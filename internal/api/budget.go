@@ -106,6 +106,9 @@ type dayPoint struct {
 	tokenTotals
 	CostUSD              float64 `json:"costUSD"`
 	SavingsUSD           float64 `json:"savingsUSD"`
+	// NoCacheCostUSD (per day) feeds only the window-cumulative "cost without caching"
+	// baseline; it is not part of the per-day trend wire shape (json:"-").
+	NoCacheCostUSD       float64 `json:"-"`
 	CompactSavedBytes    int     `json:"compactSavedBytes"`
 	CompactSavedBytesLLM int     `json:"compactSavedBytesLLM"`
 }
@@ -293,6 +296,7 @@ func (s *Server) handleWorkspaceUsage(w http.ResponseWriter, r *http.Request) {
 		day := billing.RollupOf(u.ByModel)
 		p.CostUSD += day.CostUSD
 		p.SavingsUSD += day.SavingsUSD
+		p.NoCacheCostUSD += day.NoCacheCostUSD
 		p.CacheReadTokens += day.CacheReadTokens
 		p.CacheWriteTokens += day.CacheWriteTokens
 		p.CompactSavedBytes += u.CompactSavedBytes
@@ -311,7 +315,7 @@ func (s *Server) handleWorkspaceUsage(w http.ResponseWriter, r *http.Request) {
 	// cacheWrite). It is the single ROI signal — higher means the static prefix
 	// is being reused instead of re-paid.
 	var cumCalls, cumIn, cumOut, cumCacheRead, cumCacheWrite int
-	var cumCost, cumSavings float64
+	var cumCost, cumSavings, cumNoCache float64
 	var cumCompactBytes, cumCompactBytesLLM int
 	for _, p := range trend {
 		cumCalls += p.Calls
@@ -321,6 +325,7 @@ func (s *Server) handleWorkspaceUsage(w http.ResponseWriter, r *http.Request) {
 		cumCacheWrite += p.CacheWriteTokens
 		cumCost += p.CostUSD
 		cumSavings += p.SavingsUSD
+		cumNoCache += p.NoCacheCostUSD
 		cumCompactBytes += p.CompactSavedBytes
 		cumCompactBytesLLM += p.CompactSavedBytesLLM
 	}
@@ -357,6 +362,7 @@ func (s *Server) handleWorkspaceUsage(w http.ResponseWriter, r *http.Request) {
 			"cacheWriteTokens":     cumCacheWrite,
 			"costUSD":              cumCost,
 			"savingsUSD":           cumSavings,         // total saved by prompt-cache reads over the window
+			"noCacheCostUSD":       cumNoCache,         // counterfactual: what the window would cost with NO caching (cache read/write as fresh input)
 			"cacheHitRate":         cacheHitRate,       // cacheRead / (cacheRead + input + cacheWrite)
 			"compactSavedBytes":    cumCompactBytes,    // System A bytes trimmed over the window
 			"compactSavedBytesLLM": cumCompactBytesLLM, // System B bytes trimmed over the window

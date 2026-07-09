@@ -57,6 +57,17 @@ func (s *Server) handleSessionSummary(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		body = cbody
+	case "refresh-context":
+		// Prompt-epoch explicit adopt: drop the session's frozen prompt snapshot so
+		// the next turn recomposes tools + static system from live state (a chosen
+		// one-time cache re-write). No-op text when the feature is off.
+		header = "🔄 **Bağlam yenileme**"
+		if wsp.Runtime.PromptEpochEnabled() {
+			wsp.Runtime.RefreshPromptEpoch(ctx, session.ID)
+			body = "Statik bağlam snapshot'ı temizlendi: bir sonraki tur güncel araç kataloğu, skill listesi ve talimatlarla yeniden derlenecek (bilinçli tek seferlik cache yeniden yazımı)."
+		} else {
+			body = "Prompt-epoch (donmuş bağlam snapshot'ı) bu workspace'te kapalı; her tur zaten canlı durumdan derleniyor — yenilenecek bir snapshot yok."
+		}
 	default:
 		h, ok := summaryHeaders[kind]
 		if !ok {

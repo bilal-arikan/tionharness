@@ -33,64 +33,22 @@ func (s *Server) isFirstUntitledTurn(session db.Session) bool {
 // the history messages themselves stay byte-stable for the rolling cache
 // breakpoint (see recentToolActivityBlock).
 func (s *Server) composeTurnRequest(ctx context.Context, wsp *workspace.Workspace, session db.Session, agentRow db.Agent, turnAgents []db.Agent, message string, prep conversation.Prepared, freshSession, multiAgent bool, toolRecap, lifecycleContext string) providers.Request {
-	system := buildSystemPrompt(agentRow)
-	// Coordinator sessions (M2, _Docs/47) lead with the coordinator operating manual
-	// so the agent drives workers, synthesizes their notifications itself, and runs
-	// the research→synthesis→implementation→verification loop. Role is stable, so
-	// this sits in the cached static prefix. Only a coordinator session gets it (and
-	// only a coordinator session gets the spawn_worker/send_to_worker/... tools).
-	if session.Role == "coordinator" {
-		system = strings.TrimSpace(coordinatorSystemPrompt() + "\n\n" + system)
-	}
-	// Tell the agent its own name and how "@name" references work. The message is
-	// addressed to THIS agent (chosen from the UI dropdown). An "@name" inside the
-	// message is just a NAME REFERENCE — the user pointing at who they mean — NOT a
-	// handoff or a command to invoke that agent, and NOT a file/skill/entity to look
-	// up. You answer the message yourself; if it helps you may address or relay to
-	// the referenced agent in your reply, but nothing is routed automatically.
-	if n := strings.TrimSpace(agentRow.Name); n != "" {
-		note := "You are the agent \"" + n + "\", and this message is addressed to you. It may contain \"@name\" references to other agents — treat each as a plain name reference (the user pointing at who they mean), not a handoff, a command to call that agent, or a file/skill to look up. Answer the message yourself; if useful you may address or relay to a referenced agent in your reply, but there is no automatic routing. If you hand work to another agent with spawn_session, its result runs in a SEPARATE session and does NOT come back to this conversation — do not promise to relay it here; instead tell the user it is running and where to find it (the activity feed)."
-		system = strings.TrimSpace(note + "\n\n" + system)
-	}
-	// In a session shared by several agents, the history is annotated with each
-	// assistant turn's author (see labelMultiAgentHistory). Tell the agent how to
-	// read those "[Name]:" tags so it can answer "who said what" — and not copy
-	// the tags into its own reply.
-	if multiAgent {
-		system = strings.TrimSpace(multiAgentHistoryNote + "\n\n" + system)
-	}
-	if uc := userContextBlock(s.settings.Get()); uc != "" {
-		system = strings.TrimSpace(uc + "\n\n" + system)
-	}
-	if ins := strings.TrimSpace(wsp.Settings().Instructions); ins != "" {
-		system = strings.TrimSpace(system + "\n\n# Workspace Instructions\n" + ins)
-	}
-	// Always-on: deliverables (files/documents) should surface as artifacts.
-	system = strings.TrimSpace(system + "\n\n" + artifactDeliverableGuidance)
-	// Advertise the skills THIS agent has selected (slug + summary only, in the
-	// agent's chosen order). The full body is loaded lazily via use_skill. Part of
-	// the cached static prefix since an agent's skill selection changes rarely.
-	if sb := wsp.Runtime.SkillsCatalogBlockForAgent(agentRow); sb != "" {
-		system = strings.TrimSpace(system + "\n\n" + sb)
-	}
-	// Advertise the agent's LAZY tools (self-management + MCP) as a lightweight
-	// load-on-demand catalog; full schemas are pulled via activate_tools. Part of
-	// the cached static prefix since the lazy set is stable per agent/workspace.
-	if tb := wsp.Runtime.LazyToolsCatalogBlock(ctx, agentRow); tb != "" {
-		system = strings.TrimSpace(system + "\n\n" + tb)
-	}
-	// Advertise optional external-tool capabilities (e.g. codebase-memory) present in
-	// this workspace so the agent reaches for them, with the cwd-derived project id.
-	// Presence is stable per workspace/session, so it rides the cached static prefix.
-	// Shares ONE source with the headless path (agent.autonomousSystemPrompt).
-	if cb := wsp.Runtime.CapabilityContext(ctx, strings.TrimSpace(session.WorkingDir)); cb != "" {
-		system = strings.TrimSpace(system + "\n\n" + cb)
-	}
+	// The static prefix is served through the prompt epoch (frozen snapshot,
+	// promptepoch.go): the builder below composes it from LIVE state, but between
+	// adopt points the frozen session-start bytes ship instead, so mid-session
+	// config drift (skill installs, settings edits, capability toggles, a new
+	// participant) cannot bust the prompt cache. prep.Compacted marks a fold —
+	// the history cache is busted anyway, so pending changes adopt for free.
+	system, sysStale := wsp.Runtime.EpochStaticSystem(ctx, session.ID, agentRow, multiAgent, prep.Compacted,
+		strings.TrimSpace(session.WorkingDir), func() string {
+			return s.buildStaticPrefix(ctx, wsp, session, agentRow, multiAgent)
+		})
 	// Best-effort: ensure the session's repo is indexed in this workspace's isolated
 	// store (guarded to run at most once per cwd per process; no-op without a cwd or
-	// an enabled codebase-memory server).
+	// an enabled codebase-memory server). Deliberately OUTSIDE the static builder:
+	// the builder must stay pure (a frozen turn still calls it for drift detection,
+	// and side effects must run regardless of whether the snapshot serves).
 	wsp.Runtime.EnsureCodebaseIndexed(ctx, session.WorkingDir)
-
 	// Wall-clock awareness: a single date/time line so the agent always knows
 	// "now" without a tool round-trip (there is no get_current_time tool). Volatile
 	// by nature, so it leads the dynamic suffix and never invalidates the cache.
@@ -184,6 +142,13 @@ func (s *Server) composeTurnRequest(ctx context.Context, wsp *workspace.Workspac
 		dynamic = strings.TrimSpace(lc + "\n\n" + dynamic)
 	}
 
+	// Prompt-epoch drift notice: the frozen snapshot is holding back a live
+	// change. One line on the VOLATILE side, so telling the agent about the drift
+	// never causes the very cache bust the snapshot exists to prevent.
+	if sysStale {
+		dynamic = strings.TrimSpace(dynamic + "\n\n" + agent.PromptEpochStaleNote)
+	}
+
 	return providers.Request{
 		Model:         agentRow.Model,
 		System:        system,
@@ -191,6 +156,70 @@ func (s *Server) composeTurnRequest(ctx context.Context, wsp *workspace.Workspac
 		Summary:       summary,
 		Messages:      prep.Messages,
 	}
+}
+
+// buildStaticPrefix composes the STATIC system prefix for one chat turn from
+// LIVE state: persona, coordinator manual, agent-name note, multi-agent history
+// note, user context, workspace instructions, artifact guidance, and the skills/
+// lazy-tools/capability catalog blocks. It is the single source the prompt epoch
+// freezes (EpochStaticSystem) — MUST stay pure (no side effects) and cheap: on a
+// frozen turn its output is only compared against the snapshot for drift
+// detection, not shipped.
+func (s *Server) buildStaticPrefix(ctx context.Context, wsp *workspace.Workspace, session db.Session, agentRow db.Agent, multiAgent bool) string {
+	system := buildSystemPrompt(agentRow)
+	// Coordinator sessions (M2, _Docs/47) lead with the coordinator operating manual
+	// so the agent drives workers, synthesizes their notifications itself, and runs
+	// the research→synthesis→implementation→verification loop. Role is stable, so
+	// this sits in the cached static prefix. Only a coordinator session gets it (and
+	// only a coordinator session gets the spawn_worker/send_to_worker/... tools).
+	if session.Role == "coordinator" {
+		system = strings.TrimSpace(coordinatorSystemPrompt() + "\n\n" + system)
+	}
+	// Tell the agent its own name and how "@name" references work. The message is
+	// addressed to THIS agent (chosen from the UI dropdown). An "@name" inside the
+	// message is just a NAME REFERENCE — the user pointing at who they mean — NOT a
+	// handoff or a command to invoke that agent, and NOT a file/skill/entity to look
+	// up. You answer the message yourself; if it helps you may address or relay to
+	// the referenced agent in your reply, but nothing is routed automatically.
+	if n := strings.TrimSpace(agentRow.Name); n != "" {
+		note := "You are the agent \"" + n + "\", and this message is addressed to you. It may contain \"@name\" references to other agents — treat each as a plain name reference (the user pointing at who they mean), not a handoff, a command to call that agent, or a file/skill to look up. Answer the message yourself; if useful you may address or relay to a referenced agent in your reply, but there is no automatic routing. If you hand work to another agent with spawn_session, its result runs in a SEPARATE session and does NOT come back to this conversation — do not promise to relay it here; instead tell the user it is running and where to find it (the activity feed)."
+		system = strings.TrimSpace(note + "\n\n" + system)
+	}
+	// In a session shared by several agents, the history is annotated with each
+	// assistant turn's author (see labelMultiAgentHistory). Tell the agent how to
+	// read those "[Name]:" tags so it can answer "who said what" — and not copy
+	// the tags into its own reply.
+	if multiAgent {
+		system = strings.TrimSpace(multiAgentHistoryNote + "\n\n" + system)
+	}
+	if uc := userContextBlock(s.settings.Get()); uc != "" {
+		system = strings.TrimSpace(uc + "\n\n" + system)
+	}
+	if ins := strings.TrimSpace(wsp.Settings().Instructions); ins != "" {
+		system = strings.TrimSpace(system + "\n\n# Workspace Instructions\n" + ins)
+	}
+	// Always-on: deliverables (files/documents) should surface as artifacts.
+	system = strings.TrimSpace(system + "\n\n" + artifactDeliverableGuidance)
+	// Advertise the skills THIS agent has selected (slug + summary only, in the
+	// agent's chosen order). The full body is loaded lazily via use_skill. Part of
+	// the cached static prefix since an agent's skill selection changes rarely.
+	if sb := wsp.Runtime.SkillsCatalogBlockForAgent(agentRow); sb != "" {
+		system = strings.TrimSpace(system + "\n\n" + sb)
+	}
+	// Advertise the agent's LAZY tools (self-management + MCP) as a lightweight
+	// load-on-demand catalog; full schemas are pulled via activate_tools. Part of
+	// the cached static prefix since the lazy set is stable per agent/workspace.
+	if tb := wsp.Runtime.LazyToolsCatalogBlock(ctx, agentRow); tb != "" {
+		system = strings.TrimSpace(system + "\n\n" + tb)
+	}
+	// Advertise optional external-tool capabilities (e.g. codebase-memory) present in
+	// this workspace so the agent reaches for them, with the cwd-derived project id.
+	// Presence is stable per workspace/session, so it rides the cached static prefix.
+	// Shares ONE source with the headless path (agent.autonomousSystemPrompt).
+	if cb := wsp.Runtime.CapabilityContext(ctx, strings.TrimSpace(session.WorkingDir)); cb != "" {
+		system = strings.TrimSpace(system + "\n\n" + cb)
+	}
+	return system
 }
 
 // dateTimeContextBlock renders the current server-local date/time as a single

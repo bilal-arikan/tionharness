@@ -30,11 +30,32 @@ func PriceStat(provider, model string, st db.KindStat) (cost, save float64, pric
 		return 0, 0, true, false // no spend → nothing unpriced
 	}
 	// Unpriced spend: try an equivalent-API estimate (e.g. claude-cli → anthropic).
+	// The cache-read savings are estimated the SAME way the cost is — otherwise a
+	// claude-cli workspace (the default keyless provider) shows a non-zero estimated
+	// cost that already benefits from cache pricing, yet $0 savings everywhere (Budget
+	// Savings Center, session usage, per-message debug). priced stays false so the UI
+	// keeps flagging both figures as an estimate ("~").
 	if ep, ok := providers.EstimateFor(provider, model); ok {
 		return ep.CostDetailed(st.InputTokens, st.OutputTokens, st.CacheReadTokens, st.CacheWriteTokens),
-			0, false, true
+			ep.CacheSavings(st.CacheReadTokens), false, true
 	}
 	return 0, 0, false, false
+}
+
+// NoCacheCost returns the counterfactual USD cost of a usage slice if prompt
+// caching did not exist (cache read/write billed as fresh input, no discount, no
+// write premium). Mirrors PriceStat's price resolution: real list price, else an
+// equivalent-API estimate (subscription providers), else 0 (unpriced). This is the
+// honest baseline for the "cost without caching" figure — NOT cost+savings, which
+// leaves the cache-write premium in and overstates it.
+func NoCacheCost(provider, model string, st db.KindStat) float64 {
+	if p, ok := providers.PriceFor(provider, model); ok {
+		return p.CostNoCaching(st.InputTokens, st.OutputTokens, st.CacheReadTokens, st.CacheWriteTokens)
+	}
+	if ep, ok := providers.EstimateFor(provider, model); ok {
+		return ep.CostNoCaching(st.InputTokens, st.OutputTokens, st.CacheReadTokens, st.CacheWriteTokens)
+	}
+	return 0
 }
 
 // Row is one provider+model's priced usage slice: the stored token counters plus
@@ -59,6 +80,11 @@ type Rollup struct {
 	Rows             []Row
 	CostUSD          float64
 	SavingsUSD       float64
+	// NoCacheCostUSD is the counterfactual total if caching did not exist (cache
+	// read/write billed as fresh input). The honest "cost without caching" baseline
+	// — always ≥ CostUSD, and NOT equal to CostUSD+SavingsUSD (that keeps the write
+	// premium). Budget's "Tasarrufsuz maliyet" card reads this.
+	NoCacheCostUSD   float64
 	CacheReadTokens  int
 	CacheWriteTokens int
 	Priced           bool // false when ANY spend lacks a real list price
@@ -87,6 +113,7 @@ func RollupOf(byModel map[string]db.KindStat) Rollup {
 		})
 		roll.CostUSD += cost
 		roll.SavingsUSD += save
+		roll.NoCacheCostUSD += NoCacheCost(provider, model, st)
 		roll.CacheReadTokens += st.CacheReadTokens
 		roll.CacheWriteTokens += st.CacheWriteTokens
 	}

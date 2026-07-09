@@ -64,6 +64,13 @@ type WSSettings struct {
 	// offer the codebase_workspace_search tool. Default on; off = fully vanilla.
 	CodebaseMemoryEnabled bool `json:"codebaseMemoryEnabled"`
 
+	// PromptEpochEnabled toggles the prompt-epoch (frozen prompt-prefix snapshot)
+	// system: a session's static system prompt + tool schemas freeze at session
+	// start so mid-session config drift cannot bust the prompt cache; changes
+	// adopt at compaction/idle/model-change or an explicit /refresh-context.
+	// Default on; off = every turn recomposes from live state (pre-epoch behaviour).
+	PromptEpochEnabled bool `json:"promptEpochEnabled"`
+
 	// BoardColumns overrides the default kanban column set for this workspace.
 	// Empty/nil means "use db.DefaultBoardColumns()".
 	BoardColumns []db.BoardColumnDef `json:"boardColumns,omitempty"`
@@ -79,6 +86,7 @@ func defaultWSSettings() WSSettings {
 		SessionContextEveryTurn:   false,
 		SessionContextRecentCount: 5,
 		CodebaseMemoryEnabled:     true,
+		PromptEpochEnabled:        true,
 	}
 }
 
@@ -103,6 +111,7 @@ type WSSettingsPatch struct {
 	SessionContextRecentCount *int  `json:"sessionContextRecentCount"`
 
 	CodebaseMemoryEnabled *bool `json:"codebaseMemoryEnabled"`
+	PromptEpochEnabled    *bool `json:"promptEpochEnabled"`
 
 	BoardColumns *[]db.BoardColumnDef `json:"boardColumns"`
 }
@@ -141,6 +150,7 @@ func (w *Workspace) loadSettings() {
 		w.Runtime.SetDefaultWorkDir(s.DefaultWorkingDir)
 		w.Runtime.SetSessionContext(s.SessionContextEnabled, s.SessionContextEveryTurn, s.SessionContextRecentCount)
 		w.Runtime.SetCodebaseMemory(s.CodebaseMemoryEnabled)
+		w.Runtime.SetPromptEpoch(s.PromptEpochEnabled)
 	}
 }
 
@@ -232,6 +242,9 @@ func (m *Manager) UpdateSettings(id string, patch WSSettingsPatch) (*Workspace, 
 	if patch.CodebaseMemoryEnabled != nil {
 		ws.settings.cur.CodebaseMemoryEnabled = *patch.CodebaseMemoryEnabled
 	}
+	if patch.PromptEpochEnabled != nil {
+		ws.settings.cur.PromptEpochEnabled = *patch.PromptEpochEnabled
+	}
 	if patch.BoardColumns != nil {
 		ws.settings.cur.BoardColumns = *patch.BoardColumns
 	}
@@ -242,6 +255,7 @@ func (m *Manager) UpdateSettings(id string, patch WSSettingsPatch) (*Workspace, 
 	scEvery := ws.settings.cur.SessionContextEveryTurn
 	scRecent := ws.settings.cur.SessionContextRecentCount
 	cbmEnabled := ws.settings.cur.CodebaseMemoryEnabled
+	epochEnabled := ws.settings.cur.PromptEpochEnabled
 	ws.settings.mu.Unlock()
 
 	if err := ws.saveSettings(); err != nil {
@@ -258,6 +272,7 @@ func (m *Manager) UpdateSettings(id string, patch WSSettingsPatch) (*Workspace, 
 		ws.Runtime.SetDefaultWorkDir(defaultWorkDir)
 		ws.Runtime.SetSessionContext(scEnabled, scEvery, scRecent)
 		ws.Runtime.SetCodebaseMemory(cbmEnabled)
+		ws.Runtime.SetPromptEpoch(epochEnabled)
 	}
 	return ws, nil
 }

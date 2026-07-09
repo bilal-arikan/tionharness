@@ -42,7 +42,9 @@ func (UpdateSessionTool) Def() providers.ToolDef {
 			"takes effect next turn); `goal` (the session's persistent north-star objective, injected " +
 			"into every turn); `goal_done` (mark the current goal achieved so it stops steering turns); " +
 			"`tags` (replace the whole tag set) or `add`/`remove` (incremental); `archive` (true drops " +
-			"the session out of the active list once its work is finished). Tags are shared with the UI " +
+			"the session out of the active list once its work is finished); `refresh_context` (true drops " +
+			"this session's frozen prompt snapshot so the next turn recomposes tools/skills/instructions " +
+			"from live state — use after you know your static context is stale). Tags are shared with the UI " +
 			"and drive tag-triggered automations. Use get_session_info to read the current values first.",
 		InputSchema: json.RawMessage(`{
   "type": "object",
@@ -54,7 +56,8 @@ func (UpdateSessionTool) Def() providers.ToolDef {
     "tags":        { "type": "array", "items": { "type": "string" }, "description": "Replace all tags with this exact set." },
     "add":         { "type": "array", "items": { "type": "string" }, "description": "Tags to add (kept alongside existing ones)." },
     "remove":      { "type": "array", "items": { "type": "string" }, "description": "Tags to remove." },
-    "archive":     { "type": "boolean", "description": "Set true to archive this session (do not archive one that still has open work)." }
+    "archive":     { "type": "boolean", "description": "Set true to archive this session (do not archive one that still has open work)." },
+    "refresh_context": { "type": "boolean", "description": "Set true to drop this session's frozen prompt snapshot; the next turn recomposes the static context (tools/skills/instructions) from live state." }
   },
   "additionalProperties": false
 }`),
@@ -78,6 +81,7 @@ func (UpdateSessionTool) Call(ctx context.Context, input json.RawMessage) (strin
 		Add        []string  `json:"add"`
 		Remove     []string  `json:"remove"`
 		Archive    *bool     `json:"archive"`
+		RefreshCtx *bool     `json:"refresh_context"`
 	}
 	if err := json.Unmarshal(input, &in); err != nil {
 		return "", argErrFor("update_session", err)
@@ -197,6 +201,12 @@ func (UpdateSessionTool) Call(ctx context.Context, input json.RawMessage) (strin
 			return "", err
 		}
 		applied = append(applied, "session archived (it stays available but leaves the active list)")
+	}
+	if in.RefreshCtx != nil && *in.RefreshCtx {
+		if err := sink.RefreshContext(ctx); err != nil {
+			return "", err
+		}
+		applied = append(applied, "context snapshot dropped: the next turn recomposes tools/skills/instructions from live state")
 	}
 
 	if len(applied) == 0 {

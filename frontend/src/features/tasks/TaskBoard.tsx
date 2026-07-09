@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Trash2 } from 'lucide-react'
+import { Paperclip, Trash2 } from 'lucide-react'
 import { api } from '@/api'
 import { useRefreshTrigger } from '@/shared/hooks/useRefreshTrigger'
 import type { Agent, Task, Flow, BoardColumnDef } from '@/types'
+import { artifactKindForUpload } from '@/features/artifacts/artifactMeta'
 import { AgentIdentity } from '@/shared/components/agents/AgentIdentity'
 import { normalizeAvatar } from '@/shared/lib/avatar'
 import { TaskFormModal } from './TaskFormModal'
@@ -72,6 +73,8 @@ export function TaskBoard({ agents, onError }: Props) {
   const [flows, setFlows] = useState<Flow[]>([])
   const [columns, setColumns] = useState<BoardColumnDef[]>(DEFAULT_COLUMNS)
   const [dragId, setDragId] = useState<string | null>(null)
+  // Card id currently under an OS file-drag (for the "drop to attach" highlight).
+  const [fileDropId, setFileDropId] = useState<string | null>(null)
   // Create/edit popup state: null = closed.
   const [modal, setModal] = useState<{ mode: 'create' | 'edit'; taskId: string | null } | null>(null)
   // Left-side column editor panel.
@@ -137,6 +140,37 @@ export function TaskBoard({ agents, onError }: Props) {
     }
   }
 
+  // Attach OS-dropped files to a card: upload each into the workspace, save it as
+  // an artifact, then append the new artifact ids to the task and persist.
+  const attachFilesToTask = async (task: Task, files: File[]) => {
+    if (files.length === 0 || task.id.startsWith('temp-')) return
+    const newIds: string[] = []
+    for (const file of files) {
+      try {
+        const att = await api.uploadFile(task.id, file)
+        const a = await api.createArtifact({
+          title: att.name,
+          kind: artifactKindForUpload(att),
+          content: att.textContent ?? '',
+          sourcePath: att.relPath,
+          origin: 'manual',
+        })
+        newIds.push(a.id)
+      } catch (e) {
+        onError(`"${file.name}" eklenemedi: ${(e as Error).message}`)
+      }
+    }
+    if (newIds.length === 0) return
+    const artifactIds = [...(task.artifactIds ?? []), ...newIds]
+    setTasks((prev) => prev.map((t) => (t.id === task.id ? { ...t, artifactIds } : t)))
+    try {
+      await api.updateTask(task.id, { artifactIds })
+    } catch (e) {
+      onError((e as Error).message)
+      reload()
+    }
+  }
+
   // Upsert: a created task is prepended, an edited task replaced in place.
   const onSaved = (saved: Task) => {
     setTasks((prev) =>
@@ -148,6 +182,20 @@ export function TaskBoard({ agents, onError }: Props) {
 
   const onDeleted = (id: string) => {
     setTasks((prev) => prev.filter((t) => t.id !== id))
+  }
+
+  // Reconcile an optimistic create: drop the temp card and upsert the server row
+  // (upsert, not blind prepend, so a concurrent SSE-driven reload that already
+  // pulled the real task can't produce a duplicate). real = null removes the
+  // temp card when the create failed.
+  const onReplaceTemp = (tempId: string, real: Task | null) => {
+    setTasks((prev) => {
+      const rest = prev.filter((t) => t.id !== tempId)
+      if (!real) return rest
+      return rest.some((t) => t.id === real.id)
+        ? rest.map((t) => (t.id === real.id ? real : t))
+        : [real, ...rest]
+    })
   }
 
   const modalTask = modal?.taskId ? tasks.find((t) => t.id === modal.taskId) ?? null : null
@@ -348,7 +396,30 @@ export function TaskBoard({ agents, onError }: Props) {
                           if (sel.handleClick(e, t.id, orderedIds)) return
                           setModal({ mode: 'edit', taskId: t.id })
                         }}
+                        onDragOver={(e) => {
+                          // OS file drag over a card → offer to attach (a card being
+                          // dragged internally carries no 'Files', so moves are
+                          // unaffected and still bubble to the column).
+                          if (pending || !Array.from(e.dataTransfer.types).includes('Files')) return
+                          e.preventDefault()
+                          e.stopPropagation()
+                          if (fileDropId !== t.id) setFileDropId(t.id)
+                        }}
+                        onDragLeave={(e) => {
+                          if (!Array.from(e.dataTransfer.types).includes('Files')) return
+                          if (fileDropId === t.id) setFileDropId(null)
+                        }}
+                        onDrop={(e) => {
+                          const files = Array.from(e.dataTransfer.files)
+                          if (files.length === 0) return // not a file drop → let the column handle the move
+                          e.preventDefault()
+                          e.stopPropagation()
+                          setFileDropId(null)
+                          void attachFilesToTask(t, files)
+                        }}
                         className={`rounded-lg border bg-[var(--color-surface-2)] p-2 text-sm shadow-[var(--shadow-sm)] transition ${
+                          fileDropId === t.id ? 'ring-2 ring-[var(--color-accent)] ring-offset-1' : ''
+                        } ${
                           pending
                             ? 'animate-pulse cursor-default border-[var(--color-border)] opacity-70'
                             : `cursor-pointer hover:shadow-[var(--shadow-md)] active:cursor-grabbing ${
@@ -386,9 +457,17 @@ export function TaskBoard({ agents, onError }: Props) {
                             ))}
                           </div>
                         )}
-                        {(owner || t.flowId || depIds.length > 0) && (
+                        {(owner || t.flowId || depIds.length > 0 || (t.artifactIds?.length ?? 0) > 0) && (
                           <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs text-[var(--color-text-dim)]">
                             {owner && <AgentIdentity agent={owner} size="sm" className="max-w-[160px]" />}
+                            {(t.artifactIds?.length ?? 0) > 0 && (
+                              <span
+                                className="inline-flex items-center gap-0.5 rounded bg-[var(--color-surface)] px-1.5 py-0.5 text-[10px]"
+                                title={`${t.artifactIds!.length} ek (artifact)`}
+                              >
+                                <Paperclip size={10} /> {t.artifactIds!.length}
+                              </span>
+                            )}
                             {t.flowId && (
                               <span className="inline-flex items-center gap-1 rounded bg-[var(--color-accent-soft)] px-1.5 py-0.5 text-[10px] text-[var(--color-accent)]">
                                 {normalizeAvatar(flow?.emoji) ?? '🔀'} {flow?.name ?? 'Akış'}
@@ -480,6 +559,7 @@ export function TaskBoard({ agents, onError }: Props) {
           defaultBoardState={columns[0]?.key}
           onClose={() => setModal(null)}
           onSaved={onSaved}
+          onReplaceTemp={onReplaceTemp}
           onDeleted={onDeleted}
           onError={onError}
         />

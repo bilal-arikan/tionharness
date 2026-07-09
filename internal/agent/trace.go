@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/bilal-arikan/tionswarm/internal/providers"
+	"github.com/bilal-arikan/tionswarm/internal/tools"
 )
 
 // interactionToolPrefix / extendedToolPrefix are the two MCP namespaces the
@@ -122,6 +123,11 @@ type TurnStep struct {
 	// Options are the suggested clickable answers for a StepAsk prompt (optional;
 	// the user may always type a free-text answer instead).
 	Options []string `json:"options,omitempty"`
+	// Questions carries a MULTI-question StepAsk prompt (each with its own optional
+	// options); when set, the UI renders all questions together in one card and the
+	// user answers them at once. Text/Options stay the single-question form used by
+	// the permission/confirm cards and one-question asks.
+	Questions []tools.AskQuestion `json:"questions,omitempty"`
 	// Todos carries the checklist items for a StepTodo step.
 	Todos []TodoItem `json:"todos,omitempty"`
 	// Reason is the stable machine tag for a StepRecovery/StepError step (e.g.

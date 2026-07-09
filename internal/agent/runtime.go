@@ -203,6 +203,18 @@ type Runtime struct {
 	// (P4, cachebreak.go). Keyed by session id; zero value ready. Best-effort
 	// telemetry only — never gates a turn.
 	cacheProbes sync.Map
+
+	// promptEpochEnabled gates the prompt-epoch (frozen prompt-prefix snapshot)
+	// system for this workspace: when on, a session's static system prefix and
+	// tool schemas are frozen at session start and mid-session config drift no
+	// longer busts the prompt cache (promptepoch.go). Set from per-workspace
+	// settings, like codebaseMemoryEnabled.
+	promptEpochEnabled atomic.Bool
+
+	// epochMu guards epochCache, the in-memory per-session prompt-epoch snapshots
+	// (sessionID → agentID → entry), backed by the prompt_epoch.json sidecar.
+	epochMu    sync.Mutex
+	epochCache map[string]map[string]*promptEpochEntry
 }
 
 // trackSession marks a session as actively running an autonomous invoke.
@@ -277,6 +289,14 @@ func (r *Runtime) SetCodebaseMemory(enabled bool) { r.codebaseMemoryEnabled.Stor
 // CodebaseMemoryEnabled reports whether the codebase-memory capability system is on
 // for this workspace.
 func (r *Runtime) CodebaseMemoryEnabled() bool { return r.codebaseMemoryEnabled.Load() }
+
+// SetPromptEpoch toggles the prompt-epoch (frozen prompt-prefix snapshot) system
+// for this workspace (promptepoch.go).
+func (r *Runtime) SetPromptEpoch(enabled bool) { r.promptEpochEnabled.Store(enabled) }
+
+// PromptEpochEnabled reports whether the prompt-epoch system is on for this
+// workspace.
+func (r *Runtime) PromptEpochEnabled() bool { return r.promptEpochEnabled.Load() }
 
 // NewRuntime constructs the runtime. tun carries the process-wide tunables
 // (autonomy pause, title-model override) shared across all workspace runtimes.
@@ -1145,39 +1165,48 @@ func (r *Runtime) systemPrompt(a db.Agent) string {
 // it here — together with the autonomous Interaction use_skill bridge — gives
 // headless runs the same skill access chat agents have.
 func (r *Runtime) autonomousSystemPrompt(ctx context.Context, a db.Agent) string {
-	out := r.systemPrompt(a)
-	if sb := r.SkillsCatalogBlockForAgent(a); sb != "" {
-		out = strings.TrimSpace(out + "\n\n" + sb)
-	}
-	// Advertise optional external-tool capabilities (e.g. codebase-memory) present
-	// in this workspace so a headless turn reaches for them too, WITH the session's
-	// cwd-derived project id (ctx carries the session id on scheduler/spawn/flow
-	// paths). Presence is stable, so it rides the cached static prefix. Shares ONE
-	// source with the chat path (api.composeTurnRequest).
 	cwd := r.sessionCwd(ctx)
-	if cb := r.CapabilityContext(ctx, cwd); cb != "" {
-		out = strings.TrimSpace(out + "\n\n" + cb)
+	// PURE builder: the prompt epoch calls it every turn for drift detection but
+	// only ships its output at adopt points, so side effects must stay out here.
+	build := func() string {
+		out := r.systemPrompt(a)
+		if sb := r.SkillsCatalogBlockForAgent(a); sb != "" {
+			out = strings.TrimSpace(out + "\n\n" + sb)
+		}
+		// Advertise optional external-tool capabilities (e.g. codebase-memory) present
+		// in this workspace so a headless turn reaches for them too, WITH the session's
+		// cwd-derived project id (ctx carries the session id on scheduler/spawn/flow
+		// paths). Presence is stable, so it rides the cached static prefix. Shares ONE
+		// source with the chat path (api.composeTurnRequest).
+		if cb := r.CapabilityContext(ctx, cwd); cb != "" {
+			out = strings.TrimSpace(out + "\n\n" + cb)
+		}
+		// Boot/verification sequence (Anthropic long-running-agent harness discipline):
+		// a headless turn starts with a fresh context, so nudge it through the fixed
+		// orient → recall → select-one → verify-baseline → work → close-the-loop routine
+		// before acting. We inject only a pointer to keep the cached prefix small; the
+		// full recipe lives in the tionswarm-autonomous-ops skill.
+		if r.tun.AutonomousBootSeq() {
+			out = strings.TrimSpace(out + "\n\n" + autonomousBootReminder)
+		}
+		// Machine-environment marker (OS/arch/shell) so a headless turn writes shell
+		// commands in the right syntax. Its bytes never change within a process, so
+		// it is safe inside the cached static prefix. The VOLATILE pieces (turn-start
+		// clock, session goal) deliberately live in autonomousDynamicSuffix — putting
+		// them here would change the prefix bytes every turn and defeat prompt
+		// caching for every headless run.
+		return strings.TrimSpace(out + "\n\n" + EnvironmentContextBlock())
 	}
 	// Best-effort: ensure the session's repo is indexed in this workspace's isolated
 	// store (guarded once per cwd per process; no-op without a cwd or an enabled
-	// codebase-memory server).
+	// codebase-memory server). Outside the builder — it must run on frozen turns too.
 	r.EnsureCodebaseIndexed(ctx, cwd)
-	// Boot/verification sequence (Anthropic long-running-agent harness discipline):
-	// a headless turn starts with a fresh context, so nudge it through the fixed
-	// orient → recall → select-one → verify-baseline → work → close-the-loop routine
-	// before acting. We inject only a pointer to keep the cached prefix small; the
-	// full recipe lives in the tionswarm-autonomous-ops skill.
-	if r.tun.AutonomousBootSeq() {
-		out = strings.TrimSpace(out + "\n\n" + autonomousBootReminder)
-	}
-	// Machine-environment marker (OS/arch/shell) so a headless turn writes shell
-	// commands in the right syntax. Its bytes never change within a process, so
-	// it is safe inside the cached static prefix. The VOLATILE pieces (turn-start
-	// clock, session goal) deliberately live in autonomousDynamicSuffix — putting
-	// them here would change the prefix bytes every turn and defeat prompt
-	// caching for every headless run.
-	out = strings.TrimSpace(out + "\n\n" + EnvironmentContextBlock())
-	return out
+	// Serve through the prompt epoch (frozen snapshot) keyed to this session, so a
+	// headless run's prefix is as drift-proof as a chat turn's. Headless sessions
+	// are single-agent (multiAgent=false); drift is surfaced by the dynamic suffix
+	// via PromptEpochStale (autonomousDynamicSuffix).
+	sys, _ := r.EpochStaticSystem(ctx, SessionIDFrom(ctx), a, false, false, cwd, build)
+	return sys
 }
 
 // DateTimeContextBlock renders the turn-start clock line. Exported so the chat
@@ -1216,6 +1245,12 @@ func (r *Runtime) autonomousDynamicSuffix(ctx context.Context) string {
 	// mirroring the chat path, since the gate can toggle mid-session.
 	if sh := r.ShellToolsContextBlock(); sh != "" {
 		out += "\n\n" + sh
+	}
+	// Prompt-epoch drift notice (mirrors the chat path): the frozen snapshot is
+	// holding back a live change — one line on the volatile side. The suffix runs
+	// after autonomousSystemPrompt in request composition, so the flag is fresh.
+	if sid := SessionIDFrom(ctx); sid != "" && r.PromptEpochStale(sid, agentID) {
+		out += "\n\n" + PromptEpochStaleNote
 	}
 	return out
 }

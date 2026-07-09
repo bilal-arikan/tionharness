@@ -32,6 +32,7 @@ type EventCb = (e: AppEvent) => void
 let sharedES: EventSource | null = null
 const eventSubs = new Set<EventCb>()
 const stepSubs = new Set<EventCb>()
+const flowNodeSubs = new Set<EventCb>()
 
 function ensureConnection(): void {
   if (sharedES) return
@@ -56,21 +57,32 @@ function ensureConnection(): void {
     }
     stepSubs.forEach((cb) => cb(parsed))
   })
+  sharedES.addEventListener('flownode', (ev) => {
+    let parsed: AppEvent
+    try {
+      parsed = JSON.parse((ev as MessageEvent).data) as AppEvent
+    } catch {
+      return
+    }
+    flowNodeSubs.forEach((cb) => cb(parsed))
+  })
   // EventSource auto-reconnects on transport errors; we don't tear it down
   // here so transient drops don't churn N subscribers.
 }
 
-function subscribeEvents(onEvent: EventCb, onStep?: EventCb): () => void {
+function subscribeEvents(onEvent: EventCb, onStep?: EventCb, onFlowNode?: EventCb): () => void {
   ensureConnection()
   eventSubs.add(onEvent)
   if (onStep) stepSubs.add(onStep)
+  if (onFlowNode) flowNodeSubs.add(onFlowNode)
   let unsubscribed = false
   return () => {
     if (unsubscribed) return
     unsubscribed = true
     eventSubs.delete(onEvent)
     if (onStep) stepSubs.delete(onStep)
-    if (eventSubs.size === 0 && stepSubs.size === 0 && sharedES) {
+    if (onFlowNode) flowNodeSubs.delete(onFlowNode)
+    if (eventSubs.size === 0 && stepSubs.size === 0 && flowNodeSubs.size === 0 && sharedES) {
       sharedES.close()
       sharedES = null
     }

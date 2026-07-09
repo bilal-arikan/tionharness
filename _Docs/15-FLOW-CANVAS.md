@@ -190,6 +190,18 @@ Kalıcı trace yine altta node-node liste olarak gösterilir (mevcut davranış 
   `nodeStatuses(run,state)` ile türetilir: `trace`'tekiler `done`, `state.current` çalışırken
   `running` / hata ise `error`), ve **adım izi** listesi (node çıktıları `Markdown`, branch düz
   metin). Seçili koşu `runs` listesinden türetildiği için poll ile canlı tazelenir.
+- **Canlı node ilerlemesi (2026-07-09):** RunView artık 3sn poll'a ek olarak **global bus
+  üzerinden per-node canlı olay** alır. `driveFlow` observer'ı her zaman sarmalanır →
+  her `orchestration.NodeEvent` `emitFlowNode(runID, flowID, ev)` ile bus'a yayılır
+  (`flow_node` tipi, `Target.flowRunId`; API SSE `flownode` kanalı — notify/badge yolunu
+  kirletmez). Frontend: `flowNodeBus.ts` (runId-keyed) ← `useAppEvents.onFlowNode` ←
+  `system.ts` üçüncü SSE callback'i; RunView `run.id`'ye abone → canvas node durumu **asla
+  geri sarmadan** (pending→running→done/error) + biten node çıktıları "Adım izi"nde **anında**
+  + çalışan node için "…çalışıyor" satırı. Poll caught-up olunca canlı ekler `nodeId` ile
+  dedupe olur. **Tüm** koşular (UI/otonom/scheduled) yayar — eskiden node olayları yalnız
+  koşuyu başlatan HTTP istemcisine gidiyordu (`obs=nil` otonom koşuda hiç canlı yoktu).
+  **Not:** akış node'u session'sız `complete()` çağrısıdır → `session_step`/tool-adımı
+  yaymaz; bu yüzden canlılık **node-seviyesindedir** (chat/Aktivite'deki adım-seviyesi değil).
 - **Tekrar çalıştır (2026-06-23):** RunView başlığında **"↺ Tekrar çalıştır"** butonu — koşunun
   akışını **aynı girdiyle** (`run.input`) yeniden koşar (`runFlowStreamStandalone(run.flowId, …)`;
   güncel akış tanımıyla). Akış silinmişse veya koşu hâlâ `running` ise buton pasif. Stream

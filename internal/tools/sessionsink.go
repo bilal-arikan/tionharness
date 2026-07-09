@@ -19,6 +19,10 @@ type SessionSink interface {
 	// set_session_tags tool (which supports add/remove by reading then writing).
 	Tags(ctx context.Context) ([]string, error)
 	SetTags(ctx context.Context, tags []string) error
+	// RefreshContext drops the session's frozen prompt-epoch snapshot so the next
+	// turn recomposes the static prefix + tool catalog from live state (a chosen
+	// one-time prompt-cache re-write). Backing update_session's refresh_context.
+	RefreshContext(ctx context.Context) error
 }
 
 type sessionKey struct{}

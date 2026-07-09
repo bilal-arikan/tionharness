@@ -65,6 +65,19 @@ func (p Price) CacheSavings(cacheReadTokens int) float64 {
 	return float64(cacheReadTokens) * p.InputPerMTok * (1 - p.cacheReadMult()) / 1_000_000
 }
 
+// CostNoCaching returns the counterfactual USD cost if prompt caching did not
+// exist: every cache-read AND cache-write token is billed as fresh input at the
+// base rate — no read discount (cacheReadMult) and no write premium
+// (cacheWriteMult). This is the honest "what you'd pay without any caching"
+// baseline, so a savings display can subtract the real cost from it. It is NOT
+// simply cost+CacheSavings: that keeps the cache-write premium, overstating the
+// baseline by (cacheWriteMult−1)×cacheWrite×InputPerMTok.
+func (p Price) CostNoCaching(inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens int) float64 {
+	in := float64(inputTokens+cacheReadTokens+cacheWriteTokens) * p.InputPerMTok
+	out := float64(outputTokens) * p.OutputPerMTok
+	return (in + out) / 1_000_000
+}
+
 // priceTable holds APPROXIMATE list prices (USD per 1M tokens) for the metered
 // providers, keyed by provider kind then model id. These are list-price
 // estimates for the budget screen, not billing-grade figures — provider prices
@@ -155,8 +168,15 @@ func EstimateFor(provider, model string) (Price, bool) {
 	switch provider {
 	case "claude-cli":
 		// claude-cli runs via OAuth/subscription; reuse the Anthropic list price for
-		// the same model id as an informational estimate.
+		// the same model id as an informational estimate. BUT the 1-hour extended
+		// cache-write premium (CacheWrite1hMult, 2×) the anthropic table carries is
+		// specific to TionSwarm's OWN native anthropic client, which always requests
+		// ttl:"1h". Claude Code CLI manages its own cache_control at the default
+		// 5-minute TTL (1.25×), so clear the override here → the estimate uses the
+		// standard write tier. Cache-read (0.10×) is unchanged. Without this a
+		// claude-cli agent's cache-write cost is over-estimated by ~60%.
 		if p, ok := priceTable["anthropic"][model]; ok {
+			p.CacheWriteMultOverride = 0 // fall back to CacheWriteMult (1.25×), the 5-minute tier
 			return p, true
 		}
 	}

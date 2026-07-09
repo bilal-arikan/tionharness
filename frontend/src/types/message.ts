@@ -39,6 +39,9 @@ export interface TurnStep {
   isError?: boolean
   // Suggested clickable answers for an 'ask' prompt.
   options?: string[]
+  // Multiple questions for a single 'ask' prompt — each with its own optional
+  // options. When set, the UI renders them together in one card, answered at once.
+  questions?: { question: string; options?: string[] }[]
   // Checklist items for a 'todo' step.
   todos?: TodoItem[]
   // Stable machine tag for a 'recovery'/'error' step (e.g. "max_tool_iterations").

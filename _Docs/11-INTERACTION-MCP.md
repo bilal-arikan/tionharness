@@ -104,6 +104,16 @@ gelecekteki `confirm` için bloklanır (cevap beklenir). Her MCP tool çağrıs�
 `Emit` ile **`TurnStep` izine** yazılır → aktivite kartları (ActivityCard /
 TodoCard / ArtifactCard) CLI yolunda da görünür.
 
+**Çoklu soru (2026-07-08):** `ask_user` tek çağrıda **birden fazla soru** sorabilir.
+Model ya tekil `{question, options}` gönderir ya da `{questions:[{question, options}...]}`
+dizisi. Tekil yol değişmedi (tek soru kartı). Çoklu yolda tek bir `StepAsk`
+`Questions[]` taşır → UI hepsini **tek kartta** gösterir (`MultiAskPrompt`), kullanıcı
+tümünü birden yanıtlar; cevaplar **JSON dizisi** olarak `POST .../control {answer}` ile
+gelir, `tools.FormatMultiAnswer` bunu `[n] soru\n→ cevap` bloğuna katlayıp modele döndürür.
+Backend: `tools.ParseAskInputMulti` (tüm soruları çıkarır), `tools.WithMultiAsker`
+(chat_stream), CLI köprüsü `callAsk` de aynı çoklu yolu kullanır. Çoklu asker yoksa
+tekil asker sırayla sorar (fallback). `TurnStep.Questions []tools.AskQuestion`.
+
 ---
 
 ## 4. Transport kararı (KARAR: In-process HTTP)

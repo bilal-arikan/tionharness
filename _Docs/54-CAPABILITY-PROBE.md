@@ -125,6 +125,13 @@ Tüm codebase-memory yeteneği bir workspace ayarıyla açılıp kapanır (**def
 - **UI:** `WorkspacePanel.tsx` "Kod bilgi-grafiği" bölümünde Toggle; harici-tools
   ekranında (`ExternalToolsPanel.tsx`) bilgilendirici callout ("Ayarlar ▸ Bu Workspace'ten
   aç/kapa"). Frontend tip + patch + `WorkspaceView` mapping güncellendi.
+  - **Callout artık `codebase-memory-mcp` tool satırının altına gömülü** (üstteki
+    bağımsız kutu kaldırıldı) ve içine **tek-tık MCP aç/kapa** butonu eklendi
+    (`data-testid="cbm-mcp-toggle"`): sunucu ekli değilse tespit edilen PATH exe'siyle
+    `createMCPServer({name:"codebase-memory-mcp", transport:"stdio", command:<path>})`,
+    ekliyse `deleteMCPServer(id)`. Ekli/eksik durumu MCP listesinden komut-marker'ıyla
+    türetilir (backend'in izole-store yönlendirmesiyle aynı kural). Buton araç PATH'te
+    bulunmazsa devre dışı.
 
 ## Canlı duman testi (2026-07-07)
 

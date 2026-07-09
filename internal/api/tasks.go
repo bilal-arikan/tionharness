@@ -1,8 +1,10 @@
 package api
 
 import (
+	"context"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/bilal-arikan/tionswarm/internal/db"
 )
@@ -28,9 +30,25 @@ type createTaskReq struct {
 	Dependencies string   `json:"dependencies"` // JSON array of task IDs
 	Priority     string   `json:"priority"`
 	Tags         []string `json:"tags"`
+	ArtifactIDs  []string `json:"artifactIds"`
 	Progress     int      `json:"progress"`
 	StartDate    string   `json:"startDate"`
 	DueDate      string   `json:"dueDate"`
+}
+
+// placeholderTitle derives an instant, single-line title from a card's content,
+// used until the async AI title lands (see handleCreateTask). First line only,
+// capped to a sensible length with an ellipsis — mirrors the frontend excerpt.
+func placeholderTitle(source string) string {
+	source = strings.TrimSpace(source)
+	if i := strings.IndexAny(source, "\r\n"); i >= 0 {
+		source = strings.TrimSpace(source[:i])
+	}
+	r := []rune(source)
+	if len(r) > 60 {
+		return strings.TrimSpace(string(r[:60])) + "…"
+	}
+	return source
 }
 
 // clampProgress keeps a progress value within [0,100].
@@ -68,21 +86,23 @@ func (s *Server) handleCreateTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Title strategy: when the user omits a title we DON'T block the create on an
+	// LLM call. Instead we stamp an instant placeholder — a truncated excerpt of
+	// the content — and generate the real AI title in the background (see below),
+	// swapping it in and broadcasting a board event once it lands. This keeps card
+	// creation snappy so the board can render the new card immediately.
 	title := req.Title
-	if title == "" {
-		// Generate the title from the description (board) or prompt (legacy/agents).
-		source := req.Description
-		if source == "" {
-			source = req.Prompt
-		}
-		gen, err := ws(r).Runtime.TitleFor(ctx, req.OwnerAgentID, source)
-		if err != nil {
-			s.logger.Warn("task title generation degraded", "error", err)
-		}
-		title = gen
+	titleSource := req.Description
+	if titleSource == "" {
+		titleSource = req.Prompt
+	}
+	autoTitle := req.Title == "" && titleSource != ""
+	if autoTitle {
+		title = placeholderTitle(titleSource) // instant content excerpt
 	}
 
-	task, err := ws(r).DB.CreateTask(ctx, db.Task{
+	wsp := ws(r)
+	task, err := wsp.DB.CreateTask(ctx, db.Task{
 		Title:        title,
 		Description:  req.Description,
 		Prompt:       req.Prompt,
@@ -92,6 +112,7 @@ func (s *Server) handleCreateTask(w http.ResponseWriter, r *http.Request) {
 		Dependencies: req.Dependencies,
 		Priority:     req.Priority,
 		Tags:         req.Tags,
+		ArtifactIDs:  req.ArtifactIDs,
 		Progress:     clampProgress(req.Progress),
 		StartDate:    req.StartDate,
 		DueDate:      req.DueDate,
@@ -102,8 +123,42 @@ func (s *Server) handleCreateTask(w http.ResponseWriter, r *http.Request) {
 	s.logger.Info("task created", "task", task.ID, "title", task.Title, "owner", req.OwnerAgentID)
 	// Broadcast so other open windows (Network live-mode, future badge
 	// listeners) refresh without polling — mirrors the updateTask branch.
-	publishEntityChange(ws(r), "board", "Görev oluşturuldu: "+task.Title, task.BoardState,
+	publishEntityChange(wsp, "board", "Görev oluşturuldu: "+task.Title, task.BoardState,
 		map[string]string{"view": "board", "taskId": task.ID, "op": "create"})
+
+	// Async AI titling (best-effort). Runs on a detached context so it survives
+	// the request returning; only applies the AI title if the card still carries
+	// the placeholder (never clobbers a title the user edited, nor a deleted card).
+	if autoTitle && wsp.Runtime != nil {
+		placeholder := title
+		go func() {
+			bgCtx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+			defer cancel()
+			newTitle, genErr := wsp.Runtime.TitleFor(bgCtx, req.OwnerAgentID, titleSource)
+			if genErr != nil {
+				s.logger.Warn("async task title generation degraded", "task", task.ID, "error", genErr)
+			}
+			newTitle = strings.TrimSpace(newTitle)
+			if newTitle == "" || newTitle == placeholder {
+				return // nothing better to apply
+			}
+			cur, err := wsp.DB.GetTask(bgCtx, task.ID)
+			if err != nil {
+				return // deleted meanwhile
+			}
+			if cur.Title != placeholder {
+				return // user renamed it in the meantime — don't clobber
+			}
+			cur.Title = newTitle
+			if err := wsp.DB.UpdateTask(bgCtx, cur); err != nil {
+				s.logger.Warn("async task title update failed", "task", task.ID, "error", err)
+				return
+			}
+			publishEntityChange(wsp, "board", "Görev başlığı güncellendi: "+newTitle, cur.BoardState,
+				map[string]string{"view": "board", "taskId": cur.ID, "op": "update"})
+		}()
+	}
+
 	writeJSON(w, http.StatusCreated, task)
 }
 
@@ -117,6 +172,7 @@ type updateTaskReq struct {
 	Dependencies *string   `json:"dependencies"` // JSON array of task IDs
 	Priority     *string   `json:"priority"`
 	Tags         *[]string `json:"tags"`
+	ArtifactIDs  *[]string `json:"artifactIds"`
 	Progress     *int      `json:"progress"`
 	StartDate    *string   `json:"startDate"`
 	DueDate      *string   `json:"dueDate"`
@@ -180,6 +236,9 @@ func (s *Server) handleUpdateTask(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.Tags != nil {
 		task.Tags = *req.Tags
+	}
+	if req.ArtifactIDs != nil {
+		task.ArtifactIDs = *req.ArtifactIDs
 	}
 	if req.Progress != nil {
 		task.Progress = clampProgress(*req.Progress)

@@ -383,11 +383,7 @@ export function Composer({
   return (
     <div
       className={`relative bg-gradient-to-t from-[var(--color-bg)] via-[color-mix(in_srgb,var(--color-bg)_85%,transparent)] to-transparent px-3 py-3 transition-shadow md:px-6 md:py-4 ${
-        dragOver
-          ? 'ring-2 ring-inset ring-[var(--color-accent)]'
-          : active
-            ? 'ring-1 ring-inset ring-[color-mix(in_srgb,var(--color-accent)_35%,transparent)]'
-            : ''
+        dragOver ? 'ring-2 ring-inset ring-[var(--color-accent)]' : ''
       }`}
       onDragOver={(e) => {
         if (!sessionId) return

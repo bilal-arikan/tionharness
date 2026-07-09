@@ -42,13 +42,19 @@ func (s *Server) handleActivity(w http.ResponseWriter, r *http.Request) {
 		active[sid] = struct{}{}
 	}
 	for sid := range active {
-		st.Executions = true
-		// Map the session kind to its dedicated view when one exists, so e.g. a
-		// flow's background session also lights the Akışlar item, not just Aktivite.
+		// s.runs is a SERVER-WIDE registry (shared across all workspaces), while
+		// GetSession is scoped to THIS workspace's isolated store. Resolve the
+		// session first: a foreign session (an in-flight turn belonging to another
+		// workspace) errors here and must NOT light this workspace's indicators.
+		// Otherwise switching into an idle workspace would show a stale "busy"
+		// dot for work running in the workspace we just left.
 		sess, err := wsp.DB.GetSession(ctx, sid)
 		if err != nil {
 			continue
 		}
+		st.Executions = true
+		// Map the session kind to its dedicated view when one exists, so e.g. a
+		// flow's background session also lights the Akışlar item, not just Aktivite.
 		switch sess.Kind {
 		case "", "chat":
 			st.Chat = true

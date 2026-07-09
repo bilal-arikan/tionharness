@@ -2,9 +2,10 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNodesState, useEdgesState, type Edge } from '@xyflow/react'
 import { RotateCcw, ChevronDown, ChevronUp } from 'lucide-react'
 import { graphToReactFlow, type FlowRFNode, type NodeStatus } from './flowGraph'
-import type { Agent, Flow, FlowGraph, FlowRun, FlowState } from '@/types'
+import type { Agent, Flow, FlowGraph, FlowNodeEvent, FlowRun, FlowState } from '@/types'
 import { Markdown } from '@/shared/components/markdown/Markdown'
 import { normalizeAvatar } from '@/shared/lib/avatar'
+import { subscribeFlowNode } from '@/shared/lib/flowNodeBus'
 import { FlowCanvas } from './FlowCanvas'
 
 interface Props {
@@ -70,6 +71,57 @@ export function RunView({ run, flow, agents, onRerun, rerunning, hideSummary }: 
   const graph = useMemo(() => (flow ? safeParseGraph(flow.graph) : null), [flow])
   const statuses = useMemo(() => nodeStatuses(run, st), [run, st])
 
+  // Live per-node frames off the flow-node bus (keyed by run id). They render
+  // node start/done/error + output the instant the engine emits it — ahead of
+  // the parent's ~3s run-state poll, and for autonomous/scheduled runs that have
+  // no per-request SSE at all. Latest frame per node; cleared on run switch.
+  const [live, setLive] = useState<Record<string, FlowNodeEvent>>({})
+  useEffect(() => {
+    setLive({})
+    return subscribeFlowNode(run.id, (ev) => {
+      setLive((prev) => ({ ...prev, [ev.nodeId]: ev }))
+    })
+  }, [run.id])
+
+  // Merge live statuses onto the persisted ones, never regressing: a node only
+  // advances (pending → running → done/error), so a live "done" is not undone by
+  // a stale poll still calling the node "running".
+  const rank: Record<NodeStatus, number> = { running: 1, done: 2, error: 2 }
+  const mergedStatuses = useMemo(() => {
+    const merged: Record<string, NodeStatus> = { ...statuses }
+    for (const ev of Object.values(live)) {
+      const s: NodeStatus = ev.phase === 'done' ? 'done' : ev.phase === 'error' ? 'error' : 'running'
+      const cur = merged[ev.nodeId]
+      if (!cur || rank[s] > rank[cur]) merged[ev.nodeId] = s
+    }
+    return merged
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [live, statuses])
+
+  // Trace = persisted entries + any live "done" nodes the poll hasn't recorded
+  // yet (appended in execution order), so a finished node's output shows at once.
+  const liveTrace = useMemo(() => {
+    const base = st?.trace ?? []
+    const seen = new Set(base.map((t) => t.nodeId))
+    const extras = Object.values(live)
+      .filter((ev) => ev.phase === 'done' && !seen.has(ev.nodeId))
+      .sort((a, b) => a.index - b.index)
+      .map((ev) => ({ nodeId: ev.nodeId, type: ev.type, title: ev.title, output: ev.output ?? '', at: 0 }))
+    return [...base, ...extras]
+  }, [st, live])
+
+  // The node currently executing (a live "start" with no matching "done"/trace),
+  // rendered as a trailing "running" row so the panel isn't silent mid-node.
+  const runningNode = useMemo(() => {
+    const done = new Set([
+      ...(st?.trace ?? []).map((t) => t.nodeId),
+      ...Object.values(live)
+        .filter((e) => e.phase === 'done' || e.phase === 'error')
+        .map((e) => e.nodeId),
+    ])
+    return Object.values(live).find((ev) => ev.phase === 'start' && !done.has(ev.nodeId)) ?? null
+  }, [st, live])
+
   // Collapsible "Adım izi" (step trace) bottom panel. Persisted; defaults open on
   // wide screens but CLOSED on narrow (< md) ones, where it otherwise squeezes the
   // canvas and breaks the vertical layout.
@@ -84,7 +136,7 @@ export function RunView({ run, flow, agents, onRerun, rerunning, hideSummary }: 
       localStorage.setItem('tionswarm.flowTraceOpen', next ? '1' : '0')
       return next
     })
-  const traceCount = (st?.trace ?? []).length
+  const traceCount = liveTrace.length
 
   const [nodes, setNodes, onNodesChange] = useNodesState<FlowRFNode>([])
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([])
@@ -96,9 +148,9 @@ export function RunView({ run, flow, agents, onRerun, rerunning, hideSummary }: 
       return
     }
     const { nodes: rn, edges: re } = graphToReactFlow(graph)
-    setNodes(rn.map((n) => ({ ...n, data: { ...n.data, status: statuses[n.id] } })))
+    setNodes(rn.map((n) => ({ ...n, data: { ...n.data, status: mergedStatuses[n.id] } })))
     setEdges(re)
-  }, [graph, statuses, setNodes, setEdges])
+  }, [graph, mergedStatuses, setNodes, setEdges])
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
@@ -188,7 +240,7 @@ export function RunView({ run, flow, agents, onRerun, rerunning, hideSummary }: 
         {traceOpen && (
           <div className={`overflow-y-auto px-4 pb-4 ${graph ? 'max-h-[40vh]' : 'min-h-0 flex-1'}`}>
             <ol className="space-y-2">
-              {(st?.trace ?? []).map((t, i) => (
+              {liveTrace.map((t, i) => (
                 <li key={`${t.nodeId}-${i}`} className="rounded bg-[var(--color-surface-2)] p-2 text-sm">
                   <div className="mb-1 text-xs text-[var(--color-text-dim)]">
                     {i + 1}. [{t.type}] {t.title}
@@ -200,7 +252,15 @@ export function RunView({ run, flow, agents, onRerun, rerunning, hideSummary }: 
                   )}
                 </li>
               ))}
-              {traceCount === 0 && (
+              {/* Currently-executing node (live "start" with no output yet). */}
+              {runningNode && (
+                <li className="rounded bg-[var(--color-surface-2)] p-2 text-sm">
+                  <div className="text-xs text-[var(--color-accent)]">
+                    {traceCount + 1}. [{runningNode.type}] {runningNode.title} — çalışıyor…
+                  </div>
+                </li>
+              )}
+              {traceCount === 0 && !runningNode && (
                 <li className="text-xs italic text-[var(--color-text-dim)]">
                   {run.status === 'running' ? 'Henüz adım tamamlanmadı…' : 'Adım izi yok.'}
                 </li>

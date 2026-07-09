@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { GitBranch, Activity, Copy, Table2 } from 'lucide-react'
-import type { Agent, Message } from '@/types'
+import type { Agent } from '@/types'
 import { api } from '@/api'
 import { useRefreshTrigger } from '@/shared/hooks/useRefreshTrigger'
 import { copyToClipboard } from '@/shared/lib/clipboard'
@@ -16,6 +16,7 @@ import { CopyPathButton } from '@/shared/components/CopyPathButton'
 import { RevealButton } from '@/shared/components/RevealButton'
 import { FILTERS, kindMeta, shortId, StatusPill } from './executionsShared'
 import { SessionsOverview } from './SessionsOverview'
+import { useLiveTranscript } from './useLiveTranscript'
 
 interface Props {
   agents: Agent[]
@@ -31,8 +32,6 @@ interface Props {
 }
 
 const POLL_MS = 5000
-// Faster polling interval used when the selected execution is still running.
-const RUNNING_POLL_MS = 2000
 
 // ExecutionsPanel is the unified activity feed: a single list of every execution
 // across chat / task / flow / schedule (each backed by a Session),
@@ -42,8 +41,6 @@ export function ExecutionsPanel({ agents, onError, onOpenFile, onOpenArtifact, o
   // Bulk sessions overview overlay (searchable/sortable table of every session).
   const [overviewOpen, setOverviewOpen] = useState(false)
   const [selectedId, setSelectedId] = useState<string | null>(focusId ?? null)
-  const [messages, setMessages] = useState<Message[]>([])
-  const [loading, setLoading] = useState(false)
   // Absolute on-disk folder of the selected execution's session (for the
   // open-folder + copy-path buttons in the detail header).
   const [sessPath, setSessPath] = useState('')
@@ -107,42 +104,17 @@ export function ExecutionsPanel({ agents, onError, onOpenFile, onOpenArtifact, o
       .catch(() => { /* best-effort; buttons fall back to a fetch on click */ })
   }, [selectedId])
 
-  // Load the selected execution's transcript on selection change.
-  useEffect(() => {
-    if (!selectedId) {
-      setMessages([])
-      return
-    }
-    setLoading(true)
-    api
-      .listMessages(selectedId)
-      .then((m) => {
-        if (selectedRef.current === selectedId) setMessages(m)
-      })
-      .catch((e) => onError((e as Error).message))
-      .finally(() => setLoading(false))
-  }, [selectedId, onError])
-
   const selected = useMemo(
     () => items.find((i) => i.sessionId === selectedId) ?? null,
     [items, selectedId],
   )
 
-  // While the selected execution is running, re-fetch messages at a faster rate
-  // so new turns appear in the transcript without waiting for the next list poll.
-  const selectedRunning = selected?.running ?? false
-  useEffect(() => {
-    if (!selectedId || !selectedRunning) return
-    const t = setInterval(() => {
-      api
-        .listMessages(selectedId)
-        .then((m) => {
-          if (selectedRef.current === selectedId) setMessages(m)
-        })
-        .catch(() => { /* best-effort */ })
-    }, RUNNING_POLL_MS)
-    return () => clearInterval(t)
-  }, [selectedId, selectedRunning])
+  // Read-only live transcript for the selected execution. This is the SAME live
+  // layer the chat uses (ghost bubbles grown from the session_step bus + mid-turn
+  // inflight recovery), so a running chat/task/flow/spawn shows its tool steps
+  // live — not just working dots — exactly like the chat screen. Replaces the
+  // panel's old listMessages-only polling, which was blind to in-flight steps.
+  const { messages, loading } = useLiveTranscript(selectedId, selected?.running ?? false, onError)
 
   // Cross-window live sync: App.tsx's central SSE handler bumps the
   // 'executions' refresh signal on every chat / flow / schedule / spawn /
@@ -151,18 +123,11 @@ export function ExecutionsPanel({ agents, onError, onOpenFile, onOpenArtifact, o
   // sees both the new row + the new assistant message. The central
   // dispatcher applies the workspace filter + 200ms debounce once; this
   // panel is just a consumer.
+  // The selected execution's transcript reloads itself on this same tick from
+  // inside useLiveTranscript; here we only refresh the LIST (rows/status/order).
   const executionsTick = useRefreshTrigger('executions')
   useEffect(() => {
     reloadItems()
-    const sid = selectedRef.current
-    if (sid) {
-      api
-        .listMessages(sid)
-        .then((m) => {
-          if (selectedRef.current === sid) setMessages(m)
-        })
-        .catch(() => { /* best-effort */ })
-    }
   }, [executionsTick, reloadItems])
 
   return (

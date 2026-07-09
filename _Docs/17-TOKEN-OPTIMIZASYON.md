@@ -159,6 +159,49 @@ farketmez (trailing `tool_result` da olur). Politika birleşik: yalnız `extende
 > normalde sabit kalır; bir ajanın thinking seviyesini oturum ortasında değiştirmek yeni bir
 > cache yazımı tetikler.
 
+### Hedge breakpoint + blok-bazlı coalesce (2026-07-08)
+
+Cache denetiminde bulunan iki kırılım senaryosunun kapatılması:
+
+1. **Hedge breakpoint (4. breakpoint):** Anthropic cache araması bir breakpoint'ten
+   yalnız **~20 content block** geriye bakar. Tek kayan breakpoint'le, büyük bir paralel
+   tool batch'i (N `tool_use` + N `tool_result` bloğu > 20) önceki çağrının cached
+   prefix'ini bu ufkun dışında bırakıp **tüm geçmişi** yeniden yazdırabiliyordu. Artık
+   `toAnthropicMessages` kayan breakpoint'e ek olarak **bir önceki taşıyabilen mesajın son
+   bloğuna** ikinci bir breakpoint (hedge) koyar — bu konum bir önceki çağrının breakpoint
+   pozisyonudur (veya çok yakınıdır), yani eski prefix orada garantili bulunur ve yalnız
+   yeni kuyruk yazılır. Raw (verbatim-echo) mesajlar marker taşıyamaz → yürüyüş en yeni
+   Raw-olmayan öncüle düşer. Bütçe: `tools(1) + system(1) + hedge(1) + rolling(1) = 4`
+   (API maksimumu, tam kullanım). Test: `TestToAnthropicMessages_RollingHistoryBreakpoint`,
+   `_NoHedgeOnSingleMessage`, `_HedgeSkipsRaw`, `TestCacheBreakpointStability`.
+
+2. **Blok-bazlı coalesce (anthropic yolu):** Çok-ajanlı oturumda art arda iki aynı-rol düz
+   mesaj eskiden `coalescePlainSameRole` ile öncekinin `Text`'ine `"\n\n"` ekleyerek
+   birleşiyordu — **cached prefix'in son mesajının baytları değişiyor**, o noktadan itibaren
+   cache düşüyordu. Artık anthropic yolu birleştirmeyi `toAnthropicMessages` içinde
+   **blok seviyesinde** yapar: sonraki tur, önceki mesaja **ayrı bir text bloğu** olarak
+   eklenir; önceki blokların baytları aynen kalır, rol alternasyonu korunur. (Boş
+   placeholder text bloğu yerinde doldurulur.) `coalescePlainSameRole` yalnız minimax chat
+   yolunda kaldı (blok kavramı ve prefix cache'i yok). Test:
+   `TestToAnthropicMessages_BlockWiseCoalesce`.
+
+> **Bilinen kalanlar (bilinçli):** (a) tur-içi Raw echo ↔ tur-sonu persist bayt
+> ıraksaması — her yeni turun ilk çağrısında yalnız son turun segmenti yeniden yazılır;
+> (b) eski modellerdeki `foldSystemMessages` uyumluluk yolu hâlâ text-level katlar;
+> (c) tüm breakpoint'ler tek `cacheTTL` (`1h`) — history için 5m adaptif TTL ayrı bir
+> optimizasyon adayı (yazma primi 2.0× → 1.25×).
+
+### Prompt Epoch — oturum-başı donmuş bağlam snapshot'ı (2026-07-08)
+
+Yukarıdaki tur-içi düzeltmelerin tamamlayıcısı: **oturum-ortası** konfigürasyon
+değişikliklerinin (skill kurulumu, ayar/talimat düzenlemesi, MCP araç listesi
+değişimi, capability toggle, katılımcı değişimi) cache'i kırması, statik prefix'in
+(tools + statik system) oturum başında **dondurulmasıyla** engellendi. Değişiklikler
+diske anında iner ama prompt'a yalnız cache'in zaten öldüğü anlarda (compaction,
+1h TTL soğuması, model/workdir/katılımcı değişimi, `/refresh-context`) adopte
+edilir; bu arada ajan dinamik tarafta "snapshot eski" notu görür. Workspace ayarı
+`PromptEpochEnabled` (default açık). Detay **[57-PROMPT-EPOCH.md](57-PROMPT-EPOCH.md)**.
+
 ## the external agent project'tan Aktarılan Fikirler
 
 > Kaynak: `external-agent-oss` ([repo](https://github.com/external-agent-project/external-agent-oss)) bağlam-yönetimi
@@ -237,6 +280,14 @@ the external agent project her MCP tool çağrısında şemaya bir **`_intent`**
   **Token · Maliyet · Cache tasarrufu · Sıkıştırma** (`TREND_METRICS`, `BudgetPanel`). Backend her `dayPoint`'e
   `compactSavedBytes`/`compactSavedBytesLLM` ekledi → trend bunları gün-bazında çizebiliyor; bar rengi+formatlayıcı
   metriğe göre değişir, altta pencere-toplamı gösterilir.
+
+### Hesaplama düzeltmeleri (2026-07-08)
+Bütçe / oturum-bilgisi / sohbet-debug / debug popup'larının hesap tutarlılık denetiminde bulunup düzeltilen dört nokta (hepsi ortak `billing.PriceStat` + fiyat tablosu + `session_info` filler yolunda → tek noktadan dört ekranı da düzeltir):
+
+- **claude-cli tahmini cache tasarrufu artık sıfır değil** (`billing.PriceStat`): estimated (abonelik) dalı maliyeti eşdeğer-API ile tahmin ediyor ama tasarrufu `0` döndürüyordu. Anahtarsız varsayılan sağlayıcı olan claude-cli'de bu, tahmini bir maliyet gösterilirken **Tasarruf Merkezi / "Prompt-cache" / oturum kazancı / mesaj-debug "Cache tasarrufu"** satırlarının hepsinin `$0` görünmesine yol açıyordu. Artık `ep.CacheSavings(cacheRead)` da tahmin ediliyor (`priced=false` korunur → UI iki figürü de "~" ile işaretler). Regresyon: `billing_test.go`.
+- **claude-cli cache-write primi doğru tier'a çekildi** (`providers.EstimateFor`): anthropic tablosundaki `claude-opus-4-8` vb. `CacheWrite1hMult` (2×) primini taşır — bu **yalnız TionSwarm'un native anthropic client'ına** özgü (o hep `ttl:"1h"` ister). claude-cli (Claude Code) kendi `cache_control`'unu **5 dakikalık TTL (1.25×)** ile yönetir, dolayısıyla EstimateFor artık override'ı sıfırlıyor → cache-write %60 fazla fiyatlanmıyor. Regresyon: `pricing_test.go`.
+- **Bağlam penceresi çubuğu segment↔toplam tutarsızlığı** (`session_info.go`): "kullanılan" başlığı `EstimateTokens` (mesaj başına `+MsgOverhead=4`) ile hesaplanırken filler segmentleri bu framing'i saymıyordu → çubuk rapor edilen yüzdeye tam ulaşmıyordu. `buildFillers` artık mesaj başına `conversation.MsgOverhead` ekliyor **ve** `ContextTokens` doğrudan filler toplamından türetiliyor → başlık = görünür segmentler toplamı (birebir). `MsgOverhead` `conversation` paketinden dışa açıldı.
+- **"Tasarrufsuz maliyet" tam-doğru baseline'a çevrildi** (`providers.Price.CostNoCaching` + `billing.NoCacheCost` + `Rollup.NoCacheCostUSD` → `cumulative.noCacheCostUSD`): kart eskiden `cost + savings` gösteriyordu; bu, cacheRead'i tam fiyatlıyor ama cache-write primini (1.25×/2×) içeride bırakıp "caching olmasaydı" senaryosunu `(writeMult−1)×cacheWrite×inP` kadar şişiriyordu. Yeni baseline, cacheRead **ve** cacheWrite tokenlarının tümünü taban girdi fiyatından (indirim/prim yok) + input + output ile hesaplar → gerçek "caching yokmuş" tutarı. (Not: 1s-TTL 2× primi nedeniyle tek soğuk yazma, o yazma için tasarrufsuz baseline'ı bile aşabilir — caching kazancı tekrar-okumada realize olur.) Regresyon: `billing_test.go` + `pricing_test.go`.
 
 **Notlar / sınırlar:**
 - Hook'lar (`PreToolUse`/`PostToolUse`) hâlâ tasarruf **ölçmez** (Claude Code sözleşmesi; gerçek token-tasarruf

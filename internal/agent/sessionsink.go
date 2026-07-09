@@ -25,12 +25,15 @@ type sessionSink struct {
 	// autoTag reports whether event-driven auto-tagging is on (settings gate), so
 	// Archive only writes the "archived" tag when the feature is enabled.
 	autoTag func() bool
+	// refreshEpoch drops the session's frozen prompt-epoch snapshot (nil-safe),
+	// backing update_session's refresh_context field.
+	refreshEpoch func(context.Context, string)
 }
 
 // NewSessionSink builds a session sink bound to a session for this workspace. It
 // satisfies both tools.SessionSink and (as a superset) tools.GoalSink.
 func (r *Runtime) NewSessionSink(sessionID string) tools.SessionSink {
-	return &sessionSink{db: r.db, sessionID: sessionID, publish: r.publish, autoTag: r.tun.AutoTagSessions}
+	return &sessionSink{db: r.db, sessionID: sessionID, publish: r.publish, autoTag: r.tun.AutoTagSessions, refreshEpoch: r.RefreshPromptEpoch}
 }
 
 // notify publishes a "session" change event so the open session list + detail
@@ -98,6 +101,13 @@ func (s *sessionSink) SetTags(ctx context.Context, tags []string) error {
 		return err
 	}
 	s.notify("tags")
+	return nil
+}
+
+func (s *sessionSink) RefreshContext(ctx context.Context) error {
+	if s.refreshEpoch != nil {
+		s.refreshEpoch(ctx, s.sessionID)
+	}
 	return nil
 }
 

@@ -360,7 +360,24 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 		}
 		return defs
 	}
-	req.Tools = shipDefs()
+	// Prompt epoch: the shipped tool defs are the FROZEN session-start snapshot
+	// (promptepoch.go) so passive catalog drift — a skill install, an MCP
+	// tools/list_changed, a visibility edit — cannot bust the tools block at the
+	// very front of the cache prefix. The agent's own in-turn activations are the
+	// deliberate exception: shipFor merges them live (a chosen one-time re-write).
+	// Execution always uses the LIVE registry, so a tool disabled mid-session
+	// fails closed even while its frozen schema is still advertised.
+	frozenDefs, toolsStale := r.EpochToolDefs(ctx, SessionIDFrom(ctx), agent, shipDefs)
+	shipFor := func() []providers.ToolDef {
+		if frozenDefs == nil { // epoch off / no session / no snapshot: live defs
+			return shipDefs()
+		}
+		return mergeFrozenToolDefs(frozenDefs, shipDefs(), active.Snapshot())
+	}
+	if toolsStale && !strings.Contains(req.SystemDynamic, "<context_snapshot_note>") {
+		req.SystemDynamic = strings.TrimSpace(req.SystemDynamic + "\n\n" + PromptEpochStaleNote)
+	}
+	req.Tools = shipFor()
 	req.ProgrammaticTools = ptcMode
 	req.WebTools = webMode
 	// rawEcho gates the verbatim assistant-content echo on the modes whose
@@ -465,7 +482,7 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 		// byte-stable apart from activations). Cheap; reflects activate/deactivate
 		// calls from the previous iteration.
 		active.SetIter(i)
-		req.Tools = shipDefs()
+		req.Tools = shipFor()
 		// Self-healing: enforce the tool_use↔tool_result pairing invariants on
 		// the in-flight history before every provider call. A well-formed slice
 		// passes through untouched; a healed one is logged + journaled (never

@@ -784,6 +784,15 @@ active/tool_search/hidden). Tam app boot + canlı chat testi orantısız ağır/
   `formatToolRecapLine`) artık `CallName` varsa onu gösteriyor → model gerçek çağrılabilir adı görüyor.
   UI hâlâ bare `Tool`'u kullanıyor (kartlar değişmedi). Test: `TestToolRecapBlockUsesCallName`.
   Ayrıca **activate→call race** (SES125 `list_tasks`): model doğru namespaced adı çağırsa bile
-  `activate_tools` sonrası CLI `tools/list`'i henüz yenilememişse "No such tool available" gelir,
-  retry ile toparlar — bu transient race benign (autotag muaf tutuyor); server-side bloklamalı fix
-  CLI'nin bildirim-işleme sırasına bağlı olduğundan riskli, yapılmadı.
+  `activate_tools` sonrası CLI `tools/list`'i henüz yenilememişse "No such tool available" gelir.
+
+- ✅ **activate→call race ÇÖZÜLDÜ — `PushToolsChangedAndWait` (2026-07-08):** Önce canlı ölçtük
+  (`internal/interaction/probe_relist_test.go`, `TIONSWARM_LIVE_CLI=1`): activate cevabı tutulurken
+  CLI'nin `tools/list(extended)` yeniden-çekmesi gelip gelmediğini gözledik. Sonuç claude-cli 2.1.203
+  / fable-5'te **2/2 "A"** — CLI bildirimi **eşzamanlı** işliyor, activate PENDING iken ~10-16ms'de
+  re-list ediyor (hold sırasında race hiç tetiklenmedi, 0/2). Yani bloklama güvenli+etkili.
+  Uygulama: `interaction.Server`'a `relistWaiters` + `PushToolsChangedAndWait(token, timeout)` +
+  `signalRelist` (tools/list handler sinyaller); `callActivate` artık `PushToolsChanged` yerine bunu
+  çağırıyor (`activateRelistTimeout = 1s`, normalde ~15ms'de döner). Güvenlik: açık stream yoksa hiç
+  bloklamaz, her zaman timeout'lu → client re-list etmezse en fazla +1s, sonra tarihsel retry.
+  Testler: `TestProbeRelistOrdering` (canlı, gated), `TestPushToolsChangedAndWait{Signalled,NoStream,Timeout}`.

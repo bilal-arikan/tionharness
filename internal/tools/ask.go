@@ -6,8 +6,25 @@ import "context"
 // It is supplied by the interactive chat layer; autonomous runs leave it unset.
 type AskFunc func(ctx context.Context, question string, options []string) (string, error)
 
+// AskQuestion is one question of a (possibly multi-question) ask_user prompt: the
+// question text plus optional clickable suggested answers. The json tags match the
+// TurnStep.questions payload the frontend renders, so it doubles as the wire shape.
+type AskQuestion struct {
+	Question string   `json:"question"`
+	Options  []string `json:"options,omitempty"`
+}
+
+// MultiAskFunc asks the user several questions at once (rendered together in one
+// card) and blocks until every answer is submitted, returning a single combined
+// answer string for the model. Supplied by the interactive chat layer alongside
+// AskFunc; autonomous runs leave it unset.
+type MultiAskFunc func(ctx context.Context, questions []AskQuestion) (string, error)
+
 // askKey keys the AskFunc on a request context.
 type askKey struct{}
+
+// multiAskKey keys the MultiAskFunc on a request context.
+type multiAskKey struct{}
 
 // WithAsker attaches an interactive asker to ctx so the ask_user tool can prompt
 // the user mid-turn. Kept in the tools package (not agent) so built-in tools can
@@ -20,6 +37,19 @@ func WithAsker(ctx context.Context, fn AskFunc) context.Context {
 // (e.g. scheduler runs with no open client connection).
 func askerFrom(ctx context.Context) AskFunc {
 	fn, _ := ctx.Value(askKey{}).(AskFunc)
+	return fn
+}
+
+// WithMultiAsker attaches a multi-question asker to ctx so ask_user can present
+// several questions at once. Mirrors WithAsker.
+func WithMultiAsker(ctx context.Context, fn MultiAskFunc) context.Context {
+	return context.WithValue(ctx, multiAskKey{}, fn)
+}
+
+// multiAskerFrom returns the multi-question asker attached to ctx, or nil when
+// none is present.
+func multiAskerFrom(ctx context.Context) MultiAskFunc {
+	fn, _ := ctx.Value(multiAskKey{}).(MultiAskFunc)
 	return fn
 }
 

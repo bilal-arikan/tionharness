@@ -9,6 +9,9 @@ export const VISIBILITY_TIERS: {
   label: string
   hint: string
   color: string
+  // Optional override for the badge LABEL text color (defaults to `color`). Used
+  // to distinguish tiers whose accent color would otherwise read the same.
+  labelColor?: string
 }[] = [
   {
     value: 'full',
@@ -20,7 +23,10 @@ export const VISIBILITY_TIERS: {
     value: 'summary',
     label: 'Özet',
     hint: 'Katalogda isim + kısa özet görünür; tam şema gerektiğinde on-demand yüklenir.',
-    color: 'var(--color-accent)',
+    // Olive green chip so it no longer matches the "Tam" (success green) tier; the
+    // label text is orange for extra contrast.
+    color: '#6b8e23',
+    labelColor: '#f97316',
   },
   {
     value: 'name-only',
@@ -38,6 +44,20 @@ export const VISIBILITY_TIERS: {
 
 export function visibilityMeta(v: ToolVisibility | undefined) {
   return VISIBILITY_TIERS.find((t) => t.value === v) ?? VISIBILITY_TIERS[1]
+}
+
+// parseArgs safely turns an MCPServer.args JSON string into a string[]. The
+// backend serialises a nil args slice as the literal "null" (json.Marshal(nil)),
+// so a naive JSON.parse(args).join(...) throws "Cannot read properties of null".
+// Anything that isn't a JSON array (null, object, malformed) yields [].
+export function parseArgs(args?: string): string[] {
+  if (!args) return []
+  try {
+    const parsed = JSON.parse(args)
+    return Array.isArray(parsed) ? parsed.map(String) : []
+  } catch {
+    return []
+  }
 }
 
 // MCP tools are namespaced "<server>__<tool>". These helpers recover a tool's

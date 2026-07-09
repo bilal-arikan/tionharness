@@ -192,6 +192,21 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 		}
 	})
 
+	// Multi-question asker: ask_user with several questions emits ONE step carrying
+	// all of them; the client renders a combined form and POSTs a JSON array of
+	// answers, which FormatMultiAnswer folds into a single labeled block for the model.
+	ctx = tools.WithMultiAsker(ctx, func(ctx context.Context, questions []tools.AskQuestion) (string, error) {
+		sse("step", agent.TurnStep{Kind: agent.StepAsk, Questions: questions})
+		select {
+		case ans := <-run.answer:
+			return tools.FormatMultiAnswer(questions, ans), nil
+		case <-clientGone.Done():
+			return "", clientGone.Err()
+		case <-ctx.Done():
+			return "", ctx.Err()
+		}
+	})
+
 	// Session-scoped permission grants + the approval prompter for write/exec
 	// tools under "ask" mode. The prompter emits a dedicated StepPermission card
 	// and blocks on the same answer channel as ask_user; "Always allow" is

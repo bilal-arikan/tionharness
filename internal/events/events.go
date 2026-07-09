@@ -29,6 +29,13 @@ type Event struct {
 	// happen. Opaque JSON here (the events package never imports agent), exactly
 	// like db.Message.Steps. Empty for ordinary notifications.
 	Step json.RawMessage `json:"step,omitempty"`
+	// Node carries an already-marshalled orchestration.NodeEvent for a
+	// "flow_node" event: one flow node's lifecycle (start/done/error + output),
+	// broadcast keyed by the flow run id (Target["flowRunId"]) so any window
+	// viewing that run renders per-node progress live instead of polling. Opaque
+	// JSON here (this package imports neither agent nor orchestration). Empty for
+	// everything else.
+	Node json.RawMessage `json:"node,omitempty"`
 }
 
 // Bus fans out events to every live subscriber. Sends are non-blocking: a slow

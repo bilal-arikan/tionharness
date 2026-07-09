@@ -15,6 +15,7 @@ export const taskApi = {
     dependencies?: string
     priority?: Task['priority']
     tags?: string[]
+    artifactIds?: string[]
   }) =>
     req<Task>('/api/tasks', {
       method: 'POST',
@@ -29,7 +30,7 @@ export const taskApi = {
       Pick<
         Task,
         | 'title' | 'description' | 'ownerAgentId' | 'flowId' | 'boardState'
-        | 'dependencies' | 'priority' | 'tags'
+        | 'dependencies' | 'priority' | 'tags' | 'artifactIds'
       >
     >,
   ) =>

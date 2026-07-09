@@ -118,7 +118,7 @@ func (e *AutomationEngine) fireBoard(ctx context.Context, a db.Automation, ev db
 	if !e.guardsPass(ctx, a) {
 		return
 	}
-	prompt := renderAutomationPrompt(a.PromptTemplate, e.boardVars(a, ev))
+	prompt := renderAutomationPrompt(a.PromptTemplate, e.boardVars(ctx, a, ev))
 	if strings.TrimSpace(prompt) == "" {
 		e.recordFailure(ctx, a, "rendered prompt is empty")
 		return
@@ -376,11 +376,19 @@ func (e *AutomationEngine) turnVars(ctx context.Context, a db.Automation, sess d
 // boardVars assembles the placeholder values available to a board automation's
 // prompt template for one card change. There is no session result, so {{result}}
 // is absent (renderAutomationPrompt appends nothing).
-func (e *AutomationEngine) boardVars(a db.Automation, ev db.BoardChangeEvent) map[string]string {
+func (e *AutomationEngine) boardVars(ctx context.Context, a db.Automation, ev db.BoardChangeEvent) map[string]string {
 	now := time.Now()
 	maxIter := strconv.Itoa(a.MaxIterations)
 	if a.MaxIterations == 0 {
 		maxIter = "∞"
+	}
+	// Resolve the card owner to a human name (falling back to the raw id); empty
+	// when the card is unassigned.
+	owner := ev.OwnerAgentID
+	if owner != "" {
+		if ag, err := e.db.GetAgent(ctx, owner); err == nil {
+			owner = ag.Name
+		}
 	}
 	return map[string]string{
 		"taskId":        ev.TaskID,
@@ -391,6 +399,9 @@ func (e *AutomationEngine) boardVars(a db.Automation, ev db.BoardChangeEvent) ma
 		"fromLabel":     boardLabel(ev.FromState),
 		"toLabel":       boardLabel(ev.ToState),
 		"board":         ev.ToState, // convenience alias for the current column
+		"tags":          strings.Join(ev.Tags, ", "),
+		"owner":         owner,       // card owner agent's name ("" = unassigned)
+		"priority":      ev.Priority, // critical/high/medium/low ("" = unset)
 		"iteration":     strconv.Itoa(a.IterationCount + 1),
 		"maxIterations": maxIter,
 		"automation":    automationLabel(a),

@@ -113,9 +113,10 @@ func TestToAnthropicTools_NoCacheWhenDisabled(t *testing.T) {
 	}
 }
 
-// With caching on, a single rolling breakpoint lands on the last block of the
-// last message so the whole conversation prefix is cached; no earlier message
-// carries one (one prefix breakpoint covers everything before it).
+// With caching on, the rolling breakpoint lands on the last block of the last
+// message and a HEDGE breakpoint on the second-to-last (≈ the previous call's
+// breakpoint position, so cache lookup finds the old prefix even when the new
+// tail exceeds Anthropic's ~20-block lookback). No earlier message carries one.
 func TestToAnthropicMessages_RollingHistoryBreakpoint(t *testing.T) {
 	msgs := []Message{
 		{Role: RoleUser, Text: "hi"},
@@ -126,17 +127,94 @@ func TestToAnthropicMessages_RollingHistoryBreakpoint(t *testing.T) {
 	if len(got) != 3 {
 		t.Fatalf("got %d messages, want 3", len(got))
 	}
-	for i := 0; i < len(got)-1; i++ {
+	for i := 0; i < len(got)-2; i++ {
 		for _, b := range got[i].Content {
 			if b.CacheControl != nil {
-				t.Errorf("message %d must not carry cache_control (only the last does)", i)
+				t.Errorf("message %d must not carry cache_control (only the last two do)", i)
 			}
 		}
+	}
+	hedge := got[len(got)-2].Content
+	if bp := hedge[len(hedge)-1].CacheControl; bp == nil || bp.TTL != "1h" {
+		t.Errorf("second-to-last block must carry the 1h hedge breakpoint, got %+v", bp)
 	}
 	last := got[len(got)-1].Content
 	bp := last[len(last)-1].CacheControl
 	if bp == nil || bp.TTL != "1h" {
 		t.Errorf("last block must carry a 1h rolling breakpoint, got %+v", bp)
+	}
+}
+
+// A single-message history carries only the rolling breakpoint — there is no
+// prior message to hedge on.
+func TestToAnthropicMessages_NoHedgeOnSingleMessage(t *testing.T) {
+	got := toAnthropicMessages([]Message{{Role: RoleUser, Text: "hi"}}, true, "", "claude-sonnet-4-6")
+	if len(got) != 1 {
+		t.Fatalf("got %d messages, want 1", len(got))
+	}
+	if got[0].Content[0].CacheControl == nil {
+		t.Error("single message must still carry the rolling breakpoint")
+	}
+}
+
+// The hedge walk skips Raw (verbatim-echo) messages — they cannot carry
+// cache_control — and lands on the newest non-Raw predecessor instead.
+func TestToAnthropicMessages_HedgeSkipsRaw(t *testing.T) {
+	msgs := []Message{
+		{Role: RoleUser, Text: "hi"},
+		{Role: RoleAssistant, Text: "raw turn", RawContent: json.RawMessage(`[{"type":"text","text":"raw turn"}]`)},
+		{Role: RoleUser, Text: "again"},
+	}
+	got := toAnthropicMessages(msgs, true, "", "claude-sonnet-4-6")
+	if len(got) != 3 {
+		t.Fatalf("got %d messages, want 3", len(got))
+	}
+	if len(got[1].Raw) == 0 || len(got[1].Content) != 0 {
+		t.Fatalf("middle message must stay a verbatim Raw echo: %+v", got[1])
+	}
+	if got[0].Content[0].CacheControl == nil {
+		t.Error("hedge must fall back to the newest non-Raw predecessor (message 0)")
+	}
+	last := got[2].Content
+	if last[len(last)-1].CacheControl == nil {
+		t.Error("last message must carry the rolling breakpoint")
+	}
+}
+
+// Back-to-back same-role plain turns merge BLOCK-WISE: the later turn becomes an
+// extra text block on the earlier message, so the earlier block's bytes stay
+// identical (a cached prefix ending there keeps hitting) and roles still
+// alternate. An all-empty placeholder block is filled in place instead.
+func TestToAnthropicMessages_BlockWiseCoalesce(t *testing.T) {
+	msgs := []Message{
+		{Role: RoleUser, Text: "hi"},
+		{Role: RoleAssistant, Text: "[Ada]: first"},
+		{Role: RoleAssistant, Text: "[Kai]: second"},
+		{Role: RoleUser, Text: "next"},
+	}
+	got := toAnthropicMessages(msgs, true, "", "claude-sonnet-4-6")
+	if len(got) != 3 {
+		t.Fatalf("got %d messages, want 3 (two assistant turns merged)", len(got))
+	}
+	merged := got[1]
+	if merged.Role != RoleAssistant || len(merged.Content) != 2 {
+		t.Fatalf("merged assistant message must carry two text blocks, got %+v", merged)
+	}
+	if merged.Content[0].Text != "[Ada]: first" {
+		t.Errorf("earlier block's bytes must be untouched, got %q", merged.Content[0].Text)
+	}
+	if merged.Content[1].Text != "[Kai]: second" {
+		t.Errorf("later turn must ride as its own block, got %q", merged.Content[1].Text)
+	}
+
+	// Placeholder fill: an empty first turn's placeholder block takes the text.
+	msgs = []Message{
+		{Role: RoleAssistant, Text: ""},
+		{Role: RoleAssistant, Text: "x"},
+	}
+	got = toAnthropicMessages(msgs, true, "", "claude-sonnet-4-6")
+	if len(got) != 1 || len(got[0].Content) != 1 || got[0].Content[0].Text != "x" {
+		t.Errorf("empty placeholder block must be filled in place, got %+v", got)
 	}
 }
 
@@ -260,10 +338,11 @@ func TestBuildSystemAndMessages_SummaryHeadCachedWhenOn(t *testing.T) {
 }
 
 // P5 hardening: across a full cached request (tools + static system + rolling
-// history) EVERY cache_control breakpoint must share the single cacheTTL, and there
-// must be EXACTLY ONE rolling message-level breakpoint, sitting on the last
-// PERSISTED block — never on the volatile dynamic trailer or the summary head.
-// A mixed TTL or a stray second message marker silently breaks Anthropic caching.
+// history) EVERY cache_control breakpoint must share the single cacheTTL, and
+// there must be EXACTLY TWO message-level breakpoints — the rolling one on the
+// last PERSISTED block and the hedge on the message before it — never on the
+// volatile dynamic trailer or the summary head. A mixed TTL or a stray extra
+// marker silently breaks Anthropic caching (4-breakpoint API budget).
 func TestCacheBreakpointStability(t *testing.T) {
 	a := &Anthropic{extendedCache: true}
 	req := Request{
@@ -286,25 +365,26 @@ func TestCacheBreakpointStability(t *testing.T) {
 		t.Errorf("tools breakpoint TTL = %+v, want %q", tc, cacheTTL)
 	}
 
-	// Exactly one message-level breakpoint, on the last persisted block.
-	markers := 0
-	var markedText string
+	// Exactly two message-level breakpoints: hedge + rolling, on persisted blocks.
+	var marked []string
 	for _, m := range msgs {
 		for _, b := range m.Content {
 			if b.CacheControl != nil {
-				markers++
-				markedText = b.Text
+				marked = append(marked, b.Text)
 				if b.CacheControl.TTL != cacheTTL {
 					t.Errorf("message breakpoint TTL = %q, want %q", b.CacheControl.TTL, cacheTTL)
 				}
 			}
 		}
 	}
-	if markers != 1 {
-		t.Fatalf("want exactly one rolling message breakpoint, got %d", markers)
+	if len(marked) != 2 {
+		t.Fatalf("want exactly two message breakpoints (hedge + rolling), got %d: %v", len(marked), marked)
 	}
-	if markedText != "again" {
-		t.Errorf("rolling breakpoint must sit on the last persisted block (\"again\"), got %q", markedText)
+	if marked[0] != "hello" {
+		t.Errorf("hedge breakpoint must sit on the second-to-last persisted block (\"hello\"), got %q", marked[0])
+	}
+	if marked[1] != "again" {
+		t.Errorf("rolling breakpoint must sit on the last persisted block (\"again\"), got %q", marked[1])
 	}
 }
 

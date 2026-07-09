@@ -20,6 +20,9 @@ export interface Task {
   // Rich card attributes (optional; absent on older tasks).
   priority?: TaskPriority
   tags?: string[]
+  // Referenced workspace artifacts (files dropped on the card become artifacts,
+  // or existing artifacts linked from the editor). Order is user-meaningful.
+  artifactIds?: string[]
   lastRunId: string
   lastRunStatus: string
   lastRunAt: number

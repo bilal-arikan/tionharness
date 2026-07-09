@@ -28,7 +28,8 @@ func joinNonEmpty(blocks ...string) string {
 // message after a fold is never an orphaned tool_result user turn (its matching
 // tool_use assistant turn would precede it, so it could not be first), so it is
 // either an assistant turn (→ clean user→assistant alternation) or a genuine user
-// turn (→ merged by coalescePlainSameRole into one user message). The returned
+// turn (→ merged into one user message by the provider's same-role coalescing;
+// anthropic does it block-wise in toAnthropicMessages). The returned
 // slice is a fresh backing array, so the caller's Messages are never mutated (the
 // summary head is request-time only and must never be persisted).
 func prependSummaryMessage(msgs []Message, summary string) []Message {

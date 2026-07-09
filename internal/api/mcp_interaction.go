@@ -528,6 +528,13 @@ func (b *interactionBackend) callViaSink(ctx context.Context, run *chatRun, st s
 // never by its bare name. Used to report the exact callable name back to the model.
 const extendedNSPrefix = "mcp__tionswarm_extended__"
 
+// activateRelistTimeout bounds how long callActivate waits for the CLI to re-fetch
+// tools/list after an activate push (PushToolsChangedAndWait). The live probe saw
+// claude-cli re-list concurrently in ~10-16ms, so the wait almost always returns far
+// under this ceiling; the generous cap only guards a client that never re-lists
+// (then the historical retry path takes over).
+const activateRelistTimeout = 1 * time.Second
+
 // bareToolName strips the Interaction MCP namespace so dispatch matches whether
 // the CLI sends a namespaced name (core: mcp__tionswarm_interaction__ask_user,
 // extended: mcp__tionswarm_extended__create_agent) or the bare name.
@@ -630,14 +637,17 @@ func (b *interactionBackend) callActivate(token string, run *chatRun, args json.
 			}
 		}
 		added := b.activateExtended(token, valid)
-		// Push list_changed so the CLI re-fetches tools/list and the newly registered
-		// tools become callable this turn. Pushed BEFORE returning so, by the time the
-		// model reads this result, the notification is already queued on the SSE stream
-		// (ordering mitigation, Doc 52 YENI-D). Nil-safe: without a live stream the
-		// client still converges on its next tools/list.
+		// Push list_changed AND wait for the CLI to re-fetch tools/list before returning,
+		// so the just-activated tools are already in the CLI's registry by the time the
+		// model reads this result and calls one. This closes the activate→call race that
+		// otherwise surfaced as "No such tool available: mcp__tionswarm_extended__<name>"
+		// on a same-turn call (SES125). A live probe (probe_relist_test) measured claude-cli
+		// re-listing concurrently in ~10-16ms while activate is pending, so this returns
+		// almost immediately; the bounded timeout means a client that fails to re-list can
+		// never wedge the call (worst case: the historical retry behavior).
 		pushed := false
 		if len(added) > 0 && b.srv != nil {
-			pushed = b.srv.PushToolsChanged(token)
+			pushed = b.srv.PushToolsChangedAndWait(token, activateRelistTimeout)
 		}
 		// Report the NAMESPACED callable names (mcp__tionswarm_extended__<name>), not
 		// the bare ones: in the claude-cli path a deferred tool is reachable ONLY under

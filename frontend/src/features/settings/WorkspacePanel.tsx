@@ -89,6 +89,16 @@ export function WorkspacePanel({ ws, setWsField, onDeleteWorkspace }: Props) {
       />
 
       <div className="mt-2 border-t border-[var(--color-border)] pt-3 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
+        Prompt cache — donmuş bağlam (prompt epoch)
+      </div>
+      <Toggle
+        label="Prompt epoch (donmuş bağlam snapshot'ı)"
+        hint="Açıkken bir oturumun statik sistem promptu + araç şemaları oturum başında dondurulur; oturum ortası değişiklikler (skill kurulumu, ayar/talimat düzenlemesi, MCP araç listesi değişimi) prompt cache'i kırmaz — compaction, uzun boşluk, model değişimi veya /refresh-context anında devreye girer. Ajan bu arada 'snapshot eski' notu görür; kapatılan araçlar yürütmede zaten anında engellenir. Kapalı = her tur canlı derlenir (her değişiklik cache'i kırar)."
+        checked={ws.promptEpochEnabled}
+        onChange={(v) => setWsField('promptEpochEnabled', v)}
+      />
+
+      <div className="mt-2 border-t border-[var(--color-border)] pt-3 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
         Sil
       </div>
 

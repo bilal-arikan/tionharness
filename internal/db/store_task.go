@@ -16,6 +16,8 @@ type BoardChangeEvent struct {
 	FromState    string
 	ToState      string
 	OwnerAgentID string
+	Tags         []string
+	Priority     string
 }
 
 // BoardChangeFn observes board card changes. The store calls it after releasing
@@ -64,7 +66,7 @@ func (d *DB) CreateTask(ctx context.Context, t Task) (Task, error) {
 	}
 	d.fireBoardHook(BoardChangeEvent{
 		TaskID: t.ID, Title: t.Title, Op: BoardOpCreate,
-		ToState: t.BoardState, OwnerAgentID: t.OwnerAgentID,
+		ToState: t.BoardState, OwnerAgentID: t.OwnerAgentID, Tags: t.Tags, Priority: t.Priority,
 	})
 	return t, nil
 }
@@ -101,6 +103,7 @@ func (d *DB) UpdateTask(ctx context.Context, t Task) error {
 	}
 	cur.Priority = t.Priority
 	cur.Tags = t.Tags
+	cur.ArtifactIDs = t.ArtifactIDs
 	cur.Progress = t.Progress
 	cur.StartDate = t.StartDate
 	cur.DueDate = t.DueDate
@@ -110,7 +113,7 @@ func (d *DB) UpdateTask(ctx context.Context, t Task) error {
 	if err != nil {
 		return err
 	}
-	ev := BoardChangeEvent{TaskID: cur.ID, Title: cur.Title, OwnerAgentID: cur.OwnerAgentID}
+	ev := BoardChangeEvent{TaskID: cur.ID, Title: cur.Title, OwnerAgentID: cur.OwnerAgentID, Tags: cur.Tags, Priority: cur.Priority}
 	if cur.BoardState != oldBoard {
 		ev.Op, ev.FromState, ev.ToState = BoardOpMove, oldBoard, cur.BoardState
 	} else {
@@ -133,7 +136,7 @@ func (d *DB) MoveTask(ctx context.Context, id, boardState string) error {
 	t.BoardState = boardState
 	t.UpdatedAt = now()
 	err := d.persistTaskLocked(t)
-	title, owner := t.Title, t.OwnerAgentID
+	title, owner, tags, prio := t.Title, t.OwnerAgentID, t.Tags, t.Priority
 	d.mu.Unlock()
 	if err != nil {
 		return err
@@ -141,7 +144,7 @@ func (d *DB) MoveTask(ctx context.Context, id, boardState string) error {
 	if oldBoard != boardState {
 		d.fireBoardHook(BoardChangeEvent{
 			TaskID: id, Title: title, Op: BoardOpMove,
-			FromState: oldBoard, ToState: boardState, OwnerAgentID: owner,
+			FromState: oldBoard, ToState: boardState, OwnerAgentID: owner, Tags: tags, Priority: prio,
 		})
 	}
 	return nil
@@ -167,11 +170,11 @@ func (d *DB) DeleteTask(ctx context.Context, id string) error {
 			_ = removeFile(d.dir(dirRuns, rid+".json"))
 		}
 	}
-	title, board, owner := t.Title, t.BoardState, t.OwnerAgentID
+	title, board, owner, tags, prio := t.Title, t.BoardState, t.OwnerAgentID, t.Tags, t.Priority
 	d.mu.Unlock()
 	d.fireBoardHook(BoardChangeEvent{
 		TaskID: id, Title: title, Op: BoardOpDelete,
-		FromState: board, OwnerAgentID: owner,
+		FromState: board, OwnerAgentID: owner, Tags: tags, Priority: prio,
 	})
 	return nil
 }

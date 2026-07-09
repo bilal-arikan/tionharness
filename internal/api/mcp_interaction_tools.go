@@ -17,14 +17,32 @@ func (b *interactionBackend) callAsk(ctx context.Context, run *chatRun, args jso
 	// Shared tolerant parser: accepts TionSwarm's {question, options} and claude-cli's
 	// native AskUserQuestion shapes (option objects + questions[] wrapper) so a model
 	// trained on the native tool no longer errors with a schema mismatch (SES73).
-	question, options, err := tools.ParseAskInput(args)
+	questions, err := tools.ParseAskInputMulti(args)
 	if err != nil {
 		return interaction.CallResult{Text: "invalid ask_user input: " + err.Error(), IsError: true}, nil
 	}
-	if strings.TrimSpace(question) == "" {
+	if len(questions) == 0 {
 		return interaction.CallResult{Text: "question is required", IsError: true}, nil
 	}
-	return b.blockForAnswer(ctx, run, question, options, func(a string) string { return a })
+	// Several questions: emit one combined-form step and fold the JSON-array answer
+	// into a single labeled block (mirrors the native ask_user multi path).
+	if len(questions) > 1 {
+		if run.autonomous {
+			return interaction.CallResult{Text: "no interactive session is available (autonomous run); proceed on your own", IsError: true}, nil
+		}
+		run.emit("step", agent.TurnStep{Kind: agent.StepAsk, Questions: questions})
+		select {
+		case ans := <-run.answer:
+			return interaction.CallResult{Text: tools.FormatMultiAnswer(questions, ans)}, nil
+		case <-run.done:
+			return interaction.CallResult{Text: "the turn ended before the user answered; proceed without the answer", IsError: true}, nil
+		case <-ctx.Done():
+			return interaction.CallResult{}, ctx.Err()
+		case <-time.After(askTimeout):
+			return interaction.CallResult{Text: "no answer within the time limit; proceed on your own", IsError: true}, nil
+		}
+	}
+	return b.blockForAnswer(ctx, run, questions[0].Question, questions[0].Options, func(a string) string { return a })
 }
 
 // callConfirm blocks for a yes/no decision on a risky action and normalises it.

@@ -23,7 +23,9 @@ export function performSummarize(ctx: CommandContext, kind: string): void {
   const userTmp = `cmd-u-${Date.now()}`
   const botTmp = `cmd-a-${Date.now()}`
   const busyLabel =
-    kind === 'compact' ? '⏳ Sohbet sıkıştırılıyor…' : '⏳ Özetleniyor…'
+    kind === 'compact' ? '⏳ Sohbet sıkıştırılıyor…'
+    : kind === 'refresh-context' ? '⏳ Bağlam snapshot\'ı yenileniyor…'
+    : '⏳ Özetleniyor…'
   const cmdBubble: Message = { id: userTmp, sessionId: sid, role: 'user', text: '/' + kind, createdAt: now }
   const placeholder: Message = {
     id: botTmp,
@@ -180,6 +182,7 @@ export interface ChatCommandDeps {
 export function buildChatCommands({ flows, summarize, handoff, openRewind, runFlow }: ChatCommandDeps): SlashCommand[] {
   return [
     { name: 'compact', icon: '🗜', description: 'Sohbeti şimdi özete sıkıştır', run: () => summarize('compact') },
+    { name: 'refresh-context', icon: '🔄', description: 'Donmuş bağlam snapshot\'ını yenile — araç/skill/talimat değişiklikleri sonraki turda görünür', run: () => summarize('refresh-context') },
     { name: 'handoff', icon: '↪', description: 'Context reset — temiz pencerede devam et', run: () => handoff() },
     { name: 'rewind', icon: '⟲', description: 'Sohbeti bir checkpoint\'e geri sar — mesajları geri al', run: () => openRewind() },
     { name: 'tools', icon: '🔌', description: 'Kullanılabilir araçları listele', run: () => summarize('tools') },

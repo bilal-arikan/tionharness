@@ -76,6 +76,12 @@ type Task struct {
 	// files without them decode to zero values.
 	Priority  string   `json:"priority,omitempty"`  // critical|high|medium|low ("" = unset)
 	Tags      []string `json:"tags,omitempty"`      // free-form labels
+	// ArtifactIDs references workspace artifacts attached to this card (files
+	// dropped onto the card become artifacts, or existing artifacts linked from
+	// the editor). Order is user-meaningful; ids that no longer resolve are
+	// skipped by the UI. Independent of artifact lifecycle — deleting the task
+	// drops the refs, it does not delete the artifacts.
+	ArtifactIDs []string `json:"artifactIds,omitempty"`
 	Progress  int      `json:"progress,omitempty"`  // 0..100
 	StartDate string   `json:"startDate,omitempty"` // YYYY-MM-DD
 	DueDate   string   `json:"dueDate,omitempty"`   // YYYY-MM-DD

@@ -1,5 +1,5 @@
 import type { MCPServer, MCPTransport, ToolVisibility, WorkspaceTool } from '@/types'
-import { toolSource, toolServer, VISIBILITY_TIERS } from './toolMeta'
+import { parseArgs, toolSource, toolServer, VISIBILITY_TIERS } from './toolMeta'
 
 // ServerManagement is the MCP server list + add form, shown when no tool is
 // selected. (Extracted so the right pane stays readable.)
@@ -96,7 +96,7 @@ export function ServerManagement(props: {
                   {!s.enabled && <span className="text-xs text-[var(--color-text-dim)]">(devre dışı)</span>}
                 </div>
                 <div className="truncate text-xs text-[var(--color-text-dim)]">
-                  {s.transport === 'stdio' ? `${s.command} ${JSON.parse(s.args || '[]').join(' ')}` : s.url}
+                  {s.transport === 'stdio' ? `${s.command} ${parseArgs(s.args).join(' ')}`.trim() : s.url}
                 </div>
               </div>
               <div className="flex flex-shrink-0 items-center gap-2">

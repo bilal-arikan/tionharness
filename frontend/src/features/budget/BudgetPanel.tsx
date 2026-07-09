@@ -413,8 +413,8 @@ export function BudgetPanel({ onError }: Props) {
             />
             <SummaryCard
               icon={<DollarSign size={12} />}
-              label="Tasarrufsuz maliyet (varsayım)"
-              value={`${usage.cumulative.savingsUSD > 0 && !usage.totals.priced ? '~' : ''}${usd(usage.cumulative.costUSD + usage.cumulative.savingsUSD)}`}
+              label="Tasarrufsuz maliyet"
+              value={`${usage.cumulative.noCacheCostUSD > 0 && !usage.totals.priced ? '~' : ''}${usd(usage.cumulative.noCacheCostUSD)}`}
               sub="caching olmasaydı ödenecek"
             />
           </div>

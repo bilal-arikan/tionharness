@@ -160,6 +160,9 @@ mutasyon fonksiyonu kilidi bıraktıktan sonra hook'u çağırır; workspace man
 ### Prompt değişkenleri (`boardVars`, `agent/automation.go`)
 `{{taskId}}` · `{{title}}` · `{{op}}` · `{{from}}` · `{{to}}` · `{{fromLabel}}` ·
 `{{toLabel}}` (sütun anahtarı→ad; özel sütun için anahtar) · `{{board}}` (=`{{to}}`) ·
+`{{tags}}` (kartın etiketleri, virgülle ayrık — `BoardChangeEvent.Tags` üzerinden;
+tüm op'larda dolu) · `{{owner}}` (atanan ajanın **adı**, `e.db.GetAgent` ile çözülür;
+boş = atanmamış) · `{{priority}}` (`critical/high/medium/low`, boş olabilir) ·
 ortak: `{{iteration}}` · `{{maxIterations}}` · `{{automation}}` · `{{date}}` · `{{time}}` ·
 `{{datetime}}`. `{{result}}` **yoktur** (oturum sonucu yok → append yapılmaz).
 

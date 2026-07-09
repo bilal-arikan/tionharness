@@ -1,9 +1,10 @@
-import { useState } from 'react'
-import { RefreshCw, X } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { ChevronDown, ChevronRight, RefreshCw, X } from 'lucide-react'
 import { api } from '@/api'
-import type { Agent, Task, Flow, BoardState, BoardColumnDef, TaskPriority } from '@/types'
+import type { Agent, Task, Flow, BoardState, BoardColumnDef, TaskPriority, Artifact } from '@/types'
 import { AgentPicker } from '@/shared/components/agents/AgentPicker'
 import { DependencyPicker } from './DependencyPicker'
+import { TaskArtifactRefs } from './TaskArtifactRefs'
 import { Button, ModalOverlay } from '@/shared/components'
 import { normalizeAvatar } from '@/shared/lib/avatar'
 
@@ -33,10 +34,23 @@ interface Props {
   tasks: Task[]
   defaultBoardState?: string
   onClose: () => void
-  // Called with the persisted task (created or updated).
+  // Called with the persisted task (created or updated). On optimistic create it
+  // is first called with a temporary card (id `temp-…`) so the board renders it
+  // instantly in the selected column.
   onSaved: (task: Task) => void
+  // Reconciles an optimistic create: replaces the temp card with the server row,
+  // or removes it (real = null) when the create failed.
+  onReplaceTemp?: (tempId: string, real: Task | null) => void
   onDeleted?: (id: string) => void
   onError: (msg: string) => void
+}
+
+// excerpt returns a short, single-line preview of the description used as the
+// placeholder title until the async AI title lands ("ilk başta içeriğin belli
+// miktarını başlıkta göster").
+function excerpt(text: string, max = 60): string {
+  const line = text.trim().split(/\r?\n/, 1)[0] ?? ''
+  return line.length > max ? line.slice(0, max).trimEnd() + '…' : line
 }
 
 // TaskFormModal is the obsidian-pm-style card editor: a centered popup that
@@ -44,7 +58,7 @@ interface Props {
 // flow, dependencies). Replaces the old right-hand TaskDetailPanel and the
 // inline create form.
 export function TaskFormModal({
-  mode, task, agents, flows, columns, tasks, defaultBoardState, onClose, onSaved, onDeleted, onError,
+  mode, task, agents, flows, columns, tasks, defaultBoardState, onClose, onSaved, onReplaceTemp, onDeleted, onError,
 }: Props) {
   const firstCol = defaultBoardState ?? columns[0]?.key ?? 'todo'
   const [title, setTitle] = useState(task?.title ?? '')
@@ -56,8 +70,29 @@ export function TaskFormModal({
   const [tags, setTags] = useState<string[]>(task?.tags ?? [])
   const [tagInput, setTagInput] = useState('')
   const [depIds, setDepIds] = useState<string[]>(() => parseDeps(task?.dependencies ?? '[]'))
+  const [artifactIds, setArtifactIds] = useState<string[]>(task?.artifactIds ?? [])
+  // Workspace artifacts, loaded once to resolve refs to titles/kinds and feed the
+  // "link existing" picker; drag-dropped files append newly created artifacts.
+  const [allArtifacts, setAllArtifacts] = useState<Artifact[]>([])
   const [saving, setSaving] = useState(false)
   const [retitling, setRetitling] = useState(false)
+  // Dependencies picker is collapsible; open by default only when the task
+  // already has dependencies, so the section stays out of the way otherwise.
+  const [depsOpen, setDepsOpen] = useState(depIds.length > 0)
+
+  // On create, focus the description field immediately — it is the primary input
+  // (the title is auto-generated from it), so the user can start typing at once.
+  const descRef = useRef<HTMLTextAreaElement>(null)
+  useEffect(() => {
+    if (mode === 'create') descRef.current?.focus()
+  }, [mode])
+
+  // Load workspace artifacts for the reference picker + chip resolution.
+  useEffect(() => {
+    api.listArtifacts().then(setAllArtifacts).catch(() => {
+      /* non-fatal: picker just shows "no artifacts" */
+    })
+  }, [])
 
   const addTag = () => {
     const t = tagInput.trim()
@@ -74,6 +109,7 @@ export function TaskFormModal({
     dependencies: JSON.stringify(depIds),
     priority,
     tags,
+    artifactIds,
   })
 
   const save = async () => {
@@ -81,17 +117,53 @@ export function TaskFormModal({
       onError('Başlık veya açıklama gerekli')
       return
     }
-    setSaving(true)
+    if (mode === 'edit') {
+      setSaving(true)
+      try {
+        onSaved(await api.updateTask(task!.id, payload()))
+        onClose()
+      } catch (e) {
+        onError((e as Error).message)
+      } finally {
+        setSaving(false)
+      }
+      return
+    }
+
+    // Create: optimistic. Render the card instantly in the SELECTED column with a
+    // placeholder title (typed title, else a content excerpt), close the modal,
+    // then reconcile with the server row. This guarantees the chosen board column
+    // is honored and lets the AI title fill in asynchronously (temp cards show a
+    // "başlık üretiliyor…" hint via their `temp-` id).
+    const p = payload()
+    const tempId = `temp-${Date.now()}`
+    const nowSec = Math.floor(Date.now() / 1000)
+    const optimistic: Task = {
+      id: tempId,
+      title: p.title || excerpt(p.description),
+      description: p.description,
+      prompt: '',
+      ownerAgentId: p.ownerAgentId,
+      flowId: p.flowId,
+      boardState: p.boardState,
+      dependencies: p.dependencies,
+      priority: p.priority,
+      tags: p.tags,
+      artifactIds: p.artifactIds,
+      lastRunId: '',
+      lastRunStatus: '',
+      lastRunAt: 0,
+      createdAt: nowSec,
+      updatedAt: nowSec,
+    }
+    onSaved(optimistic)
+    onClose()
     try {
-      const saved = mode === 'create'
-        ? await api.createTask(payload())
-        : await api.updateTask(task!.id, payload())
-      onSaved(saved)
-      onClose()
+      const saved = await api.createTask(p)
+      onReplaceTemp?.(tempId, saved)
     } catch (e) {
+      onReplaceTemp?.(tempId, null)
       onError((e as Error).message)
-    } finally {
-      setSaving(false)
     }
   }
 
@@ -164,6 +236,7 @@ export function TaskFormModal({
         <div className="flex flex-1 flex-col gap-4 overflow-y-auto px-4 py-4">
           <Field label="Açıklama">
             <textarea
+              ref={descRef}
               data-testid="task-description-textarea"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
@@ -261,9 +334,36 @@ export function TaskFormModal({
             </div>
           </Field>
 
-          <Field label="Bağımlılıklar — önce tamamlanması gereken görevler">
-            <DependencyPicker tasks={parentOptions} value={depIds} onChange={setDepIds} />
+          <Field label="Ekler — Artifact referansları">
+            <TaskArtifactRefs
+              value={artifactIds}
+              onChange={setArtifactIds}
+              artifacts={allArtifacts}
+              onArtifactsChanged={(created) => setAllArtifacts((prev) => [...created, ...prev])}
+              bucket={task?.id ?? 'board'}
+              onError={onError}
+            />
           </Field>
+
+          <div className="flex flex-col gap-1.5">
+            <button
+              type="button"
+              onClick={() => setDepsOpen((v) => !v)}
+              aria-expanded={depsOpen}
+              className="flex items-center gap-1.5 text-left text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-dim)] opacity-70 transition hover:opacity-100"
+            >
+              {depsOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+              <span>Bağımlılıklar — önce tamamlanması gereken görevler</span>
+              {depIds.length > 0 && (
+                <span className="rounded-full bg-[var(--color-accent-soft)] px-1.5 py-0.5 text-[10px] text-[var(--color-accent)]">
+                  {depIds.length}
+                </span>
+              )}
+            </button>
+            {depsOpen && (
+              <DependencyPicker tasks={parentOptions} value={depIds} onChange={setDepIds} />
+            )}
+          </div>
         </div>
 
         {/* Footer */}

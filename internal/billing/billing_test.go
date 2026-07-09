@@ -28,13 +28,22 @@ func TestPriceStat(t *testing.T) {
 	}
 
 	// Subscription provider (claude-cli) → unpriced but equivalent-API estimated.
-	cost, _, priced, est = PriceStat("claude-cli", "claude-sonnet-4-6",
-		db.KindStat{InputTokens: 1_000_000, OutputTokens: 1_000_000})
+	// Cache read/write are estimated too: cost includes the discounted cache tiers
+	// AND the savings figure is non-zero (regression guard: estimated savings used
+	// to be dropped to 0, hiding cache ROI for the default keyless provider).
+	cost, save, priced, est = PriceStat("claude-cli", "claude-sonnet-4-6",
+		db.KindStat{InputTokens: 1_000_000, OutputTokens: 1_000_000, CacheReadTokens: 1_000_000, CacheWriteTokens: 1_000_000})
 	if priced || !est {
 		t.Errorf("claude-cli: priced=%v est=%v, want false/true", priced, est)
 	}
-	if !approxUSD(cost, 18) { // sonnet 3 in + 15 out
-		t.Errorf("claude-cli estimate = %v, want 18", cost)
+	// sonnet 3 in + 15 out + cache-read 3*0.10 (0.3) + cache-write 3*1.25 (3.75).
+	// The write uses the STANDARD 5-min tier (1.25×), NOT the anthropic table's
+	// 1-hour override (2×) — that premium is specific to the native client.
+	if !approxUSD(cost, 22.05) {
+		t.Errorf("claude-cli estimate = %v, want 22.05 (5-min cache-write tier)", cost)
+	}
+	if !approxUSD(save, 2.7) { // 3 * 0.90 per 1M cache read
+		t.Errorf("claude-cli estimated savings = %v, want 2.7", save)
 	}
 
 	// No spend → priced=true, cost=0 (must not flag the rollup as unpriced).
@@ -48,6 +57,21 @@ func TestPriceStat(t *testing.T) {
 		db.KindStat{InputTokens: 100, OutputTokens: 10})
 	if priced || est || cost != 0 {
 		t.Errorf("unlisted: cost=%v priced=%v est=%v, want 0/false/false", cost, priced, est)
+	}
+
+	// No-caching baseline resolves like the cost: real price for anthropic, the
+	// equivalent-API estimate for claude-cli, 0 for unpriced/unknown.
+	if got := NoCacheCost("anthropic", "claude-opus-4-8",
+		db.KindStat{InputTokens: 1_000_000, OutputTokens: 1_000_000, CacheReadTokens: 1_000_000, CacheWriteTokens: 1_000_000}); !approxUSD(got, 40) {
+		t.Errorf("anthropic no-cache = %v, want 40", got)
+	}
+	// claude-cli sonnet estimate: (1M in + 1M write)*3 + 1M out*15 = 6 + 15 = 21.
+	if got := NoCacheCost("claude-cli", "claude-sonnet-4-6",
+		db.KindStat{InputTokens: 1_000_000, OutputTokens: 1_000_000, CacheWriteTokens: 1_000_000}); !approxUSD(got, 21) {
+		t.Errorf("claude-cli no-cache = %v, want 21", got)
+	}
+	if got := NoCacheCost("openrouter", "some/unlisted-model", db.KindStat{InputTokens: 100}); got != 0 {
+		t.Errorf("unlisted no-cache = %v, want 0", got)
 	}
 }
 
@@ -77,6 +101,12 @@ func TestRollupOf(t *testing.T) {
 	}
 	if roll.CacheReadTokens != 500_000 {
 		t.Errorf("cacheRead = %d, want 500000", roll.CacheReadTokens)
+	}
+	// No-caching baseline: cache tokens billed as fresh input, no discount/premium.
+	// haiku (1/5): 1M in + 1M out = 6. opus (5/25): (1M in + 0.5M read)*5 + 1M out*25
+	// = 7.5 + 25 = 32.5. unknown: unpriced → 0. Total = 38.5 (≥ CostUSD 36.25).
+	if !approxUSD(roll.NoCacheCostUSD, 38.5) {
+		t.Errorf("no-cache cost = %v, want 38.5", roll.NoCacheCostUSD)
 	}
 	if roll.Priced {
 		t.Error("Priced should be false (unknown model has real spend)")

@@ -61,6 +61,20 @@ export interface FlowState {
   trace: FlowTraceEntry[]
 }
 
+// FlowNodeEvent is one node's live lifecycle frame, broadcast over the SSE
+// `flownode` channel (backend orchestration.NodeEvent) while a run executes so
+// the run viewer shows per-node start/done/error + output the moment it happens,
+// ahead of the periodic run-state poll.
+export interface FlowNodeEvent {
+  phase: 'start' | 'done' | 'error'
+  nodeId: string
+  type: string
+  title: string
+  index: number // 1-based execution order
+  output?: string // on "done"
+  error?: string // on "error"
+}
+
 export interface FlowRun {
   id: string
   flowId: string

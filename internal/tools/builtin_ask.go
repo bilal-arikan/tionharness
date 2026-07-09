@@ -91,21 +91,67 @@ type askInput struct {
 // the model might send (TionSwarm's {question, options} and claude-cli's native
 // AskUserQuestion: option objects and/or a questions[] wrapper) into a single
 // question string + clean []string options. Shared by the native tool path and
-// the claude-cli Interaction MCP bridge so both decode identically.
+// the claude-cli Interaction MCP bridge so both decode identically. When several
+// questions are present only the first is returned (single-question callers).
 func ParseAskInput(raw json.RawMessage) (string, []string, error) {
-	var in askInput
-	if err := json.Unmarshal(raw, &in); err != nil {
+	qs, err := ParseAskInputMulti(raw)
+	if err != nil {
 		return "", nil, err
 	}
-	question := strings.TrimSpace(in.Question)
-	options := []string(in.Options)
-	if question == "" && len(in.Questions) > 0 {
-		question = strings.TrimSpace(in.Questions[0].Question)
-		if len(options) == 0 {
-			options = []string(in.Questions[0].Options)
+	if len(qs) == 0 {
+		return "", nil, nil
+	}
+	return qs[0].Question, qs[0].Options, nil
+}
+
+// ParseAskInputMulti decodes an ask_user payload into ALL of its questions,
+// tolerating every shape the model might send: TionSwarm's single {question,
+// options}, and claude-cli's AskUserQuestion {questions:[{question, options}...]}
+// wrapper (option objects or plain strings). Blank questions are dropped. A single
+// top-level {question, options} contributes one entry; when both a top-level
+// question AND a questions[] wrapper are present, all are kept (top-level first).
+func ParseAskInputMulti(raw json.RawMessage) ([]AskQuestion, error) {
+	var in askInput
+	if err := json.Unmarshal(raw, &in); err != nil {
+		return nil, err
+	}
+	out := make([]AskQuestion, 0, 1+len(in.Questions))
+	if q := strings.TrimSpace(in.Question); q != "" {
+		out = append(out, AskQuestion{Question: q, Options: []string(in.Options)})
+	}
+	for _, w := range in.Questions {
+		if q := strings.TrimSpace(w.Question); q != "" {
+			out = append(out, AskQuestion{Question: q, Options: []string(w.Options)})
 		}
 	}
-	return question, options, nil
+	return out, nil
+}
+
+// FormatMultiAnswer combines the user's per-question replies into a single labeled
+// block for the model. rawAnswer is the client's submission: a JSON array of answer
+// strings (one per question, in order). If it does not decode as an array (e.g. an
+// older client sent plain text), the whole text is returned unchanged. A missing or
+// blank entry is rendered as "(no answer)".
+func FormatMultiAnswer(questions []AskQuestion, rawAnswer string) string {
+	var answers []string
+	if err := json.Unmarshal([]byte(rawAnswer), &answers); err != nil {
+		return rawAnswer
+	}
+	var b strings.Builder
+	for i, q := range questions {
+		ans := ""
+		if i < len(answers) {
+			ans = strings.TrimSpace(answers[i])
+		}
+		if ans == "" {
+			ans = "(no answer)"
+		}
+		if i > 0 {
+			b.WriteString("\n\n")
+		}
+		fmt.Fprintf(&b, "[%d] %s\n→ %s", i+1, q.Question, ans)
+	}
+	return b.String()
 }
 
 // AskUserTool lets the agent pause and ask the user a clarifying question,
@@ -120,10 +166,13 @@ func NewAskUserTool() AskUserTool { return AskUserTool{} }
 func (AskUserTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name: "ask_user",
-		Description: "Ask the user a clarifying question and wait for their answer. " +
-			"Use ONLY when you genuinely cannot proceed without input (ambiguous " +
-			"requirement, a risky choice, missing detail). Optionally provide a few " +
-			"suggested answers; the user may also type a free-text reply.",
+		Description: "Ask the user one or more clarifying questions and wait for their " +
+			"answer(s). Use ONLY when you genuinely cannot proceed without input " +
+			"(ambiguous requirement, a risky choice, missing detail). For a single " +
+			"question set \"question\" (and optional \"options\"). To ask SEVERAL " +
+			"questions at once — shown together in one card and answered together — " +
+			"pass a \"questions\" array of {question, options} objects instead. Each " +
+			"question may offer suggested answers; the user may also type a free-text reply.",
 		// Schema mirrors claude-cli's native AskUserQuestion where it overlaps so a
 		// model trained on that tool calls this one without a shape mismatch: an
 		// option may be a plain string OR an object with a "label" (the native form).
@@ -148,9 +197,24 @@ func (AskUserTool) Def() providers.ToolDef {
           }
         ]
       }
+    },
+    "questions": {
+      "type": "array",
+      "description": "Ask SEVERAL questions at once (shown together in one card, answered together). Use this instead of \"question\" when you have multiple things to clarify. Each entry is its own question with optional suggested answers.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "question": { "type": "string", "description": "The question to ask the user." },
+          "options": {
+            "type": "array",
+            "description": "Optional suggested answers for this question (plain strings or {label} objects).",
+            "items": { "oneOf": [ { "type": "string" }, { "type": "object", "properties": { "label": { "type": "string" } } } ] }
+          }
+        },
+        "required": ["question"]
+      }
     }
-  },
-  "required": ["question"]
+  }
 }`),
 	}
 }
@@ -170,15 +234,33 @@ func (AskUserTool) Call(ctx context.Context, input json.RawMessage) (string, err
 		}
 		return "", fmt.Errorf("ask_user is only available in interactive chat sessions; proceed without asking")
 	}
-	ask := askerFrom(ctx)
-	question, options, err := ParseAskInput(input)
+	questions, err := ParseAskInputMulti(input)
 	if err != nil {
 		return "", argErrFor("ask_user", err)
 	}
-	if question == "" {
+	if len(questions) == 0 {
 		return "", fmt.Errorf("question is required")
 	}
-	answer, err := ask(ctx, question, options)
+	// Several questions at once: present them together in one card via the
+	// multi-asker. Fall back to asking each in sequence (and combining the
+	// replies) when only the single-question asker is wired.
+	if len(questions) > 1 {
+		if multi := multiAskerFrom(ctx); multi != nil {
+			return multi(ctx, questions)
+		}
+		ask := askerFrom(ctx)
+		answers := make([]string, len(questions))
+		for i, q := range questions {
+			a, err := ask(ctx, q.Question, q.Options)
+			if err != nil {
+				return "", err
+			}
+			answers[i] = a
+		}
+		enc, _ := json.Marshal(answers)
+		return FormatMultiAnswer(questions, string(enc)), nil
+	}
+	answer, err := askerFrom(ctx)(ctx, questions[0].Question, questions[0].Options)
 	if err != nil {
 		return "", err
 	}

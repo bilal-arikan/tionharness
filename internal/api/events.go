@@ -63,8 +63,13 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 			// event name so the frontend routes them to the transcript renderer
 			// instead of the notification/badge path (which reacts to `notify`).
 			name := "notify"
-			if e.Type == "session_step" {
+			switch e.Type {
+			case "session_step":
 				name = "step"
+			case "flow_node":
+				// Per-node flow progress rides its own SSE event name so the
+				// frontend routes it to the run viewer, not the notify/badge path.
+				name = "flownode"
 			}
 			fmt.Fprintf(w, "event: %s\ndata: %s\n\n", name, b)
 			flusher.Flush()

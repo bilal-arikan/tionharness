@@ -106,6 +106,13 @@ type Server struct {
 	// PushToolsChanged broadcasts to every stream for a token so the right tier re-lists
 	// (re-listing the other tier is a cheap no-op).
 	streams map[string]chan []byte
+	// relistWaiters holds one-shot signals waiting for the client's NEXT tools/list on
+	// a given stream key (token+tier). The tools/list handler signals them, so
+	// PushToolsChangedAndWait can block an activate until the CLI has actually re-listed
+	// the grown tier — closing the activate→call race. A live probe (probe_relist_test)
+	// confirmed claude-cli 2.1.x re-fetches tools/list concurrently (~10-16ms) while the
+	// activate tools/call is still pending, so this wait returns fast and never deadlocks.
+	relistWaiters map[string][]chan struct{}
 }
 
 // streamKey composes the per-connection stream key from a session token and its tier
@@ -118,7 +125,7 @@ func NewServer(b Backend, logger *slog.Logger) *Server {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &Server{backend: b, logger: logger, streams: map[string]chan []byte{}}
+	return &Server{backend: b, logger: logger, streams: map[string]chan []byte{}, relistWaiters: map[string][]chan struct{}{}}
 }
 
 // Handler returns the server as an http.Handler (compat shim for existing callers).
@@ -172,7 +179,8 @@ func (h *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case "notifications/initialized":
 		w.WriteHeader(http.StatusAccepted)
 	case "tools/list":
-		specs := h.backend.Tools(token, tierFromPath(r.URL.Path))
+		tier := tierFromPath(r.URL.Path)
+		specs := h.backend.Tools(token, tier)
 		tools := make([]map[string]any, 0, len(specs))
 		for _, s := range specs {
 			tools = append(tools, map[string]any{
@@ -182,6 +190,10 @@ func (h *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			})
 		}
 		h.writeRPC(w, req.ID, map[string]any{"tools": tools}, nil)
+		// Wake any activate blocked in PushToolsChangedAndWait for this tier: the
+		// client has now re-listed, so the grown tool is in its registry and the
+		// pending activate can return safely.
+		h.signalRelist(streamKey(token, tier))
 	case "tools/call":
 		var p struct {
 			Name      string          `json:"name"`
@@ -290,6 +302,73 @@ func (h *Server) PushToolsChanged(token string) bool {
 		h.logger.Debug("interaction pushed tools/list_changed", "session", token, "streams", len(targets))
 	}
 	return sent
+}
+
+// PushToolsChangedAndWait pushes tools/list_changed (like PushToolsChanged) then
+// blocks until the client re-fetches tools/list for the EXTENDED tier — confirming
+// the just-activated tools are in the CLI's registry — or until timeout. This closes
+// the activate→call race: without it, activate returns immediately and a same-turn
+// tool call can beat the CLI's re-list and hit "No such tool available: mcp__…".
+//
+// Safe by construction: it only waits when a push actually reached an open stream
+// (no stream → return immediately, nothing would ever signal), and always honors the
+// timeout, so a client that failed to re-list can never wedge the activate — worst
+// case is +timeout, then the historical behavior (the model retries). The live probe
+// (probe_relist_test) measured claude-cli 2.1.x re-listing concurrently in ~10-16ms
+// while activate is pending, so in practice this returns almost immediately. Returns
+// true if a re-list was observed before the timeout.
+func (h *Server) PushToolsChangedAndWait(token string, timeout time.Duration) bool {
+	key := streamKey(token, "extended")
+	wait := make(chan struct{}, 1)
+	h.mu.Lock()
+	h.relistWaiters[key] = append(h.relistWaiters[key], wait)
+	h.mu.Unlock()
+
+	if !h.PushToolsChanged(token) {
+		h.removeRelistWaiter(key, wait) // no open stream → nothing will signal; don't block
+		return false
+	}
+	select {
+	case <-wait:
+		return true
+	case <-time.After(timeout):
+		h.removeRelistWaiter(key, wait)
+		return false
+	}
+}
+
+// signalRelist wakes (and clears) every activate waiting on the client's tools/list
+// for this stream key. Called by the tools/list handler once it has served the
+// re-list, so a pending PushToolsChangedAndWait returns knowing the grown tool is now
+// in the client's registry.
+func (h *Server) signalRelist(key string) {
+	h.mu.Lock()
+	waiters := h.relistWaiters[key]
+	delete(h.relistWaiters, key)
+	h.mu.Unlock()
+	for _, w := range waiters {
+		select {
+		case w <- struct{}{}:
+		default:
+		}
+	}
+}
+
+// removeRelistWaiter drops a single waiter (timeout / no-stream cleanup) so a
+// stale channel is never signalled by a later re-list.
+func (h *Server) removeRelistWaiter(key string, wait chan struct{}) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	ws := h.relistWaiters[key]
+	for i, w := range ws {
+		if w == wait {
+			h.relistWaiters[key] = append(ws[:i], ws[i+1:]...)
+			break
+		}
+	}
+	if len(h.relistWaiters[key]) == 0 {
+		delete(h.relistWaiters, key)
+	}
 }
 
 // HasStream reports whether a session currently has any open SSE stream (a live CLI

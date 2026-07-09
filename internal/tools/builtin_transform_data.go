@@ -55,7 +55,10 @@ func (TransformDataTool) Def() providers.ToolDef {
 			"The script receives file PATHS as command-line args: argv[1..N] are the input files in order, and " +
 			"the LAST arg is the output file to write (with no input files, argv[1] is the output file). The " +
 			"subprocess runs with a STRIPPED environment (no API keys/secrets), a 30s timeout; only its " +
-			"stdout/stderr (not the data) is returned, plus the output file's path, size and row count.",
+			"stdout/stderr (not the data) is returned, plus the output file's path, size and row count. " +
+			"This is NOT a file editor: your script MUST write the output file (the LAST argv), or the call " +
+			"fails even if it exited 0. To edit source files in place, use apply_patch or Edit instead — do " +
+			"NOT use transform_data to patch files.",
 		InputSchema: json.RawMessage(`{
 			"type":"object",
 			"properties":{

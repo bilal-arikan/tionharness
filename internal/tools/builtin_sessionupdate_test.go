@@ -15,6 +15,7 @@ type fakeSessionSink struct {
 	workingDir string
 	archived   bool
 	tags       []string
+	refreshed  bool
 }
 
 func (s *fakeSessionSink) Goal(_ context.Context) (GoalState, error) { return s.state, nil }
@@ -33,6 +34,7 @@ func (s *fakeSessionSink) SetTags(_ context.Context, tags []string) error {
 	s.tags = tags
 	return nil
 }
+func (s *fakeSessionSink) RefreshContext(_ context.Context) error { s.refreshed = true; return nil }
 
 func TestUpdateSessionTitle(t *testing.T) {
 	sink := &fakeSessionSink{}

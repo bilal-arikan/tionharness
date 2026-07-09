@@ -58,6 +58,12 @@ func (req createMCPReq) toMCPRow() (db.MCPServer, error) {
 		return db.MCPServer{}, fmt.Errorf("unknown transport %q", req.Transport)
 	}
 
+	// Persist an empty args slice as "[]" (never nil → "null"): the frontend does
+	// JSON.parse(args).join(...) and a "null" would crash it ("Cannot read
+	// properties of null (reading 'join')").
+	if req.Args == nil {
+		req.Args = []string{}
+	}
 	argsJSON, _ := json.Marshal(req.Args)
 	envJSON := []byte("{}")
 	if req.Env != nil {

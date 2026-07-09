@@ -33,6 +33,13 @@ func TestCostDetailed_CacheTiers(t *testing.T) {
 	if got := p.CacheSavings(1_000_000); !approx(got, 4.5) {
 		t.Errorf("savings = %v, want 4.5", got)
 	}
+	// No-caching baseline: cache read+write billed as fresh input, no discount/premium.
+	// (1M in + 1M read + 1M write)*5 + 1M out*25 = 15 + 25 = $40. Note this is LESS
+	// than the real cost (40.5) here because the 2× write premium on a cold write
+	// exceeds full-price input — caching only wins once the prefix is re-read.
+	if got := p.CostNoCaching(1_000_000, 1_000_000, 1_000_000, 1_000_000); !approx(got, 40) {
+		t.Errorf("no-cache cost = %v, want 40", got)
+	}
 }
 
 // TestCacheMultOverride verifies a per-model cache multiplier overrides the
@@ -121,5 +128,16 @@ func TestEstimateFor_ClaudeCLI(t *testing.T) {
 	// Cost of 1M input + 1M output at sonnet price = $3 + $15 = $18.
 	if got := p.Cost(1_000_000, 1_000_000); !approx(got, 18) {
 		t.Errorf("sonnet cost = %v, want 18", got)
+	}
+
+	// The 1-hour extended cache-write premium (2×) that the anthropic table carries
+	// must NOT leak into the claude-cli estimate: Claude Code CLI caches at the
+	// default 5-minute TTL (1.25×). 1M cache-write = 3 * 1.25 = $3.75 (not $6 at 2×).
+	if got := p.CostDetailed(0, 0, 0, 1_000_000); !approx(got, 3.75) {
+		t.Errorf("claude-cli cache-write = %v, want 3.75 (5-min tier, not 2× override)", got)
+	}
+	// Cache-read tier is unchanged at 0.10× → 1M read = $0.30.
+	if got := p.CostDetailed(0, 0, 1_000_000, 0); !approx(got, 0.3) {
+		t.Errorf("claude-cli cache-read = %v, want 0.3", got)
 	}
 }

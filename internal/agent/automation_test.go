@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"context"
 	"strings"
 	"testing"
 
@@ -62,11 +63,17 @@ func TestBoardMatches(t *testing.T) {
 func TestBoardVarsSubstitution(t *testing.T) {
 	e := &AutomationEngine{}
 	a := db.Automation{TriggerKind: db.TriggerBoard, MaxIterations: 5}
-	ev := db.BoardChangeEvent{TaskID: "tsk_1", Title: "Ship it", Op: db.BoardOpMove, FromState: "todo", ToState: "done"}
-	got := renderAutomationPrompt("[{{op}}] {{title}} {{from}}→{{to}} ({{toLabel}})", e.boardVars(a, ev))
+	ev := db.BoardChangeEvent{TaskID: "tsk_1", Title: "Ship it", Op: db.BoardOpMove, FromState: "todo", ToState: "done",
+		Tags: []string{"urgent", "backend"}, Priority: "high"}
+	vars := e.boardVars(context.Background(), a, ev)
+	got := renderAutomationPrompt("[{{op}}] {{title}} {{from}}→{{to}} ({{toLabel}})", vars)
 	want := "[move] Ship it todo→done (Bitti)"
 	if got != want {
 		t.Fatalf("got %q want %q", got, want)
+	}
+	// tags / priority render; owner is empty (unassigned) with no db lookup.
+	if v := renderAutomationPrompt("{{tags}}|{{priority}}|{{owner}}", vars); v != "urgent, backend|high|" {
+		t.Fatalf("tags/priority/owner render = %q", v)
 	}
 }
 

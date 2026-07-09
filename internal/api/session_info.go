@@ -167,20 +167,25 @@ func (s *Server) handleSessionInfo(w http.ResponseWriter, r *http.Request) {
 	// artifact block) — estimated so the meter reflects the real footprint, not
 	// just the visible transcript.
 	extra := s.systemFillers(ctx, wsp, session)
-	extraTokens := 0
-	for _, f := range extra {
-		extraTokens += f.Tokens
-	}
-
-	resp.ContextTokens = conversation.EstimateTokens(session.Summary, pending) + extraTokens
-	// Effective window = the compaction threshold pushed into the conversation
-	// manager; once the pending window exceeds it, older turns fold into summary.
-	resp.ContextWindow = s.settings.Get().MaxContextTokens
 
 	// Context fillers: summary + per-role message buckets PLUS the non-message
 	// buckets (system/tools/artifacts), all sorted by token weight descending.
 	resp.Fillers = append(buildFillers(session.Summary, pending), extra...)
 	sort.SliceStable(resp.Fillers, func(i, j int) bool { return resp.Fillers[i].Tokens > resp.Fillers[j].Tokens })
+
+	// Derive the "used" total from the SAME buckets the bar renders, so the header
+	// figure equals the sum of the visible segments exactly (buildFillers already
+	// folds in MsgOverhead per message, matching EstimateTokens). Previously the
+	// header used EstimateTokens directly while the segments omitted the overhead,
+	// so the bar never quite reached the reported percentage.
+	ctxUsed := 0
+	for _, f := range resp.Fillers {
+		ctxUsed += f.Tokens
+	}
+	resp.ContextTokens = ctxUsed
+	// Effective window = the compaction threshold pushed into the conversation
+	// manager; once the pending window exceeds it, older turns fold into summary.
+	resp.ContextWindow = s.settings.Get().MaxContextTokens
 
 	// Participating agents: distinct agent per assistant turn (falling back to the
 	// session's default agent), with the default agent always present.
@@ -234,7 +239,10 @@ func buildFillers(summary string, pending []db.Message) []contextFiller {
 			byRole[m.Role] = f
 			order = append(order, m.Role)
 		}
-		f.Tokens += conversation.EstimateText(m.Text)
+		// Include the per-message framing cost so the sum of the role buckets matches
+		// the aggregate EstimateTokens (which also adds MsgOverhead per message);
+		// otherwise the usage bar's segments under-fill by 4×msgCount.
+		f.Tokens += conversation.EstimateText(m.Text) + conversation.MsgOverhead
 		f.Count++
 	}
 

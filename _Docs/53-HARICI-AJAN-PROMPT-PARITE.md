@@ -23,6 +23,7 @@ sızmasını aktif engeller.
 | Session self-management (labels/status) | **EKLENDİ** (özet + skill pointer) | Tam açıklama `tionswarm-self-management` |
 | "Confirm destructive" → geri-döndürülemez + dışa-dönük | **GENİŞLETİLDİ** | send/publish/push kapsandı |
 | Environment marker (`<environment>` OS/arch/shell) | **EKLENDİ** (dinamik tarafta) | `agent.EnvironmentContextBlock()` |
+| Shell-tool gate advertisement | **EKLENDİ** (dinamik tarafta) | `Runtime.ShellToolsContextBlock()` — shell gate açık + backing shell varsa Bash/PowerShell'i adıyla duyurur; kapalıysa boş. Statik talimatlar artık shell'i "her zaman var" diye VAAT ETMEZ (yalnız fs araçları always-on). `tools.ShellToolNames()` kayıt koşullarıyla aynı resolver'ı paylaşır → prompt ↔ katalog drift yok |
 | Structured Data (datatable/spreadsheet) · HTML/PDF/Markdown Preview · call_llm · render_template · Source Templates · Tool Metadata (`_displayName/_intent`) | **DIŞLANDI** | Frontend/araç desteği yok → prompta yazmak halüsinasyon; guard yasaklıyor |
 | Configuration Documentation tablosu (`~/.external-agent/docs/*`) | **DIŞLANDI** | TionSwarm docs yerine skill'e devreder |
 | External Sources (config.json/guide.md) | **FARKLI** | TionSwarm MCP-server modeli kullanır |

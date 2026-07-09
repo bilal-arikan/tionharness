@@ -169,9 +169,16 @@ Yeni bağımlılıklar: `react-markdown`, `remark-gfm`, `highlight.js`.
   dimmed/italik). Varsayılan kapalı.
 - `ActivityCard.tsx` — tek tool çağrısı: ikon + etiket + tek satır niyet
   (başlıkta), açınca girdi/çıktı. Edit/Write çıktısı diff olarak. Hata kırmızı.
-  **`use_skill` (2026-07-02):** başlık özeti artık slug **değerini** gösterir
-  (`lib/tools.ts summarize` `slug`/`skill` alanlarını da toplar; eskiden "slug"
-  anahtar-adı yazıyordu); açınca gövde `<pre>` yerine `Markdown` ile biçimli
+  **Başlık özeti içerik-odaklı (2026-07-09):** `lib/tools.ts summarize` artık
+  ham anahtar-listesi fallback'ini KALDIRDI — yan bilgi ya gerçek içeriği
+  (komut/yol/mesaj/başlık/`question`/`reason`/`worker`/`template`) ya da birincil
+  dizi alanının değerlerini gösterir (`activate_tools.names`, `todo_write.todos`
+  → öğe etiketleri veya "N öğe"; ikincil/filtre dizileri
+  `options`/`tags`/`exclude`/`args`/… atlanır); `move_task` → `→ <sütun>`;
+  anlamlı bir şey çıkmazsa **boş** kalır (eskiden "names"/"questions" gibi
+  anahtar adları yazıyordu). **`use_skill`
+  (2026-07-02):** başlık özeti slug **değerini** gösterir (`slug`/`skill`
+  alanları); açınca gövde `<pre>` yerine `Markdown` ile biçimli
   render olur (`# Skill: <slug>` başlığı + md gövde), gereksiz "Girdi" (`{slug}`)
   bloğu skill'de gizlenir.
 - `DiffCard.tsx` — `kind:diff` adımı için özel dosya-değişikliği kartı: ✏️ +

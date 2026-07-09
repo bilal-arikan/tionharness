@@ -16,6 +16,12 @@ package providers
 // tool_use ↔ tool_result pairing the providers require. The merged text is
 // joined with a blank line so multi-agent author tags ("[Ada]: …", "[Kai]: …")
 // stay on separate, readable lines.
+//
+// Used by the minimax chat path only. The anthropic path merges BLOCK-WISE
+// inside toAnthropicMessages instead: a text-level merge like this one rewrites
+// the earlier (possibly cached) message's bytes and busts the prompt-cache
+// prefix from that point, which matters there and not in minimax's plain chat
+// format.
 func coalescePlainSameRole(msgs []Message) []Message {
 	out := make([]Message, 0, len(msgs))
 	for _, m := range msgs {

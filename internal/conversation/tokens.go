@@ -23,6 +23,11 @@ const (
 // msgOverhead approximates the per-message role/framing token cost.
 const msgOverhead = 4
 
+// MsgOverhead exposes the per-message framing cost so breakdown callers (e.g. the
+// session info panel's context fillers) can include it and match the aggregate
+// EstimateTokens total exactly, instead of under-counting by msgOverhead per message.
+const MsgOverhead = msgOverhead
+
 // estimateText approximates the token count of a string, density-aware: prose is
 // counted at ~4 chars/token, packed/encoded blobs at ~1.5. Single pass over the
 // runes (no []rune allocation).

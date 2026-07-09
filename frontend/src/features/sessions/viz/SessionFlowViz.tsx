@@ -5,6 +5,7 @@ import type { SessionDebugEvent } from '@/types'
 import { ToolSankey } from './ToolSankey'
 import { ConcurrencyTimeline } from './ConcurrencyTimeline'
 import { SelfHealingEvents } from './SelfHealingEvents'
+import { PromptCacheEvents } from './PromptCacheEvents'
 
 // How many raw events to pull for the visualizations. Covers the whole span for
 // typical sessions; very long ones are truncated to the newest window (noted).
@@ -104,6 +105,19 @@ export function SessionFlowViz({
                   damıtılan dersler (56-SELF-HEALING).
                 </p>
                 <SelfHealingEvents events={events} />
+              </div>
+
+              <div>
+                <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
+                  Prompt-cache olayları
+                </div>
+                <p className="mb-1 text-[10px] text-[var(--color-text-dim)]">
+                  Donmuş bağlam snapshot'ının yaşam döngüsü (dondurma, adopt,
+                  bekletilen drift, elle yenileme; 57-PROMPT-EPOCH) ve tespit
+                  edilen cache kırılımları — kırılım yalnız bilinçli adopt
+                  anlarında beklenir.
+                </p>
+                <PromptCacheEvents events={events} />
               </div>
 
               {events.length >= EVENT_LIMIT && (

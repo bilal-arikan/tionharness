@@ -15,7 +15,7 @@ func init() {
 			AllowCustomModel: true,
 			Order:            0,
 			Models: []ModelInfo{
-				{ID: "", Label: "Varsayılan (oturum modeli)", Description: "claude oturumunun aktif modelini kullanır"},
+				{ID: "", Label: "Varsayılan", Description: "claude oturumunun aktif modelini kullanır"},
 				{ID: "fable", Label: "Fable 5 — öncü", Description: "En yeni nesil; 1M bağlam, adaptif düşünme (daima açık)"},
 				{ID: "opus", Label: "Opus — en güçlü", Description: "En yetenekli; en yavaş/pahalı"},
 				{ID: "sonnet", Label: "Sonnet — dengeli", Description: "Hız/kalite dengesi (günlük kullanım)"},

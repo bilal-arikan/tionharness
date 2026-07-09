@@ -183,7 +183,10 @@ export async function performSend(
         // question (transient — not added to the persisted trace); the user's
         // answer resumes the turn over the same stream.
         if (st.kind === 'ask') {
-          setPendingAsks((p) => ({ ...p, [sid]: { question: st.text || '', options: st.options, kind: 'ask' } }))
+          setPendingAsks((p) => ({
+            ...p,
+            [sid]: { question: st.text || '', options: st.options, questions: st.questions, kind: 'ask' },
+          }))
           return
         }
         // Permission gate: the agent paused waiting for approval of a

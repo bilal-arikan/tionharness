@@ -258,7 +258,7 @@ export function SessionDebugCard({
       {expanded && (
         <div className="mt-1.5">
           <div className="mb-1.5 flex flex-wrap gap-1">
-            {['', 'turn', 'llm_call', 'tool', 'hook', 'error', 'compaction', 'recovery', 'cache_break'].map(
+            {['', 'turn', 'llm_call', 'tool', 'hook', 'error', 'compaction', 'recovery', 'cache_break', 'epoch'].map(
               (t) => (
                 <button
                   key={t || 'all'}
@@ -412,6 +412,8 @@ function eventLabel(e: SessionDebugEvent): string {
       return `${e.name ?? 'cache-break'}${e.detail ? ` · ${e.detail}` : ''}${
         e.cacheWrite ? ` · yeniden yazılan ${e.cacheWrite}` : ''
       }`
+    case 'epoch':
+      return `${e.name ?? 'epoch'}${e.detail ? ` · ${e.detail}` : ''}`
     case 'error':
       return e.detail ?? ''
     default:

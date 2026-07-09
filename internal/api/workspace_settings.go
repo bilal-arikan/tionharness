@@ -46,6 +46,10 @@ type workspaceSettingsDTO struct {
 	// isolated store + auto-index + codebase_workspace_search) for this workspace.
 	CodebaseMemoryEnabled bool `json:"codebaseMemoryEnabled"`
 
+	// PromptEpochEnabled toggles the prompt-epoch (frozen prompt-prefix snapshot)
+	// system for this workspace (see promptepoch.go).
+	PromptEpochEnabled bool `json:"promptEpochEnabled"`
+
 	// BoardColumns is the ordered column set for this workspace's kanban board.
 	// Always non-nil: falls back to db.DefaultBoardColumns() when unconfigured.
 	BoardColumns []db.BoardColumnDef `json:"boardColumns"`
@@ -86,6 +90,7 @@ func toWorkspaceSettingsDTO(ctx context.Context, w *workspace.Workspace) workspa
 		SessionContextRecentCount: s.SessionContextRecentCount,
 
 		CodebaseMemoryEnabled: s.CodebaseMemoryEnabled,
+		PromptEpochEnabled:    s.PromptEpochEnabled,
 
 		BoardColumns: cols,
 	}

@@ -12,6 +12,8 @@ import type { useChatStream } from '@/features/chat/useChatStream'
 import type { View } from './NavRail'
 import { viewForEventType } from './eventViews'
 import { bumpSignalsForEvent } from './eventToRefreshSignals'
+import { publishStep, publishTurnEnd } from '@/shared/lib/stepBus'
+import { publishFlowNode } from '@/shared/lib/flowNodeBus'
 import { routeFromEvent, buildRoute } from './url'
 import type { ClientPrefs } from './useAppearance'
 
@@ -138,6 +140,11 @@ function onEvent(d: AppEventDeps, e: AppEvent) {
         d.chat.clearAutoLive(sid)
         api.listMessages(sid).then(d.setMessages).catch(() => {})
       }
+      // Fan the turn-end out to non-chat transcript views (ExecutionsPanel via
+      // useLiveTranscript) so they drop their own live ghost bubble + reload the
+      // authoritative persisted turn — regardless of which session the chat
+      // itself has active. 'armed'/'start' phases are not ends.
+      if (phase !== 'armed' && phase !== 'start') publishTurnEnd(sid)
     }
     // Autonomous turn completion (spawn / coordinator worker / scheduled run):
     // like the chat branch, drop the live ghost bubble and reload the transcript
@@ -149,6 +156,9 @@ function onEvent(d: AppEventDeps, e: AppEvent) {
         d.chat.clearAutoLive(sid)
         api.listMessages(sid).then(d.setMessages).catch(() => {})
       }
+      // Same turn-end fan-out as the chat branch (see above): unconditional so a
+      // transcript view showing this session hears it even off the chat screen.
+      publishTurnEnd(sid)
     }
   }
   // Cross-window panel refresh: every event that closes the workspace-match
@@ -192,6 +202,20 @@ function onStep(d: AppEventDeps, e: AppEvent) {
   const sid = e.target?.sessionId
   if (!sid || !e.step) return
   d.chat.applyAutoStep(sid, e.step as TurnStep)
+  // Fan the same frame out to any other live transcript view (ExecutionsPanel
+  // via useLiveTranscript) so it grows its own ghost bubble in lock-step with
+  // the chat. One SSE feed, one step bus, N transcript views.
+  publishStep(sid, e.step as TurnStep)
+}
+
+// Live flow-node frames (flow_node): fan each node lifecycle frame out to the
+// run viewer showing that run (via flowNodeBus, keyed by target.flowRunId) so
+// per-node progress renders live. Ignore frames from other workspaces.
+function onFlowNode(_d: AppEventDeps, e: AppEvent) {
+  if (e.workspaceId && e.workspaceId !== getActiveWorkspace()) return
+  const runId = e.target?.flowRunId
+  if (!runId || !e.node) return
+  publishFlowNode(runId, e.node)
 }
 
 export function useAppEvents(deps: AppEventDeps) {
@@ -206,7 +230,12 @@ export function useAppEvents(deps: AppEventDeps) {
   // Subscribe once to the global feed: notifications (onEvent) + live turn steps
   // (onStep). Both ride one EventSource; the ref keeps closures current.
   useEffect(
-    () => api.subscribeEvents((e) => onEvent(depsRef.current, e), (e) => onStep(depsRef.current, e)),
+    () =>
+      api.subscribeEvents(
+        (e) => onEvent(depsRef.current, e),
+        (e) => onStep(depsRef.current, e),
+        (e) => onFlowNode(depsRef.current, e),
+      ),
     [],
   )
 }

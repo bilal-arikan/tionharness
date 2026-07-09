@@ -8,9 +8,15 @@ import { useEffect, useState } from 'react'
 import { ScanSearch } from 'lucide-react'
 import { api } from '@/api'
 import { systemApi } from '@/api/system'
-import type { Hook, ExternalToolStatus } from '@/types'
+import type { Hook, ExternalToolStatus, MCPServer } from '@/types'
 import type { HookInput } from '@/api/hooks'
 import { displayPath } from '@/shared/lib/paths'
+
+// The external-tool name whose MCP integration is wired one-click from this panel.
+// Its detected PATH entry doubles as the stdio command; the backend auto-routes it
+// to the workspace's isolated CBM store (CBM_CACHE_DIR) whenever the command
+// contains this marker, so no env needs to be supplied at creation time.
+const CBM_TOOL = 'codebase-memory-mcp'
 
 interface Props {
   onError: (msg: string) => void
@@ -58,6 +64,10 @@ export function ExternalToolsPanel({ onError }: Props) {
   const [toolsErr, setToolsErr] = useState<string | null>(null)
   // Per-tool busy flag while creating/toggling that tool's wired hook.
   const [toolBusy, setToolBusy] = useState<string | null>(null)
+  // MCP servers — used to reflect whether codebase-memory-mcp is already wired and
+  // to add/remove it in one click from its callout below the tool row.
+  const [servers, setServers] = useState<MCPServer[]>([])
+  const [mcpBusy, setMcpBusy] = useState(false)
 
   const checkTools = async () => {
     setChecking(true)
@@ -77,10 +87,17 @@ export function ExternalToolsPanel({ onError }: Props) {
       .then(setHooks)
       .catch((e) => onError((e as Error).message))
 
+  const loadServers = () =>
+    api
+      .listMCPServers()
+      .then(setServers)
+      .catch((e) => onError((e as Error).message))
+
   useEffect(() => {
     // Hooks are needed to show which detected tools are already wired; tools are
     // auto-detected on open (presence-only — nothing installed or executed).
     loadHooks()
+    loadServers()
     checkTools()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -107,6 +124,28 @@ export function ExternalToolsPanel({ onError }: Props) {
     }
   }
 
+  // The codebase-memory MCP server, if one is already registered (matched by its
+  // command carrying the marker — same rule the backend uses to route the store).
+  const cbmServer = (): MCPServer | undefined =>
+    servers.find((s) => s.command.toLowerCase().includes(CBM_TOOL))
+
+  // Add or remove the codebase-memory MCP server in one click. Adding uses the
+  // detected PATH executable as the stdio command; removing deletes the matched
+  // server. Requires the tool to be present on PATH (detectedPath).
+  const toggleCbmServer = async (detectedPath: string) => {
+    setMcpBusy(true)
+    try {
+      const existing = cbmServer()
+      if (existing) await api.deleteMCPServer(existing.id)
+      else await api.createMCPServer({ name: CBM_TOOL, transport: 'stdio', command: detectedPath })
+      await loadServers()
+    } catch (e) {
+      onError((e as Error).message)
+    } finally {
+      setMcpBusy(false)
+    }
+  }
+
   return (
     <div className="space-y-3">
       <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-xs leading-relaxed text-[var(--color-text-dim)]">
@@ -116,15 +155,6 @@ export function ExternalToolsPanel({ onError }: Props) {
         Yalnız PATH'te aranır — araçlar <span className="font-medium text-[var(--color-text)]">kurulmaz, çalıştırılmaz, değiştirilmez</span>.
         <span className="font-mono"> hook</span> araçları tek tıkla bağlanır;{' '}
         <span className="font-mono">mcp</span>/<span className="font-mono">cli</span> araçları bilgi rozetiyle gösterilir.
-      </div>
-      <div className="rounded-lg border border-[color-mix(in_srgb,var(--color-accent)_30%,transparent)] bg-[color-mix(in_srgb,var(--color-accent)_6%,transparent)] px-3 py-2 text-xs leading-relaxed text-[var(--color-text-dim)]">
-        <span className="font-medium text-[var(--color-text)]">🧠 codebase-memory entegrasyonu:</span> Bir{' '}
-        <code>codebase-memory-mcp</code> sunucusunu <span className="font-mono">Ayarlar ▸ MCP</span>'den eklersen, TionSwarm otomatik olarak{' '}
-        ajanın bağlamına <span className="font-medium text-[var(--color-text)]">"kod bilgi-grafiği mevcut"</span> ipucu ekler,
-        sunucuyu <span className="font-medium text-[var(--color-text)]">workspace'e özel izole bir store</span>'a yönlendirir
-        (indeksler workspace'ler arası karışmaz), çalışma dizinini otomatik indeksler ve{' '}
-        <code>codebase_workspace_search</code> aracını sunar. Bu sistem{' '}
-        <span className="font-medium text-[var(--color-text)]">Ayarlar ▸ Bu Workspace</span> altından açılıp kapatılabilir.
       </div>
       <button
         type="button"
@@ -150,7 +180,8 @@ export function ExternalToolsPanel({ onError }: Props) {
                 {tools
                   .filter((t) => t.category === cat)
                   .map((t) => (
-                    <div key={t.name} className="flex items-center justify-between gap-3 rounded-lg border border-[var(--color-border)] px-3 py-2">
+                    <div key={t.name} className="flex flex-col gap-2">
+                    <div className="flex items-center justify-between gap-3 rounded-lg border border-[var(--color-border)] px-3 py-2">
                       <div className="min-w-0">
                         <div className="flex items-center gap-2 text-sm">
                           <code className="rounded bg-[var(--color-surface-2)] px-1 font-medium">{t.name}</code>
@@ -207,6 +238,49 @@ export function ExternalToolsPanel({ onError }: Props) {
                         )}
                         <a href={t.url} target="_blank" rel="noreferrer" className="text-xs text-[var(--color-accent)] hover:underline">repo ↗</a>
                       </div>
+                    </div>
+                    {/* codebase-memory integration: explanation + one-click MCP wiring,
+                        anchored directly under its own tool row. */}
+                    {t.name === CBM_TOOL && (
+                      <div className="rounded-lg border border-[color-mix(in_srgb,var(--color-accent)_30%,transparent)] bg-[color-mix(in_srgb,var(--color-accent)_6%,transparent)] px-3 py-2 text-xs leading-relaxed text-[var(--color-text-dim)]">
+                        <span className="font-medium text-[var(--color-text)]">🧠 codebase-memory entegrasyonu:</span> Bir{' '}
+                        <code>codebase-memory-mcp</code> sunucusu eklendiğinde, TionSwarm otomatik olarak{' '}
+                        ajanın bağlamına <span className="font-medium text-[var(--color-text)]">"kod bilgi-grafiği mevcut"</span> ipucu ekler,
+                        sunucuyu <span className="font-medium text-[var(--color-text)]">workspace'e özel izole bir store</span>'a yönlendirir
+                        (indeksler workspace'ler arası karışmaz), çalışma dizinini otomatik indeksler ve{' '}
+                        <code>codebase_workspace_search</code> aracını sunar. Bu sistem{' '}
+                        <span className="font-medium text-[var(--color-text)]">Ayarlar ▸ Bu Workspace</span> altından açılıp kapatılabilir.
+                        <div className="mt-2 flex items-center gap-2 border-t border-[color-mix(in_srgb,var(--color-accent)_20%,transparent)] pt-2">
+                          <button
+                            type="button"
+                            data-testid="cbm-mcp-toggle"
+                            disabled={mcpBusy || !t.found}
+                            onClick={() => toggleCbmServer(t.path ?? t.name)}
+                            className={`rounded px-2.5 py-1 text-xs font-medium disabled:opacity-50 ${
+                              cbmServer()
+                                ? 'bg-[var(--color-accent-soft)] text-[var(--color-accent)]'
+                                : 'bg-[var(--color-accent)] text-white hover:opacity-90'
+                            }`}
+                            title={
+                              !t.found
+                                ? 'Önce bu araç PATH’te bulunmalı (yukarıda "kurulu" görünmeli)'
+                                : cbmServer()
+                                  ? 'MCP sunucusunu kaldır'
+                                  : 'MCP sunucusunu otomatik ekle (izole store’a yönlenir)'
+                            }
+                          >
+                            {mcpBusy ? '…' : cbmServer() ? 'MCP’yi kaldır' : 'MCP’yi otomatik ekle'}
+                          </button>
+                          <span className="text-[11px] text-[var(--color-text-dim)]">
+                            {!t.found
+                              ? 'Araç PATH’te bulunamadı.'
+                              : cbmServer()
+                                ? 'MCP sunucusu ekli — ajanlar kullanabilir.'
+                                : 'MCP sunucusu ekli değil.'}
+                          </span>
+                        </div>
+                      </div>
+                    )}
                     </div>
                   ))}
               </div>

@@ -79,6 +79,11 @@ export interface BudgetCumulative {
   cacheWriteTokens: number
   costUSD: number
   savingsUSD: number
+  // noCacheCostUSD is the counterfactual window cost if caching did not exist:
+  // cache read/write billed as fresh input (no read discount, no write premium).
+  // The honest "cost without caching" baseline — NOT costUSD+savingsUSD (that keeps
+  // the write premium). Always ≥ costUSD.
+  noCacheCostUSD: number
   cacheHitRate: number
   compactSavedBytes: number
   compactSavedBytesLLM: number
@@ -174,7 +179,19 @@ export interface SessionDebugAnomaly {
 
 export interface SessionDebugEvent {
   ts: number
-  type: 'turn' | 'llm_call' | 'tool' | 'hook' | 'error' | 'compaction' | 'recovery' | 'cache_break'
+  type:
+    | 'turn'
+    | 'llm_call'
+    | 'tool'
+    | 'hook'
+    | 'error'
+    | 'compaction'
+    | 'recovery'
+    | 'cache_break'
+    | 'repair'
+    | 'guardrail'
+    | 'lesson'
+    | 'epoch'
   sessionId?: string
   turnId?: string
   agentId?: string

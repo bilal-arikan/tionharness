@@ -6,12 +6,67 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/bilal-arikan/tionswarm/internal/agent"
 	"github.com/bilal-arikan/tionswarm/internal/conversation"
 	"github.com/bilal-arikan/tionswarm/internal/db"
 	"github.com/bilal-arikan/tionswarm/internal/providers"
 	"github.com/bilal-arikan/tionswarm/internal/tools"
 )
+
+// withTurnID mirrors withSessionID (workdir_context.go): a package-name-safe
+// wrapper for handleChat, whose local `agent` variable shadows the agent package.
+func withTurnID(ctx context.Context, id string) context.Context {
+	return agent.WithTurnID(ctx, id)
+}
+
+// inflightRecorder accumulates a NON-STREAMING turn's persistable trace and
+// snapshots it to the session's inflight sidecar on a throttle — crash-recovery
+// parity with the streaming path (chat_stream.go `snapshot`). Previously only
+// the SSE path wrote the sidecar, so a mid-turn process death (a dev rebuild, a
+// crash) silently lost the whole non-stream turn: reply, trace, usage (the
+// AlgoBench v2 incident). Steps arrive from the calling goroutine
+// (CompleteWithToolsStream contract), so no locking is needed.
+type inflightRecorder struct {
+	db        *db.DB
+	sessionID string
+	agentID   string
+	replyID   string
+	startedAt int64
+	partial   strings.Builder
+	kept      []agent.TurnStep
+	lastSnap  time.Time
+}
+
+func (rec *inflightRecorder) onStep(st agent.TurnStep) {
+	switch st.Kind {
+	case agent.StepDelta:
+		rec.partial.WriteString(st.Text)
+	case agent.StepAsk, agent.StepToolDelta, agent.StepTombstone, agent.StepPermission:
+		// Transient (live-UI only) — never part of the persisted trace.
+	default:
+		rec.kept = append(rec.kept, st)
+	}
+	if time.Since(rec.lastSnap) < 600*time.Millisecond {
+		return
+	}
+	rec.lastSnap = time.Now()
+	_ = rec.db.WriteInflight(db.InflightTurn{
+		MessageID: rec.replyID,
+		SessionID: rec.sessionID,
+		AgentID:   rec.agentID,
+		StartedAt: rec.startedAt,
+		Text:      rec.partial.String(),
+		Steps:     marshalSteps(rec.kept),
+	})
+}
+
+// interruptedTrace returns the steps kept so far with a trailing error step —
+// the streaming path's "preserve what the agent already produced" shape.
+func (rec *inflightRecorder) interruptedTrace(detail, reason string) []agent.TurnStep {
+	return append(rec.kept, agent.TurnStep{Kind: agent.StepError, Text: detail, Reason: reason})
+}
 
 // messageUsage converts a provider Usage into the compact per-message form stored
 // on the assistant turn, returning nil when the turn reported no tokens (so an
@@ -173,14 +228,44 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 	ctx = tools.WithGrants(ctx, s.grants.forSession(session.ID))
 	ctx = tools.WithArtifacts(ctx, newArtifactSink(database, session.ID, agent.ID, ws(r).Runtime.Emit))
 	ctx = withSessionID(ctx, session.ID) // resolve this session's WorkingDir downstream
-	resp, steps, err := ws(r).Runtime.CompleteWithToolsTraced(ctx, agent, provider, llmReq, false)
+	// Crash-recovery parity with the streaming path: pre-allocate the reply id
+	// (debug events tag it; sidecar and final message share one identity, so boot
+	// recovery is idempotent) and snapshot the in-flight turn to the sidecar on a
+	// throttle. A mid-turn process death then leaves the partial turn for boot to
+	// reclaim instead of silently losing it.
+	replyID := uuid.NewString()
+	ctx = withTurnID(ctx, replyID)
+	rec := &inflightRecorder{db: database, sessionID: session.ID, agentID: agent.ID, replyID: replyID, startedAt: start.Unix()}
+	resp, steps, err := ws(r).Runtime.CompleteWithToolsStream(ctx, agent, provider, llmReq, false, rec.onStep)
 	if err != nil {
 		s.logger.Error("provider completion failed", "error", err, "agent", agent.ID)
-		// Streaming-path parity (self-healing): a failed turn must still
-		// auto-tag — error/stuck counters, lesson reflection, failed-turn
-		// automations all hang off AutoTagTurn. External clients drive this
-		// non-SSE endpoint (Doc 33), so it cannot be left out of the loop.
-		ws(r).Runtime.AutoTagTurn(context.WithoutCancel(ctx), session.ID, steps, "provider_error: "+err.Error())
+		// Streaming-path parity: persist the partial trace as an interrupted
+		// message so the tools/text the agent already produced stay visible in the
+		// transcript, then drop the sidecar — the failure is handled, there is
+		// nothing left for boot to recover. The HTTP contract is unchanged (502).
+		persistCtx := context.WithoutCancel(ctx)
+		trace := rec.interruptedTrace("provider error: "+err.Error(), "provider_error")
+		if _, aerr := database.AddMessage(persistCtx, db.Message{
+			ID:          replyID,
+			SessionID:   session.ID,
+			Role:        providers.RoleAssistant,
+			AgentID:     agent.ID,
+			Text:        rec.partial.String(),
+			Steps:       marshalSteps(trace),
+			Interrupted: true,
+			DurationMs:  time.Since(start).Milliseconds(),
+		}); aerr != nil {
+			s.logger.Error("persist interrupted turn failed", "session", session.ID, "error", aerr)
+		} else {
+			// Keep any files written before the failure as artifacts.
+			s.captureFileArtifacts(persistCtx, database, session.ID, agent.ID, trace)
+		}
+		_ = database.ClearInflight(session.ID)
+		// Self-healing parity: a failed turn must still auto-tag — error/stuck
+		// counters, lesson reflection, failed-turn automations all hang off
+		// AutoTagTurn. External clients drive this non-SSE endpoint (Doc 33), so
+		// it cannot be left out of the loop.
+		ws(r).Runtime.AutoTagTurn(persistCtx, session.ID, trace, "provider_error: "+err.Error())
 		writeError(w, http.StatusBadGateway, "provider error: "+err.Error())
 		return
 	}
@@ -188,6 +273,7 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 	// Persist the assistant reply (with its serialised activity trace so the
 	// turn can be re-rendered on reload).
 	replyMsg, err := database.AddMessage(ctx, db.Message{
+		ID:         replyID,
 		SessionID:  session.ID,
 		Role:       providers.RoleAssistant,
 		AgentID:    agent.ID,
@@ -199,9 +285,13 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 		DurationMs: time.Since(start).Milliseconds(),
 	})
 	if err != nil {
+		// Deliberately NOT clearing the sidecar: the reply exists only in memory
+		// now, so the orphaned snapshot is the recovery net for the next boot.
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	// Reply is durable — drop the crash sidecar.
+	_ = database.ClearInflight(session.ID)
 
 	// Auto-capture any files the agent wrote this turn as artifacts.
 	s.captureFileArtifacts(ctx, database, session.ID, agent.ID, steps)

@@ -1,6 +1,222 @@
 # TionSwarm — İlerleme Takibi
 
-> Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-07-08**
+> Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-07-09**
+
+## Benchmark serileşmesinin GERÇEK kök nedeni: `effortLevel` ✅ (2026-07-09, akşam)
+
+Kontrollü probe deneyleri (aynı CLI 2.1.205, aynı mini görev "4 dosya yaz"):
+global `~/.claude` home altında **4'lü paralel Write batch**, WS1 workspace
+claude-home altında **[1,1,1,1] serileşme**; WS1 settings'e `"effortLevel":"high"`
+eklenince **batch geri geldi**. Yani fail sürümün kendisi değil: **2.1.203+
+`effortLevel` ayarlanmamışken (default effort) opus-4-8 tool çağrılarını
+serileştiriyor**; kullanıcının global home'unda `effortLevel: high` olduğu için
+kendi Claude Code kullanımı etkilenmiyordu, TionSwarm workspace home'ları minimal
+settings ile default'a düşüyordu. `--disallowedTools`/`--allowedTools`/
+`--dangerously-skip-permissions`/`stream-json` tek tek elendi (hepsi batch'li).
+the external agent projects 2.1.197'ye pinli olduğu için hiç etkilenmedi. Maliyet zinciri:
+default effort → serileşme → çağrı başına prefix re-read + cache-write primi →
+$0.65→$1.51. **Çözüm adayı:** workspace claude-home seed'ine / per-turn
+`--settings` dosyasına `effortLevel` yazmak (agent ThinkingLevel eşlemesi veya
+sabit high) — aşağıdaki v1↔v2 girdisinin devamı.
+
+## Benchmark v1↔v2 maliyet farkı analizi: fail CLI sürümüydü ✅ (2026-07-09)
+
+AlgoBench v2'de (SES125) maliyet artışının nedeni "file-mutation verifier yazımları
+serileştirdi" sanılıyordu — **yanlış atıf**. CLI transkript karşılaştırması
+(claude-home): v1'de 6+7 Write **tek API cevabında paralel tool_use** (usage
+değerleri özdeş), v2'de her Write ayrı çağrı (usage monoton artan). Tek değişen:
+**claude-cli 2.1.202 → 2.1.203** (otomatik güncellenmişti); verifier CLI-native
+`Write`'ları hiç görmez (delegasyon modunda fs araçları köprülenmez), lessons boştu,
+epoch stale notu yoktu. Cache tarafı kusursuz doğrulandı: read monoton 28k→46k,
+sıfır break (Prompt Epoch CLI yolunda da çalışıyor). Yan bulgular: (a) v2 turu
+TionSwarm'a persist edilmedi — dev rebuild'i tam tur biterken geldi (kasıtlı
+restart) ve **non-stream `/api/chat` inflight sidecar yazmıyordu** → süreç
+ölümünde tur sessizce kaybolur; (b) makinedeki CLI 2.1.205'e güncellendi —
+benchmark tekrarı aynı sürümle koşulmalı.
+
+## Non-stream chat'e inflight paritesi ✅ (2026-07-09)
+
+Yukarıdaki (a) bulgusunun düzeltmesi: `/api/chat` (non-stream) artık streaming
+yoluyla aynı crash-korumasını taşıyor (`internal/api/chat.go` `inflightRecorder`):
+reply id önceden ayrılır (`WithTurnID` debug paritesi dahil), tur
+`CompleteWithToolsStream` ile koşup adımlar throttle'lı (600ms) `inflight.json`
+snapshot'ına düşer → süreç ölümünde boot recovery kısmi turu materyalize eder.
+Provider hatasında da stream paritesi: kısmi iz **interrupted mesaj** olarak
+persist edilir (üretilmiş araç adımları/text kaybolmaz; HTTP sözleşmesi
+değişmedi, 502), sidecar temizlenir; persist hatasında sidecar bilerek bırakılır
+(recovery ağı). Test: `chat_inflight_test.go`; suite 797/30 paket yeşil.
+
+## Board kartı: çoklu artifact referansı + dosya-drop ile ekleme ✅ (2026-07-09)
+
+Kartlar artık workspace artifact'larına **birden fazla referans** taşıyabiliyor
+(`Task.ArtifactIDs []string`, `models_task.go`; API create/update thread'lendi,
+`store_task.go` UpdateTask kopyalar). Artifact yaşam döngüsünden bağımsız — kart
+silmek referansı düşürür, artifact'ı silmez; çözülemeyen id'ler UI'da atlanır.
+- **Frontend:** yeni `TaskArtifactRefs.tsx` bileşeni (chip listesi + "Var olan"
+  arama-picker'ı + dosya sürükle-bırak alanı) TaskFormModal'a "Ekler" bölümü olarak
+  eklendi. Dosya bırakınca: `/api/uploads` (bucket = kart id / `board`) → `createArtifact`
+  (`sourcePath` + `origin:manual`) → id karta eklenir. Mevcut artifact upload→artifact
+  akışı (`artifactKindForUpload`, ArtifactsPanel) yeniden kullanıldı.
+- **Board kartı:** OS'ten dosya sürükleyip **doğrudan kart üzerine bırakma** → aynı
+  upload+artifact+link akışı (`attachFilesToTask`, `TaskBoard.tsx`; `dataTransfer.files`
+  olan drop dosya-ekleme, olmayan drop hâlâ sütuna taşıma). Kartta `📎 N` ek sayacı rozeti.
+- **E2E doğrulama (canlı 8090):** mevcut-referanslı task create + multipart upload→artifact→link
+  reload sonrası `artifactIds=['ART34','ART44']` olarak kalıcı.
+- **Not:** frontend dist build'i şu an **ilgisiz** iki kullanıcı-WIP hatasıyla bloklu
+  (`useAppEvents.ts:214`, `RunView.tsx:89`); bu özelliğin dosyaları tip-temiz.
+
+## Navbar "çalışıyor" göstergesi workspace'ler arası sızıyordu 🐛 (2026-07-09)
+
+- **Sorun:** Bir workspace'te oturum çalışırken navbar'daki "çalışıyor" (Aktivite/
+  Executions) göstergesi doğru şekilde yanıyordu; ancak başka bir (boşta) workspace'e
+  geçilince orada da iş devam ediyormuş gibi gösterge yanıyordu.
+- **Kök neden:** `internal/api/activity.go` `handleActivity`, in-flight chat turlarını
+  **server-geneli** `s.runs` registry'sinden (tüm workspace'ler ortak) topluyor. Döngüde
+  `st.Executions = true`, session'ın bu workspace'e ait olup olmadığı `wsp.DB.GetSession`
+  (workspace-scoped, izole store) ile doğrulanmadan **önce** set ediliyordu. Yabancı bir
+  workspace'in akan turu global registry'de bulunduğundan, GetSession başarısız olsa (`continue`)
+  bile bayrak zaten yanmış oluyordu.
+- **Çözüm:** `st.Executions = true` `GetSession` başarı kontrolünün **altına** taşındı →
+  gösterge yalnız bu workspace'e ait session'lar için yanar. Diğer bayraklar (`Task`/`Flow`/
+  `Schedule`) zaten `wsp.DB` üzerinden workspace-scoped'du; değişmedi.
+
+## Flow-run görüntüleyicisi (RunView) canlı node ilerlemesi ✅ (2026-07-09)
+
+- **Bağlam:** Aktivite ekranı canlı transkript aldıktan sonra "aynı canlılığı akış
+  koşu görüntüleyicisine de" istendi. **Mimari bulgu:** akış node'ları session turu
+  DEĞİL — her agent node'u `f.rt.complete(...)` ile session'sız tek provider çağrısı
+  yapar (`session_step` yaymaz, tool-adım granülerliği yoktur); flow session'ı transkript
+  turunu koşu **bitince** post-hoc yazar. Dolayısıyla stepBus/`FlowRun.SessionID` yolu
+  buraya oturmuyordu. Doğru canlılık sinyali: engine'in zaten yaydığı `orchestration.NodeEvent`
+  (per-node `start`/`done`+çıktı/`error`). RunView bunu kullanmıyordu → yalnız 3sn
+  `listAllFlowRuns` polling ile canlı-kördü; ayrıca node olayları sadece koşuyu başlatan
+  HTTP istemcisine gidiyordu (otonom/scheduled koşularda `obs=nil` → hiç canlı olay yok).
+- **Çözüm (session_step deseninin flow eşi):** (a) `events.Event`'e `Node json.RawMessage`
+  alanı; (b) `driveFlow` artık observer'ı **her zaman** sarmalar → her `NodeEvent`'i
+  `emitFlowNode(runID, flowID, ev)` ile global bus'a yayınlar (`flow_node` tipi, `Target.flowRunId`),
+  başlatıcının `obs`'u varsa yine çağrılır → **tüm** koşular (UI/otonom/scheduled) canlı olay
+  yayar; (c) API SSE `flow_node` → ayrı `flownode` kanalı (notify/badge/toast yolunu kirletmez);
+  (d) frontend: `AppEvent.node` + `FlowNodeEvent` tipi, `shared/lib/flowNodeBus.ts` (runId-keyed
+  pub/sub), `useAppEvents.onFlowNode` → bus'a fan-out, `system.ts` üçüncü SSE callback'i;
+  (e) `RunView` `run.id`'ye abone → canvas node durumu (asla geri sarmaz: pending→running→done/error)
+  + "Adım izi" panelinde biten node çıktıları anında + çalışan node için "…çalışıyor" satırı;
+  3sn poll caught-up olunca canlı ekler dedupe olur. `go build ./...` + flow/engine testleri
+  (3/3) + `tsc` + `vite build` temiz.
+
+## Aktivite (Executions) ekranı canlı transkript ✅ (2026-07-09)
+
+- **Sorun:** Executions/Aktivite ekranı seçili yürütmenin transkriptini yalnız
+  `api.listMessages` polling'iyle çekiyordu → **çalışan turda** araç adımları henüz
+  diske yazılmadığından sadece "çalışıyor" noktaları görünüyordu; chat ekranı ise aynı
+  turu SSE `session_step` bus'ından canlı gösteriyordu. Render katmanı zaten ortaktı
+  (`MessageList`); ayrışma **canlı-veri katmanındaydı** (tek SSE beslemesi frame'leri
+  yalnız `chat.applyAutoStep`'e veriyordu).
+- **Çözüm — canlı-transkript katmanı birleştirildi:** (a) yeni `shared/lib/stepBus.ts`
+  = `session_step` frame'lerini + `turn-end` sinyalini taşıyan session-scoped pub/sub
+  (`refreshSignals.ts` desenini yansıtır, **ikinci EventSource açmaz**); (b) `useAppEvents`
+  tek SSE beslemesinden `publishStep`/`publishTurnEnd` ile bus'a fan-out yapar (chat yolu
+  aynen korunur); (c) yeni `features/executions/useLiveTranscript.ts` = chat'le **aynı**
+  `chatStreamAutoLive` helper'larını (`foldAutoStep`/`recoverInflightSnapshot`/
+  `clearAutoLiveEntry`) kullanan salt-okunur canlı-transkript hook'u — ghost balon + mid-turn
+  inflight kurtarma dahil; (d) `ExecutionsPanel` kendi polling/tick transkript mantığını bu
+  hook'la değiştirdi (liste polling'i kaldı). Sonuç: tek SSE → tek stepBus → N transkript
+  görünümü aynı canlı kodu paylaşır. `tsc` + `vite build` temiz.
+
+## Board otomasyon değişkenleri: `{{owner}}` + `{{priority}}` ✅ (2026-07-09)
+
+`{{tags}}`'in ardından iki değişken daha: `BoardChangeEvent`'e `Priority` alanı
+(4 fire noktası doldurur, `store_task.go`); `boardVars` artık ctx alıp `{{owner}}`'ı
+`e.db.GetAgent` ile ajan **adına** çözer + `{{priority}}`'yi render eder
+(`automation.go`). Araç şeması + frontend `BOARD_PROMPT_VARS` + testler güncellendi
+(`TestBoardVarsSubstitution` tags/priority/owner kapsar). Canlı E2E: owner+priority+tags'li
+kart → prompt `OWNER=[BenchOpus48] PRIO=[high] TAGS=[urgent]` render etti.
+
+## Board UX: create'te description focus + otomasyon `{{tags}}` ✅ (2026-07-09)
+
+- **Create popup → description'a otomatik focus** (`TaskFormModal.tsx`): create modunda
+  modal açılınca `descRef` ile açıklama alanına focuslanır (başlık zaten ondan üretiliyor
+  → kullanıcı hemen yazmaya başlar). Edit modunda focus yok.
+- **Board otomasyon prompt değişkeni `{{tags}}`**: kanban kartının etiketleri artık
+  otomasyon promptuna parametre. `BoardChangeEvent`'e `Tags` alanı eklendi + dört fire
+  noktası (Create/Move/Update/Delete, `store_task.go`) doldurur; `boardVars`
+  (`automation.go`) `{{tags}}`'i virgülle-ayrık render eder. Araç şeması
+  (`builtin_automationmgmt.go`) + frontend `BOARD_PROMPT_VARS` (`Automations.tsx`)
+  güncellendi. Canlı E2E: board 'create' otomasyonu, etiketli kart → spawn oturumun
+  prompt'u `CARD_TAGS=[urgent, backend]` olarak render etti.
+
+## Prompt Epoch: oturum-başı donmuş bağlam snapshot'ı ✅ (2026-07-08)
+
+external-context-agent "frozen snapshot" deseninin genellenmesi (yeni doküman
+`57-PROMPT-EPOCH.md`): statik system promptu + araç şemaları per (session,
+agent) oturum başında donar (`internal/agent/promptepoch.go` +
+`prompt_epoch.json` sidecar'ı, restart-safe, fail-open) → oturum-ortası
+skill/ayar/MCP-katalog/capability değişiklikleri prompt cache'ini artık kırmaz.
+Adopt yalnız zaten-bust anlarında: compaction fold, 1h TTL soğuması,
+model/workdir/katılımcı değişimi, `/refresh-context` komutu + `update_session
+{refresh_context}` alanı. Tur içi `activate_tools` bilinçli kast: donmuş baza
+canlı formuyla merge edilir (`mergeFrozenToolDefs`); kapatılan araç yürütmede
+fail-closed kalır. Stale drift dinamik suffix notu + `epoch` debug olaylarıyla
+görünür; workspace toggle `PromptEpochEnabled` (default açık) → Ayarlar →
+Workspace paneli. Test: `promptepoch_test.go` (10 senaryo); suite 796/30 paket
++ tsc yeşil. **Ek (aynı gün): Debug viz** — "Prompt-cache olayları" kartı
+(`PromptCacheEvents.tsx` + `buildPromptCacheSummary`): `epoch` + `cache_break`
+olayları rozetli zaman çizelgesinde (donduruldu/adopte/stale/yenilendi/kırılım);
+ham olay filtresi `epoch` tipini aldı; epoch emit'leri `WithSessionID` damgalı
+(damgasız ctx'te olaylar düşüyordu — düzeltildi). **Canlı E2E doğrulandı**
+(izole :8099, gerçek fable-5): `created → stale → refreshed → created` dizisi,
+donmuş sidecar drift'i almadı → refresh sonrası aldı, kararlı turda olay yok,
+`cache_break` 0. Yan bulgu: izole claude-home'da aralıklı `authentication_failed`
+(token rotasyonu şüphesi, retry'la geçiyor) — epoch-dışı, ayrı araştırma.
+
+## Board kartı: collapsible bağımlılıklar + pbi-kayması kök-neden ✅ (2026-07-08)
+
+- **Card edit popup — bağımlılıklar collapsible** (`TaskFormModal.tsx`):
+  "Bağımlılıklar — önce tamamlanması gereken görevler" bölümü artık chevron'lu
+  açılır/kapanır başlık; görevde bağımlılık varsa açık, yoksa kapalı başlar +
+  kapalıyken sayaç rozeti. Yer kaplamayı azaltır.
+- **"pbi sütununa taşınan kartlar todo'ya kayıyor" — kök neden TionSwarm DIŞINDA:**
+  harici `tionswarm-obsidian-sync` aracı (`Progs\tionswarm-obsidian-sync`,
+  `watch --interval 30`) `status_map`'te olmayan custom board anahtarını her 30s'de
+  `todo`'ya çeviriyordu (`obsidian.py` `_card_to_pm`/`_pm_to_card` `get(..,"todo")`
+  fallback'i → conflict ping-pong). Düzeltme: bilinmeyen board anahtarı **pass-through**
+  (todo'ya çevrilmez); custom sütun iki yönde kayıpsız round-trip eder. Canlı doğrulama:
+  WS5'teki gerçek "Memory Provider Plugins Comparison" görevi 2+ sync döngüsü boyunca
+  `pbi`'de sabit kaldı. **TionSwarm çekirdeği bu konuda zaten doğruydu** (`IsValidBoardKey`
+  custom anahtarları kabul eder, store coercion yapmaz) — TionSwarm kodunda değişiklik yok.
+
+## Board kartı: asenkron başlık + optimistic oluşturma ✅ (2026-07-08)
+
+Board'da kart oluşturma iki iyileştirme aldı:
+- **Asenkron AI başlık** (`internal/api/tasks.go` `handleCreateTask`): başlık boş
+  bırakıldığında create artık LLM'i **beklemez**. Önce içerikten türetilmiş anlık
+  bir placeholder (`placeholderTitle`: ilk satır, 60 rune + `…`) damgalanır ve kart
+  hemen döner (~0.003s); gerçek AI başlığı **arka plan goroutine**'de üretilip
+  (`TitleFor`, detached 60s ctx) yere iner ve `board` SSE olayıyla açık pencereler
+  tazelenir. Guard: kart silinmiş veya kullanıcı başlığı elle değiştirmişse
+  (placeholder ≠ mevcut başlık) AI sonucu **uygulanmaz** (kullanıcı düzenlemesi
+  ezilmez). Başlık verilmişse davranış eskisi gibi.
+- **Optimistic + seçili sütun düzeltmesi** (`TaskFormModal.tsx` + `TaskBoard.tsx`):
+  create artık kartı **anında seçili sütunda** render eder (temp `temp-…` id →
+  "başlık üretiliyor…" ipucu), sonra sunucu satırıyla `onReplaceTemp` ile
+  upsert-uzlaştırır (eşzamanlı SSE reload'da tekilleştirir). Seçilen board sütunu
+  (ToDo dışı sütunlar dahil) uçtan uca korunur. Placeholder başlık = açıklamanın
+  kısaltılmış hali (`excerpt`).
+- **Doğrulama (canlı 8090):** boş-başlık + `boardState=review` create → yanıt
+  0.003s, doğru sütun, placeholder `"…"` ile; ~5s sonra AI başlığı
+  ("TionSwarm 2FA TOTP Doğrulama Akışı Ekleme") yerine indi.
+
+## Prompt-cache denetimi: hedge breakpoint + blok-bazlı coalesce ✅ (2026-07-08)
+
+Cache-kırılım denetiminin iki düzeltmesi (`internal/providers/anthropic.go`):
+- **Hedge breakpoint:** kayan history breakpoint'ine ek, bir önceki taşıyabilen
+  mesajın son bloğuna 4. breakpoint — >20 bloklu paralel tool batch'lerinde
+  Anthropic'in ~20-blok lookback ufku yüzünden tüm geçmişin miss olmasını önler
+  (Raw mesajlar atlanır, en yeni Raw-olmayan öncüle düşer). Bütçe 4/4 dolu.
+- **Blok-bazlı coalesce:** çok-ajanlı art arda aynı-rol düz mesajlar artık önceki
+  mesajın text'ine değil **ayrı text bloğu** olarak eklenir → cached prefix'in son
+  mesajının baytları değişmez. `coalescePlainSameRole` yalnız minimax'ta kaldı.
+- Test: 5 yeni/güncel `TestToAnthropicMessages_*` + `TestCacheBreakpointStability`;
+  tüm suite 787/787 yeşil. Detay `17-TOKEN-OPTIMIZASYON.md` §Hedge breakpoint.
 
 ## Self-healing: dosya-mutasyon verifier'ı ✅ (2026-07-08)
 

@@ -40,6 +40,7 @@ const (
 	DebugRepair     = "repair"      // message-sequence repair healed the in-flight history (rule in Name)
 	DebugGuardrail  = "guardrail"   // tool-loop guardrail decision (warn/block/halt in Name, tool in Detail)
 	DebugLesson     = "lesson"      // a failure lesson was distilled and stored (tool in Name, lesson in Detail)
+	DebugEpoch      = "epoch"       // prompt-epoch lifecycle: created/adopted/stale/refreshed (reason in Name/Detail)
 )
 
 // DebugEvent is one structured observability record. Fields are sparse

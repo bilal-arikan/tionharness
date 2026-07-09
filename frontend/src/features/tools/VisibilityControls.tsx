@@ -17,7 +17,7 @@ export function VisibilityBadge({
       className={`rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide ${className}`}
       style={{
         backgroundColor: `color-mix(in srgb, ${m.color} 18%, transparent)`,
-        color: m.color,
+        color: m.labelColor ?? m.color,
       }}
       title={m.hint}
     >

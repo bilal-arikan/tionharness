@@ -1,4 +1,5 @@
 // Captured log records and autonomous runtime events streamed over /api/events.
+import type { FlowNodeEvent } from './flow'
 
 // A captured log record (application + all workspaces).
 export interface LogEntry {
@@ -25,4 +26,8 @@ export interface AppEvent {
   // `step` event name): the marshalled TurnStep of an in-progress turn. Raw here
   // to avoid a type cycle; the consumer parses it.
   step?: unknown
+  // Present only on type === 'flow_node' frames (delivered under the SSE
+  // `flownode` event name): one flow node's live lifecycle for the run in
+  // target.flowRunId. Typed (no cycle: flow.ts holds no back-reference here).
+  node?: FlowNodeEvent
 }

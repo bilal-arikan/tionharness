@@ -1038,12 +1038,12 @@ func (a *Anthropic) systemField(static, dynamic string) any {
 // current turn is cached — the biggest lever on a long session, where the raw
 // transcript (not the static system/tools) dominates input tokens. Anthropic
 // caches by prefix in tools → system → messages order and allows up to 4
-// breakpoints; with tools(1) + system-static(1) this history breakpoint is the
-// 3rd, safely within the limit. On turn N the breakpoint marks the prefix as a
-// cache write; on turn N+1 that same prefix is a cache read (0.10×) and the new
-// breakpoint moves forward to the newest message — the standard "sliding
-// breakpoint" pattern. Gated on the same extendedCache flag as the system/tool
-// breakpoints so the caching on/off policy stays unified.
+// breakpoints; tools(1) + system-static(1) + a hedge on the previous message(1)
+// + this rolling one(1) uses exactly that budget. On turn N the breakpoint
+// marks the prefix as a cache write; on turn N+1 that same prefix is a cache
+// read (0.10×) and the new breakpoint moves forward to the newest message — the
+// standard "sliding breakpoint" pattern. Gated on the same extendedCache flag
+// as the system/tool breakpoints so the caching on/off policy stays unified.
 func toAnthropicMessages(msgs []Message, extendedCache bool, dynamic, model string) []anthropicMessage {
 	// Mid-conversation system messages: Opus 4.8 accepts {"role":"system"}
 	// entries natively (the cache-safe, non-spoofable operator channel). Older
@@ -1051,20 +1051,40 @@ func toAnthropicMessages(msgs []Message, extendedCache bool, dynamic, model stri
 	// message as a <system-reminder> block (keeps role alternation intact); a
 	// system message with no user predecessor downgrades to a user turn.
 	msgs = foldSystemMessages(msgs, SupportsSystemInMessages(model))
-	// Anthropic requires strictly alternating roles; merge any back-to-back
-	// same-role plain-text turns (e.g. two agents' replies in a shared thread)
-	// into one so the request is valid.
-	msgs = coalescePlainSameRole(msgs)
 	// A trailing message answering a PROGRAMMATIC tool batch must contain pure
 	// tool_result blocks — no dynamic-suffix text may be appended to it.
 	pureTail := len(msgs) > 0 && msgs[len(msgs)-1].OnlyToolResults
 	out := make([]anthropicMessage, 0, len(msgs))
+	// Anthropic requires strictly alternating roles, so back-to-back same-role
+	// plain-text turns (e.g. two agents' replies in a shared thread) must merge
+	// into one message. The merge is BLOCK-WISE: the later turn rides as an extra
+	// text block on the earlier message, so the earlier blocks' bytes stay
+	// identical and a cached prefix ending on that message keeps hitting. (A
+	// text-level merge would rewrite the cached block and bust the prefix from
+	// that point. minimax keeps the text-level coalescePlainSameRole — its chat
+	// format has no content blocks and no prefix cache to protect.)
+	lastPlain := false
 	for _, m := range msgs {
 		// Verbatim echo: an assistant turn captured from a prior response in this
 		// tool loop carries the exact content array (incl. server-tool blocks the
 		// union below cannot model) and must go back byte-identical.
 		if len(m.RawContent) > 0 {
 			out = append(out, anthropicMessage{Role: m.Role, Raw: m.RawContent})
+			lastPlain = false
+			continue
+		}
+		plain := len(m.ToolCalls) == 0 && len(m.ToolResults) == 0
+		if plain && lastPlain && len(out) > 0 && out[len(out)-1].Role == m.Role {
+			if m.Text != "" {
+				prev := &out[len(out)-1]
+				// A placeholder empty text block (from an all-empty message) is
+				// filled in place; anything else gets a fresh trailing block.
+				if n := len(prev.Content); n > 0 && prev.Content[n-1].Type == "text" && prev.Content[n-1].Text == "" {
+					prev.Content[n-1].Text = m.Text
+				} else {
+					prev.Content = append(prev.Content, contentBlock{Type: "text", Text: m.Text})
+				}
+			}
 			continue
 		}
 		var blocks []contentBlock
@@ -1090,6 +1110,7 @@ func toAnthropicMessages(msgs []Message, extendedCache bool, dynamic, model stri
 			blocks = append(blocks, contentBlock{Type: "text", Text: ""})
 		}
 		out = append(out, anthropicMessage{Role: m.Role, Content: blocks})
+		lastPlain = plain
 	}
 	if extendedCache {
 		// Rolling history breakpoint: mark the last block of the last (persisted)
@@ -1102,6 +1123,24 @@ func toAnthropicMessages(msgs []Message, extendedCache bool, dynamic, model stri
 			last := &out[len(out)-1]
 			if n := len(last.Content); n > 0 && len(last.Raw) == 0 {
 				last.Content[n-1].CacheControl = &cacheControl{Type: "ephemeral", TTL: cacheTTL}
+			}
+		}
+		// Hedge breakpoint: ALSO mark the newest PRIOR message that can carry one.
+		// Anthropic's cache lookup only scans ~20 content blocks back from a
+		// breakpoint; a call that appends a bigger batch (many parallel tool_use /
+		// tool_result blocks) would leave the previous call's cached prefix beyond
+		// that horizon and re-WRITE the whole history. The hedge sits at (or very
+		// near) the previous call's breakpoint position, so the old prefix is found
+		// there and only the new tail is written. Raw (verbatim-echo) messages
+		// cannot carry markers and are skipped — the walk lands on the newest
+		// non-Raw predecessor instead (typically the previous user/tool_result
+		// message, exactly where the previous breakpoint sat). Budget: tools(1) +
+		// system(1) + hedge(1) + rolling(1) = 4, the API maximum.
+		for i := len(out) - 2; i >= 0; i-- {
+			prev := &out[i]
+			if n := len(prev.Content); n > 0 && len(prev.Raw) == 0 {
+				prev.Content[n-1].CacheControl = &cacheControl{Type: "ephemeral", TTL: cacheTTL}
+				break
 			}
 		}
 		// Volatile dynamic (date/time, recalled memory, running summary, …) rides as

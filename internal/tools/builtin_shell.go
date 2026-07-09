@@ -46,6 +46,24 @@ func resolvePowerShell() (string, bool) {
 	return lookInterpreter("pwsh", "powershell")
 }
 
+// ShellToolNames reports which shell tools buildRegistry would register on this
+// host, by name: "Bash" when a POSIX shell backs it, "PowerShell" when a
+// PowerShell host is present. It shares the SAME resolvers as the tools
+// themselves (resolvePOSIXShell / resolvePowerShell), so the names advertised in
+// the prompt can never drift from what is actually registered. No Sandbox is
+// needed — availability depends only on PATH, not on the base directory. Returns
+// an empty slice when neither host is found (should not happen on a supported OS).
+func ShellToolNames() []string {
+	var names []string
+	if _, ok := resolvePOSIXShell(); ok {
+		names = append(names, "Bash")
+	}
+	if _, ok := resolvePowerShell(); ok {
+		names = append(names, "PowerShell")
+	}
+	return names
+}
+
 // ShellTool runs a command through the POSIX shell (the "Bash" tool): /bin/sh on
 // Unix, bash.exe on Windows. High-risk (RiskExec), gated behind the shell switch.
 // It starts in the sandbox base directory but is NOT confined to it. Its

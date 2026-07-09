@@ -80,9 +80,18 @@ func (r *Runtime) driveFlow(ctx context.Context, run db.FlowRun, g orchestration
 		}
 	}()
 	eng := orchestration.NewEngine(flowRunner{rt: r, autonomous: autonomous})
-	if obs != nil {
-		eng.SetObserver(obs)
-	}
+	// Always broadcast per-node lifecycle on the process-wide bus (keyed by run
+	// id) so EVERY window's run viewer renders progress live — not just the HTTP
+	// client that started the run, and including autonomous/scheduled runs where
+	// the caller's obs is nil. The run-starter's own per-request SSE (obs) is
+	// still invoked when present. The observer may fire concurrently (parallel
+	// children); r.publish is mutex-guarded so the fan-out is safe.
+	eng.SetObserver(func(ev orchestration.NodeEvent) {
+		r.emitFlowNode(run.ID, run.FlowID, ev)
+		if obs != nil {
+			obs(ev)
+		}
+	})
 
 	save := func(s orchestration.State) error {
 		data, err := json.Marshal(s)
@@ -150,6 +159,24 @@ func (r *Runtime) RunFlowRecorded(ctx context.Context, flowID, input string, aut
 		r.emitFlowDelivery(flow, run, sessionID, runErr)
 	}
 	return run, sessionID, runErr
+}
+
+// emitFlowNode broadcasts one flow node lifecycle event on the process-wide bus,
+// tagged with the run id, so any window viewing that run (the Koşular tab's
+// RunView) renders node start/done/error + output live instead of waiting for
+// the ~3s state poll. Best-effort: run state is persisted after every node, so a
+// dropped frame only costs a little latency, never correctness.
+func (r *Runtime) emitFlowNode(runID, flowID string, ev orchestration.NodeEvent) {
+	b, err := json.Marshal(ev)
+	if err != nil {
+		return
+	}
+	r.publish(events.Event{
+		Type:   "flow_node",
+		Level:  "info",
+		Target: map[string]string{"flowRunId": runID, "flowId": flowID},
+		Node:   b,
+	})
 }
 
 // emitFlowDelivery publishes the outcome of an autonomous flow run as a desktop
