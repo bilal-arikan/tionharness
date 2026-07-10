@@ -1,6 +1,17 @@
 # TionSwarm — İlerleme Takibi
 
-> Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-07-10**
+> Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-07-11**
+
+## an external CLI agent `/chronicle` referans dokümanı ✅ (2026-07-11)
+
+- **TSK30 (doküman-only):** an external CLI agent'nin `/chronicle` oturum-içgörü
+  ailesini (tips / improve / standup / cost-tips / search / reindex) + yerel
+  SQLite session store mekaniğini açıklayan ve TionSwarm muadilleriyle
+  (`session.jsonl`+`debug.jsonl`, ders döngüsü `lessons.jsonl`,
+  `conversation_search`, Tasarruf Merkezi) kıyaslayan `_Docs/59-GITHUB-COPILOT-CHRONICLE.md`
+  eklendi. Boşluk tespiti: proaktif `tips`/`standup` içgörü üreteci TionSwarm'da yok
+  (gelecek kart tohumları dokümanda). Kaynaklar dipnotlandı (GitHub Docs + changelog).
+  `00-GENEL-BAKIS.md` dizinine 58 + 59 satırları eklendi. Kod değişikliği yok.
 
 ## Bash öncelikli, PowerShell gerektiğinde ✅ (2026-07-10, TSK43)
 
