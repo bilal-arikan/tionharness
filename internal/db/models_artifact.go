@@ -56,6 +56,12 @@ type Artifact struct {
 	// organisational label — it does not affect capture, rendering, or origin.
 	Group string `json:"group,omitempty"`
 
+	// Archived marks the artifact as put away: it is never deleted, but the
+	// Artifacts screen hides it from the default list and surfaces it only behind
+	// an "archived" filter, from where it can be un-archived. Mirrors the session
+	// archive lifecycle (a soft, reversible "hide"). Defaults to false (active).
+	Archived bool `json:"archived,omitempty"`
+
 	CreatedAt int64 `json:"createdAt"`
 	UpdatedAt int64 `json:"updatedAt"`
 }

@@ -306,6 +306,32 @@ func (s *Server) handleSetArtifactGroup(w http.ResponseWriter, r *http.Request) 
 	writeJSON(w, http.StatusOK, a)
 }
 
+// handleSetArtifactArchived flips an artifact's `archived` flag (a soft,
+// reversible hide) without touching any other field, then returns the updated
+// artifact. This is the endpoint the Artifacts screen's archive / un-archive
+// action calls.
+//
+// PUT /api/artifacts/{id}/archive
+func (s *Server) handleSetArtifactArchived(w http.ResponseWriter, r *http.Request) {
+	req, ok := bindJSON[struct {
+		Archived bool `json:"archived"`
+	}](w, r)
+	if !ok {
+		return
+	}
+	a, err := ws(r).DB.SetArtifactArchived(r.Context(), r.PathValue("id"), req.Archived)
+	if writeDBError(w, err, "artifact not found") {
+		return
+	}
+	verb := "arşivden çıkarıldı"
+	if req.Archived {
+		verb = "arşivlendi"
+	}
+	publishEntityChange(ws(r), "artifact", "Artifact "+verb+": "+a.Title, a.Kind,
+		map[string]string{"view": "artifacts", "artifactId": a.ID, "sessionId": a.SessionID})
+	writeJSON(w, http.StatusOK, a)
+}
+
 // handleDeleteArtifact removes an artifact.
 func (s *Server) handleDeleteArtifact(w http.ResponseWriter, r *http.Request) {
 	if err := ws(r).DB.DeleteArtifact(r.Context(), r.PathValue("id")); writeDBError(w, err, "artifact not found") {

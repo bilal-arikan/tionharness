@@ -4,6 +4,7 @@ import {
   FileText, FileCode, UploadCloud,
   Trash2, ExternalLink, Copy, Check, Pencil, Save, X, Search,
   ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown, FolderInput,
+  Archive, ArchiveRestore,
 } from 'lucide-react'
 import { api } from '@/api'
 import type { Agent, Artifact, ArtifactKind } from '@/types'
@@ -92,17 +93,27 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
   // agent / tool).
   const [query, setQuery] = useState('')
   const [originFilter, setOriginFilter] = useState<'all' | 'chat' | 'manual' | 'agent' | 'tool' | 'plan'>('all')
+  // Archived view toggle: false (default) hides archived artifacts and shows only
+  // active ones; true flips to show ONLY archived artifacts (so they can be
+  // reviewed and un-archived). Persisted so switching screens keeps the view.
+  const [showArchived, setShowArchived] = useSessionState<boolean>('artifacts.showArchived', false)
+  // Count of archived artifacts across the whole list — drives the toggle's badge
+  // and lets us hide the toggle entirely when nothing has been archived yet.
+  const archivedCount = useMemo(() => list.filter((a) => a.archived).length, [list])
   // True until the first artifact list lands — the list column shows a loading
   // state rather than the "no artifacts yet" onboarding copy.
   const [loading, setLoading] = useState(true)
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
     return list.filter((a) => {
+      // Archive facet: the default view lists active artifacts only; the archived
+      // view lists archived ones only. They are never mixed.
+      if (!!a.archived !== showArchived) return false
       if (originFilter !== 'all' && (a.origin ?? '') !== originFilter) return false
       if (q && !a.title.toLowerCase().includes(q)) return false
       return true
     })
-  }, [list, query, originFilter])
+  }, [list, query, originFilter, showArchived])
 
   const reload = useCallback(() => {
     api
@@ -116,6 +127,13 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
   }, [onError])
 
   useEffect(() => reload(), [reload])
+
+  // Once nothing is archived any more (e.g. the last archived artifact was
+  // restored), fall back to the active view so the archived view can't strand
+  // the user on a permanently empty list.
+  useEffect(() => {
+    if (showArchived && archivedCount === 0) setShowArchived(false)
+  }, [showArchived, archivedCount, setShowArchived])
 
   // Honour an incoming deep-link selection (e.g. clicking an artifact card).
   useEffect(() => {
@@ -181,6 +199,8 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
   // Draft group name + busy flag for the bulk "set group" action on the selection.
   const [bulkGroup, setBulkGroup] = useState('')
   const [bulkGroupBusy, setBulkGroupBusy] = useState(false)
+  // Busy flag for the bulk archive / un-archive action on the selection.
+  const [bulkArchiveBusy, setBulkArchiveBusy] = useState(false)
 
   // Filtered artifacts bucketed by group (named groups first, ungrouped last),
   // with persisted per-group collapse state. Mirrors the Skills screen so both
@@ -246,6 +266,49 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
         .finally(() => setBulkGroupBusy(false))
     },
     [sel.selected, reload, activeId, onError],
+  )
+
+  // Bulk archive / un-archive every selected artifact at once (a soft, reversible
+  // hide). In the default view this archives the selection; in the archived view
+  // it restores it. Clears the selection since the affected cards leave the
+  // current view after the reload.
+  const bulkSetArchived = useCallback(
+    (archived: boolean) => {
+      const ids = [...sel.selected]
+      if (ids.length === 0) return
+      setBulkArchiveBusy(true)
+      sel.clear()
+      Promise.all(ids.map((id) => api.setArtifactArchived(id, archived)))
+        .then(() => {
+          // The affected artifacts drop out of the current view; clear the
+          // detail selection if it was one of them so the viewer doesn't dangle.
+          setActiveId((cur) => (cur && ids.includes(cur) ? null : cur))
+        })
+        .catch((e) => onError((e as Error).message))
+        .finally(() => {
+          setBulkArchiveBusy(false)
+          reload()
+        })
+    },
+    [sel, reload, onError],
+  )
+
+  // Single-artifact archive / un-archive from the detail toolbar. Keeps the list
+  // and the active artifact in sync after the flip.
+  const setArchived = useCallback(
+    async (id: string, archived: boolean) => {
+      try {
+        const updated = await api.setArtifactArchived(id, archived)
+        setList((prev) => prev.map((a) => (a.id === id ? updated : a)))
+        setActive((cur) => (cur && cur.id === id ? updated : cur))
+        // An archived artifact leaves the default view (and vice-versa); drop the
+        // selection so the viewer clears rather than showing a now-hidden card.
+        setActiveId((cur) => (cur === id ? null : cur))
+      } catch (e) {
+        onError((e as Error).message)
+      }
+    },
+    [onError],
   )
 
   // Drag-and-drop group move: dropping a card on a group header rewrites its
@@ -522,6 +585,24 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
               </button>
             ))}
           </div>
+          {/* Archived view toggle: flips the list between active and archived
+              artifacts. Hidden until at least one artifact has been archived. */}
+          {(archivedCount > 0 || showArchived) && (
+            <button
+              data-testid="artifacts-archived-toggle"
+              data-active={showArchived}
+              onClick={() => setShowArchived((v) => !v)}
+              title={showArchived ? 'Aktif artifactlara dön' : 'Arşivlenen artifactları göster'}
+              className={`flex items-center gap-1.5 self-start rounded px-1.5 py-0.5 text-[10px] font-medium transition ${
+                showArchived
+                  ? 'bg-[var(--color-accent)] text-white'
+                  : 'bg-[var(--color-surface-2)] text-[var(--color-text-dim)] hover:text-[var(--color-text)]'
+              }`}
+            >
+              <Archive size={12} />
+              {showArchived ? 'Arşiv görünümü' : `Arşiv (${archivedCount})`}
+            </button>
+          )}
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto p-2">
@@ -645,6 +726,17 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
               {bulkGroup.trim() ? 'Ata' : 'Grupsuz'}
             </SelectionBarButton>
           </div>
+          {/* Bulk archive / un-archive: hides (or restores) the selection. The
+              verb follows the current view — archive in the active view, restore
+              in the archived view. */}
+          <SelectionBarButton
+            icon={showArchived ? <ArchiveRestore size={13} /> : <Archive size={13} />}
+            onClick={() => bulkSetArchived(!showArchived)}
+            disabled={bulkArchiveBusy}
+            title={showArchived ? 'Seçili artifactları arşivden çıkar' : 'Seçili artifactları arşivle'}
+          >
+            {showArchived ? 'Arşivden çıkar' : 'Arşivle'}
+          </SelectionBarButton>
           <SelectionBarButton icon={<Trash2 size={13} />} onClick={bulkDelete} danger>
             Sil
           </SelectionBarButton>
@@ -675,6 +767,11 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
             active ? (
               <>
                 <OriginBadge origin={active.origin} />
+                {active.archived && (
+                  <span className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide bg-[color-mix(in_srgb,var(--color-warning)_15%,transparent)] text-[var(--color-warning)]">
+                    <Archive size={11} /> Arşivlendi
+                  </span>
+                )}
                 {active.group && (
                   <span className="rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide bg-[var(--color-surface-2)] text-[var(--color-text-dim)]">
                     {active.group}
@@ -737,6 +834,14 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
                         <ExternalLink size={15} />
                       </button>
                     )}
+                    <button
+                      data-testid="artifact-detail-archive"
+                      onClick={() => setArchived(active.id, !active.archived)}
+                      title={active.archived ? 'Arşivden çıkar' : 'Arşivle'}
+                      className={iconBtn}
+                    >
+                      {active.archived ? <ArchiveRestore size={15} /> : <Archive size={15} />}
+                    </button>
                     <button
                       data-testid="artifact-detail-delete"
                       onClick={() => remove(active.id)}

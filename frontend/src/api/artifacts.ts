@@ -33,6 +33,14 @@ export const artifactApi = {
       method: 'PUT',
       body: JSON.stringify({ group }),
     }),
+  // Archive / un-archive an artifact — a soft, reversible hide (the artifact is
+  // never deleted). Archived artifacts drop out of the default list and show
+  // only behind the "archived" filter, from where they can be restored.
+  setArtifactArchived: (id: string, archived: boolean) =>
+    req<Artifact>(`/api/artifacts/${id}/archive`, {
+      method: 'PUT',
+      body: JSON.stringify({ archived }),
+    }),
   // Locate the artifact on disk: its file path + containing folder.
   artifactPath: (id: string) =>
     req<{ path: string; dir: string }>(`/api/artifacts/${id}/path`),

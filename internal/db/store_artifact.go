@@ -175,6 +175,21 @@ func (d *DB) SetArtifactGroup(ctx context.Context, id, group string) (Artifact, 
 	return a, d.persistArtifactLocked(&a)
 }
 
+// SetArtifactArchived flips an artifact's archived flag without touching any
+// other field, then returns the updated row. Archiving is a soft, reversible
+// "hide" (the artifact is never deleted): true puts it away, false restores it.
+func (d *DB) SetArtifactArchived(ctx context.Context, id string, archived bool) (Artifact, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	a, ok := d.artifacts[id]
+	if !ok {
+		return Artifact{}, ErrNotFound
+	}
+	a.Archived = archived
+	a.UpdatedAt = now()
+	return a, d.persistArtifactLocked(&a)
+}
+
 // SaveFileArtifact upserts an artifact mirroring a file the agent wrote: if one
 // already exists for the same session + source path it is overwritten in place,
 // otherwise a new one is created. This dedups repeated writes of the same file

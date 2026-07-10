@@ -427,10 +427,18 @@ export function SessionDetailPanel({
           </Section>
 
 
-          {/* Persistent progress (durable todo_write checklist + rolling log) */}
-          {progress?.exists && progress.record && progress.record.todos.length > 0 && (
-            <ProgressCard progress={progress} sessionId={sessionId} />
-          )}
+          {/* Persistent progress (durable todo_write checklist + rolling log).
+              The file is keyed by working directory, so several sessions on one
+              project share ONE progress.json. Only show it in the session that
+              last wrote it — otherwise the same "8/8" checklist leaks into every
+              session on that dir and never clears. A legacy record with no owner
+              (empty sessionId) is still shown (we can't attribute it away). */}
+          {progress?.exists &&
+            progress.record &&
+            progress.record.todos.length > 0 &&
+            (!progress.record.sessionId || progress.record.sessionId === sessionId) && (
+              <ProgressCard progress={progress} />
+            )}
 
           {/* Context window usage (/context-style) */}
           <SessionContextUsage

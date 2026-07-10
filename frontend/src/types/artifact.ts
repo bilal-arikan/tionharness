@@ -32,6 +32,9 @@ export interface Artifact {
   origin?: 'chat' | 'manual' | 'agent' | 'tool' | 'plan'
   // Free-text organisation bucket (Artifacts-UI grouping). Empty = ungrouped.
   group?: string
+  // Soft, reversible "hide": archived artifacts drop out of the default list and
+  // show only behind the "archived" filter, from where they can be restored.
+  archived?: boolean
   createdAt: number
   updatedAt: number
 }

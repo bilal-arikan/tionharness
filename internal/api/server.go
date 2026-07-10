@@ -11,6 +11,8 @@ import (
 	"os"
 	"strings"
 
+	"github.com/google/uuid"
+
 	"github.com/bilal-arikan/tionswarm/internal/agent"
 	"github.com/bilal-arikan/tionswarm/internal/backup"
 	"github.com/bilal-arikan/tionswarm/internal/conversation"
@@ -22,7 +24,9 @@ import (
 	"github.com/bilal-arikan/tionswarm/internal/market"
 	"github.com/bilal-arikan/tionswarm/internal/mcp"
 	"github.com/bilal-arikan/tionswarm/internal/providers"
+	"github.com/bilal-arikan/tionswarm/internal/sessionhub"
 	"github.com/bilal-arikan/tionswarm/internal/settings"
+	"github.com/bilal-arikan/tionswarm/internal/tools"
 	"github.com/bilal-arikan/tionswarm/internal/web"
 	"github.com/bilal-arikan/tionswarm/internal/workspace"
 )
@@ -41,7 +45,10 @@ type Server struct {
 	tun        *agent.Tunables
 	logs       *logbuf.Buffer
 	bus        *events.Bus     // autonomous notifications streamed to the UI over SSE
-	runs       *chatRuns       // in-flight streaming turns (stop/steer control)
+	hub          *sessionhub.Hub   // per-session ordered event log (cursor-based, all windows subscribe)
+	interactions *interactionStore // per-session resolve-once human-in-the-loop prompts (CAS)
+	inbox        *inboxStore       // per-session durable command queue (serial worker → turns)
+	runs         *chatRuns         // in-flight streaming turns (stop/steer control)
 	grants     *permGrantStore // per-session "Always allow" permission grants
 	logger     *slog.Logger
 
@@ -85,7 +92,13 @@ func NewServer(manager *workspace.Manager, registry *providers.Registry, store *
 		tun:        tun,
 		logs:       logs,
 		bus:        bus,
-		runs:       newChatRuns(),
+		// Per-session event hub: a fresh epoch each boot so a client presenting a
+		// cursor from a previous process is told to reset instead of trusting a
+		// stale (restarted-to-zero) seq. See _Docs/58-QUEUE-SENKRON.md.
+		hub:          sessionhub.New(uuid.NewString(), 0),
+		interactions: newInteractionStore(),
+		inbox:        newInboxStore(),
+		runs:         newChatRuns(),
 		grants:     newPermGrantStore(),
 		logger:     logger,
 		// Workspace-independent market store (bundled + global tiers) for the
@@ -95,7 +108,7 @@ func NewServer(manager *workspace.Manager, registry *providers.Registry, store *
 	}
 	// Interaction MCP: lets CLI agents (claude-cli, ...) reach TionSwarm's
 	// human-in-the-loop tools over in-process HTTP. See _Docs/11-INTERACTION-MCP.md.
-	interBackend := &interactionBackend{runs: s.runs, tun: tun}
+	interBackend := &interactionBackend{runs: s.runs, tun: tun, apiSrv: s}
 	s.interactionSrv = interaction.NewServer(interBackend, logger)
 	// Wire the pusher back so activate_tools can push tools/list_changed (gateway, Doc 52).
 	interBackend.setServer(s.interactionSrv)
@@ -181,6 +194,11 @@ func NewServer(manager *workspace.Manager, registry *providers.Registry, store *
 	// Surface compaction (rolling-summary fold + manual /compact) in the in-app
 	// Logs screen; it was previously visible only in the chat response payload.
 	s.convo.SetLogger(logger)
+	// Mirror autonomous turns' live steps from the bus onto the per-session hub so
+	// every window renders them from the same authoritative stream (Faz 1B).
+	go s.bridgeBusToHub()
+	// Re-dispatch any durably-queued messages left by a crash/restart (Faz 3).
+	go s.recoverInboxes()
 	s.applySettings()
 	return s
 }
@@ -230,6 +248,10 @@ func (s *Server) applySettings() {
 	s.tun.SetClaudeSysPromptFile(cur.ClaudeSysPromptFile)
 	s.tun.SetDelegationLimits(cur.DelegationMaxDepth, cur.DelegationMaxCalls)
 	s.tun.SetSpawnLimits(cur.SpawnMaxConcurrent, cur.SpawnMaxPerTurn)
+	s.tun.SetSpawnTimeoutMinutes(cur.SpawnTimeoutMin)
+	s.tun.SetScheduleTimeoutMinutes(cur.ScheduleTimeoutMin)
+	tools.SetShellTimeouts(cur.ShellDefaultTimeoutSec, cur.ShellMaxTimeoutSec)
+	tools.SetMaxToolOutputBytes(cur.MaxToolOutputKB * 1024)
 	s.tun.SetCoordinatorLimits(cur.CoordinatorMaxWorkers, cur.CoordinatorMaxTurns)
 	s.tun.SetWorkdirGuards(cur.AutonomousConfine, cur.GitWorktreeIsolation, cur.AutonomousBootSeq)
 	s.tun.SetAutonomousTaskBudget(cur.AutonomousTaskBudgetTokens)
@@ -360,6 +382,24 @@ func (s *Server) registerSessionRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/sessions", s.handleListSessions)
 	mux.HandleFunc("GET /api/sessions/active", s.handleActiveSessions)
 	mux.HandleFunc("GET /api/sessions/{id}/inflight", s.handleSessionInflight)
+	// Server-authoritative per-session event stream (cursor-based SSE): every
+	// window watching a session subscribes here and renders live from it,
+	// whoever started the turn. See _Docs/58-QUEUE-SENKRON.md.
+	mux.HandleFunc("GET /api/sessions/{id}/stream", s.handleSessionStream)
+	// Resolve-once human-in-the-loop answer (ask_user / permission / plan): the
+	// first window to answer wins via CAS; the others' cards close on the
+	// broadcast interaction_resolved. See _Docs/58-QUEUE-SENKRON.md Faz 2.
+	mux.HandleFunc("POST /api/sessions/{id}/interactions/{iid}/answer", s.handleInteractionAnswer)
+	// Send-queue (Faz 3): enqueue a user turn (durable, idempotent on clientMsgId),
+	// cancel a not-yet-dispatched one, and stop/steer the in-flight turn without a
+	// runId (the queue runs turns server-side → control is session-scoped).
+	mux.HandleFunc("POST /api/sessions/{id}/messages", s.handleEnqueueMessage)
+	mux.HandleFunc("DELETE /api/sessions/{id}/queue/{msgId}", s.handleCancelQueued)
+	mux.HandleFunc("DELETE /api/sessions/{id}/queue", s.handleClearQueue)
+	mux.HandleFunc("POST /api/sessions/{id}/queue/{msgId}/front", s.handleMoveQueuedFront)
+	mux.HandleFunc("POST /api/sessions/{id}/control", s.handleSessionControl)
+	// Cross-window "user is typing" signal (ephemeral, not retained).
+	mux.HandleFunc("POST /api/sessions/{id}/typing", s.handleTyping)
 	mux.HandleFunc("DELETE /api/sessions/{id}/cli-process", s.handleDropSessionCLIProcess)
 	mux.HandleFunc("GET /api/sessions/search", s.handleSearchMessages)
 	mux.HandleFunc("POST /api/sessions", s.handleCreateSession)
@@ -559,6 +599,8 @@ func (s *Server) registerArtifactRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("DELETE /api/artifacts/{id}", s.handleDeleteArtifact)
 	// Assign an artifact's organisation bucket (Artifacts-UI grouping).
 	mux.HandleFunc("PUT /api/artifacts/{id}/group", s.handleSetArtifactGroup)
+	// Archive / un-archive an artifact (a soft, reversible hide).
+	mux.HandleFunc("PUT /api/artifacts/{id}/archive", s.handleSetArtifactArchived)
 	// Locate the artifact on disk: copy its path or open its folder in Explorer.
 	mux.HandleFunc("GET /api/artifacts/{id}/path", s.handleArtifactPath)
 	mux.HandleFunc("POST /api/artifacts/{id}/reveal", s.handleRevealArtifact)
