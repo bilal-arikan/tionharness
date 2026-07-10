@@ -33,7 +33,7 @@ type capturedStep struct {
 
 func TestInteractionBackend_AskRoundTrip(t *testing.T) {
 	runs := newChatRuns()
-	run := runs.register("r1", "s-r1", func() {})
+	run := runs.register("r1", "s-r1", "", func() {})
 	defer runs.unregister("r1")
 	steps, mu := captureRun(run)
 
@@ -205,7 +205,7 @@ func contains(ss []string, want string) bool {
 // default case through the run's bridge dispatcher.
 func TestInteractionBridge(t *testing.T) {
 	runs := newChatRuns()
-	run := runs.register("rb", "s-rb", func() {})
+	run := runs.register("rb", "s-rb", "", func() {})
 	defer runs.unregister("rb")
 
 	var gotName string
@@ -253,7 +253,7 @@ func specHasTool(specs []interaction.ToolSpec, name string) bool {
 
 func TestInteractionBackend_AskTurnEnded(t *testing.T) {
 	runs := newChatRuns()
-	run := runs.register("r2", "s-r2", func() {})
+	run := runs.register("r2", "s-r2", "", func() {})
 	captureRun(run)
 	b := &interactionBackend{runs: runs}
 
@@ -273,7 +273,7 @@ func TestInteractionBackend_AskTurnEnded(t *testing.T) {
 
 func TestInteractionBackend_Todo(t *testing.T) {
 	runs := newChatRuns()
-	run := runs.register("r3", "s-r3", func() {})
+	run := runs.register("r3", "s-r3", "", func() {})
 	defer runs.unregister("r3")
 	steps, mu := captureRun(run)
 	b := &interactionBackend{runs: runs}
@@ -296,7 +296,7 @@ func TestInteractionBackend_Todo(t *testing.T) {
 
 func TestInteractionBackend_Confirm(t *testing.T) {
 	runs := newChatRuns()
-	run := runs.register("rc", "s-rc", func() {})
+	run := runs.register("rc", "s-rc", "", func() {})
 	defer runs.unregister("rc")
 	captureRun(run)
 	b := &interactionBackend{runs: runs}
@@ -329,7 +329,7 @@ func (f *fakeSink) UpdateArtifact(_ context.Context, id, content string) (tools.
 
 func TestInteractionBackend_Artifact(t *testing.T) {
 	runs := newChatRuns()
-	run := runs.register("ra", "s-ra", func() {})
+	run := runs.register("ra", "s-ra", "", func() {})
 	defer runs.unregister("ra")
 	sink := &fakeSink{}
 	run.setArtifacts(sink)
@@ -358,7 +358,7 @@ func TestInteractionBackend_Artifact(t *testing.T) {
 // return an error result at once instead of blocking until the 15-minute timeout.
 func TestInteractionBackend_AutonomousAskBails(t *testing.T) {
 	runs := newChatRuns()
-	run := runs.register("rauto", "s-rauto", func() {})
+	run := runs.register("rauto", "s-rauto", "", func() {})
 	defer runs.unregister("rauto")
 	run.autonomous = true
 	b := &interactionBackend{runs: runs}

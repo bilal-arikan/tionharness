@@ -121,8 +121,9 @@ graph LR
 - Anthropic `context_management` beta: `clear_tool_uses_20250919` (trigger `input_tokens`,
   `keep` son N tool_use, `clear_at_least`) + `clear_thinking_20251015`.
 - Sunucu, cache'li önekteki eski tool-result/thinking'i **yerinde** siler (`cache_edits`),
-  önek tam yeniden yazılmaz → sıcak kalır. TionSwarm'nun mevcut deterministik tool-output
-  sıkıştırması (Sistem A/B, `CompactSavedBytes`) ile **tamamlayıcı**.
+  önek tam yeniden yazılmaz → sıcak kalır. (Not: o dönemki built-in tool-output
+  sıkıştırması — Sistem A/B, `CompactSavedBytes` — 2026-07-10'da kaldırıldı;
+  bu iş artık harici `rtk`/`sqz` katmanında, bkz. `17-TOKEN-OPTIMIZASYON.md`.)
 - `anthropic.go`'ya `extendedCache` açıkken ekle; beta header gerekir; ayar
   `anthropicContextEditing` (vars. kapalı). Client-side fold'a alternatif/ek.
 

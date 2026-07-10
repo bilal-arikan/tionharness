@@ -78,16 +78,67 @@ const SECONDARY_ARRAY_KEYS = new Set([
   'options', 'tags', 'dependencies', 'exclude', 'args', 'spawntags', 'skills',
 ])
 
+/** A field's value as a string, or '' when absent/non-string. */
+function str(v: unknown): string {
+  return typeof v === 'string' ? v : ''
+}
+
+/** "actor → payload" (or just whichever half is present). */
+function directed(actor: unknown, payload: unknown): string | null {
+  const a = str(actor)
+  const p = str(payload)
+  if (a && p) return `${a} → ${p}`
+  return a || p || null
+}
+
+// Per-tool summary templates, tried before the generic extraction. Each maps a
+// call's input to a richer one-liner that names both sides of the action —
+// e.g. "@Ali → merhaba" for a message, "Fix login [in_progress]" for a task —
+// so the collapsed card reads like a sentence, not a lone value.
+const RICH_TEMPLATES: Record<string, (o: Record<string, unknown>) => string | null> = {
+  send_message: (o) => directed(o.to, o.message ?? o.summary),
+  send_to_worker: (o) => directed(o.worker, o.message),
+  spawn_worker: (o) => directed(o.agent, o.task),
+  spawn_session: (o) => directed(o.agent, o.prompt),
+  create_task: (o) => taskLine(o),
+  update_task: (o) => taskLine(o),
+  read_logs: (o) => str(o.q) || str(o.level) || null,
+  create_schedule: (o) => scheduleLine(o),
+  update_schedule: (o) => scheduleLine(o),
+  create_hook: (o) => directed(o.event, o.command),
+  create_mcp_server: (o) => directed(o.name, o.command ?? o.url),
+}
+
+/** "title [column]" for board tasks; falls back to whichever part exists. */
+function taskLine(o: Record<string, unknown>): string | null {
+  const head = str(o.title) || str(o.prompt)
+  const state = str(o.boardState)
+  if (head && state) return `${head} [${state}]`
+  if (state) return `→ ${state}`
+  return head || null
+}
+
+/** "prompt · cron" for schedules; either part alone is fine. */
+function scheduleLine(o: Record<string, unknown>): string | null {
+  const p = str(o.prompt)
+  const cron = str(o.cronExpr)
+  if (p && cron) return `${p} · ${cron}`
+  return p || cron || null
+}
+
 /** Derive a one-line summary from common tool input shapes. The goal is a
  *  content-bearing line (the actual command / path / message / items), never a
  *  raw key list — a bare "names" or "questions" next to the tool name is noise,
- *  so when nothing meaningful can be extracted we show nothing at all. */
-function summarize(input: unknown): string {
+ *  so when nothing meaningful can be extracted we show nothing at all. A
+ *  per-tool template (RICH_TEMPLATES) is preferred when one matches the base. */
+function summarize(base: string, input: unknown): string {
   if (!input || typeof input !== 'object') {
     return typeof input === 'string' ? input : ''
   }
   if (Array.isArray(input)) return summarizeArray(input)
   const o = input as Record<string, unknown>
+  const rich = RICH_TEMPLATES[base]?.(o)
+  if (rich) return rich
   // Prefer a genuine content value over structural keys.
   const first =
     o.command ?? o.query ?? o.url ?? o.path ?? o.file_path ?? o.pattern ?? o.q ?? o.agent ??
@@ -123,7 +174,7 @@ export function toolMeta(name: string, input: unknown): ToolMeta {
   return {
     label: pickLabel(name),
     icon: toolIcon(name),
-    summary: summarize(input),
+    summary: summarize(base, input),
     isDiff: DIFF_TOOLS.some((t) => base === t || base.includes(t)),
   }
 }

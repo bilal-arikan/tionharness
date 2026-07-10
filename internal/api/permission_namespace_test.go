@@ -17,7 +17,7 @@ import (
 // the auto-allow path returns without touching the grant store or emitting a step.
 func TestPermissionPromptStripsNamespace(t *testing.T) {
 	runs := newChatRuns()
-	run := runs.register("r1", "s1", func() {})
+	run := runs.register("r1", "s1", "", func() {})
 	b := &interactionBackend{runs: runs, tun: agent.NewTunables()}
 
 	args := json.RawMessage(`{"tool_name":"mcp__tionswarm_extended__get_session_info","input":{}}`)

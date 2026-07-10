@@ -29,7 +29,7 @@ func TestGatewayDynamicExtendedSurface(t *testing.T) {
 
 	runs := newChatRuns()
 	b := &interactionBackend{runs: runs, tun: tun}
-	run := runs.register("r1", "s1", func() {})
+	run := runs.register("r1", "s1", "", func() {})
 	tok := runs.interactionToken("s1", "a1")
 	runs.bindActive(tok, run)
 
@@ -90,7 +90,7 @@ func TestGatewayActivateAcceptsNamespacedName(t *testing.T) {
 	tun := agent.NewTunables()
 	runs := newChatRuns()
 	b := &interactionBackend{runs: runs, tun: tun}
-	run := runs.register("r1", "s1", func() {})
+	run := runs.register("r1", "s1", "", func() {})
 	tok := runs.interactionToken("s1", "a1")
 	runs.bindActive(tok, run)
 
@@ -118,7 +118,7 @@ func TestGatewayHiddenActivatableAndToolSearch(t *testing.T) {
 	tun := agent.NewTunables()
 	runs := newChatRuns()
 	b := &interactionBackend{runs: runs, tun: tun}
-	run := runs.register("r1", "s1", func() {})
+	run := runs.register("r1", "s1", "", func() {})
 	tok := runs.interactionToken("s1", "a1")
 	runs.bindActive(tok, run)
 

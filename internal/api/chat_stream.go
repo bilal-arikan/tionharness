@@ -62,7 +62,7 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 	clientGone := r.Context()
 	ctx, cancel := context.WithCancel(context.WithoutCancel(r.Context()))
 	defer cancel()
-	run := s.runs.register(runID, req.SessionID, cancel)
+	run := s.runs.register(runID, req.SessionID, ws(r).ID, cancel)
 	defer s.runs.unregister(runID)
 	ctx = agent.WithSteer(ctx, run.steer)
 	// Point any CLI subprocess (claude-cli, ...) at the in-process Interaction MCP

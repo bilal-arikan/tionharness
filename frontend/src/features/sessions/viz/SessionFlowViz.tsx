@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
 import { ChevronDown, ChevronRight, Loader2, Workflow } from 'lucide-react'
 import { api } from '@/api'
-import type { SessionDebugEvent } from '@/types'
+import type { Hook, SessionDebugEvent } from '@/types'
 import { ToolSankey } from './ToolSankey'
 import { ConcurrencyTimeline } from './ConcurrencyTimeline'
 import { SelfHealingEvents } from './SelfHealingEvents'
 import { PromptCacheEvents } from './PromptCacheEvents'
+import { HookActivity } from './HookActivity'
 
 // How many raw events to pull for the visualizations. Covers the whole span for
 // typical sessions; very long ones are truncated to the newest window (noted).
@@ -28,6 +29,7 @@ export function SessionFlowViz({
     () => localStorage.getItem('tionswarm.flowVizOpen') === '1',
   )
   const [events, setEvents] = useState<SessionDebugEvent[] | null>(null)
+  const [hooks, setHooks] = useState<Hook[]>([])
   const [loading, setLoading] = useState(false)
 
   const toggle = () =>
@@ -47,6 +49,11 @@ export function SessionFlowViz({
       .then((e) => alive && setEvents(e))
       .catch(() => alive && setEvents([]))
       .finally(() => alive && setLoading(false))
+    // Hooks (workspace-scoped) attribute type=hook events to rtk/sqz in HookActivity.
+    api
+      .listHooks()
+      .then((h) => alive && setHooks(h))
+      .catch(() => alive && setHooks([]))
     return () => {
       alive = false
     }
@@ -118,6 +125,17 @@ export function SessionFlowViz({
                   anlarında beklenir.
                 </p>
                 <PromptCacheEvents events={events} />
+              </div>
+
+              <div>
+                <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
+                  Hook / token-optimizer aktivitesi
+                </div>
+                <p className="mb-1 text-[10px] text-[var(--color-text-dim)]">
+                  Bu oturumda ateşlenen hook'lar, hook başına atfedilmiş (rtk/sqz dahil):
+                  kaç kez, hangi araçta. Aktivite göstergesidir — byte tasarrufu değil (_Docs/17).
+                </p>
+                <HookActivity events={events} hooks={hooks} />
               </div>
 
               {events.length >= EVENT_LIMIT && (

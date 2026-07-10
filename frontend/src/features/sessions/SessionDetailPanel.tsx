@@ -6,6 +6,8 @@ import { CoordinatorSection } from './CoordinatorSection'
 import { KeyValueRow as Row, TagEditor } from '@/shared/components'
 import { ResizeHandle } from '@/shared/components/SidebarChrome'
 import { useResizableSidebar } from '@/shared/hooks/useResizableSidebar'
+import { useRefreshTrigger } from '@/shared/hooks/useRefreshTrigger'
+import { SIGNAL_EXECUTIONS } from '@/app/eventToRefreshSignals'
 import { Section, ActionBtn } from './SessionDetailBits'
 import { ProgressCard } from './SessionProgressCard'
 import { SessionTitleBlock } from './SessionTitleBlock'
@@ -111,8 +113,13 @@ export function SessionDetailPanel({
     }
   }, [sessionId, refreshKey, localRefresh])
 
-  // Persistent progress (durable todo_write checklist + log). Refetched on the
-  // same triggers so a finished turn that updated the list reflects here.
+  // Persistent progress (durable todo_write checklist + log). The file is keyed
+  // by WORKING DIRECTORY, not session, so ANOTHER session sharing this project
+  // dir can change it while THIS (possibly idle) panel is open — meterRefresh
+  // (this session's turn-end) then never fires and the card freezes at a stale
+  // count. Refetch it on the global `executions` signal too (a cheap single
+  // file-read endpoint) so it self-heals regardless of which session wrote last.
+  const execTick = useRefreshTrigger(SIGNAL_EXECUTIONS)
   useEffect(() => {
     let alive = true
     api
@@ -122,7 +129,7 @@ export function SessionDetailPanel({
     return () => {
       alive = false
     }
-  }, [sessionId, refreshKey, localRefresh])
+  }, [sessionId, refreshKey, localRefresh, execTick])
 
   // While a turn is running (or a warm CLI process is held), poll the info endpoint
   // so the process card appears/updates/clears live even without a chat SSE bound to
@@ -422,7 +429,7 @@ export function SessionDetailPanel({
 
           {/* Persistent progress (durable todo_write checklist + rolling log) */}
           {progress?.exists && progress.record && progress.record.todos.length > 0 && (
-            <ProgressCard progress={progress} />
+            <ProgressCard progress={progress} sessionId={sessionId} />
           )}
 
           {/* Context window usage (/context-style) */}

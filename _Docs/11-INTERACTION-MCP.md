@@ -289,6 +289,8 @@ Araçlar ekranından). CLI yolunda canlı `providers.Request` olmadığından *i
 modu yalnız prompt'a düşer.
 
 **`core_memory_replace`/`core_memory_append` + `conversation_search` — CLI köprüsüne eklendi (2026-06-22):**
+_(Not: `core_memory_*` araçları 2026-07-05'te memory alt sistemiyle birlikte KALDIRILDI;
+bu bölümün core-memory kısmı tarihseldir, `conversation_search` köprüsü hâlâ geçerli.)_
 Bu üç araç **eager** built-in (native'de her turda hazır) ve native-loop ctx bağımlılığı
 yok — yalnız `r.mem` / `r.db` ister. Daha önce CLI ajanı core-memory bloğunu prompt'unda
 **görüyor** ama düzenleyemiyordu; geçmişte derin (tam-metin) arama da yoktu. Lazy işaretleyip

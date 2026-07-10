@@ -147,10 +147,10 @@ func (r *Runtime) runPreToolHooks(ctx context.Context, sessionID string, call pr
 		dec, derr := r.execHook(ctx, h, payload)
 		if derr != nil {
 			r.logger.Warn("pre hook failed (fail-open)", "hook", h.ID, "tool", call.Name, "error", derr)
-			r.emitDebug(ctx, db.DebugEvent{Type: db.DebugHook, Name: db.HookPreToolUse, DurMs: time.Since(hookStart).Milliseconds(), Detail: call.Name + ":error", Err: true})
+			r.emitDebug(ctx, db.DebugEvent{Type: db.DebugHook, Name: db.HookPreToolUse, HookID: h.ID, DurMs: time.Since(hookStart).Milliseconds(), Detail: call.Name + ":error", Err: true})
 			continue
 		}
-		r.emitDebug(ctx, db.DebugEvent{Type: db.DebugHook, Name: db.HookPreToolUse, DurMs: time.Since(hookStart).Milliseconds(), Detail: call.Name + ":" + hookDecisionLabel(dec)})
+		r.emitDebug(ctx, db.DebugEvent{Type: db.DebugHook, Name: db.HookPreToolUse, HookID: h.ID, DurMs: time.Since(hookStart).Milliseconds(), Detail: call.Name + ":" + hookDecisionLabel(dec)})
 		if len(dec.UpdatedInput) > 0 {
 			input = dec.UpdatedInput
 			out.input = dec.UpdatedInput
@@ -200,10 +200,10 @@ func (r *Runtime) runPostToolHooks(ctx context.Context, sessionID string, call p
 		dec, derr := r.execHook(ctx, h, payload)
 		if derr != nil {
 			r.logger.Warn("post hook failed (fail-open)", "hook", h.ID, "tool", call.Name, "error", derr)
-			r.emitDebug(ctx, db.DebugEvent{Type: db.DebugHook, Name: db.HookPostToolUse, DurMs: time.Since(hookStart).Milliseconds(), Detail: call.Name + ":error", Err: true})
+			r.emitDebug(ctx, db.DebugEvent{Type: db.DebugHook, Name: db.HookPostToolUse, HookID: h.ID, DurMs: time.Since(hookStart).Milliseconds(), Detail: call.Name + ":error", Err: true})
 			continue
 		}
-		r.emitDebug(ctx, db.DebugEvent{Type: db.DebugHook, Name: db.HookPostToolUse, DurMs: time.Since(hookStart).Milliseconds(), Detail: call.Name + ":" + hookDecisionLabel(dec)})
+		r.emitDebug(ctx, db.DebugEvent{Type: db.DebugHook, Name: db.HookPostToolUse, HookID: h.ID, DurMs: time.Since(hookStart).Milliseconds(), Detail: call.Name + ":" + hookDecisionLabel(dec)})
 		if dec.UpdatedOutput != nil {
 			content = *dec.UpdatedOutput
 			out.output = dec.UpdatedOutput
@@ -293,10 +293,10 @@ func (r *Runtime) RunLifecycleHooks(ctx context.Context, sessionID, event string
 		dec, derr := r.execHook(ctx, h, payload)
 		if derr != nil {
 			r.logger.Warn("lifecycle hook failed (fail-open)", "hook", h.ID, "event", event, "error", derr)
-			r.emitDebug(ctx, db.DebugEvent{Type: db.DebugHook, Name: event, DurMs: time.Since(hookStart).Milliseconds(), Detail: "error", Err: true})
+			r.emitDebug(ctx, db.DebugEvent{Type: db.DebugHook, Name: event, HookID: h.ID, DurMs: time.Since(hookStart).Milliseconds(), Detail: "error", Err: true})
 			continue
 		}
-		r.emitDebug(ctx, db.DebugEvent{Type: db.DebugHook, Name: event, DurMs: time.Since(hookStart).Milliseconds(), Detail: hookDecisionLabel(dec)})
+		r.emitDebug(ctx, db.DebugEvent{Type: db.DebugHook, Name: event, HookID: h.ID, DurMs: time.Since(hookStart).Milliseconds(), Detail: hookDecisionLabel(dec)})
 		// Injected context: accept both the top-level and hookSpecificOutput channels.
 		add := strings.TrimSpace(dec.AdditionalContext)
 		if dec.HookSpecificOutput != nil && strings.TrimSpace(dec.HookSpecificOutput.AdditionalContext) != "" {

@@ -396,6 +396,9 @@ func (r *Runtime) runWorker(agent db.Agent, workerSessionID, prompt, coordSessio
 	turnStart := time.Now()
 
 	r.trackSession(workerSessionID)
+	// Raise the "thinking" indicator for the worker session (see emitTurnStart);
+	// the completion "worker" event clears it.
+	r.emitTurnStart(workerSessionID, "🤝 Worker turu çalışıyor")
 	output, steps, err := r.runSessionTurn(turnCtx, agent, workerSessionID, prompt, true)
 	r.untrackSession(workerSessionID)
 

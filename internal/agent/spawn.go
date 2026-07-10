@@ -184,6 +184,12 @@ func (r *Runtime) runSpawn(agent db.Agent, sessionID, prompt string, opts SpawnO
 	defer cancel()
 
 	r.trackSession(sessionID)
+	// Raise the chat "thinking" indicator immediately, mirroring the wake path: a
+	// spawned turn runs detached in the runtime (never registered in the api
+	// server's chatRuns), so without this the session shows no running state and
+	// an idle-looking composer until it happens to emit its next step. The
+	// completion "spawned" event clears it.
+	r.emitTurnStart(sessionID, "✨ Spawn turu çalışıyor")
 	turnCtx, overflow := withOverflowFlag(WithSessionID(WithCallKind(ctx, KindSpawn), sessionID))
 	turnCtx, meta := WithTurnMeta(turnCtx)
 	turnStart := time.Now()
@@ -248,6 +254,24 @@ func (r *Runtime) runSpawn(agent db.Agent, sessionID, prompt string, opts SpawnO
 	// limit (reactive compaction fired), optionally write a handoff and continue
 	// the work in a fresh session. No-op unless HandoffAuto is enabled.
 	r.maybeAutoHandoff(ctx, sessionID, agent, overflow.Load())
+}
+
+// emitTurnStart raises the chat "thinking" indicator for an autonomous turn the
+// user did not initiate (spawn / worker) by publishing a "chat" event tagged
+// phase=start for the session — the same signal the scheduler's wake path uses.
+// The matching completion event ("spawned" / "worker") clears the indicator.
+// "chat" events never raise an OS toast (the frontend returns before notifying),
+// so this is a quiet pending/reload signal, not a notification.
+func (r *Runtime) emitTurnStart(sessionID, title string) {
+	if sessionID == "" {
+		return
+	}
+	r.publish(events.Event{
+		Type:   "chat",
+		Level:  "info",
+		Title:  title,
+		Target: map[string]string{"view": "chat", "sessionId": sessionID, "phase": "start"},
+	})
 }
 
 // emitSpawnEvent publishes a "spawned"-typed notification for a finished spawn,

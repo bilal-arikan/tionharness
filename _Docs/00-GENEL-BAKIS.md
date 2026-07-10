@@ -54,7 +54,7 @@ Açık kaynaklı, kendi sunucunda barındırılan (self-hosted) bir **çoklu-aja
 | [12-LOGLAMA.md](12-LOGLAMA.md) | Loglama sistemi: slog ring buffer, /api/logs, access + iş logları, dış erişim |
 | [15-FLOW-CANVAS.md](15-FLOW-CANVAS.md) | Görsel Flow Builder (React Flow canvas) |
 | [16-PROFILLEME.md](16-PROFILLEME.md) | Profilleme (pprof) rehberi |
-| [17-TOKEN-OPTIMIZASYON.md](17-TOKEN-OPTIMIZASYON.md) | Araç çıktısı token optimizasyonu |
+| [17-TOKEN-OPTIMIZASYON.md](17-TOKEN-OPTIMIZASYON.md) | Araç çıktısı token optimizasyonu (built-in sıkıştırma 2026-07-10'da kaldırıldı → harici `rtk`/`sqz`; harici araç tespiti + prompt-cache/bütçe konuları) |
 | [18-HOOKS.md](18-HOOKS.md) | Hooks (PreToolUse / PostToolUse) — Faz P4 |
 | [19-LAZY-TOOL-LOADING.md](19-LAZY-TOOL-LOADING.md) | Lazy tool loading (tasarım + uygulama) |
 | [20-SCHEDULE-WAKE.md](20-SCHEDULE-WAKE.md) | `schedule_wake`: ajanın kendi sohbetine geri dönmesi |
@@ -87,11 +87,16 @@ Açık kaynaklı, kendi sunucunda barındırılan (self-hosted) bir **çoklu-aja
 | [47-KOORDINATOR-COKLU-AJAN.md](47-KOORDINATOR-COKLU-AJAN.md) | Koordinatör & çoklu-ajan koordinasyonu (M2 koordinatör/worker: async spawn_worker + task-notification) |
 | [48-VPS-REMOTE-CLIENT.md](48-VPS-REMOTE-CLIENT.md) | VPS uzak sunucu + mobil ince istemci (PWA/WebView APK) — tek kullanıcı/VPN, dosya önizle-indir-editle (fizibilite/tasarım) |
 | [49-MOBIL-RESPONSIVE-UI.md](49-MOBIL-RESPONSIVE-UI.md) | Mobil/dikey ekran uyumlu UI (responsive) — NavRail→alt tab bar, çok-panel→drawer/stack, full-screen sheet modallar (48-F4 derinleştirme, fizibilite/tasarım) |
+| [50-CLAUDE-CODE-CACHE-PARITE.md](50-CLAUDE-CODE-CACHE-PARITE.md) | Claude Code prompt-cache davranış paritesi — cache breakpoint stratejisi, API-native context editing, cache-break tespiti/telemetrisi |
 | [51-CLAUDE-CONFIG-BIRLESIK.md](51-CLAUDE-CONFIG-BIRLESIK.md) | Per-workspace claude-cli config evi (`<workspace>/claude-home` = CLAUDE_CONFIG_DIR, yalnız login/settings); global home'dan tohumlama migration'ı + yedekten credential hariç tutma. (Faz 2/3 — skill'i claude-home'a taşıma + native Skill — geri alındı; skill'ler `<workspace>/skills`'te, tek yol use_skill) |
 | [52-MCP-GATEWAY.md](52-MCP-GATEWAY.md) | MCP gateway (dinamik araç aktivasyonu) tasarım/analiz |
 | [53-CRAFTAGENT-PROMPT-PARITE.md](53-CRAFTAGENT-PROMPT-PARITE.md) | the external agent project sistem-promptu paritesi: statik/dinamik bloklar — alınan (env marker, session_state, self-mgmt, deliverables) / bilinçli dışlanan (datatable/call_llm/render_template/_displayName) / farklı çözülen (recovery_context → dosya-tabanlı) |
+| [53-SOURCE-TEMPLATES-RENDER.md](53-SOURCE-TEMPLATES-RENDER.md) | Source template render (`render_template`) — kaynak-başına HTML şablonlarıyla tutarlı veri sunumu |
 | [54-CAPABILITY-PROBE.md](54-CAPABILITY-PROBE.md) | Generic capability probe → cachelenebilir context genişletme (opsiyonel harici tool varsa statik prefix'e kısa blok); ilk müşteri codebase-memory + per-workspace izole store (`CBM_CACHE_DIR`) + best-effort cwd auto-index |
-| [56-SELF-HEALING.md](56-SELF-HEALING.md) | Kendi kendini onaran oturum akışları: provider hata sınıflandırıcı + sınırlı retry (errclass), tool-loop guardrail (warn/block/halt), tur-içi mesaj dizisi onarımı (RepairSequence), kalıcı StuckTurns sayacı + `stuck` etiketi + otonom gate |
+| [55-API-NATIVE-YOL-HARITASI.md](55-API-NATIVE-YOL-HARITASI.md) | Anthropic API-native özellikler yol haritası — structured outputs, sunucu web search/fetch, server-side compaction, task budgets, native tool search, programmatic tool calling (P0–P4/P6/P7 tamam; P5 memory tool planlı) |
+| [56-SELF-HEALING.md](56-SELF-HEALING.md) | Kendi kendini onaran oturum akışları: provider hata sınıflandırıcı + sınırlı retry (errclass), tool-loop guardrail (warn/block/halt), tur-içi mesaj dizisi onarımı (RepairSequence), kalıcı StuckTurns sayacı + `stuck` etiketi + otonom gate, hata→ders döngüsü (lessons) |
+| [57-PROMPT-EPOCH.md](57-PROMPT-EPOCH.md) | Prompt Epoch — statik system + araç şemalarını (session,agent) başına dondurup oturum-ortası cache kırılmalarını önleme; context-change diff notu + cache-warmth göstergesi |
+| [MALIYET-DUSURME-PLANI.md](MALIYET-DUSURME-PLANI.md) | Maliyet düşürme planı — claude-cli batching/serial maliyet analizi ve aksiyonları |
 | [analiz-craftagent-arac-eslestirme.md](analiz-craftagent-arac-eslestirme.md) | the external agent project↔TionSwarm araç eşleştirme analizi |
 | **arsiv/** | Tarihsel inceleme dokümanları (referans/appendix) |
 | [arsiv/13-CRAFT-AGENTS-INCELEME.md](arsiv/13-CRAFT-AGENTS-INCELEME.md) | external-agent-oss release incelemesi → TionSwarm çıkarımları |
@@ -100,7 +105,9 @@ Açık kaynaklı, kendi sunucunda barındırılan (self-hosted) bir **çoklu-aja
 > **Numara notu:** 13–14 tarihsel inceleme dokümanları `arsiv/` altına taşındı (ana dizinde
 > 13–14 boş). 17/18/26 eski numara çakışmaları giderildi → native pencere **32**, çoklu
 > pencere **30**, MemGPT çekirdek bellek **31**. 40 çakışması giderildi (2026-07-02) →
-> plan modu **40**, çoklu seçim **45**.
+> plan modu **40**, çoklu seçim **45**. **53 çakışıyor** (bilinen, iki dosya):
+> the external agent project prompt paritesi + source-templates render — dosya adları farklı olduğundan
+> şimdilik bırakıldı.
 
 ## Kurulu Ortam (2026-06-15 itibarıyla)
 
@@ -113,4 +120,4 @@ Açık kaynaklı, kendi sunucunda barındırılan (self-hosted) bir **çoklu-aja
 ✅ **Faz 0–8 + kapsamlı backlog tamamlandı** ve Chrome'da canlı test edildi: İskelet · DB/Config · Provider+Chat (5 kind: anthropic/claude-cli/minimax/minimax-anthropic/openrouter) · React Web UI · Agent Runtime · Workspace İzolasyonu · Tasks+Schedules · Sağlamlaştırma (compaction + bütçe guardrail) · Tool-use+MCP · Orchestration (akışlar) · Lazy tool yükleme · Prefix'li insan-okunabilir ID'ler (WS/AGT/SES, `cmd/migrate-ids`) · İlişki grafiği (workspace ağı) · Self-management suite · Hooks · İzin modeli.
 ✅ **Sonradan eklenenler (06-22 → 06-23):** native masaüstü penceresi (WebView2, CGO'suz) + çoklu pencere · oturum-başına çalışma dizini (cwd) · MCP kalıcı bağlantı havuzu · oturumlar-arası tam-metin arama · ajanlar-arası peer mesajlaşma · generic bildirim sinyalleri.
 > **Not (2026-07-05):** Memory (hafıza) alt sistemi — journal recall + MemGPT/Letta tarzı core memory + hafıza grafiği + ilgili tool/API/UI/veri — projeden **tamamen kaldırıldı**. Detay: `05-ILERLEME.md`.
-➡️ **Sıradaki (2026-07-03 akşam):** Code Execution with MCP — büyük-çıktılı senaryoyla A/B tekrarı + Faz 4 (claude-cli) / Faz 5 (trace + default aç) ([44](44-CODE-EXECUTION-MCP.md)) · araç backlog'u açık kalemler — `call_llm` (P1), `render_template`, `Monitor`, worktree araçları, credential UI, `NotebookEdit` + I1–I5 iyileştirmeleri (`get_session_info`+`update_user_preferences` ✅, labels/status ❌ kapsam dışı — 2026-07-03; [41](41-ARAC-BOSLUKLARI-YAPILACAKLAR.md)) · dış-ajan adaptörü olarak Codex (MCP delegasyonlu) · koordinatör LLM-in-the-loop görsel deneme (opsiyonel, [47](47-KOORDINATOR-COKLU-AJAN.md)). (Connectors fazı 2026-06-16'da kapsamdan çıkarıldı.) Detay: [05-ILERLEME.md](05-ILERLEME.md) · arşiv: [05-ARSIV.md](05-ARSIV.md).
+➡️ **Sıradaki (2026-07-10):** API-native kalanlar — P5 memory tool + bilinen UI boşlukları (deferred-katalog rozeti, task-budget tur rozeti, flow-builder `outputSchema` alanları; [55](55-API-NATIVE-YOL-HARITASI.md)) · gerçek byte-tasarrufu ölçümü: sqz'yi PostToolUse output-rewrite moduna alıp `runPostToolHooks`'ta delta ölçmek ([38](38-SESSION-DEBUG.md) Sırada) · claude-cli batching maliyet kıyası: koşul başına n≥5 tekrarla sağlıklı ölçüm ([MALIYET-DUSURME-PLANI](MALIYET-DUSURME-PLANI.md)) · Code Execution with MCP Faz 4 (claude-cli) / Faz 5 (trace + default aç) ([44](44-CODE-EXECUTION-MCP.md)) · araç backlog'u açık kalemler ([41](41-ARAC-BOSLUKLARI-YAPILACAKLAR.md)). Detay: [05-ILERLEME.md](05-ILERLEME.md) · arşiv: [05-ARSIV.md](05-ARSIV.md).

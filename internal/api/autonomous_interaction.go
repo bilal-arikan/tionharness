@@ -30,7 +30,7 @@ func (s *Server) autonomousInteraction(rt *agent.Runtime) agent.AutonomousIntera
 		runID := uuid.NewString()
 		// cancel is a no-op: an autonomous turn is driven by the runtime, not by the
 		// /chat/control endpoint, so there is nothing for it to cancel.
-		run := s.runs.register(runID, sessionID, func() {})
+		run := s.runs.register(runID, sessionID, rt.WorkspaceID(), func() {})
 		run.autonomous = true
 
 		// Artifacts (CLI path): bind a session-scoped artifact sink so create_artifact

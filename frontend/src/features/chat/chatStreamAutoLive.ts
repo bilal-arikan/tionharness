@@ -114,6 +114,34 @@ export async function recoverInflightSnapshot(
   } catch {
     steps = []
   }
+
+  // Race with the live bus: a `session_step` frame can arrive (foldAutoStep) and
+  // create the ghost BEFORE this snapshot fetch resolves. When that happens the
+  // ghost holds ONLY the steps emitted AFTER the reload (the bus never replays
+  // history), while the snapshot holds the steps produced BEFORE it — with no
+  // overlap. Merge by prepending the snapshot's older steps so the pre-reload
+  // trace is restored ahead of the live ones, instead of being dropped (the
+  // "old tool calls vanish, new ones keep showing" symptom). We keep the
+  // existing ghost's id/text; only its step history grows at the front.
+  const existing = autoLiveRef.current.get(sid)
+  if (existing) {
+    if (steps.length === 0) return
+    existing.steps = [...steps, ...existing.steps]
+    const json = JSON.stringify(existing.steps)
+    const id = existing.id
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.id === id
+          ? { ...m, steps: json, agentId: m.agentId || snap!.agentId || undefined }
+          : m,
+      ),
+    )
+    setPendingSessions((p) => withAdded(p, sid))
+    return
+  }
+
+  // No live entry yet → seed a fresh ghost from the snapshot (the common case:
+  // the snapshot fetch won the race, or no bus frame has arrived yet).
   autoLiveRef.current.set(sid, { id: snap.messageId, steps })
   const bubble: Message = {
     id: snap.messageId,

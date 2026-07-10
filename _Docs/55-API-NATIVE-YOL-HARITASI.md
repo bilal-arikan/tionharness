@@ -23,7 +23,8 @@ Oluşturma: 2026-07-07 · Durum: **P0–P4, P6, P7 (batch hariç) tamam; yalnız
 > `CountTokens`/`?accurate=1` önizleme sayımı) ve P4 (programmatic tool calling —
 > `AnthropicProgrammaticTools` ayarı, `allowed_callers`, container zinciri, saf tool_result
 > yanıtları, steer erteleme) uygulandı. Summarizer/System B serbest metin bırakıldı (çıktıları
-> zaten metin ürünü — şema parse güvenilirliği kazandırmaz). Flow-builder UI'da
+> zaten metin ürünü — şema parse güvenilirliği kazandırmaz; System B compactor sonradan,
+> 2026-07-10'da tamamen kaldırıldı). Flow-builder UI'da
 > `outputSchema`/`jsonField` alanları henüz görsel olarak düzenlenemiyor (graf JSON'unda desteklenir).
 
 ---
@@ -54,7 +55,9 @@ parse'ı (kırpma, tırnak temizliği, "VERDICT:" string eşleşmesi) tamamen ka
 
 **Nerede kullanılacak:**
 1. **Titler** (`titler.go`): `{"title": string}` şeması — tırnak/uzunluk temizliği kalkar.
-2. **Summarizer** (`summarizer.go`) ve **System B compactor** (`compactor.go`): yapılandırılmış özet.
+2. **Summarizer** (`summarizer.go`): yapılandırılmış özet. (~~System B compactor
+   `compactor.go`~~ — 2026-07-10'da built-in araç-çıktısı sıkıştırmasıyla birlikte
+   tamamen kaldırıldı, bkz. `17-TOKEN-OPTIMIZASYON.md`.)
 3. **Orchestration branch node**: `matchMode:"structured"` — node prompt'una şema eklenir,
    `{"verdict":"SHIP"|"FIX"}` gibi enum'lu karar → regex/contains kırılganlığı biter.
 

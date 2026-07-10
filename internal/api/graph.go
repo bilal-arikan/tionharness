@@ -93,7 +93,7 @@ func (s *Server) handleWorkspaceGraph(w http.ResponseWriter, r *http.Request) {
 	type activity struct{ kind, target string }
 	agentAct := map[string]activity{}
 	running := map[string]bool{}
-	for _, id := range s.runs.activeSessionIDs() {
+	for _, id := range s.runs.activeSessionIDs(wsp.ID) {
 		running[id] = true // chat-streaming turns
 	}
 	for _, id := range wsp.Runtime.ActiveSessionIDs() {

@@ -186,6 +186,7 @@ export interface SessionDebugEvent {
   agentId?: string
   kind?: string
   name?: string
+  hookId?: string
   model?: string
   durMs?: number
   in?: number

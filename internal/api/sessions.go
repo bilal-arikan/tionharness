@@ -226,12 +226,29 @@ func (s *Server) handleListMessages(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleActiveSessions returns the session ids that currently have an in-flight
-// streaming turn. Turns are detached from the client connection, so after a page
-// reload the frontend queries this to restore the "thinking" indicator for any
-// turn still running server-side. Session ids are globally unique, so a single
-// process-wide list is safe to return regardless of workspace.
+// turn. Turns are detached from the client connection, so after a page reload the
+// frontend queries this to restore the "thinking" indicator for any turn still
+// running server-side. It unions the two authoritative registries — streamed chat
+// turns (s.runs) AND autonomous runtime invokes (spawn / worker / schedule / flow
+// / inbox), so a spawned session running purely in the runtime (never registered
+// in s.runs) also restores its indicator. Scoped to the active workspace so a
+// foreign workspace's in-flight turns are not leaked to (nor restored by) this one.
 func (s *Server) handleActiveSessions(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, map[string][]string{"sessionIds": s.runs.activeSessionIDs()})
+	wsp := ws(r)
+	seen := map[string]struct{}{}
+	ids := []string{}
+	add := func(list []string) {
+		for _, id := range list {
+			if _, ok := seen[id]; ok {
+				continue
+			}
+			seen[id] = struct{}{}
+			ids = append(ids, id)
+		}
+	}
+	add(s.runs.activeSessionIDs(wsp.ID))
+	add(wsp.Runtime.ActiveSessionIDs())
+	writeJSON(w, http.StatusOK, map[string][]string{"sessionIds": ids})
 }
 
 // handleDropSessionCLIProcess recycles the session's warm claude-cli process(es)

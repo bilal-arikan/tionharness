@@ -3,6 +3,7 @@ import { Bug, ChevronDown, ChevronRight, Loader2, AlertTriangle, Info } from 'lu
 import { api } from '@/api'
 import type { SessionDebugSummary, SessionDebugEvent } from '@/types'
 import { SessionFlowViz } from './viz/SessionFlowViz'
+import { toolDisplayName } from './viz/flowVizData'
 
 // SessionDebugCard renders the per-session DEBUG journal (parallel observability
 // stream): turn timings, token spend by model, per-tool latency/size/errors,
@@ -206,8 +207,8 @@ export function SessionDebugCard({
           <div className="flex flex-col gap-1">
             {topTools.map(({ name, stat }) => (
               <div key={name} className="flex items-center justify-between text-[11px]">
-                <span className="truncate text-[var(--color-text-dim)]" title={name}>
-                  {name}
+                <span className="truncate text-[var(--color-text-dim)]" title={toolDisplayName(name)}>
+                  {toolDisplayName(name)}
                   {stat && stat.errors > 0 && (
                     <span className="ml-1 text-[var(--color-error)]">·{stat.errors} hata</span>
                   )}

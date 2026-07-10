@@ -44,7 +44,7 @@ func (s *Server) handleListExecutions(w http.ResponseWriter, r *http.Request) {
 
 	// Merge chat streaming sessions and autonomous (schedule) sessions.
 	running := map[string]bool{}
-	for _, id := range s.runs.activeSessionIDs() {
+	for _, id := range s.runs.activeSessionIDs(wsp.ID) {
 		running[id] = true
 	}
 	for _, id := range wsp.Runtime.ActiveSessionIDs() {

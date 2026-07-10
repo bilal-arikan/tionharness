@@ -54,8 +54,9 @@ type DebugEvent struct {
 	TurnID     string `json:"turnId,omitempty"` // the assistant reply message id this event belongs to (per-message debug)
 	AgentID    string `json:"agentId,omitempty"`
 	Kind       string `json:"kind,omitempty"`  // call origin (chat/task/schedule/flow/…)
-	Name       string `json:"name,omitempty"`  // tool name / hook event name
-	Model      string `json:"model,omitempty"` // provider model for llm_call
+	Name       string `json:"name,omitempty"`   // tool name / hook event name
+	HookID     string `json:"hookId,omitempty"` // for type=hook: the firing hook's id (attributes rtk/sqz/… activity)
+	Model      string `json:"model,omitempty"`  // provider model for llm_call
 	DurMs      int64  `json:"durMs,omitempty"`
 	In         int    `json:"in,omitempty"`
 	Out        int    `json:"out,omitempty"`

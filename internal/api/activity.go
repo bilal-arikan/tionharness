@@ -34,20 +34,17 @@ func (s *Server) handleActivity(w http.ResponseWriter, r *http.Request) {
 	// runtime invokes (schedule wake, spawned agent sessions, inbox delivery,
 	// flow agent nodes). Deduped so a session counted by both registries lights
 	// the view once. ANY entry lights the unified executions ("Aktivite") view.
+	// s.runs is a SERVER-WIDE registry (shared across all workspaces), so both
+	// sources are scoped to THIS workspace — otherwise an in-flight turn in the
+	// workspace we just left would light an idle workspace's "busy" indicators.
 	active := map[string]struct{}{}
-	for _, sid := range s.runs.activeSessionIDs() {
+	for _, sid := range s.runs.activeSessionIDs(wsp.ID) {
 		active[sid] = struct{}{}
 	}
 	for _, sid := range wsp.Runtime.ActiveSessionIDs() {
 		active[sid] = struct{}{}
 	}
 	for sid := range active {
-		// s.runs is a SERVER-WIDE registry (shared across all workspaces), while
-		// GetSession is scoped to THIS workspace's isolated store. Resolve the
-		// session first: a foreign session (an in-flight turn belonging to another
-		// workspace) errors here and must NOT light this workspace's indicators.
-		// Otherwise switching into an idle workspace would show a stale "busy"
-		// dot for work running in the workspace we just left.
 		sess, err := wsp.DB.GetSession(ctx, sid)
 		if err != nil {
 			continue

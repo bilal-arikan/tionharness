@@ -1,6 +1,6 @@
 # TionSwarm — Oturum Debug Günlüğü (Paralel Gözlemlenebilirlik Akışı)
 
-> Son güncelleme: **2026-06-26**
+> Son güncelleme: **2026-07-10**
 > Her oturum için `session.jsonl`'in **yanına** yapılandırılmış, append-only bir
 > debug akışı (`debug.jsonl`) yazılır. Amaç: debug, token/gecikme optimizasyonu
 > ve ajanın **kendi kendini geliştirebilmesi** için okuyabileceği veri.
@@ -51,7 +51,16 @@ alanı taşır:
 ```
 
 Tip sabitleri (`internal/db/debug_journal.go`): `turn`, `llm_call`, `tool`,
-`hook`, `error`, `compaction`, `recovery`, `cache_break`.
+`hook`, `error`, `compaction`, `recovery`, `cache_break`, ve self-healing/epoch
+katmanlarıyla gelenler: `repair` (mesaj-dizisi onarımı), `guardrail` (tool-loop
+guardrail kararı), `lesson` (hata→ders damıtıldı), `epoch` (prompt-epoch yaşam
+döngüsü: created/adopted/stale/refreshed). Detay: `56-SELF-HEALING.md`,
+`57-PROMPT-EPOCH.md`.
+
+Ek alanlar (2026-07-10): `HookID` — `type=hook` olayında ateşleyen hook'un id'si
+(rtk/sqz gibi token-optimizer hook aktivitesinin hook-başına atfı için);
+`Calls` — `llm_call`'ın temsil ettiği alt-tur sayısı (claude-cli kümülatif
+faturalamayı per-call bağlama bölmek için).
 
 ## Emit noktaları (tek huni: `Runtime.emitDebug`)
 
@@ -105,10 +114,12 @@ sayısı + `lastError`, compaction/recovery sayıları.
 - `?summary=1` (varsayılan) → `{ summary: DebugSummary }`
 - `?summary=0&type=tool&limit=200` → `{ events: []DebugEvent }`
 
-### 3) UI — Oturum detayında "Debug" kartı
+### 3) UI — Debug modalı (chat header "Debug" butonu)
 
-`frontend/src/components/sessions/SessionDebugCard.tsx` (ayrı, self-contained
-bileşen; `SessionDetailPanel`'de harcama kartından sonra render edilir). Metrik
+`frontend/src/features/sessions/SessionDebugCard.tsx` (ayrı, self-contained
+bileşen). **2026-07-08'den beri "Oturum bilgisi" panelinde DEĞİL** — chat
+header'daki "Debug" butonuyla açılan ayrı `SessionDebugModal` içinde
+`SessionDebugCard alwaysOpen` olarak render edilir. Metrik
 ızgarası + sağlık rozetleri (hata/compaction/recovery/süre) + en yavaş araçlar +
 modele göre token + tembel yüklenen **ham olay** log'u (tip filtreli).
 
@@ -158,11 +169,13 @@ budget (para) arasındaki yeri netleştirir.
   (warn/info) + `code` + Türkçe `message`. Sağlıklı oturumda boş.
 - **Zaman serisi:** `turnDurSeries` (tur süreleri) + `tokenSeries` (çağrı-başına
   in+out), en yeni `debugSeriesCap=40` nokta. UI'da bağımlılıksız SVG sparkline.
-- **Reflektör entegrasyonu (self-improvement):** `reflect()` dream-cycle'da
+- **Reflektör entegrasyonu (self-improvement):** ~~`reflect()` dream-cycle'da
   `r.debugPerfNotes(agentID)` ajanın en yeni ≤5 oturumunun anomalilerini
-  (dedup'lı) toplar ve reflect prompt'una "Performance observations" bloğu olarak
-  ekler → LLM bunu kalıcı reflection belleğine yedirir. Best-effort, gated
-  (`DebugJournalEnabled`), notable bulgu yoksa eklenmez. UI'da kartta anomaliler
+  toplar ve reflect prompt'una ekler → kalıcı reflection belleğine yedirir.~~
+  **KALDIRILDI (2026-07-05):** memory alt sistemiyle birlikte dream-cycle
+  reflektörü de çıkarıldı. Hata-odaklı self-improvement artık **hata→ders
+  döngüsünden** geçer (`internal/agent/lessons.go`, `lesson` debug olayı;
+  bkz. `56-SELF-HEALING.md` Faz F). UI'da kartta anomaliler
   (warn=kırmızı/info=gri rozet) + iki sparkline (tur süresi / çağrı token) gösterilir.
 - Test: `db/debug_journal_test.go` (`TestDebugSummaryAnomaliesAndSeries`,
   `TestDebugSummaryNoAnomaliesOnHealthy`).
@@ -186,9 +199,34 @@ yanıtın tüm olayları (llm_call/tool/error/recovery/compaction) o mesaja bağ
 - **cliOverhead iyileştirme:** context-preview projeksiyonu artık lifetime
   ortalaması yerine debug'daki **son llm_call**'ın gerçek girdisini kullanır.
 
+## İş akışı görselleştirmeleri (2026-07-08 → 2026-07-10)
+
+Debug modalında `debug.jsonl`'den **salt-frontend** türetilen görselleştirme
+bölümü (`frontend/src/features/sessions/viz/`, kabuk `SessionFlowViz.tsx` +
+veri hazırlığı `flowVizData.ts`):
+
+- **Araç yürütme Sankey'i (`ToolSankey.tsx`):** `Ajan → Araç → Tamam|Hata`
+  akışı, mermaid `sankey-beta` ile.
+- **Eşzamanlılık zaman çizelgesi (`ConcurrencyTimeline.tsx`):** ajan-şeritli
+  bağımsız SVG Gantt; şerit çakışması = eşzamanlılık.
+- **Prompt-cache olayları (`PromptCacheEvents.tsx`, 2026-07-08):** `epoch`
+  (önleme) + `cache_break` (tespit) olayları rozetli listede; adopt'suz
+  kırılım = araştırılacak sinyal. Detay `57-PROMPT-EPOCH.md`.
+- **Self-healing olayları (`SelfHealingEvents.tsx`):** `repair`/`guardrail`/
+  `lesson` olayları. Detay `56-SELF-HEALING.md`.
+- **Hook / token-optimizer aktivitesi (`HookActivity.tsx`, 2026-07-10):**
+  `type=hook` olayları `DebugEvent.HookID` ile hook-başına atfedilir;
+  `\brtk\b`/`\bsqz\b` (backend probe aynası) ile rtk/sqz/other sınıflanır;
+  hook başına ateşleme sayısı + araç dağılımı + hata sayısı. **Byte tasarrufu
+  DEĞİL, aktivite göstergesi** — rtk/sqz PreToolUse komut-rewrite olduğundan
+  TionSwarm sıkışmamış baseline'ı hiç görmez; ayrıca yalnız **native** turlar
+  sayılır (claude-cli turlarında hook'lar CLI içinde çalışır, journal'a düşmez).
+
 ## Sırada (Faz 4+ fikirler)
 
 - Anomali eşiklerinin ayarlanabilir olması (settings).
 - Workspace-geneli "en pahalı oturumlar" / araç ısı haritası panosu.
-- Anomali tetiklenince otomatik bildirim (events bus) veya core-memory ders yazımı
-  (sadece reflection değil, anında).
+- Anomali tetiklenince otomatik bildirim (events bus). (Ders yazımı fikri
+  2026-07-07'de hata→ders döngüsü olarak gerçekleşti — `56-SELF-HEALING.md`.)
+- Gerçek byte-tasarrufu ölçümü istenirse: sqz'yi PostToolUse output-rewrite
+  moduna alıp `runPostToolHooks`'ta `len(önce)−len(sonra)` ölçmek (ayrı iş).

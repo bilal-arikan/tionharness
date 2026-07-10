@@ -22,7 +22,7 @@ func TestInteractionTokenStablePerSessionAgent(t *testing.T) {
 	}
 
 	// A live run bound to the stable token resolves via byToken.
-	run := runs.register("run-1", "s1", func() {})
+	run := runs.register("run-1", "s1", "", func() {})
 	runs.bindActive(t1, run)
 	if got := runs.byToken(t1); got != run {
 		t.Fatalf("byToken(stable) = %v, want the bound run", got)
@@ -43,7 +43,7 @@ func TestInteractionTokenStablePerSessionAgent(t *testing.T) {
 // (autonomous turns / callers that did not bind a stable token).
 func TestByTokenPerRunFallback(t *testing.T) {
 	runs := newChatRuns()
-	run := runs.register("run-x", "s9", func() {})
+	run := runs.register("run-x", "s9", "", func() {})
 	if got := runs.byToken(run.token); got != run {
 		t.Fatalf("byToken(run.token) fallback = %v, want the run", got)
 	}

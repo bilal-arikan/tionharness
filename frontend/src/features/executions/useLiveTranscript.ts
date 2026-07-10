@@ -58,6 +58,13 @@ export function useLiveTranscript(
   // recoverInflightSnapshot take their non-owning path unconditionally.
   const autoLiveRef = useRef<Map<string, AutoLiveEntry>>(new Map())
   const runsRef = useRef<Map<string, RunHandle>>(new Map())
+  // Sessions whose inflight snapshot has already been merged this selection, so
+  // the mid-turn seed runs EXACTLY ONCE regardless of whether a live bus step
+  // (foldAutoStep) created the ghost first. Gating on autoLiveRef.has(sid)
+  // instead would let that race skip the seed entirely — the snapshot fetch is
+  // async, so a step arriving before it resolves would populate autoLiveRef and
+  // block recovery, dropping every pre-reload tool call.
+  const seededRef = useRef<Set<string>>(new Set())
   // The session this view is showing. foldAutoStep / recoverInflightSnapshot only
   // mutate the transcript when the frame's session matches this ref, so keep it
   // in sync with the selection synchronously each render.
@@ -102,9 +109,12 @@ export function useLiveTranscript(
           }
           return m
         })
-        // Seed the ghost from the inflight snapshot ONLY when there is none yet —
-        // a genuine mid-turn reload — not on every background poll.
-        if (!autoLiveRef.current.has(sid)) {
+        // Seed/merge the inflight snapshot EXACTLY ONCE per selection — a genuine
+        // mid-turn reload — not on every background poll. recoverInflightSnapshot
+        // merges into a ghost a live bus step may have already created, so the
+        // pre-reload trace is restored even when that step won the async race.
+        if (!seededRef.current.has(sid)) {
+          seededRef.current.add(sid)
           await recoverInflightSnapshot(ctx.current, sid, m)
         }
       } catch (e) {
@@ -124,6 +134,7 @@ export function useLiveTranscript(
       return
     }
     autoLiveRef.current.clear()
+    seededRef.current.clear()
     void load(sessionId, true)
   }, [sessionId, load])
 

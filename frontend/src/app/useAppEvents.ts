@@ -161,17 +161,24 @@ function onEvent(d: AppEventDeps, e: AppEvent) {
       publishTurnEnd(sid)
     }
   }
-  // Cross-window panel refresh: every event that closes the workspace-match
-  // gate above may move rows / status / memberships inside one or more
-  // panels (TaskBoard, NetworkPanel, ExecutionsPanel, useActivity, ...). We
-  // hand the event to a central mapper that returns the set of signal keys
-  // panels subscribe to (board / network / activity / executions / agents /
-  // flows / schedules / artifacts) and bump each with a 200ms per-key
-  // debounce so a burst of events collapses into a single re-fetch per
-  // panel. Placed AFTER the workspace-match block so cross-workspace events
-  // (which only fire the badge / toast side) don't trigger a wasted GET
-  // here — the same gate the chat/session logic already uses.
-  bumpSignalsForEvent(e)
+  // Cross-window panel refresh: every event may move rows / status /
+  // memberships inside one or more panels (TaskBoard, NetworkPanel,
+  // ExecutionsPanel, useActivity, ...). We hand the event to a central mapper
+  // that returns the set of signal keys panels subscribe to (board / network /
+  // activity / executions / agents / flows / schedules / artifacts) and bump
+  // each with a 200ms per-key debounce so a burst of events collapses into a
+  // single re-fetch per panel.
+  //
+  // GATED on the same workspace-match as the chat/session logic above: the
+  // mounted panels only ever hold the ACTIVE workspace's data (they remount +
+  // re-fetch per workspace), and every panel endpoint is workspace-scoped, so a
+  // cross-workspace event bumping these keys would only trigger a wasted GET
+  // that returns this workspace's unchanged data — and briefly light indicators
+  // (e.g. activity) for another workspace's work. Cross-workspace events still
+  // fire their badge / toast side below.
+  if (!e.workspaceId || e.workspaceId === getActiveWorkspace()) {
+    bumpSignalsForEvent(e)
+  }
   // Chat completions only drive the badge (the streaming turn already raises
   // its own reply notification); other event types raise a desktop
   // notification that deep-links to the target on click.

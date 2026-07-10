@@ -163,6 +163,16 @@ ajanların baseline skill setine girer.
 dosya varsa ve madde olduğunda gösterilir. `sessionProgress` API + `SessionProgress`
 tipi (`types/session.ts`).
 
+**Dizin-scope görünürlüğü + tazeleme (2026-07-10):** Dosya **çalışma dizinine** bağlı
+olduğundan aynı cwd'yi paylaşan oturumlar tek `progress.json`'ı ezer (`record.sessionId`
+= son yazan). Kart artık: (a) `record.sessionId` panelin oturumundan farklıysa
+**"çalışma diziniyle paylaşılıyor — son yazan SESxxx"** uyarı notu + her zaman
+`updatedAt` zaman damgası gösterir (yanlış-atıf + bayatlık görünür); (b) progress'i
+`meterRefresh` (bu oturumun tur-sonu) yanında global **`executions` sinyalinde** de
+yeniden çeker — böylece BAŞKA bir oturum dosyayı değiştirince açık (ve boşta) panel
+donmaz, kendini tazeler (ucuz tek dosya-okuma endpoint'i). Önceki hata: non-running
+oturumda kart eski sayıda (örn. "2/8") donuyordu.
+
 ## Dosyalar
 
 - **Yeni:** `internal/progress/progress.go` (+test), `internal/tools/todosink.go`,

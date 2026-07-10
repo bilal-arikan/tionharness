@@ -4,7 +4,7 @@ import { normalizeAvatar } from '@/shared/lib/avatar'
 import { FLOW_TEMPLATES } from './flowTemplates'
 import { flowNodeCount, type FlowsTab } from './flowsPanelShared'
 import type { Flow, FlowRun } from '@/types'
-import { SelectionBar, SelectionBarButton, ListPane } from '@/shared/components'
+import { SelectionBar, SelectionBarButton, ListPane, LoadingState } from '@/shared/components'
 import {
   NewItemButton, SELECTED_ITEM_CLS, SELECTED_ITEM_RING,
 } from '@/shared/components/SidebarChrome'
@@ -18,6 +18,8 @@ interface Props {
   q: string
   setQ: Dispatch<SetStateAction<string>>
   flows: Flow[]
+  // True while the flow list is being fetched for the first time.
+  flowsLoading: boolean
   runs: FlowRun[]
   templateId: string | null
   setTemplateId: Dispatch<SetStateAction<string | null>>
@@ -48,6 +50,7 @@ export function FlowsListPane({
   q,
   setQ,
   flows,
+  flowsLoading,
   runs,
   templateId,
   setTemplateId,
@@ -268,7 +271,12 @@ export function FlowsListPane({
             </button>
           </li>
         ))}
-        {visible.length === 0 && (
+        {flowsLoading && (
+          <li>
+            <LoadingState label="Akışlar yükleniyor…" />
+          </li>
+        )}
+        {!flowsLoading && visible.length === 0 && (
           <li className="text-sm text-[var(--color-text-dim)]">
             {flows.length === 0 ? 'Henüz akış yok.' : 'Eşleşen akış yok.'}
           </li>

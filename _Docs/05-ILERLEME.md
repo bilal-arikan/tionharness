@@ -2,6 +2,45 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-07-10**
 
+## Spawn session'ı "çalışıyor" göstermiyordu 🐛 (2026-07-10)
+
+- **Sorun:** `spawn` (veya `spawn_worker`) ile bir session oluşturulunca, sohbet ekranında o
+  session "devam ediyor" (thinking) olarak gözükmüyordu; composer/input ajan çalışmıyormuş gibi
+  görünüyordu.
+- **Kök neden:** Spawn/worker turları runtime'da **detached** çalışır (`runSpawn`/`runWorker` →
+  `trackSession` → `invokeTraced`); api sunucusunun `chatRuns` (`s.runs`) registry'sine **hiç
+  kaydolmaz**. (a) Başlangıçta thinking göstergesini kaldıracak bir sinyal yoktu (scheduler'ın
+  wake yolu `chat` phase=start olayı yayar, spawn yaymıyordu). (b) `handleActiveSessions`
+  (`/api/active-sessions`, reload sonrası thinking restore kaynağı) yalnız `s.runs`'ı dönüyordu,
+  `wsp.Runtime.ActiveSessionIDs()`'i kaçırıyordu → yenileme sonrası da restore edilemiyordu.
+- **Çözüm:** (1) Yeni `Runtime.emitTurnStart(sessionID, title)` — wake desenini yansıtan `chat`
+  phase=start olayı (frontend `markPending` → thinking + composer busy; `chat` olayları toast
+  üretmez). `runSpawn` ve `runWorker` `trackSession`'dan hemen sonra çağırır; tamamlanma zaten
+  `"spawned"`/`"worker"` olayıyla `clearPending` yapıyor. Flow/inbox/autocontinue completion'ları
+  pending temizlemediği için `trackSession` **global** hook'lanmadı (cerrahi = yalnız spawn+worker).
+  (2) `handleActiveSessions` artık `s.runs` **∪** `wsp.Runtime.ActiveSessionIDs()` (dedup) döner →
+  reload sonrası spawn/worker/schedule/flow turları da restore edilir. Build + 266 test yeşil.
+
+## Tur-ortası yenileme — eski araç adımları kurtarma yarışı 🐛 (2026-07-10)
+
+- **Sorun:** Executions/Sohbet ekranında bir ajan turu akarken sayfa yenilenirse ajanın
+  **reload öncesi** araç kullanımları listeden kayboluyor, yalnız reload **sonrası** yeni araç
+  adımları büyümeye devam ediyordu.
+- **Kök neden (frontend yarış koşulu):** Kurtarma mekanizması (`recoverInflightSnapshot`,
+  `inflight.json` snapshot'ından adımları ghost bubble'a tohumlar) canlı `session_step` bus
+  akışıyla yarışıyordu. (a) **Executions** (`useLiveTranscript.load`): snapshot tohumlaması
+  `if (!autoLiveRef.has(sid))` ile korunuyordu; `listMessages` (async) çözülmeden önce bir bus
+  adımı gelirse `foldAutoStep` boş entry (`steps:[]`) oluşturur → gate `true` olur → recover
+  **hiç çağrılmaz** → tüm eski adımlar kaybolur. (b) **Chat** (`recoverInflightSnapshot`):
+  mevcut entry'yi sorgusuz **overwrite** ediyordu → yarış anındaki adımlar kaybolur.
+- **Çözüm:** (1) `recoverInflightSnapshot` artık **merge** ediyor — canlı entry zaten varsa
+  snapshot adımlarını **başa ekler** (reload öncesi adımlar ⊕ reload sonrası bus adımları;
+  bus geçmişi tekrar yollamadığı için çakışma yok), bubble id/text korunur. (2)
+  `useLiveTranscript`'e `foldAutoStep`'ten bağımsız `seededRef` eklendi → snapshot seçim başına
+  **tam bir kez** merge edilir (bus adımı yarışı kazansa bile). Seçim değişiminde
+  `seededRef.clear()`. Backend zaten 600ms throttle ile `kept` (tool adımları dahil)
+  snapshot'lıyor (`chat_stream.go` `snapshot()`), değişmedi. Frontend `tsc --noEmit` temiz.
+
 ## Sohbet & ekran geçişlerinde loading göstergesi ⏳ (2026-07-10, TSK41)
 
 - **Sorun:** Açılışta bir an "Yeni sohbete başla" boş-durumu, sohbet değişince eski
@@ -16,6 +55,67 @@
   `SessionsSidebar` iskelete geçti. Detay → `07-CHAT-UX.md` "Loading & iskelet durumları".
 - **Doğrulama:** `go build ./...`, `go vet ./...`, `go test ./internal/...`, `npx tsc -b`,
   `npm run build` temiz. Canlı UI doğrulaması review aşamasında.
+
+## Debug Sankey — köprü ön ekleri temizlendi 🧹 (2026-07-10)
+
+- **İstek:** "Debug / Gözlemlenebilirlik" popup'ındaki Araç yürütme akışı (Sankey)
+  düğümlerinde araç adlarının başındaki `mcp__tionswarm_interaction__` /
+  `mcp__tionswarm_extended__` ön ekleri okunurluğu bozuyordu.
+- **Çözüm:** `flowVizData.ts`'e `toolDisplayName(name)` yardımcısı eklendi — yalnız bu iki
+  **iç claude-cli köprü** namespace'ini soyar (araçlar zaten TionSwarm'ın kendi köprülü
+  built-in'leri; ön ek bir transport detayı). `buildToolSankey` tool etiketini bundan geçirir;
+  **"En yavaş araçlar" listesi** de (`SessionDebugCard.tsx` `topTools`) aynı yardımcıyı kullanır.
+  Gerçek harici MCP sunucuları (`mcp__github__…`) ön eklerini korur (hangi sunucunun
+  çağırdığını ayırt eder). Frontend `tsc --noEmit` temiz.
+
+## Doküman bakım turu ✅ (2026-07-10)
+
+Git geçmişiyle (özellikle compactor kaldırma + memory kaldırma + debug-viz eklemeleri)
+dokümanlar senkronlandı:
+
+- **`38-SESSION-DEBUG.md`:** eksik "İş akışı görselleştirmeleri" bölümü eklendi
+  (`viz/`: ToolSankey · ConcurrencyTimeline · PromptCacheEvents · SelfHealingEvents ·
+  HookActivity); yeni olay tipleri (`repair`/`guardrail`/`lesson`/`epoch`) +
+  `HookID`/`Calls` alanları; debug'ın ayrı `SessionDebugModal`'a taşındığı işlendi;
+  kaldırılan dream-cycle reflektörü işaretlendi; "Sırada" listesi tazelendi.
+- **`00-GENEL-BAKIS.md`:** dizine eksik 5 kayıt eklendi (50, 53-SOURCE-TEMPLATES,
+  55, 57, MALIYET-DUSURME-PLANI); 17 açıklaması harici rtk/sqz devrini yansıtıyor;
+  53 numara çakışması nota bağlandı; bayat "Sıradaki (07-03)" satırı 07-10 açık
+  kalemleriyle yenilendi (P5 memory tool + 55 UI boşlukları, sqz byte-ölçümü,
+  batching n≥5 kıyası, code-exec Faz 4/5, araç backlog'u).
+- **Silinmiş compactor referansları:** `55-API-NATIVE` (P1 hedef listesi + uygulama
+  notu) ve `50-CACHE-PARITE` (Sistem A/B "tamamlayıcı" cümlesi) kaldırma notuyla
+  düzeltildi.
+- **Kaldırılmış core-memory kalıntıları:** `11-INTERACTION-MCP` (CLI köprüsü bölümü)
+  ve `41-ARAC-BOSLUKLARI` (madde 7 son cümle) tarihsel işaretlendi.
+- **Skill `tionswarm-project`:** `compact/`+`compactor`+`reflector`+memory araç
+  referansları temizlendi (yerine `lessons`); token-optimizasyon maddesi "built-in
+  sıkıştırma kaldırıldı → harici rtk/sqz" olarak yeniden yazıldı.
+
+## Debug: Hook / token-optimizer aktivite göstergesi ✅ (2026-07-10)
+
+"rtk/sqz tasarrufu Bütçe/Debug'da gözükür mü?" sorusunun ürün cevabı. **Gerçek tasarruf
+(byte) gösterilemez** çünkü rtk/sqz **PreToolUse** hook'u — komutu yeniden yazıyorlar,
+araç zaten sıkışmış çıktı üretiyor; TionSwarm sıkışmamış baseline'ı hiç görmüyor → delta
+yok (built-in sıkıştırma muhasebesi de 2026-07-10'da kaldırıldı). Bunun yerine **aktivite
+göstergesi** eklendi:
+
+- **Backend:** `db.DebugEvent`'e `HookID` alanı; `hooks.go`'daki 6 hook emit noktası
+  (pre/post/lifecycle · başarı+hata) artık ateşleyen hook'un id'sini yazıyor → `type=hook`
+  debug olayları hook-başına atfedilebilir. Test: `hookdebug_test.go` (fire → journal → read).
+- **Frontend:** yeni `sessions/viz/HookActivity.tsx` — `type=hook` olaylarını `hookId`'ye göre
+  gruplayıp `\brtk\b`/`\bsqz\b` (backend probe aynası) ile rtk/sqz/other sınıflar; hook başına
+  ateşleme sayısı + araç dağılımı (`tool×N`) + hata sayısı gösterir. `SessionFlowViz`'e
+  "Hook / token-optimizer aktivitesi" bölümü olarak bağlandı (hooks listesini `/api/hooks`'tan
+  çekip atıf için geçiriyor).
+- **Dürüstlük:** UI açıkça "byte tasarrufu değil, aktivite" der; ayrıca **yalnız native turlar
+  sayılır** (claude-cli turlarında hook'lar CLI içinde çalışır, journal'a düşmez) uyarısını taşır.
+
+Canlı doğrulandı: yeni binary'de SES130 debug görünümünde bölüm render oldu, claude-cli
+oturumu olduğu için dürüst empty-state gösterdi. `go test ./internal/agent ./internal/db
+./internal/api` yeşil (316), `npx tsc -b` temiz. Not: gerçek byte tasarrufu istenirse yol,
+sqz'yi PostToolUse output-rewrite moduna alıp `runPostToolHooks`'ta `len(önce)−len(sonra)`
+ölçmek — ayrı iş.
 
 ## Token-optimizer UI callout + hook matcher düzeltmesi + API GET no-store ✅ (2026-07-10)
 
@@ -399,9 +499,29 @@ silmek referansı düşürür, artifact'ı silmez; çözülemeyen id'ler UI'da a
   (workspace-scoped, izole store) ile doğrulanmadan **önce** set ediliyordu. Yabancı bir
   workspace'in akan turu global registry'de bulunduğundan, GetSession başarısız olsa (`continue`)
   bile bayrak zaten yanmış oluyordu.
-- **Çözüm:** `st.Executions = true` `GetSession` başarı kontrolünün **altına** taşındı →
-  gösterge yalnız bu workspace'e ait session'lar için yanar. Diğer bayraklar (`Task`/`Flow`/
-  `Schedule`) zaten `wsp.DB` üzerinden workspace-scoped'du; değişmedi.
+- **Çözüm (kaynakta workspace-scope):** `chatRun`'a `workspaceID` alanı eklendi
+  (`register` artık `id, sessionID, workspaceID, cancel` alır; chat yolu `ws(r).ID`, otonom
+  yol `rt.WorkspaceID()` geçer). `chatRuns.activeSessionIDs(workspaceID)` verilen workspace'e
+  filtreler (`""` = filtresiz, yalnız legacy/test). Böylece server-geneli registry'nin sızıntısı
+  **kaynağında** kesilir; 4 çağıran (`activity`/`executions`/`graph`/`sessions.handleActiveSessions`)
+  artık `wsp.ID` geçer → yabancı workspace'in turları hiçbir görünürlükte (busy dot, reload
+  "thinking" restore, ağ grafiği, executions feed) görünmez. Diğer bayraklar (`Task`/`Flow`/
+  `Schedule`) zaten `wsp.DB` üzerinden scoped'du. Kilit testi: `activity_scope_test.go`
+  (`TestActiveSessionIDsWorkspaceScope`); tüm api paketi (90 test) yeşil.
+- **Panel gözden geçirmesi — 2 ek frontend sızıntısı (aynı sınıf):** backend fix'i poll
+  yolunu kapatsa da frontend'de iki yol daha aynı semptomu üretiyordu.
+  (1) `App.tsx` `busyViews = useActivity(activeWorkspaceId, chat.streamingSessions.size > 0)`:
+  `useChatStream` App seviyesinde yaşar, workspace switch'te **remount olmaz** → A'da başlayan
+  stream'in session'ı Set'te kalır, B'ye geçince B'nin chat noktası yanardı. Düzeltme:
+  `chatBusyLocal = ctl.chatSessions.some(s => chat.streamingSessions.has(s.id))` (yalnız aktif
+  workspace'in oturumları; diğer aynı-workspace stream'leri zaten poll kapsar).
+  (2) `useAppEvents.onEvent` → `bumpSignalsForEvent(e)` yorumu "workspace-match gate'inde" dese de
+  koda göre gate'in **dışındaydı** → yabancı workspace olayı `activity`/`executions`/`network`
+  panellerini boşuna re-fetch'e zorlar + göstergeyi kısa süre yakabilirdi. Düzeltme:
+  `if (!e.workspaceId || e.workspaceId === getActiveWorkspace())` ile sarıldı (badge/toast yolu
+  gate dışında kalır). **Kasıtlı global kaldı:** Logs ekranı (`logs.go` "application + all
+  workspaces"), `events` SSE feed'i (her olay `workspaceId` taşır, frontend filtreler),
+  `grants`/`sessionRunInfo` (session-ID anahtarlı). Frontend `tsc --noEmit` temiz.
 
 ## Flow-run görüntüleyicisi (RunView) canlı node ilerlemesi ✅ (2026-07-09)
 
@@ -464,6 +584,14 @@ silmek referansı düşürür, artifact'ı silmez; çözülemeyen id'ler UI'da a
 (`automation.go`). Araç şeması + frontend `BOARD_PROMPT_VARS` + testler güncellendi
 (`TestBoardVarsSubstitution` tags/priority/owner kapsar). Canlı E2E: owner+priority+tags'li
 kart → prompt `OWNER=[BenchOpus48] PRIO=[high] TAGS=[urgent]` render etti.
+
+## Board UX: kart edit popup'ında kart ID'si (kopyalanabilir) ✅ (2026-07-10)
+
+- **Card edit popup — kart ID'si (başlığın solunda)** (`TaskFormModal.tsx`): edit modunda
+  header'da başlık input'unun **solunda** `tsk_…` chip'i; tıklayınca panoya kopyalar
+  (Copy→✓ 1.5sn geri bildirim, `copyToClipboard`, `data-testid="task-id-copy"`). Amaç:
+  kartı bağımlılık/otomasyon/prompt içinde referanslarken id'yi UI'dan almak. Yalnız edit
+  modunda (create'te id yok).
 
 ## Board UX: create'te description focus + otomasyon `{{tags}}` ✅ (2026-07-09)
 

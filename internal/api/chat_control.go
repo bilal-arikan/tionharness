@@ -35,6 +35,12 @@ type chatRun struct {
 	// "is a turn in flight for session X?" after a page reload (turns are
 	// detached from the client connection and keep running server-side).
 	sessionID string
+	// workspaceID scopes this run to its owning workspace. chatRuns is a single
+	// SERVER-WIDE registry shared across every workspace, so activeSessionIDs must
+	// be able to filter to one workspace — otherwise an in-flight turn in workspace
+	// A would light the "busy" nav indicators of an idle workspace B. Set once at
+	// register (read-only after), read under mu with the rest of the map.
+	workspaceID string
 	// startedAt stamps when this turn was registered, so the Session Info panel
 	// can show how long the background process has been running. Set once at
 	// register (read-only after) so no lock is needed to read it.
@@ -434,16 +440,19 @@ func (c *chatRuns) bindActive(token string, run *chatRun) {
 }
 
 // register creates a control handle for a run (with a fresh per-run token) and
-// returns it. sessionID ties the run to its chat session for activeSessionIDs.
-func (c *chatRuns) register(id, sessionID string, cancel context.CancelFunc) *chatRun {
+// returns it. sessionID ties the run to its chat session for activeSessionIDs;
+// workspaceID scopes it so activeSessionIDs can report per-workspace (empty ""
+// means unscoped — only test/legacy callers pass that).
+func (c *chatRuns) register(id, sessionID, workspaceID string, cancel context.CancelFunc) *chatRun {
 	run := &chatRun{
-		cancel:    cancel,
-		steer:     make(chan string, 16),
-		answer:    make(chan string, 1),
-		done:      make(chan struct{}),
-		token:     uuid.NewString(),
-		sessionID: sessionID,
-		startedAt: time.Now(),
+		cancel:      cancel,
+		steer:       make(chan string, 16),
+		answer:      make(chan string, 1),
+		done:        make(chan struct{}),
+		token:       uuid.NewString(),
+		sessionID:   sessionID,
+		workspaceID: workspaceID,
+		startedAt:   time.Now(),
 	}
 	c.mu.Lock()
 	c.runs[id] = run
@@ -452,15 +461,25 @@ func (c *chatRuns) register(id, sessionID string, cancel context.CancelFunc) *ch
 }
 
 // activeSessionIDs returns the distinct session ids that currently have a turn
-// in flight. The frontend uses this after a reload to restore the "thinking"
-// indicator for turns that are still running detached on the server.
-func (c *chatRuns) activeSessionIDs() []string {
+// in flight, optionally scoped to one workspace. The frontend uses this after a
+// reload to restore the "thinking" indicator for turns that are still running
+// detached on the server, and the nav rail uses it for per-view busy dots.
+//
+// workspaceID scopes the result to a single workspace: this registry is
+// SERVER-WIDE (shared across all workspaces), so an unscoped call would report
+// another workspace's in-flight turns and light an idle workspace's indicators.
+// Pass "" only when a truly process-wide list is wanted (no production caller
+// does; kept for legacy/test callers).
+func (c *chatRuns) activeSessionIDs(workspaceID string) []string {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	seen := make(map[string]struct{}, len(c.runs))
 	ids := make([]string, 0, len(c.runs))
 	for _, run := range c.runs {
 		if run.sessionID == "" {
+			continue
+		}
+		if workspaceID != "" && run.workspaceID != workspaceID {
 			continue
 		}
 		if _, ok := seen[run.sessionID]; ok {

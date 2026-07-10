@@ -147,8 +147,10 @@
   `userCountry`/`userNotes`) `SettingsBridge.Apply` ile yazar. Profil zaten her turda "About the user"
   bloğu olarak enjekte ediliyor (`api/settings.go userContextBlock`) → yeni prompt-enjeksiyon katmanı
   GEREKMEDİ. Dar sarmalayıcı: yalnız 5 profil alanına dokunur (update_settings'in aksine yanlışlıkla
-  başka ayar değiştiremez); `notes`+`notes_append` birlikte → hata. core_memory "human" bloğu ajanın
-  kendi gözlemleri için serbest-metin olarak ayrı yaşamaya devam eder.
+  başka ayar değiştiremez); `notes`+`notes_append` birlikte → hata. ~~core_memory "human" bloğu ajanın
+  kendi gözlemleri için serbest-metin olarak ayrı yaşamaya devam eder.~~ _(core memory
+  2026-07-05'te memory alt sistemiyle birlikte kaldırıldı — yapısal kullanıcı profili artık
+  yalnız bu araçtan geçer.)_
 - **Kayıt:** `settingsBridge` varken (`toolsetup.go`); tier `MarkNameOnly`; claude-cli köprüsü
   `runtime.go BridgeTools` `extra`. Risk: haritalanmadı → varsayılan `RiskWrite`; kategori `config`.
 
