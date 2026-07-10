@@ -128,6 +128,15 @@ onClick={(e) => {
   gösterilir. `Artifact.Group` first-class JSON alanı (skill'lerden farklı olarak
   frontmatter değil, entity alanı — artifact'lar dosya-tabanlı JSON entity'dir).
   Collapse durumu `tionswarm.artifactsCollapsedGroups` localStorage'da kalıcı.
+- **Tekil grup düzenleme (TSK44):** Toplu (bulk) ve sürükle-bırak'a ek olarak, tek
+  bir artifact açıkken **detay editöründe** grubu doğrudan değiştirilebilir. Düzenle
+  moduna girince başlık/kind/dil'in yanında bir grup input'u belirir
+  (`data-testid="artifact-edit-group-input"`, mevcut grup adları `artifacts-group-names`
+  datalist'iyle önerilir; boş = grupsuz). Kaydet, önce içerik/meta patch'ini
+  (`api.updateArtifact` — bu handler `group`'u yok sayar), grup değiştiyse ardından
+  `api.setArtifactGroup(id, group)` çağırır; son yanıt kaydedilmiş artifact'tir.
+  `dirty` bayrağı grup farkını da içerir. Böylece kullanıcı tek bir artifact'i
+  gruplamak için artık çoklu-seçime girmek zorunda değil.
 
 ## İleride
 - Klavye gezinme (Space=toggle, Shift+Ok ile aralık).

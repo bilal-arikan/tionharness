@@ -62,6 +62,9 @@ interface Draft {
   kind: ArtifactKind
   language: string
   content: string
+  // Organisation bucket the artifact belongs to. Empty string = ungrouped.
+  // Persisted through the dedicated group endpoint (not the content/meta patch).
+  group: string
 }
 
 // ArtifactsPanel is the dedicated artifacts screen: a list of saved artifacts on
@@ -277,7 +280,7 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
       setList((prev) => [a, ...prev])
       setActiveId(a.id)
       setActive(a)
-      setDraft({ title: a.title, kind: a.kind, language: a.language, content: a.content })
+      setDraft({ title: a.title, kind: a.kind, language: a.language, content: a.content, group: a.group ?? '' })
     } catch (e) {
       onError((e as Error).message)
     }
@@ -291,10 +294,14 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
       kind: active.kind,
       language: active.language,
       content: active.content,
+      group: active.group ?? '',
     })
   }, [active])
 
-  // Save the draft: send only changed fields (a content change overwrites in place).
+  // Save the draft: send only changed fields (a content change overwrites in
+  // place). The `group` field is not part of the content/meta patch — the
+  // backend `updateArtifact` handler ignores it — so a group change is persisted
+  // through the dedicated `setArtifactGroup` endpoint (same one bulk + DnD use).
   const save = useCallback(async () => {
     if (!active || !draft) return
     const patch: { title?: string; kind?: ArtifactKind; language?: string; content?: string } = {}
@@ -302,13 +309,23 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
     if (draft.kind !== active.kind) patch.kind = draft.kind
     if (draft.language !== active.language) patch.language = draft.language
     if (draft.content !== active.content) patch.content = draft.content
-    if (Object.keys(patch).length === 0) {
+    const nextGroup = draft.group.trim()
+    const groupChanged = nextGroup !== (active.group ?? '')
+    if (Object.keys(patch).length === 0 && !groupChanged) {
       setDraft(null)
       return
     }
     setSaving(true)
     try {
-      const updated = await api.updateArtifact(active.id, patch)
+      // Apply the content/meta patch first (if any), then the group change; the
+      // last response is the authoritative post-save artifact.
+      let updated = active
+      if (Object.keys(patch).length > 0) {
+        updated = await api.updateArtifact(active.id, patch)
+      }
+      if (groupChanged) {
+        updated = await api.setArtifactGroup(active.id, nextGroup)
+      }
       setActive(updated)
       setDraft(null)
       setList((prev) => prev.map((a) => (a.id === updated.id ? updated : a)))
@@ -328,7 +345,8 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
       (draft.title !== active.title ||
         draft.kind !== active.kind ||
         draft.language !== active.language ||
-        draft.content !== active.content),
+        draft.content !== active.content ||
+        draft.group.trim() !== (active.group ?? '')),
     [draft, active],
   )
   useRegisterDirty('artifacts', dirty)
@@ -772,6 +790,23 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
                       className="w-32 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2.5 py-1.5 text-sm"
                     />
                   )}
+                  {/* Per-artifact group: edit this single artifact's organisation
+                      bucket directly, without entering multi-select or dragging.
+                      Autocompletes to existing group names; blank = ungrouped. */}
+                  <input
+                    data-testid="artifact-edit-group-input"
+                    list="artifacts-group-names"
+                    value={draft.group}
+                    onChange={(e) => setDraft({ ...draft, group: e.target.value })}
+                    placeholder="Grup (opsiyonel)"
+                    title="Bu artifact'in grubu — boş bırakırsan grupsuz olur"
+                    className="w-40 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2.5 py-1.5 text-sm"
+                  />
+                  <datalist id="artifacts-group-names">
+                    {groupNames.map((n) => (
+                      <option key={n} value={n} />
+                    ))}
+                  </datalist>
                 </div>
                 {isMediaKind(draft.kind) ? (
                   <>
