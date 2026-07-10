@@ -68,6 +68,39 @@
   Gerçek harici MCP sunucuları (`mcp__github__…`) ön eklerini korur (hangi sunucunun
   çağırdığını ayırt eder). Frontend `tsc --noEmit` temiz.
 
+## Default skill seed'i frontmatter-farkındalı ✅ (2026-07-10)
+
+**Sorun (global tier denetiminde bulundu):** `EnsureDefaults` sürüm-farkındalıydı ama
+bütün-dosya hash'iyle çalışıyordu. Uygulama görünürlük frontmatter'ını yerinde yazdığı
+için (`access`/`group`/`auto_summary`/`name_only`/`summary_only` — ör. Skills ekranında
+tek bir paylaşım/tier değişikliği) dosya hem gömülüden hem son-sevk hash'inden ayrışıyor
+→ "user edit" sayılıp **sonsuza dek donuyordu**; sevk edilen gövde güncellemeleri bir
+daha ulaşmıyordu (canlı örnek: 12/12 global default donmuştu, `tionswarm-settings`
+kaldırılmış compaction ayarlarını belgelemeye devam ediyordu).
+
+**Çözüm:** SKILL.md dosyaları için **gövde-ayrı muhasebe**:
+
+- `.shipped-versions.json` v2: `{files: {...}, bodies: {...}}` — `files` bütün-dosya
+  (eski semantik, frontmatter değişikliklerini de sevk eden tam-tazeleme yolu önce
+  denenir), `bodies` yalnız SKILL.md gövdesi (frontmatter hariç, `splitFrontmatter`).
+  Legacy düz map `files`'a katlanarak okunur (`loadShippedManifest`).
+- Yeni kural: bütün-dosya eşleşmezse gövde karşılaştırılır — gövde gömülüyle aynıysa
+  yalnız kayda geçirilir (unfreeze bootstrap); gövde son-sevk gövdesiyle aynıysa
+  **frontmatter verbatim korunarak** yeni gövde altına yazılır (`rebuildSkillFile`);
+  ikisi de değilse gerçek kullanıcı düzenlemesi → dokunulmaz.
+- Dosyalar: `internal/skills/defaults.go` (algoritma), yeni
+  `internal/skills/defaults_manifest.go` (manifest v2 + `skillBody`/`rebuildSkillFile`).
+- Testler: yeni `defaults_test.go` — gövde-tazeleme (kullanıcı frontmatter'ı altında),
+  kullanıcı gövde düzenlemesi korunur, yalnız-frontmatter değişikliğinde unfreeze
+  kaydı, legacy düz manifest yükleme, rebuild round-trip; mevcut `store_test.go`
+  seed/pristine testleri yeni API'ye uyarlandı. `go test ./internal/...` 811 yeşil.
+- Bayat `tionswarm-doc-improver` cümlesi ("EnsureDefaults never overwrites") repo
+  default'unda + global kopyada düzeltildi.
+
+**Etki:** Mevcut kurulumda gövdeler şu an gömülüyle eşit (elle senkronlandı) →
+ilk çalıştırmada `bodies` kayıtları kendini tohumlar, sonraki her sevk gövdeyi
+kullanıcı frontmatter'ına dokunmadan tazeler. Yeni davranış rebuild + restart ister.
+
 ## Doküman bakım turu ✅ (2026-07-10)
 
 Git geçmişiyle (özellikle compactor kaldırma + memory kaldırma + debug-viz eklemeleri)
@@ -91,6 +124,13 @@ dokümanlar senkronlandı:
 - **Skill `tionswarm-project`:** `compact/`+`compactor`+`reflector`+memory araç
   referansları temizlendi (yerine `lessons`); token-optimizasyon maddesi "built-in
   sıkıştırma kaldırıldı → harici rtk/sqz" olarak yeniden yazıldı.
+- **Default skill `tionswarm-autonomous-ops`:** Guardrails bölümündeki bayat
+  "per-agent budgets (`daily_call_limit`/`daily_token_limit`)" maddesi (limitler
+  2026-07-01'de kaldırılmıştı) global otonomi-pause freni + kullanım ölçümü
+  (`guardedComplete`) olarak düzeltildi. Not: `~/.tionswarm/skills`'teki global
+  kopyalar `access/group/summary_only` frontmatter eklendiği için EnsureDefaults
+  tarafından "user edit" sayılıp bir daha tazelenmiyor — düzeltme global kopyaya
+  elle de uygulandı.
 
 ## Debug: Hook / token-optimizer aktivite göstergesi ✅ (2026-07-10)
 

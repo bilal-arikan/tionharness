@@ -196,8 +196,8 @@ a flow, or a skill that says which agent to hand off to at each stage.
 
 ## 9. Guardrails — keep autonomy safe
 
-- **Per-agent budgets** — `daily_call_limit` / `daily_token_limit` (0 = unlimited)
-  bound any autonomous loop's spend.
+- **Global autonomy brake** — pausing autonomy stops all autonomous provider
+  calls at the single `guardedComplete` funnel; every call is usage-metered.
 - **Permission layer** — `auto` / `ask` / `read-only` modes; arg-based patterns
   narrow a blanket "always allow" to a command family (e.g. `shell(git *)` runs
   unattended while `rm` still prompts). Run loops in a mode you trust.
