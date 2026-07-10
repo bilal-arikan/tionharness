@@ -32,6 +32,11 @@ export interface ChatViewProps {
   bootstrapping: boolean
   // True while the open session's transcript is being fetched.
   messagesLoading: boolean
+  // When true the session is a read-only run log (task / flow / schedule): the
+  // composer and its ask/todo/pending/wake stack are hidden and a thin banner is
+  // shown instead. The transcript, context preview, debug and info panels stay
+  // fully available.
+  readOnly: boolean
   // Empty-state ("Yeni sohbete başla") wiring, used when no session is active.
   defaultAgentId: string | null
   onNewSession: () => void
@@ -60,6 +65,7 @@ export function ChatView({
   activeAgentId,
   bootstrapping,
   messagesLoading,
+  readOnly,
   defaultAgentId,
   onNewSession,
   onSelectDefaultAgent,
@@ -151,9 +157,24 @@ export function ChatView({
           bottomInset={bottomInset}
         />
       )}
-      {/* Floating bottom stack: overlays the transcript so bubbles scroll UNDER
+      {/* Read-only run log (task / flow / schedule): the composer and its
+          ask/todo/pending/wake stack are meaningless — a new user turn has no run
+          to attach to — so they are hidden entirely and replaced by a thin banner.
+          The transcript above (and the header's context/debug/info panels) stay
+          fully available. */}
+      {readOnly ? (
+        <div
+          ref={bottomStackRef}
+          className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex justify-center px-4 pb-4"
+        >
+          <div className="pointer-events-auto rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-1.5 text-xs text-[var(--color-text-dim)] shadow-[var(--shadow-sm)]">
+            Bu oturum salt-okunurdur (görev / akış / zamanlama günlüğü).
+          </div>
+        </div>
+      ) : (
+      /* Floating bottom stack: overlays the transcript so bubbles scroll UNDER
           the composer's transparent→black gradient. pointer-events pass through
-          the transparent gaps to the transcript; each child re-enables them. */}
+          the transparent gaps to the transcript; each child re-enables them. */
       <div
         ref={bottomStackRef}
         className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex flex-col [&>*]:pointer-events-auto"
@@ -199,6 +220,7 @@ export function ChatView({
           artifacts={artifacts}
         />
       </div>
+      )}
       {chat.rewindOpen && (
         <RewindDialog messages={messages} onClose={chat.closeRewind} onRewind={onRewind} />
       )}

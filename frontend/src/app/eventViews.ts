@@ -20,7 +20,9 @@ export function viewForEventType(type: string): View | null {
     case 'spawned':
     case 'worker':
     case 'coordination':
-      return 'executions'
+      // Spawned / worker / coordination runs are sessions; their transcripts live
+      // in the unified chat sidebar, so their unread badge lands on 'chat'.
+      return 'chat'
     default:
       return null
   }

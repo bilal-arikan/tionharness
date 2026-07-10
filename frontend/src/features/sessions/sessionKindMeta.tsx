@@ -8,12 +8,11 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 
-// Shared display metadata for the unified executions feed, used by both the
-// ExecutionsPanel list and the SessionsOverview bulk table so the kind badge,
-// filter tabs, id trimming and status pill stay identical across the two views.
+// Shared display metadata for session-kind rendering. Every execution path
+// (chat / task / flow / schedule / spawn) funnels into a Session tagged with a
+// kind, so the sessions sidebar, the bulk overview table and the agent activity
+// rail all render the same icon, label, id trimming and status pill.
 
-// Per-kind display metadata: every execution path funnels into a Session tagged
-// with a kind, so each view renders it uniformly with its own icon + label.
 export const KIND_META: Record<string, { label: string; icon: LucideIcon }> = {
   chat: { label: 'Sohbet', icon: MessageSquare },
   task: { label: 'Görev', icon: LayoutGrid },
@@ -34,6 +33,15 @@ export const FILTERS: { key: string; label: string }[] = [
 
 export function kindMeta(kind: string) {
   return KIND_META[kind] ?? { label: kind || 'Diğer', icon: Activity }
+}
+
+// matchesKindFilter reports whether a session kind belongs under a filter tab.
+// A legacy session persisted before the `kind` field existed carries '' and is
+// treated as a plain chat, so it stays reachable under the "Sohbet" tab.
+export function matchesKindFilter(kind: string, filter: string): boolean {
+  if (!filter) return true
+  if (filter === 'chat') return kind === '' || kind === 'chat'
+  return kind === filter
 }
 
 // shortId trims a session id to a compact, recognisable suffix for list rows

@@ -24,14 +24,12 @@ export interface AppNavigationParams {
   scheduleTarget: string | null
   settingsCat: string | null
   workspaceTab: string | null
-  executionTarget: string | null
   pendingRouteRef: MutableRefObject<Route | null>
   switchWorkspace: (id: string) => void
   selectSession: (id: string, messageId?: string) => void
   focusAgent: (id: string) => void
   setArtifactTarget: (id: string | null) => void
   setScheduleTarget: (id: string | null) => void
-  setExecutionTarget: (id: string | null) => void
   setSettingsCat: (id: string | null) => void
   setWorkspaceTab: (id: string | null) => void
 }
@@ -39,7 +37,7 @@ export interface AppNavigationParams {
 export function useAppNavigation(p: AppNavigationParams) {
   const {
     setView, pendingRouteRef, switchWorkspace, selectSession, focusAgent,
-    setArtifactTarget, setScheduleTarget, setExecutionTarget, setSettingsCat, setWorkspaceTab,
+    setArtifactTarget, setScheduleTarget, setSettingsCat, setWorkspaceTab,
   } = p
 
   // Apply a Route (from back/forward, a manual URL edit, or a shared link) to
@@ -62,8 +60,6 @@ export function useAppNavigation(p: AppNavigationParams) {
         setArtifactTarget(r.id)
       } else if (r.view === 'schedules') {
         setScheduleTarget(r.id)
-      } else if (r.view === 'executions') {
-        setExecutionTarget(r.id)
       } else if (r.view === 'settings') {
         setSettingsCat(r.id)
       } else if (r.view === 'workspace') {
@@ -72,7 +68,7 @@ export function useAppNavigation(p: AppNavigationParams) {
     },
     [
       setView, pendingRouteRef, switchWorkspace, selectSession, focusAgent,
-      setArtifactTarget, setScheduleTarget, setExecutionTarget, setSettingsCat, setWorkspaceTab,
+      setArtifactTarget, setScheduleTarget, setSettingsCat, setWorkspaceTab,
     ],
   )
 
@@ -87,7 +83,6 @@ export function useAppNavigation(p: AppNavigationParams) {
       scheduleId: p.scheduleTarget,
       settingsCat: p.settingsCat,
       workspaceTab: p.workspaceTab,
-      executionId: p.executionTarget,
     }),
   }
   useUrlSync(route, !!p.activeWorkspaceId, applyRoute)

@@ -10,22 +10,18 @@ import { copyToClipboard } from '@/shared/lib/clipboard'
 import type { View } from './NavRail'
 import type { Route } from './url'
 import { INITIAL_ROUTE } from './useAppNavigation'
-import { isChatKind } from './viewRegistry'
+import { isWritableSessionKind } from './viewRegistry'
 
 export interface SessionsControllerParams {
   activeWorkspaceId: string | null
   setError: (msg: string | null) => void
   setView: (v: View) => void
-  // Deep-link hand-off: the workspace-load effect passes a routed execution id
-  // to the Activity screen (it loads its own list; we just select the run).
-  setExecutionTarget: (id: string | null) => void
 }
 
 export function useSessionsController({
   activeWorkspaceId,
   setError,
   setView,
-  setExecutionTarget,
 }: SessionsControllerParams) {
   const [agents, setAgents] = useState<Agent[]>([])
   const [sessions, setSessions] = useState<Session[]>([])
@@ -90,12 +86,16 @@ export function useSessionsController({
         if (cancelled) return
         setAgents(ag)
         setSessions(ss)
-        // Default selection: the most recent chat session (task/flow/schedule
-        // transcripts live in the Activity view, not the chat sidebar).
-        const firstChat = ss.find((s) => isChatKind(s.kind))
+        // Default selection: the most recent WRITABLE session. The sidebar now
+        // lists every kind, but landing a returning user on a read-only flow or
+        // schedule log (with no composer) would be a worse default than the last
+        // conversation they can actually continue.
+        const firstChat = ss.find((s) => isWritableSessionKind(s.kind))
         let sid = firstChat ? firstChat.id : null
         let aid = firstChat ? firstChat.agentId : null
         // Honor a pending deep link (initial load or cross-workspace nav) once.
+        // A legacy '#executions/<sessionId>' link has already been rewritten to
+        // the chat view by parseRoute, so it lands here as an ordinary session id.
         const want = pendingRouteRef.current
         pendingRouteRef.current = null
         if (want) {
@@ -108,9 +108,6 @@ export function useSessionsController({
             ag.some((a) => a.id === want.id)
           ) {
             aid = want.id
-          } else if (want.view === 'executions') {
-            // The Activity feed loads its own list; just hand it the run to select.
-            setExecutionTarget(want.id)
           }
         }
         setActiveSessionId(sid)
@@ -125,7 +122,7 @@ export function useSessionsController({
     return () => {
       cancelled = true
     }
-  }, [activeWorkspaceId, setError, setExecutionTarget])
+  }, [activeWorkspaceId, setError])
 
   // Keep the default agent (for new sessions) valid: fall back to the first
   // agent when unset or pointing at a removed agent.
@@ -470,8 +467,15 @@ export function useSessionsController({
     }
   }, [setError])
 
-  // Manual chats for the chat sidebar (other kinds live in the Activity view).
-  const chatSessions = useMemo(() => sessions.filter((s) => isChatKind(s.kind)), [sessions])
+  // Whether the open session accepts new user turns. Task / flow / schedule
+  // transcripts are read-only run logs: the composer is hidden for them. An
+  // unknown id (list not yet loaded) is treated as writable so the composer does
+  // not flicker away mid-load; the `bootstrapping` guard covers that window.
+  const activeSessionWritable = useMemo(() => {
+    if (!activeSessionId) return true
+    const s = sessions.find((x) => x.id === activeSessionId)
+    return s ? isWritableSessionKind(s.kind) : true
+  }, [sessions, activeSessionId])
 
   return {
     // state
@@ -480,7 +484,7 @@ export function useSessionsController({
     messages, setMessages,
     activeAgentId, activeSessionId,
     bootstrapping, messagesLoading,
-    chatSessions,
+    activeSessionWritable,
     sessionArtifacts,
     defaultAgentId,
     composerKey, setComposerKey,

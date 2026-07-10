@@ -140,17 +140,25 @@ function onEvent(d: AppEventDeps, e: AppEvent) {
         d.chat.clearAutoLive(sid)
         api.listMessages(sid).then(d.setMessages).catch(() => {})
       }
-      // Fan the turn-end out to non-chat transcript views (ExecutionsPanel via
-      // useLiveTranscript) so they drop their own live ghost bubble + reload the
-      // authoritative persisted turn — regardless of which session the chat
-      // itself has active. 'armed'/'start' phases are not ends.
+      // Fan the turn-end out on the shared step bus for any other transcript
+      // consumer of this session, regardless of which session the chat itself has
+      // active. 'armed'/'start' phases are not ends.
       if (phase !== 'armed' && phase !== 'start') publishTurnEnd(sid)
     }
-    // Autonomous turn completion (spawn / coordinator worker / scheduled run):
-    // like the chat branch, drop the live ghost bubble and reload the transcript
-    // so the authoritative persisted turn (with its full trace) replaces it. These
-    // types carry no wake-phase logic — a plain reload is enough.
-    if ((e.type === 'spawned' || e.type === 'worker' || e.type === 'schedule') && sid) {
+    // Autonomous turn completion (spawn / coordinator worker / scheduled run /
+    // flow run / automation fire): like the chat branch, drop the live ghost
+    // bubble and reload the transcript so the authoritative persisted turn (with
+    // its full trace) replaces it. These types carry no wake-phase logic — a
+    // plain reload is enough. flow/automation are included because the chat
+    // screen is now the unified transcript view: their sessions are selectable in
+    // the sidebar, so a running one must land its finished turn without a manual
+    // reselect. (Board task runs surface as 'spawned'/'chat' sessions; there is
+    // no distinct 'task' run event.)
+    if (
+      (e.type === 'spawned' || e.type === 'worker' || e.type === 'schedule' ||
+        e.type === 'flow' || e.type === 'automation') &&
+      sid
+    ) {
       d.chat.clearPending(sid)
       if (sid === d.activeSessionId) {
         d.chat.clearAutoLive(sid)

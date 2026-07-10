@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import {
   MessageSquare,
-  Activity,
   Users,
   Share2,
   LayoutGrid,
@@ -22,7 +21,7 @@ import type { Workspace } from '@/types'
 import { WorkspaceSwitcher } from '@/features/workspace/WorkspaceSwitcher'
 import type { NewWorkspaceData } from '@/features/workspace/WorkspaceCreateModal'
 
-export type View = 'chat' | 'executions' | 'agents' | 'network' | 'board' | 'schedules' | 'flows' | 'artifacts' | 'skills' | 'tools' | 'market' | 'budget' | 'logs' | 'workspace' | 'settings'
+export type View = 'chat' | 'agents' | 'network' | 'board' | 'schedules' | 'flows' | 'artifacts' | 'skills' | 'tools' | 'market' | 'budget' | 'logs' | 'workspace' | 'settings'
 
 interface Props {
   view: View
@@ -50,7 +49,6 @@ interface Props {
 // same set from a single source of truth.
 export const NAV: { key: View; label: string; icon: LucideIcon }[] = [
   { key: 'chat', label: 'Sohbet', icon: MessageSquare },
-  { key: 'executions', label: 'Aktivite', icon: Activity },
   { key: 'agents', label: 'Ajanlar', icon: Users },
   { key: 'network', label: 'Ağ', icon: Share2 },
   { key: 'board', label: 'Görevler', icon: LayoutGrid },

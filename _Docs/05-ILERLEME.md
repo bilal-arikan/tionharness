@@ -2,6 +2,38 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-07-10**
 
+## Executions ekranı kaldırıldı — birleşik Sohbet transkripti ✅ (2026-07-10, TSK45)
+
+- **Karar:** Ayrı "Aktivite" (Executions) ekranı kaldırıldı. Executions ayrı bir veri
+  kaynağı değildi — `GET /api/executions` ile `GET /api/sessions` **aynı** `DB.ListSessions`
+  çağrısına dayanıyor; Executions yalnızca her satıra `running` + `lastStatus` ekliyordu.
+  Artık **Sohbet** ekranı her oturum türü (chat/task/flow/schedule/spawned) için tek
+  birleşik transkript görünümü.
+- **Frontend — birleşik sidebar:** `SessionsSidebar` artık tüm oturum türlerini listeler:
+  kind rozeti + ikon, kind filtre sekmeleri (`Tümü/Sohbet/Görev/Akış/Spawn/Zamanlama`,
+  `localStorage`'da hatırlanır), canlı nabız noktası ve task/flow için pass/fail `StatusPill`.
+  `running`/`lastStatus` bilgisi yeni `useExecutionRuntime` hook'undan (`/api/executions`
+  poll + `executions` SSE sinyali) `runtimeById` haritası olarak beslenir.
+- **Salt-okunur composer:** `ChatView`'e `readOnly` prop'u eklendi; task/flow/schedule
+  transkriptlerinde composer + ask/todo/pending/wake yığını **hiç render edilmez**, yerine
+  "Bu oturum salt-okunurdur" bandı gösterilir (`isWritableSessionKind` → `chat`/`spawned`
+  yazılabilir). Böylece bağlam/debug/oturum-bilgisi panelleri **tüm** oturum türleri için
+  açılabilir hâle geldi (önceden yalnız `view === 'chat'` altındaydı).
+- **Toplu tablo:** `SessionsOverview` (`features/executions/`'tan `features/sessions/`'a
+  taşındı) sidebar'daki "Oturumlar" (`Table2`) butonundan overlay olarak açılır; satıra
+  tıkla → o oturumu Sohbet transkriptinde aç.
+- **Silinen / taşınan dosyalar:** `features/executions/` klasörü tamamen kaldırıldı
+  (`ExecutionsPanel.tsx`, `useLiveTranscript.ts` silindi; `executionsShared.tsx` →
+  `features/sessions/sessionKindMeta.tsx`, `SessionsOverview.tsx` → `features/sessions/`).
+  `NavRail`/`viewRegistry`/`url.ts`/`eventViews`/`useActivity`/`useDeepLinks`/
+  `useAppNavigation`/`useSessionsController` içindeki `executions` referansları
+  temizlendi; eski `#executions/<sid>` deep-link'i chat oturumuna düşer. `AgentActivityPanel`
+  "yürütmeyi aç" bağlantısı artık chat transkriptine yönlenir.
+- **Backend değişmedi:** `GET /api/executions` (`internal/api/executions.go`) korundu —
+  `AgentActivityPanel` ve `useExecutionRuntime` onu tüketiyor; yalnız UI ekranı kaldırıldı.
+- **Doğrulama:** `go build`/`go vet`/`go test ./internal/...` tümü yeşil; `npx tsc -b`
+  temiz; `npm run build` başarılı.
+
 ## Spawn session'ı "çalışıyor" göstermiyordu 🐛 (2026-07-10)
 
 - **Sorun:** `spawn` (veya `spawn_worker`) ile bir session oluşturulunca, sohbet ekranında o

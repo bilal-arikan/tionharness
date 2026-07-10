@@ -10,7 +10,6 @@ export const SPLASH_MIN_MS = 1100
 
 export const VIEW_TITLE: Record<View, string> = {
   chat: 'Sohbet',
-  executions: 'Aktivite',
   agents: 'Ajanlar',
   network: 'Ağ',
   board: 'Görevler',
@@ -31,15 +30,19 @@ export const VIEW_TITLE: Record<View, string> = {
 // in-pane headers) reach the very top — matching the chat layout where the
 // sidebar is a sibling of <main>. Errors for these still surface via ErrorToast.
 export const HEADERLESS_VIEWS = new Set<View>([
-  'agents', 'executions', 'artifacts', 'skills', 'tools', 'flows', 'market', 'schedules', 'logs', 'budget', 'board', 'network',
+  'agents', 'artifacts', 'skills', 'tools', 'flows', 'market', 'schedules', 'logs', 'budget', 'board', 'network',
 ])
 
-// isChatKind reports whether a session is continuable from the chat sidebar.
-// Manual chats (chat/empty) plus "spawned" sessions qualify: spawned covers
-// both the spawn tool and handoff (context-reset) children, which are
-// single-agent linear transcripts explicitly meant for a human to take over and
-// keep talking to. Task/flow/schedule transcripts are aggregate/multi-run logs
-// and stay read-only in the Activity (executions) view instead.
-export function isChatKind(kind: string): boolean {
+// isWritableSessionKind reports whether the user may send a new message into a
+// session from the composer. Manual chats (chat/empty) plus "spawned" sessions
+// qualify: spawned covers both the spawn tool and handoff (context-reset)
+// children, which are single-agent linear transcripts explicitly meant for a
+// human to take over and keep talking to.
+//
+// Task / flow / schedule transcripts are aggregate run logs produced by the
+// orchestrator: they still appear in the (unified) sessions sidebar and are fully
+// readable — transcript, context preview, debug panel, session info — but the
+// composer is hidden for them, since a new user turn has no run to attach to.
+export function isWritableSessionKind(kind: string): boolean {
   return kind === '' || kind === 'chat' || kind === 'spawned'
 }

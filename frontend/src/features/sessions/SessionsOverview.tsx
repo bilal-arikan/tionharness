@@ -5,13 +5,13 @@ import { AgentAvatar } from '@/shared/components/agents/AgentAvatar'
 import { copyToClipboard } from '@/shared/lib/clipboard'
 import { relativeTime, fullDateTime, formatDuration } from '@/shared/lib/time'
 import { ModalOverlay } from '@/shared/components'
-import { FILTERS, kindMeta, shortId, StatusPill } from './executionsShared'
+import { FILTERS, kindMeta, matchesKindFilter, shortId, StatusPill } from './sessionKindMeta'
 
 interface Props {
-  // All executions currently loaded by the panel (workspace-wide session rows).
+  // Every execution row the sessions sidebar has loaded (workspace-wide).
   items: Execution[]
   agents: Agent[]
-  // Select an execution (jump to its transcript) — the overlay closes afterwards.
+  // Select a session (jump to its transcript) — the overlay closes afterwards.
   onSelect: (sessionId: string) => void
   onClose: () => void
 }
@@ -48,9 +48,9 @@ const COLUMNS: { key: SortKey; label: string; align?: 'right' }[] = [
 ]
 
 // SessionsOverview is the bulk sessions table: a searchable, filterable, sortable
-// grid of every execution (chat / task / flow / schedule / spawn) in the
-// workspace. It reuses the panel's already-loaded executions list — no extra
-// fetch — and clicking a row jumps to that transcript in the panel.
+// grid of every session (chat / task / flow / schedule / spawn) in the
+// workspace. It reuses the sidebar's already-loaded executions list — no extra
+// fetch — and clicking a row opens that transcript in the chat column.
 export function SessionsOverview({ items, agents, onSelect, onClose }: Props) {
   const [query, setQuery] = useState('')
   const [kind, setKind] = useState('')
@@ -65,7 +65,7 @@ export function SessionsOverview({ items, agents, onSelect, onClose }: Props) {
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase()
     const filtered = items.filter((it) => {
-      if (kind && it.kind !== kind) return false
+      if (!matchesKindFilter(it.kind, kind)) return false
       if (!q) return true
       return (
         (it.title || '').toLowerCase().includes(q) ||

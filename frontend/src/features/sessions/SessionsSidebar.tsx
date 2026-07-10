@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Settings, Pencil, Sparkles, ClipboardCopy, FolderOpen, Trash2, Search, X, MessageSquareText, Plus, RefreshCw, Archive, ArchiveRestore, Pin, PinOff, type LucideIcon } from 'lucide-react'
+import { Settings, Pencil, Sparkles, ClipboardCopy, FolderOpen, Trash2, Search, X, MessageSquareText, Plus, RefreshCw, Archive, ArchiveRestore, Pin, PinOff, Table2, type LucideIcon } from 'lucide-react'
 import type { Agent, Session, SearchHit } from '@/types'
 import { api } from '@/api'
 import { AgentAvatar } from '@/shared/components/agents/AgentAvatar'
@@ -8,6 +8,12 @@ import { useOutsideClick } from '@/shared/hooks/useOutsideClick'
 import { useMultiSelect } from '@/shared/hooks/useMultiSelect'
 import { SelectionBar, SelectionBarButton, Skeleton } from '@/shared/components'
 import { useDelayedFlag } from '@/shared/hooks/useDelayedFlag'
+import { FILTERS, kindMeta, matchesKindFilter, StatusPill } from './sessionKindMeta'
+import type { ExecutionRuntime } from '@/app/useExecutionRuntime'
+
+// Persisted kind filter — the sidebar now lists every session kind, so the tab
+// choice is worth remembering across reloads (same rationale as the width).
+const KIND_FILTER_KEY = 'tionswarm.sessionKindFilter'
 
 interface Props {
   sessions: Session[]
@@ -17,10 +23,15 @@ interface Props {
   // pulsing indicator so in-progress conversations are visible from the list.
   // A set because several turns can stream concurrently (detached server-side).
   streamingSessionIds?: ReadonlySet<string>
+  // sessionId → live-running flag + last task/flow run status, from
+  // GET /api/executions. Covers autonomous turns this window never streamed.
+  runtimeById?: ReadonlyMap<string, ExecutionRuntime>
   // True while the workspace's session list is still being fetched — the rows are
   // replaced by skeletons so the column never claims "no sessions" prematurely.
   loading?: boolean
   newDisabled: boolean
+  // Open the bulk sessions table (searchable/sortable grid of every session).
+  onOpenOverview: () => void
   // messageId is set when the user clicks a message-content search result, so the
   // transcript can scroll to that exact turn.
   onSelectSession: (id: string, messageId?: string) => void
@@ -38,16 +49,19 @@ interface Props {
   onSetPinned: (id: string, pinned: boolean) => void
 }
 
-// SessionsSidebar is the chat column: a flat, time-bucketed list of every
-// session (newest first), with per-row unread dots and a settings menu
-// (rename, AI title, copy path, open folder, delete).
+// SessionsSidebar is the unified sessions column: a flat, time-bucketed list of
+// every session (chat / task / flow / schedule / spawn, newest first), with a
+// per-kind badge + filter tabs, live-running pulse, run status pill, unread dots
+// and a settings menu (rename, AI title, copy path, open folder, delete).
 export function SessionsSidebar({
   sessions,
   agents,
   activeSessionId,
   streamingSessionIds,
+  runtimeById,
   loading = false,
   newDisabled,
+  onOpenOverview,
   onSelectSession,
   onNewSession,
   onRefresh,
@@ -63,6 +77,11 @@ export function SessionsSidebar({
   // Active vs Archived view. Archiving a session moves it out of the default
   // (active) list into the Archived filter — it is never deleted.
   const [showArchived, setShowArchived] = useState(false)
+  // Kind filter ('' = all). Persisted like the archive filter's sibling controls.
+  const [kindFilter, setKindFilter] = useState(() => localStorage.getItem(KIND_FILTER_KEY) ?? '')
+  useEffect(() => {
+    localStorage.setItem(KIND_FILTER_KEY, kindFilter)
+  }, [kindFilter])
   const [renamingId, setRenamingId] = useState<string | null>(null)
   const [renameText, setRenameText] = useState('')
   const [query, setQuery] = useState('')
@@ -113,13 +132,15 @@ export function SessionsSidebar({
   const archivedCount = useMemo(() => sessions.filter((s) => s.state === 'archived').length, [sessions])
 
   // Group the (already newest-first) sessions into recency buckets, preserving
-  // order. The Active/Archived filter narrows by state first, then a title search.
+  // order. The Active/Archived filter narrows by state first, then the kind tab,
+  // then a title search.
   const groups = useMemo(() => {
     const q = query.trim().toLowerCase()
     const map = new Map<Bucket, Session[]>()
     for (const s of sessions) {
       const isArchived = s.state === 'archived'
       if (showArchived !== isArchived) continue
+      if (!matchesKindFilter(s.kind, kindFilter)) continue
       if (q && !(s.title || 'Yeni sohbet').toLowerCase().includes(q)) continue
       const b = bucketOf(s.updatedAt)
       const arr = map.get(b) ?? []
@@ -127,7 +148,7 @@ export function SessionsSidebar({
       map.set(b, arr)
     }
     return BUCKET_ORDER.filter((b) => map.has(b)).map((b) => ({ bucket: b, items: map.get(b)! }))
-  }, [sessions, query, showArchived])
+  }, [sessions, query, showArchived, kindFilter])
 
   // Multi-select (Ctrl/Cmd+Click, Shift-range). The ordered id list is the
   // flattened visible render order so Shift+Click can span recency buckets.
@@ -242,6 +263,18 @@ export function SessionsSidebar({
         </button>
       </div>
 
+      {/* Bulk sessions table (searchable/sortable grid of every session). */}
+      <div className="px-3 pb-1">
+        <button
+          onClick={onOpenOverview}
+          title="Tüm oturumları tablo olarak gör"
+          data-testid="sessions-overview-open"
+          className="flex w-full items-center justify-center gap-2 rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-xs font-medium text-[var(--color-text-dim)] transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
+        >
+          <Table2 size={14} /> Oturumlar
+        </button>
+      </div>
+
       {/* Title search */}
       <div className="relative px-3 pb-2 pt-1">
         <Search size={13} className="pointer-events-none absolute left-5 top-1/2 -translate-y-1/2 text-[var(--color-text-dim)]" />
@@ -287,6 +320,24 @@ export function SessionsSidebar({
         </button>
       </div>
 
+      {/* Kind filter tabs: the sidebar lists every session kind, so this is the
+          antidote to a crowded list. Defaults to "Tümü" and is persisted. */}
+      <div className="flex flex-wrap gap-1 px-3 pb-2" data-testid="session-kind-filters">
+        {FILTERS.map((f) => (
+          <button
+            key={f.key}
+            onClick={() => setKindFilter(f.key)}
+            className={`rounded-full px-2.5 py-1 text-[11px] transition ${
+              kindFilter === f.key
+                ? 'bg-[var(--color-accent-soft)] font-medium text-[var(--color-accent)]'
+                : 'text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)]'
+            }`}
+          >
+            {f.label}
+          </button>
+        ))}
+      </div>
+
       <div className="flex-1 overflow-y-auto px-2 pb-2">
         {loading && (
           <div data-testid="sessions-skeleton" className="flex flex-col gap-1 px-1 pt-3">
@@ -302,7 +353,13 @@ export function SessionsSidebar({
             {items.map((s) => {
               const owner = agents.find((a) => a.id === s.agentId)
               const isActive = activeSessionId === s.id
-              const isStreaming = streamingSessionIds?.has(s.id) ?? false
+              const runtime = runtimeById?.get(s.id)
+              // Live either because THIS window is streaming the turn (instant, no
+              // poll lag) or because the executions poll reports it running (covers
+              // autonomous task/flow/schedule turns this window never streamed).
+              const isStreaming = (streamingSessionIds?.has(s.id) ?? false) || (runtime?.running ?? false)
+              const meta = kindMeta(s.kind)
+              const KindIcon = meta.icon
               const isSelected = sel.isSelected(s.id)
               return (
                 <div
@@ -370,15 +427,21 @@ export function SessionsSidebar({
                               {s.parentSessionId ? '↩ handoff' : '✦ spawn'}
                             </span>
                           )}
+                          {/* Finished task/flow runs carry a pass/fail pill. */}
+                          {!isStreaming && runtime?.lastStatus && (
+                            <StatusPill status={runtime.lastStatus} />
+                          )}
                         </span>
-                        {/* Meta row: status/time on the left, the session ID on a
-                            row of its own below the title (moved off the title line). */}
+                        {/* Meta row: kind badge + status/time on the left, the
+                            session ID on a row of its own below the title. */}
                         <span className="flex items-center gap-1.5 text-[10px]">
+                          <KindIcon size={11} className="shrink-0 opacity-60" />
+                          <span className="shrink-0 opacity-60">{meta.label}</span>
                           {isStreaming ? (
                             <span className="truncate font-medium text-[var(--color-success)]">yazıyor…</span>
                           ) : (
                             <span className="truncate opacity-60">
-                              {relativeTime(s.updatedAt)} · {s.messageCount} mesaj
+                              · {relativeTime(s.updatedAt)} · {s.messageCount} mesaj
                             </span>
                           )}
                           <span className="ml-auto shrink-0 font-mono opacity-50" title="Oturum ID">
@@ -471,7 +534,11 @@ export function SessionsSidebar({
         ))}
         {!loading && groups.length === 0 && query.trim().length < 2 && (
           <p className="px-3 py-2 text-xs text-[var(--color-text-dim)]">
-            {showArchived ? 'Arşivlenmiş oturum yok.' : 'Oturum yok. + ile başlat.'}
+            {showArchived
+              ? 'Arşivlenmiş oturum yok.'
+              : kindFilter
+                ? 'Bu türde oturum yok.'
+                : 'Oturum yok. + ile başlat.'}
           </p>
         )}
 

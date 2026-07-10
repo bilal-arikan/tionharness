@@ -17,6 +17,7 @@ import { useAppearance } from './useAppearance'
 import { useAppEvents } from './useAppEvents'
 import { useDeepLinks } from './useDeepLinks'
 import { useSessionsController } from './useSessionsController'
+import { useExecutionRuntime } from './useExecutionRuntime'
 import { useWorkspaces } from './useWorkspaces'
 import { useActivity } from './useActivity'
 import { useUnreadViews } from './useUnreadViews'
@@ -25,11 +26,11 @@ import { ChatView } from '@/features/chat/ChatView'
 import { useChatStream } from '@/features/chat/useChatStream'
 import { writeSessionDraft } from '@/features/chat/useSessionDraft'
 import { SessionsSidebar } from '@/features/sessions/SessionsSidebar'
+import { SessionsOverview } from '@/features/sessions/SessionsOverview'
 import { SessionDetailPanel } from '@/features/sessions/SessionDetailPanel'
 import { SessionContextModal } from '@/features/sessions/SessionContextModal'
 import { SessionDebugModal } from '@/features/sessions/SessionDebugModal'
 import { AgentsView } from '@/features/agents/AgentsView'
-import { ExecutionsPanel } from '@/features/executions/ExecutionsPanel'
 import { TaskBoard } from '@/features/tasks/TaskBoard'
 import { Schedules } from '@/features/schedules/Schedules'
 import { ArtifactsPanel } from '@/features/artifacts/ArtifactsPanel'
@@ -189,8 +190,15 @@ export default function App() {
     activeWorkspaceId,
     setError,
     setView,
-    setExecutionTarget: links.setExecutionTarget,
   })
+
+  // Live/last-run facts per session (GET /api/executions): the sidebar's pulse
+  // dot + status pill and the bulk overview table's rows. Same DB.ListSessions
+  // source as the session list, merely enriched with running/status.
+  const { executions, runtimeById } = useExecutionRuntime(activeWorkspaceId)
+  // Bulk sessions overview overlay (the searchable/sortable table of every
+  // session), opened from the sidebar's "Oturumlar" button.
+  const [overviewOpen, setOverviewOpen] = useState(false)
 
   // Clicking a file path: open images inline (new tab via the file server),
   // copy other paths to the clipboard as a best-effort action.
@@ -259,11 +267,11 @@ export default function App() {
   // streamingSessions set keeps a turn started in workspace A even after we
   // switch into B. Feeding raw `size > 0` would light B's chat dot for A's work
   // — the very cross-workspace leak this indicator is meant to avoid. Gate it on
-  // sessions that belong to the ACTIVE workspace (ctl.chatSessions is scoped);
+  // sessions that belong to the ACTIVE workspace (ctl.sessions is scoped);
   // any other same-workspace stream is still covered by useActivity's poll.
   const chatBusyLocal = useMemo(
-    () => ctl.chatSessions.some((s) => chat.streamingSessions.has(s.id)),
-    [ctl.chatSessions, chat.streamingSessions],
+    () => ctl.sessions.some((s) => chat.streamingSessions.has(s.id)),
+    [ctl.sessions, chat.streamingSessions],
   )
   const busyViews = useActivity(activeWorkspaceId, chatBusyLocal)
   // Per-view unread (unseen activity from the SSE feed) + unsaved-edit (dirty)
@@ -334,10 +342,10 @@ export default function App() {
   // badge. Sum of: unread chat sessions (active ws) + other workspaces with
   // activity + non-chat view badges (chat is already counted via sessions).
   const unreadTotal = useMemo(() => {
-    const sess = ctl.chatSessions.filter((s) => s.unread).length
+    const sess = ctl.sessions.filter((s) => s.unread).length
     const views = [...unreadViews].filter((v) => v !== 'chat').length
     return sess + unreadWs.size + views
-  }, [ctl.chatSessions, unreadViews, unreadWs])
+  }, [ctl.sessions, unreadViews, unreadWs])
   useUnreadBadge(unreadTotal)
 
   // URL ↔ state sync (canonical route + applyRoute for back/forward/deep links).
@@ -351,14 +359,12 @@ export default function App() {
     scheduleTarget: links.scheduleTarget,
     settingsCat: links.settingsCat,
     workspaceTab: links.workspaceTab,
-    executionTarget: links.executionTarget,
     pendingRouteRef: ctl.pendingRouteRef,
     switchWorkspace,
     selectSession: ctl.selectSession,
     focusAgent: ctl.focusAgent,
     setArtifactTarget: links.setArtifactTarget,
     setScheduleTarget: links.setScheduleTarget,
-    setExecutionTarget: links.setExecutionTarget,
     setSettingsCat: links.setSettingsCat,
     setWorkspaceTab: links.setWorkspaceTab,
   })
@@ -412,12 +418,14 @@ export default function App() {
             } max-md:fixed max-md:inset-y-0 max-md:left-0 max-md:z-40 max-md:shadow-xl max-md:transition-transform`}
           >
             <SessionsSidebar
-              sessions={ctl.chatSessions}
+              sessions={ctl.sessions}
               agents={ctl.agents}
               activeSessionId={ctl.activeSessionId}
               streamingSessionIds={chat.streamingSessions}
+              runtimeById={runtimeById}
               loading={ctl.bootstrapping}
               newDisabled={ctl.agents.length === 0}
+              onOpenOverview={() => setOverviewOpen(true)}
               onSelectSession={(id, messageId) => {
                 ctl.selectSession(id, messageId)
                 setMobileListOpen(false)
@@ -479,6 +487,7 @@ export default function App() {
             activeAgentId={ctl.activeAgentId}
             bootstrapping={ctl.bootstrapping}
             messagesLoading={ctl.messagesLoading}
+            readOnly={!ctl.activeSessionWritable}
             defaultAgentId={ctl.defaultAgentId}
             onNewSession={ctl.newSession}
             onSelectDefaultAgent={ctl.pickDefaultAgent}
@@ -513,18 +522,13 @@ export default function App() {
                 .catch((e) => setError((e as Error).message))
             }
             onError={setError}
-            onOpenExecution={links.openExecution}
-          />
-        )}
-        {view === 'executions' && (
-          <ExecutionsPanel
-            agents={ctl.agents}
-            onError={setError}
-            onOpenFile={openFile}
-            onOpenArtifact={links.openArtifact}
-            onOpenFlowRun={links.openFlowRun}
-            focusId={links.executionTarget}
-            onSelectExecution={links.setExecutionTarget}
+            onOpenExecution={(sid) => {
+              // The agent activity rail links each run to its transcript; the
+              // Executions screen is gone, so every kind opens in the unified
+              // chat transcript view instead.
+              setView('chat')
+              ctl.selectSession(sid)
+            }}
           />
         )}
         {view === 'network' && (
@@ -618,6 +622,21 @@ export default function App() {
             />
           </div>
         </>
+      )}
+
+      {/* Bulk sessions overview: a searchable/sortable table of every session in
+          the workspace, opened from the chat sidebar. Selecting a row jumps to
+          that transcript in the chat view. */}
+      {overviewOpen && (
+        <SessionsOverview
+          items={executions}
+          agents={ctl.agents}
+          onSelect={(sid) => {
+            setView('chat')
+            ctl.selectSession(sid)
+          }}
+          onClose={() => setOverviewOpen(false)}
+        />
       )}
 
       {/* Bottom navigation for portrait phones (hidden on md+ where the rail

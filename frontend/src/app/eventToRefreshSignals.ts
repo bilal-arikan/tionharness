@@ -15,7 +15,7 @@ import { bumpSignal } from '@/shared/lib/refreshSignals'
 export const SIGNAL_BOARD = 'board' // task CRUD + board column changes
 export const SIGNAL_NETWORK = 'network' // collaboration graph
 export const SIGNAL_ACTIVITY = 'activity' // useActivity's per-view busy flags
-export const SIGNAL_EXECUTIONS = 'executions' // ExecutionsPanel
+export const SIGNAL_EXECUTIONS = 'executions' // GET /api/executions consumers (session runtime map)
 export const SIGNAL_AGENTS = 'agents' // AgentsView
 export const SIGNAL_FLOWS = 'flows' // FlowsPanel
 export const SIGNAL_SCHEDULES = 'schedules' // SchedulesPanel

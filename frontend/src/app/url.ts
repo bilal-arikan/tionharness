@@ -5,16 +5,32 @@
 // Scheme: #/w/{workspaceId}/{view}[/{entityId}]
 //   - workspaceId scopes the request to an isolated backend database.
 //   - view is one of the NavRail views.
-//   - entityId is meaningful per view: chat→sessionId, executions→sessionId,
-//     agents→agentId, artifacts→artifactId, schedules→scheduleId,
-//     settings→category key. Other views ignore it.
+//   - entityId is meaningful per view: chat→sessionId, agents→agentId,
+//     artifacts→artifactId, schedules→scheduleId, settings→category key.
+//     Other views ignore it.
 import type { View } from './NavRail'
 
 const VIEWS: View[] = [
-  'chat', 'executions', 'agents', 'network', 'board', 'schedules',
+  'chat', 'agents', 'network', 'board', 'schedules',
   'flows', 'artifacts', 'skills', 'tools', 'market', 'budget',
   'logs', 'workspace', 'settings',
 ]
+
+// Retired view slugs kept alive as redirects so bookmarked / notification URLs
+// still land somewhere sensible. 'executions' was the standalone Activity screen,
+// folded into the unified chat transcript view; its entity id was already a
+// sessionId, so the mapping is a pure rename.
+const LEGACY_VIEWS: Record<string, View> = {
+  executions: 'chat',
+}
+
+// resolveView maps a raw hash segment to a live View, honouring legacy slugs.
+// Unknown segments fall back to 'chat'.
+function resolveView(seg: string | undefined): View {
+  if (!seg) return 'chat'
+  if ((VIEWS as string[]).includes(seg)) return seg as View
+  return LEGACY_VIEWS[seg] ?? 'chat'
+}
 
 export interface Route {
   workspaceId: string | null
@@ -35,12 +51,14 @@ export function parseRoute(hash: string): Route {
     rest = parts.slice(2)
   }
 
-  const view: View = rest[0] && (VIEWS as string[]).includes(rest[0]) ? (rest[0] as View) : 'chat'
+  const view = resolveView(rest[0])
   const id = rest[1] ?? null
   return { workspaceId, view, id }
 }
 
-// isView reports whether a string is a known NavRail view.
+// isView reports whether a string is a known NavRail view. Legacy slugs are NOT
+// views — routeFromEvent maps them separately so a stale backend event target
+// (target.view === 'executions') still routes instead of being dropped.
 export function isView(v: string | null | undefined): v is View {
   return !!v && (VIEWS as string[]).includes(v)
 }
@@ -55,10 +73,13 @@ export function routeFromEvent(e: {
   target?: Record<string, string>
 }): Route | null {
   const t = e.target
-  if (!t || !isView(t.view)) return null
-  const view = t.view
+  if (!t?.view) return null
+  // A legacy target ('executions', emitted by older builds and by events already
+  // persisted in a log) still resolves — to the chat transcript it now lives in.
+  if (!isView(t.view) && !(t.view in LEGACY_VIEWS)) return null
+  const view = resolveView(t.view)
   let id: string | null = null
-  if (view === 'chat' || view === 'executions') id = t.sessionId ?? null
+  if (view === 'chat') id = t.sessionId ?? null
   else if (view === 'agents') id = t.agentId ?? null
   return { workspaceId: e.workspaceId ?? null, view, id }
 }
@@ -84,14 +105,11 @@ export function routeIdForView(
     scheduleId: string | null
     settingsCat: string | null
     workspaceTab: string | null
-    executionId: string | null
   },
 ): string | null {
   switch (view) {
     case 'chat':
       return state.sessionId
-    case 'executions':
-      return state.executionId
     case 'agents':
       return state.agentId
     case 'artifacts':

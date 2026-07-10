@@ -23,25 +23,15 @@ export function useDeepLinks(setView: (v: View) => void) {
   const [artifactTarget, setArtifactTarget] = useState<string | null>(
     INITIAL_ROUTE.view === 'artifacts' ? INITIAL_ROUTE.id : null,
   )
-  // Flow deep-link target: set when an Activity flow execution links to its flow,
-  // opening the Flows screen on that flow's run history.
+  // Flow deep-link target: set when a flow transcript links to its flow, opening
+  // the Flows screen on that flow's run history.
   const [flowTarget, setFlowTarget] = useState<string | null>(null)
   const openFlowRun = useCallback((flowId: string) => {
     setFlowTarget(flowId)
     setView('flows')
   }, [setView])
-  // Executions deep-link target (sessionId): set when a schedule/flow notification
-  // is clicked, opening the Activity feed with that run pre-selected.
-  const [executionTarget, setExecutionTarget] = useState<string | null>(
-    INITIAL_ROUTE.view === 'executions' ? INITIAL_ROUTE.id : null,
-  )
-  // Open a specific run on the Activity screen (used by the agent activity rail).
-  const openExecution = useCallback((sessionId: string) => {
-    setExecutionTarget(sessionId)
-    setView('executions')
-  }, [setView])
 
-  // Clicking an artifact card/chip anywhere (chat, activity): preview it in a
+  // Clicking an artifact card/chip anywhere: preview it in a
   // modal overlay — no navigation to the Artifacts screen. The modal offers a
   // shortcut to open the full screen for editing.
   const [previewArtifactId, setPreviewArtifactId] = useState<string | null>(null)
@@ -69,7 +59,6 @@ export function useDeepLinks(setView: (v: View) => void) {
     workspaceTab, setWorkspaceTab,
     artifactTarget, setArtifactTarget,
     flowTarget, openFlowRun,
-    executionTarget, setExecutionTarget, openExecution,
     previewArtifactId, setPreviewArtifactId, openArtifact, openArtifactFull,
     openSecrets,
   }
