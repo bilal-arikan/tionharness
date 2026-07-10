@@ -642,7 +642,7 @@ func TestEnsureDefaultsRefreshesPristine(t *testing.T) {
 		t.Fatal(err)
 	}
 	m := loadShippedManifest(dir)
-	m["tionswarm-guide/SKILL.md"] = sha256Hex(oldBody)
+	m.Files["tionswarm-guide/SKILL.md"] = sha256Hex(oldBody)
 	if err := saveShippedManifest(dir, m); err != nil {
 		t.Fatal(err)
 	}
@@ -656,7 +656,7 @@ func TestEnsureDefaultsRefreshesPristine(t *testing.T) {
 		t.Errorf("pristine prior-shipped default was NOT refreshed to embedded content")
 	}
 	// The manifest must now record the fresh embedded hash.
-	if loadShippedManifest(dir)["tionswarm-guide/SKILL.md"] != sha256Hex(embedded) {
+	if loadShippedManifest(dir).Files["tionswarm-guide/SKILL.md"] != sha256Hex(embedded) {
 		t.Errorf("manifest not updated to the refreshed hash")
 	}
 }

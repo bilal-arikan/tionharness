@@ -96,8 +96,12 @@ pad, and never cut working content to hit a line target.
 - **Default skills are auto-discovered.** `internal/skills/defaults.go` embeds the
   whole `defaults/` tree (`//go:embed defaults`) and derives slugs from the
   subdirectories — so **adding a new default skill needs no Go change**, only a new
-  `<slug>/SKILL.md` folder. Existing installs keep their copy (`EnsureDefaults`
-  never overwrites); a fresh global dir gets the new skill seeded on startup.
+  `<slug>/SKILL.md` folder. Existing installs are refreshed VERSION-AWARE
+  (`EnsureDefaults` + `.shipped-versions.json`): a pristine prior-shipped copy is
+  updated in place, and a pristine BODY under user-tuned frontmatter
+  (access/group/visibility) gets the new body with the frontmatter preserved;
+  real user edits are never overwritten. A fresh global dir gets the new skill
+  seeded on startup.
 - **Doc-sync check (honest):** a `_Docs/05-ILERLEME.md` entry is for *behavioral*
   changes (a shipped feature/fix). A pure doc-cleanup edit — rewording a skill body,
   splitting a paragraph — changed no behavior, so it does **not** warrant a changelog
