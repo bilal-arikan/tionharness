@@ -1,0 +1,35 @@
+[Unit]
+Description=TionSwarm multi-agent runtime (single binary, embedded UI)
+Documentation=file:///home/user/projects/tionharness/deploy/README.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=hermes
+Group=hermes
+WorkingDirectory=/home/user/projects/tionharness
+
+# HOME must point at hermes so the claude-cli provider inherits the existing
+# OAuth subscription login at ~/.claude/.credentials.json (keyless).
+Environment=HOME=/home/hermes
+# PATH must include the npm/nvm bin dirs so exec.LookPath("claude") resolves the
+# CLI (registry.go auto-detects it on PATH).
+Environment=PATH=/home/hermes/.npm-global/bin:/home/hermes/.nvm/versions/node/v22.22.3/bin:/usr/local/bin:/usr/bin:/bin
+# Bind to the Tailscale IP ONLY. TionSwarm has NO auth + CORS wildcard, so it must
+# never listen on a public interface (0.0.0.0). Reachable only inside the tailnet.
+Environment=TIONSWARM_ADDR=<vps-host>:8099
+Environment=TIONSWARM_DATA_DIR=/home/user/projects/tionharness/data
+# Shell tool gate (built-in Bash/PowerShell tools). Set to 0 to disable.
+Environment=TIONSWARM_ENABLE_SHELL=1
+
+ExecStart=/home/user/projects/tionharness/tionswarm
+# The Tailscale IP may not be assigned the instant this unit starts; Restart keeps
+# retrying the bind until tailscaled is up.
+Restart=always
+RestartSec=3
+# Autonomous agents spawn many subprocesses (claude-cli, MCP servers, shells).
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target
