@@ -6,7 +6,8 @@ import { AgentAvatar } from '@/shared/components/agents/AgentAvatar'
 import { relativeTime, bucketOf, BUCKET_LABELS, BUCKET_ORDER, type Bucket } from '@/shared/lib/time'
 import { useOutsideClick } from '@/shared/hooks/useOutsideClick'
 import { useMultiSelect } from '@/shared/hooks/useMultiSelect'
-import { SelectionBar, SelectionBarButton } from '@/shared/components'
+import { SelectionBar, SelectionBarButton, Skeleton } from '@/shared/components'
+import { useDelayedFlag } from '@/shared/hooks/useDelayedFlag'
 
 interface Props {
   sessions: Session[]
@@ -16,6 +17,9 @@ interface Props {
   // pulsing indicator so in-progress conversations are visible from the list.
   // A set because several turns can stream concurrently (detached server-side).
   streamingSessionIds?: ReadonlySet<string>
+  // True while the workspace's session list is still being fetched — the rows are
+  // replaced by skeletons so the column never claims "no sessions" prematurely.
+  loading?: boolean
   newDisabled: boolean
   // messageId is set when the user clicks a message-content search result, so the
   // transcript can scroll to that exact turn.
@@ -42,6 +46,7 @@ export function SessionsSidebar({
   agents,
   activeSessionId,
   streamingSessionIds,
+  loading = false,
   newDisabled,
   onSelectSession,
   onNewSession,
@@ -201,6 +206,11 @@ export function SessionsSidebar({
     setRenamingId(null)
   }
 
+  // Delayed so a sub-100ms local load never flashes placeholder rows. While
+  // `loading` holds but the delay has not elapsed, the list body renders nothing
+  // — the "no sessions" copy stays suppressed either way.
+  const showSkeleton = useDelayedFlag(loading)
+
   return (
     <aside
       ref={rootRef}
@@ -278,7 +288,13 @@ export function SessionsSidebar({
       </div>
 
       <div className="flex-1 overflow-y-auto px-2 pb-2">
-        {groups.map(({ bucket, items }) => (
+        {loading && (
+          <div data-testid="sessions-skeleton" className="flex flex-col gap-1 px-1 pt-3">
+            {showSkeleton &&
+              Array.from({ length: 5 }, (_, i) => <Skeleton key={i} className="h-10 w-full" />)}
+          </div>
+        )}
+        {!loading && groups.map(({ bucket, items }) => (
           <div key={bucket} className="mb-1">
             <div className="px-3 pt-3 pb-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-dim)] opacity-70">
               {BUCKET_LABELS[bucket]}
@@ -453,7 +469,7 @@ export function SessionsSidebar({
             })}
           </div>
         ))}
-        {groups.length === 0 && query.trim().length < 2 && (
+        {!loading && groups.length === 0 && query.trim().length < 2 && (
           <p className="px-3 py-2 text-xs text-[var(--color-text-dim)]">
             {showArchived ? 'Arşivlenmiş oturum yok.' : 'Oturum yok. + ile başlat.'}
           </p>

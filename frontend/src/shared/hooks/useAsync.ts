@@ -32,7 +32,9 @@ export function useAsync<T>(
 ): UseAsyncState<T> {
   const { pollMs, enabled = true } = opts
   const [data, setData] = useState<T | null>(null)
-  const [loading, setLoading] = useState(false)
+  // Starts true whenever a fetch is going to run, so the first paint renders a
+  // loading state instead of momentarily looking like an empty result.
+  const [loading, setLoading] = useState(enabled)
   const [error, setError] = useState<string | null>(null)
 
   // Alive across the component's lifetime; flipped false on unmount so late

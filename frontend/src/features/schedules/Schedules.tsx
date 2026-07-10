@@ -4,7 +4,7 @@ import { api } from '@/api'
 import type { Agent, Flow, Schedule, AutomationTriggerKind } from '@/types'
 import { AgentPicker } from '@/shared/components/agents/AgentPicker'
 import { AgentAvatar } from '@/shared/components/agents/AgentAvatar'
-import { Button, TagEditor, PaneHeader } from '@/shared/components'
+import { Button, TagEditor, PaneHeader, LoadingState } from '@/shared/components'
 import { normalizeAvatar } from '@/shared/lib/avatar'
 import { Automations } from './Automations'
 
@@ -195,8 +195,16 @@ export function Schedules({ agents, focusId, onError }: Props) {
   const [tab, setTab] = useState<'schedules' | AutomationTriggerKind>('schedules')
   const [autoCounts, setAutoCounts] = useState({ tag: 0, board: 0 })
 
+  // True until the first schedule list lands — the list area shows a loading
+  // state instead of the "no schedules yet" copy.
+  const [loading, setLoading] = useState(true)
+
   const reload = () =>
-    api.listSchedules().then(setSchedules).catch((e) => onError(e.message))
+    api
+      .listSchedules()
+      .then(setSchedules)
+      .catch((e) => onError(e.message))
+      .finally(() => setLoading(false))
 
   useEffect(() => {
     reload()
@@ -552,7 +560,8 @@ export function Schedules({ agents, focusId, onError }: Props) {
 
       {/* Schedule list */}
       <div className="space-y-2">
-        {schedules.length === 0 && (
+        {loading && <LoadingState label="Zamanlamalar yükleniyor…" />}
+        {!loading && schedules.length === 0 && (
           <p className="text-sm text-[var(--color-text-dim)]">Henüz zamanlama yok.</p>
         )}
         {schedules.map((s) =>

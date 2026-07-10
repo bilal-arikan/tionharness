@@ -32,6 +32,13 @@ export function useSessionsController({
   const [messages, setMessages] = useState<Message[]>([])
   const [activeAgentId, setActiveAgentId] = useState<string | null>(null)
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null)
+  // True from the moment a workspace becomes active until its agents+sessions
+  // have landed. While it holds, the chat screen shows a skeleton instead of the
+  // "start a new chat" empty state, which would otherwise flash for a returning
+  // user whose session list simply hasn't arrived yet.
+  const [bootstrapping, setBootstrapping] = useState(true)
+  // True while the open session's transcript is being fetched.
+  const [messagesLoading, setMessagesLoading] = useState(false)
   // Bumped to remount the Composer so it re-reads its persisted draft — used to
   // restore a rewound prompt back into the input box.
   const [composerKey, setComposerKey] = useState(0)
@@ -76,6 +83,7 @@ export function useSessionsController({
     setMessages([])
     setActiveAgentId(null)
     setActiveSessionId(null)
+    setBootstrapping(true)
     let cancelled = false
     Promise.all([api.listAgents(), api.listSessions()])
       .then(([ag, ss]) => {
@@ -111,6 +119,9 @@ export function useSessionsController({
       .catch((e) => {
         if (!cancelled) setError((e as Error).message)
       })
+      .finally(() => {
+        if (!cancelled) setBootstrapping(false)
+      })
     return () => {
       cancelled = true
     }
@@ -125,19 +136,34 @@ export function useSessionsController({
     }
   }, [agents, defaultAgentId])
 
-  // When the active session changes, load its messages. If a turn is still
+  // Bumped on every transcript load so only the newest one is allowed to commit:
+  // a fast A → B → A switch would otherwise let B's late response overwrite A's
+  // transcript, leaving the screen showing the wrong conversation.
+  const msgSeqRef = useRef(0)
+
+  // When the active session changes, load its messages. The previous transcript
+  // is cleared up-front (rather than lingering until the fetch resolves) and the
+  // view shows a skeleton while `messagesLoading` holds. If a turn is still
   // streaming (a mid-turn reload, or switching to a running session), restore the
   // in-progress assistant bubble (agent + steps-so-far) from the inflight snapshot
   // so it isn't blank until the turn ends; the session-step bus then grows it live.
   useEffect(() => {
+    const seq = ++msgSeqRef.current
+    // Clearing up-front is the point: the outgoing session's transcript must not
+    // linger on screen while the next one loads. This is a deliberate cascading
+    // render, so the rule is disabled here rather than worked around.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setMessages([])
     if (!activeSessionId) {
-      setMessages([])
+      setMessagesLoading(false)
       return
     }
     const sid = activeSessionId
+    setMessagesLoading(true)
     api
       .listMessages(sid)
       .then((msgs) => {
+        if (msgSeqRef.current !== seq) return
         setMessages(msgs)
         // chat is bound post-render by App (chatRef.current = chat), so the
         // binding is initialised by the time this callback fires (same pattern
@@ -145,11 +171,19 @@ export function useSessionsController({
         // recoverInflight restores the NON-owning path (server snapshot + bus);
         // reseedLive restores the bubble THIS window is actively streaming (which
         // listMessages above just wiped). The two are mutually exclusive per session.
+        // Both run AFTER the commit above so the live bubble is not wiped by it.
         void chatRef.current?.recoverInflight(sid, msgs)
         chatRef.current?.reseedLive(sid, msgs)
       })
-      .catch(() => {})
-  }, [activeSessionId])
+      .catch((e) => {
+        if (msgSeqRef.current !== seq) return
+        setError((e as Error).message)
+      })
+      .finally(() => {
+        if (msgSeqRef.current !== seq) return
+        setMessagesLoading(false)
+      })
+  }, [activeSessionId, setError])
 
   // Artifacts offered by the composer's "#" picker so the user can include an
   // artifact's content in the next turn. ALL workspace artifacts are referencable
@@ -445,6 +479,7 @@ export function useSessionsController({
     sessions, setSessions,
     messages, setMessages,
     activeAgentId, activeSessionId,
+    bootstrapping, messagesLoading,
     chatSessions,
     sessionArtifacts,
     defaultAgentId,

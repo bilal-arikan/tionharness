@@ -8,7 +8,7 @@ import { AgentIdentity } from '@/shared/components/agents/AgentIdentity'
 import { normalizeAvatar } from '@/shared/lib/avatar'
 import { TaskFormModal } from './TaskFormModal'
 import { BoardColumnEditor } from './BoardColumnEditor'
-import { Button, SelectionBar, SelectionBarButton, PaneHeader } from '@/shared/components'
+import { Button, SelectionBar, SelectionBarButton, PaneHeader, LoadingState } from '@/shared/components'
 import { useMultiSelect } from '@/shared/hooks/useMultiSelect'
 
 // Fallback columns used until workspace settings are loaded.
@@ -81,9 +81,16 @@ export function TaskBoard({ agents, onError }: Props) {
   const [editorOpen, setEditorOpen] = useState(false)
   // When true, cards sort by topological dependency order (no-blocker tasks first).
   const [depSort, setDepSort] = useState(false)
+  // True until the first task list lands, so the board shows a loading state
+  // instead of empty columns. Later reloads (SSE ticks) keep the board on screen.
+  const [loading, setLoading] = useState(true)
 
   const reload = () =>
-    api.listTasks().then(setTasks).catch((e) => onError(e.message))
+    api
+      .listTasks()
+      .then(setTasks)
+      .catch((e) => onError(e.message))
+      .finally(() => setLoading(false))
 
   const loadColumns = () =>
     api
@@ -319,8 +326,10 @@ export function TaskBoard({ agents, onError }: Props) {
           }
         />
 
-        {/* Board */}
-        <div className="flex flex-1 gap-3 overflow-x-auto p-4">
+        {/* Board. Hidden (not unmounted) during the first load so column widths and
+            scroll position are already settled when the cards appear. */}
+        {loading && <LoadingState label="Görevler yükleniyor…" className="flex-1" />}
+        <div className={`flex flex-1 gap-3 overflow-x-auto p-4 ${loading ? 'hidden' : ''}`}>
           {columns.map((col) => {
             const colTasksRaw = tasks.filter((t) => t.boardState === col.key)
             const colTasks = depSort && levels

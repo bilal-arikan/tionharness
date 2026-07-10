@@ -176,7 +176,11 @@ Yeni bağımlılıklar: `react-markdown`, `remark-gfm`, `highlight.js`.
   → öğe etiketleri veya "N öğe"; ikincil/filtre dizileri
   `options`/`tags`/`exclude`/`args`/… atlanır); `move_task` → `→ <sütun>`;
   anlamlı bir şey çıkmazsa **boş** kalır (eskiden "names"/"questions" gibi
-  anahtar adları yazıyordu). **`use_skill`
+  anahtar adları yazıyordu). **Tool-özel şablonlar** (`RICH_TEMPLATES`, generic
+  mantıktan önce, saf frontend — LLM/token yok): `send_message`/`send_to_worker`/
+  `spawn_worker`/`spawn_session` → `aktör → yük`; `create_task`/`update_task` →
+  `başlık [sütun]`; `create_schedule`/`update_schedule` → `prompt · cron`;
+  `create_hook` → `event → komut`; `create_mcp_server` → `ad → komut`. **`use_skill`
   (2026-07-02):** başlık özeti slug **değerini** gösterir (`slug`/`skill`
   alanları); açınca gövde `<pre>` yerine `Markdown` ile biçimli
   render olur (`# Skill: <slug>` başlığı + md gövde), gereksiz "Girdi" (`{slug}`)
@@ -435,6 +439,40 @@ oturum gerçek konuşma sayılır, korunur. (Sidebar'daki yenile butonu silmeyi 
   **kullanıcı** mesajı.createdAt; yalnız önceki mesaj kullanıcıysa, enjekte özet/ardışık
   asistan turları yanıltmasın). Akış sürerken son balonda her saniye tıklayan **`LiveTimer`**;
   `formatDuration` ortak biçimleyici.
+
+### Loading & iskelet durumları (2026-07-10)
+
+Açılışta ve sohbet geçişlerinde **yanlış içerik** (boş-durum ekranı ya da önceki
+sohbetin transkripti) gösterilmemesi için iki ayrı yükleme bayrağı vardır. İkisi de
+`useSessionsController`'da tutulur ve `ChatView`'a prop olarak geçer:
+
+- **`bootstrapping`** — workspace aktifleştiği andan `listAgents()`+`listSessions()`
+  çözülene kadar `true`. Bu süre boyunca `ChatEmptyState` **hiç** render edilmez:
+  dönen kullanıcı splash'i atladığı için, oturum listesi gelmeden önce bir an
+  "Yeni sohbete başla" görünüyordu. Yükleme bitince (`!bootstrapping`) ve gerçekten
+  sıfır oturum varsa boş-durum **yine gösterilir** — bastırma kalıcı değildir.
+- **`messagesLoading`** — açık oturumun transkripti çekilirken `true`. Effect'in
+  başında `setMessages([])` çağrılır, böylece eski sohbet beklerken ekranda kalmaz.
+
+**Delayed-flag sözleşmesi.** Yerel backend `listMessages`'ı çoğu zaman <50ms
+döndürür; gecikmesiz iskelet tek-frame'lik titreme yaratır. Bu yüzden her iki bayrak
+da `shared/hooks/useDelayedFlag.ts` (≈140ms) üzerinden geçirilir: bayrak `true`
+olduktan `delayMs` sonra iskelet açılır, `false` olunca **anında** kapanır. Hook'lar
+erken-return'lerden **önce** çağrılır (`react-hooks/rules-of-hooks`).
+
+**In-flight guard.** Transkript yüklemesi `msgSeqRef` sayacıyla korunur: yalnız en
+yeni çağrı `setMessages` commit eder. Hızlı `A → B → A` geçişinde B'nin geç gelen
+cevabı A'nın transkriptini ezmez. `recoverInflight`/`reseedLive` commit'ten **sonra**
+ve yalnız güncel seq'te çalışır; böylece canlı (streaming) balon silinmez. Yükleme
+hatası artık sessizce yutulmaz (`.catch(() => {})` yerine `setError`).
+
+**Ortak primitive'ler.** `shared/components/Skeleton.tsx` → `Skeleton` (pulse bar) +
+`LoadingState` (ortalanmış spinner + etiket). `features/chat/ChatSkeleton.tsx`
+transkript iskeletidir (`data-testid="chat-skeleton"`). `SessionsSidebar` yüklenirken
+iskelet satırlar, lazy panellerin `Suspense` fallback'leri ise düz metin yerine
+`LoadingState` gösterir. `shared/hooks/useAsync.ts` `loading` bayrağı artık `enabled`
+ile başlar — ilk paint "boş" değil "yükleniyor" olur; `TaskBoard`, `Schedules`,
+`Automations`, `FlowsPanel`, `MarketPanel`, `ArtifactsPanel` bu desene taşındı.
 
 ## Doğrulama
 

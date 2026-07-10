@@ -7,6 +7,7 @@ import type { Agent, Artifact, Message } from '@/types'
 import { MessageList } from './MessageList'
 import { Composer } from './Composer'
 import { ChatEmptyState } from './ChatEmptyState'
+import { ChatSkeleton } from './ChatSkeleton'
 import { RewindDialog } from './RewindDialog'
 import { AskPrompt } from './AskPrompt'
 import { PermissionPrompt } from './PermissionPrompt'
@@ -15,6 +16,7 @@ import { PendingTray } from './PendingTray'
 import { WakeWaitBanner } from './WakeWaitBanner'
 import { TodoPanel } from './TodoPanel'
 import { latestTodos } from './todos'
+import { useDelayedFlag } from '@/shared/hooks/useDelayedFlag'
 import type { useChatStream } from './useChatStream'
 
 export interface ChatViewProps {
@@ -24,6 +26,12 @@ export interface ChatViewProps {
   artifacts: Artifact[]
   activeSessionId: string | null
   activeAgentId: string | null
+  // True while the workspace's agents+sessions are still loading. The empty state
+  // is suppressed for its whole duration (a session may still be selected once the
+  // list lands); the skeleton itself appears only if the load is slow enough.
+  bootstrapping: boolean
+  // True while the open session's transcript is being fetched.
+  messagesLoading: boolean
   // Empty-state ("Yeni sohbete başla") wiring, used when no session is active.
   defaultAgentId: string | null
   onNewSession: () => void
@@ -50,6 +58,8 @@ export function ChatView({
   artifacts,
   activeSessionId,
   activeAgentId,
+  bootstrapping,
+  messagesLoading,
   defaultAgentId,
   onNewSession,
   onSelectDefaultAgent,
@@ -88,8 +98,21 @@ export function ChatView({
   // transcript). Pinned above the composer and updated as the agent ticks items.
   const currentTodos = useMemo(() => latestTodos(messages), [messages])
 
-  // No active session → show the "start a new chat" screen instead of a bare,
-  // disabled composer with no agent selected.
+  // Both flags gate a skeleton, so they go through the same delay: a local
+  // backend answers in well under it, and a one-frame skeleton would only flicker.
+  // Hooks must run before any early return (rules-of-hooks).
+  const showBootSkeleton = useDelayedFlag(bootstrapping)
+  const showTranscriptSkeleton = useDelayedFlag(messagesLoading && messages.length === 0)
+
+  // Still bootstrapping → never show the empty state: the session list may well
+  // contain a chat to open, and flashing "start a new chat" first is the bug this
+  // guards against. Once the load is slow enough, the skeleton takes over.
+  if (bootstrapping) {
+    return showBootSkeleton ? <ChatSkeleton /> : <div className="flex min-h-0 flex-1" />
+  }
+
+  // No active session (and the workspace really has loaded) → show the "start a
+  // new chat" screen instead of a bare, disabled composer with no agent selected.
   if (!activeSessionId) {
     return (
       <ChatEmptyState
@@ -104,24 +127,30 @@ export function ChatView({
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col">
-      <MessageList
-        messages={messages}
-        sessionId={activeSessionId ?? undefined}
-        pending={chat.activePending}
-        agents={agents}
-        artifacts={artifacts}
-        streaming={chat.activeStreaming}
-        highlightMessageId={scrollToMsgId}
-        onHighlightConsumed={onHighlightConsumed}
-        onOpenFile={onOpenFile}
-        onOpenArtifact={onOpenArtifact}
-        onDeleteMessage={onDeleteMessage}
-        onRewind={onRewind}
-        onRetry={chat.retryMessage}
-        onFeedback={onFeedback}
-        onOpenAgent={onOpenAgent}
-        bottomInset={bottomInset}
-      />
+      {/* The transcript is swapped for a skeleton while it loads; the bottom stack
+          below stays mounted so the composer does not jump. */}
+      {showTranscriptSkeleton ? (
+        <ChatSkeleton />
+      ) : (
+        <MessageList
+          messages={messages}
+          sessionId={activeSessionId ?? undefined}
+          pending={chat.activePending}
+          agents={agents}
+          artifacts={artifacts}
+          streaming={chat.activeStreaming}
+          highlightMessageId={scrollToMsgId}
+          onHighlightConsumed={onHighlightConsumed}
+          onOpenFile={onOpenFile}
+          onOpenArtifact={onOpenArtifact}
+          onDeleteMessage={onDeleteMessage}
+          onRewind={onRewind}
+          onRetry={chat.retryMessage}
+          onFeedback={onFeedback}
+          onOpenAgent={onOpenAgent}
+          bottomInset={bottomInset}
+        />
+      )}
       {/* Floating bottom stack: overlays the transcript so bubbles scroll UNDER
           the composer's transparent→black gradient. pointer-events pass through
           the transparent gaps to the transcript; each child re-enables them. */}

@@ -4,7 +4,7 @@ import type { Pack, PackKind, Secret } from '@/types'
 import { api } from '@/api'
 import type { PriceTable } from '@/api/providers'
 import type { PreviewItem } from '@/api/ingest'
-import { ListPane } from '@/shared/components'
+import { ListPane, LoadingState } from '@/shared/components'
 import { useCollapsibleList } from '@/shared/hooks/useCollapsibleList'
 import { SkillImportDialog } from '@/features/skills/SkillImportDialog'
 import { RegistryManager } from './RegistryManager'
@@ -51,11 +51,17 @@ export function MarketPanel({ onError, onManageSecrets, onInstalled }: Props) {
   // provider preview's per-model cost hints.
   const [prices, setPrices] = useState<PriceTable>({})
 
+  // True until the first catalog fetch settles — the grid area shows a loading
+  // state instead of an empty catalog.
+  const [loading, setLoading] = useState(true)
+
   const load = useCallback(async () => {
     try {
       setPacks(await api.listMarket())
     } catch (e) {
       onError(e instanceof Error ? e.message : 'Market yüklenemedi')
+    } finally {
+      setLoading(false)
     }
   }, [onError])
 
@@ -338,6 +344,8 @@ export function MarketPanel({ onError, onManageSecrets, onInstalled }: Props) {
           </div>
         </header>
 
+        {loading && <LoadingState label="Market yükleniyor…" />}
+        {!loading && (
         <MarketGrid
           visible={visible}
           tab={tab}
@@ -349,6 +357,7 @@ export function MarketPanel({ onError, onManageSecrets, onInstalled }: Props) {
           remoteResults={remoteResults}
           remoteWarnings={remoteWarnings}
         />
+        )}
       </div>
 
       {/* Detail popup (centered modal) */}

@@ -113,8 +113,16 @@ export function FlowsPanel({ agents, onError, openFlowId }: Props) {
   // True while a re-run kicked off from the Koşular tab (RunView) is in flight.
   const [rerunning, setRerunning] = useState(false)
 
+  // True until the first flow list lands — the list column shows a loading state
+  // rather than the "no flows yet" copy.
+  const [flowsLoading, setFlowsLoading] = useState(true)
+
   const loadFlows = useCallback(() => {
-    api.listFlows().then(setFlows).catch((e) => onError(e.message))
+    api
+      .listFlows()
+      .then(setFlows)
+      .catch((e) => onError(e.message))
+      .finally(() => setFlowsLoading(false))
   }, [onError])
 
   useEffect(() => loadFlows(), [loadFlows])
@@ -359,6 +367,7 @@ export function FlowsPanel({ agents, onError, openFlowId }: Props) {
         q={q}
         setQ={setQ}
         flows={flows}
+        flowsLoading={flowsLoading}
         runs={runs}
         templateId={templateId}
         setTemplateId={setTemplateId}

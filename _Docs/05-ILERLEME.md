@@ -2,6 +2,21 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-07-10**
 
+## Sohbet & ekran geçişlerinde loading göstergesi ⏳ (2026-07-10, TSK41)
+
+- **Sorun:** Açılışta bir an "Yeni sohbete başla" boş-durumu, sohbet değişince eski
+  transkriptin ekranda kalması, panellerde ilk paint'te "boş" görünmesi.
+- **Çözüm:** `useSessionsController`'a `bootstrapping` + `messagesLoading` bayrakları,
+  transkript yüklemesine `msgSeqRef` in-flight guard'ı (hızlı A→B→A geçişinde geç gelen
+  cevap ezmiyor) ve sessiz `.catch(() => {})` yerine `setError`. Yeni primitive'ler:
+  `shared/components/Skeleton.tsx` (`Skeleton`/`LoadingState`), `shared/hooks/useDelayedFlag.ts`
+  (≈140ms, iskelet titremesini önler), `features/chat/ChatSkeleton.tsx`. `useAsync`'te
+  `loading` artık `enabled` ile başlıyor; `TaskBoard`/`Schedules`/`Automations`/`FlowsPanel`/
+  `MarketPanel`/`ArtifactsPanel` bu desene taşındı. Lazy panel `Suspense` fallback'leri ve
+  `SessionsSidebar` iskelete geçti. Detay → `07-CHAT-UX.md` "Loading & iskelet durumları".
+- **Doğrulama:** `go build ./...`, `go vet ./...`, `go test ./internal/...`, `npx tsc -b`,
+  `npm run build` temiz. Canlı UI doğrulaması review aşamasında.
+
 ## Token-optimizer UI callout + hook matcher düzeltmesi + API GET no-store ✅ (2026-07-10)
 
 Token-optimizer capability'sinin (rtk/sqz) devamı — UI tarafı + bir gerçek matcher bug'ı

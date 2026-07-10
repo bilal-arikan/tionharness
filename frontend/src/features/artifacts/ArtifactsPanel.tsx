@@ -16,7 +16,7 @@ import { copyToClipboard } from '@/shared/lib/clipboard'
 import { useMultiSelect } from '@/shared/hooks/useMultiSelect'
 import { useGroupedList } from '@/shared/hooks/useGroupedList'
 import { useGroupDnD } from '@/shared/hooks/useGroupDnD'
-import { SelectionBar, SelectionBarButton, ListPane, PaneHeader } from '@/shared/components'
+import { SelectionBar, SelectionBarButton, ListPane, PaneHeader, LoadingState } from '@/shared/components'
 import { useCollapsibleList } from '@/shared/hooks/useCollapsibleList'
 import { useRegisterDirty } from '@/shared/lib/dirtySignals'
 import {
@@ -89,6 +89,9 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
   // agent / tool).
   const [query, setQuery] = useState('')
   const [originFilter, setOriginFilter] = useState<'all' | 'chat' | 'manual' | 'agent' | 'tool' | 'plan'>('all')
+  // True until the first artifact list lands — the list column shows a loading
+  // state rather than the "no artifacts yet" onboarding copy.
+  const [loading, setLoading] = useState(true)
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
     return list.filter((a) => {
@@ -106,6 +109,7 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
         setActiveId((cur) => cur ?? rows[0]?.id ?? null)
       })
       .catch((e) => onError((e as Error).message))
+      .finally(() => setLoading(false))
   }, [onError])
 
   useEffect(() => reload(), [reload])
@@ -503,7 +507,8 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto p-2">
-          {list.length === 0 && (
+          {loading && <LoadingState label="Artifact'ler yükleniyor…" />}
+          {!loading && list.length === 0 && (
             <div className="flex flex-col items-center gap-2 px-4 py-10 text-center text-sm text-[var(--color-text-dim)]">
               <FileCode size={28} className="opacity-40" />
               <p>

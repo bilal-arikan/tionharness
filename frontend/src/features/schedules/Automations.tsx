@@ -5,7 +5,7 @@ import { api } from '@/api'
 import type { Agent, Automation, Flow, BoardColumnDef, AutomationTriggerKind, BoardOp } from '@/types'
 import { AgentPicker } from '@/shared/components/agents/AgentPicker'
 import { AgentAvatar } from '@/shared/components/agents/AgentAvatar'
-import { Button, TagEditor } from '@/shared/components'
+import { Button, TagEditor, LoadingState } from '@/shared/components'
 import { normalizeAvatar } from '@/shared/lib/avatar'
 import { TargetModeToggle, FlowPicker } from './Schedules'
 
@@ -238,9 +238,16 @@ export function Automations({ agents, flows, onError, activeKind, onCounts }: Pr
   const [items, setItems] = useState<Automation[]>([])
   // Workspace board columns, for the board-trigger source/target filters.
   const [columns, setColumns] = useState<BoardColumnDef[]>(DEFAULT_COLUMNS)
+  // True until the first automation list lands — sections render a loading state
+  // rather than claiming there are no automations yet.
+  const [loading, setLoading] = useState(true)
 
   const reload = () =>
-    api.listAutomations().then(setItems).catch((e) => onError((e as Error).message))
+    api
+      .listAutomations()
+      .then(setItems)
+      .catch((e) => onError((e as Error).message))
+      .finally(() => setLoading(false))
 
   useEffect(() => {
     reload()
@@ -266,7 +273,7 @@ export function Automations({ agents, flows, onError, activeKind, onCounts }: Pr
 
   if (!activeKind) return null
 
-  const shared = { allItems: items, setItems, reload, agents, flows, columns, onError }
+  const shared = { allItems: items, setItems, reload, agents, flows, columns, loading, onError }
   return <AutomationSection kind={activeKind} {...shared} />
 }
 
@@ -278,13 +285,14 @@ interface SectionProps {
   agents: Agent[]
   flows: Flow[]
   columns: BoardColumnDef[]
+  loading: boolean
   onError: (msg: string) => void
 }
 
 // AutomationSection is one kind-scoped block (tag or board): header, create form,
 // and list. It filters the shared item list to its own kind and drives all
 // mutations through the parent's setItems/reload so the two sections stay in sync.
-function AutomationSection({ kind, allItems, setItems, reload, agents, flows, columns, onError }: SectionProps) {
+function AutomationSection({ kind, allItems, setItems, reload, agents, flows, columns, loading, onError }: SectionProps) {
   const isBoardKind = kind === 'board'
   const items = allItems.filter((a) => (a.triggerKind ?? 'tag') === kind)
 
@@ -604,7 +612,8 @@ function AutomationSection({ kind, allItems, setItems, reload, agents, flows, co
 
       {/* List */}
       <div className="space-y-2">
-        {items.length === 0 && (
+        {loading && <LoadingState label="Otomasyonlar yükleniyor…" />}
+        {!loading && items.length === 0 && (
           <p className="text-sm text-[var(--color-text-dim)]">
             {isBoardKind ? 'Henüz pano otomasyonu yok.' : 'Henüz etiket otomasyonu yok.'}
           </p>

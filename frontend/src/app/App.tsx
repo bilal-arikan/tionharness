@@ -5,6 +5,7 @@
 import { useCallback, useEffect, useMemo, useState, Suspense } from 'react'
 import { api } from '@/api'
 import { ErrorToast } from '@/shared/components/ErrorToast'
+import { LoadingState } from '@/shared/components'
 import { NavRail, type View } from './NavRail'
 import { MobileNavBar } from './MobileNavBar'
 import { SplashScreen } from './SplashScreen'
@@ -253,7 +254,18 @@ export default function App() {
   }, [activeWorkspaceId, chat.markPending])
 
   // Per-view "work in progress" flags for the nav-rail busy indicators.
-  const busyViews = useActivity(activeWorkspaceId, chat.streamingSessions.size > 0)
+  // The instant local chat signal must be workspace-scoped: useChatStream lives
+  // at App level (it does NOT remount on a workspace switch), so its
+  // streamingSessions set keeps a turn started in workspace A even after we
+  // switch into B. Feeding raw `size > 0` would light B's chat dot for A's work
+  // — the very cross-workspace leak this indicator is meant to avoid. Gate it on
+  // sessions that belong to the ACTIVE workspace (ctl.chatSessions is scoped);
+  // any other same-workspace stream is still covered by useActivity's poll.
+  const chatBusyLocal = useMemo(
+    () => ctl.chatSessions.some((s) => chat.streamingSessions.has(s.id)),
+    [ctl.chatSessions, chat.streamingSessions],
+  )
+  const busyViews = useActivity(activeWorkspaceId, chatBusyLocal)
   // Per-view unread (unseen activity from the SSE feed) + unsaved-edit (dirty)
   // signals — the other two channels of the generic nav notification system.
   const { unreadViews, markViewUnread, markViewRead } = useUnreadViews(activeWorkspaceId)
@@ -404,6 +416,7 @@ export default function App() {
               agents={ctl.agents}
               activeSessionId={ctl.activeSessionId}
               streamingSessionIds={chat.streamingSessions}
+              loading={ctl.bootstrapping}
               newDisabled={ctl.agents.length === 0}
               onSelectSession={(id, messageId) => {
                 ctl.selectSession(id, messageId)
@@ -464,6 +477,8 @@ export default function App() {
             artifacts={ctl.sessionArtifacts}
             activeSessionId={ctl.activeSessionId}
             activeAgentId={ctl.activeAgentId}
+            bootstrapping={ctl.bootstrapping}
+            messagesLoading={ctl.messagesLoading}
             defaultAgentId={ctl.defaultAgentId}
             onNewSession={ctl.newSession}
             onSelectDefaultAgent={ctl.pickDefaultAgent}
@@ -513,11 +528,7 @@ export default function App() {
           />
         )}
         {view === 'network' && (
-          <Suspense
-            fallback={
-              <div className="flex-1 p-6 text-sm text-[var(--color-text-dim)]">Ağ yükleniyor…</div>
-            }
-          >
+          <Suspense fallback={<LoadingState label="Ağ yükleniyor…" className="flex-1" />}>
             <NetworkPanel onError={setError} />
           </Suspense>
         )}
@@ -526,11 +537,7 @@ export default function App() {
           <Schedules agents={ctl.agents} focusId={links.scheduleTarget} onError={setError} />
         )}
         {view === 'flows' && (
-          <Suspense
-            fallback={
-              <div className="flex-1 p-6 text-sm text-[var(--color-text-dim)]">Akışlar yükleniyor…</div>
-            }
-          >
+          <Suspense fallback={<LoadingState label="Akışlar yükleniyor…" className="flex-1" />}>
             <FlowsPanel agents={ctl.agents} onError={setError} openFlowId={links.flowTarget} />
           </Suspense>
         )}
