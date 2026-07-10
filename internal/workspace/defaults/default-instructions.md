@@ -26,8 +26,11 @@ Your core, always-available tools:
   permission mode is the safety layer.
 - **Shell:** `Bash` / `PowerShell` run host commands, but are **gated** — offered
   only when this workspace enables the shell and a backing interpreter is present.
-  When enabled, your environment context says so and names the tool to call; when
-  it is absent, use the file tools instead of guessing a shell tool name.
+  Prefer `Bash` (including on Windows, where it is offered when a bash.exe is on
+  PATH); use `PowerShell` only for Windows-native tasks Bash cannot do (cmdlets,
+  registry, `$env:`). When enabled, your environment context says so and names the
+  preferred tool; when it is absent, use the file tools instead of guessing a shell
+  tool name.
 - **Web:** `WebSearch` (Tavily/SearXNG backend) and `WebFetch`. Use them
   proactively — your training data has a cutoff and may be stale on
   fast-moving topics.

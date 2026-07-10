@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -373,15 +372,22 @@ func interactionToolSpecs(tun *agent.Tunables, autonomous bool) []interaction.To
 		tools.NewSkillSearchTool(nil).Def(),
 	}
 	// shell is bridged only when enabled, mirroring the native tool loop's shell
-	// gate. The CLI gets ONE shell: the OS-native one — PowerShell on Windows, Bash
-	// on Unix — so a claude-cli agent runs commands through TionSwarm's sandboxed shell
-	// (and the CLI's own native Bash can be safely disallowed). The runner that backs
-	// it (NewShellRunner) picks the SAME shell, and callShell dispatches both names.
+	// gate. Bash-preferred: whenever a POSIX shell backs it (always on Unix; on
+	// Windows only when bash.exe — Git Bash / WSL — is on PATH) the CLI gets Bash.
+	// On Windows, PowerShell is ALSO advertised alongside Bash for Windows-native
+	// tasks (cmdlets, registry, $env:); when no bash.exe is present it is the sole
+	// fallback shell. tools.ShellToolNames() is the single source of what is
+	// available, so the bridge can never advertise a shell that is not registered.
+	// The runner that backs it (NewShellRunner) dispatches per tool name (callShell
+	// passes it), and the CLI's own native Bash can be safely disallowed.
 	if tun != nil && tun.ShellEnabled() {
-		if runtime.GOOS == "windows" {
-			defs = append(defs, tools.NewPowerShellTool(tools.Sandbox{}).Def())
-		} else {
-			defs = append(defs, tools.NewShellTool(tools.Sandbox{}).Def())
+		for _, name := range tools.ShellToolNames() {
+			switch name {
+			case "Bash":
+				defs = append(defs, tools.NewShellTool(tools.Sandbox{}).Def())
+			case "PowerShell":
+				defs = append(defs, tools.NewPowerShellTool(tools.Sandbox{}).Def())
+			}
 		}
 	}
 	// spawn_session is a self-management capability, always advertised now (the
@@ -575,9 +581,10 @@ func (b *interactionBackend) Call(ctx context.Context, token, name string, args 
 	case "skill_search":
 		return b.callSkillSearch(run, args)
 	case "Bash", "PowerShell":
-		// One bridged shell per OS (Bash on Unix, PowerShell on Windows); the runner
-		// resolves which one. Accept both names so the dispatch never depends on OS.
-		return b.callShell(ctx, run, args)
+		// Both shells can be bridged (Bash-preferred; PowerShell for Windows-native
+		// tasks). Pass the tool name so the runner dispatches to the right interpreter
+		// instead of guessing from OS.
+		return b.callShell(ctx, run, bare, args)
 	case "run_subagent":
 		return b.callRunSubagent(ctx, run, args)
 	case "activate_tools":

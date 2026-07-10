@@ -193,8 +193,10 @@ func (r *chatRun) skillAllowedFor() skillAllowedFunc {
 // shellRunner runs a shell command for the responding agent (CLI path), bound to
 // the workspace sandbox. Mirrors the native shell built-in over the Interaction
 // MCP bridge so a claude-cli agent runs commands through TionSwarm's own shell
-// (PowerShell on Windows, sandboxed + bounded) instead of the CLI's POSIX Bash.
-type shellRunner func(ctx context.Context, args json.RawMessage) (string, error)
+// (sandboxed + bounded) instead of the CLI's POSIX Bash. toolName selects the
+// interpreter ("Bash" / "PowerShell"); the runner resolves the backing shell and
+// falls back to PowerShell on Windows when no bash.exe is present.
+type shellRunner func(ctx context.Context, toolName string, args json.RawMessage) (string, error)
 
 // setShellRunner installs the per-agent shell runner so the Interaction MCP shell
 // tool (CLI path) can run a command. A nil value disables it (shell off).

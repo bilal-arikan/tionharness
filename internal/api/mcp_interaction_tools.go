@@ -342,15 +342,16 @@ func (b *interactionBackend) callSkillSearch(run *chatRun, args json.RawMessage)
 }
 
 // callShell runs a shell command through the run's per-agent shell runner (CLI
-// path), which is bound to the workspace sandbox and uses TionSwarm's own shell
-// (PowerShell on Windows). Returns a graceful error result when shell is not
-// available for this turn (disabled or no sandbox).
-func (b *interactionBackend) callShell(ctx context.Context, run *chatRun, args json.RawMessage) (interaction.CallResult, error) {
+// path), which is bound to the workspace sandbox and uses TionSwarm's own shell.
+// toolName ("Bash" / "PowerShell") selects the interpreter so a Bash-first agent
+// and a PowerShell call both dispatch correctly. Returns a graceful error result
+// when shell is not available for this turn (disabled or no sandbox).
+func (b *interactionBackend) callShell(ctx context.Context, run *chatRun, toolName string, args json.RawMessage) (interaction.CallResult, error) {
 	runFn := run.shellRunnerFor()
 	if runFn == nil {
 		return interaction.CallResult{Text: "shell is not available for this turn", IsError: true}, nil
 	}
-	out, err := runFn(ctx, args)
+	out, err := runFn(ctx, toolName, args)
 	if err != nil {
 		return interaction.CallResult{Text: err.Error(), IsError: true}, nil
 	}

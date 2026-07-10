@@ -2,6 +2,33 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-07-10**
 
+## Bash öncelikli, PowerShell gerektiğinde ✅ (2026-07-10, TSK43)
+
+- **Sorun:** Windows'ta ajan koşulsuz PowerShell'e yönlendiriliyordu — üç katman
+  (ortam bloğu, Bash aracı açıklaması, claude-cli köprüsü). bash.exe zaten kuruluysa
+  `Bash` aracı native döngüde kayıtlıydı; sorun araç eksikliği değil **önceliklendirmeydi**.
+- **Çözüm (davranış/prompt-policy refactor, execution core değişmedi):**
+  - `EnvironmentContextBlock()` artık `tools.ShellToolNames()`'in ilk girdisine göre
+    tercih edilen shell'i ilan eder — Windows'ta bash.exe varsa `shell="Bash"` +
+    "prefer Bash; use PowerShell only for Windows-native tasks", bash.exe yoksa
+    PowerShell'e düşer (guard'a bağlı, sessiz yutma yok).
+  - `ShellTool.Def()` "PREFERRED shell — reach for it first, including on Windows";
+    `PowerShellTool.Def()` "use ONLY when the Bash tool cannot do the job".
+  - claude-cli köprüsü: `interactionToolSpecs()` Windows'ta `ShellToolNames()`'e göre
+    hem Bash (varsa) hem PowerShell'i ilan eder; `NewShellRunner()` closure'ı artık
+    `toolName`'e göre dispatch eder (Bash→POSIX, PowerShell→PS; Windows'ta bash yoksa
+    PowerShell'e düşer); `callShell()` dispatch'e tool adını (`bare`) geçirir.
+  - `climcp.go` shadowing yorumu ve `default-instructions.md` shell cümlesi
+    Bash-öncelikliye güncellendi. Native döngü zaten iki aracı da kaydediyordu.
+- **Bash mevcudiyeti guard'ı:** Tüm Bash-öncelikli ilan `resolvePOSIXShell()`/`Available()`
+  üzerinden `ShellToolNames()`'e bağlı — bash.exe olmayan makinede "Bash" iddia edilmez.
+- **Not (kullanıcı CLAUDE.md çelişkisi):** Bu makinenin `CLAUDE.md`'si Windows/PowerShell
+  tercihi belirtir (kullanıcının; dokunulmadı). Bu değişiklik uygulamanın **varsayılan
+  ajan yönlendirmesini** Bash-öncelikliye çevirir; kullanıcı workspace talimatı/CLAUDE.md
+  ile bunu ezebilir.
+- **Doğrulama:** `go build ./...`, `go vet ./...`, `go test ./internal/...` — hepsi yeşil
+  (agent/api/tools dahil; frontend'e dokunulmadı). Detay `_Docs\51`, `_Docs\17`.
+
 ## Executions ekranı kaldırıldı — birleşik Sohbet transkripti ✅ (2026-07-10, TSK45)
 
 - **Karar:** Ayrı "Aktivite" (Executions) ekranı kaldırıldı. Executions ayrı bir veri

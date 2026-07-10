@@ -187,7 +187,8 @@ func (r *Runtime) writeCLIMCPConfig(ctx context.Context, mcpEnabled bool, inter 
 		// Bash: only suppress the CLI's native POSIX Bash when TionSwarm's own shell is
 		// bridged (shell enabled) as its replacement — otherwise the agent would lose
 		// shell entirely (TionSwarm's shell is not bridged when disabled). With the
-		// bridge present, all commands route through TionSwarm's PowerShell shell.
+		// bridge present, all commands route through TionSwarm's own sandboxed shells
+		// (bridged Bash-preferred, plus PowerShell for Windows-native tasks).
 		if r.tun.ShellEnabled() {
 			// Also suppress the native background-shell siblings (BashOutput/KillShell,
 			// renamed TaskOutput/TaskStop in newer CLIs): they only operate on shells the

@@ -468,13 +468,17 @@ func (r *Runtime) SetWakeTurnRunner(fn WakeTurnFunc) { r.wakeTurn = fn }
 // the runtime can resolve its workspace (DB, settings) from the manager.
 func (r *Runtime) WorkspaceID() string { return r.wsID }
 
-// NewShellRunner returns a closure that runs a shell command through the
-// workspace-sandboxed shell tool (PowerShell on Windows, /bin/sh elsewhere), for
-// the claude-cli Interaction MCP bridge — so a CLI agent runs commands through
-// TionSwarm's own shell (sandboxed, bounded, permission/hook-gated) instead of the
-// CLI's native POSIX Bash. Returns nil when shell is disabled or no sandbox is
-// configured, so the bridge advertises shell only when it can honour it.
-func (r *Runtime) NewShellRunner() func(ctx context.Context, args json.RawMessage) (string, error) {
+// NewShellRunner returns a closure that runs a shell command through a
+// workspace-sandboxed shell tool for the claude-cli Interaction MCP bridge — so a
+// CLI agent runs commands through TionSwarm's own shell (sandboxed, bounded,
+// permission/hook-gated) instead of the CLI's native POSIX Bash. The toolName
+// argument selects the interpreter: "PowerShell" routes to the PowerShell host,
+// anything else (including "Bash") routes to the POSIX shell — falling back to
+// PowerShell on Windows when no bash.exe is present, so the runner honours whatever
+// the bridge advertises (see interactionToolSpecs) without depending on OS alone.
+// Returns nil when shell is disabled or no sandbox is configured, so the bridge
+// advertises shell only when it can honour it.
+func (r *Runtime) NewShellRunner() func(ctx context.Context, toolName string, args json.RawMessage) (string, error) {
 	if !r.tun.ShellEnabled() {
 		return nil
 	}
@@ -483,15 +487,20 @@ func (r *Runtime) NewShellRunner() func(ctx context.Context, args json.RawMessag
 	}
 	// Resolve the working dir per call so the bridged shell honours the session's
 	// WorkingDir override (the ctx carries the session id), matching the native
-	// path. Unconfined, like an interactive turn. The CLI path exposes ONE shell:
-	// the OS-native one (PowerShell on Windows, Bash on Unix) — the same identity the
-	// bridge advertises (see interactionToolSpecs) and dispatches (callShell).
-	return func(ctx context.Context, args json.RawMessage) (string, error) {
+	// path. Unconfined, like an interactive turn.
+	return func(ctx context.Context, toolName string, args json.RawMessage) (string, error) {
 		sb := tools.NewSandbox(r.effectiveWorkDir(ctx))
-		if runtime.GOOS == "windows" {
+		if toolName == "PowerShell" {
 			return tools.NewPowerShellTool(sb).Call(ctx, args)
 		}
-		return tools.NewShellTool(sb).Call(ctx, args)
+		// Bash-preferred: use the POSIX shell when one backs it. On Windows without a
+		// bash.exe, ShellTool.Available() is false, so fall back to PowerShell rather
+		// than dispatch to a shell that cannot run — no silent failure.
+		bash := tools.NewShellTool(sb)
+		if !bash.Available() {
+			return tools.NewPowerShellTool(sb).Call(ctx, args)
+		}
+		return bash.Call(ctx, args)
 	}
 }
 
@@ -1106,12 +1115,23 @@ const GoalUsageHint = "For substantial multi-turn work, set a durable objective 
 // the headless path (autonomousSystemPrompt) inject the identical line. It rides
 // the volatile dynamic suffix, so it never disturbs the cached static prefix.
 func EnvironmentContextBlock() string {
+	// Prefer Bash when a POSIX shell backs it (always on Unix; on Windows only when a
+	// bash.exe — Git Bash / WSL — is on PATH). PowerShell is advertised as the
+	// fallback only for Windows-native tasks (cmdlets, registry, $env:). ShellToolNames
+	// orders Bash first when present, so its first entry is the preferred shell and
+	// can never claim "Bash" on a machine where bash.exe is missing.
+	names := tools.ShellToolNames()
 	shell := "Bash"
-	if runtime.GOOS == "windows" {
-		shell = "PowerShell"
+	if len(names) > 0 {
+		shell = names[0]
 	}
-	return fmt.Sprintf("<environment os=%q arch=%q shell=%q /> — write shell commands in %s syntax for this machine.",
-		runtime.GOOS, runtime.GOARCH, shell, shell)
+	hint := fmt.Sprintf("write shell commands in %s syntax for this machine.", shell)
+	if shell == "Bash" && runtime.GOOS == "windows" {
+		// Bash-first on Windows, but PowerShell stays available for native tasks.
+		hint = "prefer Bash; use PowerShell only for Windows-native tasks (cmdlets, registry, `$env:`)."
+	}
+	return fmt.Sprintf("<environment os=%q arch=%q shell=%q /> — %s",
+		runtime.GOOS, runtime.GOARCH, shell, hint)
 }
 
 // ShellToolsContextBlock advertises the shell execution tools (Bash / PowerShell)

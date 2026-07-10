@@ -95,8 +95,9 @@ func (ShellTool) Def() providers.ToolDef {
 		Name: "Bash",
 		Description: "Run a command through the POSIX shell (/bin/sh on Unix, bash.exe on Windows) and " +
 			"return its combined stdout+stderr (truncated to 64KB). Starts in the working directory but may " +
-			"operate on any path. Bounded by a timeout (default 30s, max 120s). Use POSIX/Bash syntax. On " +
-			"Windows prefer the PowerShell tool for native tasks (cmdlets, registry, $env: variables). " +
+			"operate on any path. Bounded by a timeout (default 30s, max 120s). Use POSIX/Bash syntax. This is " +
+			"the PREFERRED shell — reach for it first, including on Windows. Only switch to the PowerShell tool " +
+			"for Windows-native tasks Bash cannot do (cmdlets, registry, $env: variables). " +
 			"Set run_in_background=true for a long-running command (dev server, watcher): it returns a shell " +
 			"id immediately — poll shell_output and stop it with shell_kill.",
 		InputSchema: shellInputSchema,
@@ -150,7 +151,9 @@ func (PowerShellTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name: "PowerShell",
 		Description: "Run a command through PowerShell (pwsh 7+ if available, else Windows PowerShell 5.1) " +
-			"and return its combined stdout+stderr (truncated to 64KB). Starts in the working directory but " +
+			"and return its combined stdout+stderr (truncated to 64KB). Use ONLY when the Bash tool cannot do " +
+			"the job — i.e. for Windows-native tasks (cmdlets, registry, $env: variables); prefer Bash for " +
+			"everything else. Starts in the working directory but " +
 			"may operate on any path. Bounded by a timeout (default 30s, max 120s). Use PowerShell syntax: " +
 			"cmdlets (Get-ChildItem), $env:VAR for environment variables, 2>$null (not 2>/dev/null), and " +
 			"registry PSDrives (HKLM:\\). The command runs DIRECTLY in PowerShell — do NOT wrap it in another " +
