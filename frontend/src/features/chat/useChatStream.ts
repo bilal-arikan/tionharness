@@ -372,10 +372,12 @@ export function useChatStream(deps: ChatStreamDeps) {
   }, [sendMessage])
 
   // Steer: inject live guidance into the ACTIVE session's running turn
-  // (session-scoped; the worker owns the run). Live steering only works for native
-  // providers; for a claude-cli turn the server reports "unsupported" and we fall
-  // back to queueing the guidance as the next message (the user's intent — run
-  // this next — is best served by the queue).
+  // (session-scoped; the worker owns the run). Native providers fold it in via the
+  // steer channel; claude-cli stashes it and delivers it at the next tool boundary
+  // (server reports "steered"). If that turn ends with no tool call, the backend
+  // itself enqueues the message as the next turn (steer_undelivered fallback), so
+  // the client needs no fallback here anymore. A legacy "unsupported" (older backend)
+  // still falls back to queueing so mixed-version deploys don't drop the message.
   const steerTurn = useCallback((text: string) => {
     const sid = activeSessionId
     if (!sid || !text.trim()) return
@@ -383,7 +385,7 @@ export function useChatStream(deps: ChatStreamDeps) {
       .then((r) => {
         if (r?.result === 'unsupported') {
           void sendMessage(text)
-          setError('Bu ajan (claude-cli) canlı yönlendirmeyi desteklemiyor — mesaj sıraya alındı.')
+          setError('Bu ajan canlı yönlendirmeyi desteklemiyor — mesaj sıraya alındı.')
         }
       })
       .catch((e) => setError((e as Error).message))

@@ -207,10 +207,15 @@ func (s *Server) bridgeBusToHub() {
 			if len(e.Step) == 0 {
 				continue
 			}
-			// An interactive turn owns a chatRun and already published this step to
-			// the hub in-order; only bridge steps for sessions with no live chatRun
-			// (the autonomous case).
-			if _, live := s.runs.sessionRunInfo(sid); live {
+			// An INTERACTIVE turn owns a chatRun and already published this step to the
+			// hub in-order (runChatTurn onStep), so bridging it here would double-publish
+			// — skip those. But an AUTONOMOUS turn (coordinator/scheduler/spawn/worker)
+			// also owns a chatRun: a TOKEN-ONLY handle registered by autonomousInteraction
+			// to correlate the CLI's Interaction MCP Bearer token. That handle does NOT
+			// self-publish steps, so skipping it would drop every live thinking/tool step
+			// (they only reappear at turn end via the completion→turn_done reload). Bridge
+			// autonomous runs; skip only interactive ones.
+			if info, live := s.runs.sessionRunInfo(sid); live && !info.Autonomous {
 				continue
 			}
 			s.hub.Publish(sid, sessionhub.KindStep, e.Step, false)

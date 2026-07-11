@@ -82,6 +82,17 @@ func (s *Server) runChatTurn(clientGone context.Context, wsp *workspace.Workspac
 	defer cancel()
 	run := s.runs.register(runID, req.SessionID, wsp.ID, cancel)
 	defer s.runs.unregister(runID)
+	// steer_undelivered fallback (Doc 59): a claude-cli steer is delivered at the
+	// next tool boundary via the Interaction MCP permission tool's additionalContext.
+	// If the turn ends (any path) with a steer message that never reached a tool
+	// boundary (a tool-less, text-only turn), enqueue it as the next message so the
+	// user's intent is not lost. takeSteer returns "" on a normal turn (or once the
+	// message was already delivered), so this is a no-op in the common case.
+	defer func() {
+		if msg := run.takeSteer(); msg != "" {
+			s.enqueueMessage(wsp.ID, chatReq{SessionID: req.SessionID, Message: msg, AgentIDs: req.AgentIDs}, "")
+		}
+	}()
 	ctx = agent.WithSteer(ctx, run.steer)
 	// Point any CLI subprocess (claude-cli, ...) at the in-process Interaction MCP
 	// endpoint for this turn, carrying the per-run token. No-op when unknown.

@@ -2,6 +2,57 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-07-11**
 
+## archive_sessions: kendi oturumunu da arşivleyebilir (include_current) ✅ (2026-07-11)
+
+- **Karar:** `archive_sessions` artık mevcut oturumu **yalnız varsayılan olarak** hariç
+  tutuyor; yeni `include_current: true` argümanıyla ajan **kendi çalıştığı oturumu da**
+  arşivleyebilir. Arşivleme soft/geri-alınabilir ve çalışan turu durdurmaz (sadece
+  aktif listeden çıkar). `exclude` listesi include_current ile de geçerli.
+- **Değişiklikler:** `builtin_sessionarchive.go` — args'a `IncludeCurrent bool`, keep-set'e
+  ekleme artık `!args.IncludeCurrent` koşullu; Def açıklaması + şema (`include_current`),
+  struct/constructor yorumları ve "nothing to archive" mesajı güncellendi (koşullu ipucu).
+  Not: şema açıklamasındaki `` `exclude` `` backtick'leri raw-string literal'i erken
+  kapatıyordu → düz metne çevrildi. Test: `builtin_sessionarchive_test.go` →
+  `TestArchiveSessionsIncludeCurrent`.
+- Doğrulama: `go build ./...` + `go test ./internal/tools -run TestArchiveSessions` yeşil.
+
+## Bug fix — otonom tur canlı adımları hub'a köprülenmiyordu ✅ (2026-07-11)
+
+- **Teşhis:** Koordinatör (ve scheduler/spawn/worker) otonom turlarında ajanın
+  düşünce/tool adımları canlı görünmüyor, yalnız tur bitince toptan geliyordu.
+- **Kök neden:** `autonomousInteraction` her otonom claude-cli turu için Interaction
+  MCP Bearer token'ını eşlemek üzere **token-only bir chatRun** kaydediyor
+  (`run.autonomous=true`). `bridgeBusToHub` `session_step` guard'ı ise
+  `if _, live := sessionRunInfo(sid); live { continue }` ile "canlı run'ı olan
+  oturumu atla" yapıyordu — bu guard **interaktif** turlar için doğru (runChatTurn
+  adımları zaten doğrudan hub'a yayınlar, çift yayını önler), ama otonom token-only
+  run hub'a hiçbir şey yayınlamadığından adımlar **düşüyordu**. Tur bitince run
+  unregister → completion event `turn_done`+reload → her şey birden.
+- **Çözüm:** guard yalnız **interaktif** run'ı atlasın:
+  `if info, live := sessionRunInfo(sid); live && !info.Autonomous { continue }`
+  (`internal/api/session_stream.go`). Otonom run'ların adımları artık köprüleniyor.
+- **Testler:** `internal/api/bridge_autonomous_test.go` — otonom adımlar köprüleniyor,
+  interaktif adımlar çift yayınlanmıyor. api paketi 96 test yeşil.
+
+## claude-cli canlı steer (Yönlendir) ✅ (2026-07-11)
+
+- **Sorun:** "Yönlendir" yalnız native provider'da çalışıyordu; claude-cli için
+  backend `unsupported` dönüp mesajı kuyruğa düşürüyordu (mid-turn rehberlik yok).
+- **Çözüm (external-agent muadili, Doc 59):** claude-cli için steer mesajı
+  `chatRun.pendingSteer`'a saklanır (`setSteer`/`takeSteer`, `chat_control.go`);
+  `handleSessionControl` claude-cli → stash + `"steered"` (`inbox.go`);
+  `callPermission` her **allow** (auto-allow RiskRead + prompt sonrası) sınırında
+  mesajı `additionalContext` olarak enjekte eder (`permDecisionCtx`/`steerContext`,
+  `mcp_interaction_tools.go`) → rehberlik bir sonraki **tool sınırında** turu
+  yeniden başlatmadan bağlama girer. Tur tool'suz (yalnız metin) biterse
+  `runChatTurn` bekleyen mesajı **sonraki tura enqueue** eder (steer_undelivered
+  fallback, `chat_stream.go`).
+- **Testler:** `internal/api/steer_cli_test.go` (stash consume-once, additionalContext
+  enjeksiyonu, steer yokken plain karar). api paketi 94 test yeşil; frontend tsc temiz.
+- **Açık doğrulama:** `additionalContext`'in claude-cli permission cevabında modele
+  gerçekten girip girmediği CLI sürümüne bağlı (canlı test). Girmezse Doc 59 Faz 2
+  seçenek (B) PreToolUse hook kanalına geçilir; fallback her hâlükârda güvenli.
+
 ## Shell sağlamlaştırma: non-interactive git + süreç-ağacı reap ✅ (2026-07-11)
 
 - **Teşhis:** Bir ajan shell aracıyla `git commit` çalıştırınca tur tamamen

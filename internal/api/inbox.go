@@ -394,13 +394,16 @@ func (s *Server) handleSessionControl(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "steer text is required")
 			return
 		}
-		// Live steering only works for NATIVE providers: their tool loop drains the
-		// steer channel between iterations (see agent/toolloop.go drainSteer). A
-		// claude-cli turn runs its own subprocess loop and cannot receive mid-turn
-		// guidance, so the steer would silently vanish. Report it unsupported so the
-		// client falls back to queueing the guidance as the next message.
+		// Native providers drain the steer CHANNEL between tool-loop iterations
+		// (see agent/toolloop.go drainSteer). claude-cli runs its own subprocess
+		// loop with no such drain point, so instead stash the guidance on the run;
+		// it is delivered at the next tool boundary as the Interaction MCP permission
+		// tool's additionalContext (see callPermission). If the turn ends with no
+		// tool call, runChatTurn enqueues the leftover as the next message
+		// (steer_undelivered fallback).
 		if run.providerOf() == "claude-cli" {
-			writeJSON(w, http.StatusOK, map[string]string{"result": "unsupported"})
+			run.setSteer(req.Text)
+			writeJSON(w, http.StatusOK, map[string]string{"result": "steered"})
 			return
 		}
 		select {

@@ -141,3 +141,43 @@ func TestArchiveSessionsFilters(t *testing.T) {
 		t.Fatalf("idle filter must have left 'Keep this' active, got %q", got)
 	}
 }
+
+// TestArchiveSessionsIncludeCurrent verifies the current session is excluded by
+// default but archivable when include_current:true is passed.
+func TestArchiveSessionsIncludeCurrent(t *testing.T) {
+	database, err := db.Open(filepath.Join(t.TempDir(), "store"))
+	if err != nil {
+		t.Fatalf("db open: %v", err)
+	}
+	t.Cleanup(func() { _ = database.Close() })
+	ctx := context.Background()
+
+	current := mkSession(t, database, ctx, db.Session{Kind: "chat", Title: "Current", State: "active"})
+	other := mkSession(t, database, ctx, db.Session{Kind: "chat", Title: "Other", State: "active"})
+
+	tool := NewArchiveSessionsTool(database, current)
+
+	// Default: only the OTHER session is archived; current stays active.
+	out, err := tool.Call(ctx, json.RawMessage(`{}`))
+	if err != nil {
+		t.Fatalf("call: %v", err)
+	}
+	if !strings.Contains(out, other) || strings.Contains(out, current) {
+		t.Fatalf("default run must archive only the other session:\n%s", out)
+	}
+	if got := stateOf(t, database, ctx, current); got != "active" {
+		t.Fatalf("current session must stay active by default, got %q", got)
+	}
+
+	// include_current: the current session is now archivable too.
+	out, err = tool.Call(ctx, json.RawMessage(`{"include_current":true}`))
+	if err != nil {
+		t.Fatalf("call include_current: %v", err)
+	}
+	if !strings.Contains(out, current) {
+		t.Fatalf("include_current must archive the current session:\n%s", out)
+	}
+	if got := stateOf(t, database, ctx, current); got != "archived" {
+		t.Fatalf("current session should be archived, got %q", got)
+	}
+}

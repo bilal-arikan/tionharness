@@ -25,18 +25,20 @@ const defaultArchiveLimit = 100
 // to drop to raw REST (Invoke-RestMethod against /api/sessions/{id}/state), which
 // loses the automatic workspace scoping the built-in tools get for free — the
 // exact footgun that once archived the wrong (default) workspace. This tool binds
-// to the workspace DB (r.db), so it is physically scoped to this workspace, and it
-// always excludes the current session, so it cannot archive the session it runs
-// in. Archiving is soft/reversible (state="archived" → restore with "active").
+// to the workspace DB (r.db), so it is physically scoped to this workspace. By
+// default it excludes the current session (so a "clean up old sessions" sweep
+// cannot self-archive by accident); pass include_current:true to opt in and archive
+// the running session too. Archiving is soft/reversible (state="archived" → restore
+// with "active"); it only leaves the active list, it does not stop the running turn.
 type ArchiveSessionsTool struct {
 	db *db.DB
-	// currentSessionID is resolved at registry-build time and is never touched by
-	// this tool — the session the agent is running in must stay active.
+	// currentSessionID is resolved at registry-build time. It is excluded from
+	// archiving by default; a caller can opt in with include_current:true.
 	currentSessionID string
 }
 
 // NewArchiveSessionsTool binds the tool to a workspace DB and the current session
-// id (which is always excluded from archiving).
+// id (excluded from archiving unless the caller passes include_current:true).
 func NewArchiveSessionsTool(database *db.DB, currentSessionID string) ArchiveSessionsTool {
 	return ArchiveSessionsTool{db: database, currentSessionID: currentSessionID}
 }
@@ -44,21 +46,24 @@ func NewArchiveSessionsTool(database *db.DB, currentSessionID string) ArchiveSes
 func (ArchiveSessionsTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name: "archive_sessions",
-		Description: "Bulk-archive OTHER chat sessions in THIS workspace (soft, reversible). Use this " +
+		Description: "Bulk-archive chat sessions in THIS workspace (soft, reversible). Use this " +
 			"to clean up old/finished sessions instead of raw HTTP calls — it is scoped to this " +
-			"workspace and ALWAYS excludes the session you are running in. Filter with `idle_days` " +
+			"workspace and by default excludes the session you are running in. Filter with `idle_days` " +
 			"(only sessions whose last activity is older than N days) and/or `title_contains`. " +
+			"Set `include_current` true to also archive the session you are running in (it stays " +
+			"reversible and the current turn keeps running). " +
 			"Set `dry_run` true first to preview exactly which sessions would be archived, then run " +
 			"again without it to apply. Archiving only leaves the active list; restore via the UI or " +
 			"by setting a session back to active. Use list_sessions to inspect candidates first.",
 		InputSchema: json.RawMessage(`{
   "type": "object",
   "properties": {
-    "idle_days":      { "type": "integer", "description": "Only archive sessions whose last activity is older than this many days. 0 or omitted = no age filter (all active sessions match)." },
-    "title_contains": { "type": "string", "description": "Only archive sessions whose title contains this text (case-insensitive)." },
-    "exclude":        { "type": "array", "items": { "type": "string" }, "description": "Session IDs to keep active (in addition to the current session, which is always excluded)." },
-    "dry_run":        { "type": "boolean", "description": "Preview only: list the sessions that WOULD be archived without changing anything." },
-    "limit":          { "type": "integer", "description": "Safety cap on how many sessions to archive in one call (default 100). Matches beyond the cap are reported but left untouched." }
+    "idle_days":       { "type": "integer", "description": "Only archive sessions whose last activity is older than this many days. 0 or omitted = no age filter (all active sessions match)." },
+    "title_contains":  { "type": "string", "description": "Only archive sessions whose title contains this text (case-insensitive)." },
+    "exclude":         { "type": "array", "items": { "type": "string" }, "description": "Session IDs to keep active." },
+    "include_current": { "type": "boolean", "description": "Also archive the session you are running in (default false = keep it active). The exclude list still applies." },
+    "dry_run":         { "type": "boolean", "description": "Preview only: list the sessions that WOULD be archived without changing anything." },
+    "limit":           { "type": "integer", "description": "Safety cap on how many sessions to archive in one call (default 100). Matches beyond the cap are reported but left untouched." }
   },
   "additionalProperties": false
 }`),
@@ -72,11 +77,12 @@ func (ArchiveSessionsTool) Def() providers.ToolDef {
 
 func (t ArchiveSessionsTool) Call(ctx context.Context, input json.RawMessage) (string, error) {
 	var args struct {
-		IdleDays      int      `json:"idle_days"`
-		TitleContains string   `json:"title_contains"`
-		Exclude       []string `json:"exclude"`
-		DryRun        bool     `json:"dry_run"`
-		Limit         int      `json:"limit"`
+		IdleDays       int      `json:"idle_days"`
+		TitleContains  string   `json:"title_contains"`
+		Exclude        []string `json:"exclude"`
+		IncludeCurrent bool     `json:"include_current"`
+		DryRun         bool     `json:"dry_run"`
+		Limit          int      `json:"limit"`
 	}
 	if len(input) > 0 {
 		if err := json.Unmarshal(input, &args); err != nil {
@@ -101,10 +107,10 @@ func (t ArchiveSessionsTool) Call(ctx context.Context, input json.RawMessage) (s
 			keep[id] = struct{}{}
 		}
 	}
-	// The current session is never archivable, even if a caller lists it in exclude
-	// (or forgets to). "" (catalog/preview build) matches no real id, so this is a
-	// no-op there rather than a wrong exclusion.
-	if t.currentSessionID != "" {
+	// The current session is excluded by default so a broad "clean up old sessions"
+	// sweep cannot self-archive by accident; include_current:true opts in. "" (catalog/
+	// preview build) matches no real id, so this is a no-op there either way.
+	if t.currentSessionID != "" && !args.IncludeCurrent {
 		keep[t.currentSessionID] = struct{}{}
 	}
 
@@ -136,7 +142,11 @@ func (t ArchiveSessionsTool) Call(ctx context.Context, input json.RawMessage) (s
 	}
 
 	if len(matched) == 0 {
-		return "No active sessions match — nothing to archive. (The current session is always excluded.)", nil
+		note := "No active sessions match — nothing to archive."
+		if t.currentSessionID != "" && !args.IncludeCurrent {
+			note += " (The current session is excluded; pass include_current:true to archive it too.)"
+		}
+		return note, nil
 	}
 
 	capped := false

@@ -42,6 +42,15 @@ type chatRun struct {
 	// register (read-only after) so no lock is needed to read it.
 	startedAt time.Time
 
+	// pendingSteer holds a mid-turn steer message for a claude-cli run. Native
+	// providers drain the steer CHANNEL between tool-loop iterations (drainSteer);
+	// claude-cli runs its own subprocess loop with no such drain point here, so the
+	// guidance is stashed and delivered at the next tool boundary as the Interaction
+	// MCP permission tool's additionalContext (see callPermission). If the turn ends
+	// with no tool call, the leftover message is enqueued as the next message
+	// (steer_undelivered fallback). Guarded by mu (declared below).
+	pendingSteer string
+
 	// mu serialises SSE writes: the stream handler goroutine and the Interaction
 	// MCP handler goroutine both emit steps onto the same ResponseWriter. It also
 	// guards artifacts (swapped per responding agent in a multi-agent turn).
@@ -73,6 +82,26 @@ type chatRun struct {
 	// allowlist. Installed per agent turn alongside the bridge. nil → the static
 	// split (used when no per-agent registry is available).
 	tierVis func(name string) string
+}
+
+// setSteer stashes a mid-turn steer message for a claude-cli run, to be delivered
+// as additionalContext at the next tool boundary. The latest guidance wins: a new
+// message overwrites any prior one that has not been delivered yet.
+func (r *chatRun) setSteer(msg string) {
+	r.mu.Lock()
+	r.pendingSteer = msg
+	r.mu.Unlock()
+}
+
+// takeSteer atomically returns and clears the pending steer message (empty when
+// none). Callers consume it ONLY on a delivery path (an allow decision / the
+// turn-end fallback) so a message that could not be injected is not silently lost.
+func (r *chatRun) takeSteer() string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	msg := r.pendingSteer
+	r.pendingSteer = ""
+	return msg
 }
 
 // setProvider records the responding agent's provider id so the Session Info

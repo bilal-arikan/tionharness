@@ -236,6 +236,13 @@ gap-fill** dayanıklı olmalı: `Last-Event-ID`, ring taşınca `reset`, ping/ke
 - **Autonomous simetri (F):** `bridgeBusToHub` tamamlanma event'inde son assistant
   mesajını `KindReply` olarak hub'a yayınlar (+turn_done+Commit) → autonomous tur
   da canlı reply gösterir (`publishAutonomousReply`).
+- **Bug fix — otonom canlı adım köprüsü (2026-07-11):** `session_step` guard'ı
+  `live && !info.Autonomous` olmalı. `autonomousInteraction` otonom CLI turları için
+  Interaction MCP token'ını eşleyen **token-only bir chatRun** kaydeder; eski guard
+  (`live`) bunu "interaktif" sanıp adımları atlıyordu → koordinatör/scheduler/spawn
+  turlarında düşünce/tool adımları tur bitene kadar görünmüyordu. Interaktif run
+  (kendi yayınlar) atlanır, otonom run (yayınlamaz) köprülenir. Test:
+  `bridge_autonomous_test.go`.
 - **Worker sağlamlığı:** `runTurnGuarded` panic-barrier — tek turun panic'i
   worker'ı öldürüp session kuyruğunu kilitlemez (log + hub turn_error + devam).
   `inbox.seen` dedupe seti kuyruk boşalınca sıfırlanır (sınırsız büyüme yok).
@@ -267,11 +274,14 @@ yazıyor…" gösterir (kendi echo'su `windowClientId` ile yok sayılır). `sess
 **Composer buton modeli (queue-entegre):** Tur çalışırken metin yazılınca üç buton
 çıkar — **Sıraya** (tur bitince çalış = enqueue-after), **Kes** (mevcut turu durdur,
 benimki sıradaki = `sessionControl stop` + enqueue), **Yönlendir** (çalışan tura
-canlı rehberlik enjekte et). Üçü de kuyruk-entegre. **Yönlendir yalnız NATIVE
-provider'da çalışır** (tool loop `drainSteer` ile iterasyonlar arası enjekte eder);
-**claude-cli** kendi alt-süreç döngüsünü çalıştırdığından mid-turn enjeksiyon alamaz
-→ backend `{"result":"unsupported"}` döner, frontend rehberliği **kuyruğa düşürür +
-bildirir** (2026-07-11 fix; önceden claude-cli'da sessizce hiçbir şey yapmıyordu).
+canlı rehberlik enjekte et). Üçü de kuyruk-entegre. **Yönlendir artık her iki
+provider'da da çalışır:** NATIVE tool loop `drainSteer` ile iterasyonlar arası
+enjekte eder; **claude-cli** için mesaj `chatRun.pendingSteer`'a saklanıp bir
+sonraki **tool sınırında** Interaction MCP permission tool'unun `additionalContext`
+alanıyla teslim edilir (`{"result":"steered"}`). Tur hiç tool çağırmadan (yalnız
+metin) biterse `runChatTurn` bekleyen mesajı **sonraki tur olarak kuyruğa düşürür**
+(steer_undelivered fallback). Ayrıntı: [59-CLI-STEER-PLANI.md](59-CLI-STEER-PLANI.md)
+(2026-07-11 uygulandı; önceki `unsupported`→kuyruk davranışının yerini aldı).
 
 **Bug fix — off-screen "Durdur" sızıntısı (2026-07-11):** Tur, kullanıcı başka
 session'a geçtikten sonra biterse, o session'ın hub aboneliği kapandığı için

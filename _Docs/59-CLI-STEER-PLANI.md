@@ -1,8 +1,22 @@
 # TionSwarm — claude-cli Canlı Steer (Yönlendirme) Planı
 
-> Durum: **PLAN** (2026-07-11). Uygulanmadı. Amaç: claude-cli ajanlarında da
+> Durum: **UYGULANDI** (2026-07-11, Faz 1 + 3). Amaç: claude-cli ajanlarında da
 > **gerçek mid-turn steer** (turu durdurmadan, çalışan tura rehberlik enjekte
-> etme) desteği — bugün yalnız native (anthropic/minimax) provider'larda çalışıyor.
+> etme) desteği — önceden yalnız native (anthropic/minimax) provider'larda çalışıyordu.
+>
+> **Uygulanan:** `chatRun.pendingSteer` + `setSteer`/`takeSteer`
+> (`chat_control.go`); `handleSessionControl` claude-cli → stash + `"steered"`
+> (`inbox.go`); `callPermission` her allow (auto-allow RiskRead + prompt sonrası)
+> sınırında `additionalContext` enjeksiyonu + `permDecisionCtx`/`steerContext`
+> (`mcp_interaction_tools.go`); `runChatTurn` sonunda `steer_undelivered`→enqueue
+> fallback (`chat_stream.go`); frontend `steerTurn` "unsupported" fallback korunur
+> (eski backend uyumu). Testler: `steer_cli_test.go` (stash/enjeksiyon/plain).
+>
+> **Açık doğrulama (canlı):** `additionalContext`'in claude-cli permission-prompt
+> cevabında modele gerçekten bağlam olarak girip girmediği CLI sürümüne bağlı
+> (aşağıdaki "Enjeksiyon kanalı" ve "Riskler"). Girmezse **Faz 2 seçenek (B)**
+> PreToolUse hook kanalına geçilir. Kod-yolu ve fallback her hâlükârda güvenli:
+> teslim olmazsa mesaj kuyruğa düşer, kaybolmaz.
 
 ## Arka plan
 

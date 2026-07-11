@@ -117,7 +117,9 @@ func (b *interactionBackend) callPermission(ctx context.Context, run *chatRun, a
 	// already covers this command without re-prompting.
 	arg := tools.RepresentativeArg(toolName, in.Input)
 	if risk == tools.RiskRead || run.grantStore().Matches(toolName, arg) {
-		return interaction.CallResult{Text: permDecision(true, in.Input, "")}, nil
+		// Auto-allow path — still a tool BOUNDARY, so deliver any pending mid-turn
+		// steer here as additionalContext (claude-cli has no steer channel).
+		return interaction.CallResult{Text: permDecisionCtx(true, in.Input, "", b.steerContext(run))}, nil
 	}
 	pi := b.apiSrv.openInteraction(run.sessionID, "permission", map[string]any{
 		"tool": toolName, "reason": string(risk), "text": arg, "options": tools.PermissionOptions,
@@ -130,9 +132,9 @@ func (b *interactionBackend) callPermission(ctx context.Context, run *chatRun, a
 			// Derive the standing rule from the bare name so it matches future calls (we
 			// now match grants by the stripped name above).
 			run.grantStore().GrantRule(tools.DeriveGrantRule(toolName, arg))
-			return interaction.CallResult{Text: permDecision(true, in.Input, "")}, nil
+			return interaction.CallResult{Text: permDecisionCtx(true, in.Input, "", b.steerContext(run))}, nil
 		case "allow":
-			return interaction.CallResult{Text: permDecision(true, in.Input, "")}, nil
+			return interaction.CallResult{Text: permDecisionCtx(true, in.Input, "", b.steerContext(run))}, nil
 		default:
 			return interaction.CallResult{Text: permDecision(false, in.Input, "denied by the user")}, nil
 		}
@@ -200,18 +202,50 @@ func (b *interactionBackend) capturePlanArtifact(run *chatRun, plan string) {
 	}
 }
 
+// steerInjectPreamble prefixes a mid-turn steer message injected as the permission
+// tool's additionalContext, telling the model to redirect. Mirrors external-agent'
+// canUseTool/PreToolUse additionalContext delivery (Doc 59).
+const steerInjectPreamble = "The user just sent a new message while you were working. Stop what you are currently doing and address their message instead:\n\n"
+
+// steerContext consumes any pending mid-turn steer message on the run and returns
+// it wrapped in the redirect preamble, or "" when none is pending. Called ONLY on
+// an allow (delivery) path so an undelivered message stays stashed for the next
+// tool boundary or the turn-end fallback.
+func (b *interactionBackend) steerContext(run *chatRun) string {
+	msg := run.takeSteer()
+	if msg == "" {
+		return ""
+	}
+	return steerInjectPreamble + msg
+}
+
 // permDecision builds the JSON result the claude CLI permission-prompt tool must
 // return. allow echoes the (unchanged) input as updatedInput; deny carries a
 // message the model sees.
 func permDecision(allow bool, input json.RawMessage, message string) string {
+	return permDecisionCtx(allow, input, message, "")
+}
+
+// permDecisionCtx is permDecision with an optional additionalContext string folded
+// into the result — the channel claude-cli surfaces to the model alongside the tool
+// decision, used here to deliver mid-turn steering at a tool boundary. Empty
+// extraContext yields the plain decision (byte-identical to the old permDecision).
+func permDecisionCtx(allow bool, input json.RawMessage, message, extraContext string) string {
+	m := map[string]any{}
 	if allow {
 		if len(input) == 0 {
 			input = json.RawMessage("{}")
 		}
-		b, _ := json.Marshal(map[string]any{"behavior": "allow", "updatedInput": input})
-		return string(b)
+		m["behavior"] = "allow"
+		m["updatedInput"] = input
+	} else {
+		m["behavior"] = "deny"
+		m["message"] = message
 	}
-	b, _ := json.Marshal(map[string]any{"behavior": "deny", "message": message})
+	if extraContext != "" {
+		m["additionalContext"] = extraContext
+	}
+	b, _ := json.Marshal(m)
 	return string(b)
 }
 
