@@ -130,6 +130,71 @@ export const chatApi = {
       body: JSON.stringify({ runId, action, text }),
     }),
 
+  // Send-queue (Faz 3): enqueue a user turn. Durable + idempotent on clientMsgId
+  // (dedupes double-submits/retries). Returns immediately; the turn runs
+  // server-side and streams to every window over the session hub.
+  enqueueMessage: (
+    sessionId: string,
+    body: {
+      message: string
+      agentIds?: string[]
+      attachments?: Attachment[]
+      thinkingLevel?: string
+      permissionMode?: string
+      clientMsgId?: string
+    },
+  ) =>
+    req<{ queued: boolean; clientMsgId: string }>(`/api/sessions/${sessionId}/messages`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  // Cancel a not-yet-dispatched queued message (the in-flight turn is unaffected —
+  // use control:"stop" for that).
+  cancelQueued: (sessionId: string, clientMsgId: string) =>
+    req<{ removed: boolean }>(`/api/sessions/${sessionId}/queue/${clientMsgId}`, {
+      method: 'DELETE',
+    }),
+
+  // Drop every waiting message from a session's queue.
+  clearQueue: (sessionId: string) =>
+    req<{ cleared: number }>(`/api/sessions/${sessionId}/queue`, { method: 'DELETE' }),
+
+  // Promote a waiting message so it dispatches next ("send next").
+  moveQueuedFront: (sessionId: string, clientMsgId: string) =>
+    req<{ moved: boolean }>(`/api/sessions/${sessionId}/queue/${clientMsgId}/front`, {
+      method: 'POST',
+    }),
+
+  // Stop or steer a session's in-flight turn WITHOUT a runId (the queue runs turns
+  // server-side, so control is session-scoped now).
+  sessionControl: (sessionId: string, action: 'stop' | 'steer', text?: string) =>
+    req<{ result: string }>(`/api/sessions/${sessionId}/control`, {
+      method: 'POST',
+      body: JSON.stringify({ action, text }),
+    }),
+
+  // Broadcast a cross-window "user is typing" signal (ephemeral). clientId lets
+  // the sending window ignore its own echo.
+  setTyping: (sessionId: string, active: boolean, clientId: string) =>
+    req<{ result: string }>(`/api/sessions/${sessionId}/typing`, {
+      method: 'POST',
+      body: JSON.stringify({ active, clientId }),
+    }),
+
+  // Answer a resolve-once interaction (ask_user / permission / plan) via CAS. The
+  // first window to answer wins (200); a concurrent second answer gets 409 so the
+  // UI can simply close the already-resolved card. See _Docs/58-QUEUE-SENKRON.md.
+  answerInteraction: (
+    sessionId: string,
+    interactionId: string,
+    body: { answer?: string; answersJson?: string; clientId?: string },
+  ) =>
+    req<{ result: string }>(`/api/sessions/${sessionId}/interactions/${interactionId}/answer`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
   // Disarm a pending one-shot self-wake (schedule_wake) for a session — the user
   // pressed "Durdur" on the waiting banner before the wake fired.
   cancelWake: (sessionId: string) =>

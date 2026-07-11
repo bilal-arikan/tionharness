@@ -182,6 +182,10 @@ func (s *Server) compactSession(ctx context.Context, wsp *workspace.Workspace, s
 	if err != nil {
 		return "", err
 	}
+	// Out-of-loop path: pin this workspace's claude-home before ForceCompact's
+	// direct provider.Complete, mirroring guardedComplete (else it falls back to
+	// the global home and can fail auth even when the workspace is logged in).
+	wsp.Runtime.PinClaudeHome(provider)
 	history, err := wsp.DB.ListMessages(ctx, session.ID)
 	if err != nil {
 		return "", err

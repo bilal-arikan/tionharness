@@ -15,11 +15,27 @@ import (
 	"github.com/bilal-arikan/tionswarm/internal/providers"
 )
 
-const (
-	shellMaxOutputBytes = 64 * 1024 // cap combined stdout+stderr
+const shellMaxOutputBytes = 64 * 1024 // cap combined stdout+stderr
+
+// Shell timeouts are process-global and settings-driven (ShellDefaultTimeoutSec /
+// ShellMaxTimeoutSec) via SetShellTimeouts, pushed from applySettings. A per-call
+// timeout_sec arg still overrides shellDefaultTimeout, clamped to shellMaxTimeout.
+var (
 	shellMaxTimeout     = 120 * time.Second
 	shellDefaultTimeout = 30 * time.Second
 )
+
+// SetShellTimeouts overrides the default and hard-max shell command timeouts (in
+// seconds). A value <= 0 leaves the corresponding timeout unchanged, so a partial
+// settings push never zeroes a live timeout.
+func SetShellTimeouts(defaultSec, maxSec int) {
+	if defaultSec > 0 {
+		shellDefaultTimeout = time.Duration(defaultSec) * time.Second
+	}
+	if maxSec > 0 {
+		shellMaxTimeout = time.Duration(maxSec) * time.Second
+	}
+}
 
 // shellArgs is the shared input schema for both the Bash and PowerShell tools.
 type shellArgs struct {
@@ -114,7 +130,7 @@ func (t ShellTool) CallStream(ctx context.Context, input json.RawMessage, onChun
 		return "", err
 	}
 	build := func(runCtx context.Context, command string) *exec.Cmd {
-		return proc.CommandContext(runCtx, t.exe, "-c", command)
+		return hardenShellCmd(proc.CommandContext(runCtx, t.exe, "-c", command))
 	}
 	if args.RunInBackground {
 		return startBackgroundShell(t.mgr, t.sb, args, "Bash", build)
@@ -181,7 +197,7 @@ func (t PowerShellTool) CallStream(ctx context.Context, input json.RawMessage, o
 		// (e.g. Turkish) file content is not mangled on the round-trip to Go. No-op
 		// for pwsh 7+, which is UTF-8 by default. See builtin_shell_encoding.go.
 		command = applyWinPSUTF8(t.exe, command)
-		return proc.CommandContext(runCtx, t.exe, "-NoProfile", "-NonInteractive", "-Command", command)
+		return hardenShellCmd(proc.CommandContext(runCtx, t.exe, "-NoProfile", "-NonInteractive", "-Command", command))
 	}
 	if args.RunInBackground {
 		return startBackgroundShell(t.mgr, t.sb, args, "PowerShell", build)

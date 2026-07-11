@@ -38,10 +38,6 @@ type workspaceSettingsDTO struct {
 	Accent      string `json:"accent"`
 	ThemePreset string `json:"themePreset"`
 
-	SessionContextEnabled     bool `json:"sessionContextEnabled"`
-	SessionContextEveryTurn   bool `json:"sessionContextEveryTurn"`
-	SessionContextRecentCount int  `json:"sessionContextRecentCount"`
-
 	// CodebaseMemoryEnabled toggles the codebase-memory capability system (hint +
 	// isolated store + auto-index + codebase_workspace_search) for this workspace.
 	CodebaseMemoryEnabled bool `json:"codebaseMemoryEnabled"`
@@ -84,10 +80,6 @@ func toWorkspaceSettingsDTO(ctx context.Context, w *workspace.Workspace) workspa
 		Theme:       s.Theme,
 		Accent:      s.Accent,
 		ThemePreset: s.ThemePreset,
-
-		SessionContextEnabled:     s.SessionContextEnabled,
-		SessionContextEveryTurn:   s.SessionContextEveryTurn,
-		SessionContextRecentCount: s.SessionContextRecentCount,
 
 		CodebaseMemoryEnabled: s.CodebaseMemoryEnabled,
 		PromptEpochEnabled:    s.PromptEpochEnabled,

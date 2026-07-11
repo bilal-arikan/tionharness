@@ -3,9 +3,7 @@ package agent
 import (
 	"context"
 	"fmt"
-	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/bilal-arikan/tionswarm/internal/db"
@@ -15,39 +13,27 @@ import (
 )
 
 // todoSink is a tools.TodoSink that persists the agent's working checklist to a
-// durable progress file (internal/progress) so the list survives across
-// sessions. When the session has an explicit project working directory the file
-// lives in the project (<cwd>/.tionswarm/progress.json) — git-committable, portable
-// and SHARED across every session working on that same project. With no explicit
-// project dir it falls back to a PER-SESSION file under the workspace store, so
-// unrelated sessions (which would otherwise all share the workspace-default dir)
-// keep their own progress instead of overwriting each other. Best-effort.
+// durable progress file (internal/progress) so the list survives a fresh
+// session load. The file is PER-SESSION (keyed by session id under the workspace
+// store) — it is NOT shared across sessions that happen to use the same working
+// directory. Each session keeps its own checklist so two sessions on the same
+// project never overwrite each other's progress. Best-effort.
 type todoSink struct {
 	publish   func(events.Event)
 	db        *db.DB
 	sessionID string
 	agentID   string
-	dir       string // resolved project/per-session directory
+	dir       string // resolved per-session directory
 }
 
-// ProgressDir resolves where a session's persistent progress file lives:
-//   - the session's EXPLICIT working directory (a real project) → SHARED across
-//     all sessions on that project (the claude-progress cross-session convention).
-//   - otherwise a PER-SESSION directory under the store, so sessions without a
-//     project dir don't all collide on one workspace-default progress file.
+// ProgressDir resolves where a session's persistent progress file lives: a
+// PER-SESSION directory under the store, keyed by session id. Progress is
+// session-specific — it is never keyed by the working directory, so sessions
+// sharing a project dir keep independent checklists.
 //
 // Single source of truth for both the persist (NewTodoSink) and the read paths
 // (resume context block + the session-detail progress card) so they always agree.
 func (r *Runtime) ProgressDir(sessionID string) string {
-	if sessionID != "" {
-		if s, err := r.db.GetSession(context.Background(), sessionID); err == nil {
-			if d := strings.TrimSpace(s.WorkingDir); d != "" {
-				if info, statErr := os.Stat(d); statErr == nil && info.IsDir() {
-					return d
-				}
-			}
-		}
-	}
 	return filepath.Join(r.db.Root(), "progress", sessionID)
 }
 

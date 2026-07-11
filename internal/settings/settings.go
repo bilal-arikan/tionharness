@@ -297,6 +297,13 @@ type Settings struct {
 	// (native) and the bridged spawn_session (claude-cli) + the UI spawn button.
 	SpawnMaxConcurrent int `json:"spawnMaxConcurrent"` // max concurrent spawned sessions (0 = default 16)
 	SpawnMaxPerTurn    int `json:"spawnMaxPerTurn"`    // max spawns per agent turn (0 = default 4)
+	SpawnTimeoutMin    int `json:"spawnTimeoutMin"`    // spawn work-turn deadline in minutes (0 = default 20); also budgets its auto-continue continuations
+	ScheduleTimeoutMin int `json:"scheduleTimeoutMin"` // scheduled-fire (cron task/prompt + wake) deadline in minutes (0 = default 30)
+
+	// Tool execution guards (process-global tool behaviour).
+	ShellDefaultTimeoutSec int `json:"shellDefaultTimeoutSec"` // default Bash/PowerShell timeout in seconds (0 = default 30); per-call timeout_sec still overrides
+	ShellMaxTimeoutSec     int `json:"shellMaxTimeoutSec"`     // hard-max Bash/PowerShell timeout in seconds (0 = default 120)
+	MaxToolOutputKB        int `json:"maxToolOutputKB"`        // backstop cap on a tool's output in KB before truncation (0 = default 100)
 
 	// Coordinator/worker guards (M2, _Docs/47).
 	CoordinatorMaxWorkers int `json:"coordinatorMaxWorkers"` // max active workers per coordinator (0 = default 8)
@@ -333,7 +340,7 @@ func Default() Settings {
 		ClaudeConfigDir:       defaultClaudeConfigDir(),
 		ClaudeCliAuthKind:     "",
 
-		MaxContextTokens: 12000,
+		MaxContextTokens: 800000,
 		KeepRecentMsgs:   8,
 		// Context-rot-aware default (2026-06-25, _Docs/17 §12): ceil 256K keeps the
 		// live window in the gradient's high-precision zone; fraction 0 = "auto"
@@ -434,6 +441,12 @@ func Default() Settings {
 
 		SpawnMaxConcurrent: 16,
 		SpawnMaxPerTurn:    4,
+		SpawnTimeoutMin:    20,
+		ScheduleTimeoutMin: 30,
+
+		ShellDefaultTimeoutSec: 30,
+		ShellMaxTimeoutSec:     120,
+		MaxToolOutputKB:        100,
 
 		CoordinatorMaxWorkers: 8,
 		CoordinatorMaxTurns:   50,
@@ -554,6 +567,12 @@ type DTO struct {
 
 	SpawnMaxConcurrent int `json:"spawnMaxConcurrent"`
 	SpawnMaxPerTurn    int `json:"spawnMaxPerTurn"`
+	SpawnTimeoutMin    int `json:"spawnTimeoutMin"`
+	ScheduleTimeoutMin int `json:"scheduleTimeoutMin"`
+
+	ShellDefaultTimeoutSec int `json:"shellDefaultTimeoutSec"`
+	ShellMaxTimeoutSec     int `json:"shellMaxTimeoutSec"`
+	MaxToolOutputKB        int `json:"maxToolOutputKB"`
 
 	CoordinatorMaxWorkers int `json:"coordinatorMaxWorkers"`
 	CoordinatorMaxTurns   int `json:"coordinatorMaxTurns"`
@@ -661,6 +680,12 @@ func (s Settings) ToDTO() DTO {
 
 		SpawnMaxConcurrent: s.SpawnMaxConcurrent,
 		SpawnMaxPerTurn:    s.SpawnMaxPerTurn,
+		SpawnTimeoutMin:    s.SpawnTimeoutMin,
+		ScheduleTimeoutMin: s.ScheduleTimeoutMin,
+
+		ShellDefaultTimeoutSec: s.ShellDefaultTimeoutSec,
+		ShellMaxTimeoutSec:     s.ShellMaxTimeoutSec,
+		MaxToolOutputKB:        s.MaxToolOutputKB,
 
 		CoordinatorMaxWorkers: s.CoordinatorMaxWorkers,
 		CoordinatorMaxTurns:   s.CoordinatorMaxTurns,

@@ -95,6 +95,29 @@ func (r *Runtime) maybeAutoContinue(ctx context.Context, agent db.Agent, session
 		if !needsAutoContinue(steps) {
 			return
 		}
+		// The preceding turn may have consumed the whole spawn/schedule deadline; a
+		// continuation on an already-expired context fails instantly and would surface
+		// a bare "context deadline exceeded". There IS unfinished work but no budget
+		// left — skip the continuation and record a clear, human-readable note instead.
+		if cerr := ctx.Err(); cerr != nil {
+			r.logger.Info("auto-continue: parent deadline already exceeded — skipping continuation",
+				"session", sessionID, "agent", agent.ID, "iteration", i+1, "error", cerr)
+			// ctx is expired, so persist with a detached context that ignores its deadline.
+			bg := context.WithoutCancel(ctx)
+			note := db.Message{
+				SessionID: sessionID,
+				AgentID:   agent.ID,
+				Role:      "assistant",
+				Text: "⏱️ Süre doldu — önceki tur ayrılan spawn süresini doldurduğu için " +
+					"otomatik devam turu çalıştırılamadı. İş yarım kalmış olabilir; oturumu elle " +
+					"sürdürebilir ya da spawn süresini Ayarlar'dan artırabilirsiniz.",
+			}
+			if _, addErr := r.db.AddMessage(bg, note); addErr != nil {
+				r.logger.Warn("auto-continue: failed to record timeout note", "session", sessionID, "error", addErr)
+			}
+			r.AutoTagTurn(bg, sessionID, steps, "auto_continue_error")
+			return
+		}
 		r.logger.Info("auto-continue: unfinished autonomous turn — issuing continuation",
 			"session", sessionID, "agent", agent.ID, "iteration", i+1, "max", max)
 

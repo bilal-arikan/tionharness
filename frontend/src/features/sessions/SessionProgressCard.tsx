@@ -4,21 +4,17 @@ import { formatDate } from './sessionDetailFormat'
 
 // ProgressCard renders the session's persistent progress file read-only: a count
 // summary, each checklist item with its status marker (and optional category),
-// and the most recent rolling-log lines. Surfaces the cross-session note-taking
-// that the agent maintains via todo_write.
+// and the most recent rolling-log lines. Surfaces the note-taking the agent
+// maintains via todo_write.
 //
-// The file is keyed by WORKING DIRECTORY, not session (see internal/progress):
-// several sessions sharing a project dir share one progress.json. So the record
-// may have been last written by ANOTHER session — `sessionId` (the panel's
-// session) lets us flag that instead of silently attributing it to this one.
-export function ProgressCard({ progress, sessionId }: { progress: SessionProgress; sessionId?: string }) {
+// The file is PER-SESSION (keyed by session id under the store, see
+// internal/progress + Runtime.ProgressDir): each session keeps its own checklist,
+// so it never leaks into another session sharing the same working directory.
+export function ProgressCard({ progress }: { progress: SessionProgress }) {
   const rec = progress.record!
   const total = rec.todos.length
   const done = rec.todos.filter((t) => t.status === 'completed').length
   const log = (rec.log ?? []).slice(-3).reverse()
-  // The dir-scoped file was last written by a DIFFERENT session — this checklist
-  // belongs to the shared project dir, not (only) this session.
-  const foreign = !!rec.sessionId && !!sessionId && rec.sessionId !== sessionId
   return (
     <section>
       <div className="mb-2 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-dim)] opacity-70">
@@ -30,11 +26,6 @@ export function ProgressCard({ progress, sessionId }: { progress: SessionProgres
           </span>
         )}
       </div>
-      {foreign && (
-        <div className="mb-1.5 rounded-md border border-[color-mix(in_srgb,var(--color-warning)_30%,transparent)] bg-[color-mix(in_srgb,var(--color-warning)_8%,transparent)] px-2 py-1 text-[10px] leading-relaxed text-[var(--color-text-dim)]">
-          Bu ilerleme <strong>çalışma diziniyle paylaşılıyor</strong> (oturuma değil dizine bağlı) — son yazan oturum <strong>{rec.sessionId}</strong>.
-        </div>
-      )}
       <div className="flex flex-col gap-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-2.5 py-2">
         {rec.todos.map((t, i) => (
           <div key={i} className="flex items-start gap-1.5 text-[11px] leading-relaxed">

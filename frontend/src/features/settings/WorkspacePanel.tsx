@@ -56,29 +56,6 @@ export function WorkspacePanel({ ws, setWsField, onDeleteWorkspace }: Props) {
       </div>
 
       <div className="mt-2 border-t border-[var(--color-border)] pt-3 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
-        Çapraz-session farkındalığı
-      </div>
-      <Toggle
-        label="Session bağlamı"
-        hint="Bu workspace'in ajanlarına son (geçmiş) sessionlarının kısa özetini bağlama ekler ve list_sessions aracını sunar. Aktif (canlı) sessionlar otomatik gönderilmez — ajan onları list_sessions ile kendi çeker. Mevcut başlık/özet kullanılır (yeni LLM çağrısı yok)."
-        checked={ws.sessionContextEnabled}
-        onChange={(v) => setWsField('sessionContextEnabled', v)}
-      />
-      {ws.sessionContextEnabled && (
-        <>
-          <Toggle
-            label="Her turda ver"
-            hint="Açık: özet her turda güncellenir (token maliyeti). Kapalı: yalnızca session'ın ilk turunda verilir (önerilen)."
-            checked={ws.sessionContextEveryTurn}
-            onChange={(v) => setWsField('sessionContextEveryTurn', v)}
-          />
-          <Field label="Listelenecek geçmiş session sayısı" hint="Aktif olmayan, en son güncellenen N session (1–20).">
-            <input type="number" min={1} max={20} value={ws.sessionContextRecentCount} onChange={(e) => setWsField('sessionContextRecentCount', Number(e.target.value))} className={inputCls} />
-          </Field>
-        </>
-      )}
-
-      <div className="mt-2 border-t border-[var(--color-border)] pt-3 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
         Kod bilgi-grafiği (codebase-memory)
       </div>
       <Toggle

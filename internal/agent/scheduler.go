@@ -15,13 +15,8 @@ import (
 	"github.com/bilal-arikan/tionswarm/internal/tools"
 )
 
-// scheduleTimeout bounds a single scheduled fire (task run or prompt delivery).
-// Sized for current-generation models: a Fable-class agent can legitimately run
-// ONE request for many minutes, and a multi-iteration tool loop longer still —
-// the old 120s ceiling killed exactly the long autonomous work schedules exist
-// for. Runaway protection comes from the loop guards (iteration cap, budgets),
-// not this wall clock.
-const scheduleTimeout = 30 * time.Minute
+// The scheduled-fire deadline is settings-driven (ScheduleTimeoutMinutes, default
+// DefaultScheduleTimeoutMinutes) and read live via s.rt.tun.ScheduleTimeout().
 
 // Scheduler runs a workspace's enabled schedules on their cron expressions.
 // Cron expressions use the standard 5-field format (minute hour dom month dow).
@@ -137,7 +132,7 @@ func scheduleExpired(sc db.Schedule) bool {
 // the schedule's end date is skipped and the schedule is auto-disabled (a reload
 // then drops it from the cron table).
 func (s *Scheduler) fire(scheduleID string) {
-	ctx, cancel := context.WithTimeout(context.Background(), scheduleTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), s.rt.tun.ScheduleTimeout())
 	defer cancel()
 	if sc, err := s.db.GetSchedule(ctx, scheduleID); err == nil && scheduleExpired(sc) {
 		if err := s.db.SetScheduleEnabled(ctx, scheduleID, false); err != nil {
@@ -176,7 +171,7 @@ func (s *Scheduler) fireWake(scheduleID string) {
 	delete(s.wakeTimers, scheduleID)
 	s.mu.Unlock()
 
-	ctx, cancel := context.WithTimeout(context.Background(), scheduleTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), s.rt.tun.ScheduleTimeout())
 	defer cancel()
 
 	sc, err := s.db.GetSchedule(ctx, scheduleID)

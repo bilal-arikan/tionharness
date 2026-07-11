@@ -2,6 +2,151 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-07-11**
 
+## Shell sağlamlaştırma: non-interactive git + süreç-ağacı reap ✅ (2026-07-11)
+
+- **Teşhis:** Bir ajan shell aracıyla `git commit` çalıştırınca tur tamamen
+  kilitleniyordu. İki kök neden: (1) `core.editor=notepad` → git editör açmak
+  isteyince headless/stdin'siz alt-süreçte **notepad GUI'si sonsuza dek bloke**
+  oluyordu (env'de `GIT_EDITOR` yoktu); (2) timeout'ta `exec.CommandContext`
+  yalnız doğrudan çocuğu (bash/powershell) öldürüp **spawn edilen `git.exe`+editör
+  torununu zombi bırakıyordu** → `.git/index.lock` kalıyor, sonraki commit'ler
+  bloke. Gözlemde ~28 zombi git süreci + 10 dakikalık boşa tur.
+- **Çözüm (uygulama geneli):** `internal/proc` katmanına iki primitive:
+  - `HardenedEnv(base)` → non-interactive guard'lar (`GIT_TERMINAL_PROMPT=0`,
+    `GIT_EDITOR=true`, `GIT_SEQUENCE_EDITOR=true`, `GIT_PAGER=cat`/`PAGER=cat`,
+    `GIT_OPTIONAL_LOCKS=0`, `GCM_INTERACTIVE=never`). Guard'lar **en sona
+    eklenir** → os/exec last-wins dedup'ı ile miras `notepad` editörünü ezer.
+  - `TreeKill(cmd)` → ctx iptal/timeout'ta **tüm çocuk ağacını** öldürür (Windows
+    `taskkill /F /T`; Unix `Setpgid` + negatif-pid `SIGKILL`) + `WaitDelay` (5sn)
+    ile takılan doğrudan çocuğu force-kill eder.
+  - Bağlanan yerler: `builtin_shell.go` Bash+PowerShell `build` closure'ı ortak
+    `hardenShellCmd` (foreground + `run_in_background` ikisi de) ve claude-cli
+    `cliBaseEnv` (CLI ajanının kendi git'i de non-interactive).
+- **Testler:** `internal/proc/env_test.go` — guard override (notepad→true),
+  TreeKill Cancel/WaitDelay set; build+vet+tools/providers testleri yeşil.
+
+## Çapraz-session farkındalığı: tamamen ayarsız → her zaman açık + list_sessions sayfalama ✅ (2026-07-11)
+
+- **Karar:** Çapraz-session farkındalığı artık diğer pull araçları gibi **her zaman
+  aktif ve hiç ayarı yok**. Önce iki toggle (`Session bağlamı` = `SessionContextEnabled`,
+  master; `Her turda ver` = `SessionContextEveryTurn`), ardından son kalan
+  `Listelenecek geçmiş session sayısı` (`SessionContextRecentCount`) input'u da
+  kaldırıldı. Pushed özet bloğu daima yalnız session'ın **ilk turunda**, sabit **5**
+  geçmiş session ile verilir; `list_sessions`/`archive_sessions`/`conversation_search`
+  daima sunulur.
+- **list_sessions sayfalama:** Araç artık `offset` argümanı alıyor; yanıt toplam
+  sayıyı ("Showing X–Y of Z") ve daha varsa bir sonraki sayfanın offset'ini bildiriyor
+  → **tüm** sessionlar (aktif veya geçmiş) sayfa sayfa gezilebilir (varsayılan sayfa
+  20). (`builtin_sessions.go` + `builtin_sessions_test.go`.)
+- **Değişiklikler:** `WSSettings`/`WSSettingsPatch` + API DTO'dan üç alanın hepsi
+  silindi, `clampRecent` kaldırıldı (`settings.go`, `workspace_settings.go`).
+  `Runtime`'dan tüm `sessionCtx*` durumu + `SetSessionContext`/`SessionContextRecentCount`
+  silindi, `DefaultSessionContextRecent` sabiti kaldırıldı (`runtime.go`, `tunables.go`).
+  Gate'ler koşulsuz (`toolsetup.go`, `runtime.go` CLI bridge, `agent_context.go`);
+  `sessionsContextBlock` artık parametresiz (sabit 5), `chat_turn.go` yalnız
+  `freshSession` koşuluyla enjekte ediyor. Frontend: `WorkspacePanel.tsx`'ten
+  "Çapraz-session farkındalığı" bölümü **tamamen kaldırıldı** (başlık + açıklama; hiç
+  ayar yok), tipler + `WorkspaceView` payload'ı güncellendi. Testler (`settings_test.go`, `sessionctx_test.go`, `sessions_context_test.go`,
+  `builtin_sessions_test.go`) yeni imzalara uyarlandı.
+- Doğrulama: `go build ./...` + `go test ./internal/{workspace,agent,api,tools}` yeşil;
+  frontend `npx tsc --noEmit` yeşil.
+
+## Artifact arşivleme + "Kalıcı ilerleme" oturum sızıntısı düzeltmesi ✅ (2026-07-11)
+
+- **TSK46 (iki parça):**
+  1. **Artifact arşivleme** — Artifact'ler artık oturumlar gibi *yumuşak,
+     geri-alınabilir* şekilde arşivlenebiliyor (silinmiyor). Model'e
+     `Archived bool` alanı (`models_artifact.go`), store'a `SetArtifactArchived`
+     (`store_artifact.go`, `SetArtifactGroup` desenini izler), API'ye
+     `PUT /api/artifacts/{id}/archive` (`artifacts.go` + `server.go`) eklendi.
+     Frontend: `setArtifactArchived` API çağrısı, `Artifact.archived` tipi,
+     Artifacts ekranında filtre çubuğuna **Arşiv (N)** görünüm toggle'ı (aktif ⇄
+     arşiv listeleri asla karışmaz), toplu **Arşivle/Arşivden çıkar** aksiyonu,
+     detay toolbar'ında tekil arşiv butonu + "Arşivlendi" rozeti. Son arşivli
+     artifact geri alınınca görünüm otomatik aktif listeye döner.
+  2. **Bug** — "Kalıcı ilerleme · N/N" kartı bütün oturumlarda aynı görünüyor ve
+     hiç kaybolmuyordu: `progress.json` **çalışma dizinine** göre anahtarlı
+     (bkz. `36-KALICI-ILERLEME.md`), aynı proje dizinini paylaşan tüm oturumlar
+     tek dosyayı okuyordu. Kayıt zaten **son yazan** oturumun `sessionId`'sini
+     tutuyor (`todosink.go` `SaveTodos`); `SessionDetailPanel` artık kartı yalnız
+     kaydı son yazan oturumda gösteriyor (sahipsiz legacy kayıt hâlâ görünür).
+     `SessionProgressCard`'daki artık ulaşılamaz "foreign" uyarı bloğu kaldırıldı.
+- Doğrulama: `go build ./...` + `go vet ./...` + `go test ./internal/...` yeşil;
+  frontend `npx tsc -b` + `npm run build` yeşil.
+
+## Canlı süre göstergesi her tool'da sıfırlanıyordu ✅ (2026-07-11)
+
+- **Problem:** Sohbette asistan balonunun altındaki canlı süre (`LiveTimer`), agent'ın
+  baştan beri çalışma süresini değil, **son tool'dan/step'ten beri geçen süreyi**
+  gösteriyordu. Kök neden: `chatStreamHub.ts`'de `composeGhost()` her `syncGhost`
+  çağrısında (her step/delta) `createdAt: Date.now()` ile **yeniden** damgalanıyordu;
+  `LiveTimer startUnixSec={m.createdAt}` de bu sürekli-yenilenen zamandan sayıyordu.
+  (SES162'de 5 dk görünmesinin sebebi: hung olduğu için hiç step gelmemiş, damga sabit
+  kalmıştı — bug'ı maskeliyordu.)
+- **Çözüm:** `ghostStartedAt` tur başında **bir kez** damgalanıp (`AgentStart`'ta;
+  step'ler önce gelirse `syncGhost` fallback'iyle) tüm step/delta upsert'lerinde sabit
+  tutuluyor, `dropGhost`'ta sıfırlanıyor. `composeGhost` artık `createdAt: ghostStartedAt`
+  kullanıyor → canlı sayaç agent'ın tüm turunu sayıyor. Tamamlanan tur süresi
+  (`workedSec = m.createdAt − tetikleyen user mesajı`) zaten doğruydu, dokunulmadı.
+- Doğrulama: `tsc --noEmit` temiz. (Frontend değişikliği → gömülü dist rebuild gerekir.)
+
+## sqz PreToolUse köprü uyumsuzluğu — teşhis + workaround (2026-07-11, kod değişikliği yok)
+
+- **Bulgu:** WS5'te `sqz` (token sıkıştırıcı) HOK1 olarak **enabled** ve CLI
+  `--settings`'ine doğru forward ediliyor, ama `sqz gain` → *son 7 günde 0 sıkıştırma*
+  (tarihsel 25). Sebep: `sqz hook claude` **yalnız `tool_name == "Bash"`** olan çağrıları
+  yeniden yazıyor; TionSwarm shell'i claude-cli'ye **MCP-namespaced** isimle köprülüyor
+  (`mcp__tionswarm_interaction__PowerShell` — 463 çağrı — ve `__Bash` — 49), ayrıca
+  CLI-native `Bash` gölgeleme korumasıyla deny listesinde. Sonuç: matcher `Bash,PowerShell`
+  gerçek shell çağrılarını yakalamıyor → sqz hiç tetiklenmiyor. (Aynı sorun rtk/HOK2'de de
+  var; HOK2 zaten disabled.)
+- **Workaround (workspace config, TionSwarm source'a dokunmaz):** köprü scripti
+  `Progs/sqz/sqz-bridge-hook.ps1` — köprülü `tool_name`'i `Bash`'e normalize edip sqz'ye
+  **byte-temiz** (temp dosya + `cmd` redirection; WinPS 5.1 pipe UTF-16 bozuyor) devreder,
+  çıktıyı BOM'suz yazar. HOK1 matcher'ı köprülü isimleri de içerecek şekilde genişletildi
+  ve komutu bu scripte bağlandı. Test: köprülü PowerShell/Bash → `<cmd> 2>&1 | sqz compress`
+  olarak yeniden yazılıyor (native Bash da bozulmadı). **Tüm sqz-hook'lu workspace'lere
+  uygulandı:** WS5/HOK1, WS1/HOK2, WS10/HOK4 (WS10'unki bir otonom ajan tarafından çift-escape'li
+  bozuk yazılmıştı — `-File \"C:\\...\"` — düzeltildi). WS2/WS8/WS9'da sqz hook yok. **Etkin
+  olması için TionSwarm restart gerekir** (hook DB bellek-içi; dosya boot'ta yüklenir).
+- **Olası kalıcı çözüm (gelecek kart):** ya sqz'nin köprülü tool-adı desteği, ya da
+  TionSwarm'ın bridged-shell çıktısını doğrudan bir token-optimizer'dan geçiren native seam.
+
+## claude-cli startup-hang watchdog ✅ (2026-07-11)
+
+- **Problem:** Spawn edilen bir board-otomasyon turunun `claude.exe -p` subprocess'i
+  MCP `initialize` handshake'inde kilitlenip **hiç stdout üretmeden ve çıkmadan**
+  7+ dk askıda kaldı (WS5/SES162). `runAttempt`'in bloklu okuma döngüsü yalnız `ctx`
+  iptaliyle biterdi; spawn/otonom turun ctx'inde deadline yoksa → `llm_call` yok,
+  `error` yok, sohbetteki "yazıyor" göstergesi hiç temizlenmez, seri kuyruk kilitlenir.
+- **Çözüm:** `runAttempt` okuma döngüsüne **startup-only watchdog** eklendi
+  (`claudecli.go`, `cliStartupTimeout = 90s`). Reader goroutine + timer; **yalnız
+  ilk-çıktıya-kadar** olan süre korunur — ilk stdout satırı gelince timer durur,
+  sonraki uzun sessizlikler (meşru sync `run_subagent`, dakikalarca sessiz) CLI'nin
+  `MCP_TOOL_TIMEOUT`'una + dış ctx'e bırakılır (yanlış-pozitif kill yok). Çıktısız
+  hang'de subprocess öldürülür → `cmd.Wait` döner → **retryable** net hata döner →
+  self-healing bir kez retry eder, ghost temizlenir, kuyruk açılır.
+- Doğrulama: `go build ./...` + `go vet ./internal/providers` + `go test
+  ./internal/providers -short` yeşil.
+
+## `/compact` + `/handoff` claude-home seam düzeltmesi ✅ (2026-07-11)
+
+- **Problem:** Manuel `/compact` (`api.compactSession`) ve `/handoff`
+  (`Runtime.HandoffSession` → `conversation.BuildHandoff`) provider'ı
+  `providers.Get` ile alıp **doğrudan** `provider.Complete` çağırıyordu —
+  `guardedComplete` funnel'ını (dolayısıyla `SetConfigDir` seam'ini) atlayarak.
+  claude-cli sağlayıcıda provider default `configDir` = **global**
+  `~/.tionswarm/claude-home`; oranın credential'ı boşsa `authentication_failed`
+  dönüyordu, workspace'in kendi `claude-home`'u login olsa bile (WS5/SES130'da
+  görüldü).
+- **Çözüm:** Ortak seam tek yere alındı — `Runtime.PinClaudeHome(provider)`
+  (`budget.go`), claude-cli provider'ının config evini bu workspace'in
+  `claude-home`'una sabitler (diğerlerinde no-op). `guardedComplete` artık bunu
+  çağırıyor; iki out-of-loop yol (`compactSession`, `HandoffSession`) da ham
+  `Complete` öncesi çağırıyor. Diğer yardımcı çağrılar (title/summary/reflect)
+  zaten `guardedComplete`'ten geçtiği için etkilenmemişti.
+- Doğrulama: `go build ./...` + `go vet` + `go test ./internal/agent` yeşil.
+
 ## an external CLI agent `/chronicle` referans dokümanı ✅ (2026-07-11)
 
 - **TSK30 (doküman-only):** an external CLI agent'nin `/chronicle` oturum-içgörü
@@ -12,6 +157,54 @@
   eklendi. Boşluk tespiti: proaktif `tips`/`standup` içgörü üreteci TionSwarm'da yok
   (gelecek kart tohumları dokümanda). Kaynaklar dipnotlandı (GitHub Docs + changelog).
   `00-GENEL-BAKIS.md` dizinine 58 + 59 satırları eklendi. Kod değişikliği yok.
+
+## Sohbet kuyruğu + çoklu-ekran senkronizasyonu (event-sourcing cutover) ✅ (2026-07-11)
+
+- **Amaç:** Sohbeti "owner window kendi SSE'sini stream'ler + non-owner'lar
+  inflight snapshot + polling ile kurtarır" ikiliğinden çıkarıp **sunucu-otoriter,
+  tek total-order'lı, cursor tabanlı event akışı** modeline taşımak. Her pencere
+  sadece abone; "sahip pencere" öldü. Tam tasarım + faz planı: `_Docs/58-QUEUE-SENKRON.md`.
+- **Faz 1 — SessionHub + cursor SSE:** `internal/sessionhub` (per-session monoton
+  `seq` + ring buffer + epoch + gap-aware `Replay` + `Commit` boundary);
+  `GET /api/sessions/{id}/stream?since=&epoch=` (hello/reset/hub, `Last-Event-ID`
+  uyumlu). İnteraktif tur tüm dayanıklı olayları eş-sıralı hub'a yayınlıyor;
+  autonomous turlar `bridgeBusToHub` ile bus→hub (steps + turn_done). **Replay
+  optimizasyonu:** fresh abonelik (`since<=0`) yalnız `committed`'dan sonraki
+  in-flight tail'i replay eder → tamamlanmış turlar tekrar oynatılmaz.
+- **Faz 2 — Interaction CAS (resolve-once):** `ask_user`/`permission`/`plan` tek
+  `pendingInteraction` primitive'ine; `interaction_open`/`interaction_resolved`
+  tüm pencerelere yayılır; cevap `POST .../interactions/{iid}/answer` → compare-and-
+  swap, ilk yazan kazanır (200), diğeri 409 + kart kapanır. Native + CLI yolu.
+- **Faz 3 — Durable send-queue:** `handleChatStream` → ince wrapper + `runChatTurn`
+  (HTTP'siz, worker'ın çağırdığı çekirdek). `db/inbox.go` (durable `inbox.json`) +
+  `api/inbox.go`: `POST /sessions/{id}/messages` (enqueue, `clientMsgId` idempotency),
+  `DELETE .../queue/{msgId}` (cancel), `POST .../control` (session-scoped stop/steer),
+  `queue_update` broadcast, boot `recoverInboxes`. Frontend: send = enqueue
+  (optimistic yok — kuyruktaysa tray, çalışınca chat balonu); client-side flush
+  kaldırıldı, backend serialize ediyor.
+- **Faz 4 — Presence:** `hub.SubscriberCount` → efemer `presence` yayını her abone
+  giriş/çıkışında → ChatView "Bu oturum N pencerede açık" rozeti.
+- **Frontend cutover:** `api/sessionStream.ts` (cursor+epoch+gap-detect+reconnect),
+  `features/chat/chatStreamHub.ts` (aktif session'ın tek otoriter render'ı);
+  `useChatStream` hub aboneliği; inflight polling + bus-ghost + recoverInflight
+  kaldırıldı.
+- **Doğrulama:** `go build`/`go vet` yeşil, **815 test / 35 paket** (3 interaction
+  testi yeni CAS'a göre güncellendi); `tsc --noEmit` + `vite build` temiz; runtime
+  smoke (headless boot + hub stream hello/presence + queue/control endpoint'leri).
+- **Bilinen sınır:** autonomous turlar reply mesajını hub'a yayınlamıyor
+  (tamamlanma `bridgeBusToHub`'ın turn_done'u + listMessages reload ile geliyor).
+
+## Mobil: interaktif kartlar taşınca kaydırılabilir ✅ (2026-07-10)
+
+- **Sorun:** Telefon ekranında `ask_user` (çok-soru), plan onayı, izin ve görev
+  listesi kartları viewport'u aşınca üst kısımları görünmüyordu — dikey kaydırma yoktu.
+- **Çözüm (yalnız frontend, mantık değişmedi):** ortak `ScrollableCard`
+  (`shared/components/ScrollableCard.tsx`) sarmalayıcısı — viewport-oransal
+  `maxH` (varsayılan `max-h-[55vh]`) + `overflow-y-auto`. Büyüyen içerik bölgesi bu
+  sarmalayıcıya alındı; aksiyon butonları dışarıda bırakıldı → her zaman görünür.
+  - Kullananlar: `AskPrompt` (SingleAsk soru/seçenek + MultiAsk soru listesi, 55vh),
+    `TodoCard` (50vh), `TodoPanel` (45vh), `PermissionPrompt` (komut `<pre>`, 40vh),
+    `PlanPrompt` (plan markdown'ı, 55vh).
 
 ## Bash öncelikli, PowerShell gerektiğinde ✅ (2026-07-10, TSK43)
 
@@ -39,6 +232,50 @@
   ile bunu ezebilir.
 - **Doğrulama:** `go build ./...`, `go vet ./...`, `go test ./internal/...` — hepsi yeşil
   (agent/api/tools dahil; frontend'e dokunulmadı). Detay `_Docs\51`, `_Docs\17`.
+
+## Artifact detayında tekil grup düzenleme ✅ (2026-07-10, TSK44)
+
+- **Sorun:** Bir artifact açıkken grubunu değiştirmenin yolu yoktu — yalnız çoklu-seçim
+  (bulk) grup atama ve sürükle-bırak vardı. Tek bir artifact'i gruplamak için kullanıcı
+  çoklu-seçime girmek veya DnD yapmak zorundaydı.
+- **Çözüm:** `ArtifactsPanel` detay editörüne doğrudan grup input'u eklendi
+  (`data-testid="artifact-edit-group-input"`, mevcut grup adları `artifacts-group-names`
+  datalist'iyle önerilir; boş = grupsuz). `Draft`'a `group` alanı; `createNew`/`startEdit`
+  onu doldurur; `dirty` grup farkını da içerir.
+- **Kayıt yolu:** `save` önce içerik/meta patch'ini (`api.updateArtifact`), grup değiştiyse
+  ardından `api.setArtifactGroup(id, group)` çağırır — backend `updateArtifact` handler'ı
+  `group`'u yok saydığı için mevcut `PUT /api/artifacts/{id}/group` endpoint'i reuse edildi.
+  **Backend değişikliği yok.** Detay `_Docs\45`.
+- **Doğrulama:** `go build/vet`, `go test ./internal/...`, `npx tsc -b`, `npm run build` — hepsi yeşil.
+
+## Spawn süresi ayarlanabilir + otomatik-devam deadline koruması ✅ (2026-07-10)
+
+- **Sorun:** Otomatik-devam turu (`maybeAutoContinue`), spawn work-turn'ünün context'ini
+  paylaşıyordu. İlk tur 10 dk'lık sabit `spawnTimeout`'u tükettiğinde devam turu **süresi
+  dolmuş** context'te 80 ms'de patlayıp kullanıcıya ham `context deadline exceeded`
+  gösteriyordu (SES147).
+- **Fix 1 — ayarlanabilir süre:** Spawn work-turn deadline'ı artık Ayarlar'dan
+  (`SpawnTimeoutMin`, **default 20 dk**). `Tunables.SpawnTimeout()` → `runSpawn` kullanır;
+  applySettings ile canlı uygulanır. Frontend: AppToolsPanel "Spawn süresi (dk)" alanı.
+  Diğer ayrık yüzeyler (worker/inbox/hook firing) sabit `spawnTimeout`'ta kalır.
+- **Fix 2 — deadline guard:** `maybeAutoContinue`, her iterasyonda `ctx.Err()` kontrol eder;
+  deadline dolmuşsa devam turunu atlar ve ham Go hatası yerine anlamlı "⏱️ Süre doldu…"
+  mesajı yazar (`context.WithoutCancel` ile kalıcılaştırır, `auto_continue_error` etiketler).
+
+## Ek sabit değerler Ayarlar'a taşındı ✅ (2026-07-10)
+
+Daha önce kod-sabiti olan 4 değer settings-driven yapıldı (applySettings ile canlı,
+0 → yerleşik default). Ayarlar → App/Tools panelinde:
+
+- **Zamanlama süresi** (`ScheduleTimeoutMin`, default 30 dk) — `scheduler.fire/fireWake`
+  artık `s.rt.tun.ScheduleTimeout()` kullanır; spawn süresiyle aynı desen.
+- **Kabuk varsayılan/maks. süre** (`ShellDefaultTimeoutSec`/`ShellMaxTimeoutSec`, 30/120 sn)
+  — `tools.SetShellTimeouts`; per-call `timeout_sec` yine geçersiz kılar, maks. ile kırpılır.
+- **Araç çıktı sınırı** (`MaxToolOutputKB`, default 100 KB) — `tools.SetMaxToolOutputBytes`;
+  MCP dahil tüm araç çıktısının backstop kesme sınırı.
+- **Maks. bağlam token** default `12000 → 800000`.
+
+Not: `tools` paketinde bu değerler artık process-global `var` + setter (const değil).
 
 ## Executions ekranı kaldırıldı — birleşik Sohbet transkripti ✅ (2026-07-10, TSK45)
 

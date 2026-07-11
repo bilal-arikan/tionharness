@@ -15,7 +15,9 @@ import (
 	"github.com/bilal-arikan/tionswarm/internal/db"
 	"github.com/bilal-arikan/tionswarm/internal/events"
 	"github.com/bilal-arikan/tionswarm/internal/providers"
+	"github.com/bilal-arikan/tionswarm/internal/sessionhub"
 	"github.com/bilal-arikan/tionswarm/internal/tools"
+	"github.com/bilal-arikan/tionswarm/internal/workspace"
 )
 
 // handleChatStream runs one chat turn over Server-Sent Events, emitting each
@@ -40,43 +42,69 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "sessionId and message (or attachments) are required")
 		return
 	}
-
 	flusher, ok := w.(http.Flusher)
 	if !ok {
 		writeError(w, http.StatusInternalServerError, "streaming unsupported")
 		return
 	}
+	// Legacy direct-stream path. Since the full cutover (_Docs/58) the UI renders
+	// from the per-session hub, not these SSE frames — but the endpoint still runs
+	// the turn synchronously and streams for any old client. Headers go out now
+	// (200); a pre-flight failure is then delivered as an `error` frame + a hub
+	// turn_error, rather than an HTTP status.
+	h := w.Header()
+	h.Set("Content-Type", "text/event-stream")
+	h.Set("Cache-Control", "no-cache")
+	h.Set("Connection", "keep-alive")
+	h.Set("X-Accel-Buffering", "no")
+	w.WriteHeader(http.StatusOK)
+	write := func(event string, data any) {
+		b, _ := json.Marshal(data)
+		fmt.Fprintf(w, "event: %s\ndata: %s\n\n", event, b)
+		flusher.Flush()
+	}
+	s.runChatTurn(r.Context(), ws(r), req, write)
+}
 
-	// Register this turn so it can be stopped or steered while running. The
-	// cancelable context ends the stream on "stop"; the steer channel feeds live
-	// guidance into the tool loop.
+// runChatTurn runs one chat turn to completion, publishing every UI event to the
+// session hub (the authoritative render path for all windows). write is an
+// optional legacy SSE sink: the direct /chat/stream handler passes one, the queue
+// worker passes nil (the hub carries the UI either way). clientGone signals the
+// submitting client navigated away so an interactive ask_user unblocks instead of
+// pinning the detached turn; pass a never-done context for a server-driven queued
+// turn that has no single owning client.
+func (s *Server) runChatTurn(clientGone context.Context, wsp *workspace.Workspace, req chatReq, write func(event string, data any)) {
+	// Register this turn so it can be stopped or steered while running.
 	runID := uuid.NewString()
-	// Detach the turn from the client connection. A page refresh or navigation
-	// aborts the SSE fetch; if generation were tied to the request context it
-	// would cancel mid-turn and the assistant reply would never be persisted —
-	// so after reload the answer is gone and the message block "vanishes". By
-	// detaching, generation runs to completion and persists regardless; only an
-	// explicit "stop" control cancels it. The original request context is kept
-	// as clientGone so an interactive ask_user (which needs a live client) does
-	// not block forever once the user has navigated away.
-	clientGone := r.Context()
-	ctx, cancel := context.WithCancel(context.WithoutCancel(r.Context()))
+	// Detach the turn from the client connection so a page refresh/navigation never
+	// cancels generation; only an explicit "stop" control cancels it.
+	ctx, cancel := context.WithCancel(context.WithoutCancel(clientGone))
 	defer cancel()
-	run := s.runs.register(runID, req.SessionID, ws(r).ID, cancel)
+	run := s.runs.register(runID, req.SessionID, wsp.ID, cancel)
 	defer s.runs.unregister(runID)
 	ctx = agent.WithSteer(ctx, run.steer)
 	// Point any CLI subprocess (claude-cli, ...) at the in-process Interaction MCP
-	// endpoint for this turn, carrying the per-run token so its ask_user/todo_write
-	// calls correlate back here. No-op when the base URL is unknown.
+	// endpoint for this turn, carrying the per-run token. No-op when unknown.
 	if url := s.interactionURL(); url != "" {
-		// Provisional endpoint (pre-turn, no responding agent resolved yet): use the
-		// static split. It is overwritten below per agent turn with the visibility-
-		// aware split once agentRow + its registry are known.
 		coreNames, extNames := splitInteractionTiers(interactionAdvertisedNames(s.tun, false), nil, nil)
 		ctx = tools.WithInteractionEndpoint(ctx, url, run.token, coreNames, extNames)
 	}
+	// Install the legacy SSE writer only for the direct HTTP path; the queue worker
+	// passes nil and run.emit becomes a no-op (the hub carries all UI).
+	if write != nil {
+		run.setWrite(write)
+		defer run.clearWrite()
+	}
+	// fail reports a pre-flight failure (before the turn commits) to the legacy SSE
+	// sink AND the hub, so every window clears its "thinking" state and shows why.
+	fail := func(reason, detail string) {
+		s.logger.Error("chat turn preflight failed", "session", req.SessionID, "reason", reason, "detail", detail)
+		payload := map[string]any{"error": detail, "reason": reason}
+		run.emit("error", payload)
+		s.publishHub(req.SessionID, sessionhub.KindTurnError, payload, false)
+		s.hub.Commit(req.SessionID)
+	}
 
-	wsp := ws(r)
 	database := wsp.DB
 	// Drop any crash-recovery sidecar when the turn returns by any normal path
 	// (success, handled failure, client abort): only a true mid-turn process
@@ -103,7 +131,7 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 
 	session, err := database.GetSession(ctx, req.SessionID)
 	if err != nil {
-		writeError(w, http.StatusNotFound, "session not found")
+		fail("session_not_found", "session not found")
 		return
 	}
 	// A coordinator session runs at most ONE turn at a time: claim the turn slot
@@ -122,7 +150,7 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 	// Resolve the ordered list of responding agents (default → session agent).
 	agents := s.resolveTurnAgents(ctx, database, session, req.AgentIDs)
 	if len(agents) == 0 {
-		writeError(w, http.StatusNotFound, "agent not found")
+		fail("agent_not_found", "agent not found")
 		return
 	}
 	// A fresh session opened by @mentioning an agent adopts it as the main agent.
@@ -144,7 +172,7 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 		Attachments: req.Attachments,
 	})
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		fail("persist_error", err.Error())
 		return
 	}
 	// The turn is now committed (user message persisted); arm the terminal-event
@@ -153,58 +181,36 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 	// Every file attached to a chat turn becomes a session artifact (origin chat).
 	s.captureAttachmentArtifacts(ctx, database, session.ID, agents[0].ID, req.Attachments)
 
-	// Begin the event stream.
-	h := w.Header()
-	h.Set("Content-Type", "text/event-stream")
-	h.Set("Cache-Control", "no-cache")
-	h.Set("Connection", "keep-alive")
-	h.Set("X-Accel-Buffering", "no")
-	w.WriteHeader(http.StatusOK)
-
-	// Route every SSE write through the run's mutex-guarded writer so the stream
-	// handler goroutine and the Interaction MCP handler goroutine (which emits
-	// ask/todo steps for the CLI path) never race on the ResponseWriter.
-	run.setWrite(func(event string, data any) {
-		b, _ := json.Marshal(data)
-		fmt.Fprintf(w, "event: %s\ndata: %s\n\n", event, b)
-		flusher.Flush()
-	})
-	defer run.clearWrite()
+	// The legacy SSE writer (if any) was installed at the top; sse is a no-op when
+	// none is set (queue worker path). All UI rides the hub regardless.
 	sse := run.emit
 
 	sse("meta", map[string]any{"userMessage": userMsg, "runId": runID})
+	// Put the user message onto the session hub so EVERY window watching this
+	// session (not just the one that submitted) renders it live, in order.
+	s.publishHub(session.ID, sessionhub.KindUserMessage, userMsg, false)
 
 	// Wire the interactive asker: the ask_user tool emits a transient "ask" step
 	// and blocks here until the client POSTs an answer (or the turn is stopped).
 	// The tool loop runs in this same goroutine, so emitting via sse is safe.
 	ctx = tools.WithAsker(ctx, func(ctx context.Context, question string, options []string) (string, error) {
-		sse("step", agent.TurnStep{Kind: agent.StepAsk, Text: question, Options: options})
-		select {
-		case ans := <-run.answer:
-			return ans, nil
-		case <-clientGone.Done():
-			// The user navigated away; no one can answer. Surface an error so the
-			// model proceeds on its own instead of blocking the detached turn
-			// forever (and leaking this goroutine).
-			return "", clientGone.Err()
-		case <-ctx.Done():
-			return "", ctx.Err()
-		}
+		// Resolve-once interaction on the session hub: EVERY window renders the card
+		// and the first to answer wins (CAS). clientGone still aborts a detached turn
+		// whose user navigated away so the goroutine never leaks.
+		pi := s.openInteraction(session.ID, "ask", map[string]any{"question": question, "options": options})
+		return s.waitInteraction(ctx, clientGone, pi)
 	})
 
-	// Multi-question asker: ask_user with several questions emits ONE step carrying
-	// all of them; the client renders a combined form and POSTs a JSON array of
-	// answers, which FormatMultiAnswer folds into a single labeled block for the model.
+	// Multi-question asker: ask_user with several questions emits ONE interaction
+	// carrying all of them; every window renders a combined form and any POSTs a JSON
+	// array of answers, which FormatMultiAnswer folds into a single labeled block.
 	ctx = tools.WithMultiAsker(ctx, func(ctx context.Context, questions []tools.AskQuestion) (string, error) {
-		sse("step", agent.TurnStep{Kind: agent.StepAsk, Questions: questions})
-		select {
-		case ans := <-run.answer:
-			return tools.FormatMultiAnswer(questions, ans), nil
-		case <-clientGone.Done():
-			return "", clientGone.Err()
-		case <-ctx.Done():
-			return "", ctx.Err()
+		pi := s.openInteraction(session.ID, "ask", map[string]any{"questions": questions})
+		ans, err := s.waitInteraction(ctx, clientGone, pi)
+		if err != nil {
+			return "", err
 		}
+		return tools.FormatMultiAnswer(questions, ans), nil
 	})
 
 	// Session-scoped permission grants + the approval prompter for write/exec
@@ -216,15 +222,10 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 	run.setGrants(grants)
 	ctx = tools.WithGrants(ctx, grants)
 	ctx = tools.WithPermissionPrompter(ctx, func(ctx context.Context, tool, risk, arg string, options []string) (string, error) {
-		sse("step", agent.TurnStep{Kind: agent.StepPermission, Tool: tool, Reason: risk, Text: arg, Options: options})
-		select {
-		case ans := <-run.answer:
-			return ans, nil
-		case <-clientGone.Done():
-			return "", clientGone.Err()
-		case <-ctx.Done():
-			return "", ctx.Err()
-		}
+		pi := s.openInteraction(session.ID, "permission", map[string]any{
+			"tool": tool, "reason": risk, "text": arg, "options": options,
+		})
+		return s.waitInteraction(ctx, clientGone, pi)
 	})
 
 	// Lifecycle hooks (Claude Code parity), fired once per user turn BEFORE any
@@ -303,6 +304,9 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 			}
 
 			sse("agent", map[string]any{"agentId": agentRow.ID, "index": i})
+			// Mirror agent-start onto the hub so late-joining windows know which
+			// agent is answering (multi-agent threads render each turn's author).
+			s.publishHub(session.ID, sessionhub.KindAgentStart, map[string]any{"agentId": agentRow.ID, "index": i}, false)
 
 			history, herr := database.ListMessages(ctx, session.ID)
 			if herr != nil {
@@ -349,6 +353,7 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 			for _, st := range leadSteps {
 				sse("step", st)
 				wsp.Runtime.EmitSessionStep(session.ID, st)
+				s.publishHub(session.ID, sessionhub.KindStep, st, false)
 			}
 			// claude-cli session resume (opt-in): when engaged, this trims llmReq to the
 			// unseen delta and sets ResumeSessionID so the CLI reuses its warm cache.
@@ -514,10 +519,20 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 					switch st.Kind {
 					case agent.StepDelta:
 						partial.WriteString(st.Text)
-					case agent.StepAsk, agent.StepToolDelta, agent.StepTombstone, agent.StepPermission:
-						// Transient (live-UI only) — never part of the persisted trace.
+						// Ephemeral token growth: best-effort live, seq 0, not retained.
+						s.publishHub(session.ID, sessionhub.KindDelta, st, true)
+					case agent.StepToolDelta:
+						s.publishHub(session.ID, sessionhub.KindToolDelta, st, true)
+					case agent.StepAsk, agent.StepTombstone, agent.StepPermission, agent.StepPlan:
+						// Interactive prompts are handled by the Phase 2 interaction CAS
+						// (interaction_open/resolved), not broadcast as plain hub steps —
+						// otherwise a passive window would show a card it cannot resolve.
 					default:
 						kept = append(kept, st)
+						// Durable activity (thinking/tool/todo/diff/recovery/error/…) →
+						// seq'd on the hub so every window renders it live and a reconnect
+						// gap-fills it from the ring.
+						s.publishHub(session.ID, sessionhub.KindStep, st, false)
 					}
 					snapshot()
 				},
@@ -559,12 +574,20 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 					payload["replyMessage"] = msg
 					// Keep any files written before the stop as artifacts.
 					s.captureFileArtifacts(persistCtx, database, session.ID, agentRow.ID, trace)
+					// Push the interrupted/stopped reply onto the hub so other windows
+					// render the preserved partial instead of a dangling live bubble.
+					s.publishHub(session.ID, sessionhub.KindReply, msg, false)
+					s.hub.Commit(session.ID)
 				}
 				_ = database.ClearInflight(session.ID)
 				// Auto-tag the turn failure (skips a clean user "stopped"), plus any real
 				// tool error captured before the failure.
 				wsp.Runtime.AutoTagTurn(context.WithoutCancel(ctx), session.ID, trace, reason)
 				sse("error", payload)
+				// Terminal error onto the hub so every window clears its "thinking"
+				// indicator and shows the failure, not just the submitting window.
+				s.publishHub(session.ID, sessionhub.KindTurnError, payload, false)
+				s.hub.Commit(session.ID)
 				return
 			}
 
@@ -598,6 +621,12 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 			// Auto-capture any files the agent wrote this turn as artifacts.
 			s.captureFileArtifacts(ctx, database, session.ID, agentRow.ID, steps)
 			sse("reply", map[string]any{"replyMessage": replyMsg})
+			// Canonical reply onto the hub: every window replaces its live-accumulated
+			// bubble with this persisted, authoritative message (steps + usage + model).
+			s.publishHub(session.ID, sessionhub.KindReply, replyMsg, false)
+			// This agent's turn is now in the persisted transcript → a fresh
+			// subscriber need not replay it (only the next agent's in-flight tail).
+			s.hub.Commit(session.ID)
 
 			s.logger.Info("chat turn completed",
 				"session", session.ID, "agent", agentRow.Name, "provider", agentRow.Provider,
@@ -635,6 +664,10 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 	sessionTitle := s.maybeAutoTitle(ctx, wsp, firstTurn, agents[0].ID, session.ID, req.Message)
 
 	sse("done", map[string]any{"sessionTitle": sessionTitle})
+	// Terminal success onto the hub: every window stops its live indicator and
+	// picks up the (possibly new) session title.
+	s.publishHub(session.ID, sessionhub.KindTurnDone, map[string]any{"sessionTitle": sessionTitle}, false)
+	s.hub.Commit(session.ID)
 
 	// Publish a chat-completion event so other workspaces can flag activity with
 	// a badge when the user is viewing a different workspace. The frontend uses

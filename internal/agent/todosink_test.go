@@ -10,10 +10,10 @@ import (
 	"github.com/bilal-arikan/tionswarm/internal/tools"
 )
 
-// TestNewTodoSinkPersistsToCwd verifies the todo sink writes the checklist to the
-// project's progress file when the session has an explicit working directory
-// (shared across sessions on that project).
-func TestNewTodoSinkPersistsToCwd(t *testing.T) {
+// TestNewTodoSinkIsPerSessionEvenWithSharedCwd verifies the checklist persists to
+// a PER-SESSION file — NOT the working directory — so two sessions sharing the
+// same project dir keep independent progress (the dir-shared file is gone).
+func TestNewTodoSinkIsPerSessionEvenWithSharedCwd(t *testing.T) {
 	rt, _ := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))
 	ctx := context.Background()
 	cwd := t.TempDir()
@@ -21,17 +21,21 @@ func TestNewTodoSinkPersistsToCwd(t *testing.T) {
 	sess, _ := rt.db.CreateSession(ctx, db.Session{AgentID: ag.ID, WorkingDir: cwd})
 
 	sink := rt.NewTodoSink(sess.ID, ag.ID)
-	err := sink.SaveTodos(ctx, []tools.TodoSinkItem{
+	if err := sink.SaveTodos(ctx, []tools.TodoSinkItem{
 		{Content: "build", Status: "completed"},
 		{Content: "test", Status: "in_progress"},
-	})
-	if err != nil {
+	}); err != nil {
 		t.Fatalf("save todos: %v", err)
 	}
 
-	rec, ok, err := progress.Load(cwd)
+	// Must NOT leak into the working directory (no dir-shared progress file).
+	if _, ok, _ := progress.Load(cwd); ok {
+		t.Fatalf("progress leaked into the shared working dir %s (want per-session only)", cwd)
+	}
+	// It lives in the per-session store dir, stamped with this session.
+	rec, ok, err := progress.Load(rt.ProgressDir(sess.ID))
 	if err != nil || !ok {
-		t.Fatalf("load: ok=%v err=%v", ok, err)
+		t.Fatalf("load per-session: ok=%v err=%v", ok, err)
 	}
 	if rec.SessionID != sess.ID || rec.AgentID != ag.ID {
 		t.Fatalf("ids not stamped: %+v", rec)
@@ -39,8 +43,11 @@ func TestNewTodoSinkPersistsToCwd(t *testing.T) {
 	if len(rec.Todos) != 2 || rec.Todos[0].Status != "completed" {
 		t.Fatalf("todos not persisted: %+v", rec.Todos)
 	}
-	if len(rec.Log) != 1 {
-		t.Fatalf("expected one log entry, got %d", len(rec.Log))
+
+	// A SECOND session on the SAME cwd resolves to a DIFFERENT progress dir.
+	sess2, _ := rt.db.CreateSession(ctx, db.Session{AgentID: ag.ID, WorkingDir: cwd})
+	if rt.ProgressDir(sess2.ID) == rt.ProgressDir(sess.ID) {
+		t.Fatalf("two sessions on the same cwd share a progress dir: %s", rt.ProgressDir(sess.ID))
 	}
 }
 

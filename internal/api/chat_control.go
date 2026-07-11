@@ -17,10 +17,6 @@ import (
 type chatRun struct {
 	cancel context.CancelFunc
 	steer  chan string
-	// answer delivers a reply to a blocked ask_user tool call. Buffered (1) so
-	// the control endpoint never blocks; only one question is outstanding at a
-	// time because the tool loop runs synchronously.
-	answer chan string
 	// done is closed when the turn finishes (unregister), unblocking any
 	// Interaction MCP tool call still waiting on this run.
 	done chan struct{}
@@ -449,7 +445,6 @@ func (c *chatRuns) register(id, sessionID, workspaceID string, cancel context.Ca
 	run := &chatRun{
 		cancel:      cancel,
 		steer:       make(chan string, 16),
-		answer:      make(chan string, 1),
 		done:        make(chan struct{}),
 		token:       uuid.NewString(),
 		sessionID:   sessionID,
@@ -574,14 +569,16 @@ func (c *chatRuns) byToken(token string) *chatRun {
 
 type chatControlReq struct {
 	RunID  string `json:"runId"`
-	Action string `json:"action"` // "stop" | "steer" | "answer"
+	Action string `json:"action"` // "stop" | "steer"
 	Text   string `json:"text"`
 }
 
-// handleChatControl stops, steers or answers an in-flight streaming turn. "stop"
-// cancels the run's context (ending the stream); "steer" delivers live guidance
-// the tool loop folds in before its next model call; "answer" delivers a reply
-// to a blocked ask_user tool call.
+// handleChatControl stops or steers an in-flight streaming turn by runId (legacy /
+// external-automation path; the UI uses the session-scoped POST /sessions/{id}/
+// control now). "stop" cancels the run's context (ending the stream); "steer"
+// delivers live guidance the tool loop folds in before its next model call.
+// Answering a prompt is no longer here — it goes through the resolve-once
+// interaction endpoint (POST /sessions/{id}/interactions/{iid}/answer).
 func (s *Server) handleChatControl(w http.ResponseWriter, r *http.Request) {
 	req, ok := bindJSON[chatControlReq](w, r)
 	if !ok {
@@ -603,15 +600,6 @@ func (s *Server) handleChatControl(w http.ResponseWriter, r *http.Request) {
 		select {
 		case run.steer <- req.Text:
 		default: // buffer full — drop rather than block the request
-		}
-	case "answer":
-		if req.Text == "" {
-			writeError(w, http.StatusBadRequest, "answer text is required")
-			return
-		}
-		select {
-		case run.answer <- req.Text:
-		default: // no question waiting (or already answered) — drop
 		}
 	default:
 		writeError(w, http.StatusBadRequest, "unknown action: "+req.Action)

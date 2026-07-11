@@ -4,9 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"strings"
-	"time"
 
-	"github.com/bilal-arikan/tionswarm/internal/agent"
 	"github.com/bilal-arikan/tionswarm/internal/interaction"
 	"github.com/bilal-arikan/tionswarm/internal/tools"
 )
@@ -30,15 +28,18 @@ func (b *interactionBackend) callAsk(ctx context.Context, run *chatRun, args jso
 		if run.autonomous {
 			return interaction.CallResult{Text: "no interactive session is available (autonomous run); proceed on your own", IsError: true}, nil
 		}
-		run.emit("step", agent.TurnStep{Kind: agent.StepAsk, Questions: questions})
-		select {
-		case ans := <-run.answer:
+		// Route through the session interaction store (CAS + hub broadcast) so the
+		// combined-form card shows in EVERY window and the first answer wins.
+		pi := b.apiSrv.openInteraction(run.sessionID, "ask", map[string]any{"questions": questions})
+		ans, reason := b.apiSrv.waitInteractionCLI(ctx, run, pi)
+		switch reason {
+		case "":
 			return interaction.CallResult{Text: tools.FormatMultiAnswer(questions, ans)}, nil
-		case <-run.done:
-			return interaction.CallResult{Text: "the turn ended before the user answered; proceed without the answer", IsError: true}, nil
-		case <-ctx.Done():
+		case "ctx":
 			return interaction.CallResult{}, ctx.Err()
-		case <-time.After(askTimeout):
+		case "done":
+			return interaction.CallResult{Text: "the turn ended before the user answered; proceed without the answer", IsError: true}, nil
+		default:
 			return interaction.CallResult{Text: "no answer within the time limit; proceed on your own", IsError: true}, nil
 		}
 	}
@@ -68,15 +69,16 @@ func (b *interactionBackend) blockForAnswer(ctx context.Context, run *chatRun, q
 	if run.autonomous {
 		return interaction.CallResult{Text: "no interactive session is available (autonomous run); proceed on your own", IsError: true}, nil
 	}
-	run.emit("step", agent.TurnStep{Kind: agent.StepAsk, Text: question, Options: options})
-	select {
-	case ans := <-run.answer:
+	pi := b.apiSrv.openInteraction(run.sessionID, "ask", map[string]any{"question": question, "options": options})
+	ans, reason := b.apiSrv.waitInteractionCLI(ctx, run, pi)
+	switch reason {
+	case "":
 		return interaction.CallResult{Text: normalize(ans)}, nil
-	case <-run.done:
-		return interaction.CallResult{Text: "the turn ended before the user answered; proceed without the answer", IsError: true}, nil
-	case <-ctx.Done():
+	case "ctx":
 		return interaction.CallResult{}, ctx.Err()
-	case <-time.After(askTimeout):
+	case "done":
+		return interaction.CallResult{Text: "the turn ended before the user answered; proceed without the answer", IsError: true}, nil
+	default:
 		return interaction.CallResult{Text: "no answer within the time limit; proceed on your own", IsError: true}, nil
 	}
 }
@@ -117,9 +119,12 @@ func (b *interactionBackend) callPermission(ctx context.Context, run *chatRun, a
 	if risk == tools.RiskRead || run.grantStore().Matches(toolName, arg) {
 		return interaction.CallResult{Text: permDecision(true, in.Input, "")}, nil
 	}
-	run.emit("step", agent.TurnStep{Kind: agent.StepPermission, Tool: toolName, Reason: string(risk), Text: arg, Options: tools.PermissionOptions})
-	select {
-	case ans := <-run.answer:
+	pi := b.apiSrv.openInteraction(run.sessionID, "permission", map[string]any{
+		"tool": toolName, "reason": string(risk), "text": arg, "options": tools.PermissionOptions,
+	})
+	ans, reason := b.apiSrv.waitInteractionCLI(ctx, run, pi)
+	switch reason {
+	case "":
 		switch tools.NormalizePermission(ans) {
 		case "always":
 			// Derive the standing rule from the bare name so it matches future calls (we
@@ -131,11 +136,11 @@ func (b *interactionBackend) callPermission(ctx context.Context, run *chatRun, a
 		default:
 			return interaction.CallResult{Text: permDecision(false, in.Input, "denied by the user")}, nil
 		}
-	case <-run.done:
-		return interaction.CallResult{Text: permDecision(false, in.Input, "the turn ended before approval")}, nil
-	case <-ctx.Done():
+	case "ctx":
 		return interaction.CallResult{}, ctx.Err()
-	case <-time.After(askTimeout):
+	case "done":
+		return interaction.CallResult{Text: permDecision(false, in.Input, "the turn ended before approval")}, nil
+	default:
 		return interaction.CallResult{Text: permDecision(false, in.Input, "no approval within the time limit")}, nil
 	}
 }
@@ -161,19 +166,20 @@ func (b *interactionBackend) callExitPlan(ctx context.Context, run *chatRun, inp
 		b.capturePlanArtifact(run, plan)
 		return interaction.CallResult{Text: permDecision(true, input, "")}, nil
 	}
-	run.emit("step", agent.TurnStep{Kind: agent.StepPlan, Text: plan, Options: tools.PlanOptions})
-	select {
-	case ans := <-run.answer:
+	pi := b.apiSrv.openInteraction(run.sessionID, "plan", map[string]any{"text": plan, "options": tools.PlanOptions})
+	ans, reason := b.apiSrv.waitInteractionCLI(ctx, run, pi)
+	switch reason {
+	case "":
 		if tools.PlanApproved(ans) {
 			b.capturePlanArtifact(run, plan)
 			return interaction.CallResult{Text: permDecision(true, input, "")}, nil
 		}
 		return interaction.CallResult{Text: permDecision(false, input, "the user rejected the plan and asked to revise it: "+ans)}, nil
-	case <-run.done:
-		return interaction.CallResult{Text: permDecision(false, input, "the turn ended before the plan was approved")}, nil
-	case <-ctx.Done():
+	case "ctx":
 		return interaction.CallResult{}, ctx.Err()
-	case <-time.After(askTimeout):
+	case "done":
+		return interaction.CallResult{Text: permDecision(false, input, "the turn ended before the plan was approved")}, nil
+	default:
 		return interaction.CallResult{Text: permDecision(false, input, "no plan approval within the time limit")}, nil
 	}
 }

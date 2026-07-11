@@ -123,14 +123,10 @@ func (s *Server) composeTurnRequest(ctx context.Context, wsp *workspace.Workspac
 	}
 	// Cross-session awareness: a short summary of the workspace's recent PAST
 	// sessions (active/live sessions are NOT auto-sent — the agent lists them on
-	// demand). Configured PER WORKSPACE; injected every turn or only on a
-	// session's first turn (its "start") depending on the toggle.
-	if sc := wsp.Settings(); sc.SessionContextEnabled && (sc.SessionContextEveryTurn || freshSession) {
-		recent := sc.SessionContextRecentCount
-		if recent <= 0 {
-			recent = 5
-		}
-		if sb := sessionsContextBlock(ctx, wsp.DB, session.ID, recent); sb != "" {
+	// demand via list_sessions, which pages through ALL of them). Always on;
+	// injected only on a session's first turn (its "start").
+	if freshSession {
+		if sb := sessionsContextBlock(ctx, wsp.DB, session.ID); sb != "" {
 			dynamic = strings.TrimSpace(dynamic + "\n\n" + sb)
 		}
 	}

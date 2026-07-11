@@ -475,7 +475,11 @@ func cliBaseEnv(extra ...string) []string {
 		}
 		out = append(out, kv)
 	}
-	return append(out, extra...)
+	// Harden the CLI's own subprocess environment the same way the native shell
+	// tools are: a claude-cli agent running `git commit` must not hang on a GUI
+	// editor (core.editor=notepad) or a credential prompt inside the stdin-less
+	// child. Guards win over inherited values (appended last).
+	return proc.HardenedEnv(append(out, extra...))
 }
 
 // ensureEnvDefault appends KEY=val to env only when KEY is not already present,
@@ -489,6 +493,13 @@ func ensureEnvDefault(env []string, key, val string) []string {
 	}
 	return append(env, prefix+val)
 }
+
+// cliStartupTimeout bounds the time-to-first-output for a claude-cli turn. A
+// subprocess that emits nothing within this window is treated as a hung MCP
+// startup and killed (retryable). It guards ONLY startup — once the first line
+// arrives the turn is demonstrably alive and later silence is a legitimately
+// long tool call, bounded by the CLI's own MCP_TOOL_TIMEOUT and the caller ctx.
+const cliStartupTimeout = 90 * time.Second
 
 func (c *ClaudeCLI) runAttempt(ctx context.Context, args []string, prompt, model string, req Request) (resp *Response, retryable bool, err error) {
 	cmd := proc.CommandContext(ctx, c.binPath, args...)
@@ -561,22 +572,70 @@ func (c *ClaudeCLI) runAttempt(ctx context.Context, args []string, prompt, model
 	// dumped log file. Capped so a huge successful stream can't balloon memory.
 	var fullOut bytes.Buffer
 	const fullOutCap = 1 << 20 // 1 MiB
-	for {
-		line, rerr := rd.ReadString('\n')
-		if line != "" {
-			p.feed(line)
-			if fullOut.Len() < fullOutCap {
-				fullOut.WriteString(line)
+	// Startup watchdog: a claude-cli subprocess that connects to the MCP bridge can
+	// deadlock during MCP `initialize`, then produce NO stdout and never exit — the
+	// blocking read below would hang for the whole (often deadline-less) turn, so no
+	// llm_call, no error, and the chat's typing indicator never clears (observed: a
+	// spawned board-automation turn stuck 7+ min with zero output). Guard only the
+	// TIME-TO-FIRST-OUTPUT via a reader goroutine + timer; once the first line
+	// arrives the turn is alive and later silence is a legitimately long tool call.
+	type readItem struct {
+		line string
+		err  error
+	}
+	lines := make(chan readItem, 1)
+	readerDone := make(chan struct{})
+	defer close(readerDone)
+	go func() {
+		for {
+			line, rerr := rd.ReadString('\n')
+			select {
+			case lines <- readItem{line, rerr}:
+			case <-readerDone:
+				return
 			}
-			if s := strings.TrimSpace(line); s != "" {
-				tail = append(tail, s)
-				if len(tail) > tailMax {
-					tail = tail[len(tail)-tailMax:]
-				}
+			if rerr != nil {
+				return
 			}
 		}
-		if rerr != nil {
-			break
+	}()
+
+	startup := time.NewTimer(cliStartupTimeout)
+	defer startup.Stop()
+	sawOutput := false
+	startupHang := false
+readLoop:
+	for {
+		select {
+		case it := <-lines:
+			if it.line != "" {
+				if !sawOutput {
+					sawOutput = true
+					startup.Stop() // first output → turn is alive; drop the startup guard
+				}
+				p.feed(it.line)
+				if fullOut.Len() < fullOutCap {
+					fullOut.WriteString(it.line)
+				}
+				if s := strings.TrimSpace(it.line); s != "" {
+					tail = append(tail, s)
+					if len(tail) > tailMax {
+						tail = tail[len(tail)-tailMax:]
+					}
+				}
+			}
+			if it.err != nil {
+				break readLoop
+			}
+		case <-startup.C:
+			// No stdout at all within the startup budget → almost certainly an MCP
+			// startup hang. Kill the subprocess so the read unblocks; cmd.Wait then
+			// returns and we surface a clear, retryable failure below.
+			startupHang = true
+			if cmd.Process != nil {
+				_ = cmd.Process.Kill()
+			}
+			break readLoop
 		}
 	}
 	runErr := cmd.Wait()
@@ -595,6 +654,14 @@ func (c *ClaudeCLI) runAttempt(ctx context.Context, args []string, prompt, model
 	// before the crash. Genuine error results (hadError) are NOT salvaged.
 	if partial := p.salvage(); partial != nil {
 		return partial, false, nil
+	}
+	// Startup watchdog fired: the subprocess emitted nothing within cliStartupTimeout
+	// and was killed. There is no salvageable content — surface a clear, retryable
+	// failure so self-healing retries once and the turn fails fast instead of hanging.
+	if startupHang {
+		return nil, true, fmt.Errorf(
+			"claude CLI produced no output within %s and was killed as a likely MCP startup hang (retryable) — check the interaction MCP bridge / concurrent-spawn load (exit: %v)",
+			cliStartupTimeout, runErr)
 	}
 	// The CLI often writes its error to stdout (a non-JSON line) and leaves stderr
 	// empty — surface whatever it printed so the failure is not a bare "exit status

@@ -51,12 +51,10 @@ type WSSettings struct {
 	// workspace dir. A session's own WorkingDir overrides it. the external agent project parity.
 	DefaultWorkingDir string `json:"defaultWorkingDir"`
 
-	// Cross-session awareness (workspace-specific): inject a short summary of this
-	// workspace's active + recent chat sessions into an agent's context, and offer
-	// the list_sessions pull tool. Each workspace controls its own behaviour.
-	SessionContextEnabled     bool `json:"sessionContextEnabled"`
-	SessionContextEveryTurn   bool `json:"sessionContextEveryTurn"`   // false = only a session's first turn
-	SessionContextRecentCount int  `json:"sessionContextRecentCount"` // past sessions listed (0 = default 5)
+	// Cross-session awareness (workspace-specific) is always on: a short summary of
+	// this workspace's recent past chat sessions is injected into an agent's context
+	// on the session's first turn, and the list_sessions / archive_sessions /
+	// conversation_search pull tools are always offered. Nothing is configurable.
 
 	// CodebaseMemoryEnabled toggles the codebase-memory capability system for this
 	// workspace: when a codebase-memory MCP server is present, inject a prompt hint,
@@ -78,15 +76,12 @@ type WSSettings struct {
 
 // defaultWSSettings is the seed used before overlaying a persisted ws-settings
 // document, so a fresh workspace (or one whose file predates a new field) gets
-// sensible defaults — notably cross-session awareness on, first-turn, 5 recent.
+// sensible defaults.
 func defaultWSSettings() WSSettings {
 	return WSSettings{
-		Instructions:              defaultInstructions,
-		SessionContextEnabled:     true,
-		SessionContextEveryTurn:   false,
-		SessionContextRecentCount: 5,
-		CodebaseMemoryEnabled:     true,
-		PromptEpochEnabled:        true,
+		Instructions:          defaultInstructions,
+		CodebaseMemoryEnabled: true,
+		PromptEpochEnabled:    true,
 	}
 }
 
@@ -105,10 +100,6 @@ type WSSettingsPatch struct {
 	Theme       *string `json:"theme"`
 	Accent      *string `json:"accent"`
 	ThemePreset *string `json:"themePreset"`
-
-	SessionContextEnabled     *bool `json:"sessionContextEnabled"`
-	SessionContextEveryTurn   *bool `json:"sessionContextEveryTurn"`
-	SessionContextRecentCount *int  `json:"sessionContextRecentCount"`
 
 	CodebaseMemoryEnabled *bool `json:"codebaseMemoryEnabled"`
 	PromptEpochEnabled    *bool `json:"promptEpochEnabled"`
@@ -148,7 +139,6 @@ func (w *Workspace) loadSettings() {
 		w.Runtime.SetPaused(s.PauseAutonomy)
 		w.Runtime.SetInstructions(s.Instructions)
 		w.Runtime.SetDefaultWorkDir(s.DefaultWorkingDir)
-		w.Runtime.SetSessionContext(s.SessionContextEnabled, s.SessionContextEveryTurn, s.SessionContextRecentCount)
 		w.Runtime.SetCodebaseMemory(s.CodebaseMemoryEnabled)
 		w.Runtime.SetPromptEpoch(s.PromptEpochEnabled)
 	}
@@ -230,15 +220,6 @@ func (m *Manager) UpdateSettings(id string, patch WSSettingsPatch) (*Workspace, 
 	if patch.ThemePreset != nil {
 		ws.settings.cur.ThemePreset = *patch.ThemePreset
 	}
-	if patch.SessionContextEnabled != nil {
-		ws.settings.cur.SessionContextEnabled = *patch.SessionContextEnabled
-	}
-	if patch.SessionContextEveryTurn != nil {
-		ws.settings.cur.SessionContextEveryTurn = *patch.SessionContextEveryTurn
-	}
-	if patch.SessionContextRecentCount != nil {
-		ws.settings.cur.SessionContextRecentCount = clampRecent(*patch.SessionContextRecentCount)
-	}
 	if patch.CodebaseMemoryEnabled != nil {
 		ws.settings.cur.CodebaseMemoryEnabled = *patch.CodebaseMemoryEnabled
 	}
@@ -251,9 +232,6 @@ func (m *Manager) UpdateSettings(id string, patch WSSettingsPatch) (*Workspace, 
 	paused := ws.settings.cur.PauseAutonomy
 	instructions := ws.settings.cur.Instructions
 	defaultWorkDir := ws.settings.cur.DefaultWorkingDir
-	scEnabled := ws.settings.cur.SessionContextEnabled
-	scEvery := ws.settings.cur.SessionContextEveryTurn
-	scRecent := ws.settings.cur.SessionContextRecentCount
 	cbmEnabled := ws.settings.cur.CodebaseMemoryEnabled
 	epochEnabled := ws.settings.cur.PromptEpochEnabled
 	ws.settings.mu.Unlock()
@@ -270,20 +248,8 @@ func (m *Manager) UpdateSettings(id string, patch WSSettingsPatch) (*Workspace, 
 		ws.Runtime.SetPaused(paused)
 		ws.Runtime.SetInstructions(instructions)
 		ws.Runtime.SetDefaultWorkDir(defaultWorkDir)
-		ws.Runtime.SetSessionContext(scEnabled, scEvery, scRecent)
 		ws.Runtime.SetCodebaseMemory(cbmEnabled)
 		ws.Runtime.SetPromptEpoch(epochEnabled)
 	}
 	return ws, nil
-}
-
-// clampRecent bounds the recent-session count to [1,20] to keep the prompt small.
-func clampRecent(n int) int {
-	if n < 1 {
-		return 1
-	}
-	if n > 20 {
-		return 20
-	}
-	return n
 }

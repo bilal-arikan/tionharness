@@ -47,3 +47,49 @@ func TestListSessionsTool(t *testing.T) {
 		t.Fatalf("non-chat sessions must never be listed:\n%s", out)
 	}
 }
+
+// TestListSessionsToolPagination verifies limit/offset windowing surfaces the
+// total and the next-page offset, and that every session is reachable by paging.
+func TestListSessionsToolPagination(t *testing.T) {
+	database, err := db.Open(filepath.Join(t.TempDir(), "store"))
+	if err != nil {
+		t.Fatalf("db open: %v", err)
+	}
+	t.Cleanup(func() { _ = database.Close() })
+	ctx := context.Background()
+
+	for _, name := range []string{"S1", "S2", "S3", "S4", "S5"} {
+		database.CreateSession(ctx, db.Session{Kind: "chat", Title: name, State: "active"})
+	}
+	tool := NewListSessionsTool(database)
+
+	// First page of 2 of 5: reports the total and the next offset.
+	out, err := tool.Call(ctx, json.RawMessage(`{"limit":2}`))
+	if err != nil {
+		t.Fatalf("call: %v", err)
+	}
+	if !strings.Contains(out, "Showing 1–2 of 5.") {
+		t.Fatalf("expected page-1 header:\n%s", out)
+	}
+	if !strings.Contains(out, "offset:2") {
+		t.Fatalf("expected next-page offset hint:\n%s", out)
+	}
+
+	// Last page: no more offset hint.
+	out, err = tool.Call(ctx, json.RawMessage(`{"limit":2,"offset":4}`))
+	if err != nil {
+		t.Fatalf("call: %v", err)
+	}
+	if !strings.Contains(out, "Showing 5–5 of 5.") || strings.Contains(out, "offset:") {
+		t.Fatalf("last page wrong:\n%s", out)
+	}
+
+	// Offset past the end is reported, not an error.
+	out, err = tool.Call(ctx, json.RawMessage(`{"offset":99}`))
+	if err != nil {
+		t.Fatalf("call: %v", err)
+	}
+	if !strings.Contains(out, "past the last") {
+		t.Fatalf("expected past-end notice:\n%s", out)
+	}
+}

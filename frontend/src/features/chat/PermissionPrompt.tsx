@@ -1,5 +1,6 @@
 import { ShieldAlert } from 'lucide-react'
 import type { PendingAsk } from './AskPrompt'
+import { ScrollableCard } from '@/shared/components'
 
 interface Props {
   ask: PendingAsk
@@ -35,9 +36,11 @@ export function PermissionPrompt({ ask, onAnswer }: Props) {
         </span>
       </div>
       {ask.cmd && (
-        <pre className="mb-2 overflow-x-auto whitespace-pre-wrap break-words rounded bg-[var(--color-surface-2)] px-2 py-1.5 text-xs text-[var(--color-text-dim)]">
-          {ask.cmd}
-        </pre>
+        <ScrollableCard maxH="max-h-[40vh]" className="mb-2 rounded bg-[var(--color-surface-2)]">
+          <pre className="whitespace-pre-wrap break-words px-2 py-1.5 text-xs text-[var(--color-text-dim)]">
+            {ask.cmd}
+          </pre>
+        </ScrollableCard>
       )}
       <div className="flex flex-wrap gap-1.5">
         {options.map((opt, i) => {

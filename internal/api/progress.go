@@ -16,9 +16,8 @@ type progressView struct {
 
 // handleSessionProgress returns the session's persistent progress (the durable
 // todo_write checklist + rolling log) for the read-only viewer card. Resolves the
-// SAME directory the todo sink writes to via Runtime.ProgressDir: the session's
-// explicit project working dir (shared across sessions on that project), else a
-// per-session fallback (so unrelated sessions don't share one progress file).
+// SAME per-session directory the todo sink writes to via Runtime.ProgressDir, so
+// the progress is session-specific — never shared across sessions on a working dir.
 func (s *Server) handleSessionProgress(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	ctx := r.Context()

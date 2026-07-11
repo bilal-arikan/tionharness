@@ -428,11 +428,10 @@ export function SessionDetailPanel({
 
 
           {/* Persistent progress (durable todo_write checklist + rolling log).
-              The file is keyed by working directory, so several sessions on one
-              project share ONE progress.json. Only show it in the session that
-              last wrote it — otherwise the same "8/8" checklist leaks into every
-              session on that dir and never clears. A legacy record with no owner
-              (empty sessionId) is still shown (we can't attribute it away). */}
+              Now PER-SESSION (keyed by session id, not working directory), so this
+              session's checklist never leaks into another session on the same dir.
+              The sessionId guard is kept as a belt-and-suspenders for any legacy
+              dir-shared record left on disk from before the change. */}
           {progress?.exists &&
             progress.record &&
             progress.record.todos.length > 0 &&

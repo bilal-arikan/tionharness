@@ -28,8 +28,10 @@ hedeftir, adım listesi değil.
 
 ## Tasarım
 
-`todo_write` listesi **çalışma dizinine** (proje) bağlı bir progress dosyasına
-yazılır ve fresh oturum açılışında geri yüklenir.
+`todo_write` listesi **oturuma özel** bir progress dosyasına yazılır ve fresh
+oturum açılışında geri yüklenir. (2026-07-11'e kadar çalışma-dizini paylaşımlıydı;
+artık her oturum kendi listesini tutar — aynı projedeki iki oturum birbirinin
+ilerlemesini ezmez.)
 
 **Kompakt `set` formu (2026-07-10):** `todo_write` artık iki giriş şekli alır —
 `todos` (tam liste replace, eskisi gibi) veya `set` (`{"set":{"1":"completed"}}`,
@@ -40,15 +42,14 @@ kartını input yerine output'tan kurabilsin. Sink yoksa/liste yoksa açık hata
 Dinamik "Active todo list" bloğu numaralıdır ve `set` formunu öğretir. Amaç: durum
 güncellemelerinde değişmeyen içerikleri yeniden göndermemek (~400 → ~40 char).
 
-- **Konum:** `<cwd>/.tionswarm/progress.json` — session'ın **explicit** working
-  dir'i ayarlıysa (git-commit'lenebilir, proje'ye bağlı; **aynı projedeki tüm
-  oturumlar paylaşır** = cross-session resume). Explicit proje dizini yoksa
-  fallback **per-session**: `<store>/progress/<sessionID>/.tionswarm/progress.json`
-  (önceden ajan-başına idi → proje dizini olmayan farklı oturumlar tek dosyayı
-  ezeyordu; 2026-06-26'da oturum-başına izole edildi, detay-paneldeki "Kalıcı
-  ilerleme" kartı artık oturuma özel görünür). Tek resolver: `Runtime.ProgressDir`
-  (yaz=NewTodoSink + oku=resume bloğu + detay-panel hep onu kullanır). Aynı
-  `.tionswarm/` dizini handoff dosyasıyla (`handoff.md`) paylaşılır.
+- **Konum (2026-07-11'den beri OTURUMA ÖZEL):** `<store>/progress/<sessionID>/…`
+  — **her zaman** oturum-başına, çalışma dizininden bağımsız. Session'ın working
+  dir'i olsa bile progress oraya YAZILMAZ (eski `<cwd>/.tionswarm/progress.json`
+  dizin-paylaşımlı davranışı kaldırıldı: aynı projedeki farklı oturumlar
+  birbirinin checklist'ini eziyordu; kullanıcı isteğiyle oturuma özel yapıldı).
+  Tek resolver: `Runtime.ProgressDir(sessionID)` (yaz=NewTodoSink + oku=resume
+  bloğu + detay-panel hep onu kullanır → hep tutarlı). Not: eski cwd'lerde kalan
+  legacy `progress.json`'lar artık okunmaz (yörüngesiz kalır, elle silinebilir).
 - **Format:** `internal/progress` paketi, `Record{Version, UpdatedAt, SessionID,
   AgentID, Todos[], Log[]}`. `Todos[].Status` = `pending|in_progress|completed`;
   `completed` ≡ Anthropic `feature_list` `passes:true`. `Log[]` = rolling ilerleme

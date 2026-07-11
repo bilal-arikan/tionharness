@@ -179,6 +179,17 @@ export function ChatView({
         ref={bottomStackRef}
         className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex flex-col [&>*]:pointer-events-auto"
       >
+        {(chat.activePresence > 1 || chat.activeTyping) && (
+          <div className="flex justify-center pb-1">
+            <span className="rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-2.5 py-0.5 text-[11px] text-[var(--color-text-dim)] shadow-[var(--shadow-sm)]">
+              {chat.activeTyping
+                ? 'Başka bir pencere yazıyor…'
+                : chat.activeAsk
+                  ? `${chat.activePresence} pencerede açık — ilk cevaplayan geçerli`
+                  : `Bu oturum ${chat.activePresence} pencerede açık`}
+            </span>
+          </div>
+        )}
         {chat.activeAsk &&
           (chat.activeAsk.kind === 'permission' ? (
             <PermissionPrompt ask={chat.activeAsk} onAnswer={chat.answerAsk} />
@@ -188,7 +199,12 @@ export function ChatView({
             <AskPrompt ask={chat.activeAsk} onAnswer={chat.answerAsk} />
           ))}
         <TodoPanel todos={currentTodos} />
-        <PendingTray items={chat.activeQueued} onRemove={chat.removePending} />
+        <PendingTray
+          items={chat.activeQueued}
+          onRemove={chat.removePending}
+          onSendNext={chat.sendQueuedNext}
+          onClear={chat.clearQueue}
+        />
         {chat.activeWakeWait && (
           <WakeWaitBanner
             reason={chat.activeWakeWait.reason}
@@ -209,6 +225,7 @@ export function ChatView({
           onInterrupt={chat.interruptTurn}
           onQueue={chat.queueMessage}
           onSteer={chat.steerTurn}
+          onTyping={chat.notifyTyping}
           thinkingLevel={chat.thinkingLevel}
           onThinkingLevelChange={chat.setThinkingLevel}
           permissionMode={chat.permissionMode}

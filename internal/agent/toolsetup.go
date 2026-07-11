@@ -209,20 +209,18 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 	}
 
 	// Cross-session awareness: the list_sessions pull tool (complements the pushed
-	// context block). Gated per-workspace by the same master toggle.
-	if r.SessionContextEnabled() {
-		builtins = append(builtins, tools.NewListSessionsTool(r.db))
-		// archive_sessions: bulk-archive OTHER sessions in THIS workspace (the
-		// "manage siblings" complement to update_session, which only edits the
-		// current one). Bound to r.db so it is physically workspace-scoped, and it
-		// always excludes the current session (resolved here at build time) — so an
-		// agent asked to "clean up old sessions" never has to fall back to raw REST
-		// (which loses workspace scoping and once archived the wrong workspace).
-		builtins = append(builtins, tools.NewArchiveSessionsTool(r.db, SessionIDFrom(ctx)))
-		// conversation_search: full-text search across the workspace's message
-		// history (deeper than list_sessions' titles+summaries). Same gate.
-		builtins = append(builtins, tools.NewConversationSearchTool(r.db))
-	}
+	// context block). Always on, like the other pull tools.
+	builtins = append(builtins, tools.NewListSessionsTool(r.db))
+	// archive_sessions: bulk-archive OTHER sessions in THIS workspace (the
+	// "manage siblings" complement to update_session, which only edits the
+	// current one). Bound to r.db so it is physically workspace-scoped, and it
+	// always excludes the current session (resolved here at build time) — so an
+	// agent asked to "clean up old sessions" never has to fall back to raw REST
+	// (which loses workspace scoping and once archived the wrong workspace).
+	builtins = append(builtins, tools.NewArchiveSessionsTool(r.db, SessionIDFrom(ctx)))
+	// conversation_search: full-text search across the workspace's message
+	// history (deeper than list_sessions' titles+summaries).
+	builtins = append(builtins, tools.NewConversationSearchTool(r.db))
 
 	// read_session_debug: the agent reads its OWN session's structured debug
 	// journal (turn timings, token spend, tool latency/errors, anomalies) to

@@ -10,6 +10,7 @@ import (
 
 	"github.com/bilal-arikan/tionswarm/internal/interaction"
 	"github.com/bilal-arikan/tionswarm/internal/providers"
+	"github.com/bilal-arikan/tionswarm/internal/sessionhub"
 	"github.com/bilal-arikan/tionswarm/internal/tools"
 )
 
@@ -32,12 +33,20 @@ type capturedStep struct {
 }
 
 func TestInteractionBackend_AskRoundTrip(t *testing.T) {
-	runs := newChatRuns()
-	run := runs.register("r1", "s-r1", "", func() {})
-	defer runs.unregister("r1")
-	steps, mu := captureRun(run)
+	// The CLI ask path now routes through the session interaction store (CAS) +
+	// the hub (interaction_open / interaction_resolved), not the old run.answer
+	// channel. So the round trip is: callAsk publishes interaction_open with a
+	// fresh id → a window (here, the test) reads that id off the hub and resolves
+	// it → the blocked call returns the answer.
+	srv := &Server{
+		runs:         newChatRuns(),
+		hub:          sessionhub.New("test", 0),
+		interactions: newInteractionStore(),
+	}
+	run := srv.runs.register("r1", "s-r1", "", func() {})
+	defer srv.runs.unregister("r1")
 
-	b := &interactionBackend{runs: runs}
+	b := &interactionBackend{runs: srv.runs, apiSrv: srv}
 	if !b.Valid(run.token) {
 		t.Fatal("token should be valid")
 	}
@@ -45,10 +54,31 @@ func TestInteractionBackend_AskRoundTrip(t *testing.T) {
 		t.Fatal("unknown token should be invalid")
 	}
 
-	// Answer shortly after the call blocks.
+	// Subscribe BEFORE the call so the live interaction_open frame is not missed,
+	// then resolve it with the answer as soon as it opens.
+	_, ch, _ := srv.hub.Subscribe("s-r1")
+	gotOpen := make(chan struct{}, 1)
 	go func() {
-		time.Sleep(20 * time.Millisecond)
-		run.answer <- "BLUE"
+		for ev := range ch {
+			if ev.Kind != sessionhub.KindInteractionOpen {
+				continue
+			}
+			var p struct {
+				ID       string   `json:"id"`
+				Kind     string   `json:"kind"`
+				Question string   `json:"question"`
+				Options  []string `json:"options"`
+			}
+			if err := json.Unmarshal(ev.Payload, &p); err != nil {
+				return
+			}
+			if p.Kind != "ask" || p.Question != "color?" || len(p.Options) != 2 {
+				t.Errorf("unexpected interaction_open: %+v", p)
+			}
+			srv.resolveInteraction("s-r1", p.ID, "BLUE", "test")
+			gotOpen <- struct{}{}
+			return
+		}
 	}()
 
 	res, err := b.Call(context.Background(), run.token, "ask_user", json.RawMessage(`{"question":"color?","options":["RED","BLUE"]}`))
@@ -58,22 +88,10 @@ func TestInteractionBackend_AskRoundTrip(t *testing.T) {
 	if res.IsError || res.Text != "BLUE" {
 		t.Fatalf("want answer BLUE, got %+v", res)
 	}
-
-	mu.Lock()
-	defer mu.Unlock()
-	if len(*steps) != 1 {
-		t.Fatalf("want 1 emitted step, got %d", len(*steps))
-	}
-	var st struct {
-		Kind    string   `json:"kind"`
-		Text    string   `json:"text"`
-		Options []string `json:"options"`
-	}
-	if err := json.Unmarshal((*steps)[0].data, &st); err != nil {
-		t.Fatal(err)
-	}
-	if st.Kind != "ask" || st.Text != "color?" || len(st.Options) != 2 {
-		t.Fatalf("unexpected ask step: %+v", st)
+	select {
+	case <-gotOpen:
+	case <-time.After(time.Second):
+		t.Fatal("interaction_open was never observed on the hub")
 	}
 }
 
@@ -252,15 +270,19 @@ func specHasTool(specs []interaction.ToolSpec, name string) bool {
 }
 
 func TestInteractionBackend_AskTurnEnded(t *testing.T) {
-	runs := newChatRuns()
-	run := runs.register("r2", "s-r2", "", func() {})
-	captureRun(run)
-	b := &interactionBackend{runs: runs}
+	srv := &Server{
+		runs:         newChatRuns(),
+		hub:          sessionhub.New("test", 0),
+		interactions: newInteractionStore(),
+	}
+	run := srv.runs.register("r2", "s-r2", "", func() {})
+	b := &interactionBackend{runs: srv.runs, apiSrv: srv}
 
-	// End the turn while the ask is blocked; the call must unblock with an error.
+	// End the turn (closes run.done) while the ask is blocked; waitInteractionCLI
+	// must unblock with an error result so the model proceeds on its own.
 	go func() {
 		time.Sleep(20 * time.Millisecond)
-		runs.unregister("r2")
+		srv.runs.unregister("r2")
 	}()
 	res, err := b.Call(context.Background(), run.token, "ask_user", json.RawMessage(`{"question":"q"}`))
 	if err != nil {
@@ -295,15 +317,31 @@ func TestInteractionBackend_Todo(t *testing.T) {
 }
 
 func TestInteractionBackend_Confirm(t *testing.T) {
-	runs := newChatRuns()
-	run := runs.register("rc", "s-rc", "", func() {})
-	defer runs.unregister("rc")
-	captureRun(run)
-	b := &interactionBackend{runs: runs}
+	srv := &Server{
+		runs:         newChatRuns(),
+		hub:          sessionhub.New("test", 0),
+		interactions: newInteractionStore(),
+	}
+	run := srv.runs.register("rc", "s-rc", "", func() {})
+	defer srv.runs.unregister("rc")
+	b := &interactionBackend{runs: srv.runs, apiSrv: srv}
 
+	// Resolve the confirm interaction with "Onayla" as soon as it opens on the hub.
+	_, ch, _ := srv.hub.Subscribe("s-rc")
 	go func() {
-		time.Sleep(20 * time.Millisecond)
-		run.answer <- "Onayla"
+		for ev := range ch {
+			if ev.Kind != sessionhub.KindInteractionOpen {
+				continue
+			}
+			var p struct {
+				ID string `json:"id"`
+			}
+			if json.Unmarshal(ev.Payload, &p) != nil {
+				return
+			}
+			srv.resolveInteraction("s-rc", p.ID, "Onayla", "test")
+			return
+		}
 	}()
 	res, err := b.Call(context.Background(), run.token, "mcp__tionswarm_interaction__request_confirmation",
 		json.RawMessage(`{"question":"Delete the file?"}`))

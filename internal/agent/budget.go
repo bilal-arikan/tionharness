@@ -69,12 +69,8 @@ func (r *Runtime) guardedComplete(ctx context.Context, agent db.Agent, req provi
 		return nil, err
 	}
 	// claude-cli auxiliary calls (title/summary/compaction/lesson reflection)
-	// must use THIS workspace's config home like tool-loop turns do — without
-	// this seam they fell back to the global claude-home, which may not be
-	// logged in even though the workspace is (found by the self-healing E2E).
-	if cli, ok := provider.(*providers.ClaudeCLI); ok {
-		cli.SetConfigDir(r.claudeHomeDir())
-	}
+	// must use THIS workspace's config home like tool-loop turns do.
+	r.PinClaudeHome(provider)
 	// Fill a model-aware output cap when the caller left MaxTokens unset; the
 	// explicit caps that compaction/summary/title set are respected untouched.
 	req = r.withMaxOutput(agent.Provider, req)
@@ -90,4 +86,18 @@ func (r *Runtime) guardedComplete(ctx context.Context, agent db.Agent, req provi
 	}
 	r.RecordUsage(ctx, agent, resp.Model, resp.Usage, resp.ProviderCalls)
 	return resp, nil
+}
+
+// PinClaudeHome pins THIS workspace's claude-cli config home on a claude-cli
+// provider before a Complete call, so the CLI reads skills/settings/login from
+// <workspace>/claude-home instead of the global default. guardedComplete applies
+// this for in-loop and autonomous aux calls; out-of-loop session commands that
+// call provider.Complete directly (manual /compact, /handoff) must call it
+// themselves, or they fall back to the global claude-home — which may not be
+// logged in even though the workspace is (authentication_failed). No-op for
+// non-claude-cli providers.
+func (r *Runtime) PinClaudeHome(provider providers.Provider) {
+	if cli, ok := provider.(*providers.ClaudeCLI); ok {
+		cli.SetConfigDir(r.claudeHomeDir())
+	}
 }

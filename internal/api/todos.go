@@ -18,11 +18,11 @@ import (
 // no active list (none yet, or the latest is fully completed). Kept in the
 // dynamic (uncached) suffix since it changes whenever the list is updated.
 //
-// When the session has no checklist of its own yet (a fresh session) and resume
-// is enabled, it falls back to the durable progress file at dir (resolved by
-// agent.Runtime.ProgressDir: the project dir shared across sessions, else the
-// per-session fallback) — so the agent picks up where the last session on this
-// project left off (Claude Code's claude-progress convention).
+// When the session has no checklist of its own yet (a fresh reload) and resume
+// is enabled, it falls back to the durable per-session progress file at dir
+// (resolved by agent.Runtime.ProgressDir) — so the agent picks up THIS session's
+// own checklist after a context reset. Progress is session-specific, not shared
+// across sessions on a working directory.
 func todoContextBlock(ctx context.Context, database *db.DB, sessionID, dir string, resume bool) string {
 	if sessionID == "" {
 		return ""

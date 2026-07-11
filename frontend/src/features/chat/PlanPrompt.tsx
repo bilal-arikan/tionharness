@@ -1,6 +1,7 @@
 import { ClipboardList } from 'lucide-react'
 import type { PendingAsk } from './AskPrompt'
 import { Markdown } from '@/shared/components/markdown/Markdown'
+import { ScrollableCard } from '@/shared/components'
 
 interface Props {
   ask: PendingAsk
@@ -21,9 +22,9 @@ export function PlanPrompt({ ask, onAnswer }: Props) {
         <span className="min-w-0 flex-1 font-medium">Ajan bir plan sunuyor. Onaylıyor musun?</span>
       </div>
       {ask.cmd && (
-        <div className="mb-2 max-h-72 overflow-y-auto rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm">
+        <ScrollableCard maxH="max-h-[55vh]" className="mb-2 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm">
           <Markdown>{ask.cmd}</Markdown>
-        </div>
+        </ScrollableCard>
       )}
       <div className="flex flex-wrap gap-1.5">
         {options.map((opt, i) => {

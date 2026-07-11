@@ -3,6 +3,7 @@
 export { Button, type ButtonVariant } from './Button'
 export { IconButton } from './IconButton'
 export { Card } from './Card'
+export { ScrollableCard } from './ScrollableCard'
 export { Badge, type BadgeTone } from './Badge'
 export { SectionHead } from './SectionHead'
 export { CollapsibleSection, useBulkToggle, type BulkToggle } from './CollapsibleSection'

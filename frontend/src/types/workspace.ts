@@ -45,9 +45,6 @@ export interface WorkspaceSettings {
   theme: string
   accent: string
   themePreset: string
-  sessionContextEnabled: boolean
-  sessionContextEveryTurn: boolean
-  sessionContextRecentCount: number
   codebaseMemoryEnabled: boolean
   promptEpochEnabled: boolean
   boardColumns: BoardColumnDef[]
@@ -71,9 +68,6 @@ export type WorkspaceSettingsPatch = Partial<
     | 'theme'
     | 'accent'
     | 'themePreset'
-    | 'sessionContextEnabled'
-    | 'sessionContextEveryTurn'
-    | 'sessionContextRecentCount'
     | 'codebaseMemoryEnabled'
     | 'promptEpochEnabled'
     | 'boardColumns'

@@ -101,6 +101,28 @@ export function ToolsPanel({ draft, set }: PanelProps) {
         <Field label="Tur başına maks. spawn" hint="Tek ajan turunda başlatılabilecek spawn sayısı (1–64).">
           <input type="number" min={1} max={64} value={draft.spawnMaxPerTurn} onChange={(e) => set('spawnMaxPerTurn', Number(e.target.value))} className={inputCls} />
         </Field>
+        <Field label="Spawn süresi (dk)" hint="Bir spawn iş turunun süre sınırı; otomatik-devam turları da bu süreyi paylaşır (varsayılan 20).">
+          <input type="number" min={1} max={1440} value={draft.spawnTimeoutMin} onChange={(e) => set('spawnTimeoutMin', Number(e.target.value))} className={inputCls} />
+        </Field>
+        <Field label="Zamanlama süresi (dk)" hint="Bir zamanlanmış tetiğin (cron görev/prompt + schedule_wake) süre sınırı (varsayılan 30).">
+          <input type="number" min={1} max={1440} value={draft.scheduleTimeoutMin} onChange={(e) => set('scheduleTimeoutMin', Number(e.target.value))} className={inputCls} />
+        </Field>
+      </div>
+
+      <SubHead icon={Sparkles}>Araç çalıştırma</SubHead>
+      <p className="-mt-1 text-xs text-[var(--color-text-dim)]">
+        Süreç-geneli araç davranışı: kabuk (Bash/PowerShell) komut süreleri ve bir aracın modele dönmeden önceki çıktı üst sınırı. Tek çağrıdaki <code>timeout_sec</code> argümanı varsayılanı geçersiz kılar (maks. ile kırpılır).
+      </p>
+      <div className="grid grid-cols-3 gap-3">
+        <Field label="Kabuk varsayılan süre (sn)" hint="timeout_sec verilmezse kullanılan Bash/PowerShell süresi (varsayılan 30).">
+          <input type="number" min={1} max={3600} value={draft.shellDefaultTimeoutSec} onChange={(e) => set('shellDefaultTimeoutSec', Number(e.target.value))} className={inputCls} />
+        </Field>
+        <Field label="Kabuk maks. süre (sn)" hint="Bir komutun üst sınırı; timeout_sec bunu aşamaz (varsayılan 120).">
+          <input type="number" min={1} max={3600} value={draft.shellMaxTimeoutSec} onChange={(e) => set('shellMaxTimeoutSec', Number(e.target.value))} className={inputCls} />
+        </Field>
+        <Field label="Araç çıktı sınırı (KB)" hint="Bir aracın çıktısı bu boyutu aşarsa kesilir (MCP araçları dahil backstop; varsayılan 100).">
+          <input type="number" min={1} max={4096} value={draft.maxToolOutputKB} onChange={(e) => set('maxToolOutputKB', Number(e.target.value))} className={inputCls} />
+        </Field>
       </div>
 
       <SubHead icon={Sparkles}>Koordinatör (çoklu-ajan) limitleri</SubHead>

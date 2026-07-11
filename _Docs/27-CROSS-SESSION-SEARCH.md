@@ -1,5 +1,13 @@
 # 27 — Oturumlar-Arası Tam-Metin Arama (CG-16)
 
+> **Güncelleme (2026-07-11):** Çapraz-session farkındalığı artık **her zaman açık ve
+> hiç ayarı yok** (diğer pull araçları gibi). `Session bağlamı` (master), `Her turda ver`
+> ve `Listelenecek geçmiş session sayısı` (RecentCount) — hepsi kaldırıldı. Pushed özet
+> bloğu daima yalnız session'ın **ilk turunda**, sabit 5 geçmiş session ile verilir.
+> `list_sessions` artık **sayfalanır**: `offset` argümanı + yanıtta "Showing X–Y of Z"
+> ile tüm sessionlar (aktif/geçmiş) gezilebilir; `archive_sessions`/`conversation_search`
+> daima sunulur.
+>
 > **Durum (2026-06-22): Parça 1, 2, 3 TAMAMEN UYGULANDI — görsel arama dahil.**
 > Sidebar arama kutusu artık başlık + mesaj-içeriği arıyor; sonuca tıklayınca
 > oturum açılıp ilgili mesaja kaydırılıp flash'lanıyor. Uygulama özeti dosyanın sonunda.
@@ -129,10 +137,14 @@ func NewConversationSearchTool(database *db.DB) ConversationSearchTool
 Tam/çevre metni `db.MessagesAround(sid, mid, before, after)` ile bellekteki transkriptten çekilir (LLM'siz).
 Çıktı çok-satırlı: başlıkta `session_id` de var (ajan yeniden daraltabilsin). Header'da yaş hâlâ gösterilir.
 
-**Kayıt:** `internal/agent/toolsetup.go` — `NewListSessionsTool`'un yanında
-(satır ~115), **aynı capability gate** (cross-session context / `list_sessions`
-ile birlikte). Lazy-load kataloğuna girebilir (`19-LAZY-TOOL-LOADING.md` deseni)
-— `activate_tools` ile çekilir; sürekli prompt'ta durmasına gerek yok.
+**Kayıt:** `internal/agent/toolsetup.go` — `NewListSessionsTool`'un yanında,
+**her zaman aktif** (cross-session context / `list_sessions` ile birlikte; toggle yok).
+Lazy-load kataloğuna girebilir (`19-LAZY-TOOL-LOADING.md` deseni) — `activate_tools`
+ile çekilir; sürekli prompt'ta durmasına gerek yok.
+
+**`list_sessions` sayfalama:** `state` (`active`|`all`) + `limit` (varsayılan 20) +
+`offset` (varsayılan 0). Yanıt sonunda `Showing X–Y of Z` ve daha varsa
+`… pass offset:Y for the next page` — böylece tüm sessionlar sayfa sayfa okunur.
 
 ### Test
 - `builtin_conversation_search_test.go`: eşleşme biçimi, rol filtresi, boş sonuç,
@@ -212,8 +224,8 @@ Parça 1, 2 ve Parça 3'ün backend/contract'ı sevk edildi. Plandan sapma yok.
   rune-sınırlı snippet. `SearchHit`/`SearchOpts` tipleri. Test: `store_search_test.go`
   (AND, rol filtresi, ExcludeID, limit, Türkçe snippet UTF-8 güvenliği).
 - **Ajan aracı (N5):** `tools.ConversationSearchTool` (`builtin_conversation_search.go`),
-  `conversation_search` — `ListSessionsTool` deseni. `toolsetup.go`'da
-  `SessionContextEnabled()` gate'i altında (list_sessions ile aynı). Test:
+  `conversation_search` — `ListSessionsTool` deseni. `toolsetup.go`'da artık
+  **her zaman aktif** (list_sessions ile aynı; 2026-07-11'de toggle kaldırıldı). Test:
   `builtin_conversation_search_test.go`. **Not:** plandaki `exclude_current`
   düşürüldü — `tools`→`agent` import döngüsü olurdu; API tarafında `exclude` query
   param'ı ile karşılanıyor.

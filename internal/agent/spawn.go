@@ -12,8 +12,11 @@ import (
 	"github.com/bilal-arikan/tionswarm/internal/events"
 )
 
-// spawnTimeout bounds a single background spawn turn. Spawns may run longer
-// agentic work than a scheduled prompt, so the window is generous.
+// spawnTimeout bounds the non-spawn detached surfaces (worker/inbox turns and
+// turn-finished/failed hook firing) that share this package-level default. The
+// spawn WORK turn itself uses the settings-driven r.tun.SpawnTimeout() instead —
+// see runSpawn — so it can be tuned (and its auto-continue continuations budgeted)
+// from the Settings screen.
 const spawnTimeout = 10 * time.Minute
 
 // SpawnOptions tunes a spawn. ModelOverride swaps just the model (the target
@@ -180,7 +183,7 @@ func (r *Runtime) SpawnSession(ctx context.Context, agentRef, prompt string, opt
 func (r *Runtime) runSpawn(agent db.Agent, sessionID, prompt string, opts SpawnOptions) {
 	defer r.releaseSpawnSlot()
 
-	ctx, cancel := context.WithTimeout(context.Background(), spawnTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), r.tun.SpawnTimeout())
 	defer cancel()
 
 	r.trackSession(sessionID)

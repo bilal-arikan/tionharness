@@ -24,6 +24,10 @@ func NewListSessionsTool(database *db.DB) ListSessionsTool {
 	return ListSessionsTool{db: database}
 }
 
+// listSessionsPageLimit is the default page size when the caller doesn't pass a
+// limit. ALL sessions are reachable by paging with the offset argument.
+const listSessionsPageLimit = 20
+
 func (ListSessionsTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name: "list_sessions",
@@ -31,12 +35,14 @@ func (ListSessionsTool) Def() providers.ToolDef {
 			"their titles, message counts, age and a short summary. Active (live) sessions are " +
 			"NOT auto-injected into your context, so call this tool whenever you need to see what " +
 			"other work is currently in progress. Returns active sessions by default; pass " +
-			"state:\"all\" to include past ones.",
+			"state:\"all\" to include past ones. Results are paginated (newest first): the reply " +
+			"reports the total and, when more remain, the exact offset to pass for the next page.",
 		InputSchema: json.RawMessage(`{
   "type": "object",
   "properties": {
     "state": { "type": "string", "enum": ["active", "all"], "description": "Which sessions to list (default: active)." },
-    "limit": { "type": "integer", "description": "Max sessions to return (default 15)." }
+    "limit": { "type": "integer", "description": "Max sessions per page (default 20). Use with offset to page through all of them." },
+    "offset": { "type": "integer", "description": "How many matching sessions to skip before this page (default 0). Pass the offset from a previous reply to get the next page." }
   },
   "additionalProperties": false
 }`),
@@ -45,8 +51,9 @@ func (ListSessionsTool) Def() providers.ToolDef {
 
 func (t ListSessionsTool) Call(ctx context.Context, input json.RawMessage) (string, error) {
 	var args struct {
-		State string `json:"state"`
-		Limit int    `json:"limit"`
+		State  string `json:"state"`
+		Limit  int    `json:"limit"`
+		Offset int    `json:"offset"`
 	}
 	if len(input) > 0 {
 		if err := json.Unmarshal(input, &args); err != nil {
@@ -54,7 +61,10 @@ func (t ListSessionsTool) Call(ctx context.Context, input json.RawMessage) (stri
 		}
 	}
 	if args.Limit <= 0 {
-		args.Limit = 15
+		args.Limit = listSessionsPageLimit
+	}
+	if args.Offset < 0 {
+		args.Offset = 0
 	}
 	onlyActive := args.State != "all"
 
@@ -63,9 +73,9 @@ func (t ListSessionsTool) Call(ctx context.Context, input json.RawMessage) (stri
 		return "", err
 	}
 
-	now := time.Now().Unix()
-	var b strings.Builder
-	n := 0
+	// Collect every matching session first so we know the true total, then window
+	// it by [offset, offset+limit) for pagination.
+	matches := make([]db.Session, 0, len(sessions))
 	for _, s := range sessions {
 		if s.Kind != "chat" {
 			continue
@@ -73,9 +83,25 @@ func (t ListSessionsTool) Call(ctx context.Context, input json.RawMessage) (stri
 		if onlyActive && s.State != "active" {
 			continue
 		}
-		if n >= args.Limit {
-			break
-		}
+		matches = append(matches, s)
+	}
+	total := len(matches)
+	if total == 0 {
+		return "No matching sessions in this workspace.", nil
+	}
+	if args.Offset >= total {
+		return fmt.Sprintf("Offset %d is past the last of %d matching sessions.", args.Offset, total), nil
+	}
+
+	end := args.Offset + args.Limit
+	if end > total {
+		end = total
+	}
+	page := matches[args.Offset:end]
+
+	now := time.Now().Unix()
+	var b strings.Builder
+	for _, s := range page {
 		title := strings.TrimSpace(s.Title)
 		if title == "" {
 			title = "(untitled)"
@@ -85,10 +111,11 @@ func (t ListSessionsTool) Call(ctx context.Context, input json.RawMessage) (stri
 			b.WriteString(" — " + snip)
 		}
 		b.WriteString("\n")
-		n++
 	}
-	if n == 0 {
-		return "No matching sessions in this workspace.", nil
+
+	fmt.Fprintf(&b, "\nShowing %d–%d of %d.", args.Offset+1, end, total)
+	if end < total {
+		fmt.Fprintf(&b, " %d more — pass offset:%d for the next page.", total-end, end)
 	}
 	return strings.TrimSpace(b.String()), nil
 }

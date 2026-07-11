@@ -52,6 +52,8 @@ interface Props {
   onInterrupt?: (text: string) => void
   onQueue?: (text: string) => void
   onSteer?: (text: string) => void
+  // Fired on keystrokes to broadcast a cross-window "user is typing" signal.
+  onTyping?: () => void
   // Per-turn reasoning level ('' = agent default). Picked from a small menu in
   // the composer and applied to the next message.
   thinkingLevel?: string
@@ -88,6 +90,7 @@ export function Composer({
   onInterrupt,
   onQueue,
   onSteer,
+  onTyping,
   thinkingLevel = '',
   onThinkingLevelChange,
   permissionMode = '',
@@ -250,6 +253,8 @@ export function Composer({
   const onChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setText(e.target.value)
     updateTrigger(e.target.value, e.target.selectionStart ?? e.target.value.length)
+    // Cross-window "is typing" signal (throttled inside onTyping).
+    if (e.target.value) onTyping?.()
   }
 
   const closeMenu = () => setTrigger(null)

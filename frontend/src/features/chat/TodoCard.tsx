@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { ListChecks, Check, CircleDot, Circle, ChevronDown, ChevronRight, type LucideIcon } from 'lucide-react'
 import type { TurnStep, TodoItem } from '@/types'
+import { ScrollableCard } from '@/shared/components'
 
 interface Props {
   step: TurnStep
@@ -53,18 +54,20 @@ export function TodoCard({ step }: Props) {
         </span>
       </button>
       {open && (
-        <ul className="flex flex-col gap-0.5 border-t border-[var(--color-border)] px-3 py-2 text-xs">
-          {todos.map((t, i) => {
-            const m = MARK[t.status] ?? MARK.pending
-            const Icon = m.icon
-            return (
-              <li key={i} className={`flex items-start gap-2 ${m.cls}`}>
-                <Icon size={13} className="mt-0.5 shrink-0" />
-                <span className="min-w-0 flex-1 leading-5">{t.content}</span>
-              </li>
-            )
-          })}
-        </ul>
+        <ScrollableCard maxH="max-h-[50vh]">
+          <ul className="flex flex-col gap-0.5 border-t border-[var(--color-border)] px-3 py-2 text-xs">
+            {todos.map((t, i) => {
+              const m = MARK[t.status] ?? MARK.pending
+              const Icon = m.icon
+              return (
+                <li key={i} className={`flex items-start gap-2 ${m.cls}`}>
+                  <Icon size={13} className="mt-0.5 shrink-0" />
+                  <span className="min-w-0 flex-1 leading-5">{t.content}</span>
+                </li>
+              )
+            })}
+          </ul>
+        </ScrollableCard>
       )}
     </div>
   )

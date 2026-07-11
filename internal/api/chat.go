@@ -103,6 +103,11 @@ type chatReq struct {
 	// uploaded via POST /api/uploads. Persisted on the user message and folded
 	// into the provider request.
 	Attachments []db.Attachment `json:"attachments"`
+	// ClientMsgID is a client-generated id (ULID) for the send-queue path
+	// (POST /sessions/{id}/messages): it dedupes double-submits / retries /
+	// reconnect replays so the same message is enqueued at most once. Empty on the
+	// legacy direct /chat/stream path. See _Docs/58-QUEUE-SENKRON.md Faz 3.
+	ClientMsgID string `json:"clientMsgId,omitempty"`
 }
 
 type chatResp struct {

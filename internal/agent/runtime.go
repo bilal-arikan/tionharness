@@ -161,14 +161,6 @@ type Runtime struct {
 	// workDir (the physical workspace dir). A session's own WorkingDir overrides it.
 	defaultWorkDir atomic.Pointer[string]
 
-	// Cross-session awareness config, set from per-workspace settings: whether the
-	// feature is on (gates both the pushed context block and the list_sessions
-	// pull tool), whether to inject every turn (vs only a session's first turn),
-	// and how many past sessions to list.
-	sessionCtxEnabled   atomic.Bool
-	sessionCtxEveryTurn atomic.Bool
-	sessionCtxRecent    atomic.Int64
-
 	// codebaseMemoryEnabled gates the whole codebase-memory capability system for
 	// this workspace: the prompt hint block, the per-workspace isolated store env,
 	// the cwd auto-index, and the codebase_workspace_search tool. Default on;
@@ -258,28 +250,6 @@ func (r *Runtime) WorkspaceDefaultDir() string {
 		}
 	}
 	return r.workDir
-}
-
-// SetSessionContext updates this workspace's cross-session awareness config.
-func (r *Runtime) SetSessionContext(enabled, everyTurn bool, recent int) {
-	r.sessionCtxEnabled.Store(enabled)
-	r.sessionCtxEveryTurn.Store(everyTurn)
-	r.sessionCtxRecent.Store(int64(recent))
-}
-
-// SessionContextEnabled reports whether cross-session awareness is on for this
-// workspace (gates the pushed block and the list_sessions tool).
-func (r *Runtime) SessionContextEnabled() bool { return r.sessionCtxEnabled.Load() }
-
-// SessionContextEveryTurn reports whether the block is injected every turn.
-func (r *Runtime) SessionContextEveryTurn() bool { return r.sessionCtxEveryTurn.Load() }
-
-// SessionContextRecentCount returns how many past sessions to list (default when unset).
-func (r *Runtime) SessionContextRecentCount() int {
-	if n := int(r.sessionCtxRecent.Load()); n > 0 {
-		return n
-	}
-	return DefaultSessionContextRecent
 }
 
 // SetCodebaseMemory toggles the codebase-memory capability system for this
@@ -623,9 +593,7 @@ func (r *Runtime) BridgeTools(ctx context.Context, agent db.Agent) ([]providers.
 	//   - conversation_search        : full-text history search (deeper than the
 	//     list_sessions pull tool, which is already bridged).
 	var extra []providers.ToolDef
-	if r.SessionContextEnabled() {
-		extra = append(extra, tools.NewConversationSearchTool(r.db).Def())
-	}
+	extra = append(extra, tools.NewConversationSearchTool(r.db).Def())
 	//   - read_session_debug : let a CLI agent read its OWN session's debug journal
 	//     (timings, token spend, tool latency, anomalies) for self-improvement —
 	//     the same always-on observability tool the native path gets. Only needs

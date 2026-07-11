@@ -25,7 +25,7 @@ func TestSessionsContextBlock(t *testing.T) {
 	database.CreateSession(ctx, db.Session{Kind: "chat", Title: "Old Thread", State: "archived", Summary: "shipped the parser"})
 	database.CreateSession(ctx, db.Session{Kind: "schedule", Title: "Pulse Loop", State: "active"})
 
-	block := sessionsContextBlock(ctx, database, current.ID, 5)
+	block := sessionsContextBlock(ctx, database, current.ID)
 	if block == "" {
 		t.Fatal("expected a non-empty block")
 	}
@@ -62,7 +62,7 @@ func TestSessionsContextBlockEmpty(t *testing.T) {
 	ctx := context.Background()
 
 	current, _ := database.CreateSession(ctx, db.Session{Kind: "chat", Title: "Only One", State: "active"})
-	if block := sessionsContextBlock(ctx, database, current.ID, 5); block != "" {
+	if block := sessionsContextBlock(ctx, database, current.ID); block != "" {
 		t.Fatalf("expected empty block, got:\n%s", block)
 	}
 }

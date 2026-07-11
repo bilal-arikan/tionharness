@@ -17,14 +17,13 @@ import (
 // session's existing Title and rolling Summary — no new LLM call — and rides
 // the dynamic (uncached) suffix since the session list changes over time.
 // Returns "" when there is nothing else to show. currentID is excluded (the
-// agent is already in it).
-func sessionsContextBlock(ctx context.Context, database *db.DB, currentID string, recentCount int) string {
+// agent is already in it). The pushed block always lists the 5 most recent past
+// sessions; the agent pages through the rest via the list_sessions tool.
+func sessionsContextBlock(ctx context.Context, database *db.DB, currentID string) string {
+	const recentCount = 5
 	sessions, err := database.ListSessions(ctx, "") // workspace-wide, UpdatedAt desc
 	if err != nil || len(sessions) == 0 {
 		return ""
-	}
-	if recentCount <= 0 {
-		recentCount = 5
 	}
 
 	now := time.Now().Unix()

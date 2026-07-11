@@ -20,8 +20,17 @@ import (
 // and persisted to the session JSONL. Unbounded output risks context overflow,
 // OOM and runaway transcript files. Tools with their own tighter caps (http /
 // shell / fs) stay well under this ceiling; this is the backstop for everything
-// else — notably MCP tools, whose output size we do not control.
-const maxToolOutputBytes = 100 * 1024
+// else — notably MCP tools, whose output size we do not control. Process-global and
+// settings-driven (MaxToolOutputKB) via SetMaxToolOutputBytes, pushed from applySettings.
+var maxToolOutputBytes = 100 * 1024
+
+// SetMaxToolOutputBytes overrides the tool-output backstop cap (in bytes). A value
+// <= 0 leaves it unchanged, so a partial settings push never zeroes the cap.
+func SetMaxToolOutputBytes(n int) {
+	if n > 0 {
+		maxToolOutputBytes = n
+	}
+}
 
 // capToolOutput truncates s to maxToolOutputBytes on a UTF-8 boundary and
 // appends a marker when it overflows, so the model is told output was cut.

@@ -14,45 +14,74 @@ export interface PendingItem {
 interface Props {
   items: PendingItem[]
   onRemove: (id: string) => void
+  // Promote a waiting message to dispatch next ("öne al"). Optional.
+  onSendNext?: (id: string) => void
+  // Clear the whole waiting queue. Optional; shown when 2+ queue items wait.
+  onClear?: () => void
 }
 
-import { CornerDownRight, Hourglass, X } from 'lucide-react'
+import { ArrowUp, CornerDownRight, Hourglass, X } from 'lucide-react'
 
-// PendingTray lists staged queue/steer items above the composer, each removable
-// before it is processed.
-export function PendingTray({ items, onRemove }: Props) {
+// PendingTray lists the session's WAITING backend queue (+ any steers) above the
+// composer. Queue items show their position (#N), can be promoted to run next,
+// removed individually, or cleared all at once.
+export function PendingTray({ items, onRemove, onSendNext, onClear }: Props) {
   if (items.length === 0) return null
+  const queueCount = items.filter((it) => it.kind === 'queue').length
+  let qIndex = 0
   return (
     <div className="flex flex-col gap-1.5 border-t border-[var(--color-border)] bg-[var(--color-surface)] px-6 pt-3">
-      <span className="text-[10px] font-medium uppercase tracking-wide text-[var(--color-text-dim)]">
-        Bekleyenler — işleme alınmadan silebilirsin
-      </span>
-      {items.map((it) => (
-        <div
-          key={it.id}
-          className="flex items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-2.5 py-1.5 text-sm"
-        >
-          <span
-            className={`inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-semibold ${
-              it.kind === 'steer'
-                ? 'bg-[color-mix(in_srgb,var(--color-warning)_20%,transparent)] text-[var(--color-warning)]'
-                : 'bg-[var(--color-accent-soft)] text-[var(--color-accent)]'
-            }`}
-            title={it.kind === 'steer' ? 'Canlı yönlendirme (birazdan gönderilecek)' : 'Sıradaki mesaj (tur bitince gönderilecek)'}
-          >
-            {it.kind === 'steer' ? <CornerDownRight size={11} /> : <Hourglass size={11} />}
-            {it.kind === 'steer' ? 'Yönlendir' : 'Sırada'}
-          </span>
-          <span className="min-w-0 flex-1 truncate text-[var(--color-text)]">{it.text}</span>
+      <div className="flex items-center justify-between">
+        <span className="text-[10px] font-medium uppercase tracking-wide text-[var(--color-text-dim)]">
+          Bekleyenler — işleme alınmadan silebilirsin
+        </span>
+        {onClear && queueCount > 1 && (
           <button
-            onClick={() => onRemove(it.id)}
-            title="Sil (işleme alınmadan)"
-            className="shrink-0 rounded p-0.5 text-[var(--color-text-dim)] transition hover:text-[var(--color-danger)]"
+            onClick={onClear}
+            className="text-[10px] font-medium text-[var(--color-text-dim)] transition hover:text-[var(--color-danger)]"
           >
-            <X size={14} />
+            Kuyruğu temizle ({queueCount})
           </button>
-        </div>
-      ))}
+        )}
+      </div>
+      {items.map((it) => {
+        const pos = it.kind === 'queue' ? ++qIndex : 0
+        return (
+          <div
+            key={it.id}
+            className="flex items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-2.5 py-1.5 text-sm"
+          >
+            <span
+              className={`inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-semibold ${
+                it.kind === 'steer'
+                  ? 'bg-[color-mix(in_srgb,var(--color-warning)_20%,transparent)] text-[var(--color-warning)]'
+                  : 'bg-[var(--color-accent-soft)] text-[var(--color-accent)]'
+              }`}
+              title={it.kind === 'steer' ? 'Canlı yönlendirme (birazdan gönderilecek)' : 'Sıradaki mesaj (tur bitince gönderilecek)'}
+            >
+              {it.kind === 'steer' ? <CornerDownRight size={11} /> : <Hourglass size={11} />}
+              {it.kind === 'steer' ? 'Yönlendir' : `Sırada #${pos}`}
+            </span>
+            <span className="min-w-0 flex-1 truncate text-[var(--color-text)]">{it.text}</span>
+            {it.kind === 'queue' && onSendNext && pos > 1 && (
+              <button
+                onClick={() => onSendNext(it.id)}
+                title="Öne al (sıradaki tur bunu çalıştırsın)"
+                className="shrink-0 rounded p-0.5 text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)]"
+              >
+                <ArrowUp size={14} />
+              </button>
+            )}
+            <button
+              onClick={() => onRemove(it.id)}
+              title="Sil (işleme alınmadan)"
+              className="shrink-0 rounded p-0.5 text-[var(--color-text-dim)] transition hover:text-[var(--color-danger)]"
+            >
+              <X size={14} />
+            </button>
+          </div>
+        )
+      })}
     </div>
   )
 }

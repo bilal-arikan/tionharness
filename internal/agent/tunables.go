@@ -1,10 +1,9 @@
 package agent
 
-import "sync"
-
-// DefaultSessionContextRecent bounds the past sessions listed in the
-// cross-session context block.
-const DefaultSessionContextRecent = 5
+import (
+	"sync"
+	"time"
+)
 
 // Default turn-recovery (A1) bounds, applied to a freshly constructed Tunables so
 // test runtimes (which never call applySettings) get production-sane behaviour.
@@ -22,6 +21,18 @@ const (
 	DefaultSpawnMaxConcurrent = 16 // max simultaneously-running spawned sessions
 	DefaultSpawnMaxPerTurn    = 4  // max spawns one agent turn may launch
 )
+
+// DefaultSpawnTimeoutMinutes bounds a single background spawn work turn (plus the
+// auto-continue continuations that share its context). Settings-driven
+// (SpawnTimeoutMinutes) via applySettings; 0 selects this default.
+const DefaultSpawnTimeoutMinutes = 20
+
+// DefaultScheduleTimeoutMinutes bounds a single scheduled fire (task run or prompt
+// delivery / wake). Sized for current-generation models: one request can run many
+// minutes and a multi-iteration tool loop longer still. Runaway protection comes
+// from the loop guards (iteration cap, budgets), not this wall clock. Settings-driven
+// (ScheduleTimeoutMinutes) via applySettings; 0 selects this default.
+const DefaultScheduleTimeoutMinutes = 30
 
 // Default coordinator/worker guards (see internal/agent/coordination.go). They
 // bound the M2 coordination loop so a coordinator can neither fan out unbounded
@@ -49,6 +60,8 @@ type Tunables struct {
 
 	spawnMaxConcurrent int // 0 → DefaultSpawnMaxConcurrent
 	spawnMaxPerTurn    int // 0 → DefaultSpawnMaxPerTurn
+	spawnTimeoutMin    int // 0 → DefaultSpawnTimeoutMinutes (spawn work-turn deadline, in minutes)
+	schedTimeoutMin    int // 0 → DefaultScheduleTimeoutMinutes (scheduled-fire deadline, in minutes)
 	coordMaxWorkers    int // 0 → DefaultCoordinatorMaxWorkers
 	coordMaxTurns      int // 0 → DefaultCoordinatorMaxTurns
 
@@ -388,6 +401,48 @@ func (t *Tunables) SpawnMaxPerTurn() int {
 		return DefaultSpawnMaxPerTurn
 	}
 	return t.spawnMaxPerTurn
+}
+
+// SetSpawnTimeoutMinutes sets the deadline (in minutes) that bounds a single
+// background spawn work turn and the auto-continue continuations sharing its
+// context. A value of 0 selects the built-in default.
+func (t *Tunables) SetSpawnTimeoutMinutes(minutes int) {
+	t.mu.Lock()
+	t.spawnTimeoutMin = minutes
+	t.mu.Unlock()
+}
+
+// SpawnTimeout returns the spawn work-turn deadline as a duration (default when
+// unset).
+func (t *Tunables) SpawnTimeout() time.Duration {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	m := t.spawnTimeoutMin
+	if m <= 0 {
+		m = DefaultSpawnTimeoutMinutes
+	}
+	return time.Duration(m) * time.Minute
+}
+
+// SetScheduleTimeoutMinutes sets the deadline (in minutes) that bounds a single
+// scheduled fire (cron task/prompt delivery + schedule_wake). 0 selects the
+// built-in default.
+func (t *Tunables) SetScheduleTimeoutMinutes(minutes int) {
+	t.mu.Lock()
+	t.schedTimeoutMin = minutes
+	t.mu.Unlock()
+}
+
+// ScheduleTimeout returns the scheduled-fire deadline as a duration (default when
+// unset).
+func (t *Tunables) ScheduleTimeout() time.Duration {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	m := t.schedTimeoutMin
+	if m <= 0 {
+		m = DefaultScheduleTimeoutMinutes
+	}
+	return time.Duration(m) * time.Minute
 }
 
 // SetCoordinatorLimits sets the coordinator/worker guards: the max number of

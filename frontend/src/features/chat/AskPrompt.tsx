@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { MessageCircleQuestion } from 'lucide-react'
-import { Button } from '@/shared/components'
+import { Button, ScrollableCard } from '@/shared/components'
 
 export interface PendingAsk {
   question: string
@@ -19,6 +19,11 @@ export interface PendingAsk {
   // shown on the permission card, or the plan markdown on the plan card, so the
   // user sees what is being approved.
   cmd?: string
+  // interactionId is the server-side resolve-once id (Faz 2): the answer is
+  // POSTed to /sessions/{id}/interactions/{interactionId}/answer, so the first
+  // window to reply wins (CAS) and every other window's card closes on the
+  // broadcast interaction_resolved. Absent only on legacy/local-only prompts.
+  interactionId?: string
 }
 
 interface Props {
@@ -49,24 +54,26 @@ function SingleAskPrompt({ ask, onAnswer }: Props) {
 
   return (
     <div className="mx-3 mb-2 rounded-lg border border-[var(--color-accent)] bg-[var(--color-surface)] px-3 py-2.5">
-      <div className="mb-2 flex items-start gap-2 text-sm text-[var(--color-text)]">
-        <MessageCircleQuestion size={16} className="mt-0.5 shrink-0 text-[var(--color-accent)]" />
-        <span className="min-w-0 flex-1 font-medium">{ask.question}</span>
-      </div>
-
-      {!!ask.options?.length && (
-        <div className="mb-2 flex flex-wrap gap-1.5">
-          {ask.options.map((opt, i) => (
-            <button
-              key={i}
-              onClick={() => submit(opt)}
-              className="rounded-full border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-1 text-xs text-[var(--color-text)] hover:border-[var(--color-accent)] hover:bg-[var(--color-surface-2)]"
-            >
-              {opt}
-            </button>
-          ))}
+      <ScrollableCard>
+        <div className="mb-2 flex items-start gap-2 text-sm text-[var(--color-text)]">
+          <MessageCircleQuestion size={16} className="mt-0.5 shrink-0 text-[var(--color-accent)]" />
+          <span className="min-w-0 flex-1 font-medium">{ask.question}</span>
         </div>
-      )}
+
+        {!!ask.options?.length && (
+          <div className="mb-2 flex flex-wrap gap-1.5">
+            {ask.options.map((opt, i) => (
+              <button
+                key={i}
+                onClick={() => submit(opt)}
+                className="rounded-full border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-1 text-xs text-[var(--color-text)] hover:border-[var(--color-accent)] hover:bg-[var(--color-surface-2)]"
+              >
+                {opt}
+              </button>
+            ))}
+          </div>
+        )}
+      </ScrollableCard>
 
       <form
         onSubmit={(e) => {
@@ -124,6 +131,7 @@ function MultiAskPrompt({
         }}
         className="flex flex-col gap-3"
       >
+        <ScrollableCard className="flex flex-col gap-3 pr-1">
         {questions.map((q, i) => (
           <div key={i} className="flex flex-col gap-1.5 border-t border-[var(--color-border)] pt-2 first:border-t-0 first:pt-0">
             <div className="flex items-start gap-2 text-sm text-[var(--color-text)]">
@@ -157,6 +165,7 @@ function MultiAskPrompt({
             />
           </div>
         ))}
+        </ScrollableCard>
 
         <div className="flex justify-end">
           <Button type="submit" disabled={!allAnswered}>

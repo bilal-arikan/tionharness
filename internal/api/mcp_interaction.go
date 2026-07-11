@@ -28,6 +28,11 @@ const askTimeout = 15 * time.Minute
 type interactionBackend struct {
 	runs *chatRuns
 	tun  *agent.Tunables // gates self-manage tools (spawn_session) on the CLI path
+	// apiSrv is the owning HTTP server, so the CLI human-in-the-loop tools
+	// (ask_user/permission/plan) route through the session interaction store +
+	// hub (resolve-once CAS, broadcast to every window) instead of the old
+	// owner-only SSE + run.answer channel. Set in NewServer.
+	apiSrv *Server
 	// srv is the streaming server, used to PUSH tools/list_changed when activate_tools
 	// grows a session's extended surface (Doc 52 Faz 1-b). Set after server construction
 	// (setServer); nil-safe — without it activation still mutates state, the client just

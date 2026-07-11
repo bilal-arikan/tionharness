@@ -15,21 +15,11 @@ import type { AutoLiveEntry, ChatStreamDeps, RunHandle, WakeWait } from './chatS
 import { performSend } from './chatStreamSend'
 import { performRerunLast, performRetry, performRewindTo } from './chatStreamHistory'
 import {
-  dropStaleSteers,
-  performAnswerAsk,
-  performInterrupt,
-  performQueueMessage,
-  performRemovePending,
-  performSteer,
-  performStop,
-} from './chatStreamInterventions'
-import {
   clearAutoLiveEntry,
-  foldAutoStep,
   performReseedLive,
-  recoverInflightSnapshot,
-  startInflightTextPoll,
 } from './chatStreamAutoLive'
+import { makeHubHandlers } from './chatStreamHub'
+import { subscribeSessionStream, windowClientId } from '@/api/sessionStream'
 import {
   buildChatCommands,
   performHandoff,
@@ -89,9 +79,38 @@ export function useChatStream(deps: ChatStreamDeps) {
     localStorage.setItem('tionswarm.permissionMode', v)
   }, [])
 
-  // Staged interventions shown above the composer while a turn streams.
-  const [queuedItems, setQueuedItems] = useState<PendingItem[]>([])
-  const steerTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
+  // The ACTIVE session's WAITING backend queue (driven by queue_update hub
+  // events) + its live viewer count (presence, Faz 4). Both are reset when the
+  // subscription switches sessions.
+  const [queued, setQueued] = useState<PendingItem[]>([])
+  const [presence, setPresence] = useState(1)
+  // "another window is typing…" — driven by the hub (typing events from OTHER
+  // windows), auto-cleared if the peer stops updating (e.g. it closed).
+  const [typingActive, setTypingActive] = useState(false)
+  const typingClearTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const setTyping = useCallback((active: boolean) => {
+    if (typingClearTimer.current) clearTimeout(typingClearTimer.current)
+    setTypingActive(active)
+    if (active) typingClearTimer.current = setTimeout(() => setTypingActive(false), 4000)
+  }, [])
+  // Outbound: the composer calls notifyTyping on each keystroke. First keystroke
+  // pings active; an idle gap (2.5s) pings inactive. Throttled so it is not a
+  // per-keystroke request storm.
+  const typingSentRef = useRef(false)
+  const typingIdleTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const notifyTyping = useCallback(() => {
+    const sid = activeSessionId
+    if (!sid) return
+    if (!typingSentRef.current) {
+      typingSentRef.current = true
+      api.setTyping(sid, true, windowClientId).catch(() => {})
+    }
+    if (typingIdleTimer.current) clearTimeout(typingIdleTimer.current)
+    typingIdleTimer.current = setTimeout(() => {
+      typingSentRef.current = false
+      api.setTyping(sid, false, windowClientId).catch(() => {})
+    }, 2500)
+  }, [activeSessionId])
   // ask_user pauses are held PER SESSION so a turn paused in one session does
   // not show its prompt while the user is viewing another.
   const [pendingAsks, setPendingAsks] = useState<Record<string, PendingAsk>>({})
@@ -120,6 +139,7 @@ export function useChatStream(deps: ChatStreamDeps) {
           setMessages,
           setStreamingSessions,
           setPendingSessions,
+          setQueued,
           setPendingAsks,
           setWakeWaits,
           setError,
@@ -173,41 +193,45 @@ export function useChatStream(deps: ChatStreamDeps) {
     [activeSessionIdRef, messagesRef, setMessages],
   )
 
-  // When a session's turn ends, drop any of ITS still-pending steers (their
-  // target run is gone) and cancel their grace timers.
-  useEffect(() => {
-    setQueuedItems((prev) => dropStaleSteers(prev, streamingSessions, steerTimers.current))
-  }, [streamingSessions])
+  // The backend serial queue replaces the old client-side flush loop: sending
+  // while a turn runs just enqueues (POST /messages) and the server dispatches in
+  // order. Waiting items arrive via queue_update; there is nothing to flush here.
 
-  // When a session's turn ends, flush the next message queued FOR THAT SESSION
-  // (FIFO). Sending re-adds the session to streamingSessions, so this re-runs
-  // for the following queued item in order.
-  useEffect(() => {
-    const next = queuedItems.find((p) => p.kind === 'queue' && !streamingSessions.has(p.sid))
-    if (next) {
-      setQueuedItems((prev) => prev.filter((p) => p.id !== next.id))
-      void sendMessageRef.current(next.text, next.sid)
-    }
-  }, [streamingSessions, queuedItems])
+  // ---- turn interventions (session-scoped: the queue runs turns server-side) ----
 
-  // ---- streaming-turn interventions (target the ACTIVE session's turn) ----
-
-  // Stop: cancel the active session's in-flight turn (see performStop).
+  // Stop: cancel the active session's in-flight turn. Session-scoped — the client
+  // no longer holds a runId (the worker owns the run), so the server resolves it.
   const stopTurn = useCallback(() => {
-    performStop({ activeSessionId, runsRef, setStreamingSessions, setPendingSessions, setPendingAsks })
+    const sid = activeSessionId
+    if (!sid) return
+    setStreamingSessions((p) => withRemoved(p, sid))
+    setPendingSessions((p) => withRemoved(p, sid))
+    setPendingAsks((p) => withoutKey(p, sid))
+    api.sessionControl(sid, 'stop').catch(() => {})
   }, [activeSessionId])
 
-  // Answer: deliver the user's reply to the active session's turn paused on
-  // ask_user, resuming it.
+  // Answer: resolve the active session's pending interaction (ask_user /
+  // permission / plan) via the resolve-once endpoint. Optimistically close the
+  // card here; the server broadcasts interaction_resolved so every OTHER window
+  // closes it too. A 409 (another window answered first) is expected and benign.
   const answerAsk = useCallback((text: string) => {
-    performAnswerAsk({ activeSessionId, runsRef, setPendingAsks, setError }, text)
-  }, [activeSessionId, setError])
+    const sid = activeSessionId
+    if (!sid) return
+    const ask = pendingAsks[sid]
+    setPendingAsks((p) => withoutKey(p, sid))
+    if (ask?.interactionId) {
+      api.answerInteraction(sid, ask.interactionId, { answer: text }).catch(() => {})
+    }
+  }, [activeSessionId, pendingAsks])
 
-  // Interrupt: stop the active session's turn and immediately send a new message
-  // to the SAME session.
+  // Interrupt: stop the active session's turn, then enqueue a new message to the
+  // SAME session (it dispatches once the stopped turn unwinds).
   const interruptTurn = useCallback(
     (text: string) => {
-      performInterrupt({ activeSessionId, runsRef }, text, sendMessage)
+      const sid = activeSessionId
+      if (!sid) return
+      api.sessionControl(sid, 'stop').catch(() => {})
+      void sendMessage(text, sid)
     },
     [activeSessionId, sendMessage],
   )
@@ -229,8 +253,16 @@ export function useChatStream(deps: ChatStreamDeps) {
 
   // Clear a session's post-reload pending indicator once its turn has ended
   // (chat-completion event). Locally-owned live streams clear themselves.
+  // Called from the GLOBAL completion feed (useAppEvents: chat/spawned/worker/…),
+  // which arrives regardless of which session is on screen. Clears BOTH pending
+  // and streaming — the latter matters when a turn finished for a session the
+  // user had navigated away from: its per-session hub subscription was torn down,
+  // so its turn_done never cleared streamingSessions, leaving a stuck "Durdur"
+  // (stale running indicator) on return. This global signal is the authoritative
+  // turn-end that covers the off-screen case.
   const clearPending = useCallback((sid: string) => {
     setPendingSessions((p) => withRemoved(p, sid))
+    setStreamingSessions((p) => withRemoved(p, sid))
   }, [])
 
   // ---- autonomous / other-window live turns (session-step bus) ----
@@ -240,13 +272,17 @@ export function useChatStream(deps: ChatStreamDeps) {
   // detached and several can overlap.
   const autoLiveRef = useRef<Map<string, AutoLiveEntry>>(new Map())
 
-  // applyAutoStep folds one bus step into the active session's ghost bubble
-  // (see foldAutoStep).
+  // applyAutoStep: rendering is now the hub subscription's job (authoritative,
+  // per ACTIVE session). A global bus step frame only raises the "pending"
+  // indicator for a session that is NOT on screen here; when the user opens it,
+  // the hub stream replays its history and renders it. No more ghost bubble from
+  // the bus (that path is the hub's now).
   const applyAutoStep = useCallback(
-    (sid: string, step: TurnStep) => {
-      foldAutoStep({ activeSessionIdRef, runsRef, autoLiveRef, setMessages, setPendingSessions }, sid, step)
+    (sid: string, _step: TurnStep) => {
+      if (activeSessionIdRef.current === sid) return
+      setPendingSessions((p) => withAdded(p, sid))
     },
-    [activeSessionIdRef, setMessages],
+    [activeSessionIdRef],
   )
 
   // clearAutoLive drops a session's ghost bubble + its accumulator once the turn
@@ -258,18 +294,11 @@ export function useChatStream(deps: ChatStreamDeps) {
     [setMessages],
   )
 
-  // recoverInflight restores the in-progress assistant bubble after a MID-TURN
-  // reload (see recoverInflightSnapshot).
-  const recoverInflight = useCallback(
-    async (sid: string, loadedMsgs: Message[]) => {
-      await recoverInflightSnapshot(
-        { activeSessionIdRef, runsRef, autoLiveRef, setMessages, setPendingSessions },
-        sid,
-        loadedMsgs,
-      )
-    },
-    [activeSessionIdRef, setMessages],
-  )
+  // Mid-turn reload recovery is the hub subscription's job now: on (re)connect it
+  // replays the in-flight turn from the server ring, rebuilding the live bubble —
+  // no separate inflight-snapshot fetch. Kept as a no-op so the controller's
+  // message-load call site is unchanged.
+  const recoverInflight = useCallback(async (_sid: string, _loadedMsgs: Message[]) => {}, [])
 
   // reseedLive restores the live (unpersisted) assistant bubble THIS window is
   // streaming after a session-switch reload (see performReseedLive).
@@ -282,16 +311,37 @@ export function useChatStream(deps: ChatStreamDeps) {
 
   // ---- inflight text polling (non-owning / post-refresh observer) ----
 
-  // While the ACTIVE session has a running turn THIS window does not own, poll
-  // the inflight snapshot to advance the ghost bubble's answer text (the bus
-  // drops delta frames — see startInflightTextPoll for the full story).
+  // Authoritative render: subscribe the ACTIVE session to its per-session hub
+  // stream and render the transcript live from it — full cutover, so EVERY window
+  // (the sender and every other viewer) renders from here, not from the send
+  // request's own SSE. Cursor-based: a reconnect gap-fills from the server ring,
+  // and a reset (server restart / eviction) triggers a full listMessages resync.
+  // Replaces the old bus-ghost + inflight-text-polling machinery.
   useEffect(() => {
     const sid = activeSessionId
     if (!sid) return
-    if (!pendingSessions.has(sid)) return
-    if (runsRef.current.has(sid)) return // this window owns the turn — its own SSE streams the text
-    return startInflightTextPoll(sid, activeSessionIdRef, runsRef, setMessages)
-  }, [activeSessionId, pendingSessions, activeSessionIdRef, setMessages])
+    // Fresh session view: clear the previous session's queue/presence until this
+    // one's first queue_update / presence frame arrives.
+    setQueued([])
+    setPresence(1)
+    setTypingActive(false)
+    const reload = () => {
+      api.listMessages(sid).then(setMessages).catch(() => {})
+    }
+    const handlers = makeHubHandlers({
+      sid,
+      activeSessionIdRef,
+      setMessages,
+      setStreamingSessions,
+      setPendingSessions,
+      setPendingAsks,
+      setQueued,
+      setPresence,
+      setTyping,
+      reload,
+    })
+    return subscribeSessionStream(sid, handlers)
+  }, [activeSessionId, activeSessionIdRef, setMessages, setTyping])
 
   // ---- self-wake (schedule_wake) waiting state ----
 
@@ -315,22 +365,56 @@ export function useChatStream(deps: ChatStreamDeps) {
     api.cancelWake(sid).catch((e) => setError((e as Error).message))
   }, [activeSessionId, setError])
 
-  // Queue: stage a message to auto-send (FIFO) when the ACTIVE session's current
-  // turn finishes (see performQueueMessage).
+  // Queue: with the backend serial queue, "queue" is just a normal send — the
+  // server serialises it behind the running turn and shows it in the tray.
   const queueMessage = useCallback((text: string) => {
-    performQueueMessage({ activeSessionId, setQueuedItems }, text)
+    void sendMessage(text)
+  }, [sendMessage])
+
+  // Steer: inject live guidance into the ACTIVE session's running turn
+  // (session-scoped; the worker owns the run). Live steering only works for native
+  // providers; for a claude-cli turn the server reports "unsupported" and we fall
+  // back to queueing the guidance as the next message (the user's intent — run
+  // this next — is best served by the queue).
+  const steerTurn = useCallback((text: string) => {
+    const sid = activeSessionId
+    if (!sid || !text.trim()) return
+    api.sessionControl(sid, 'steer', text)
+      .then((r) => {
+        if (r?.result === 'unsupported') {
+          void sendMessage(text)
+          setError('Bu ajan (claude-cli) canlı yönlendirmeyi desteklemiyor — mesaj sıraya alındı.')
+        }
+      })
+      .catch((e) => setError((e as Error).message))
+  }, [activeSessionId, setError, sendMessage])
+
+  // Remove a WAITING queued message before it is dispatched (backend cancel).
+  const removePending = useCallback((id: string) => {
+    const sid = activeSessionId
+    if (!sid) return
+    setQueued((prev) => prev.filter((p) => p.id !== id))
+    api.cancelQueued(sid, id).catch(() => {})
   }, [activeSessionId])
 
-  // Steer: stage live guidance with a short cancellable grace window, then POST
-  // it to the ACTIVE session's running turn (see performSteer).
-  const steerTurn = useCallback((text: string) => {
-    performSteer({ activeSessionId, runsRef, steerTimers, setQueuedItems, setError }, text)
-  }, [activeSessionId, setError])
+  // Clear the whole waiting queue for the active session.
+  const clearQueue = useCallback(() => {
+    const sid = activeSessionId
+    if (!sid) return
+    setQueued([])
+    api.clearQueue(sid).catch(() => {})
+  }, [activeSessionId])
 
-  // Remove a staged item before it is processed.
-  const removePending = useCallback((id: string) => {
-    performRemovePending(steerTimers, setQueuedItems, id)
-  }, [])
+  // Promote a waiting message so it dispatches next ("öne al").
+  const sendQueuedNext = useCallback((id: string) => {
+    const sid = activeSessionId
+    if (!sid) return
+    setQueued((prev) => {
+      const it = prev.find((p) => p.id === id)
+      return it ? [it, ...prev.filter((p) => p.id !== id)] : prev
+    })
+    api.moveQueuedFront(sid, id).catch(() => {})
+  }, [activeSessionId])
 
   // Run a "/" command that posts an assistant message: summary (board/flows/
   // tools) or conversation compaction (see performSummarize).
@@ -375,13 +459,17 @@ export function useChatStream(deps: ChatStreamDeps) {
   const activePending = activeSessionId ? pendingSessions.has(activeSessionId) : false
   const activeAsk = activeSessionId ? pendingAsks[activeSessionId] ?? null : null
   const activeWakeWait = activeSessionId ? wakeWaits[activeSessionId] ?? null : null
-  const activeQueued = useMemo(
-    () => (activeSessionId ? queuedItems.filter((p) => p.sid === activeSessionId) : []),
-    [queuedItems, activeSessionId],
-  )
+  // The active session's WAITING backend queue is already session-scoped (the hub
+  // subscription is per active session), so it maps straight through.
+  const activeQueued = queued
+  // "open in N windows" — >1 means another window is also viewing this session.
+  const activePresence = presence
 
   return {
     streamingSessions,
+    activePresence,
+    activeTyping: typingActive,
+    notifyTyping,
     thinkingLevel,
     setThinkingLevel: setThinkingLevelPersist,
     permissionMode,
@@ -395,6 +483,8 @@ export function useChatStream(deps: ChatStreamDeps) {
     queueMessage,
     steerTurn,
     removePending,
+    clearQueue,
+    sendQueuedNext,
     markPending,
     clearPending,
     applyAutoStep,

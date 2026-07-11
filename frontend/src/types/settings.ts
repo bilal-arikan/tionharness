@@ -113,6 +113,13 @@ export interface AppSettings {
   // Spawn guards — the detached background surface (run_subagent async + spawn).
   spawnMaxConcurrent: number
   spawnMaxPerTurn: number
+  spawnTimeoutMin: number
+  scheduleTimeoutMin: number
+
+  // Tool execution guards (process-global tool behaviour).
+  shellDefaultTimeoutSec: number
+  shellMaxTimeoutSec: number
+  maxToolOutputKB: number
 
   // Coordinator/worker guards (M2): active workers per coordinator + auto-turn cap.
   coordinatorMaxWorkers: number
