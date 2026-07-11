@@ -21,6 +21,24 @@ func nonInteractiveGuards() []string {
 	}
 }
 
+// DisableGitSigningEnv returns git's env-based config injection that turns commit
+// AND tag signing off (commit.gpgsign=false, tag.gpgsign=false) via
+// GIT_CONFIG_COUNT/KEY/VALUE. It is meant for autonomous/confined turns only: an
+// unattended `git commit` on a repo configured with commit.gpgsign=true would
+// block forever on a GPG pinentry passphrase prompt that no human can answer.
+// Interactive turns keep signing (a person can enter the passphrase), so callers
+// gate this on the confined/autonomous flag.
+//
+// Assumes the ambient environment carries no GIT_CONFIG_* injection of its own
+// (true for TionSwarm's process); appended last, these win via os/exec dedup.
+func DisableGitSigningEnv() []string {
+	return []string{
+		"GIT_CONFIG_COUNT=2",
+		"GIT_CONFIG_KEY_0=commit.gpgsign", "GIT_CONFIG_VALUE_0=false",
+		"GIT_CONFIG_KEY_1=tag.gpgsign", "GIT_CONFIG_VALUE_1=false",
+	}
+}
+
 // HardenedEnv returns base (or the current process environment when base is nil)
 // with the non-interactive guards appended. Appending last is deliberate: os/exec
 // deduplicates the environment keeping the LAST value for each key (case-

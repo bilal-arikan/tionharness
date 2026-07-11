@@ -45,6 +45,27 @@ func TestHardenedEnvGuardOverridesInherited(t *testing.T) {
 	}
 }
 
+// Confined turns must disable commit/tag signing so an unattended git op can't
+// hang on a GPG pinentry prompt.
+func TestDisableGitSigningEnv(t *testing.T) {
+	env := DisableGitSigningEnv()
+	if v, _ := lastValue(env, "GIT_CONFIG_COUNT"); v != "2" {
+		t.Fatalf("GIT_CONFIG_COUNT = %q; want 2", v)
+	}
+	// Both keys must map to false; order-independent scan of key→value pairs.
+	seen := map[string]string{}
+	for i := 0; i < 2; i++ {
+		k, _ := lastValue(env, "GIT_CONFIG_KEY_"+string(rune('0'+i)))
+		val, _ := lastValue(env, "GIT_CONFIG_VALUE_"+string(rune('0'+i)))
+		seen[k] = val
+	}
+	for _, k := range []string{"commit.gpgsign", "tag.gpgsign"} {
+		if seen[k] != "false" {
+			t.Fatalf("%s = %q; want false (got pairs %v)", k, seen[k], seen)
+		}
+	}
+}
+
 func TestTreeKillConfiguresCancel(t *testing.T) {
 	cmd := exec.Command("someprog")
 	TreeKill(cmd)

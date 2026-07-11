@@ -17,8 +17,16 @@ import (
 //     whole child tree, not just the shell — otherwise git.exe and the editor it
 //     spawned survive as zombies and leave a .git/index.lock that wedges the next
 //     commit (the failure mode that stalled the coordinator for a full turn).
-func hardenShellCmd(cmd *exec.Cmd) *exec.Cmd {
+//
+// When confined (an autonomous/spawned turn with no human in the loop), it also
+// forces commit/tag signing off: a signed git operation would otherwise block
+// forever on a GPG pinentry passphrase prompt nobody can answer. Interactive
+// turns keep signing enabled.
+func hardenShellCmd(cmd *exec.Cmd, confined bool) *exec.Cmd {
 	cmd.Env = proc.HardenedEnv(cmd.Env) // cmd.Env nil → os.Environ()+guards
+	if confined {
+		cmd.Env = append(cmd.Env, proc.DisableGitSigningEnv()...)
+	}
 	proc.TreeKill(cmd)
 	return cmd
 }

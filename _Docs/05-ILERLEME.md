@@ -24,6 +24,11 @@
     `cliBaseEnv` (CLI ajanının kendi git'i de non-interactive).
 - **Testler:** `internal/proc/env_test.go` — guard override (notepad→true),
   TreeKill Cancel/WaitDelay set; build+vet+tools/providers testleri yeşil.
+- **Confined imza kapatma:** `DisableGitSigningEnv()` → `commit.gpgsign=false` +
+  `tag.gpgsign=false` (git `GIT_CONFIG_COUNT/KEY/VALUE` env-injection). Yalnız
+  **confined (otonom/spawn) shell'lerde** enjekte edilir (`hardenShellCmd(cmd,
+  t.sb.Confined)`); interaktif turlar imzayı korur (insan passphrase girebilir).
+  Böylece nezaretsiz `git commit` GPG pinentry'de asılamaz.
 
 ## Çapraz-session farkındalığı: tamamen ayarsız → her zaman açık + list_sessions sayfalama ✅ (2026-07-11)
 

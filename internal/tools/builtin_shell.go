@@ -130,7 +130,7 @@ func (t ShellTool) CallStream(ctx context.Context, input json.RawMessage, onChun
 		return "", err
 	}
 	build := func(runCtx context.Context, command string) *exec.Cmd {
-		return hardenShellCmd(proc.CommandContext(runCtx, t.exe, "-c", command))
+		return hardenShellCmd(proc.CommandContext(runCtx, t.exe, "-c", command), t.sb.Confined)
 	}
 	if args.RunInBackground {
 		return startBackgroundShell(t.mgr, t.sb, args, "Bash", build)
@@ -197,7 +197,7 @@ func (t PowerShellTool) CallStream(ctx context.Context, input json.RawMessage, o
 		// (e.g. Turkish) file content is not mangled on the round-trip to Go. No-op
 		// for pwsh 7+, which is UTF-8 by default. See builtin_shell_encoding.go.
 		command = applyWinPSUTF8(t.exe, command)
-		return hardenShellCmd(proc.CommandContext(runCtx, t.exe, "-NoProfile", "-NonInteractive", "-Command", command))
+		return hardenShellCmd(proc.CommandContext(runCtx, t.exe, "-NoProfile", "-NonInteractive", "-Command", command), t.sb.Confined)
 	}
 	if args.RunInBackground {
 		return startBackgroundShell(t.mgr, t.sb, args, "PowerShell", build)
