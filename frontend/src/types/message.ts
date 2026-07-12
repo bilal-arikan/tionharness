@@ -6,7 +6,7 @@ import type { Attachment } from './attachment'
 // 'permission' (approval gate), 'plan' (plan approval), 'tool_delta' (streaming
 // tool output), 'tombstone' (retract a live step).
 // Persisted: text, thinking, tool, todo, recovery, error, steer.
-// See lib/stepKinds.ts for human-readable descriptions.
+// See @/shared/stepKinds for human-readable descriptions + shared icons.
 export type StepKind =
   | 'text'
   | 'thinking'

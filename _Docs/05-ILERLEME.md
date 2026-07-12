@@ -2,7 +2,17 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-07-12**
 
-## Koordinatör "coalesced completion" stall'ı — worker-state + idle reconcile ✅ (2026-07-12)
+## TurnStep ikonları tek kaynağa çekildi (sohbet ↔ ayar ekranı) ✅ (2026-07-12)
+
+- **Sorun:** `stepKinds.ts` "tek doğruluk kaynağı" olduğunu iddia etse de yalnız ayar
+  ekranı (`StepKindsPanel`) onu tüketiyordu (emoji); sohbet step bileşenleri ikonları
+  ayrı ayrı hardcode ediyordu (lucide SVG). Drift vardı (ör. `thinking` ayarda 🧠,
+  sohbette 💭).
+- **Çözüm:** Metadata `@/shared/stepKinds.ts`'e taşındı; her kind artık bir **lucide
+  `Icon`** taşır (+ `STEP_KIND_MAP` O(1) lookup). Ayar ekranı ve **tüm** sohbet step
+  bileşenleri (TextStep/ThinkingBlock/ErrorStep/RecoveryStep/SteerStep/HookStep/
+  SubagentStep/ContextChangeCard/TodoCard/DiffCard/ToolDeltaStep) aynı ikonu oradan
+  render eder → görsel birebir aynı, drift imkânsız. `tsc --noEmit` + `vite build` temiz.
 
 - **Teşhis:** Aynı tura düşen birden fazla `<task-notification>`'dan biri koordinatör
   LLM'i tarafından gözden kaçırılınca (biten worker'ı "hâlâ çalışıyor" sanması), o tur
@@ -52,6 +62,24 @@
   kapatıyordu → düz metne çevrildi. Test: `builtin_sessionarchive_test.go` →
   `TestArchiveSessionsIncludeCurrent`.
 - Doğrulama: `go build ./...` + `go test ./internal/tools -run TestArchiveSessions` yeşil.
+
+## Otonom turlar için "çalışıyor" göstergesi + gerçek Durdur ✅ (2026-07-12)
+
+- **İhtiyaç:** Canlı adım köprüsü düzeldikten sonra ghost balonu akıyordu ama otonom
+  turlarda (koordinatör/scheduler/spawn) "çalışıyor" göstergesi + composer Durdur/
+  Kes/Yönlendir kümesi çıkmıyordu — çünkü frontend `streamingSessions`'ı yalnız
+  `KindUserMessage`'da işaretliyor, otonom tur bunu yayınlamıyor.
+- **Frontend:** `chatStreamHub.ts` — ilk hub aktivitesinde (`KindAgentStart` ve
+  `KindStep`) oturum `streamingSessions`'a eklenir → transkript göstergesi +
+  composer busy-durumu interaktifle simetrik çıkar. `turn_done`/`turn_error` (ve
+  global tamamlanma feed'i) temizler.
+- **Backend:** `autonomousInteraction` (`autonomous_interaction.go`) artık **gerçek
+  bir cancel** kaydediyor (eskiden no-op): `ctx, cancel := context.WithCancel(ctx)`
+  → dönen iptal-edilebilir ctx CLI provider çağrısına akar, cleanup `cancel()`+
+  `unregister`. Böylece izleyicinin "Durdur"/"Kes"i otonom claude-cli turunu
+  gerçekten durdurur. `coordination.go` `runCoordinatorTurn`/`runWorker`:
+  `errors.Is(err, context.Canceled)` → temiz "⏹️ … durduruldu" mesajı (hata değil).
+- **Doğrulama:** api+agent **274 test** yeşil, vet temiz, frontend tsc temiz.
 
 ## Bug fix — otonom tur canlı adımları hub'a köprülenmiyordu ✅ (2026-07-11)
 

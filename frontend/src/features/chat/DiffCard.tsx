@@ -1,6 +1,9 @@
 import { useState } from 'react'
-import { Pencil, ChevronDown, ChevronRight } from 'lucide-react'
+import { ChevronDown, ChevronRight } from 'lucide-react'
 import type { TurnStep } from '@/types'
+import { STEP_KIND_MAP } from '@/shared/stepKinds'
+
+const HeaderIcon = STEP_KIND_MAP.diff.Icon
 import { DiffView } from '@/shared/components/markdown/DiffView'
 import { synthDiffData } from '@/shared/lib/diff'
 import { toolBase } from './tools'
@@ -50,7 +53,7 @@ export function DiffCard({ step, onOpenFile }: Props) {
           hasPatch ? 'hover:bg-[var(--color-surface-2)]' : 'cursor-default'
         }`}
       >
-        <Pencil size={14} className="shrink-0 text-[var(--color-text-dim)]" />
+        <HeaderIcon size={14} className="shrink-0 text-[var(--color-text-dim)]" />
         <span className="shrink-0 font-medium text-[var(--color-text)]">{actionLabel(step, created)}</span>
         {/* The path is shown short (…/dir/file) so it no longer spans the whole
             row; only the text itself opens the file (span, not <button>, to keep

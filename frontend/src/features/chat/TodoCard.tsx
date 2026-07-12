@@ -1,7 +1,10 @@
 import { useState } from 'react'
-import { ListChecks, Check, CircleDot, Circle, ChevronDown, ChevronRight, type LucideIcon } from 'lucide-react'
+import { Check, CircleDot, Circle, ChevronDown, ChevronRight, type LucideIcon } from 'lucide-react'
 import type { TurnStep, TodoItem } from '@/types'
 import { ScrollableCard } from '@/shared/components'
+import { STEP_KIND_MAP } from '@/shared/stepKinds'
+
+const HeaderIcon = STEP_KIND_MAP.todo.Icon
 
 interface Props {
   step: TurnStep
@@ -44,7 +47,7 @@ export function TodoCard({ step }: Props) {
         onClick={() => setOpen((o) => !o)}
         className="flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-left text-xs text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)]"
       >
-        <ListChecks size={14} className="shrink-0" />
+        <HeaderIcon size={14} className="shrink-0" />
         <span className="font-medium text-[var(--color-text)]">Görev Listesi</span>
         <span className="ml-auto tabular-nums">
           {done}/{todos.length}

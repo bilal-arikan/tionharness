@@ -1,5 +1,5 @@
-import { Webhook, Ban } from 'lucide-react'
 import type { TurnStep } from '@/types'
+import { STEP_KIND_MAP } from '@/shared/stepKinds'
 
 interface Props {
   step: TurnStep
@@ -15,7 +15,7 @@ export function HookStep({ step }: Props) {
   const tone = blocked
     ? 'border-[color-mix(in_srgb,var(--color-danger)_35%,transparent)] bg-[color-mix(in_srgb,var(--color-danger)_12%,transparent)] text-[var(--color-danger)]'
     : 'border-[color-mix(in_srgb,var(--color-accent)_30%,transparent)] bg-[color-mix(in_srgb,var(--color-accent)_10%,transparent)] text-[var(--color-accent)]'
-  const Icon = blocked ? Ban : Webhook
+  const Icon = blocked ? STEP_KIND_MAP.error.Icon : STEP_KIND_MAP.hook.Icon
   return (
     <div className={`flex items-center gap-2 rounded-md border px-3 py-1.5 text-xs ${tone}`}>
       <Icon size={14} className="shrink-0" />

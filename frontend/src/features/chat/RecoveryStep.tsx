@@ -1,5 +1,7 @@
-import { TriangleAlert } from 'lucide-react'
 import type { TurnStep } from '@/types'
+import { STEP_KIND_MAP } from '@/shared/stepKinds'
+
+const HeaderIcon = STEP_KIND_MAP.recovery.Icon
 
 interface Props {
   step: TurnStep
@@ -12,7 +14,7 @@ export function RecoveryStep({ step }: Props) {
   const text = step.text?.trim() || step.reason || 'Kurtarma'
   return (
     <div className="flex items-center gap-2 rounded-md border border-[color-mix(in_srgb,var(--color-warning)_35%,transparent)] bg-[color-mix(in_srgb,var(--color-warning)_12%,transparent)] px-3 py-1.5 text-xs text-[var(--color-warning)]">
-      <TriangleAlert size={14} className="shrink-0" />
+      <HeaderIcon size={14} className="shrink-0" />
       <span className="min-w-0 flex-1">{text}</span>
       {step.reason && (
         <span className="shrink-0 rounded bg-[color-mix(in_srgb,var(--color-warning)_22%,transparent)] px-1.5 py-0.5 font-mono text-[10px] opacity-80">

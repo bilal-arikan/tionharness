@@ -1,4 +1,7 @@
 import type { TurnStep } from '@/types'
+import { STEP_KIND_MAP } from '@/shared/stepKinds'
+
+const HeaderIcon = STEP_KIND_MAP.tool_delta.Icon
 
 interface Props {
   step: TurnStep
@@ -11,7 +14,7 @@ export function ToolDeltaStep({ step }: Props) {
   return (
     <div className="overflow-hidden rounded-md">
       <div className="flex items-center gap-2 px-3 py-1 text-xs text-[var(--color-text-dim)]">
-        <span>📟</span>
+        <HeaderIcon size={14} className="shrink-0" />
         <span className="font-medium text-[var(--color-text)]">{step.tool || 'Araç'}</span>
         <span className="ml-auto animate-pulse">çalışıyor…</span>
       </div>

@@ -1,6 +1,6 @@
 // Adım Türleri category: read-only reference of the assistant turn's activity
 // trace step kinds (mirrors internal/agent/trace.go).
-import { STEP_KINDS } from './stepKinds'
+import { STEP_KINDS } from '@/shared/stepKinds'
 
 export function StepKindsPanel() {
   return (
@@ -14,8 +14,8 @@ export function StepKindsPanel() {
             key={s.kind}
             className="flex items-start gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2"
           >
-            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-[var(--color-surface-2)] text-base">
-              {s.icon}
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-[var(--color-surface-2)] text-[var(--color-text-dim)]">
+              <s.Icon size={16} />
             </span>
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">

@@ -1,6 +1,28 @@
-// Single source of truth describing every assistant-turn StepKind: used by the
-// chat renderer and the Settings → "Adım Türleri" reference screen. Mirrors the
-// StepKind constants in internal/agent/trace.go.
+// Single source of truth describing every assistant-turn StepKind: the icon,
+// label, persistence and status shared by BOTH the chat renderer (features/chat/*
+// step components) and the Settings → "Adım Türleri" reference screen. Each kind
+// carries a lucide icon component so the two surfaces render the SAME glyph and
+// can never drift. Mirrors the StepKind constants in internal/agent/trace.go.
+import {
+  Ban,
+  Bot,
+  Brain,
+  ClipboardList,
+  CornerDownRight,
+  ListChecks,
+  MessageCircleQuestion,
+  MessageSquare,
+  Pencil,
+  RefreshCw,
+  ShieldAlert,
+  Terminal,
+  Trash2,
+  TriangleAlert,
+  Waves,
+  Webhook,
+  Wrench,
+  type LucideIcon,
+} from 'lucide-react'
 import type { StepKind } from '@/types'
 
 export type StepStatus = 'active' | 'infra'
@@ -8,7 +30,8 @@ export type StepStatus = 'active' | 'infra'
 export interface StepKindInfo {
   kind: StepKind
   label: string
-  icon: string
+  /** Shared lucide icon rendered by both the chat step card and the settings screen. */
+  Icon: LucideIcon
   /** Whether the step persists in the saved trace or is live-only. */
   persisted: boolean
   /** "active" = a producer emits it today; "infra" = type/UI ready, producer pending. */
@@ -20,7 +43,7 @@ export const STEP_KINDS: StepKindInfo[] = [
   {
     kind: 'text',
     label: 'Metin',
-    icon: '💬',
+    Icon: MessageSquare,
     persisted: true,
     status: 'active',
     description: 'Modelin araç çağrıları arasında ürettiği ara anlatım metni.',
@@ -28,7 +51,7 @@ export const STEP_KINDS: StepKindInfo[] = [
   {
     kind: 'thinking',
     label: 'Düşünme',
-    icon: '🧠',
+    Icon: Brain,
     persisted: true,
     status: 'active',
     description: 'Modelin akıl yürütme (thinking) içeriği — sağlayıcı sunduğunda.',
@@ -36,7 +59,7 @@ export const STEP_KINDS: StepKindInfo[] = [
   {
     kind: 'tool',
     label: 'Araç',
-    icon: '🛠️',
+    Icon: Wrench,
     persisted: true,
     status: 'active',
     description: 'Tek bir araç çağrısı: girdi + sonuç. Edit/Write çıktısı diff olarak gösterilir.',
@@ -44,7 +67,7 @@ export const STEP_KINDS: StepKindInfo[] = [
   {
     kind: 'delta',
     label: 'Akış parçası',
-    icon: '🌊',
+    Icon: Waves,
     persisted: false,
     status: 'active',
     description:
@@ -53,7 +76,7 @@ export const STEP_KINDS: StepKindInfo[] = [
   {
     kind: 'ask',
     label: 'Soru',
-    icon: '❓',
+    Icon: MessageCircleQuestion,
     persisted: false,
     status: 'active',
     description:
@@ -62,7 +85,7 @@ export const STEP_KINDS: StepKindInfo[] = [
   {
     kind: 'permission',
     label: 'İzin onayı',
-    icon: '🛡️',
+    Icon: ShieldAlert,
     persisted: false,
     status: 'active',
     description:
@@ -71,7 +94,7 @@ export const STEP_KINDS: StepKindInfo[] = [
   {
     kind: 'plan',
     label: 'Plan onayı',
-    icon: '📋',
+    Icon: ClipboardList,
     persisted: false,
     status: 'active',
     description:
@@ -80,7 +103,7 @@ export const STEP_KINDS: StepKindInfo[] = [
   {
     kind: 'todo',
     label: 'Görev listesi',
-    icon: '✅',
+    Icon: ListChecks,
     persisted: true,
     status: 'active',
     description: 'todo_write aracının çalışma checklist’i; ilk-sınıf kart olarak render edilir.',
@@ -88,7 +111,7 @@ export const STEP_KINDS: StepKindInfo[] = [
   {
     kind: 'recovery',
     label: 'Kurtarma',
-    icon: '⚠️',
+    Icon: TriangleAlert,
     persisted: true,
     status: 'active',
     description:
@@ -97,7 +120,7 @@ export const STEP_KINDS: StepKindInfo[] = [
   {
     kind: 'error',
     label: 'Hata',
-    icon: '⛔',
+    Icon: Ban,
     persisted: true,
     status: 'active',
     description:
@@ -106,7 +129,7 @@ export const STEP_KINDS: StepKindInfo[] = [
   {
     kind: 'steer',
     label: 'Yönlendirme',
-    icon: '↪️',
+    Icon: CornerDownRight,
     persisted: true,
     status: 'active',
     description: 'Çalışan tura canlı eklenen kullanıcı yönlendirmesi (steer); modelden ayrı gösterilir.',
@@ -114,7 +137,7 @@ export const STEP_KINDS: StepKindInfo[] = [
   {
     kind: 'tool_delta',
     label: 'Araç çıktı akışı',
-    icon: '📟',
+    Icon: Terminal,
     persisted: false,
     status: 'active',
     description:
@@ -123,7 +146,7 @@ export const STEP_KINDS: StepKindInfo[] = [
   {
     kind: 'tombstone',
     label: 'Geri çekme',
-    icon: '🗑️',
+    Icon: Trash2,
     persisted: false,
     status: 'active',
     description:
@@ -132,7 +155,7 @@ export const STEP_KINDS: StepKindInfo[] = [
   {
     kind: 'diff',
     label: 'Dosya değişikliği',
-    icon: '✏️',
+    Icon: Pencil,
     persisted: true,
     status: 'active',
     description:
@@ -141,7 +164,7 @@ export const STEP_KINDS: StepKindInfo[] = [
   {
     kind: 'hook',
     label: 'Hook',
-    icon: '🪝',
+    Icon: Webhook,
     persisted: true,
     status: 'active',
     description:
@@ -150,7 +173,7 @@ export const STEP_KINDS: StepKindInfo[] = [
   {
     kind: 'context_change',
     label: 'Bağlam değişikliği',
-    icon: '🔄',
+    Icon: RefreshCw,
     persisted: true,
     status: 'active',
     description:
@@ -159,10 +182,16 @@ export const STEP_KINDS: StepKindInfo[] = [
   {
     kind: 'subagent',
     label: 'Alt-ajan',
-    icon: '🤖',
+    Icon: Bot,
     persisted: true,
     status: 'active',
     description:
       'run_subagent ile başlatılan izole alt-ajan: kendi temiz bağlamında bir görevi yürütüp yalnız final sonucunu döndürür (ana bağlam kirlenmez). Katlanabilir kart; açılınca alt-ajanın kendi iz ağacı (SubSteps) iç içe gösterilir. Tek turda birden çok çağrı paralel koşar.',
   },
 ]
+
+// STEP_KIND_MAP is the O(1) lookup the chat step components use to render the
+// same icon the settings screen lists — the shared glyph per kind.
+export const STEP_KIND_MAP: Record<StepKind, StepKindInfo> = Object.fromEntries(
+  STEP_KINDS.map((s) => [s.kind, s]),
+) as Record<StepKind, StepKindInfo>

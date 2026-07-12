@@ -1,7 +1,10 @@
 import { useState } from 'react'
-import { ChevronDown, ChevronRight, Bot } from 'lucide-react'
+import { ChevronDown, ChevronRight } from 'lucide-react'
 import type { TurnStep } from '@/types'
 import { TurnSteps } from './TurnSteps'
+import { STEP_KIND_MAP } from '@/shared/stepKinds'
+
+const HeaderIcon = STEP_KIND_MAP.subagent.Icon
 
 interface Props {
   step: TurnStep
@@ -39,7 +42,7 @@ export function SubagentStep({ step, onOpenFile, onOpenArtifact }: Props) {
         className="flex w-full items-center gap-2 rounded-md px-3 py-1 text-left text-xs hover:bg-[var(--color-surface-2)]"
       >
         <span className="shrink-0 text-[var(--color-accent)]">
-          <Bot size={14} />
+          <HeaderIcon size={14} />
         </span>
         <span className="shrink-0 font-medium text-[var(--color-text)]">
           Alt-ajan{target ? ` · ${target}` : ''}

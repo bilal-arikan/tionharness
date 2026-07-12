@@ -1,4 +1,7 @@
 import { useState } from 'react'
+import { STEP_KIND_MAP } from '@/shared/stepKinds'
+
+const HeaderIcon = STEP_KIND_MAP.thinking.Icon
 
 interface Props {
   text: string
@@ -18,7 +21,7 @@ export function ThinkingBlock({ text }: Props) {
         onClick={() => setOpen((o) => !o)}
         className="flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-left text-xs hover:bg-[var(--color-surface-2)]"
       >
-        <span className="shrink-0">💭</span>
+        <HeaderIcon size={14} className="shrink-0 text-[var(--color-text-dim)]" />
         <span className="shrink-0 font-medium text-[var(--color-text)]">Düşünme</span>
         {!open && preview && (
           <span className="min-w-0 flex-1 truncate italic text-[var(--color-text-dim)]">
