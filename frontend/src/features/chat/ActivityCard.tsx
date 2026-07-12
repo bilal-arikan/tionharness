@@ -14,13 +14,19 @@ interface Props {
   onOpenFile?: (path: string) => void
 }
 
-// shellCommand returns the command string for a Bash/PowerShell step (so a brand
-// icon of the program it runs can sit next to the tool icon), else null.
-function shellCommand(step: TurnStep): string | null {
+// programHint returns a string to resolve a program brand icon from, so it can sit
+// next to the tool icon: the command for a Bash/PowerShell step, or the interpreter
+// language for a transform_data/run_code step (e.g. "python3" → Python). Else null.
+function programHint(step: TurnStep): string | null {
   const base = toolBase(step.tool || '')
-  if (base !== 'bash' && base !== 'powershell') return null
-  const input = step.input as { command?: unknown } | null
-  return typeof input?.command === 'string' ? input.command : null
+  const input = step.input as { command?: unknown; language?: unknown } | null
+  if (base === 'bash' || base === 'powershell') {
+    return typeof input?.command === 'string' ? input.command : null
+  }
+  if (base === 'transform_data' || base === 'run_code') {
+    return typeof input?.language === 'string' ? input.language : null
+  }
+  return null
 }
 
 // headerBadge derives a compact right-aligned summary shown next to the tool
@@ -76,7 +82,7 @@ export function ActivityCard({ step, onOpenFile }: Props) {
   // A loaded skill's body is markdown (use_skill returns "# Skill: <slug>\n\n…").
   // Render it formatted rather than as a raw <pre> block when the card is expanded.
   const isSkill = toolBase(step.tool || '') === 'use_skill' && !step.isError
-  const shellCmd = shellCommand(step)
+  const progHint = programHint(step)
 
   return (
     <div className="overflow-hidden rounded-md">
@@ -85,7 +91,7 @@ export function ActivityCard({ step, onOpenFile }: Props) {
         className="flex w-full items-center gap-2 rounded-md px-3 py-1 text-left text-xs hover:bg-[var(--color-surface-2)]"
       >
         <meta.icon size={14} className="shrink-0 text-[var(--color-text-dim)]" />
-        {shellCmd && <CommandProgramIcon command={shellCmd} />}
+        {progHint && <CommandProgramIcon command={progHint} />}
         <span className="shrink-0 font-medium text-[var(--color-text)]">{meta.label}</span>
         {meta.summary && (
           <span className="min-w-0 flex-1 truncate text-[var(--color-text-dim)]">

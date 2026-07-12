@@ -10,12 +10,19 @@
   uyarlaması).
 - **Nasıl:** `shared/lib/commandProgram.ts` komutu parse eder (env/`sudo`/pipe/chain/
   path/`bash -c`+`pwsh -Command` sarmalayıcıları). `shared/lib/programIcons.ts`
-  program adını (alias'lı ~40 komut) `simple-icons` marka glyph'ine eşler; ilk eşleşen
+  program adını (**~90 alias**, ~75 marka) `simple-icons` glyph'ine eşler; ilk eşleşen
   program kazanır. `features/chat/CommandProgramIcon.tsx` 13px SVG'yi brand-hex + `title`
-  ile render eder; eşleşmezse (cmdlet/`ls`…) hiçbir şey. `ActivityCard`'ta yalnız
-  Bash/PowerShell adımlarında `<meta.icon>` yanına eklenir.
+  ile render eder; eşleşmezse (cmdlet/`ls`…) hiçbir şey.
+- **Kapsam:** git/gh, npm/pnpm/yarn/bun/node/deno, tsc/vite/webpack/esbuild/rollup/turbo/
+  next/astro/prisma/eslint/prettier/biome/jest/vitest/cypress, python/pip/poetry/uv/pytest/
+  conda, go/cargo, docker/podman/kubectl/helm/terraform/pulumi/ansible/vagrant, java/dotnet/
+  gradle/maven/ant/scala/kotlin, ruby/php/composer, dart/flutter/swift/elixir/julia/r/perl/lua,
+  clang/cmake/make, psql/mysql/mongo/redis/sqlite, nginx, gcloud/vercel/netlify/supabase/
+  firebase/wrangler, nvim/vim/brew/pacman/wasmer, curl. (aws/azure/playwright simple-icons'ta yok.)
+- **Bonus:** `ActivityCard`'ta yalnız Bash/PowerShell (`input.command`) **ve** `transform_data`
+  /`run_code` (`input.language` → python/node/bun…) adımlarında `<meta.icon>` yanına eklenir.
 - **Bağımlılık/bundle:** `simple-icons` (named import → tree-shake doğrulandı, yalnız
-  kullanılan ~26 ikon bundle'a girer). `tsc --noEmit` + `vite build` temiz; parser 12
+  kullanılan ikonlar bundle'a girer). `tsc --noEmit` + `vite build` temiz; parser 12
   örnek vaka ile node sanity-check'ten geçti (frontend'de unit-test runner yok).
 
 ## TurnStep ikonları tek kaynağa çekildi (sohbet ↔ ayar ekranı) ✅ (2026-07-12)
