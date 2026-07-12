@@ -184,3 +184,12 @@ export interface ChatResponse {
   // Present only when the first turn auto-generated the session title.
   sessionTitle?: string
 }
+
+// BtwResponse is one side-chat ("btw") answer. It carries no message ids because
+// no message was created: the side chat reads the session's context but is never
+// written back into its history.
+export interface BtwResponse {
+  answer: string
+  model: string
+  usage: Usage
+}

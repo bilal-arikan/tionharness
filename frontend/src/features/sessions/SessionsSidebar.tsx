@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Settings, Pencil, Sparkles, ClipboardCopy, FolderOpen, Trash2, Search, X, MessageSquareText, Plus, RefreshCw, Archive, ArchiveRestore, Pin, PinOff, Table2, type LucideIcon } from 'lucide-react'
+import { Settings, Pencil, Sparkles, ClipboardCopy, FolderOpen, Trash2, Search, X, MessageSquareText, Plus, RefreshCw, Archive, ArchiveRestore, Pin, PinOff, Table2, Users, type LucideIcon } from 'lucide-react'
 import type { Agent, Session, SearchHit } from '@/types'
 import { api } from '@/api'
 import { AgentAvatar } from '@/shared/components/agents/AgentAvatar'
@@ -74,9 +74,13 @@ export function SessionsSidebar({
   onSetPinned,
 }: Props) {
   const [menuId, setMenuId] = useState<string | null>(null)
-  // Active vs Archived view. Archiving a session moves it out of the default
-  // (active) list into the Archived filter — it is never deleted.
-  const [showArchived, setShowArchived] = useState(false)
+  // Top-level view: Active (default), Archived, or Workers (coordinator-spawned
+  // worker sessions). Archiving moves a session into the Archived view — it is
+  // never deleted. Worker sessions live in their own view so they don't clutter
+  // the active list. Derived booleans keep the downstream filter logic terse.
+  const [view, setView] = useState<'active' | 'archived' | 'workers'>('active')
+  const showArchived = view === 'archived'
+  const showWorkers = view === 'workers'
   // Kind filter ('' = all). Persisted like the archive filter's sibling controls.
   const [kindFilter, setKindFilter] = useState(() => localStorage.getItem(KIND_FILTER_KEY) ?? '')
   useEffect(() => {
@@ -130,16 +134,30 @@ export function SessionsSidebar({
 
   // How many sessions are archived (drives the Archived filter's count badge).
   const archivedCount = useMemo(() => sessions.filter((s) => s.state === 'archived').length, [sessions])
+  // How many (non-archived) worker sessions exist — the Workers tab's count badge.
+  const workerCount = useMemo(
+    () => sessions.filter((s) => s.role === 'worker' && s.state !== 'archived').length,
+    [sessions],
+  )
 
   // Group the (already newest-first) sessions into recency buckets, preserving
-  // order. The Active/Archived filter narrows by state first, then the kind tab,
-  // then a title search.
+  // order. The view (Active/Archived/Workers) narrows first, then the kind tab,
+  // then a title search. Active EXCLUDES workers (they have their own tab) so the
+  // default list isn't buried under coordinator-spawned sessions.
   const groups = useMemo(() => {
     const q = query.trim().toLowerCase()
     const map = new Map<Bucket, Session[]>()
     for (const s of sessions) {
       const isArchived = s.state === 'archived'
-      if (showArchived !== isArchived) continue
+      const isWorker = s.role === 'worker'
+      if (showWorkers) {
+        if (!isWorker || isArchived) continue
+      } else if (showArchived) {
+        if (!isArchived) continue
+      } else {
+        // Active view: hide archived AND worker sessions.
+        if (isArchived || isWorker) continue
+      }
       if (!matchesKindFilter(s.kind, kindFilter)) continue
       if (q && !(s.title || 'Yeni sohbet').toLowerCase().includes(q)) continue
       const b = bucketOf(s.updatedAt)
@@ -148,7 +166,7 @@ export function SessionsSidebar({
       map.set(b, arr)
     }
     return BUCKET_ORDER.filter((b) => map.has(b)).map((b) => ({ bucket: b, items: map.get(b)! }))
-  }, [sessions, query, showArchived, kindFilter])
+  }, [sessions, query, showArchived, showWorkers, kindFilter])
 
   // Multi-select (Ctrl/Cmd+Click, Shift-range). The ordered id list is the
   // flattened visible render order so Shift+Click can span recency buckets.
@@ -295,13 +313,14 @@ export function SessionsSidebar({
         )}
       </div>
 
-      {/* Active / Archived filter. The Archived pill carries a count so archived
-          work is discoverable without cluttering the default list. */}
+      {/* Active / Archived / Workers filter. Each non-default pill carries a count
+          so archived work and coordinator workers are discoverable without
+          cluttering the default list. */}
       <div className="flex gap-1 px-3 pb-2">
         <button
-          onClick={() => setShowArchived(false)}
+          onClick={() => setView('active')}
           className={`flex-1 rounded-md px-2 py-1 text-xs font-medium transition ${
-            !showArchived
+            view === 'active'
               ? 'bg-[var(--color-surface-2)] text-[var(--color-text)]'
               : 'text-[var(--color-text-dim)] hover:text-[var(--color-text)]'
           }`}
@@ -309,14 +328,25 @@ export function SessionsSidebar({
           Aktif
         </button>
         <button
-          onClick={() => setShowArchived(true)}
+          onClick={() => setView('archived')}
           className={`flex flex-1 items-center justify-center gap-1 rounded-md px-2 py-1 text-xs font-medium transition ${
-            showArchived
+            view === 'archived'
               ? 'bg-[var(--color-surface-2)] text-[var(--color-text)]'
               : 'text-[var(--color-text-dim)] hover:text-[var(--color-text)]'
           }`}
         >
           <Archive size={12} /> Arşiv{archivedCount > 0 ? ` (${archivedCount})` : ''}
+        </button>
+        <button
+          onClick={() => setView('workers')}
+          title="Koordinatör tarafından başlatılan worker oturumları"
+          className={`flex flex-1 items-center justify-center gap-1 rounded-md px-2 py-1 text-xs font-medium transition ${
+            view === 'workers'
+              ? 'bg-[var(--color-surface-2)] text-[var(--color-text)]'
+              : 'text-[var(--color-text-dim)] hover:text-[var(--color-text)]'
+          }`}
+        >
+          <Users size={12} /> Workers{workerCount > 0 ? ` (${workerCount})` : ''}
         </button>
       </div>
 
@@ -534,11 +564,13 @@ export function SessionsSidebar({
         ))}
         {!loading && groups.length === 0 && query.trim().length < 2 && (
           <p className="px-3 py-2 text-xs text-[var(--color-text-dim)]">
-            {showArchived
-              ? 'Arşivlenmiş oturum yok.'
-              : kindFilter
-                ? 'Bu türde oturum yok.'
-                : 'Oturum yok. + ile başlat.'}
+            {showWorkers
+              ? 'Worker oturumu yok. Koordinatör modunda spawn_worker ile başlatın.'
+              : showArchived
+                ? 'Arşivlenmiş oturum yok.'
+                : kindFilter
+                  ? 'Bu türde oturum yok.'
+                  : 'Oturum yok. + ile başlat.'}
           </p>
         )}
 

@@ -192,8 +192,13 @@ func paragraphArea(p string, kind ContextChangeKind) ContextArea {
 	label = truncateRunes(strings.TrimSpace(strings.TrimLeft(label, "#> \t")), contextLabelMaxRune)
 	body := make([]string, 0, len(lines))
 	for _, l := range lines {
-		if len(l) > maxAreaLineLen {
-			l = string([]rune(l)[:maxAreaLineLen]) + "…"
+		// Guard by RUNE count, not byte length: len(l) is bytes, but the slice below
+		// indexes []rune. A line with multi-byte UTF-8 (Turkish ç/ğ/ı/ö/ş/ü, emoji,
+		// CJK) can exceed maxAreaLineLen BYTES while holding fewer RUNES, so the old
+		// len(l)>max guard let string([]rune(l)[:max]) slice past the rune slice's
+		// capacity and panic ("slice bounds out of range [:400] with capacity 384").
+		if r := []rune(l); len(r) > maxAreaLineLen {
+			l = string(r[:maxAreaLineLen]) + "…"
 		}
 		body = append(body, l)
 		if len(body) >= maxAreaLines {

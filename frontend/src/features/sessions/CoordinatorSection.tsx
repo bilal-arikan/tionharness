@@ -27,12 +27,24 @@ export function CoordinatorSection({ sessionId, role, refreshKey, onError, onRol
   const [workersOpen, setWorkersOpen] = useState(
     () => localStorage.getItem('tionswarm.coordWorkersOpen') !== '0',
   )
+  // Which worker bucket is shown: running vs finished (persisted).
+  const [workerTab, setWorkerTab] = useState<'running' | 'done'>(
+    () => (localStorage.getItem('tionswarm.coordWorkerTab') === 'done' ? 'done' : 'running'),
+  )
   const toggleWorkers = () =>
     setWorkersOpen((v) => {
       const next = !v
       localStorage.setItem('tionswarm.coordWorkersOpen', next ? '1' : '0')
       return next
     })
+  const selectTab = (tab: 'running' | 'done') => {
+    setWorkerTab(tab)
+    localStorage.setItem('tionswarm.coordWorkerTab', tab)
+  }
+
+  const runningWorkers = workers.filter((w) => w.running)
+  const doneWorkers = workers.filter((w) => !w.running)
+  const shownWorkers = workerTab === 'running' ? runningWorkers : doneWorkers
 
   const loadWorkers = useCallback(() => {
     if (!isCoordinator) return
@@ -129,29 +141,62 @@ export function CoordinatorSection({ sessionId, role, refreshKey, onError, onRol
               Worker'lar · {workers.length}
             </button>
             {workersOpen && (
-            <ul className="space-y-1.5">
-              {workers.map((w) => (
-                <li
-                  key={w.sessionId}
-                  className="rounded-lg border border-[var(--color-border)] px-2.5 py-1.5"
+            <>
+              {/* Tabs: running vs finished, each with a live count. */}
+              <div className="flex items-center gap-1 px-1">
+                <button
+                  onClick={() => selectTab('running')}
+                  aria-pressed={workerTab === 'running'}
+                  className={`flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-medium transition ${
+                    workerTab === 'running'
+                      ? 'bg-[var(--color-accent)]/10 text-[var(--color-accent)]'
+                      : 'text-[var(--color-text-dim)] hover:text-[var(--color-text)]'
+                  }`}
                 >
-                  <div className="flex items-center gap-1.5">
-                    {w.running ? (
-                      <Play size={12} className="shrink-0 text-[var(--color-accent)]" />
-                    ) : (
-                      <CheckCircle2 size={12} className="shrink-0 text-[var(--color-success)]" />
-                    )}
-                    <span className="truncate text-[11px] font-medium text-[var(--color-text)]">{w.agentName}</span>
-                    <span className="ml-auto text-[9px] uppercase tracking-wide text-[var(--color-text-dim)]">
-                      {w.running ? 'çalışıyor' : 'bitti'}
-                    </span>
-                  </div>
-                  {w.summary && (
-                    <p className="mt-0.5 line-clamp-2 text-[10px] text-[var(--color-text-dim)]">{w.summary}</p>
-                  )}
-                </li>
-              ))}
-            </ul>
+                  <Play size={11} className="shrink-0" /> Çalışan · {runningWorkers.length}
+                </button>
+                <button
+                  onClick={() => selectTab('done')}
+                  aria-pressed={workerTab === 'done'}
+                  className={`flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-medium transition ${
+                    workerTab === 'done'
+                      ? 'bg-[var(--color-success)]/10 text-[var(--color-success)]'
+                      : 'text-[var(--color-text-dim)] hover:text-[var(--color-text)]'
+                  }`}
+                >
+                  <CheckCircle2 size={11} className="shrink-0" /> Tamamlanan · {doneWorkers.length}
+                </button>
+              </div>
+              {shownWorkers.length === 0 ? (
+                <p className="px-1 text-[10px] text-[var(--color-text-dim)]">
+                  {workerTab === 'running' ? 'Şu an çalışan worker yok.' : 'Henüz tamamlanan worker yok.'}
+                </p>
+              ) : (
+                <ul className="space-y-1.5">
+                  {shownWorkers.map((w) => (
+                    <li
+                      key={w.sessionId}
+                      className="rounded-lg border border-[var(--color-border)] px-2.5 py-1.5"
+                    >
+                      <div className="flex items-center gap-1.5">
+                        {w.running ? (
+                          <Play size={12} className="shrink-0 text-[var(--color-accent)]" />
+                        ) : (
+                          <CheckCircle2 size={12} className="shrink-0 text-[var(--color-success)]" />
+                        )}
+                        <span className="truncate text-[11px] font-medium text-[var(--color-text)]">{w.agentName}</span>
+                        <span className="ml-auto text-[9px] uppercase tracking-wide text-[var(--color-text-dim)]">
+                          {w.running ? 'çalışıyor' : 'bitti'}
+                        </span>
+                      </div>
+                      {w.summary && (
+                        <p className="mt-0.5 line-clamp-2 text-[10px] text-[var(--color-text-dim)]">{w.summary}</p>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </>
             )}
             </>
           )}

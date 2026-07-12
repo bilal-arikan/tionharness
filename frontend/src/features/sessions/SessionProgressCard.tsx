@@ -1,4 +1,5 @@
-import { Loader2, CheckCircle2, ListChecks, Square } from 'lucide-react'
+import { useState } from 'react'
+import { Loader2, CheckCircle2, ListChecks, Square, ChevronDown, ChevronRight } from 'lucide-react'
 import type { SessionProgress } from '@/types'
 import { formatDate } from './sessionDetailFormat'
 
@@ -15,17 +16,34 @@ export function ProgressCard({ progress }: { progress: SessionProgress }) {
   const total = rec.todos.length
   const done = rec.todos.filter((t) => t.status === 'completed').length
   const log = (rec.log ?? []).slice(-3).reverse()
+  // Collapse state (persisted) — the task list can get long, so let it fold.
+  const [open, setOpen] = useState(
+    () => localStorage.getItem('tionswarm.sessionTasksOpen') !== '0',
+  )
+  const toggle = () =>
+    setOpen((v) => {
+      const next = !v
+      localStorage.setItem('tionswarm.sessionTasksOpen', next ? '1' : '0')
+      return next
+    })
   return (
     <section>
-      <div className="mb-2 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-dim)] opacity-70">
+      <button
+        onClick={toggle}
+        aria-expanded={open}
+        className="mb-2 flex w-full items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-dim)] opacity-70 transition hover:text-[var(--color-accent)] hover:opacity-100"
+      >
+        {open ? <ChevronDown size={12} className="shrink-0" /> : <ChevronRight size={12} className="shrink-0" />}
         <ListChecks size={12} className="shrink-0" />
-        <span>Kalıcı ilerleme · {done}/{total}</span>
+        <span>Görev Listesi · {done}/{total}</span>
         {rec.updatedAt > 0 && (
           <span className="ml-auto font-normal normal-case opacity-80" title="Son güncelleme">
             {formatDate(rec.updatedAt)}
           </span>
         )}
-      </div>
+      </button>
+      {open && (
+      <>
       <div className="flex flex-col gap-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-2.5 py-2">
         {rec.todos.map((t, i) => (
           <div key={i} className="flex items-start gap-1.5 text-[11px] leading-relaxed">
@@ -51,6 +69,8 @@ export function ProgressCard({ progress }: { progress: SessionProgress }) {
             </div>
           ))}
         </div>
+      )}
+      </>
       )}
     </section>
   )

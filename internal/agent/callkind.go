@@ -26,6 +26,11 @@ const (
 	KindSummary  CallKind = db.UsageKindSummary
 	KindReflect  CallKind = db.UsageKindReflect
 	KindCompact  CallKind = db.UsageKindCompact
+	// KindBtw is the "/btw" side chat: a one-shot, tool-less consultation that
+	// reads the session's context but is NEVER written back to its history. It is
+	// an AUXILIARY kind (like title/summary), so isConversationKind excludes it and
+	// its throwaway prompt cannot be mistaken for a prompt-cache break.
+	KindBtw CallKind = db.UsageKindBtw
 )
 
 type callKindKey struct{}

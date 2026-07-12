@@ -1,6 +1,6 @@
 // Chat endpoints: the blocking turn, the SSE streaming turn (with its frame
 // parser) and the in-flight control channel.
-import type { Attachment, Message, ChatResponse, TurnStep } from '@/types'
+import type { Attachment, BtwResponse, Message, ChatResponse, TurnStep } from '@/types'
 import { req, wsHeaders, errorFromResponse } from './client'
 
 // Handlers invoked as the streaming turn dispatches parsed SSE events. Also
@@ -121,6 +121,16 @@ export const chatApi = {
     thinkingLevel?: string,
     permissionMode?: string,
   ): Promise<void> => streamChat(sessionId, message, agentIds, handlers, signal, thinkingLevel, permissionMode),
+
+  // Side chat ("btw"): ask a one-shot question against the session's context
+  // WITHOUT writing it into the history. The agent gets no tools, and neither the
+  // question nor the answer becomes a session message — so a long conversation's
+  // token cost does not grow. Answerable while the main turn is still streaming.
+  btw: (sessionId: string, question: string, agentId?: string) =>
+    req<BtwResponse>('/api/chat/btw', {
+      method: 'POST',
+      body: JSON.stringify({ sessionId, question, agentId }),
+    }),
 
   // Control an in-flight streaming turn: stop (cancel), steer (live guidance) or
   // answer (reply to a blocked ask_user prompt).

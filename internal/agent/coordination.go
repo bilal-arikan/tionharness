@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -421,6 +422,11 @@ func (r *Runtime) runWorker(agent db.Agent, workerSessionID, prompt, coordSessio
 		if ctl.stopped.Load() {
 			status = "killed"
 			replyText = "⏹️ Worker turu koordinatör tarafından durduruldu."
+		} else if errors.Is(err, context.Canceled) {
+			// A viewer pressed "Durdur"/"Kes": the autonomous run's cancel aborted the
+			// turn (see autonomousInteraction). Report it as a clean stop, not a failure.
+			status = "killed"
+			replyText = "⏹️ Worker turu durduruldu."
 		} else {
 			status = "failed"
 			replyText = "⚠️ Worker turu çalıştırılamadı:\n\n" + err.Error()
@@ -689,8 +695,15 @@ func (r *Runtime) runCoordinatorTurn(coordSessionID string) {
 
 	text := output
 	if err != nil {
-		text = "⚠️ Koordinatör turu çalıştırılamadı:\n\n" + err.Error()
-		r.logger.Error("coordination: coordinator turn failed", "coordinator", coordSessionID, "error", err)
+		if errors.Is(err, context.Canceled) {
+			// A viewer pressed "Durdur"/"Kes": the autonomous run's cancel aborted the
+			// turn (see autonomousInteraction). Report a clean stop, not a failure.
+			text = "⏹️ Koordinatör turu durduruldu."
+			r.logger.Info("coordination: coordinator turn stopped", "coordinator", coordSessionID)
+		} else {
+			text = "⚠️ Koordinatör turu çalıştırılamadı:\n\n" + err.Error()
+			r.logger.Error("coordination: coordinator turn failed", "coordinator", coordSessionID, "error", err)
+		}
 	} else if strings.TrimSpace(text) == "" {
 		text = "ℹ️ Koordinatör bu tur için boş yanıt döndürdü."
 	}

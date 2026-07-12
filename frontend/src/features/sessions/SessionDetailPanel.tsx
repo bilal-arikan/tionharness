@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Sparkles, Trash2 } from 'lucide-react'
+import { Trash2, Archive, ArchiveRestore } from 'lucide-react'
 import { api } from '@/api'
 import type { SessionInfo, SessionUsageDetail, SessionProgress } from '@/types'
 import { CoordinatorSection } from './CoordinatorSection'
@@ -74,6 +74,8 @@ export function SessionDetailPanel({
   const [progress, setProgress] = useState<SessionProgress | null>(null)
   const [loading, setLoading] = useState(false)
   const [titling, setTitling] = useState(false)
+  // In-flight guard for the archive / unarchive toggle.
+  const [archiving, setArchiving] = useState(false)
   // Manual rename: when editing, hold the draft text; saving persists verbatim.
   const [editingTitle, setEditingTitle] = useState(false)
   const [titleDraft, setTitleDraft] = useState('')
@@ -230,6 +232,24 @@ export function SessionDetailPanel({
     }
   }
 
+  // Toggle the session's archive state ("archived" drops it from the active
+  // sidebar list without deleting; "active" restores it). Reflect locally and
+  // refresh so the state pill updates.
+  const handleArchiveToggle = async () => {
+    if (archiving || !info) return
+    const next = info.state === 'archived' ? 'active' : 'archived'
+    setArchiving(true)
+    try {
+      await api.setSessionState(sessionId, next)
+      setInfo((prev) => (prev ? { ...prev, state: next } : prev))
+      setLocalRefresh((n) => n + 1)
+    } catch (e) {
+      onError((e as Error).message)
+    } finally {
+      setArchiving(false)
+    }
+  }
+
   // Open the inline title editor seeded with the current title.
   const startEditTitle = () => {
     setTitleDraft(info?.title ?? '')
@@ -355,6 +375,8 @@ export function SessionDetailPanel({
             startEditTitle={startEditTitle}
             commitTitle={commitTitle}
             onSelectSession={onSelectSession}
+            onGenerateTitle={handleTitle}
+            titling={titling}
           />
 
           {/* Background process: an in-flight turn and/or a warm persistent CLI
@@ -460,18 +482,23 @@ export function SessionDetailPanel({
           {/* Debug / observability moved to its own panel — opened from the chat
               header's "Debug" button (SessionDebugModal). */}
 
-          {/* Actions / tools */}
+          {/* Actions / tools. AI title generation moved next to the title's edit
+              control (SessionTitleBlock); "Bağlam" lives in the chat header. */}
           <Section title="Araçlar">
             <div className="flex flex-col gap-1.5">
               <ActionBtn
-                icon={Sparkles}
-                label={titling ? 'Başlık üretiliyor…' : 'AI ile başlık üret'}
-                onClick={handleTitle}
-                disabled={info.messageCount === 0 || titling}
-                busy={titling}
+                icon={info.state === 'archived' ? ArchiveRestore : Archive}
+                label={
+                  archiving
+                    ? '…'
+                    : info.state === 'archived'
+                      ? 'Arşivden kaldır'
+                      : 'Arşivle'
+                }
+                onClick={handleArchiveToggle}
+                disabled={archiving}
+                busy={archiving}
               />
-              {/* "Bağlam" moved to the chat header (App.tsx) so it opens
-                  without first opening this inspector. */}
               <ActionBtn
                 icon={Trash2}
                 label="Oturumu sil"

@@ -1,4 +1,6 @@
-import { BTN_DANGER, BTN_PRIMARY, BTN_SECONDARY, BTN_WARNING } from './buttonStyles'
+import { ArrowUp, Compass, ListPlus, Scissors, Square } from 'lucide-react'
+import { ActionButton } from './ActionButton'
+import { BTN_DANGER, BTN_PRIMARY, BTN_QUEUE, BTN_WARNING } from './buttonStyles'
 
 interface Props {
   // Turn lifecycle: `streaming` = a turn is in flight; `waiting` = the turn ended
@@ -26,6 +28,10 @@ interface Props {
 //   waiting, typed  → Gönder (takes over: disarms the wake, starts a fresh turn)
 //   streaming, empty→ Durdur (stop generation)
 //   streaming, typed→ Sıraya / Kes / Yönlendir
+//
+// Every button is an ActionButton: icon + label on wide viewports, icon-only below
+// the `sm` breakpoint. That matters most for the streaming triplet, which would
+// otherwise be three labelled buttons competing for a narrow toolbar row.
 export function SendActions({
   streaming,
   waiting,
@@ -41,30 +47,28 @@ export function SendActions({
   onSteer,
 }: Props) {
   const sendBtn = (
-    <button
+    <ActionButton
       onClick={onSend}
       disabled={disabled || !hasContent || anyUploading}
-      data-testid="composer-send"
-      aria-label="Gönder"
+      testId="composer-send"
+      icon={ArrowUp}
+      label="Gönder"
       className={BTN_PRIMARY}
-    >
-      Gönder
-    </button>
+    />
   )
 
   if (waiting && !streaming) {
     return hasText ? (
       sendBtn
     ) : (
-      <button
+      <ActionButton
         onClick={onCancelWait}
         title="Otomatik uyandırmayı durdur"
-        data-testid="composer-stop"
-        aria-label="Durdur"
+        testId="composer-stop"
+        icon={Square}
+        label="Durdur"
         className={BTN_DANGER}
-      >
-        Durdur
-      </button>
+      />
     )
   }
 
@@ -74,28 +78,43 @@ export function SendActions({
     // Input filled while streaming → queue / interrupt / steer.
     return (
       <div className="flex items-end gap-1.5">
-        <button onClick={onQueue} title="Bu tur bitince gönder" data-testid="composer-queue" className={BTN_SECONDARY}>
-          Sıraya
-        </button>
-        <button onClick={onInterrupt} title="Turu kes ve hemen gönder" data-testid="composer-interrupt" className={BTN_WARNING}>
-          Kes
-        </button>
-        <button
+        <ActionButton
+          onClick={onQueue}
+          title="Bu tur bitince gönder"
+          testId="composer-queue"
+          icon={ListPlus}
+          label="Sıraya"
+          className={BTN_QUEUE}
+        />
+        <ActionButton
+          onClick={onInterrupt}
+          title="Turu kes ve hemen gönder"
+          testId="composer-interrupt"
+          icon={Scissors}
+          label="Kes"
+          className={BTN_WARNING}
+        />
+        <ActionButton
           onClick={onSteer}
           title="Çalışan turu canlı yönlendir (araç döngüsünde etkili)"
-          data-testid="composer-steer"
+          testId="composer-steer"
+          icon={Compass}
+          label="Yönlendir"
           className={BTN_PRIMARY}
-        >
-          Yönlendir
-        </button>
+        />
       </div>
     )
   }
 
   // Streaming, empty input → stop.
   return (
-    <button onClick={onStop} title="Üretimi durdur" data-testid="composer-stop" aria-label="Durdur" className={BTN_DANGER}>
-      Durdur
-    </button>
+    <ActionButton
+      onClick={onStop}
+      title="Üretimi durdur"
+      testId="composer-stop"
+      icon={Square}
+      label="Durdur"
+      className={BTN_DANGER}
+    />
   )
 }

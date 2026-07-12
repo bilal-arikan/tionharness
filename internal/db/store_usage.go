@@ -24,6 +24,7 @@ const (
 	UsageKindSummary  = "summary"
 	UsageKindReflect  = "reflect"
 	UsageKindCompact  = "compact"
+	UsageKindBtw      = "btw"
 	UsageKindOther    = "other"
 )
 

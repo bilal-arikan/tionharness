@@ -1,4 +1,4 @@
-import { Loader2, Check, Pencil, X } from 'lucide-react'
+import { Loader2, Check, Pencil, X, Sparkles } from 'lucide-react'
 import type { SessionInfo } from '@/types'
 import { Pill } from './SessionDetailBits'
 
@@ -12,6 +12,9 @@ interface Props {
   startEditTitle: () => void
   commitTitle: () => void
   onSelectSession?: (id: string) => void
+  // AI title generation, surfaced right next to the manual edit control.
+  onGenerateTitle: () => void
+  titling: boolean
 }
 
 // Title + status pills + context-reset lineage for the session inspector.
@@ -25,6 +28,8 @@ export function SessionTitleBlock({
   startEditTitle,
   commitTitle,
   onSelectSession,
+  onGenerateTitle,
+  titling,
 }: Props) {
   return (
     <div>
@@ -64,6 +69,14 @@ export function SessionTitleBlock({
           <h3 className="min-w-0 flex-1 truncate text-sm font-semibold text-[var(--color-text)]" title={info.title}>
             {info.title || 'Yeni sohbet'}
           </h3>
+          <button
+            onClick={onGenerateTitle}
+            disabled={info.messageCount === 0 || titling}
+            title={titling ? 'Başlık üretiliyor…' : 'AI ile başlık üret'}
+            className="shrink-0 rounded p-1 text-[var(--color-text-dim)] opacity-0 transition hover:text-[var(--color-accent)] group-hover:opacity-100 disabled:cursor-default disabled:opacity-30 disabled:group-hover:opacity-30"
+          >
+            {titling ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
+          </button>
           <button
             onClick={startEditTitle}
             title="Başlığı düzenle"

@@ -83,6 +83,13 @@ func (s *Server) handleListBuiltinHooks(w http.ResponseWriter, _ *http.Request) 
 			Description: "In ask / read-only modes the CLI's ExitPlanMode is routed through TionSwarm's plan-approval card; in auto mode plan tools are disallowed so the agent just executes.",
 		},
 		{
+			Name:        "Live steer bridge (Yönlendir)",
+			Scope:       "cli",
+			Event:       "PreToolUse",
+			Enabled:     true,
+			Description: "\"Yönlendir\" on a running claude-cli turn stashes the message and delivers it at the next tool boundary as the permission tool's additionalContext, redirecting the agent without restarting the turn (native providers use the steer channel instead). If the turn makes no tool call, the message is queued as the next turn (steer_undelivered fallback).",
+		},
+		{
 			Name:        "Autonomous git brake",
 			Scope:       "native",
 			Event:       "PreToolUse",

@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { Paperclip } from 'lucide-react'
+import { MessageCircleQuestion, Paperclip } from 'lucide-react'
 import type { Agent, Artifact, Attachment, SlashCommand } from '@/types'
 import { AttachmentChip } from './AttachmentChip'
 import { WorkDirBadge } from './WorkDirBadge'
@@ -10,6 +10,7 @@ import { AgentSelect } from './composer/AgentSelect'
 import { ComposerPicker } from './composer/ComposerPicker'
 import { THINKING_OPTIONS, PERMISSION_OPTIONS } from './composer/pickerOptions'
 import { AutocompleteMenu } from './composer/AutocompleteMenu'
+import { BtwPanel } from './composer/BtwPanel'
 import { SendActions } from './composer/SendActions'
 import { detectTrigger, buildMenuItems, type Trigger } from './composer/trigger'
 import { useSessionDraft } from './useSessionDraft'
@@ -109,6 +110,11 @@ export function Composer({
   const [sel, setSel] = useState(0)
   const [pending, setPending] = useState<PendingAttachment[]>([])
   const [dragOver, setDragOver] = useState(false)
+  // Btw side chat: an off-transcript, tool-less question answered against the
+  // session's context. Deliberately usable WHILE a turn streams (that is the
+  // point: "ask without interrupting the main task"), so it is not gated on
+  // `streaming` / `disabled` — only on having a session and a target agent.
+  const [btwOpen, setBtwOpen] = useState(false)
   const taRef = useRef<HTMLTextAreaElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   // Monotonic id for pending attachments (avoids Date.now collisions on bursts).
@@ -387,7 +393,7 @@ export function Composer({
 
   return (
     <div
-      className={`relative bg-gradient-to-t from-[var(--color-bg)] via-[color-mix(in_srgb,var(--color-bg)_85%,transparent)] to-transparent px-3 py-3 transition-shadow md:px-6 md:py-4 ${
+      className={`relative bg-gradient-to-t from-[var(--color-bg)] via-[color-mix(in_srgb,var(--color-bg)_85%,transparent)] to-transparent px-3 pt-3 pb-1.5 transition-shadow md:px-6 md:pt-4 md:pb-2 ${
         dragOver ? 'ring-2 ring-inset ring-[var(--color-accent)]' : ''
       }`}
       onDragOver={(e) => {
@@ -411,6 +417,12 @@ export function Composer({
           onHover={setSel}
           onChoose={choose}
         />
+      )}
+
+      {/* Btw side chat. Rendered only with a session + agent (both are required to
+          answer), and stays open across a streaming turn on purpose. */}
+      {btwOpen && sessionId && agentId && (
+        <BtwPanel sessionId={sessionId} agentId={agentId} onClose={() => setBtwOpen(false)} />
       )}
 
       {/* Attachment tray: chips for files/pasted text staged for the next turn. */}
@@ -496,6 +508,22 @@ export function Composer({
             className={BTN_ICON}
           >
             <Paperclip size={18} />
+          </button>
+
+          {/* Btw: a side question answered from the conversation's context but never
+              written into it. Enabled even while a turn is streaming — asking one is
+              exactly what this button is for. Needs a session + a target agent. */}
+          <button
+            type="button"
+            onClick={() => setBtwOpen((o) => !o)}
+            disabled={!sessionId || !agentId}
+            title="Btw — yan soru sor (geçmişe yazılmaz, ana görevi kesmez)"
+            aria-label="Btw yan soru"
+            aria-expanded={btwOpen}
+            data-testid="composer-btw"
+            className={`${BTN_ICON} ${btwOpen ? 'border-[var(--color-accent)] text-[var(--color-accent)]' : ''}`}
+          >
+            <MessageCircleQuestion size={18} />
           </button>
 
           {/* Spacer pushes the send cluster to the right edge. */}

@@ -1,6 +1,6 @@
 // Pure helpers for the tools screen, split out of ToolsPanel to keep that file
 // focused on state/behaviour. No React, no state — name parsing + schema flatten.
-import type { ToolVisibility, WorkspaceTool } from '@/types'
+import type { MCPServer, ToolVisibility, WorkspaceTool } from '@/types'
 
 // The four context-visibility tiers, in order of decreasing per-turn cost. Each
 // entry drives the tier selector: short label, one-line hint, badge accent color.
@@ -58,6 +58,41 @@ export function parseArgs(args?: string): string[] {
   } catch {
     return []
   }
+}
+
+// parseJsonObject safely turns an MCPServer env/headers JSON string into a
+// Record<string,string>. Anything malformed or non-object (null, array) yields {}.
+export function parseJsonObject(raw?: string): Record<string, string> {
+  if (!raw) return {}
+  try {
+    const parsed = JSON.parse(raw)
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {}
+    const out: Record<string, string> = {}
+    for (const [k, v] of Object.entries(parsed)) out[k] = String(v)
+    return out
+  } catch {
+    return {}
+  }
+}
+
+// serverToImportJson builds the standard mcpServers JSON document for a single
+// server — the same shape the "JSON ile içe aktar" box accepts (Claude Code /
+// .mcp.json format) — so an operator can copy one server and paste it into another
+// workspace or tool. Only the fields relevant to the transport are emitted.
+export function serverToImportJson(s: MCPServer): string {
+  const spec: Record<string, unknown> = { type: s.transport }
+  if (s.transport === 'stdio') {
+    spec.command = s.command
+    const args = parseArgs(s.args)
+    if (args.length) spec.args = args
+    const env = parseJsonObject(s.envConfig)
+    if (Object.keys(env).length) spec.env = env
+  } else {
+    spec.url = s.url
+    const headers = parseJsonObject(s.headersConfig)
+    if (Object.keys(headers).length) spec.headers = headers
+  }
+  return JSON.stringify({ mcpServers: { [s.name]: spec } }, null, 2)
 }
 
 // MCP tools are namespaced "<server>__<tool>". These helpers recover a tool's

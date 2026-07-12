@@ -338,8 +338,13 @@ keyed-lock+flag; M3 scratchpad ertelendi.
 - **API** (F4): `session_info`'ya `role`+`coordinatorSessionId`; yeni
   `PUT /api/sessions/{id}/role` + `GET /api/sessions/{id}/workers`.
 - **UI** (F4): `CoordinatorSection.tsx` (aç/kapa + canlı worker roster, running
-  varken 3sn poll) SessionDetailPanel'de; `worker`+`coordination` SSE tipleri
-  `eventViews`'te executions'a bağlı.
+  varken 3sn poll) SessionDetailPanel'de; roster **Çalışan/Tamamlanan iki sekme**
+  (sayaçlı, `localStorage` ile kalıcı) + tüm listeyi katla/aç toggle;
+  `worker`+`coordination` SSE tipleri `eventViews`'te executions'a bağlı.
+  Oturum listesinde (`SessionsSidebar.tsx`) Aktif/Arşiv yanında **Workers sekmesi**
+  (`role==='worker'` filtresi, sayaçlı); Aktif görünüm worker oturumlarını hariç
+  tutar. `Session` tipi `role`+`coordinatorSessionId` taşır (liste `db.Session`'ı
+  ham döndürür).
 - **Test** (`agent/coordination_test.go`): kuyruk serileştirme+coalescing (kritik
   yarış), worker cap, coordinator-link, notification format, countToolSteps.
   **Tüm paket testleri (221) geçiyor.**

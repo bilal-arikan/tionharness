@@ -38,19 +38,19 @@ const workspaceCtxKey ctxKey = "workspace"
 
 // Server holds dependencies for HTTP handlers.
 type Server struct {
-	workspaces *workspace.Manager
-	providers  *providers.Registry
-	convo      *conversation.Manager
-	settings   *settings.Store
-	tun        *agent.Tunables
-	logs       *logbuf.Buffer
-	bus        *events.Bus     // autonomous notifications streamed to the UI over SSE
+	workspaces   *workspace.Manager
+	providers    *providers.Registry
+	convo        *conversation.Manager
+	settings     *settings.Store
+	tun          *agent.Tunables
+	logs         *logbuf.Buffer
+	bus          *events.Bus       // autonomous notifications streamed to the UI over SSE
 	hub          *sessionhub.Hub   // per-session ordered event log (cursor-based, all windows subscribe)
 	interactions *interactionStore // per-session resolve-once human-in-the-loop prompts (CAS)
 	inbox        *inboxStore       // per-session durable command queue (serial worker → turns)
 	runs         *chatRuns         // in-flight streaming turns (stop/steer control)
-	grants     *permGrantStore // per-session "Always allow" permission grants
-	logger     *slog.Logger
+	grants       *permGrantStore   // per-session "Always allow" permission grants
+	logger       *slog.Logger
 
 	// market is a workspace-independent market store (bundled + global tiers),
 	// used by the workspace-template picker and create-from-template seeding so
@@ -99,8 +99,8 @@ func NewServer(manager *workspace.Manager, registry *providers.Registry, store *
 		interactions: newInteractionStore(),
 		inbox:        newInboxStore(),
 		runs:         newChatRuns(),
-		grants:     newPermGrantStore(),
-		logger:     logger,
+		grants:       newPermGrantStore(),
+		logger:       logger,
 		// Workspace-independent market store (bundled + global tiers) for the
 		// workspace-template picker, which must work with zero workspaces during
 		// onboarding. No ledger dir: install-status tracking is per-workspace.
@@ -476,6 +476,10 @@ func (s *Server) registerChatRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/chat/stream", s.handleChatStream)
 	// Control an in-flight streaming turn: stop (cancel) or steer (live guidance).
 	mux.HandleFunc("POST /api/chat/control", s.handleChatControl)
+	// Side chat ("btw"): a tool-less one-shot question answered against the
+	// session's context WITHOUT being written into its history. Answerable while
+	// the main turn is still streaming. See _Docs/60-BTW-YAN-SOHBET.md.
+	mux.HandleFunc("POST /api/chat/btw", s.handleChatBtw)
 	// Disarm a pending one-shot self-wake (schedule_wake) for a session — the
 	// user pressed "Durdur" on the waiting banner before the wake fired.
 	mux.HandleFunc("POST /api/chat/wake/cancel", s.handleCancelWake)

@@ -36,6 +36,11 @@ export interface Session {
   // ordinary session.
   parentSessionId?: string
   handoffArtifactId?: string
+  // Multi-agent coordination (M2, _Docs/47): 'coordinator' | 'worker' | '' (or
+  // undefined for an ordinary session). coordinatorSessionId back-links a worker
+  // to the coordinator that spawned it. Drives the sidebar's "Workers" filter.
+  role?: string
+  coordinatorSessionId?: string
   createdAt: number
   updatedAt: number
 }

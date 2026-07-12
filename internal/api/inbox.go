@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"runtime/debug"
 	"sync"
 	"time"
 
@@ -22,16 +23,27 @@ type inboxItem struct {
 	Req         chatReq `json:"req"`
 	WorkspaceID string  `json:"workspaceId"`
 	EnqueuedAt  int64   `json:"enqueuedAt"`
+	// Attempts counts how many times the serial worker has dispatched this turn.
+	// It advances the instant the head is popped into the in-flight slot (before the
+	// turn runs), so a turn that wedges the process on every boot is eventually
+	// dropped by the poison guard instead of re-running forever. See _Docs/58.
+	Attempts int `json:"attempts,omitempty"`
 }
 
 // sessionInbox is one session's FIFO command queue plus its serial-worker flag.
 // Everything a session submits — user turns while a turn is already running —
 // funnels through here so exactly one turn runs at a time, in order.
 type sessionInbox struct {
-	items   []inboxItem
-	seen    map[string]bool // clientMsgId dedupe (idempotent enqueue)
-	running bool            // a worker goroutine is draining this queue
-	wsID    string          // owning workspace (for persistence + dispatch)
+	items []inboxItem
+	// inflight is the head the worker has popped and is currently running. It is
+	// held here (and persisted separately from the WAITING tail) until the turn
+	// completes, so a mid-turn process death — even a hard kill before the turn
+	// writes its own inflight sidecar — still re-dispatches this exact turn at boot
+	// instead of losing it. nil when no turn is in flight.
+	inflight *inboxItem
+	seen     map[string]bool // clientMsgId dedupe (idempotent enqueue)
+	running  bool            // a worker goroutine is draining this queue
+	wsID     string          // owning workspace (for persistence + dispatch)
 }
 
 // inboxStore holds every session's queue. Server-wide (like chatRuns), keyed by
@@ -158,10 +170,10 @@ func (s *Server) kickInbox(sessionID string) {
 }
 
 // runInboxWorker drains a session's queue one turn at a time. It pops the head
-// (marking it in-flight, so the persisted queue shows only WAITING turns), runs
-// it to completion via the hub-publishing turn runner, then loops. A crash while
-// the head runs is covered by the turn's own inflight sidecar; the WAITING tail
-// stays durable in inbox.json.
+// into the durable in-flight slot (so the persisted queue keeps that turn until
+// it completes AND shows the remaining WAITING tail), runs it under a watchdog,
+// clears the slot, then loops. A crash while the head runs is reclaimed at boot
+// from the in-flight slot; the WAITING tail stays durable in inbox.json.
 func (s *Server) runInboxWorker(sessionID string) {
 	for {
 		s.inbox.lock()
@@ -169,6 +181,7 @@ func (s *Server) runInboxWorker(sessionID string) {
 		if ib == nil || len(ib.items) == 0 {
 			if ib != nil {
 				ib.running = false
+				ib.inflight = nil
 				// Queue drained: reset the dedupe set so it can't grow without bound
 				// across a long-lived session (a re-submit of an old id after this is a
 				// genuinely new turn).
@@ -181,9 +194,22 @@ func (s *Server) runInboxWorker(sessionID string) {
 		}
 		item := ib.items[0]
 		ib.items = ib.items[1:]
+		item.Attempts++
+		inflight := item
+		ib.inflight = &inflight
 		s.inbox.unlock()
+		// Persist with the head moved into the durable in-flight slot: if the process
+		// dies mid-turn (even a hard kill before the turn writes its own inflight
+		// sidecar), boot re-dispatches this exact item instead of losing it.
 		s.persistInbox(sessionID)
 		s.publishQueueUpdate(sessionID)
+
+		// Poison guard: a turn that has already wedged the process too many times is
+		// dropped (with a visible turn_error) so it can never block the queue forever.
+		if item.Attempts > maxInboxAttempts {
+			s.dropPoisonedInflight(sessionID, item)
+			continue
+		}
 
 		wsp := s.workspaces.Default()
 		if item.WorkspaceID != "" {
@@ -192,14 +218,16 @@ func (s *Server) runInboxWorker(sessionID string) {
 			}
 		}
 		if wsp == nil {
+			s.clearInflight(sessionID)
 			continue
 		}
 		// Server-driven turn: no single owning client, so clientGone never fires —
 		// an interactive ask_user waits for an answer from ANY window (via the
 		// interaction CAS) instead of bailing. All UI rides the hub (write=nil).
-		// Recover from a panic in the turn so ONE bad turn can never kill the worker
-		// goroutine and leave the session's queue wedged (running=true, undrained).
-		s.runTurnGuarded(wsp, item.Req)
+		// runQueuedTurn adds a panic barrier AND a watchdog so ONE bad turn can never
+		// kill the worker goroutine or wedge the queue by never returning.
+		s.runQueuedTurn(wsp, sessionID, item.Req)
+		s.clearInflight(sessionID)
 	}
 }
 
@@ -210,7 +238,8 @@ func (s *Server) runTurnGuarded(wsp *workspace.Workspace, req chatReq) {
 	defer func() {
 		if r := recover(); r != nil {
 			if s.logger != nil {
-				s.logger.Error("queued turn panicked", "session", req.SessionID, "panic", r)
+				s.logger.Error("queued turn panicked", "session", req.SessionID, "panic", r,
+					"stack", string(debug.Stack()))
 			}
 			s.publishHub(req.SessionID, sessionhub.KindTurnError, map[string]any{
 				"error":  "turn crashed",
@@ -227,10 +256,14 @@ func (s *Server) runTurnGuarded(wsp *workspace.Workspace, req chatReq) {
 func (s *Server) persistInbox(sessionID string) {
 	s.inbox.lock()
 	ib := s.inbox.sessions[sessionID]
-	var items []inboxItem
+	var snapshot persistedInbox
 	wsID := ""
 	if ib != nil {
-		items = append([]inboxItem{}, ib.items...)
+		snapshot.Items = append([]inboxItem{}, ib.items...)
+		if ib.inflight != nil {
+			cp := *ib.inflight
+			snapshot.Inflight = &cp
+		}
 		wsID = ib.wsID
 	}
 	s.inbox.unlock()
@@ -243,11 +276,11 @@ func (s *Server) persistInbox(sessionID string) {
 	if wsp == nil || wsp.DB == nil {
 		return
 	}
-	if len(items) == 0 {
+	if snapshot.Inflight == nil && len(snapshot.Items) == 0 {
 		_ = wsp.DB.ClearInbox(sessionID)
 		return
 	}
-	if data, err := json.Marshal(items); err == nil {
+	if data, err := json.Marshal(snapshot); err == nil {
 		_ = wsp.DB.WriteInbox(sessionID, data)
 	}
 }
@@ -292,8 +325,16 @@ func (s *Server) recoverInboxes() {
 			if err != nil || !ok {
 				continue
 			}
-			var items []inboxItem
-			if json.Unmarshal(data, &items) != nil || len(items) == 0 {
+			pi := decodeInbox(data)
+			// The in-flight head was interrupted by the crash/restart before it
+			// completed. Put it back at the FRONT so it runs first, right where the
+			// worker left off; its Attempts counter already advanced, so the poison
+			// guard eventually gives up on a turn that wedges the process every boot.
+			items := pi.Items
+			if pi.Inflight != nil {
+				items = append([]inboxItem{*pi.Inflight}, items...)
+			}
+			if len(items) == 0 {
 				continue
 			}
 			s.inbox.lock()
@@ -304,6 +345,10 @@ func (s *Server) recoverInboxes() {
 			}
 			s.inbox.sessions[sess.ID] = ib
 			s.inbox.unlock()
+			// Rewrite the sidecar in the current object shape (in-flight slot cleared,
+			// the reclaimed head now a normal WAITING entry) so a second crash before
+			// dispatch doesn't double-count it as both in-flight and waiting.
+			s.persistInbox(sess.ID)
 			s.publishQueueUpdate(sess.ID)
 			s.kickInbox(sess.ID)
 		}

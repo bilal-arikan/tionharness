@@ -1,5 +1,6 @@
+import { useState } from 'react'
 import type { MCPServer, MCPTransport, ToolVisibility, WorkspaceTool } from '@/types'
-import { parseArgs, toolSource, toolServer, VISIBILITY_TIERS } from './toolMeta'
+import { parseArgs, serverToImportJson, toolSource, toolServer, VISIBILITY_TIERS } from './toolMeta'
 
 // ServerManagement is the MCP server list + add form, shown when no tool is
 // selected. (Extracted so the right pane stays readable.)
@@ -59,6 +60,27 @@ export function ServerManagement(props: {
     importMsg,
     onImport,
   } = props
+  // Per-server "Kopyalandı" feedback keyed by server id, cleared after a moment.
+  const [copiedId, setCopiedId] = useState<string | null>(null)
+  const copyServer = async (s: MCPServer) => {
+    const json = serverToImportJson(s)
+    try {
+      await navigator.clipboard.writeText(json)
+    } catch {
+      // Clipboard API unavailable (insecure context / denied) — fall back to a
+      // hidden textarea so the copy still works instead of silently failing.
+      const ta = document.createElement('textarea')
+      ta.value = json
+      ta.style.position = 'fixed'
+      ta.style.opacity = '0'
+      document.body.appendChild(ta)
+      ta.select()
+      document.execCommand('copy')
+      document.body.removeChild(ta)
+    }
+    setCopiedId(s.id)
+    window.setTimeout(() => setCopiedId((prev) => (prev === s.id ? null : prev)), 1500)
+  }
   return (
     <div className="mx-auto max-w-2xl">
       <h2 className="mb-1 text-sm font-semibold">MCP Sunucuları</h2>
@@ -108,6 +130,15 @@ export function ServerManagement(props: {
                   className="rounded bg-[var(--color-surface-2)] px-2 py-1 text-xs hover:opacity-90"
                 >
                   Test
+                </button>
+                <button
+                  data-testid="mcp-server-copy"
+                  data-server-id={s.id}
+                  onClick={() => copyServer(s)}
+                  title="Bu sunucunun yapılandırmasını mcpServers JSON'u olarak panoya kopyala (başka yere yapıştırıp içe aktarılabilir)."
+                  className="rounded bg-[var(--color-surface-2)] px-2 py-1 text-xs hover:opacity-90"
+                >
+                  {copiedId === s.id ? 'Kopyalandı' : 'Json'}
                 </button>
                 <button
                   data-testid="mcp-server-toggle"

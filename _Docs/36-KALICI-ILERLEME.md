@@ -159,7 +159,8 @@ ajanların baseline skill setine girer.
 
 `GET /api/sessions/{id}/progress` (`api/progress.go::handleSessionProgress`) →
 `{path, exists, record}` (sink ile **aynı** dizin çözümü). Frontend: `SessionDetailPanel`
-"Kalıcı ilerleme · n/m" kartı (`ProgressCard`) — her madde statü işaretçisiyle
+"Görev Listesi · n/m" kartı (`ProgressCard`) — başlığı katla/aç toggle'ıdır
+(`localStorage` ile kalıcı); her madde statü işaretçisiyle
 (✓/⟳/☐, tamamlanan üstü çizili) + opsiyonel `category` + son 3 log satırı. Yalnız
 dosya varsa ve madde olduğunda gösterilir. `sessionProgress` API + `SessionProgress`
 tipi (`types/session.ts`).

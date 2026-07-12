@@ -173,11 +173,19 @@ export function makeHubHandlers(ctx: HubApplyCtx): SessionStreamHandlers {
           steps = []
           text = ''
           ghostStartedAt = Math.floor(Date.now() / 1000) // definitive turn start
+          // An AUTONOMOUS turn (coordinator/scheduler/spawn) publishes no
+          // UserMessage, so mark the session busy here (and on the first Step) —
+          // otherwise the "working" indicator + composer stop/steer cluster never
+          // light up for a turn the user is merely watching.
+          setStreamingSessions((pp) => withAdded(pp, sid))
           syncGhost()
           setPendingSessions((pp) => withRemoved(pp, sid))
           break
         }
         case HubKind.Step:
+          // First live activity of an autonomous turn (no UserMessage preceded it):
+          // mark busy so the session shows "working" like an interactive turn.
+          setStreamingSessions((pp) => withAdded(pp, sid))
           applyStep(ev.payload as TurnStep)
           break
         case HubKind.Delta: {

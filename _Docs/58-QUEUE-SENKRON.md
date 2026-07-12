@@ -135,6 +135,19 @@ type PendingInteraction struct {
 - **Kalıcılık:** inbox diske yazılır → crash recovery = "işlenmemiş inbox
   girdilerini replay et"; `inflight.json` rolü yalnız **efemer streaming metni**
   kurtarmaya daralır.
+- **Uçuşan head dayanıklılığı (2026-07-12):** `inbox.json` artık `{inflight, items}`
+  obje şekli (eski bare-array `decodeInbox` ile geriye-uyumlu okunur). Worker head'i
+  pop edince onu ayrı `inflight` slotuna yazar ve tur bitene kadar orada tutar →
+  tur kendi `inflight.json` sidecar'ını yazamadan süreç ölse bile (hung subprocess
+  hard-kill) boot'ta `recoverInboxes` head'i öne alıp yeniden dispatch eder. Eski
+  bug: head, tur çalışmadan **önce** kuyruktan silinip persist ediliyordu → sidecar
+  da yoksa mesaj **tümden kayboluyordu** (SES10 "ajan hiç başlamıyor" semptomu).
+- **Worker watchdog + poison guard (2026-07-12):** her kuyruk turu `runQueuedTurn`
+  ile panik-bariyeri **+ 20 dk watchdog** altında koşar; asılan tur süreyi aşınca
+  worker live-run'ı `cancel()` eder → goroutine çözülür, kuyruk kilitlenmez. Her
+  dispatch `inboxItem.Attempts++` sayar; `maxInboxAttempts` (3) aşılırsa mesaj
+  "poison" olarak düşürülür (görünür `turn_error`) → her boot'ta çöken tur kuyruğu
+  sonsuza dek bloklayamaz.
 - **Cancel/dequeue:** `DELETE .../messages/{clientMsgId}` provider'a gitmemiş
   girdiyi çeker.
 - **Steer vs queue politikası (UI'da görünür):** tur çalışırken gelen mesaj →
@@ -243,6 +256,13 @@ gap-fill** dayanıklı olmalı: `Last-Event-ID`, ring taşınca `reset`, ping/ke
   turlarında düşünce/tool adımları tur bitene kadar görünmüyordu. Interaktif run
   (kendi yayınlar) atlanır, otonom run (yayınlamaz) köprülenir. Test:
   `bridge_autonomous_test.go`.
+- **Otonom "çalışıyor" göstergesi + gerçek Durdur (2026-07-12):** Otonom turlar
+  `KindUserMessage` yayınlamadığından frontend busy-state işaretlenmiyordu. Çözüm:
+  `chatStreamHub.ts` ilk `KindAgentStart`/`KindStep`'te oturumu `streamingSessions`'a
+  ekler (interaktifle simetri). `autonomousInteraction` artık gerçek bir `cancel`
+  kaydeder (`context.WithCancel`) → izleyicinin Durdur/Kes'i otonom CLI turunu
+  gerçekten durdurur; `runCoordinatorTurn`/`runWorker` `context.Canceled`'ı temiz
+  "durduruldu" mesajına çevirir.
 - **Worker sağlamlığı:** `runTurnGuarded` panic-barrier — tek turun panic'i
   worker'ı öldürüp session kuyruğunu kilitlemez (log + hub turn_error + devam).
   `inbox.seen` dedupe seti kuyruk boşalınca sıfırlanır (sınırsız büyüme yok).

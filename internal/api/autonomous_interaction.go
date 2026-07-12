@@ -28,9 +28,14 @@ func (s *Server) autonomousInteraction(rt *agent.Runtime) agent.AutonomousIntera
 			return ctx, func() {}
 		}
 		runID := uuid.NewString()
-		// cancel is a no-op: an autonomous turn is driven by the runtime, not by the
-		// /chat/control endpoint, so there is nothing for it to cancel.
-		run := s.runs.register(runID, sessionID, rt.WorkspaceID(), func() {})
+		// Make the turn cancellable so a viewer's "Durdur"/"Kes" (session control
+		// stop → run.cancel) actually aborts an autonomous claude-cli turn instead of
+		// being a no-op. The cancellable child ctx returned here threads into the CLI
+		// provider call (autoInteract reassigns the turn ctx), so cancelling it ends
+		// generation. cleanup cancels + unregisters (cancel after completion is a
+		// harmless no-op, and satisfies the vet "cancel used on all paths" check).
+		ctx, cancel := context.WithCancel(ctx)
+		run := s.runs.register(runID, sessionID, rt.WorkspaceID(), cancel)
 		run.autonomous = true
 
 		// Artifacts (CLI path): bind a session-scoped artifact sink so create_artifact
@@ -117,6 +122,6 @@ func (s *Server) autonomousInteraction(rt *agent.Runtime) agent.AutonomousIntera
 		tok := s.runs.interactionToken(sessionID, ag.ID)
 		s.runs.bindActive(tok, run)
 		ctx = tools.WithInteractionEndpoint(ctx, url, tok, coreNames, extNames)
-		return ctx, func() { s.runs.unregister(runID) }
+		return ctx, func() { cancel(); s.runs.unregister(runID) }
 	}
 }
