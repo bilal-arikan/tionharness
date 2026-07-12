@@ -7,16 +7,17 @@ import { parseDiff, looksLikeDiff, synthDiff } from '@/shared/lib/diff'
 import { DiffView } from '@/shared/components/markdown/DiffView'
 import { Markdown } from '@/shared/components/markdown/Markdown'
 import { PathText } from './PathText'
-import { CommandProgramIcon } from './CommandProgramIcon'
+import { CommandProgramTag } from './CommandProgramTag'
 
 interface Props {
   step: TurnStep
   onOpenFile?: (path: string) => void
 }
 
-// programHint returns a string to resolve a program brand icon from, so it can sit
-// next to the tool icon: the command for a Bash/PowerShell step, or the interpreter
-// language for a transform_data/run_code step (e.g. "python3" → Python). Else null.
+// programHint returns a string to resolve the program (brand icon + name) from, so
+// it can sit next to the tool icon: the command for a Bash/PowerShell step, or the
+// interpreter language for a transform_data/run_code step (e.g. "python3" → Python).
+// Else null.
 function programHint(step: TurnStep): string | null {
   const base = toolBase(step.tool || '')
   const input = step.input as { command?: unknown; language?: unknown } | null
@@ -91,7 +92,7 @@ export function ActivityCard({ step, onOpenFile }: Props) {
         className="flex w-full items-center gap-2 rounded-md px-3 py-1 text-left text-xs hover:bg-[var(--color-surface-2)]"
       >
         <meta.icon size={14} className="shrink-0 text-[var(--color-text-dim)]" />
-        {progHint && <CommandProgramIcon command={progHint} />}
+        {progHint && <CommandProgramTag command={progHint} />}
         <span className="shrink-0 font-medium text-[var(--color-text)]">{meta.label}</span>
         {meta.summary && (
           <span className="min-w-0 flex-1 truncate text-[var(--color-text-dim)]">

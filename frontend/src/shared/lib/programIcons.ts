@@ -227,15 +227,22 @@ export function programIconFor(name: string): ProgramIcon | null {
   return PROGRAM_ICONS[name.toLowerCase()] ?? null
 }
 
-// resolveProgramIcon parses a command string and returns the icon of the FIRST
-// recognized program in it, or null when none maps. Also accepts a bare program
-// name (e.g. transform_data's "python3"), which parses to itself.
+/** A program recognized inside a command string: its bare name plus its brand icon. */
+export interface Program {
+  /** Bare program name as written in the command, lower-cased (e.g. "curl", "npm"). */
+  name: string
+  icon: ProgramIcon
+}
+
+// resolveProgram parses a command string and returns the FIRST recognized program
+// in it — name and icon together — or null when none maps. Also accepts a bare
+// program name (e.g. transform_data's "python3"), which parses to itself.
 import { extractCommandNames } from './commandProgram'
 
-export function resolveProgramIcon(command: string): ProgramIcon | null {
+export function resolveProgram(command: string): Program | null {
   for (const name of extractCommandNames(command)) {
     const icon = programIconFor(name)
-    if (icon) return icon
+    if (icon) return { name, icon }
   }
   return null
 }

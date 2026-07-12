@@ -1,6 +1,21 @@
 # TionSwarm — İlerleme Takibi
 
-> Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-07-12**
+> Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-07-13**
+
+## Shell adımında program ikonunun yanına program adı ✅ (2026-07-13)
+
+- **Ne:** Sohbetteki Bash/PowerShell (ve `transform_data`/`run_code`) araç adımında,
+  marka ikonunun yanında artık programın **adı** da yazıyor: `<ikon> (curl) Bash`.
+  Böylece adımın hangi programı çalıştırdığı ikonu tanımadan da okunabiliyor.
+- **Nasıl:** `shared/lib/programIcons.ts`'e `resolveProgram(command)` eklendi — ilk
+  tanınan programın **adını + ikonunu birlikte** döndürür (yalnız-ikon döndüren
+  `resolveProgramIcon` kaldırıldı). Yeni `features/chat/CommandProgramTag.tsx` ikonu +
+  `(ad)` etiketini render eder; `ActivityCard` eski `CommandProgramIcon` yerine bunu
+  kullanır (eski bileşen dosyası silindi).
+- **Sınır:** Ad yalnız program **tanındığında** (ikonu varsa) gösterilir; tanınmayan
+  komutlarda (PowerShell cmdlet'i, düz `ls`…) davranış eskisi gibi — ne ikon ne ad.
+- **Doğrulama:** `go build ./...` + `go vet ./...` + `go test ./internal/...` temiz;
+  frontend `npx tsc -b` + `npm run build` temiz.
 
 ## Shell adımında komut-programı marka ikonu ✅ (2026-07-12)
 
