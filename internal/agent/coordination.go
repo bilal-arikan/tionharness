@@ -32,9 +32,11 @@ import (
 type coordSlot struct {
 	mu      sync.Mutex
 	free    *sync.Cond   // lazily created; broadcast whenever running flips false
-	running bool         // a turn (auto OR interactive) is currently executing
-	pending bool         // >=1 notification arrived while running; run once more after
-	turns   int          // auto-triggered coordinator turns so far (notify-loop cap)
+	running    bool      // a turn (auto OR interactive) is currently executing
+	pending    bool      // >=1 notification arrived while running; run once more after
+	ackedIdle  bool      // ran the "all workers idle" reconcile turn for this batch
+	hadWorkers bool      // at least one worker was ever spawned (gates the idle sweep)
+	turns      int       // auto-triggered coordinator turns so far (notify-loop cap)
 	capWarn bool         // whether the "cap reached" warning has been posted
 	workers atomic.Int64 // active workers under this coordinator
 }
@@ -44,6 +46,15 @@ func (s *coordSlot) signalFree() {
 	if s.free != nil {
 		s.free.Broadcast()
 	}
+}
+
+// markHadWorkers records that this coordinator has spawned at least one worker, so
+// the idle-reconcile sweep only ever fires for a coordinator that actually has
+// workers to reconcile (never for a plain no-worker session).
+func (s *coordSlot) markHadWorkers() {
+	s.mu.Lock()
+	s.hadWorkers = true
+	s.mu.Unlock()
 }
 
 // workerCtl lets stop_worker cancel an in-flight worker turn and mark it stopped
@@ -216,6 +227,7 @@ func (r *Runtime) SpawnWorker(ctx context.Context, coordSessionID, agentRef, tas
 		slot.workers.Add(-1)
 		return SpawnResult{}, err
 	}
+	slot.markHadWorkers()
 	return res, nil
 }
 
@@ -311,6 +323,7 @@ func (r *Runtime) SendToWorker(ctx context.Context, coordSessionID, workerSessio
 	}
 	slot := r.coordSlotFor(coordSessionID)
 	slot.workers.Add(1)
+	slot.markHadWorkers()
 	go r.runWorker(agent, workerSessionID, message, coordSessionID)
 	return nil
 }
@@ -525,6 +538,9 @@ func (r *Runtime) claimCoordinatorSlot(coordSessionID string, resetCap bool) fun
 func (r *Runtime) enqueueCoordinatorTurn(coordSessionID string) {
 	slot := r.coordSlotFor(coordSessionID)
 	slot.mu.Lock()
+	// A fresh notification (a worker just finished or continued) re-arms the
+	// idle-reconcile sweep: this batch is no longer "acknowledged idle".
+	slot.ackedIdle = false
 	if slot.running {
 		slot.pending = true
 		slot.mu.Unlock()
@@ -568,11 +584,81 @@ func (r *Runtime) drainCoordinator(coordSessionID string, slot *coordSlot) {
 			slot.mu.Unlock()
 			continue
 		}
+		// Idle reconciliation (liveness backstop): if EVERY worker is now finished
+		// and we have not yet run a reconcile turn for this all-idle transition,
+		// inject an authoritative "all workers finished" note and loop ONCE more.
+		// This guarantees the coordinator gets a final, unambiguous turn even when
+		// it overlooked one notification in a coalesced batch — breaking the "waits
+		// forever on an already-finished worker" stall. One-shot per all-idle
+		// transition (ackedIdle, re-armed by the next notification) and bounded by
+		// CoordinatorMaxTurns (checked at the loop top), so it can never loop.
+		if !slot.ackedIdle && slot.hadWorkers && slot.workers.Load() == 0 {
+			slot.ackedIdle = true
+			slot.mu.Unlock()
+			r.appendCoordinationStatus(coordSessionID)
+			continue
+		}
 		slot.running = false
 		slot.signalFree()
 		slot.mu.Unlock()
 		return
 	}
+}
+
+// appendCoordinationStatus persists a one-shot <coordination-status> note into the
+// coordinator session so the idle-reconcile turn opens on an explicit, authoritative
+// signal that every worker has finished. Purely a history append (no enqueue): the
+// caller is already inside the drain loop and continues to the next turn.
+func (r *Runtime) appendCoordinationStatus(coordSessionID string) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	const note = "<coordination-status>All workers under this coordinator have finished. " +
+		"Act on any results you have not handled yet, spawn the next steps if the plan has more, " +
+		"or conclude the project. Do NOT wait for a worker that has already finished.</coordination-status>"
+	if _, err := r.db.AddMessage(ctx, db.Message{
+		SessionID: coordSessionID,
+		Role:      "user",
+		Origin:    "worker-note",
+		Text:      note,
+	}); err != nil {
+		r.logger.Warn("coordination: failed to record idle status note", "coordinator", coordSessionID, "error", err)
+	}
+}
+
+// coordinatorWorkerStatusBlock renders an authoritative, always-fresh snapshot of
+// every worker under coordSessionID for the coordinator's dynamic system suffix.
+// Unlike the prose <task-notification>s in history — which a coalesced batch can
+// let the model overlook — this block is regenerated every turn from live session
+// state, so the coordinator can never believe a finished worker is still running.
+// Empty when the session has no workers.
+func (r *Runtime) coordinatorWorkerStatusBlock(ctx context.Context, coordSessionID string) string {
+	ws, err := r.ListWorkers(ctx, coordSessionID)
+	if err != nil || len(ws) == 0 {
+		return ""
+	}
+	running, finished := 0, 0
+	var b strings.Builder
+	b.WriteString("# Worker status (live, authoritative)\n")
+	b.WriteString("Regenerated every turn from real session state; trust THIS over the notifications in history.\n")
+	for _, w := range ws {
+		status := "finished"
+		if w.Running {
+			status = "RUNNING"
+			running++
+		} else {
+			finished++
+		}
+		fmt.Fprintf(&b, "- %s [%s] (%s)", w.AgentName, status, w.SessionID)
+		if w.Summary != "" {
+			fmt.Fprintf(&b, " — %s", w.Summary)
+		}
+		b.WriteByte('\n')
+	}
+	fmt.Fprintf(&b, "Summary: %d running, %d finished.", running, finished)
+	if running == 0 {
+		b.WriteString(" ALL workers are finished — there is NO running worker to wait for; spawn the remaining steps or conclude.")
+	}
+	return b.String()
 }
 
 // runCoordinatorTurn runs one history-aware turn for the coordinator session so it

@@ -338,3 +338,77 @@ func TestSpawnWorkerSetsCoordinatorLink(t *testing.T) {
 		t.Errorf("coordinatorSessionID = %q, want COORD", sess.CoordinatorSessionID)
 	}
 }
+
+// waitTurns blocks until *turns reaches want or the deadline elapses, guarding the
+// counter with mu. Fails the test on timeout.
+func waitTurns(t *testing.T, mu *sync.Mutex, turns *int, want int, what string) {
+	t.Helper()
+	deadline := time.After(2 * time.Second)
+	for {
+		mu.Lock()
+		got := *turns
+		mu.Unlock()
+		if got == want {
+			return
+		}
+		select {
+		case <-deadline:
+			t.Fatalf("%s: expected %d turns, got %d", what, want, got)
+		case <-time.After(10 * time.Millisecond):
+		}
+	}
+}
+
+// TestIdleReconcileSweepRunsFinalTurn: when every worker has finished (workers==0)
+// under a coordinator that actually spawned workers, the drain loop must run ONE
+// extra authoritative reconcile turn — the liveness backstop against a coalesced
+// notification the model overlooked. It must be one-shot per all-idle transition
+// and re-arm on the next notification.
+func TestIdleReconcileSweepRunsFinalTurn(t *testing.T) {
+	rt, _ := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))
+
+	var mu sync.Mutex
+	turns := 0
+	rt.coordRunFn = func(string) { mu.Lock(); turns++; mu.Unlock() }
+
+	slot := rt.coordSlotFor("COORD")
+	slot.markHadWorkers() // simulate a coordinator that has spawned worker(s), now all done
+
+	// One notification: the processing turn (1) plus the idle-reconcile turn (2).
+	rt.enqueueCoordinatorTurn("COORD")
+	waitTurns(t, &mu, &turns, 2, "process + reconcile")
+
+	// One-shot: no further idle turn may appear without a new notification.
+	time.Sleep(200 * time.Millisecond)
+	mu.Lock()
+	got := turns
+	mu.Unlock()
+	if got != 2 {
+		t.Fatalf("idle sweep must be one-shot; got %d turns", got)
+	}
+
+	// A new notification re-arms the sweep → process (3) + reconcile (4).
+	rt.enqueueCoordinatorTurn("COORD")
+	waitTurns(t, &mu, &turns, 4, "re-armed process + reconcile")
+}
+
+// TestIdleReconcileSkippedWithoutWorkers: a coordinator that never spawned a worker
+// must NOT get an idle-reconcile turn (nothing to reconcile) — a single notification
+// yields exactly one turn.
+func TestIdleReconcileSkippedWithoutWorkers(t *testing.T) {
+	rt, _ := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))
+
+	var mu sync.Mutex
+	turns := 0
+	rt.coordRunFn = func(string) { mu.Lock(); turns++; mu.Unlock() }
+
+	rt.enqueueCoordinatorTurn("COORD")
+	waitTurns(t, &mu, &turns, 1, "single turn, no reconcile")
+	time.Sleep(200 * time.Millisecond)
+	mu.Lock()
+	got := turns
+	mu.Unlock()
+	if got != 1 {
+		t.Fatalf("no-worker coordinator must not reconcile; got %d turns", got)
+	}
+}

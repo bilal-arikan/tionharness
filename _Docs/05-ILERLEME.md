@@ -1,6 +1,43 @@
 # TionSwarm — İlerleme Takibi
 
-> Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-07-11**
+> Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-07-12**
+
+## Koordinatör "coalesced completion" stall'ı — worker-state + idle reconcile ✅ (2026-07-12)
+
+- **Teşhis:** Aynı tura düşen birden fazla `<task-notification>`'dan biri koordinatör
+  LLM'i tarafından gözden kaçırılınca (biten worker'ı "hâlâ çalışıyor" sanması), o tur
+  `pending` olmadan bitip drain döngüsü çıktığı için atlanan completion bir daha
+  ziyaret edilmiyordu → koordinatör zaten biten bir worker'ı sonsuza dek bekliyordu.
+  Kuyruk mekanizması bildirimi kaybetmiyor; açık **reasoning + liveness** katmanında.
+- **Fix 1 — otoriter worker-state bloğu:** `coordinatorWorkerStatusBlock` her koordinatör
+  turunun dinamik system suffix'ine (`autonomousDynamicSuffix`, coordinator-only) canlı
+  `ListWorkers` durumunu enjekte eder → model biten worker'ı "çalışıyor" sanamaz.
+- **Fix 2 — idle reconciliation sweep:** `drainCoordinator` çıkışta, koordinatör worker
+  spawn etmişse (`hadWorkers`) ve **tüm** worker'lar bitmişse (`workers==0`) ve bu batch
+  için henüz yapılmadıysa (`ackedIdle`), tek-seferlik `<coordination-status>All workers
+  finished…</coordination-status>` notu ekleyip bir otoriter tur daha koşar. `ackedIdle`
+  bir sonraki bildirimde re-arm olur; `CoordinatorMaxTurns` cap'i sınırlar → sonsuz döngü
+  yok. LLM bir bildirimi atlasa bile stall imkânsız.
+- **Testler:** `TestIdleReconcileSweepRunsFinalTurn` (process+reconcile, one-shot, re-arm),
+  `TestIdleReconcileSkippedWithoutWorkers`; mevcut coalesce/user-turn testleri yeşil.
+  (`coordination.go`, `runtime.go`, `coordination_test.go`.)
+
+## MCP sunucu satırına "Kopyala" butonu ✅ (2026-07-12)
+
+- **İstek:** Araçlar & MCP ekranında custom MCP eklendikten sonra Test/Aç-Kapat/Sil
+  yanına, sunucu yapılandırmasını başka yerlere yapıştırabilmek için bir **Kopyala**
+  butonu.
+- **Çözüm:** `ServerManagement.tsx`'e Test'ten hemen sonra **Kopyala** butonu — sunucuyu
+  standart `mcpServers` JSON belgesi (Claude Code / .mcp.json biçimi; "JSON ile içe aktar"
+  kutusunun kabul ettiği aynı şekil) olarak panoya kopyalar → başka workspace/araca
+  yapıştırıp içe aktarılabilir. Tıklayınca 1.5sn "Kopyalandı" geri bildirimi verir.
+  `navigator.clipboard` yoksa (güvensiz bağlam) gizli textarea + `execCommand('copy')`
+  fallback'i. transport'a göre yalnız ilgili alanlar yazılır (stdio → command/args/env,
+  http → url/headers).
+- **Değişiklikler:** `toolMeta.ts` — `serverToImportJson(server)` + `parseJsonObject(raw)`
+  yardımcıları (env/headers JSON string'lerini güvenli parse). `ServerManagement.tsx` —
+  `copiedId` state + `copyServer`, `data-testid="mcp-server-copy"`.
+- Doğrulama: `tsc --noEmit` temiz.
 
 ## archive_sessions: kendi oturumunu da arşivleyebilir (include_current) ✅ (2026-07-11)
 

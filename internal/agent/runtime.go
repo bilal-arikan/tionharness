@@ -1219,10 +1219,12 @@ func (r *Runtime) autonomousDynamicSuffix(ctx context.Context) string {
 	// Failure lessons (hata→ders döngüsü): the newest distilled lessons ride
 	// every headless turn so a fresh context does not repeat known failures.
 	// The turn's own agent (resolved via the stamped session) ranks first.
-	agentID := ""
-	if sid := SessionIDFrom(ctx); sid != "" {
+	agentID, role := "", ""
+	sid := SessionIDFrom(ctx)
+	if sid != "" {
 		if sess, err := r.db.GetSession(ctx, sid); err == nil {
 			agentID = sess.AgentID
+			role = sess.Role
 		}
 	}
 	if lb := r.LessonsContextBlock(ctx, agentID); lb != "" {
@@ -1238,9 +1240,17 @@ func (r *Runtime) autonomousDynamicSuffix(ctx context.Context) string {
 	// holding back a live change — a compact diff on the volatile side. The suffix
 	// runs after autonomousSystemPrompt in request composition, so the diff (set by
 	// EpochStaticSystem) is fresh for this turn.
-	if sid := SessionIDFrom(ctx); sid != "" {
+	if sid != "" {
 		if note := r.PromptEpochContextNote(sid, agentID); note != "" {
 			out += "\n\n" + note
+		}
+	}
+	// Coordinator turns get an authoritative live worker-state block so the model
+	// can never believe a finished worker is still running (the coalesced-
+	// notification stall). Coordinator-only, reusing the session role loaded above.
+	if sid != "" && role == "coordinator" {
+		if wb := r.coordinatorWorkerStatusBlock(ctx, sid); wb != "" {
+			out += "\n\n" + wb
 		}
 	}
 	return out
