@@ -2,6 +2,22 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-07-12**
 
+## Shell adımında komut-programı marka ikonu ✅ (2026-07-12)
+
+- **Ne:** Bir Bash/PowerShell araç adımında, komuttaki programı (git/npm/docker/python
+  /go/cargo/kubectl…) tespit edip tool ikonunun yanında küçük **marka SVG'si** gösterir
+  (external-agent-oss'taki "hangi programı kullandığına göre ikon" davranışının frontend-only
+  uyarlaması).
+- **Nasıl:** `shared/lib/commandProgram.ts` komutu parse eder (env/`sudo`/pipe/chain/
+  path/`bash -c`+`pwsh -Command` sarmalayıcıları). `shared/lib/programIcons.ts`
+  program adını (alias'lı ~40 komut) `simple-icons` marka glyph'ine eşler; ilk eşleşen
+  program kazanır. `features/chat/CommandProgramIcon.tsx` 13px SVG'yi brand-hex + `title`
+  ile render eder; eşleşmezse (cmdlet/`ls`…) hiçbir şey. `ActivityCard`'ta yalnız
+  Bash/PowerShell adımlarında `<meta.icon>` yanına eklenir.
+- **Bağımlılık/bundle:** `simple-icons` (named import → tree-shake doğrulandı, yalnız
+  kullanılan ~26 ikon bundle'a girer). `tsc --noEmit` + `vite build` temiz; parser 12
+  örnek vaka ile node sanity-check'ten geçti (frontend'de unit-test runner yok).
+
 ## TurnStep ikonları tek kaynağa çekildi (sohbet ↔ ayar ekranı) ✅ (2026-07-12)
 
 - **Sorun:** `stepKinds.ts` "tek doğruluk kaynağı" olduğunu iddia etse de yalnız ayar
