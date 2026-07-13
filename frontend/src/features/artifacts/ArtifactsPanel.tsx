@@ -787,16 +787,31 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
                     {creator(active)!.name}
                   </span>
                 )}
+                {/* Content actions sit together at the end of the chip row: edit
+                    lives right next to the content-copy button (both act on the
+                    artifact's body), while the right slot keeps the file-level
+                    and destructive actions. */}
                 {!draft && (
-                  <button
-                    data-testid="artifact-detail-copy"
-                    onClick={copy}
-                    title="İçeriği kopyala"
-                    className="ml-auto flex shrink-0 items-center gap-1.5 rounded-md border border-[var(--color-border)] px-2 py-1 text-xs text-[var(--color-text-dim)] transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
-                  >
-                    {copied ? <Check size={14} className="text-[var(--color-success)]" /> : <Copy size={14} />}
-                    <span>{copied ? 'Kopyalandı' : 'İçerik'}</span>
-                  </button>
+                  <div className="ml-auto flex shrink-0 items-center gap-1.5">
+                    <button
+                      data-testid="artifact-detail-edit"
+                      onClick={startEdit}
+                      title="Düzenle"
+                      className="flex shrink-0 items-center gap-1.5 rounded-md border border-[var(--color-border)] px-2 py-1 text-xs text-[var(--color-text-dim)] transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
+                    >
+                      <Pencil size={14} />
+                      <span>Düzenle</span>
+                    </button>
+                    <button
+                      data-testid="artifact-detail-copy"
+                      onClick={copy}
+                      title="İçeriği kopyala"
+                      className="flex shrink-0 items-center gap-1.5 rounded-md border border-[var(--color-border)] px-2 py-1 text-xs text-[var(--color-text-dim)] transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
+                    >
+                      {copied ? <Check size={14} className="text-[var(--color-success)]" /> : <Copy size={14} />}
+                      <span>{copied ? 'Kopyalandı' : 'İçerik'}</span>
+                    </button>
+                  </div>
                 )}
               </>
             ) : undefined
@@ -820,9 +835,7 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
                   </>
                 ) : (
                   <>
-                    <button data-testid="artifact-detail-edit" onClick={startEdit} title="Düzenle" className={iconBtn}>
-                      <Pencil size={15} />
-                    </button>
+                    {/* Edit moved next to the content-copy button in the chip row. */}
                     <CopyPathButton path={activePath} label="Yolu kopyala" labelClassName="hidden" title="Yolu kopyala" />
                     <RevealButton testId="artifact-detail-reveal" onReveal={reveal} disabled={!activePath} label="Aç" labelClassName="hidden sm:inline" />
                     {active.sessionId && onOpenSession && (
