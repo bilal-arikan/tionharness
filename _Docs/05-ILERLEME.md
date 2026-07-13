@@ -2,6 +2,32 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-07-13**
 
+## `archive_sessions` tüm oturum tiplerini süpürebiliyor (`kinds`) ✅ (2026-07-13)
+
+- **Sorun:** Araç `s.Kind != "chat"` ile sabit filtreliyordu → otonom çalıştırmaların
+  ürettiği oturumlar (`spawned`, `worker`, `flow`, `task`, `schedule`, `inbox`)
+  **hiçbir toplu araçla arşivlenemiyordu**. Board otomasyon zinciri her kart için
+  `spawned` oturum üretiyor, bunlar birikiyordu. Geriye tek yol ham REST kalıyordu —
+  ki bu workspace scope'unu kaybettiren footgun (bir kez yanlış workspace arşivlendi).
+- **Çözüm:** Opsiyonel `kinds` alanı. Geçerli tipler `chat`/`spawned`/`worker`/`flow`/
+  `task`/`schedule`/`inbox` + hepsi için `["*"]`. **Verilmezse varsayılan `["chat"]`** →
+  mevcut çağrılar birebir aynı davranır (geri uyumluluk kritikti: varsayılan genişletilseydi
+  eski "temizlik" çağrıları aniden flow/schedule/inbox'ı da süpürürdü).
+- **Nasıl:** Tip mantığı ayrı dosyada — `internal/tools/builtin_sessionkinds.go`
+  (`archivableSessionKinds` otoritatif liste, `resolveArchiveKinds` çözümleme +
+  trim/lowercase). Bilinmeyen tip **hata döner, sessizce yutulmaz** (`"spawn"` gibi bir
+  typo aksi halde "arşivlenecek bir şey yok" diye okunurdu). `dry_run` ve uygulanan
+  çıktı her satırda tipi gösterir (`- SES12 · [flow] · "..."`), başlıkta süpürülen tip
+  seti yazar. Mevcut korumalar (`currentSessionID` hariç tutma, `exclude`, `idle_days`,
+  `title_contains`, `limit` 100) `["*"]` altında da geçerli.
+- **Not:** `worker` tipi plandaki 6 tipe ek olarak dahil edildi — coordinator spawn'ları
+  (`spawn.go:120`) bu tipi üretiyor, listede olmasa süpürülemez kalırdı.
+- **Testler:** `builtin_sessionkinds_test.go` (7 yeni test: chat-only varsayılan,
+  seçili tip, `["*"]`, bilinmeyen tip hatası, dry-run tip gösterimi, `["*"]` altında
+  guard'lar, helper birim testi). Mevcut 4 test **değiştirilmeden** geçiyor → geri
+  uyumluluk kanıtı. `go build ./...`, `go vet ./...`, `go test ./internal/...` temiz.
+- **Doküman:** `_Docs/24-SELF-MANAGEMENT.md` satır 60 güncellendi.
+
 ## Yeni default skill `tionswarm-terse` (caveman-esinli terse mod) ✅ (2026-07-13)
 
 - **Ne:** Gömülü skill `internal/skills/defaults/tionswarm-terse/SKILL.md` (`🪨 TionSwarm
