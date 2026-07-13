@@ -435,3 +435,44 @@ sağlanıyor; panele ayrıca eklenen `pb-24` girdi altında ölü boşluk + gere
 - **Dikey yükseklik fix.** `RunView` kökü `min-h-0` aldı (flex çocukları düzgün küçülsün diye);
   trace listesi `max-h-[40%]` → `max-h-[40vh]` (kesin-yükseklik gerektirmeyen, daha kararlı).
   Kapalıyken canvas tüm yüksekliği alır — dar ekranda "yükseklik bozulması" giderildi.
+
+## Flow başlatma öncesi doğrulama (semantic precheck, 2026-07-13)
+
+**Sorun.** `orchestration.Graph.Validate()` yalnız **yapısal** doğrulama yapar: start node var
+mı, id'ler tekil mi, `Next`/`Branches`/`Parallel`/`JoinNext` referansları graf içinde çözülüyor
+mu, agent node'un `agentId` alanı **dolu** mu. Ama o `agentId`'nin DB'de gerçekten **var olup
+olmadığını** ya da ajanın sağlayıcısının yapılandırılmış olup olmadığını bilemez —
+`orchestration` paketi bilerek `db`/`providers`'a bağımlı değildir.
+
+Sonuç: silinmiş bir ajana ya da API anahtarı olmayan bir sağlayıcıya referans veren akış,
+yapısal doğrulamayı geçip **`FlowRun` kaydı oluşturuyor**, sonra motor ilk agent node'a
+geldiğinde patlıyordu. Kullanıcı, aslında hiç başlayamayacak bir akış için başarısız bir koşu
+kaydıyla karşılaşıyordu.
+
+**Çözüm.** `RunFlow` içinde, `g.Validate()` **sonrası** ve `CreateFlowRun` **öncesi** DB+registry
+destekli ikinci bir katman: `internal/agent/flow_precheck.go` →
+`(*Runtime).validateFlowPreconditions(ctx, g)`.
+
+Kontroller:
+- **Agent node** → `db.GetAgent(agentID)`: ajan silinmişse hata. Ajan varsa
+  `providers.Registry.Get(agent.Provider)`: sağlayıcı bilinmiyorsa veya yapılandırılmamışsa
+  (ör. anahtarsız `anthropic`) hata. Ajan id'leri **distinct** olarak bir kez sorgulanır — aynı
+  ajana çok node'dan referans veren fan-out graflarında tekrar okuma yok.
+- **Transform node** → `Template` boşsa (yalnız boşluk dahil) hata: boş template sessizce boş
+  çıktı üretip `{{last}}` ile aşağı taşınır; bu bir yapılandırma hatasıdır, geçerli no-op değil.
+- **Delay node** → `DelayMs` negatifse hata.
+
+Hatalar `errors.Join` ile **tek seferde** birleştirilir — kullanıcı her denemede bir sonraki
+hatayı keşfetmek yerine akışı tek geçişte düzeltir.
+
+**Hata yolu.** `RunFlow`'un tüm çağıranları (`RunFlowRecorded`, `handleSessionRunFlow`,
+`handleSessionRunFlowStream`) dönen `error`'u zaten kullanıcıya iletiyordu → ek UI değişikliği
+gerekmedi. Precheck başarısız olduğunda **hiç `FlowRun` kaydı oluşmaz**.
+
+**Geriye dönük uyumluluk riski.** Bugüne kadar çalışmayı deneyip ilk node'da patlayan akışlar
+artık **baştan** reddedilir. Davranış farkı: başarısız bir koşu kaydı yerine anında hata mesajı.
+
+**Doğrulama:** `internal/agent/flow_precheck_test.go` — geçerli graf regresyon testi (precheck'i
+geçer), eksik ajan, yapılandırılmamış sağlayıcı, bozuk transform/delay parametreleri, tüm
+hataların birlikte raporlanması ve `RunFlow`'un **`FlowRun` kaydı oluşturmadan** reddettiği.
+`go build ./...` + `go vet ./...` + `go test ./internal/...` yeşil.

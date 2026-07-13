@@ -53,6 +53,12 @@ func (r *Runtime) RunFlow(ctx context.Context, flowID, input string, autonomous 
 	if err := g.Validate(); err != nil {
 		return db.FlowRun{}, err
 	}
+	// Structural validity is not enough: the graph may reference an agent that was
+	// deleted, or whose provider is no longer configured. Reject before a FlowRun
+	// row exists, so an unrunnable flow leaves no failed run behind.
+	if err := r.validateFlowPreconditions(ctx, g); err != nil {
+		return db.FlowRun{}, err
+	}
 
 	run, err := r.db.CreateFlowRun(ctx, db.FlowRun{FlowID: flowID, Input: input})
 	if err != nil {
