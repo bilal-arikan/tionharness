@@ -6,6 +6,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -118,23 +119,35 @@ func (s *CLISession) Turn(ctx context.Context, prompt string, onEvent func(Trace
 }
 
 // Close terminates the process and removes its system-prompt temp file. Safe to
-// call more than once.
-func (s *CLISession) Close() {
+// call more than once. Best-effort: any kill error is swallowed (use closeChecked
+// when a caller must fail closed on a process it could not terminate).
+func (s *CLISession) Close() { _ = s.closeChecked() }
+
+// closeChecked is Close but returns a non-nil error when the process could NOT be
+// killed, and — crucially — does NOT mark the session closed / does NOT remove its
+// temp file in that case, so the process stays tracked and a retry can try again
+// instead of being silently orphaned. os.ErrProcessDone (already exited) is success.
+// Session delete uses this to fail closed: a live claude-cli that cannot be killed
+// must block the delete, never outlive its session. Safe to call more than once.
+func (s *CLISession) closeChecked() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.closed {
-		return
+		return nil
 	}
-	s.closed = true
 	if s.stdin != nil {
 		_ = s.stdin.Close() // EOF lets the CLI exit cleanly
 	}
 	if s.cmd != nil && s.cmd.Process != nil {
-		_ = s.cmd.Process.Kill()
+		if err := s.cmd.Process.Kill(); err != nil && !errors.Is(err, os.ErrProcessDone) {
+			return err // leave closed=false + temp file intact so a retry can re-kill
+		}
 	}
+	s.closed = true
 	if s.sysFilePath != "" {
 		_ = os.Remove(s.sysFilePath)
 	}
+	return nil
 }
 
 // startPersistent launches a long-lived claude process for one conversation. The
@@ -455,6 +468,48 @@ func (pl *CLISessionPool) DropSession(sessionID string) int {
 		pl.log(slog.LevelInfo, "cli persistent sessions dropped (user restart)", "session", sessionID, "count", len(dead))
 	}
 	return len(dead)
+}
+
+// DropSessionChecked is DropSession but VERIFIES every kill: a process it could not
+// terminate is kept in the pool (still tracked, not orphaned) and reported in the
+// returned error, alongside the count actually dropped. Session delete uses this to
+// fail closed — a warm claude-cli that survives the kill must block the delete rather
+// than outlive its session as a zombie.
+func (pl *CLISessionPool) DropSessionChecked(sessionID string) (int, error) {
+	if sessionID == "" {
+		return 0, nil
+	}
+	prefix := keyPrefixForSession(sessionID)
+	type keyed struct {
+		k string
+		s *CLISession
+	}
+	pl.mu.Lock()
+	var targets []keyed
+	for k, s := range pl.sessions {
+		if strings.HasPrefix(k, prefix) {
+			targets = append(targets, keyed{k, s})
+		}
+	}
+	pl.mu.Unlock()
+	dropped := 0
+	var errs []error
+	for _, t := range targets {
+		if t.s != nil {
+			if err := t.s.closeChecked(); err != nil {
+				errs = append(errs, fmt.Errorf("cli %s: %w", t.k, err))
+				continue // leave it tracked in the pool; do not orphan it
+			}
+		}
+		pl.mu.Lock()
+		delete(pl.sessions, t.k)
+		pl.mu.Unlock()
+		dropped++
+	}
+	if dropped > 0 {
+		pl.log(slog.LevelInfo, "cli persistent sessions dropped (session delete)", "session", sessionID, "count", dropped)
+	}
+	return dropped, errors.Join(errs...)
 }
 
 // Close terminates every live session. Called on workspace/runtime teardown.

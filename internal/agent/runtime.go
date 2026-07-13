@@ -342,6 +342,16 @@ func (r *Runtime) DropWarmCLISession(sessionID string) int {
 	return r.cliSessions.DropSession(sessionID)
 }
 
+// DropWarmCLISessionChecked is DropWarmCLISession but VERIFIES every kill, returning
+// an error for any warm claude-cli process it could not terminate so a caller (session
+// delete) can fail closed instead of stranding it. Nil-safe.
+func (r *Runtime) DropWarmCLISessionChecked(sessionID string) (int, error) {
+	if r.cliSessions == nil {
+		return 0, nil
+	}
+	return r.cliSessions.DropSessionChecked(sessionID)
+}
+
 // globalSkillsDir is TionSwarm's data-dir-level global skills directory
 // (<DataDir>/skills, default ~/.tionswarm/skills). Deliberately under TionSwarm's
 // OWN data dir — not the cross-tool ~/.agents/skills convention — so TionSwarm's

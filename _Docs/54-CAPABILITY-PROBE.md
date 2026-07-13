@@ -149,6 +149,50 @@ Tüm codebase-memory yeteneği bir workspace ayarıyla açılıp kapanır (**def
     türetilir (backend'in izole-store yönlendirmesiyle aynı kural). Buton araç PATH'te
     bulunmazsa devre dışı.
 
+## Workspace oluşturma sonrası öneri kartları (2026-07-13)
+
+`WorkspaceRecommendations.tsx` — `ClaudeAuthGate` ile aynı desende, App'te ayrı bir
+`recsTrigger` sayacıyla **yalnız create/attach başarısında** tetiklenir (chat-open'da
+DEĞİL → kullanıcı her sohbet açılışında rahatsız edilmez).
+
+**Mimari — kural motoru:** modül-seviyesi düz `RULES: Rule[]` dizisi; her kural saf bir
+`(ctx) => Rec | null` fonksiyonu. Tetikte tek bir probe (`external-tools` + `mcp-servers`
++ `hooks` + `workspace-settings` + `app-settings` + `agents`) paralel çekilir, `ctx`
+kurulur, her kural bir kez koşar ve null-olmayanlar kapatılabilir sağ-alt kart olur.
+**Yeni öneri = tek `RULES` girdisi.** Kart varyantı `accent`|`warning`.
+
+Kurallar (sırayla — kartlar üstten alta yığılır):
+- **token-conflict** (⚠): rtk+sqz ikisi de enabled → "Harici araçlar"a yönlendir.
+- **no-agents**: 0 ajan → Ajanlar ekranı.
+- **workdir**: `defaultWorkingDir` boş → "Bu Workspace" (path native picker ister).
+- **cbm-add**: codebase-memory-mcp kurulu ama MCP yok → `createMCPServer(...)`.
+- **cbm-enable**: MCP ekli ama `codebaseMemoryEnabled=false` → `updateWorkspaceSettings`.
+- **token**: rtk (yoksa sqz) kurulu ama hiç token-hook yok → `createHook(...)`.
+- **no-mcp**: hiç MCP yok (ve cbm bekleyen öneri değilse) → Market.
+- **backup-off**: `backupEnabled=false` → Yedekleme ayarları.
+- **cli-tools**: PATH'te `wire=cli` araçlar (mmdc/crabbox) → tek bilgi kartı, Harici Araçlar.
+
+Yeni algılama endpoint'i eklenmedi; hepsi mevcut endpoint'leri tüketir. Kartlar
+`data-testid="workspace-rec-<key>"`, aksiyon `workspace-rec-act-<key>`.
+
+**Paylaşılan katalog:** kural motoru `recommendations.ts`'e taşındı — her kural statik
+`meta` (key/icon/title/summary) + `detect(ctx)` taşır. İki yüzey aynı kataloğu kullanır:
+toast (`WorkspaceRecommendations.tsx`) ve **"Öneriler" workspace sekmesi**
+(`RecommendationsPanel.tsx`).
+
+**Ignore + yönetim (kalıcı):** Toast'ta "X" artık kartı **kalıcı yok sayar** — key,
+per-workspace `WSSettings.IgnoredRecommendations` listesine yazılır (`ignoredRecommendations`
+DTO + patch alanı; runtime etkisi yok, saf UI). Bir aksiyon **uygulanınca** ignore
+yazılmaz (koşul zaten çözülür). WorkspaceView ▸ **Öneriler** sekmesi tüm kuralları
+listeler: her biri için "Şu an geçerli / Yok sayıldı / Uygulanabilir değil" rozeti +
+**Yok say / Yok saymayı kaldır** düğmesi (`updateWorkspaceSettings({ignoredRecommendations})`).
+Test id'leri `rec-row-<key>` / `rec-toggle-<key>`.
+
+**Manuel gösterme:** Panelde **"Kartları göster"** düğmesi (`rec-show-cards`) App'teki
+`recsTrigger`'ı bumlar → toast'ı istek üzerine tekrar açar (create beklemeden). Geçerli
+ve yok sayılmamış öneri yoksa devre dışı (sayacı buton üstünde gösterir). Toast App
+seviyesinde her view'da mount olduğu için workspace ekranında da görünür.
+
 ## Canlı duman testi (2026-07-07)
 
 - **CLI kontratı:** izole temp store → `index_repository` (10056 node) → `list_projects`

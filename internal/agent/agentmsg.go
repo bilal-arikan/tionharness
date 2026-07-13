@@ -142,7 +142,9 @@ func (r *Runtime) deliverOne(ctx context.Context, fromAgentID, fromName string, 
 func (r *Runtime) runInboxDelivery(agent db.Agent, inboxID, prompt string) {
 	defer r.releaseSpawnSlot()
 
-	ctx, cancel := context.WithTimeout(context.Background(), spawnTimeout)
+	// Same hard ceiling + idle watchdog as spawn/worker turns: a productive turn
+	// runs up to SpawnTimeout, a hung one is reclaimed after SpawnIdleTimeout.
+	ctx, cancel := withActivityTimeout(context.Background(), r.tun.SpawnTimeout(), r.tun.SpawnIdleTimeout())
 	defer cancel()
 
 	// Mark as async chat (a human may read the inbox) + autonomous, and stamp the

@@ -12,7 +12,7 @@ export interface NewWorkspaceData {
 }
 
 interface Props {
-  onCreate: (data: NewWorkspaceData) => void
+  onCreate: (data: NewWorkspaceData) => void | Promise<unknown>
   onClose: () => void
 }
 
@@ -23,6 +23,7 @@ export function WorkspaceCreateModal({ onCreate, onClose }: Props) {
   const [path, setPath] = useState('')
   const [icon, setIcon] = useState('⬡')
   const [picking, setPicking] = useState(false)
+  const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [templates, setTemplates] = useState<WorkspaceTemplate[]>([])
   // Empty until templates load; the load effect auto-selects the blank default so
@@ -67,13 +68,26 @@ export function WorkspaceCreateModal({ onCreate, onClose }: Props) {
     }
   }
 
-  const submit = () => {
+  const submit = async () => {
+    if (busy) return
     if (!name.trim()) {
       setError('Workspace adı gerekli')
       nameRef.current?.focus()
       return
     }
-    onCreate({ name: name.trim(), path: path.trim() || undefined, icon, template: templateId })
+    setBusy(true)
+    setError(null)
+    try {
+      // Awaits the whole provision so the button stays in its "Oluşturuluyor…"
+      // state until the parent dismisses the modal on success. On failure the
+      // creation path surfaces the error itself; we release busy so the user can
+      // retry without a stuck spinner.
+      await onCreate({ name: name.trim(), path: path.trim() || undefined, icon, template: templateId })
+    } catch (e) {
+      setError('Workspace oluşturulamadı: ' + (e as Error).message)
+    } finally {
+      setBusy(false)
+    }
   }
 
   return (
@@ -160,12 +174,13 @@ export function WorkspaceCreateModal({ onCreate, onClose }: Props) {
         <div className="flex justify-end gap-2">
           <button
             onClick={onClose}
-            className="rounded-lg px-3 py-2 text-sm text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)]"
+            disabled={busy}
+            className="rounded-lg px-3 py-2 text-sm text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] disabled:opacity-50"
           >
             İptal
           </button>
-          <Button onClick={submit} size="lg">
-            Oluştur
+          <Button onClick={submit} size="lg" disabled={busy}>
+            {busy ? 'Oluşturuluyor…' : 'Oluştur'}
           </Button>
         </div>
       </div>

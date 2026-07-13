@@ -11,12 +11,13 @@ import (
 	"github.com/bilal-arikan/tionswarm/internal/providers"
 )
 
-// ListSessionsTool lets an agent pull the workspace's chat sessions on demand —
+// ListSessionsTool lets an agent pull the workspace's sessions on demand —
 // the "pull" complement to the cross-session context block. That block pushes
-// only RECENT (past) sessions into the prompt; ACTIVE (live) sessions are never
-// auto-injected, so this tool is the agent's only way to see them. It reuses
-// each session's stored Title and rolling Summary (no new LLM call) and is
-// scoped to this workspace's DB.
+// only RECENT (past) chat sessions into the prompt; ACTIVE (live) sessions and
+// autonomous runs (spawn/worker, flow, task, schedule) are never auto-injected,
+// so this tool is the agent's only way to see them. It lists every kind by
+// default (an optional kind filter narrows it), reuses each session's stored
+// Title and rolling Summary (no new LLM call) and is scoped to this workspace's DB.
 type ListSessionsTool struct{ db *db.DB }
 
 // NewListSessionsTool binds the tool to a workspace DB.
@@ -31,16 +32,19 @@ const listSessionsPageLimit = 20
 func (ListSessionsTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name: "list_sessions",
-		Description: "List the chat sessions in this workspace for situational awareness — " +
-			"their titles, message counts, age and a short summary. Active (live) sessions are " +
-			"NOT auto-injected into your context, so call this tool whenever you need to see what " +
-			"other work is currently in progress. Returns active sessions by default; pass " +
-			"state:\"all\" to include past ones. Results are paginated (newest first): the reply " +
-			"reports the total and, when more remain, the exact offset to pass for the next page.",
+		Description: "List the sessions in this workspace for situational awareness — their kind, " +
+			"title, message counts, age and a short summary. Covers EVERY execution path by default: " +
+			"chat threads plus autonomous runs (spawn/worker, flow, task, schedule). Active (live) " +
+			"sessions are NOT auto-injected into your context, so call this tool whenever you need to " +
+			"see what other work is currently in progress. Returns active sessions of all kinds by " +
+			"default; pass kind:\"...\" to narrow to one kind and state:\"all\" to include past " +
+			"(archived) ones. Each line is prefixed with [kind·state]. Results are paginated (newest " +
+			"first): the reply reports the total and, when more remain, the exact offset for the next page.",
 		InputSchema: json.RawMessage(`{
   "type": "object",
   "properties": {
     "state": { "type": "string", "enum": ["active", "all"], "description": "Which sessions to list (default: active)." },
+    "kind": { "type": "string", "enum": ["chat", "spawned", "worker", "flow", "task", "schedule"], "description": "Narrow to a single session kind. Omit to list all kinds (default)." },
     "limit": { "type": "integer", "description": "Max sessions per page (default 20). Use with offset to page through all of them." },
     "offset": { "type": "integer", "description": "How many matching sessions to skip before this page (default 0). Pass the offset from a previous reply to get the next page." }
   },
@@ -52,6 +56,7 @@ func (ListSessionsTool) Def() providers.ToolDef {
 func (t ListSessionsTool) Call(ctx context.Context, input json.RawMessage) (string, error) {
 	var args struct {
 		State  string `json:"state"`
+		Kind   string `json:"kind"`
 		Limit  int    `json:"limit"`
 		Offset int    `json:"offset"`
 	}
@@ -67,6 +72,7 @@ func (t ListSessionsTool) Call(ctx context.Context, input json.RawMessage) (stri
 		args.Offset = 0
 	}
 	onlyActive := args.State != "all"
+	kindFilter := strings.TrimSpace(args.Kind)
 
 	sessions, err := t.db.ListSessions(ctx, "") // workspace-wide, UpdatedAt desc
 	if err != nil {
@@ -74,10 +80,12 @@ func (t ListSessionsTool) Call(ctx context.Context, input json.RawMessage) (stri
 	}
 
 	// Collect every matching session first so we know the true total, then window
-	// it by [offset, offset+limit) for pagination.
+	// it by [offset, offset+limit) for pagination. All kinds are listed by default
+	// (chat + autonomous runs); an optional kind filter narrows to one. Legacy
+	// sessions persisted before the kind field carry "" and count as chat.
 	matches := make([]db.Session, 0, len(sessions))
 	for _, s := range sessions {
-		if s.Kind != "chat" {
+		if kindFilter != "" && !sessKindMatches(s.Kind, kindFilter) {
 			continue
 		}
 		if onlyActive && s.State != "active" {
@@ -106,7 +114,7 @@ func (t ListSessionsTool) Call(ctx context.Context, input json.RawMessage) (stri
 		if title == "" {
 			title = "(untitled)"
 		}
-		fmt.Fprintf(&b, "- [%s] %q · %d msg · %s", s.State, sessClip(title, 70), s.MessageCount, sessAge(now-s.UpdatedAt))
+		fmt.Fprintf(&b, "- [%s·%s] %q · %d msg · %s", sessKindLabel(s.Kind), s.State, sessClip(title, 70), s.MessageCount, sessAge(now-s.UpdatedAt))
 		if snip := sessSnippet(s.Summary); snip != "" {
 			b.WriteString(" — " + snip)
 		}
@@ -118,6 +126,25 @@ func (t ListSessionsTool) Call(ctx context.Context, input json.RawMessage) (stri
 		fmt.Fprintf(&b, " %d more — pass offset:%d for the next page.", total-end, end)
 	}
 	return strings.TrimSpace(b.String()), nil
+}
+
+// sessKindMatches reports whether a session's kind belongs under a kind filter.
+// A legacy session persisted before the kind field existed carries "" and counts
+// as a plain chat, so it stays reachable under the "chat" filter.
+func sessKindMatches(kind, filter string) bool {
+	if filter == "chat" {
+		return kind == "" || kind == "chat"
+	}
+	return kind == filter
+}
+
+// sessKindLabel normalizes a session kind for the listing prefix, mapping the
+// empty legacy kind to "chat".
+func sessKindLabel(kind string) string {
+	if kind == "" {
+		return "chat"
+	}
+	return kind
 }
 
 // sessSnippet returns the first non-empty line of a summary, capped.

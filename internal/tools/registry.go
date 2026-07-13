@@ -263,6 +263,23 @@ func (r *Registry) AttachMCP(entries []mcp.CatalogEntry, cfgByServer map[string]
 	}
 }
 
+// ServerDescriptions returns the curated one-liner for each attached MCP server
+// (server name → description), skipping servers without one. Used to enrich the
+// per-server summary line of the load-on-demand catalog so a semantic hint
+// survives even when a workspace has too many MCP tools to enumerate.
+func (r *Registry) ServerDescriptions() map[string]string {
+	if len(r.mcpCfgByServer) == 0 {
+		return nil
+	}
+	out := make(map[string]string, len(r.mcpCfgByServer))
+	for name, cfg := range r.mcpCfgByServer {
+		if d := strings.TrimSpace(cfg.Description); d != "" {
+			out[name] = d
+		}
+	}
+	return out
+}
+
 // foldExamples merges a tool's Examples into its InputSchema as a JSON Schema
 // "examples" array, so sample calls travel with the FULL schema sent to the model.
 // Tools without examples (or without an object schema) are returned unchanged.

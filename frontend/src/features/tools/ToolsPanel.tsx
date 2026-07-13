@@ -56,11 +56,21 @@ export function ToolsPanel({ onError }: Props) {
     toggleTool,
     setToolVisibility,
     setServerVisibility,
+    scope,
+    setScope,
+    editingId,
+    startEdit,
+    cancelEdit,
+    poolStats,
     addServer,
     importServers,
     toggleServer,
     testServer,
     removeServer,
+    importable,
+    addingImportable,
+    loadImportable,
+    addImportable,
     activeCount,
     filtered,
     filtersActive,
@@ -302,6 +312,12 @@ export function ToolsPanel({ onError }: Props) {
             setUrl={setUrl}
             headersText={headersText}
             setHeadersText={setHeadersText}
+            scope={scope}
+            setScope={setScope}
+            editingId={editingId}
+            onEdit={startEdit}
+            onCancelEdit={cancelEdit}
+            poolStats={poolStats}
             onAdd={addServer}
             onToggle={toggleServer}
             onTest={testServer}
@@ -311,6 +327,10 @@ export function ToolsPanel({ onError }: Props) {
             importing={importing}
             importMsg={importMsg}
             onImport={importServers}
+            importable={importable}
+            addingImportable={addingImportable}
+            onLoadImportable={loadImportable}
+            onAddImportable={addImportable}
           />
         )}
       </div>

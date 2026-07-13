@@ -63,8 +63,19 @@ func (r *Runtime) EmitSessionStep(sessionID string, st TurnStep) { r.emitSession
 // interactive chat turn has.
 func (r *Runtime) SessionStepEmitter(ctx context.Context) func(TurnStep) {
 	sid := SessionIDFrom(ctx)
-	if sid == "" {
+	// touch resets the idle watchdog (withActivityTimeout) on every step so a
+	// long-but-productive autonomous turn is not killed as "hung". Present only on
+	// turns wrapped by the watchdog; nil otherwise.
+	touch := activityTouchFrom(ctx)
+	if sid == "" && touch == nil {
 		return nil
 	}
-	return func(st TurnStep) { r.emitSessionStep(sid, st) }
+	return func(st TurnStep) {
+		if touch != nil {
+			touch()
+		}
+		if sid != "" {
+			r.emitSessionStep(sid, st)
+		}
+	}
 }

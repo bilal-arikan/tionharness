@@ -40,13 +40,14 @@ func toServerConfig(m db.MCPServer) mcp.ServerConfig {
 	headers := map[string]string{}
 	_ = json.Unmarshal([]byte(m.HeadersConfig), &headers)
 	return mcp.ServerConfig{
-		Name:      m.Name,
-		Transport: m.Transport,
-		Command:   m.Command,
-		Args:      args,
-		URL:       m.URL,
-		Env:       env,
-		Headers:   headers,
+		Name:        m.Name,
+		Transport:   m.Transport,
+		Command:     m.Command,
+		Args:        args,
+		URL:         m.URL,
+		Env:         env,
+		Headers:     headers,
+		Description: m.Description,
 	}
 }
 
@@ -463,8 +464,21 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 		if r.CodebaseMemoryEnabled() {
 			cbmStore = r.CBMStoreDir()
 		}
+		// Hybrid MCP scoping: a server marked scope="scoped" gets its OWN live
+		// connection per (session, agent) instead of the shared workspace-wide one,
+		// so its per-connection server state can't bleed between sessions and its
+		// blast radius on hang/crash is one caller. The transport is still pooled
+		// (idle-evicted, not spawned per turn), so shared servers are unaffected.
+		// No session (catalog/preview build) → fall back to shared. Detail: _Docs/52.
+		mcpScopeKey := ""
+		if sid := SessionIDFrom(ctx); sid != "" {
+			mcpScopeKey = sid + "|" + agent.ID
+		}
 		for _, m := range servers {
 			cfg := toServerConfig(m)
+			if m.Scope == "scoped" && mcpScopeKey != "" {
+				cfg.ScopeKey = mcpScopeKey
+			}
 			// Route the codebase-memory server at this workspace's ISOLATED store so
 			// its index never mixes with other workspaces (store = workspace boundary).
 			// A user-set CBM_CACHE_DIR wins; we only fill it when unset.
@@ -696,7 +710,7 @@ func (r *Runtime) LazyToolsCatalogBlock(ctx context.Context, agent db.Agent) str
 	cli := agent.Provider == "" || agent.Provider == "claude-cli"
 	// Visible lazy tools are enumerated; the hidden self-management suite is folded
 	// into a single skill pointer (rendered when hiddenCount > 0).
-	return renderLazyToolCatalog(reg.VisibleLazyCatalog(filter), reg.HiddenLazyCount(filter), cli)
+	return renderLazyToolCatalog(reg.VisibleLazyCatalog(filter), reg.HiddenLazyCount(filter), cli, reg.ServerDescriptions())
 }
 
 // lazyCatalogMCPListLimit caps how many MCP (namespaced) lazy tools are listed
@@ -707,7 +721,7 @@ func (r *Runtime) LazyToolsCatalogBlock(ctx context.Context, agent db.Agent) str
 // self-management family) are always listed in full: they are few and high-value.
 // This is the TionSwarm analogue of the Anthropic "tool search" pattern — search
 // instead of enumerate once the catalog grows large.
-const lazyCatalogMCPListLimit = 30
+const lazyCatalogMCPListLimit = 50
 
 // cliLazyBridgeExcluded names built-in lazy tools NOT advertised to the claude-cli
 // Interaction MCP bridge, so the CLI-form catalog must not list them (the CLI uses
@@ -759,7 +773,7 @@ func catalogDisplayName(name string, cli bool) (string, bool) {
 // TionSwarm's native activate_tools (the CLI has neither activate_tools nor
 // tool_search). CLI-native built-ins (WebFetch) are dropped. This mirrors how the
 // skills block (CatalogBlockForAgentTool) already adapts to the CLI.
-func renderLazyToolCatalog(lazy []providers.ToolDef, hiddenCount int, cli bool) string {
+func renderLazyToolCatalog(lazy []providers.ToolDef, hiddenCount int, cli bool, serverDesc map[string]string) string {
 	if len(lazy) == 0 && hiddenCount == 0 {
 		return ""
 	}
@@ -831,7 +845,11 @@ func renderLazyToolCatalog(lazy []providers.ToolDef, hiddenCount int, cli bool) 
 			if cli {
 				label = "mcp__" + srv
 			}
-			fmt.Fprintf(&b, "- `%s` — %d tools\n", label, counts[srv])
+			if desc := strings.TrimSpace(serverDesc[srv]); desc != "" {
+				fmt.Fprintf(&b, "- `%s` — %d tools — %s\n", label, counts[srv], desc)
+			} else {
+				fmt.Fprintf(&b, "- `%s` — %d tools\n", label, counts[srv])
+			}
 		}
 	}
 

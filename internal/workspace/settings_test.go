@@ -9,4 +9,7 @@ func TestDefaultWSSettings(t *testing.T) {
 	if !d.CodebaseMemoryEnabled {
 		t.Error("codebase-memory capability should default on")
 	}
+	if d.AutoCaptureArtifacts {
+		t.Error("auto-capture artifacts should default OFF (deliberate create_artifact only)")
+	}
 }

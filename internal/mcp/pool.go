@@ -9,7 +9,9 @@ import (
 	"log/slog"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -19,6 +21,29 @@ import (
 // Overridable via TIONSWARM_MCP_POOL_TTL_SEC (0 disables the timer; listChanged
 // still refreshes).
 const poolTTL = 60 * time.Second
+
+// scopedIdleTTL bounds how long a SCOPED (per-session/agent) connection may sit
+// idle before the reaper closes it, so a session that walked away does not pin an
+// stdio subprocess forever. Shared (workspace-wide) connections are never reaped —
+// they live for the workspace, as before. Overridable via
+// TIONSWARM_MCP_SCOPED_IDLE_SEC (0 disables idle eviction).
+const scopedIdleTTL = 300 * time.Second
+
+// scopeSep joins a caller ScopeKey to a server name to form a scoped pool-entry
+// key. It is a NUL byte, which never appears in a sanitized server name, so a
+// key containing it is unambiguously scoped (used by the reaper to tell scoped
+// entries apart from shared ones).
+const scopeSep = "\x00"
+
+// scopedEntryKey builds the pool-entry key for a server. An empty scopeKey keeps
+// the bare server name (the shared, workspace-lifetime slot); a non-empty one
+// yields a distinct per-scope slot.
+func scopedEntryKey(scopeKey, server string) string {
+	if scopeKey == "" {
+		return server
+	}
+	return scopeKey + scopeSep + server
+}
 
 // Pool maintains one persistent stdio client per MCP server (keyed by sanitized
 // server name). Persistent connections — as opposed to the old dial-per-
@@ -40,9 +65,12 @@ type Pool struct {
 	mu       sync.Mutex
 	entries  map[string]*poolEntry
 	ttl      time.Duration
+	idleTTL  time.Duration    // scoped-connection idle eviction window (0 = disabled)
 	now      func() time.Time // injectable clock for tests; nil => time.Now
 	onChange func()           // optional: fired (async) when any server's tools change
 	logger   *slog.Logger     // optional: lifecycle logs to the in-app Logs ring buffer
+	stop     chan struct{}    // closed by Close to stop the reaper goroutine
+	stopOnce sync.Once
 }
 
 type poolEntry struct {
@@ -55,11 +83,25 @@ type poolEntry struct {
 	tools    []Tool
 	listed   bool
 	listedAt time.Time
+
+	// lastUsedNano is the Unix-nanos timestamp of the last ensure() on this entry.
+	// Read by the reaper without holding e.mu, so it is an atomic. Only meaningful
+	// for scoped entries (shared ones are never reaped).
+	lastUsedNano atomic.Int64
 }
 
-// NewPool returns an empty pool with the default (env-overridable) TTL.
+// NewPool returns an empty pool with the default (env-overridable) TTLs and
+// starts a background reaper that evicts idle scoped connections. Call Close to
+// terminate connections and stop the reaper.
 func NewPool() *Pool {
-	return &Pool{entries: map[string]*poolEntry{}, ttl: poolTTLFromEnv()}
+	p := &Pool{
+		entries: map[string]*poolEntry{},
+		ttl:     poolTTLFromEnv(),
+		idleTTL: scopedIdleFromEnv(),
+		stop:    make(chan struct{}),
+	}
+	go p.reapLoop()
+	return p
 }
 
 // SetOnToolsChanged registers a callback fired (in its own goroutine) whenever
@@ -113,6 +155,8 @@ func (p *Pool) entry(name string) *poolEntry {
 // ensure returns a live client for cfg, dialing (or re-dialing on config change
 // / death) as needed. Caller holds e.mu.
 func (p *Pool) ensure(ctx context.Context, e *poolEntry, cfg ServerConfig) (Client, error) {
+	// Mark activity for the idle reaper (scoped entries only; harmless for shared).
+	e.lastUsedNano.Store(p.clock().UnixNano())
 	want := configFingerprint(cfg)
 	if e.client != nil && e.fp == want && e.client.Alive() {
 		return e.client, nil
@@ -200,7 +244,9 @@ func (p *Pool) Catalog(ctx context.Context, cfgs []ServerConfig) (entries []Cata
 	for _, cfg := range cfgs {
 		name, _, _ := SplitNamespaced(NamespaceTool(cfg.Name, "x"))
 		cfgByServer[name] = cfg
-		e := p.entry(name)
+		// A scoped server (cfg.ScopeKey set) gets its own per-caller slot; a shared
+		// one keeps the bare server-name slot reused across the whole workspace.
+		e := p.entry(scopedEntryKey(cfg.ScopeKey, name))
 		e.mu.Lock()
 		list, err := p.tools(ctx, e, cfg)
 		e.mu.Unlock()
@@ -231,7 +277,9 @@ func (p *Pool) Call(ctx context.Context, cfgByServer map[string]ServerConfig, na
 	if !ok {
 		return CallToolResult{}, fmt.Errorf("mcp: no server %q for tool %q", server, namespaced)
 	}
-	e := p.entry(server)
+	// Route to the same slot Catalog used: scoped (per-caller) when cfg.ScopeKey is
+	// set, shared (workspace-wide) otherwise.
+	e := p.entry(scopedEntryKey(cfg.ScopeKey, server))
 	for attempt := 0; attempt < 2; attempt++ {
 		e.mu.Lock()
 		client, err := p.ensure(ctx, e, cfg)
@@ -254,8 +302,57 @@ func (p *Pool) Call(ctx context.Context, cfgByServer map[string]ServerConfig, na
 	return CallToolResult{}, ctx.Err()
 }
 
-// Close terminates every pooled connection. Safe to call multiple times.
+// EntryStat is a read-only snapshot of one pooled connection, for observability
+// (the Tools screen's live-connection / reaper indicator).
+type EntryStat struct {
+	Server   string `json:"server"`   // server name (recovered from the pool key)
+	Scoped   bool   `json:"scoped"`   // true = per-(session,agent) connection
+	ScopeKey string `json:"scopeKey"` // "" for shared; "<sessionID>|<agentID>" for scoped
+	Alive    bool   `json:"alive"`    // the underlying client is connected
+	IdleSec  int    `json:"idleSec"`  // seconds since last use (drives eviction)
+}
+
+// Stats returns a snapshot of every pooled entry. Cheap and lock-safe; intended
+// for a status endpoint, not a hot path.
+func (p *Pool) Stats() []EntryStat {
+	now := p.clock()
+	p.mu.Lock()
+	keys := make([]string, 0, len(p.entries))
+	ents := make([]*poolEntry, 0, len(p.entries))
+	for k, e := range p.entries {
+		keys = append(keys, k)
+		ents = append(ents, e)
+	}
+	p.mu.Unlock()
+
+	out := make([]EntryStat, 0, len(ents))
+	for i, e := range ents {
+		k := keys[i]
+		scoped := strings.Contains(k, scopeSep)
+		server, scopeKey := k, ""
+		if scoped {
+			parts := strings.SplitN(k, scopeSep, 2)
+			scopeKey, server = parts[0], parts[1]
+		}
+		e.mu.Lock()
+		alive := e.client != nil && e.client.Alive()
+		e.mu.Unlock()
+		idle := 0
+		if lu := e.lastUsedNano.Load(); lu > 0 {
+			idle = int(now.Sub(time.Unix(0, lu)).Seconds())
+		}
+		out = append(out, EntryStat{Server: server, Scoped: scoped, ScopeKey: scopeKey, Alive: alive, IdleSec: idle})
+	}
+	return out
+}
+
+// IdleTTL is the scoped-connection idle-eviction window (0 = eviction disabled).
+func (p *Pool) IdleTTL() time.Duration { return p.idleTTL }
+
+// Close terminates every pooled connection and stops the reaper. Safe to call
+// multiple times.
 func (p *Pool) Close() {
+	p.stopOnce.Do(func() { close(p.stop) })
 	p.mu.Lock()
 	es := make([]*poolEntry, 0, len(p.entries))
 	for _, e := range p.entries {
@@ -274,7 +371,11 @@ func (p *Pool) Close() {
 }
 
 // configFingerprint hashes a server's launch/connection spec; a change re-dials.
+// ScopeKey is caller identity (it selects the pool slot, not how we dial), so it
+// is cleared before hashing — otherwise two scopes of the same server would look
+// like a config change to each other.
 func configFingerprint(cfg ServerConfig) string {
+	cfg.ScopeKey = ""
 	h := sha256.New()
 	enc := json.NewEncoder(h) // encoding/json sorts map keys → deterministic Env
 	_ = enc.Encode(cfg)
@@ -288,4 +389,68 @@ func poolTTLFromEnv() time.Duration {
 		}
 	}
 	return poolTTL
+}
+
+func scopedIdleFromEnv() time.Duration {
+	if v := os.Getenv("TIONSWARM_MCP_SCOPED_IDLE_SEC"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n >= 0 {
+			return time.Duration(n) * time.Second
+		}
+	}
+	return scopedIdleTTL
+}
+
+// reapLoop periodically evicts idle scoped connections until Close stops it. The
+// tick is half the idle window (min 30s) so an entry is closed within ~1.5× its
+// idle TTL of going quiet. Disabled when idleTTL <= 0.
+func (p *Pool) reapLoop() {
+	if p.idleTTL <= 0 {
+		return
+	}
+	interval := p.idleTTL / 2
+	if interval < 30*time.Second {
+		interval = 30 * time.Second
+	}
+	t := time.NewTicker(interval)
+	defer t.Stop()
+	for {
+		select {
+		case <-p.stop:
+			return
+		case <-t.C:
+			p.reapScoped()
+		}
+	}
+}
+
+// reapScoped closes and drops every scoped entry idle beyond idleTTL. Shared
+// entries (bare-name keys) are never touched — they are workspace-lifetime.
+func (p *Pool) reapScoped() {
+	if p.idleTTL <= 0 {
+		return
+	}
+	cutoff := p.clock().Add(-p.idleTTL).UnixNano()
+	p.mu.Lock()
+	var stale []*poolEntry
+	for k, e := range p.entries {
+		if !strings.Contains(k, scopeSep) {
+			continue // shared slot — never reaped
+		}
+		if e.lastUsedNano.Load() < cutoff {
+			stale = append(stale, e)
+			delete(p.entries, k)
+		}
+	}
+	p.mu.Unlock()
+	// Close outside the pool lock; a slow Close must not stall other callers.
+	for _, e := range stale {
+		e.mu.Lock()
+		if e.client != nil {
+			_ = e.client.Close()
+			e.client = nil
+			e.listed = false
+		}
+		e.mu.Unlock()
+		p.log(slog.LevelInfo, "mcp pool: evicted idle scoped connection", "key", e.name)
+	}
 }

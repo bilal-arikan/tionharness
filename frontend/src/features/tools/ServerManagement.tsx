@@ -1,5 +1,12 @@
 import { useState } from 'react'
-import type { MCPServer, MCPTransport, ToolVisibility, WorkspaceTool } from '@/types'
+import type {
+  MCPServer,
+  MCPTransport,
+  MCPPoolStats,
+  ToolVisibility,
+  WorkspaceTool,
+  ImportableMCPServer,
+} from '@/types'
 import { parseArgs, serverToImportJson, toolSource, toolServer, VISIBILITY_TIERS } from './toolMeta'
 
 // ServerManagement is the MCP server list + add form, shown when no tool is
@@ -22,6 +29,12 @@ export function ServerManagement(props: {
   setUrl: (v: string) => void
   headersText: string
   setHeadersText: (v: string) => void
+  scope: 'shared' | 'scoped'
+  setScope: (v: 'shared' | 'scoped') => void
+  editingId: string | null
+  onEdit: (s: MCPServer) => void
+  onCancelEdit: () => void
+  poolStats: MCPPoolStats | null
   onAdd: () => void
   onToggle: (s: MCPServer) => void
   onTest: (s: MCPServer) => void
@@ -31,6 +44,10 @@ export function ServerManagement(props: {
   importing: boolean
   importMsg: string
   onImport: () => void
+  importable: ImportableMCPServer[]
+  addingImportable: string | null
+  onLoadImportable: () => void
+  onAddImportable: (item: ImportableMCPServer) => void
 }) {
   const {
     servers,
@@ -50,6 +67,12 @@ export function ServerManagement(props: {
     setUrl,
     headersText,
     setHeadersText,
+    scope,
+    setScope,
+    editingId,
+    onEdit,
+    onCancelEdit,
+    poolStats,
     onAdd,
     onToggle,
     onTest,
@@ -59,9 +82,19 @@ export function ServerManagement(props: {
     importing,
     importMsg,
     onImport,
+    importable,
+    addingImportable,
+    onLoadImportable,
+    onAddImportable,
   } = props
   // Per-server "Kopyalandı" feedback keyed by server id, cleared after a moment.
   const [copiedId, setCopiedId] = useState<string | null>(null)
+  // "Diğer workspace'lerden ekle" popup: opens on demand and loads the candidates.
+  const [showImportable, setShowImportable] = useState(false)
+  const openImportable = () => {
+    setShowImportable(true)
+    onLoadImportable()
+  }
   const copyServer = async (s: MCPServer) => {
     const json = serverToImportJson(s)
     try {
@@ -83,7 +116,17 @@ export function ServerManagement(props: {
   }
   return (
     <div className="mx-auto max-w-2xl">
-      <h2 className="mb-1 text-sm font-semibold">MCP Sunucuları</h2>
+      <div className="mb-1 flex items-center justify-between gap-2">
+        <h2 className="text-sm font-semibold">MCP Sunucuları</h2>
+        <button
+          data-testid="mcp-importable-open"
+          onClick={openImportable}
+          title="TionSwarm'daki diğer workspace'lerde tanımlı, buraya eklenmemiş MCP sunucularını gör ve tek tıkla ekle."
+          className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-1.5 text-xs font-medium hover:opacity-90"
+        >
+          Diğer MCP’ler
+        </button>
+      </div>
       <p className="mb-3 text-xs text-[var(--color-text-dim)]">
         Soldaki listeden bir araç seçerek detaylarını görüntüleyip aç/kapatabilirsin.
       </p>
@@ -106,6 +149,35 @@ export function ServerManagement(props: {
                   <span className="rounded bg-[var(--color-surface-2)] px-1.5 py-0.5 text-xs text-[var(--color-text-dim)]">
                     {s.transport}
                   </span>
+                  {s.scope === 'scoped' && (
+                    <span
+                      data-testid="mcp-server-scope-badge"
+                      className="rounded bg-[var(--color-accent-soft)] px-1.5 py-0.5 text-xs text-[var(--color-accent)]"
+                      title="Session bazlı: her (oturum, ajan) için ayrı canlı bağlantı; boşta kalınca otomatik kapanır."
+                    >
+                      session bazlı
+                    </span>
+                  )}
+                  {(() => {
+                    // Live-connection / reaper indicator from the pool snapshot.
+                    const st = poolStats?.servers.find((x) => x.server === s.name)
+                    if (!st || st.live === 0) return null
+                    const idleMin = poolStats ? Math.round(poolStats.idleSec / 60) : 0
+                    return (
+                      <span
+                        data-testid="mcp-server-live-badge"
+                        className="rounded bg-[var(--color-surface-2)] px-1.5 py-0.5 text-xs text-[var(--color-text-secondary)]"
+                        title={
+                          st.scoped
+                            ? `${st.live} canlı bağlantı (${st.total} slot). Boşta ${idleMin} dk sonra kapanır (reaper).`
+                            : `${st.live} canlı paylaşımlı bağlantı (workspace geneli, reaper'a tabi değil).`
+                        }
+                      >
+                        🔗 {st.live}
+                        {st.scoped ? ' oturum' : ''}
+                      </span>
+                    )
+                  })()}
                   {s.command.toLowerCase().includes('codebase-memory-mcp') && (
                     <span
                       data-testid="mcp-server-isolated-store"
@@ -143,10 +215,32 @@ export function ServerManagement(props: {
                 <button
                   data-testid="mcp-server-toggle"
                   data-server-id={s.id}
+                  role="switch"
+                  aria-checked={s.enabled}
                   onClick={() => onToggle(s)}
-                  className="rounded bg-[var(--color-surface-2)] px-2 py-1 text-xs hover:opacity-90"
+                  title={s.enabled ? 'Devre dışı bırak' : 'Etkinleştir'}
+                  className={`relative h-5 w-9 flex-shrink-0 rounded-full transition ${
+                    s.enabled ? 'bg-[var(--color-accent)]' : 'bg-[var(--color-surface-2)]'
+                  }`}
                 >
-                  {s.enabled ? 'Kapat' : 'Aç'}
+                  <span
+                    className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-all ${
+                      s.enabled ? 'left-4' : 'left-0.5'
+                    }`}
+                  />
+                </button>
+                <button
+                  data-testid="mcp-server-edit"
+                  data-server-id={s.id}
+                  onClick={() => onEdit(s)}
+                  title="Bu sunucuyu düzenle (isim, komut, URL, başlıklar, kapsam). Değişiklik sonraki turda yeniden bağlanır."
+                  className={`rounded px-2 py-1 text-xs hover:opacity-90 ${
+                    editingId === s.id
+                      ? 'bg-[var(--color-accent)] text-white'
+                      : 'bg-[var(--color-surface-2)]'
+                  }`}
+                >
+                  Düzenle
                 </button>
                 <button
                   data-testid="mcp-server-delete"
@@ -245,14 +339,45 @@ export function ServerManagement(props: {
               />
             </>
           )}
+          <label className="col-span-2 flex items-center gap-2 text-xs text-[var(--color-text-secondary)]">
+            <span className="shrink-0">Bağlantı kapsamı</span>
+            <select
+              data-testid="mcp-server-scope-select"
+              value={scope}
+              onChange={(e) => setScope(e.target.value as 'shared' | 'scoped')}
+              className="rounded bg-[var(--color-surface-2)] px-2 py-1.5 text-sm outline-none"
+            >
+              <option value="shared">Paylaşımlı (workspace geneli, varsayılan)</option>
+              <option value="scoped">Session bazlı (her oturuma ayrı, idle'da kapanır)</option>
+            </select>
+          </label>
         </div>
-        <button
-          data-testid="mcp-server-add"
-          onClick={onAdd}
-          className="mt-3 rounded-lg bg-[var(--color-accent)] px-4 py-2 text-sm font-medium text-white hover:opacity-90"
-        >
-          Ekle
-        </button>
+        {scope === 'scoped' && poolStats && (
+          <p className="mt-2 text-xs text-[var(--color-text-dim)]">
+            Session bazlı bağlantılar{' '}
+            {poolStats.idleSec > 0
+              ? `${Math.round(poolStats.idleSec / 60)} dk boşta kaldıktan sonra otomatik kapanır (reaper).`
+              : 'idle eviction kapalı (reaper devre dışı).'}
+          </p>
+        )}
+        <div className="mt-3 flex items-center gap-2">
+          <button
+            data-testid="mcp-server-add"
+            onClick={onAdd}
+            className="rounded-lg bg-[var(--color-accent)] px-4 py-2 text-sm font-medium text-white hover:opacity-90"
+          >
+            {editingId ? 'Kaydet' : 'Ekle'}
+          </button>
+          {editingId && (
+            <button
+              data-testid="mcp-server-cancel-edit"
+              onClick={onCancelEdit}
+              className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-4 py-2 text-sm font-medium hover:opacity-90"
+            >
+              Vazgeç
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Bulk import from a pasted mcpServers JSON document. */}
@@ -284,6 +409,85 @@ export function ServerManagement(props: {
           {importMsg && <span className="break-words text-xs text-[var(--color-text-dim)]">{importMsg}</span>}
         </div>
       </div>
+
+      {/* Popup: MCP servers from OTHER workspaces, one-click add into this one. */}
+      {showImportable && (
+        <div
+          data-testid="mcp-importable-overlay"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          onClick={() => setShowImportable(false)}
+        >
+          <div
+            className="flex max-h-[80vh] w-full max-w-lg flex-col rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-[var(--color-border)] px-4 py-3">
+              <div>
+                <h3 className="text-sm font-semibold">Diğer workspace’lerdeki MCP’ler</h3>
+                <p className="text-xs text-[var(--color-text-dim)]">
+                  Bu workspace’e eklenmemiş sunucular. Tek tıkla kopyala.
+                </p>
+              </div>
+              <button
+                data-testid="mcp-importable-close"
+                onClick={() => setShowImportable(false)}
+                className="rounded p-1 text-lg leading-none text-[var(--color-text-dim)] hover:opacity-80"
+                aria-label="Kapat"
+              >
+                ×
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-3">
+              {importable.length === 0 ? (
+                <p className="py-6 text-center text-sm text-[var(--color-text-dim)]">
+                  Eklenebilecek başka MCP sunucusu yok.
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {importable.map((item) => (
+                    <div
+                      key={`${item.workspaceId}:${item.server.id}`}
+                      data-testid="mcp-importable-item"
+                      className="flex items-center justify-between gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] p-3"
+                    >
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="truncate font-medium">{item.server.name}</span>
+                          <span className="rounded bg-[var(--color-surface)] px-1.5 py-0.5 text-xs text-[var(--color-text-dim)]">
+                            {item.server.transport}
+                          </span>
+                          <span className="rounded bg-[var(--color-surface)] px-1.5 py-0.5 text-xs text-[var(--color-text-dim)]">
+                            {item.workspaceName}
+                          </span>
+                        </div>
+                        {item.server.description && (
+                          <div className="mt-0.5 truncate text-xs text-[var(--color-text-dim)]">
+                            {item.server.description}
+                          </div>
+                        )}
+                        <div className="truncate text-xs text-[var(--color-text-dim)]">
+                          {item.server.transport === 'stdio'
+                            ? `${item.server.command} ${parseArgs(item.server.args).join(' ')}`.trim()
+                            : item.server.url}
+                        </div>
+                      </div>
+                      <button
+                        data-testid="mcp-importable-add"
+                        data-server-id={item.server.id}
+                        onClick={() => onAddImportable(item)}
+                        disabled={addingImportable === item.server.id}
+                        className="flex-shrink-0 rounded-lg bg-[var(--color-accent)] px-3 py-1.5 text-xs font-medium text-white hover:opacity-90 disabled:opacity-50"
+                      >
+                        {addingImportable === item.server.id ? 'Ekleniyor…' : 'Ekle'}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -1,0 +1,63 @@
+package agent
+
+import (
+	"context"
+	"sync"
+	"time"
+)
+
+// activityTouchKey keys the idle-watchdog reset func on a turn context.
+type activityTouchKey struct{}
+
+// WithActivityTouch attaches an idle-watchdog reset func to ctx. The step emitter
+// (SessionStepEmitter) calls it on every step so live activity keeps the turn
+// alive; nil-safe consumers ignore it when absent.
+func WithActivityTouch(ctx context.Context, touch func()) context.Context {
+	if touch == nil {
+		return ctx
+	}
+	return context.WithValue(ctx, activityTouchKey{}, touch)
+}
+
+// activityTouchFrom returns the installed idle-watchdog reset func (nil if none).
+func activityTouchFrom(ctx context.Context) func() {
+	fn, _ := ctx.Value(activityTouchKey{}).(func())
+	return fn
+}
+
+// withActivityTimeout bounds a background turn by BOTH an absolute wall-clock
+// ceiling (hard) AND an inactivity window (idle): the returned ctx is cancelled
+// when either the hard deadline passes OR no touch() arrives within idle. The
+// touch func is installed on the ctx (WithActivityTouch) so the step emitter can
+// reset the idle timer on every step — a long-but-productive turn (streaming tool
+// calls) runs up to hard, while a truly hung turn is reclaimed after idle.
+//
+// idle <= 0 disables the inactivity window (hard ceiling only). The returned stop
+// MUST be called (defer it) to release both timers and the context.
+func withActivityTimeout(parent context.Context, hard, idle time.Duration) (context.Context, func()) {
+	ctx, cancel := context.WithCancel(parent)
+	hardTimer := time.AfterFunc(hard, cancel)
+
+	if idle <= 0 {
+		return ctx, func() { hardTimer.Stop(); cancel() }
+	}
+
+	idleTimer := time.AfterFunc(idle, cancel)
+	var mu sync.Mutex
+	// Reset the idle timer on every step. Reset is an O(1) reschedule and steps
+	// arrive at most a few hundred/sec, so the churn is negligible; the mutex just
+	// serialises concurrent touches. Once idle has already fired (cancel ran, ctx
+	// permanently Done), a late Reset only schedules a harmless no-op cancel that
+	// stop() later cleans up — it never un-cancels a finished turn.
+	touch := func() {
+		mu.Lock()
+		idleTimer.Reset(idle)
+		mu.Unlock()
+	}
+	ctx = WithActivityTouch(ctx, touch)
+	return ctx, func() {
+		hardTimer.Stop()
+		idleTimer.Stop()
+		cancel()
+	}
+}

@@ -82,6 +82,68 @@ func EnsureWorkspaceClaudeHome(wsRoot string) {
 	// healed too — the effortLevel guard matters for all CLI turns, including the
 	// non-MCP path that gets no per-turn --settings file.
 	ensureClaudeHomeEffortLevel(home)
+	// Same "heal on every open" reasoning for the login credential: a home seeded
+	// from an unauthenticated global home (blank-token .credentials.json) would
+	// otherwise pop a login prompt on the first CLI turn.
+	ensureClaudeHomeCredential(home)
+}
+
+// oauthCredential is the token-bearing part of the on-disk .credentials.json Claude
+// Code reads/writes (<home>/.credentials.json → {"claudeAiOauth": {...}}). Only the
+// two token fields matter for the usability check below.
+type oauthCredential struct {
+	ClaudeAiOauth struct {
+		AccessToken  string `json:"accessToken"`
+		RefreshToken string `json:"refreshToken"`
+	} `json:"claudeAiOauth"`
+}
+
+// credentialUsable reports whether the .credentials.json at path carries a token the
+// CLI can actually use — a non-empty access OR refresh token (the CLI self-refreshes
+// from the refresh token, so a live access token is not required). A missing, empty,
+// or blank-token file is NOT usable: seeding it into a workspace yields an interactive
+// login prompt on the first CLI turn. This is exactly the empty-scaffold shape
+// (accessToken:"", refreshToken:"", expiresAt:0) that made fresh workspaces prompt.
+func credentialUsable(path string) bool {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return false
+	}
+	var c oauthCredential
+	if json.Unmarshal(b, &c) != nil {
+		return false
+	}
+	return c.ClaudeAiOauth.AccessToken != "" || c.ClaudeAiOauth.RefreshToken != ""
+}
+
+// ensureClaudeHomeCredential makes sure a workspace claude-home starts logged in. If
+// the home's own .credentials.json already carries a token it is left untouched — a
+// per-workspace login stays in control and is never clobbered. Otherwise it copies the
+// first USABLE credential from, in order: the TionSwarm global home
+// (~/.tionswarm/claude-home), then the user's real ~/.claude. Falling back to ~/.claude
+// matches the keyless claude-cli design (it runs against the user's local login) and
+// self-heals the case where the global home was never authenticated.
+//
+// Best-effort: if no usable source exists, the home is left as-is and the user logs in
+// once via the in-app popup (which writes this workspace's home directly).
+func ensureClaudeHomeCredential(home string) {
+	dst := filepath.Join(home, ".credentials.json")
+	if credentialUsable(dst) {
+		return
+	}
+	var candidates []string
+	if g := globalClaudeHomeDir(); g != "" && g != home {
+		candidates = append(candidates, filepath.Join(g, ".credentials.json"))
+	}
+	if uh, err := os.UserHomeDir(); err == nil && uh != "" {
+		candidates = append(candidates, filepath.Join(uh, ".claude", ".credentials.json"))
+	}
+	for _, src := range candidates {
+		if credentialUsable(src) {
+			_ = copyFile(src, dst, 0o600)
+			return
+		}
+	}
 }
 
 // ensureClaudeHomeEffortLevel makes sure a workspace claude-home's settings.json

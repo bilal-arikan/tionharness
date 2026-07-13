@@ -170,6 +170,7 @@ export function SettingsPanel({ onError, onSaved, commands = [], cat: catProp, o
       claudeSysPromptFile: draft.claudeSysPromptFile,
       delegationMaxDepth: draft.delegationMaxDepth, delegationMaxCalls: draft.delegationMaxCalls,
       spawnMaxConcurrent: draft.spawnMaxConcurrent, spawnMaxPerTurn: draft.spawnMaxPerTurn, spawnTimeoutMin: draft.spawnTimeoutMin,
+      spawnIdleTimeoutMin: draft.spawnIdleTimeoutMin,
       scheduleTimeoutMin: draft.scheduleTimeoutMin,
       shellDefaultTimeoutSec: draft.shellDefaultTimeoutSec, shellMaxTimeoutSec: draft.shellMaxTimeoutSec, maxToolOutputKB: draft.maxToolOutputKB,
       coordinatorMaxWorkers: draft.coordinatorMaxWorkers, coordinatorMaxTurns: draft.coordinatorMaxTurns,

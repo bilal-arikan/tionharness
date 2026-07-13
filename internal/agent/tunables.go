@@ -27,6 +27,14 @@ const (
 // (SpawnTimeoutMinutes) via applySettings; 0 selects this default.
 const DefaultSpawnTimeoutMinutes = 20
 
+// DefaultSpawnIdleTimeoutMinutes bounds INACTIVITY inside a background spawn/worker
+// work turn: the idle watchdog cancels a turn that emits no step (tool/thinking/
+// token) for this long, so a truly hung turn is reclaimed fast while a long-but-
+// productive one (heavy exploration streaming tool calls) runs on up to the hard
+// SpawnTimeout ceiling. Settings-driven (SpawnIdleTimeoutMin) via applySettings;
+// 0 selects this default.
+const DefaultSpawnIdleTimeoutMinutes = 5
+
 // DefaultScheduleTimeoutMinutes bounds a single scheduled fire (task run or prompt
 // delivery / wake). Sized for current-generation models: one request can run many
 // minutes and a multi-iteration tool loop longer still. Runaway protection comes
@@ -61,6 +69,7 @@ type Tunables struct {
 	spawnMaxConcurrent int // 0 → DefaultSpawnMaxConcurrent
 	spawnMaxPerTurn    int // 0 → DefaultSpawnMaxPerTurn
 	spawnTimeoutMin    int // 0 → DefaultSpawnTimeoutMinutes (spawn work-turn deadline, in minutes)
+	spawnIdleTimeoutMin int // 0 → DefaultSpawnIdleTimeoutMinutes (spawn/worker inactivity watchdog, in minutes)
 	schedTimeoutMin    int // 0 → DefaultScheduleTimeoutMinutes (scheduled-fire deadline, in minutes)
 	coordMaxWorkers    int // 0 → DefaultCoordinatorMaxWorkers
 	coordMaxTurns      int // 0 → DefaultCoordinatorMaxTurns
@@ -420,6 +429,27 @@ func (t *Tunables) SpawnTimeout() time.Duration {
 	m := t.spawnTimeoutMin
 	if m <= 0 {
 		m = DefaultSpawnTimeoutMinutes
+	}
+	return time.Duration(m) * time.Minute
+}
+
+// SetSpawnIdleTimeoutMinutes sets the inactivity window (in minutes) after which
+// the idle watchdog cancels a background spawn/worker turn that has emitted no
+// step. 0 selects the built-in default.
+func (t *Tunables) SetSpawnIdleTimeoutMinutes(minutes int) {
+	t.mu.Lock()
+	t.spawnIdleTimeoutMin = minutes
+	t.mu.Unlock()
+}
+
+// SpawnIdleTimeout returns the spawn/worker inactivity window as a duration
+// (default when unset).
+func (t *Tunables) SpawnIdleTimeout() time.Duration {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	m := t.spawnIdleTimeoutMin
+	if m <= 0 {
+		m = DefaultSpawnIdleTimeoutMinutes
 	}
 	return time.Duration(m) * time.Minute
 }

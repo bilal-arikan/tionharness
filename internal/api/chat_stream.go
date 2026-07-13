@@ -583,8 +583,11 @@ func (s *Server) runChatTurn(clientGone context.Context, wsp *workspace.Workspac
 					s.logger.Error("persist interrupted turn failed", "session", session.ID, "error", aerr)
 				} else {
 					payload["replyMessage"] = msg
-					// Keep any files written before the stop as artifacts.
-					s.captureFileArtifacts(persistCtx, database, session.ID, agentRow.ID, trace)
+					// Keep any files written before the stop as artifacts (workspace
+					// opt-in; off = only deliberate create_artifact calls register).
+					if wsp.Settings().AutoCaptureArtifacts {
+						s.captureFileArtifacts(persistCtx, database, session.ID, agentRow.ID, trace)
+					}
 					// Push the interrupted/stopped reply onto the hub so other windows
 					// render the preserved partial instead of a dangling live bubble.
 					s.publishHub(session.ID, sessionhub.KindReply, msg, false)
@@ -629,8 +632,11 @@ func (s *Server) runChatTurn(clientGone context.Context, wsp *workspace.Workspac
 			// Reply is durable now; drop this agent's sidecar before the next agent
 			// (the top-level defer is the catch-all for early-return paths).
 			_ = database.ClearInflight(session.ID)
-			// Auto-capture any files the agent wrote this turn as artifacts.
-			s.captureFileArtifacts(ctx, database, session.ID, agentRow.ID, steps)
+			// Auto-capture any files the agent wrote this turn as artifacts (workspace
+			// opt-in; off = only deliberate create_artifact calls register artifacts).
+			if wsp.Settings().AutoCaptureArtifacts {
+				s.captureFileArtifacts(ctx, database, session.ID, agentRow.ID, steps)
+			}
 			sse("reply", map[string]any{"replyMessage": replyMsg})
 			// Canonical reply onto the hub: every window replaces its live-accumulated
 			// bubble with this persisted, authoritative message (steps + usage + model).

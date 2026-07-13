@@ -1,5 +1,19 @@
 # 52 — Go-Native MCP Gateway Entegrasyonu (Planlama)
 
+> **UYGULANDI (2026-07-13) — Hibrit MCP kapsamı.** Havuz artık per-sunucu `scope`
+> alanını gerçekten kullanıyor: `scope="shared"` (varsayılan) eski davranış — workspace
+> geneli tek paylaşımlı bağlantı; `scope="scoped"` her `(session,agent)` için ayrı canlı
+> bağlantı (havuz anahtarı `ServerConfig.ScopeKey`, `toolsetup.go` `SessionIDFrom(ctx)+"|"+agent.ID`
+> ile damgalar; session yoksa shared'e düşer). Boşta kalan scoped bağlantılar `pool.go`
+> reaper'ıyla kapatılır (`TIONSWARM_MCP_SCOPED_IDLE_SEC`, vars. 300s; 0=kapalı); shared
+> bağlantılar hiç reap edilmez. `ScopeKey` dial-fingerprint'ten hariç. Create API + Araçlar
+> formunda "Bağlantı kapsamı" seçici. Ayrıca sunucu **düzenleme** (`PATCH /api/mcp-servers/{id}`,
+> `DB.UpdateMCPServer` — kimlik/enabled korunur, spec değişince re-dial) ve canlı havuz
+> gözlemi (`GET /api/mcp-servers/pool` → `Pool.Stats()`; UI'da per-sunucu 🔗 live/reaper
+> rozeti, 5sn poll). Testler: `pool_scoped_test.go`. **Bu, aşağıdaki
+> §11-A "token'ı per-(session,agent) yap" fikrinin transport-seviyesi karşılığıdır**;
+> kimlik/token seviyesi hâlâ ayrı bir iş.
+>
 > **Durum: TASLAK / PLANLAMA.** Bu doküman kod değişikliği içermez. Önceki oturumun
 > `gateway-integration-brief.md`'i + bu oturumda `codebase-memory-mcp` ile TionSwarm
 > kaynak doğrulaması + `mcp-server` (TS `gateway-manager v3`) incelemesine dayanır.

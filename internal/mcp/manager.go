@@ -24,6 +24,19 @@ type ServerConfig struct {
 	URL       string
 	Env       map[string]string // extra environment variables (stdio)
 	Headers   map[string]string // extra request headers (http, e.g. Authorization)
+	// Description is a short, curated one-liner about what this server is for.
+	// It rides the per-server line of the load-on-demand catalog so the model
+	// keeps a semantic hint (e.g. "use for code search") even when the workspace
+	// has too many MCP tools to enumerate individually. Optional.
+	Description string
+	// ScopeKey isolates the pooled connection to a caller identity (e.g.
+	// "<sessionID>|<agentID>") instead of sharing one workspace-wide connection.
+	// Empty (the default) keeps the shared, workspace-lifetime connection — the
+	// original behaviour. Non-empty makes the pool key a distinct live connection
+	// per scope, subject to idle eviction, for servers marked scope="scoped".
+	// It is caller identity, not a dial parameter, so it is excluded from the
+	// connection fingerprint (see configFingerprint).
+	ScopeKey string
 }
 
 // envSlice renders Env as KEY=VALUE entries for exec.

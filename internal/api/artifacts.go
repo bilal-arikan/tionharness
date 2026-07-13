@@ -26,6 +26,25 @@ const artifactDeliverableGuidance = "# Deliverables → Artifacts\n" +
 	"Content meant to be SEEN (a diagram, an image/video, a gallery) goes INLINE in your reply (markdown ![alt](path), a ```mermaid block) — not hidden in a separate Artifacts tab. " +
 	"For the full rules (binary files via sourcePath, inline media, galleries, updating by id), load the `tionswarm-deliverables` skill before producing the deliverable."
 
+// artifactDeliverableGuidanceManual is the variant used when a workspace has
+// AutoCaptureArtifacts turned OFF: plain file writes are NOT captured, so the
+// agent must register a deliverable DELIBERATELY with create_artifact. Editing
+// project source files therefore no longer pollutes the Artifacts screen.
+const artifactDeliverableGuidanceManual = "# Deliverables → Artifacts\n" +
+	"Writing a file does NOT create an artifact in this workspace. When you produce a deliverable the user should keep (a document/dataset/report/standalone code file), register it DELIBERATELY by calling create_artifact — do not assume a plain file write will surface it. Ordinary edits to project source files stay out of the Artifacts screen. " +
+	"Content meant to be SEEN (a diagram, an image/video, a gallery) goes INLINE in your reply (markdown ![alt](path), a ```mermaid block). " +
+	"For the full rules (binary files via sourcePath, inline media, galleries, updating by id), load the `tionswarm-deliverables` skill before producing the deliverable."
+
+// artifactGuidanceFor picks the deliverable guidance matching the workspace's
+// auto-capture setting so the prompt never tells the agent to rely on a capture
+// path that is switched off.
+func artifactGuidanceFor(autoCapture bool) string {
+	if autoCapture {
+		return artifactDeliverableGuidance
+	}
+	return artifactDeliverableGuidanceManual
+}
+
 // artifactsContextBlock builds a system-prompt section listing the artifacts a
 // session already has, so the agent can revise them with update_artifact (by id)
 // instead of creating duplicates. Returns "" when the session has none. Kept in

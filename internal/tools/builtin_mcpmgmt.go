@@ -49,6 +49,7 @@ func (t ListMCPServersTool) Call(ctx context.Context, _ json.RawMessage) (string
 	type row struct {
 		ID             string `json:"id"`
 		Name           string `json:"name"`
+		Description    string `json:"description,omitempty"`
 		Transport      string `json:"transport"`
 		Command        string `json:"command,omitempty"`
 		URL            string `json:"url,omitempty"`
@@ -58,7 +59,7 @@ func (t ListMCPServersTool) Call(ctx context.Context, _ json.RawMessage) (string
 	out := make([]row, 0, len(servers))
 	for _, m := range servers {
 		out = append(out, row{
-			ID: m.ID, Name: m.Name, Transport: m.Transport,
+			ID: m.ID, Name: m.Name, Description: m.Description, Transport: m.Transport,
 			Command: m.Command, URL: m.URL, Enabled: m.Enabled,
 			CreatedByAgent: m.CreatedBy != "",
 		})
@@ -85,6 +86,7 @@ func (CreateMCPServerTool) Def() providers.ToolDef {
 			"type":"object",
 			"properties":{
 				"name":{"type":"string","description":"Display name"},
+				"description":{"type":"string","description":"Short one-liner about what this server is for and when to use it (rides the load-on-demand catalog's per-server summary, e.g. 'code knowledge graph; prefer over grep for code search')"},
 				"transport":{"type":"string","enum":["stdio","sse","http"]},
 				"command":{"type":"string","description":"Executable for transport=stdio"},
 				"args":{"type":"string","description":"JSON array of arguments, e.g. [\"-y\",\"@scope/pkg\"]"},
@@ -107,12 +109,13 @@ func (CreateMCPServerTool) Def() providers.ToolDef {
 
 func (t CreateMCPServerTool) Call(ctx context.Context, input json.RawMessage) (string, error) {
 	var in struct {
-		Name      string `json:"name"`
-		Transport string `json:"transport"`
-		Command   string `json:"command"`
-		Args      string `json:"args"`
-		URL       string `json:"url"`
-		Env       string `json:"env"`
+		Name        string `json:"name"`
+		Description string `json:"description"`
+		Transport   string `json:"transport"`
+		Command     string `json:"command"`
+		Args        string `json:"args"`
+		URL         string `json:"url"`
+		Env         string `json:"env"`
 	}
 	if err := json.Unmarshal(input, &in); err != nil {
 		return "", argErr(err)
@@ -141,15 +144,16 @@ func (t CreateMCPServerTool) Call(ctx context.Context, input json.RawMessage) (s
 		return "", fmt.Errorf("env must be a JSON object string")
 	}
 	created, err := t.d.db.CreateMCPServer(ctx, db.MCPServer{
-		Name:      in.Name,
-		Transport: in.Transport,
-		Command:   in.Command,
-		Args:      in.Args,
-		URL:       in.URL,
-		EnvConfig: in.Env,
-		Enabled:   true,
-		Scope:     "shared",
-		CreatedBy: t.d.actorID,
+		Name:        in.Name,
+		Description: strings.TrimSpace(in.Description),
+		Transport:   in.Transport,
+		Command:     in.Command,
+		Args:        in.Args,
+		URL:         in.URL,
+		EnvConfig:   in.Env,
+		Enabled:     true,
+		Scope:       "shared",
+		CreatedBy:   t.d.actorID,
 	})
 	if err != nil {
 		return "", fmt.Errorf("create mcp server: %w", err)

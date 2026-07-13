@@ -268,8 +268,12 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 		}); aerr != nil {
 			s.logger.Error("persist interrupted turn failed", "session", session.ID, "error", aerr)
 		} else {
-			// Keep any files written before the failure as artifacts.
-			s.captureFileArtifacts(persistCtx, database, session.ID, agent.ID, trace)
+			// Keep any files written before the failure as artifacts (when the
+			// workspace opts into auto-capture; otherwise only deliberate
+			// create_artifact calls produce artifacts).
+			if ws(r).Settings().AutoCaptureArtifacts {
+				s.captureFileArtifacts(persistCtx, database, session.ID, agent.ID, trace)
+			}
 		}
 		_ = database.ClearInflight(session.ID)
 		// Self-healing parity: a failed turn must still auto-tag — error/stuck
@@ -304,8 +308,11 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 	// Reply is durable — drop the crash sidecar.
 	_ = database.ClearInflight(session.ID)
 
-	// Auto-capture any files the agent wrote this turn as artifacts.
-	s.captureFileArtifacts(ctx, database, session.ID, agent.ID, steps)
+	// Auto-capture any files the agent wrote this turn as artifacts (workspace
+	// opt-in; off = only deliberate create_artifact calls register artifacts).
+	if ws(r).Settings().AutoCaptureArtifacts {
+		s.captureFileArtifacts(ctx, database, session.ID, agent.ID, steps)
+	}
 
 	// Streaming-path parity: auto-tag the finished turn (tool-error tags, stuck
 	// counter reset, lesson reflection) and signal tag automations — previously

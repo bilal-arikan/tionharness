@@ -10,8 +10,8 @@ import (
 	"github.com/bilal-arikan/tionswarm/internal/db"
 )
 
-// TestListSessionsTool checks the pull tool: active-only by default, all when
-// asked, chat-only filter, and the limit cap.
+// TestListSessionsTool checks the pull tool: active-only by default across ALL
+// kinds, all states when asked, the per-kind filter, and the kind·state prefix.
 func TestListSessionsTool(t *testing.T) {
 	database, err := db.Open(filepath.Join(t.TempDir(), "store"))
 	if err != nil {
@@ -23,28 +23,43 @@ func TestListSessionsTool(t *testing.T) {
 	database.CreateSession(ctx, db.Session{Kind: "chat", Title: "Alpha", State: "active"})
 	database.CreateSession(ctx, db.Session{Kind: "chat", Title: "Beta", State: "archived"})
 	database.CreateSession(ctx, db.Session{Kind: "schedule", Title: "Pulse", State: "active"})
+	database.CreateSession(ctx, db.Session{Kind: "spawned", Title: "Gamma", State: "active"})
 
 	tool := NewListSessionsTool(database)
 
-	// Default (active only): Alpha yes, Beta no, Pulse (schedule) no.
+	// Default (active, all kinds): Alpha (chat), Pulse (schedule) and Gamma
+	// (spawned) show; Beta is archived so it's hidden.
 	out, err := tool.Call(ctx, json.RawMessage(`{}`))
 	if err != nil {
 		t.Fatalf("call: %v", err)
 	}
-	if !strings.Contains(out, "Alpha") || strings.Contains(out, "Beta") || strings.Contains(out, "Pulse") {
-		t.Fatalf("active-only listing wrong:\n%s", out)
+	if !strings.Contains(out, "Alpha") || !strings.Contains(out, "Pulse") || !strings.Contains(out, "Gamma") {
+		t.Fatalf("default listing should include every active kind:\n%s", out)
+	}
+	if strings.Contains(out, "Beta") {
+		t.Fatalf("archived session must be hidden by default:\n%s", out)
+	}
+	// The prefix carries the kind so kinds are distinguishable.
+	if !strings.Contains(out, "[spawned·active]") || !strings.Contains(out, "[schedule·active]") {
+		t.Fatalf("kind·state prefix missing:\n%s", out)
 	}
 
-	// state=all surfaces the archived chat session too (still not the schedule one).
+	// state=all surfaces the archived chat session too.
 	out, err = tool.Call(ctx, json.RawMessage(`{"state":"all"}`))
 	if err != nil {
 		t.Fatalf("call all: %v", err)
 	}
 	if !strings.Contains(out, "Alpha") || !strings.Contains(out, "Beta") {
-		t.Fatalf("state=all should list both chat sessions:\n%s", out)
+		t.Fatalf("state=all should list active and archived:\n%s", out)
 	}
-	if strings.Contains(out, "Pulse") {
-		t.Fatalf("non-chat sessions must never be listed:\n%s", out)
+
+	// kind=chat narrows to chat only (Pulse/Gamma excluded).
+	out, err = tool.Call(ctx, json.RawMessage(`{"kind":"chat"}`))
+	if err != nil {
+		t.Fatalf("call kind=chat: %v", err)
+	}
+	if !strings.Contains(out, "Alpha") || strings.Contains(out, "Pulse") || strings.Contains(out, "Gamma") {
+		t.Fatalf("kind=chat filter wrong:\n%s", out)
 	}
 }
 

@@ -49,6 +49,13 @@ ile tutarlı):
   `~/.tionswarm/claude-home` (global) içeriğini per-workspace eve **tohumlar**
   (login dahil; `projects/`, `sessions/`, `cache/` gibi çalışma-anı/büyük dizinler
   atlanır). Idempotent. **Skill taşımaz** — claude-home yalnız login/settings tutar.
+- **Credential self-heal (`ensureClaudeHomeCredential`):** her açılışta çalışır. Global
+  tohum home'un `.credentials.json`'ı **boş/token'sız** olabilir (accessToken="",
+  refreshToken="", expiresAt=0 scaffold) — bu durumda tohumlanan her yeni workspace CLI
+  login popup'ı verirdi. Guard: workspace home'un kendi credential'ı token taşımıyorsa
+  sırayla **global → gerçek `~/.claude`** ilk kullanılabilir credential'ı kopyalar
+  (keyless CLI = kullanıcının yerel login'i). Zaten token taşıyan per-workspace login
+  asla ezilmez.
 
 ### Faz 2 — Skill tier'ı = `<claude-home>/skills` ⟲ (GERİ ALINDI 2026-07-05)
 Kısa süre denendi, sonra geri alındı. **Karar:** skill'ler eski yerinde kalsın

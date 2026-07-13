@@ -2,6 +2,55 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-07-13**
 
+## Yeni default skill `tionswarm-terse` (caveman-esinli terse mod) ✅ (2026-07-13)
+
+- **Ne:** Gömülü skill `internal/skills/defaults/tionswarm-terse/SKILL.md` (`🪨 TionSwarm
+  Terse Mode`, `access: shared`). Caveman skill'inin (github.com/JuliusBrussee/caveman)
+  özünü TionSwarm'a uyarlar: dolgu/nezaket/hedge at, teknik özü koru; **kod/komut/yol/
+  hata string'leri byte-for-byte aynen**. 3 seviye (`lite`/`full`/`ultra`), dil-koruyan
+  (çeviri yok), oturum-sürekli, "normal mode" ile kapanır.
+- **Neden:** Yalnız **output token** kısar (caveman ölçümü ort. %65). Prompt-seviyesi,
+  opt-in, cache-dostu — TionSwarm'ın güvenlik/izin/araç davranışını değiştirmez.
+- **Nasıl:** `//go:embed defaults` yeni klasörü otomatik seed eder (kod değişikliği yok).
+  Caveman'in destructive/security kalıplarında caveman'i kapatan **auto-clarity** kuralı
+  TionSwarm izin-gate'leriyle hizalı biçimde korundu. `go build/test ./internal/skills/`
+  yeşil (37 test). **Not:** çalışan binary için yeniden derleme + restart gerekir.
+
+## `list_sessions` artık tüm kind'leri listeler + `kind` filtresi ✅ (2026-07-13)
+
+- **Ne:** `list_sessions` aracı varsayılan olarak **her kind'i** döndürüyor (chat +
+  spawn/worker/flow/task/schedule). Eski sabit `Kind=="chat"` eleme kaldırıldı;
+  opsiyonel `kind` argümanı tek kind'e daraltır. Her satır artık `[kind·state]`
+  ön ekiyle başlar (ör. `[spawned·active]`).
+- **Neden:** Otonom koşular (board otomasyon spawn'ları vb.) UI'nın sidebar +
+  SessionsOverview'ında görünürken ajanın `list_sessions`'ında **hiç** görünmüyordu
+  → ajan "session listesi eksik geliyor" durumu yaşıyordu (WS5/SES158 teşhisi).
+- **Nasıl:** `internal/tools/builtin_sessions.go` — filtre `kindFilter != "" &&
+  !sessKindMatches(...)` oldu; `sessKindMatches` (legacy `""`→chat) + `sessKindLabel`
+  yardımcıları eklendi; şema/açıklama güncellendi. Test `builtin_sessions_test.go`
+  yeni davranışa göre yazıldı; self-management SKILL.md + `27-CROSS-SESSION-SEARCH.md`
+  senkron. `go build ./...` + `go test ./internal/tools/` yeşil. **Not:** çalışan
+  binary'nin görmesi için yeniden derleme + restart gerekir.
+
+## Otomatik artifact yakalama toggle'ı (`AutoCaptureArtifacts`) ✅ (2026-07-13)
+
+- **Ne:** Yazılan dosyaların tur sonunda otomatik artifact yapılması artık **workspace
+  ayarı** ile açılıp kapanabiliyor ve **varsayılan KAPALI**. Kapalıyken yalnız ajanın
+  **bilerek** `create_artifact` çağırdığı içerikler artifact olur — proje kaynak
+  dosyalarını düzenlemek Artifacts'ı kirletmez. Açıldığında eski davranış: ajanın
+  `Write`/`create_file` ile yazdığı her dosya `captureFileArtifacts` ile Artifacts
+  ekranına düşer.
+- **Neden:** Kaynak-kodu düzenleyen ajan turları (ör. `ART30.cs`) istenmeden artifact
+  üretiyordu. Varsayılan bilerek-artifact'a çekildi; isteyen workspace toggle'ı açar.
+- **Nasıl:** `WSSettings.AutoCaptureArtifacts` (varsayılan `false`) + patch/DTO. `chat.go`
+  ve `chat_stream.go`'daki 4 `captureFileArtifacts` çağrısı bu ayara koşullandı. Prompt
+  yönlendirmesi de takip ediyor: `artifactGuidanceFor(auto)` — kapalıyken ajana "dosya
+  yazımı artifact üretmez, deliverable'ı `create_artifact` ile kaydet" der
+  (`artifactDeliverableGuidanceManual`). Frontend WorkspacePanel'de "Artifact yakalama"
+  toggle'ı.
+- **Doğrulama:** `go build`/`go test ./internal/api ./internal/workspace` temiz (default
+  testi genişletildi); frontend `tsc --noEmit` temiz. WS10 için ayar `false`'a alındı.
+
 ## Shell adımında program ikonunun yanına program adı ✅ (2026-07-13)
 
 - **Ne:** Sohbetteki Bash/PowerShell (ve `transform_data`/`run_code`) araç adımında,
@@ -100,6 +149,54 @@
   kapatıyordu → düz metne çevrildi. Test: `builtin_sessionarchive_test.go` →
   `TestArchiveSessionsIncludeCurrent`.
 - Doğrulama: `go build ./...` + `go test ./internal/tools -run TestArchiveSessions` yeşil.
+
+## Otonom-tur boot kurtarması + SpawnIdle Settings UI ✅ (2026-07-13)
+
+- **Sorun:** Worker/spawn/koordinatör turları fire-and-forget goroutine; crash/restart
+  onları sessizce öldürüyor → session yanıtsız `state=active` kalıyor VE worker'ın
+  koordinatörü hiç bildirim almadığı için sonsuza dek bekliyor (SES28 donması). Inbox
+  turları kurtarılıyordu ama otonom turlar için kurtarma YOKtu.
+- **Çözüm — boot kurtarması** (`Runtime.RecoverOrphanedTurns`, `coordination.go`;
+  boot'ta `server.go` → `recoverAutonomousTurns` her workspace runtime için çağırır):
+  son mesajı **user** olan (yani yarıda kalmış) otonom session'lar için:
+  - **worker** → interrupted assistant reply yaz + koordinatöre sentetik
+    `<task-notification status="killed">` enjekte et → koordinatör beklemeyi bırakır,
+    yeniden görevlendirebilir/sonuçlandırabilir;
+  - **koordinatör** (yarıda ölmüş) → bir koordinatör turu re-enqueue → geçmişten devam;
+  - **düz spawn** → interrupted reply (donuk görünmesin).
+  Idempotent (reply eklenince son mesaj assistant olur, ikinci boot atlar), archived
+  session'lara dokunmaz.
+- **Testler:** `internal/agent/recover_orphan_test.go` (worker kurtarma + koordinatör
+  bildirimi + idempotent + tamamlanmış worker'a dokunmama).
+- **SpawnIdleTimeoutMin Settings UI:** AppToolsPanel'e "Spawn boşta süresi (dk)" alanı
+  eklendi (spawn üst-sınır alanının yanına); tip + save payload + backend round-trip
+  `spawnTimeoutMin` ile birebir. "Spawn süresi" etiketi "üst sınır" olarak netleştirildi.
+- **Doğrulama:** full suite **847 test** yeşil, vet temiz, frontend tsc temiz.
+- **Kalan:** durable spawn KUYRUĞU (N-bounded, "limit reached" yerine sıraya al) —
+  kullanıcı isteğiyle şimdilik ertelendi.
+
+## Otonom tur timeout'u: hard-cap tunable + idle watchdog ✅ (2026-07-13)
+
+- **Sorun:** Worker + koordinatör turları **hardcoded 10 dk `spawnTimeout` const**'una
+  takılıydı (sıradan spawn zaten 20 dk tunable `r.tun.SpawnTimeout()` kullanıyordu) →
+  ağır keşif worker'ları (72-101 tool çağrısı) tam 600sn'de tur ortasında kesiliyordu
+  (SES33). Ayrıca mutlak duvar-saati "asılı" ile "uzun ama üretken"i ayırmıyordu.
+- **Çözüm — iki katmanlı süre sınırı** (`internal/agent/activity_timeout.go`
+  `withActivityTimeout`): (1) **hard-cap** = `r.tun.SpawnTimeout()` (default 20 dk),
+  (2) **idle watchdog** = yeni tunable `r.tun.SpawnIdleTimeout()` (default **5 dk**).
+  Tur her adım yaydığında (`SessionStepEmitter` → `activityTouchFrom` → touch) idle
+  timer resetlenir; adım akmayan (gerçekten asılı) tur idle penceresinde iptal edilir,
+  üretken uzun tur hard-cap'e kadar koşar. Hangisi önce dolarsa ctx iptal.
+- **Kapsam:** worker, koordinatör, spawn ve inbox-delivery **iş turları** artık
+  hard-cap + idle kullanıyor (10 dk const yalnız turn-finished/failed **hook**
+  dispatch'inde kaldı — iş turu değil).
+- **Ayarlanabilir:** `SpawnIdleTimeoutMin` settings alanı (default 5) — `SpawnTimeoutMin`
+  ile birebir aynı plumbing (settings.go + defaults + server.go applySettings).
+- **Testler:** `internal/agent/activity_timeout_test.go` (idle iptal, touch canlı
+  tutar, hard-cap, tunable). Full suite **844 test** yeşil, vet temiz.
+- **Not:** Bu, süreç **restart**'ında öksüz kalan turları çözmez (o hâlâ ayrı bir iş:
+  otonom-tur boot kurtarması). Bu değişiklik yalnız **asılı/uzun** turların timeout
+  davranışını düzeltir.
 
 ## Otonom turlar için "çalışıyor" göstergesi + gerçek Durdur ✅ (2026-07-12)
 

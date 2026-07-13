@@ -46,9 +46,18 @@ type workspaceSettingsDTO struct {
 	// system for this workspace (see promptepoch.go).
 	PromptEpochEnabled bool `json:"promptEpochEnabled"`
 
+	// AutoCaptureArtifacts toggles turn-end auto-capture of written files as
+	// artifacts (see artifacts_auto.go). Off = only deliberate create_artifact
+	// calls produce artifacts.
+	AutoCaptureArtifacts bool `json:"autoCaptureArtifacts"`
+
 	// BoardColumns is the ordered column set for this workspace's kanban board.
 	// Always non-nil: falls back to db.DefaultBoardColumns() when unconfigured.
 	BoardColumns []db.BoardColumnDef `json:"boardColumns"`
+
+	// IgnoredRecommendations lists the dismissed advisory-card keys for this
+	// workspace (always non-nil so the client can render an empty list cleanly).
+	IgnoredRecommendations []string `json:"ignoredRecommendations"`
 
 	AgentCount   int `json:"agentCount"`
 	SessionCount int `json:"sessionCount"`
@@ -83,8 +92,12 @@ func toWorkspaceSettingsDTO(ctx context.Context, w *workspace.Workspace) workspa
 
 		CodebaseMemoryEnabled: s.CodebaseMemoryEnabled,
 		PromptEpochEnabled:    s.PromptEpochEnabled,
+		AutoCaptureArtifacts:  s.AutoCaptureArtifacts,
 
 		BoardColumns: cols,
+
+		// Non-nil for a clean empty array in JSON (nil marshals to null).
+		IgnoredRecommendations: append([]string{}, s.IgnoredRecommendations...),
 	}
 	if agents, err := w.DB.ListAgents(ctx); err == nil {
 		dto.AgentCount = len(agents)

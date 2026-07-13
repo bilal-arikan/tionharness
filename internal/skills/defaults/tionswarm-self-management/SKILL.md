@@ -106,7 +106,11 @@ Read/create any; delete only ones you created.
 **MCP servers** — `list_mcp_servers`, `create_mcp_server`, `toggle_mcp_server`,
 `delete_mcp_server`. Wire up a new external tool source (stdio subprocess or
 sse/http endpoint); a new/enabled server's tools appear on your NEXT turn.
-Read/create/toggle any; delete only ones you created.
+Read/create/toggle any; delete only ones you created. Set the optional
+`description` (a short "what it's for / when to use" one-liner) on
+`create_mcp_server` — it rides the load-on-demand catalog's per-server summary,
+so the semantic hint survives even when the workspace has too many MCP tools to
+list individually.
 
 **Workspaces** — `list_workspaces`, `create_workspace`, `rename_workspace`,
 `delete_workspace`. Manage the fully-isolated workspaces (each its own
@@ -157,8 +161,9 @@ FILE you produced on disk (e.g. a screenshot) use `kind=image|video|audio|file` 
 it like the rest of this suite.
 
 **Secrets & sessions** — `secret` (one tool, `action: list|get|set|delete`) reads
-the encrypted vault and stores/removes a credential, `list_sessions` (enumerate sibling sessions; a context
-block is also pushed automatically), `conversation_search` (full-text search across
+the encrypted vault and stores/removes a credential, `list_sessions` (enumerate sibling sessions
+of EVERY kind — chat + spawn/worker/flow/task/schedule; optional `kind`/`state` filters; a context
+block of recent chats is also pushed automatically), `conversation_search` (full-text search across
 the workspace's message history — deeper than list_sessions). These are
 load-on-demand: `activate_tools` first. (`WebFetch` is NOT here — it is an EAGER
 built-in on the native path, always available without activate_tools; on claude-cli

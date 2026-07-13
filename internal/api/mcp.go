@@ -3,9 +3,11 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/bilal-arikan/tionswarm/internal/db"
@@ -32,6 +34,9 @@ type createMCPReq struct {
 	URL       string            `json:"url"`
 	Env       map[string]string `json:"env"`
 	Headers   map[string]string `json:"headers"`
+	// Scope: "shared" (default) reuses one workspace-wide connection; "scoped"
+	// gives each (session, agent) its own idle-evicted connection. Empty ⇒ shared.
+	Scope string `json:"scope"`
 }
 
 // toMCPRow validates a create request and renders the stored row (Enabled=true).
@@ -73,6 +78,13 @@ func (req createMCPReq) toMCPRow() (db.MCPServer, error) {
 	if req.Headers != nil {
 		headersJSON, _ = json.Marshal(req.Headers)
 	}
+	// Validate scope explicitly rather than silently coercing an unknown value —
+	// a typo should surface, not quietly become "shared". Empty ⇒ store default.
+	switch req.Scope {
+	case "", "shared", "scoped":
+	default:
+		return db.MCPServer{}, fmt.Errorf("unknown scope %q (want \"shared\" or \"scoped\")", req.Scope)
+	}
 	return db.MCPServer{
 		Name:          req.Name,
 		Transport:     req.Transport,
@@ -82,6 +94,7 @@ func (req createMCPReq) toMCPRow() (db.MCPServer, error) {
 		EnvConfig:     string(envJSON),
 		HeadersConfig: string(headersJSON),
 		Enabled:       true,
+		Scope:         req.Scope,
 	}, nil
 }
 
@@ -101,6 +114,85 @@ func (s *Server) handleCreateMCPServer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusCreated, server)
+}
+
+// handleUpdateMCPServer edits an existing server (PATCH). Body is the same shape
+// as create; identity (id, createdAt, createdBy) and enabled state are preserved.
+// A changed connection spec (incl. scope) re-dials on the next turn.
+func (s *Server) handleUpdateMCPServer(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	req, ok := bindJSON[createMCPReq](w, r)
+	if !ok {
+		return
+	}
+	row, err := req.toMCPRow()
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	updated, err := ws(r).DB.UpdateMCPServer(r.Context(), id, row)
+	if err != nil {
+		if errors.Is(err, db.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "server not found")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	s.logger.Info("mcp server updated", "id", id, "name", updated.Name, "scope", updated.Scope)
+	writeJSON(w, http.StatusOK, updated)
+}
+
+// mcpPoolStatsResp is the live-connection snapshot for the Tools screen: per-
+// server aggregates plus the reaper's idle window.
+type mcpPoolStatsResp struct {
+	IdleSec int                `json:"idleSec"` // scoped idle-eviction window (0 = disabled)
+	Servers []mcpPoolServerAgg `json:"servers"`
+}
+
+type mcpPoolServerAgg struct {
+	Server string `json:"server"` // server name
+	Live   int    `json:"live"`   // alive connections right now
+	Total  int    `json:"total"`  // pool entries (alive or reconnecting)
+	Scoped bool   `json:"scoped"` // has at least one per-(session,agent) connection
+}
+
+// handleMCPPoolStats reports the live pool state so the UI can show how many
+// connections a scoped server holds and how close they are to idle eviction.
+func (s *Server) handleMCPPoolStats(w http.ResponseWriter, r *http.Request) {
+	wsp := ws(r)
+	resp := mcpPoolStatsResp{Servers: []mcpPoolServerAgg{}}
+	if wsp == nil || wsp.Runtime == nil {
+		writeJSON(w, http.StatusOK, resp)
+		return
+	}
+	pool := wsp.Runtime.MCPPool()
+	if pool == nil {
+		writeJSON(w, http.StatusOK, resp)
+		return
+	}
+	resp.IdleSec = int(pool.IdleTTL().Seconds())
+	byServer := map[string]*mcpPoolServerAgg{}
+	order := []string{}
+	for _, st := range pool.Stats() {
+		agg, ok := byServer[st.Server]
+		if !ok {
+			agg = &mcpPoolServerAgg{Server: st.Server}
+			byServer[st.Server] = agg
+			order = append(order, st.Server)
+		}
+		agg.Total++
+		if st.Alive {
+			agg.Live++
+		}
+		if st.Scoped {
+			agg.Scoped = true
+		}
+	}
+	for _, name := range order {
+		resp.Servers = append(resp.Servers, *byServer[name])
+	}
+	writeJSON(w, http.StatusOK, resp)
 }
 
 // importMCPServerSpec is one entry in the standard mcpServers JSON object (the
@@ -240,6 +332,107 @@ func (s *Server) handleTestMCPServer(w http.ResponseWriter, r *http.Request) {
 	}
 	s.logger.Info("mcp server tested", "server", server.Name, "tools", len(tools))
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "toolCount": len(tools), "tools": tools})
+}
+
+// importableMCPServer is one MCP server configured in ANOTHER workspace, offered
+// for one-click copy into the current workspace.
+type importableMCPServer struct {
+	WorkspaceID   string       `json:"workspaceId"`
+	WorkspaceName string       `json:"workspaceName"`
+	Server        db.MCPServer `json:"server"`
+}
+
+// mcpSignature identifies a server by its wiring (name + transport + command +
+// args + url), so the same server present in several workspaces dedupes to one
+// entry and matches against the current workspace's set.
+func mcpSignature(m db.MCPServer) string {
+	return strings.Join([]string{
+		strings.TrimSpace(strings.ToLower(m.Name)),
+		m.Transport, m.Command, m.Args, m.URL,
+	}, "\x00")
+}
+
+// handleImportableMCPServers lists MCP servers configured in OTHER workspaces that
+// are not already present (by wiring signature) in the current one, so the UI can
+// offer them for one-click copy. Deduped across workspaces (first occurrence wins).
+func (s *Server) handleImportableMCPServers(w http.ResponseWriter, r *http.Request) {
+	cur := ws(r)
+	ctx := r.Context()
+	// Signatures already in THIS workspace — never offer a duplicate.
+	have := map[string]bool{}
+	if servers, err := cur.DB.ListMCPServers(ctx); err == nil {
+		for _, m := range servers {
+			have[mcpSignature(m)] = true
+		}
+	}
+	out := []importableMCPServer{}
+	for _, meta := range s.workspaces.List() {
+		if meta.ID == cur.ID {
+			continue
+		}
+		other, err := s.workspaces.Get(meta.ID)
+		if err != nil {
+			continue
+		}
+		servers, err := other.DB.ListMCPServers(ctx)
+		if err != nil {
+			continue
+		}
+		for _, m := range servers {
+			sig := mcpSignature(m)
+			if have[sig] {
+				continue
+			}
+			have[sig] = true // also dedupe across the remaining workspaces
+			out = append(out, importableMCPServer{
+				WorkspaceID: meta.ID, WorkspaceName: meta.Name, Server: m,
+			})
+		}
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+type addImportableReq struct {
+	WorkspaceID string `json:"workspaceId"`
+	ServerID    string `json:"serverId"`
+}
+
+// handleAddImportableMCPServer copies a server from another workspace into the
+// current one as a fresh user-owned row (new id, enabled). Its tools appear on the
+// next agent turn, exactly like any other newly added server.
+func (s *Server) handleAddImportableMCPServer(w http.ResponseWriter, r *http.Request) {
+	req, ok := bindJSON[addImportableReq](w, r)
+	if !ok {
+		return
+	}
+	src, err := s.workspaces.Get(req.WorkspaceID)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "source workspace not found")
+		return
+	}
+	m, err := src.DB.GetMCPServer(r.Context(), req.ServerID)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "source server not found")
+		return
+	}
+	created, err := ws(r).DB.CreateMCPServer(r.Context(), db.MCPServer{
+		Name:          m.Name,
+		Description:   m.Description,
+		Transport:     m.Transport,
+		Command:       m.Command,
+		Args:          m.Args,
+		URL:           m.URL,
+		EnvConfig:     m.EnvConfig,
+		HeadersConfig: m.HeadersConfig,
+		Enabled:       true,
+		Scope:         m.Scope, // preserve the source server's scope (store defaults "" ⇒ shared)
+	})
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	s.logger.Info("mcp server imported from workspace", "from", req.WorkspaceID, "name", created.Name, "id", created.ID)
+	writeJSON(w, http.StatusCreated, created)
 }
 
 // mcpServerConfig converts a db row to an mcp.ServerConfig (mirrors the agent

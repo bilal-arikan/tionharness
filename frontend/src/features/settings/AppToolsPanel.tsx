@@ -101,8 +101,11 @@ export function ToolsPanel({ draft, set }: PanelProps) {
         <Field label="Tur başına maks. spawn" hint="Tek ajan turunda başlatılabilecek spawn sayısı (1–64).">
           <input type="number" min={1} max={64} value={draft.spawnMaxPerTurn} onChange={(e) => set('spawnMaxPerTurn', Number(e.target.value))} className={inputCls} />
         </Field>
-        <Field label="Spawn süresi (dk)" hint="Bir spawn iş turunun süre sınırı; otomatik-devam turları da bu süreyi paylaşır (varsayılan 20).">
+        <Field label="Spawn süresi — üst sınır (dk)" hint="Bir spawn/worker iş turunun MUTLAK süre tavanı; otomatik-devam turları da bu süreyi paylaşır (varsayılan 20).">
           <input type="number" min={1} max={1440} value={draft.spawnTimeoutMin} onChange={(e) => set('spawnTimeoutMin', Number(e.target.value))} className={inputCls} />
+        </Field>
+        <Field label="Spawn boşta süresi (dk)" hint="Etkinlik izleyicisi: bir spawn/worker turu bu kadar süre hiçbir adım (araç/düşünce/token) yaymazsa 'asılı' sayılıp iptal edilir; üretken uzun tur üst sınıra kadar koşar (varsayılan 5).">
+          <input type="number" min={1} max={1440} value={draft.spawnIdleTimeoutMin} onChange={(e) => set('spawnIdleTimeoutMin', Number(e.target.value))} className={inputCls} />
         </Field>
         <Field label="Zamanlama süresi (dk)" hint="Bir zamanlanmış tetiğin (cron görev/prompt + schedule_wake) süre sınırı (varsayılan 30).">
           <input type="number" min={1} max={1440} value={draft.scheduleTimeoutMin} onChange={(e) => set('scheduleTimeoutMin', Number(e.target.value))} className={inputCls} />

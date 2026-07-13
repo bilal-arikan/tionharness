@@ -12,11 +12,12 @@ import (
 	"github.com/bilal-arikan/tionswarm/internal/events"
 )
 
-// spawnTimeout bounds the non-spawn detached surfaces (worker/inbox turns and
-// turn-finished/failed hook firing) that share this package-level default. The
-// spawn WORK turn itself uses the settings-driven r.tun.SpawnTimeout() instead —
-// see runSpawn — so it can be tuned (and its auto-continue continuations budgeted)
-// from the Settings screen.
+// spawnTimeout bounds the turn-finished / failed-turn HOOK firing (a completion
+// side-effect, not a work turn) that shares this package-level default. Every
+// background WORK turn — spawn, worker, coordinator, inbox delivery — instead uses
+// the settings-driven r.tun.SpawnTimeout() hard ceiling PLUS the r.tun.SpawnIdleTimeout()
+// inactivity watchdog (see withActivityTimeout), so a productive long turn is not
+// killed as "hung" and both bounds are tunable from the Settings screen.
 const spawnTimeout = 10 * time.Minute
 
 // SpawnOptions tunes a spawn. ModelOverride swaps just the model (the target
@@ -183,7 +184,10 @@ func (r *Runtime) SpawnSession(ctx context.Context, agentRef, prompt string, opt
 func (r *Runtime) runSpawn(agent db.Agent, sessionID, prompt string, opts SpawnOptions) {
 	defer r.releaseSpawnSlot()
 
-	ctx, cancel := context.WithTimeout(context.Background(), r.tun.SpawnTimeout())
+	// Hard wall-clock ceiling PLUS an idle watchdog (see withActivityTimeout): a
+	// spawn that streams no step for SpawnIdleTimeout is reclaimed fast, while a
+	// long-but-productive one runs up to SpawnTimeout.
+	ctx, cancel := withActivityTimeout(context.Background(), r.tun.SpawnTimeout(), r.tun.SpawnIdleTimeout())
 	defer cancel()
 
 	r.trackSession(sessionID)

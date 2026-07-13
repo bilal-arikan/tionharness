@@ -14,12 +14,13 @@ const (
 type MCPServer struct {
 	ID            string `json:"id"`
 	Name          string `json:"name"`
-	Transport     string `json:"transport"`     // stdio | http (sse deprecated/unsupported)
-	Command       string `json:"command"`       // stdio executable
-	Args          string `json:"args"`          // JSON array of args
-	URL           string `json:"url"`           // http endpoint
-	EnvConfig     string `json:"envConfig"`     // JSON object of env vars (stdio)
-	HeadersConfig string `json:"headersConfig"` // JSON object of request headers (http)
+	Description   string `json:"description,omitempty"` // short one-liner shown in the load-on-demand catalog's per-server summary
+	Transport     string `json:"transport"`             // stdio | http (sse deprecated/unsupported)
+	Command       string `json:"command"`               // stdio executable
+	Args          string `json:"args"`                  // JSON array of args
+	URL           string `json:"url"`                   // http endpoint
+	EnvConfig     string `json:"envConfig"`             // JSON object of env vars (stdio)
+	HeadersConfig string `json:"headersConfig"`         // JSON object of request headers (http)
 	Enabled       bool   `json:"enabled"`
 	Scope         string `json:"scope"`               // shared | scoped
 	CreatedBy     string `json:"createdBy,omitempty"` // "" = user-defined (protected); agent id = agent-created

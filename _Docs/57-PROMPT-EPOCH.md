@@ -132,6 +132,13 @@ tarafta → cache'i asla bozmaz).
   değişen paragrafın ilk satırı doğal etiket olur (`# Workspace Instructions`,
   `<user_context>`, skill katalog başlığı…) — hardcoded marker gerekmez. Notun
   her stale turda ridee etmesi için cap'li (`maxContextAreas`/`maxAreaLines`).
+  **Satır kesme rune-güvenli (fix 2026-07-12):** `paragraphArea` satırı
+  `maxAreaLineLen`'e keserken **rune** sayısıyla guard'lar (`len([]rune(l))`), bayt
+  değil. Eski bayt-guard (`len(l)>max`) çok-baytlı UTF-8'de (Türkçe ç/ğ/ı/ö/ş/ü,
+  emoji, CJK) `string([]rune(l)[:max])`'i rune-slice kapasitesini aşırıp
+  **panikletiyordu** (`slice bounds out of range [:400] with capacity 384`). Panik
+  tur-setup'ında (epoch/debug olayından önce) olduğu için semptom "tur hiç
+  başlamıyor, hata da yok"tu — kuyruk worker'ını da kilitliyordu (bkz. `_Docs\58`).
 - **Hesaplama seam'i:** `EpochStaticSystem` zaten `build() != e.System`
   karşılaştırmasında canlı+donmuş metnin ikisini de elinde tutuyor → orada
   `e.systemChange` doldurulur; `EpochToolDefs` `e.toolsChange`'i doldurur;

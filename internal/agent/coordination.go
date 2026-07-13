@@ -399,7 +399,10 @@ func (r *Runtime) runWorker(agent db.Agent, workerSessionID, prompt, coordSessio
 		defer slot.workers.Add(-1)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), spawnTimeout)
+	// Hard wall-clock ceiling (settings-driven, same as spawns) PLUS an idle
+	// watchdog: a worker/coordinator turn that streams no step for SpawnIdleTimeout
+	// is reclaimed fast, while a long-but-productive one runs up to SpawnTimeout.
+	ctx, cancel := withActivityTimeout(context.Background(), r.tun.SpawnTimeout(), r.tun.SpawnIdleTimeout())
 	defer cancel()
 	ctl := &workerCtl{cancel: cancel}
 	r.workerCancels.Store(workerSessionID, ctl)
@@ -453,6 +456,83 @@ func (r *Runtime) runWorker(agent db.Agent, workerSessionID, prompt, coordSessio
 	// the failure/kill note (so the coordinator can react to failures too).
 	note := formatTaskNotification(workerSessionID, agent.Name, status, replyText, countToolSteps(steps), time.Since(turnStart).Milliseconds())
 	r.NotifyCoordinator(coordSessionID, note)
+}
+
+// RecoverOrphanedTurns reclaims autonomous background turns (worker / plain spawn /
+// coordinator) that were mid-flight when the process died. Those turns run as
+// fire-and-forget goroutines with no crash sidecar, so a restart kills them
+// silently: the session is left with a trailing USER message and no reply, and —
+// for a worker — the coordinator is never notified and waits forever (the SES28
+// freeze). At boot this, per orphaned session:
+//
+//   - records an INTERRUPTED assistant reply, so the session no longer looks frozen
+//     mid-turn (and a second boot skips it — the last message is now an assistant);
+//   - for a worker, injects a synthetic <task-notification status="killed"> into its
+//     coordinator, which persists it + enqueues a coordinator turn → the coordinator
+//     stops waiting and can react (re-dispatch or conclude);
+//   - for a coordinator orphaned mid-turn (trailing user notification, no reply),
+//     re-enqueues one coordinator turn so it resumes from full history.
+//
+// Best-effort and idempotent. Detection is "an autonomous session whose LAST message
+// is a user turn" — at boot nothing is running, so that is exactly a killed mid-turn.
+func (r *Runtime) RecoverOrphanedTurns(ctx context.Context) {
+	sessions, err := r.db.ListSessions(ctx, "")
+	if err != nil {
+		return
+	}
+	for _, sess := range sessions {
+		if sess.State == "archived" {
+			continue // do not resurrect work the user has archived
+		}
+		isWorker := sess.CoordinatorSessionID != "" || sess.Role == "worker"
+		isCoordinator := sess.Role == "coordinator"
+		isSpawn := sess.Kind == "spawned" || sess.Kind == "worker"
+		if !isWorker && !isCoordinator && !isSpawn {
+			continue // ordinary interactive/inbox session — not an autonomous turn
+		}
+		// At boot the in-memory active set is empty; this only guards a late call.
+		if r.isSessionActive(sess.ID) {
+			continue
+		}
+		msgs, err := r.db.ListMessages(ctx, sess.ID)
+		if err != nil || len(msgs) == 0 {
+			continue
+		}
+		if msgs[len(msgs)-1].Role != "user" {
+			continue // completed normally (last message is an assistant reply)
+		}
+		switch {
+		case isWorker:
+			r.recordInterruptedReply(ctx, sess, "⏹️ Worker turu süreç yeniden başlarken yarıda kaldı (kurtarıldı).")
+			// Tell the coordinator so it stops waiting and can re-dispatch or conclude.
+			note := formatTaskNotification(sess.ID, r.agentName(sess.AgentID), "killed",
+				"Worker turu süreç yeniden başlatılırken (crash/restart) yarıda kaldı; sonuç üretilemedi. Gerekirse yeniden görevlendir.", 0, 0)
+			r.NotifyCoordinator(sess.CoordinatorSessionID, note)
+			r.logger.Info("recover: orphaned worker reclaimed", "session", sess.ID, "coordinator", sess.CoordinatorSessionID)
+		case isCoordinator:
+			// Coordinator itself died mid-turn: re-run once so it resumes from history.
+			r.enqueueCoordinatorTurn(sess.ID)
+			r.logger.Info("recover: orphaned coordinator re-enqueued", "session", sess.ID)
+		default: // plain spawn
+			r.recordInterruptedReply(ctx, sess, "⚠️ Spawn turu süreç yeniden başlarken yarıda kaldı.")
+			r.logger.Info("recover: orphaned spawn reclaimed", "session", sess.ID)
+		}
+	}
+}
+
+// recordInterruptedReply persists a crash-recovered assistant reply on an orphaned
+// autonomous session so it reads as finished (Interrupted) instead of hanging on a
+// trailing user message. Best-effort; a write failure is logged, not fatal.
+func (r *Runtime) recordInterruptedReply(ctx context.Context, sess db.Session, text string) {
+	if _, err := r.db.AddMessage(ctx, db.Message{
+		SessionID:   sess.ID,
+		AgentID:     sess.AgentID,
+		Role:        "assistant",
+		Text:        text,
+		Interrupted: true,
+	}); err != nil {
+		r.logger.Warn("recover: failed to record interrupted reply", "session", sess.ID, "error", err)
+	}
 }
 
 // NotifyCoordinator persists a <task-notification> as a user message in the
@@ -671,7 +751,10 @@ func (r *Runtime) coordinatorWorkerStatusBlock(ctx context.Context, coordSession
 // synthesizes the worker notifications now sitting in its history, then records the
 // reply and fires the turn-finished hook (for tags/automations on the coordinator).
 func (r *Runtime) runCoordinatorTurn(coordSessionID string) {
-	ctx, cancel := context.WithTimeout(context.Background(), spawnTimeout)
+	// Hard wall-clock ceiling (settings-driven, same as spawns) PLUS an idle
+	// watchdog: a worker/coordinator turn that streams no step for SpawnIdleTimeout
+	// is reclaimed fast, while a long-but-productive one runs up to SpawnTimeout.
+	ctx, cancel := withActivityTimeout(context.Background(), r.tun.SpawnTimeout(), r.tun.SpawnIdleTimeout())
 	defer cancel()
 
 	sess, err := r.db.GetSession(ctx, coordSessionID)

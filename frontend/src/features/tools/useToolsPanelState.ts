@@ -1,7 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useSessionState } from '@/shared/hooks/useSessionState'
 import { api } from '@/api'
-import type { MCPServer, MCPTransport, ToolVisibility, WorkspaceTool } from '@/types'
+import type {
+  MCPServer,
+  MCPTransport,
+  MCPPoolStats,
+  ToolVisibility,
+  WorkspaceTool,
+  ImportableMCPServer,
+} from '@/types'
 import {
   toolSource,
   toolServer,
@@ -10,6 +17,7 @@ import {
   CATEGORY_LABELS,
   CATEGORY_ORDER,
   extractParams,
+  parseArgs,
 } from './toolMeta'
 import { useMultiSelect } from '@/shared/hooks/useMultiSelect'
 import { useCollapsibleList } from '@/shared/hooks/useCollapsibleList'
@@ -29,6 +37,11 @@ export function useToolsPanelState(onError: (msg: string) => void) {
   const [url, setUrl] = useState('')
   // Optional http request headers, one "Key: Value" per line (e.g. Authorization).
   const [headersText, setHeadersText] = useState('')
+  // Connection scope: "shared" = one workspace-wide connection (default);
+  // "scoped" = a separate idle-evicted connection per (session, agent).
+  const [scope, setScope] = useState<'shared' | 'scoped'>('shared')
+  // When set, the add form is editing this server (PATCH) instead of creating.
+  const [editingId, setEditingId] = useState<string | null>(null)
 
   // Bulk JSON import (mcpServers document).
   const [importText, setImportText] = useState('')
@@ -79,6 +92,40 @@ export function useToolsPanelState(onError: (msg: string) => void) {
   const loadServers = useCallback(() => {
     api.listMCPServers().then(setServers).catch((e) => onError(e.message))
   }, [onError])
+
+  // Live pool snapshot for the reaper / live-connection indicator. Polled on a
+  // light interval (best-effort; failures are swallowed so the panel stays calm).
+  const [poolStats, setPoolStats] = useState<MCPPoolStats | null>(null)
+  const loadPoolStats = useCallback(() => {
+    api.mcpPoolStats().then(setPoolStats).catch(() => {})
+  }, [])
+  useEffect(() => {
+    loadPoolStats()
+    const t = setInterval(loadPoolStats, 5000)
+    return () => clearInterval(t)
+  }, [loadPoolStats])
+
+  // Servers configured in OTHER workspaces, offered for one-click copy here.
+  const [importable, setImportable] = useState<ImportableMCPServer[]>([])
+  const [addingImportable, setAddingImportable] = useState<string | null>(null)
+  const loadImportable = useCallback(() => {
+    api.importableMCPServers().then(setImportable).catch((e) => onError(e.message))
+  }, [onError])
+
+  // Copy one server from another workspace into this one, then refresh both the
+  // local list (its tools appear next turn) and the importable list (it drops out).
+  const addImportable = async (item: ImportableMCPServer) => {
+    setAddingImportable(item.server.id)
+    try {
+      await api.addImportableMCPServer(item.workspaceId, item.server.id)
+      loadServers()
+      loadImportable()
+    } catch (e) {
+      onError((e as Error).message)
+    } finally {
+      setAddingImportable(null)
+    }
+  }
 
   const loadTools = useCallback(() => {
     api
@@ -173,23 +220,58 @@ export function useToolsPanelState(onError: (msg: string) => void) {
           headers[t.slice(0, i).trim()] = t.slice(i + 1).trim()
         }
       }
-      await api.createMCPServer({
+      const payload = {
         name: name.trim(),
         transport,
         command: command.trim(),
         args,
         url: url.trim(),
         headers: Object.keys(headers).length ? headers : undefined,
-      })
-      setName('')
-      setCommand('')
-      setArgsText('')
-      setUrl('')
-      setHeadersText('')
+        scope: (scope === 'scoped' ? 'scoped' : undefined) as 'scoped' | undefined,
+      }
+      // Edit mode (editingId set) PATCHes the existing row; else create.
+      if (editingId) await api.updateMCPServer(editingId, payload)
+      else await api.createMCPServer(payload)
+      resetForm()
       loadServers()
+      loadPoolStats()
     } catch (e) {
       onError((e as Error).message)
     }
+  }
+
+  // resetForm clears the add/edit form and leaves edit mode.
+  const resetForm = () => {
+    setEditingId(null)
+    setName('')
+    setCommand('')
+    setArgsText('')
+    setUrl('')
+    setHeadersText('')
+    setScope('shared')
+    setTransport('stdio')
+  }
+
+  // startEdit loads a server's fields into the form and switches it to edit mode.
+  const startEdit = (s: MCPServer) => {
+    setEditingId(s.id)
+    setName(s.name)
+    setTransport(s.transport)
+    setCommand(s.command)
+    setArgsText(parseArgs(s.args).join(' '))
+    setUrl(s.url)
+    // Render the stored headers JSON back into "Key: Value" lines for the textarea.
+    let headerLines = ''
+    try {
+      const h = JSON.parse(s.headersConfig || '{}') as Record<string, string>
+      headerLines = Object.entries(h)
+        .map(([k, v]) => `${k}: ${v}`)
+        .join('\n')
+    } catch {
+      headerLines = ''
+    }
+    setHeadersText(headerLines)
+    setScope(s.scope === 'scoped' ? 'scoped' : 'shared')
   }
 
   const importServers = async () => {
@@ -373,6 +455,12 @@ export function useToolsPanelState(onError: (msg: string) => void) {
     setUrl,
     headersText,
     setHeadersText,
+    scope,
+    setScope,
+    editingId,
+    startEdit,
+    cancelEdit: resetForm,
+    poolStats,
     importText,
     setImportText,
     importing,
@@ -401,6 +489,10 @@ export function useToolsPanelState(onError: (msg: string) => void) {
     toggleServer,
     testServer,
     removeServer,
+    importable,
+    addingImportable,
+    loadImportable,
+    addImportable,
     activeCount,
     filtered,
     filtersActive,

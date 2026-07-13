@@ -98,6 +98,7 @@ Açık kaynaklı, kendi sunucunda barındırılan (self-hosted) bir **çoklu-aja
 | [57-PROMPT-EPOCH.md](57-PROMPT-EPOCH.md) | Prompt Epoch — statik system + araç şemalarını (session,agent) başına dondurup oturum-ortası cache kırılmalarını önleme; context-change diff notu + cache-warmth göstergesi |
 | [58-QUEUE-SENKRON.md](58-QUEUE-SENKRON.md) | Sohbet kuyruğu + çoklu-ekran senkronizasyonu (event-sourcing cutover): SessionHub cursor SSE + interaction CAS + durable send-queue + presence |
 | [59-GITHUB-COPILOT-CHRONICLE.md](59-GITHUB-COPILOT-CHRONICLE.md) | an external CLI agent `/chronicle` oturum-içgörü ailesi (tips/improve/standup/cost-tips/search) + yerel SQLite session store; TionSwarm muadilleriyle kıyas (salt referans, doküman-only) |
+| [60-RETROSPEKTIF-TARAMA.md](60-RETROSPEKTIF-TARAMA.md) | Retrospektif geçmiş tarama (Insight Scan) — TASLAK/Faz1: editlenebilir lens dosyaları + inkremental ledger (UpdatedAt+fingerprint) + 3-aşamalı pipeline; iki kanal (app-fix / workspace-opt); manuel + cron tetik |
 | [MALIYET-DUSURME-PLANI.md](MALIYET-DUSURME-PLANI.md) | Maliyet düşürme planı — claude-cli batching/serial maliyet analizi ve aksiyonları |
 | [analiz-craftagent-arac-eslestirme.md](analiz-craftagent-arac-eslestirme.md) | the external agent project↔TionSwarm araç eşleştirme analizi |
 | **arsiv/** | Tarihsel inceleme dokümanları (referans/appendix) |

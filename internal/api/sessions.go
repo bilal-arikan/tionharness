@@ -345,6 +345,16 @@ func (s *Server) handleMarkSessionRead(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleDeleteSession(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	wsp := ws(r)
+	// Tear down this session's LIVE runtime (in-flight turn + its claude-cli subprocess,
+	// warm pooled processes, the inbox worker, any autonomous worker) BEFORE removing it.
+	// Fail closed: if a live process/turn cannot be stopped, abort with 409 so we never
+	// strand a process pointing at a session that no longer exists (the session is left
+	// fully intact — queue restored, worker resumed).
+	if err := s.teardownSessionRuntime(wsp, id); err != nil {
+		s.logger.Error("session delete aborted: could not tear down live runtime", "session", id, "error", err)
+		writeError(w, http.StatusConflict, "session has live processes that could not be stopped; not deleted: "+err.Error())
+		return
+	}
 	// SessionEnd lifecycle hook (Claude Code parity): fire BEFORE the delete so a
 	// cleanup hook can still read the session's files. Fire-and-forget audit.
 	wsp.Runtime.RunLifecycleHooks(r.Context(), id, db.HookSessionEnd, agent.LifecycleExtras{Trigger: "delete"})

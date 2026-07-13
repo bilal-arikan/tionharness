@@ -47,7 +47,10 @@ export interface WorkspaceSettings {
   themePreset: string
   codebaseMemoryEnabled: boolean
   promptEpochEnabled: boolean
+  autoCaptureArtifacts: boolean
   boardColumns: BoardColumnDef[]
+  // Keys of post-create advisory cards the user dismissed for this workspace.
+  ignoredRecommendations: string[]
   createdAt: number
   agentCount: number
   sessionCount: number
@@ -70,7 +73,9 @@ export type WorkspaceSettingsPatch = Partial<
     | 'themePreset'
     | 'codebaseMemoryEnabled'
     | 'promptEpochEnabled'
+    | 'autoCaptureArtifacts'
     | 'boardColumns'
+    | 'ignoredRecommendations'
   >
 >
 

@@ -16,7 +16,7 @@ interface Props {
   favoriteId?: string | null
   onToggleFavorite?: (id: string) => void
   onSwitch: (id: string) => void
-  onCreate: (data: NewWorkspaceData) => void
+  onCreate: (data: NewWorkspaceData) => void | Promise<unknown>
   // The row's "delete" button no longer deletes inline — it navigates to that
   // workspace's Settings screen, where deletion (with confirmation) lives.
   onOpenSettings: (id: string) => void
@@ -53,8 +53,12 @@ export function WorkspaceSwitcher({ workspaces, activeId, unreadIds, activeBusy,
   // Any non-active workspace with pending activity → the trigger shows a dot.
   const hasUnread = unreadIds.size > 0
 
-  const create = (data: NewWorkspaceData) => {
-    onCreate(data)
+  // Await the (async) creation before dismissing so the modal can show a busy
+  // state for the whole backend provision (claude-home seed + runtime + scheduler)
+  // instead of closing instantly and leaving the user staring at nothing until the
+  // screen abruptly jumps to the new workspace.
+  const create = async (data: NewWorkspaceData) => {
+    await onCreate(data)
     setShowCreate(false)
     setOpen(false)
   }

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Boxes, FileText, FolderGit2, Palette, PackageCheck, type LucideIcon } from 'lucide-react'
+import { Boxes, FileText, FolderGit2, Lightbulb, Palette, PackageCheck, type LucideIcon } from 'lucide-react'
 import { api } from '@/api'
 import type { WorkspaceSettings } from '@/types'
 import type { Appearance } from '@/shared/lib/theme'
@@ -8,12 +8,13 @@ import { AppearancePanel } from '@/features/settings/appPanels'
 import { WorkspaceFilesPanel, type FilesSaveState } from '@/features/settings/WorkspaceFilesPanel'
 import { ProjectPanel } from './ProjectPanel'
 import { WorkspaceExportPanel } from './WorkspaceExportPanel'
+import { RecommendationsPanel } from './RecommendationsPanel'
 import { Button, CollapsibleListShell } from '@/shared/components'
 import { useRegisterDirty } from '@/shared/lib/dirtySignals'
 
-type Tab = 'general' | 'appearance' | 'project' | 'files' | 'export'
+type Tab = 'general' | 'appearance' | 'project' | 'files' | 'export' | 'recommendations'
 
-const TAB_KEYS: Tab[] = ['general', 'appearance', 'project', 'files', 'export']
+const TAB_KEYS: Tab[] = ['general', 'appearance', 'project', 'files', 'export', 'recommendations']
 
 interface Props {
   onError: (msg: string) => void
@@ -23,6 +24,9 @@ interface Props {
   onDeleteWorkspace?: () => void
   // Sync App's live theme after the per-workspace appearance override is saved.
   onAppearanceSaved?: (a: Appearance) => void
+  // Re-trigger the post-create recommendation toast on demand (bumps recsTrigger in
+  // App) — used by the Öneriler tab's "show cards" button.
+  onShowRecommendations?: () => void
   // Active sub-tab, URL-synced by the parent (#/w/{ws}/workspace/{tab}).
   tab?: string | null
   onTabChange?: (t: string) => void
@@ -37,6 +41,7 @@ const TABS: { key: Tab; label: string; icon: LucideIcon }[] = [
   { key: 'project', label: 'Proje', icon: FolderGit2 },
   { key: 'files', label: 'Promptlar & Dosyalar', icon: FileText },
   { key: 'export', label: 'Dışa Aktar', icon: PackageCheck },
+  { key: 'recommendations', label: 'Öneriler', icon: Lightbulb },
 ]
 
 // WorkspaceView is the dedicated workspace window opened from the NavRail. A
@@ -44,7 +49,7 @@ const TABS: { key: Tab; label: string; icon: LucideIcon }[] = [
 // workspace's General settings, its Project (path + git), and its prompt/
 // instruction Files. Moved out of the Settings screen so workspace + path
 // details have their own navbar-opened window.
-export function WorkspaceView({ onError, onWorkspaceChanged, onDeleteWorkspace, onAppearanceSaved, tab: tabProp, onTabChange, navOpen, onToggleNav }: Props) {
+export function WorkspaceView({ onError, onWorkspaceChanged, onDeleteWorkspace, onAppearanceSaved, onShowRecommendations, tab: tabProp, onTabChange, navOpen, onToggleNav }: Props) {
   const tab: Tab = TAB_KEYS.includes(tabProp as Tab) ? (tabProp as Tab) : 'general'
   const setTab = (t: Tab) => onTabChange?.(t)
   const [ws, setWs] = useState<WorkspaceSettings | null>(null)
@@ -86,6 +91,7 @@ export function WorkspaceView({ onError, onWorkspaceChanged, onDeleteWorkspace, 
         defaultWorkingDir: ws.defaultWorkingDir,
         codebaseMemoryEnabled: ws.codebaseMemoryEnabled,
         promptEpochEnabled: ws.promptEpochEnabled,
+        autoCaptureArtifacts: ws.autoCaptureArtifacts,
       })
       setWs(updated)
       setWsOrig(updated)
@@ -105,7 +111,12 @@ export function WorkspaceView({ onError, onWorkspaceChanged, onDeleteWorkspace, 
   const onHeaderSave = filesTab ? filesState?.save : save
   // The Appearance tab manages its own Save/Reset buttons (live preview) and the
   // Export tab has its own publish action, so the shared header Save is hidden there.
-  const showSave = tab === 'appearance' || tab === 'export' ? false : filesTab ? !!filesState : true
+  const showSave =
+    tab === 'appearance' || tab === 'export' || tab === 'recommendations'
+      ? false
+      : filesTab
+        ? !!filesState
+        : true
   const activeMeta = TABS.find((t) => t.key === tab)
 
   // Surface unsaved workspace edits on the nav "Workspace" item + workspace label.
@@ -131,7 +142,11 @@ export function WorkspaceView({ onError, onWorkspaceChanged, onDeleteWorkspace, 
           >
             <t.icon size={16} className="shrink-0" />
             <span className="flex-1 truncate">{t.label}</span>
-            {(t.key === 'files' ? !!filesState?.dirty : t.key === 'appearance' || t.key === 'export' ? false : dirty) && (
+            {(t.key === 'files'
+              ? !!filesState?.dirty
+              : t.key === 'appearance' || t.key === 'export' || t.key === 'recommendations'
+                ? false
+                : dirty) && (
               <span className="h-1.5 w-1.5 rounded-full bg-[var(--color-accent)]" title="Kaydedilmemiş" />
             )}
           </button>
@@ -187,6 +202,8 @@ export function WorkspaceView({ onError, onWorkspaceChanged, onDeleteWorkspace, 
             />
           ) : tab === 'export' ? (
             <WorkspaceExportPanel ws={ws} onError={onError} />
+          ) : tab === 'recommendations' ? (
+            <RecommendationsPanel onError={onError} onShowCards={onShowRecommendations} />
           ) : (
             <WorkspaceFilesPanel onError={onError} onState={setFilesState} />
           )}

@@ -148,6 +148,12 @@ type PendingInteraction struct {
   dispatch `inboxItem.Attempts++` sayar; `maxInboxAttempts` (3) aşılırsa mesaj
   "poison" olarak düşürülür (görünür `turn_error`) → her boot'ta çöken tur kuyruğu
   sonsuza dek bloklayamaz.
+- **Kuyruk-hatası kalıcılaştırma (2026-07-13):** üç bariyer de (panic/watchdog/
+  poison) artık `recordQueueTurnFailure` ile hatayı **kalıcı** yazar: `session.jsonl`'e
+  `kind=error` asistan mesajı (hub `KindReply` → yenilemeye dayanıklı kırmızı kart,
+  `analyze-session` bulur) **+** `debug.jsonl`'e `DebugError` olayı (Debug paneli /
+  `read_session_debug` görür). Önceden yalnız ephemeral hub `turn_error` + server-log
+  vardı → tur setup'ında ölen panic "sessiz asılma" gibi görünüyordu.
 - **Cancel/dequeue:** `DELETE .../messages/{clientMsgId}` provider'a gitmemiş
   girdiyi çeker.
 - **Steer vs queue politikası (UI'da görünür):** tur çalışırken gelen mesaj →
@@ -315,6 +321,37 @@ Mevcut takılı session sayfa yenilemeyle de temizlenir (streaming boş başlar)
 gerekir); dev StrictMode presence şişmesi (prod'da yok); kuyruk öğesi düzenleme.
 Ekstra dayanıklılık için `activeSessions` ile periyodik streaming reconcile
 düşünülebilir (şimdilik event-driven clear + reload yeterli).
+
+## Refactor (2026-07-13) — tek-snapshot flush + mutator helper
+
+Kuyruk mutator'ları eskiden `persistInbox` + `publishQueueUpdate` çiftini ayrı ayrı
+çağırıyordu; her ikisi de inbox kilidini **bağımsız** alıyordu, yani iki kritik bölüm
+arasında başka bir goroutine kuyruğu değiştirebilir → diske yazılan snapshot ile her
+pencereye yayınlanan kuyruk **birbirinden sapabilirdi**. İkisi tek locked-snapshot'tan
+türeten `flushInbox` ile birleştirildi (tutarsızlık penceresi kapandı, kilit alımı
+yarıya indi). Ortak kilitle-mutasyon-flush iskeleti `withInbox(sessionID, fn)`
+helper'ına toplandı (`cancel/clear/move`). `runTurnGuarded` panic bariyeri, kavramsal
+eşi `runQueuedTurn` watchdog'unun yanına (`inbox_durability.go`) taşındı. Davranış
+birebir korundu; `go build`/`go vet` temiz, inbox testleri 4/4 geçiyor.
+
+## Session silme — fail-closed runtime teardown (2026-07-13)
+
+Session silmek (`handleDeleteSession`) eskiden yalnız DB + disk + worktree temizliyordu;
+**çalışan runtime durumuna hiç dokunmuyordu** → geride artıklar kalıyordu: (1) warm
+claude-cli havuz süreçleri (`DropSession` silmede çağrılmıyordu), (2) uçuştaki tur +
+subprocess'i (`run.cancel` yok), (3) bellekteki inbox worker'ı kuyruğu dispatch etmeye
+devam ediyordu, (4) autonomous worker/coordinator (`StopWorker` yok).
+
+Çözüm: DB silmesinden **önce** `teardownSessionRuntime` (`session_teardown.go`), **fail
+closed** — canlı bir tur/subprocess durdurulamazsa delete 409 ile iptal edilir ve session
+tam olarak korunur (kuyruk geri yüklenir, worker devam eder). Sıra: kuyruğu `closing`
+bayrağıyla **dondur** (yeni dispatch durur ama mesajlar korunur) → uçuştaki turu iptal
+edip `run.done`'u bekle (`sessionTeardownGrace`=15sn, bitmezse abort) → warm süreçleri
+**doğrulanmış kill** ile düşür (`DropSessionChecked`/`closeChecked`: öldürülemeyen süreç
+havuzda kalır, orphan olmaz, delete'i bloke eder) → autonomous worker'ı durdur → inbox
+girdisini kaldır. `CLISession.closeChecked` `os.ErrProcessDone`'u başarı sayar, kill
+hatasında `closed=false` bırakıp retry'a izin verir. Testler: `session_teardown_test.go`
+(stop/timeout/freeze/resume). `go build`/`go vet` temiz, 403 test geçiyor.
 
 ## Doğrulama
 

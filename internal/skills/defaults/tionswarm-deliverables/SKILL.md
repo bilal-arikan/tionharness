@@ -20,6 +20,13 @@ deliver substantial output only as inline chat text, and do NOT write it only
 via an ad-hoc shell command — that bypasses artifact capture, so the user never
 gets a real, openable deliverable in the Artifacts screen.
 
+> **Auto-capture may be OFF for this workspace.** By default every file you write
+> is auto-captured as an artifact; a workspace can turn that off
+> (`AutoCaptureArtifacts`). When it is off, a plain file write does NOT create an
+> artifact — register deliverables **deliberately** with `create_artifact`, and
+> ordinary edits to project source files stay out of the Artifacts screen. Your
+> turn's deliverable-guidance line tells you which mode is active.
+
 For a **binary file already on disk** (e.g. a screenshot, a generated PDF), call
 `create_artifact` with `kind=image|file` and `sourcePath` set to the path on
 disk. Never base64-embed raw bytes into `content` — it blows the token budget

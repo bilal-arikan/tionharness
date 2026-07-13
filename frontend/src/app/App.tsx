@@ -44,6 +44,7 @@ import { SettingsPanel } from '@/features/settings/SettingsPanel'
 import { WorkspaceView } from '@/features/workspace/WorkspaceView'
 import { OnboardingScreen } from '@/features/workspace/OnboardingScreen'
 import { ClaudeAuthGate } from '@/features/workspace/ClaudeAuthGate'
+import { WorkspaceRecommendations } from '@/features/workspace/WorkspaceRecommendations'
 import { useDirtyViews } from '@/shared/lib/dirtySignals'
 import { useIsMobile } from '@/shared/hooks/useMediaQuery'
 import { useCollapsibleList } from '@/shared/hooks/useCollapsibleList'
@@ -87,10 +88,17 @@ export default function App() {
   const bumpClaudeGate = useCallback((requireNoProvider: boolean) => {
     setClaudeGate((g) => ({ nonce: g.nonce + 1, requireNoProvider }))
   }, [])
+  // Separate trigger for the post-create advisory cards (WorkspaceRecommendations).
+  // Bumped ONLY on a successful create/attach — never on chat-open — so the user is
+  // offered tool wiring once per new workspace, not nagged every time they open chat.
+  const [recsTrigger, setRecsTrigger] = useState(0)
   const handleCreateWorkspace = useCallback(
     async (data: Parameters<typeof createWorkspace>[0]) => {
       const created = await createWorkspace(data)
-      if (created) bumpClaudeGate(false)
+      if (created) {
+        bumpClaudeGate(false)
+        setRecsTrigger((n) => n + 1)
+      }
     },
     [createWorkspace, bumpClaudeGate],
   )
@@ -101,7 +109,10 @@ export default function App() {
   const handleAttachWorkspace = useCallback(
     async (path: string) => {
       const attached = await attachWorkspace(path)
-      if (attached) bumpClaudeGate(false)
+      if (attached) {
+        bumpClaudeGate(false)
+        setRecsTrigger((n) => n + 1)
+      }
       return attached
     },
     [attachWorkspace, bumpClaudeGate],
@@ -578,6 +589,7 @@ export default function App() {
             onWorkspaceChanged={refreshWorkspaces}
             onDeleteWorkspace={deleteActiveWorkspace}
             onAppearanceSaved={onAppearanceSaved}
+            onShowRecommendations={() => setRecsTrigger((n) => n + 1)}
             tab={links.workspaceTab}
             onTabChange={links.setWorkspaceTab}
             navOpen={workspaceNav.open}
@@ -700,6 +712,20 @@ export default function App() {
         requireNoProvider={claudeGate.requireNoProvider}
         onNavigateProviders={() => {
           links.setSettingsCat('providers')
+          setView('settings')
+        }}
+        onError={setError}
+      />
+
+      {/* Post-create advisory cards: after a new workspace is created/attached,
+          offer one-click wiring for detected external tools (sqz hook,
+          codebase-memory MCP) and steer toward setting a default working dir.
+          Dismissible; never shown on chat-open. */}
+      <WorkspaceRecommendations
+        trigger={recsTrigger}
+        onNavigateView={(v) => setView(v as View)}
+        onNavigateSettings={(cat) => {
+          links.setSettingsCat(cat)
           setView('settings')
         }}
         onError={setError}

@@ -69,9 +69,23 @@ type WSSettings struct {
 	// Default on; off = every turn recomposes from live state (pre-epoch behaviour).
 	PromptEpochEnabled bool `json:"promptEpochEnabled"`
 
+	// AutoCaptureArtifacts toggles the turn-end trace scan that upserts every file
+	// the agent wrote (Write/create_file) as an artifact automatically. Default OFF:
+	// only files the agent DELIBERATELY registers via create_artifact become
+	// artifacts — plain file writes (e.g. editing project source) stay off the
+	// Artifacts screen. On: any file deliverable lands in the Artifacts screen
+	// without an explicit call. The deliverable prompt guidance follows this toggle.
+	AutoCaptureArtifacts bool `json:"autoCaptureArtifacts"`
+
 	// BoardColumns overrides the default kanban column set for this workspace.
 	// Empty/nil means "use db.DefaultBoardColumns()".
 	BoardColumns []db.BoardColumnDef `json:"boardColumns,omitempty"`
+
+	// IgnoredRecommendations holds the keys of post-create advisory cards
+	// (WorkspaceRecommendations) the user dismissed for this workspace, so they are
+	// not re-offered. Purely UI state — no runtime effect. Manageable (review +
+	// un-ignore) from the Settings ▸ Öneriler panel.
+	IgnoredRecommendations []string `json:"ignoredRecommendations,omitempty"`
 }
 
 // defaultWSSettings is the seed used before overlaying a persisted ws-settings
@@ -82,6 +96,10 @@ func defaultWSSettings() WSSettings {
 		Instructions:          defaultInstructions,
 		CodebaseMemoryEnabled: true,
 		PromptEpochEnabled:    true,
+		// Default OFF: writing a file no longer auto-registers an artifact. Only a
+		// deliberate create_artifact call produces one, so editing project source
+		// files does not pollute the Artifacts screen. Opt in per workspace.
+		AutoCaptureArtifacts: false,
 	}
 }
 
@@ -103,8 +121,11 @@ type WSSettingsPatch struct {
 
 	CodebaseMemoryEnabled *bool `json:"codebaseMemoryEnabled"`
 	PromptEpochEnabled    *bool `json:"promptEpochEnabled"`
+	AutoCaptureArtifacts  *bool `json:"autoCaptureArtifacts"`
 
 	BoardColumns *[]db.BoardColumnDef `json:"boardColumns"`
+
+	IgnoredRecommendations *[]string `json:"ignoredRecommendations"`
 }
 
 // settingsHolder is embedded in Workspace to guard concurrent settings access.
@@ -226,8 +247,14 @@ func (m *Manager) UpdateSettings(id string, patch WSSettingsPatch) (*Workspace, 
 	if patch.PromptEpochEnabled != nil {
 		ws.settings.cur.PromptEpochEnabled = *patch.PromptEpochEnabled
 	}
+	if patch.AutoCaptureArtifacts != nil {
+		ws.settings.cur.AutoCaptureArtifacts = *patch.AutoCaptureArtifacts
+	}
 	if patch.BoardColumns != nil {
 		ws.settings.cur.BoardColumns = *patch.BoardColumns
+	}
+	if patch.IgnoredRecommendations != nil {
+		ws.settings.cur.IgnoredRecommendations = *patch.IgnoredRecommendations
 	}
 	paused := ws.settings.cur.PauseAutonomy
 	instructions := ws.settings.cur.Instructions

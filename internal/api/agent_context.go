@@ -180,7 +180,7 @@ func (s *Server) buildAgentStaticPrompt(ctx context.Context, wsp *workspace.Work
 	if ins := strings.TrimSpace(wsp.Settings().Instructions); ins != "" {
 		system = strings.TrimSpace(system + "\n\n# Workspace Instructions\n" + ins)
 	}
-	system = strings.TrimSpace(system + "\n\n" + artifactDeliverableGuidance)
+	system = strings.TrimSpace(system + "\n\n" + artifactGuidanceFor(wsp.Settings().AutoCaptureArtifacts))
 	if sb := wsp.Runtime.SkillsCatalogBlockForAgent(agent); sb != "" {
 		system = strings.TrimSpace(system + "\n\n" + sb)
 	}

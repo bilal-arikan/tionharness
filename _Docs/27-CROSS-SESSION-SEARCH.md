@@ -142,9 +142,14 @@ Tam/çevre metni `db.MessagesAround(sid, mid, before, after)` ile bellekteki tra
 Lazy-load kataloğuna girebilir (`19-LAZY-TOOL-LOADING.md` deseni) — `activate_tools`
 ile çekilir; sürekli prompt'ta durmasına gerek yok.
 
-**`list_sessions` sayfalama:** `state` (`active`|`all`) + `limit` (varsayılan 20) +
-`offset` (varsayılan 0). Yanıt sonunda `Showing X–Y of Z` ve daha varsa
-`… pass offset:Y for the next page` — böylece tüm sessionlar sayfa sayfa okunur.
+**`list_sessions` kapsam + sayfalama:** Araç **varsayılan olarak TÜM kind'leri**
+listeler (chat + spawn/worker/flow/task/schedule) — eski `Kind=="chat"` sabit
+filtresi kaldırıldı (2026-07-13), çünkü otonom koşular UI'nın sidebar/Overview'ında
+görünürken ajanın `list_sessions`'ında görünmüyordu. Args: `state` (`active`|`all`,
+vars. `active`) + **`kind`** (tek kind'e daralt; boş = hepsi) + `limit` (vars. 20) +
+`offset` (vars. 0). Her satır `[kind·state]` ön ekiyle başlar. Yanıt sonunda
+`Showing X–Y of Z` ve daha varsa `… pass offset:Y for the next page` — böylece tüm
+sessionlar sayfa sayfa okunur.
 
 ### Test
 - `builtin_conversation_search_test.go`: eşleşme biçimi, rol filtresi, boş sonuç,

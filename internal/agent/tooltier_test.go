@@ -79,7 +79,7 @@ func TestLazyCatalogSummarisesManyMCPTools(t *testing.T) {
 		{Name: "srvA__alpha", Description: "mcp tool alpha"},
 		{Name: "srvA__beta", Description: "mcp tool beta"},
 	}
-	out := renderLazyToolCatalog(small, 0, false)
+	out := renderLazyToolCatalog(small, 0, false, nil)
 	if !strings.Contains(out, "create_agent") || !strings.Contains(out, "srvA__alpha") {
 		t.Fatalf("small catalog should list every tool, got:\n%s", out)
 	}
@@ -92,7 +92,9 @@ func TestLazyCatalogSummarisesManyMCPTools(t *testing.T) {
 			Description: "an mcp tool",
 		})
 	}
-	out = renderLazyToolCatalog(big, 0, false)
+	// A curated server description must ride the per-server summary line so the
+	// model keeps a semantic hint even when individual tools are dropped.
+	out = renderLazyToolCatalog(big, 0, false, map[string]string{"bigsrv": "graph code search; prefer over grep"})
 	if !strings.Contains(out, "create_agent") {
 		t.Error("built-in lazy tool must still be listed in full")
 	}
@@ -105,6 +107,9 @@ func TestLazyCatalogSummarisesManyMCPTools(t *testing.T) {
 	if !strings.Contains(out, "bigsrv") {
 		t.Error("summary must name the server")
 	}
+	if !strings.Contains(out, "graph code search; prefer over grep") {
+		t.Errorf("per-server summary must carry the server description, got:\n%s", out)
+	}
 }
 
 // TestLazyCatalogHidesSelfManageBehindSkillPointer verifies the rendered block
@@ -112,7 +117,7 @@ func TestLazyCatalogSummarisesManyMCPTools(t *testing.T) {
 // the tionswarm-self-management skill (and still names the visible lazy tools).
 func TestLazyCatalogHidesSelfManageBehindSkillPointer(t *testing.T) {
 	visible := []providers.ToolDef{{Name: "WebFetch", Description: "fetch a page"}}
-	out := renderLazyToolCatalog(visible, 12, false)
+	out := renderLazyToolCatalog(visible, 12, false, nil)
 	if !strings.Contains(out, "WebFetch") {
 		t.Error("visible lazy tools must still be listed")
 	}
@@ -123,12 +128,12 @@ func TestLazyCatalogHidesSelfManageBehindSkillPointer(t *testing.T) {
 		t.Errorf("pointer must state the hidden count, got:\n%s", out)
 	}
 	// With no hidden tools, no pointer line.
-	out = renderLazyToolCatalog(visible, 0, false)
+	out = renderLazyToolCatalog(visible, 0, false, nil)
 	if strings.Contains(out, "tionswarm-self-management") {
 		t.Error("no pointer when there are no hidden tools")
 	}
 	// Empty + no hidden → empty block.
-	if renderLazyToolCatalog(nil, 0, false) != "" {
+	if renderLazyToolCatalog(nil, 0, false, nil) != "" {
 		t.Error("empty catalog with no hidden tools must render nothing")
 	}
 }
@@ -144,7 +149,7 @@ func TestLazyCatalogCLIFormNamespacesNames(t *testing.T) {
 		{Name: "WebFetch", Description: "fetch"},  // CLI-native → dropped
 		{Name: "srvA__alpha", Description: "mcp"}, // MCP → mcp__ prefix
 	}
-	out := renderLazyToolCatalog(lazy, 3, true)
+	out := renderLazyToolCatalog(lazy, 3, true, nil)
 
 	if !strings.Contains(out, "mcp__tionswarm_extended__update_session") {
 		t.Errorf("CLI form must namespace lazy built-ins under the extended tier:\n%s", out)
@@ -167,7 +172,7 @@ func TestLazyCatalogCLIFormNamespacesNames(t *testing.T) {
 	}
 
 	// Native form keeps bare names + activate_tools (regression guard).
-	nat := renderLazyToolCatalog(lazy, 0, false)
+	nat := renderLazyToolCatalog(lazy, 0, false, nil)
 	if !strings.Contains(nat, "- `update_session`") || !strings.Contains(nat, "- `WebFetch`") {
 		t.Errorf("native form keeps bare names incl. WebFetch:\n%s", nat)
 	}

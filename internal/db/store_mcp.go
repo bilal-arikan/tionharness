@@ -32,6 +32,45 @@ func (d *DB) CreateMCPServer(ctx context.Context, m MCPServer) (MCPServer, error
 	return m, d.persistMCPLocked(m)
 }
 
+// UpdateMCPServer replaces the editable fields of an existing server, preserving
+// its identity (ID, CreatedAt, CreatedBy) and Enabled state. Returns ErrNotFound
+// if the id is unknown. A changed connection spec re-dials on the next turn via
+// the pool's config fingerprint.
+func (d *DB) UpdateMCPServer(ctx context.Context, id string, upd MCPServer) (MCPServer, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	m, ok := d.mcp[id]
+	if !ok {
+		return MCPServer{}, ErrNotFound
+	}
+	m.Name = upd.Name
+	m.Description = upd.Description
+	m.Transport = upd.Transport
+	m.Command = upd.Command
+	m.Args = upd.Args
+	m.URL = upd.URL
+	m.EnvConfig = upd.EnvConfig
+	m.HeadersConfig = upd.HeadersConfig
+	m.Scope = upd.Scope
+	// Same normalisation as create; identity + enabled are preserved above.
+	if m.Transport == "" {
+		m.Transport = MCPTransportStdio
+	}
+	if m.Args == "" {
+		m.Args = "[]"
+	}
+	if m.EnvConfig == "" {
+		m.EnvConfig = "{}"
+	}
+	if m.HeadersConfig == "" {
+		m.HeadersConfig = "{}"
+	}
+	if m.Scope == "" {
+		m.Scope = "shared"
+	}
+	return m, d.persistMCPLocked(m)
+}
+
 // GetMCPServer loads an MCP server by id.
 func (d *DB) GetMCPServer(ctx context.Context, id string) (MCPServer, error) {
 	return dbGet(d, d.mcp, id)

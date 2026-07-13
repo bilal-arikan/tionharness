@@ -298,6 +298,7 @@ type Settings struct {
 	SpawnMaxConcurrent int `json:"spawnMaxConcurrent"` // max concurrent spawned sessions (0 = default 16)
 	SpawnMaxPerTurn    int `json:"spawnMaxPerTurn"`    // max spawns per agent turn (0 = default 4)
 	SpawnTimeoutMin    int `json:"spawnTimeoutMin"`    // spawn work-turn deadline in minutes (0 = default 20); also budgets its auto-continue continuations
+	SpawnIdleTimeoutMin int `json:"spawnIdleTimeoutMin"` // spawn/worker inactivity watchdog in minutes (0 = default 5); cancels a turn that emits no step for this long
 	ScheduleTimeoutMin int `json:"scheduleTimeoutMin"` // scheduled-fire (cron task/prompt + wake) deadline in minutes (0 = default 30)
 
 	// Tool execution guards (process-global tool behaviour).
@@ -442,6 +443,7 @@ func Default() Settings {
 		SpawnMaxConcurrent: 16,
 		SpawnMaxPerTurn:    4,
 		SpawnTimeoutMin:    20,
+		SpawnIdleTimeoutMin: 5,
 		ScheduleTimeoutMin: 30,
 
 		ShellDefaultTimeoutSec: 30,
@@ -568,6 +570,7 @@ type DTO struct {
 	SpawnMaxConcurrent int `json:"spawnMaxConcurrent"`
 	SpawnMaxPerTurn    int `json:"spawnMaxPerTurn"`
 	SpawnTimeoutMin    int `json:"spawnTimeoutMin"`
+	SpawnIdleTimeoutMin int `json:"spawnIdleTimeoutMin"`
 	ScheduleTimeoutMin int `json:"scheduleTimeoutMin"`
 
 	ShellDefaultTimeoutSec int `json:"shellDefaultTimeoutSec"`
@@ -681,6 +684,7 @@ func (s Settings) ToDTO() DTO {
 		SpawnMaxConcurrent: s.SpawnMaxConcurrent,
 		SpawnMaxPerTurn:    s.SpawnMaxPerTurn,
 		SpawnTimeoutMin:    s.SpawnTimeoutMin,
+		SpawnIdleTimeoutMin: s.SpawnIdleTimeoutMin,
 		ScheduleTimeoutMin: s.ScheduleTimeoutMin,
 
 		ShellDefaultTimeoutSec: s.ShellDefaultTimeoutSec,

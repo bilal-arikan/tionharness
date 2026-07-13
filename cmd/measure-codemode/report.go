@@ -20,7 +20,7 @@ import (
 // lazyCatalogMCPListLimit mirrors internal/agent's constant of the same name:
 // above this many MCP tools the per-turn catalog switches from one line per
 // tool to one summary line per server.
-const lazyCatalogMCPListLimit = 30
+const lazyCatalogMCPListLimit = 50
 
 // serverResult is one server's measured catalog (or its connection failure).
 type serverResult struct {

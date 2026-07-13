@@ -199,6 +199,10 @@ func NewServer(manager *workspace.Manager, registry *providers.Registry, store *
 	go s.bridgeBusToHub()
 	// Re-dispatch any durably-queued messages left by a crash/restart (Faz 3).
 	go s.recoverInboxes()
+	// Reclaim autonomous background turns (worker/spawn/coordinator) orphaned by a
+	// crash/restart: mark them interrupted + notify the coordinator so it resumes
+	// instead of waiting forever on a worker that will never report.
+	go s.recoverAutonomousTurns()
 	s.applySettings()
 	return s
 }
@@ -249,6 +253,7 @@ func (s *Server) applySettings() {
 	s.tun.SetDelegationLimits(cur.DelegationMaxDepth, cur.DelegationMaxCalls)
 	s.tun.SetSpawnLimits(cur.SpawnMaxConcurrent, cur.SpawnMaxPerTurn)
 	s.tun.SetSpawnTimeoutMinutes(cur.SpawnTimeoutMin)
+	s.tun.SetSpawnIdleTimeoutMinutes(cur.SpawnIdleTimeoutMin)
 	s.tun.SetScheduleTimeoutMinutes(cur.ScheduleTimeoutMin)
 	tools.SetShellTimeouts(cur.ShellDefaultTimeoutSec, cur.ShellMaxTimeoutSec)
 	tools.SetMaxToolOutputBytes(cur.MaxToolOutputKB * 1024)
@@ -545,6 +550,10 @@ func (s *Server) registerMCPRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/mcp-servers", s.handleListMCPServers)
 	mux.HandleFunc("POST /api/mcp-servers", s.handleCreateMCPServer)
 	mux.HandleFunc("POST /api/mcp-servers/import", s.handleImportMCPServers)
+	mux.HandleFunc("GET /api/mcp-servers/importable", s.handleImportableMCPServers)
+	mux.HandleFunc("POST /api/mcp-servers/importable/add", s.handleAddImportableMCPServer)
+	mux.HandleFunc("GET /api/mcp-servers/pool", s.handleMCPPoolStats)
+	mux.HandleFunc("PATCH /api/mcp-servers/{id}", s.handleUpdateMCPServer)
 	mux.HandleFunc("POST /api/mcp-servers/{id}/toggle", s.handleToggleMCPServer)
 	mux.HandleFunc("POST /api/mcp-servers/{id}/test", s.handleTestMCPServer)
 	mux.HandleFunc("DELETE /api/mcp-servers/{id}", s.handleDeleteMCPServer)
