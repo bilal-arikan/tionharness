@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/bilal-arikan/tionswarm/internal/db"
+	"github.com/bilal-arikan/tionswarm/internal/prompts"
 )
 
 // TestHandoffChainDepth walks the ParentSessionID lineage and counts resets.
@@ -94,7 +95,7 @@ func TestMaybeAutoHandoff_ChainCap(t *testing.T) {
 
 // TestBuildContinuationPrompt embeds the handoff inline and the recovery pointers.
 func TestBuildContinuationPrompt(t *testing.T) {
-	got := buildContinuationPrompt("SES7", "ART3", "/w/.tionswarm/handoff.md", "1. Objective: do X")
+	got := buildContinuationPrompt(prompts.Default("continuation"), "SES7", "ART3", "/w/.tionswarm/handoff.md", "1. Objective: do X")
 	for _, want := range []string{"FRESH context window", "SES7", "ART3", "conversation_search", "do X", "/w/.tionswarm/handoff.md"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("continuation prompt missing %q", want)

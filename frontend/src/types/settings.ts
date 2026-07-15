@@ -243,8 +243,8 @@ export interface ExternalToolStatus {
   path?: string
 }
 
-// A built-in runtime prompt (summary/title/compact), shown read-only in the
-// Komutlar settings screen.
+// A registered runtime prompt from the central prompt registry
+// (internal/prompts), shown read-only in the Komutlar settings screen.
 export interface PromptInfo {
   key: string
   label: string

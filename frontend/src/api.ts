@@ -14,6 +14,7 @@ import { graphApi } from './api/graph'
 import { mcpApi } from './api/mcp'
 import { hookApi } from './api/hooks'
 import { lessonApi } from './api/lessons'
+import { insightApi } from './api/insights'
 import { flowApi } from './api/flows'
 import { executionApi } from './api/executions'
 import { artifactApi } from './api/artifacts'
@@ -38,6 +39,7 @@ export const api = {
   ...mcpApi,
   ...hookApi,
   ...lessonApi,
+  ...insightApi,
   ...flowApi,
   ...executionApi,
   ...artifactApi,

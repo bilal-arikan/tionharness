@@ -40,6 +40,7 @@ import { ToolsPanel as ToolCatalogPanel } from '@/features/tools/ToolsPanel'
 import { MarketPanel } from '@/features/market/MarketPanel'
 import { BudgetPanel } from '@/features/budget/BudgetPanel'
 import { LogsPanel } from '@/features/logs/LogsPanel'
+import { InsightPanel } from '@/features/insight/InsightPanel'
 import { SettingsPanel } from '@/features/settings/SettingsPanel'
 import { WorkspaceView } from '@/features/workspace/WorkspaceView'
 import { OnboardingScreen } from '@/features/workspace/OnboardingScreen'
@@ -583,6 +584,15 @@ export default function App() {
         )}
         {view === 'budget' && <BudgetPanel onError={setError} />}
         {view === 'logs' && <LogsPanel onError={setError} />}
+        {view === 'insights' && (
+          <InsightPanel
+            onError={setError}
+            onOpenSession={(sid) => {
+              setView('chat')
+              ctl.selectSession(sid)
+            }}
+          />
+        )}
         {view === 'workspace' && (
           <WorkspaceView
             onError={setError}

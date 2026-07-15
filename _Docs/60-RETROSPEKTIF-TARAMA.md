@@ -1,6 +1,6 @@
 # 60 — Retrospektif Geçmiş Tarama (Insight Scan)
 
-> **Durum:** TASLAK (Faz 1 onaylı). Canlı ilerleme `05-ILERLEME.md`'ye işlenecek.
+> **Durum:** Faz 1–4 TAMAM (build OK · 899 test · tsc temiz). Canlı ilerleme `05-ILERLEME.md`'ye işlenecek.
 >
 > **Amaç:** Geçmiş session'ları **farklı amaçlarla (lens)** tarayan; taradığını tekrar
 > taramayan (session değiştiyse yeniden tarayan); bulguları **iki kanala** yönlendiren
@@ -61,6 +61,25 @@ Geçici/kullanıcı-kaynaklı hataları ELE.
 > diye JSON şemayı her lens tanımlamaz; motor tek kanonik `Finding` şemasını structured
 > output olarak dayatır. Lens yalnız prompt + kanal + prefilter + scope verir.
 
+### Prefilter — yapısal predikat (parser YOK)
+
+İfade dili (AND/OR/NOT parser'ı) **kullanılmaz** — editlenebilirlik + güvenlik için. Bunun
+yerine motorun yorumladığı sabit alanlı **declarative struct**:
+
+```yaml
+prefilter:
+  requiresAny: [error]           # OR — sinyallerden en az biri varsa aday
+  requiresAll: [worker, idle]    # AND — hepsi varsa
+  excludes: [handoff]            # NOT — varsa atla
+  minCount: { cache_break: 3 }   # sinyal → min tekrar (eşik)
+  minTokens: 50000               # session-düzeyi sayısal eşik
+```
+
+Sinyaller `debug.jsonl` olay türleri + step kind'larıdır. AND/OR/NOT/eşik ihtiyacını
+Turing-complete dil olmadan karşılar; yeni ihtiyaç = yeni sabit anahtar.
+**Faz 1:** yalnız `requiresAny` implement edilir (`tool-errors` bunu kullanır); struct diğer
+alanları baştan taşır, motor Faz 2+ lensleri gelince doldurur.
+
 ### Başlangıç default lensleri
 `tool-errors` (app-fix), `tool-usage-opt`, `skill-usage-opt`, `context-hygiene`,
 `context-cache-opt`, `lessons-mining` (hepsi workspace-opt). Genişletme: `autonomy-safety`,
@@ -78,19 +97,21 @@ Geçici/kullanıcı-kaynaklı hataları ELE.
   "seenFingerprint": "...", "scannedAt": 0, "findingCount": 0, "status": "clean|error" }
 ```
 
-**Fingerprint (baştan dahil):** `msgCount:lastMsgId:lastMsgCreatedAt` — `UpdatedAt`
-metadata-only bump'larını eler; birincil sinyal `UpdatedAt`, sağlamlık için fingerprint.
+**Fingerprint (baştan dahil, TEK tetik):** `Fingerprint(msgCount, summaryMsgCount)` =
+`"msgCount:summaryMsgCount"` — header'dan hesaplanır (jsonl okumaz). **İçerik değişim
+sinyali fingerprint'tir; `UpdatedAt` tetik DEĞİL** (saniye granülerliği → aynı-saniye içerik
+değişimini kaçırır; ayrıca metadata-only bump'ta da artar → yanlış tetikler). Fingerprint
+her ikisini de doğru çözer: tur append'inde/compaction'da değişir, metadata editinde değişmez.
+`seenUpdatedAt` yalnız gözlem için saklanır. (İleride son-mesaj-id ile güçlendirilebilir.)
 
 **Karar:**
 ```mermaid
 graph LR
     A[Session] --> B{ledger kaydi var mi?}
     B -- yok --> R[TARA]
-    B -- var --> C{UpdatedAt farkli mi?}
-    C -- evet --> R
-    C -- hayir --> D{fingerprint farkli mi?}
-    D -- evet --> R
-    D -- hayir --> S[ATLA]
+    B -- var --> D{fingerprint farkli mi?}
+    D -- evet --> R[TARA]
+    D -- hayir --> S[ATLA - metadata bump dahil]
 ```
 
 - **Per-lens** tutulur (farklı lens farklı yüzey okur).
@@ -151,9 +172,13 @@ stateDiagram-v2
 
 ## 6. İki Kanal
 
-- **Kanal A — App Fix:** kök neden uygulamada. Çıktı = App Fix Raporu artifact'i
-  (kök neden + kanıt session'lar + önerilen düzeltme + dosya işaretçisi). **Asla oto-apply.**
-  Sink seçenekleri: repo `_Docs` backlog / cwd=TionSwarm coder ajanı spawn / GitHub issue.
+- **Kanal A — App Fix:** kök neden uygulamada. Çıktı = App Fix Raporu (kök neden + kanıt
+  session'lar + önerilen düzeltme + dosya işaretçisi). **Asla oto-apply / asla coder-spawn.**
+  Kullanıcı bu raporları sonradan TionSwarm'ı geliştirmekte kullanır. **İki sink (varsayılan):**
+  1. **In-app detaylı rapor** — `findings.jsonl` + render artifact, Insight panosunda görünür (her zaman).
+  2. **Repo `_Docs` backlog** — hedef git reposu **UI'dan seçilir** (`InsightSettings.AppFixRepoPath`);
+     seçilen reponun `_Docs/INSIGHT-BACKLOG.md`'sine append-only yazılır (kodu değil dokümanı
+     ekler, versiyonlu, imza-dedupe ile tekrar eklemez). GitHub issue / coder-spawn kapsam dışı.
 - **Kanal B — Workspace Opt:** self-management araçlarına maplenir (skill buda,
   `BlockedTools`/`DisabledTools`, config prompt, agent soul, `update_settings`, eksik
   CLAUDE.md). **Guarded auto-apply:** düşük-risk oto, yüksek-risk `needs-review`.
@@ -162,18 +187,24 @@ stateDiagram-v2
 
 ## 7. Kod Yerleşimi + Yeniden Kullanım
 
-| Yeni | İçerik |
-|------|--------|
-| `internal/insight/intent.go` | Lens registry (workspace tier + embed seed) |
-| `internal/insight/defaults/*.md` | Gömülü default lensler (`//go:embed`) |
-| `internal/insight/ledger.go` | İnkremental durum (`UpdatedAt` + fingerprint) |
-| `internal/insight/scanner.go` | 3-aşamalı pipeline |
-| `internal/insight/finding.go` | Finding modeli + imza-dedupe |
-| `internal/insight/router.go` | Kanal yönlendirme |
-| `internal/insight/apply.go` | Workspace guarded auto-apply (Faz 2) |
-| `internal/api/insight.go` | REST uçları |
-| `frontend/src/features/insight/` | UI (Faz 1: read-only pano) |
-| ajan araçları | `insight_scan`, `insight_list_findings`, `insight_apply_finding` |
+| Yeni | İçerik | Durum |
+|------|--------|-------|
+| `internal/insight/finding.go` | Finding modeli + imza-dedupe store | ✅ Faz 1 |
+| `internal/insight/lens.go` | Lens tipi + Prefilter + parser + Registry | ✅ Faz 1 |
+| `internal/insight/prefilter.go` | Yapısal predikat `Match` (requiresAny/All/excludes/minCount/minTokens) | ✅ Faz 1 |
+| `internal/insight/ledger.go` | İnkremental durum (`UpdatedAt` + fingerprint) | ✅ Faz 1 |
+| `internal/insight/defaults.go` + `defaults/*.md` | Gömülü default lensler (`//go:embed`) + seed | ✅ Faz 1 |
+| `internal/insight/scanner.go` | Pipeline + `SessionSignals` extraction + prefilter + inkremental + dedupe (`Analyzer` seam) | ✅ Faz 1 (LLM impl hariç) |
+| `internal/insight/router.go` | Kanal A: `RenderAppFixReport` + `AppendBacklog` (idempotent, insight-sig marker) | ✅ Faz 1 |
+| `internal/insight/settings.go` | `Settings{AppFixRepoPath,MaxSessions}` load/save | ✅ Faz 1 |
+| `internal/agent/insightanalyzer.go` | Gerçek `Analyzer`: `guardedComplete` + structured output + parse-with-fallback | ✅ Faz 1 |
+| `internal/agent/insightscan.go` | `Runtime.RunInsightScan` orchestration (seed→scan→backlog route) | ✅ Faz 1 |
+| `internal/api/insight.go` | REST uçları (lenses/scan/findings/settings) + server.go route kaydı | ✅ Faz 1 |
+| `internal/insight/router.go` Kanal B | `AppendWorkspaceActions` → `insight/WORKSPACE-ACTIONS.md` (idempotent) | ✅ Faz 2.5 |
+| `internal/agent/insightcron.go` | `InsightCron` — ayar-güdümlü otomatik tarama (`AutoScanCron`) | ✅ Faz 3 |
+| `frontend/src/features/insight/` | UI (pano + triage + auto-scan cron alanı) | ✅ Faz 1–3 |
+| `internal/tools/builtin_insight.go` | ajan araçları `insight_scan` + `insight_list_findings` (id+status çıktı/filtre) + `insight_apply_finding` | ✅ Faz 1–2 |
+| `internal/skills/defaults/tionswarm-insight/` | Ajana tarama→sun→(kullanıcı kararı)→triage akışını öğreten skill | ✅ |
 
 **Yeniden kullanım:** `db.ListSessions` (+`UpdatedAt`), debug journal reader
 (`read_session_debug`), `call_llm`/`run_subagent`, `internal/skills` seed deseni,
@@ -186,61 +217,165 @@ retrospektif offline analiz. `lessons-mining` lensi lessons store'u besler (kopy
 
 ## 8. API + Araçlar (hedef yüzey)
 
-- `GET  /api/insight/lenses` — lens listesi (enabled/channel)
-- `POST /api/insight/scan` — `{ lensIds[], scope, channel }` → SSE canlı ilerleme
-- `GET  /api/insight/findings` — filtre: lens/channel/status
-- `POST /api/insight/findings/{id}/apply` — workspace-opt guarded apply (Faz 2)
-- `POST /api/insight/findings/{id}/dismiss`
+- `GET  /api/insight/lenses` — lens listesi (seed+load; id/name/channel/enabled/prefilter) ✅
+- `POST /api/insight/scan` — `{ lensIds[], … }` → **arka planda başlatır**, `202 {started}` döner
+  (senkron değil: tarama dakikalarca sürebilir + request-context iptali taramayı öldürürdü). Sonuç
+  bulgu store'una + `🔍 İçgörü Taraması` session'ına düşer. Çakışma guard'ı: çalışırken ikinci tetik `409`. ✅
+- `GET  /api/insight/status` — `{ scanning }` — arka plan taraması sürüyor mu (panel canlı takip + otomatik yenileme). ✅
+- `GET  /api/insight/runs` — son tarama-run log'u (when/süre/sayılar; session değil). ✅
+- `GET  /api/insight/fleet-findings` — tüm workspace'ler arası birleşik app-fix backlog'u (kanonik-imza dedup). ✅
+- `GET  /api/insight/lenses/{id}/raw` · `PUT /api/insight/lenses/{id}` (parse-doğrulamalı) · `POST /api/insight/lenses/{id}/toggle` — lens düzenleme/enable-disable. ✅
+- `GET  /api/insight/findings?lens=&channel=` — bulgu listesi ✅
+- `GET|PUT /api/insight/settings` — `{ appFixRepoPath, maxSessions, autoScanCron, autoScanAgentId }` ✅
+  (PUT sonrası otomatik tarama cron'u anında re-arm edilir)
+- `POST /api/insight/findings/{id}/status` — bulgu statü geçişi (triage) ✅
 
 ---
 
 ## 9. Tetikleme
 
-- **Manuel (Faz 1):** UI ekranı → lens + kapsam + kanal seç → `POST /scan` → SSE.
-- **Otomatik (Faz 3):** `AutomationEngine`'e yeni `insight-scan` tetik türü + cron.
-  İkisi de aynı `Engine.Scan(scope, lensIds, channel)`'ı çağırır.
+- **Manuel (✅):** UI → lens seç → "Tara" → `POST /scan` **arka planda** başlar; panel `/status`'u
+  poll ederek bitişte bulguları yeniler. Tarama tek-uçuş (workspace başına bir tarama, çakışma `409`).
+- **Otomatik (✅ Faz 3):** `insight/settings.json` `autoScanCron` → `InsightCron` doğrudan
+  `RunInsightScan`'i çağırır (özel cron, prompt/flow Scheduler'dan ayrı, deterministik).
+- **Ajan-güdümlü (✅):** Bir ajana talimatla ("içgörü taraması yap ve özetle") → ajan `insight_scan`
+  ile tarar, `insight_list_findings` ile okur (satır başında **finding id**), kanala göre sunar ve
+  **DURUR** — kullanıcı ne yapılacağını söyler, ajan `insight_apply_finding` ile triage eder (advisory,
+  otomatik mutasyon yok). `tionswarm-insight` skill'i bu akışı öğretir. Otomasyon: aynı talimatı bir
+  schedule'a koy (Scheduler zaten ajan-prompt tetikler).
+
+> **Not:** Normal taramalar **session olarak listelenmez** (bilinçli — gürültü olmasın). Sonuç
+> bulgu store'una + panele + sink dokümanlarına düşer; panel `GET /status`'u poll edip yeniler.
 
 ---
 
 ## 10. Uygulama TODO
 
 ### Faz 1 — İskelet (onaylı)
-- [ ] `internal/insight/` paket iskeleti + `Finding` kanonik modeli (`finding.go`).
-- [ ] Lens dosya formatı parser'ı (frontmatter + gövde) — `intent.go`.
-- [ ] Gömülü default lens: `defaults/tool-errors.md` + `//go:embed` seed (skills seed
-      mantığını uyarla: sürüm+fm-farkındalı, kullanıcı fm korunur).
-- [ ] Workspace tier loader: `<workspace>/insight/lenses/` → registry.
-- [ ] Ledger (`ledger.go`): `<store>/insight/ledger.jsonl`, `UpdatedAt` + fingerprint
-      (`msgCount:lastMsgId:lastMsgCreatedAt`) hesabı + oku/yaz + "değişti mi?" kararı.
-- [ ] Prefilter: lens `prefilter.requiresAny` → `debug.jsonl`/steps yapısal kontrol (LLM yok).
-- [ ] Per-session analiz: ilgili dilimi topla → `call_llm`/claude-cli → kanonik `Finding[]`
-      (structured output). Session'lar paralel + bütçe tavanı.
-- [ ] Aggregate + imza-dedupe → `<store>/insight/findings.jsonl`.
-- [ ] Kanal A router: App Fix Raporu artifact'i (read-only; kanıt + dosya işaretçisi).
-- [ ] `internal/api/insight.go`: `GET /lenses`, `POST /scan` (SSE), `GET /findings`.
-- [ ] Frontend `features/insight/`: lens seç + kapsam + "Tara" + canlı ilerleme + bulgu panosu (read-only).
-- [ ] Ajan aracı `insight_scan` + `insight_list_findings` (self-management).
-- [ ] Bütçe/guardrail: max session, max token per scan-run; archived default hariç (oto).
 
-### Faz 2 — Workspace kanalı
-- [ ] `skill-usage-opt` + `context-hygiene` default lensleri.
-- [ ] `apply.go`: workspace-opt guarded auto-apply (düşük-risk oto, yüksek-risk `needs-review`).
-- [ ] `POST /findings/{id}/apply|dismiss` + UI accept/dismiss/apply.
-- [ ] Ajan aracı `insight_apply_finding`.
+**Deterministik çekirdek — TAMAM (14 unit test geçti):**
+- [x] `finding.go`: `Finding` kanonik modeli + `FindingStore` (imza-dedupe, atomic tmp+rename).
+- [x] `lens.go`: lens parser (frontmatter flat via `skills.Frontmatter*` + gövde) + `Registry`
+      (dizinden yükle, bozuk dosya diğerlerini kör etmez); geçersiz channel/id = HATA.
+- [x] `prefilter.go`: yapısal predikat `Match` (tüm alanlar: requiresAny/All/excludes/minCount/minTokens).
+- [x] `ledger.go`: `<store>/insight/ledger.jsonl`, `Fingerprint(msgCount,summaryMsgCount)` +
+      append-only `Record` + `NeedsScan` ("değişti mi?" kararı, metadata-bump'ı eler).
+- [x] `defaults.go` + `defaults/tool-errors.md`: `//go:embed` seed (missing→yaz, user edit korunur).
 
-### Faz 3 — Otomasyon
-- [ ] `AutomationEngine` `insight-scan` tetik türü + cron config.
-- [ ] Gece taraması: değişmiş session'lar → route → app-fix rapor + düşük-risk apply +
-      yüksek-risk `needs-review`.
+**Scanner çekirdeği — TAMAM (17 unit test geçti, LLM'siz):**
+- [x] `scanner.go`: `SessionSignals` çıkar (Steps JSON via minimal `rawStep` + `debug.jsonl`
+      via `ReadDebugEvents`) → prefilter → inkremental (ledger) → dilim topla → `Analyzer` seam →
+      `Finding` dedupe-upsert + ledger kayıt. `Analyzer` interface = tek LLM seam (fake ile test).
+      Analyzer hatası → pair kaydedilmez → sonraki taramada retry. Archived atlanır (opt-in).
 
-### Faz 4 — Genişletme
-- [ ] Kalan default lensler (`tool-usage-opt`, `context-cache-opt`, `lessons-mining`, +ekstralar).
-- [ ] `lessons-mining` → lessons store besleme sinerjisi.
-- [ ] Bulgu panosu: pattern/occurrence görselleştirme.
+**LLM + entegrasyon — TAMAM (tam build + tsc temiz):**
+- [x] `internal/agent/insightanalyzer.go`: gerçek `Analyzer` — `guardedComplete` (usage-metered,
+      workspace-pinned) + `Request.OutputSchema` structured output + parse-with-fallback (balanced
+      JSON çıkar; unparseable → 0 bulgu + warn). `KindReflect` call-kind (ucuz TitleModel override).
+- [x] `internal/agent/insightscan.go`: `Runtime.RunInsightScan(scope, agentID)` — seed→registry→
+      ledger/findings/settings→scan→app-fix backlog append. Ajan seçimi: verilen id veya default.
+- [x] `router.go` Kanal A: `RenderAppFixReport` + `AppendBacklog` (idempotent, `insight-sig` marker).
+- [x] `settings.go`: `Settings{AppFixRepoPath,MaxSessions}` load/save (atomic).
+- [x] `internal/api/insight.go` + `server.go`: `GET /lenses`, `POST /scan` (senkron), `GET /findings`,
+      `GET|PUT /settings`.
+- [x] Frontend `features/insight/InsightPanel.tsx` + wiring (NavRail/viewRegistry/App) + `api/insights.ts`
+      + `types/insight.ts`: lens seç + "Tara" + bulgu panosu + ayarlar (repo yolu + maxSessions).
+- [x] Ajan araçları `insight_scan` (tools→agent `InsightScanner` interface ile Runtime tetikler) +
+      `insight_list_findings` (db-only, read-only); ikisi de toolsetup'a kayıtlı.
+- [x] Bütçe/guardrail: `MaxSessions` (scope + settings), archived default hariç (opt-in).
+- [x] Lens seed: **lazy** — `GET /lenses` ve `RunInsightScan` `EnsureDefaults` çağırır (boot bağı gereksiz).
+
+**Faz 1 — TAMAM.** Tek ertelenen (opsiyonel, düşük değer):
+- [ ] Scan sonrası in-app rapor **artifact**'i — `RenderAppFixReport` hazır ama artifact session-scoped;
+      workspace-seviyesi scan'in session'ı yok. Findings store zaten kalıcı + panel gösteriyor →
+      Faz 2'ye ertelendi (accept/dismiss UI ile birlikte).
+
+> **Not:** seed Faz 1'de basit (missing→yaz). Skills'teki sürüm+fm-farkındalı body-refresh
+> ileride eklenebilir. `POST /scan` senkron; canlı ilerleme (SSE) Faz 3.
+
+### Faz 2 — Workspace kanalı — TAMAM (build OK · 223 test · tsc temiz)
+- [x] `skill-usage-opt` + `context-hygiene` default lensleri (`//go:embed`, workspace-opt).
+- [x] Prefilter **tool-adı sinyali**: `SessionSignals.Tools` (StepTool.Tool + DebugTool.Name) →
+      lens `requiresAny:[use_skill]` gibi araç-hedefli prefilter mümkün.
+- [x] Bulgu yaşam döngüsü (triage): `POST /api/insight/findings/{id}/status` (`ValidStatus`) +
+      panelde **Kabul / Uygulandı / Yoksay** butonları + status rozeti + `insight_apply_finding` aracı.
+
+> **Otomatik mutasyon bilinçli olarak yapılmadı (güvenlik).** Kullanıcının "riskli şeyi
+> sessizce yapma" ilkesi gereği workspace-opt bulguları **advisory**: apply = statü geçişi
+> (kullanıcı/ajan öneriyi kendi uygular).
+
+### Faz 2.5 — Kanal B sink (workspace-opt) — TAMAM
+- [x] `router.go` **`AppendWorkspaceActions(storeRoot, findings)`**: workspace-opt bulguları
+      `<store>/insight/WORKSPACE-ACTIONS.md`'ye idempotent ekler (Kanal A backlog'un simetriği,
+      aynı `insight-sig` marker dedupe). `AppendBacklog` ile ortak `appendFindingsFile` motoru.
+- [x] `RunInsightScan` scan sonrası Kanal B sink'i çağırır (app-fix backlog'a paralel).
+
+> **Karar:** Otomatik workspace mutasyonu için güvenli/tersine-çevrilebilir bir knob
+> (tool-disable vb.) `WorkspaceBridge`'de yok; her aksiyon tipi ayrı tasarım ister. Bu yüzden
+> Kanal B sink de **doküman**tır (auto-mutasyon değil) — kullanıcının ilkesine uygun boundary.
+
+### Faz 3 — Otomasyon — TAMAM (build OK · 899 test · tsc temiz)
+- [x] `internal/agent/insightcron.go` **`InsightCron`**: ayarlardan (`AutoScanCron`) beslenen,
+      `RunInsightScan`'i **doğrudan** çağıran özel cron (prompt/flow Scheduler'dan ayrı — tarama
+      model-üzerinden değil deterministik). Workspace başına bir tane; boot'ta armlanır, kapanışta Stop.
+- [x] `Settings{AutoScanCron, AutoScanAgentID}` + settings PUT sonrası `ReloadInsightCron` ile anında re-arm.
+- [x] `manager.go` wiring (Workspace.InsightCron alanı + Start/Stop) + UI'da cron alanı.
+
+> **Async tarama (canlı gözlemden sonra eklendi):** Gerçek bir workspace'te ilk tam tarama
+> `dur=17m` HTTP'yi blokladı + request-context iptali (sekme değişimi) taramayı öldürüyordu.
+> `POST /scan` artık arka planda çalışır (`202`), panel `GET /status`'u poll eder. Tam SSE yerine
+> bu poll + `🔍 İçgörü Taraması` session kaydı yeterli. **Sıradaki iyileştirme:** analyzer
+> çağrılarında sınırlı eşzamanlılık (17dk → dakikalar) — dikkatli, `res`/ledger yarış-güvenli olmalı.
+
+### Faz 4 — Genişletme — TAMAM (build OK · 899 test · tsc temiz)
+- [x] Kalan default lensler: `tool-usage-opt` + `context-cache-opt` (workspace-opt, `minCount`
+      prefilter) + `lessons-mining` (workspace-opt, `requiresAny:[error]`). `//go:embed` ile seed.
+- [x] `minCount` inline-map prefilter parse'ı (`parseMinCount`) — flat frontmatter'ın string
+      bıraktığı `{ tool: 12 }` formunu sinyal→eşik map'ine çevirir; prefilter enforce eder.
+- [x] `lessons-mining` → **lessons store besleme sinerjisi**: `ScanResult.Produced` (bu taramada
+      üretilen bulgular) → `RunInsightScan.promoteMinedLessons` → `db.AddLesson` (imza-dedupe,
+      Count++). Sadece taze bulgular beslenir (tüm store re-feed edilmez).
+- [x] Bulgu panosu occurrence göstergesi (`×N`) + status rozeti zaten mevcut.
+
+### Faz 5 — Kalite & Yaşam Döngüsü — TAMAM (build OK · 915 test · tsc temiz)
+Canlı taramalarda gözlenen zayıflıklara yönelik olgunlaştırma (üretim tarafı güçlüydü, döngü tarafı zayıftı):
+- [x] **Regresyon tespiti** (`finding.go`): kapalı (dismissed/applied/verified) bir bulgu nüksederse
+      `Regressed`+`RegressedAt` işaretlenir; `SetStatus` yeni kararda temizler. Backlog + panel + tool "⚠REGRESSED" gösterir.
+- [x] **Kompozit öncelik skoru** (`priority.go`): `severity×occurrences` + regresyon bonusu − kapalı cezası;
+      `List` artık tarihe değil skora göre sıralı → 100-bulgu triage'ı kullanılır.
+- [x] **GC + auto-verify** (`maintain.go`): applied bulgu 14 gün nüksetmezse `verified`; dismissed/verified 45 günde prune. Scan sonrası çağrılır.
+- [x] **Semantik dedup** iki katman: ingest'te kanonik-imza birleştirme (`dedup.go` `canonSig`) +
+      görüntüleme-zamanı lexical kümeleme (`cluster.go` token-Jaccard, `insight_list_findings cluster:true`).
+- [x] **Analyzer eşzamanlılık** (`scanner.go`): 3-faz (serial enum → paralel analyze bounded-pool → serial apply); 17dk → dakikalar.
+- [x] **MaxAnalyzed bütçesi**: taramada sert LLM-çağrı tavanı (`ScanScope`/`Settings`); aşan çiftler sonraki taramaya kalır.
+- [x] **FilePointer doğrulama** (`CheckFilePointer`): app-fix backlog'da repo'da olmayan LLM-tahmini yolları "⚠ unverified" işaretler.
+- [x] **Fleet rollup** (`fleet.go` + `GET /api/insight/fleet-findings`): tüm workspace'lerin app-fix bulgularını kanonik-imzayla birleştirir.
+- [x] **Scan-run log** (`runlog.go` + `GET /api/insight/runs`): session değil, append-only observability (when/süre/sayılar).
+
+### Faz 6 — Triage Kokpiti (UI/UX) — TAMAM (build OK · tsc temiz)
+Panel "düz liste"den triage kokpitine dönüştü; `features/insight/` alt bileşenlere bölündü:
+- [x] **Sekmeler**: Bulgular / Lensler / Fleet / Geçmiş / Ayarlar (`InsightPanel` shell).
+- [x] **Filtre + arama** (`FilterBar` + `insightHelpers.applyFilter`): kanal/statü/severity/lens/regresyon/metin.
+- [x] **Kümeleme toggle** (`clusterFindings`, Go Jaccard'ın TS aynası): benzer bulguları temsilci+sayıya indirir.
+- [x] **Özet başlığı** (`SummaryHeader`): tıklanabilir sayaç-çipleri (tek-tık filtre).
+- [x] **Katlanabilir bulgu kartları** (`FindingCard`): öncelik renk-kodu, regresyon rozeti, kanıt-session'a tıklama.
+- [x] **"Karta ekle"** (tek + toplu): app-fix/workspace-opt bulgusu → board kartı (`POST /api/tasks`, severity→priority, insight tag).
+- [x] **Toplu aksiyon**: seç → Kabul/Yoksay/Karta ekle; **"verified"** statüsü de eklendi.
+- [x] **Lens yönetimi** (`LensList`): enable/disable toggle + inline düzenleme modalı + per-lens tara.
+      Backend: `GET /lenses/{id}/raw`, `PUT /lenses/{id}` (parse-doğrulamalı), `POST /lenses/{id}/toggle` (`SetFrontmatterEnabled`).
+- [x] **Fleet + Geçmiş sekmeleri**: `fleet-findings` ve `runs` uçlarını UI'da gösterir.
+- [x] Kanıt bağlantısı: `onOpenSession` → chat transcript'e atlar (App.tsx wiring).
+
+> **Bilinen (ayrı, ortamsal):** sıfır-workspace açılmadan `ws(r)` handler'ları nil-panic veriyor (tüm uçlar, insight'a özel değil) — `withWorkspace`'e default-yoksa-503 guard'ı ayrı bir iş.
 
 ---
 
-## 11. Açık Sorular
-- Kanal A sink varsayılanı: repo `_Docs` backlog mı, coder ajanı spawn mı, GitHub issue mı?
-- Prefilter dil düzeyi: `requiresAny` yeterli mi, yoksa küçük ifade dili mi gerekli?
+## 11. Kararlar + Açık Sorular
+
+**Kararlaştırıldı (2026-07-13):**
+- **Kanal A sink:** in-app detaylı rapor **+** UI'dan seçilen git reposunun `_Docs` backlog'u.
+  Coder-spawn ve GitHub issue kapsam dışı. Kullanıcı raporları sonradan TionSwarm geliştirmede kullanır.
+- **Prefilter:** yapısal predikat struct (parser yok). Faz 1 = yalnız `requiresAny`.
+
+**Açık:**
 - Cross-workspace tarama gerekli mi (şimdilik workspace-scoped)?

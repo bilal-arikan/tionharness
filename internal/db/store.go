@@ -467,6 +467,16 @@ func (d *DB) SetSessionRole(ctx context.Context, sessionID, role string) error {
 	})
 }
 
+// SetSessionCoordinatorWorkflow records the selected coordinator recipe (M5) on a
+// session plus the resolved per-session notify-loop cap override (0 = keep the
+// workspace default). An empty slug clears the selection.
+func (d *DB) SetSessionCoordinatorWorkflow(ctx context.Context, sessionID, slug string, maxTurns int) error {
+	return d.mutateSessionLocked(sessionID, func(s *Session) {
+		s.CoordinatorWorkflow = slug
+		s.CoordinatorMaxTurns = maxTurns
+	})
+}
+
 // MarkSessionRead clears a session's unread flag (without bumping UpdatedAt, so
 // reading a thread never reorders the list).
 func (d *DB) MarkSessionRead(ctx context.Context, sessionID string) error {

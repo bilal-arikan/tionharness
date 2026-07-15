@@ -282,6 +282,8 @@ export interface SessionInfo {
   // worker's back-link to its coordinator.
   role?: string
   coordinatorSessionId?: string
+  // Selected coordinator recipe/workflow slug (M5), if any.
+  coordinatorWorkflow?: string
   createdAt: number
   updatedAt: number
 

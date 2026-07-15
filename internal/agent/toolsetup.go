@@ -241,6 +241,11 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 		builtins = append(builtins, tools.NewReadLessonsTool(r.db), tools.NewDeleteLessonTool(r.db))
 	}
 
+	// insight_scan / insight_list_findings: trigger a retrospective scan and review
+	// what it surfaced (app-fix + workspace-opt findings). Always available so an
+	// agent can self-improve out of the box; scans are incremental/idempotent (_Docs/60).
+	builtins = append(builtins, tools.NewInsightScanTool(r), tools.NewInsightFindingsTool(r.db), tools.NewInsightApplyFindingTool(r.db))
+
 	// codebase_workspace_search: fan out codebase-memory's project-scoped search_code
 	// across EVERY project in this workspace's isolated store, for "where in the whole
 	// workspace is X?" queries (graph/architecture queries are already fleet-wide;

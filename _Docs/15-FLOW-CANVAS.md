@@ -140,8 +140,11 @@ Kalıcı trace yine altta node-node liste olarak gösterilir (mevcut davranış 
 - **Code-split:** `FlowsPanel` artık `App.tsx`'te `React.lazy(() => import(...))` + `<Suspense>`
   ile tembel yüklenir. React Flow yalnızca **Akışlar** görünümü açılınca iner. Sonuç:
   ana bundle `~988KB → ~811KB`, ayrı `FlowsPanel-*.js` (~202KB) + `FlowsPanel-*.css` (~16KB) chunk'ı.
-- **Salt-okunur şablon galerisi:** `lib/flowTemplates.ts` 6 agent-bağımsız şablon
-  (Sıralı Hat, Duygu Yönlendirici, Artı-Eksi, Eleştir-Düzelt, Planla-Uygula, Çoklu Uzman+Sentez).
+- **Salt-okunur şablon galerisi:** `features/flows/flowTemplates.ts` agent-bağımsız şablonlar
+  (Sıralı Hat, Duygu Yönlendirici, Artı-Eksi, Eleştir-Düzelt, Planla-Uygula, Çoklu Uzman+Sentez,
+  Generator↔Evaluator (GAN)). **Koordinatör deseni karşılıkları (M5, 2026-07-15):**
+  Sınıflandır & Yönlendir (`classify-act`, 3-yollu branch), Üret & Süz (`generate-filter`,
+  paralel üretim→süzme), Turnuva (`tournament`, 4 aday→yarı-final→final; parallel→parallel).
   `FlowsPanel` sol kolonunda **Akışlarım / Şablonlar** sekme geçişi; şablon seçilince
   `flow/TemplatePreview.tsx` salt-okunur canvas (`FlowCanvas readOnly` — `nodesDraggable`/
   `nodesConnectable`/`elementsSelectable` kapalı, `onConnect` yok) yapıyı önizler.

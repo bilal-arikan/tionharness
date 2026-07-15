@@ -694,7 +694,10 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 			batch = batchSeq
 		}
 		for _, call := range resp.ToolCalls {
-			r.logger.Info("tool call", "agent", agent.ID, "tool", call.Name)
+			// Debug, not Info: a busy multi-turn session makes 100+ tool calls and
+			// would otherwise dominate the 2000-entry ring buffer. Blocks/denials
+			// below stay at Info — those are the actionable events.
+			r.logger.Debug("tool call", "agent", agent.ID, "tool", call.Name)
 			active.MarkUsed(call.Name) // reset idle age for pruning (Phase 3)
 
 			// PreToolUse hooks (Faz P4): user-defined commands may rewrite the

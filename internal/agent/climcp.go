@@ -307,7 +307,9 @@ func (r *Runtime) writeCLISettings(ctx context.Context, deny []string, effort st
 				continue // only command hooks map to the CLI contract
 			}
 			hooks[event] = append(hooks[event], cliHookRule{
-				Matcher: h.Matcher,
+				// Translate TionSwarm's comma-glob matcher to Claude Code regex — a
+				// verbatim comma list never matches in the CLI (see cliMatcherRegex).
+				Matcher: cliMatcherRegex(h.Matcher),
 				Hooks:   []cliHookSpec{{Type: "command", Command: h.Command, Timeout: h.TimeoutSec}},
 			})
 		}

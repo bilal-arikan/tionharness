@@ -20,6 +20,7 @@ export const VIEW_TITLE: Record<View, string> = {
   tools: 'Araçlar & MCP',
   budget: 'Bütçe',
   logs: 'Loglar',
+  insights: 'İçgörü',
   market: 'Market',
   workspace: 'Workspace',
   settings: 'Ayarlar',
@@ -30,7 +31,7 @@ export const VIEW_TITLE: Record<View, string> = {
 // in-pane headers) reach the very top — matching the chat layout where the
 // sidebar is a sibling of <main>. Errors for these still surface via ErrorToast.
 export const HEADERLESS_VIEWS = new Set<View>([
-  'agents', 'artifacts', 'skills', 'tools', 'flows', 'market', 'schedules', 'logs', 'budget', 'board', 'network',
+  'agents', 'artifacts', 'skills', 'tools', 'flows', 'market', 'schedules', 'logs', 'insights', 'budget', 'board', 'network',
 ])
 
 // isWritableSessionKind reports whether the user may send a new message into a

@@ -169,6 +169,18 @@ func (s *Server) runChatTurn(clientGone context.Context, wsp *workspace.Workspac
 	// Label the run with the responding agent's provider so the Session Info panel
 	// can show which kind of background process is running (e.g. "claude-cli").
 	run.setProvider(agents[0].Provider)
+	// Record whether "Yönlendir" (mid-turn steer) can actually reach this turn, so
+	// the control endpoint can tell the client to queue instead of silently
+	// dropping it. claude-cli delivers a steer only at a permission-prompt tool
+	// boundary, which exists solely in "ask"/"read-only" modes; "auto" runs the CLI
+	// with --dangerously-skip-permissions (no such boundary). Native providers drain
+	// the steer channel in the tool loop regardless of mode. Effective mode = the
+	// request override when set, else the agent's own mode.
+	effMode := agents[0].PermissionMode
+	if req.PermissionMode != "" {
+		effMode = req.PermissionMode
+	}
+	run.setSteerable(steerableForTurn(agents[0].Provider, effMode))
 
 	// Persist the incoming user message once. Stamp the routed recipient agent
 	// (agents[0]) so a multi-agent thread's history can show which agent each

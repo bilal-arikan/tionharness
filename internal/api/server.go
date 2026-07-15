@@ -421,6 +421,7 @@ func (s *Server) registerSessionRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("PUT /api/sessions/{id}/messages/{msgId}/feedback", s.handleSetMessageFeedback)
 	mux.HandleFunc("PUT /api/sessions/{id}/agent", s.handleSetSessionAgent)
 	mux.HandleFunc("PUT /api/sessions/{id}/role", s.handleSetSessionRole)
+	mux.HandleFunc("PUT /api/sessions/{id}/workflow", s.handleSetSessionWorkflow)
 	mux.HandleFunc("GET /api/sessions/{id}/workers", s.handleListWorkers)
 	mux.HandleFunc("GET /api/sessions/{id}/workdir", s.handleGetSessionWorkdir)
 	mux.HandleFunc("PUT /api/sessions/{id}/workdir", s.handleSetSessionWorkdir)
@@ -568,6 +569,19 @@ func (s *Server) registerMCPRoutes(mux *http.ServeMux) {
 func (s *Server) registerHookRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/lessons", s.handleListLessons)
 	mux.HandleFunc("DELETE /api/lessons/{id}", s.handleDeleteLesson)
+	// Retrospective session scanning (Insight, _Docs/60).
+	mux.HandleFunc("GET /api/insight/lenses", s.handleListInsightLenses)
+	mux.HandleFunc("POST /api/insight/scan", s.handleInsightScan)
+	mux.HandleFunc("GET /api/insight/status", s.handleInsightScanStatus)
+	mux.HandleFunc("GET /api/insight/runs", s.handleInsightRuns)
+	mux.HandleFunc("GET /api/insight/fleet-findings", s.handleInsightFleetFindings)
+	mux.HandleFunc("GET /api/insight/lenses/{id}/raw", s.handleGetInsightLensRaw)
+	mux.HandleFunc("PUT /api/insight/lenses/{id}", s.handleUpdateInsightLens)
+	mux.HandleFunc("POST /api/insight/lenses/{id}/toggle", s.handleToggleInsightLens)
+	mux.HandleFunc("GET /api/insight/findings", s.handleListInsightFindings)
+	mux.HandleFunc("POST /api/insight/findings/{id}/status", s.handleSetInsightFindingStatus)
+	mux.HandleFunc("GET /api/insight/settings", s.handleGetInsightSettings)
+	mux.HandleFunc("PUT /api/insight/settings", s.handleUpdateInsightSettings)
 	mux.HandleFunc("GET /api/hooks", s.handleListHooks)
 	mux.HandleFunc("GET /api/hooks/builtins", s.handleListBuiltinHooks)
 	mux.HandleFunc("POST /api/hooks", s.handleCreateHook)
@@ -714,9 +728,39 @@ func (s *Server) withWorkspace(next http.Handler) http.Handler {
 		} else {
 			ws = s.workspaces.Default()
 		}
+		// Fresh install / all workspaces deleted: no active workspace exists. A
+		// workspace-scoped handler would deref this nil (recovered into a noisy
+		// 500 by withRecover). Short-circuit with a clean, self-explanatory 409
+		// instead — except for the bootstrap routes (workspace CRUD, templates,
+		// folder picker) that MUST work precisely when there is no workspace yet.
+		if ws == nil && !workspaceOptionalPath(r.URL.Path) {
+			writeError(w, http.StatusConflict, "no active workspace — create one first")
+			return
+		}
 		ctx := context.WithValue(r.Context(), workspaceCtxKey, ws)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
+}
+
+// workspaceOptionalPath reports whether a route must work with NO active
+// workspace — the first-run bootstrap surface (create/list/attach a workspace,
+// browse templates, pick a folder) plus process-global infra that never reads a
+// workspace. Everything else is workspace-scoped and gets a clean 409 when none
+// exists, rather than dereferencing a nil workspace.
+func workspaceOptionalPath(path string) bool {
+	switch {
+	case path == "/api/workspaces" || strings.HasPrefix(path, "/api/workspaces/"):
+		return true
+	case path == "/api/workspace-templates":
+		return true
+	case path == "/api/pick-folder":
+		return true
+	case path == "/api/external-tools":
+		return true
+	case path == "/api/events":
+		return true
+	}
+	return false
 }
 
 // ws returns the workspace bound to the current request.

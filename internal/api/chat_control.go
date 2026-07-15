@@ -51,6 +51,16 @@ type chatRun struct {
 	// (steer_undelivered fallback). Guarded by mu (declared below).
 	pendingSteer string
 
+	// steerable reports whether a mid-turn steer ("Yönlendir") can actually reach
+	// this turn. Native providers always can (the tool loop drains the steer
+	// channel). claude-cli can ONLY when a permission-prompt tool boundary exists —
+	// i.e. "ask"/"read-only" modes; "auto" runs the CLI with
+	// --dangerously-skip-permissions and never calls that tool, so a steer would be
+	// silently re-queued at turn end. handleSessionControl reads this to answer
+	// "unsupported" (client queues the message + shows a hint) instead of pretending
+	// the steer landed. Set once per turn at register-time; guarded by mu.
+	steerable bool
+
 	// mu serialises SSE writes: the stream handler goroutine and the Interaction
 	// MCP handler goroutine both emit steps onto the same ResponseWriter. It also
 	// guards artifacts (swapped per responding agent in a multi-agent turn).
@@ -102,6 +112,35 @@ func (r *chatRun) takeSteer() string {
 	msg := r.pendingSteer
 	r.pendingSteer = ""
 	return msg
+}
+
+// steerableForTurn reports whether a mid-turn steer ("Yönlendir") can actually
+// reach a turn for the given responding-agent provider + effective permission
+// mode. Native (non-claude-cli) providers drain the steer channel in the tool loop
+// in every mode. claude-cli delivers a steer only at a permission-prompt tool
+// boundary, which is wired solely in "ask"/"read-only" modes; "auto" runs the CLI
+// with --dangerously-skip-permissions and never calls that tool. Kept as a pure
+// function so the rule is unit-testable and lives next to the field it feeds.
+func steerableForTurn(provider, mode string) bool {
+	if provider != "claude-cli" {
+		return true
+	}
+	return mode == "ask" || mode == "read-only"
+}
+
+// setSteerable records whether a mid-turn steer can reach this turn (see the
+// steerable field). Set once at turn setup, before any steer request can arrive.
+func (r *chatRun) setSteerable(v bool) {
+	r.mu.Lock()
+	r.steerable = v
+	r.mu.Unlock()
+}
+
+// steerableFor reports the recorded steer deliverability (false until set).
+func (r *chatRun) steerableFor() bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.steerable
 }
 
 // setProvider records the responding agent's provider id so the Session Info

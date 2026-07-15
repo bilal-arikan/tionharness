@@ -36,7 +36,9 @@ type sessionInfoResp struct {
 	// CoordinatorSessionID is a worker's back-link to its coordinator.
 	Role                 string `json:"role,omitempty"`
 	CoordinatorSessionID string `json:"coordinatorSessionId,omitempty"`
-	CreatedAt            int64  `json:"createdAt"`
+	// CoordinatorWorkflow is the selected coordinator recipe slug (M5), if any.
+	CoordinatorWorkflow string `json:"coordinatorWorkflow,omitempty"`
+	CreatedAt           int64  `json:"createdAt"`
 	UpdatedAt            int64  `json:"updatedAt"`
 
 	// Tags are the session's free-form labels (also drive tag-triggered automations).

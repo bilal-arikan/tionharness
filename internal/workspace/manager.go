@@ -44,10 +44,11 @@ type Meta struct {
 type Workspace struct {
 	Meta
 	DB        *db.DB
-	Runtime   *agent.Runtime
-	Scheduler *agent.Scheduler
-	Secrets   *secrets.Vault
-	DataDir   string
+	Runtime     *agent.Runtime
+	Scheduler   *agent.Scheduler
+	InsightCron *agent.InsightCron
+	Secrets     *secrets.Vault
+	DataDir     string
 
 	settings settingsHolder // per-workspace overrides (ws-settings.json)
 }
@@ -187,8 +188,8 @@ func NewManager(rootDir string, registry *providers.Registry, tun *agent.Tunable
 	// splash + "create workspace" popup on a fresh install; if the user dismisses it
 	// without creating one, nothing is provisioned. With zero workspaces, ws(r) in
 	// the API resolves to nil for workspace-scoped routes — the frontend gates those
-	// behind an active workspace, and withRecover turns any stray call into a 500
-	// instead of a crash.
+	// behind an active workspace, and withWorkspace short-circuits any stray call
+	// with a clean 409 ("no active workspace"), never dereferencing the nil.
 	return m, nil
 }
 
@@ -238,7 +239,7 @@ func (m *Manager) open(meta Meta) error {
 		rt.SetWakeTurnRunner(m.wakeTurnFactory(rt))
 	}
 
-	sched := agent.NewScheduler(database, rt, m.logger)
+	sched := agent.NewScheduler(database, rt, m.logger.With("component", "scheduler", "workspace", meta.ID))
 	// Let self-management schedule tools reload the cron scheduler immediately.
 	rt.SetScheduleReloader(sched.Reload)
 	// Let the run_schedule tool fire a schedule on demand ("Run now").
@@ -247,9 +248,18 @@ func (m *Manager) open(meta Meta) error {
 		m.logger.Warn("start scheduler failed", "workspace", meta.ID, "error", err)
 	}
 
+	// Insight auto-scan (retrospective scanning, _Docs/60 Faz 3): a dedicated cron
+	// that calls RunInsightScan directly on the settings-driven schedule. Wire its
+	// Reload so the settings endpoint can re-arm it, then start it.
+	insightCron := agent.NewInsightCron(rt, m.logger.With("component", "insight-cron", "workspace", meta.ID))
+	rt.SetInsightCronReloader(insightCron.Reload)
+	if err := insightCron.Start(context.Background()); err != nil {
+		m.logger.Warn("start insight cron failed", "workspace", meta.ID, "error", err)
+	}
+
 	// Tag-triggered automations: wire the event-driven engine as the runtime's turn
 	// hook so a tagged session finishing a turn can spawn a follow-up (the loop).
-	autoEngine := agent.NewAutomationEngine(database, rt, m.logger)
+	autoEngine := agent.NewAutomationEngine(database, rt, m.logger.With("component", "automation", "workspace", meta.ID))
 	rt.SetTurnHook(autoEngine.OnTurnFinished)
 	// Failed turns dispatch to the automation engine ONLY (not coordination):
 	// repair automations watching error-class tags ("stuck"/"error") must fire
@@ -265,7 +275,7 @@ func (m *Manager) open(meta Meta) error {
 	// Restart-safe: continue any flow runs interrupted by a previous shutdown.
 	rt.ResumeRunningFlows(context.Background())
 
-	ws := &Workspace{Meta: meta, DB: database, Runtime: rt, Scheduler: sched, Secrets: vault, DataDir: dir}
+	ws := &Workspace{Meta: meta, DB: database, Runtime: rt, Scheduler: sched, InsightCron: insightCron, Secrets: vault, DataDir: dir}
 	ws.loadSettings()    // apply persisted per-workspace overrides (e.g. autonomy pause)
 	ws.syncConfigFiles() // seed config/ tree + adopt instructions.md (file is authoritative)
 
@@ -455,6 +465,9 @@ func (m *Manager) Delete(id string) error {
 	m.mu.Unlock()
 
 	ws.Scheduler.Stop()
+	if ws.InsightCron != nil {
+		ws.InsightCron.Stop()
+	}
 	ws.Runtime.CloseMCP()
 	_ = ws.DB.Close()
 	if err := os.RemoveAll(ws.DataDir); err != nil {
@@ -491,6 +504,9 @@ func (m *Manager) RestoreFromArchive(id, archivePath string, extract func(src, d
 	// Release all live handles so the files can be replaced (Windows locks open
 	// files). The scheduler/runtime/DB are recreated by open() at the end.
 	ws.Scheduler.Stop()
+	if ws.InsightCron != nil {
+		ws.InsightCron.Stop()
+	}
 	ws.Runtime.CloseMCP()
 	_ = ws.DB.Close()
 
@@ -553,6 +569,9 @@ func (m *Manager) Close() {
 	defer m.mu.Unlock()
 	for _, ws := range m.workspaces {
 		ws.Scheduler.Stop()
+		if ws.InsightCron != nil {
+			ws.InsightCron.Stop()
+		}
 		ws.Runtime.CloseMCP()
 		_ = ws.DB.Close()
 	}

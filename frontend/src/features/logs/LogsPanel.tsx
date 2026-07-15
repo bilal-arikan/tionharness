@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
-import { ArrowDown } from 'lucide-react'
+import { useEffect, useRef, useState, useCallback, useMemo, type ReactNode } from 'react'
+import { ArrowDown, Copy, Download } from 'lucide-react'
 import { api } from '@/api'
 import type { LogEntry } from '@/types'
 import { groupConsecutive } from './logGroup'
@@ -27,6 +27,18 @@ const LEVEL_COLOR: Record<string, string> = {
   DEBUG: 'text-[var(--color-text-dim)]',
 }
 
+// levelRank mirrors the backend ordering so SSE-appended entries respect the
+// active minimum-level filter without a round trip.
+const LEVEL_RANK: Record<string, number> = { DEBUG: 1, INFO: 2, WARN: 3, ERROR: 4 }
+
+// Time-window presets for the since filter (minutes; '' = all retained).
+const RANGES = [
+  { key: '', label: 'Tümü' },
+  { key: '15', label: '15 dk' },
+  { key: '60', label: '1 saat' },
+  { key: '1440', label: '24 saat' },
+] as const
+
 function clockTime(ms: number): string {
   const d = new Date(ms)
   const p = (n: number) => String(n).padStart(2, '0')
@@ -44,15 +56,60 @@ function fmtTime(ms: number): string {
   return `${clockTime(ms)}.${msPart(ms)}`
 }
 
+// entryText flattens one entry to a copy/export-friendly single line.
+function entryText(e: LogEntry): string {
+  const parts = [new Date(e.time).toISOString(), e.level, e.message]
+  if (e.component) parts.push(`component=${e.component}`)
+  if (e.workspace) parts.push(`workspace=${e.workspace}`)
+  if (e.agent) parts.push(`agent=${e.agent}`)
+  if (e.session) parts.push(`session=${e.session}`)
+  for (const [k, v] of Object.entries(e.attrs ?? {})) parts.push(`${k}=${v}`)
+  return parts.join(' ')
+}
+
+// highlight wraps case-insensitive matches of q in <mark> so search hits are
+// visible at a glance. Plain text when q is empty or absent from the string.
+function highlight(text: string, q: string): ReactNode {
+  if (!q) return text
+  const lower = text.toLowerCase()
+  const needle = q.toLowerCase()
+  if (!lower.includes(needle)) return text
+  const out: ReactNode[] = []
+  let i = 0
+  let hit = lower.indexOf(needle)
+  let key = 0
+  while (hit >= 0) {
+    if (hit > i) out.push(text.slice(i, hit))
+    out.push(
+      <mark key={key++} className="rounded bg-[var(--color-warning)]/30 px-0.5 text-inherit">
+        {text.slice(hit, hit + needle.length)}
+      </mark>,
+    )
+    i = hit + needle.length
+    hit = lower.indexOf(needle, i)
+  }
+  if (i < text.length) out.push(text.slice(i))
+  return out
+}
+
 // LogsPanel shows the application + all-workspace log stream from the backend
-// ring buffer, with live follow, level filtering, text search, and optional
+// ring buffer: live SSE tail, level/component/time filtering, debounced text
+// search with match highlighting, per-line copy, JSON export and optional
 // collapsing of consecutive identical entries into a single counted row.
 export function LogsPanel({ onError }: Props) {
   const [logs, setLogs] = useState<LogEntry[]>([])
   const [level, setLevel] = useState<string>('')
   const [q, setQ] = useState('')
+  // Debounced copy of q: the API reload + highlight work run on this, so fast
+  // typing doesn't fire a request per keystroke.
+  const [qDebounced, setQDebounced] = useState('')
+  const [component, setComponent] = useState('')
+  const [range, setRange] = useState<string>('')
   const [follow, setFollow] = useState(true)
   const [group, setGroup] = useState(true)
+  // Count of live entries that arrived (matching the filters) while follow was
+  // off — surfaced as a "N yeni kayıt" refresh chip instead of moving the view.
+  const [pending, setPending] = useState(0)
   // Absolute path of the on-disk log file (for copy / reveal in Explorer).
   const [logPath, setLogPath] = useState('')
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -67,22 +124,76 @@ export function LogsPanel({ onError }: Props) {
     api.logsPath().then((r) => setLogPath(r.path)).catch(() => setLogPath(''))
   }, [])
 
+  // Debounce the search box (the input itself stays instant).
+  useEffect(() => {
+    const id = setTimeout(() => setQDebounced(q.trim()), 300)
+    return () => clearTimeout(id)
+  }, [q])
+
+  const sinceMs = useCallback((): number | undefined => {
+    const mins = Number(range)
+    return mins > 0 ? Date.now() - mins * 60_000 : undefined
+  }, [range])
+
   const load = useCallback(async () => {
     try {
-      const data = await api.getLogs({ limit: 1000, level: level || undefined, q: q || undefined })
+      const data = await api.getLogs({
+        limit: 1000,
+        level: level || undefined,
+        q: qDebounced || undefined,
+        component: component || undefined,
+        since: sinceMs(),
+      })
       setLogs(data)
+      setPending(0)
     } catch (e) {
       onError((e as Error).message)
     }
-  }, [level, q, onError])
+  }, [level, qDebounced, component, sinceMs, onError])
 
   // Initial + reactive load when filters change.
   useEffect(() => { void load() }, [load])
 
-  // Live polling while "follow" is on.
+  // Client-side twin of the server filters, applied to live SSE entries.
+  const matchesFilters = useCallback(
+    (e: LogEntry): boolean => {
+      if (level && (LEVEL_RANK[e.level] ?? 0) < (LEVEL_RANK[level.toUpperCase()] ?? 0)) return false
+      if (component && e.component !== component) return false
+      const since = sinceMs()
+      if (since && e.time < since) return false
+      if (qDebounced) {
+        const needle = qDebounced.toLowerCase()
+        const hay = entryText(e).toLowerCase()
+        if (!hay.includes(needle)) return false
+      }
+      return true
+    },
+    [level, component, sinceMs, qDebounced],
+  )
+
+  // Live tail over the shared SSE feed: matching entries append directly while
+  // following; while paused they only bump the "new records" chip. A slow 30s
+  // reconciliation poll (follow only) backfills anything missed across an SSE
+  // reconnect.
+  useEffect(() => {
+    const unsub = api.subscribeLogs((entry) => {
+      if (!matchesFilters(entry)) return
+      if (follow) {
+        setLogs((prev) => {
+          if (prev.length > 0 && entry.seq <= prev[prev.length - 1].seq) return prev
+          const next = [...prev, entry]
+          return next.length > 1000 ? next.slice(next.length - 1000) : next
+        })
+      } else {
+        setPending((n) => n + 1)
+      }
+    })
+    return unsub
+  }, [follow, matchesFilters])
+
   useEffect(() => {
     if (!follow) return
-    const id = setInterval(() => { void load() }, 2500)
+    const id = setInterval(() => { void load() }, 30_000)
     return () => clearInterval(id)
   }, [follow, load])
 
@@ -91,6 +202,15 @@ export function LogsPanel({ onError }: Props) {
     () => (group ? groupConsecutive(logs) : logs.map((e) => ({ entry: e, count: 1, firstTime: e.time, lastTime: e.time }))),
     [logs, group],
   )
+
+  // Distinct components present in the current result set (plus the active
+  // selection, so a filter that empties the list stays visible/undoable).
+  const components = useMemo(() => {
+    const set = new Set<string>()
+    for (const e of logs) if (e.component) set.add(e.component)
+    if (component) set.add(component)
+    return [...set].sort()
+  }, [logs, component])
 
   // Track whether the viewport is pinned to the bottom. A small threshold
   // tolerates sub-pixel rounding and lets near-bottom still count as "bottom".
@@ -119,6 +239,21 @@ export function LogsPanel({ onError }: Props) {
     }
   }, [rows, follow])
 
+  const copyLine = useCallback((e: LogEntry) => {
+    void navigator.clipboard?.writeText(entryText(e)).catch(() => {})
+  }, [])
+
+  // Download the currently filtered entries as a JSON file.
+  const exportLogs = useCallback(() => {
+    const blob = new Blob([JSON.stringify(logs, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `tionswarm-logs-${new Date().toISOString().replace(/[:.]/g, '-')}.json`
+    a.click()
+    URL.revokeObjectURL(url)
+  }, [logs])
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <PaneHeader
@@ -137,6 +272,14 @@ export function LogsPanel({ onError }: Props) {
               labelClassName="hidden sm:inline"
               title="Log klasörünü aç"
             />
+            <button
+              onClick={exportLogs}
+              className="flex items-center gap-1 rounded border border-[var(--color-border)] px-2 py-1 text-xs hover:border-[var(--color-accent)]"
+              title="Filtrelenmiş logları JSON olarak indir"
+            >
+              <Download size={12} />
+              <span className="hidden sm:inline">İndir</span>
+            </button>
             <button
               onClick={() => void load()}
               className="rounded border border-[var(--color-border)] px-2 py-1 text-xs hover:border-[var(--color-accent)]"
@@ -164,6 +307,27 @@ export function LogsPanel({ onError }: Props) {
             </button>
           ))}
         </div>
+        <select
+          value={component}
+          onChange={(e) => setComponent(e.target.value)}
+          className="rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-xs outline-none focus:border-[var(--color-accent)]"
+          title="Bileşene göre filtrele"
+        >
+          <option value="">Bileşen: hepsi</option>
+          {components.map((c) => (
+            <option key={c} value={c}>{c}</option>
+          ))}
+        </select>
+        <select
+          value={range}
+          onChange={(e) => setRange(e.target.value)}
+          className="rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-xs outline-none focus:border-[var(--color-accent)]"
+          title="Zaman aralığına göre filtrele"
+        >
+          {RANGES.map((r) => (
+            <option key={r.key} value={r.key}>{r.label}</option>
+          ))}
+        </select>
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
@@ -178,6 +342,15 @@ export function LogsPanel({ onError }: Props) {
           <input type="checkbox" checked={follow} onChange={(e) => setFollow(e.target.checked)} />
           Canlı
         </label>
+        {!follow && pending > 0 && (
+          <button
+            onClick={() => void load()}
+            className="rounded-full border border-[var(--color-accent)] px-2 py-0.5 text-xs text-[var(--color-accent)] hover:bg-[var(--color-accent)]/10"
+            title="Takip kapalıyken gelen yeni kayıtları yükle"
+          >
+            {pending} yeni kayıt — Yenile
+          </button>
+        )}
       </div>
 
       {/* Log lines */}
@@ -189,7 +362,13 @@ export function LogsPanel({ onError }: Props) {
         {rows.map((g) => {
           const e = g.entry
           return (
-            <div key={e.seq} className="flex gap-2 border-b border-[var(--color-border)]/30 py-0.5">
+            <div
+              key={e.seq}
+              className="group flex gap-2 border-b border-[var(--color-border)]/30 py-0.5"
+              // Skip layout/paint for offscreen rows — cheap virtualization that
+              // keeps a 1000-row list responsive without a windowing library.
+              style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 22px' }}
+            >
               <span
                 className="shrink-0 text-[var(--color-text-dim)]"
                 title={g.count > 1 ? `${clockTime(g.firstTime)} → ${clockTime(g.lastTime)}` : fmtTime(e.time)}
@@ -208,6 +387,15 @@ export function LogsPanel({ onError }: Props) {
                 <span className="@sm:hidden">{e.level.charAt(0)}</span>
                 <span className="hidden @sm:inline">{e.level}</span>
               </span>
+              {e.component && (
+                <button
+                  onClick={() => setComponent(e.component!)}
+                  className="hidden shrink-0 rounded bg-[var(--color-surface-2)] px-1.5 text-[var(--color-text-dim)] hover:text-[var(--color-accent)] @sm:inline"
+                  title={`Bileşene göre filtrele: ${e.component}`}
+                >
+                  {e.component}
+                </button>
+              )}
               {g.count > 1 && (
                 <span
                   className="shrink-0 rounded bg-[var(--color-surface-2)] px-1.5 font-semibold text-[var(--color-accent)]"
@@ -217,14 +405,36 @@ export function LogsPanel({ onError }: Props) {
                 </span>
               )}
               <span className="min-w-0 flex-1 break-words">
-                <span className="text-[var(--color-text)]">{e.message}</span>
+                <span className="text-[var(--color-text)]">{highlight(e.message, qDebounced)}</span>
+                {e.session && (
+                  <span className="ml-2 text-[var(--color-text-dim)]">
+                    session=<span className="text-[var(--color-accent)]">{highlight(e.session, qDebounced)}</span>
+                  </span>
+                )}
+                {e.agent && (
+                  <span className="ml-2 text-[var(--color-text-dim)]">
+                    agent=<span className="text-[var(--color-accent)]">{highlight(e.agent, qDebounced)}</span>
+                  </span>
+                )}
+                {e.workspace && (
+                  <span className="ml-2 text-[var(--color-text-dim)]">
+                    workspace=<span className="text-[var(--color-accent)]">{highlight(e.workspace, qDebounced)}</span>
+                  </span>
+                )}
                 {e.attrs &&
                   Object.entries(e.attrs).map(([k, v]) => (
                     <span key={k} className="ml-2 text-[var(--color-text-dim)]">
-                      {k}=<span className="text-[var(--color-accent)]">{v}</span>
+                      {k}=<span className="text-[var(--color-accent)]">{highlight(v, qDebounced)}</span>
                     </span>
                   ))}
               </span>
+              <button
+                onClick={() => copyLine(e)}
+                className="invisible shrink-0 self-start text-[var(--color-text-dim)] hover:text-[var(--color-accent)] group-hover:visible"
+                title="Satırı kopyala"
+              >
+                <Copy size={12} />
+              </button>
             </div>
           )
         })}

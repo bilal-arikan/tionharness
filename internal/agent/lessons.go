@@ -31,11 +31,9 @@ const lessonEvidenceMax = 3
 // lessonSnippetRunes caps each evidence snippet (input/error) in the prompt.
 const lessonSnippetRunes = 400
 
-// lessonSystemPrompt keeps the reflector terse, honest and generalizable.
-const lessonSystemPrompt = `You review a failed AI-agent turn and distill ONE reusable lesson for future turns.
-Reply with 1-3 plain sentences: what failed, the likely root cause, and how to avoid it next time.
-Generalize (a rule the agent can apply again), do not just restate the error.
-If the failure is not generalizable (one-off cancellation, external outage, missing login), reply with exactly: NONE`
+// The reflector's system prompt lives in the central registry
+// (internal/prompts, key "lesson"); it keeps the reflector terse, honest and
+// generalizable, and readPrompt resolves the workspace override.
 
 // lessonEvidence is one failing observation extracted from a turn's trace.
 type lessonEvidence struct {
@@ -131,9 +129,10 @@ func (r *Runtime) reflectLessons(ctx context.Context, sessionID string, evidence
 	if override := r.tun.TitleModel(); override != "" {
 		model = override
 	}
-	resp, err := r.guardedComplete(WithCallKind(ctx, KindReflect), agent, providers.Request{
+	lessonPrompt := r.readPrompt("lesson")
+	resp, err := r.guardedComplete(WithPromptTrace(WithCallKind(ctx, KindReflect), "lesson", lessonPrompt), agent, providers.Request{
 		Model:     model,
-		System:    lessonSystemPrompt,
+		System:    lessonPrompt,
 		MaxTokens: 300,
 		Messages: []providers.Message{
 			{Role: providers.RoleUser, Text: b.String()},

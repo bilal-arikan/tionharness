@@ -35,7 +35,7 @@ func TestBuildHandoff_InjectsEnvAndTranscript(t *testing.T) {
 		{Role: providers.RoleAssistant, Text: "working on it"},
 	})
 
-	out, err := BuildHandoff(context.Background(), nil, cp, db.Agent{Model: "m"}, "prev summary", rendered, env)
+	out, err := BuildHandoff(context.Background(), nil, cp, db.Agent{Model: "m"}, "prev summary", rendered, env, "")
 	if err != nil {
 		t.Fatalf("BuildHandoff: %v", err)
 	}
@@ -56,7 +56,7 @@ func TestBuildHandoff_InjectsEnvAndTranscript(t *testing.T) {
 
 func TestBuildHandoff_EmptyTranscriptErrors(t *testing.T) {
 	cp := &capturingProvider{out: "x"}
-	if _, err := BuildHandoff(context.Background(), nil, cp, db.Agent{Model: "m"}, "", "   ", HandoffEnv{}); err == nil {
+	if _, err := BuildHandoff(context.Background(), nil, cp, db.Agent{Model: "m"}, "", "   ", HandoffEnv{}, ""); err == nil {
 		t.Fatal("expected an error for an empty transcript")
 	}
 }

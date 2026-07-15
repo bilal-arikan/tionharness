@@ -9,6 +9,7 @@ import (
 	"sync/atomic"
 
 	"github.com/bilal-arikan/tionswarm/internal/db"
+	"github.com/bilal-arikan/tionswarm/internal/prompts"
 	"github.com/bilal-arikan/tionswarm/internal/providers"
 	"github.com/bilal-arikan/tionswarm/internal/tools"
 )
@@ -24,54 +25,40 @@ type SubagentProfile struct {
 }
 
 // defaultSubagentProfiles are the built-in worker types selectable as a
-// run_subagent target. Kept in code for now (a later phase may move them to
-// settings.json). Allowlists intersect with the caller's own effective tools.
+// run_subagent target. Each profile's system prompt lives in the central prompt
+// registry (internal/prompts, key "subagent-<id>") — resolve one through
+// Runtime.subagentProfile so a workspace override is honored. Allowlists stay
+// in code (they are a safety contract, not prose) and intersect with the
+// caller's own effective tools.
+//
+// The "config" profile is the mini-agent analog (the external agent project
+// getMiniAgentSystemPrompt): a cheap, tightly-scoped editor for a workspace's
+// config/ files. It is sandboxed to the config tools (which are themselves
+// rooted at config/), so it can never wander the filesystem or grow the change.
 var defaultSubagentProfiles = map[string]SubagentProfile{
-	"explore": {
-		ID: "explore",
-		SystemPrompt: "You are an Explore subagent: a focused, read-only investigator. Search the " +
-			"workspace, read the relevant files, and report precise findings (file:line, names, facts). " +
-			"You never modify anything. Return a concise, structured answer — your reply is the only " +
-			"thing the caller sees, so make it self-contained.",
-		AllowedTools: []string{"Read", "LS", "Glob", "Grep", "WebFetch"},
-	},
-	"coder": {
-		ID: "coder",
-		SystemPrompt: "You are a Coder subagent: you implement a well-scoped change. Read what you need, " +
-			"write or edit the necessary files, and keep edits minimal and idiomatic. Report what you " +
-			"changed (files + a one-line rationale each). Your reply is the only thing the caller sees.",
-		AllowedTools: []string{"Read", "LS", "Glob", "Grep", "Write", "Edit", "Bash"},
-	},
-	"reviewer": {
-		ID: "reviewer",
-		SystemPrompt: "You are a Reviewer subagent: an independent, read-only critic. Examine the target " +
-			"for bugs, races, security issues and unclear code. Report ONLY real, actionable findings " +
-			"with file:line and a short why; say so plainly if it looks correct. You never modify " +
-			"anything. Your reply is the only thing the caller sees.",
-		AllowedTools: []string{"Read", "LS", "Glob", "Grep"},
-	},
-	// config is the mini-agent analog (the external agent project getMiniAgentSystemPrompt): a cheap,
-	// tightly-scoped editor for a workspace's config/ files. It is sandboxed to the
-	// config tools (which are themselves rooted at config/), so it can never wander
-	// the filesystem or grow the change — ideal for a quick "change the theme" /
-	// "edit this prompt" delegation on a small/fast model.
-	"config": {
-		ID: "config",
-		SystemPrompt: "You are a Config subagent: a focused editor for this workspace's config/ files " +
-			"(runtime prompts, instructions, README, and app config like statuses/labels/permissions). " +
-			"Make ONLY the requested change: discover with list_config, read with read_config, write it " +
-			"back with write_config, then verify with config_validate. Keep edits minimal and idiomatic — " +
-			"never add unrequested changes or features. You are sandboxed to config/ and cannot touch " +
-			"anything else. Report the file(s) you changed in one line. Your reply is the only thing the " +
-			"caller sees.",
-		AllowedTools: []string{"list_config", "read_config", "write_config", "config_validate"},
-	},
+	"explore":  {ID: "explore", AllowedTools: []string{"Read", "LS", "Glob", "Grep", "WebFetch"}},
+	"coder":    {ID: "coder", AllowedTools: []string{"Read", "LS", "Glob", "Grep", "Write", "Edit", "Bash"}},
+	"reviewer": {ID: "reviewer", AllowedTools: []string{"Read", "LS", "Glob", "Grep"}},
+	"config":   {ID: "config", AllowedTools: []string{"list_config", "read_config", "write_config", "config_validate"}},
 }
 
-// SubagentProfiles returns the built-in profile ids (sorted-free; for display).
+// subagentProfile resolves a built-in profile by target name, filling its
+// system prompt from the registry (workspace override → embedded default).
+func (r *Runtime) subagentProfile(target string) (SubagentProfile, bool) {
+	p, ok := defaultSubagentProfiles[strings.ToLower(target)]
+	if !ok {
+		return SubagentProfile{}, false
+	}
+	p.SystemPrompt = r.readPrompt("subagent-" + p.ID)
+	return p, true
+}
+
+// SubagentProfiles returns the built-in profiles with their DEFAULT prompts
+// (sorted-free; for display). Live resolution goes through subagentProfile.
 func SubagentProfiles() []SubagentProfile {
 	out := make([]SubagentProfile, 0, len(defaultSubagentProfiles))
 	for _, p := range defaultSubagentProfiles {
+		p.SystemPrompt = prompts.Default("subagent-" + p.ID)
 		out = append(out, p)
 	}
 	return out
@@ -267,7 +254,7 @@ func (r *Runtime) resolveSubagentTarget(ctx context.Context, caller db.Agent, ta
 	if a, err := r.resolveAgent(ctx, target); err == nil {
 		return a, false, nil
 	}
-	if p, ok := defaultSubagentProfiles[strings.ToLower(target)]; ok {
+	if p, ok := r.subagentProfile(target); ok {
 		eph := caller // clone limits/provider/model/permission from the caller
 		eph.Name = "subagent:" + p.ID
 		eph.Soul = p.SystemPrompt

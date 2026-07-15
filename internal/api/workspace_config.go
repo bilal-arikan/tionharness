@@ -7,19 +7,32 @@ import (
 	"path/filepath"
 
 	"github.com/bilal-arikan/tionswarm/internal/agent"
+	"github.com/bilal-arikan/tionswarm/internal/prompts"
 	"github.com/bilal-arikan/tionswarm/internal/workspace"
 )
 
 // wsConfigDTO is the client view of a workspace's editable config files: the
-// utility prompts (with their compiled-in defaults for "reset"), the workspace
-// instructions and the free-form README. All live under <workspace>/config/.
+// registry prompts (with their embedded defaults for "reset" and their UI
+// metadata), the workspace instructions and the free-form README. All live
+// under <workspace>/config/.
 type wsConfigDTO struct {
-	Dir          string            `json:"dir"`
-	Prompts      map[string]string `json:"prompts"`  // key → current file content
-	Defaults     map[string]string `json:"defaults"` // key → compiled-in default
-	PromptKeys   []string          `json:"promptKeys"`
-	Instructions string            `json:"instructions"`
-	Readme       string            `json:"readme"`
+	Dir          string                  `json:"dir"`
+	Prompts      map[string]string       `json:"prompts"`  // key → current file content
+	Defaults     map[string]string       `json:"defaults"` // key → embedded default
+	PromptKeys   []string                `json:"promptKeys"`
+	PromptMeta   map[string]promptMetaTO `json:"promptMeta"` // key → registry metadata
+	Instructions string                  `json:"instructions"`
+	Readme       string                  `json:"readme"`
+}
+
+// promptMetaTO is the per-key registry metadata the editor renders: label,
+// hint, required placeholders and whether an edit only lands on NEW
+// sessions/epochs (the prompt rides the cached static prefix).
+type promptMetaTO struct {
+	Label          string   `json:"label"`
+	Hint           string   `json:"hint"`
+	Placeholders   []string `json:"placeholders,omitempty"`
+	EpochAffecting bool     `json:"epochAffecting,omitempty"`
 }
 
 // wsConfigPatch is a partial update; omitted fields are left unchanged. A prompt
@@ -45,13 +58,21 @@ func buildWSConfigDTO(wsDir string) wsConfigDTO {
 		Prompts:      map[string]string{},
 		Defaults:     map[string]string{},
 		PromptKeys:   agent.PromptKeys,
+		PromptMeta:   map[string]promptMetaTO{},
 		Instructions: readFileOr(agent.InstructionsFilePath(wsDir), ""),
 		Readme:       readFileOr(agent.ReadmeFilePath(wsDir), ""),
 	}
-	for _, key := range agent.PromptKeys {
+	for _, spec := range prompts.Specs() {
+		key := spec.Key
 		def := agent.PromptDefault(key)
 		dto.Defaults[key] = def
 		dto.Prompts[key] = readFileOr(agent.PromptFilePath(wsDir, key), def)
+		dto.PromptMeta[key] = promptMetaTO{
+			Label:          spec.Label,
+			Hint:           spec.Hint,
+			Placeholders:   spec.Placeholders,
+			EpochAffecting: spec.EpochAffecting,
+		}
 	}
 	return dto
 }

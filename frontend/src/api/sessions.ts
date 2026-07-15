@@ -122,6 +122,14 @@ export const sessionApi = {
       method: 'PUT',
       body: JSON.stringify({ role }),
     }),
+  // Select (or clear) the coordinator recipe/workflow (M5) for a session. Pass a
+  // coordinator-workflow skill slug to apply it, or '' to clear. Rejects an
+  // invalid slug (not a coordinator-workflow, or unknown pattern).
+  setSessionWorkflow: (sessionId: string, workflow: string) =>
+    req<{ id: string; workflow: string; maxTurns: number }>(
+      `/api/sessions/${sessionId}/workflow`,
+      { method: 'PUT', body: JSON.stringify({ workflow }) },
+    ),
   // List the workers spawned under a coordinator session (for the coordination panel).
   listWorkers: (sessionId: string) =>
     req<{ workers: WorkerInfo[] }>(`/api/sessions/${sessionId}/workers`),

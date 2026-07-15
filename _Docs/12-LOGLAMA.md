@@ -1,8 +1,37 @@
 # TionSwarm — Loglama Sistemi
 
-> Son güncelleme: **2026-06-23**
+> Son güncelleme: **2026-07-13**
 > Uygulama logları bir **bellek-içi ring buffer**'a yakalanır, **stdout'a** ve
-> **disk dosyasına** yazılır ve `GET /api/logs` ile UI'a + dış araçlara sunulur.
+> **disk dosyasına** yazılır, `GET /api/logs` ile UI'a + dış araçlara sunulur ve
+> `/api/events` üzerinden **`log` SSE olayı** olarak canlı yayınlanır.
+
+## Kaynak alanları + SSE canlı akış + UI yükseltmesi (2026-07-13)
+
+- **Birinci sınıf kaynak alanları:** `logbuf.Entry` artık `component`, `session`,
+  `agent`, `workspace` alanları taşır. Handler aynı-isimli slog attr'larını bu
+  alanlara **terfi ettirir** (attrs map'inden çıkarır). Kablolama konvansiyonu:
+  logger enjeksiyonunda `logger.With("component", "...")` — runtime `agent`
+  (+`workspace=<id>`), scheduler `scheduler`, automation `automation`, API `api`,
+  backup `backup`, workspace manager `workspace`, MCP havuzu `mcp`, claude-cli
+  havuzu `provider`. Kayıt-anı attr'ı (`"session", id` gibi) da terfi eder.
+- **SSE canlı akış:** `Buffer.SetNotify` her eklenen kaydı `events.Bus`'a
+  `Type="log"` olayı olarak yayınlar (`app.Bootstrap` bağlar); `/api/events`
+  bunu `log` SSE event adıyla iletir. Callback loglamaz → rekürsiyon yok;
+  `Publish` non-blocking → yavaş abone kayıt düşürür, publisher'ı bloklamaz.
+- **Yeni API filtreleri:** `GET /api/logs?component=&session=&since=&until=`
+  (since/until unix **milisaniye**, kapsayıcı). `q` araması terfi eden
+  alanları da kapsar.
+- **`read_logs` aracı:** `q` mesaj + attrs + kaynak alanlarında arar (API ile
+  tutarlı); `component` ve `session` filtre parametreleri eklendi.
+- **Gürültü azaltma:** `toolloop` "tool call" logu INFO→DEBUG (block/deny INFO'da).
+- **Sessiz bölgeler kapatıldı:** `db.atomicWriteBytes`/`nextID` yazım hataları
+  WARN `component=db` (slog default tee'li olduğundan Loglar ekranında görünür);
+  `tools/registry.go` MCP transport hatası WARN `component=mcp`.
+- **UI:** bileşen filtresi (dropdown + satır rozeti tıklanabilir), zaman aralığı
+  (15dk/1sa/24sa), debounce'lu arama + `<mark>` vurgusu, satır kopyalama,
+  filtrelenmiş JSON indirme, takip kapalıyken "N yeni kayıt" rozeti,
+  `content-visibility:auto` ile ucuz virtualization. Canlı mod artık SSE tail
+  (+30sn mutabakat poll'u); eski 2.5sn tam-liste poll'u kaldırıldı.
 
 ## Disk log dosyası + UI'dan erişim (2026-06-23)
 
@@ -77,15 +106,21 @@ logger := slog.New(logs.Handler(slog.NewTextHandler(os.Stdout, &slog.HandlerOpti
 
 ```go
 type Entry struct {
-    Seq     int64             `json:"seq"`     // monoton artan sıra
-    Time    int64             `json:"time"`    // unix milisaniye
-    Level   string            `json:"level"`   // DEBUG|INFO|WARN|ERROR
-    Message string            `json:"message"` // slog mesajı
-    Attrs   map[string]string `json:"attrs"`   // key=value alanlar (string'e çevrili)
+    Seq       int64             `json:"seq"`       // monoton artan sıra
+    Time      int64             `json:"time"`      // unix milisaniye
+    Level     string            `json:"level"`     // DEBUG|INFO|WARN|ERROR
+    Message   string            `json:"message"`   // slog mesajı
+    Component string            `json:"component"` // kaynak alt sistem (terfi eden attr)
+    Session   string            `json:"session"`   // oturum id (terfi eden attr)
+    Agent     string            `json:"agent"`     // ajan id (terfi eden attr)
+    Workspace string            `json:"workspace"` // workspace id (terfi eden attr)
+    Attrs     map[string]string `json:"attrs"`     // kalan key=value alanlar
 }
 ```
 
 `WithAttrs`/`WithGroup` desteklenir: grup öneki `group.key` olarak düzleştirilir.
+`component`/`session`/`agent`/`workspace` attr'ları birinci sınıf alanlara terfi
+eder ve map'ten çıkarılır.
 
 ## Loglanan olaylar
 
@@ -142,7 +177,10 @@ değil** (tek ring buffer tüm workspace'leri kapsar).
 |-------------|----------|------------|
 | `limit` | Filtreden sonra son N kayıt | 500 |
 | `level` | Minimum seviye: `debug`/`info`/`warn`/`error` | hepsi |
-| `q` | Mesaj + alanlar üzerinde büyük/küçük harf duyarsız substring | yok |
+| `q` | Mesaj + kaynak alanları + attrs üzerinde büyük/küçük harf duyarsız substring | yok |
+| `component` | Kaynak alt sisteme tam eşleşme (`api`/`agent`/`scheduler`/`mcp`/`db`/…) | yok |
+| `session` | Oturum id'sine tam eşleşme | yok |
+| `since` / `until` | Zaman penceresi, unix **milisaniye** (kapsayıcı) | yok |
 
 - `levelRank` minimum-seviye sıralaması yapar (boş/bilinmeyen → her şey geçer).
 - `entryMatches` `q`'yu mesajda **ve** her attr key/value'da arar.
@@ -159,12 +197,21 @@ Invoke-RestMethod "http://127.0.0.1:8090/api/logs?q=provider"
 
 ## UI: Loglar ekranı
 
-`frontend/src/components/panels/LogsPanel.tsx` (NavRail → "📜 Loglar"):
+`frontend/src/features/logs/LogsPanel.tsx` (NavRail → "📜 Loglar"):
 
-- **Canlı takip:** "Canlı" açıkken 2.5sn'de bir `GET /api/logs` poll'lar; yeni
-  satıra otomatik kaydırır.
+- **Canlı takip (SSE):** "Canlı" açıkken kayıtlar `/api/events` `log` olayından
+  canlı akar (30sn'de bir mutabakat poll'u SSE kopmalarını kapatır); yeni satıra
+  otomatik kaydırır. Takip kapalıyken gelen eşleşen kayıtlar "N yeni kayıt —
+  Yenile" rozetinde birikir.
 - **Seviye chip'leri:** Hepsi / Debug / Info / Warn / Error.
-- **Arama:** mesaj + alan üzerinde anlık filtre (`q`).
+- **Bileşen filtresi:** dropdown (mevcut kayıtlardan türetilir) + satırdaki
+  bileşen rozetine tıklayınca o bileşene filtrelenir.
+- **Zaman aralığı:** Tümü / 15 dk / 1 saat / 24 saat (`since` paramı).
+- **Arama:** mesaj + alan üzerinde 300ms debounce'lu filtre (`q`); eşleşmeler
+  satırda `<mark>` ile vurgulanır.
+- **Satır kopyalama** (hover'da ikon) + **JSON indirme** (filtrelenmiş liste).
+- **Performans:** satırlar `content-visibility:auto` ile ekran-dışında
+  layout/paint atlar (1000 satırda pencere kütüphanesiz akıcılık).
 - **Grupla** (varsayılan açık): ardışık **birebir aynı** kayıtları (aynı
   level + message + attrs) tek satıra katlar, `×N` rozeti + ilk→son zaman
   aralığı (tooltip) gösterir. Yalnız **ardışık** olanlar gruplanır (kronolojik
@@ -219,24 +266,28 @@ Sınırlar ve güvenlik:
 
 ## Gelecek (öneri — henüz yok)
 
-1. **Canlı hata SSE:** `/api/events`'e `error` olay türü → dış ajan poll'suz
-   hata yakalar.
+1. ~~**Canlı log SSE**~~ ✅ **Yapıldı (2026-07-13)** — `/api/events` `log` olayı;
+   dış ajan da poll'suz canlı log (hatalar dahil) alabilir.
 2. ~~**Frontend hata köprüsü**~~ ✅ **Yapıldı (2026-06-18)** — `POST /api/logs` +
    `ErrorBoundary` + global handler'lar (bkz. yukarıdaki "Takip edilmeyen
    hataları yakalama" bölümü).
-3. **Kalıcı rotating log dosyası:** restart sonrası geçmiş korunur.
+3. **Kalıcı rotating log dosyası:** restart sonrası geçmiş korunur (UI'dan
+   disk dosyası geçmişini okuma modu ile birlikte).
 4. **Bearer auth + ağ bind:** gerçek uzak-ajan erişimi için token'lı koruma.
+5. **Log satırı → oturum linki:** `session` alanından ilgili oturuma/
+   SessionDebugModal'a atlama.
 
 ## İlgili dosyalar
 
-- `internal/logbuf/logbuf.go` — ring buffer + tee'li slog handler
-- `internal/api/logs.go` — `GET /api/logs` (filtre: limit/level/q) + `POST /api/logs` (frontend hata köprüsü)
+- `internal/logbuf/logbuf.go` — ring buffer + tee'li slog handler + alan terfisi + `SetNotify`
+- `internal/api/logs.go` — `GET /api/logs` (filtre: limit/level/q/component/session/since/until) + `POST /api/logs` (frontend hata köprüsü)
+- `internal/api/events.go` — `log` SSE olayı (canlı tail)
 - `internal/api/middleware_log.go` — HTTP access-log middleware
 - `internal/api/middleware_recover.go` — HTTP panic-recovery middleware (son savunma hattı)
 - `frontend/src/lib/reportError.ts` — istemci hata raporlayıcı + global handler kurulumu
 - `frontend/src/components/ErrorBoundary.tsx` — React render çökmesi yakalayıcı
 - `internal/api/{chat,chat_stream,agents,sessions,tasks,schedules,mcp,memory}.go` — iş logları
 - `internal/agent/{worker,executor,flow,reflector}.go` — otonom/runtime logları
-- `frontend/src/components/panels/LogsPanel.tsx` — Loglar ekranı (filtre + gruplama)
-- `frontend/src/lib/logGroup.ts` — ardışık aynı kayıtları katlama (`groupConsecutive`)
+- `frontend/src/features/logs/LogsPanel.tsx` — Loglar ekranı (filtreler + gruplama + SSE tail)
+- `frontend/src/features/logs/logGroup.ts` — ardışık aynı kayıtları katlama (`groupConsecutive`)
 - `cmd/tionswarm/main.go` — logger kurulumu

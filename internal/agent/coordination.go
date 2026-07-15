@@ -240,7 +240,7 @@ func (r *Runtime) SpawnWorker(ctx context.Context, coordSessionID, agentRef, tas
 // allowlist. Reused on subsequent spawns (find-or-create, serialized).
 func (r *Runtime) resolveWorkerTarget(ctx context.Context, coordSessionID, baseAgentID, target string) (string, error) {
 	target = strings.TrimSpace(target)
-	prof, isProfile := defaultSubagentProfiles[strings.ToLower(target)]
+	prof, isProfile := r.subagentProfile(target)
 	if !isProfile {
 		// Ordinary target: must be an existing agent.
 		a, err := r.resolveAgent(ctx, target)
@@ -643,7 +643,13 @@ func (r *Runtime) enqueueCoordinatorTurn(coordSessionID string) {
 func (r *Runtime) drainCoordinator(coordSessionID string, slot *coordSlot) {
 	for {
 		slot.mu.Lock()
-		if slot.turns >= r.tun.CoordinatorMaxTurns() {
+		// A selected recipe (M5) may lower/raise the notify-loop cap for just this
+		// coordinator session; fall back to the workspace default when unset (0).
+		maxTurns := r.tun.CoordinatorMaxTurns()
+		if sess, err := r.db.GetSession(context.Background(), coordSessionID); err == nil && sess.CoordinatorMaxTurns > 0 {
+			maxTurns = sess.CoordinatorMaxTurns
+		}
+		if slot.turns >= maxTurns {
 			warn := !slot.capWarn
 			slot.capWarn = true
 			slot.running = false

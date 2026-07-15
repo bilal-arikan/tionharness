@@ -29,10 +29,12 @@ import { req } from './client'
 // (NetworkPanel + TaskBoard + future listeners) from holding N independent
 // HTTP/1.1 SSE keep-alives against the backend.
 type EventCb = (e: AppEvent) => void
+type LogCb = (e: LogEntry) => void
 let sharedES: EventSource | null = null
 const eventSubs = new Set<EventCb>()
 const stepSubs = new Set<EventCb>()
 const flowNodeSubs = new Set<EventCb>()
+const logSubs = new Set<LogCb>()
 
 function ensureConnection(): void {
   if (sharedES) return
@@ -66,8 +68,32 @@ function ensureConnection(): void {
     }
     flowNodeSubs.forEach((cb) => cb(parsed))
   })
+  sharedES.addEventListener('log', (ev) => {
+    let parsed: AppEvent
+    try {
+      parsed = JSON.parse((ev as MessageEvent).data) as AppEvent
+    } catch {
+      return
+    }
+    if (!parsed.log) return
+    const entry = parsed.log
+    logSubs.forEach((cb) => cb(entry))
+  })
   // EventSource auto-reconnects on transport errors; we don't tear it down
   // here so transient drops don't churn N subscribers.
+}
+
+function closeIfIdle(): void {
+  if (
+    eventSubs.size === 0 &&
+    stepSubs.size === 0 &&
+    flowNodeSubs.size === 0 &&
+    logSubs.size === 0 &&
+    sharedES
+  ) {
+    sharedES.close()
+    sharedES = null
+  }
 }
 
 function subscribeEvents(onEvent: EventCb, onStep?: EventCb, onFlowNode?: EventCb): () => void {
@@ -82,10 +108,21 @@ function subscribeEvents(onEvent: EventCb, onStep?: EventCb, onFlowNode?: EventC
     eventSubs.delete(onEvent)
     if (onStep) stepSubs.delete(onStep)
     if (onFlowNode) flowNodeSubs.delete(onFlowNode)
-    if (eventSubs.size === 0 && stepSubs.size === 0 && flowNodeSubs.size === 0 && sharedES) {
-      sharedES.close()
-      sharedES = null
-    }
+    closeIfIdle()
+  }
+}
+
+// subscribeLogs receives every captured application log record live over the
+// shared SSE feed (event name `log`), so the Logs screen tails without polling.
+function subscribeLogs(onLog: LogCb): () => void {
+  ensureConnection()
+  logSubs.add(onLog)
+  let unsubscribed = false
+  return () => {
+    if (unsubscribed) return
+    unsubscribed = true
+    logSubs.delete(onLog)
+    closeIfIdle()
   }
 }
 
@@ -112,13 +149,27 @@ export const systemApi = {
 
   // Autonomous event feed (task/schedule) — global SSE stream.
   subscribeEvents,
+  // Live application-log tail — same SSE stream, `log` event frames.
+  subscribeLogs,
 
   // Application + workspace logs (global ring buffer).
-  getLogs: (opts?: { limit?: number; level?: string; q?: string }) => {
+  getLogs: (opts?: {
+    limit?: number
+    level?: string
+    q?: string
+    component?: string
+    session?: string
+    since?: number // unix ms, inclusive
+    until?: number // unix ms, inclusive
+  }) => {
     const p = new URLSearchParams()
     if (opts?.limit) p.set('limit', String(opts.limit))
     if (opts?.level) p.set('level', opts.level)
     if (opts?.q) p.set('q', opts.q)
+    if (opts?.component) p.set('component', opts.component)
+    if (opts?.session) p.set('session', opts.session)
+    if (opts?.since) p.set('since', String(opts.since))
+    if (opts?.until) p.set('until', String(opts.until))
     const qs = p.toString()
     return req<LogEntry[]>(`/api/logs${qs ? `?${qs}` : ''}`)
   },

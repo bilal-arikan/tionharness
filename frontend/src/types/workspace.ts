@@ -86,8 +86,19 @@ export interface WorkspaceConfig {
   prompts: Record<string, string>
   defaults: Record<string, string>
   promptKeys: string[]
+  promptMeta: Record<string, WorkspacePromptMeta>
   instructions: string
   readme: string
+}
+
+// Per-key registry metadata from the central prompt registry (internal/prompts):
+// UI label/hint, required {{placeholder}} slots, and whether an edit only lands
+// on NEW sessions/epochs (the prompt rides the cached static prefix).
+export interface WorkspacePromptMeta {
+  label: string
+  hint: string
+  placeholders?: string[]
+  epochAffecting?: boolean
 }
 
 // Partial update; omitted fields unchanged. A prompt written as "" clears the

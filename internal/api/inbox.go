@@ -439,6 +439,14 @@ func (s *Server) handleSessionControl(w http.ResponseWriter, r *http.Request) {
 		// tool call, runChatTurn enqueues the leftover as the next message
 		// (steer_undelivered fallback).
 		if run.providerOf() == "claude-cli" {
+			// In "auto" (bypass) mode the CLI never calls the permission-prompt tool,
+			// so there is no boundary to carry the steer — it would only surface at
+			// turn end as a re-queued message. Tell the client it's unsupported so it
+			// queues the message and shows a hint, instead of us pretending it landed.
+			if !run.steerableFor() {
+				writeJSON(w, http.StatusOK, map[string]string{"result": "unsupported"})
+				return
+			}
 			run.setSteer(req.Text)
 			writeJSON(w, http.StatusOK, map[string]string{"result": "steered"})
 			return

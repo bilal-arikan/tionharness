@@ -161,4 +161,74 @@ export const FLOW_TEMPLATES: FlowTemplate[] = [
       ],
     },
   },
+  {
+    // Classify-And-Act (deterministic form of the coordinator pattern): a fixed
+    // 3-way router. One agent labels the input, a branch node routes to the
+    // handler for that category. Assign a suitable agent to each handler.
+    id: 'classify-act',
+    name: 'Sınıflandır & Yönlendir',
+    description: 'Girdiyi kategoriye ayır (hata/özellik/soru), her kategoriyi kendi işleyicisine yönlendir. Koordinatör "Classify-And-Act" deseninin deterministik Flow karşılığı.',
+    graph: {
+      start: 'classify',
+      edgeStyle: 'smoothstep',
+      nodes: [
+        { id: 'classify', type: 'agent', title: 'Sınıflandır', agentId: '', prompt: 'Classify this request into EXACTLY one category. Reply with a single word: BUG, FEATURE, or QUESTION.\n{{input}}', next: 'route', x: 100, y: 40 },
+        {
+          id: 'route', type: 'branch', title: 'Yönlendir', matchMode: 'contains',
+          branches: [
+            { contains: 'bug', next: 'handle-bug' },
+            { contains: 'feature', next: 'handle-feature' },
+            { contains: '', next: 'handle-question' },
+          ],
+          x: 100, y: 200,
+        },
+        { id: 'handle-bug', type: 'agent', title: 'Hata İşle', agentId: '', prompt: 'Triage this bug report: reproduce steps, likely cause, and a fix plan.\n{{input}}', next: '', x: 380, y: 100 },
+        { id: 'handle-feature', type: 'agent', title: 'Özellik İşle', agentId: '', prompt: 'Scope this feature request: user value, acceptance criteria, and rough implementation steps.\n{{input}}', next: '', x: 380, y: 220 },
+        { id: 'handle-question', type: 'agent', title: 'Soru Yanıtla', agentId: '', prompt: 'Answer this question clearly and concisely.\n{{input}}', next: '', x: 380, y: 340 },
+      ],
+    },
+  },
+  {
+    // Generate-And-Filter (deterministic): fan out to N generators for diversity,
+    // join, then one filter agent dedupes and ranks against a rubric, keeping the
+    // strongest few.
+    id: 'generate-filter',
+    name: 'Üret & Süz',
+    description: 'Farklı açılardan çok sayıda aday üret (paralel), sonra tek ajan tekrarları eleyip rubric ile puanlayarak en güçlü birkaçını seçer. "Generate-And-Filter" deseninin Flow karşılığı.',
+    graph: {
+      start: 'gen',
+      animated: true,
+      nodes: [
+        { id: 'gen', type: 'parallel', title: 'Üret', parallel: ['g1', 'g2', 'g3'], joinNext: 'filter', x: 100, y: 40 },
+        { id: 'g1', type: 'agent', title: 'Aday A (güvenli)', agentId: '', prompt: 'Generate several candidate options for this, favoring safe/proven approaches: {{input}}', next: '', x: 380, y: 20 },
+        { id: 'g2', type: 'agent', title: 'Aday B (cesur)', agentId: '', prompt: 'Generate several candidate options for this, favoring bold/novel approaches: {{input}}', next: '', x: 380, y: 160 },
+        { id: 'g3', type: 'agent', title: 'Aday C (basit)', agentId: '', prompt: 'Generate several candidate options for this, favoring the simplest possible approaches: {{input}}', next: '', x: 380, y: 300 },
+        { id: 'filter', type: 'agent', title: 'Süz & Sırala', agentId: '', prompt: 'Here are candidate options from three angles. Remove near-duplicates, score each against value/effort/risk, and return the TOP 3 with a one-line justification each.\n{{last}}', next: '', x: 100, y: 260 },
+      ],
+    },
+  },
+  {
+    // Tournament (deterministic bracket): four candidates generated in parallel,
+    // two semifinal judges pick a pair winner each, a final judge crowns the
+    // champion. Fresh judge per match (no self-judging).
+    id: 'tournament',
+    name: 'Turnuva',
+    description: 'Dört aday paralel üretilir, iki yarı-final yargıcı çiftlerin kazananını seçer, final yargıcı şampiyonu belirler. "Tournament" deseninin deterministik Flow karşılığı.',
+    graph: {
+      start: 'seed',
+      animated: true,
+      edgeStyle: 'smoothstep',
+      nodes: [
+        { id: 'seed', type: 'parallel', title: 'Adaylar', parallel: ['c1', 'c2', 'c3', 'c4'], joinNext: 'semis', x: 100, y: 40 },
+        { id: 'c1', type: 'agent', title: 'Aday 1', agentId: '', prompt: 'Produce one strong candidate solution (angle 1) for: {{input}}', next: '', x: 380, y: 0 },
+        { id: 'c2', type: 'agent', title: 'Aday 2', agentId: '', prompt: 'Produce one strong candidate solution (angle 2) for: {{input}}', next: '', x: 380, y: 120 },
+        { id: 'c3', type: 'agent', title: 'Aday 3', agentId: '', prompt: 'Produce one strong candidate solution (angle 3) for: {{input}}', next: '', x: 380, y: 240 },
+        { id: 'c4', type: 'agent', title: 'Aday 4', agentId: '', prompt: 'Produce one strong candidate solution (angle 4) for: {{input}}', next: '', x: 380, y: 360 },
+        { id: 'semis', type: 'parallel', title: 'Yarı Final', parallel: ['semiA', 'semiB'], joinNext: 'final', x: 100, y: 240 },
+        { id: 'semiA', type: 'agent', title: 'Yarı A (1 vs 2)', agentId: '', prompt: 'You are an impartial judge. Compare these two candidates head-to-head and pick the single winner; give a one-line reason.\n\nCandidate 1:\n{{node.c1}}\n\nCandidate 2:\n{{node.c2}}', next: '', x: 620, y: 60 },
+        { id: 'semiB', type: 'agent', title: 'Yarı B (3 vs 4)', agentId: '', prompt: 'You are an impartial judge. Compare these two candidates head-to-head and pick the single winner; give a one-line reason.\n\nCandidate 3:\n{{node.c3}}\n\nCandidate 4:\n{{node.c4}}', next: '', x: 620, y: 300 },
+        { id: 'final', type: 'agent', title: 'Final', agentId: '', prompt: 'You are the final judge. Pick the overall winner between the two semifinal winners and explain why it wins.\n\nSemifinal A winner:\n{{node.semiA}}\n\nSemifinal B winner:\n{{node.semiB}}', next: '', x: 100, y: 440 },
+      ],
+    },
+  },
 ]

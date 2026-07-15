@@ -26,12 +26,9 @@ interface Props {
   onState?: (s: FilesSaveState | null) => void
 }
 
-// Human labels for each runtime prompt key.
-const PROMPT_LABELS: Record<string, { label: string; hint: string }> = {
-  summary: { label: 'Genel bakış promptu', hint: 'Yalnızca /board · /flows komutlarının anlık genel-bakış sistem promptu (kısa liste özeti). Konuşma özetlemesi (compaction) DEĞİL — o ayrı "Compaction promptu" alanıdır. Boş bırakırsan gömülü varsayılan kullanılır.' },
-  title: { label: 'Başlık promptu', hint: 'Otomatik başlık üretimi sistem promptu.' },
-  compact: { label: 'Compaction promptu', hint: 'Bağlam sınırına yaklaşınca geçmişi tek bir yapılandırılmış özete katlayan ASIL prompt (8 bölüm + anti-decay). İki %s yer tutucusu (mevcut özet, yeni mesajlar) KORUNMALI — bozarsan gömülü varsayılana düşer. Boş bırakırsan varsayılan kullanılır.' },
-}
+// Labels/hints come from the central prompt registry via the API
+// (config.promptMeta); this is only the fallback for an older backend.
+const FALLBACK_META = { label: '', hint: '' }
 
 type Draft = { prompts: Record<string, string>; instructions: string; readme: string }
 
@@ -130,10 +127,17 @@ export function WorkspaceFilesPanel({ onError, onState }: Props) {
 
       <div className="text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">Runtime promptları</div>
       {config.promptKeys.map((key) => {
-        const meta = PROMPT_LABELS[key] ?? { label: key, hint: '' }
+        const meta = config.promptMeta?.[key] ?? { ...FALLBACK_META, label: key }
         const isDefault = draft.prompts[key].trim() === (config.defaults[key] ?? '').trim()
+        const placeholders = meta.placeholders ?? []
+        const missing = placeholders.filter((p) => !draft.prompts[key].includes(`{{${p}}}`))
+        let hint = meta.hint
+        if (placeholders.length) {
+          hint = `${hint} Zorunlu yer tutucular: ${placeholders.map((p) => `{{${p}}}`).join(', ')}.`
+        }
+        hint = `${hint} Boş bırakırsan gömülü varsayılan kullanılır.`
         return (
-          <Field key={key} label={meta.label} hint={meta.hint}>
+          <Field key={key} label={meta.label || key} hint={hint}>
             <PromptEditor
               value={draft.prompts[key]}
               onChange={(v) => setPrompt(key, v)}
@@ -141,7 +145,7 @@ export function WorkspaceFilesPanel({ onError, onState }: Props) {
               mono
               textareaClassName="text-xs"
             />
-            <div className="mt-1 flex items-center gap-2">
+            <div className="mt-1 flex flex-wrap items-center gap-2">
               <button
                 onClick={() => setPrompt(key, config.defaults[key] ?? '')}
                 disabled={isDefault}
@@ -149,7 +153,21 @@ export function WorkspaceFilesPanel({ onError, onState }: Props) {
               >
                 Varsayılana dön
               </button>
-              {isDefault && <span className="text-[11px] text-[var(--color-text-dim)]">varsayılan</span>}
+              {isDefault ? (
+                <span className="text-[11px] text-[var(--color-text-dim)]">varsayılan</span>
+              ) : (
+                <span className="text-[11px] text-[var(--color-accent)]">özelleştirildi</span>
+              )}
+              {meta.epochAffecting && (
+                <span title="Bu prompt önbelleğe alınan statik sistem prefix'ine girer; değişiklik yeni oturum/epoch'larda etkili olur." className="rounded bg-[var(--color-surface-2)] px-1.5 py-0.5 text-[10px] text-[var(--color-text-dim)]">
+                  yeni oturumlarda etkili
+                </span>
+              )}
+              {!isDefault && missing.length > 0 && (
+                <span className="rounded bg-[var(--color-danger,#b91c1c)]/15 px-1.5 py-0.5 text-[10px] text-[var(--color-danger,#f87171)]">
+                  eksik yer tutucu: {missing.map((p) => `{{${p}}}`).join(', ')} — varsayılana düşer
+                </span>
+              )}
             </div>
           </Field>
         )

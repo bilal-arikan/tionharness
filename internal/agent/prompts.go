@@ -1,51 +1,38 @@
 package agent
 
 import (
-	"path/filepath"
-	"runtime"
+	"github.com/bilal-arikan/tionswarm/internal/prompts"
 )
 
-// PromptInfo describes one built-in prompt used by the runtime's utility
-// operations (on-demand summaries, reflection, titling), for read-only display
-// in the settings UI. The prompts themselves are compiled-in constants — this
-// is purely a viewer payload.
+// PromptInfo describes one registered runtime prompt for read-only display in
+// the settings UI. Derived from the central registry (internal/prompts) — this
+// is purely a viewer payload; editing goes through the workspace config API.
 type PromptInfo struct {
 	Key    string `json:"key"`
 	Label  string `json:"label"`
-	File   string `json:"file"`   // source file basename where the prompt lives
-	System string `json:"system"` // system prompt (empty when none)
+	File   string `json:"file"`   // embedded default source (defaults/<key>.md)
+	System string `json:"system"` // the embedded default text
 	User   string `json:"user"`   // user-turn template (placeholders shown literally)
 	Note   string `json:"note"`   // short usage note
 }
 
-// PromptsDir returns the absolute directory holding the prompt source files, as
-// recorded at build time via runtime.Caller. On a locally-built binary this
-// resolves to the repository's internal/agent folder, so the UI's "open folder"
-// button lands on the actual sources.
-func PromptsDir() string {
-	if _, file, _, ok := runtime.Caller(0); ok {
-		return filepath.Dir(file)
-	}
-	return ""
-}
+// PromptsDir returns the absolute directory holding the embedded prompt default
+// sources (internal/prompts/defaults on a locally-built binary), so the UI's
+// "open folder" button lands on the actual sources.
+func PromptsDir() string { return prompts.SourceDir() }
 
-// Prompts returns the built-in prompt set for read-only display.
+// Prompts returns the full registry for read-only display.
 func Prompts() []PromptInfo {
-	return []PromptInfo{
-		{
-			Key:    "summary",
-			Label:  "Özet komutları — /board · /flows",
-			File:   "summarizer.go",
-			System: summarySystemPrompt,
-			User:   "Summarize the following <etiket> for the user:\n\n<toplanan veri>",
-			Note:   "Veri sunucuda toplanır (<etiket> = görev / akış), en fazla 40 öğe. Ucuz title-modeli varsa o, yoksa ajanın modeli kullanılır.",
-		},
-		{
-			Key:    "title",
-			Label:  "Otomatik başlık (auto-title)",
-			File:   "titler.go",
-			System: titleSystemPrompt,
-			Note:   "Sohbetin ilk turunda ve görev oluşturmada başlık üretir; Ayarlar'daki başlık modeli (ucuz) kullanılabilir.",
-		},
+	specs := prompts.Specs()
+	out := make([]PromptInfo, 0, len(specs))
+	for _, s := range specs {
+		out = append(out, PromptInfo{
+			Key:    s.Key,
+			Label:  s.Label,
+			File:   s.Key + ".md",
+			System: prompts.Default(s.Key),
+			Note:   s.Hint,
+		})
 	}
+	return out
 }

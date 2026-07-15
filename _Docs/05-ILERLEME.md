@@ -1,6 +1,116 @@
 # TionSwarm — İlerleme Takibi
 
-> Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-07-13**
+> Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-07-15**
+
+## Merkezi Prompt Registry — tüm gömülü promptlar tek kayıt defterinde ✅ (2026-07-15)
+
+Uygulamaya dağılmış 15 gömülü LLM promptu (summary/title/compact + btw×2, lesson,
+insight-analyzer, auto-continue, handoff, continuation, coordinator, subagent×4)
+yeni **leaf paket `internal/prompts`**'ta toplandı: default'lar `defaults/*.md`
+(`//go:embed`), her anahtar Spec metadata'lı (Türkçe label/hint, zorunlu
+`{{yerTutucu}}` listesi, `EpochAffecting`). Çözümleme her yerde tek disiplin:
+workspace `config/prompts/<key>.md` override → gömülü default; boş/eksik-yer-tutuculu
+dosya sessizce default'a düşer (eski compact-%s guard'ının genellenmişi).
+Konumsal `%s` → adlandırılmış `{{...}}` geçişi yapıldı (legacy iki-%s compact
+override'ı okuma anında otomatik dönüştürülür). **Seed politikası değişti:**
+prompt default'ları artık dosya olarak seed edilmez; eski default-aynısı seed
+artıkları temizlenir → default iyileştirmeleri edit'lenmemiş workspace'lere
+otomatik ulaşır. Subagent allowlist'leri bilinçli olarak kodda kaldı (güvenlik
+sözleşmesi); btw araçsızlığı yapısal zorlamada. **Prompt izi:** `WithPromptTrace`
+→ `debug.jsonl` `llm_call` olaylarına `promptKey`+`promptHash` (düzenlenmiş
+prompt ≠ default hash'i → etki ölçülebilir). API: `workspace-config` DTO'suna
+`promptMeta`; UI: Promptlar & Dosyalar ekranı registry-güdümlü ("özelleştirildi",
+"yeni oturumlarda etkili" epoch rozeti, eksik-yer-tutucu uyarısı). Drift guard:
+`TestRegistryConsistency` (yetim dosya/anahtar = test kırılır). Detay `61`.
+`go build`+`vet`+ilgili paket testleri + frontend `tsc` yeşil.
+
+## claude-cli hook matcher'ı: bridged-shell genişletme (tüm mevcut workspace'lere uygulandı) ✅ (2026-07-14)
+
+Bir önceki (2026-07-13) regex-çevirisi düzeltmesinin tamamlayıcısı. **Kalan boşluk:** CLI'da
+built-in shell açıkken araç adı **köprülü** görünür (`mcp__tionswarm_interaction__PowerShell`),
+düz `PowerShell` değil. Yani matcher'ı yalnız `Bash,PowerShell` olan hook'lar (regex-çevirisi
+sonrası `^(Bash|PowerShell)$` bile) köprülü ismi kapsamadığından CLI'da **hâlâ ateşlenmezdi**.
+Tüm workspace'ler tarandı: WS1/WS5/WS10'un enabled sqz hook'ları matcher'da köprülü isimleri
+zaten taşıyordu (elle eklenmiş — çalışıyordu); **WS15'in enabled sqz hook'u yalnız
+`Bash,PowerShell`** taşıyordu → açık kurbandı.
+
+**Çözüm (kod, evrensel — veri düzenlemesi YOK):** `cliMatcherRegex` artık matcher'daki
+`Bash`/`PowerShell` alternatiflerine köprülü formu (`interactionToolPrefix+ad`) **otomatik
+ekler** (deduplu). Düz `Bash,PowerShell` → `^(Bash|mcp__tionswarm_interaction__Bash|PowerShell|
+mcp__tionswarm_interaction__PowerShell)$`. Böylece WS15 + gelecekteki her workspace + tek-tık
+"Bağla" şablonu CLI'da veri düzenlemeden ateşlenir; zaten köprülü ismi olanlar deduple aynı
+kalır. Native yol etkilenmez (olmayan araç zaten eşleşmez).
+
+Test: `climcp_matcher_test.go` güncellendi (WS15-şekli `Bash,PowerShell` düz matcher köprülü
+tools'a ateşler; superset'e uymaz; entegrasyon: writeCLISettings çıktısı genişletilmiş regex).
+`go build`+`vet`+`go test ./internal/agent` yeşil (200).
+
+**Canlı E2E (uçtan uca kanıt):** WS15'e geçici bir marker PreToolUse hook'u (matcher düz
+`PowerShell`) eklendi, AGT1'e (claude-cli) gerçek bir PowerShell turu tetiklendi. Ajan cevabı:
+hook **`mcp__tionswarm_interaction__PowerShell` çağrısında ateşlendi** → düz `PowerShell`
+matcher'ı köprülü CLI aracına eşleşti (fix'ten önce eşleşmezdi). **Bonus keşif:** Claude Code
+PreToolUse hook'larını Windows'ta **bash/sh ile** çalıştırıyor (TionSwarm native yol PowerShell
+ile) — marker ham-PS sözdizimindeydi, bash altında `syntax error` verdi. **Etki:** sqz hook'u
+`powershell -NoProfile … -File sqz-bridge-hook.ps1` (bash-geçerli) olduğu için ateşlendiğinde
+sorunsuz çalışır; ama **ham-PS sözdizimli rtk hook'ları** (`$j=[Console]::In.ReadToEnd()|…`,
+şu an her workspace'te DISABLED) CLI'da bash altında kırılır — etkinleştirilirse sqz gibi
+`powershell -File` sarmalayıcısına çevrilmeli. Marker+test-session temizlendi.
+
+## claude-cli hook matcher'ı: virgül-glob → regex çevirisi (sqz/rtk CLI'da sessiz çalışmıyordu) ✅ (2026-07-13)
+
+**Kök neden (bir oturum incelemesinde yakalandı):** TionSwarm'ın **native** hook matcher'ı
+(`hookMatches`) virgül-ayrık **filepath.Match glob listesi** (`Bash,PowerShell`,
+tam-eşleşme). Ama `climcp.go writeCLISettings` matcher'ı claude-cli'ın `--settings`'ine
+**verbatim** yazıyordu. **Claude Code matcher'ı REGEX sayar** (alternation `|`, virgül
+literal, ankraj yok) → `Bash,PowerShell,mcp__tionswarm_interaction__PowerShell,…` virgüller
+dahil o literal diziyi arar, hiçbir tekil araç adına uymaz → **hook claude-cli turlarında
+SESSİZCE hiç ateşlenmez** (ajanların çoğunun kullandığı yol). Sonuç: virgüllü matcher'lı
+sqz/rtk optimizerları CLI ajanlarında ölüydü — bir WS10 oturumunda 23 PowerShell/git komutu
+ham çalışmış, sqz sıfır optimizasyon yapmış (komut+çıktı ham, "sqz" 0 kez).
+
+**Çözüm:** yeni `internal/agent/climcp_matcher.go` — `cliMatcherRegex` matcher'ı iki lehçe
+arası köprüler: virgülle böl → her glob'u regex'e çevir (`*`→`.*`, `?`→`.`, diğer metachar'lar
+escape) → `|` ile birleştir → `^…$` ankraj (native `filepath.Match`'in tam-eşleşme semantiğini
+aynala, `Bash` artık `BashOutput`'a uymasın). `writeCLISettings` artık `cliMatcherRegex(h.Matcher)`
+yazıyor. Boş matcher boş kalır (iki motor da "tüm araçlar" sayar). Native yol değişmedi.
+
+Test: `climcp_matcher_test.go` — dönüştürme tablosu + davranışsal ateşleme (bridged
+`mcp__…__PowerShell`'e uyar, superset'e uymaz) + **entegrasyon** (`writeCLISettings` çıktısında
+dönüştürülmüş regex, verbatim virgül-liste YOK). `go build ./...` + `go vet` + `go test
+./internal/agent` yeşil (203). Backend rebuild+restart edildi; artık her CLI turunda doğru
+matcher yazılıyor → sqz/rtk gerçekten ateşlenir.
+
+## Loglama revizyonu: kaynak alanları + SSE canlı akış + Loglar ekranı yükseltmesi ✅ (2026-07-13)
+
+- **Entry modeli:** `logbuf.Entry`'ye birinci sınıf **`component` / `session` /
+  `agent` / `workspace`** alanları eklendi — handler aynı-isimli slog attr'larını
+  bu alanlara terfi ettirir (attrs map'inden çıkarır). Kablolama: runtime
+  `component=agent`+`workspace=<id>`, scheduler/automation/api/backup/workspace/
+  mcp-pool/cli-pool kendi component etiketlerini alır (`runtime.go`,
+  `workspace/manager.go`, `app/app.go`).
+- **SSE canlı log akışı:** `logbuf.Buffer.SetNotify` → her kayıt `events.Bus`'a
+  `Type="log"` olarak yayınlanır (`app.Bootstrap`), `/api/events` `log` SSE
+  event'iyle iletir. Loglar ekranı artık 2.5sn poll yerine **canlı tail** yapar
+  (30sn'de bir mutabakat poll'u SSE kopmalarını kapatır).
+- **API filtreleri:** `GET /api/logs`'a `component`, `session`, `since`, `until`
+  (unix ms) parametreleri; `entryMatches` terfi eden alanlarda da arar.
+- **`read_logs` aracı:** `q` artık attrs + kaynak alanlarında da arar (önceden
+  yalnız mesajdı — API ile tutarsızdı); `component` ve `session` filtreleri eklendi.
+- **Gürültü:** `toolloop.go` "tool call" logu INFO→**DEBUG** (yoğun oturumda tur
+  başına 100+ satır tamponu domine ediyordu; block/deny INFO'da kaldı).
+- **Sessiz bölge logları:** `db.atomicWriteBytes` (mkdir/tmp/rename) ve `nextID`
+  best-effort counter yazımı hataları WARN (`component=db`, slog default tee'li
+  olduğundan Loglar ekranına düşer); `tools/registry.go` MCP çağrı transport
+  hatası WARN (`component=mcp`) — önceden yalnız model'e dönen IsError'dı.
+- **Loglar ekranı (UI):** bileşen filtresi (satırdaki rozet tıklanabilir),
+  zaman aralığı seçici (15dk/1sa/24sa), 300ms debounce'lu arama + `<mark>`
+  vurgusu, satır kopyalama (hover), filtrelenmiş JSON indirme, takip kapalıyken
+  "N yeni kayıt — Yenile" rozeti, `content-visibility:auto` ile ucuz
+  virtualization, session/agent/workspace alanları ayrı gösterim. Gruplama
+  imzasına kaynak alanları dahil edildi (`logGroup.ts`).
+- **Testler:** `go build ./...` + 561 test (logbuf/api/tools/db/events/workspace/
+  agent/app) ve frontend `npm run build` temiz.
+- **Doküman:** `_Docs/12-LOGLAMA.md` güncellendi.
 
 ## `archive_sessions` tüm oturum tiplerini süpürebiliyor (`kinds`) ✅ (2026-07-13)
 
@@ -27,6 +137,20 @@
   guard'lar, helper birim testi). Mevcut 4 test **değiştirilmeden** geçiyor → geri
   uyumluluk kanıtı. `go build ./...`, `go vet ./...`, `go test ./internal/...` temiz.
 - **Doküman:** `_Docs/24-SELF-MANAGEMENT.md` satır 60 güncellendi.
+
+## Global skill değişiminde "tüm workspace'leri etkiler" toast'ı ✅ (2026-07-13)
+
+- **Ne:** Skills ekranında **global** tier bir skill'in görünürlüğü, erişimi (shared)
+  veya gövdesi değiştiğinde sağ-altta bilgilendirici bir toast çıkar: değişikliğin
+  tüm workspace'lerde geçerli olduğunu (workspace override'ları hariç) belirtir.
+- **Neden:** Global skill dosyası paylaşımlı global dizinde (`~/.tionswarm/skills`) →
+  bir workspace'te yapılan düzenleme sessizce diğerlerini de etkiliyordu; kullanıcı
+  bunu görmüyordu.
+- **Nasıl:** Yeni `shared/components/InfoToast.tsx` (ErrorToast'ın nötr/accent kardeşi,
+  `bottom-20 right-4` → error toast'ıyla çakışmaz). `SkillsPanel` üç mutasyon yolunda
+  (`toggleAccess`/`setVisibility`/`onEditorSaved`) `active.source === 'global'` ise
+  tetikler. Yalnız frontend, self-contained (App error plumbing'e dokunulmadı).
+  `npx tsc --noEmit` temiz.
 
 ## Yeni default skill `tionswarm-terse` (caveman-esinli terse mod) ✅ (2026-07-13)
 

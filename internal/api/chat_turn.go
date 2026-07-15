@@ -184,7 +184,15 @@ func (s *Server) buildStaticPrefix(ctx context.Context, wsp *workspace.Workspace
 	// this sits in the cached static prefix. Only a coordinator session gets it (and
 	// only a coordinator session gets the spawn_worker/send_to_worker/... tools).
 	if session.Role == "coordinator" {
-		system = strings.TrimSpace(coordinatorSystemPrompt() + "\n\n" + system)
+		// Registry prompt "coordinator" (workspace override → embedded default).
+		lead := agent.WorkspacePrompt(wsp.DataDir, "coordinator")
+		// A selected coordinator recipe (M5) layers its saved orchestration pattern
+		// between the manual and the persona. Slug is stable for the session, so it
+		// rides the cached static prefix alongside the manual.
+		if rb := coordinatorRecipeBlock(wsp, session); rb != "" {
+			lead = lead + "\n\n" + rb
+		}
+		system = strings.TrimSpace(lead + "\n\n" + system)
 	}
 	// Tell the agent its own name and how "@name" references work. The message is
 	// addressed to THIS agent (chosen from the UI dropdown). An "@name" inside the

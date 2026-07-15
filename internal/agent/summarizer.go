@@ -16,9 +16,8 @@ const (
 	SummaryTools = "tools"
 )
 
-// summarySystemPrompt keeps the model terse and grounded strictly in the
-// supplied data.
-const summarySystemPrompt = `You summarize structured workspace data for the user. Reply in the same language as the data. Be concise and well structured: a one-line overview followed by short grouped markdown bullets. Do not invent items that are not present in the data.`
+// The summary system prompt lives in the central registry (internal/prompts,
+// key "summary"); readPrompt resolves the workspace override.
 
 // maxSummaryItems caps how many rows of each kind feed one summary, bounding the
 // prompt size (and cost).
@@ -55,9 +54,10 @@ func (r *Runtime) Summarize(ctx context.Context, agentID, kind string) (string, 
 	if override := r.tun.TitleModel(); override != "" {
 		model = override
 	}
-	resp, err := r.guardedComplete(WithCallKind(ctx, KindSummary), agent, providers.Request{
+	summaryPrompt := r.readPrompt("summary")
+	resp, err := r.guardedComplete(WithPromptTrace(WithCallKind(ctx, KindSummary), "summary", summaryPrompt), agent, providers.Request{
 		Model:  model,
-		System: r.readPrompt("summary"),
+		System: summaryPrompt,
 		Messages: []providers.Message{
 			{Role: providers.RoleUser, Text: fmt.Sprintf("Summarize the following %s for the user:\n\n%s", label, data)},
 		},

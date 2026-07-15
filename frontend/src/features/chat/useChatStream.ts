@@ -376,8 +376,10 @@ export function useChatStream(deps: ChatStreamDeps) {
   // steer channel; claude-cli stashes it and delivers it at the next tool boundary
   // (server reports "steered"). If that turn ends with no tool call, the backend
   // itself enqueues the message as the next turn (steer_undelivered fallback), so
-  // the client needs no fallback here anymore. A legacy "unsupported" (older backend)
-  // still falls back to queueing so mixed-version deploys don't drop the message.
+  // the client needs no fallback here anymore. The server reports "unsupported" when
+  // a steer cannot reach the turn — a claude-cli agent in "auto" mode (no permission-
+  // prompt boundary), or an older backend — in which case we queue the message and
+  // tell the user, instead of silently dropping their guidance.
   const steerTurn = useCallback((text: string) => {
     const sid = activeSessionId
     if (!sid || !text.trim()) return
@@ -385,7 +387,7 @@ export function useChatStream(deps: ChatStreamDeps) {
       .then((r) => {
         if (r?.result === 'unsupported') {
           void sendMessage(text)
-          setError('Bu ajan canlı yönlendirmeyi desteklemiyor — mesaj sıraya alındı.')
+          setError('Auto izin modunda canlı yönlendirme desteklenmiyor (claude-cli) — mesaj sıraya alındı. Canlı yönlendirme için ajanı "ask" moduna al.')
         }
       })
       .catch((e) => setError((e as Error).message))

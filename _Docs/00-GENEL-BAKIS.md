@@ -99,6 +99,7 @@ Açık kaynaklı, kendi sunucunda barındırılan (self-hosted) bir **çoklu-aja
 | [58-QUEUE-SENKRON.md](58-QUEUE-SENKRON.md) | Sohbet kuyruğu + çoklu-ekran senkronizasyonu (event-sourcing cutover): SessionHub cursor SSE + interaction CAS + durable send-queue + presence |
 | [59-GITHUB-COPILOT-CHRONICLE.md](59-GITHUB-COPILOT-CHRONICLE.md) | an external CLI agent `/chronicle` oturum-içgörü ailesi (tips/improve/standup/cost-tips/search) + yerel SQLite session store; TionSwarm muadilleriyle kıyas (salt referans, doküman-only) |
 | [60-RETROSPEKTIF-TARAMA.md](60-RETROSPEKTIF-TARAMA.md) | Retrospektif geçmiş tarama (Insight Scan) — TASLAK/Faz1: editlenebilir lens dosyaları + inkremental ledger (UpdatedAt+fingerprint) + 3-aşamalı pipeline; iki kanal (app-fix / workspace-opt); manuel + cron tetik |
+| [61-MERKEZI-PROMPT-REGISTRY.md](61-MERKEZI-PROMPT-REGISTRY.md) | Merkezi prompt registry (`internal/prompts`) — 15 gömülü prompt tek kayıt defterinde: embed edilmiş .md default'lar, workspace override + `{{yerTutucu}}` doğrulaması + default'a fallback, epoch rozeti, debug.jsonl prompt izi (promptKey/promptHash), drift-guard testi |
 | [MALIYET-DUSURME-PLANI.md](MALIYET-DUSURME-PLANI.md) | Maliyet düşürme planı — claude-cli batching/serial maliyet analizi ve aksiyonları |
 | [analiz-craftagent-arac-eslestirme.md](analiz-craftagent-arac-eslestirme.md) | the external agent project↔TionSwarm araç eşleştirme analizi |
 | **arsiv/** | Tarihsel inceleme dokümanları (referans/appendix) |

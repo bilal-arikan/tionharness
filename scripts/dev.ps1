@@ -121,9 +121,9 @@ try {
         Free-Port $Port "Backend"
         Write-Host "==> Backend baslatiliyor: go run ./cmd/tionswarm  (${bindHost}:$Port)" -ForegroundColor Cyan
         $env:TIONSWARM_ADDR = "${bindHost}:$Port"
-        # Gated features (see SKILL.md / Ortam Notlari): shell + self-management.
+        # Gated feature (see SKILL.md / Ortam Notlari): the built-in shell.
+        # (Self-management is ALWAYS installed since 2026-07-01 -- no env gate.)
         $env:TIONSWARM_ENABLE_SHELL = "1"
-        $env:TIONSWARM_ENABLE_SELFMANAGE = "1"
         $backend = Start-Process -FilePath "go" -ArgumentList "run", "./cmd/tionswarm" `
             -WorkingDirectory $root -NoNewWindow -PassThru
         $procs += $backend

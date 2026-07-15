@@ -1,27 +1,32 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Loader2, Network, Users, CheckCircle2, Play, ChevronDown, ChevronRight } from 'lucide-react'
+import { Loader2, Network, Users, CheckCircle2, Play, ChevronDown, ChevronRight, Workflow } from 'lucide-react'
 import { api } from '@/api'
-import type { WorkerInfo } from '@/types'
+import type { Skill, WorkerInfo } from '@/types'
 
 interface Props {
   sessionId: string
   // The session's current role ('coordinator' | 'worker' | '' | undefined).
   role?: string
+  // The session's selected coordinator recipe/workflow slug (M5), if any.
+  workflow?: string
   // Bumped by the parent whenever the conversation changes, so the worker list
   // refreshes as notifications land.
   refreshKey?: number
   onError: (msg: string) => void
-  // Called after the role is toggled so the parent re-fetches session info.
+  // Called after the role/workflow is toggled so the parent re-fetches session info.
   onRoleChanged: () => void
 }
 
 // CoordinatorSection is the M2 coordination panel: it toggles a session into
 // coordinator mode and, once on, shows the live worker roster (running vs
 // finished, with each finished worker's one-line summary). See _Docs/47.
-export function CoordinatorSection({ sessionId, role, refreshKey, onError, onRoleChanged }: Props) {
+export function CoordinatorSection({ sessionId, role, workflow, refreshKey, onError, onRoleChanged }: Props) {
   const isCoordinator = role === 'coordinator'
   const isWorker = role === 'worker'
   const [toggling, setToggling] = useState(false)
+  // Available coordinator recipes (M5): skills with kind 'coordinator-workflow'.
+  const [recipes, setRecipes] = useState<Skill[]>([])
+  const [savingWf, setSavingWf] = useState(false)
   const [workers, setWorkers] = useState<WorkerInfo[]>([])
   // Worker roster collapse (persisted) — the list can get long, so let it fold.
   const [workersOpen, setWorkersOpen] = useState(
@@ -82,6 +87,30 @@ export function CoordinatorSection({ sessionId, role, refreshKey, onError, onRol
     }
   }
 
+  // Load coordinator-workflow recipes once the session is a coordinator, so the
+  // picker can offer them. Filtered client-side by kind.
+  useEffect(() => {
+    if (!isCoordinator) return
+    api
+      .listSkills()
+      .then((all) => setRecipes(all.filter((s) => s.kind === 'coordinator-workflow')))
+      .catch(() => setRecipes([]))
+  }, [isCoordinator])
+
+  const selectWorkflow = async (next: string) => {
+    setSavingWf(true)
+    try {
+      await api.setSessionWorkflow(sessionId, next)
+      onRoleChanged()
+    } catch (e) {
+      onError((e as Error).message)
+    } finally {
+      setSavingWf(false)
+    }
+  }
+
+  const activeRecipe = recipes.find((r) => r.slug === workflow)
+
   // A worker session shows only a passive note (its role is set at spawn time).
   if (isWorker) {
     return (
@@ -124,6 +153,33 @@ export function CoordinatorSection({ sessionId, role, refreshKey, onError, onRol
             >
               {toggling ? '…' : 'Kapat'}
             </button>
+          </div>
+
+          {/* Workflow (recipe) picker (M5): a saved orchestration pattern layered on
+              the coordinator prompt. */}
+          <div className="rounded-lg border border-[var(--color-border)] px-2.5 py-2">
+            <label className="mb-1 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
+              <Workflow size={12} /> Workflow
+              {savingWf && <Loader2 size={11} className="animate-spin" />}
+            </label>
+            <select
+              value={workflow ?? ''}
+              onChange={(e) => selectWorkflow(e.target.value)}
+              disabled={savingWf}
+              className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-[11px] text-[var(--color-text)] disabled:opacity-50"
+            >
+              <option value="">Serbest (recipe yok)</option>
+              {recipes.map((r) => (
+                <option key={r.slug} value={r.slug}>
+                  {r.icon ? `${r.icon} ` : ''}{r.name}
+                </option>
+              ))}
+            </select>
+            {activeRecipe?.description && (
+              <p className="mt-1 text-[10px] leading-snug text-[var(--color-text-dim)]">
+                {activeRecipe.description}
+              </p>
+            )}
           </div>
 
           {workers.length === 0 ? (

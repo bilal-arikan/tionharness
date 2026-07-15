@@ -11,7 +11,9 @@ import (
 
 // handleListLogs returns recent captured log entries (application + all
 // workspaces). Query params: limit (default 500), level (minimum level filter:
-// debug|info|warn|error), q (case-insensitive substring over message + attrs).
+// debug|info|warn|error), q (case-insensitive substring over message + attrs),
+// component (exact match on the originating subsystem), session (exact match on
+// the session id), since / until (unix milliseconds, inclusive time window).
 func (s *Server) handleListLogs(w http.ResponseWriter, r *http.Request) {
 	limit := 500
 	if v := r.URL.Query().Get("limit"); v != "" {
@@ -23,10 +25,33 @@ func (s *Server) handleListLogs(w http.ResponseWriter, r *http.Request) {
 	entries := s.logs.Entries(0) // all retained; filter then trim below
 	minLevel := levelRank(r.URL.Query().Get("level"))
 	q := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("q")))
+	component := strings.TrimSpace(r.URL.Query().Get("component"))
+	session := strings.TrimSpace(r.URL.Query().Get("session"))
+	parseMs := func(key string) int64 {
+		if v := r.URL.Query().Get(key); v != "" {
+			if n, err := strconv.ParseInt(v, 10, 64); err == nil && n > 0 {
+				return n
+			}
+		}
+		return 0
+	}
+	since, until := parseMs("since"), parseMs("until")
 
 	filtered := make([]logbuf.Entry, 0, len(entries))
 	for _, e := range entries {
 		if levelRank(e.Level) < minLevel {
+			continue
+		}
+		if component != "" && e.Component != component {
+			continue
+		}
+		if session != "" && e.Session != session {
+			continue
+		}
+		if since > 0 && e.Time < since {
+			continue
+		}
+		if until > 0 && e.Time > until {
 			continue
 		}
 		if q != "" && !entryMatches(e, q) {
@@ -119,6 +144,12 @@ func levelRank(level string) int {
 func entryMatches(e logbuf.Entry, q string) bool {
 	if strings.Contains(strings.ToLower(e.Message), q) {
 		return true
+	}
+	// Promoted source fields participate in free-text search like any attr.
+	for _, v := range []string{e.Component, e.Session, e.Agent, e.Workspace} {
+		if v != "" && strings.Contains(strings.ToLower(v), q) {
+			return true
+		}
 	}
 	for k, v := range e.Attrs {
 		if strings.Contains(strings.ToLower(k), q) || strings.Contains(strings.ToLower(v), q) {

@@ -504,3 +504,71 @@ oturumda tek tur" garantisi.
   schedule kind oturumuna rol verilmiş olabilir), **inbox** (`agentmsg.go`
   runInboxDelivery). Test: `TestClaimTurnSlotIfCoordinator`. Kapsam dışı kalan
   tek yol: `flow.go` (flow-run oturumları koordinatör olarak kullanılmıyor).
+
+---
+
+## 11. Workflow Desenleri (skill'e eklendi, 2026-07-14)
+
+Anthropic'in "dynamic workflows" altı orkestrasyon deseni (Fanout-And-Synthesize,
+Adversarial Verification, Loop Until Done, Classify-And-Act, Generate-And-Filter,
+Tournament) `tionswarm-coordinator` skill'ine **§4 "Workflow desenleri"** olarak
+eklendi. Bunlar yeni araç değil, M1–M4 mekanikleri üstünde koşan **stratejiler**:
+
+- **Doğrudan M2 eşleşmesi (✅ mekanik):** Fanout-And-Synthesize (`spawn_worker`×N →
+  sentez), Adversarial Verification (taze `spawn_worker(reviewer)`), Loop Until Done
+  (notify + `CoordinatorMaxTurns` guard).
+- **Prompt-seviyesi (aynı araçlarla):** Classify-And-Act (`resolveWorkerTarget`
+  profile yönlendirme), Generate-And-Filter (fan-out + koordinatör rubric), Tournament
+  (ardışık `spawn_worker(judge)` + coalescing).
+
+**Gerçek boşluk (M5 adayı):** deseni "birinci-sınıf, isimli, tekrar-kullanılabilir
+workflow" olarak *kaydetme* yok — her seferinde koordinatör prompt'undan doğuyor
+(ephemeral). Claude Code'da workflow skill gibi saklanabiliyor; bizde M4 (Flow) buna
+en yakın ama LLM-koordinatörsüz deterministik graf.
+
+## 12. M5-A — Kayıtlı Koordinatör Recipe'leri (uygulandı, 2026-07-15)
+
+Yukarıdaki boşluğu kapatan **Seçenek A** uygulandı: bir workflow = **özel
+frontmatter'lı skill** (`kind: coordinator-workflow`). Skill altyapısını (seed,
+market, import, frontmatter-aware re-seed) tümüyle devralır; LLM-döngü dinamizmi
+korunur; yeni entity yok.
+
+### Yapıldı
+- **Frontmatter (`internal/skills/skill.go`, `store.go`):** `kind` + `pattern` +
+  `worker_targets` + `stop_condition` + `max_turns` alanları `Skill`'e eklendi.
+  `PatternValues` allow-list + `KnownPattern()` + `IsCoordinatorWorkflow()`.
+  Geçersiz `max_turns` sessizce 0'a düşer (=default kullan); geçersiz `pattern`
+  **apply anında** hata verir (sessiz yutma yok).
+- **Session bağı (`internal/db/models.go`, `store.go`):** `CoordinatorWorkflow`
+  (seçili recipe slug) + `CoordinatorMaxTurns` (per-session notify-loop cap
+  override); `SetSessionCoordinatorWorkflow`.
+- **Cap enforcement (`agent/coordination.go`):** `drainCoordinator` cap'i artık
+  `Session.CoordinatorMaxTurns > 0` ise onu, yoksa workspace default'unu kullanır.
+- **Prompt enjeksiyonu (`api/coordinator_prompt.go`, `chat_turn.go`):**
+  `coordinatorRecipeBlock` recipe gövdesi + önerilen worker hedefleri + stop
+  condition'ı koordinatör manual'ı ile persona arasına, **cache'li static
+  prefix'e** enjekte eder. `ResolveCoordinatorRecipe` seçimi doğrular.
+- **API (`api/session_role.go`, `server.go`):** `PUT /api/sessions/{id}/workflow`
+  (recipe seç/temizle, geçersizi reddeder); `session_info`'da `coordinatorWorkflow`.
+- **6 default recipe (`skills/defaults/coordinator-wf-*`):** fanout, adversarial,
+  loop, classify, generate-filter, tournament (`access: shared`,
+  `auto_summary: false` → picker'da listelenir, prompt'u şişirmez).
+- **Test:** `skills/coordinator_workflow_test.go` + `api/coordinator_recipe_test.go`.
+  `go build ./...` + skills/agent/api/db testleri yeşil.
+
+### F4 UI ✅ (2026-07-15)
+- **API client (`api/sessions.ts`):** `setSessionWorkflow(sessionId, slug)`.
+- **Tipler:** `Skill`'e `kind`/`pattern`/`workerTargets`/`stopCondition`/`maxTurns`;
+  `SessionInfo`'ya `coordinatorWorkflow`.
+- **Picker (`CoordinatorSection.tsx`):** koordinatör modu açıkken **Workflow**
+  dropdown'u — `kind==='coordinator-workflow'` skill'lerini listeler, seçince
+  `PUT /api/sessions/{id}/workflow`; seçili recipe açıklaması altında gösterilir.
+  "Serbest (recipe yok)" ile temizlenir. `npx tsc --noEmit` temiz.
+
+### F5 Flow şablonları ✅ (2026-07-15)
+Deterministik 3 desen `frontend/src/features/flows/flowTemplates.ts` galerisine
+eklendi (mevcut `branch`+`parallel` düğümleri, **sıfır motor değişikliği**):
+- **Sınıflandır & Yönlendir** (`classify-act`) — agent→branch 3-yollu router.
+- **Üret & Süz** (`generate-filter`) — 3 paralel üretici → join → süzme ajanı.
+- **Turnuva** (`tournament`) — 4 aday paralel → 2 yarı-final yargıcı (parallel→parallel)
+  → final yargıcı. `Validate` geçer (joinNext yalnız varlık kontrolü).

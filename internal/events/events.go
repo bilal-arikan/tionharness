@@ -36,6 +36,11 @@ type Event struct {
 	// JSON here (this package imports neither agent nor orchestration). Empty for
 	// everything else.
 	Node json.RawMessage `json:"node,omitempty"`
+	// Log carries an already-marshalled logbuf.Entry for a "log" event: one
+	// captured application log record, broadcast so the Logs screen can tail
+	// live over SSE instead of polling. Opaque JSON here (this package never
+	// imports logbuf). Empty for everything else.
+	Log json.RawMessage `json:"log,omitempty"`
 }
 
 // Bus fans out events to every live subscriber. Sends are non-blocking: a slow

@@ -64,11 +64,10 @@ if ($LASTEXITCODE -ne 0) { throw "build failed (exit $LASTEXITCODE)" }
 $mb = [math]::Round((Get-Item $bin).Length / 1MB, 1)
 Write-Host "==> Build OK: $bin ($mb MB)" -ForegroundColor Green
 
-# 2) Free the port and set env (gated features match dev.ps1).
+# 2) Free the port and set env (gated feature matches dev.ps1).
 Free-Port $Port "Backend"
 $env:TIONSWARM_ADDR = "${bindHost}:$Port"
 $env:TIONSWARM_ENABLE_SHELL = "1"
-$env:TIONSWARM_ENABLE_SELFMANAGE = "1"
 
 # 3) Run in the foreground -- Ctrl+C stops it (single binary, no children to reap).
 Write-Host "==> Running: $bin  (${bindHost}:$Port)  -- Ctrl+C to stop" -ForegroundColor Cyan

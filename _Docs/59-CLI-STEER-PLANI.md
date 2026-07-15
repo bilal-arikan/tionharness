@@ -1,5 +1,28 @@
 # TionSwarm — claude-cli Canlı Steer (Yönlendirme) Planı
 
+> ## ⚠️ Güncelleme (2026-07-13): "auto" modda steer YAPISAL OLARAK ÇALIŞMAZ
+> claude-cli steer teslimi **tamamen** `callPermission` (permission-prompt tool)
+> sınırına bağlı. Ama bu araç yalnız **"ask"/"read-only"** modunda bağlanıyor
+> (`climcp.go` `promptToolForMode`). **"auto"** modda CLI
+> `--dangerously-skip-permissions` ile çalışır → permission-prompt tool'u **HİÇ**
+> çağrılmaz → `callPermission` hiç tetiklenmez → `pendingSteer` tur ortasında **hiç**
+> teslim edilmez. Aşağıdaki "Enjeksiyon kanalı — kritik incelik" bölümü yalnız
+> RiskRead boşluğunu anıyordu; asıl boşluk **auto modun tümü**. Yani en yaygın
+> kurulumda (claude-cli + auto) "Yönlendir" bir no-op'tu: backend `"steered"` dönüp
+> mesajı yalnız tur bitince `steer_undelivered` ile yeni mesaj olarak kuyruğa
+> alıyordu → kullanıcı ne UI'da ne davranışta değişiklik görüyordu.
+>
+> **Karar — Seçenek (C) (mekanizmaya dokunma, dürüst UX):** steer teslim
+> edilemeyecekse backend `"unsupported"` döner, frontend mesajı kuyruğa alıp
+> "Auto izin modunda canlı yönlendirme desteklenmiyor" bildirir. (A)/(B)
+> uygulanmadı — auto modda her araca +1 MCP round-trip / hook wiring maliyeti
+> istenmedi. Canlı steer isteyen kullanıcı ajanı **"ask"** moduna alır.
+>
+> **Kod:** `steerableForTurn(provider, mode)` (`chat_control.go`) kuralı;
+> `chatRun.steerable` alanı, tur kurulumunda `chat_stream.go`'da set edilir;
+> `handleSessionControl` (`inbox.go`) claude-cli + `!steerable` → `"unsupported"`.
+> Test: `steer_cli_test.go` `TestSteerableForTurn`.
+
 > Durum: **UYGULANDI** (2026-07-11, Faz 1 + 3). Amaç: claude-cli ajanlarında da
 > **gerçek mid-turn steer** (turu durdurmadan, çalışan tura rehberlik enjekte
 > etme) desteği — önceden yalnız native (anthropic/minimax) provider'larda çalışıyordu.

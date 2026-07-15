@@ -183,6 +183,16 @@ type Session struct {
 	Role                 string `json:"role,omitempty"`
 	CoordinatorSessionID string `json:"coordinatorSessionId,omitempty"`
 
+	// CoordinatorWorkflow is the slug of the selected coordinator recipe (M5) —
+	// a saved orchestration pattern (skill with kind=coordinator-workflow) whose
+	// body is injected into this coordinator session's system prompt. Empty means
+	// the free (recipe-less) coordinator. Only meaningful when Role=="coordinator".
+	CoordinatorWorkflow string `json:"coordinatorWorkflow,omitempty"`
+	// CoordinatorMaxTurns optionally overrides the workspace CoordinatorMaxTurns
+	// notify-loop cap for THIS coordinator session (0 = use the workspace default).
+	// Resolved from the selected recipe's max_turns when the workflow is set.
+	CoordinatorMaxTurns int `json:"coordinatorMaxTurns,omitempty"`
+
 	// claude-cli session resume (opt-in, ClaudeResume setting). CLISessionID is the
 	// CLI's server-side session to --resume on the next turn (rotates each turn);
 	// CLISentMsgCount is how many of this session's messages the CLI has already

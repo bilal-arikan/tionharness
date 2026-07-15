@@ -87,7 +87,7 @@ func (s *Server) handleListBuiltinHooks(w http.ResponseWriter, _ *http.Request) 
 			Scope:       "cli",
 			Event:       "PreToolUse",
 			Enabled:     true,
-			Description: "\"Yönlendir\" on a running claude-cli turn stashes the message and delivers it at the next tool boundary as the permission tool's additionalContext, redirecting the agent without restarting the turn (native providers use the steer channel instead). If the turn makes no tool call, the message is queued as the next turn (steer_undelivered fallback).",
+			Description: "\"Yönlendir\" on a running claude-cli turn stashes the message and delivers it at the next tool boundary as the permission tool's additionalContext, redirecting the agent without restarting the turn (native providers use the steer channel instead). This works ONLY in \"ask\"/\"read-only\" modes, where the permission-prompt tool is wired; in \"auto\" mode the CLI runs with --dangerously-skip-permissions and never hits that boundary, so a steer cannot land — the control endpoint returns \"unsupported\" and the client queues the message instead. If a steerable turn makes no tool call, the message is queued as the next turn (steer_undelivered fallback).",
 		},
 		{
 			Name:        "Autonomous git brake",

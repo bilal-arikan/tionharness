@@ -57,6 +57,8 @@ type DebugEvent struct {
 	Name       string `json:"name,omitempty"`   // tool name / hook event name
 	HookID     string `json:"hookId,omitempty"` // for type=hook: the firing hook's id (attributes rtk/sqz/… activity)
 	Model      string `json:"model,omitempty"`  // provider model for llm_call
+	PromptKey  string `json:"promptKey,omitempty"`  // registry prompt key that drove an auxiliary llm_call
+	PromptHash string `json:"promptHash,omitempty"` // 8-hex hash of the RESOLVED prompt text (edited ≠ default)
 	DurMs      int64  `json:"durMs,omitempty"`
 	In         int    `json:"in,omitempty"`
 	Out        int    `json:"out,omitempty"`

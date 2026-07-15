@@ -429,6 +429,7 @@ export function SessionDetailPanel({
           <CoordinatorSection
             sessionId={sessionId}
             role={info.role}
+            workflow={info.coordinatorWorkflow}
             refreshKey={(refreshKey ?? 0) + localRefresh}
             onError={onError}
             onRoleChanged={() => setLocalRefresh((n) => n + 1)}

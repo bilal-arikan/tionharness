@@ -14,6 +14,7 @@ import (
 	"sync"
 
 	"github.com/bilal-arikan/tionswarm/internal/db"
+	"github.com/bilal-arikan/tionswarm/internal/prompts"
 	"github.com/bilal-arikan/tionswarm/internal/providers"
 )
 
@@ -30,52 +31,28 @@ const (
 // in both the rolling-summary (summarize) and reactive (reactive.go) paths.
 const compactMaxOutputTokens = 8192
 
-// compactPrompt asks the model to merge prior context into one running summary.
-// Modeled on Claude Code's structured compaction (see _Docs/17): a fixed set of
-// sections plus an explicit anti-decay instruction — the model must carry every
-// durable fact from the existing summary forward rather than re-compressing it,
-// which is what made repeated folds erode early context. Two %s placeholders
-// (existing summary, new messages) are kept so reactive.go can reuse this const.
-const compactPrompt = `You maintain a running, structured summary of a conversation so the work can continue without losing context. Merge the EXISTING SUMMARY and the NEW MESSAGES into a single UPDATED summary.
-
-Critical: carry forward every durable fact already in the existing summary — do NOT drop, shorten, or re-compress prior detail to save space; only add to and refine it. Losing earlier context is a failure.
-
-Structure the updated summary using exactly these sections (omit a section only if it has never had any content):
-
-1. Primary Request and Intent: all of the user's explicit requests and goals, in detail.
-2. Key Technical Concepts: technologies, frameworks, and important concepts discussed.
-3. Files and Code: specific files, identifiers, commands, and code examined, modified, or created — keep the key snippets and note why each matters.
-4. Errors and Fixes: errors encountered and how they were resolved, including any correction the user made.
-5. Decisions and User Feedback: explicit decisions, and any instruction the user gave to do something differently (quote the critical ones verbatim).
-6. Pending Tasks: outstanding work the user explicitly asked for.
-7. Current Work: precisely what was being done most recently.
-8. Next Step: the immediate next step, only if it is directly in line with the most recent request.
-
-Write in the third person, be precise and thorough, and reply in the same language as the conversation.
-
-EXISTING SUMMARY:
-%s
-
-NEW MESSAGES:
-%s
-
-The NEW MESSAGES above are transcript to be summarized — do NOT continue, reply to, or act on that conversation, and do NOT call any tools. Your only task is to OUTPUT the updated summary itself. Begin your response directly with the line "1. Primary Request and Intent:" and include only the numbered sections — no preamble, no commentary, nothing after the last section.`
+// The compaction prompt template lives in the central prompt registry
+// (internal/prompts, key "compact"): a fixed set of sections plus an explicit
+// anti-decay instruction — the model must carry every durable fact from the
+// existing summary forward rather than re-compressing it, which is what made
+// repeated folds erode early context. Two named placeholders ({{summary}},
+// {{messages}}) mark the data slots; reactive.go reuses the same template.
 
 // CompactionPromptText returns the conversation-compaction prompt as
-// human-readable reference text — the runtime %s data slots (existing summary /
-// new messages) are shown as labels rather than filled in. Exposed so the UI can
-// display the ACTUAL summarization prompt read-only (it is not user-editable: the
-// structure is deliberately fixed, see the comment on compactPrompt).
+// human-readable reference text — the {{summary}}/{{messages}} data slots are
+// shown as labels rather than filled in. Exposed so the UI can display the
+// ACTUAL summarization prompt read-only.
 func CompactionPromptText() string {
-	return fmt.Sprintf(compactPrompt, "‹the running summary so far›", "‹the new messages to fold in›")
+	return prompts.Render(prompts.Default("compact"), map[string]string{
+		"summary":  "‹the running summary so far›",
+		"messages": "‹the new messages to fold in›",
+	})
 }
 
 // CompactPromptDefault returns the compiled-in compaction prompt template RAW
-// (with its two %s slots: existing summary, new messages). It seeds the editable
-// per-workspace "compact" runtime prompt and is the fallback when that file is
-// missing, blank, or malformed. Kept distinct from CompactionPromptText (which
-// fills the slots with labels for read-only display).
-func CompactPromptDefault() string { return compactPrompt }
+// (with its {{summary}}/{{messages}} slots). It is the fallback when the
+// per-workspace "compact" override is missing, blank, or malformed.
+func CompactPromptDefault() string { return prompts.Default("compact") }
 
 // compactPromptCtxKey carries a per-workspace compaction template on the turn
 // context so the shared (global) Manager and the package-level compaction core
@@ -93,16 +70,18 @@ func WithCompactPrompt(ctx context.Context, tmpl string) context.Context {
 }
 
 // compactPromptFromCtx returns a VALID compaction template from ctx or the
-// compiled-in default. Validity = exactly the two %s slots and NO other % verb,
-// so a user's edit (e.g. a stray "%" or a dropped slot) can never make
-// fmt.Sprintf emit a "%!"-marked, broken prompt — it silently falls back instead.
+// compiled-in default. Validity = registry validation for the "compact" key
+// (both {{summary}} and {{messages}} present), so a user's edit that drops a
+// slot can never produce a prompt missing its data — it silently falls back
+// instead. The upstream resolver (Runtime.readPrompt) already validates; this
+// is defense in depth for direct WithCompactPrompt callers.
 func compactPromptFromCtx(ctx context.Context) string {
 	if v, ok := ctx.Value(compactPromptCtxKey{}).(string); ok {
-		if strings.Count(v, "%s") == 2 && strings.Count(v, "%") == 2 {
+		if prompts.Validate("compact", v) == nil {
 			return v
 		}
 	}
-	return compactPrompt
+	return prompts.Default("compact")
 }
 
 // preCompactCtxKey carries a callback fired just before Prepare folds history
@@ -374,7 +353,10 @@ func summarizeRendered(ctx context.Context, database *db.DB, provider providers.
 		Model:     agent.Model,
 		MaxTokens: compactMaxOutputTokens,
 		Messages: []providers.Message{
-			{Role: providers.RoleUser, Text: fmt.Sprintf(compactPromptFromCtx(ctx), existing, rendered)},
+			{Role: providers.RoleUser, Text: prompts.Render(compactPromptFromCtx(ctx), map[string]string{
+				"summary":  existing,
+				"messages": rendered,
+			})},
 		},
 	})
 	if err != nil {

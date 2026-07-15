@@ -49,7 +49,32 @@ kullanılabilir.
 - **Continue vs. spawn:** bağlam örtüşmesi yüksek → `send_to_worker`; düşük/temiz gerek → `spawn_worker`; doğrulama → her zaman taze `spawn_worker`.
 - **Gerçek doğrulama:** özelliği açıp test et; "var" demek yetmez.
 
-## 4. Sınırlar (guardrail)
+## 4. Workflow desenleri — göreve göre seç ve **kombinle**
+
+Aşağıdaki altı desen, yukarıdaki M1–M4 mekanikleri üstünde koştuğun **stratejilerdir**
+(yeni araç gerektirmez). Münhasır değildirler — tek işte birkaçını zincirle
+(ör. fan-out ile araştır → adversarial ile doğrula → sentezle).
+
+| Desen | Ne yapar | Nasıl (mekanik) | Ne zaman |
+|-------|----------|-----------------|----------|
+| **Fanout-And-Synthesize** | Alt-görevlere böl, her dala bir worker, sonuçları birleştir | `spawn_worker` ×N (M2) veya `run_subagent` ×N (M1) → SEN sentezle | Derin araştırma: N kaynağı paralel tara → tek rapor |
+| **Adversarial Verification** | Bir worker'ın çıktısını **ikinci bir worker** kırmaya/çürütmeye çalışır | Çıktıyı taze `spawn_worker(reviewer)`'a ver; "refute et, rubber-stamp etme" | İddiaları fact-check, kod/plan doğrulama |
+| **Loop Until Done** | Durma koşulu sağlanana dek yeni worker spawn et | Notify geldikçe `spawn_worker`; `CoordinatorMaxTurns` guard'ı | "Yeni bulgu var mı? → devam" (Ralph-loop); GAN-loop skill'i de bunu yapar |
+| **Classify-And-Act** | Görevi türüne göre doğru worker/yola yönlendir | Önce sınıflandır → `spawn_worker(target=profil)` ile doğru profile (explore/coder/reviewer) yönlendir | Karışık istekleri kategoriye ayırma |
+| **Generate-And-Filter** | Çok seçenek üret, rubric + dedupe ile en iyileri süz | Fan-out ile N aday üret → SEN kendi bağlamında rubric'le ele | Beyin fırtınası: 10 fikir → en güçlü 3 |
+| **Tournament** | Adaylar ikişerli yargılarla elenir → kazanan | Ardışık `spawn_worker(judge)` turları; coalescing biriktirir | En iyi tek çözümü seçmek |
+
+Not: İlk üçü (Fanout / Adversarial / Loop) M2 döngüsüyle **doğrudan** eşleşir; son
+üçü (Classify / Generate-Filter / Tournament) aynı araçlarla **prompt-seviyesinde**
+kurulur.
+
+**Kayıtlı recipe'ler (M5):** Bu 6 desen kutudan çıkan `coordinator-wf-*` recipe'leri
+olarak saklıdır. Koordinatör Composer'ındaki **Workflow seçici** ile birini seçince
+gövdesi bu sisteme enjekte edilir, önerilen worker hedefleri + stop condition +
+`max_turns` uygulanır. Kendi recipe'ini `kind: coordinator-workflow` frontmatter'lı
+bir skill olarak yazıp ekleyebilirsin.
+
+## 5. Sınırlar (guardrail)
 
 - `spawn_worker` hedefi var olan bir ajan **veya** bir profil (`explore`/`coder`/
   `reviewer`) olabilir; profil verilirse kalıcı, yeniden-kullanılabilir bir

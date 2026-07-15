@@ -145,6 +145,30 @@ kapsaması için gerekir — Windows'ta ajan `PowerShell` aracını kullanır, y
 matcher'ı **hiç eşleşmezdi**. Birden çok eşleşen hook **oluşturma sırasına göre**
 zincirlenir; ilk `block` kazanır.
 
+> **claude-cli köprüsü (2026-07-13):** Virgül-glob **TionSwarm'ın native** sözdizimidir.
+> Claude Code matcher'ı **REGEX** sayar (alternation `|`, virgül literal), o yüzden
+> `writeCLISettings` matcher'ı `cliMatcherRegex` ile çevirir: virgül→`|`, glob→regex
+> (`*`→`.*`), `^…$` ankraj (`climcp_matcher.go`). **Önceden verbatim yazılıyordu → virgüllü
+> matcher CLI turlarında sessizce hiç ateşlenmiyordu** (sqz/rtk CLI ajanlarında ölüydü).
+> **Bridged-shell genişletme (2026-07-14):** built-in shell açıkken CLI, `Bash`/`PowerShell`
+> yerine köprülü `mcp__tionswarm_interaction__Bash`/`__PowerShell`'i görür — o yüzden
+> `cliMatcherRegex`, matcher'daki `Bash`/`PowerShell` alternatiflerine köprülü formu da
+> **otomatik ekler** (deduplu). Böylece düz `Bash,PowerShell` matcher'ı (tek-tık şablonu +
+> tüm mevcut/gelecek workspace'ler) CLI'da veri düzenlemeden ateşlenir; aşağıdaki manuel
+> `Bash,PowerShell` uyarısı artık yalnız **native** yol için geçerli. **Canlı E2E ile
+> doğrulandı (2026-07-14):** düz `PowerShell` matcher'lı bir hook gerçek claude-cli turunda
+> `mcp__tionswarm_interaction__PowerShell` çağrısında ateşlendi.
+>
+> **Hook yürütme kabuğu farkı (ÖNEMLİ):** Native yol hook'u **PowerShell** ile çalıştırır
+> (`execHook` → `powershell.exe -Command`), Claude Code ise Windows'ta **bash/sh** ile. Yani
+> ham-PowerShell sözdizimli bir hook komutu (`$j=[Console]::In.ReadToEnd()|…`) native'de çalışır
+> ama CLI'da bash altında `syntax error` verir (canlı E2E'de görüldü). **Kural:** CLI'da da
+> çalışması gereken hook'u kabuk-bağımsız yaz — açık yorumlayıcı çağır (`powershell -NoProfile
+> -File script.ps1`, sqz hook'unun yaptığı) veya POSIX sözdizimi kullan. Ham-PS rtk hook'ları
+> bu yüzden CLI'da kırılır.
+
+
+
 > **sqz/rtk uyarısı (Windows):** Ayarlar ▸ Dış Araçlar'daki tek-tık "Bağla" artık
 > `Bash,PowerShell` matcher'ıyla hook kurar. Eski kurulumlarda matcher `Bash` kalmışsa
 > PowerShell komutları sıkıştırılmadan geçer — hook'u düzenleyip matcher'ı

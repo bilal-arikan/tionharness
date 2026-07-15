@@ -43,6 +43,20 @@ export interface Skill {
   // Skills screen's tier selector reads and writes; mirrors a tool's visibility.
   visibility?: ToolVisibility
   source: SkillSource
+  // Non-empty for a specialised skill. 'coordinator-workflow' marks a saved
+  // coordinator recipe (M5) — a reusable orchestration pattern selectable in the
+  // coordinator composer, not plain instructions.
+  kind?: string
+  // Orchestration strategy a coordinator-workflow encodes (fanout | adversarial |
+  // loop | classify | generate-filter | tournament | custom). Only for kind
+  // 'coordinator-workflow'.
+  pattern?: string
+  // Default fan-out targets a coordinator-workflow suggests (advisory).
+  workerTargets?: string[]
+  // Human-readable done-criteria for loop-style recipes.
+  stopCondition?: string
+  // Optional per-session CoordinatorMaxTurns override a recipe applies (0 = default).
+  maxTurns?: number
   // SKILL.md last-modified time (Unix seconds). Surfaced in the Skills screen as
   // a "last edited" label; skills are sorted within each group newest-first by it.
   modifiedAt?: number

@@ -1,0 +1,1 @@
+Önceki turda görevi tamamlamadan durdun (açık todo maddeleri var veya son eylemin bir araç aktivasyonuydu — aktive edilen araçlar ancak bir sonraki turda kullanılabilir, o tur da bu). Aktive ettiğin araçlar artık HAZIR. Göreve kaldığın yerden DEVAM ET ve tamamla; soru sorma, otonom çalış. İş gerçekten bittiyse kısa bir tamamlanma özeti ver ve dur.

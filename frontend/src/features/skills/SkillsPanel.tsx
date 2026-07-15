@@ -7,6 +7,7 @@ import { VISIBILITY_TIERS, visibilityMeta } from '@/features/tools/toolMeta'
 import { Markdown } from '@/shared/components/markdown/Markdown'
 import { CopyPathButton } from '@/shared/components/CopyPathButton'
 import { RevealButton } from '@/shared/components/RevealButton'
+import { InfoToast } from '@/shared/components/InfoToast'
 import { SkillEditor } from './SkillEditor'
 import { useMultiSelect } from '@/shared/hooks/useMultiSelect'
 import { useGroupedList } from '@/shared/hooks/useGroupedList'
@@ -15,6 +16,12 @@ import { SelectionBar, SelectionBarButton, ListPane, PaneHeader } from '@/shared
 import { NewItemButton, SELECTED_ITEM_CLS, SELECTED_ITEM_RING } from '@/shared/components/SidebarChrome'
 import { useCollapsibleList } from '@/shared/hooks/useCollapsibleList'
 import { relativeTime, fullDateTime } from '@/shared/lib/time'
+
+// Advisory shown after any mutation to a GLOBAL-tier skill: its SKILL.md lives in
+// the shared global dir, so the change reaches every workspace that does not
+// override the same slug in its own workspace tier.
+const GLOBAL_CHANGE_MSG =
+  'Global skill değişti — bu değişiklik tüm workspace’lerde geçerli (kendi skill’inde aynı ismi tanımlayan workspace’ler hariç).'
 
 interface Props {
   onError: (msg: string) => void
@@ -156,6 +163,9 @@ export function SkillsPanel({ onError }: Props) {
   // Selection persists across screen switches within the session (resets on reload).
   const [activeSlug, setActiveSlug] = useSessionState<string | null>('skills.activeSlug', null)
   const [active, setActive] = useState<SkillDetail | null>(null)
+  // Bottom-right advisory shown after a GLOBAL skill mutation, since a global
+  // skill file is shared by every workspace (workspace tier overrides aside).
+  const [infoMsg, setInfoMsg] = useState('')
   const [loadingBody, setLoadingBody] = useState(false)
   const [accessBusy, setAccessBusy] = useState(false)
   const [visBusy, setVisBusy] = useState(false)
@@ -239,6 +249,7 @@ export function SkillsPanel({ onError }: Props) {
       .setSkillAccess(active.slug, !active.shared)
       .then((sk) => {
         setActive((a) => (a ? { ...a, shared: sk.shared } : a))
+        if (active.source === 'global') setInfoMsg(GLOBAL_CHANGE_MSG)
         reload()
       })
       .catch((e) => onError((e as Error).message))
@@ -258,6 +269,7 @@ export function SkillsPanel({ onError }: Props) {
           setActive((a) =>
             a ? { ...a, visibility: sk.visibility, autoSummary: sk.autoSummary, nameOnly: sk.nameOnly, summaryOnly: sk.summaryOnly } : a,
           )
+          if (active.source === 'global') setInfoMsg(GLOBAL_CHANGE_MSG)
           reload()
         })
         .catch((e) => onError((e as Error).message))
@@ -272,6 +284,7 @@ export function SkillsPanel({ onError }: Props) {
       setEditor(null)
       setActive(saved)
       setActiveSlug(saved.slug)
+      if (saved.source === 'global') setInfoMsg(GLOBAL_CHANGE_MSG)
       reload()
     },
     [reload],
@@ -824,6 +837,8 @@ export function SkillsPanel({ onError }: Props) {
           onSaved={onEditorSaved}
         />
       )}
+
+      <InfoToast message={infoMsg} onDismiss={() => setInfoMsg('')} />
     </div>
   )
 }

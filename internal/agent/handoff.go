@@ -12,6 +12,7 @@ import (
 	"github.com/bilal-arikan/tionswarm/internal/conversation"
 	"github.com/bilal-arikan/tionswarm/internal/db"
 	"github.com/bilal-arikan/tionswarm/internal/events"
+	"github.com/bilal-arikan/tionswarm/internal/prompts"
 	"github.com/bilal-arikan/tionswarm/internal/tools"
 )
 
@@ -73,7 +74,7 @@ func (r *Runtime) HandoffSession(ctx context.Context, session db.Session, agent 
 	}
 
 	env := r.handoffEnv(ctx, session)
-	handoffText, err := conversation.BuildHandoff(ctx, r.db, provider, agent, session.Summary, rendered, env)
+	handoffText, err := conversation.BuildHandoff(ctx, r.db, provider, agent, session.Summary, rendered, env, r.readPrompt("handoff"))
 	if err != nil {
 		return HandoffResult{}, fmt.Errorf("generate handoff: %w", err)
 	}
@@ -100,7 +101,7 @@ func (r *Runtime) HandoffSession(ctx context.Context, session db.Session, agent 
 	// Spawn a FRESH session seeded with the handoff so a clean-window agent
 	// continues from the "Next Concrete Step". The continuation prompt embeds the
 	// handoff inline (no tool round-trip needed) plus recovery pointers.
-	cont := buildContinuationPrompt(session.ID, ref.ID, filePath, handoffText)
+	cont := buildContinuationPrompt(r.readPrompt("continuation"), session.ID, ref.ID, filePath, handoffText)
 	spawn, err := r.SpawnSession(ctx, agent.ID, cont, SpawnOptions{
 		CreatedBy:       opts.CreatedBy,
 		ParentSessionID: session.ID,
@@ -250,25 +251,23 @@ func (r *Runtime) writeHandoffFile(dir, content string) string {
 // buildContinuationPrompt is the opening user turn for the fresh session: it tells
 // the agent it is resuming after a context reset, embeds the handoff inline so it
 // has full state immediately, and points to the old session + artifact for
-// verbatim recovery of anything the handoff did not capture.
-func buildContinuationPrompt(oldSessionID, artifactID, filePath, handoffText string) string {
-	var b strings.Builder
-	b.WriteString("You are continuing a long-running task in a FRESH context window (a context reset / handoff). ")
-	b.WriteString("Your previous session reached its context limit; this is a clean slate. ")
-	b.WriteString("Do NOT restart from scratch — continue from the \"Next Concrete Step\" in the handoff below.\n\n")
-	b.WriteString("# Handoff\n")
-	b.WriteString(handoffText)
-	b.WriteString("\n\n---\n")
-	fmt.Fprintf(&b, "Recovery: the previous session id is `%s`. For exact pre-reset detail not captured above "+
-		"(a code snippet, error message, file contents, or a specific decision), do not guess — use "+
-		"`conversation_search` with session_id=\"%s\", or re-open the referenced files with your file tools. ",
-		oldSessionID, oldSessionID)
-	fmt.Fprintf(&b, "This handoff is also saved as artifact `%s`", artifactID)
-	if strings.TrimSpace(filePath) != "" {
-		fmt.Fprintf(&b, " (and file `%s`)", filePath)
+// verbatim recovery of anything the handoff did not capture. tmpl is the
+// registry "continuation" template (blank/invalid falls back to the default);
+// the optional {{fileNote}} slot renders the on-disk handoff file when written.
+func buildContinuationPrompt(tmpl, oldSessionID, artifactID, filePath, handoffText string) string {
+	if prompts.Validate("continuation", tmpl) != nil {
+		tmpl = prompts.Default("continuation")
 	}
-	b.WriteString(".")
-	return b.String()
+	fileNote := ""
+	if strings.TrimSpace(filePath) != "" {
+		fileNote = fmt.Sprintf(" (and file `%s`)", filePath)
+	}
+	return prompts.Render(tmpl, map[string]string{
+		"handoff":    handoffText,
+		"oldSession": oldSessionID,
+		"artifact":   artifactID,
+		"fileNote":   fileNote,
+	})
 }
 
 // handoffTitle derives a short label for the handoff artifact + continuation

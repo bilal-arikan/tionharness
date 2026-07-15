@@ -38,11 +38,14 @@ func (r *Runtime) RecordUsage(ctx context.Context, agent db.Agent, model string,
 		// Debug journal: record this provider call's per-call token spend (model +
 		// input/output/cache) so the per-session debug stream can attribute where
 		// tokens went, turn by turn — finer than the lifetime SessionUsage rollup.
+		promptKey, promptHash := promptTraceFrom(ctx)
 		r.emitDebug(ctx, db.DebugEvent{
 			Type:       db.DebugLLMCall,
 			AgentID:    agent.ID,
 			Kind:       kind,
 			Model:      model,
+			PromptKey:  promptKey,
+			PromptHash: promptHash,
 			In:         u.InputTokens,
 			Out:        u.OutputTokens,
 			CacheRead:  u.CacheReadTokens,

@@ -1,12 +1,18 @@
 // Captured log records and autonomous runtime events streamed over /api/events.
 import type { FlowNodeEvent } from './flow'
 
-// A captured log record (application + all workspaces).
+// A captured log record (application + all workspaces). component/session/
+// agent/workspace are first-class source fields promoted by the backend from
+// same-named slog attrs, enabling exact filtering without substring search.
 export interface LogEntry {
   seq: number
   time: number // unix milliseconds
   level: string // DEBUG | INFO | WARN | ERROR
   message: string
+  component?: string // originating subsystem (api/agent/scheduler/mcp/db/…)
+  session?: string // session id, when the record carries one
+  agent?: string // agent id, when the record carries one
+  workspace?: string // workspace id, when the record carries one
   attrs?: Record<string, string>
 }
 
@@ -30,4 +36,7 @@ export interface AppEvent {
   // `flownode` event name): one flow node's live lifecycle for the run in
   // target.flowRunId. Typed (no cycle: flow.ts holds no back-reference here).
   node?: FlowNodeEvent
+  // Present only on type === 'log' frames (delivered under the SSE `log`
+  // event name): one captured application log record for live tailing.
+  log?: LogEntry
 }

@@ -10,6 +10,8 @@
 // sits in the context window until it is actually needed.
 package skills
 
+import "strings"
+
 // Visibility tiers describe how much of a skill rides in the per-turn "# Available
 // Skills" catalog block — the skill analogue of a tool's visibility tiers (see
 // tools.Visibility*). Every skill resolves to exactly one tier, derived from its
@@ -28,6 +30,39 @@ const (
 	// reachable only via explicit assignment or skill_search.
 	VisibilityHidden = "hidden"
 )
+
+// KindCoordinatorWorkflow marks a skill as a saved coordinator recipe (M5): a
+// reusable orchestration pattern rather than plain instructions. Match it
+// case-insensitively via IsCoordinatorWorkflow.
+const KindCoordinatorWorkflow = "coordinator-workflow"
+
+// PatternValues are the orchestration strategies a coordinator-workflow recipe
+// may encode (see _Docs/47 §4). "custom" is the escape hatch for a recipe whose
+// body defines its own combination.
+var PatternValues = []string{
+	"fanout",          // Fanout-And-Synthesize
+	"adversarial",     // Adversarial Verification
+	"loop",            // Loop Until Done
+	"classify",        // Classify-And-Act
+	"generate-filter", // Generate-And-Filter
+	"tournament",      // Tournament
+	"custom",          // recipe-defined combination
+}
+
+// KnownPattern reports whether p is one of PatternValues (case-insensitive).
+func KnownPattern(p string) bool {
+	for _, v := range PatternValues {
+		if strings.EqualFold(strings.TrimSpace(p), v) {
+			return true
+		}
+	}
+	return false
+}
+
+// IsCoordinatorWorkflow reports whether this skill is a saved coordinator recipe.
+func (s Skill) IsCoordinatorWorkflow() bool {
+	return strings.EqualFold(strings.TrimSpace(s.Kind), KindCoordinatorWorkflow)
+}
 
 // Source identifies which tier a skill was resolved from. The workspace tier
 // overrides the global tier when slugs collide (workspace beats global).
@@ -111,6 +146,26 @@ type Skill struct {
 	// can progressively load deeper instructions on demand (e.g. an overview skill
 	// pointing at a detailed per-feature skill). Set from frontmatter `subskills:`.
 	SubSkills []string `json:"subSkills,omitempty"`
+	// Kind classifies a non-standard skill. Empty is a normal instructional skill;
+	// "coordinator-workflow" marks a saved coordinator recipe (M5) — a reusable
+	// orchestration pattern selectable in the coordinator composer. Set from
+	// frontmatter `kind`. UI lists coordinator-workflow skills in a separate picker.
+	Kind string `json:"kind,omitempty"`
+	// Pattern is the orchestration strategy a coordinator-workflow recipe encodes
+	// (one of PatternValues). Only meaningful when Kind=="coordinator-workflow".
+	// Set from frontmatter `pattern`. Validated at apply time (KnownPattern).
+	Pattern string `json:"pattern,omitempty"`
+	// WorkerTargets are the DEFAULT fan-out targets (agent names or profiles like
+	// explore/coder/reviewer) a coordinator-workflow suggests. Advisory — the
+	// coordinator may override them. Set from frontmatter `worker_targets`.
+	WorkerTargets []string `json:"workerTargets,omitempty"`
+	// StopCondition is a human-readable done-criteria for loop-style recipes
+	// (e.g. "no new findings in 2 rounds"). Injected into the coordinator prompt.
+	// Set from frontmatter `stop_condition`.
+	StopCondition string `json:"stopCondition,omitempty"`
+	// MaxTurns optionally overrides CoordinatorMaxTurns for this recipe (0 = keep
+	// the workspace default). Set from frontmatter `max_turns`.
+	MaxTurns int `json:"maxTurns,omitempty"`
 	// Source is the tier this skill was resolved from.
 	Source Source `json:"source"`
 	// ModifiedAt is the SKILL.md file's last-modified time (Unix seconds), surfaced

@@ -70,6 +70,10 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 				// Per-node flow progress rides its own SSE event name so the
 				// frontend routes it to the run viewer, not the notify/badge path.
 				name = "flownode"
+			case "log":
+				// Captured log records ride their own SSE event name so the Logs
+				// screen tails live without polling (and the notify path ignores them).
+				name = "log"
 			}
 			fmt.Fprintf(w, "event: %s\ndata: %s\n\n", name, b)
 			flusher.Flush()

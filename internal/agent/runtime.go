@@ -71,6 +71,16 @@ type Runtime struct {
 	// scheduler exists; nil before then.
 	runSched func(context.Context, string) error
 
+	// reloadInsightCron re-arms the insight auto-scan timer after the settings
+	// endpoint changes AutoScanCron. Wired by the workspace manager once the
+	// insight cron exists; nil before then (no-op).
+	reloadInsightCron func(context.Context) error
+
+	// insightScanActive guards against overlapping retrospective scans: a scan can
+	// run for many minutes (one LLM call per (lens,session) pair), so a second
+	// manual/cron trigger while one is in flight is rejected instead of stacking.
+	insightScanActive atomic.Bool
+
 	// turnHooks are called (detached, non-blocking) whenever an agent turn finishes
 	// on any path (chat/spawn/schedule/wake). The workspace manager wires the
 	// AutomationEngine (tag-triggered automations) and the CoordinationEngine
@@ -278,6 +288,15 @@ func NewRuntime(database *db.DB, registry *providers.Registry, tun *Tunables, wo
 	// Seed the shipped default skills into the global dir (idempotent, never
 	// overwrites) so every workspace inherits the TionSwarm guide skills.
 	_ = skills.EnsureDefaults(globalSkillsDir())
+	// Tag every record from this runtime with its source so the Logs screen can
+	// filter by component and workspace. The keys are promoted to first-class
+	// Entry fields by the logbuf handler.
+	if logger != nil {
+		logger = logger.With("component", "agent")
+		if wsID != "" {
+			logger = logger.With("workspace", wsID)
+		}
+	}
 	// The marketplace has no bundled/workspace tiers: packs live only in the
 	// global market dir (<DataDir>/market) and remote registries. No seeding.
 	r := &Runtime{
@@ -302,11 +321,13 @@ func NewRuntime(database *db.DB, registry *providers.Registry, tun *Tunables, wo
 	r.codebaseMemoryEnabled.Store(true)
 	// Surface MCP connection lifecycle (dial / re-dial / list_changed) in the
 	// in-app Logs screen; the persistent pool is otherwise opaque.
-	r.mcpPool.SetLogger(logger)
-	// Same rationale for the persistent claude-cli pool: surface cold-start reason
-	// (config-change / dead-process), warm reuse, and process death in Logs so a
-	// surprise cold turn is diagnosable instead of silent.
-	r.cliSessions.SetLogger(logger)
+	if logger != nil {
+		r.mcpPool.SetLogger(logger.With("component", "mcp"))
+		// Same rationale for the persistent claude-cli pool: surface cold-start
+		// reason (config-change / dead-process), warm reuse, and process death in
+		// Logs so a surprise cold turn is diagnosable instead of silent.
+		r.cliSessions.SetLogger(logger.With("component", "provider"))
+	}
 	return r
 }
 
@@ -818,6 +839,19 @@ func (r *Runtime) SetScheduleReloader(fn func(context.Context) error) { r.reload
 // self-management tool can fire a schedule on demand. Called by the workspace
 // manager after the scheduler is constructed. Nil leaves run_schedule a no-op.
 func (r *Runtime) SetScheduleRunner(fn func(context.Context, string) error) { r.runSched = fn }
+
+// SetInsightCronReloader wires the insight auto-scan timer's Reload so a settings
+// change re-arms it immediately. Called by the workspace manager after the cron
+// is constructed. Nil leaves ReloadInsightCron a no-op.
+func (r *Runtime) SetInsightCronReloader(fn func(context.Context) error) { r.reloadInsightCron = fn }
+
+// ReloadInsightCron re-arms the insight auto-scan timer (nil-safe).
+func (r *Runtime) ReloadInsightCron(ctx context.Context) error {
+	if r.reloadInsightCron == nil {
+		return nil
+	}
+	return r.reloadInsightCron(ctx)
+}
 
 // runScheduleNow fires a schedule immediately (nil-safe; errors when unwired).
 func (r *Runtime) runScheduleNow(ctx context.Context, id string) error {

@@ -8,11 +8,11 @@ import (
 	"github.com/bilal-arikan/tionswarm/internal/db"
 )
 
-// autoContinuePrompt is the nudge delivered to an autonomous session that ended a
-// turn with work still unfinished. It is persisted as a user turn (Origin
-// "auto-continue") so the history-aware continuation reads it as a real prompt and
-// the thread shows the progression.
-const autoContinuePrompt = "Önceki turda görevi tamamlamadan durdun (açık todo maddeleri var veya son eylemin bir araç aktivasyonuydu — aktive edilen araçlar ancak bir sonraki turda kullanılabilir, o tur da bu). Aktive ettiğin araçlar artık HAZIR. Göreve kaldığın yerden DEVAM ET ve tamamla; soru sorma, otonom çalış. İş gerçekten bittiyse kısa bir tamamlanma özeti ver ve dur."
+// The auto-continue nudge lives in the central registry (internal/prompts, key
+// "auto-continue"): it is delivered to an autonomous session that ended a turn
+// with work still unfinished, persisted as a user turn (Origin "auto-continue")
+// so the history-aware continuation reads it as a real prompt and the thread
+// shows the progression.
 
 // autoContinueTools are the lazy-loading meta-tools whose activation only takes
 // effect on the NEXT turn (the CLI's fixed per-process tool set, or the native
@@ -124,11 +124,12 @@ func (r *Runtime) maybeAutoContinue(ctx context.Context, agent db.Agent, session
 		// Persist the nudge as a user turn so the history-aware continuation loads it
 		// (the wake-turn runner reads the prompt from history, not a separate arg) and
 		// the thread reads as a real prompt→reply progression.
+		nudge := r.readPrompt("auto-continue")
 		if _, err := r.db.AddMessage(ctx, db.Message{
 			SessionID: sessionID,
 			Role:      "user",
 			Origin:    "auto-continue",
-			Text:      autoContinuePrompt,
+			Text:      nudge,
 		}); err != nil {
 			r.logger.Warn("auto-continue: failed to record nudge", "session", sessionID, "error", err)
 			return
@@ -138,7 +139,7 @@ func (r *Runtime) maybeAutoContinue(ctx context.Context, agent db.Agent, session
 		turnCtx, overflow := withOverflowFlag(WithSessionID(WithCallKind(ctx, kind), sessionID))
 		turnCtx, meta := WithTurnMeta(turnCtx)
 		turnStart := time.Now()
-		output, cSteps, err := r.runSessionTurn(turnCtx, agent, sessionID, autoContinuePrompt, true)
+		output, cSteps, err := r.runSessionTurn(turnCtx, agent, sessionID, nudge, true)
 		r.untrackSession(sessionID)
 
 		if err != nil {

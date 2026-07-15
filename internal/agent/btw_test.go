@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/bilal-arikan/tionswarm/internal/db"
+	"github.com/bilal-arikan/tionswarm/internal/prompts"
 	"github.com/bilal-arikan/tionswarm/internal/providers"
 )
 
@@ -16,7 +17,7 @@ import (
 // model to obey the prompt — so a future refactor that starts attaching the agent's
 // tool set here must fail this test.
 func TestBuildBtwRequest_NoTools(t *testing.T) {
-	req := buildBtwRequest(db.Agent{Model: "m"}, "static", "dynamic", nil, "neden bu hata çıkıyor?")
+	req := buildBtwRequest(db.Agent{Model: "m"}, "static", "dynamic", nil, "neden bu hata çıkıyor?", prompts.Default("btw-system"), prompts.Default("btw-preamble"))
 	if len(req.Tools) != 0 {
 		t.Fatalf("btw request carries %d tools, want 0 — the side chat must be read-only", len(req.Tools))
 	}
@@ -33,7 +34,7 @@ func TestBuildBtwRequest_DoesNotMutateHistory(t *testing.T) {
 	history[0] = providers.Message{Role: providers.RoleUser, Text: "ana görev"}
 	history[1] = providers.Message{Role: providers.RoleAssistant, Text: "üzerinde çalışıyorum"}
 
-	req := buildBtwRequest(db.Agent{Model: "m"}, "static", "dynamic", history, "yan soru")
+	req := buildBtwRequest(db.Agent{Model: "m"}, "static", "dynamic", history, "yan soru", prompts.Default("btw-system"), prompts.Default("btw-preamble"))
 
 	if len(history) != 2 {
 		t.Fatalf("history length changed to %d, want 2", len(history))

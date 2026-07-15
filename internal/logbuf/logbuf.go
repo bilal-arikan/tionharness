@@ -11,13 +11,20 @@ import (
 	"sync/atomic"
 )
 
-// Entry is one captured log record in a UI-friendly shape.
+// Entry is one captured log record in a UI-friendly shape. Component, Session,
+// Agent and Workspace are first-class fields (promoted from same-named slog
+// attrs) so the UI and API can filter by source without substring-scanning the
+// attrs map.
 type Entry struct {
-	Seq     int64             `json:"seq"`
-	Time    int64             `json:"time"` // unix milliseconds
-	Level   string            `json:"level"`
-	Message string            `json:"message"`
-	Attrs   map[string]string `json:"attrs,omitempty"`
+	Seq       int64             `json:"seq"`
+	Time      int64             `json:"time"` // unix milliseconds
+	Level     string            `json:"level"`
+	Message   string            `json:"message"`
+	Component string            `json:"component,omitempty"` // originating subsystem (api/agent/scheduler/…)
+	Session   string            `json:"session,omitempty"`   // session id, when the record carries one
+	Agent     string            `json:"agent,omitempty"`     // agent id, when the record carries one
+	Workspace string            `json:"workspace,omitempty"` // workspace id, when the record carries one
+	Attrs     map[string]string `json:"attrs,omitempty"`
 }
 
 // Buffer is a fixed-capacity ring of recent log entries.
@@ -26,6 +33,10 @@ type Buffer struct {
 	entries []Entry
 	max     int
 	seq     atomic.Int64
+	// notify, when set, receives every appended entry (after it is stored).
+	// Used to fan captured logs out over the SSE event bus for live tailing.
+	// Must be fast and non-blocking; called outside the buffer lock.
+	notify atomic.Pointer[func(Entry)]
 }
 
 // New creates a ring buffer holding up to max entries.
@@ -36,15 +47,29 @@ func New(max int) *Buffer {
 	return &Buffer{max: max}
 }
 
+// SetNotify installs a callback invoked for every appended entry (after it is
+// stored). Pass nil to remove. The callback runs on the logging goroutine, so
+// it must never block or log (a logging callback would recurse).
+func (b *Buffer) SetNotify(fn func(Entry)) {
+	if fn == nil {
+		b.notify.Store(nil)
+		return
+	}
+	b.notify.Store(&fn)
+}
+
 // add appends an entry, dropping the oldest when over capacity.
 func (b *Buffer) add(e Entry) {
 	b.mu.Lock()
-	defer b.mu.Unlock()
 	b.entries = append(b.entries, e)
 	if len(b.entries) > b.max {
 		// Drop the oldest chunk to amortise the cost of trimming.
 		drop := len(b.entries) - b.max
 		b.entries = append([]Entry(nil), b.entries[drop:]...)
+	}
+	b.mu.Unlock()
+	if fn := b.notify.Load(); fn != nil {
+		(*fn)(e)
 	}
 }
 
@@ -90,16 +115,28 @@ func (h *handler) Handle(ctx context.Context, r slog.Record) error {
 		attrs[h.key(a.Key)] = a.Value.String()
 		return true
 	})
-	if len(attrs) == 0 {
-		attrs = nil
-	}
-	h.buf.add(Entry{
+	e := Entry{
 		Seq:     h.buf.seq.Add(1),
 		Time:    r.Time.UnixMilli(),
 		Level:   r.Level.String(),
 		Message: r.Message,
-		Attrs:   attrs,
-	})
+	}
+	// Promote well-known source attrs to first-class fields so the API/UI can
+	// filter by them directly. Promoted keys are removed from the generic map.
+	promote := func(key string, dst *string) {
+		if v, ok := attrs[key]; ok {
+			*dst = v
+			delete(attrs, key)
+		}
+	}
+	promote("component", &e.Component)
+	promote("session", &e.Session)
+	promote("agent", &e.Agent)
+	promote("workspace", &e.Workspace)
+	if len(attrs) > 0 {
+		e.Attrs = attrs
+	}
+	h.buf.add(e)
 	return h.inner.Handle(ctx, r)
 }
 

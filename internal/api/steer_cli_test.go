@@ -7,6 +7,28 @@ import (
 	"testing"
 )
 
+// TestSteerableForTurn pins the rule that gates the "unsupported" steer response:
+// native providers steer in any mode; claude-cli only in "ask"/"read-only" (a
+// permission-prompt boundary exists there), never in "auto" (bypass).
+func TestSteerableForTurn(t *testing.T) {
+	cases := []struct {
+		provider, mode string
+		want           bool
+	}{
+		{"claude-cli", "auto", false},
+		{"claude-cli", "", false}, // "" resolves to auto/bypass
+		{"claude-cli", "ask", true},
+		{"claude-cli", "read-only", true},
+		{"anthropic", "auto", true},
+		{"minimax", "", true},
+	}
+	for _, c := range cases {
+		if got := steerableForTurn(c.provider, c.mode); got != c.want {
+			t.Errorf("steerableForTurn(%q,%q) = %v, want %v", c.provider, c.mode, got, c.want)
+		}
+	}
+}
+
 // TestChatRunSteerStash verifies the claude-cli steer stash: setSteer holds the
 // latest message and takeSteer consumes it exactly once (empty afterwards).
 func TestChatRunSteerStash(t *testing.T) {

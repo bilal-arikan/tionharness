@@ -74,6 +74,43 @@ func TestPoolScopedReusesWithinScope(t *testing.T) {
 	}
 }
 
+// Stats reports one entry per live connection, classified shared vs scoped with
+// the server name and scope key recovered from the pool key.
+func TestPoolStatsClassifies(t *testing.T) {
+	ctx := context.Background()
+	p := newTestPool(scopedIdleTTL, nil)
+	defer p.Close()
+
+	if _, _, errs := p.Catalog(ctx, []ServerConfig{fakeCfg()}); len(errs) != 0 {
+		t.Fatalf("shared build errs: %v", errs)
+	}
+	if _, _, errs := p.Catalog(ctx, []ServerConfig{scopedCfg("s1|a1")}); len(errs) != 0 {
+		t.Fatalf("scoped build errs: %v", errs)
+	}
+
+	stats := p.Stats()
+	if len(stats) != 2 {
+		t.Fatalf("want 2 entries, got %d: %+v", len(stats), stats)
+	}
+	var shared, scoped *EntryStat
+	for i := range stats {
+		if stats[i].Scoped {
+			scoped = &stats[i]
+		} else {
+			shared = &stats[i]
+		}
+	}
+	if shared == nil || scoped == nil {
+		t.Fatalf("want one shared + one scoped, got %+v", stats)
+	}
+	if shared.Server != "fake" || shared.ScopeKey != "" || !shared.Alive {
+		t.Errorf("shared entry wrong: %+v", *shared)
+	}
+	if scoped.Server != "fake" || scoped.ScopeKey != "s1|a1" || !scoped.Alive {
+		t.Errorf("scoped entry wrong: %+v", *scoped)
+	}
+}
+
 // reapScoped closes and drops idle scoped entries but never the shared one.
 func TestPoolReapEvictsIdleScopedOnly(t *testing.T) {
 	ctx := context.Background()

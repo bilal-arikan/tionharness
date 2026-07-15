@@ -8,6 +8,7 @@ import {
   GitBranch,
   FileCode,
   ScrollText,
+  Lightbulb,
   Sparkles,
   Store,
   Wallet,
@@ -21,7 +22,7 @@ import type { Workspace } from '@/types'
 import { WorkspaceSwitcher } from '@/features/workspace/WorkspaceSwitcher'
 import type { NewWorkspaceData } from '@/features/workspace/WorkspaceCreateModal'
 
-export type View = 'chat' | 'agents' | 'network' | 'board' | 'schedules' | 'flows' | 'artifacts' | 'skills' | 'tools' | 'market' | 'budget' | 'logs' | 'workspace' | 'settings'
+export type View = 'chat' | 'agents' | 'network' | 'board' | 'schedules' | 'flows' | 'artifacts' | 'skills' | 'tools' | 'market' | 'budget' | 'logs' | 'insights' | 'workspace' | 'settings'
 
 interface Props {
   view: View
@@ -60,6 +61,7 @@ export const NAV: { key: View; label: string; icon: LucideIcon }[] = [
   { key: 'market', label: 'Market', icon: Store },
   { key: 'budget', label: 'Bütçe', icon: Wallet },
   { key: 'logs', label: 'Loglar', icon: ScrollText },
+  { key: 'insights', label: 'İçgörü', icon: Lightbulb },
 ]
 
 const COLLAPSE_KEY = 'tionswarm.navCollapsed'

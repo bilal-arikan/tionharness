@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"sort"
 	"strings"
 	"unicode/utf8"
@@ -604,6 +605,9 @@ func (r *Registry) Call(ctx context.Context, call providers.ToolCall) providers.
 			out, err = mcp.CallNamespaced(ctx, r.mcpCfgByServer, call.Name, call.Input)
 		}
 		if err != nil {
+			// Transport/dial failures would otherwise only surface as an IsError
+			// tool result fed back to the model — invisible in the Logs screen.
+			slog.Warn("mcp tool call failed", "component", "mcp", "tool", call.Name, "error", err)
 			res.Content = "mcp tool error: " + err.Error()
 			res.IsError = true
 			return res

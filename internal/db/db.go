@@ -13,6 +13,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -194,8 +195,12 @@ func (d *DB) nextID(prefix string) string {
 	d.counters[prefix]++
 	n := d.counters[prefix]
 	// Best-effort persist: a write error here only risks a future restart
-	// reissuing this number, which is acceptably rare for a local file store.
-	_ = atomicWriteJSON(d.dir(countersFile), d.counters)
+	// reissuing this number, which is acceptably rare for a local file store —
+	// but it must not stay invisible (it usually means a full disk or a
+	// permissions problem that will bite real entity writes next).
+	if err := atomicWriteJSON(d.dir(countersFile), d.counters); err != nil {
+		slog.Warn("persist id counters failed", "component", "db", "prefix", prefix, "error", err)
+	}
 	return prefix + strconv.FormatInt(n, 10)
 }
 
@@ -216,13 +221,19 @@ func atomicWriteJSON(path string, v any) error {
 
 func atomicWriteBytes(path string, data []byte) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		slog.Warn("store write failed (mkdir)", "component", "db", "path", path, "error", err)
 		return err
 	}
 	tmp := path + ".tmp"
 	if err := os.WriteFile(tmp, data, 0o644); err != nil {
+		slog.Warn("store write failed (tmp)", "component", "db", "path", path, "error", err)
 		return err
 	}
-	return os.Rename(tmp, path)
+	if err := os.Rename(tmp, path); err != nil {
+		slog.Warn("store write failed (rename)", "component", "db", "path", path, "error", err)
+		return err
+	}
+	return nil
 }
 
 func readJSONFile(path string, v any) error {

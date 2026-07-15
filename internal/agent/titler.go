@@ -24,10 +24,10 @@ var titleOutputSchema = json.RawMessage(`{
 	"additionalProperties": false
 }`)
 
-// titleSystemPrompt instructs a provider to emit a short, bare title that
-// summarizes a request or conversation. The wording is deliberately strict so
-// providers that like to add preamble or quotes stay terse.
-const titleSystemPrompt = `You generate short titles. Given a user's request, message, or conversation, reply with a concise title of 3 to 6 words that summarizes it. Rules: reply with ONLY the title — no surrounding quotes, no trailing punctuation, no markdown, no preamble. Maximum 60 characters. Write the title in the same language as the input.`
+// The title system prompt lives in the central registry (internal/prompts,
+// key "title"); readPrompt resolves the workspace override. The wording is
+// deliberately strict so providers that like to add preamble or quotes stay
+// terse.
 
 // maxTitleSourceRunes caps how much input text we feed the titler; the opening
 // of a request is more than enough to summarize and keeps the call cheap.
@@ -53,9 +53,10 @@ func (r *Runtime) GenerateTitle(ctx context.Context, agent db.Agent, source stri
 		model = override
 	}
 
-	resp, err := r.guardedComplete(WithCallKind(ctx, KindTitle), agent, providers.Request{
+	titlePrompt := r.readPrompt("title")
+	resp, err := r.guardedComplete(WithPromptTrace(WithCallKind(ctx, KindTitle), "title", titlePrompt), agent, providers.Request{
 		Model:        model,
-		System:       r.readPrompt("title"),
+		System:       titlePrompt,
 		OutputSchema: titleOutputSchema,
 		Messages: []providers.Message{
 			{Role: providers.RoleUser, Text: userPrompt},

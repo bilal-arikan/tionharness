@@ -7,6 +7,7 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"log/slog"
 	"net"
@@ -153,15 +154,28 @@ func Bootstrap(cfg *config.Config, logs *logbuf.Buffer, logger *slog.Logger) (*A
 	// the API streams them to the UI over SSE.
 	bus := events.NewBus()
 
+	// Fan every captured log record out on the bus (SSE event name "log") so the
+	// Logs screen tails live instead of polling. Publish is non-blocking (slow
+	// subscribers drop) and the callback never logs, so no recursion is possible.
+	logs.SetNotify(func(e logbuf.Entry) {
+		b, err := json.Marshal(e)
+		if err != nil {
+			return
+		}
+		bus.Publish(events.Event{Type: "log", Level: strings.ToLower(e.Level), Time: e.Time / 1000, Log: b})
+	})
+
 	// Workspace manager: each workspace owns its own DB + agent runtime.
-	manager, err := workspace.NewManager(cfg.DataDir, registry, tun, secret, bus, logs, logger)
+	// Component tags: the manager (and by inheritance anything it doesn't retag)
+	// logs as "workspace"; runtime/scheduler/automation retag themselves.
+	manager, err := workspace.NewManager(cfg.DataDir, registry, tun, secret, bus, logs, logger.With("component", "workspace"))
 	if err != nil {
 		ln.Close()
 		return nil, err
 	}
 	logger.Info("workspaces ready", "count", len(manager.List()))
 
-	server := api.NewServer(manager, registry, settingsStore, tun, logs, bus, logger)
+	server := api.NewServer(manager, registry, settingsStore, tun, logs, bus, logger.With("component", "api"))
 	// Wire the application-settings bridge into every workspace runtime so the
 	// get_settings / update_settings self-management tools can read and live-apply
 	// settings (the server owns the apply hook; the manager owns the runtimes).
@@ -181,7 +195,7 @@ func Bootstrap(cfg *config.Config, logs *logbuf.Buffer, logger *slog.Logger) (*A
 			out = append(out, backup.Target{ID: t.ID, Name: t.Name, Dir: t.Dir})
 		}
 		return out
-	}, logger)
+	}, logger.With("component", "backup"))
 	server.SetBackupManager(backups)
 
 	// Advertise this server's own loopback URL so CLI agents can reach the
