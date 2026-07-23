@@ -106,17 +106,20 @@ func (t ShellTool) WithManager(m *ShellManager) ShellTool { t.mgr = m; return t 
 // on Windows only when a bash.exe is on PATH).
 func (t ShellTool) Available() bool { return t.exe != "" }
 
-func (ShellTool) Def() providers.ToolDef {
+func (t ShellTool) Def() providers.ToolDef {
+	bg := t.mgr != nil
+	desc := "Run a command through the POSIX shell (/bin/sh on Unix, bash.exe on Windows) and " +
+		"return its combined stdout+stderr (truncated to 64KB). Starts in the working directory but may " +
+		"operate on any path. Bounded by a timeout (default 30s, max 120s). Use POSIX/Bash syntax. This is " +
+		"the PREFERRED shell — reach for it first, including on Windows. Only switch to the PowerShell tool " +
+		"for Windows-native tasks Bash cannot do (cmdlets, registry, $env: variables)."
+	if bg {
+		desc += bgHint
+	}
 	return providers.ToolDef{
-		Name: "Bash",
-		Description: "Run a command through the POSIX shell (/bin/sh on Unix, bash.exe on Windows) and " +
-			"return its combined stdout+stderr (truncated to 64KB). Starts in the working directory but may " +
-			"operate on any path. Bounded by a timeout (default 30s, max 120s). Use POSIX/Bash syntax. This is " +
-			"the PREFERRED shell — reach for it first, including on Windows. Only switch to the PowerShell tool " +
-			"for Windows-native tasks Bash cannot do (cmdlets, registry, $env: variables). " +
-			"Set run_in_background=true for a long-running command (dev server, watcher): it returns a shell " +
-			"id immediately — poll shell_output and stop it with shell_kill.",
-		InputSchema: shellInputSchema,
+		Name:        "Bash",
+		Description: desc,
+		InputSchema: shellInputSchema(bg),
 	}
 }
 
@@ -163,18 +166,23 @@ func (t PowerShellTool) WithManager(m *ShellManager) PowerShellTool { t.mgr = m;
 // Available reports whether a PowerShell host (pwsh/powershell.exe) was found.
 func (t PowerShellTool) Available() bool { return t.exe != "" }
 
-func (PowerShellTool) Def() providers.ToolDef {
+func (t PowerShellTool) Def() providers.ToolDef {
+	bg := t.mgr != nil
+	desc := "Run a command through PowerShell (pwsh 7+ if available, else Windows PowerShell 5.1) " +
+		"and return its combined stdout+stderr (truncated to 64KB). Use ONLY when the Bash tool cannot do " +
+		"the job — i.e. for Windows-native tasks (cmdlets, registry, $env: variables); prefer Bash for " +
+		"everything else. Starts in the working directory but " +
+		"may operate on any path. Bounded by a timeout (default 30s, max 120s). Use PowerShell syntax: " +
+		"cmdlets (Get-ChildItem), $env:VAR for environment variables, 2>$null (not 2>/dev/null), and " +
+		"registry PSDrives (HKLM:\\). The command runs DIRECTLY in PowerShell — do NOT wrap it in another " +
+		"`powershell -Command \"...\"` (that re-parses the string and strips $variable references)."
+	if bg {
+		desc += bgHint
+	}
 	return providers.ToolDef{
-		Name: "PowerShell",
-		Description: "Run a command through PowerShell (pwsh 7+ if available, else Windows PowerShell 5.1) " +
-			"and return its combined stdout+stderr (truncated to 64KB). Use ONLY when the Bash tool cannot do " +
-			"the job — i.e. for Windows-native tasks (cmdlets, registry, $env: variables); prefer Bash for " +
-			"everything else. Starts in the working directory but " +
-			"may operate on any path. Bounded by a timeout (default 30s, max 120s). Use PowerShell syntax: " +
-			"cmdlets (Get-ChildItem), $env:VAR for environment variables, 2>$null (not 2>/dev/null), and " +
-			"registry PSDrives (HKLM:\\). The command runs DIRECTLY in PowerShell — do NOT wrap it in another " +
-			"`powershell -Command \"...\"` (that re-parses the string and strips $variable references).",
-		InputSchema: shellInputSchema,
+		Name:        "PowerShell",
+		Description: desc,
+		InputSchema: shellInputSchema(bg),
 	}
 }
 
@@ -205,17 +213,24 @@ func (t PowerShellTool) CallStream(ctx context.Context, input json.RawMessage, o
 	return runShell(ctx, t.sb, args, onChunk, build)
 }
 
-// shellInputSchema is shared by both shell tools.
-var shellInputSchema = json.RawMessage(`{
-	"type":"object",
-	"properties":{
-		"command":{"type":"string","description":"The command line to execute"},
+// shellInputSchema builds the shared shell-tool schema. run_in_background is only
+// advertised when the tool has a background-shell manager wired (withBackground):
+// without one, the runtime would reject the field at call time — so it must not
+// appear in the schema in the first place (don't offer what you'll refuse).
+func shellInputSchema(withBackground bool) json.RawMessage {
+	props := `"command":{"type":"string","description":"The command line to execute"},
+		"timeout_sec":{"type":"integer","description":"Timeout in seconds (default 30, max 120)."}`
+	if withBackground {
+		props = `"command":{"type":"string","description":"The command line to execute"},
 		"timeout_sec":{"type":"integer","description":"Timeout in seconds (default 30, max 120). Ignored when run_in_background is true."},
-		"run_in_background":{"type":"boolean","description":"Run detached and return a shell id immediately instead of waiting. Use for long-running processes (dev servers, watchers); read output with shell_output and stop with shell_kill."}
-	},
-	"required":["command"],
-	"additionalProperties":false
-}`)
+		"run_in_background":{"type":"boolean","description":"Run detached and return a shell id immediately instead of waiting. Use for long-running processes (dev servers, watchers); read output with shell_output and stop with shell_kill."}`
+	}
+	return json.RawMessage(`{"type":"object","properties":{` + props + `},"required":["command"],"additionalProperties":false}`)
+}
+
+// bgHint is the trailing run_in_background sentence appended to a shell tool's
+// description only when background execution is actually available.
+const bgHint = " Set run_in_background=true for a long-running command (dev server, watcher): it returns a shell id immediately — poll shell_output and stop it with shell_kill."
 
 func parseShellArgs(input json.RawMessage) (shellArgs, error) {
 	var args shellArgs

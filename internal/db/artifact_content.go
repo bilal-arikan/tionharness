@@ -129,8 +129,18 @@ func (d *DB) ImportMediaSource(sessionID, src string) (string, error) {
 		abs = filepath.Join(wsDir, filepath.FromSlash(src))
 	}
 	info, err := os.Stat(abs)
-	if err != nil || info.IsDir() {
-		return "", fmt.Errorf("source file not found: %s", src)
+	if err != nil {
+		// An absolute path that doesn't resolve is most often a path handed back by
+		// an MCP server that runs in a container / on a remote host / in a different
+		// filesystem than TionSwarm — so the path is valid THERE but not accessible
+		// HERE. Point the caller at the real fix instead of a bare "not found".
+		if filepath.IsAbs(src) {
+			return "", fmt.Errorf("source file not accessible from TionSwarm: %s — an absolute path from an MCP server that runs in a container/remote host or a different filesystem does not resolve here; have that tool return the file CONTENT (e.g. base64) instead of a host path, or reference a file inside the workspace", src)
+		}
+		return "", fmt.Errorf("source file not found in the workspace: %s (resolved to %s)", src, abs)
+	}
+	if info.IsDir() {
+		return "", fmt.Errorf("sourcePath is a directory, not a file: %s", src)
 	}
 	// Already inside the workspace → store a clean relative path, no copy.
 	if rel, err := filepath.Rel(wsDir, abs); err == nil &&

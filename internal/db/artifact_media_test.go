@@ -3,6 +3,7 @@ package db
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -75,6 +76,21 @@ func TestImportMediaSource_OutsideWorkspace(t *testing.T) {
 }
 
 // TestImportMediaSource_Missing verifies a non-existent source path is rejected.
+// TestImportMediaSource_AbsoluteNotAccessibleHint: a missing ABSOLUTE path (the
+// shape an MCP server in a container/remote host returns) yields a message that
+// points at the real fix (return content, not a host path), not a bare not-found.
+func TestImportMediaSource_AbsoluteNotAccessibleHint(t *testing.T) {
+	root := t.TempDir()
+	d, err := Open(filepath.Join(root, "store"))
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	_, err = d.ImportMediaSource("SES1", filepath.Join(root, "container", "nope.png"))
+	if err == nil || !strings.Contains(err.Error(), "not accessible from TionSwarm") {
+		t.Fatalf("absolute missing path should hint at MCP/container filesystem: %v", err)
+	}
+}
+
 func TestImportMediaSource_Missing(t *testing.T) {
 	root := t.TempDir()
 	d, err := Open(filepath.Join(root, "store"))
