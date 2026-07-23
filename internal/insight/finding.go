@@ -237,6 +237,24 @@ func (s *FindingStore) SetStatus(id string, status FindingStatus, at int64) (boo
 	return false, nil
 }
 
+// Delete removes one finding by id, rewriting the store. Returns false when the
+// id is absent (a no-op, not an error). Unlike Dismiss (a status), Delete drops
+// the row entirely — used by the board-style triage UI's per-card/bulk delete.
+func (s *FindingStore) Delete(id string) (bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i := range s.items {
+		if s.items[i].ID == id {
+			s.items = append(s.items[:i], s.items[i+1:]...)
+			if err := writeFindings(s.path, s.items); err != nil {
+				return false, err
+			}
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 // mergeStrings appends items of b not already in a, preserving order.
 func mergeStrings(a, b []string) []string {
 	seen := make(map[string]bool, len(a))

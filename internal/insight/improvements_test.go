@@ -177,6 +177,23 @@ func TestRunLogRoundTrip(t *testing.T) {
 	}
 }
 
+// TestFindingDelete: Delete drops a row entirely (distinct from Dismiss); an
+// unknown id is a no-op (found=false, no error).
+func TestFindingDelete(t *testing.T) {
+	s := openStore(t)
+	a, _ := s.Upsert(Finding{LensID: "l", Signature: "a", Title: "A", LastSeen: 1})
+	s.Upsert(Finding{LensID: "l", Signature: "b", Title: "B", LastSeen: 2})
+	if found, err := s.Delete(a.ID); err != nil || !found {
+		t.Fatalf("delete existing: found=%v err=%v", found, err)
+	}
+	if got := s.List("", ""); len(got) != 1 || got[0].Signature != "b" {
+		t.Fatalf("only B should remain: %+v", got)
+	}
+	if found, err := s.Delete("nope"); err != nil || found {
+		t.Fatalf("delete unknown id should be a no-op: found=%v err=%v", found, err)
+	}
+}
+
 // TestLedgerCompactBoundsFile: repeated re-scans of the same key append lines;
 // Compact rewrites to one line per key so the file stops growing.
 func TestLedgerCompactBoundsFile(t *testing.T) {

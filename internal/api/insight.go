@@ -213,6 +213,25 @@ func (s *Server) handleListInsightFindings(w http.ResponseWriter, r *http.Reques
 	writeJSON(w, http.StatusOK, out)
 }
 
+// handleDeleteInsightFinding removes one finding by id entirely (distinct from
+// dismissing it, which keeps the row with a dismissed status). Backs the board-
+// style triage UI's delete action.
+func (s *Server) handleDeleteInsightFinding(w http.ResponseWriter, r *http.Request) {
+	store, err := insight.OpenFindingStore(ws(r).DB.Root())
+	if writeDBError(w, err, "") {
+		return
+	}
+	found, err := store.Delete(r.PathValue("id"))
+	if writeDBError(w, err, "") {
+		return
+	}
+	if !found {
+		http.Error(w, "finding not found", http.StatusNotFound)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"deleted": r.PathValue("id")})
+}
+
 type insightStatusReq struct {
 	Status string `json:"status"`
 }

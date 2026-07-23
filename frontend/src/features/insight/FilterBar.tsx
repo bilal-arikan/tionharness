@@ -6,8 +6,10 @@ interface Props {
   filter: FindingFilter
   setFilter: (f: FindingFilter) => void
   lenses: InsightLens[]
-  cluster: boolean
-  setCluster: (v: boolean) => void
+  // Clustering is only offered in the list view; the kanban omits it (columns are
+  // the grouping). When setCluster is undefined the "Kümele" button is hidden.
+  cluster?: boolean
+  setCluster?: (v: boolean) => void
 }
 
 const selectCls =
@@ -69,17 +71,19 @@ export function FilterBar({ filter, setFilter, lenses, cluster, setCluster }: Pr
         ⚠ Regresyon
       </button>
 
-      <button
-        onClick={() => setCluster(!cluster)}
-        className={`flex items-center gap-1 rounded-md border px-2 py-1 text-sm ${
-          cluster
-            ? 'border-[var(--color-accent)] text-[var(--color-accent)]'
-            : 'border-[var(--color-border)] hover:bg-[var(--color-surface-2)]'
-        }`}
-        title="Benzer bulguları kümele"
-      >
-        <Layers className="h-4 w-4" /> Kümele
-      </button>
+      {setCluster && (
+        <button
+          onClick={() => setCluster(!cluster)}
+          className={`flex items-center gap-1 rounded-md border px-2 py-1 text-sm ${
+            cluster
+              ? 'border-[var(--color-accent)] text-[var(--color-accent)]'
+              : 'border-[var(--color-border)] hover:bg-[var(--color-surface-2)]'
+          }`}
+          title="Benzer bulguları kümele"
+        >
+          <Layers className="h-4 w-4" /> Kümele
+        </button>
+      )}
 
       {active && (
         <button

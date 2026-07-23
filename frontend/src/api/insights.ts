@@ -44,6 +44,9 @@ export const insightApi = {
       body: JSON.stringify({ status }),
     }),
 
+  deleteInsightFinding: (id: string) =>
+    req<{ deleted: string }>(`/api/insight/findings/${id}`, { method: 'DELETE' }),
+
   getInsightSettings: () => req<InsightSettings>('/api/insight/settings'),
 
   updateInsightSettings: (s: InsightSettings) =>

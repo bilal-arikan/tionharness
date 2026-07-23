@@ -1,11 +1,14 @@
 import { useMemo, useState } from 'react'
-import { LayoutGrid, Check, X } from 'lucide-react'
+import { LayoutGrid, Trash2 } from 'lucide-react'
 import { api } from '@/api'
 import type { InsightFinding, InsightLens } from '@/types'
+import { SelectionBar, SelectionBarButton } from '@/shared/components'
+import { useMultiSelect } from '@/shared/hooks/useMultiSelect'
 import { SummaryHeader } from './SummaryHeader'
 import { FilterBar } from './FilterBar'
-import { FindingCard } from './FindingCard'
-import { applyFilter, clusterFindings, summarize, type FindingFilter } from './insightHelpers'
+import { FindingModal } from './FindingModal'
+import { ChannelBadge, SeverityBadge } from './insightBadges'
+import { applyFilter, priorityScore, summarize, type FindingFilter } from './insightHelpers'
 
 interface Props {
   findings: InsightFinding[]
@@ -16,9 +19,23 @@ interface Props {
   onNote: (msg: string) => void
 }
 
+// Fixed lifecycle columns (a finding with an empty/triaged status buckets into
+// "Yeni"). Moving a card between columns = changing its status.
+const COLUMNS: { key: string; label: string }[] = [
+  { key: 'new', label: 'Yeni' },
+  { key: 'accepted', label: 'Kabul' },
+  { key: 'applied', label: 'Uygulandı' },
+  { key: 'verified', label: 'Doğrulandı' },
+  { key: 'dismissed', label: 'Yoksayıldı' },
+]
+const bucketOf = (status: string) => {
+  const s = status || 'new'
+  return COLUMNS.some((c) => c.key === s) ? s : 'new'
+}
+
 const SEV2PRI: Record<string, string> = { high: 'high', med: 'medium', medium: 'medium', low: 'low' }
 
-function cardBody(f: InsightFinding) {
+function cardBody(f: InsightFinding): string {
   const parts: string[] = []
   if (f.rootCause) parts.push(`**Root cause:** ${f.rootCause}`)
   if (f.proposedFix) parts.push(`**Proposed fix:** ${f.proposedFix}`)
@@ -31,22 +48,29 @@ function cardBody(f: InsightFinding) {
   return parts.join('\n\n')
 }
 
+// FindingsTab is the board-style triage view: findings laid out in fixed
+// lifecycle columns, drag or bulk-move to change status, click a card for the
+// detail popup, multi-select (Ctrl/Shift) for bulk status / board-card / delete.
 export function FindingsTab({ findings, lenses, reload, onOpenSession, onError, onNote }: Props) {
   const [filter, setFilter] = useState<FindingFilter>({})
-  const [cluster, setCluster] = useState(false)
-  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [modalId, setModalId] = useState<string | null>(null)
+  const [dragId, setDragId] = useState<string | null>(null)
+  const sel = useMultiSelect()
 
   const filtered = useMemo(() => applyFilter(findings, filter), [findings, filter])
   const summary = useMemo(() => summarize(findings), [findings])
-  const clusters = useMemo(() => (cluster ? clusterFindings(filtered) : null), [cluster, filtered])
 
-  const toggleSelect = (id: string) =>
-    setSelected((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
+  // Cards per column, priority-sorted; plus the flat ordered id list for Shift-range.
+  const byColumn = useMemo(() => {
+    const m: Record<string, InsightFinding[]> = {}
+    for (const c of COLUMNS) m[c.key] = []
+    for (const f of filtered) m[bucketOf(f.status)].push(f)
+    for (const k of Object.keys(m)) {
+      m[k].sort((a, b) => priorityScore(b) - priorityScore(a) || (b.lastSeen ?? 0) - (a.lastSeen ?? 0))
+    }
+    return m
+  }, [filtered])
+  const orderedIds = useMemo(() => COLUMNS.flatMap((c) => byColumn[c.key].map((f) => f.id)), [byColumn])
 
   const setStatus = async (id: string, status: string) => {
     try {
@@ -56,7 +80,14 @@ export function FindingsTab({ findings, lenses, reload, onOpenSession, onError, 
       onError((e as Error).message)
     }
   }
-
+  const remove = async (id: string) => {
+    try {
+      await api.deleteInsightFinding(id)
+      reload()
+    } catch (e) {
+      onError((e as Error).message)
+    }
+  }
   const addCard = async (f: InsightFinding) => {
     try {
       await api.createTask({
@@ -73,67 +104,132 @@ export function FindingsTab({ findings, lenses, reload, onOpenSession, onError, 
   }
 
   const bulkStatus = async (status: string) => {
-    const ids = Array.from(selected)
-    for (const id of ids) await api.setInsightFindingStatus(id, status).catch(() => {})
-    setSelected(new Set())
+    if (!status) return
+    const ids = [...sel.selected]
+    sel.clear()
+    await Promise.all(ids.map((id) => api.setInsightFindingStatus(id, status).catch(() => {})))
     reload()
   }
-
+  const bulkDelete = async () => {
+    const ids = [...sel.selected]
+    if (ids.length === 0 || !confirm(`${ids.length} bulgu silinsin mi?`)) return
+    sel.clear()
+    await Promise.all(ids.map((id) => api.deleteInsightFinding(id).catch(() => {})))
+    reload()
+  }
   const bulkCard = async () => {
     const byId = new Map(findings.map((f) => [f.id, f]))
-    for (const id of selected) {
+    const ids = [...sel.selected]
+    sel.clear()
+    for (const id of ids) {
       const f = byId.get(id)
       if (f) await addCard(f)
     }
-    setSelected(new Set())
   }
 
-  const renderCard = (f: InsightFinding, similar?: InsightFinding[]) => (
-    <FindingCard
-      key={f.id}
-      f={f}
-      selected={selected.has(f.id)}
-      onSelect={toggleSelect}
-      onStatus={setStatus}
-      onAddCard={addCard}
-      onOpenSession={onOpenSession}
-      similar={similar}
-    />
-  )
+  const modalFinding = modalId ? findings.find((f) => f.id === modalId) ?? null : null
 
   return (
-    <div className="space-y-3">
+    <div className="flex min-h-0 flex-1 flex-col">
       <SummaryHeader summary={summary} onPick={(patch) => setFilter({ ...patch })} />
-      <FilterBar filter={filter} setFilter={setFilter} lenses={lenses} cluster={cluster} setCluster={setCluster} />
+      <div className="my-2">
+        <FilterBar filter={filter} setFilter={setFilter} lenses={lenses} />
+      </div>
 
-      {selected.size > 0 && (
-        <div className="flex items-center gap-2 rounded-md border border-[var(--color-accent)]/40 bg-[var(--color-accent)]/10 p-2 text-sm">
-          <span className="font-medium">{selected.size} seçili</span>
-          <button onClick={() => bulkStatus('accepted')} className="flex items-center gap-1 rounded px-2 py-0.5 hover:bg-[var(--color-surface-2)]">
-            <Check className="h-3.5 w-3.5" /> Kabul
-          </button>
-          <button onClick={() => bulkStatus('dismissed')} className="rounded px-2 py-0.5 text-[var(--color-text-muted)] hover:bg-[var(--color-surface-2)]">
-            Yoksay
-          </button>
-          <button onClick={bulkCard} className="flex items-center gap-1 rounded bg-[var(--color-accent)] px-2 py-0.5 text-white">
-            <LayoutGrid className="h-3.5 w-3.5" /> Karta ekle ({selected.size})
-          </button>
-          <button onClick={() => setSelected(new Set())} className="ml-auto rounded p-1 hover:bg-[var(--color-surface-2)]">
-            <X className="h-4 w-4" />
-          </button>
+      {/* Kanban */}
+      <div className="flex flex-1 gap-3 overflow-x-auto pb-2">
+        {COLUMNS.map((col) => {
+          const cards = byColumn[col.key]
+          return (
+            <div
+              key={col.key}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={() => {
+                if (dragId) void setStatus(dragId, col.key)
+                setDragId(null)
+              }}
+              className="flex w-64 flex-shrink-0 flex-col rounded-lg bg-[var(--color-surface)]"
+            >
+              <div className="flex items-center justify-between rounded-t-lg px-3 py-2 text-xs font-medium uppercase tracking-wide text-[var(--color-text-muted)]">
+                <span>{col.label}</span>
+                <span className="rounded bg-[var(--color-surface-2)] px-1.5">{cards.length}</span>
+              </div>
+              <div className="flex-1 space-y-2 overflow-y-auto px-2 pb-2 pt-1">
+                {cards.map((f) => (
+                  <div
+                    key={f.id}
+                    draggable
+                    onDragStart={() => setDragId(f.id)}
+                    onClick={(e) => {
+                      if (sel.handleClick(e, f.id, orderedIds)) return
+                      setModalId(f.id)
+                    }}
+                    className={`cursor-pointer rounded-lg border p-2 text-sm shadow-[var(--shadow-sm)] transition hover:shadow-[var(--shadow-md)] ${
+                      sel.isSelected(f.id)
+                        ? 'border-[var(--color-accent)] bg-[var(--color-accent-soft)] ring-1 ring-[var(--color-accent)]'
+                        : f.regressed
+                          ? 'border-[var(--color-danger)]/50 bg-[var(--color-surface-2)]'
+                          : 'border-[var(--color-border)] bg-[var(--color-surface-2)] hover:border-[var(--color-accent)]'
+                    }`}
+                  >
+                    <div className="mb-1 flex flex-wrap items-center gap-1">
+                      <ChannelBadge channel={f.channel} />
+                      {f.severity && <SeverityBadge severity={f.severity} />}
+                      {f.regressed && <span className="text-xs font-semibold text-[var(--color-danger)]">⚠</span>}
+                      {f.occurrences > 1 && <span className="text-[11px] text-[var(--color-text-muted)]">×{f.occurrences}</span>}
+                    </div>
+                    <div className="line-clamp-3 leading-snug">{f.title}</div>
+                  </div>
+                ))}
+                {cards.length === 0 && (
+                  <div className="px-1 py-2 text-xs text-[var(--color-text-muted)]">—</div>
+                )}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+
+      {filtered.length === 0 && (
+        <div className="mt-2 text-sm text-[var(--color-text-muted)]">
+          {findings.length === 0 ? 'Henüz bulgu yok. Bir tarama başlat.' : 'Filtreyle eşleşen bulgu yok.'}
         </div>
       )}
 
-      <div className="space-y-2">
-        {clusters
-          ? clusters.map((c) => renderCard(c.representative, c.members.slice(1)))
-          : filtered.map((f) => renderCard(f))}
-        {filtered.length === 0 && (
-          <div className="text-sm text-[var(--color-text-muted)]">
-            {findings.length === 0 ? 'Henüz bulgu yok. Bir tarama başlat.' : 'Filtreyle eşleşen bulgu yok.'}
-          </div>
-        )}
-      </div>
+      <SelectionBar
+        count={sel.count}
+        onClear={sel.clear}
+        onSelectAll={orderedIds.length ? () => sel.selectAll(orderedIds) : undefined}
+      >
+        <select
+          value=""
+          onChange={(e) => bulkStatus(e.target.value)}
+          title="Seçili bulguların statüsünü değiştir"
+          className="rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-xs outline-none focus:border-[var(--color-accent)]"
+        >
+          <option value="">↦ Statü…</option>
+          {COLUMNS.map((c) => (
+            <option key={c.key} value={c.key}>{c.label}</option>
+          ))}
+        </select>
+        <SelectionBarButton icon={<LayoutGrid size={13} />} onClick={bulkCard}>
+          Karta ekle
+        </SelectionBarButton>
+        <SelectionBarButton icon={<Trash2 size={13} />} onClick={bulkDelete} danger>
+          Sil
+        </SelectionBarButton>
+      </SelectionBar>
+
+      {modalFinding && (
+        <FindingModal
+          f={modalFinding}
+          onClose={() => setModalId(null)}
+          onStatus={setStatus}
+          onDelete={remove}
+          onAddCard={addCard}
+          onOpenSession={onOpenSession}
+        />
+      )}
     </div>
   )
 }
