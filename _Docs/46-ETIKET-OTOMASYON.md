@@ -141,9 +141,40 @@ paylaşır; farkı yalnızca **tetik** ve **prompt değişkenleri**dir.
 | `BoardOp` | Hangi kart değişimi tetikler: `move` (varsayılan, boş=`move`), `create`, `update`, `delete`, `any`. |
 | `BoardFromState` | Kartın **çıktığı** sütun filtresi (boş=herhangi). |
 | `BoardToState` | Kartın **girdiği** sütun filtresi (boş=herhangi). |
+| `BoardPriority` | **Aynı** kart değişimine uyan otomasyonlar arasında ateşleme sırası; küçük olan **önce** (vars. 0). |
+| `BoardExclusive` | Eşleşen değişimi **tek başına** sahiplenir; aynı olaya uyan diğer tüm pano otomasyonları bastırılır (vars. false). |
 
 `boardMatches(a, ev)`: op (boş→move; `any`→hepsi) **ve** from/to sütun filtreleri (boş→herhangi)
 eşleşince ateşler.
+
+### Aynı sütunda çoklu tetik: sıralama + tek sahip (2026-07-24)
+
+**Sorun (TSK59):** İki kural aynı sütunu izlediğinde (ör. Kart Sınıflandırıcı ve Board Planner,
+ikisi de `move → todo`) ikisi de ateşliyordu ve **sıra belirsizdi** — `ListEnabledAutomations`
+map üzerinden döndüğü için işlem sırası yeniden başlatmalar arasında değişebiliyor, iki otonom
+oturum aynı kart üzerinde yarışıyordu. Çakışma o güne kadar Planner'ı **elle kapatarak** önlenmişti.
+
+**Çözüm — `selectBoardAutomations` (`internal/agent/automation_board_order.go`):**
+`OnBoardChange` artık eşleşmeleri doğrudan gezmez; önce bu seçici üzerinden geçirir.
+
+1. **Sıralama** — eşleşmeler `BoardPriority` artan, eşitlikte `ID` ile sıralanır. Böylece sıra
+   hem **deterministik** (yeniden başlatmadan bağımsız) hem de **yapılandırılabilir** olur.
+2. **Tek sahip (exclusive)** — eşleşmelerden herhangi biri `BoardExclusive` ise **yalnız kazanan**
+   döner (sıralama sonrası ilk exclusive; yani en düşük `BoardPriority`). Bu, "sütun başına tek
+   sahip" garantisidir — kaybedeni elle devre dışı bırakmaya gerek kalmaz.
+
+Ateşleme **sıralı**dır (`for` içinde arka arkaya): ikinci kural, birincinin bıraktığı kart
+durumunu görür — yarışmaz. Exclusive bir kural olayı sahiplendiğinde bu, `automation: exclusive
+owner claimed board event` satırıyla loglanır.
+
+**Kullanım (iki seçenek):**
+- **Zincirleme istiyorsan:** ikisini de açık bırak, `BoardPriority` ver (ör. Sınıflandırıcı 10,
+  Planner 20) → önce sınıflandırma, sonra planlama; aynı olayda ama sırayla.
+- **Tek sahip istiyorsan:** kazanan kurala `BoardExclusive=true` ver → diğeri açık kalsa bile
+  o olayda ateşlemez (başka sütunlardaki kuralları etkilemez).
+
+> Not: exclusive yalnız **kendi eşleştiği olayı** sahiplenir; `todo`'yu sahiplenen bir kural
+> `in_progress`'i izleyen kuralı etkilemez.
 
 ### Tetik: db board hook (çift-yol tek nokta)
 Kart mutasyonları hem UI (`api/tasks.go`) hem ajan araçları (`move_task`/`update_task`/
@@ -177,9 +208,12 @@ MaxIterations (vars. 50) + Cooldown bunu sınırlar. Bildirim tipi yine `automat
   board türü `triggerTag` **istemez**, `boardOp` doğrulanır (`ValidBoardOp`); tag türü hâlâ
   `triggerTag` ister. Update'te `triggerKind` **verilmezse** dokunulmaz (kısmi patch — ör.
   yalnız-spawnTags — board otomasyonunu tag'e çevirmesin); verilirse board filtreleri onunla
-  birlikte (yeniden) uygulanır.
+  birlikte (yeniden) uygulanır. `boardPriority`/`boardExclusive` **pointer** alanlardır: kısmi
+  patch'te gönderilmezse **saklı değer korunur** (yalnız-spawnTags düzenlemesi bir sütunun
+  sahibini sessizce 0/false'a döndüremez).
 - **Araçlar:** `create/update/list_automation`'a aynı alanlar (`list` çıktısına `triggerKind`/
-  `boardOp`/`boardToState`). `TriggerKind` kısmi patch'te pointer ile korunur.
+  `boardOp`/`boardToState`/`boardPriority`/`boardExclusive`). `TriggerKind` kısmi patch'te
+  pointer ile korunur; `boardPriority`/`boardExclusive` de aynı şekilde.
 - **UI — birleşik 3 SEKME (`Schedules.tsx`, 2026-07-07):** Otomasyon ekranı tek bir **tab bar**
   altında toplandı: **⏰ Zamanlamalar (cron)** · **🏷 Etiket otomasyonları** · **🗂 Pano
   otomasyonları** (her sekmede canlı sayaç rozeti). Tab state Schedules'ta tutulur; `schedules`
@@ -191,7 +225,10 @@ MaxIterations (vars. 50) + Cooldown bunu sınırlar. Bildirim tipi yine `automat
   bölümünde olay + kaynak/hedef sütun seçicileri; ortak `PromptVarsField` türe göre değişken
   listesi; board satırında `🗂 <op> (kaynak→hedef)` çipi. Board bölümünde etiket kutusu yerine **olay +
   kaynak/hedef sütun** seçicileri (`BoardTriggerFields`; sütunlar `getWorkspaceSettings().
-  boardColumns`'tan, yoksa default). Prompt textarea + ℹ️ değişken popover'ı ortak `PromptVarsField`
+  boardColumns`'tan, yoksa default). `BoardTriggerFields` ayrıca **Sıra** (sayı, `boardPriority`)
+  ve **Tek sahip** (checkbox, `boardExclusive`) kontrollerini içerir — hem oluşturma formunda hem
+  satır-içi editörde aynı bileşenden gelir. Liste satırında `boardExclusive` → `🔒 tek sahip`,
+  sıfırdan farklı `boardPriority` → `sıra N` rozeti (editörü açmadan görünür). Prompt textarea + ℹ️ değişken popover'ı ortak `PromptVarsField`
   bileşeninde, türe göre `BOARD_PROMPT_VARS`/`PROMPT_VARS` gösterir. Board satırında `#tag` yerine
   `🗂 <op> (kaynak→hedef)` çipi; spawn-etiket editörü gizli (yerine bilgi notu). Parent `Automations`
   tek `listAutomations` çeker + `columns`'ı yükler, listeyi `kind`'e göre iki bölüme böler ve ortak

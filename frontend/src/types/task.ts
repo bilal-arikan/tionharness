@@ -86,6 +86,12 @@ export interface Automation {
   boardOp?: BoardOp
   boardFromState?: string
   boardToState?: string
+  // Fire order among board automations matching the SAME card change; lower runs
+  // first (default 0). Sequences two rules on one column instead of racing them.
+  boardPriority?: number
+  // When true this automation claims the matching card change alone: every other
+  // matching board rule is suppressed ("single owner per column").
+  boardExclusive?: boolean
   targetAgentId: string
   // When set, the automation runs this flow (with the rendered prompt as input)
   // instead of spawning a session for targetAgentId. Per-trigger (no self-loop).

@@ -70,21 +70,31 @@ func (e *AutomationEngine) OnTurnFinished(ctx context.Context, tf TurnFinished) 
 	}
 }
 
-// OnBoardChange is the board hook (see db.SetBoardHook). For every enabled board
-// automation whose op/column filters match the change, it evaluates the shared
-// guardrails and (if clear) fires the target agent or flow with the card context
-// rendered into the prompt. Runs on its own detached goroutine (wired by the
-// workspace manager) so a card mutation is never blocked.
+// OnBoardChange is the board hook (see db.SetBoardHook). It selects the board
+// automations that match the change — deterministically ordered, and narrowed to
+// a single owner when one of them is exclusive (see selectBoardAutomations) —
+// then evaluates the shared guardrails and fires each in turn with the card
+// context rendered into the prompt. Runs on its own detached goroutine (wired by
+// the workspace manager) so a card mutation is never blocked.
+//
+// Firing is SEQUENTIAL: two rules on the same column run one after the other, so
+// a later rule observes the card state the earlier one left behind instead of
+// racing it.
 func (e *AutomationEngine) OnBoardChange(ctx context.Context, ev db.BoardChangeEvent) {
 	autos, err := e.db.ListEnabledAutomations(ctx)
 	if err != nil {
 		e.logger.Warn("automation: list failed (board)", "task", ev.TaskID, "error", err)
 		return
 	}
-	for _, a := range autos {
-		if a.TriggerKind != db.TriggerBoard || !boardMatches(a, ev) {
-			continue
-		}
+	selected := selectBoardAutomations(autos, ev)
+	if len(selected) == 0 {
+		return
+	}
+	if len(selected) == 1 && selected[0].BoardExclusive {
+		e.logger.Info("automation: exclusive owner claimed board event",
+			"automation", selected[0].ID, "task", ev.TaskID, "op", ev.Op, "to", ev.ToState)
+	}
+	for _, a := range selected {
 		e.fireBoard(ctx, a, ev)
 	}
 }

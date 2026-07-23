@@ -1,6 +1,27 @@
 # TionSwarm — İlerleme Takibi
 
-> Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-07-23**
+> Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-07-24**
+
+## Pano otomasyonlarında sıralama + tek sahip (çift-tetik yarışı) ✅ (2026-07-24)
+
+**TSK59:** Aynı sütunu izleyen iki pano otomasyonu (Kart Sınıflandırıcı AUT7 ve
+Board Planner AUT4, ikisi de `move → todo`) aynı olayda ateşliyor, üstelik sıra
+`ListEnabledAutomations`'ın map kaynaklı dönüş düzenine bağlı olduğu için
+**belirsiz** kalıyordu → iki otonom oturum aynı kart üzerinde yarışıyordu.
+Çakışma o güne dek Planner elle kapatılarak önlenmişti. `Automation`'a iki alan
+eklendi: **`BoardPriority`** (aynı olaya uyanlar arasında ateşleme sırası, küçük
+önce; eşitlikte `ID` ile stabil) ve **`BoardExclusive`** (eşleşen olayı tek
+başına sahiplenir, diğer tüm eşleşmeler bastırılır = "sütun başına tek sahip").
+Karar mantığı ayrı dosyada — `internal/agent/automation_board_order.go`
+`selectBoardAutomations`; `OnBoardChange` artık eşleşmeleri doğrudan gezmek
+yerine bu seçiciden geçirip **sırayla** ateşliyor (ikinci kural birincinin
+bıraktığı kart durumunu görür). Alanlar db/API/araç/UI boyunca taşındı; API ve
+araç tarafında **pointer** oldukları için kısmi patch saklı değeri korur. UI:
+`BoardTriggerFields` içine "Sıra" + "Tek sahip" kontrolleri (hem oluşturma formu
+hem satır-içi editör), liste satırında `🔒 tek sahip` / `sıra N` rozetleri.
+7 yeni birim testi (sıralama, ID tie-break, exclusive bastırma, exclusive
+kazanan, sütun-içi izolasyon, filtreleme, boş küme) + `go build/vet`,
+`go test ./internal/...`, `npx tsc -b`, `npm run build` yeşil. Detay `_Docs\46`.
 
 ## PromptEditor içerik-boyutlu yükseklik (autoSize) ✅ (2026-07-23)
 

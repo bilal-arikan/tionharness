@@ -29,6 +29,8 @@ type automationReq struct {
 	BoardOp        string   `json:"boardOp"`
 	BoardFromState string   `json:"boardFromState"`
 	BoardToState   string   `json:"boardToState"`
+	BoardPriority  *int     `json:"boardPriority"`
+	BoardExclusive *bool    `json:"boardExclusive"`
 	TargetAgentID  string   `json:"targetAgentId"`
 	FlowID         string   `json:"flowId"`
 	PromptTemplate string   `json:"promptTemplate"`
@@ -99,6 +101,14 @@ func (s *Server) handleCreateAutomation(w http.ResponseWriter, r *http.Request) 
 	if req.ExpiresAt != nil {
 		expiresAt = *req.ExpiresAt
 	}
+	boardPriority := 0
+	if req.BoardPriority != nil {
+		boardPriority = *req.BoardPriority
+	}
+	boardExclusive := false
+	if req.BoardExclusive != nil {
+		boardExclusive = *req.BoardExclusive
+	}
 	created, err := ws(r).DB.CreateAutomation(ctx, db.Automation{
 		Name:           strings.TrimSpace(req.Name),
 		TriggerKind:    req.TriggerKind,
@@ -106,6 +116,8 @@ func (s *Server) handleCreateAutomation(w http.ResponseWriter, r *http.Request) 
 		BoardOp:        req.BoardOp,
 		BoardFromState: req.BoardFromState,
 		BoardToState:   req.BoardToState,
+		BoardPriority:  boardPriority,
+		BoardExclusive: boardExclusive,
 		TargetAgentID:  req.TargetAgentID,
 		FlowID:         req.FlowID,
 		PromptTemplate: req.PromptTemplate,
@@ -182,6 +194,15 @@ func (s *Server) handleUpdateAutomation(w http.ResponseWriter, r *http.Request) 
 	}
 	if req.ExpiresAt != nil {
 		cur.ExpiresAt = *req.ExpiresAt
+	}
+	// Board ordering/exclusivity are pointer fields: absent in a partial patch
+	// means "leave as stored", so a spawnTags-only edit can't silently reset a
+	// column's owner back to 0/false.
+	if req.BoardPriority != nil {
+		cur.BoardPriority = *req.BoardPriority
+	}
+	if req.BoardExclusive != nil {
+		cur.BoardExclusive = *req.BoardExclusive
 	}
 	if err := ws(r).DB.UpdateAutomation(ctx, cur); writeDBError(w, err, "") {
 		return

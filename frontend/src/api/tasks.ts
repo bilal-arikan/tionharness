@@ -88,6 +88,8 @@ export const taskApi = {
     boardOp?: 'any' | 'move' | 'create' | 'update' | 'delete'
     boardFromState?: string
     boardToState?: string
+    boardPriority?: number
+    boardExclusive?: boolean
     targetAgentId?: string
     flowId?: string
     promptTemplate: string
@@ -110,6 +112,8 @@ export const taskApi = {
       boardOp?: 'any' | 'move' | 'create' | 'update' | 'delete'
       boardFromState?: string
       boardToState?: string
+      boardPriority?: number
+      boardExclusive?: boolean
       targetAgentId?: string
       flowId?: string
       promptTemplate?: string

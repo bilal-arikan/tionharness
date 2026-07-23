@@ -68,6 +68,17 @@ type Automation struct {
 	// BoardToState, when set, requires the card to have ENTERED this column for a
 	// board automation to fire (target-column filter). Empty = any target.
 	BoardToState string `json:"boardToState,omitempty"`
+	// BoardPriority orders board automations that match the SAME card change.
+	// Lower fires first; ties break on ID so the order is stable across restarts
+	// (map iteration is not). Without it, two rules watching the same column fired
+	// in arbitrary order and raced on the card. Default 0.
+	BoardPriority int `json:"boardPriority,omitempty"`
+	// BoardExclusive claims sole ownership of a card change: when an exclusive
+	// automation matches, it is the ONLY one that fires for that event — every
+	// lower-priority rule matching the same change is suppressed. This is the
+	// "one owner per column" guarantee that replaces manually disabling the loser.
+	// Among several exclusive matches the lowest BoardPriority wins.
+	BoardExclusive bool `json:"boardExclusive,omitempty"`
 	// TargetAgentID is the agent that runs the spawned session. Optional when
 	// FlowID is set (a flow-backed automation runs a flow instead of one agent).
 	TargetAgentID string `json:"targetAgentId"`

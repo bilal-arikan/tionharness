@@ -63,6 +63,8 @@ func (CreateAutomationTool) Def() providers.ToolDef {
 				"boardOp":{"type":"string","enum":["any","move","create","update","delete"],"description":"[board kind] Which card change fires it (default 'move')"},
 				"boardFromState":{"type":"string","description":"[board kind] Only fire when a card LEAVES this column (empty = any source)"},
 				"boardToState":{"type":"string","description":"[board kind] Only fire when a card ENTERS this column (empty = any target)"},
+				"boardPriority":{"type":"integer","description":"[board kind] Fire order among automations matching the SAME card change; lower runs first (default 0). Use it to sequence two rules on one column instead of letting them race."},
+				"boardExclusive":{"type":"boolean","description":"[board kind] Claim sole ownership of a matching card change: only this automation fires and every other match is suppressed (default false). Among several exclusive matches the lowest boardPriority wins."},
 				"targetAgentId":{"type":"string","description":"The agent that runs the spawned session (see list_agents). Omit when flowId is set."},
 				"flowId":{"type":"string","description":"Run this orchestration flow with the rendered prompt as its input instead of spawning an agent session (see list_flows)."},
 				"promptTemplate":{"type":"string","description":"Prompt for the spawned session (or flow input). Tag placeholders: {{result}}, {{title}}, {{tag}}, {{sessionId}}, {{prevPrompt}}, {{agent}}. Board placeholders: {{taskId}}, {{title}}, {{op}}, {{from}}, {{to}}, {{fromLabel}}, {{toLabel}}, {{board}}, {{tags}}, {{owner}}, {{priority}}. Common: {{iteration}}, {{maxIterations}}, {{automation}}, {{date}}, {{time}}, {{datetime}}"},
@@ -89,6 +91,8 @@ func (t CreateAutomationTool) Call(ctx context.Context, input json.RawMessage) (
 		BoardOp        string   `json:"boardOp"`
 		BoardFromState string   `json:"boardFromState"`
 		BoardToState   string   `json:"boardToState"`
+		BoardPriority  *int     `json:"boardPriority"`
+		BoardExclusive *bool    `json:"boardExclusive"`
 		TargetAgentID  string   `json:"targetAgentId"`
 		FlowID         string   `json:"flowId"`
 		PromptTemplate string   `json:"promptTemplate"`
@@ -147,6 +151,14 @@ func (t CreateAutomationTool) Call(ctx context.Context, input json.RawMessage) (
 	if in.ExpiresAt != nil {
 		expiresAt = *in.ExpiresAt
 	}
+	boardPriority := 0
+	if in.BoardPriority != nil {
+		boardPriority = *in.BoardPriority
+	}
+	boardExclusive := false
+	if in.BoardExclusive != nil {
+		boardExclusive = *in.BoardExclusive
+	}
 	created, err := t.d.db.CreateAutomation(ctx, db.Automation{
 		Name:           strings.TrimSpace(in.Name),
 		TriggerKind:    in.TriggerKind,
@@ -154,6 +166,8 @@ func (t CreateAutomationTool) Call(ctx context.Context, input json.RawMessage) (
 		BoardOp:        in.BoardOp,
 		BoardFromState: in.BoardFromState,
 		BoardToState:   in.BoardToState,
+		BoardPriority:  boardPriority,
+		BoardExclusive: boardExclusive,
 		TargetAgentID:  in.TargetAgentID,
 		FlowID:         in.FlowID,
 		PromptTemplate: in.PromptTemplate,
@@ -182,7 +196,7 @@ func NewUpdateAutomationTool(database *db.DB, actorID string) UpdateAutomationTo
 func (UpdateAutomationTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name:        "update_automation",
-		Description: "Edit an agent-created automation (not one made by the user). Pass the id and the fields to change (name, triggerTag, targetAgentId, flowId, promptTemplate, spawnTags, maxIterations, cooldownSec, enabled). Setting flowId makes it flow-backed (and clears the agent); setting targetAgentId switches it back to agent-backed.",
+		Description: "Edit an agent-created automation (not one made by the user). Pass the id and the fields to change (name, triggerTag, targetAgentId, flowId, promptTemplate, spawnTags, maxIterations, cooldownSec, boardPriority, boardExclusive, enabled). Setting flowId makes it flow-backed (and clears the agent); setting targetAgentId switches it back to agent-backed.",
 		InputSchema: json.RawMessage(`{
 			"type":"object",
 			"properties":{
@@ -193,6 +207,8 @@ func (UpdateAutomationTool) Def() providers.ToolDef {
 				"boardOp":{"type":"string","enum":["any","move","create","update","delete"]},
 				"boardFromState":{"type":"string","description":"[board kind] source-column filter (empty = any)"},
 				"boardToState":{"type":"string","description":"[board kind] target-column filter (empty = any)"},
+				"boardPriority":{"type":"integer","description":"[board kind] fire order among automations matching the same card change; lower runs first"},
+				"boardExclusive":{"type":"boolean","description":"[board kind] only this automation fires for a matching change; all other matches are suppressed"},
 				"targetAgentId":{"type":"string"},
 				"flowId":{"type":"string","description":"Run this flow with the rendered prompt as input instead of spawning an agent session (see list_flows). Setting it clears the agent."},
 				"promptTemplate":{"type":"string"},
@@ -216,6 +232,8 @@ func (t UpdateAutomationTool) Call(ctx context.Context, input json.RawMessage) (
 		BoardOp        *string   `json:"boardOp"`
 		BoardFromState *string   `json:"boardFromState"`
 		BoardToState   *string   `json:"boardToState"`
+		BoardPriority  *int      `json:"boardPriority"`
+		BoardExclusive *bool     `json:"boardExclusive"`
 		TargetAgentID  *string   `json:"targetAgentId"`
 		FlowID         *string   `json:"flowId"`
 		PromptTemplate *string   `json:"promptTemplate"`
@@ -257,6 +275,12 @@ func (t UpdateAutomationTool) Call(ctx context.Context, input json.RawMessage) (
 	}
 	if in.BoardToState != nil {
 		cur.BoardToState = strings.TrimSpace(*in.BoardToState)
+	}
+	if in.BoardPriority != nil {
+		cur.BoardPriority = *in.BoardPriority
+	}
+	if in.BoardExclusive != nil {
+		cur.BoardExclusive = *in.BoardExclusive
 	}
 	// A non-empty flowId switches to flow-backed (and clears the agent); an
 	// explicit targetAgentId switches back to agent-backed (and clears the flow).
@@ -371,6 +395,8 @@ func (t ListAutomationsTool) Call(ctx context.Context, _ json.RawMessage) (strin
 		TriggerTag     string `json:"triggerTag,omitempty"`
 		BoardOp        string `json:"boardOp,omitempty"`
 		BoardToState   string `json:"boardToState,omitempty"`
+		BoardPriority  int    `json:"boardPriority,omitempty"`
+		BoardExclusive bool   `json:"boardExclusive,omitempty"`
 		TargetAgentID  string `json:"targetAgentId"`
 		FlowID         string `json:"flowId,omitempty"`
 		Enabled        bool   `json:"enabled"`
@@ -391,6 +417,8 @@ func (t ListAutomationsTool) Call(ctx context.Context, _ json.RawMessage) (strin
 			TriggerTag:     a.TriggerTag,
 			BoardOp:        a.BoardOp,
 			BoardToState:   a.BoardToState,
+			BoardPriority:  a.BoardPriority,
+			BoardExclusive: a.BoardExclusive,
 			TargetAgentID:  a.TargetAgentID,
 			FlowID:         a.FlowID,
 			Enabled:        a.Enabled,

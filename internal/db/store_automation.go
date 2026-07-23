@@ -77,6 +77,8 @@ func (d *DB) UpdateAutomation(ctx context.Context, a Automation) error {
 	cur.BoardOp = a.BoardOp
 	cur.BoardFromState = a.BoardFromState
 	cur.BoardToState = a.BoardToState
+	cur.BoardPriority = a.BoardPriority
+	cur.BoardExclusive = a.BoardExclusive
 	cur.TargetAgentID = a.TargetAgentID
 	cur.FlowID = a.FlowID
 	cur.PromptTemplate = a.PromptTemplate

@@ -84,20 +84,32 @@ const DEFAULT_PROMPT: Record<AutomationTriggerKind, string> = {
 }
 
 // BoardTriggerFields renders the op + source/target column filters for a
-// board-triggered automation. Source is shown for move/any/delete, target for
-// everything except delete.
+// board-triggered automation, plus the arbitration controls (fire order and
+// exclusivity) that decide what happens when several rules watch the same
+// column. Source is shown for move/any/delete, target for everything except
+// delete.
 function BoardTriggerFields({
   op,
   from,
   to,
+  priority,
+  exclusive,
   columns,
   onChange,
 }: {
   op: BoardOp
   from: string
   to: string
+  priority: number
+  exclusive: boolean
   columns: BoardColumnDef[]
-  onChange: (patch: { op?: BoardOp; from?: string; to?: string }) => void
+  onChange: (patch: {
+    op?: BoardOp
+    from?: string
+    to?: string
+    priority?: number
+    exclusive?: boolean
+  }) => void
 }) {
   const selCls =
     'rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-sm outline-none focus:border-[var(--color-accent)]'
@@ -141,6 +153,30 @@ function BoardTriggerFields({
           </select>
         </label>
       )}
+      <label
+        className="flex items-center gap-1 text-xs text-[var(--color-text-dim)]"
+        title="Aynı kart değişimini yakalayan otomasyonlar arasında ateşleme sırası. Küçük olan önce çalışır."
+      >
+        Sıra
+        <input
+          type="number"
+          value={priority}
+          onChange={(e) => onChange({ priority: Number(e.target.value) || 0 })}
+          className={`${selCls} w-16`}
+        />
+      </label>
+      <label
+        className="flex items-center gap-1 text-xs text-[var(--color-text-dim)]"
+        title="Bu otomasyon eşleşen kart değişimini tek başına sahiplenir; aynı olaya uyan diğer tüm pano otomasyonları bastırılır."
+      >
+        <input
+          type="checkbox"
+          checked={exclusive}
+          onChange={(e) => onChange({ exclusive: e.target.checked })}
+          className="accent-[var(--color-accent)]"
+        />
+        Tek sahip
+      </label>
     </>
   )
 }
@@ -302,6 +338,8 @@ function AutomationSection({ kind, allItems, setItems, reload, agents, flows, co
   const [boardOp, setBoardOp] = useState<BoardOp>('move')
   const [boardFromState, setBoardFromState] = useState('')
   const [boardToState, setBoardToState] = useState('')
+  const [boardPriority, setBoardPriority] = useState(0)
+  const [boardExclusive, setBoardExclusive] = useState(false)
   const [targetAgentId, setTargetAgentId] = useState('')
   const [targetMode, setTargetMode] = useState<'agent' | 'flow'>('agent')
   const [flowId, setFlowId] = useState('')
@@ -340,6 +378,7 @@ function AutomationSection({ kind, allItems, setItems, reload, agents, flows, co
   const [editId, setEditId] = useState<string | null>(null)
   const [edit, setEdit] = useState({
     name: '', triggerTag: '', boardOp: 'move' as BoardOp, boardFromState: '', boardToState: '',
+    boardPriority: 0, boardExclusive: false,
     targetAgentId: '', targetMode: 'agent' as 'agent' | 'flow',
     flowId: '', promptTemplate: '', maxIterations: '50', cooldownSec: '0', expiresAt: '',
   })
@@ -371,7 +410,9 @@ function AutomationSection({ kind, allItems, setItems, reload, agents, flows, co
       const a = await api.createAutomation({
         name: name.trim(),
         triggerKind: kind,
-        ...(isBoardKind ? { boardOp, boardFromState, boardToState } : { triggerTag: triggerTag.trim() }),
+        ...(isBoardKind
+          ? { boardOp, boardFromState, boardToState, boardPriority, boardExclusive }
+          : { triggerTag: triggerTag.trim() }),
         ...(targetMode === 'flow' ? { flowId } : { targetAgentId }),
         ...(spawnTagsOverride !== null ? { spawnTags: spawnTagsOverride } : {}),
         promptTemplate: promptTemplate.trim(),
@@ -385,6 +426,8 @@ function AutomationSection({ kind, allItems, setItems, reload, agents, flows, co
       setTriggerTag('')
       setBoardFromState('')
       setBoardToState('')
+      setBoardPriority(0)
+      setBoardExclusive(false)
       setExpiresAt('')
       setFlowId('')
       setSpawnTagsOverride(null)
@@ -401,6 +444,8 @@ function AutomationSection({ kind, allItems, setItems, reload, agents, flows, co
       boardOp: a.boardOp ?? 'move',
       boardFromState: a.boardFromState ?? '',
       boardToState: a.boardToState ?? '',
+      boardPriority: a.boardPriority ?? 0,
+      boardExclusive: a.boardExclusive ?? false,
       targetAgentId: a.targetAgentId,
       targetMode: a.flowId ? 'flow' : 'agent',
       flowId: a.flowId ?? '',
@@ -438,7 +483,13 @@ function AutomationSection({ kind, allItems, setItems, reload, agents, flows, co
         // re-applied together with it; a partial patch (e.g. spawnTags) omits it.
         triggerKind: kind,
         ...(isBoardKind
-          ? { boardOp: edit.boardOp, boardFromState: edit.boardFromState, boardToState: edit.boardToState }
+          ? {
+              boardOp: edit.boardOp,
+              boardFromState: edit.boardFromState,
+              boardToState: edit.boardToState,
+              boardPriority: edit.boardPriority,
+              boardExclusive: edit.boardExclusive,
+            }
           : { triggerTag: edit.triggerTag.trim() }),
         ...(edit.targetMode === 'flow'
           ? { flowId: edit.flowId, targetAgentId: '' }
@@ -530,11 +581,15 @@ function AutomationSection({ kind, allItems, setItems, reload, agents, flows, co
               op={boardOp}
               from={boardFromState}
               to={boardToState}
+              priority={boardPriority}
+              exclusive={boardExclusive}
               columns={columns}
               onChange={(p) => {
                 if (p.op !== undefined) setBoardOp(p.op)
                 if (p.from !== undefined) setBoardFromState(p.from)
                 if (p.to !== undefined) setBoardToState(p.to)
+                if (p.priority !== undefined) setBoardPriority(p.priority)
+                if (p.exclusive !== undefined) setBoardExclusive(p.exclusive)
               }}
             />
           ) : (
@@ -641,6 +696,8 @@ function AutomationSection({ kind, allItems, setItems, reload, agents, flows, co
                       op={edit.boardOp}
                       from={edit.boardFromState}
                       to={edit.boardToState}
+                      priority={edit.boardPriority}
+                      exclusive={edit.boardExclusive}
                       columns={columns}
                       onChange={(p) =>
                         setEdit((s) => ({
@@ -648,6 +705,8 @@ function AutomationSection({ kind, allItems, setItems, reload, agents, flows, co
                           ...(p.op !== undefined ? { boardOp: p.op } : {}),
                           ...(p.from !== undefined ? { boardFromState: p.from } : {}),
                           ...(p.to !== undefined ? { boardToState: p.to } : {}),
+                          ...(p.priority !== undefined ? { boardPriority: p.priority } : {}),
+                          ...(p.exclusive !== undefined ? { boardExclusive: p.exclusive } : {}),
                         }))
                       }
                     />
@@ -753,6 +812,22 @@ function AutomationSection({ kind, allItems, setItems, reload, agents, flows, co
                   ) : (
                     <span className="rounded bg-[var(--color-accent-soft)] px-1.5 py-0.5 font-mono text-[11px] text-[var(--color-accent)]">
                       #{a.triggerTag}
+                    </span>
+                  )}
+                  {isBoardKind && a.boardExclusive && (
+                    <span
+                      className="rounded bg-[var(--color-warning-soft,var(--color-accent-soft))] px-1.5 py-0.5 text-[11px] text-[var(--color-text)]"
+                      title="Tek sahip: eşleşen kart değişiminde yalnız bu otomasyon çalışır, diğer eşleşmeler bastırılır."
+                    >
+                      🔒 tek sahip
+                    </span>
+                  )}
+                  {isBoardKind && (a.boardPriority ?? 0) !== 0 && (
+                    <span
+                      className="rounded bg-[var(--color-bg)] px-1.5 py-0.5 font-mono text-[11px] text-[var(--color-text-dim)]"
+                      title="Aynı kart değişimini yakalayan otomasyonlar arasındaki ateşleme sırası (küçük olan önce)."
+                    >
+                      sıra {a.boardPriority}
                     </span>
                   )}
                   <span className="text-xs text-[var(--color-text-dim)]">
