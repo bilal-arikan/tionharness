@@ -351,6 +351,8 @@ Canlı taramalarda gözlenen zayıflıklara yönelik olgunlaştırma (üretim ta
 - [x] **FilePointer doğrulama** (`CheckFilePointer`): app-fix backlog'da repo'da olmayan LLM-tahmini yolları "⚠ unverified" işaretler.
 - [x] **Fleet rollup** (`fleet.go` + `GET /api/insight/fleet-findings`): tüm workspace'lerin app-fix bulgularını kanonik-imzayla birleştirir.
 - [x] **Scan-run log** (`runlog.go` + `GET /api/insight/runs`): session değil, append-only observability (when/süre/sayılar).
+- [x] **Birikme (unbounded growth) önleme:** `ledger.jsonl` her taramada `Compact()` ile tek-satır/anahtara indirilir
+      (append-only'di, Compact hiç çağrılmıyordu → sınırsız büyüyordu); `runs.jsonl` `maxRunRecords=1000` ile cap'lenir.
 
 ### Faz 6 — Triage Kokpiti (UI/UX) — TAMAM (build OK · tsc temiz)
 Panel "düz liste"den triage kokpitine dönüştü; `features/insight/` alt bileşenlere bölündü:

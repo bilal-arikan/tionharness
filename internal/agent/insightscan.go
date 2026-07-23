@@ -111,6 +111,13 @@ func (r *Runtime) RunInsightScan(ctx context.Context, scope insight.ScanScope, a
 		r.logger.Info("insight maintain", "autoVerified", m.AutoVerified, "pruned", m.Pruned)
 	}
 
+	// Compact the append-only ledger back to one line per (lens,session): every
+	// re-scan of a changed session appends a superseded line, so without this the
+	// file — and the startup load that reads it — grows unboundedly with scans.
+	if cErr := ledger.Compact(); cErr != nil {
+		r.logger.Warn("insight ledger compact failed", "error", cErr)
+	}
+
 	// Observability: record the run in an append-only log (NOT a session), so scans
 	// stay auditable (when/how long/what) without cluttering the chat list.
 	if rErr := insight.AppendRun(root, insight.RunRecord{

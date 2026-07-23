@@ -177,6 +177,74 @@ func TestRunLogRoundTrip(t *testing.T) {
 	}
 }
 
+// TestLedgerCompactBoundsFile: repeated re-scans of the same key append lines;
+// Compact rewrites to one line per key so the file stops growing.
+func TestLedgerCompactBoundsFile(t *testing.T) {
+	root := t.TempDir()
+	l, err := OpenLedger(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Same (lens,session) recorded 20 times → 20 appended lines.
+	for i := 0; i < 20; i++ {
+		if err := l.Record(LedgerEntry{LensID: "x", SessionID: "S1", SeenFingerprint: "fp", ScannedAt: int64(i)}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	path := filepath.Join(root, ledgerRelPath)
+	before := lineCount(t, path)
+	if before < 20 {
+		t.Fatalf("expected >=20 appended lines before compact, got %d", before)
+	}
+	if err := l.Compact(); err != nil {
+		t.Fatal(err)
+	}
+	if after := lineCount(t, path); after != 1 {
+		t.Fatalf("compact should collapse to 1 line per key, got %d", after)
+	}
+	// Correctness survives compaction: the key is still known (skip on same fp).
+	if l.NeedsScan("x", "S1", 0, "fp") {
+		t.Fatal("compacted ledger must still remember the scanned key")
+	}
+}
+
+// TestRunLogTrims: AppendRun keeps the file bounded to the newest maxRunRecords.
+func TestRunLogTrims(t *testing.T) {
+	root := t.TempDir()
+	const extra = 3 // just enough over the cap to prove trimming, without O(n²) churn
+	for i := 0; i < maxRunRecords+extra; i++ {
+		if err := AppendRun(root, RunRecord{At: int64(i)}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if n := lineCount(t, filepath.Join(root, runsRelPath)); n != maxRunRecords {
+		t.Fatalf("runs file should be capped at %d, got %d", maxRunRecords, n)
+	}
+	runs, err := ReadRuns(root, 5)
+	if err != nil || len(runs) != 5 {
+		t.Fatalf("expected 5 newest runs, got %d err=%v", len(runs), err)
+	}
+	// Newest kept: the very last At we wrote.
+	if runs[0].At != int64(maxRunRecords+extra-1) {
+		t.Fatalf("newest record should survive, got At=%d", runs[0].At)
+	}
+}
+
+func lineCount(t *testing.T, path string) int {
+	t.Helper()
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+	n := 0
+	for _, c := range b {
+		if c == '\n' {
+			n++
+		}
+	}
+	return n
+}
+
 // TestCheckFilePointer: real file resolves, junk/escape does not.
 func TestCheckFilePointer(t *testing.T) {
 	repo := t.TempDir()
