@@ -22,7 +22,7 @@ export function FindingModal({ f, onClose, onStatus, onDelete, onAddCard, onOpen
   }
   return (
     <ModalOverlay onClose={onClose}>
-      <div className="flex max-h-[86vh] w-[min(680px,94vw)] flex-col">
+      <div className="flex max-h-[86vh] w-[min(680px,94vw)] flex-col overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-2xl">
         {/* Header */}
         <div className="flex items-start gap-2 border-b border-[var(--color-border)] p-4">
           <div className="min-w-0 flex-1">
