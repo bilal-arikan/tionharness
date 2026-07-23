@@ -32,7 +32,7 @@ func busForwardable(k StepKind) bool {
 // activity as it happens. Best-effort: the authoritative trace is always
 // persisted on the finished assistant message, so a dropped step is only a
 // missed live frame, never lost history.
-func (r *Runtime) emitSessionStep(sessionID string, st TurnStep) {
+func (r *Runtime) emitSessionStep(sessionID string, st TurnStep, origin string) {
 	if sessionID == "" || !busForwardable(st.Kind) {
 		return
 	}
@@ -40,10 +40,20 @@ func (r *Runtime) emitSessionStep(sessionID string, st TurnStep) {
 	if err != nil {
 		return
 	}
+	target := map[string]string{"sessionId": sessionID}
+	// origin lets the hub bridge tell an INTERACTIVE turn's mirrored step (which
+	// the chat handler already published to the hub in-order) from an AUTONOMOUS
+	// turn's step (which only reaches the hub via that bridge). Interactive steps
+	// must never be re-bridged: a straggler processed AFTER the run unregisters
+	// would re-arm the client's live indicator that turn_done just cleared (the
+	// stuck-"conversing" bug). Empty origin = autonomous (bridged as before).
+	if origin != "" {
+		target["origin"] = origin
+	}
 	r.publish(events.Event{
 		Type:   "session_step",
 		Level:  "info",
-		Target: map[string]string{"sessionId": sessionID},
+		Target: target,
 		Step:   b,
 	})
 }
@@ -53,7 +63,9 @@ func (r *Runtime) emitSessionStep(sessionID string, st TurnStep) {
 // it mirrors an interactive turn's live steps onto the bus so OTHER windows
 // viewing the same session render it live too (the originating window suppresses
 // the duplicate — it already streams over its own per-request SSE).
-func (r *Runtime) EmitSessionStep(sessionID string, st TurnStep) { r.emitSessionStep(sessionID, st) }
+func (r *Runtime) EmitSessionStep(sessionID string, st TurnStep) {
+	r.emitSessionStep(sessionID, st, "interactive")
+}
 
 // SessionStepEmitter returns an onStep sink that broadcasts the running turn's
 // steps to the session bus, or nil when the turn carries no session id (so the
@@ -75,7 +87,7 @@ func (r *Runtime) SessionStepEmitter(ctx context.Context) func(TurnStep) {
 			touch()
 		}
 		if sid != "" {
-			r.emitSessionStep(sid, st)
+			r.emitSessionStep(sid, st, "")
 		}
 	}
 }

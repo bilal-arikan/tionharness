@@ -328,6 +328,61 @@ func marshalSteps(steps []agent.TurnStep) string {
 	return "[]"
 }
 
+// maybeSnippetTitle gives a freshly-enqueued chat its first visible title the
+// instant the user message lands — a short snippet of the prompt — so the UI drops
+// its "new chat" placeholder immediately instead of waiting on the LLM auto-title
+// round-trip that runs during the first turn. It only names an as-yet-untitled
+// session; the later LLM auto-title (maybeAutoTitle) refines this snippet into a
+// cleaner title. Best-effort throughout: any failure just leaves the title
+// untouched and never disturbs the enqueue/reply path.
+func (s *Server) maybeSnippetTitle(ctx context.Context, wsp *workspace.Workspace, sessionID, message string) {
+	if wsp == nil || wsp.DB == nil {
+		return
+	}
+	session, err := wsp.DB.GetSession(ctx, sessionID)
+	if err != nil {
+		return
+	}
+	// Already named (manual, snippet from a prior message, or a completed LLM
+	// title) — never clobber an existing title.
+	if strings.TrimSpace(session.Title) != "" {
+		return
+	}
+	snip := titleSnippet(message)
+	if snip == "" {
+		return
+	}
+	if err := wsp.DB.SetSessionTitle(ctx, sessionID, snip); err != nil {
+		s.logger.Warn("snippet title failed", "session", sessionID, "error", err)
+		return
+	}
+	emitSessionChange(wsp, sessionID, "title")
+}
+
+// titleSnippet reduces a user message to a short single-line title fragment: its
+// first line only, inner whitespace collapsed to single spaces, trimmed to ~48
+// runes with a trailing ellipsis when it was cut. Rune-safe so multi-byte (e.g.
+// Turkish) characters are never split mid-character. Returns "" for a blank message.
+func titleSnippet(msg string) string {
+	msg = strings.TrimSpace(msg)
+	if msg == "" {
+		return ""
+	}
+	if i := strings.IndexByte(msg, '\n'); i >= 0 {
+		msg = msg[:i]
+	}
+	msg = strings.Join(strings.Fields(msg), " ")
+	if msg == "" {
+		return ""
+	}
+	const maxRunes = 48
+	r := []rune(msg)
+	if len(r) > maxRunes {
+		return strings.TrimSpace(string(r[:maxRunes])) + "…"
+	}
+	return msg
+}
+
 // maybeAutoTitle generates and persists a session title from the opening message
 // when firstTurn is set. Best-effort: a failure never breaks the reply. Returns
 // the new title, or "" when none was generated.

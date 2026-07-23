@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import { Bell } from 'lucide-react'
+import { Bell, Volume2 } from 'lucide-react'
 import { NOTIFY_TYPES, mutedTypes, setTypeEnabled } from '@/shared/lib/notifyPrefs'
+import { soundEffectsEnabled, setSoundEffectsEnabled, playTurnDone } from '@/shared/lib/sounds'
 import { Toggle } from './primitives'
 import { SubHead } from './settingsPanelShared'
 import type { PanelProps } from './settingsPanelShared'
@@ -9,6 +10,13 @@ export function NotificationsPanel({ draft, set }: PanelProps) {
   // Per-type toast preferences are device-local (localStorage), so they apply
   // instantly — independent of the backend-persisted master toggle / Save.
   const [muted, setMuted] = useState<Set<string>>(() => mutedTypes())
+  // Sound effects are also device-local; toggling on plays a sample chime.
+  const [sounds, setSounds] = useState<boolean>(() => soundEffectsEnabled())
+  const toggleSounds = (on: boolean) => {
+    setSoundEffectsEnabled(on)
+    setSounds(on)
+    if (on) playTurnDone()
+  }
   const toggleType = (type: string, on: boolean) => {
     setTypeEnabled(type, on)
     setMuted((prev) => {
@@ -30,6 +38,14 @@ export function NotificationsPanel({ draft, set }: PanelProps) {
       {NOTIFY_TYPES.map((t) => (
         <Toggle key={t.type} label={t.label} hint={t.hint} checked={!muted.has(t.type)} onChange={(v) => toggleType(t.type, v)} />
       ))}
+
+      <SubHead icon={Volume2}>Sesler</SubHead>
+      <Toggle
+        label="Ses efektleri"
+        hint="Ajan yanıtı bitince çalınan bitiş sesi ile mikrofon başlat/durdur seslerini açar/kapatır. Bu cihaza özeldir."
+        checked={sounds}
+        onChange={toggleSounds}
+      />
     </>
   )
 }

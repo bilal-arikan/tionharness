@@ -146,6 +146,7 @@ func (s *Server) handleSessionInfo(w http.ResponseWriter, r *http.Request) {
 		HandoffArtifactID:    session.HandoffArtifactID,
 		Role:                 session.Role,
 		CoordinatorSessionID: session.CoordinatorSessionID,
+		CoordinatorWorkflow:  session.CoordinatorWorkflow,
 		CreatedAt:            session.CreatedAt,
 		UpdatedAt:            session.UpdatedAt,
 		HasSummary:           session.Summary != "",

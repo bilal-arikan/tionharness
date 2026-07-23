@@ -262,6 +262,19 @@ gap-fill** dayanıklı olmalı: `Last-Event-ID`, ring taşınca `reset`, ping/ke
   turlarında düşünce/tool adımları tur bitene kadar görünmüyordu. Interaktif run
   (kendi yayınlar) atlanır, otonom run (yayınlamaz) köprülenir. Test:
   `bridge_autonomous_test.go`.
+- **Bug fix — interaktif adım köprüsü `origin` tabanlı (2026-07-23):** Yukarıdaki
+  `live && !info.Autonomous` guard'ı **canlılığa** dayandığı için yeni bir yarışa
+  yol açıyordu: `runChatTurn` `turn_done`'u **doğrudan** hub'a yayınlar, ardından
+  `defer s.runs.unregister(runID)` çalışır. Bus'ta bekleyen **geç (straggler)** bir
+  interaktif `session_step`, run kaydı silindikten sonra işlenirse `!live` görünür
+  ve hub'a yeniden yayınlanırdı → istemci `turn_done` ile temizlediği
+  `streamingSessions`'ı bu geç `KindStep` ile **yeniden** doldurup "hâlâ konuşuyor"
+  takılı kalırdı (sayfa yenileyince düzelir, çünkü tur gerçekten bitmiştir). Çözüm:
+  interaktif adımlar bus olayında `Target["origin"]="interactive"` ile etiketlenir
+  (`EmitSessionStep`); köprü bunları **run canlılığından bağımsız koşulsuz atlar**.
+  Otonom adımlar (`origin=""`) eskisi gibi köprülenir. `emitSessionStep` artık
+  `origin` parametresi alır. Testler: `TestBridgeSkipsInteractiveSteps` (run
+  kaydı YOK → straggler senaryosu), `TestBridgeForwardsAutonomousSteps`.
 - **Otonom "çalışıyor" göstergesi + gerçek Durdur (2026-07-12):** Otonom turlar
   `KindUserMessage` yayınlamadığından frontend busy-state işaretlenmiyordu. Çözüm:
   `chatStreamHub.ts` ilk `KindAgentStart`/`KindStep`'te oturumu `streamingSessions`'a

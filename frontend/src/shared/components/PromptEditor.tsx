@@ -27,7 +27,26 @@ interface Props extends TextareaProps {
   mono?: boolean
   /** Extra classes merged onto the inner <textarea> (e.g. min-height overrides). */
   textareaClassName?: string
+  /**
+   * Size the editor to its CONTENT instead of a fixed box: short prompts render
+   * short, long ones grow up to `autoSizeMax` and then scroll. Applies to the
+   * inline Edit, Preview and Split views; fullscreen always fills the overlay.
+   * ON by default (app-wide rule); pass false to restore the fixed-box layout.
+   */
+  autoSize?: boolean
+  /** Max content-driven height in px when `autoSize` is on (default 320). */
+  autoSizeMax?: number
 }
+
+// Floor for the auto-sized editor so an empty field still presents a usable
+// click/typing target rather than collapsing to a single line. The effective
+// floor also honors the caller's `rows` (an authoring surface asking for 12
+// rows must not collapse to 72px when empty).
+const AUTO_SIZE_MIN = 72
+
+// Approximate rendered height of `rows` text-sm lines incl. vertical padding,
+// used for the rows-aware autoSize floor.
+const rowsFloor = (rows: number) => rows * 20 + 18
 
 // PromptEditor is a markdown-aware textarea: a thin toolbar toggles between three
 // views — Edit, Preview (rendered through the shared <Markdown>) and Split (edit
@@ -42,6 +61,8 @@ export function PromptEditor({
   mono = false,
   textareaClassName = '',
   className = '',
+  autoSize = true,
+  autoSizeMax = 320,
   ...rest
 }: Props) {
   // null until the first width measurement picks the default (edit vs split).
@@ -49,6 +70,10 @@ export function PromptEditor({
   const [copied, setCopied] = useState(false)
   const [full, setFull] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
+  // autoSize measurement targets — the INLINE textarea and split row only (the
+  // fullscreen overlay always fills, so it is never measured or resized).
+  const taRef = useRef<HTMLTextAreaElement>(null)
+  const splitRef = useRef<HTMLDivElement>(null)
 
   // Pick the initial view from the rendered width: wide editors open in Split,
   // narrow ones in Edit. Runs once (mode stays null until then); afterwards the
@@ -60,6 +85,25 @@ export function PromptEditor({
   }, [mode])
 
   const m: ViewMode = mode ?? 'edit'
+
+  // Content-driven height: measure the textarea's natural scrollHeight and clamp
+  // it to [AUTO_SIZE_MIN, autoSizeMax]. In Edit view the height lands on the
+  // textarea itself; in Split it lands on the row so both panes stay equal and
+  // the taller preview scrolls internally.
+  useLayoutEffect(() => {
+    if (!autoSize) return
+    const ta = taRef.current
+    if (!ta) return
+    ta.style.height = 'auto'
+    const floor = Math.max(AUTO_SIZE_MIN, rowsFloor(rows))
+    const h = Math.max(floor, Math.min(ta.scrollHeight + 2, Math.max(autoSizeMax, floor)))
+    if (m === 'split') {
+      ta.style.height = '' // height comes from the row via the h-full class
+      if (splitRef.current) splitRef.current.style.height = `${h}px`
+    } else {
+      ta.style.height = `${h}px`
+    }
+  }, [autoSize, autoSizeMax, rows, value, m, full])
 
   const copy = async () => {
     if (await copyToClipboard(value)) {
@@ -112,6 +156,9 @@ export function PromptEditor({
 
   const editArea = (fullscreen: boolean, half: boolean) => (
     <textarea
+      // Measurement target for autoSize — inline instance only; the fullscreen
+      // overlay renders a second textarea that must never steal the ref.
+      ref={fullscreen ? undefined : taRef}
       value={value}
       onChange={(e) => onChange(e.target.value)}
       // In split ("half") and fullscreen the textarea fills the pane height
@@ -119,7 +166,7 @@ export function PromptEditor({
       // caller's short `rows`, which left it cut off next to a tall preview.
       rows={fullscreen || half ? undefined : rows}
       className={`w-full bg-transparent px-2.5 py-2 text-sm outline-none ${
-        fullscreen ? 'flex-1 resize-none px-4 py-3' : half ? 'h-full flex-1 resize-none' : 'resize-y'
+        fullscreen ? 'flex-1 resize-none px-4 py-3' : half ? 'h-full flex-1 resize-none' : autoSize ? 'resize-none' : 'resize-y'
       } ${mono ? 'font-mono' : ''} ${textareaClassName}`}
       {...rest}
     />
@@ -133,8 +180,10 @@ export function PromptEditor({
     <div
       className={
         'min-w-0 break-words overflow-y-auto ' +
-        (fullscreen ? 'flex-1 px-4 py-3' : half ? 'h-full px-2.5 py-2' : 'min-h-[26rem] max-h-[65vh] px-2.5 py-2')
+        (fullscreen ? 'flex-1 px-4 py-3' : half ? 'h-full px-2.5 py-2' : autoSize ? 'px-2.5 py-2' : 'min-h-[26rem] max-h-[65vh] px-2.5 py-2')
       }
+      // autoSize single-pane preview: shrink-wrap the content up to the cap.
+      style={!fullscreen && !half && autoSize ? { maxHeight: autoSizeMax } : undefined}
     >
       {value.trim() ? (
         <Markdown>{value}</Markdown>
@@ -149,12 +198,15 @@ export function PromptEditor({
   const body = (fullscreen: boolean) => {
     if (m === 'split') {
       return (
-        // Non-fullscreen split gets an explicit, comfortable height (capped to the
-        // viewport) so BOTH panes fill it and scroll internally — otherwise the
-        // edit side collapsed to the short `rows` while the preview grew tall.
+        // Non-fullscreen split gets an explicit height so BOTH panes fill it and
+        // scroll internally — otherwise the edit side collapsed to the short
+        // `rows` while the preview grew tall. With autoSize the height is set
+        // imperatively from the measured content (clamped); otherwise it is the
+        // fixed comfortable box.
         <div
+          ref={fullscreen ? undefined : splitRef}
           className={`flex divide-x divide-[var(--color-border)] ${
-            fullscreen ? 'min-h-0 flex-1' : 'h-[26rem] max-h-[65vh]'
+            fullscreen ? 'min-h-0 flex-1' : autoSize ? '' : 'h-[26rem] max-h-[65vh]'
           }`}
         >
           <div className="flex w-1/2 min-w-0 flex-col">{editArea(fullscreen, true)}</div>

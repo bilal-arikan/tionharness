@@ -179,6 +179,7 @@ export function SkillEditor({ mode, initial, groups = [], onClose, onSaved }: Pr
               onChange={setBody}
               rows={12}
               mono
+              autoSizeMax={560}
               placeholder="# Skill&#10;&#10;Talimatları buraya yaz…"
             />
           </Field>

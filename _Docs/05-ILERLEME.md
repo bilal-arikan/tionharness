@@ -1,6 +1,23 @@
 # TionSwarm — İlerleme Takibi
 
-> Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-07-15**
+> Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-07-23**
+
+## PromptEditor içerik-boyutlu yükseklik (autoSize) ✅ (2026-07-23)
+
+Promptlar & Dosyalar ekranındaki editörler sabit 26rem'lik kutu yerine **içeriğe
+göre boyutlanıyor**: `PromptEditor`'a opsiyonel `autoSize` + `autoSizeMax`
+(vars. 320px, min 72px) prop'ları eklendi. Edit görünümünde textarea scrollHeight
+ölçümüyle, split'te satır yüksekliği imperatif set edilerek (iki pane eşit kalır),
+tek-pane önizlemede max-height + shrink-wrap ile çalışır; tavana ulaşan içerik
+içten kaydırılır, tam ekran etkilenmez. **Uygulama-geneli VARSAYILAN** (aynı gün
+ikinci adım): `autoSize` default `true` — tüm PromptEditor yüzeyleri (workspace
+promptları, ajan soul/identity, skill gövdesi `autoSizeMax=560`, flow node
+promptu, profil notları, oturum hedefi) kurala uyar; taban `rows`-farkındalı
+(`max(72, rows*20+18)` — 12 satırlık authoring alanı boşken 72px'e çökmez);
+`autoSize={false}` ile eski sabit kutuya dönülebilir. Görsel doğrulama: kısa
+promptlar 72–132px, uzunlar 320px tavanında; ajan formu 416→98/72px; skill
+gövdesi içerikle 518px.
+`tsc` + prod build + gömülü binary üzerinde Playwright kontrolü yeşil.
 
 ## Merkezi Prompt Registry — tüm gömülü promptlar tek kayıt defterinde ✅ (2026-07-15)
 

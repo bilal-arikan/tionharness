@@ -72,7 +72,12 @@ cevaplanır. Damgalı yollar: summary, title, lesson, insight-analyzer, btw-syst
   temizler (default devralır).
 - Ayarlar → Promptlar & Dosyalar: tüm anahtarlar registry metadata'sıyla render
   edilir; "özelleştirildi" etiketi, "yeni oturumlarda etkili" epoch rozeti ve
-  eksik-yer-tutucu uyarısı eklendi.
+  eksik-yer-tutucu uyarısı eklendi. Editörler **içeriğe göre otomatik boyutlanır**
+  (`PromptEditor autoSize` — UYGULAMA-GENELİ varsayılan; taban `rows`-farkındalı
+  min 72px, varsayılan tavan 320px, skill gövdesinde 560; uzun içerik tavanda
+  içten kaydırılır; edit/preview/split görünümlerinin üçünde de geçerli, tam
+  ekran etkilenmez; `autoSize={false}` eski sabit kutu) — kısa promptlarda sabit
+  26rem'lik boş kutu kalmadı (2026-07-23).
 - `GET /api/prompts` (salt-okunur vitrin) artık tüm registry'yi listeler;
   `POST /api/prompts/reveal` `internal/prompts/defaults` klasörünü açar.
 - Market publish + workspace şablonları `agent.PromptKeys` üzerinden döndüğü için

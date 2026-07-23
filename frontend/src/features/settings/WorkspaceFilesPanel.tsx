@@ -125,7 +125,18 @@ export function WorkspaceFilesPanel({ onError, onState }: Props) {
         </div>
       </div>
 
-      <div className="text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">Runtime promptları</div>
+      <div className="text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">Workspace dosyaları</div>
+      <Field label="Talimatlar (instructions.md)" hint="Bu workspace'teki tüm ajanlara eklenen yönergeler. 'Genel' sekmesindeki talimatlarla senkronizedir.">
+        <PromptEditor
+          value={draft.instructions}
+          onChange={(v) => setDraft((d) => (d ? { ...d, instructions: v } : d))}
+          rows={4}
+          autoSize
+          placeholder="Örn. Tüm cevapları Türkçe ver; commit at ama push'lama."
+        />
+      </Field>
+
+      <div className="pt-2 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">Runtime promptları</div>
       {config.promptKeys.map((key) => {
         const meta = config.promptMeta?.[key] ?? { ...FALLBACK_META, label: key }
         const isDefault = draft.prompts[key].trim() === (config.defaults[key] ?? '').trim()
@@ -143,6 +154,7 @@ export function WorkspaceFilesPanel({ onError, onState }: Props) {
               onChange={(v) => setPrompt(key, v)}
               rows={4}
               mono
+              autoSize
               textareaClassName="text-xs"
             />
             <div className="mt-1 flex flex-wrap items-center gap-2">
@@ -173,15 +185,6 @@ export function WorkspaceFilesPanel({ onError, onState }: Props) {
         )
       })}
 
-      <div className="pt-2 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">Workspace dosyaları</div>
-      <Field label="Talimatlar (instructions.md)" hint="Bu workspace'teki tüm ajanlara eklenen yönergeler. 'Genel' sekmesindeki talimatlarla senkronizedir.">
-        <PromptEditor
-          value={draft.instructions}
-          onChange={(v) => setDraft((d) => (d ? { ...d, instructions: v } : d))}
-          rows={4}
-          placeholder="Örn. Tüm cevapları Türkçe ver; commit at ama push'lama."
-        />
-      </Field>
     </>
   )
 }

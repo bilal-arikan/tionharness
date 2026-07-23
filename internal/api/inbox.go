@@ -363,6 +363,12 @@ func (s *Server) handleEnqueueMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	queued := s.enqueueMessage(ws(r).ID, req, req.ClientMsgID)
+	if queued {
+		// Instant feedback: name a still-untitled session from a snippet of this
+		// prompt right away, so the UI drops "new chat" without waiting for the
+		// first-turn LLM auto-title. Best-effort — never blocks the reply.
+		s.maybeSnippetTitle(r.Context(), ws(r), req.SessionID, req.Message)
+	}
 	writeJSON(w, http.StatusOK, map[string]any{"queued": queued, "clientMsgId": req.ClientMsgID})
 }
 

@@ -8,6 +8,7 @@ import { api, getActiveWorkspace } from '@/api'
 import type { AppEvent, Message, TurnStep } from '@/types'
 import { isTypeEnabled } from '@/shared/lib/notifyPrefs'
 import { notify } from '@/shared/lib/clientPrefs'
+import { playTurnDone } from '@/shared/lib/sounds'
 import type { useChatStream } from '@/features/chat/useChatStream'
 import type { View } from './NavRail'
 import { viewForEventType } from './eventViews'
@@ -144,6 +145,23 @@ function onEvent(d: AppEventDeps, e: AppEvent) {
       // consumer of this session, regardless of which session the chat itself has
       // active. 'armed'/'start' phases are not ends.
       if (phase !== 'armed' && phase !== 'start') publishTurnEnd(sid)
+      // Completion feedback when a real assistant reply lands: a turn-done chime
+      // (gated by the device-local sound-effects pref) plus, when this window is
+      // backgrounded, an OS toast that deep-links to the session on click. The
+      // wake lifecycle phases (armed/start/cancelled) are NOT completions.
+      if (!phase || phase === 'done') {
+        playTurnDone()
+        notify(
+          d.notifyEnabled.current,
+          e.title || 'Yanıt hazır',
+          e.body || '',
+          () => {
+            const r = routeFromEvent(e)
+            if (r) window.location.hash = buildRoute(r)
+          },
+          `chat-done:${e.workspaceId ?? ''}:${sid}:${e.time}`,
+        )
+      }
     }
     // Autonomous turn completion (spawn / coordinator worker / scheduled run /
     // flow run / automation fire): like the chat branch, drop the live ghost

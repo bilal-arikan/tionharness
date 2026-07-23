@@ -236,6 +236,23 @@ Yeni bağımlılıklar: `react-markdown`, `remark-gfm`, `highlight.js`.
     seçenekler `pickerOptions.ts` (`THINKING_OPTIONS`/`PERMISSION_OPTIONS`).
   - `SendActions.tsx` — Gönder/Durdur/Sıraya/Kes/Yönlendir buton kümesi (tur yaşam
     döngüsüne göre tek dal seçer); stil sabitleri `buttonStyles.ts`.
+  - **Sesli girdi (`MicButton.tsx` + `useSpeechToText.ts` + `sttLanguages.ts`):**
+    tarayıcı **Web Speech API** ile dikte. Toolbar'da dil seçici (`ComposerPicker`,
+    çok-dilli: `tr-TR` varsayılan, `en-US`/`de-DE`/… — `sttLanguages.ts`, seçim
+    `localStorage`'a kalıcı) + mikrofon toggle. `useSpeechToText` hook'u tanıma
+    oturumunu sürer: **final** parçalar `appendTranscript` ile drafta eklenir (trigger
+    tespiti + typing sinyali tetiklenir), **interim** metin mikrofonun üstünde canlı
+    önizleme. Başlat/durdur'da kısa **blip** sesi (merkezi `shared/lib/sounds.ts`,
+    Web Audio ile sentez — dosya yok; `listening` geçişine bağlı → kendi kapanışta
+    da çalar). API yoksa (çoğu WebView2 masaüstü build'i, Firefox) `supported=false`
+    → kümenin tamamı gizlenir.
+- **Ajan yanıtı bitiş sesi + bildirimi:** chat turu tamamlanınca (`useAppEvents.ts`
+  `chat` completion dalı, wake fazları hariç) `playTurnDone()` chime'ı çalar ve
+  pencere arka plandaysa tıklayınca oturuma deep-link eden OS bildirimi gösterilir.
+  Tüm UI sesleri **tek cihaz-yerel tercihe** bağlı (`shared/lib/sounds.ts`
+  `soundEffectsEnabled`) → Ayarlar ▸ Bildirimler ▸ **Ses efektleri** toggle'ı
+  (`NotificationsPanel`); açınca örnek chime çalar. Tanıma **istemci-tarafı + Chromium-bağımlı** (bulut
+    endpoint) — offline/masaüstü için ileride yerel `whisper.cpp` backend'i düşünülebilir.
 - `hooks/useOutsideClick.ts` — dışarı-tıklama efekti tek hook'a çıkarıldı ve **7
   bileşende** (Composer pickerları, WorkDirBadge, AgentPicker, FolderPickerButton,
   WorkspaceSwitcher, SessionsSidebar, EmojiPicker) tekrar yerine kullanıldı.
@@ -413,6 +430,24 @@ ayrılınca (başka oturum seçince veya bir başka yeni sohbet açınca) otomat
 boş oturumu izler; `discardEmptyFresh(leavingId)` ayrılırken canlı transcript boşsa
 (`messagesRef.length === 0`) `api.deleteSession` ile siler. Bir mesaj gönderilmişse
 oturum gerçek konuşma sayılır, korunur. (Sidebar'daki yenile butonu silmeyi tetiklemez.)
+
+### Anlık başlık kesiti (2026-07-23)
+
+Yeni bir oturumun title'ı boştur ve arayüzde **"Yeni sohbet"** placeholder'ıyla gösterilir
+(`SessionsSidebar` / `AppHeader` / `SessionTitleBlock`). İlk mesaj gönderilince ilk turda
+backend LLM ile bir başlık üretir (`maybeAutoTitle` → `Runtime.TitleFor`), ama bu bir model
+round-trip'idir; o pencerede başlık hâlâ "Yeni sohbet" kalırdı (ve sağlayıcı hatalıysa hiç
+değişmeyebilirdi). Artık mesaj **kuyruğa alınır alınmaz** (LLM'i beklemeden) başlık, promptun
+kısa bir **kesitine** set edilir: `handleEnqueueMessage` (`internal/api/inbox.go`), enqueue
+`queued==true` döndükten sonra `maybeSnippetTitle` (`internal/api/chat_turn.go`) çağırır. Bu
+yardımcı yalnızca title'ı **hâlâ boş** olan oturuma dokunur (mevcut başlığı asla ezmez),
+`titleSnippet(message)` ile kesiti üretir (ilk satır → whitespace tek boşluğa → ~48 rune,
+rune-güvenli kırpma + `…`), `SetSessionTitle` ile yazar ve `emitSessionChange(..., "title")`
+yayar — böylece "Yeni sohbet" SSE üzerinden **anında** kaybolur. Kesit hem kalıcıdır (reload'da
+da görünür) hem de ilk-tur LLM auto-title'ı için **fallback**tir: LLM başarısız olursa/boş
+dönerse kesit kalır, başarılıysa daha temiz bir başlıkla üzerine yazar (refine). Tamamen
+best-effort — hiçbir hata enqueue/reply akışını bozmaz. Frontend'e dokunulmaz; mevcut
+`session_change("title")` eventi UI'ı günceller.
 
 ### Hata kurtarma ve yeniden deneme
 

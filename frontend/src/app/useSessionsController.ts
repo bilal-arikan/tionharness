@@ -408,12 +408,17 @@ export function useSessionsController({
       try {
         const agent = await api.createAgent({ name, soul, provider, model })
         setAgents((prev) => [agent, ...prev])
-        pickDefaultAgent(agent.id)
+        // Focus the new agent (so Agents/Tools views select it) but do NOT make
+        // it the default for new chats: creating an agent must not silently
+        // change the user's chosen default. The very first agent still becomes
+        // the default via the "keep default valid" effect above, which fills in
+        // agents[0] when no valid default is set.
+        setActiveAgentId(agent.id)
       } catch (e) {
         setError((e as Error).message)
       }
     },
-    [pickDefaultAgent, setError],
+    [setError],
   )
 
   const updateAgent = useCallback(async (id: string, patch: AgentPatch) => {

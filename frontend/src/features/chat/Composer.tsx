@@ -11,6 +11,7 @@ import { ComposerPicker } from './composer/ComposerPicker'
 import { THINKING_OPTIONS, PERMISSION_OPTIONS } from './composer/pickerOptions'
 import { AutocompleteMenu } from './composer/AutocompleteMenu'
 import { BtwPanel } from './composer/BtwPanel'
+import { MicButton } from './composer/MicButton'
 import { SendActions } from './composer/SendActions'
 import { detectTrigger, buildMenuItems, type Trigger } from './composer/trigger'
 import { useSessionDraft } from './useSessionDraft'
@@ -117,6 +118,10 @@ export function Composer({
   const [btwOpen, setBtwOpen] = useState(false)
   const taRef = useRef<HTMLTextAreaElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
+  // Mirrors the latest text so voice-dictation callbacks append to the current
+  // draft (the draft setter takes a plain string, not a functional updater, and
+  // the callback would otherwise close over a stale value across rapid chunks).
+  const textRef = useRef(text)
   // Monotonic id for pending attachments (avoids Date.now collisions on bursts).
   const seq = useRef(0)
 
@@ -152,6 +157,11 @@ export function Composer({
     if (!el) return
     el.style.height = 'auto'
     el.style.height = `${el.scrollHeight}px`
+  }, [text])
+
+  // Keep textRef in sync so voice-dictation callbacks read the current draft.
+  useEffect(() => {
+    textRef.current = text
   }, [text])
 
   // Focus the input ONLY when the active session is a freshly-opened new chat
@@ -261,6 +271,18 @@ export function Composer({
     updateTrigger(e.target.value, e.target.selectionStart ?? e.target.value.length)
     // Cross-window "is typing" signal (throttled inside onTyping).
     if (e.target.value) onTyping?.()
+  }
+
+  // appendTranscript inserts a finalized voice-dictation chunk at the end of the
+  // draft, separated by a space, then re-runs trigger detection and the typing
+  // signal exactly as a keystroke would.
+  const appendTranscript = (chunk: string) => {
+    const prev = textRef.current
+    const sep = prev && !/\s$/.test(prev) ? ' ' : ''
+    const next = prev + sep + chunk
+    setText(next)
+    updateTrigger(next, next.length)
+    onTyping?.()
   }
 
   const closeMenu = () => setTrigger(null)
@@ -525,6 +547,11 @@ export function Composer({
           >
             <MessageCircleQuestion size={18} />
           </button>
+
+          {/* Voice dictation: language picker + mic toggle. Speaking appends
+              recognized text to the draft. Renders nothing when the browser lacks
+              Web Speech recognition. Needs a session (nothing to dictate into). */}
+          <MicButton disabled={!sessionId} onTranscript={appendTranscript} />
 
           {/* Spacer pushes the send cluster to the right edge. */}
           <div className="flex-1" />
