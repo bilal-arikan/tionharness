@@ -29,7 +29,7 @@ export function SummaryHeader({ summary, onPick }: Props) {
           }`}
         >
           <span className="font-semibold">{c.value}</span>
-          <span className="text-[var(--color-text-muted)]">{c.label}</span>
+          <span className="text-[var(--color-text-dim)]">{c.label}</span>
         </button>
       ))}
     </div>

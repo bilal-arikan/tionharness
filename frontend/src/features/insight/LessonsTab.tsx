@@ -45,7 +45,7 @@ export function LessonsTab({ onError }: Props) {
         />
         <span>
           <span className="text-sm font-medium">Hatalardan ders çıkar (lesson reflect)</span>
-          <span className="mt-1 block text-xs text-[var(--color-text-muted)]">
+          <span className="mt-1 block text-xs text-[var(--color-text-dim)]">
             Kötü biten turdan arka planda kısa bir ders damıtılır (hata turu başına 1 ucuz çağrı) ve
             workspace-geneli lessons store'a yazılır; en yeni 5 ders her turun bağlamına otomatik
             enjekte edilir. Aynı hata şekli tekrarında mevcut ders güncellenir (yığılmaz). Bu ayar

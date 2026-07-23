@@ -21,7 +21,7 @@ export function FilterBar({ filter, setFilter, lenses, cluster, setCluster }: Pr
   return (
     <div className="flex flex-wrap items-center gap-2">
       <div className="relative">
-        <Search className="pointer-events-none absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-text-muted)]" />
+        <Search className="pointer-events-none absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-text-dim)]" />
         <input
           type="text"
           value={filter.search ?? ''}
@@ -88,7 +88,7 @@ export function FilterBar({ filter, setFilter, lenses, cluster, setCluster }: Pr
       {active && (
         <button
           onClick={() => setFilter({})}
-          className="flex items-center gap-1 rounded-md px-2 py-1 text-sm text-[var(--color-text-muted)] hover:bg-[var(--color-surface-2)]"
+          className="flex items-center gap-1 rounded-md px-2 py-1 text-sm text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)]"
         >
           <X className="h-4 w-4" /> Temizle
         </button>

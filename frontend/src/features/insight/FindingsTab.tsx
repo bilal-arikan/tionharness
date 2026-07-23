@@ -150,7 +150,7 @@ export function FindingsTab({ findings, lenses, reload, onOpenSession, onError, 
               }}
               className="flex w-64 flex-shrink-0 flex-col rounded-lg bg-[var(--color-surface)]"
             >
-              <div className="flex items-center justify-between rounded-t-lg px-3 py-2 text-xs font-medium uppercase tracking-wide text-[var(--color-text-muted)]">
+              <div className="flex items-center justify-between rounded-t-lg px-3 py-2 text-xs font-medium uppercase tracking-wide text-[var(--color-text-dim)]">
                 <span>{col.label}</span>
                 <span className="rounded bg-[var(--color-surface-2)] px-1.5">{cards.length}</span>
               </div>
@@ -176,13 +176,13 @@ export function FindingsTab({ findings, lenses, reload, onOpenSession, onError, 
                       <ChannelBadge channel={f.channel} />
                       {f.severity && <SeverityBadge severity={f.severity} />}
                       {f.regressed && <span className="text-xs font-semibold text-[var(--color-danger)]">⚠</span>}
-                      {f.occurrences > 1 && <span className="text-[11px] text-[var(--color-text-muted)]">×{f.occurrences}</span>}
+                      {f.occurrences > 1 && <span className="text-[11px] text-[var(--color-text-dim)]">×{f.occurrences}</span>}
                     </div>
                     <div className="line-clamp-3 leading-snug">{f.title}</div>
                   </div>
                 ))}
                 {cards.length === 0 && (
-                  <div className="px-1 py-2 text-xs text-[var(--color-text-muted)]">—</div>
+                  <div className="px-1 py-2 text-xs text-[var(--color-text-dim)]">—</div>
                 )}
               </div>
             </div>
@@ -191,7 +191,7 @@ export function FindingsTab({ findings, lenses, reload, onOpenSession, onError, 
       </div>
 
       {filtered.length === 0 && (
-        <div className="mt-2 text-sm text-[var(--color-text-muted)]">
+        <div className="mt-2 text-sm text-[var(--color-text-dim)]">
           {findings.length === 0 ? 'Henüz bulgu yok. Bir tarama başlat.' : 'Filtreyle eşleşen bulgu yok.'}
         </div>
       )}

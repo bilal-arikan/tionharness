@@ -32,9 +32,9 @@ export function FindingModal({ f, onClose, onStatus, onDelete, onAddCard, onOpen
               {f.regressed && <RegressedBadge />}
               {f.status && f.status !== 'new' && <StatusBadge status={f.status} />}
               {f.occurrences > 1 && (
-                <span className="text-xs text-[var(--color-text-muted)]">×{f.occurrences}</span>
+                <span className="text-xs text-[var(--color-text-dim)]">×{f.occurrences}</span>
               )}
-              <span className="text-xs text-[var(--color-text-muted)]">{f.lensId}</span>
+              <span className="text-xs text-[var(--color-text-dim)]">{f.lensId}</span>
             </div>
             <h2 className="text-base font-semibold leading-snug">{f.title}</h2>
           </div>
@@ -47,25 +47,25 @@ export function FindingModal({ f, onClose, onStatus, onDelete, onAddCard, onOpen
         <div className="flex-1 space-y-3 overflow-auto p-4 text-sm">
           {f.rootCause && (
             <div>
-              <div className="mb-0.5 text-xs font-semibold text-[var(--color-text-muted)]">Kök neden</div>
+              <div className="mb-0.5 text-xs font-semibold text-[var(--color-text-dim)]">Kök neden</div>
               <p className="leading-snug">{f.rootCause}</p>
             </div>
           )}
           {f.proposedFix && (
             <div>
-              <div className="mb-0.5 text-xs font-semibold text-[var(--color-text-muted)]">Önerilen çözüm</div>
+              <div className="mb-0.5 text-xs font-semibold text-[var(--color-text-dim)]">Önerilen çözüm</div>
               <p className="leading-snug">{f.proposedFix}</p>
             </div>
           )}
           {f.filePointer && (
             <div>
-              <div className="mb-0.5 text-xs font-semibold text-[var(--color-text-muted)]">Dosya (öneri)</div>
+              <div className="mb-0.5 text-xs font-semibold text-[var(--color-text-dim)]">Dosya (öneri)</div>
               <code className="text-xs">{f.filePointer}</code>
             </div>
           )}
           {f.evidenceSessionIds && f.evidenceSessionIds.length > 0 && (
             <div>
-              <div className="mb-0.5 text-xs font-semibold text-[var(--color-text-muted)]">Kanıt oturumları</div>
+              <div className="mb-0.5 text-xs font-semibold text-[var(--color-text-dim)]">Kanıt oturumları</div>
               <div className="flex flex-wrap gap-1.5">
                 {f.evidenceSessionIds.map((sid) => (
                   <button
@@ -80,7 +80,7 @@ export function FindingModal({ f, onClose, onStatus, onDelete, onAddCard, onOpen
               </div>
             </div>
           )}
-          <div className="pt-1 text-[11px] text-[var(--color-text-muted)]">
+          <div className="pt-1 text-[11px] text-[var(--color-text-dim)]">
             <code className="opacity-70">{f.sig}</code>
           </div>
         </div>
@@ -92,7 +92,7 @@ export function FindingModal({ f, onClose, onStatus, onDelete, onAddCard, onOpen
           </button>
           <button onClick={() => act('applied')} className="rounded-md border border-[var(--color-border)] px-3 py-1 text-sm hover:bg-[var(--color-surface-2)]">Uygulandı</button>
           <button onClick={() => act('verified')} className="rounded-md border border-[var(--color-border)] px-3 py-1 text-sm hover:bg-[var(--color-surface-2)]">Doğrulandı</button>
-          <button onClick={() => act('dismissed')} className="rounded-md border border-[var(--color-border)] px-3 py-1 text-sm text-[var(--color-text-muted)] hover:bg-[var(--color-surface-2)]">Yoksay</button>
+          <button onClick={() => act('dismissed')} className="rounded-md border border-[var(--color-border)] px-3 py-1 text-sm text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)]">Yoksay</button>
           <button onClick={() => { onAddCard(f); onClose() }} className="flex items-center gap-1 rounded-md border border-[var(--color-border)] px-3 py-1 text-sm hover:bg-[var(--color-surface-2)]">
             <LayoutGrid className="h-3.5 w-3.5" /> Karta ekle
           </button>

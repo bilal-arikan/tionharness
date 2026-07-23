@@ -20,8 +20,8 @@ export function SeverityBadge({ severity }: { severity: string }) {
     severity === 'high'
       ? 'var(--color-danger)'
       : severity === 'med' || severity === 'medium'
-        ? 'var(--color-warning, #d97706)'
-        : 'var(--color-text-muted)'
+        ? 'var(--color-warning)'
+        : 'var(--color-text-dim)'
   return (
     <span
       className="rounded px-1.5 py-0.5 text-xs font-medium"
@@ -50,7 +50,7 @@ const STATUS_LABEL: Record<string, string> = {
 
 export function StatusBadge({ status }: { status: string }) {
   return (
-    <span className="rounded border border-[var(--color-border)] px-1.5 py-0.5 text-xs text-[var(--color-text-muted)]">
+    <span className="rounded border border-[var(--color-border)] px-1.5 py-0.5 text-xs text-[var(--color-text-dim)]">
       {STATUS_LABEL[status] ?? status}
     </span>
   )

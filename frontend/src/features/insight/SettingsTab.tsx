@@ -75,7 +75,7 @@ export function SettingsTab({ settings, setSettings, onError, onReset }: Props) 
           onChange={(e) => setSettings({ ...settings, maxAnalyzed: Number(e.target.value) })}
           className={`${inputCls} w-32`}
         />
-        <span className="mt-1 block text-xs text-[var(--color-text-muted)]">
+        <span className="mt-1 block text-xs text-[var(--color-text-dim)]">
           Maliyet tavanı — aşan çiftler sonraki taramada işlenir.
         </span>
       </label>
@@ -88,7 +88,7 @@ export function SettingsTab({ settings, setSettings, onError, onReset }: Props) 
           placeholder="0 3 * * *  (her gece 03:00)"
           className={`${inputCls} w-full font-mono`}
         />
-        <span className="mt-1 block text-xs text-[var(--color-text-muted)]">
+        <span className="mt-1 block text-xs text-[var(--color-text-dim)]">
           Standart 5 alanlı cron (dakika saat gün ay haftagünü).
         </span>
       </label>
@@ -104,7 +104,7 @@ export function SettingsTab({ settings, setSettings, onError, onReset }: Props) 
     {/* Danger zone: reset all insight data for this workspace. */}
     <div className="space-y-2 rounded-md border border-[var(--color-danger)]/40 p-3">
       <div className="text-sm font-semibold text-[var(--color-danger)]">Tehlikeli bölge</div>
-      <p className="text-xs text-[var(--color-text-muted)]">
+      <p className="text-xs text-[var(--color-text-dim)]">
         Bu workspace'in TÜM içgörü verisini sıfırlar (bulgular + tarama geçmişi + workspace-opt
         aksiyon dokümanı). Lensler ve ayarlar korunur. Her taramada benzer bulgular biriktiyse
         panoyu temizler.

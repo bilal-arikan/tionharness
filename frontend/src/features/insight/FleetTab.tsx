@@ -23,7 +23,7 @@ export function FleetTab({ onError }: { onError: (msg: string) => void }) {
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <p className="text-sm text-[var(--color-text-muted)]">
+        <p className="text-sm text-[var(--color-text-dim)]">
           Tüm workspace'lerin app-fix bulguları, kanonik imzayla birleştirilmiş.
         </p>
         <button onClick={load} className="flex items-center gap-1 rounded-md px-2 py-1 text-sm hover:bg-[var(--color-surface-2)]">
@@ -37,7 +37,7 @@ export function FleetTab({ onError }: { onError: (msg: string) => void }) {
               {f.regressed && <RegressedBadge />}
               <span className="font-medium">{f.title}</span>
               {f.severity && <SeverityBadge severity={f.severity} />}
-              <span className="text-xs text-[var(--color-text-muted)]">×{f.occurrences}</span>
+              <span className="text-xs text-[var(--color-text-dim)]">×{f.occurrences}</span>
             </div>
             {f.proposedFix && (
               <p className="mt-1 text-sm">
@@ -45,7 +45,7 @@ export function FleetTab({ onError }: { onError: (msg: string) => void }) {
               </p>
             )}
             <div className="mt-2 flex flex-wrap items-center gap-1">
-              <span className="text-xs text-[var(--color-text-muted)]">Workspace:</span>
+              <span className="text-xs text-[var(--color-text-dim)]">Workspace:</span>
               {f.workspaces.map((w) => (
                 <span key={w} className="rounded border border-[var(--color-border)] px-1.5 py-0.5 text-xs">
                   {w}
@@ -55,7 +55,7 @@ export function FleetTab({ onError }: { onError: (msg: string) => void }) {
           </div>
         ))}
         {rows.length === 0 && !loading && (
-          <div className="text-sm text-[var(--color-text-muted)]">Fleet app-fix bulgusu yok.</div>
+          <div className="text-sm text-[var(--color-text-dim)]">Fleet app-fix bulgusu yok.</div>
         )}
       </div>
     </div>

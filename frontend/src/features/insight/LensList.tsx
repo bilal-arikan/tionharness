@@ -33,9 +33,9 @@ export function LensList({ lenses, scanning, onToggle, onScanLens, onSaved, onEr
             <div className="flex items-center gap-2">
               <span className="font-medium">{l.name}</span>
               <ChannelBadge channel={l.channel} />
-              <code className="text-xs text-[var(--color-text-muted)]">{l.id}</code>
+              <code className="text-xs text-[var(--color-text-dim)]">{l.id}</code>
             </div>
-            <div className="truncate text-xs text-[var(--color-text-muted)]">{l.description}</div>
+            <div className="truncate text-xs text-[var(--color-text-dim)]">{l.description}</div>
           </div>
           <button
             onClick={() => onScanLens(l.id)}
@@ -53,7 +53,7 @@ export function LensList({ lenses, scanning, onToggle, onScanLens, onSaved, onEr
           </button>
         </div>
       ))}
-      {lenses.length === 0 && <div className="text-sm text-[var(--color-text-muted)]">Lens yok.</div>}
+      {lenses.length === 0 && <div className="text-sm text-[var(--color-text-dim)]">Lens yok.</div>}
 
       {editId && (
         <LensEditor

@@ -23,14 +23,14 @@ export function RunsTab({ onError }: { onError: (msg: string) => void }) {
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <p className="text-sm text-[var(--color-text-muted)]">Son taramalar (session değil — kayıt log'u).</p>
+        <p className="text-sm text-[var(--color-text-dim)]">Son taramalar (session değil — kayıt log'u).</p>
         <button onClick={load} className="flex items-center gap-1 rounded-md px-2 py-1 text-sm hover:bg-[var(--color-surface-2)]">
           <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} /> Yenile
         </button>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
-          <thead className="text-left text-xs text-[var(--color-text-muted)]">
+          <thead className="text-left text-xs text-[var(--color-text-dim)]">
             <tr className="border-b border-[var(--color-border)]">
               <th className="py-1 pr-3">Zaman</th>
               <th className="py-1 pr-3">Süre</th>
@@ -56,7 +56,7 @@ export function RunsTab({ onError }: { onError: (msg: string) => void }) {
           </tbody>
         </table>
         {runs.length === 0 && !loading && (
-          <div className="py-2 text-sm text-[var(--color-text-muted)]">Henüz tarama çalışmadı.</div>
+          <div className="py-2 text-sm text-[var(--color-text-dim)]">Henüz tarama çalışmadı.</div>
         )}
       </div>
     </div>

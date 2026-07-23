@@ -131,7 +131,7 @@ export function InsightPanel({ onError, onOpenSession }: Props) {
             className={`border-b-2 px-3 py-2 text-sm ${
               tab === t.key
                 ? 'border-[var(--color-accent)] text-[var(--color-accent)]'
-                : 'border-transparent text-[var(--color-text-muted)] hover:text-[var(--color-text)]'
+                : 'border-transparent text-[var(--color-text-dim)] hover:text-[var(--color-text)]'
             }`}
           >
             {t.label}
