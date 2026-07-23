@@ -177,6 +177,47 @@ func TestRunLogRoundTrip(t *testing.T) {
 	}
 }
 
+// TestReset: default reset clears findings/runs/actions but KEEPS the ledger;
+// deep reset clears the ledger too.
+func TestReset(t *testing.T) {
+	root := t.TempDir()
+	// Seed all four artifacts.
+	s, _ := OpenFindingStore(root)
+	s.Upsert(Finding{LensID: "l", Signature: "a", Title: "A", Channel: ChannelWorkspaceOpt, LastSeen: 1})
+	AppendWorkspaceActions(root, []Finding{{Signature: "a", Title: "A", Channel: ChannelWorkspaceOpt}})
+	AppendRun(root, RunRecord{At: 1})
+	led, _ := OpenLedger(root)
+	led.Record(LedgerEntry{LensID: "l", SessionID: "S1", SeenFingerprint: "fp"})
+
+	exists := func(rel string) bool { _, err := os.Stat(filepath.Join(root, rel)); return err == nil }
+	if !exists(findingsRelPath) || !exists(runsRelPath) || !exists(workspaceActionsRelPath) || !exists(ledgerRelPath) {
+		t.Fatal("seed: all four artifacts should exist")
+	}
+
+	// Default reset: findings/runs/actions gone, ledger kept.
+	if err := Reset(root, false); err != nil {
+		t.Fatal(err)
+	}
+	if exists(findingsRelPath) || exists(runsRelPath) || exists(workspaceActionsRelPath) {
+		t.Fatal("default reset should remove findings/runs/actions")
+	}
+	if !exists(ledgerRelPath) {
+		t.Fatal("default reset must KEEP the ledger (so old sessions aren't re-scanned)")
+	}
+
+	// Deep reset: ledger gone too.
+	if err := Reset(root, true); err != nil {
+		t.Fatal(err)
+	}
+	if exists(ledgerRelPath) {
+		t.Fatal("deep reset should remove the ledger")
+	}
+	// Reset on an already-clean root is a no-op (no error).
+	if err := Reset(root, true); err != nil {
+		t.Fatalf("reset on clean root should be a no-op: %v", err)
+	}
+}
+
 // TestFindingDelete: Delete drops a row entirely (distinct from Dismiss); an
 // unknown id is a no-op (found=false, no error).
 func TestFindingDelete(t *testing.T) {

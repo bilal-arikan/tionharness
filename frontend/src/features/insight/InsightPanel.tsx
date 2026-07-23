@@ -170,7 +170,9 @@ export function InsightPanel({ onError, onOpenSession }: Props) {
         {tab === 'lessons' && <LessonsTab onError={onError} />}
         {tab === 'fleet' && <FleetTab onError={onError} />}
         {tab === 'runs' && <RunsTab onError={onError} />}
-        {tab === 'settings' && <SettingsTab settings={settings} setSettings={setSettings} onError={onError} />}
+        {tab === 'settings' && (
+          <SettingsTab settings={settings} setSettings={setSettings} onError={onError} onReset={load} />
+        )}
       </div>
     </div>
   )

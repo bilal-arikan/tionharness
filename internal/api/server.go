@@ -582,6 +582,7 @@ func (s *Server) registerHookRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/insight/findings", s.handleListInsightFindings)
 	mux.HandleFunc("POST /api/insight/findings/{id}/status", s.handleSetInsightFindingStatus)
 	mux.HandleFunc("DELETE /api/insight/findings/{id}", s.handleDeleteInsightFinding)
+	mux.HandleFunc("POST /api/insight/reset", s.handleResetInsight)
 	mux.HandleFunc("GET /api/insight/settings", s.handleGetInsightSettings)
 	mux.HandleFunc("PUT /api/insight/settings", s.handleUpdateInsightSettings)
 	mux.HandleFunc("GET /api/hooks", s.handleListHooks)

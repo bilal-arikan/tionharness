@@ -47,6 +47,14 @@ export const insightApi = {
   deleteInsightFinding: (id: string) =>
     req<{ deleted: string }>(`/api/insight/findings/${id}`, { method: 'DELETE' }),
 
+  // Clear accumulated insight data. deep=false keeps the ledger (board clears,
+  // won't re-fill from old sessions); deep=true also clears it (re-scan from zero).
+  resetInsight: (deep: boolean) =>
+    req<{ reset: boolean; deep: boolean }>('/api/insight/reset', {
+      method: 'POST',
+      body: JSON.stringify({ deep }),
+    }),
+
   getInsightSettings: () => req<InsightSettings>('/api/insight/settings'),
 
   updateInsightSettings: (s: InsightSettings) =>

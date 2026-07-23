@@ -213,6 +213,26 @@ func (s *Server) handleListInsightFindings(w http.ResponseWriter, r *http.Reques
 	writeJSON(w, http.StatusOK, out)
 }
 
+// handleResetInsight clears the workspace's accumulated insight data (findings +
+// run log + workspace-opt actions doc; the ledger too when deep=true). Rejected
+// while a scan is running so it can't race the in-flight writer.
+func (s *Server) handleResetInsight(w http.ResponseWriter, r *http.Request) {
+	if ws(r).Runtime.InsightScanActive() {
+		writeError(w, http.StatusConflict, "bir tarama çalışıyor — bitmesini bekleyin")
+		return
+	}
+	req, ok := bindJSON[struct {
+		Deep bool `json:"deep"`
+	}](w, r)
+	if !ok {
+		return
+	}
+	if err := insight.Reset(ws(r).DB.Root(), req.Deep); writeDBError(w, err, "") {
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]bool{"reset": true, "deep": req.Deep})
+}
+
 // handleDeleteInsightFinding removes one finding by id entirely (distinct from
 // dismissing it, which keeps the row with a dismissed status). Backs the board-
 // style triage UI's delete action.
