@@ -8,6 +8,7 @@ import { LensList } from './LensList'
 import { FleetTab } from './FleetTab'
 import { RunsTab } from './RunsTab'
 import { SettingsTab } from './SettingsTab'
+import { LessonsTab } from './LessonsTab'
 
 interface Props {
   onError: (msg: string) => void
@@ -15,10 +16,11 @@ interface Props {
   onOpenSession?: (sid: string) => void
 }
 
-type Tab = 'findings' | 'lenses' | 'fleet' | 'runs' | 'settings'
+type Tab = 'findings' | 'lessons' | 'lenses' | 'fleet' | 'runs' | 'settings'
 
 const TABS: { key: Tab; label: string }[] = [
   { key: 'findings', label: 'Bulgular' },
+  { key: 'lessons', label: 'Dersler' },
   { key: 'lenses', label: 'Lensler' },
   { key: 'fleet', label: 'Fleet' },
   { key: 'runs', label: 'Geçmiş' },
@@ -165,6 +167,7 @@ export function InsightPanel({ onError, onOpenSession }: Props) {
             onError={onError}
           />
         )}
+        {tab === 'lessons' && <LessonsTab onError={onError} />}
         {tab === 'fleet' && <FleetTab onError={onError} />}
         {tab === 'runs' && <RunsTab onError={onError} />}
         {tab === 'settings' && <SettingsTab settings={settings} setSettings={setSettings} onError={onError} />}

@@ -211,7 +211,10 @@ stateDiagram-v2
 lessons imza-dedupe, scheduler + `AutomationEngine`.
 
 **Lessons ilişkisi:** Lessons = per-agent reaktif runtime hafızası; Insight = fleet-geneli
-retrospektif offline analiz. `lessons-mining` lensi lessons store'u besler (kopya değil).
+retrospektif offline analiz. **Ortak store** (`db.Lesson`): hem `lessons-mining` lensi hem reaktif
+reflektör onu besler — iki üretici (hızlı/per-tur + yavaş/batch), tek store; üreticiyi taşımak
+latency'yi bozar. **İçgörü panelinde "Dersler" sekmesi** reaktif tarafı gösterir: `lesson reflect`
+toggle (Ayarlar ▸ Bağlam ile aynı `lessonReflect`) + kayıtlı dersler (`LessonsList` reuse).
 
 ---
 
