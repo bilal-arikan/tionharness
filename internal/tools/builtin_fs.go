@@ -279,14 +279,23 @@ func (t FSEditFileTool) Call(ctx context.Context, input json.RawMessage) (string
 	old := string(data)
 	n := strings.Count(old, args.OldString)
 	if n == 0 {
-		// Tolerate a common paste mistake: Read output is line-numbered ("<n>\t<text>"),
-		// and the model sometimes copies those prefixes into old_string. If stripping
-		// the cat -n prefixes makes it match, do so — and strip new_string the same way
-		// so the replacement isn't written with stray numbering.
-		if so := stripCatNPrefixes(args.OldString); so != args.OldString && strings.Count(old, so) > 0 {
-			args.OldString = so
-			args.NewString = stripCatNPrefixes(args.NewString)
-			n = strings.Count(old, args.OldString)
+		// The model's old_string is often the RIGHT text but doesn't byte-match:
+		//   - it may carry cat -n line-number prefixes copied from Read's output, and/or
+		//   - it uses bare LF newlines while the file on disk uses CRLF (Windows) —
+		//     so a multi-line old_string never matches even though it looks identical.
+		// Try those normalizations (and their combination) and adopt the first that
+		// matches, applying the SAME transform to new_string so the write stays clean
+		// and the file keeps its own line ending.
+		cands := []func(string) string{stripCatNPrefixes}
+		if strings.Contains(old, "\r\n") {
+			cands = append(cands, toCRLF, func(s string) string { return toCRLF(stripCatNPrefixes(s)) })
+		}
+		for _, norm := range cands {
+			if cand := norm(args.OldString); cand != args.OldString && strings.Count(old, cand) > 0 {
+				args.OldString, args.NewString = cand, norm(args.NewString)
+				n = strings.Count(old, args.OldString)
+				break
+			}
 		}
 	}
 	if n == 0 {
@@ -392,6 +401,14 @@ var catNPrefixRe = regexp.MustCompile(`(?m)^ *\d+\t`)
 // match fails (see the Edit tool); text without such prefixes is returned unchanged.
 func stripCatNPrefixes(s string) string {
 	return catNPrefixRe.ReplaceAllString(s, "")
+}
+
+// toCRLF rewrites every line ending in s to CRLF, collapsing any existing CRLF
+// first so a mixed or bare-LF input becomes uniformly CRLF. Used by Edit to align
+// a model-supplied (LF) old_string to a CRLF file on disk so multi-line matches
+// still land — and to keep the written replacement in the file's own convention.
+func toCRLF(s string) string {
+	return strings.ReplaceAll(strings.ReplaceAll(s, "\r\n", "\n"), "\n", "\r\n")
 }
 
 // globToRegexp converts a glob pattern (supporting **, *, ?) into an anchored

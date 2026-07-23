@@ -64,6 +64,36 @@ func (ActivateToolsTool) Def() providers.ToolDef {
 	}
 }
 
+// resolveLazyName maps a requested tool name to a real catalog name, tolerating
+// the common namespace confusion where the model prefixes a name with an
+// mcp__<server>__ (or <server>__) segment it invented — or drops one an MCP tool
+// actually has. An EXACT match always wins. Otherwise it compares by the final
+// "__"-segment (the bare tool name) and returns the catalog entry only when that
+// match is UNAMBIGUOUS (exactly one), so a wrong guess is never silently routed
+// to the wrong tool. "" means no confident match (caller reports it as unknown).
+func (t ActivateToolsTool) resolveLazyName(n string) string {
+	if _, ok := t.byName[n]; ok {
+		return n
+	}
+	bare := func(s string) string {
+		if i := strings.LastIndex(s, "__"); i >= 0 {
+			return s[i+2:]
+		}
+		return s
+	}
+	want := bare(n)
+	var hits []string
+	for name := range t.byName {
+		if name == want || bare(name) == want {
+			hits = append(hits, name)
+		}
+	}
+	if len(hits) == 1 {
+		return hits[0]
+	}
+	return ""
+}
+
 func (t ActivateToolsTool) Call(ctx context.Context, input json.RawMessage) (string, error) {
 	var in struct {
 		Names []string `json:"names"`
@@ -77,8 +107,8 @@ func (t ActivateToolsTool) Call(ctx context.Context, input json.RawMessage) (str
 		if n == "" {
 			continue
 		}
-		if _, ok := t.byName[n]; ok {
-			known = append(known, n)
+		if r := t.resolveLazyName(n); r != "" {
+			known = append(known, r)
 		} else {
 			unknown = append(unknown, n)
 		}

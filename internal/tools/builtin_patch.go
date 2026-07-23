@@ -274,6 +274,16 @@ func applyHunks(old string, hunks []diffHunk, create bool) (string, error) {
 		return joinLines(out), nil
 	}
 	oldLines := splitLines(old)
+	// A CRLF file (Windows) leaves a trailing '\r' on each split line, but the
+	// patch's context/removed lines come from the model as bare LF — so the hunk
+	// pre-images would never match. Strip the '\r' for matching, then restore CRLF
+	// on write so the file keeps its own line ending.
+	crlf := strings.Contains(old, "\r\n")
+	if crlf {
+		for i := range oldLines {
+			oldLines[i] = strings.TrimSuffix(oldLines[i], "\r")
+		}
+	}
 	var result []string
 	cursor := 0 // index into oldLines already copied to result
 	for hi, h := range hunks {
@@ -286,7 +296,11 @@ func applyHunks(old string, hunks []diffHunk, create bool) (string, error) {
 		cursor = idx + len(h.pre)
 	}
 	result = append(result, oldLines[cursor:]...) // tail after the last hunk
-	return joinLines(result), nil
+	out := joinLines(result)
+	if crlf {
+		out = toCRLF(out)
+	}
+	return out, nil
 }
 
 // indexOfBlock returns the first index >= from at which block occurs contiguously
