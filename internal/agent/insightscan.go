@@ -87,11 +87,24 @@ func (r *Runtime) RunInsightScan(ctx context.Context, scope insight.ScanScope, a
 		scope.SinceUnix = time.Now().Unix() - int64(settings.ScanSinceDays)*86400
 	}
 
+	// Analysis agent: an explicit caller agentID wins; otherwise the persistent
+	// setting (so the manual "Tara" button and the cron share one default);
+	// otherwise pickInsightAgent's fallback (first agent).
+	if agentID == "" {
+		agentID = settings.AutoScanAgentID
+	}
 	analysisAgent, err := r.pickInsightAgent(ctx, agentID)
 	if err != nil {
 		return insight.ScanResult{}, err
 	}
-	analyzer := &insightAnalyzer{rt: r, agent: analysisAgent, model: r.insightModel(analysisAgent)}
+	// An EXPLICITLY chosen agent runs on its own provider+model — that is the whole
+	// point of selecting it. Only the implicit default (no agent picked) falls back
+	// to the cheap title-model override.
+	model := r.insightModel(analysisAgent)
+	if agentID != "" && analysisAgent.Model != "" {
+		model = analysisAgent.Model
+	}
+	analyzer := &insightAnalyzer{rt: r, agent: analysisAgent, model: model}
 
 	start := time.Now()
 	scanner := insight.NewScanner(r.db, reg, ledger, findings, analyzer, nil)

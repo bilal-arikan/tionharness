@@ -26,8 +26,10 @@ type Settings struct {
 	// AutoScanCron is a standard 5-field cron expression (minute hour dom month dow)
 	// that drives automatic scans. Empty disables automatic scanning (manual only).
 	AutoScanCron string `json:"autoScanCron,omitempty"`
-	// AutoScanAgentID selects the agent whose provider/model runs automatic scans.
-	// Empty = the workspace's default (newest) agent, same as a manual scan.
+	// AutoScanAgentID selects the agent whose provider+model runs scans (both the
+	// manual "Tara" button and the cron, unless a scan passes an explicit agent).
+	// An explicitly selected agent runs on ITS OWN model; empty = the workspace's
+	// first agent with the cheap title-model override.
 	AutoScanAgentID string `json:"autoScanAgentId,omitempty"`
 }
 
