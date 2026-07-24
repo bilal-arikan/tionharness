@@ -232,6 +232,8 @@ toggle (Ayarlar ▸ Bağlam ile aynı `lessonReflect`) + kayıtlı dersler (`Les
 - `GET|PUT /api/insight/settings` — `{ appFixRepoPath, maxSessions, autoScanCron, autoScanAgentId }` ✅
   (PUT sonrası otomatik tarama cron'u anında re-arm edilir)
 - `POST /api/insight/findings/{id}/status` — bulgu statü geçişi (triage) ✅
+- `DELETE /api/insight/findings/{id}` — bulguyu kalıcı siler (`FindingStore.Delete`; dismiss'ten farklı) ✅
+- `POST /api/insight/reset` — `{ deep }` — workspace insight verisini sıfırlar; tarama sürerken `409` ✅
 
 ---
 
@@ -370,6 +372,26 @@ Panel "düz liste"den triage kokpitine dönüştü; `features/insight/` alt bile
       Backend: `GET /lenses/{id}/raw`, `PUT /lenses/{id}` (parse-doğrulamalı), `POST /lenses/{id}/toggle` (`SetFrontmatterEnabled`).
 - [x] **Fleet + Geçmiş sekmeleri**: `fleet-findings` ve `runs` uçlarını UI'da gösterir.
 - [x] Kanıt bağlantısı: `onOpenSession` → chat transcript'e atlar (App.tsx wiring).
+
+### Faz 6.1 — Kokpit yükseltmeleri (2026-07-23) — TAMAM
+- [x] **Bulgular sekmesi kanban'a döndü** (`FindingsTab`): görev panosu deseninde **5 SABİT
+      yaşam-döngüsü sütunu** (Yeni / Kabul / Uygulandı / Doğrulandı / Yoksayıldı); kart
+      sürükle-bırak = statü geçişi. Kart tıklaması **detay popup'ı** (`FindingModal`: kök neden /
+      önerilen düzeltme / dosya / tıklanabilir kanıt oturumları + per-statü, sil, karta-ekle
+      aksiyonları; standart dialog yüzeyi). Ctrl/Shift **çoklu seçim** + toplu statü/karta-ekle/sil
+      barı — panonun `useMultiSelect` + `SelectionBar`'ı yeniden kullanılır. Eski `FindingCard`
+      kaldırıldı; `FilterBar` kümeleme yalnız liste görünümünde (kanban'da gizli).
+- [x] **Bulgu silme**: `FindingStore.Delete` + `DELETE /api/insight/findings/{id}` — yoksaymaktan
+      (dismiss) ayrı, kalıcı silme.
+- [x] **Insight reset (iki mod)** (`internal/insight/reset.go` + `POST /api/insight/reset` +
+      Ayarlar sekmesinde tehlike bölgesi): bulgular + run log + workspace-opt doküman temizlenir.
+      Varsayılan (`deep=false`) **ledger'ı KORUR** — taranmış eski oturumlar yeniden analiz edilmez,
+      pano aynı tarihsel bulgularla hemen geri dolmaz. `deep=true` ledger'ı da siler = sıfırdan
+      tam tarama (eski oturumlardaki, çoktan düzeltilmiş sorunları da yeniden yüzeye çıkarır —
+      uyarılı checkbox). Tarama sürerken reddedilir (`409`).
+- [x] **Dersler sekmesi** (`LessonsTab`): reaktif lesson tarafı kokpitte (bkz. §7 Lessons ilişkisi).
+- [x] **Tema hizalaması**: tanımsız `--color-text-muted` → `--color-text-dim`; tüm renk/gölge
+      tema token'larından → ekran açık/koyu temayla birlikte değişir.
 
 > **Bilinen (ayrı, ortamsal):** sıfır-workspace açılmadan `ws(r)` handler'ları nil-panic veriyor (tüm uçlar, insight'a özel değil) — `withWorkspace`'e default-yoksa-503 guard'ı ayrı bir iş.
 

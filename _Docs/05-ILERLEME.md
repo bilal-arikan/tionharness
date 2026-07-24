@@ -2,6 +2,51 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-07-24**
 
+## 👍/👎 geri bildirimi tur bağlamına enjekte ✅ (2026-07-24)
+
+Mesaj puanları saklanıyordu (`db.MessageFeedback`, `session.jsonl`) ama hiç geri
+okunmuyordu — puan vermek sonraki cevabı değiştirmiyordu. Yeni
+`internal/api/chat_feedback_summary.go` → `recentFeedbackBlock`: en yeni **6**
+puanlı turdan kompakt bir `<user_feedback>` bloğu üretir ve **volatile dinamik
+suffix'e** enjekte eder — history'ye katlanmaz, puan vermek rolling prompt
+cache'i **bozamaz**. Tüm konuşma taranır (puan seyrek ama uzun ömürlü),
+`rating: 0` (geri alınan) atlanır; 5 `composeTurnRequest` çağıranının hepsine
+bağlı (stream, blocking, btw, wake, context-preview). Test:
+`chat_feedback_summary_test.go`. Detay `_Docs\07`.
+
+## Chat yüzey rötuşları: mesaj altbilgisi + bloke-tur uyarısı + canlı panel ✅ (2026-07-24)
+
+Üç UI düzeltmesi: **(1)** Per-mesaj meta + aksiyonlar balon altında **footer
+satırına** taşındı — solda pasif meta (saat/süre/model/token), sağda her zaman
+görünür aksiyon çipleri (🔊 oku, 👍/👎, yeniden dene, sil; eskiden hover-only
+ghost'tu). Ortak stil `chat/messageActions.ts`. **(2)** Tur kullanıcıya bloke
+olunca (ask_user / izin / plan) **ayrı chime + masaüstü toast** — interaction
+id başına bir kez, reconnect/replay güvenli (`chatStreamHub` + `sounds.ts`).
+**(3)** Açık Oturum Bilgisi paneli mesaj girişinde canlı yenilenir —
+`bumpMeter` nonce'u bağlanmamıştı, panel mount anında donuyordu; Faz 3 queue
+cutover'dan kalan 11 ölü `SendContext` alanı da temizlendi. Ek: oturum
+başlığındaki AI-başlık + yeniden adlandırma butonları artık hover'sız her zaman
+görünür (`SessionTitleBlock`). Detay `_Docs\07`.
+
+## Workspace listesinde çapraz-workspace "çalışıyor" nabzı ✅ (2026-07-24)
+
+Session "devam ediyor/tamamlandı" göstergeleri sohbet listesinde (yeşil nabız +
+`StatusPill`) ve navbar per-view `busy` noktasında vardı, ama bunlar yalnız
+**aktif** workspace-scoped (`/api/activity`). Workspace **listesinde** aktif
+olmayan workspace'lerde canlı koşu görünmüyordu. Yeni çapraz-workspace sinyal:
+backend `GET /api/workspaces/activity` (`handleWorkspacesActivity` + `workspaceRunning`
+— her workspace için tek `running` bayrağı; global route, aktif ws gerektirmez),
+frontend `useWorkspaceActivity` hook (4sn poll + **iki SSE sinyali**: aktif ws için
+`executions`, çapraz-ws için yeni `workspace-activity` — `useAppEvents` çapraz-ws
+dalında run-lifecycle olaylarında `bumpWorkspaceActivityForEvent` ile bumlar, aktif
+olmayan ws'te başlayan/biten koşu **anlık** yansır → `busyWorkspaceIds`).
+`WorkspaceSwitcher`/`MobileWorkspaceButton` her
+satırda yeşil nabız (oturum "yazıyor…" görseliyle aynı, `unread`'in önünde);
+aktif olmayan bir workspace çalışıyorsa switcher trigger + collapsed rail ikonu
+accent noktayı pulse eder. "Tamamlandı" ayrı sinyal değil — mevcut SSE `unread`
+accent noktası. `App.tsx` → `NavRail`/`MobileNavBar` boyunca `busyWorkspaceIds`
+taşındı. `go vet`, `go test ./internal/api`, `npx tsc --noEmit` yeşil. Detay `_Docs\29`.
+
 ## Pano otomasyonlarında sıralama + tek sahip (çift-tetik yarışı) ✅ (2026-07-24)
 
 **TSK59:** Aynı sütunu izleyen iki pano otomasyonu (Kart Sınıflandırıcı AUT7 ve
@@ -40,7 +85,51 @@ promptlar 72–132px, uzunlar 320px tavanında; ajan formu 416→98/72px; skill
 gövdesi içerikle 518px.
 `tsc` + prod build + gömülü binary üzerinde Playwright kontrolü yeşil.
 
-## Merkezi Prompt Registry — tüm gömülü promptlar tek kayıt defterinde ✅ (2026-07-15)
+## Sesli giriş + sesli okuma (STT/TTS) ✅ (2026-07-23→24)
+
+Composer'a **dikte** geldi: `MicButton` + `useSpeechToText` (Web Speech API,
+Chromium-bağımlı; API yoksa gizli), mikrofon dili Ayarlar ▸ **Ses**'ten, aktif
+dil tooltip'te. **UI sesleri** merkezi `shared/lib/sounds.ts` (mic blip + yanıt
+bitiş chime'ı + onay-bekleyen cue). **TTS** (`shared/lib/tts.ts` + balonda 🔊 +
+"Yanıtları sesli oku"): kod/tablo/link ayıklanır; iki motor — tarayıcı
+`speechSynthesis` veya **sunucu Piper CLI** (`internal/tts` + `/api/tts`;
+telefon/thin client'ta da çalar, yoksa tarayıcıya düşer). **STT'de de iki
+motor:** tarayıcı Web Speech veya **sunucu whisper.cpp** (`internal/stt` +
+ffmpeg + `/api/stt`; offline/Türkçe, yoksa Web Speech'e düşer). Tüm ses
+ayarları tek alt-sayfada: Ayarlar ▸ **Ses** = `SoundPanel` (efektler + STT +
+TTS). Detay `_Docs\07`.
+
+## İçgörü kokpiti: kanban Bulgular + reset + Dersler sekmesi + büyüme sınırı ✅ (2026-07-23)
+
+Dört adım: **(1)** Bulgular sekmesi görev panosu gibi **kanban** oldu — 5 sabit
+yaşam-döngüsü sütunu, sürükle = statü, kart tıkla = `FindingModal` detay
+popup'ı, Ctrl/Shift çoklu seçim + toplu bar (`useMultiSelect`/`SelectionBar`
+reuse); bulgu **silme** eklendi (`FindingStore.Delete` +
+`DELETE /api/insight/findings/{id}`). **(2)** **Insight reset, iki mod**
+(`internal/insight/reset.go` + `POST /api/insight/reset` + Ayarlar'da tehlike
+bölgesi): varsayılan ledger'ı korur (eski oturumlar yeniden taranmaz),
+`deep=true` sıfırdan (uyarılı). **(3)** **Dersler sekmesi**: reaktif lesson
+tarafı (toggle + `LessonsList`) kokpitte — Insight tek öz-iyileştirme ekranı.
+**(4)** Tema hizalaması (tanımsız `--color-text-muted` → `--color-text-dim`) +
+`FindingModal` opak yüzey. Ayrıca **birikme önleme**: `ledger.jsonl` her
+taramada `Compact()`, `runs.jsonl` 1000 kayıtla cap'li. Detay `_Docs\60`.
+
+## Araç güvenilirlik düzeltmeleri (Insight bulgularından) ✅ (2026-07-23)
+
+Insight taramasının yüzeye çıkardığı, koda karşı doğrulanmış dört düzeltme:
+**(1) CRLF eşleşmesi** — `Edit`/`apply_patch` çok-satırlı `old_string`'i CRLF
+(Windows) dosyada hiç yakalayamıyordu (Read LF verir, disk CRLF); Edit iğneyi
+dosyanın satır sonuna hizalar, apply_patch hunk eşleşmesinde `\r` soyar, ikisi
+de yazarken CRLF'i korur (`builtin_crlf_test.go`). **(2) `activate_tools`
+namespace toleransı** — uydurma `mcp__server__` önekli ad, son `__`-segmenti
+katalogda tekil ise çözülür (belirsizse unknown kalır). **(3) bg-shell şema
+kapısı** — `Bash`/`PowerShell` şeması `run_in_background`'ı yalnız arka-plan
+shell yöneticisi bağlıyken ilan eder (reddedeceğini teklif etme). **(4)
+Artifact yol hatası** — çözülmeyen mutlak yol için hata artık "MCP sunucusu
+container/uzak host yolu döndürmüş olabilir; içerik döndürün" ipucunu verir
+(`artifact_content.go`). Detay `_Docs\19` (2). Testler:
+`builtin_crlf_test.go`, `builtin_activate_ns_test.go`,
+`builtin_shell_bg_gate_test.go`, `artifact_media_test.go`.
 
 Uygulamaya dağılmış 15 gömülü LLM promptu (summary/title/compact + btw×2, lesson,
 insight-analyzer, auto-continue, handoff, continuation, coordinator, subagent×4)

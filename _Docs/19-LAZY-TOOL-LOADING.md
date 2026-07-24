@@ -222,6 +222,10 @@
   şeması her turdan tamamen kalktı; 8 araç özet satırını kaybetti.
 - Üç eager meta-araç: **`activate_tools`** (şema yükle), **`deactivate_tools`**,
   **`tool_search`** (katalogda anahtar kelime arama). `internal/tools/builtin_activate.go`.
+  **Namespace toleransı (2026-07-23):** model adı uydurma bir `mcp__server__` önekiyle
+  verirse (`mcp__foo__bar`), son `__`-segmenti katalogda **tekil** eşleşiyorsa o araca
+  çözülür; belirsiz ad `unknown` kalır (asla yanlış yönlendirmez). Test:
+  `builtin_activate_ns_test.go`.
 - Per-turn **aktif set** (`internal/tools/activetools.go`, context üzerinden
   `buildRegistry`'ye taşınır). Tool loop her iterasyonda
   `reg.ActiveDefs(filter, active.Snapshot())` ile gönderilen şemayı yeniden
