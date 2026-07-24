@@ -496,6 +496,33 @@ func computeDebugAnomalies(sum DebugSummary) []DebugAnomaly {
 		})
 	}
 
+	// 4c) Cache-efficiency coach: across a sustained session (>=3 LLM calls) with
+	// real prompt spend, a low warm-hit ratio means the cache rarely holds — full
+	// input price paid turn after turn even without a hard break event. Distinct
+	// from cache_breaks (which counts break EVENTS); this catches steady-state cold
+	// reads (e.g. a churning dynamic prefix). First turns naturally miss, so the
+	// >=3-call gate keeps a fresh session from tripping it.
+	if promptTotal := sum.InputTokens + sum.CacheRead + sum.CacheWrite; sum.LLMCalls >= 3 && promptTotal > 20000 {
+		if hit := float64(sum.CacheRead) / float64(promptTotal); hit < 0.5 {
+			out = append(out, DebugAnomaly{
+				Severity: "warn",
+				Code:     "low_cache_hit",
+				Message:  "Prompt-cache isabet oranı düşük (" + pct(hit) + ") — sıcak önek tutmuyor; statik system/araç setini sabitle veya prompt-epoch'u aç.",
+			})
+		}
+	}
+
+	// 4d) Thinking coach: a large hidden-reasoning share of a meaningful output
+	// spend. Advisory (info) — extended thinking is often worth it, but a
+	// consistently high share on routine work is a knob (lower ThinkingLevel).
+	if sum.OutputTokens >= 2000 && sum.ThinkingShare >= 0.5 {
+		out = append(out, DebugAnomaly{
+			Severity: "info",
+			Code:     "high_thinking",
+			Message:  "Çıktı token'ının " + pct(sum.ThinkingShare) + "'i gizli akıl yürütme — basit görevlerde ThinkingLevel'i düşürmeyi değerlendir.",
+		})
+	}
+
 	// 5) Error burst across the session.
 	if sum.Errors >= 3 {
 		out = append(out, DebugAnomaly{
