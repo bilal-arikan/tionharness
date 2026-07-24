@@ -3,7 +3,7 @@
 import { type ReactNode } from 'react'
 import {
   User, KeyRound, Brain, Shield, Command,
-  Blocks, Info, Boxes, FileText, Wrench, SlidersHorizontal, Webhook, Archive, ScanSearch, type LucideIcon,
+  Blocks, Info, Boxes, FileText, Wrench, SlidersHorizontal, Webhook, Archive, ScanSearch, Volume2, type LucideIcon,
 } from 'lucide-react'
 import type { AppSettings, PromptInfo, WorkspaceSettings } from '@/types'
 import { CopyPathButton } from '@/shared/components/CopyPathButton'
@@ -20,6 +20,7 @@ export type Cat =
   | 'tools'
   | 'hooks'
   | 'exttools'
+  | 'sound'
   | 'advanced'
   | 'backup'
   | 'commands'
@@ -42,6 +43,8 @@ export const APP_CATS: CatMeta[] = [
   { key: 'tools', label: 'Yetenekler (Araçlar)', icon: Wrench },
   { key: 'hooks', label: 'Hooks', icon: Webhook },
   { key: 'exttools', label: 'Harici Araçlar', icon: ScanSearch },
+  // Dedicated audio page: sound effects, speech input (STT) + output (TTS).
+  { key: 'sound', label: 'Ses', icon: Volume2 },
   // Combined screen: notifications, autonomy, auto-title, MCP, diagnostics.
   { key: 'advanced', label: 'Gelişmiş', icon: SlidersHorizontal },
   // Dedicated page: backup schedule + archive list / restore.

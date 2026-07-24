@@ -314,6 +314,7 @@ func (s *Server) Routes() http.Handler {
 	s.registerMarketRoutes(mux)
 	s.registerIngestRoutes(mux)
 	s.registerTTSRoutes(mux)
+	s.registerSTTRoutes(mux)
 	s.registerSettingsRoutes(mux)
 	s.registerGraphRoutes(mux)
 	s.registerSecretRoutes(mux)
@@ -345,6 +346,8 @@ func (s *Server) registerWebRoutes(mux *http.ServeMux) {
 // registerWorkspaceRoutes registers workspace management (not workspace-scoped).
 func (s *Server) registerWorkspaceRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/workspaces", s.handleListWorkspaces)
+	// Cross-workspace live-run flags (switcher pulse for non-active workspaces).
+	mux.HandleFunc("GET /api/workspaces/activity", s.handleWorkspacesActivity)
 	mux.HandleFunc("POST /api/workspaces", s.handleCreateWorkspace)
 	// Adopt an existing on-disk workspace data dir (first-run "select workspace").
 	mux.HandleFunc("POST /api/workspaces/attach", s.handleAttachWorkspace)

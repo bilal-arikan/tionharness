@@ -237,9 +237,12 @@ Yeni bağımlılıklar: `react-markdown`, `remark-gfm`, `highlight.js`.
   - `SendActions.tsx` — Gönder/Durdur/Sıraya/Kes/Yönlendir buton kümesi (tur yaşam
     döngüsüne göre tek dal seçer); stil sabitleri `buttonStyles.ts`.
   - **Sesli girdi (`MicButton.tsx` + `useSpeechToText.ts` + `sttLanguages.ts`):**
-    tarayıcı **Web Speech API** ile dikte. Toolbar'da dil seçici (`ComposerPicker`,
-    çok-dilli: `tr-TR` varsayılan, `en-US`/`de-DE`/… — `sttLanguages.ts`, seçim
-    `localStorage`'a kalıcı) + mikrofon toggle. `useSpeechToText` hook'u tanıma
+    tarayıcı **Web Speech API** ile dikte. Toolbar'da yalnız **mikrofon toggle**
+    (dropdown YOK — sadeleşti). Tanıma dili artık **Ayarlar ▸ Ses ▸ Sesli giriş (STT)
+    ▸ Mikrofon dili**'nden seçilir (`SttSettings.tsx` → `setSttLang`; çok-dilli liste
+    `sttLanguages.ts`, `tr-TR` varsayılan, `localStorage`'a kalıcı). Seçim same-window
+    custom event (`onSttLangChange`) ile mikrofona canlı yansır; **aktif dil butonun
+    tooltip'inde** görünür (`sttLangLabel`). `useSpeechToText` hook'u tanıma
     oturumunu sürer: **final** parçalar `appendTranscript` ile drafta eklenir (trigger
     tespiti + typing sinyali tetiklenir), **interim** metin mikrofonun üstünde canlı
     önizleme. Başlat/durdur'da kısa **blip** sesi (merkezi `shared/lib/sounds.ts`,
@@ -250,9 +253,64 @@ Yeni bağımlılıklar: `react-markdown`, `remark-gfm`, `highlight.js`.
   `chat` completion dalı, wake fazları hariç) `playTurnDone()` chime'ı çalar ve
   pencere arka plandaysa tıklayınca oturuma deep-link eden OS bildirimi gösterilir.
   Tüm UI sesleri **tek cihaz-yerel tercihe** bağlı (`shared/lib/sounds.ts`
-  `soundEffectsEnabled`) → Ayarlar ▸ Bildirimler ▸ **Ses efektleri** toggle'ı
-  (`NotificationsPanel`); açınca örnek chime çalar. Tanıma **istemci-tarafı + Chromium-bağımlı** (bulut
-    endpoint) — offline/masaüstü için ileride yerel `whisper.cpp` backend'i düşünülebilir.
+  `soundEffectsEnabled`) → Ayarlar ▸ **Ses** ▸ **Ses efektleri** toggle'ı
+  (`SoundPanel`); açınca örnek chime çalar.
+- **Yanıtı sesli okuma (TTS, `shared/lib/tts.ts`):** tarayıcı `speechSynthesis` ile
+  ajan yanıtını sesli okur — **güvenli bağlam/izin gerektirmez** (mikrofonun aksine
+  HTTP/LAN'da da çalışır). `stripForSpeech` yalnız düz metni bırakır: fenced/inline
+  kod (fenced **bloklar**), datatable/mermaid/html-preview blokları, tablolar, görsel/link,
+  çıplak URL ve Windows dosya yolları ayıklanır. **Inline kod** (tek-backtick) ise cümlenin
+  parçası olduğu için **okunur** — sadece backtick'ler atılır, içindeki kelime kalır.
+  **Manuel:** her asistan balonunda 🔊
+  buton (`AssistantTurn`, play/stop). **Otomatik:** tur bitince aktif oturumda okur
+  (`useAppEvents` completion dalı → `speakLatestReply`; id-dedupe + interrupted/cancelled
+  atlanır). Dil `ttsLang()` → açık TTS seçimi, yoksa composer ses dili (`stt.lang`),
+  yoksa motor varsayılanı. **Ayarlar ▸ Ses** (yeni özel alt-sayfa `SoundPanel` —
+  ses efektleri + STT + TTS bir arada; NotificationsPanel'den ayrıldı)
+  + `TtsSettings.tsx`): "Yanıtları sesli oku" toggle'ı (cihaz-yerel, varsayılan kapalı)
+  + **ses seçimi** (`speechSynthesis.getVoices()`, `voiceschanged` ile tazelenir,
+  voiceURI'ye göre) + **hız** (0.5–2×) + **ton** (0–2) slider'ları + "Sesi dene" butonu.
+  Tüm bu tercihler hem otomatik okuma hem balon 🔊 butonunu etkiler; `speak` rate/pitch/
+  seçili sesi uygular (`resolveVoice`: voiceURI › dile göre eşleşen ses).
+- **Sunucu TTS motoru (Piper, harici CLI):** tarayıcı sesleri yerine sunucuda üretilen
+  **doğal Piper** sesi — böylece **telefon/thin client** da okur (sesi sunucu üretir,
+  cihaz sadece çalar). Backend `internal/tts` (piper.exe tespiti: `TIONSWARM_PIPER` env
+  › `Progs\piper` layout › PATH; `voices/*.onnx` tarar; `os/exec`+60s timeout, `--model`
+  + stdin metin → WAV) + `internal/api/tts.go` (`GET /api/tts/status`, `POST /api/tts`
+  → `audio/wav`). Frontend `api/tts.ts` + `shared/lib/tts.ts` motor katmanı: `resolveEngine`
+  (`auto`/`browser`/`server`; auto Piper varsa onu), server yolunda `/api/tts` → paylaşımlı
+  `<audio>`; hata/yoksa **browser speechSynthesis'e düşer**. **Mobil autoplay:** ilk
+  jestte sessiz-WAV ile `initTtsUnlock`, boot'ta `initServerTts` (App.tsx). Ayarlar'da
+  motor seçici (Segmented) + sunucu ses listesi (`TtsSettings`). Piper yoksa hiçbir şey
+  değişmez. **Kurulum-bağımsız** (tek-binary'e gömülü değil).
+- **Sunucu STT motoru (whisper.cpp, harici CLI):** tarayıcı Web Speech yerine sunucuda
+  transkripsiyon — offline, Türkçe, WebView2/thin client'ta da çalışır. Backend
+  `internal/stt` (whisper-cli + **ffmpeg** tespiti: env › `Progs\whisper` layout › PATH;
+  `models/ggml-*.bin` tarar; `Transcribe`: ffmpeg ile ses→16kHz mono WAV → `whisper-cli
+  -otxt` → metin; 120s timeout) + `internal/api/stt.go` (`GET /api/stt/status`,
+  `POST /api/stt?lang=&model=` raw audio → `{text}`). Frontend `api/stt.ts` +
+  `shared/lib/stt.ts` (`resolveSttEngine` auto/browser/server) + `useServerStt.ts`
+  (`MediaRecorder` → kayıt → stop'ta yükle → transcribe; ara sonuç YOK, "yazıya
+  çevriliyor…" spinner'ı). `MicButton` iki motoru da bağlar, resolver'a göre yönlendirir;
+  server yoksa/başarısızsa **Web Speech'e düşer**. Boot'ta `initServerStt` (App.tsx).
+  Ayarlar ▸ Ses'te motor seçici + whisper model listesi (`SttSettings`). **Uyarı:**
+  `getUserMedia` yine güvenli bağlam ister → LAN-IP+HTTP telefonda mikrofon bloklu
+  (localhost/HTTPS gerekir); sunucu motoru bu sınırı kaldırmaz, sadece tanımayı yerelleştirir.
+- **Onay bekleyen tool sesi + bildirimi (2026-07-23):** Tur kullanıcıya **bloke**
+  olduğunda (`ask_user` sorusu, izin onayı, plan onayı) dikkat çekilir:
+  `chatStreamHub.ts` `openInteraction` (hub `interaction_open`) `playAskPrompt()`
+  çalar ve pencere arka plandaysa OS bildirimi gösterir (`ask:{sid}:{id}` tag'i ile
+  çoklu pencerede tek toast). Ses `playTurnDone`'dan **bilerek farklı**: yükselip
+  geri düşen "soru" şekli — "bitti" ile karışmasın. Ses her durumda çalar (pencere
+  önde olsa da; kullanıcı başka yere bakıyor olabilir), OS toast'ı ise `notify()`
+  gereği yalnız arka planda. Aynı prompt **bir kez** duyurulur: interaction id'leri
+  `cuedInteractions` setinde tutulur (hub replay / oturum değişimi / reconnect
+  tekrar çalmaz), `interaction_resolved` ile set'ten düşer. Gate'ler: ses →
+  `soundEffectsEnabled`, toast → `settings.desktopNotifications` + tarayıcı izni.
+  **Sınır:** `openInteraction` sunucuda yalnız oturum hub'ına yayınlanır
+  (`publishHub`, global bus event'i YOK) → ipucu sadece **aktif oturum** için
+  çalışır. Ekranda olmayan bir oturumdaki `ask_user` sessizdir; kapsamak için
+  backend'in interaction'ı process-wide bus'a da yayınlaması gerekir.
 - `hooks/useOutsideClick.ts` — dışarı-tıklama efekti tek hook'a çıkarıldı ve **7
   bileşende** (Composer pickerları, WorkDirBadge, AgentPicker, FolderPickerButton,
   WorkspaceSwitcher, SessionsSidebar, EmojiPicker) tekrar yerine kullanıldı.
@@ -401,6 +459,40 @@ Yeni bağımlılıklar: `react-markdown`, `remark-gfm`, `highlight.js`.
   `CLISessionPool.DropSession`, sonraki tur cold-restart, konuşma korunur). Kart, süreç
   canlıyken 3sn'de bir poll eder + geçen-süre sayacı gösterir; detached/otonom turlar için
   de çalışır (runId backend'den gelir, pencere sahipliğine bağlı değil).
+- **Oturum bilgisi paneli artık konuşmayı takip ediyor (2026-07-23):** Panel bir
+  `refreshKey` (`meterRefresh` nonce) ile yenileniyordu ve kodda "her turdan sonra
+  tazelenir" yazıyordu — ama bunu artıran `bumpMeter` **hiçbir yerden çağrılmıyordu**
+  (`chatStreamSend.ts`'e prop olarak geçiyor, `performSend` onu destructure bile
+  etmiyor). Nonce'u yalnızca `useAppEvents`'teki `session_change` olayları artırıyordu,
+  yani **ajan araçlarıyla** metadata değişince (goal/title/tags/workdir…). Normal sohbette
+  hiçbir `session_change` yayılmadığı için panel mount anındaki fotoğrafta donuyordu —
+  mesaj sayısı, boyut, bağlam kullanımı ve harcama güncellenmiyordu.
+  Çözüm: `chatStreamHub.ts` artık `bumpMeter`'ı **transkripte mesaj girdiğinde** çağırıyor:
+  `KindUserMessage` (bizim mesajımız) ve `KindTurnDone`/`KindTurnError` (ajanın turu
+  bitti, maliyet/boyut kesinleşti). Tur **sonunda** (her `Reply`'de değil) → çok-ajanlı
+  bir tur yine **tek** yenileme eder. Panel kapalıyken zaten mount edilmediği için
+  ekstra istek doğurmaz. **Yan fayda:** aynı nonce `sessionArtifacts` listesini de
+  besliyordu; o da sessizce ölüydü, artık tur sonunda gerçekten tazeleniyor
+  (yorumun baştan beri iddia ettiği davranış).
+- **Gönderim yolu ölü kablolarından temizlendi (2026-07-23):** Yukarıdaki hatanın
+  kök nedeni `SendContext`'ti: Faz 3 kuyruk geçişi `performSend`'i ince bir
+  **enqueue**'ya indirdi, ama arayüz eski "turu boyayan" hâlinden kalma 19 alanı
+  taşımaya devam etti. `performSend` bunların yalnız **8**'ini destructure ediyordu;
+  kalan 11'i (run handle'ları, canlı balon ref'i, transkript setter'ları, navigasyon,
+  `bumpMeter`) sessizce ölüydü — ve "bağlı görünen ama çağrılmayan" `bumpMeter` tam
+  da panelin donmasına yol açmıştı. `SendContext` gerçekten kullanılan 8 alana
+  indirildi; zincirleme olarak `useChatStream`'de `runsRef` ile `setView` de ölü
+  kaldı ve silindi, `RunHandle` tipi tamamen kaldırıldı (tek kullanıcısı `runsRef`'ti),
+  `ChatStreamDeps`'ten `setView` çıkarıldı (App.tsx çağrı yeri güncellendi).
+  `sendMessage`'ın `useCallback` bağımlılık dizisi 12 → 5 girdiye indi.
+  Kural: bu arayüz **minimal** kalmalı — kullanılmayan bir prop burada "bağlı"
+  görünür ve bir sonraki geliştiriciyi (ve bu bug'da olduğu gibi UI'ı) yanıltır.
+- **Başlık kontrolleri hep görünür (2026-07-23):** `SessionTitleBlock`'taki **AI ile
+  başlık üret** (✨) ve **Başlığı düzenle** (✏️) butonları `opacity-0
+  group-hover:opacity-100` hayaletiydi → satırın üzerine gelmeyen kullanıcı bu iki
+  özelliğin varlığını göremiyordu. Hover kapısı kaldırıldı (artık `opacity: 1`), sarmalayıcı
+  `group` sınıfı ölü kaldığı için silindi, `aria-label`'lar eklendi. Devre dışı
+  durum (`messageCount === 0` / üretim sürerken) `disabled:opacity-30` ile korunuyor.
 - **Son turların araç I/O özeti (2026-06-23):** Geçmiş provider'a çevrilirken araç
   çağrı/sonuçları düşüyordu (`toProviderMessages` yalnız metin) → ajan "az önce ne
   yaptın / o komut ne döndü" diye soramıyordu. Artık `Prepare`'den önce son **N=4**
@@ -408,6 +500,30 @@ Yeni bağımlılıklar: `react-markdown`, `remark-gfm`, `highlight.js`.
   (araç+kısa arg → kırpılmış çıktı; tur başına ≤10 araç, çıktı ≤240 rune) o turun
   metnine **kopya üzerinde** eklenir (`api/chat_tool_summary.go`). Token maliyeti
   son N turla sınırlı. Test: `chat_tool_summary_test.go`.
+- **👍/👎 geri bildirimi artık bağlama enjekte ediliyor (2026-07-23):** Puan zaten
+  mesajda saklanıyordu (`db.MessageFeedback`, `session.jsonl`'e yazılır) ama **hiçbir
+  yer okumuyordu** → 👎'ye basmak bir sonraki cevabı hiç etkilemiyordu (tek dokunan
+  yer yazma fonksiyonunun kendisiydi). Okuma tarafı eklendi:
+  `api/chat_feedback_summary.go` → `recentFeedbackBlock(history)` kompakt bir
+  `<user_feedback>` bloğu üretir ve `composeTurnRequest` bunu **volatile dinamik
+  soneke** ekler (tıpkı `recentToolActivityBlock` gibi).
+  - **Neden history'ye katlanmıyor:** puan her an eklenebilir/çevrilebilir/temizlenebilir;
+    geçmiş bir turun baytlarını değiştirmek **rolling prompt-cache breakpoint'ini
+    bozardı**. Dinamik blok breakpoint'ten sonra gittiği için puan vermek cache'i bozmaz.
+  - **Sınırlar:** en yeni **6** puanlı tur, cevap alıntısı ≤200 rune, not ≤300 rune.
+    Puanlar seyrek ama uzun ömürlü olduğundan tool recap'ten farklı olarak **tüm
+    geçmiş** taranır (20 tur önceki bir 👎 hâlâ en değerli sinyal olabilir).
+  - `rating: 0` (kullanıcı puanı geri aldı) **sinyal değildir**, atlanır.
+  - **İfade:** girdiler "senin cevapların" değil "bu sohbetteki cevaplar" diye
+    tanımlanır — çok-ajanlı bir thread'de puanlanan tur bir **başka ajana** ait olabilir,
+    ona ait olmayan bir eleştiriyi üstlenmesi yanlış olurdu.
+  - Prompt, modele bunu **sessizce uygulamasını** söyler: puanı gündeme getirme,
+    teşekkür etme, 👎 için özür dileme. Not varsa alıntıdan **üstündür**.
+  - 5 çağıranın hepsine bağlandı: `chat_stream.go` (akış), `chat.go` (bloklayan),
+    `chat_btw.go` (yan sohbet), `wake_turn.go` (otomatik uyanma), `session_context.go`
+    (bağlam önizlemesi — gerçek turu birebir yansıtması için).
+  - Test: `chat_feedback_summary_test.go` (boş/temizlenmiş puan, 👍/👎 + tur-yaşı
+    etiketleri, sıralama, üst sınır, kırpma).
 - **Ardışık aynı-rol birleştirme (2026-06-23):** Bir kullanıcı mesajına iki ajan
   ardışık yanıt verirse geçmiş `user → assistant → assistant` olur; Anthropic katı
   şekilde rol-değişimi ister ("roles must alternate") → istek reddedilirdi. `providers`
@@ -474,6 +590,33 @@ best-effort — hiçbir hata enqueue/reply akışını bozmaz. Frontend'e dokunu
   **kullanıcı** mesajı.createdAt; yalnız önceki mesaj kullanıcıysa, enjekte özet/ardışık
   asistan turları yanıltmasın). Akış sürerken son balonda her saniye tıklayan **`LiveTimer`**;
   `formatDuration` ortak biçimleyici.
+- **Tur altbilgisi: meta solda, aksiyon çipleri sağda — balonun DIŞINDA (2026-07-23):**
+  Her mesajın altında, **balonun dışında** tek bir satır var:
+  - **Sol:** pasif meta — saat, süre, model, token
+    (`00:35 · ⏱ 4 dk 32 sn · claude-opus-4-8 · ↑34 ↓9.8k ⚡6.5M`); kullanıcı turunda
+    saat + yönlendirme rozeti.
+  - **Sağ:** aksiyon çipleri — asistanda 🔊 sesli oku + 👍/👎 puan + "Yeniden dene" +
+    🗑 sil; kullanıcıda ⟲ geri sar + 🗑 sil.
+  - **Görünürlük düzeltmesi (asıl kazanım):** butonlar eskiden
+    `opacity-0 group-hover:opacity-100` hayaletiydi → fark edilmiyorlardı. Artık
+    **durağan hâlde görünür** çipler (kenarlıklı, hover'da renk alan).
+  - **Konum geçmişi:** kısa süre balonun *içine* alındı (meta sol alt / butonlar sağ alt),
+    sonra tekrar **dışarı** çıkarıldı; nihai hâl budur. Balon dışı zemin nötr olduğu için
+    yüzeye göre değişen **`accent` tonu tamamen kaldırıldı** — `MessageTime`,
+    `DirectionBadge`, `DeleteButton`, `RewindButton` artık `tone` prop'u almıyor ve
+    `messageActions.ts` tek paletli. (Butonlar tekrar balon içine alınırsa beyaz-üstü-accent
+    varyantının geri gelmesi gerekir.)
+  - Stil tek yerde: **`chat/messageActions.ts`** — `actionChip(intent)` /
+    `actionChipActive(intent)` + `TURN_FOOTER` / `TURN_FOOTER_END` / `META_CLUSTER` /
+    `ACTION_CLUSTER`. Her durum **eksiksiz** sınıf kümesi döndürür (üstüne "override"
+    sınıfı eklenmez): Tailwind çakışmasını **stylesheet sırası** çözer, class-string
+    sırası değil. `intent`: `default` | `danger` | `positive`.
+  - **İki ayrı hizalama sabiti, bilerek:** `TURN_FOOTER` (`justify-between`) tam genişlikteki
+    **asistan** balonu için; `TURN_FOOTER_END` (`justify-end`) sağa yaslı **kullanıcı**
+    balonu için — orada `justify-between` meta'yı sütunun en soluna atıp balondan koparırdı.
+    `TURN_FOOTER + 'justify-end'` **yapılmaz**: aynı öğede iki `justify-*` sınıfını
+    stylesheet sırası çözer, class-string sırası değil.
+  - `AutoPromptNote`, `PeerTurn`, `TaskNotificationNote` de aynı görünür çipi kullanır.
 
 ### Loading & iskelet durumları (2026-07-10)
 

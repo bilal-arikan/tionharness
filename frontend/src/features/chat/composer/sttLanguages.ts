@@ -21,3 +21,45 @@ export const DEFAULT_STT_LANG = 'tr-TR'
 
 // The chosen dictation language persists across sessions/reloads.
 export const STT_LANG_STORAGE_KEY = 'tionswarm.stt.lang'
+
+// Same-window change signal: the language is now set from the Settings screen but
+// consumed by the composer's mic button, so a custom event syncs them live (the
+// native 'storage' event only fires across windows, not within one).
+const STT_LANG_EVENT = 'tionswarm:stt-lang'
+
+// sttLang returns the persisted dictation language, validated against the list
+// (falls back to the default for an unknown/absent value).
+export function sttLang(): string {
+  try {
+    const v = localStorage.getItem(STT_LANG_STORAGE_KEY)
+    return STT_LANGUAGES.some((l) => l.value === v) ? (v as string) : DEFAULT_STT_LANG
+  } catch {
+    return DEFAULT_STT_LANG
+  }
+}
+
+// setSttLang persists the choice and notifies same-window listeners (the mic
+// button) so its active language + tooltip update without a reload.
+export function setSttLang(v: string) {
+  try {
+    localStorage.setItem(STT_LANG_STORAGE_KEY, v)
+  } catch {
+    // best-effort
+  }
+  try {
+    window.dispatchEvent(new CustomEvent(STT_LANG_EVENT, { detail: v }))
+  } catch {
+    // best-effort
+  }
+}
+
+export function onSttLangChange(cb: (lang: string) => void): () => void {
+  const handler = (e: Event) => cb((e as CustomEvent).detail ?? sttLang())
+  window.addEventListener(STT_LANG_EVENT, handler)
+  return () => window.removeEventListener(STT_LANG_EVENT, handler)
+}
+
+// sttLangLabel maps a language code to its display label (e.g. 'tr-TR' → 'Türkçe').
+export function sttLangLabel(code: string): string {
+  return STT_LANGUAGES.find((l) => l.value === code)?.label ?? code
+}

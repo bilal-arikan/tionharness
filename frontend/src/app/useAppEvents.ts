@@ -9,10 +9,11 @@ import type { AppEvent, Message, TurnStep } from '@/types'
 import { isTypeEnabled } from '@/shared/lib/notifyPrefs'
 import { notify } from '@/shared/lib/clientPrefs'
 import { playTurnDone } from '@/shared/lib/sounds'
+import { speakLatestReply } from '@/shared/lib/tts'
 import type { useChatStream } from '@/features/chat/useChatStream'
 import type { View } from './NavRail'
 import { viewForEventType } from './eventViews'
-import { bumpSignalsForEvent } from './eventToRefreshSignals'
+import { bumpSignalsForEvent, bumpWorkspaceActivityForEvent } from './eventToRefreshSignals'
 import { publishStep, publishTurnEnd } from '@/shared/lib/stepBus'
 import { publishFlowNode } from '@/shared/lib/flowNodeBus'
 import { routeFromEvent, buildRoute } from './url'
@@ -92,6 +93,11 @@ function onEvent(d: AppEventDeps, e: AppEvent) {
   // the badge so every other open window picks it up via its storage listener.
   if (e.workspaceId && e.workspaceId !== getActiveWorkspace()) {
     d.markWorkspaceUnread(e.workspaceId)
+    // A run starting/finishing in this non-active workspace flips its live-run
+    // state — refresh the cross-workspace switcher pulse instantly. (The
+    // active-scoped executions/activity signals are deliberately NOT bumped
+    // here; only this dedicated cross-workspace key is.)
+    bumpWorkspaceActivityForEvent(e)
   }
   // Same-workspace activity (chat/schedule) updates the session list
   // so unread dots, ordering and times stay live without a manual refresh.
@@ -139,7 +145,16 @@ function onEvent(d: AppEventDeps, e: AppEvent) {
       }
       if (sid === d.activeSessionId) {
         d.chat.clearAutoLive(sid)
-        api.listMessages(sid).then(d.setMessages).catch(() => {})
+        // A real completion (not a wake armed/start/cancelled phase) can be read
+        // aloud once the reloaded transcript carries the final reply text.
+        const isCompletion = !phase || phase === 'done'
+        api
+          .listMessages(sid)
+          .then((msgs) => {
+            d.setMessages(msgs)
+            if (isCompletion) speakLatestReply(msgs)
+          })
+          .catch(() => {})
       }
       // Fan the turn-end out on the shared step bus for any other transcript
       // consumer of this session, regardless of which session the chat itself has

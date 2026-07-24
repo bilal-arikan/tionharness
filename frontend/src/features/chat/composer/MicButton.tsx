@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
-import { Mic, Square } from 'lucide-react'
+import { Mic, Square, Loader2 } from 'lucide-react'
 import { BTN_ICON } from './buttonStyles'
-import { ComposerPicker } from './ComposerPicker'
 import { useSpeechToText } from './useSpeechToText'
+import { useServerStt } from './useServerStt'
 import { playMicStart, playMicStop } from '@/shared/lib/sounds'
-import { STT_LANGUAGES, DEFAULT_STT_LANG, STT_LANG_STORAGE_KEY } from './sttLanguages'
+import { initServerStt, resolveSttEngine } from '@/shared/lib/stt'
+import { sttLang, onSttLangChange, sttLangLabel } from './sttLanguages'
 
 interface Props {
   // Disabled while there is no active session (nothing to dictate into).
@@ -14,23 +15,48 @@ interface Props {
   onTranscript: (text: string) => void
 }
 
-// Read the persisted dictation language once, falling back to the default.
-function initialLang(): string {
-  const saved = localStorage.getItem(STT_LANG_STORAGE_KEY)
-  return STT_LANGUAGES.some((l) => l.value === saved) ? saved! : DEFAULT_STT_LANG
-}
-
-// MicButton adds voice dictation to the composer: a language picker plus a mic
-// toggle. Speaking appends recognized text to the input; a live interim preview
-// floats above while listening. The whole cluster renders nothing when the
-// browser lacks Web Speech recognition (e.g. most WebView2 desktop builds).
+// MicButton adds voice dictation to the composer with two engines: the browser
+// Web Speech API (streaming, interim preview) or the server whisper.cpp engine
+// (record → upload → transcribe on stop; works in WebView2 / thin clients). The
+// engine is auto-selected (server when installed) and configurable in Settings ▸
+// Ses. Language is chosen there too and surfaced only in the button tooltip.
 export function MicButton({ disabled, onTranscript }: Props) {
-  const [lang, setLang] = useState(initialLang)
-  const { supported, listening, interim, error, start, stop } = useSpeechToText(onTranscript)
+  const [lang, setLang] = useState(sttLang)
+  // Bumped once the server STT status resolves so the engine choice re-evaluates.
+  const [, setReady] = useState(0)
+  useEffect(() => {
+    void initServerStt().then(() => setReady((n) => n + 1))
+  }, [])
 
-  // Play a start/stop blip on every listening transition — this fires for an
-  // explicit toggle AND when recognition ends on its own (e.g. 'no-speech'), so
-  // the cue always matches the real mic state. The initial mount is skipped.
+  // Both engines are wired; only one is driven, chosen per render by the resolver.
+  const ws = useSpeechToText(onTranscript)
+  const srv = useServerStt(onTranscript)
+
+  const engine = resolveSttEngine()
+  const useServer = engine === 'server'
+  const listening = useServer ? srv.listening : ws.listening
+  const transcribing = useServer ? srv.transcribing : false
+  const interim = useServer ? '' : ws.interim
+  const error = useServer ? srv.error : ws.error
+  const start = (l: string) => (useServer ? srv.start(l) : ws.start(l))
+  const stop = () => (useServer ? srv.stop() : ws.stop())
+
+  // Follow language changes from Settings: update label; re-arm only the browser
+  // engine mid-listen (re-arming the recorder would abort an in-progress clip).
+  const listeningRef = useRef(listening)
+  useEffect(() => {
+    listeningRef.current = listening
+  }, [listening])
+  useEffect(
+    () =>
+      onSttLangChange((v) => {
+        setLang(v)
+        if (listeningRef.current && !useServer) ws.start(v)
+      }),
+    [ws, useServer],
+  )
+
+  // Blip on every listening transition (explicit toggle or self-stop). Skip mount.
   const prevListening = useRef(listening)
   useEffect(() => {
     if (prevListening.current !== listening) {
@@ -40,57 +66,53 @@ export function MicButton({ disabled, onTranscript }: Props) {
     }
   }, [listening])
 
-  if (!supported) return null
+  if (engine === 'none') return null
 
   const toggle = () => {
+    if (transcribing) return
     if (listening) stop()
     else start(lang)
   }
 
-  const pickLang = (v: string) => {
-    setLang(v)
-    localStorage.setItem(STT_LANG_STORAGE_KEY, v)
-    // Re-arm on the new language so a mid-session switch takes effect immediately.
-    if (listening) start(v)
-  }
+  const engineLabel = useServer ? 'sunucu' : 'tarayıcı'
+  const title = error
+    ? `Ses tanıma hatası: ${error}`
+    : transcribing
+      ? 'Yazıya çevriliyor…'
+      : listening
+        ? useServer
+          ? `Kaydı bitir (${sttLangLabel(lang)} · sunucu)`
+          : `Dinlemeyi durdur (${sttLangLabel(lang)})`
+        : `Sesle yaz (${sttLangLabel(lang)} · ${engineLabel}) — dili Ayarlar'dan değiştir`
 
   return (
-    <div className="relative flex items-center gap-1.5">
-      {/* Live interim transcript, floating just above the mic while speaking. */}
+    <div className="relative flex items-center">
+      {/* Live interim transcript (browser engine only), floating above the mic. */}
       {listening && interim && (
         <div className="absolute bottom-full left-0 mb-2 max-w-[16rem] truncate rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-2 py-1 text-xs text-[var(--color-text-dim)] shadow-lg">
           {interim}
         </div>
       )}
 
-      <ComposerPicker
-        value={lang}
-        onChange={pickLang}
-        options={STT_LANGUAGES}
-        header="Ses dili"
-        title={(c) => `Ses tanıma dili: ${c.label}`}
-        iconOnly
-      />
-
       <button
         type="button"
         onClick={toggle}
-        disabled={disabled}
-        title={
-          error
-            ? `Ses tanıma hatası: ${error}`
-            : listening
-              ? 'Dinlemeyi durdur'
-              : 'Sesle yaz — konuş, metin girdiye eklenir'
-        }
-        aria-label={listening ? 'Dinlemeyi durdur' : 'Sesle yaz'}
+        disabled={disabled || transcribing}
+        title={title}
+        aria-label={listening ? 'Kaydı durdur' : 'Sesle yaz'}
         aria-pressed={listening}
         data-testid="composer-mic"
         className={`${BTN_ICON} ${
           listening ? 'animate-pulse border-[var(--color-danger)] text-[var(--color-danger)]' : ''
-        }`}
+        } ${transcribing ? 'text-[var(--color-accent)]' : ''}`}
       >
-        {listening ? <Square size={18} /> : <Mic size={18} />}
+        {transcribing ? (
+          <Loader2 size={18} className="animate-spin" />
+        ) : listening ? (
+          <Square size={18} />
+        ) : (
+          <Mic size={18} />
+        )}
       </button>
     </div>
   )

@@ -55,6 +55,7 @@ const TOOL_CATEGORY_LABELS: Record<string, string> = {
   token: 'Token / bağlam optimizasyonu',
   dev: 'Geliştirme araçları',
   render: 'Render / diyagram',
+  voice: 'Ses (TTS / STT)',
 }
 
 export function ExternalToolsPanel({ onError }: Props) {
