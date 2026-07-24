@@ -4,7 +4,6 @@
 // keep using '@/features/chat/useChatStream'.
 import type { Dispatch, RefObject, SetStateAction } from 'react'
 import type { Agent, Attachment, Message, Session, TurnStep } from '@/types'
-import type { View } from '@/app/NavRail'
 
 export interface ChatStreamDeps {
   agents: Agent[]
@@ -21,18 +20,11 @@ export interface ChatStreamDeps {
   notifyEnabled: RefObject<boolean>
   setMessages: Dispatch<SetStateAction<Message[]>>
   setError: (msg: string | null) => void
-  setView: (v: View) => void
   selectSession: (id: string) => void
   refreshSessions: () => void
-  // Bump the context/budget meter refresh counter after a turn completes.
+  // Refresh the Session Info panel + artifact list. Called from the hub handlers
+  // when a message enters the transcript (turn start / turn end).
   bumpMeter: () => void
-}
-
-// A live run handle: the server-issued runId plus the AbortController of the
-// SSE fetch that owns the turn in THIS window.
-export interface RunHandle {
-  runId: string
-  ac: AbortController
 }
 
 // Signature of the hook's sendMessage, used by modules that re-send through

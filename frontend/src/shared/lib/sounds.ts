@@ -82,3 +82,15 @@ export function playTurnDone() {
   tone(784, 140, 0, 0.13) // G5
   tone(1047, 200, 110, 0.13) // C6
 }
+
+// Attention cue when a turn BLOCKS waiting on the user (ask_user question,
+// permission approval, plan approval). Deliberately unlike playTurnDone: that one
+// resolves upward and stops, this one rises and then falls back — an unfinished,
+// questioning shape — so "the agent needs you" is never mistaken for "the agent
+// is done". Slightly louder, since the turn stays stalled until it is answered.
+export function playAskPrompt() {
+  if (!soundEffectsEnabled()) return
+  tone(880, 120, 0, 0.17) // A5
+  tone(1175, 130, 120, 0.17) // D6
+  tone(880, 190, 260, 0.15) // back to A5 — "still waiting on you"
+}

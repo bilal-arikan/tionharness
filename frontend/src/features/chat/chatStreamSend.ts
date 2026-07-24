@@ -1,37 +1,29 @@
-// Send/stream loop: performSend drives one chat turn end-to-end over SSE —
-// optimistic user bubble, live assistant bubble upkeep (deltas/steps/asks),
-// reply/error handling and per-session streaming-state teardown. Extracted
-// from useChatStream as a plain function; the hook's sendMessage callback
-// builds the context and delegates here.
-import type { Dispatch, RefObject, SetStateAction } from 'react'
+// Send path: performSend submits one user turn to the session's durable backend
+// queue. It paints NOTHING — rendering is the hub subscription's job (see
+// chatStreamHub). Extracted from useChatStream as a plain function; the hook's
+// sendMessage callback builds the context and delegates here.
+import type { Dispatch, SetStateAction } from 'react'
 import { api } from '@/api'
-import type { Attachment, Message, Session } from '@/types'
-import type { View } from '@/app/NavRail'
-import type { PendingAsk } from './AskPrompt'
+import type { Attachment, Session } from '@/types'
 import type { PendingItem } from './PendingTray'
 import { withAdded, withRemoved, withoutKey } from './chatStreamHelpers'
-import type { RunHandle, WakeWait } from './chatStreamTypes'
+import type { WakeWait } from './chatStreamTypes'
 
+// Exactly what performSend touches — nothing more. This interface used to mirror
+// the whole chat hook (run handles, live bubbles, transcript setters, navigation)
+// because performSend once painted the turn itself; the Faz 3 queue cutover made
+// all of that the hub's job, but the dead fields lingered. They were not harmless:
+// a `bumpMeter` that was threaded here and never called is exactly why the Session
+// Info panel silently stopped refreshing. Keep this list minimal.
 export interface SendContext {
   activeSessionId: string | null
   sessions: Session[]
   thinkingLevel: string
   permissionMode: string
-  activeSessionIdRef: RefObject<string | null>
-  notifyEnabled: RefObject<boolean>
-  runsRef: RefObject<Map<string, RunHandle>>
-  liveBubblesRef: RefObject<Map<string, Message>>
-  setMessages: Dispatch<SetStateAction<Message[]>>
-  setStreamingSessions: Dispatch<SetStateAction<ReadonlySet<string>>>
   setPendingSessions: Dispatch<SetStateAction<ReadonlySet<string>>>
   setQueued: Dispatch<SetStateAction<PendingItem[]>>
-  setPendingAsks: Dispatch<SetStateAction<Record<string, PendingAsk>>>
   setWakeWaits: Dispatch<SetStateAction<Record<string, WakeWait>>>
   setError: (msg: string | null) => void
-  setView: (v: View) => void
-  selectSession: (id: string) => void
-  refreshSessions: () => void
-  bumpMeter: () => void
 }
 
 // Faz 3 (_Docs/58): a send is now an ENQUEUE. The message goes to the session's

@@ -11,7 +11,7 @@ import type { Attachment, Flow, Message, SlashCommand, TurnStep } from '@/types'
 import type { PendingAsk } from './AskPrompt'
 import type { PendingItem } from './PendingTray'
 import { withAdded, withRemoved, withoutKey } from './chatStreamHelpers'
-import type { AutoLiveEntry, ChatStreamDeps, RunHandle, WakeWait } from './chatStreamTypes'
+import type { AutoLiveEntry, ChatStreamDeps, WakeWait } from './chatStreamTypes'
 import { performSend } from './chatStreamSend'
 import { performRerunLast, performRetry, performRewindTo } from './chatStreamHistory'
 import {
@@ -39,7 +39,6 @@ export function useChatStream(deps: ChatStreamDeps) {
     notifyEnabled,
     setMessages,
     setError,
-    setView,
     selectSession,
     refreshSessions,
     bumpMeter,
@@ -51,7 +50,6 @@ export function useChatStream(deps: ChatStreamDeps) {
   // session's indicator, controls and staged interventions independent.
   const [streamingSessions, setStreamingSessions] = useState<ReadonlySet<string>>(() => new Set())
   const [pendingSessions, setPendingSessions] = useState<ReadonlySet<string>>(() => new Set())
-  const runsRef = useRef<Map<string, RunHandle>>(new Map())
   // Latest live (unpersisted) assistant bubble per session that THIS window owns.
   // Kept in a ref (not React state) so it survives a session-switch reload that
   // wipes `messages` to the persisted-only list: reseedLive re-injects it when the
@@ -132,28 +130,17 @@ export function useChatStream(deps: ChatStreamDeps) {
           sessions,
           thinkingLevel,
           permissionMode,
-          activeSessionIdRef,
-          notifyEnabled,
-          runsRef,
-          liveBubblesRef,
-          setMessages,
-          setStreamingSessions,
           setPendingSessions,
           setQueued,
-          setPendingAsks,
           setWakeWaits,
           setError,
-          setView,
-          selectSession,
-          refreshSessions,
-          bumpMeter,
         },
         text,
         targetSid,
         attachments,
       )
     },
-    [activeSessionId, sessions, thinkingLevel, permissionMode, activeSessionIdRef, notifyEnabled, setMessages, setError, setView, selectSession, refreshSessions, bumpMeter],
+    [activeSessionId, sessions, thinkingLevel, permissionMode, setError],
   )
 
   // Keep a live ref to sendMessage so effects (queue flush) can call the latest
@@ -339,9 +326,11 @@ export function useChatStream(deps: ChatStreamDeps) {
       setPresence,
       setTyping,
       reload,
+      notifyEnabled,
+      bumpMeter,
     })
     return subscribeSessionStream(sid, handlers)
-  }, [activeSessionId, activeSessionIdRef, setMessages, setTyping])
+  }, [activeSessionId, activeSessionIdRef, setMessages, setTyping, notifyEnabled, bumpMeter])
 
   // ---- self-wake (schedule_wake) waiting state ----
 

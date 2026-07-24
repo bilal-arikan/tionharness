@@ -233,7 +233,6 @@ export default function App() {
     notifyEnabled,
     setMessages: ctl.setMessages,
     setError,
-    setView,
     selectSession: ctl.selectSession,
     refreshSessions: ctl.refreshSessions,
     bumpMeter: ctl.bumpMeter,

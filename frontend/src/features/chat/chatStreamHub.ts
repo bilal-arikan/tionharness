@@ -8,9 +8,36 @@ import type { Dispatch, RefObject, SetStateAction } from 'react'
 import type { Message, TurnStep } from '@/types'
 import type { HubEvent, SessionStreamHandlers } from '@/api/sessionStream'
 import { HubKind, windowClientId } from '@/api/sessionStream'
+import { notify } from '@/shared/lib/clientPrefs'
+import { playAskPrompt } from '@/shared/lib/sounds'
 import type { PendingAsk } from './AskPrompt'
 import type { PendingItem } from './PendingTray'
 import { withAdded, withRemoved, withoutKey } from './chatStreamHelpers'
+
+// Interaction ids already announced (sound + OS toast), so the SAME pending
+// prompt is not re-announced when the hub replays it — a reconnect, a session
+// switch back, or a second window all redeliver the retained interaction_open.
+// Entries are dropped on interaction_resolved, so the set stays bounded and a
+// genuinely NEW prompt (new id) always cues.
+const cuedInteractions = new Set<string>()
+
+// askCueText renders the notification title/body for a blocking prompt. The
+// title names WHAT is blocked (question vs. tool approval vs. plan); the body
+// carries the concrete detail the user needs to decide.
+function askCueText(ask: PendingAsk): { title: string; body: string } {
+  const first = ask.questions?.[0]?.question ?? ask.question
+  switch (ask.kind) {
+    case 'permission':
+      return {
+        title: 'İzin bekleniyor',
+        body: ask.tool ? `${ask.tool}: ${ask.cmd ?? ask.risk ?? ''}`.trim() : (ask.cmd ?? ''),
+      }
+    case 'plan':
+      return { title: 'Plan onayı bekleniyor', body: first || 'Ajan hazırladığı planın onayını bekliyor.' }
+    default:
+      return { title: 'Ajan bir soru sordu', body: first || 'Ajan yanıtını bekliyor.' }
+  }
+}
 
 export interface HubApplyCtx {
   sid: string
@@ -28,6 +55,17 @@ export interface HubApplyCtx {
   // reload pulls the authoritative transcript (listMessages) — used on a reset,
   // and on turn end to swap the live ghost for the persisted messages.
   reload: () => void
+  // Master desktop-notification preference (settings.desktopNotifications), read
+  // at fire time so a Settings change applies without resubscribing. Gates only
+  // the OS toast for a blocking prompt; the sound cue has its own device-local
+  // pref (soundEffectsEnabled).
+  notifyEnabled: RefObject<boolean>
+  // Bumps the shared "meter" nonce: re-fetches the Session Info panel (size,
+  // message count, context usage, spend) and the session's artifact list. Called
+  // when a message ENTERS the transcript — the user's turn starting and the
+  // agent's turn ending — so an open panel tracks the conversation instead of
+  // freezing at its mount-time snapshot.
+  bumpMeter: () => void
 }
 
 // makeHubHandlers builds the SessionStreamHandlers for one active session. It
@@ -45,6 +83,8 @@ export function makeHubHandlers(ctx: HubApplyCtx): SessionStreamHandlers {
     setPresence,
     setTyping,
     reload,
+    notifyEnabled,
+    bumpMeter,
   } = ctx
 
   // Live accumulator behind the ghost bubble. A stable id per turn so upserts
@@ -133,11 +173,25 @@ export function makeHubHandlers(ctx: HubApplyCtx): SessionStreamHandlers {
       interactionId: p.id as string | undefined,
     }
     setPendingAsks((prev) => ({ ...prev, [sid]: ask }))
+    // The turn is now BLOCKED on the user, so pull their attention: a distinct
+    // chime (audible even with the window focused — they may be looking
+    // elsewhere) plus, when this window is backgrounded, an OS toast. notify()
+    // itself skips a visible window and un-granted permission. Announced once per
+    // interaction id; a prompt with no id (legacy/local-only) always cues.
+    const id = ask.interactionId
+    if (id && cuedInteractions.has(id)) return
+    if (id) cuedInteractions.add(id)
+    playAskPrompt()
+    const { title, body } = askCueText(ask)
+    notify(notifyEnabled.current, title, body, () => {}, `ask:${sid}:${id ?? ''}`)
   }
 
   const resolveInteraction = (ev: HubEvent) => {
     const p = (ev.payload ?? {}) as Record<string, unknown>
     const id = p.id as string | undefined
+    // Answered (here or in another window) — forget its cue so the set stays
+    // bounded. A later prompt carries a fresh id and cues again.
+    if (id) cuedInteractions.delete(id)
     // Close the card in EVERY window. Match the id so a stale resolve for an
     // already-replaced prompt doesn't drop a newer one.
     setPendingAsks((prev) => {
@@ -157,6 +211,9 @@ export function makeHubHandlers(ctx: HubApplyCtx): SessionStreamHandlers {
           // The serial worker just started this turn → mark the session busy.
           setStreamingSessions((p) => withAdded(p, sid))
           setPendingSessions((p) => withAdded(p, sid))
+          // Our message just entered the transcript → refresh an open Session Info
+          // panel (message count, size, context usage).
+          bumpMeter()
           // Drop any local optimistic bubble (none in the queue path, but harmless)
           // and upsert the real user message in place.
           onSid((prev) => {
@@ -250,6 +307,10 @@ export function makeHubHandlers(ctx: HubApplyCtx): SessionStreamHandlers {
           // Pull the authoritative transcript so the persisted turn (full trace,
           // usage, model) replaces the live ghost.
           reload()
+          // The agent's reply is persisted now, so its cost/size/context figures
+          // are final → refresh an open Session Info panel. Fired at turn END
+          // (not per Reply) so a multi-agent turn still costs one refresh.
+          bumpMeter()
           break
       }
     },
