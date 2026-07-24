@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Save, Trash2 } from 'lucide-react'
 import { api } from '@/api'
+import { AgentPicker } from '@/shared/components/agents/AgentPicker'
 import type { Agent, InsightSettings } from '@/types'
 
 interface Props {
@@ -63,25 +64,22 @@ export function SettingsTab({ settings, setSettings, onError, onReset }: Props) 
           className={`${inputCls} w-full`}
         />
       </label>
-      <label className="block">
+      <div className="block">
         <span className="text-sm">Analiz ajanı (provider + model)</span>
-        <select
-          value={settings.autoScanAgentId ?? ''}
-          onChange={(e) => setSettings({ ...settings, autoScanAgentId: e.target.value || undefined })}
-          className={`${inputCls} w-full`}
-        >
-          <option value="">Varsayılan (ilk ajan + ucuz başlık modeli)</option>
-          {agents.map((a) => (
-            <option key={a.id} value={a.id}>
-              {a.name} — {a.provider}/{a.model}
-            </option>
-          ))}
-        </select>
+        <div className="mt-1">
+          <AgentPicker
+            agents={agents}
+            value={settings.autoScanAgentId ?? ''}
+            onChange={(id) => setSettings({ ...settings, autoScanAgentId: id || undefined })}
+            placeholder="Varsayılan (ilk ajan + ucuz başlık modeli)"
+            clearable
+          />
+        </div>
         <span className="mt-1 block text-xs text-[var(--color-text-dim)]">
           Taramayı seçilen ajanın provider ve modeliyle çalıştırır (manuel + otomatik). Seçili ajan
           KENDİ modelini kullanır; boşsa ilk ajan + ucuz başlık modeli.
         </span>
-      </label>
+      </div>
       <label className="block">
         <span className="text-sm">Maks. oturum / tarama (0 = sınırsız)</span>
         <input
