@@ -80,6 +80,19 @@ export function SettingsTab({ settings, setSettings, onError, onReset }: Props) 
         </span>
       </label>
       <label className="block">
+        <span className="text-sm">Sadece son N günü tara (0 = tüm geçmiş)</span>
+        <input
+          type="number"
+          min={0}
+          value={settings.scanSinceDays ?? 0}
+          onChange={(e) => setSettings({ ...settings, scanSinceDays: Number(e.target.value) })}
+          className={`${inputCls} w-32`}
+        />
+        <span className="mt-1 block text-xs text-[var(--color-text-dim)]">
+          Eski oturumların (çözülmüş olabilecek) sorunlarını taramamak için pencereyi daralt.
+        </span>
+      </label>
+      <label className="block">
         <span className="text-sm">Otomatik tarama cron (boş = kapalı)</span>
         <input
           type="text"

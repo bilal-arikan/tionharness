@@ -50,6 +50,8 @@ export interface InsightSettings {
   maxSessions?: number
   /** Hard ceiling on analyzer (LLM) calls per scan — the real cost driver. 0 = no cap. */
   maxAnalyzed?: number
+  /** Only scan sessions active within the last N days. 0 = all history. */
+  scanSinceDays?: number
   /** Standard 5-field cron expression driving automatic scans; empty = manual only. */
   autoScanCron?: string
   /** Agent whose provider/model runs automatic scans; empty = default agent. */

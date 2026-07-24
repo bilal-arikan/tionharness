@@ -37,6 +37,7 @@ type ScanScope struct {
 	MaxSessions     int      // 0 = no cap (budget guardrail)
 	MaxAnalyzed     int      // 0 = no cap; hard ceiling on analyzer (LLM) calls this run (cost budget)
 	Concurrency     int      // 0 = default; how many analyzer calls run in parallel
+	SinceUnix       int64    // 0 = no age limit; skip sessions last active before this unix time
 }
 
 // defaultScanConcurrency bounds how many analyzer (LLM) calls run at once when the
@@ -131,6 +132,12 @@ enumerate:
 			break
 		}
 		if !scope.IncludeArchived && sess.State == "archived" {
+			continue
+		}
+		// Age filter: skip sessions whose last activity predates the cutoff, so a
+		// scan can focus on recent history instead of re-surfacing findings from
+		// long-old sessions (whose issues may be stale or already fixed).
+		if scope.SinceUnix > 0 && sess.UpdatedAt > 0 && sess.UpdatedAt < scope.SinceUnix {
 			continue
 		}
 		res.Sessions++

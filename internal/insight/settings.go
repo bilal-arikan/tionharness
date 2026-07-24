@@ -19,6 +19,10 @@ type Settings struct {
 	// MaxAnalyzed caps how many analyzer (LLM) calls one scan makes — the real cost
 	// driver. 0 = no cap. Pairs beyond the cap are retried on the next scan.
 	MaxAnalyzed int `json:"maxAnalyzed,omitempty"`
+	// ScanSinceDays limits a scan to sessions active within the last N days (0 =
+	// all history). Keeps a scan focused on recent sessions instead of surfacing
+	// findings from long-old ones whose issues may be stale or already fixed.
+	ScanSinceDays int `json:"scanSinceDays,omitempty"`
 	// AutoScanCron is a standard 5-field cron expression (minute hour dom month dow)
 	// that drives automatic scans. Empty disables automatic scanning (manual only).
 	AutoScanCron string `json:"autoScanCron,omitempty"`

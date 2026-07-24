@@ -81,6 +81,11 @@ func (r *Runtime) RunInsightScan(ctx context.Context, scope insight.ScanScope, a
 	if scope.MaxAnalyzed == 0 && settings.MaxAnalyzed > 0 {
 		scope.MaxAnalyzed = settings.MaxAnalyzed
 	}
+	// Age filter: an explicit scope cutoff wins; otherwise derive one from the
+	// settings' ScanSinceDays so a scan skips sessions older than that window.
+	if scope.SinceUnix == 0 && settings.ScanSinceDays > 0 {
+		scope.SinceUnix = time.Now().Unix() - int64(settings.ScanSinceDays)*86400
+	}
 
 	analysisAgent, err := r.pickInsightAgent(ctx, agentID)
 	if err != nil {

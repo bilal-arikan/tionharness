@@ -4,9 +4,38 @@ import (
 	"context"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/bilal-arikan/tionswarm/internal/db"
 )
+
+// TestScanAgeFilterSkipsOldSessions: a SinceUnix cutoff skips sessions whose last
+// activity predates it, so a scan can ignore old history.
+func TestScanAgeFilterSkipsOldSessions(t *testing.T) {
+	fa := &fakeAnalyzer{emit: func(req AnalysisRequest) []Finding {
+		return []Finding{{Signature: "s", Title: "t"}}
+	}}
+	sc, _, _ := newScanFixture(t, fa)
+
+	// A cutoff in the far future → every existing session predates it → all skipped.
+	future := time.Now().Add(24 * time.Hour).Unix()
+	res, err := sc.Scan(context.Background(), ScanScope{LensIDs: []string{"tool-errors"}, SinceUnix: future})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Sessions != 0 || res.Analyzed != 0 {
+		t.Fatalf("far-future cutoff should skip all sessions: sessions=%d analyzed=%d", res.Sessions, res.Analyzed)
+	}
+
+	// No cutoff → the error session is analyzed normally.
+	res2, err := sc.Scan(context.Background(), ScanScope{LensIDs: []string{"tool-errors"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res2.Analyzed != 1 {
+		t.Fatalf("no cutoff should analyze the error session: analyzed=%d", res2.Analyzed)
+	}
+}
 
 // fakeAnalyzer is a deterministic stand-in for the LLM: it counts calls and emits
 // whatever `emit` returns, so the whole pipeline is exercised without a model.
