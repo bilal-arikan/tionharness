@@ -45,7 +45,7 @@ func NewListTasksTool(database *db.DB, actorID string) ListTasksTool {
 func (ListTasksTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name:        "list_tasks",
-		Description: "List the tasks on the kanban board in this workspace (id, title, boardState, ownerAgentId, flowId, priority, tags, last run status, and whether each was created by an agent). You can edit, move and delete ANY task. Built-in board columns are: todo, in_progress, review, done, failed — this workspace may also define custom columns; check existing tasks' boardState values or the board UI to see them.",
+		Description: "List the tasks on the kanban board in this workspace (id, title, boardState, ownerAgentId, flowId, priority, tags, artifactIds, last run status, and whether each was created by an agent). artifactIds are workspace artifacts attached to the card (e.g. a plan) — read one with read_artifact. You can edit, move and delete ANY task. Built-in board columns are: todo, in_progress, review, done, failed — this workspace may also define custom columns; check existing tasks' boardState values or the board UI to see them.",
 		InputSchema: json.RawMessage(`{"type":"object","properties":{},"additionalProperties":false}`),
 	}
 }
@@ -63,6 +63,7 @@ func (t ListTasksTool) Call(ctx context.Context, _ json.RawMessage) (string, err
 		FlowID         string   `json:"flowId,omitempty"`
 		Priority       string   `json:"priority,omitempty"`
 		Tags           []string `json:"tags,omitempty"`
+		ArtifactIDs    []string `json:"artifactIds,omitempty"`
 		LastRunStatus  string   `json:"lastRunStatus,omitempty"`
 		CreatedByAgent bool     `json:"createdByAgent"`
 	}
@@ -76,6 +77,7 @@ func (t ListTasksTool) Call(ctx context.Context, _ json.RawMessage) (string, err
 			FlowID:         tk.FlowID,
 			Priority:       tk.Priority,
 			Tags:           tk.Tags,
+			ArtifactIDs:    tk.ArtifactIDs,
 			LastRunStatus:  tk.LastRunStatus,
 			CreatedByAgent: tk.CreatedBy != "",
 		})
@@ -109,7 +111,8 @@ func (CreateTaskTool) Def() providers.ToolDef {
 				"boardState":{"type":"string","description":"Initial column key (default todo). Built-in: todo, in_progress, review, done, failed — but a workspace may define custom columns (see list_tasks description or the board UI); any lowercase letters/digits/underscores key is accepted."},
 				"dependencies":{"type":"string","description":"JSON array of task IDs that must complete before this task, e.g. [\"id1\",\"id2\"]"},
 				"priority":{"type":"string","enum":["critical","high","medium","low"],"description":"Task priority (optional)"},
-				"tags":{"type":"array","items":{"type":"string"},"description":"Free-form labels (optional)"}
+				"tags":{"type":"array","items":{"type":"string"},"description":"Free-form labels (optional)"},
+				"artifactIds":{"type":"array","items":{"type":"string"},"description":"Workspace artifact ids to attach to this card (optional). Read one with read_artifact."}
 			},
 			"required":[],
 			"additionalProperties":false
@@ -128,6 +131,7 @@ func (t CreateTaskTool) Call(ctx context.Context, input json.RawMessage) (string
 		Dependencies string   `json:"dependencies"`
 		Priority     string   `json:"priority"`
 		Tags         []string `json:"tags"`
+		ArtifactIDs  []string `json:"artifactIds"`
 	}
 	if err := json.Unmarshal(input, &in); err != nil {
 		return "", argErr(err)
@@ -167,6 +171,7 @@ func (t CreateTaskTool) Call(ctx context.Context, input json.RawMessage) (string
 		Dependencies: in.Dependencies,
 		Priority:     in.Priority,
 		Tags:         in.Tags,
+		ArtifactIDs:  in.ArtifactIDs,
 		CreatedBy:    t.d.actorID,
 	})
 	if err != nil {
@@ -189,7 +194,7 @@ func NewUpdateTaskTool(database *db.DB, actorID string) UpdateTaskTool {
 func (UpdateTaskTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name:        "update_task",
-		Description: "Edit a task on the board. Pass the task id and the fields to change (title, prompt, description, ownerAgentId, flowId, boardState, dependencies, priority, tags). To change only the column, prefer move_task. Allowed on any task.",
+		Description: "Edit a task on the board. Pass the task id and the fields to change (title, prompt, description, ownerAgentId, flowId, boardState, dependencies, priority, tags, artifactIds). Use artifactIds to attach workspace artifacts to the card (e.g. link a plan artifact so a later stage reads it by id instead of matching on title). To change only the column, prefer move_task. Allowed on any task.",
 		InputSchema: json.RawMessage(`{
 			"type":"object",
 			"properties":{
@@ -202,7 +207,8 @@ func (UpdateTaskTool) Def() providers.ToolDef {
 				"boardState":{"type":"string","description":"Column key. Built-in: todo, in_progress, review, done, failed — plus any workspace custom column key."},
 				"dependencies":{"type":"string","description":"JSON array of task IDs this task depends on, e.g. [\"id1\",\"id2\"]. Pass [] to clear."},
 				"priority":{"type":"string","enum":["critical","high","medium","low",""],"description":"Priority ('' clears it)"},
-				"tags":{"type":"array","items":{"type":"string"},"description":"Free-form labels (replaces the set; [] clears)"}
+				"tags":{"type":"array","items":{"type":"string"},"description":"Free-form labels (replaces the set; [] clears)"},
+				"artifactIds":{"type":"array","items":{"type":"string"},"description":"Workspace artifact ids attached to this card (replaces the set; [] clears). Read one with read_artifact."}
 			},
 			"required":["id"],
 			"additionalProperties":false
@@ -230,6 +236,7 @@ func (t UpdateTaskTool) Call(ctx context.Context, input json.RawMessage) (string
 		Dependencies *string   `json:"dependencies"`
 		Priority     *string   `json:"priority"`
 		Tags         *[]string `json:"tags"`
+		ArtifactIDs  *[]string `json:"artifactIds"`
 	}
 	if err := json.Unmarshal(input, &in); err != nil {
 		return "", argErr(err)
@@ -284,6 +291,9 @@ func (t UpdateTaskTool) Call(ctx context.Context, input json.RawMessage) (string
 	}
 	if in.Tags != nil {
 		cur.Tags = *in.Tags
+	}
+	if in.ArtifactIDs != nil {
+		cur.ArtifactIDs = *in.ArtifactIDs
 	}
 	if err := t.d.db.UpdateTask(ctx, cur); err != nil {
 		return "", fmt.Errorf("update task: %w", err)
