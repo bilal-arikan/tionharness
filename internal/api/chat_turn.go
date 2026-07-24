@@ -32,7 +32,7 @@ func (s *Server) isFirstUntitledTurn(session db.Session) bool {
 // recent assistant turns' Steps traces — injected here on the volatile side so
 // the history messages themselves stay byte-stable for the rolling cache
 // breakpoint (see recentToolActivityBlock).
-func (s *Server) composeTurnRequest(ctx context.Context, wsp *workspace.Workspace, session db.Session, agentRow db.Agent, turnAgents []db.Agent, message string, prep conversation.Prepared, freshSession, multiAgent bool, toolRecap, lifecycleContext string) providers.Request {
+func (s *Server) composeTurnRequest(ctx context.Context, wsp *workspace.Workspace, session db.Session, agentRow db.Agent, turnAgents []db.Agent, message string, prep conversation.Prepared, freshSession, multiAgent bool, toolRecap, feedbackRecap, lifecycleContext string) providers.Request {
 	// The static prefix is served through the prompt epoch (frozen snapshot,
 	// promptepoch.go): the builder below composes it from LIVE state, but between
 	// adopt points the frozen session-start bytes ship instead, so mid-session
@@ -68,6 +68,12 @@ func (s *Server) composeTurnRequest(ctx context.Context, wsp *workspace.Workspac
 	// messages keeps those messages byte-stable for the rolling cache breakpoint.
 	if strings.TrimSpace(toolRecap) != "" {
 		dynamic = strings.TrimSpace(dynamic + "\n\n" + toolRecap)
+	}
+	// The user's 👍/👎 on earlier replies — what landed and what did not. Volatile
+	// for the same reason as the recap above: ratings change independently of the
+	// turns they annotate, so they must never rewrite a cached history message.
+	if strings.TrimSpace(feedbackRecap) != "" {
+		dynamic = strings.TrimSpace(dynamic + "\n\n" + feedbackRecap)
 	}
 	// Tell the agent its working directory (cwd) + git branch, so it knows where
 	// its file/shell tools operate. The session override wins; else the workspace

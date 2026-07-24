@@ -240,6 +240,7 @@ func (s *Server) handleSessionContextPreview(w http.ResponseWriter, r *http.Requ
 	// (the recap is a volatile dynamic block, mirroring the real turn).
 	history, multiAgent := s.labelMultiAgentHistory(ctx, wsp.DB, agent.ID, history)
 	toolRecap := recentToolActivityBlock(history)
+	feedbackRecap := recentFeedbackBlock(history)
 
 	// Split the transcript into what the model ACTUALLY receives (the live tail) vs
 	// the messages that are no longer sent because they were folded into the rolling
@@ -311,7 +312,7 @@ func (s *Server) handleSessionContextPreview(w http.ResponseWriter, r *http.Requ
 		Summary:  session.Summary,
 		Messages: historyToPreviewMessages(liveHistory),
 	}
-	req := s.composeTurnRequest(ctx, wsp, session, agent, []db.Agent{agent}, sample, prep, false, multiAgent, toolRecap, "")
+	req := s.composeTurnRequest(ctx, wsp, session, agent, []db.Agent{agent}, sample, prep, false, multiAgent, toolRecap, feedbackRecap, "")
 
 	// Shipped (eager) tool catalog — schemas actually sent each turn.
 	defs := wsp.Runtime.ShippedToolCatalog(ctx, agent)

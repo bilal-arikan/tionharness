@@ -213,6 +213,7 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 	// Rendered as a volatile dynamic block — NOT folded into the history — so the
 	// history messages stay byte-stable for the rolling prompt-cache breakpoint.
 	toolRecap := recentToolActivityBlock(history)
+	feedbackRecap := recentFeedbackBlock(history)
 	// Carry this workspace's editable compaction prompt onto the turn context so
 	// any fold (rolling summary here, or reactive mid-loop downstream) uses it.
 	ctx = conversation.WithCompactPrompt(ctx, ws(r).Runtime.CompactPromptTemplate())
@@ -224,7 +225,7 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 
 	// Blocking (non-streaming) path: lifecycle hooks fire on the streaming path
 	// (the UI default); "" here satisfies the request builder signature.
-	llmReq := s.composeTurnRequest(ctx, ws(r), session, agent, []db.Agent{agent}, req.Message, prep, freshSession, multiAgent, toolRecap, "")
+	llmReq := s.composeTurnRequest(ctx, ws(r), session, agent, []db.Agent{agent}, req.Message, prep, freshSession, multiAgent, toolRecap, feedbackRecap, "")
 	// Prompt-epoch drift step (streaming-path parity): prepend a context_change
 	// step to the persisted trace once per drift episode so the change is visible
 	// in history. The agent already read the diff via the suffix note above. Type

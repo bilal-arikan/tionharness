@@ -83,6 +83,7 @@ func (s *Server) handleChatBtw(w http.ResponseWriter, r *http.Request) {
 	}
 	history, multiAgent := s.labelMultiAgentHistory(ctx, database, agentRow.ID, history)
 	toolRecap := recentToolActivityBlock(history)
+	feedbackRecap := recentFeedbackBlock(history)
 
 	// Budget the history to the context window exactly as a real turn does. NOTE:
 	// Prepare may fold older turns into the session's rolling summary — that is a
@@ -100,7 +101,7 @@ func (s *Server) handleChatBtw(w http.ResponseWriter, r *http.Request) {
 	// of the context assembly. freshSession=false: a side question is never a
 	// session's opening turn. lifecycleContext="": UserPromptSubmit hooks are for
 	// real user turns; a btw question is not one.
-	llmReq := s.composeTurnRequest(ctx, ws(r), session, agentRow, []db.Agent{agentRow}, req.Question, prep, false, multiAgent, toolRecap, "")
+	llmReq := s.composeTurnRequest(ctx, ws(r), session, agentRow, []db.Agent{agentRow}, req.Question, prep, false, multiAgent, toolRecap, feedbackRecap, "")
 
 	answer, err := ws(r).Runtime.AskBtw(ctx, agentRow, session.ID, llmReq.System, llmReq.SystemDynamic, llmReq.Messages, req.Question)
 	if err != nil {

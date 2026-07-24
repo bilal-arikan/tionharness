@@ -350,6 +350,11 @@ func (s *Server) runChatTurn(clientGone context.Context, wsp *workspace.Workspac
 			// NOT folded into the history — so the history messages stay byte-stable
 			// for the rolling prompt-cache breakpoint.
 			toolRecap := recentToolActivityBlock(history)
+			// The user's 👍/👎 on earlier turns. Same volatile-block treatment as the
+			// tool recap (never folded into the history): a rating can be added, flipped
+			// or cleared at any moment, and rewriting a cached history message for it
+			// would bust the rolling prompt-cache breakpoint.
+			feedbackRecap := recentFeedbackBlock(history)
 			// Carry this workspace's editable compaction prompt onto the turn context.
 			ctx = conversation.WithCompactPrompt(ctx, wsp.Runtime.CompactPromptTemplate())
 			// PreCompact lifecycle hook (Claude Code parity): Prepare invokes this just
@@ -366,7 +371,7 @@ func (s *Server) runChatTurn(clientGone context.Context, wsp *workspace.Workspac
 				return
 			}
 
-			llmReq := s.composeTurnRequest(ctx, wsp, session, agentRow, agents, req.Message, prep, freshSession, multiAgent, toolRecap, passContext)
+			llmReq := s.composeTurnRequest(ctx, wsp, session, agentRow, agents, req.Message, prep, freshSession, multiAgent, toolRecap, feedbackRecap, passContext)
 			// Prompt-epoch drift step: if the static context changed since the frozen
 			// snapshot, surface a context_change step at the head of the turn (once per
 			// drift episode). Emitted live and prepended to the persisted trace so the
