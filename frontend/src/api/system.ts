@@ -185,7 +185,7 @@ export const systemApi = {
   // Per-view "work in progress" flags for the left-nav busy indicators
   // (chat stream / running task / running flow / schedule-triggered run).
   getActivity: () =>
-    req<{ chat: boolean; task: boolean; flow: boolean; schedule: boolean; executions: boolean }>(
+    req<{ chat: boolean; task: boolean; flow: boolean; schedule: boolean; executions: boolean; insights?: boolean }>(
       '/api/activity',
     ),
 

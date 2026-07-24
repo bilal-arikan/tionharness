@@ -13,7 +13,7 @@ import type { View } from './NavRail'
 const VIEWS: View[] = [
   'chat', 'agents', 'network', 'board', 'schedules',
   'flows', 'artifacts', 'skills', 'tools', 'market', 'budget',
-  'logs', 'workspace', 'settings',
+  'logs', 'insights', 'workspace', 'settings',
 ]
 
 // Retired view slugs kept alive as redirects so bookmarked / notification URLs
@@ -105,6 +105,7 @@ export function routeIdForView(
     scheduleId: string | null
     settingsCat: string | null
     workspaceTab: string | null
+    insightTab: string | null
   },
 ): string | null {
   switch (view) {
@@ -120,6 +121,8 @@ export function routeIdForView(
       return state.settingsCat
     case 'workspace':
       return state.workspaceTab
+    case 'insights':
+      return state.insightTab
     default:
       return null
   }

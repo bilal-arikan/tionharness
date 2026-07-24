@@ -35,6 +35,7 @@ export function useActivity(activeWorkspaceId: string | null, chatStreaming: boo
       // background session a flow/schedule/agent spawned, which no other view
       // owns) lights the chat dot.
       if (a.executions) s.add('chat')
+      if (a.insights) s.add('insights')
       setBusy(s)
     } catch {
       /* transient fetch failure — keep the last known flags */

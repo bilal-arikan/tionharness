@@ -386,6 +386,7 @@ export default function App() {
     scheduleTarget: links.scheduleTarget,
     settingsCat: links.settingsCat,
     workspaceTab: links.workspaceTab,
+    insightTab: links.insightTab,
     pendingRouteRef: ctl.pendingRouteRef,
     switchWorkspace,
     selectSession: ctl.selectSession,
@@ -394,6 +395,7 @@ export default function App() {
     setScheduleTarget: links.setScheduleTarget,
     setSettingsCat: links.setSettingsCat,
     setWorkspaceTab: links.setWorkspaceTab,
+    setInsightTab: links.setInsightTab,
   })
 
   // ---- First-run gating (must stay AFTER every hook above) ----
@@ -603,6 +605,8 @@ export default function App() {
         {view === 'insights' && (
           <InsightPanel
             onError={setError}
+            tab={links.insightTab}
+            onTabChange={links.setInsightTab}
             onOpenSession={(sid) => {
               setView('chat')
               ctl.selectSession(sid)

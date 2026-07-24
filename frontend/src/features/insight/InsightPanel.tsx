@@ -14,6 +14,10 @@ interface Props {
   onError: (msg: string) => void
   // Jump to a session transcript (evidence link).
   onOpenSession?: (sid: string) => void
+  // Deep-link the active sub-tab: #/w/{ws}/insights/{tab}. When onTabChange is
+  // wired the panel is URL-controlled; otherwise it falls back to local state.
+  tab?: string | null
+  onTabChange?: (t: string) => void
 }
 
 type Tab = 'findings' | 'lessons' | 'lenses' | 'fleet' | 'runs' | 'settings'
@@ -31,8 +35,14 @@ const TABS: { key: Tab; label: string }[] = [
 // deduplicated + priority-ranked findings (filter / search / cluster / bulk-triage
 // / turn into board cards), manage the editable lenses, and inspect the fleet
 // backlog + scan-run history.
-export function InsightPanel({ onError, onOpenSession }: Props) {
-  const [tab, setTab] = useState<Tab>('findings')
+export function InsightPanel({ onError, onOpenSession, tab: tabProp, onTabChange }: Props) {
+  const [localTab, setLocalTab] = useState<Tab>('findings')
+  // URL-controlled when a valid tab arrives via the route; else local state.
+  const tab: Tab = (TABS.some((t) => t.key === tabProp) ? (tabProp as Tab) : localTab)
+  const setTab = (t: Tab) => {
+    setLocalTab(t)
+    onTabChange?.(t)
+  }
   const [lenses, setLenses] = useState<InsightLens[]>([])
   const [findings, setFindings] = useState<InsightFinding[]>([])
   const [settings, setSettings] = useState<InsightSettings>({})

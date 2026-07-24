@@ -3,9 +3,12 @@ package agent
 import (
 	"context"
 	"errors"
+	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/bilal-arikan/tionswarm/internal/db"
+	"github.com/bilal-arikan/tionswarm/internal/events"
 	"github.com/bilal-arikan/tionswarm/internal/insight"
 )
 
@@ -32,7 +35,22 @@ func (r *Runtime) RunInsightScan(ctx context.Context, scope insight.ScanScope, a
 	if !r.insightScanActive.CompareAndSwap(false, true) {
 		return insight.ScanResult{}, ErrInsightScanBusy
 	}
-	defer r.insightScanActive.Store(false)
+	// Broadcast start/finish so any window (nav rail + workspace list) can show a
+	// live "scanning / done" indicator for THIS workspace (the event carries the
+	// workspace id via r.publish). doneFindings is captured by the finish defer.
+	r.publish(events.Event{
+		Type: "insight", Level: "info", Title: "İçgörü taraması başladı",
+		Target: map[string]string{"scanning": "true"},
+	})
+	doneFindings := 0
+	defer func() {
+		r.insightScanActive.Store(false)
+		r.publish(events.Event{
+			Type: "insight", Level: "success", Title: "İçgörü taraması tamamlandı",
+			Body:   fmt.Sprintf("%d bulgu", doneFindings),
+			Target: map[string]string{"scanning": "false", "findings": strconv.Itoa(doneFindings)},
+		})
+	}()
 	root := r.db.Root()
 
 	lensDir := insight.LensesDir(root)
@@ -134,6 +152,7 @@ func (r *Runtime) RunInsightScan(ctx context.Context, scope insight.ScanScope, a
 		r.logger.Warn("insight run log failed", "error", rErr)
 	}
 
+	doneFindings = res.Findings // surfaced in the finish event's body/target
 	return res, nil
 }
 

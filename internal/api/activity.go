@@ -27,6 +27,7 @@ type activityState struct {
 	Flow       bool `json:"flow"`
 	Schedule   bool `json:"schedule"`
 	Executions bool `json:"executions"`
+	Insights   bool `json:"insights"` // a retrospective insight scan is running
 }
 
 // handleActivity computes the per-view busy flags for the active workspace.
@@ -85,6 +86,9 @@ func (s *Server) handleActivity(w http.ResponseWriter, r *http.Request) {
 		st.Executions = true
 	}
 
+	// Insight: a retrospective scan in flight lights the İçgörü nav item.
+	st.Insights = wsp.Runtime.InsightScanActive()
+
 	writeJSON(w, http.StatusOK, st)
 }
 
@@ -109,6 +113,10 @@ func (s *Server) workspaceRunning(ctx context.Context, wsp *workspace.Workspace)
 	}
 	// A flow run in progress.
 	if fr, err := wsp.DB.ListRunningFlowRuns(ctx); err == nil && len(fr) > 0 {
+		return true
+	}
+	// A retrospective insight scan in flight (so the switcher pulses this workspace).
+	if wsp.Runtime.InsightScanActive() {
 		return true
 	}
 	return false

@@ -62,6 +62,10 @@ export function signalsForEvent(e: AppEvent): string[] {
         SIGNAL_EXECUTIONS,
         SIGNAL_ACTIVITY,
       ]
+    case 'insight':
+      // Scan started/finished: re-poll /api/activity (nav-rail İçgörü dot) and
+      // /api/workspaces/activity (switcher pulse) so both update without lag.
+      return [SIGNAL_ACTIVITY, SIGNAL_WORKSPACE_ACTIVITY]
     case 'spawned':
       return [SIGNAL_EXECUTIONS, SIGNAL_NETWORK, SIGNAL_ACTIVITY]
     case 'worker':

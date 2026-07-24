@@ -18,6 +18,10 @@ export function useDeepLinks(setView: (v: View) => void) {
   const [workspaceTab, setWorkspaceTab] = useState<string | null>(
     INITIAL_ROUTE.view === 'workspace' ? INITIAL_ROUTE.id : null,
   )
+  // Active İçgörü sub-tab (deep-link aware): #/w/{ws}/insights/{tab}.
+  const [insightTab, setInsightTab] = useState<string | null>(
+    INITIAL_ROUTE.view === 'insights' ? INITIAL_ROUTE.id : null,
+  )
   // Artifact deep-link target: set when a chat artifact card is clicked, opening
   // the artifacts screen with that artifact pre-selected.
   const [artifactTarget, setArtifactTarget] = useState<string | null>(
@@ -57,6 +61,7 @@ export function useDeepLinks(setView: (v: View) => void) {
     scheduleTarget, setScheduleTarget,
     settingsCat, setSettingsCat,
     workspaceTab, setWorkspaceTab,
+    insightTab, setInsightTab,
     artifactTarget, setArtifactTarget,
     flowTarget, openFlowRun,
     previewArtifactId, setPreviewArtifactId, openArtifact, openArtifactFull,
