@@ -65,7 +65,10 @@ export function SessionTitleBlock({
           </button>
         </div>
       ) : (
-        <div className="group flex items-center gap-1.5">
+        // The two title controls stay VISIBLE at rest (no hover gating): they were
+        // `opacity-0 group-hover:opacity-100` ghosts, which made renaming and AI
+        // title generation undiscoverable unless you happened to hover the row.
+        <div className="flex items-center gap-1.5">
           <h3 className="min-w-0 flex-1 truncate text-sm font-semibold text-[var(--color-text)]" title={info.title}>
             {info.title || 'Yeni sohbet'}
           </h3>
@@ -73,14 +76,16 @@ export function SessionTitleBlock({
             onClick={onGenerateTitle}
             disabled={info.messageCount === 0 || titling}
             title={titling ? 'Başlık üretiliyor…' : 'AI ile başlık üret'}
-            className="shrink-0 rounded p-1 text-[var(--color-text-dim)] opacity-0 transition hover:text-[var(--color-accent)] group-hover:opacity-100 disabled:cursor-default disabled:opacity-30 disabled:group-hover:opacity-30"
+            aria-label="AI ile başlık üret"
+            className="shrink-0 rounded p-1 text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)] disabled:cursor-default disabled:opacity-30"
           >
             {titling ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
           </button>
           <button
             onClick={startEditTitle}
             title="Başlığı düzenle"
-            className="shrink-0 rounded p-1 text-[var(--color-text-dim)] opacity-0 transition hover:text-[var(--color-accent)] group-hover:opacity-100"
+            aria-label="Başlığı düzenle"
+            className="shrink-0 rounded p-1 text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)]"
           >
             <Pencil size={13} />
           </button>
