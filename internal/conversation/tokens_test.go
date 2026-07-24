@@ -6,14 +6,14 @@ import (
 )
 
 // TestEstimateTextDensity verifies the density-aware estimator (CG-9): packed/
-// encoded blobs are counted at ~1.5 chars/token, prose at ~4, so dense tool
+// encoded blobs are counted at ~1.5 chars/token, prose at ~3, so dense tool
 // output can't silently undercount and overflow the budget.
 func TestEstimateTextDensity(t *testing.T) {
-	// Natural prose: plenty of whitespace → ~4 chars/token.
+	// Natural prose: plenty of whitespace → ~3 chars/token.
 	prose := strings.Repeat("the quick brown fox jumps over ", 40) // ~1240 runes
 	proseTokens := estimateText(prose)
 	if want := len([]rune(prose)) / charsPerToken; proseTokens < want-2 || proseTokens > want+2 {
-		t.Fatalf("prose: got %d, expected ~%d (4 chars/token)", proseTokens, want)
+		t.Fatalf("prose: got %d, expected ~%d (%d chars/token)", proseTokens, want, charsPerToken)
 	}
 
 	// Dense base64-like blob: no whitespace → ~1.5 chars/token (runes*2/3).

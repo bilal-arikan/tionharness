@@ -123,6 +123,14 @@ export function SessionDebugCard({
         <Metric label="Araç" value={String(sum.toolCalls)} />
         <Metric label="Giriş tok" value={fmtTok(sum.inputTokens)} />
         <Metric label="Çıkış tok" value={fmtTok(sum.outputTokens)} />
+        {/* Hidden-reasoning share of output tokens (estimated; already inside
+            "Çıkış tok"). Hidden when the session did no measurable thinking. */}
+        {(sum.thinkingTokens ?? 0) > 0 && (
+          <Metric
+            label="Düşünme"
+            value={`%${Math.round((sum.thinkingShare ?? 0) * 100)} · ${fmtTok(sum.thinkingTokens ?? 0)}`}
+          />
+        )}
         <Metric label="Cache oku" value={fmtTok(sum.cacheReadTokens)} />
         <Metric label="Cache yaz" value={fmtTok(sum.cacheWriteTokens)} />
         <Metric label="Cache isabet" value={cacheHitPct} />

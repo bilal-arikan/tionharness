@@ -137,6 +137,10 @@ export interface SessionDebugSummary {
   llmCalls: number
   inputTokens: number
   outputTokens: number
+  // thinkingTokens is the estimated hidden-reasoning share of outputTokens
+  // (already inside it); thinkingShare is that fraction 0..1. Attribution only.
+  thinkingTokens?: number
+  thinkingShare?: number
   cacheReadTokens: number
   cacheWriteTokens: number
   toolCalls: number
@@ -221,6 +225,8 @@ export interface TurnDebug {
   llmCalls: number
   inputTokens: number
   outputTokens: number
+  // Estimated hidden-reasoning portion of outputTokens for this turn (attribution).
+  thinkingTokens?: number
   cacheReadTokens: number
   cacheWriteTokens: number
   toolCalls: number

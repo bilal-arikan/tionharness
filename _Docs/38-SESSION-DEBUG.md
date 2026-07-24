@@ -41,7 +41,7 @@ alanı taşır:
 
 ```jsonc
 {"ts":1719..., "type":"turn",       "durMs":4210, "stop":"end_turn"}
-{"ts":1719..., "type":"llm_call",   "model":"claude", "in":1200, "out":340, "cacheRead":8000}
+{"ts":1719..., "type":"llm_call",   "model":"claude", "in":1200, "out":340, "think":180, "cacheRead":8000}
 {"ts":1719..., "type":"tool",       "name":"Bash", "durMs":120, "outBytes":4200}
 {"ts":1719..., "type":"hook",       "name":"PreToolUse", "detail":"Bash:allow", "durMs":12}
 {"ts":1719..., "type":"error",      "detail":"provider_error: 429 rate limit", "err":true}
@@ -61,6 +61,17 @@ Ek alanlar (2026-07-10): `HookID` — `type=hook` olayında ateşleyen hook'un i
 (rtk/sqz gibi token-optimizer hook aktivitesinin hook-başına atfı için);
 `Calls` — `llm_call`'ın temsil ettiği alt-tur sayısı (claude-cli kümülatif
 faturalamayı per-call bağlama bölmek için).
+
+Ek alan (2026-07-23): `Think` — `llm_call`'ın `out` token'ının **gizli akıl
+yürütmeye (extended thinking)** giden tahmini kısmı. API ayrı bir thinking alanı
+vermiyor; `out − görünür_token` (görünür = text+tool_use, kalibre tahminci)
+olarak **agent katmanında** türetilir (`budget.go deriveThinkingTokens`); yalnız
+native provider + `Calls<=1` (claude-cli `out`'u kümülatif → 0). **`out`'un
+içinde zaten sayılı** — atıf amaçlı, faturaya eklenmez. `GetDebugSummary` /
+`GetTurnDebug` bunu toplayıp `thinkingTokens` + `thinkingShare` (çıktının oranı)
+olarak sunar; Debug kartı ve mesaj panelinde "Düşünme %N · tok" olarak görünür.
+Ölçüm: thinking açık turlarda çıktı token'ının ~%40'ı (Sonnet 5 ~%59) gizli
+akıl yürütme.
 
 ## Emit noktaları (tek huni: `Runtime.emitDebug`)
 

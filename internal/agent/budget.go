@@ -4,9 +4,31 @@ import (
 	"context"
 	"errors"
 
+	"github.com/bilal-arikan/tionswarm/internal/conversation"
 	"github.com/bilal-arikan/tionswarm/internal/db"
 	"github.com/bilal-arikan/tionswarm/internal/providers"
 )
+
+// deriveThinkingTokens estimates the hidden-reasoning share of a native
+// provider response. The API bills extended thinking inside OutputTokens without
+// a separate field, so thinking ≈ OutputTokens − visible(text + tool_use). The
+// visible estimate uses the calibrated conversation estimator. claude-cli's
+// OutputTokens is CUMULATIVE across its internal tool-loop steps (ProviderCalls
+// > 1), which would make this subtraction meaningless, so it returns 0 there.
+// Never negative (a visible over-estimate clamps to 0, not a spurious value).
+func deriveThinkingTokens(resp *providers.Response) int {
+	if resp == nil || resp.ProviderCalls > 1 {
+		return 0
+	}
+	visible := conversation.EstimateText(resp.Text)
+	for _, tc := range resp.ToolCalls {
+		visible += conversation.EstimateText(tc.Name) + conversation.EstimateText(string(tc.Input))
+	}
+	if t := resp.Usage.OutputTokens - visible; t > 0 {
+		return t
+	}
+	return 0
+}
 
 // ErrAutonomyPaused is returned when the workspace autonomy brake is engaged and an
 // autonomous call is attempted. Manual calls are unaffected.
@@ -48,6 +70,7 @@ func (r *Runtime) RecordUsage(ctx context.Context, agent db.Agent, model string,
 			PromptHash: promptHash,
 			In:         u.InputTokens,
 			Out:        u.OutputTokens,
+			Think:      u.ThinkingTokens,
 			CacheRead:  u.CacheReadTokens,
 			CacheWrite: u.CacheWriteTokens,
 			Calls:      providerCalls,
@@ -87,6 +110,7 @@ func (r *Runtime) guardedComplete(ctx context.Context, agent db.Agent, req provi
 			"callKind", callKindFrom(ctx), "error", err)
 		return nil, err
 	}
+	resp.Usage.ThinkingTokens = deriveThinkingTokens(resp)
 	r.RecordUsage(ctx, agent, resp.Model, resp.Usage, resp.ProviderCalls)
 	return resp, nil
 }

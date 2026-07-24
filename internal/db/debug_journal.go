@@ -53,17 +53,21 @@ type DebugEvent struct {
 	SessionID  string `json:"sessionId,omitempty"`
 	TurnID     string `json:"turnId,omitempty"` // the assistant reply message id this event belongs to (per-message debug)
 	AgentID    string `json:"agentId,omitempty"`
-	Kind       string `json:"kind,omitempty"`  // call origin (chat/task/schedule/flow/…)
-	Name       string `json:"name,omitempty"`   // tool name / hook event name
-	HookID     string `json:"hookId,omitempty"` // for type=hook: the firing hook's id (attributes rtk/sqz/… activity)
-	Model      string `json:"model,omitempty"`  // provider model for llm_call
+	Kind       string `json:"kind,omitempty"`       // call origin (chat/task/schedule/flow/…)
+	Name       string `json:"name,omitempty"`       // tool name / hook event name
+	HookID     string `json:"hookId,omitempty"`     // for type=hook: the firing hook's id (attributes rtk/sqz/… activity)
+	Model      string `json:"model,omitempty"`      // provider model for llm_call
 	PromptKey  string `json:"promptKey,omitempty"`  // registry prompt key that drove an auxiliary llm_call
 	PromptHash string `json:"promptHash,omitempty"` // 8-hex hash of the RESOLVED prompt text (edited ≠ default)
 	DurMs      int64  `json:"durMs,omitempty"`
 	In         int    `json:"in,omitempty"`
 	Out        int    `json:"out,omitempty"`
-	CacheRead  int    `json:"cacheRead,omitempty"`
-	CacheWrite int    `json:"cacheWrite,omitempty"`
+	// Think is the ESTIMATED portion of Out spent on hidden extended reasoning
+	// (derived output−visible in the agent layer). Already counted inside Out —
+	// an attribution figure, never added to it. Only meaningful for llm_call.
+	Think      int `json:"think,omitempty"`
+	CacheRead  int `json:"cacheRead,omitempty"`
+	CacheWrite int `json:"cacheWrite,omitempty"`
 	// Calls is the number of underlying provider API round-trips this llm_call
 	// represents. 0/1 for native single-call providers; for claude-cli it is the
 	// CLI's own internal tool-loop turn count (result event num_turns), since the
@@ -193,27 +197,32 @@ const debugSeriesCap = 40
 // DebugSummary is an aggregate view of a session's debug journal — the data an
 // agent (or the UI Debug tab) reads to spot where tokens, time and errors went.
 type DebugSummary struct {
-	SessionID    string                   `json:"sessionId"`
-	Events       int                      `json:"events"`
-	Turns        int                      `json:"turns"`
-	LLMCalls     int                      `json:"llmCalls"`
-	InputTokens  int                      `json:"inputTokens"`
-	OutputTokens int                      `json:"outputTokens"`
-	CacheRead    int                      `json:"cacheReadTokens"`
-	CacheWrite   int                      `json:"cacheWriteTokens"`
-	ToolCalls    int                      `json:"toolCalls"`
-	Errors       int                      `json:"errors"`
-	Compactions  int                      `json:"compactions"`
-	Recoveries   int                      `json:"recoveries"`
-	CacheBreaks  int                      `json:"cacheBreaks"`
-	SavedBytes   int                      `json:"savedBytes"`
-	TurnDurMs    int64                    `json:"turnDurMs"`
-	ByTool       map[string]DebugToolStat `json:"byTool,omitempty"`
-	ByModel      map[string]int           `json:"byModel,omitempty"` // model → total tokens
-	TopTools     []string                 `json:"topTools,omitempty"`
-	LastError    string                   `json:"lastError,omitempty"`
-	FirstTs      int64                    `json:"firstTs,omitempty"`
-	LastTs       int64                    `json:"lastTs,omitempty"`
+	SessionID    string `json:"sessionId"`
+	Events       int    `json:"events"`
+	Turns        int    `json:"turns"`
+	LLMCalls     int    `json:"llmCalls"`
+	InputTokens  int    `json:"inputTokens"`
+	OutputTokens int    `json:"outputTokens"`
+	// ThinkingTokens is the summed estimated hidden-reasoning portion of
+	// OutputTokens across the session's llm_calls (attribution, already inside
+	// OutputTokens). ThinkingShare is that fraction of output, 0..1.
+	ThinkingTokens int                      `json:"thinkingTokens,omitempty"`
+	ThinkingShare  float64                  `json:"thinkingShare,omitempty"`
+	CacheRead      int                      `json:"cacheReadTokens"`
+	CacheWrite     int                      `json:"cacheWriteTokens"`
+	ToolCalls      int                      `json:"toolCalls"`
+	Errors         int                      `json:"errors"`
+	Compactions    int                      `json:"compactions"`
+	Recoveries     int                      `json:"recoveries"`
+	CacheBreaks    int                      `json:"cacheBreaks"`
+	SavedBytes     int                      `json:"savedBytes"`
+	TurnDurMs      int64                    `json:"turnDurMs"`
+	ByTool         map[string]DebugToolStat `json:"byTool,omitempty"`
+	ByModel        map[string]int           `json:"byModel,omitempty"` // model → total tokens
+	TopTools       []string                 `json:"topTools,omitempty"`
+	LastError      string                   `json:"lastError,omitempty"`
+	FirstTs        int64                    `json:"firstTs,omitempty"`
+	LastTs         int64                    `json:"lastTs,omitempty"`
 	// LastCacheBreak is the human-readable reason of the most recent prompt-cache
 	// break (empty when none) — surfaced in the Debug card + the cache_break anomaly.
 	LastCacheBreak string `json:"lastCacheBreak,omitempty"`
@@ -251,6 +260,7 @@ func (d *DB) GetDebugSummary(ctx context.Context, sessionID string) (DebugSummar
 			sum.LLMCalls++
 			sum.InputTokens += e.In
 			sum.OutputTokens += e.Out
+			sum.ThinkingTokens += e.Think
 			sum.CacheRead += e.CacheRead
 			sum.CacheWrite += e.CacheWrite
 			sum.TokenSeries = appendCappedInt(sum.TokenSeries, e.In+e.Out)
@@ -298,6 +308,9 @@ func (d *DB) GetDebugSummary(ctx context.Context, sessionID string) (DebugSummar
 		}
 		sum.TopTools = names
 	}
+	if sum.OutputTokens > 0 {
+		sum.ThinkingShare = float64(sum.ThinkingTokens) / float64(sum.OutputTokens)
+	}
 	sum.Anomalies = computeDebugAnomalies(sum)
 	if len(sum.ByTool) == 0 {
 		sum.ByTool = nil
@@ -323,26 +336,29 @@ type TurnToolCall struct {
 // reply message id). ByModel feeds the shared cost helper in the API layer and is
 // not serialized directly.
 type TurnDebug struct {
-	SessionID    string              `json:"sessionId"`
-	TurnID       string              `json:"turnId"`
-	Found        bool                `json:"found"`
-	Model        string              `json:"model,omitempty"`
-	DurMs        int64               `json:"durMs"`
-	Stop         string              `json:"stop,omitempty"`
-	LLMCalls     int                 `json:"llmCalls"`
-	InputTokens  int                 `json:"inputTokens"`
-	OutputTokens int                 `json:"outputTokens"`
-	CacheRead    int                 `json:"cacheReadTokens"`
-	CacheWrite   int                 `json:"cacheWriteTokens"`
-	ToolCalls    int                 `json:"toolCalls"`
-	Tools        []TurnToolCall      `json:"tools,omitempty"`
-	Errors       int                 `json:"errors"`
-	Recoveries   int                 `json:"recoveries"`
-	Compactions  int                 `json:"compactions"`
-	LastError    string              `json:"lastError,omitempty"`
-	FirstTs      int64               `json:"firstTs,omitempty"`
-	LastTs       int64               `json:"lastTs,omitempty"`
-	ByModel      map[string]KindStat `json:"-"` // cost calc input (API layer); not serialized
+	SessionID    string `json:"sessionId"`
+	TurnID       string `json:"turnId"`
+	Found        bool   `json:"found"`
+	Model        string `json:"model,omitempty"`
+	DurMs        int64  `json:"durMs"`
+	Stop         string `json:"stop,omitempty"`
+	LLMCalls     int    `json:"llmCalls"`
+	InputTokens  int    `json:"inputTokens"`
+	OutputTokens int    `json:"outputTokens"`
+	// ThinkingTokens is the estimated hidden-reasoning portion of OutputTokens
+	// for this turn (attribution; already inside OutputTokens).
+	ThinkingTokens int                 `json:"thinkingTokens,omitempty"`
+	CacheRead      int                 `json:"cacheReadTokens"`
+	CacheWrite     int                 `json:"cacheWriteTokens"`
+	ToolCalls      int                 `json:"toolCalls"`
+	Tools          []TurnToolCall      `json:"tools,omitempty"`
+	Errors         int                 `json:"errors"`
+	Recoveries     int                 `json:"recoveries"`
+	Compactions    int                 `json:"compactions"`
+	LastError      string              `json:"lastError,omitempty"`
+	FirstTs        int64               `json:"firstTs,omitempty"`
+	LastTs         int64               `json:"lastTs,omitempty"`
+	ByModel        map[string]KindStat `json:"-"` // cost calc input (API layer); not serialized
 }
 
 // GetTurnDebug aggregates a session's debug journal down to the events tagged with
@@ -378,6 +394,7 @@ func (d *DB) GetTurnDebug(ctx context.Context, sessionID, turnID string) (TurnDe
 			td.LLMCalls++
 			td.InputTokens += e.In
 			td.OutputTokens += e.Out
+			td.ThinkingTokens += e.Think
 			td.CacheRead += e.CacheRead
 			td.CacheWrite += e.CacheWrite
 			if e.Model != "" {

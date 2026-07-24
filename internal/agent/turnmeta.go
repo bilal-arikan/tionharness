@@ -75,6 +75,7 @@ func sumUsage(a, b providers.Usage) providers.Usage {
 		OutputTokens:     a.OutputTokens + b.OutputTokens,
 		CacheReadTokens:  a.CacheReadTokens + b.CacheReadTokens,
 		CacheWriteTokens: a.CacheWriteTokens + b.CacheWriteTokens,
+		ThinkingTokens:   a.ThinkingTokens + b.ThinkingTokens,
 	}
 }
 

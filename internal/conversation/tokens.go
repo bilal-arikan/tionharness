@@ -4,10 +4,19 @@ import (
 	"github.com/bilal-arikan/tionswarm/internal/db"
 )
 
-// charsPerToken is a rough heuristic: ~4 characters per token for mixed
-// English/Turkish prose. This avoids a tokenizer dependency; it is used only for
-// budgeting and the UI meter, where an estimate is sufficient.
-const charsPerToken = 4
+// charsPerToken is a rough heuristic: ~3 characters per token for this project's
+// mixed Turkish/English/code prose. This avoids a tokenizer dependency; it is
+// used only for budgeting and the UI meter, where an estimate is sufficient.
+//
+// Calibrated empirically (2026-07-23) against ~1.15M chars of real session text
+// tokenised with a modern BPE proxy (o200k): 3.29 chars/token overall, 3.25 for
+// Turkish-bearing text, 3.81 for English prose. Claude's current tokenizer
+// (Sonnet-5 / Opus-4.7+) is DENSER than the proxy, so the real ratio is ~2.9–3.0;
+// the older value of 4 under-counted tokens by ~33% (matching the documented
+// "new tokenizer ≈35% more tokens"), which risked late compaction / context
+// overflow. 3 tracks the Turkish-heavy mix and slightly over-counts English —
+// the safe direction (compaction fires early, never late).
+const charsPerToken = 3
 
 // Dense content (base64, hex, data URIs, minified JSON/code) packs far more
 // tokens per character than prose — roughly 1.5 chars/token. Estimating it at
@@ -29,7 +38,7 @@ const msgOverhead = 4
 const MsgOverhead = msgOverhead
 
 // estimateText approximates the token count of a string, density-aware: prose is
-// counted at ~4 chars/token, packed/encoded blobs at ~1.5. Single pass over the
+// counted at ~3 chars/token, packed/encoded blobs at ~1.5. Single pass over the
 // runes (no []rune allocation).
 func estimateText(s string) int {
 	runes, spaces := 0, 0

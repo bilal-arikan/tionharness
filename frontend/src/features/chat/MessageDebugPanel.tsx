@@ -90,6 +90,12 @@ export function MessageDebugPanel({ sessionId, turnId }: { sessionId: string; tu
               <div className="grid grid-cols-2 gap-1">
                 <Stat label="Girdi" value={fmtTok(data.inputTokens)} />
                 <Stat label="Çıktı" value={fmtTok(data.outputTokens)} />
+                {(data.thinkingTokens ?? 0) > 0 && data.outputTokens > 0 && (
+                  <Stat
+                    label="Düşünme"
+                    value={`%${Math.round(((data.thinkingTokens ?? 0) / data.outputTokens) * 100)} · ${fmtTok(data.thinkingTokens ?? 0)}`}
+                  />
+                )}
                 <Stat label="Cache oku" value={fmtTok(data.cacheReadTokens)} />
                 <Stat label="Cache yaz" value={fmtTok(data.cacheWriteTokens)} />
               </div>

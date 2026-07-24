@@ -1003,6 +1003,7 @@ func (r *Runtime) recordedComplete(ctx context.Context, agent db.Agent, provider
 		if sid := SessionIDFrom(ctx); sid != "" {
 			key := sid + "|" + agent.ID
 			if resp, perr := r.cliSessions.Turn(ctx, key, cli, req, req.OnEvent); perr == nil {
+				resp.Usage.ThinkingTokens = deriveThinkingTokens(resp)
 				r.RecordUsage(ctx, agent, resp.Model, resp.Usage, resp.ProviderCalls)
 				r.noteCacheOutcome(ctx, agent, req, resp.Model, resp.Usage)
 				return resp, nil
@@ -1019,6 +1020,7 @@ func (r *Runtime) recordedComplete(ctx context.Context, agent db.Agent, provider
 			"callKind", callKindFrom(ctx), "error", err)
 		return nil, err
 	}
+	resp.Usage.ThinkingTokens = deriveThinkingTokens(resp)
 	r.RecordUsage(ctx, agent, resp.Model, resp.Usage, resp.ProviderCalls)
 	r.noteCacheOutcome(ctx, agent, req, resp.Model, resp.Usage)
 	return resp, nil
@@ -1047,6 +1049,7 @@ func (r *Runtime) recordedStream(ctx context.Context, agent db.Agent, sm provide
 	if err != nil {
 		return nil, err
 	}
+	resp.Usage.ThinkingTokens = deriveThinkingTokens(resp)
 	r.RecordUsage(ctx, agent, resp.Model, resp.Usage, resp.ProviderCalls)
 	r.noteCacheOutcome(ctx, agent, req, resp.Model, resp.Usage)
 	return resp, nil

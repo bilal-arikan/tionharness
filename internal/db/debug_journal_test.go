@@ -107,12 +107,19 @@ func TestDebugSummaryAnomaliesAndSeries(t *testing.T) {
 	// Time series points.
 	emit(DebugEvent{Type: DebugTurn, DurMs: 100})
 	emit(DebugEvent{Type: DebugTurn, DurMs: 200})
-	emit(DebugEvent{Type: DebugLLMCall, Model: "m", In: 10, Out: 5})
-	emit(DebugEvent{Type: DebugLLMCall, Model: "m", In: 20, Out: 5})
+	emit(DebugEvent{Type: DebugLLMCall, Model: "m", In: 10, Out: 5, Think: 2})
+	emit(DebugEvent{Type: DebugLLMCall, Model: "m", In: 20, Out: 5, Think: 3})
 
 	sum, err := d.GetDebugSummary(ctx, sess.ID)
 	if err != nil {
 		t.Fatalf("summary: %v", err)
+	}
+	// Thinking attribution: summed (2+3) and its share of total output (5/10).
+	if sum.ThinkingTokens != 5 {
+		t.Errorf("thinkingTokens = %d, want 5", sum.ThinkingTokens)
+	}
+	if sum.ThinkingShare != 0.5 {
+		t.Errorf("thinkingShare = %v, want 0.5", sum.ThinkingShare)
 	}
 	if len(sum.TurnDurSeries) != 2 || sum.TurnDurSeries[1] != 200 {
 		t.Errorf("turnDurSeries = %v", sum.TurnDurSeries)

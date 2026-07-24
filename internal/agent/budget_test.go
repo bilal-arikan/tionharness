@@ -4,8 +4,10 @@ import (
 	"context"
 	"log/slog"
 	"path/filepath"
+	"strings"
 	"testing"
 
+	"github.com/bilal-arikan/tionswarm/internal/conversation"
 	"github.com/bilal-arikan/tionswarm/internal/db"
 	"github.com/bilal-arikan/tionswarm/internal/providers"
 )
@@ -46,10 +48,10 @@ func TestGuardedComplete_LogsProviderResolveFailure(t *testing.T) {
 // counter field, so a multi-step turn's persisted bubble equals the sum of its
 // provider calls (matching what RecordUsage folds into the daily/session rollups).
 func TestSumUsage(t *testing.T) {
-	a := providers.Usage{InputTokens: 100, OutputTokens: 10, CacheReadTokens: 1000, CacheWriteTokens: 50}
-	b := providers.Usage{InputTokens: 200, OutputTokens: 20, CacheReadTokens: 2000, CacheWriteTokens: 60}
+	a := providers.Usage{InputTokens: 100, OutputTokens: 10, CacheReadTokens: 1000, CacheWriteTokens: 50, ThinkingTokens: 3}
+	b := providers.Usage{InputTokens: 200, OutputTokens: 20, CacheReadTokens: 2000, CacheWriteTokens: 60, ThinkingTokens: 7}
 	got := sumUsage(a, b)
-	want := providers.Usage{InputTokens: 300, OutputTokens: 30, CacheReadTokens: 3000, CacheWriteTokens: 110}
+	want := providers.Usage{InputTokens: 300, OutputTokens: 30, CacheReadTokens: 3000, CacheWriteTokens: 110, ThinkingTokens: 10}
 	if got != want {
 		t.Fatalf("sumUsage = %+v, want %+v", got, want)
 	}
@@ -57,5 +59,36 @@ func TestSumUsage(t *testing.T) {
 	// Zero value is the identity element (loop starts from an empty accumulator).
 	if got := sumUsage(providers.Usage{}, b); got != b {
 		t.Fatalf("sumUsage(zero, b) = %+v, want %+v", got, b)
+	}
+}
+
+// TestDeriveThinkingTokens checks the hidden-reasoning derivation: thinking is
+// OutputTokens minus the estimated visible payload, clamped at 0, and disabled
+// for claude-cli's cumulative multi-step turns (ProviderCalls > 1).
+func TestDeriveThinkingTokens(t *testing.T) {
+	txt := strings.Repeat("word ", 100) // whitespace-rich prose
+	vis := conversation.EstimateText(txt)
+
+	// Output well above the visible estimate → the excess is attributed to thinking.
+	resp := &providers.Response{Text: txt, Usage: providers.Usage{OutputTokens: vis + 400}}
+	if got := deriveThinkingTokens(resp); got != 400 {
+		t.Fatalf("thinking = %d, want 400", got)
+	}
+
+	// Visible estimate exceeds output → clamp to 0, never negative.
+	resp2 := &providers.Response{Text: txt, Usage: providers.Usage{OutputTokens: vis - 5}}
+	if got := deriveThinkingTokens(resp2); got != 0 {
+		t.Fatalf("clamp = %d, want 0", got)
+	}
+
+	// claude-cli cumulative turn (ProviderCalls > 1): subtraction is meaningless → 0.
+	resp3 := &providers.Response{Text: txt, Usage: providers.Usage{OutputTokens: 9999}, ProviderCalls: 3}
+	if got := deriveThinkingTokens(resp3); got != 0 {
+		t.Fatalf("cli-cumulative = %d, want 0", got)
+	}
+
+	// nil is safe.
+	if got := deriveThinkingTokens(nil); got != 0 {
+		t.Fatalf("nil = %d, want 0", got)
 	}
 }

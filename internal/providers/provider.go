@@ -229,6 +229,12 @@ type Usage struct {
 	OutputTokens     int `json:"outputTokens"`
 	CacheReadTokens  int `json:"cacheReadTokens,omitempty"`  // prompt tokens served from cache (cheap)
 	CacheWriteTokens int `json:"cacheWriteTokens,omitempty"` // prompt tokens written to cache (premium)
+	// ThinkingTokens is the ESTIMATED share of OutputTokens spent on hidden
+	// extended reasoning. The API bills thinking inside OutputTokens without
+	// breaking it out, so this is derived (output − visible) in the agent layer
+	// (deriveThinkingTokens); providers leave it 0. Attribution/visibility only —
+	// it is ALREADY part of OutputTokens, so billing must NOT add it again.
+	ThinkingTokens int `json:"thinkingTokens,omitempty"`
 }
 
 // TraceStep is one entry in a provider-produced activity trace (intermediate
