@@ -169,6 +169,41 @@ func TestDebugSummaryCacheBreaks(t *testing.T) {
 	}
 }
 
+// TestDebugSummaryCacheAndThinkingCoach verifies the two observability coaches:
+// a sustained low warm-hit ratio raises low_cache_hit, and a large hidden-
+// reasoning share of a meaningful output spend raises high_thinking.
+func TestDebugSummaryCacheAndThinkingCoach(t *testing.T) {
+	ctx := context.Background()
+	d, _ := Open(filepath.Join(t.TempDir(), "store"))
+	agent, _ := d.CreateAgent(ctx, Agent{Name: "A", Provider: "anthropic"})
+
+	// 3 calls, big prompt spend, almost no cache reads → low hit ratio.
+	// Output carries a majority-thinking share too.
+	s, _ := d.CreateSession(ctx, Session{AgentID: agent.ID, Title: "coach"})
+	for i := 0; i < 3; i++ {
+		_ = d.AppendDebugEvent(s.ID, DebugEvent{
+			Type: DebugLLMCall, Model: "m", In: 10000, Out: 1000, Think: 700, CacheRead: 500,
+		}, 0)
+	}
+	sum, _ := d.GetDebugSummary(ctx, s.ID)
+	if code := anomalyCode(sum.Anomalies, "low_cache_hit"); code == nil || code.Severity != "warn" {
+		t.Errorf("low warm-hit ratio should raise a warn low_cache_hit anomaly, got %+v", sum.Anomalies)
+	}
+	if code := anomalyCode(sum.Anomalies, "high_thinking"); code == nil || code.Severity != "info" {
+		t.Errorf("majority-thinking output should raise an info high_thinking anomaly, got %+v", sum.Anomalies)
+	}
+
+	// Warm session: high cache reads → no low_cache_hit.
+	s2, _ := d.CreateSession(ctx, Session{AgentID: agent.ID, Title: "warm"})
+	for i := 0; i < 3; i++ {
+		_ = d.AppendDebugEvent(s2.ID, DebugEvent{Type: DebugLLMCall, Model: "m", In: 500, Out: 200, CacheRead: 40000}, 0)
+	}
+	sum2, _ := d.GetDebugSummary(ctx, s2.ID)
+	if code := anomalyCode(sum2.Anomalies, "low_cache_hit"); code != nil {
+		t.Errorf("warm cache should not flag low_cache_hit, got %+v", sum2.Anomalies)
+	}
+}
+
 // anomalyCode returns the first anomaly with the given code, or nil.
 func anomalyCode(as []DebugAnomaly, code string) *DebugAnomaly {
 	for i := range as {
