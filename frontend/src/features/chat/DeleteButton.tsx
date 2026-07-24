@@ -1,9 +1,11 @@
 import { useState } from 'react'
 import { Trash2, X } from 'lucide-react'
+import { actionChip, actionChipActive } from './messageActions'
 
-// DeleteButton is the small destructive control revealed on message hover. It
-// uses a two-step inline confirm (🗑 → "Sil" / ✕) instead of a blocking native
-// dialog, so deleting a message stays in the UI.
+// DeleteButton is the destructive per-message control. It uses a two-step inline
+// confirm (🗑 → "Sil" / ✕) instead of a blocking native dialog, so deleting a
+// message stays in the UI. Visible at rest (it lives in the turn footer, not as a
+// hover-only ghost).
 export function DeleteButton({ onClick }: { onClick: () => void }) {
   const [armed, setArmed] = useState(false)
   if (armed) {
@@ -14,15 +16,11 @@ export function DeleteButton({ onClick }: { onClick: () => void }) {
             setArmed(false)
             onClick()
           }}
-          className="rounded px-1.5 py-0.5 text-[10px] font-semibold text-[var(--color-danger)] transition hover:bg-[color-mix(in_srgb,var(--color-danger)_15%,transparent)]"
+          className={actionChipActive('danger', 'font-semibold')}
         >
           Sil
         </button>
-        <button
-          onClick={() => setArmed(false)}
-          title="Vazgeç"
-          className="rounded px-1 py-0.5 text-[10px] text-[var(--color-text-dim)] transition hover:text-[var(--color-text)]"
-        >
+        <button onClick={() => setArmed(false)} title="Vazgeç" aria-label="Vazgeç" className={actionChip()}>
           <X size={12} />
         </button>
       </span>
@@ -32,9 +30,10 @@ export function DeleteButton({ onClick }: { onClick: () => void }) {
     <button
       onClick={() => setArmed(true)}
       title="Mesajı sil"
-      className="shrink-0 rounded p-0.5 text-[var(--color-text-dim)] opacity-0 transition hover:text-[var(--color-danger)] group-hover:opacity-100"
+      aria-label="Mesajı sil"
+      className={actionChip('danger')}
     >
-      <Trash2 size={14} />
+      <Trash2 size={13} />
     </button>
   )
 }

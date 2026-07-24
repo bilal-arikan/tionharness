@@ -1,5 +1,7 @@
-import { RotateCcw, ThumbsUp, ThumbsDown } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { RotateCcw, ThumbsUp, ThumbsDown, Volume2, Square } from 'lucide-react'
 import type { Agent, Message } from '@/types'
+import { speak, stopSpeaking, ttsAvailable } from '@/shared/lib/tts'
 import { Markdown } from '@/shared/components/markdown/Markdown'
 import { TurnSteps, parseSteps } from './TurnSteps'
 import { ThinkingBlock } from './ThinkingBlock'
@@ -9,6 +11,7 @@ import { DirectionBadge } from './DirectionBadge'
 import { WorkingDots } from './WorkingDots'
 import { DeleteButton } from './DeleteButton'
 import { MessageDebugPanel } from './MessageDebugPanel'
+import { ACTION_CLUSTER, META_CLUSTER, TURN_FOOTER, actionChip, actionChipActive } from './messageActions'
 
 interface Props {
   message: Message
@@ -89,6 +92,28 @@ export function AssistantTurn({
   // message). Not offered while still streaming.
   const canRetry = !!onRetry && steps.some((st) => st.kind === 'error') && !isLastLive
 
+  // Manual read-aloud (TTS) of this reply's prose. Local "speaking" state drives
+  // the play/stop icon; it resets when the utterance ends. Offered only when the
+  // browser supports speech synthesis, the turn is finished, and it has text.
+  const [speaking, setSpeaking] = useState(false)
+  const canSpeak = ttsAvailable() && !isLastLive && m.text.trim().length > 0
+  const toggleSpeak = () => {
+    if (speaking) {
+      stopSpeaking()
+      setSpeaking(false)
+      return
+    }
+    setSpeaking(true)
+    speak(m.text, () => setSpeaking(false))
+  }
+  // Stop this bubble's speech if it unmounts mid-utterance.
+  useEffect(() => () => { if (speaking) stopSpeaking() }, [speaking])
+
+  // Whether the in-bubble action row has anything to show at all (a live bubble
+  // offers none of them, so it stays clean while streaming).
+  const hasActions =
+    canSpeak || (!!onFeedback && !isLastLive) || canRetry || (!!onDelete && !isLastLive)
+
   return (
     <div className="group flex flex-col gap-1">
       <div className="flex w-full justify-start">
@@ -148,51 +173,81 @@ export function AssistantTurn({
           )}
         </div>
       </div>
-      <div className="flex items-center gap-2 pl-1">
-        <MessageTime unixSec={m.createdAt} />
-        {isLastLive ? <LiveTimer startUnixSec={m.createdAt} /> : <TurnDuration seconds={workedSec} />}
-        {/* Per-turn metadata: model + token usage (the per-bubble cost). */}
-        {(m.model || m.usage) && (
-          <span className="flex items-center gap-1.5 text-[10px] text-[var(--color-text-dim)]" title="Bu turun modeli ve token tüketimi">
-            {m.model && <span className="font-mono opacity-80">{m.model}</span>}
-            {m.usage && (
-              <span className="font-mono">
-                ↑{fmtTok(m.usage.in)} ↓{fmtTok(m.usage.out)}
-                {!!m.usage.cacheRead && <span className="opacity-60"> ⚡{fmtTok(m.usage.cacheRead)}</span>}
-              </span>
+      {/* Footer BELOW the bubble: passive meta (time, duration, model, token spend)
+          on the LEFT, action chips (read-aloud, rating, retry, delete) on the
+          RIGHT. The chips are visible at rest, not hover-only — see
+          messageActions.ts. */}
+      <div className={TURN_FOOTER}>
+        <div className={META_CLUSTER}>
+          <MessageTime unixSec={m.createdAt} />
+          {isLastLive ? <LiveTimer startUnixSec={m.createdAt} /> : <TurnDuration seconds={workedSec} />}
+          {/* Per-turn metadata: model + token usage (the per-turn cost). */}
+          {(m.model || m.usage) && (
+            <span
+              className="flex items-center gap-1.5 text-[10px] text-[var(--color-text-dim)]"
+              title="Bu turun modeli ve token tüketimi"
+            >
+              {m.model && <span className="font-mono opacity-80">{m.model}</span>}
+              {m.usage && (
+                <span className="font-mono">
+                  ↑{fmtTok(m.usage.in)} ↓{fmtTok(m.usage.out)}
+                  {!!m.usage.cacheRead && (
+                    <span className="opacity-60"> ⚡{fmtTok(m.usage.cacheRead)}</span>
+                  )}
+                </span>
+              )}
+            </span>
+          )}
+        </div>
+        {hasActions && (
+          <div className={ACTION_CLUSTER}>
+            {/* Read this reply aloud (TTS). Toggles play/stop; strips code/tables. */}
+            {canSpeak && (
+              <button
+                onClick={toggleSpeak}
+                title={speaking ? 'Okumayı durdur' : 'Yanıtı sesli oku (kod atlanır)'}
+                aria-label={speaking ? 'Okumayı durdur' : 'Yanıtı sesli oku'}
+                className={speaking ? actionChipActive() : actionChip()}
+              >
+                {speaking ? <Square size={13} /> : <Volume2 size={13} />}
+              </button>
             )}
-          </span>
+            {/* Feedback thumbs (not on the live bubble). */}
+            {onFeedback && !isLastLive && (
+              <>
+                <button
+                  onClick={() => onFeedback(m.id, rating === 1 ? 0 : 1)}
+                  title="Bu yanıt iyi"
+                  aria-label="Bu yanıt iyi"
+                  aria-pressed={rating === 1}
+                  className={rating === 1 ? actionChipActive('positive') : actionChip('positive')}
+                >
+                  <ThumbsUp size={13} />
+                </button>
+                <button
+                  onClick={() => onFeedback(m.id, rating === -1 ? 0 : -1)}
+                  title="Bu yanıt kötü"
+                  aria-label="Bu yanıt kötü"
+                  aria-pressed={rating === -1}
+                  className={rating === -1 ? actionChipActive('danger') : actionChip('danger')}
+                >
+                  <ThumbsDown size={13} />
+                </button>
+              </>
+            )}
+            {canRetry && (
+              <button
+                onClick={() => onRetry!(m.id)}
+                title="Bu turu yeniden dene"
+                className={actionChipActive('danger', 'font-semibold')}
+              >
+                <RotateCcw size={13} />
+                Yeniden dene
+              </button>
+            )}
+            {onDelete && !isLastLive && <DeleteButton onClick={() => onDelete(m.id)} />}
+          </div>
         )}
-        {/* Feedback thumbs (not on the live bubble). */}
-        {onFeedback && !isLastLive && (
-          <span className="flex items-center gap-0.5">
-            <button
-              onClick={() => onFeedback(m.id, rating === 1 ? 0 : 1)}
-              title="Bu yanıt iyi"
-              className={`rounded p-0.5 transition hover:text-[var(--color-success)] ${rating === 1 ? 'text-[var(--color-success)]' : 'text-[var(--color-text-dim)] opacity-0 group-hover:opacity-100'}`}
-            >
-              <ThumbsUp size={12} />
-            </button>
-            <button
-              onClick={() => onFeedback(m.id, rating === -1 ? 0 : -1)}
-              title="Bu yanıt kötü"
-              className={`rounded p-0.5 transition hover:text-[var(--color-danger)] ${rating === -1 ? 'text-[var(--color-danger)]' : 'text-[var(--color-text-dim)] opacity-0 group-hover:opacity-100'}`}
-            >
-              <ThumbsDown size={12} />
-            </button>
-          </span>
-        )}
-        {canRetry && (
-          <button
-            onClick={() => onRetry!(m.id)}
-            title="Bu turu yeniden dene"
-            className="flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium text-[var(--color-danger)] transition hover:bg-[color-mix(in_srgb,var(--color-danger)_15%,transparent)]"
-          >
-            <RotateCcw size={12} />
-            Yeniden dene
-          </button>
-        )}
-        {onDelete && !isLastLive && <DeleteButton onClick={() => onDelete(m.id)} />}
       </div>
     </div>
   )

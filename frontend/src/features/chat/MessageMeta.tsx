@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react'
 import { clockTime, fullDateTime, formatDuration } from '@/shared/lib/time'
 
 // MessageTime renders a message's send time as a short clock label, with the
-// full date+time available on hover.
+// full date+time available on hover. Lives in the turn footer, outside the bubble,
+// so it always sits on the neutral chat background.
 export function MessageTime({ unixSec }: { unixSec: number }) {
   if (!unixSec) return null
   return (

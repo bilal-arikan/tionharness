@@ -4,10 +4,13 @@ import { MessageTime } from './MessageMeta'
 import { DeleteButton } from './DeleteButton'
 import { RewindButton } from './RewindButton'
 import { DirectionBadge } from './DirectionBadge'
+import { ACTION_CLUSTER, META_CLUSTER, TURN_FOOTER_END } from './messageActions'
 
-// UserTurn renders a real user message: the bubble plus a right-aligned meta row
-// (rewind + delete on hover + timestamp). Auto-generated prompts use
-// AutoPromptNote instead.
+// UserTurn renders a real user message: the bubble, then a footer row BELOW it
+// carrying the passive meta (timestamp + routing cue) and the rewind/delete
+// controls. The user's bubble hugs the right edge, so the footer is right-aligned
+// under it (a full-width justify-between would strand the meta on the far left,
+// visually detached from the bubble). Auto-generated prompts use AutoPromptNote.
 export function UserTurn({
   message,
   agents,
@@ -42,11 +45,17 @@ export function UserTurn({
         onOpenArtifact={onOpenArtifact}
         clamp={clamp}
       />
-      <div className="flex items-center justify-end gap-2 pr-1">
-        <DirectionBadge label={recipientLabel} />
-        {onRewind && <RewindButton onClick={() => onRewind(m.id)} />}
-        {onDelete && <DeleteButton onClick={() => onDelete(m.id)} />}
-        <MessageTime unixSec={m.createdAt} />
+      <div className={TURN_FOOTER_END}>
+        <div className={META_CLUSTER}>
+          <MessageTime unixSec={m.createdAt} />
+          <DirectionBadge label={recipientLabel} />
+        </div>
+        {(onRewind || onDelete) && (
+          <div className={ACTION_CLUSTER}>
+            {onRewind && <RewindButton onClick={() => onRewind(m.id)} />}
+            {onDelete && <DeleteButton onClick={() => onDelete(m.id)} />}
+          </div>
+        )}
       </div>
     </div>
   )
