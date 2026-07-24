@@ -189,6 +189,13 @@ kanalına maplenebilir (gelecek iş).
 2. **claude-cli VPS'te kimlik:** izole config home + `claude setup-token` (oauth) ya
    da `ANTHROPIC_API_KEY` (`claudeCliAuthKind`/`Token`, `03` maddesi). VPS'te login
    akışı headless olacağından **setup-token** önerilir.
+   - **In-app tarayıcı girişi (ClaudeAuthDialog):** "Otomatik (loopback)" alt-modu
+     backend'de efemer `127.0.0.1:<port>` dinleyici açıp `redirect_uri`'yi
+     `http://localhost:<port>/callback` yapar → dönüş viewer'ın **kendi** makinesine
+     düşer, VPS'e değil. Bu yüzden uzak erişim (`window.location.hostname` localhost
+     değil) tespit edilince dialog varsayılan olarak **"Elle kod"** akışına geçer
+     (`redirect_uri = platform.claude.com/oauth/code/callback`; kodu kopyala-yapıştır,
+     her yerden çalışır). Otomatik moda geçilirse uyarı bandı gösterilir.
 3. **İndirme endpoint güvenliği:** VPN arkasında olsa da path-traversal guard şart;
    yalnız workspace-altı + artifact yollarına izin.
 4. **Mobil düzen kapsamı:** flow canvas (React Flow) + ilişki grafiği (vis-network

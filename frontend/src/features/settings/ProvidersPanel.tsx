@@ -132,6 +132,7 @@ function BuiltinProvider({
   endpointValue,
   endpointPlaceholder,
   onEndpoint,
+  hideEndpoint,
   endpoint2Label,
   endpoint2Value,
   endpoint2Placeholder,
@@ -158,6 +159,9 @@ function BuiltinProvider({
   endpointValue: string
   endpointPlaceholder: string
   onEndpoint: (v: string) => void
+  // When true, the endpoint column is not rendered and the key picker spans the
+  // full row (used for cards whose auth has no endpoint concept, e.g. a pure API-key card).
+  hideEndpoint?: boolean
   // Optional second endpoint-style field (e.g. claude CLI config dir). Rendered
   // full-width below the key/endpoint grid only when all four props are supplied.
   endpoint2Label?: string
@@ -194,22 +198,24 @@ function BuiltinProvider({
         </span>
       </div>
 
-      <div className="grid gap-2 sm:grid-cols-2">
+      <div className={hideEndpoint ? 'grid gap-2' : 'grid gap-2 sm:grid-cols-2'}>
         <div className="flex flex-col gap-1">
           <span className="text-xs font-medium text-[var(--color-text-dim)]">{keyLabel}</span>
           <KeyPicker isSet={isSet} secrets={secrets} onPick={onPick} onClear={onClear} provider={testProvider} />
         </div>
-        <div className="flex flex-col gap-1">
-          <span className="text-xs font-medium text-[var(--color-text-dim)]">{endpointLabel}</span>
-          <input
-            data-testid="provider-endpoint-input"
-            data-provider={testProvider}
-            value={endpointValue}
-            onChange={(e) => onEndpoint(e.target.value)}
-            placeholder={endpointPlaceholder}
-            className={inputCls}
-          />
-        </div>
+        {!hideEndpoint && (
+          <div className="flex flex-col gap-1">
+            <span className="text-xs font-medium text-[var(--color-text-dim)]">{endpointLabel}</span>
+            <input
+              data-testid="provider-endpoint-input"
+              data-provider={testProvider}
+              value={endpointValue}
+              onChange={(e) => onEndpoint(e.target.value)}
+              placeholder={endpointPlaceholder}
+              className={inputCls}
+            />
+          </div>
+        )}
       </div>
 
       {endpoint2Label && onEndpoint2 && (
@@ -555,92 +561,124 @@ export function ProvidersPanel({
         <div className="grid gap-2">
           <BuiltinProvider
             icon={Sparkles}
-            name="Anthropic"
+            name="Anthropic API"
             kindLabel="API"
             keyLabel="API anahtarı"
             isSet={draft.anthropicKeySet}
-            requiredHint="anthropic sağlayıcısı için gerekli."
+            requiredHint="anthropic (HTTP API) sağlayıcısı için gerekli."
             secrets={secrets}
             onPick={async (n) => applyKey('anthropic', await onImportSecret(n))}
             onClear={() => clearKey('anthropic')}
-            endpointLabel="claude CLI yolu"
-            endpointValue={draft.claudeCliPath}
-            endpointPlaceholder="otomatik (PATH)"
-            onEndpoint={(v) => set('claudeCliPath', v)}
-            endpoint2Label="claude config dizini (bu workspace · salt-okunur)"
-            endpoint2Value={workspaceClaudeHome || draft.claudeConfigDir}
-            endpoint2Placeholder="per-workspace: <workspace>/claude-home"
-            onEndpoint2={(v) => set('claudeConfigDir', v)}
-            endpoint2ReadOnly
-            endpoint2Hint={
-              workspaceClaudeHome
-                ? 'Aktif workspace\'in kendi CLAUDE_CONFIG_DIR yolu — skill/ayar/login bu workspace ile paylaşılır. Her workspace farklı bir yol kullanır; salt-okunur (workspace kökünden türetilir).'
-                : 'Uygulama-geneli fallback (workspace çözülemedi). Normalde her workspace kendi <workspace>/claude-home dizinini kullanır; salt-okunur.'
-            }
-            extra={
-              <div className="space-y-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] p-2.5">
-                <div className="flex flex-wrap items-center gap-2">
-                  <button
-                    data-testid="claude-auth-open"
-                    onClick={() => setAuthOpen(true)}
-                    className="flex items-center gap-1.5 rounded-lg border border-[var(--color-border)] px-2.5 py-1.5 text-xs hover:border-[var(--color-accent)]"
-                  >
-                    <KeyRound size={12} /> claude-cli kimlik (Max / API)
-                  </button>
-                  <span className="text-[11px] text-[var(--color-text-dim)]">
-                    {draft.claudeCliAuthSet
-                      ? `✓ ${draft.claudeCliAuthKind === 'oauth' ? 'Max/Pro token' : 'API anahtarı'} kayıtlı`
-                      : 'İzole dizin için token ekle (login gerekmez)'}
-                  </span>
-                </div>
-                {/* Dedicated claude-cli probe: runs the `claude` binary with the
-                    config dir + injected token, separate from the Anthropic HTTP
-                    API-key test (which would fail with "invalid x-api-key" when only
-                    a Max/Pro OAuth token is set). */}
-                <div className="flex flex-wrap items-center gap-2">
-                  <button
-                    data-testid="provider-test"
-                    data-provider="claude-cli"
-                    onClick={() => runTest('claude-cli')}
-                    className="flex items-center gap-1.5 rounded-lg border border-[var(--color-border)] px-2.5 py-1.5 text-xs hover:border-[var(--color-accent)]"
-                  >
-                    <Sparkles size={12} /> claude-cli'yi test et
-                  </button>
-                  {testBadge(test, 'claude-cli')}
-                  <span className="text-[11px] text-[var(--color-text-dim)]">
-                    (yandaki “Test et” Anthropic HTTP API anahtarını dener)
-                  </span>
-                </div>
-                {/* Pre-flight: verify THIS workspace's claude-home is logged in
-                    before an agent turn burns on an auth wall. Cheap tool-free probe
-                    against <workspace>/claude-home (not the app-global config dir). */}
-                <div className="flex flex-wrap items-center gap-2">
-                  <button
-                    data-testid="workspace-claude-auth-check"
-                    onClick={checkWsAuth}
-                    className="flex items-center gap-1.5 rounded-lg border border-[var(--color-border)] px-2.5 py-1.5 text-xs hover:border-[var(--color-accent)]"
-                  >
-                    <KeyRound size={12} /> Bu workspace login doğrula
-                  </button>
-                  {wsAuth === 'pending' && (
-                    <span className="text-[11px] text-[var(--color-warning)]">kontrol ediliyor…</span>
-                  )}
-                  {typeof wsAuth === 'object' && wsAuth.loggedIn && (
-                    <span className="text-[11px] text-[var(--color-success)]">✓ giriş yapılmış</span>
-                  )}
-                  {typeof wsAuth === 'object' && !wsAuth.loggedIn && (
-                    <span className="text-[11px] text-[var(--color-error)]" title={wsAuth.detail}>
-                      ✕ giriş yok — {wsAuth.detail || 'claude /login gerekli'}
-                    </span>
-                  )}
-                </div>
-              </div>
-            }
+            hideEndpoint
+            endpointLabel=""
+            endpointValue=""
+            endpointPlaceholder=""
+            onEndpoint={() => {}}
             test={test}
             runTest={runTest}
             testProvider="anthropic"
-            testDisabledHint="önce Anthropic anahtarı ekle"
+            testDisabledHint="önce Anthropic API anahtarı ekle"
           />
+          <div className="space-y-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex min-w-0 items-center gap-2">
+                <Sparkles size={15} className="shrink-0 text-[var(--color-accent)]" />
+                <span className="truncate text-sm font-medium">Anthropic Pro/Max (OAuth)</span>
+                <span className="shrink-0 text-[10px] uppercase tracking-wide text-[var(--color-text-dim)]">claude-cli / abonelik</span>
+              </div>
+              <span
+                className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${
+                  draft.claudeCliAuthSet ? 'bg-[var(--color-surface-2)] text-[var(--color-success)]' : 'bg-[var(--color-surface-2)] text-[var(--color-text-dim)]'
+                }`}
+              >
+                {draft.claudeCliAuthSet
+                  ? `✓ ${draft.claudeCliAuthKind === 'apikey' ? 'API token' : 'Max/Pro token'} kayıtlı`
+                  : 'Kimlik yok'}
+              </span>
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <span className="text-xs font-medium text-[var(--color-text-dim)]">claude CLI yolu</span>
+              <input
+                data-testid="provider-endpoint-input"
+                data-provider="claude-cli"
+                value={draft.claudeCliPath}
+                onChange={(e) => set('claudeCliPath', e.target.value)}
+                placeholder="otomatik (PATH)"
+                className={inputCls}
+              />
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <span className="text-xs font-medium text-[var(--color-text-dim)]">claude config dizini (bu workspace · salt-okunur)</span>
+              <input
+                value={workspaceClaudeHome || draft.claudeConfigDir}
+                readOnly
+                placeholder="per-workspace: <workspace>/claude-home"
+                className={`${inputCls} cursor-not-allowed opacity-60`}
+              />
+              <span className="text-[10px] text-[var(--color-text-dim)]">
+                {workspaceClaudeHome
+                  ? 'Aktif workspace\'in kendi CLAUDE_CONFIG_DIR yolu — skill/ayar/login bu workspace ile paylaşılır. Her workspace farklı bir yol kullanır; salt-okunur (workspace kökünden türetilir).'
+                  : 'Uygulama-geneli fallback (workspace çözülemedi). Normalde her workspace kendi <workspace>/claude-home dizinini kullanır; salt-okunur.'}
+              </span>
+            </div>
+
+            <div className="space-y-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] p-2.5">
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  data-testid="claude-auth-open"
+                  onClick={() => setAuthOpen(true)}
+                  className="flex items-center gap-1.5 rounded-lg border border-[var(--color-border)] px-2.5 py-1.5 text-xs hover:border-[var(--color-accent)]"
+                >
+                  <KeyRound size={12} /> claude-cli kimlik (Max / API)
+                </button>
+                <span className="text-[11px] text-[var(--color-text-dim)]">
+                  {draft.claudeCliAuthSet
+                    ? `✓ ${draft.claudeCliAuthKind === 'oauth' ? 'Max/Pro token' : 'API anahtarı'} kayıtlı`
+                    : 'İzole dizin için token ekle (login gerekmez)'}
+                </span>
+              </div>
+              {/* Dedicated claude-cli probe: runs the `claude` binary with the
+                  config dir + injected token, separate from the Anthropic HTTP
+                  API-key test (which would fail with "invalid x-api-key" when only
+                  a Max/Pro OAuth token is set). */}
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  data-testid="provider-test"
+                  data-provider="claude-cli"
+                  onClick={() => runTest('claude-cli')}
+                  className="flex items-center gap-1.5 rounded-lg border border-[var(--color-border)] px-2.5 py-1.5 text-xs hover:border-[var(--color-accent)]"
+                >
+                  <Sparkles size={12} /> claude-cli'yi test et
+                </button>
+                {testBadge(test, 'claude-cli')}
+              </div>
+              {/* Pre-flight: verify THIS workspace's claude-home is logged in
+                  before an agent turn burns on an auth wall. Cheap tool-free probe
+                  against <workspace>/claude-home (not the app-global config dir). */}
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  data-testid="workspace-claude-auth-check"
+                  onClick={checkWsAuth}
+                  className="flex items-center gap-1.5 rounded-lg border border-[var(--color-border)] px-2.5 py-1.5 text-xs hover:border-[var(--color-accent)]"
+                >
+                  <KeyRound size={12} /> Bu workspace login doğrula
+                </button>
+                {wsAuth === 'pending' && (
+                  <span className="text-[11px] text-[var(--color-warning)]">kontrol ediliyor…</span>
+                )}
+                {typeof wsAuth === 'object' && wsAuth.loggedIn && (
+                  <span className="text-[11px] text-[var(--color-success)]">✓ giriş yapılmış</span>
+                )}
+                {typeof wsAuth === 'object' && !wsAuth.loggedIn && (
+                  <span className="text-[11px] text-[var(--color-error)]" title={wsAuth.detail}>
+                    ✕ giriş yok — {wsAuth.detail || 'claude /login gerekli'}
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
           <BuiltinProvider
             icon={Zap}
             name="MiniMax"

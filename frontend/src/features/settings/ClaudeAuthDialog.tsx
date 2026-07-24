@@ -18,6 +18,17 @@ import { inputCls } from './primitives'
 // 'apikey'   → paste an sk-ant-... API key (API billing).
 type Method = 'browser' | 'oauth' | 'apikey'
 
+// isRemoteAccess reports whether the app is being viewed from a different machine
+// than the backend runs on (e.g. a VPS reached over the network). The automatic
+// (loopback) OAuth sub-mode binds an ephemeral 127.0.0.1 listener ON THE BACKEND and
+// hands the browser a http://localhost:<port>/callback redirect — which resolves to
+// the *viewer's* machine, not the backend, when they differ. So loopback only works
+// when browser and backend share a host; remote access must use the paste flow.
+function isRemoteAccess(): boolean {
+  const h = typeof window !== 'undefined' ? window.location.hostname : 'localhost'
+  return !['localhost', '127.0.0.1', '::1', '[::1]', ''].includes(h)
+}
+
 interface Props {
   configDir: string // current claudeConfigDir (shown in the setup-token command)
   currentKind: string // existing stored kind ("oauth" | "apikey" | "")
@@ -44,7 +55,10 @@ export function ClaudeAuthDialog({ configDir, currentKind, isSet, onClose, onSav
   const [oauthDone, setOauthDone] = useState(false)
   // 'auto'   → loopback: browser redirects back to a local listener, no paste.
   // 'manual' → paste the "<code>#<state>" from the callback page.
-  const [browserMode, setBrowserMode] = useState<'auto' | 'manual'>('auto')
+  // Default to manual when accessed remotely (VPS): loopback's localhost redirect
+  // would land on the viewer's machine, not the backend, and silently fail.
+  const remote = isRemoteAccess()
+  const [browserMode, setBrowserMode] = useState<'auto' | 'manual'>(remote ? 'manual' : 'auto')
   const [loopbackFlowId, setLoopbackFlowId] = useState('')
 
   // Poll the loopback flow's status once started, until it flips to ok/error.
@@ -250,6 +264,20 @@ export function ClaudeAuthDialog({ configDir, currentKind, isSet, onClose, onSav
                   </button>
                 </div>
 
+                {browserMode === 'auto' && remote && (
+                  <div className="rounded-lg border border-[var(--color-warning)]/40 bg-[color-mix(in_srgb,var(--color-warning)_8%,transparent)] px-3 py-2 text-xs text-[var(--color-text-dim)]">
+                    ⚠️ Uygulamaya uzaktan (ör. VPS) erişiyorsun. Otomatik giriş yalnız tarayıcı ile
+                    sunucu aynı makinedeyken çalışır — dönüş adresi (<code>localhost</code>) senin
+                    kendi cihazını işaret eder, sunucuyu değil. Uzaktan giriş için{' '}
+                    <button
+                      onClick={() => setBrowserMode('manual')}
+                      className="font-medium text-[var(--color-accent)] hover:underline"
+                    >
+                      Elle kod
+                    </button>{' '}
+                    modunu kullan.
+                  </div>
+                )}
                 {browserMode === 'auto' ? (
                   !loopbackFlowId ? (
                     <Button onClick={startAutoLogin} size="lg" disabled={oauthBusy}>
