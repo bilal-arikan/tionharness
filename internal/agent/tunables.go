@@ -106,6 +106,11 @@ type Tunables struct {
 	// future turns' dynamic context. Costs one cheap-model call per failing turn.
 	lessonReflect bool
 
+	// language is the user's preferred reply language as a human name (e.g.
+	// "Turkish (Türkçe)"), mirrored from Settings.Language so non-chat producers
+	// (insight analyzer) can write their output in it. "" = model default.
+	language string
+
 	// Working-directory guards (fs/shell are otherwise unconfined).
 	autonomousConfine    bool // confine fs/shell to the working dir on autonomous turns (default on)
 	gitWorktreeIsolation bool // give autonomous sessions a per-session git worktree (default off)
@@ -636,6 +641,22 @@ func (t *Tunables) LessonReflect() bool {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 	return t.lessonReflect
+}
+
+// SetLanguage stores the user's preferred reply language as a human name (e.g.
+// "Turkish (Türkçe)"), so non-chat producers (insight analyzer, ...) can write
+// their output in it. Empty = no preference (model default).
+func (t *Tunables) SetLanguage(name string) {
+	t.mu.Lock()
+	t.language = name
+	t.mu.Unlock()
+}
+
+// Language returns the user's preferred reply language name ("" = unset).
+func (t *Tunables) Language() string {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	return t.language
 }
 
 // ReactiveKeepRecent returns the in-flight compaction tail size (default when <2,

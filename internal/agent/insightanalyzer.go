@@ -51,21 +51,36 @@ var insightFindingsSchema = json.RawMessage(`{
   "required": ["findings"]
 }`)
 
-func (a *insightAnalyzer) Analyze(ctx context.Context, req insight.AnalysisRequest) ([]insight.Finding, error) {
+// analysisUserPrompt assembles the analyzer's user message: the lens prompt, the
+// session evidence, the strict-JSON instruction, and — when lang is non-empty — a
+// directive to write the user-facing prose fields in that language (code
+// identifiers, paths and the signature stay verbatim so dedup/file-pointers hold).
+func analysisUserPrompt(req insight.AnalysisRequest, lang string) string {
 	var b strings.Builder
 	b.WriteString(strings.TrimSpace(req.Lens.Prompt))
 	b.WriteString("\n\n--- SESSION EVIDENCE ---\n")
 	b.WriteString(req.Transcript)
 	b.WriteString("\n\nReturn ONLY JSON of the form {\"findings\":[{\"title\":...,\"rootCause\":...,\"proposedFix\":...,\"filePointer\":...,\"severity\":\"low|med|high\",\"signature\":...}]}. " +
 		"Use a STABLE signature per problem shape (tool/error shape, not volatile ids). Empty array if nothing qualifies.")
+	if lang != "" {
+		b.WriteString(" Write the title, rootCause and proposedFix in " + lang +
+			"; keep the signature, code identifiers and file paths verbatim (do not translate them).")
+	}
+	return b.String()
+}
 
+func (a *insightAnalyzer) Analyze(ctx context.Context, req insight.AnalysisRequest) ([]insight.Finding, error) {
+	lang := ""
+	if a.rt != nil && a.rt.tun != nil {
+		lang = a.rt.tun.Language()
+	}
 	system := a.rt.readPrompt("insight-analyzer")
 	resp, err := a.rt.guardedComplete(WithPromptTrace(WithCallKind(ctx, KindReflect), "insight-analyzer", system), a.agent, providers.Request{
 		Model:        a.model,
 		System:       system,
 		MaxTokens:    1500,
 		OutputSchema: insightFindingsSchema,
-		Messages:     []providers.Message{{Role: providers.RoleUser, Text: b.String()}},
+		Messages:     []providers.Message{{Role: providers.RoleUser, Text: analysisUserPrompt(req, lang)}},
 	}, false)
 	if err != nil {
 		return nil, err

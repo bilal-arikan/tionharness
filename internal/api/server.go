@@ -270,6 +270,7 @@ func (s *Server) applySettings() {
 	s.tun.SetToolGuardThresholds(cur.GuardExactWarn, cur.GuardExactBlock, cur.GuardSameToolWarn, cur.GuardSameToolHalt, cur.GuardNoProgressWarn, cur.GuardNoProgressBlck)
 	s.tun.SetStuckTurnThreshold(cur.StuckTurnThreshold)
 	s.tun.SetLessonReflect(cur.LessonReflect)
+	s.tun.SetLanguage(languageName(cur.Language))
 	s.tun.SetMaxOutputTokens(cur.MaxOutputTokens)
 	if s.backups != nil {
 		s.backups.Configure(backup.Config{

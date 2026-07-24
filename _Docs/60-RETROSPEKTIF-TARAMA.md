@@ -197,7 +197,7 @@ stateDiagram-v2
 | `internal/insight/scanner.go` | Pipeline + `SessionSignals` extraction + prefilter + inkremental + dedupe (`Analyzer` seam) | ✅ Faz 1 (LLM impl hariç) |
 | `internal/insight/router.go` | Kanal A: `RenderAppFixReport` + `AppendBacklog` (idempotent, insight-sig marker) | ✅ Faz 1 |
 | `internal/insight/settings.go` | `Settings{AppFixRepoPath,MaxSessions}` load/save | ✅ Faz 1 |
-| `internal/agent/insightanalyzer.go` | Gerçek `Analyzer`: `guardedComplete` + structured output + parse-with-fallback | ✅ Faz 1 |
+| `internal/agent/insightanalyzer.go` | Gerçek `Analyzer`: `guardedComplete` + structured output + parse-with-fallback. Prompt, kullanıcı dilinde (`Settings.Language` → `Tunables.Language()`) title/rootCause/proposedFix üretir; signature/kod/dosya-yolları verbatim kalır. | ✅ Faz 1 |
 | `internal/agent/insightscan.go` | `Runtime.RunInsightScan` orchestration (seed→scan→backlog route) | ✅ Faz 1 |
 | `internal/api/insight.go` | REST uçları (lenses/scan/findings/settings) + server.go route kaydı | ✅ Faz 1 |
 | `internal/insight/router.go` Kanal B | `AppendWorkspaceActions` → `insight/WORKSPACE-ACTIONS.md` (idempotent) | ✅ Faz 2.5 |
