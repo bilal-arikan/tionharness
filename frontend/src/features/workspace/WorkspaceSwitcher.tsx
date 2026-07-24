@@ -9,6 +9,10 @@ interface Props {
   workspaces: Workspace[]
   activeId: string | null
   unreadIds: Set<string>
+  // Workspaces (active OR not) with a run currently in flight — each list row
+  // pulses a green "çalışıyor" dot, and a non-active busy one also pulses the
+  // trigger. Sourced from GET /api/workspaces/activity.
+  busyIds?: Set<string>
   // Active workspace rollup: any view busy / any unsaved edit (shown on the label).
   activeBusy?: boolean
   activeDirty?: boolean
@@ -43,7 +47,7 @@ function openInNewWindow(id: string) {
   window.open(`${window.location.origin}${window.location.pathname}#${route}`, '_blank', 'noopener')
 }
 
-export function WorkspaceSwitcher({ workspaces, activeId, unreadIds, activeBusy, activeDirty, favoriteId, onToggleFavorite, onSwitch, onCreate, onOpenSettings, trailing }: Props) {
+export function WorkspaceSwitcher({ workspaces, activeId, unreadIds, busyIds, activeBusy, activeDirty, favoriteId, onToggleFavorite, onSwitch, onCreate, onOpenSettings, trailing }: Props) {
   const [open, setOpen] = useState(false)
   const [showCreate, setShowCreate] = useState(false)
   // Close the dropdown when clicking anywhere outside it (detached while closed).
@@ -52,6 +56,9 @@ export function WorkspaceSwitcher({ workspaces, activeId, unreadIds, activeBusy,
   const active = workspaces.find((w) => w.id === activeId)
   // Any non-active workspace with pending activity → the trigger shows a dot.
   const hasUnread = unreadIds.size > 0
+  // A run is live in some OTHER workspace → the trigger dot pulses (distinct from
+  // a merely-unseen completed one).
+  const hasOtherBusy = Array.from(busyIds ?? []).some((id) => id !== activeId)
 
   // Await the (async) creation before dismissing so the modal can show a busy
   // state for the whole backend provision (claude-home seed + runtime + scheduler)
@@ -80,8 +87,13 @@ export function WorkspaceSwitcher({ workspaces, activeId, unreadIds, activeBusy,
             style={active?.color ? { backgroundColor: active.color + '33' } : undefined}
           >
             {active?.icon || '⬡'}
-            {hasUnread && (
-              <span className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-[var(--color-accent)] ring-2 ring-[var(--color-surface-2)]" />
+            {(hasUnread || hasOtherBusy) && (
+              <span
+                className={`absolute -right-1 -top-1 h-2 w-2 rounded-full bg-[var(--color-accent)] ring-2 ring-[var(--color-surface-2)] ${
+                  hasOtherBusy ? 'animate-pulse' : ''
+                }`}
+                title={hasOtherBusy ? 'Başka workspace’te işlem sürüyor' : 'Başka workspace’te yeni etkinlik'}
+              />
             )}
           </span>
           {/* Active-workspace signals sit inline next to the icon so the parent's
@@ -149,8 +161,32 @@ export function WorkspaceSwitcher({ workspaces, activeId, unreadIds, activeBusy,
                     {w.id}
                   </span>
                 </span>
-                {unreadIds.has(w.id) && (
-                  <span className="h-2 w-2 shrink-0 rounded-full bg-[var(--color-accent)]" title="Yeni etkinlik" />
+                {/* Explicit per-workspace run state, so the dropdown reads at a
+                    glance without decoding a 2px dot. A live run (green pulse +
+                    "çalışıyor") takes precedence over the settled unread state
+                    ("tamamlandı" — an unseen completion in a non-active
+                    workspace, from the SSE badge). */}
+                {busyIds?.has(w.id) ? (
+                  <span
+                    className="flex shrink-0 items-center gap-1 text-[10px] font-medium text-[var(--color-success)]"
+                    title="İşlem sürüyor"
+                  >
+                    <span className="relative flex h-2 w-2">
+                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[var(--color-success)] opacity-75" />
+                      <span className="relative inline-flex h-2 w-2 rounded-full bg-[var(--color-success)]" />
+                    </span>
+                    çalışıyor
+                  </span>
+                ) : (
+                  unreadIds.has(w.id) && (
+                    <span
+                      className="flex shrink-0 items-center gap-1 text-[10px] font-medium text-[var(--color-accent)]"
+                      title="Tamamlandı — görülmemiş etkinlik"
+                    >
+                      <span className="h-2 w-2 rounded-full bg-[var(--color-accent)]" />
+                      tamamlandı
+                    </span>
+                  )
                 )}
               </button>
               {onToggleFavorite && (

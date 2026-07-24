@@ -12,6 +12,11 @@ import { req } from './client'
 
 export const workspaceApi = {
   listWorkspaces: () => req<Workspace[]>('/api/workspaces'),
+  // Cross-workspace live-run flags: for every workspace, whether it currently has
+  // any run in flight. Powers the switcher's per-row "çalışıyor" pulse for
+  // non-active workspaces (the active one's per-view busy comes from /api/activity).
+  listWorkspacesActivity: () =>
+    req<{ id: string; running: boolean }[]>('/api/workspaces/activity'),
   // Available workspace templates (agents/flow blueprints) for the create dialog.
   listWorkspaceTemplates: () => req<WorkspaceTemplate[]>('/api/workspace-templates'),
   createWorkspace: (data: {

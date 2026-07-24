@@ -30,6 +30,10 @@ interface Props {
   workspaces: Workspace[]
   activeWorkspaceId: string | null
   unreadWorkspaceIds: Set<string>
+  // Workspaces (active OR not) with a run currently in flight, from
+  // GET /api/workspaces/activity. Drives the switcher's per-row "çalışıyor" pulse
+  // and — when a NON-active workspace is busy — a pulsing rollup on the rail label.
+  busyWorkspaceIds?: Set<string>
   // Per-view notification signals, each shown with a distinct dot on the nav item:
   //   busy   → pulsing accent dot (work running)
   //   unread → solid accent dot (unseen activity)
@@ -145,6 +149,7 @@ export function NavRail({
   workspaces,
   activeWorkspaceId,
   unreadWorkspaceIds,
+  busyWorkspaceIds,
   busyViews,
   unreadViews,
   dirtyViews,
@@ -157,6 +162,10 @@ export function NavRail({
   // unsaved edit. (Other workspaces surface via the unread-badge set.)
   const anyBusy = (busyViews?.size ?? 0) > 0
   const anyDirty = (dirtyViews?.size ?? 0) > 0
+  // A run is in flight in some OTHER workspace (not the one on screen). Turns the
+  // "other workspace has activity" unread dot into a pulsing one so a live run
+  // elsewhere reads differently from a merely-unseen completed one.
+  const anyOtherBusy = Array.from(busyWorkspaceIds ?? []).some((id) => id !== activeWorkspaceId)
   const [collapsed, setCollapsed] = useState(
     () => localStorage.getItem(COLLAPSE_KEY) === '1',
   )
@@ -190,8 +199,13 @@ export function NavRail({
           style={active?.color ? { backgroundColor: active.color + '33' } : undefined}
         >
           {active?.icon || (active?.name ?? '?').charAt(0).toUpperCase()}
-          {unreadWorkspaceIds.size > 0 && (
-            <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-[var(--color-accent)] ring-2 ring-[var(--color-surface-2)]" />
+          {(unreadWorkspaceIds.size > 0 || anyOtherBusy) && (
+            <span
+              className={`absolute right-1 top-1 h-2 w-2 rounded-full bg-[var(--color-accent)] ring-2 ring-[var(--color-surface-2)] ${
+                anyOtherBusy ? 'animate-pulse' : ''
+              }`}
+              title={anyOtherBusy ? 'Başka workspace’te işlem sürüyor' : 'Başka workspace’te yeni etkinlik'}
+            />
           )}
           {anyDirty && (
             <span
@@ -211,6 +225,7 @@ export function NavRail({
           workspaces={workspaces}
           activeId={activeWorkspaceId}
           unreadIds={unreadWorkspaceIds}
+          busyIds={busyWorkspaceIds}
           activeBusy={anyBusy}
           activeDirty={anyDirty}
           favoriteId={favoriteWorkspaceId}

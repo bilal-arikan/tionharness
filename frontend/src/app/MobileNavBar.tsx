@@ -16,6 +16,8 @@ interface Props {
   workspaces: Workspace[]
   activeWorkspaceId: string | null
   unreadWorkspaceIds?: Set<string>
+  // Workspaces with a live run — pulses a "çalışıyor" dot in the mobile picker.
+  busyWorkspaceIds?: Set<string>
   onSwitchWorkspace: (id: string) => void
   onCreateWorkspace: (data: NewWorkspaceData) => void
 }
@@ -40,6 +42,7 @@ export function MobileNavBar({
   workspaces,
   activeWorkspaceId,
   unreadWorkspaceIds,
+  busyWorkspaceIds,
   onSwitchWorkspace,
   onCreateWorkspace,
 }: Props) {
@@ -59,6 +62,7 @@ export function MobileNavBar({
         workspaces={workspaces}
         activeId={activeWorkspaceId}
         unreadIds={unreadWorkspaceIds}
+        busyIds={busyWorkspaceIds}
         onSwitch={onSwitchWorkspace}
         onCreate={onCreateWorkspace}
       />

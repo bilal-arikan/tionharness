@@ -7,6 +7,8 @@ interface Props {
   workspaces: Workspace[]
   activeId: string | null
   unreadIds?: Set<string>
+  // Workspaces (active OR not) with a live run — pulses a green "çalışıyor" dot.
+  busyIds?: Set<string>
   onSwitch: (id: string) => void
   onCreate: (data: NewWorkspaceData) => void
 }
@@ -16,12 +18,14 @@ interface Props {
 // an UPWARD menu (the bar sits at the screen bottom) to switch between workspaces
 // or create a new one. It is intentionally rendered OUTSIDE the nav's horizontal
 // scroll strip so its upward popup is not clipped by the scroller's overflow.
-export function MobileWorkspaceButton({ workspaces, activeId, unreadIds, onSwitch, onCreate }: Props) {
+export function MobileWorkspaceButton({ workspaces, activeId, unreadIds, busyIds, onSwitch, onCreate }: Props) {
   const [open, setOpen] = useState(false)
   const [showCreate, setShowCreate] = useState(false)
   const rootRef = useOutsideClick<HTMLDivElement>(() => setOpen(false), open)
   const active = workspaces.find((w) => w.id === activeId)
   const hasUnread = (unreadIds?.size ?? 0) > 0
+  // A run is live in some OTHER workspace → the trigger dot pulses.
+  const hasOtherBusy = Array.from(busyIds ?? []).some((id) => id !== activeId)
 
   const create = (data: NewWorkspaceData) => {
     onCreate(data)
@@ -46,10 +50,12 @@ export function MobileWorkspaceButton({ workspaces, activeId, unreadIds, onSwitc
           {active?.icon || '⬡'}
         </span>
         <span className="max-w-[4.5rem] truncate">{active?.name || 'Workspace'}</span>
-        {hasUnread && (
+        {(hasUnread || hasOtherBusy) && (
           <span
-            className="absolute right-2 top-1 h-1.5 w-1.5 rounded-full bg-[var(--color-accent)]"
-            title="Yeni etkinlik"
+            className={`absolute right-2 top-1 h-1.5 w-1.5 rounded-full bg-[var(--color-accent)] ${
+              hasOtherBusy ? 'animate-pulse' : ''
+            }`}
+            title={hasOtherBusy ? 'Başka workspace’te işlem sürüyor' : 'Yeni etkinlik'}
           />
         )}
       </button>
@@ -84,8 +90,29 @@ export function MobileWorkspaceButton({ workspaces, activeId, unreadIds, onSwitc
                 {w.icon || '⬡'}
               </span>
               <span className="flex-1 truncate">{w.name || 'İsimsiz'}</span>
-              {unreadIds?.has(w.id) && (
-                <span className="h-2 w-2 shrink-0 rounded-full bg-[var(--color-accent)]" title="Yeni etkinlik" />
+              {/* Explicit run state (green pulse "çalışıyor" wins over the settled
+                  "tamamlandı" unread state), mirroring the desktop switcher. */}
+              {busyIds?.has(w.id) ? (
+                <span
+                  className="flex shrink-0 items-center gap-1 text-[10px] font-medium text-[var(--color-success)]"
+                  title="İşlem sürüyor"
+                >
+                  <span className="relative flex h-2 w-2">
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[var(--color-success)] opacity-75" />
+                    <span className="relative inline-flex h-2 w-2 rounded-full bg-[var(--color-success)]" />
+                  </span>
+                  çalışıyor
+                </span>
+              ) : (
+                unreadIds?.has(w.id) && (
+                  <span
+                    className="flex shrink-0 items-center gap-1 text-[10px] font-medium text-[var(--color-accent)]"
+                    title="Tamamlandı — görülmemiş etkinlik"
+                  >
+                    <span className="h-2 w-2 rounded-full bg-[var(--color-accent)]" />
+                    tamamlandı
+                  </span>
+                )
               )}
             </button>
           ))}

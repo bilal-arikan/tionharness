@@ -20,6 +20,7 @@ export const SIGNAL_AGENTS = 'agents' // AgentsView
 export const SIGNAL_FLOWS = 'flows' // FlowsPanel
 export const SIGNAL_SCHEDULES = 'schedules' // SchedulesPanel
 export const SIGNAL_ARTIFACTS = 'artifacts' // Artifact views
+export const SIGNAL_WORKSPACE_ACTIVITY = 'workspace-activity' // cross-workspace live-run flags (switcher pulse)
 
 // signalsForEvent returns the set of signal keys that should bump for the
 // given event. App.tsx's onEventRef walks this set and calls debouncedBump.
@@ -100,4 +101,21 @@ export function debouncedBump(key: string): void {
 export function bumpSignalsForEvent(e: AppEvent): void {
   const keys = signalsForEvent(e)
   for (const k of keys) debouncedBump(k)
+}
+
+// Run-lifecycle event types: those whose start/end flips a workspace's live-run
+// state (a turn / task / flow beginning or finishing). Used to instantly refresh
+// the cross-workspace switcher pulse.
+const RUN_LIFECYCLE_TYPES = new Set(['chat', 'flow', 'schedule', 'spawned', 'worker', 'task'])
+
+// bumpWorkspaceActivityForEvent nudges the cross-workspace live-run signal
+// (useWorkspaceActivity) when a run started or ended — for ANY workspace,
+// including non-active ones. It is intentionally separate from
+// bumpSignalsForEvent: the latter's executions/activity keys are active-workspace
+// scoped, so bumping them for a NON-active workspace's event would only trigger a
+// wasted refetch of unchanged active-workspace data. This dedicated key drives the
+// one consumer that IS cross-workspace, so a run elsewhere lights the switcher
+// pulse instantly instead of waiting for the next poll tick.
+export function bumpWorkspaceActivityForEvent(e: AppEvent): void {
+  if (RUN_LIFECYCLE_TYPES.has(e.type)) debouncedBump(SIGNAL_WORKSPACE_ACTIVITY)
 }
