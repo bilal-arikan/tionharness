@@ -1,7 +1,7 @@
 # Generic Bildirim Sinyalleri (nav + workspace)
 
 > "Dışarıya ve kullanıcıya haber verme" katmanı tek bir generic sisteme toplandı.
-> Son güncelleme: **2026-06-23**
+> Son güncelleme: **2026-07-24** (çapraz-workspace "çalışıyor" nabzı eklendi)
 
 ## Üç dik sinyal
 
@@ -51,6 +51,23 @@ graph TD
   collapsed workspace ikonu, aktif workspace'in toplu sinyalini gösterir; diğer
   workspace'ler mevcut unread rozetinden gelir.
 
+## Çapraz-workspace "çalışıyor" (workspace listesi)
+
+`busy` sinyali per-view olarak yalnız **aktif** workspace'i kapsar (`/api/activity`
+o workspace-scoped). Workspace **listesinde** (switcher açılır menüsü) aktif olmayan
+workspace'lerde de canlı koşuyu göstermek için ayrı bir çapraz-workspace sinyal var:
+
+| Parça | Görev |
+|-------|-------|
+| **Backend** `GET /api/workspaces/activity` (`api/activity.go` → `handleWorkspacesActivity` + `workspaceRunning`) | Her workspace için tek `running` bayrağı: aktif oturum (server-wide `chatRuns` + runtime), çalışan task/flow run. Global route (aktif workspace gerektirmez). |
+| **Hook** `app/useWorkspaceActivity.ts` | 4sn poll + **iki** refresh sinyali → `busyWorkspaceIds: Set<string>`. `executions` (aktif ws'in kendi başlat/bitir) + `workspace-activity` (herhangi bir ws'te run-lifecycle olayı; aktif olmayan ws'ler için anlık). |
+| **SSE anlık tazeleme** `useAppEvents` | Çapraz-workspace dalında (`markWorkspaceUnread` yanında) `bumpWorkspaceActivityForEvent(e)` → run-lifecycle tipleri (`chat/flow/schedule/spawned/worker/task`) `workspace-activity` sinyalini bumlar. Aktif-scoped `executions`/`activity` sinyalleri çapraz-ws'te **bilerek bumlanmaz** (boşuna refetch olmasın). |
+| **UI** | `WorkspaceSwitcher` / `MobileWorkspaceButton` açılır listede her satırda **açık metin etiketi**: yeşil nabız + **"çalışıyor"** (`--color-success`) ya da accent nokta + **"tamamlandı"** (`--color-accent`). `running` `unread`'in **önüne** geçer. Aktif olmayan bir workspace çalışıyorsa switcher trigger'ı + collapsed rail ikonu accent noktayı **pulse** eder (`anyOtherBusy`). Aktif workspace'in kendi "tamamlandı"sı listede filtrelenir (`unreadWs` aktif ws'i çıkarır) çünkü zaten oturum listesinde `StatusPill` ile zengin gösterilir. |
+
+**"Tamamlandı"** ayrı bir sinyal DEĞİL — biten koşu mevcut SSE `unread` accent
+noktası olarak yansır (`markWorkspaceUnread`, cross-window kalıcı). Yani liste
+satırında: yeşil nabız = çalışıyor, accent dolu nokta = tamamlandı/görülmemiş.
+
 ## Pencere dışı: tab başlığı + taskbar rozeti
 
 Toplam **görülmemiş** öğe sayısı pencere dışına da taşınır:
@@ -76,6 +93,27 @@ yayınlar → aynı SSE borusu → OS toast (`agent` tipi `NOTIFY_TYPES`'ta, sus
 Bloklamaz; sink yoksa (otonom, açık client yok) graceful no-op. Native + claude-cli
 yollarının ikisinde de çalışır; kaynak `internal/api/notifysink.go`. Kullanım: ajanın
 kullanıcı uygulamaya bakmıyorken haber vermesi gereken durumlar ("uzun iş bitti", "hata").
+
+## Masaüstü bildirim ana anahtarı: workspace override (3-durumlu)
+
+Masaüstü OS-toast'larını kesen **ana anahtar** iki kaynaktan çözülür: uygulama-genel
+varsayılan (`AppSettings.DesktopNotifications`) + **aktif workspace'in override'ı**.
+Bu, TionSwarm'ın fiziksel workspace izolasyonuyla tutarlı — kullanıcı arka planda
+koşan bir "otonom" workspace'i susturup üzerinde çalıştığını açık tutabilir (ya da
+tersi).
+
+| Katman | Alan | Anlam |
+|--------|------|-------|
+| **Backend model** `internal/workspace/settings.go` | `WSSettings.DesktopNotifications *bool` (`omitempty`) | `nil` = genel ayarı miras al (varsayılan); `*true`/`*false` = bu workspace için zorla aç/kapat. |
+| **Patch** aynı dosya | `WSSettingsPatch.DesktopNotifications **bool` (`json:"-"`) + özel `UnmarshalJSON` | Üç durumu ayırır: nil (dokunma) / non-nil→nil iç (override'ı temizle) / non-nil bool (zorla). Tel string'i (`"inherit"\|"on"\|"off"`) `UnmarshalJSON` bu şekle map eder; tanınmayan değer hata verir. |
+| **DTO** `internal/api/workspace_settings.go` | `desktopNotifications string` (`desktopNotificationsToString`) | `nil→"inherit"`, `true→"on"`, `false→"off"`. |
+| **Frontend tip** `frontend/src/types/workspace.ts` | `DesktopNotificationsMode = 'inherit'\|'on'\|'off'` | `WorkspaceSettings.desktopNotifications` + patch alanı. |
+| **Çözümleyici** `frontend/src/shared/lib/desktopNotifications.ts` | `resolveDesktopNotifications(wsMode, globalEnabled)` | Override `inherit` değilse onu, yoksa geneli döndürür. |
+| **Efektif kapı** `frontend/src/app/useAppearance.ts` | `notifyEnabled` ref | Genel master + aktif-ws override iki ayrı ref'te; her biri değişince `applyResolvedNotify()` `notifyEnabled.current`'ı yeniden hesaplar. Bu ref, hem `useAppEvents` hem chat-stream toast yollarının **tek** ana kapısıdır. |
+| **UI** `frontend/src/features/settings/NotificationsPanel.tsx` | `Segmented` 3-durumlu kontrol | Ana toggle'ın altında "Bu workspace için bildirimler". Kendi kendine yüklenir/kaydeder (`updateWorkspaceSettings`), sonra `onWorkspaceNotifySaved(mode)` ile canlı yeniden çözümlemeyi tetikler (workspace switch beklemeden). |
+
+Not: **Tip-bazlı** mute (task/flow/schedule/agent — `notifyPrefs.ts`) hâlâ cihaz-özel
+(`localStorage`), workspace-bağımsız. Yalnız ana anahtar workspace-scoped yapıldı.
 
 ## Yeni bir event tipi/görünüm eklemek
 

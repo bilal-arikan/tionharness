@@ -26,6 +26,10 @@ export interface WorkspaceTemplate {
   hasFlow: boolean
 }
 
+// Three-state per-workspace override of the app-global desktop-notification
+// master toggle. 'inherit' = follow the global AppSettings value.
+export type DesktopNotificationsMode = 'inherit' | 'on' | 'off'
+
 // Per-workspace settings (overrides + rename). Resolved from X-Workspace-Id.
 export interface WorkspaceSettings {
   id: string
@@ -51,6 +55,10 @@ export interface WorkspaceSettings {
   boardColumns: BoardColumnDef[]
   // Keys of post-create advisory cards the user dismissed for this workspace.
   ignoredRecommendations: string[]
+  // This workspace's override of the app-global desktop-notification master toggle.
+  // Three-state: 'inherit' follows AppSettings.desktopNotifications (default),
+  // 'on'/'off' force OS toasts for this workspace regardless of the global toggle.
+  desktopNotifications: DesktopNotificationsMode
   createdAt: number
   agentCount: number
   sessionCount: number
@@ -76,6 +84,7 @@ export type WorkspaceSettingsPatch = Partial<
     | 'autoCaptureArtifacts'
     | 'boardColumns'
     | 'ignoredRecommendations'
+    | 'desktopNotifications'
   >
 >
 

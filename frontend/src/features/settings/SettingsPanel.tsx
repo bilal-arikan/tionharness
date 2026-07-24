@@ -17,12 +17,14 @@ import {
 import {
   ProfilePanel,
   NotificationsPanel,
+  SoundPanel,
   ContextPanel,
   AutoTitlePanel,
   ToolsPanel,
   BackupPanel,
   AboutPanel,
 } from './appPanels'
+import type { DesktopNotificationsMode } from '@/types/workspace'
 import { useRegisterDirty } from '@/shared/lib/dirtySignals'
 import { Button, CollapsibleListShell } from '@/shared/components'
 import { ProvidersPanel } from './ProvidersPanel'
@@ -36,6 +38,10 @@ interface Props {
   onError: (msg: string) => void
   // Re-apply theme/accent globally after an app-settings save.
   onSaved: (s: AppSettings) => void
+  // Re-resolve the effective desktop-notification gate after the active
+  // workspace's three-state override is saved from the Notifications panel, so it
+  // applies live without a workspace switch or a global-settings reload.
+  onWorkspaceNotifySaved?: (mode: DesktopNotificationsMode) => void
   // Slash commands available in the chat composer — shown read-only in the
   // "Komutlar" reference category.
   commands?: SlashCommand[]
@@ -63,7 +69,7 @@ function isCat(v: string | null | undefined): v is Cat {
 // left (like the chat session list) and the selected category's fields on the
 // right. App-global settings and per-workspace settings are separate scopes.
 // The per-category forms live in ./settings/*.
-export function SettingsPanel({ onError, onSaved, commands = [], cat: catProp, onCatChange, reloadNonce = 0, navOpen, onToggleNav }: Props) {
+export function SettingsPanel({ onError, onSaved, onWorkspaceNotifySaved, commands = [], cat: catProp, onCatChange, reloadNonce = 0, navOpen, onToggleNav }: Props) {
   // Category is controlled by the parent (URL deep-link) when onCatChange is
   // given; an unknown/empty routed category falls back to 'profile'.
   const [catState, setCatState] = useState<Cat>('profile')
@@ -315,10 +321,11 @@ export function SettingsPanel({ onError, onSaved, commands = [], cat: catProp, o
               {cat === 'backup' && <BackupPanel draft={draft} set={set} setDraft={setDraft} />}
               {cat === 'hooks' && <HooksPanel onError={onError} />}
               {cat === 'exttools' && <ExternalToolsPanel onError={onError} />}
+              {cat === 'sound' && <SoundPanel />}
               {cat === 'advanced' && (
                 <>
                   <AdvSection title="Bildirimler & Ekran" icon={Bell}>
-                    <NotificationsPanel draft={draft} set={set} setDraft={setDraft} />
+                    <NotificationsPanel draft={draft} set={set} setDraft={setDraft} onError={onError} onWorkspaceNotifySaved={onWorkspaceNotifySaved} />
                   </AdvSection>
                   <AdvSection title="Otomatik Başlık" icon={Tag}>
                     <AutoTitlePanel draft={draft} set={set} setDraft={setDraft} />

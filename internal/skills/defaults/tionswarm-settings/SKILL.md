@@ -46,6 +46,12 @@ update_settings → {"patch": {"autoTitleEnabled": false}}
   reply-language directive inside the "## About the user" block (agents default to
   this language). Not yet injected into autonomous/flow turns.
 - `desktopNotifications`, `keepAwake` — booleans (applied client-side).
+  `desktopNotifications` here is the app-global **default** master toggle for OS
+  toasts. Each workspace may **override** it via the workspace-settings field
+  `desktopNotifications` (three-state: `"inherit"` = follow this global default,
+  `"on"`/`"off"` = force for that workspace), edited under Settings ▸ Bildirimler.
+  The effective gate = workspace override unless `"inherit"`, then the global value.
+  Per-*type* mute (task/flow/schedule/agent) stays device-local (localStorage).
 
 ### Providers & model
 - `defaultProvider` — `"claude-cli"` | `"anthropic"` (default `claude-cli`).

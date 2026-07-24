@@ -86,6 +86,16 @@ type WSSettings struct {
 	// not re-offered. Purely UI state — no runtime effect. Manageable (review +
 	// un-ignore) from the Settings ▸ Öneriler panel.
 	IgnoredRecommendations []string `json:"ignoredRecommendations,omitempty"`
+
+	// DesktopNotifications overrides the app-global desktop-notification master
+	// toggle (AppSettings.DesktopNotifications) for this workspace. A three-state
+	// pointer: nil (absent in JSON) = inherit the global value; *true/*false =
+	// force notifications on/off for this workspace regardless of the global
+	// toggle. This lets a user silence a background "autonomous" workspace while
+	// keeping notifications on for the one they actively work in (or vice versa),
+	// consistent with TionSwarm's physical workspace isolation. Purely a client-side
+	// OS-toast gate — no backend runtime effect.
+	DesktopNotifications *bool `json:"desktopNotifications,omitempty"`
 }
 
 // defaultWSSettings is the seed used before overlaying a persisted ws-settings
@@ -126,6 +136,50 @@ type WSSettingsPatch struct {
 	BoardColumns *[]db.BoardColumnDef `json:"boardColumns"`
 
 	IgnoredRecommendations *[]string `json:"ignoredRecommendations"`
+
+	// DesktopNotifications is a pointer-of-pointer to distinguish all three states
+	// the patch must express: nil = leave unchanged; non-nil pointing at nil (**bool
+	// set, *bool nil) = clear the override (revert to "inherit global"); non-nil
+	// pointing at a bool = force on/off for this workspace. It is populated from the
+	// wire "inherit"|"on"|"off" string in UnmarshalJSON (json:"-" so the default
+	// decoder does not touch it).
+	DesktopNotifications **bool `json:"-"`
+}
+
+// UnmarshalJSON decodes the standard patch fields via a shadow type, then maps the
+// three-state desktopNotifications wire string ("inherit"|"on"|"off") onto the
+// DesktopNotifications **bool. An absent key leaves DesktopNotifications nil (patch
+// unchanged); "inherit" sets it to a non-nil pointer to a nil *bool (clear the
+// override); "on"/"off" set it to a pointer to true/false. An unrecognised value is
+// rejected so a client typo cannot silently no-op.
+func (p *WSSettingsPatch) UnmarshalJSON(data []byte) error {
+	type alias WSSettingsPatch // shares the field set, drops the custom method to avoid recursion
+	var shadow struct {
+		alias
+		DesktopNotifications *string `json:"desktopNotifications"`
+	}
+	if err := json.Unmarshal(data, &shadow); err != nil {
+		return err
+	}
+	*p = WSSettingsPatch(shadow.alias)
+	if shadow.DesktopNotifications != nil {
+		switch *shadow.DesktopNotifications {
+		case "inherit":
+			var cleared *bool // nil inner pointer => clear the override
+			p.DesktopNotifications = &cleared
+		case "on":
+			on := true
+			onPtr := &on
+			p.DesktopNotifications = &onPtr
+		case "off":
+			off := false
+			offPtr := &off
+			p.DesktopNotifications = &offPtr
+		default:
+			return errors.New("desktopNotifications must be one of: inherit, on, off")
+		}
+	}
+	return nil
 }
 
 // settingsHolder is embedded in Workspace to guard concurrent settings access.
@@ -255,6 +309,11 @@ func (m *Manager) UpdateSettings(id string, patch WSSettingsPatch) (*Workspace, 
 	}
 	if patch.IgnoredRecommendations != nil {
 		ws.settings.cur.IgnoredRecommendations = *patch.IgnoredRecommendations
+	}
+	if patch.DesktopNotifications != nil {
+		// *patch is the new override state: nil (inner) clears the override so this
+		// workspace inherits the global toggle again; a non-nil *bool forces it.
+		ws.settings.cur.DesktopNotifications = *patch.DesktopNotifications
 	}
 	paused := ws.settings.cur.PauseAutonomy
 	instructions := ws.settings.cur.Instructions

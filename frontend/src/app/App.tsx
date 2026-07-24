@@ -20,6 +20,7 @@ import { useSessionsController } from './useSessionsController'
 import { useExecutionRuntime } from './useExecutionRuntime'
 import { useWorkspaces } from './useWorkspaces'
 import { useActivity } from './useActivity'
+import { useWorkspaceActivity } from './useWorkspaceActivity'
 import { useUnreadViews } from './useUnreadViews'
 import { useUnreadBadge } from './useUnreadBadge'
 import { ChatView } from '@/features/chat/ChatView'
@@ -51,6 +52,8 @@ import { useIsMobile } from '@/shared/hooks/useMediaQuery'
 import { useCollapsibleList } from '@/shared/hooks/useCollapsibleList'
 import { isImagePath, mediaUrl } from '@/shared/lib/paths'
 import { copyToClipboard } from '@/shared/lib/clipboard'
+import { initServerTts, initTtsUnlock } from '@/shared/lib/tts'
+import { initServerStt } from '@/shared/lib/stt'
 
 export default function App() {
   const [error, setError] = useState<string | null>(null)
@@ -189,7 +192,7 @@ export default function App() {
   }, [])
 
   // Theme / keep-awake / desktop-notification preferences.
-  const { applyClientPrefs, onAppearanceSaved, notifyEnabled } = useAppearance(
+  const { applyClientPrefs, onAppearanceSaved, onWorkspaceNotifySaved, notifyEnabled } = useAppearance(
     activeWorkspaceId,
     setError,
   )
@@ -285,6 +288,11 @@ export default function App() {
     [ctl.sessions, chat.streamingSessions],
   )
   const busyViews = useActivity(activeWorkspaceId, chatBusyLocal)
+  // Cross-workspace live-run flags (GET /api/workspaces/activity): the set of
+  // workspaces — including non-active ones — that currently have a run in flight,
+  // so the switcher pulses a "çalışıyor" dot on each. Complements busyViews, which
+  // only covers the active workspace's per-view breakdown.
+  const busyWorkspaceIds = useWorkspaceActivity(activeWorkspaceId)
   // Per-view unread (unseen activity from the SSE feed) + unsaved-edit (dirty)
   // signals — the other two channels of the generic nav notification system.
   const { unreadViews, markViewUnread, markViewRead } = useUnreadViews(activeWorkspaceId)
@@ -306,6 +314,14 @@ export default function App() {
     markWorkspaceRead,
     markViewUnread,
   })
+
+  // Boot the read-aloud engine: probe for the optional server-side Piper TTS
+  // (so 'auto' prefers it) and arm the mobile autoplay unlock on first gesture.
+  useEffect(() => {
+    void initServerTts()
+    void initServerStt()
+    initTtsUnlock()
+  }, [])
 
   // Navigation guard: if the current screen has unsaved edits, confirm before
   // switching to another view so those edits are not silently lost. Returns true
@@ -400,6 +416,7 @@ export default function App() {
         workspaces={workspaces}
         activeWorkspaceId={activeWorkspaceId}
         unreadWorkspaceIds={unreadWs}
+        busyWorkspaceIds={busyWorkspaceIds}
         busyViews={busyViews}
         unreadViews={unreadViews}
         dirtyViews={dirtyViews as Set<View>}
@@ -609,6 +626,7 @@ export default function App() {
           <SettingsPanel
             onError={setError}
             onSaved={applyClientPrefs}
+            onWorkspaceNotifySaved={onWorkspaceNotifySaved}
             commands={chat.chatCommands}
             cat={links.settingsCat}
             onCatChange={links.setSettingsCat}
@@ -671,6 +689,7 @@ export default function App() {
         workspaces={workspaces}
         activeWorkspaceId={activeWorkspaceId}
         unreadWorkspaceIds={unreadWs}
+        busyWorkspaceIds={busyWorkspaceIds}
         onSwitchWorkspace={switchWorkspace}
         onCreateWorkspace={handleCreateWorkspace}
       />
