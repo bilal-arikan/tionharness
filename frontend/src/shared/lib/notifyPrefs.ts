@@ -1,23 +1,13 @@
-// Per-type desktop-notification preferences. The master toggle
-// (settings.desktopNotifications) gates all OS toasts; these refine it per event
-// type and are device-local (stored in localStorage, applied instantly). Muting
-// a type suppresses its OS toast.
-
-// The autonomous event types the runtime publishes (see internal/events). `chat`
-// is intentionally excluded: chat replies surface inside the session, never as a
-// background notification.
-export interface NotifTypeMeta {
-  type: string
-  label: string
-  hint: string
-}
-
-export const NOTIFY_TYPES: NotifTypeMeta[] = [
-  { type: 'task', label: 'Görevler', hint: 'Görev tamamlandı / başarısız oldu.' },
-  { type: 'flow', label: 'Akışlar', hint: 'Akış (flow) çalışması tamamlandı / başarısız oldu.' },
-  { type: 'schedule', label: 'Zamanlamalar', hint: 'Zamanlanmış prompt çalıştı / başarısız oldu.' },
-  { type: 'agent', label: 'Ajan', hint: 'Genel ajan bildirimleri.' },
-]
+// Per-type desktop-notification preferences: the mute/unmute persistence layer.
+// The master toggle (settings.desktopNotifications) gates all OS toasts; these
+// refine it per event type and are device-local (localStorage, applied instantly).
+// Muting a type suppresses its OS toast (its sound cue, if any, still follows the
+// separate sound-effects pref — see notifyBus.playCue).
+//
+// The catalogue of notifiable types lives in ONE place — notifyTypes.ts — so this
+// module only owns persistence; the UI and the toast funnel read the same list.
+export { NOTIFY_TYPES } from './notifyTypes'
+export type { NotifyType } from './notifyTypes'
 
 const KEY = 'tionswarm.notifyMutedTypes'
 

@@ -45,7 +45,7 @@ func (s notifySink) Notify(_ context.Context, spec tools.NotifySpec) error {
 		level = "info"
 	}
 	s.emit(events.Event{
-		Type:  "agent",
+		Type:  events.TypeAgent,
 		Level: level,
 		Title: spec.Title,
 		Body:  spec.Body,
@@ -80,6 +80,6 @@ func (s notifySink) Navigate(_ context.Context, spec tools.NavigateSpec) error {
 	if aid != "" {
 		target["agentId"] = aid
 	}
-	s.emit(events.Event{Type: "navigate", Level: "info", Target: target})
+	s.emit(events.Event{Type: events.TypeNavigate, Level: "info", Target: target})
 	return nil
 }

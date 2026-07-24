@@ -49,6 +49,13 @@ type Runtime struct {
 	wsID   string
 	wsName string
 
+	// anomalyNotified dedupes debug-anomaly desktop notifications per (session,
+	// code) so a persistent anomaly (e.g. low_cache_hit) toasts once per process
+	// rather than on every turn. Key is sessionID+"\x00"+code → struct{}. In-memory
+	// only: a process restart may re-notify a still-standing anomaly, which is
+	// acceptable for advisory coaching. Zero value is ready (no init).
+	anomalyNotified sync.Map
+
 	// logs is the process-wide ring buffer of captured log entries, exposed to
 	// agents through the read_logs self-management tool. May be nil.
 	logs *logbuf.Buffer

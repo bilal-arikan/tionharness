@@ -375,7 +375,7 @@ func (s *Scheduler) emitPromptDelivery(sc db.Schedule, sessionID string, err err
 			target = map[string]string{"view": "executions", "sessionId": sessionID}
 		}
 		s.rt.publish(events.Event{
-			Type:   "schedule",
+			Type:   events.TypeSchedule,
 			Level:  "error",
 			Title:  "⏰ Zamanlama başarısız — " + name,
 			Body:   notifyLine(err.Error(), 200),
@@ -384,7 +384,7 @@ func (s *Scheduler) emitPromptDelivery(sc db.Schedule, sessionID string, err err
 		return
 	}
 	s.rt.publish(events.Event{
-		Type:   "schedule",
+		Type:   events.TypeSchedule,
 		Level:  "success",
 		Title:  "⏰ Zamanlanmış prompt çalıştı — " + name,
 		Body:   notifyLine(sc.Prompt, 120),

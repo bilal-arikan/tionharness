@@ -158,22 +158,16 @@ ajanların baseline skill setine girer.
 ## UI görüntüleyici (salt-okunur kart)
 
 `GET /api/sessions/{id}/progress` (`api/progress.go::handleSessionProgress`) →
-`{path, exists, record}` (sink ile **aynı** dizin çözümü). Frontend: `SessionDetailPanel`
-"Görev Listesi · n/m" kartı (`ProgressCard`) — başlığı katla/aç toggle'ıdır
-(`localStorage` ile kalıcı); her madde statü işaretçisiyle
-(✓/⟳/☐, tamamlanan üstü çizili) + opsiyonel `category` + son 3 log satırı. Yalnız
-dosya varsa ve madde olduğunda gösterilir. `sessionProgress` API + `SessionProgress`
-tipi (`types/session.ts`).
+`{path, exists, record}` (sink ile **aynı** dizin çözümü). API + `SessionProgress`
+tipi (`types/session.ts`) korunur.
 
-**Dizin-scope görünürlüğü + tazeleme (2026-07-10):** Dosya **çalışma dizinine** bağlı
-olduğundan aynı cwd'yi paylaşan oturumlar tek `progress.json`'ı ezer (`record.sessionId`
-= son yazan). Kart artık: (a) `record.sessionId` panelin oturumundan farklıysa
-**"çalışma diziniyle paylaşılıyor — son yazan SESxxx"** uyarı notu + her zaman
-`updatedAt` zaman damgası gösterir (yanlış-atıf + bayatlık görünür); (b) progress'i
-`meterRefresh` (bu oturumun tur-sonu) yanında global **`executions` sinyalinde** de
-yeniden çeker — böylece BAŞKA bir oturum dosyayı değiştirince açık (ve boşta) panel
-donmaz, kendini tazeler (ucuz tek dosya-okuma endpoint'i). Önceki hata: non-running
-oturumda kart eski sayıda (örn. "2/8") donuyordu.
+**Bilgi panelinde görev listesi kaldırıldı (2026-07-24):** `SessionDetailPanel`
+artık "Görev Listesi" kartını (`ProgressCard`) render etmiyor — kart + progress
+fetch (`sessionProgress` + `executions` sinyaliyle tazeleme) paneiden çıkarıldı.
+Kalıcı ilerleme yalnız composer üstüne iğnelenen `TodoPanel` üzerinden görünür;
+`SessionProgressCard.tsx` artık kullanılmayan ölü bileşen. (`ProgressCard` eski
+davranışı: katla/aç toggle + statü işaretçisi + son 3 log; dizin-scope uyarı notu
++ `executions` sinyaliyle self-heal — hepsi kaldırıldı.)
 
 ## Dosyalar
 

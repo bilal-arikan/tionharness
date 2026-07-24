@@ -2,28 +2,14 @@
 // the generic "something changed" signal (SSE events) drives per-view unread dots
 // uniformly. App-global types (settings/workspaces) return null — they refresh
 // state but never badge a single view.
+//
+// The mapping is derived from the single notify-type registry (notifyTypes.ts) so
+// a view assignment and its Settings toggle can never drift apart. `task` is a
+// legacy alias for `board` (handled inside viewIdForType); spawned/worker runs are
+// sessions, so their badge lands on 'chat'.
 import type { View } from './NavRail'
+import { viewIdForType } from '@/shared/lib/notifyTypes'
 
 export function viewForEventType(type: string): View | null {
-  switch (type) {
-    case 'chat':
-      return 'chat'
-    case 'flow':
-      return 'flows'
-    case 'task':
-    case 'board':
-      return 'board'
-    case 'artifact':
-      return 'artifacts'
-    case 'schedule':
-      return 'schedules'
-    case 'spawned':
-    case 'worker':
-    case 'coordination':
-      // Spawned / worker / coordination runs are sessions; their transcripts live
-      // in the unified chat sidebar, so their unread badge lands on 'chat'.
-      return 'chat'
-    default:
-      return null
-  }
+  return viewIdForType(type) as View | null
 }

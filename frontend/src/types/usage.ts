@@ -195,6 +195,9 @@ export interface SessionDebugEvent {
   durMs?: number
   in?: number
   out?: number
+  // think is the estimated hidden-reasoning portion of `out` for an llm_call
+  // (already inside `out`; attribution only).
+  think?: number
   cacheRead?: number
   cacheWrite?: number
   outBytes?: number

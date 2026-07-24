@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Eye, Trash2 } from 'lucide-react'
+import { Eye, Trash2, Star } from 'lucide-react'
 import { useRegisterDirty } from '@/shared/lib/dirtySignals'
 import type { View } from '@/app/NavRail'
 import type { Agent, AgentPatch } from '@/types'
@@ -24,6 +24,13 @@ interface Props {
   cancelLabel?: string
   /** Danger action: when set, a "Sil" button is shown at the footer-left. */
   onDelete?: () => void
+  /** Whether this agent is the default for new chats. Drives the header star
+   * toggle's filled/active state. */
+  isDefault?: boolean
+  /** Make this agent the default for new chats. When set, a star toggle is shown
+   * in the header (mirrors the roster's ★/☆ button). Takes effect immediately —
+   * independent of the form's Save. */
+  onSetDefault?: () => void
   /** When set, unsaved edits are surfaced on this nav view's dirty indicator.
    * The AgentsView page passes "agents"; the modal reuse leaves it unset so it
    * does not flag the nav from an unrelated screen. */
@@ -34,7 +41,7 @@ interface Props {
 // fields). It is reused both inside the modal (roster gear) and as the right
 // pane of the two-panel Agents view. Mount with a key={agent.id} so switching
 // the selected agent resets the field state.
-export function AgentSettingsForm({ agent, onSave, onSaved, onCancel, cancelLabel = 'İptal', onDelete, dirtyView }: Props) {
+export function AgentSettingsForm({ agent, onSave, onSaved, onCancel, cancelLabel = 'İptal', onDelete, isDefault, onSetDefault, dirtyView }: Props) {
   const [name, setName] = useState(agent.name)
   // Seed with a normalized avatar so an existing mojibake value is repaired on
   // open and persisted clean when the form is saved.
@@ -127,6 +134,22 @@ export function AgentSettingsForm({ agent, onSave, onSaved, onCancel, cancelLabe
         <div className="flex shrink-0 items-center gap-2">
           {savedAt > 0 && !saving && (
             <span className="text-xs text-[var(--color-text-dim)]">Kaydedildi ✓</span>
+          )}
+          {onSetDefault && (
+            <button
+              data-testid="agent-set-default-detail"
+              onClick={() => { if (!isDefault) onSetDefault() }}
+              disabled={isDefault}
+              title={isDefault ? 'Bu ajan yeni sohbetler için varsayılan' : 'Yeni sohbetler için varsayılan yap'}
+              className={`flex items-center gap-1.5 rounded px-3 py-1.5 text-sm transition ${
+                isDefault
+                  ? 'text-[var(--color-accent)]'
+                  : 'text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]'
+              }`}
+            >
+              <Star size={14} className={isDefault ? 'fill-current' : ''} />
+              {isDefault ? 'Varsayılan' : 'Varsayılan yap'}
+            </button>
           )}
           <button
             data-testid="agent-preview-context"

@@ -8,8 +8,7 @@ import type { Dispatch, RefObject, SetStateAction } from 'react'
 import type { Message, TurnStep } from '@/types'
 import type { HubEvent, SessionStreamHandlers } from '@/api/sessionStream'
 import { HubKind, windowClientId } from '@/api/sessionStream'
-import { notify } from '@/shared/lib/clientPrefs'
-import { playAskPrompt } from '@/shared/lib/sounds'
+import { emitToast } from '@/shared/lib/notifyBus'
 import type { PendingAsk } from './AskPrompt'
 import type { PendingItem } from './PendingTray'
 import { withAdded, withRemoved, withoutKey } from './chatStreamHelpers'
@@ -181,9 +180,12 @@ export function makeHubHandlers(ctx: HubApplyCtx): SessionStreamHandlers {
     const id = ask.interactionId
     if (id && cuedInteractions.has(id)) return
     if (id) cuedInteractions.add(id)
-    playAskPrompt()
+    // Route through the single funnel as the 'prompt' type: it plays the ask cue
+    // (sound-effects pref) then, unless 'prompt' is muted in Settings, raises the
+    // OS toast (master gate + backgrounded rule). Making it a real notify type is
+    // what lets the user silence ask/permission toasts like any other.
     const { title, body } = askCueText(ask)
-    notify(notifyEnabled.current, title, body, () => {}, `ask:${sid}:${id ?? ''}`)
+    emitToast({ type: 'prompt', enabled: notifyEnabled.current, title, body, tag: `ask:${sid}:${id ?? ''}` })
   }
 
   const resolveInteraction = (ev: HubEvent) => {

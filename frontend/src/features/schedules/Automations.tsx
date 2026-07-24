@@ -11,6 +11,7 @@ import { TargetModeToggle, FlowPicker } from './Schedules'
 
 // Fallback columns used until workspace board columns load (mirrors TaskBoard).
 const DEFAULT_COLUMNS: BoardColumnDef[] = [
+  { key: 'pbi', label: 'PBI', color: '' },
   { key: 'todo', label: 'Yapılacak', color: '' },
   { key: 'in_progress', label: 'Devam Eden', color: '' },
   { key: 'review', label: 'İnceleme', color: '' },

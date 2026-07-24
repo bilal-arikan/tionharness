@@ -112,11 +112,35 @@ tersi).
 | **Efektif kapı** `frontend/src/app/useAppearance.ts` | `notifyEnabled` ref | Genel master + aktif-ws override iki ayrı ref'te; her biri değişince `applyResolvedNotify()` `notifyEnabled.current`'ı yeniden hesaplar. Bu ref, hem `useAppEvents` hem chat-stream toast yollarının **tek** ana kapısıdır. |
 | **UI** `frontend/src/features/settings/NotificationsPanel.tsx` | `Segmented` 3-durumlu kontrol | Ana toggle'ın altında "Bu workspace için bildirimler". Kendi kendine yüklenir/kaydeder (`updateWorkspaceSettings`), sonra `onWorkspaceNotifySaved(mode)` ile canlı yeniden çözümlemeyi tetikler (workspace switch beklemeden). |
 
-Not: **Tip-bazlı** mute (task/flow/schedule/agent — `notifyPrefs.ts`) hâlâ cihaz-özel
-(`localStorage`), workspace-bağımsız. Yalnız ana anahtar workspace-scoped yapıldı.
+Not: **Tip-bazlı** mute (`notifyPrefs.ts`) hâlâ cihaz-özel (`localStorage`),
+workspace-bağımsız. Yalnız ana anahtar workspace-scoped yapıldı. Susturulabilir
+türlerin tam listesi artık tek registry'den gelir (aşağı bak) — `chat` (yanıt hazır)
+ve `prompt` (onay/soru) dahil.
 
-## Yeni bir event tipi/görünüm eklemek
+## Masaüstü toast: tek funnel + tek registry (2026-07-24 refactor)
 
-1. Mutasyon noktasında `publishEntityChange(wsp, "<type>", title, body, target)` çağır.
-2. `viewForEventType` içine `case "<type>": return '<view>'` ekle.
+Önceden "bu olay toast olsun mu?" kararı **üç ayrı yerde** kopyalanmıştı (SSE chat
+dalı, SSE generic dalı, session-stream ask yolu) → tip-bazlı mute yalnız birinde
+çalışıyor, chat-yanıtı ve ask/onay bildirimleri hiç susturulamıyordu. Ayrıca
+susturulabilir tiplerin listesi backend string literalleri + `NOTIFY_TYPES` +
+`viewForEventType`'a dağılmıştı → ayarlar ekranı gerçeği yansıtmıyordu (ör. hiç
+yayınlanmayan bir `task` tipini listeliyordu; oysa görev değişiklikleri `board`
+event'i). Refactor bunu tek kaynağa topladı:
+
+| Katman | Dosya | Görev |
+|--------|-------|-------|
+| **Backend registry** | `internal/events/types.go` | Tüm event tipleri için isimli sabitler (`TypeChat`/`TypeBoard`/…) + kullanıcıya-dönük **`NotifyKinds`** seti + `IsNotifyKind`. Toast üreten emit noktaları artık string literal yerine bu sabitleri kullanır. |
+| **Frontend registry** | `shared/lib/notifyTypes.ts` | Tek `NOTIFY_TYPES` listesi: `{type,label,hint,view,cue}`. `NotifyKinds`'ı yansıtır + yalnız-frontend `prompt` tipini ekler (ask/onay; backend event'i yok). `viewForEventType` (`eventViews.ts`) ve `notifyPrefs.NOTIFY_TYPES` bundan türer → ayarlar ekranı **tüm** tipleri otomatik yansıtır. |
+| **Tek funnel** | `shared/lib/notifyBus.ts` | `emitToast({type,enabled,title,body,tag,onClick})`: (1) tipin ses uyarısını çalar (`playCue` — yalnız ses-efektleri tercihine bağlı, tip-mute'tan bağımsız), (2) tip Ayarlar'da susturulmuşsa çıkar, (3) `clientPrefs.notify` ile master-gate + arka-plan kuralıyla OS toast. `useAppEvents` (chat + generic dal) ve `chatStreamHub` (ask) hepsi bunu çağırır. |
+
+`chat` ve `prompt` artık gerçek susturulabilir tip: türü kapatmak yalnız OS toast'ı
+susturur; ses uyarısı Ses ekranındaki "Ses efektleri" tercihini izlemeye devam eder.
+
+## Yeni bir bildirim tipi eklemek
+
+1. Backend'de `internal/events/types.go`: sabiti tanımla ve toastable ise
+   **`NotifyKinds`**'e ekle. Mutasyon noktasında sabiti kullan
+   (`publishEntityChange(wsp, events.Type<X>, …)` ya da `Runtime.Emit`).
+2. Frontend'de `shared/lib/notifyTypes.ts` → `NOTIFY_TYPES`'a `{type,label,hint,view,cue}`
+   satırı ekle. Ayarlar ekranı, view badge'i ve toast gating'i otomatik gelir.
 3. (Opsiyonel) editör ekranıysa `useRegisterDirty('<view>', isDirty)` ekle.

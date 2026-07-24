@@ -6,9 +6,7 @@
 import { useEffect, useRef, type Dispatch, type MutableRefObject, type SetStateAction } from 'react'
 import { api, getActiveWorkspace } from '@/api'
 import type { AppEvent, Message, TurnStep } from '@/types'
-import { isTypeEnabled } from '@/shared/lib/notifyPrefs'
-import { notify } from '@/shared/lib/clientPrefs'
-import { playTurnDone } from '@/shared/lib/sounds'
+import { emitToast } from '@/shared/lib/notifyBus'
 import { speakLatestReply } from '@/shared/lib/tts'
 import type { useChatStream } from '@/features/chat/useChatStream'
 import type { View } from './NavRail'
@@ -160,22 +158,23 @@ function onEvent(d: AppEventDeps, e: AppEvent) {
       // consumer of this session, regardless of which session the chat itself has
       // active. 'armed'/'start' phases are not ends.
       if (phase !== 'armed' && phase !== 'start') publishTurnEnd(sid)
-      // Completion feedback when a real assistant reply lands: a turn-done chime
-      // (gated by the device-local sound-effects pref) plus, when this window is
-      // backgrounded, an OS toast that deep-links to the session on click. The
+      // Completion feedback when a real assistant reply lands, routed through the
+      // single toast funnel: a turn-done chime (gated by the device-local
+      // sound-effects pref) plus, when this window is backgrounded and the 'chat'
+      // type is not muted, an OS toast that deep-links to the session on click. The
       // wake lifecycle phases (armed/start/cancelled) are NOT completions.
       if (!phase || phase === 'done') {
-        playTurnDone()
-        notify(
-          d.notifyEnabled.current,
-          e.title || 'Yanıt hazır',
-          e.body || '',
-          () => {
+        emitToast({
+          type: 'chat',
+          enabled: d.notifyEnabled.current,
+          title: e.title || 'Yanıt hazır',
+          body: e.body || '',
+          tag: `chat-done:${e.workspaceId ?? ''}:${sid}:${e.time}`,
+          onClick: () => {
             const r = routeFromEvent(e)
             if (r) window.location.hash = buildRoute(r)
           },
-          `chat-done:${e.workspaceId ?? ''}:${sid}:${e.time}`,
-        )
+        })
       }
     }
     // Autonomous turn completion (spawn / coordinator worker / scheduled run /
@@ -220,25 +219,29 @@ function onEvent(d: AppEventDeps, e: AppEvent) {
   if (!e.workspaceId || e.workspaceId === getActiveWorkspace()) {
     bumpSignalsForEvent(e)
   }
-  // Chat completions only drive the badge (the streaming turn already raises
-  // its own reply notification); other event types raise a desktop
+  // Chat completions are handled by the branch above (chime + toast via the
+  // funnel); here they only drove the badge. Other event types raise a desktop
   // notification that deep-links to the target on click.
   if (e.type === 'chat') return
-  // Raise an OS toast only when the master toggle is on AND this event type is
-  // not muted in Settings (per-type preference, device-local).
-  if (!isTypeEnabled(e.type)) return
-  // Tag the toast with the event identity so multiple open tabs/windows
-  // (each receiving the same SSE event) collapse into a single OS toast
-  // instead of one per tab.
-  const tag = `${e.workspaceId ?? ''}:${e.type}:${e.target?.sessionId ?? e.target?.agentId ?? ''}:${e.time}`
-  notify(d.notifyEnabled.current, e.title, e.body, () => {
-    // Navigate via the deep-link URL: setting the hash drives the URL→state
-    // machinery (useUrlSync → applyRoute), which switches workspace and
-    // selects the entity correctly even across workspaces. notify() has
-    // already focused the window.
-    const r = routeFromEvent(e)
-    if (r) window.location.hash = buildRoute(r)
-  }, tag)
+  // Route through the single funnel: it applies the per-type mute + the master
+  // gate + the backgrounded-window rule. The tag carries the event identity so
+  // multiple open tabs/windows (each receiving the same SSE event) collapse into
+  // a single OS toast instead of one per tab.
+  emitToast({
+    type: e.type,
+    enabled: d.notifyEnabled.current,
+    title: e.title,
+    body: e.body,
+    tag: `${e.workspaceId ?? ''}:${e.type}:${e.target?.sessionId ?? e.target?.agentId ?? ''}:${e.time}`,
+    onClick: () => {
+      // Navigate via the deep-link URL: setting the hash drives the URL→state
+      // machinery (useUrlSync → applyRoute), which switches workspace and selects
+      // the entity correctly even across workspaces. notify() has already focused
+      // the window.
+      const r = routeFromEvent(e)
+      if (r) window.location.hash = buildRoute(r)
+    },
+  })
 }
 
 // Live turn-activity frames (session_step): fold each step into the active

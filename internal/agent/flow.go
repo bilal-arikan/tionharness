@@ -198,7 +198,7 @@ func (r *Runtime) emitFlowDelivery(flow db.Flow, run db.FlowRun, sessionID strin
 			body = notifyLine(run.Error, 200)
 		}
 		r.publish(events.Event{
-			Type:   "flow",
+			Type:   events.TypeFlow,
 			Level:  "error",
 			Title:  "🔀 Akış başarısız — " + flow.Name,
 			Body:   body,
@@ -207,7 +207,7 @@ func (r *Runtime) emitFlowDelivery(flow db.Flow, run db.FlowRun, sessionID strin
 		return
 	}
 	r.publish(events.Event{
-		Type:   "flow",
+		Type:   events.TypeFlow,
 		Level:  "success",
 		Title:  "🔀 Akış tamamlandı — " + flow.Name,
 		Body:   notifyLine(run.Output, 120),

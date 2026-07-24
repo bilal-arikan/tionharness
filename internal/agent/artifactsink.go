@@ -32,7 +32,7 @@ func (s *artifactSink) notify(a db.Artifact, verb string) {
 		return
 	}
 	s.publish(events.Event{
-		Type:   "artifact",
+		Type:   events.TypeArtifact,
 		Level:  "info",
 		Title:  "Artifact " + verb + ": " + a.Title,
 		Body:   a.Kind,

@@ -559,26 +559,6 @@ export function ProvidersPanel({
         </div>
         <p className="mb-2 text-xs text-[var(--color-text-dim)]">Anahtarlar yalnızca Sır kasasından seçilir — elle giriş kapalı.</p>
         <div className="grid gap-2">
-          <BuiltinProvider
-            icon={Sparkles}
-            name="Anthropic API"
-            kindLabel="API"
-            keyLabel="API anahtarı"
-            isSet={draft.anthropicKeySet}
-            requiredHint="anthropic (HTTP API) sağlayıcısı için gerekli."
-            secrets={secrets}
-            onPick={async (n) => applyKey('anthropic', await onImportSecret(n))}
-            onClear={() => clearKey('anthropic')}
-            hideEndpoint
-            endpointLabel=""
-            endpointValue=""
-            endpointPlaceholder=""
-            onEndpoint={() => {}}
-            test={test}
-            runTest={runTest}
-            testProvider="anthropic"
-            testDisabledHint="önce Anthropic API anahtarı ekle"
-          />
           <div className="space-y-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
             <div className="flex items-center justify-between gap-2">
               <div className="flex min-w-0 items-center gap-2">
@@ -679,6 +659,26 @@ export function ProvidersPanel({
               </div>
             </div>
           </div>
+          <BuiltinProvider
+            icon={Sparkles}
+            name="Anthropic API"
+            kindLabel="API"
+            keyLabel="API anahtarı"
+            isSet={draft.anthropicKeySet}
+            requiredHint="anthropic (HTTP API) sağlayıcısı için gerekli."
+            secrets={secrets}
+            onPick={async (n) => applyKey('anthropic', await onImportSecret(n))}
+            onClear={() => clearKey('anthropic')}
+            hideEndpoint
+            endpointLabel=""
+            endpointValue=""
+            endpointPlaceholder=""
+            onEndpoint={() => {}}
+            test={test}
+            runTest={runTest}
+            testProvider="anthropic"
+            testDisabledHint="önce Anthropic API anahtarı ekle"
+          />
           <BuiltinProvider
             icon={Zap}
             name="MiniMax"

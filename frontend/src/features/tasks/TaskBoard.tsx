@@ -13,6 +13,7 @@ import { useMultiSelect } from '@/shared/hooks/useMultiSelect'
 
 // Fallback columns used until workspace settings are loaded.
 const DEFAULT_COLUMNS: BoardColumnDef[] = [
+  { key: 'pbi', label: 'PBI', color: '' },
   { key: 'todo', label: 'Yapılacak', color: '' },
   { key: 'in_progress', label: 'Devam Eden', color: '' },
   { key: 'review', label: 'İnceleme', color: '' },

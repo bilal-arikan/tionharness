@@ -2,6 +2,7 @@ package db
 
 // Board states for a task. These drive the default kanban columns in the UI.
 const (
+	BoardPBI        = "pbi"
 	BoardTodo       = "todo"
 	BoardInProgress = "in_progress"
 	BoardReview     = "review"
@@ -21,6 +22,7 @@ type BoardColumnDef struct {
 // has no custom column configuration.
 func DefaultBoardColumns() []BoardColumnDef {
 	return []BoardColumnDef{
+		{Key: BoardPBI, Label: "PBI", Color: ""},
 		{Key: BoardTodo, Label: "Yapılacak", Color: ""},
 		{Key: BoardInProgress, Label: "Devam Eden", Color: ""},
 		{Key: BoardReview, Label: "İnceleme", Color: ""},
@@ -29,10 +31,10 @@ func DefaultBoardColumns() []BoardColumnDef {
 	}
 }
 
-// ValidBoardState reports whether s is one of the five board column keys.
+// ValidBoardState reports whether s is one of the six built-in board column keys.
 func ValidBoardState(s string) bool {
 	switch s {
-	case BoardTodo, BoardInProgress, BoardReview, BoardDone, BoardFailed:
+	case BoardPBI, BoardTodo, BoardInProgress, BoardReview, BoardDone, BoardFailed:
 		return true
 	default:
 		return false

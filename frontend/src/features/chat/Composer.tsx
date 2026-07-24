@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { MessageCircleQuestion, Paperclip } from 'lucide-react'
+import { MessageCircleQuestion, Paperclip, SlidersHorizontal } from 'lucide-react'
 import type { Agent, Artifact, Attachment, SlashCommand } from '@/types'
 import { AttachmentChip } from './AttachmentChip'
 import { WorkDirBadge } from './WorkDirBadge'
@@ -116,6 +116,18 @@ export function Composer({
   // point: "ask without interrupting the main task"), so it is not gated on
   // `streaming` / `disabled` — only on having a session and a target agent.
   const [btwOpen, setBtwOpen] = useState(false)
+  // On narrow/portrait widths the per-turn pickers (thinking, permission, workdir)
+  // are collapsed behind a toggle to keep the toolbar from wrapping; they are
+  // always shown from `md:` up. Preference persists across sessions/reloads.
+  const [showControls, setShowControls] = useState(
+    () => localStorage.getItem('tionswarm.composerControlsOpen') === '1',
+  )
+  const toggleControls = () =>
+    setShowControls((v) => {
+      const next = !v
+      localStorage.setItem('tionswarm.composerControlsOpen', next ? '1' : '0')
+      return next
+    })
   const taRef = useRef<HTMLTextAreaElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   // Mirrors the latest text so voice-dictation callbacks append to the current
@@ -501,23 +513,41 @@ export function Composer({
             onChange={onAgentChange}
             disabled={!sessionId}
           />
-          <ComposerPicker
-            value={thinkingLevel}
-            onChange={onThinkingLevelChange}
-            options={thinkingOptions}
-            header="Düşünme seviyesi"
-            title={(c) => `Düşünme seviyesi: ${c.label} — ${c.hint}`}
-          />
-          <ComposerPicker
-            value={permissionMode}
-            onChange={onPermissionModeChange}
-            options={permissionOptions}
-            header="İzin modu (Shift+Tab)"
-            title={(c) => `İzin modu: ${c.label} — ${c.hint} (Shift+Tab ile değiştir)`}
-            menuWidthClass="w-60"
-            iconOnly
-          />
-          <WorkDirBadge sessionId={sessionId} />
+          {/* Narrow-screen toggle: reveals/hides the per-turn pickers below. Hidden
+              from `md:` up, where the pickers are always shown. */}
+          <button
+            type="button"
+            onClick={toggleControls}
+            title="Tur ayarları (düşünme · izin · çalışma dizini)"
+            aria-label="Tur ayarlarını göster/gizle"
+            aria-expanded={showControls}
+            data-testid="composer-controls-toggle"
+            className={`${BTN_ICON} md:hidden ${showControls ? 'border-[var(--color-accent)] text-[var(--color-accent)]' : ''}`}
+          >
+            <SlidersHorizontal size={18} />
+          </button>
+          {/* Per-turn pickers. `contents` keeps them as direct flex children (so the
+              toolbar gap is unaffected); collapsed on narrow widths unless toggled,
+              always shown from `md:` up. */}
+          <div className={`${showControls ? 'contents' : 'hidden'} md:contents`}>
+            <ComposerPicker
+              value={thinkingLevel}
+              onChange={onThinkingLevelChange}
+              options={thinkingOptions}
+              header="Düşünme seviyesi"
+              title={(c) => `Düşünme seviyesi: ${c.label} — ${c.hint}`}
+            />
+            <ComposerPicker
+              value={permissionMode}
+              onChange={onPermissionModeChange}
+              options={permissionOptions}
+              header="İzin modu (Shift+Tab)"
+              title={(c) => `İzin modu: ${c.label} — ${c.hint} (Shift+Tab ile değiştir)`}
+              menuWidthClass="w-60"
+              iconOnly
+            />
+            <WorkDirBadge sessionId={sessionId} />
+          </div>
           {/* Attach button + hidden multi-file input. */}
           <input ref={fileRef} type="file" multiple className="hidden" onChange={onPickFiles} />
           <button

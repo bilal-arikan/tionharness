@@ -176,8 +176,11 @@ budget (para) arasındaki yeri netleştirir.
   (`computeDebugAnomalies`, no-I/O) — `tool_time_dominant` (tek araç araç-süresinin
   ≥%60'ını yiyor, toplam >2s), `tool_failing` (çağrı≥3, hata oranı >%30),
   `tool_large_output` (ort. çıktı >64KB), `frequent_compaction` (≥3),
-  `error_burst` (≥3), `slow_turns` (ort. tur >45s). Her biri `severity`
-  (warn/info) + `code` + Türkçe `message`. Sağlıklı oturumda boş.
+  `cache_breaks`/`cache_break` (kırılım olayları), `error_burst` (≥3),
+  `slow_turns` (ort. tur >45s), **`low_cache_hit`** (cache koçu: ≥3 çağrı +
+  prompt>20K token + sıcak-isabet <%50 → sıcak önek tutmuyor), **`high_thinking`**
+  (thinking koçu: çıktı ≥2K token + `thinkingShare` ≥%50 → ThinkingLevel'i düşür).
+  Her biri `severity` (warn/info) + `code` + Türkçe `message`. Sağlıklı oturumda boş.
 - **Zaman serisi:** `turnDurSeries` (tur süreleri) + `tokenSeries` (çağrı-başına
   in+out), en yeni `debugSeriesCap=40` nokta. UI'da bağımlılıksız SVG sparkline.
 - **Reflektör entegrasyonu (self-improvement):** ~~`reflect()` dream-cycle'da
@@ -189,7 +192,7 @@ budget (para) arasındaki yeri netleştirir.
   bkz. `56-SELF-HEALING.md` Faz F). UI'da kartta anomaliler
   (warn=kırmızı/info=gri rozet) + iki sparkline (tur süresi / çağrı token) gösterilir.
 - Test: `db/debug_journal_test.go` (`TestDebugSummaryAnomaliesAndSeries`,
-  `TestDebugSummaryNoAnomaliesOnHealthy`).
+  `TestDebugSummaryNoAnomaliesOnHealthy`, `TestDebugSummaryCacheAndThinkingCoach`).
 
 ## Mesaj başına debug paneli (2026-06-29)
 
@@ -223,6 +226,9 @@ veri hazırlığı `flowVizData.ts`):
 - **Prompt-cache olayları (`PromptCacheEvents.tsx`, 2026-07-08):** `epoch`
   (önleme) + `cache_break` (tespit) olayları rozetli listede; adopt'suz
   kırılım = araştırılacak sinyal. Detay `57-PROMPT-EPOCH.md`.
+- **Düşünme payı (`ThinkingShareChart.tsx`, 2026-07-24):** çağrı-başına `think`/
+  `out` oranı bağımsız SVG bar-serisi + ortalama pay; thinking-off oturum sessiz.
+  Gizli akıl yürütme maliyetini tur-tur görünür kılar (_Docs/17 türetim).
 - **Self-healing olayları (`SelfHealingEvents.tsx`):** `repair`/`guardrail`/
   `lesson` olayları. Detay `56-SELF-HEALING.md`.
 - **Hook / token-optimizer aktivitesi (`HookActivity.tsx`, 2026-07-10):**
@@ -233,11 +239,23 @@ veri hazırlığı `flowVizData.ts`):
   TionSwarm sıkışmamış baseline'ı hiç görmez; ayrıca yalnız **native** turlar
   sayılır (claude-cli turlarında hook'lar CLI içinde çalışır, journal'a düşmez).
 
+## Anomali → bildirim ✅ (2026-07-24)
+
+Tur-sonu tek huni `AutoTagTurn` (her tamamlanma yolu: chat/spawn/schedule/wake/
+auto-continue) artık **auto-tag'den bağımsız** olarak `notifyNewAnomalies` çağırır:
+`GetDebugSummary`'nin **warn** anomalilerini (`low_cache_hit`, `cache_breaks`,
+`tool_failing`, `frequent_compaction`, `error_burst`, `tool_time_dominant`)
+events bus'a `type:"anomaly"` olayı olarak yayar → SSE → masaüstü bildirimi,
+tıklama session'a deep-link. **Info** bulgular (high_thinking/slow_turns/…) yalnız
+kartta kalır. Yayım koşulsuz (task/flow gibi); toast'ı frontend geçitler:
+device-local `anomaly` notify-tipi (`NOTIFY_TYPES`, Ayarlar ▸ Bildirimler) +
+ana masaüstü-bildirim toggle'ı. Dedup **per (session, code)** in-memory
+(`Runtime.anomalyNotified`) → kalıcı anomali süreç başına bir kez bildirir, her
+tur değil. Test: `agent/anomaly_notify_test.go`.
+
 ## Sırada (Faz 4+ fikirler)
 
 - Anomali eşiklerinin ayarlanabilir olması (settings).
 - Workspace-geneli "en pahalı oturumlar" / araç ısı haritası panosu.
-- Anomali tetiklenince otomatik bildirim (events bus). (Ders yazımı fikri
-  2026-07-07'de hata→ders döngüsü olarak gerçekleşti — `56-SELF-HEALING.md`.)
 - Gerçek byte-tasarrufu ölçümü istenirse: sqz'yi PostToolUse output-rewrite
   moduna alıp `runPostToolHooks`'ta `len(önce)−len(sonra)` ölçmek (ayrı iş).

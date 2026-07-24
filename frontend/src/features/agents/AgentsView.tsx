@@ -319,6 +319,8 @@ export function AgentsView({
             key={selected.id}
             agent={selected}
             dirtyView="agents"
+            isDefault={defaultAgentId === selected.id}
+            onSetDefault={() => onSetDefault(selected.id)}
             onSave={(p) => onUpdateAgent(selected.id, p)}
             onDelete={async () => {
               if (confirm(`"${selected.name}" ajanı ve sahip olduğu oturumlar kalıcı olarak silinsin mi?`)) {

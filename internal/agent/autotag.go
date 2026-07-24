@@ -34,7 +34,16 @@ const (
 // turnErr is the stable turn-failure reason ("" on success). A user-initiated
 // "stopped" is NOT an error and is ignored.
 func (r *Runtime) AutoTagTurn(ctx context.Context, sessionID string, steps []TurnStep, turnErr string) {
-	if sessionID == "" || !r.tun.AutoTagSessions() {
+	if sessionID == "" {
+		return
+	}
+	// Cross-cutting post-turn concern with its OWN gate (independent of tagging):
+	// surface newly-detected warn-severity debug anomalies as desktop
+	// notifications. Placed before the auto-tag gate so it runs even when tagging
+	// is off — this is the one funnel every turn-completion path hits.
+	r.notifyNewAnomalies(ctx, sessionID)
+
+	if !r.tun.AutoTagSessions() {
 		return
 	}
 	sess, err := r.db.GetSession(ctx, sessionID)
@@ -137,6 +146,42 @@ func (r *Runtime) AutoTagTurn(ctx context.Context, sessionID string, steps []Tur
 // AutoTagEnabled reports whether event-driven auto-tagging is on (settings gate).
 // Exported so the api layer can gate its own out-of-turn tagging (archive) too.
 func (r *Runtime) AutoTagEnabled() bool { return r.tun.AutoTagSessions() }
+
+// notifyNewAnomalies raises a desktop notification for each newly-detected
+// warn-severity debug anomaly in a session — the cache/tool/error coaches
+// (low_cache_hit, cache_breaks, tool_failing, frequent_compaction, error_burst,
+// tool_time_dominant). Advisory info-level findings (high_thinking, slow_turns,
+// cache_break, tool_large_output) stay on the Debug card only, never as a toast.
+//
+// Publishing is unconditional (like task/flow/schedule events): the frontend
+// gates the OS toast by the device-local "anomaly" notify-type + the master
+// desktop-notifications toggle. Dedup is per (session, code) so a persistent
+// anomaly notifies once, not every turn. Best-effort: a read failure is silent
+// and never blocks the turn.
+func (r *Runtime) notifyNewAnomalies(ctx context.Context, sessionID string) {
+	sum, err := r.db.GetDebugSummary(ctx, sessionID)
+	if err != nil {
+		return
+	}
+	for _, a := range sum.Anomalies {
+		if a.Severity != "warn" {
+			continue
+		}
+		key := sessionID + "\x00" + a.Code
+		if _, seen := r.anomalyNotified.LoadOrStore(key, struct{}{}); seen {
+			continue
+		}
+		r.publish(events.Event{
+			Type:  events.TypeAnomaly,
+			Level: "info",
+			Title: "Oturum uyarısı",
+			Body:  a.Message,
+			// view:"chat" deep-links to the session transcript (routeFromEvent maps
+			// chat→sessionId); the Debug card lives in that view's side panel.
+			Target: map[string]string{"view": "chat", "sessionId": sessionID},
+		})
+	}
+}
 
 // AddSessionTag is a small exported helper to add a single derived tag outside a
 // turn (e.g. the moment a session is archived). No-op if already present.

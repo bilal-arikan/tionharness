@@ -808,7 +808,7 @@ func (r *Runtime) runCoordinatorTurn(coordSessionID string) {
 		r.logger.Warn("coordination: failed to record coordinator reply", "coordinator", coordSessionID, "error", addErr)
 	}
 	r.publish(events.Event{
-		Type:   "chat",
+		Type:   events.TypeChat,
 		Level:  "info",
 		Title:  "🧭 Koordinatör turu tamamlandı — " + agent.Name,
 		Target: map[string]string{"view": "executions", "sessionId": coordSessionID},
@@ -827,7 +827,7 @@ func (r *Runtime) runCoordinatorTurn(coordSessionID string) {
 func (r *Runtime) warnCoordinatorCap(coordSessionID string, turns int) {
 	r.logger.Warn("coordination: coordinator auto-turn cap reached", "coordinator", coordSessionID, "turns", turns)
 	r.publish(events.Event{
-		Type:   "coordination",
+		Type:   events.TypeCoordination,
 		Level:  "info",
 		Title:  "🧭 Koordinatör tur limiti",
 		Body:   fmt.Sprintf("Otomatik koordinatör turları limiti (%d) aşıldı; yeni worker bildirimleri kaydediliyor ama otomatik tur tetiklenmiyor. Devam etmek için oturuma manuel mesaj gönderin.", turns),
@@ -845,7 +845,7 @@ func (r *Runtime) emitWorkerEvent(agent db.Agent, workerSessionID, coordSessionI
 		level = "info"
 	}
 	r.publish(events.Event{
-		Type:  "worker",
+		Type:  events.TypeWorker,
 		Level: level,
 		Title: "🤖 Worker " + status + " — " + agent.Name,
 		Target: map[string]string{

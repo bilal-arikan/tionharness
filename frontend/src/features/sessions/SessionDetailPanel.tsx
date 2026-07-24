@@ -1,15 +1,12 @@
 import { useEffect, useState } from 'react'
 import { Trash2, Archive, ArchiveRestore } from 'lucide-react'
 import { api } from '@/api'
-import type { SessionInfo, SessionUsageDetail, SessionProgress } from '@/types'
+import type { SessionInfo, SessionUsageDetail } from '@/types'
 import { CoordinatorSection } from './CoordinatorSection'
 import { KeyValueRow as Row, TagEditor } from '@/shared/components'
 import { ResizeHandle } from '@/shared/components/SidebarChrome'
 import { useResizableSidebar } from '@/shared/hooks/useResizableSidebar'
-import { useRefreshTrigger } from '@/shared/hooks/useRefreshTrigger'
-import { SIGNAL_EXECUTIONS } from '@/app/eventToRefreshSignals'
 import { Section, ActionBtn } from './SessionDetailBits'
-import { ProgressCard } from './SessionProgressCard'
 import { SessionTitleBlock } from './SessionTitleBlock'
 import { SessionProcessCard } from './SessionProcessCard'
 import { SessionGoalSection } from './SessionGoalSection'
@@ -71,7 +68,6 @@ export function SessionDetailPanel({
   // Ticks once a second while a turn is running, so the elapsed timer is live.
   const [nowTick, setNowTick] = useState(() => Math.floor(Date.now() / 1000))
   const [sessionUsage, setSessionUsage] = useState<SessionUsageDetail | null>(null)
-  const [progress, setProgress] = useState<SessionProgress | null>(null)
   const [loading, setLoading] = useState(false)
   const [titling, setTitling] = useState(false)
   // In-flight guard for the archive / unarchive toggle.
@@ -114,24 +110,6 @@ export function SessionDetailPanel({
       alive = false
     }
   }, [sessionId, refreshKey, localRefresh])
-
-  // Persistent progress (durable todo_write checklist + log). The file is keyed
-  // by WORKING DIRECTORY, not session, so ANOTHER session sharing this project
-  // dir can change it while THIS (possibly idle) panel is open — meterRefresh
-  // (this session's turn-end) then never fires and the card freezes at a stale
-  // count. Refetch it on the global `executions` signal too (a cheap single
-  // file-read endpoint) so it self-heals regardless of which session wrote last.
-  const execTick = useRefreshTrigger(SIGNAL_EXECUTIONS)
-  useEffect(() => {
-    let alive = true
-    api
-      .sessionProgress(sessionId)
-      .then((p) => alive && setProgress(p))
-      .catch(() => alive && setProgress(null))
-    return () => {
-      alive = false
-    }
-  }, [sessionId, refreshKey, localRefresh, execTick])
 
   // While a turn is running (or a warm CLI process is held), poll the info endpoint
   // so the process card appears/updates/clears live even without a chat SSE bound to
@@ -449,18 +427,6 @@ export function SessionDetailPanel({
             <Row label="Mesaj sayısı" value={String(info.messageCount)} />
           </Section>
 
-
-          {/* Persistent progress (durable todo_write checklist + rolling log).
-              Now PER-SESSION (keyed by session id, not working directory), so this
-              session's checklist never leaks into another session on the same dir.
-              The sessionId guard is kept as a belt-and-suspenders for any legacy
-              dir-shared record left on disk from before the change. */}
-          {progress?.exists &&
-            progress.record &&
-            progress.record.todos.length > 0 &&
-            (!progress.record.sessionId || progress.record.sessionId === sessionId) && (
-              <ProgressCard progress={progress} />
-            )}
 
           {/* Context window usage (/context-style) */}
           <SessionContextUsage

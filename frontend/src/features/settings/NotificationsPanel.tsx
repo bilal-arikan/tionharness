@@ -77,10 +77,16 @@ export function NotificationsPanel({ draft, set, onError, onWorkspaceNotifySaved
 
       <SubHead icon={Bell}>Bildirim türleri</SubHead>
       <p className="-mt-1 text-xs text-[var(--color-text-dim)]">
-        Bir türü kapatınca o olay için masaüstü bildirimi gösterilmez. Bu ayarlar bu cihaza özeldir ve anında uygulanır.
+        Bir türü kapatınca o olay için masaüstü bildirimi gösterilmez. Uygulamanın gönderebileceği <b>tüm</b> bildirim türleri burada listelenir. Bu ayarlar bu cihaza özeldir ve anında uygulanır. 🔊 işaretli türlerin ayrıca bir ses uyarısı vardır (ses, Ses ekranındaki "Ses efektleri" tercihine bağlıdır; bu türü kapatmak yalnız masaüstü bildirimini susturur).
       </p>
       {NOTIFY_TYPES.map((t) => (
-        <Toggle key={t.type} label={t.label} hint={t.hint} checked={!muted.has(t.type)} onChange={(v) => toggleType(t.type, v)} />
+        <Toggle
+          key={t.type}
+          label={t.cue ? `${t.label} 🔊` : t.label}
+          hint={t.hint}
+          checked={!muted.has(t.type)}
+          onChange={(v) => toggleType(t.type, v)}
+        />
       ))}
     </>
   )

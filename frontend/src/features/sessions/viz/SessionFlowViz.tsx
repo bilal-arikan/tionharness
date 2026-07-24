@@ -6,6 +6,7 @@ import { ToolSankey } from './ToolSankey'
 import { ConcurrencyTimeline } from './ConcurrencyTimeline'
 import { SelfHealingEvents } from './SelfHealingEvents'
 import { PromptCacheEvents } from './PromptCacheEvents'
+import { ThinkingShareChart } from './ThinkingShareChart'
 import { HookActivity } from './HookActivity'
 
 // How many raw events to pull for the visualizations. Covers the whole span for
@@ -125,6 +126,18 @@ export function SessionFlowViz({
                   anlarında beklenir.
                 </p>
                 <PromptCacheEvents events={events} />
+              </div>
+
+              <div>
+                <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
+                  Düşünme (gizli akıl yürütme) payı
+                </div>
+                <p className="mb-1 text-[10px] text-[var(--color-text-dim)]">
+                  Çağrı başına çıktı token'ının gizli akıl yürütmeye giden tahmini
+                  oranı (API ayırmıyor → out−görünür türetimi; _Docs/38). Yüksek
+                  pay basit görevlerde ThinkingLevel'i düşürme fırsatıdır.
+                </p>
+                <ThinkingShareChart events={events} />
               </div>
 
               <div>

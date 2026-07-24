@@ -291,7 +291,7 @@ func (r *Runtime) emitSpawnEvent(agent db.Agent, sessionID, prompt string, ok bo
 		title = "✨ Spawn başarısız — " + agent.Name
 	}
 	r.publish(events.Event{
-		Type:   "spawned",
+		Type:   events.TypeSpawned,
 		Level:  level,
 		Title:  title,
 		Body:   notifyLine(prompt, 120),

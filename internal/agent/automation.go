@@ -164,7 +164,7 @@ func (e *AutomationEngine) fireBoard(ctx context.Context, a db.Automation, ev db
 		"automation", a.ID, "op", ev.Op, "task", ev.TaskID,
 		"spawned", res.SessionID, "agent", agent.ID, "iteration", a.IterationCount+1)
 	e.rt.publish(events.Event{
-		Type:   "automation",
+		Type:   events.TypeAutomation,
 		Level:  "success",
 		Title:  "🗂 Otomasyon tetiklendi (pano) — " + automationLabel(a),
 		Body:   notifyLine(prompt, 120),
@@ -203,7 +203,7 @@ func (e *AutomationEngine) guardsPass(ctx context.Context, a db.Automation) bool
 			e.logger.Warn("automation: auto-disable failed", "automation", a.ID, "error", err)
 		}
 		e.rt.publish(events.Event{
-			Type:   "automation",
+			Type:   events.TypeAutomation,
 			Level:  "info",
 			Title:  "🔁 Otomasyon durduruldu (limit) — " + automationLabel(a),
 			Body:   "Maksimum iterasyon (" + strconv.Itoa(a.MaxIterations) + ") aşıldı; otomasyon devre dışı bırakıldı.",
@@ -282,7 +282,7 @@ func (e *AutomationEngine) fire(ctx context.Context, a db.Automation, sess db.Se
 		"automation", a.ID, "tag", a.TriggerTag, "from", sess.ID,
 		"spawned", res.SessionID, "agent", agent.ID, "iteration", a.IterationCount+1)
 	e.rt.publish(events.Event{
-		Type:   "automation",
+		Type:   events.TypeAutomation,
 		Level:  "success",
 		Title:  "🔁 Otomasyon tetiklendi — " + automationLabel(a),
 		Body:   notifyLine(prompt, 120),
@@ -316,7 +316,7 @@ func (e *AutomationEngine) fireFlow(ctx context.Context, a db.Automation, prompt
 		"automation", a.ID, "tag", a.TriggerTag, "flow", a.FlowID,
 		"session", sessionID, "iteration", a.IterationCount+1)
 	e.rt.publish(events.Event{
-		Type:   "automation",
+		Type:   events.TypeAutomation,
 		Level:  "success",
 		Title:  "🔁 Otomasyon tetiklendi (akış) — " + automationLabel(a),
 		Body:   notifyLine(prompt, 120),
@@ -333,7 +333,7 @@ func (e *AutomationEngine) recordFailure(ctx context.Context, a db.Automation, m
 		e.logger.Warn("automation: record failure failed", "automation", a.ID, "error", err)
 	}
 	e.rt.publish(events.Event{
-		Type:   "automation",
+		Type:   events.TypeAutomation,
 		Level:  "error",
 		Title:  "🔁 Otomasyon başarısız — " + automationLabel(a),
 		Body:   notifyLine(msg, 200),

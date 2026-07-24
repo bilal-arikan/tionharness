@@ -2,6 +2,35 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-07-24**
 
+## Composer: dar ekranda tur-ayarı butonları toggle ile gizlenir ✅ (2026-07-24)
+
+**İstek:** Sohbet input alanı dikey/dar ekrana geçince Düşünme seviyesi, İzin modu
+ve Çalışma dizini butonları bir toggle ile gösterilip gizlenebilsin.
+
+**Ne yapıldı (yalnız frontend, `Composer.tsx`):**
+- Üç per-turn kontrolü (`ComposerPicker` düşünme + `ComposerPicker` izin +
+  `WorkDirBadge`) `display:contents` sarmalayıcıya alındı → toolbar gap'i bozulmaz.
+  Sarmalayıcı dar ekranda `hidden`, `md:contents` ile **`md:`'den itibaren daima
+  görünür**.
+- Yeni `SlidersHorizontal` toggle butonu (`md:hidden`, yalnız dar ekran) kontrolleri
+  aç/kapat yapar; açıkken accent kenarlık. Tercih `localStorage`
+  (`tionswarm.composerControlsOpen`) ile kalıcı; varsayılan gizli. `tsc` yeşil.
+
+## Görev listesi UX: bilgi panelinden kaldırıldı + TodoPanel minimize/kapatılamaz ✅ (2026-07-24)
+
+**İstek:** Sohbet bilgisi panelinde görev listesi görünmesin; sohbet sırasında
+açılan görev listesi küçültülmüş başlasın ama kapatılamasın.
+
+**Ne yapıldı (yalnız frontend):**
+- **Bilgi paneli:** `SessionDetailPanel.tsx`'ten `ProgressCard` (Görev Listesi)
+  render'ı + `progress` state + `sessionProgress` fetch effect'i (`executions`
+  sinyaliyle tazeleme) + ilgili importlar kaldırıldı. `SessionProgressCard.tsx`
+  artık kullanılmayan ölü bileşen; API/tip korunur.
+- **`TodoPanel.tsx`:** varsayılan **küçültülmüş** (`open=false`) başlar; ✕ gizle
+  (dismiss) butonu + `dismissedSig`/`sig` mantığı + auto-open `useEffect` kaldırıldı
+  → panel composer üstünde iğneli kalır, yalnız başlıktan katla/aç, **asla
+  kapatılamaz**. `tsc --noEmit` yeşil. Detay `_Docs\36`.
+
 ## 👍/👎 geri bildirimi tur bağlamına enjekte ✅ (2026-07-24)
 
 Mesaj puanları saklanıyordu (`db.MessageFeedback`, `session.jsonl`) ama hiç geri
