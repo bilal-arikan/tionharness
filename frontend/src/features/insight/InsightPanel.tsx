@@ -6,7 +6,6 @@ import type { InsightLens, InsightFinding, InsightSettings } from '@/types'
 import { FindingsTab } from './FindingsTab'
 import { LensList } from './LensList'
 import { FleetTab } from './FleetTab'
-import { RunsTab } from './RunsTab'
 import { SettingsTab } from './SettingsTab'
 import { LessonsTab } from './LessonsTab'
 
@@ -20,14 +19,13 @@ interface Props {
   onTabChange?: (t: string) => void
 }
 
-type Tab = 'findings' | 'lessons' | 'lenses' | 'fleet' | 'runs' | 'settings'
+type Tab = 'findings' | 'lessons' | 'lenses' | 'fleet' | 'settings'
 
 const TABS: { key: Tab; label: string }[] = [
   { key: 'findings', label: 'Bulgular' },
   { key: 'lessons', label: 'Dersler' },
   { key: 'lenses', label: 'Lensler' },
   { key: 'fleet', label: 'Fleet' },
-  { key: 'runs', label: 'Geçmiş' },
   { key: 'settings', label: 'Ayarlar' },
 ]
 
@@ -179,7 +177,6 @@ export function InsightPanel({ onError, onOpenSession, tab: tabProp, onTabChange
         )}
         {tab === 'lessons' && <LessonsTab onError={onError} />}
         {tab === 'fleet' && <FleetTab onError={onError} />}
-        {tab === 'runs' && <RunsTab onError={onError} />}
         {tab === 'settings' && (
           <SettingsTab settings={settings} setSettings={setSettings} onError={onError} onReset={load} />
         )}

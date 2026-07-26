@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Save, Trash2 } from 'lucide-react'
 import { api } from '@/api'
 import { AgentPicker } from '@/shared/components/agents/AgentPicker'
+import { RunsTab } from './RunsTab'
 import type { Agent, InsightSettings } from '@/types'
 
 interface Props {
@@ -19,7 +20,16 @@ export function SettingsTab({ settings, setSettings, onError, onReset }: Props) 
   const [agents, setAgents] = useState<Agent[]>([])
 
   useEffect(() => {
-    api.listAgents().then(setAgents).catch(() => {})
+    // Load the roster and, when no analysis agent is chosen yet, pre-select the
+    // first existing agent. There is no abstract "default" option: the scan
+    // always runs with a concrete agent's own provider + model.
+    api.listAgents().then((list) => {
+      setAgents(list)
+      if (!settings.autoScanAgentId && list.length > 0) {
+        setSettings({ ...settings, autoScanAgentId: list[0].id })
+      }
+    }).catch(() => {})
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
   const [deep, setDeep] = useState(false)
   const [resetting, setResetting] = useState(false)
@@ -70,14 +80,13 @@ export function SettingsTab({ settings, setSettings, onError, onReset }: Props) 
           <AgentPicker
             agents={agents}
             value={settings.autoScanAgentId ?? ''}
-            onChange={(id) => setSettings({ ...settings, autoScanAgentId: id || undefined })}
-            placeholder="Varsayılan (ilk ajan + ucuz başlık modeli)"
-            clearable
+            onChange={(id) => setSettings({ ...settings, autoScanAgentId: id })}
+            placeholder="Ajan seç"
           />
         </div>
         <span className="mt-1 block text-xs text-[var(--color-text-dim)]">
           Taramayı seçilen ajanın provider ve modeliyle çalıştırır (manuel + otomatik). Seçili ajan
-          KENDİ modelini kullanır; boşsa ilk ajan + ucuz başlık modeli.
+          KENDİ modelini kullanır. Varsayılan olarak mevcut ilk ajan seçilir.
         </span>
       </div>
       <label className="block">
@@ -134,6 +143,13 @@ export function SettingsTab({ settings, setSettings, onError, onReset }: Props) 
       >
         <Save className="h-4 w-4" /> {saving ? 'Kaydediliyor…' : 'Kaydet'}
       </button>
+    </div>
+
+    {/* Scan history: moved here from a standalone tab — it is reference data, not
+        a primary triage surface. */}
+    <div className="space-y-2 rounded-md border border-[var(--color-border)] p-3">
+      <div className="text-sm font-medium">Tarama geçmişi</div>
+      <RunsTab onError={onError} />
     </div>
 
     {/* Danger zone: reset all insight data for this workspace. */}
