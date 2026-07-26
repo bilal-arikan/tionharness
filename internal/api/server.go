@@ -269,6 +269,7 @@ func (s *Server) applySettings() {
 	s.tun.SetToolGuardThresholds(cur.GuardExactWarn, cur.GuardExactBlock, cur.GuardSameToolWarn, cur.GuardSameToolHalt, cur.GuardNoProgressWarn, cur.GuardNoProgressBlck)
 	s.tun.SetStuckTurnThreshold(cur.StuckTurnThreshold)
 	s.tun.SetLessonReflect(cur.LessonReflect)
+	db.SetLessonMaxAgeDays(cur.LessonMaxAgeDays)
 	s.tun.SetLanguage(languageName(cur.Language))
 	s.tun.SetMaxOutputTokens(cur.MaxOutputTokens)
 	if s.backups != nil {
@@ -611,6 +612,9 @@ func (s *Server) registerFlowRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/flows/{id}/run-stream", s.handleRunFlowStream)
 	mux.HandleFunc("GET /api/flow-runs", s.handleListFlowRuns)
 	mux.HandleFunc("GET /api/flow-runs/{id}", s.handleGetFlowRun)
+	mux.HandleFunc("GET /api/flow-runs/{id}/nodes/{nodeId}/steps", s.handleFlowRunNodeSteps)
+	// Deliver input to a run suspended at an await-input node (durable resume).
+	mux.HandleFunc("POST /api/flow-runs/{id}/input", s.handleResumeFlowRun)
 }
 
 // registerExecutionRoutes registers the unified executions feed — every run

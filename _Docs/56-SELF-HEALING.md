@@ -140,7 +140,8 @@ toggle'lar daha önce kaydedilmiyordu — düzeltildi).
 
 - **Ajan araçları:** `read_lessons` (RiskRead) / `delete_lesson` — tam ders seti +
   id'lerle budama; `lessonReflect` gate'iyle kurulur.
-- **Yaşlandırma:** `db.LessonMaxAge` (45 gün) — tekrar etmeyen ders sonraki
+- **Yaşlandırma:** `db.DefaultLessonMaxAge` (varsayılan **2 gün**; `Settings.lessonMaxAgeDays`
+  ile ayarlanabilir, İçgörü ▸ Öz-iyileşme'den) — tekrar etmeyen ders sonraki
   AddLesson rewrite'ında düşer. **Signature normalizasyonu:** yol → `<path>`,
   sayı dizileri → `#` (aynı hata şekli farklı dosya/satırda tek derse deduplanır).
 - **Ajan-öncelikli enjeksiyon:** `LessonsContextBlock(ctx, agentID)` — ajanın

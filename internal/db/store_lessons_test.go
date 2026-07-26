@@ -98,8 +98,8 @@ func TestLessons_CapKeepsNewest(t *testing.T) {
 func TestLessons_AgingPrunesStale(t *testing.T) {
 	d := lessonsDB(t)
 	base := time.Now().Unix()
-	// One lesson well past LessonMaxAge, one fresh.
-	_, _ = d.AddLesson(Lesson{Time: base - int64(LessonMaxAge.Seconds()) - 3600, Signature: "old", Text: "stale lesson"})
+	// One lesson well past the max-age, one fresh.
+	_, _ = d.AddLesson(Lesson{Time: base - int64(DefaultLessonMaxAge.Seconds()) - 3600, Signature: "old", Text: "stale lesson"})
 	_, _ = d.AddLesson(Lesson{Time: base - 60, Signature: "new", Text: "fresh lesson"})
 	got, _ := d.ListLessons(0)
 	if len(got) != 1 || got[0].Text != "fresh lesson" {

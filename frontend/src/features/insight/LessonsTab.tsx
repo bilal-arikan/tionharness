@@ -47,6 +47,7 @@ export function LessonsTab({ onError }: Props) {
         guardNoProgressBlock: draft.guardNoProgressBlock,
         stuckTurnThreshold: draft.stuckTurnThreshold,
         lessonReflect: draft.lessonReflect,
+        lessonMaxAgeDays: draft.lessonMaxAgeDays,
       })
       setDraft(updated)
       setOriginal(updated)
@@ -130,6 +131,12 @@ export function LessonsTab({ onError }: Props) {
         checked={draft.lessonReflect}
         onChange={(v) => set('lessonReflect', v)}
       />
+      <Field
+        label="Ders ömrü (gün)"
+        hint="Bir dersin hata şekli bu kadar gün içinde tekrar etmezse bayat sayılıp budanır (bir sonraki ders yazımında). Düşük = daha hızlı unutma. 0 = yerleşik varsayılan (2 gün)."
+      >
+        <input type="number" min={0} max={365} value={draft.lessonMaxAgeDays} onChange={(e) => set('lessonMaxAgeDays', Number(e.target.value))} className={inputCls} />
+      </Field>
     </div>
   )
 }

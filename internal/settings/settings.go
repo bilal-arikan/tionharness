@@ -250,6 +250,9 @@ type Settings struct {
 	// lessons.jsonl), injected into future turns' dynamic context. One
 	// cheap-model call per failing turn.
 	LessonReflect bool `json:"lessonReflect"`
+	// LessonMaxAgeDays: a lesson whose failure shape does not recur within this
+	// many days is pruned as stale (0 = built-in default). Lower = faster decay.
+	LessonMaxAgeDays int `json:"lessonMaxAgeDays"`
 	// MaxOutputTokens is the generation cap (max output tokens) applied when a
 	// turn leaves it unset. 0 = auto: resolve per model family (providers.
 	// MaxOutputFor), which keeps answers from being truncated at the providers'
@@ -406,6 +409,7 @@ func Default() Settings {
 		GuardNoProgressBlck: 5,
 		StuckTurnThreshold:  3,
 		LessonReflect:       true,
+		LessonMaxAgeDays:    2,
 		MaxOutputTokens:     0, // auto: per-model family default
 
 		AutoTitleEnabled: true,
@@ -542,6 +546,7 @@ type DTO struct {
 	GuardNoProgressBlck int  `json:"guardNoProgressBlock"`
 	StuckTurnThreshold  int  `json:"stuckTurnThreshold"`
 	LessonReflect       bool `json:"lessonReflect"`
+	LessonMaxAgeDays    int  `json:"lessonMaxAgeDays"`
 	MaxOutputTokens     int  `json:"maxOutputTokens"`
 
 	AutoTitleEnabled bool   `json:"autoTitleEnabled"`
@@ -662,6 +667,7 @@ func (s Settings) ToDTO() DTO {
 		GuardNoProgressBlck: s.GuardNoProgressBlck,
 		StuckTurnThreshold:  s.StuckTurnThreshold,
 		LessonReflect:       s.LessonReflect,
+		LessonMaxAgeDays:    s.LessonMaxAgeDays,
 		MaxOutputTokens:     s.MaxOutputTokens,
 
 		AutoTitleEnabled: s.AutoTitleEnabled,
@@ -775,6 +781,7 @@ type Patch struct {
 	GuardNoProgressBlck *int  `json:"guardNoProgressBlock"`
 	StuckTurnThreshold  *int  `json:"stuckTurnThreshold"`
 	LessonReflect       *bool `json:"lessonReflect"`
+	LessonMaxAgeDays    *int  `json:"lessonMaxAgeDays"`
 	MaxOutputTokens     *int  `json:"maxOutputTokens"`
 
 	AutoTitleEnabled *bool   `json:"autoTitleEnabled"`

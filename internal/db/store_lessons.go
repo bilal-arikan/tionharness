@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"sync/atomic"
 	"time"
 )
 
@@ -18,12 +19,39 @@ const lessonsFile = "lessons.jsonl"
 // be a small, high-signal set — not a log.
 const DefaultLessonsCap = 200
 
-// LessonMaxAge is how long a lesson stays alive without recurring. A failure
-// shape not seen for this long is likely fixed or obsolete — keeping it would
-// pollute the injected context with stale guidance. Expired entries are pruned
-// on the next AddLesson rewrite; if the failure recurs, a fresh lesson is
-// recorded anyway.
-const LessonMaxAge = 45 * 24 * time.Hour
+// DefaultLessonMaxAge is how long a lesson stays alive without recurring. A
+// failure shape not seen for this long is likely fixed or obsolete — keeping it
+// would pollute the injected context with stale guidance. Expired entries are
+// pruned on the next AddLesson rewrite; if the failure recurs, a fresh lesson is
+// recorded anyway. Configurable at runtime via SetLessonMaxAge.
+const DefaultLessonMaxAge = 2 * 24 * time.Hour
+
+// lessonMaxAgeOverride holds the app-configured lesson max-age in nanoseconds (0 =
+// use DefaultLessonMaxAge). App-global — every workspace shares one value — set
+// from the settings apply path via SetLessonMaxAge.
+var lessonMaxAgeOverride atomic.Int64
+
+// SetLessonMaxAge overrides the lesson max-age process-wide (d <= 0 restores the
+// default). Called when app settings change.
+func SetLessonMaxAge(d time.Duration) {
+	if d <= 0 {
+		lessonMaxAgeOverride.Store(0)
+		return
+	}
+	lessonMaxAgeOverride.Store(int64(d))
+}
+
+// SetLessonMaxAgeDays is the day-granular convenience over SetLessonMaxAge (0 =
+// default), used by the settings apply path so callers need no time import.
+func SetLessonMaxAgeDays(days int) { SetLessonMaxAge(time.Duration(days) * 24 * time.Hour) }
+
+// effectiveLessonMaxAge is the active max-age: the override when set, else the default.
+func effectiveLessonMaxAge() time.Duration {
+	if v := lessonMaxAgeOverride.Load(); v > 0 {
+		return time.Duration(v)
+	}
+	return DefaultLessonMaxAge
+}
 
 // Lesson is one distilled failure lesson, produced by the lesson reflector
 // after a turn that ended badly. Signature identifies the failure shape
@@ -57,7 +85,7 @@ func (d *DB) AddLesson(l Lesson) (Lesson, error) {
 	}
 	// Age out lessons whose failure shape has not recurred within LessonMaxAge —
 	// stale guidance must not keep riding every turn's context.
-	cutoff := time.Now().Add(-LessonMaxAge).Unix()
+	cutoff := time.Now().Add(-effectiveLessonMaxAge()).Unix()
 	fresh := lessons[:0:0]
 	for _, existing := range lessons {
 		if existing.Time >= cutoff {
