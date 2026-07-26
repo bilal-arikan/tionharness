@@ -157,11 +157,9 @@ export function SettingsPanel({ onError, onSaved, onWorkspaceNotifySaved, comman
       reactiveCompact: draft.reactiveCompact, maxTokenRetries: draft.maxTokenRetries,
       reactiveKeepRecent: draft.reactiveKeepRecent, maxOutputTokens: draft.maxOutputTokens,
       maxProviderRetries: draft.maxProviderRetries,
-      toolGuardWarnings: draft.toolGuardWarnings, toolGuardHardStop: draft.toolGuardHardStop,
-      guardExactWarn: draft.guardExactWarn, guardExactBlock: draft.guardExactBlock,
-      guardSameToolWarn: draft.guardSameToolWarn, guardSameToolHalt: draft.guardSameToolHalt,
-      guardNoProgressWarn: draft.guardNoProgressWarn, guardNoProgressBlock: draft.guardNoProgressBlock,
-      stuckTurnThreshold: draft.stuckTurnThreshold, lessonReflect: draft.lessonReflect,
+      // Self-healing (guardrails + stuck threshold + lessonReflect) moved to
+      // İçgörü ▸ Öz-iyileşme; NOT patched here so a Settings save can't clobber a
+      // change made there with this panel's stale draft.
       handoffAuto: draft.handoffAuto, handoffPressure: draft.handoffPressure,
       handoffMaxChain: draft.handoffMaxChain, handoffWriteFile: draft.handoffWriteFile,
       progressPersist: draft.progressPersist, progressResume: draft.progressResume,

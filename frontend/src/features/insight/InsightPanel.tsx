@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { RefreshCw, Play, Bug, GraduationCap, ScanSearch, Boxes, History, Settings, type LucideIcon } from 'lucide-react'
+import { RefreshCw, Play, Bug, ShieldCheck, ScanSearch, Boxes, History, Settings, type LucideIcon } from 'lucide-react'
 import { api } from '@/api'
 import type { InsightLens, InsightFinding, InsightSettings } from '@/types'
 import { FindingsTab } from './FindingsTab'
@@ -24,7 +24,7 @@ type Tab = 'findings' | 'lessons' | 'lenses' | 'fleet' | 'runs' | 'settings'
 // Left-rail sub-pages (Settings-style vertical nav), each with an icon.
 const TABS: { key: Tab; label: string; icon: LucideIcon }[] = [
   { key: 'findings', label: 'Bulgular', icon: Bug },
-  { key: 'lessons', label: 'Dersler', icon: GraduationCap },
+  { key: 'lessons', label: 'Öz-iyileşme', icon: ShieldCheck },
   { key: 'lenses', label: 'Lensler', icon: ScanSearch },
   { key: 'fleet', label: 'Fleet', icon: Boxes },
   { key: 'runs', label: 'Geçmiş', icon: History },
