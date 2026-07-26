@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { RefreshCw, Play } from 'lucide-react'
+import { RefreshCw, Play, Bug, GraduationCap, ScanSearch, Boxes, History, Settings, type LucideIcon } from 'lucide-react'
 import { api } from '@/api'
-import { PaneHeader } from '@/shared/components'
 import type { InsightLens, InsightFinding, InsightSettings } from '@/types'
 import { FindingsTab } from './FindingsTab'
 import { LensList } from './LensList'
 import { FleetTab } from './FleetTab'
+import { RunsTab } from './RunsTab'
 import { SettingsTab } from './SettingsTab'
 import { LessonsTab } from './LessonsTab'
 
@@ -19,20 +19,22 @@ interface Props {
   onTabChange?: (t: string) => void
 }
 
-type Tab = 'findings' | 'lessons' | 'lenses' | 'fleet' | 'settings'
+type Tab = 'findings' | 'lessons' | 'lenses' | 'fleet' | 'runs' | 'settings'
 
-const TABS: { key: Tab; label: string }[] = [
-  { key: 'findings', label: 'Bulgular' },
-  { key: 'lessons', label: 'Dersler' },
-  { key: 'lenses', label: 'Lensler' },
-  { key: 'fleet', label: 'Fleet' },
-  { key: 'settings', label: 'Ayarlar' },
+// Left-rail sub-pages (Settings-style vertical nav), each with an icon.
+const TABS: { key: Tab; label: string; icon: LucideIcon }[] = [
+  { key: 'findings', label: 'Bulgular', icon: Bug },
+  { key: 'lessons', label: 'Dersler', icon: GraduationCap },
+  { key: 'lenses', label: 'Lensler', icon: ScanSearch },
+  { key: 'fleet', label: 'Fleet', icon: Boxes },
+  { key: 'runs', label: 'Geçmiş', icon: History },
+  { key: 'settings', label: 'Ayarlar', icon: Settings },
 ]
 
 // InsightPanel is the retrospective-scanner triage cockpit: run scans, review the
-// deduplicated + priority-ranked findings (filter / search / cluster / bulk-triage
-// / turn into board cards), manage the editable lenses, and inspect the fleet
-// backlog + scan-run history.
+// deduplicated + priority-ranked findings, manage the editable lenses, and inspect
+// the fleet backlog + scan-run history. A left sub-page rail (Settings-style) holds
+// the scan actions on top + the sub-pages below.
 export function InsightPanel({ onError, onOpenSession, tab: tabProp, onTabChange }: Props) {
   const [localTab, setLocalTab] = useState<Tab>('findings')
   // URL-controlled when a valid tab arrives via the route; else local state.
@@ -110,44 +112,48 @@ export function InsightPanel({ onError, onOpenSession, tab: tabProp, onTabChange
   }
 
   return (
-    <div className="flex h-full flex-col">
-      <PaneHeader
-        title="İçgörü"
-        right={
-          <div className="flex items-center gap-2">
-            <button onClick={load} className="flex items-center gap-1 rounded-md px-2 py-1 text-sm hover:bg-[var(--color-surface-2)]" title="Yenile">
-              <RefreshCw className="h-4 w-4" />
-            </button>
+    <div className="flex min-h-0 flex-1">
+      {/* Left: scan actions on top + sub-page rail below (Settings-style). */}
+      <aside className="flex h-full w-52 flex-shrink-0 flex-col gap-1 overflow-y-auto border-r border-[var(--color-border)] bg-[var(--color-surface)] p-2">
+        <button
+          onClick={() => runScan()}
+          disabled={scanning}
+          className="flex items-center justify-center gap-1.5 rounded-md bg-[var(--color-accent)] px-3 py-2 text-sm text-white disabled:opacity-50"
+        >
+          <Play className="h-4 w-4" />
+          {scanning ? 'Taranıyor…' : 'Tara'}
+        </button>
+        <button
+          onClick={load}
+          className="flex items-center justify-center gap-1.5 rounded-md border border-[var(--color-border)] px-3 py-1.5 text-sm text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]"
+          title="Yenile"
+        >
+          <RefreshCw className={`h-4 w-4 ${scanning ? 'animate-spin' : ''}`} /> Yenile
+        </button>
+
+        <div className="my-1 border-t border-[var(--color-border)]" />
+
+        {TABS.map((t) => {
+          const Icon = t.icon
+          const active = tab === t.key
+          return (
             <button
-              onClick={() => runScan()}
-              disabled={scanning}
-              className="flex items-center gap-1 rounded-md bg-[var(--color-accent)] px-3 py-1 text-sm text-white disabled:opacity-50"
+              key={t.key}
+              onClick={() => setTab(t.key)}
+              className={`flex items-center gap-2 rounded-md px-3 py-2 text-left text-sm transition ${
+                active
+                  ? 'bg-[var(--color-accent-soft)] font-medium text-[var(--color-accent)]'
+                  : 'text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]'
+              }`}
             >
-              <Play className="h-4 w-4" />
-              {scanning ? 'Taranıyor…' : 'Tara'}
+              <Icon size={15} /> {t.label}
             </button>
-          </div>
-        }
-      />
+          )
+        })}
+      </aside>
 
-      {/* Tab bar */}
-      <div className="flex gap-1 border-b border-[var(--color-border)] px-4">
-        {TABS.map((t) => (
-          <button
-            key={t.key}
-            onClick={() => setTab(t.key)}
-            className={`border-b-2 px-3 py-2 text-sm ${
-              tab === t.key
-                ? 'border-[var(--color-accent)] text-[var(--color-accent)]'
-                : 'border-transparent text-[var(--color-text-dim)] hover:text-[var(--color-text)]'
-            }`}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
-
-      <div className="flex-1 overflow-auto p-4">
+      {/* Right: active sub-page content. */}
+      <div className="min-w-0 flex-1 overflow-auto p-4">
         {(scanNote || scanning) && (
           <div className="mb-3 flex items-center gap-2 rounded-md border border-[var(--color-border)] bg-[var(--color-surface-2)] p-3 text-sm">
             {scanning && <RefreshCw className="h-4 w-4 animate-spin" />}
@@ -177,6 +183,7 @@ export function InsightPanel({ onError, onOpenSession, tab: tabProp, onTabChange
         )}
         {tab === 'lessons' && <LessonsTab onError={onError} />}
         {tab === 'fleet' && <FleetTab onError={onError} />}
+        {tab === 'runs' && <RunsTab onError={onError} />}
         {tab === 'settings' && (
           <SettingsTab settings={settings} setSettings={setSettings} onError={onError} onReset={load} />
         )}

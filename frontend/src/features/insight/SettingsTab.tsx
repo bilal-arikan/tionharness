@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import { Save, Trash2 } from 'lucide-react'
 import { api } from '@/api'
 import { AgentPicker } from '@/shared/components/agents/AgentPicker'
-import { RunsTab } from './RunsTab'
 import type { Agent, InsightSettings } from '@/types'
 
 interface Props {
@@ -143,13 +142,6 @@ export function SettingsTab({ settings, setSettings, onError, onReset }: Props) 
       >
         <Save className="h-4 w-4" /> {saving ? 'Kaydediliyor…' : 'Kaydet'}
       </button>
-    </div>
-
-    {/* Scan history: moved here from a standalone tab — it is reference data, not
-        a primary triage surface. */}
-    <div className="space-y-2 rounded-md border border-[var(--color-border)] p-3">
-      <div className="text-sm font-medium">Tarama geçmişi</div>
-      <RunsTab onError={onError} />
     </div>
 
     {/* Danger zone: reset all insight data for this workspace. */}
