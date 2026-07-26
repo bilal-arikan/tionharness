@@ -114,25 +114,35 @@ export function InsightPanel({ onError, onOpenSession, tab: tabProp, onTabChange
   return (
     <div className="flex min-h-0 flex-1">
       {/* Left: scan actions on top + sub-page rail below (Settings-style). */}
-      <aside className="flex h-full w-52 flex-shrink-0 flex-col gap-1 overflow-y-auto border-r border-[var(--color-border)] bg-[var(--color-surface)] p-2">
-        <button
-          onClick={() => runScan()}
-          disabled={scanning}
-          className="flex items-center justify-center gap-1.5 rounded-md bg-[var(--color-accent)] px-3 py-2 text-sm text-white disabled:opacity-50"
-        >
-          <Play className="h-4 w-4" />
-          {scanning ? 'Taranıyor…' : 'Tara'}
-        </button>
-        <button
-          onClick={load}
-          className="flex items-center justify-center gap-1.5 rounded-md border border-[var(--color-border)] px-3 py-1.5 text-sm text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]"
-          title="Yenile"
-        >
-          <RefreshCw className={`h-4 w-4 ${scanning ? 'animate-spin' : ''}`} /> Yenile
-        </button>
+      <aside className="flex h-full w-52 flex-shrink-0 flex-col overflow-y-auto border-r border-[var(--color-border)] bg-[var(--color-surface)]">
+        {/* Header: label + refresh — same look/arrangement as the chat session list. */}
+        <div className="flex items-center justify-between px-4 pt-4 pb-1">
+          <span className="text-xs font-medium uppercase tracking-wide text-[var(--color-text-dim)]">
+            İçgörü
+          </span>
+          <button
+            onClick={load}
+            className="rounded p-1 text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)]"
+            title="Yenile"
+          >
+            <RefreshCw size={14} className={scanning ? 'animate-spin' : ''} />
+          </button>
+        </div>
 
-        <div className="my-1 border-t border-[var(--color-border)]" />
+        {/* Prominent scan button — styled like the chat "+ Yeni Sohbet" button. */}
+        <div className="px-3 pb-1 pt-1">
+          <button
+            onClick={() => runScan()}
+            disabled={scanning}
+            className="flex w-full items-center justify-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-sm font-medium text-[var(--color-text)] transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)] disabled:cursor-not-allowed disabled:opacity-40"
+            title="Retrospektif tarama başlat"
+          >
+            <Play size={15} /> {scanning ? 'Taranıyor…' : 'Tara'}
+          </button>
+        </div>
 
+        {/* Sub-page rail. */}
+        <div className="flex flex-col gap-1 p-2">
         {TABS.map((t) => {
           const Icon = t.icon
           const active = tab === t.key
@@ -150,6 +160,7 @@ export function InsightPanel({ onError, onOpenSession, tab: tabProp, onTabChange
             </button>
           )
         })}
+        </div>
       </aside>
 
       {/* Right: active sub-page content. */}
