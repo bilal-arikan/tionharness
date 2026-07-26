@@ -3,7 +3,6 @@ import { ShieldCheck, Save } from 'lucide-react'
 import { api } from '@/api'
 import type { AppSettings } from '@/types'
 import { Field, Toggle, inputCls } from '@/features/settings/primitives'
-import { LessonsList } from '@/features/settings/LessonsList'
 
 interface Props {
   onError: (msg: string) => void
@@ -131,7 +130,6 @@ export function LessonsTab({ onError }: Props) {
         checked={draft.lessonReflect}
         onChange={(v) => set('lessonReflect', v)}
       />
-      <LessonsList />
     </div>
   )
 }

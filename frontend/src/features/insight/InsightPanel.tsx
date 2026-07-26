@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { RefreshCw, Play, Bug, ShieldCheck, ScanSearch, Boxes, History, Settings, type LucideIcon } from 'lucide-react'
+import { RefreshCw, Play, Bug, ShieldCheck, GraduationCap, ScanSearch, Boxes, History, Settings, type LucideIcon } from 'lucide-react'
 import { api } from '@/api'
 import type { InsightLens, InsightFinding, InsightSettings } from '@/types'
 import { FindingsTab } from './FindingsTab'
@@ -8,6 +8,7 @@ import { FleetTab } from './FleetTab'
 import { RunsTab } from './RunsTab'
 import { SettingsTab } from './SettingsTab'
 import { LessonsTab } from './LessonsTab'
+import { LessonsList } from '@/features/settings/LessonsList'
 
 interface Props {
   onError: (msg: string) => void
@@ -19,12 +20,13 @@ interface Props {
   onTabChange?: (t: string) => void
 }
 
-type Tab = 'findings' | 'lessons' | 'lenses' | 'fleet' | 'runs' | 'settings'
+type Tab = 'findings' | 'lessons' | 'saved-lessons' | 'lenses' | 'fleet' | 'runs' | 'settings'
 
 // Left-rail sub-pages (Settings-style vertical nav), each with an icon.
 const TABS: { key: Tab; label: string; icon: LucideIcon }[] = [
   { key: 'findings', label: 'Bulgular', icon: Bug },
   { key: 'lessons', label: 'Öz-iyileşme', icon: ShieldCheck },
+  { key: 'saved-lessons', label: 'Dersler', icon: GraduationCap },
   { key: 'lenses', label: 'Lensler', icon: ScanSearch },
   { key: 'fleet', label: 'Fleet', icon: Boxes },
   { key: 'runs', label: 'Geçmiş', icon: History },
@@ -193,6 +195,7 @@ export function InsightPanel({ onError, onOpenSession, tab: tabProp, onTabChange
           />
         )}
         {tab === 'lessons' && <LessonsTab onError={onError} />}
+        {tab === 'saved-lessons' && <LessonsList fill />}
         {tab === 'fleet' && <FleetTab onError={onError} />}
         {tab === 'runs' && <RunsTab onError={onError} />}
         {tab === 'settings' && (

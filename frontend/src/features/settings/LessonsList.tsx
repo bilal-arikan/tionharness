@@ -4,9 +4,10 @@ import { api } from '@/api'
 import type { Lesson } from '@/types'
 
 // LessonsList shows the workspace's auto-collected failure lessons (read-only
-// store written by the lesson reflector) with a per-row prune button. Rendered
-// inside the Settings "Self-healing" section; fetches on mount + manual refresh.
-export function LessonsList() {
+// store written by the lesson reflector) with a per-row prune button. fetches on
+// mount + manual refresh. fill=true makes it a full-height page (flex column with
+// the list growing to fill); the default is the compact embedded card (max-h-56).
+export function LessonsList({ fill = false }: { fill?: boolean } = {}) {
   const [lessons, setLessons] = useState<Lesson[] | null>(null)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
@@ -37,7 +38,7 @@ export function LessonsList() {
   }
 
   return (
-    <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2">
+    <div className={`rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 ${fill ? 'flex h-full min-h-0 flex-col' : ''}`}>
       <div className="mb-1 flex items-center justify-between">
         <span className="text-xs font-medium text-[var(--color-text)]">
           Kayıtlı dersler {lessons ? `(${lessons.length})` : ''}
@@ -59,7 +60,7 @@ export function LessonsList() {
         </p>
       )}
       {lessons && lessons.length > 0 && (
-        <ul className="max-h-56 space-y-1.5 overflow-y-auto">
+        <ul className={`space-y-1.5 overflow-y-auto ${fill ? 'min-h-0 flex-1' : 'max-h-56'}`}>
           {lessons.map((l) => (
             <li key={l.id} className="group flex items-start gap-2 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5">
               <div className="min-w-0 flex-1">
