@@ -137,7 +137,6 @@ export function SettingsPanel({ onError, onSaved, onWorkspaceNotifySaved, comman
     if (!draft) return
     const patch: SettingsPatch = {
       theme: draft.theme, accent: draft.accent, themePreset: draft.themePreset, language: draft.language,
-      defaultProvider: draft.defaultProvider, defaultModel: draft.defaultModel,
       defaultPermissionMode: draft.defaultPermissionMode, claudeCliPath: draft.claudeCliPath,
       claudeConfigDir: draft.claudeConfigDir,
       minimaxBaseUrl: draft.minimaxBaseUrl,

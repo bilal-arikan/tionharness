@@ -86,12 +86,12 @@ export function WorkspaceView({ onError, onWorkspaceChanged, onDeleteWorkspace, 
         // instructions are edited (and saved) in the Files tab as an editable
         // file; omit here so a save never clobbers a newer value.
         name: ws.name, icon: ws.icon, color: ws.color,
-        defaultProvider: ws.defaultProvider, defaultModel: ws.defaultModel,
         pauseAutonomy: ws.pauseAutonomy,
         defaultWorkingDir: ws.defaultWorkingDir,
         codebaseMemoryEnabled: ws.codebaseMemoryEnabled,
         promptEpochEnabled: ws.promptEpochEnabled,
         autoCaptureArtifacts: ws.autoCaptureArtifacts,
+        shellOutputCompression: ws.shellOutputCompression,
       })
       setWs(updated)
       setWsOrig(updated)

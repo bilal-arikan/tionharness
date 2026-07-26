@@ -37,7 +37,6 @@ type Manifest struct {
 type ResolvedConfig struct {
 	Key           string // API key (anthropic, minimax)
 	BaseURL       string // custom endpoint ("" = kind default)
-	Model         string // default model applied when a request omits one
 	CLIPath       string // resolved `claude` binary path (claude-cli)
 	CLIConfigDir  string // CLAUDE_CONFIG_DIR override for the claude-cli subprocess ("" = inherit ~/.claude)
 	CLIAuthKind   string // claude-cli credential kind: "oauth" | "apikey" | "" (none)

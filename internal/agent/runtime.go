@@ -184,6 +184,11 @@ type Runtime struct {
 	// workspace settings can switch the entire feature off. See capabilities.go.
 	codebaseMemoryEnabled atomic.Bool
 
+	// shellCompressMode is the per-workspace shell-output compression override:
+	// 0 = auto (follow sqz-hook detection), 1 = force on, 2 = force off. Set from
+	// WSSettings.ShellOutputCompression; consulted by sqzShellFilter (shell_optimizer.go).
+	shellCompressMode atomic.Int32
+
 	// activeSessions tracks sessions currently executing an autonomous invoke
 	// (schedule / spawn). Keyed by session id; value is struct{}.
 	// Used by the executions feed to show a live "running" indicator for
@@ -276,6 +281,29 @@ func (r *Runtime) SetCodebaseMemory(enabled bool) { r.codebaseMemoryEnabled.Stor
 // CodebaseMemoryEnabled reports whether the codebase-memory capability system is on
 // for this workspace.
 func (r *Runtime) CodebaseMemoryEnabled() bool { return r.codebaseMemoryEnabled.Load() }
+
+// Shell-output compression modes (see shellCompressMode).
+const (
+	shellCompressAuto int32 = 0 // follow sqz-hook detection (default)
+	shellCompressOn   int32 = 1 // force on (needs the sqz binary)
+	shellCompressOff  int32 = 2 // force off
+)
+
+// SetShellCompression sets the per-workspace shell-output compression override from
+// the WSSettings string ("on"/"off"; anything else — including "" or "auto" — is
+// auto). Consulted by sqzShellFilter.
+func (r *Runtime) SetShellCompression(mode string) {
+	var v int32
+	switch strings.ToLower(strings.TrimSpace(mode)) {
+	case "on":
+		v = shellCompressOn
+	case "off":
+		v = shellCompressOff
+	default:
+		v = shellCompressAuto
+	}
+	r.shellCompressMode.Store(v)
+}
 
 // SetPromptEpoch toggles the prompt-epoch (frozen prompt-prefix snapshot) system
 // for this workspace (promptepoch.go).
@@ -498,17 +526,20 @@ func (r *Runtime) NewShellRunner() func(ctx context.Context, toolName string, ar
 	// path. Unconfined, like an interactive turn.
 	return func(ctx context.Context, toolName string, args json.RawMessage) (string, error) {
 		sb := tools.NewSandbox(r.effectiveWorkDir(ctx))
+		// Route bridged shell output through the token-optimizer (sqz) in-process when
+		// wired — the CLI hook path cannot reach this bridged tool name (see sqzShellFilter).
+		filter := r.sqzShellFilter(ctx)
 		if toolName == "PowerShell" {
-			return tools.NewPowerShellTool(sb).Call(ctx, args)
+			return tools.NewPowerShellTool(sb).WithOutputFilter(filter).Call(ctx, args)
 		}
 		// Bash-preferred: use the POSIX shell when one backs it. On Windows without a
 		// bash.exe, ShellTool.Available() is false, so fall back to PowerShell rather
 		// than dispatch to a shell that cannot run — no silent failure.
 		bash := tools.NewShellTool(sb)
 		if !bash.Available() {
-			return tools.NewPowerShellTool(sb).Call(ctx, args)
+			return tools.NewPowerShellTool(sb).WithOutputFilter(filter).Call(ctx, args)
 		}
-		return bash.Call(ctx, args)
+		return bash.WithOutputFilter(filter).Call(ctx, args)
 	}
 }
 

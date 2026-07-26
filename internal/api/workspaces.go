@@ -35,11 +35,14 @@ func (s *Server) handleListWorkspaces(w http.ResponseWriter, _ *http.Request) {
 }
 
 type createWorkspaceReq struct {
-	Name     string `json:"name"`
-	Path     string `json:"path"`     // optional parent folder for the workspace data dir
-	Icon     string `json:"icon"`     // optional emoji identity
-	Color    string `json:"color"`    // optional hex accent
-	Template string `json:"template"` // optional workspace template id (default "blank")
+	Name string `json:"name"`
+	// ProjectDir is an OPTIONAL working directory (cwd) new sessions in this
+	// workspace start with — the project the workspace operates on. It is NOT the
+	// workspace data dir: the data dir always uses the application default location.
+	ProjectDir string `json:"projectDir"`
+	Icon       string `json:"icon"`     // optional emoji identity
+	Color      string `json:"color"`    // optional hex accent
+	Template   string `json:"template"` // optional workspace template id (default "blank")
 }
 
 func (s *Server) handleCreateWorkspace(w http.ResponseWriter, r *http.Request) {
@@ -47,20 +50,26 @@ func (s *Server) handleCreateWorkspace(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	wsNew, err := s.workspaces.Create(req.Name, strings.TrimSpace(req.Path), "")
+	// The data dir always uses the application default location — no per-workspace
+	// data-folder override any more.
+	wsNew, err := s.workspaces.Create(req.Name, "", "")
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	// Apply the visual identity (icon/color) when provided.
-	if req.Icon != "" || req.Color != "" {
+	// Apply the visual identity (icon/color) and the optional project directory.
+	projectDir := strings.TrimSpace(req.ProjectDir)
+	if req.Icon != "" || req.Color != "" || projectDir != "" {
 		patch := workspace.WSSettingsPatch{}
 		if req.Icon != "" {
 			patch.Icon = &req.Icon
 		}
 		if req.Color != "" {
 			patch.Color = &req.Color
+		}
+		if projectDir != "" {
+			patch.DefaultWorkingDir = &projectDir
 		}
 		if _, err := s.workspaces.UpdateSettings(wsNew.ID, patch); err != nil {
 			s.logger.Warn("apply workspace identity failed", "workspace", wsNew.ID, "error", err)

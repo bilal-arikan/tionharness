@@ -140,8 +140,11 @@ Fresh install'da (hiç workspace yokken) `OnboardingScreen` gösterilir; backend
 **varsayılan workspace tohumlamaz** (üstteki "Çalışma Şekli 2." maddesi eski
 davranıştır). Karşılama kartında **iki** aksiyon vardır:
 
-- **Workspace Oluştur** → `WorkspaceCreateModal` (ad + opsiyonel veri klasörü + emoji
-  + şablon) → `POST /api/workspaces`.
+- **Workspace Oluştur** → `WorkspaceCreateModal` (ad + emoji + şablon + **opsiyonel
+  proje dizini**) → `POST /api/workspaces`. Veri klasörü **artık seçilmez**: data dir
+  daima uygulama varsayılan konumunu kullanır (`Create(name, "", "")`). Girilen proje
+  dizini workspace'in `DefaultWorkingDir`'ine (oturum cwd'si) yazılır (istek alanı
+  `projectDir`).
 - **Mevcut Workspace Seç** → native klasör seçici (`POST /api/pick-folder`) → seçilen
   yol `POST /api/workspaces/attach` ile **taşınmadan** kayıt defterine eklenir. Bu,
   başka makineden kopyalanan ya da önceki kurulumdan kalan bir workspace veri
@@ -262,9 +265,16 @@ override'larını `store/` yanındaki `ws-settings.json` dosyasında tutar
 | Alan | Açıklama |
 |------|----------|
 | `icon`, `color` | Switcher/rail'de görsel kimlik |
-| `defaultProvider`, `defaultModel` | Boş = uygulama varsayılanı |
 | `pauseAutonomy` | Sadece bu workspace'in otonomisini (scheduler) durdurur — anahtar **Zamanlamalar** ekranının üstünde (2026-07-01: app-geneli pause kaldırıldı, pause artık yalnız workspace-özel) |
 | `instructions` | **Bu workspace'teki tüm agent'lara eklenen serbest metin yönergeler** |
+
+> **Not (2026-07-25):** Hem workspace-özel `defaultProvider`/`defaultModel` alanı hem de
+> app-geneli varsayılan sağlayıcı/model **tamamen kaldırıldı**. Sağlayıcı/model soyut bir
+> "varsayılan" değildir; her ajan kendi net kurulumunu taşır. Yeni ajan oluşturulurken boş
+> bırakılan sağlayıcı/model workspace'teki **ilk (en yeni) ajanın** kurulumundan →
+> `claude-cli` + provider'ın kendi yerleşik varsayılan modelinden miras alınır
+> (`handleCreateAgent` → `firstAgentProviderModel`). Eski `ws-settings.json` dosyalarındaki
+> dead anahtarlar yüklemede bir kez temizlenir.
 
 ### Instructions enjeksiyonu
 

@@ -12,8 +12,6 @@ export interface AppSettings {
   themePreset: string
   language: 'tr' | 'en'
 
-  defaultProvider: string
-  defaultModel: string
   defaultPermissionMode: string
   claudeCliPath: string
   // CLAUDE_CONFIG_DIR for claude-cli subprocesses. Now a FALLBACK only: each turn

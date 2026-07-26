@@ -7,11 +7,10 @@
 // the section reads as rows of the same shape, and custom providers render as a
 // real table.
 import { useEffect, useState } from 'react'
-import { Server, Sparkles, Zap, KeyRound, Boxes, Plus, Trash2, Network, type LucideIcon } from 'lucide-react'
+import { Sparkles, Zap, KeyRound, Boxes, Plus, Trash2, Network, type LucideIcon } from 'lucide-react'
 import { api } from '@/api'
 import type { AppSettings, ProviderTestResult, Secret } from '@/types'
 import type { CustomProvider, UpsertProviderInput, PriceTable } from '@/api/providers'
-import { ProviderModelSelect } from '@/shared/components/agents/ProviderModelSelect'
 import { inputCls, type AppSet } from './primitives'
 import { ClaudeAuthDialog } from './ClaudeAuthDialog'
 
@@ -528,25 +527,6 @@ export function ProvidersPanel({
           onSaved={(next) => setDraft(next)}
         />
       )}
-      <div>
-        <div className="mb-1 flex items-center gap-1.5 text-sm font-medium">
-          <Server size={14} className="text-[var(--color-accent)]" />
-          Varsayılan sağlayıcı + model
-        </div>
-        <p className="mb-2 text-xs text-[var(--color-text-dim)]">Yeni ajanlar bunlarla oluşturulur (model boş = sağlayıcı varsayılanı).</p>
-        <ProviderModelSelect
-          provider={draft.defaultProvider}
-          model={draft.defaultModel}
-          onChange={(p, m) => setDraft((d) => (d ? { ...d, defaultProvider: p, defaultModel: m } : d))}
-        />
-        <div className="mt-2 flex items-center gap-2">
-          <button onClick={() => runTest(draft.defaultProvider)} className="rounded border border-[var(--color-border)] px-2 py-1.5 text-xs hover:border-[var(--color-accent)]">
-            Bağlantıyı test et
-          </button>
-          {testBadge(test, draft.defaultProvider)}
-        </div>
-      </div>
-
       <div>
         <div className="mb-1.5 flex items-center justify-between gap-2">
           <span className="text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">Yerleşik sağlayıcılar</span>

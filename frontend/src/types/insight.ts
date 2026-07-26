@@ -54,7 +54,7 @@ export interface InsightSettings {
   scanSinceDays?: number
   /** Standard 5-field cron expression driving automatic scans; empty = manual only. */
   autoScanCron?: string
-  /** Agent whose provider/model runs automatic scans; empty = default agent. */
+  /** Agent whose own provider/model runs scans; empty = fall back to the first agent. */
   autoScanAgentId?: string
 }
 

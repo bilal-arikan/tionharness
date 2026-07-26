@@ -21,6 +21,11 @@ type Flow struct {
 	// agents (set_flow_tags). Organizational only (they do not drive automations —
 	// only session tags do).
 	Tags []string `json:"tags,omitempty"`
+	// Seed, when non-empty, marks this flow as a shipped built-in default
+	// provisioned by EnsureDefaultFlows. The value is the stable seed key; it
+	// lets seeding skip an already-present default and lets the UI recognize a
+	// default. User- and agent-created flows leave it "".
+	Seed string `json:"seed,omitempty"`
 	// CreatedBy is the ID of the agent that created this flow via a
 	// self-management tool ("" = created by the user). Agents may only
 	// edit/delete agent-created flows.

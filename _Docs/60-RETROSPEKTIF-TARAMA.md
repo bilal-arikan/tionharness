@@ -232,7 +232,7 @@ toggle (Ayarlar ▸ Bağlam ile aynı `lessonReflect`) + kayıtlı dersler (`Les
 - `GET|PUT /api/insight/settings` — `{ appFixRepoPath, maxSessions, maxAnalyzed, scanSinceDays, autoScanCron, autoScanAgentId }` ✅
   (PUT sonrası otomatik tarama cron'u anında re-arm edilir)
   - `scanSinceDays` — sadece son N günde aktif oturumları tara (0 = tüm geçmiş); eski oturum gürültüsünü keser.
-  - `autoScanAgentId` — analiz ajanı (manuel + cron): seçili ajan KENDİ provider+model'iyle çalışır; boşsa ilk ajan + ucuz başlık modeli.
+  - `autoScanAgentId` — analiz ajanı (manuel + cron): seçili ajan KENDİ provider+model'iyle çalışır. Soyut "varsayılan" seçeneği yoktur; UI açılışta boşsa mevcut **ilk ajanı** otomatik seçer (picker clearable değil). Kayıtlı değer boşsa backend yine ilk ajana (ucuz başlık modeliyle) düşer.
 - `POST /api/insight/findings/{id}/status` — bulgu statü geçişi (triage) ✅
 - `DELETE /api/insight/findings/{id}` — bulguyu kalıcı siler (`FindingStore.Delete`; dismiss'ten farklı) ✅
 - `POST /api/insight/reset` — `{ deep }` — workspace insight verisini sıfırlar; tarama sürerken `409` ✅

@@ -219,7 +219,7 @@ func TestActiveToolsPrune(t *testing.T) {
 func TestActivateToolsTool(t *testing.T) {
 	active := NewActiveTools()
 	cat := []providers.ToolDef{{Name: "lazy_a", Description: "A"}, {Name: "lazy_b", Description: "B"}}
-	tool := NewActivateToolsTool(active, cat)
+	tool := NewActivateToolsTool(active, cat, nil)
 
 	out, err := tool.Call(context.Background(), json.RawMessage(`{"names":["lazy_a","nope"]}`))
 	if err != nil {

@@ -327,11 +327,15 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 			// tools (shell_output/shell_kill/shell_list) that poll and reap them. Nil for
 			// catalog/preview builds (no session) → background execution simply unavailable.
 			shellMgr := r.shellMgrFor(SessionIDFrom(ctx))
+			// Route foreground shell output through the token-optimizer (sqz) in-process
+			// when wired — same filter the bridged (claude-cli) path uses, so native
+			// providers save tokens identically. nil when sqz is not opted-in.
+			shellFilter := r.sqzShellFilter(ctx)
 			if sh := tools.NewShellTool(sb); sh.Available() {
-				builtins = append(builtins, sh.WithManager(shellMgr))
+				builtins = append(builtins, sh.WithManager(shellMgr).WithOutputFilter(shellFilter))
 			}
 			if ps := tools.NewPowerShellTool(sb); ps.Available() {
-				builtins = append(builtins, ps.WithManager(shellMgr))
+				builtins = append(builtins, ps.WithManager(shellMgr).WithOutputFilter(shellFilter))
 			}
 			if shellMgr != nil {
 				// One control tool (action=output/kill/list) polls and reaps the
@@ -621,8 +625,12 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 			d := deact.Def()
 			lazyCat = append(lazyCat, providers.ToolDef{Name: d.Name, Description: d.Description})
 		}
+		// eagerNames: the always-on built-ins (e.g. insight_scan) so activate_tools can
+		// answer a stray "activate an already-shipped tool" request with a clear
+		// "already available" note instead of a misleading "unknown name".
+		eagerNames := reg.EagerNames(nil)
 		reg.Add(
-			tools.NewActivateToolsTool(active, lazyCat),
+			tools.NewActivateToolsTool(active, lazyCat, eagerNames),
 			deact,
 			tools.NewToolSearchTool(lazyCat),
 		)
@@ -698,6 +706,23 @@ func (r *Runtime) LazyToolCatalog(ctx context.Context, agent db.Agent) []provide
 func (r *Runtime) ToolVisibilityFunc(ctx context.Context, agent db.Agent) func(name string) string {
 	reg := r.buildRegistry(ctx, agent)
 	return reg.VisibilityOf
+}
+
+// ToolAllowedFunc returns a per-agent predicate reporting whether a tool is
+// offered to this agent — workspace-active (not in the workspace DisabledTools)
+// AND not on the agent denylist AND permitted by its allowlist — the SAME gate
+// ToolCatalog applies on the native path. Unlike toolFilter it is ALWAYS non-nil:
+// when nothing is restricted it reports every tool allowed. The claude-cli
+// Interaction bridge consults it so a workspace-disabled or agent-blocked tool
+// (e.g. PowerShell disabled to force Bash) is neither advertised in the bridge's
+// tools/list nor placed in the CLI allowlist — closing the gap where the bridge
+// exposed tools the native loop would have filtered out.
+func (r *Runtime) ToolAllowedFunc(ctx context.Context, agent db.Agent) func(name string) bool {
+	filter := r.toolFilter(ctx, agent)
+	if filter == nil {
+		return func(string) bool { return true }
+	}
+	return filter
 }
 
 // LazyToolsCatalogBlock renders the "Available Tools (load on demand)" system-

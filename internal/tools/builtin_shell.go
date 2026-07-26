@@ -42,6 +42,10 @@ type shellArgs struct {
 	Command         string `json:"command"`
 	TimeoutSec      int    `json:"timeout_sec"`
 	RunInBackground bool   `json:"run_in_background"`
+	// NoCompress skips the token-optimizer output filter for THIS call, returning the
+	// byte-exact raw output. Advertised only when a filter is active (see Def). Use it
+	// when you need the output verbatim (a value you will parse/compare exactly).
+	NoCompress bool `json:"no_compress"`
 }
 
 // resolvePOSIXShell finds the POSIX shell to back the Bash tool: /bin/sh on Unix,
@@ -88,6 +92,11 @@ type ShellTool struct {
 	sb  Sandbox
 	exe string
 	mgr *ShellManager // background-shell registry (nil = run_in_background unavailable)
+	// outFilter optionally post-processes the combined output before it is returned
+	// to the model (e.g. an external token-optimizer like sqz). nil = passthrough. It
+	// runs only on foreground runs and only above shellCompressMinBytes; the live UI
+	// stream (onChunk) is never filtered. Injected by the agent layer.
+	outFilter func(cmd, output string) string
 }
 
 // NewShellTool binds the tool to a base working directory and resolves the POSIX
@@ -101,6 +110,15 @@ func NewShellTool(sb Sandbox) ShellTool {
 // manager, enabling run_in_background. Without it, background execution reports it
 // is unavailable (the historical foreground-only behaviour).
 func (t ShellTool) WithManager(m *ShellManager) ShellTool { t.mgr = m; return t }
+
+// WithOutputFilter returns a copy whose combined output is post-processed by f
+// before being returned to the model (nil = passthrough). Used to route shell
+// output through an external token-optimizer (sqz) in-process, since the CLI hook
+// path cannot reach TionSwarm's bridged shell tool name.
+func (t ShellTool) WithOutputFilter(f func(cmd, output string) string) ShellTool {
+	t.outFilter = f
+	return t
+}
 
 // Available reports whether a backing POSIX shell was found (always true on Unix;
 // on Windows only when a bash.exe is on PATH).
@@ -119,7 +137,7 @@ func (t ShellTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name:        "Bash",
 		Description: desc,
-		InputSchema: shellInputSchema(bg),
+		InputSchema: shellInputSchema(bg, t.outFilter != nil),
 	}
 }
 
@@ -138,7 +156,7 @@ func (t ShellTool) CallStream(ctx context.Context, input json.RawMessage, onChun
 	if args.RunInBackground {
 		return startBackgroundShell(t.mgr, t.sb, args, "Bash", build)
 	}
-	return runShell(ctx, t.sb, args, onChunk, build)
+	return runShell(ctx, t.sb, args, onChunk, build, t.outFilter)
 }
 
 // PowerShellTool runs a command through PowerShell (pwsh preferred, else
@@ -150,6 +168,8 @@ type PowerShellTool struct {
 	sb  Sandbox
 	exe string
 	mgr *ShellManager // background-shell registry (nil = run_in_background unavailable)
+	// outFilter — see ShellTool.outFilter. Same contract for the PowerShell sibling.
+	outFilter func(cmd, output string) string
 }
 
 // NewPowerShellTool binds the tool to a base working directory and resolves a
@@ -162,6 +182,13 @@ func NewPowerShellTool(sb Sandbox) PowerShellTool {
 // WithManager returns a copy wired to a session's background-shell manager,
 // enabling run_in_background (see ShellTool.WithManager).
 func (t PowerShellTool) WithManager(m *ShellManager) PowerShellTool { t.mgr = m; return t }
+
+// WithOutputFilter returns a copy whose combined output is post-processed by f
+// before return (nil = passthrough). See ShellTool.WithOutputFilter.
+func (t PowerShellTool) WithOutputFilter(f func(cmd, output string) string) PowerShellTool {
+	t.outFilter = f
+	return t
+}
 
 // Available reports whether a PowerShell host (pwsh/powershell.exe) was found.
 func (t PowerShellTool) Available() bool { return t.exe != "" }
@@ -182,7 +209,7 @@ func (t PowerShellTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name:        "PowerShell",
 		Description: desc,
-		InputSchema: shellInputSchema(bg),
+		InputSchema: shellInputSchema(bg, t.outFilter != nil),
 	}
 }
 
@@ -210,20 +237,26 @@ func (t PowerShellTool) CallStream(ctx context.Context, input json.RawMessage, o
 	if args.RunInBackground {
 		return startBackgroundShell(t.mgr, t.sb, args, "PowerShell", build)
 	}
-	return runShell(ctx, t.sb, args, onChunk, build)
+	return runShell(ctx, t.sb, args, onChunk, build, t.outFilter)
 }
 
 // shellInputSchema builds the shared shell-tool schema. run_in_background is only
 // advertised when the tool has a background-shell manager wired (withBackground):
 // without one, the runtime would reject the field at call time — so it must not
 // appear in the schema in the first place (don't offer what you'll refuse).
-func shellInputSchema(withBackground bool) json.RawMessage {
+func shellInputSchema(withBackground, withCompress bool) json.RawMessage {
 	props := `"command":{"type":"string","description":"The command line to execute"},
 		"timeout_sec":{"type":"integer","description":"Timeout in seconds (default 30, max 120)."}`
 	if withBackground {
 		props = `"command":{"type":"string","description":"The command line to execute"},
 		"timeout_sec":{"type":"integer","description":"Timeout in seconds (default 30, max 120). Ignored when run_in_background is true."},
 		"run_in_background":{"type":"boolean","description":"Run detached and return a shell id immediately instead of waiting. Use for long-running processes (dev servers, watchers); read output with shell_output and stop with shell_kill."}`
+	}
+	// no_compress is advertised only when an output token-optimizer is active for this
+	// tool — otherwise the flag would be a no-op the model shouldn't see.
+	if withCompress {
+		props += `,
+		"no_compress":{"type":"boolean","description":"Return the byte-exact raw output, skipping the token-optimizer compression applied to large output. Use only when you must parse/compare the output verbatim."}`
 	}
 	return json.RawMessage(`{"type":"object","properties":{` + props + `},"required":["command"],"additionalProperties":false}`)
 }
@@ -265,7 +298,12 @@ func startBackgroundShell(mgr *ShellManager, sb Sandbox, args shellArgs, label s
 // confined-mode git guard, timeout, working directory, capped streaming capture
 // and uniform output formatting. build constructs the *exec.Cmd for the resolved
 // command — the only part that differs between shells.
-func runShell(ctx context.Context, sb Sandbox, args shellArgs, onChunk func(string), build func(ctx context.Context, command string) *exec.Cmd) (string, error) {
+// shellCompressMinBytes is the output size below which the outFilter is skipped:
+// small outputs are not worth an optimizer subprocess (and precise short values —
+// hashes, keys — should never be touched anyway).
+const shellCompressMinBytes = 2048
+
+func runShell(ctx context.Context, sb Sandbox, args shellArgs, onChunk func(string), build func(ctx context.Context, command string) *exec.Cmd, outFilter func(cmd, output string) string) (string, error) {
 	// Autonomous brake: when the sandbox is confined (autonomous turn + the
 	// AutonomousConfine guard), block network-mutating git operations. A scheduled
 	// or spawned agent must not push to a remote without a human in the loop;
@@ -311,6 +349,13 @@ func runShell(ctx context.Context, sb Sandbox, args shellArgs, onChunk func(stri
 	result := strings.TrimSpace(b.String())
 	if result == "" {
 		result = "(no output)"
+	}
+	// Optional token-optimizer post-processing (e.g. sqz), applied only to the value
+	// RETURNED to the model — the live UI stream (onChunk) already showed the raw
+	// output. Skipped for small outputs. The filter must fail open (return the
+	// original on any error); it is an optimization, not a correctness step.
+	if outFilter != nil && !args.NoCompress && len(result) >= shellCompressMinBytes {
+		result = outFilter(args.Command, result)
 	}
 	return result, nil
 }

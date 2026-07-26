@@ -471,3 +471,29 @@ stable `insight-sig` marker so re-scans never duplicate it.
 
 <!-- insight-sig:todo_write:no-existing-checklist-to-update -->
 
+## ask_user aracı yanıtsız kaldığında zaman aşımıyla turu askıya alıyor
+
+- **Severity:** med
+- **Occurrences:** 1
+- **Evidence sessions:** SES182
+- **File:** `internal/api/autonomous_interaction.go`
+
+**Root cause:** TionSwarm'ın interaction MCP aracı olan ask_user, kullanıcıdan yanıt gelene kadar bloklanıyor. Otonom/gözetimsiz çalışan bir oturumda soruyu yanıtlayacak bir kullanıcı olmadığında istek varsayılan zaman aşımına kadar bekliyor ve ardından 'operation timed out' ile düşüyor. Bu bir kullanıcı/ortam hatası değil; aracın yanıtsız durumu zarifçe ele alacak bir guardrail (otomatik iptal, varsayılan cevap veya turu devam ettiren fallback) içermemesinden kaynaklanan uygulama seviyesinde bir eksiklik.
+
+**Proposed fix:** autonomous_interaction akışında ask_user için açık bir zaman aşımı + fallback guardrail'i ekle: süre dolduğunda istegi iptal edip ajana yapılandırılmış bir 'no_response' sonucu döndür (hata fırlatmak yerine), böylece tur bloklanmadan devam etsin. Otonom modda ask_user'ı ya devre dışı bırak ya da varsayılan/timeout-safe bir yanıtla besle.
+
+<!-- insight-sig:ask_user:operation_timed_out -->
+
+## insight_* araçları on-demand katalogda kayıtlı olmadığı için activate_tools ile etkinleştirilemiyor
+
+- **Severity:** med
+- **Occurrences:** 1
+- **Evidence sessions:** SES180
+- **File:** `internal/agent/toolsetup.go`
+
+**Root cause:** Ajan, insight akışını sürdürmek için insight_scan, insight_list_findings ve insight_apply_finding araçlarını activate_tools ile etkinleştirmeye çalışıyor; ancak bu araçlar on-demand (talep üzerine etkinleştirilebilir) araç kataloğuna hiç eklenmemiş. Katalogda tanımlı olmadıkları için activate_tools 'unknown (not in the on-demand catalog)' diyerek hiçbir yeni araç etkinleştirmiyor ve insight adımı sessizce ilerleyemiyor. Bu, kullanıcı/geçici bir hata değil, araç kayıt tablosundaki bir eksiklik — uygulama seviyesinde bir kayıt/şema hatası.
+
+**Proposed fix:** insight_scan, insight_list_findings ve insight_apply_finding araçlarını on-demand araç kataloğuna kaydet (activate_tools tarafından çözümlenebilir hale getir). Alternatif olarak bu araçları insight bağlamında baştan aktif (always-on) kabul et; her iki durumda da katalog ile araç tanımları arasındaki isim eşlemesini doğrulayan bir başlangıç kontrolü ekle ki katalogda olmayan bir araç etkinleştirme isteği erken ve açık şekilde raporlansın.
+
+<!-- insight-sig:activate_tools|unknown tool not in on-demand catalog|insight_scan,insight_list_findings,insight_apply_finding -->
+

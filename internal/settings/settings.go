@@ -70,9 +70,10 @@ type Settings struct {
 	ThemePreset string `json:"themePreset"` // theme color + variant id, e.g. "violet-dark" ("" = default)
 	Language    string `json:"language"`    // "tr" | "en"
 
-	// Providers.
-	DefaultProvider string `json:"defaultProvider"` // "claude-cli" | "anthropic"
-	DefaultModel    string `json:"defaultModel"`    // "" = provider default
+	// Providers. There is no abstract app-global "default provider/model": a new
+	// agent inherits the first existing agent's concrete provider/model, falling
+	// back to the built-in claude-cli (local, keyless) + the provider's own default
+	// model only when no agent exists yet.
 	// DefaultPermissionMode seeds new agents' tool-use permission gate:
 	// "read-only" | "ask" | "auto". "" falls back to "auto".
 	DefaultPermissionMode string `json:"defaultPermissionMode"`
@@ -334,8 +335,6 @@ func Default() Settings {
 		ThemePreset: "violet-dark",
 		Language:    "tr",
 
-		DefaultProvider:       "claude-cli",
-		DefaultModel:          "",
 		DefaultPermissionMode: "auto",
 		ClaudeCLIPath:         "",
 		ClaudeConfigDir:       defaultClaudeConfigDir(),
@@ -475,8 +474,6 @@ type DTO struct {
 	ThemePreset string `json:"themePreset"`
 	Language    string `json:"language"`
 
-	DefaultProvider       string `json:"defaultProvider"`
-	DefaultModel          string `json:"defaultModel"`
 	DefaultPermissionMode string `json:"defaultPermissionMode"`
 	ClaudeCLIPath         string `json:"claudeCliPath"`
 	ClaudeConfigDir       string `json:"claudeConfigDir"`
@@ -598,8 +595,6 @@ func (s Settings) ToDTO() DTO {
 		ThemePreset: s.ThemePreset,
 		Language:    s.Language,
 
-		DefaultProvider:       s.DefaultProvider,
-		DefaultModel:          s.DefaultModel,
 		DefaultPermissionMode: s.DefaultPermissionMode,
 		ClaudeCLIPath:         s.ClaudeCLIPath,
 		ClaudeConfigDir:       s.ClaudeConfigDir,
@@ -714,8 +709,6 @@ type Patch struct {
 	ThemePreset *string `json:"themePreset"`
 	Language    *string `json:"language"`
 
-	DefaultProvider       *string `json:"defaultProvider"`
-	DefaultModel          *string `json:"defaultModel"`
 	DefaultPermissionMode *string `json:"defaultPermissionMode"`
 	ClaudeCLIPath         *string `json:"claudeCliPath"`
 	ClaudeConfigDir       *string `json:"claudeConfigDir"`

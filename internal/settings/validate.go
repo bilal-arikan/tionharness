@@ -31,13 +31,6 @@ func Validate(p Patch) error {
 	if p.Language != nil && *p.Language != "tr" && *p.Language != "en" {
 		return fmt.Errorf("language must be \"tr\" or \"en\" (got %q)", *p.Language)
 	}
-	if p.DefaultProvider != nil {
-		switch *p.DefaultProvider {
-		case "claude-cli", "anthropic":
-		default:
-			return fmt.Errorf("defaultProvider must be \"claude-cli\" or \"anthropic\" (got %q)", *p.DefaultProvider)
-		}
-	}
 	if p.DefaultPermissionMode != nil {
 		switch *p.DefaultPermissionMode {
 		case "", "read-only", "ask", "auto":

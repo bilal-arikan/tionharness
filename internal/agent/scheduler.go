@@ -215,10 +215,11 @@ func (s *Scheduler) deliverWake(ctx context.Context, sc db.Schedule) error {
 	if _, err := s.db.GetSession(ctx, sc.SessionID); err != nil {
 		return fmt.Errorf("wake session %s gone: %w", sc.SessionID, err)
 	}
-	// A wake may re-enter a coordinator session: claim its turn slot so the wake
-	// turn never overlaps an auto-triggered coordinator turn (worker notifications
-	// arriving meanwhile coalesce and run after release). No-op otherwise.
-	release := s.rt.claimTurnSlotIfCoordinator(ctx, sc.SessionID)
+	// A wake re-enters a real, human-visible chat session: claim its per-session
+	// turn slot so the wake turn never overlaps a concurrent user turn (inbox
+	// worker / direct chat) or, for a coordinator, an auto turn — worker
+	// notifications arriving meanwhile coalesce and run after release.
+	release := s.rt.claimSessionTurnSlot(sc.SessionID)
 	defer release()
 
 	// Record the wake prompt as a user turn and tell the open screen to refresh +
@@ -239,7 +240,13 @@ func (s *Scheduler) deliverWake(ctx context.Context, sc db.Schedule) error {
 	// asynchronous chat run so interactive-only tools (ask_user/request_confirmation)
 	// guide the model to ask in its reply instead of bailing with "proceed without
 	// asking" — the user can answer in the chat afterwards.
-	wakeCtx := tools.WithAsyncChat(WithSessionID(WithCallKind(ctx, KindSchedule), sc.SessionID))
+	// Bound the wake turn with the same hard+idle watchdog as spawn/worker turns: it
+	// now holds the per-session turn slot, so a hung wake (a provider that never
+	// returns) would otherwise block every other turn on the session indefinitely —
+	// the slot's Cond wait ignores ctx, so nothing else could release it.
+	turnBase, cancelTurn := withActivityTimeout(ctx, s.rt.tun.SpawnTimeout(), s.rt.tun.SpawnIdleTimeout())
+	defer cancelTurn()
+	wakeCtx := tools.WithAsyncChat(WithSessionID(WithCallKind(turnBase, KindSchedule), sc.SessionID))
 	wakeCtx, wakeMeta := WithTurnMeta(wakeCtx)
 	wakeStart := time.Now()
 	// Prefer the history-aware runner (installed by the api server) so the woken
@@ -447,9 +454,10 @@ func (s *Scheduler) deliverPrompt(ctx context.Context, sc db.Schedule) (string, 
 			"schedule", sc.ID, "agent", sc.AgentID, "error", err)
 		return "", err
 	}
-	// The schedule session could have been given the coordinator role: serialize
-	// with its auto turns the same way chat/wake turns do. No-op otherwise.
-	release := s.rt.claimTurnSlotIfCoordinator(ctx, session.ID)
+	// Serialize this scheduled turn with any concurrent turn on the same session
+	// (user chat / inbox worker / wake) — and, for a coordinator, its auto turns —
+	// via the single per-session turn slot.
+	release := s.rt.claimSessionTurnSlot(session.ID)
 	defer release()
 	// Record the scheduled prompt as a user turn first, so the schedule thread
 	// reads as a real conversation (the UI shows what was asked). Origin "schedule"
@@ -463,7 +471,12 @@ func (s *Scheduler) deliverPrompt(ctx context.Context, sc db.Schedule) (string, 
 		return session.ID, err
 	}
 	s.rt.trackSession(session.ID)
-	turnCtx, overflow := withOverflowFlag(WithSessionID(WithCallKind(ctx, KindSchedule), session.ID))
+	// Bound the scheduled turn with the spawn watchdog: it holds the per-session turn
+	// slot, so a hung turn must not block the session's queue forever (the slot's Cond
+	// wait ignores ctx).
+	turnBase, cancelTurn := withActivityTimeout(ctx, s.rt.tun.SpawnTimeout(), s.rt.tun.SpawnIdleTimeout())
+	defer cancelTurn()
+	turnCtx, overflow := withOverflowFlag(WithSessionID(WithCallKind(turnBase, KindSchedule), session.ID))
 	turnCtx, meta := WithTurnMeta(turnCtx)
 	turnStart := time.Now()
 	output, steps, err := s.rt.invokeTraced(turnCtx, agent, sc.Prompt, true) // scheduled = autonomous

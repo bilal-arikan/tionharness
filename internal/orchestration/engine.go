@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -30,6 +31,21 @@ type AgentRunner interface {
 // keep working unchanged (the schema is then advisory-only).
 type SchemaAgentRunner interface {
 	RunAgentNodeSchema(ctx context.Context, agentID, prompt, outputSchema string) (string, error)
+}
+
+// Msg is one turn of an accumulated conversation thread (see State.Thread).
+type Msg struct {
+	Role string `json:"role"` // "user" | "assistant"
+	Text string `json:"text"`
+}
+
+// ThreadAgentRunner is an OPTIONAL extension for accumulate-mode graphs: the
+// runner receives the prior conversation thread plus the new user prompt, so the
+// agent's stable system + growing message prefix is reused by the provider's
+// prompt cache across sequential nodes. Runners that do not implement it fall
+// back to the stateless RunAgentNode path even when Accumulate is on.
+type ThreadAgentRunner interface {
+	RunAgentNodeThread(ctx context.Context, agentID string, thread []Msg, prompt, outputSchema string) (string, error)
 }
 
 // NodeEvent reports a node's lifecycle to an Observer so a caller can stream
@@ -66,6 +82,16 @@ type State struct {
 	Outputs map[string]string `json:"outputs"`
 	Steps   int               `json:"steps"`
 	Trace   []TraceEntry      `json:"trace"`
+	// Iter is the current loop iteration (0-based) exposed to body nodes as
+	// {{iteration}}. Set by the engine before each loop body pass; nested loops
+	// share this field, so an inner loop overwrites it for the duration of its run.
+	Iter int `json:"iter,omitempty"`
+	// Thread is the accumulated conversation for accumulate-mode graphs: each
+	// non-Fresh agent node appends its rendered prompt ({user}) and reply
+	// ({assistant}). Empty on legacy stateless runs. Persisted so a resumed run
+	// keeps its cacheable prefix. A parallel node forks a copy per child and folds
+	// the joined output back as a single synthetic turn (see runParallel).
+	Thread []Msg `json:"thread,omitempty"`
 }
 
 // NewState builds a fresh state starting at the graph entry node.
@@ -118,12 +144,24 @@ func (e *Engine) notifyError(node Node, index int, err error) {
 // crashing node (or a tool/provider panic beneath it) ends the flow cleanly
 // instead of taking down the whole process. Used by both the sequential and
 // parallel paths.
-func (e *Engine) runAgentNodeSafe(ctx context.Context, node Node, prompt string) (out string, err error) {
+//
+// When useThread is true and the runner implements ThreadAgentRunner, the node
+// runs with the accumulated conversation (thread) as its prior messages so the
+// provider's prompt cache reuses the stable prefix. The caller owns growing the
+// thread (sequential appends in place; parallel forks a copy and folds the join),
+// so this method never mutates thread. Falls back to the schema/stateless runner
+// when useThread is false or the runner lacks ThreadAgentRunner.
+func (e *Engine) runAgentNodeSafe(ctx context.Context, node Node, prompt string, thread []Msg, useThread bool) (out string, err error) {
 	defer func() {
 		if p := recover(); p != nil {
 			err = fmt.Errorf("agent node %q panicked: %v", node.ID, p)
 		}
 	}()
+	if useThread {
+		if tr, ok := e.runner.(ThreadAgentRunner); ok {
+			return tr.RunAgentNodeThread(ctx, node.AgentID, thread, prompt, node.OutputSchema)
+		}
+	}
 	if node.OutputSchema != "" {
 		if sr, ok := e.runner.(SchemaAgentRunner); ok {
 			return sr.RunAgentNodeSchema(ctx, node.AgentID, prompt, node.OutputSchema)
@@ -153,10 +191,16 @@ func (e *Engine) Run(ctx context.Context, g Graph, input string, st State, save 
 		case NodeAgent:
 			e.notify("start", node, st.Steps, "")
 			prompt := render(node.Prompt, input, st)
-			out, err := e.runAgentNodeSafe(ctx, node, prompt)
+			useThread := g.Accumulate && !node.Fresh
+			out, err := e.runAgentNodeSafe(ctx, node, prompt, st.Thread, useThread)
 			if err != nil {
 				e.notifyError(node, st.Steps, err)
 				return st, fmt.Errorf("node %q (agent): %w", node.ID, err)
+			}
+			if useThread {
+				// Grow the shared thread so the next same-agent node reuses the
+				// cached prefix. Fresh/stateless nodes leave the thread untouched.
+				st.Thread = append(st.Thread, Msg{Role: "user", Text: prompt}, Msg{Role: "assistant", Text: out})
 			}
 			st.Outputs[node.ID] = out
 			st.Last = out
@@ -194,9 +238,30 @@ func (e *Engine) Run(ctx context.Context, g Graph, input string, st State, save 
 			if err != nil {
 				return st, err
 			}
+			if g.Accumulate {
+				// Fold the fan-out back into the parent thread as ONE synthetic
+				// user/assistant pair so the thread stays linear, alternating, and
+				// ends in assistant (the invariant the next agent node's user turn
+				// relies on). The branches' own forked threads are discarded.
+				st.Thread = append(st.Thread,
+					Msg{Role: "user", Text: parallelFoldMarker(node)},
+					Msg{Role: "assistant", Text: combined})
+			}
 			st.Last = combined
 			st.appendTrace(node, combined)
 			st.Current = node.JoinNext
+
+		case NodeLoop:
+			e.notify("start", node, st.Steps, "")
+			next, loopedState, err := e.runLoop(ctx, g, node, input, st, save)
+			if err != nil {
+				e.notifyError(node, st.Steps, err)
+				return loopedState, fmt.Errorf("node %q (loop): %w", node.ID, err)
+			}
+			st = loopedState
+			st.appendTrace(node, st.Last)
+			e.notify("done", node, st.Steps, st.Last)
+			st.Current = next
 
 		default:
 			return st, fmt.Errorf("node %q has unknown type %q", node.ID, node.Type)
@@ -239,7 +304,11 @@ func (e *Engine) runParallel(ctx context.Context, g Graph, node Node, input stri
 			// all workspaces). On failure emit an "error" event so the child's live
 			// spinner stops instead of hanging pending forever.
 			prompt := render(child.Prompt, input, st)
-			out, err := e.runAgentNodeSafe(ctx, child, prompt)
+			// Copy-on-fork: each child reads the SAME accumulated prefix (st.Thread)
+			// as prior context — same-agent branches share the cached prefix — but a
+			// child never grows the parent thread; the join is folded once in Run.
+			useChild := g.Accumulate && !child.Fresh
+			out, err := e.runAgentNodeSafe(ctx, child, prompt, st.Thread, useChild)
 			if err != nil {
 				e.notifyError(child, st.Steps, err)
 			} else {
@@ -260,6 +329,51 @@ func (e *Engine) runParallel(ctx context.Context, g Graph, node Node, input stri
 		fmt.Fprintf(&b, "[%s]\n%s\n\n", r.title, r.out)
 	}
 	return strings.TrimSpace(b.String()), nil
+}
+
+// runLoop repeats the loop node's Body sub-chain until an exit condition holds,
+// then returns LoopNext. Each pass runs the body via the engine's own driver
+// (e.Run) with st.Current set to Body, so the body may contain any node types
+// (including nested parallel/loop) and the global maxSteps in Run bounds total
+// work across every iteration. Body chains must terminate (Next="") to hand
+// control back for the condition check.
+//
+// Resume limitation: loop control lives on the call stack, not in State, so a
+// crash mid-iteration resumes the current body pass and then exits at the body's
+// terminal without running the remaining iterations — acceptable for now.
+func (e *Engine) runLoop(ctx context.Context, g Graph, node Node, input string, st State, save SaveFunc) (string, State, error) {
+	for iter := 0; node.MaxIters <= 0 || iter < node.MaxIters; iter++ {
+		st.Iter = iter
+		st.Current = node.Body
+		var err error
+		st, err = e.Run(ctx, g, input, st, save)
+		if err != nil {
+			return node.LoopNext, st, err
+		}
+		if node.Until != "" && loopMatches(node, st.Last) {
+			break
+		}
+	}
+	return node.LoopNext, st, nil
+}
+
+// loopMatches reports whether the loop's Until condition holds for the value,
+// reusing the branch match modes (contains/equals/regex).
+func loopMatches(node Node, value string) bool {
+	lower := strings.ToLower(value)
+	trimmed := strings.ToLower(strings.TrimSpace(value))
+	return branchArmMatches(node.UntilMode, node.Until, value, lower, trimmed)
+}
+
+// parallelFoldMarker builds the synthetic user turn that precedes a folded
+// parallel result in an accumulate-mode thread, naming the fan-out so the
+// conversation reads coherently (e.g. "⚡ parallel: Pro, Con → results").
+func parallelFoldMarker(node Node) string {
+	title := node.Title
+	if title == "" {
+		title = node.ID
+	}
+	return fmt.Sprintf("⚡ parallel step %q → results", title)
 }
 
 // appendTrace records a node execution.
@@ -374,6 +488,7 @@ func sleepCtx(ctx context.Context, ms int) error {
 //	{{date}}         current date (2006-01-02)
 //	{{time}}         current time (15:04)
 //	{{datetime}}     current date + time (2006-01-02 15:04)
+//	{{iteration}}    the current loop iteration (0-based); 0 outside a loop
 //
 // The date/time placeholders resolve to the wall-clock at render time (mirrors the
 // automation engine's turnVars format). On a resumed run they reflect the resume
@@ -388,5 +503,6 @@ func render(tmpl, input string, st State) string {
 	out = strings.ReplaceAll(out, "{{date}}", now.Format("2006-01-02"))
 	out = strings.ReplaceAll(out, "{{time}}", now.Format("15:04"))
 	out = strings.ReplaceAll(out, "{{datetime}}", now.Format("2006-01-02 15:04"))
+	out = strings.ReplaceAll(out, "{{iteration}}", strconv.Itoa(st.Iter))
 	return out
 }

@@ -115,7 +115,12 @@ func (s *Server) autonomousInteraction(rt *agent.Runtime) agent.AutonomousIntera
 		// classifies identically to the allowlist.
 		visOf := rt.ToolVisibilityFunc(ctx, ag)
 		run.setTierVis(visOf)
-		coreNames, extNames := splitInteractionTiers(interactionAdvertisedNames(s.tun, true), bridgeDefs, visOf)
+		// Effective tool filter (workspace DisabledTools + agent denylist), so the
+		// headless CLI bridge drops workspace-disabled tools exactly like the chat path.
+		allowOf := rt.ToolAllowedFunc(ctx, ag)
+		run.setToolAllowed(allowOf)
+		names := filterAllowedNames(interactionAdvertisedNames(s.tun, true), allowOf)
+		coreNames, extNames := splitInteractionTiers(names, bridgeDefs, visOf)
 		// Stable per-(session,agent) Bearer token (see chat_stream): keeps the CLI
 		// mcp-config byte-identical across turns so a persistent process stays warm
 		// (Doc 52 §3-D). bindActive resolves it to this in-flight run.

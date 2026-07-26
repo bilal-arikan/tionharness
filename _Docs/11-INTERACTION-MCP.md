@@ -368,6 +368,16 @@ yok. (Self-manage'e bağlı `spawn_session` gating'i tek yerde kalır → advert
 allowlist ikisi de aynı koşula uyar.) Değişmez: `mcp_interaction_test.go`
 `TestInteractionAdvertisedNames` advertise == allowlist isimlerini kilitler.
 
+**Köprü `toolFilter`'a uyar (2026-07-25):** Önceden köprü araç seti yalnız
+tunables'tan (ShellEnabled vb.) türetiliyordu; workspace `DisabledTools` ve
+ajan denylist'i **uygulanmıyordu** → native `ToolCatalog`'da elenen bir araç
+(ör. Bash'i zorlamak için PowerShell'i kapatan workspace) claude-cli köprüsünde
+yine ilan ediliyor ve çağrılabiliyordu. Artık her tur `Runtime.ToolAllowedFunc`
+(= native `toolFilter`: workspace-active − DisabledTools − ajan block) run'a
+kurulur (`setToolAllowed`); `Tools()` (tools/list) + `candidateDefs()` (activate/
+tool_search) + CLI allowlist bu predikatla süzülür → köprü, native yolla birebir
+aynı seti sunar. Değişmez: `gateway_dynamic_test.go TestInteractionToolsHonorDisabled`.
+
 ---
 
 ## 9. Dosya değişiklikleri (tahmini)

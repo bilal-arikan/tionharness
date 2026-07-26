@@ -141,12 +141,10 @@ func (s *Server) handleTestProvider(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 60*time.Second)
 	defer cancel()
 
-	model := req.Model
-	if model == "" {
-		model = s.settings.Get().DefaultModel
-	}
+	// Empty model → the provider applies its own built-in default model. There is
+	// no app-global default-model setting to fall back to any more.
 	resp, err := provider.Complete(ctx, providers.Request{
-		Model:  model,
+		Model:  req.Model,
 		System: "You are a connectivity probe. Reply with exactly: OK",
 		Messages: []providers.Message{
 			{Role: providers.RoleUser, Text: "ping"},

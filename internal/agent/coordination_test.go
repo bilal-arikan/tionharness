@@ -113,7 +113,7 @@ func TestUserTurnBlocksAutoTurnsAndDrainsPending(t *testing.T) {
 		mu.Unlock()
 	}
 
-	release := rt.BeginCoordinatorUserTurn("COORD")
+	release := rt.BeginSessionUserTurn("COORD")
 
 	// Two notifications land mid-user-turn: no auto turn may start.
 	rt.enqueueCoordinatorTurn("COORD")
@@ -174,7 +174,7 @@ func TestUserTurnWaitsForAutoTurnAndResetsCap(t *testing.T) {
 	<-started
 
 	acquired := make(chan func(), 1)
-	go func() { acquired <- rt.BeginCoordinatorUserTurn("COORD") }()
+	go func() { acquired <- rt.BeginSessionUserTurn("COORD") }()
 
 	select {
 	case <-acquired:
@@ -199,38 +199,25 @@ func TestUserTurnWaitsForAutoTurnAndResetsCap(t *testing.T) {
 	release()
 }
 
-// TestClaimTurnSlotIfCoordinator: a coordinator session's autonomous turn claims
-// the slot (blocking auto turns into pending, without resetting the cap); a
-// non-coordinator session gets a no-op release even when a slot with the same id
-// happens to be busy.
-func TestClaimTurnSlotIfCoordinator(t *testing.T) {
+// TestClaimSessionTurnSlot: an autonomous claim (wake/scheduled/peer) blocks auto
+// turns into pending WITHOUT resetting the coordinator cap — for a coordinator
+// session AND for a plain session, which now serializes exactly the same way (the
+// old coordinator-only gate that returned a no-op for plain sessions is gone).
+func TestClaimSessionTurnSlot(t *testing.T) {
 	rt, _ := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))
-	ctx := context.Background()
-	agent, err := rt.db.CreateAgent(ctx, db.Agent{Name: "C", Provider: "anthropic", Model: "m"})
-	if err != nil {
-		t.Fatalf("create agent: %v", err)
-	}
-	coord, err := rt.db.CreateSession(ctx, db.Session{AgentID: agent.ID, Role: "coordinator"})
-	if err != nil {
-		t.Fatalf("create coordinator session: %v", err)
-	}
-	plain, err := rt.db.CreateSession(ctx, db.Session{AgentID: agent.ID})
-	if err != nil {
-		t.Fatalf("create plain session: %v", err)
-	}
 
 	var mu sync.Mutex
 	turns := 0
 	rt.coordRunFn = func(string) { mu.Lock(); turns++; mu.Unlock() }
 
-	// Coordinator session: slot is claimed — a notification must fall into pending,
-	// and the cap state must survive (autonomous claim does not reset it).
-	slot := rt.coordSlotFor(coord.ID)
+	// Slot is claimed for an autonomous turn — a notification must fall into
+	// pending, and the cap state must survive (autonomous claim does not reset it).
+	slot := rt.coordSlotFor("COORD")
 	slot.mu.Lock()
 	slot.turns = 7
 	slot.mu.Unlock()
-	release := rt.claimTurnSlotIfCoordinator(ctx, coord.ID)
-	rt.enqueueCoordinatorTurn(coord.ID)
+	release := rt.claimSessionTurnSlot("COORD")
+	rt.enqueueCoordinatorTurn("COORD")
 	time.Sleep(50 * time.Millisecond)
 	mu.Lock()
 	if turns != 0 {
@@ -245,10 +232,37 @@ func TestClaimTurnSlotIfCoordinator(t *testing.T) {
 	}
 	slot.mu.Unlock()
 	release()
+}
 
-	// Non-coordinator session: release is a no-op and nothing blocks.
-	releasePlain := rt.claimTurnSlotIfCoordinator(ctx, plain.ID)
-	releasePlain()
+// TestPlainSessionSerializesConcurrentTurns is the #1 regression guard (_Docs/58):
+// on a PLAIN (non-coordinator) session, a second turn-entry path must block on the
+// per-session slot until the first releases — this is the wake-vs-user /
+// direct-chat-vs-inbox-worker race that the old coordinator-only gate left open.
+func TestPlainSessionSerializesConcurrentTurns(t *testing.T) {
+	rt, _ := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))
+
+	// A user turn (e.g. inbox worker) holds the slot for a plain session.
+	release := rt.BeginSessionUserTurn("PLAIN")
+
+	// A concurrent autonomous turn (e.g. a scheduler wake re-entering this chat
+	// session) tries to claim the same slot — it MUST block until release.
+	acquired := make(chan func(), 1)
+	go func() { acquired <- rt.claimSessionTurnSlot("PLAIN") }()
+
+	select {
+	case <-acquired:
+		t.Fatal("autonomous turn acquired a plain session's slot while a user turn held it")
+	case <-time.After(50 * time.Millisecond):
+	}
+
+	// Releasing the user turn lets the waiting autonomous turn proceed.
+	release()
+	select {
+	case wakeRelease := <-acquired:
+		wakeRelease()
+	case <-time.After(time.Second):
+		t.Fatal("autonomous turn never acquired the slot after the user turn released")
+	}
 }
 
 // TestSpawnWorkerRespectsWorkerCap verifies the per-coordinator worker cap refuses

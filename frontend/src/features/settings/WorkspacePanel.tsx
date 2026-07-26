@@ -3,7 +3,6 @@
 // publish/export-as-template flow now lives in its own "Dışa Aktar" sub-tab.
 import type { WorkspaceSettings } from '@/types'
 import { Field, Toggle, inputCls, type WsSet } from './primitives'
-import { ProviderModelSelect } from '@/shared/components/agents/ProviderModelSelect'
 import { EmojiField } from '@/shared/components/EmojiField'
 
 interface Props {
@@ -16,7 +15,7 @@ export function WorkspacePanel({ ws, setWsField, onDeleteWorkspace }: Props) {
   return (
     <>
       <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-xs text-[var(--color-text-dim)]">
-        Bu ayarlar yalnızca <span className="font-medium text-[var(--color-text)]">{ws.name}</span> workspace'ine özeldir. Boş bırakılan sağlayıcı/model uygulama-geneli varsayılana düşer.
+        Bu ayarlar yalnızca <span className="font-medium text-[var(--color-text)]">{ws.name}</span> workspace'ine özeldir. Her ajanın sağlayıcı ve modeli kendi ayarında net olarak belirtilir; yeni ajanlar mevcut ilk ajanın kurulumunu miras alır.
       </div>
 
       {/* Stats */}
@@ -39,20 +38,6 @@ export function WorkspacePanel({ ws, setWsField, onDeleteWorkspace }: Props) {
         <Field label="İkon (emoji)">
           <EmojiField value={ws.icon} onChange={(e) => setWsField('icon', e)} clearLabel="⬡" />
         </Field>
-      </div>
-
-      <div className="space-y-1">
-        <span className="text-sm font-medium">Varsayılan sağlayıcı + model (bu workspace)</span>
-        <ProviderModelSelect
-          allowInherit
-          provider={ws.defaultProvider}
-          model={ws.defaultModel}
-          onChange={(p, m) => {
-            setWsField('defaultProvider', p)
-            setWsField('defaultModel', m)
-          }}
-        />
-        <span className="text-xs text-[var(--color-text-dim)]">Boş = uygulama varsayılanı.</span>
       </div>
 
       <div className="mt-2 border-t border-[var(--color-border)] pt-3 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
@@ -84,6 +69,24 @@ export function WorkspacePanel({ ws, setWsField, onDeleteWorkspace }: Props) {
         checked={ws.autoCaptureArtifacts}
         onChange={(v) => setWsField('autoCaptureArtifacts', v)}
       />
+
+      <div className="mt-2 border-t border-[var(--color-border)] pt-3 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
+        Shell çıktısı sıkıştırma (sqz)
+      </div>
+      <Field
+        label="Büyük shell çıktısını sqz ile sıkıştır"
+        hint="Ajanın shell (Bash/PowerShell) komut çıktısı, modele dönmeden önce yerel 'sqz compress' ile in-process kısaltılır (kayıpsız n-gram; canlı UI ham kalır, yalnız modele giden sonuç küçülür). sqz'in PreToolUse hook'u yalnız native 'Bash' adını tanıdığı ve TionSwarm shell'i bridged araçla koşturduğu için hook yolu çalışmaz — bu ayar onun yerine geçer. Otomatik = sqz hook bağlıysa açık; Açık = hook olmasa da açık (sqz binary gerekir); Kapalı = devre dışı."
+      >
+        <select
+          value={ws.shellOutputCompression || ''}
+          onChange={(e) => setWsField('shellOutputCompression', e.target.value as '' | 'on' | 'off')}
+          className={inputCls}
+        >
+          <option value="">Otomatik (sqz hook varsa)</option>
+          <option value="on">Açık (zorla)</option>
+          <option value="off">Kapalı</option>
+        </select>
+      </Field>
 
       <div className="mt-2 border-t border-[var(--color-border)] pt-3 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
         Sil

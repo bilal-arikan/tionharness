@@ -18,6 +18,8 @@ interface Props {
   edgeStyle: EdgeStyle
   animated: boolean
   setAnimated: Dispatch<SetStateAction<boolean>>
+  accumulate: boolean
+  setAccumulate: Dispatch<SetStateAction<boolean>>
   changeEdgeStyle: (s: EdgeStyle) => void
   onNodesChange: (c: NodeChange<FlowRFNode>[]) => void
   onEdgesChange: (c: EdgeChange[]) => void
@@ -62,6 +64,8 @@ export function FlowEditorView({
   edgeStyle,
   animated,
   setAnimated,
+  accumulate,
+  setAccumulate,
   changeEdgeStyle,
   onNodesChange,
   onEdgesChange,
@@ -162,6 +166,17 @@ export function FlowEditorView({
                 onChange={(e) => setAnimated(e.target.checked)}
               />
               Animasyon
+            </label>
+            <label
+              className="flex cursor-pointer items-center gap-1.5 px-0.5 text-xs text-[var(--color-text-dim)]"
+              title="Ardışık ajan node'ları büyüyen tek bir konuşmayı paylaşır → prompt-cache düğümler arası yeniden kullanılır"
+            >
+              <input
+                type="checkbox"
+                checked={accumulate}
+                onChange={(e) => setAccumulate(e.target.checked)}
+              />
+              Bağlamı biriktir (cache)
             </label>
           </div>
         </div>

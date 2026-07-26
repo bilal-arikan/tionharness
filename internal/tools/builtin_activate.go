@@ -33,15 +33,20 @@ func toLazyEntries(catalog []providers.ToolDef) []lazyEntry {
 type ActivateToolsTool struct {
 	active *ActiveTools
 	byName map[string]string // lazy tool name -> description
+	eager  map[string]bool   // always-on tool names (already callable, no activation needed)
 }
 
-// NewActivateToolsTool builds the tool over the active set and the lazy catalog.
-func NewActivateToolsTool(active *ActiveTools, catalog []providers.ToolDef) ActivateToolsTool {
+// NewActivateToolsTool builds the tool over the active set, the lazy catalog and
+// the set of eager (always-on) tool names. The eager set lets the tool answer a
+// request to activate an already-shipped tool with a clear "already available"
+// note instead of the misleading "unknown name" (eager tools are never in the
+// lazy catalog). A nil eager set is fine — such names simply fall back to unknown.
+func NewActivateToolsTool(active *ActiveTools, catalog []providers.ToolDef, eager map[string]bool) ActivateToolsTool {
 	byName := make(map[string]string, len(catalog))
 	for _, e := range toLazyEntries(catalog) {
 		byName[e.name] = e.desc
 	}
-	return ActivateToolsTool{active: active, byName: byName}
+	return ActivateToolsTool{active: active, byName: byName, eager: eager}
 }
 
 func (ActivateToolsTool) Def() providers.ToolDef {
@@ -94,6 +99,34 @@ func (t ActivateToolsTool) resolveLazyName(n string) string {
 	return ""
 }
 
+// resolveEagerName maps a requested name to an always-on (eager) tool, tolerating
+// the same invented-namespace confusion as resolveLazyName. An EXACT match wins;
+// otherwise it matches on the bare final "__"-segment when UNAMBIGUOUS. "" means
+// the name is not an eager tool. Used only to turn "activate an already-shipped
+// tool" into a helpful note rather than a misleading "unknown name".
+func (t ActivateToolsTool) resolveEagerName(n string) string {
+	if t.eager[n] {
+		return n
+	}
+	bare := func(s string) string {
+		if i := strings.LastIndex(s, "__"); i >= 0 {
+			return s[i+2:]
+		}
+		return s
+	}
+	want := bare(n)
+	var hits []string
+	for name := range t.eager {
+		if name == want || bare(name) == want {
+			hits = append(hits, name)
+		}
+	}
+	if len(hits) == 1 {
+		return hits[0]
+	}
+	return ""
+}
+
 func (t ActivateToolsTool) Call(ctx context.Context, input json.RawMessage) (string, error) {
 	var in struct {
 		Names []string `json:"names"`
@@ -101,7 +134,7 @@ func (t ActivateToolsTool) Call(ctx context.Context, input json.RawMessage) (str
 	if err := json.Unmarshal(input, &in); err != nil {
 		return "", argErrFor("activate_tools", err)
 	}
-	var known, unknown []string
+	var known, alwaysOn, unknown []string
 	for _, n := range in.Names {
 		n = strings.TrimSpace(n)
 		if n == "" {
@@ -109,15 +142,24 @@ func (t ActivateToolsTool) Call(ctx context.Context, input json.RawMessage) (str
 		}
 		if r := t.resolveLazyName(n); r != "" {
 			known = append(known, r)
+		} else if r := t.resolveEagerName(n); r != "" {
+			alwaysOn = append(alwaysOn, r)
 		} else {
 			unknown = append(unknown, n)
 		}
 	}
 	if len(known) == 0 {
-		if len(unknown) > 0 {
-			return fmt.Sprintf("No tools activated. Unknown names: %s. Use the exact names from the \"Available Tools (load on demand)\" list (or tool_search).", strings.Join(unknown, ", ")), nil
+		var b strings.Builder
+		if len(alwaysOn) > 0 {
+			fmt.Fprintf(&b, "Nothing to activate: %s already available (always-on) — just call it directly.\n", strings.Join(alwaysOn, ", "))
 		}
-		return "No tool names given.", nil
+		if len(unknown) > 0 {
+			fmt.Fprintf(&b, "Unknown names: %s. Use the exact names from the \"Available Tools (load on demand)\" list (or tool_search).\n", strings.Join(unknown, ", "))
+		}
+		if b.Len() == 0 {
+			return "No tool names given.", nil
+		}
+		return strings.TrimSpace(b.String()), nil
 	}
 	added, already := t.active.Activate(known...)
 
@@ -130,6 +172,9 @@ func (t ActivateToolsTool) Call(ctx context.Context, input json.RawMessage) (str
 	}
 	if len(already) > 0 {
 		fmt.Fprintf(&b, "Already active: %s\n", strings.Join(already, ", "))
+	}
+	if len(alwaysOn) > 0 {
+		fmt.Fprintf(&b, "Already available (always-on, no activation needed): %s\n", strings.Join(alwaysOn, ", "))
 	}
 	if len(unknown) > 0 {
 		fmt.Fprintf(&b, "Unknown (skipped): %s\n", strings.Join(unknown, ", "))

@@ -49,11 +49,11 @@ func TestMermaidValidate(t *testing.T) {
 func TestConfigValidate(t *testing.T) {
 	dir := t.TempDir()
 	good := filepath.Join(dir, "settings.json")
-	_ = os.WriteFile(good, []byte(`{"defaultProvider":"claude-cli","theme":"dark"}`), 0o644)
+	_ = os.WriteFile(good, []byte(`{"defaultPermissionMode":"auto","theme":"dark"}`), 0o644)
 	bad := filepath.Join(dir, "broken.json")
 	_ = os.WriteFile(bad, []byte(`{"a":1,`), 0o644)
 	missingKey := filepath.Join(dir, "settings2.json")
-	// recognised settings shape but missing required defaultProvider
+	// recognised settings shape but missing required defaultPermissionMode
 	_ = os.WriteFile(missingKey, []byte(`{"theme":"dark"}`), 0o644)
 	_ = os.Rename(missingKey, filepath.Join(dir, "settings.json")) // keep name match
 	tool := NewConfigValidateTool(NewSandbox(dir))

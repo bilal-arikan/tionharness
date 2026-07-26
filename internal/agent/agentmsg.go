@@ -153,9 +153,10 @@ func (r *Runtime) runInboxDelivery(agent db.Agent, inboxID, prompt string) {
 	turnCtx, meta := WithTurnMeta(turnCtx)
 	turnStart := time.Now()
 
-	// The inbox session could have been given the coordinator role: serialize with
-	// its auto turns the same way chat/wake turns do. No-op otherwise.
-	release := r.claimTurnSlotIfCoordinator(ctx, inboxID)
+	// Serialize this peer delivery with any concurrent turn on the same session
+	// (user chat / inbox worker / wake) — and, for a coordinator, its auto turns —
+	// via the single per-session turn slot.
+	release := r.claimSessionTurnSlot(inboxID)
 	defer release()
 
 	r.trackSession(inboxID)

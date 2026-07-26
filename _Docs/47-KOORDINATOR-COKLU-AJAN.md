@@ -341,6 +341,12 @@ keyed-lock+flag; M3 scratchpad ertelendi.
   varken 3sn poll) SessionDetailPanel'de; roster **Çalışan/Tamamlanan iki sekme**
   (sayaçlı, `localStorage` ile kalıcı) + tüm listeyi katla/aç toggle;
   `worker`+`coordination` SSE tipleri `eventViews`'te executions'a bağlı.
+  **Roster satırı tıklanabilir (2026-07-24):** her worker kendi oturumu olduğundan
+  satıra tıklayınca o worker oturumu açılır (`onSelectSession` prop'u
+  SessionDetailPanel'den zincirlenir; verilmezse satır düz div kalır).
+  **Worker'da "Koordinatöre dön" (2026-07-24):** worker oturumundaki pasif not
+  altına, `coordinatorSessionId` back-link'iyle koordinatör oturumunu açan buton
+  eklendi (ArrowLeft; yalnız `onSelectSession` + back-link varsa görünür).
   Oturum listesinde (`SessionsSidebar.tsx`) Aktif/Arşiv yanında **Workers sekmesi**
   (`role==='worker'` filtresi, sayaçlı); Aktif görünüm worker oturumlarını hariç
   tutar. `Session` tipi `role`+`coordinatorSessionId` taşır (liste `db.Session`'ı
@@ -504,6 +510,47 @@ oturumda tek tur" garantisi.
   schedule kind oturumuna rol verilmiş olabilir), **inbox** (`agentmsg.go`
   runInboxDelivery). Test: `TestClaimTurnSlotIfCoordinator`. Kapsam dışı kalan
   tek yol: `flow.go` (flow-run oturumları koordinatör olarak kullanılmıyor).
+
+---
+
+## 13. Per-session tur kilidi TÜM oturumlara genelleştirildi ✅ (2026-07-25)
+
+§10'daki "tek oturumda tek tur" garantisi **yalnız `Role=="coordinator"` oturumlar
+için** kuruluydu; düz (non-coordinator) oturumlarda `claimTurnSlotIfCoordinator`
+no-op release döndürüyordu. Bu, doc 58'in kapatmaya çalıştığı eşzamanlı-tur
+yarışını düz oturumlarda **açık** bırakıyordu: kullanıcı chat yazarken (inbox
+worker turu) aynı oturuma bir **zamanlanmış wake** / **peer teslimi** düşerse ya da
+legacy `/chat/stream`·`/chat` inbox worker koşarken çağrılırsa **aynı oturumda iki
+LLM turu paralel** koşabiliyordu (karışık sıra + mükerrer tepki riski).
+
+**Çözüm:** koordinatör-only geçit kaldırıldı, `coordSlot` artık **her oturumun**
+tek tur kilidi:
+- `BeginCoordinatorUserTurn` → **`BeginSessionUserTurn(sessionID)`**; `chat_stream.go`
+  + `chat.go` artık `Role` bakmadan **koşulsuz** claim eder (düz oturumda
+  `pending`/`turns` alanlarına dokunulmaz → release temiz unlock).
+- `claimTurnSlotIfCoordinator(ctx, id)` → **`claimSessionTurnSlot(id)`**; her zaman
+  claim eder (resetCap=false). Otonom yollar (deliverWake / deliverPrompt /
+  runInboxDelivery) buna bağlandı → wake/peer/scheduled artık inbox worker + direct
+  chat ile aynı slotta serileşir.
+- Düşük seviye `claimCoordinatorSlot` değişmedi (adı korundu; artık tüm oturumları
+  sırlayan primitive olduğu doc'ta belirtildi).
+- Testler: `TestClaimSessionTurnSlot` (yeniden yazıldı) + yeni
+  `TestPlainSessionSerializesConcurrentTurns` (#1 regresyon: düz oturumda ikinci
+  giriş yolu slotta bloklanır). `go build`/`go vet` temiz, agent+api **333 test**
+  yeşil.
+
+**Worker + spawn turları da kapsandı (aynı gün):** `runWorker` (worker oturumu) ve
+`runSpawn` (düz spawn) kendi oturumlarının tur slotunu **almıyordu** → yukarıdaki
+chat/wake/peer claim'iyle serileşmiyorlardı. Ek olarak `SendToWorker` eşzamanlı turu
+yalnız `isSessionActive` (UI göstergesi, **kilit değil**) ile kontrol ediyordu →
+check-then-act TOCTOU: iki hızlı `send_to_worker` iki paralel `runWorker`
+başlatabilirdi. Çözüm: `runWorker` `claimSessionTurnSlot(workerSessionID)` (koordinatör
+slotundan ayrı, worker oturumu anahtarlı), `runSpawn` `claimSessionTurnSlot(sessionID)`
+alır → worker/spawn turları aynı oturumdaki her turla serileşir; `isSessionActive`
+hızlı-ret UX olarak kalır, slot gerçek garantidir. (Serileştirme primitifi
+`TestPlainSessionSerializesConcurrentTurns` ile doğrulanır; iki çağrı yeri onu kullanır.)
+
+Kalan kapsam dışı: `flow.go` (flow-run oturumları interaktif/otonom tur almaz).
 
 ---
 

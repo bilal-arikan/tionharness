@@ -213,6 +213,16 @@ func (b *interactionBackend) Tools(token, tier string) []interaction.ToolSpec {
 			}
 		}
 	}
+	// Drop tools the agent's effective filter rejects (workspace DisabledTools or the
+	// agent denylist). Without this the claude-cli bridge advertised a tool the native
+	// ToolCatalog filters out — e.g. a workspace that disables PowerShell to force Bash
+	// (so the sqz/rtk token-optimizer, which only rewrites Bash, always applies) still
+	// saw PowerShell here and could call it. nil predicate → no restriction.
+	if run != nil {
+		if allow := run.toolAllowedFor(); allow != nil {
+			specs = filterAllowedSpecs(specs, allow)
+		}
+	}
 	if tier == "" {
 		return specs
 	}
@@ -268,22 +278,64 @@ func (b *interactionBackend) candidateDefs(run *chatRun) map[string]string {
 	specs := interactionToolSpecs(b.tun, run != nil && run.autonomous)
 	var bridge []providers.ToolDef
 	var visOf func(string) string
+	var allow func(string) bool
 	if run != nil {
 		bridge = run.bridgeDefsFor()
 		visOf = run.tierVisFor()
+		allow = run.toolAllowedFor()
 	}
 	out := map[string]string{}
 	for _, s := range specs {
+		if allow != nil && !allow(s.Name) {
+			continue // workspace-disabled / agent-blocked: not activatable either
+		}
 		if cliTier(s.Name, visOf) != "core" {
 			out[s.Name] = s.Description
 		}
 	}
 	for _, d := range bridge {
+		if allow != nil && !allow(d.Name) {
+			continue
+		}
 		if cliTier(d.Name, visOf) != "core" {
 			out[d.Name] = d.Description
 		}
 	}
 	return out
+}
+
+// filterAllowedSpecs drops interaction tool specs the agent's effective filter
+// rejects (workspace DisabledTools or the agent denylist), keeping the claude-cli
+// bridge's advertised set aligned with the native ToolCatalog. allow nil → returned
+// unchanged.
+func filterAllowedSpecs(specs []interaction.ToolSpec, allow func(string) bool) []interaction.ToolSpec {
+	if allow == nil {
+		return specs
+	}
+	kept := specs[:0]
+	for _, s := range specs {
+		if allow(s.Name) {
+			kept = append(kept, s)
+		}
+	}
+	return kept
+}
+
+// filterAllowedNames drops the bare tool names the agent's effective filter rejects,
+// so the CLI allowlist never advertises a tool the bridge's tools/list will refuse
+// (advertised set and allowlist share one source — see interactionAdvertisedNames).
+// allow nil → returned unchanged.
+func filterAllowedNames(names []string, allow func(string) bool) []string {
+	if allow == nil {
+		return names
+	}
+	kept := make([]string, 0, len(names))
+	for _, n := range names {
+		if allow(n) {
+			kept = append(kept, n)
+		}
+	}
+	return kept
 }
 
 // interactionAdvertisedNames returns the bare tool names the Interaction MCP

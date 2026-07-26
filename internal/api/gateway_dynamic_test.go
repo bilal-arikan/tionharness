@@ -150,3 +150,42 @@ func TestGatewayHiddenActivatableAndToolSearch(t *testing.T) {
 		t.Fatal("hidden tool must be advertised on the extended tier after activation")
 	}
 }
+
+// TestInteractionToolsHonorDisabled locks the claude-cli bridge to the agent's
+// effective tool filter: a tool the filter rejects (workspace DisabledTools or the
+// agent denylist) must NOT be advertised in tools/list, nor be activatable — matching
+// the native ToolCatalog. Regression for the gap where a workspace that disabled
+// PowerShell (to force Bash so the sqz/rtk optimizer, which only rewrites Bash,
+// applies) still saw the bridged PowerShell tool and could call it. Uses core/extended
+// built-ins (create_artifact / notify) so the assertion does not depend on which host
+// shells ShellToolNames() resolves.
+func TestInteractionToolsHonorDisabled(t *testing.T) {
+	tun := agent.NewTunables()
+	runs := newChatRuns()
+	b := &interactionBackend{runs: runs, tun: tun}
+	run := runs.register("r1", "s1", "", func() {})
+	tok := runs.interactionToken("s1", "a1")
+	runs.bindActive(tok, run)
+
+	// Baseline (no filter installed): create_artifact is on the core tier and notify
+	// is an activatable extended candidate.
+	if !specHasTool(b.Tools(tok, "core"), "create_artifact") {
+		t.Fatalf("baseline: create_artifact must be on the core tier, got %v", specNames(b.Tools(tok, "core")))
+	}
+	if !b.extendedCandidates(run)["notify"] {
+		t.Fatal("baseline: notify must be an activatable candidate")
+	}
+
+	// Reject both via the effective tool-allow predicate the run now carries.
+	run.setToolAllowed(func(name string) bool { return name != "create_artifact" && name != "notify" })
+
+	if specHasTool(b.Tools(tok, "core"), "create_artifact") {
+		t.Fatalf("create_artifact must be dropped once the filter rejects it, got %v", specNames(b.Tools(tok, "core")))
+	}
+	if !specHasTool(b.Tools(tok, "core"), "use_skill") {
+		t.Fatalf("an unrelated core tool (use_skill) must stay advertised, got %v", specNames(b.Tools(tok, "core")))
+	}
+	if b.extendedCandidates(run)["notify"] {
+		t.Fatal("a filter-rejected tool must not be activatable")
+	}
+}

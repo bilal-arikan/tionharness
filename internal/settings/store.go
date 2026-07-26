@@ -251,8 +251,6 @@ func (s *Store) Apply(p Patch) (Settings, error) {
 	applyString(&next.ThemePreset, p.ThemePreset)
 	applyString(&next.Language, p.Language)
 
-	applyString(&next.DefaultProvider, p.DefaultProvider)
-	applyString(&next.DefaultModel, p.DefaultModel)
 	applyString(&next.DefaultPermissionMode, p.DefaultPermissionMode)
 	applyString(&next.ClaudeCLIPath, p.ClaudeCLIPath)
 	applyString(&next.ClaudeConfigDir, p.ClaudeConfigDir)
@@ -453,9 +451,6 @@ func normalize(v Settings) Settings {
 	case "read-only", "ask", "auto":
 	default:
 		v.DefaultPermissionMode = "auto"
-	}
-	if v.DefaultProvider != "anthropic" {
-		v.DefaultProvider = "claude-cli"
 	}
 	if v.MaxContextTokens < 500 {
 		v.MaxContextTokens = 500

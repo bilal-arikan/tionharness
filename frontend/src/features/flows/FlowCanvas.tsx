@@ -26,6 +26,7 @@ import { BranchNode } from './BranchNode'
 import { ParallelNode } from './ParallelNode'
 import { DelayNode } from './DelayNode'
 import { TransformNode } from './TransformNode'
+import { LoopNode } from './LoopNode'
 
 // CanvasTools is a small in-canvas toolbar (top-right Panel). It lives inside
 // ReactFlowProvider so it can use the programmatic viewport API. "Otomatik diz"
@@ -80,6 +81,7 @@ const nodeTypes: NodeTypes = {
   parallel: ParallelNode,
   delay: DelayNode,
   transform: TransformNode,
+  loop: LoopNode,
 }
 
 // Parallel-node edge colors so the two outgoing roles read at a glance: the
@@ -93,6 +95,8 @@ const JOIN_EDGE_COLOR = '#7c3aed' // violet — join
 function edgeColor(sourceHandle: string | null | undefined): string | undefined {
   if (sourceHandle === 'fan') return FAN_EDGE_COLOR
   if (sourceHandle === 'join') return JOIN_EDGE_COLOR
+  if (sourceHandle === 'body') return '#db2777' // loop body — pink (matches loop accent)
+  if (sourceHandle === 'loop') return '#3b82f6' // loop exit — blue
   return undefined
 }
 

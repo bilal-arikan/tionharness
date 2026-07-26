@@ -102,8 +102,9 @@ func (s *Server) runQueuedTurn(wsp *workspace.Workspace, sessionID string, req c
 		detail := "Tur süre sınırını aştı ve iptal edildi (watchdog)."
 		s.recordQueueTurnFailure(sessionID, "watchdog", detail)
 		s.publishHub(sessionID, sessionhub.KindTurnError, map[string]any{
-			"error":  detail,
-			"reason": "watchdog",
+			"error":       detail,
+			"reason":      "watchdog",
+			"clientMsgId": req.ClientMsgID,
 		}, false)
 		s.hub.Commit(sessionID)
 	}
@@ -138,8 +139,9 @@ func (s *Server) runTurnGuarded(wsp *workspace.Workspace, req chatReq) {
 			// visible in the transcript and the Debug panel — not a silent hang.
 			s.recordQueueTurnFailure(req.SessionID, "panic", detail)
 			s.publishHub(req.SessionID, sessionhub.KindTurnError, map[string]any{
-				"error":  detail,
-				"reason": "panic",
+				"error":       detail,
+				"reason":      "panic",
+				"clientMsgId": req.ClientMsgID,
 			}, false)
 			s.hub.Commit(req.SessionID)
 		}
@@ -158,8 +160,9 @@ func (s *Server) dropPoisonedInflight(sessionID string, item inboxItem) {
 	detail := "Mesaj, başlatılırken tekrarlanan çökmeler yüzünden düşürüldü (poison)."
 	s.recordQueueTurnFailure(sessionID, "poison", detail)
 	s.publishHub(sessionID, sessionhub.KindTurnError, map[string]any{
-		"error":  detail,
-		"reason": "poison",
+		"error":       detail,
+		"reason":      "poison",
+		"clientMsgId": item.ClientMsgID,
 	}, false)
 	s.hub.Commit(sessionID)
 	s.clearInflight(sessionID)

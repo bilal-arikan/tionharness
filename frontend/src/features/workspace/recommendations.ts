@@ -209,6 +209,29 @@ export const RULES: Rule[] = [
   },
   {
     meta: {
+      key: 'shell-compress',
+      icon: Zap,
+      title: 'Shell çıktısı sıkıştırmayı aç',
+      summary: 'sqz kuruluyken shell çıktısı in-process sıkıştırma pasifse (hook yok, otomatik devre dışı).',
+    },
+    detect: (ctx) => {
+      const sqz = ctx.tools.find((t) => t.name === 'sqz' && t.found)
+      if (!sqz) return null
+      // 'on' zaten zorluyor; 'off' kullanıcının açık tercihi — ikisine de dokunma.
+      if (ctx.ws.shellOutputCompression === 'on' || ctx.ws.shellOutputCompression === 'off') return null
+      // Otomatik mod yalnız bir sqz hook bağlıyken aktiftir; bağlıysa sıkıştırma zaten çalışıyor.
+      if (tokenHookLive(ctx.hooks, 'sqz')) return null
+      return {
+        desc: 'sqz kurulu ama bu workspace’te shell çıktısı sıkıştırma pasif. Açarsan ajanın shell çıktısı modele dönmeden in-process sqz ile kayıpsız kısaltılır — hook gerektirmez (hook yolu bridged araçta zaten çalışmaz).',
+        actionLabel: 'Aç',
+        act: async () => {
+          await api.updateWorkspaceSettings({ shellOutputCompression: 'on' })
+        },
+      }
+    },
+  },
+  {
+    meta: {
       key: 'no-mcp',
       icon: Plug,
       title: 'MCP kaynağı yok',

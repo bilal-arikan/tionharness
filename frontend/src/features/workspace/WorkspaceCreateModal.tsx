@@ -6,7 +6,9 @@ import { Button, ModalOverlay } from '@/shared/components'
 
 export interface NewWorkspaceData {
   name: string
-  path?: string
+  // Optional project directory (session working dir). The workspace data dir
+  // always uses the application default location — it is not user-selectable.
+  projectDir?: string
   icon?: string
   template?: string
 }
@@ -17,10 +19,11 @@ interface Props {
 }
 
 // WorkspaceCreateModal is the popup dialog for creating a new workspace: name,
-// an optional data folder (native picker or manual path), and an emoji identity.
+// an optional project directory (native picker or manual path — the session cwd)
+// and an emoji identity. The data dir always uses the app default location.
 export function WorkspaceCreateModal({ onCreate, onClose }: Props) {
   const [name, setName] = useState('')
-  const [path, setPath] = useState('')
+  const [projectDir, setProjectDir] = useState('')
   const [icon, setIcon] = useState('⬡')
   const [picking, setPicking] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -60,7 +63,7 @@ export function WorkspaceCreateModal({ onCreate, onClose }: Props) {
     setError(null)
     try {
       const { path: chosen, canceled } = await api.pickFolder()
-      if (!canceled && chosen) setPath(chosen)
+      if (!canceled && chosen) setProjectDir(chosen)
     } catch (e) {
       setError('Klasör seçici açılamadı — yolu elle yazabilirsin. (' + (e as Error).message + ')')
     } finally {
@@ -82,7 +85,7 @@ export function WorkspaceCreateModal({ onCreate, onClose }: Props) {
       // state until the parent dismisses the modal on success. On failure the
       // creation path surfaces the error itself; we release busy so the user can
       // retry without a stuck spinner.
-      await onCreate({ name: name.trim(), path: path.trim() || undefined, icon, template: templateId })
+      await onCreate({ name: name.trim(), projectDir: projectDir.trim() || undefined, icon, template: templateId })
     } catch (e) {
       setError('Workspace oluşturulamadı: ' + (e as Error).message)
     } finally {
@@ -149,15 +152,16 @@ export function WorkspaceCreateModal({ onCreate, onClose }: Props) {
           />
         </div>
 
-        {/* Folder */}
+        {/* Project directory (session cwd) — optional. The data dir always uses the
+            app default location and is no longer user-selectable. */}
         <label className="mb-1 block text-xs text-[var(--color-text-dim)]">
-          Veri klasörü <span className="opacity-60">(opsiyonel — boşsa varsayılan konum)</span>
+          Proje dizini (path) <span className="opacity-60">(opsiyonel — oturumların çalışma dizini)</span>
         </label>
         <div className="mb-4 flex gap-1">
           <input
-            value={path}
-            onChange={(e) => setPath(e.target.value)}
-            placeholder="C:\Users\...\workspaces"
+            value={projectDir}
+            onChange={(e) => setProjectDir(e.target.value)}
+            placeholder="C:\Users\...\Desktop\Projects\my-app"
             className="flex-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm outline-none focus:border-[var(--color-accent)]"
           />
           <button

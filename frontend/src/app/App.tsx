@@ -31,6 +31,7 @@ import { SessionsOverview } from '@/features/sessions/SessionsOverview'
 import { SessionDetailPanel } from '@/features/sessions/SessionDetailPanel'
 import { SessionContextModal } from '@/features/sessions/SessionContextModal'
 import { SessionDebugModal } from '@/features/sessions/SessionDebugModal'
+import { SessionFlowInline } from '@/features/flows/SessionFlowInline'
 import { AgentsView } from '@/features/agents/AgentsView'
 import { TaskBoard } from '@/features/tasks/TaskBoard'
 import { Schedules } from '@/features/schedules/Schedules'
@@ -179,6 +180,10 @@ export default function App() {
   const [ctxPreviewOpen, setCtxPreviewOpen] = useState(false)
   // Debug/observability modal (opened from the chat header's "Debug" button).
   const [debugOpen, setDebugOpen] = useState(false)
+  // Session-as-flow inline view (chat header's "Akış" toggle): the current
+  // transcript reified into a completed, read-only flow run, shown in place of the
+  // chat transcript (session→flow bridge). Reset when the session changes.
+  const [sessionFlowOpen, setSessionFlowOpen] = useState(false)
   // Right-hand session detail panel visibility (persisted).
   const [detailOpen, setDetailOpen] = useState(
     () => localStorage.getItem('tionswarm.detailOpen') === '1',
@@ -206,6 +211,8 @@ export default function App() {
     setError,
     setView,
   })
+  // Leave the inline session-as-flow view when the active session changes.
+  useEffect(() => setSessionFlowOpen(false), [ctl.activeSessionId])
 
   // Live/last-run facts per session (GET /api/executions): the sidebar's pulse
   // dot + status pill and the bulk overview table's rows. Same DB.ListSessions
@@ -501,13 +508,26 @@ export default function App() {
             onToggleNav={view === 'workspace' ? workspaceNav.toggle : settingsNav.toggle}
             onOpenContextPreview={() => setCtxPreviewOpen(true)}
             onOpenDebug={() => setDebugOpen(true)}
+            onOpenSessionFlow={() => setSessionFlowOpen((v) => !v)}
+            sessionFlowActive={sessionFlowOpen}
             onToggleDetail={toggleDetail}
             onRevealSession={ctl.revealSession}
             onError={setError}
           />
         )}
 
-        {view === 'chat' && (
+        {view === 'chat' && sessionFlowOpen && ctl.activeSessionId && (
+          <SessionFlowInline
+            messages={ctl.messages}
+            agents={ctl.agents}
+            fallbackAgentId={ctl.activeAgentId || ctl.agents[0]?.id || ''}
+            sessionId={ctl.activeSessionId}
+            sessionTitle={ctl.sessions.find((s) => s.id === ctl.activeSessionId)?.title || ''}
+            onBack={() => setSessionFlowOpen(false)}
+            onError={setError}
+          />
+        )}
+        {view === 'chat' && !(sessionFlowOpen && ctl.activeSessionId) && (
           <ChatView
             chat={chat}
             messages={ctl.messages}

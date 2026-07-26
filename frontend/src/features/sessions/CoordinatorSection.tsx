@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Loader2, Network, Users, CheckCircle2, Play, ChevronDown, ChevronRight, Workflow } from 'lucide-react'
+import { Loader2, Network, Users, CheckCircle2, Play, ChevronDown, ChevronRight, Workflow, ArrowLeft } from 'lucide-react'
 import { api } from '@/api'
 import type { Skill, WorkerInfo } from '@/types'
 
@@ -9,18 +9,24 @@ interface Props {
   role?: string
   // The session's selected coordinator recipe/workflow slug (M5), if any.
   workflow?: string
+  // For a worker session: back-link to its coordinator, so the panel can offer a
+  // "back to coordinator" shortcut.
+  coordinatorSessionId?: string
   // Bumped by the parent whenever the conversation changes, so the worker list
   // refreshes as notifications land.
   refreshKey?: number
   onError: (msg: string) => void
   // Called after the role/workflow is toggled so the parent re-fetches session info.
   onRoleChanged: () => void
+  // Navigates to a worker's own session when its roster row is clicked. Each worker
+  // is a first-class session, so clicking opens its transcript.
+  onSelectSession?: (id: string) => void
 }
 
 // CoordinatorSection is the M2 coordination panel: it toggles a session into
 // coordinator mode and, once on, shows the live worker roster (running vs
 // finished, with each finished worker's one-line summary). See _Docs/47.
-export function CoordinatorSection({ sessionId, role, workflow, refreshKey, onError, onRoleChanged }: Props) {
+export function CoordinatorSection({ sessionId, role, workflow, coordinatorSessionId, refreshKey, onError, onRoleChanged, onSelectSession }: Props) {
   const isCoordinator = role === 'coordinator'
   const isWorker = role === 'worker'
   const [toggling, setToggling] = useState(false)
@@ -121,6 +127,16 @@ export function CoordinatorSection({ sessionId, role, workflow, refreshKey, onEr
         <div className="rounded-lg border border-[var(--color-border)] px-2.5 py-2 text-[11px] text-[var(--color-text-dim)]">
           Bu oturum bir <span className="font-medium text-[var(--color-text)]">worker</span> — bir koordinatör tarafından başlatıldı. Sonucu, koordinatör oturumuna <code>&lt;task-notification&gt;</code> olarak iletilir.
         </div>
+        {onSelectSession && coordinatorSessionId && (
+          <button
+            type="button"
+            onClick={() => onSelectSession(coordinatorSessionId)}
+            title="Koordinatör oturumunu aç"
+            className="mt-1.5 flex w-full items-center justify-center gap-1.5 rounded-lg border border-[var(--color-border)] px-2.5 py-1.5 text-[11px] text-[var(--color-text-dim)] transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
+          >
+            <ArrowLeft size={13} className="shrink-0" /> Koordinatöre dön
+          </button>
+        )}
       </section>
     )
   }
@@ -229,27 +245,46 @@ export function CoordinatorSection({ sessionId, role, workflow, refreshKey, onEr
                 </p>
               ) : (
                 <ul className="space-y-1.5">
-                  {shownWorkers.map((w) => (
-                    <li
-                      key={w.sessionId}
-                      className="rounded-lg border border-[var(--color-border)] px-2.5 py-1.5"
-                    >
-                      <div className="flex items-center gap-1.5">
-                        {w.running ? (
-                          <Play size={12} className="shrink-0 text-[var(--color-accent)]" />
-                        ) : (
-                          <CheckCircle2 size={12} className="shrink-0 text-[var(--color-success)]" />
+                  {shownWorkers.map((w) => {
+                    // Each worker is its own session — clicking the row opens it.
+                    const clickable = !!onSelectSession && !!w.sessionId
+                    const inner = (
+                      <>
+                        <div className="flex items-center gap-1.5">
+                          {w.running ? (
+                            <Play size={12} className="shrink-0 text-[var(--color-accent)]" />
+                          ) : (
+                            <CheckCircle2 size={12} className="shrink-0 text-[var(--color-success)]" />
+                          )}
+                          <span className="truncate text-[11px] font-medium text-[var(--color-text)]">{w.agentName}</span>
+                          <span className="ml-auto text-[9px] uppercase tracking-wide text-[var(--color-text-dim)]">
+                            {w.running ? 'çalışıyor' : 'bitti'}
+                          </span>
+                        </div>
+                        {w.summary && (
+                          <p className="mt-0.5 line-clamp-2 text-[10px] text-[var(--color-text-dim)]">{w.summary}</p>
                         )}
-                        <span className="truncate text-[11px] font-medium text-[var(--color-text)]">{w.agentName}</span>
-                        <span className="ml-auto text-[9px] uppercase tracking-wide text-[var(--color-text-dim)]">
-                          {w.running ? 'çalışıyor' : 'bitti'}
-                        </span>
-                      </div>
-                      {w.summary && (
-                        <p className="mt-0.5 line-clamp-2 text-[10px] text-[var(--color-text-dim)]">{w.summary}</p>
-                      )}
-                    </li>
-                  ))}
+                      </>
+                    )
+                    return (
+                      <li key={w.sessionId}>
+                        {clickable ? (
+                          <button
+                            type="button"
+                            onClick={() => onSelectSession!(w.sessionId)}
+                            title="Worker oturumunu aç"
+                            className="block w-full rounded-lg border border-[var(--color-border)] px-2.5 py-1.5 text-left transition hover:border-[var(--color-accent)] hover:bg-[var(--color-surface-2)]"
+                          >
+                            {inner}
+                          </button>
+                        ) : (
+                          <div className="rounded-lg border border-[var(--color-border)] px-2.5 py-1.5">
+                            {inner}
+                          </div>
+                        )}
+                      </li>
+                    )
+                  })}
                 </ul>
               )}
             </>

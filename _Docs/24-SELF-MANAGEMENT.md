@@ -106,7 +106,7 @@ Alanların tam referansı: default skill **`tionswarm-settings`** (`access: shar
 ### Validation + normalize (`internal/settings/validate.go`)
 
 - `Validate(Patch)` enum/format alanlarını denetler (theme, language,
-  defaultProvider, defaultPermissionMode, logLevel, accent hex) ve geçersizleri
+  defaultPermissionMode, logLevel, accent hex) ve geçersizleri
   **açık hata mesajıyla reddeder**. `Apply` en başta çağırır → hatalı değişiklik
   canlı alt sistemlere hiç ulaşmaz.
 - Sayısal alanlar reddedilmez, `normalize` ile clamp'lenir.

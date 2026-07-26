@@ -80,7 +80,7 @@ func (t ConfigValidateTool) Call(_ context.Context, input json.RawMessage) (stri
 	var warns []string
 	switch {
 	case base == "settings.json":
-		warns = requireKeys(doc, "defaultProvider")
+		warns = requireKeys(doc, "defaultPermissionMode")
 	case base == "tools-config.json":
 		warns = requireKeys(doc, "disabledTools")
 	case hasAny(doc, "id", "name") && hasAny(doc, "provider", "model", "soul"):

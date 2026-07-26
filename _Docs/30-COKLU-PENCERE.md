@@ -17,6 +17,24 @@
 > `-H windowsgui` (konsolsuz) olduğundan gizlemeye gerek yok. Görünürlük canlı doğrulandı:
 > ikincil başlatınca görünür pencere sayısı 1→2.
 
+## Tek-instance store kilidi (2026-07-25)
+
+Bu modelin geçerliliği **tek sunucu, N pencere** varsayımına dayanır: hub (per-session
+seq/ring), serial send-queue, coordSlot tur kilidi, interaction CAS ve cron scheduler
+hepsi **tek process'in belleğinde**. Aynı file store'a **iki server process** hizmet
+ederse ikisi de olur → cross-process eşzamanlı tur, çift ateşlenen schedule, boot'ta
+çift re-dispatch, last-writer-wins entity ezmesi (store bozulması).
+
+Masaüstü birincil `:0` portu bağladığından (double-launch'ı yakalayacak port çakışması
+yok) ve store seviyesinde kilit yoktu → binary iki kez başlatılırsa iki birincil aynı
+store'u ezerdi. **Çözüm (sert ret):** `app.Bootstrap` artık store'a girmeden **DataDir
+üzerinde process-ömürlü exclusive advisory kilit** alır (`internal/app/instancelock*.go`;
+Windows `CreateFile` share=0, Unix `flock` — yeni bağımlılık yok, process çıkışında OS
+otomatik bırakır → crash sonrası stale kilit kalmaz). Kilit tutuluysa net hatayla başlamayı
+reddeder. Connect-only ikincil pencereler `Bootstrap` çağırmadığından etkilenmez. Test:
+`instancelock_test.go`. Not: bu **sert ret**; ileride masaüstü için "zarif yönlendirme"
+(ikinci launch → mevcut instance'a connect-only pencere) opsiyonel bir iyileştirme.
+
 ## Sorun (bugün)
 
 `frontend/.../WorkspaceSwitcher.tsx` `openInNewWindow` → `window.open(url, '_blank')`.

@@ -27,7 +27,10 @@ func init() {
 			if cfg.CLIPath == "" {
 				return nil, fmt.Errorf("claude CLI not found on PATH (install Claude Code)")
 			}
-			return NewClaudeCLI(cfg.CLIPath, cfg.Model, cfg.CLIConfigDir, cfg.CLIAuthKind, cfg.CLIAuthToken), nil
+			// Model is not injected at the registry level any more (no app-global
+			// default model); an empty model lets the CLI use the agent's request
+			// model, falling back to its own session default.
+			return NewClaudeCLI(cfg.CLIPath, "", cfg.CLIConfigDir, cfg.CLIAuthKind, cfg.CLIAuthToken), nil
 		},
 	))
 }

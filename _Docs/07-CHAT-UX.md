@@ -272,6 +272,19 @@ Yeni bağımlılıklar: `react-markdown`, `remark-gfm`, `highlight.js`.
   voiceURI'ye göre) + **hız** (0.5–2×) + **ton** (0–2) slider'ları + "Sesi dene" butonu.
   Tüm bu tercihler hem otomatik okuma hem balon 🔊 butonunu etkiler; `speak` rate/pitch/
   seçili sesi uygular (`resolveVoice`: voiceURI › dile göre eşleşen ses).
+- **Uzun metin okuma (tarayıcı motoru):** Chrome/Edge `speechSynthesis` uzun
+  utterance'ı ~15sn/birkaç yüz karakterde cümle ortasında keser + sekme blur'unda
+  stall eder. `speak` metni **cümlelere bölüp** (`splitForSpeech`, ≤180 char) zincirleme
+  kuyrukta seslendirir + 10sn'de bir `pause()/resume()` keep-alive. Cümle sınırı =
+  **ardından boşluk gelen** `.!?…` → `file.ts`, `127.0.0.1`, `3.14`, `v1.2.0`, `Node.js`
+  gibi kod/sayı token'ları bölünmez. `stopSpeaking` kuyruğu temizler. (Sunucu Piper
+  motorunda bu sorunlar yok — tek kesintisiz WAV.)
+- **Global ses seviyesi slider'ı (`TtsVolumeSlider.tsx`):** her asistan balonundaki 🔊
+  butonunun yanında kompakt bir volume slider'ı. **Tek global değer** (`ttsVolume`/
+  `setTtsVolume`, 0–1) — biri değişince `onTtsVolumeChange` yayınıyla **tüm balonların
+  slider'ları + Ayarlar ▸ Ses'teki slider** anında güncellenir. Volume iki motora da
+  uygulanır (`speechSynthesis` `utterance.volume`; sunucu `<audio>.volume`, çalan ses
+  canlı güncellenir).
 - **Sunucu TTS motoru (Piper, harici CLI):** tarayıcı sesleri yerine sunucuda üretilen
   **doğal Piper** sesi — böylece **telefon/thin client** da okur (sesi sunucu üretir,
   cihaz sadece çalar). Backend `internal/tts` (piper.exe tespiti: `TIONSWARM_PIPER` env

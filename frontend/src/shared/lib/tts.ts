@@ -12,6 +12,10 @@ const LANG_KEY = 'tionswarm.tts.lang'
 const VOICE_KEY = 'tionswarm.tts.voiceURI'
 const RATE_KEY = 'tionswarm.tts.rate'
 const PITCH_KEY = 'tionswarm.tts.pitch'
+const VOLUME_KEY = 'tionswarm.tts.volume'
+// Broadcast name for live volume sync: every mounted volume slider (per-bubble +
+// Settings) updates when any one of them changes the single global value.
+const VOLUME_EVENT = 'tionswarm:tts-volume'
 // Engine selection ('auto' | 'browser' | 'server') and the chosen server (Piper)
 // voice id. Auto prefers the server engine when the host has Piper installed.
 const ENGINE_KEY = 'tionswarm.tts.engine'
@@ -118,6 +122,40 @@ export function setTtsPitch(n: number) {
   } catch {
     // best-effort
   }
+}
+
+// Global read-aloud volume (0..1, default 1). Applies to BOTH engines and to every
+// bubble's inline slider — there is one shared value.
+export function ttsVolume(): number {
+  try {
+    return clampNum(Number(localStorage.getItem(VOLUME_KEY)), 0, 1, 1)
+  } catch {
+    return 1
+  }
+}
+
+// setTtsVolume persists the value, applies it live to any playing server audio,
+// and broadcasts so every mounted slider reflects the change at once.
+export function setTtsVolume(n: number) {
+  const v = clampNum(n, 0, 1, 1)
+  try {
+    localStorage.setItem(VOLUME_KEY, String(v))
+  } catch {
+    // best-effort
+  }
+  if (audioEl) audioEl.volume = v
+  try {
+    window.dispatchEvent(new CustomEvent(VOLUME_EVENT, { detail: v }))
+  } catch {
+    // best-effort (non-DOM env)
+  }
+}
+
+// onTtsVolumeChange subscribes to global volume changes (same-window broadcast).
+export function onTtsVolumeChange(cb: (v: number) => void): () => void {
+  const h = (e: Event) => cb((e as CustomEvent<number>).detail)
+  window.addEventListener(VOLUME_EVENT, h)
+  return () => window.removeEventListener(VOLUME_EVENT, h)
 }
 
 // The engine's available voices (empty until the async 'voiceschanged' fires on
@@ -257,6 +295,7 @@ async function speakServer(clean: string, onEnd?: () => void): Promise<boolean> 
     currentURL = url
     a.src = url
     a.playbackRate = ttsRate()
+    a.volume = ttsVolume()
     a.onended = () => onEnd?.()
     a.onerror = () => onEnd?.()
     await a.play()
@@ -321,17 +360,84 @@ function resolveVoice(): SpeechSynthesisVoice | null {
   return pickVoice(ttsLang())
 }
 
-// speakBrowser reads text with the browser SpeechSynthesis engine (client voices).
-function speakBrowser(clean: string, onEnd?: () => void) {
-  if (!ttsSupported()) {
-    onEnd?.()
+// --- Browser engine: chunked speech ----------------------------------------
+// Chrome/Edge speechSynthesis stops a long utterance (~15s / a few hundred chars)
+// MID-SENTENCE and stalls when the tab loses focus. We fix both by (1) splitting
+// the text into sentence-sized chunks spoken as a chained queue, and (2) a
+// periodic pause()/resume() keep-alive that revives the engine if it stalls.
+
+const CHUNK_MAX = 180 // chars per utterance — safely under the cutoff at slow rates
+
+let browserQueue: string[] = []
+let browserOnEnd: (() => void) | undefined
+let keepAliveTimer: number | null = null
+
+// splitForSpeech breaks prose into <=CHUNK_MAX chunks on sentence boundaries,
+// hard-wrapping any single sentence that is still too long on word boundaries.
+//
+// A sentence boundary is a terminator (.!?…) FOLLOWED BY whitespace. A period
+// glued to the next char — file.ts, 127.0.0.1, 3.14, v1.2.0, Node.js — has no
+// space after it, so code-ish/numeric tokens are never split mid-token.
+function splitForSpeech(text: string): string[] {
+  const raw = text.split(/(?<=[.!?…])\s+/)
+  const chunks: string[] = []
+  for (const piece of raw) {
+    const s = piece.trim()
+    if (!s) continue
+    if (s.length <= CHUNK_MAX) {
+      chunks.push(s)
+      continue
+    }
+    // Hard-wrap an over-long sentence on word boundaries so it still fits a chunk.
+    let cur = ''
+    for (const word of s.split(/\s+/)) {
+      if (cur && (cur.length + 1 + word.length) > CHUNK_MAX) {
+        chunks.push(cur)
+        cur = word
+      } else {
+        cur = cur ? `${cur} ${word}` : word
+      }
+    }
+    if (cur) chunks.push(cur)
+  }
+  return chunks.length ? chunks : [text]
+}
+
+function stopKeepAlive() {
+  if (keepAliveTimer != null) {
+    clearInterval(keepAliveTimer)
+    keepAliveTimer = null
+  }
+}
+
+function startKeepAlive() {
+  stopKeepAlive()
+  // Chrome pauses ~14s in; a no-op pause/resume every 10s keeps it flowing.
+  keepAliveTimer = window.setInterval(() => {
+    const s = window.speechSynthesis
+    if (s.speaking) {
+      s.pause()
+      s.resume()
+    }
+  }, 10000)
+}
+
+// speakNextChunk dequeues and speaks one chunk, chaining to the next on end. A
+// chunk that errors is skipped so one bad segment can't stall the whole reply.
+function speakNextChunk() {
+  const synth = window.speechSynthesis
+  const next = browserQueue.shift()
+  if (next == null) {
+    stopKeepAlive()
+    const cb = browserOnEnd
+    browserOnEnd = undefined
+    cb?.()
     return
   }
-  const synth = window.speechSynthesis
-  synth.cancel()
-  const u = new SpeechSynthesisUtterance(clean)
+  const u = new SpeechSynthesisUtterance(next)
   u.rate = ttsRate()
   u.pitch = ttsPitch()
+  u.volume = ttsVolume()
   const voice = resolveVoice()
   if (voice) {
     u.voice = voice
@@ -340,11 +446,23 @@ function speakBrowser(clean: string, onEnd?: () => void) {
     const lang = ttsLang()
     if (lang) u.lang = lang
   }
-  if (onEnd) {
-    u.onend = () => onEnd()
-    u.onerror = () => onEnd()
-  }
+  u.onend = () => speakNextChunk()
+  u.onerror = () => speakNextChunk()
   synth.speak(u)
+}
+
+// speakBrowser reads text with the browser SpeechSynthesis engine (client voices),
+// chunked so long replies are read fully without mid-sentence cutoffs.
+function speakBrowser(clean: string, onEnd?: () => void) {
+  if (!ttsSupported()) {
+    onEnd?.()
+    return
+  }
+  window.speechSynthesis.cancel()
+  browserQueue = splitForSpeech(clean)
+  browserOnEnd = onEnd
+  startKeepAlive()
+  speakNextChunk()
 }
 
 // speak reads the given text aloud (after stripping), cancelling any current
@@ -369,6 +487,11 @@ export function speak(text: string, onEnd?: () => void) {
 }
 
 export function stopSpeaking() {
+  // Clear the chunk queue + callback BEFORE cancel(), so the cancelled utterance's
+  // onend can't chain into the next chunk or re-fire the completion callback.
+  browserQueue = []
+  browserOnEnd = undefined
+  stopKeepAlive()
   if (ttsSupported()) window.speechSynthesis.cancel()
   if (audioEl) audioEl.pause()
 }

@@ -21,7 +21,8 @@ export const workspaceApi = {
   listWorkspaceTemplates: () => req<WorkspaceTemplate[]>('/api/workspace-templates'),
   createWorkspace: (data: {
     name: string
-    path?: string
+    // Optional project directory (session cwd). The data dir always uses the app default.
+    projectDir?: string
     icon?: string
     color?: string
     template?: string

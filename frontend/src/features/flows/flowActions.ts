@@ -1,7 +1,6 @@
 import type { Dispatch, SetStateAction } from 'react'
 import type { Edge } from '@xyflow/react'
 import { api } from '@/api'
-import type { FlowNodeEvent } from '@/api/flows'
 import type { EdgeStyle } from './FlowCanvas'
 import type { FlowTemplate } from './flowTemplates'
 import { reactFlowToGraph, type FlowRFNode } from './flowGraph'
@@ -21,15 +20,17 @@ interface FlowActionsDeps {
   name: string
   setEmoji: Dispatch<SetStateAction<string>>
   nodes: FlowRFNode[]
-  setNodes: Dispatch<SetStateAction<FlowRFNode[]>>
   edges: Edge[]
   start: string
   edgeStyle: EdgeStyle
   animated: boolean
+  accumulate: boolean
   input: string
   setRunning: Dispatch<SetStateAction<boolean>>
-  setRun: Dispatch<SetStateAction<FlowRun | null>>
-  setLiveNodes: Dispatch<SetStateAction<FlowNodeEvent[]>>
+  // Runs tab: doRun surfaces the fresh run here (not painted on the editor canvas).
+  runs: FlowRun[]
+  setRuns: Dispatch<SetStateAction<FlowRun[]>>
+  setSelectedRunId: Dispatch<SetStateAction<string | null>>
   sel: MultiSelect
   onError: (msg: string) => void
 }
@@ -48,15 +49,16 @@ export function createFlowActions({
   name,
   setEmoji,
   nodes,
-  setNodes,
   edges,
   start,
   edgeStyle,
   animated,
+  accumulate,
   input,
   setRunning,
-  setRun,
-  setLiveNodes,
+  runs,
+  setRuns,
+  setSelectedRunId,
   sel,
   onError,
 }: FlowActionsDeps) {
@@ -104,6 +106,7 @@ export function createFlowActions({
       const graph = reactFlowToGraph(nodes, edges, start)
       graph.edgeStyle = edgeStyle
       graph.animated = animated
+      graph.accumulate = accumulate
       const f = await api.updateFlow(selectedId, name, graph)
       setFlows((prev) => prev.map((x) => (x.id === f.id ? f : x)))
       onError('') // clear
@@ -160,37 +163,36 @@ export function createFlowActions({
     }
   }
 
-  // setNodeStatus paints a node's live run state (running glow / done ring /
-  // error ring).
-  const setNodeStatus = (nodeId: string, status: 'running' | 'done' | 'error' | undefined) => {
-    setNodes((prev) =>
-      prev.map((rn) => (rn.id === nodeId ? { ...rn, data: { ...rn.data, status } } : rn)),
-    )
-  }
-
+  // doRun starts the selected flow and shows its progress in the Koşular (Runs)
+  // tab — NOT painted onto the editor canvas, so the flow-editing screen stays
+  // exactly as the user left it. It switches to the Runs tab and auto-selects the
+  // freshly started run (RunView then streams it live via the flow-node bus).
   const doRun = async () => {
     if (!selectedId) return
     setRunning(true)
-    setRun(null)
-    setLiveNodes([])
-    setNodes((prev) => prev.map((rn) => ({ ...rn, data: { ...rn.data, status: undefined } })))
     try {
       await saveFlow() // persist edits before running
-      await api.runFlowStreamStandalone(selectedId, input, {
-        onNode: (ev) => {
-          const status = ev.phase === 'start' ? 'running' : ev.phase === 'error' ? 'error' : 'done'
-          setNodeStatus(ev.nodeId, status)
-          setLiveNodes((prev) => {
-            if (ev.phase === 'start') return [...prev, ev]
-            // done/error: replace the pending entry for this node (still running).
-            const i = prev.findIndex((n) => n.nodeId === ev.nodeId && n.output === undefined && n.error === undefined)
-            if (i < 0) return [...prev, ev]
-            const next = [...prev]
-            next[i] = ev
-            return next
+      // Runs already listed for this flow — so we can pick the NEW one (not an old
+      // run) as soon as it appears in the polled list.
+      const priorIds = new Set(runs.filter((r) => r.flowId === selectedId).map((r) => r.id))
+      setTab('runs')
+      const refresh = () =>
+        api
+          .listAllFlowRuns()
+          .then((rs) => {
+            setRuns(rs)
+            const fresh = rs.find((r) => r.flowId === selectedId && !priorIds.has(r.id))
+            if (fresh) setSelectedRunId(fresh.id)
           })
+          .catch(() => {})
+      await api.runFlowStreamStandalone(selectedId, input, {
+        // Each node event surfaces/advances the running run in the list; the run
+        // viewer renders it live off the flow-node bus.
+        onNode: () => refresh(),
+        onReply: (r) => {
+          setRuns((prev) => [r.run, ...prev.filter((x) => x.id !== r.run.id)])
+          setSelectedRunId(r.run.id)
         },
-        onReply: (r) => setRun(r.run),
         onError: (e) => onError(e),
       })
     } catch (e) {

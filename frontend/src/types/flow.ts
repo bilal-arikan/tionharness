@@ -1,6 +1,6 @@
 // Orchestration flows: graph definition, persisted run state and run history (Phase 7).
 
-export type FlowNodeType = 'agent' | 'branch' | 'parallel' | 'delay' | 'transform'
+export type FlowNodeType = 'agent' | 'branch' | 'parallel' | 'delay' | 'transform' | 'loop'
 
 export type BranchMatchMode = 'contains' | 'equals' | 'regex'
 
@@ -22,6 +22,13 @@ export interface FlowNode {
   joinNext?: string
   delayMs?: number // delay node: ms to wait
   template?: string // transform node: rendered output template
+  fresh?: boolean // agent node: opt out of the accumulated thread (accumulate mode)
+  // loop node
+  body?: string // entry node id of the loop body
+  loopNext?: string // node after the loop exits
+  maxIters?: number // hard iteration cap (0 = rely on until)
+  until?: string // exit when {{last}} matches
+  untilMode?: BranchMatchMode // how until matches (default: contains)
   // Cosmetic canvas layout (persisted; ignored by the engine).
   x?: number
   y?: number
@@ -30,6 +37,9 @@ export interface FlowNode {
 export interface FlowGraph {
   start: string
   nodes: FlowNode[]
+  // Accumulate mode: sequential agent nodes share a growing conversation thread
+  // so the provider's prompt cache reuses the stable prefix across nodes.
+  accumulate?: boolean
   // Cosmetic canvas presentation (persisted; ignored by the engine).
   edgeStyle?: string // default | smoothstep | step | straight
   animated?: boolean

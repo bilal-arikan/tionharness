@@ -9,6 +9,9 @@ import {
   setTtsRate,
   ttsPitch,
   setTtsPitch,
+  ttsVolume,
+  setTtsVolume,
+  onTtsVolumeChange,
   speak,
   ttsEngine,
   setTtsEngine,
@@ -42,6 +45,8 @@ export function TtsSettings() {
   const [srvVoice, setSrvVoice] = useState(() => serverVoiceId())
   const [rate, setRate] = useState(() => ttsRate())
   const [pitch, setPitch] = useState(() => ttsPitch())
+  // Global volume: mirrors the per-bubble sliders live (shared broadcast).
+  const [volume, setVolume] = useState(() => ttsVolume())
   // Refresh cached server status + browser voice list on mount (both may arrive async).
   const [srv, setSrv] = useState(() => serverTtsStatus())
 
@@ -49,10 +54,12 @@ export function TtsSettings() {
     void initServerTts().then(setSrv)
     const refresh = () => setBrowserVoices(ttsVoices())
     const off = onVoicesChanged(refresh)
+    const offVol = onTtsVolumeChange(setVolume)
     const t = window.setTimeout(refresh, 0)
     return () => {
       window.clearTimeout(t)
       off()
+      offVol()
     }
   }, [])
 
@@ -76,6 +83,10 @@ export function TtsSettings() {
   const changePitch = (v: number) => {
     setPitch(v)
     setTtsPitch(v)
+  }
+  const changeVolume = (v: number) => {
+    setVolume(v)
+    setTtsVolume(v) // broadcast → every bubble slider updates too
   }
   const test = () => speak('Merhaba, bu bir sesli okuma örneğidir. This is a voice sample.')
 
@@ -133,6 +144,16 @@ export function TtsSettings() {
         )
       )}
 
+      {/* Global volume — same value as every chat bubble's inline slider. */}
+      <Slider
+        label="Ses seviyesi"
+        badge={`%${Math.round(volume * 100)}`}
+        min={0}
+        max={1}
+        step={0.05}
+        value={volume}
+        onChange={changeVolume}
+      />
       <Slider
         label="Hız"
         badge={`${rate.toFixed(2)}×`}

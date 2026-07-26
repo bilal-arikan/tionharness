@@ -35,7 +35,6 @@ type Registry struct {
 	claudeConfigDir    string // CLAUDE_CONFIG_DIR override for claude-cli, or "" to inherit ~/.claude
 	claudeAuthKind     string // claude-cli credential kind: "oauth" | "apikey" | ""
 	claudeAuthToken    string // claude-cli credential value injected into the subprocess env
-	defaultModel       string // applied when a request leaves Model empty
 
 	betaExtendedCache    bool // anthropic extended prompt-cache TTL beta
 	betaContextEditing   bool // anthropic API-native context-editing beta (clear_tool_uses)
@@ -96,13 +95,6 @@ func (r *Registry) SetClaudeAuth(token, kind string) {
 	r.mu.Lock()
 	r.claudeAuthToken = token
 	r.claudeAuthKind = kind
-	r.mu.Unlock()
-}
-
-// SetDefaultModel sets the model applied when a request omits one.
-func (r *Registry) SetDefaultModel(model string) {
-	r.mu.Lock()
-	r.defaultModel = model
 	r.mu.Unlock()
 }
 
@@ -236,7 +228,6 @@ func (r *Registry) resolve(id string) ResolvedConfig {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	cfg := ResolvedConfig{
-		Model:              r.defaultModel,
 		CLIPath:            r.claudeCLIPath,
 		CLIConfigDir:       r.claudeConfigDir,
 		CLIAuthKind:        r.claudeAuthKind,

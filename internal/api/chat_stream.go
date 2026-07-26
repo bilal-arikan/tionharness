@@ -2,9 +2,6 @@ package api
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
-	"net/http"
 	"strings"
 	"time"
 
@@ -31,41 +28,6 @@ import (
 //	done  → { sessionTitle }                    (terminal, success)
 //	error → { error }                           (terminal, failure)
 //
-// Pre-flight failures use a normal JSON error; once streaming begins, errors
-// are delivered as an `error` event.
-func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
-	req, ok := bindJSON[chatReq](w, r)
-	if !ok {
-		return
-	}
-	if req.SessionID == "" || (strings.TrimSpace(req.Message) == "" && len(req.Attachments) == 0) {
-		writeError(w, http.StatusBadRequest, "sessionId and message (or attachments) are required")
-		return
-	}
-	flusher, ok := w.(http.Flusher)
-	if !ok {
-		writeError(w, http.StatusInternalServerError, "streaming unsupported")
-		return
-	}
-	// Legacy direct-stream path. Since the full cutover (_Docs/58) the UI renders
-	// from the per-session hub, not these SSE frames — but the endpoint still runs
-	// the turn synchronously and streams for any old client. Headers go out now
-	// (200); a pre-flight failure is then delivered as an `error` frame + a hub
-	// turn_error, rather than an HTTP status.
-	h := w.Header()
-	h.Set("Content-Type", "text/event-stream")
-	h.Set("Cache-Control", "no-cache")
-	h.Set("Connection", "keep-alive")
-	h.Set("X-Accel-Buffering", "no")
-	w.WriteHeader(http.StatusOK)
-	write := func(event string, data any) {
-		b, _ := json.Marshal(data)
-		fmt.Fprintf(w, "event: %s\ndata: %s\n\n", event, b)
-		flusher.Flush()
-	}
-	s.runChatTurn(r.Context(), ws(r), req, write)
-}
-
 // runChatTurn runs one chat turn to completion, publishing every UI event to the
 // session hub (the authoritative render path for all windows). write is an
 // optional legacy SSE sink: the direct /chat/stream handler passes one, the queue
@@ -76,6 +38,11 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 func (s *Server) runChatTurn(clientGone context.Context, wsp *workspace.Workspace, req chatReq, write func(event string, data any)) {
 	// Register this turn so it can be stopped or steered while running.
 	runID := uuid.NewString()
+	// clientMsgID keys this turn's terminal hub events (turn_done / turn_error) so a
+	// queue observer — the legacy /chat/stream + /chat handlers that now enqueue and
+	// relay the hub — can tell its own turn's completion from another queued turn's.
+	// Empty for the frontend's own /messages turns (harmless: it reads sessionTitle).
+	clientMsgID := req.ClientMsgID
 	// Detach the turn from the client connection so a page refresh/navigation never
 	// cancels generation; only an explicit "stop" control cancels it.
 	ctx, cancel := context.WithCancel(context.WithoutCancel(clientGone))
@@ -110,7 +77,7 @@ func (s *Server) runChatTurn(clientGone context.Context, wsp *workspace.Workspac
 	// sink AND the hub, so every window clears its "thinking" state and shows why.
 	fail := func(reason, detail string) {
 		s.logger.Error("chat turn preflight failed", "session", req.SessionID, "reason", reason, "detail", detail)
-		payload := map[string]any{"error": detail, "reason": reason}
+		payload := map[string]any{"error": detail, "reason": reason, "clientMsgId": clientMsgID}
 		run.emit("error", payload)
 		s.publishHub(req.SessionID, sessionhub.KindTurnError, payload, false)
 		s.hub.Commit(req.SessionID)
@@ -145,14 +112,15 @@ func (s *Server) runChatTurn(clientGone context.Context, wsp *workspace.Workspac
 		fail("session_not_found", "session not found")
 		return
 	}
-	// A coordinator session runs at most ONE turn at a time: claim the turn slot
-	// (blocking until any in-flight auto turn finishes) so this interactive turn
-	// never overlaps an auto-triggered coordinator turn. Worker notifications
-	// arriving mid-turn coalesce and trigger one auto turn on release.
-	if session.Role == "coordinator" {
-		release := wsp.Runtime.BeginCoordinatorUserTurn(session.ID)
-		defer release()
-	}
+	// Every session runs at most ONE turn at a time: claim the per-session turn slot
+	// (blocking until any in-flight turn finishes) so this turn never overlaps a
+	// concurrent direct /chat/stream call, a queued inbox turn, a scheduler wake, a
+	// peer delivery, or (for a coordinator) an auto turn. Worker notifications
+	// arriving mid-turn coalesce and trigger one auto turn on release. Claiming for
+	// ALL sessions — not just coordinators — is what closes the plain-session
+	// concurrent-turn race (_Docs/58).
+	release := wsp.Runtime.BeginSessionUserTurn(session.ID)
+	defer release()
 	firstTurn := s.isFirstUntitledTurn(session)
 	// Captured before the user message is appended: primes cross-session context
 	// on a fresh session's first turn.
@@ -288,7 +256,7 @@ func (s *Server) runChatTurn(clientGone context.Context, wsp *workspace.Workspac
 			Steps:     marshalSteps(ups.Steps),
 		})
 		if berr != nil {
-			s.failTurn(ctx, database, sse, session.ID, agents[0].ID, "hook_block_persist", berr.Error())
+			s.failTurn(ctx, database, sse, session.ID, agents[0].ID, clientMsgID, "hook_block_persist", berr.Error())
 			return
 		}
 		sse("reply", map[string]any{"replyMessage": blockMsg})
@@ -322,7 +290,7 @@ func (s *Server) runChatTurn(clientGone context.Context, wsp *workspace.Workspac
 			}
 			provider, perr := s.providers.Get(agentRow.Provider)
 			if perr != nil {
-				s.failTurn(ctx, database, sse, session.ID, agentRow.ID, "provider_unavailable", perr.Error())
+				s.failTurn(ctx, database, sse, session.ID, agentRow.ID, clientMsgID, "provider_unavailable", perr.Error())
 				return
 			}
 
@@ -333,7 +301,7 @@ func (s *Server) runChatTurn(clientGone context.Context, wsp *workspace.Workspac
 
 			history, herr := database.ListMessages(ctx, session.ID)
 			if herr != nil {
-				s.failTurn(ctx, database, sse, session.ID, agentRow.ID, "history_error", herr.Error())
+				s.failTurn(ctx, database, sse, session.ID, agentRow.ID, clientMsgID, "history_error", herr.Error())
 				return
 			}
 			session, _ = database.GetSession(ctx, session.ID)
@@ -367,7 +335,7 @@ func (s *Server) runChatTurn(clientGone context.Context, wsp *workspace.Workspac
 			})
 			prep, cerr := s.convo.Prepare(ctx, database, provider, session, agentRow, history)
 			if cerr != nil {
-				s.failTurn(ctx, database, sse, session.ID, agentRow.ID, "compaction_failed", "compaction failed: "+cerr.Error())
+				s.failTurn(ctx, database, sse, session.ID, agentRow.ID, clientMsgID, "compaction_failed", "compaction failed: "+cerr.Error())
 				return
 			}
 
@@ -499,8 +467,14 @@ func (s *Server) runChatTurn(clientGone context.Context, wsp *workspace.Workspac
 			// (Tools) classifies identically to the allowlist built here.
 			visOf := wsp.Runtime.ToolVisibilityFunc(turnCtx, agentRow)
 			run.setTierVis(visOf)
+			// Effective tool filter (workspace DisabledTools + agent denylist), installed
+			// so the Interaction bridge's tools/list and the allowlist drop tools the
+			// native ToolCatalog would (e.g. a workspace disabling PowerShell to force Bash).
+			allowOf := wsp.Runtime.ToolAllowedFunc(turnCtx, agentRow)
+			run.setToolAllowed(allowOf)
 			if url := s.interactionURL(); url != "" {
-				coreNames, extNames := splitInteractionTiers(interactionAdvertisedNames(s.tun, false), bridgeDefs, visOf)
+				names := filterAllowedNames(interactionAdvertisedNames(s.tun, false), allowOf)
+				coreNames, extNames := splitInteractionTiers(names, bridgeDefs, visOf)
 				// Stable per-(session,agent) Bearer token (not run.token): keeps the CLI
 				// mcp-config byte-identical across turns so a persistent process stays warm
 				// (Doc 52 §3-D). bindActive resolves it to this in-flight run.
@@ -583,7 +557,7 @@ func (s *Server) runChatTurn(clientGone context.Context, wsp *workspace.Workspac
 				trace := append(append(leadSteps, kept...), agent.TurnStep{Kind: agent.StepError, Text: detail, Reason: reason})
 				// Persist with a detached context so a cancelled (stopped) ctx still saves.
 				persistCtx := context.WithoutCancel(ctx)
-				payload := map[string]any{"error": detail, "reason": reason}
+				payload := map[string]any{"error": detail, "reason": reason, "clientMsgId": clientMsgID}
 				if msg, aerr := database.AddMessage(persistCtx, db.Message{
 					ID:        replyID,
 					SessionID: session.ID,
@@ -635,7 +609,7 @@ func (s *Server) runChatTurn(clientGone context.Context, wsp *workspace.Workspac
 				DurationMs: time.Since(agentStart).Milliseconds(),
 			})
 			if aerr != nil {
-				s.failTurn(ctx, database, sse, session.ID, agentRow.ID, "persist_error", aerr.Error())
+				s.failTurn(ctx, database, sse, session.ID, agentRow.ID, clientMsgID, "persist_error", aerr.Error())
 				return
 			}
 			// Persist the rotated claude-cli session id so the NEXT turn resumes it and
@@ -699,8 +673,9 @@ func (s *Server) runChatTurn(clientGone context.Context, wsp *workspace.Workspac
 
 	sse("done", map[string]any{"sessionTitle": sessionTitle})
 	// Terminal success onto the hub: every window stops its live indicator and
-	// picks up the (possibly new) session title.
-	s.publishHub(session.ID, sessionhub.KindTurnDone, map[string]any{"sessionTitle": sessionTitle}, false)
+	// picks up the (possibly new) session title. clientMsgId lets a queue observer
+	// (legacy /chat + /chat/stream) recognise its own turn's completion.
+	s.publishHub(session.ID, sessionhub.KindTurnDone, map[string]any{"sessionTitle": sessionTitle, "clientMsgId": clientMsgID}, false)
 	s.hub.Commit(session.ID)
 
 	// Publish a chat-completion event so other workspaces can flag activity with
@@ -752,13 +727,13 @@ func (s *Server) resolveTurnAgents(ctx context.Context, database *db.DB, session
 // agentID is the responding agent (may be "" if none was selected yet); reason
 // is a stable machine tag (provider_error, compaction_failed, …) shown as a
 // badge; detail is the human-readable message.
-func (s *Server) failTurn(ctx context.Context, database *db.DB, sse func(string, any), sessionID, agentID, reason, detail string) {
+func (s *Server) failTurn(ctx context.Context, database *db.DB, sse func(string, any), sessionID, agentID, clientMsgID, reason, detail string) {
 	// Surface the failure in the server log too — without this a turn that dies
 	// before producing output (provider unavailable, compaction failure, …) is
 	// invisible server-side and only visible as a red card in the UI.
 	s.logger.Error("turn failed", "session", sessionID, "agent", agentID, "reason", reason, "detail", detail)
 	step := agent.TurnStep{Kind: agent.StepError, Text: detail, Reason: reason}
-	payload := map[string]any{"error": detail, "reason": reason}
+	payload := map[string]any{"error": detail, "reason": reason, "clientMsgId": clientMsgID}
 	if msg, err := database.AddMessage(ctx, db.Message{
 		SessionID: sessionID,
 		Role:      providers.RoleAssistant,
@@ -770,4 +745,10 @@ func (s *Server) failTurn(ctx context.Context, database *db.DB, sse func(string,
 		payload["replyMessage"] = msg
 	}
 	sse("error", payload)
+	// Terminal error onto the hub too, so every window (and a queue observer waiting
+	// on this turn) clears its "thinking" state and sees the failure — previously
+	// failTurn only wrote the legacy SSE sink, leaving hub clients to discover it on
+	// reload and the /chat + /chat/stream queue observers hanging.
+	s.publishHub(sessionID, sessionhub.KindTurnError, payload, false)
+	s.hub.Commit(sessionID)
 }

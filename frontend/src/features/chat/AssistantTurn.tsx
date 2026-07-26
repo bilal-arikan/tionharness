@@ -3,6 +3,7 @@ import { RotateCcw, ThumbsUp, ThumbsDown, Volume2, Square } from 'lucide-react'
 import type { Agent, Message } from '@/types'
 import { speak, stopSpeaking, ttsAvailable } from '@/shared/lib/tts'
 import { Markdown } from '@/shared/components/markdown/Markdown'
+import { TtsVolumeSlider } from './TtsVolumeSlider'
 import { TurnSteps, parseSteps } from './TurnSteps'
 import { ThinkingBlock } from './ThinkingBlock'
 import { MessageTime, TurnDuration, LiveTimer } from './MessageMeta'
@@ -201,16 +202,20 @@ export function AssistantTurn({
         </div>
         {hasActions && (
           <div className={ACTION_CLUSTER}>
-            {/* Read this reply aloud (TTS). Toggles play/stop; strips code/tables. */}
+            {/* Read this reply aloud (TTS). Toggles play/stop; strips code/tables.
+                The adjacent slider sets the GLOBAL read-aloud volume (all bubbles). */}
             {canSpeak && (
-              <button
-                onClick={toggleSpeak}
-                title={speaking ? 'Okumayı durdur' : 'Yanıtı sesli oku (kod atlanır)'}
-                aria-label={speaking ? 'Okumayı durdur' : 'Yanıtı sesli oku'}
-                className={speaking ? actionChipActive() : actionChip()}
-              >
-                {speaking ? <Square size={13} /> : <Volume2 size={13} />}
-              </button>
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={toggleSpeak}
+                  title={speaking ? 'Okumayı durdur' : 'Yanıtı sesli oku (kod atlanır)'}
+                  aria-label={speaking ? 'Okumayı durdur' : 'Yanıtı sesli oku'}
+                  className={speaking ? actionChipActive() : actionChip()}
+                >
+                  {speaking ? <Square size={13} /> : <Volume2 size={13} />}
+                </button>
+                <TtsVolumeSlider />
+              </div>
             )}
             {/* Feedback thumbs (not on the live bubble). */}
             {onFeedback && !isLastLive && (

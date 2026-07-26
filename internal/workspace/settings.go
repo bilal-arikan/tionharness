@@ -1,6 +1,7 @@
 package workspace
 
 import (
+	"bytes"
 	_ "embed"
 	"encoding/json"
 	"errors"
@@ -34,8 +35,6 @@ type WSSettings struct {
 	Instructions    string `json:"instructions"`
 	Icon            string `json:"icon"`  // emoji shown in the switcher/rail
 	Color           string `json:"color"` // hex accent for visual identity
-	DefaultProvider string `json:"defaultProvider"`
-	DefaultModel    string `json:"defaultModel"`
 	PauseAutonomy   bool   `json:"pauseAutonomy"`
 
 	// Per-workspace appearance overrides (client-side visual only). Empty fields
@@ -68,6 +67,11 @@ type WSSettings struct {
 	// adopt at compaction/idle/model-change or an explicit /refresh-context.
 	// Default on; off = every turn recomposes from live state (pre-epoch behaviour).
 	PromptEpochEnabled bool `json:"promptEpochEnabled"`
+
+	// ShellOutputCompression overrides the in-process shell-output token-optimizer
+	// (sqz) for this workspace: "" (or "auto") = follow sqz-hook detection (default),
+	// "on" = force it on (needs the sqz binary), "off" = disable. See _Docs/17.
+	ShellOutputCompression string `json:"shellOutputCompression,omitempty"`
 
 	// AutoCaptureArtifacts toggles the turn-end trace scan that upserts every file
 	// the agent wrote (Write/create_file) as an artifact automatically. Default OFF:
@@ -120,8 +124,6 @@ type WSSettingsPatch struct {
 	Instructions    *string `json:"instructions"`
 	Icon            *string `json:"icon"`
 	Color           *string `json:"color"`
-	DefaultProvider   *string `json:"defaultProvider"`
-	DefaultModel      *string `json:"defaultModel"`
 	PauseAutonomy     *bool   `json:"pauseAutonomy"`
 	DefaultWorkingDir *string `json:"defaultWorkingDir"`
 
@@ -129,9 +131,10 @@ type WSSettingsPatch struct {
 	Accent      *string `json:"accent"`
 	ThemePreset *string `json:"themePreset"`
 
-	CodebaseMemoryEnabled *bool `json:"codebaseMemoryEnabled"`
-	PromptEpochEnabled    *bool `json:"promptEpochEnabled"`
-	AutoCaptureArtifacts  *bool `json:"autoCaptureArtifacts"`
+	CodebaseMemoryEnabled  *bool   `json:"codebaseMemoryEnabled"`
+	PromptEpochEnabled     *bool   `json:"promptEpochEnabled"`
+	AutoCaptureArtifacts   *bool   `json:"autoCaptureArtifacts"`
+	ShellOutputCompression *string `json:"shellOutputCompression"`
 
 	BoardColumns *[]db.BoardColumnDef `json:"boardColumns"`
 
@@ -206,16 +209,25 @@ func (w *Workspace) loadSettings() {
 	// Seed defaults first so an absent file — or a file written before a field
 	// existed — yields the intended defaults rather than zero values.
 	s := defaultWSSettings()
+	legacy := false
 	if data, err := os.ReadFile(w.settingsPath()); err == nil {
 		_ = json.Unmarshal(data, &s)
+		// One-time migration: the abstract per-workspace "defaultProvider/defaultModel"
+		// override was removed (provider/model is now agent-based). Strip the dead keys
+		// from any pre-existing file by rewriting it clean below.
+		legacy = bytes.Contains(data, []byte(`"defaultProvider"`)) || bytes.Contains(data, []byte(`"defaultModel"`))
 	}
 	w.settings.cur = s
+	if legacy {
+		_ = w.saveSettings()
+	}
 	if w.Runtime != nil {
 		w.Runtime.SetPaused(s.PauseAutonomy)
 		w.Runtime.SetInstructions(s.Instructions)
 		w.Runtime.SetDefaultWorkDir(s.DefaultWorkingDir)
 		w.Runtime.SetCodebaseMemory(s.CodebaseMemoryEnabled)
 		w.Runtime.SetPromptEpoch(s.PromptEpochEnabled)
+		w.Runtime.SetShellCompression(s.ShellOutputCompression)
 	}
 }
 
@@ -274,12 +286,6 @@ func (m *Manager) UpdateSettings(id string, patch WSSettingsPatch) (*Workspace, 
 	if patch.Color != nil {
 		ws.settings.cur.Color = *patch.Color
 	}
-	if patch.DefaultProvider != nil {
-		ws.settings.cur.DefaultProvider = *patch.DefaultProvider
-	}
-	if patch.DefaultModel != nil {
-		ws.settings.cur.DefaultModel = *patch.DefaultModel
-	}
 	if patch.PauseAutonomy != nil {
 		ws.settings.cur.PauseAutonomy = *patch.PauseAutonomy
 	}
@@ -304,6 +310,9 @@ func (m *Manager) UpdateSettings(id string, patch WSSettingsPatch) (*Workspace, 
 	if patch.AutoCaptureArtifacts != nil {
 		ws.settings.cur.AutoCaptureArtifacts = *patch.AutoCaptureArtifacts
 	}
+	if patch.ShellOutputCompression != nil {
+		ws.settings.cur.ShellOutputCompression = *patch.ShellOutputCompression
+	}
 	if patch.BoardColumns != nil {
 		ws.settings.cur.BoardColumns = *patch.BoardColumns
 	}
@@ -320,6 +329,7 @@ func (m *Manager) UpdateSettings(id string, patch WSSettingsPatch) (*Workspace, 
 	defaultWorkDir := ws.settings.cur.DefaultWorkingDir
 	cbmEnabled := ws.settings.cur.CodebaseMemoryEnabled
 	epochEnabled := ws.settings.cur.PromptEpochEnabled
+	shellCompression := ws.settings.cur.ShellOutputCompression
 	ws.settings.mu.Unlock()
 
 	if err := ws.saveSettings(); err != nil {
@@ -336,6 +346,7 @@ func (m *Manager) UpdateSettings(id string, patch WSSettingsPatch) (*Workspace, 
 		ws.Runtime.SetDefaultWorkDir(defaultWorkDir)
 		ws.Runtime.SetCodebaseMemory(cbmEnabled)
 		ws.Runtime.SetPromptEpoch(epochEnabled)
+		ws.Runtime.SetShellCompression(shellCompression)
 	}
 	return ws, nil
 }

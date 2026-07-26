@@ -92,6 +92,14 @@ type chatRun struct {
 	// allowlist. Installed per agent turn alongside the bridge. nil → the static
 	// split (used when no per-agent registry is available).
 	tierVis func(name string) string
+	// toolAllowed reports whether a tool is offered to the responding agent
+	// (workspace DisabledTools + agent allow/deny) — the same gate the native
+	// ToolCatalog applies. Installed per agent turn alongside tierVis so the
+	// Interaction MCP tools/list (Tools) and the CLI allowlist DROP a
+	// workspace-disabled / agent-blocked tool (e.g. PowerShell) instead of exposing
+	// it only on the claude-cli path. nil → no restriction (all tools allowed),
+	// used when no per-agent registry is available.
+	toolAllowed func(name string) bool
 }
 
 // setSteer stashes a mid-turn steer message for a claude-cli run, to be delivered
@@ -172,6 +180,24 @@ func (r *chatRun) tierVisFor() func(name string) string {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return r.tierVis
+}
+
+// setToolAllowed installs the responding agent's effective tool-allow predicate
+// (workspace DisabledTools + agent denylist). Kept in lockstep with setTierVis/
+// setBridge so tools/list, the activatable surface, and the allowlist all honor
+// the same filter the native ToolCatalog uses.
+func (r *chatRun) setToolAllowed(allow func(name string) bool) {
+	r.mu.Lock()
+	r.toolAllowed = allow
+	r.mu.Unlock()
+}
+
+// toolAllowedFor returns the installed tool-allow predicate (nil if none → no
+// restriction).
+func (r *chatRun) toolAllowedFor() func(name string) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.toolAllowed
 }
 
 // setBridge installs the responding agent's self-management tool catalog +

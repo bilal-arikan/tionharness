@@ -346,22 +346,10 @@ func resolveTemplateFlowGraph(tf market.WorkspaceTemplateFlow, ids map[string]st
 	return graph, true
 }
 
-// defaultProviderModel resolves the provider/model for seeded agents:
-// workspace override → app default → claude-cli last resort.
-func (s *Server) defaultProviderModel(wsNew *workspace.Workspace) (provider, model string) {
-	cfg := s.settings.Get()
-	wsCfg := wsNew.Settings()
-
-	provider = wsCfg.DefaultProvider
-	if provider == "" {
-		provider = cfg.DefaultProvider
-	}
-	if provider == "" {
-		provider = "claude-cli"
-	}
-	model = wsCfg.DefaultModel
-	if model == "" {
-		model = cfg.DefaultModel
-	}
-	return provider, model
+// defaultProviderModel resolves the provider/model for seeded agents. A
+// freshly-created workspace has no agents yet and there is no abstract default
+// provider/model, so seeded agents that omit both start on the keyless local
+// claude-cli with the provider's own default model (empty).
+func (s *Server) defaultProviderModel(_ *workspace.Workspace) (provider, model string) {
+	return "claude-cli", ""
 }

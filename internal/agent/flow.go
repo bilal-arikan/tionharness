@@ -37,6 +37,18 @@ func (f flowRunner) RunAgentNodeSchema(ctx context.Context, agentID, prompt, out
 	return f.rt.complete(ctx, agent, f.rt.systemPrompt(agent), f.rt.autonomousDynamicSuffix(ctx), prompt, outputSchema, f.autonomous)
 }
 
+// RunAgentNodeThread implements orchestration.ThreadAgentRunner: an accumulate-mode
+// agent node runs with the accumulated conversation (thread) as its prior messages,
+// so the agent's stable system + growing message prefix is reused by the provider's
+// prompt cache across sequential same-agent nodes.
+func (f flowRunner) RunAgentNodeThread(ctx context.Context, agentID string, thread []orchestration.Msg, prompt, outputSchema string) (string, error) {
+	agent, err := f.rt.db.GetAgent(ctx, agentID)
+	if err != nil {
+		return "", err
+	}
+	return f.rt.completeThread(ctx, agent, f.rt.systemPrompt(agent), f.rt.autonomousDynamicSuffix(ctx), thread, prompt, outputSchema, f.autonomous)
+}
+
 // RunFlow starts a new run of a flow with the given input and drives it to
 // completion. Manual runs (autonomous=false) are not budget-gated. obs is an
 // optional progress observer (nil for no live events) used by the streaming path.
@@ -146,14 +158,24 @@ func (r *Runtime) RunFlowRecorded(ctx context.Context, flowID, input string, aut
 	// graph show the flow (and its agent) as active *while* it runs — not only
 	// after it finishes. The session is idempotent (one per flow), so
 	// recordFlowSessionTurn below reuses the same one.
+	// Each run gets its OWN session (per-run isolation): keyed for attribution by
+	// SourceID = flow.ID (the network graph + executions feed still resolve it to
+	// the flow) but NEVER reused, so a run's transcript — and its "Akış olarak gör"
+	// reification — shows exactly one run. Created up front so the executions feed
+	// shows it running, then the same session id is threaded into the turn record.
 	sessionID := ""
-	if sess, serr := r.db.GetOrCreateSourceSession(ctx, "flow", flow.ID, firstFlowAgentID(flow), flow.Name); serr == nil {
+	if sess, serr := r.db.CreateSession(ctx, db.Session{
+		AgentID:  firstFlowAgentID(flow),
+		Kind:     "flow",
+		SourceID: flow.ID,
+		Title:    flow.Name,
+	}); serr == nil {
 		sessionID = sess.ID
 		r.trackSession(sessionID)
 		defer r.untrackSession(sessionID)
 	}
 	run, runErr := r.RunFlow(ctx, flowID, input, autonomous, obs)
-	if recorded := r.recordFlowSessionTurn(ctx, flow, run, input, runErr); recorded != "" {
+	if recorded := r.recordFlowSessionTurn(ctx, flow, run, input, runErr, sessionID); recorded != "" {
 		sessionID = recorded
 	}
 	// Every recorded flow run raises a desktop notification that deep-links to the
@@ -219,19 +241,24 @@ func (r *Runtime) emitFlowDelivery(flow db.Flow, run db.FlowRun, sessionID strin
 // (assistant turn with a per-node step trace) to the flow's transcript session,
 // returning the session id. The session is grouped under the flow's first agent;
 // the reply is attributed to the agent that produced the final output.
-func (r *Runtime) recordFlowSessionTurn(ctx context.Context, flow db.Flow, run db.FlowRun, input string, runErr error) string {
+func (r *Runtime) recordFlowSessionTurn(ctx context.Context, flow db.Flow, run db.FlowRun, input string, runErr error, sessionID string) string {
 	owner := firstFlowAgentID(flow)
-	session, err := r.db.GetOrCreateSourceSession(ctx, "flow", flow.ID, owner, flow.Name)
-	if err != nil {
-		r.logger.Warn("flow session create failed", "flow", flow.ID, "error", err)
-		return ""
+	if sessionID == "" {
+		// The up-front create failed (or a caller passed none) — make the per-run
+		// session now so the run is still recorded somewhere.
+		sess, err := r.db.CreateSession(ctx, db.Session{AgentID: owner, Kind: "flow", SourceID: flow.ID, Title: flow.Name})
+		if err != nil {
+			r.logger.Warn("flow session create failed", "flow", flow.ID, "error", err)
+			return ""
+		}
+		sessionID = sess.ID
 	}
 	userText := strings.TrimSpace(input)
 	if userText == "" {
 		userText = "🔀 " + flow.Name
 	}
-	if _, err := r.db.AddMessage(ctx, db.Message{SessionID: session.ID, Role: "user", Text: userText}); err != nil {
-		r.logger.Warn("flow transcript: record input failed", "flow", flow.ID, "session", session.ID, "error", err)
+	if _, err := r.db.AddMessage(ctx, db.Message{SessionID: sessionID, Role: "user", Text: userText}); err != nil {
+		r.logger.Warn("flow transcript: record input failed", "flow", flow.ID, "session", sessionID, "error", err)
 	}
 
 	replyAgent := finalFlowAgentID(flow, run)
@@ -243,15 +270,15 @@ func (r *Runtime) recordFlowSessionTurn(ctx context.Context, flow db.Flow, run d
 		text = renderFlowTranscript(flow.Name, run, runErr)
 	}
 	if _, err := r.db.AddMessage(ctx, db.Message{
-		SessionID: session.ID,
+		SessionID: sessionID,
 		AgentID:   replyAgent,
 		Role:      "assistant",
 		Text:      text,
 		Steps:     encodeSteps(flowStateToSteps(run, runErr)),
 	}); err != nil {
-		r.logger.Warn("flow transcript: record reply failed", "flow", flow.ID, "session", session.ID, "error", err)
+		r.logger.Warn("flow transcript: record reply failed", "flow", flow.ID, "session", sessionID, "error", err)
 	}
-	return session.ID
+	return sessionID
 }
 
 // flowStateToSteps converts a finished flow run's persisted state into a turn

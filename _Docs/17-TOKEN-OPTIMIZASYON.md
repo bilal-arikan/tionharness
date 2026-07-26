@@ -33,6 +33,39 @@ compaction'ı (transcript bütçesi) ve prompt-cache bu harici katmanı tamamlar
 Built-in tarafında geriye kalan tek koruma tool'ların kendi 64 KB hard-cap'idir; hata/boş sonuçlar
 her zaman olduğu gibi **hiç dokunulmadan** modele gider.
 
+## Bridged shell için in-process `sqz` (2026-07-25)
+
+**Sorun:** `sqz hook claude` yalnız **native `Bash`** tool adını rewrite ediyor. TionSwarm
+tüm shell'i bridged `mcp__tionswarm_interaction__Bash` (ve `…__PowerShell`) üzerinden
+koşturduğu için sqz PostToolUse/PreToolUse hook'u bu araçları **tanımıyor** → hiç sıkıştırma
+olmuyordu (doğrulandı: aynı `cat` komutu native adla rewrite edilir, bridged adla passthrough).
+
+**Çözüm:** sıkıştırmayı **sunucu tarafında, in-process** uygula. Shell tool'ları opsiyonel bir
+çıktı filtresi taşır (`ShellTool/PowerShellTool.WithOutputFilter`, `internal/tools/builtin_shell.go`);
+foreground çalıştırmada, sonuç **modele dönmeden önce** ve yalnız `shellCompressMinBytes` (2 KB)
+üstündeyse filtreden geçer. Canlı UI stream'i (`onChunk`) **ham** kalır — kullanıcı tam çıktıyı görür,
+model sıkıştırılmış alır. Filtreyi `Runtime.sqzShellFilter` (`internal/agent/shell_optimizer.go`)
+kurar: sqz **opt-in** (workspace'te sqz hook wired) **ve** binary PATH'te ise, çıktıyı
+`sqz compress --cmd '<komut>'`'a stdin ile verir. Hata/eksiklikte **ham çıktı** döner + `Warn` log
+(fail-open; sıkıştırma optimizasyondur, doğruluk değil). Hem **native** (buildRegistry) hem **bridged**
+(NewShellRunner), hem **Bash** hem **PowerShell** aynı tek enjeksiyondan geçer.
+
+**Workspace toggle:** `WSSettings.ShellOutputCompression` (`""`=auto → sqz-hook varlığını
+izler, `"on"`=zorla aç [binary yeterli, hook gerekmez], `"off"`=kapat). Runtime'a
+`SetShellCompression` ile push edilir; `sqzShellFilter` bunu okur. UI: Ayarlar ▸ Workspace ▸
+"Shell çıktısı sıkıştırma (sqz)" seçici + workspace-oluşturma sonrası öneri kartı
+(`recommendations.ts` `shell-compress`: sqz kurulu ama pasifse tek-tık `on`). Hook'u
+kaldırmak zaten doğal bir kapatma anahtarıdır (auto modda).
+
+**Güvenlik/kayıpsızlık:** `sqz compress` kendi kendini gate'ler — küçük/precise çıktı (hash, key)
+"0% reduction" ile **verbatim** döner; asıl mekanizma **lossless n-gram kısaltma** (sözlük çıktının
+başına eklenir, model geri açabilir). `[sqz] N/N tokens` istatistik satırı **stderr**'e gider,
+döndürülmez. Agent ham çıktıya her zaman erişebilir: (a) shell tool'una **`no_compress: true`**
+argümanı (filtre aktifken şemada ilan edilir → o çağrıda byte-exact ham döner), veya (b)
+`komut > dosya` (stdout boş → filtre tetiklenmez) + `Read`/`Grep` file tool'u. Testler:
+`builtin_shell_test.go TestShellOutputFilter` (eşik + no_compress), `shell_optimizer_test.go
+TestSqzShellFilter_Gate`.
+
 ## Harici araç tespiti (presence-only) — ana yol
 
 Ayarlar → **Hooks** ekranındaki "Kurulu mu kontrol et" butonu (panel açılışında otomatik de çalışır), bu

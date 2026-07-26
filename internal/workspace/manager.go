@@ -216,6 +216,13 @@ func (m *Manager) open(meta Meta) error {
 		return err
 	}
 
+	// Seed the built-in default flows into this workspace's store. Idempotent and
+	// deletion-aware (a ledger keeps a user-removed default from coming back).
+	// Running it here backfills every existing workspace on the next startup.
+	if err := agent.EnsureDefaultFlows(context.Background(), database, storeDir); err != nil {
+		m.logger.Warn("seed default flows failed", "workspace", meta.ID, "error", err)
+	}
+
 	// Per-workspace secret vault (AES-GCM encrypted), shared by the secret_* tools.
 	vault, err := secrets.Open(storeDir, m.cipher)
 	if err != nil {

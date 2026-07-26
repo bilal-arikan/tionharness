@@ -42,7 +42,7 @@ type coordSlot struct {
 	workers atomic.Int64 // active workers under this coordinator
 }
 
-// signalFree wakes turns blocked in BeginCoordinatorUserTurn. Callers must hold mu.
+// signalFree wakes turns blocked in claimCoordinatorSlot. Callers must hold mu.
 func (s *coordSlot) signalFree() {
 	if s.free != nil {
 		s.free.Broadcast()
@@ -408,6 +408,15 @@ func (r *Runtime) runWorker(agent db.Agent, workerSessionID, prompt, coordSessio
 	r.workerCancels.Store(workerSessionID, ctl)
 	defer r.workerCancels.Delete(workerSessionID)
 
+	// Serialize this worker turn on the WORKER session's own turn slot (keyed by
+	// workerSessionID, distinct from the coordinator slot whose workers counter is
+	// decremented above) so it never overlaps another turn on the same worker
+	// session: a second send_to_worker that raced the isSessionActive check (that
+	// check is a UI hint, not a lock), or a user/wake/peer turn opened on the worker
+	// session (all of which now claim this same slot).
+	releaseSlot := r.claimSessionTurnSlot(workerSessionID)
+	defer releaseSlot()
+
 	turnCtx := tools.WithAsyncChat(WithSessionID(WithCallKind(ctx, KindSpawn), workerSessionID))
 	turnCtx, meta := WithTurnMeta(turnCtx)
 	turnStart := time.Now()
@@ -559,37 +568,40 @@ func (r *Runtime) NotifyCoordinator(coordSessionID, note string) {
 	r.enqueueCoordinatorTurn(coordSessionID)
 }
 
-// BeginCoordinatorUserTurn claims the coordinator's turn slot for an interactive
-// (user-initiated) turn so it never overlaps an auto-triggered coordinator turn:
-// auto turns arriving meanwhile fall into pending (enqueueCoordinatorTurn sees
-// running=true), and this call blocks until any in-flight auto turn — bounded by
-// spawnTimeout — finishes. The returned release func MUST be called when the
-// interactive turn ends (defer it); it frees the slot and, when worker
-// notifications piled up mid-turn, schedules exactly one coordinator turn to
-// process them. A user turn also resets the auto-turn cap: a human is back in
-// the loop, so notifications may resume triggering turns after a cap stop.
-func (r *Runtime) BeginCoordinatorUserTurn(coordSessionID string) (release func()) {
-	return r.claimCoordinatorSlot(coordSessionID, true)
+// BeginSessionUserTurn claims the session's turn slot for an interactive
+// (user-initiated) turn so it never overlaps ANY other turn on the same session —
+// a concurrent direct /chat/stream call, a queued inbox turn, an auto-triggered
+// coordinator turn, a scheduler wake, or a peer inbox delivery. This is the single
+// per-session turn lock: EVERY turn-entry path claims it, not just coordinator
+// sessions (that coordinator-only gate was the source of the concurrent-turn race
+// on plain sessions — see _Docs/58). Turns arriving meanwhile block until this
+// call's release runs; a coordinator's auto turns instead fall into pending
+// (enqueueCoordinatorTurn sees running=true) and coalesce into one turn on release.
+// The slot's coordinator-only fields (pending/turns) stay unused on a plain
+// session, so release is a clean unlock there. A user turn also resets the
+// auto-turn cap (a human is back in the loop); harmless on a plain session where
+// the cap is never consulted. The returned release func MUST be deferred.
+func (r *Runtime) BeginSessionUserTurn(sessionID string) (release func()) {
+	return r.claimCoordinatorSlot(sessionID, true)
 }
 
-// claimTurnSlotIfCoordinator claims the coordinator turn slot when sessionID
-// belongs to a coordinator session, so autonomous turns (scheduler wake, scheduled
-// prompt, inbox delivery) serialize with coordinator auto turns exactly like
-// interactive chat turns. Returns a release func — a no-op for non-coordinator
-// sessions (or when the session can't be loaded, since there is then no
-// coordinator slot to protect). Unlike a user turn it does NOT reset the
-// auto-turn cap: no human re-entered the loop.
-func (r *Runtime) claimTurnSlotIfCoordinator(ctx context.Context, sessionID string) (release func()) {
-	s, err := r.db.GetSession(ctx, sessionID)
-	if err != nil || s.Role != "coordinator" {
-		return func() {}
-	}
+// claimSessionTurnSlot claims the session's turn slot for an AUTONOMOUS turn
+// (scheduler wake, scheduled prompt, peer inbox delivery) so it serializes with
+// every other turn on the same session — exactly like an interactive chat turn.
+// It always claims (no coordinator gate): a plain session gets real mutual
+// exclusion too, closing the wake-vs-user / peer-vs-user race. Unlike a user turn
+// it does NOT reset the auto-turn cap (no human re-entered the loop). Returns the
+// release func — defer it.
+func (r *Runtime) claimSessionTurnSlot(sessionID string) (release func()) {
 	return r.claimCoordinatorSlot(sessionID, false)
 }
 
-// claimCoordinatorSlot blocks until the coordinator's turn slot is free, claims
-// it, and returns the release func (see BeginCoordinatorUserTurn for semantics).
-// resetCap additionally zeroes the auto-turn budget (human back in the loop).
+// claimCoordinatorSlot is the low-level per-session turn lock: it blocks until the
+// session's turn slot is free, claims it, and returns the release func (see
+// BeginSessionUserTurn / claimSessionTurnSlot for semantics). Despite the name it
+// backs EVERY session's turn serialization, not only coordinators — a plain
+// session simply never touches the coordinator-only pending/turns fields. resetCap
+// additionally zeroes the auto-turn budget (human back in the loop).
 func (r *Runtime) claimCoordinatorSlot(coordSessionID string, resetCap bool) func() {
 	slot := r.coordSlotFor(coordSessionID)
 	slot.mu.Lock()

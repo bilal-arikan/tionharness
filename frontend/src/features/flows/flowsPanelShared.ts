@@ -15,6 +15,7 @@ export const NODE_TYPES: { value: FlowNodeType; label: string; Icon: LucideIcon 
   { value: 'parallel', label: 'Paralel', Icon: NODE_ICONS.parallel },
   { value: 'delay', label: 'Bekle', Icon: NODE_ICONS.delay },
   { value: 'transform', label: 'Birleştir', Icon: NODE_ICONS.transform },
+  { value: 'loop', label: 'Döngü', Icon: NODE_ICONS.loop },
 ]
 
 export const EDGE_STYLES: { value: EdgeStyle; label: string }[] = [

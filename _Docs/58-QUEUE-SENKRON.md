@@ -335,6 +335,66 @@ gerekir); dev StrictMode presence şişmesi (prod'da yok); kuyruk öğesi düzen
 Ekstra dayanıklılık için `activeSessions` ile periyodik streaming reconcile
 düşünülebilir (şimdilik event-driven clear + reload yeterli).
 
+## Birleşik per-session tur kilidi (2026-07-25)
+
+Send-queue (bu doc) kullanıcı `/messages`'larını **birbirine** karşı serileştirir;
+ama tur açan diğer yollar — legacy `/chat/stream`·`/chat`, scheduler wake, peer
+inbox teslimi, scheduled prompt — kuyruğu atlayıp doğrudan tur koşuyordu. Bunlar
+eskiden yalnız `Role=="coordinator"` oturumlarda `coordSlot` ile serileşiyor, düz
+oturumda ise **eşzamanlı ikinci bir tur** açabiliyordu (wake↔kullanıcı,
+direct-chat↔inbox-worker yarışı). Artık `coordSlot` **her oturumun** tek tur
+kilidi: `runChatTurn`/`handleChat` `BeginSessionUserTurn` ile, otonom yollar
+`claimSessionTurnSlot` ile **koşulsuz** claim eder → aynı oturumda asla iki tur
+paralel koşmaz. Detay + testler: `_Docs/47` §13.
+
+## Legacy `/chat/stream` + `/chat` kuyruğa taşındı (dayanıklı cutover, 2026-07-25)
+
+Bu iki legacy endpoint (frontend artık **hiçbirini** çağırmıyor — yalnız dış
+otomasyon/eski istemci; Doc 33) turu **inline** koşuyor, mesajı `inbox.json`'a
+yazmıyordu → süreç tur ortasında çökerse mesaj kurtarılamıyor + kuyruğu atlıyordu.
+Artık ikisi de `POST /sessions/{id}/messages` gibi **serial send-queue**'ya enqueue
+eder (kalıcı, crash-recoverable, tek-tur garantili) ve per-session **hub**'ı gözler:
+- `handleChatStream` → hub olaylarını **legacy SSE frame** şekline (meta/agent/step/
+  reply/done/error) çevirip relay eder; senkron streaming sözleşmesi korunur.
+- `handleChat` → terminal olayı bekler, kalıcı yanıtı DB'den JSON döndürür.
+
+**Korelasyon:** her handler taze bir `clientMsgId` üretir (dedupe'a takılmaz);
+`runChatTurn` + kuyruk dayanıklılık bariyerleri (panic/watchdog/poison) bu id'yi
+terminal hub olaylarına (`turn_done`/`turn_error`) damgalar → gözlemci **kendi**
+turunun bitişini başka bir kuyruk turununkinden ayırır (öndeki turun terminal'i
+DÜŞÜRÜLÜR, erken kapatmaz). Slow-consumer drop'una karşı `Replay` ile gap-fill.
+Ayrıca `failTurn` artık hub'a da `turn_error` yayınlar (önceden yalnız legacy SSE
+sink'e yazıyordu → hub istemcileri hatayı ancak reload'da görüyordu; gözlemci
+asılıyordu). Kod: `internal/api/chat_queue.go`; testler: `chat_queue_test.go`
+(`TestPayloadClientMsgID`, `TestRelayLegacyFrameOwnTerminalOnly`). Kaybolan tek şey
+non-stream yanıtındaki `contextTokens`/`compacted` alanları (tur artık band-dışı
+koştuğundan yeniden üretilmiyor); `reply`/`replyMessage`/`usage`/`model` korunur.
+
+### Nadir-senaryo sağlamlaştırması (2026-07-25)
+
+Cutover sonrası adversarial gözden geçirmede 3 nadir boşluk bulunup kapatıldı:
+- **Düşen terminal frame → asılma:** hub'ın non-blocking fan-out'u terminal
+  `turn_done`/`turn_error`'ı slow-consumer'a düşürürse ardından başka olay gelmediği
+  için gap-tespiti tetiklenmez → gözlemci sonsuza dek bekler. Çözüm: her ping tick'te
+  `drainReplay` ile ring'ten görülmemiş dayanıklı olaylar reconcile edilir (stream +
+  non-stream). Test: `TestDrainReplayRecoversDroppedTerminal`.
+- **`handleChat` yanlış/boş yanıt:** ardışık kuyruk turlarında "son assistant mesajı"
+  yarışı. Çözüm: gözlemci turu boyunca gördüğü **hub `KindReply` payload'ını** kullanır
+  (serial worker → turn_done'dan hemen önceki reply bizimkidir); DB fallback'i de artık
+  sondan geriye son assistant rolünü tarar.
+- **Asılan wake/scheduled tur → kuyruk head-of-line bloğu:** `deliverWake`/`deliverPrompt`
+  artık per-session slotu alıyor ama `withActivityTimeout` (spawn/worker'da var) yoktu →
+  sonsuz asılan bir wake, slotun Cond-wait'i ctx'i dinlemediğinden tüm oturum kuyruğunu
+  bloke ederdi. Çözüm: her ikisi de `withActivityTimeout(SpawnTimeout, SpawnIdleTimeout)`
+  ile sarıldı (spawn/worker paritesi).
+- **Kuyruktaki mesaj başka pencereden iptal edilirse → gözlemci asılması:** `/chat` +
+  `/chat/stream` kendi terminal olayını bekler; mesaj çalışmadan `DELETE .../queue/{id}`
+  veya `.../queue` ile silinirse terminal hiç gelmez → gözlemci sonsuza beklerdi. Çözüm:
+  `queue_update` payload'ına **`inflightClientMsgId`** eklendi (dispatched↔cancelled ayrımı);
+  gözlemci mesajını kuyrukta **canlı gördükten sonra** (`queueHasMsg`) kaybolursa iptal
+  sayar → stream `error{reason:"cancelled"}` frame'i, non-stream **409** döner. Enqueue-öncesi
+  yarışa karşı "önce canlı görülmeli" guard'ı (false-cancel yok). Test: `TestQueueHasMsg`.
+
 ## Refactor (2026-07-13) — tek-snapshot flush + mutator helper
 
 Kuyruk mutator'ları eskiden `persistInbox` + `publishQueueUpdate` çiftini ayrı ayrı

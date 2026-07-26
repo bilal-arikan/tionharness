@@ -5,12 +5,22 @@
 import type { Edge, Node as RFNode } from '@xyflow/react'
 import type { FlowGraph, FlowNode, FlowNodeType } from '@/types'
 
-export type FlowRFNode = RFNode<{ node: FlowNode; isStart: boolean; status?: NodeStatus }>
+export type FlowRFNode = RFNode<{
+  node: FlowNode
+  isStart: boolean
+  status?: NodeStatus
+  // A finished node's output (run views only) → rendered as an inline preview on
+  // the node when status is "done". Undefined in the editor (no run outputs).
+  output?: string
+}>
 export type NodeStatus = 'running' | 'done' | 'error'
 
 // Layout grid spacing for auto-placed nodes.
 const COL_W = 280
-const ROW_H = 140
+// Vertical gap between layered rows. Sized to clear a tall node (agent + prompt
+// preview + a 3-line output preview in run/session-flow views) so a vertical
+// chain doesn't overlap; short editor nodes are just more airy.
+const ROW_H = 180
 
 // edgeId builds a stable id for a routing edge. `slot` distinguishes a branch's
 // multiple outgoing edges (one per arm) so they don't collide.
@@ -59,6 +69,10 @@ export function graphToReactFlow(graph: FlowGraph): { nodes: FlowRFNode[]; edges
         )
         add(n.id, n.joinNext ?? '', { slot: 'join', sourceHandle: 'join', label: 'join' })
         break
+      case 'loop':
+        add(n.id, n.body ?? '', { slot: 'body', sourceHandle: 'body', label: 'gövde' })
+        add(n.id, n.loopNext ?? '', { slot: 'loop', sourceHandle: 'loop', label: 'çıkış' })
+        break
     }
   }
   return { nodes, edges }
@@ -93,6 +107,10 @@ export function reactFlowToGraph(
         base.parallel = outgoing.filter((e) => e.sourceHandle === 'fan').map((e) => e.target)
         base.joinNext = outgoing.find((e) => e.sourceHandle === 'join')?.target ?? ''
         break
+      case 'loop':
+        base.body = outgoing.find((e) => e.sourceHandle === 'body')?.target ?? ''
+        base.loopNext = outgoing.find((e) => e.sourceHandle === 'loop')?.target ?? ''
+        break
     }
     return base
   })
@@ -120,9 +138,10 @@ function needsLayout(graph: FlowGraph): boolean {
   return graph.nodes.some((n) => n.x === undefined || n.y === undefined)
 }
 
-// autoLayout assigns a layered grid position to every node: column = BFS depth
-// from start, row = order within that depth. Cyclic graphs are bounded by a
-// visited set so this always terminates.
+// autoLayout assigns a layered grid position to every node VERTICALLY: the BFS
+// depth from start flows top→bottom (y), and siblings at the same depth spread
+// left→right (x). Cyclic graphs are bounded by a visited set so this always
+// terminates.
 export function autoLayout(graph: FlowGraph): Record<string, { x: number; y: number }> {
   const byId = new Map(graph.nodes.map((n) => [n.id, n]))
   const depth = new Map<string, number>()
@@ -145,13 +164,15 @@ export function autoLayout(graph: FlowGraph): Record<string, { x: number; y: num
   let extra = (depth.size ? Math.max(...depth.values()) : -1) + 1
   for (const n of graph.nodes) if (!depth.has(n.id)) depth.set(n.id, extra++)
 
-  const rowByCol = new Map<number, number>()
+  // Vertical layout: depth = row (down the y-axis), sibling order = column
+  // (spread across the x-axis) so the flow reads top→bottom.
+  const colByDepth = new Map<number, number>()
   const pos: Record<string, { x: number; y: number }> = {}
   for (const n of graph.nodes) {
-    const col = depth.get(n.id) ?? 0
-    const row = rowByCol.get(col) ?? 0
-    rowByCol.set(col, row + 1)
-    pos[n.id] = { x: col * COL_W, y: row * ROW_H }
+    const d = depth.get(n.id) ?? 0
+    const col = colByDepth.get(d) ?? 0
+    colByDepth.set(d, col + 1)
+    pos[n.id] = { x: col * COL_W, y: d * ROW_H }
   }
   return pos
 }
@@ -168,6 +189,8 @@ function successors(n: FlowNode | undefined): string[] {
       return (n.branches ?? []).map((b) => b.next)
     case 'parallel':
       return [...(n.parallel ?? []), n.joinNext ?? '']
+    case 'loop':
+      return [n.body ?? '', n.loopNext ?? '']
     default:
       return []
   }
@@ -200,6 +223,12 @@ export function blankNode(id: string, type: FlowNodeType, defaultAgentId = ''): 
   } else if (type === 'transform') {
     node.template = '{{last}}'
     node.next = ''
+  } else if (type === 'loop') {
+    node.body = ''
+    node.loopNext = ''
+    node.maxIters = 3
+    node.until = ''
+    node.untilMode = 'contains'
   } else {
     node.parallel = []
     node.joinNext = ''

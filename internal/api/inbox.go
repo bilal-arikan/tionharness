@@ -70,6 +70,10 @@ func (s *Server) enqueueMessage(wsID string, req chatReq, clientMsgID string) bo
 	if clientMsgID == "" {
 		clientMsgID = uuid.NewString()
 	}
+	// Carry the resolved id on the request too, so the worker's runChatTurn stamps it
+	// onto this turn's terminal hub events — the correlation a /chat + /chat/stream
+	// queue observer uses to recognise its own turn's completion (chat_queue.go).
+	req.ClientMsgID = clientMsgID
 	s.inbox.lock()
 	ib := s.inbox.sessions[req.SessionID]
 	if ib == nil {
@@ -255,11 +259,13 @@ func (s *Server) flushInbox(sessionID string) {
 	var snapshot persistedInbox
 	view := make([]queueView, 0)
 	wsID := ""
+	inflightID := ""
 	if ib != nil {
 		snapshot.Items = append([]inboxItem{}, ib.items...)
 		if ib.inflight != nil {
 			cp := *ib.inflight
 			snapshot.Inflight = &cp
+			inflightID = ib.inflight.ClientMsgID
 		}
 		for _, it := range ib.items {
 			view = append(view, queueView{ClientMsgID: it.ClientMsgID, Text: it.Req.Message, EnqueuedAt: it.EnqueuedAt})
@@ -281,7 +287,11 @@ func (s *Server) flushInbox(sessionID string) {
 			_ = wsp.DB.WriteInbox(sessionID, data)
 		}
 	}
-	s.publishHub(sessionID, sessionhub.KindQueueUpdate, map[string]any{"queue": view}, false)
+	// inflightClientMsgId lets a queue observer (the /chat + /chat/stream handlers)
+	// tell "my message was dispatched and is running" (== inflight) from "my message
+	// was cancelled/cleared before running" (absent from both) — the latter never
+	// produces a terminal event, so the observer must close instead of hanging.
+	s.publishHub(sessionID, sessionhub.KindQueueUpdate, map[string]any{"queue": view, "inflightClientMsgId": inflightID}, false)
 }
 
 // recoverInboxes re-enqueues every session's persisted WAITING queue at boot and

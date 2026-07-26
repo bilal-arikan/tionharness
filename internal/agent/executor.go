@@ -96,3 +96,38 @@ func (r *Runtime) complete(ctx context.Context, agent db.Agent, system, systemDy
 	}
 	return resp.Text, nil
 }
+
+// completeThread is the accumulate-mode variant of complete: prior turns
+// (thread) precede the new user prompt in the message list, so the agent's
+// stable system prefix + growing message prefix are reused by the provider's
+// prompt cache across sequential nodes. The provider already takes a message
+// slice, so this only widens the slice — no provider-side change.
+func (r *Runtime) completeThread(ctx context.Context, agent db.Agent, system, systemDynamic string, thread []orchestration.Msg, prompt, outputSchema string, autonomous bool) (string, error) {
+	provider, err := r.providers.Get(agent.Provider)
+	if err != nil {
+		return "", err
+	}
+	msgs := make([]providers.Message, 0, len(thread)+1)
+	for _, m := range thread {
+		role := providers.RoleUser
+		if m.Role == "assistant" {
+			role = providers.RoleAssistant
+		}
+		msgs = append(msgs, providers.Message{Role: role, Text: m.Text})
+	}
+	msgs = append(msgs, providers.Message{Role: providers.RoleUser, Text: prompt})
+	req := providers.Request{
+		Model:         agent.Model,
+		System:        system,
+		SystemDynamic: systemDynamic,
+		Messages:      msgs,
+	}
+	if s := strings.TrimSpace(outputSchema); s != "" {
+		req.OutputSchema = json.RawMessage(s)
+	}
+	resp, err := r.CompleteWithTools(ctx, agent, provider, req, autonomous)
+	if err != nil {
+		return "", err
+	}
+	return resp.Text, nil
+}

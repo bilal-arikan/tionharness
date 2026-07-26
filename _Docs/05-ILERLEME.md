@@ -1,6 +1,157 @@
 # TionSwarm — İlerleme Takibi
 
-> Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-07-24**
+> Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-07-25**
+
+## Kuyruk mesajı iptal edilince gözlemci kapanışı ✅ (2026-07-25)
+
+`/chat` + `/chat/stream` kendi turunun terminal olayını bekler; mesaj çalışmadan başka
+pencereden (`DELETE .../queue/{id}` veya `.../queue`) silinirse terminal hiç gelmez →
+gözlemci asılırdı. `queue_update` payload'ına `inflightClientMsgId` eklendi (dispatched↔
+cancelled ayrımı); gözlemci mesajını kuyrukta **canlı gördükten sonra** kaybolursa iptal
+sayar → stream `error{reason:"cancelled"}`, non-stream **409** döner. Enqueue-öncesi yarışa
+karşı "önce canlı görülmeli" guard'ı. Test `TestQueueHasMsg`; app+api+agent **348 test** yeşil.
+Detay: `_Docs/58`.
+
+## Tek-instance DataDir kilidi (multi-process guard) ✅ (2026-07-25)
+
+Doc 58'in tüm serileştirmesi (hub/inbox-worker/coordSlot/interaction-CAS/scheduler)
+**tek process belleğinde**; aynı store'a iki server process = cross-process eşzamanlı
+tur + çift schedule + boot çift re-dispatch + entity ezmesi. Masaüstü `:0` portu
+bağladığından double-launch'ta port çakışması yok, store kilidi de yoktu → iki birincil
+aynı store'u bozardı. **Sert ret eklendi:** `app.Bootstrap` store'a girmeden DataDir'de
+process-ömürlü exclusive advisory kilit alır (`internal/app/instancelock*.go`; Windows
+`CreateFile` share=0, Unix `flock` — yeni bağımlılık yok, OS process çıkışında bırakır →
+stale kilit yok). Tutuluysa net hatayla reddeder; connect-only ikincil pencereler
+etkilenmez. Test `instancelock_test.go`; app+api+agent **341 test** yeşil. Detay: `_Docs/30`.
+
+## Kuyruk cutover — nadir-senaryo sağlamlaştırması ✅ (2026-07-25)
+
+Cutover sonrası adversarial gözden geçirmede 3 nadir boşluk kapatıldı: (1) **düşen
+terminal frame → asılma** — hub fan-out'u terminal `turn_done`'u düşürürse gözlemci
+sonsuza bekliyordu → her ping tick'te `drainReplay` ile ring reconcile; (2)
+**`handleChat` yanlış/boş yanıt** — ardışık turlarda "son assistant" yarışı → gördüğü
+hub `KindReply` payload'ını kullanır (DB fallback sondan geriye tarar); (3) **asılan
+wake/scheduled tur → kuyruk head-of-line bloğu** — `deliverWake`/`deliverPrompt` slotu
+alıyor ama `withActivityTimeout`'u yoktu → spawn/worker paritesiyle sarıldı. Yeni test
+`TestDrainReplayRecoversDroppedTerminal`; agent+api **340 test** yeşil. Detay: `_Docs/58`.
+
+## Legacy `/chat/stream` + `/chat` durable kuyruğa taşındı ✅ (2026-07-25)
+
+Bu iki endpoint (frontend hiçbirini çağırmıyor — yalnız dış otomasyon/eski istemci)
+turu **inline** koşup `inbox.json`'a yazmıyordu → mid-turn crash'te mesaj kayboluyor
++ kuyruğu atlıyordu. Artık ikisi de serial send-queue'ya enqueue eder (kalıcı,
+crash-recoverable, tek-tur garantili) ve per-session hub'ı gözler: `handleChatStream`
+hub'ı legacy SSE frame şekline çevirip relay eder (streaming sözleşmesi korunur),
+`handleChat` terminal olayı bekleyip kalıcı yanıtı DB'den döndürür. Korelasyon: taze
+`clientMsgId` → `runChatTurn` + kuyruk bariyerleri terminal hub olaylarına (turn_done/
+turn_error) damgalar (öndeki turun terminal'i erken kapatmaz); slow-drop'a karşı
+`Replay` gap-fill. `failTurn` artık hub'a da turn_error yayınlıyor (önceden yalnız SSE
+sink → hub istemcileri reload'da görüyordu). Yeni dosya `internal/api/chat_queue.go`
+(iki handler + relay helper'ları); eski inline gövdeler `chat.go`/`chat_stream.go`'dan
+silindi (`inflightRecorder` testte kullanıldığı için korundu). `go build`/`go vet`
+temiz, agent+api **339 test** yeşil. Detay: `_Docs/58`.
+
+## Per-session tur kilidi TÜM oturumlara genelleştirildi ✅ (2026-07-25)
+
+**Sorun:** "tek oturumda tek tur" garantisi yalnız koordinatör oturumlarındaydı;
+düz oturumda `claimTurnSlotIfCoordinator` no-op dönüyordu. Kullanıcı chat yazarken
+(inbox worker) aynı oturuma zamanlanmış **wake** / **peer teslimi** düşerse ya da
+legacy `/chat/stream`·`/chat` inbox worker koşarken çağrılırsa **eşzamanlı iki tur**
+açılabiliyordu (doc 58'in kapatmayı hedeflediği yarış, düz oturumda açıktı).
+
+**Ne yapıldı:** koordinatör-only geçit kaldırıldı, `coordSlot` her oturumun tek tur
+kilidi oldu. `BeginCoordinatorUserTurn`→`BeginSessionUserTurn` (chat_stream.go +
+chat.go koşulsuz claim); `claimTurnSlotIfCoordinator`→`claimSessionTurnSlot` (her
+zaman claim, resetCap=false) → wake/scheduled/peer (scheduler.go + agentmsg.go) aynı
+slotta serileşir. Düşük seviye `claimCoordinatorSlot` korundu. Testler:
+`TestClaimSessionTurnSlot` (yeniden yazıldı) + yeni
+`TestPlainSessionSerializesConcurrentTurns`. Ayrıca `runWorker` +
+`runSpawn` kendi oturum slotlarını almıyordu ve `SendToWorker` eşzamanlı turu yalnız
+`isSessionActive` (UI göstergesi, kilit değil → TOCTOU) ile kontrol ediyordu; ikisi
+de `claimSessionTurnSlot`'a bağlandı → worker/spawn turları da her turla serileşir.
+`go build`/`go vet` temiz, agent+api **333 test** yeşil. Detay: `_Docs/47` §13, `_Docs/58`.
+
+## Workspace oluşturmada "veri klasörü" → "proje dizini" ✅ (2026-07-25)
+
+**İstek:** Workspace oluştururken "Veri klasörü" seçimi kalksın (hep app default kullanılsın);
+yerine opsiyonel "Proje dizini (path)" girilebilsin.
+
+**Ne yapıldı:**
+- **Backend:** `createWorkspaceReq.Path` → `ProjectDir`. Data dir daima app varsayılanı
+  (`workspaces.Create(name, "", "")`). `ProjectDir` doluysa identity patch'iyle workspace'in
+  `DefaultWorkingDir`'ine yazılır.
+- **Frontend:** `WorkspaceCreateModal` — "Veri klasörü" alanı "Proje dizini (path)" oldu
+  (state `path`→`projectDir`, Gözat/pickFolder korundu). `NewWorkspaceData.path`→`projectDir`,
+  `api.createWorkspace` body alanı da `projectDir`.
+- **Test:** `go build` + `go test ./internal/api ./internal/workspace` (120) yeşil, `tsc --noEmit` temiz.
+
+## Soyut "varsayılan sağlayıcı/model/ajan" kaldırıldı ✅ (2026-07-25)
+
+**İstek:** Workspace ayarlarında "varsayılan model/provider/ajan" diye bir özellik olmasın;
+sağlayıcı/ajan net belirtilsin ya da mevcut ajanlardan ilki seçilsin. Aynısı İçgörü
+ekranındaki ajan seçiminde de geçerli olsun.
+
+**Ne yapıldı:**
+- **Workspace ayarları:** `WSSettings.DefaultProvider/DefaultModel` (struct + patch + DTO +
+  frontend `WorkspaceSettings`/patch) tamamen kaldırıldı; `WorkspacePanel`'deki
+  "Varsayılan sağlayıcı + model" bloğu + banner metni silindi (`ProviderModelSelect` importu da).
+- **App-geneli varsayılan da kaldırıldı:** `settings.Settings.DefaultProvider/DefaultModel`
+  (struct + DTO + patch + `Default()` + normalize + `Validate`) ve `ProvidersPanel`'deki
+  "Varsayılan sağlayıcı + model" kontrolü + `SettingsPanel` save payload'ı + `AppSettings`
+  tipi silindi.
+- **Registry temizliği:** `providers.Registry.defaultModel` alanı + `SetDefaultModel` metodu +
+  `ResolvedConfig.Model` alanı tamamen söküldü (`server.go` çağrısı da). claude-cli artık modelini
+  ajanın `req.Model`'inden alır (`kind_claudecli` `NewClaudeCLI(..., "", ...)`), boşsa CLI kendi
+  oturum varsayılanını kullanır.
+- **Yeni ajan çözümü:** `handleCreateAgent` boş sağlayıcı/modeli workspace'in **ilk (en yeni)
+  ajanından** miras alır (`firstAgentProviderModel`) → `claude-cli` + provider yerleşik modeli.
+  Şablon tohumlama (`defaultProviderModel`) → `claude-cli`, model "". `handleTestProvider`
+  boş modeli provider'ın kendi varsayılanına bırakır.
+- **İçgörü:** `SettingsTab` AgentPicker artık `clearable` değil; açılışta ajan seçili değilse
+  **ilk ajan** otomatik seçilir. "Varsayılan (…)" placeholder'ı kalktı.
+- **Migration:** `ws-settings.json` yüklemede eski `defaultProvider/defaultModel` anahtarları
+  görülürse dosya bir kez temiz yeniden yazılır (`loadSettings` → `saveSettings`). App
+  `settings.json`'daki dead anahtarlar unmarshal'da yok sayılır, sonraki kayıtta düşer.
+- **config_validate:** `settings.json` için beklenen anahtar `defaultProvider` → `defaultPermissionMode`.
+- **Test:** `go vet ./...` temiz, `go test ./...` (974) yeşil, `tsc --noEmit` temiz.
+
+## Her workspace'e varsayılan flow tohumlama ✅ (2026-07-25)
+
+**İstek:** Her workspace'te kullanılabilecek bir flow; yeni workspace'te otomatik eklensin,
+istenirse silinebilsin, eski workspace'lere de eklensin, şablonlar arasına da eklensin.
+
+**Ne yapıldı:**
+- **Model:** `db.Flow` += `Seed string` (shipped default işaretçisi).
+- **Seed mantığı:** `internal/agent/flow_defaults.go` — `defaultFlows` (tek doğruluk kaynağı;
+  "Yanıtla & Doğrula" akışı) + `EnsureDefaultFlows(ctx, db, storeDir)`. İdempotent
+  (DB'de aynı `Seed` varsa atlar) + **silme kalıcı** (store kökünde `.seeded-flows.json`
+  ledger; silinen tohum geri gelmez). Agent node'lara ilk ajan atanır (yoksa boş).
+- **Tetikleme:** `workspace.Manager.open()` her açılışta çağırır → yeni workspace kurulumda,
+  eski workspace'ler bir sonraki başlangıçta backfill.
+- **Şablon galerisi:** `flowTemplates.ts` += `default-starter` (aynı graph).
+- **Test:** `flow_defaults_test.go` (4 vaka: seed/idempotens, silme kalıcılığı, ilk-ajan
+  ataması, ajansız seed). `go build`/`vet` + `tsc -b` yeşil.
+
+## Worker oturumunda "Koordinatöre dön" butonu ✅ (2026-07-24)
+
+**İstek:** Worker oturumundan koordinatör oturumuna dönme kısayolu.
+
+**Ne yapıldı (yalnız frontend):** `SessionInfo.coordinatorSessionId` back-link'i
+`SessionDetailPanel`'den `CoordinatorSection`'a geçirildi; worker branch'indeki
+pasif notun altına ArrowLeft ikonlu "Koordinatöre dön" butonu eklendi →
+`onSelectSession(coordinatorSessionId)` ile koordinatör oturumunu açar. Yalnız
+`onSelectSession` + back-link mevcutsa görünür. `tsc` yeşil. Detay `_Docs\47`.
+
+## Koordinasyon roster'ı: worker satırına tıklayınca oturumu açılır ✅ (2026-07-24)
+
+**İstek:** Oturum bilgisi ekranındaki worker'a tıklayınca o worker'ın oturumuna
+gitsin.
+
+**Ne yapıldı (yalnız frontend):** Her worker zaten kendi oturumu (`w.sessionId`).
+`SessionDetailPanel` mevcut `onSelectSession`'ı `CoordinatorSection`'a zincirledi;
+roster satırı `onSelectSession` verildiğinde tıklanabilir butona dönüşüp
+`onSelectSession(w.sessionId)` ile o oturumu açar (hover accent kenarlık). Prop
+yoksa satır eski düz div olarak kalır. `tsc` yeşil. Detay `_Docs\47`.
 
 ## Composer: dar ekranda tur-ayarı butonları toggle ile gizlenir ✅ (2026-07-24)
 

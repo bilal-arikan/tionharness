@@ -37,6 +37,9 @@ type App struct {
 	listener net.Listener
 	settings *settings.Store
 	backups  *backup.Manager
+	// lock is the exclusive data-dir lock held for this process's lifetime so no
+	// second server ever serves the same file store concurrently. Released on Shutdown.
+	lock *instanceLock
 }
 
 // Appearance returns the current UI appearance settings (preset id, theme
@@ -80,6 +83,15 @@ func openLogFile() (*os.File, error) {
 // cfg.Addr = "127.0.0.1:0" makes the OS pick a free port; Addr() then reports
 // the resolved address. It does not begin serving — call Serve for that.
 func Bootstrap(cfg *config.Config, logs *logbuf.Buffer, logger *slog.Logger) (*App, error) {
+	// Take the single-instance data-dir lock FIRST, before touching the store: two
+	// server processes over one file store corrupt it (two in-memory hubs / inbox
+	// workers / schedulers — see lockDataDir + _Docs/58). Fail fast with a clear
+	// error rather than starting a second, store-clobbering instance.
+	lock, err := lockDataDir(cfg.DataDir)
+	if err != nil {
+		return nil, err
+	}
+
 	// Open the listener FIRST, before the heavy workspace init below. The port
 	// then accepts connections immediately (queued in the kernel backlog); Serve
 	// (called after Bootstrap returns) drains them once init is done. Otherwise a
@@ -88,12 +100,14 @@ func Bootstrap(cfg *config.Config, logs *logbuf.Buffer, logger *slog.Logger) (*A
 	// cfg.Addr "127.0.0.1:0" → OS picks a free port; Addr() reports the resolved one.
 	ln, err := net.Listen("tcp", cfg.Addr)
 	if err != nil {
+		lock.release()
 		return nil, err
 	}
 
 	secret, err := config.LoadSecret(cfg.DataDir)
 	if err != nil {
 		ln.Close()
+		lock.release()
 		return nil, err
 	}
 
@@ -103,6 +117,7 @@ func Bootstrap(cfg *config.Config, logs *logbuf.Buffer, logger *slog.Logger) (*A
 	settingsStore, err := settings.Open(cfg.DataDir, secret)
 	if err != nil {
 		ln.Close()
+		lock.release()
 		return nil, err
 	}
 	if settingsStore.Get().AnthropicKeyEnc == "" && cfg.AnthropicAPIKey != "" {
@@ -171,6 +186,7 @@ func Bootstrap(cfg *config.Config, logs *logbuf.Buffer, logger *slog.Logger) (*A
 	manager, err := workspace.NewManager(cfg.DataDir, registry, tun, secret, bus, logs, logger.With("component", "workspace"))
 	if err != nil {
 		ln.Close()
+		lock.release()
 		return nil, err
 	}
 	logger.Info("workspaces ready", "count", len(manager.List()))
@@ -219,6 +235,7 @@ func Bootstrap(cfg *config.Config, logs *logbuf.Buffer, logger *slog.Logger) (*A
 		listener: ln,
 		settings: settingsStore,
 		backups:  backups,
+		lock:     lock,
 	}, nil
 }
 
@@ -258,5 +275,10 @@ func (a *App) Shutdown(ctx context.Context) error {
 	}
 	err := a.httpSrv.Shutdown(ctx)
 	a.manager.Close() // closes each workspace Runtime (incl. the MCP pool the gateway shares)
+	// Release the single-instance lock last, once the store is quiescent, so the next
+	// launch can take it. (The OS also frees it on process exit, covering a crash.)
+	if a.lock != nil {
+		a.lock.release()
+	}
 	return err
 }

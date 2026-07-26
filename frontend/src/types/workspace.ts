@@ -37,8 +37,6 @@ export interface WorkspaceSettings {
   instructions: string
   icon: string
   color: string
-  defaultProvider: string
-  defaultModel: string
   pauseAutonomy: boolean
   defaultWorkingDir: string
   // This workspace's resolved claude-cli config home (<workspace>/claude-home),
@@ -52,6 +50,9 @@ export interface WorkspaceSettings {
   codebaseMemoryEnabled: boolean
   promptEpochEnabled: boolean
   autoCaptureArtifacts: boolean
+  // In-process shell-output compression (sqz) override: '' = auto (follow sqz-hook
+  // detection), 'on' = force on (needs the sqz binary), 'off' = disable.
+  shellOutputCompression: '' | 'on' | 'off'
   boardColumns: BoardColumnDef[]
   // Keys of post-create advisory cards the user dismissed for this workspace.
   ignoredRecommendations: string[]
@@ -72,8 +73,6 @@ export type WorkspaceSettingsPatch = Partial<
     | 'instructions'
     | 'icon'
     | 'color'
-    | 'defaultProvider'
-    | 'defaultModel'
     | 'pauseAutonomy'
     | 'defaultWorkingDir'
     | 'theme'
@@ -82,6 +81,7 @@ export type WorkspaceSettingsPatch = Partial<
     | 'codebaseMemoryEnabled'
     | 'promptEpochEnabled'
     | 'autoCaptureArtifacts'
+    | 'shellOutputCompression'
     | 'boardColumns'
     | 'ignoredRecommendations'
     | 'desktopNotifications'

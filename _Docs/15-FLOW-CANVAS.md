@@ -439,6 +439,129 @@ sağlanıyor; panele ayrıca eklenen `pb-24` girdi altında ölü boşluk + gere
   trace listesi `max-h-[40%]` → `max-h-[40vh]` (kesin-yükseklik gerektirmeyen, daha kararlı).
   Kapalıyken canvas tüm yüksekliği alır — dar ekranda "yükseklik bozulması" giderildi.
 
+## Varsayılan flow tohumlama (per-workspace, 2026-07-25)
+
+Her workspace store'una otomatik bir **varsayılan flow** ("Yanıtla & Doğrula" — bir ajan
+isteği yanıtlar, ikinci ajan hataları/eksikleri bulup düzeltilmiş nihai sürümü üretir)
+tohumlanır. Silinebilir; silinen tohum **geri gelmez**.
+
+- **Kaynak:** `internal/agent/flow_defaults.go` — `defaultFlows` tek doğruluk kaynağı
+  (`Seed` stabil kimlik + graph). `EnsureDefaultFlows(ctx, db, storeDir)` seed eder.
+- **Tetikleme:** `workspace.Manager.open()` her açılışta çağırır → yeni workspace'ler kurulumda,
+  **eski workspace'ler bir sonraki başlangıçta** otomatik backfill.
+- **İdempotens + silme kalıcılığı:** DB'de aynı `Seed`'li flow varsa atlar; yoksa store
+  kökündeki `.seeded-flows.json` ledger'ında kayıtlıysa (= kullanıcı silmiş) **yeniden
+  oluşturmaz**. `db.Flow.Seed` alanı shipped default'ı işaretler.
+- **Ajan ataması:** agent node'lara workspace'in ilk ajanı atanır (ajan yoksa boş `agentId` —
+  `CreateFlow` doğrulamaz, flow yine görünür, kullanıcı ajan atar).
+- **Şablon galerisi:** aynı graph `flowTemplates.ts`'te `default-starter` olarak da listelenir
+  (iki graph senkron tutulmalı).
+- **Test:** `internal/agent/flow_defaults_test.go` — seed/idempotens, silme kalıcılığı,
+  ilk-ajan ataması, ajansız seed.
+
+## Accumulate (cache'li bağlam) modu + Döngü node + Paralel fold (2026-07-25)
+
+Üç bağlı özellik; hepsi geriye tam uyumlu (yeni alanlar `omitempty`, yeni runner arayüzü opsiyonel).
+
+### Accumulate modu (`Graph.Accumulate`)
+Açıkken (flow düzenleyicide **Görünüm ▸ "Bağlamı biriktir (cache)"**) ardışık agent node'ları
+**büyüyen tek bir konuşma thread'ini** (`State.Thread []Msg`) paylaşır: her node'un render'lanmış
+prompt'u `{user}`, cevabı `{assistant}` olarak eklenir ve sonraki node bu thread'le çağrılır.
+Böylece ajanın statik system + büyüyen mesaj prefix'i provider prompt-cache'inde yeniden kullanılır
+(düğümler arası cache). Kapalı (varsayılan) = eski **stateless** yol (node başına tek-mesajlık taze
+çağrı). Bir agent node **`Fresh`** ile devre dışı kalır (birikmiş bağlamı görmez/büyütmez).
+Runner köprüsü: `orchestration.ThreadAgentRunner` → `flowRunner.RunAgentNodeThread` →
+`completeThread` (provider zaten mesaj slice'ı alıyor; **provider tarafında değişiklik yok**).
+
+### Paralel fork/fold
+Accumulate altında paralel node **copy-on-fork**: her çocuk aynı birikmiş prefix'i (`st.Thread`)
+**okur** (aynı ajanlı dallar cache prefix'ini paylaşır) ama ebeveyn thread'i tek başına büyütmez.
+Join'de birleşik çıktı ebeveyn thread'e **tek sentetik `[user-marker, assistant-combined]` çifti**
+olarak katlanır (`parallelFoldMarker`) → thread lineer, alternasyonlu ve **assistant ile biter**
+(sonraki agent'ın user turn'ü alternasyonu bozmaz). Transform/branch/delay LLM'siz → thread'e dokunmaz.
+
+### Döngü node (`NodeLoop`)
+Alanlar: `Body` (yinelenen alt-zincirin giriş id'si), `LoopNext` (çıkışta gidilecek node),
+`MaxIters` (sert cap), `Until`+`UntilMode` (çıkış koşulu, branch eşleşme modlarını paylaşır).
+Motor `runLoop`: her iterasyonda `st.Current=Body` ile **motorun kendi `Run`'ını özyinelemeli**
+çağırır → gövde her node tipini (iç içe parallel/loop dahil) içerebilir; `Run`'daki global
+`maxSteps` tüm iterasyonlar toplamını sınırlar. Gövde node'ları **`{{iteration}}`** (0-tabanlı,
+`render`'a eklendi) okuyabilir. Çıkış: iterasyon `MaxIters`'a ulaşır **veya** `Until` son çıktıya
+uyar. `Validate`: `Body` zorunlu + (`MaxIters>0` **veya** boş-olmayan `Until`) — sonsuz döngü
+imkânsız. **Resume sınırı:** döngü kontrolü çağrı yığınında (State'te değil) → iterasyon-ortası
+çökme mevcut gövde geçişini tamamlayıp çıkar (dokümante). Frontend: palet 7. tip "Döngü"
+(`LoopNode`, gövde=pembe `body` + çıkış=mavi `loop` tutamağı), inspector maxIters/until/mode.
+
+**Kapsam dışı (opsiyonel, sonraki):** iç içe paralel / dal-başına alt-hat (paralel çocuğun
+alt-graf olması — `runLoop`'un kullandığı özyinelemeli `Run` bunu ileride bedavaya yakın açar);
+loop için `CompactEachIter` (her iterasyonda thread katlama — cache'i kırar, varsayılan kapalı).
+
+**Test:** `internal/orchestration/accumulate_test.go` (thread büyüme, Fresh opt-out, stateless
+fallback, parallel fold) + `loop_test.go` (maxIters/until çıkış, Validate bound/body). Backend
+243 test yeşil; `tsc -b` + `vite build` yeşil.
+
+### Session → Flow köprüsü ("Akış" inline görünüm, 2026-07-25)
+Chat header'ındaki **"Akış" toggle'ı** (`AppHeader`, Debug'ın yanında; aktifken accent) mevcut
+oturumu **tamamlanmış bir flow KOŞUSU** olarak sohbet alanında **inline** gösterir (popup değil;
+"Sohbete dön" ile geri). Kilit karar: transkript bir flow *tanımı* değil, *koşusu* olarak üretilir →
+`sessionToFlowRun` (`features/flows/sessionToFlow.ts`, saf/backend'siz) hem grafiği hem **sentetik
+`{flow, run}`**'ı kurar; `FlowState.trace` her node'un **çıktısını = asistan cevabını** taşır.
+Böylece `RunView` yeniden kullanılır (`SessionFlowInline`): canvas'ta node = user prompt'u (başlık),
+**"Adım izi"nde agent cevabı** görünür — önceki "yalnız bizim mesajlarımız görünüyordu" sorunu çözülür.
+Her assistant turn'ü bir agent node; `next` ile lineer; `accumulate:true` (sohbet tek büyüyen konuşma).
+**"Flow olarak kaydet"** `api.createFlow` ile gerçek düzenlenebilir flow üretir → kullanıcı
+dal/paralel/döngü ekleyip yeniden çalıştırır (döngü kapanır: session→flow→run→session). Dal/paralel
+yapısı düz transkriptten çıkarılamaz → sonuç daima lineer. Reset: aktif oturum değişince inline
+görünüm kapanır. (Ters yön — flow koşusunu çok-turlu session olarak render — mevcut per-node
+step-kartı kaydıyla zaten karşılanıyor.)
+
+**Node inline çıktı önizlemesi:** `FlowRFNode.data.output` (koşu görünümlerinde `RunView` node data'sına
+canlı/trace'ten geçirilir); `AgentNode` node `done` olduğunda cevabı yeşil kenarlı `line-clamp-3`
+kutuda gösterir (`data-testid="flow-node-output"`) → canvas'ta prompt **ve** çıktı birlikte görünür.
+
+**E2E doğrulaması (Playwright, headless chromium, canlı dev :5173):** 6/6 kontrol geçti — header
+"Akış" toggle → inline canvas render, **9 node çıktı önizlemesi** (agent cevapları), "Sohbete dön"
+geri butonu; flow editör paletinde **Döngü** + Görünüm'de **Bağlamı biriktir (cache)** toggle'ı.
+
+### İyileştirmeler (2026-07-25, ikinci tur)
+- **Dikey auto-layout:** `autoLayout` (flowGraph.ts) artık BFS derinliğini **y** (yukarı→aşağı),
+  kardeş sırasını **x** (sola→sağa) yapar → "Oto diz" dikey dizer. Dikey satır aralığı `ROW_H`
+  **140→180**: çıktı önizlemeli uzun node'lar üst üste binmesin.
+- **Accumulate default AÇIK:** `Graph.Accumulate` JSON tag'inden **`omitempty` kaldırıldı**
+  (`false` verbatim persist olur → save/reload round-trip'i bozulmaz). Frontend `FlowsPanel`
+  toggle'ı `useState(true)`; `selectFlow` `g.accumulate === undefined ? true : !!g.accumulate`
+  (yalnız açıkça `false` olan akış kapalı; alan yoksa/eski akış → açık).
+- **Flow-run oturumu → çok-node açılımı (bugfix):** bir flow koşusu oturuma **tek assistant turn**
+  olarak, node'lar o turn'ün `steps`'ine gömülü kaydedilir (`flowStateToSteps`, her node bir text
+  step `**title**\n\n<çıktı>`). `sessionToFlowRun` artık bu turn'ü açar: `steps` **≥2 ve hepsi text**
+  ise her step bir node olur (başlık bold header'dan, çıktı gövdeden) → reify edilen akış orijinal
+  grafiği yansıtır (önceden tek node'a çöküyordu). Normal sohbet turn'ü (thinking/tool step'li) tek
+  node kalır. Doğrulandı: gerçek `SES194` (FLW5 "Yanıtla & Doğrula") → 2 node (Yanıtla, Doğrula).
+
+### Editörden çalıştır → Koşular tab'ına yönlendir (2026-07-25)
+Editörden "Çalıştır" artık koşuyu **editör canvas'ına boyamaz** (eski `setNodeStatus`/`liveNodes`
+kaldırıldı) → editör ekranı değişmeden kalır. Bunun yerine `doRun` (flowActions.ts) `setTab('runs')`
+ile **Koşular** tab'ına geçer ve taze koşuyu otomatik seçer: koşu-öncesi bu flow'un koşu id'lerini
+(`priorIds`) alır, stream'in `onNode`'unda `listAllFlowRuns` yenileyip `priorIds`'te olmayan **yeni**
+koşuyu `setSelectedRunId` ile seçer (`RunView` flow-node bus'tan canlı akıtır); `onReply`'de biten
+koşuyu upsert+seçer. Deps değişti: `setNodes/setRun/setLiveNodes` yerine `runs/setRuns/setSelectedRunId`.
+E2E: Çalıştır → Koşular tab aktif + RunView + 2 node çıktısı.
+
+### Per-run flow oturumu (2026-07-25)
+Eskiden bir flow'un tüm koşuları **tek** transcript oturumunda birikiyordu
+(`GetOrCreateSourceSession("flow", flow.ID)`, flow başına bir session) → "Akış olarak gör"
+N koşuyu tek zincire karıştırıyordu. Artık **her koşu kendi oturumunu** alır: `RunFlowRecorded`
+`db.CreateSession` ile (kind `flow`, **`SourceID = flow.ID`** korunur — Ağ grafiği + Aktivite feed
+flow'a bu alanla bağlanır; graph.go/executions.go bozulmaz) **yeni** bir session yaratır, id'yi
+`recordFlowSessionTurn`'e geçirir (çift-oluşturmayı önler; boşsa fallback create). Böylece bir koşunun
+transkripti — ve reify'ı — tam olarak **tek koşu** gösterir. `RunFlow` (kayıtsız, `handleSessionRunFlow`)
+oturuma dokunmaz → etkilenmez. Test: `flow_session_test.go` (iki koşu → iki ayrı session, kind/sourceID,
+2 mesaj). **Bilinen kozmetik sınır:** `executions.go lastStatusFor` flow session'ı için
+`ListFlowRuns(flow.ID)[0]` (flow'un en yeni koşusu) döndürür → eski bir koşu-oturumu daha yeni bir koşu
+oluşunca statü çipinde onu gösterir (oluşturma anında doğru). Tam eşleme FlowRun↔session linkage'i
+gerektirir (sonraki). **Not:** backend değişikliği; canlı görmek için backend yeniden derlenip
+başlatılmalı (Go hot-reload olmaz).
+
 ## Flow başlatma öncesi doğrulama (semantic precheck, 2026-07-13)
 
 **Sorun.** `orchestration.Graph.Validate()` yalnız **yapısal** doğrulama yapar: start node var

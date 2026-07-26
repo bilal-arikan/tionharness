@@ -190,6 +190,13 @@ func (r *Runtime) runSpawn(agent db.Agent, sessionID, prompt string, opts SpawnO
 	ctx, cancel := withActivityTimeout(context.Background(), r.tun.SpawnTimeout(), r.tun.SpawnIdleTimeout())
 	defer cancel()
 
+	// Serialize this detached spawn turn on the session's turn slot so it never
+	// overlaps a user/wake/peer turn opened on the same session (all of which claim
+	// the same slot). A fresh spawn is usually alone, but the session can be chatted
+	// into or woken while the spawn runs.
+	releaseSlot := r.claimSessionTurnSlot(sessionID)
+	defer releaseSlot()
+
 	r.trackSession(sessionID)
 	// Raise the chat "thinking" indicator immediately, mirroring the wake path: a
 	// spawned turn runs detached in the runtime (never registered in the api

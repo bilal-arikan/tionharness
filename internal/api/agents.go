@@ -1,10 +1,12 @@
 package api
 
 import (
+	"context"
 	"net/http"
 	"os/exec"
 
 	"github.com/bilal-arikan/tionswarm/internal/db"
+	"github.com/bilal-arikan/tionswarm/internal/workspace"
 )
 
 // handleAgentPath returns the absolute path of an agent's on-disk JSON file.
@@ -74,24 +76,22 @@ func (s *Server) handleCreateAgent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Fall back to defaults for any blank field. Precedence: request value →
-	// per-workspace override → application-global default → built-in last resort.
+	// Fall back for any blank field. Precedence: request value → the first
+	// existing agent in this workspace (its concrete provider/model) → built-in
+	// last resort. There is no abstract "default provider/model" any more (neither
+	// per-workspace nor app-global): a new agent copies a real agent's setup, or —
+	// when it is the very first agent — the keyless local claude-cli with the
+	// provider's own default model.
 	cfg := s.settings.Get()
-	wsCfg := ws(r).Settings()
+	fp, fm := s.firstAgentProviderModel(r.Context(), ws(r))
 	if req.Provider == "" {
-		req.Provider = wsCfg.DefaultProvider
-	}
-	if req.Provider == "" {
-		req.Provider = cfg.DefaultProvider
+		req.Provider = fp
 	}
 	if req.Provider == "" {
 		req.Provider = "claude-cli" // last-resort: local Claude Code login, no API key
 	}
 	if req.Model == "" {
-		req.Model = wsCfg.DefaultModel
-	}
-	if req.Model == "" {
-		req.Model = cfg.DefaultModel
+		req.Model = fm // may stay "" → provider applies its own default model
 	}
 	// Permission mode: request → application default → "auto" (db also defaults).
 	if req.PermissionMode == "" {
@@ -130,6 +130,17 @@ func (s *Server) handleCreateAgent(w http.ResponseWriter, r *http.Request) {
 	s.logger.Info("agent created", "agent", agent.Name, "id", agent.ID,
 		"provider", agent.Provider, "model", agent.Model)
 	writeJSON(w, http.StatusCreated, agent)
+}
+
+// firstAgentProviderModel returns the provider/model of the first (newest)
+// existing agent in the workspace, or empty strings when none exist. New agents
+// inherit a real agent's concrete setup instead of an abstract workspace default.
+func (s *Server) firstAgentProviderModel(ctx context.Context, wsp *workspace.Workspace) (provider, model string) {
+	agents, err := wsp.DB.ListAgents(ctx)
+	if err != nil || len(agents) == 0 {
+		return "", ""
+	}
+	return agents[0].Provider, agents[0].Model
 }
 
 // handleDeleteAgent removes the agent together with the sessions, schedules and

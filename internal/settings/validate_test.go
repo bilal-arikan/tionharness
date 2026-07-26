@@ -13,7 +13,6 @@ func TestValidateRejectsBadEnums(t *testing.T) {
 		{"good theme", Patch{Theme: strptr("light")}, true},
 		{"bad theme", Patch{Theme: strptr("neon")}, false},
 		{"bad language", Patch{Language: strptr("de")}, false},
-		{"bad provider", Patch{DefaultProvider: strptr("openai")}, false},
 		{"bad permission", Patch{DefaultPermissionMode: strptr("yolo")}, false},
 		{"empty permission ok", Patch{DefaultPermissionMode: strptr("")}, true},
 		{"bad accent", Patch{Accent: strptr("purple")}, false},

@@ -104,6 +104,16 @@ export function NodeInspector({ node, agents, isStart, allNodes, onPatch, onMake
               textareaClassName="min-h-48 text-xs"
             />
           </div>
+          <label className="flex items-center gap-2 text-xs">
+            <input
+              type="checkbox"
+              checked={node.fresh ?? false}
+              onChange={(e) => onPatch({ fresh: e.target.checked })}
+            />
+            <span>
+              Taze bağlam <span className="text-[var(--color-text-dim)]">(birikmiş konuşmayı görmez — yalnız "Bağlamı biriktir" açıkken etkili)</span>
+            </span>
+          </label>
         </>
       )}
 
@@ -207,6 +217,50 @@ export function NodeInspector({ node, agents, isStart, allNodes, onPatch, onMake
             mono
             textareaClassName="min-h-32 text-xs"
           />
+        </div>
+      )}
+
+      {node.type === 'loop' && (
+        <div className="space-y-2">
+          <p className="text-xs text-[var(--color-text-dim)]">
+            Gövdeyi (alttaki <b>gövde</b> tutamağı) yinele; bitince <b>çıkış</b> tutamağındaki node'a
+            geç. Gövde node'ları <code>{'{{iteration}}'}</code> (0-tabanlı) kullanabilir.
+          </p>
+          <label className="block">
+            <span className="mb-1 block text-xs text-[var(--color-text-dim)]">En çok iterasyon</span>
+            <input
+              type="number"
+              min={0}
+              step={1}
+              value={node.maxIters ?? 0}
+              onChange={(e) => onPatch({ maxIters: Math.max(0, Math.round(Number(e.target.value) || 0)) })}
+              className={input}
+            />
+            <span className="mt-1 block text-[11px] text-[var(--color-text-dim)]">
+              0 = yalnız "çıkış koşulu"na göre biter (biri gerekli).
+            </span>
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-xs text-[var(--color-text-dim)]">Çıkış koşulu (eşleşince biter)</span>
+            <input
+              value={node.until ?? ''}
+              onChange={(e) => onPatch({ until: e.target.value })}
+              placeholder="boş = yalnız iterasyon sınırı"
+              className={input}
+            />
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-xs text-[var(--color-text-dim)]">Eşleşme</span>
+            <select
+              value={node.untilMode ?? 'contains'}
+              onChange={(e) => onPatch({ untilMode: e.target.value as BranchMatchMode })}
+              className={input}
+            >
+              <option value="contains">İçerir (substring)</option>
+              <option value="equals">Eşittir (tam)</option>
+              <option value="regex">Regex</option>
+            </select>
+          </label>
         </div>
       )}
     </div>

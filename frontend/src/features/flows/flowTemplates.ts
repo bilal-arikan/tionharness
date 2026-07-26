@@ -13,6 +13,22 @@ export interface FlowTemplate {
 
 export const FLOW_TEMPLATES: FlowTemplate[] = [
   {
+    // Mirrors the backend default flow seeded into every workspace store
+    // (internal/agent/flow_defaults.go, seed "starter-answer-verify"). Keep the
+    // two graphs in sync.
+    id: 'default-starter',
+    name: 'Yanıtla & Doğrula',
+    description: 'Her workspace’e otomatik eklenen varsayılan akış. Bir ajan isteği yanıtlar, ikincisi hataları/eksikleri bulup düzeltilmiş nihai sürümü üretir.',
+    graph: {
+      start: 'answer',
+      edgeStyle: 'smoothstep',
+      nodes: [
+        { id: 'answer', type: 'agent', title: 'Yanıtla', agentId: '', prompt: 'Answer the user\'s request thoroughly and concretely:\n{{input}}', next: 'verify', x: 100, y: 40 },
+        { id: 'verify', type: 'agent', title: 'Doğrula', agentId: '', prompt: 'Review the answer above for errors, gaps, or unsupported claims, then produce a corrected, final version:\n{{last}}', next: '', x: 100, y: 200 },
+      ],
+    },
+  },
+  {
     id: 'pipeline',
     name: 'Sıralı Hat',
     description: 'Araştır → taslak yaz → cilala. Tek bir konudan parlatılmış kısa metin üretir.',

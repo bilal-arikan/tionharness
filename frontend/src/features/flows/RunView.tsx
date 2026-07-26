@@ -148,9 +148,13 @@ export function RunView({ run, flow, agents, onRerun, rerunning, hideSummary }: 
       return
     }
     const { nodes: rn, edges: re } = graphToReactFlow(graph)
-    setNodes(rn.map((n) => ({ ...n, data: { ...n.data, status: mergedStatuses[n.id] } })))
+    // Per-node output: prefer the live "done" frame, else the persisted trace, so
+    // a finished node can render its reply inline on the canvas (AgentNode).
+    const outputs: Record<string, string> = {}
+    for (const t of liveTrace) outputs[t.nodeId] = t.output
+    setNodes(rn.map((n) => ({ ...n, data: { ...n.data, status: mergedStatuses[n.id], output: outputs[n.id] } })))
     setEdges(re)
-  }, [graph, mergedStatuses, setNodes, setEdges])
+  }, [graph, mergedStatuses, liveTrace, setNodes, setEdges])
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">

@@ -37,6 +37,7 @@ Each node's fields depend on its `type` — use the exact field names below
 | `branch` | `branches`: array of `{contains, next}` rules | per-arm `next` |
 | `delay` | `delayMs` | `next` |
 | `transform` | `template` | `next` |
+| `loop` | `body` (loop entry id), and `maxIters`>0 or non-empty `until` | `loopNext` (node after exit) |
 
 Parallel fan-out + join example (run `a` and `b` concurrently, then `merge`):
 
@@ -50,7 +51,13 @@ Parallel fan-out + join example (run `a` and `b` concurrently, then `merge`):
 ```
 
 Parallel children must be `agent` nodes. Templates: `{{input}}`, `{{last}}`,
-`{{node.<id>}}`.
+`{{node.<id>}}` (plus `{{iteration}}`, the 0-based loop counter, inside a `loop` body).
+
+A `loop` repeats its `body` sub-chain (which must terminate with `next:""`) until
+`maxIters` or an `until` match on the last output, then continues at `loopNext`.
+Set the graph-level `"accumulate": true` to make sequential agent nodes share one
+growing conversation thread so the prompt cache is reused across nodes (a node can
+opt out with `"fresh": true`); off by default = each node is a stateless call.
 
 ## Building a flow (self-management tools)
 

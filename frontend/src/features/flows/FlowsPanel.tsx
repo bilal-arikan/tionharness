@@ -100,6 +100,10 @@ export function FlowsPanel({ agents, onError, openFlowId }: Props) {
     () => (localStorage.getItem('tionswarm.flowEdgeStyle') as EdgeStyle) || 'default',
   )
   const [animated, setAnimated] = useState(false)
+  // Accumulate mode: sequential agent nodes share a growing conversation thread
+  // (prompt-cache reuse). Stored per-flow in the graph; defaults ON for flows that
+  // never set it (a new flow or a pre-feature one).
+  const [accumulate, setAccumulate] = useState(true)
   const changeEdgeStyle = (s: EdgeStyle) => {
     setEdgeStyle(s)
     localStorage.setItem('tionswarm.flowEdgeStyle', s)
@@ -196,11 +200,16 @@ export function FlowsPanel({ agents, onError, openFlowId }: Props) {
             ((localStorage.getItem('tionswarm.flowEdgeStyle') as EdgeStyle) || 'default'),
         )
         setAnimated(!!g.animated)
+        // Default ON unless the flow explicitly stored accumulate:false. The raw
+        // JSON distinguishes an absent field (undefined → default on) from an
+        // explicit false (→ off), which the backend now persists verbatim.
+        setAccumulate(g.accumulate === undefined ? true : !!g.accumulate)
       } catch {
         setNodes([])
         setEdges([])
         setStart('')
         setAnimated(false)
+        setAccumulate(true)
       }
     },
     [setNodes, setEdges, setSelectedId],
@@ -264,15 +273,16 @@ export function FlowsPanel({ agents, onError, openFlowId }: Props) {
     name,
     setEmoji,
     nodes,
-    setNodes,
     edges,
     start,
     edgeStyle,
     animated,
+    accumulate,
     input,
     setRunning,
-    setRun,
-    setLiveNodes,
+    runs,
+    setRuns,
+    setSelectedRunId,
     sel,
     onError,
   })
@@ -455,6 +465,8 @@ export function FlowsPanel({ agents, onError, openFlowId }: Props) {
             edgeStyle={edgeStyle}
             animated={animated}
             setAnimated={setAnimated}
+            accumulate={accumulate}
+            setAccumulate={setAccumulate}
             changeEdgeStyle={changeEdgeStyle}
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}

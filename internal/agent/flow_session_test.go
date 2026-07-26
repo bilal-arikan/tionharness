@@ -1,55 +1,59 @@
 package agent
 
 import (
-	"encoding/json"
-	"errors"
+	"context"
 	"testing"
 
 	"github.com/bilal-arikan/tionswarm/internal/db"
 	"github.com/bilal-arikan/tionswarm/internal/orchestration"
 )
 
-// TestFlowStateToSteps verifies a finished flow run's persisted state maps to a
-// per-node turn trace, so a flow run renders like a normal chat turn's activity.
-func TestFlowStateToSteps(t *testing.T) {
-	st := orchestration.State{
-		Trace: []orchestration.TraceEntry{
-			{NodeID: "n1", Title: "Plan", Output: "step one"},
-			{NodeID: "n2", Title: "", Output: "step two"}, // empty title → node id
-		},
+// TestFlowRecordsDistinctSessionPerRun verifies the per-run session model: each
+// recorded flow run lands in its OWN session (keyed for attribution by
+// SourceID = flow.ID but never reused), so a run's transcript — and its
+// "Akış olarak gör" reification — shows exactly one run.
+func TestFlowRecordsDistinctSessionPerRun(t *testing.T) {
+	rt, _ := newTestRuntime(t, t.TempDir())
+	ctx := context.Background()
+	a := newFlowAgent(t, rt, "worker")
+	g := orchestration.Graph{
+		Start: "n1",
+		Nodes: []orchestration.Node{{ID: "n1", Type: orchestration.NodeAgent, AgentID: a.ID, Prompt: "{{input}}"}},
 	}
-	data, _ := json.Marshal(st)
-	fr := db.FlowRun{State: string(data), Status: db.FlowSuccess}
+	flowID := createFlow(t, rt, g)
+	flow, err := rt.db.GetFlow(ctx, flowID)
+	if err != nil {
+		t.Fatalf("get flow: %v", err)
+	}
 
-	steps := flowStateToSteps(fr, nil)
-	if len(steps) != 2 {
-		t.Fatalf("expected 2 steps, got %d", len(steps))
-	}
-	if steps[0].Kind != StepText || steps[0].Text == "" {
-		t.Fatalf("expected non-empty text step, got %+v", steps[0])
-	}
-	// Falls back to node id when the title is empty.
-	if want := "**n2**"; steps[1].Text[:len(want)] != want {
-		t.Fatalf("expected node-id title fallback, got %q", steps[1].Text)
-	}
-}
+	// Two runs → two turn recordings with no pre-created session id (the fallback
+	// create path). Each must produce a distinct flow session.
+	run1 := db.FlowRun{ID: "R1", FlowID: flowID, Status: db.FlowSuccess, Output: "out1"}
+	run2 := db.FlowRun{ID: "R2", FlowID: flowID, Status: db.FlowSuccess, Output: "out2"}
+	s1 := rt.recordFlowSessionTurn(ctx, flow, run1, "first", nil, "")
+	s2 := rt.recordFlowSessionTurn(ctx, flow, run2, "second", nil, "")
 
-// TestFlowStateToStepsSetupError surfaces a setup failure as a single error step.
-func TestFlowStateToStepsSetupError(t *testing.T) {
-	steps := flowStateToSteps(db.FlowRun{}, errors.New("bad graph"))
-	if len(steps) != 1 || steps[0].Kind != StepError {
-		t.Fatalf("expected one error step, got %+v", steps)
+	if s1 == "" || s2 == "" {
+		t.Fatalf("expected both runs to record a session, got %q / %q", s1, s2)
 	}
-}
+	if s1 == s2 {
+		t.Fatalf("per-run sessions must be distinct, both were %q (reused, not per-run)", s1)
+	}
 
-// TestFlowStateToStepsFailureAppendsError adds an error step when the run failed.
-func TestFlowStateToStepsFailureAppendsError(t *testing.T) {
-	st := orchestration.State{Trace: []orchestration.TraceEntry{{NodeID: "n1", Output: "x"}}}
-	data, _ := json.Marshal(st)
-	fr := db.FlowRun{State: string(data), Status: db.FlowFailure, Error: "node blew up"}
-
-	steps := flowStateToSteps(fr, nil)
-	if len(steps) != 2 || steps[1].Kind != StepError {
-		t.Fatalf("expected trailing error step, got %+v", steps)
+	// Both sessions are flow-kind and attribute back to the flow via SourceID.
+	for _, id := range []string{s1, s2} {
+		sess, err := rt.db.GetSession(ctx, id)
+		if err != nil {
+			t.Fatalf("get session %s: %v", id, err)
+		}
+		if sess.Kind != "flow" {
+			t.Errorf("session %s kind = %q, want flow", id, sess.Kind)
+		}
+		if sess.SourceID != flowID {
+			t.Errorf("session %s sourceID = %q, want flow id %q (graph/executions attribution)", id, sess.SourceID, flowID)
+		}
+		if sess.MessageCount != 2 {
+			t.Errorf("session %s should hold exactly one run (user+assistant = 2 msgs), got %d", id, sess.MessageCount)
+		}
 	}
 }
