@@ -184,8 +184,25 @@ kanalına maplenebilir (gelecek iş).
 
 ## 8. Açık kararlar / riskler
 
-1. **Tailscale bind detayı:** `127.0.0.1` + Tailscale Serve (TLS terminasyonu) mi,
-   yoksa doğrudan tailnet IP'sine bind mi? Serve daha temiz (otomatik TLS + host).
+1. ~~**Tailscale bind detayı:**~~ **KARARLAŞTI (2026-07-24): `127.0.0.1` + Tailscale Serve.**
+   Otomatik Let's Encrypt sertifikası + tailnet host adı verdiği için doğrudan tailnet-IP
+   bind'ine tercih edildi. Hazır script: **`scripts\tailscale-serve.ps1`** — `dev.ps1` gibi
+   **ön planda** koşar (backend çıktısı terminale akar; Ctrl+C süreç ağacını indirir ve
+   `-KeepServe` verilmedikçe serve yapılandırmasını kaldırır).
+
+   ```powershell
+   .\scripts\tailscale-serve.ps1              # gerekiyorsa derle, koş, serve et
+   .\scripts\tailscale-serve.ps1 -Build       # önce zorla yeniden derle
+   .\scripts\tailscale-serve.ps1 -Port 5174   # loopback portunu değiştir (vars. 5174)
+   .\scripts\tailscale-serve.ps1 -Reset       # yalnız serve yapılandırmasını sök
+   ```
+
+   **Neden HTTPS şart:** tarayıcılar mikrofona (`getUserMedia` / Web Speech) yalnız
+   **güvenli bağlamda** izin verir → telefondan sesli girdi ancak `https://` ile çalışır
+   (bkz. `07-CHAT-UX.md` STT). Trafik tailnet **içinde** kalır (`serve`, `funnel` DEĞİL)
+   → auth'suz backend asla public olmaz. Varsayılan port 5174, `dev.ps1` (5173/8090) ve
+   unity-mcp (8080) ile çakışmaz. **Tek seferlik ön koşul:** tailnet admin konsolunda
+   "HTTPS Certificates" açık olmalı (`https://login.tailscale.com/admin/dns`).
 2. **claude-cli VPS'te kimlik:** izole config home + `claude setup-token` (oauth) ya
    da `ANTHROPIC_API_KEY` (`claudeCliAuthKind`/`Token`, `03` maddesi). VPS'te login
    akışı headless olacağından **setup-token** önerilir.

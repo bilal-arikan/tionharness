@@ -231,7 +231,9 @@ Kalıcı trace yine altta node-node liste olarak gösterilir (mevcut davranış 
     **agent**: chat görünümü (+ accumulate modda **önceki bağlam** açılır bölümü, aşağıda); **branch**:
     **karar kartı** (değerlendirilen değer + eşleşme modu + tüm dallar, eşleşen ✓ yeşil, hedef node;
     `TraceEntry.Input`=`st.Last`, matched arm output label'ından türetilir); **parallel**: **fan-out**
-    (çocuk listesi, tıkla→çocuğun kendi görünümü, `traceByNode` + `onSelectNode`); diğerleri: basit kart.
+    (çocuk listesi, tıkla→çocuğun kendi görünümü, `traceByNode` + `onSelectNode`) + **eşzamanlılık
+    timeline'ı** (her çocuk göreli çubuk; kritik yol=en geç biten kırmızı; `TraceEntry.StartMs`/`EndMs`
+    unix-ms `runParallel`'de goroutine içinde ölçülür — yalnız paralel çocuklarda dolar); diğerleri: basit kart.
   - **Accumulate-thread gösterimi (yapıldı, indeks yöntemi):** her agent node çalışmadan önce
     gördüğü thread uzunluğu `TraceEntry.ThreadLen` olarak kaydedilir (snapshot YOK — thread zaten
     `State.Thread`'de). Inspector `State.Thread[:ThreadLen]`'i **"Önceki bağlam (N mesaj)"** açılır

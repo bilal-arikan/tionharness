@@ -364,7 +364,9 @@ Canlı taramalarda gözlenen zayıflıklara yönelik olgunlaştırma (üretim ta
 
 ### Faz 6 — Triage Kokpiti (UI/UX) — TAMAM (build OK · tsc temiz)
 Panel "düz liste"den triage kokpitine dönüştü; `features/insight/` alt bileşenlere bölündü:
-- [x] **Sekmeler**: Bulgular / Lensler / Fleet / Geçmiş / Ayarlar (`InsightPanel` shell).
+- [x] **Alt-sayfalar**: Bulgular / Lensler / Fleet / Geçmiş / Ayarlar (`InsightPanel` shell).
+      *(Not: bu liste Faz 6 anındaki üst sekme çubuğudur; 2026-07-27'de sol alt-sayfa rayına
+      dönüştü ve iki sayfa daha eklendi → aşağıdaki **Faz 6.2**.)*
 - [x] **Filtre + arama** (`FilterBar` + `insightHelpers.applyFilter`): kanal/statü/severity/lens/regresyon/metin.
 - [x] **Kümeleme toggle** (`clusterFindings`, Go Jaccard'ın TS aynası): benzer bulguları temsilci+sayıya indirir.
 - [x] **Özet başlığı** (`SummaryHeader`): tıklanabilir sayaç-çipleri (tek-tık filtre).
@@ -395,6 +397,24 @@ Panel "düz liste"den triage kokpitine dönüştü; `features/insight/` alt bile
 - [x] **Dersler sekmesi** (`LessonsTab`): reaktif lesson tarafı kokpitte (bkz. §7 Lessons ilişkisi).
 - [x] **Tema hizalaması**: tanımsız `--color-text-muted` → `--color-text-dim`; tüm renk/gölge
       tema token'larından → ekran açık/koyu temayla birlikte değişir.
+
+### Faz 6.2 — Sol alt-sayfa rayı + görünürlük (2026-07-24/27) — TAMAM
+
+- [x] **Üst sekme çubuğu → sol alt-sayfa rayı** (`InsightPanel`, Ayarlar ekranıyla aynı desen):
+      solda üstte **tarama aksiyonları**, altında ikonlu dikey gezinme. Yedi alt-sayfa:
+      **Bulgular** (kanban) · **Öz-iyileşme** · **Dersler** · **Lensler** · **Fleet** ·
+      **Geçmiş** · **Ayarlar**. Rayın üst hizası chat oturum kenar çubuğuyla eşleşir.
+- [x] **Öz-iyileşme alt-sayfası**: guardrail eşikleri + reaktif lesson toggle'ları Ayarlar'dan
+      çıkarılıp bütün hâlinde İçgörü'ye taşındı → `56-SELF-HEALING.md` "İçgörü ▸ Öz-iyileşme".
+- [x] **Dersler alt-sayfası** (`LessonsTab`): saklanan dersler gömülü kart yerine **tam-yükseklik
+      kendi sayfası**. (Reaktif lesson ilişkisi: §7.)
+- [x] **Geçmiş kendi sayfası**: kısa süre Ayarlar içine katlanmıştı (2026-07-26), ray gelince
+      geri **bağımsız alt-sayfa** oldu.
+- [x] **Derin bağlanabilir alt-sayfalar**: `#/w/{ws}/insights/{tab}` — `tab`/`onTabChange`
+      prop'ları geldiğinde panel **URL-güdümlüdür**, yoksa yerel state'e düşer (`InsightPanel:17-47`).
+- [x] **Canlı tarama göstergesi**: tarama sürerken nav rail'deki İçgörü öğesinde ve
+      workspace switcher'da nabız → hangi workspace'in taradığı ekranı açmadan görünür.
+- [x] **Analiz ajanı seçimi**: tarama için provider+model, temalı `AgentPicker` ile seçilir.
 
 > **Bilinen (ayrı, ortamsal):** sıfır-workspace açılmadan `ws(r)` handler'ları nil-panic veriyor (tüm uçlar, insight'a özel değil) — `withWorkspace`'e default-yoksa-503 guard'ı ayrı bir iş.
 

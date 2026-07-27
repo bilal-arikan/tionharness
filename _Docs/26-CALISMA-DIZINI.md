@@ -69,6 +69,25 @@ için iki fren var (Ayarlar ▸ MCP & Araçlar):
 - Worktree mantığı `internal/agent/worktree.go` (`ensureWorktree` /
   `RemoveSessionWorktree`); git yoksa veya repo değilse sessizce taban dizine düşer.
 
+### Geliştirici worktree'leri (`scripts\worktree.ps1`) — ajan izolasyonundan AYRI
+
+Yukarıdaki `gitWorktreeIsolation` **çalışma-zamanı** özelliğidir (otonom oturuma worktree
+verir). Bunun yanında, **insan geliştirici** için aynı anda birden çok dalda çalışmayı
+(stash/checkout gidip-gelmesi olmadan) kolaylaştıran bir yardımcı script vardır:
+
+```powershell
+.\scripts\worktree.ps1 add    feat-login                        # yeni dal: feature/feat-login
+.\scripts\worktree.ps1 add    hotfix -Branch fix/crash -Existing # mevcut dalı bağla
+.\scripts\worktree.ps1 list
+.\scripts\worktree.ps1 remove feat-login
+.\scripts\worktree.ps1 prune
+```
+
+Worktree'ler reponun **kardeşi** olarak açılır (ör. `...\Projects\TionSwarm-feat-login`);
+tek `.git` deposu paylaşılır, her worktree'nin kendi çalışma dizini + dalı olur.
+`add` sırasında `frontend/node_modules` ana repodan **junction** ile bağlanır (sıfırdan
+`npm install` beklemezsin); `-NoLink` verirsen bunun yerine `npm install` koşar.
+
 ## Akış matrisi
 
 | Tur tipi | Sandbox | git push | Worktree |

@@ -123,6 +123,20 @@ Açık kaynaklı, kendi sunucunda barındırılan (self-hosted) bir **çoklu-aja
 - ✅ Node.js v24 + npm 11
 - ✅ WebView2 runtime (native masaüstü penceresi; Wails planı iptal — `32-NATIVE-PENCERE.md`)
 
+## Script'ler (`scripts\`)
+
+> Hepsi PowerShell. **ASCII-only tutulmalı** — WinPS 5.1 BOM'suz UTF-8'i ANSI çözer, parse bozulur.
+
+| Script | Ne yapar | Detay |
+|---|---|---|
+| `dev.ps1` | Tek komutla dev: backend 8090 + frontend 5173 (Ctrl+C ikisini de indirir). `-Loopback` / `-BackendOnly` / `-FrontendOnly` | [33](33-DIS-AJAN-OTOMASYONU.md) |
+| `build.ps1` | UI build + tek binary. `-Desktop` → `tionswarm-desktop.exe` (`-H windowsgui`) | [32](32-NATIVE-PENCERE.md) |
+| `serve.ps1` | Temiz build + tek binary'yi koşar (yalnız backend, Vite yok; gömülü SPA'yı sunar). `go run`'ın bayat link cache'i sorununu aşmak için açık `go build` yapar | — |
+| `tailscale-serve.ps1` | Tailnet üzerinden **otomatik HTTPS** ile sunar (telefonda mikrofon/STT için güvenli bağlam). Ön planda koşar, çıkışta serve config'i söker | [48](48-VPS-REMOTE-CLIENT.md) |
+| `worktree.ps1` | Geliştirici git worktree yardımcısı (`add`/`list`/`remove`/`prune`); node_modules junction'lar | [26](26-CALISMA-DIZINI.md) |
+| `e2e-smoke.ps1` | 12 adımlı uçtan uca smoke testi (`-SkipLLM` ile hızlı/ucuz) | [33](33-DIS-AJAN-OTOMASYONU.md) |
+| `repair-encoding.ps1` | Bozuk UTF-8 kayıtlarını onarır (varsayılan dry-run, `-Apply`) | [33](33-DIS-AJAN-OTOMASYONU.md) |
+
 ## Proje Durumu (2026-07-27)
 
 > Bu bölüm **periyodik anlık görüntüdür**; günlük ilerleme `05-ILERLEME.md`'de tutulur.
