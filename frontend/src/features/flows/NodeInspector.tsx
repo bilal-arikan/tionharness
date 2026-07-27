@@ -1,4 +1,4 @@
-import type { Agent, BranchMatchMode, FlowNode } from '@/types'
+import type { Agent, BranchMatchMode, Flow, FlowNode } from '@/types'
 import { AgentPicker } from '@/shared/components/agents/AgentPicker'
 import { PromptEditor } from '@/shared/components'
 import { chromeFor } from './nodeStyles'
@@ -11,6 +11,9 @@ interface Props {
   // All nodes in the flow (for the {{node.<id>}} variable helper). Excludes nothing;
   // the helper filters out the current node itself.
   allNodes: FlowNode[]
+  // Other flows in the workspace, for the subflow/spawn flow pickers. The current
+  // flow is excluded by the caller to avoid trivial self-reference in the picker.
+  flows: Flow[]
   onPatch: (patch: Partial<FlowNode>) => void
   onDuplicate: () => void
   onDelete: () => void
@@ -23,8 +26,10 @@ const input =
 // created (it is chosen from the palette and never changes here) — the inspector
 // only edits its intrinsic fields (title, agent, prompt, branch conditions).
 // Routing (next/parallel/joinNext) is managed by drawing edges on the canvas.
-export function NodeInspector({ node, agents, isStart, allNodes, onPatch, onDuplicate, onDelete }: Props) {
+export function NodeInspector({ node, agents, isStart, allNodes, flows, onPatch, onDuplicate, onDelete }: Props) {
   const chrome = chromeFor(node.type)
+  // Spawn nodes in this flow, for the join node's "which spawn to await" picker.
+  const spawnNodes = allNodes.filter((n) => n.type === 'spawn')
   // Other nodes, for the {{node.<id>}} variable helper (a node can't reference itself).
   const nodeRefs = allNodes
     .filter((n) => n.id !== node.id)
@@ -173,6 +178,130 @@ export function NodeInspector({ node, agents, isStart, allNodes, onPatch, onDupl
           Eşzamanlı ajan node'larını alttaki <b>fan</b> tutamağından, join hedefini sağdaki{' '}
           <b>join</b> tutamağından kenar çizerek bağla.
         </p>
+      )}
+
+      {node.type === 'subflow' && (
+        <div className="space-y-2">
+          <label className="block">
+            <span className="mb-1 block text-xs text-[var(--color-text-dim)]">Alt-akış</span>
+            <select value={node.flowRef ?? ''} onChange={(e) => onPatch({ flowRef: e.target.value })} className={input}>
+              <option value="">— akış seç —</option>
+              {flows.map((f) => (
+                <option key={f.id} value={f.id}>
+                  {f.emoji ? `${f.emoji} ` : ''}
+                  {f.name} ({f.id})
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="block">
+            <div className="mb-1 flex flex-wrap items-center gap-1 text-xs text-[var(--color-text-dim)]">
+              <span>Girdi şablonu</span>
+              <FlowVarsButton nodeRefs={nodeRefs} onInsert={(t) => onPatch({ template: (node.template ?? '') + t })} />
+            </div>
+            <PromptEditor
+              value={node.template ?? ''}
+              onChange={(v) => onPatch({ template: v })}
+              placeholder="boş = {{last}} · alt-akışa geçilecek girdi"
+              rows={3}
+              mono
+              textareaClassName="min-h-12 text-xs"
+            />
+          </div>
+          <p className="text-[11px] text-[var(--color-text-dim)]">
+            Alt-akış <b>await-input</b>'a düşerse bu akış da askıya alınır; girdi verilince alt-akış
+            devam eder (propagasyon).
+          </p>
+        </div>
+      )}
+
+      {node.type === 'spawn' && (
+        <div className="space-y-2">
+          <div className="block">
+            <span className="mb-1 block text-xs text-[var(--color-text-dim)]">Async akışlar (birden çok seç)</span>
+            <div className="max-h-40 space-y-1 overflow-auto rounded bg-[var(--color-surface-2)] p-1.5">
+              {flows.length === 0 && (
+                <div className="text-[11px] text-[var(--color-text-dim)]">başka akış yok</div>
+              )}
+              {flows.map((f) => {
+                const selected = (node.spawnFlows ?? []).includes(f.id)
+                return (
+                  <label key={f.id} className="flex cursor-pointer items-center gap-1.5 text-[11px]">
+                    <input
+                      type="checkbox"
+                      checked={selected}
+                      onChange={(e) => {
+                        const cur = node.spawnFlows ?? []
+                        onPatch({
+                          spawnFlows: e.target.checked ? [...cur, f.id] : cur.filter((x) => x !== f.id),
+                        })
+                      }}
+                    />
+                    <span className="truncate">
+                      {f.emoji ? `${f.emoji} ` : ''}
+                      {f.name}
+                    </span>
+                  </label>
+                )
+              })}
+            </div>
+          </div>
+          <div className="block">
+            <div className="mb-1 flex flex-wrap items-center gap-1 text-xs text-[var(--color-text-dim)]">
+              <span>Girdi şablonu (her çocuğa)</span>
+              <FlowVarsButton nodeRefs={nodeRefs} onInsert={(t) => onPatch({ template: (node.template ?? '') + t })} />
+            </div>
+            <PromptEditor
+              value={node.template ?? ''}
+              onChange={(v) => onPatch({ template: v })}
+              placeholder="boş = {{last}}"
+              rows={2}
+              mono
+              textareaClassName="min-h-10 text-xs"
+            />
+          </div>
+          <p className="text-[11px] text-[var(--color-text-dim)]">
+            Akışları <b>bloklamadan</b> başlatır; sonuçları bir <b>join</b> toplar. Async çocuklar
+            interaktif olmamalı (await-input'a düşen çocuk join'i başarısız yapar).
+          </p>
+        </div>
+      )}
+
+      {node.type === 'join' && (
+        <div className="space-y-2">
+          <label className="block">
+            <span className="mb-1 block text-xs text-[var(--color-text-dim)]">Beklenecek spawn node</span>
+            <select value={node.spawnRef ?? ''} onChange={(e) => onPatch({ spawnRef: e.target.value })} className={input}>
+              <option value="">tümü (tüm bekleyen spawn'lar)</option>
+              {spawnNodes.map((n) => (
+                <option key={n.id} value={n.id}>
+                  {n.title || n.id} ({n.id})
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-xs text-[var(--color-text-dim)]">Zaman aşımı (saniye, 0 = süresiz)</span>
+            <input
+              type="number"
+              min={0}
+              value={node.joinTimeoutSec ?? 0}
+              onChange={(e) => onPatch({ joinTimeoutSec: Math.max(0, Math.round(Number(e.target.value) || 0)) })}
+              className={input}
+            />
+          </label>
+          <label className="flex items-center gap-2 text-xs text-[var(--color-text-dim)]">
+            <input
+              type="checkbox"
+              checked={!!node.joinPartial}
+              onChange={(e) => onPatch({ joinPartial: e.target.checked })}
+            />
+            Kısmi mod (başarısız/bekleyen/zaman aşımına uğrayan çocuğu düşür, join'i düşürme)
+          </label>
+          <span className="block text-[11px] text-[var(--color-text-dim)]">
+            Spawn edilen child run'ları bekler, çıktılarını birleştirip {'{{last}}'}'e koyar.
+          </span>
+        </div>
       )}
 
       {node.type === 'delay' && (

@@ -31,6 +31,8 @@ import { AwaitInputNode } from './AwaitInputNode'
 import { SubflowNode } from './SubflowNode'
 import { StartNode } from './StartNode'
 import { EndNode } from './EndNode'
+import { SpawnNode } from './SpawnNode'
+import { JoinNode } from './JoinNode'
 
 // CanvasTools is a small in-canvas toolbar (top-right Panel). It lives inside
 // ReactFlowProvider so it can use the programmatic viewport API. "Otomatik diz"
@@ -90,6 +92,8 @@ const nodeTypes: NodeTypes = {
   subflow: SubflowNode,
   start: StartNode,
   end: EndNode,
+  spawn: SpawnNode,
+  join: JoinNode,
 }
 
 // Parallel-node edge colors so the two outgoing roles read at a glance: the
@@ -128,6 +132,13 @@ interface Props {
   // Read-only preview (template gallery): disable dragging, connecting and
   // selection so the graph can only be viewed, not edited.
   readOnly?: boolean
+  // Run-inspector mode: nodes stay draggable and selectable (so clicking one
+  // opens its inspector and the layout can be tidied), but connecting, palette
+  // drop and node-editing are all disabled — the graph structure is fixed.
+  runMode?: boolean
+  // Fired after a node drag settles with its new flow-space position, so the run
+  // inspector can persist the tidied layout back to the flow. Absent = no save.
+  onNodeDragStop?: (id: string, pos: { x: number; y: number }) => void
   // Re-layout the graph (parent recomputes node positions). Hidden if absent.
   onAutoLayout?: () => void
   // Per-node toolbar actions (make-start / duplicate / delete). Null = none.
@@ -153,10 +164,18 @@ function CanvasInner({
   onSelect,
   onNodeClick,
   readOnly = false,
+  runMode = false,
+  onNodeDragStop,
   onAutoLayout,
   onDropNode,
 }: Omit<Props, 'agents' | 'nodeActions'>) {
   const { screenToFlowPosition } = useReactFlow()
+  // Interaction is gated by two independent locks. `readOnly` (template preview)
+  // freezes everything; `runMode` (run inspector) keeps drag + select but freezes
+  // the graph structure. `editable` is the full editor (neither lock).
+  const draggable = !readOnly
+  const selectable = !readOnly
+  const editable = !readOnly && !runMode
   // Mini-map show/hide (toggled from the in-canvas toolbar). Defaults on for wide
   // screens but OFF on narrow (< md) ones where it would crowd the canvas.
   const [showMinimap, setShowMinimap] = useState(
@@ -237,24 +256,27 @@ function CanvasInner({
       }}
       onNodesChange={onNodesChange}
       onEdgesChange={onEdgesChange}
-      onConnect={readOnly ? undefined : onConnect}
+      onConnect={editable ? onConnect : undefined}
       onSelectionChange={onSelectionChange}
-      onNodeClick={readOnly || !onNodeClick ? undefined : (_, n) => onNodeClick(n.id)}
-      onDrop={readOnly ? undefined : onDrop}
-      onDragOver={readOnly ? undefined : onDragOver}
+      onNodeClick={editable && onNodeClick ? (_, n) => onNodeClick(n.id) : undefined}
+      onNodeDragStop={
+        draggable && onNodeDragStop ? (_, n) => onNodeDragStop(n.id, n.position) : undefined
+      }
+      onDrop={editable ? onDrop : undefined}
+      onDragOver={editable ? onDragOver : undefined}
       // A few px of movement counts as a drag (not a click), so repositioning
       // a node never opens the editor popup and a plain click always does.
       nodeDragThreshold={4}
-      nodesDraggable={!readOnly}
-      nodesConnectable={!readOnly}
-      elementsSelectable={!readOnly}
+      nodesDraggable={draggable}
+      nodesConnectable={editable}
+      elementsSelectable={selectable}
       fitView
       proOptions={{ hideAttribution: true }}
     >
       <Background />
       <Controls />
       <CanvasTools
-        onAutoLayout={readOnly ? undefined : onAutoLayout}
+        onAutoLayout={editable ? onAutoLayout : undefined}
         showMinimap={showMinimap}
         onToggleMinimap={() => setShowMinimap((v) => !v)}
       />

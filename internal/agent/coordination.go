@@ -31,15 +31,15 @@ import (
 // its active workers. Guarded by mu except workers (atomic, touched from the
 // spawn path without the turn lock).
 type coordSlot struct {
-	mu      sync.Mutex
-	free    *sync.Cond   // lazily created; broadcast whenever running flips false
-	running    bool      // a turn (auto OR interactive) is currently executing
-	pending    bool      // >=1 notification arrived while running; run once more after
-	ackedIdle  bool      // ran the "all workers idle" reconcile turn for this batch
-	hadWorkers bool      // at least one worker was ever spawned (gates the idle sweep)
-	turns      int       // auto-triggered coordinator turns so far (notify-loop cap)
-	capWarn bool         // whether the "cap reached" warning has been posted
-	workers atomic.Int64 // active workers under this coordinator
+	mu         sync.Mutex
+	free       *sync.Cond   // lazily created; broadcast whenever running flips false
+	running    bool         // a turn (auto OR interactive) is currently executing
+	pending    bool         // >=1 notification arrived while running; run once more after
+	ackedIdle  bool         // ran the "all workers idle" reconcile turn for this batch
+	hadWorkers bool         // at least one worker was ever spawned (gates the idle sweep)
+	turns      int          // auto-triggered coordinator turns so far (notify-loop cap)
+	capWarn    bool         // whether the "cap reached" warning has been posted
+	workers    atomic.Int64 // active workers under this coordinator
 }
 
 // signalFree wakes turns blocked in claimCoordinatorSlot. Callers must hold mu.
@@ -448,15 +448,8 @@ func (r *Runtime) runWorker(agent db.Agent, workerSessionID, prompt, coordSessio
 		replyText = "ℹ️ Worker bu tur için boş yanıt döndürdü."
 	}
 
-	replyMsg := db.Message{
-		SessionID: workerSessionID,
-		AgentID:   agent.ID,
-		Role:      "assistant",
-		Text:      replyText,
-		Steps:     encodeSteps(steps),
-	}
-	meta.apply(&replyMsg, time.Since(turnStart).Milliseconds())
-	if _, addErr := r.db.AddMessage(ctx, replyMsg); addErr != nil {
+	// replyText was pre-composed above (success output / failure / kill / empty note).
+	if addErr := r.recordAssistantMessage(ctx, workerSessionID, agent.ID, replyText, steps, meta, time.Since(turnStart).Milliseconds()); addErr != nil {
 		r.logger.Warn("worker: failed to record reply", "session", workerSessionID, "error", addErr)
 	}
 	r.emitWorkerEvent(agent, workerSessionID, coordSessionID, status)
@@ -808,15 +801,8 @@ func (r *Runtime) runCoordinatorTurn(coordSessionID string) {
 	} else if strings.TrimSpace(text) == "" {
 		text = "ℹ️ Koordinatör bu tur için boş yanıt döndürdü."
 	}
-	replyMsg := db.Message{
-		SessionID: coordSessionID,
-		AgentID:   agent.ID,
-		Role:      "assistant",
-		Text:      text,
-		Steps:     encodeSteps(steps),
-	}
-	meta.apply(&replyMsg, time.Since(turnStart).Milliseconds())
-	if _, addErr := r.db.AddMessage(ctx, replyMsg); addErr != nil {
+	// text was pre-composed above (success output / failure / stop / empty note).
+	if addErr := r.recordAssistantMessage(ctx, coordSessionID, agent.ID, text, steps, meta, time.Since(turnStart).Milliseconds()); addErr != nil {
 		r.logger.Warn("coordination: failed to record coordinator reply", "coordinator", coordSessionID, "error", addErr)
 	}
 	r.publish(events.Event{

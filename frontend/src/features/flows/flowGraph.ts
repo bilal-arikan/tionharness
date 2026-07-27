@@ -54,6 +54,8 @@ export function graphToReactFlow(graph: FlowGraph): { nodes: FlowRFNode[]; edges
       case 'await-input':
       case 'subflow':
       case 'start':
+      case 'spawn':
+      case 'join':
         add(n.id, n.next ?? '')
         break
       case 'end':
@@ -100,6 +102,8 @@ export function reactFlowToGraph(
       case 'await-input':
       case 'subflow':
       case 'start':
+      case 'spawn':
+      case 'join':
         base.next = outgoing[0]?.target ?? ''
         break
       case 'end':
@@ -197,6 +201,8 @@ function successors(n: FlowNode | undefined): string[] {
     case 'await-input':
     case 'subflow':
     case 'start':
+    case 'spawn':
+    case 'join':
       return [n.next ?? '']
     case 'end':
       return []
@@ -268,6 +274,15 @@ export function blankNode(id: string, type: FlowNodeType, defaultAgentId = ''): 
     node.title = 'Başlangıç'
   } else if (type === 'end') {
     node.title = 'Bitiş'
+  } else if (type === 'spawn') {
+    node.spawnFlows = []
+    node.template = '{{last}}'
+    node.next = ''
+    node.title = 'Spawn'
+  } else if (type === 'join') {
+    node.spawnRef = ''
+    node.next = ''
+    node.title = 'Join'
   } else {
     node.parallel = []
     node.joinNext = ''

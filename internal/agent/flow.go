@@ -82,6 +82,155 @@ func (f flowRunner) RunChildFlow(ctx context.Context, flowID, input string) (str
 	return run.Output, nil
 }
 
+// RunChildFlowResumable implements orchestration.SuspendableChildFlowRunner: like
+// RunChildFlow but, instead of failing when the child suspends at await-input, it
+// returns waiting=true with the child's run id so the parent subflow node can
+// propagate the suspension upward and later feed input to that same child.
+func (f flowRunner) RunChildFlowResumable(ctx context.Context, flowID, input string) (out, childRunID string, waiting bool, err error) {
+	depth, _ := ctx.Value(subflowDepthKey{}).(int)
+	if depth >= maxSubflowDepth {
+		return "", "", false, fmt.Errorf("subflow recursion too deep (>%d) — a flow is calling itself", maxSubflowDepth)
+	}
+	childCtx := context.WithValue(ctx, subflowDepthKey{}, depth+1)
+	run, err := f.rt.RunFlow(childCtx, flowID, input, f.autonomous, nil)
+	if err != nil {
+		return "", "", false, err
+	}
+	switch run.Status {
+	case db.FlowFailure:
+		return "", "", false, fmt.Errorf("child flow failed: %s", run.Error)
+	case db.FlowWaiting:
+		return "", run.ID, true, nil // propagate: parent parks on this child
+	}
+	return run.Output, run.ID, false, nil
+}
+
+// ResumeChildFlow implements orchestration.SuspendableChildFlowRunner: it feeds
+// the parent's delivered input to a suspended child run (synchronously) and
+// reports whether the child completed (out) or suspended again (waiting).
+func (f flowRunner) ResumeChildFlow(ctx context.Context, childRunID, input string) (out string, waiting bool, err error) {
+	run, err := f.rt.resumeWaitingFlowSync(ctx, childRunID, input)
+	if err != nil {
+		return "", false, err
+	}
+	switch run.Status {
+	case db.FlowFailure:
+		return "", false, fmt.Errorf("child flow failed: %s", run.Error)
+	case db.FlowWaiting:
+		return "", true, nil
+	}
+	return run.Output, false, nil
+}
+
+// joinPollInterval is how often JoinChildFlows re-checks its spawned child runs.
+const joinPollInterval = 500 * time.Millisecond
+
+// SpawnChildFlows implements orchestration.AsyncFlowRunner: it launches each flow
+// as an INDEPENDENT async run (non-blocking) and returns their run ids. A join
+// node later awaits them. Recursion is depth-guarded via the context (the depth
+// value survives context.WithoutCancel in spawnChildFlow's goroutine).
+func (f flowRunner) SpawnChildFlows(ctx context.Context, flowIDs []string, input string) ([]string, error) {
+	ids := make([]string, 0, len(flowIDs))
+	for _, fid := range flowIDs {
+		id, err := f.rt.spawnChildFlow(ctx, fid, input, f.autonomous)
+		if err != nil {
+			return ids, fmt.Errorf("spawn %s: %w", fid, err)
+		}
+		ids = append(ids, id)
+	}
+	return ids, nil
+}
+
+// JoinChildFlows implements orchestration.AsyncFlowRunner: it block-polls the
+// given child runs until every one reaches a terminal status, then returns their
+// SUCCESSFUL outputs in original order. Polling runs in the parent flow's own
+// goroutine.
+//
+// timeoutSec bounds the wait (0 = forever). partial makes the barrier tolerant:
+//   - partial=false (strict): any child failure/suspension, or the timeout, fails
+//     the whole join.
+//   - partial=true: a failed/suspended child is dropped (excluded); at the timeout
+//     the still-pending children are dropped too and the join returns what it has.
+//
+// A suspended (await-input) child is treated as an error case because async
+// children must be non-interactive — nobody feeds them, so they'd never finish.
+func (f flowRunner) JoinChildFlows(ctx context.Context, runIDs []string, timeoutSec int, partial bool, onProgress func(done, total int)) ([]string, error) {
+	outputs := make([]string, len(runIDs))
+	pending := map[int]string{}
+	dropped := map[int]bool{}
+	for i, id := range runIDs {
+		pending[i] = id
+	}
+	total := len(runIDs)
+	// resolved = finished (success + dropped); total - len(pending) once the loop
+	// has processed a cycle. Report the initial state before the first poll.
+	report := func() {
+		if onProgress != nil {
+			onProgress(total-len(pending), total)
+		}
+	}
+	report()
+	var deadline <-chan time.Time
+	if timeoutSec > 0 {
+		t := time.NewTimer(time.Duration(timeoutSec) * time.Second)
+		defer t.Stop()
+		deadline = t.C // a nil channel (timeoutSec==0) never fires → wait forever
+	}
+	for len(pending) > 0 {
+		for i, id := range pending {
+			run, err := f.rt.db.GetFlowRun(ctx, id)
+			if err != nil {
+				return nil, fmt.Errorf("poll child %s: %w", id, err)
+			}
+			switch run.Status {
+			case db.FlowSuccess:
+				outputs[i] = run.Output
+				delete(pending, i)
+			case db.FlowFailure:
+				if !partial {
+					return nil, fmt.Errorf("spawned child %s failed: %s", id, run.Error)
+				}
+				dropped[i] = true
+				delete(pending, i)
+				f.rt.logger.Warn("join dropping failed child", "run", id, "error", run.Error)
+			case db.FlowWaiting:
+				if !partial {
+					return nil, fmt.Errorf("spawned child %s suspended at await-input (async children must be non-interactive)", id)
+				}
+				dropped[i] = true
+				delete(pending, i)
+				f.rt.logger.Warn("join dropping suspended child", "run", id)
+			}
+		}
+		report()
+		if len(pending) == 0 {
+			break
+		}
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-deadline:
+			if !partial {
+				return nil, fmt.Errorf("join timed out after %ds with %d child(ren) still pending", timeoutSec, len(pending))
+			}
+			for i, id := range pending {
+				dropped[i] = true
+				f.rt.logger.Warn("join dropping timed-out child", "run", id)
+			}
+			pending = map[int]string{}
+		case <-time.After(joinPollInterval):
+		}
+	}
+	// Successful outputs in original order (dropped children excluded).
+	result := make([]string, 0, len(runIDs))
+	for i := range runIDs {
+		if !dropped[i] {
+			result = append(result, outputs[i])
+		}
+	}
+	return result, nil
+}
+
 // RunFlow starts a new run of a flow with the given input and drives it to
 // completion. Manual runs (autonomous=false) are not budget-gated. obs is an
 // optional progress observer (nil for no live events) used by the streaming path.
@@ -111,6 +260,40 @@ func (r *Runtime) RunFlow(ctx context.Context, flowID, input string, autonomous 
 	}
 	r.logger.Info("flow run started", "flow", flowID, "run", run.ID)
 	return r.driveFlow(ctx, run, g, input, orchestration.NewState(g), autonomous, obs), nil
+}
+
+// spawnChildFlow launches a flow as an INDEPENDENT async run in its own goroutine
+// and returns its run id immediately (non-blocking) — the engine's spawn node
+// records the id and a later join awaits it. Preconditions are validated up front
+// so a bad spawn fails fast (no orphan run). Recursion is depth-guarded via the
+// context; the depth value survives context.WithoutCancel so a spawned child that
+// spawns again keeps counting up toward maxSubflowDepth.
+func (r *Runtime) spawnChildFlow(ctx context.Context, flowID, input string, autonomous bool) (string, error) {
+	depth, _ := ctx.Value(subflowDepthKey{}).(int)
+	if depth >= maxSubflowDepth {
+		return "", fmt.Errorf("spawn recursion too deep (>%d) — a flow is spawning itself", maxSubflowDepth)
+	}
+	flow, err := r.db.GetFlow(ctx, flowID)
+	if err != nil {
+		return "", err
+	}
+	g, err := orchestration.ParseGraph(flow.Graph)
+	if err != nil {
+		return "", err
+	}
+	if err := g.Validate(); err != nil {
+		return "", err
+	}
+	if err := r.validateFlowPreconditions(ctx, g); err != nil {
+		return "", err
+	}
+	run, err := r.db.CreateFlowRun(ctx, db.FlowRun{FlowID: flowID, Input: input})
+	if err != nil {
+		return "", err
+	}
+	childCtx := context.WithValue(WithCallKind(ctx, KindFlow), subflowDepthKey{}, depth+1)
+	go r.driveFlow(context.WithoutCancel(childCtx), run, g, input, orchestration.NewState(g), autonomous, nil)
+	return run.ID, nil
 }
 
 // waitingSweepInterval is how often the sweeper scans for timed-out await-input
@@ -188,35 +371,58 @@ func (r *Runtime) sweepWaitingFlowsAt(ctx context.Context, now int64) {
 // node after the await. Resume is treated as interactive (not budget-gated).
 func (r *Runtime) ResumeWaitingFlow(ctx context.Context, runID, input string) (db.FlowRun, error) {
 	ctx = WithCallKind(ctx, KindFlow)
-	run, err := r.db.ClaimWaitingFlowRun(ctx, runID) // CAS waiting→running (double-resume guard)
+	run, g, st, err := r.prepareResume(ctx, runID, input)
 	if err != nil {
-		return db.FlowRun{}, err
+		return run, err
+	}
+	go r.driveFlow(context.WithoutCancel(ctx), run, g, run.Input, st, false, nil)
+	return run, nil
+}
+
+// resumeWaitingFlowSync is the synchronous sibling of ResumeWaitingFlow: it drives
+// the resumed run inline and returns its terminal (or re-suspended) FlowRun. Used
+// by subflow await-input propagation, where the parent must know the child's
+// immediate outcome before deciding whether to advance or stay parked.
+func (r *Runtime) resumeWaitingFlowSync(ctx context.Context, runID, input string) (db.FlowRun, error) {
+	ctx = WithCallKind(ctx, KindFlow)
+	run, g, st, err := r.prepareResume(ctx, runID, input)
+	if err != nil {
+		return run, err
+	}
+	return r.driveFlow(ctx, run, g, run.Input, st, false, nil), nil
+}
+
+// prepareResume CAS-claims a waiting run (waiting→running; the double-resume
+// guard), loads its graph + persisted state, injects the delivered input into
+// State.Last (which the await/subflow node at Current consumes), and persists it
+// before any drive so a crash mid-resume can't lose the input. Shared by the
+// async (ResumeWaitingFlow) and sync (resumeWaitingFlowSync) paths.
+func (r *Runtime) prepareResume(ctx context.Context, runID, input string) (db.FlowRun, orchestration.Graph, orchestration.State, error) {
+	run, err := r.db.ClaimWaitingFlowRun(ctx, runID)
+	if err != nil {
+		return db.FlowRun{}, orchestration.Graph{}, orchestration.State{}, err
 	}
 	flow, err := r.db.GetFlow(ctx, run.FlowID)
 	if err != nil {
 		// Flow deleted while waiting: fail the run cleanly.
 		_ = r.db.FinishFlowRun(ctx, run.ID, db.FlowFailure, "", "flow deleted")
-		return run, fmt.Errorf("flow %s: %w", run.FlowID, err)
+		return run, orchestration.Graph{}, orchestration.State{}, fmt.Errorf("flow %s: %w", run.FlowID, err)
 	}
 	g, err := orchestration.ParseGraph(flow.Graph)
 	if err != nil {
 		_ = r.db.FinishFlowRun(ctx, run.ID, db.FlowFailure, "", err.Error())
-		return run, err
+		return run, orchestration.Graph{}, orchestration.State{}, err
 	}
 	var st orchestration.State
 	if uerr := json.Unmarshal([]byte(run.State), &st); uerr != nil || st.Outputs == nil {
 		_ = r.db.FinishFlowRun(ctx, run.ID, db.FlowFailure, "", "corrupted run state")
-		return run, fmt.Errorf("corrupted run state: %w", uerr)
+		return run, orchestration.Graph{}, orchestration.State{}, fmt.Errorf("corrupted run state: %w", uerr)
 	}
-	// Inject the delivered input; the await node (Current == WaitingAt) consumes it.
 	st.Last = input
-	// Persist the injected input BEFORE launching so a crash during resume can't lose
-	// it (boot would then resume a running run whose state already carries the input).
 	if data, merr := json.Marshal(st); merr == nil {
 		_ = r.db.SetFlowRunState(ctx, run.ID, string(data))
 	}
-	go r.driveFlow(context.WithoutCancel(ctx), run, g, run.Input, st, false, nil)
-	return run, nil
+	return run, g, st, nil
 }
 
 // driveFlow runs the engine from the given state, persisting after each node,
@@ -320,6 +526,7 @@ func (r *Runtime) RunFlowRecorded(ctx context.Context, flowID, input string, aut
 	// reification — shows exactly one run. Created up front so the executions feed
 	// shows it running, then the same session id is threaded into the turn record.
 	sessionID := ""
+	inputRecorded := false
 	if sess, serr := r.db.CreateSession(ctx, db.Session{
 		AgentID:  firstFlowAgentID(flow),
 		Kind:     "flow",
@@ -329,10 +536,28 @@ func (r *Runtime) RunFlowRecorded(ctx context.Context, flowID, input string, aut
 		sessionID = sess.ID
 		r.trackSession(sessionID)
 		defer r.untrackSession(sessionID)
+		// Record the user turn AND announce the session up front, so the chat
+		// sidebar shows the run — with its input bubble — the instant it starts,
+		// not only after it finishes. The assistant reply is appended at the end
+		// (recordFlowSessionTurn, inputRecorded=true so the input isn't dup'd).
+		r.recordFlowInput(ctx, flow, input, sessionID)
+		inputRecorded = true
+		r.publish(events.Event{
+			Type:   events.TypeSession,
+			Level:  "info",
+			Target: map[string]string{"sessionId": sessionID, "op": "create"},
+		})
 	}
 	run, runErr := r.RunFlow(ctx, flowID, input, autonomous, obs)
-	if recorded := r.recordFlowSessionTurn(ctx, flow, run, input, runErr, sessionID); recorded != "" {
+	if recorded := r.recordFlowSessionTurn(ctx, flow, run, input, runErr, sessionID, inputRecorded); recorded != "" {
 		sessionID = recorded
+		// The assistant reply just landed — nudge any window viewing this session
+		// to reload its transcript (op "message_added" triggers listMessages).
+		r.publish(events.Event{
+			Type:   events.TypeSession,
+			Level:  "info",
+			Target: map[string]string{"sessionId": sessionID, "op": "message_added"},
+		})
 	}
 	// Every recorded flow run raises a desktop notification that deep-links to the
 	// run's transcript in the executions feed. This covers both autonomous
@@ -393,11 +618,34 @@ func (r *Runtime) emitFlowDelivery(flow db.Flow, run db.FlowRun, sessionID strin
 	})
 }
 
+// flowInputText is the user-turn text for a recorded flow run: the trimmed
+// input, or a "🔀 <flow name>" placeholder when the flow takes no input.
+func flowInputText(flow db.Flow, input string) string {
+	if t := strings.TrimSpace(input); t != "" {
+		return t
+	}
+	return "🔀 " + flow.Name
+}
+
+// recordFlowInput appends the user turn to a flow's transcript session up front
+// (before the run executes), so the session is non-empty the moment it appears
+// in the sidebar. Best-effort; a failure only means the input bubble is missing.
+func (r *Runtime) recordFlowInput(ctx context.Context, flow db.Flow, input, sessionID string) {
+	if sessionID == "" {
+		return
+	}
+	if _, err := r.db.AddMessage(ctx, db.Message{SessionID: sessionID, Role: "user", Text: flowInputText(flow, input)}); err != nil {
+		r.logger.Warn("flow transcript: record input failed", "flow", flow.ID, "session", sessionID, "error", err)
+	}
+}
+
 // recordFlowSessionTurn appends the input (user turn) and the run transcript
 // (assistant turn with a per-node step trace) to the flow's transcript session,
 // returning the session id. The session is grouped under the flow's first agent;
 // the reply is attributed to the agent that produced the final output.
-func (r *Runtime) recordFlowSessionTurn(ctx context.Context, flow db.Flow, run db.FlowRun, input string, runErr error, sessionID string) string {
+// inputRecorded=true means the user turn was already written up front (by
+// recordFlowInput), so only the assistant reply is appended here.
+func (r *Runtime) recordFlowSessionTurn(ctx context.Context, flow db.Flow, run db.FlowRun, input string, runErr error, sessionID string, inputRecorded bool) string {
 	owner := firstFlowAgentID(flow)
 	if sessionID == "" {
 		// The up-front create failed (or a caller passed none) — make the per-run
@@ -409,12 +657,10 @@ func (r *Runtime) recordFlowSessionTurn(ctx context.Context, flow db.Flow, run d
 		}
 		sessionID = sess.ID
 	}
-	userText := strings.TrimSpace(input)
-	if userText == "" {
-		userText = "🔀 " + flow.Name
-	}
-	if _, err := r.db.AddMessage(ctx, db.Message{SessionID: sessionID, Role: "user", Text: userText}); err != nil {
-		r.logger.Warn("flow transcript: record input failed", "flow", flow.ID, "session", sessionID, "error", err)
+	if !inputRecorded {
+		if _, err := r.db.AddMessage(ctx, db.Message{SessionID: sessionID, Role: "user", Text: flowInputText(flow, input)}); err != nil {
+			r.logger.Warn("flow transcript: record input failed", "flow", flow.ID, "session", sessionID, "error", err)
+		}
 	}
 
 	replyAgent := finalFlowAgentID(flow, run)

@@ -6,7 +6,7 @@ import { req, wsHeaders, errorFromResponse } from './client'
 // orchestration.NodeEvent): phase "start" before a node runs, "done" after a
 // success, "error" when the node fails (so a live spinner can stop and show why).
 export interface FlowNodeEvent {
-  phase: 'start' | 'done' | 'error'
+  phase: 'start' | 'done' | 'error' | 'waiting' | 'progress'
   nodeId: string
   type: string
   title: string

@@ -119,14 +119,71 @@ continuation** runner'ları (slot claim + user-turn kaydı + `invokeTraced` + `m
 `{{last}}`). Motor `NodeSubflow` case → `ChildFlowRunner.RunChildFlow(flowID, input)` çocuğu **baştan
 sona koşar** (kendi FlowRun'ı), çıktısını `{{node.<id>}}`/`{{last}}` olarak yakalar. Runner:
 `flowRunner.RunChildFlow` = `RunFlow` + **recursion depth guard** (ctx `subflowDepthKey`, `maxSubflowDepth=5`).
-Çocuk `failure` → hata; çocuk `await-input`'ta `waiting` → hata (senkron subflow inline beslenemez —
-dokümante). `Validate`: `FlowRef` zorunlu. Test: `subflow_test.go` (child-call + output capture,
-unwired-runner, Validate). Canlı E2E (gerçek LLM): parent subflow → child → `CHILD_OK` yakalandı.
-Frontend: palet "Alt-Akış" (`SubflowNode`, indigo `Workflow`), inspector flowRef+şablon.
-**Async spawn/join (bağımsız child-run + join=çoklu-await + coordination-in-graph) daha büyük bir
-takip işi** — senkron subflow onun güvenli, düşük-riskli ilk adımı.
+Çocuk `failure` → hata. `Validate`: `FlowRef` zorunlu. Test: `subflow_test.go`. Frontend: palet
+"Alt-Akış" (`SubflowNode`, indigo `Workflow`), inspector flowRef+şablon. **Çocuk `await-input`'ta
+askıya alınırsa artık propagate edilir → aşağıya bak.**
+
+## Async spawn/join + subflow await-propagasyonu ✅ (2026-07-27, canlı + test)
+
+Önceki iki "Sonraki" maddesi tamamlandı (temiz kurulum; `flow.go` bu oturumda tek elden yazıldı).
+
+**Subflow await-propagasyonu.** Çocuk `await-input`'a düşerse artık hata değil — **parent da askıya
+alınır**. `orchestration.SuspendableChildFlowRunner` (`RunChildFlowResumable` → `waiting`+childRunID;
+`ResumeChildFlow` → sync devam). `State.SubflowRun` = park edilen child run id. Motor `NodeSubflow`
+case'i suspend/resume çift-fazlı: ilk gelişte child beklerse `WaitingAt=subflow, SubflowRun=child` →
+parent `waiting`; parent'a input gelince `ResumeChildFlow` child'ı **sync** sürer
+(`resumeWaitingFlowSync` = `prepareResume` + inline `driveFlow`), child biterse advance / tekrar
+beklerse park kalır. Suspendable yoksa eski fail-on-suspend fallback korunur.
+
+**Async spawn/join.** `NodeSpawn` (`SpawnFlows[]` + `Template`) çocuk flow'ları **bloklamadan**
+başlatır (`spawnChildFlow`: precheck + `CreateFlowRun` + goroutine `driveFlow`), run id'lerini
+`State.Spawned[nodeID]`'e yazar (restart-safe) → `Next`. `NodeJoin` (`SpawnRef` — boş=tümü) bir
+**bariyer**: `JoinChildFlows` child run'ları **block-poll** eder (motor DB'ye dokunmaz; runtime
+poll'lar), hepsi terminal olunca çıktıları `{{last}}`'e birleştirir. Çocuk `failure`→join fail; çocuk
+`waiting`→join fail (async çocuklar interaktif olmamalı) → bariyer **her zaman sonlanır**.
+`AsyncFlowRunner` arayüzü. Recursion `subflowDepthKey` ile guard'lı (değer `WithoutCancel`'da yaşar).
+
+**Test:** `orchestration/spawn_join_test.go` (fake runner: happy path, child-fail, Validate),
+`subflow_propagate_test.go` (fake: suspend→resume, no-suspend), `agent/spawn_join_flow_test.go`
+(gerçek runtime: transform-child spawn/join; subflow-child await → parent waiting → resume → success).
+**Canlı E2E:** spawn(`[child,child]`)→join → `child:go\n\nchild:go`; parent subflow→await-child →
+`waiting` → input → `resumed:answer`. Frontend: palet "Spawn (Async)" (macenta `Rocket`) + "Join
+(Bariyer)" (teal `GitMerge`), `SpawnNode`/`JoinNode`, inspector spawnFlows/spawnRef + subflow flowRef.
+
+### Genişletme (2026-07-27): join timeout + kısmi mod, flow-picker UI
+`NodeJoin` alanları **`JoinTimeoutSec`** (0=süresiz) + **`JoinPartial`**. `JoinChildFlows(ctx, runIDs,
+timeoutSec, partial)`: `partial=false` (varsayılan) → herhangi bir fail/suspend veya timeout tüm
+join'i düşürür; `partial=true` → fail/suspend/timeout olan çocuk **düşürülür** (çıktısı hariç), join
+başarılı çocuklarla devam eder (sonuçlar orijinal sırada, düşenler çıkarılmış). Test:
+`spawn_join_test.go` (forward timeout/partial) + `spawn_join_flow_test.go` (`TestJoin_PartialDropsFailedChild`:
+OK-child + schema-fail-child → partial "ok", strict fail). Canlı E2E: partial join fail eden çocuğu
+atlayıp `ok` döndü. **Flow-picker UI:** subflow/spawn artık akış id metni yerine seçici (subflow=select,
+spawn=çoklu-checkbox, join spawnRef=graf'taki spawn node select'i) + join timeout/partial alanları;
+`flows` listesi `FlowsPanel → FlowEditorView → NodeInspector` zinciriyle geçer (mevcut flow hariç).
+
+### Genişletme (2026-07-27): continuation turn recording paylaşımı
+Session-reuse (continuation) yolları — scheduler `deliverPrompt` + `deliverWake` — sync'ten kaçan
+ortak parçayı artık paylaşıyor: `Runtime.recordAssistantReply` (boş→placeholder + `meta.apply` +
+`encodeSteps` + agent id) ve `recordTurnError` (prefix + hata metni, best-effort) — `turn_record.go`.
+**Bilinçli karar:** hepsini tek "generic turn-runner"a katlamak ~12 knob'lu bir god-function
+gerektirir (overflow+autoContinue+autoHandoff vs asyncChat+wake-event, prompt-only vs history-aware) →
+iki okunur fonksiyondan kötü olurdu; yalnız drift-prone mesaj-kurma bloğu paylaşıldı, yaşam-döngüsü
+çağıranda kaldı. `agentmsg`/`coordination`/`spawn` aynı bloğu kullanıyor → ileride bu helper'lara
+geçebilir. Test: `turn_record_test.go` (boş-substitution, error shape). Backend 1015 test yeşil.
+
+### Genişletme (2026-07-27): tüm continuation siteleri + async örnek şablon + join canlı ilerleme
+- **Paylaşımın yayılması:** `recordAssistantMessage` çekirdeği eklendi (`recordAssistantReply` boş→placeholder
+  ekleyip onu çağırır; `recordTurnError` prefix+hata ile çağırır). `agentmsg` (inbox), `spawn`,
+  `coordination` (worker + coordinator; metin/kill mantığı çağıranda kalır) artık bu helper'ları
+  kullanıyor — 5 continuation sitesi tek yerden. Test: `turn_record_test.go`.
+- **Async örnek şablon:** gallery'ye "Async Fan-out (Spawn/Join)" eklendi. `FlowTemplate.companions`
+  (opsiyonel) — instantiate'te companion alt-akışlar oluşturulur ve `spawn.spawnFlows`'taki
+  `companion:<i>` yer-tutucuları gerçek id'lerle değişir → şablon kutudan çıkar çıkmaz çalışır
+  (`flowActions.instantiateTemplate`).
+- **Join canlı ilerleme:** `JoinChildFlows(..., onProgress func(done,total))`; engine join case'i her
+  poll'da `"progress"` faz'lı NodeEvent yayar (`done/total`), RunView bunu çalışan satırda
+  "N/M tamamlandı…" olarak gösterir (`FlowNodeEvent.phase += 'progress'`). Canlı SSE doğrulandı:
+  `start → 0/2 → 2/2 → done`. Backend 1029 test yeşil.
 
 ## Sonraki (daha ileri)
-- Async **spawn/join** node'ları: bağımsız child Run + `join`= await-N (keystone'un çoklu genellemesi).
-- subflow'un `await-input` çocuğunu parent'a **propagate** etmesi (senkron sınırı kaldırma).
-- session-reuse launcher'larını gerçekten sadeleştirmek (continuation'ı generic bir turn-runner'a çıkarmak).
+- Join ilerlemesini canvas node'unun kendisinde de göstermek (şu an yalnız adım-izi satırında).

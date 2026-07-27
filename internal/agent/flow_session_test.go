@@ -30,8 +30,8 @@ func TestFlowRecordsDistinctSessionPerRun(t *testing.T) {
 	// create path). Each must produce a distinct flow session.
 	run1 := db.FlowRun{ID: "R1", FlowID: flowID, Status: db.FlowSuccess, Output: "out1"}
 	run2 := db.FlowRun{ID: "R2", FlowID: flowID, Status: db.FlowSuccess, Output: "out2"}
-	s1 := rt.recordFlowSessionTurn(ctx, flow, run1, "first", nil, "")
-	s2 := rt.recordFlowSessionTurn(ctx, flow, run2, "second", nil, "")
+	s1 := rt.recordFlowSessionTurn(ctx, flow, run1, "first", nil, "", false)
+	s2 := rt.recordFlowSessionTurn(ctx, flow, run2, "second", nil, "", false)
 
 	if s1 == "" || s2 == "" {
 		t.Fatalf("expected both runs to record a session, got %q / %q", s1, s2)

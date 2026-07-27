@@ -21,6 +21,8 @@ const (
 	NodeSubflow    = "subflow"     // run another flow to completion, capture its output, then Next
 	NodeStart      = "start"       // required entry marker; passes straight through to Next
 	NodeEnd        = "end"         // optional terminal; may shape (Template) / validate (OutputSchema) the final output
+	NodeSpawn      = "spawn"       // launch SpawnFlows as async child runs (non-blocking), then Next
+	NodeJoin       = "join"        // barrier: wait for a spawn node's child runs, collect outputs, then Next
 )
 
 // Graph is a reusable orchestration protocol.
@@ -106,6 +108,26 @@ type Node struct {
 	// node's output, then continue at Next. Enables flow composition/reuse. The
 	// runner guards against runaway recursion (a flow calling itself too deep).
 	FlowRef string `json:"flowRef,omitempty"` // id of the child flow to run
+
+	// spawn — launch each flow in SpawnFlows as an INDEPENDENT async child run
+	// (non-blocking); the run ids are recorded in State.Spawned[node.ID] and the
+	// engine continues at Next immediately. The rendered input (Template, default
+	// {{last}}) is passed to every child. A later join node collects the results.
+	SpawnFlows []string `json:"spawnFlows,omitempty"`
+
+	// join — barrier that waits for the child runs launched by a spawn node, then
+	// continues at Next with their joined outputs as {{last}}. SpawnRef names the
+	// spawn node whose children to await ("" = every outstanding spawned run). A
+	// spawned child that suspends at await-input fails the join (async children
+	// must be non-interactive) so the barrier always terminates.
+	SpawnRef string `json:"spawnRef,omitempty"`
+	// JoinTimeoutSec bounds how long a join waits (0 = wait forever). JoinPartial
+	// makes the join tolerant: a failed/suspended/timed-out child is DROPPED (its
+	// output excluded) instead of failing the whole join, so the barrier proceeds
+	// with the successful children's outputs. With JoinPartial off (default) any
+	// failure/suspension — or the timeout — fails the join.
+	JoinTimeoutSec int  `json:"joinTimeoutSec,omitempty"`
+	JoinPartial    bool `json:"joinPartial,omitempty"`
 
 	// await-input — TimeoutSec optionally bounds how long the run may stay
 	// suspended: a background sweeper fails a waiting run once now-suspendTime
@@ -263,6 +285,28 @@ func (g Graph) Validate() error {
 		case NodeSubflow:
 			if n.FlowRef == "" {
 				return fmt.Errorf("subflow node %q has no flowRef", n.ID)
+			}
+			if err := ref(n.Next, "node "+n.ID); err != nil {
+				return err
+			}
+		case NodeSpawn:
+			// SpawnFlows are external flow ids (not nodes in this graph) so they are
+			// not ref-checked here; existence is verified at launch time.
+			if len(n.SpawnFlows) == 0 {
+				return fmt.Errorf("spawn node %q has no spawnFlows", n.ID)
+			}
+			if err := ref(n.Next, "node "+n.ID); err != nil {
+				return err
+			}
+		case NodeJoin:
+			if n.SpawnRef != "" {
+				sn, ok := g.node(n.SpawnRef)
+				if !ok {
+					return fmt.Errorf("join node %q references unknown spawn node %q", n.ID, n.SpawnRef)
+				}
+				if sn.Type != NodeSpawn {
+					return fmt.Errorf("join node %q spawnRef %q is not a spawn node", n.ID, n.SpawnRef)
+				}
 			}
 			if err := ref(n.Next, "node "+n.ID); err != nil {
 				return err

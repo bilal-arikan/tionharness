@@ -53,8 +53,13 @@ type LaunchResult struct {
 // It is the unified-Run (Model C) launcher seam: a future budget/pause/telemetry
 // hook applies here once, for every trigger. Session-reuse launchers (the
 // scheduler's schedule-kind prompt turn, schedule_wake into an existing session)
-// are intentionally NOT folded in yet — they deliver into an existing session
-// rather than spawning a fresh one.
+// are intentionally NOT folded into LaunchRun — they deliver a turn into an
+// EXISTING session rather than spawning a fresh one, a distinct lifecycle (slot
+// claim, history-aware invoke, auto-continue/handoff, wake events). Their shared,
+// drift-prone part — building the reply/error message with meta + trace — is
+// extracted into Runtime.recordAssistantReply / recordTurnError (turn_record.go);
+// the lifecycle itself stays per-caller by design (folding it would need a
+// dozen-knob runner that reads worse than the callers).
 func (r *Runtime) LaunchRun(ctx context.Context, spec RunSpec) (LaunchResult, error) {
 	if spec.FlowID != "" {
 		if _, err := r.db.GetFlow(ctx, spec.FlowID); err != nil {

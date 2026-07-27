@@ -9,6 +9,11 @@ export interface FlowTemplate {
   name: string
   description: string
   graph: FlowGraph
+  // Optional companion flows created alongside the main flow on instantiate. A
+  // spawn node in `graph` references them by the placeholder id `companion:<i>`
+  // (index into this array), which instantiate rewrites to the created flow's
+  // real id — so an async spawn/join example is runnable out of the box.
+  companions?: { name: string; graph: FlowGraph }[]
 }
 
 export const FLOW_TEMPLATES: FlowTemplate[] = [
@@ -29,6 +34,47 @@ export const FLOW_TEMPLATES: FlowTemplate[] = [
         { id: 'end', type: 'end', title: 'Bitiş', x: 100, y: 380 },
       ],
     },
+  },
+  {
+    id: 'async-fanout',
+    name: 'Async Fan-out (Spawn/Join)',
+    description:
+      'İki analiz alt-akışını EŞZAMANLI (bloklamadan) başlatır, bir join bariyeriyle sonuçları toplar, sonra tek yanıtta birleştirir. Kısmi mod açık: bir dal başarısız olursa join yine de devam eder. Instantiate sırasında iki companion alt-akış otomatik oluşturulur ve spawn onlara bağlanır.',
+    graph: {
+      start: 'start',
+      edgeStyle: 'smoothstep',
+      nodes: [
+        { id: 'start', type: 'start', title: 'Başlangıç', next: 'spawn', x: 100, y: -80 },
+        { id: 'spawn', type: 'spawn', title: 'Analizleri Başlat', spawnFlows: ['companion:0', 'companion:1'], template: '{{input}}', next: 'join', x: 100, y: 40 },
+        { id: 'join', type: 'join', title: 'Sonuçları Topla', spawnRef: 'spawn', joinPartial: true, next: 'synth', x: 100, y: 200 },
+        { id: 'synth', type: 'agent', title: 'Birleştir', agentId: '', prompt: 'Aşağıdaki paralel analizleri tek, tutarlı bir değerlendirmede birleştir:\n{{last}}', next: 'end', x: 100, y: 360 },
+        { id: 'end', type: 'end', title: 'Bitiş', x: 100, y: 520 },
+      ],
+    },
+    companions: [
+      {
+        name: 'Analiz — Olumlu Bakış',
+        graph: {
+          start: 'start',
+          nodes: [
+            { id: 'start', type: 'start', title: 'Başlangıç', next: 't', x: 100, y: 0 },
+            { id: 't', type: 'transform', title: 'Olumlu', template: 'OLUMLU BAKIŞ:\n{{input}}\n\n(bu dalı gerçek bir analiz ajanına dönüştürebilirsin)', next: 'end', x: 100, y: 140 },
+            { id: 'end', type: 'end', title: 'Bitiş', x: 100, y: 280 },
+          ],
+        },
+      },
+      {
+        name: 'Analiz — Olumsuz Bakış',
+        graph: {
+          start: 'start',
+          nodes: [
+            { id: 'start', type: 'start', title: 'Başlangıç', next: 't', x: 100, y: 0 },
+            { id: 't', type: 'transform', title: 'Olumsuz', template: 'OLUMSUZ BAKIŞ:\n{{input}}\n\n(bu dalı gerçek bir analiz ajanına dönüştürebilirsin)', next: 'end', x: 100, y: 140 },
+            { id: 'end', type: 'end', title: 'Bitiş', x: 100, y: 280 },
+          ],
+        },
+      },
+    ],
   },
   {
     id: 'pipeline',

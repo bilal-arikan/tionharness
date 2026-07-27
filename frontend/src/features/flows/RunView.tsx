@@ -157,7 +157,9 @@ export function RunView({ run, flow, agents, onRerun, rerunning, hideSummary, on
         .filter((e) => e.phase === 'done' || e.phase === 'error')
         .map((e) => e.nodeId),
     ])
-    return Object.values(live).find((ev) => ev.phase === 'start' && !done.has(ev.nodeId)) ?? null
+    // A 'progress' frame (e.g. a join barrier reporting "2/5") keeps the node in
+    // the running row too — its latest frame is progress, not start.
+    return Object.values(live).find((ev) => (ev.phase === 'start' || ev.phase === 'progress') && !done.has(ev.nodeId)) ?? null
   }, [st, live])
 
   // Collapsible "Adım izi" (step trace) bottom panel. Persisted; defaults open on
@@ -209,9 +211,42 @@ export function RunView({ run, flow, agents, onRerun, rerunning, hideSummary, on
     // a finished node can render its reply inline on the canvas (AgentNode).
     const outputs: Record<string, string> = {}
     for (const t of liveTrace) outputs[t.nodeId] = t.output
-    setNodes(rn.map((n) => ({ ...n, data: { ...n.data, status: mergedStatuses[n.id], output: outputs[n.id] } })))
+    // Preserve in-session drag positions AND the current selection: the ~3s
+    // status/output poll re-runs this effect, so rebuilding straight from the
+    // graph would (a) snap a just-dragged node back and (b) drop React Flow's
+    // `selected` flag — which fires onSelectionChange(empty) and closes the open
+    // node inspector. Carry both over for nodes that already exist.
+    setNodes((prev) => {
+      const byId = new Map(prev.map((n) => [n.id, n]))
+      return rn.map((n) => {
+        const p = byId.get(n.id)
+        return {
+          ...n,
+          position: p?.position ?? n.position,
+          selected: p?.selected,
+          data: { ...n.data, status: mergedStatuses[n.id], output: outputs[n.id] },
+        }
+      })
+    })
     setEdges(re)
   }, [graph, mergedStatuses, liveTrace, setNodes, setEdges])
+
+  // Persist a tidied layout: dragging a node in the run inspector writes its new
+  // x/y back to the flow definition (the run renders the live flow graph, not a
+  // snapshot, so the layout is shared with the editor). Only the moved node's
+  // position changes; everything else in the graph is left intact.
+  const persistNodePosition = async (id: string, pos: { x: number; y: number }) => {
+    if (!flow || !graph) return
+    const nextNodes = graph.nodes.map((n) =>
+      n.id === id ? { ...n, x: Math.round(pos.x), y: Math.round(pos.y) } : n,
+    )
+    try {
+      await api.updateFlow(flow.id, flow.name, { ...graph, nodes: nextNodes })
+    } catch (e) {
+      // Cosmetic-only; surface for debugging but don't disrupt the inspector.
+      console.error('flow layout save failed', e)
+    }
+  }
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
@@ -311,7 +346,8 @@ export function RunView({ run, flow, agents, onRerun, rerunning, hideSummary, on
               setSelectedNodeId(id)
               if (id) setTraceOpen(true)
             }}
-            readOnly
+            runMode
+            onNodeDragStop={(id, pos) => void persistNodePosition(id, pos)}
           />
         </div>
       )}
@@ -366,7 +402,10 @@ export function RunView({ run, flow, agents, onRerun, rerunning, hideSummary, on
               {runningNode && (
                 <li className="rounded bg-[var(--color-surface-2)] p-2 text-sm">
                   <div className="text-xs text-[var(--color-accent)]">
-                    {traceCount + 1}. [{runningNode.type}] {runningNode.title} — çalışıyor…
+                    {traceCount + 1}. [{runningNode.type}] {runningNode.title} —{' '}
+                    {runningNode.phase === 'progress' && runningNode.output
+                      ? `${runningNode.output} tamamlandı…`
+                      : 'çalışıyor…'}
                   </div>
                 </li>
               )}

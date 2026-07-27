@@ -34,6 +34,8 @@ Each node's fields depend on its `type` — use the exact field names below
 |------|-----------------|---------------|
 | `start` | (none) — REQUIRED, exactly one; the graph `start` must be its id | `next` (the first real node) |
 | `end` | (optional) `template` (shape output), `outputSchema` (JSON Schema the final output must satisfy, else the run fails) | terminal — no `next` |
+| `spawn` | `spawnFlows` (child flow ids launched ASYNC/non-blocking), `template` (input) | `next` |
+| `join` | (optional) `spawnRef` (which spawn node to await; "" = all), `joinTimeoutSec` (0 = forever), `joinPartial` (drop failed/suspended/timed-out children instead of failing) — barrier that block-waits the spawned runs, joins outputs into `{{last}}` | `next` |
 | `agent` | `agentId`, `prompt` | `next` (node id; `""` = end) |
 | `parallel` | `parallel`: **array of child agent node ids** | `joinNext` (node after the join) |
 | `branch` | `branches`: array of `{contains, next}` rules | per-arm `next` |
@@ -41,7 +43,7 @@ Each node's fields depend on its `type` — use the exact field names below
 | `transform` | `template` | `next` |
 | `loop` | `body` (loop entry id), and `maxIters`>0 or non-empty `until` | `loopNext` (node after exit) |
 | `await-input` | (optional `timeoutSec`) | `next` — the run PAUSES until input arrives (durable), then continues with it as `{{last}}` |
-| `subflow` | `flowRef` (child flow id), optional `template` (child input; default `{{last}}`) | `next` — runs the child flow to completion, captures its output |
+| `subflow` | `flowRef` (child flow id), optional `template` (child input; default `{{last}}`) | `next` — runs the child flow to completion, captures its output; if the child suspends at `await-input` the PARENT run also suspends and feeding it resumes the child (propagation) |
 
 Parallel fan-out + join example (run `a` and `b` concurrently, then `merge`):
 

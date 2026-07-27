@@ -20,6 +20,8 @@ export const NODE_TYPES: { value: FlowNodeType; label: string; Icon: LucideIcon 
   { value: 'loop', label: 'Döngü', Icon: NODE_ICONS.loop },
   { value: 'await-input', label: 'Girdi Bekle', Icon: NODE_ICONS['await-input'] },
   { value: 'subflow', label: 'Alt-Akış', Icon: NODE_ICONS.subflow },
+  { value: 'spawn', label: 'Spawn (Async)', Icon: NODE_ICONS.spawn },
+  { value: 'join', label: 'Join (Bariyer)', Icon: NODE_ICONS.join },
 ]
 
 export const EDGE_STYLES: { value: EdgeStyle; label: string }[] = [

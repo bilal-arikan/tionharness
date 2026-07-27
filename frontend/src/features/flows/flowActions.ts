@@ -88,15 +88,35 @@ export function createFlowActions({
       onError('Şablondan akış oluşturmak için önce en az bir ajan oluşturun.')
       return
     }
-    const graph = ensureStartNode({
-      ...t.graph,
-      nodes: t.graph.nodes.map((n) =>
-        n.type === 'agent' && !n.agentId ? { ...n, agentId: defaultAgent } : n,
-      ),
-    })
     try {
+      // Companion flows (e.g. the spawn/join example's async branches) are created
+      // first; their real ids replace the `companion:<i>` placeholders in the main
+      // graph's spawn nodes, so the instantiated flow is runnable out of the box.
+      const created: Flow[] = []
+      const companionIds: string[] = []
+      for (const c of t.companions ?? []) {
+        const cf = await api.createFlow(c.name, ensureStartNode(c.graph))
+        created.push(cf)
+        companionIds.push(cf.id)
+      }
+      const graph = ensureStartNode({
+        ...t.graph,
+        nodes: t.graph.nodes.map((n) => {
+          if (n.type === 'agent' && !n.agentId) return { ...n, agentId: defaultAgent }
+          if (n.type === 'spawn' && n.spawnFlows) {
+            return {
+              ...n,
+              spawnFlows: n.spawnFlows.map((ref) => {
+                const m = /^companion:(\d+)$/.exec(ref)
+                return m ? companionIds[Number(m[1])] ?? ref : ref
+              }),
+            }
+          }
+          return n
+        }),
+      })
       const f = await api.createFlow(t.name, graph)
-      setFlows((prev) => [f, ...prev])
+      setFlows((prev) => [f, ...created, ...prev])
       setTab('flows')
       selectFlow(f)
     } catch (e) {

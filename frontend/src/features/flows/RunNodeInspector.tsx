@@ -131,8 +131,17 @@ function BranchCard({ node, entry }: { node: FlowNode; entry: FlowTraceEntry | u
   )
 }
 
-// ParallelFanout lists a parallel node's children with their outputs and a click
-// to open each child's own chat view — plus any failure highlight.
+// fmtDur renders a millisecond duration compactly (e.g. "820ms", "3.4s").
+function fmtDur(ms: number): string {
+  if (ms < 1000) return `${ms}ms`
+  return `${(ms / 1000).toFixed(ms < 10000 ? 1 : 0)}s`
+}
+
+// ParallelFanout shows a parallel node's children as a concurrency timeline: each
+// child is a relative bar (start→end within the fan-out's window) so overlap and
+// the critical path (longest bar) are obvious at a glance, plus a click to open
+// each child's own chat view. Falls back to a plain list when no timestamps exist
+// (older runs / children that never recorded bounds).
 function ParallelFanout({
   node,
   traceByNode,
@@ -143,25 +152,55 @@ function ParallelFanout({
   onSelectNode: (id: string) => void
 }) {
   const children = node.parallel ?? []
+  // The fan-out's time window across children that recorded bounds.
+  const timed = children
+    .map((cid) => traceByNode[cid])
+    .filter((t): t is FlowTraceEntry => !!t && !!t.startMs && !!t.endMs)
+  const t0 = timed.length ? Math.min(...timed.map((t) => t.startMs!)) : 0
+  const t1 = timed.length ? Math.max(...timed.map((t) => t.endMs!)) : 0
+  const span = Math.max(1, t1 - t0)
+
   return (
     <div className="space-y-2">
-      <div className="text-xs text-[var(--color-text-dim)]">
-        {children.length} eşzamanlı dal — birini aç:
+      <div className="flex items-center gap-2 text-xs text-[var(--color-text-dim)]">
+        <span>{children.length} eşzamanlı dal</span>
+        {timed.length > 0 && <span className="ml-auto">toplam {fmtDur(span)}</span>}
       </div>
       {children.map((cid) => {
         const t = traceByNode[cid]
+        const hasBar = !!t?.startMs && !!t?.endMs
+        const dur = hasBar ? t!.endMs! - t!.startMs! : 0
+        const leftPct = hasBar ? ((t!.startMs! - t0) / span) * 100 : 0
+        const widthPct = hasBar ? Math.max(2, (dur / span) * 100) : 0
+        // Critical path = the child whose end defines the window's end.
+        const isCritical = hasBar && t!.endMs! === t1
         return (
           <button
             key={cid}
             type="button"
             onClick={() => onSelectNode(cid)}
-            className="flex w-full items-start gap-2 rounded border border-[var(--color-border)] p-2 text-left text-sm transition hover:border-[var(--color-accent)]"
+            className="flex w-full items-center gap-2 rounded border border-[var(--color-border)] p-2 text-left text-sm transition hover:border-[var(--color-accent)]"
           >
-            <span className="shrink-0 truncate font-medium">{t?.title || cid}</span>
-            <span className="min-w-0 flex-1 truncate text-[var(--color-text-dim)]">
-              {t?.output ?? <span className="italic">çıktı yok</span>}
-            </span>
-            <ChevronRight size={14} className="mt-0.5 shrink-0 text-[var(--color-text-dim)]" />
+            <span className="w-28 shrink-0 truncate font-medium">{t?.title || cid}</span>
+            {hasBar ? (
+              <span className="relative h-4 min-w-0 flex-1 rounded bg-[var(--color-surface-2)]">
+                <span
+                  className="absolute top-0 h-4 rounded"
+                  style={{
+                    left: `${leftPct}%`,
+                    width: `${widthPct}%`,
+                    background: isCritical ? 'var(--color-danger)' : 'var(--color-accent)',
+                  }}
+                  title={`${fmtDur(dur)}${isCritical ? ' — kritik yol' : ''}`}
+                />
+              </span>
+            ) : (
+              <span className="min-w-0 flex-1 truncate text-[var(--color-text-dim)]">
+                {t?.output ?? <span className="italic">çıktı yok</span>}
+              </span>
+            )}
+            {hasBar && <span className="w-14 shrink-0 text-right text-xs text-[var(--color-text-dim)]">{fmtDur(dur)}</span>}
+            <ChevronRight size={14} className="shrink-0 text-[var(--color-text-dim)]" />
           </button>
         )
       })}

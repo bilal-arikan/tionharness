@@ -11,6 +11,8 @@ export type FlowNodeType =
   | 'subflow'
   | 'start'
   | 'end'
+  | 'spawn'
+  | 'join'
 
 export type BranchMatchMode = 'contains' | 'equals' | 'regex'
 
@@ -44,6 +46,12 @@ export interface FlowNode {
   timeoutSec?: number // 0/absent = wait forever; else fail the run after N seconds
   // subflow node
   flowRef?: string // id of the child flow to run
+  // spawn node — launch these flows as async child runs (non-blocking)
+  spawnFlows?: string[]
+  // join node — which spawn node's children to await ("" = all outstanding)
+  spawnRef?: string
+  joinTimeoutSec?: number // 0/absent = wait forever
+  joinPartial?: boolean // drop failed/suspended/timed-out children instead of failing the join
   // end node — optional output contract
   outputSchema?: string // JSON Schema the final output must satisfy (else the run fails)
   // Cosmetic canvas layout (persisted; ignored by the engine).
@@ -91,6 +99,10 @@ export interface FlowTraceEntry {
   // Accumulate mode: how many thread messages this agent node saw as prior
   // context before its own turn (FlowState.thread[:threadLen]). Absent/0 otherwise.
   threadLen?: number
+  // Unix-ms execution bounds, populated for parallel children so the run
+  // inspector can draw a concurrency timeline. Absent for sequential nodes.
+  startMs?: number
+  endMs?: number
   at: number
 }
 
@@ -112,7 +124,7 @@ export interface FlowState {
 // the run viewer shows per-node start/done/error + output the moment it happens,
 // ahead of the periodic run-state poll.
 export interface FlowNodeEvent {
-  phase: 'start' | 'done' | 'error' | 'waiting'
+  phase: 'start' | 'done' | 'error' | 'waiting' | 'progress'
   nodeId: string
   type: string
   title: string

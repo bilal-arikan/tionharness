@@ -205,6 +205,15 @@ Kalıcı trace yine altta node-node liste olarak gösterilir (mevcut davranış 
   koşuyu başlatan HTTP istemcisine gidiyordu (`obs=nil` otonom koşuda hiç canlı yoktu).
   **Not:** akış node'u session'sız `complete()` çağrısıdır → `session_step`/tool-adımı
   **canlı yaymaz**; bu yüzden canlılık **node-seviyesindedir** (chat/Aktivite'deki adım-seviyesi değil).
+- **Koşu canvas'ı: seçilebilir + sürüklenebilir (2026-07-27):** `RunView` artık `FlowCanvas`'ı
+  `readOnly` yerine yeni **`runMode`** ile çağırır. Eski `readOnly` node seçimini kapatıyordu
+  (`elementsSelectable={false}`), bu yüzden node-tıkla inspector paneli koda rağmen açılamıyordu —
+  düzeltildi. `runMode`: node **sürüklenebilir** (`nodesDraggable`) + **seçilebilir**
+  (`elementsSelectable`) ama bağlantı/palet-drop/node-config kapalı (`editable = !readOnly && !runMode`).
+  Sürükleme bitince (`onNodeDragStop`) `RunView.persistNodePosition` sadece taşınan node'un `x/y`'sini
+  flow tanımına `updateFlow` ile yazar (koşu canlı flow graph'ını render eder, snapshot değil → düzen
+  editörle paylaşılır). ~3s status/output poll'ünde node yeniden-inşa effect'i mevcut canvas
+  pozisyonlarını korur → taşınan node geri sıçramaz.
 - **Node-tıkla chat görünümü (2026-07-27):** `RunView`'de canvas'ta bir node'a tıklayınca alt
   panel düz "Adım izi" listesinden **`RunNodeInspector`** görünümüne geçer: agent node için
   **girdi mesaj balonu** (çözülmüş prompt) + **tool/düşünce adımları** (chat'in `TurnSteps`
@@ -597,6 +606,21 @@ oturuma dokunmaz → etkilenmez. Test: `flow_session_test.go` (iki koşu → iki
 oluşunca statü çipinde onu gösterir (oluşturma anında doğru). Tam eşleme FlowRun↔session linkage'i
 gerektirir (sonraki). **Not:** backend değişikliği; canlı görmek için backend yeniden derlenip
 başlatılmalı (Go hot-reload olmaz).
+
+### Flow oturumu: anında sidebar + boş-ekran fix (2026-07-27)
+Eskiden `RunFlowRecorded` session'ı up-front oluşturuyor ama **user + assistant mesajlarının ikisini de
+run bittikten sonra** ekliyordu (`recordFlowSessionTurn`) ve `db.CreateSession` bir `session` SSE olayı
+yaymıyordu. Sonuç: (1) koşu sohbet listesinde ancak manuel yenilemeyle çıkıyordu, (2) çıksa bile koşu
+sürerken tıklayınca **boş, mesajsız ekran** görünüyordu. Düzeltme:
+- Session oluşunca **user turn hemen** yazılır (`recordFlowInput` + `flowInputText` helper'ı) ve bir
+  `session`/`op:create` olayı yayınlanır → sidebar canlı yenilenir (`useAppEvents` → `refreshSessions`),
+  tıklayınca en azından **input balonu** görünür.
+- Assistant yanıtı sonda eklenince `session`/`op:message_added` olayı yayınlanır → açık transcript
+  (`listMessages`) yeniden yüklenir, yanıt manuel yenileme olmadan belirir.
+- `recordFlowSessionTurn`'e **`inputRecorded bool`** parametresi eklendi: up-front yol `true` geçer
+  (input çift eklenmez); fallback (sessionID boş) yol `false` geçer ve user mesajını kendisi yazar.
+  Test çağrıları `false` ile güncellendi (`flow_session_test.go`, hâlâ 2 mesaj). Backend değişikliği →
+  yeniden derle/başlat.
 
 ## Start / End node'ları (zorunlu giriş + opsiyonel çıktı sözleşmesi, 2026-07-27)
 

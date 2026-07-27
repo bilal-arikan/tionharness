@@ -461,6 +461,7 @@ export function FlowsPanel({ agents, onError, openFlowId }: Props) {
         ) : (
           <FlowEditorView
             agents={agents}
+            flows={flows.filter((f) => f.id !== selectedId)}
             nodes={nodes}
             edges={edges}
             edgeStyle={edgeStyle}

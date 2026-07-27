@@ -8,11 +8,12 @@ import { NodeInspector } from './NodeInspector'
 import { FlowVarsButton } from './FlowVarsButton'
 import type { FlowRFNode } from './flowGraph'
 import { NODE_TYPES, EDGE_STYLES } from './flowsPanelShared'
-import type { Agent, FlowNode, FlowNodeType, FlowRun, FlowState } from '@/types'
+import type { Agent, Flow, FlowNode, FlowNodeType, FlowRun, FlowState } from '@/types'
 import { Button, TagEditor, ModalOverlay } from '@/shared/components'
 
 interface Props {
   agents: Agent[]
+  flows: Flow[]
   nodes: FlowRFNode[]
   edges: Edge[]
   edgeStyle: EdgeStyle
@@ -58,6 +59,7 @@ interface Props {
 // in FlowsPanel; this renders it.
 export function FlowEditorView({
   agents,
+  flows,
   nodes,
   edges,
   edgeStyle,
@@ -233,6 +235,7 @@ export function FlowEditorView({
                 agents={agents}
                 isStart={start === selectedNode.id}
                 allNodes={nodes.map((n) => n.data.node)}
+                flows={flows}
                 onPatch={patchSelected}
                   onDuplicate={duplicateSelected}
                 onDelete={deleteSelected}

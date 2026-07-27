@@ -1,0 +1,76 @@
+package agent
+
+import (
+	"context"
+	"errors"
+	"strings"
+	"testing"
+
+	"github.com/bilal-arikan/tionswarm/internal/db"
+)
+
+// TestRecordAssistantReply_EmptySubstitution verifies an empty reply is persisted
+// as the placeholder text (never a silent no-reply) and a non-empty reply is kept.
+func TestRecordAssistantReply_EmptySubstitution(t *testing.T) {
+	rt, _ := newTestRuntime(t, t.TempDir())
+	ctx := context.Background()
+	a := newFlowAgent(t, rt, "worker")
+	sess, err := rt.db.CreateSession(ctx, db.Session{AgentID: a.ID, Kind: "schedule"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	out, err := rt.recordAssistantReply(ctx, sess.ID, a.ID, "   ", nil, nil, 12, "PLACEHOLDER")
+	if err != nil {
+		t.Fatalf("record failed: %v", err)
+	}
+	if out != "PLACEHOLDER" {
+		t.Errorf("empty reply should become the placeholder, got %q", out)
+	}
+
+	if _, err := rt.recordAssistantReply(ctx, sess.ID, a.ID, "real answer", nil, nil, 34, "PLACEHOLDER"); err != nil {
+		t.Fatalf("record failed: %v", err)
+	}
+
+	msgs, err := rt.db.ListMessages(ctx, sess.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(msgs) != 2 {
+		t.Fatalf("expected 2 persisted replies, got %d", len(msgs))
+	}
+	if msgs[0].Text != "PLACEHOLDER" || msgs[0].Role != "assistant" || msgs[0].AgentID != a.ID {
+		t.Errorf("first reply not persisted as expected: %+v", msgs[0])
+	}
+	if msgs[1].Text != "real answer" {
+		t.Errorf("second reply text = %q, want %q", msgs[1].Text, "real answer")
+	}
+}
+
+// TestRecordTurnError_InlineFailure verifies a failed turn is persisted inline as
+// an assistant message with the prefix + error text (best-effort, never panics).
+func TestRecordTurnError_InlineFailure(t *testing.T) {
+	rt, _ := newTestRuntime(t, t.TempDir())
+	ctx := context.Background()
+	a := newFlowAgent(t, rt, "worker")
+	sess, err := rt.db.CreateSession(ctx, db.Session{AgentID: a.ID, Kind: "schedule"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rt.recordTurnError(ctx, sess.ID, a.ID, errors.New("boom"), nil, nil, 5, "⚠️ Çalıştırılamadı:")
+
+	msgs, err := rt.db.ListMessages(ctx, sess.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(msgs) != 1 {
+		t.Fatalf("expected 1 error message, got %d", len(msgs))
+	}
+	if !strings.HasPrefix(msgs[0].Text, "⚠️ Çalıştırılamadı:") || !strings.Contains(msgs[0].Text, "boom") {
+		t.Errorf("error message shape wrong: %q", msgs[0].Text)
+	}
+	if msgs[0].Role != "assistant" {
+		t.Errorf("error turn should be an assistant message, got role %q", msgs[0].Role)
+	}
+}

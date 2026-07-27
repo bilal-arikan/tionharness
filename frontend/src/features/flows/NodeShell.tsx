@@ -30,12 +30,25 @@ export function NodeShell({ id, type, title, isStart, isEnd, selected, status, c
   const chrome: NodeChrome = chromeFor(type)
   const bodyBg = isStart ? START_TINT : isEnd ? END_TINT : 'transparent'
   const actions = useContext(NodeActionsContext)
+  // Selection reads as an accent-colored halo (a solid 3px ring + soft glow),
+  // layered OUTSIDE any run-status ring so both stay visible. The status ring
+  // (2px spread) paints on top; the selection ring (3px) shows as a rim around it.
+  const sr = statusRing(status)
+  const boxShadow = selected
+    ? [
+        sr === 'none' ? '' : sr,
+        `0 0 0 3px ${chrome.accent}`,
+        `0 0 18px 3px color-mix(in srgb, ${chrome.accent} 55%, transparent)`,
+      ]
+        .filter(Boolean)
+        .join(', ')
+    : sr
   return (
     <div
-      className="min-w-[180px] max-w-[220px] rounded-lg border bg-[var(--color-surface)] text-[var(--color-text)]"
+      className="min-w-[180px] max-w-[220px] rounded-lg border bg-[var(--color-surface)] text-[var(--color-text)] transition-shadow"
       style={{
         borderColor: selected ? chrome.accent : 'var(--color-border)',
-        boxShadow: statusRing(status),
+        boxShadow,
       }}
     >
       {actions && (

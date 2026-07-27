@@ -167,33 +167,12 @@ func (r *Runtime) runInboxDelivery(agent db.Agent, inboxID, prompt string) {
 		r.logger.Error("agent message: invoke failed",
 			"session", inboxID, "agent", agent.ID,
 			"provider", agent.Provider, "model", agent.Model, "error", err)
-		errMsg := db.Message{
-			SessionID: inboxID,
-			AgentID:   agent.ID,
-			Role:      "assistant",
-			Text:      "⚠️ Inbox mesajı işlenemedi:\n\n" + err.Error(),
-			Steps:     encodeSteps(steps),
-		}
-		meta.apply(&errMsg, time.Since(turnStart).Milliseconds())
-		if _, addErr := r.db.AddMessage(ctx, errMsg); addErr != nil {
-			r.logger.Warn("agent message: failed to record error reply", "session", inboxID, "error", addErr)
-		}
+		r.recordTurnError(ctx, inboxID, agent.ID, err, steps, meta, time.Since(turnStart).Milliseconds(), "⚠️ Inbox mesajı işlenemedi:")
 		r.emitInboxEvent(agent, inboxID, false)
 		return
 	}
-	if strings.TrimSpace(output) == "" {
-		output = "ℹ️ Ajan bu mesaj için boş yanıt döndürdü."
-	}
-	replyMsg := db.Message{
-		SessionID: inboxID,
-		AgentID:   agent.ID,
-		Role:      "assistant",
-		Text:      output,
-		Steps:     encodeSteps(steps),
-	}
-	meta.apply(&replyMsg, time.Since(turnStart).Milliseconds())
-	if _, err := r.db.AddMessage(ctx, replyMsg); err != nil {
-		r.logger.Warn("agent message: failed to record reply", "session", inboxID, "error", err)
+	if _, addErr := r.recordAssistantReply(ctx, inboxID, agent.ID, output, steps, meta, time.Since(turnStart).Milliseconds(), "ℹ️ Ajan bu mesaj için boş yanıt döndürdü."); addErr != nil {
+		r.logger.Warn("agent message: failed to record reply", "session", inboxID, "error", addErr)
 	}
 	r.logger.Info("agent message: processed", "session", inboxID, "agent", agent.ID)
 	r.emitInboxEvent(agent, inboxID, true)

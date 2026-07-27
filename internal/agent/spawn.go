@@ -214,35 +214,15 @@ func (r *Runtime) runSpawn(agent db.Agent, sessionID, prompt string, opts SpawnO
 		r.logger.Error("spawn: agent invoke failed",
 			"session", sessionID, "agent", agent.ID,
 			"provider", agent.Provider, "model", agent.Model, "error", err)
-		errMsg := db.Message{
-			SessionID: sessionID,
-			AgentID:   agent.ID,
-			Role:      "assistant",
-			Text:      "⚠️ Spawn turu çalıştırılamadı:\n\n" + err.Error(),
-			Steps:     encodeSteps(steps),
-		}
-		meta.apply(&errMsg, time.Since(turnStart).Milliseconds())
-		if _, addErr := r.db.AddMessage(ctx, errMsg); addErr != nil {
-			r.logger.Warn("spawn: failed to record error reply", "session", sessionID, "error", addErr)
-		}
+		r.recordTurnError(ctx, sessionID, agent.ID, err, steps, meta, time.Since(turnStart).Milliseconds(), "⚠️ Spawn turu çalıştırılamadı:")
 		r.emitSpawnEvent(agent, sessionID, prompt, false)
 		r.AutoTagTurn(ctx, sessionID, steps, "spawn_error")
 		return
 	}
 
-	if strings.TrimSpace(output) == "" {
-		output = "ℹ️ Ajan bu spawn için boş yanıt döndürdü."
-	}
-	replyMsg := db.Message{
-		SessionID: sessionID,
-		AgentID:   agent.ID,
-		Role:      "assistant",
-		Text:      output,
-		Steps:     encodeSteps(steps),
-	}
-	meta.apply(&replyMsg, time.Since(turnStart).Milliseconds())
-	if _, err := r.db.AddMessage(ctx, replyMsg); err != nil {
-		r.logger.Warn("spawn: failed to record reply", "session", sessionID, "error", err)
+	output, addErr := r.recordAssistantReply(ctx, sessionID, agent.ID, output, steps, meta, time.Since(turnStart).Milliseconds(), "ℹ️ Ajan bu spawn için boş yanıt döndürdü.")
+	if addErr != nil {
+		r.logger.Warn("spawn: failed to record reply", "session", sessionID, "error", addErr)
 	}
 	r.logger.Info("spawn: finished", "session", sessionID, "agent", agent.ID)
 	// Self-completion: if the spawned turn stalled with unfinished work (activated

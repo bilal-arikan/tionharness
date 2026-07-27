@@ -255,33 +255,12 @@ func (s *Scheduler) deliverWake(ctx context.Context, sc db.Schedule) error {
 	// runSessionTurn falls back to the prompt-only invoke when no runner is wired.
 	output, steps, invokeErr := s.rt.runSessionTurn(wakeCtx, agent, sc.SessionID, sc.Prompt, true)
 	if invokeErr != nil {
-		wErrMsg := db.Message{
-			SessionID: sc.SessionID,
-			AgentID:   sc.AgentID,
-			Role:      "assistant",
-			Text:      "⚠️ Otomatik uyandırma çalıştırılamadı:\n\n" + invokeErr.Error(),
-			Steps:     encodeSteps(steps),
-		}
-		wakeMeta.apply(&wErrMsg, time.Since(wakeStart).Milliseconds())
-		if _, addErr := s.db.AddMessage(ctx, wErrMsg); addErr != nil {
-			s.logger.Warn("wake: failed to record error reply", "schedule", sc.ID, "error", addErr)
-		}
+		s.rt.recordTurnError(ctx, sc.SessionID, sc.AgentID, invokeErr, steps, wakeMeta, time.Since(wakeStart).Milliseconds(), "⚠️ Otomatik uyandırma çalıştırılamadı:")
 		s.emitWakeEvent(sc, "done", "⏰ Otomatik uyandırma başarısız")
 		s.rt.AutoTagTurn(ctx, sc.SessionID, steps, "wake_error")
 		return invokeErr
 	}
-	if strings.TrimSpace(output) == "" {
-		output = "ℹ️ Ajan bu uyandırma için boş yanıt döndürdü."
-	}
-	wReplyMsg := db.Message{
-		SessionID: sc.SessionID,
-		AgentID:   sc.AgentID,
-		Role:      "assistant",
-		Text:      output,
-		Steps:     encodeSteps(steps),
-	}
-	wakeMeta.apply(&wReplyMsg, time.Since(wakeStart).Milliseconds())
-	_, err = s.db.AddMessage(ctx, wReplyMsg)
+	output, err = s.rt.recordAssistantReply(ctx, sc.SessionID, sc.AgentID, output, steps, wakeMeta, time.Since(wakeStart).Milliseconds(), "ℹ️ Ajan bu uyandırma için boş yanıt döndürdü.")
 	s.emitWakeEvent(sc, "done", "⏰ Otomatik uyandırma tamamlandı")
 	// Auto-tag tool errors / goal state from this wake turn.
 	s.rt.AutoTagTurn(ctx, sc.SessionID, steps, "")
@@ -491,39 +470,14 @@ func (s *Scheduler) deliverPrompt(ctx context.Context, sc db.Schedule) (string, 
 			"provider", agent.Provider, "model", agent.Model, "error", err)
 		// Surface the failure inside the schedule thread itself, not just in the
 		// delivery status/logs — otherwise the user opens the session and sees
-		// their prompt with no reply and no clue what went wrong. Persist the
-		// error as an assistant turn so the chat reads the failure inline.
-		errMsg := db.Message{
-			SessionID: session.ID,
-			AgentID:   sc.AgentID,
-			Role:      "assistant",
-			Text:      "⚠️ Zamanlanmış prompt çalıştırılamadı:\n\n" + err.Error(),
-			Steps:     encodeSteps(steps),
-		}
-		meta.apply(&errMsg, time.Since(turnStart).Milliseconds())
-		if _, addErr := s.db.AddMessage(ctx, errMsg); addErr != nil {
-			s.logger.Warn("schedule: failed to record error reply", "schedule", sc.ID, "error", addErr)
-		}
+		// their prompt with no reply and no clue what went wrong.
+		s.rt.recordTurnError(ctx, session.ID, sc.AgentID, err, steps, meta, time.Since(turnStart).Milliseconds(), "⚠️ Zamanlanmış prompt çalıştırılamadı:")
 		s.rt.AutoTagTurn(ctx, session.ID, steps, "schedule_error")
 		return session.ID, err
 	}
-	// A successful provider call that yields no text still leaves the thread
-	// looking unanswered; make the empty turn explicit so it never reads as a
-	// silent no-reply.
-	if strings.TrimSpace(output) == "" {
-		output = "ℹ️ Ajan bu zamanlanmış prompt için boş yanıt döndürdü."
-	}
-	// Stamp the reply with the agent id (so its avatar/identity renders) and its
-	// activity trace (so tool/thinking steps show like a normal chat turn).
-	replyMsg := db.Message{
-		SessionID: session.ID,
-		AgentID:   sc.AgentID,
-		Role:      "assistant",
-		Text:      output,
-		Steps:     encodeSteps(steps),
-	}
-	meta.apply(&replyMsg, time.Since(turnStart).Milliseconds())
-	_, err = s.db.AddMessage(ctx, replyMsg)
+	// Persist the reply (empty → explicit note; agent id + activity trace stamped
+	// so it renders like a normal chat turn).
+	output, err = s.rt.recordAssistantReply(ctx, session.ID, sc.AgentID, output, steps, meta, time.Since(turnStart).Milliseconds(), "ℹ️ Ajan bu zamanlanmış prompt için boş yanıt döndürdü.")
 	// Self-completion: a scheduled run has no human to send the follow-up, so if the
 	// turn stalled with unfinished work (activated tools it never used, or open
 	// todos) keep it going until done. No-op on a clean finish. Bounded + budget-gated.
