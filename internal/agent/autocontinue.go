@@ -2,7 +2,6 @@ package agent
 
 import (
 	"context"
-	"strings"
 	"time"
 
 	"github.com/bilal-arikan/tionswarm/internal/db"
@@ -144,34 +143,16 @@ func (r *Runtime) maybeAutoContinue(ctx context.Context, agent db.Agent, session
 
 		if err != nil {
 			// A provider error or a daily-budget stop ends the loop; surface it inline
-			// so the thread explains why the autonomous run halted.
-			errMsg := db.Message{
-				SessionID: sessionID,
-				AgentID:   agent.ID,
-				Role:      "assistant",
-				Text:      "⚠️ Otomatik devam turu çalıştırılamadı:\n\n" + err.Error(),
-				Steps:     encodeSteps(cSteps),
-			}
-			meta.apply(&errMsg, time.Since(turnStart).Milliseconds())
-			if _, addErr := r.db.AddMessage(ctx, errMsg); addErr != nil {
-				r.logger.Warn("auto-continue: failed to record error reply", "session", sessionID, "error", addErr)
-			}
+			// so the thread explains why the autonomous run halted. Shared continuation
+			// error recorder — same message shape as spawn/inbox/wake.
+			r.recordTurnError(ctx, sessionID, agent.ID, err, cSteps, meta, time.Since(turnStart).Milliseconds(), "⚠️ Otomatik devam turu çalıştırılamadı:")
 			r.AutoTagTurn(ctx, sessionID, cSteps, "auto_continue_error")
 			return
 		}
 
-		if strings.TrimSpace(output) == "" {
-			output = "ℹ️ Ajan otomatik devam turunda boş yanıt döndürdü."
-		}
-		replyMsg := db.Message{
-			SessionID: sessionID,
-			AgentID:   agent.ID,
-			Role:      "assistant",
-			Text:      output,
-			Steps:     encodeSteps(cSteps),
-		}
-		meta.apply(&replyMsg, time.Since(turnStart).Milliseconds())
-		if _, err := r.db.AddMessage(ctx, replyMsg); err != nil {
+		// Shared continuation reply recorder (empty-substitution + step trace + meta),
+		// identical to the spawn/inbox/wake path.
+		if _, err := r.recordAssistantReply(ctx, sessionID, agent.ID, output, cSteps, meta, time.Since(turnStart).Milliseconds(), "ℹ️ Ajan otomatik devam turunda boş yanıt döndürdü."); err != nil {
 			r.logger.Warn("auto-continue: failed to record reply", "session", sessionID, "error", err)
 		}
 		r.maybeAutoHandoff(ctx, sessionID, agent, overflow.Load())

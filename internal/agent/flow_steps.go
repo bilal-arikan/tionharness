@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/bilal-arikan/tionswarm/internal/events"
 	"github.com/bilal-arikan/tionswarm/internal/orchestration"
 )
 
@@ -90,16 +89,9 @@ func (r *Runtime) emitFlowNodeStepCtx(ctx context.Context, step TurnStep) {
 	if runID == "" || nodeID == "" {
 		return
 	}
-	b, err := json.Marshal(step)
-	if err != nil {
-		return
-	}
-	r.publish(events.Event{
-		Type:   "flow_node_step",
-		Level:  "info",
-		Target: map[string]string{"flowRunId": runID, "nodeId": nodeID},
-		Step:   b,
-	})
+	// Shared emit seam with the chat session_step feed (see publishStep): same
+	// marshal + bus envelope, distinct event type + (flowRunId, nodeId) target.
+	r.publishStep("flow_node_step", map[string]string{"flowRunId": runID, "nodeId": nodeID}, step)
 }
 
 // writeFlowNodeSteps atomically persists one node's steps (tmp + rename), so a

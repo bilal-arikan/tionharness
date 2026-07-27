@@ -36,10 +36,6 @@ func (r *Runtime) emitSessionStep(sessionID string, st TurnStep, origin string) 
 	if sessionID == "" || !busForwardable(st.Kind) {
 		return
 	}
-	b, err := json.Marshal(st)
-	if err != nil {
-		return
-	}
 	target := map[string]string{"sessionId": sessionID}
 	// origin lets the hub bridge tell an INTERACTIVE turn's mirrored step (which
 	// the chat handler already published to the hub in-order) from an AUTONOMOUS
@@ -50,8 +46,23 @@ func (r *Runtime) emitSessionStep(sessionID string, st TurnStep, origin string) 
 	if origin != "" {
 		target["origin"] = origin
 	}
+	r.publishStep(events.TypeSessionStep, target, st)
+}
+
+// publishStep is the shared tail of both live-step emitters — the chat/autonomous
+// session feed (session_step) and the flow run inspector (flow_node_step). Both
+// marshal one TurnStep and broadcast it on the process-wide bus under a distinct
+// event type + addressing target; routing this through one seam keeps the live-step
+// envelope (Level/Step field) from drifting between the two feeds. The forwardable
+// filter stays in each caller: the session feed drops high-frequency delta frames
+// (busForwardable) while a flow node's captured steps are already coarse-grained.
+func (r *Runtime) publishStep(evType string, target map[string]string, st TurnStep) {
+	b, err := json.Marshal(st)
+	if err != nil {
+		return
+	}
 	r.publish(events.Event{
-		Type:   "session_step",
+		Type:   evType,
 		Level:  "info",
 		Target: target,
 		Step:   b,

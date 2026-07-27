@@ -61,6 +61,10 @@ type LaunchResult struct {
 // the lifecycle itself stays per-caller by design (folding it would need a
 // dozen-knob runner that reads worse than the callers).
 func (r *Runtime) LaunchRun(ctx context.Context, spec RunSpec) (LaunchResult, error) {
+	driver := launchDriver(spec)
+	if err := r.launchGate(spec, driver); err != nil {
+		return LaunchResult{Driver: driver}, err
+	}
 	if spec.FlowID != "" {
 		if _, err := r.db.GetFlow(ctx, spec.FlowID); err != nil {
 			return LaunchResult{Driver: "flow"}, fmt.Errorf("target flow gone: %w", err)
@@ -83,4 +87,31 @@ func (r *Runtime) LaunchRun(ctx context.Context, spec RunSpec) (LaunchResult, er
 		return LaunchResult{Driver: "session"}, fmt.Errorf("spawn failed: %w", err)
 	}
 	return LaunchResult{Driver: "session", SessionID: res.SessionID}, nil
+}
+
+// launchDriver reports which driver a spec routes to (flow takes precedence over
+// the session driver), for gating and result labeling before the dispatch runs.
+func launchDriver(spec RunSpec) string {
+	if spec.FlowID != "" {
+		return "flow"
+	}
+	return "session"
+}
+
+// launchGate is the single pre-dispatch gate every fresh triggered run passes
+// through — the unified-Run (Model C) choke point the doc reserved on LaunchRun.
+// It honors the workspace autonomy brake for autonomous launches BEFORE anything
+// is spawned, so a paused workspace never creates a session / flow-run that would
+// only fail at its first provider call (guardedComplete gates there too, but only
+// after the junk row already exists). Manual launches bypass the brake. It also
+// stamps one launch-telemetry line per run (trigger, driver, autonomous). Per-
+// launcher guards (cooldown, iteration caps) still run in the caller beforehand.
+func (r *Runtime) launchGate(spec RunSpec, driver string) error {
+	if spec.Autonomous && r.Paused() {
+		return ErrAutonomyPaused
+	}
+	r.logger.Info("launch",
+		"trigger", spec.Trigger, "driver", driver, "autonomous", spec.Autonomous,
+		"flow", spec.FlowID, "agent", spec.AgentID)
+	return nil
 }
