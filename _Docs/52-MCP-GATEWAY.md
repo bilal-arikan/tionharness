@@ -14,7 +14,9 @@
 > §11-A "token'ı per-(session,agent) yap" fikrinin transport-seviyesi karşılığıdır**;
 > kimlik/token seviyesi hâlâ ayrı bir iş.
 >
-> **Durum: TASLAK / PLANLAMA.** Bu doküman kod değişikliği içermez. Önceki oturumun
+> **Durum: KISMİ.** Yukarıdaki hibrit kapsam bölümü **uygulanmıştır** (kod: `internal/mcp/pool.go`,
+> `manager.go`, `internal/agent/toolsetup.go`). Bu satırın **altındaki** faz planı ise hâlâ
+> TASLAK/PLANLAMA'dır — henüz koda dönüşmemiştir. Önceki oturumun
 > `gateway-integration-brief.md`'i + bu oturumda `codebase-memory-mcp` ile TionSwarm
 > kaynak doğrulaması + `mcp-server` (TS `gateway-manager v3`) incelemesine dayanır.
 > Amaç: gateway desenini TionSwarm'a katmanın **faz-faz uygulama planı** + Bilal'in

@@ -106,9 +106,9 @@ go tool pprof -base heap_before.prof heap_after.prof
 Tek bir fonksiyonu izole ölçmek için pprof yerine Go benchmark + `-benchmem`:
 
 ```powershell
-go test -run=^$ -bench=BenchmarkRecall -benchmem ./internal/memory/
+go test -run=^$ -bench=. -benchmem ./internal/conversation/
 # allocation profili de üret:
-go test -bench=. -benchmem -memprofile=mem.prof ./internal/memory/
+go test -bench=. -benchmem -memprofile=mem.prof ./internal/db/
 go tool pprof mem.prof
 ```
 

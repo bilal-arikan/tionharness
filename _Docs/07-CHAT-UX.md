@@ -40,7 +40,16 @@ sohbet ekranı gibi.
   yarım yanıtı `Message.Interrupted=true` olarak kurtarır → frontend asistan
   balonunda **"Bu yanıt yarıda kesildi (sunucu yeniden başladı)"** banner'ı
   (`MessageList.tsx`). Mekanizma + external-agent karşılaştırması: `_Docs/08-DEPOLAMA.md`.
-- **Tur-ortası reload/navigasyon kurtarma (istemci tarafı, crash'ten AYRI):** tur
+- **Tur-ortası reload/navigasyon kurtarma (istemci tarafı, crash'ten AYRI):**
+  > ⚠️ **Kısmen süperseded (2026-07-11).** Aşağıdaki "sahip / sahip-olmayan pencere"
+  > ikiliği **event-sourcing cutover'ıyla kaldırıldı**: her pencere artık
+  > `GET /api/sessions/{id}/stream` (per-session `SessionHub`: seq + ring + cursor'lı
+  > replay, `internal/sessionhub/hub.go`) üzerinden aynı şekilde render eder.
+  > Güncel model: **[58-QUEUE-SENKRON.md](58-QUEUE-SENKRON.md)**. Buradaki inflight
+  > sidecar/ghost-balon mekanizması kodda hâlâ vardır ama artık *crash kurtarma* rolündedir,
+  > pencere-sahipliği ayrımı için değil. Aşağısı tarihsel bağlam olarak korunmuştur.
+
+  Tur
   `context.WithoutCancel` ile client bağlantısından **detached** çalışır → sayfa
   yenileme/başka sohbete geçiş üretimi kesmez, yanıt yine persist olur. Yeniden
   girişte `App.tsx` `listMessages` ile transkripti kalıcı-mesajlarla yükler; canlı

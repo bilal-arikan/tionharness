@@ -12,7 +12,7 @@ graph LR
     F5 --> F6[Faz 6<br/>Memory]
     F6 --> F7[Faz 7<br/>Orchestration]
     F7 --> F8[Faz 8<br/>MCP]
-    F8 --> F9[Faz 9<br/>Wails Paketleme]
+    F8 --> F9[Faz 9<br/>Masaustu Paketleme]
 ```
 
 ---
@@ -97,22 +97,26 @@ graph LR
 - [x] Branch / parallel join (agent/branch/parallel node; `maxSteps` döngü guard)
 - [x] Şablon sistemi (`{{input}}`/`{{last}}`/`{{node.<id>}}`) + restart-safe run state (`flow_runs`, her node sonrası persist + boot'ta resume)
 - [x] UI: görsel protokol builder (`FlowsPanel.tsx`, "🔀 Akışlar")
-- [~] Loop node → **henüz yok** (branch + maxSteps ile döngüler dolaylı kurulabilir)
+- [x] Loop node ✅ (2026-07-25) — `Body`/`LoopNext`/`MaxIters`/`Until` ile gövde alt-zincirini yineler; ayrıca `await-input`/`subflow` node'ları (bkz. `62-BIRLESIK-RUN-AWAIT.md`)
 - **Çıktı:** Çok adımlı, dallanan iş akışları. ✅
 
 ## Faz 8 — Tool-use + MCP Entegrasyonu ✅ (Faz 7'den önce yapıldı)
 - [x] `internal/mcp`: **SDK yerine elle JSON-RPC 2.0** istemci (mark3labs/mcp-go değil — bağımlılıksız felsefe)
-- [~] Transport: **yalnızca stdio**; SSE / HTTP → henüz yok (net "desteklenmiyor")
+- [x] Transport: **stdio + Streamable HTTP** ✅; kalıcı bağlantı havuzu (`pool.go`) + hibrit kapsam (`shared`/`scoped`)
 - [x] Native tool-use protokolü (`providers` ToolDef/ToolCall/ToolResult + anthropic content-block + `agent/toolloop.go`) **ve** anahtarsız claude-cli MCP delegasyonu (`--mcp-config`)
 - [x] `internal/tools`: built-in (get_current_time/http_get) + MCP birleşik registry; ajan başına `mcp_enabled` + allowlist _(memory_recall sonradan KALDIRILDI 2026-07-05)_
 - [x] UI: "🔌 Araçlar" paneli (`ToolsPanel.tsx`) + "🔀 Akışlar"
 - **Çıktı:** Harici MCP sunucularına bağlanan, araç kullanan ajanlar. ✅
 
-## Faz 9 — Wails Paketleme + Çoklu Platform
-- [ ] Wails ile native pencere entegrasyonu
-- [ ] `wails build` → Windows `.exe`
+## Faz 9 — Masaüstü Paketleme + Çoklu Platform
+
+> ⚠️ **Wails planı İPTAL (2026-06-22).** Native pencere Wails yerine **CGO'suz WebView2**
+> ile çözüldü → `cmd/tionswarm-desktop`. Detay: [32-NATIVE-PENCERE.md](32-NATIVE-PENCERE.md).
+
+- [x] Native pencere entegrasyonu ✅ — WebView2 (`jchv/go-webview2`), CGO'suz
+- [x] Çoklu pencere (N süreç / N pencere) ✅ — [30-COKLU-PENCERE.md](30-COKLU-PENCERE.md)
 - [ ] GitHub Actions: Win/macOS/Linux otomatik derleme
-- **Çıktı:** Dağıtıma hazır masaüstü uygulaması.
+- **Çıktı:** Dağıtıma hazır masaüstü uygulaması. *(Pencere kısmı tamam; kalan iş CI/paketleme.)*
 
 > **Fikir (2026-06-22) — Sistem tepsisi (system tray) entegrasyonu.** TionSwarm arka planda
 > çalışan otonom-ajanlı bir runtime; masaüstü dağıtımında **tray'e küçülme + durum göstergesi**
@@ -194,8 +198,8 @@ graph LR
 - [ ] **C2** — Compaction emniyet katmanı (`snip`) — 1M tampon var, düşük öncelik
 
 ### MCP & dağıtım
-- [ ] **D1** — MCP çoklu-transport (stdio + SSE/HTTP factory) + config kapsam-zinciri (local<user<project)
-- [ ] **Faz 9** — Wails paketleme (yukarıdaki Faz 9 bloğu)
+- [~] **D1** — MCP çoklu-transport: stdio + Streamable HTTP ✅ (+ hibrit `shared`/`scoped` kapsam); kalan: config kapsam-zinciri (local<user<project)
+- [~] **Faz 9** — Masaüstü: native pencere ✅ (WebView2, Wails iptal); kalan: çapraz-platform CI/paketleme
 - [ ] **D3** — Server/Remote/Bridge (kapsam dışı, not olarak saklanır)
 
 ---

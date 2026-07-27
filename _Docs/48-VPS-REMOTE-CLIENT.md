@@ -203,4 +203,6 @@ kanalına maplenebilir (gelecek iş).
 5. **Yedek/kalıcılık:** VPS diski tek doğruluk kaynağı → `34-YEDEKLEME` periyodik zip
    + VPS snapshot/off-site kopya önerilir (APK'da veri tutulmuyor).
 6. **VPS maliyeti/uptime:** her zaman-açık küçük instance yeter; otonomi token
-   maliyeti mobilde daha görünmez → `daily_token_limit` guardrail agresif tutulmalı.
+   maliyeti mobilde daha görünmez → global **otonomi-pause** freni + Tasarruf Merkezi
+   takibi yakından izlenmeli. *(Per-ajan `daily_token_limit` guardrail'i 2026-07-01'de
+   kaldırıldı; bugün yalnız kullanım takibi var.)*

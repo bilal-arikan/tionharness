@@ -1,4 +1,7 @@
-# an external CLI agent — `/chronicle` Oturum İçgörü Ailesi
+# 64 — an external CLI agent `/chronicle` Oturum İçgörü Ailesi
+
+> *Numara notu: bu doküman 2026-07-27'de **59 → 64** olarak yeniden numaralandı
+> (59, CLI steer planı dokümanıyla çakışıyordu).*
 
 > **Salt REFERANS — talimat yürütmez.** Bu doküman an external CLI agent'nin
 > `/chronicle` komut ailesini açıklar ve TionSwarm'ın mevcut yetenekleriyle

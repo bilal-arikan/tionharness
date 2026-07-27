@@ -7,17 +7,20 @@ graph TD
     UI[Frontend - Web UI<br/>kendi tasarimimiz] -->|HTTP + SSE| API[API Katmani<br/>internal/api]
     API --> RT[Agent Runtime<br/>internal/agent]
     API --> ORC[Orchestration<br/>internal/orchestration]
-    API --> TASK[Task Board<br/>internal/tasks]
-    RT --> MEM[Memory<br/>internal/memory]
+    API --> TASK[Task Board<br/>db + api + agent/executor]
+    RT --> CONV[Conversation<br/>internal/conversation]
     RT --> PROV[Providers<br/>internal/providers<br/>5 kind]
     RT --> MCP[MCP Istemci<br/>internal/mcp]
-    MEM --> DB[Dosya Store<br/>JSON/JSONL<br/>internal/db]
+    CONV --> DB[Dosya Store<br/>JSON/JSONL<br/>internal/db]
     TASK --> DB
     RT --> DB
     ORC --> DB
     EMBED[internal/web<br/>go:embed all:dist] -.SPA binary icinde.-> UI
-    WAILS[Wails Masaustu Kabugu<br/>Faz 9 opsiyonel] -.sarar.-> UI
+    DESK[Native WebView2 Penceresi<br/>cmd/tionswarm-desktop] -.sarar.-> UI
 ```
+
+> **Not:** `Task Board` ayrı bir paket değildir (bkz. §7); diyagramda mantıksal
+> katman olarak gösterilir.
 
 ## Katmanlar
 
@@ -25,7 +28,7 @@ graph TD
 - Bağımsız geliştirilen web UI (React + Vite + TS + Tailwind v4, kendi bileşenlerimiz).
 - Backend ile yalnızca **JSON API + SSE** üzerinden konuşur.
 - Frontend `dist/` çıktısı `go:embed all:dist` ile Go binary'sine gömülür (`internal/web/embed.go`) → tek çalıştırılabilir dosya, ayrı statik sunucu gerekmez.
-- Wails (Faz 9) opsiyonel native pencere sarmalayıcısı olarak eklenecek.
+- Native masaüstü kabuğu: `cmd/tionswarm-desktop` (WebView2, CGO'suz). Wails planı iptal edildi — bkz. `32-NATIVE-PENCERE.md`.
 - UI/UX tamamen kendi tasarım dilimizdir.
 
 ### 2. API Katmanı (`internal/api`)
@@ -38,13 +41,13 @@ Sistemin kalbi. Her ajan bir **goroutine** olarak çalışır.
 
 ```mermaid
 graph LR
-    W[Wake Signal<br/>zamanlama/mesaj/orchestrator] --> CTX[Context Assembly<br/>gecmis + hafiza + gorevler]
+    W[Wake Signal<br/>zamanlama/mesaj/orchestrator] --> CTX[Context Assembly<br/>gecmis + skill + gorevler]
     CTX --> CALL[Provider Call<br/>LLM cagrisi]
     CALL --> TOOL[Tool Loop<br/>arac calistirma]
     TOOL --> OUT[Outcome Classification<br/>basari/hata + backoff]
-    OUT --> PERSIST[Message Persist<br/>session_messages]
-    PERSIST --> MEMUP[Memory Update<br/>reflection/dream]
-    MEMUP --> DISPATCH[Task Dispatch<br/>delege gorevler]
+    OUT --> PERSIST[Message Persist<br/>session.jsonl]
+    PERSIST --> COMPACT[Compaction<br/>butceli rolling summary]
+    COMPACT --> DISPATCH[Task Dispatch<br/>delege gorevler]
 ```
 
 **Anahtar mekanizmalar:**
@@ -59,16 +62,17 @@ graph LR
 - Şablon (template) tabanlı, restart-safe run state.
 - Facilitator + participant rolleri.
 
-### 5. Memory (`internal/memory`)
-- Hibrit hatırlama: doküman + journal + reflection.
-- Recall: **saf Go lexical cosine** (token-frekans) — anahtarsız/çevrimdışı; semantik embedding ileride aynı `Store` arkasına takılabilir.
-- "Dream" döngüsü (`agent/reflector.go` → `Reflect`): journal'ı provider'a özetletip reflection üretir.
+### 5. ~~Memory (`internal/memory`)~~ — **KALDIRILDI (2026-07-05)**
+Hafıza alt sistemi (journal recall + core memory + hafıza grafiği + ilgili tool/API/UI)
+projeden tamamen çıkarıldı. Kalıcılık artık yalnız **retrieval** katmanıdır:
+`conversation_search`, artifact'lar ve kalıcı ilerleme (`36-KALICI-ILERLEME.md`).
+Tarihsel tasarım: `31-MEMGPT-CORE-MEMORY.md`.
 
 ### 5b. Conversation (`internal/conversation`)
 - Token-bütçeli **compaction**: oturum geçmişi eşiği aşınca eski turlar rolling summary'ye katlanır; sadece özet + son N tur gönderilir → uzun sohbetlerde context taşması yok.
 
 ### 5c. Bütçe Guardrail (`agent/budget.go`)
-- `guardedComplete`: tüm runtime provider çağrılarının tek hunisi. Otonom çağrılarda (scheduler) ajan başına günlük limit (`agent_usage`) uygulanır; manuel chat muaf.
+- `guardedComplete`: tüm runtime provider çağrılarının tek hunisi. Otonom çağrılar global otonomi-pause frenine takılır; her çağrı kullanım sayaçlarına (`store_usage.go`) işlenir. **Per-ajan günlük limitler 2026-07-01'de kaldırıldı** — yalnız kullanım takibi kaldı.
 
 ### 6. Providers (`internal/providers`)
 - Ortak `Provider` arayüzü; her LLM için ayrı implementasyon.
@@ -77,7 +81,7 @@ graph LR
 - **Streaming birinci sınıf:** opsiyonel `Streamer` arayüzü (`Stream(ctx, req, onDelta)`); `anthropic` + `minimax` native token akışı yapar, claude-cli kendi stream-json izini yayınlar. UI'a SSE ile akar (bkz. `07-CHAT-UX.md`).
 
 ### 7. Diğer Modüller
-- **MCP (`internal/mcp`):** Model Context Protocol istemcisi — SDK'sız elle JSON-RPC 2.0; şu an **stdio** taşıma (SSE/HTTP hedef, henüz yok).
+- **MCP (`internal/mcp`):** Model Context Protocol istemcisi — SDK'sız elle JSON-RPC 2.0; **stdio + Streamable HTTP** taşıma. Kalıcı bağlantı havuzu (`pool.go`) turlar arası paylaşılır; hibrit kapsam (`scope: shared|scoped`) ile per-`(session,agent)` izole bağlantı mümkün (bkz. `52-MCP-GATEWAY.md`).
 - **Görevler (ayrı paket yok):** Kanban/pano + atama + yürütme mantığı `internal/db` (model+store) + `internal/api` + `internal/agent/executor.go` içinde yaşar — ayrı bir `internal/tasks` paketi yoktur.
 - **DB (`internal/db`):** Dosya-tabanlı store — entity-başına JSON + oturum-başına JSONL, bellek-içi maps + atomik diske yazma (SQLite yok). Bkz. `_Docs/08-DEPOLAMA.md`.
 - **Config (`internal/config`):** Ortam değişkenleri, şifreli kimlik bilgileri (credential secret).
@@ -92,30 +96,32 @@ graph LR
 TionSwarm/
 ├── _Docs/                       # Plan ve tasarim dokumanlari (Turkce)
 ├── cmd/
-│   ├── tionswarm/main.go          # Giris: Manager + API server + graceful shutdown
+│   ├── tionswarm/main.go          # Bassiz giris (internal/app.Bootstrap)
+│   ├── tionswarm-desktop/       # Native WebView2 masaustu penceresi (_Docs/32)
 │   └── migrate-ids/             # Tek-seferlik WS/AGT/SES prefix'li ID migrasyon araci
 ├── internal/
 │   ├── config/                  # env + AES-GCM secret
-│   ├── db/                      # Dosya store (JSON/JSONL, DB yok): db.go (maps+load+atomik yaz) + store_*.go (agent/session/task/run/schedule/memory/usage/mcp/flow)
+│   ├── db/                      # Dosya store (JSON/JSONL, DB yok): db.go (maps+load+atomik yaz) + store_*.go (task/run/schedule/usage/mcp/flow/artifact/hook/automation/lessons/search)
 │   ├── providers/               # provider arayüzü (+Streamer), anthropic, claudecli, minimax, minimax-anthropic, openrouter, catalog, transport, registry
 │   ├── web/                     # embed.go — go:embed all:dist → frontend SPA'yi binary'ye gömer, http.Handler sunar
 │   ├── agent/                   # runtime, worker, executor (RunTask), scheduler (cron), reflector, budget, titler, toolloop, toolsetup, climcp (claude-cli --mcp-config), trace (aktivite izi/StepKind), tunables, flow
-│   ├── memory/                  # vector.go (lexical cosine), memory.go (Store)
-│   ├── conversation/            # token-bütçeli compaction (tokens.go, manager.go)
+│   ├── conversation/            # token-bütçeli compaction (tokens.go, manager.go, reactive.go, repair.go)
 │   ├── orchestration/           # akış graf motoru (model.go, engine.go)
-│   ├── mcp/                     # SDK'sız stdio JSON-RPC istemci (client.go, manager.go)
+│   ├── mcp/                     # SDK'sız JSON-RPC istemci: stdio + Streamable HTTP (client.go, manager.go, pool.go)
 │   ├── tools/                   # built-in (fs/shell akan + todo_write/ask_user + artifact + lazy-load meta) + MCP birleşik registry (registry.go, builtin_*.go, activetools.go, builtin_activate.go)
 │   ├── skills/                  # dosya-tabanlı skill sistemi (2 katman: global ~/.tionswarm/skills + workspace/skills); frontmatter-only katalog, lazy body; subskills; koşullu paths:+skill_search (SK-2); ${SKILL_DIR}+bundled files (SK-1); allowed_tools auto-grant (SK-3); provenance (SK-4); varsayılan seeding (defaults/)
 │   ├── settings/                # uygulama-geneli ayarlar (settings.go, store.go — şifreli settings.json)
 │   ├── logbuf/                  # slog → ring buffer (tüm app+workspace logları); /api/logs (bkz. 12-LOGLAMA.md)
 │   ├── events/                  # Event + Bus (süreç-geneli pub/sub); otonom bildirimler → /api/events SSE
 │   ├── workspace/               # workspace başına DB + Runtime + Scheduler (manager.go); prefix'li ID'ler (id.go, ws-counter.json)
-│   └── api/                     # HTTP handler'ları (stdlib ServeMux): agents/sessions/chat(+stream/control)/files/runtime/tasks/schedules/memory/usage/mcp/agent_tools/flows/artifacts/settings/workspaces/logs/events
+│   └── api/                     # HTTP handler'ları (stdlib ServeMux): agents/sessions/chat(+stream/control)/files/runtime/tasks/schedules/usage/mcp/agent_tools/flows/artifacts/settings/workspaces/logs/events/insight
 ├── frontend/                    # React + Vite + TS + Tailwind v4; vis-network + vis-data (ilişki grafiği), @xyflow/react (flow canvas), lucide-react (ikonlar), @fontsource-variable/inter + jetbrains-mono
 └── go.mod
 ```
 
-> Henüz eklenmemiş (ileri fazlar): Wails paketleme (Faz 9), WebSocket (canlı akış şu an SSE ile). Not: MCP istemcisi yalnızca **stdio** taşımayı destekler; SSE/HTTP henüz yok.
+> Not: Canlı akış WebSocket değil **SSE** ile yapılır (bilinçli seçim). Wails planı iptal
+> edildi → native pencere `cmd/tionswarm-desktop` (WebView2). Yukarıdaki ağaç kısaltılmıştır;
+> güncel tam liste için `internal/` dizinine bakın.
 
 ## Tasarım İlkeleri
 

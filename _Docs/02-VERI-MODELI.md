@@ -16,7 +16,6 @@ erDiagram
     agents ||--o{ tasks : "sahip/atanan"
     agents ||--o{ schedules : "tetikler"
     tasks ||--o{ runs : "uretir"
-    agents ||--o{ knowledge_sources : "hafiza"
     agents ||--o{ agent_usage : "kullanim"
     flows ||--o{ flow_runs : "uretir"
 
@@ -27,14 +26,15 @@ erDiagram
         text identity
         text provider
         text model
-        text planning_mode
+        text thinking_level
+        text permission_mode
         text avatar
         text color
-        int  daily_call_limit
-        int  daily_token_limit
         int  mcp_enabled
         text allowed_tools
         text blocked_tools
+        text skills
+        text created_by
         int  created_at
         int  updated_at
     }
@@ -107,14 +107,6 @@ erDiagram
         int  created_at
         int  updated_at
     }
-    knowledge_sources {
-        text id PK
-        text agent_id FK
-        text kind
-        text content
-        blob embedding
-        int  created_at
-    }
     skills {
         text id PK
         text name
@@ -165,14 +157,14 @@ erDiagram
 
 | Tablo | Sorumluluk |
 |-------|-----------|
-| `agents` | Ajan tanımı: soul, kimlik, sağlayıcı, model, planlama modu; **günlük bütçe limitleri** (`daily_call_limit`/`daily_token_limit`); **araç ayarları** (`mcp_enabled`; `blocked_tools` ajan denylist = varsayılan tüm araçlar açık, listelenenler engelli; `allowed_tools` legacy allowlist yalnız subagent profilleri için) |
+| `agents` | Ajan tanımı: soul, kimlik, sağlayıcı, model, `thinking_level`, `permission_mode`; **araç ayarları** (`mcp_enabled`; `blocked_tools` ajan denylist = varsayılan tüm araçlar açık, listelenenler engelli; `allowed_tools` legacy allowlist yalnız subagent profilleri için). *(Per-ajan günlük bütçe limitleri 2026-07-01'de kaldırıldı.)* |
 | `sessions` | Oturum: ajan ilişkisi, başlık, mesaj sayısı, durum; **compaction** özeti (`summary` + `summary_msg_count`) |
 | `session_messages` | Tur geçmişi: rol, metin, araç çağrıları, akıl yürütme içeriği, aktivite izi (`steps`); **`agent_id`** = turu üreten ajan (çok-ajanlı oturumda mesaj başına ajan) |
-| `agent_usage` | Ajan başına gün bazlı kullanım sayacı (çağrı + giriş/çıkış token) — bütçe guardrail'i için |
+| `agent_usage` | Ajan başına gün bazlı kullanım sayacı (çağrı + giriş/çıkış token) — `db.Usage`, `store_usage.go`. **Yalnız takip/raporlama** (Tasarruf Merkezi + spend metre); limit uygulamaz |
 | `tasks` | Pano durumu (`board_state`), sahiplik, ajana verilen `prompt`, son çalışma özeti, bağımlılıklar. **`flow_id`** dolu ise görev "flow-backed" — çalıştırılınca ajana prompt yerine o orchestration akışı koşar. **`created_by`** = görevi oluşturan ajan ("" = kullanıcı; ajan yalnız kendi oluşturduğunu silebilir) |
 | `schedules` | Cron zamanlama; ajana doğrudan `prompt` teslimi (panodan bağımsız — görev çalıştırmaz); sonraki/son çalışma + teslim durumu; etkin mi. **`expires_at`** dolu ise (opsiyonel son tarih, unix saniye) o tarihten sonra zamanlama çalışmaz ve otomatik pasifleşir (0 = süresiz) |
 | `runs` | Yürütme kaydı: durum, tetikleyici (`trigger`), ajan çıktısı (`output`), hata |
-| `knowledge_sources` | Doküman, journal, reflection notları + embedding |
+| ~~`knowledge_sources`~~ | **KALDIRILDI (2026-07-05)** — hafıza alt sistemiyle birlikte çıkarıldı |
 | `mcp_servers` | İsim, taşıma (stdio; SSE/HTTP henüz yok), `command`/`args`/`url`, env config, `enabled`, `scope` (workspace). **`created_by`** = sunucuyu ekleyen ajan ("" = kullanıcı tanımlı, korumalı; ajan yalnız kendi eklediğini silebilir) |
 | `flows` | Akış tanımı: `graph` (JSON `orchestration.Graph` — agent/branch/parallel node). **`created_by`** = akışı oluşturan ajan ("" = kullanıcı) |
 | `flow_runs` | Akış yürütmesi: durum, girdi/çıktı, **restart-safe** `state` (her node sonrası persist), hata |
@@ -216,9 +208,9 @@ erDiagram
 > eklenen alanlar bugün ilgili model struct'larında yaşar:
 
 - **Ana entity'ler** (eski `0001_init`): agents, sessions, session_messages, tasks,
-  schedules, runs, knowledge_sources, mcp_servers — `models*.go`.
+  schedules, runs, mcp_servers — `models*.go`. (`knowledge_sources` 2026-07-05'te kaldırıldı.)
 - **Tasks/Schedules** (eski `0003`): `Task.Prompt/LastRun*`, `Schedule.TaskID/Prompt`, `Run.Output/Trigger`.
-- **Context/Budget** (eski `0004`): `Session.Summary*`, `Agent.Daily*Limit`, `Usage` (gün-bazlı dosya).
+- **Context/Budget** (eski `0004`): `Session.Summary*`, `Usage` (gün-bazlı dosya). *(`Agent.Daily*Limit` alanları 2026-07-01'de kaldırıldı.)*
 - **MCP/Tools** (eski `0005`): `MCPServer.Command/Args/URL/Enabled/Scope`, `Agent.MCPEnabled/AllowedTools`. **Ajan denylist (2026-06-26):** `Agent.BlockedTools` (JSON dizi) eklendi — ajan-düzeyi araç erişimi allowlist'ten denylist'e geçti; varsayılan tüm araçlar açık, listelenenler engelli. `AllowedTools` legacy (subagent profilleri); eski allowlist'ler `GET tools`'ta denylist'e çevrilir, ilk kaydetmede temizlenir. Eski JSON'da boş → "[]" (geriye uyumlu). **Yeni-agent default (2026-06-29):** `db.CreateAgent` `MCPEnabled=false` (Go zero value) gelen çağrıları `true`'ya çevirir — tüm oluşturma yolları (UI/API `POST /api/agents`, market/ingest install, workspace-template seeding, `create_agent` self-management aracı) tutarlı şekilde **tool-açık** ajan üretir. Chat-only ajan isteyen sonradan `UpdateAgentTools` ile `MCPEnabled=false`'ya çekebilir (`POST /api/agents/{id}/tools`). Test: `TestCreateAgent_DefaultsMCPEnabledOn` + `TestUpdateAgentTools_Toggle` (`internal/db/store_agent_default_test.go`).
 - **Self-management köken** (sürümsüz, son eklenen): `created_by` alanı `Agent`/`Task`/`Schedule`/`Flow`/`Hook`/`MCPServer` struct'larına eklendi (boş = kullanıcı, korumalı). Eski JSON dosyaları okunurken boş kalır → kullanıcı varlığı sayılır (geriye dönük uyumlu).
 - **Flows** (eski `0006`): `Flow.Graph`, `FlowRun` (restart-safe `State` JSON, status/input/output/error).

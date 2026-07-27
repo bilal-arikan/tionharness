@@ -6,7 +6,7 @@
 > anthropic** sağlayıcıyı hedefler (`provider.Name() == "anthropic"` kapısı); claude-cli kendi
 > döngüsünü, minimax-anthropic/custom uçlar kendi kısıtlarını korur.
 
-Oluşturma: 2026-07-07 · Durum: **P0–P4, P6, P7 (batch hariç) tamam; yalnız P5 (memory tool) planlı**
+Oluşturma: 2026-07-07 · Durum: **P0–P4, P6, P7 (batch hariç) tamam; P5 (memory tool) 2026-07-05 hafıza kaldırma kararıyla İPTAL** → açık kalan yalnız birkaç UI rozeti
 
 > **Uygulama notu (2026-07-07, ikinci tur):** P2 (sunucu web search/fetch — `AnthropicWebTools`
 > ayarı; 4.6+ modellerde `_20260209` dinamik-filtreli sürüm, eski modellerde ve PTC açıkken
@@ -131,7 +131,11 @@ model bu akışa göre eğitilmiş; tool_use round-trip'leri sunucu içinde dön
 
 ---
 
-## P5 — Memory Tool (`memory_20250818`) · Etki: orta · Efor: M
+## ~~P5 — Memory Tool (`memory_20250818`)~~ — ❌ **İPTAL (2026-07-05)**
+
+> Hafıza alt sistemi projeden **tamamen kaldırıldığı** için bu madde düşürülmüştür.
+> Kalıcılık ihtiyacı retrieval katmanıyla karşılanır: `conversation_search`, artifact'lar
+> ve kalıcı ilerleme (`36-KALICI-ILERLEME.md`). Aşağıdaki tasarım **tarihsel referanstır**.
 
 **Ne:** Claude'un eğitildiği native hafıza protokolü: `view/create/str_replace/insert/delete/
 rename` komutlarıyla `/memories` dizini. İstemci-tarafı araç — depoyu TionSwarm sağlar.
@@ -182,7 +186,7 @@ P2 Web Search/Fetch (RawContent altyapısını kullanır — P0'a dayanır)
 P6 Mid-conversation system (bağımsız, küçük)
 P7 count_tokens + strict + effort (bağımsız küçükler)
 P3 Server compaction (persist şeması gerektirir — en dikkatli iş)
-P5 Memory tool (bağımsız, UI'lı)
+P5 Memory tool — İPTAL (2026-07-05)
 P4 PTC (en büyük; P2'nin container deneyiminden sonra)
 ```
 

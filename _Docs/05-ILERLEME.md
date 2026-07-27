@@ -1,6 +1,65 @@
 # TionSwarm — İlerleme Takibi
 
-> Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-07-25**
+> Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-07-27**
+
+## Claude Opus 5 model desteği ✅ (2026-07-27)
+
+Anthropic **Opus 5** (`claude-opus-5`, 24 Tem 2026; 1M bağlam, Opus fiyatı sabit
+$5/$25) katalog + fiyat tablolarına eklendi. Açık giriş gereken 3 yer:
+`kind_anthropic.go` katalog (yeni "en yetenekli", Opus 4.8 → "önceki nesil"),
+`pricing.go` (anthropic + openrouter tabloları), `kind_openrouter.go`
+(`anthropic/claude-opus-5` önerisi). `context_window.go`/`maxoutput.go` model-ailesi
+("opus") eşleştiği için 1M pencere + çıktı tavanını otomatik verir; claude-cli `opus`
+alias'ı CLI güncellenince otomatik çözülür (değişiklik yok). Frontend model dropdown'ı
+API-güdümlü → değişiklik gerekmedi. Varsayılan model değişmedi (anthropic hâlâ Sonnet 5).
+Backend `go build` + `internal/providers` 107 test yeşil.
+
+## Flow Start / End node'ları ✅ (2026-07-27)
+
+İlk-sınıf **Start** (zorunlu giriş markeri; per-node "başlangıç işaretle" kalktı) + **End**
+(opsiyonel terminal; `Template` çıktıyı şekillendirir, `OutputSchema` nihai çıktıyı JSON-Schema'ya
+karşı doğrular → uymuyorsa `failure` = **çıktı sözleşmesi**). Temiz kurulum: geri uyumluluk yok,
+eski flow'lar `MigrateAddStart` + `MigrateFlowsStartEnd` ile workspace açılışında migrate edildi;
+default flow + gallery/swarmpack templates + frontend `ensureStartNode` yeni formatta. Detay:
+[15-FLOW-CANVAS.md](15-FLOW-CANVAS.md). Backend 1004 test yeşil; canlı: start→agent→end +
+eski FLW15 migrate doğrulandı.
+
+## Birleşik Run (C+D): await-input keystone + genişletmeler ✅ (2026-07-26)
+
+Session ⇄ flow birleşiminin yürütülebilir çekirdeği ve çevresi. Detay: [62-BIRLESIK-RUN-AWAIT.md](62-BIRLESIK-RUN-AWAIT.md).
+
+- **`await-input` keystone (durable suspend/resume):** flow bir node'da **durup girdi bekleyebilir**.
+  `orchestration.State.WaitingAt` + `db.FlowWaiting` statüsü; suspend `Run`'dan `(st,nil)` ile döner
+  (Current park), `MarkFlowRunWaiting` persist; `ClaimWaitingFlowRun` **CAS** çift-resume korur;
+  waiting'ler boot-resume dışı (orphan yok). `ResumeWaitingFlow` + `POST /api/flow-runs/{id}/input`
+  (409 guard). Girdi `{{last}}` ile devam eder. UI: RunView waiting composer + sarı ring. Canlı
+  gerçek-LLM E2E ✅.
+- **`LaunchRun` (Faz 3):** tetik-launcher'ların `FlowID?flow:session` dalı tek seam'de
+  (`internal/agent/launch.go`, `RunTrigger`/`RunSpec`); `automation.fire`/`fireBoard` + `scheduler.deliverFlow`
+  buradan geçer, `fireFlow` silindi. Reuse-continuation launcher'ları (`deliverPrompt`/wake) **tasarımca
+  dışında** (continuation ≠ fresh launch).
+- **Peer-bridge (#1):** `list_flow_runs` (status='waiting' → bekleyeni bul) + `deliver_flow_input`
+  (resume köprüsü) araçları → peer ajan/koordinatör bekleyen flow'u besler.
+- **await timeout/GC (#3):** node `TimeoutSec` + 30s sweeper (`StartWaitingFlowSweeper`) deadline
+  geçeni CAS-claim + `failure`.
+- **`subflow` node (#2):** bir flow başka flow'u baştan sona koşup çıktısını yakalar (kompozisyon);
+  `RunChildFlow` + recursion depth guard (5). Canlı E2E ✅.
+- Backend 1000 test yeşil; frontend `tsc`+`vite build` yeşil; backend restart + canlı doğrulama.
+
+## Flow motoru: accumulate cache + loop + session↔flow köprüsü ✅ (2026-07-25/26)
+
+Detay: [15-FLOW-CANVAS.md](15-FLOW-CANVAS.md).
+
+- **Accumulate (cache'li bağlam):** `Graph.Accumulate` (flows ekranında default açık) — ardışık agent
+  node'ları büyüyen tek konuşma thread'ini paylaşır (`State.Thread` + `ThreadAgentRunner`) → prompt-cache
+  düğümler arası; `Node.Fresh` opt-out; paralel copy-on-fork + join sentetik-turn katlama.
+- **`loop` node:** `Body`/`LoopNext`/`MaxIters`/`Until` — gövde alt-zincirini yineler (`{{iteration}}`),
+  global `maxSteps` frenler.
+- **Session → Flow:** chat header "Akış" toggle → oturumu **tamamlanmış bir koşu** olarak inline RunView'de
+  gösterir (flow-run oturumunun gömülü step'leri çok-node'a açılır); node inline çıktı önizlemesi; dikey
+  auto-layout.
+- **Per-run flow oturumu:** her koşu kendi session'ı (`CreateSession`, `SourceID=flow.ID`).
+- **Editörden çalıştır → Koşular tab'ına yönlendir** (editör canvas'ı değişmez).
 
 ## Kuyruk mesajı iptal edilince gözlemci kapanışı ✅ (2026-07-25)
 
@@ -866,7 +925,7 @@ matcher yazılıyor → sqz/rtk gerçekten ateşlenir.
   ailesini (tips / improve / standup / cost-tips / search / reindex) + yerel
   SQLite session store mekaniğini açıklayan ve TionSwarm muadilleriyle
   (`session.jsonl`+`debug.jsonl`, ders döngüsü `lessons.jsonl`,
-  `conversation_search`, Tasarruf Merkezi) kıyaslayan `_Docs/59-GITHUB-COPILOT-CHRONICLE.md`
+  `conversation_search`, Tasarruf Merkezi) kıyaslayan `_Docs/64-GITHUB-COPILOT-CHRONICLE.md`
   eklendi. Boşluk tespiti: proaktif `tips`/`standup` içgörü üreteci TionSwarm'da yok
   (gelecek kart tohumları dokümanda). Kaynaklar dipnotlandı (GitHub Docs + changelog).
   `00-GENEL-BAKIS.md` dizinine 58 + 59 satırları eklendi. Kod değişikliği yok.

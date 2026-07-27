@@ -145,11 +145,14 @@ import" ile "registry'den install" aynı yere düşer.
   **caveman 10** (3 agent + 7 skill; `plugins/` aynası dedup'landı),
   **taste-skill 13**, **marketingskills 45**.
 
-## 9. Sırada (opsiyonel)
+## 9. Tamamlananlar
 
-- **Dizin-sitesi adaptörü:** crossaitools/skillsmp/claudeskillsmarket'i `swarmregistry/v1`
-  uzak registry olarak köprülemek.
-- CC `model` → TionSwarm provider/model eşleme tablosu (agent adapter).
-- **Yapıldı (2026-06-25):** `.toml` command desteği (`toml.go`) + `marketplace.json`
+- ✅ **(2026-06-25)** `.toml` command desteği (`toml.go`) + `marketplace.json`
   güdümlü keşif (`marketplace.go`). Canlı: caveman artık 11 (3 agent + 8 skill; `.toml`
   komutlardan `caveman-init` eklendi, kalan 3 skill-folder ile dedup'landı).
+
+## 10. Sırada (opsiyonel)
+
+- **Dizin-sitesi adaptörü:** crossaitools/skillsmp/claudeskillsmarket'i `swarmregistry/v1`
+  uzak registry olarak köprülemek (bkz. `39-DIZIN-SITE-REGISTRY.md`).
+- CC `model` → TionSwarm provider/model eşleme tablosu (agent adapter).

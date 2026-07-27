@@ -1,5 +1,9 @@
 # TionSwarm — Masaüstünde Çoklu Pencere (Workspace'i Yeni Pencerede Aç)
 
+> **Kapsam:** bu doküman yalnız **pencere/süreç açma** mekanizmasını anlatır.
+> Açılan pencerelerin sohbet içeriğini nasıl senkron tuttuğu ayrı bir konudur →
+> [58-QUEUE-SENKRON.md](58-QUEUE-SENKRON.md) (SessionHub cursor SSE + durable send-queue).
+
 > Durum: **UYGULANDI ✅ (2026-06-23)** — N süreç / N pencere modeli. "Workspace'i yeni
 > pencerede aç" artık Edge'e sızmadan, aynı sunucuya bağlı yeni bir native TionSwarm
 > penceresi açar. Canlı doğrulandı: birincil (Bind çökmedi) + connect-only ikincil

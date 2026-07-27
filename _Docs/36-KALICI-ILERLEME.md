@@ -115,15 +115,15 @@ oturumun kendi todo trace'i varsa onu render eder (mevcut davranış); yoksa ve
 liste; hepsi tamamsa boş). `chat_turn.go::composeTurnRequest` cwd + agentID +
 `s.tun.ProgressResume()` geçirir. `progressDir` çözümü `NewTodoSink` ile **aynı**.
 
-## Core Memory ile İlişki
+## Diğer Kalıcılık Katmanlarıyla İlişki
 
 | Katman | Ne tutar | Yapı | Kapsam | Kaynak |
 |---|---|---|---|---|
-| Core memory ([31](31-MEMGPT-CORE-MEMORY.md)) | Ajan kim / kullanıcı kim | Serbest metin | Ajan | `knowledge_sources` |
+| ~~Core memory~~ | ~~Ajan kim / kullanıcı kim~~ | — | — | **KALDIRILDI (2026-07-05)** — [31](31-MEMGPT-CORE-MEMORY.md) tarihsel |
 | Session Goal | Tek kuzey-yıldızı | Tek cümle | Oturum | `db.Session.Goal` |
-| **Progress (bu doküman)** | Ne bitti / sırada ne var | Yapılı todo + log | **Proje (cwd)** | `<cwd>/.tionswarm/progress.json` |
+| **Progress (bu doküman)** | Ne bitti / sırada ne var | Yapılı todo + log | **Oturum** | `<store>/progress/<sessionID>/` |
 
-Üçü tamamlayıcı, çakışmaz; üçü de `SystemDynamic`'e ayrı bloklar girer. Progress
+Kalan iki katman tamamlayıcıdır, çakışmaz; ikisi de `SystemDynamic`'e ayrı bloklar girer. Progress
 recall'a girmez (disk dosyası, knowledge_source değil).
 
 ## Ayarlar
@@ -165,7 +165,7 @@ tipi (`types/session.ts`) korunur.
 artık "Görev Listesi" kartını (`ProgressCard`) render etmiyor — kart + progress
 fetch (`sessionProgress` + `executions` sinyaliyle tazeleme) paneiden çıkarıldı.
 Kalıcı ilerleme yalnız composer üstüne iğnelenen `TodoPanel` üzerinden görünür;
-`SessionProgressCard.tsx` artık kullanılmayan ölü bileşen. (`ProgressCard` eski
+`SessionProgressCard.tsx` **2026-07-27'de silindi** (ölü bileşendi). (`ProgressCard` eski
 davranışı: katla/aç toggle + statü işaretçisi + son 3 log; dizin-scope uyarı notu
 + `executions` sinyaliyle self-heal — hepsi kaldırıldı.)
 

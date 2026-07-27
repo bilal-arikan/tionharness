@@ -156,7 +156,7 @@
 
 ### 8. `render_template` — şablonlu çıktı render — **P2** — ✅ Tamamlandı (2026-07-06)
 
-- **Durum:** ✅ Yapıldı. Ayrıntılı tasarım + uygulama: **_Docs/53-SOURCE-TEMPLATES-RENDER.md**.
+- **Durum:** ✅ Yapıldı. Ayrıntılı tasarım + uygulama: **_Docs/63-SOURCE-TEMPLATES-RENDER.md**.
 - **Ne yapıldı (özet):**
   - Motor: Go **`html/template`** (auto-escape / XSS-güvenli), naive string-ikame değil.
   - Araç: `internal/tools/builtin_render_template.go` (+ `render_template.go` saf motor + test).

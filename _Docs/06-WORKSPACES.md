@@ -309,4 +309,6 @@ prompt cache'i bozmaz.
   (varsayılan açık) bu dizine yeniden kilitler; `gitWorktreeIsolation` (kapalı) ise
   otonom oturuma `<workspace>/worktrees/<sessionID>` altında ayrı git worktree
   verir. Detay: `_Docs/26-CALISMA-DIZINI.md`.
-- **Gelecek:** Workspace yeniden adlandırma, dışa/içe aktarma (export/import), workspace başına ayrı tema.
+- **Yeniden adlandırma ✅:** `rename_workspace` aracı (`internal/tools/builtin_workspacemgmt.go`) + WorkspaceBridge üzerinden yapılır.
+- **Workspace başına tema ✅:** görünüm/tema workspace-özeldir (`WSSettings`).
+- **Gelecek:** dışa/içe aktarma (export/import). *(Periyodik zip yedekleme zaten var → `34-YEDEKLEME.md`.)*

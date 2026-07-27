@@ -1,20 +1,41 @@
-# 31 — MemGPT/Letta Tarzı Self-Editing Bellek (Mod C uygulama planı)
+# 31 — ~~MemGPT/Letta Tarzı Self-Editing Bellek~~ · ⚰️ MEZAR TAŞI
 
-> **KALDIRILDI (2026-07-05):** Memory/core-memory alt sistemi projeden tamamen çıkarıldı. Bu doküman tarihsel referanstır.
+> # ❌ KALDIRILDI (2026-07-05)
+>
+> Memory/core-memory alt sistemi — journal recall, MemGPT/Letta tarzı çekirdek bellek,
+> hafıza grafiği ve ilgili **tüm** tool / API / UI / veri — projeden **tamamen çıkarıldı.**
+> `internal/memory` paketi diskte yoktur; `core_memory_replace` / `core_memory_append` /
+> `memory_add` gibi araçlar **mevcut değildir**.
+>
+> **Bugün yerine ne var?** Kalıcılık artık yalnız *retrieval* katmanıdır:
+> - `conversation_search` — oturumlar-arası tam-metin arama ([27](27-CROSS-SESSION-SEARCH.md))
+> - Artifact sistemi — oturum-başına birinci sınıf çıktılar
+> - Kalıcı ilerleme (`todo_write`) — [36](36-KALICI-ILERLEME.md)
+> - Context reset + handoff — [35](35-CONTEXT-RESET-HANDOFF.md)
+> - Dersler (lessons) — hata→ders döngüsü, [56](56-SELF-HEALING.md)
+>
+> **Bu dokümanın altındaki her şey tarihsel kayıttır.** İçindeki "UYGULANDI",
+> "Durum: TAMAMLANDI", tarihler ve API tanımları **o günkü** durumu yansıtır ve
+> bugün için **geçersizdir** — uygulama rehberi olarak kullanmayın.
+> Kaldırma kaydı: `05-ILERLEME.md` · Roadmap: `03-YOL-HARITASI.md` → **C6**.
 
-> **Durum (2026-06-23): Parça 1–5 + 4a + 4b UYGULANDI (TAMAMLANDI).** Çekirdek
+---
+
+## (Tarihsel) Orijinal plan ve uygulama notları
+
+> Aşağısı 2026-07-05 öncesi içeriktir; arşiv amacıyla korunmuştur.
+
+> **Durum (2026-06-23): Parça 1–5 + 4a + 4b UYGULANDI.** Çekirdek
 > bellek **adlandırılmış bloklar + karakter limiti** (Parça 5); `human` bloğu
-> dream-cycle ile **otomatik** doldurulur (Parça 4b/HA-1). Özet + `05-ILERLEME.md`.
+> dream-cycle ile **otomatik** doldurulurdu (Parça 4b/HA-1).
 >
 > **Okuma rehberi:** Aşağıdaki **Parça 2–3** (tek `core` kind'i) ve **Parça 4a**
 > (persona/human, `core_persona`/`core_human`, `section`) bölümleri **orijinal
 > plan/tarihçedir** ve sonradan **Parça 5** (adlandırılmış bloklar, `core:<label>`,
-> `label` parametresi) tarafından geçersiz kılınmıştır. Güncel API/tanımlayıcılar
-> için **Parça 5**'i esas al; eski bölümler yalnız tarihsel kayıt.
+> `label` parametresi) tarafından geçersiz kılınmıştı.
 >
-> **CLI köprüsü (2026-06-22):** `core_memory_replace`/`core_memory_append` artık
-> claude-cli ajanlarına da Interaction MCP üzerinden sunuluyor (önceden CLI ajanı
-> core-memory bloğunu görüyor ama düzenleyemiyordu). Bkz. `11-INTERACTION-MCP.md`.
+> **CLI köprüsü (2026-06-22):** `core_memory_replace`/`core_memory_append` claude-cli
+> ajanlarına Interaction MCP üzerinden sunuluyordu. Bkz. `11-INTERACTION-MCP.md`.
 >
 > **Roadmap maddesi:** `03-YOL-HARITASI.md` → **C6**.
 > **Karar:** Letta'yı doğrudan koşmak yerine (Docker + Postgres + Python sidecar →

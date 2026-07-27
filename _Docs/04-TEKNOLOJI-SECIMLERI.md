@@ -7,9 +7,14 @@ Her seçim, TypeScript dünyasındaki karşılığının Go ekosistemindeki en u
 > artık geçerli **değil** — kalıcılık entity-başına JSON + oturum-başına JSONL üzerinde,
 > bağımlılıksız. Güncel depolama tasarımı: **`_Docs/08-DEPOLAMA.md`**.
 
-## Backend (Go)
+## Backend (Go) — ⚠️ BAŞLANGIÇ PLANI (tarihsel)
 
-| İhtiyaç | Seçim | Gerekçe |
+> Aşağıdaki tablo **2026-06-15 öncesi ilk plandır, güncel değildir.** Birçok satır
+> uygulanmadı (chi, sqlite, sqlc, golang-migrate, errgroup, resmi SDK'lar, mcp-go).
+> **Gerçekte kullanılan kararlar için bir sonraki bölüme bakın →
+> "Uygulanan Durum — Planlanan vs Gerçek".**
+
+| İhtiyaç | Plan (uygulanmadı olabilir) | Gerekçe (o günkü) |
 |---------|-------|---------|
 | HTTP router | **go-chi/chi** | Hafif, idiomatic, stdlib uyumlu. (Alternatif: Echo, Fiber) |
 | WebSocket | **coder/websocket** (eski nhooyr) | Modern, context-aware, bakımlı |

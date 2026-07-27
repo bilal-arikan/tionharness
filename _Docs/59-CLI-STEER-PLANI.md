@@ -23,7 +23,10 @@
 > `handleSessionControl` (`inbox.go`) claude-cli + `!steerable` → `"unsupported"`.
 > Test: `steer_cli_test.go` `TestSteerableForTurn`.
 
-> Durum: **UYGULANDI** (2026-07-11, Faz 1 + 3). Amaç: claude-cli ajanlarında da
+> Durum: **UYGULANDI — SINIRLAMAYLA** (2026-07-11, Faz 1 + 3; 2026-07-13 revizyonu).
+> Canlı steer yalnız **"ask" / "read-only"** izin modunda çalışır; **"auto" modda
+> yapısal olarak desteklenmez** (yukarıdaki uyarıya bakın) → backend `"unsupported"`
+> döner ve mesaj kuyruğa alınır. Amaç: claude-cli ajanlarında da
 > **gerçek mid-turn steer** (turu durdurmadan, çalışan tura rehberlik enjekte
 > etme) desteği — önceden yalnız native (anthropic/minimax) provider'larda çalışıyordu.
 >

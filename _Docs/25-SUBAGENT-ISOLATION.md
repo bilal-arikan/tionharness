@@ -286,11 +286,12 @@ Native döngü (`toolloop.go`) tek turda çoklu `tool_use` döndürür; bunlar g
 | `frontend/src/components/chat/SubagentStep.tsx` | **yeni** | iç içe katlanabilir kart |
 | `frontend/src/lib/{stepKinds,tools}.ts`, `types/*.ts` | düzenle | `subagent` kind + `run_subagent` |
 
-> **Dokümantasyon temizliği (ayrı geçiş):** heartbeat kaldırıldığı için
-> `00-GENEL-BAKIS`, `05-ILERLEME`, `24-SELF-MANAGEMENT`, `tionswarm-autonomous-ops`
-> ve proje SKILL'i "heartbeat/`Wake`/`send_agent_message`" referanslarından
-> arındırılmalı; otonomi anlatımı scheduler + schedule_wake + spawn + flows'a
-> dayandırılmalı.
+> **Dokümantasyon temizliği ✅ (tamamlandı):** `00-GENEL-BAKIS`, `05-ILERLEME`,
+> `24-SELF-MANAGEMENT` ve proje SKILL'inde artık "heartbeat/`Wake`/`send_agent_message`"
+> referansı yok; otonomi anlatımı scheduler + `schedule_wake` + `spawn` + flows'a
+> dayandırıldı. `tionswarm-autonomous-ops` ve `tionswarm-self-management` skill'lerinde
+> kalan tek geçiş bilinçli **negatif ifadedir** ("heartbeat ticker yoktur",
+> "`send_agent_message` diye ayrı bir araç yoktur") — korunmalıdır.
 
 ## Fazlama
 

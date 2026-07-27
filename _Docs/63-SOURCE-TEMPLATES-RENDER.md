@@ -1,4 +1,7 @@
-# 53 — `render_template` + `html-preview` (Şablonlu HTML Render)
+# 63 — `render_template` + `html-preview` (Şablonlu HTML Render)
+
+> *Numara notu: bu doküman 2026-07-27'de **53 → 63** olarak yeniden numaralandı
+> (53, the external agent project prompt paritesi dokümanıyla çakışıyordu).*
 
 > Durum: ✅ **Uygulandı** (2026-07-06). the external agent project'ın "Source Templates / `render_template`"
 > özelliğinin TionSwarm-native karşılığı.
