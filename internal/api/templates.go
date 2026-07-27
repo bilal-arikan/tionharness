@@ -174,6 +174,7 @@ func (s *Server) seedWorkspaceTeam(ctx context.Context, wsNew *workspace.Workspa
 			MCPEnabled:     mcpEnabled,
 			AllowedTools:   ta.AllowedTools,
 			BlockedTools:   ta.BlockedTools,
+			ToolOverrides:  ta.ToolOverrides,
 			Skills:         known,
 		})
 		if err != nil {

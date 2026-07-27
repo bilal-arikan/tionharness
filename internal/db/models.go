@@ -42,6 +42,22 @@ type Agent struct {
 	AllowedTools string `json:"allowedTools"` // JSON array (legacy allowlist; subagent profiles)
 	BlockedTools string `json:"blockedTools"` // JSON array (per-agent denylist)
 
+	// ToolOverrides is the per-agent tool override map (JSON object: tool name —
+	// or a "prefix*" pattern — → tier). Tiers are the four visibility tiers
+	// ("full"/"summary"/"name-only"/"hidden") plus "blocked". It is the THIRD and
+	// last layer of the tool precedence chain:
+	//
+	//	code default  <  workspace ToolVisibility  <  agent ToolOverrides
+	//
+	// A key absent from the map inherits the workspace-effective tier. The
+	// "blocked" tier is not a visibility state: it drops the tool from the agent's
+	// catalog entirely and is the successor to BlockedTools, which is now DERIVED
+	// from this map on every write (a one-way mirror kept so market packs,
+	// workspace templates and pre-existing agent files still parse). Reading code
+	// should go through agent.ParseToolOverrides, which folds a legacy
+	// BlockedTools list back into this map.
+	ToolOverrides string `json:"toolOverrides"` // JSON object (name/pattern → tier)
+
 	// Skills is the list of skill slugs enabled for this agent. Only these skills
 	// are advertised to the agent and loadable via use_skill. Empty means the
 	// agent has no assigned skills. Skills themselves are a shared library

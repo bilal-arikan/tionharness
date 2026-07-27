@@ -125,6 +125,11 @@ export interface WorkspaceConfigPatch {
 // One of the four per-tool context visibility tiers (see backend tools.Visibility*).
 export type ToolVisibility = 'full' | 'summary' | 'name-only' | 'hidden'
 
+// AgentToolTier is the per-agent override scale: the four workspace visibility
+// tiers plus 'blocked', which drops the tool from the agent's catalog entirely
+// (the successor to the standalone "yasaklı araçlar" denylist).
+export type AgentToolTier = ToolVisibility | 'blocked'
+
 export interface WorkspaceTool {
   name: string
   label: string

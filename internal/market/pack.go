@@ -212,7 +212,8 @@ type WorkspaceTemplateAgent struct {
 	Color          string   `json:"color,omitempty"`
 	MCPEnabled     bool     `json:"mcpEnabled,omitempty"`
 	AllowedTools   string   `json:"allowedTools,omitempty"` // legacy allowlist (JSON array)
-	BlockedTools   string   `json:"blockedTools,omitempty"` // per-agent denylist (JSON array)
+	BlockedTools   string   `json:"blockedTools,omitempty"`  // legacy per-agent denylist (JSON array); folded into ToolOverrides on load
+	ToolOverrides  string   `json:"toolOverrides,omitempty"` // per-agent tool override map (JSON object: name/pattern → tier)
 	Skills         []string `json:"skills,omitempty"`       // skill slugs to assign (resolved against the seeded skills)
 }
 

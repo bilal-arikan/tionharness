@@ -570,3 +570,74 @@ yüzden kaynak model 4 tier kalır. claude-cli inherently 2 durumludur → 4 tie
 - Kod: `api/mcp_interaction.go` (`callActivate`/`callActiveTools`/`callToolSearch`/`activated`/
   `Tools`/`candidateDefs` — koşulsuz), `agent/runtime.go` (`BridgeTools` skipHidden=false),
   `interaction/server.go` (push). Detay: Doc **52** §12.
+
+## Per-ajan araç override'ları + "Yasaklı Araçlar" birleşimi (2026-07-27)
+
+Görünürlük tier'ları o güne kadar yalnız **workspace** seviyesinde ayarlanabiliyordu;
+ajan seviyesinde ise ayrı bir **yasaklı araç** denylist'i (`Agent.BlockedTools`) vardı —
+iki ayrı model, iki ayrı UI. Artık tek bir **5 değerli** ajan override haritası var:
+
+`full | summary | name-only | hidden | **blocked**`
+
+"Yasaklı", tier skalasının en uç durağı; ayrı bir liste değil.
+
+### Öncelik zinciri
+
+```
+kod default  <  workspace ToolVisibility  <  agent ToolOverrides
+```
+
+`blocked` **registry'ye girmez** — registry hâlâ yalnız 4 görünürlük tier'ını bilir.
+`blocked` bir katman yukarıda, `toolFilter`'da çözülür ve aracı ajanın kataloğundan
+tamamen düşürür. Böylece görünürlük semantiği kirlenmez; birleşme *config + UI*
+seviyesinde olur.
+
+### Persistans + geriye uyum
+
+- **`Agent.ToolOverrides`** (JSON object: araç adı **veya `prefix*` deseni** → tier).
+- **`Agent.BlockedTools` silinmedi**: `UpdateAgentTools` her yazışta `blocked`
+  girdilerinden **türetip** (sıralı) yazar → tek yönlü ayna. Market paketleri
+  (`market/pack.go`), workspace şablonları (`api/templates.go`) ve eski build'in
+  yazdığı ajan dosyaları bozulmadan okunur.
+- **Okuma tek noktadan**: `agent.ParseToolOverrides(db.Agent)` iki kaynağı **birleştirir**
+  — legacy denylist `blocked` olarak katlanır (migrasyon budur), ama açık bir override
+  daima kazanır (aynasında hâlâ yasaklı görünen bir aracı bilerek serbest bırakan ajan
+  onurlandırılır). Bozuk JSON **sessizce yutulmaz ama fatal de değildir**: override'sız
+  duruma düşer, ajan çalışmaz hale gelmez.
+
+### Desen (`prefix*`) genişletmesi
+
+`SetVisibility` tek bir tam isim alır; override anahtarı `mcp__linear__*` gibi bir desen
+olabildiği için `applyVisibilityOverrides` deseni katalog üzerinde genişletir. Anahtarlar
+**sıralı** işlenir → daha uzun (daha özel) desen sonra uygulanır ve kazanır (map iterasyon
+sırası rastgele olurdu). `blocked` tarafında desen zaten `patternPredicate` ile çalışıyordu.
+
+### UI — sadece FARKLAR
+
+Ajan detayı ▸ Araçlar ekranı artık 140 satırlık ikinci bir katalog değil, workspace
+varsayılanlarına karşı bir **diff**:
+
+- Üst liste yalnız override'lı araçlar: `varsayılan → seçili` rozet çifti + 5'li tier
+  seçici + "Varsayılana dön".
+- Varsayılana **eşit** tier seçilirse override haritadan **silinir** (gereksiz kayıt birikmez).
+- Katalogda karşılığı olmayan anahtarlar (desen veya o an kapalı bir araç) ayrı bir
+  "kesikli çerçeve" bölümünde korunur — sessizce düşürmek bir yasağı kaldırırdı.
+- Alt picker: arama + "tıklayınca uygulanacak tier" seçici; çoklu seçim + `SelectionBar`
+  ile 5 tier'ın hepsi toplu uygulanabilir.
+
+### Kod + testler
+
+- `internal/agent/tooloverrides.go` (`ParseToolOverrides`/`ValidAgentTier`/
+  `blockedPatterns`/`visibilityOverrides`/`applyVisibilityOverrides`)
+- `internal/agent/toolsetup.go` (`buildRegistry` iki-katmanlı override zinciri,
+  `blockFunc` override'dan türer, yeni `ActiveToolCatalogWithState`)
+- `internal/db/models.go` (`Agent.ToolOverrides`), `internal/db/store_mcp.go`
+  (`UpdateAgentTools` + `db.TierBlocked`)
+- `internal/api/agent_tools.go` (`defaultVisibility` + `toolOverrides`; legacy
+  `blockedTools` gövdesi hâlâ kabul edilir, geçersiz tier 400)
+- Frontend: `types/workspace.ts` (`AgentToolTier`), `features/tools/toolMeta.ts`
+  (`AGENT_TIERS`), `features/tools/VisibilityControls.tsx` (`AgentTierSelector`/
+  `AgentTierBadge`), `features/agents/AgentToolsSection.tsx` + `AgentToolOverrideRow.tsx`
+- Testler: `agent/tooloverrides_test.go` (parse/migrasyon/desen),
+  `agent/tooloverrides_integration_test.go` (ajan workspace'i ezer, `blocked` katalogdan
+  düşer, legacy denylist hâlâ yasaklar, `BlockedTools` aynası)

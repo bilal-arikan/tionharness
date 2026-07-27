@@ -1,7 +1,7 @@
 // Agent profile, partial patch, usage counters and per-agent tool selection.
 
-import type { ToolDef } from './mcp'
 import type { CLIOverhead } from './session'
+import type { AgentToolTier, ToolVisibility } from './workspace'
 
 export interface Agent {
   id: string
@@ -63,11 +63,24 @@ export interface AgentUsage {
   estimated?: boolean
 }
 
+// One row of the agent tools screen: a workspace-active tool plus the visibility
+// tier it gets WITHOUT any per-agent override — the baseline the UI diffs against.
+export interface AgentToolEntry {
+  name: string
+  description: string
+  defaultVisibility: ToolVisibility
+  inputSchema?: unknown
+}
+
 export interface AgentTools {
   mcpEnabled: boolean
-  // Per-agent denylist of tool names. Empty = all catalog tools available.
+  // Per-agent override map: tool name (or "prefix*" pattern) → tier. A tool
+  // absent from the map follows its defaultVisibility. This is the single model
+  // for both visibility and banning ('blocked').
+  toolOverrides: Record<string, AgentToolTier>
+  // Derived 'blocked' slice of toolOverrides. Read-only compatibility field.
   blockedTools: string[]
-  catalog: ToolDef[]
+  catalog: AgentToolEntry[]
 }
 
 // Fresh-start context preview: the static system prompt + tool catalog an agent

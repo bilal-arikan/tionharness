@@ -1,27 +1,36 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Ban, Plus, X } from 'lucide-react'
+import { X } from 'lucide-react'
 import { api } from '@/api'
-import type { AgentTools } from '@/types'
+import type { AgentTools, AgentToolEntry, AgentToolTier } from '@/types'
 import { useMultiSelect } from '@/shared/hooks/useMultiSelect'
 import { SelectionBar, SelectionBarButton } from '@/shared/components'
+import { AGENT_TIERS } from '@/features/tools/toolMeta'
+import { AgentTierBadge, AgentTierSelector } from '@/features/tools/VisibilityControls'
+import { AgentToolOverrideRow } from './AgentToolOverrideRow'
 
 interface Props {
   agentId: string
   onError?: (msg: string) => void
 }
 
-// AgentToolsSection manages an agent's tool DENYLIST. An agent reaches every
-// workspace-ACTIVE tool by default (including ones enabled workspace-wide
-// later); this panel only collects the tools to switch OFF for this agent.
-// The master switch toggles tool use entirely. Empty denylist = all tools.
-// Changes auto-save.
+// AgentToolsSection manages an agent's per-tool OVERRIDES. Every tool reaches
+// the agent at its workspace-effective tier by default; this panel collects the
+// tools pinned to a different one — including 'Yasaklı', which replaces the old
+// standalone denylist (banning is now the last stop on the same scale).
+//
+// Only overridden tools are listed: the screen is a DIFF against the workspace
+// defaults, not a second copy of the 140-row tools catalog. Changes auto-save,
+// and picking a tier equal to the default deletes the override instead of
+// storing a redundant one.
 export function AgentToolsSection({ agentId, onError }: Props) {
   const [data, setData] = useState<AgentTools | null>(null)
   const [busy, setBusy] = useState(false)
   const [query, setQuery] = useState('')
-  // Multi-select on the "available" tool list: modifier-click selects, then one
-  // bulk action blocks every selected tool in a single save. Plain click still
-  // blocks a single tool immediately (the original behaviour).
+  // Tier applied by a plain click in the picker (and by the bulk action). Ban is
+  // the common case, so it is the default — matching the old panel's behaviour.
+  const [pickTier, setPickTier] = useState<AgentToolTier>('blocked')
+  // Multi-select on the picker list: modifier-click selects, then one bulk action
+  // overrides every selected tool in a single save.
   const sel = useMultiSelect()
 
   const load = useCallback(() => {
@@ -30,15 +39,14 @@ export function AgentToolsSection({ agentId, onError }: Props) {
 
   useEffect(() => load(), [load])
 
-  const names = data?.catalog.map((t) => t.name) ?? []
-  const blocked = useMemo(() => new Set(data?.blockedTools ?? []), [data])
+  const catalog = useMemo(() => data?.catalog ?? [], [data])
+  const byName = useMemo(() => new Map(catalog.map((t) => [t.name, t])), [catalog])
+  const overrides = useMemo(() => data?.toolOverrides ?? {}, [data])
 
-  const save = async (mcpEnabled: boolean, blockedTools: string[]) => {
+  const save = async (mcpEnabled: boolean, next: Record<string, AgentToolTier>) => {
     if (!data) return
     setBusy(true)
-    // Drop denylist entries for tools that no longer exist in the catalog.
-    const next = blockedTools.filter((n) => names.includes(n))
-    setData({ ...data, mcpEnabled, blockedTools: next }) // optimistic
+    setData({ ...data, mcpEnabled, toolOverrides: next }) // optimistic
     try {
       await api.setAgentTools(agentId, mcpEnabled, next)
     } catch (e) {
@@ -49,31 +57,73 @@ export function AgentToolsSection({ agentId, onError }: Props) {
     }
   }
 
-  const block = (name: string) => save(data?.mcpEnabled ?? true, [...blocked, name])
-  const unblock = (name: string) =>
-    save(data?.mcpEnabled ?? true, Array.from(blocked).filter((n) => n !== name))
-  const blockAll = () => save(data?.mcpEnabled ?? true, names)
-  const clearAll = () => save(data?.mcpEnabled ?? true, [])
-  const blockSelected = () => {
-    save(data?.mcpEnabled ?? true, [...new Set([...blocked, ...sel.selected])])
+  // setTier pins one tool to a tier — or CLEARS the override when the chosen tier
+  // equals the tool's workspace default, so the diff list never accumulates
+  // no-op entries. A tool missing from the catalog (a stale entry or a "prefix*"
+  // pattern) has no known default, so its override is always kept.
+  const setTier = (name: string, tier: AgentToolTier) => {
+    const next = { ...overrides }
+    if (byName.get(name)?.defaultVisibility === tier) delete next[name]
+    else next[name] = tier
+    save(data?.mcpEnabled ?? true, next)
+  }
+
+  const clearOverride = (name: string) => {
+    const next = { ...overrides }
+    delete next[name]
+    save(data?.mcpEnabled ?? true, next)
+  }
+
+  const resetAll = () => save(data?.mcpEnabled ?? true, {})
+  const blockAll = () =>
+    save(
+      data?.mcpEnabled ?? true,
+      Object.fromEntries(catalog.map((t) => [t.name, 'blocked' as AgentToolTier])),
+    )
+
+  const applyToSelected = (tier: AgentToolTier) => {
+    const next = { ...overrides }
+    for (const name of sel.selected) {
+      if (byName.get(name)?.defaultVisibility === tier) delete next[name]
+      else next[name] = tier
+    }
+    save(data?.mcpEnabled ?? true, next)
     sel.clear()
   }
 
-  // Tools still available to ban (not blocked yet), filtered by the search box.
+  // Overridden tools that exist in the catalog — the main diff list.
+  const overridden = useMemo(
+    () =>
+      Object.keys(overrides)
+        .filter((n) => byName.has(n))
+        .sort()
+        .map((n) => ({ tool: byName.get(n) as AgentToolEntry, tier: overrides[n] })),
+    [overrides, byName],
+  )
+  // Override keys with no catalog entry: a "prefix*" pattern, or a tool not built
+  // for this workspace right now (a gated shell tool, a disabled MCP server).
+  // They are kept — dropping them would silently lift a ban — but listed apart
+  // since there is no default to diff against.
+  const orphans = useMemo(
+    () => Object.keys(overrides).filter((n) => !byName.has(n)).sort(),
+    [overrides, byName],
+  )
+
+  // Tools with no override yet, filtered by the search box.
   const available = useMemo(() => {
     const q = query.trim().toLowerCase()
-    return (data?.catalog ?? []).filter(
+    return catalog.filter(
       (t) =>
-        !blocked.has(t.name) &&
+        !(t.name in overrides) &&
         (!q || t.name.toLowerCase().includes(q) || t.description.toLowerCase().includes(q)),
     )
-  }, [data, blocked, query])
+  }, [catalog, overrides, query])
 
   if (!data) {
     return <p className="text-xs text-[var(--color-text-dim)]">Araçlar yükleniyor…</p>
   }
 
-  const blockedList = data.catalog.filter((t) => blocked.has(t.name))
+  const overrideCount = overridden.length + orphans.length
 
   return (
     <div className="space-y-3">
@@ -83,32 +133,31 @@ export function AgentToolsSection({ agentId, onError }: Props) {
           type="checkbox"
           checked={data.mcpEnabled}
           disabled={busy}
-          onChange={(e) => save(e.target.checked, data.blockedTools)}
+          onChange={(e) => save(e.target.checked, overrides)}
         />
         <span className="font-medium">Bu ajan için araç kullanımını etkinleştir</span>
       </label>
 
       {data.mcpEnabled && (
         <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] p-3">
-          {/* Blocked tools (the denylist) */}
           <div className="mb-2 flex items-center justify-between">
             <p className="text-xs text-[var(--color-text-dim)]">
-              Yasaklı araçlar ({blockedList.length}/{names.length})
+              Araç override'ları ({overrideCount}/{catalog.length})
             </p>
             <div className="flex gap-2 text-xs">
               <button
                 data-testid="agent-tools-clear-blocks"
-                onClick={clearAll}
-                disabled={busy || blockedList.length === 0}
+                onClick={resetAll}
+                disabled={busy || overrideCount === 0}
                 className="rounded bg-[var(--color-surface-2)] px-2 py-0.5 hover:opacity-90 disabled:opacity-40"
-                title="Tüm yasakları kaldır (ajan her aracı kullanabilir)"
+                title="Tüm override'ları kaldır (her araç workspace varsayılanına döner)"
               >
-                Yasakları temizle
+                Tümünü sıfırla
               </button>
               <button
                 data-testid="agent-tools-block-all"
                 onClick={blockAll}
-                disabled={busy || names.length === 0 || blockedList.length === names.length}
+                disabled={busy || catalog.length === 0}
                 className="rounded bg-[var(--color-surface-2)] px-2 py-0.5 hover:opacity-90 disabled:opacity-40"
                 title="Tüm araçları yasakla"
               >
@@ -117,77 +166,97 @@ export function AgentToolsSection({ agentId, onError }: Props) {
             </div>
           </div>
 
-          {blockedList.length === 0 ? (
+          {overrideCount === 0 ? (
             <p className="mb-3 rounded border border-dashed border-[var(--color-border)] px-3 py-3 text-center text-xs text-[var(--color-text-dim)]">
-              Hiçbir araç yasaklı değil — bu ajan tüm araçları kullanabilir. Aşağıdan yasaklamak
-              istediklerini ekle.
+              Hiçbir override yok — her araç workspace varsayılanıyla geliyor. Aşağıdan bir aracı
+              seçip görünürlüğünü değiştir veya yasakla.
             </p>
           ) : (
-            <ul className="mb-3 flex flex-wrap gap-1.5">
-              {blockedList.map((t) => (
-                <li key={t.name}>
-                  {/* The whole chip is the un-block control: click it to lift the
-                      ban (no separate X). */}
+            <ul className="mb-3 space-y-1">
+              {overridden.map(({ tool, tier }) => (
+                <AgentToolOverrideRow
+                  key={tool.name}
+                  tool={tool}
+                  tier={tier}
+                  busy={busy}
+                  onSelect={(t) => setTier(tool.name, t)}
+                  onReset={() => clearOverride(tool.name)}
+                />
+              ))}
+              {orphans.map((name) => (
+                <li
+                  key={name}
+                  data-testid="agent-tool-override-orphan"
+                  data-tool-name={name}
+                  className="flex items-center gap-2 rounded border border-dashed border-[var(--color-border)] px-2.5 py-1.5"
+                  title="Bu isim şu an katalogda yok (desen veya kapalı bir araç). Kayıt korunuyor."
+                >
+                  <code className="text-xs">{name}</code>
+                  <AgentTierBadge tier={overrides[name]} />
                   <button
-                    data-testid="agent-tool-blocked"
-                    data-tool-name={t.name}
-                    onClick={() => unblock(t.name)}
+                    onClick={() => clearOverride(name)}
                     disabled={busy}
-                    title={`${t.description}\n\nYasağı kaldırmak için tıkla`}
-                    className="group flex items-center gap-1.5 rounded-full border border-[var(--color-danger)]/40 bg-[var(--color-surface-2)] px-2.5 py-1 text-xs transition hover:border-[var(--color-danger)] hover:bg-[color-mix(in_srgb,var(--color-danger)_12%,var(--color-surface-2))] disabled:opacity-50"
+                    title="Kaydı sil"
+                    className="ml-auto rounded p-1 text-[var(--color-text-dim)] hover:text-[var(--color-danger)] disabled:opacity-40"
                   >
-                    <Ban size={12} className="shrink-0 text-[var(--color-danger)] group-hover:hidden" />
-                    <X size={12} className="hidden shrink-0 text-[var(--color-danger)] group-hover:block" />
-                    <code className="text-xs">{t.name}</code>
+                    <X size={13} />
                   </button>
                 </li>
               ))}
             </ul>
           )}
 
-          {/* Add-to-denylist picker */}
+          {/* Add-an-override picker */}
           <div className="border-t border-[var(--color-border)] pt-2">
-            <input
-              data-testid="agent-tools-search"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Yasaklamak için araç ara…"
-              className="mb-2 w-full rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-xs outline-none focus:border-[var(--color-accent)]"
-            />
+            <div className="mb-2 flex flex-wrap items-center gap-2">
+              <input
+                data-testid="agent-tools-search"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Override eklemek için araç ara…"
+                className="min-w-40 flex-1 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-xs outline-none focus:border-[var(--color-accent)]"
+              />
+              <span className="flex items-center gap-1.5 text-[11px] text-[var(--color-text-dim)]">
+                Tıklayınca:
+                <AgentTierSelector value={pickTier} busy={busy} onSelect={setPickTier} compact />
+              </span>
+            </div>
             <div className="max-h-56 space-y-1 overflow-y-auto">
-              {names.length === 0 && (
+              {catalog.length === 0 && (
                 <p className="text-xs text-[var(--color-text-dim)]">
                   Bu workspace'te aktif araç yok. Araçlar ekranından etkinleştir.
                 </p>
               )}
-              {names.length > 0 && available.length === 0 && (
+              {catalog.length > 0 && available.length === 0 && (
                 <p className="px-1 py-1 text-xs text-[var(--color-text-dim)]">
-                  {query.trim() ? 'Eşleşen araç yok.' : 'Tüm araçlar zaten yasaklı.'}
+                  {query.trim() ? 'Eşleşen araç yok.' : 'Tüm araçlarda zaten override var.'}
                 </p>
               )}
               {available.map((t) => {
                 const orderedIds = available.map((x) => x.name)
                 return (
-                <button
-                  key={t.name}
-                  data-testid="agent-tool-block-add"
-                  data-tool-name={t.name}
-                  onClick={(e) => {
-                    // Modifier-click multi-selects; plain click blocks immediately.
-                    if (sel.handleClick(e, t.name, orderedIds)) return
-                    block(t.name)
-                  }}
-                  disabled={busy}
-                  className={`flex w-full items-start gap-2.5 rounded px-1 py-1 text-left hover:bg-[var(--color-surface-2)] ${
-                    sel.isSelected(t.name) ? 'bg-[var(--color-accent-soft)] ring-1 ring-[var(--color-accent)]' : ''
-                  }`}
-                >
-                  <Plus size={13} className="mt-1 shrink-0 text-[var(--color-text-dim)]" />
-                  <span className="min-w-0">
-                    <code className="rounded bg-[var(--color-surface-2)] px-1.5 py-0.5 text-xs">{t.name}</code>
-                    <span className="ml-2 text-xs text-[var(--color-text-dim)]">{t.description}</span>
-                  </span>
-                </button>
+                  <button
+                    key={t.name}
+                    data-testid="agent-tool-block-add"
+                    data-tool-name={t.name}
+                    onClick={(e) => {
+                      // Modifier-click multi-selects; plain click applies pickTier.
+                      if (sel.handleClick(e, t.name, orderedIds)) return
+                      setTier(t.name, pickTier)
+                    }}
+                    disabled={busy}
+                    className={`flex w-full items-start gap-2 rounded px-1 py-1 text-left hover:bg-[var(--color-surface-2)] ${
+                      sel.isSelected(t.name) ? 'bg-[var(--color-accent-soft)] ring-1 ring-[var(--color-accent)]' : ''
+                    }`}
+                  >
+                    <AgentTierBadge tier={t.defaultVisibility} className="mt-0.5 shrink-0 opacity-70" />
+                    <span className="min-w-0">
+                      <code className="rounded bg-[var(--color-surface-2)] px-1.5 py-0.5 text-xs">
+                        {t.name}
+                      </code>
+                      <span className="ml-2 text-xs text-[var(--color-text-dim)]">{t.description}</span>
+                    </span>
+                  </button>
                 )
               })}
             </div>
@@ -198,9 +267,15 @@ export function AgentToolsSection({ agentId, onError }: Props) {
             onClear={sel.clear}
             onSelectAll={available.length ? () => sel.selectAll(available.map((t) => t.name)) : undefined}
           >
-            <SelectionBarButton icon={<Ban size={13} />} onClick={blockSelected} danger>
-              Seçilenleri yasakla
-            </SelectionBarButton>
+            {AGENT_TIERS.map((tier) => (
+              <SelectionBarButton
+                key={tier.value}
+                onClick={() => applyToSelected(tier.value)}
+                danger={tier.value === 'blocked'}
+              >
+                {tier.label}
+              </SelectionBarButton>
+            ))}
           </SelectionBar>
         </div>
       )}

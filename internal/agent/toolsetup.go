@@ -82,14 +82,13 @@ func allowFunc(agent db.Agent) func(string) bool {
 	return patternPredicate(patterns)
 }
 
-// blockFunc builds a tool-name predicate from an agent's blocked_tools JSON
-// denylist — it reports whether a tool is BLOCKED for this agent. An empty list
-// means "nothing blocked" (nil predicate). This is the per-agent denylist driven
-// from agent detail: agents reach all tools by default, minus these.
+// blockFunc builds a tool-name predicate reporting whether a tool is BLOCKED for
+// this agent. The denylist is the "blocked"-tier slice of the agent's tool
+// override map (which folds in the legacy BlockedTools list), so the unified
+// 5-tier model and the old standalone denylist resolve to the same predicate.
+// Nothing blocked => nil predicate (caller treats nil as "no constraint").
 func blockFunc(agent db.Agent) func(string) bool {
-	var patterns []string
-	_ = json.Unmarshal([]byte(agent.BlockedTools), &patterns)
-	return patternPredicate(patterns)
+	return patternPredicate(blockedPatterns(ParseToolOverrides(agent)))
 }
 
 // readTrackerFor returns the freshness read-tracker for a session, creating it on
@@ -602,12 +601,28 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 		}
 	}
 
-	// Per-tool visibility overrides (applied LAST so each wins over every code
-	// default + the MCP name-only default): force a tool into one of the four tiers
-	// — full / summary / name-only / hidden — chosen on the tools screen. An unknown
-	// tier value is ignored; an unknown name is a harmless no-op.
+	// Per-tool visibility overrides, applied LAST as a two-layer chain so each wins
+	// over every code default + the MCP name-only default:
+	//
+	//	code default  <  workspace ToolVisibility  <  agent ToolOverrides
+	//
+	// Both force a tool into one of the four tiers — full / summary / name-only /
+	// hidden. An unknown tier value is ignored; an unknown name is a harmless no-op.
+	// The agent map's fifth tier ("blocked") is NOT a visibility state and is
+	// deliberately skipped here: it is enforced one layer up, in toolFilter, which
+	// removes the tool from the catalog outright.
 	for name, tier := range wsToolCfg.ToolVisibility {
 		reg.SetVisibility(name, tier)
+	}
+	if agentOv := visibilityOverrides(ParseToolOverrides(agent)); len(agentOv) > 0 {
+		// Catalog names are needed only to expand "prefix*" override keys, which
+		// SetVisibility (one exact name) cannot take directly.
+		defs := reg.Defs(nil)
+		names := make([]string, 0, len(defs))
+		for _, d := range defs {
+			names = append(names, d.Name)
+		}
+		applyVisibilityOverrides(reg, agentOv, names)
 	}
 
 	// Wire the lazy-loading meta-tools once the full lazy catalog (self-management
@@ -930,6 +945,27 @@ func (r *Runtime) WorkspaceToolCatalog(ctx context.Context) []providers.ToolDef 
 func (r *Runtime) WorkspaceToolCatalogWithState(ctx context.Context) ([]providers.ToolDef, map[string]string) {
 	reg := r.buildRegistry(ctx, db.Agent{})
 	defs := reg.Defs(nil)
+	vis := make(map[string]string, len(defs))
+	for _, d := range defs {
+		vis[d.Name] = reg.VisibilityOf(d.Name)
+	}
+	return defs, vis
+}
+
+// ActiveToolCatalogWithState is ActiveToolCatalog plus each tool's
+// WORKSPACE-EFFECTIVE visibility tier — code defaults + the workspace override
+// map, with NO agent overrides applied (it builds against a zero agent).
+//
+// That is exactly the "default" an agent's override is measured against: the
+// agent tools screen shows only the tools whose per-agent tier differs from this
+// baseline, so the user sees the diff rather than 140 unchanged rows.
+func (r *Runtime) ActiveToolCatalogWithState(ctx context.Context) ([]providers.ToolDef, map[string]string) {
+	reg := r.buildRegistry(ctx, db.Agent{})
+	filter := func(name string) bool { return true }
+	if disabled := r.workspaceDisabledSet(ctx); disabled != nil {
+		filter = func(name string) bool { return !disabled[name] }
+	}
+	defs := reg.Defs(filter)
 	vis := make(map[string]string, len(defs))
 	for _, d := range defs {
 		vis[d.Name] = reg.VisibilityOf(d.Name)

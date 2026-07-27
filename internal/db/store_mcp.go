@@ -2,6 +2,9 @@ package db
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
+	"sort"
 )
 
 func (d *DB) persistMCPLocked(m MCPServer) error {
@@ -107,19 +110,47 @@ func (d *DB) DeleteMCPServer(ctx context.Context, id string) error {
 	return dbDeleteLocked(d, d.mcp, dirMCP, id)
 }
 
+// TierBlocked is the ToolOverrides tier that drops a tool from an agent's
+// catalog entirely — the successor to the standalone BlockedTools denylist.
+// Declared here (not in the tools package) to avoid an import cycle; the value
+// must stay in sync with agent.TierBlocked.
+const TierBlocked = "blocked"
+
 // UpdateAgentTools sets an agent's tool access: whether MCP tools are offered
-// and a per-agent denylist of tool-name patterns (JSON array). Agents reach all
-// workspace-active tools by default; blockedTools switches specific ones off for
-// this agent only. The legacy allowlist is cleared here so a user-facing agent
-// is fully described by its denylist (the allowlist remains for subagent
-// profiles, which never go through this endpoint).
-func (d *DB) UpdateAgentTools(ctx context.Context, agentID string, mcpEnabled bool, blockedTools string) error {
-	if blockedTools == "" {
-		blockedTools = "[]"
+// and the per-agent tool override map (JSON object, name/pattern → tier — the
+// four visibility tiers plus "blocked"). Agents reach all workspace-active
+// tools at the workspace-effective tier by default; this map overrides
+// individual tools for this agent only.
+//
+// BlockedTools is DERIVED from the map's "blocked" entries and written along
+// with it, so readers that predate the override map (market packs, workspace
+// templates, agent files written by an older build) keep seeing an accurate
+// denylist. The legacy allowlist is cleared so a user-facing agent is fully
+// described by its overrides (the allowlist remains for subagent profiles,
+// which never go through this endpoint).
+func (d *DB) UpdateAgentTools(ctx context.Context, agentID string, mcpEnabled bool, toolOverrides string) error {
+	if toolOverrides == "" {
+		toolOverrides = "{}"
 	}
-	_, err := d.mutateAgentLocked(agentID, func(a *Agent) {
+	var overrides map[string]string
+	if err := json.Unmarshal([]byte(toolOverrides), &overrides); err != nil {
+		return fmt.Errorf("tool overrides must be a JSON object: %w", err)
+	}
+	blocked := []string{}
+	for name, tier := range overrides {
+		if tier == TierBlocked {
+			blocked = append(blocked, name)
+		}
+	}
+	sort.Strings(blocked) // stable on-disk order (map iteration is random)
+	blockedJSON, err := json.Marshal(blocked)
+	if err != nil {
+		return err
+	}
+	_, err = d.mutateAgentLocked(agentID, func(a *Agent) {
 		a.MCPEnabled = mcpEnabled
-		a.BlockedTools = blockedTools
+		a.ToolOverrides = toolOverrides
+		a.BlockedTools = string(blockedJSON)
 		a.AllowedTools = "[]"
 	})
 	return err

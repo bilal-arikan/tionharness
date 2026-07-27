@@ -1,5 +1,12 @@
 // Agents: CRUD, usage/budget guardrails and per-agent tool access.
-import type { Agent, AgentPatch, AgentUsage, AgentTools, AgentContextPreview } from '@/types'
+import type {
+  Agent,
+  AgentPatch,
+  AgentUsage,
+  AgentTools,
+  AgentToolTier,
+  AgentContextPreview,
+} from '@/types'
 import { req } from './client'
 
 export const agentApi = {
@@ -44,9 +51,16 @@ export const agentApi = {
     req<{ path: string }>(`/api/agents/${agentId}/reveal`, { method: 'POST' }),
 
   agentTools: (agentId: string) => req<AgentTools>(`/api/agents/${agentId}/tools`),
-  setAgentTools: (agentId: string, mcpEnabled: boolean, blockedTools: string[]) =>
-    req<{ mcpEnabled: boolean; blockedTools: string[] }>(
+  // Replaces the agent's whole override map (tool name → tier, 'blocked'
+  // included). An empty map means "no overrides" — every tool follows the
+  // workspace-effective tier.
+  setAgentTools: (
+    agentId: string,
+    mcpEnabled: boolean,
+    toolOverrides: Record<string, AgentToolTier>,
+  ) =>
+    req<{ mcpEnabled: boolean; toolOverrides: Record<string, AgentToolTier> }>(
       `/api/agents/${agentId}/tools`,
-      { method: 'POST', body: JSON.stringify({ mcpEnabled, blockedTools }) },
+      { method: 'POST', body: JSON.stringify({ mcpEnabled, toolOverrides }) },
     ),
 }

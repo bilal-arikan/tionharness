@@ -1,6 +1,6 @@
 // Pure helpers for the tools screen, split out of ToolsPanel to keep that file
 // focused on state/behaviour. No React, no state — name parsing + schema flatten.
-import type { MCPServer, ToolVisibility, WorkspaceTool } from '@/types'
+import type { AgentToolTier, MCPServer, ToolVisibility, WorkspaceTool } from '@/types'
 
 // The four context-visibility tiers, in order of decreasing per-turn cost. Each
 // entry drives the tier selector: short label, one-line hint, badge accent color.
@@ -44,6 +44,29 @@ export const VISIBILITY_TIERS: {
 
 export function visibilityMeta(v: ToolVisibility | undefined) {
   return VISIBILITY_TIERS.find((t) => t.value === v) ?? VISIBILITY_TIERS[1]
+}
+
+// AGENT_TIERS extends the workspace scale with 'blocked' for the per-agent
+// override selector. 'blocked' is not a visibility state — it removes the tool
+// from the agent's catalog altogether — so it sits last, past 'Gizli'.
+export const AGENT_TIERS: {
+  value: AgentToolTier
+  label: string
+  hint: string
+  color: string
+  labelColor?: string
+}[] = [
+  ...VISIBILITY_TIERS,
+  {
+    value: 'blocked',
+    label: 'Yasaklı',
+    hint: 'Araç bu ajana hiç sunulmaz — katalogda yok, tool_search bulamaz, çağrılamaz.',
+    color: 'var(--color-danger)',
+  },
+]
+
+export function agentTierMeta(v: AgentToolTier | undefined) {
+  return AGENT_TIERS.find((t) => t.value === v) ?? AGENT_TIERS[1]
 }
 
 // parseArgs safely turns an MCPServer.args JSON string into a string[]. The
