@@ -31,6 +31,12 @@ type Settings struct {
 	// An explicitly selected agent runs on ITS OWN model; empty = the workspace's
 	// first agent with the cheap title-model override.
 	AutoScanAgentID string `json:"autoScanAgentId,omitempty"`
+	// AutoVerifyDays: an APPLIED finding not seen for this many days (and not
+	// regressed) is auto-marked VERIFIED during maintenance. 0 = default (14).
+	AutoVerifyDays int `json:"autoVerifyDays,omitempty"`
+	// PruneDays: a DISMISSED/VERIFIED finding untouched for this many days is
+	// deleted during maintenance. 0 = default (45).
+	PruneDays int `json:"pruneDays,omitempty"`
 }
 
 var settingsRelPath = filepath.Join("insight", "settings.json")

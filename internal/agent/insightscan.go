@@ -141,7 +141,7 @@ func (r *Runtime) RunInsightScan(ctx context.Context, scope insight.ScanScope, a
 
 	// Lifecycle maintenance: auto-verify applied fixes that stopped recurring and
 	// prune long-resolved findings, so the store doesn't accumulate stale noise.
-	if m, mErr := findings.Maintain(time.Now().Unix()); mErr != nil {
+	if m, mErr := findings.Maintain(time.Now().Unix(), int64(settings.AutoVerifyDays)*86400, int64(settings.PruneDays)*86400); mErr != nil {
 		r.logger.Warn("insight maintain failed", "error", mErr)
 	} else if m.AutoVerified > 0 || m.Pruned > 0 {
 		r.logger.Info("insight maintain", "autoVerified", m.AutoVerified, "pruned", m.Pruned)

@@ -123,6 +123,32 @@ export function SettingsTab({ settings, setSettings, onError, onReset }: Props) 
         </span>
       </label>
       <label className="block">
+        <span className="text-sm">Uygulanan bulguyu otomatik doğrula: N gün (0 = 14)</span>
+        <input
+          type="number"
+          min={0}
+          value={settings.autoVerifyDays ?? 0}
+          onChange={(e) => setSettings({ ...settings, autoVerifyDays: Number(e.target.value) })}
+          className={`${inputCls} w-32`}
+        />
+        <span className="mt-1 block text-xs text-[var(--color-text-dim)]">
+          "Uygulandı" bir bulgu bu kadar gün nüksetmezse (ve regrese değilse) otomatik "Doğrulandı" olur.
+        </span>
+      </label>
+      <label className="block">
+        <span className="text-sm">Çözülmüş bulguyu buda: N gün (0 = 45)</span>
+        <input
+          type="number"
+          min={0}
+          value={settings.pruneDays ?? 0}
+          onChange={(e) => setSettings({ ...settings, pruneDays: Number(e.target.value) })}
+          className={`${inputCls} w-32`}
+        />
+        <span className="mt-1 block text-xs text-[var(--color-text-dim)]">
+          "Yoksayıldı"/"Doğrulandı" bir bulguya bu kadar gün dokunulmazsa silinir (birikmiş gürültüyü temizler).
+        </span>
+      </label>
+      <label className="block">
         <span className="text-sm">Otomatik tarama cron (boş = kapalı)</span>
         <input
           type="text"

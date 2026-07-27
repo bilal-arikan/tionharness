@@ -1,19 +1,22 @@
 package insight
 
-// Findings lifecycle maintenance. Unlike lessons (which age out after 45 days),
-// findings only ever grew — dismissed/verified items lingered forever and an
+// Findings lifecycle maintenance. Unlike lessons (which age out purely by time,
+// default 2 days), findings only ever grew — dismissed/verified items lingered
+// forever and an
 // "applied" fix was never confirmed. Maintain closes both gaps: it auto-verifies
 // applied findings that stopped recurring, and prunes long-resolved ones.
 
 const (
-	// autoVerifyAge: an APPLIED finding whose last sighting is older than this
-	// (i.e. it has not recurred in any scan since) is considered fixed → verified.
-	// A regressed finding is never auto-verified (it demonstrably came back).
-	autoVerifyAge = int64(14 * 24 * 60 * 60) // 14 days
+	// DefaultAutoVerifyAge: an APPLIED finding whose last sighting is older than
+	// this (i.e. it has not recurred in any scan since) is considered fixed →
+	// verified. A regressed finding is never auto-verified (it demonstrably came
+	// back). Overridable per workspace via Settings.AutoVerifyDays.
+	DefaultAutoVerifyAge = int64(14 * 24 * 60 * 60) // 14 days
 
-	// pruneAge: a DISMISSED or VERIFIED finding untouched for this long is deleted,
-	// so the store does not accumulate resolved noise indefinitely.
-	pruneAge = int64(45 * 24 * 60 * 60) // 45 days
+	// DefaultPruneAge: a DISMISSED or VERIFIED finding untouched for this long is
+	// deleted, so the store does not accumulate resolved noise indefinitely.
+	// Overridable per workspace via Settings.PruneDays.
+	DefaultPruneAge = int64(45 * 24 * 60 * 60) // 45 days
 )
 
 // MaintainResult reports what a maintenance pass changed.
@@ -27,8 +30,15 @@ type MaintainResult struct {
 //   - APPLIED findings not seen for autoVerifyAge and not regressed → VERIFIED.
 //   - DISMISSED/VERIFIED findings not seen for pruneAge → removed.
 //
-// It rewrites the store only when something changed.
-func (s *FindingStore) Maintain(now int64) (MaintainResult, error) {
+// autoVerifyAge/pruneAge are in seconds; a value <= 0 falls back to the built-in
+// default. It rewrites the store only when something changed.
+func (s *FindingStore) Maintain(now, autoVerifyAge, pruneAge int64) (MaintainResult, error) {
+	if autoVerifyAge <= 0 {
+		autoVerifyAge = DefaultAutoVerifyAge
+	}
+	if pruneAge <= 0 {
+		pruneAge = DefaultPruneAge
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 

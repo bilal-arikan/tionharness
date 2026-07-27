@@ -82,15 +82,15 @@ func TestListRanksByPriority(t *testing.T) {
 func TestMaintain(t *testing.T) {
 	s := openStore(t)
 	now := int64(1_000_000_000)
-	old := now - autoVerifyAge - 1
-	veryOld := now - pruneAge - 1
+	old := now - DefaultAutoVerifyAge - 1
+	veryOld := now - DefaultPruneAge - 1
 
 	applied, _ := s.Upsert(Finding{LensID: "l", Signature: "a", Title: "applied", Status: StatusApplied, LastSeen: old})
 	appliedReg, _ := s.Upsert(Finding{LensID: "l", Signature: "b", Title: "reg", Status: StatusApplied, Regressed: true, LastSeen: old})
 	s.Upsert(Finding{LensID: "l", Signature: "c", Title: "dismissed-old", Status: StatusDismissed, LastSeen: veryOld})
 	s.Upsert(Finding{LensID: "l", Signature: "d", Title: "new-recent", Status: StatusNew, LastSeen: now})
 
-	res, err := s.Maintain(now)
+	res, err := s.Maintain(now, 0, 0)
 	if err != nil {
 		t.Fatal(err)
 	}

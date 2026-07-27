@@ -56,6 +56,10 @@ export interface InsightSettings {
   autoScanCron?: string
   /** Agent whose own provider/model runs scans; empty = fall back to the first agent. */
   autoScanAgentId?: string
+  /** APPLIED finding not seen for N days (and not regressed) → auto-verified. 0 = default (14). */
+  autoVerifyDays?: number
+  /** DISMISSED/VERIFIED finding untouched for N days → deleted. 0 = default (45). */
+  pruneDays?: number
 }
 
 export interface InsightScanResult {

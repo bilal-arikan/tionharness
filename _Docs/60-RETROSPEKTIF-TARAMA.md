@@ -229,9 +229,10 @@ toggle (Ayarlar ▸ Bağlam ile aynı `lessonReflect`) + kayıtlı dersler (`Les
 - `GET  /api/insight/fleet-findings` — tüm workspace'ler arası birleşik app-fix backlog'u (kanonik-imza dedup). ✅
 - `GET  /api/insight/lenses/{id}/raw` · `PUT /api/insight/lenses/{id}` (parse-doğrulamalı) · `POST /api/insight/lenses/{id}/toggle` — lens düzenleme/enable-disable. ✅
 - `GET  /api/insight/findings?lens=&channel=` — bulgu listesi ✅
-- `GET|PUT /api/insight/settings` — `{ appFixRepoPath, maxSessions, maxAnalyzed, scanSinceDays, autoScanCron, autoScanAgentId }` ✅
+- `GET|PUT /api/insight/settings` — `{ appFixRepoPath, maxSessions, maxAnalyzed, scanSinceDays, autoScanCron, autoScanAgentId, autoVerifyDays, pruneDays }` ✅
   (PUT sonrası otomatik tarama cron'u anında re-arm edilir)
   - `scanSinceDays` — sadece son N günde aktif oturumları tara (0 = tüm geçmiş); eski oturum gürültüsünü keser.
+  - `autoVerifyDays` / `pruneDays` — bulgu bakımı eşikleri (0 = varsayılan 14 / 45 gün): applied bulgu N gün nüksetmezse auto-verify; dismissed/verified bulgu N gün dokunulmazsa silinir (`maintain.go`).
   - `autoScanAgentId` — analiz ajanı (manuel + cron): seçili ajan KENDİ provider+model'iyle çalışır. Soyut "varsayılan" seçeneği yoktur; UI açılışta boşsa mevcut **ilk ajanı** otomatik seçer (picker clearable değil). Kayıtlı değer boşsa backend yine ilk ajana (ucuz başlık modeliyle) düşer.
 - `POST /api/insight/findings/{id}/status` — bulgu statü geçişi (triage) ✅
 - `DELETE /api/insight/findings/{id}` — bulguyu kalıcı siler (`FindingStore.Delete`; dismiss'ten farklı) ✅
