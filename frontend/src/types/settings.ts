@@ -226,7 +226,7 @@ export interface VersionInfo {
   module: string
 }
 
-// Detection result for an optional external CLI tool (rtk, sqz, crabbox, mmdc…).
+// Detection result for an optional external CLI tool (rtk, sqz, mmdc, piper…).
 // Presence-only: the backend looks the executable up on PATH, never runs it.
 // `category` groups tools in the panel; `wire` tells how it is used once present:
 //   'hook' → one-click PreToolUse/PostToolUse toggle

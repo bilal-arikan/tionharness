@@ -33,9 +33,12 @@ go test ./... -count=1            # tüm backend (~90sn)
 cd frontend; npm test             # vitest (pure-logic modüller)
 ```
 
-CI (`.crabbox.yaml` → `ci` job) tam olarak bunu koşar: `go vet ./...` + `go build ./...` +
-`go test ./...`. **Paket alt-kümesi geçidi kurma** — daha önce 4 pakete daralmış ve tam da
-en çok değişen paketleri (`agent`/`api`/`tools`) kapsamaz hale gelmişti.
+CI `.gitea/workflows/ci.yml`'dedir — **repo'nun tek remote'u Gitea'dır, GitHub değil**
+(`git remote -v`), yani `.github/workflows` altına konan hiçbir şey çalışmaz. `ci.yml`
+tam olarak yukarıdakini koşar (`-race` ile) ve `deploy.yml` `needs: test` ile ona bağlıdır.
+
+**Paket alt-kümesi geçidi kurma** — daha önce 4 pakete daralmış ve tam da en çok değişen
+paketleri (`agent`/`api`/`tools`) kapsamaz hale gelmişti.
 
 - **`.go` dosyalarına BOM yazma.** `go build`/`go vet` tolere eder ama cover instrumentation
   dosyayı yeniden yazınca BOM ortada kalır ve paket `invalid BOM in the middle of the file`

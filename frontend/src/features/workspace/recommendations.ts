@@ -269,7 +269,7 @@ export const RULES: Rule[] = [
       key: 'cli-tools',
       icon: Wrench,
       title: 'Kurulu CLI araçları var',
-      summary: 'PATH’te doğrudan Bash ile çağrılabilecek CLI araçları (mmdc/crabbox…) varsa.',
+      summary: 'PATH’te doğrudan Bash ile çağrılabilecek CLI araçları (mmdc…) varsa.',
     },
     detect: (ctx) => {
       const cli = ctx.tools.filter((t) => t.found && t.wire === 'cli')

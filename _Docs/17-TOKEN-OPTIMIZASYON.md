@@ -75,7 +75,6 @@ token araçlarıyla sınırlı değil; **kategorilere** ayrılır:
 | Kategori (`category`) | Araç | Kullanım (`wire`) |
 |---|---|---|
 | `token` (Token / bağlam optimizasyonu) | `rtk`, `sqz` | `hook` — tek tıkla PostToolUse hook'u bağlanır (`sqz`); `rtk` ise komut-katmanında agent tarafından Bash ile çağrılır |
-| `dev` (Geliştirme araçları) | `crabbox` | `cli` — ajan Bash ile doğrudan çağırır (bilgi rozeti) |
 | `render` (Render / diyagram) | `mmdc` (mermaid-cli) | `cli` — yerelde mermaid→SVG/PNG dosya çıktısı |
 
 - Backend: `GET /api/external-tools` (`api/external_tools.go`) → `exec.LookPath` ile PATH'te arar.
@@ -87,7 +86,7 @@ token araçlarıyla sınırlı değil; **kategorilere** ayrılır:
 - Bu yalnızca **bilgilendirme + opsiyonel wire-up**'tır; TionSwarm bu araçları kendiliğinden çalıştırmaz.
   Araç-çıktısı sıkıştırması **artık yalnız bu harici yoldadır** (built-in `compact` alt sistemi
   kaldırıldı): `sqz` PostToolUse hook'u olarak bağlanır, `rtk` agent tarafından Bash ile çağrılır.
-  `cli` araçları (`crabbox`/`mmdc`) ajan tarafından geliştirme sırasında Bash ile kullanılır.
+  `cli` araçları (`mmdc`) ajan tarafından geliştirme sırasında Bash ile kullanılır.
 
 ### `sqz` PostToolUse hook entegrasyonu
 

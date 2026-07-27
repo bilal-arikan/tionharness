@@ -1,5 +1,5 @@
 // External tools settings panel. Detects optional CLI tools used alongside
-// TionSwarm (token optimisation, dev, render — e.g. `sqz`, `crabbox`, `mmdc`) on
+// TionSwarm (token optimisation, dev, render — e.g. `sqz`, `mmdc`, `piper`) on
 // PATH and lets the user wire the hook-based ones into TionSwarm with one click.
 // Read-only detection — nothing is installed or executed. Self-contained (own
 // load), exempt from the global Save bar — like the Hooks panel. Split out of
@@ -191,7 +191,7 @@ export function ExternalToolsPanel({ onError }: Props) {
     <div className="space-y-3">
       <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-xs leading-relaxed text-[var(--color-text-dim)]">
         TionSwarm ile birlikte kullanılabilecek isteğe bağlı CLI araçlarının (token optimizasyonu, geliştirme, render — ör.{' '}
-        <code>sqz</code>, <code>crabbox</code>, <code>mmdc</code>) bu cihazda{' '}
+        <code>sqz</code>, <code>mmdc</code>, <code>piper</code>) bu cihazda{' '}
         <span className="font-medium text-[var(--color-text)]">kurulu olup olmadığını</span> kontrol eder.
         Yalnız PATH'te aranır — araçlar <span className="font-medium text-[var(--color-text)]">kurulmaz, çalıştırılmaz, değiştirilmez</span>.
         <span className="font-mono"> hook</span> araçları tek tıkla bağlanır;{' '}

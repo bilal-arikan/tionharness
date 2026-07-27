@@ -250,6 +250,9 @@ M3'ün gerçek sınırı ~512K).
   (`dev`/`cli` — uzak yürütme/test control-plane'i; geliştirmede Bash ile çağrılır) ve
   **`mmdc`** (`render`/`cli` — mermaid-cli, yerelde mermaid→SVG/PNG dosya çıktısı).
   Hâlâ `exec.LookPath` ile **presence-only** — kurulum/çalıştırma/değişiklik yok.
+  <br>*(2026-07-27: `crabbox` katalogdan kaldırıldı — CI'daki crabbox tabanlı iş
+  akışı da kaldırılıp gate `.gitea/workflows/ci.yml`'e taşındı. `dev` kategorisinde
+  yalnız `codebase-memory-mcp` kaldı. Detay: `05-ILERLEME`.)*
 - `frontend/types/settings.ts`: `ExternalToolStatus`'a `category`+`wire` eklendi.
 - `frontend/components/settings/HooksPanel.tsx`: araçlar **kategoriye göre gruplanır**
   (`TOOL_CATEGORY_LABELS`), rozet/buton **`wire`'a göre** gösterilir — `hook`→Bağla/Aktif

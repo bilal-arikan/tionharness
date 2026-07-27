@@ -29,7 +29,6 @@ var knownExternalTools = []struct {
 }{
 	{"rtk", "Rust Token Killer — komut çıktısı sıkıştırma CLI proxy'si", "https://github.com/rtk-ai/rtk", "token", "hook"},
 	{"sqz", "LLM bağlam sıkıştırma (PreToolUse hook)", "https://github.com/ojuschugh1/sqz", "token", "hook"},
-	{"crabbox", "Uzak yürütme/test control-plane'i — kutuyu ısıt, diff'i senkronla, komutu uzakta koştur (lease+sync+run); geliştirmede Bash ile çağrılır", "https://github.com/openclaw/crabbox", "dev", "cli"},
 	{"mmdc", "Mermaid CLI — mermaid diyagramlarını yerelde SVG/PNG'ye render eder (gömülü tarayıcı render'ının yanında dosya çıktısı için)", "https://github.com/mermaid-js/mermaid-cli", "render", "cli"},
 	{"codebase-memory-mcp", "Codebase Memory — kod tabanını kalıcı bilgi grafiğine indeksler (158 dil, sub-ms sorgu, ~%99 daha az token); search_graph/query_graph/trace_path/get_architecture araçları. Market'te 'Codebase Memory MCP' paketi ile kurulur", "https://github.com/DeusData/codebase-memory-mcp", "dev", "mcp"},
 	{"piper", "Piper — yerel/offline nöral TTS motoru (35+ dil, Türkçe dahil). TionSwarm sunucu-tarafı sesli okuma (TTS) için OTOMATİK kullanır → telefon dahil her cihazda aynı ses. Progs\\piper altına kurulur veya PATH'te bulunur; bir de .onnx ses modeli gerekir.", "https://github.com/OHF-Voice/piper1-gpl", "voice", ""},

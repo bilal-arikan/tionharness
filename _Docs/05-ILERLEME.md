@@ -7,10 +7,17 @@
 Test **kodlarının** durumu iyiydi (kaldırılan özelliklerin testleri de silinmiş — `tools/compact`,
 memory, günlük limitler için sıfır artık referans), asıl boşluk **koşturma** tarafındaydı. Dört düzeltme:
 
-1. **CI kapsamı 4 → 30 paket.** `.crabbox.yaml` `ci` job'ı yalnız `conversation/billing/orchestration/skills`
-   koşturuyordu; `agent`/`api`/`tools`/`db`/`insight`/`providers` (testlerin ~%85'i) CI'da hiç çalışmıyordu.
-   `ci` artık `go vet ./...` + `go build ./...` + `go test ./...` (`TIONSWARM_ENABLE_SHELL=1`); harici araç
-   veya ağ isteyen testler zaten `t.Skip` ile kendilerini geçitliyor. Kalan-yarım `ci-full` job'ı kaldırıldı.
+1. **CI hiç koşmuyormuş — crabbox kaldırıldı, gate Gitea'ya taşındı.** İki katmanlı sorun: (a) mevcut
+   `ci` job'ı 30 paketten yalnız 4'ünü (`conversation/billing/orchestration/skills`) koşturuyordu —
+   `agent`/`api`/`tools`/`db`/`insight`/`providers`, yani testlerin ~%85'i, kapsam dışıydı; (b) daha
+   kötüsü, o job `.github/workflows/` altındaydı ama **repo'nun tek remote'u Gitea** — GitHub'a hiç
+   push edilmiyor, dolayısıyla workflow hiç çalışmıyordu. Crabbox tamamen kaldırıldı (`.crabbox.yaml`,
+   `.github/`, harici-araç kataloğu satırı); GitHub runner'ının içinde ikinci bir Docker katmanı zaten
+   gereksiz dolaylılıktı ve `slug=` stdout-parse'ı kırılgandı. Yerine **`.gitea/workflows/ci.yml`**:
+   native `setup-go`/`setup-node` (deploy.yml'in zaten kanıtladığı desen), `go vet` + `go build` +
+   `go test ./... -race` (`TIONSWARM_ENABLE_SHELL=1`) + frontend `npm test` + `npm run build`.
+   `-race` yalnız burada gerçekten koşar — Windows geliştirme makinesinde CGO kapalı. Ayrıca
+   `deploy.yml` artık `needs: test` ile geçide bağlı: kırmızı build deploy edilemiyor.
 2. **BOM fix.** `internal/tools/builtin_workspacemgmt.go` UTF-8 BOM ile başlıyordu; `go build`/`go vet`
    tolere ediyor ama cover instrumentation dosyayı yeniden yazınca BOM ortada kalıp
    `invalid BOM in the middle of the file` ile **tüm `internal/tools` paketinin coverage ölçümünü**
@@ -24,8 +31,8 @@ memory, günlük limitler için sıfır artık referans), asıl boşluk **koştu
    `npm run test:watch`); kullanılmayan `@playwright/test` devDependency'si kaldırıldı (config yok,
    script yok, tek test yok). İlk 38 test: `notifyTypes` (cue/badge eşlemesi + `task`→`board` legacy
    alias'ı) ve `recommendations` (öneri kural motoru: token-conflict önceliği, sqz/rtk hook tespiti,
-   `shellOutputCompression` explicit-tercih saygısı, cbm add/enable ayrımı, kart sırası). Frontend job'ı
-   artık `npm test` + `npm run build` koşuyor ve **workflow'a bağlandı** (ayrı node:22 box, Go gate'e paralel).
+   `shellOutputCompression` explicit-tercih saygısı, cbm add/enable ayrımı, kart sırası). `ci.yml`'de
+   ayrı bir `frontend` job'ı olarak `npm test` + `npm run build` koşar (Go gate'ine paralel).
 
 Ek olarak `internal/tools/readtracker_test.go`: dosya-tazelik guard'ının unit sözleşmesi — nil tracker
 no-op, mtime-değişti-içerik-aynı (guard tripmemeli) vs içerik-değişti-mtime-aynı (tripmeli), never-read

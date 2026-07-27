@@ -1,0 +1,81 @@
+name: CI
+
+# Test gate for the repo. Runs on every push/PR to main and — via the
+# `needs: test` in deploy.yml — blocks a deploy whose tests do not pass.
+#
+# Native toolchains, no container-in-container indirection: the runner is
+# already an isolated Linux box, and deploy.yml proves setup-go/setup-node work
+# on this infrastructure.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch: {}
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      # Without this the shell-tool tests skip instead of running.
+      TIONSWARM_ENABLE_SHELL: '1'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.26'
+
+      # internal/web/dist is gitignored (built by the frontend job / deploy) but
+      # //go:embed all:dist needs the directory to exist to compile.
+      - name: Placeholder for the embedded SPA
+        run: mkdir -p internal/web/dist && touch internal/web/dist/index.html
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Build
+        run: go build ./...
+
+      # The whole suite — do NOT narrow this to a package subset. A reduced gate
+      # silently stopped covering the packages that actually change
+      # (agent/api/tools/db/insight) and let regressions through for weeks.
+      # Tests needing an absent external tool (rg, python, node, claude CLI) or a
+      # live network gate themselves behind t.Skip, so this runs green on a bare
+      # runner. -race needs cgo, which the Windows dev machine cannot provide —
+      # this is the only place the detector actually runs.
+      - name: Test
+        run: go test ./... -count=1 -race -timeout 900s
+
+  frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install
+        working-directory: frontend
+        run: npm ci
+
+      - name: Test
+        working-directory: frontend
+        run: npm test
+
+      # Typecheck + bundle. Catches the errors `vitest` does not (it transpiles
+      # without type-checking), and proves the SPA the deploy embeds still builds.
+      - name: Build
+        working-directory: frontend
+        env:
+          NODE_OPTIONS: --max_old_space_size=1536
+        run: npm run build

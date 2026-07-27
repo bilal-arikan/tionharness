@@ -170,7 +170,7 @@ Kurallar (sırayla — kartlar üstten alta yığılır):
 - **token**: rtk (yoksa sqz) kurulu ama hiç token-hook yok → `createHook(...)`.
 - **no-mcp**: hiç MCP yok (ve cbm bekleyen öneri değilse) → Market.
 - **backup-off**: `backupEnabled=false` → Yedekleme ayarları.
-- **cli-tools**: PATH'te `wire=cli` araçlar (mmdc/crabbox) → tek bilgi kartı, Harici Araçlar.
+- **cli-tools**: PATH'te `wire=cli` araçlar (mmdc) → tek bilgi kartı, Harici Araçlar.
 
 Yeni algılama endpoint'i eklenmedi; hepsi mevcut endpoint'leri tüketir. Kartlar
 `data-testid="workspace-rec-<key>"`, aksiyon `workspace-rec-act-<key>`.

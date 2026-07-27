@@ -225,14 +225,14 @@ describe('workspace-setup rules', () => {
         tools: [
           { name: 'rtk', found: true, path: 'C:/rtk.exe', wire: 'hook' },
           { name: 'mmdc', found: true, wire: 'cli' },
-          { name: 'crabbox', found: true, wire: 'cli' },
+          { name: 'ffmpeg', found: true, wire: 'cli' },
           { name: 'absent-cli', found: false, wire: 'cli' },
         ],
       } as unknown as Partial<RecContext>),
     )
     const cli = recs.find((r) => r.key === 'cli-tools')
     expect(cli?.desc).toContain('mmdc')
-    expect(cli?.desc).toContain('crabbox')
+    expect(cli?.desc).toContain('ffmpeg')
     expect(cli?.desc).not.toContain('absent-cli')
   })
 })
