@@ -2,6 +2,52 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-07-27**
 
+## Flow paleti: node butonlarında (ⓘ) açıklama balonu ✅ (2026-07-27)
+
+Flow editöründe sol paletteki node tipleri yalnız ad + ikon gösteriyordu; ne işe
+yaradıkları görünmüyordu. Her palet satırına bir **(ⓘ) bilgi butonu** eklendi;
+tıklayınca o node tipinin ne yaptığını anlatan balon açılıyor.
+
+- Metinler: yeni `frontend/src/features/flows/nodeTypeHelp.ts` (`NODE_TYPE_HELP`,
+  12 node tipinin tamamı; `internal/orchestration/model.go` yorumlarıyla hizalı).
+- `shared/components/InfoPopover`'a opsiyonel **`fixed`** modu: balon viewport
+  koordinatlarında çizilir (kenarlara clamp'li). Palet kolonu `overflow-y-auto`
+  olduğu için mutlak konumlu balon kırpılıyordu. Varsayılan kapalı → mevcut
+  kullanım yerleri etkilenmedi.
+- `FlowEditorView` palet satırı `flex` sarmalayıcıya alındı (buton `flex-1`,
+  etiket `truncate`); sürükle-bırak + tıkla-ekle davranışı korundu.
+- Doğrulama: `npx tsc --noEmit` yeşil.
+
+## Per-ajan araç override'ları — "Yasaklı Araçlar" 5. tier oldu ✅ (2026-07-27)
+
+Araç görünürlük tier'ları (Tam/Özet/İsim/Gizli) yalnız **workspace** seviyesinde
+ayarlanabiliyordu; ajan seviyesinde ise ayrı bir **yasaklı araç** denylist'i vardı —
+iki ayrı model, iki ayrı UI, ajan başına ince ayar imkânsız. Artık tek bir 5 değerli
+ajan override haritası var: `full | summary | name-only | hidden | **blocked**`.
+
+- **Öncelik zinciri:** kod default < workspace `ToolVisibility` < ajan `ToolOverrides`.
+  `blocked` registry'ye **girmez** — bir katman yukarıda `toolFilter`'da çözülür ve
+  aracı katalogdan tamamen düşürür; görünürlük semantiği kirlenmez.
+- **Persistans:** yeni `Agent.ToolOverrides` (JSON object; anahtar tam ad **veya**
+  `prefix*` deseni). `BlockedTools` silinmedi, **türetilmiş ayna**'ya dönüştü —
+  `UpdateAgentTools` her yazışta `blocked` girdilerinden sıralı üretip yazar, böylece
+  market paketleri/şablonlar/eski ajan dosyaları bozulmaz.
+- **Migrasyon okuma tarafında:** `agent.ParseToolOverrides` iki kaynağı birleştirir
+  (legacy denylist → `blocked`), açık override daima kazanır. Bozuk JSON fatal değil →
+  override'sız duruma düşer, ajan çalışmaz hale gelmez.
+- **Desen genişletmesi:** `SetVisibility` tek isim aldığı için `prefix*` anahtarları
+  katalog üzerinde genişletilir; anahtarlar sıralı işlenir → daha özel (uzun) desen kazanır.
+- **UI = DIFF:** ajan Araçlar ekranı ikinci bir katalog değil; yalnız override'lı araçlar
+  `varsayılan → seçili` rozet çiftiyle listelenir (+5'li tier seçici, "Varsayılana dön",
+  toplu uygulama). Varsayılana eşit seçim override'ı **siler**. Katalogda karşılığı
+  olmayan anahtarlar (desen / o an kapalı araç) kesikli çerçevede korunur — sessizce
+  düşürmek bir yasağı kaldırırdı.
+- Kod: `agent/tooloverrides.go` (yeni), `agent/toolsetup.go` (`buildRegistry` iki-katmanlı
+  zincir, `blockFunc`, `ActiveToolCatalogWithState`), `db/models.go`+`db/store_mcp.go`,
+  `api/agent_tools.go`, frontend `AgentToolsSection.tsx`+`AgentToolOverrideRow.tsx`+
+  `VisibilityControls.tsx`+`toolMeta.ts`. Testler: `tooloverrides_test.go` (6) +
+  `tooloverrides_integration_test.go` (4). Detay: **`_Docs/19`**.
+
 ## SSE kopması toleransı: yeniden-bağlanınca resync ✅ (2026-07-27)
 
 Poll'ler SSE'ye taşındıkça (bir alttaki giriş) yeni bir kırılganlık doğdu: **feed
