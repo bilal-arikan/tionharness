@@ -700,6 +700,22 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 			r.logger.Debug("tool call", "agent", agent.ID, "tool", call.Name)
 			active.MarkUsed(call.Name) // reset idle age for pruning (Phase 3)
 
+			// Durable Ask (MVP): at a CLEAN suspend point, a native ask_user call is
+			// parked to disk and the turn returns an *askSuspend sentinel instead of
+			// blocking a goroutine on the interactive asker (see ask_suspend.go). The
+			// caller persists the state + opens a durable card; the answer endpoint
+			// re-drives the loop via ResumeAsk. Gated by WithDurableAsk (only the
+			// interactive chat turn runner sets it) so every other path keeps today's
+			// blocking behavior. "Clean" = this ask is the sole call in its batch, no
+			// parallel subagents are in flight, and no code-execution container is
+			// active — so the resumable state is exactly the message history already
+			// appended above (the assistant tool_use turn). Anything else falls through
+			// to the ordinary (blocking) asker path below.
+			cleanAskPoint := durableAskEnabled(ctx) && len(resp.ToolCalls) == 1 && subFutures == nil && req.ContainerID == ""
+			if cleanAskPoint && call.Name == askUserToolName {
+				return nil, steps, &askSuspend{Kind: "ask", CallID: call.ID, Call: call, Payload: call.Input, Messages: req.Messages}
+			}
+
 			// PreToolUse hooks (Faz P4): user-defined commands may rewrite the
 			// tool input, auto-approve the call (bypassing the permission gate) or
 			// block it. A blocked call becomes an error result fed back to the
@@ -724,6 +740,14 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 			// that explicitly approved the call short-circuits the gate.
 			allowed, denyMsg := true, ""
 			if !pre.autoAllow {
+				// Durable Ask (permission): at a clean point, a write/exec call that
+				// would block on the approval prompter is parked to disk instead — the
+				// permission analog of the ask_user suspend above. On approval the
+				// resume EXECUTES this call (see resolveResumeResult). Non-clean points
+				// and no-prompter (autonomous) runs fall through to the blocking gate.
+				if cleanAskPoint && wouldPromptPermission(ctx, agent.PermissionMode, call) {
+					return nil, steps, &askSuspend{Kind: "permission", CallID: call.ID, Call: call, Payload: permissionCardPayload(call), Messages: req.Messages}
+				}
 				// Carry the logger so approvals / "always allow" grants leave an
 				// audit trail in the Logs screen (denials are already logged below).
 				allowed, denyMsg = permGate(withPermLogger(ctx, r.logger), agent.PermissionMode, call)

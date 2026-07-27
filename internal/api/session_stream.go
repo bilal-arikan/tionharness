@@ -103,6 +103,12 @@ func (s *Server) handleSessionStream(w http.ResponseWriter, r *http.Request) {
 		writeFrame("reset", 0, map[string]any{"head": head})
 	}
 
+	// Durable Ask restore: re-publish any still-waiting ask card for this session
+	// (ephemeral → live to current subscribers, not added to the ring), so a card
+	// survives a backend restart that cleared the in-memory hub. The disk row is the
+	// source of truth. No-op when there are none.
+	s.restoreWaitingAsks(ws(r), sessionID)
+
 	ping := time.NewTicker(eventsPingInterval)
 	defer ping.Stop()
 	ctx := r.Context()

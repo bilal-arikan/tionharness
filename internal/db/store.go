@@ -60,6 +60,9 @@ func (d *DB) CreateAgent(ctx context.Context, a Agent) (Agent, error) {
 	if a.BlockedTools == "" {
 		a.BlockedTools = "[]"
 	}
+	if a.ToolOverrides == "" {
+		a.ToolOverrides = "{}"
+	}
 	if a.Skills == nil {
 		a.Skills = []string{}
 	}

@@ -490,6 +490,12 @@ func (s *Server) runChatTurn(clientGone context.Context, wsp *workspace.Workspac
 			// Tag every debug event emitted during this turn with the reply id, so the
 			// per-message debug panel can fetch exactly this message's spend/latency.
 			turnCtx = agent.WithTurnID(turnCtx, replyID)
+			// Durable Ask (MVP): opt this interactive turn into durable ask_user
+			// suspend/resume. At a clean suspend point the native loop returns an
+			// *askSuspend sentinel instead of blocking the asker; the intercept below
+			// parks it to disk + opens a durable card. The blocking asker (wired above)
+			// still handles non-clean asks (parallel/PTC) as the fallback.
+			turnCtx = agent.WithDurableAsk(turnCtx)
 			// Snapshot the in-flight reply to disk on a throttle: the partial answer
 			// text (accumulated from streaming deltas) plus the persistable trace so
 			// far. A mid-turn process death leaves this sidecar for boot to reclaim.
@@ -539,6 +545,26 @@ func (s *Server) runChatTurn(clientGone context.Context, wsp *workspace.Workspac
 					snapshot()
 				},
 			)
+			// Durable Ask suspend: the native loop parked at a clean ask_user point.
+			// This is NOT an error — persist the suspend snapshot (lead + loop trace),
+			// open a durable card keyed to the ask id, clear the crash sidecar (the wait
+			// is now durable, not a mid-turn orphan), and return the goroutine cleanly.
+			// The answer endpoint re-drives the turn via ResumeAsk.
+			if cerr != nil {
+				snapSteps := append(append([]agent.TurnStep{}, leadSteps...), steps...)
+				if ask, suspended, perr := wsp.Runtime.SuspendAskFromError(context.WithoutCancel(ctx), agentRow, session.ID, llmReq, snapSteps, cerr); suspended {
+					if perr != nil {
+						s.logger.Error("durable ask: persist suspend failed", "session", session.ID, "error", perr)
+					} else {
+						_ = database.ClearInflight(session.ID)
+						s.openDurableAskCard(session.ID, ask, false)
+						s.hub.Commit(session.ID)
+						s.logger.Info("durable ask: turn suspended", "session", session.ID, "ask", ask.ID)
+						sse("ask_suspended", map[string]any{"askId": ask.ID})
+						return
+					}
+				}
+			}
 			if cerr != nil {
 				// Distinguish a manual Stop (run.cancel cancelled ctx) from a genuine
 				// provider failure. Either way, PRESERVE the partial trace accumulated so

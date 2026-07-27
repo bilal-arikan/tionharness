@@ -205,6 +205,14 @@ func (s *Server) handleInteractionAnswer(w http.ResponseWriter, r *http.Request)
 		writeJSON(w, http.StatusOK, map[string]string{"result": "ok"})
 		return
 	}
+	// Durable Ask (MVP): not an in-memory interaction — it may be a durably-
+	// suspended ask_user (SAK id) whose turn is parked on disk. Claim it single-
+	// winner and re-drive the turn in the background; the continuation streams to
+	// every window over the session hub.
+	if s.answerDurableAsk(r, sessionID, iid, answer, req.ClientID) {
+		writeJSON(w, http.StatusOK, map[string]string{"result": "ok"})
+		return
+	}
 	// Not found or already resolved: from the client's perspective the card is
 	// simply gone. 409 lets it distinguish "someone beat me to it" from success.
 	writeError(w, http.StatusConflict, "interaction already resolved")

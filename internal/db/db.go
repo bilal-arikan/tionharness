@@ -45,6 +45,7 @@ type DB struct {
 	mcp       map[string]MCPServer
 	flows       map[string]Flow
 	flowRuns    map[string]FlowRun
+	sessionAsks map[string]SessionAsk // durable ask suspend/resume (MVP)
 	automations map[string]Automation
 	artifacts   map[string]Artifact
 	hooks     map[string]Hook
@@ -97,6 +98,7 @@ func Open(path string) (*DB, error) {
 		mcp:       map[string]MCPServer{},
 		flows:       map[string]Flow{},
 		flowRuns:    map[string]FlowRun{},
+		sessionAsks: map[string]SessionAsk{},
 		automations: map[string]Automation{},
 		artifacts:   map[string]Artifact{},
 		hooks:     map[string]Hook{},
@@ -137,6 +139,7 @@ const (
 	dirMCP       = "mcp-servers"
 	dirFlows       = "flows"
 	dirFlowRuns    = "flow-runs"
+	dirSessionAsks = "session-asks"
 	dirAutomations = "automations"
 	dirArtifacts = "artifacts"
 	dirRender    = "render" // per-session render_template output (transient, swept)
@@ -159,6 +162,7 @@ const (
 	idTask      = "TSK"
 	idFlow      = "FLW"
 	idFlowRun   = "RUN"
+	idSessionAsk = "SAK"
 	idArtifact  = "ART"
 	idKnowledge = "MEM"
 	idMCP       = "MCP"
@@ -337,6 +341,14 @@ func (d *DB) load() error {
 	}
 	for _, r := range flowRuns {
 		d.flowRuns[r.ID] = r
+	}
+
+	sessionAsks, err := loadJSONDir[SessionAsk](d.dir(dirSessionAsks))
+	if err != nil {
+		return err
+	}
+	for _, a := range sessionAsks {
+		d.sessionAsks[a.ID] = a
 	}
 
 	automations, err := loadJSONDir[Automation](d.dir(dirAutomations))

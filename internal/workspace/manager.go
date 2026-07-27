@@ -288,6 +288,9 @@ func (m *Manager) open(meta Meta) error {
 	rt.ResumeRunningFlows(context.Background())
 	// Timeout sweeper: fail await-input runs that out-wait their node's TimeoutSec.
 	rt.StartWaitingFlowSweeper(context.Background())
+	// Durable Ask timeout sweeper: close ask/permission cards nobody answered in
+	// time (no-op until a TimeoutSec is stamped — 0 = unlimited by default).
+	rt.StartWaitingAskSweeper(context.Background())
 
 	ws := &Workspace{Meta: meta, DB: database, Runtime: rt, Scheduler: sched, InsightCron: insightCron, Secrets: vault, DataDir: dir}
 	ws.loadSettings()    // apply persisted per-workspace overrides (e.g. autonomy pause)
