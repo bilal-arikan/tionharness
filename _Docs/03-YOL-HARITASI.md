@@ -140,59 +140,36 @@ graph LR
 > SDK paritesi (P1–P4) + `observed-behavior` mimari incelemesinden çıkan işler. Kavramsal detay: [10-KAVRAMSAL-TASARIM-NOTLARI.md](10-KAVRAMSAL-TASARIM-NOTLARI.md). Her madde bittiğinde işaretle ve [05-ILERLEME.md](05-ILERLEME.md)'ye günlük gir.
 
 ### Tamamlananlar ✅
-- [x] **Faz P2** — Built-in dosya/shell araçları (sandbox'lı `read/write/edit/list/glob/grep` + gate'li `shell`)
-- [x] **D2 (kısmi)** — Provider native token streaming (`Streamer`: anthropic+minimax) + claude-cli stream-json → SSE
-- [x] **Faz P1** — Etkileşim araçları: `todo_write` (checklist) + `ask_user` (SSE-blok suspend/resume)
-- [x] **E3** — Trace `StepKind` genişletme: `ask`/`todo`/`recovery`/`error`/`steer` + `tool_delta`/`tombstone` (akan shell üreticili) + **Ayarlar ▸ Adım Türleri** referans ekranı
-- [x] **Faz A1** — Artifact sistemi: sürümlü içerik (doküman/kod/HTML/SVG/Mermaid), `create/update_artifact` araçları, Artifactlar ekranı + sohbet kartı
-- [x] **İki-seviyeli araç yönetimi** — workspace-geneli aktivasyon (denylist `tools-config.json`) + ajan-bazlı seçim (allowlist); `WorkspaceToolCatalog`/`ActiveToolCatalog`/`ToolCatalog` + `GET/PUT /api/workspace-tools`
-- [x] **Talep-üzerine özetler** — "/" komut paleti: görev panosu/akışlar (ucuz model) + araç listesi (deterministik); `Runtime.Summarize` + `POST /api/sessions/{id}/summary` _(hafıza özeti KALDIRILDI 2026-07-05)_
-- [x] **D2** — Provider **retry middleware**: `transport.go` `doWithRetry` (üstel backoff + jitter, `Retry-After` saygılı, 429/5xx/529 + ağ hatası); `postJSON`/`postSSE` sarıldı (+ token streaming `Streamer`)
-- [x] **C1** — Sistem-prompt **cache sınırı**: `Request.System` (statik: persona+profil) / `Request.SystemDynamic` (dinamik: bellek+özet); Anthropic cache breakpoint yalnız statik blokta → araç+statik prefix cache'lenir, dinamik suffix cache'i bozmaz
-- [x] **Ara özellikler** — otonom olay akışı (`/api/events`), workspace switcher + çapraz-ws rozet, tıklanabilir bildirimler, sessions-only sidebar + okundu/okunmadı, tema presetleri
-- [x] **A1 (loop recovery)** — Agent loop **recovery + `continuationReason`**: saf karar katmanı (`agent/recovery.go`: `loopState`+`decideRecovery`), max-token resume (guard'lı + partial-stitch + withhold), reaktif compaction (`conversation/reactive.go`, assistant-sınır fold), minimax `length`→`max_tokens` map; `recovery_test.go`+`reactive_test.go`. **Kalan:** max-token escalation merdiveni (8k→64k) *(A3 iptal sentetiği ✅ 2026-06-19)*
-- [x] **Self-management genişlemesi** ✅ 2026-06-19 — öz-yönetim araç ailesine **hooks/MCP/secret/skill/settings** eklendi (`builtin_{hookmgmt,mcpmgmt,secretmgmt,skillmgmt,settings}.go`); provenance guard'ı (`created_by`); öğretici default skill `tionswarm-self-management` + ayar referansı `tionswarm-settings`. Bkz. `_Docs/24-SELF-MANAGEMENT.md`
-- [x] **Ayarlar canlı-uygulama + validation** ✅ 2026-06-19 — `get_settings`/`update_settings` tool'ları + `settings.Validate` (enum reddi/clamp) + bridge wiring + `settings` SSE event'i ile çok-pencere senkronu. Bkz. `_Docs/24-SELF-MANAGEMENT.md`
-- [x] **İlişki Grafiği** ✅ 2026-06-19 — Workspace Ağı (NavRail) salt-okunur React Flow ağı, Fizik/Küme yerleşim. Bkz. `_Docs/23-ILISKI-GRAFIGI.md` _(Hafıza Bilgi Grafiği KALDIRILDI 2026-07-05)_
-- [x] **CLI araç köprüsü (CLI-1/2/3)** ✅ 2026-06-19 — claude-cli ajanları Interaction MCP üzerinden: `use_skill` skill-gövde yükleme (CLI-1), advertise+allowlist tek-kaynak (`InteractionEndpoint.ToolNames`, CLI-2), lazy self-management ailesi köprüsü (`BridgeTools`/`Tools(token)`, CLI-3). Bkz. `_Docs/11-INTERACTION-MCP.md`. Kalan: claude-cli ile canlı uçtan-uca doğrulama.
-- [x] **Lazy araç yükleme** ✅ — Self-management + MCP araç şemaları tura girmez; sistem promptunda özet katalog yayımlanır, `tool_search` ile keşfedilir, `activate_tools`/`deactivate_tools` ile istenince tam şema aktive edilir (`internal/tools/activetools.go`, `builtin_activate.go`). Bkz. `_Docs/19-LAZY-TOOL-LOADING.md`.
-- [x] **Prefix'li insan-okunabilir ID'ler** ✅ — Workspace `WS<n>`, ajan `AGT<n>`, oturum `SES<n>` biçiminde monoton sayaç ID'leri; `internal/workspace/id.go` + `ws-counter.json` ile yeniden başlamada sayaç korunur; tek seferlik migrasyon: `cmd/migrate-ids/`.
-- [x] **Tek-binary web dağıtımı** ✅ — `frontend/dist/` `go:embed all:dist` ile derleme anında binary'ye gömülür (`internal/web/embed.go`); ayrı statik sunum gerekmez.
+
+SDK paritesi P1/P2/P4, built-in fs+shell araçları, etkileşim araçları
+(`todo_write`/`ask_user`), artifact sistemi, trace `StepKind` genişletmesi,
+provider streaming + retry, sistem-prompt cache sınırı (C1), iki-seviyeli araç
+yönetimi, lazy araç yükleme, self-management ailesi, ayarlar canlı-uygulama,
+ilişki grafiği, CLI araç köprüsü, prefix'li ID'ler ve tek-binary dağıtım
+**tamamlandı**.
+
+> Madde madde döküm burada tekrarlanmaz — tarih, dosya ve doğrulama detayı için
+> [05-ILERLEME.md](05-ILERLEME.md) (2026-07+) ve [05-ARSIV.md](05-ARSIV.md)
+> (2026-06 ve öncesi). Alt sistemlerin kendi dokümanları:
+> [19](19-LAZY-TOOL-LOADING.md) · [24](24-SELF-MANAGEMENT.md) ·
+> [23](23-ILISKI-GRAFIGI.md) · [11](11-INTERACTION-MCP.md).
 
 ### Mimari sıçrama
 - [x] **A2** ✅ (2026-06-19) — **Subagent / Task izolasyonu**: `AgentContext` + `runAgent` çekirdeği; `run_subagent` aracı (profil: `explore`/`coder`/`reviewer`); paralel fan-out; `subagent` StepKind + `SubagentStep.tsx`. `call_agent`/`send_agent_message` kaldırıldı; `spawn_session` native tool'dan kaldırıldı (`run_subagent` async moduna taşındı). **Detay:** `25-SUBAGENT-ISOLATION.md`.
 - [x] **A3** — İptal hiyerarşisi: tur-içi iptalde (`toolloop.go`) yarım kalan tool_call'lara sentetik `cancelled` tool_result (`fillCancelledResults`) → dangling tool_use yok; `cancel_test.go` (2026-06-19)
 
 ### Araç & yetki katmanı
-- [ ] **B1** — Tool sözleşmesi v2: `ReadOnly()`/`ConcurrencySafe()`/`ValidateInput()` + `BaseTool` varsayılanları
-- [ ] **B4** — Paralel tool yürütme (read-only'leri `errgroup`) + büyük çıktı için disk-spill + referans
+- [x] **B1** — ✅ **farklı çözüldü**: Tool arabirimine `ReadOnly()`/`ConcurrencySafe()` metotları eklemek yerine merkezî risk tablosu (`tools/classify.go`: `RiskRead`/`RiskWrite`/`RiskExec`) → izin katmanının tek kaynağı. Bkz. [40](40-PLAN-MODE.md).
+- [~] **B4** — Paralel tool yürütme ✅ (`TurnStep.Batch` ile gruplanır, UI'da "⚡ N paralel araç çağrısı"); kalan: büyük çıktı için disk-spill + referans deseni (bugün 64KB hard-cap var)
 - [x] **Faz P4** — Hooks (`PreToolUse`/`PostToolUse`, subprocess JSON I/O) ✅ 2026-06-18 — `internal/agent/hooks.go`, Ayarlar → Hooks; bkz. `_Docs/18-HOOKS.md`
 
 ### Bağlam, bellek, trace
 > ⚠️ **Bellek (C3/C5/C6) — KALDIRILDI (2026-07-05):** memory alt sistemi tamamen çıkarıldı;
 > aşağıdaki bellek maddeleri artık geçersiz tarihsel kayıttır. Bağlam maddeleri (compaction/handoff) geçerli.
-- [ ] **C5** — **Recency + importance ağırlıklı recall** (Generative Agents, Park et al. 2023): mevcut
-  `memory.Recall` saf cosine (yalnız *relevance*). Üzerine iki sinyal eklenir →
-  `score = α·relevance + β·recency + γ·importance`. **recency** = son erişimden bu yana üstel sönüm
-  (`exp(-λ·Δt)`, erişimde `LastAccess` tazelenir); **importance** = belleğe yazılırken 1–10 arası bir önem
-  skoru (ucuz LLM ya da heuristik; `Memory.Importance` alanı). `minScore` eşiği ağırlıklı skora uygulanır.
-  Geri-uyumlu: β=γ=0 → bugünkü davranış. İlham: `didiforgithub/SwarmAgent`'ın taklit ettiği orijinal
-  Generative Agents "memory stream" deseni (o repo'da kod stub; fikir makaleden alındı). İlişkili: **C3**.
-- [x] **C6 ✅ (2026-06-23)** — **MemGPT/Letta tarzı self-editing bellek + memory-pressure sinyali**
-  (`letta-ai/letta`, "LLM as OS" deseni): compaction'ı ajandan gizli tutmak yerine belleği **ajanın
-  açık kontrolüne** ver. **Uygulandı:** pressure sinyali + ajanın `core_memory_replace/append`
-  araçlarıyla düzenlediği **adlandırılmış çekirdek bloklar** (persona/human + özel, karakter limitli) +
-  `human` bloğunun dream-cycle'la otomatik doldurulması (HA-1/c). Detay: `31-MEMGPT-CORE-MEMORY.md`.
-  İki parça → (a) **memory-pressure sinyali**: `conversation.Manager` bağlam bütçesine yaklaşınca ajana
-  sistem-uyarısı enjekte eder ("bağlam doluyor, önemliyi belleğe yaz") + ajan `memory_write` (C3) ile neyin
-  kalıcı olacağına karar verir (sessiz oto-katlamadan önce); (b) **self-editing core memory bloğu**:
-  `SystemDynamic` içinde ajanın `core_memory_append/replace` araçlarıyla güncelleyebildiği küçük kalıcı
-  "çalışma belleği" bloğu (Letta'nın human/persona memory-block'larına karşılık). TionSwarm'nun iki-parçalı
-  sistem promptu + Faz 6 recall + C3 bunun altyapısı; eksik olan **ajana açık araç yüzeyi + pressure
-  sinyali**. İlişkili: **C2** (compaction), **C3** (memory_write), **HA-1** (kullanıcı modelleme).
-  **Detaylı uygulama planı:** [`arsiv/31-MEMGPT-CORE-MEMORY.md`](arsiv/31-MEMGPT-CORE-MEMORY.md) (Mod C — neden doğrudan
-  Letta değil + 3 parça gerçek dosya temas noktalarıyla, 2026-06-22).
-- [ ] **C3** — memdir benzeri bellek **yazma/indeksleme** (`memory_write`, frontmatter türleri) — şu an sadece recall
+- ~~**C5 / C6 / C3**~~ — recency+importance ağırlıklı recall, MemGPT tarzı
+  self-editing çekirdek bellek ve memdir benzeri `memory_write` indeksleme.
+  **Hepsi 2026-07-05'te düştü** (memory alt sistemi kaldırıldı). Tarihsel tasarım:
+  [`arsiv/31-MEMGPT-CORE-MEMORY.md`](arsiv/31-MEMGPT-CORE-MEMORY.md).
 - [x] **C4** — Maliyet takibi: `cache_creation` vs `cache_read` ayrımı (uçtan uca) + oturumlar arası kümülatif toplam & `cacheHitRate` (caching ROI) — Bütçe ekranı pencere-kümülatif kartları + trend maliyet/tasarruf (2026-06-19)
 - [~] **E3 kalan** — `subagent` StepKind ✅ (A2 ile tamamlandı); `tombstone`/`tool_delta` (canlı adım güncelleme altyapısı) — kalan
 - [ ] **C2** — Compaction emniyet katmanı (`snip`) — 1M tampon var, düşük öncelik
