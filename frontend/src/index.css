@@ -1,4 +1,13 @@
-@import 'tailwindcss';
+/* Tailwind is imported in three parts instead of the usual `@import
+   'tailwindcss'` so utilities land OUTSIDE a cascade layer.
+   Why: Chrome 150 mis-orders declarations nested inside `@media` when they sit
+   in a large `@layer` block, so `hidden md:flex` resolved to `display:none` at
+   every viewport (the nav rail and every `hidden sm:inline` label vanished).
+   Un-layered utilities keep their source order and the pattern works again.
+   Revert to the single import once the Chrome regression is fixed. */
+@import 'tailwindcss/theme.css' layer(theme);
+@import 'tailwindcss/preflight.css' layer(base);
+@import 'tailwindcss/utilities.css';
 @import '@fontsource-variable/inter';
 @import '@fontsource-variable/jetbrains-mono';
 @import 'highlight.js/styles/github-dark.css';

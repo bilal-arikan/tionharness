@@ -2,6 +2,32 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-07-27**
 
+## Navbar kayboldu: Tailwind utilities cascade layer'dan çıkarıldı ✅ (2026-07-27)
+
+**Belirti:** Sol `NavRail` masaüstünde hiç görünmüyordu; alt `MobileNavBar` de gizliydi, yani
+1920px'te iki gezinme çubuğu birden yoktu. Kod tarafında hiçbir değişiklik yoktu (`tsc` temiz,
+`App.tsx` her ikisini de koşulsuz render ediyor) — bozulan CSS'ti.
+
+**Kök neden — Chrome 150 regresyonu.** Tarayıcıda ölçüldü: `hidden md:flex` sınıf çiftinde
+`display` `none` kalıyordu, oysa `.md\:flex` kuralı üretilen CSS'te `.hidden`'dan ~700 kural
+SONRA geliyor (CSSOM'da doğrulandı: `@layer utilities` içinde sırasıyla #111 ve #807), aynı
+specificity, `!important` yok. Tailwind v4 responsive utility'leri **nested** yazar
+(`.md\:flex { @media (width >= 48rem) { display: flex } }`); Chrome 150 bu nested `@media`
+declaration'larının kaynak sırasını **büyük bir `@layer` bloğu içinde** kaybediyor. Kesin kanıt:
+aynı CSS'te tek kelimeyi değiştirip (`@layer utilities {` → `@media all {`) ölçüm `flex`'e döndü.
+Küçük bir layer'da tekrarlanmıyor, yani kural sayısına bağlı bir Blink hatası. Tailwind 4.2 de
+aynı nested çıktıyı ürettiği için sürüm düşürmek çözmüyordu.
+
+**Etki alanı navbar'dan genişti:** `hidden sm:inline` / `hidden md:block` gibi TÜM
+"mobilde gizle, geniş ekranda göster" kalıpları (AppHeader etiketleri, ~25 dosya) ölüydü.
+
+**Düzeltme (`frontend/src/index.css`):** tek satırlık `@import 'tailwindcss'` üç parçaya bölündü —
+`theme.css layer(theme)` + `preflight.css layer(base)` + `utilities.css` **layer'sız**. Layer'sız
+utility'ler kaynak sırasını koruyor, kalıp yeniden çalışıyor. Cascade açısından güvenli: utilities
+zaten en yüksek layer'daydı, layer dışına çıkınca yalnızca daha güçlü oluyor. Dev + prod build
+doğrulandı (rail 208px `flex`, mobil bar `md`'de gizli). Chrome hatası düzelince tek-satır
+import'a dönülebilir — gerekçe index.css'teki yorumda duruyor.
+
 ## Test altyapısı: CI tam kapsam + frontend testleri ✅ (2026-07-27)
 
 Test **kodlarının** durumu iyiydi (kaldırılan özelliklerin testleri de silinmiş — `tools/compact`,
