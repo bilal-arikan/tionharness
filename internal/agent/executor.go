@@ -90,10 +90,15 @@ func (r *Runtime) complete(ctx context.Context, agent db.Agent, system, systemDy
 	if s := strings.TrimSpace(outputSchema); s != "" {
 		req.OutputSchema = json.RawMessage(s)
 	}
-	resp, err := r.CompleteWithTools(ctx, agent, provider, req, autonomous)
+	resp, steps, err := r.CompleteWithToolsStream(ctx, agent, provider, req, autonomous, func(st TurnStep) {
+		r.emitFlowNodeStepCtx(ctx, st) // live to the run viewer (no-op off the flow path)
+	})
 	if err != nil {
 		return "", err
 	}
+	// Persist the node's tool/thinking trace to a sidecar (no-op off the flow
+	// path) so the run inspector can render it as a chat-like exchange.
+	r.captureFlowNodeSteps(ctx, steps)
 	return resp.Text, nil
 }
 
@@ -125,9 +130,12 @@ func (r *Runtime) completeThread(ctx context.Context, agent db.Agent, system, sy
 	if s := strings.TrimSpace(outputSchema); s != "" {
 		req.OutputSchema = json.RawMessage(s)
 	}
-	resp, err := r.CompleteWithTools(ctx, agent, provider, req, autonomous)
+	resp, steps, err := r.CompleteWithToolsStream(ctx, agent, provider, req, autonomous, func(st TurnStep) {
+		r.emitFlowNodeStepCtx(ctx, st)
+	})
 	if err != nil {
 		return "", err
 	}
+	r.captureFlowNodeSteps(ctx, steps)
 	return resp.Text, nil
 }

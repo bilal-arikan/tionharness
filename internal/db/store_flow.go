@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"fmt"
 )
 
 // ---- Flows ----
@@ -168,9 +169,56 @@ func (d *DB) FinishFlowRun(ctx context.Context, id, status, output, errText stri
 }
 
 // ListRunningFlowRuns returns runs still in the running state (for resume on boot),
-// oldest first.
+// oldest first. Waiting runs are intentionally excluded — they sleep until input,
+// so boot never revives them (no orphan).
 func (d *DB) ListRunningFlowRuns(ctx context.Context) ([]FlowRun, error) {
 	return dbFilter(d, d.flowRuns,
 		func(r FlowRun) bool { return r.Status == FlowRunning },
 		func(a, b FlowRun) bool { return a.CreatedAt < b.CreatedAt }), nil
+}
+
+// MarkFlowRunWaiting durably suspends a run at an await-input node: it persists
+// the state snapshot AND flips the status to waiting in one step, so a crash
+// between the two can't leave a "running" row with await-input state.
+func (d *DB) MarkFlowRunWaiting(ctx context.Context, id, state string) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	r, ok := d.flowRuns[id]
+	if !ok {
+		return ErrNotFound
+	}
+	r.State = state
+	r.Status = FlowWaiting
+	r.UpdatedAt = now()
+	return d.persistFlowRunLocked(r)
+}
+
+// ListWaitingFlowRuns returns runs suspended at an await-input node (for the
+// timeout sweeper), oldest suspend first.
+func (d *DB) ListWaitingFlowRuns(ctx context.Context) ([]FlowRun, error) {
+	return dbFilter(d, d.flowRuns,
+		func(r FlowRun) bool { return r.Status == FlowWaiting },
+		func(a, b FlowRun) bool { return a.UpdatedAt < b.UpdatedAt }), nil
+}
+
+// ClaimWaitingFlowRun atomically transitions a run from waiting → running and
+// returns it, so exactly one resume wins the race (concurrent input from multiple
+// windows). Returns ErrNotFound if the run is missing and a plain error if the run
+// is not currently waiting (already resumed, finished, or never suspended).
+func (d *DB) ClaimWaitingFlowRun(ctx context.Context, id string) (FlowRun, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	r, ok := d.flowRuns[id]
+	if !ok {
+		return FlowRun{}, ErrNotFound
+	}
+	if r.Status != FlowWaiting {
+		return FlowRun{}, fmt.Errorf("flow run %s is not waiting (status %q)", id, r.Status)
+	}
+	r.Status = FlowRunning
+	r.UpdatedAt = now()
+	if err := d.persistFlowRunLocked(r); err != nil {
+		return FlowRun{}, err
+	}
+	return r, nil
 }

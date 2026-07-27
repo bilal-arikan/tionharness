@@ -3,7 +3,7 @@ import type { Edge } from '@xyflow/react'
 import { api } from '@/api'
 import type { EdgeStyle } from './FlowCanvas'
 import type { FlowTemplate } from './flowTemplates'
-import { reactFlowToGraph, type FlowRFNode } from './flowGraph'
+import { reactFlowToGraph, ensureStartNode, type FlowRFNode } from './flowGraph'
 import type { Agent, Flow, FlowRun } from '@/types'
 import type { MultiSelect } from '@/shared/hooks/useMultiSelect'
 import type { FlowsTab } from './flowsPanelShared'
@@ -66,7 +66,11 @@ export function createFlowActions({
     const n = prompt('Akış adı:')
     if (!n) return
     try {
-      const f = await api.createFlow(n)
+      // Seed with the required start node so a fresh flow is valid out of the box.
+      const f = await api.createFlow(n, {
+        start: 'start',
+        nodes: [{ id: 'start', type: 'start', title: 'Başlangıç', next: '' }],
+      })
       setFlows((prev) => [f, ...prev])
       selectFlow(f)
     } catch (e) {
@@ -84,12 +88,12 @@ export function createFlowActions({
       onError('Şablondan akış oluşturmak için önce en az bir ajan oluşturun.')
       return
     }
-    const graph = {
+    const graph = ensureStartNode({
       ...t.graph,
       nodes: t.graph.nodes.map((n) =>
         n.type === 'agent' && !n.agentId ? { ...n, agentId: defaultAgent } : n,
       ),
-    }
+    })
     try {
       const f = await api.createFlow(t.name, graph)
       setFlows((prev) => [f, ...prev])

@@ -93,6 +93,8 @@ var priceTable = map[string]map[string]Price{
 	// when caching is on, so writes carry the 2× extended premium here (not the
 	// standard 1.25×).
 	"anthropic": {
+		// Opus 5 (2026-07-24) keeps Opus-tier pricing unchanged ($5/$25 per MTok).
+		"claude-opus-5":             {InputPerMTok: 5, OutputPerMTok: 25, CacheWriteMultOverride: CacheWrite1hMult},
 		"claude-opus-4-8":           {InputPerMTok: 5, OutputPerMTok: 25, CacheWriteMultOverride: CacheWrite1hMult},
 		// Sonnet 5 standard list price ($3/$15). Introductory $2/$10 runs through
 		// 2026-08-31; the table tracks the standard rate as a stable ballpark.
@@ -116,6 +118,7 @@ var priceTable = map[string]map[string]Price{
 	// "openai/gpt-…": {InputPerMTok: …, OutputPerMTok: …, CacheReadMultOverride: 0.25}).
 	// Unlisted models fall through to unpriced (the screen is explicitly ballpark).
 	"openrouter": {
+		"anthropic/claude-opus-5":     {InputPerMTok: 5, OutputPerMTok: 25, CacheReadMultOverride: 0.10, CacheWriteMultOverride: 1.25},
 		"anthropic/claude-opus-4.8":   {InputPerMTok: 5, OutputPerMTok: 25, CacheReadMultOverride: 0.10, CacheWriteMultOverride: 1.25},
 		"anthropic/claude-sonnet-5":   {InputPerMTok: 3, OutputPerMTok: 15, CacheReadMultOverride: 0.10, CacheWriteMultOverride: 1.25},
 		"anthropic/claude-sonnet-4.6": {InputPerMTok: 3, OutputPerMTok: 15, CacheReadMultOverride: 0.10, CacheWriteMultOverride: 1.25},

@@ -13,7 +13,7 @@ export type FlowRFNode = RFNode<{
   // the node when status is "done". Undefined in the editor (no run outputs).
   output?: string
 }>
-export type NodeStatus = 'running' | 'done' | 'error'
+export type NodeStatus = 'running' | 'done' | 'error' | 'waiting'
 
 // Layout grid spacing for auto-placed nodes.
 const COL_W = 280
@@ -36,7 +36,7 @@ export function graphToReactFlow(graph: FlowGraph): { nodes: FlowRFNode[]; edges
     id: n.id,
     type: n.type,
     position: { x: n.x ?? positions[n.id]?.x ?? 0, y: n.y ?? positions[n.id]?.y ?? 0 },
-    data: { node: n, isStart: n.id === graph.start },
+    data: { node: n, isStart: n.type === 'start' },
   }))
 
   const edges: Edge[] = []
@@ -51,8 +51,13 @@ export function graphToReactFlow(graph: FlowGraph): { nodes: FlowRFNode[]; edges
       case 'agent':
       case 'delay':
       case 'transform':
+      case 'await-input':
+      case 'subflow':
+      case 'start':
         add(n.id, n.next ?? '')
         break
+      case 'end':
+        break // terminal — no outgoing edge
       case 'branch':
         (n.branches ?? []).forEach((b, i) =>
           add(n.id, b.next, {
@@ -92,8 +97,13 @@ export function reactFlowToGraph(
       case 'agent':
       case 'delay':
       case 'transform':
+      case 'await-input':
+      case 'subflow':
+      case 'start':
         base.next = outgoing[0]?.target ?? ''
         break
+      case 'end':
+        break // terminal — no next
       case 'branch': {
         // Keep existing arm conditions, re-target by branch slot order.
         const arms = base.branches ?? []
@@ -184,7 +194,12 @@ function successors(n: FlowNode | undefined): string[] {
     case 'agent':
     case 'delay':
     case 'transform':
+    case 'await-input':
+    case 'subflow':
+    case 'start':
       return [n.next ?? '']
+    case 'end':
+      return []
     case 'branch':
       return (n.branches ?? []).map((b) => b.next)
     case 'parallel':
@@ -198,6 +213,17 @@ function successors(n: FlowNode | undefined): string[] {
 
 function round(v: number): number {
   return Math.round(v)
+}
+
+// ensureStartNode upgrades a graph to the required start-node model: when it lacks
+// a start node it prepends one (Next = the old entry) and repoints start to it.
+// Mirrors the backend's MigrateAddStart so templates/previews render + instantiate
+// validly. Idempotent.
+export function ensureStartNode(graph: FlowGraph): FlowGraph {
+  if (graph.nodes.some((n) => n.type === 'start')) return graph
+  const id = graph.nodes.some((n) => n.id === 'start') ? `start_${graph.nodes.length}` : 'start'
+  const startNode: FlowNode = { id, type: 'start', title: 'Başlangıç', next: graph.start || '' }
+  return { ...graph, start: id, nodes: [startNode, ...graph.nodes] }
 }
 
 // nextNodeId returns the smallest unused "n<i>" id for a new node.
@@ -229,6 +255,19 @@ export function blankNode(id: string, type: FlowNodeType, defaultAgentId = ''): 
     node.maxIters = 3
     node.until = ''
     node.untilMode = 'contains'
+  } else if (type === 'await-input') {
+    node.next = ''
+    node.title = 'Girdi bekle'
+  } else if (type === 'subflow') {
+    node.flowRef = ''
+    node.template = '{{last}}'
+    node.next = ''
+    node.title = 'Alt-akış'
+  } else if (type === 'start') {
+    node.next = ''
+    node.title = 'Başlangıç'
+  } else if (type === 'end') {
+    node.title = 'Bitiş'
   } else {
     node.parallel = []
     node.joinNext = ''

@@ -125,8 +125,9 @@ func (r *verdictRunner) RunAgentNode(_ context.Context, agentID, _ string) (stri
 // purpose — the engine allows cycles and bounds them with maxSteps.
 func ganGraph() Graph {
 	return Graph{
-		Start: "gen",
+		Start: "start",
 		Nodes: []Node{
+			{ID: "start", Type: NodeStart, Next: "gen"},
 			{ID: "gen", Type: NodeAgent, AgentID: "gen", Prompt: "build {{input}}", Next: "eval"},
 			{ID: "eval", Type: NodeAgent, AgentID: "eval", Prompt: "judge {{node.gen}}", Next: "decide"},
 			{ID: "decide", Type: NodeBranch, MatchMode: "regex", Branches: []Branch{

@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/bilal-arikan/tionswarm/internal/agent"
 	"github.com/bilal-arikan/tionswarm/internal/conversation"
 	"github.com/bilal-arikan/tionswarm/internal/db"
 	"github.com/bilal-arikan/tionswarm/internal/orchestration"
@@ -255,6 +256,40 @@ func (s *Server) handleGetFlowRun(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, run)
+}
+
+// handleFlowRunNodeSteps returns one node's captured tool/thinking steps for a
+// run (GET /api/flow-runs/{id}/nodes/{nodeId}/steps), read from the per-node
+// sidecar. A node with no steps (or a run from before step capture) yields [] —
+// the run inspector then just shows the input/output bubbles.
+func (s *Server) handleFlowRunNodeSteps(w http.ResponseWriter, r *http.Request) {
+	steps, err := ws(r).Runtime.ReadFlowNodeSteps(r.PathValue("id"), r.PathValue("nodeId"))
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if steps == nil {
+		steps = []agent.TurnStep{}
+	}
+	writeJSON(w, http.StatusOK, steps)
+}
+
+// handleResumeFlowRun delivers input to a run suspended at an await-input node and
+// resumes it (POST /api/flow-runs/{id}/input). Only a "waiting" run accepts input;
+// the waiting→running CAS makes concurrent input from multiple windows safe (the
+// losers get 409). The engine then continues past the await with the input as {{last}}.
+func (s *Server) handleResumeFlowRun(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	var req runFlowReq // reuses {input}
+	_ = decodeJSON(r, &req)
+	runCtx := context.WithoutCancel(r.Context())
+	run, err := ws(r).Runtime.ResumeWaitingFlow(runCtx, id, req.Input)
+	if err != nil {
+		// Not-waiting / already-resumed / missing → conflict (idempotent for clients).
+		writeError(w, http.StatusConflict, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"run": run})
 }
 
 type sessionFlowReq struct {

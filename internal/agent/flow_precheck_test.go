@@ -43,8 +43,9 @@ func TestFlowPrecheckValidGraphPasses(t *testing.T) {
 	a := newFlowAgent(t, rt, "worker")
 
 	g := orchestration.Graph{
-		Start: "n1",
+		Start: "start",
 		Nodes: []orchestration.Node{
+			{ID: "start", Type: orchestration.NodeStart, Next: "n1"},
 			{ID: "n1", Type: orchestration.NodeAgent, AgentID: a.ID, Prompt: "{{input}}", Next: "n2"},
 			{ID: "n2", Type: orchestration.NodeTransform, Template: "{{last}}", Next: "n3"},
 			{ID: "n3", Type: orchestration.NodeDelay, DelayMs: 10},

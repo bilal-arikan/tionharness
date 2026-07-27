@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/bilal-arikan/tionswarm/internal/db"
 	"github.com/bilal-arikan/tionswarm/internal/events"
@@ -49,6 +50,38 @@ func (f flowRunner) RunAgentNodeThread(ctx context.Context, agentID string, thre
 	return f.rt.completeThread(ctx, agent, f.rt.systemPrompt(agent), f.rt.autonomousDynamicSuffix(ctx), thread, prompt, outputSchema, f.autonomous)
 }
 
+// subflowDepthKey carries the nested-subflow depth so a flow that (directly or
+// transitively) calls itself can't recurse forever.
+type subflowDepthKey struct{}
+
+// maxSubflowDepth caps how deep subflow nodes may nest (a flow calling a flow
+// calling a flow …). The child's own maxSteps bounds each level's work.
+const maxSubflowDepth = 5
+
+// RunChildFlow implements orchestration.ChildFlowRunner: it runs another flow to
+// completion (synchronously, its own FlowRun) and returns its final output, so a
+// subflow node can compose flows. Recursion is depth-guarded via the context.
+func (f flowRunner) RunChildFlow(ctx context.Context, flowID, input string) (string, error) {
+	depth, _ := ctx.Value(subflowDepthKey{}).(int)
+	if depth >= maxSubflowDepth {
+		return "", fmt.Errorf("subflow recursion too deep (>%d) — a flow is calling itself", maxSubflowDepth)
+	}
+	childCtx := context.WithValue(ctx, subflowDepthKey{}, depth+1)
+	run, err := f.rt.RunFlow(childCtx, flowID, input, f.autonomous, nil)
+	if err != nil {
+		return "", err
+	}
+	switch run.Status {
+	case db.FlowFailure:
+		return "", fmt.Errorf("child flow failed: %s", run.Error)
+	case db.FlowWaiting:
+		// A synchronously-called subflow that suspends at await-input has no one to
+		// feed it inline; surface it rather than hang the parent.
+		return "", fmt.Errorf("child flow suspended at await-input (not supported inside a synchronous subflow)")
+	}
+	return run.Output, nil
+}
+
 // RunFlow starts a new run of a flow with the given input and drives it to
 // completion. Manual runs (autonomous=false) are not budget-gated. obs is an
 // optional progress observer (nil for no live events) used by the streaming path.
@@ -80,6 +113,112 @@ func (r *Runtime) RunFlow(ctx context.Context, flowID, input string, autonomous 
 	return r.driveFlow(ctx, run, g, input, orchestration.NewState(g), autonomous, obs), nil
 }
 
+// waitingSweepInterval is how often the sweeper scans for timed-out await-input
+// runs. Coarse on purpose — await timeouts are minutes/hours, not seconds.
+const waitingSweepInterval = 30 * time.Second
+
+// awaitTimeoutExceeded reports whether a run suspended at an await node with the
+// given TimeoutSec (0 = never) has blown its deadline. updatedAt is the suspend
+// time (unix seconds), now the current unix time.
+func awaitTimeoutExceeded(timeoutSec int, updatedAt, now int64) bool {
+	return timeoutSec > 0 && now-updatedAt >= int64(timeoutSec)
+}
+
+// StartWaitingFlowSweeper launches the background timeout sweeper: it periodically
+// fails any await-input run that has out-waited its node's TimeoutSec, so a run
+// nobody ever feeds can't sleep forever. Stops when ctx is cancelled.
+func (r *Runtime) StartWaitingFlowSweeper(ctx context.Context) {
+	go func() {
+		t := time.NewTicker(waitingSweepInterval)
+		defer t.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-t.C:
+				r.sweepWaitingFlowsAt(ctx, time.Now().Unix())
+			}
+		}
+	}()
+}
+
+// sweepWaitingFlowsAt fails every waiting run whose await node's TimeoutSec has
+// elapsed by `now`. It CAS-claims each run (waiting→running) before failing it, so
+// a concurrent live resume (human/peer) always wins over the sweeper. Split from
+// StartWaitingFlowSweeper with an explicit `now` so it is deterministically testable.
+func (r *Runtime) sweepWaitingFlowsAt(ctx context.Context, now int64) {
+	runs, err := r.db.ListWaitingFlowRuns(ctx)
+	if err != nil {
+		return
+	}
+	for _, run := range runs {
+		flow, err := r.db.GetFlow(ctx, run.FlowID)
+		if err != nil {
+			continue
+		}
+		g, err := orchestration.ParseGraph(flow.Graph)
+		if err != nil {
+			continue
+		}
+		var st struct {
+			WaitingAt string `json:"waitingAt"`
+		}
+		_ = json.Unmarshal([]byte(run.State), &st)
+		node, ok := g.NodeByID(st.WaitingAt)
+		if !ok || !awaitTimeoutExceeded(node.TimeoutSec, run.UpdatedAt, now) {
+			continue
+		}
+		// Claim so we never race a live resume; if it's already been claimed the
+		// human/peer won and we skip.
+		if _, err := r.db.ClaimWaitingFlowRun(ctx, run.ID); err != nil {
+			continue
+		}
+		if err := r.db.FinishFlowRun(ctx, run.ID, db.FlowFailure, "", fmt.Sprintf("await-input timed out after %ds", node.TimeoutSec)); err != nil {
+			r.logger.Warn("fail timed-out await run", "run", run.ID, "error", err)
+			continue
+		}
+		r.logger.Info("await-input timed out", "run", run.ID, "flow", run.FlowID, "node", st.WaitingAt, "timeoutSec", node.TimeoutSec)
+	}
+}
+
+// ResumeWaitingFlow delivers external input to a flow run suspended at an
+// await-input node and resumes it in the background. Exactly one caller wins the
+// waiting→running CAS (ClaimWaitingFlowRun), so concurrent input from multiple
+// windows/peers is safe — the rest get an error. The input rides {{last}} into the
+// node after the await. Resume is treated as interactive (not budget-gated).
+func (r *Runtime) ResumeWaitingFlow(ctx context.Context, runID, input string) (db.FlowRun, error) {
+	ctx = WithCallKind(ctx, KindFlow)
+	run, err := r.db.ClaimWaitingFlowRun(ctx, runID) // CAS waiting→running (double-resume guard)
+	if err != nil {
+		return db.FlowRun{}, err
+	}
+	flow, err := r.db.GetFlow(ctx, run.FlowID)
+	if err != nil {
+		// Flow deleted while waiting: fail the run cleanly.
+		_ = r.db.FinishFlowRun(ctx, run.ID, db.FlowFailure, "", "flow deleted")
+		return run, fmt.Errorf("flow %s: %w", run.FlowID, err)
+	}
+	g, err := orchestration.ParseGraph(flow.Graph)
+	if err != nil {
+		_ = r.db.FinishFlowRun(ctx, run.ID, db.FlowFailure, "", err.Error())
+		return run, err
+	}
+	var st orchestration.State
+	if uerr := json.Unmarshal([]byte(run.State), &st); uerr != nil || st.Outputs == nil {
+		_ = r.db.FinishFlowRun(ctx, run.ID, db.FlowFailure, "", "corrupted run state")
+		return run, fmt.Errorf("corrupted run state: %w", uerr)
+	}
+	// Inject the delivered input; the await node (Current == WaitingAt) consumes it.
+	st.Last = input
+	// Persist the injected input BEFORE launching so a crash during resume can't lose
+	// it (boot would then resume a running run whose state already carries the input).
+	if data, merr := json.Marshal(st); merr == nil {
+		_ = r.db.SetFlowRunState(ctx, run.ID, string(data))
+	}
+	go r.driveFlow(context.WithoutCancel(ctx), run, g, run.Input, st, false, nil)
+	return run, nil
+}
+
 // driveFlow runs the engine from the given state, persisting after each node,
 // and records the terminal status. It never returns an error: a failure is
 // captured in the returned FlowRun (status=failure) so callers always get a row.
@@ -97,6 +236,9 @@ func (r *Runtime) driveFlow(ctx context.Context, run db.FlowRun, g orchestration
 			}
 		}
 	}()
+	// Thread the run id so each agent node's tool/thinking steps land in a
+	// sidecar keyed by (runID, nodeID) — see captureFlowNodeSteps.
+	ctx = withFlowRunID(ctx, run.ID)
 	eng := orchestration.NewEngine(flowRunner{rt: r, autonomous: autonomous})
 	// Always broadcast per-node lifecycle on the process-wide bus (keyed by run
 	// id) so EVERY window's run viewer renders progress live — not just the HTTP
@@ -125,6 +267,20 @@ func (r *Runtime) driveFlow(ctx context.Context, run db.FlowRun, g orchestration
 	if data, err := json.Marshal(final); err == nil {
 		_ = r.db.SetFlowRunState(ctx, run.ID, string(data))
 		run.State = string(data)
+	}
+
+	// Durable suspend: the run paused at an await-input node. Persist state +
+	// waiting status and return — NOT terminal. ResumeWaitingFlow revives it when
+	// input arrives; boot never auto-resumes it (it's not "running").
+	if runErr == nil && final.WaitingAt != "" {
+		data, _ := json.Marshal(final)
+		if err := r.db.MarkFlowRunWaiting(ctx, run.ID, string(data)); err != nil {
+			r.logger.Warn("mark flow run waiting failed", "run", run.ID, "error", err)
+		}
+		run.Status = db.FlowWaiting
+		run.State = string(data)
+		r.logger.Info("flow run waiting for input", "flow", run.FlowID, "run", run.ID, "node", final.WaitingAt)
+		return run
 	}
 
 	status := db.FlowSuccess

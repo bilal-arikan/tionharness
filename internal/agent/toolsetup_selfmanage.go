@@ -68,6 +68,12 @@ func (r *Runtime) selfManageBuiltins(agent db.Agent) []tools.Tool {
 			run, _, err := r.RunFlowRecorded(ctx, flowID, input, true, nil)
 			return run, err
 		}),
+		// Discover flow runs (esp. ones waiting at an await-input node) and feed a
+		// waiting run — the peer/agent half of the await-input bridge.
+		tools.NewListFlowRunsTool(r.db, agent.ID),
+		tools.NewDeliverFlowInputTool(r.db, agent.ID, func(ctx context.Context, runID, input string) (db.FlowRun, error) {
+			return r.ResumeWaitingFlow(ctx, runID, input)
+		}),
 		// Schedules (routines).
 		tools.NewCreateScheduleTool(r.db, agent.ID, r.reloadSchedules),
 		tools.NewUpdateScheduleTool(r.db, agent.ID, r.reloadSchedules),

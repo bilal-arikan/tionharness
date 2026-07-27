@@ -34,11 +34,29 @@ let sharedES: EventSource | null = null
 const eventSubs = new Set<EventCb>()
 const stepSubs = new Set<EventCb>()
 const flowNodeSubs = new Set<EventCb>()
+const flowNodeStepSubs = new Set<EventCb>()
 const logSubs = new Set<LogCb>()
 
 function ensureConnection(): void {
   if (sharedES) return
   sharedES = new EventSource('/api/events')
+  // The browser only auto-reconnects on transport-level drops (readyState stays
+  // CONNECTING). A non-2xx from the dev proxy (Vite 502/504 during a backend
+  // blip) or any hard error puts the source in CLOSED permanently and it never
+  // retries — the live UI silently goes dark while the server is fine. Detect
+  // that terminal state and rebuild the connection ourselves after a short
+  // backoff, but only while someone still cares (so an idle close stays closed).
+  sharedES.onerror = () => {
+    if (!sharedES || sharedES.readyState !== EventSource.CLOSED) return
+    sharedES = null
+    const hasSubs =
+      eventSubs.size > 0 ||
+      stepSubs.size > 0 ||
+      flowNodeSubs.size > 0 ||
+      flowNodeStepSubs.size > 0 ||
+      logSubs.size > 0
+    if (hasSubs) setTimeout(ensureConnection, 2000)
+  }
   sharedES.addEventListener('notify', (ev) => {
     let parsed: AppEvent
     try {
@@ -68,6 +86,15 @@ function ensureConnection(): void {
     }
     flowNodeSubs.forEach((cb) => cb(parsed))
   })
+  sharedES.addEventListener('flownodestep', (ev) => {
+    let parsed: AppEvent
+    try {
+      parsed = JSON.parse((ev as MessageEvent).data) as AppEvent
+    } catch {
+      return
+    }
+    flowNodeStepSubs.forEach((cb) => cb(parsed))
+  })
   sharedES.addEventListener('log', (ev) => {
     let parsed: AppEvent
     try {
@@ -88,6 +115,7 @@ function closeIfIdle(): void {
     eventSubs.size === 0 &&
     stepSubs.size === 0 &&
     flowNodeSubs.size === 0 &&
+    flowNodeStepSubs.size === 0 &&
     logSubs.size === 0 &&
     sharedES
   ) {
@@ -96,11 +124,17 @@ function closeIfIdle(): void {
   }
 }
 
-function subscribeEvents(onEvent: EventCb, onStep?: EventCb, onFlowNode?: EventCb): () => void {
+function subscribeEvents(
+  onEvent: EventCb,
+  onStep?: EventCb,
+  onFlowNode?: EventCb,
+  onFlowNodeStep?: EventCb,
+): () => void {
   ensureConnection()
   eventSubs.add(onEvent)
   if (onStep) stepSubs.add(onStep)
   if (onFlowNode) flowNodeSubs.add(onFlowNode)
+  if (onFlowNodeStep) flowNodeStepSubs.add(onFlowNodeStep)
   let unsubscribed = false
   return () => {
     if (unsubscribed) return
@@ -108,6 +142,7 @@ function subscribeEvents(onEvent: EventCb, onStep?: EventCb, onFlowNode?: EventC
     eventSubs.delete(onEvent)
     if (onStep) stepSubs.delete(onStep)
     if (onFlowNode) flowNodeSubs.delete(onFlowNode)
+    if (onFlowNodeStep) flowNodeStepSubs.delete(onFlowNodeStep)
     closeIfIdle()
   }
 }

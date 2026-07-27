@@ -449,6 +449,7 @@ export function FlowsPanel({ agents, onError, openFlowId }: Props) {
               onRerun={rerunRun}
               rerunning={rerunning}
               hideSummary
+              onResumed={() => api.listAllFlowRuns().then(setRuns).catch(() => {})}
             />
           )
         ) : !selectedId ? (
@@ -487,7 +488,6 @@ export function FlowsPanel({ agents, onError, openFlowId }: Props) {
             selectedNode={selectedNode}
             start={start}
             patchSelected={ops.patchSelected}
-            makeStart={ops.makeStart}
             duplicateSelected={ops.duplicateSelected}
             deleteSelected={ops.deleteSelected}
             runInputRef={runInputRef}

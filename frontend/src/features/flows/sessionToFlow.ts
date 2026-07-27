@@ -130,8 +130,18 @@ export function sessionToFlowRun(
     outputs[id] = ''
   }
 
-  const graph: FlowGraph = { start: nodes[0]?.id ?? '', nodes, accumulate: true }
-  const state: FlowState = { current: '', last: lastOutput, outputs, steps: nodes.length, trace }
+  // Prepend the required start node (the reified flow reads like a real flow:
+  // Başlangıç → …). It shows as a completed pass-through at the top of the view.
+  const startNode: FlowNode = { id: 'start', type: 'start', title: 'Başlangıç', next: nodes[0]?.id ?? '' }
+  const allNodes = [startNode, ...nodes]
+  const graph: FlowGraph = { start: 'start', nodes: allNodes, accumulate: true }
+  const state: FlowState = {
+    current: '',
+    last: lastOutput,
+    outputs,
+    steps: allNodes.length,
+    trace: [{ nodeId: 'start', type: 'start', title: 'Başlangıç', output: '', at: 0 }, ...trace],
+  }
   const now = Math.floor(Date.now() / 1000)
   const id = `session:${sessionId}`
   const flow: Flow = {

@@ -32,12 +32,16 @@ Each node's fields depend on its `type` — use the exact field names below
 
 | Type | Required fields | Continues via |
 |------|-----------------|---------------|
+| `start` | (none) — REQUIRED, exactly one; the graph `start` must be its id | `next` (the first real node) |
+| `end` | (optional) `template` (shape output), `outputSchema` (JSON Schema the final output must satisfy, else the run fails) | terminal — no `next` |
 | `agent` | `agentId`, `prompt` | `next` (node id; `""` = end) |
 | `parallel` | `parallel`: **array of child agent node ids** | `joinNext` (node after the join) |
 | `branch` | `branches`: array of `{contains, next}` rules | per-arm `next` |
 | `delay` | `delayMs` | `next` |
 | `transform` | `template` | `next` |
 | `loop` | `body` (loop entry id), and `maxIters`>0 or non-empty `until` | `loopNext` (node after exit) |
+| `await-input` | (optional `timeoutSec`) | `next` — the run PAUSES until input arrives (durable), then continues with it as `{{last}}` |
+| `subflow` | `flowRef` (child flow id), optional `template` (child input; default `{{last}}`) | `next` — runs the child flow to completion, captures its output |
 
 Parallel fan-out + join example (run `a` and `b` concurrently, then `merge`):
 
@@ -69,6 +73,11 @@ These tools require self-management to be enabled for the workspace:
 - `delete_flow` — remove an agent-created flow.
 - `run_flow` — drive a flow to completion (autonomous, budget-gated); the run is
   recorded in the executions feed.
+- `list_flow_runs` — list flow runs; use `status="waiting"` to find runs paused at an
+  `await-input` node (each row's `waitingAt` is the await node id).
+- `deliver_flow_input` — feed input to a WAITING run (from `list_flow_runs`), resuming it;
+  the input becomes `{{last}}` for the node after the await. Lets an agent/coordinator drive a
+  waiting flow, not just a human in the UI.
 
 ## Design checklist
 

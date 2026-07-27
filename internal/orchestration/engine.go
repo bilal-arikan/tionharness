@@ -39,6 +39,13 @@ type Msg struct {
 	Text string `json:"text"`
 }
 
+// ChildFlowRunner is an OPTIONAL extension that lets a subflow node run another
+// flow to completion and capture its output. Runners that do not implement it
+// make a subflow node fail with a clear "not wired" error.
+type ChildFlowRunner interface {
+	RunChildFlow(ctx context.Context, flowID, input string) (string, error)
+}
+
 // ThreadAgentRunner is an OPTIONAL extension for accumulate-mode graphs: the
 // runner receives the prior conversation thread plus the new user prompt, so the
 // agent's stable system + growing message prefix is reused by the provider's
@@ -71,7 +78,36 @@ type TraceEntry struct {
 	Type   string `json:"type"`
 	Title  string `json:"title"`
 	Output string `json:"output"`
-	At     int64  `json:"at"`
+	// Input is the rendered prompt actually sent to an agent node (after
+	// {{...}} substitution). Empty for non-agent nodes. Small enough to keep in
+	// state; the heavier per-node tool/thinking steps live in a sidecar file (see
+	// agent.Runtime.writeFlowNodeSteps), keyed by (runID, nodeID).
+	// For a branch node it holds the value that was evaluated (st.Last) so the run
+	// inspector can show a decision card.
+	Input string `json:"input,omitempty"`
+	// ThreadLen is how many accumulated-thread messages this agent node saw as
+	// prior context BEFORE its own turn (accumulate mode only; 0/omitted otherwise).
+	// The full thread lives in State.Thread; State.Thread[:ThreadLen] is exactly the
+	// prior context this node ran with — the run inspector renders it without
+	// snapshotting the (growing) thread per node.
+	ThreadLen int   `json:"threadLen,omitempty"`
+	At        int64 `json:"at"`
+}
+
+// ctxNodeIDKey carries the id of the node currently executing so an AgentRunner
+// (which only receives agentID + prompt) can attribute side outputs — e.g. a
+// per-node steps sidecar — to the right node without widening the interface.
+type ctxNodeIDKey struct{}
+
+// WithNodeID tags ctx with the executing node's id.
+func WithNodeID(ctx context.Context, id string) context.Context {
+	return context.WithValue(ctx, ctxNodeIDKey{}, id)
+}
+
+// NodeIDFromContext returns the executing node's id set by WithNodeID ("" if none).
+func NodeIDFromContext(ctx context.Context) string {
+	s, _ := ctx.Value(ctxNodeIDKey{}).(string)
+	return s
 }
 
 // State is the restart-safe snapshot persisted after every node. A run can be
@@ -86,6 +122,12 @@ type State struct {
 	// {{iteration}}. Set by the engine before each loop body pass; nested loops
 	// share this field, so an inner loop overwrites it for the duration of its run.
 	Iter int `json:"iter,omitempty"`
+	// WaitingAt is the id of the await-input node the run is durably suspended at
+	// ("" when running/terminal). Run returns (state, nil) with this set when it
+	// hits an unfed await-input; the caller persists status=waiting. On resume the
+	// caller injects the input into Last and re-enters Run with Current == WaitingAt
+	// == the await node, which consumes it and advances. See NodeAwaitInput.
+	WaitingAt string `json:"waitingAt,omitempty"`
 	// Thread is the accumulated conversation for accumulate-mode graphs: each
 	// non-Fresh agent node appends its rendered prompt ({user}) and reply
 	// ({assistant}). Empty on legacy stateless runs. Persisted so a resumed run
@@ -157,6 +199,8 @@ func (e *Engine) runAgentNodeSafe(ctx context.Context, node Node, prompt string,
 			err = fmt.Errorf("agent node %q panicked: %v", node.ID, p)
 		}
 	}()
+	// Tag the context so the runner can attribute its per-node steps sidecar.
+	ctx = WithNodeID(ctx, node.ID)
 	if useThread {
 		if tr, ok := e.runner.(ThreadAgentRunner); ok {
 			return tr.RunAgentNodeThread(ctx, node.AgentID, thread, prompt, node.OutputSchema)
@@ -192,6 +236,8 @@ func (e *Engine) Run(ctx context.Context, g Graph, input string, st State, save 
 			e.notify("start", node, st.Steps, "")
 			prompt := render(node.Prompt, input, st)
 			useThread := g.Accumulate && !node.Fresh
+			// Prior-context length this node ran with (before it grows the thread).
+			threadLenBefore := len(st.Thread)
 			out, err := e.runAgentNodeSafe(ctx, node, prompt, st.Thread, useThread)
 			if err != nil {
 				e.notifyError(node, st.Steps, err)
@@ -204,13 +250,20 @@ func (e *Engine) Run(ctx context.Context, g Graph, input string, st State, save 
 			}
 			st.Outputs[node.ID] = out
 			st.Last = out
-			st.appendTrace(node, out)
+			st.appendTraceIn(node, out, prompt)
+			if useThread {
+				// Tag the just-appended trace with the prior-context length so the
+				// inspector can show State.Thread[:ThreadLen] as this node's context.
+				st.Trace[len(st.Trace)-1].ThreadLen = threadLenBefore
+			}
 			e.notify("done", node, st.Steps, out)
 			st.Current = node.Next
 
 		case NodeBranch:
 			next, label := evalBranch(node, st.Last)
-			st.appendTrace(node, "→ "+label)
+			// Record the evaluated value as Input so the inspector can render a
+			// decision card (value → which arm matched); Output carries the label.
+			st.appendTraceIn(node, "→ "+label, st.Last)
 			e.notify("done", node, st.Steps, "→ "+label)
 			st.Current = next
 
@@ -234,10 +287,14 @@ func (e *Engine) Run(ctx context.Context, g Graph, input string, st State, save 
 			st.Current = node.Next
 
 		case NodeParallel:
-			combined, err := e.runParallel(ctx, g, node, input, st)
+			combined, childTraces, err := e.runParallel(ctx, g, node, input, st)
 			if err != nil {
 				return st, err
 			}
+			// Record each child as its own trace entry (before the parent's fold
+			// entry) so the run inspector can open a child's chat-like view; the
+			// engine's ctx already tagged each child's steps sidecar by child id.
+			st.Trace = append(st.Trace, childTraces...)
 			if g.Accumulate {
 				// Fold the fan-out back into the parent thread as ONE synthetic
 				// user/assistant pair so the thread stays linear, alternating, and
@@ -259,9 +316,84 @@ func (e *Engine) Run(ctx context.Context, g Graph, input string, st State, save 
 				return loopedState, fmt.Errorf("node %q (loop): %w", node.ID, err)
 			}
 			st = loopedState
+			// A suspend inside the loop body propagates up: Current already points at
+			// the await node, so return without advancing to LoopNext.
+			if st.WaitingAt != "" {
+				return st, nil
+			}
 			st.appendTrace(node, st.Last)
 			e.notify("done", node, st.Steps, st.Last)
 			st.Current = next
+
+		case NodeStart:
+			// Entry marker: pass straight through to the first real node.
+			st.appendTrace(node, "")
+			st.Current = node.Next
+
+		case NodeEnd:
+			// Optional terminal. Shape the final output (Template) and/or validate it
+			// against OutputSchema, then finish.
+			if strings.TrimSpace(node.Template) != "" {
+				st.Last = render(node.Template, input, st)
+				st.Outputs[node.ID] = st.Last
+			}
+			if s := strings.TrimSpace(node.OutputSchema); s != "" {
+				if !json.Valid([]byte(strings.TrimSpace(st.Last))) {
+					err := fmt.Errorf("node %q (end): final output does not satisfy the required format (not valid JSON)", node.ID)
+					e.notifyError(node, st.Steps, err)
+					return st, err
+				}
+			}
+			st.appendTrace(node, st.Last)
+			e.notify("done", node, st.Steps, st.Last)
+			st.Current = "" // terminal
+
+		case NodeSubflow:
+			e.notify("start", node, st.Steps, "")
+			tmpl := node.Template
+			if strings.TrimSpace(tmpl) == "" {
+				tmpl = "{{last}}"
+			}
+			childInput := render(tmpl, input, st)
+			cr, ok := e.runner.(ChildFlowRunner)
+			if !ok {
+				err := fmt.Errorf("node %q (subflow): runner does not support child flows", node.ID)
+				e.notifyError(node, st.Steps, err)
+				return st, err
+			}
+			out, err := cr.RunChildFlow(ctx, node.FlowRef, childInput)
+			if err != nil {
+				e.notifyError(node, st.Steps, err)
+				return st, fmt.Errorf("node %q (subflow): %w", node.ID, err)
+			}
+			st.Outputs[node.ID] = out
+			st.Last = out
+			st.appendTrace(node, out)
+			e.notify("done", node, st.Steps, out)
+			st.Current = node.Next
+
+		case NodeAwaitInput:
+			if st.WaitingAt == node.ID {
+				// Resume: input was injected into Last; consume it, clear the wait,
+				// and advance. The received input rides {{last}} into the next node
+				// (in accumulate mode the next agent's prompt turns it into a user turn).
+				st.WaitingAt = ""
+				st.Outputs[node.ID] = st.Last
+				st.appendTrace(node, st.Last)
+				e.notify("done", node, st.Steps, st.Last)
+				st.Current = node.Next
+			} else {
+				// First arrival: durably suspend. Leave Current at this node and set
+				// WaitingAt so the caller marks the run waiting and persists state.
+				st.WaitingAt = node.ID
+				e.notify("waiting", node, st.Steps, "")
+				if save != nil {
+					if err := save(st); err != nil {
+						return st, fmt.Errorf("persist waiting state: %w", err)
+					}
+				}
+				return st, nil
+			}
 
 		default:
 			return st, fmt.Errorf("node %q has unknown type %q", node.ID, node.Type)
@@ -277,11 +409,15 @@ func (e *Engine) Run(ctx context.Context, g Graph, input string, st State, save 
 }
 
 // runParallel executes a parallel node's children concurrently and joins their
-// outputs. Each child receives the same incoming value (st.Last) as {{last}}.
-func (e *Engine) runParallel(ctx context.Context, g Graph, node Node, input string, st State) (string, error) {
+// outputs. Each child receives the same incoming value (st.Last) as {{last}}. It
+// returns the joined output plus one TraceEntry per child (input+output), so the
+// run inspector can open each child's own chat-like view — appended by the caller
+// since st is a value copy here (a slice append would not reach the caller).
+func (e *Engine) runParallel(ctx context.Context, g Graph, node Node, input string, st State) (string, []TraceEntry, error) {
 	type res struct {
-		id, title, out string
-		err            error
+		id, title, in, out string
+		typ                string
+		err                error
 	}
 	results := make([]res, len(node.Parallel))
 	var wg sync.WaitGroup
@@ -289,7 +425,7 @@ func (e *Engine) runParallel(ctx context.Context, g Graph, node Node, input stri
 	for i, childID := range node.Parallel {
 		child, ok := g.node(childID)
 		if !ok {
-			return "", fmt.Errorf("parallel child %q not found", childID)
+			return "", nil, fmt.Errorf("parallel child %q not found", childID)
 		}
 		e.notify("start", child, st.Steps, "")
 		wg.Add(1)
@@ -314,21 +450,30 @@ func (e *Engine) runParallel(ctx context.Context, g Graph, node Node, input stri
 			} else {
 				e.notify("done", child, st.Steps, out)
 			}
-			results[i] = res{id: child.ID, title: title, out: out, err: err}
+			results[i] = res{id: child.ID, title: title, in: prompt, out: out, typ: child.Type, err: err}
 		}(i, child)
 	}
 	wg.Wait()
 
 	var b strings.Builder
+	traces := make([]TraceEntry, 0, len(results))
 	for i := range results {
 		r := results[i]
 		if r.err != nil {
-			return "", fmt.Errorf("parallel child %q: %w", r.id, r.err)
+			return "", nil, fmt.Errorf("parallel child %q: %w", r.id, r.err)
 		}
 		st.Outputs[r.id] = r.out
 		fmt.Fprintf(&b, "[%s]\n%s\n\n", r.title, r.out)
+		traces = append(traces, TraceEntry{
+			NodeID: r.id,
+			Type:   r.typ,
+			Title:  r.title,
+			Output: r.out,
+			Input:  r.in,
+			At:     time.Now().Unix(),
+		})
 	}
-	return strings.TrimSpace(b.String()), nil
+	return strings.TrimSpace(b.String()), traces, nil
 }
 
 // runLoop repeats the loop node's Body sub-chain until an exit condition holds,
@@ -349,6 +494,12 @@ func (e *Engine) runLoop(ctx context.Context, g Graph, node Node, input string, 
 		st, err = e.Run(ctx, g, input, st, save)
 		if err != nil {
 			return node.LoopNext, st, err
+		}
+		// Body suspended at an await-input: propagate the wait up (Current points at
+		// the await node). NOTE: on resume the loop does not continue iterating — the
+		// body remainder runs once and exits (the documented loop-resume limitation).
+		if st.WaitingAt != "" {
+			return "", st, nil
 		}
 		if node.Until != "" && loopMatches(node, st.Last) {
 			break
@@ -376,8 +527,15 @@ func parallelFoldMarker(node Node) string {
 	return fmt.Sprintf("⚡ parallel step %q → results", title)
 }
 
-// appendTrace records a node execution.
+// appendTrace records a node execution (no input; non-agent nodes).
 func (st *State) appendTrace(node Node, output string) {
+	st.appendTraceIn(node, output, "")
+}
+
+// appendTraceIn records a node execution together with the rendered input that
+// produced it (agent nodes), so the run inspector can show input→output as a
+// chat-like exchange.
+func (st *State) appendTraceIn(node Node, output, input string) {
 	title := node.Title
 	if title == "" {
 		title = node.ID
@@ -387,6 +545,7 @@ func (st *State) appendTrace(node Node, output string) {
 		Type:   node.Type,
 		Title:  title,
 		Output: output,
+		Input:  input,
 		At:     time.Now().Unix(),
 	})
 }

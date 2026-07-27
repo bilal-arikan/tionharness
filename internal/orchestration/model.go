@@ -6,16 +6,21 @@ package orchestration
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 )
 
 // Node types.
 const (
-	NodeAgent     = "agent"     // run an agent with a (templated) prompt, then go to Next
-	NodeBranch    = "branch"    // route by matching the last output (see MatchMode)
-	NodeParallel  = "parallel"  // run several agent nodes concurrently, then JoinNext
-	NodeDelay     = "delay"     // wait DelayMs, then go to Next (no LLM)
-	NodeTransform = "transform" // emit a rendered template as output, then Next (no LLM)
-	NodeLoop      = "loop"      // repeat a body sub-chain until MaxIters/Until, then LoopNext
+	NodeAgent      = "agent"       // run an agent with a (templated) prompt, then go to Next
+	NodeBranch     = "branch"      // route by matching the last output (see MatchMode)
+	NodeParallel   = "parallel"    // run several agent nodes concurrently, then JoinNext
+	NodeDelay      = "delay"       // wait DelayMs, then go to Next (no LLM)
+	NodeTransform  = "transform"   // emit a rendered template as output, then Next (no LLM)
+	NodeLoop       = "loop"        // repeat a body sub-chain until MaxIters/Until, then LoopNext
+	NodeAwaitInput = "await-input" // durably suspend until external input arrives, then Next
+	NodeSubflow    = "subflow"     // run another flow to completion, capture its output, then Next
+	NodeStart      = "start"       // required entry marker; passes straight through to Next
+	NodeEnd        = "end"         // optional terminal; may shape (Template) / validate (OutputSchema) the final output
 )
 
 // Graph is a reusable orchestration protocol.
@@ -92,6 +97,21 @@ type Node struct {
 	Until     string `json:"until,omitempty"`     // exit when {{last}} matches this
 	UntilMode string `json:"untilMode,omitempty"` // contains|equals|regex ("" = contains)
 
+	// start — the required entry node; carries only Next (a pass-through). end — an
+	// optional terminal that may render Template as the final output and/or validate
+	// the final output against OutputSchema (both fields declared above/for agent).
+
+	// subflow — run another flow (FlowRef) to completion with a rendered input
+	// (Template; defaults to {{last}} when empty), capture its final output as this
+	// node's output, then continue at Next. Enables flow composition/reuse. The
+	// runner guards against runaway recursion (a flow calling itself too deep).
+	FlowRef string `json:"flowRef,omitempty"` // id of the child flow to run
+
+	// await-input — TimeoutSec optionally bounds how long the run may stay
+	// suspended: a background sweeper fails a waiting run once now-suspendTime
+	// exceeds it (0 = wait forever). The engine itself ignores this field.
+	TimeoutSec int `json:"timeoutSec,omitempty"`
+
 	// layout (cosmetic only — ignored by the engine and Validate). Persisted so
 	// the visual canvas builder can restore node positions across reloads.
 	X float64 `json:"x,omitempty"`
@@ -131,6 +151,39 @@ func (g Graph) node(id string) (Node, bool) {
 // package, e.g. attributing a flow run's output to a specific node's agent).
 func (g Graph) NodeByID(id string) (Node, bool) { return g.node(id) }
 
+// MigrateAddStart upgrades a graph to the required start-node model: when it has
+// no start node, it prepends one whose Next is the old entry (Start) and repoints
+// Start to it. Returns the (possibly new) graph and whether it changed. Idempotent.
+func MigrateAddStart(g Graph) (Graph, bool) {
+	for _, n := range g.Nodes {
+		if n.Type == NodeStart {
+			return g, false // already has a start node
+		}
+	}
+	id := uniqueNodeID(g, "start")
+	var x, y float64
+	if old, ok := g.node(g.Start); ok {
+		x, y = old.X, old.Y-120
+	}
+	start := Node{ID: id, Type: NodeStart, Title: "Başlangıç", Next: g.Start, X: x, Y: y}
+	g.Nodes = append([]Node{start}, g.Nodes...)
+	g.Start = id
+	return g, true
+}
+
+// uniqueNodeID returns base, or base_1/base_2/… when base is already taken.
+func uniqueNodeID(g Graph, base string) string {
+	if _, ok := g.node(base); !ok {
+		return base
+	}
+	for i := 1; ; i++ {
+		cand := fmt.Sprintf("%s_%d", base, i)
+		if _, ok := g.node(cand); !ok {
+			return cand
+		}
+	}
+}
+
 // Validate checks structural integrity: a start node, unique ids, valid
 // references, and agent nodes with an agent assigned.
 func (g Graph) Validate() error {
@@ -149,6 +202,23 @@ func (g Graph) Validate() error {
 	}
 	if _, ok := g.node(g.Start); !ok {
 		return fmt.Errorf("start node %q not found", g.Start)
+	}
+
+	// Exactly one start node, and it must be the graph entry. The start node type
+	// is the entry marker (no separate "mark as start").
+	startCount := 0
+	startID := ""
+	for _, n := range g.Nodes {
+		if n.Type == NodeStart {
+			startCount++
+			startID = n.ID
+		}
+	}
+	if startCount != 1 {
+		return fmt.Errorf("graph must have exactly one start node, found %d", startCount)
+	}
+	if g.Start != startID {
+		return fmt.Errorf("graph entry %q must be the start node %q", g.Start, startID)
 	}
 
 	ref := func(id, ctx string) error {
@@ -179,7 +249,21 @@ func (g Graph) Validate() error {
 					return err
 				}
 			}
-		case NodeDelay, NodeTransform:
+		case NodeStart, NodeDelay, NodeTransform, NodeAwaitInput:
+			if err := ref(n.Next, "node "+n.ID); err != nil {
+				return err
+			}
+		case NodeEnd:
+			// Terminal: no outgoing edge. OutputSchema, when set, must be valid JSON.
+			if s := strings.TrimSpace(n.OutputSchema); s != "" {
+				if !json.Valid([]byte(s)) {
+					return fmt.Errorf("end node %q has an invalid OutputSchema (must be JSON)", n.ID)
+				}
+			}
+		case NodeSubflow:
+			if n.FlowRef == "" {
+				return fmt.Errorf("subflow node %q has no flowRef", n.ID)
+			}
 			if err := ref(n.Next, "node "+n.ID); err != nil {
 				return err
 			}

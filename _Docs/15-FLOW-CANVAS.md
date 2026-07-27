@@ -204,7 +204,39 @@ Kalıcı trace yine altta node-node liste olarak gösterilir (mevcut davranış 
   dedupe olur. **Tüm** koşular (UI/otonom/scheduled) yayar — eskiden node olayları yalnız
   koşuyu başlatan HTTP istemcisine gidiyordu (`obs=nil` otonom koşuda hiç canlı yoktu).
   **Not:** akış node'u session'sız `complete()` çağrısıdır → `session_step`/tool-adımı
-  yaymaz; bu yüzden canlılık **node-seviyesindedir** (chat/Aktivite'deki adım-seviyesi değil).
+  **canlı yaymaz**; bu yüzden canlılık **node-seviyesindedir** (chat/Aktivite'deki adım-seviyesi değil).
+- **Node-tıkla chat görünümü (2026-07-27):** `RunView`'de canvas'ta bir node'a tıklayınca alt
+  panel düz "Adım izi" listesinden **`RunNodeInspector`** görünümüne geçer: agent node için
+  **girdi mesaj balonu** (çözülmüş prompt) + **tool/düşünce adımları** (chat'in `TurnSteps`
+  bileşeni) + **çıktı balonu** (assistant), chat mekanizmasının kendi bileşenleriyle
+  (`UserBubble`/`TurnSteps`/`Markdown`). Adımlar node çalışırken **çöpe atılmıyor** artık:
+  agent node yolu (`executor.go` `complete`/`completeThread`) `CompleteWithToolsTraced` ile
+  `[]TurnStep` yakalar → **sidecar** dosyaya yazar (`<store>/flow_runs/<runID>/steps-<nodeID>.json`;
+  state şişmesin diye State içinde DEĞİL — bkz. WS5/TSK64). `TraceEntry.Input` çözülmüş prompt'u
+  taşır. API: `GET /api/flow-runs/{id}/nodes/{nodeId}/steps`. Node id ctx'e
+  `orchestration.WithNodeID`, run id `withFlowRunID` ile taşınır. Non-agent node'lar (branch/delay/…)
+  chat değil basit çıktı kartı gösterir. Çıktı balonunda hover'da **kopyala** butonu. Not:
+  `NodeInspector` = flow **editörünün** node-config paneli; `RunNodeInspector` = koşu görüntüleyici.
+  - **Canlı intra-node step streaming (Faz 3, yapıldı):** agent node yolu `CompleteWithToolsStream`
+    ile her adımı anında yayar → `flow_node_step` olayı (SSE adı **`flownodestep`**,
+    `Target{flowRunId,nodeId}`, `Step`=marshalled `TurnStep`) → `flowNodeStepBus` (runId-keyed) →
+    `RunNodeInspector` çalışan node için canlı adım ekler. Node bitince sidecar refetch'i (running→done
+    geçişinde) tam izi geri doldurur (inspector geç açıldıysa kaçan erken adımlar dahil). Emit `ctx`'ten
+    runID+nodeID okur → flow-dışı yolda no-op.
+  - **Paralel-çocuk trace'i (yapıldı):** `runParallel` artık her çocuk için `TraceEntry` (input+output)
+    döndürür, `Run` bunları parent fold kaydından önce `st.Trace`'e ekler → paralel node'un
+    çocuklarına da tıklanıp chat görünümü açılır. Çocuk step sidecar'ları zaten yazılıyordu
+    (`runAgentNodeSafe` ctx'e child.ID koyar). Eski "paralel çocuklar trace'te yok" notu artık geçersiz.
+  - **Node-tipine-özel inspector (yapıldı):** `RunNodeInspector` node tipine göre dallanır —
+    **agent**: chat görünümü (+ accumulate modda **önceki bağlam** açılır bölümü, aşağıda); **branch**:
+    **karar kartı** (değerlendirilen değer + eşleşme modu + tüm dallar, eşleşen ✓ yeşil, hedef node;
+    `TraceEntry.Input`=`st.Last`, matched arm output label'ından türetilir); **parallel**: **fan-out**
+    (çocuk listesi, tıkla→çocuğun kendi görünümü, `traceByNode` + `onSelectNode`); diğerleri: basit kart.
+  - **Accumulate-thread gösterimi (yapıldı, indeks yöntemi):** her agent node çalışmadan önce
+    gördüğü thread uzunluğu `TraceEntry.ThreadLen` olarak kaydedilir (snapshot YOK — thread zaten
+    `State.Thread`'de). Inspector `State.Thread[:ThreadLen]`'i **"Önceki bağlam (N mesaj)"** açılır
+    bölümünde user/assistant balonlarıyla gösterir → accumulate node'un gerçekte gördüğü bağlam net.
+    `FlowState.thread` + `FlowTraceEntry.threadLen` frontend tiplerine eklendi.
 - **Tekrar çalıştır (2026-06-23):** RunView başlığında **"↺ Tekrar çalıştır"** butonu — koşunun
   akışını **aynı girdiyle** (`run.input`) yeniden koşar (`runFlowStreamStandalone(run.flowId, …)`;
   güncel akış tanımıyla). Akış silinmişse veya koşu hâlâ `running` ise buton pasif. Stream
@@ -509,6 +541,8 @@ oturumu **tamamlanmış bir flow KOŞUSU** olarak sohbet alanında **inline** g�
 Böylece `RunView` yeniden kullanılır (`SessionFlowInline`): canvas'ta node = user prompt'u (başlık),
 **"Adım izi"nde agent cevabı** görünür — önceki "yalnız bizim mesajlarımız görünüyordu" sorunu çözülür.
 Her assistant turn'ü bir agent node; `next` ile lineer; `accumulate:true` (sohbet tek büyüyen konuşma).
+(2026-07-27: reify edilen graf zorunlu **Start node** ile başlar — `sessionToFlowRun` bir `start`
+node'u prepend eder, trace'te done görünür; adım sayacı start'ı saymaz.)
 **"Flow olarak kaydet"** `api.createFlow` ile gerçek düzenlenebilir flow üretir → kullanıcı
 dal/paralel/döngü ekleyip yeniden çalıştırır (döngü kapanır: session→flow→run→session). Dal/paralel
 yapısı düz transkriptten çıkarılamaz → sonuç daima lineer. Reset: aktif oturum değişince inline
@@ -561,6 +595,31 @@ oturuma dokunmaz → etkilenmez. Test: `flow_session_test.go` (iki koşu → iki
 oluşunca statü çipinde onu gösterir (oluşturma anında doğru). Tam eşleme FlowRun↔session linkage'i
 gerektirir (sonraki). **Not:** backend değişikliği; canlı görmek için backend yeniden derlenip
 başlatılmalı (Go hot-reload olmaz).
+
+## Start / End node'ları (zorunlu giriş + opsiyonel çıktı sözleşmesi, 2026-07-27)
+
+Flow'lara ilk-sınıf **Start** ve **End** node tipleri eklendi (temiz kurulum — geri uyumluluk
+gözetilmedi, eski flow'lar migrate edildi).
+
+- **`NodeStart` ("start"):** **zorunlu** giriş markeri; LLM'siz pass-through (`st.Current=Next`).
+  `Validate` **tam bir** start node ister ve `Graph.Start` ona eşit olmalı → ayrı "başlangıç
+  işaretle" kalktı (per-node `onMakeStart` + `▶ Başlangıç yap` kaldırıldı). `graphToReactFlow`
+  `isStart = type==='start'`.
+- **`NodeEnd` ("end"):** **opsiyonel** terminal (giden kenarı yok). `Template` nihai çıktıyı
+  şekillendirir; `OutputSchema` (JSON Schema) verilirse nihai çıktı geçerli JSON değilse koşu
+  **`failure`** — flow'un **çıktı sözleşmesi**. Birden çok dal tek End'e yakınsayabilir. Empty-Next
+  yine terminal (End şart değil).
+- **Migration:** `orchestration.MigrateAddStart` (idempotent) — start node'u olmayan grafa bir tane
+  prepend eder (`Next`=eski giriş). `agent.MigrateFlowsStartEnd` her workspace açılışında tüm
+  flow'ları migrate eder (`manager.open`); default flow (`flow_defaults.go`) + gallery templates
+  (`flowTemplates.ts` `default-starter`) + swarmpack template builder (`resolveTemplateFlowGraph`) +
+  frontend `ensureStartNode` (instantiate/preview) yeni formatta. Yeni flow oluşturma start node
+  ile tohumlanır.
+- **UI:** palet'te "Başlangıç" (yeşil `Play`) + "Bitiş" (mavi `Square`); `StartNode`/`EndNode`
+  bileşenleri; inspector'da End için şablon + JSON-Schema alanları.
+- **Test:** `startend_test.go` (pass-through, End template/schema, tek-start Validate, MigrateAddStart);
+  fixture'lar + template pack test'i güncellendi. Backend 1004 test yeşil; `tsc`+`vite build` yeşil;
+  canlı: start→agent→end koşusu (`[final] DONE_OK`) + eski FLW15 migrate.
 
 ## Flow başlatma öncesi doğrulama (semantic precheck, 2026-07-13)
 

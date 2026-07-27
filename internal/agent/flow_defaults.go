@@ -35,11 +35,13 @@ var defaultFlows = []defaultFlow{
 		Emoji: "✅",
 		Tags:  []string{"varsayılan"},
 		Graph: orchestration.Graph{
-			Start:     "answer",
+			Start:     "start",
 			EdgeStyle: "smoothstep",
 			Nodes: []orchestration.Node{
-				{ID: "answer", Type: orchestration.NodeAgent, Title: "Yanıtla", Prompt: "Answer the user's request thoroughly and concretely:\n{{input}}", Next: "verify", X: 100, Y: 40},
-				{ID: "verify", Type: orchestration.NodeAgent, Title: "Doğrula", Prompt: "Review the answer above for errors, gaps, or unsupported claims, then produce a corrected, final version:\n{{last}}", Next: "", X: 100, Y: 200},
+				{ID: "start", Type: orchestration.NodeStart, Title: "Başlangıç", Next: "answer", X: 100, Y: -60},
+				{ID: "answer", Type: orchestration.NodeAgent, Title: "Yanıtla", Prompt: "Answer the user's request thoroughly and concretely:\n{{input}}", Next: "verify", X: 100, Y: 60},
+				{ID: "verify", Type: orchestration.NodeAgent, Title: "Doğrula", Prompt: "Review the answer above for errors, gaps, or unsupported claims, then produce a corrected, final version:\n{{last}}", Next: "end", X: 100, Y: 220},
+				{ID: "end", Type: orchestration.NodeEnd, Title: "Bitiş", X: 100, Y: 380},
 			},
 		},
 	},
@@ -130,6 +132,38 @@ func EnsureDefaultFlows(ctx context.Context, database *db.DB, storeDir string) e
 
 	if changed {
 		return saveSeededFlowsLedger(storeDir, ledger)
+	}
+	return nil
+}
+
+// MigrateFlowsStartEnd upgrades every flow in the store to the start-node model:
+// any graph lacking a start node gets one prepended (its Next = the old entry).
+// Idempotent — run at workspace open so existing flows adopt the new required
+// entry marker without manual editing.
+func MigrateFlowsStartEnd(ctx context.Context, database *db.DB) error {
+	if database == nil {
+		return nil
+	}
+	flows, err := database.ListFlows(ctx)
+	if err != nil {
+		return err
+	}
+	for _, f := range flows {
+		g, err := orchestration.ParseGraph(f.Graph)
+		if err != nil {
+			continue // unparseable graph — leave it for the user to fix
+		}
+		ng, changed := orchestration.MigrateAddStart(g)
+		if !changed {
+			continue
+		}
+		raw, err := json.Marshal(ng)
+		if err != nil {
+			continue
+		}
+		if err := database.UpdateFlow(ctx, db.Flow{ID: f.ID, Name: f.Name, Graph: string(raw)}); err != nil {
+			return err
+		}
 	}
 	return nil
 }

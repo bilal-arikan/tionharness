@@ -26,8 +26,15 @@ func TestResolveTemplateFlowGraph(t *testing.T) {
 	if !ok {
 		t.Fatal("linear flow failed to resolve")
 	}
-	if g.Start != "s1" || len(g.Nodes) != 2 || g.Nodes[0].AgentID != "AGT1" || g.Nodes[1].AgentID != "AGT2" {
-		t.Fatalf("unexpected linear graph: %+v", g)
+	// A start node is prepended (required entry), so: start → s1(AGT1) → s2(AGT2).
+	if g.Start != "start" || len(g.Nodes) != 3 {
+		t.Fatalf("unexpected linear graph shape: %+v", g)
+	}
+	if g.Nodes[0].Type != orchestration.NodeStart || g.Nodes[0].Next != "s1" {
+		t.Fatalf("first node should be the start node → s1: %+v", g.Nodes[0])
+	}
+	if g.Nodes[1].AgentID != "AGT1" || g.Nodes[2].AgentID != "AGT2" {
+		t.Fatalf("agent ids not wired: %+v", g.Nodes)
 	}
 
 	// Non-linear graph (branch) with tmpl:<key> agent ids → substituted + valid.

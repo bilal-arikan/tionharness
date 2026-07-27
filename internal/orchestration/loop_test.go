@@ -70,8 +70,9 @@ func TestLoop_UntilExit(t *testing.T) {
 // an Until is rejected, so it can never run away to the step cap.
 func TestValidate_LoopRequiresBound(t *testing.T) {
 	g := Graph{
-		Start: "lp",
+		Start: "start",
 		Nodes: []Node{
+			{ID: "start", Type: NodeStart, Next: "lp"},
 			{ID: "lp", Type: NodeLoop, Body: "body", LoopNext: ""},
 			{ID: "body", Type: NodeAgent, AgentID: "ag", Prompt: "x", Next: ""},
 		},
@@ -84,8 +85,11 @@ func TestValidate_LoopRequiresBound(t *testing.T) {
 // TestValidate_LoopNeedsBody verifies a loop without a body is rejected.
 func TestValidate_LoopNeedsBody(t *testing.T) {
 	g := Graph{
-		Start: "lp",
-		Nodes: []Node{{ID: "lp", Type: NodeLoop, MaxIters: 1}},
+		Start: "start",
+		Nodes: []Node{
+			{ID: "start", Type: NodeStart, Next: "lp"},
+			{ID: "lp", Type: NodeLoop, MaxIters: 1},
+		},
 	}
 	if err := g.Validate(); err == nil || !strings.Contains(err.Error(), "body") {
 		t.Fatalf("expected a missing-body rejection, got %v", err)

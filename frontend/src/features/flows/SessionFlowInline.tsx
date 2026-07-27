@@ -28,7 +28,9 @@ export function SessionFlowInline({ messages, agents, fallbackAgentId, sessionId
     [messages, fallbackAgentId, sessionId, sessionTitle],
   )
   const [saving, setSaving] = useState(false)
-  const empty = graph.nodes.length === 0
+  // The graph always carries a start node; "empty" means no real (non-start) nodes.
+  const realNodes = graph.nodes.filter((n) => n.type !== 'start')
+  const empty = realNodes.length === 0
 
   const save = async () => {
     if (empty) return
@@ -55,7 +57,7 @@ export function SessionFlowInline({ messages, agents, fallbackAgentId, sessionId
           <span>Sohbete dön</span>
         </button>
         <span className="truncate text-xs text-[var(--color-text-dim)]">
-          Anlık akış görünümü ({graph.nodes.length} adım) — kaydedilmedi
+          Anlık akış görünümü ({realNodes.length} adım) — kaydedilmedi
         </span>
         <Button onClick={save} disabled={saving || empty} variant="primary">
           {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}

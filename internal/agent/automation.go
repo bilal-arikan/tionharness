@@ -134,39 +134,39 @@ func (e *AutomationEngine) fireBoard(ctx context.Context, a db.Automation, ev db
 		return
 	}
 
-	// Flow-backed: run the rendered prompt as the flow input.
-	if a.FlowID != "" {
-		e.fireFlow(ctx, a, prompt)
-		return
-	}
-
-	agent, err := e.db.GetAgent(ctx, a.TargetAgentID)
-	if err != nil {
-		e.recordFailure(ctx, a, "target agent gone: "+err.Error())
-		return
-	}
 	// SpawnTags default to none for board automations (an empty/nil slice) so a
 	// board fire does not tag its spawned session — board rules match on card
-	// changes, not tags, so there is no self-loop to seed.
-	res, err := e.rt.SpawnSession(ctx, agent.ID, prompt, SpawnOptions{
-		Title:     "🗂 " + automationLabel(a),
-		CreatedBy: "automation:" + a.ID,
-		Tags:      a.SpawnTags,
+	// changes, not tags, so there is no self-loop to seed. (Ignored on the flow driver.)
+	res, err := e.rt.LaunchRun(ctx, RunSpec{
+		Trigger:    TriggerAutomationBoard,
+		Input:      prompt,
+		Autonomous: true,
+		FlowID:     a.FlowID,
+		AgentID:    a.TargetAgentID,
+		Spawn: SpawnOptions{
+			Title:     "🗂 " + automationLabel(a),
+			CreatedBy: "automation:" + a.ID,
+			Tags:      a.SpawnTags,
+		},
 	})
 	if err != nil {
-		e.recordFailure(ctx, a, "spawn failed: "+err.Error())
+		e.recordFailure(ctx, a, err.Error())
 		return
 	}
 	if err := e.db.RecordAutomationFire(ctx, a.ID, res.SessionID, ""); err != nil {
 		e.logger.Warn("automation: record fire failed", "automation", a.ID, "error", err)
 	}
+	suffix := " (pano)"
+	if res.Driver == "flow" {
+		suffix = " (pano·akış)"
+	}
 	e.logger.Info("automation: fired (board)",
 		"automation", a.ID, "op", ev.Op, "task", ev.TaskID,
-		"spawned", res.SessionID, "agent", agent.ID, "iteration", a.IterationCount+1)
+		"session", res.SessionID, "driver", res.Driver, "iteration", a.IterationCount+1)
 	e.rt.publish(events.Event{
 		Type:   events.TypeAutomation,
 		Level:  "success",
-		Title:  "🗂 Otomasyon tetiklendi (pano) — " + automationLabel(a),
+		Title:  "🗂 Otomasyon tetiklendi" + suffix + " — " + automationLabel(a),
 		Body:   notifyLine(prompt, 120),
 		Target: map[string]string{"view": "executions", "sessionId": res.SessionID},
 	})
@@ -228,22 +228,9 @@ func (e *AutomationEngine) fire(ctx context.Context, a db.Automation, sess db.Se
 		return
 	}
 
-	// Flow-backed automation: run the rendered prompt as the flow's input instead
-	// of spawning a single-agent session. This is a per-trigger dispatch (no
-	// self-loop via SpawnTags — flow sessions carry no trigger tag).
-	if a.FlowID != "" {
-		e.fireFlow(ctx, a, prompt)
-		return
-	}
-
-	agent, err := e.db.GetAgent(ctx, a.TargetAgentID)
-	if err != nil {
-		e.recordFailure(ctx, a, "target agent gone: "+err.Error())
-		return
-	}
-
 	// Spawn tags: default to the trigger tag so the new session re-fires this
 	// automation (the loop). A non-nil empty slice breaks the loop intentionally.
+	// (Ignored on the flow driver — flow sessions carry no trigger tag.)
 	spawnTags := a.SpawnTags
 	if spawnTags == nil {
 		spawnTags = []string{a.TriggerTag}
@@ -263,64 +250,43 @@ func (e *AutomationEngine) fire(ctx context.Context, a db.Automation, sess db.Se
 		clearParentTags = []string{a.TriggerTag}
 	}
 
-	res, err := e.rt.SpawnSession(ctx, agent.ID, prompt, SpawnOptions{
-		Title:                    "🔁 " + automationLabel(a),
-		CreatedBy:                "automation:" + a.ID,
-		ParentSessionID:          sess.ID,
-		Tags:                     spawnTags,
-		ClearParentTagsOnSuccess: clearParentTags,
+	// Unified dispatch: flow-backed → run the flow; else → spawn a single-agent
+	// session. LaunchRun validates the target and normalizes flow-failure to an err.
+	res, err := e.rt.LaunchRun(ctx, RunSpec{
+		Trigger:    TriggerAutomationTag,
+		Input:      prompt,
+		Autonomous: true,
+		FlowID:     a.FlowID,
+		AgentID:    a.TargetAgentID,
+		Spawn: SpawnOptions{
+			Title:                    "🔁 " + automationLabel(a),
+			CreatedBy:                "automation:" + a.ID,
+			ParentSessionID:          sess.ID,
+			Tags:                     spawnTags,
+			ClearParentTagsOnSuccess: clearParentTags,
+		},
 	})
 	if err != nil {
-		e.recordFailure(ctx, a, "spawn failed: "+err.Error())
+		e.recordFailure(ctx, a, err.Error())
 		return
 	}
 
 	if err := e.db.RecordAutomationFire(ctx, a.ID, res.SessionID, ""); err != nil {
 		e.logger.Warn("automation: record fire failed", "automation", a.ID, "error", err)
 	}
-	e.logger.Info("automation: fired",
+	suffix := ""
+	if res.Driver == "flow" {
+		suffix = " (akış)"
+	}
+	e.logger.Info("automation: fired"+suffix,
 		"automation", a.ID, "tag", a.TriggerTag, "from", sess.ID,
-		"spawned", res.SessionID, "agent", agent.ID, "iteration", a.IterationCount+1)
+		"session", res.SessionID, "driver", res.Driver, "iteration", a.IterationCount+1)
 	e.rt.publish(events.Event{
 		Type:   events.TypeAutomation,
 		Level:  "success",
-		Title:  "🔁 Otomasyon tetiklendi — " + automationLabel(a),
+		Title:  "🔁 Otomasyon tetiklendi" + suffix + " — " + automationLabel(a),
 		Body:   notifyLine(prompt, 120),
 		Target: map[string]string{"view": "executions", "sessionId": res.SessionID},
-	})
-}
-
-// fireFlow runs a flow-backed automation: it executes a.FlowID with the rendered
-// prompt as the flow input (RunFlowRecorded records the run as a turn in the
-// flow's transcript session and raises its own notification), then records the
-// fire. A missing flow or a failed run is captured via recordFailure so the
-// automation's LastError and iteration counter stay accurate.
-func (e *AutomationEngine) fireFlow(ctx context.Context, a db.Automation, prompt string) {
-	if _, err := e.db.GetFlow(ctx, a.FlowID); err != nil {
-		e.recordFailure(ctx, a, "target flow gone: "+err.Error())
-		return
-	}
-	run, sessionID, err := e.rt.RunFlowRecorded(ctx, a.FlowID, prompt, true, nil)
-	if err != nil {
-		e.recordFailure(ctx, a, "flow run failed: "+err.Error())
-		return
-	}
-	if run.Status == db.FlowFailure {
-		e.recordFailure(ctx, a, "flow run failed: "+run.Error)
-		return
-	}
-	if err := e.db.RecordAutomationFire(ctx, a.ID, sessionID, ""); err != nil {
-		e.logger.Warn("automation: record fire failed", "automation", a.ID, "error", err)
-	}
-	e.logger.Info("automation: fired (flow)",
-		"automation", a.ID, "tag", a.TriggerTag, "flow", a.FlowID,
-		"session", sessionID, "iteration", a.IterationCount+1)
-	e.rt.publish(events.Event{
-		Type:   events.TypeAutomation,
-		Level:  "success",
-		Title:  "🔁 Otomasyon tetiklendi (akış) — " + automationLabel(a),
-		Body:   notifyLine(prompt, 120),
-		Target: map[string]string{"view": "executions", "sessionId": sessionID},
 	})
 }
 

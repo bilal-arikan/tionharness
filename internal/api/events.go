@@ -70,6 +70,11 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 				// Per-node flow progress rides its own SSE event name so the
 				// frontend routes it to the run viewer, not the notify/badge path.
 				name = "flownode"
+			case "flow_node_step":
+				// One agent node's live tool/thinking step (mid-execution), so the
+				// run viewer's node inspector renders steps as they happen — the
+				// flow counterpart of "step" (session_step). Keyed by flowRunId+nodeId.
+				name = "flownodestep"
 			case "log":
 				// Captured log records ride their own SSE event name so the Logs
 				// screen tails live without polling (and the notify path ignores them).

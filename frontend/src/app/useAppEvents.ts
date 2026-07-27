@@ -14,6 +14,7 @@ import { viewForEventType } from './eventViews'
 import { bumpSignalsForEvent, bumpWorkspaceActivityForEvent } from './eventToRefreshSignals'
 import { publishStep, publishTurnEnd } from '@/shared/lib/stepBus'
 import { publishFlowNode } from '@/shared/lib/flowNodeBus'
+import { publishFlowNodeStep } from '@/shared/lib/flowNodeStepBus'
 import { routeFromEvent, buildRoute } from './url'
 import type { ClientPrefs } from './useAppearance'
 
@@ -269,6 +270,17 @@ function onFlowNode(_d: AppEventDeps, e: AppEvent) {
   publishFlowNode(runId, e.node)
 }
 
+// Live per-node step frames (flow_node_step): fan each tool/thinking step out to
+// the run viewer's node inspector (via flowNodeStepBus, keyed by target.flowRunId)
+// so a running agent node shows its steps live. Ignore other-workspace frames.
+function onFlowNodeStep(_d: AppEventDeps, e: AppEvent) {
+  if (e.workspaceId && e.workspaceId !== getActiveWorkspace()) return
+  const runId = e.target?.flowRunId
+  const nodeId = e.target?.nodeId
+  if (!runId || !nodeId || !e.step) return
+  publishFlowNodeStep(runId, { nodeId, step: e.step as TurnStep })
+}
+
 export function useAppEvents(deps: AppEventDeps) {
   // Latest deps snapshot, refreshed after each render so the once-mounted SSE
   // subscription always navigates with current state/closures. (Effect-time
@@ -286,6 +298,7 @@ export function useAppEvents(deps: AppEventDeps) {
         (e) => onEvent(depsRef.current, e),
         (e) => onStep(depsRef.current, e),
         (e) => onFlowNode(depsRef.current, e),
+        (e) => onFlowNodeStep(depsRef.current, e),
       ),
     [],
   )

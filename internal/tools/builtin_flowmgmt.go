@@ -22,10 +22,16 @@ import (
 // runFlowFn runs a flow by id with the given input and returns the finished run.
 type runFlowFn func(ctx context.Context, flowID, input string) (db.FlowRun, error)
 
+// resumeFlowFn delivers input to a run suspended at an await-input node and
+// resumes it (background), returning the run (now running). Errors if the run is
+// not currently waiting (already resumed/finished/unknown).
+type resumeFlowFn func(ctx context.Context, runID, input string) (db.FlowRun, error)
+
 type flowDeps struct {
 	db      *db.DB
 	actorID string
 	run     runFlowFn
+	resume  resumeFlowFn
 }
 
 func (d flowDeps) requireFlowCreatedByAgent(ctx context.Context, id string) (db.Flow, error) {
@@ -421,6 +427,145 @@ func (t RunFlowTool) Call(ctx context.Context, input json.RawMessage) (string, e
 		"status": run.Status,
 		"output": truncateForTool(run.Output, 2000),
 		"error":  truncateForTool(run.Error, 500),
+	})
+	return string(b), nil
+}
+
+// ---- list_flow_runs ----
+
+// ListFlowRunsTool lists flow runs (optionally one flow / one status) so an agent
+// can discover runs — in particular ones WAITING at an await-input node that it
+// (or a peer) can feed via deliver_flow_input. Read-only.
+type ListFlowRunsTool struct{ d flowDeps }
+
+// NewListFlowRunsTool constructs list_flow_runs.
+func NewListFlowRunsTool(database *db.DB, actorID string) ListFlowRunsTool {
+	return ListFlowRunsTool{d: flowDeps{db: database, actorID: actorID}}
+}
+
+func (ListFlowRunsTool) Def() providers.ToolDef {
+	return providers.ToolDef{
+		Name:        "list_flow_runs",
+		Description: "List orchestration flow runs (newest first). Optionally filter by flowId and/or status (running|waiting|success|failure). Use status='waiting' to find runs suspended at an await-input node, then feed one with deliver_flow_input. Returns id, flowId, status, waitingAt (the await node id when waiting), input and a truncated output.",
+		InputSchema: json.RawMessage(`{
+			"type":"object",
+			"properties":{
+				"flowId":{"type":"string","description":"Only runs of this flow (optional)"},
+				"status":{"type":"string","description":"Only runs with this status: running|waiting|success|failure (optional)"},
+				"limit":{"type":"integer","description":"Max runs to return (default 20)"}
+			},
+			"additionalProperties":false
+		}`),
+	}
+}
+
+func (t ListFlowRunsTool) Call(ctx context.Context, input json.RawMessage) (string, error) {
+	var in struct {
+		FlowID string `json:"flowId"`
+		Status string `json:"status"`
+		Limit  int    `json:"limit"`
+	}
+	if len(input) > 0 {
+		if err := json.Unmarshal(input, &in); err != nil {
+			return "", argErr(err)
+		}
+	}
+	if in.Limit <= 0 {
+		in.Limit = 20
+	}
+	runs, err := t.d.db.ListFlowRuns(ctx, strings.TrimSpace(in.FlowID))
+	if err != nil {
+		return "", err
+	}
+	want := strings.TrimSpace(in.Status)
+	type row struct {
+		ID        string `json:"id"`
+		FlowID    string `json:"flowId"`
+		Status    string `json:"status"`
+		WaitingAt string `json:"waitingAt,omitempty"`
+		Input     string `json:"input,omitempty"`
+		Output    string `json:"output,omitempty"`
+	}
+	out := make([]row, 0, in.Limit)
+	for _, r := range runs {
+		if want != "" && r.Status != want {
+			continue
+		}
+		waitingAt := ""
+		if r.Status == db.FlowWaiting {
+			var st struct {
+				WaitingAt string `json:"waitingAt"`
+			}
+			_ = json.Unmarshal([]byte(r.State), &st)
+			waitingAt = st.WaitingAt
+		}
+		out = append(out, row{
+			ID:        r.ID,
+			FlowID:    r.FlowID,
+			Status:    r.Status,
+			WaitingAt: waitingAt,
+			Input:     truncateForTool(r.Input, 200),
+			Output:    truncateForTool(r.Output, 200),
+		})
+		if len(out) >= in.Limit {
+			break
+		}
+	}
+	b, _ := json.Marshal(out)
+	return string(b), nil
+}
+
+// ---- deliver_flow_input ----
+
+// DeliverFlowInputTool delivers input to a flow run suspended at an await-input
+// node and resumes it — the peer/agent half of the flow↔session bridge, so a
+// coordinator or any agent can feed a waiting flow (not just a human via the UI).
+type DeliverFlowInputTool struct{ d flowDeps }
+
+// NewDeliverFlowInputTool constructs deliver_flow_input.
+func NewDeliverFlowInputTool(database *db.DB, actorID string, resume resumeFlowFn) DeliverFlowInputTool {
+	return DeliverFlowInputTool{d: flowDeps{db: database, actorID: actorID, resume: resume}}
+}
+
+func (DeliverFlowInputTool) Def() providers.ToolDef {
+	return providers.ToolDef{
+		Name:        "deliver_flow_input",
+		Description: "Deliver input to a flow run that is WAITING at an await-input node, resuming it. The input becomes {{last}} for the node after the await. Find waiting runs with list_flow_runs (status='waiting'). Errors if the run is not currently waiting (already resumed/finished/unknown).",
+		InputSchema: json.RawMessage(`{
+			"type":"object",
+			"properties":{
+				"runId":{"type":"string","description":"The waiting flow run id (see list_flow_runs status='waiting')"},
+				"input":{"type":"string","description":"Input delivered to the await-input node (becomes {{last}})"}
+			},
+			"required":["runId"],
+			"additionalProperties":false
+		}`),
+	}
+}
+
+func (t DeliverFlowInputTool) Call(ctx context.Context, input json.RawMessage) (string, error) {
+	var in struct {
+		RunID string `json:"runId"`
+		Input string `json:"input"`
+	}
+	if err := json.Unmarshal(input, &in); err != nil {
+		return "", argErr(err)
+	}
+	in.RunID = strings.TrimSpace(in.RunID)
+	if in.RunID == "" {
+		return "", fmt.Errorf("runId is required")
+	}
+	if t.d.resume == nil {
+		return "", fmt.Errorf("deliver_flow_input is not wired in this context")
+	}
+	run, err := t.d.resume(ctx, in.RunID, in.Input)
+	if err != nil {
+		return "", fmt.Errorf("deliver input: %w", err)
+	}
+	b, _ := json.Marshal(map[string]string{
+		"runId":  run.ID,
+		"status": run.Status,
+		"action": "resumed",
 	})
 	return string(b), nil
 }

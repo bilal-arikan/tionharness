@@ -27,6 +27,10 @@ import { ParallelNode } from './ParallelNode'
 import { DelayNode } from './DelayNode'
 import { TransformNode } from './TransformNode'
 import { LoopNode } from './LoopNode'
+import { AwaitInputNode } from './AwaitInputNode'
+import { SubflowNode } from './SubflowNode'
+import { StartNode } from './StartNode'
+import { EndNode } from './EndNode'
 
 // CanvasTools is a small in-canvas toolbar (top-right Panel). It lives inside
 // ReactFlowProvider so it can use the programmatic viewport API. "Otomatik diz"
@@ -82,6 +86,10 @@ const nodeTypes: NodeTypes = {
   delay: DelayNode,
   transform: TransformNode,
   loop: LoopNode,
+  'await-input': AwaitInputNode,
+  subflow: SubflowNode,
+  start: StartNode,
+  end: EndNode,
 }
 
 // Parallel-node edge colors so the two outgoing roles read at a glance: the

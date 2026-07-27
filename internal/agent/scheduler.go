@@ -420,19 +420,20 @@ func notifyLine(s string, max int) string {
 // flow that finishes with FlowFailure is surfaced as an error so the schedule's
 // lastDeliveryStatus reflects it.
 func (s *Scheduler) deliverFlow(ctx context.Context, sc db.Schedule) (string, error) {
-	if _, err := s.db.GetFlow(ctx, sc.FlowID); err != nil {
-		return "", fmt.Errorf("schedule %s flow %s gone: %w", sc.ID, sc.FlowID, err)
-	}
-	run, sessionID, err := s.rt.RunFlowRecorded(ctx, sc.FlowID, sc.Prompt, true, nil)
+	// Unified dispatch: LaunchRun validates the flow, runs it (budget-gated
+	// autonomous), and normalizes a flow-failure into an error.
+	res, err := s.rt.LaunchRun(ctx, RunSpec{
+		Trigger:    TriggerSchedule,
+		Input:      sc.Prompt,
+		Autonomous: true,
+		FlowID:     sc.FlowID,
+	})
 	if err != nil {
 		s.logger.Error("schedule deliver: flow run failed",
-			"schedule", sc.ID, "flow", sc.FlowID, "session", sessionID, "error", err)
-		return sessionID, err
+			"schedule", sc.ID, "flow", sc.FlowID, "session", res.SessionID, "error", err)
+		return res.SessionID, err
 	}
-	if run.Status == db.FlowFailure {
-		return sessionID, fmt.Errorf("flow run failed: %s", run.Error)
-	}
-	return sessionID, nil
+	return res.SessionID, nil
 }
 
 // deliverPrompt sends a standalone scheduled prompt to the agent and logs the

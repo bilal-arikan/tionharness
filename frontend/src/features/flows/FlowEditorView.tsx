@@ -40,7 +40,6 @@ interface Props {
   selectedNode: FlowNode | null
   start: string
   patchSelected: (patch: Partial<FlowNode>) => void
-  makeStart: () => void
   duplicateSelected: () => void
   deleteSelected: () => void
   runInputRef: RefObject<HTMLTextAreaElement | null>
@@ -86,7 +85,6 @@ export function FlowEditorView({
   selectedNode,
   start,
   patchSelected,
-  makeStart,
   duplicateSelected,
   deleteSelected,
   runInputRef,
@@ -236,8 +234,7 @@ export function FlowEditorView({
                 isStart={start === selectedNode.id}
                 allNodes={nodes.map((n) => n.data.node)}
                 onPatch={patchSelected}
-                onMakeStart={makeStart}
-                onDuplicate={duplicateSelected}
+                  onDuplicate={duplicateSelected}
                 onDelete={deleteSelected}
               />
             </div>

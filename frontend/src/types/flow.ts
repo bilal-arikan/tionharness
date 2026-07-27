@@ -1,6 +1,16 @@
 // Orchestration flows: graph definition, persisted run state and run history (Phase 7).
 
-export type FlowNodeType = 'agent' | 'branch' | 'parallel' | 'delay' | 'transform' | 'loop'
+export type FlowNodeType =
+  | 'agent'
+  | 'branch'
+  | 'parallel'
+  | 'delay'
+  | 'transform'
+  | 'loop'
+  | 'await-input'
+  | 'subflow'
+  | 'start'
+  | 'end'
 
 export type BranchMatchMode = 'contains' | 'equals' | 'regex'
 
@@ -18,6 +28,7 @@ export interface FlowNode {
   next?: string
   branches?: FlowBranch[] // branch routing arms ("" contains = default)
   matchMode?: BranchMatchMode // branch: how arm values match (default: contains)
+  jsonField?: string // branch: match on this top-level JSON field of the value (structured routing)
   parallel?: string[]
   joinNext?: string
   delayMs?: number // delay node: ms to wait
@@ -29,6 +40,12 @@ export interface FlowNode {
   maxIters?: number // hard iteration cap (0 = rely on until)
   until?: string // exit when {{last}} matches
   untilMode?: BranchMatchMode // how until matches (default: contains)
+  // await-input node
+  timeoutSec?: number // 0/absent = wait forever; else fail the run after N seconds
+  // subflow node
+  flowRef?: string // id of the child flow to run
+  // end node — optional output contract
+  outputSchema?: string // JSON Schema the final output must satisfy (else the run fails)
   // Cosmetic canvas layout (persisted; ignored by the engine).
   x?: number
   y?: number
@@ -55,11 +72,25 @@ export interface Flow {
   updatedAt: number
 }
 
+// One accumulated-thread message (mirrors orchestration.Msg). In accumulate mode
+// each agent node's prior context is FlowState.thread sliced to the node's
+// threadLen.
+export interface FlowMsg {
+  role: string // "user" | "assistant"
+  text: string
+}
+
 export interface FlowTraceEntry {
   nodeId: string
   type: string
   title: string
   output: string
+  // Rendered prompt actually sent to an agent node (after {{...}} substitution),
+  // or the evaluated value for a branch node. Absent for other non-agent nodes.
+  input?: string
+  // Accumulate mode: how many thread messages this agent node saw as prior
+  // context before its own turn (FlowState.thread[:threadLen]). Absent/0 otherwise.
+  threadLen?: number
   at: number
 }
 
@@ -69,6 +100,11 @@ export interface FlowState {
   outputs: Record<string, string>
   steps: number
   trace: FlowTraceEntry[]
+  // Accumulated conversation for accumulate-mode runs (grows per agent node). A
+  // node's prior context is thread[:entry.threadLen]. Empty on stateless runs.
+  thread?: FlowMsg[]
+  // Set to the await-input node id while the run is durably suspended for input.
+  waitingAt?: string
 }
 
 // FlowNodeEvent is one node's live lifecycle frame, broadcast over the SSE
@@ -76,7 +112,7 @@ export interface FlowState {
 // the run viewer shows per-node start/done/error + output the moment it happens,
 // ahead of the periodic run-state poll.
 export interface FlowNodeEvent {
-  phase: 'start' | 'done' | 'error'
+  phase: 'start' | 'done' | 'error' | 'waiting'
   nodeId: string
   type: string
   title: string
@@ -88,7 +124,7 @@ export interface FlowNodeEvent {
 export interface FlowRun {
   id: string
   flowId: string
-  status: 'running' | 'success' | 'failure'
+  status: 'running' | 'success' | 'failure' | 'waiting'
   input: string
   state: string // JSON FlowState
   output: string

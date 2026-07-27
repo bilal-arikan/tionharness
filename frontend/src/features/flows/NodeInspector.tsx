@@ -12,7 +12,6 @@ interface Props {
   // the helper filters out the current node itself.
   allNodes: FlowNode[]
   onPatch: (patch: Partial<FlowNode>) => void
-  onMakeStart: () => void
   onDuplicate: () => void
   onDelete: () => void
 }
@@ -24,7 +23,7 @@ const input =
 // created (it is chosen from the palette and never changes here) — the inspector
 // only edits its intrinsic fields (title, agent, prompt, branch conditions).
 // Routing (next/parallel/joinNext) is managed by drawing edges on the canvas.
-export function NodeInspector({ node, agents, isStart, allNodes, onPatch, onMakeStart, onDuplicate, onDelete }: Props) {
+export function NodeInspector({ node, agents, isStart, allNodes, onPatch, onDuplicate, onDelete }: Props) {
   const chrome = chromeFor(node.type)
   // Other nodes, for the {{node.<id>}} variable helper (a node can't reference itself).
   const nodeRefs = allNodes
@@ -38,11 +37,6 @@ export function NodeInspector({ node, agents, isStart, allNodes, onPatch, onMake
           {isStart && ' ▶'}
         </span>
         <div className="flex flex-wrap gap-2">
-          {!isStart && (
-            <button onClick={onMakeStart} className="text-xs text-[var(--color-accent)]" title="Başlangıç yap">
-              ▶ Başlangıç
-            </button>
-          )}
           <button onClick={onDuplicate} className="text-xs text-[var(--color-accent)]" title="Çoğalt">
             ⧉ Çoğalt
           </button>

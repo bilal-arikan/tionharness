@@ -1,5 +1,5 @@
 // Orchestration flows and their run history (Phase 7).
-import type { Attachment, Flow, FlowGraph, FlowRun, Message } from '@/types'
+import type { Attachment, Flow, FlowGraph, FlowRun, Message, TurnStep } from '@/types'
 import { req, wsHeaders, errorFromResponse } from './client'
 
 // One node lifecycle event streamed while a flow runs (mirrors
@@ -182,6 +182,19 @@ export const flowApi = {
   // no flowId is given. Used by the FlowsPanel "Koşular" tab.
   listAllFlowRuns: () => req<FlowRun[]>('/api/flow-runs'),
   getFlowRun: (id: string) => req<FlowRun>(`/api/flow-runs/${id}`),
+  // One agent node's captured tool/thinking steps for a run, read from the
+  // per-node sidecar. Returns [] for nodes with no steps (or pre-capture runs).
+  flowRunNodeSteps: (runId: string, nodeId: string) =>
+    req<TurnStep[]>(
+      `/api/flow-runs/${encodeURIComponent(runId)}/nodes/${encodeURIComponent(nodeId)}/steps`,
+    ),
+  // Deliver input to a run suspended at an await-input node and resume it. Only a
+  // "waiting" run accepts input; a non-waiting/already-resumed run returns 409.
+  resumeFlowRun: (id: string, input: string) =>
+    req<{ run: FlowRun }>(`/api/flow-runs/${id}/input`, {
+      method: 'POST',
+      body: JSON.stringify({ input }),
+    }).then((r) => r.run),
   // Run a flow inside a session over SSE, streaming each node's progress.
   runFlowStream: (
     sessionId: string,

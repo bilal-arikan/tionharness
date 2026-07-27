@@ -5,6 +5,11 @@ const (
 	FlowRunning = "running"
 	FlowSuccess = "success"
 	FlowFailure = "failure"
+	// FlowWaiting: the run paused at an await-input node and is durably suspended
+	// until external input arrives (see ResumeWaitingFlow). Unlike "running", a
+	// waiting run is NOT auto-resumed on boot — it sleeps until input, so it is
+	// never an orphan.
+	FlowWaiting = "waiting"
 )
 
 // Flow is a reusable multi-agent orchestration protocol. Graph holds the JSON

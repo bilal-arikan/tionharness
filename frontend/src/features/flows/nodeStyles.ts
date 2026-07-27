@@ -1,7 +1,7 @@
 // Shared visual styling for flow canvas nodes: per-type accent + run status.
 import { createContext, useContext } from 'react'
 import { useStore } from '@xyflow/react'
-import { Bot, Split, Zap, Timer, Puzzle, Repeat, Circle, type LucideIcon } from 'lucide-react'
+import { Bot, Split, Zap, Timer, Puzzle, Repeat, MessageCircleQuestion, Workflow, Play, Square, Circle, type LucideIcon } from 'lucide-react'
 import type { Agent, FlowNodeType } from '@/types'
 import type { NodeStatus } from './flowGraph'
 
@@ -51,6 +51,10 @@ export const NODE_ICONS: Record<FlowNodeType, LucideIcon> = {
   delay: Timer,
   transform: Puzzle,
   loop: Repeat,
+  'await-input': MessageCircleQuestion,
+  subflow: Workflow,
+  start: Play,
+  end: Square,
 }
 
 const CHROME: Record<string, NodeChrome> = {
@@ -60,6 +64,10 @@ const CHROME: Record<string, NodeChrome> = {
   delay: { accent: '#0891b2', label: 'Bekle', Icon: NODE_ICONS.delay },
   transform: { accent: '#059669', label: 'Birleştir', Icon: NODE_ICONS.transform },
   loop: { accent: '#db2777', label: 'Döngü', Icon: NODE_ICONS.loop },
+  'await-input': { accent: '#eab308', label: 'Girdi Bekle', Icon: NODE_ICONS['await-input'] },
+  subflow: { accent: '#6366f1', label: 'Alt-Akış', Icon: NODE_ICONS.subflow },
+  start: { accent: '#22c55e', label: 'Başlangıç', Icon: NODE_ICONS.start },
+  end: { accent: '#3b82f6', label: 'Bitiş', Icon: NODE_ICONS.end },
 }
 
 export function chromeFor(type: string): NodeChrome {
@@ -75,6 +83,8 @@ export function statusRing(status?: NodeStatus): string {
       return '0 0 0 2px #22c55e'
     case 'error':
       return '0 0 0 2px var(--color-danger)'
+    case 'waiting':
+      return '0 0 0 2px #eab308, 0 0 14px #eab308'
     default:
       return 'none'
   }

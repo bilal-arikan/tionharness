@@ -310,6 +310,7 @@ func resolveTemplateFlowGraph(tf market.WorkspaceTemplateFlow, ids map[string]st
 				n.AgentID = real
 			}
 		}
+		graph, _ = orchestration.MigrateAddStart(graph) // ensure the required start node
 		if graph.Validate() != nil {
 			return orchestration.Graph{}, false
 		}
@@ -340,6 +341,7 @@ func resolveTemplateFlowGraph(tf market.WorkspaceTemplateFlow, ids map[string]st
 		})
 	}
 	graph := orchestration.Graph{Start: tf.Steps[0].ID, Nodes: nodes}
+	graph, _ = orchestration.MigrateAddStart(graph) // ensure the required start node
 	if graph.Validate() != nil {
 		return orchestration.Graph{}, false
 	}

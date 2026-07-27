@@ -52,6 +52,7 @@ var builtinCategory = map[string]string{
 	"create_flow": CategoryAutomation, "update_flow": CategoryAutomation,
 	"delete_flow": CategoryAutomation, "list_flows": CategoryAutomation,
 	"get_flow": CategoryAutomation, "run_flow": CategoryAutomation,
+	"list_flow_runs": CategoryAutomation, "deliver_flow_input": CategoryAutomation,
 	"run_schedule": CategoryAutomation, "create_schedule": CategoryAutomation,
 	"update_schedule": CategoryAutomation, "delete_schedule": CategoryAutomation,
 	"list_schedules": CategoryAutomation, "schedule_wake": CategoryAutomation,

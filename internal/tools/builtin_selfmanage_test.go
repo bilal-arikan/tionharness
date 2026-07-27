@@ -212,7 +212,7 @@ func TestFlowCreateValidatesGraph(t *testing.T) {
 	if _, err := create.Call(ctx, json.RawMessage(`{"name":"Empty","graph":"{\"nodes\":[]}"}`)); err == nil {
 		t.Fatal("expected structurally-invalid graph (no start node) to be rejected")
 	}
-	const validGraph = `{\"start\":\"n1\",\"nodes\":[{\"id\":\"n1\",\"type\":\"agent\",\"agentId\":\"a1\"}]}`
+	const validGraph = `{\"start\":\"start\",\"nodes\":[{\"id\":\"start\",\"type\":\"start\",\"next\":\"n1\"},{\"id\":\"n1\",\"type\":\"agent\",\"agentId\":\"a1\"}]}`
 	out, err := create.Call(ctx, json.RawMessage(`{"name":"Good","graph":"`+validGraph+`"}`))
 	if err != nil {
 		t.Fatalf("create_flow: %v", err)

@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { useNodesState, useEdgesState, type Edge } from '@xyflow/react'
-import { graphToReactFlow, type FlowRFNode } from './flowGraph'
+import { graphToReactFlow, ensureStartNode, type FlowRFNode } from './flowGraph'
 import type { Agent, FlowGraph } from '@/types'
 import { FlowCanvas } from './FlowCanvas'
 
@@ -18,7 +18,7 @@ export function TemplatePreview({ graph, agents }: Props) {
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([])
 
   useEffect(() => {
-    const { nodes: rn, edges: re } = graphToReactFlow(graph)
+    const { nodes: rn, edges: re } = graphToReactFlow(ensureStartNode(graph))
     setNodes(rn)
     setEdges(re)
   }, [graph, setNodes, setEdges])

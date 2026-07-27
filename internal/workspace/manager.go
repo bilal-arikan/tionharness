@@ -43,7 +43,7 @@ type Meta struct {
 // Workspace bundles a workspace's live database, runtime and scheduler.
 type Workspace struct {
 	Meta
-	DB        *db.DB
+	DB          *db.DB
 	Runtime     *agent.Runtime
 	Scheduler   *agent.Scheduler
 	InsightCron *agent.InsightCron
@@ -222,6 +222,11 @@ func (m *Manager) open(meta Meta) error {
 	if err := agent.EnsureDefaultFlows(context.Background(), database, storeDir); err != nil {
 		m.logger.Warn("seed default flows failed", "workspace", meta.ID, "error", err)
 	}
+	// Upgrade existing flows to the required start-node model (adds a start node
+	// where missing). Idempotent; backfills every workspace on the next startup.
+	if err := agent.MigrateFlowsStartEnd(context.Background(), database); err != nil {
+		m.logger.Warn("migrate flows to start-node model failed", "workspace", meta.ID, "error", err)
+	}
 
 	// Per-workspace secret vault (AES-GCM encrypted), shared by the secret_* tools.
 	vault, err := secrets.Open(storeDir, m.cipher)
@@ -281,6 +286,8 @@ func (m *Manager) open(meta Meta) error {
 
 	// Restart-safe: continue any flow runs interrupted by a previous shutdown.
 	rt.ResumeRunningFlows(context.Background())
+	// Timeout sweeper: fail await-input runs that out-wait their node's TimeoutSec.
+	rt.StartWaitingFlowSweeper(context.Background())
 
 	ws := &Workspace{Meta: meta, DB: database, Runtime: rt, Scheduler: sched, InsightCron: insightCron, Secrets: vault, DataDir: dir}
 	ws.loadSettings()    // apply persisted per-workspace overrides (e.g. autonomy pause)

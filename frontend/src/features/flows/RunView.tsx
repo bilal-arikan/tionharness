@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNodesState, useEdgesState, type Edge } from '@xyflow/react'
-import { RotateCcw, ChevronDown, ChevronUp } from 'lucide-react'
+import { RotateCcw, ChevronDown, ChevronUp, Send, Loader2 } from 'lucide-react'
+import { api } from '@/api'
 import { graphToReactFlow, type FlowRFNode, type NodeStatus } from './flowGraph'
 import type { Agent, Flow, FlowGraph, FlowNodeEvent, FlowRun, FlowState } from '@/types'
 import { Markdown } from '@/shared/components/markdown/Markdown'
 import { normalizeAvatar } from '@/shared/lib/avatar'
 import { subscribeFlowNode } from '@/shared/lib/flowNodeBus'
 import { FlowCanvas } from './FlowCanvas'
+import { RunNodeInspector } from './RunNodeInspector'
 
 interface Props {
   run: FlowRun
@@ -19,17 +21,22 @@ interface Props {
   // Hide the top summary row (flow name + status + date + rerun) when the parent
   // lifts it into the screen's top bar (PaneHeader). Input/error rows still show.
   hideSummary?: boolean
+  // Called right after input is delivered to a waiting run, so the parent can
+  // refresh the runs list without waiting for the next poll.
+  onResumed?: () => void
 }
 
 export const STATUS_LABEL: Record<string, string> = {
   running: '▶ devam ediyor',
   success: '✓ başarılı',
   failure: '✕ hata',
+  waiting: '⏳ girdi bekleniyor',
 }
 
 export function statusColor(status: string): string {
   if (status === 'success') return 'text-[var(--color-success)]'
   if (status === 'failure') return 'text-[var(--color-danger)]'
+  if (status === 'waiting') return 'text-[#eab308]'
   return 'text-[var(--color-accent)]'
 }
 
@@ -56,7 +63,9 @@ function nodeStatuses(run: FlowRun, st: FlowState | null): Record<string, NodeSt
   const map: Record<string, NodeStatus> = {}
   if (!st) return map
   for (const t of st.trace ?? []) map[t.nodeId] = 'done'
-  if (st.current) {
+  if (run.status === 'waiting' && st.waitingAt) {
+    map[st.waitingAt] = 'waiting'
+  } else if (st.current) {
     if (run.status === 'running') map[st.current] = 'running'
     else if (run.status === 'failure') map[st.current] = 'error'
   }
@@ -66,10 +75,32 @@ function nodeStatuses(run: FlowRun, st: FlowState | null): Record<string, NodeSt
 // RunView is the read-only inspector for a single flow run: a non-interactive
 // canvas annotated with per-node run status (which stage we're at), plus the
 // node-by-node trace with outputs and any error.
-export function RunView({ run, flow, agents, onRerun, rerunning, hideSummary }: Props) {
+export function RunView({ run, flow, agents, onRerun, rerunning, hideSummary, onResumed }: Props) {
   const st = useMemo(() => safeParseState(run.state), [run.state])
+  // Await-input composer state (only used while the run is waiting).
+  const [awaitInput, setAwaitInput] = useState('')
+  const [delivering, setDelivering] = useState(false)
+  const deliverInput = async () => {
+    if (delivering) return
+    setDelivering(true)
+    try {
+      await api.resumeFlowRun(run.id, awaitInput)
+      setAwaitInput('')
+      onResumed?.()
+    } catch {
+      // 409 = already resumed by another window; the poll will reconcile.
+    } finally {
+      setDelivering(false)
+    }
+  }
   const graph = useMemo(() => (flow ? safeParseGraph(flow.graph) : null), [flow])
   const statuses = useMemo(() => nodeStatuses(run, st), [run, st])
+
+  // Clicking a canvas node opens its chat-like inspector in the bottom panel
+  // (input bubble + steps + output) instead of the flat all-nodes list. Cleared
+  // on run switch and when the flow/node no longer exists.
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null)
+  useEffect(() => setSelectedNodeId(null), [run.id])
 
   // Live per-node frames off the flow-node bus (keyed by run id). They render
   // node start/done/error + output the instant the engine emits it — ahead of
@@ -86,11 +117,18 @@ export function RunView({ run, flow, agents, onRerun, rerunning, hideSummary }: 
   // Merge live statuses onto the persisted ones, never regressing: a node only
   // advances (pending → running → done/error), so a live "done" is not undone by
   // a stale poll still calling the node "running".
-  const rank: Record<NodeStatus, number> = { running: 1, done: 2, error: 2 }
+  const rank: Record<NodeStatus, number> = { waiting: 1, running: 1, done: 2, error: 2 }
   const mergedStatuses = useMemo(() => {
     const merged: Record<string, NodeStatus> = { ...statuses }
     for (const ev of Object.values(live)) {
-      const s: NodeStatus = ev.phase === 'done' ? 'done' : ev.phase === 'error' ? 'error' : 'running'
+      const s: NodeStatus =
+        ev.phase === 'done'
+          ? 'done'
+          : ev.phase === 'error'
+            ? 'error'
+            : ev.phase === 'waiting'
+              ? 'waiting'
+              : 'running'
       const cur = merged[ev.nodeId]
       if (!cur || rank[s] > rank[cur]) merged[ev.nodeId] = s
     }
@@ -137,6 +175,25 @@ export function RunView({ run, flow, agents, onRerun, rerunning, hideSummary }: 
       return next
     })
   const traceCount = liveTrace.length
+
+  // The selected node (graph def) + its trace entry (input/output), feeding the
+  // NodeInspector chat view. A selection for a node not in the graph (deleted
+  // flow) or not yet executed collapses back to the flat list.
+  const selectedNode = useMemo(
+    () => (selectedNodeId && graph ? (graph.nodes.find((n) => n.id === selectedNodeId) ?? null) : null),
+    [selectedNodeId, graph],
+  )
+  const selectedEntry = useMemo(
+    () => (selectedNodeId ? liveTrace.find((t) => t.nodeId === selectedNodeId) : undefined),
+    [selectedNodeId, liveTrace],
+  )
+  // Lookup for the parallel fan-out view (child id → its trace entry). Last write
+  // wins if a node executed more than once (loop) — the latest output.
+  const traceByNode = useMemo(() => {
+    const m: Record<string, (typeof liveTrace)[number]> = {}
+    for (const t of liveTrace) m[t.nodeId] = t
+    return m
+  }, [liveTrace])
 
   const [nodes, setNodes, onNodesChange] = useNodesState<FlowRFNode>([])
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([])
@@ -208,6 +265,36 @@ export function RunView({ run, flow, agents, onRerun, rerunning, hideSummary }: 
         </div>
       )}
 
+      {/* Await-input composer: the run paused at an await-input node and needs
+          input to continue. Delivering resumes it (any window/peer can); the poll
+          then reflects the run advancing. */}
+      {run.status === 'waiting' && (
+        <div className="flex items-center gap-2 border-b border-[color:#eab308] bg-[color:color-mix(in_srgb,#eab308_10%,var(--color-surface))] p-3">
+          <span className="shrink-0 text-xs text-[#eab308]">⏳ Girdi bekleniyor</span>
+          <input
+            value={awaitInput}
+            onChange={(e) => setAwaitInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault()
+                void deliverInput()
+              }
+            }}
+            placeholder="Akışa gönderilecek girdi…"
+            autoFocus
+            className="min-w-0 flex-1 rounded bg-[var(--color-surface-2)] px-2 py-1.5 text-sm outline-none"
+          />
+          <button
+            onClick={() => void deliverInput()}
+            disabled={delivering}
+            className="flex shrink-0 items-center gap-1.5 rounded-md bg-[#eab308] px-3 py-1.5 text-xs font-medium text-black transition hover:opacity-90 disabled:opacity-50"
+          >
+            {delivering ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
+            Gönder
+          </button>
+        </div>
+      )}
+
       {/* Read-only canvas with per-node status (only if the flow still exists) */}
       {graph && (
         <div className="min-h-0 flex-1">
@@ -220,7 +307,10 @@ export function RunView({ run, flow, agents, onRerun, rerunning, hideSummary }: 
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             setEdges={setEdges}
-            onSelect={() => {}}
+            onSelect={(id) => {
+              setSelectedNodeId(id)
+              if (id) setTraceOpen(true)
+            }}
             readOnly
           />
         </div>
@@ -238,10 +328,26 @@ export function RunView({ run, flow, agents, onRerun, rerunning, hideSummary }: 
           title={traceOpen ? 'Adım izini gizle' : 'Adım izini göster'}
         >
           {traceOpen ? <ChevronDown size={13} /> : <ChevronUp size={13} />}
-          <span>Adım izi</span>
-          <span className="ml-auto opacity-70">{traceCount} adım</span>
+          <span>{selectedNode ? 'Node görünümü' : 'Adım izi'}</span>
+          <span className="ml-auto opacity-70">
+            {selectedNode ? (selectedNode.title || selectedNode.id) : `${traceCount} adım`}
+          </span>
         </button>
-        {traceOpen && (
+        {traceOpen && selectedNode ? (
+          <div className={`flex min-h-0 flex-col ${graph ? 'max-h-[40vh]' : 'flex-1'}`}>
+            <RunNodeInspector
+              run={run}
+              node={selectedNode}
+              entry={selectedEntry}
+              status={mergedStatuses[selectedNode.id]}
+              thread={st?.thread}
+              traceByNode={traceByNode}
+              agents={agents}
+              onClose={() => setSelectedNodeId(null)}
+              onSelectNode={(id) => setSelectedNodeId(id)}
+            />
+          </div>
+        ) : traceOpen ? (
           <div className={`overflow-y-auto px-4 pb-4 ${graph ? 'max-h-[40vh]' : 'min-h-0 flex-1'}`}>
             <ol className="space-y-2">
               {liveTrace.map((t, i) => (
@@ -271,7 +377,7 @@ export function RunView({ run, flow, agents, onRerun, rerunning, hideSummary }: 
               )}
             </ol>
           </div>
-        )}
+        ) : null}
       </div>
     </div>
   )

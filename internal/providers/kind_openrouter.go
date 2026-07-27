@@ -31,7 +31,8 @@ func init() {
 			// exposes hundreds more, so AllowCustomModel lets the user type any slug.
 			Models: []ModelInfo{
 				{ID: "anthropic/claude-fable-5", Label: "Claude Fable 5 — öncü", Description: "En yeni Anthropic nesli; 1M bağlam, adaptif düşünme (daima açık)"},
-				{ID: "anthropic/claude-opus-4.8", Label: "Claude Opus 4.8 — en yetenekli", Description: "Anthropic amiral; karmaşık akıl yürütme + ajan"},
+				{ID: "anthropic/claude-opus-5", Label: "Claude Opus 5 — en yetenekli", Description: "En yeni Anthropic amiral; 1M bağlam, öncü ajan/kodlama + computer-use"},
+					{ID: "anthropic/claude-opus-4.8", Label: "Claude Opus 4.8 — önceki nesil", Description: "Önceki Anthropic amiral; karmaşık akıl yürütme + ajan"},
 				{ID: "anthropic/claude-opus-4.8-fast", Label: "Claude Opus 4.8 (Fast)", Description: "Opus 4.8'in hızlı varyantı"},
 				{ID: "anthropic/claude-opus-4.7", Label: "Claude Opus 4.7", Description: "Önceki Opus nesli"},
 				{ID: "anthropic/claude-sonnet-5", Label: "Claude Sonnet 5 — dengeli", Description: "En yeni Anthropic dengeli nesli; 1M bağlam, güçlü ajan/kodlama"},
