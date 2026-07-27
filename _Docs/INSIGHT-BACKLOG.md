@@ -497,3 +497,16 @@ stable `insight-sig` marker so re-scans never duplicate it.
 
 <!-- insight-sig:activate_tools|unknown tool not in on-demand catalog|insight_scan,insight_list_findings,insight_apply_finding -->
 
+## Flow çalıştırması, var olmayan agent node referansı yüzünden ancak run sırasında düşüyor
+
+- **Severity:** med
+- **Occurrences:** 1
+- **Evidence sessions:** SES160
+- **File:** `internal/orchestration/engine.go`
+
+**Root cause:** Flow grafiği kaydedilirken veya run başlatılırken node referansları doğrulanmıyor. Motor node'ları sırayla yürütürken hedef agent node'unu (`"thanks"`) arıyor, bulamayınca run'ı `flow_failure: node ... not found` ile iptal ediyor. Yani eksik/yeniden adlandırılmış node referansı bir ön doğrulama (pre-flight validation) guardrail'i olmadığı için yalnızca çalışma anında, kısmen ilerlemiş bir run'ın ortasında yakalanıyor; kullanıcı kaybedilen adımları ve harcanan token'ları geri alamıyor.
+
+**Proposed fix:** Flow kaydetme (`SaveFlow`) ve run başlatma yollarına bir graf doğrulama adımı ekle: tüm edge hedeflerinin, start/end bağlantılarının ve agent node'larının gerçekten var olan node id'lerine/agent kayıtlarına çözümlendiğini kontrol et; çözümlenmeyenleri run başlamadan önce tek seferde hata listesi olarak döndür. Ayrıca editörde (FlowCanvas/NodeInspector) kırık referansları görsel olarak işaretle ki hata çalıştırmadan önce görülsün.
+
+<!-- insight-sig:flow_run:node_ref_not_found -->
+
