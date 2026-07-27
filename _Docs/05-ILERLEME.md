@@ -2,6 +2,29 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-07-27**
 
+## SSE kopması toleransı: yeniden-bağlanınca resync ✅ (2026-07-27)
+
+Poll'ler SSE'ye taşındıkça (bir alttaki giriş) yeni bir kırılganlık doğdu: **feed
+kopup geri geldiğinde arada yayınlanan frame'ler kalıcı olarak kayıp** — backend bus'ı
+fire-and-forget, replay yok, `Last-Event-ID` cursor'ı yok. Yalnız event'lerle render
+eden bir görünüm bunu **kendi başına fark edemez**; en kötü hâli: outage sırasında biten
+worker yüzünden banner çoktan rapor vermiş bir worker'da asılı kalır.
+
+`api/system.ts` zaten CLOSED olan kaynağı 2sn backoff'la yeniden kuruyordu, ama kimseye
+"kaçırdın, tazele" demiyordu. Eklenenler:
+- **`sharedES.onopen`** → ilk açılış değilse `reconnectSubs`'a sinyal (`everConnected`
+  bayrağı ilk açılışı ayırt eder; feed idle'dan kapanınca sıfırlanır → sonraki açılış
+  yine "ilk" sayılır, çünkü yeni aboneler kendi başlangıç fetch'ini yapar).
+- **`subscribeReconnect(cb)`** — `subscribeEvents`/`subscribeLogs` ile aynı desen
+  (multiplex + `closeIfIdle` muhasebesine dahil).
+- **`useAppEvents.onReconnect`** — SSE-only kümeyi tazeler: `refreshSessions()` +
+  `publishWorkerChangeAll()` (yeni; hangi koordinatörün etkilendiği bilinemediği için
+  tüm roster aboneleri) + açık oturumun transkriptini yeniden yükler.
+
+Tarayıcının kendi auto-reconnect'i (readyState CONNECTING) ve modül-seviyesi rebuild
+(CLOSED → backoff) **ikisi de** aynı `onopen` yolundan geçtiği için tek kanca yeterli.
+`tsc --noEmit` temiz, `npm run build` + vitest (38) yeşil.
+
 ## Worker banner'ı: canlı süre + poll→SSE ✅ (2026-07-27)
 
 Banner'ın (bir alttaki giriş) iki eksiği kapatıldı.

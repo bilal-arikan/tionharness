@@ -36,6 +36,11 @@ const stepSubs = new Set<EventCb>()
 const flowNodeSubs = new Set<EventCb>()
 const flowNodeStepSubs = new Set<EventCb>()
 const logSubs = new Set<LogCb>()
+// Resync subscribers: notified when the feed reopens after a drop (see onopen).
+const reconnectSubs = new Set<() => void>()
+// Whether the shared feed has ever been open, so the first open is not mistaken
+// for a reconnect. Reset when the feed is closed for being idle.
+let everConnected = false
 
 function ensureConnection(): void {
   if (sharedES) return
@@ -106,6 +111,16 @@ function ensureConnection(): void {
     const entry = parsed.log
     logSubs.forEach((cb) => cb(entry))
   })
+  // A RECONNECT (any open after the first) means the feed was down for a while:
+  // every frame published in that window is gone for good — the backend bus is
+  // fire-and-forget, there is no replay and no Last-Event-ID cursor here. Any view
+  // that renders purely from SSE is therefore stale in a way it cannot detect on
+  // its own, so we fan a resync signal out and let each consumer refetch.
+  // The FIRST open needs no signal: consumers fetch their initial state on mount.
+  sharedES.onopen = () => {
+    if (everConnected) reconnectSubs.forEach((cb) => cb())
+    everConnected = true
+  }
   // EventSource auto-reconnects on transport errors; we don't tear it down
   // here so transient drops don't churn N subscribers.
 }
@@ -117,10 +132,29 @@ function closeIfIdle(): void {
     flowNodeSubs.size === 0 &&
     flowNodeStepSubs.size === 0 &&
     logSubs.size === 0 &&
+    reconnectSubs.size === 0 &&
     sharedES
   ) {
     sharedES.close()
     sharedES = null
+    // The next open is a FIRST open again (fresh subscribers fetch their own
+    // initial state), so it must not fire a resync.
+    everConnected = false
+  }
+}
+
+// subscribeReconnect registers `cb` to run whenever the shared feed reopens after
+// a drop — the "you missed frames, refetch" signal. Consumers that render live
+// state purely from SSE (with no polling fallback) should use it to resync.
+function subscribeReconnect(cb: () => void): () => void {
+  ensureConnection()
+  reconnectSubs.add(cb)
+  let unsubscribed = false
+  return () => {
+    if (unsubscribed) return
+    unsubscribed = true
+    reconnectSubs.delete(cb)
+    closeIfIdle()
   }
 }
 
@@ -186,6 +220,8 @@ export const systemApi = {
   subscribeEvents,
   // Live application-log tail — same SSE stream, `log` event frames.
   subscribeLogs,
+  // "The feed reopened after a drop" signal — for SSE-driven views to resync.
+  subscribeReconnect,
 
   // Application + workspace logs (global ring buffer).
   getLogs: (opts?: {

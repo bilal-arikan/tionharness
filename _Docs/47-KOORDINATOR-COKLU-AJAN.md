@@ -363,6 +363,11 @@ keyed-lock+flag; M3 scratchpad ertelendi.
   yeniden yükler + turn-end fanlar + masaüstü toast atar — bunların hepsi yeni
   başlayan bir tur için yanlış, ayrıca 8'li fan-out 8 toast demekti; start
   event'i bu dalların dışında tutuldu.
+  **SSE kopma toleransı (2026-07-27):** poll gittiği için feed koptuğunda arada
+  olan geçişler kaybolur (bus'ta replay yok) → banner rapor vermiş bir worker'da
+  asılı kalabilirdi. `api.subscribeReconnect` (feed ilk kez değil de **yeniden**
+  açılınca ateşler) → `useAppEvents.onReconnect` → `publishWorkerChangeAll()` tüm
+  roster abonelerini tazeler (+ `refreshSessions` + açık transkript reload).
   **Worker'da "Koordinatöre dön" (2026-07-24):** worker oturumundaki pasif not
   altına, `coordinatorSessionId` back-link'iyle koordinatör oturumunu açan buton
   eklendi (ArrowLeft; yalnız `onSelectSession` + back-link varsa görünür).

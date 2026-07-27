@@ -15,7 +15,7 @@ import { bumpSignalsForEvent, bumpWorkspaceActivityForEvent } from './eventToRef
 import { publishStep, publishTurnEnd } from '@/shared/lib/stepBus'
 import { publishFlowNode } from '@/shared/lib/flowNodeBus'
 import { publishFlowNodeStep } from '@/shared/lib/flowNodeStepBus'
-import { publishWorkerChange } from '@/shared/lib/workerBus'
+import { publishWorkerChange, publishWorkerChangeAll } from '@/shared/lib/workerBus'
 import { routeFromEvent, buildRoute } from './url'
 import type { ClientPrefs } from './useAppearance'
 
@@ -296,6 +296,25 @@ function onFlowNodeStep(_d: AppEventDeps, e: AppEvent) {
   publishFlowNodeStep(runId, { nodeId, step: e.step as TurnStep })
 }
 
+// onReconnect resyncs the live views after the SSE feed reopens following a drop.
+// Everything published while it was down is lost (the backend bus has no replay),
+// so anything rendered purely from events is now stale with no way to notice:
+//   - the session list (ordering, unread dots, newly spawned sessions),
+//   - coordinator worker rosters, which no longer poll at all — a worker that
+//     started or finished during the outage would otherwise stay wrong until the
+//     next turn edge, i.e. a banner stuck on a worker that already reported,
+//   - the open transcript, which may be missing a turn that completed meanwhile.
+// Panels keep their own refetch paths; this is the SSE-only set.
+function onReconnect(d: AppEventDeps) {
+  d.refreshSessions()
+  publishWorkerChangeAll()
+  const sid = d.activeSessionId
+  if (sid) {
+    d.chat.clearAutoLive(sid)
+    api.listMessages(sid).then(d.setMessages).catch(() => {})
+  }
+}
+
 export function useAppEvents(deps: AppEventDeps) {
   // Latest deps snapshot, refreshed after each render so the once-mounted SSE
   // subscription always navigates with current state/closures. (Effect-time
@@ -317,4 +336,8 @@ export function useAppEvents(deps: AppEventDeps) {
       ),
     [],
   )
+
+  // Resync after an SSE drop (see onReconnect). Separate subscription so it also
+  // covers the module-level rebuild path (a CLOSED source recreated after backoff).
+  useEffect(() => api.subscribeReconnect(() => onReconnect(depsRef.current)), [])
 }

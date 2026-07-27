@@ -16,6 +16,14 @@ export function publishWorkerChange(coordinatorSessionId: string): void {
   listeners.get(coordinatorSessionId)?.forEach((l) => l())
 }
 
+// publishWorkerChangeAll notifies EVERY subscriber regardless of coordinator. Used
+// when we know the roster may have changed but not for which coordinator — after an
+// SSE reconnect, where the transitions that happened while the feed was down are
+// lost and cannot be attributed.
+export function publishWorkerChangeAll(): void {
+  listeners.forEach((set) => set.forEach((l) => l()))
+}
+
 // subscribeWorkerChange registers `cb` for one coordinator's worker transitions.
 // Returns an unsubscribe function; the per-coordinator set is pruned when empty.
 export function subscribeWorkerChange(coordinatorSessionId: string, cb: Listener): () => void {

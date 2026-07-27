@@ -213,7 +213,9 @@ Yeni bağımlılıklar: `react-markdown`, `remark-gfm`, `highlight.js`.
   tick; start zamanı bilinmiyorsa süre gizlenir). Veri `useRunningWorkers.ts`
   (`GET /api/sessions/{id}/workers`, yalnız `role==='coordinator'`) — **poll yok**,
   tazeleme `worker` SSE event'i ile: `useAppEvents` → `shared/lib/workerBus.ts`
-  (coordinatorId anahtarlı pub/sub) → hook. Detay `_Docs/47`.
+  (coordinatorId anahtarlı pub/sub) → hook. Feed koparsa `api.subscribeReconnect`
+  → `onReconnect` resync eder (kopma sırasındaki event'ler kalıcı kayıptır).
+  Detay `_Docs/47`.
 
 ### Modüler yapı (büyük dosyaların bölünmesi)
 İki büyük dosya tek-sorumluluklu küçük parçalara ayrıldı; davranış birebir korundu.
