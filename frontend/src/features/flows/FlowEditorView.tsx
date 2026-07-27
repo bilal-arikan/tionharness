@@ -8,8 +8,9 @@ import { NodeInspector } from './NodeInspector'
 import { FlowVarsButton } from './FlowVarsButton'
 import type { FlowRFNode } from './flowGraph'
 import { NODE_TYPES, EDGE_STYLES } from './flowsPanelShared'
+import { NODE_TYPE_HELP } from './nodeTypeHelp'
 import type { Agent, Flow, FlowNode, FlowNodeType, FlowRun, FlowState } from '@/types'
-import { Button, TagEditor, ModalOverlay } from '@/shared/components'
+import { Button, TagEditor, ModalOverlay, InfoPopover } from '@/shared/components'
 
 interface Props {
   agents: Agent[]
@@ -115,20 +116,29 @@ export function FlowEditorView({
             {paletteOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
             Node ekle
           </button>
+          {/* Each palette entry pairs the add/drag button with an (ⓘ) popover
+              explaining what that node type does. The popover renders in fixed
+              coordinates because this column scrolls (and would clip it). */}
           {paletteOpen && NODE_TYPES.map((t) => (
-            <button
-              key={t.value}
-              draggable
-              onDragStart={(e) => {
-                e.dataTransfer.setData(FLOW_NODE_DND_MIME, t.value)
-                e.dataTransfer.effectAllowed = 'move'
-              }}
-              onClick={() => addNode(t.value)}
-              className="flex w-full cursor-grab items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-2 py-2 text-left text-xs hover:border-[var(--color-accent)] active:cursor-grabbing"
-            >
-              <t.Icon size={15} className="shrink-0 text-[var(--color-text-dim)]" />
-              <span>{t.label}</span>
-            </button>
+            <div key={t.value} className="flex items-center gap-1">
+              <button
+                draggable
+                onDragStart={(e) => {
+                  e.dataTransfer.setData(FLOW_NODE_DND_MIME, t.value)
+                  e.dataTransfer.effectAllowed = 'move'
+                }}
+                onClick={() => addNode(t.value)}
+                className="flex min-w-0 flex-1 cursor-grab items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-2 py-2 text-left text-xs hover:border-[var(--color-accent)] active:cursor-grabbing"
+              >
+                <t.Icon size={15} className="shrink-0 text-[var(--color-text-dim)]" />
+                <span className="truncate">{t.label}</span>
+              </button>
+              <InfoPopover
+                fixed
+                text={NODE_TYPE_HELP[t.value]}
+                label={`${t.label} nedir?`}
+              />
+            </div>
           ))}
 
           {/* Flow-level presentation moved here from the meta toolbar. */}

@@ -554,11 +554,25 @@ Böylece `RunView` yeniden kullanılır (`SessionFlowInline`): canvas'ta node = 
 Her assistant turn'ü bir agent node; `next` ile lineer; `accumulate:true` (sohbet tek büyüyen konuşma).
 (2026-07-27: reify edilen graf zorunlu **Start node** ile başlar — `sessionToFlowRun` bir `start`
 node'u prepend eder, trace'te done görünür; adım sayacı start'ı saymaz.)
-**"Flow olarak kaydet"** `api.createFlow` ile gerçek düzenlenebilir flow üretir → kullanıcı
-dal/paralel/döngü ekleyip yeniden çalıştırır (döngü kapanır: session→flow→run→session). Dal/paralel
-yapısı düz transkriptten çıkarılamaz → sonuç daima lineer. Reset: aktif oturum değişince inline
-görünüm kapanır. (Ters yön — flow koşusunu çok-turlu session olarak render — mevcut per-node
-step-kartı kaydıyla zaten karşılanıyor.)
+Dal/paralel yapısı düz transkriptten çıkarılamaz → reify sonucu daima lineer. Reset: aktif oturum
+değişince inline görünüm kapanır. (Ters yön — flow koşusunu çok-turlu session olarak render — mevcut
+per-node step-kartı kaydıyla zaten karşılanıyor.) (2026-07-27: **"Flow olarak kaydet" butonu ve
+özelliği kaldırıldı** — `SessionFlowInline` artık yalnız görüntüler, `api.createFlow` çağırmaz;
+`onError` prop'u da söküldü.)
+
+**Gerçek flow oturumu → gerçek graf (2026-07-27):** Bir flow koşusunun transkript oturumunu
+"Akış olarak gör" ile açınca artık transkript **reify edilmez** — koşunun **gerçek grafiği/düzeni**
+gösterilir (Koşular tab'ıyla birebir aynı düzen; "dizilim farklı" sorunu çözüldü). Mekanizma:
+`db.FlowRun`'a **`SessionID`** alanı eklendi; `RunFlowRecorded` nihai `sessionID`'yi
+`db.SetFlowRunSession` ile koşuya damgalar (yeni koşular için kesin bağ). `SessionFlowInline` artık
+`sessionKind`+`sourceId`+`sessionCreatedAt` alır: `kind==='flow'` ise **`api.listFlows()` +
+`api.listFlowRuns(sourceId)`** ile flow'u ve koşuyu bulur → gerçek `{flow, run}`'ı `RunView`'e verir
+(görüntüleme-only; kaydet yok). Koşu eşleştirme **iki aşamalı**: önce `run.sessionId === sessionId`
+(yeni koşular), yoksa **en yakın `createdAt`** (eski koşular — per-run oturum koşuyla ~aynı saniyede
+yaratılır; 5 sn tolerans, aşılırsa reify). Bu sayede **backend restart gerekmeden** eski koşular da
+(örn. SES200 → RUN11) gerçek grafiği gösterir. Eşleşme yoksa (flow silinmiş / koşu silinmiş) veya
+oturum flow-kaynaklı değilse reify. (`GET /api/flows/{id}` / `handleGetFlow` de eklendi ama zorunlu
+değil — frontend `listFlows` kullanır.)
 
 **Node inline çıktı önizlemesi:** `FlowRFNode.data.output` (koşu görünümlerinde `RunView` node data'sına
 canlı/trace'ten geçirilir); `AgentNode` node `done` olduğunda cevabı yeşil kenarlı `line-clamp-3`
@@ -570,8 +584,9 @@ geri butonu; flow editör paletinde **Döngü** + Görünüm'de **Bağlamı biri
 
 ### İyileştirmeler (2026-07-25, ikinci tur)
 - **Dikey auto-layout:** `autoLayout` (flowGraph.ts) artık BFS derinliğini **y** (yukarı→aşağı),
-  kardeş sırasını **x** (sola→sağa) yapar → "Oto diz" dikey dizer. Dikey satır aralığı `ROW_H`
-  **140→180**: çıktı önizlemeli uzun node'lar üst üste binmesin.
+  kardeş sırasını **x** (sola→sağa) yapar → "Oto diz" dikey dizer. (2026-07-27: aralıklar
+  sıkılaştırıldı — `COL_W` **280→240**, `ROW_H` **180→150** → oto-dizilen graf daha kompakt,
+  çıktı önizlemeli node'ları hâlâ çakışmadan geçirecek kadar yüksek.)
 - **Accumulate default AÇIK:** `Graph.Accumulate` JSON tag'inden **`omitempty` kaldırıldı**
   (`false` verbatim persist olur → save/reload round-trip'i bozulmaz). Frontend `FlowsPanel`
   toggle'ı `useState(true)`; `selectFlow` `g.accumulate === undefined ? true : !!g.accumulate`
@@ -582,6 +597,16 @@ geri butonu; flow editör paletinde **Döngü** + Görünüm'de **Bağlamı biri
   ise her step bir node olur (başlık bold header'dan, çıktı gövdeden) → reify edilen akış orijinal
   grafiği yansıtır (önceden tek node'a çöküyordu). Normal sohbet turn'ü (thinking/tool step'li) tek
   node kalır. Doğrulandı: gerçek `SES194` (FLW5 "Yanıtla & Doğrula") → 2 node (Yanıtla, Doğrula).
+
+### Flows tab'ları deep-link + Koşular'da Girdi → Adım izi (2026-07-27)
+- **3 tab için ayrı URL:** FlowsPanel sol-kolon tab'ı (`flows`|`templates`|`runs`) artık URL'de:
+  **`#/w/{ws}/flows/{tab}`** (varsayılan `flows` segment taşımaz → temiz `#/w/{ws}/flows`).
+  `useSessionState('flows.tab')` kaldırıldı; tab state App'e taşındı (`useDeepLinks.flowsTab`),
+  `useAppNavigation` (`routeIdForView`/`applyRoute` `flows` case'i) URL↔state senkronu yapar,
+  FlowsPanel controlled `tab`/`onTabChange` prop'larını alır (`setTab` = `Dispatch<SetStateAction>`
+  imzasını korur ama sonucu parent'a yazar). Reload/`geri`/`ileri` doğru tab'a düşer, link paylaşılır.
+- **Koşular'da Girdi Adım izi'nde:** Koşular tab'ındaki `RunView` de `inputInTrace` alır → üstteki
+  "Girdi:" satırı yerine alt Adım izi panelinin ilk öğesi (sohbet flow görünümüyle aynı davranış).
 
 ### Editörden çalıştır → Koşular tab'ına yönlendir (2026-07-25)
 Editörden "Çalıştır" artık koşuyu **editör canvas'ına boyamaz** (eski `setNodeStatus`/`liveNodes`
@@ -687,3 +712,23 @@ artık **baştan** reddedilir. Davranış farkı: başarısız bir koşu kaydı 
 geçer), eksik ajan, yapılandırılmamış sağlayıcı, bozuk transform/delay parametreleri, tüm
 hataların birlikte raporlanması ve `RunFlow`'un **`FlowRun` kaydı oluşturmadan** reddettiği.
 `go build ./...` + `go vet ./...` + `go test ./internal/...` yeşil.
+
+## Palet node butonlarında (ⓘ) bilgi balonu (2026-07-27)
+
+Sol paletteki "Node ekle" listesinde her tipin adı vardı ama **ne işe yaradığı**
+hiçbir yerde yazmıyordu; kullanıcı ancak node'u ekleyip inspector'ı açarak
+anlayabiliyordu. Artık her palet satırı **buton + (ⓘ)** ikilisi:
+
+- Metinler `frontend/src/features/flows/nodeTypeHelp.ts` → `NODE_TYPE_HELP:
+  Record<FlowNodeType, string>`. Sözlü açıklamalar `internal/orchestration/model.go`
+  içindeki node-tipi yorumlarıyla hizalı — motor davranışı değişirse ikisi birlikte
+  güncellenmeli.
+- Render: mevcut paylaşılan `shared/components/InfoPopover` yeniden kullanılır.
+  Palet kolonu `overflow-y-auto` olduğu için mutlak konumlu balon **kırpılırdı** →
+  `InfoPopover`'a opsiyonel **`fixed`** modu eklendi: açılışta butonun
+  `getBoundingClientRect()`'i ölçülür ve balon viewport koordinatlarında
+  (`position: fixed`, sağ/alt kenara clamp'li) çizilir. Varsayılan `fixed=false`,
+  yani diğer kullanım yerlerinin davranışı değişmez.
+- Palet satırı `flex items-center gap-1`; buton `min-w-0 flex-1` + etiket `truncate`
+  (dar `w-32` mobil palette taşma yok). Sürükle-bırak (`FLOW_NODE_DND_MIME`) ve tıkla-ekle
+  davranışı aynen korunur — (ⓘ) butonu draggable değildir, tıklaması node eklemez.
