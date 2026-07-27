@@ -1,6 +1,9 @@
 # Crabbox repo config for TionSwarm.
 # Local Docker (local-container) test boxes — no coordinator/login required.
 # Run jobs with:  crabbox job run ci   |   crabbox job run frontend
+# `ci` is the full gate (vet + build + every package). There is no reduced
+# fast-lane job: a subset gate silently stopped covering the packages that
+# actually change (agent/api/tools/db/insight), so the whole suite runs.
 profile: tionswarm-check
 
 # Sync: git ls-files manifest over rsync+ssh. Keep build/output dirs out.
@@ -47,7 +50,11 @@ ssh:
 #       so a placeholder is created before build. The golang image's login shell resets
 #       PATH, so /usr/local/go/bin is exported.
 jobs:
-  # Go: compile the whole project + run the fast, pure-logic unit tests.
+  # Go: vet + compile the whole project + run the FULL unit-test suite.
+  # Tests that need an absent external tool (rg, python, node, claude CLI) or a
+  # live network gate themselves behind t.Skip, so the golang image runs green
+  # without extra provisioning. TIONSWARM_ENABLE_SHELL exercises the shell tool
+  # tests instead of letting them skip.
   ci:
     provider: local-container
     image: golang:1.26
@@ -55,29 +62,23 @@ jobs:
     stop: auto
     command: >
       export PATH=/usr/local/go/bin:$PATH &&
+      export TIONSWARM_ENABLE_SHELL=1 &&
       go version &&
       mkdir -p internal/web/dist && touch internal/web/dist/index.html &&
+      echo ===VET=== && go vet ./... && echo VET_OK &&
       echo ===BUILD=== && go build ./... && echo BUILD_OK &&
       echo ===TEST=== &&
-      go test -count=1 ./internal/conversation/... ./internal/billing/... ./internal/orchestration/... ./internal/skills/...
+      go test -count=1 -timeout 900s ./...
 
-  # Go: full test suite (some tests may need external tools/network and can fail/skip).
-  ci-full:
-    provider: local-container
-    image: golang:1.26
-    shell: true
-    stop: auto
-    command: >
-      export PATH=/usr/local/go/bin:$PATH &&
-      mkdir -p internal/web/dist && touch internal/web/dist/index.html &&
-      go build ./... && echo BUILD_OK &&
-      go test -count=1 ./...
-
-  # Frontend: install + production build (Vite + React + TS).
+  # Frontend: install + unit tests + production build (Vite + React + TS).
+  # Tests run before the build so a logic regression fails fast, without waiting
+  # on the full Vite bundle.
   frontend:
     provider: local-container
     image: node:22
     shell: true
     stop: auto
     command: >
-      cd frontend && npm ci && npm run build
+      cd frontend && npm ci &&
+      echo ===TEST=== && npm test &&
+      echo ===BUILD=== && npm run build

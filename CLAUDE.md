@@ -25,6 +25,25 @@ değil). Gerçek yaşanan hatalardan çıkarılmış kurallar:
   `Glob` ile (ör. `internal/db/store_*.go`) dosyanın gerçekten var olduğunu
   teyit et, sonra o yolu Grep'e geç.
 
+## Test koşturma
+
+```powershell
+$env:TIONSWARM_ENABLE_SHELL='1'   # yoksa shell aracı testleri skip'e düşer
+go test ./... -count=1            # tüm backend (~90sn)
+cd frontend; npm test             # vitest (pure-logic modüller)
+```
+
+CI (`.crabbox.yaml` → `ci` job) tam olarak bunu koşar: `go vet ./...` + `go build ./...` +
+`go test ./...`. **Paket alt-kümesi geçidi kurma** — daha önce 4 pakete daralmış ve tam da
+en çok değişen paketleri (`agent`/`api`/`tools`) kapsamaz hale gelmişti.
+
+- **`.go` dosyalarına BOM yazma.** `go build`/`go vet` tolere eder ama cover instrumentation
+  dosyayı yeniden yazınca BOM ortada kalır ve paket `invalid BOM in the middle of the file`
+  ile derlenmez → `go test -cover` o pakette tamamen çöker.
+- **Harici araç isteyen testler `t.Skip` ile geçitlenir** (rg, python, node, claude CLI, ağ).
+  Yeni bir testin böyle bir bağımlılığı varsa aynı deseni izle, yoksa CI kırılır.
+- `-race` bu makinede CGO kapalı olduğu için koşmaz; CI (linux) koşar.
+
 ## internal/db dizin haritası
 
 `internal/db` paketi tek bir dosya-tabanlı store'dur (`DB` tipi, `store.go` ve

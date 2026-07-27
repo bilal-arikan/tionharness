@@ -17,6 +17,7 @@ permissions:
 env:
   CRABBOX_VERSION: "0.33.0"
   GO_IMAGE: "golang:1.26"
+  NODE_IMAGE: "node:22"
 
 jobs:
   crabbox-ci:
@@ -47,8 +48,44 @@ jobs:
           test -n "$slug"
           echo "slug=$slug" >> "$GITHUB_OUTPUT"
 
-      - name: Run ci job (build + unit tests)
+      - name: Run ci job (vet + build + full unit-test suite)
         run: crabbox job run --id "${{ steps.warm.outputs.slug }}" ci
+
+      - name: Stop box
+        if: always()
+        run: |
+          slug="${{ steps.warm.outputs.slug }}"
+          if [ -n "$slug" ]; then crabbox stop -provider local-container -id "$slug" || true; fi
+
+  # Separate box: the frontend job pins node:22, so it cannot share the Go box.
+  # Runs in parallel with the Go gate — neither blocks the other.
+  crabbox-frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install crabbox
+        run: |
+          set -euo pipefail
+          url="https://github.com/openclaw/crabbox/releases/download/v${CRABBOX_VERSION}/crabbox_${CRABBOX_VERSION}_linux_amd64.tar.gz"
+          curl -fsSL "$url" -o /tmp/crabbox.tar.gz
+          tar -xzf /tmp/crabbox.tar.gz -C /tmp
+          sudo install -m 0755 /tmp/crabbox "/usr/local/bin/crabbox"
+          crabbox version
+
+      - name: Warm a Node box
+        id: warm
+        run: |
+          set -euo pipefail
+          out="$(crabbox warmup -provider local-container -local-container-image "$NODE_IMAGE")"
+          echo "$out"
+          slug="$(printf '%s\n' "$out" | grep -oP 'slug=\K[^ ]+' | head -1)"
+          test -n "$slug"
+          echo "slug=$slug" >> "$GITHUB_OUTPUT"
+
+      - name: Run frontend job (vitest + vite build)
+        run: crabbox job run --id "${{ steps.warm.outputs.slug }}" frontend
 
       - name: Stop box
         if: always()

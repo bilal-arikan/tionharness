@@ -2,6 +2,59 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-07-27**
 
+## Test altyapısı: CI tam kapsam + frontend testleri ✅ (2026-07-27)
+
+Test **kodlarının** durumu iyiydi (kaldırılan özelliklerin testleri de silinmiş — `tools/compact`,
+memory, günlük limitler için sıfır artık referans), asıl boşluk **koşturma** tarafındaydı. Dört düzeltme:
+
+1. **CI kapsamı 4 → 30 paket.** `.crabbox.yaml` `ci` job'ı yalnız `conversation/billing/orchestration/skills`
+   koşturuyordu; `agent`/`api`/`tools`/`db`/`insight`/`providers` (testlerin ~%85'i) CI'da hiç çalışmıyordu.
+   `ci` artık `go vet ./...` + `go build ./...` + `go test ./...` (`TIONSWARM_ENABLE_SHELL=1`); harici araç
+   veya ağ isteyen testler zaten `t.Skip` ile kendilerini geçitliyor. Kalan-yarım `ci-full` job'ı kaldırıldı.
+2. **BOM fix.** `internal/tools/builtin_workspacemgmt.go` UTF-8 BOM ile başlıyordu; `go build`/`go vet`
+   tolere ediyor ama cover instrumentation dosyayı yeniden yazınca BOM ortada kalıp
+   `invalid BOM in the middle of the file` ile **tüm `internal/tools` paketinin coverage ölçümünü**
+   kırıyordu. BOM kaldırıldı → paket %57.8 ile ölçülebiliyor (repodaki tek BOM'lu `.go` dosyasıydı).
+3. **Bildirim sözleşmesine drift testi.** `events.NotifyKinds` ↔ `frontend/.../notifyTypes.ts` senkronu
+   yalnız iki yorum satırıyla korunuyordu. `internal/events/notifyparity_test.go` TS dosyasını parse edip
+   iki listeyi karşılaştırır: backend-only kind = Ayarlar'da susturulamaz bildirim, frontend-only kind =
+   ölü toggle. `prompt` bilerek frontend-only (backend olayı yok). Yanında kontrol/stream tiplerinin
+   `NotifyKinds`'e sızmadığı testi (sızarsa her log satırı toast olurdu).
+4. **Frontend testleri sıfırdan.** Vitest kuruldu (`vitest.config.ts`, node env, `@` alias; `npm test` /
+   `npm run test:watch`); kullanılmayan `@playwright/test` devDependency'si kaldırıldı (config yok,
+   script yok, tek test yok). İlk 38 test: `notifyTypes` (cue/badge eşlemesi + `task`→`board` legacy
+   alias'ı) ve `recommendations` (öneri kural motoru: token-conflict önceliği, sqz/rtk hook tespiti,
+   `shellOutputCompression` explicit-tercih saygısı, cbm add/enable ayrımı, kart sırası). Frontend job'ı
+   artık `npm test` + `npm run build` koşuyor ve **workflow'a bağlandı** (ayrı node:22 box, Go gate'e paralel).
+
+Ek olarak `internal/tools/readtracker_test.go`: dosya-tazelik guard'ının unit sözleşmesi — nil tracker
+no-op, mtime-değişti-içerik-aynı (guard tripmemeli) vs içerik-değişti-mtime-aynı (tripmeli), never-read
+ile stale hata mesajlarının ayrışması, `recordWritten` sonrası ardışık yazım, path-scope, eşzamanlılık.
+Araç seviyesindeki happy-path'ler zaten `builtin_fs_test.go`/`builtin_patch_test.go`'daydı.
+
+Durum: **937 test yeşil, 0 fail, 11 skip** (harici araç/ağ geçitli) + 38 frontend testi.
+
+Bilinen kalan boşluklar (öncelik sırasıyla): `internal/api` %17 — `chat_stream.go` (37KB),
+`chat_control.go` (27KB), `session_context.go` (26KB), `session_stream.go` testsiz;
+`internal/workspace` %4.3 (`manager.go` 23KB); `internal/app` %15.5.
+
+## Flow: async spawn/join + subflow await-propagasyonu ✅ (2026-07-27)
+
+İki yeni yürütme yeteneği (temiz kurulum; `flow.go` tek elden). **Async spawn/join:** `spawn`
+node child flow'ları bloklamadan başlatır (`State.Spawned`), `join` node bariyer olarak block-poll
+ile bekleyip çıktıları birleştirir; interaktif çocuk join'i fail eder → hep sonlanır. **Subflow
+await-propagasyonu:** subflow çocuğu `await-input`'a düşerse parent da askıya alınır (`State.SubflowRun`),
+parent'a input verilince child sync resume edilir. `AsyncFlowRunner` + `SuspendableChildFlowRunner`
+arayüzleri; frontend palet "Spawn"/"Join" + inspector. **Genişletme:** join'e `joinTimeoutSec` +
+`joinPartial` (kısmi mod: fail/suspend/timeout çocuğu düşür), ve subflow/spawn/join için **flow-picker
+UI** (id metni yerine seçici). Ayrıca continuation turn'lerinin (scheduler `deliverPrompt`/`deliverWake`)
+ortak reply/error kaydı `recordAssistantReply`/`recordTurnError`'a çıkarıldı (god-function'dan bilinçli
+kaçınıldı). **Devam:** paylaşım 5 continuation sitesine yayıldı (`agentmsg`/`spawn`/`coordination` +
+`recordAssistantMessage` çekirdeği); gallery'ye **Async Fan-out (Spawn/Join)** örnek şablonu (companion
+alt-akışlarla runnable); **join canlı ilerleme** (`onProgress` → `progress` NodeEvent → RunView "N/M").
+Backend 1029 test yeşil; canlı E2E hepsi (spawn/join, propagasyon, partial-drop, SSE progress `0/2→2/2`).
+Detay: [62-BIRLESIK-RUN-AWAIT.md](62-BIRLESIK-RUN-AWAIT.md).
+
 ## Claude Opus 5 model desteği ✅ (2026-07-27)
 
 Anthropic **Opus 5** (`claude-opus-5`, 24 Tem 2026; 1M bağlam, Opus fiyatı sabit
