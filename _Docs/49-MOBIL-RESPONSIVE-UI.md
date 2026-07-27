@@ -203,91 +203,31 @@ telefondan gerçek kullanım mümkün olur.
 
 ## 7. Uygulama Durumu
 
-### 7.1 F1 — Shell + Sohbet ✅ (2026-07-04)
+### 7.1–7.3 F1–F3 — kabuk, modallar, liste panelleri ✅ (2026-07-04)
 
-Portrait telefon için tek-sütun kabuk + alt yatay nav bar + sohbet drawer'ları
-uygulandı; `frontend` prod build (`tsc -b && vite build`) temiz geçti.
+Portrait telefon için tek-sütun kabuk, bottom-sheet modallar ve tek-sütun liste
+panelleri sevk edildi. Dosya-dosya döküm **git geçmişindedir**; kalıcı olarak
+bilinmesi gerekenler:
 
-**Yeni dosyalar:**
-- `hooks/useMediaQuery.ts` — `useMediaQuery` + `useIsMobile()` (`max-width: 767px`,
-  Tailwind `md` altı). Tek yerde tutulur ki breakpoint `md:` sınıflarıyla senkron
-  kalsın.
-- `components/MobileNavBar.tsx` — altta `fixed bottom-0` yatay-kaydırılabilir nav;
-  `NAV` + Workspace/Ayarlar tek şeritte; busy/unread/dirty noktaları; `md:hidden`.
+- **Breakpoint tek kaynak:** `hooks/useMediaQuery.ts` → `useIsMobile()`
+  (`max-width: 767px` = Tailwind `md` altı). Tailwind `md:` sınıflarıyla senkron
+  kalması için breakpoint başka yerde tekrar edilmez.
+- **Mobil navigasyon:** `components/MobileNavBar.tsx` (altta `fixed bottom-0`,
+  `md:hidden`); `NavRail`'in `NAV` dizisi export edilip tek kaynak yapıldı.
+- **Drawer deseni:** yan paneller (oturum listesi, ajan roster'ı, detay paneli)
+  masaüstünde sütun (`md:static`), mobilde `max-md:fixed` + `translate-x` slide-in
+  + backdrop; seçimden sonra kapanır.
+- **Modal tek kaldıracı:** `common/ModalOverlay.tsx` — `< md`'de overlay `items-end`
+  ve `max-md:[&>*]:!w-full !max-w-none !max-h-[92dvh] !rounded-b-none` ile **13 modal**
+  birden bottom-sheet olur. `!important`, çocuğun sabit `w-*`/`max-w-*` sınıflarını ezer.
+- **Genel kural:** tüm mobil davranış `max-md:` / `md:hidden` altındadır →
+  **`>= md`'de düzen birebir eski hâlidir** (masaüstü regresyonu yok).
+- **`!w-full` neden `!important`:** resizable panellerin inline `style={{width}}`'ini
+  ezmek için (inline stil > sınıf; `!important` > inline).
 
-**Değişen dosyalar:**
-- `components/NavRail.tsx` — `NAV` artık **export** (tek kaynak); kök `nav`
-  `hidden md:flex` (mobilde gizli, masaüstünde eskisi gibi).
-- `App.tsx`:
-  - `useIsMobile()` + `mobileSessionsOpen` state; `Menu` ikonu import.
-  - Chat header'ında **mobil hamburger** (`md:hidden`) → oturum drawer'ını açar.
-  - **SessionsSidebar** artık sarmalayıcı `<div>` içinde: masaüstünde sütun
-    (`md:static`), mobilde soldan **slide-in drawer** (`max-md:fixed inset-y-0
-    left-0` + `translate-x` toggle + backdrop); seçim/yeni-oturum sonrası kapanır.
-  - **SessionDetailPanel** aynı desenle sağdan **slide-in drawer** (mevcut
-    `detailOpen` state'i sürer) + backdrop.
-  - `<main>` mobilde `max-md:pb-16` (içerik alt nav'ın altına gizlenmez).
-  - `<MobileNavBar>` render edildi.
-
-**Masaüstü davranışı korunur:** tüm mobil sınıflar `max-md:`/`md:hidden` altında;
-`>= md`'de düzen birebir eski hâli.
-
-**F1 kapsamı DIŞI (bilinen, sonraki fazlar):**
-- `memory` view'ındaki `AgentRoster` hâlâ mobilde sütun (drawer'a çevrilmeli).
-- Headerless view panelleri (agents/executions/artifacts/skills/tools/flows/
-  market) kendi iç düzenleriyle mobilde optimize değil → **F3**.
-- Modallar full-screen sheet değil → **F2** (`common/ModalOverlay.tsx`).
-- Grafik/canvas (Flows/Network/MemoryGraph/Board) → **F4**.
-- Mobil workspace switcher yok (§3.2 notu).
-- Gerçek cihaz/emülatör görsel testi yapılmadı (build-only doğrulama).
-
-### 7.2 F2 — Modallar + Header ✅ (2026-07-04)
-
-Modallar mobilde **bottom-sheet**, header taşması giderildi; `tsc -b && vite build`
-temiz (CSS 84.6→85.2 kB, yeni mobil sınıflar üretildi).
-
-- **`common/ModalOverlay.tsx` (tek kaldıraç → 13 modal):** `< md`'de overlay
-  `items-end` + `p-0`; `max-md:[&>*]:!w-full !max-w-none !max-h-[92dvh]
-  !rounded-b-none` ile her modalın kök çocuğu tam-genişlik, düz-alt-köşe, 92dvh
-  tavanlı iç-scrolllu sheet olur. `!important` çocuğun sabit `w-*`/`max-w-*`/
-  yuvarlama sınıflarını ezer. `>= md`'de sınıflar etkisiz (masaüstü aynı).
-- **Elle yazılmış overlay'ler aynı desene alındı:** `artifacts/ArtifactPreviewModal.tsx`
-  (48-F2 dosya önizleme ile örtüşür), `chat/RewindDialog.tsx`.
-- **`common/PromptEditor.tsx` tam-ekran editör:** `< md`'de `p-0` + çocuk
-  `!max-w-none !rounded-none` → kenardan kenara tam ekran (mobilde prompt/metin
-  düzenleme hedefiyle uyumlu).
-- **Header sıkıştırma (`App.tsx`):** `px-6`→`max-md:px-3`; sol grup `min-w-0` +
-  ajan adı `truncate`; sağ grup `shrink-0`; **ChatMeters `hidden md:flex`**
-  (mobilde gizli — tam döküm Detay drawer + Bütçe ekranında). Copy/Reveal ikon
-  butonları zaten `sm`'de etiketsiz.
-
-**F2 kapsamı DIŞI (sonraki):** `common/Lightbox.tsx` zaten tam-ekran (dokunulmadı);
-modal iç içeriklerinin dokunmatik ergonomisi (büyük form alanları) F5 cilası.
-
-### 7.3 F3 — Liste panelleri tek-sütun ✅ (2026-07-04)
-
-İki-sütunlu paneller mobilde **dikey stack** (üstte liste, altta içerik); memory
-roster de sohbet gibi drawer. `tsc -b && vite build` temiz (CSS 85.2→85.6 kB).
-
-- **Memory roster → drawer:** `App.tsx`'te `mobileSessionsOpen` state'i
-  `mobileListOpen`'a genellendi (sohbet + memory ortak); header hamburger artık
-  `chat || memory`'de görünür (memory'de "Ajanlar" etiketi); `AgentRoster` sohbet
-  sidebar'ıyla **aynı** drawer sarmalayıcı deseninde (backdrop + `translate-x`,
-  seçimde kapanır).
-- **Headerless iki-sütun paneller → dikey stack (6 panel):** her panelin kökü
-  `max-md:flex-col`, sol liste sütunu `max-md:!w-full max-md:h-auto
-  max-md:max-h-[45vh] max-md:border-b max-md:border-r-0`. `!w-full` resizable
-  panellerin inline `style={{width}}`'ini ezer (`!important` > inline).
-  - `panels/ExecutionsPanel.tsx` (+ sağ pane `max-md:h-auto`, `h-full` çakışması),
-    `agents/AgentsView.tsx`, `panels/ToolsPanel.tsx` (fixed `w-72`),
-    `panels/SkillsPanel.tsx`, `panels/ArtifactsPanel.tsx`,
-    `panels/MarketPanel.tsx` (kategori rayı mobilde `flex-row flex-wrap` chip'ler).
-- Liste 45vh tavanlı, iç `overflow-y-auto` ile kaydırılır; içerik altında `flex-1`.
-
-**F3 kapsamı DIŞI (sonraki):** `Schedules`/`Budget`/`Logs` tek-sütun panellerdi
-(dokunulmadı; gerekirse F5 kart taşma denetimi). Flows canvası **F4**. Master-detail
-"seç→içeriğe geç" navigasyonu değil, basit stack (liste + içerik alt alta) — daha
-gelişmiş mobil master-detail F5 cilası.
+**Bu fazların dışında bırakılanlar:** grafik/canvas görünümleri (Flows, Network,
+Board) → **F4**; dokunmatik ergonomi cilası, master-detail navigasyonu ve
+`Schedules`/`Budget`/`Logs` kart taşma denetimi → **F5**.
 
 ### 7.4 Panel UX iyileştirmeleri — daraltılabilir listeler + otomasyon renkleri ✅ (2026-07-04)
 

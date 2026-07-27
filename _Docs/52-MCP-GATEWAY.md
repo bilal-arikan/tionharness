@@ -390,38 +390,22 @@ onun built-in + bridged self-management + NameOnly araçları. Gateway aktivasyo
 6. ✅ **Interaction token → per-(session,agent)** (aşağıda detaylı sonuçlar).
 7. ✅ **Faz 3 kapsamı: auth (loopback+token) + VPS zincir göçü dahil** (aşağıda detay).
 
-### 11-A. Token'ı per-run → per-(session,agent) yapmanın DETAYLI SONUÇLARI
+### 11-A. Token: per-run → per-(session,agent) — ✅ UYGULANDI
 
-**Bugünkü durum.** Interaction MCP her şeyi **per-run Bearer token**'a bağlar
-(`chatRuns.byToken(token)` → o anki canlı turn). Token bir turn (chatRun) yaşam süresine
-eşit. One-shot `-p` yolunda sorun yok: her turn yeni process, yeni config, yeni token.
+**Sorun:** Interaction MCP Bearer token'ı bir *turn* ömürlüydü. Persistent CLI
+process'inde token spawn'da sabitlenir ama process birçok turn'ü kapsar → sonraki
+turn'lerde `byToken` ölü run'a çözer (401). Config churn bunu maskeliyordu.
 
-**Persistent'te çelişki.** Persistent process config'i (dolayısıyla token'ı Authorization
-header'ında) **spawn'da sabitlenir** ve process **birçok turn'ü** kapsar. Sabit token ↔
-değişen run → `byToken` sonraki turn'lerde **eski/ölü run'a** çözer (veya `Valid=false` →
-401). Yani bugün persistent+interaction düzgün çalışmaz (config churn bunu maskeliyordu).
+**Çözüm:** token `(session,agent)` kimliğine bağlandı; `byToken` o anahtarın **aktif**
+run'ına çözer (`chatRuns.active` + `bindActive`, `internal/api/chat_control.go`).
+Kazanç: process ömrü boyunca tek kararlı token → mcp-config değişmez → fingerprint
+değişmez → **warm-reuse korunur** (§3-D'nin diğer yarısı).
 
-**Değişiklik.** Token'ı `(session,agent)` kimliğine bağla; backend `byToken`'ı **o
-anahtarın AKTİF run'ına** çözsün (turn başında set edilen `activeRun[key]`).
-
-**Sonuçlar (olumlu):**
-- Persistent process ömrü boyunca **tek kararlı token** → config değişmez → fingerprint
-  değişmez → **warm-reuse korunur** (§3-D'nin diğer yarısı). Gateway list_changed'i canlı
-  SSE'ye push edebilir çünkü bağlantı/oturum turn'ler arası **yaşıyor**.
-- Token artık kararlı bir sırrın parçası → mcp-config dosyası turn'ler arası **aynı kalır**.
-
-**Sonuçlar (dikkat/risk):**
-- **Güvenlik ömrü uzar:** token artık turn değil, session+agent ömürlü. Sızarsa pencere
-  daha geniş. Azaltma: yüksek-entropi token, **loopback-only** endpoint (zaten öyle),
-  process ölünce token'ı geçersiz kıl (pool Drop/evict ile bağla).
-- **Yetki kapsamı:** `byToken` "aktif run" çözümü, iki turn arası boşlukta (run yokken)
-  gelen çağrıyı **temiz reddetmeli** (sessiz kabul yok) — CLI process turn dışında tool
-  çağırmaz ama defansif ol.
-- **Çoklu-agent izolasyonu:** anahtar `session|agent` olduğundan her agent'ın kendi warm
-  process'i + kendi token'ı; çapraz-agent token karışması yok (mevcut `cliSessions` anahtarıyla hizalı).
-- **Migration:** `interactionBackend.Valid/Tools/Call` imzaları token→key çözümüyle
-  güncellenir; `chatRuns` bir `activeRun map[key]*chatRun` taşır. Token üretimi
-  run-başından **session-başına** taşınır. Testler: token round-trip + turn-arası reddi.
+**Kalıcı ödünleşim (bilinmesi gereken):** token artık turn değil **session+agent
+ömürlü** → sızma penceresi geniş. Azaltmalar: yüksek-entropi token, **loopback-only**
+endpoint, process ölünce geçersiz kılma. Ayrıca iki turn arası boşlukta (aktif run
+yokken) gelen çağrı **açıkça reddedilir** — sessiz kabul yok. Anahtar `session|agent`
+olduğu için çapraz-agent token karışması yapısal olarak imkânsız.
 
 ### 11-B. Faz 3 — harici sunum: auth (loopback+token) + VPS zincir göçü DETAY
 

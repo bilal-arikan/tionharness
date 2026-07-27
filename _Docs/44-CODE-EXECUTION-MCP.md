@@ -167,8 +167,11 @@ MCP'de araç çağrılabilmesi için tam şema `tools/list`'te olmalı, CLI allo
 süreç başında sabit → **tur-içi activate yok**. Bu yüzden native yol (Seçenek A)
 desenin tam kazancına daha uygun; CLI yolu için gerçekçi hedef B1'i olgunlaştırmak.
 
-> **Karar önerisi:** Ana hat **Seçenek A (native)**. claude-cli için önce mevcut
-> B1 (extended-tier deferral) yeterli sayılıp ölçülmeli; B2 ileri faza ertelenmeli.
+> **✅ KARAR (kapandı):** Ana hat **Seçenek A (native)** seçildi ve uygulandı
+> (`internal/codemode`, Faz 0–3 + Faz 5). claude-cli tarafında B1 (extended-tier
+> deferral) yeterli sayıldı; **B2 uygulanmadı**. Yukarıdaki A/B analizi kararın
+> *gerekçesi* olarak korunur — özellikle CLI köprüsünde 4-tier'ın neden "eridiği".
+> Ölçüm sonuçları ve mevcut durum: §10–13.
 
 ---
 

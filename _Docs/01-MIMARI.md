@@ -66,7 +66,7 @@ graph LR
 Hafıza alt sistemi (journal recall + core memory + hafıza grafiği + ilgili tool/API/UI)
 projeden tamamen çıkarıldı. Kalıcılık artık yalnız **retrieval** katmanıdır:
 `conversation_search`, artifact'lar ve kalıcı ilerleme (`36-KALICI-ILERLEME.md`).
-Tarihsel tasarım: `31-MEMGPT-CORE-MEMORY.md`.
+Tarihsel tasarım: [`arsiv/31-MEMGPT-CORE-MEMORY.md`](arsiv/31-MEMGPT-CORE-MEMORY.md).
 
 ### 5b. Conversation (`internal/conversation`)
 - Token-bütçeli **compaction**: oturum geçmişi eşiği aşınca eski turlar rolling summary'ye katlanır; sadece özet + son N tur gönderilir → uzun sohbetlerde context taşması yok.

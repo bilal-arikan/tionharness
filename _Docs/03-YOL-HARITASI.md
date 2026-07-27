@@ -190,7 +190,7 @@ graph LR
   "çalışma belleği" bloğu (Letta'nın human/persona memory-block'larına karşılık). TionSwarm'nun iki-parçalı
   sistem promptu + Faz 6 recall + C3 bunun altyapısı; eksik olan **ajana açık araç yüzeyi + pressure
   sinyali**. İlişkili: **C2** (compaction), **C3** (memory_write), **HA-1** (kullanıcı modelleme).
-  **Detaylı uygulama planı:** [`31-MEMGPT-CORE-MEMORY.md`](31-MEMGPT-CORE-MEMORY.md) (Mod C — neden doğrudan
+  **Detaylı uygulama planı:** [`arsiv/31-MEMGPT-CORE-MEMORY.md`](arsiv/31-MEMGPT-CORE-MEMORY.md) (Mod C — neden doğrudan
   Letta değil + 3 parça gerçek dosya temas noktalarıyla, 2026-06-22).
 - [ ] **C3** — memdir benzeri bellek **yazma/indeksleme** (`memory_write`, frontmatter türleri) — şu an sadece recall
 - [x] **C4** — Maliyet takibi: `cache_creation` vs `cache_read` ayrımı (uçtan uca) + oturumlar arası kümülatif toplam & `cacheHitRate` (caching ROI) — Bütçe ekranı pencere-kümülatif kartları + trend maliyet/tasarruf (2026-06-19)

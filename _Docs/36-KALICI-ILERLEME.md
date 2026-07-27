@@ -5,7 +5,7 @@
 > makalelerindeki **kalıcı not dosyası** (`claude-progress.txt` + `feature_list.json`
 > / `NOTES.md`) konvansiyonunun TionSwarm karşılığı.
 >
-> İlişkili: [`31-MEMGPT-CORE-MEMORY.md`](31-MEMGPT-CORE-MEMORY.md) (core memory),
+> İlişkili: [`arsiv/31-MEMGPT-CORE-MEMORY.md`](arsiv/31-MEMGPT-CORE-MEMORY.md) (core memory — KALDIRILDI),
 > [`17-TOKEN-OPTIMIZASYON.md`](17-TOKEN-OPTIMIZASYON.md) (compaction),
 > [`24-SELF-MANAGEMENT.md`](24-SELF-MANAGEMENT.md) (todo aracı).
 
@@ -119,7 +119,7 @@ liste; hepsi tamamsa boş). `chat_turn.go::composeTurnRequest` cwd + agentID +
 
 | Katman | Ne tutar | Yapı | Kapsam | Kaynak |
 |---|---|---|---|---|
-| ~~Core memory~~ | ~~Ajan kim / kullanıcı kim~~ | — | — | **KALDIRILDI (2026-07-05)** — [31](31-MEMGPT-CORE-MEMORY.md) tarihsel |
+| ~~Core memory~~ | ~~Ajan kim / kullanıcı kim~~ | — | — | **KALDIRILDI (2026-07-05)** — [arşiv](arsiv/31-MEMGPT-CORE-MEMORY.md) |
 | Session Goal | Tek kuzey-yıldızı | Tek cümle | Oturum | `db.Session.Goal` |
 | **Progress (bu doküman)** | Ne bitti / sırada ne var | Yapılı todo + log | **Oturum** | `<store>/progress/<sessionID>/` |
 

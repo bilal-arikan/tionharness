@@ -1,6 +1,9 @@
-# 11 — TionSwarm Interaction MCP (Tasarım / Plan)
+# 11 — TionSwarm Interaction MCP
 
-> **Durum:** Plan (uygulanmadı). Onay sonrası Faz 1 ile başlanacak.
+> **Durum: ✅ UYGULANDI.** Faz 0–3 tamamlandı (2026-06-16 … 2026-06-26); üzerine
+> iki-tier endpoint (2026-06-26) ve stateful streaming + `tools/list_changed` push
+> (2026-07-06) eklendi. Faz 4 (diğer CLI'lar) **düştü** — Gemini/Antigravity
+> provider'ları 2026-07-03'te kaldırıldı, tek CLI yolu claude-cli. Sonuçlar §14–20'de.
 > **Amaç:** Tüm insan-etkileşimli (human-in-the-loop) ve UI-etkileyen araçları
 > (`ask_user`, `todo_write`, artifact, ileride onay/bildirim vb.) **tek bir ortak
 > MCP sunucusu** üzerinden **kendi agentic döngüsünü çalıştıran her CLI ajanına**
@@ -400,23 +403,18 @@ aynı seti sunar. Değişmez: `gateway_dynamic_test.go TestInteractionToolsHonor
 
 ---
 
-## 10. Fazlama
+## 10. Fazlama — kapandı
 
-- **Faz 0 (Spike — KARAR: önce bu):** Minimal `/mcp/interaction` (yalnız
-  `initialize` + `tools/list` + tek dummy tool). `claude -p --mcp-config` ile
-  gerçekten `tools/list` çekilebiliyor mu **2-3 saatlik timebox** içinde doğrula.
-  Tutarsa Faz 1; tutmazsa **stdio fallback**'e geç. En pahalı belirsizliği başta öldürür.
-- **Faz 1 (MVP): ✅ TAMAMLANDI (2026-06-16, §15).** HTTP MCP server + `ask_user`
-  (bloklayan) + `todo_write`; claude-cli wiring + built-in disallow; canlı
-  claude-cli testi geçti (soru penceresi açıldı, cevap CLI'ye döndü, tur devam etti).
-- **Faz 2: ✅ TAMAMLANDI (2026-06-16, §16).** `create_artifact`/`update_artifact`
-  + `request_confirmation`; CLI izinde todo/artifact kart paritesi (namespace strip
-  + todo promotion). Canlı claude-cli testi geçti.
-- **Faz 3:** `notify` ✅ **TAMAMLANDI (2026-06-25, §17).** Kalan: workspace/oturum
-  etkileşimleri (ileride, ayrı iş).
-- **Faz 4 (CLI genişleme):** Codex / Gemini / Mistral Vibe provider + adaptör;
-  her biri aynı Interaction MCP'ye bağlanır; per-CLI built-in-disable + token taşıma
-  matristen (§7.1) uygulanır.
+| Faz | Kapsam | Durum |
+|---|---|---|
+| 0 | Spike: `claude -p --mcp-config` gerçekten `tools/list` çekiyor mu (timebox'lı; tutmazsa stdio fallback) | ✅ 2026-06-16 (§14) |
+| 1 | HTTP MCP server + `ask_user` (bloklayan) + `todo_write` + CLI wiring/disallow | ✅ 2026-06-16 (§15) |
+| 2 | `create_artifact`/`update_artifact` + `request_confirmation`; todo/artifact kart paritesi | ✅ 2026-06-16 (§16) |
+| 3 | `notify`, `focus_view`, oturum hedefi + metadata araçları | ✅ 2026-06-25/26 (§17–20) |
+| 4 | Diğer CLI'lar (Codex/Gemini/Mistral) | ❌ **düştü** — Gemini/Antigravity provider'ları 2026-07-03'te kaldırıldı |
+
+Faz sonrası eklemeler: iki-tier endpoint (2026-06-26) ve stateful streaming +
+`tools/list_changed` push (2026-07-06) — ilgili bölümlerde.
 
 ---
 
