@@ -15,6 +15,7 @@ import { bumpSignalsForEvent, bumpWorkspaceActivityForEvent } from './eventToRef
 import { publishStep, publishTurnEnd } from '@/shared/lib/stepBus'
 import { publishFlowNode } from '@/shared/lib/flowNodeBus'
 import { publishFlowNodeStep } from '@/shared/lib/flowNodeStepBus'
+import { publishWorkerChange } from '@/shared/lib/workerBus'
 import { routeFromEvent, buildRoute } from './url'
 import type { ClientPrefs } from './useAppearance'
 
@@ -187,10 +188,14 @@ function onEvent(d: AppEventDeps, e: AppEvent) {
     // the sidebar, so a running one must land its finished turn without a manual
     // reselect. (Board task runs surface as 'spawned'/'chat' sessions; there is
     // no distinct 'task' run event.)
+    // A worker event with phase='start' is the OPPOSITE of a completion: the turn
+    // is just beginning, so it must not clear the ghost bubble, reload the
+    // transcript or fan out a turn-end. It only feeds the coordination bus below.
     if (
       (e.type === 'spawned' || e.type === 'worker' || e.type === 'schedule' ||
         e.type === 'flow' || e.type === 'automation') &&
-      sid
+      sid &&
+      !(e.type === 'worker' && e.target?.phase === 'start')
     ) {
       d.chat.clearPending(sid)
       if (sid === d.activeSessionId) {
@@ -200,6 +205,12 @@ function onEvent(d: AppEventDeps, e: AppEvent) {
       // Same turn-end fan-out as the chat branch (see above): unconditional so a
       // transcript view showing this session hears it even off the chat screen.
       publishTurnEnd(sid)
+    }
+    // Coordination: every worker transition (start AND completion) tells the
+    // coordinator's running-worker banner to refetch its roster, which is what
+    // replaces polling for it.
+    if (e.type === 'worker' && e.target?.coordinatorId) {
+      publishWorkerChange(e.target.coordinatorId)
     }
   }
   // Cross-window panel refresh: every event may move rows / status /
@@ -224,6 +235,10 @@ function onEvent(d: AppEventDeps, e: AppEvent) {
   // funnel); here they only drove the badge. Other event types raise a desktop
   // notification that deep-links to the target on click.
   if (e.type === 'chat') return
+  // A worker START is UI plumbing (roster/banner refresh), not an outcome worth
+  // interrupting the user for — a fan-out of 8 workers would fire 8 toasts. Only
+  // worker completions notify.
+  if (e.type === 'worker' && e.target?.phase === 'start') return
   // Route through the single funnel: it applies the per-type mute + the master
   // gate + the backgrounded-window rule. The tag carries the event identity so
   // multiple open tabs/windows (each receiving the same SSE event) collapse into

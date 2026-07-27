@@ -209,9 +209,11 @@ Yeni bağımlılıklar: `react-markdown`, `remark-gfm`, `highlight.js`.
   varken composer'ın üstünde bekleme banner'ı (`WakeWaitBanner` deseni): "N worker
   çalışıyor — sonuçları bekleniyor · M/T bitti" + her worker için oturumunu açan çip.
   Koordinatör turu bitip ilk `<task-notification>` düşene kadar sohbetin bitmiş
-  görünmesini engeller. Veri `useRunningWorkers.ts` (`GET /api/sessions/{id}/workers`;
-  yalnız `role==='coordinator'`, poll yalnız streaming veya çalışan worker varken).
-  Detay `_Docs/47`.
+  görünmesini engeller. Her çipte **canlı geçen süre** (`WorkerInfo.startedAt` + 1sn
+  tick; start zamanı bilinmiyorsa süre gizlenir). Veri `useRunningWorkers.ts`
+  (`GET /api/sessions/{id}/workers`, yalnız `role==='coordinator'`) — **poll yok**,
+  tazeleme `worker` SSE event'i ile: `useAppEvents` → `shared/lib/workerBus.ts`
+  (coordinatorId anahtarlı pub/sub) → hook. Detay `_Docs/47`.
 
 ### Modüler yapı (büyük dosyaların bölünmesi)
 İki büyük dosya tek-sorumluluklu küçük parçalara ayrıldı; davranış birebir korundu.

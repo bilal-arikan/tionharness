@@ -59,10 +59,12 @@ func (s *coordSlot) markHadWorkers() {
 }
 
 // workerCtl lets stop_worker cancel an in-flight worker turn and mark it stopped
-// so it reports "killed" rather than "failed".
+// so it reports "killed" rather than "failed". startedAt stamps when the turn
+// began so ListWorkers can report a running worker's elapsed time.
 type workerCtl struct {
-	cancel  context.CancelFunc
-	stopped atomic.Bool
+	cancel    context.CancelFunc
+	stopped   atomic.Bool
+	startedAt time.Time
 }
 
 // sessionRole returns the Role of the session stamped on ctx ("coordinator" /
@@ -351,6 +353,12 @@ type WorkerInfo struct {
 	Title     string
 	Running   bool
 	Summary   string // first line of the worker's latest reply, when finished
+	// StartedAt is the unix-second stamp of when a RUNNING worker's current turn
+	// began, so the UI can show live elapsed time. Zero when the worker is not
+	// running, or when it is active without a workerCtl (e.g. a turn opened
+	// directly on the worker session rather than through the coordinator) — the
+	// start time is then genuinely unknown and the UI omits the duration.
+	StartedAt int64
 }
 
 // ListWorkers returns the workers spawned under a coordinator session, newest
@@ -372,7 +380,11 @@ func (r *Runtime) ListWorkers(ctx context.Context, coordSessionID string) ([]Wor
 			Title:     s.Title,
 			Running:   r.isSessionActive(s.ID),
 		}
-		if !info.Running {
+		if info.Running {
+			if v, ok := r.workerCancels.Load(s.ID); ok {
+				info.StartedAt = v.(*workerCtl).startedAt.Unix()
+			}
+		} else {
 			if msgs, err := r.db.ListMessages(ctx, s.ID); err == nil {
 				for i := len(msgs) - 1; i >= 0; i-- {
 					if msgs[i].Role == "assistant" {
@@ -404,7 +416,7 @@ func (r *Runtime) runWorker(agent db.Agent, workerSessionID, prompt, coordSessio
 	// is reclaimed fast, while a long-but-productive one runs up to SpawnTimeout.
 	ctx, cancel := withActivityTimeout(context.Background(), r.tun.SpawnTimeout(), r.tun.SpawnIdleTimeout())
 	defer cancel()
-	ctl := &workerCtl{cancel: cancel}
+	ctl := &workerCtl{cancel: cancel, startedAt: time.Now()}
 	r.workerCancels.Store(workerSessionID, ctl)
 	defer r.workerCancels.Delete(workerSessionID)
 
@@ -425,6 +437,9 @@ func (r *Runtime) runWorker(agent db.Agent, workerSessionID, prompt, coordSessio
 	// Raise the "thinking" indicator for the worker session (see emitTurnStart);
 	// the completion "worker" event clears it.
 	r.emitTurnStart(workerSessionID, "🤝 Worker turu çalışıyor")
+	// Tell the coordination UI a worker is now running (covers both the initial
+	// spawn and a send_to_worker continuation, since both land here).
+	r.emitWorkerStartEvent(agent, workerSessionID, coordSessionID)
 	output, steps, err := r.runSessionTurn(turnCtx, agent, workerSessionID, prompt, true)
 	r.untrackSession(workerSessionID)
 
@@ -830,6 +845,28 @@ func (r *Runtime) warnCoordinatorCap(coordSessionID string, turns int) {
 		Title:  "🧭 Koordinatör tur limiti",
 		Body:   fmt.Sprintf("Otomatik koordinatör turları limiti (%d) aşıldı; yeni worker bildirimleri kaydediliyor ama otomatik tur tetiklenmiyor. Devam etmek için oturuma manuel mesaj gönderin.", turns),
 		Target: map[string]string{"view": "executions", "sessionId": coordSessionID},
+	})
+}
+
+// emitWorkerStartEvent publishes a worker turn START so the coordination UI (the
+// sidebar roster and the chat's running-worker banner) learns about a new worker
+// the moment it begins, instead of polling for it.
+//
+// It carries phase="start", which the frontend MUST use to tell it apart from the
+// completion event below: the completion branch drops the session's live ghost
+// bubble, reloads the transcript and raises a desktop toast — all wrong for a turn
+// that is only just beginning.
+func (r *Runtime) emitWorkerStartEvent(agent db.Agent, workerSessionID, coordSessionID string) {
+	r.publish(events.Event{
+		Type:  events.TypeWorker,
+		Level: "info",
+		Title: "🤖 Worker başladı — " + agent.Name,
+		Target: map[string]string{
+			"view":          "executions",
+			"sessionId":     workerSessionID,
+			"coordinatorId": coordSessionID,
+			"phase":         "start",
+		},
 	})
 }
 

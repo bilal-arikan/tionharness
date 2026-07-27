@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Loader2, Network, Users, CheckCircle2, Play, ChevronDown, ChevronRight, Workflow, ArrowLeft } from 'lucide-react'
 import { api } from '@/api'
+import { subscribeWorkerChange } from '@/shared/lib/workerBus'
 import type { Skill, WorkerInfo } from '@/types'
 
 interface Props {
@@ -71,15 +72,13 @@ export function CoordinatorSection({ sessionId, role, workflow, coordinatorSessi
     loadWorkers()
   }, [loadWorkers, refreshKey])
 
-  // While any worker is running, poll lightly so cards flip to "finished" without
-  // depending on an event reaching the parent.
+  // Live worker transitions (start + completion) arrive over workerBus, fed by the
+  // single SSE feed — so cards appear and flip to "finished" immediately, with no
+  // polling and no dependency on the parent bumping refreshKey.
   useEffect(() => {
     if (!isCoordinator) return
-    const anyRunning = workers.some((w) => w.running)
-    if (!anyRunning) return
-    const t = setInterval(loadWorkers, 3000)
-    return () => clearInterval(t)
-  }, [isCoordinator, workers, loadWorkers])
+    return subscribeWorkerChange(sessionId, loadWorkers)
+  }, [isCoordinator, sessionId, loadWorkers])
 
   const toggleRole = async (next: string) => {
     setToggling(true)

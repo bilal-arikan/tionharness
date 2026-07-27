@@ -2,21 +2,23 @@
 // the chat screen, so the transcript can say "this conversation is waiting on N
 // workers" instead of looking finished (see _Docs/47).
 //
-// Polling policy — the workers endpoint is cheap but not free, so it is only hit
-// while something can actually change: the coordinator turn is streaming (a
-// spawn_worker call may land mid-turn) or at least one worker is still running.
-// An idle coordinator with no workers costs one fetch per session open.
+// Event-driven, not polled: the backend publishes a `worker` SSE event on every
+// transition (phase='start' when a worker turn begins, plus the completed/failed/
+// killed event), useAppEvents fans those onto workerBus keyed by coordinator id,
+// and this hook refetches the roster on each one. So the banner appears the moment
+// a worker spawns and clears the moment the last one reports, with zero traffic
+// while nothing is happening.
 import { useCallback, useEffect, useState } from 'react'
 import { api } from '@/api'
+import { subscribeWorkerChange } from '@/shared/lib/workerBus'
 import type { WorkerInfo } from '@/types'
-
-const POLL_MS = 3000
 
 export function useRunningWorkers(
   sessionId: string | null,
   enabled: boolean,
-  // True while the coordinator's own turn is streaming — a worker may be spawned
-  // at any tool step, so poll through it.
+  // True while the coordinator's own turn is streaming. Used only as a coarse
+  // refetch edge (turn start/end), since a worker's own transitions arrive over
+  // the bus.
   streaming: boolean,
 ): WorkerInfo[] {
   const [workers, setWorkers] = useState<WorkerInfo[]>([])
@@ -35,19 +37,18 @@ export function useRunningWorkers(
     setWorkers([])
   }, [sessionId])
 
-  // Refetch on mount/session change and on every streaming edge (turn start =
-  // workers may appear, turn end = the running set is authoritative again).
+  // Refetch on mount/session change and on every streaming edge. The streaming
+  // edge also covers the case where this window missed a worker event (e.g. it
+  // was opened after the workers had already started).
   useEffect(() => {
     load()
   }, [load, streaming])
 
-  const anyRunning = workers.some((w) => w.running)
+  // Live worker transitions for THIS coordinator.
   useEffect(() => {
     if (!enabled || !sessionId) return
-    if (!streaming && !anyRunning) return
-    const t = setInterval(load, POLL_MS)
-    return () => clearInterval(t)
-  }, [enabled, sessionId, streaming, anyRunning, load])
+    return subscribeWorkerChange(sessionId, load)
+  }, [enabled, sessionId, load])
 
   return workers
 }

@@ -348,7 +348,21 @@ keyed-lock+flag; M3 scratchpad ertelendi.
   composer'ın üstüne `WorkerWaitBanner.tsx` eklendi — çalışan worker sayısı +
   "sonuçları bekleniyor" + M/T bitti sayacı + worker oturumunu açan çipler. Veri
   `useRunningWorkers.ts` (aynı `GET .../workers`); yalnız `role==='coordinator'`
-  oturumlarda etkin, poll yalnız streaming veya çalışan worker varken (3sn).
+  oturumlarda etkin.
+  **Canlı süre + poll→SSE (2026-07-27):** iki eksik kapatıldı.
+  (a) `WorkerInfo.StartedAt` (unix sn) eklendi — `workerCtl.startedAt`'tan gelir,
+  yalnız ÇALIŞAN worker için dolu; ctl yoksa (worker oturumunda doğrudan açılmış
+  tur, ya da restart'ı atlatmış tur) 0 kalır ve UI süreyi **gizler** (uydurma süre
+  göstermez). Banner her çipte 1sn tick ile geçen süreyi yazar (`Xsn` / `Xdk Ysn`).
+  (b) Poll tamamen kaldırıldı: `runWorker` başında yeni **`emitWorkerStartEvent`**
+  `worker` event'i yayınlar (`Target.phase="start"`; spawn + `send_to_worker`
+  ikisini de kapsar), `useAppEvents` her `worker` event'ini `coordinatorId` ile
+  `shared/lib/workerBus.ts`'e fanlar, `useRunningWorkers` + `CoordinatorSection`
+  abone olup roster'ı tazeler. **`phase="start"` gate'i kritik:** `useAppEvents`'in
+  otonom-tamamlanma dalı `worker` event'inde ghost balonu siler + transkripti
+  yeniden yükler + turn-end fanlar + masaüstü toast atar — bunların hepsi yeni
+  başlayan bir tur için yanlış, ayrıca 8'li fan-out 8 toast demekti; start
+  event'i bu dalların dışında tutuldu.
   **Worker'da "Koordinatöre dön" (2026-07-24):** worker oturumundaki pasif not
   altına, `coordinatorSessionId` back-link'iyle koordinatör oturumunu açan buton
   eklendi (ArrowLeft; yalnız `onSelectSession` + back-link varsa görünür).

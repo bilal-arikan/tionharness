@@ -323,4 +323,9 @@ export interface WorkerInfo {
   title: string
   running: boolean
   summary: string
+  // Unix seconds when a RUNNING worker's current turn began, for live elapsed
+  // time. 0 when the worker is finished, or when its start time is unknown (a
+  // turn opened directly on the worker session, or one that survived a restart)
+  // — the UI then omits the duration rather than showing a bogus one.
+  startedAt: number
 }

@@ -98,6 +98,7 @@ func (s *Server) handleListWorkers(w http.ResponseWriter, r *http.Request) {
 			"title":     wk.Title,
 			"running":   wk.Running,
 			"summary":   wk.Summary,
+			"startedAt": wk.StartedAt,
 		})
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"workers": out})

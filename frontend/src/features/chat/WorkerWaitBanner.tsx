@@ -3,8 +3,22 @@
 // turn ending and the first <task-notification> landing — the conversation IS
 // waiting, and this makes that explicit. Each running worker is clickable and
 // opens its own session (workers are first-class sessions). See _Docs/47.
+import { useEffect, useState } from 'react'
 import { Users, Play } from 'lucide-react'
 import type { WorkerInfo } from '@/types'
+
+// elapsedLabel renders seconds since startedAt as a compact "Xsn" / "Xdk Ysn".
+// Returns null when the start time is unknown (startedAt 0) or in the future, so
+// the chip simply omits the duration instead of showing "0sn" forever.
+function elapsedLabel(startedAt: number, nowSec: number): string | null {
+  if (startedAt <= 0) return null
+  const secs = nowSec - startedAt
+  if (secs < 0) return null
+  if (secs < 60) return `${secs}sn`
+  const m = Math.floor(secs / 60)
+  const s = secs % 60
+  return s ? `${m}dk ${s}sn` : `${m}dk`
+}
 
 interface Props {
   // Only the running workers; the banner is not rendered when this is empty.
@@ -17,6 +31,16 @@ interface Props {
 }
 
 export function WorkerWaitBanner({ workers, doneCount, onSelectSession }: Props) {
+  // Tick once a second so each chip's elapsed time stays live without the parent
+  // re-rendering (and without any network traffic — the roster itself is
+  // event-driven).
+  const [now, setNow] = useState(() => Math.floor(Date.now() / 1000))
+  useEffect(() => {
+    if (workers.length === 0) return
+    const t = setInterval(() => setNow(Math.floor(Date.now() / 1000)), 1000)
+    return () => clearInterval(t)
+  }, [workers.length])
+
   if (workers.length === 0) return null
   const total = workers.length + doneCount
 
@@ -38,10 +62,14 @@ export function WorkerWaitBanner({ workers, doneCount, onSelectSession }: Props)
         <ul className="mt-1.5 flex flex-wrap gap-1.5">
           {workers.map((w) => {
             const label = w.agentName || w.title || w.sessionId
+            const elapsed = elapsedLabel(w.startedAt, now)
             const inner = (
               <>
                 <Play size={10} className="shrink-0 text-[var(--color-accent)]" />
                 <span className="max-w-[220px] truncate">{label}</span>
+                {elapsed && (
+                  <span className="shrink-0 tabular-nums text-[var(--color-text-dim)]">{elapsed}</span>
+                )}
               </>
             )
             return (

@@ -2,6 +2,33 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-07-27**
 
+## Worker banner'ı: canlı süre + poll→SSE ✅ (2026-07-27)
+
+Banner'ın (bir alttaki giriş) iki eksiği kapatıldı.
+
+**1) Canlı süre.** `WorkerInfo`'ya `StartedAt` (unix sn) eklendi; kaynak
+`workerCtl.startedAt` (runWorker turu başlatırken damgalar), API'de `startedAt`
+alanı. Banner her çipte 1sn tick ile `Xsn` / `Xdk Ysn` yazar. Start zamanı
+bilinmediğinde (ctl yok: worker oturumunda doğrudan açılmış tur veya restart'ı
+atlatmış tur) alan 0 kalır ve UI süreyi **gizler** — uydurma süre göstermez.
+
+**2) Poll kaldırıldı, SSE geldi.** `runWorker` başında yeni `emitWorkerStartEvent`
+bir `worker` event'i yayınlar (`Target.phase="start"`; spawn + `send_to_worker`
+ikisini de kapsar). `useAppEvents` her `worker` event'ini `coordinatorId` anahtarıyla
+yeni `shared/lib/workerBus.ts`'e fanlar; `useRunningWorkers` **ve**
+`CoordinatorSection` abone olup roster'ı tazeler — ikisindeki 3sn poll silindi.
+Boşta trafik sıfır; worker başlayınca/bitince banner anında güncellenir.
+
+**Kritik ayrıntı — `phase="start"` gate'i.** `useAppEvents`'in otonom-tamamlanma dalı
+`worker` event'ini "tur bitti" sayıyor: ghost balonu siler, transkripti yeniden yükler,
+`publishTurnEnd` fanlar ve masaüstü toast'ı atar. Bunların hepsi yeni **başlayan** bir
+tur için yanlış olurdu (üstelik 8'li fan-out 8 toast demekti), o yüzden start event'i
+hem o daldan hem toast funnel'ından hariç tutuldu; `refreshSessions`/panel sinyalleri
+akmaya devam eder (yeni worker oturumu sidebar'a düşsün).
+
+Yeni: `frontend/src/shared/lib/workerBus.ts`. `go build` + `go test ./...` (1029)
+yeşil, `tsc --noEmit` temiz, `npm run build` başarılı.
+
 ## Sohbette çalışan worker banner'ı ✅ (2026-07-27)
 
 **Belirti:** Bir koordinatör oturumu `spawn_worker` ile worker başlatıp turunu bitirdiğinde
