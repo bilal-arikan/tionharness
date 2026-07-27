@@ -185,5 +185,49 @@ geçebilir. Test: `turn_record_test.go` (boş-substitution, error shape). Backen
   "N/M tamamlandı…" olarak gösterir (`FlowNodeEvent.phase += 'progress'`). Canlı SSE doğrulandı:
   `start → 0/2 → 2/2 → done`. Backend 1029 test yeşil.
 
+### Genişletme (2026-07-27): #5 son continuation sitesi + #1 canlı-step emit seam'i
+- **#5 — `autocontinue` de paylaşımda.** Kalan tek elle-kayıt noktası (`autocontinue.go` hata + yanıt
+  dalları, `db.Message`+`encodeSteps` elle kuruyordu) `recordTurnError`/`recordAssistantReply`'a
+  geçirildi → 6. continuation sitesi tek yerden (`strings` importu düştü). **Bilinçli ayrı kalan:**
+  `recordInterruptedReply` (crash-recovery, `Interrupted:true`, steps/meta yok) ve `recordFlowSessionTurn`
+  (flow→session reify, `flowStateToSteps`) — ikisi de helper'a knob eklemeyi gerektirir, ayrı okunur.
+- **#1 — tek canlı-step emit seam'i.** `emitSessionStep`(`session_step`) ve `emitFlowNodeStepCtx`
+  (`flow_node_step`) ortak marshal+bus-envelope kuyruğunu tek `publishStep(evType, target, step)`
+  (`sessionstep.go`) üzerinden yapıyor → Level/Step alanları tek yerden, drift yok; `flow_steps.go`
+  `events` importundan kurtuldu. `busForwardable` filtresi çağırana özel kalır (session delta-flood eler;
+  flow node adımları iri-taneli — davranış birebir korunur). **Bilinçli ayrı kalan (persistence):** chat
+  adımı `Message.Steps` (session.jsonl), flow adımı per-node sidecar (State şişmesin diye) — bir flow
+  node ≠ mesaj turu olduğundan iki depolamayı tek şemaya katlamak büyük/riskli, düşük görünür kazanç →
+  yalnız bus emit yolu birleşti. Test: `internal/agent`+`internal/api` 353 yeşil.
+
+### Genişletme (2026-07-27): #4 LaunchRun pause/telemetri gate + #2 durable-wait değerlendirmesi
+- **#4 — `launchGate` (Faz3 tohumu somutlaştı).** LaunchRun'ın en başına tek dispatch-öncesi gate:
+  `launchGate(spec, driver)` → **otonom** launch'larda workspace otonomi freni (`r.Paused()`) burada
+  uygulanır, böylece duraklatılmış workspace **hiç** session/flow-run yaratmadan `ErrAutonomyPaused` ile
+  fail-fast döner (önceden yalnız `guardedComplete` per-LLM-call gate'liyordu → junk row + async hata
+  oluşuyordu). **Manuel** launch freni baypaslar. Ayrıca run başına tek launch-telemetri satırı
+  (trigger/driver/autonomous). `launchDriver(spec)` yardımcı. Per-launcher guard'lar (cooldown, iterasyon
+  cap) çağırandan önce çalışmaya devam eder. Test: `launch_test.go` `TestLaunchRun_PauseGate`
+  (paused+autonomous→refuse, manual→bypass). Backend `internal/agent`+`internal/api` 354 yeşil.
+- **#2 — durable-wait merge'i BİLİNÇLİ YAPILMADI (gerekçeli).** İki "bekle" sistemi **kasıtlı olarak
+  farklı durability modeli** taşıyor: (a) **flow `await-input`** = durable (persist `waiting` statü +
+  DB-katmanı CAS `ClaimWaitingFlowRun` + endpoint'ten resume, goroutine bloklamaz, restart-safe, timeout
+  sweeper); (b) **session interaction** (ask/permission/plan) = bellek-içi `pendingInteraction` +
+  `atomic.CompareAndSwapInt32` resolve-once, **canlı turu bloklar**, restart'ta ölür. Doc 62 flow yolunu
+  zaten bu primitifi "durable için yanlış" bulduğu için **ayrı** kurmuştu. Üçüncüsü session **send-queue**
+  = durable *mesaj kuyruğu* (teslim), süspansiyon değil. Bunları tek `DurableWait` arayüzüne katlamak ya
+  (i) flow await'i yeniden goroutine-bloklar (doc 62'nin düzelttiği regresyon), ya (ii) session
+  interaction'ı durable yapar = büyük *feature*, refactor değil. Durable substrat (flow) **zaten** tek
+  temiz implementasyon ve peer/tool/endpoint yüzeyi de tek (`deliver_flow_input` / `POST
+  /flow-runs/{id}/input` → `ResumeWaitingFlow` → `prepareResume`). → Güvenli/değerli bir kod-merge'i yok;
+  yapılmadı.
+
 ## Sonraki (daha ileri)
 - Join ilerlemesini canvas node'unun kendisinde de göstermek (şu an yalnız adım-izi satırında).
+- (İstenirse) step *persistence* katmanını birleştirmek: flow sidecar + chat `Message.Steps`'i tek "step
+  store" arayüzü ardına almak — yüksek risk (run inspector + crash-recovery + SSE routing regresyon
+  yüzeyi), yalnız net ihtiyaç doğarsa.
+- #2'nin gerçek ihtiyaç doğarsa doğru kapsamı: session interaction'ı **durable** yapmak (flow waiting
+  altyapısını devralarak) — bir *feature* olarak planlanmalı, mevcut ephemeral yolla merge değil.
+  **→ Yapıldı (2026-07-27): "Durable Ask" (MVP), native `ask_user` için kalıcı suspend/resume —
+  `_Docs/65-DURABLE-ASK.md`.**

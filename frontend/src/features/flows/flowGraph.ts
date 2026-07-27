@@ -15,12 +15,12 @@ export type FlowRFNode = RFNode<{
 }>
 export type NodeStatus = 'running' | 'done' | 'error' | 'waiting'
 
-// Layout grid spacing for auto-placed nodes.
-const COL_W = 280
-// Vertical gap between layered rows. Sized to clear a tall node (agent + prompt
-// preview + a 3-line output preview in run/session-flow views) so a vertical
-// chain doesn't overlap; short editor nodes are just more airy.
-const ROW_H = 180
+// Layout grid spacing for auto-placed nodes. Kept tight (a node is ≤220px wide)
+// so an auto-arranged graph stays compact and readable without much panning.
+const COL_W = 230
+// Vertical gap between layered rows. Just clears a node with a prompt + 3-line
+// output preview (run/session-flow views); tighter would risk overlap.
+const ROW_H = 120
 
 // edgeId builds a stable id for a routing edge. `slot` distinguishes a branch's
 // multiple outgoing edges (one per arm) so they don't collide.

@@ -394,6 +394,7 @@ export default function App() {
     settingsCat: links.settingsCat,
     workspaceTab: links.workspaceTab,
     insightTab: links.insightTab,
+    flowsTab: links.flowsTab,
     pendingRouteRef: ctl.pendingRouteRef,
     switchWorkspace,
     selectSession: ctl.selectSession,
@@ -403,6 +404,7 @@ export default function App() {
     setSettingsCat: links.setSettingsCat,
     setWorkspaceTab: links.setWorkspaceTab,
     setInsightTab: links.setInsightTab,
+    setFlowsTab: links.setFlowsTab,
   })
 
   // ---- First-run gating (must stay AFTER every hook above) ----
@@ -523,8 +525,10 @@ export default function App() {
             fallbackAgentId={ctl.activeAgentId || ctl.agents[0]?.id || ''}
             sessionId={ctl.activeSessionId}
             sessionTitle={ctl.sessions.find((s) => s.id === ctl.activeSessionId)?.title || ''}
+            sessionKind={ctl.sessions.find((s) => s.id === ctl.activeSessionId)?.kind || ''}
+            sourceId={ctl.sessions.find((s) => s.id === ctl.activeSessionId)?.sourceId}
+            sessionCreatedAt={ctl.sessions.find((s) => s.id === ctl.activeSessionId)?.createdAt}
             onBack={() => setSessionFlowOpen(false)}
-            onError={setError}
           />
         )}
         {view === 'chat' && !(sessionFlowOpen && ctl.activeSessionId) && (
@@ -594,7 +598,13 @@ export default function App() {
         )}
         {view === 'flows' && (
           <Suspense fallback={<LoadingState label="Akışlar yükleniyor…" className="flex-1" />}>
-            <FlowsPanel agents={ctl.agents} onError={setError} openFlowId={links.flowTarget} />
+            <FlowsPanel
+              agents={ctl.agents}
+              onError={setError}
+              openFlowId={links.flowTarget}
+              tab={links.flowsTab}
+              onTabChange={links.setFlowsTab}
+            />
           </Suspense>
         )}
         {view === 'artifacts' && (

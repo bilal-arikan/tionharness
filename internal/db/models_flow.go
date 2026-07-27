@@ -42,8 +42,13 @@ type Flow struct {
 // FlowRun is one execution instance of a flow. State is the restart-safe JSON
 // snapshot the engine persists after each node.
 type FlowRun struct {
-	ID        string `json:"id"`
-	FlowID    string `json:"flowId"`
+	ID     string `json:"id"`
+	FlowID string `json:"flowId"`
+	// SessionID links this run to the per-run transcript session it produced
+	// (Session.Kind "flow"), so the chat view can resolve a flow session back to
+	// the exact run — and its REAL graph/layout — instead of reifying the
+	// transcript into a synthetic linear chain. Empty on pre-link runs.
+	SessionID string `json:"sessionId,omitempty"`
 	Status    string `json:"status"`
 	Input     string `json:"input"`
 	State     string `json:"state"` // JSON

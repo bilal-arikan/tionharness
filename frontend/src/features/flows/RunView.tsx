@@ -24,6 +24,10 @@ interface Props {
   // Called right after input is delivered to a waiting run, so the parent can
   // refresh the runs list without waiting for the next poll.
   onResumed?: () => void
+  // Move the run's input out of the top detail row and into the step-trace panel
+  // as its first "Girdi" entry (chat flow view: the input reads inline with the
+  // steps instead of a separate header row). Koşular keeps the top row.
+  inputInTrace?: boolean
 }
 
 export const STATUS_LABEL: Record<string, string> = {
@@ -75,7 +79,7 @@ function nodeStatuses(run: FlowRun, st: FlowState | null): Record<string, NodeSt
 // RunView is the read-only inspector for a single flow run: a non-interactive
 // canvas annotated with per-node run status (which stage we're at), plus the
 // node-by-node trace with outputs and any error.
-export function RunView({ run, flow, agents, onRerun, rerunning, hideSummary, onResumed }: Props) {
+export function RunView({ run, flow, agents, onRerun, rerunning, hideSummary, onResumed, inputInTrace }: Props) {
   const st = useMemo(() => safeParseState(run.state), [run.state])
   // Await-input composer state (only used while the run is waiting).
   const [awaitInput, setAwaitInput] = useState('')
@@ -253,7 +257,7 @@ export function RunView({ run, flow, agents, onRerun, rerunning, hideSummary, on
       {/* Header: run summary (flow name + status + date + rerun) plus input/error
           detail rows. The summary row is hidden when the parent lifts it into the
           screen's top bar (PaneHeader); the input/error rows always show here. */}
-      {(!hideSummary || run.input || run.error) && (
+      {(!hideSummary || (run.input && !inputInTrace) || run.error) && (
         <div className="border-b border-[var(--color-border)] p-3">
           {!hideSummary && (
             <div className="flex items-center gap-2">
@@ -287,7 +291,7 @@ export function RunView({ run, flow, agents, onRerun, rerunning, hideSummary, on
               )}
             </div>
           )}
-          {run.input && (
+          {run.input && !inputInTrace && (
             <div className={`${hideSummary ? '' : 'mt-1 '}truncate text-xs text-[var(--color-text-dim)]`}>
               Girdi: {run.input}
             </div>
@@ -386,6 +390,14 @@ export function RunView({ run, flow, agents, onRerun, rerunning, hideSummary, on
         ) : traceOpen ? (
           <div className={`overflow-y-auto px-4 pb-4 ${graph ? 'max-h-[40vh]' : 'min-h-0 flex-1'}`}>
             <ol className="space-y-2">
+              {/* Run input as the first step-trace entry (chat flow view): the
+                  girdi reads inline with the steps instead of a top header row. */}
+              {inputInTrace && run.input && (
+                <li className="rounded border-l-2 border-[var(--color-accent)] bg-[var(--color-surface-2)] p-2 text-sm">
+                  <div className="mb-1 text-xs text-[var(--color-text-dim)]">Girdi</div>
+                  <div className="whitespace-pre-wrap">{run.input}</div>
+                </li>
+              )}
               {liveTrace.map((t, i) => (
                 <li key={`${t.nodeId}-${i}`} className="rounded bg-[var(--color-surface-2)] p-2 text-sm">
                   <div className="mb-1 text-xs text-[var(--color-text-dim)]">

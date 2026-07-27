@@ -551,6 +551,13 @@ func (r *Runtime) RunFlowRecorded(ctx context.Context, flowID, input string, aut
 	run, runErr := r.RunFlow(ctx, flowID, input, autonomous, obs)
 	if recorded := r.recordFlowSessionTurn(ctx, flow, run, input, runErr, sessionID, inputRecorded); recorded != "" {
 		sessionID = recorded
+		// Link the run to its transcript session so the chat "Akış olarak gör"
+		// can resolve back to this exact run's REAL graph instead of reifying.
+		if err := r.db.SetFlowRunSession(ctx, run.ID, sessionID); err != nil {
+			r.logger.Warn("link flow run to session failed", "run", run.ID, "session", sessionID, "error", err)
+		} else {
+			run.SessionID = sessionID
+		}
 		// The assistant reply just landed — nudge any window viewing this session
 		// to reload its transcript (op "message_added" triggers listMessages).
 		r.publish(events.Event{

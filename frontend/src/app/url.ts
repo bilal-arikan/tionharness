@@ -106,6 +106,7 @@ export function routeIdForView(
     settingsCat: string | null
     workspaceTab: string | null
     insightTab: string | null
+    flowsTab: string | null
   },
 ): string | null {
   switch (view) {
@@ -123,6 +124,10 @@ export function routeIdForView(
       return state.workspaceTab
     case 'insights':
       return state.insightTab
+    case 'flows':
+      // Default "flows" tab carries no URL segment (clean #/w/{ws}/flows); only
+      // the runs/templates tabs add /{tab}.
+      return state.flowsTab && state.flowsTab !== 'flows' ? state.flowsTab : null
     default:
       return null
   }

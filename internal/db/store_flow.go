@@ -153,6 +153,21 @@ func (d *DB) SetFlowRunState(ctx context.Context, id, state string) error {
 	return d.persistFlowRunLocked(r)
 }
 
+// SetFlowRunSession links a run to the transcript session it produced. Merges
+// into the existing record (state/status untouched) so it can be called after
+// the run finishes.
+func (d *DB) SetFlowRunSession(ctx context.Context, id, sessionID string) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	r, ok := d.flowRuns[id]
+	if !ok {
+		return ErrNotFound
+	}
+	r.SessionID = sessionID
+	r.UpdatedAt = now()
+	return d.persistFlowRunLocked(r)
+}
+
 // FinishFlowRun records the terminal status, final output and error.
 func (d *DB) FinishFlowRun(ctx context.Context, id, status, output, errText string) error {
 	d.mu.Lock()

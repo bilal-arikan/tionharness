@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react'
 import { useNodesState, useEdgesState, type Edge } from '@xyflow/react'
 import { api } from '@/api'
 import { useRegisterDirty } from '@/shared/lib/dirtySignals'
@@ -13,7 +13,7 @@ import {
   type FlowRFNode,
 } from './flowGraph'
 import type { EdgeStyle } from './FlowCanvas'
-import { safeParse } from './flowsPanelShared'
+import { safeParse, type FlowsTab } from './flowsPanelShared'
 import { createFlowGraphOps } from './flowGraphOps'
 import { createFlowActions } from './flowActions'
 import { FlowsListPane } from './FlowsListPane'
@@ -29,6 +29,10 @@ interface Props {
   onError: (msg: string) => void
   // Deep-link: when set, open this flow's run history (from the Activity screen).
   openFlowId?: string | null
+  // Active left-column tab, driven by the URL (#/w/{ws}/flows/{tab}); null/unknown
+  // → "flows". onTabChange writes it back so the hash reflects the current tab.
+  tab?: string | null
+  onTabChange?: (tab: string | null) => void
 }
 
 // FlowsPanel is the visual protocol builder: pick a flow, edit it on a drag-and-
@@ -37,7 +41,7 @@ interface Props {
 // state; the list column (FlowsListPane), top bar (FlowsHeader), editor body
 // (FlowEditorView) and the action factories (flowActions / flowGraphOps) render
 // and mutate it.
-export function FlowsPanel({ agents, onError, openFlowId }: Props) {
+export function FlowsPanel({ agents, onError, openFlowId, tab: tabProp, onTabChange }: Props) {
   const [flows, setFlows] = useState<Flow[]>([])
   // Selection + active tab persist across screen switches within the session
   // (reset on app reload). The selected flow's editor state is re-loaded on mount
@@ -45,8 +49,16 @@ export function FlowsPanel({ agents, onError, openFlowId }: Props) {
   const [selectedId, setSelectedId] = useSessionState<string | null>('flows.selectedId', null)
   // Absolute path of the selected flow's on-disk JSON file (for copy / reveal).
   const [flowPath, setFlowPath] = useState('')
-  // Left-column tab: own flows, read-only template gallery, or run history.
-  const [tab, setTab] = useSessionState<'flows' | 'templates' | 'runs'>('flows.tab', 'flows')
+  // Left-column tab: own flows, read-only template gallery, or run history. Driven
+  // by the URL (deep-linkable, #/w/{ws}/flows/{tab}); the parent owns the value so
+  // the hash and the tab stay in sync. Unknown/absent → "flows".
+  const tab: FlowsTab = tabProp === 'templates' || tabProp === 'runs' ? tabProp : 'flows'
+  // Matches the useState setter shape consumers expect (value OR updater), but
+  // routes the result to the URL-owning parent instead of local state.
+  const setTab = useCallback<Dispatch<SetStateAction<FlowsTab>>>(
+    (t) => onTabChange?.(typeof t === 'function' ? t(tab) : t),
+    [onTabChange, tab],
+  )
   const [templateId, setTemplateId] = useSessionState<string | null>('flows.templateId', null)
   // Run history (all flows, newest first) + the selected run for the read-only viewer.
   const [runs, setRuns] = useState<FlowRun[]>([])
@@ -449,6 +461,7 @@ export function FlowsPanel({ agents, onError, openFlowId }: Props) {
               onRerun={rerunRun}
               rerunning={rerunning}
               hideSummary
+              inputInTrace
               onResumed={() => api.listAllFlowRuns().then(setRuns).catch(() => {})}
             />
           )

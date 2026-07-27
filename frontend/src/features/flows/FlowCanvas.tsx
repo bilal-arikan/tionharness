@@ -267,6 +267,9 @@ function CanvasInner({
       // A few px of movement counts as a drag (not a click), so repositioning
       // a node never opens the editor popup and a plain click always does.
       nodeDragThreshold={4}
+      // Run inspector: dragging a node only repositions it — selection (which
+      // opens the node inspector) happens on a genuine click, not on drag start.
+      selectNodesOnDrag={!runMode}
       nodesDraggable={draggable}
       nodesConnectable={editable}
       elementsSelectable={selectable}

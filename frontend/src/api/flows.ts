@@ -176,6 +176,9 @@ export const flowApi = {
       method: 'POST',
       body: JSON.stringify({ input }),
     }).then((r) => r.run),
+  // Fetch a single flow by id (chat "Akış olarak gör" resolves a flow session
+  // back to its real graph). Rejects (404) if the flow was deleted.
+  getFlow: (id: string) => req<Flow>(`/api/flows/${encodeURIComponent(id)}`),
   listFlowRuns: (flowId: string) =>
     req<FlowRun[]>(`/api/flow-runs?flowId=${encodeURIComponent(flowId)}`),
   // All flow runs across flows (newest first) — backend returns everything when

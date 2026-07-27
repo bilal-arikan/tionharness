@@ -136,6 +136,10 @@ export interface FlowNodeEvent {
 export interface FlowRun {
   id: string
   flowId: string
+  // Per-run transcript session this run produced (Session.kind "flow"). Lets the
+  // chat "Akış olarak gör" resolve a flow session back to its exact run + real
+  // graph. Empty on runs recorded before the link existed.
+  sessionId?: string
   status: 'running' | 'success' | 'failure' | 'waiting'
   input: string
   state: string // JSON FlowState

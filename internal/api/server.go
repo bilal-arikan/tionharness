@@ -600,6 +600,7 @@ func (s *Server) registerHookRoutes(mux *http.ServeMux) {
 // registerFlowRoutes registers orchestration flows + runs (Phase 7).
 func (s *Server) registerFlowRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/flows", s.handleListFlows)
+	mux.HandleFunc("GET /api/flows/{id}", s.handleGetFlow)
 	mux.HandleFunc("POST /api/flows", s.handleCreateFlow)
 	mux.HandleFunc("PUT /api/flows/{id}", s.handleUpdateFlow)
 	mux.HandleFunc("PUT /api/flows/{id}/tags", s.handleSetFlowTags)
