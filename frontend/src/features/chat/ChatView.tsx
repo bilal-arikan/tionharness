@@ -14,6 +14,8 @@ import { PermissionPrompt } from './PermissionPrompt'
 import { PlanPrompt } from './PlanPrompt'
 import { PendingTray } from './PendingTray'
 import { WakeWaitBanner } from './WakeWaitBanner'
+import { WorkerWaitBanner } from './WorkerWaitBanner'
+import { useRunningWorkers } from './useRunningWorkers'
 import { TodoPanel } from './TodoPanel'
 import { latestTodos } from './todos'
 import { useDelayedFlag } from '@/shared/hooks/useDelayedFlag'
@@ -37,6 +39,11 @@ export interface ChatViewProps {
   // shown instead. The transcript, context preview, debug and info panels stay
   // fully available.
   readOnly: boolean
+  // The open session's coordination role ('coordinator' | 'worker' | ''). Only a
+  // coordinator gets the running-worker banner above the composer.
+  sessionRole?: string
+  // Opens another session's transcript (used to jump into a running worker).
+  onSelectSession?: (id: string) => void
   // Empty-state ("Yeni sohbete başla") wiring, used when no session is active.
   defaultAgentId: string | null
   onNewSession: () => void
@@ -66,6 +73,8 @@ export function ChatView({
   bootstrapping,
   messagesLoading,
   readOnly,
+  sessionRole,
+  onSelectSession,
   defaultAgentId,
   onNewSession,
   onSelectDefaultAgent,
@@ -103,6 +112,16 @@ export function ChatView({
   // The active session's current checklist (latest todo_write across the
   // transcript). Pinned above the composer and updated as the agent ticks items.
   const currentTodos = useMemo(() => latestTodos(messages), [messages])
+
+  // Coordinator sessions: the live worker roster, so the chat can show that it is
+  // waiting on background workers rather than looking idle. Disabled (and never
+  // polled) for ordinary and worker sessions.
+  const workers = useRunningWorkers(
+    activeSessionId,
+    sessionRole === 'coordinator',
+    chat.activeStreaming,
+  )
+  const runningWorkers = useMemo(() => workers.filter((w) => w.running), [workers])
 
   // Both flags gate a skeleton, so they go through the same delay: a local
   // backend answers in well under it, and a one-frame skeleton would only flicker.
@@ -204,6 +223,11 @@ export function ChatView({
           onRemove={chat.removePending}
           onSendNext={chat.sendQueuedNext}
           onClear={chat.clearQueue}
+        />
+        <WorkerWaitBanner
+          workers={runningWorkers}
+          doneCount={workers.length - runningWorkers.length}
+          onSelectSession={onSelectSession}
         />
         {chat.activeWakeWait && (
           <WakeWaitBanner

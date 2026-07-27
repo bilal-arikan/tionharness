@@ -538,6 +538,8 @@ export default function App() {
             bootstrapping={ctl.bootstrapping}
             messagesLoading={ctl.messagesLoading}
             readOnly={!ctl.activeSessionWritable}
+            sessionRole={ctl.sessions.find((s) => s.id === ctl.activeSessionId)?.role}
+            onSelectSession={ctl.selectSession}
             defaultAgentId={ctl.defaultAgentId}
             onNewSession={ctl.newSession}
             onSelectDefaultAgent={ctl.pickDefaultAgent}

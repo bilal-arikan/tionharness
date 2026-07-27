@@ -344,6 +344,11 @@ keyed-lock+flag; M3 scratchpad ertelendi.
   **Roster satırı tıklanabilir (2026-07-24):** her worker kendi oturumu olduğundan
   satıra tıklayınca o worker oturumu açılır (`onSelectSession` prop'u
   SessionDetailPanel'den zincirlenir; verilmezse satır düz div kalır).
+  **Sohbet içi banner (2026-07-27):** roster panel kapalıyken görünmediği için
+  composer'ın üstüne `WorkerWaitBanner.tsx` eklendi — çalışan worker sayısı +
+  "sonuçları bekleniyor" + M/T bitti sayacı + worker oturumunu açan çipler. Veri
+  `useRunningWorkers.ts` (aynı `GET .../workers`); yalnız `role==='coordinator'`
+  oturumlarda etkin, poll yalnız streaming veya çalışan worker varken (3sn).
   **Worker'da "Koordinatöre dön" (2026-07-24):** worker oturumundaki pasif not
   altına, `coordinatorSessionId` back-link'iyle koordinatör oturumunu açan buton
   eklendi (ArrowLeft; yalnız `onSelectSession` + back-link varsa görünür).

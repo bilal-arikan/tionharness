@@ -2,6 +2,24 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-07-27**
 
+## Sohbette çalışan worker banner'ı ✅ (2026-07-27)
+
+**Belirti:** Bir koordinatör oturumu `spawn_worker` ile worker başlatıp turunu bitirdiğinde
+sohbet **bitmiş gibi** görünüyordu — ilk `<task-notification>` düşene kadar hiçbir işaret yok.
+Canlı worker roster'ı yalnız sağ **SessionDetailPanel ▸ Koordinasyon** bölümünde vardı, yani
+panel kapalıysa konuşmanın worker sonucu beklediği belli olmuyordu.
+
+**Düzeltme:** composer'ın üstündeki alt-yığına `WorkerWaitBanner` eklendi (`WakeWaitBanner` ile
+aynı desen): "N worker çalışıyor — sonuçları bekleniyor · M/T bitti" + her çalışan worker için
+tıklanabilir çip (worker oturumunu açar; worker'lar birinci-sınıf oturum). Veri `useRunningWorkers`
+hook'undan — `GET /api/sessions/{id}/workers`; **yalnız** `role==='coordinator'` oturumlarda etkin,
+poll da yalnız (tur streaming || en az bir worker çalışıyor) iken 3sn'de bir; boşta oturum başına
+tek fetch. Oturum değişiminde roster anında boşaltılır (başka koordinatörün listesi yanıltmasın).
+
+Yeni: `frontend/src/features/chat/WorkerWaitBanner.tsx`, `useRunningWorkers.ts`;
+`ChatView` yeni `sessionRole`/`onSelectSession` prop'ları, `App.tsx` ikisini de besler.
+Yeni backend/API yok. `tsc --noEmit` temiz.
+
 ## Navbar kayboldu: Tailwind utilities cascade layer'dan çıkarıldı ✅ (2026-07-27)
 
 **Belirti:** Sol `NavRail` masaüstünde hiç görünmüyordu; alt `MobileNavBar` de gizliydi, yani
