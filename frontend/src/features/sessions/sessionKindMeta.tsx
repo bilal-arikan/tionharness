@@ -5,6 +5,7 @@ import {
   Clock,
   Activity,
   Sparkles,
+  Compass,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -19,6 +20,9 @@ export const KIND_META: Record<string, { label: string; icon: LucideIcon }> = {
   flow: { label: 'Akış', icon: GitBranch },
   schedule: { label: 'Zamanlama', icon: Clock },
   spawned: { label: 'Spawn', icon: Sparkles },
+  // A flow's coordinator node opens one of these per run (see internal/agent/
+  // flow_coordinator.go); its workers hang off it like any coordinator's.
+  'flow-coordinator': { label: 'Akış Koordinatörü', icon: Compass },
 }
 
 // Filter tabs (in display order). '' is "all".

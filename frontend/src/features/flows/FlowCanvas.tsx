@@ -33,6 +33,7 @@ import { StartNode } from './StartNode'
 import { EndNode } from './EndNode'
 import { SpawnNode } from './SpawnNode'
 import { JoinNode } from './JoinNode'
+import { CoordinatorNode } from './CoordinatorNode'
 
 // CanvasTools is a small in-canvas toolbar (top-right Panel). It lives inside
 // ReactFlowProvider so it can use the programmatic viewport API. "Otomatik diz"
@@ -94,6 +95,7 @@ const nodeTypes: NodeTypes = {
   end: EndNode,
   spawn: SpawnNode,
   join: JoinNode,
+  coordinator: CoordinatorNode,
 }
 
 // Parallel-node edge colors so the two outgoing roles read at a glance: the

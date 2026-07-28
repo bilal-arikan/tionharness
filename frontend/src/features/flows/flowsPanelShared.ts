@@ -22,6 +22,7 @@ export const NODE_TYPES: { value: FlowNodeType; label: string; Icon: LucideIcon 
   { value: 'subflow', label: 'Alt-Akış', Icon: NODE_ICONS.subflow },
   { value: 'spawn', label: 'Spawn (Async)', Icon: NODE_ICONS.spawn },
   { value: 'join', label: 'Join (Bariyer)', Icon: NODE_ICONS.join },
+  { value: 'coordinator', label: 'Koordinatör', Icon: NODE_ICONS.coordinator },
 ]
 
 export const EDGE_STYLES: { value: EdgeStyle; label: string }[] = [

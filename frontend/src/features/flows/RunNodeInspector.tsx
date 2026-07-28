@@ -329,6 +329,29 @@ export function RunNodeInspector({
           <BranchCard node={node} entry={entry} />
         ) : node.type === 'parallel' ? (
           <ParallelFanout node={node} traceByNode={traceByNode} onSelectNode={onSelectNode} />
+        ) : node.type === 'coordinator' ? (
+          // A coordinator node's tool/thinking steps live in its OWN coordinator
+          // session (and its workers'), not in this run's per-node sidecar — so
+          // show the delegated goal and the final report, and point at the session.
+          <>
+            {input ? (
+              <UserBubble text={input} agents={agents} />
+            ) : (
+              <div className="text-xs italic text-[var(--color-text-dim)]">
+                Girdi kaydı yok (bu düğüm henüz tamamlanmadı veya eski bir koşu).
+              </div>
+            )}
+            {running && (
+              <div className="flex items-center gap-2 text-xs text-[var(--color-accent)]">
+                <Loader2 size={13} className="animate-spin" /> Koordinatör çalışıyor — workerlar bekleniyor…
+              </div>
+            )}
+            {output && <AssistantBubble text={output} />}
+            <p className="text-[11px] text-[var(--color-text-dim)]">
+              Worker adımları koordinatörün kendi oturumunda; Oturumlar ekranından
+              (“Akış Koordinatörü”) izlenebilir.
+            </p>
+          </>
         ) : !isAgent ? (
           // Other non-agent nodes (delay/transform/loop/…): plain output card.
           <div className="rounded bg-[var(--color-surface-2)] p-3 text-sm">

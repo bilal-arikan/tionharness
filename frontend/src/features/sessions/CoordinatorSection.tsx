@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Loader2, Network, Users, CheckCircle2, Play, ChevronDown, ChevronRight, Workflow, ArrowLeft } from 'lucide-react'
 import { api } from '@/api'
+import { InfoPopover } from '@/shared/components/InfoPopover'
+import { CoordinatorWorkflowPicker, WORKFLOW_HELP } from '@/shared/components/CoordinatorWorkflowPicker'
 import { subscribeWorkerChange } from '@/shared/lib/workerBus'
-import type { Skill, WorkerInfo } from '@/types'
+import type { WorkerInfo } from '@/types'
 
 interface Props {
   sessionId: string
@@ -22,17 +24,19 @@ interface Props {
   // Navigates to a worker's own session when its roster row is clicked. Each worker
   // is a first-class session, so clicking opens its transcript.
   onSelectSession?: (id: string) => void
+  // Opens the Skills screen on a given skill slug. A coordinator workflow IS a
+  // skill (kind 'coordinator-workflow'), so this is how the picker links to the
+  // recipe's actual instructions. Optional — the link hides when absent.
+  onOpenSkill?: (slug: string) => void
 }
 
 // CoordinatorSection is the M2 coordination panel: it toggles a session into
 // coordinator mode and, once on, shows the live worker roster (running vs
 // finished, with each finished worker's one-line summary). See _Docs/47.
-export function CoordinatorSection({ sessionId, role, workflow, coordinatorSessionId, refreshKey, onError, onRoleChanged, onSelectSession }: Props) {
+export function CoordinatorSection({ sessionId, role, workflow, coordinatorSessionId, refreshKey, onError, onRoleChanged, onSelectSession, onOpenSkill }: Props) {
   const isCoordinator = role === 'coordinator'
   const isWorker = role === 'worker'
   const [toggling, setToggling] = useState(false)
-  // Available coordinator recipes (M5): skills with kind 'coordinator-workflow'.
-  const [recipes, setRecipes] = useState<Skill[]>([])
   const [savingWf, setSavingWf] = useState(false)
   const [workers, setWorkers] = useState<WorkerInfo[]>([])
   // Worker roster collapse (persisted) — the list can get long, so let it fold.
@@ -92,16 +96,6 @@ export function CoordinatorSection({ sessionId, role, workflow, coordinatorSessi
     }
   }
 
-  // Load coordinator-workflow recipes once the session is a coordinator, so the
-  // picker can offer them. Filtered client-side by kind.
-  useEffect(() => {
-    if (!isCoordinator) return
-    api
-      .listSkills()
-      .then((all) => setRecipes(all.filter((s) => s.kind === 'coordinator-workflow')))
-      .catch(() => setRecipes([]))
-  }, [isCoordinator])
-
   const selectWorkflow = async (next: string) => {
     setSavingWf(true)
     try {
@@ -113,8 +107,6 @@ export function CoordinatorSection({ sessionId, role, workflow, coordinatorSessi
       setSavingWf(false)
     }
   }
-
-  const activeRecipe = recipes.find((r) => r.slug === workflow)
 
   // A worker session shows only a passive note (its role is set at spawn time).
   if (isWorker) {
@@ -173,28 +165,24 @@ export function CoordinatorSection({ sessionId, role, workflow, coordinatorSessi
           {/* Workflow (recipe) picker (M5): a saved orchestration pattern layered on
               the coordinator prompt. */}
           <div className="rounded-lg border border-[var(--color-border)] px-2.5 py-2">
-            <label className="mb-1 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
+            {/* A plain heading, not a <label>: it labels no single control (the
+                radiogroup below carries its own aria-label) and it now contains a
+                button, which a label must not swallow clicks for. */}
+            <div className="mb-1 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
               <Workflow size={12} /> Workflow
+              {/* fixed: the session panel is `overflow-hidden` + `overflow-y-auto`
+                  and barely wider than the bubble, so an absolutely-positioned one
+                  is clipped on both axes no matter which edge it aligns to. */}
+              <InfoPopover text={WORKFLOW_HELP} label="Workflow nedir?" fixed />
               {savingWf && <Loader2 size={11} className="animate-spin" />}
-            </label>
-            <select
-              value={workflow ?? ''}
-              onChange={(e) => selectWorkflow(e.target.value)}
+            </div>
+            <CoordinatorWorkflowPicker
+              value={workflow}
+              onChange={selectWorkflow}
               disabled={savingWf}
-              className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-[11px] text-[var(--color-text)] disabled:opacity-50"
-            >
-              <option value="">Serbest (recipe yok)</option>
-              {recipes.map((r) => (
-                <option key={r.slug} value={r.slug}>
-                  {r.icon ? `${r.icon} ` : ''}{r.name}
-                </option>
-              ))}
-            </select>
-            {activeRecipe?.description && (
-              <p className="mt-1 text-[10px] leading-snug text-[var(--color-text-dim)]">
-                {activeRecipe.description}
-              </p>
-            )}
+              groupName={`coord-wf-${sessionId}`}
+              onOpenSkill={onOpenSkill}
+            />
           </div>
 
           {workers.length === 0 ? (

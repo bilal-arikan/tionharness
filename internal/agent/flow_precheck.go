@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/bilal-arikan/tionswarm/internal/orchestration"
+	"github.com/bilal-arikan/tionswarm/internal/skills"
 )
 
 // validateFlowPreconditions is the semantic (DB- and registry-backed) half of
@@ -39,7 +40,9 @@ func (r *Runtime) validateFlowPreconditions(ctx context.Context, g orchestration
 
 	for _, n := range g.Nodes {
 		switch n.Type {
-		case orchestration.NodeAgent:
+		// A coordinator node runs its agent exactly like an agent node does (through
+		// a session turn), so it needs the same "agent exists + provider builds" check.
+		case orchestration.NodeAgent, orchestration.NodeCoordinator:
 			c, done := checked[n.AgentID]
 			if !done {
 				c = agentCheck{err: r.checkFlowAgent(ctx, n.AgentID)}
@@ -47,6 +50,15 @@ func (r *Runtime) validateFlowPreconditions(ctx context.Context, g orchestration
 			}
 			if c.err != nil {
 				problems = append(problems, fmt.Errorf("node %q: %w", n.ID, c.err))
+			}
+			// A coordination recipe that was renamed/deleted since the flow was drawn
+			// would otherwise only surface once the node ran — and a silent fallback to
+			// free coordination is exactly the wrong recovery (the author picked the
+			// recipe on purpose).
+			if n.Type == orchestration.NodeCoordinator && strings.TrimSpace(n.Workflow) != "" {
+				if _, err := skills.ResolveCoordinatorWorkflow(r.skills, n.Workflow); err != nil {
+					problems = append(problems, fmt.Errorf("node %q: %w", n.ID, err))
+				}
 			}
 
 		case orchestration.NodeTransform:

@@ -1,6 +1,9 @@
 import type { Agent, BranchMatchMode, Flow, FlowNode } from '@/types'
 import { AgentPicker } from '@/shared/components/agents/AgentPicker'
 import { PromptEditor } from '@/shared/components'
+import { InfoPopover } from '@/shared/components/InfoPopover'
+import { CoordinatorWorkflowPicker, WORKFLOW_HELP } from '@/shared/components/CoordinatorWorkflowPicker'
+import { Workflow } from 'lucide-react'
 import { chromeFor } from './nodeStyles'
 import { FlowVarsButton } from './FlowVarsButton'
 
@@ -113,6 +116,81 @@ export function NodeInspector({ node, agents, isStart, allNodes, flows, onPatch,
               Taze bağlam <span className="text-[var(--color-text-dim)]">(birikmiş konuşmayı görmez — yalnız "Bağlamı biriktir" açıkken etkili)</span>
             </span>
           </label>
+        </>
+      )}
+
+      {node.type === 'coordinator' && (
+        <>
+          <div className="block">
+            <span className="mb-1 block text-xs text-[var(--color-text-dim)]">Koordinatör ajan</span>
+            <AgentPicker
+              agents={agents}
+              value={node.agentId ?? ''}
+              onChange={(id) => onPatch({ agentId: id })}
+              placeholder="— ajan seç —"
+              clearable
+            />
+          </div>
+          <div className="block">
+            <div className="mb-1 flex flex-wrap items-center gap-1 text-xs text-[var(--color-text-dim)]">
+              <span>Görev (koordinatöre verilen hedef)</span>
+              <FlowVarsButton
+                nodeRefs={nodeRefs}
+                onInsert={(t) => onPatch({ prompt: (node.prompt ?? '') + t })}
+              />
+            </div>
+            <PromptEditor
+              value={node.prompt ?? ''}
+              onChange={(v) => onPatch({ prompt: v })}
+              placeholder="{{input}}, {{last}}, {{node.<id>}}"
+              rows={8}
+              mono
+              textareaClassName="min-h-32 text-xs"
+            />
+          </div>
+          {/* The same recipe list the session info panel offers, so a pattern
+              picked there is selectable here (shared component). */}
+          <div className="block">
+            <div className="mb-1 flex flex-wrap items-center gap-1.5 text-xs text-[var(--color-text-dim)]">
+              <Workflow size={12} />
+              <span>Koordinasyon türü (workflow)</span>
+              <InfoPopover text={WORKFLOW_HELP} label="Workflow nedir?" fixed />
+            </div>
+            <CoordinatorWorkflowPicker
+              value={node.workflow}
+              onChange={(slug) => onPatch({ workflow: slug })}
+              groupName={`node-wf-${node.id}`}
+            />
+          </div>
+          <label className="block">
+            <span className="mb-1 block text-xs text-[var(--color-text-dim)]">
+              En çok koordinatör turu (0 = reçetenin kendi sınırı, yoksa workspace varsayılanı)
+            </span>
+            <input
+              type="number"
+              min={0}
+              value={node.maxTurns ?? 0}
+              onChange={(e) => onPatch({ maxTurns: Math.max(0, Math.round(Number(e.target.value) || 0)) })}
+              className={input}
+            />
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-xs text-[var(--color-text-dim)]">
+              Zaman aşımı (saniye, 0 = 30 dk varsayılan)
+            </span>
+            <input
+              type="number"
+              min={0}
+              value={node.timeoutSec ?? 0}
+              onChange={(e) => onPatch({ timeoutSec: Math.max(0, Math.round(Number(e.target.value) || 0)) })}
+              className={input}
+            />
+          </label>
+          <p className="text-[11px] text-[var(--color-text-dim)]">
+            Ajan kendi koordinatör oturumunda çalışır ve <b>kaç worker açacağına anlık karar verir</b>.
+            Düğüm, tüm workerlar bitip koordinatör susana kadar bloklar; son yanıtı çıktı olur. Zaman
+            aşımında çalışan workerlar durdurulur ve akış hata verir.
+          </p>
         </>
       )}
 

@@ -1,7 +1,7 @@
 // Shared visual styling for flow canvas nodes: per-type accent + run status.
 import { createContext, useContext } from 'react'
 import { useStore } from '@xyflow/react'
-import { Bot, Split, Zap, Timer, Puzzle, Repeat, MessageCircleQuestion, Workflow, Play, Square, Circle, Rocket, GitMerge, type LucideIcon } from 'lucide-react'
+import { Bot, Split, Zap, Timer, Puzzle, Repeat, MessageCircleQuestion, Workflow, Play, Square, Circle, Rocket, GitMerge, Compass, type LucideIcon } from 'lucide-react'
 import type { Agent, FlowNodeType } from '@/types'
 import type { NodeStatus } from './flowGraph'
 
@@ -57,6 +57,7 @@ export const NODE_ICONS: Record<FlowNodeType, LucideIcon> = {
   end: Square,
   spawn: Rocket,
   join: GitMerge,
+  coordinator: Compass,
 }
 
 const CHROME: Record<string, NodeChrome> = {
@@ -72,6 +73,7 @@ const CHROME: Record<string, NodeChrome> = {
   end: { accent: '#3b82f6', label: 'Bitiş', Icon: NODE_ICONS.end },
   spawn: { accent: '#c026d3', label: 'Spawn (Async)', Icon: NODE_ICONS.spawn },
   join: { accent: '#0d9488', label: 'Join (Bariyer)', Icon: NODE_ICONS.join },
+  coordinator: { accent: '#ea580c', label: 'Koordinatör', Icon: NODE_ICONS.coordinator },
 }
 
 export function chromeFor(type: string): NodeChrome {

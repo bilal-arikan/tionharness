@@ -739,15 +739,22 @@ func firstFlowAgentID(flow db.Flow) string {
 	if err != nil {
 		return ""
 	}
-	if n, ok := g.NodeByID(g.Start); ok && n.Type == orchestration.NodeAgent && n.AgentID != "" {
+	if n, ok := g.NodeByID(g.Start); ok && nodeRunsAgent(n) {
 		return n.AgentID
 	}
 	for _, n := range g.Nodes {
-		if n.Type == orchestration.NodeAgent && n.AgentID != "" {
+		if nodeRunsAgent(n) {
 			return n.AgentID
 		}
 	}
 	return ""
+}
+
+// nodeRunsAgent reports whether a node executes an assigned agent, so the flow
+// session's owner/reply attribution covers coordinator nodes as well as plain
+// agent ones.
+func nodeRunsAgent(n orchestration.Node) bool {
+	return (n.Type == orchestration.NodeAgent || n.Type == orchestration.NodeCoordinator) && n.AgentID != ""
 }
 
 // finalFlowAgentID returns the agent of the last agent node that executed in the
@@ -762,7 +769,7 @@ func finalFlowAgentID(flow db.Flow, run db.FlowRun) string {
 		return ""
 	}
 	for i := len(st.Trace) - 1; i >= 0; i-- {
-		if n, ok := g.NodeByID(st.Trace[i].NodeID); ok && n.Type == orchestration.NodeAgent {
+		if n, ok := g.NodeByID(st.Trace[i].NodeID); ok && nodeRunsAgent(n) {
 			return n.AgentID
 		}
 	}

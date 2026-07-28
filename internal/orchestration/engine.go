@@ -66,6 +66,30 @@ type AsyncFlowRunner interface {
 	JoinChildFlows(ctx context.Context, runIDs []string, timeoutSec int, partial bool, onProgress func(done, total int)) (outputs []string, err error)
 }
 
+// CoordinatorSpec is one coordinator node's resolved configuration, handed to a
+// CoordinatorRunner. A struct rather than positional arguments: the node already
+// carries five knobs and more would make call sites unreadable.
+type CoordinatorSpec struct {
+	AgentID string // the agent to run as coordinator
+	Prompt  string // the delegated goal, already rendered
+	// Workflow is the coordinator recipe (skill, kind "coordinator-workflow") to
+	// layer on the coordinator prompt. "" = free (recipe-less) coordination.
+	Workflow string
+	// MaxTurns caps the coordinator's auto-turn budget (0 = the recipe's own cap,
+	// else the runner default). TimeoutSec bounds the settle wait (0 = default).
+	MaxTurns   int
+	TimeoutSec int
+}
+
+// CoordinatorRunner is an OPTIONAL extension powering the coordinator node: it
+// runs spec.AgentID as a COORDINATOR session seeded with spec.Prompt, blocks
+// until that coordinator has settled (every worker finished and no further
+// coordinator turn pending), and returns its final reply. Runners that do not
+// implement it make a coordinator node fail with a clear "not wired" error.
+type CoordinatorRunner interface {
+	RunCoordinatorNode(ctx context.Context, spec CoordinatorSpec) (string, error)
+}
+
 // ThreadAgentRunner is an OPTIONAL extension for accumulate-mode graphs: the
 // runner receives the prior conversation thread plus the new user prompt, so the
 // agent's stable system + growing message prefix is reused by the provider's
@@ -250,6 +274,30 @@ func (e *Engine) runAgentNodeSafe(ctx context.Context, node Node, prompt string,
 	return e.runner.RunAgentNode(ctx, node.AgentID, prompt)
 }
 
+// runCoordinatorNodeSafe runs one coordinator node and converts a panic into an
+// error, mirroring runAgentNodeSafe: a coordinator drives detached worker
+// goroutines, so a panic in its settle path must not take down the process.
+func (e *Engine) runCoordinatorNodeSafe(ctx context.Context, node Node, prompt string) (out string, err error) {
+	defer func() {
+		if p := recover(); p != nil {
+			err = fmt.Errorf("coordinator node %q panicked: %v", node.ID, p)
+		}
+	}()
+	cr, ok := e.runner.(CoordinatorRunner)
+	if !ok {
+		return "", fmt.Errorf("runner does not support coordinator nodes")
+	}
+	// Tag the context so the runner can attribute its per-node side outputs.
+	ctx = WithNodeID(ctx, node.ID)
+	return cr.RunCoordinatorNode(ctx, CoordinatorSpec{
+		AgentID:    node.AgentID,
+		Prompt:     prompt,
+		Workflow:   node.Workflow,
+		MaxTurns:   node.MaxTurns,
+		TimeoutSec: node.TimeoutSec,
+	})
+}
+
 // Run advances the graph from st.Current until it finishes (Current == ""),
 // hits the step cap, or an agent errors. It persists after each node via save.
 // The returned State is terminal; the final output is State.Last.
@@ -292,6 +340,29 @@ func (e *Engine) Run(ctx context.Context, g Graph, input string, st State, save 
 				// inspector can show State.Thread[:ThreadLen] as this node's context.
 				st.Trace[len(st.Trace)-1].ThreadLen = threadLenBefore
 			}
+			e.notify("done", node, st.Steps, out)
+			st.Current = node.Next
+
+		case NodeCoordinator:
+			e.notify("start", node, st.Steps, "")
+			prompt := render(node.Prompt, input, st)
+			out, err := e.runCoordinatorNodeSafe(ctx, node, prompt)
+			if err != nil {
+				e.notifyError(node, st.Steps, err)
+				return st, fmt.Errorf("node %q (coordinator): %w", node.ID, err)
+			}
+			if g.Accumulate {
+				// The coordinator ran in its OWN session, so it never saw (or grew)
+				// this thread. Fold its result in as one synthetic user/assistant pair
+				// — exactly like a parallel fan-out — so the thread stays linear,
+				// alternating and assistant-terminated for the next agent node.
+				st.Thread = append(st.Thread,
+					Msg{Role: "user", Text: coordinatorFoldMarker(node)},
+					Msg{Role: "assistant", Text: out})
+			}
+			st.Outputs[node.ID] = out
+			st.Last = out
+			st.appendTraceIn(node, out, prompt)
 			e.notify("done", node, st.Steps, out)
 			st.Current = node.Next
 
@@ -385,6 +456,9 @@ func (e *Engine) Run(ctx context.Context, g Graph, input string, st State, save 
 			st.Current = "" // terminal
 
 		case NodeSubflow:
+			// Tag the node id so the runner can attribute the child run it creates to
+			// THIS node (several subflow nodes may target the same flow).
+			nodeCtx := WithNodeID(ctx, node.ID)
 			// advance records the child output and continues past the subflow node.
 			advance := func(out string) {
 				st.WaitingAt = ""
@@ -417,7 +491,7 @@ func (e *Engine) Run(ctx context.Context, g Graph, input string, st State, save 
 					e.notifyError(node, st.Steps, err)
 					return st, err
 				}
-				out, waiting, err := sr.ResumeChildFlow(ctx, st.SubflowRun, st.Last)
+				out, waiting, err := sr.ResumeChildFlow(nodeCtx, st.SubflowRun, st.Last)
 				if err != nil {
 					e.notifyError(node, st.Steps, err)
 					return st, fmt.Errorf("node %q (subflow): %w", node.ID, err)
@@ -438,7 +512,7 @@ func (e *Engine) Run(ctx context.Context, g Graph, input string, st State, save 
 			// Prefer the suspendable runner so a child await-input propagates up; fall
 			// back to the plain runner (fail-on-suspend) when unavailable.
 			if sr, ok := e.runner.(SuspendableChildFlowRunner); ok {
-				out, childRunID, waiting, err := sr.RunChildFlowResumable(ctx, node.FlowRef, childInput)
+				out, childRunID, waiting, err := sr.RunChildFlowResumable(nodeCtx, node.FlowRef, childInput)
 				if err != nil {
 					e.notifyError(node, st.Steps, err)
 					return st, fmt.Errorf("node %q (subflow): %w", node.ID, err)
@@ -455,7 +529,7 @@ func (e *Engine) Run(ctx context.Context, g Graph, input string, st State, save 
 				e.notifyError(node, st.Steps, err)
 				return st, err
 			}
-			out, err := cr.RunChildFlow(ctx, node.FlowRef, childInput)
+			out, err := cr.RunChildFlow(nodeCtx, node.FlowRef, childInput)
 			if err != nil {
 				e.notifyError(node, st.Steps, err)
 				return st, fmt.Errorf("node %q (subflow): %w", node.ID, err)
@@ -475,7 +549,7 @@ func (e *Engine) Run(ctx context.Context, g Graph, input string, st State, save 
 				tmpl = "{{last}}"
 			}
 			childInput := render(tmpl, input, st)
-			runIDs, err := ar.SpawnChildFlows(ctx, node.SpawnFlows, childInput)
+			runIDs, err := ar.SpawnChildFlows(WithNodeID(ctx, node.ID), node.SpawnFlows, childInput)
 			if err != nil {
 				e.notifyError(node, st.Steps, err)
 				return st, fmt.Errorf("node %q (spawn): %w", node.ID, err)
@@ -694,6 +768,17 @@ func parallelFoldMarker(node Node) string {
 		title = node.ID
 	}
 	return fmt.Sprintf("⚡ parallel step %q → results", title)
+}
+
+// coordinatorFoldMarker builds the synthetic user turn that precedes a folded
+// coordinator result in an accumulate-mode thread, naming the delegation so the
+// conversation reads coherently.
+func coordinatorFoldMarker(node Node) string {
+	title := node.Title
+	if title == "" {
+		title = node.ID
+	}
+	return fmt.Sprintf("🧭 coordinator step %q → result", title)
 }
 
 // appendTrace records a node execution (no input; non-agent nodes).

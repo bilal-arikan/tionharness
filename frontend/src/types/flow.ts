@@ -13,6 +13,7 @@ export type FlowNodeType =
   | 'end'
   | 'spawn'
   | 'join'
+  | 'coordinator'
 
 export type BranchMatchMode = 'contains' | 'equals' | 'regex'
 
@@ -42,8 +43,16 @@ export interface FlowNode {
   maxIters?: number // hard iteration cap (0 = rely on until)
   until?: string // exit when {{last}} matches
   untilMode?: BranchMatchMode // how until matches (default: contains)
-  // await-input node
-  timeoutSec?: number // 0/absent = wait forever; else fail the run after N seconds
+  // await-input node: 0/absent = wait forever; else fail the run after N seconds.
+  // coordinator node: how long to wait for the coordinator to settle (0 = default).
+  timeoutSec?: number
+  // coordinator node — cap on the coordinator's auto-turn (notify-loop) budget
+  // for this node only (0/absent = the recipe's own cap, else the workspace default).
+  maxTurns?: number
+  // coordinator node — saved coordination recipe slug (a skill with kind
+  // 'coordinator-workflow'; the same list the session info panel offers).
+  // ''/absent = free coordination.
+  workflow?: string
   // subflow node
   flowRef?: string // id of the child flow to run
   // spawn node — launch these flows as async child runs (non-blocking)

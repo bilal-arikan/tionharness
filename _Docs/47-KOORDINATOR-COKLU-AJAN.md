@@ -635,6 +635,24 @@ korunur; yeni entity yok.
   dropdown'u — `kind==='coordinator-workflow'` skill'lerini listeler, seçince
   `PUT /api/sessions/{id}/workflow`; seçili recipe açıklaması altında gösterilir.
   "Serbest (recipe yok)" ile temizlenir. `npx tsc --noEmit` temiz.
+- **Picker `<select>` → radio listesi (2026-07-28):** `<option>` başına buton
+  taşıyamadığı için dropdown, **satır başına kontrol** taşıyan bir radio listesine
+  çevrildi (`role="radiogroup"` + native `<input type="radio">` → ok tuşu/ekran
+  okuyucu davranışı korunur). Her recipe satırında:
+  - **(ⓘ)** `InfoPopover` — `recipeHelp(r)` frontmatter'dan not üretir: açıklama,
+    `pattern` (insan-okur etiket, `PATTERN_LABEL`), `workerTargets`, `stopCondition`,
+    `maxTurns`, slug. Alanların hepsi opsiyonel; yalnız var olanlar satır olur.
+  - **(📖)** `onOpenSkill(slug)` — o recipe'nin skill dosyasını Skills ekranında açar
+    (artık yalnız seçili olan için değil, **her** recipe için).
+  Etiket yanındaki (ⓘ) genel "workflow nedir" notu olarak kalır. Buton grubu
+  `<label>`'ın DIŞINDA — aksi halde tıklama seçim yapardı.
+  Balonlar **`fixed` modda**: oturum paneli `overflow-hidden` + `overflow-y-auto` ve
+  balondan ancak birkaç piksel geniş, dolayısıyla `absolute` balon hangi kenara
+  hizalanırsa hizalansın kırpılıyordu (flow paletindeki durumun aynısı).
+  Bir recipe seçiliyken altında **"Skill'i aç"** butonu: `onOpenSkill(slug)` →
+  `App.openSkill` seçimi `setSessionState('skills.activeSlug', slug)` ile tohumlar
+  ve Skills ekranına geçer (SkillsPanel view geçişinde mount olup bu değeri
+  initializer'ında okur → URL şeması değişmedi).
 
 ### F5 Flow şablonları ✅ (2026-07-15)
 Deterministik 3 desen `frontend/src/features/flows/flowTemplates.ts` galerisine
@@ -643,3 +661,39 @@ eklendi (mevcut `branch`+`parallel` düğümleri, **sıfır motor değişikliği
 - **Üret & Süz** (`generate-filter`) — 3 paralel üretici → join → süzme ajanı.
 - **Turnuva** (`tournament`) — 4 aday paralel → 2 yarı-final yargıcı (parallel→parallel)
   → final yargıcı. `Validate` geçer (joinNext yalnız varlık kontrolü).
+
+## Akış içinden koordinatör: `coordinator` node tipi (2026-07-28)
+
+Koordinatör/worker mekanizması artık yalnız kullanıcı sohbetinden değil, bir
+**akış düğümünden** de tetiklenebilir. `coordinator` node'u seçilen ajanı kendi
+`Kind="flow-coordinator"` + `Role="coordinator"` oturumunda çalıştırır; ajan kaç
+worker açacağına anlık karar verir, düğüm hepsi bitene kadar bloklar ve
+koordinatörün son yanıtını akışın `{{last}}`'ine koyar.
+
+Bu, `parallel`/`spawn` ile kapatılamayan boşluğu doldurur: onların fan-out
+genişliği tasarım anında sabittir, koordinatörünki değildir.
+
+**Koordinasyon türü (recipe) düğümden seçilir.** Node'un `workflow` alanı, Oturum
+Bilgisi panelindeki listenin aynısını sunar; seçilen slug oturumun
+`CoordinatorWorkflow`'una yazılır, böylece reçete gövdesi prompt'a normal yoldan
+(`coordinatorRecipeBlock`) enjekte olur. Reçetenin `max_turns`'ü, düğüm kendi
+`maxTurns`'ünü vermediyse uygulanır. Doğrulama tek geçitten geçer:
+`skills.ResolveCoordinatorWorkflow` (leaf pakete taşındı; `api.ResolveCoordinatorRecipe`
+artık onun alias'ı) — bilinmeyen/yanlış türdeki slug hem `validateFlowPreconditions`'ta
+hem düğüm çalışırken hata verdirir, **asla sessizce serbest koordinasyona düşmez**.
+UI tarafında seçici tek paylaşılan bileşendir: `shared/components/CoordinatorWorkflowPicker`
+(`CoordinatorSection` de ona taşındı) → iki liste ayrışamaz.
+
+Bu dokümandaki tüm mekanikler (notify-loop, coalesce, idle reconcile, canlı
+worker-state bloğu, `CoordinatorMaxTurns`) aynen geçerlidir — düğüm yalnız
+oturumu açar, prompt'u yazar ve yerleşmeyi bekler. İki koordinatör-özel fark:
+
+- **Crash kurtarma dışlaması.** `RecoverOrphanedTurns`, `flow-coordinator`
+  oturumlarını yeniden kuyruğa almaz ve bunlara bağlı yetim worker'lar için
+  `NotifyCoordinator` çağırmaz — çünkü `ResumeRunningFlows` düğümü zaten yeni bir
+  koordinatör oturumuyla baştan çalıştırır; ikisi birlikte işi iki kez yapardı.
+- **Yerleşme (settle) beklemesi.** `waitCoordinatorIdle` slot'u yoklar
+  (`!running && !pending && workers==0`). Yarış yok: `runWorker`,
+  worker sayacını azaltan `defer`'inden önce `NotifyCoordinator`'ı çağırır.
+
+Sözleşme + alanlar + UI: `_Docs/15-FLOW-CANVAS.md` → "`coordinator` node tipi".

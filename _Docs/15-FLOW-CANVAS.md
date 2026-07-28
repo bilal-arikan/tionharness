@@ -732,3 +732,92 @@ anlayabiliyordu. Artık her palet satırı **buton + (ⓘ)** ikilisi:
 - Palet satırı `flex items-center gap-1`; buton `min-w-0 flex-1` + etiket `truncate`
   (dar `w-32` mobil palette taşma yok). Sürükle-bırak (`FLOW_NODE_DND_MIME`) ve tıkla-ekle
   davranışı aynen korunur — (ⓘ) butonu draggable değildir, tıklaması node eklemez.
+
+## `coordinator` node tipi — dinamik worker fan-out (2026-07-28)
+
+### Neden
+
+`parallel` ve `spawn`/`join` fan-out **genişliği tasarım anında sabittir**: akışı
+çizerken kaç kol olacağını bilmek gerekir. "Bulunan her bulgu için bir worker",
+"bu klasördeki her modül için bir inceleme" gibi **sayısı çalışma anında belli
+olan** işlerin karşılığı yoktu. Koordinatör/worker mekanizması (`_Docs/47`) tam
+bunu çözüyordu ama yalnız kullanıcı sohbetinde erişilebiliyordu.
+
+`coordinator` node'u iki mekanizmayı birleştirir: graf **deterministik motorda**
+kalır, tek bir düğüm alt-hedefi canlı bir koordinatör oturumuna devreder.
+
+### Sözleşme
+
+Motor açısından düğüm **atomiktir**: koordinatör "susana" kadar bloklar, sonra tek
+çıktı üretir. Yarıda kalan bir koşu resume'da düğümü **baştan** (yeni koordinatör
+oturumuyla) çalıştırır — restart-safe state modeli bozulmaz.
+
+| Alan | Anlamı |
+|------|--------|
+| `agentId` | Koordinatör olarak koşacak ajan (zorunlu; precheck agent node'la aynı) |
+| `prompt` | Devredilen hedef; `{{input}}`/`{{last}}`/`{{node.<id>}}` render edilir |
+| `workflow` | **Koordinasyon türü** — kayıtlı reçete slug'ı (`kind: coordinator-workflow` skill'i). "" = serbest |
+| `maxTurns` | Bu düğüme özel koordinatör auto-tur (notify-loop) tavanı (0 = reçetenin kendi `max_turns`'ü, o da yoksa workspace varsayılanı) |
+| `timeoutSec` | Yerleşme (settle) süresi tavanı, 0 = 30 dk varsayılan |
+| `next` | Sonraki düğüm |
+
+Çıktı = koordinatörün **son assistant mesajı**. Yanıt boşsa düğüm hata verir
+(sessizce boş `{{last}}` taşımaz).
+
+### Yürütme (`internal/agent/flow_coordinator.go`)
+
+0. `workflow` doluysa `skills.ResolveCoordinatorWorkflow` ile **doğrulanır** — bilinmeyen
+   slug / coordinator-workflow olmayan skill / geçersiz pattern düğümü hata verdirir
+   (sessizce serbest koordinasyona düşmez; yazar reçeteyi bilerek seçmiştir). Aynı geçit
+   `validateFlowPreconditions`'ta da koşar → koşu başlamadan yakalanır.
+1. `Kind="flow-coordinator"` + `Role="coordinator"` bir oturum açılır
+   (`SourceID` = flow run id → Aktivite akışı koşuya geri çözer). Seçilen slug
+   `Session.CoordinatorWorkflow`'a yazılır — reçetenin gövdesini prompt'a enjekte eden
+   `coordinatorRecipeBlock` zaten oturumdan okuduğu için ek kablolama gerekmez.
+2. Prompt user turu olarak yazılır, `enqueueCoordinatorTurn` çağrılır. Bu çağrı
+   slot'u **senkron** olarak `running=true` yapar → aşağıdaki bekleme asla erken
+   "boşta" göremez.
+3. Ajan `spawn_worker`/`send_to_worker` ile workerlarını kendisi açar; normal
+   `<task-notification>` döngüsü işler (koordinatör prompt'u + canlı worker-state
+   bloğu `Role`'den gelir, ek kablolama yok).
+4. `waitCoordinatorIdle` 500 ms'de bir yerleşme kontrolü yapar:
+   `!running && !pending && workers==0`.
+5. Zaman aşımında çalışan workerlar `StopWorker` ile durdurulur ve düğüm hata verir
+   (arkada yetim worker turu kalmaz).
+
+**Yarış yok:** `runWorker`, worker sayacını azaltan `defer`'inden **önce**
+`NotifyCoordinator`'ı çağırır; yani son worker sayımdan düşerken koordinatör turu
+zaten claim edilmiş olur.
+
+**Accumulate modu:** koordinatör kendi oturumunda koştuğu için akış thread'ini ne
+görür ne büyütür. Sonuç, `parallel` fold'u gibi **tek sentetik user/assistant
+çifti** olarak thread'e katlanır → thread sıralı, alternatif ve assistant-sonlu kalır.
+
+**Crash kurtarma:** `RecoverOrphanedTurns` `flow-coordinator` oturumlarını
+**atlar** (koordinatör branch'i) ve bunlara bağlı yetim worker'lar için
+`NotifyCoordinator` yapmaz — aksi halde `ResumeRunningFlows`'un düğümü yeniden
+çalıştırmasıyla yarışır ve iş iki kez yapılırdı. Worker yine "interrupted" yanıtla
+kapatılır.
+
+### UI
+
+`CoordinatorNode.tsx` (pusula ikonu, turuncu aksan `#ea580c`), palet + (ⓘ) yardımı,
+`NodeInspector`'da ajan/görev/**workflow**/maxTurns/timeoutSec formu. Workflow seçici
+**Oturum Bilgisi panelindekiyle aynı bileşendir** (`shared/components/CoordinatorWorkflowPicker`,
+per-reçete (ⓘ) + 📖 skill linki) — `CoordinatorSection` de bu ortak bileşene taşındı, böylece
+iki liste tek kaynaktan gelir ve ayrışamaz. Koşu görüntüleyicide düğüme
+tıklayınca devredilen hedef + son rapor gösterilir; worker adımları koordinatörün
+kendi oturumunda (Oturumlar ▸ "Akış Koordinatörü" kind'ı).
+
+### Doğrulama
+
+`internal/orchestration/coordinator_test.go` (render/knob geçişi, trace, accumulate
+fold, kablosuz runner, panic, hata propagasyonu, validate) +
+`internal/agent/flow_coordinator_test.go` (uçtan uca oturum/kind/maxTurns, boş yanıt,
+eksik ajan, settle timeout, yerleşme koşulu, crash-kurtarma atlaması, **workflow
+kalıcılığı + reçete `max_turns` fallback'i + düğüm tavanının reçeteyi ezmesi + bilinmeyen
+reçetenin oturum açmadan reddi**).
+
+Not: reçete doğrulama mantığı `internal/api`'den leaf `internal/skills` paketine taşındı
+(`ResolveCoordinatorWorkflow`) — `internal/agent` `internal/api`'yi import edemez (döngü).
+`api.ResolveCoordinatorRecipe` artık ince bir alias.

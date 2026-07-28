@@ -10,7 +10,10 @@
 // sits in the context window until it is actually needed.
 package skills
 
-import "strings"
+import (
+	"fmt"
+	"strings"
+)
 
 // Visibility tiers describe how much of a skill rides in the per-turn "# Available
 // Skills" catalog block — the skill analogue of a tool's visibility tiers (see
@@ -62,6 +65,35 @@ func KnownPattern(p string) bool {
 // IsCoordinatorWorkflow reports whether this skill is a saved coordinator recipe.
 func (s Skill) IsCoordinatorWorkflow() bool {
 	return strings.EqualFold(strings.TrimSpace(s.Kind), KindCoordinatorWorkflow)
+}
+
+// ResolveCoordinatorWorkflow validates a coordinator recipe slug and returns the
+// max-turns override it carries (0 = keep the caller's default). An empty slug
+// clears the selection. A non-empty slug that does not resolve to a
+// coordinator-workflow skill, or carries an unknown pattern, is a hard error — a
+// bad selection is surfaced, never silently ignored.
+//
+// Lives here (a leaf package) rather than beside the HTTP handler so both entry
+// points can share it: the session-role API and a flow's coordinator node.
+func ResolveCoordinatorWorkflow(store *Store, slug string) (maxTurns int, err error) {
+	slug = strings.TrimSpace(slug)
+	if slug == "" {
+		return 0, nil
+	}
+	if store == nil {
+		return 0, fmt.Errorf("skills store unavailable")
+	}
+	sk, ok := store.Get(slug)
+	if !ok {
+		return 0, fmt.Errorf("workflow %q not found", slug)
+	}
+	if !sk.IsCoordinatorWorkflow() {
+		return 0, fmt.Errorf("skill %q is not a coordinator-workflow", slug)
+	}
+	if sk.Pattern != "" && !KnownPattern(sk.Pattern) {
+		return 0, fmt.Errorf("workflow %q has unknown pattern %q (want one of %v)", slug, sk.Pattern, PatternValues)
+	}
+	return sk.MaxTurns, nil
 }
 
 // Source identifies which tier a skill was resolved from. The workspace tier

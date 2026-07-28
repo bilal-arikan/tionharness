@@ -502,7 +502,11 @@ func (r *Runtime) RecoverOrphanedTurns(ctx context.Context) {
 			continue // do not resurrect work the user has archived
 		}
 		isWorker := sess.CoordinatorSessionID != "" || sess.Role == "worker"
-		isCoordinator := sess.Role == "coordinator"
+		// A flow's coordinator node owns its coordinator session (kind
+		// "flow-coordinator"). Re-enqueueing a turn on it would race the flow
+		// runner, which resumes the owning run and re-executes the node against a
+		// FRESH coordinator session — so the orphan is left alone here.
+		isCoordinator := sess.Role == "coordinator" && sess.Kind != SessionKindFlowCoordinator
 		isSpawn := sess.Kind == "spawned" || sess.Kind == "worker"
 		if !isWorker && !isCoordinator && !isSpawn {
 			continue // ordinary interactive/inbox session — not an autonomous turn
@@ -522,9 +526,14 @@ func (r *Runtime) RecoverOrphanedTurns(ctx context.Context) {
 		case isWorker:
 			r.recordInterruptedReply(ctx, sess, "⏹️ Worker turu süreç yeniden başlarken yarıda kaldı (kurtarıldı).")
 			// Tell the coordinator so it stops waiting and can re-dispatch or conclude.
-			note := formatTaskNotification(sess.ID, r.agentName(sess.AgentID), "killed",
-				"Worker turu süreç yeniden başlatılırken (crash/restart) yarıda kaldı; sonuç üretilemedi. Gerekirse yeniden görevlendir.", 0, 0)
-			r.NotifyCoordinator(sess.CoordinatorSessionID, note)
+			// Skipped when the coordinator belongs to a flow's coordinator node: that
+			// session is abandoned on restart (the node re-runs with a fresh one), so a
+			// notification would only wake a zombie turn nobody is waiting on.
+			if !r.isFlowCoordinatorSession(ctx, sess.CoordinatorSessionID) {
+				note := formatTaskNotification(sess.ID, r.agentName(sess.AgentID), "killed",
+					"Worker turu süreç yeniden başlatılırken (crash/restart) yarıda kaldı; sonuç üretilemedi. Gerekirse yeniden görevlendir.", 0, 0)
+				r.NotifyCoordinator(sess.CoordinatorSessionID, note)
+			}
 			r.logger.Info("recover: orphaned worker reclaimed", "session", sess.ID, "coordinator", sess.CoordinatorSessionID)
 		case isCoordinator:
 			// Coordinator itself died mid-turn: re-run once so it resumes from history.

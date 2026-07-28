@@ -29,4 +29,6 @@ export const NODE_TYPE_HELP: Record<FlowNodeType, string> = {
     'Seçilen akışları asenkron alt-koşu olarak başlatır ve BEKLEMEDEN devam eder. Sonuçlarını toplamak için ileride bir Join düğümü konur.',
   join:
     'Bariyer düğümü: bir Spawn düğümünün başlattığı alt-koşuların bitmesini bekler, çıktılarını toplar ve tek sonuç olarak devam eder.',
+  coordinator:
+    'Seçilen ajanı KOORDİNATÖR olarak çalıştırır: kaç worker açacağına ve onları nasıl görevlendireceğine çalışma anında kendisi karar verir — Paralel düğümün aksine genişlik tasarım anında sabit değildir. Tüm workerlar bitip koordinatör susana kadar bekler, son yanıtını bu düğümün çıktısı yapar.',
 }

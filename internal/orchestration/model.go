@@ -11,18 +11,19 @@ import (
 
 // Node types.
 const (
-	NodeAgent      = "agent"       // run an agent with a (templated) prompt, then go to Next
-	NodeBranch     = "branch"      // route by matching the last output (see MatchMode)
-	NodeParallel   = "parallel"    // run several agent nodes concurrently, then JoinNext
-	NodeDelay      = "delay"       // wait DelayMs, then go to Next (no LLM)
-	NodeTransform  = "transform"   // emit a rendered template as output, then Next (no LLM)
-	NodeLoop       = "loop"        // repeat a body sub-chain until MaxIters/Until, then LoopNext
-	NodeAwaitInput = "await-input" // durably suspend until external input arrives, then Next
-	NodeSubflow    = "subflow"     // run another flow to completion, capture its output, then Next
-	NodeStart      = "start"       // required entry marker; passes straight through to Next
-	NodeEnd        = "end"         // optional terminal; may shape (Template) / validate (OutputSchema) the final output
-	NodeSpawn      = "spawn"       // launch SpawnFlows as async child runs (non-blocking), then Next
-	NodeJoin       = "join"        // barrier: wait for a spawn node's child runs, collect outputs, then Next
+	NodeAgent       = "agent"       // run an agent with a (templated) prompt, then go to Next
+	NodeBranch      = "branch"      // route by matching the last output (see MatchMode)
+	NodeParallel    = "parallel"    // run several agent nodes concurrently, then JoinNext
+	NodeDelay       = "delay"       // wait DelayMs, then go to Next (no LLM)
+	NodeTransform   = "transform"   // emit a rendered template as output, then Next (no LLM)
+	NodeLoop        = "loop"        // repeat a body sub-chain until MaxIters/Until, then LoopNext
+	NodeAwaitInput  = "await-input" // durably suspend until external input arrives, then Next
+	NodeSubflow     = "subflow"     // run another flow to completion, capture its output, then Next
+	NodeStart       = "start"       // required entry marker; passes straight through to Next
+	NodeEnd         = "end"         // optional terminal; may shape (Template) / validate (OutputSchema) the final output
+	NodeSpawn       = "spawn"       // launch SpawnFlows as async child runs (non-blocking), then Next
+	NodeJoin        = "join"        // barrier: wait for a spawn node's child runs, collect outputs, then Next
+	NodeCoordinator = "coordinator" // run an agent as a coordinator that spawns workers, then Next
 )
 
 // Graph is a reusable orchestration protocol.
@@ -132,7 +133,24 @@ type Node struct {
 	// await-input — TimeoutSec optionally bounds how long the run may stay
 	// suspended: a background sweeper fails a waiting run once now-suspendTime
 	// exceeds it (0 = wait forever). The engine itself ignores this field.
+	//
+	// coordinator — TimeoutSec instead bounds how long the node waits for the
+	// coordinator to settle (0 = the runner's own default); on expiry the node
+	// fails and the runner stops any still-running workers.
 	TimeoutSec int `json:"timeoutSec,omitempty"`
+
+	// coordinator — run AgentID as a COORDINATOR session seeded with the rendered
+	// Prompt. Unlike a parallel node (whose fan-out width is fixed at design time)
+	// the coordinator decides at RUNTIME how many workers to spawn and how to
+	// dispatch them; the node blocks until every worker has finished and the
+	// coordinator has stopped reacting, then emits the coordinator's final reply as
+	// this node's output. MaxTurns caps the coordinator's auto-turn (notify-loop)
+	// budget for this node only (0 = the recipe's own cap, else the workspace
+	// default). Workflow names a saved coordination recipe (a skill with kind
+	// "coordinator-workflow" — the same list the session panel offers) whose body
+	// is layered onto the coordinator prompt; "" = free coordination.
+	MaxTurns int    `json:"maxTurns,omitempty"`
+	Workflow string `json:"workflow,omitempty"`
 
 	// layout (cosmetic only — ignored by the engine and Validate). Persisted so
 	// the visual canvas builder can restore node positions across reloads.
@@ -258,6 +276,13 @@ func (g Graph) Validate() error {
 		case NodeAgent:
 			if n.AgentID == "" {
 				return fmt.Errorf("agent node %q has no agentId", n.ID)
+			}
+			if err := ref(n.Next, "node "+n.ID); err != nil {
+				return err
+			}
+		case NodeCoordinator:
+			if n.AgentID == "" {
+				return fmt.Errorf("coordinator node %q has no agentId", n.ID)
 			}
 			if err := ref(n.Next, "node "+n.ID); err != nil {
 				return err

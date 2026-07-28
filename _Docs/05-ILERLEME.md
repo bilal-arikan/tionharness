@@ -180,6 +180,57 @@ yanıp kalıyordu; yalnız sayfa yenilemek geçiriyordu. Backend suçsuzdu —
 
 Detay: `_Docs\19-LAZY-TOOL-LOADING.md` + `_Docs\07-CHAT-UX.md`.
 
+## Akış `coordinator` node tipi — dinamik worker fan-out ✅ (2026-07-28)
+
+`parallel`/`spawn` fan-out genişliği tasarım anında sabitti; "bulunan her bulgu için bir
+worker" gibi sayısı **çalışma anında** belli olan işler ifade edilemiyordu. Yeni
+`coordinator` node'u seçilen ajanı kendi koordinatör oturumunda çalıştırır, ajan kaç
+worker açacağına anlık karar verir, düğüm hepsi bitene kadar bloklar ve son yanıtı
+`{{last}}`'e koyar. Graf deterministik motorda kalır — düğüm motor açısından atomiktir,
+yarıda kalan koşu resume'da düğümü baştan (yeni oturumla) çalıştırır.
+
+- Motor: `orchestration.NodeCoordinator` + opsiyonel `CoordinatorRunner` arayüzü; panic-safe,
+  accumulate modunda sonucu `parallel` gibi tek sentetik user/assistant çifti olarak katlar.
+- Runtime: `internal/agent/flow_coordinator.go` — `Kind="flow-coordinator"` +
+  `Role="coordinator"` oturum, `enqueueCoordinatorTurn` (slot'u senkron claim eder → erken
+  "boşta" okuması imkansız), `waitCoordinatorIdle` yoklaması, timeout'ta `StopWorker`.
+- `RecoverOrphanedTurns` bu oturumları **atlar** (ve bağlı yetim worker'lar için
+  `NotifyCoordinator` yapmaz), yoksa `ResumeRunningFlows`'un yeniden çalıştırmasıyla yarışıp
+  işi iki kez yapardı.
+- **Koordinasyon türü (recipe) düğümden seçilebilir:** node'un `workflow` alanı Oturum
+  Bilgisi panelindeki listenin aynısını sunar; slug oturumun `CoordinatorWorkflow`'una
+  yazılır (reçete gövdesi normal yoldan prompt'a girer), reçetenin `max_turns`'ü düğüm
+  kendi tavanını vermediyse uygulanır. Doğrulama `skills.ResolveCoordinatorWorkflow`'a
+  (leaf paket; `api.ResolveCoordinatorRecipe` artık alias) taşındı ve hem precheck'te hem
+  düğümde koşar — bilinmeyen reçete sessizce serbest koordinasyona düşmez.
+- UI: `CoordinatorNode` (pusula, `#ea580c`), palet + (ⓘ), inspector formu
+  (ajan/görev/workflow/maxTurns/timeoutSec), koşu görüntüleyicide hedef + rapor kartı,
+  Oturumlar'da "Akış Koordinatörü" kind rozeti. Workflow seçici tek paylaşılan bileşen
+  (`shared/components/CoordinatorWorkflowPicker`); `CoordinatorSection` de ona taşındı.
+- Not: bu iş sırasında `internal/agent` test paketi zaten derlenmiyordu — `bootseq_test.go`
+popup'tan (kalem ikonu) yapılır — ekranın yarısını yiyen satır-içi form ve
+satır-içi editör kaldırıldı.
+
+- `Schedules.tsx` (795 satır) + `Automations.tsx` (911 satır) ikilisi silindi; yerine
+  12 odaklı dosya: `AutomationBoard.tsx` (ekran + veri + mutasyonlar),
+  `BoardColumn.tsx` (şerit kabuğu), `ScheduleCard.tsx`/`AutomationCard.tsx` (kartlar),
+  `FormModal.tsx` (ortak popup kabuğu), `ScheduleModal.tsx`/`AutomationModal.tsx`
+  (oluştur+düzenle), `AutomationFields.tsx` (`BoardTriggerFields`+`PromptVarsField`),
+  `pickers.tsx` (`TargetModeToggle`/`FlowPicker`/`Field`), `automationMeta.ts`,
+  `cronPresets.ts`, `timeUtils.ts`.
+- `App.tsx` artık `AutomationBoard`'u render ediyor (`Schedules` yerine).
+- Etiket otomasyonu modalına **Ad** alanı eklendi (eskiden yalnız şablon set ediyordu).
+- **Dikey/dar ekran:** `md` altında üç şerit `snap-x snap-mandatory` karuseli
+  (`w-[85vw]`, şerit başına bir ekran, her şeridin kendi dikey scroll'u); `md`+ üçü
+  yan yana `flex-1`. Popup'lar `ModalOverlay` sayesinde telefonda bottom-sheet.
+- Kart aksiyonları çerçeveli ikon buton (`CardAction`): ▶ çalıştır + ✏️ düzenle
+  (+ limit dolduysa ↺ sıfırla). **Sil karttan kaldırılıp düzenleme popup'ının sol
+  kaldırılmış `gitWorktreeIsolation` parametresini geçiyordu; çağrı 2 argümanlı yeni imzaya
+  güncellendi.
+
+Detay: `_Docs
+-FLOW-CANVAS.md` + `_Docs'-KOORDINATOR-COKLU-AJAN.md`.
+
 ## Market ekranı + item'ları bayatlık tazelemesi ✅ (2026-07-28)
 
 Market, son alt sistemlerin gerisinde kalmıştı. Detay tablo: **`_Docs\21-MARKET.md` §8**.

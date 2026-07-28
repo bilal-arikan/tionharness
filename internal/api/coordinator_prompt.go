@@ -52,28 +52,10 @@ func coordinatorRecipeBlock(wsp *workspace.Workspace, session db.Session) string
 
 // ResolveCoordinatorRecipe validates a recipe slug for a coordinator session and
 // returns the per-session max-turns override to persist (0 = keep the workspace
-// default). An empty slug clears the selection. A non-empty slug that does not
-// resolve to a coordinator-workflow skill, or carries an unknown pattern, is a
-// hard error — a bad selection is surfaced, never silently ignored.
+// default). Thin alias over skills.ResolveCoordinatorWorkflow, which lives in the
+// leaf package so a flow's coordinator node can share the same gate.
 func ResolveCoordinatorRecipe(store *skills.Store, slug string) (maxTurns int, err error) {
-	slug = strings.TrimSpace(slug)
-	if slug == "" {
-		return 0, nil
-	}
-	if store == nil {
-		return 0, fmt.Errorf("skills store unavailable")
-	}
-	sk, ok := store.Get(slug)
-	if !ok {
-		return 0, fmt.Errorf("workflow %q not found", slug)
-	}
-	if !sk.IsCoordinatorWorkflow() {
-		return 0, fmt.Errorf("skill %q is not a coordinator-workflow", slug)
-	}
-	if sk.Pattern != "" && !skills.KnownPattern(sk.Pattern) {
-		return 0, fmt.Errorf("workflow %q has unknown pattern %q (want one of %v)", slug, sk.Pattern, skills.PatternValues)
-	}
-	return sk.MaxTurns, nil
+	return skills.ResolveCoordinatorWorkflow(store, slug)
 }
 
 // coordinationScratchpadBlock returns a system-context line pointing a coordinator

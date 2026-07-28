@@ -56,6 +56,7 @@ export function graphToReactFlow(graph: FlowGraph): { nodes: FlowRFNode[]; edges
       case 'start':
       case 'spawn':
       case 'join':
+      case 'coordinator':
         add(n.id, n.next ?? '')
         break
       case 'end':
@@ -104,6 +105,7 @@ export function reactFlowToGraph(
       case 'start':
       case 'spawn':
       case 'join':
+      case 'coordinator':
         base.next = outgoing[0]?.target ?? ''
         break
       case 'end':
@@ -203,6 +205,7 @@ function successors(n: FlowNode | undefined): string[] {
     case 'start':
     case 'spawn':
     case 'join':
+    case 'coordinator':
       return [n.next ?? '']
     case 'end':
       return []
@@ -283,6 +286,11 @@ export function blankNode(id: string, type: FlowNodeType, defaultAgentId = ''): 
     node.spawnRef = ''
     node.next = ''
     node.title = 'Join'
+  } else if (type === 'coordinator') {
+    node.agentId = defaultAgentId
+    node.prompt = '{{last}}'
+    node.next = ''
+    node.title = 'Koordinatör'
   } else {
     node.parallel = []
     node.joinNext = ''
