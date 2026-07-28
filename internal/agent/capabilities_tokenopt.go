@@ -79,13 +79,31 @@ func (r *Runtime) detectTokenOptimizers(ctx context.Context) tokenOptimizerState
 	return st
 }
 
+// effectiveTokenOptimizers is detectTokenOptimizers plus the in-process shell
+// filter, which is what the agent actually observes. A workspace with
+// ShellOutputCompression="on" compresses shell output WITHOUT any hook (see
+// sqzShellFilter), so hook detection alone would leave the agent unwarned and it
+// could read sqz's abbreviated output as truncation — re-running commands or
+// mis-parsing compiler/test output. The forced filter covers every shell call
+// (Bash + PowerShell, native + bridged), so it claims the "*" matcher and no
+// narrowing scope note is emitted.
+func (r *Runtime) effectiveTokenOptimizers(ctx context.Context) tokenOptimizerState {
+	st := r.detectTokenOptimizers(ctx)
+	if r.shellCompressMode.Load() == shellCompressOn {
+		st.sqz = true
+		st.matchers = append(st.matchers, "*")
+		sort.Strings(st.matchers)
+	}
+	return st
+}
+
 var tokenOptimizerCapability = Capability{
 	ID: "token-optimizers",
 	Detect: func(ctx context.Context, r *Runtime) bool {
-		return r.detectTokenOptimizers(ctx).present()
+		return r.effectiveTokenOptimizers(ctx).present()
 	},
 	Context: func(ctx context.Context, r *Runtime, cwd string) string {
-		return tokenOptimizerGuidance(r.detectTokenOptimizers(ctx))
+		return tokenOptimizerGuidance(r.effectiveTokenOptimizers(ctx))
 	},
 }
 

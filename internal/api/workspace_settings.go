@@ -49,6 +49,12 @@ type workspaceSettingsDTO struct {
 	// calls produce artifacts.
 	AutoCaptureArtifacts bool `json:"autoCaptureArtifacts"`
 
+	// ShellOutputCompression is the in-process shell-output token-optimizer
+	// override: "" (auto — follow the sqz-hook opt-in), "on" or "off". Must be
+	// echoed back, otherwise the settings selector always renders "auto" and a
+	// workspace that really is forced on reads as unconfigured.
+	ShellOutputCompression string `json:"shellOutputCompression"`
+
 	// BoardColumns is the ordered column set for this workspace's kanban board.
 	// Always non-nil: falls back to db.DefaultBoardColumns() when unconfigured.
 	BoardColumns []db.BoardColumnDef `json:"boardColumns"`
@@ -110,6 +116,8 @@ func toWorkspaceSettingsDTO(ctx context.Context, w *workspace.Workspace) workspa
 		CodebaseMemoryEnabled: s.CodebaseMemoryEnabled,
 		PromptEpochEnabled:    s.PromptEpochEnabled,
 		AutoCaptureArtifacts:  s.AutoCaptureArtifacts,
+
+		ShellOutputCompression: s.ShellOutputCompression,
 
 		BoardColumns: cols,
 

@@ -47,6 +47,24 @@ kurulacak; o zamana kadar yarı-uygulanmış hali beklenti yaratıp karşılamı
   `InfoPopover`'ın fixed dikey clamp'i artık uydurma 180px yükseklik yerine gerçek
   bir tavan (`max-h` + scroll) kullanıyor, uzun not viewport dışına taşmıyor.
 
+## `shellOutputCompression=on` sessiz kalıyordu: DTO + ajan uyarısı ✅ (2026-07-28)
+
+WS16'da sıkıştırmayı açarken iki ayrı sessiz boşluk çıktı:
+
+- **API DTO'su alanı hiç taşımıyordu.** `PUT` diske doğru yazıyordu ama `GET` boş
+  dönüyordu → Ayarlar ▸ Workspace seçici (`WorkspacePanel.tsx`, `ws.shellOutputCompression || ''`)
+  gerçek değer `on`/`off` olsa bile **daima "auto"** gösteriyordu. `workspaceSettingsDTO`'ya
+  alan eklendi.
+- **Ajan `on` modunda bilgilendirilmiyordu.** `tokenOptimizerCapability` yalnız hook
+  tarıyordu; `on` hook gerektirmediği için sıkıştırma çalışıp ajan uyarısız kalıyordu —
+  sqz'nin kısaltmalı çıktısını truncation sanma riski. `Runtime.effectiveTokenOptimizers`
+  artık in-process filtreyi de sayıyor (`*` matcher, daraltıcı kapsam notu yok); `off` ise
+- `ShellTool` artık `preArgs` taşıyor, böylece `-c`'den önce ek argüman verilebiliyor.
+- Git-bash tercih ediliyor çünkü Windows dosya sistemi + ağ yığınını paylaşır; diğer
+  araçların (Read/Write/cwd) Windows yollarıyla tutarlı kalır.
+- Testler: `builtin_shell_posix_test.go` — launcher tespiti, resolver'ın launcher'ı
+  reddetmesi ve seçilen kabukta `X=..; Y=$(..)` genişletmesinin gerçekten çalışması.
+
 ## Bash aracı WSL launcher'ına düşünce `$VAR` sessizce boşalıyordu ✅ (2026-07-28)
 
 Windows'ta `resolvePOSIXShell` PATH'teki ilk `bash`'i alıyordu; bu çoğu makinede

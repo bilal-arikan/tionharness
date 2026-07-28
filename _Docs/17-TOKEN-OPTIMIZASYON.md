@@ -57,6 +57,16 @@ izler, `"on"`=zorla aç [binary yeterli, hook gerekmez], `"off"`=kapat). Runtime
 (`recommendations.ts` `shell-compress`: sqz kurulu ama pasifse tek-tık `on`). Hook'u
 kaldırmak zaten doğal bir kapatma anahtarıdır (auto modda).
 
+**Ajan bilgilendirmesi `on` modunda da gider (fix 2026-07-28):** `tokenOptimizerCapability`
+eskiden yalnız hook'lara bakıyordu → `on` ile hook'suz sıkıştırılan workspace'te ajan
+uyarısız kalıyor, sqz'nin kısaltmalı çıktısını **truncation sanıp** komutu tekrar
+çalıştırabiliyor ya da derleyici/test çıktısını yanlış ayrıştırabiliyordu. Artık
+`Runtime.effectiveTokenOptimizers` hook tespitine in-process filtreyi de katıyor; `on`
+her shell çağrısını kapsadığı için `*` matcher'ı ile gelir (daraltıcı kapsam notu
+basılmaz). `off` bir gerçek sqz hook'unu **gizlemez** — o hook native araç adında hâlâ
+ateşlenir. API DTO'su da `shellOutputCompression`'ı geri yansıtır; eskiden
+yansıtmadığı için Ayarlar seçici gerçek değer ne olursa olsun daima "auto" gösteriyordu.
+
 **Güvenlik/kayıpsızlık:** `sqz compress` kendi kendini gate'ler — küçük/precise çıktı (hash, key)
 "0% reduction" ile **verbatim** döner; asıl mekanizma **lossless n-gram kısaltma** (sözlük çıktının
 başına eklenir, model geri açabilir). `[sqz] N/N tokens` istatistik satırı **stderr**'e gider,
