@@ -232,9 +232,10 @@ doğruluk kaynağı.
 
 ## Frontend
 
-`Schedules.tsx` oluşturma ve düzenleme formlarında **"Son tarih (ops.)"**
-`datetime-local` alanı (✕ ile temizlenebilir, gelecekte olma doğrulaması).
-Liste satırı son tarihi gösterir; geçmişse kırmızı **"(süresi doldu)"** etiketi.
+`ScheduleModal.tsx` (oluşturma **ve** düzenleme aynı popup) içinde **"Son tarih
+(ops.)"** `datetime-local` alanı (✕ ile temizlenebilir, gelecekte olma
+doğrulaması). Pano kartı (`ScheduleCard`) son tarihi gösterir; geçmişse kırmızı
+**"(süresi doldu)"** etiketi.
 
 ## Dosyalar
 
@@ -246,7 +247,8 @@ Liste satırı son tarihi gösterir; geçmişse kırmızı **"(süresi doldu)"**
 | `internal/api/schedules.go` | create/update `expiresAt` alanı |
 | `frontend/src/types/task.ts` | `Schedule.expiresAt?` |
 | `frontend/src/api/tasks.ts` | `createSchedule`/`updateSchedule` `expiresAt` |
-| `frontend/src/components/panels/Schedules.tsx` | son tarih input + liste gösterimi |
+| `frontend/src/features/schedules/ScheduleModal.tsx` | son tarih input (popup) |
+| `frontend/src/features/schedules/ScheduleCard.tsx` | pano kartında son tarih gösterimi |
 
 ## Testler
 
@@ -333,10 +335,11 @@ tetikleyicisiyle otomatik koşabilir. Model olarak, Task'taki mevcut `FlowID`
   spawnTags güncellemesi hedefi ellemez).
 - **Araçlar:** `create/update_schedule` + `create/update_automation` `flowId`
   parametresi (+ `list_*` çıktısında `flowId`). Flow varlığı `GetFlow` ile doğrulanır.
-- **UI:** `Schedules.tsx` + `Automations.tsx` — ortak `TargetModeToggle` (Ajan/Akış)
-  + `FlowPicker` (workspace akışları `api.listFlows`). Akış modunda prompt "Akış
-  girdisi (opsiyonel)"; listede akış satırı `Workflow` ikonu + `🔀 <akış adı>` ile
-  gösterilir; akış otomasyonunda spawn-etiket editörü yerine bilgi notu.
+- **UI:** `ScheduleModal.tsx` + `AutomationModal.tsx` — ortak `TargetModeToggle`
+  (Ajan/Akış) + `FlowPicker` (`pickers.tsx`; workspace akışları `api.listFlows`).
+  Akış modunda prompt "Akış girdisi (opsiyonel)"; pano kartında akış hedefi
+  `Workflow` ikonu + `🔀 <akış adı>` ile gösterilir; akış otomasyonunda
+  spawn-etiket editörü yerine bilgi notu.
 
 ## Test
 

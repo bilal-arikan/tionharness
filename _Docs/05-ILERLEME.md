@@ -96,6 +96,18 @@ açtığı panel **salt bilgi** — hiçbir ayarı değiştirmez (değişiklik y
 - Frontend: `features/chat/composer/ToolAccessPanel.tsx` (üç sekme: Aktif · Talep üzerine ·
   MCP, arama kutusu), `ToolAccessList.tsx` (gruplu satırlar + sunucu listesi),
   `toolAccessGroups.ts` (saf grup/filtre). Built-in'ler kategoriye, MCP araçları sunucuya
+## Otomasyon ekranı 3 sütunlu panoya çevrildi ✅ (2026-07-28)
+
+Sekmeli görünüm (⏰ Zamanlamalar / 🏷 Etiket / 🗂 Pano) yerine **üç şeritli pano**:
+üç kural türü artık aynı anda yan yana görünüyor, sekme değiştirmeye gerek yok.
+Her şeridin başlığında sayaç + kısa açıklama + **`+`** butonu var; `+` o türün
+**oluşturma popup'ını** açar. Kurallar salt-okunur kart; düzenleme de aynı
+- Doğrulama: `go build ./...` + `go vet` + `go test ./internal/market/... ./internal/ingest/...`
+  (19 test) yeşil, `npx tsc --noEmit` yeşil.
+- **Kalan (içerik kararı):** şablonlar hâlâ yalnız agents + lineer flow + schedule taşıyor;
+  automations (etiket/pano) için payload alanı bile yok, koordinatör rolü ve
+  `await-input`/`subflow`/`spawn-join` düğümleri şablonla dağıtılamıyor.
+
 ## Git worktree izolasyonu kaldırıldı ✅ (2026-07-28)
 
 Otonom oturuma per-session git worktree + dal veren `gitWorktreeIsolation`

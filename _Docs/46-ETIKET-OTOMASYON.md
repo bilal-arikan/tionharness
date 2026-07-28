@@ -214,25 +214,29 @@ MaxIterations (vars. 50) + Cooldown bunu sınırlar. Bildirim tipi yine `automat
 - **Araçlar:** `create/update/list_automation`'a aynı alanlar (`list` çıktısına `triggerKind`/
   `boardOp`/`boardToState`/`boardPriority`/`boardExclusive`). `TriggerKind` kısmi patch'te
   pointer ile korunur; `boardPriority`/`boardExclusive` de aynı şekilde.
-- **UI — birleşik 3 SEKME (`Schedules.tsx`, 2026-07-07):** Otomasyon ekranı tek bir **tab bar**
-  altında toplandı: **⏰ Zamanlamalar (cron)** · **🏷 Etiket otomasyonları** · **🗂 Pano
-  otomasyonları** (her sekmede canlı sayaç rozeti). Tab state Schedules'ta tutulur; `schedules`
-  sekmesinde cron başlık+form+liste, diğerlerinde `Automations` bileşeni ilgili bölümü gösterir.
-  `Automations` artık **kontrollü**: `activeKind` prop'u (`'tag'|'board'|null`) hangi
-  `AutomationSection`'ı render edeceğini belirler (`null` → hiçbir şey; ama bileşen mount kalır ki
-  öğe fetch'i + `onCounts` ile bildirilen sayaçlar canlı kalsın). Her `AutomationSection`'ın kendi
-  oluşturma formu/listesi/edit state'i var; tür toggle'ı yok (kind sekmeye göre sabit). Board
-  bölümünde olay + kaynak/hedef sütun seçicileri; ortak `PromptVarsField` türe göre değişken
-  listesi; board satırında `🗂 <op> (kaynak→hedef)` çipi. Board bölümünde etiket kutusu yerine **olay +
-  kaynak/hedef sütun** seçicileri (`BoardTriggerFields`; sütunlar `getWorkspaceSettings().
-  boardColumns`'tan, yoksa default). `BoardTriggerFields` ayrıca **Sıra** (sayı, `boardPriority`)
-  ve **Tek sahip** (checkbox, `boardExclusive`) kontrollerini içerir — hem oluşturma formunda hem
-  satır-içi editörde aynı bileşenden gelir. Liste satırında `boardExclusive` → `🔒 tek sahip`,
-  sıfırdan farklı `boardPriority` → `sıra N` rozeti (editörü açmadan görünür). Prompt textarea + ℹ️ değişken popover'ı ortak `PromptVarsField`
-  bileşeninde, türe göre `BOARD_PROMPT_VARS`/`PROMPT_VARS` gösterir. Board satırında `#tag` yerine
-  `🗂 <op> (kaynak→hedef)` çipi; spawn-etiket editörü gizli (yerine bilgi notu). Parent `Automations`
-  tek `listAutomations` çeker + `columns`'ı yükler, listeyi `kind`'e göre iki bölüme böler ve ortak
-  `setItems`/`reload` ile senkron tutar (optimistic toggle/sil/spawnTags tam liste üzerinde çalışır).
+- **UI — 3 SÜTUNLU PANO (`AutomationBoard.tsx`, 2026-07-28):** Otomasyon ekranı sekmeli görünümden
+  **kanban benzeri üç şeride** çevrildi — **⏰ Zamanlamalar (cron)** · **🏷 Etiket otomasyonları** ·
+  **🗂 Pano otomasyonları**. Her şerit bir `BoardColumn`: renkli üst şerit + sayaç + kısa açıklama +
+  **`+` butonu** (o türün oluşturma popup'ını açar) ve altında kendi kaydırılan kart listesi. Kurallar
+  artık **salt-okunur kart** (`ScheduleCard` / `AutomationCard`); satır-içi form ve satır-içi editör
+  kaldırıldı — **oluşturma ve düzenleme popup'ta** (`ScheduleModal` / `AutomationModal`, ortak
+  `FormModal` kabuğu; Esc/backdrop kapatır). Kart aksiyonları belirgin **çerçeveli ikon butonlar**
+  (`CardAction`, `pickers.tsx`): zamanlamada ▶ çalıştır (yeşil hover) + ✏️ düzenle, otomasyonda
+  ✏️ düzenle (+ limit dolduysa ↺ sıfırla). **Sil karttan kaldırıldı** → düzenleme popup'ının sol
+  altında `🗑 Sil` (birincil aksiyondan uzakta, `confirm` + popup kapanışı board'da). **Dikey/dar
+  ekran:** `md` altında üç şerit `snap-x snap-mandatory` karuseli olur (`w-[85vw]`, şerit başına bir
+  ekran); `md`+ üçü yan yana `flex-1`. Modal'da kind
+  sabittir (hangi sütunun `+`'sına basıldıysa); etiket otomasyonu modalında ayrıca **Ad** alanı ve
+  yalnız oluşturmada 🩹 stuck-onarıcı şablon butonu vardır. Board modalında etiket kutusu yerine
+  **olay + kaynak/hedef sütun** seçicileri (`BoardTriggerFields`; sütunlar `getWorkspaceSettings().
+  boardColumns`'tan, yoksa default) + **Sıra** (`boardPriority`) ve **Tek sahip** (`boardExclusive`).
+  Board kartında `#tag` yerine `🗂 <op> (kaynak→hedef)` çipi, `boardExclusive` → `🔒 tek sahip`,
+  sıfırdan farklı `boardPriority` → `sıra N` rozeti; spawn-etiket editörü gizli (yerine bilgi notu).
+  Prompt textarea + ℹ️ değişken popover'ı ortak `PromptVarsField`'da (`AutomationFields.tsx`), türe
+  göre `BOARD_PROMPT_VARS`/`PROMPT_VARS`. `AutomationBoard` tek `listSchedules`+`listAutomations`
+  çeker, `columns`/`flows`/`pauseAutonomy`'yi yükler ve tüm mutasyonları (optimistic toggle/sil/
+  tags/spawnTags) sahiplenir. Yardımcılar ayrı dosyalarda: `automationMeta.ts` (sabitler + sütun
+  renkleri), `cronPresets.ts`, `timeUtils.ts`, `pickers.tsx` (`TargetModeToggle`/`FlowPicker`).
 
 ### Test
 - `internal/agent/automation_test.go` — `boardMatches` (op/from/to matrisi), `boardVars` (ikame).
@@ -263,9 +267,11 @@ Atanan etiketler (`agent/autotag.go` sabitleri):
 | `tool-error` | Turda **gerçek** bir tool hatası (`StepTool.IsError`) |
 | `error` | Tur-seviyesi hata (provider/aksiyon hatası; kullanıcı "stopped" hariç) |
 | `auth-error` | Tur bir **kimlik doğrulama** hatasında bitti (claude-cli login/token) — **TERMINAL** |
-| `goal` | Oturumda kalıcı hedef var |
-| `goal-done` | Hedef tamamlandı |
 | `archived` | Oturum arşivlendi |
+
+> `goal` / `goal-done` etiketleri **2026-07-28'de kaldırıldı** (oturum-hedefi
+> mekanizmasıyla birlikte). Bu iki etikete dayanan bir otomasyonun varsa artık
+> tetiklenmez — kuralı `stuck` / `error` gibi yaşayan bir etikete taşı.
 
 **`auth-error` — terminal, onarılamaz (2026-07-06):** Bir tur claude-cli kimlik
 doğrulaması (login/token süresi/geçersiz anahtar) yüzünden başarısız olduğunda `error`'a

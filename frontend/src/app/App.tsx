@@ -34,7 +34,7 @@ import { SessionDebugModal } from '@/features/sessions/SessionDebugModal'
 import { SessionFlowInline } from '@/features/flows/SessionFlowInline'
 import { AgentsView } from '@/features/agents/AgentsView'
 import { TaskBoard } from '@/features/tasks/TaskBoard'
-import { Schedules } from '@/features/schedules/Schedules'
+import { AutomationBoard } from '@/features/schedules/AutomationBoard'
 import { ArtifactsPanel } from '@/features/artifacts/ArtifactsPanel'
 import { ArtifactPreviewModal } from '@/features/artifacts/ArtifactPreviewModal'
 import { SkillsPanel } from '@/features/skills/SkillsPanel'
@@ -594,7 +594,7 @@ export default function App() {
         )}
         {view === 'board' && <TaskBoard agents={ctl.agents} onError={setError} />}
         {view === 'schedules' && (
-          <Schedules agents={ctl.agents} focusId={links.scheduleTarget} onError={setError} />
+          <AutomationBoard agents={ctl.agents} focusId={links.scheduleTarget} onError={setError} />
         )}
         {view === 'flows' && (
           <Suspense fallback={<LoadingState label="Akışlar yükleniyor…" className="flex-1" />}>
