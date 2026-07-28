@@ -356,7 +356,6 @@ func (s *Store) Apply(p Patch) (Settings, error) {
 	applyInt(&next.CoordinatorMaxTurns, p.CoordinatorMaxTurns)
 
 	applyBool(&next.AutonomousConfine, p.AutonomousConfine)
-	applyBool(&next.GitWorktreeIsolation, p.GitWorktreeIsolation)
 	applyBool(&next.AutonomousBootSeq, p.AutonomousBootSeq)
 
 	applyBool(&next.BackupEnabled, p.BackupEnabled)

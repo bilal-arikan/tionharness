@@ -176,15 +176,11 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 	}
 
 	// Resolve this turn's working directory: the session's WorkingDir override
-	// (else the workspace default). Autonomous turns may additionally get an
-	// isolated per-session git worktree. The result roots the fs/shell sandbox
+	// (else the workspace default). The result roots the fs/shell sandbox
 	// (carried via ctx into buildRegistry) and is the cwd for provider-driven CLI
 	// subprocesses (claude-cli) so relative paths — e.g. an attachment's
 	// "uploads/<sid>/<file>" — resolve there. Native providers ignore req.WorkDir.
 	workDir := r.effectiveWorkDir(ctx)
-	if autonomous && r.tun.GitWorktreeIsolation() {
-		workDir = r.ensureWorktree(ctx, workDir, SessionIDFrom(ctx))
-	}
 	req.WorkDir = workDir
 	ctx = withResolvedWorkDir(ctx, workDir, autonomous)
 

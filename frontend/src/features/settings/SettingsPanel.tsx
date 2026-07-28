@@ -177,7 +177,7 @@ export function SettingsPanel({ onError, onSaved, onWorkspaceNotifySaved, comman
       scheduleTimeoutMin: draft.scheduleTimeoutMin,
       shellDefaultTimeoutSec: draft.shellDefaultTimeoutSec, shellMaxTimeoutSec: draft.shellMaxTimeoutSec, maxToolOutputKB: draft.maxToolOutputKB,
       coordinatorMaxWorkers: draft.coordinatorMaxWorkers, coordinatorMaxTurns: draft.coordinatorMaxTurns,
-      autonomousConfine: draft.autonomousConfine, gitWorktreeIsolation: draft.gitWorktreeIsolation,
+      autonomousConfine: draft.autonomousConfine,
       autonomousBootSeq: draft.autonomousBootSeq,
       backupEnabled: draft.backupEnabled, backupIntervalHours: draft.backupIntervalHours,
       backupRetain: draft.backupRetain, backupDir: draft.backupDir,

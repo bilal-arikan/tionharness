@@ -316,9 +316,8 @@ type Settings struct {
 
 	// Working-directory guards. The built-in fs/shell tools are unconfined (may
 	// touch any path); these brake that power on autonomous (no-human) turns.
-	AutonomousConfine    bool `json:"autonomousConfine"`    // confine fs/shell to the working dir on autonomous turns (default true)
-	GitWorktreeIsolation bool `json:"gitWorktreeIsolation"` // give autonomous sessions a per-session git worktree (default false)
-	AutonomousBootSeq    bool `json:"autonomousBootSeq"`    // inject the boot/verification-sequence reminder on autonomous turns (default true)
+	AutonomousConfine bool `json:"autonomousConfine"` // confine fs/shell to the working dir on autonomous turns (default true)
+	AutonomousBootSeq bool `json:"autonomousBootSeq"` // inject the boot/verification-sequence reminder on autonomous turns (default true)
 
 	// Workspace backups — periodic, retention-bounded zip snapshots of every
 	// workspace's data directory. Off by default.
@@ -456,11 +455,9 @@ func Default() Settings {
 		CoordinatorMaxWorkers: 8,
 		CoordinatorMaxTurns:   50,
 
-		// Autonomous turns confine fs/shell by default (safety brake); worktree
-		// isolation is opt-in (needs git + has setup cost).
-		AutonomousConfine:    true,
-		GitWorktreeIsolation: false,
-		AutonomousBootSeq:    true,
+		// Autonomous turns confine fs/shell by default (safety brake).
+		AutonomousConfine: true,
+		AutonomousBootSeq: true,
 
 		// Workspace backups off by default; daily cadence, keep a week of snapshots.
 		BackupEnabled:       false,
@@ -582,9 +579,8 @@ type DTO struct {
 	CoordinatorMaxWorkers int `json:"coordinatorMaxWorkers"`
 	CoordinatorMaxTurns   int `json:"coordinatorMaxTurns"`
 
-	AutonomousConfine    bool `json:"autonomousConfine"`
-	GitWorktreeIsolation bool `json:"gitWorktreeIsolation"`
-	AutonomousBootSeq    bool `json:"autonomousBootSeq"`
+	AutonomousConfine bool `json:"autonomousConfine"`
+	AutonomousBootSeq bool `json:"autonomousBootSeq"`
 
 	BackupEnabled       bool   `json:"backupEnabled"`
 	BackupIntervalHours int    `json:"backupIntervalHours"`
@@ -695,9 +691,8 @@ func (s Settings) ToDTO() DTO {
 		CoordinatorMaxWorkers: s.CoordinatorMaxWorkers,
 		CoordinatorMaxTurns:   s.CoordinatorMaxTurns,
 
-		AutonomousConfine:    s.AutonomousConfine,
-		GitWorktreeIsolation: s.GitWorktreeIsolation,
-		AutonomousBootSeq:    s.AutonomousBootSeq,
+		AutonomousConfine: s.AutonomousConfine,
+		AutonomousBootSeq: s.AutonomousBootSeq,
 
 		BackupEnabled:       s.BackupEnabled,
 		BackupIntervalHours: s.BackupIntervalHours,
@@ -802,9 +797,8 @@ type Patch struct {
 	CoordinatorMaxWorkers *int `json:"coordinatorMaxWorkers"`
 	CoordinatorMaxTurns   *int `json:"coordinatorMaxTurns"`
 
-	AutonomousConfine    *bool `json:"autonomousConfine"`
-	GitWorktreeIsolation *bool `json:"gitWorktreeIsolation"`
-	AutonomousBootSeq    *bool `json:"autonomousBootSeq"`
+	AutonomousConfine *bool `json:"autonomousConfine"`
+	AutonomousBootSeq *bool `json:"autonomousBootSeq"`
 
 	BackupEnabled       *bool   `json:"backupEnabled"`
 	BackupIntervalHours *int    `json:"backupIntervalHours"`

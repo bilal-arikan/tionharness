@@ -55,24 +55,25 @@ graph LR
 ## Otonomi frenleri (güvenlik)
 
 Araçlar kilitsiz olduğundan, **insan döngüde olmayan** (scheduler/spawn/flow) turlar
-için iki fren var (Ayarlar ▸ MCP & Araçlar):
+için bir fren var (Ayarlar ▸ MCP & Araçlar):
 
 | Ayar | Varsayılan | Etki |
 |---|---|---|
 | `autonomousConfine` | **açık** | Otonom turda fs araçları çalışma dizinine **kilitlenir** (mutlak yol + `..` reddi) ve shell'de `git push` engellenir. İnteraktif sohbet etkilenmez. |
-| `gitWorktreeIsolation` | kapalı | Çalışma dizini git deposuysa, otonom oturuma özel **git worktree + dal** verilir (`<workspace>/worktrees/<sessionID>`). Paralel ajan çakışmasını önler. Oturum silinince temizlenir. |
 
 - Confine, `Sandbox.Confined` bayrağını yeniden kullanır (`internal/tools/sandbox.go`):
   interaktif = `NewSandbox` (kilitsiz), otonom+confine = `NewConfinedSandbox`.
 - `git push` engeli `builtin_shell.go isNetworkMutatingGit` ile (best-effort substring;
   gerçek sınır confine'ın kendisidir).
-- Worktree mantığı `internal/agent/worktree.go` (`ensureWorktree` /
-  `RemoveSessionWorktree`); git yoksa veya repo değilse sessizce taban dizine düşer.
+
+> **Not (2026-07-28):** Otonom oturuma per-session git worktree veren
+> `gitWorktreeIsolation` **çalışma-zamanı** özelliği kaldırıldı (ayar + `agent/worktree.go`
+> + oturum-silme temizliği). İleride kapsamlı biçimde yeniden eklenecek. Aşağıdaki
+> **geliştirici** worktree scripti bundan ayrıdır ve durmaktadır.
 
 ### Geliştirici worktree'leri (`scripts\worktree.ps1`) — ajan izolasyonundan AYRI
 
-Yukarıdaki `gitWorktreeIsolation` **çalışma-zamanı** özelliğidir (otonom oturuma worktree
-verir). Bunun yanında, **insan geliştirici** için aynı anda birden çok dalda çalışmayı
+**İnsan geliştirici** için aynı anda birden çok dalda çalışmayı
 (stash/checkout gidip-gelmesi olmadan) kolaylaştıran bir yardımcı script vardır:
 
 ```powershell
@@ -90,18 +91,18 @@ tek `.git` deposu paylaşılır, her worktree'nin kendi çalışma dizini + dal�
 
 ## Akış matrisi
 
-| Tur tipi | Sandbox | git push | Worktree |
-|---|---|---|---|
-| İnteraktif sohbet | Kilitsiz | Serbest | Hayır |
-| Otonom + confine açık | Çalışma dizinine kilitli | Engelli | İzolasyon açıksa evet |
-| Otonom + confine kapalı | Kilitsiz | Serbest | İzolasyon açıksa evet |
+| Tur tipi | Sandbox | git push |
+|---|---|---|
+| İnteraktif sohbet | Kilitsiz | Serbest |
+| Otonom + confine açık | Çalışma dizinine kilitli | Engelli |
+| Otonom + confine kapalı | Kilitsiz | Serbest |
 
 ## the external agent project ile fark
 
 - **Eşit:** oturum-başına cwd, klasör rozeti, cwd değiştirme, git branch göstergesi,
   CLAUDE.md farkındalığı, makine geneli erişim.
-- **TionSwarm'ya özgü:** otonom turlar (scheduler/flow/spawn) için confine + worktree
-  frenleri — the external agent project interaktif olduğu için bunlara ihtiyaç duymaz.
+- **TionSwarm'ya özgü:** otonom turlar (scheduler/flow/spawn) için confine freni —
+  the external agent project interaktif olduğu için buna ihtiyaç duymaz.
 
 ## Workspace varsayılan çalışma dizini (2026-06-22)
 

@@ -198,12 +198,13 @@
 
 ### 11. `EnterWorktree` / `ExitWorktree` — ajan-kontrollü worktree — **P3**
 
-- **Durum:** TionSwarm'da `gitWorktreeIsolation` **ayarı** var (otonom oturuma ayrı worktree) ama
-  ajanın **açıkça** worktree'ye girip çıkabileceği bir araç yok.
+- **Durum:** Otonom oturuma per-session worktree veren `gitWorktreeIsolation` ayarı 2026-07-28'de
+  **kaldırıldı** (ileride kapsamlı yeniden ekleme planlı). Ajanın **açıkça** worktree'ye girip
+  çıkabileceği bir araç da yok. Bu iki iş birlikte, kapsamlı bir worktree katmanı olarak tasarlanacak.
 - **Neden önemli:** Paralel/izole değişiklik (riskli refactor, paralel ajan çakışması) için ajanın
   kendi inisiyatifiyle izole worktree açıp kapatması.
-- **Yaklaşım:** `git worktree add/remove` sarmalayan iki builtin; mevcut `autonomousConfine`/
-  `gitWorktreeIsolation` mantığıyla uyumlu, çalışma dizinini geçici olarak yönlendirir.
+- **Yaklaşım:** `git worktree add/remove` sarmalayan iki builtin; yeniden eklenecek worktree
+  izolasyon mantığı + mevcut `autonomousConfine` ile uyumlu, çalışma dizinini geçici olarak yönlendirir.
 - **Dosyalar:** yeni `builtin_worktree.go` (+ test), `agent/wsconfig` veya cwd yönetimi entegrasyonu.
 - **Risk sınıfı:** `RiskExec`.
 

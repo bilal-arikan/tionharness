@@ -1,4 +1,4 @@
-package agent
+﻿package agent
 
 import (
 	"sync"
@@ -112,8 +112,7 @@ type Tunables struct {
 	language string
 
 	// Working-directory guards (fs/shell are otherwise unconfined).
-	autonomousConfine    bool // confine fs/shell to the working dir on autonomous turns (default on)
-	gitWorktreeIsolation bool // give autonomous sessions a per-session git worktree (default off)
+	autonomousConfine bool // confine fs/shell to the working dir on autonomous turns (default on)
 
 	// Autonomous boot/verification sequence (Anthropic long-running-agent harness
 	// discipline). When on, headless turns get a short reminder to orient → recall
@@ -164,7 +163,7 @@ type Tunables struct {
 	fileFreshnessGuard bool
 
 	// autoTagSessions — when true, the runtime derives well-known session tags from
-	// turn outcomes + session state (tool-error/error/goal/goal-done/archived) so an
+	// turn outcomes + session state (tool-error/error/archived) so an
 	// automation can scan + repair them. Default on. See internal/agent/autotag.go.
 	autoTagSessions bool
 
@@ -691,13 +690,11 @@ func (t *Tunables) MaxOutputTokens() int {
 }
 
 // SetWorkdirGuards configures the working-directory safety guards: whether
-// autonomous turns re-confine fs/shell to the working dir, whether autonomous
-// sessions on a git repo get an isolated per-session worktree, and whether the
+// autonomous turns re-confine fs/shell to the working dir, and whether the
 // boot/verification-sequence reminder is injected on autonomous turns.
-func (t *Tunables) SetWorkdirGuards(autonomousConfine, gitWorktreeIsolation, autonomousBootSeq bool) {
+func (t *Tunables) SetWorkdirGuards(autonomousConfine, autonomousBootSeq bool) {
 	t.mu.Lock()
 	t.autonomousConfine = autonomousConfine
-	t.gitWorktreeIsolation = gitWorktreeIsolation
 	t.autonomousBootSeq = autonomousBootSeq
 	t.mu.Unlock()
 }
@@ -708,14 +705,6 @@ func (t *Tunables) AutonomousConfine() bool {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 	return t.autonomousConfine
-}
-
-// GitWorktreeIsolation reports whether autonomous sessions get a per-session git
-// worktree instead of operating directly on the repository working tree.
-func (t *Tunables) GitWorktreeIsolation() bool {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
-	return t.gitWorktreeIsolation
 }
 
 // AutonomousBootSeq reports whether autonomous turns get the boot/verification
@@ -873,7 +862,7 @@ func (t *Tunables) FileFreshnessGuard() bool {
 }
 
 // SetAutoTagSessions toggles event-driven session auto-tagging (tool-error/error/
-// goal/archived). On by default; disable to stop the runtime writing derived tags.
+// archived). On by default; disable to stop the runtime writing derived tags.
 func (t *Tunables) SetAutoTagSessions(enabled bool) {
 	t.mu.Lock()
 	t.autoTagSessions = enabled

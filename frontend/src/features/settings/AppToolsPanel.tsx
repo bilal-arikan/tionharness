@@ -154,12 +154,6 @@ export function ToolsPanel({ draft, set }: PanelProps) {
         onChange={(v) => set('autonomousConfine', v)}
       />
       <Toggle
-        label="Git worktree izolasyonu (otonom)"
-        hint="Açıkken çalışma dizini bir git deposuysa, otonom oturumlar depoyu doğrudan değiştirmek yerine oturuma özel bir git worktree + dal alır. Paralel ajanların birbirinin dosyalarını ezmesini önler. Git gerektirir; oturum silinince worktree temizlenir."
-        checked={draft.gitWorktreeIsolation}
-        onChange={(v) => set('gitWorktreeIsolation', v)}
-      />
-      <Toggle
         label="Otonom boot doğrulama sırası"
         hint="Açıkken zamanlama/spawn/flow/subagent turlarına kısa bir açılış sırası hatırlatıcısı enjekte edilir (yönelim → hatırlama → tek görev seç → temel testi doğrula → işi yap → döngüyü kapat). Tam reçete: tionswarm-autonomous-ops becerisi (§10). Otonom tur başına birkaç token; kapatınca geri kazanılır. Önerilen: AÇIK."
         checked={draft.autonomousBootSeq}

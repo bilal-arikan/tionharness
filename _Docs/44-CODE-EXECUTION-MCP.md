@@ -105,7 +105,7 @@ namespace'li MCP çağrı yolu, ve kod-dışı çağrı için `mcp.CallNamespace
 | **MCP havuzu** | `internal/mcp/pool.go` (+ `client.go` stdio, `http.go` streamable) | Kalıcı bağlantı — kod içinden tekrarlı çağrılar yeni süreç açmaz. |
 | **4-tier görünürlük** | `internal/tools/registry.go` (`VisibilityFull/Summary/NameOnly/Hidden`) | Kod moduyla birlikte yaşayacak; §8. |
 | **Sandbox** | `internal/tools/sandbox.go` | `NewSandbox` (unconfined, izin katmanı sınır) / `NewConfinedSandbox` (config dizini). |
-| **Worktree izolasyonu** | `internal/agent/worktree.go` (`ensureWorktree`) | Otonom turlarda per-session git worktree + branch (`tionswarm/session-<id>`). |
+| **Worktree izolasyonu** | ~~`internal/agent/worktree.go`~~ | **Kaldırıldı (2026-07-28)** — per-session worktree ileride kapsamlı yeniden eklenecek (`41` madde 11). O zaman kod-modu da devralır. |
 | **Ölçüm** | `internal/agent/debugjournal.go` + `GetTurnDebug` | `debug.jsonl` `llm_call` olayları (`in/out/cacheRead/cacheWrite`), `TurnID`. |
 
 ### Seçenek A — Native tool-loop için "MCP-as-code" (önerilen ana hat)
@@ -185,7 +185,7 @@ Kod yürütme = keyfi host kodu. TionSwarm'nun mevcut sınırları ve boşluklar
 | **Kaynak sınırı** | 30s timeout, 16KB log cap (`transform_data`) / 64KB (shell) | ✅ Devral; kod-modu için timeout ayarlanabilir yapılmalı. |
 | **Path sınırı** | `Sandbox` default **unconfined** — izin katmanı (read-only/ask/auto) gerçek sınır | ⚠️ Kod içi fs erişimi izin modunu **atlar**; kod-modu için `NewConfinedSandbox` benzeri bir confine seçeneği düşünülmeli. |
 | **Otonom fren** | `sb.Confined` + `isNetworkMutatingGit` → `git push` engeli; `autonomousConfine` | ⚠️ Kod içinden `git push` substring guard'ı **atlar** (kod shell'i doğrudan çağırabilir). Kod-modunda ağ-mutasyon guard'ı köprü/subprocess seviyesine taşınmalı. |
-| **Worktree izolasyonu** | `ensureWorktree` per-session branch | ✅ Kod-modu otonom turlarda worktree içinde çalışmalı — dosya çakışması önlenir. |
+| **Worktree izolasyonu** | ~~`ensureWorktree`~~ **kaldırıldı (2026-07-28)** | ⏳ Worktree izolasyonu yeniden eklendiğinde kod-modu da worktree içinde çalışmalı — dosya çakışması önlenir. |
 | **İzin (permission)** | Native: per-tool RiskExec gate; CLI: `--permission-prompt-tool` | ⚠️ **En kritik boşluk:** kod bloğu tek `run_code` çağrısı → içindeki N MCP/fs/shell çağrısı ayrı ayrı onaylanmaz. İzin ya (a) `run_code`'un tamamına bir kez, ya (b) köprü seviyesinde per-call verilmeli. |
 
 ```mermaid

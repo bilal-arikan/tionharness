@@ -361,9 +361,6 @@ func (s *Server) handleDeleteSession(w http.ResponseWriter, r *http.Request) {
 	if err := wsp.DB.DeleteSession(r.Context(), id); writeDBError(w, err, "session not found") {
 		return
 	}
-	// Tear down this session's git worktree if isolation ever created one
-	// (no-op otherwise), so deleting a session never leaks a worktree.
-	wsp.Runtime.RemoveSessionWorktree(id)
 	s.logger.Info("session deleted", "session", id)
 	// Cross-window sync: a sibling window showing this session in its sidebar
 	// drops the row immediately; the active session (if it was the deleted one)

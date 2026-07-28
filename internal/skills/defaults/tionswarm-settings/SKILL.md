@@ -171,15 +171,11 @@ update_settings → {"patch": {"autoTitleEnabled": false}}
 
 ### Working-directory guards
 The built-in fs/shell tools are UNCONFINED (they may read, write and run on any
-path; the permission mode is the safety boundary). These two guards rein that in
+path; the permission mode is the safety boundary). These guards rein that in
 for autonomous (no-human) turns; interactive chat is unaffected.
 - `autonomousConfine` (default true) — on scheduler/spawn/flow turns, confine the
   fs tools to the session's working dir (reject absolute paths + `..` escapes) and
   block `git push`. Recommended: on.
-- `gitWorktreeIsolation` (default false) — when the working dir is a git repo,
-  give each autonomous session its own git worktree + branch instead of editing
-  the shared tree (parallel agents never clobber each other). Needs git; the
-  worktree is removed when the session is deleted.
 - `autonomousBootSeq` (default true) — on scheduler/spawn/flow/subagent turns,
   inject a short boot/verification-sequence reminder (orient → recall → select one
   task → verify the baseline → work → close the loop) into the system prompt. The

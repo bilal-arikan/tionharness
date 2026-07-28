@@ -127,7 +127,6 @@ export interface AppSettings {
 
   // Working-directory guards for the (unconfined) fs/shell tools.
   autonomousConfine: boolean
-  gitWorktreeIsolation: boolean
   // Inject the boot/verification-sequence reminder on autonomous turns.
   autonomousBootSeq: boolean
 

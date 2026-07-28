@@ -47,6 +47,38 @@ kurulacak; o zamana kadar yarı-uygulanmış hali beklenti yaratıp karşılamı
   `InfoPopover`'ın fixed dikey clamp'i artık uydurma 180px yükseklik yerine gerçek
   bir tavan (`max-h` + scroll) kullanıyor, uzun not viewport dışına taşmıyor.
 
+## Git worktree izolasyonu kaldırıldı ✅ (2026-07-28)
+
+Otonom oturuma per-session git worktree + dal veren `gitWorktreeIsolation`
+çalışma-zamanı özelliği tamamen kaldırıldı — ileride kapsamlı biçimde yeniden
+eklenecek (bkz. `41` madde 11: `EnterWorktree`/`ExitWorktree` ile birleşik tasarım).
+
+- **Kaldırılanlar:** `internal/agent/worktree.go` (dosya silindi: `ensureWorktree` /
+  `RemoveSessionWorktree` / `worktreesDir` / `gitRepoToplevel`); `Tunables`
+  `gitWorktreeIsolation` alanı + `GitWorktreeIsolation()` getter; `SetWorkdirGuards`
+  imzasından parametre düştü; `toolloop.go` otonom worktree dallanması; `sessions.go`
+  oturum-silme temizlik çağrısı; `settings.go` (Settings/View/Patch) + `store.go`
+  gerçek bir sqz hook'unu gizlemiyor. Testler: `capabilities_tokenopt_test.go`.
+
+Ölçüm notu: WS16'nın üç worker oturumunda shell çıktısı toplamı ~40K char, sqz kazancı
+**%24.8** (~2.5K token). Bağlamın asıl yükü `Write` (%39–44) ve `Read` (%16–34) — sqz
+ikisini de kapsamıyor, yani shell sıkıştırma tek başına belirleyici değil.
+
+  artık paketle taşınabiliyor** (önceden sessizce düşüyordu).
+- **`NODE_ICON` 5 → 12 node tipi** (start/end/loop/await-input/subflow/spawn/join eklendi);
+  workspace önizlemesindeki akış çipleri tüm non-lineer tipleri gösterir.
+- **Ölü kod/tip temizliği** — kaldırılmış `memory` türüne ait yorumlar, `AgentPayload.capabilities`,
+  kullanılmayan `SourceWorkspace` tier'ı (frontend `PackSource` + `SOURCE_LABEL` dâhil).
+  Eklenenler: `toolOverrides` (TS), `prompts`/`readme` (TS + workspace önizlemesinde bölüm).
+- **Gömülü 5 şablona `version: 1.0.0`** → `updateAvailable()` artık gömülülerde de çalışır.
+- **Varsayılan kategori `skill` → `workspace`** (gömülü skill paketi 0 olduğu için market
+  ilk açılışta boş ızgara gösteriyordu).
+  `applyBool` alanları; frontend `types/settings.ts` + `AppToolsPanel` toggle'ı +
+  `SettingsPanel` gönderimi.
+- **Korunanlar:** `autonomousConfine` freni ve **geliştiriciye ait** `scripts\worktree.ps1`
+  yardımcısı (tamamen ayrı) yerinde.
+- Doğrulama: `go build ./...` yeşil, `npx tsc --noEmit` yeşil.
+
 ## Flow paleti: node butonlarında (ⓘ) açıklama balonu ✅ (2026-07-27)
 
 Flow editöründe sol paletteki node tipleri yalnız ad + ikon gösteriyordu; ne işe

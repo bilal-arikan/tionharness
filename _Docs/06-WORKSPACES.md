@@ -306,9 +306,9 @@ prompt cache'i bozmaz.
   **varsayılan** çalışma dizini. Her oturum kendi `Session.WorkingDir`'ini
   belirleyebilir (Composer'daki klasör rozeti) → fs/shell o dizinden çalışır, ajan
   cwd'sini + git branch'ini bağlamda görür. Otonom turlar için `autonomousConfine`
-  (varsayılan açık) bu dizine yeniden kilitler; `gitWorktreeIsolation` (kapalı) ise
-  otonom oturuma `<workspace>/worktrees/<sessionID>` altında ayrı git worktree
-  verir. Detay: `_Docs/26-CALISMA-DIZINI.md`.
+  (varsayılan açık) bu dizine yeniden kilitler. Detay: `_Docs/26-CALISMA-DIZINI.md`.
+  (Not: per-session git worktree izolasyonu 2026-07-28'de kaldırıldı; ileride
+  kapsamlı biçimde yeniden eklenecek.)
 - **Yeniden adlandırma ✅:** `rename_workspace` aracı (`internal/tools/builtin_workspacemgmt.go`) + WorkspaceBridge üzerinden yapılır.
 - **Workspace başına tema ✅:** görünüm/tema workspace-özeldir (`WSSettings`).
 - **Gelecek:** dışa/içe aktarma (export/import). *(Periyodik zip yedekleme zaten var → `34-YEDEKLEME.md`.)*

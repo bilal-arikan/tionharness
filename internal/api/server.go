@@ -257,7 +257,7 @@ func (s *Server) applySettings() {
 	tools.SetShellTimeouts(cur.ShellDefaultTimeoutSec, cur.ShellMaxTimeoutSec)
 	tools.SetMaxToolOutputBytes(cur.MaxToolOutputKB * 1024)
 	s.tun.SetCoordinatorLimits(cur.CoordinatorMaxWorkers, cur.CoordinatorMaxTurns)
-	s.tun.SetWorkdirGuards(cur.AutonomousConfine, cur.GitWorktreeIsolation, cur.AutonomousBootSeq)
+	s.tun.SetWorkdirGuards(cur.AutonomousConfine, cur.AutonomousBootSeq)
 	s.tun.SetAutonomousTaskBudget(cur.AutonomousTaskBudgetTokens)
 	s.tun.SetNativeToolSearch(cur.AnthropicNativeToolSearch)
 	s.tun.SetProgrammaticTools(cur.AnthropicProgrammaticTools)
