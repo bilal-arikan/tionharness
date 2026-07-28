@@ -233,8 +233,26 @@ Yeni bağımlılıklar: `react-markdown`, `remark-gfm`, `highlight.js`.
   streaming/tool-adımı `messages` değişimi bir kare **eski scroll konumu + eski
   pinned index** ile boyanıp overlay'i (tam-genişlik gradyanlı sticky soru) tek
   kare flash'lıyordu. Pre-paint çalışınca scroll ile overlay görünürlüğü aynı
-  commit'e bağlanır → ara tutarsız kare yok. Her satırı şu bileşenlere
-  devreder:
+  commit'e bağlanır → ara tutarsız kare yok.
+  **Overlay tıklanabilir (2026-07-28):** sarmalayıcı `pointer-events-none` kalır
+  (gradyan üzerinden scroll geçmeye devam eder), yalnız balon `pointer-events-auto`
+  `role="button"` olur → tıklayınca o soruya döner (`scrollRowIntoView`, satırı üstten
+  **8px aşağıya** oturtur ki sticky başlık kendi kopyasını örtmesin; + flash vurgusu).
+  Overlay scroll konteynerinin DIŞINDA olduğu için balon üzerindeki wheel'in
+  kaydıracağı ata yok → `onWheel` deltayı konteynere elle iletir.
+  **Gönderimde dibe in (2026-07-28):** `scrollBottomSignal` prop'u — `ChatView`
+  composer submit'inde (send **ve** queue) bump eder, `MessageList` anında dibe iner.
+  Gerekli, çünkü gönderim yalnız **kuyruğa alır**: mesaj backend worker onu alınca
+  boyanır, o yüzden yukarı kaydırmış kullanıcı aksi halde hiçbir tepki görmez.
+  Mevcut "yeni kullanıcı turu gelince yeniden pinle" mantığı korunur.
+  **Bekleme göstergesi (2026-07-28):** bağımsız `WorkingDots` balonu artık
+  `(pending || streaming) && son mesaj kullanıcının` ile çıkar. Çalışan bir oturum
+  açıldığında turun başlangıcı ile ilk asistan karesi arasında yalnız streaming
+  mandalı set oluyordu → transkript kendi mesajımızda bitip ajan susmuş gibi
+  görünüyordu. Ayrıca `App` oturum açılışında `GET /api/sessions/active`'ten o
+  oturumu **markPending** ile tohumlar (yalnız EKLER; kuyruğa yeni atılmış tur
+  sunucuda henüz kayıtlı olmayabilir, budamak göstergeyi söndürürdü).
+  Her satırı şu bileşenlere devreder:
   - `UserTurn.tsx` — gerçek kullanıcı mesajı (balon + sağ meta satırı).
   - `PeerTurn.tsx` — **gelen peer/inbox mesajı** (2026-07-06): başka bir ajanın
     yazdığı, `Role:"user"` ama `authorKind:"agent"` (+`authorId`) ile damgalı mesaj.

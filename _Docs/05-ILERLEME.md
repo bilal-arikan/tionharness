@@ -140,6 +140,21 @@ ikisini de kapsamıyor, yani shell sıkıştırma tek başına belirleyici deği
   yardımcısı (tamamen ayrı) yerinde.
 - Doğrulama: `go build ./...` yeşil, `npx tsc --noEmit` yeşil.
 
+## Sohbet gezinme + bekleme geri bildirimi ✅ (2026-07-28)
+
+Transkriptte dört küçük ama sürtünme yaratan boşluk kapatıldı (detay `07`, `47`).
+
+- **Yapışkan soru başlığı tıklanabilir:** üstte sabitlenen kullanıcı sorusuna
+  tıklayınca o mesaja dönülür. Sarmalayıcı `pointer-events-none` kalır (gradyan
+  üzerinden scroll geçmeye devam eder), yalnız balon `pointer-events-auto` olur;
+  overlay scroll konteynerinin dışında olduğu için wheel elle iletilir. Satır üstten
+  8px aşağıya oturur — aksi halde sticky başlık jump ettiğimiz mesajın üstüne binerdi.
+- **Gönderimde dibe in:** `ChatView` composer submit'inde (send + queue)
+  `scrollBottomSignal`'ı bump eder. Gönderim yalnız kuyruğa aldığı için mesaj ancak
+- Doğrulama: `npx vitest run` 42 test yeşil. `npx tsc --noEmit` bu değişikliklerde
+  temiz; repoda o sırada **başka bir çalışmanın** yarım kalan `IngestKind` düzenlemesi
+  vardı (`SkillImportDialog.tsx` güncellenmemiş) — dokunulmadı.
+
 ## Market ekranı + item'ları bayatlık tazelemesi ✅ (2026-07-28)
 
 Market, son alt sistemlerin gerisinde kalmıştı. Detay tablo: **`_Docs\21-MARKET.md` §8**.

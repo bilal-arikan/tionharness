@@ -51,6 +51,12 @@ interface Props {
   // clears the opaque input instead of hiding behind it, while the rows above it
   // still scroll UNDER the composer's transparent-topped gradient.
   bottomInset?: number
+  // Bumped by the parent the moment the user submits (sends or queues) a message.
+  // Jumping to the bottom right then — rather than waiting for the turn to appear
+  // — matters because the send path only enqueues: the message is painted when the
+  // backend worker picks it up, so a user who had scrolled up would otherwise stare
+  // at old history with no sign their message went anywhere.
+  scrollBottomSignal?: number
 }
 
 // MessageList is the scrolling transcript. It owns scroll-pinning and per-message
@@ -75,6 +81,7 @@ export function MessageList({
   onFeedback,
   onOpenAgent,
   bottomInset,
+  scrollBottomSignal,
 }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null)
   // Transiently highlighted message (from a search deep-link); cleared after the
@@ -172,6 +179,20 @@ export function MessageList({
     updateActivePinned(el)
   }
 
+  // Bring a message's row back into view just BELOW the container's top edge.
+  // The 8px gap is deliberate: landing the row at exactly the top would still
+  // satisfy updateActivePinned's "has reached the top" test, so the sticky header
+  // would sit right on top of the very message we jumped to.
+  function scrollRowIntoView(id: string) {
+    const el = scrollRef.current
+    const row = el?.querySelector<HTMLElement>(`[data-msg-id="${CSS.escape(id)}"]`)
+    if (!el || !row) return
+    el.scrollTop += row.getBoundingClientRect().top - el.getBoundingClientRect().top - 8
+    pinnedRef.current = false // a deliberate jump must not be yanked back down
+    updateActivePinned(el)
+    setFlashId(id)
+  }
+
   // useLayoutEffect (NOT useEffect): the scroll-to-bottom + active-pinned-index
   // update must run BEFORE the browser paints. With a post-paint useEffect, each
   // streaming/tool-step messages change painted one frame at the stale scroll
@@ -221,15 +242,41 @@ export function MessageList({
     el.scrollIntoView({ block: 'center' })
     pinnedRef.current = false // don't yank back to bottom after the jump
     setFlashId(highlightMessageId)
-    const t = setTimeout(() => setFlashId(null), 1600)
     onHighlightConsumed?.()
-    return () => clearTimeout(t)
   }, [highlightMessageId, messages])
 
-  // When a live assistant bubble is already present (streaming), the standalone
-  // pending bubble would duplicate it — suppress it in that case.
+  // Fade the transient highlight out, whichever jump set it (search deep-link or
+  // a click on the sticky pinned question).
+  useEffect(() => {
+    if (!flashId) return
+    const t = setTimeout(() => setFlashId(null), 1600)
+    return () => clearTimeout(t)
+  }, [flashId])
+
+  // Explicit jump to the bottom, fired when the user submits a message. Separate
+  // from the pin-driven scroll above because the send path only ENQUEUES: the
+  // message is painted later, when the backend worker picks it up, so waiting for
+  // it would leave a scrolled-up user with no feedback that anything happened.
+  useEffect(() => {
+    if (!scrollBottomSignal) return
+    const el = scrollRef.current
+    if (!el) return
+    pinnedRef.current = true
+    el.scrollTop = el.scrollHeight
+    updateActivePinned(el)
+  }, [scrollBottomSignal])
+
+  // When a live assistant bubble is already present, the standalone pending bubble
+  // would duplicate it — the `last.role === 'user'` test is what suppresses it.
+  //
+  // `streaming` counts alongside `pending`: opening a session whose turn is already
+  // running lands us between the turn's start and its first assistant frame, and in
+  // that window only the streaming latch is set. Without it the transcript ends on
+  // our own message with no sign the agent is working. The two hand over cleanly —
+  // once the assistant bubble exists, `last` is no longer the user's turn and the
+  // in-bubble WorkingDots take over.
   const last = messages[messages.length - 1]
-  const showStandalonePending = pending && (!last || last.role === 'user')
+  const showStandalonePending = (pending || !!streaming) && (!last || last.role === 'user')
 
   // The typed user question that has scrolled above the top edge — rendered as a
   // compact overlay header (below), NOT as an in-flow sticky row. Keeping it out
@@ -242,15 +289,38 @@ export function MessageList({
 
   return (
     <div className="relative min-h-0 flex-1">
-      {/* Overlay pinned-question header. pointer-events-none so wheel/touch scroll
-          passes straight through to the transcript underneath; the top-down
-          gradient fades the real question that scrolls beneath it. */}
+      {/* Overlay pinned-question header. The WRAPPER stays pointer-events-none so
+          wheel/touch scroll over the gradient passes straight through to the
+          transcript underneath; only the bubble itself re-enables them, so it can
+          be clicked to jump back to that question. Because the overlay sits
+          OUTSIDE the scroll container, a wheel over the bubble has no scrollable
+          ancestor to bubble into — hence the explicit forward in onWheel. */}
       {pinnedTyped && (
-        <div
-          aria-hidden
-          className="pointer-events-none absolute inset-x-0 top-0 z-10 bg-gradient-to-b from-[var(--color-bg)] via-[var(--color-bg)] to-transparent px-[1px] pt-2 pb-6 md:px-6"
-        >
-          <UserBubble text={pinnedTyped.text} agents={agents} clamp />
+        <div className="pointer-events-none absolute inset-x-0 top-0 z-10 bg-gradient-to-b from-[var(--color-bg)] via-[var(--color-bg)] to-transparent px-[1px] pt-2 pb-6 md:px-6">
+          {/* role="button" on a div rather than a real <button>: UserBubble renders
+              block-level markup, which a button's phrasing-only content model
+              forbids. Keyboard activation is wired explicitly to match. */}
+          <div
+            role="button"
+            tabIndex={0}
+            onClick={() => scrollRowIntoView(pinnedTyped.id)}
+            onKeyDown={(e) => {
+              if (e.key !== 'Enter' && e.key !== ' ') return
+              e.preventDefault()
+              scrollRowIntoView(pinnedTyped.id)
+            }}
+            onWheel={(e) => {
+              const el = scrollRef.current
+              if (el) el.scrollTop += e.deltaY
+            }}
+            title="Bu soruya dön"
+            aria-label="Sabitlenen soruya dön"
+            className="pointer-events-auto cursor-pointer rounded-2xl outline-none ring-[var(--color-accent)] focus-visible:ring-2"
+          >
+            <div aria-hidden>
+              <UserBubble text={pinnedTyped.text} agents={agents} clamp />
+            </div>
+          </div>
         </div>
       )}
       <div

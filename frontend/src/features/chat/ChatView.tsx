@@ -113,6 +113,13 @@ export function ChatView({
   // transcript). Pinned above the composer and updated as the agent ticks items.
   const currentTodos = useMemo(() => latestTodos(messages), [messages])
 
+  // Bumped on every composer submit (send OR queue) to jump the transcript to the
+  // bottom immediately. Both paths only enqueue — the turn is painted later, when
+  // the backend worker picks it up — so a user who had scrolled up needs the jump
+  // now to see their message land (or its chip appear in the pending tray).
+  const [sendTick, setSendTick] = useState(0)
+  const jumpToBottom = () => setSendTick((n) => n + 1)
+
   // Coordinator sessions: the live worker roster, so the chat can show that it is
   // waiting on background workers rather than looking idle. Disabled (and never
   // polled) for ordinary and worker sessions.
@@ -174,6 +181,7 @@ export function ChatView({
           onFeedback={onFeedback}
           onOpenAgent={onOpenAgent}
           bottomInset={bottomInset}
+          scrollBottomSignal={sendTick}
         />
       )}
       {/* Read-only run log (task / flow / schedule): the composer and its
@@ -244,10 +252,16 @@ export function ChatView({
           streaming={chat.activeStreaming}
           waiting={!!chat.activeWakeWait}
           onCancelWait={chat.cancelWake}
-          onSend={(text, attachments) => chat.sendMessage(text, undefined, attachments)}
+          onSend={(text, attachments) => {
+            jumpToBottom()
+            return chat.sendMessage(text, undefined, attachments)
+          }}
           onStop={chat.stopTurn}
           onInterrupt={chat.interruptTurn}
-          onQueue={chat.queueMessage}
+          onQueue={(text) => {
+            jumpToBottom()
+            chat.queueMessage(text)
+          }}
           onSteer={chat.steerTurn}
           onTyping={chat.notifyTyping}
           thinkingLevel={chat.thinkingLevel}
