@@ -35,7 +35,6 @@ export const ROLE_COLORS: Record<string, string> = {
   tool: '#8b5cf6', // violet — tool-result messages
   tools: '#a855f7', // purple — tool/MCP schemas (always-sent catalog)
   artifacts: '#ec4899', // pink — session artifact context block
-  goal: '#f43f5e', // rose — persistent session goal block
   system: '#64748b', // slate
 }
 

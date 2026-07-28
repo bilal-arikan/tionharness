@@ -1,4 +1,4 @@
-# 11 — TionSwarm Interaction MCP
+﻿# 11 — TionSwarm Interaction MCP
 
 > **Durum: ✅ UYGULANDI.** Faz 0–3 tamamlandı (2026-06-16 … 2026-06-26); üzerine
 > iki-tier endpoint (2026-06-26) ve stateful streaming + `tools/list_changed` push
@@ -261,7 +261,7 @@ geçirir (`tools.WithInteractionEndpoint(ctx, ...)` — mevcut context köprü d
 | `conversation_search` (CLI köprüsü) | bloklamayan (geçmiş tam-metin arama) | 2026-06-22 |
 | `notify` (masaüstü bildirim) | bloklamayan | Faz 3 |
 | `focus_view` (UI navigasyon) | bloklamayan | Faz 3 |
-| `set_session_goal` / `complete_goal` (oturum hedefi) | bloklamayan | Faz 3 |
+| ~~`set_session_goal` / `complete_goal`~~ | — | **KALDIRILDI (2026-07-28)** |
 | `set_session_title` / `set_working_dir` / `archive_session` | bloklamayan | Faz 3 |
 
 Yeni tool eklemek = `tools.Registry`'de tek tanım → her iki adaptöre (native +
@@ -728,6 +728,12 @@ Type:"navigate", Target:{view, sessionId, agentId}}` yayınlar → SSE `/api/eve
 
 ## 19. Faz 3 — `set_session_goal` / `complete_goal` (oturum hedefi) (2026-06-26 — TAMAMLANDI ✅)
 
+> **⚠️ BU BÖLÜM TARİHSELDİR.** Oturum-hedefi mekanizması **2026-07-28'de tamamen
+> kaldırıldı** (araçlar, `db.Session.Goal`/`GoalDone`, prompt enjeksiyonu, HTTP
+> endpoint'i, UI kartı, `goal`/`goal-done` etiketleri). İleride Claude Code'un
+> `/goal`'üne benzer — ayrı bir değerlendirici modelin tur sonunda durma koşulunu
+> yargıladığı — bir döngü olarak yeniden ele alınacak. Aşağısı ne yapıldığının kaydıdır.
+
 Ajan artık oturumun kalıcı **"north star" hedefini** kendisi koyabilir/tamamlayabilir —
 **mevcut `db.Session.Goal`/`GoalDone` ile paylaşımlı** (ayrı bir ajan-goal açılmadı). Daha
 önce yalnız kullanıcı UI'dan set ediyordu; ajan hedefi sistem prompt'unda (`goalContextBlock`)
@@ -830,7 +836,7 @@ da erteleniyordu → ilk turda `No such tool available`.
 | Anahtar | Path | `alwaysLoad` | İçerik |
 |---------|------|--------------|--------|
 | `tionswarm_interaction` (CORE) | `/mcp/interaction/core` | **true** | eager: `Bash`, `ask_user`, `request_confirmation`, `todo_write`, `create_artifact`/`update_artifact`, `use_skill`, `skill_search`, `run_subagent`, `permission_prompt` |
-| `tionswarm_extended` (EXTENDED) | `/mcp/interaction/extended` | yok | self-management suite + NameOnly: `notify`, `focus_view`, `set_session_goal`/`complete_goal`, `set_session_title`/`set_working_dir`/`archive_session`, `schedule_wake`, `spawn_session`, `conversation_search`, `read_session_debug` |
+| `tionswarm_extended` (EXTENDED) | `/mcp/interaction/extended` | yok | self-management suite + NameOnly: `notify`, `focus_view`, `set_session_title`/`set_working_dir`/`archive_session`, `schedule_wake`, `spawn_session`, `conversation_search`, `read_session_debug` |
 
 - `alwaysLoad: true` → CORE tool-search'ten muaf (her zaman inline). CLI process env'ine
   `ENABLE_TOOL_SEARCH=auto` geçilir (`claudecli.go runAttempt`) → EXTENDED %10 eşiğini

@@ -25,7 +25,6 @@ func (p *capturingProvider) Complete(_ context.Context, req providers.Request) (
 func TestBuildHandoff_InjectsEnvAndTranscript(t *testing.T) {
 	cp := &capturingProvider{out: "1. Objective / Primary Intent: ship the feature"}
 	env := HandoffEnv{
-		Goal:       "Build the parser",
 		WorkingDir: "/work/proj",
 		GitBranch:  "feature/parser",
 		Artifacts:  "  - spec.md (markdown, id ART1)",
@@ -44,7 +43,7 @@ func TestBuildHandoff_InjectsEnvAndTranscript(t *testing.T) {
 	}
 
 	sent := cp.last.Messages[0].Text
-	for _, want := range []string{"prev summary", "start the parser", "Build the parser", "/work/proj", "feature/parser", "spec.md"} {
+	for _, want := range []string{"prev summary", "start the parser", "/work/proj", "feature/parser", "spec.md"} {
 		if !strings.Contains(sent, want) {
 			t.Errorf("prompt missing %q\n---\n%s", want, sent)
 		}

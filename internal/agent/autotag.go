@@ -19,8 +19,6 @@ const (
 	TagToolError = "tool-error" // a real tool call failed this turn
 	TagError     = "error"      // the turn itself failed (provider/action error)
 	TagAuthError = "auth-error" // the turn failed on authentication (login/token) — TERMINAL, not repairable
-	TagGoal      = "goal"       // session has a persistent goal set
-	TagGoalDone  = "goal-done"  // that goal is marked done
 	TagArchived  = "archived"   // session is archived
 	TagStuck     = "stuck"      // StuckTurns crossed the threshold — autonomous turns refused
 )
@@ -89,12 +87,6 @@ func (r *Runtime) AutoTagTurn(ctx context.Context, sessionID string, steps []Tur
 	}
 
 	// State-derived tags (reconciled on every turn; add-only).
-	if strings.TrimSpace(sess.Goal) != "" {
-		add = append(add, TagGoal)
-	}
-	if sess.GoalDone {
-		add = append(add, TagGoalDone)
-	}
 	if sess.State == "archived" {
 		add = append(add, TagArchived)
 	}

@@ -25,8 +25,6 @@ type sessionInfoResp struct {
 	AgentName    string `json:"agentName"`
 	MessageCount int    `json:"messageCount"`
 	Unread       bool   `json:"unread"`
-	Goal         string `json:"goal"`
-	GoalDone     bool   `json:"goalDone"`
 	// Context-reset lineage: the session this one continues (if born from a
 	// /handoff) and the handoff artifact written into this session at reset.
 	ParentSessionID   string `json:"parentSessionId,omitempty"`
@@ -139,8 +137,6 @@ func (s *Server) handleSessionInfo(w http.ResponseWriter, r *http.Request) {
 		AgentID:              session.AgentID,
 		MessageCount:         session.MessageCount,
 		Unread:               session.Unread,
-		Goal:                 session.Goal,
-		GoalDone:             session.GoalDone,
 		Tags:                 session.Tags,
 		ParentSessionID:      session.ParentSessionID,
 		HandoffArtifactID:    session.HandoffArtifactID,
@@ -294,12 +290,6 @@ func (s *Server) systemFillers(ctx context.Context, wsp *workspace.Workspace, se
 	// Tool catalog (built-in + MCP) exactly as the agent receives it.
 	if cat := wsp.Runtime.ToolCatalog(ctx, agentRow); len(cat) > 0 {
 		out = append(out, contextFiller{Label: "Araçlar", Role: "tools", Tokens: estimateToolCatalog(cat), Count: len(cat)})
-	}
-
-	// Session goal block (dynamic suffix) — the persistent objective injected on
-	// every turn (skipped once the goal is marked done).
-	if gb := goalContextBlock(session.Goal, session.GoalDone); gb != "" {
-		out = append(out, contextFiller{Label: "Hedef", Role: "goal", Tokens: conversation.EstimateText(gb), Count: 1})
 	}
 
 	// Session artifact context block (dynamic suffix).

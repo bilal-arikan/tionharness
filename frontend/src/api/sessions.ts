@@ -76,13 +76,6 @@ export const sessionApi = {
       method: 'POST',
       body: JSON.stringify({ title }),
     }),
-  // Set (or clear, when empty) the session's persistent goal ("north star").
-  // done marks it achieved (kept visible, no longer injected into context).
-  setSessionGoal: (sessionId: string, goal: string, done = false) =>
-    req<{ id: string; goal: string; goalDone: boolean }>(`/api/sessions/${sessionId}/goal`, {
-      method: 'PUT',
-      body: JSON.stringify({ goal, done }),
-    }),
   // Set the session's lifecycle state ("active" | "archived"). Archiving drops it
   // from the active sidebar list but never deletes it; "active" restores it.
   setSessionState: (sessionId: string, state: 'active' | 'archived') =>

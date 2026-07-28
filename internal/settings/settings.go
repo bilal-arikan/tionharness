@@ -1,4 +1,4 @@
-// Package settings holds the application-global, user-editable configuration
+﻿// Package settings holds the application-global, user-editable configuration
 // that backs the Settings screen. It is a single JSON document persisted in the
 // data directory; the sensitive Anthropic API key is stored AES-GCM encrypted
 // and never returned to clients in plaintext.
@@ -208,7 +208,7 @@ type Settings struct {
 	// AutoTagSessions (event-driven auto-tagging). When on, the runtime derives
 	// well-known session tags from turn outcomes + session state — "tool-error" (a
 	// real tool failed; a claude-cli disallowed-tool denial is excluded), "error" (the
-	// turn itself failed), "goal"/"goal-done"/"archived" — so an automation can scan
+	// turn itself failed) and "archived" — so an automation can scan
 	// and repair them. Add-only (a fixer removes the tag). Detay: _Docs/46 §3.
 	AutoTagSessions bool `json:"autoTagSessions"`
 
@@ -386,7 +386,7 @@ func Default() Settings {
 		// positive fails the turn outright.
 		AnthropicRefusalFallback: true,
 
-		// Auto-tagging on by default: derives error/goal/archived tags for automation
+		// Auto-tagging on by default: derives error/archived tags for automation
 		// scanning; add-only and cheap (a small write only when a tag actually changes).
 		AutoTagSessions: true,
 

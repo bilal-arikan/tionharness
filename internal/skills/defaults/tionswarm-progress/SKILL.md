@@ -83,18 +83,12 @@ Suggested shape:
 - NOTE: progress.json is keyed to the project cwd (shared across sessions on it); falls back to a per-session store file when there is no project cwd
 ```
 
-## How this relates to the session goal
+## Where the objective lives
 
-- **Progress (this skill)** = what is done / in progress / next — structured task
-  state, tied to the project.
-- **Goal** = the session's single north-star objective. Set it with
-  `update_session` (`goal` field) and mark it achieved with `update_session`
-  (`goal_done: true`) — it is the SAME goal the user edits in the UI (shared, not
-  parallel), injected into every turn until done. One durable objective, not a task
-  checklist (that's progress/todos).
-
-Keep them distinct: the goal is the single objective; progress is the structured
-checklist of steps toward it.
+There is no separate session-goal field: **progress IS the objective record**.
+State the outcome you are working toward as the first item, then keep the rest of
+the list as the steps toward it. If the user states a goal in chat, write it into
+progress rather than assuming a durable field is holding it for you.
 
 ## Rules of thumb
 

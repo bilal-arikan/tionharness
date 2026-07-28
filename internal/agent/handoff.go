@@ -202,9 +202,9 @@ func (r *Runtime) handoffChainDepth(ctx context.Context, session db.Session) int
 	return depth
 }
 
-// handoffEnv gathers the environment snapshot for a handoff: the session goal, its
-// working directory, the git branch/status there, and the session's existing
-// artifacts. Best-effort — any piece that can't be gathered is simply omitted.
+// handoffEnv gathers the environment snapshot for a handoff: the session's
+// working directory, the git branch/status there, and its existing artifacts.
+// Best-effort — any piece that can't be gathered is simply omitted.
 func (r *Runtime) handoffEnv(ctx context.Context, session db.Session) conversation.HandoffEnv {
 	dir := strings.TrimSpace(session.WorkingDir)
 	if dir == "" {
@@ -214,9 +214,6 @@ func (r *Runtime) handoffEnv(ctx context.Context, session db.Session) conversati
 		WorkingDir: dir,
 		GitBranch:  gitOut(dir, "rev-parse", "--abbrev-ref", "HEAD"),
 		GitStatus:  gitOut(dir, "status", "--short", "--branch"),
-	}
-	if !session.GoalDone {
-		env.Goal = strings.TrimSpace(session.Goal)
 	}
 	if arts, err := r.db.ListArtifacts(ctx, session.ID); err == nil && len(arts) > 0 {
 		var b strings.Builder

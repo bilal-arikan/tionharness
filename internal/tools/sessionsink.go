@@ -3,15 +3,12 @@ package tools
 import "context"
 
 // SessionSink groups the session-scoped mutations an agent can make to its OWN
-// session: rename it, set its working directory, archive it. It is a superset of
-// GoalSink (the goal tools depend on the narrower interface) — one concrete sink
-// bound to the session implements both. Turns without a sink make these tools
-// graceful no-ops.
+// session: rename it, set its working directory, archive it. Turns without a
+// sink make these tools graceful no-ops.
 //
 // Kept in the tools package (not agent/api) so built-in tools can reach it
 // without importing those packages (which would cycle).
 type SessionSink interface {
-	GoalSink
 	SetTitle(ctx context.Context, title string) error
 	SetWorkingDir(ctx context.Context, dir string) error
 	Archive(ctx context.Context) error

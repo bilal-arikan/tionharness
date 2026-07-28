@@ -12,9 +12,9 @@ import (
 
 // GetSessionInfoTool returns the metadata of the session the agent is running
 // in (or, with an explicit id, another session in this workspace): title, state,
-// kind, bound agent, tags, goal, working directory, lineage (parent/handoff) and
+// kind, bound agent, tags, working directory, lineage (parent/handoff) and
 // the coordinator/worker role. It is the read counterpart of the session-edit
-// tools (set_session_title / set_session_tags / set_session_goal / ...), so the
+// tools (set_session_title / set_session_tags / ...), so the
 // agent can inspect before it mutates — and self-orient in a fresh autonomous
 // turn without asking the user.
 type GetSessionInfoTool struct{ db *db.DB }
@@ -28,9 +28,9 @@ func (GetSessionInfoTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name: "get_session_info",
 		Description: "Read this session's metadata: id, title, state, kind, bound agent, tags, " +
-			"goal, working directory, coordinator/worker role and lineage (parent / handoff). " +
+			"working directory, coordinator/worker role and lineage (parent / handoff). " +
 			"Use it to orient yourself before editing the session (set_session_title / " +
-			"set_session_tags / set_session_goal) or to check what a tag-triggered automation " +
+			"set_session_tags) or to check what a tag-triggered automation " +
 			"will see. Pass session_id to inspect another session in this workspace instead.",
 		InputSchema: json.RawMessage(`{
   "type": "object",
@@ -81,13 +81,6 @@ func (t GetSessionInfoTool) Call(ctx context.Context, input json.RawMessage) (st
 	fmt.Fprintf(&b, "messages: %d\n", s.MessageCount)
 	if len(s.Tags) > 0 {
 		line("tags", strings.Join(s.Tags, ", "))
-	}
-	if s.Goal != "" {
-		goal := s.Goal
-		if s.GoalDone {
-			goal += " (done)"
-		}
-		line("goal", goal)
 	}
 	line("working_dir", s.WorkingDir)
 	line("role", s.Role)

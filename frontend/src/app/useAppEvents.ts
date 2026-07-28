@@ -1,4 +1,4 @@
-// useAppEvents owns the app-wide SSE subscription: autonomous-event handling
+﻿// useAppEvents owns the app-wide SSE subscription: autonomous-event handling
 // (notifications, badges, live list refreshes, cross-window panel signals) and
 // live turn-step frames. The subscription is mounted once; a deps ref refreshed
 // each render keeps the handlers reading current state/closures — the same
@@ -64,15 +64,15 @@ function onEvent(d: AppEventDeps, e: AppEvent) {
     if (r) window.location.hash = buildRoute(r)
     return
   }
-  // An agent mutated this session's metadata (goal/title/working dir/archive
+  // An agent mutated this session's metadata (title/working dir/archive
   // via the session tools). Refresh the session list (title/order/archived) and,
-  // when it's the open session, bump the detail panel so its goal/title/cwd card
+  // when it's the open session, bump the detail panel so its title/cwd card
   // updates live. No toast — it's a quiet live-refresh signal.
   //
   // The op hint lets a subset of mutations also reload the active transcript
   // when something material changed inside it (a rewind, a deleted message, a
   // /summary or /handoff command landing, a new feedback rating). Plain
-  // metadata edits (title/goal/workdir/pin/agent/role/tags/state) only touch
+  // metadata edits (title/workdir/pin/agent/role/tags/state) only touch
   // the row + the detail meter — no listMessages call needed.
   if (e.type === 'session') {
     const sid = e.target?.sessionId

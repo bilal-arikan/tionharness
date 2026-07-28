@@ -1,4 +1,4 @@
-package agent
+﻿package agent
 
 import (
 	"context"
@@ -54,7 +54,7 @@ func (r *Runtime) invokeTraced(ctx context.Context, agent db.Agent, prompt strin
 		Model:  agent.Model,
 		System: r.autonomousSystemPrompt(ctx, agent),
 		// Volatile per-turn context (turn-start clock + the session's persistent
-		// goal, when scheduler/spawn/peer stamp a session id in ctx) rides the
+		// lessons, when scheduler/spawn/peer stamp a session id in ctx) rides the
 		// dynamic suffix so the static prefix above stays byte-stable and cacheable.
 		SystemDynamic: r.autonomousDynamicSuffix(ctx),
 		Messages: []providers.Message{

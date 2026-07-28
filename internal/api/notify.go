@@ -1,4 +1,4 @@
-package api
+﻿package api
 
 import (
 	"github.com/bilal-arikan/tionswarm/internal/events"
@@ -33,9 +33,9 @@ func publishEntityChange(wsp *workspace.Workspace, typ, title, body string, targ
 //   - also reload the ACTIVE transcript when the changed session is the one on
 //     screen (op-specific: rewind/delete_message/handoff/summary).
 //   - bump the session-detail meter when the active session's own metadata
-//     (title/goal/workdir/pin) changed.
+//     (title/workdir/pin) changed.
 //
-// `op` is a short, stable verb (create, delete, state, title, pin, goal, workdir,
+// `op` is a short, stable verb (create, delete, state, title, pin, workdir,
 // agent, role, tags, rewind, delete_message, feedback, spawn, handoff, summary,
 // message_added). Best-effort and nil-safe — callers can fire-and-forget.
 func emitSessionChange(wsp *workspace.Workspace, id, op string) {

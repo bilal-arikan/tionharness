@@ -8,9 +8,8 @@ import (
 	"testing"
 )
 
-// fakeSessionSink is an in-memory SessionSink for tests (also satisfies GoalSink).
+// fakeSessionSink is an in-memory SessionSink for tests.
 type fakeSessionSink struct {
-	state      GoalState
 	title      string
 	workingDir string
 	archived   bool
@@ -18,11 +17,6 @@ type fakeSessionSink struct {
 	refreshed  bool
 }
 
-func (s *fakeSessionSink) Goal(_ context.Context) (GoalState, error) { return s.state, nil }
-func (s *fakeSessionSink) SetGoal(_ context.Context, text string, done bool) error {
-	s.state = GoalState{Text: text, Done: done}
-	return nil
-}
 func (s *fakeSessionSink) SetTitle(_ context.Context, title string) error { s.title = title; return nil }
 func (s *fakeSessionSink) SetWorkingDir(_ context.Context, dir string) error {
 	s.workingDir = dir
@@ -52,43 +46,6 @@ func TestUpdateSessionEmptyTitleRejected(t *testing.T) {
 	ctx := WithSession(context.Background(), &fakeSessionSink{})
 	if _, err := NewUpdateSessionTool().Call(ctx, json.RawMessage(`{"title":"  "}`)); err == nil {
 		t.Fatal("expected error for empty title")
-	}
-}
-
-func TestUpdateSessionGoalWritesAndFlagsReplacement(t *testing.T) {
-	sink := &fakeSessionSink{state: GoalState{Text: "Old goal"}}
-	ctx := WithSession(context.Background(), sink)
-	out, err := NewUpdateSessionTool().Call(ctx, json.RawMessage(`{"goal":"New goal"}`))
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if sink.state.Text != "New goal" || sink.state.Done {
-		t.Fatalf("goal not set: %+v", sink.state)
-	}
-	if !strings.Contains(out, "replaced previous goal") || !strings.Contains(out, "Old goal") {
-		t.Fatalf("replacement not flagged: %q", out)
-	}
-}
-
-func TestUpdateSessionGoalDoneMarksExisting(t *testing.T) {
-	sink := &fakeSessionSink{state: GoalState{Text: "Ship v1"}}
-	ctx := WithSession(context.Background(), sink)
-	if _, err := NewUpdateSessionTool().Call(ctx, json.RawMessage(`{"goal_done":true}`)); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if !sink.state.Done || sink.state.Text != "Ship v1" {
-		t.Fatalf("goal not completed (text must be kept): %+v", sink.state)
-	}
-}
-
-func TestUpdateSessionSetAndCompleteGoalInOneCall(t *testing.T) {
-	sink := &fakeSessionSink{}
-	ctx := WithSession(context.Background(), sink)
-	if _, err := NewUpdateSessionTool().Call(ctx, json.RawMessage(`{"goal":"Ship v1","goal_done":true}`)); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if !sink.state.Done || sink.state.Text != "Ship v1" {
-		t.Fatalf("goal should be set then marked done: %+v", sink.state)
 	}
 }
 

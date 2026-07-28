@@ -12,10 +12,9 @@ import (
 
 // HandoffEnv carries the environment snapshot folded into a handoff artifact's
 // "Environment State" section — the durable, non-transcript facts the next agent
-// needs to resume in a clean window (working dir, git branch, the session goal).
+// needs to resume in a clean window (working dir, git branch, artifacts).
 // All fields are optional; empty ones are simply omitted from the rendered block.
 type HandoffEnv struct {
-	Goal       string // the session's persistent objective ("north star"), if any
 	WorkingDir string // cwd the fs/shell tools operate in
 	GitBranch  string // current git branch at reset time, if known
 	GitStatus  string // short git status snapshot, if gathered
@@ -33,7 +32,6 @@ func (e HandoffEnv) rendered() string {
 			fmt.Fprintf(&b, "- %s: %s\n", label, v)
 		}
 	}
-	add("Objective / Goal", e.Goal)
 	add("Working directory", e.WorkingDir)
 	add("Git branch", e.GitBranch)
 	if s := strings.TrimSpace(e.GitStatus); s != "" {

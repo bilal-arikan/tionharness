@@ -1,4 +1,4 @@
-package api
+﻿package api
 
 import (
 	"context"
@@ -379,9 +379,8 @@ func (s *Server) runChatTurn(clientGone context.Context, wsp *workspace.Workspac
 			// can drive the UI to a view/entity on both tool paths.
 			run.setNav(nsink)
 			turnCtx = tools.WithNavigate(turnCtx, nsink)
-			// Session sink: one sink for every session-scoped mutation — goal (the same
-			// db.Session.Goal the user edits), title, working dir, archive — on both tool
-			// paths. It is a SessionSink (superset of GoalSink), so it serves the goal
+			// Session sink: one sink for every session-scoped mutation — title, working
+			// dir, tags, archive — on both tool
 			// tools and the session-edit tools alike; each mutation emits a "session"
 			// event so open windows refresh live.
 			ssink := wsp.Runtime.NewSessionSink(session.ID)
@@ -668,7 +667,7 @@ func (s *Server) runChatTurn(clientGone context.Context, wsp *workspace.Workspac
 				"steps", len(steps), "stream", true,
 				"dur", time.Since(agentStart).Round(time.Millisecond).String())
 
-			// Auto-tag: derive session tags from this turn (tool-error / error / goal /
+			// Auto-tag: derive session tags from this turn (tool-error / error /
 			// archived) so an automation can later scan + repair them.
 			wsp.Runtime.AutoTagTurn(ctx, session.ID, steps, "")
 

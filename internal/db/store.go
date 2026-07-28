@@ -347,16 +347,6 @@ func (d *DB) SetSessionTitle(ctx context.Context, sessionID, title string) error
 	})
 }
 
-// SetSessionGoal persists a session's persistent objective ("north star") and
-// its done state. An empty string clears the goal (and its done flag). Does not
-// bump UpdatedAt so editing the goal never reorders the session list.
-func (d *DB) SetSessionGoal(ctx context.Context, sessionID, goal string, done bool) error {
-	return d.mutateSessionLocked(sessionID, func(s *Session) {
-		s.Goal = goal
-		s.GoalDone = done && goal != ""
-	})
-}
-
 // SetSessionWorkingDir sets (or clears, when empty) a session's working
 // directory (cwd) for the built-in filesystem/shell tools. An empty string
 // resets the session to the workspace default.

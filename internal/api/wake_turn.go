@@ -1,4 +1,4 @@
-package api
+﻿package api
 
 import (
 	"context"
@@ -14,7 +14,7 @@ import (
 // scheduler's prompt-only invoke gave the woken agent ONLY the wake prompt — none
 // of the conversation it was meant to continue. This runner composes the SAME
 // rich request an interactive chat turn gets (full history with author labels,
-// running summary, memory, goal, workdir, etc.) and runs the agentic loop, so the
+// running summary, memory, workdir, etc.) and runs the agentic loop, so the
 // woken agent truly continues the thread.
 //
 // The wake prompt was already persisted as the session's last user message by

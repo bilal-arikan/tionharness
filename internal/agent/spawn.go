@@ -1,4 +1,4 @@
-package agent
+﻿package agent
 
 import (
 	"context"
@@ -230,7 +230,7 @@ func (r *Runtime) runSpawn(agent db.Agent, sessionID, prompt string, opts SpawnO
 	// the follow-up. No-op when the turn finished cleanly. Bounded + budget-gated.
 	r.maybeAutoContinue(ctx, agent, sessionID, KindSpawn, steps)
 	r.emitSpawnEvent(agent, sessionID, prompt, true)
-	// Auto-tag any tool errors / goal state from this spawned turn.
+	// Auto-tag any tool errors from this spawned turn.
 	r.AutoTagTurn(ctx, sessionID, steps, "")
 	// Repair completion: a fixer spawned to clear an errored PARENT session's tag
 	// cannot reach it via the current-session-scoped update_session tool. Now that

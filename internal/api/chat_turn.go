@@ -58,11 +58,6 @@ func (s *Server) composeTurnRequest(ctx context.Context, wsp *workspace.Workspac
 	// may do (read-only vs. auto) instead of attempting an edit that will be denied.
 	// Volatile side because the mode can change mid-session (Shift+Tab).
 	dynamic = strings.TrimSpace(dynamic + "\n\n" + sessionStateBlock(session, agentRow, wsp.ID, wsp.Name, wsp.DataDir))
-	// The session's persistent goal leads the dynamic context — it is the agent's
-	// north star and should be the first thing it reads after the static persona.
-	if gb := goalContextBlock(session.Goal, session.GoalDone); gb != "" {
-		dynamic = strings.TrimSpace(dynamic + "\n\n" + gb)
-	}
 	// Recap of recent turns' tool I/O ("what did you just run / what did it
 	// return"). Volatile by design: injecting it here instead of into the history
 	// messages keeps those messages byte-stable for the rolling cache breakpoint.

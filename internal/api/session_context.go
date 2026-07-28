@@ -1,4 +1,4 @@
-package api
+﻿package api
 
 import (
 	"context"
@@ -16,7 +16,7 @@ import (
 // sent: the composed system prompt + dynamic suffix, the message transcript that
 // would go on the wire, and the shipped tool catalog — each with a token estimate.
 // A debug view mirroring the agent context preview, but for a live session (real
-// history, author labels, tool recap, running summary, memory, goal, cwd).
+// history, author labels, tool recap, running summary, memory, cwd).
 type sessionContextPreview struct {
 	AgentName string `json:"agentName"`
 	// Provider drives provider-aware UI notes (e.g. claude-cli delivers tools via

@@ -1,4 +1,4 @@
-package api
+﻿package api
 
 import (
 	"context"
@@ -412,9 +412,9 @@ func interactionToolSpecs(tun *agent.Tunables, autonomous bool) []interaction.To
 		// Non-blocking; advertised on autonomous turns too (no-op with no open window).
 		tools.NewFocusViewTool().Def(),
 		// update_session mutates THIS session's own metadata (title, working dir,
-		// persistent goal + completion, tags, archive) in one call — the same
+		// tags, archive) in one call — the same
 		// db.Session fields the user edits. Non-blocking; advertised on autonomous
-		// turns too (a scheduled run can set/complete its own goal or retag itself).
+		// turns too (a scheduled run can rename or retag itself).
 		tools.NewUpdateSessionTool().Def(),
 		// schedule_wake replaces the CLI's native ScheduleWakeup (which TionSwarm
 		// disallows): the CLI runs one-shot, so its built-in wake never fires —
@@ -516,7 +516,7 @@ type sinkTool struct {
 
 // Shared attach closures (one per sink kind). Artifact/notify/focus deliberately
 // run on a fresh background ctx (fire-and-forget, not tied to turn cancellation);
-// goal/session edits use the call ctx.
+// session edits use the call ctx.
 var (
 	artifactAttach = func(_ context.Context, run *chatRun) (context.Context, bool) {
 		s := run.artifactSink()
@@ -525,9 +525,8 @@ var (
 		}
 		return tools.WithArtifacts(context.Background(), s), true
 	}
-	// update_session reads the SessionSink (a superset of GoalSink), so a single
-	// sessionAttach covers title/working-dir/goal/tags/archive — no separate
-	// goalAttach is needed any more.
+	// update_session reads the SessionSink, so a single
+	// sessionAttach covers title/working-dir/tags/archive.
 	sessionAttach = func(ctx context.Context, run *chatRun) (context.Context, bool) {
 		s := run.sessionSinkFor()
 		if s == nil {
@@ -565,14 +564,13 @@ var sinkToolTable = map[string]sinkTool{
 		}
 		return tools.WithNavigate(context.Background(), s), true
 	}, missing: "no UI is available to navigate for this turn"},
-	// update_session covers title/working-dir/goal/tags/archive; it reads the
-	// SessionSink (a superset of GoalSink), so sessionAttach alone suffices.
+	// update_session covers title/working-dir/tags/archive via the SessionSink.
 	"update_session": {newTool: func() tools.Tool { return tools.NewUpdateSessionTool() }, attach: sessionAttach, missing: "no session is available to edit for this turn"},
 }
 
 // callViaSink runs a sink-bound tool: attach the per-run sink, then call the shared
 // builtin. Replaces the former per-tool callTodo/callArtifact/callNotify/callFocus/
-// callGoal/callSessionEdit methods (one shape, one place).
+// callSessionEdit method (one shape, one place).
 func (b *interactionBackend) callViaSink(ctx context.Context, run *chatRun, st sinkTool, args json.RawMessage) (interaction.CallResult, error) {
 	cctx, ok := st.attach(ctx, run)
 	if !ok {
@@ -615,7 +613,7 @@ func (b *interactionBackend) Call(ctx context.Context, token, name string, args 
 		return interaction.CallResult{}, errors.New("no live turn for token")
 	}
 	bare := bareToolName(name)
-	// Sink-bound tools (todo/artifact/notify/focus/goal/session-edit) all share one
+	// Sink-bound tools (todo/artifact/notify/focus/session-edit) all share one
 	// shape: pull the per-run sink, inject it as a context value, call the shared
 	// builtin handler. Dispatched through a single table+helper instead of one
 	// near-identical method each (callViaSink / sinkToolTable).

@@ -1,4 +1,4 @@
-package api
+﻿package api
 
 import (
 	"context"
@@ -126,7 +126,7 @@ type chatResp struct {
 // the streaming worker path and its test still exercise it.
 
 // buildSystemPrompt delegates to the agent package's single persona assembler
-// (soul + identity + goal-usage hint) so the chat/preview and headless paths can
+// (soul + identity) so the chat/preview and headless paths can
 // never drift apart.
 func buildSystemPrompt(a db.Agent) string {
 	return agent.BuildSystemPrompt(a)

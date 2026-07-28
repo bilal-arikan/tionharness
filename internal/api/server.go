@@ -419,7 +419,6 @@ func (s *Server) registerSessionRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("DELETE /api/sessions/{id}/messages/{msgId}", s.handleDeleteMessage)
 	mux.HandleFunc("POST /api/sessions/{id}/rewind", s.handleRewindSession)
 	mux.HandleFunc("POST /api/sessions/{id}/title", s.handleGenerateSessionTitle)
-	mux.HandleFunc("PUT /api/sessions/{id}/goal", s.handleSetSessionGoal)
 	mux.HandleFunc("PUT /api/sessions/{id}/state", s.handleSetSessionState)
 	mux.HandleFunc("PUT /api/sessions/{id}/pin", s.handleSetSessionPin)
 	mux.HandleFunc("PUT /api/sessions/{id}/tags", s.handleSetSessionTags)

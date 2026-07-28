@@ -1,4 +1,4 @@
-// Package agent implements TionSwarm's multi-agent ("swarm") runtime: it owns each
+﻿// Package agent implements TionSwarm's multi-agent ("swarm") runtime: it owns each
 // agent's provider calls, tool loop, delegation, cron scheduler and the headless
 // autonomous entry points (schedule/spawn/flow).
 package agent
@@ -490,7 +490,7 @@ func (r *Runtime) SetAutonomousInteraction(fn AutonomousInteraction) { r.autoInt
 // WakeTurnFunc runs a full, history-aware chat turn for a self-wake: given the
 // originating session (whose history already includes the wake prompt as the
 // last user message) it composes the same rich request an interactive chat turn
-// gets — conversation history, author labels, memory, goal, summary — and runs
+// gets — conversation history, author labels, memory, summary — and runs
 // the agentic loop, returning the reply text and its activity trace. Installed by
 // the api server (which owns chat-turn composition); nil falls back to the
 // prompt-only invoke.
@@ -670,7 +670,7 @@ func (r *Runtime) BridgeTools(ctx context.Context, agent db.Agent) ([]providers.
 	if r.tun.DebugJournalEnabled() {
 		extra = append(extra, tools.NewReadSessionDebugTool(r.db).Def())
 	}
-	//   - get_session_info : read own-session metadata (title/tags/goal/role) — the
+	//   - get_session_info : read own-session metadata (title/tags/role) — the
 	//     session id is injected into the call ctx below, same as read_session_debug.
 	extra = append(extra, tools.NewGetSessionInfoTool(r.db).Def())
 	//   - update_user_preferences : persist durable user facts into the app-wide
@@ -1126,9 +1126,9 @@ func (r *Runtime) agentName(id string) string {
 	return id
 }
 
-// BuildSystemPrompt composes the agent's persona from soul + identity plus the
-// goal-usage hint. Exported as the SINGLE persona assembler: the chat/preview
-// path (api package) uses it too, so the two paths can never drift apart.
+// BuildSystemPrompt composes the agent's persona from soul + identity. Exported
+// as the SINGLE persona assembler: the chat/preview path (api package) uses it
+// too, so the two paths can never drift apart.
 func BuildSystemPrompt(a db.Agent) string {
 	out := ""
 	if a.Soul != "" {
@@ -1140,21 +1140,8 @@ func BuildSystemPrompt(a db.Agent) string {
 		}
 		out += a.Identity
 	}
-	// One-line nudge to use the session's north-star goal, in the cached static
-	// prefix for every turn (chat and autonomous/flow both go through here).
-	if out != "" {
-		out += "\n\n"
-	}
-	out += GoalUsageHint
 	return out
 }
-
-// GoalUsageHint is a single cached-prefix line teaching proactive goal use. The
-// tools are always available (eager); this nudges the agent to actually reach for
-// them on substantial work. Full guidance lives in the tionswarm-guide skill.
-// Appended by BuildSystemPrompt (the single persona assembler for all paths).
-const GoalUsageHint = "For substantial multi-turn work, set a durable objective with `set_session_goal` " +
-	"(one north star, not a checklist) and `complete_goal` when it is met; keep replies aligned with the session's active goal."
 
 // EnvironmentContextBlock renders a one-line machine-environment marker (OS,
 // arch, native shell) so the agent writes shell commands in the correct syntax
@@ -1262,7 +1249,7 @@ func (r *Runtime) autonomousSystemPrompt(ctx context.Context, a db.Agent) string
 		// Machine-environment marker (OS/arch/shell) so a headless turn writes shell
 		// commands in the right syntax. Its bytes never change within a process, so
 		// it is safe inside the cached static prefix. The VOLATILE pieces (turn-start
-		// clock, session goal) deliberately live in autonomousDynamicSuffix — putting
+		// clock, lessons) deliberately live in autonomousDynamicSuffix — putting
 		// them here would change the prefix bytes every turn and defeat prompt
 		// caching for every headless run.
 		return strings.TrimSpace(out + "\n\n" + EnvironmentContextBlock())
@@ -1289,15 +1276,12 @@ func DateTimeContextBlock() string {
 }
 
 // autonomousDynamicSuffix builds the VOLATILE system suffix for headless turns
-// (scheduler/spawn/flow/subagent): the turn-start clock plus the session's
-// active goal (if any). Chat turns assemble the same pieces in
-// composeTurnRequest; keeping them out of autonomousSystemPrompt keeps the
-// static prefix byte-stable across turns so cache-capable providers reuse it.
+// (scheduler/spawn/flow/subagent): the turn-start clock plus the newest failure
+// lessons. Chat turns assemble the same pieces in composeTurnRequest; keeping
+// them out of autonomousSystemPrompt keeps the static prefix byte-stable across
+// turns so cache-capable providers reuse it.
 func (r *Runtime) autonomousDynamicSuffix(ctx context.Context) string {
 	out := DateTimeContextBlock()
-	if g := r.autonomousGoalBlock(ctx); g != "" {
-		out += "\n\n" + g
-	}
 	// Failure lessons (hata→ders döngüsü): the newest distilled lessons ride
 	// every headless turn so a fresh context does not repeat known failures.
 	// The turn's own agent (resolved via the stamped session) ranks first.

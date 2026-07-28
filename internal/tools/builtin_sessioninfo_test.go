@@ -22,7 +22,7 @@ func TestGetSessionInfoTool(t *testing.T) {
 
 	sess, err := database.CreateSession(ctx, db.Session{
 		Kind: "chat", Title: "Refactor sweep", State: "active",
-		Tags: []string{"sprint", "backend"}, Goal: "ship it", Role: "coordinator",
+		Tags: []string{"sprint", "backend"}, Role: "coordinator",
 		WorkingDir: `C:\proj`,
 	})
 	if err != nil {
@@ -36,7 +36,7 @@ func TestGetSessionInfoTool(t *testing.T) {
 	if err != nil {
 		t.Fatalf("call: %v", err)
 	}
-	for _, want := range []string{sess.ID, "Refactor sweep", "sprint, backend", "ship it", "coordinator", `C:\proj`} {
+	for _, want := range []string{sess.ID, "Refactor sweep", "sprint, backend", "coordinator", `C:\proj`} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("output missing %q:\n%s", want, out)
 		}

@@ -94,14 +94,12 @@ and claude-cli agents). They are always available — no `activate_tools` needed
   chat/board/flows/artifacts/agents/…; optional `sessionId`/`agentId`). Use to
   *show* ("open the artifact I just made"), not to ask. Non-blocking.
 - **`update_session`** — manage THIS session in one call (pass only the fields you
-  change): `goal` sets the persistent "north star" objective (injected into every
-  turn, the SAME goal the user edits in the UI — shared, not parallel) and
-  `goal_done: true` marks it achieved; `title` renames it (a clear sidebar label
-  once the topic is known); `working_dir` sets the cwd for the file/shell tools
-  (like `cd`; empty string resets to the workspace default, takes effect next turn);
-  `tags` / `add` / `remove` edit its tags; `archive: true` retires it when the work
-  is done (it leaves the active list, never deleted). One durable goal, not a
-  checklist (use `todo_write` for steps). Non-blocking.
+  change): `title` renames it (a clear sidebar label once the topic is known);
+  `working_dir` sets the cwd for the file/shell tools (like `cd`; empty string
+  resets to the workspace default, takes effect next turn); `tags` / `add` /
+  `remove` edit its tags; `archive: true` retires it when the work is done (it
+  leaves the active list, never deleted). Track multi-step work with `todo_write`.
+  Non-blocking.
 
 On autonomous (scheduler/spawn/flow) turns there is no live user: the blocking
 tools (`ask_user`/`request_confirmation`) are withdrawn, while `notify`/

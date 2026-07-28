@@ -1,4 +1,4 @@
-package agent
+﻿package agent
 
 import (
 	"context"
@@ -33,7 +33,7 @@ func (f flowRunner) RunAgentNodeSchema(ctx context.Context, agentID, prompt, out
 	if err != nil {
 		return "", err
 	}
-	// Volatile clock/goal ride the dynamic suffix so the node's static system
+	// Volatile clock/lessons ride the dynamic suffix so the node's static system
 	// prefix stays byte-stable across nodes and runs (cacheable).
 	return f.rt.complete(ctx, agent, f.rt.systemPrompt(agent), f.rt.autonomousDynamicSuffix(ctx), prompt, outputSchema, f.autonomous)
 }

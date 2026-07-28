@@ -9,7 +9,6 @@ import { useResizableSidebar } from '@/shared/hooks/useResizableSidebar'
 import { Section, ActionBtn } from './SessionDetailBits'
 import { SessionTitleBlock } from './SessionTitleBlock'
 import { SessionProcessCard } from './SessionProcessCard'
-import { SessionGoalSection } from './SessionGoalSection'
 import { SessionContextUsage } from './SessionContextUsage'
 import { SessionAgentsSection } from './SessionAgentsSection'
 import { SessionUsageCard } from './SessionUsageCard'
@@ -76,11 +75,6 @@ export function SessionDetailPanel({
   const [editingTitle, setEditingTitle] = useState(false)
   const [titleDraft, setTitleDraft] = useState('')
   const [savingTitle, setSavingTitle] = useState(false)
-  // Persistent goal ("north star"): when editing, hold the draft text; saving
-  // persists verbatim (empty clears the goal).
-  const [editingGoal, setEditingGoal] = useState(false)
-  const [goalDraft, setGoalDraft] = useState('')
-  const [savingGoal, setSavingGoal] = useState(false)
   // Manual-refresh nonce: bumped by the refresh button (and after a title
   // regeneration) to re-fetch without touching the parent's refreshKey.
   const [localRefresh, setLocalRefresh] = useState(0)
@@ -251,52 +245,6 @@ export function SessionDetailPanel({
     }
   }
 
-  // Open the goal editor seeded with the current goal.
-  const startEditGoal = () => {
-    setGoalDraft(info?.goal ?? '')
-    setEditingGoal(true)
-  }
-
-  // Persist the goal verbatim (empty clears it), then reflect it locally. Saving
-  // always reopens the goal (done=false) — an edited objective is active again.
-  const commitGoal = async () => {
-    const g = goalDraft.trim()
-    if (g === (info?.goal ?? '').trim() && !info?.goalDone) {
-      setEditingGoal(false)
-      return
-    }
-    setSavingGoal(true)
-    try {
-      await api.setSessionGoal(sessionId, g, false)
-      setInfo((prev) => (prev ? { ...prev, goal: g, goalDone: false } : prev))
-      setEditingGoal(false)
-      // Re-fetch so the context meter reflects the goal's new footprint.
-      setLocalRefresh((n) => n + 1)
-    } catch (e) {
-      onError((e as Error).message)
-    } finally {
-      setSavingGoal(false)
-    }
-  }
-
-  // Toggle the goal's done state: completing it keeps the text but stops the
-  // context injection; reopening resumes it.
-  const toggleGoalDone = async () => {
-    if (!info?.goal || savingGoal) return
-    const next = !info.goalDone
-    setSavingGoal(true)
-    try {
-      await api.setSessionGoal(sessionId, info.goal, next)
-      setInfo((prev) => (prev ? { ...prev, goalDone: next } : prev))
-      // Re-fetch so the context meter drops/restores the goal bucket.
-      setLocalRefresh((n) => n + 1)
-    } catch (e) {
-      onError((e as Error).message)
-    } finally {
-      setSavingGoal(false)
-    }
-  }
-
   // Context window figures (/context-style): used vs. the compaction threshold,
   // with the leftover shown as free space.
   const ctxWindow = info ? info.contextWindow || info.contextTokens || 1 : 1
@@ -370,19 +318,6 @@ export function SessionDetailPanel({
               hasRerun={!!onRerun}
             />
           )}
-
-          {/* Goal ("north star") — persistent objective injected into context */}
-          <SessionGoalSection
-            info={info}
-            editingGoal={editingGoal}
-            goalDraft={goalDraft}
-            savingGoal={savingGoal}
-            setGoalDraft={setGoalDraft}
-            setEditingGoal={setEditingGoal}
-            startEditGoal={startEditGoal}
-            commitGoal={commitGoal}
-            toggleGoalDone={toggleGoalDone}
-          />
 
           {/* Tags — free-form labels (also drive tag-triggered automations) */}
           <section>

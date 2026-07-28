@@ -1,4 +1,4 @@
-package agent
+﻿package agent
 
 import (
 	"context"
@@ -262,7 +262,7 @@ func (s *Scheduler) deliverWake(ctx context.Context, sc db.Schedule) error {
 	}
 	output, err = s.rt.recordAssistantReply(ctx, sc.SessionID, sc.AgentID, output, steps, wakeMeta, time.Since(wakeStart).Milliseconds(), "ℹ️ Ajan bu uyandırma için boş yanıt döndürdü.")
 	s.emitWakeEvent(sc, "done", "⏰ Otomatik uyandırma tamamlandı")
-	// Auto-tag tool errors / goal state from this wake turn.
+	// Auto-tag tool errors from this wake turn.
 	s.rt.AutoTagTurn(ctx, sc.SessionID, steps, "")
 	// Tag-triggered automations: a wake continues a real chat session, which may be
 	// tagged — signal its completion so an automation can pick up the result.
@@ -485,7 +485,7 @@ func (s *Scheduler) deliverPrompt(ctx context.Context, sc db.Schedule) (string, 
 	// Context-reset handoff: if this scheduled turn hit the context limit, optionally
 	// continue the work in a fresh session. No-op unless HandoffAuto is enabled.
 	s.rt.maybeAutoHandoff(ctx, session.ID, agent, overflow.Load())
-	// Auto-tag tool errors / goal state from this scheduled turn.
+	// Auto-tag tool errors from this scheduled turn.
 	s.rt.AutoTagTurn(ctx, session.ID, steps, "")
 	// Tag-triggered automations: a scheduled delivery's session may be tagged too.
 	s.rt.FireTurnFinished(session.ID, agent.ID, output)

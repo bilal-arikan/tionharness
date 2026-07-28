@@ -265,12 +265,6 @@ export interface SessionInfo {
   agentName: string
   messageCount: number
   unread: boolean
-  // Persistent session objective ("north star") injected into every turn's
-  // context. Empty when none is set.
-  goal: string
-  // True when the goal is marked done: it stays visible but is no longer
-  // injected into context.
-  goalDone: boolean
   // Free-form labels (also drive tag-triggered automations).
   tags?: string[]
   // Context-reset lineage: the session this one continues (born from /handoff)

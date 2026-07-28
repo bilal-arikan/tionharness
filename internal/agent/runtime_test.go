@@ -13,13 +13,10 @@ func TestSystemPromptInjectsWorkspaceInstructions(t *testing.T) {
 	agent := db.Agent{Soul: "You are Ada.", Identity: "A helpful assistant."}
 	r := &Runtime{}
 
-	// No instructions set → bare persona plus the cached goal-usage hint.
+	// No instructions set → bare persona.
 	noInstr := r.systemPrompt(agent)
 	if !strings.HasPrefix(noInstr, BuildSystemPrompt(agent)) {
 		t.Fatalf("without instructions: persona prefix dropped: %q", noInstr)
-	}
-	if !strings.Contains(noInstr, GoalUsageHint) {
-		t.Fatalf("without instructions: goal hint missing: %q", noInstr)
 	}
 
 	// With instructions → persona plus a labelled workspace block.

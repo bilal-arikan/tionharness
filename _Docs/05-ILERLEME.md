@@ -1,6 +1,51 @@
 # TionSwarm — İlerleme Takibi
 
-> Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-07-27**
+> Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-07-28**
+
+## Oturum-hedefi (goal) mekanizması tamamen kaldırıldı ✅ (2026-07-28)
+
+Kaldırıldı çünkü **yarım bir özellikti**: bir kuzey-yıldızı metnini her turun
+dinamik suffix'ine enjekte ediyordu, ama "bitti"ye işi yapan modelin kendisi karar
+veriyordu (`complete_goal`) ve hiçbir şeyi sürmüyordu — `autocontinue.go` goal'den
+tamamen habersizdi. Claude Code'un `/goal`'ü ise bir **kontrol akışıdır**: ayrı bir
+değerlendirici model her turdan sonra transkripti okuyup durma koşulunu yargılar ve
+karşılanmadıysa yeni tur başlatır. İleride bu şekilde ayrı bir oturumda yeniden
+kurulacak; o zamana kadar yarı-uygulanmış hali beklenti yaratıp karşılamıyordu.
+
+- **Silinen dosyalar:** `internal/agent/goal.go` (+test), `internal/api/goal.go`,
+  `internal/tools/goalsink.go`, `frontend/src/features/sessions/SessionGoalSection.tsx`.
+- **Veri modeli:** `db.Session.Goal` / `GoalDone` + `SetSessionGoal` kalktı. Diskteki
+  eski `goal` alanları JSON'da öylece kalır ve **yok sayılır** (migration gerekmez).
+- **Prompt:** `goalContextBlock` enjeksiyonu (chat + otonom yol) ve statik prefix'teki
+  `GoalUsageHint` kalktı — `BuildSystemPrompt` artık salt persona (soul + identity).
+- **Araç yüzeyi:** `update_session`'ın `goal` / `goal_done` alanları kalktı;
+  `tools.SessionSink` artık `GoalSink`'i gömmüyor; `get_session_info` goal satırı yok.
+- **Yan sistemler:** `PUT /api/sessions/{id}/goal` route'u, `SessionInfo.goal/goalDone`,
+  bağlam ölçerdeki "Hedef" kovası, handoff'un `HandoffEnv.Goal` alanı ve
+  **`goal` / `goal-done` auto-tag'leri** kalktı → bu etiketlere bağlı bir otomasyon
+  varsa artık tetiklenmez (detay `46`).
+- **Seed skill'ler:** `tionswarm-guide` ve `tionswarm-progress` artık ölü API'yi
+  öğretmiyor; hedefin yeri `todo_write`/progress olarak yazıldı.
+- Doğrulama: `go vet ./...` temiz; `go test` agent/tools/api/db/conversation/skills
+  paketleri yeşil. `npx tsc --noEmit` bu değişikliklerde temiz.
+
+  worker onu alınca boyanıyordu; yukarı kaydırmış kullanıcı o ana kadar hiçbir tepki
+  görmüyordu.
+- **Bekleme göstergesi:** bağımsız `WorkingDots` balonu artık `pending`'in yanı sıra
+  `streaming` ile de çıkar, ve `App` oturum açılışında `GET /api/sessions/active`'ten
+  o oturumu `markPending` ile tohumlar (yalnız EKLER — kuyruğa yeni atılmış tur
+  sunucuda henüz kayıtlı olmayabilir). Çalışan bir oturum açıldığında transkript artık
+  kendi mesajımızda bitip ajan susmuş gibi görünmüyor.
+- **Coordinator workflow picker → satır başına (ⓘ) + 📖:** `<select>` bir radio
+  listesine çevrildi (`<option>` buton taşıyamaz). Her recipe satırında kendi
+  açıklama balonu (`recipeHelp` — frontmatter'daki `pattern`/`workerTargets`/
+  `stopCondition`/`maxTurns`'ten üretilir) ve kendi skill'ini açan 📖 butonu var;
+  etiket yanındaki (ⓘ) genel "workflow nedir" notu olarak kalır. Skills'e geçiş
+  yeni `setSessionState` seam'i ile — seçim tohumlanır, Skills ekranı mount olurken
+  okur → URL şeması değişmedi. Balonlar `fixed` modda: oturum paneli
+  `overflow-hidden` olduğu için `absolute` balon kırpılıyordu; ayrıca
+  `InfoPopover`'ın fixed dikey clamp'i artık uydurma 180px yükseklik yerine gerçek
+  bir tavan (`max-h` + scroll) kullanıyor, uzun not viewport dışına taşmıyor.
 
 ## Flow paleti: node butonlarında (ⓘ) açıklama balonu ✅ (2026-07-27)
 

@@ -1,4 +1,4 @@
-# 35 — Context Reset + Handoff Artifact
+﻿# 35 — Context Reset + Handoff Artifact
 
 > Uzun otonom görevlerde, bağlam sınırına yaklaşan bir oturumu **yerinde
 > özetlemek yerine** tamamen temiz bir pencerede sürdürmek: bir **handoff
@@ -69,7 +69,7 @@ Rolling-summary'nin 8 bölümünü **reset-kritik** parçalarla genişletir:
 9. **Next Concrete Step** (tek, hemen yapılacak iş)
 
 6/7/9 reset'in özüdür: taze ajan **net bir devam noktası** görür → "erken bitirme"
-eğilimi kırılır. `HandoffEnv` (Goal/WorkingDir/GitBranch/GitStatus/Todos/Artifacts)
+eğilimi kırılır. `HandoffEnv` (WorkingDir/GitBranch/GitStatus/Todos/Artifacts)
 8. bölümü gerçek değerlerle besler.
 
 ## Otomatik tetik mekaniği

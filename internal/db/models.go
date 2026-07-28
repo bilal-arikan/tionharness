@@ -123,16 +123,6 @@ type Session struct {
 	// the one being viewed; cleared when the user opens it.
 	Unread bool `json:"unread"`
 
-	// Goal is a persistent, user-set objective ("north star") for this session.
-	// When set it is injected into every turn's context so the agent keeps its
-	// replies aligned with it. Inspired by Claude Code's /goal: one durable,
-	// measurable objective that steers the conversation. Empty = no goal.
-	Goal string `json:"goal,omitempty"`
-	// GoalDone marks the goal as achieved: it stays stored (so the user can
-	// review or reopen it) but is no longer injected into context — completing a
-	// goal stops it steering future turns.
-	GoalDone bool `json:"goalDone,omitempty"`
-
 	// WorkingDir is this session's working directory (cwd) for the built-in
 	// filesystem/shell tools — like `cd /path/to/project` in a terminal. When set
 	// it overrides the workspace default: relative paths resolve here and the

@@ -9,9 +9,8 @@ import (
 )
 
 // sessionSink is a DB-backed tools.SessionSink bound to one session. It reads and
-// writes the session's own fields — goal (the SAME db.Session.Goal the user
-// edits), title, working directory and lifecycle state — so the session-scoped
-// tools (set_session_goal/complete_goal, set_session_title, set_working_dir,
+// writes the session's own fields — title, working directory and lifecycle
+// state — so the session-scoped tools (set_session_title, set_working_dir,
 // archive_session) operate on the live session. Every mutation publishes a
 // "session" change event so open windows refresh the session list + detail panel
 // live (the agent-driven counterpart to the user editing these in the UI). Used
@@ -30,16 +29,15 @@ type sessionSink struct {
 	refreshEpoch func(context.Context, string)
 }
 
-// NewSessionSink builds a session sink bound to a session for this workspace. It
-// satisfies both tools.SessionSink and (as a superset) tools.GoalSink.
+// NewSessionSink builds a session sink bound to a session for this workspace.
 func (r *Runtime) NewSessionSink(sessionID string) tools.SessionSink {
 	return &sessionSink{db: r.db, sessionID: sessionID, publish: r.publish, autoTag: r.tun.AutoTagSessions, refreshEpoch: r.RefreshPromptEpoch}
 }
 
 // notify publishes a "session" change event so the open session list + detail
 // panel refresh live when an agent mutates session metadata. `op` is a short,
-// stable verb matching the http-side emitSessionChange values (title / goal /
-// workdir / tags / state) so the listener can decide whether to also reload the
+// stable verb matching the http-side emitSessionChange values (title / workdir /
+// tags / state) so the listener can decide whether to also reload the
 // active transcript vs only the row + detail meter.
 func (s *sessionSink) notify(op string) {
 	if s.publish == nil {
@@ -50,26 +48,6 @@ func (s *sessionSink) notify(op string) {
 		Level:  "info",
 		Target: map[string]string{"sessionId": s.sessionID, "op": op},
 	})
-}
-
-func (s *sessionSink) Goal(ctx context.Context) (tools.GoalState, error) {
-	sess, err := s.db.GetSession(ctx, s.sessionID)
-	if err != nil {
-		return tools.GoalState{}, err
-	}
-	return tools.GoalState{Text: sess.Goal, Done: sess.GoalDone}, nil
-}
-
-func (s *sessionSink) SetGoal(ctx context.Context, text string, done bool) error {
-	// A cleared goal can't be "done" (mirrors the HTTP handler's guard).
-	if text == "" {
-		done = false
-	}
-	if err := s.db.SetSessionGoal(ctx, s.sessionID, text, done); err != nil {
-		return err
-	}
-	s.notify("goal")
-	return nil
 }
 
 func (s *sessionSink) SetTitle(ctx context.Context, title string) error {

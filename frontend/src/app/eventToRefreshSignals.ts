@@ -1,4 +1,4 @@
-// Maps a global SSE AppEvent to the set of panel-level refresh signal keys
+﻿// Maps a global SSE AppEvent to the set of panel-level refresh signal keys
 // that should re-fetch in response. App.tsx's central onEventRef handler calls
 // this for every event and bumps the returned keys (debounced) so subscribers
 // in useRefreshTrigger re-render and re-fetch.
@@ -41,7 +41,7 @@ export function signalsForEvent(e: AppEvent): string[] {
       // care about individual task mutations.
       return [SIGNAL_BOARD, SIGNAL_NETWORK, SIGNAL_EXECUTIONS]
     case 'session':
-      // Session CRUD (create / delete / archive / state / title / goal /
+      // Session CRUD (create / delete / archive / state / title /
       // workdir / agent / role / tags / spawn / handoff / rewind / feedback).
       // App.tsx's existing onEventRef branch already calls refreshSessions()
       // for the chat sidebar; this signal additionally nudges the executions

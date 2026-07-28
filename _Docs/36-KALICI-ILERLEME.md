@@ -1,4 +1,4 @@
-# 36 — Kalıcı Todo / PROGRESS Dosyası (Structured Note-Taking)
+﻿# 36 — Kalıcı Todo / PROGRESS Dosyası (Structured Note-Taking)
 
 > **Durum (2026-06-25): UYGULANDI.** Anthropic'in *"Effective harnesses for
 > long-running agents"* + *"Effective context engineering for AI agents"*
@@ -120,7 +120,7 @@ liste; hepsi tamamsa boş). `chat_turn.go::composeTurnRequest` cwd + agentID +
 | Katman | Ne tutar | Yapı | Kapsam | Kaynak |
 |---|---|---|---|---|
 | ~~Core memory~~ | ~~Ajan kim / kullanıcı kim~~ | — | — | **KALDIRILDI (2026-07-05)** — [arşiv](arsiv/31-MEMGPT-CORE-MEMORY.md) |
-| Session Goal | Tek kuzey-yıldızı | Tek cümle | Oturum | `db.Session.Goal` |
+| ~~Session Goal~~ | ~~Tek kuzey-yıldızı~~ | — | — | **KALDIRILDI (2026-07-28)** |
 | **Progress (bu doküman)** | Ne bitti / sırada ne var | Yapılı todo + log | **Oturum** | `<store>/progress/<sessionID>/` |
 
 Kalan iki katman tamamlayıcıdır, çakışmaz; ikisi de `SystemDynamic`'e ayrı bloklar girer. Progress

@@ -1,4 +1,4 @@
-package agent
+﻿package agent
 
 import (
 	"context"
@@ -150,9 +150,9 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 		// chat turn's context).
 		tools.NewFocusViewTool(),
 		// update_session: mutate THIS session's metadata in one call — title,
-		// working dir, persistent goal (+ complete), tags, archive. Replaces the
+		// working dir, tags, archive. Replaces the
 		// former per-field tools (set_session_title/_working_dir/archive_session/
-		// set_session_goal/complete_goal/set_session_tags). No-op without a session
+		// set_session_tags). No-op without a session
 		// sink (i.e. outside a session-bound turn). Tags shared with the UI also
 		// enrol the session into tag-triggered automations.
 		tools.NewUpdateSessionTool(),
@@ -255,7 +255,7 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 	}
 
 	// get_session_info: the read counterpart of the session-edit tools — the
-	// agent inspects its own session's metadata (title/state/tags/goal/cwd/role/
+	// agent inspects its own session's metadata (title/state/tags/cwd/role/
 	// lineage) before mutating it, or orients itself in a fresh autonomous turn.
 	builtins = append(builtins, tools.NewGetSessionInfoTool(r.db))
 

@@ -1,4 +1,4 @@
-package agent
+﻿package agent
 
 import (
 	"context"
@@ -208,7 +208,7 @@ func (r *Runtime) runAgent(ctx context.Context, caller db.Agent, parentReq *prov
 	req := providers.Request{
 		Model:  agent.Model,
 		System: sys,
-		// Volatile turn-start clock (+ session goal when ctx carries a session)
+		// Volatile turn-start clock (+ lessons when ctx carries a session)
 		// rides the dynamic suffix, keeping the static prefix cacheable.
 		SystemDynamic: r.autonomousDynamicSuffix(ctx),
 		Messages:      msgs,

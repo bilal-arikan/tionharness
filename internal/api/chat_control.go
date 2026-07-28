@@ -1,4 +1,4 @@
-package api
+﻿package api
 
 import (
 	"context"
@@ -421,8 +421,8 @@ func (r *chatRun) navSink() tools.NavigateSink {
 
 // setSession installs the session edit sink so the update_session tool (native
 // via context, CLI via the Interaction MCP) can mutate this session's title,
-// working dir, goal, tags and archive state. SessionSink is a superset of
-// GoalSink, so this single sink also backs the goal read/write.
+// working dir, tags and archive state.
+
 func (r *chatRun) setSession(sink tools.SessionSink) {
 	r.mu.Lock()
 	r.session = sink
