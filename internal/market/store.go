@@ -23,9 +23,10 @@ type tier struct {
 	fsys   fs.FS // non-nil → read from this embedded FS instead of the OS
 }
 
-// Store resolves and caches marketplace packs from the three tiers (bundled →
-// global → workspace). Safe for concurrent use. The cache holds manifests only;
-// payloads are read from disk on demand so the catalog stays lean.
+// Store resolves and caches marketplace packs from the local tiers (bundled →
+// global) plus cached remote registry indexes. Safe for concurrent use. The
+// cache holds manifests only; payloads are read from disk (or downloaded) on
+// demand so the catalog stays lean.
 type Store struct {
 	tiers []tier
 
@@ -47,11 +48,11 @@ type Store struct {
 	ledgerDir string
 }
 
-// New builds a store over a single local pack tier — the global market dir
-// (<DataDir>/market) — plus remote registries. There is no bundled (embedded) or
-// per-workspace pack tier: packs live only in the global dir and remote sources.
-// ledgerDir is the per-workspace root where the install ledger is kept. Any dir
-// may be empty/missing.
+// New builds a store over two local pack tiers — the embedded bundled tier
+// (workspace templates, lowest priority) and the global market dir
+// (<DataDir>/market, writable) — plus remote registries. There is no
+// per-workspace pack tier. ledgerDir is the per-workspace root where the install
+// ledger is kept. Any dir may be empty/missing.
 func New(globalDir, ledgerDir string) *Store {
 	// Bundled tier first (lowest priority): the embedded workspace-template packs,
 	// always present so a fresh install has templates in the market + create picker.

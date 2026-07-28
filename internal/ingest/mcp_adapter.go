@@ -22,7 +22,8 @@ type mcpServerSpec struct {
 	Args    []string          `json:"args"`
 	Env     map[string]string `json:"env"`
 	URL     string            `json:"url"`
-	Type    string            `json:"type"` // stdio | sse | http
+	Headers map[string]string `json:"headers"` // http transport request headers (auth)
+	Type    string            `json:"type"`    // stdio | sse | http
 }
 
 func (mcpAdapter) Scan(tree fetch.Tree, prefix, baseURL string) []Discovered {
@@ -60,6 +61,12 @@ func (mcpAdapter) Scan(tree fetch.Tree, prefix, baseURL string) []Discovered {
 					envJSON = string(b)
 				}
 			}
+			headersJSON := ""
+			if len(spec.Headers) > 0 {
+				if b, err := json.Marshal(spec.Headers); err == nil {
+					headersJSON = string(b)
+				}
+			}
 			desc := transport + " MCP server"
 			if spec.Command != "" {
 				desc = spec.Command + " " + strings.Join(spec.Args, " ")
@@ -83,12 +90,14 @@ func (mcpAdapter) Scan(tree fetch.Tree, prefix, baseURL string) []Discovered {
 						Description: strings.TrimSpace(desc),
 						Version:     "1.0.0",
 						Payload: market.Payload{MCP: &market.MCPPayload{
-							Name:      name,
-							Transport: transport,
-							Command:   spec.Command,
-							Args:      argsJSON,
-							URL:       spec.URL,
-							EnvConfig: envJSON,
+							Name:          name,
+							Description:   strings.TrimSpace(desc),
+							Transport:     transport,
+							Command:       spec.Command,
+							Args:          argsJSON,
+							URL:           spec.URL,
+							EnvConfig:     envJSON,
+							HeadersConfig: headersJSON,
 						}},
 					}, nil
 				},

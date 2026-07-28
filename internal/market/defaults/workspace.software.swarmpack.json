@@ -4,6 +4,7 @@
   "kind": "workspace",
   "name": "Yazılım Geliştirme",
   "description": "Search · Plan · Execute · Verify ajanları ve bu adımları sırayla yürüten geliştirme akışı.",
+  "version": "1.0.0",
   "author": "TionSwarm",
   "icon": "🛠",
   "tags": [

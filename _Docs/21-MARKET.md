@@ -1,23 +1,27 @@
 # 21 — Uygulama İçi Market Sistemi (Marketplace)
 
 > **Durum:** Tasarım + **yedi türde de kurulum çalışır** (skill/agent/provider/flow/
-> **workspace/memory/mcp** install). Yeni türler (workspace/memory/mcp) 2026-06-24'te
-> eklendi. (Board türü kısa süre denendi, 2026-06-24'te **kaldırıldı** — workspace
-> şablonu zaten opsiyonel kanban düzeni taşıyor.)
+> **workspace/mcp/hook** install). workspace/mcp 2026-06-24'te, `hook` (yabancı plugin
+> hook'ları, ingest ile) sonradan eklendi. (Board türü kısa süre denendi, 2026-06-24'te
+> **kaldırıldı** — workspace şablonu zaten opsiyonel kanban düzeni taşıyor.
+> **`memory` türü 2026-07-05'te hafıza alt sistemiyle birlikte tamamen kaldırıldı.**)
+> **Bayatlık tazelemesi 2026-07-28 → §8** (hook UI'ı, MCP scope/headers, node ikonları,
+> şablon sürümleri).
 > **Uzak kayıt defteri (remote registry) — 2026-06-25:** market artık harici
 > sunuculardan paket çekebilir (`swarmregistry/v1` index). Kaynak ekle/çıkar/yenile,
 > uzak paketleri listele+kur (lazy indirme, opsiyonel sha256), ve **sürüm bazlı
 > "Güncelle"** algısı (install ledger). Detay §7.
 > Yayınlama (publish) şimdilik yalnız skill için; diğer türlerin publish + import/export UI sonraki dilim.
 > **Hedef:** Skiller, Agentlar, Sağlayıcılar, Flow taslakları, **Workspace şablonları,
-> Bellek tohumları ve MCP araç sunucuları** uygulama içinden paketlenip (publish),
+> MCP araç sunucuları ve hook'lar** uygulama içinden paketlenip (publish),
 > gözatılıp (browse) ve kurulabilsin (install).
 >
-> **Katman sadeleştirme (2026-06-25):** bundled (binary'e gömülü) ve workspace
-> pack tier'ları **kaldırıldı**. Paketler artık **yalnız global dizinde**
-> (`<DataDir>/market`, ~/.tionswarm/market) ve **uzak registry'lerde** yaşar.
-> `//go:embed defaults` + `EnsureDefaults` + `internal/market/defaults/` silindi →
-> binary market item taşımıyor, workspace'te market klasörü yok. Mevcut başlangıç
+> **Katman sadeleştirme (2026-06-25) + kısmi geri alma:** workspace pack tier'ı
+> **kaldırıldı**; **bundled tier daha sonra geri geldi** — `//go:embed defaults` +
+> `internal/market/defaults/*.swarmpack.json` yalnız **gömülü workspace şablonlarını**
+> taşır (taze kurulumda market ve "workspace oluştur" seçicisi boş kalmasın diye).
+> Diğer tüm paketler global dizinde (`<DataDir>/market`, ~/.tionswarm/market) ve uzak
+> registry'lerde yaşar; workspace'te market klasörü yok. Mevcut başlangıç
 > paketleri (52 adet; 2026-06-25'te **GAN üçlüsü** eklendi — `flow.gan-generator-evaluator`
 > + `agent.skeptical-evaluator` + `mcp.playwright`, generator↔evaluator döngüsü için, bkz.
 > `_Docs/15-FLOW-CANVAS.md`) global dizinde duruyor; yeni kurulumlarda market boş başlar
@@ -71,13 +75,13 @@
 > (`/api/prices`'ten) görünür. Böylece market-kurulumu olmayan, elle eklenen
 > sağlayıcılar da bu sistemlere bağlanabilir.
 >
-> **UI (2026-06-24):** Market ekranı **sol dikey kategori menüsü** kullanır (Skills/
-> Agents/Providers/Flows/Workspaces/Memories/Tools(MCP)); "Tümü" seçeneği yok,
-> ilk kategori varsayılan. **Claude Code skill içe aktarma** Skills ekranından markete
-> taşındı (Skills kategorisi başlığındaki "İçe Aktar" butonu → `SkillImportDialog`).
-> **Memory kurulumu hedef ajan seçtirir** (detayda dropdown; varsayılan ilk ajan).
-> Bir item'a tıklayınca detay **ortada açılan popup/modal** olarak gelir (eski yan-panel
-> yerine; `market-detail-modal`, backdrop'a tıklayınca kapanır).
+> **UI (2026-06-24, sıralama 2026-07-28):** Market ekranı **sol dikey kategori menüsü**
+> kullanır — **Workspaces**/Skills/Agents/Providers/Flows/Tools(MCP)/**Hooks**; "Tümü"
+> seçeneği yok, ilk kategori (Workspaces — tek gömülü paket tipi) varsayılan.
+> **Claude Code skill içe aktarma** Skills ekranından markete taşındı (sol paneldeki
+> "İçe Aktar" butonu → `SkillImportDialog`). Bir item'a tıklayınca detay **ortada açılan
+> popup/modal** olarak gelir (eski yan-panel yerine; `market-detail-modal`, backdrop'a
+> tıklayınca kapanır).
 >
 > **Generic içe aktarma (SK-IMP2→SK-IMP3, 2026-06-25):** içe aktarma artık **jenerik ve
 > çok-türlü** — tek skill klasörü değil, bir **GitHub repo / Claude Code plugin / `skills/`
@@ -106,12 +110,11 @@ TionSwarm'da yedi "paylaşılabilir varlık" var:
 | **provider** | `settings.CustomProvider` | şifreli settings.json | `settings.Upsert` |
 | **flow** | `db.Flow` (graph JSON) | JSON entity | `db.CreateFlow` |
 | **workspace** | `workspace.Manager` | workspace registry + ws-settings | `Manager.Create` + `UpdateSettings` (yeni workspace; opsiyonel kanban düzeni dahil) |
-| **memory** | `db.KnowledgeSource` | JSON entity (ajan-başına) | `Runtime.Memory().Remember` (**seçilen** ajana tohum) |
 | **mcp** | `db.MCPServer` | JSON entity | `db.CreateMCPServer` (enabled; sonraki turda yüklenir) |
+| **hook** | `db.Hook` (ingest ile yabancı plugin'den) | JSON entity + hook-scripts dosyaları | `db.CreateHook` (enabled; dedup yok) |
 
 **Kurulum semantiği farkları:**
-- **memory** bir **eylem** (tohum ekle), benzersiz-kimlikli varlık yaratmaz → "zaten kurulu" işareti yok, tekrar çalıştırılabilir ("Belleğe ekle").
-- **memory** kurulumu **seçilen ajana** yazar (install body `agentId`; verilmezse ilk ajan; ajan yoksa hata verir, UI'da buton pasif).
+- **hook** benzersiz-kimlikli varlık yaratmaz (ad/slug yok) → "zaten kurulu" işareti yok, tekrar kurulabilir; kurmadan önce komut önizlemesi okunmalı (makinede kabuk komutu çalıştırır).
 - **workspace** kurulumu **yeni bir workspace oluşturur** (ad çakışırsa engellenir); workspace şablonu opsiyonel kanban kolon düzeni taşıyabilir (`WorkspacePayload.Columns` → `WSSettings.BoardColumns`).
 - **mcp** ve **workspace** ad-bazlı dedup; **agent**/**flow** ad-bazlı; **skill** slug; **provider** id (Upsert → "Güncelle").
 
@@ -146,7 +149,7 @@ Her paket bir **manifest zarfı + tür-özel payload**'tan oluşur. Tek dosya:
 {
   "schema": "swarmpack/v1",
   "id": "skill.web-research",        // kararlı paket kimliği (kind.slug)
-  "kind": "skill",                   // skill|agent|provider|flow|workspace|memory|mcp
+  "kind": "skill",                   // skill|agent|provider|flow|workspace|mcp|hook
   "name": "Web Research",
   "description": "Derin web araştırması için adım adım yöntem.",
   "version": "1.0.0",
@@ -206,6 +209,49 @@ payload yalnız detay/kurulum anında okunur (skills'teki body-lazy kalıbı).
 }
 ```
 
+**workspace** — workspace şablonu (kimlik + başlangıç ekosistemi):
+```jsonc
+"payload": { "workspace": {
+  "name": "...", "icon": "🛠", "color": "#...", "instructions": "...",
+  "columns": [{ "key": "todo", "label": "Yapılacak" }],
+  "prompts": { "summary": "..." },   // yalnız NON-DEFAULT prompt override'ları
+  "readme": "...",                   // config/README.md
+  "skills":  [{ "slug": "...", "body": "---\n...", "files": {} }],
+  "agents":  [{ "key": "execute", "name": "...", "soul": "...",
+                "permissionMode": "auto", "toolOverrides": "{...}",
+                "skills": ["..."] }],
+  "flows":   [{ "name": "...", "steps": [...] }],   // veya "graph": "{...}" (agentId = "tmpl:<key>")
+  "schedules": [{ "agentKey": "...", "cronExpr": "0 8 * * *", "prompt": "..." }]
+}}
+```
+> Seed sırası: skills → agents → flows → schedules. Zamanlamalar **pasif** kurulur.
+
+**mcp** — MCP araç sunucusu:
+```jsonc
+"payload": { "mcp": {
+  "name": "github", "description": "GitHub MCP",
+  "transport": "http",                 // stdio | http (sse desteklenmiyor)
+  "command": "", "args": "[]", "url": "https://…/mcp",
+  "envConfig": "{...}",                // stdio env
+  "headersConfig": "{\"Authorization\":\"Bearer …\"}",  // http başlıkları (2026-07-28)
+  "scope": "shared"                    // shared (vars.) | scoped (oturum+ajan başına)
+}}
+```
+> Sırlar publisher'ın sorumluluğu — `envConfig`/`headersConfig` verbatim taşınır.
+> Bilinmeyen `scope` değeri kurulumda `shared`'a düşürülür.
+
+**hook** — yabancı plugin'den (Claude Code `plugin.json`/`hooks.json`) içe aktarılan
+lifecycle/tool hook'u:
+```jsonc
+"payload": { "hook": {
+  "event": "PreToolUse", "matcher": "Bash", "timeoutSec": 30,
+  "command": "${CLAUDE_PLUGIN_ROOT}/scripts/guard.sh"
+}}
+```
+> Paketin `files` alanındaki scriptler workspace'in hook-scripts klasörüne yazılır ve
+> `${CLAUDE_PLUGIN_ROOT}` o dizine yeniden yazılır. Kurulum **dedup yapmaz** (hook'un
+> tekil kimliği yok) → UI de "zaten kurulu" işareti göstermez.
+
 ---
 
 ## 3. Backend — `internal/market` paketi
@@ -223,18 +269,20 @@ internal/market/
 └── *_test.go
 ```
 
-### 3.1 Registry katmanları (tier) — sadeleştirildi (2026-06-25)
+### 3.1 Registry katmanları (tier)
 
-Eskiden bundled/global/workspace üçlüsü vardı; **bundled ve workspace pack tier'ları
-kaldırıldı**. Kalan yerel tek tier **global**; uzak registry'ler 4. (en düşük öncelikli)
-kaynaktır. Yerel (global) paketler, id çakışmasında uzak paketleri gölgeler.
+2026-06-25'te bundled/workspace tier'ları kaldırılmıştı; **bundled tier daha sonra geri
+geldi** (gömülü workspace şablonları, `embed.go` + `defaults/*.swarmpack.json`) — taze
+kurulumda market ve "workspace oluştur" seçicisi boş kalmasın diye. Workspace tier'ı
+gerçekten yok. Öncelik: **global > bundled**, ikisi de uzak paketleri gölgeler.
 
 | Tier | Dizin | İçerik |
 |------|-------|--------|
-| **global** | `<DataDir>/market` | tek yerel kaynak (publish edilen / elle konan) |
+| **bundled** | binary içi `defaults/` | gömülü workspace şablonları (salt-okunur, en düşük öncelik) |
+| **global** | `<DataDir>/market` | tek yazılabilir yerel kaynak (publish edilen / elle konan) |
 | **remote** | uzak `registry.json` | harici registry'lerden çekilenler (§7) |
 
-Embed/seed yok: binary market item taşımaz, workspace'te market klasörü yok. Install
+Workspace'te market klasörü yok. Install
 ledger (`installed.json`) per-workspace olarak workspace kökünde tutulur (pack değil,
 yalnız "hangi sürüm kuruldu" takibi).
 
@@ -249,7 +297,7 @@ func (s *Store) Reload()
 func (s *Store) Publish(p Pack) error           // global dizine yazar
 ```
 
-### 3.3 Install (kurulum) — ✅ dört tür de çalışır
+### 3.3 Install (kurulum) — ✅ yedi türün hepsi çalışır
 
 `market.InstallSkill` dosya işidir (market paketinde); agent/provider/flow ise db/
 settings gerektirdiğinden **API handler'ında** (`api/market.go`) yapılır — market
@@ -268,6 +316,16 @@ paketini db/settings bağımlılığından uzak tutar (publish'in `BuildSkillPac
   (canlı registry push). Key (pakette **yok**) gövdedeki `apiKey`'den gelir, AES-GCM
   şifrelenir; boşsa yine kurulur (kullanıcı sonra Ayarlar'dan girer). Provider id =
   pack id'den (`provider.<slug>` → `<slug>`).
+
+- **workspace** → `installWorkspacePack`: şablondan **yeni workspace** yaratır ve
+  ekosistemi seed eder (skills → agents → flows → schedules). Dedup workspace adına göre.
+- **mcp** → `installMCPPack`: `db.CreateMCPServer` (enabled). Ad'a göre dedup. Payload'daki
+  `description`/`headersConfig`/`scope` aynen aktarılır; `scope` yalnız `scoped` ise
+  korunur, aksi hâlde `shared` (2026-07-28 — önceden sabit `shared` idi ve
+  headers/description düşüyordu).
+- **hook** → `installHookPack`: `db.CreateHook` (enabled, `CreatedBy=""`). Paketin
+  script'leri workspace hook-scripts dizinine yazılır, `${CLAUDE_PLUGIN_ROOT}` o dizine
+  rewrite edilir. **Dedup yok.**
 
 **Tekrar-kurulum koruması (dedup):** agent/flow kurulumu, aynı **ada** sahip bir varlık
 zaten varsa **409** döner (`nameExists` + `agentNames`/`flowNames`) — kullanıcının işini
@@ -483,3 +541,28 @@ registry sürümü 3.0.0'a çıkarıldı + refresh → "güncelleme var" = true.
 - `minAppVersion` zorlaması (şimdilik yalnız taşınıyor).
 - Bağımlılıklar (agent paketi referans skill paketlerini önersin).
 - Çakışma politikası (slug çakışmasında yeniden adlandırma vs üzerine yazma).
+
+---
+
+## 8. Bayatlık tazelemesi — 2026-07-28
+
+Market ekranı ve gömülü item'lar, son dönemde eklenen alt sistemlerin (hook ingest'i,
+hibrit MCP kapsamı, genişleyen flow node tipleri, merkezi prompt registry) gerisinde
+kalmıştı. Yapılan düzeltmeler:
+
+| # | Sorun | Düzeltme |
+|---|-------|----------|
+| 1 | `hook` türü backend'de kurulabilirken UI'da yoktu (sekme yok, `KIND_LABEL['hook']` boş → İçe Aktar diyaloğunda başlıksız grup) | `PackKind`/`IngestKind`'a `hook`, `KIND_NAV`'a **Hooks** sekmesi (`Webhook` ikonu), `KIND_LABEL`/`INSTALL_LABEL` girdileri, `PackPreview`'da hook kartı (olay/matcher/timeout + komut + "kurmadan önce komutu oku" uyarısı) |
+| 2 | `MCPPayload` scope/headers/description taşımıyordu; kurulum `Scope:"shared"` sabitliyordu → auth başlıklı HTTP MCP sunucusu paketle taşınamıyordu | Payload'a `description`/`headersConfig`/`scope`; `installMCPPack` üçünü de aktarır (`scope` allow-list'li). `mcp_adapter` artık `.mcp.json`'daki `headers` bloğunu da okur |
+| 3 | `NODE_ICON` yalnız 5 node tipini biliyordu | 12 tipin tamamı (start/end/agent/branch/parallel/delay/transform/loop/await-input/subflow/spawn/join); workspace önizlemesindeki akış çipleri de artık tüm non-lineer tipleri gösterir |
+| 4 | Kaldırılmış `memory` türüne ait ölü yorumlar; `AgentPayload.capabilities` ölü alan; `toolOverrides`/`prompts`/`readme` TS tiplerinde yoktu | Temizlendi + eklendi; workspace önizlemesine **prompt override'ları** ve **config/README.md** bölümleri, ajan kartına araç-override çipi |
+| 5 | Gömülü 5 şablonda `version` yoktu → `updateAvailable()` hep false, ledger'a boş sürüm | Hepsine `"version": "1.0.0"` |
+| 6 | Market varsayılan sekmesi `skill` idi ama gömülü skill paketi 0 → ilk açılışta boş ızgara | `KIND_NAV` sırası **Workspaces** ile başlar (tek gömülü paket tipi) |
+| 7 | `SourceWorkspace` tier'ı ölü koddu; paket/store yorumları "dört tür / üç tier" diyordu | `SourceWorkspace` kaldırıldı (frontend `PackSource` + `SOURCE_LABEL` dâhil); yorumlar 7 tür + bundled/global/remote olarak güncellendi |
+
+**Doğrulama:** `go build ./...` + `go vet` + `go test ./internal/market/... ./internal/ingest/...`
+(19 test) yeşil; frontend `tsc --noEmit` temiz.
+
+**Kalan (içerik kararı):** gömülü şablonlar hâlâ yalnız agents + lineer flow + schedule
+kullanıyor — automations (etiket/pano) payload'da alanı bile yok; koordinatör rolü,
+`await-input`/`subflow`/`spawn-join` düğümleri ve insight lens'leri şablonla taşınamıyor.

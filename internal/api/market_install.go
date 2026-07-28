@@ -142,15 +142,23 @@ func (s *Server) installMCPPack(r *http.Request, wsp *workspace.Workspace, pack 
 	if existing, _ := wsp.DB.ListMCPServers(r.Context()); nameExists(mp.Name, mcpNames(existing)) {
 		return market.InstallResult{}, httpErr{http.StatusConflict, "\"" + mp.Name + "\" adlı MCP sunucusu zaten kurulu"}
 	}
+	// Scope rides in the pack; anything other than "scoped" falls back to the
+	// shared default so a foreign pack cannot smuggle in an unknown scope.
+	scope := strings.TrimSpace(mp.Scope)
+	if scope != "scoped" {
+		scope = "shared"
+	}
 	created, err := wsp.DB.CreateMCPServer(r.Context(), db.MCPServer{
-		Name:      mp.Name,
-		Transport: mp.Transport,
-		Command:   mp.Command,
-		Args:      mp.Args,
-		URL:       mp.URL,
-		EnvConfig: mp.EnvConfig,
-		Enabled:   true,
-		Scope:     "shared",
+		Name:          mp.Name,
+		Description:   mp.Description,
+		Transport:     mp.Transport,
+		Command:       mp.Command,
+		Args:          mp.Args,
+		URL:           mp.URL,
+		EnvConfig:     mp.EnvConfig,
+		HeadersConfig: mp.HeadersConfig,
+		Enabled:       true,
+		Scope:         scope,
 	})
 	if err != nil {
 		return market.InstallResult{}, httpErr{http.StatusInternalServerError, err.Error()}

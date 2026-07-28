@@ -1,7 +1,7 @@
-// Marketplace — shareable "packs" (skill / agent / provider / flow) resolved
-// from three tiers (bundled / global / workspace). The catalog carries the
-// manifest only; the kind-specific payload is fetched on demand via the detail
-// endpoint and used at install time. See _Docs/21-MARKET.md.
+// Marketplace — shareable "packs" (skill / agent / provider / flow / workspace /
+// mcp / hook) resolved from four tiers (bundled / global / workspace / remote).
+// The catalog carries the manifest only; the kind-specific payload is fetched on
+// demand via the detail endpoint and used at install time. See _Docs/21-MARKET.md.
 
 export type PackKind =
   | 'skill'
@@ -10,7 +10,8 @@ export type PackKind =
   | 'flow'
   | 'workspace'
   | 'mcp'
-export type PackSource = 'bundled' | 'global' | 'workspace' | 'remote'
+  | 'hook'
+export type PackSource = 'bundled' | 'global' | 'remote'
 
 export interface SkillPayload {
   slug: string
@@ -23,7 +24,6 @@ export interface AgentPayload {
   identity?: string
   provider?: string
   model?: string
-  capabilities?: string
   thinkingLevel?: string
   permissionMode?: string
   avatar?: string
@@ -70,7 +70,10 @@ export interface WorkspaceTemplateAgent {
   color?: string
   mcpEnabled?: boolean
   allowedTools?: string
+  /** Legacy per-agent denylist (JSON array); folded into toolOverrides on load. */
   blockedTools?: string
+  /** Per-agent tool override map (JSON object: name/pattern → tier | "blocked"). */
+  toolOverrides?: string
   skills?: string[]
 }
 
@@ -105,6 +108,10 @@ export interface WorkspacePayload {
   color?: string
   instructions?: string
   columns?: BoardColumn[]
+  /** Non-default runtime prompt overrides (registry key → content), seeded under config/prompts/. */
+  prompts?: Record<string, string>
+  /** Free-form config/README.md shipped with the template. */
+  readme?: string
   skills?: WorkspaceTemplateSkill[]
   agents?: WorkspaceTemplateAgent[]
   flows?: WorkspaceTemplateFlow[]
@@ -113,11 +120,26 @@ export interface WorkspacePayload {
 
 export interface MCPPayload {
   name: string
-  transport?: string
+  /** One-liner shown in the load-on-demand tool catalog. */
+  description?: string
+  transport?: string // stdio | http
   command?: string
   args?: string
   url?: string
   envConfig?: string
+  /** JSON object of request headers (http transport). */
+  headersConfig?: string
+  /** Connection scope: "shared" (default) | "scoped" (per session+agent). */
+  scope?: string
+}
+
+// A lifecycle/tool hook imported from a foreign plugin. Bundled scripts ride in
+// the pack's files and ${CLAUDE_PLUGIN_ROOT} is rewritten at install time.
+export interface HookPayload {
+  event: string
+  matcher?: string
+  command: string
+  timeoutSec?: number
 }
 
 export interface PackPayload {
@@ -127,6 +149,7 @@ export interface PackPayload {
   flow?: FlowPayload
   workspace?: WorkspacePayload
   mcp?: MCPPayload
+  hook?: HookPayload
 }
 
 export interface Pack {

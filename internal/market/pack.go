@@ -1,13 +1,14 @@
 // Package market implements an in-app marketplace: a lightweight, file-based
-// registry of shareable "packs". A pack bundles one of the four shareable entity
-// kinds — skill, agent, provider, flow — into a single portable JSON envelope
-// (a SwarmPack) that can be browsed, installed into a workspace, and produced
-// (published) from an existing entity.
+// registry of shareable "packs". A pack bundles one of the shareable entity
+// kinds — skill, agent, provider, flow, workspace, mcp, hook — into a single
+// portable JSON envelope (a SwarmPack) that can be browsed, installed into a
+// workspace, and produced (published) from an existing entity.
 //
 // The design mirrors internal/skills: a multi-tier (bundled → global →
 // workspace) store that scans only the manifest of each *.swarmpack.json on
 // load and reads the (heavier) payload lazily on demand, so the catalog stays
-// cheap.
+// cheap. A fourth tier, remote, is layered on top from configured registry
+// indexes (see remote.go) and downloads its payload at install time.
 package market
 
 import "io/fs"
@@ -31,17 +32,17 @@ const (
 	KindHook = "hook"
 )
 
-// Source identifies which tier a pack was resolved from. Higher tiers override
-// lower ones on id collision (workspace > global > bundled).
+// Source identifies which tier a pack was resolved from. Local tiers override
+// each other on id collision (global > bundled) and both override remote.
 type Source string
 
 const (
-	// SourceBundled is the set of packs shipped embedded in the binary.
+	// SourceBundled is the set of packs shipped embedded in the binary
+	// (workspace templates); lowest priority.
 	SourceBundled Source = "bundled"
-	// SourceGlobal is TionSwarm's data-dir market dir (<DataDir>/market).
+	// SourceGlobal is TionSwarm's data-dir market dir (<DataDir>/market) — the
+	// only writable local tier (publish/import land here).
 	SourceGlobal Source = "global"
-	// SourceWorkspace is this workspace's market dir (<workspace>/market).
-	SourceWorkspace Source = "workspace"
 	// SourceRemote is a pack resolved from a remote registry index (downloaded
 	// on install). It carries RegistryName for display.
 	SourceRemote Source = "remote"
@@ -282,14 +283,24 @@ type WorkspacePayload struct {
 	Schedules []WorkspaceTemplateSchedule `json:"schedules,omitempty"`
 }
 
-// MCPPayload is a Model Context Protocol server config. Secrets in EnvConfig are
-// the publisher's responsibility to omit; install adds the server to the workspace.
+// MCPPayload is a Model Context Protocol server config. Secrets in EnvConfig and
+// HeadersConfig are the publisher's responsibility to omit; install adds the
+// server to the workspace.
 type MCPPayload struct {
-	Name      string `json:"name"`
-	Transport string `json:"transport,omitempty"` // stdio | sse | http
-	Command   string `json:"command,omitempty"`   // stdio executable
-	Args      string `json:"args,omitempty"`      // JSON array of args
-	URL       string `json:"url,omitempty"`       // sse/http endpoint
-	EnvConfig string `json:"envConfig,omitempty"` // JSON object of env vars
+	Name string `json:"name"`
+	// Description is the one-liner shown in the load-on-demand tool catalog's
+	// per-server summary.
+	Description string `json:"description,omitempty"`
+	Transport   string `json:"transport,omitempty"` // stdio | http
+	Command     string `json:"command,omitempty"`   // stdio executable
+	Args        string `json:"args,omitempty"`      // JSON array of args
+	URL         string `json:"url,omitempty"`       // http endpoint
+	EnvConfig   string `json:"envConfig,omitempty"` // JSON object of env vars (stdio)
+	// HeadersConfig is a JSON object of request headers (http transport) — the
+	// only way an authenticated HTTP MCP server can be shipped in a pack.
+	HeadersConfig string `json:"headersConfig,omitempty"`
+	// Scope is the connection scope: "shared" (one workspace-wide connection,
+	// default) or "scoped" (a live connection per session+agent). Empty = shared.
+	Scope string `json:"scope,omitempty"`
 }
 

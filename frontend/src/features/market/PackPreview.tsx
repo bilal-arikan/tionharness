@@ -80,15 +80,38 @@ export function PackPreview({ pack, prices }: { pack: Pack; prices: PriceTable }
   }
   if (pack.kind === 'mcp' && p?.mcp) {
     const m = p.mcp
+    const scope = m.scope === 'scoped' ? 'scoped (oturum+ajan başına bağlantı)' : 'shared (workspace geneli tek bağlantı)'
     return (
       <div className="space-y-1">
         <Row k="Ad" v={m.name} />
+        <Row k="Açıklama" v={m.description} />
         <Row k="Transport" v={m.transport} />
+        <Row k="Kapsam" v={scope} />
         <Row k="Komut" v={m.command} />
         <Row k="Argümanlar" v={m.args} />
         <Row k="URL" v={m.url} />
+        <Row k="Başlıklar" v={m.headersConfig} />
         <p className="pt-2 text-[11px] text-[var(--color-text-dim)]">
           Kurunca workspace'e bir MCP sunucusu eklenir; araçları sonraki turda görünür.
+        </p>
+      </div>
+    )
+  }
+  if (pack.kind === 'hook' && p?.hook) {
+    const h = p.hook
+    return (
+      <div className="space-y-1">
+        <Row k="Olay" v={h.event} />
+        <Row k="Matcher" v={h.matcher || '(tüm araçlar)'} />
+        <Row k="Zaman aşımı" v={h.timeoutSec ? `${h.timeoutSec} sn` : undefined} />
+        <div className="pt-1">
+          <span className="text-xs text-[var(--color-text-dim)]">Komut</span>
+          <pre className="mt-1 overflow-x-auto rounded bg-[var(--color-surface-2)] p-2 text-[11px]">{h.command}</pre>
+        </div>
+        <p className="pt-2 text-[11px] text-[var(--color-text-dim)]">
+          Hook aktif olarak kurulur ve sonraki turda çalışır. Paketle gelen scriptler workspace'in
+          hook-scripts klasörüne yazılır. <strong>Komutu kurmadan önce oku</strong> — hook'lar makinende
+          kabuk komutu çalıştırır.
         </p>
       </div>
     )
@@ -104,6 +127,7 @@ function WorkspacePackPreview({ wsp }: { wsp: WorkspacePayload }) {
   const flows = wsp.flows ?? []
   const schedules = wsp.schedules ?? []
   const skills = wsp.skills ?? []
+  const promptKeys = Object.keys(wsp.prompts ?? {})
   return (
     <div className="space-y-4">
       {/* Stat strip */}
@@ -143,6 +167,11 @@ function WorkspacePackPreview({ wsp }: { wsp: WorkspacePayload }) {
                     {a.skills.map((s) => <MiniChip key={s}>📚 {s}</MiniChip>)}
                   </div>
                 )}
+                {(a.toolOverrides || a.blockedTools) && (
+                  <div className="mt-1 flex flex-wrap gap-1">
+                    <MiniChip>🔧 araç override&apos;ları</MiniChip>
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -154,14 +183,16 @@ function WorkspacePackPreview({ wsp }: { wsp: WorkspacePayload }) {
           <div className="space-y-1.5">
             {flows.map((f, i) => {
               const nodes = flowSummary(f)
-              const hasBranch = nodes.some((n) => n.type === 'branch')
-              const hasParallel = nodes.some((n) => n.type === 'parallel')
+              // Chip every non-linear node type present (branch/parallel/loop/
+              // await-input/subflow/spawn/join), not just the two original ones.
+              const special = Array.from(
+                new Set(nodes.map((n) => n.type).filter((t) => t !== 'agent' && t !== 'start' && t !== 'end')),
+              )
               return (
                 <div key={i} className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] p-2">
                   <div className="flex flex-wrap items-center gap-1.5 text-xs font-medium">
                     {f.name}
-                    {hasBranch && <MiniChip>branch</MiniChip>}
-                    {hasParallel && <MiniChip>parallel</MiniChip>}
+                    {special.map((t) => <MiniChip key={t}>{t}</MiniChip>)}
                   </div>
                   <div className="mt-1.5 flex flex-wrap items-center gap-1">
                     {nodes.map((n, j) => {
@@ -223,6 +254,23 @@ function WorkspacePackPreview({ wsp }: { wsp: WorkspacePayload }) {
       {wsp.columns && wsp.columns.length > 0 && (
         <PreviewSection title="Board kolonları">
           <ColumnsPreview columns={wsp.columns} />
+        </PreviewSection>
+      )}
+
+      {promptKeys.length > 0 && (
+        <PreviewSection title={`Prompt override'ları (${promptKeys.length})`}>
+          <div className="flex flex-wrap gap-1">
+            {promptKeys.map((k) => <MiniChip key={k}>{k}</MiniChip>)}
+          </div>
+          <p className="mt-1 text-[10px] text-[var(--color-text-dim)]">
+            Bu şablon merkezi prompt registry'sinin varsayılanlarını ezer — config/prompts/ altına yazılır.
+          </p>
+        </PreviewSection>
+      )}
+
+      {wsp.readme && (
+        <PreviewSection title="config/README.md">
+          <p className="line-clamp-6 whitespace-pre-wrap rounded bg-[var(--color-surface-2)] p-2 text-[11px] leading-relaxed">{wsp.readme}</p>
         </PreviewSection>
       )}
 

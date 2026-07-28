@@ -8,6 +8,14 @@ import {
   Bot,
   Zap,
   Timer,
+  Webhook,
+  Play,
+  Square,
+  Repeat,
+  MessageCircleQuestion,
+  Workflow,
+  Rocket,
+  Merge,
   type LucideIcon,
 } from 'lucide-react'
 import type { Pack, PackKind, WorkspaceTemplateFlow } from '@/types'
@@ -38,13 +46,16 @@ function compareVersions(a: string, b: string): number {
 
 // Kind filter entries shown as a left sidebar (no "all" option — one kind is
 // always selected, defaulting to the first). Each maps to a market pack kind.
+// Workspaces lead because they are the only kind that ships bundled packs, so a
+// fresh install opens on a non-empty catalog.
 export const KIND_NAV: { key: PackKind; label: string; icon: LucideIcon }[] = [
+  { key: 'workspace', label: 'Workspaces', icon: Boxes },
   { key: 'skill', label: 'Skills', icon: Sparkles },
   { key: 'agent', label: 'Agents', icon: Users },
   { key: 'provider', label: 'Providers', icon: Plug },
   { key: 'flow', label: 'Flows', icon: GitBranch },
-  { key: 'workspace', label: 'Workspaces', icon: Boxes },
   { key: 'mcp', label: 'Tools (MCP)', icon: Wrench },
+  { key: 'hook', label: 'Hooks', icon: Webhook },
 ]
 
 export const KIND_LABEL: Record<PackKind, string> = {
@@ -54,6 +65,7 @@ export const KIND_LABEL: Record<PackKind, string> = {
   flow: 'Akış',
   workspace: 'Workspace',
   mcp: 'MCP',
+  hook: 'Hook',
 }
 
 export const INSTALL_LABEL: Record<PackKind, string> = {
@@ -63,6 +75,7 @@ export const INSTALL_LABEL: Record<PackKind, string> = {
   flow: 'Akışı içe aktar',
   workspace: 'Workspace oluştur',
   mcp: 'Sunucuyu ekle',
+  hook: "Hook'u ekle",
 }
 
 // cacheLabel turns a provider's promptCache mode into a human label for the badge.
@@ -86,14 +99,26 @@ export function fmtPrice(n: number): string {
 }
 
 // NODE_ICON maps an orchestration node type to a monochrome lucide glyph for the
-// flow-chain preview (replaces colored emojis).
+// flow-chain preview (replaces colored emojis). Covers every engine node type;
+// an unknown type falls back to a bullet in the preview.
 export const NODE_ICON: Record<string, LucideIcon> = {
-  agent: Bot, branch: GitBranch, parallel: Zap, delay: Timer, transform: Wrench,
+  start: Play,
+  end: Square,
+  agent: Bot,
+  branch: GitBranch,
+  parallel: Zap,
+  delay: Timer,
+  transform: Wrench,
+  loop: Repeat,
+  'await-input': MessageCircleQuestion,
+  subflow: Workflow,
+  spawn: Rocket,
+  join: Merge,
 }
 
 // SOURCE_LABEL labels which tier/source a pack came from.
 export const SOURCE_LABEL: Record<string, string> = {
-  bundled: '📦 Gömülü', global: '💾 Yerel', workspace: '🗂 Workspace', remote: '🌐 Uzak',
+  bundled: '📦 Gömülü', global: '💾 Yerel', remote: '🌐 Uzak',
 }
 
 // flowSummary returns a flow's node list for the preview, from either its full
@@ -128,8 +153,8 @@ export function flowNodeSummary(graph: string): { id: string; type: string; titl
 // existingKeys holds, per kind, the identifiers of entities already present in
 // the workspace, so the market can mark a pack as already installed and block a
 // duplicate. Keys: skill→slug, agent→lowercased name, flow→lowercased name,
-// provider→id, workspace→lowercased name, mcp→lowercased name. memory is a seed
-// action (no entity identity), so it is never marked installed.
+// provider→id, workspace→lowercased name, mcp→lowercased name. hook has no
+// identity the installer dedups on, so it is never marked installed.
 export interface ExistingKeys {
   skills: Set<string>
   agents: Set<string>
@@ -149,10 +174,13 @@ export const emptyExisting = (): ExistingKeys => ({
 })
 
 // packTargetKey returns the identifier a pack would occupy once installed, in
-// the same shape as ExistingKeys. memory returns null (no dedup — it seeds entries
-// rather than create a uniquely-named entity).
+// the same shape as ExistingKeys. hook returns null: the installer creates a hook
+// unconditionally (no name/slug to dedup on), so the catalog must not claim it is
+// already installed.
 export function packTargetKey(pack: Pack): { set: keyof ExistingKeys; key: string } | null {
   switch (pack.kind) {
+    case 'hook':
+      return null
     case 'skill':
       return { set: 'skills', key: pack.id.replace(/^skill\./, '') }
     case 'provider':

@@ -4,6 +4,7 @@
   "kind": "workspace",
   "name": "Boş",
   "description": "Tek bir genel asistan ile başla. Kendi ajanlarını ve akışlarını sıfırdan kur.",
+  "version": "1.0.0",
   "author": "TionSwarm",
   "icon": "⬡",
   "tags": [

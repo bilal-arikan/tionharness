@@ -140,6 +140,17 @@ ikisini de kapsamıyor, yani shell sıkıştırma tek başına belirleyici deği
   yardımcısı (tamamen ayrı) yerinde.
 - Doğrulama: `go build ./...` yeşil, `npx tsc --noEmit` yeşil.
 
+## Market ekranı + item'ları bayatlık tazelemesi ✅ (2026-07-28)
+
+Market, son alt sistemlerin gerisinde kalmıştı. Detay tablo: **`_Docs\21-MARKET.md` §8**.
+
+- **`hook` türü UI'a bağlandı** — backend'de kurulabiliyordu ama `PackKind`/`IngestKind`'da
+  yoktu: sekme yok, `KIND_LABEL['hook']` boş (İçe Aktar diyaloğunda başlıksız grup),
+  önizleme yok. Artık **Hooks** kategorisi + hook önizleme kartı (olay/matcher/timeout +
+  komut + güvenlik uyarısı) var; kurulum dedup yapmadığı için "zaten kurulu" işareti yok.
+- **MCP paketi hibrit kapsama uyduruldu** — `MCPPayload`'a `description`/`headersConfig`/
+  `scope`; `installMCPPack` sabit `Scope:"shared"` yerine payload'ı aktarır (allow-list'li).
+  `mcp_adapter` `.mcp.json`'daki `headers` bloğunu okur → **auth başlıklı HTTP MCP sunucusu
 ## Flow paleti: node butonlarında (ⓘ) açıklama balonu ✅ (2026-07-27)
 
 Flow editöründe sol paletteki node tipleri yalnız ad + ikon gösteriyordu; ne işe

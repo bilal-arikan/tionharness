@@ -2,9 +2,9 @@ import { req } from './client'
 
 // Generic import (ingest) pipeline: scan a foreign source (GitHub repo/plugin or a
 // local folder tree), then bulk-install the selected artifacts (skills/agents/
-// commands/MCP) through the same install authority the market uses. (SK-IMP3)
+// commands/MCP/hooks) through the same install authority the market uses. (SK-IMP3)
 
-export type IngestKind = 'skill' | 'agent' | 'flow' | 'provider' | 'workspace' | 'mcp'
+export type IngestKind = 'skill' | 'agent' | 'flow' | 'provider' | 'workspace' | 'mcp' | 'hook'
 
 // Discovered is one artifact found in a source, with preview metadata + a unique
 // selection key.
