@@ -49,6 +49,22 @@ type FlowRun struct {
 	// the exact run — and its REAL graph/layout — instead of reifying the
 	// transcript into a synthetic linear chain. Empty on pre-link runs.
 	SessionID string `json:"sessionId,omitempty"`
+	// ParentRunID is the run that launched this one — a subflow/spawn node, or an
+	// agent node's run_flow tool call. Empty means this is a ROOT run (started by
+	// a user, schedule or automation). Child runs stay first-class: they get their
+	// own row, status and viewer, and can also be launched standalone (in which
+	// case they are roots themselves).
+	ParentRunID string `json:"parentRunId,omitempty"`
+	// ParentNodeID is the node in the PARENT's graph that launched this run. Needed
+	// to attribute a child to the right node when one graph has several subflow or
+	// spawn nodes. Empty on root runs (and on children launched by run_flow from an
+	// agent node, where the node id is the agent node's).
+	ParentNodeID string `json:"parentNodeId,omitempty"`
+	// RootRunID is the top of this run's tree, so the whole tree is one query
+	// instead of a level-by-level walk of ParentRunID. EMPTY MEANS SELF (this run
+	// is the root) — never write a self-reference here, so a root needs no second
+	// write after its id is generated. Use RootOf to read it.
+	RootRunID string `json:"rootRunId,omitempty"`
 	Status    string `json:"status"`
 	Input     string `json:"input"`
 	State     string `json:"state"` // JSON
@@ -57,3 +73,15 @@ type FlowRun struct {
 	CreatedAt int64  `json:"createdAt"`
 	UpdatedAt int64  `json:"updatedAt"`
 }
+
+// RootOf returns the id of the top of this run's tree, resolving the "empty
+// means self" encoding of RootRunID. A root run reports its own id.
+func (r FlowRun) RootOf() string {
+	if r.RootRunID != "" {
+		return r.RootRunID
+	}
+	return r.ID
+}
+
+// IsRootRun reports whether this run is the top of its tree (nothing launched it).
+func (r FlowRun) IsRootRun() bool { return r.ParentRunID == "" }

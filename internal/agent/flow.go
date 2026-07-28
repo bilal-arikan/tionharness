@@ -254,11 +254,18 @@ func (r *Runtime) RunFlow(ctx context.Context, flowID, input string, autonomous 
 		return db.FlowRun{}, err
 	}
 
-	run, err := r.db.CreateFlowRun(ctx, db.FlowRun{FlowID: flowID, Input: input})
+	// A ctx carrying a flow run id means this call came from inside another run
+	// (subflow node, or an agent node's run_flow tool), so the new run joins that
+	// run's tree; started standalone it is a root.
+	parentRunID, parentNodeID, rootRunID := runLineage(ctx)
+	run, err := r.db.CreateFlowRun(ctx, db.FlowRun{
+		FlowID: flowID, Input: input,
+		ParentRunID: parentRunID, ParentNodeID: parentNodeID, RootRunID: rootRunID,
+	})
 	if err != nil {
 		return db.FlowRun{}, err
 	}
-	r.logger.Info("flow run started", "flow", flowID, "run", run.ID)
+	r.logger.Info("flow run started", "flow", flowID, "run", run.ID, "parent", parentRunID)
 	return r.driveFlow(ctx, run, g, input, orchestration.NewState(g), autonomous, obs), nil
 }
 
@@ -287,7 +294,13 @@ func (r *Runtime) spawnChildFlow(ctx context.Context, flowID, input string, auto
 	if err := r.validateFlowPreconditions(ctx, g); err != nil {
 		return "", err
 	}
-	run, err := r.db.CreateFlowRun(ctx, db.FlowRun{FlowID: flowID, Input: input})
+	// Lineage is read from the SPAWNING run's ctx — driveFlow only rebinds the run
+	// id to the child once it starts below, so ctx still points at the parent here.
+	parentRunID, parentNodeID, rootRunID := runLineage(ctx)
+	run, err := r.db.CreateFlowRun(ctx, db.FlowRun{
+		FlowID: flowID, Input: input,
+		ParentRunID: parentRunID, ParentNodeID: parentNodeID, RootRunID: rootRunID,
+	})
 	if err != nil {
 		return "", err
 	}
@@ -445,6 +458,9 @@ func (r *Runtime) driveFlow(ctx context.Context, run db.FlowRun, g orchestration
 	// Thread the run id so each agent node's tool/thinking steps land in a
 	// sidecar keyed by (runID, nodeID) — see captureFlowNodeSteps.
 	ctx = withFlowRunID(ctx, run.ID)
+	// Carry the tree root too, so a run started from within this one records its
+	// RootRunID without reading this row back. RootOf resolves "empty = self".
+	ctx = withFlowRootID(ctx, run.RootOf())
 	eng := orchestration.NewEngine(flowRunner{rt: r, autonomous: autonomous})
 	// Always broadcast per-node lifecycle on the process-wide bus (keyed by run
 	// id) so EVERY window's run viewer renders progress live — not just the HTTP

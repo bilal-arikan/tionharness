@@ -140,6 +140,30 @@ func (d *DB) ListFlowRuns(ctx context.Context, flowID string) ([]FlowRun, error)
 		func(a, b FlowRun) bool { return a.CreatedAt > b.CreatedAt }), nil
 }
 
+// ListRootFlowRuns is ListFlowRuns restricted to runs nothing else launched, so
+// a run list is not flooded by every subflow/spawn child of a composed flow.
+// Children remain reachable via ListFlowRunTree (or directly by id).
+func (d *DB) ListRootFlowRuns(ctx context.Context, flowID string) ([]FlowRun, error) {
+	return dbFilter(d, d.flowRuns,
+		func(r FlowRun) bool { return (flowID == "" || r.FlowID == flowID) && r.IsRootRun() },
+		func(a, b FlowRun) bool { return a.CreatedAt > b.CreatedAt }), nil
+}
+
+// ListFlowRunTree returns every run in rootID's tree — the root itself plus all
+// descendants at any depth — OLDEST first, so a caller can build the hierarchy
+// in one pass (a parent always precedes its children). Resolving the tree by
+// RootRunID keeps this a single scan instead of a walk per level. An unknown or
+// non-root id yields an empty result rather than an error: a tree that no longer
+// exists is an empty tree, not a failure.
+func (d *DB) ListFlowRunTree(ctx context.Context, rootID string) ([]FlowRun, error) {
+	if rootID == "" {
+		return nil, nil
+	}
+	return dbFilter(d, d.flowRuns,
+		func(r FlowRun) bool { return r.RootOf() == rootID },
+		func(a, b FlowRun) bool { return a.CreatedAt < b.CreatedAt }), nil
+}
+
 // SetFlowRunState persists the restart-safe state snapshot mid-run.
 func (d *DB) SetFlowRunState(ctx context.Context, id, state string) error {
 	d.mu.Lock()

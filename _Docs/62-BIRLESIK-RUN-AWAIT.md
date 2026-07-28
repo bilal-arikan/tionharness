@@ -222,7 +222,41 @@ geçebilir. Test: `turn_record_test.go` (boş-substitution, error shape). Backen
   /flow-runs/{id}/input` → `ResumeWaitingFlow` → `prepareResume`). → Güvenli/değerli bir kod-merge'i yok;
   yapılmadı.
 
+## Koşu soyağacı (run lineage) — Katman 1 (2026-07-28)
+
+Kompozisyon (subflow/spawn/`run_flow`) çalışıyordu ama **çocuk koşu ile ebeveyni arasında
+kalıcı bir bağ yoktu**: parent'ın `State.SubflowRun`/`State.Spawned` alanları yukarıdan
+aşağı iniyordu, tersi yoktu → "beni kim başlattı" sorulamıyor, ağaç tek sorguda çekilemiyordu.
+
+- **`db.FlowRun` + 3 alan:** `ParentRunID` (ağacın kenarı), `ParentNodeID` (parent
+  grafiğinde hangi node doğurdu — aynı grafikte birden çok subflow node'u varsa atfetmek
+  için şart), `RootRunID` (ağacın tepesi; **boş = kendisi** kodlaması, böylece kök koşu
+  id'si üretildikten sonra ikinci bir yazma gerekmez). Okuma: `RootOf()` / `IsRootRun()`.
+  Hepsi `omitempty` → eski koşular kök olarak okunur, **migration yok**.
+- **Tespit:** yeni taşıma mekanizması eklenmedi — `driveFlow` zaten
+  `withFlowRunID(ctx, run.ID)` yapıyordu (step sidecar'ı için). Ctx'te flow run id
+  **varsa** yeni koşu onun çocuğudur, yoksa köktür (`runLineage`, `flow_steps.go`).
+  Yanına `withFlowRootID` eklendi → çocuk, kökü öğrenmek için parent'ı **DB'den okumaz**.
+- **Node atfı:** `orchestration.WithNodeID` yalnız `runAgentNodeSafe` içinde uygulanıyordu;
+  artık `NodeSubflow` ve `NodeSpawn` dalları da runner'ı kendi node id'leriyle çağırıyor.
+  **Hiçbir runner arayüzü imzası değişmedi** (aksi halde 3 arayüz + tüm sahte test
+  runner'ları etkilenirdi).
+- **Bedava kazanç:** agent node'unun `run_flow` aracıyla başlattığı flow da node'un ctx'ini
+  miras aldığı için ağaca çocuk olarak düşer → daha önce "canvas'ta görünmez" olan dinamik
+  çağrılar en azından **soyağacında** görünür.
+- **Sorgu:** `ListRootFlowRuns` (liste subflow çocuklarıyla dolmasın; çocuklar birinci sınıf
+  kalır, id ile hâlâ çekilebilir) + `ListFlowRunTree(rootID)` (`RootRunID` üzerinden **tek
+  tarama**; **eskiden yeniye** sıralı → ebeveyn daima çocuğundan önce gelir, hiyerarşi tek
+  geçişte kurulur).
+- **Kapsam dışı (bilinçli):** olay yayınına `rootRunId` eklenmesi (Katman 2), API uçları ve
+  ağaç UI'ı (Katman 3–4) bu adımda yapılmadı.
+- Test: `orchestration/lineage_test.go` (node-id etiketi subflow/spawn'da doğru, komşu
+  node'a sızmıyor) + `db/flow_lineage_test.go` (boş=kendisi kodlaması, kalıcılık, iki
+  seviye derinlikte kök hâlâ tepe, kök-filtresi çocuğu gizler ama silmez).
+
 ## Sonraki (daha ileri)
+- Katman 2–4: olaylara `rootRunId`, `GET /api/flow-runs/{id}/tree` + `rootOnly` filtresi,
+  ağaç paneli · subflow/spawn node'unda canlı rollup rozeti · nested canvas (zoom-in).
 - Join ilerlemesini canvas node'unun kendisinde de göstermek (şu an yalnız adım-izi satırında).
 - (İstenirse) step *persistence* katmanını birleştirmek: flow sidecar + chat `Message.Steps`'i tek "step
   store" arayüzü ardına almak — yüksek risk (run inspector + crash-recovery + SSE routing regresyon

@@ -27,6 +27,45 @@ func flowRunIDFromContext(ctx context.Context) string {
 	return s
 }
 
+// flowRootIDKey carries the id of the TOP of the active run's tree alongside the
+// run id, so a run launched from inside another one can record its RootRunID
+// without reading its parent back from the store.
+type flowRootIDKey struct{}
+
+// withFlowRootID tags ctx with the run tree's root id (set once per run in
+// driveFlow, next to withFlowRunID).
+func withFlowRootID(ctx context.Context, rootID string) context.Context {
+	return context.WithValue(ctx, flowRootIDKey{}, rootID)
+}
+
+// flowRootIDFromContext returns the run tree's root id ("" if none).
+func flowRootIDFromContext(ctx context.Context) string {
+	s, _ := ctx.Value(flowRootIDKey{}).(string)
+	return s
+}
+
+// runLineage derives the parent/root linkage for a flow run about to be created
+// under ctx. A ctx carrying a flow run id means we are INSIDE that run, so the
+// new run is its child; otherwise this is a root run and all three are empty
+// (RootRunID encodes "root" as empty — see db.FlowRun.RootRunID).
+//
+// This deliberately also catches a flow started by an agent node's run_flow tool:
+// that call inherits the node's context, so the run it starts joins the tree
+// instead of appearing as an unrelated root.
+func runLineage(ctx context.Context) (parentRunID, parentNodeID, rootRunID string) {
+	parentRunID = flowRunIDFromContext(ctx)
+	if parentRunID == "" {
+		return "", "", ""
+	}
+	rootRunID = flowRootIDFromContext(ctx)
+	if rootRunID == "" {
+		// Parent predates lineage tracking (or is itself a root): the tree tops out
+		// at the parent.
+		rootRunID = parentRunID
+	}
+	return parentRunID, orchestration.NodeIDFromContext(ctx), rootRunID
+}
+
 // flowRunStepsDir is where a run's per-node step sidecars live:
 // <store>/flow_runs/<runID>/. Kept out of the entity store proper so it never
 // bloats the restart-safe flow-run State (which is re-marshaled wholesale after
