@@ -641,3 +641,21 @@ varsayılanlarına karşı bir **diff**:
 - Testler: `agent/tooloverrides_test.go` (parse/migrasyon/desen),
   `agent/tooloverrides_integration_test.go` (ajan workspace'i ezer, `blocked` katalogdan
   düşer, legacy denylist hâlâ yasaklar, `BlockedTools` aynası)
+
+## Sohbet composer'ında araç müfettişi (salt bilgi)
+
+Eager/lazy ayrımı artık ayarlar ekranına girmeden, sohbetin içinden görülebilir:
+composer toolbar'ındaki 🔧 butonu `ToolAccessPanel`'i açar.
+
+- Kaynak: `GET /api/agents/{id}/tool-access` (`internal/api/agent_tool_access.go`) —
+  `Runtime.ShippedToolCatalog` (eager) + `Runtime.LazyToolCatalog` (lazy) +
+  `Runtime.ToolVisibilityFunc` (tier) + `ListMCPServers` + `MCPPool().Stats()`.
+  Ajan-kapsamlı ve **read-only**; hiçbir yapılandırmayı değiştirmez.
+- Sekmeler: **Aktif** (her tur şeması gönderilenler), **Talep üzerine** (ajanın
+  `tool_search`/`activate_tools` ile açabilecekleri), **MCP** (tanımlı sunucular;
+  devre dışı olanlar da listelenir → "neyi açabilirim" görünür, canlı bağlantı
+  sayısı ve scoped reaper penceresi rozetle).
+- Ajan yasakları (`blocked`) ve ajanda MCP kapalıysa uyarı panelin altında.
+- Frontend: `features/chat/composer/ToolAccessPanel.tsx` (kabuk + sekmeler),
+  `ToolAccessList.tsx` (gruplu satırlar + sunucu listesi), `toolAccessGroups.ts`
+  (saf grup/filtre yardımcıları).

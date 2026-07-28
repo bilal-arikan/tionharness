@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { MessageCircleQuestion, Paperclip, SlidersHorizontal } from 'lucide-react'
+import { MessageCircleQuestion, Paperclip, SlidersHorizontal, Wrench } from 'lucide-react'
 import type { Agent, Artifact, Attachment, SlashCommand } from '@/types'
 import { AttachmentChip } from './AttachmentChip'
 import { WorkDirBadge } from './WorkDirBadge'
@@ -12,6 +12,7 @@ import { THINKING_OPTIONS, PERMISSION_OPTIONS } from './composer/pickerOptions'
 import { AutocompleteMenu } from './composer/AutocompleteMenu'
 import { BtwPanel } from './composer/BtwPanel'
 import { MicButton } from './composer/MicButton'
+import { ToolAccessPanel } from './composer/ToolAccessPanel'
 import { SendActions } from './composer/SendActions'
 import { detectTrigger, buildMenuItems, type Trigger } from './composer/trigger'
 import { useSessionDraft } from './useSessionDraft'
@@ -116,6 +117,10 @@ export function Composer({
   // point: "ask without interrupting the main task"), so it is not gated on
   // `streaming` / `disabled` — only on having a session and a target agent.
   const [btwOpen, setBtwOpen] = useState(false)
+  // Tool inspector: a read-only view of what the selected agent can use right now
+  // (eager vs on-demand tools) and what the MCP gateway has open. Informational
+  // only — it never changes configuration, so it stays usable while streaming.
+  const [toolsOpen, setToolsOpen] = useState(false)
   // On narrow/portrait widths the per-turn pickers (thinking, permission, workdir)
   // are collapsed behind a toggle to keep the toolbar from wrapping; they are
   // always shown from `md:` up. Preference persists across sessions/reloads.
@@ -459,6 +464,12 @@ export function Composer({
         <BtwPanel sessionId={sessionId} agentId={agentId} onClose={() => setBtwOpen(false)} />
       )}
 
+      {/* Tool inspector. Needs a target agent (tool access is per-agent); no
+          session required, so it also answers "what could this agent do?". */}
+      {toolsOpen && agentId && (
+        <ToolAccessPanel key={agentId} agentId={agentId} onClose={() => setToolsOpen(false)} />
+      )}
+
       {/* Attachment tray: chips for files/pasted text staged for the next turn. */}
       {pending.length > 0 && (
         <div className="mb-2 flex flex-wrap gap-2.5">
@@ -560,6 +571,22 @@ export function Composer({
             className={BTN_ICON}
           >
             <Paperclip size={18} />
+          </button>
+
+          {/* Tool inspector: what this agent can use right now (active vs on-demand)
+              and what the MCP gateway has open. Read-only, so it is never disabled
+              by a streaming turn — only by having no agent to inspect. */}
+          <button
+            type="button"
+            onClick={() => setToolsOpen((o) => !o)}
+            disabled={!agentId}
+            title="Araçlar — bu ajanın kullanabildiği araçlar ve MCP durumu (salt bilgi)"
+            aria-label="Araç bilgisi"
+            aria-expanded={toolsOpen}
+            data-testid="composer-tools"
+            className={`${BTN_ICON} ${toolsOpen ? 'border-[var(--color-accent)] text-[var(--color-accent)]' : ''}`}
+          >
+            <Wrench size={18} />
           </button>
 
           {/* Btw: a side question answered from the conversation's context but never

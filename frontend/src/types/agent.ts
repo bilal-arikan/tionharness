@@ -83,6 +83,49 @@ export interface AgentTools {
   catalog: AgentToolEntry[]
 }
 
+// One tool row of the composer's read-only tool inspector (GET
+// /api/agents/{id}/tool-access): origin + effective visibility tier, no schema.
+export interface ToolAccessEntry {
+  name: string
+  label: string
+  description: string
+  source: 'builtin' | 'mcp'
+  server: string
+  category?: string
+  visibility: ToolVisibility
+}
+
+// One MCP server as the inspector shows it: config identity, how many of ITS
+// tools are eager/lazy for this agent, and its live pool connections. A disabled
+// server contributes no tools — it is listed so the user sees what could be on.
+export interface ToolAccessServer {
+  id: string
+  name: string
+  transport: string
+  scope: string
+  enabled: boolean
+  eagerCount: number
+  lazyCount: number
+  live: number
+  total: number
+}
+
+// What the agent can actually use right now: the eager set (schemas shipped
+// every turn) vs the lazy set (advertised in the load-on-demand catalog and
+// activated through the gateway with tool_search/activate_tools).
+export interface AgentToolAccess {
+  agentId: string
+  agentName: string
+  provider: string
+  mcpEnabled: boolean
+  eager: ToolAccessEntry[]
+  lazy: ToolAccessEntry[]
+  blocked: string[]
+  servers: ToolAccessServer[]
+  // Idle window after which a scoped MCP connection is reaped (0 = disabled).
+  poolIdleSec: number
+}
+
 // Fresh-start context preview: the static system prompt + tool catalog an agent
 // begins each turn with (dynamic memory/summary/artifacts are added per-turn).
 export interface AgentContextPreview {

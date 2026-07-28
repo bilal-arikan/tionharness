@@ -564,6 +564,10 @@ func (s *Server) registerMCPRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("DELETE /api/mcp-servers/{id}", s.handleDeleteMCPServer)
 	mux.HandleFunc("GET /api/agents/{id}/tools", s.handleAgentTools)
 	mux.HandleFunc("POST /api/agents/{id}/tools", s.handleSetAgentTools)
+	// Read-only "what can this agent actually use right now" view: eager vs lazy
+	// (gateway-activatable) split + MCP server inventory. Drives the composer's
+	// tool inspector; changes nothing.
+	mux.HandleFunc("GET /api/agents/{id}/tool-access", s.handleAgentToolAccess)
 	mux.HandleFunc("GET /api/workspace-tools", s.handleWorkspaceTools)
 	mux.HandleFunc("PUT /api/workspace-tools", s.handleSetWorkspaceTools)
 }

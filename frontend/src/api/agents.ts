@@ -4,6 +4,7 @@ import type {
   AgentPatch,
   AgentUsage,
   AgentTools,
+  AgentToolAccess,
   AgentToolTier,
   AgentContextPreview,
 } from '@/types'
@@ -51,6 +52,10 @@ export const agentApi = {
     req<{ path: string }>(`/api/agents/${agentId}/reveal`, { method: 'POST' }),
 
   agentTools: (agentId: string) => req<AgentTools>(`/api/agents/${agentId}/tools`),
+  // Read-only "what can this agent use right now": eager vs lazy (gateway-
+  // activatable) tools + the MCP server inventory. Purely informational.
+  agentToolAccess: (agentId: string) =>
+    req<AgentToolAccess>(`/api/agents/${agentId}/tool-access`),
   // Replaces the agent's whole override map (tool name → tier, 'blocked'
   // included). An empty map means "no overrides" — every tool follows the
   // workspace-effective tier.

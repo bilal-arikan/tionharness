@@ -256,6 +256,17 @@ Yeni bağımlılıklar: `react-markdown`, `remark-gfm`, `highlight.js`.
     seçenekler `pickerOptions.ts` (`THINKING_OPTIONS`/`PERMISSION_OPTIONS`).
   - `SendActions.tsx` — Gönder/Durdur/Sıraya/Kes/Yönlendir buton kümesi (tur yaşam
     döngüsüne göre tek dal seçer); stil sabitleri `buttonStyles.ts`.
+  - **Araç müfettişi (`ToolAccessPanel.tsx` + `ToolAccessList.tsx` +
+    `toolAccessGroups.ts`):** toolbar'daki 🔧 butonu seçili ajanın **şu an**
+    kullanabildiği araçları **salt bilgi** olarak gösterir — üç sekme: *Aktif*
+    (şeması her tur gönderilen eager set), *Talep üzerine* (katalogda isim/özet
+    duran, `tool_search`/`activate_tools` ile açılabilen lazy set) ve *MCP*
+    (tanımlı sunucular: etkin mi, transport/kapsam, canlı bağlantı sayısı, o
+    sunucudan gelen aktif/hazır araç adedi). Built-in'ler fonksiyonel kategoriye,
+    MCP araçları sunucuya göre gruplanır; her satırda görünürlük tier rozeti.
+    Kaynak `GET /api/agents/{id}/tool-access` (ajan-kapsamlı, hiçbir şeyi
+    değiştirmez); ayar değişikliği yine Araçlar ekranından yapılır. Panel akış
+    sürerken de açılabilir, ajan seçimi değişince `key={agentId}` ile remount olur.
   - **Sesli girdi (`MicButton.tsx` + `useSpeechToText.ts` + `sttLanguages.ts`):**
     tarayıcı **Web Speech API** ile dikte. Toolbar'da yalnız **mikrofon toggle**
     (dropdown YOK — sadeleşti). Tanıma dili artık **Ayarlar ▸ Ses ▸ Sesli giriş (STT)

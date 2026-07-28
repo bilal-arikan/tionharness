@@ -83,6 +83,19 @@ namespace'i yüzünden Windows `127.0.0.1`'ine ulaşamıyordu (`Errno 111`).
   `schedule-run-now`, `schedule-edit`, `schedule-delete` — sonuncusu artık popup
   içinde, `schedule-create-*`); kartlara `automation-row`/`data-automation-id` eklendi.
 - Detay: `46-ETIKET-OTOMASYON.md` ▸ "UI — 3 SÜTUNLU PANO".
+## Composer'da araç müfettişi — "ajan neyi kullanabiliyor?" ✅ (2026-07-28)
+
+Sohbetten çıkmadan görülemiyordu: ajanın o an hangi araçlara sahip olduğu, hangilerinin
+şemasının her tur gönderildiği (pahalı), hangilerinin yalnız katalogda durup gerektiğinde
+açıldığı ve MCP gateway'de nelerin bağlı olduğu. Composer toolbar'ına 🔧 butonu eklendi;
+açtığı panel **salt bilgi** — hiçbir ayarı değiştirmez (değişiklik yine Araçlar ekranından).
+
+- Backend: `GET /api/agents/{id}/tool-access` (`internal/api/agent_tool_access.go`) —
+  eager/lazy katalog + tier + ajan `blocked` listesi + MCP sunucu envanteri
+  (etkin mi, transport/kapsam, canlı bağlantı sayısı, sunucu başına aktif/hazır adet).
+- Frontend: `features/chat/composer/ToolAccessPanel.tsx` (üç sekme: Aktif · Talep üzerine ·
+  MCP, arama kutusu), `ToolAccessList.tsx` (gruplu satırlar + sunucu listesi),
+  `toolAccessGroups.ts` (saf grup/filtre). Built-in'ler kategoriye, MCP araçları sunucuya
 ## Git worktree izolasyonu kaldırıldı ✅ (2026-07-28)
 
 Otonom oturuma per-session git worktree + dal veren `gitWorktreeIsolation`
