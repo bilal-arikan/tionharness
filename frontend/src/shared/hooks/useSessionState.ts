@@ -29,6 +29,15 @@ export function useSessionState<T>(key: string, initial: T): [T, Dispatch<SetSta
   return [value, set]
 }
 
+// setSessionState seeds a selection from OUTSIDE the component that owns it, so
+// one screen can deep-link into another's selected item before navigating there
+// (e.g. the session inspector opening a coordinator workflow's skill). The target
+// screen is mounted on view switch and reads the seeded value in its initialiser,
+// so this must be called BEFORE the navigation that mounts it.
+export function setSessionState<T>(key: string, value: T): void {
+  store.set(key, value)
+}
+
 // clearSessionState wipes one or all session selections (e.g. on explicit reset).
 export function clearSessionState(key?: string): void {
   if (key === undefined) store.clear()

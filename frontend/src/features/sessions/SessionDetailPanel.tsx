@@ -32,6 +32,10 @@ interface Props {
   onSelectAgent?: (id: string) => void
   // Navigate to another session (used by the context-reset lineage link).
   onSelectSession?: (id: string) => void
+  // Navigate to the Skills view focused on a slug — used by the coordination
+  // section to open the selected workflow's recipe (a 'coordinator-workflow'
+  // skill). Optional so legacy/test usages still compile.
+  onOpenSkill?: (slug: string) => void
   // Restart the last turn (stop any in-flight run + re-send the last user prompt).
   // Wired to the chat hook's rerunLast so it reuses the one true turn path. Optional
   // so legacy/test usages still compile; the button hides when absent.
@@ -50,6 +54,7 @@ export function SessionDetailPanel({
   onDeleteSession,
   onSelectSession,
   onSelectAgent,
+  onOpenSkill,
   onRerun,
 }: Props) {
   // Persisted, drag-resizable width. The panel sits on the RIGHT, so its handle
@@ -348,6 +353,7 @@ export function SessionDetailPanel({
             onError={onError}
             onRoleChanged={() => setLocalRefresh((n) => n + 1)}
             onSelectSession={onSelectSession}
+            onOpenSkill={onOpenSkill}
           />
 
           {/* Meta */}

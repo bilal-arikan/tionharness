@@ -33,11 +33,17 @@ export function InfoPopover({
   }
 
   // In fixed mode the bubble is clamped into the viewport so a button near the
-  // right/bottom edge still shows the whole note.
+  // right/bottom edge still shows the whole note. The vertical clamp needs a
+  // height to reserve, and a rendered bubble's height isn't known before it is
+  // positioned — so the bubble is capped at MAX_H (scrolling past it) and the
+  // clamp reserves exactly that. Guessing a height instead would push a long note
+  // off the bottom edge, where it can't be read or scrolled to.
+  const MAX_H = 260
   const fixedStyle = pos
     ? {
-        top: Math.min(pos.top, Math.max(8, window.innerHeight - 180)),
+        top: Math.min(pos.top, Math.max(8, window.innerHeight - MAX_H - 8)),
         left: Math.min(pos.left, Math.max(8, window.innerWidth - 340)),
+        maxHeight: MAX_H,
       }
     : undefined
 
@@ -59,8 +65,8 @@ export function InfoPopover({
         <span
           role="tooltip"
           style={fixed ? fixedStyle : undefined}
-          className={`z-50 w-80 max-w-[80vw] whitespace-pre-line rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-[11px] leading-relaxed text-[var(--color-text-dim)] shadow-[var(--shadow-lg)] ${
-            fixed ? 'fixed' : `absolute top-5 ${align === 'right' ? 'right-0' : 'left-0'}`
+          className={`z-50 block w-80 max-w-[80vw] whitespace-pre-line rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-[11px] leading-relaxed text-[var(--color-text-dim)] shadow-[var(--shadow-lg)] ${
+            fixed ? 'fixed overflow-y-auto' : `absolute top-5 ${align === 'right' ? 'right-0' : 'left-0'}`
           }`}
         >
           {text}

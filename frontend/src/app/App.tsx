@@ -23,6 +23,7 @@ import { useActivity } from './useActivity'
 import { useWorkspaceActivity } from './useWorkspaceActivity'
 import { useUnreadViews } from './useUnreadViews'
 import { useUnreadBadge } from './useUnreadBadge'
+import { setSessionState } from '@/shared/hooks/useSessionState'
 import { ChatView } from '@/features/chat/ChatView'
 import { useChatStream } from '@/features/chat/useChatStream'
 import { writeSessionDraft } from '@/features/chat/useSessionDraft'
@@ -394,6 +395,17 @@ export default function App() {
     [confirmLeaveIfDirty],
   )
 
+  // Open the Skills screen focused on one skill. SkillsPanel is mounted by the
+  // view switch and reads its selection from the session-state store in its
+  // initialiser, so the seed has to be written before we navigate.
+  const openSkill = useCallback(
+    (slug: string) => {
+      setSessionState('skills.activeSlug', slug)
+      selectView('skills')
+    },
+    [selectView],
+  )
+
   // Warn on tab close / reload (browser-native prompt) whenever any screen has
   // unsaved edits. The message text is controlled by the browser.
   useEffect(() => {
@@ -732,6 +744,7 @@ export default function App() {
               onRename={ctl.renameSession}
               onDeleteSession={ctl.deleteSession}
               onSelectSession={ctl.selectSession}
+              onOpenSkill={openSkill}
               onRerun={() => chat.rerunLast()}
             />
           </div>
