@@ -47,6 +47,24 @@ kurulacak; o zamana kadar yarı-uygulanmış hali beklenti yaratıp karşılamı
   `InfoPopover`'ın fixed dikey clamp'i artık uydurma 180px yükseklik yerine gerçek
   bir tavan (`max-h` + scroll) kullanıyor, uzun not viewport dışına taşmıyor.
 
+## Bash aracı WSL launcher'ına düşünce `$VAR` sessizce boşalıyordu ✅ (2026-07-28)
+
+Windows'ta `resolvePOSIXShell` PATH'teki ilk `bash`'i alıyordu; bu çoğu makinede
+`C:\Windows\System32\bash.exe`, yani WSL launcher'ı. Launcher `-c` payload'ını gerçek
+bash'e vermeden önce **bir dış kabukta expand ediyor** → script'in kendi atadığı
+değişkenler ve `$(...)` sonuçları boş geliyor. Pratikte `T=$(cat tok.txt)` sonrası
+`curl -H "Bearer $T"` boş kimlik gönderip 401 alıyordu; ajan bunu "kabuk değişkeni
+genişletmesi bozuk" diye raporlayıp Python'a kaçıyor, orada da WSL'in ayrı network
+namespace'i yüzünden Windows `127.0.0.1`'ine ulaşamıyordu (`Errno 111`).
+
+- Resolver ayrı dosyaya alındı: `internal/tools/builtin_shell_posix.go`. Sıra artık
+  PATH'teki bash (launcher değilse) → git-bash (PATH'te olmasa da git.exe'den ve standart
+  kurulum yollarından bulunur) → son çare `wsl.exe -e bash` (argv'yi bozmadan geçirir).
+  altına taşındı** → dolu şeritte yanlış tıklamayla kural silinmiyor.
+- `data-testid`'ler korundu (`schedule-row`, `schedule-enable-toggle`,
+  `schedule-run-now`, `schedule-edit`, `schedule-delete` — sonuncusu artık popup
+  içinde, `schedule-create-*`); kartlara `automation-row`/`data-automation-id` eklendi.
+- Detay: `46-ETIKET-OTOMASYON.md` ▸ "UI — 3 SÜTUNLU PANO".
 ## Git worktree izolasyonu kaldırıldı ✅ (2026-07-28)
 
 Otonom oturuma per-session git worktree + dal veren `gitWorktreeIsolation`

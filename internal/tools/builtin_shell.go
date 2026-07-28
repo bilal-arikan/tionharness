@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"os/exec"
 	"regexp"
-	"runtime"
 	"strings"
 	"time"
 
@@ -48,16 +47,6 @@ type shellArgs struct {
 	NoCompress bool `json:"no_compress"`
 }
 
-// resolvePOSIXShell finds the POSIX shell to back the Bash tool: /bin/sh on Unix,
-// or a bash.exe (git-bash/WSL) on Windows. Returns ok=false on Windows when no
-// bash is on PATH, so the Bash tool is simply not offered there (PowerShell is).
-func resolvePOSIXShell() (string, bool) {
-	if runtime.GOOS == "windows" {
-		return lookInterpreter("bash")
-	}
-	return "/bin/sh", true
-}
-
 // resolvePowerShell finds a PowerShell host for the PowerShell tool, preferring
 // PowerShell 7+ (pwsh, cross-platform, modern syntax) over Windows PowerShell 5.1
 // (powershell.exe). Returns ok=false when neither is present (typical on Unix
@@ -75,7 +64,7 @@ func resolvePowerShell() (string, bool) {
 // an empty slice when neither host is found (should not happen on a supported OS).
 func ShellToolNames() []string {
 	var names []string
-	if _, ok := resolvePOSIXShell(); ok {
+	if _, _, ok := resolvePOSIXShell(); ok {
 		names = append(names, "Bash")
 	}
 	if _, ok := resolvePowerShell(); ok {
@@ -91,7 +80,11 @@ func ShellToolNames() []string {
 type ShellTool struct {
 	sb  Sandbox
 	exe string
-	mgr *ShellManager // background-shell registry (nil = run_in_background unavailable)
+	// preArgs precede "-c <command>" in the argv. Empty for a direct bash; on a
+	// WSL-only Windows host it carries the `-e bash` that turns exe (wsl.exe) into
+	// a POSIX shell (see resolvePOSIXShell).
+	preArgs []string
+	mgr     *ShellManager // background-shell registry (nil = run_in_background unavailable)
 	// outFilter optionally post-processes the combined output before it is returned
 	// to the model (e.g. an external token-optimizer like sqz). nil = passthrough. It
 	// runs only on foreground runs and only above shellCompressMinBytes; the live UI
@@ -102,8 +95,8 @@ type ShellTool struct {
 // NewShellTool binds the tool to a base working directory and resolves the POSIX
 // shell. Use Available to check whether a shell was found before registering it.
 func NewShellTool(sb Sandbox) ShellTool {
-	exe, _ := resolvePOSIXShell()
-	return ShellTool{sb: sb, exe: exe}
+	exe, preArgs, _ := resolvePOSIXShell()
+	return ShellTool{sb: sb, exe: exe, preArgs: preArgs}
 }
 
 // WithManager returns a copy of the tool wired to a session's background-shell
@@ -151,7 +144,8 @@ func (t ShellTool) CallStream(ctx context.Context, input json.RawMessage, onChun
 		return "", err
 	}
 	build := func(runCtx context.Context, command string) *exec.Cmd {
-		return hardenShellCmd(proc.CommandContext(runCtx, t.exe, "-c", command), t.sb.Confined)
+		argv := append(append([]string{}, t.preArgs...), "-c", command)
+		return hardenShellCmd(proc.CommandContext(runCtx, t.exe, argv...), t.sb.Confined)
 	}
 	if args.RunInBackground {
 		return startBackgroundShell(t.mgr, t.sb, args, "Bash", build)
