@@ -155,6 +155,31 @@ Transkriptte dört küçük ama sürtünme yaratan boşluk kapatıldı (detay `0
   temiz; repoda o sırada **başka bir çalışmanın** yarım kalan `IngestKind` düzenlemesi
   vardı (`SkillImportDialog.tsx` güncellenmemiş) — dokunulmadı.
 
+## Navbar'da hayalet "Sohbet çalışıyor" noktası ✅ (2026-07-28)
+
+Boştaki bir workspace'in nav rail'inde `Sohbet` nabız noktası (ve yan etkileri:
+sidebar spinner'ı, composer'daki "Durdur" butonu) hiçbir tur çalışmadığı halde
+yanıp kalıyordu; yalnız sayfa yenilemek geçiriyordu. Backend suçsuzdu —
+`GET /api/activity` ilgili workspace için `chat:false` dönüyordu.
+
+- **Kök neden:** `useChatStream.streamingSessions`, poll gecikmesini gizleyen
+  istemci-tarafı bir mandal. Yalnız olayla temizleniyor, tamamlanma olayları ise
+  `useAppEvents`'te `e.workspaceId === aktif workspace` koşuluyla filtreleniyor.
+  Kullanıcı tur bitmeden başka workspace'e geçerse temizleme olayı düşüyor ve
+  mandal sekme ömrü boyunca asılı kalıyor. Oturum ID'leri **store başına**
+  sayaçla üretildiğinden (`db.nextID` → her workspace kendi `SES1`, `SES2`…
+  serisini verir) bu yetim ID, ekrandaki workspace'in gerçek bir oturumuyla
+  çakışıyor ve `App.tsx`'teki `chatBusyLocal` kesişim testini yanlış yere
+  geçiriyordu.
+- **Düzeltme:** kurtarma yolu artık **mutabakat** yapıyor, yalnız eklemiyor.
+  `useChatStream.reconcileActive(ids)` pending'i `GET /api/sessions/active`
+  listesiyle değiştirir, streaming'i o listeye daraltır (yeni saf yardımcı
+  göre gruplanır. Panel akış sürerken de açılabilir (read-only), ajan değişince remount.
+- Not: `/tools` slash komutu (LLM'e özet yazdıran, token harcayan yol) duruyor; bu buton
+  aynı bilgiyi **sıfır token** ile verir.
+
+Detay: `_Docs\19-LAZY-TOOL-LOADING.md` + `_Docs\07-CHAT-UX.md`.
+
 ## Market ekranı + item'ları bayatlık tazelemesi ✅ (2026-07-28)
 
 Market, son alt sistemlerin gerisinde kalmıştı. Detay tablo: **`_Docs\21-MARKET.md` §8**.

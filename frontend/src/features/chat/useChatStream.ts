@@ -10,7 +10,7 @@ import { api } from '@/api'
 import type { Attachment, Flow, Message, SlashCommand, TurnStep } from '@/types'
 import type { PendingAsk } from './AskPrompt'
 import type { PendingItem } from './PendingTray'
-import { withAdded, withRemoved, withoutKey } from './chatStreamHelpers'
+import { intersectWith, withAdded, withRemoved, withoutKey } from './chatStreamHelpers'
 import type { AutoLiveEntry, ChatStreamDeps, WakeWait } from './chatStreamTypes'
 import { performSend } from './chatStreamSend'
 import { performRerunLast, performRetry, performRewindTo } from './chatStreamHistory'
@@ -236,6 +236,25 @@ export function useChatStream(deps: ChatStreamDeps) {
       for (const id of ids) next = withAdded(next, id)
       return next
     })
+  }, [])
+
+  // reconcileActive REPLACES the local running latches with the server's list of
+  // in-flight sessions for the workspace now on screen. Called on every workspace
+  // switch (and the initial resolve), where the server is authoritative and this
+  // window owns no live run in the workspace it just entered.
+  //
+  // markPending only ever ADDS, so nothing could drop a stale latch. That leaked:
+  // the global completion feed clears a session's latch only while ITS workspace
+  // is the active one (useAppEvents gates on e.workspaceId), so a turn that ends
+  // after the user switched away stays latched for the lifetime of the tab. And
+  // session ids are per-workspace counters (each store issues its own SES1, SES2,
+  // …), so that orphaned id collides with a real session in the workspace now on
+  // screen — lighting its nav "Sohbet" busy dot, sidebar spinner and composer
+  // Durdur button with no run behind them.
+  const reconcileActive = useCallback((ids: string[]) => {
+    const live = new Set(ids)
+    setPendingSessions(() => live)
+    setStreamingSessions((p) => intersectWith(p, live))
   }, [])
 
   // Clear a session's post-reload pending indicator once its turn has ended
@@ -479,6 +498,7 @@ export function useChatStream(deps: ChatStreamDeps) {
     clearQueue,
     sendQueuedNext,
     markPending,
+    reconcileActive,
     clearPending,
     applyAutoStep,
     clearAutoLive,

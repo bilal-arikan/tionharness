@@ -40,6 +40,17 @@ graph TD
 - **unread**: `hooks/useUnreadViews.ts` — workspace başına ayrı set, `localStorage`
   + `storage` event ile **cross-window** senkron (workspace-unread rozetiyle aynı
   desen). View görüntülenince temizlenir (App'te `markViewRead(view)` efekti).
+- **busy — yerel gecikmesiz sinyal ve mutabakatı**: 3sn poll'a ek olarak
+  `useChatStream.streamingSessions` (bu pencerenin canlı tur mandalı) anında
+  `chat` noktasını yakar. Mandal **yalnız olayla** temizlenir ve tamamlanma
+  olayları `useAppEvents`'te aktif workspace'e göre filtrelenir → kullanıcı tur
+  bitmeden başka workspace'e geçerse mandal sekme kapanana dek asılı kalır.
+  Oturum ID'leri store başına sayaçla üretildiği için (`SES1`, `SES2`… her
+  workspace'te yeniden başlar) bu yetim ID karşı workspace'teki gerçek bir
+  oturumla çakışır ve **iş yokken "Sohbet" noktasını yakardı**. Çözüm:
+  her workspace geçişinde `GET /api/sessions/active` otoriter kabul edilir —
+  `chat.reconcileActive(ids)` pending'i bu listeyle **değiştirir**, streaming'i
+  listeye **daraltır** (`intersectWith`). Eski `markPending` yalnız eklerdi.
 - **dirty**: `lib/dirtySignals.ts` — `useSyncExternalStore` tabanlı modül store
   (provider gerektirmez). Editörler `useRegisterDirty(view, isDirty)` ile kaydolur;
   unmount'ta otomatik temizlenir. Kayıtlı ekranlar: `SettingsPanel` (`settings`),

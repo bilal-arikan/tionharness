@@ -274,13 +274,52 @@ export default function App() {
     [chat, ctl.activeSessionId],
   )
 
-  // After a reload (or workspace switch), restore the "thinking" indicator for
-  // any turn still running detached on the server — the user may have refreshed
-  // right after sending. Each turn's chat-completion event clears it again.
+  // After a reload (or workspace switch), re-seat the "thinking" indicators on the
+  // server's authoritative list of detached turns still in flight for THIS
+  // workspace — restoring them for a mid-turn refresh AND dropping any latch that
+  // outlived its turn (see reconcileActive: the completion feed only clears while
+  // the session's own workspace is active, and session ids repeat across stores).
+  // Whichever workspace is entered last wins: a slow response from a workspace we
+  // already left must not overwrite the current one's indicators.
+  const reconcileActive = chat.reconcileActive
   useEffect(() => {
     if (!activeWorkspaceId) return
-    api.activeSessions().then(chat.markPending).catch(() => {})
-  }, [activeWorkspaceId, chat.markPending])
+    let cancelled = false
+    api
+      .activeSessions()
+      .then((ids) => {
+        if (!cancelled) reconcileActive(ids)
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [activeWorkspaceId, reconcileActive])
+
+  // Opening a session must show at once that its turn is still running, instead of
+  // ending on our own message as if the agent had gone quiet. The per-session hub
+  // subscription eventually replays the in-flight turn, but only once a frame of it
+  // has been emitted — a turn still queued behind another, or one whose first
+  // assistant frame hasn't landed, produces nothing to replay. So seed the
+  // indicator from the server's authoritative list. ADD-only (markPending, not
+  // reconcileActive): a turn this window just enqueued may not be registered
+  // server-side yet, and pruning here would blank its indicator.
+  const markPending = chat.markPending
+  const openedSessionId = ctl.activeSessionId
+  useEffect(() => {
+    if (!openedSessionId) return
+    let cancelled = false
+    api
+      .activeSessions()
+      .then((ids) => {
+        if (!cancelled) markPending(ids.filter((id) => id === openedSessionId))
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [openedSessionId, markPending])
+
 
   // Per-view "work in progress" flags for the nav-rail busy indicators.
   // The instant local chat signal must be workspace-scoped: useChatStream lives
