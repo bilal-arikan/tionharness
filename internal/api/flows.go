@@ -247,9 +247,19 @@ func (s *Server) handleRunFlowStream(w http.ResponseWriter, r *http.Request) {
 	sse("reply", map[string]any{"run": run, "sessionId": sessionID})
 }
 
+// handleListFlowRuns lists flow runs (GET /api/flow-runs), optionally narrowed to
+// one flow with ?flowId=. With ?rootOnly=true the subflow/spawn children of a
+// composed flow are left out, so one click on a composed flow contributes one row
+// instead of a burst of near-identical ones; the children stay reachable through
+// /api/flow-runs/{id}/tree. The filter is opt-in so existing callers that expect
+// every run keep working unchanged.
 func (s *Server) handleListFlowRuns(w http.ResponseWriter, r *http.Request) {
 	flowID := r.URL.Query().Get("flowId")
-	runs, err := ws(r).DB.ListFlowRuns(r.Context(), flowID)
+	list := ws(r).DB.ListFlowRuns
+	if r.URL.Query().Get("rootOnly") == "true" {
+		list = ws(r).DB.ListRootFlowRuns
+	}
+	runs, err := list(r.Context(), flowID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -267,6 +277,32 @@ func (s *Server) handleGetFlowRun(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, run)
+}
+
+// handleFlowRunTree returns every run in one composed flow's tree — the root run
+// plus every subflow/spawn descendant at any depth — breadth-first, so a parent
+// always precedes its children (GET /api/flow-runs/{id}/tree).
+//
+// The id may be ANY member of the tree, not only its root. The UI has whatever
+// run the user clicked selected, which is routinely a child, and "show me this
+// run's tree" must not depend on which member was picked; one read normalises the
+// id via RootOf(). This endpoint is also the resync path after a dropped SSE
+// connection, where the client knows a run id but not necessarily the root.
+func (s *Server) handleFlowRunTree(w http.ResponseWriter, r *http.Request) {
+	run, err := ws(r).DB.GetFlowRun(r.Context(), r.PathValue("id"))
+	if err != nil {
+		writeError(w, http.StatusNotFound, "flow run not found")
+		return
+	}
+	runs, err := ws(r).DB.ListFlowRunTree(r.Context(), run.RootOf())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if runs == nil {
+		runs = []db.FlowRun{}
+	}
+	writeJSON(w, http.StatusOK, runs)
 }
 
 // handleFlowRunNodeSteps returns one node's captured tool/thinking steps for a

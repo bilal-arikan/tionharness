@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"fmt"
+	"strconv"
 )
 
 // ---- Flows ----
@@ -149,19 +150,93 @@ func (d *DB) ListRootFlowRuns(ctx context.Context, flowID string) ([]FlowRun, er
 		func(a, b FlowRun) bool { return a.CreatedAt > b.CreatedAt }), nil
 }
 
+// flowRunSeq extracts the monotonic counter nextID appended to a run id
+// ("RUN12" → 12), used to order runs created within the same second. Ids are not
+// zero-padded, so a lexicographic compare would put "RUN10" before "RUN2".
+// Returns -1 for an unparseable id, which sorts such runs first but stably.
+func flowRunSeq(id string) int64 {
+	i := len(id)
+	for i > 0 && id[i-1] >= '0' && id[i-1] <= '9' {
+		i--
+	}
+	if i == len(id) {
+		return -1
+	}
+	n, err := strconv.ParseInt(id[i:], 10, 64)
+	if err != nil {
+		return -1
+	}
+	return n
+}
+
+// flowRunBefore is the deterministic creation order of two runs. CreatedAt alone
+// is NOT enough: it has second granularity (see now()), and a composed flow
+// creates a parent and its children within the same second — leaving their
+// relative order arbitrary. The id counter breaks the tie.
+func flowRunBefore(a, b FlowRun) bool {
+	if a.CreatedAt != b.CreatedAt {
+		return a.CreatedAt < b.CreatedAt
+	}
+	return flowRunSeq(a.ID) < flowRunSeq(b.ID)
+}
+
 // ListFlowRunTree returns every run in rootID's tree — the root itself plus all
-// descendants at any depth — OLDEST first, so a caller can build the hierarchy
-// in one pass (a parent always precedes its children). Resolving the tree by
-// RootRunID keeps this a single scan instead of a walk per level. An unknown or
-// non-root id yields an empty result rather than an error: a tree that no longer
-// exists is an empty tree, not a failure.
+// descendants at any depth — ordered BREADTH-FIRST from the root, so a parent
+// always precedes its children and siblings stay grouped. Resolving membership
+// by RootRunID keeps this a single scan instead of a walk per level; the parent
+// links then only order what that scan already found.
+//
+// Ordering walks ParentRunID rather than trusting timestamps: CreatedAt is
+// second-granular, so a parent and the child it launches milliseconds later are
+// routinely indistinguishable by time. Siblings are ordered by creation
+// (flowRunBefore).
+//
+// An unknown or non-root id yields an empty result rather than an error: a tree
+// that no longer exists is an empty tree, not a failure. Any member the walk
+// cannot reach (a parent row deleted out from under it) is appended at the end
+// in creation order rather than silently dropped.
 func (d *DB) ListFlowRunTree(ctx context.Context, rootID string) ([]FlowRun, error) {
 	if rootID == "" {
 		return nil, nil
 	}
-	return dbFilter(d, d.flowRuns,
+	members := dbFilter(d, d.flowRuns,
 		func(r FlowRun) bool { return r.RootOf() == rootID },
-		func(a, b FlowRun) bool { return a.CreatedAt < b.CreatedAt }), nil
+		flowRunBefore)
+	if len(members) == 0 {
+		return nil, nil
+	}
+
+	childrenOf := map[string][]FlowRun{}
+	var root *FlowRun
+	for i, r := range members {
+		if r.ID == rootID {
+			root = &members[i]
+			continue
+		}
+		childrenOf[r.ParentRunID] = append(childrenOf[r.ParentRunID], r)
+	}
+
+	out := make([]FlowRun, 0, len(members))
+	seen := map[string]bool{}
+	if root != nil {
+		queue := []FlowRun{*root}
+		for len(queue) > 0 {
+			cur := queue[0]
+			queue = queue[1:]
+			if seen[cur.ID] { // defensive: a cycle must not spin forever
+				continue
+			}
+			seen[cur.ID] = true
+			out = append(out, cur)
+			queue = append(queue, childrenOf[cur.ID]...)
+		}
+	}
+	for _, r := range members {
+		if !seen[r.ID] {
+			out = append(out, r)
+		}
+	}
+	return out, nil
 }
 
 // SetFlowRunState persists the restart-safe state snapshot mid-run.

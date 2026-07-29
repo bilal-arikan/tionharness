@@ -88,9 +88,29 @@ type ShellTool struct {
 	// outFilter optionally post-processes the combined output before it is returned
 	// to the model (e.g. an external token-optimizer like sqz). nil = passthrough. It
 	// runs only on foreground runs and only above shellCompressMinBytes; the live UI
-	// stream (onChunk) is never filtered. Injected by the agent layer.
-	outFilter func(cmd, output string) string
+	// stream (onChunk) is never filtered. Injected by the agent layer. The second
+	// return value reports what the optimizer actually did (nil = nothing measurable),
+	// so the UI can show a chip instead of the compression being invisible.
+	outFilter ShellOutputFilter
+	// cmdFilter optionally rewrites the command before it runs (rtk). nil = as-typed.
+	cmdFilter ShellCommandFilter
 }
+
+// ShellOutputFilter post-processes a shell command's combined output before it is
+// returned to the model, and reports the optimization it applied (nil when the
+// output was passed through unchanged or the optimizer produced no measurement).
+// It MUST fail open — on any internal error it returns the original output.
+type ShellOutputFilter func(cmd, output string) (string, *ShellOptimization)
+
+// ShellCommandFilter rewrites a command BEFORE it runs so an external optimizer
+// (rtk) can make it produce less output in the first place — e.g. a test runner
+// that reports only failures. Returns "" to leave the command untouched, which is
+// also the required behaviour on any internal error (fail open: never block a
+// command because an optimization could not be applied).
+//
+// This is the counterpart of ShellOutputFilter at the other end of the call: one
+// shapes the command, the other compresses the result, and they compose.
+type ShellCommandFilter func(cmd string) (string, *ShellOptimization)
 
 // NewShellTool binds the tool to a base working directory and resolves the POSIX
 // shell. Use Available to check whether a shell was found before registering it.
@@ -108,8 +128,17 @@ func (t ShellTool) WithManager(m *ShellManager) ShellTool { t.mgr = m; return t 
 // before being returned to the model (nil = passthrough). Used to route shell
 // output through an external token-optimizer (sqz) in-process, since the CLI hook
 // path cannot reach TionSwarm's bridged shell tool name.
-func (t ShellTool) WithOutputFilter(f func(cmd, output string) string) ShellTool {
+func (t ShellTool) WithOutputFilter(f ShellOutputFilter) ShellTool {
 	t.outFilter = f
+	return t
+}
+
+// WithCommandFilter returns a copy whose command is rewritten by f before it runs
+// (nil = as-typed). Used to route shell commands through an external command-layer
+// optimizer (rtk) in-process, for the same reason WithOutputFilter exists: the CLI
+// hook path cannot reach TionSwarm's bridged shell tool name.
+func (t ShellTool) WithCommandFilter(f ShellCommandFilter) ShellTool {
+	t.cmdFilter = f
 	return t
 }
 
@@ -150,7 +179,7 @@ func (t ShellTool) CallStream(ctx context.Context, input json.RawMessage, onChun
 	if args.RunInBackground {
 		return startBackgroundShell(t.mgr, t.sb, args, "Bash", build)
 	}
-	return runShell(ctx, t.sb, args, onChunk, build, t.outFilter)
+	return runShell(ctx, t.sb, args, onChunk, build, t.outFilter, t.cmdFilter)
 }
 
 // PowerShellTool runs a command through PowerShell (pwsh preferred, else
@@ -163,7 +192,9 @@ type PowerShellTool struct {
 	exe string
 	mgr *ShellManager // background-shell registry (nil = run_in_background unavailable)
 	// outFilter — see ShellTool.outFilter. Same contract for the PowerShell sibling.
-	outFilter func(cmd, output string) string
+	outFilter ShellOutputFilter
+	// cmdFilter — see ShellTool.cmdFilter.
+	cmdFilter ShellCommandFilter
 }
 
 // NewPowerShellTool binds the tool to a base working directory and resolves a
@@ -179,8 +210,15 @@ func (t PowerShellTool) WithManager(m *ShellManager) PowerShellTool { t.mgr = m;
 
 // WithOutputFilter returns a copy whose combined output is post-processed by f
 // before return (nil = passthrough). See ShellTool.WithOutputFilter.
-func (t PowerShellTool) WithOutputFilter(f func(cmd, output string) string) PowerShellTool {
+func (t PowerShellTool) WithOutputFilter(f ShellOutputFilter) PowerShellTool {
 	t.outFilter = f
+	return t
+}
+
+// WithCommandFilter returns a copy whose command is rewritten before it runs.
+// See ShellTool.WithCommandFilter.
+func (t PowerShellTool) WithCommandFilter(f ShellCommandFilter) PowerShellTool {
+	t.cmdFilter = f
 	return t
 }
 
@@ -231,7 +269,7 @@ func (t PowerShellTool) CallStream(ctx context.Context, input json.RawMessage, o
 	if args.RunInBackground {
 		return startBackgroundShell(t.mgr, t.sb, args, "PowerShell", build)
 	}
-	return runShell(ctx, t.sb, args, onChunk, build, t.outFilter)
+	return runShell(ctx, t.sb, args, onChunk, build, t.outFilter, t.cmdFilter)
 }
 
 // shellInputSchema builds the shared shell-tool schema. run_in_background is only
@@ -297,7 +335,25 @@ func startBackgroundShell(mgr *ShellManager, sb Sandbox, args shellArgs, label s
 // hashes, keys — should never be touched anyway).
 const shellCompressMinBytes = 2048
 
-func runShell(ctx context.Context, sb Sandbox, args shellArgs, onChunk func(string), build func(ctx context.Context, command string) *exec.Cmd, outFilter func(cmd, output string) string) (string, error) {
+// rtkDegradedNote is appended when a REWRITTEN command fails. rtk replaces the
+// command's real output with its own summary, and its summarizers can lose the
+// actual error entirely. Measured 2026-07-28 with a go.mod carrying a stray BOM,
+// where the raw command reports `go.mod:1: unexpected input character U+FEFF`:
+// rtk 0.42.4 answered "Go test: No tests found", and 0.44.1 returns NOTHING at
+// all. The failure mode is not going away, it just changes shape between
+// releases — which is precisely why this note is unconditional rather than
+// pattern-matched against any particular wording.
+// Re-running the command ourselves to recover the raw text
+// would double the cost of every failing build and can report a DIFFERENT result
+// for a flaky test — so we do not guess. We say plainly that this is a summary of
+// a failure and point at the escape hatch, and let the agent decide.
+const rtkDegradedNote = "\n\n[optimizer note: this command FAILED and the text above is a token-optimized " +
+	"SUMMARY produced by rtk, not the command's raw output. rtk preserves test and compile failures, but a " +
+	"setup/tooling error (bad go.mod, missing toolchain) can be reduced to something uninformative like " +
+	"\"No tests found\". If the summary does not explain the failure, re-run the SAME command with " +
+	"no_compress: true to get the byte-exact output.]"
+
+func runShell(ctx context.Context, sb Sandbox, args shellArgs, onChunk func(string), build func(ctx context.Context, command string) *exec.Cmd, outFilter ShellOutputFilter, cmdFilter ShellCommandFilter) (string, error) {
 	// Autonomous brake: when the sandbox is confined (autonomous turn + the
 	// AutonomousConfine guard), block network-mutating git operations. A scheduled
 	// or spawned agent must not push to a remote without a human in the loop;
@@ -316,7 +372,19 @@ func runShell(ctx context.Context, sb Sandbox, args shellArgs, onChunk func(stri
 	runCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	cmd := build(runCtx, args.Command)
+	// Command-layer optimizer (rtk): rewrite BEFORE running so the command emits
+	// less in the first place. Honours the same no_compress opt-out as the output
+	// filter — one flag, one concept: "give me this command untouched".
+	command := args.Command
+	var rewrite *ShellOptimization
+	if cmdFilter != nil && !args.NoCompress {
+		if rewritten, opt := cmdFilter(args.Command); rewritten != "" && rewritten != args.Command {
+			command = rewritten
+			rewrite = opt
+		}
+	}
+
+	cmd := build(runCtx, command)
 	cmd.Dir = sb.Root
 
 	// Same writer for stdout+stderr: exec serialises writes when they are equal,
@@ -344,14 +412,63 @@ func runShell(ctx context.Context, sb Sandbox, args shellArgs, onChunk func(stri
 	if result == "" {
 		result = "(no output)"
 	}
+	// Both optimizers can act on one call (rtk shapes the command, sqz compresses
+	// what it printed), so their findings are merged into ONE record rather than
+	// recorded twice — a second record would overwrite the first and silently drop
+	// whichever half it did not carry (notably the Degraded warning).
+	rec := rewrite
+	if rec == nil && isRTKWrapped(args.Command) {
+		// The agent typed `rtk …` itself rather than us rewriting it.
+		rec = &ShellOptimization{Kind: "rtk"}
+	}
+	// A rewritten command that FAILED is flagged here; the note itself is appended
+	// AFTER the output filter below, so the recovery instruction reaches the agent
+	// verbatim instead of arriving abbreviated by sqz.
+	degraded := rewrite != nil && runErr != nil
+	if degraded {
+		rec.Degraded = true
+	}
 	// Optional token-optimizer post-processing (e.g. sqz), applied only to the value
 	// RETURNED to the model — the live UI stream (onChunk) already showed the raw
 	// output. Skipped for small outputs. The filter must fail open (return the
 	// original on any error); it is an optimization, not a correctness step.
 	if outFilter != nil && !args.NoCompress && len(result) >= shellCompressMinBytes {
-		result = outFilter(args.Command, result)
+		filtered, opt := outFilter(args.Command, result)
+		result = filtered
+		if opt != nil {
+			// sqz measured real tokens, so its kind/counts win the label; the
+			// command-layer facts (what actually ran, and whether it degraded)
+			// belong to rtk and are carried over.
+			merged := *opt
+			if rec != nil {
+				merged.Command = rec.Command
+				merged.Degraded = rec.Degraded
+			}
+			rec = &merged
+		}
+	}
+	if rec != nil {
+		recordOptimization(ctx, *rec)
+	}
+	if degraded {
+		result += rtkDegradedNote
 	}
 	return result, nil
+}
+
+// isRTKWrapped reports whether the command runs through the `rtk` token-proxy —
+// i.e. rtk is the program being invoked, not a word appearing later in the line.
+// Only the leading token counts, so `grep rtk log.txt` is correctly not a match.
+func isRTKWrapped(cmd string) bool {
+	fields := strings.Fields(cmd)
+	if len(fields) == 0 {
+		return false
+	}
+	switch strings.ToLower(fields[0]) {
+	case "rtk", "rtk.exe":
+		return true
+	}
+	return false
 }
 
 // isNetworkMutatingGit reports whether cmd looks like a git operation that

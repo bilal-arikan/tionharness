@@ -149,6 +149,16 @@ export interface FlowRun {
   // chat "Akış olarak gör" resolve a flow session back to its exact run + real
   // graph. Empty on runs recorded before the link existed.
   sessionId?: string
+  // Run lineage (subflow / spawn / the run_flow tool). All three are omitted by
+  // the backend on a root run, so absent means "this run is a root" — see
+  // flowRunRootOf, which is the only place that encoding should be decoded.
+  // parentRunId is the run that launched this one, parentNodeId the node in that
+  // run's graph which did it (what a parent's canvas hangs a child's progress
+  // off), and rootRunId the top of the tree — the key both /api/flow-runs/{id}/tree
+  // and subscribeFlowTree are addressed by.
+  parentRunId?: string
+  parentNodeId?: string
+  rootRunId?: string
   status: 'running' | 'success' | 'failure' | 'waiting'
   input: string
   state: string // JSON FlowState

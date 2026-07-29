@@ -76,6 +76,409 @@ argümanı (filtre aktifken şemada ilan edilir → o çağrıda byte-exact ham 
 `builtin_shell_test.go TestShellOutputFilter` (eşik + no_compress), `shell_optimizer_test.go
 TestSqzShellFilter_Gate`.
 
+**sqz dedup önbelleği (2026-07-28):** sqz **kalıcı** bir dedup cache tutar; daha önce gördüğü
+bir içerik tekrar gelirse **tüm çıktıyı** `§ref:<hash>§` handle'ıyla değiştirir ve stderr'e
+`N/M tokens` yerine `[sqz] dedup hit: …` yazar. İki sonucu var:
+
+1. **Test:** `TestSqzShellFilter_Gate` sabit payload ile **ilk koşuda geçip sonrakilerde
+   düşüyordu** (ikinci koşuda istatistik satırı hiç yok). Test artık payload'a koşuya-özgü
+   bir marker ekliyor → dedup'a takılmadan gerçek sıkıştırma yolunu ölçer.
+2. **Ajan:** binlerce satır basan bir komut tek satırlık bir handle olarak dönebilir. Bunu
+   bilmeyen ajan sonucu boş/bozuk sanıp komutu tekrar çalıştırır ve **aynı handle'ı** alır →
+   döngü. `tokenOptimizerGuidance` artık iki çıktı biçimini de (`[Abbreviations]` sözlüğü ve
+   çıplak `§ref:…§`) açıklıyor.
+
+   **Kurtarma: `sqz expand '§ref:<hash>§'`** — orijinali tam olarak geri basar (doğrulandı:
+   19.908 karakterlik çıktı birebir döndü). Rehber eskiden "geriye bak / `no_compress` ile
+   tekrar çalıştır" diyordu; ikisi de gereksiz dolambaçtı — `expand` tam ve ucuz yol.
+   İlgili: `sqz reset --cache-only` bayat `§ref:` token'ları temizler, `sqz tee list/get`
+   sıkıştırılmamış kayıtları tutar.
+
+`parseSqzStats` dedup satırını da tanır (`ShellOptimization{Kind:"sqz", Dedup:true}`) —
+token çifti yok ama çip "sqz · yinelenen" olarak görünür, çünkü **kırık gibi görünen kart
+tam olarak budur.**
+
+## In-process `rtk` komut filtresi (2026-07-28)
+
+**Sorun:** rtk hiç çalışmıyordu. SES14 + SES15'te **81 shell çağrısının 0'ı** rtk'dan
+geçmiş. Sebep sqz'de çözdüğümüzün aynısı: rtk'nın PreToolUse hook'u araç **adı** olarak
+`Bash`'i eşliyor, TionSwarm ise her şeyi bridged `mcp__tionswarm_interaction__Bash` ile
+koşturuyor → hook hiç ateşlenmiyor. Manuel sarmalama da olmuyor (talimat yetmiyor).
+
+**Çözüm:** sqz'nin çıktı filtresinin kardeşi olarak bir **komut** filtresi:
+`tools.ShellCommandFilter` (`func(cmd string) (string, *ShellOptimization)`), `runShell`
+içinde `build()`'den **önce** uygulanır. `Runtime.rtkCommandFilter`
+(`internal/agent/rtk_optimizer.go`) kurar. Hem native hem bridged, hem Bash hem PowerShell.
+
+```mermaid
+graph LR
+    A["komut (ajanin yazdigi)"] --> B{"rtkRewriteWorthIt?"}
+    B -->|hayir| D["komut aynen"]
+    B -->|evet| C["rtk rewrite"]
+    C --> D
+    D --> E["calistir"]
+    E --> F{"exit != 0 ve<br/>yeniden yazildi mi?"}
+    F -->|evet| G["Degraded + kurtarma notu"]
+    F -->|hayir| H["sqz cikti filtresi"]
+    G --> H
+```
+
+### Neden beyaz liste (kara liste değil)
+
+`rtk rewrite` her komuta bir karşılık üretmeye hazır, ama **sonucun daha kötü olduğu
+aileler var**. Bu repoda ölçüldü (2026-07-28, token sayıları sqz'nin tokenizer'ından):
+
+| Komut | Ham | sqz | rtk | rtk+sqz | Sonuç |
+|---|---|---|---|---|---|
+| `go test -v ./internal/tools` | 6107 | 3209 | **12** | 12 | rtk ezici |
+| `git log -30` | 6595 | 2027 | 2157 | **1167** | istifleme |
+| `git status` | 1090 | 876 | 811 | **549** | istifleme |
+| `git diff _Docs` | 16184 | **7485** | 12556 | 10129 | **sqz kazanıyor** |
+| `cat big.txt` (karakter) | 172.200 | — | **176.201** | — | **rtk büyütüyor** |
+
+> Tablo **rtk 0.44.1** ile yenilendi (ilk ölçüm 0.42.4'teydi; `go test` 110 → 12 token'a
+> indi, diğer kararlar aynı kaldı). Ham sütunlar repo o an ne durumdaysa ona göre değişir —
+> önemli olan mutlak sayılar değil, aynı girdi üzerinde **sütunlar arası sıralama**.
+
+Son iki satır yüzünden `rtk rewrite`'a körü körüne güvenilmiyor. `rtkRewriteWorthIt`
+yalnız **doğrudan** test/build koşucularını geçirir (`go`, `cargo`, `npm`, `pytest`,
+`jest`, `vitest`, `mvn`, …) + `git status`/`git log`. `git diff`, `cat` ve tüm
+**dispatcher** komutlar (`npx`, `lint`, `prettier`, `format`, `uv`, `tsc`, `pip`) kapsam
+dışı — gerekçeleri aşağıdaki ölçüm bölümünde. Ayrıca kabuk operatörü içeren satırlar
+(`|`, `&&`, `;`, `$(…)`) atlanır — orada ilk token artık neyin çalıştığını anlatmıyor.
+
+Listede olmayan bir aile "rtk başarısız olur" demek değil, **"henüz ölçülmedi"** demektir.
+Genişletmek için ölçüm aracını kullan:
+
+```powershell
+python scripts/rtk_eval.py scripts/rtk_eval.spec.tsv
+```
+
+`scripts/rtk_eval.py` her komutu ham ve rtk-yeniden-yazılmış hâlde koşar, dördünü de
+(`ham / sqz / rtk / rtk+sqz`) **tiktoken** ile sayar ve kararı basar. `spec` dosyası
+kararların dayandığı komutları kaydeder — yolları kendi makinene göre düzenle.
+
+### Ölçüm sonuçları (2026-07-28, rtk 0.44.1)
+
+| Komut | Ham | sqz | rtk | rtk+sqz | Karar |
+|---|---|---|---|---|---|
+| `go test -v ./internal/tools` | 6107 | 3209 | **12** | 12 | ✅ listede |
+| `cargo test -p sample-rules` | 929 | 874 | **16** | 30 | ✅ listede |
+| `pytest -v` (182 test) | 3638 | 335 | **137** | 151 | ✅ listede |
+| `npm run build` (vite) | 934 | 885 | 923 | **404** | ✅ listede |
+| `npx vitest run` | 85 | 98 | 8 | 23 | ✅ (çıktı küçük, yön doğru) |
+| `npx tsc --noEmit` (180 hata) | 4500 | **1832** | 4534 | 1700 | ❌ **çıkarıldı** |
+| `npx eslint src` | 18943 | 10483 | 49 | 64 | ❌ **çıkarıldı — sayı YANLIŞ** |
+| `pip list` | 2352 | **1230** | 2344 | — | ❌ eklenmedi |
+| `uv pip list` | 55 | — | 2344 | — | ❌ **eklenmedi — farklı komut** |
+
+> **`npm run build` ilginç:** rtk tek başına nötr (923 vs 934), kazanç rtk'nın çıktısının
+> sqz tarafından **çok daha iyi sıkışmasından** geliyor (404). İki filtreyi ayrı ayrı
+> değerlendirmenin yanıltıcı olabileceğinin örneği.
+
+### Ölçümün zorla çıkarttığı üç aile
+
+Beyaz listenin ilk hâli `go test` dışında **ölçümsüzdü** — "aynı şekle sahip" varsayımıyla
+doldurulmuştu. Ölçünce varsayım 5 aileden 2'sinde çöktü ve biri **doğruluk hatası** çıktı:
+
+**1. `npx` / `lint` / `prettier` / `format` — yanlış sayı üretiyor.**
+
+```
+Ham eslint : ✖ 109 problems (90 errors, 19 warnings)
+rtk lint   : Lint: 2 errors, 0 warnings
+             npm error could not determine executable to run
+```
+
+rtk `npx` önekini düşürüp `rtk lint`'e çeviriyor, projenin **yerel** eslint'ini bulamıyor,
+ama yine de kendinden emin bir özet basıyor. Bu kayıplı değil, **yanlış**: ajan 90 hatalı
+bir kod tabanını "neredeyse temiz" okur. (Çıkış kodu 1 olduğu için `Degraded` koruması
+devreye giriyor — ama makul görünen yanlış bir sayı, beyaz listenin var oluş sebebidir.)
+
+**2. `uv` — farklı yorumlayıcı.** `uv pip list` → `rtk pip list`, yani uv'nin ortamı yerine
+**sistem python'u**. Daha kısa bir cevap değil, **başka** bir cevap.
+
+**3. `tsc` — hak etmedi.** Dispatcher değil, sadece kazanç yok: rtk tek başına ham çıktıdan
+**kötü** (4534 vs 4500), rtk+sqz ise sqz'den yalnız %7 iyi — eşiğin altında. sqz zaten
+hallediyor.
+
+Ortak desen: **dispatcher komutlar** (hangi aracı çalıştıracağına karar vermesi gerekenler)
+rtk'da kırılıyor; doğrudan araç çağrıları (`go`, `cargo`, `pytest`, `npm run`) sorunsuz.
+Bu ayrım `rtkWrapperPrograms` olarak kodda **gerekçesiyle** duruyor, ki "e canım lint de
+bir koşucu değil mi" sezgisiyle geri eklenmesin. Test: `TestRtkWrapperProgramsExcluded`.
+
+### Bunlar bize özgü değil — rtk'nın kendi issue'ları
+
+Ölçümle bulduğumuz her vakanın upstream'de karşılığı var; yani yanlış kullanım değil,
+bilinen sınırlar:
+
+Durum **2026-07-28** itibarıyla (rtk 0.44.1 en güncel sürüm):
+
+| Issue | Durum | Konu |
+|---|---|---|
+| [#950](https://github.com/rtk-ai/rtk/issues/950) | **AÇIK** | Windows'ta `.cmd`/shell sarmalayıcıları spawn edemiyor: **pnpm, npm, npx, tsc, tsserver, corepack**. Önerilen çözüm: Windows'ta `cmd.exe /c` ile çalıştırmak. Issue'nun kendi geçici çözümü de bizimkiyle aynı: *"bir PreToolUse hook bu komutlarda rtk'yı baypas ediyor"* |
+| [#1080](https://github.com/rtk-ai/rtk/issues/1080) | **KAPANDI** (2026-04-26) | `npx <bilinmeyen-paket>` → `npm run` → ENOENT |
+| [#1205](https://github.com/rtk-ai/rtk/issues/1205) | AÇIK | `uv run <araç>` / `uvx <araç>` registry aramasından önce açılmalı |
+| [#294](https://github.com/rtk-ai/rtk/issues/294) | AÇIK | Hook rewrite kapsamı: `uv run`, `pnpm exec`, Python yol varyantları |
+
+> **#1080 kapandı ama `npx` dışarıda kalmaya devam ediyor.** Bizim eslint hatamız
+> `npm error could not determine executable to run` diyordu — bu #1080'in (yanlış
+> dönüşüm → ENOENT) değil, **#950'nin** imzası. Yani `npx`'i dışarıda tutan gerekçe
+> hâlâ açık. Kapanan issue'yu gerekçe sanıp `npx`'i geri almak, düzelmemiş bir hataya
+> güvenmek olurdu.
+
+**#950'nin listesi uygulandı** (`npx`, `tsc`, `tsserver`, `corepack`, `pnpm`) — **tek
+istisna `npm`**. Kural şu oldu: *upstream'in listesi geçerlidir, doğrudan ölçüm onu
+çürütmediği sürece.*
+
+| Komut | Bu makinede ölçüldü mü? | Karar |
+|---|---|---|
+| `npx`, `tsc` | evet — kazanç yok / yanlış sayı | çıkarıldı |
+| `pnpm`, `tsserver`, `corepack` | **hayır** (pnpm kurulu bile değil) | çıkarıldı |
+| `npm` | **evet** — çalışıyor + kazanç doğrulandı | **kaldı** |
+
+> **`pnpm` neden gitti:** beyaz listede yalnızca "npm'e benziyor" diye duruyordu, burada
+> hiç ölçülmedi (kurulu değil), dolayısıyla hakkındaki **tek kanıt** upstream'inki ve o da
+> "bozuk" diyor. Ölçülmemiş bir girdinin aleyhine kanıt varsa onu ayakta tutan hiçbir şey
+> kalmaz — bu, "ölçülmemiş aileye dokunma" kuralının doğrudan sonucu.
+
+> **`npm` neden kaldı — iki gerekçe:**
+> 1. **Tekrar etmedi.** `rtk npm run build` gerçekten derledi (exit 0, 4497 modül, tam
+>    vite çıktısı); 824 → 404 kazancı dedup cache'i her ölçümden önce temizlenerek yeniden
+>    üretildi.
+> 2. **Hata modu gürültülü.** rtk'nın npm filtresi çıktıyı **özetlemiyor**, olduğu gibi
+>    geçiriyor (rtk tek başına 924 token vs ham 842 — hiçbir şeyi küçültmüyor). Dolayısıyla
+>    `lint` filtresinin "2 errors" uydurması gibi bir sayaç yok. #950 ısırırsa komut sadece
+>    çalışmaz: exit≠0, `Degraded` notu, görünür.
+>
+> **Kazancı rtk olmadan alamıyoruz.** Bariz teori — "rtk ANSI'yi temizliyor, sqz'ye o
+> yarıyor" — test edilip **çürütüldü**: hamdan ANSI'yi kendimiz temizleyince hiçbir şey
+> değişmedi (824 → 821), rtk'nın **daha büyük** çıktısı ise yine 404'e indi. sqz'nin rtk
+> formatında bulduğu şey her neyse, bizim taklit edebileceğimiz bir şey değil.
+
+Test: `TestRtkWrapperProgramsExcluded` hem çıkarılanları hem `npm`'in kalmasını kilitliyor,
+ki ileride "upstream listesini harfiyen uygula" geçişi doğrulanmış kazancı sessizce silmesin.
+
+> **`npm run build`'in kazancı nereden geliyor?** rtk çıktıyı özetlemiyor (921 vs ham 932) —
+> kazanç rtk'nın çıktısının sqz tarafından **iki kat iyi sıkışmasından** geliyor (404 vs 883).
+> Dedup cache'i her ölçümden önce temizlenerek iki kez doğrulandı.
+
+Referans: [Command Rewrite System](https://deepwiki.com/rtk-ai/rtk/3.5-command-rewrite-system)
+— `rtk rewrite`'ın registry kuralları ve `npx` passthrough listesi.
+
+### `rtk rewrite`'ın çıkış kodu tuzağı
+
+`rtk rewrite --help` "Exits 0 and prints the rewritten command if supported" diyor.
+**Gerçekte rtk 3.x başarıda 3 dönüyor** (doğrulandı: `rtk rewrite "go test ./..."` →
+stdout `rtk go test ./...`, exit **3**). Belgelenen koda göre kapı koymak özelliği
+sessizce tamamen devre dışı bıraktı. Filtre artık çıkış kodunu **yok sayıyor**, bunun
+yerine **çıktıyı doğruluyor**: boş olmayacak, değişmiş olacak ve `rtk ` ile başlayacak.
+Beklenmedik bir şey dönerse orijinal komut çalışır + `Warn` log.
+
+### Hata yutması koruması
+
+rtk kayıplı bir özetleyici ve **gerçek hatayı kaybedebiliyor.** Ölçülen üç vaka:
+
+| Vaka | rtk 0.42.4 | rtk 0.44.1 | Değerlendirme |
+|---|---|---|---|
+| Test başarısız | `[FAIL] TestX` + `fail_test.go:9: …` + tee log | aynı | ✅ tam korunuyor |
+| Derleme hatası | `broken.go:3:22: syntax error: …` | aynı | ✅ tam korunuyor |
+| **Bozuk `go.mod` (BOM)** | `Go test: No tests found` | **tamamen boş** | ❌ **gerçek hata kayıp** |
+
+Üçünde de exit kodu 1. Yani çıkış kodu güvenilir, **mesaj** değil.
+
+> **Sürüm yükseltmesi bu vakayı düzeltmedi, şekil değiştirdi** (0.44.1'de yanıltıcı metin
+> yerine sıfır çıktı — ajan açısından daha da kötü). Koruma bu yüzden **koşulsuz**: belirli
+> bir metni ("No tests found" gibi) yakalamaya çalışmıyor, "yeniden yazılmış komut
+> başarısız oldu" olgusuna bakıyor. Sürümler arası kayan bir hata desenine kalıp bağlamak
+> ilk yükseltmede sessizce kırılırdı.
+
+Ham çıktıyı kurtarmak için komutu yeniden koşmak **seçilmedi**: her başarısız build'in
+maliyetini ikiye katlar ve flaky bir testte **farklı** sonuç raporlayabilir. rtk'nın kendi
+tee dosyası da çözüm değil — yutma vakasında tee hiç oluşmuyor (doğrulandı).
+
+Bunun yerine **dürüst uyarı**: yeniden yazılmış bir komut başarısız olursa çıktının sonuna
+`[optimizer note: …]` eklenir ("bu ham çıktı değil, rtk özeti; açıklamıyorsa aynı komutu
+`no_compress: true` ile tekrar çalıştır") ve adım `Degraded` işaretlenir → kartta
+**`rtk özet — ham değil`** çipi. Not, sqz filtresinden **sonra** eklenir ki kurtarma
+talimatı kısaltılmadan ulaşsın. Tek çalıştırma, sıfır tahmin, kararı bilgiye en yakın olan
+verir.
+
+### Araçların kendi ayarları (TionSwarm dışı)
+
+Her ikisinin de kendi yapılandırması var; TionSwarm'ın ayarlarıyla **karışmaz**, alt katmanda
+durur:
+
+| Araç | Yapılandırma | İşe yarayan anahtarlar |
+|---|---|---|
+| rtk | `%APPDATA%\rtk\config.toml` (`rtk config --create` ile oluşur) | `[hooks] exclude_commands` — belirli komutları rtk'dan muaf tut · `[tee] enabled/mode` (varsayılan `failures`) · `[limits] grep_max_results`, `status_max_files`, `passthrough_max_chars` · `[filters] ignore_dirs/ignore_files` · `[telemetry] enabled=false` |
+| sqz | `sqz init` ile kurulan preset'ler | `sqz reset --cache-only` (bayat `§ref:` token'ları) · `sqz expand` (ref → tam içerik) · `sqz tee list/get` · `sqz status`/`gain`/`stats` |
+
+> **Neden beyaz listeyi rtk'nın `exclude_commands`'ine devretmiyoruz:** o dosya makineye
+> özel ve sürüm kontrolünde değil. Kararı oraya taşımak, TionSwarm'ın davranışını
+> **makineden makineye değiştirir** ve testle kilitlenemez hale getirir. Kod tarafındaki
+> `rtkWrapperPrograms` gerekçesiyle birlikte repoda duruyor ve testi var.
+
+#### Bakım paneli — Ayarlar ▸ Harici Araçlar (2026-07-28)
+
+Aynı gerekçeyle bu araçların config **anahtarları** ayar olarak yansıtılmadı: onların
+yapılandırması makine geneli, TionSwarm ayarları workspace başına — anahtarı buraya koymak,
+ayarın tutamayacağı bir kapsam sözü vermek olurdu. Bunun yerine üç **eylem**:
+
+| Eylem | Uç nokta | Ne yapar |
+|---|---|---|
+| Tasarruf raporu | `GET /api/external-tools/token-report` | `rtk gain` + `sqz gain` çıktısını **birebir** gösterir; TionSwarm yeniden hesaplamaz, böylece araçların muhasebesinden sapamaz |
+| sqz dedup önbelleğini temizle | `POST /api/external-tools/sqz-reset-cache` | `sqz reset --cache-only` — bayat `§ref:…§` işaretçileri ajanı şaşırttığında sqz'nin kendi önerdiği işlem. İstatistikler korunur |
+| rtk config dosyasını aç | `POST /api/external-tools/rtk-config/reveal` | `%APPDATA%\rtk\config.toml`'u Explorer'da gösterir. Dosyayı **oluşturmaz** — rtk o ana dek yerleşik varsayılanlarla çalışır ve buradan sessizce config yaratmak makinedeki tüm araçların davranışını değiştirirdi |
+
+Güvenlik: üç uç nokta da **parametre almaz**; komutlar sabit argv. Kabuğa ulaşan hiçbir
+istek alanı yok.
+
+Panel ayrıca eski *"rtk ve sqz'yi aynı anda açma"* uyarısını taşıyordu — o metin de
+ölçümle çeliştiği için düzeltildi: artık ikisini birden açmayı **öneriyor**.
+
+### Ayar
+
+`WSSettings.ShellCommandRewrite` — `ShellOutputCompression` ile birebir simetrik tri-state
+(`""`=auto → rtk-hook varlığını izler, `"on"`=zorla, `"off"`=kapat). Ayrı knob, çünkü ikisi
+karşı uçlarda çalışıyor ve bir workspace birini isteyip diğerini istemeyebilir. UI: Ayarlar
+▸ Workspace ▸ "Shell komutu yeniden yazma (rtk)".
+
+`no_compress: true` **ikisini birden** atlar — tek bayrak, tek kavram ("bu komutu bana
+dokunulmamış ver"). Degraded notunun işaret ettiği kaçış yolunun gerçekten ham çıktı
+vermesi buna bağlı.
+
+Testler: `rtk_optimizer_test.go` (beyaz liste, gate, canlı rewrite),
+`builtin_shell_cmdfilter_test.go` (rewrite gerçekten çalışıyor mu, degraded notu,
+no_compress opt-out, iki filtrenin tek kayda birleşmesi).
+
+> **Kaldırılan uyarı kartı:** `token-conflict` ("rtk ve sqz ikisi de komutu yeniden
+> yazıyor — birini kapatmalısın") **silindi**. Ölçüm bunun tersini gösteriyor: karşı
+> uçlarda çalışıyorlar ve istifleme her vakada en iyi sonucu veriyor. Kart kullanıcıyı
+> **en iyi konfigürasyonunu kapatmaya** yönlendiriyordu.
+
+## Tasarruf çipi — sohbet kartında görünür optimizasyon (2026-07-28)
+
+**Sorun:** sqz çıktıyı yeniden yazıyordu ama **hiçbir yerde görünmüyordu**. Kullanıcı
+kartta `«A1»` placeholder'ları ya da tek satırlık `§ref:…§` görüp bunu truncation/hata
+sanıyordu; ajan da aynı belirsizliği yaşıyordu.
+
+**Çözüm:** shell adımına `TurnStep.Optimizer` (`tools.ShellOptimization{Kind,InTokens,
+OutTokens,Dedup}`) eklendi; UI `OptimizerChip` ile `sqz −%93` / `sqz · yinelenen` / `rtk`
+çipi basar (hover'da `841 → 57 token`).
+
+Sayılar **tahmin değil**: sqz zaten stderr'e `[sqz] 57/841 tokens (93% reduction)` yazıyor,
+`parseSqzStats` onu okuyor. Ölçüm yoksa yüzde de yok — `rtk` komutu **sarmaladığı** için
+öncesi/sonrası çifti hiç oluşmaz, o yüzden çip yalnız adı gösterir (uydurma yüzde yerine).
+
+İki farklı yol, iki farklı mekanizma:
+
+```mermaid
+graph LR
+    A["runShell<br/>(internal/tools)"] -->|"sqz stderr parse<br/>+ rtk komut tespiti"| B["recordOptimization"]
+    B --> C["ctx sink<br/>optimizer.go"]
+    C -->|"native döngü"| D["toolloop.go<br/>st.Optimizer = opts.Take()"]
+    C -->|"claude-cli:<br/>NewShellRunner"| E["optimizerLog<br/>(çıktı-hash anahtarlı)"]
+    E -->|"trace→step"| F["Runtime.traceStepToTurnStep"]
+    D --> G["OptimizerChip"]
+    F --> G
+```
+
+- **Native yol** temiz: `WithOptimizerSink` çağrı-başı ctx sink'i, `diff.go` deseninin aynısı.
+- **claude-cli yolu** (WS16 worker'ları) ctx sink'e ulaşamaz: shell bizim bridge'imizde
+  koşar ama **adımlar sonradan CLI'nin stream-json trace'inden** kurulur — farklı çağrı
+  yığını. Bu yüzden `optimizerLog` (`internal/agent/optimizer_log.go`) devreye girer.
+  **Anahtar komut değil, çıktının SHA-256'sıdır:** komutla anahtarlamak FIFO defter
+  tutmayı gerektirirdi (aynı komut turda iki kez koşabilir) ve sıraya duyarlı olurdu;
+  çıktı ise runner'dan trace adımına giden şeyin ta kendisi → arama **idempotent**
+  (hem canlı `OnEvent` hem son toplu dönüşüm aynı adımı çözer, boşaltma gerekmez).
+  Ring 128 girdi ile sınırlı, yalnız hash tutulur. Eşleşmezse çip **çıkmaz** — bir
+  downstream hook sonucu yeniden yazarsa sessizce kaybolmak, yanlış rakam basmaktan iyidir.
+
+Testler: `optimizer_test.go` (sink, `isRTKWrapped`, `Measured()` dürüstlüğü),
+`optimizer_log_test.go` (round-trip, whitespace toleransı, ring sınırı),
+`shell_optimizer_parse_test.go` (`parseSqzStats`'ın beş stderr biçimi).
+
+## Ajan bağlamı — hangi optimizer aktifse ona göre (2026-07-28)
+
+`tokenOptimizerGuidance` artık **üç ayrı şekil** üretiyor; her biri o kombinasyonun
+kendine özgü "bu bozuk mu?" anını hedefliyor:
+
+| Aktif | Bloğun anlattığı asıl şey |
+|---|---|
+| **rtk** | Çıktı bir **ÖZET** — kayıp bilinçli, yalnız geçen testler düşer; hatalar `dosya:satır` ile tam. Kısa sonuç "komut çalışmadı" demek değil. Başarısızlıkta `[optimizer note: …]` gelirse takip et. |
+| **sqz** | Sıkıştırma **KAYIPSIZ**; iki biçim: `[Abbreviations]` sözlüğü ve çıplak `§ref:…§`. |
+| **ikisi** | Karşı uçlarda çalışıyorlar ve **istifleniyorlar**. Kritik: rtk bir test koşusunu birkaç satıra indirince sonuç sqz'nin ~2KB eşiğinin **altında** kalır → o kartta **hiç kısaltma sözlüğü görünmez.** Bu boru hattının çalışması, sqz'nin bozulması değil. |
+
+Son satır bu bloğun asıl varlık sebebi: "çıktın sıkıştırılıyor" denip sıkıştırılmamış
+çıktı gösterilen ajan, optimizer'ın bozulduğu sonucuna varıp **olmayan bir soruna**
+çözüm aramaya başlar.
+
+Blok sonunda tek ortak kaçış yolu duyurulur: `no_compress: true`.
+Test: `TestTokenOptimizerGuidance_PerCombination`.
+
+## Canlı doğrulama — WS16 / claude-cli (2026-07-28)
+
+Zincirin tamamı gerçek bir turda, gerçek bir worker'da doğrulandı. WS16'da
+`shellCommandRewrite="on"` yapıldı (workspace'te yalnız sqz hook'u vardı, rtk hook'u
+yoktu → filtre `auto` modda nil kalıyordu) ve AGT1'e (claude-cli/opus) tek komutluk bir
+görev verildi: `cargo test -p sample-rules`.
+
+Persist edilen adım:
+
+```json
+{
+  "kind": "tool", "tool": "Bash",
+  "input":  { "command": "cargo test -p sample-rules" },
+  "optimizer": {
+    "kind": "rtk",
+    "command": "rtk cargo test -p sample-rules",
+    "degraded": true
+  }
+}
+```
+
+Dört şey birden kanıtlandı:
+
+1. **Komut filtresi ateşledi** — `cargo test …` → `rtk cargo test …`
+2. **Yeniden yazılan komut kaydedildi** → çip hover'ında gerçekte çalışan komut görünür
+3. **`Degraded` koruması çalıştı** — komut başarısız oldu, bayrak set edildi
+4. **claude-cli yolu tuttu** — bu **en riskli parçaydı**: adımlar CLI'nin stream-json
+   trace'inden kuruluyor, ctx sink oraya ulaşmıyor. `optimizerLog`'un çıktı-hash
+   eşleşmesi bridged runner ile trace adımını doğru bağladı.
+
+Ajana dönen çıktının sonu (not sqz'den **sonra** ekleniyor, kısaltılmadan ulaşıyor):
+
+```
+rtk: Failed to resolve 'cargo' via PATH, falling back to direct exec: Binary 'cargo' not found on PATH
+[exit error: exit status 1]
+
+[optimizer note: this command FAILED and the text above is a token-optimized SUMMARY
+produced by rtk, not the command's raw output. … re-run the SAME command with
+no_compress: true to get the byte-exact output.]
+```
+
+> **Turun ortaya çıkardığı ayrı bir sorun:** `cargo` bridged shell'in PATH'inde yok —
+> SES14/SES15'te üç çağrı harcatan israfın aynısı. git-bash normal bir kabuktan
+> çağrıldığında `/c/Users/user/.cargo/bin/cargo`'yu görüyor, yani sorun git-bash'te
+> değil: **TionSwarm süreci dar bir PATH ile başlatılmış** ve tüm alt kabukları onu
+> miras alıyor. Bu, token optimizasyonundan bağımsız bir dağıtım/başlatma konusu;
+> `_Docs/17`'nin kapsamı dışında ama worker'ların Rust derleyememesine yol açıyor.
+
+## Kabuk ortamı ipucu — `/c/` vs `/mnt/c` (2026-07-28)
+
+Windows'ta `Bash` aracını **git-bash mi WSL mi** karşıladığı OS'tan türetilemez ama
+komuttaki yol yazımını tamamen belirler. Prompt bunu söylemediği için ajan her oturumda
+sıfırdan keşfediyordu: SES14 ve SES15 traceleri **ilk üç shell çağrısını** `/mnt/c/...`
+deneyip `No such file or directory` alarak harcadı, sonra `/c/...`'a geçti — her yeni
+oturumda yeniden.
+
+`shellEnvironmentCapability` (`internal/agent/capabilities_shellenv.go`) çözülen lehçeyi
+(`tools.POSIXShellFlavor()` → `gitbash` / `wsl` / `unix`) statik prefix'te **bir kez**
+bildirir: mount kökü (`/c/` vs `/mnt/c/`), Windows PATH/`.exe` davranışı, `127.0.0.1`
+erişilebilirliği. Native Unix'te blok **basılmaz** (model zaten o düzeni varsayıyor →
+boşuna token). Diğer capability'ler gibi hem chat (`composeTurnRequest`) hem headless
+(`autonomousSystemPrompt`) yolundan geçer. Test: `TestShellEnvironmentGuidance`.
+
 ## Harici araç tespiti (presence-only) — ana yol
 
 Ayarlar → **Hooks** ekranındaki "Kurulu mu kontrol et" butonu (panel açılışında otomatik de çalışır), bu
@@ -267,9 +670,11 @@ Bütçe / oturum-bilgisi / sohbet-debug / debug popup'larının hesap tutarlıl�
 - **"Tasarrufsuz maliyet" tam-doğru baseline'a çevrildi** (`providers.Price.CostNoCaching` + `billing.NoCacheCost` + `Rollup.NoCacheCostUSD` → `cumulative.noCacheCostUSD`): kart eskiden `cost + savings` gösteriyordu; bu, cacheRead'i tam fiyatlıyor ama cache-write primini (1.25×/2×) içeride bırakıp "caching olmasaydı" senaryosunu `(writeMult−1)×cacheWrite×inP` kadar şişiriyordu. Yeni baseline, cacheRead **ve** cacheWrite tokenlarının tümünü taban girdi fiyatından (indirim/prim yok) + input + output ile hesaplar → gerçek "caching yokmuş" tutarı. (Not: 1s-TTL 2× primi nedeniyle tek soğuk yazma, o yazma için tasarrufsuz baseline'ı bile aşabilir — caching kazancı tekrar-okumada realize olur.) Regresyon: `billing_test.go` + `pricing_test.go`.
 
 **Notlar / sınırlar:**
-- Hook'lar (`PreToolUse`/`PostToolUse`) tasarruf **ölçmez** (Claude Code sözleşmesi). Araç-çıktısı
-  sıkıştırması artık tamamen bu harici hook/CLI yolundadır (`sqz` PostToolUse hook · `rtk` Bash
-  sarmalama); TionSwarm bu kazanımı sayaçlamaz — kazanç dolaylı olarak input-token düşüşünde görünür.
+- Hook'lar (`PreToolUse`/`PostToolUse`) tasarruf **ölçmez** (Claude Code sözleşmesi); kazanç
+  dolaylı olarak input-token düşüşünde görünür. **İstisna:** in-process sqz shell filtresi
+  (hook değil) sqz'nin kendi stderr istatistiğini okur → o **adım** için gerçek token çifti
+  bilinir ve sohbet kartında çip olarak gösterilir. Bu **adım-başı görünürlüktür**; bütçe
+  ekranındaki toplamlara **girmez** (orada tek gerçek tasarruf kalemi prompt-cache USD'sidir).
 - Bütçe ekranında gösterilen tek gerçek tasarruf **prompt-cache USD**'sidir; built-in bayt/token
   sıkıştırma ölçeri yoktur.
 - Geriye-uyumlu: eski usage dosyalarındaki artık-kullanılmayan `compactSavedBytes*` alanları yok sayılır

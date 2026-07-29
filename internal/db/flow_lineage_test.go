@@ -58,11 +58,15 @@ func TestCreateFlowRun_PersistsLineage(t *testing.T) {
 	}
 }
 
-// TestListFlowRunTree_ReturnsWholeTreeOldestFirst verifies a grandchild several
-// levels down still resolves via RootRunID (one scan, not a per-level walk), and
-// that ordering puts a parent before its children so a caller can build the
-// hierarchy in a single pass.
-func TestListFlowRunTree_ReturnsWholeTreeOldestFirst(t *testing.T) {
+// TestListFlowRunTree_ParentPrecedesChildren verifies a grandchild several levels
+// down still resolves via RootRunID (one scan, not a per-level walk) and that a
+// parent always precedes its children.
+//
+// Ordering may NOT lean on CreatedAt: it is second-granular, so these runs — all
+// created in the same instant, exactly like a real composed flow — carry
+// identical timestamps. An implementation that sorted by time alone returned them
+// in arbitrary order.
+func TestListFlowRunTree_ParentPrecedesChildren(t *testing.T) {
 	d, err := Open(t.TempDir())
 	if err != nil {
 		t.Fatalf("open db: %v", err)
@@ -88,12 +92,85 @@ func TestListFlowRunTree_ReturnsWholeTreeOldestFirst(t *testing.T) {
 		t.Fatalf("expected 3 runs in the tree, got %d", len(tree))
 	}
 	if tree[0].ID != root.ID || tree[1].ID != child.ID || tree[2].ID != grand.ID {
-		t.Errorf("tree not oldest-first: %s, %s, %s", tree[0].ID, tree[1].ID, tree[2].ID)
+		t.Errorf("tree order wrong: %s, %s, %s (want %s, %s, %s)",
+			tree[0].ID, tree[1].ID, tree[2].ID, root.ID, child.ID, grand.ID)
 	}
 	for _, r := range tree {
 		if r.ID == other.ID {
 			t.Error("an unrelated run leaked into the tree")
 		}
+	}
+}
+
+// TestListFlowRunTree_GroupsSiblingsBreadthFirst verifies a fan-out (spawn) tree
+// comes back breadth-first: both children of the root before either grandchild,
+// so a renderer can indent by depth without reordering.
+func TestListFlowRunTree_GroupsSiblingsBreadthFirst(t *testing.T) {
+	d, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	ctx := context.Background()
+
+	root, _ := d.CreateFlowRun(ctx, FlowRun{FlowID: "FLW-root"})
+	a, _ := d.CreateFlowRun(ctx, FlowRun{
+		FlowID: "FLW-a", ParentRunID: root.ID, ParentNodeID: "fan", RootRunID: root.ID,
+	})
+	b, _ := d.CreateFlowRun(ctx, FlowRun{
+		FlowID: "FLW-b", ParentRunID: root.ID, ParentNodeID: "fan", RootRunID: root.ID,
+	})
+	// A grandchild under the FIRST sibling: breadth-first must still place it
+	// after the second sibling.
+	aa, _ := d.CreateFlowRun(ctx, FlowRun{
+		FlowID: "FLW-aa", ParentRunID: a.ID, ParentNodeID: "sub", RootRunID: root.ID,
+	})
+
+	tree, err := d.ListFlowRunTree(ctx, root.ID)
+	if err != nil {
+		t.Fatalf("list tree: %v", err)
+	}
+	got := []string{tree[0].ID, tree[1].ID, tree[2].ID, tree[3].ID}
+	want := []string{root.ID, a.ID, b.ID, aa.ID}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("breadth-first order wrong: got %v, want %v", got, want)
+		}
+	}
+}
+
+// TestListFlowRunTree_KeepsUnreachableMembers verifies a run whose parent row is
+// gone is still returned (appended at the end) rather than silently vanishing —
+// a missing intermediate must not hide work that actually ran.
+func TestListFlowRunTree_KeepsUnreachableMembers(t *testing.T) {
+	d, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	ctx := context.Background()
+
+	root, _ := d.CreateFlowRun(ctx, FlowRun{FlowID: "FLW-root"})
+	orphan, _ := d.CreateFlowRun(ctx, FlowRun{
+		FlowID: "FLW-orphan", ParentRunID: "RUN-deleted", RootRunID: root.ID,
+	})
+
+	tree, err := d.ListFlowRunTree(ctx, root.ID)
+	if err != nil {
+		t.Fatalf("list tree: %v", err)
+	}
+	if len(tree) != 2 || tree[0].ID != root.ID || tree[1].ID != orphan.ID {
+		t.Fatalf("expected root then the unreachable member, got %+v", tree)
+	}
+}
+
+// TestFlowRunSeq_OrdersBeyondTen locks the tie-break that makes same-second
+// ordering deterministic: ids are not zero-padded, so a lexicographic compare
+// would place "RUN10" before "RUN2".
+func TestFlowRunSeq_OrdersBeyondTen(t *testing.T) {
+	if !(flowRunSeq("RUN2") < flowRunSeq("RUN10")) {
+		t.Error("RUN2 must sort before RUN10")
+	}
+	if flowRunSeq("RUN") != -1 || flowRunSeq("") != -1 {
+		t.Error("an id with no counter should report -1")
 	}
 }
 

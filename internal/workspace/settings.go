@@ -73,6 +73,14 @@ type WSSettings struct {
 	// "on" = force it on (needs the sqz binary), "off" = disable. See _Docs/17.
 	ShellOutputCompression string `json:"shellOutputCompression,omitempty"`
 
+	// ShellCommandRewrite overrides the in-process shell-COMMAND token-optimizer
+	// (rtk) for this workspace: "" (or "auto") = follow rtk-hook detection (default),
+	// "on" = force it on (needs the rtk binary), "off" = disable. Distinct from
+	// ShellOutputCompression because the two act at opposite ends: rtk rewrites the
+	// COMMAND before it runs (so a test runner reports only failures), sqz compresses
+	// the OUTPUT after. They compose — see _Docs/17.
+	ShellCommandRewrite string `json:"shellCommandRewrite,omitempty"`
+
 	// AutoCaptureArtifacts toggles the turn-end trace scan that upserts every file
 	// the agent wrote (Write/create_file) as an artifact automatically. Default OFF:
 	// only files the agent DELIBERATELY registers via create_artifact become
@@ -135,6 +143,7 @@ type WSSettingsPatch struct {
 	PromptEpochEnabled     *bool   `json:"promptEpochEnabled"`
 	AutoCaptureArtifacts   *bool   `json:"autoCaptureArtifacts"`
 	ShellOutputCompression *string `json:"shellOutputCompression"`
+	ShellCommandRewrite    *string `json:"shellCommandRewrite"`
 
 	BoardColumns *[]db.BoardColumnDef `json:"boardColumns"`
 
@@ -228,6 +237,7 @@ func (w *Workspace) loadSettings() {
 		w.Runtime.SetCodebaseMemory(s.CodebaseMemoryEnabled)
 		w.Runtime.SetPromptEpoch(s.PromptEpochEnabled)
 		w.Runtime.SetShellCompression(s.ShellOutputCompression)
+		w.Runtime.SetShellCommandRewrite(s.ShellCommandRewrite)
 	}
 }
 
@@ -313,6 +323,9 @@ func (m *Manager) UpdateSettings(id string, patch WSSettingsPatch) (*Workspace, 
 	if patch.ShellOutputCompression != nil {
 		ws.settings.cur.ShellOutputCompression = *patch.ShellOutputCompression
 	}
+	if patch.ShellCommandRewrite != nil {
+		ws.settings.cur.ShellCommandRewrite = *patch.ShellCommandRewrite
+	}
 	if patch.BoardColumns != nil {
 		ws.settings.cur.BoardColumns = *patch.BoardColumns
 	}
@@ -330,6 +343,7 @@ func (m *Manager) UpdateSettings(id string, patch WSSettingsPatch) (*Workspace, 
 	cbmEnabled := ws.settings.cur.CodebaseMemoryEnabled
 	epochEnabled := ws.settings.cur.PromptEpochEnabled
 	shellCompression := ws.settings.cur.ShellOutputCompression
+	shellRewrite := ws.settings.cur.ShellCommandRewrite
 	ws.settings.mu.Unlock()
 
 	if err := ws.saveSettings(); err != nil {
@@ -347,6 +361,7 @@ func (m *Manager) UpdateSettings(id string, patch WSSettingsPatch) (*Workspace, 
 		ws.Runtime.SetCodebaseMemory(cbmEnabled)
 		ws.Runtime.SetPromptEpoch(epochEnabled)
 		ws.Runtime.SetShellCompression(shellCompression)
+		ws.Runtime.SetShellCommandRewrite(shellRewrite)
 	}
 	return ws, nil
 }

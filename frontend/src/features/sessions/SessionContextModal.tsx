@@ -7,6 +7,7 @@ import { Markdown } from '@/shared/components/markdown/Markdown'
 import { Button, CollapsibleSection, InfoPopover, ModalOverlay, useBulkToggle, type BulkToggle } from '@/shared/components'
 import { CacheWarmthBadge } from './CacheWarmthBadge'
 import { cacheRemaining } from './sessionDetailFormat'
+import { serverNow } from '@/shared/lib/serverClock'
 
 // FLOOR_NOTE clarifies that the predicted CLI overhead is a per-turn FLOOR (base
 // system + built-ins + eager tools only), so a measured turn can exceed it: the
@@ -43,7 +44,7 @@ interface Props {
 export function SessionContextModal({ sessionId, title, updatedAt, onClose }: Props) {
   const [data, setData] = useState<SessionContextPreview | null>(null)
   // Live 1s tick for the prompt-cache warmth countdown; self-stops once cold.
-  const [nowSec, setNowSec] = useState(() => Math.floor(Date.now() / 1000))
+  const [nowSec, setNowSec] = useState(() => serverNow())
   const [err, setErr] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
   const [message, setMessage] = useState('')
@@ -78,10 +79,10 @@ export function SessionContextModal({ sessionId, title, updatedAt, onClose }: Pr
   // Tick every second while the prompt cache is still warm, then self-stop.
   useEffect(() => {
     if (!updatedAt) return
-    const warm = () => cacheRemaining(updatedAt, Math.floor(Date.now() / 1000)) > 0
+    const warm = () => cacheRemaining(updatedAt, serverNow()) > 0
     if (!warm()) return
     const t = setInterval(() => {
-      setNowSec(Math.floor(Date.now() / 1000))
+      setNowSec(serverNow())
       if (!warm()) clearInterval(t)
     }, 1000)
     return () => clearInterval(t)

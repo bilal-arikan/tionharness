@@ -13,7 +13,11 @@
 //   - reset: when the cursor is unusable (epoch changed, or it fell out of the
 //     server ring) the caller does a full resync (listMessages) via onReset.
 //   - auto-reconnect: on stream end/error, retry with a bounded backoff.
+//   - server clock: every frame carries the server's wall clock, fed to
+//     shared/lib/serverClock so elapsed-time counters never tick against a
+//     skewed browser clock.
 import { getActiveWorkspace } from './client'
+import { noteServerTime } from '@/shared/lib/serverClock'
 
 // A stable id for THIS browser window/tab, minted once. Used to tag outbound
 // signals (typing) so the window can ignore its own echo on the shared hub.
@@ -34,8 +38,9 @@ export interface HubEvent {
 }
 
 export interface SessionStreamHandlers {
-  // hello fires once per (re)connection with the server's current epoch + head.
-  onHello?: (info: { epoch: string; head: number }) => void
+  // hello fires once per (re)connection with the server's current epoch + head
+  // (+ `now`, the server's wall clock, already fed to the shared server clock).
+  onHello?: (info: { epoch: string; head: number; now?: number }) => void
   // reset fires when the cursor is unusable: the caller must resync from scratch
   // (listMessages) and then keep applying live events from `head`.
   onReset?: (info: { head: number }) => void
@@ -95,8 +100,12 @@ export function subscribeSessionStream(
   const handle = (event: string, data: unknown): boolean => {
     switch (event) {
       case 'hello': {
-        const h = data as { epoch: string; head: number }
+        const h = data as { epoch: string; head: number; now?: number }
         epoch = h.epoch
+        // Calibrate the shared server clock as early as possible: elapsed-time
+        // counters must not tick against a skewed browser clock while waiting
+        // for the first hub frame.
+        noteServerTime(h.now ?? 0)
         handlers.onHello?.(h)
         return false
       }

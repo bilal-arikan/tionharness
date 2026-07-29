@@ -5,6 +5,7 @@
 // "Durdur" control that disarms the wake (POST /api/chat/wake/cancel).
 import { useEffect, useState } from 'react'
 import { AlarmClock, X } from 'lucide-react'
+import { serverNow } from '@/shared/lib/serverClock'
 
 interface Props {
   // The agent's stated reason for waiting (may be empty).
@@ -30,9 +31,9 @@ function remainingLabel(fireAt: number, nowSec: number): string | null {
 // pending self-wake, plus a Durdur control.
 export function WakeWaitBanner({ reason, fireAt, onCancel }: Props) {
   // Tick once a second so the countdown stays live without a parent re-render.
-  const [now, setNow] = useState(() => Math.floor(Date.now() / 1000))
+  const [now, setNow] = useState(() => serverNow())
   useEffect(() => {
-    const t = setInterval(() => setNow(Math.floor(Date.now() / 1000)), 1000)
+    const t = setInterval(() => setNow(serverNow()), 1000)
     return () => clearInterval(t)
   }, [])
 

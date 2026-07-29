@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { memo, useState } from 'react'
 import type { ReactNode } from 'react'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import type { TurnStep } from '@/types'
@@ -8,6 +8,7 @@ import { DiffView } from '@/shared/components/markdown/DiffView'
 import { Markdown } from '@/shared/components/markdown/Markdown'
 import { PathText } from './PathText'
 import { CommandProgramTag } from './CommandProgramTag'
+import { OptimizerChip } from './OptimizerChip'
 
 interface Props {
   step: TurnStep
@@ -67,7 +68,14 @@ function headerBadge(step: TurnStep, diffText: string | null, output: string): R
 // icon + label + one-line intent in the header, full input/output on expand.
 // Edit/Write tools render their output as a diff. Mirrors the tool activity
 // cards in External Agent chat.
-export function ActivityCard({ step, onOpenFile }: Props) {
+// fmtBytes renders a byte count compactly (10240 → "10 KB").
+function fmtBytes(n: number): string {
+  if (n >= 1024 * 1024) return `${(n / (1024 * 1024)).toFixed(1)} MB`
+  if (n >= 1024) return `${Math.round(n / 1024)} KB`
+  return `${n} B`
+}
+
+export const ActivityCard = memo(function ActivityCard({ step, onOpenFile }: Props) {
   const [open, setOpen] = useState(false)
   const meta = toolMeta(step.tool || '', step.input)
   const output = step.output || ''
@@ -100,8 +108,15 @@ export function ActivityCard({ step, onOpenFile }: Props) {
           </span>
         )}
         {step.isError && <span className="shrink-0 text-[var(--color-danger)]">hata</span>}
-        {badge && <span className="ml-auto">{badge}</span>}
-        <span className={`${badge ? 'ml-1' : 'ml-auto'} shrink-0 opacity-50`}>
+        {/* The chip is the first of the right-aligned group, so it carries the
+            ml-auto that pushes the group to the edge; the badge then just spaces. */}
+        {step.optimizer && (
+          <span className="ml-auto">
+            <OptimizerChip optimizer={step.optimizer} />
+          </span>
+        )}
+        {badge && <span className={step.optimizer ? 'ml-1' : 'ml-auto'}>{badge}</span>}
+        <span className={`${badge || step.optimizer ? 'ml-1' : 'ml-auto'} shrink-0 opacity-50`}>
           {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
         </span>
       </button>
@@ -149,6 +164,16 @@ export function ActivityCard({ step, onOpenFile }: Props) {
                 >
                   {output.length > 4000 ? output.slice(0, 4000) + '\n… (kırpıldı)' : output}
                 </pre>
+                {/* The server cut this payload before sending the transcript.
+                    The whole turn's full trace is one click away — the "tam iz"
+                    chip on the turn's tool toggle row (AssistantTurn). */}
+                {step.outputTruncated && (
+                  <div className="mt-1 text-[10px] text-[var(--color-text-dim)]">
+                    Sunucu bu çıktıyı kırptı
+                    {step.outputLen ? ` (tamamı ${fmtBytes(step.outputLen)})` : ''} — turun
+                    başındaki “tam iz” ile tamamını getirebilirsin.
+                  </div>
+                )}
               </div>
             )
           )}
@@ -156,4 +181,4 @@ export function ActivityCard({ step, onOpenFile }: Props) {
       )}
     </div>
   )
-}
+})

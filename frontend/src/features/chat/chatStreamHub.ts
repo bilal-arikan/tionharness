@@ -8,6 +8,7 @@ import type { Dispatch, RefObject, SetStateAction } from 'react'
 import type { Message, TurnStep } from '@/types'
 import type { HubEvent, SessionStreamHandlers } from '@/api/sessionStream'
 import { HubKind, windowClientId } from '@/api/sessionStream'
+import { noteServerTime, serverNow } from '@/shared/lib/serverClock'
 import { emitToast } from '@/shared/lib/notifyBus'
 import type { PendingAsk } from './AskPrompt'
 import type { PendingItem } from './PendingTray'
@@ -112,14 +113,14 @@ export function makeHubHandlers(ctx: HubApplyCtx): SessionStreamHandlers {
     text,
     steps: JSON.stringify(steps),
     // Stable turn-start stamp (not "now"): the live timer must not reset per step.
-    createdAt: ghostStartedAt || Math.floor(Date.now() / 1000),
+    createdAt: ghostStartedAt || serverNow(),
   })
 
   // syncGhost UPSERTs the ghost into the transcript (append if wiped by a reload).
   const syncGhost = () => {
     hasGhost = true
     // Fallback stamp if steps arrive before AgentStart set the turn-start time.
-    if (!ghostStartedAt) ghostStartedAt = Math.floor(Date.now() / 1000)
+    if (!ghostStartedAt) ghostStartedAt = serverNow()
     const bubble = composeGhost()
     onSid((prev) =>
       prev.some((m) => m.id === ghostId)
@@ -206,6 +207,10 @@ export function makeHubHandlers(ctx: HubApplyCtx): SessionStreamHandlers {
 
   return {
     onEvent: (ev: HubEvent) => {
+      // Every hub frame carries the server's unix seconds — feed it to the shared
+      // clock so elapsed-time readings are measured against the SERVER, not the
+      // browser's (possibly skewed) clock.
+      noteServerTime(ev.time)
       switch (ev.kind) {
         case HubKind.UserMessage: {
           const m = ev.payload as Message
@@ -231,7 +236,11 @@ export function makeHubHandlers(ctx: HubApplyCtx): SessionStreamHandlers {
           agentId = p.agentId as string | undefined
           steps = []
           text = ''
-          ghostStartedAt = Math.floor(Date.now() / 1000) // definitive turn start
+          // Definitive turn start, taken from the SERVER's stamp on this frame.
+          // agent_start is a durable (ringed) event, so a window that joins or
+          // reloads mid-turn replays it and gets the real start — not the moment
+          // it happened to connect.
+          ghostStartedAt = ev.time || serverNow()
           // An AUTONOMOUS turn (coordinator/scheduler/spawn) publishes no
           // UserMessage, so mark the session busy here (and on the first Step) —
           // otherwise the "working" indicator + composer stop/steer cluster never

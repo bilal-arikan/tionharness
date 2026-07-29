@@ -34,7 +34,13 @@ export interface AppEvent {
   step?: unknown
   // Present only on type === 'flow_node' frames (delivered under the SSE
   // `flownode` event name): one flow node's live lifecycle for the run in
-  // target.flowRunId. Typed (no cycle: flow.ts holds no back-reference here).
+  // target.flowRunId. target.rootRunId carries the top of that run's tree
+  // (equal to flowRunId for a root run), so a viewer can follow a composed run
+  // and its subflow/spawn children through one subscription; target.parentRunId +
+  // target.parentNodeId name the run and the node in ITS graph that launched this
+  // run, so the parent's canvas can hang the child's progress off that node
+  // without fetching the tree first (both empty for a root run).
+  // Typed (no cycle: flow.ts holds no back-reference here).
   node?: FlowNodeEvent
   // Present only on type === 'log' frames (delivered under the SSE `log`
   // event name): one captured application log record for live tailing.

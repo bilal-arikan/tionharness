@@ -1,5 +1,15 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from 'react'
 import type { Agent, Artifact, Message } from '@/types'
+import { useStableCallback } from '@/shared/lib/useStableCallback'
 import { MessageTime, LiveTimer } from './MessageMeta'
 import { AgentHeader } from './AgentHeader'
 import { WorkingDots } from './WorkingDots'
@@ -59,6 +69,31 @@ interface Props {
   scrollBottomSignal?: number
 }
 
+// SKIPPED_ROW lets the browser skip layout/paint/style for a row that is
+// scrolled out of view — a worker session's transcript is hundreds of tool
+// cards, markdown blocks and diffs, and rendering all of them is what made
+// opening one feel like it "reloads everything from scratch".
+//
+// This is deliberately NOT a virtualizer: the transcript's scroll logic
+// (scrollRowIntoView, updateActivePinned, the search deep-link) queries real
+// DOM nodes by data-msg-id, and unmounting off-screen rows would break all of
+// it. content-visibility keeps every row in the DOM — only its subtree render
+// is skipped — so the queries keep working. `contain-intrinsic-size: auto <h>`
+// makes the browser remember each row's real height once painted, so scrollbar
+// geometry converges instead of jumping.
+const SKIPPED_ROW: CSSProperties = {
+  contentVisibility: 'auto',
+  containIntrinsicSize: 'auto 320px',
+}
+// How many trailing rows stay eagerly rendered. The live/most recent turns are
+// in view anyway, and skipping them would fight the scroll-to-bottom pinning
+// (which reads scrollHeight right after a streaming delta).
+const EAGER_TAIL_ROWS = 3
+// Below this many rows the whole transcript renders eagerly. Short sessions have
+// no render problem to solve, and skipping rows there would only trade a
+// non-issue for estimated-height scroll imprecision.
+const SKIP_OFFSCREEN_MIN_ROWS = 30
+
 // MessageList is the scrolling transcript. It owns scroll-pinning and per-message
 // tool-trace collapse, then delegates each row to UserTurn / AutoPromptNote /
 // AssistantTurn. The standalone pending bubble covers polled views with no live
@@ -73,16 +108,26 @@ export function MessageList({
   streaming,
   highlightMessageId,
   onHighlightConsumed,
-  onOpenFile,
-  onOpenArtifact,
-  onDeleteMessage,
-  onRewind,
-  onRetry,
-  onFeedback,
-  onOpenAgent,
+  onOpenFile: onOpenFileProp,
+  onOpenArtifact: onOpenArtifactProp,
+  onDeleteMessage: onDeleteMessageProp,
+  onRewind: onRewindProp,
+  onRetry: onRetryProp,
+  onFeedback: onFeedbackProp,
+  onOpenAgent: onOpenAgentProp,
   bottomInset,
   scrollBottomSignal,
 }: Props) {
+  // Identity-stable handlers. The rows below are React.memo'd, and callers hand
+  // these in as inline arrow functions — without this, every row would re-render
+  // on every streaming delta and the memo would buy nothing.
+  const onOpenFile = useStableCallback(onOpenFileProp)
+  const onOpenArtifact = useStableCallback(onOpenArtifactProp)
+  const onDeleteMessage = useStableCallback(onDeleteMessageProp)
+  const onRewind = useStableCallback(onRewindProp)
+  const onRetry = useStableCallback(onRetryProp)
+  const onFeedback = useStableCallback(onFeedbackProp)
+  const onOpenAgent = useStableCallback(onOpenAgentProp)
   const scrollRef = useRef<HTMLDivElement>(null)
   // Transiently highlighted message (from a search deep-link); cleared after the
   // flash animation so the highlight doesn't stick.
@@ -143,12 +188,14 @@ export function MessageList({
   // Per-message collapse of the tool-activity trace (the TurnSteps block). Keyed
   // by message id; a message is shown expanded unless its id is in the set.
   const [collapsedTools, setCollapsedTools] = useState<ReadonlySet<string>>(() => new Set())
-  const toggleTools = (id: string) =>
+  // useCallback: passed to every memoized AssistantTurn row.
+  const toggleTools = useCallback((id: string) => {
     setCollapsedTools((prev) => {
       const next = new Set(prev)
       next.has(id) ? next.delete(id) : next.add(id)
       return next
     })
+  }, [])
 
   // Message index of the user message currently pinned to the top — the most
   // recent typed user message that has scrolled above the viewport's top edge.
@@ -191,6 +238,17 @@ export function MessageList({
     pinnedRef.current = false // a deliberate jump must not be yanked back down
     updateActivePinned(el)
     setFlashId(id)
+    // Off-screen rows render lazily (SKIPPED_ROW), so the rows we just scrolled
+    // past were measured at their ESTIMATED height — the jump can land off by a
+    // few hundred pixels. One frame later they have painted at their real size;
+    // re-align against those to land exactly.
+    requestAnimationFrame(() => {
+      const el2 = scrollRef.current
+      const row2 = el2?.querySelector<HTMLElement>(`[data-msg-id="${CSS.escape(id)}"]`)
+      if (!el2 || !row2) return
+      el2.scrollTop += row2.getBoundingClientRect().top - el2.getBoundingClientRect().top - 8
+      updateActivePinned(el2)
+    })
   }
 
   // useLayoutEffect (NOT useEffect): the scroll-to-bottom + active-pinned-index
@@ -242,6 +300,14 @@ export function MessageList({
     el.scrollIntoView({ block: 'center' })
     pinnedRef.current = false // don't yank back to bottom after the jump
     setFlashId(highlightMessageId)
+    // Second pass after paint: the rows we scrolled past were skipped
+    // (SKIPPED_ROW) and measured at estimated heights, so the first jump is
+    // approximate. Setting flashId also makes the target itself render eagerly.
+    requestAnimationFrame(() => {
+      scrollRef.current
+        ?.querySelector<HTMLElement>(`[data-msg-id="${CSS.escape(highlightMessageId)}"]`)
+        ?.scrollIntoView({ block: 'center' })
+    })
     onHighlightConsumed?.()
   }, [highlightMessageId, messages])
 
@@ -376,19 +442,27 @@ export function MessageList({
             // The in-flight assistant bubble is the last message while streaming; its
             // createdAt marks the turn start, so a live timer counts up from it.
             const isLastLive = rowLive
-            // Completed-turn working time ≈ this message's createdAt (turn end) minus
-            // the triggering user message's (turn start). Only meaningful when the
-            // previous message is the user's — injected summaries or consecutive
-            // assistant turns would otherwise report idle gaps, not real work.
+            // Completed-turn working time comes FROM THE SERVER: the backend times
+            // the agent run and persists it as Message.durationMs. Legacy fallback
+            // (messages written before that field existed): the createdAt gap to the
+            // triggering user message — only meaningful when the previous message is
+            // the user's, since injected summaries or consecutive assistant turns
+            // would otherwise report idle gaps rather than real work. It is flagged
+            // as derived so the UI marks it approximate.
             const prev = messages[i - 1]
-            const workedSec = prev?.role === 'user' ? m.createdAt - prev.createdAt : 0
+            const serverMs = m.durationMs ?? 0
+            const workedDerived = serverMs <= 0
+            const workedMs = workedDerived
+              ? prev?.role === 'user' ? (m.createdAt - prev.createdAt) * 1000 : 0
+              : serverMs
             row = (
               <AssistantTurn
                 message={m}
                 agent={agentById(m.agentId)}
                 sessionId={sessionId}
                 isLastLive={isLastLive}
-                workedSec={workedSec}
+                workedMs={workedMs}
+                workedDerived={workedDerived}
                 toolsHidden={collapsedTools.has(m.id)}
                 onToggleTools={toggleTools}
                 onOpenFile={onOpenFile}
@@ -409,6 +483,12 @@ export function MessageList({
               ? 'rounded-2xl ring-2 ring-[var(--color-accent)] ring-offset-2 ring-offset-[var(--color-bg)] transition-shadow'
               : ''
           const wrapperCls = flashCls || undefined
+          // The flashed (deep-linked) row must render eagerly: it is scrolled to
+          // and highlighted, and a skipped subtree has no measurable height yet.
+          const skipOffscreen =
+            messages.length >= SKIP_OFFSCREEN_MIN_ROWS &&
+            i < messages.length - EAGER_TAIL_ROWS &&
+            flashId !== m.id
           return (
             <div
               key={m.id}
@@ -419,6 +499,7 @@ export function MessageList({
               data-user-row={isTypedUser ? 'true' : undefined}
               data-idx={isTypedUser ? i : undefined}
               className={wrapperCls}
+              style={skipOffscreen ? SKIPPED_ROW : undefined}
             >
               {row}
             </div>

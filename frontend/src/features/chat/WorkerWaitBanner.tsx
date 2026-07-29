@@ -6,6 +6,7 @@
 import { useEffect, useState } from 'react'
 import { Users, Play } from 'lucide-react'
 import type { WorkerInfo } from '@/types'
+import { serverNow } from '@/shared/lib/serverClock'
 
 // elapsedLabel renders seconds since startedAt as a compact "Xsn" / "Xdk Ysn".
 // Returns null when the start time is unknown (startedAt 0) or in the future, so
@@ -34,10 +35,10 @@ export function WorkerWaitBanner({ workers, doneCount, onSelectSession }: Props)
   // Tick once a second so each chip's elapsed time stays live without the parent
   // re-rendering (and without any network traffic — the roster itself is
   // event-driven).
-  const [now, setNow] = useState(() => Math.floor(Date.now() / 1000))
+  const [now, setNow] = useState(() => serverNow())
   useEffect(() => {
     if (workers.length === 0) return
-    const t = setInterval(() => setNow(Math.floor(Date.now() / 1000)), 1000)
+    const t = setInterval(() => setNow(serverNow()), 1000)
     return () => clearInterval(t)
   }, [workers.length])
 

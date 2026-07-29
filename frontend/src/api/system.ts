@@ -10,6 +10,7 @@ import type {
   AppEvent,
   WorkspaceUsage,
   ExternalToolStatus,
+  TokenToolReport,
   VersionInfo,
   BackupStatus,
   BackupResult,
@@ -263,6 +264,22 @@ export const systemApi = {
   // Detect optional external token-optimization tools (rtk, sqz) on the host
   // PATH. Presence-only — the backend never runs or installs them.
   externalTools: () => req<ExternalToolStatus[]>('/api/external-tools'),
+
+  // Token-optimizer MAINTENANCE (rtk / sqz). These are actions, not settings —
+  // the tools' own config is machine-global while TionSwarm settings are
+  // per-workspace, so their keys are deliberately NOT mirrored into a workspace
+  // setting. See internal/api/external_tools_maint.go.
+  //
+  // The report is each tool's OWN `gain` output, verbatim: TionSwarm does not
+  // recompute the numbers, so they cannot drift from the tools' accounting.
+  tokenToolReport: () => req<TokenToolReport>('/api/external-tools/token-report'),
+  // Clears sqz's dedup cache — what sqz's own help prescribes when stale
+  // `§ref:HASH§` pointers start confusing the agent. Stats/history are kept.
+  sqzResetCache: () => req<{ output: string }>('/api/external-tools/sqz-reset-cache', { method: 'POST' }),
+  // Opens rtk's config.toml in the OS file manager. Does NOT create it: rtk runs
+  // on built-in defaults until `rtk config --create`, and materialising one from
+  // here would change rtk for every tool on the machine.
+  revealRtkConfig: () => req<{ path: string }>('/api/external-tools/rtk-config/reveal', { method: 'POST' }),
 
   // Build / version info (injected via ldflags at build time; falls back to
   // "dev" for local development builds without explicit versioning).

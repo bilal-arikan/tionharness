@@ -139,7 +139,7 @@ Claude Code ile birebir uyumlu (worker sonucu koordinatöre user-rolünde gelir)
 ```xml
 <task-notification>
 <task-id>{workerSessionID}</task-id>
-<status>completed|failed|killed</status>
+<status>completed|timeout|incomplete|failed|killed</status>
 <summary>{kısa özet}</summary>
 <result>{worker'ın son yanıt metni}</result>
 <usage><total_tokens>N</total_tokens><tool_uses>N</tool_uses><duration_ms>N</duration_ms></usage>
@@ -149,6 +149,26 @@ Claude Code ile birebir uyumlu (worker sonucu koordinatöre user-rolünde gelir)
 Koordinatör sistem promptu bunun bir "kullanıcı mesajı gibi görünen ama
 konuşma partneri olmayan iç sinyal" olduğunu öğretir (Claude Code'daki gibi:
 "never thank or acknowledge them").
+
+**Yalnız `completed` "iş bitti" demektir** (2026-07-28). Bir tur hatasız dönse
+bile kesilmiş olabilir: claude-cli, subprocess öldürüldüğünde yakaladığı kısmi
+metni `err=nil` ile geri verir (`salvage`), native döngü de iterasyon limiti /
+guardrail halt / bağlam-çıktı tükenmesinde `StepRecovery` ekleyip `nil` döner.
+`internal/agent/turnoutcome.go` bu iki parmak izini okur:
+
+| Parmak izi | Status | Ne demek |
+|---|---|---|
+| ctx cause `ErrTurnHardTimeout` | `timeout` | Mutlak süre tavanı doldu, iş yarıda |
+| ctx cause `ErrTurnIdleTimeout` | `timeout` | Tur adım üretmedi, asılı kaldı |
+| `termMaxIters` | `incomplete` | Araç iterasyon limiti tükendi |
+| `termGuardrailHalt` | `incomplete` | Döngü koruması durdurdu |
+| `termContextExhausted` / `termMaxTokenExhausted` | `incomplete` | Metin kesik |
+
+Kesik turlarda `<result>`, kurtarılan metnin **önüne** ne olduğunu Türkçe anlatan
+bir not alır (`applyTurnOutcome`) — koordinatör fragmanı sonuç sanamaz.
+`withActivityTimeout` artık `context.WithCancelCause` kullanır; aksi hâlde
+watchdog iptali ile kullanıcının "Durdur"u ayırt edilemezdi (ikisi de
+`context.Canceled`) ve süre dolması "killed" diye raporlanırdı.
 
 ### 3.4 Kilit yeni bileşen: `CoordinationEngine` + per-session tur kuyruğu
 

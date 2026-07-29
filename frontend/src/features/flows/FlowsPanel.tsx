@@ -4,7 +4,7 @@ import { api } from '@/api'
 import { useRegisterDirty } from '@/shared/lib/dirtySignals'
 import type { FlowNodeEvent } from '@/api/flows'
 import { TemplatePreview } from './TemplatePreview'
-import { RunView } from './RunView'
+import { RunTreeView } from './RunTreeView'
 import { FLOW_TEMPLATES } from './flowTemplates'
 import {
   graphToReactFlow,
@@ -62,6 +62,10 @@ export function FlowsPanel({ agents, onError, openFlowId, tab: tabProp, onTabCha
   const [templateId, setTemplateId] = useSessionState<string | null>('flows.templateId', null)
   // Run history (all flows, newest first) + the selected run for the read-only viewer.
   const [runs, setRuns] = useState<FlowRun[]>([])
+  // Runs tab filter: off (default) lists only root runs, so one run of a composed
+  // flow is one row instead of a burst of its subflow/spawn children. The children
+  // are not lost — they are still reachable by id and through the run tree.
+  const [showSubRuns, setShowSubRuns] = useSessionState('flows.showSubRuns', false)
   const [selectedRunId, setSelectedRunId] = useSessionState<string | null>('flows.selectedRunId', null)
   // Left-list search (adapts to the active tab: flow/template name, or a run's
   // flow name).
@@ -152,13 +156,15 @@ export function FlowsPanel({ agents, onError, openFlowId, tab: tabProp, onTabCha
   }, [input, selectedId])
 
   // While the Koşular tab is open, load all flow runs and poll every 3s so
-  // in-progress runs advance live. Polling stops when leaving the tab.
+  // in-progress runs advance live. Polling stops when leaving the tab. Toggling
+  // showSubRuns re-runs the effect, so the list switches filter immediately
+  // instead of waiting out the current poll interval.
   useEffect(() => {
     if (tab !== 'runs') return
     let alive = true
     const tick = () => {
       api
-        .listAllFlowRuns()
+        .listAllFlowRuns(!showSubRuns)
         .then((rs) => alive && setRuns(rs))
         .catch(() => {})
     }
@@ -168,7 +174,7 @@ export function FlowsPanel({ agents, onError, openFlowId, tab: tabProp, onTabCha
       alive = false
       clearInterval(id)
     }
-  }, [tab])
+  }, [tab, showSubRuns])
 
   // Deep-link from the Activity screen: open this flow's run history and select
   // its latest run (runs are newest-first). Consumed once per target so polling
@@ -294,6 +300,7 @@ export function FlowsPanel({ agents, onError, openFlowId, tab: tabProp, onTabCha
     setRunning,
     runs,
     setRuns,
+    rootOnlyRuns: !showSubRuns,
     setSelectedRunId,
     sel,
     onError,
@@ -314,7 +321,7 @@ export function FlowsPanel({ agents, onError, openFlowId, tab: tabProp, onTabCha
   const rerunRun = useCallback(
     async (r: FlowRun) => {
       setRerunning(true)
-      const refresh = () => api.listAllFlowRuns().then(setRuns).catch(() => {})
+      const refresh = () => api.listAllFlowRuns(!showSubRuns).then(setRuns).catch(() => {})
       try {
         await api.runFlowStreamStandalone(r.flowId, r.input, {
           // Surface the new running run in the left list as it progresses.
@@ -337,7 +344,7 @@ export function FlowsPanel({ agents, onError, openFlowId, tab: tabProp, onTabCha
         refresh()
       }
     },
-    [onError],
+    [onError, showSubRuns],
   )
 
   // Unsaved-edits (dirty) signal for the nav "Akışlar" item + workspace label:
@@ -391,6 +398,8 @@ export function FlowsPanel({ agents, onError, openFlowId, tab: tabProp, onTabCha
         flows={flows}
         flowsLoading={flowsLoading}
         runs={runs}
+        showSubRuns={showSubRuns}
+        setShowSubRuns={setShowSubRuns}
         templateId={templateId}
         setTemplateId={setTemplateId}
         selectedId={selectedId}
@@ -454,15 +463,13 @@ export function FlowsPanel({ agents, onError, openFlowId, tab: tabProp, onTabCha
               </p>
             </div>
           ) : (
-            <RunView
+            <RunTreeView
               run={selectedRun}
-              flow={flows.find((f) => f.id === selectedRun.flowId)}
+              flows={flows}
               agents={agents}
               onRerun={rerunRun}
               rerunning={rerunning}
-              hideSummary
-              inputInTrace
-              onResumed={() => api.listAllFlowRuns().then(setRuns).catch(() => {})}
+              onResumed={() => api.listAllFlowRuns(!showSubRuns).then(setRuns).catch(() => {})}
             />
           )
         ) : !selectedId ? (

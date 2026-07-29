@@ -48,7 +48,7 @@ UI'da aynı Schedules ekranında ayrı bölümde gösterilir.
 | `PromptTemplate` | Yeni oturumun promptu (veya akış girdisi). Placeholder'lar aşağıda. |
 | `SpawnTags` | Spawn'lanan oturuma uygulanan etiketler. `nil` → `[TriggerTag]` (döngü). `[]` → döngüyü kırar. |
 | `Enabled` | Kill-switch. Aç→iterasyon sayacı sıfırlanır. |
-| `MaxIterations` | Toplam tetik üst sınırı (0=sınırsız — dikkat). Vars. 50. Aşılınca otomatik pasifle. |
+| `MaxIterations` | Toplam tetik üst sınırı. **Pozitif olmalı ve en fazla 500 (`db.MaxIterationsHardCap`).** `0` (eski "sınırsız" değeri) ve negatifler create/update yollarında **reddedilir** — bkz. §5.1. Vars. 50. Aşılınca otomatik pasifle. |
 | `CooldownSec` | İki tetik arası min. saniye. |
 | `IterationCount` / `LastFiredAt` / `LastSessionID` / `LastError` | Çalışma-zamanı defteri (`RecordAutomationFire`). |
 
@@ -319,14 +319,42 @@ vs politika-reddi ayrımı).
 - Etiketsiz sohbet asla tetiklenmez (tag-gating).
 - Cooldown + MaxIterations + per-otomasyon Enabled + workspace "otonomi duraklat"
   (mevcut) + per-ajan günlük bütçe (`ensureBudget`, spawn autonomous).
-- Limit dolunca otomasyon otomatik pasifleşir (sonsuz döngü imkânsız, 0=sınırsız
-  hariç — UI'da uyarı title'ı).
+- Limit dolunca otomasyon otomatik pasifleşir.
+
+### 5.1 `maxIterations` sözleşmesi (TSK60, 2026-07-29)
+
+Eskiden `MaxIterations = 0` "sınırsız" demekti ve create/update yollarının hiçbiri
+bunu engellemiyordu. Kartlar ajanın kendi `move_task` çağrısıyla hareket
+edebildiğinden, pano tetikleyicili bir otomasyon insan müdahalesi olmadan sonsuza
+kadar dönebiliyordu. Artık üç katmanlı savunma var:
+
+1. **Giriş noktası doğrulaması** — `db.ValidateMaxIterations`
+   (`internal/db/automation_limits.go`) `<= 0` ve `> 500` değerlerini reddeder.
+   Hem REST (`internal/api/automations.go`, create + update → `400`) hem de ajan
+   araçları (`internal/tools/builtin_automationmgmt.go`, `create_automation` +
+   `update_automation` → tool hatası) **aynı** fonksiyonu çağırır; iki yolun
+   birbirinden ayrışması mümkün değil.
+2. **Sert tavan** — `db.MaxIterationsHardCap = 500`. `0` kapatıldıktan sonra
+   "pratikte sınırsız" bir sayı geçirerek kuralın etrafından dolaşmayı engeller.
+3. **Mutlak güvenlik freni** — `db.AbsoluteIterationBackstop = 1000`. Diskte
+   `maxIterations <= 0` ile **zaten kayıtlı** otomasyonlar (bu kural öncesinde
+   yazılmış, market paketinden import edilmiş veya JSON'u elle düzenlenmiş)
+   giriş doğrulamasına hiç uğramaz. `guardsPass` bu kayıtları backstop'ta durdurur:
+   otomasyonu pasifleştirir ve `warn` seviyesinde bir olay yayınlar.
+
+Yani doğrulama yeni kayıtları, backstop ise eski/ithal kayıtları kapatır — 1 ve 2
+olmadan 3 yetmez, 3 olmadan 1 ve 2 mevcut veriyi kurtarmaz.
 
 ## Test
 - `internal/db/automation_test.go` — CRUD, sayaç, aç/kapa-sıfırla, reset, reload
   kalıcılığı; `SetSessionTags` normalizasyonu.
 - `internal/agent/automation_test.go` — `renderAutomationPrompt` (ikame + append +
   no-op), `containsTag`.
+- `internal/db/automation_limits_test.go` — `ValidateMaxIterations` sınır tablosu
+  (0/negatif reddedilir, 1..500 kabul, 501 reddedilir).
+- `internal/agent/automation_backstop_test.go` — `guardsPass` mutlak freni:
+  `MaxIterations=0` + sayaç backstop'ta → pasifleşir; backstop altında → çalışır;
+  pozitif limit davranışı değişmemiş.
 
 ## Sıradaki
 - Canlı loop doğrulaması (gerçek sağlayıcıyla uçtan uca; token maliyeti nedeniyle

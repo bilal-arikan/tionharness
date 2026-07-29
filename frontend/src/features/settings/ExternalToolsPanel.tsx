@@ -5,10 +5,10 @@
 // load), exempt from the global Save bar — like the Hooks panel. Split out of
 // HooksPanel into its own settings category.
 import { useEffect, useState } from 'react'
-import { ScanSearch } from 'lucide-react'
+import { ScanSearch, Eraser, FileCog, RefreshCw } from 'lucide-react'
 import { api } from '@/api'
 import { systemApi } from '@/api/system'
-import type { Hook, ExternalToolStatus, MCPServer } from '@/types'
+import type { Hook, ExternalToolStatus, MCPServer, TokenToolReport } from '@/types'
 import type { HookInput } from '@/api/hooks'
 import { displayPath } from '@/shared/lib/paths'
 
@@ -71,6 +71,32 @@ export function ExternalToolsPanel({ onError }: Props) {
   const [mcpBusy, setMcpBusy] = useState(false)
   // Busy flag (keyed by hook id) while repairing a token-optimizer hook's matcher.
   const [fixBusy, setFixBusy] = useState<string | null>(null)
+  // Token-optimizer maintenance: each tool's own savings report + rtk config path.
+  const [report, setReport] = useState<TokenToolReport | null>(null)
+  const [maintBusy, setMaintBusy] = useState<string | null>(null)
+  const [maintMsg, setMaintMsg] = useState<string | null>(null)
+
+  const loadReport = () =>
+    systemApi
+      .tokenToolReport()
+      .then(setReport)
+      .catch((e) => onError((e as Error).message))
+
+  // Run one maintenance action, keeping its outcome next to the buttons rather
+  // than as a toast: these are diagnostics the user reads, not fire-and-forget.
+  const runMaint = async (key: string, fn: () => Promise<unknown>, done: (r: never) => string) => {
+    setMaintBusy(key)
+    setMaintMsg(null)
+    try {
+      const res = await fn()
+      setMaintMsg(done(res as never))
+      if (key === 'sqz-reset') await loadReport()
+    } catch (e) {
+      onError((e as Error).message)
+    } finally {
+      setMaintBusy(null)
+    }
+  }
 
   const checkTools = async () => {
     setChecking(true)
@@ -102,6 +128,7 @@ export function ExternalToolsPanel({ onError }: Props) {
     loadHooks()
     loadServers()
     checkTools()
+    loadReport()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -338,7 +365,14 @@ export function ExternalToolsPanel({ onError }: Props) {
                     Hook <span className="font-medium text-[var(--color-text)]">matcher</span>'ı{' '}
                     <code>Bash,PowerShell</code> olmalı; yalnız <code>Bash</code> ise Windows'ta ajanın kullandığı{' '}
                     <code>PowerShell</code> aracında <span className="font-medium text-[var(--color-text)]">hiç ateşlenmez</span>.
-                    rtk ve sqz'yi aynı anda açma (ikisi de komutu yeniden yazar).
+                    {/* This used to warn "do not enable rtk and sqz together — both rewrite
+                        the command". Measurement showed the opposite: they act at opposite
+                        ends and stacking wins (git log -30: 6595 ham → sqz 2027 → rtk 2157
+                        → rtk+sqz 1167 token). The old text steered users away from their
+                        best configuration. */}
+                    <span className="font-medium text-[var(--color-text)]"> İkisini birden açmak önerilir</span> —
+                    rtk komutu <span className="italic">çalışmadan önce</span> şekillendirir, sqz çıktıyı{' '}
+                    <span className="italic">sonra</span> sıkıştırır; ölçümde istifleme her ikisinden de iyi çıktı.
                     {tokenHooksNeedingFix().length > 0 && (
                       <div className="mt-2 flex flex-col gap-1.5 border-t border-[color-mix(in_srgb,var(--color-accent)_20%,transparent)] pt-2">
                         {tokenHooksNeedingFix().map((h) => (
@@ -360,6 +394,96 @@ export function ExternalToolsPanel({ onError }: Props) {
                           </div>
                         ))}
                       </div>
+                    )}
+                  </div>
+                )}
+                {/* Maintenance ACTIONS for the token optimizers. Deliberately not
+                    settings: rtk/sqz config is machine-global while this screen is
+                    workspace-scoped, so mirroring their keys here would promise a
+                    scope the setting cannot honour. What IS offered: the report the
+                    tools already produce, the reset sqz itself prescribes, and a
+                    door to rtk's config where it actually lives. */}
+                {cat === 'token' && report && (report.rtkFound || report.sqzFound) && (
+                  <div className="rounded-lg border border-[var(--color-border)] px-3 py-2 text-xs leading-relaxed text-[var(--color-text-dim)]">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-medium text-[var(--color-text)]">🔧 Bakım ve tasarruf raporu</span>
+                      <button
+                        type="button"
+                        data-testid="token-report-refresh"
+                        disabled={maintBusy === 'refresh'}
+                        onClick={() => runMaint('refresh', loadReport, () => 'Rapor yenilendi.')}
+                        className="inline-flex items-center gap-1 rounded bg-[var(--color-surface-2)] px-2 py-0.5 text-[11px] hover:text-[var(--color-text)] disabled:opacity-50"
+                        title="rtk gain / sqz gain çıktısını yeniden al"
+                      >
+                        <RefreshCw size={11} />
+                        {maintBusy === 'refresh' ? '…' : 'Yenile'}
+                      </button>
+                    </div>
+                    <p className="mt-1">
+                      Aşağıdaki rakamlar <span className="font-medium text-[var(--color-text)]">araçların kendi</span>{' '}
+                      <code>gain</code> çıktısıdır — TionSwarm yeniden hesaplamaz, böylece araçların muhasebesinden sapamaz.
+                    </p>
+                    {(['rtk', 'sqz'] as const).map((name) => {
+                      const found = name === 'rtk' ? report.rtkFound : report.sqzFound
+                      const gain = name === 'rtk' ? report.rtkGain : report.sqzGain
+                      if (!found) return null
+                      return (
+                        <div key={name} className="mt-2">
+                          <div className="mb-1 font-mono text-[10px] uppercase tracking-wide">{name} gain</div>
+                          <pre className="max-h-40 overflow-auto whitespace-pre-wrap rounded bg-[var(--color-bg)] p-2 text-[11px]">
+                            {gain?.trim() ? gain : '(rapor boş — henüz veri yok)'}
+                          </pre>
+                        </div>
+                      )
+                    })}
+                    <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-[var(--color-border)] pt-2">
+                      {report.sqzFound && (
+                        <button
+                          type="button"
+                          data-testid="sqz-reset-cache"
+                          disabled={maintBusy === 'sqz-reset'}
+                          onClick={() =>
+                            runMaint('sqz-reset', systemApi.sqzResetCache, () => 'sqz dedup önbelleği temizlendi.')
+                          }
+                          className="inline-flex items-center gap-1.5 rounded bg-[var(--color-surface-2)] px-2.5 py-1 font-medium hover:text-[var(--color-text)] disabled:opacity-50"
+                          title="sqz'nin dedup önbelleğini temizler (istatistikler korunur). Bayat §ref:…§ işaretçileri ajanı şaşırttığında sqz'nin kendi önerdiği işlem."
+                        >
+                          <Eraser size={12} />
+                          {maintBusy === 'sqz-reset' ? '…' : 'sqz dedup önbelleğini temizle'}
+                        </button>
+                      )}
+                      {report.rtkFound && report.rtkConfigPath && (
+                        <button
+                          type="button"
+                          data-testid="rtk-config-reveal"
+                          disabled={maintBusy === 'rtk-config'}
+                          onClick={() =>
+                            runMaint('rtk-config', systemApi.revealRtkConfig, () => 'rtk config klasörü açıldı.')
+                          }
+                          className="inline-flex items-center gap-1.5 rounded bg-[var(--color-surface-2)] px-2.5 py-1 font-medium hover:text-[var(--color-text)] disabled:opacity-50"
+                          title={report.rtkConfigPath}
+                        >
+                          <FileCog size={12} />
+                          {maintBusy === 'rtk-config' ? '…' : 'rtk config dosyasını aç'}
+                        </button>
+                      )}
+                      {maintMsg && <span className="text-[var(--color-success)]">{maintMsg}</span>}
+                    </div>
+                    {report.rtkFound && report.rtkConfigPath && (
+                      <p className="mt-1.5 text-[11px]">
+                        <code className="break-all">{displayPath(report.rtkConfigPath)}</code>
+                        {!report.rtkConfigExists && (
+                          <>
+                            {' '}— dosya <span className="font-medium text-[var(--color-text)]">henüz yok</span>; rtk
+                            yerleşik varsayılanlarla çalışıyor. Oluşturmak için terminalde{' '}
+                            <code>rtk config --create</code>.
+                          </>
+                        )}
+                        <br />
+                        Bu dosya <span className="font-medium text-[var(--color-text)]">makine geneli</span> —
+                        workspace'e özel değil. Bu yüzden anahtarları buraya ayar olarak taşınmadı: burada
+                        değiştirdiğin şey diğer tüm workspace'leri de etkilerdi.
+                      </p>
                     )}
                   </div>
                 )}

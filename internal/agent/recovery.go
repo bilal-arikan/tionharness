@@ -32,6 +32,11 @@ const (
 	termMaxTokenExhausted termReason = "max_output_tokens_exhausted"
 	termGuardrailHalt     termReason = "guardrail_halt"
 	termContextExhausted  termReason = "context_window_exhausted"
+	// termTimeout is raised OUTSIDE the loop, by the background-turn watchdogs
+	// (withActivityTimeout). The loop never observes it — the context is simply
+	// cancelled under it — so without this nothing would mark the trace. See
+	// turnoutcome.go.
+	termTimeout termReason = "turn_timeout"
 )
 
 // maxRetryAfterWait caps how long a server-sent Retry-After hint may delay the

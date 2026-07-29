@@ -14,6 +14,7 @@ import { SessionAgentsSection } from './SessionAgentsSection'
 import { SessionUsageCard } from './SessionUsageCard'
 import { CacheWarmthBadge } from './CacheWarmthBadge'
 import { formatBytes, formatDate, cacheRemaining } from './sessionDetailFormat'
+import { serverNow } from '@/shared/lib/serverClock'
 
 interface Props {
   sessionId: string
@@ -70,7 +71,7 @@ export function SessionDetailPanel({
   // In-flight action guard for the running-process card (stop/restart/drop).
   const [procBusy, setProcBusy] = useState<'' | 'stop' | 'restart' | 'drop'>('')
   // Ticks once a second while a turn is running, so the elapsed timer is live.
-  const [nowTick, setNowTick] = useState(() => Math.floor(Date.now() / 1000))
+  const [nowTick, setNowTick] = useState(() => serverNow())
   const [sessionUsage, setSessionUsage] = useState<SessionUsageDetail | null>(null)
   const [loading, setLoading] = useState(false)
   const [titling, setTitling] = useState(false)
@@ -136,10 +137,10 @@ export function SessionDetailPanel({
   useEffect(() => {
     const running = !!info?.running
     const updatedAt = info?.updatedAt ?? 0
-    const needsTick = () => running || cacheRemaining(updatedAt, Math.floor(Date.now() / 1000)) > 0
+    const needsTick = () => running || cacheRemaining(updatedAt, serverNow()) > 0
     if (!needsTick()) return
     const t = setInterval(() => {
-      setNowTick(Math.floor(Date.now() / 1000))
+      setNowTick(serverNow())
       if (!needsTick()) clearInterval(t)
     }, 1000)
     return () => clearInterval(t)

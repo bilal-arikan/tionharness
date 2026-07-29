@@ -170,9 +170,50 @@ Yeni bağımlılıklar: `react-markdown`, `remark-gfm`, `highlight.js`.
   önizlemesi (eski yerel ImageLightbox kaldırıldı), `ArtifactView` görsel artifact
   (`ImageArtifact`).
 
+### Transkript yükleme maliyeti (2026-07-28)
+
+Bir oturumu her açtığında iz **sunucudan yeniden çekilir** — ama disk'ten değil:
+`db.loadSessions` boot'ta tüm `session.jsonl`'leri belleğe alır, `ListMessages`
+yalnız kopya döndürür. Maliyet **wire payload'ı + React render'ı**ydı. İkisi de
+kırpıldı:
+
+1. **Sunucu-tarafı iz kırpma** (`internal/api/steps_trim.go`) — transkript
+   **okuma yolunda** her `TurnStep`'in `output`/`text`/`patch` alanları ve
+   `input` içindeki uzun string yaprakları `stepFieldCap` (2 KB) ile kesilir;
+   `subSteps` (subagent izi) özyinelemeli taranır. Kesilen alan
+   `outputTruncated`/`inputTruncated`/… + `*Len` bayraklarıyla işaretlenir.
+   `input`'un **anahtarları korunur** (tool etiketi, program rozeti ve
+   sentezlenen Edit/Write diff'i onlardan türer). Disk'e yazılan iz ve **modele
+   giden bağlam tam kalır** — kırpma yalnız HTTP kopyasıdır.
+   Uygulandığı yerler: `handleListMessages` + `publishHub(KindReply)` (aynı tur
+   canlıyken ve reload sonrası farklı görünmesin diye). Ölçüm: gerçek 11-oturumlu
+   bir workspace'te iz payload'ı **~%45** küçüldü (cap 1 KB → ~%60 ama sıradan
+   tool çıktısını kırpmaya başlar; 4 KB → ~%27).
+2. **Tam izi talep üzerine getirme** — `GET /api/sessions/{id}/messages/{msgId}/steps`
+   o turun izini kırpılmamış döndürür. UI'da turun 🔧 satırında **"⤓ tam iz"**
+   çipi (yalnız kırpılmış tur + `sessionId` varken); `AssistantTurn` çekip
+   `steps`'i değiştirir. `ActivityCard` kırpılmış çıktının altına "Sunucu bu
+   çıktıyı kırptı (tamamı N KB)" notunu düşer.
+3. **Off-screen render atlama** (`MessageList.tsx`) — görünüm dışı satırlara
+   `content-visibility: auto` + `contain-intrinsic-size: auto 320px`.
+   **Virtualizer DEĞİL** bilerek: transkriptin scroll mantığı (`scrollRowIntoView`,
+   `updateActivePinned`, arama deep-link'i) `data-msg-id` ile gerçek DOM
+   düğümlerini sorgular; satırları unmount etmek hepsini bozardı. Satır DOM'da
+   kalır, yalnız alt-ağacının render'ı atlanır. Guard'lar: transkript
+   < `SKIP_OFFSCREEN_MIN_ROWS` (30) ise hiç uygulanmaz, son 3 satır + flash'lanan
+   satır daima eager, ve iki atlama yolu (`scrollRowIntoView` + deep-link) tahmini
+   yükseklikle ıskalamasın diye **rAF'ta ikinci kez hizalanır**.
+4. **Memoizasyon** — `AssistantTurn`/`UserTurn`/`PeerTurn`/`TurnSteps`/`ActivityCard`
+   `React.memo`; `AssistantTurn` içinde `parseSteps` artık `useMemo` (yüzlerce KB'lık
+   JSON.parse her delta'da koşuyordu) → `TurnSteps`'e referansı sabit dizi gider.
+   Memo'nun tutması için `MessageList` gelen handler'ları
+   `shared/lib/useStableCallback.ts` ile kimliği sabit hale getirir (ebeveyn inline
+   arrow verse bile). Handler yoksa `undefined` kalır — çağıranlar `!!onRetry` ile
+   affordance'a karar veriyor.
+
 ### Sohbet bileşenleri (`components/chat/`)
 - `TurnSteps.tsx` — bir turun iz listesini sırayla çizer; `parseSteps` JSON'u
-  güvenli çözer.
+  güvenli çözer, `stepTruncated` sunucunun kırptığı adımı bildirir.
 - `ThinkingBlock.tsx` — model akıl yürütmesi: tool ActivityCard ile **aynı tek-satır
   açılır-kapanır kart** (💭 + "Düşünme" + truncate önizleme + chevron; açınca tam metin,
   dimmed/italik). Varsayılan kapalı.
@@ -194,6 +235,20 @@ Yeni bağımlılıklar: `react-markdown`, `remark-gfm`, `highlight.js`.
   alanları); açınca gövde `<pre>` yerine `Markdown` ile biçimli
   render olur (`# Skill: <slug>` başlığı + md gövde), gereksiz "Girdi" (`{slug}`)
   bloğu skill'de gizlenir.
+- `OptimizerChip.tsx` (2026-07-28) — shell adımının çıktısı **modele girmeden önce**
+  bir token-optimize edici tarafından kısaltıldıysa başlığın sağında küçük çip:
+  `sqz −%93` (hover: `841 → 57 token`), `sqz · yinelenen` (sqz dedup: tüm çıktı
+  `§ref:…§` işaretçisiyle değişti — kart tek satır görünür ama komut düzgün çalıştı)
+  veya yalnız `rtk` (komutu sarmalar, ölçülebilir öncesi/sonrası yok → yüzde
+  gösterilmez). Veri `TurnStep.optimizer`; canlı UI stream'i (`onChunk`) **ham**
+  kaldığı için çip yalnız modele giden değerin kısaltıldığını söyler.
+  **`rtk özet — ham değil` (uyarı rengi):** yeniden yazılmış komut **başarısız**
+  oldu; metin rtk'nın özeti ve gerçek hatayı kaybetmiş olabilir (ölçülen vaka:
+  bozuk `go.mod` → "No tests found"). Bu durum diğer her şeyin önüne geçer —
+  gizli bir hatanın yanında "−%93" tasarruf yazmak yanlış şeyi kutlamak olur.
+  Komut yeniden yazıldıysa hover'da **çalıştırılan gerçek komut** görünür; sessiz
+  komut değişimi kabul edilmez. Mekanizma + claude-cli yolu →
+  [17-TOKEN-OPTIMIZASYON.md](17-TOKEN-OPTIMIZASYON.md).
 - `DiffCard.tsx` — `kind:diff` adımı için özel dosya-değişikliği kartı: ✏️ +
   eylem (Oluştur/Düzenle/Yaz) + tıklanabilir yol + `+N −M` satır sayıları
   (başlıkta), açınca `DiffView` ile birleşik patch. `Write`/`Edit`
@@ -285,6 +340,16 @@ Yeni bağımlılıklar: `react-markdown`, `remark-gfm`, `highlight.js`.
     Kaynak `GET /api/agents/{id}/tool-access` (ajan-kapsamlı, hiçbir şeyi
     değiştirmez); ayar değişikliği yine Araçlar ekranından yapılır. Panel akış
     sürerken de açılabilir, ajan seçimi değişince `key={agentId}` ile remount olur.
+    **Kapanış:** Esc, ✕ **ve boşluğa tıklama** (mousedown; `data-tool-access-toggle`
+    taşıyan 🔧 butonu hariç tutulur — yoksa mousedown kapatır, butonun click'i anında
+    geri açardı). **Bağlam durumu:** MCP sekmesinde her sunucu (özel/custom dâhil)
+    bir **verdict rozeti** taşır — `bağlamda` · `katalog dışı` (araçlarının hepsi
+    Gizli tier) · `kapalı` (workspace'te devre dışı) · `ajanda MCP kapalı` ·
+    `araç yok` (bağlanamamış / tümü yasaklı) — yanında aktif/katalog/gizli araç
+    sayıları (gizli rozetin tooltip'inde kabaca kaç token tasarruf edildiği).
+    Araç satırlarında `inContext` alanı aynı ayrımı taşır. **Sözcük seçimi bilinçli:**
+    Gizli tier "bağlam dışı" DEĞİL — promptta "N araç daha var, `tool_search` ile bul"
+    işaretçisi durur; kaybolan tek şey isim listesi (detay `19`).
   - **Sesli girdi (`MicButton.tsx` + `useSpeechToText.ts` + `sttLanguages.ts`):**
     tarayıcı **Web Speech API** ile dikte. Toolbar'da yalnız **mikrofon toggle**
     (dropdown YOK — sadeleşti). Tanıma dili artık **Ayarlar ▸ Ses ▸ Sesli giriş (STT)
@@ -648,10 +713,23 @@ best-effort — hiçbir hata enqueue/reply akışını bozmaz. Frontend'e dokunu
   cevap tam görünür kalır.
 - **Mesaj meta satırı (`chat/MessageMeta.tsx`):** her mesajın altında **gönderilme saati**
   (`MessageTime`, hover'da tam tarih; `lib/time.ts` `clockTime`/`fullDateTime`) ve her asistan
-  turunda **çalışma süresi** (`TurnDuration` "⏱ 2 dk 15 sn" = asistan.createdAt − önceki
-  **kullanıcı** mesajı.createdAt; yalnız önceki mesaj kullanıcıysa, enjekte özet/ardışık
-  asistan turları yanıltmasın). Akış sürerken son balonda her saniye tıklayan **`LiveTimer`**;
-  `formatDuration` ortak biçimleyici.
+  turunda **çalışma süresi** (`TurnDuration` "⏱ 2 dk 15 sn"). Akış sürerken son balonda her
+  saniye tıklayan **`LiveTimer`**; `formatDuration`/`formatDurationMs` ortak biçimleyici.
+- **Süreler SUNUCUDAN gelir (2026-07-28):** tamamlanmış turun süresi artık frontend'de
+  `createdAt` farkından türetilmez — backend turu bizzat ölçüp `Message.DurationMs` olarak
+  kaydeder (`chat_stream.go` `agentStart`; otonom yollarda `turnmeta.apply`) ve `TurnDuration`
+  bu ms değerini gösterir (<10 sn'de tek ondalık: "3.4 sn"). Yalnız bu alandan ÖNCE yazılmış
+  eski mesajlarda eski türetim (asistan.createdAt − önceki **kullanıcı** mesajı.createdAt, yalnız
+  önceki mesaj kullanıcıysa) devreye girer ve "~" ile **yaklaşık** işaretlenir.
+- **Sunucu saati (`shared/lib/serverClock.ts`):** geçen-süre sayan her gösterge sunucunun
+  saatine göre ölçer. Hub akışı her frame'de (+ `hello` frame'i `now` alanıyla) sunucu unix
+  saniyesini taşır → `noteServerTime` skew tahminini günceller (≥2 sn fark olunca adopte edilir,
+  ağ jitter'ı sayacı zıplatmaz), `serverNow()` de "şimdi"yi verir. Müşteriler: `LiveTimer`,
+  `WorkerWaitBanner`, `WakeWaitBanner`, prompt-cache sıcaklık geri sayımları
+  (`SessionDetailPanel`/`SessionContextModal`). Tur başlangıcı da sunucudan: **`agent_start`**
+  hub olayının `time` alanı kullanılır — durable/ringed olduğu için
+  tur ortasında açılan/yenilenen pencere turu gerçek başlangıcından sayar, bağlandığı andan
+  değil. Mutlak saat etiketleri (`MessageTime`) bilerek yerel saat diliminde kalır.
 - **Tur altbilgisi: meta solda, aksiyon çipleri sağda — balonun DIŞINDA (2026-07-23):**
   Her mesajın altında, **balonun dışında** tek bir satır var:
   - **Sol:** pasif meta — saat, süre, model, token

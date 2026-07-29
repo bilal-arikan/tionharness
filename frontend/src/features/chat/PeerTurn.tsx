@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import type { Agent, Message } from '@/types'
 import { AgentHeader } from './AgentHeader'
 import { MessageTime } from './MessageMeta'
@@ -13,7 +14,7 @@ import { DirectionBadge } from './DirectionBadge'
 // cue below states whom it was addressed to (the inbox owner in a DM). Falls back
 // to the raw author id when the sender agent is not in the roster, so attribution
 // is never silently dropped.
-export function PeerTurn({
+export const PeerTurn = memo(function PeerTurn({
   message,
   sender,
   recipientLabel,
@@ -50,4 +51,4 @@ export function PeerTurn({
       </div>
     </div>
   )
-}
+})

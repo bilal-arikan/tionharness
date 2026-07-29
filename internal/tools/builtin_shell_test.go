@@ -103,10 +103,10 @@ func TestShellOutputFilter(t *testing.T) {
 	// A recording filter that reports it ran and echoes back a sentinel-wrapped output.
 	var gotCmd, gotOut string
 	called := 0
-	tool := base.WithOutputFilter(func(cmd, output string) string {
+	tool := base.WithOutputFilter(func(cmd, output string) (string, *ShellOptimization) {
 		called++
 		gotCmd, gotOut = cmd, output
-		return "FILTERED\n" + output
+		return "FILTERED\n" + output, nil
 	})
 
 	// Large output (> shellCompressMinBytes): write a file in the sandbox and cat it,

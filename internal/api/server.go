@@ -417,6 +417,9 @@ func (s *Server) registerSessionRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("DELETE /api/sessions/{id}", s.handleDeleteSession)
 	mux.HandleFunc("GET /api/sessions/{id}/messages", s.handleListMessages)
 	mux.HandleFunc("DELETE /api/sessions/{id}/messages/{msgId}", s.handleDeleteMessage)
+	// Untrimmed activity trace for one turn — the listing above ships tool
+	// payloads cut to stepFieldCap.
+	mux.HandleFunc("GET /api/sessions/{id}/messages/{msgId}/steps", s.handleMessageSteps)
 	mux.HandleFunc("POST /api/sessions/{id}/rewind", s.handleRewindSession)
 	mux.HandleFunc("POST /api/sessions/{id}/title", s.handleGenerateSessionTitle)
 	mux.HandleFunc("PUT /api/sessions/{id}/state", s.handleSetSessionState)
@@ -617,6 +620,8 @@ func (s *Server) registerFlowRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/flow-runs", s.handleListFlowRuns)
 	mux.HandleFunc("GET /api/flow-runs/{id}", s.handleGetFlowRun)
 	mux.HandleFunc("GET /api/flow-runs/{id}/nodes/{nodeId}/steps", s.handleFlowRunNodeSteps)
+	// The whole tree a composed run belongs to (root + subflow/spawn descendants).
+	mux.HandleFunc("GET /api/flow-runs/{id}/tree", s.handleFlowRunTree)
 	// Deliver input to a run suspended at an await-input node (durable resume).
 	mux.HandleFunc("POST /api/flow-runs/{id}/input", s.handleResumeFlowRun)
 }
@@ -717,6 +722,12 @@ func (s *Server) registerMiscRoutes(mux *http.ServeMux) {
 	// Detect optional external token-optimization tools on PATH (presence-only,
 	// never installs/runs them) — surfaced by the Settings diagnostics panel.
 	mux.HandleFunc("GET /api/external-tools", s.handleExternalTools)
+	// Maintenance ACTIONS for the token optimizers (not settings — their config is
+	// machine-global while TionSwarm settings are per-workspace; see
+	// external_tools_maint.go). Fixed-argv commands, no request parameters.
+	mux.HandleFunc("GET /api/external-tools/token-report", s.handleTokenToolReport)
+	mux.HandleFunc("POST /api/external-tools/sqz-reset-cache", s.handleSqzResetCache)
+	mux.HandleFunc("POST /api/external-tools/rtk-config/reveal", s.handleRevealRtkConfig)
 }
 
 // withWorkspace resolves the active workspace from the X-Workspace-Id header
@@ -769,7 +780,7 @@ func workspaceOptionalPath(path string) bool {
 		return true
 	case path == "/api/pick-folder":
 		return true
-	case path == "/api/external-tools":
+	case path == "/api/external-tools" || strings.HasPrefix(path, "/api/external-tools/"):
 		return true
 	case path == "/api/events":
 		return true

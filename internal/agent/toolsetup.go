@@ -330,11 +330,15 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 			// when wired — same filter the bridged (claude-cli) path uses, so native
 			// providers save tokens identically. nil when sqz is not opted-in.
 			shellFilter := r.sqzShellFilter(ctx)
+			// Command-layer optimizer (rtk) at the other end of the same call: it
+			// rewrites the command so it emits less, where sqz compresses what it
+			// emitted. Independently gated; both, either or neither may be active.
+			cmdFilter := r.rtkCommandFilter(ctx)
 			if sh := tools.NewShellTool(sb); sh.Available() {
-				builtins = append(builtins, sh.WithManager(shellMgr).WithOutputFilter(shellFilter))
+				builtins = append(builtins, sh.WithManager(shellMgr).WithOutputFilter(shellFilter).WithCommandFilter(cmdFilter))
 			}
 			if ps := tools.NewPowerShellTool(sb); ps.Available() {
-				builtins = append(builtins, ps.WithManager(shellMgr).WithOutputFilter(shellFilter))
+				builtins = append(builtins, ps.WithManager(shellMgr).WithOutputFilter(shellFilter).WithCommandFilter(cmdFilter))
 			}
 			if shellMgr != nil {
 				// One control tool (action=output/kill/list) polls and reaps the

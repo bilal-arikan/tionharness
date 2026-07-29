@@ -187,7 +187,8 @@ func (r *Runtime) runSpawn(agent db.Agent, sessionID, prompt string, opts SpawnO
 	// Hard wall-clock ceiling PLUS an idle watchdog (see withActivityTimeout): a
 	// spawn that streams no step for SpawnIdleTimeout is reclaimed fast, while a
 	// long-but-productive one runs up to SpawnTimeout.
-	ctx, cancel := withActivityTimeout(context.Background(), r.tun.SpawnTimeout(), r.tun.SpawnIdleTimeout())
+	hardCap, idleCap := r.tun.SpawnTimeout(), r.tun.SpawnIdleTimeout()
+	ctx, cancel := withActivityTimeout(context.Background(), hardCap, idleCap)
 	defer cancel()
 
 	// Serialize this detached spawn turn on the session's turn slot so it never
@@ -210,34 +211,68 @@ func (r *Runtime) runSpawn(agent db.Agent, sessionID, prompt string, opts SpawnO
 	output, steps, err := r.invokeTraced(turnCtx, agent, prompt, true)
 	r.untrackSession(sessionID)
 
+	// Why the turn ended, independent of err: a spawn can be cut short and still
+	// return (text, nil) — claude-cli salvages the text captured before its
+	// subprocess was killed, and the native loop returns nil after appending its own
+	// terminal marker (iteration cap, guardrail halt, context/output exhaustion).
+	// Without this a truncated spawn read as a finished one in the transcript, and
+	// any tag automation chained off it continued on half-done work.
+	outcome := classifyTurnOutcome(ctx, steps, hardCap, idleCap)
+
 	if err != nil {
-		r.logger.Error("spawn: agent invoke failed",
-			"session", sessionID, "agent", agent.ID,
-			"provider", agent.Provider, "model", agent.Model, "error", err)
-		r.recordTurnError(ctx, sessionID, agent.ID, err, steps, meta, time.Since(turnStart).Milliseconds(), "⚠️ Spawn turu çalıştırılamadı:")
+		// A watchdog cancellation arrives here as a bare "context canceled". Record
+		// the note naming the ceiling that fired instead of that raw Go error.
+		if outcome.Truncated() {
+			r.logger.Warn("spawn: turn truncated",
+				"session", sessionID, "agent", agent.ID, "status", outcome.Status,
+				"hardCap", hardCap, "idleCap", idleCap)
+			steps = appendOutcomeStep(steps, outcome)
+			if addErr := r.recordAssistantMessage(ctx, sessionID, agent.ID, outcome.Note, steps, meta, time.Since(turnStart).Milliseconds()); addErr != nil {
+				r.logger.Warn("spawn: failed to record truncated reply", "session", sessionID, "error", addErr)
+			}
+		} else {
+			r.logger.Error("spawn: agent invoke failed",
+				"session", sessionID, "agent", agent.ID,
+				"provider", agent.Provider, "model", agent.Model, "error", err)
+			r.recordTurnError(ctx, sessionID, agent.ID, err, steps, meta, time.Since(turnStart).Milliseconds(), "⚠️ Spawn turu çalıştırılamadı:")
+		}
 		r.emitSpawnEvent(agent, sessionID, prompt, false)
 		r.AutoTagTurn(ctx, sessionID, steps, "spawn_error")
 		return
+	}
+
+	if outcome.Truncated() {
+		// Keep the salvaged text (the only record of how far the work got) but lead
+		// with the note, so neither a human nor a chained agent reads the fragment as
+		// a result. turnCtx, not ctx: only it carries the session id emitDebug keys on.
+		r.logger.Warn("spawn: turn truncated",
+			"session", sessionID, "agent", agent.ID, "status", outcome.Status,
+			"hardCap", hardCap, "idleCap", idleCap)
+		r.emitDebug(turnCtx, db.DebugEvent{Type: db.DebugError, AgentID: agent.ID, Detail: "spawn turn " + outcome.Status, Err: true})
+		steps = appendOutcomeStep(steps, outcome)
+		output = applyTurnOutcome(output, outcome)
 	}
 
 	output, addErr := r.recordAssistantReply(ctx, sessionID, agent.ID, output, steps, meta, time.Since(turnStart).Milliseconds(), "ℹ️ Ajan bu spawn için boş yanıt döndürdü.")
 	if addErr != nil {
 		r.logger.Warn("spawn: failed to record reply", "session", sessionID, "error", addErr)
 	}
-	r.logger.Info("spawn: finished", "session", sessionID, "agent", agent.ID)
+	r.logger.Info("spawn: finished", "session", sessionID, "agent", agent.ID, "status", outcome.Status)
 	// Self-completion: if the spawned turn stalled with unfinished work (activated
 	// tools it never used, or open todos), keep it going — there is no human to send
 	// the follow-up. No-op when the turn finished cleanly. Bounded + budget-gated.
 	r.maybeAutoContinue(ctx, agent, sessionID, KindSpawn, steps)
-	r.emitSpawnEvent(agent, sessionID, prompt, true)
+	r.emitSpawnEvent(agent, sessionID, prompt, !outcome.Truncated())
 	// Auto-tag any tool errors from this spawned turn.
 	r.AutoTagTurn(ctx, sessionID, steps, "")
 	// Repair completion: a fixer spawned to clear an errored PARENT session's tag
 	// cannot reach it via the current-session-scoped update_session tool. Now that
 	// the fixer's turn finished cleanly, clear the requested tag(s) from the parent.
 	// (On failure the runSpawn error branch above returned early, so the tag survives
-	// and the bounded repair loop can retry.)
-	if len(opts.ClearParentTagsOnSuccess) > 0 && strings.TrimSpace(opts.ParentSessionID) != "" {
+	// and the bounded repair loop can retry.) A TRUNCATED fixer counts as a failure
+	// for the same reason: it never proved the parent's problem was fixed, so the tag
+	// must survive and let the bounded repair loop try again.
+	if !outcome.Truncated() && len(opts.ClearParentTagsOnSuccess) > 0 && strings.TrimSpace(opts.ParentSessionID) != "" {
 		r.RemoveSessionTags(ctx, opts.ParentSessionID, opts.ClearParentTagsOnSuccess)
 	}
 	// Tag-triggered automations: a spawned session completing is the natural loop

@@ -1,6 +1,6 @@
 // Presentational lists for the composer's tool inspector: grouped tool rows and
 // the MCP server inventory. Read-only — nothing here mutates configuration.
-import type { ToolAccessEntry, ToolAccessServer } from '@/types'
+import type { ToolAccessEntry, ToolAccessServer, ToolAccessServerStatus } from '@/types'
 import { visibilityMeta } from '@/features/tools/toolMeta'
 import { groupTools } from './toolAccessGroups'
 
@@ -17,6 +17,51 @@ function TierBadge({ visibility }: { visibility: ToolAccessEntry['visibility'] }
       {meta.label}
     </span>
   )
+}
+
+// STATUS_META answers "is this server in the agent's context, and if not why?".
+// The label is the verdict; the hint explains which knob changes it.
+//
+// Note the wording of 'hidden-only': the tools are out of the CATALOG, not out of
+// context altogether — the prompt still carries a one-line pointer telling the
+// agent they exist and how to find them. Calling that "bağlam dışı" would read as
+// "unavailable", which is wrong.
+const STATUS_META: Record<ToolAccessServerStatus, { label: string; hint: string; color: string }> =
+  {
+    'in-context': {
+      label: 'bağlamda',
+      hint: 'Bu sunucunun araçları ajanın promptunda — çağırabilir.',
+      color: 'var(--color-success)',
+    },
+    'hidden-only': {
+      label: 'katalog dışı',
+      hint: 'Araçları "Gizli" tier\'da: katalogda tek tek listelenmez (bağlamda yalnız "N araç daha var, tool_search ile bul" notu durur), aktive edilince normal çağrılır.',
+      color: 'var(--color-warning,#d97706)',
+    },
+    disabled: {
+      label: 'kapalı',
+      hint: "Sunucu bu workspace'te devre dışı — Araçlar ekranından açılabilir.",
+      color: 'var(--color-text-dim)',
+    },
+    'agent-mcp-off': {
+      label: 'ajanda MCP kapalı',
+      hint: 'Sunucu etkin ama bu ajanın MCP anahtarı kapalı — hiçbir MCP aracı sunulmuyor.',
+      color: 'var(--color-warning,#d97706)',
+    },
+    'no-tools': {
+      label: 'araç yok',
+      hint: 'Sunucu etkin ama araç gelmiyor: bağlantı kurulamamış ya da tüm araçları yasaklı olabilir.',
+      color: 'var(--color-danger)',
+    },
+  }
+
+// Rough per-line cost of a catalogued lazy tool ("- `name` — one-line summary")
+// in the load-on-demand block. Only used to put an order of magnitude on what the
+// hidden tier saves; not a billing figure.
+const CATALOG_LINE_TOKENS = 20
+
+function hiddenHint(count: number): string {
+  return `Katalogda tek tek listelenmeyen araç sayısı — bağlamda yalnız "tool_search ile bulunabilir" notu durur (≈${count * CATALOG_LINE_TOKENS} token tasarruf, her turda).`
 }
 
 export function ToolGroupList({ tools }: { tools: ToolAccessEntry[] }) {
@@ -73,50 +118,64 @@ export function ServerList({
   }
   return (
     <div className="flex flex-col gap-1">
-      {servers.map((s) => (
-        <div
-          key={s.id}
-          className="flex items-center gap-2 rounded-lg px-1 py-1.5 hover:bg-[var(--color-surface-2)]"
-        >
-          <span
-            title={s.enabled ? 'Etkin' : 'Devre dışı'}
-            className="shrink-0"
-            style={{ color: s.enabled ? 'var(--color-success)' : 'var(--color-text-dim)' }}
+      {servers.map((s) => {
+        const st = STATUS_META[s.status]
+        return (
+          <div
+            key={s.id}
+            className="flex items-center gap-2 rounded-lg px-1 py-1.5 hover:bg-[var(--color-surface-2)]"
           >
-            ●
-          </span>
-          <span className="shrink-0 text-xs font-medium text-[var(--color-text)]">{s.name}</span>
-          <span className="shrink-0 text-[10px] text-[var(--color-text-dim)]">
-            {s.transport}
-            {s.scope === 'scoped' ? ' · oturum-özel' : ''}
-          </span>
-          <div className="flex-1" />
-          {s.live > 0 && (
-            <span
-              title={
-                s.scope === 'scoped' && poolIdleSec > 0
-                  ? `${s.live}/${s.total} canlı bağlantı — ${poolIdleSec}sn boşta kalırsa kapanır`
-                  : `${s.live}/${s.total} canlı bağlantı`
-              }
-              className="shrink-0 text-[10px] text-[var(--color-success)]"
-            >
-              🔗 {s.live}
+            <span title={st.hint} className="shrink-0" style={{ color: st.color }}>
+              ●
             </span>
-          )}
-          <span
-            title="Bu sunucudan her tur şeması gönderilen araç sayısı"
-            className="shrink-0 text-[10px] text-[var(--color-text-dim)]"
-          >
-            aktif {s.eagerCount}
-          </span>
-          <span
-            title="Bu sunucudan talep üzerine (activate_tools) açılabilen araç sayısı"
-            className="shrink-0 text-[10px] text-[var(--color-text-dim)]"
-          >
-            hazır {s.lazyCount}
-          </span>
-        </div>
-      ))}
+            <span className="shrink-0 text-xs font-medium text-[var(--color-text)]">{s.name}</span>
+            <span
+              title={st.hint}
+              className="shrink-0 rounded-md border px-1 text-[10px] leading-4"
+              style={{ borderColor: st.color, color: st.color }}
+            >
+              {st.label}
+            </span>
+            <span className="shrink-0 text-[10px] text-[var(--color-text-dim)]">
+              {s.transport}
+              {s.scope === 'scoped' ? ' · oturum-özel' : ''}
+            </span>
+            <div className="flex-1" />
+            {s.live > 0 && (
+              <span
+                title={
+                  s.scope === 'scoped' && poolIdleSec > 0
+                    ? `${s.live}/${s.total} canlı bağlantı — ${poolIdleSec}sn boşta kalırsa kapanır`
+                    : `${s.live}/${s.total} canlı bağlantı`
+                }
+                className="shrink-0 text-[10px] text-[var(--color-success)]"
+              >
+                🔗 {s.live}
+              </span>
+            )}
+            <span
+              title="Bu sunucudan her tur TAM şeması gönderilen araç sayısı"
+              className="shrink-0 text-[10px] text-[var(--color-text-dim)]"
+            >
+              aktif {s.eagerCount}
+            </span>
+            <span
+              title="Katalogda isim/özet olarak duran, activate_tools ile açılabilen araç sayısı"
+              className="shrink-0 text-[10px] text-[var(--color-text-dim)]"
+            >
+              katalog {s.lazyCount}
+            </span>
+            {s.hiddenCount > 0 && (
+              <span
+                title={hiddenHint(s.hiddenCount)}
+                className="shrink-0 text-[10px] text-[var(--color-text-dim)] opacity-70"
+              >
+                gizli {s.hiddenCount}
+              </span>
+            )}
+          </div>
+        )
+      })}
     </div>
   )
 }

@@ -659,3 +659,44 @@ composer toolbar'ındaki 🔧 butonu `ToolAccessPanel`'i açar.
 - Frontend: `features/chat/composer/ToolAccessPanel.tsx` (kabuk + sekmeler),
   `ToolAccessList.tsx` (gruplu satırlar + sunucu listesi), `toolAccessGroups.ts`
   (saf grup/filtre yardımcıları).
+
+### "Bağlamda mı?" verdikti (MCP sunucuları)
+
+`tool-access` yanıtı her sunucu için tek bir `status` alanı taşır — kullanıcının
+gerçekten sorduğu soru bu: *bu (özel) MCP'nin araçları şu an promptta mı, değilse neden?*
+
+| status | anlamı |
+|--------|--------|
+| `in-context` | en az bir aracı promptta (eager şema veya katalog satırı) |
+| `hidden-only` | araçları var ama hepsi **Gizli** tier → katalogda listelenmez, yalnız `tool_search` bulur |
+| `disabled` | sunucu workspace'te kapalı |
+| `agent-mcp-off` | sunucu açık ama ajanın MCP ana anahtarı kapalı |
+| `no-tools` | açık ama araç gelmiyor (bağlantı kurulamamış ya da tümü yasaklı) |
+
+Sıra önemli: dıştaki sebep önce raporlanır (workspace anahtarı → ajan anahtarı → içerik),
+böylece kullanıcı boş listeyi kovalamak yerine doğru düğmeye gider. Sayaçlar:
+`eagerCount` (her tur tam şema) · `lazyCount` (katalogda isim/özet) · `hiddenCount`
+(bağlamda **yok**) · `contextCount = eager + lazy`. Araç satırlarında karşılığı
+`inContext` (eager ⇒ hep true; lazy ⇒ tier `hidden` değilse true).
+
+### Gizli tier "bağlam dışı" değildir (isimlendirme notu)
+
+`hidden` tier'ın maliyeti sıfır değil, **~40 token**: `renderLazyToolCatalog`
+bloğun sonuna tek paragraflık bir işaretçi yazar — "N self-management tools
+(manage agents, flows, schedules, …) are available but not listed here to save
+context. Load the `tionswarm-self-management` skill via `use_skill`, or find one
+with `tool_search` — then `activate_tools`." Yani ajan **varlıklarını bilir**;
+kaybolan tek şey isim listesidir, onu da `tool_search` çözer.
+
+Ölçek (2026-07-29): `toolsetup_selfmanage.go` içinde **49** self-management aracı var.
+
+| yaklaşım | her turdaki maliyet |
+|---|---|
+| tam şema (eager) | ~10–15k token |
+| katalogda isim+özet | ~800–1000 token |
+| **gizli + işaretçi (mevcut)** | **~40 token** |
+
+Bu yüzden UI'da gizli araçlar **"katalog dışı"** diye etiketlenir, "bağlam dışı" diye
+değil — ikincisi "kullanılamaz" gibi okunurdu. Sürekli self-management yapan bir ajan
+için doğru hamle tier'ı `summary`/`full`'e çekmektir (workspace `ToolVisibility` veya
+ajan `ToolOverrides`); karar sabit değil, ayarlanabilir.

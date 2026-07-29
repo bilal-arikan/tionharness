@@ -222,7 +222,33 @@ func (s *Server) handleListMessages(w http.ResponseWriter, r *http.Request) {
 	if messages == nil {
 		messages = []db.Message{}
 	}
+	// Shrink the wire copy: a long transcript's bulk is tool output the chat
+	// never paints. Trimmed steps carry their `*Truncated` flags, and the full
+	// trace stays one click away via handleMessageSteps below. ListMessages
+	// already returned a copy, so mutating in place cannot touch the store.
+	for i := range messages {
+		messages[i].Steps = trimStepsJSON(messages[i].Steps)
+	}
 	writeJSON(w, http.StatusOK, messages)
+}
+
+// handleMessageSteps returns ONE message's activity trace untrimmed. The
+// transcript listing ships tool payloads cut to stepFieldCap; the chat calls
+// this when the user asks to see a truncated turn in full.
+func (s *Server) handleMessageSteps(w http.ResponseWriter, r *http.Request) {
+	sessionID := r.PathValue("id")
+	msgID := r.PathValue("msgId")
+	messages, err := ws(r).DB.ListMessages(r.Context(), sessionID)
+	if writeDBError(w, err, "") {
+		return
+	}
+	for _, m := range messages {
+		if m.ID == msgID {
+			writeJSON(w, http.StatusOK, map[string]string{"steps": m.Steps})
+			return
+		}
+	}
+	writeError(w, http.StatusNotFound, "message not found")
 }
 
 // handleActiveSessions returns the session ids that currently have an in-flight

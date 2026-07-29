@@ -131,6 +131,11 @@ interface Props {
   // popup. React Flow suppresses onNodeClick when the pointer moved past the
   // drag threshold, so dragging to reposition/connect never triggers it.
   onNodeClick?: (id: string) => void
+  // Fired on a node double-click — used by the run viewer to descend into the
+  // child run a subflow/spawn node launched. Unlike onNodeClick this is NOT gated
+  // on the canvas being editable: the run inspector is read-only by design and is
+  // precisely where descending applies.
+  onNodeDoubleClick?: (id: string) => void
   // Read-only preview (template gallery): disable dragging, connecting and
   // selection so the graph can only be viewed, not edited.
   readOnly?: boolean
@@ -165,6 +170,7 @@ function CanvasInner({
   setEdges,
   onSelect,
   onNodeClick,
+  onNodeDoubleClick,
   readOnly = false,
   runMode = false,
   onNodeDragStop,
@@ -261,6 +267,7 @@ function CanvasInner({
       onConnect={editable ? onConnect : undefined}
       onSelectionChange={onSelectionChange}
       onNodeClick={editable && onNodeClick ? (_, n) => onNodeClick(n.id) : undefined}
+      onNodeDoubleClick={onNodeDoubleClick ? (_, n) => onNodeDoubleClick(n.id) : undefined}
       onNodeDragStop={
         draggable && onNodeDragStop ? (_, n) => onNodeDragStop(n.id, n.position) : undefined
       }

@@ -14,7 +14,6 @@ import {
   Brain,
   FolderCog,
   Plug,
-  TriangleAlert,
   Wrench,
   Zap,
   type LucideIcon,
@@ -96,23 +95,12 @@ const tokenHookLive = (hooks: Hook[], marker: string) =>
 // RULES run in this order; cards stack top-to-bottom, so warnings and the biggest
 // gaps come first. Each rule is independent — no cross-rule state.
 export const RULES: Rule[] = [
-  {
-    meta: {
-      key: 'token-conflict',
-      icon: TriangleAlert,
-      title: 'İki token aracı birden aktif',
-      summary: 'rtk ve sqz aynı anda hook olarak aktifse ikisi de komutu yeniden yazar, çakışabilir.',
-    },
-    detect: (ctx) => {
-      if (!(tokenHookLive(ctx.hooks, 'rtk') && tokenHookLive(ctx.hooks, 'sqz'))) return null
-      return {
-        variant: 'warning',
-        desc: 'rtk ve sqz ikisi de komutu yeniden yazıyor — çakışabilir. Birini kapatmalısın.',
-        actionLabel: 'Harici araçları aç',
-        act: () => ctx.nav.settings('exttools'),
-      }
-    },
-  },
+  // Both optimizers active used to be flagged as a conflict ("ikisi de komutu
+  // yeniden yazıyor — birini kapat"). That was wrong: they act at OPPOSITE ends
+  // (rtk reshapes the command, sqz compresses the output) and measurement shows
+  // stacking beats either alone — `git log -30`: 6595 raw → sqz 2027 → rtk 2157 →
+  // rtk+sqz 1167 tokens. The card told users to disable their best configuration,
+  // so it is gone rather than reworded.
   {
     meta: {
       key: 'no-agents',

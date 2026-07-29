@@ -166,6 +166,10 @@ type TurnStep struct {
 	// Areas carries the per-block added/removed diff for a StepContextChange step
 	// (the prompt-epoch drift). Added/Removed above hold the rollup counts.
 	Areas []ContextArea `json:"areas,omitempty"`
+	// Optimizer records that an external token-optimizer (sqz / rtk) shrank this
+	// shell step's output before it re-entered the model's context, so the UI can
+	// show a chip instead of the rewrite being invisible. nil = untouched.
+	Optimizer *tools.ShellOptimization `json:"optimizer,omitempty"`
 }
 
 // ContextChangeStep builds the persisted/streamed TurnStep for a prompt-epoch
@@ -244,15 +248,27 @@ func traceStepToTurnStep(t providers.TraceStep) TurnStep {
 	return st
 }
 
+// traceStepToTurnStep is the runtime-bound form: the pure mapping plus the
+// token-optimizer chip, which only the runtime can resolve (the CLI ran the shell
+// through our bridge in a different call stack, so the optimization is recovered
+// from the output-keyed log rather than a ctx sink). A miss leaves Optimizer nil.
+func (r *Runtime) traceStepToTurnStep(t providers.TraceStep) TurnStep {
+	st := traceStepToTurnStep(t)
+	if st.Kind == StepTool {
+		st.Optimizer = r.optLog.lookup(st.Output)
+	}
+	return st
+}
+
 // traceToSteps converts a provider-produced trace (claude CLI stream-json) into
 // the agent-level TurnStep records the chat UI renders.
-func traceToSteps(tr []providers.TraceStep) []TurnStep {
+func (r *Runtime) traceToSteps(tr []providers.TraceStep) []TurnStep {
 	if len(tr) == 0 {
 		return nil
 	}
 	steps := make([]TurnStep, 0, len(tr))
 	for _, t := range tr {
-		steps = append(steps, traceStepToTurnStep(t))
+		steps = append(steps, r.traceStepToTurnStep(t))
 	}
 	return steps
 }

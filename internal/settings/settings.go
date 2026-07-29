@@ -791,8 +791,11 @@ type Patch struct {
 	DelegationMaxDepth      *int  `json:"delegationMaxDepth"`
 	DelegationMaxCalls      *int  `json:"delegationMaxCalls"`
 
-	SpawnMaxConcurrent *int `json:"spawnMaxConcurrent"`
-	SpawnMaxPerTurn    *int `json:"spawnMaxPerTurn"`
+	SpawnMaxConcurrent  *int `json:"spawnMaxConcurrent"`
+	SpawnMaxPerTurn     *int `json:"spawnMaxPerTurn"`
+	SpawnTimeoutMin     *int `json:"spawnTimeoutMin"`
+	SpawnIdleTimeoutMin *int `json:"spawnIdleTimeoutMin"`
+	ScheduleTimeoutMin  *int `json:"scheduleTimeoutMin"`
 
 	CoordinatorMaxWorkers *int `json:"coordinatorMaxWorkers"`
 	CoordinatorMaxTurns   *int `json:"coordinatorMaxTurns"`

@@ -352,6 +352,9 @@ func (s *Store) Apply(p Patch) (Settings, error) {
 	applyInt(&next.DelegationMaxCalls, p.DelegationMaxCalls)
 	applyInt(&next.SpawnMaxConcurrent, p.SpawnMaxConcurrent)
 	applyInt(&next.SpawnMaxPerTurn, p.SpawnMaxPerTurn)
+	applyInt(&next.SpawnTimeoutMin, p.SpawnTimeoutMin)
+	applyInt(&next.SpawnIdleTimeoutMin, p.SpawnIdleTimeoutMin)
+	applyInt(&next.ScheduleTimeoutMin, p.ScheduleTimeoutMin)
 	applyInt(&next.CoordinatorMaxWorkers, p.CoordinatorMaxWorkers)
 	applyInt(&next.CoordinatorMaxTurns, p.CoordinatorMaxTurns)
 
@@ -579,6 +582,27 @@ func normalize(v Settings) Settings {
 	}
 	if v.SpawnMaxPerTurn > 64 {
 		v.SpawnMaxPerTurn = 64
+	}
+	// Turn deadlines (minutes): at least one minute, at most a day — same bounds the
+	// settings UI enforces. The idle watchdog must stay BELOW the hard ceiling, else
+	// it never fires and a hung turn burns the full wall clock.
+	if v.SpawnTimeoutMin < 1 {
+		v.SpawnTimeoutMin = 1
+	}
+	if v.SpawnTimeoutMin > 1440 {
+		v.SpawnTimeoutMin = 1440
+	}
+	if v.SpawnIdleTimeoutMin < 1 {
+		v.SpawnIdleTimeoutMin = 1
+	}
+	if v.SpawnIdleTimeoutMin > v.SpawnTimeoutMin {
+		v.SpawnIdleTimeoutMin = v.SpawnTimeoutMin
+	}
+	if v.ScheduleTimeoutMin < 1 {
+		v.ScheduleTimeoutMin = 1
+	}
+	if v.ScheduleTimeoutMin > 1440 {
+		v.ScheduleTimeoutMin = 1440
 	}
 	// Coordinator guards: workers ≥ 1 (≤ 64), auto-turns ≥ 1 (≤ 500).
 	if v.CoordinatorMaxWorkers < 1 {

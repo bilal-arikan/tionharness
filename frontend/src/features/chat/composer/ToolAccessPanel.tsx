@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Wrench, X } from 'lucide-react'
 import { api } from '@/api'
 import type { AgentToolAccess } from '@/types'
@@ -30,6 +30,7 @@ export function ToolAccessPanel({ agentId, onClose }: Props) {
   const [error, setError] = useState('')
   const [tab, setTab] = useState<Tab>('eager')
   const [query, setQuery] = useState('')
+  const rootRef = useRef<HTMLDivElement>(null)
 
   // Fetch once per mount. The parent keys this component by agentId, so switching
   // the target agent remounts it with clean state instead of resetting in-effect.
@@ -50,6 +51,26 @@ export function ToolAccessPanel({ agentId, onClose }: Props) {
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
 
+  // Click-outside closes. The toggle button lives OUTSIDE this element (it is a
+  // toolbar sibling, not a wrapper), so a click on it must be ignored here —
+  // otherwise mousedown would close the panel and the button's own click would
+  // immediately reopen it, making the button look dead.
+  useEffect(() => {
+    const onDown = (e: MouseEvent) => {
+      const target = e.target as HTMLElement | null
+      if (rootRef.current?.contains(target)) return
+      if (target?.closest('[data-tool-access-toggle]')) return
+      onClose()
+    }
+    document.addEventListener('mousedown', onDown)
+    return () => document.removeEventListener('mousedown', onDown)
+  }, [onClose])
+
+  // Lazy tools that are not even catalogued (tier 'hidden') — the self-management
+  // suite and friends. Called out explicitly so "not listed" never reads as
+  // "unavailable": the prompt still carries a pointer to them.
+  const hiddenCount = data?.lazy.filter((t) => !t.inContext).length ?? 0
+
   const tabs: { id: Tab; label: string; count?: number }[] = [
     { id: 'eager', label: 'Aktif', count: data?.eager.length },
     { id: 'lazy', label: 'Talep üzerine', count: data?.lazy.length },
@@ -58,6 +79,7 @@ export function ToolAccessPanel({ agentId, onClose }: Props) {
 
   return (
     <div
+      ref={rootRef}
       data-testid="tool-access-panel"
       className="absolute bottom-full left-3 z-20 mb-2 w-[min(34rem,calc(100vw-2rem))] rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-3 shadow-2xl md:left-6"
     >
@@ -125,9 +147,9 @@ export function ToolAccessPanel({ agentId, onClose }: Props) {
             {tab === 'eager' &&
               'Bu araçların tam şeması her turda modele gönderilir — anında çağırabilir.'}
             {tab === 'lazy' &&
-              'Bu araçlar katalogda yalnız isim/özet olarak durur; ajan gerektiğinde tool_search / activate_tools ile şemasını yükleyip kullanır.'}
+              `Bu araçların şeması turda gönderilmez; ajan gerektiğinde tool_search / activate_tools ile yükler. ${hiddenCount} tanesi "Gizli" tier'da: katalogda tek tek listelenmez, bağlamda yalnız "bunlar da var, tool_search ile bul" notu durur — bilinmez değil, ucuzdur.`}
             {tab === 'servers' &&
-              'Workspace’teki MCP sunucuları. Yeşil nokta = etkin; 🔗 = şu an açık canlı bağlantı. Ayarlar Araçlar ekranından değiştirilir.'}
+              'Workspace’teki (özel dâhil) tüm MCP sunucuları ve araçlarının bağlama girip girmediği: yeşil = promptta, sarı/gri = değil (sebebi rozetin üstünde). 🔗 = şu an açık canlı bağlantı. Ayarlar Araçlar ekranından değiştirilir.'}
           </p>
 
           <div className="max-h-[22rem] overflow-y-auto pr-1">

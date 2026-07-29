@@ -30,6 +30,9 @@ interface FlowActionsDeps {
   // Runs tab: doRun surfaces the fresh run here (not painted on the editor canvas).
   runs: FlowRun[]
   setRuns: Dispatch<SetStateAction<FlowRun[]>>
+  // Mirrors the Runs tab's "alt koşuları göster" toggle, so a refresh triggered
+  // by a run keeps the same filter the list is already showing.
+  rootOnlyRuns: boolean
   setSelectedRunId: Dispatch<SetStateAction<string | null>>
   sel: MultiSelect
   onError: (msg: string) => void
@@ -58,6 +61,7 @@ export function createFlowActions({
   setRunning,
   runs,
   setRuns,
+  rootOnlyRuns,
   setSelectedRunId,
   sel,
   onError,
@@ -202,7 +206,7 @@ export function createFlowActions({
       setTab('runs')
       const refresh = () =>
         api
-          .listAllFlowRuns()
+          .listAllFlowRuns(rootOnlyRuns)
           .then((rs) => {
             setRuns(rs)
             const fresh = rs.find((r) => r.flowId === selectedId && !priorIds.has(r.id))

@@ -89,6 +89,24 @@ export function WorkspacePanel({ ws, setWsField, onDeleteWorkspace }: Props) {
       </Field>
 
       <div className="mt-2 border-t border-[var(--color-border)] pt-3 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
+        Shell komutu yeniden yazma (rtk)
+      </div>
+      <Field
+        label="Test/build komutlarını rtk ile çalıştır"
+        hint="sqz'nin tamamlayıcısı, karşı uçta: sqz çıktıyı sonradan sıkıştırır, rtk komutu ÖNCEDEN değiştirip daha az çıktı üretmesini sağlar. Yalnız ölçülmüş kazanç veren aileler (go/cargo/npm/pytest/jest… test-build-lint koşucuları + git status/log) yeniden yazılır; git diff ve cat kapsam DIŞI (ölçümde sqz daha iyi, rtk read ham çıktıdan büyük). rtk ÖZET döndürür — geçen testler düşer, hatalar dosya:satır ile korunur. Komut başarısız olursa ajana 'bu bir özet' notu eklenir. Otomatik = rtk hook bağlıysa açık; Açık = hook olmasa da açık (rtk binary gerekir); Kapalı = devre dışı."
+      >
+        <select
+          value={ws.shellCommandRewrite || ''}
+          onChange={(e) => setWsField('shellCommandRewrite', e.target.value as '' | 'on' | 'off')}
+          className={inputCls}
+        >
+          <option value="">Otomatik (rtk hook varsa)</option>
+          <option value="on">Açık (zorla)</option>
+          <option value="off">Kapalı</option>
+        </select>
+      </Field>
+
+      <div className="mt-2 border-t border-[var(--color-border)] pt-3 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
         Sil
       </div>
 

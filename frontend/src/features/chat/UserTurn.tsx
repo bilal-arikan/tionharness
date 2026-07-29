@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import type { Agent, Artifact, Message } from '@/types'
 import { UserBubble } from './UserBubble'
 import { MessageTime } from './MessageMeta'
@@ -11,7 +12,7 @@ import { ACTION_CLUSTER, META_CLUSTER, TURN_FOOTER_END } from './messageActions'
 // controls. The user's bubble hugs the right edge, so the footer is right-aligned
 // under it (a full-width justify-between would strand the meta on the far left,
 // visually detached from the bubble). Auto-generated prompts use AutoPromptNote.
-export function UserTurn({
+export const UserTurn = memo(function UserTurn({
   message,
   agents,
   artifacts,
@@ -59,4 +60,4 @@ export function UserTurn({
       </div>
     </div>
   )
-}
+})

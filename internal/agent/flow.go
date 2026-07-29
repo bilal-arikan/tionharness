@@ -469,7 +469,7 @@ func (r *Runtime) driveFlow(ctx context.Context, run db.FlowRun, g orchestration
 	// still invoked when present. The observer may fire concurrently (parallel
 	// children); r.publish is mutex-guarded so the fan-out is safe.
 	eng.SetObserver(func(ev orchestration.NodeEvent) {
-		r.emitFlowNode(run.ID, run.FlowID, ev)
+		r.emitFlowNode(run, ev)
 		if obs != nil {
 			obs(ev)
 		}
@@ -598,16 +598,39 @@ func (r *Runtime) RunFlowRecorded(ctx context.Context, flowID, input string, aut
 // RunView) renders node start/done/error + output live instead of waiting for
 // the ~3s state poll. Best-effort: run state is persisted after every node, so a
 // dropped frame only costs a little latency, never correctness.
-func (r *Runtime) emitFlowNode(runID, flowID string, ev orchestration.NodeEvent) {
+//
+// The frame also carries the run's LINEAGE, taken straight off the run row (no
+// extra read):
+//
+//   - rootRunId — the TOP of the run's tree, so a viewer watching a composed run
+//     hears its subflow/spawn children too, including children that do not exist
+//     yet when it subscribes (each child broadcasts under its own run id, which
+//     the viewer cannot know in advance). Equals flowRunId for a root run.
+//   - parentRunId + parentNodeId — WHERE this run hangs in the tree: the run that
+//     launched it and the node in that run's graph which did. A parent's canvas
+//     rolls a child's live progress up onto that node; without the tags it would
+//     have to fetch the run tree to place a just-born child, and would show
+//     nothing until that fetch returned. Both are needed, not just the node: node
+//     ids are only unique WITHIN one flow graph, so two runs in the same tree can
+//     each own an "n1" and a node-only key would paint one onto the other's
+//     canvas. Empty for a root run, and parentNodeId is also empty for a child
+//     started by the run_flow tool from outside any node.
+func (r *Runtime) emitFlowNode(run db.FlowRun, ev orchestration.NodeEvent) {
 	b, err := json.Marshal(ev)
 	if err != nil {
 		return
 	}
 	r.publish(events.Event{
-		Type:   "flow_node",
-		Level:  "info",
-		Target: map[string]string{"flowRunId": runID, "flowId": flowID},
-		Node:   b,
+		Type:  "flow_node",
+		Level: "info",
+		Target: map[string]string{
+			"flowRunId":    run.ID,
+			"flowId":       run.FlowID,
+			"rootRunId":    run.RootOf(),
+			"parentRunId":  run.ParentRunID,
+			"parentNodeId": run.ParentNodeID,
+		},
+		Node: b,
 	})
 }
 

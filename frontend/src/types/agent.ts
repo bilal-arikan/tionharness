@@ -93,7 +93,18 @@ export interface ToolAccessEntry {
   server: string
   category?: string
   visibility: ToolVisibility
+  // Whether the tool occupies prompt context right now: eager tools always do,
+  // lazy tools only while catalogued ('hidden' ones are tool_search-only).
+  inContext: boolean
 }
+
+// Why a server's tools are (not) in the agent's context.
+export type ToolAccessServerStatus =
+  | 'in-context'
+  | 'hidden-only'
+  | 'disabled'
+  | 'agent-mcp-off'
+  | 'no-tools'
 
 // One MCP server as the inspector shows it: config identity, how many of ITS
 // tools are eager/lazy for this agent, and its live pool connections. A disabled
@@ -104,8 +115,14 @@ export interface ToolAccessServer {
   transport: string
   scope: string
   enabled: boolean
+  status: ToolAccessServerStatus
+  // eagerCount: full schemas shipped every turn. lazyCount: listed in the
+  // load-on-demand catalog (name/summary). hiddenCount: tool_search-only, NOT in
+  // the prompt. contextCount = eager + lazy.
   eagerCount: number
   lazyCount: number
+  hiddenCount: number
+  contextCount: number
   live: number
   total: number
 }

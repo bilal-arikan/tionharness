@@ -245,18 +245,131 @@ aşağı iniyordu, tersi yoktu → "beni kim başlattı" sorulamıyor, ağaç te
   miras aldığı için ağaca çocuk olarak düşer → daha önce "canvas'ta görünmez" olan dinamik
   çağrılar en azından **soyağacında** görünür.
 - **Sorgu:** `ListRootFlowRuns` (liste subflow çocuklarıyla dolmasın; çocuklar birinci sınıf
-  kalır, id ile hâlâ çekilebilir) + `ListFlowRunTree(rootID)` (`RootRunID` üzerinden **tek
-  tarama**; **eskiden yeniye** sıralı → ebeveyn daima çocuğundan önce gelir, hiyerarşi tek
-  geçişte kurulur).
-- **Kapsam dışı (bilinçli):** olay yayınına `rootRunId` eklenmesi (Katman 2), API uçları ve
-  ağaç UI'ı (Katman 3–4) bu adımda yapılmadı.
+  kalır, id ile hâlâ çekilebilir) + `ListFlowRunTree(rootID)` — üyelik `RootRunID` üzerinden
+  **tek tarama**, sıralama ise **ebeveyn bağlarıyla breadth-first**.
+  **Neden zamana göre değil:** `now()` **saniye** çözünürlüğünde; bir composed flow ebeveyni
+  ve çocuğunu aynı saniyede yarattığı için `CreatedAt` ikisini ayırt edemiyor → ilk yazdığım
+  "eskiden yeniye" sıralama **keyfi sonuç veriyordu** (test yakaladı). Kardeşler
+  `flowRunBefore` ile sıralanır: `CreatedAt`, eşitse id sayacı (`flowRunSeq`; id'ler sıfır
+  dolgusuz olduğundan sözlüksel karşılaştırma `RUN10`'u `RUN2`'den önce koyardı).
+  Ulaşılamayan üye (ebeveyn satırı silinmiş) **sessizce düşürülmez**, sona eklenir; döngüye
+  karşı `seen` guard'ı var.
+- **Kapsam dışı (bilinçli):** API uçları ve ağaç UI'ı (Katman 3–4) bu adımda yapılmadı.
 - Test: `orchestration/lineage_test.go` (node-id etiketi subflow/spawn'da doğru, komşu
   node'a sızmıyor) + `db/flow_lineage_test.go` (boş=kendisi kodlaması, kalıcılık, iki
   seviye derinlikte kök hâlâ tepe, kök-filtresi çocuğu gizler ama silmez).
 
+## Koşu soyağacı — Katman 2: olay katmanı (2026-07-28)
+
+Her koşu (çocuklar dahil) node yaşam-döngüsünü **kendi run id'si** altında yayınlıyordu, bu
+yüzden parent'ın RunView'ı child koşarken ölü duruyordu. Çocuk id'lerine tek tek abone olmak
+çözüm değil: çocuklar **koşu ortasında doğuyor**, id'leri abone olurken bilinmiyor.
+
+- **Backend:** `emitFlowNode(runID, flowID, rootRunID, ev)` → `Target`'a `rootRunId`.
+  Kök `driveFlow`'da zaten ctx'te (Katman 1) → ek okuma yok. Kök koşuda `rootRunId == flowRunId`.
+- **Frontend bus (`flowNodeBus.ts`):** aynı frame **iki kapsama** dağıtılır —
+  `subscribeFlowNode(runId)` (mevcut API, **imzası değişmedi**, RunView aynen çalışır) ve yeni
+  `subscribeFlowTree(rootRunId)` (kök + tüm alt koşular, **sonradan doğanlar dahil**).
+- **Kritik:** ağaç kapsamındaki payload `{runId, ev}` taşır. Aksi halde parent, child'ın node
+  id'lerini kendi grafiğine boyardı (`flow_node_step` zaten `{nodeId, step}` ile aynı deseni
+  kullanıyordu). Per-run kapsamda gerek yok — orada anahtar zaten run id.
+- **Geriye dönük:** `rootId` opsiyonel; etiketsiz frame "kendi kökü" sayılır → eski backend
+  frame'leri kaybolmaz.
+- **Kapsam dışı (bilinçli):** `flow_node_step`'e dokunulmadı (node adımları yalnız inspector
+  açıkken gerekir, ağaç için gereksiz trafik). Replay/reconnect yok — bus'ta replay yok,
+  kopuşta resync **Katman 3'ün** ağaç endpoint'iyle yapılacak (mevcut RunView de aynı durumda).
+- Test: `agent/flow_treeevent_test.go` (frame hem kendi run'ını hem kökü taşır; kök koşu
+  kendini kök etiketler) + `frontend/src/shared/lib/flowNodeBus.test.ts` (6 senaryo: kardeş
+  ağaca sızma yok, child frame'i köke yönlenir, etiketsiz frame kendi kökü, çift teslim yok).
+
+## Koşu soyağacı — Katman 3: sorgu ve API (2026-07-28)
+
+Katman 1 veriyi, Katman 2 canlı nabzı üretmişti; ikisi de UI'ın erişemediği yerdeydi.
+Bu katman store fonksiyonlarını HTTP'ye açar — yeni sorgu mantığı yazılmadı.
+
+- **`GET /api/flow-runs?rootOnly=true`** → `ListRootFlowRuns`. **Opt-in**: parametresiz
+  çağrı eskisi gibi her koşuyu döndürür, yani mevcut çağıranlar (ör. `SessionFlowInline`)
+  sessizce davranış değiştirmez. Yalnız `"true"` filtreler; `rootOnly=1` filtrelemez.
+  `flowId` filtresi bunun üstüne biner.
+- **`GET /api/flow-runs/{id}/tree`** → `ListFlowRunTree`. Id **ağacın herhangi bir üyesi**
+  olabilir, yalnız kök değil: UI'da seçili koşu çoğu zaman bir çocuktur ve "bu koşunun
+  ağacı" isteği hangi üyenin tıklandığına bağlı olmamalı. Handler tek okumayla `RootOf()`
+  ile köke normalize eder. Bilinmeyen id → **404** (boş liste değil; böylece bayat bir
+  derin-bağlantı, gerçekten çocuğu olmayan bir koşudan ayırt edilir).
+- **Resync yolu:** bus'ta replay yok. SSE koptuğunda (sekme uyudu, ağ gitti) ağacın anlık
+  hali bu uçtan tek çağrıyla geri alınır — Katman 4 paneli buna dayanacak.
+- **UI:** Koşular sekmesinde "alt koşuları göster" onay kutusu (`FlowsListPane`),
+  varsayılan **kapalı** → liste yalnız kök koşular. Durum `useSessionState` ile kalıcı;
+  değişince poll etkisi yeniden koşar, 3sn'lik aralık beklenmez.
+  **Yan kazanç:** FlowsPanel'in derin-bağlantısı (`runs.find(r => r.flowId === openFlowId)`)
+  aynı `flowId`'yi taşıyan **daha yeni bir çocuğu** seçebiliyordu; kök-only listeyle
+  doğru kök seçilir.
+- **İstemci sözleşmesi:** `FlowRun` TS arayüzü Katman 1'in üç alanını taşımıyordu — Go
+  bunları JSON'da gönderse de tip bilmediği için `flowRunTree()`'nin çıktısından
+  `parentRunId` okunamıyordu (kimse tüketmediği için derleme patlamamıştı). Üçü de
+  **opsiyonel** eklendi (`omitempty` ile birebir). "Boş = kök" kodlaması her tüketicide
+  yeniden türetilmesin diye `shared/lib/flowRunTree.ts` → `flowRunRootOf` /
+  `isRootFlowRun` (Go'daki `RootOf` / `IsRootRun` karşılığı). **Kök olma kararı
+  `parentRunId`'ye bakar, `rootRunId`'ye değil**: kökte ikisi de boştur ama yalnız
+  ebeveyn bağı tam olarak kökler için boş kalır.
+- Test: `api/flow_runs_tree_test.go` (rootOnly iki yön + flowId ile birleşim + gevşek
+  değer filtrelemiyor; ağaç kökten/çocuktan/torundan aynı sırayı verir, komşu ağaç
+  sızmaz, bilinmeyen id 404) + `shared/lib/flowRunTree.test.ts` (5 senaryo: kök kendi
+  kökü, torun tepeyi gösterir, `""` de kendisi sayılır, kök kararı ebeveyn bağıyla).
+
+## Koşu soyağacı — Katman 4: UI (2026-07-28)
+
+Composed bir koşunun asıl işi, ana canvas'ın gösteremediği koşularda oluyor: her subflow/spawn
+çocuğu **kendi grafiğine sahip ayrı bir koşu**. Bu katman onları görünür kılar.
+
+- **Olaya iki etiket daha:** `emitFlowNode` artık `run db.FlowRun` alıyor (4 pozisyonel string
+  yerine) ve `Target`'a `parentRunId` + `parentNodeId` ekliyor — ikisi de zaten koşu satırında,
+  **ek okuma yok**. **Neden ikisi birden:** node id'leri yalnız *kendi grafiği içinde* tekil;
+  aynı ağaçtaki iki koşu da `n1`'e sahip olabilir, node-only anahtar birinin ilerlemesini
+  diğerinin canvas'ına boyardı. Etiketler olmasa parent, yeni doğmuş bir çocuğu yerleştirmek
+  için önce ağacı çekmek zorunda kalır ve o istek dönene kadar hiçbir şey göstermezdi.
+- **Saf mantık ayrı (`features/flows/runTree.ts`):** `buildRunTreeRows` (derinlik; **backend
+  sırasını koruyor, yeniden sıralamıyor** — istemcide ikinci bir doğruluk kaynağı üretmemek
+  için), `applyChildFrame` (canlı frame → `(parentRunId → nodeId → ChildProgress)` iki
+  seviyeli harita), `runTreeBreadcrumb` (döngü guard'lı ata zinciri).
+- **`RunTreeView` sarmalayıcı:** ağaç durumu, canlı abonelik ve hangi koşunun *görüntülendiği*
+  burada. **RunView'a dokunulmadı** (3 çağrı yeri var, yalnız biri bu boyutu istiyor): RunView
+  hâlâ tek koşu render ediyor, sarmalayıcı hangisi olduğuna karar veriyor. Ağaç, içinde koşan
+  bir şey kaldığı sürece 3sn'de bir tazelenir; biten ağaç istek üretmeyi bırakır. Tanınmayan
+  `runId` taşıyan frame = çocuk yeni doğdu → 250ms debounce ile ağaç yeniden okunur.
+- **Rozet — `3/7` yerine çocuğun o anki node'u.** Payda (child akışın node sayısı) çalışan node
+  sayısının **üst sınırı değil**: loop node'ları yeniden girer, branch atlar → oran hem yanlış
+  olur hem 1'i aşabilir. `ChildRunBadge` bunun yerine `▶ 3. Kod incelemesi` gösterir.
+- **Nested canvas:** subflow/spawn node'una **çift tık** → o node'un başlattığı koşuya inilir,
+  üstte breadcrumb. `FlowCanvas.onNodeDoubleClick` bilerek `editable` kapısına takılı **değil**
+  — run inspector zaten salt-okunur ve inişin geçerli olduğu tek yer orası.
+- **Tarayıcı testinde yakalanan hata — rozet yalnız canlıydı.** İlk yazımda `childProgress`
+  *sadece* canlı SSE çerçevelerinden doluyordu. Bitmiş bir composed koşu açıldığında hiç
+  çerçeve gelmediği için **ne rozet çıkıyordu ne de çift tık çalışıyordu** — ve koşu listesine
+  normalde iş bittikten *sonra* bakılır, yani bu kenar durum değil asıl durum. Düzeltme:
+  `childProgressFromTree` ilerlemeyi **kalıcı ağaçtan tohumlar** (çocuğun `status`'ü → phase,
+  kendi trace'inin son node'u → başlık/indeks), `mergeChildProgress` canlı çerçeveleri
+  üstüne bindirir (canlı kazanır, çünkü daha yeni). Trace'i olmayan/bozuk state'li çocuk da
+  kaydedilir: girdinin asıl işi **hangi koşunun o node'a asılı olduğunu** söylemek, iniş
+  bunu kullanıyor.
+- **Bilinçli sınır:** `run_flow` aracıyla ajan içinden başlatılan çocuklar ağaç panelinde
+  listelenir ama **rozetleri yoktur** — onları doğuran bir node yok, asılacakları yer yok.
+  Tek koşuluk ağaç paneli hiç render edilmez (çocuğu olmayan akış chrome ödemesin).
+- Test: `agent/flow_treeevent_test.go` (iki yeni etiket, kökte ikisi de boş) ·
+  `shared/lib/flowNodeBus.test.ts` (etiketler yalnız ağaç kapsamına geçer) ·
+  `features/flows/runTree.test.ts` (19 senaryo: derinlik, backend sırası korunur, kayıp
+  ebeveynli üye düşürülmez, **iki koşu aynı node id'sinde çakışmaz**, parent'sız frame
+  yok sayılır, ağaçtan tohumlama + canlı bindirme, bozuk state ağacı düşürmez, breadcrumb
+  döngüde durur).
+- **Tarayıcı doğrulaması:** gerçek Chrome'da (playwright-core, system Chrome kanalı) üç
+  seviyeli deterministik bir akış koşturulup **7/7** senaryo geçti — `rootOnly` listesi,
+  toggle, ağaç paneli, üç seviye, rozet, çift tıkla iniş, breadcrumb; konsol hatasız.
+  Not: MCP tarayıcı kaynakları bu oturumda araç yüklemediği için otomasyon doğrudan
+  `playwright-core` ile sürüldü. `waitUntil: 'networkidle'` **kullanılamaz** — uygulama
+  `/api/events` SSE bağlantısını kalıcı açık tuttuğu için ağ hiç boşa çıkmaz.
+
 ## Sonraki (daha ileri)
-- Katman 2–4: olaylara `rootRunId`, `GET /api/flow-runs/{id}/tree` + `rootOnly` filtresi,
-  ağaç paneli · subflow/spawn node'unda canlı rollup rozeti · nested canvas (zoom-in).
+- Gantt görünümü (`TraceEntry.StartMs`/`EndMs` hazır) — ağaç + rozet oturduktan sonra.
 - Join ilerlemesini canvas node'unun kendisinde de göstermek (şu an yalnız adım-izi satırında).
 - (İstenirse) step *persistence* katmanını birleştirmek: flow sidecar + chat `Message.Steps`'i tek "step
   store" arayüzü ardına almak — yüksek risk (run inspector + crash-recovery + SSE routing regresyon

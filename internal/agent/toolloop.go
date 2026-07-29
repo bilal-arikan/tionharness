@@ -212,7 +212,7 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 
 	// Provider-driven paths (claude CLI) surface their own trace via OnEvent.
 	if onStep != nil {
-		req.OnEvent = func(ts providers.TraceStep) { onStep(traceStepToTurnStep(ts)) }
+		req.OnEvent = func(ts providers.TraceStep) { onStep(r.traceStepToTurnStep(ts)) }
 	}
 
 	// The claude CLI runs its own tool loop. Route it through the keyless MCP
@@ -262,7 +262,7 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 				// Text deltas are transient (recovered from resp.Text); the
 				// thinking trace, if any, is persisted so the reasoning block
 				// survives reload.
-				return resp, traceToSteps(resp.Trace), nil
+				return resp, r.traceToSteps(resp.Trace), nil
 			}
 		}
 		resp, err := r.recordedComplete(ctx, agent, provider, req)
@@ -273,7 +273,7 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 		r.emitCLIToolDebug(ctx, agent, resp.Trace)
 		// Guardrail visibility parity: flag looping CLI turns post-hoc.
 		r.analyzeCLIGuardrail(ctx, agent, resp.Trace)
-		return resp, traceToSteps(resp.Trace), nil
+		return resp, r.traceToSteps(resp.Trace), nil
 	}
 
 	// Keyless delegation path: let the claude CLI own the tool loop, wiring the
@@ -305,7 +305,7 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 		r.emitCLIToolDebug(ctx, agent, resp.Trace)
 		// Guardrail visibility parity: flag looping CLI turns post-hoc.
 		r.analyzeCLIGuardrail(ctx, agent, resp.Trace)
-		return resp, traceToSteps(resp.Trace), nil
+		return resp, r.traceToSteps(resp.Trace), nil
 	}
 
 	// Native agentic loop (providers that return structured tool_use). OnEvent
@@ -784,6 +784,10 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 			// the row is promoted to a collapsible StepSubagent.
 			callCtx, diffs := tools.WithDiffSink(ctx)
 			callCtx, subs := withSubStepSink(callCtx)
+			// Per-call optimizer sink: a shell tool whose output was shrunk by sqz
+			// (or whose command was rtk-wrapped) reports it here, so the card can
+			// show what the model actually received.
+			callCtx, opts := tools.WithOptimizerSink(callCtx)
 
 			// Stream long-running tool output live as tool_delta chunks (keyed by
 			// the call id) when the tool and the live sink both support it.
@@ -883,6 +887,10 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 				IsError: res.IsError,
 				Batch:   batch,
 			}
+			// Token-optimizer chip: recorded even on an errored shell call, since the
+			// compression happened regardless and the user should see why the output
+			// reads abbreviated.
+			st.Optimizer = opts.Take()
 			// The working checklist is a first-class step, not a generic tool row.
 			// `set` updates carry the merged list in the result, not the input.
 			if call.Name == "todo_write" && !res.IsError {

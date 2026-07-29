@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/bilal-arikan/tionswarm/internal/db"
 	"github.com/bilal-arikan/tionswarm/internal/sessionhub"
 )
 
@@ -26,7 +27,7 @@ import (
 //
 // SSE frames:
 //
-//	hello → { epoch, head }             (once, first)
+//	hello → { epoch, head, now }        (once, first; now = server unix seconds)
 //	reset → { head }                    (when the cursor is unusable → client resyncs)
 //	hub   → a sessionhub.Event          (durable carry `id: <seq>`; ephemeral seq 0)
 //
@@ -89,8 +90,14 @@ func (s *Server) handleSessionStream(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Hello: tell the client the current epoch + live head so it can align its
-	// cursor and detect a restarted server.
-	writeFrame("hello", 0, map[string]any{"epoch": s.hub.Epoch(), "head": head})
+	// cursor and detect a restarted server. `now` is this server's wall clock, so
+	// the client can calibrate its elapsed-time counters against OUR clock before
+	// the first hub frame arrives (turn start stamps are server-side).
+	writeFrame("hello", 0, map[string]any{
+		"epoch": s.hub.Epoch(),
+		"head":  head,
+		"now":   time.Now().Unix(),
+	})
 
 	// Gap-fill from the cursor, or ask the client to resync when it can't be trusted.
 	if clientEpoch != "" && clientEpoch != s.hub.Epoch() {
@@ -184,6 +191,17 @@ func mustJSON(v any) json.RawMessage {
 // typing) carry seq 0 and are not retained for replay. A no-op on a nil hub or
 // a marshal error.
 func (s *Server) publishHub(sessionID, kind string, v any, ephemeral bool) {
+	// A completed reply carries the turn's whole activity trace. Trim its
+	// oversized tool payloads the same way the transcript listing does, so a
+	// turn does not render one way live and a shorter way after a reload — and
+	// so the fan-out to every open window stays small. Only the wire copy is
+	// trimmed; the persisted message keeps the full trace.
+	if kind == sessionhub.KindReply {
+		if m, ok := v.(db.Message); ok {
+			m.Steps = trimStepsJSON(m.Steps)
+			v = m
+		}
+	}
 	b, err := json.Marshal(v)
 	if err != nil {
 		return

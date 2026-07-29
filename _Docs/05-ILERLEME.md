@@ -2,6 +2,116 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-07-28**
 
+## Sohbet süre/zaman bilgileri artık sunucu-otoriter ✅ (2026-07-28)
+
+Balon altbilgisindeki "⏱ süre" ve canlı sayaç frontend'de türetiliyordu; ikisi de
+sunucuya taşındı.
+
+- **Tamamlanmış tur süresi:** `MessageList` `asistan.createdAt − önceki kullanıcı
+  mesajı.createdAt` hesaplıyordu. Oysa backend turu zaten ölçüp `Message.DurationMs`
+  olarak kaydediyordu (`chat_stream.go` `agentStart`; otonom yollarda `turnmeta.apply`)
+  ve frontend bu alanı **hiç kullanmıyordu**. Artık `durationMs` gösteriliyor; saniye
+  yuvarlaması yerine ms hassasiyeti (`formatDurationMs`, <10 sn'de "3.4 sn"). Eski
+  türetim yalnız bu alandan önce yazılmış mesajlar için fallback ve "~" ile
+  **yaklaşık** işaretleniyor (sessizce doğruymuş gibi gösterilmiyor).
+- **Canlı sayaç + tur başlangıcı:** `LiveTimer` istemci `Date.now()` kullanıyor,
+  tur başlangıcı da istemcide damgalanıyordu (`chatStreamHub` `AgentStart`). Sonuç:
+  (a) saati kaymış istemcide süre yanlış, (b) tur ortasında açılan/yenilenen pencere
+  turu **gördüğü ilk adımdan** saymaya başlıyordu. Artık başlangıç `agent_start` hub
+  olayının sunucu `time` damgası (durable/ringed → replay'de gerçek başlangıç gelir).
+- **Yeni `shared/lib/serverClock.ts`:** hub frame'lerinin `time` alanı + `hello`
+  frame'ine eklenen `now` alanından skew tahmini (≥2 sn farkta adopte → ağ jitter'ı
+  sayacı zıplatmaz); `serverNow()` tek "şimdi" kaynağı. Müşteriler: `LiveTimer`,
+  `WorkerWaitBanner`, `WakeWaitBanner`, prompt-cache sıcaklık geri sayımları
+  (`SessionDetailPanel`/`SessionContextModal`). Mutlak saat etiketleri (`MessageTime`)
+  bilerek yerel saat diliminde kalır. Test: `serverClock.test.ts` (6/6).
+
+Detay `07-CHAT-UX.md` + `58-QUEUE-SENKRON.md`.
+
+## Spawn/zamanlama süre ayarları gerçekten kaydediliyor + tavan 2 saat ✅ (2026-07-28)
+
+**Bulgu (SES17):** bir worker turu tam `1.199.905 ms` = 20 dk'da kesildi. Sebep
+`SpawnTimeout` hard-cap'i; idle watchdog (5 dk) tetiklenmemişti çünkü worker sürekli
+araç çağırıyordu (68 tool call). Kök neden ayarın **hiç uygulanamaması**:
+
+- **Plumbing açığı:** `spawnTimeoutMin` / `spawnIdleTimeoutMin` / `scheduleTimeoutMin`
+  `Settings` ve `DTO`'da vardı, Ayarlar UI'ında alanları da vardı ve PUT gövdesinde
+  gönderiliyordu — ama `settings.Patch` struct'ında **yoktu** → sunucu değeri sessizce
+  yutuyordu. UI alanı boot'tan beri no-op'tu. Düzeltildi: `Patch` alanları +
+  `applyPatch` `applyInt` çağrıları + `normalize` clamp'leri (süreler 1–1440 dk;
+  `spawnIdleTimeoutMin` hard-cap'i **aşamaz**, yoksa watchdog hiç ateşlemez).
+- **Yeni değer:** `spawnTimeoutMin` = **120 dk** (global `~/.tionswarm/settings.json`
+  → tüm workspace'ler; `internal/settings` app-seviyesi, workspace-scoped değil).
+  Kod default'u (`DefaultSpawnTimeoutMinutes = 20`) değişmedi — yalnız fallback.
+## Kesilen worker turu artık "completed" diye raporlanmıyor ✅ (2026-07-28)
+
+Yukarıdaki SES17'nin ikinci yarısı: tur 20 dk'da kesildiği hâlde koordinatöre
+`<status>completed</status>` + yarım cümlelik `<result>` gitti, koordinatör işi
+bitmiş sandı. **Sebep:** kesilme hiçbir yerde hata olmuyor — claude-cli
+`salvage()` kısmi metni `err=nil` ile döndürüyor, native döngü de iterasyon
+limiti/guardrail halt/bağlam tükenmesinde `StepRecovery` ekleyip `nil` dönüyor.
+
+- **`withActivityTimeout` → `context.WithCancelCause`** (`activity_timeout.go`):
+  yeni sentinel'ler `ErrTurnHardTimeout` / `ErrTurnIdleTimeout`. Öncesinde
+  watchdog iptali ile kullanıcının "Durdur"u **ayırt edilemiyordu** (ikisi de
+  `context.Canceled`), yani süre dolması "killed" olarak da raporlanabilirdi.
+- **Yeni `internal/agent/turnoutcome.go`** — `classifyTurnOutcome(ctx, steps,
+  hard, idle)`: ctx cause + trace'teki **terminal** `termReason` işaretlerini
+  okur (mid-turn `contReason`'larla çakışmaz) → `timeout` / `incomplete` /
+  `completed`. `applyTurnOutcome` kurtarılan metnin **önüne** ne olduğunu
+  anlatan Türkçe not koyar (metin atılmaz — işin nereye kadar geldiğinin tek
+  kaydı).
+- **`runWorker`** artık bu verdikti kullanıyor; deadline kontrolü
+  `context.Canceled` kontrolünden **önce** gelir. Kesik turda ayrıca
+  `debug.jsonl`'e `error` olayı düşer ve log'a `worker: turn truncated` yazılır.
+- **Kapsanan durumlar:** süre tavanı, boşta watchdog'u, **araç iterasyon limiti**
+  (`maxToolIters`, vars. 500), guardrail halt, bağlam penceresi ve çıktı-token
+  tükenmesi.
+- **`runSpawn` de aynı verdikti kullanıyor** (worker'sız detached spawn'lar):
+  kesik turda (a) kurtarılan metnin önüne not, (b) trace'e `turn_timeout`
+  `StepRecovery` (`appendOutcomeStep` — watchdog döngünün DIŞINDA iptal ettiği
+  için başka hiçbir şey iz bırakmıyordu; loop'un kendi `term*` işaretleri
+  tekrarlanmaz), (c) `spawn` olayı **başarısız** seviyesinde yayınlanır,
+  (d) `ClearParentTagsOnSuccess` **çalıştırılmaz** — yarıda kalan bir onarım
+  ajanı ebeveynin `error` etiketini temizleyemez, sınırlı onarım döngüsü
+  tekrar denesin. Hata dalında ham `context canceled` yerine hangi tavanın
+  dolduğunu söyleyen not kaydedilir.
+- **Testler:** `turnoutcome_test.go` (8 vaka: temiz tur, hard/idle timeout,
+  kullanıcı-stop'un timeout sayılmaması, 4 terminal işaret, mid-turn retry'ın
+  turu bozmaması, iz adımı tekrarlanmaması, not birleştirme). Full suite +
+  `go vet` yeşil.
+
+Detay `_Docs\47` ▸ "task-notification formatı".
+
+## Transkript açılış maliyeti: iz kırpma + off-screen render atlama ✅ (2026-07-28)
+
+**Şikâyet:** bir worker oturumunu her açtığında adımlar/tool kullanımları "baştan
+yükleniyor" gibi geliyordu. **Ölçüm sonucu varsayım yanlıştı:** sunucu zaten
+cache'liyor — `db.loadSessions` boot'ta tüm `session.jsonl`'leri belleğe alıyor,
+`ListMessages` disk'e hiç gitmiyor. Gerçek maliyet (a) wire payload'ı, (b) React
+render'ıydı. İkisi de hedeflendi:
+
+- **Sunucu-tarafı iz kırpma** — yeni `internal/api/steps_trim.go`: okuma yolunda
+  `output`/`text`/`patch` + `input` yaprakları 2 KB'a kesilir, `*Truncated`/`*Len`
+  bayrağıyla işaretlenir, `subSteps` özyinelemeli. `input` anahtarları korunur
+  (diff sentezi + tool etiketi onlara bağlı). Disk ve model bağlamı **tam kalır**.
+  `handleListMessages` + `publishHub(KindReply)`'a bağlandı. Gerçek 11-oturumlu
+  workspace'te iz payload'ı **~%45** küçüldü.
+- **Talep üzerine tam iz** — `GET /api/sessions/{id}/messages/{msgId}/steps` +
+  turun 🔧 satırındaki **"⤓ tam iz"** çipi.
+- **Off-screen render atlama** — `MessageList` satırlarına `content-visibility:auto`.
+  Virtualizer bilerek kullanılmadı: scroll/deep-link mantığı `data-msg-id` ile
+  gerçek DOM'u sorguluyor, unmount hepsini bozardı. 30 satırdan kısa transkriptte
+  devre dışı; son 3 satır eager; atlamalar rAF'ta ikinci kez hizalanır.
+- **Memoizasyon** — `AssistantTurn`/`UserTurn`/`PeerTurn`/`TurnSteps`/`ActivityCard`
+  `React.memo`, `parseSteps` `useMemo`'ya alındı (her delta'da yüzlerce KB JSON.parse
+  ediyordu), handler kimlikleri `shared/lib/useStableCallback.ts` ile sabitlendi.
+
+Detay `_Docs\07-CHAT-UX.md` ▸ "Transkript yükleme maliyeti".
+
+Yan bulgu: `SkillImportDialog.tsx`'te `KIND_LABEL` haritası `hook` ingest türünü
+kaçırdığı için `npm run build` kırıktı (bu değişiklikle ilgisiz) — eklendi.
+
 ## Oturum-hedefi (goal) mekanizması tamamen kaldırıldı ✅ (2026-07-28)
 
 Kaldırıldı çünkü **yarım bir özellikti**: bir kuzey-yıldızı metnini her turun
@@ -83,6 +193,25 @@ namespace'i yüzünden Windows `127.0.0.1`'ine ulaşamıyordu (`Errno 111`).
   `schedule-run-now`, `schedule-edit`, `schedule-delete` — sonuncusu artık popup
   içinde, `schedule-create-*`); kartlara `automation-row`/`data-automation-id` eklendi.
 - Detay: `46-ETIKET-OTOMASYON.md` ▸ "UI — 3 SÜTUNLU PANO".
+## Frontend format otomasyonu (Prettier + pre-commit hook) ✅ (2026-07-29)
+
+Frontend'in tek bir format otoritesi yoktu; elle tutarlı yazılıyordu ve config'siz bir
+`npx prettier` çağrısı dosyaları çift tırnak/noktalı virgüle çevirip sahte diff üretebiliyordu.
+
+- `frontend/.prettierrc.json` — `singleQuote` · `semi:false` · `printWidth:100` ·
+  `trailingComma:all` · **`endOfLine:auto`** (CRLF çalışma kopyası + LF depo; `lf` deseydik
+  106 dosya yalnızca satır-sonu yüzünden "farklı" görünürdü). `prettier` devDependency,
+  `.prettierignore` (dist/node_modules/public/lock).
+- Script: `npm run format` / `npm run format:check`.
+- `.githooks/pre-commit` — **yalnız stage'lenmiş** dosyaları formatlar (frontend→prettier,
+  `*.go`→gofmt) ve yeniden stage'ler; prettier **mutlak yolla** çağrılır (npm `.bin` hook'un
+  düz `sh`'ında PATH'te değil). Etkinleştirme: `git config core.hooksPath .githooks` (yapıldı).
+- `.vscode/settings.json` — kaydet-formatla + prettier/gopls eşlemesi.
+- **Toplu format ATILMADI:** ağaçta 111 commit'lenmemiş dosya vardı, repo-geneli yeniden
+  format gerçek diff'i gömerdi. `format:check` şu an ~248 dosyada uyarıyor; dokunulan dosya
+  hook ile kendiliğinden dönüşür. Toplu geçiş temiz ağaçta kendi commit'inde yapılmalı.
+- Kural CLAUDE.md'ye yazıldı ("config'siz prettier çalıştırma").
+
 ## Composer'da araç müfettişi — "ajan neyi kullanabiliyor?" ✅ (2026-07-28)
 
 Sohbetten çıkmadan görülemiyordu: ajanın o an hangi araçlara sahip olduğu, hangilerinin
@@ -177,6 +306,16 @@ yanıp kalıyordu; yalnız sayfa yenilemek geçiriyordu. Backend suçsuzdu —
   göre gruplanır. Panel akış sürerken de açılabilir (read-only), ajan değişince remount.
 - Not: `/tools` slash komutu (LLM'e özet yazdıran, token harcayan yol) duruyor; bu buton
   aynı bilgiyi **sıfır token** ile verir.
+- Ek tur: panel **boşluğa tıklayınca** kapanır (mousedown; 🔧 toggle'ı `data-tool-access-toggle`
+  ile hariç tutulur, aksi halde kapat→anında-aç yanıp sönmesi olurdu) ve MCP sekmesindeki her
+  sunucu **"bağlamda mı"** verdikti taşır (`in-context` / `hidden-only` / `disabled` /
+  `agent-mcp-off` / `no-tools`) + aktif/katalog/gizli sayaçları. Özel (custom) MCP'lerin
+  bağlama girip girmediği artık tek bakışta görünüyor.
+- Terminoloji düzeltmesi: `hidden-only` rozeti **"bağlam dışı" değil "katalog dışı"**.
+  Gizli tier promptta ~40 token'lık bir işaretçi bırakır ("N araç daha var, `tool_search`
+  ile bul"), yani araçlar bilinmez değil — yalnız isim listesi çıkarılmıştır (49 self-
+  management aracı için ~800–1000 token/tur tasarruf). Gizli sayaç rozeti tooltip'inde
+  kabaca tasarruf gösteriliyor. Gerekçe: `_Docs\19` son bölüm.
 
 Detay: `_Docs\19-LAZY-TOOL-LOADING.md` + `_Docs\07-CHAT-UX.md`.
 

@@ -414,7 +414,8 @@ func (r *Runtime) runWorker(agent db.Agent, workerSessionID, prompt, coordSessio
 	// Hard wall-clock ceiling (settings-driven, same as spawns) PLUS an idle
 	// watchdog: a worker/coordinator turn that streams no step for SpawnIdleTimeout
 	// is reclaimed fast, while a long-but-productive one runs up to SpawnTimeout.
-	ctx, cancel := withActivityTimeout(context.Background(), r.tun.SpawnTimeout(), r.tun.SpawnIdleTimeout())
+	hardCap, idleCap := r.tun.SpawnTimeout(), r.tun.SpawnIdleTimeout()
+	ctx, cancel := withActivityTimeout(context.Background(), hardCap, idleCap)
 	defer cancel()
 	ctl := &workerCtl{cancel: cancel, startedAt: time.Now()}
 	r.workerCancels.Store(workerSessionID, ctl)
@@ -443,24 +444,52 @@ func (r *Runtime) runWorker(agent db.Agent, workerSessionID, prompt, coordSessio
 	output, steps, err := r.runSessionTurn(turnCtx, agent, workerSessionID, prompt, true)
 	r.untrackSession(workerSessionID)
 
-	status := "completed"
+	// Why the turn ended, independent of err: a watchdog cancellation (hard cap or
+	// idle) and the loop's own terminal markers (iteration cap, guardrail halt,
+	// context/output exhaustion) all yield truncated work that the provider may
+	// still hand back as a nil-error "answer". Without this, such a turn was
+	// reported to the coordinator as completed and the coordinator moved on.
+	outcome := classifyTurnOutcome(ctx, steps, hardCap, idleCap)
+
+	status := outcome.Status
 	replyText := output
 	if err != nil {
-		if ctl.stopped.Load() {
-			status = "killed"
+		switch {
+		case ctl.stopped.Load():
+			status = turnStatusKilled
 			replyText = "⏹️ Worker turu koordinatör tarafından durduruldu."
-		} else if errors.Is(err, context.Canceled) {
+		// A deadline check must precede the plain-cancel check: withActivityTimeout
+		// cancels the context, so an expired turn ALSO satisfies context.Canceled and
+		// would otherwise be misreported as a clean human stop.
+		case outcome.Status == turnStatusTimeout:
+			status = turnStatusTimeout
+			replyText = outcome.Note
+			steps = appendOutcomeStep(steps, outcome)
+		case errors.Is(err, context.Canceled):
 			// A viewer pressed "Durdur"/"Kes": the autonomous run's cancel aborted the
 			// turn (see autonomousInteraction). Report it as a clean stop, not a failure.
-			status = "killed"
+			status = turnStatusKilled
 			replyText = "⏹️ Worker turu durduruldu."
-		} else {
-			status = "failed"
+		default:
+			status = turnStatusFailed
 			replyText = "⚠️ Worker turu çalıştırılamadı:\n\n" + err.Error()
 		}
 		r.logger.Warn("worker: turn ended", "session", workerSessionID, "coordinator", coordSessionID, "status", status, "error", err)
-	} else if strings.TrimSpace(replyText) == "" {
-		replyText = "ℹ️ Worker bu tur için boş yanıt döndürdü."
+	} else {
+		if strings.TrimSpace(replyText) == "" && !outcome.Truncated() {
+			replyText = "ℹ️ Worker bu tur için boş yanıt döndürdü."
+		}
+		// Salvaged text from a cut-short turn: keep it (it is the only record of how
+		// far the work got) but lead with the note so it is never read as a result.
+		replyText = applyTurnOutcome(replyText, outcome)
+		steps = appendOutcomeStep(steps, outcome)
+		if outcome.Truncated() {
+			r.logger.Warn("worker: turn truncated", "session", workerSessionID, "coordinator", coordSessionID,
+				"status", status, "hardCap", hardCap, "idleCap", idleCap)
+			// turnCtx, not ctx: only the turn context carries the session id the
+			// debug journal keys on (ctx would silently drop the event).
+			r.emitDebug(turnCtx, db.DebugEvent{Type: db.DebugError, AgentID: agent.ID, Detail: "worker turn " + status, Err: true})
+		}
 	}
 
 	// replyText was pre-composed above (success output / failure / kill / empty note).
@@ -902,7 +931,9 @@ func (r *Runtime) emitWorkerEvent(agent db.Agent, workerSessionID, coordSessionI
 
 // formatTaskNotification renders a worker outcome as the <task-notification> XML
 // the coordinator reads (mirrors Claude Code's coordinator format). status is
-// completed | failed | killed; result is the worker's final text.
+// completed | timeout | incomplete | failed | killed; result is the worker's final
+// text (for the truncated statuses, prefixed with a note saying so — see
+// turnoutcome.go). Only "completed" means the worker finished its assignment.
 func formatTaskNotification(workerSessionID, agentName, status, result string, toolUses int, durationMs int64) string {
 	var b strings.Builder
 	b.WriteString("<task-notification>\n")

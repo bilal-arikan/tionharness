@@ -186,6 +186,12 @@ Kalıcı trace yine altta node-node liste olarak gösterilir (mevcut davranış 
   yeni→eski listelenir. `api.listAllFlowRuns()` (`GET /api/flow-runs`, flowId'siz — **backend
   değişmedi**) ile yüklenir ve sekme açıkken **3sn'de bir poll** edilir (devam eden koşular canlı
   ilerler; sekmeden çıkınca interval temizlenir).
+  **(2026-07-28)** Liste varsayılan olarak yalnız **kök** koşuları gösterir
+  (`listAllFlowRuns(true)` → `?rootOnly=true`); composed bir akışın subflow/spawn çocukları
+  "alt koşuları göster" onay kutusuyla açılır. Seçilen koşu artık `RunTreeView` ile sarılıyor:
+  solda **koşu ağacı** paneli (tek koşuluk ağaçta gizli), subflow/spawn node'unda çocuğun o anki
+  adımını gösteren **rozet**, node'a **çift tıkla** alt koşuya iniş + breadcrumb.
+  Ayrıntı: `_Docs/62-BIRLESIK-RUN-AWAIT.md`.
 - Liste öğesi: durum rozeti (▶ devam ediyor / ✓ başarılı / ✕ hata) + akış adı (flowId→`flows`
   map; silinmişse "（silinmiş akış）") + zaman.
 - Seçilince **`flow/RunView.tsx`** (salt-okunur): başlık (ad + durum + girdi + `run.error` ⚠️),

@@ -241,6 +241,19 @@ export interface ExternalToolStatus {
   path?: string
 }
 
+// Token-optimizer maintenance payload: each installed tool's OWN `gain` report
+// (verbatim — TionSwarm does not recompute the figures) plus rtk's config
+// location. `rtkConfigExists` is false until `rtk config --create` is run, which
+// is normal: rtk runs on built-in defaults until then.
+export interface TokenToolReport {
+  rtkFound: boolean
+  rtkGain?: string
+  sqzFound: boolean
+  sqzGain?: string
+  rtkConfigPath?: string
+  rtkConfigExists: boolean
+}
+
 // A registered runtime prompt from the central prompt registry
 // (internal/prompts), shown read-only in the Komutlar settings screen.
 export interface PromptInfo {

@@ -207,6 +207,9 @@ gap-fill** dayanıklı olmalı: `Last-Event-ID`, ring taşınca `reset`, ping/ke
 - `internal/api/session_stream.go` — `GET /sessions/{id}/stream?since=&epoch=`
   (hello/reset/hub frame'leri, `id:<seq>` ile `Last-Event-ID` uyumlu) +
   `bridgeBusToHub` (autonomous turları bus→hub aynala; interaktif zaten doğrudan).
+  `hello` = `{epoch, head, now}`; `now` sunucunun unix saniyesidir — istemci ilk hub
+  frame'ini beklemeden geçen-süre sayaçlarını sunucu saatine kalibre eder
+  (`shared/lib/serverClock.ts`; her hub frame'inin `time` alanı da beslenir). Detay `07`.
 - `internal/api/interactions.go` — `pendingInteraction` + CAS (`resolveInteraction`
   / `cancelInteraction`), `POST /sessions/{id}/interactions/{iid}/answer`
   (kazanan 200, kaybeden 409), `waitInteraction` (native) + `waitInteractionCLI`.

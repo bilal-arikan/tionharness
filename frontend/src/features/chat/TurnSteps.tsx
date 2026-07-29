@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { memo, type ReactNode } from 'react'
 import { Zap } from 'lucide-react'
 import type { TurnStep } from '@/types'
 import { ThinkingBlock } from './ThinkingBlock'
@@ -89,7 +89,12 @@ function renderStep(
 // `batch` id (one provider response that carried multiple PARALLEL tool calls)
 // are clustered under a small "⚡ N paralel araç çağrısı" header so batched
 // execution is visible at a glance.
-export function TurnSteps({ steps, onOpenFile, onOpenArtifact }: Props) {
+// memo: a long transcript re-renders on every streaming delta, and re-running
+// this over every finished turn's trace (each one a tree of markdown/diff cards)
+// is what made scrolling a worker session stutter. The finished turns' `steps`
+// arrays are referentially stable (AssistantTurn memoizes the parse), so only
+// the live turn actually re-renders.
+export const TurnSteps = memo(function TurnSteps({ steps, onOpenFile, onOpenArtifact }: Props) {
   if (!steps.length) return null
   const out: ReactNode[] = []
   for (let i = 0; i < steps.length; ) {
@@ -127,6 +132,19 @@ export function TurnSteps({ steps, onOpenFile, onOpenArtifact }: Props) {
     i++
   }
   return <div className="mb-2 flex flex-col">{out}</div>
+})
+
+// stepTruncated reports whether the server cut any of this step's payloads (or
+// a nested subagent step's) on the transcript read path — i.e. showing it in
+// full needs a refetch via sessionApi.getMessageSteps.
+export function stepTruncated(s: TurnStep): boolean {
+  return (
+    !!s.outputTruncated ||
+    !!s.textTruncated ||
+    !!s.patchTruncated ||
+    !!s.inputTruncated ||
+    !!s.subSteps?.some(stepTruncated)
+  )
 }
 
 // parseSteps safely decodes the JSON `steps` string persisted on a message.

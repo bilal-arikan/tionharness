@@ -9,6 +9,7 @@ import { normalizeAvatar } from '@/shared/lib/avatar'
 import { subscribeFlowNode } from '@/shared/lib/flowNodeBus'
 import { FlowCanvas } from './FlowCanvas'
 import { RunNodeInspector } from './RunNodeInspector'
+import type { ChildProgress } from './runTree'
 
 interface Props {
   run: FlowRun
@@ -28,6 +29,14 @@ interface Props {
   // as its first "Girdi" entry (chat flow view: the input reads inline with the
   // steps instead of a separate header row). Koşular keeps the top row.
   inputInTrace?: boolean
+  // Live progress of the child runs THIS run launched, keyed by the subflow/spawn
+  // node that launched each. Rendered as a rollup line on that node, so a composed
+  // run is not a dead box while all the work happens in a child. Absent = the
+  // host does not track the run tree (chat-inline views).
+  childProgress?: Record<string, ChildProgress>
+  // Descend into the child run a subflow/spawn node launched (double-click).
+  // Absent = no nesting; the double-click is then inert.
+  onDescend?: (nodeId: string) => void
 }
 
 export const STATUS_LABEL: Record<string, string> = {
@@ -79,7 +88,18 @@ function nodeStatuses(run: FlowRun, st: FlowState | null): Record<string, NodeSt
 // RunView is the read-only inspector for a single flow run: a non-interactive
 // canvas annotated with per-node run status (which stage we're at), plus the
 // node-by-node trace with outputs and any error.
-export function RunView({ run, flow, agents, onRerun, rerunning, hideSummary, onResumed, inputInTrace }: Props) {
+export function RunView({
+  run,
+  flow,
+  agents,
+  onRerun,
+  rerunning,
+  hideSummary,
+  onResumed,
+  inputInTrace,
+  childProgress,
+  onDescend,
+}: Props) {
   const st = useMemo(() => safeParseState(run.state), [run.state])
   // Await-input composer state (only used while the run is waiting).
   const [awaitInput, setAwaitInput] = useState('')
@@ -228,12 +248,17 @@ export function RunView({ run, flow, agents, onRerun, rerunning, hideSummary, on
           ...n,
           position: p?.position ?? n.position,
           selected: p?.selected,
-          data: { ...n.data, status: mergedStatuses[n.id], output: outputs[n.id] },
+          data: {
+            ...n.data,
+            status: mergedStatuses[n.id],
+            output: outputs[n.id],
+            child: childProgress?.[n.id],
+          },
         }
       })
     })
     setEdges(re)
-  }, [graph, mergedStatuses, liveTrace, setNodes, setEdges])
+  }, [graph, mergedStatuses, liveTrace, childProgress, setNodes, setEdges])
 
   // Persist a tidied layout: dragging a node in the run inspector writes its new
   // x/y back to the flow definition (the run renders the live flow graph, not a
@@ -352,6 +377,7 @@ export function RunView({ run, flow, agents, onRerun, rerunning, hideSummary, on
             }}
             runMode
             onNodeDragStop={(id, pos) => void persistNodePosition(id, pos)}
+            onNodeDoubleClick={onDescend}
           />
         </div>
       )}

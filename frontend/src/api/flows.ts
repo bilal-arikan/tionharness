@@ -182,9 +182,17 @@ export const flowApi = {
   listFlowRuns: (flowId: string) =>
     req<FlowRun[]>(`/api/flow-runs?flowId=${encodeURIComponent(flowId)}`),
   // All flow runs across flows (newest first) — backend returns everything when
-  // no flowId is given. Used by the FlowsPanel "Koşular" tab.
-  listAllFlowRuns: () => req<FlowRun[]>('/api/flow-runs'),
+  // no flowId is given. Used by the FlowsPanel "Koşular" tab. Pass rootOnly to
+  // leave out the subflow/spawn children of composed flows, so one run of a
+  // composed flow is one row; the children stay reachable via flowRunTree.
+  listAllFlowRuns: (rootOnly = false) =>
+    req<FlowRun[]>(`/api/flow-runs${rootOnly ? '?rootOnly=true' : ''}`),
   getFlowRun: (id: string) => req<FlowRun>(`/api/flow-runs/${id}`),
+  // Every run in one composed flow's tree, breadth-first (parent before its
+  // children). Accepts ANY member id, not just the root — the backend normalises
+  // to the root. Also the resync path when the live event stream drops.
+  flowRunTree: (id: string) =>
+    req<FlowRun[]>(`/api/flow-runs/${encodeURIComponent(id)}/tree`),
   // One agent node's captured tool/thinking steps for a run, read from the
   // per-node sidecar. Returns [] for nodes with no steps (or pre-capture runs).
   flowRunNodeSteps: (runId: string, nodeId: string) =>

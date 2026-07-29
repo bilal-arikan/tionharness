@@ -53,6 +53,9 @@ export interface WorkspaceSettings {
   // In-process shell-output compression (sqz) override: '' = auto (follow sqz-hook
   // detection), 'on' = force on (needs the sqz binary), 'off' = disable.
   shellOutputCompression: '' | 'on' | 'off'
+  // In-process shell-COMMAND rewrite (rtk) override, same tri-state. Separate
+  // knob: rtk reshapes the command before it runs, sqz compresses the output after.
+  shellCommandRewrite: '' | 'on' | 'off'
   boardColumns: BoardColumnDef[]
   // Keys of post-create advisory cards the user dismissed for this workspace.
   ignoredRecommendations: string[]
@@ -82,6 +85,7 @@ export type WorkspaceSettingsPatch = Partial<
     | 'promptEpochEnabled'
     | 'autoCaptureArtifacts'
     | 'shellOutputCompression'
+    | 'shellCommandRewrite'
     | 'boardColumns'
     | 'ignoredRecommendations'
     | 'desktopNotifications'

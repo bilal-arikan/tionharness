@@ -51,6 +51,15 @@ export const sessionApi = {
     }),
   listMessages: (sessionId: string) =>
     req<Message[]>(`/api/sessions/${sessionId}/messages`),
+  // One turn's activity trace, UNTRIMMED. listMessages ships tool payloads cut
+  // to a server-side cap (marked with the step's `*Truncated` flags) so opening
+  // a long session stays cheap; this refetches the full trace for a single turn
+  // when the user asks to see it. Returns the raw JSON string persisted on the
+  // message — feed it to parseSteps().
+  getMessageSteps: (sessionId: string, messageId: string) =>
+    req<{ steps: string }>(
+      `/api/sessions/${encodeURIComponent(sessionId)}/messages/${encodeURIComponent(messageId)}/steps`,
+    ).then((r) => r.steps),
   // Full-text search the workspace's message history. role: 'user' | 'assistant'
   // | 'all'; exclude skips a session id (e.g. the current one). Each hit carries
   // sessionId + messageId for deep-linking to the matched turn.

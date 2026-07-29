@@ -184,11 +184,12 @@ export function AutomationModal({
           Maks. iter.
           <input
             type="number"
-            min={0}
+            min={1}
+            max={MAX_ITERATIONS_HARD_CAP}
             value={maxIterations}
             onChange={(e) => setMaxIterations(e.target.value)}
             className="w-20 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5 text-sm outline-none"
-            title="0 = sınırsız (dikkat: sonsuz döngü)"
+            title={`1 ile ${MAX_ITERATIONS_HARD_CAP} arası olmalı. 0 (sınırsız) artık kabul edilmiyor — sonsuz döngü riski.`}
           />
         </label>
         <label className="flex items-center gap-1 text-xs text-[var(--color-text-dim)]">

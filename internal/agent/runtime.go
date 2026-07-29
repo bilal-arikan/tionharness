@@ -189,6 +189,16 @@ type Runtime struct {
 	// WSSettings.ShellOutputCompression; consulted by sqzShellFilter (shell_optimizer.go).
 	shellCompressMode atomic.Int32
 
+	// shellRewriteMode is the per-workspace shell-COMMAND rewrite override (rtk),
+	// same tri-state encoding as shellCompressMode. Set from
+	// WSSettings.ShellCommandRewrite; consulted by rtkCommandFilter (rtk_optimizer.go).
+	shellRewriteMode atomic.Int32
+
+	// optLog remembers which recent shell OUTPUTS a token optimizer produced, so
+	// the claude-cli path (where the CLI owns the tool loop and steps are rebuilt
+	// from its trace) can still tag those steps. See optimizer_log.go.
+	optLog optimizerLog
+
 	// activeSessions tracks sessions currently executing an autonomous invoke
 	// (schedule / spawn). Keyed by session id; value is struct{}.
 	// Used by the executions feed to show a live "running" indicator for
@@ -303,6 +313,24 @@ func (r *Runtime) SetShellCompression(mode string) {
 		v = shellCompressAuto
 	}
 	r.shellCompressMode.Store(v)
+}
+
+// SetShellCommandRewrite sets the per-workspace shell-COMMAND rewrite override
+// (rtk) from the WSSettings string ("on"/"off"; anything else is auto). Shares the
+// tri-state shape with SetShellCompression but is a SEPARATE knob: rtk rewrites the
+// command before it runs, sqz compresses the output after, and a workspace may
+// reasonably want one without the other. Consulted by rtkCommandFilter.
+func (r *Runtime) SetShellCommandRewrite(mode string) {
+	var v int32
+	switch strings.ToLower(strings.TrimSpace(mode)) {
+	case "on":
+		v = shellCompressOn
+	case "off":
+		v = shellCompressOff
+	default:
+		v = shellCompressAuto
+	}
+	r.shellRewriteMode.Store(v)
 }
 
 // SetPromptEpoch toggles the prompt-epoch (frozen prompt-prefix snapshot) system
@@ -529,17 +557,31 @@ func (r *Runtime) NewShellRunner() func(ctx context.Context, toolName string, ar
 		// Route bridged shell output through the token-optimizer (sqz) in-process when
 		// wired — the CLI hook path cannot reach this bridged tool name (see sqzShellFilter).
 		filter := r.sqzShellFilter(ctx)
-		if toolName == "PowerShell" {
-			return tools.NewPowerShellTool(sb).WithOutputFilter(filter).Call(ctx, args)
+		// Command-layer optimizer (rtk), same reasoning as the output filter: the
+		// CLI's own hook cannot see this bridged tool name.
+		cmdFilter := r.rtkCommandFilter(ctx)
+		// The CLI rebuilds its steps from its own stream-json trace, far from this
+		// call stack, so the per-call sink is drained here and parked in the
+		// output-keyed log the trace conversion reads (see optimizer_log.go).
+		callCtx, opt := tools.WithOptimizerSink(ctx)
+
+		out, err := func() (string, error) {
+			if toolName == "PowerShell" {
+				return tools.NewPowerShellTool(sb).WithOutputFilter(filter).WithCommandFilter(cmdFilter).Call(callCtx, args)
+			}
+			// Bash-preferred: use the POSIX shell when one backs it. On Windows without a
+			// bash.exe, ShellTool.Available() is false, so fall back to PowerShell rather
+			// than dispatch to a shell that cannot run — no silent failure.
+			bash := tools.NewShellTool(sb)
+			if !bash.Available() {
+				return tools.NewPowerShellTool(sb).WithOutputFilter(filter).WithCommandFilter(cmdFilter).Call(callCtx, args)
+			}
+			return bash.WithOutputFilter(filter).WithCommandFilter(cmdFilter).Call(callCtx, args)
+		}()
+		if o := opt.Take(); o != nil && err == nil {
+			r.optLog.record(out, *o)
 		}
-		// Bash-preferred: use the POSIX shell when one backs it. On Windows without a
-		// bash.exe, ShellTool.Available() is false, so fall back to PowerShell rather
-		// than dispatch to a shell that cannot run — no silent failure.
-		bash := tools.NewShellTool(sb)
-		if !bash.Available() {
-			return tools.NewPowerShellTool(sb).WithOutputFilter(filter).Call(ctx, args)
-		}
-		return bash.WithOutputFilter(filter).Call(ctx, args)
+		return out, err
 	}
 }
 

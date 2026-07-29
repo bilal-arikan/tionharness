@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react'
+import { memo, useEffect, useMemo, useState } from 'react'
 import { RotateCcw, ThumbsUp, ThumbsDown, Volume2, Square } from 'lucide-react'
 import type { Agent, Message } from '@/types'
+import { api } from '@/api'
 import { speak, stopSpeaking, ttsAvailable } from '@/shared/lib/tts'
 import { Markdown } from '@/shared/components/markdown/Markdown'
 import { TtsVolumeSlider } from './TtsVolumeSlider'
-import { TurnSteps, parseSteps } from './TurnSteps'
+import { TurnSteps, parseSteps, stepTruncated } from './TurnSteps'
 import { ThinkingBlock } from './ThinkingBlock'
 import { MessageTime, TurnDuration, LiveTimer } from './MessageMeta'
 import { AgentHeader } from './AgentHeader'
@@ -23,9 +24,13 @@ interface Props {
   // isLastLive: this is the in-flight assistant bubble (last message while
   // streaming) — drives the live elapsed timer and suppresses retry/delete.
   isLastLive: boolean
-  // workedSec: completed-turn working time (end − triggering user message start);
-  // 0 when not meaningful (no preceding user turn).
-  workedSec: number
+  // workedMs: completed-turn wall clock in milliseconds, as MEASURED BY THE
+  // SERVER (Message.durationMs). 0 when the backend did not time this turn.
+  workedMs: number
+  // workedDerived: the value above is a client-side reconstruction from message
+  // timestamps, not a server measurement — only true for messages persisted
+  // before durationMs existed. Renders the duration as approximate.
+  workedDerived: boolean
   toolsHidden: boolean
   onToggleTools: (id: string) => void
   onOpenFile?: (path: string) => void
@@ -67,12 +72,13 @@ function stopReasonLabel(reason?: string): string {
 // AssistantTurn renders one assistant message: the responding agent's header, an
 // optional reasoning block, a collapsible tool-activity trace, the markdown answer
 // (or a working indicator while empty), and a meta row with timing + retry/delete.
-export function AssistantTurn({
+export const AssistantTurn = memo(function AssistantTurn({
   message: m,
   agent,
   sessionId,
   isLastLive,
-  workedSec,
+  workedMs,
+  workedDerived,
   toolsHidden,
   onToggleTools,
   onOpenFile,
@@ -83,7 +89,30 @@ export function AssistantTurn({
   onOpenAgent,
   recipientLabel,
 }: Props) {
-  const steps = parseSteps(m.steps)
+  // The full trace fetched on demand, replacing the server-trimmed one. Keyed
+  // implicitly by this bubble's identity; a session switch remounts the row.
+  const [fullSteps, setFullSteps] = useState<string | null>(null)
+  const [loadingFull, setLoadingFull] = useState(false)
+  const [fullError, setFullError] = useState(false)
+  // useMemo, not a bare call: `steps` is a JSON.parse of a string that can run
+  // to hundreds of KB on a worker turn, and this component re-renders on every
+  // streaming delta of the LIVE turn. Memoizing also gives TurnSteps a stable
+  // array reference so its own memo actually holds.
+  const steps = useMemo(() => parseSteps(fullSteps ?? m.steps), [fullSteps, m.steps])
+  // Whether the server cut any payload in this turn's trace.
+  const truncated = useMemo(() => !fullSteps && steps.some(stepTruncated), [fullSteps, steps])
+  const loadFullSteps = async () => {
+    if (!sessionId || loadingFull) return
+    setLoadingFull(true)
+    setFullError(false)
+    try {
+      setFullSteps(await api.getMessageSteps(sessionId, m.id))
+    } catch {
+      setFullError(true)
+    } finally {
+      setLoadingFull(false)
+    }
+  }
   const stopNote = stopReasonLabel(m.stopReason)
   const rating = m.feedback?.rating ?? 0
   const toolCount = steps.filter(
@@ -128,15 +157,33 @@ export function AssistantTurn({
           {m.reasoningContent && <ThinkingBlock text={m.reasoningContent} />}
           {/* Per-message toggle to hide/show the tool-activity trace. */}
           {steps.length > 0 && (
-            <button
-              onClick={() => onToggleTools(m.id)}
-              title={toolsHidden ? 'Araç adımlarını göster' : 'Araç adımlarını gizle'}
-              className="mb-1.5 flex items-center gap-1 text-[10px] text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)]"
-            >
-              <span>🔧</span>
-              <span>{toolCount > 0 ? `${toolCount} araç` : `${steps.length} adım`}</span>
-              <span className="opacity-70">{toolsHidden ? '▸ göster' : '▾ gizle'}</span>
-            </button>
+            <div className="mb-1.5 flex items-center gap-2">
+              <button
+                onClick={() => onToggleTools(m.id)}
+                title={toolsHidden ? 'Araç adımlarını göster' : 'Araç adımlarını gizle'}
+                className="flex items-center gap-1 text-[10px] text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)]"
+              >
+                <span>🔧</span>
+                <span>{toolCount > 0 ? `${toolCount} araç` : `${steps.length} adım`}</span>
+                <span className="opacity-70">{toolsHidden ? '▸ göster' : '▾ gizle'}</span>
+              </button>
+              {/* The transcript arrives with long tool payloads cut server-side
+                  so opening a session stays cheap. This pulls THIS turn's full
+                  trace on demand. Needs a sessionId to address the message. */}
+              {truncated && sessionId && (
+                <button
+                  onClick={loadFullSteps}
+                  disabled={loadingFull}
+                  title="Bu turun kırpılmış araç çıktılarının tamamını sunucudan getir"
+                  className="flex items-center gap-1 text-[10px] text-[var(--color-text-dim)] underline decoration-dotted underline-offset-2 transition hover:text-[var(--color-accent)] disabled:opacity-50"
+                >
+                  {loadingFull ? '⏳ getiriliyor…' : '⤓ tam iz'}
+                </button>
+              )}
+              {fullError && (
+                <span className="text-[10px] text-[var(--color-danger)]">tam iz alınamadı</span>
+              )}
+            </div>
           )}
           {!toolsHidden && (
             <TurnSteps steps={steps} onOpenFile={onOpenFile} onOpenArtifact={onOpenArtifact} />
@@ -181,7 +228,11 @@ export function AssistantTurn({
       <div className={TURN_FOOTER}>
         <div className={META_CLUSTER}>
           <MessageTime unixSec={m.createdAt} />
-          {isLastLive ? <LiveTimer startUnixSec={m.createdAt} /> : <TurnDuration seconds={workedSec} />}
+          {isLastLive ? (
+            <LiveTimer startUnixSec={m.createdAt} />
+          ) : (
+            <TurnDuration ms={workedMs} derived={workedDerived} />
+          )}
           {/* Per-turn metadata: model + token usage (the per-turn cost). */}
           {(m.model || m.usage) && (
             <span
@@ -256,4 +307,4 @@ export function AssistantTurn({
       </div>
     </div>
   )
-}
+})

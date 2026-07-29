@@ -59,6 +59,16 @@ export function formatDuration(seconds: number): string {
   return m ? `${h} sa ${m} dk` : `${h} sa`
 }
 
+// formatDurationMs renders a server-measured duration (milliseconds) as a
+// compact Turkish label. Short turns keep one decimal ("0.8 sn", "3.4 sn")
+// because the backend measures in ms and flooring them to whole seconds would
+// throw the precision away; from 10 s up it falls back to formatDuration.
+export function formatDurationMs(ms: number): string {
+  const m = Math.max(0, ms)
+  if (m < 10 * 1000) return `${(m / 1000).toFixed(1)} sn`
+  return formatDuration(m / 1000)
+}
+
 // Recency bucket ids, ordered newest → oldest.
 export type Bucket = 'today' | 'yesterday' | 'week' | 'month' | 'older'
 

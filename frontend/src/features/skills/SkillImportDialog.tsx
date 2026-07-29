@@ -20,6 +20,7 @@ const KIND_LABEL: Record<IngestKind, string> = {
   provider: 'Providers',
   workspace: 'Workspaces',
   mcp: 'MCP araçları',
+  hook: 'Hook\'lar',
 }
 
 // deriveGroup suggests a Skills-UI group label from the scanned location so imported

@@ -277,12 +277,17 @@ function onStep(d: AppEventDeps, e: AppEvent) {
 
 // Live flow-node frames (flow_node): fan each node lifecycle frame out to the
 // run viewer showing that run (via flowNodeBus, keyed by target.flowRunId) so
-// per-node progress renders live. Ignore frames from other workspaces.
+// per-node progress renders live. target.rootRunId additionally routes the frame
+// to viewers following the whole run tree, so a composed run's subflow/spawn
+// children stream too. Ignore frames from other workspaces.
 function onFlowNode(_d: AppEventDeps, e: AppEvent) {
   if (e.workspaceId && e.workspaceId !== getActiveWorkspace()) return
   const runId = e.target?.flowRunId
   if (!runId || !e.node) return
-  publishFlowNode(runId, e.node)
+  publishFlowNode(runId, e.node, e.target?.rootRunId, {
+    parentRunId: e.target?.parentRunId,
+    parentNodeId: e.target?.parentNodeId,
+  })
 }
 
 // Live per-node step frames (flow_node_step): fan each tool/thinking step out to

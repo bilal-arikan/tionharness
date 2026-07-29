@@ -26,7 +26,7 @@ type Capability struct {
 
 // capabilities is the ordered registry of optional-tool probes. Append here to
 // teach the agent about a new external tool.
-var capabilities = []Capability{codebaseMemoryCapability, tokenOptimizerCapability}
+var capabilities = []Capability{codebaseMemoryCapability, tokenOptimizerCapability, shellEnvironmentCapability}
 
 // CapabilityContext concatenates the context blocks of every capability currently
 // present. cwd is the session working directory (may be ""), used by capabilities

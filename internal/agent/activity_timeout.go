@@ -2,8 +2,19 @@ package agent
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"time"
+)
+
+// ErrTurnHardTimeout / ErrTurnIdleTimeout are the cancellation CAUSES attached by
+// withActivityTimeout. Both a watchdog and a viewer pressing "Durdur" surface as
+// context.Canceled on ctx.Err(), so without a cause the caller cannot tell a turn
+// that RAN OUT OF TIME from one a human stopped — and a truncated turn gets
+// reported as a clean "completed" (the SES17 misreport). Read with context.Cause.
+var (
+	ErrTurnHardTimeout = errors.New("turn hit its wall-clock ceiling")
+	ErrTurnIdleTimeout = errors.New("turn emitted no step within the inactivity window")
 )
 
 // activityTouchKey keys the idle-watchdog reset func on a turn context.
@@ -35,14 +46,14 @@ func activityTouchFrom(ctx context.Context) func() {
 // idle <= 0 disables the inactivity window (hard ceiling only). The returned stop
 // MUST be called (defer it) to release both timers and the context.
 func withActivityTimeout(parent context.Context, hard, idle time.Duration) (context.Context, func()) {
-	ctx, cancel := context.WithCancel(parent)
-	hardTimer := time.AfterFunc(hard, cancel)
+	ctx, cancel := context.WithCancelCause(parent)
+	hardTimer := time.AfterFunc(hard, func() { cancel(ErrTurnHardTimeout) })
 
 	if idle <= 0 {
-		return ctx, func() { hardTimer.Stop(); cancel() }
+		return ctx, func() { hardTimer.Stop(); cancel(context.Canceled) }
 	}
 
-	idleTimer := time.AfterFunc(idle, cancel)
+	idleTimer := time.AfterFunc(idle, func() { cancel(ErrTurnIdleTimeout) })
 	var mu sync.Mutex
 	// Reset the idle timer on every step. Reset is an O(1) reschedule and steps
 	// arrive at most a few hundred/sec, so the churn is negligible; the mutex just
@@ -58,6 +69,6 @@ func withActivityTimeout(parent context.Context, hard, idle time.Duration) (cont
 	return ctx, func() {
 		hardTimer.Stop()
 		idleTimer.Stop()
-		cancel()
+		cancel(context.Canceled)
 	}
 }

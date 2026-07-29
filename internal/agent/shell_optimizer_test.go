@@ -3,8 +3,10 @@ package agent
 import (
 	"context"
 	"os/exec"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/bilal-arikan/tionswarm/internal/db"
 )
@@ -35,17 +37,31 @@ func TestSqzShellFilter_Gate(t *testing.T) {
 	}
 
 	// Smoke: highly repetitive input must come back SHORTER (sqz self-gates, so the
-	// content has to be clearly compressible). The "[sqz] N/N tokens" stats line goes
-	// to stderr (not returned); stdout carries the lossless legend + abbreviated body,
-	// so proving len(out) < len(in) confirms the binary ran and compressed end-to-end.
-	big := strings.Repeat("2026-07-25 INFO handler=chat session=S action=process status=ok\n", 400)
-	out := f("cat big.log", big)
+	// content has to be clearly compressible). stdout carries the lossless legend +
+	// abbreviated body, so proving len(out) < len(in) confirms the binary ran and
+	// compressed end-to-end.
+	//
+	// The payload MUST be unique per run: sqz keeps a PERSISTENT dedup cache, and on
+	// a repeat of content it has seen before it returns a "§ref:…§" handle and logs
+	// "[sqz] dedup hit" INSTEAD of the "N/M tokens" stats line. With a fixed payload
+	// this test therefore passed once and failed on every later run of the suite.
+	marker := t.Name() + "-" + strconv.FormatInt(time.Now().UnixNano(), 36)
+	big := strings.Repeat(marker+" 2026-07-25 INFO handler=chat session=S action=process status=ok\n", 400)
+	out, opt := f("cat big.log", big)
 	if strings.TrimSpace(out) == "" {
 		t.Fatal("filter returned empty output")
 	}
 	if len(out) >= len(big) {
 		t.Errorf("expected sqz to compress repetitive input, got %d bytes from %d:\n%.200s",
 			len(out), len(big), out)
+	}
+	// The "[sqz] OUT/IN tokens" stats line rides stderr; parsing it is what makes the
+	// UI chip a real measurement, so a compressed run MUST surface one.
+	if opt == nil {
+		t.Fatal("sqz compressed the output but reported no token measurement (stderr stats line not parsed)")
+	}
+	if opt.Kind != "sqz" || !opt.Measured() || opt.Percent() <= 0 {
+		t.Fatalf("expected a measured sqz saving, got %+v (%d%%)", *opt, opt.Percent())
 	}
 
 	// Per-workspace override (WSSettings.ShellOutputCompression): off disables even

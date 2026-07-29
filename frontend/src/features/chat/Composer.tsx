@@ -584,6 +584,7 @@ export function Composer({
             aria-label="Araç bilgisi"
             aria-expanded={toolsOpen}
             data-testid="composer-tools"
+            data-tool-access-toggle=""
             className={`${BTN_ICON} ${toolsOpen ? 'border-[var(--color-accent)] text-[var(--color-accent)]' : ''}`}
           >
             <Wrench size={18} />

@@ -76,6 +76,40 @@ export interface TurnStep {
   // 'context_change' payload: the per-block added/removed diff of the frozen
   // static context (prompt-epoch drift). added/removed above hold rollup counts.
   areas?: ContextArea[]
+  // Truncation markers set by the SERVER on the transcript READ path only: a
+  // long tool payload is cut to a cap so opening a session does not ship
+  // megabytes the chat never paints. The persisted trace — and the model's
+  // context — keeps the full text; sessionApi.getMessageSteps refetches it on
+  // demand. `*Len` carries the original byte length.
+  outputTruncated?: boolean
+  outputLen?: number
+  textTruncated?: boolean
+  textLen?: number
+  patchTruncated?: boolean
+  patchLen?: number
+  inputTruncated?: boolean
+  // Set when an external token-optimizer shrank this shell step's output before
+  // it re-entered the model's context, so the card can show a chip rather than
+  // the rewrite being invisible. 'sqz' carries real token counts; 'rtk' wrapped
+  // the command upstream, so it has no before/after pair to report.
+  optimizer?: ShellOptimization
+}
+
+export interface ShellOptimization {
+  kind: 'sqz' | 'rtk'
+  inTokens?: number
+  outTokens?: number
+  // sqz recognised output identical to an earlier result this session and replaced
+  // the WHOLE thing with a `§ref:<hash>§` pointer — so a command that printed
+  // thousands of lines shows one line here. Flagged so the card can say why.
+  dedup?: boolean
+  // The rewritten command, when an optimizer changed what actually ran (rtk turns
+  // `go test -v ./...` into `go test -json ./...`). Surfaced so a command
+  // substitution never happens behind the user's back.
+  command?: string
+  // A rewritten command that FAILED: the output is rtk's summary, which can lose
+  // the real error. The card warns instead of presenting it as a clean result.
+  degraded?: boolean
 }
 
 // A slash command surfaced in the chat composer ("/" menu).

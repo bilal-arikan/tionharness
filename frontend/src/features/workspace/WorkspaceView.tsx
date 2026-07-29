@@ -92,6 +92,7 @@ export function WorkspaceView({ onError, onWorkspaceChanged, onDeleteWorkspace, 
         promptEpochEnabled: ws.promptEpochEnabled,
         autoCaptureArtifacts: ws.autoCaptureArtifacts,
         shellOutputCompression: ws.shellOutputCompression,
+        shellCommandRewrite: ws.shellCommandRewrite,
       })
       setWs(updated)
       setWsOrig(updated)

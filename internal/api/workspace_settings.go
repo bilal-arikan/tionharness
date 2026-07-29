@@ -55,6 +55,11 @@ type workspaceSettingsDTO struct {
 	// workspace that really is forced on reads as unconfigured.
 	ShellOutputCompression string `json:"shellOutputCompression"`
 
+	// ShellCommandRewrite is the in-process shell-COMMAND token-optimizer (rtk)
+	// override: "" (auto — follow the rtk-hook opt-in), "on" or "off". Echoed back
+	// for the same reason as ShellOutputCompression.
+	ShellCommandRewrite string `json:"shellCommandRewrite"`
+
 	// BoardColumns is the ordered column set for this workspace's kanban board.
 	// Always non-nil: falls back to db.DefaultBoardColumns() when unconfigured.
 	BoardColumns []db.BoardColumnDef `json:"boardColumns"`
@@ -118,6 +123,7 @@ func toWorkspaceSettingsDTO(ctx context.Context, w *workspace.Workspace) workspa
 		AutoCaptureArtifacts:  s.AutoCaptureArtifacts,
 
 		ShellOutputCompression: s.ShellOutputCompression,
+		ShellCommandRewrite:    s.ShellCommandRewrite,
 
 		BoardColumns: cols,
 

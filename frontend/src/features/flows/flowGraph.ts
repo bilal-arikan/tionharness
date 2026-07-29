@@ -4,6 +4,7 @@
 // inspector edit it directly; edges are derived from the routing fields.
 import type { Edge, Node as RFNode } from '@xyflow/react'
 import type { FlowGraph, FlowNode, FlowNodeType } from '@/types'
+import type { ChildProgress } from './runTree'
 
 export type FlowRFNode = RFNode<{
   node: FlowNode
@@ -12,6 +13,10 @@ export type FlowRFNode = RFNode<{
   // A finished node's output (run views only) → rendered as an inline preview on
   // the node when status is "done". Undefined in the editor (no run outputs).
   output?: string
+  // Live progress of the child run a subflow/spawn node launched (only in run
+  // views that follow the run tree) → rendered as a rollup line on the node.
+  // Undefined in the editor and for node types that launch nothing.
+  child?: ChildProgress
 }>
 export type NodeStatus = 'running' | 'done' | 'error' | 'waiting'
 

@@ -21,6 +21,10 @@ interface Props {
   // True while the flow list is being fetched for the first time.
   flowsLoading: boolean
   runs: FlowRun[]
+  // Runs tab: when off (default) the list holds only root runs — a composed flow's
+  // subflow/spawn children are folded away instead of flooding the history.
+  showSubRuns: boolean
+  setShowSubRuns: Dispatch<SetStateAction<boolean>>
   templateId: string | null
   setTemplateId: Dispatch<SetStateAction<string | null>>
   selectedId: string | null
@@ -52,6 +56,8 @@ export function FlowsListPane({
   flows,
   flowsLoading,
   runs,
+  showSubRuns,
+  setShowSubRuns,
   templateId,
   setTemplateId,
   selectedId,
@@ -102,6 +108,19 @@ export function FlowsListPane({
         placeholder={tab === 'runs' ? 'Koşu ara (akış adı)…' : tab === 'templates' ? 'Şablon ara…' : 'Akış ara…'}
         className="mb-2 w-full rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-2.5 py-1.5 text-xs outline-none focus:border-[var(--color-accent)]"
       />
+
+      {/* Runs tab: fold the subflow/spawn children of composed flows in or out. */}
+      {tab === 'runs' && (
+        <label className="mb-2 flex cursor-pointer items-center gap-1.5 px-0.5 text-xs text-[var(--color-text-dim)]">
+          <input
+            type="checkbox"
+            checked={showSubRuns}
+            onChange={(e) => setShowSubRuns(e.target.checked)}
+            className="accent-[var(--color-accent)]"
+          />
+          Alt koşuları göster
+        </label>
+      )}
 
       {tab === 'templates' ? (
         <ul className="space-y-1">

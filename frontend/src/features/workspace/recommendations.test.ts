@@ -63,28 +63,16 @@ describe('runRules — baseline', () => {
 })
 
 describe('token-optimizer rules', () => {
-  it('warns when rtk and sqz both rewrite the command', () => {
-    const recs = runRules(
-      healthyCtx({
-        hooks: [
-          { enabled: true, command: 'rtk hook claude' },
-          { enabled: true, command: 'sqz hook claude' },
-        ],
-      } as unknown as Partial<RecContext>),
-    )
-    const conflict = recs.find((r) => r.key === 'token-conflict')
-    expect(conflict).toBeDefined()
-    expect(conflict?.variant).toBe('warning')
-  })
-
-  // A disabled hook does not rewrite anything, so it must not count toward the
-  // conflict — otherwise turning one off would leave the warning stuck on.
-  it('does not warn when one of the two hooks is disabled', () => {
+  // rtk + sqz together is the BEST configuration, not a conflict: they act at
+  // opposite ends of the call and stack (git log -30: 6595 raw -> sqz 2027 ->
+  // rtk 2157 -> rtk+sqz 1167 tokens). The old 'token-conflict' card told users to
+  // disable one of them, so it was removed; this locks it stays removed.
+  it('does not flag rtk + sqz as a conflict', () => {
     const keys = keysOf(
       healthyCtx({
         hooks: [
           { enabled: true, command: 'rtk hook claude' },
-          { enabled: false, command: 'sqz hook claude' },
+          { enabled: true, command: 'sqz hook claude' },
         ],
       } as unknown as Partial<RecContext>),
     )
@@ -238,20 +226,17 @@ describe('workspace-setup rules', () => {
 })
 
 describe('card ordering', () => {
-  // Cards stack top-to-bottom, so the conflict warning has to outrank the
-  // routine setup nudges it would otherwise be buried under.
-  it('puts the conflict warning above the setup suggestions', () => {
+  // Cards stack top-to-bottom, so a BLOCKING gap has to outrank the routine
+  // nudges it would otherwise be buried under: a workspace with no agents cannot
+  // run anything at all, while backup being off is a preference.
+  it('puts a blocking gap above the setup suggestions', () => {
     const keys = keysOf(
       healthyCtx({
         agentsCount: 0,
         settings: { backupEnabled: false },
-        hooks: [
-          { enabled: true, command: 'rtk hook claude' },
-          { enabled: true, command: 'sqz hook claude' },
-        ],
       } as unknown as Partial<RecContext>),
     )
-    expect(keys[0]).toBe('token-conflict')
-    expect(keys.indexOf('token-conflict')).toBeLessThan(keys.indexOf('backup-off'))
+    expect(keys[0]).toBe('no-agents')
+    expect(keys.indexOf('no-agents')).toBeLessThan(keys.indexOf('backup-off'))
   })
 })

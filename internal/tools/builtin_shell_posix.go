@@ -8,6 +8,35 @@ import (
 	"strings"
 )
 
+// POSIX shell flavours the Bash tool may be backed by. The flavour decides how
+// Windows paths must be spelled inside a command, which is NOT derivable from
+// the OS alone — the same Windows 11 host reaches C:\ as /c/... under git-bash
+// but /mnt/c/... under WSL. Callers use it to tell the agent which one it got.
+const (
+	POSIXShellNone    = ""        // no POSIX shell on this host (Bash tool not offered)
+	POSIXShellUnix    = "unix"    // native /bin/sh
+	POSIXShellGitBash = "gitbash" // git-bash on Windows: drives at /c/, /d/
+	POSIXShellWSL     = "wsl"     // wsl.exe -e bash: drives at /mnt/c/, /mnt/d/
+)
+
+// POSIXShellFlavor reports which shell backs the Bash tool on this host. Returns
+// POSIXShellNone when none is available.
+func POSIXShellFlavor() string {
+	exe, preArgs, ok := resolvePOSIXShell()
+	if !ok {
+		return POSIXShellNone
+	}
+	if runtime.GOOS != "windows" {
+		return POSIXShellUnix
+	}
+	// The WSL route is the only one that goes through wsl.exe with a "-e bash"
+	// prefix (see resolvePOSIXShell); everything else on Windows is a real bash.
+	if len(preArgs) > 0 && strings.Contains(strings.ToLower(filepath.Base(exe)), "wsl") {
+		return POSIXShellWSL
+	}
+	return POSIXShellGitBash
+}
+
 // resolvePOSIXShell finds the POSIX shell backing the Bash tool and the args that
 // must precede "-c <command>". On Unix it is plain /bin/sh. On Windows it prefers
 // a real git-bash and deliberately avoids C:\Windows\System32\bash.exe — see
