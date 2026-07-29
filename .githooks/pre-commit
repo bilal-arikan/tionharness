@@ -1,0 +1,37 @@
+#!/bin/sh
+# Format STAGED files only, then re-stage them. Deliberately incremental: the
+# frontend was hand-formatted for a long time, so a repo-wide rewrite would bury
+# real diffs. Touching a file is what pulls it into the Prettier/gofmt world.
+#
+# Enable once per clone:  git config core.hooksPath .githooks
+# Skip for one commit:    git commit --no-verify
+set -e
+
+repo_root=$(git rev-parse --show-toplevel)
+
+# --- frontend (prettier) ---------------------------------------------------
+staged_fe=$(git diff --cached --name-only --diff-filter=ACM -- 'frontend/src/*.ts' 'frontend/src/*.tsx' 'frontend/src/*.css')
+if [ -n "$staged_fe" ]; then
+  prettier_bin="$repo_root/frontend/node_modules/.bin/prettier"
+  if [ -x "$prettier_bin" ]; then
+    # Paths are repo-relative; prettier runs from frontend/, so strip the prefix.
+    # The local binary is invoked by absolute path — npm's .bin is NOT on PATH in
+    # a hook's plain sh.
+    rel=$(printf '%s\n' "$staged_fe" | sed 's|^frontend/||')
+    (cd "$repo_root/frontend" && printf '%s\n' "$rel" | xargs "$prettier_bin" --write --ignore-unknown)
+    printf '%s\n' "$staged_fe" | xargs git add
+  else
+    echo "pre-commit: frontend/node_modules/.bin/prettier not found — run 'npm install' in frontend/; skipping." >&2
+  fi
+fi
+
+# --- backend (gofmt) -------------------------------------------------------
+staged_go=$(git diff --cached --name-only --diff-filter=ACM -- '*.go')
+if [ -n "$staged_go" ]; then
+  if command -v gofmt >/dev/null 2>&1; then
+    printf '%s\n' "$staged_go" | xargs gofmt -w
+    printf '%s\n' "$staged_go" | xargs git add
+  else
+    echo "pre-commit: gofmt not on PATH; skipping Go formatting." >&2
+  fi
+fi

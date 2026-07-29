@@ -25,6 +25,28 @@ değil). Gerçek yaşanan hatalardan çıkarılmış kurallar:
   `Glob` ile (ör. `internal/db/store_*.go`) dosyanın gerçekten var olduğunu
   teyit et, sonra o yolu Grep'e geç.
 
+## Kod formatı (otomatik)
+
+Frontend **Prettier** ile formatlanır — ayarlar `frontend/.prettierrc.json`
+(tek tırnak, noktalı virgülsüz, `printWidth: 100`, `endOfLine: auto`). Elle
+"prettier'i varsayılan ayarlarla çalıştırmak" YASAK: config'siz koşarsan dosyayı
+çift tırnak + noktalı virgüle çevirir ve devasa sahte diff üretir.
+
+```powershell
+cd frontend
+npm run format         # yaz (src/**/*.{ts,tsx,css})
+npm run format:check   # sadece kontrol
+```
+
+**Pre-commit hook** (`.githooks/pre-commit`) yalnız **stage'lenmiş** dosyaları
+formatlar (frontend → prettier, `*.go` → gofmt) ve yeniden stage'ler. Klon başına
+bir kez: `git config core.hooksPath .githooks`. Tek seferlik atlamak için
+`git commit --no-verify`.
+
+Depo tarihsel olarak elle formatlanmış: `format:check` şu an ~248 dosyada uyarı
+verir. Kasıtlı olarak toplu format ATILMADI — dokunulan dosya hook ile kendiliğinden
+dönüşür. Toplu geçiş yapılacaksa **temiz ağaçta, kendi commit'inde** (`npm run format`).
+
 ## Test koşturma
 
 ```powershell
