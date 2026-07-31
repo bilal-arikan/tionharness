@@ -82,7 +82,10 @@ func (r *Runtime) RunCoordinatorNode(ctx context.Context, spec orchestration.Coo
 		// viewer can resolve this session back to the run that produced it.
 		SourceID: flowRunIDFromContext(ctx),
 		Title:    title,
-		Role:     "coordinator",
+		// Coordinator CAPABILITY, not lineage: the flow owns this session, it has no
+		// parent coordinator to report to, so Role stays empty and it is the root of
+		// its own tree.
+		CoordinatorMode: true,
 		// Persisting the slug is all the recipe needs: the turn's static prefix
 		// resolves and injects its body from the session (coordinatorRecipeBlock).
 		CoordinatorWorkflow: strings.TrimSpace(spec.Workflow),
@@ -157,7 +160,11 @@ func (r *Runtime) waitCoordinatorIdle(ctx context.Context, coordSessionID string
 		case <-deadline.C:
 			return fmt.Errorf("coordinator did not settle within %s", limit)
 		case <-tick.C:
-			if coordSlotIdle(slot) {
+			// The slot's own counter tracks DIRECT workers only. A sub-coordinator
+			// decrements it the moment its own turn ends — while its branch keeps
+			// working — so the slot alone would read as settled with grandchildren
+			// still running, and the node would take a half-finished result.
+			if coordSlotIdle(slot) && r.activeSubtreeWorkers(ctx, coordSessionID) == 0 {
 				return nil
 			}
 		}
@@ -176,19 +183,10 @@ func coordSlotIdle(slot *coordSlot) bool {
 // whose node gave up (timeout / cancellation), so a failed node leaves no
 // detached worker turns burning budget behind it. Best-effort.
 func (r *Runtime) stopCoordinatorWorkers(ctx context.Context, coordSessionID string) {
-	ws, err := r.ListWorkers(ctx, coordSessionID)
-	if err != nil {
-		r.logger.Warn("coordinator node: cannot list workers to stop", "coordinator", coordSessionID, "error", err)
-		return
-	}
-	for _, w := range ws {
-		if !w.Running {
-			continue
-		}
-		if err := r.StopWorker(w.SessionID); err != nil {
-			r.logger.Warn("coordinator node: stop worker failed", "worker", w.SessionID, "error", err)
-		}
-	}
+	// Whole subtree, not just the direct workers: a failed node that leaves its
+	// sub-coordinators' workers running keeps burning budget for a flow run that has
+	// already given up.
+	r.stopSubtree(ctx, coordSessionID, "coordinator node gave up")
 }
 
 // isFlowCoordinatorSession reports whether a session id names a coordinator

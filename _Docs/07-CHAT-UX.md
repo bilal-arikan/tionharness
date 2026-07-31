@@ -258,6 +258,44 @@ kırpıldı:
   (stopPropagation), kalan `flex-1` alan + chevron başlık-butonun parçası kalıp
   diff'i katlar (eskiden `flex-1` tam-genişlik yol satırı katlamayı engelliyordu).
   Tam yol `title` ile hover'da görünür.
+- `ChangesButton.tsx` + `ChangesModal.tsx` (2026-08-01) — **toplu dosya-farkı
+  görüntüleyici.** Ajan balonunun altındaki aksiyon satırında `⧉ N dosya +A −R`
+  çipi; tıklayınca **master-detail** popup açılır: solda değişen dosyalar, sağda
+  yalnız seçili dosyanın yaması. Tek uzun scroll yerine master-detail, çünkü o
+  zaman aynı anda tek bir patch mount edilir — 20 dosya 1 dosya kadar maliyetli.
+  İki sekme: **Bu tur** (turun izinden) ve **Tüm oturum**
+  (`GET /api/sessions/{id}/changes`).
+  - **Çıkarım tek kaynaktan:** `shared/lib/fileChanges.ts` — `kind:diff` adımı
+    (native yol, sunucu `FileDiff`'i kaydetmiş) **veya** başarılı `tool` adımı +
+    edit aracı (claude-cli yolu, yama `synthDiffData` ile girdiden sentezlenir).
+    Kural birebir `TurnSteps`'in `DiffCard` seçimiyle aynı, yoksa popup'ın dosya
+    sayısı görünen kartlarla çelişirdi. Hatalı adımlar atlanır (diske hiçbir şey
+    yazılmadı); `subSteps` içine inilir (alt-ajan düzenlemeleri de gerçek).
+  - **Kırpma farkındalığı:** transkript yolu yamaları `stepFieldCap`'e kırpar.
+    Herhangi bir değişiklik kırpılmışsa çipte `≥` görünür ve popup açılışta o
+    turun **tam izini** çeker (`getMessageSteps`). Sentezlenen yamalarda kırpılan
+    şey **girdi** olduğu için satır sayıları da eksik kalır — bu yüzden
+    `inputTruncated` de "kırpılmış" sayılır.
+  - **Aynı dosyaya çoklu edit** grup içinde sıralı listelenir, **birleştirilmiş
+    yama üretilmez**: TionSwarm dosyanın öncesi/sonrası içeriğini saklamaz, tek
+    tek edit farklarını saklar → gerçek birleşim hesaplanamaz, uydurmak yerine
+    "sıralı değişiklikler" denir.
+  - Yama başına `Kopyala` / `.patch indir` / `dosyayı aç`; altta sabit not:
+    gösterilen fark değişiklik anındaki halidir, dosyanın şu anki içeriği değil.
+- **Büyük dosya stratejisi** (`DiffView` `variant="panel"`) — sırayla:
+  1. **Bağlam katlama** (`foldableRanges`/`diffRows`, `shared/lib/diff.ts`): 6+
+     satırlık değişmemiş bloklar iki yanda 3 satır bağlam bırakılarak tek
+     `⋯ N değişmeyen satır` satırına iner. İşin kendisini küçülten tek adım bu,
+     o yüzden ilk sırada.
+  2. **Satır sanallaştırma** (`shared/hooks/useVirtualRows.ts`, 400+ satırda
+     devreye girer). Panelde satırlar **sarmaz** (`pre` + yatay kaydırma) —
+     sarma satır yüksekliğini değiştirir, sabit yükseklik varsayımı bozulunca
+     spacer'lar içerikten kayar.
+  3. **Sert tavan:** 20.000 satır üstünde ilk 2.000 satır gösterilir, kalanı
+     gerçek sayısıyla birlikte açık bir butonla yüklenir. Sessiz kırpma yok.
+  4. **Yeni dosya özel durumu:** `Write`'ın sentezlenen "farkı" dosyanın tüm
+     içeriğidir (binlerce `+` satırı, bilgi değeri düşük) → varsayılan kapalı,
+     `Yeni dosya · N satır` rozetinin arkasında. Düzenlemeler açık başlar.
 - `PathText.tsx` — düz metindeki dosya yollarını tıklanabilir çiplere çevirir
   (`lib/paths.ts` tespit eder).
 - `WorkerWaitBanner.tsx` (2026-07-27) — koordinatör oturumunda **çalışan worker**

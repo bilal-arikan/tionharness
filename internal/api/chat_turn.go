@@ -184,7 +184,10 @@ func (s *Server) buildStaticPrefix(ctx context.Context, wsp *workspace.Workspace
 	// the research→synthesis→implementation→verification loop. Role is stable, so
 	// this sits in the cached static prefix. Only a coordinator session gets it (and
 	// only a coordinator session gets the spawn_worker/send_to_worker/... tools).
-	if session.Role == "coordinator" {
+	// Includes a MID-LEVEL node of a coordinator tree (a worker with coordinator
+	// mode on): it needs the manual for its own workers plus the upward-reporting
+	// rules for its parent.
+	if session.IsCoordinator() {
 		// Registry prompt "coordinator" (workspace override → embedded default).
 		lead := agent.WorkspacePrompt(wsp.DataDir, "coordinator")
 		// A selected coordinator recipe (M5) layers its saved orchestration pattern
@@ -192,6 +195,12 @@ func (s *Server) buildStaticPrefix(ctx context.Context, wsp *workspace.Workspace
 		// rides the cached static prefix alongside the manual.
 		if rb := coordinatorRecipeBlock(wsp, session); rb != "" {
 			lead = lead + "\n\n" + rb
+		}
+		// A mid-level node also gets its place in the tree and the contract for
+		// reporting back up (report_to_coordinator). Both are fixed for the session's
+		// lifetime, so they belong in the cached prefix next to the manual.
+		if sb := coordinatorSubordinateBlock(session); sb != "" {
+			lead = lead + "\n\n" + sb
 		}
 		system = strings.TrimSpace(lead + "\n\n" + system)
 	}
@@ -217,6 +226,11 @@ func (s *Server) buildStaticPrefix(ctx context.Context, wsp *workspace.Workspace
 	}
 	if ins := strings.TrimSpace(wsp.Settings().Instructions); ins != "" {
 		system = strings.TrimSpace(system + "\n\n# Workspace Instructions\n" + ins)
+	}
+	// Terse ("caveman") reply style: workspace toggle + registry prompt "terse".
+	// After the instructions so a workspace rule can be phrased to override it.
+	if tb := wsp.Runtime.TerseModeBlock(); tb != "" {
+		system = strings.TrimSpace(system + "\n\n" + tb)
 	}
 	// Always-on: deliverables (files/documents) should surface as artifacts. The
 	// guidance follows the workspace auto-capture toggle — when off, the agent is

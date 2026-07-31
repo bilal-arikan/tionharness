@@ -1,15 +1,37 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Loader2, Network, Users, CheckCircle2, Play, ChevronDown, ChevronRight, Workflow, ArrowLeft } from 'lucide-react'
+import {
+  Loader2,
+  Network,
+  Users,
+  CheckCircle2,
+  Play,
+  ChevronDown,
+  ChevronRight,
+  Workflow,
+  ArrowLeft,
+} from 'lucide-react'
 import { api } from '@/api'
 import { InfoPopover } from '@/shared/components/InfoPopover'
-import { CoordinatorWorkflowPicker, WORKFLOW_HELP } from '@/shared/components/CoordinatorWorkflowPicker'
+import {
+  CoordinatorWorkflowPicker,
+  WORKFLOW_HELP,
+} from '@/shared/components/CoordinatorWorkflowPicker'
 import { subscribeWorkerChange } from '@/shared/lib/workerBus'
+import { isCoordinatorSession, isWorkerSession } from '@/shared/lib/coordination'
+import { CoordinatorBreadcrumb } from './CoordinatorBreadcrumb'
+import { CoordinatorTreeView } from './CoordinatorTreeView'
 import type { WorkerInfo } from '@/types'
 
 interface Props {
   sessionId: string
-  // The session's current role ('coordinator' | 'worker' | '' | undefined).
+  // Lineage: 'worker' when a coordinator spawned this session, else '' — NOT the
+  // coordinator capability, which is `coordinatorMode`. The two are independent
+  // since coordinator trees can nest (a mid-level node has both).
   role?: string
+  // Whether this session may drive workers of its own.
+  coordinatorMode?: boolean
+  // This session's depth in its coordinator tree (root = 0).
+  coordinatorDepth?: number
   // The session's selected coordinator recipe/workflow slug (M5), if any.
   workflow?: string
   // For a worker session: back-link to its coordinator, so the panel can offer a
@@ -33,9 +55,22 @@ interface Props {
 // CoordinatorSection is the M2 coordination panel: it toggles a session into
 // coordinator mode and, once on, shows the live worker roster (running vs
 // finished, with each finished worker's one-line summary). See _Docs/47.
-export function CoordinatorSection({ sessionId, role, workflow, coordinatorSessionId, refreshKey, onError, onRoleChanged, onSelectSession, onOpenSkill }: Props) {
-  const isCoordinator = role === 'coordinator'
-  const isWorker = role === 'worker'
+export function CoordinatorSection({
+  sessionId,
+  role,
+  coordinatorMode,
+  coordinatorDepth,
+  workflow,
+  coordinatorSessionId,
+  refreshKey,
+  onError,
+  onRoleChanged,
+  onSelectSession,
+  onOpenSkill,
+}: Props) {
+  const session = { role, coordinatorMode, coordinatorSessionId, coordinatorDepth }
+  const isCoordinator = isCoordinatorSession(session)
+  const isWorker = isWorkerSession(session)
   const [toggling, setToggling] = useState(false)
   const [savingWf, setSavingWf] = useState(false)
   const [workers, setWorkers] = useState<WorkerInfo[]>([])
@@ -44,8 +79,8 @@ export function CoordinatorSection({ sessionId, role, workflow, coordinatorSessi
     () => localStorage.getItem('tionswarm.coordWorkersOpen') !== '0',
   )
   // Which worker bucket is shown: running vs finished (persisted).
-  const [workerTab, setWorkerTab] = useState<'running' | 'done'>(
-    () => (localStorage.getItem('tionswarm.coordWorkerTab') === 'done' ? 'done' : 'running'),
+  const [workerTab, setWorkerTab] = useState<'running' | 'done'>(() =>
+    localStorage.getItem('tionswarm.coordWorkerTab') === 'done' ? 'done' : 'running',
   )
   const toggleWorkers = () =>
     setWorkersOpen((v) => {
@@ -108,29 +143,40 @@ export function CoordinatorSection({ sessionId, role, workflow, coordinatorSessi
     }
   }
 
-  // A worker session shows only a passive note (its role is set at spawn time).
-  if (isWorker) {
-    return (
-      <section>
-        <div className="mb-2 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-dim)] opacity-70">
-          <Network size={12} /> <span>Koordinasyon</span>
-        </div>
-        <div className="rounded-lg border border-[var(--color-border)] px-2.5 py-2 text-[11px] text-[var(--color-text-dim)]">
-          Bu oturum bir <span className="font-medium text-[var(--color-text)]">worker</span> — bir koordinatör tarafından başlatıldı. Sonucu, koordinatör oturumuna <code>&lt;task-notification&gt;</code> olarak iletilir.
-        </div>
-        {onSelectSession && coordinatorSessionId && (
-          <button
-            type="button"
-            onClick={() => onSelectSession(coordinatorSessionId)}
-            title="Koordinatör oturumunu aç"
-            className="mt-1.5 flex w-full items-center justify-center gap-1.5 rounded-lg border border-[var(--color-border)] px-2.5 py-1.5 text-[11px] text-[var(--color-text-dim)] transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
-          >
-            <ArrowLeft size={13} className="shrink-0" /> Koordinatöre dön
-          </button>
+  // A worker's upward context. Rendered as a HEADER, not an early return: a
+  // mid-level node is a worker AND a coordinator, so it needs both this block and
+  // the coordinator controls below it.
+  const workerHeader = isWorker && (
+    <div className="mb-2 space-y-1.5">
+      <div className="rounded-lg border border-[var(--color-border)] px-2.5 py-2 text-[11px] text-[var(--color-text-dim)]">
+        {isCoordinator ? (
+          <>
+            Bu oturum bir{' '}
+            <span className="font-medium text-[var(--color-text)]">alt-koordinatör</span> — hem
+            kendi worker'larını yönetir hem de üstündeki koordinatöre rapor verir. Turu bitmesi
+            işinin bittiği anlamına gelmez; sonucu <code>report_to_coordinator</code> ile kapatır.
+          </>
+        ) : (
+          <>
+            Bu oturum bir <span className="font-medium text-[var(--color-text)]">worker</span> — bir
+            koordinatör tarafından başlatıldı. Sonucu, koordinatör oturumuna{' '}
+            <code>&lt;task-notification&gt;</code> olarak iletilir.
+          </>
         )}
-      </section>
-    )
-  }
+      </div>
+      <CoordinatorBreadcrumb sessionId={sessionId} onSelectSession={onSelectSession} />
+      {onSelectSession && coordinatorSessionId && (
+        <button
+          type="button"
+          onClick={() => onSelectSession(coordinatorSessionId)}
+          title="Koordinatör oturumunu aç"
+          className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-[var(--color-border)] px-2.5 py-1.5 text-[11px] text-[var(--color-text-dim)] transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
+        >
+          <ArrowLeft size={13} className="shrink-0" /> Koordinatöre dön
+        </button>
+      )}
+    </div>
+  )
 
   return (
     <section>
@@ -138,14 +184,35 @@ export function CoordinatorSection({ sessionId, role, workflow, coordinatorSessi
         <Network size={12} /> <span>Koordinasyon</span>
       </div>
 
+      {workerHeader}
+
+      {/* The full tree, for anyone inside one. The roster below shows only DIRECT
+          workers — complete while trees were one level deep, but blind to
+          everything a sub-coordinator is running (and to most of the cost). */}
+      {(isCoordinator || isWorker) && (
+        <div className="mb-2">
+          <CoordinatorTreeView
+            sessionId={sessionId}
+            refreshKey={refreshKey}
+            onSelectSession={onSelectSession}
+          />
+        </div>
+      )}
+
       {!isCoordinator ? (
         <button
           onClick={() => toggleRole('coordinator')}
           disabled={toggling}
           className="flex w-full items-center gap-2 rounded-lg border border-dashed border-[var(--color-border)] px-2.5 py-2 text-left text-[11px] text-[var(--color-text-dim)] transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)] disabled:opacity-50"
         >
-          {toggling ? <Loader2 size={13} className="shrink-0 animate-spin" /> : <Users size={13} className="shrink-0" />}
-          Koordinatör modunu aç (paralel worker'ları yönet)
+          {toggling ? (
+            <Loader2 size={13} className="shrink-0 animate-spin" />
+          ) : (
+            <Users size={13} className="shrink-0" />
+          )}
+          {isWorker
+            ? "Koordinatör modunu aç (bu worker kendi worker'larını yönetsin)"
+            : "Koordinatör modunu aç (paralel worker'ları yönet)"}
         </button>
       ) : (
         <div className="space-y-2">
@@ -191,91 +258,110 @@ export function CoordinatorSection({ sessionId, role, workflow, coordinatorSessi
             </p>
           ) : (
             <>
-            <button
-              onClick={toggleWorkers}
-              aria-expanded={workersOpen}
-              className="flex w-full items-center gap-1.5 px-1 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)]"
-            >
-              {workersOpen ? <ChevronDown size={12} className="shrink-0" /> : <ChevronRight size={12} className="shrink-0" />}
-              Worker'lar · {workers.length}
-            </button>
-            {workersOpen && (
-            <>
-              {/* Tabs: running vs finished, each with a live count. */}
-              <div className="flex items-center gap-1 px-1">
-                <button
-                  onClick={() => selectTab('running')}
-                  aria-pressed={workerTab === 'running'}
-                  className={`flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-medium transition ${
-                    workerTab === 'running'
-                      ? 'bg-[var(--color-accent)]/10 text-[var(--color-accent)]'
-                      : 'text-[var(--color-text-dim)] hover:text-[var(--color-text)]'
-                  }`}
-                >
-                  <Play size={11} className="shrink-0" /> Çalışan · {runningWorkers.length}
-                </button>
-                <button
-                  onClick={() => selectTab('done')}
-                  aria-pressed={workerTab === 'done'}
-                  className={`flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-medium transition ${
-                    workerTab === 'done'
-                      ? 'bg-[var(--color-success)]/10 text-[var(--color-success)]'
-                      : 'text-[var(--color-text-dim)] hover:text-[var(--color-text)]'
-                  }`}
-                >
-                  <CheckCircle2 size={11} className="shrink-0" /> Tamamlanan · {doneWorkers.length}
-                </button>
-              </div>
-              {shownWorkers.length === 0 ? (
-                <p className="px-1 text-[10px] text-[var(--color-text-dim)]">
-                  {workerTab === 'running' ? 'Şu an çalışan worker yok.' : 'Henüz tamamlanan worker yok.'}
-                </p>
-              ) : (
-                <ul className="space-y-1.5">
-                  {shownWorkers.map((w) => {
-                    // Each worker is its own session — clicking the row opens it.
-                    const clickable = !!onSelectSession && !!w.sessionId
-                    const inner = (
-                      <>
-                        <div className="flex items-center gap-1.5">
-                          {w.running ? (
-                            <Play size={12} className="shrink-0 text-[var(--color-accent)]" />
-                          ) : (
-                            <CheckCircle2 size={12} className="shrink-0 text-[var(--color-success)]" />
-                          )}
-                          <span className="truncate text-[11px] font-medium text-[var(--color-text)]">{w.agentName}</span>
-                          <span className="ml-auto text-[9px] uppercase tracking-wide text-[var(--color-text-dim)]">
-                            {w.running ? 'çalışıyor' : 'bitti'}
-                          </span>
-                        </div>
-                        {w.summary && (
-                          <p className="mt-0.5 line-clamp-2 text-[10px] text-[var(--color-text-dim)]">{w.summary}</p>
-                        )}
-                      </>
-                    )
-                    return (
-                      <li key={w.sessionId}>
-                        {clickable ? (
-                          <button
-                            type="button"
-                            onClick={() => onSelectSession!(w.sessionId)}
-                            title="Worker oturumunu aç"
-                            className="block w-full rounded-lg border border-[var(--color-border)] px-2.5 py-1.5 text-left transition hover:border-[var(--color-accent)] hover:bg-[var(--color-surface-2)]"
-                          >
-                            {inner}
-                          </button>
-                        ) : (
-                          <div className="rounded-lg border border-[var(--color-border)] px-2.5 py-1.5">
-                            {inner}
-                          </div>
-                        )}
-                      </li>
-                    )
-                  })}
-                </ul>
+              <button
+                onClick={toggleWorkers}
+                aria-expanded={workersOpen}
+                className="flex w-full items-center gap-1.5 px-1 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)]"
+              >
+                {workersOpen ? (
+                  <ChevronDown size={12} className="shrink-0" />
+                ) : (
+                  <ChevronRight size={12} className="shrink-0" />
+                )}
+                Worker'lar · {workers.length}
+              </button>
+              {workersOpen && (
+                <>
+                  {/* Tabs: running vs finished, each with a live count. */}
+                  <div className="flex items-center gap-1 px-1">
+                    <button
+                      onClick={() => selectTab('running')}
+                      aria-pressed={workerTab === 'running'}
+                      className={`flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-medium transition ${
+                        workerTab === 'running'
+                          ? 'bg-[var(--color-accent)]/10 text-[var(--color-accent)]'
+                          : 'text-[var(--color-text-dim)] hover:text-[var(--color-text)]'
+                      }`}
+                    >
+                      <Play size={11} className="shrink-0" /> Çalışan · {runningWorkers.length}
+                    </button>
+                    <button
+                      onClick={() => selectTab('done')}
+                      aria-pressed={workerTab === 'done'}
+                      className={`flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-medium transition ${
+                        workerTab === 'done'
+                          ? 'bg-[var(--color-success)]/10 text-[var(--color-success)]'
+                          : 'text-[var(--color-text-dim)] hover:text-[var(--color-text)]'
+                      }`}
+                    >
+                      <CheckCircle2 size={11} className="shrink-0" /> Tamamlanan ·{' '}
+                      {doneWorkers.length}
+                    </button>
+                  </div>
+                  {shownWorkers.length === 0 ? (
+                    <p className="px-1 text-[10px] text-[var(--color-text-dim)]">
+                      {workerTab === 'running'
+                        ? 'Şu an çalışan worker yok.'
+                        : 'Henüz tamamlanan worker yok.'}
+                    </p>
+                  ) : (
+                    <ul className="space-y-1.5">
+                      {shownWorkers.map((w) => {
+                        // Each worker is its own session — clicking the row opens it.
+                        const clickable = !!onSelectSession && !!w.sessionId
+                        const inner = (
+                          <>
+                            <div className="flex items-center gap-1.5">
+                              {w.running ? (
+                                <Play size={12} className="shrink-0 text-[var(--color-accent)]" />
+                              ) : (
+                                <CheckCircle2
+                                  size={12}
+                                  className="shrink-0 text-[var(--color-success)]"
+                                />
+                              )}
+                              <span className="truncate text-[11px] font-medium text-[var(--color-text)]">
+                                {w.agentName}
+                              </span>
+                              {/* "delegating" is NOT "running": a sub-coordinator between its
+                              own turns has no live turn, it is waiting on its branch.
+                              Labelling it "çalışıyor" would suggest an answer is coming;
+                              labelling it "bitti" would be worse still — its result does
+                              not exist yet. */}
+                              <span className="ml-auto text-[9px] uppercase tracking-wide text-[var(--color-text-dim)]">
+                                {w.delegating ? 'dağıtıyor' : w.running ? 'çalışıyor' : 'bitti'}
+                              </span>
+                            </div>
+                            {w.summary && (
+                              <p className="mt-0.5 line-clamp-2 text-[10px] text-[var(--color-text-dim)]">
+                                {w.summary}
+                              </p>
+                            )}
+                          </>
+                        )
+                        return (
+                          <li key={w.sessionId}>
+                            {clickable ? (
+                              <button
+                                type="button"
+                                onClick={() => onSelectSession!(w.sessionId)}
+                                title="Worker oturumunu aç"
+                                className="block w-full rounded-lg border border-[var(--color-border)] px-2.5 py-1.5 text-left transition hover:border-[var(--color-accent)] hover:bg-[var(--color-surface-2)]"
+                              >
+                                {inner}
+                              </button>
+                            ) : (
+                              <div className="rounded-lg border border-[var(--color-border)] px-2.5 py-1.5">
+                                {inner}
+                              </div>
+                            )}
+                          </li>
+                        )
+                      })}
+                    </ul>
+                  )}
+                </>
               )}
-            </>
-            )}
             </>
           )}
         </div>

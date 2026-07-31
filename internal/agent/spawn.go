@@ -1,4 +1,4 @@
-﻿package agent
+package agent
 
 import (
 	"context"
@@ -56,6 +56,24 @@ type SpawnOptions struct {
 	// of runSpawn. Empty leaves an ordinary detached spawn unchanged.
 	CoordinatorSessionID string
 	Role                 string
+
+	// Coordinator tree placement, stamped once at creation (see
+	// db.Session.RootCoordinatorSessionID / CoordinatorDepth): the tree root this
+	// worker belongs to and its distance from that root. Computed by SpawnWorker
+	// from the parent session, never supplied by a tool caller.
+	RootCoordinatorSessionID string
+	CoordinatorDepth         int
+
+	// CoordinatorMode makes the SPAWNED session a coordinator in its own right, so
+	// it can nest another level of workers under itself. This is what turns a flat
+	// coordinator/worker pair into an arbitrarily deep tree.
+	CoordinatorMode bool
+	// CoordinatorWorkflow optionally pins a coordinator recipe (M5) on the spawned
+	// sub-coordinator, with CoordinatorMaxTurns as its resolved notify-loop cap.
+	// Deliberately NOT inherited from the parent: a recursive recipe (tournament,
+	// fanout) would otherwise repeat itself all the way down the tree.
+	CoordinatorWorkflow string
+	CoordinatorMaxTurns int
 }
 
 // SpawnResult is what a spawn returns to its caller immediately — the new
@@ -91,8 +109,10 @@ func (r *Runtime) SpawnSession(ctx context.Context, agentRef, prompt string, opt
 	}
 
 	// Concurrency guard: refuse once the cap of simultaneously-running spawns is
-	// reached. The slot is released when the background turn finishes.
-	if !r.acquireSpawnSlot() {
+	// reached. The slot is released when the background turn finishes. Depth-aware
+	// so a deep coordinator branch cannot drain the pool that shallower work — and
+	// any unrelated chat/schedule spawn — depends on.
+	if !r.acquireSpawnSlotAtDepth(opts.CoordinatorDepth) {
 		return SpawnResult{}, fmt.Errorf("spawn limit reached (%d concurrent spawned sessions); try again once some finish", r.tun.SpawnMaxConcurrent())
 	}
 
@@ -123,15 +143,22 @@ func (r *Runtime) SpawnSession(ctx context.Context, agentRef, prompt string, opt
 	// Each spawn is its own independent session — a fresh sourceID (not GetOrCreate)
 	// so two spawns never collapse into one thread.
 	session, err := r.db.CreateSession(ctx, db.Session{
-		AgentID:              agent.ID,
-		Kind:                 kind,
-		SourceID:             "spawn:" + uuid.NewString(),
-		Title:                title,
-		ParentSessionID:      strings.TrimSpace(opts.ParentSessionID),
-		WorkingDir:           cwd,
-		Tags:                 opts.Tags,
-		Role:                 strings.TrimSpace(opts.Role),
-		CoordinatorSessionID: coordID,
+		AgentID:                  agent.ID,
+		Kind:                     kind,
+		SourceID:                 "spawn:" + uuid.NewString(),
+		Title:                    title,
+		ParentSessionID:          strings.TrimSpace(opts.ParentSessionID),
+		WorkingDir:               cwd,
+		Tags:                     opts.Tags,
+		Role:                     strings.TrimSpace(opts.Role),
+		CoordinatorSessionID:     coordID,
+		RootCoordinatorSessionID: strings.TrimSpace(opts.RootCoordinatorSessionID),
+		CoordinatorDepth:         opts.CoordinatorDepth,
+		// A sub-coordinator: this worker may spawn workers of its own (the nesting
+		// switch). Role stays "worker" — it still reports up to coordID.
+		CoordinatorMode:     opts.CoordinatorMode,
+		CoordinatorWorkflow: strings.TrimSpace(opts.CoordinatorWorkflow),
+		CoordinatorMaxTurns: opts.CoordinatorMaxTurns,
 	})
 	if err != nil {
 		r.releaseSpawnSlot()
@@ -321,11 +348,45 @@ func (r *Runtime) emitSpawnEvent(agent db.Agent, sessionID, prompt string, ok bo
 	})
 }
 
+// deepSpawnDepth is the coordinator-tree depth from which a spawn counts as
+// "deep" and must leave headroom for shallower work. Depth 0 is a root
+// coordinator and depth 1 its direct workers — the level a user or a flow is
+// actually waiting on — so the squeeze starts at 2.
+const deepSpawnDepth = 2
+
 // acquireSpawnSlot reserves one of the bounded concurrency slots, returning false
-// when the cap is already reached. Paired with releaseSpawnSlot.
-func (r *Runtime) acquireSpawnSlot() bool {
+// when the cap is already reached. Paired with releaseSpawnSlot. Equivalent to a
+// top-level spawn (see acquireSpawnSlotAtDepth).
+func (r *Runtime) acquireSpawnSlot() bool { return r.acquireSpawnSlotAtDepth(0) }
+
+// acquireSpawnSlotAtDepth reserves a background-turn slot for a spawn at a given
+// coordinator-tree depth, keeping part of the pool for shallow work.
+//
+// SpawnMaxConcurrent is a single GLOBAL pool, and a deep coordinator tree can
+// legitimately want more background turns than it holds. Without a reservation
+// one busy branch fills every slot and its siblings — and any unrelated
+// chat/schedule spawn — simply fail with "spawn limit reached" until it drains.
+// That is not a deadlock (a coordinator's auto turns take no slot, so the tree
+// still makes progress), but it starves exactly the levels a human is watching.
+//
+// So a deep spawn may only take a slot while a quarter of the pool is still
+// free. Shallow spawns keep the full pool: the top of the tree never waits on
+// its own descendants.
+func (r *Runtime) acquireSpawnSlotAtDepth(depth int) bool {
 	max := int64(r.tun.SpawnMaxConcurrent())
-	if r.spawnActive.Add(1) > max {
+	limit := max
+	if depth >= deepSpawnDepth {
+		reserve := max / 4
+		if reserve < 1 {
+			reserve = 1
+		}
+		if limit = max - reserve; limit < 1 {
+			// A pool of 1 cannot be shared; let the deep spawn have it rather than
+			// making deep work impossible on a tiny cap.
+			limit = 1
+		}
+	}
+	if r.spawnActive.Add(1) > limit {
 		r.spawnActive.Add(-1)
 		return false
 	}

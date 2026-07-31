@@ -288,6 +288,21 @@ func TestGlobToRegexp(t *testing.T) {
 		{"*.go", "src/main.go", false},
 		{"src/*.ts", "src/app.ts", true},
 		{"src/*.ts", "src/sub/app.ts", false},
+		// "**/" spans WHOLE segments only: a name that merely ends with the
+		// pattern must not match (regression — "**/log_*" used to hit
+		// "d81c8e90-log_....txt", so an agent globbing for a file by name got a
+		// false positive on a differently-named one).
+		{"**/x.go", "a/b/x.go", true},
+		{"**/x.go", "x.go", true},
+		{"**/x.go", "barx.go", false},
+		{"**/x.go", "a/b/barx.go", false},
+		{"**/log_2026*", "art/S1/log_20260729.txt", true},
+		{"**/log_2026*", "art/S1/d81c8e90-log_20260729.txt", false},
+		// A bare ** (no trailing slash) still spans separators.
+		{"artifacts/**", "artifacts/S1/a.txt", true},
+		{"a/**/b.go", "a/x/y/b.go", true},
+		{"a/**/b.go", "a/b.go", true},
+		{"a/**/b.go", "a/x/zzb.go", false},
 	}
 	for _, c := range cases {
 		re, err := globToRegexp(c.pattern)

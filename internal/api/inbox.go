@@ -354,6 +354,12 @@ func (s *Server) recoverAutonomousTurns() {
 			continue
 		}
 		wsp.Runtime.RecoverOrphanedTurns(context.Background())
+		// AFTER the orphan pass, never before: a sub-coordinator that still owes its
+		// coordinator a report usually gets one more turn out of that pass (its
+		// recovered workers notify it), and should report for itself. Re-arming the
+		// backstop here lets it do exactly that — the backstop only fires for a node
+		// that is still quiet once the grace period elapses.
+		wsp.Runtime.RecoverPendingReports(context.Background())
 	}
 }
 

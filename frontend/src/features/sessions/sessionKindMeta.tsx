@@ -35,6 +35,26 @@ export const FILTERS: { key: string; label: string }[] = [
   { key: 'schedule', label: 'Zamanlama' },
 ]
 
+// Top-level sidebar tab (Aktif / Arşiv / Workers). 'active' is the default and
+// is therefore omitted from the URL.
+export type SessionListTab = 'active' | 'archived' | 'workers'
+
+// Persisted kind filter — the sidebar lists every session kind, so the tab
+// choice is worth remembering across reloads (same rationale as the width). The
+// URL wins over this when it carries an explicit ?kind=.
+export const KIND_FILTER_KEY = 'tionswarm.sessionKindFilter'
+
+// normalizeSessionListTab coerces an untrusted value (URL segment, storage) to a
+// live tab; anything unknown falls back to the default view.
+export function normalizeSessionListTab(v: string | null | undefined): SessionListTab {
+  return v === 'archived' || v === 'workers' ? v : 'active'
+}
+
+// normalizeKindFilter coerces an untrusted value to a known filter key ('' = all).
+export function normalizeKindFilter(v: string | null | undefined): string {
+  return v != null && FILTERS.some((f) => f.key === v) ? v : ''
+}
+
 export function kindMeta(kind: string) {
   return KIND_META[kind] ?? { label: kind || 'Diğer', icon: Activity }
 }

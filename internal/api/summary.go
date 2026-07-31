@@ -191,6 +191,7 @@ func (s *Server) compactSession(ctx context.Context, wsp *workspace.Workspace, s
 		return "", err
 	}
 	ctx = conversation.WithCompactPrompt(ctx, wsp.Runtime.CompactPromptTemplate())
+	ctx = conversation.WithAttachmentRoot(ctx, wsp.SandboxRoot())
 	folded, summary, err := s.convo.ForceCompact(ctx, wsp.DB, provider, session, agentRow, history)
 	if err != nil {
 		return "", err

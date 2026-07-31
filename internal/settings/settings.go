@@ -1,4 +1,4 @@
-﻿// Package settings holds the application-global, user-editable configuration
+// Package settings holds the application-global, user-editable configuration
 // that backs the Settings screen. It is a single JSON document persisted in the
 // data directory; the sensitive Anthropic API key is stored AES-GCM encrypted
 // and never returned to clients in plaintext.
@@ -299,11 +299,11 @@ type Settings struct {
 
 	// Spawn guards — the detached background surface: run_subagent wait:"async"
 	// (native) and the bridged spawn_session (claude-cli) + the UI spawn button.
-	SpawnMaxConcurrent int `json:"spawnMaxConcurrent"` // max concurrent spawned sessions (0 = default 16)
-	SpawnMaxPerTurn    int `json:"spawnMaxPerTurn"`    // max spawns per agent turn (0 = default 4)
-	SpawnTimeoutMin    int `json:"spawnTimeoutMin"`    // spawn work-turn deadline in minutes (0 = default 20); also budgets its auto-continue continuations
+	SpawnMaxConcurrent  int `json:"spawnMaxConcurrent"`  // max concurrent spawned sessions (0 = default 16)
+	SpawnMaxPerTurn     int `json:"spawnMaxPerTurn"`     // max spawns per agent turn (0 = default 4)
+	SpawnTimeoutMin     int `json:"spawnTimeoutMin"`     // spawn work-turn deadline in minutes (0 = default 20); also budgets its auto-continue continuations
 	SpawnIdleTimeoutMin int `json:"spawnIdleTimeoutMin"` // spawn/worker inactivity watchdog in minutes (0 = default 5); cancels a turn that emits no step for this long
-	ScheduleTimeoutMin int `json:"scheduleTimeoutMin"` // scheduled-fire (cron task/prompt + wake) deadline in minutes (0 = default 30)
+	ScheduleTimeoutMin  int `json:"scheduleTimeoutMin"`  // scheduled-fire (cron task/prompt + wake) deadline in minutes (0 = default 30)
 
 	// Tool execution guards (process-global tool behaviour).
 	ShellDefaultTimeoutSec int `json:"shellDefaultTimeoutSec"` // default Bash/PowerShell timeout in seconds (0 = default 30); per-call timeout_sec still overrides
@@ -313,6 +313,19 @@ type Settings struct {
 	// Coordinator/worker guards (M2, _Docs/47).
 	CoordinatorMaxWorkers int `json:"coordinatorMaxWorkers"` // max active workers per coordinator (0 = default 8)
 	CoordinatorMaxTurns   int `json:"coordinatorMaxTurns"`   // max auto-triggered coordinator turns per session (0 = default 50)
+	// CoordinatorMaxDepth bounds how deep a coordinator TREE may nest (root = 0);
+	// -1 = unlimited nesting. CoordinatorMaxSubtreeSessions bounds the TOTAL worker
+	// sessions in one tree across every level; -1 = unlimited. The per-coordinator
+	// worker cap above cannot do that job: it is enforced per node, so depth
+	// multiplies it instead of adding to it.
+	CoordinatorMaxDepth           int `json:"coordinatorMaxDepth"`
+	CoordinatorMaxSubtreeSessions int `json:"coordinatorMaxSubtreeSessions"`
+	// CoordinatorSettleGraceSec is how long the upward-report backstop waits after
+	// a sub-coordinator's branch goes quiet before auto-reporting for it. Tune it to
+	// the model behind the coordinators: too short and a slow synthesis turn loses
+	// the race, so the parent gets a needless "incomplete"; too long and a genuinely
+	// stalled branch keeps its coordinator waiting.
+	CoordinatorSettleGraceSec int `json:"coordinatorSettleGraceSec"`
 
 	// Working-directory guards. The built-in fs/shell tools are unconfined (may
 	// touch any path); these brake that power on autonomous (no-human) turns.
@@ -442,18 +455,21 @@ func Default() Settings {
 		DelegationMaxDepth: 3,
 		DelegationMaxCalls: 8,
 
-		SpawnMaxConcurrent: 16,
-		SpawnMaxPerTurn:    4,
-		SpawnTimeoutMin:    20,
+		SpawnMaxConcurrent:  16,
+		SpawnMaxPerTurn:     4,
+		SpawnTimeoutMin:     20,
 		SpawnIdleTimeoutMin: 5,
-		ScheduleTimeoutMin: 30,
+		ScheduleTimeoutMin:  30,
 
 		ShellDefaultTimeoutSec: 30,
 		ShellMaxTimeoutSec:     120,
 		MaxToolOutputKB:        100,
 
-		CoordinatorMaxWorkers: 8,
-		CoordinatorMaxTurns:   50,
+		CoordinatorMaxWorkers:         8,
+		CoordinatorMaxTurns:           50,
+		CoordinatorMaxDepth:           5,
+		CoordinatorMaxSubtreeSessions: 64,
+		CoordinatorSettleGraceSec:     30,
 
 		// Autonomous turns confine fs/shell by default (safety brake).
 		AutonomousConfine: true,
@@ -566,18 +582,21 @@ type DTO struct {
 	DelegationMaxDepth  int  `json:"delegationMaxDepth"`
 	DelegationMaxCalls  int  `json:"delegationMaxCalls"`
 
-	SpawnMaxConcurrent int `json:"spawnMaxConcurrent"`
-	SpawnMaxPerTurn    int `json:"spawnMaxPerTurn"`
-	SpawnTimeoutMin    int `json:"spawnTimeoutMin"`
+	SpawnMaxConcurrent  int `json:"spawnMaxConcurrent"`
+	SpawnMaxPerTurn     int `json:"spawnMaxPerTurn"`
+	SpawnTimeoutMin     int `json:"spawnTimeoutMin"`
 	SpawnIdleTimeoutMin int `json:"spawnIdleTimeoutMin"`
-	ScheduleTimeoutMin int `json:"scheduleTimeoutMin"`
+	ScheduleTimeoutMin  int `json:"scheduleTimeoutMin"`
 
 	ShellDefaultTimeoutSec int `json:"shellDefaultTimeoutSec"`
 	ShellMaxTimeoutSec     int `json:"shellMaxTimeoutSec"`
 	MaxToolOutputKB        int `json:"maxToolOutputKB"`
 
-	CoordinatorMaxWorkers int `json:"coordinatorMaxWorkers"`
-	CoordinatorMaxTurns   int `json:"coordinatorMaxTurns"`
+	CoordinatorMaxWorkers         int `json:"coordinatorMaxWorkers"`
+	CoordinatorMaxTurns           int `json:"coordinatorMaxTurns"`
+	CoordinatorMaxDepth           int `json:"coordinatorMaxDepth"`
+	CoordinatorMaxSubtreeSessions int `json:"coordinatorMaxSubtreeSessions"`
+	CoordinatorSettleGraceSec     int `json:"coordinatorSettleGraceSec"`
 
 	AutonomousConfine bool `json:"autonomousConfine"`
 	AutonomousBootSeq bool `json:"autonomousBootSeq"`
@@ -678,18 +697,21 @@ func (s Settings) ToDTO() DTO {
 		DelegationMaxDepth:      s.DelegationMaxDepth,
 		DelegationMaxCalls:      s.DelegationMaxCalls,
 
-		SpawnMaxConcurrent: s.SpawnMaxConcurrent,
-		SpawnMaxPerTurn:    s.SpawnMaxPerTurn,
-		SpawnTimeoutMin:    s.SpawnTimeoutMin,
+		SpawnMaxConcurrent:  s.SpawnMaxConcurrent,
+		SpawnMaxPerTurn:     s.SpawnMaxPerTurn,
+		SpawnTimeoutMin:     s.SpawnTimeoutMin,
 		SpawnIdleTimeoutMin: s.SpawnIdleTimeoutMin,
-		ScheduleTimeoutMin: s.ScheduleTimeoutMin,
+		ScheduleTimeoutMin:  s.ScheduleTimeoutMin,
 
 		ShellDefaultTimeoutSec: s.ShellDefaultTimeoutSec,
 		ShellMaxTimeoutSec:     s.ShellMaxTimeoutSec,
 		MaxToolOutputKB:        s.MaxToolOutputKB,
 
-		CoordinatorMaxWorkers: s.CoordinatorMaxWorkers,
-		CoordinatorMaxTurns:   s.CoordinatorMaxTurns,
+		CoordinatorMaxWorkers:         s.CoordinatorMaxWorkers,
+		CoordinatorMaxTurns:           s.CoordinatorMaxTurns,
+		CoordinatorMaxDepth:           s.CoordinatorMaxDepth,
+		CoordinatorMaxSubtreeSessions: s.CoordinatorMaxSubtreeSessions,
+		CoordinatorSettleGraceSec:     s.CoordinatorSettleGraceSec,
 
 		AutonomousConfine: s.AutonomousConfine,
 		AutonomousBootSeq: s.AutonomousBootSeq,
@@ -797,8 +819,11 @@ type Patch struct {
 	SpawnIdleTimeoutMin *int `json:"spawnIdleTimeoutMin"`
 	ScheduleTimeoutMin  *int `json:"scheduleTimeoutMin"`
 
-	CoordinatorMaxWorkers *int `json:"coordinatorMaxWorkers"`
-	CoordinatorMaxTurns   *int `json:"coordinatorMaxTurns"`
+	CoordinatorMaxWorkers         *int `json:"coordinatorMaxWorkers"`
+	CoordinatorMaxTurns           *int `json:"coordinatorMaxTurns"`
+	CoordinatorMaxDepth           *int `json:"coordinatorMaxDepth"`
+	CoordinatorMaxSubtreeSessions *int `json:"coordinatorMaxSubtreeSessions"`
+	CoordinatorSettleGraceSec     *int `json:"coordinatorSettleGraceSec"`
 
 	AutonomousConfine *bool `json:"autonomousConfine"`
 	AutonomousBootSeq *bool `json:"autonomousBootSeq"`

@@ -51,6 +51,7 @@ conversation ve api çevrim olmadan bağımlı olabilir).
 | `auto-continue` | otonom devam dürtmesi (autocontinue.go) | — | — |
 | `coordinator` | koordinatör el kitabı (api/chat_turn.go statik prefix) | — | ✅ |
 | `subagent-explore/coder/reviewer/config` | run_subagent profilleri (subagent.go) — allowlist'ler kodda kaldı (güvenlik sözleşmesi) | — | ✅ |
+| `terse` | terse (caveman) yanıt stili — yalnız `WSSettings.TerseMode` açıkken statik prefix'e eklenir (`agent/tersemode.go`) | — | ✅ |
 
 Kayıt dışı bırakılanlar (bilinçli): structured-output şemaları (parser sözleşmesi),
 dinamik context blokları (lessons/todo/env — veri, prompt değil), tool
@@ -68,8 +69,8 @@ cevaplanır. Damgalı yollar: summary, title, lesson, insight-analyzer, btw-syst
 ## API / UI
 
 - `GET/PATCH /api/workspace-config` — `promptMeta` (label/hint/placeholders/
-  epochAffecting) eklendi; `promptKeys` artık 15 anahtar. `""` yazmak dosyayı
-  temizler (default devralır).
+  epochAffecting) eklendi; `promptKeys` artık 16 anahtar (2026-08-01: `terse`).
+  `""` yazmak dosyayı temizler (default devralır).
 - Ayarlar → Promptlar & Dosyalar: tüm anahtarlar registry metadata'sıyla render
   edilir; "özelleştirildi" etiketi, "yeni oturumlarda etkili" epoch rozeti ve
   eksik-yer-tutucu uyarısı eklendi. Editörler **içeriğe göre otomatik boyutlanır**

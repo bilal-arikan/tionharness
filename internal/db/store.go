@@ -451,12 +451,150 @@ func (d *DB) SetSessionAgent(ctx context.Context, sessionID, agentID string) err
 	})
 }
 
-// SetSessionRole sets a session's coordinator/worker role (M2). "coordinator"
-// turns it into a coordinator (gets the coordinator prompt + worker tools); ""
-// reverts it to an ordinary session. Worker role is set at spawn time, not here.
-func (d *DB) SetSessionRole(ctx context.Context, sessionID, role string) error {
+// SetCoordinatorMode turns a session's coordinator capability on or off (M2). It
+// touches ONLY CoordinatorMode: Role stays whatever the session's lineage is, so
+// enabling it on a worker produces a mid-level node (worker + coordinator) rather
+// than severing its link to its parent. Disabling also clears the LEGACY Role
+// value, otherwise IsCoordinator() would keep returning true on an old session
+// and the toggle would silently do nothing.
+func (d *DB) SetCoordinatorMode(ctx context.Context, sessionID string, enabled bool) error {
 	return d.mutateSessionLocked(sessionID, func(s *Session) {
-		s.Role = role
+		s.CoordinatorMode = enabled
+		if !enabled && s.Role == SessionRoleCoordinator {
+			s.Role = ""
+		}
+	})
+}
+
+// SetSessionCoordinatorLineage stamps a freshly spawned worker's place in its
+// coordinator tree: its parent, the tree root, and its depth below that root.
+// Written once at spawn time, never edited afterwards — the tree shape is fixed
+// at creation, which is what makes RootCoordinator()/depth safe to trust for
+// tree-wide budgeting.
+func (d *DB) SetSessionCoordinatorLineage(ctx context.Context, sessionID, parentID, rootID string, depth int) error {
+	return d.mutateSessionLocked(sessionID, func(s *Session) {
+		s.CoordinatorSessionID = parentID
+		s.RootCoordinatorSessionID = rootID
+		s.CoordinatorDepth = depth
+	})
+}
+
+// SetCoordinatorReportPending records whether a mid-level node still owes its
+// coordinator an upward report (see Session.CoordinatorReportPending).
+func (d *DB) SetCoordinatorReportPending(ctx context.Context, sessionID string, pending bool) error {
+	return d.mutateSessionLocked(sessionID, func(s *Session) {
+		s.CoordinatorReportPending = pending
+	})
+}
+
+// ListPendingCoordinatorReports returns every non-archived session that still owes
+// its coordinator a report. Read at boot to re-arm the settle backstop for nodes
+// whose owed report would otherwise be forgotten across a restart.
+func (d *DB) ListPendingCoordinatorReports(ctx context.Context) ([]Session, error) {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	var out []Session
+	for _, s := range d.sessions {
+		if s.CoordinatorReportPending && s.State != "archived" && s.CoordinatorSessionID != "" {
+			out = append(out, s)
+		}
+	}
+	return out, nil
+}
+
+// ListCoordinatorTree returns every session in the coordinator tree that sessionID
+// belongs to, INCLUDING the root and sessionID itself, in breadth-first order from
+// the root. Accepts any member of the tree (root, mid-level node, or leaf) and
+// normalizes to the root first — the same contract as ListFlowRunTree (_Docs/62),
+// so a UI can hand it whatever session the user happens to be looking at.
+//
+// One pass over the session map builds the parent→children index: walking
+// CoordinatorSessionID per node would be O(depth) lookups per node, and this runs
+// on every coordinator turn (the live worker-status block).
+func (d *DB) ListCoordinatorTree(ctx context.Context, sessionID string) ([]Session, error) {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	start, ok := d.sessions[sessionID]
+	if !ok {
+		return nil, ErrNotFound
+	}
+	rootID := start.RootCoordinator()
+	if rootID == "" {
+		return []Session{start}, nil // neither coordinator nor worker: a tree of one
+	}
+	root, ok := d.sessions[rootID]
+	if !ok {
+		// The root was deleted out from under its subtree. Treat the caller as the
+		// root so the surviving nodes stay reachable — returning an empty tree here
+		// would read as "no workers" to a coordinator still waiting on them.
+		root, rootID = start, start.ID
+	}
+	children := map[string][]Session{}
+	for _, s := range d.sessions {
+		if s.CoordinatorSessionID != "" {
+			children[s.CoordinatorSessionID] = append(children[s.CoordinatorSessionID], s)
+		}
+	}
+	out := []Session{root}
+	queue := []string{rootID}
+	seen := map[string]bool{rootID: true}
+	for len(queue) > 0 {
+		cur := queue[0]
+		queue = queue[1:]
+		kids := children[cur]
+		sortSessionsByCreation(kids)
+		for _, k := range kids {
+			if seen[k.ID] {
+				continue // defensive: a hand-edited parent cycle must not hang the walk
+			}
+			seen[k.ID] = true
+			out = append(out, k)
+			queue = append(queue, k.ID)
+		}
+	}
+	return out, nil
+}
+
+// ListCoordinatorAncestors returns the chain from sessionID's ROOT down to its
+// direct parent (root first, parent last); empty for a root or an ordinary
+// session. This is the breadcrumb a worker walks upward to see who it reports to.
+func (d *DB) ListCoordinatorAncestors(ctx context.Context, sessionID string) ([]Session, error) {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	s, ok := d.sessions[sessionID]
+	if !ok {
+		return nil, ErrNotFound
+	}
+	var chain []Session
+	seen := map[string]bool{sessionID: true} // bounds a hand-edited parent cycle
+	for cur := s.CoordinatorSessionID; cur != ""; {
+		if seen[cur] {
+			break
+		}
+		seen[cur] = true
+		p, ok := d.sessions[cur]
+		if !ok {
+			break
+		}
+		chain = append(chain, p)
+		cur = p.CoordinatorSessionID
+	}
+	// Collected parent-first; callers want root-first.
+	for i, j := 0, len(chain)-1; i < j; i, j = i+1, j-1 {
+		chain[i], chain[j] = chain[j], chain[i]
+	}
+	return chain, nil
+}
+
+// sortSessionsByCreation orders siblings oldest-first so a tree walk is stable
+// across calls. CreatedAt has second resolution, so ties fall back to the id
+// (monotonic per store) rather than leaving sibling order to map iteration.
+func sortSessionsByCreation(ss []Session) {
+	sort.Slice(ss, func(i, j int) bool {
+		if ss[i].CreatedAt != ss[j].CreatedAt {
+			return ss[i].CreatedAt < ss[j].CreatedAt
+		}
+		return ss[i].ID < ss[j].ID
 	})
 }
 

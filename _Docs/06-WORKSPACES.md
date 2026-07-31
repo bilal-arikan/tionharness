@@ -267,6 +267,7 @@ override'larını `store/` yanındaki `ws-settings.json` dosyasında tutar
 | `icon`, `color` | Switcher/rail'de görsel kimlik |
 | `pauseAutonomy` | Sadece bu workspace'in otonomisini (scheduler) durdurur — anahtar **Zamanlamalar** ekranının üstünde (2026-07-01: app-geneli pause kaldırıldı, pause artık yalnız workspace-özel) |
 | `instructions` | **Bu workspace'teki tüm agent'lara eklenen serbest metin yönergeler** |
+| `terseMode` | **Terse (caveman) yanıt stili** — açıkken `terse` registry promptu statik prefix'e eklenir (aşağıya bak) |
 
 > **Not (2026-07-25):** Hem workspace-özel `defaultProvider`/`defaultModel` alanı hem de
 > app-geneli varsayılan sağlayıcı/model **tamamen kaldırıldı**. Sağlayıcı/model soyut bir
@@ -286,6 +287,36 @@ prompt cache'i bozmaz.
 - **Otonom yollar** (schedule / task / flow / reflection): `internal/agent/runtime.go` →
   `Runtime.systemPrompt(agent)`. Runtime, değeri `SetInstructions` ile ayarlardan
   senkron tutar (ilk yükleme `loadSettings`, sonraki güncellemeler `UpdateSettings`).
+
+### Terse (caveman) mod (`terseMode`)
+
+**Sorun:** yanıt stili kuralı ancak **her zaman yürürlükteyse** işe yarar. Skill olarak
+tutulduğunda Available Skills kataloğunda yalnız tek satır özet görünür ve modele ancak
+kendisi `use_skill` çağırmaya karar verirse ulaşır — pratikte kullanıcı "terse" demedikçe
+hiç ateşlenmez. Bu yüzden skill değil, **prompt**.
+
+Anahtar açıkken `terse` **registry promptu** (`_Docs\61`) her ajanın statik system
+prefix'ine, workspace instructions'ın **ardından** eklenir (sıra bilinçli: workspace
+kuralı stili ezebilsin diye). Kapalıyken tek bayt gönderilmez.
+
+- **Metin düzenlenebilir:** çözümleme `<workspace>/config/prompts/terse.md` override →
+  gömülü `internal/prompts/defaults/terse.md`. Boş/bozuk override varsayılana düşer, yani
+  kötü bir edit modu sessizce devre dışı bırakamaz.
+- **Maliyet:** statik prefix → prompt-cache penceresi başına bir kez ödenir, her tur değil.
+- **Epoch:** `EpochAffecting: true` — anahtarı veya metni değiştirmek **açık oturumları**
+  anında etkilemez; `/refresh-context` ya da yeni oturum gerekir (cache'i koruyan mevcut
+  davranış).
+- **Tek kaynak:** `Runtime.TerseModeBlock()` — hem headless (`systemPrompt`) hem api tarafı
+  (chat turu, bağlam önizlemesi, oturum bilgisi) aynı metni ve aynı anahtarı okur.
+- **Varsayılan metnin kaynağı:** [juliusbrussee/caveman](https://github.com/juliusbrussee/caveman)
+  (MIT) uyarlaması — sıkıştırma kuralları, "stili asla ilan etme" ve auto-clarity istisnaları
+  oradan. Üstüne ajan-özgü **iki** kural eklendi (o proje sohbet skill'i olduğu için içermiyor):
+  **(a)** stil yalnız sohbet cevabını yönetir, diske yazılan içeriği (kod/commit/doküman) DEĞİL;
+  **(b)** çıktıyı kısaltır, **işi** değil — kısalık için dosya okumayı/test koşmayı atlamak yasak.
+  Seviyeler (lite/full/ultra) bilerek alınmadı: seçici yok, ölü ağırlık olurdu.
+- **Kod:** `internal/agent/tersemode.go`, `WSSettings.TerseMode` → `Runtime.SetTerseMode`.
+- **UI:** Workspace ▸ Genel ▸ "Yanıt stili" ▸ *Terse mod (caveman)*; metin Workspace ▸
+  Promptlar & Dosyalar ▸ "Terse (caveman) yanıt stili".
 
 ## Notlar / Gelecek
 

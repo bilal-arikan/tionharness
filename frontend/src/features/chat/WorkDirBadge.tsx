@@ -100,13 +100,19 @@ export function WorkDirBadge({ sessionId }: { sessionId?: string }) {
         }`}
       >
         <FolderOpen size={15} className="shrink-0" />
-        <span className="hidden truncate sm:inline">{label}</span>
-        {info?.branch && (
-          <span className="hidden items-center gap-0.5 opacity-70 md:flex">
-            <GitBranch size={12} />
-            <span className="max-w-[80px] truncate">{info.branch}</span>
-          </span>
-        )}
+        {/* Folder on the first line, branch on the second — same two-line shape
+            as the agent picker next to it, so the composer row lines up and
+            neither value has to fight the other for horizontal space. Collapses
+            to the icon alone on phones. */}
+        <span className="hidden min-w-0 flex-col items-start gap-0 leading-tight sm:flex">
+          <span className="max-w-full truncate text-xs">{label}</span>
+          {info?.branch && (
+            <span className="flex max-w-full items-center gap-0.5 text-[10px] opacity-70">
+              <GitBranch size={10} className="shrink-0" />
+              <span className="truncate">{info.branch}</span>
+            </span>
+          )}
+        </span>
       </button>
 
       {open && (
@@ -144,7 +150,9 @@ export function WorkDirBadge({ sessionId }: { sessionId?: string }) {
 
           {/* Subdirectory list. */}
           <div className="max-h-56 overflow-y-auto rounded-lg border border-[var(--color-border)]">
-            {busy && <div className="px-2 py-3 text-xs text-[var(--color-text-dim)]">Yükleniyor…</div>}
+            {busy && (
+              <div className="px-2 py-3 text-xs text-[var(--color-text-dim)]">Yükleniyor…</div>
+            )}
             {!busy && (browse?.entries.length ?? 0) === 0 && (
               <div className="px-2 py-3 text-xs text-[var(--color-text-dim)]">Alt klasör yok</div>
             )}

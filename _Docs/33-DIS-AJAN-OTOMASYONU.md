@@ -214,7 +214,7 @@ doğru okusun).
 
 ### B.1 URL Deep-Link (en güçlü giriş noktası)
 
-Hash-tabanlı routing (`lib/url.ts`): `#/w/{workspaceId}/{view}[/{entityId}]`
+Hash-tabanlı routing (`app/url.ts`): `#/w/{workspaceId}/{view}[/{entityId}][?k=v&…]`
 
 ```
 #/w/WS1/chat/SES42        → belirli oturum
@@ -224,6 +224,19 @@ Hash-tabanlı routing (`lib/url.ts`): `#/w/{workspaceId}/{view}[/{entityId}]`
 ```
 View'lar: `chat · executions · agents · network · board · schedules · memory · flows ·
 artifacts · skills · market · budget · logs · workspace · settings`.
+
+**Hash query (alt-durum).** Tek `entityId` yuvası dolu olan ekranlarda alt-sekmeler
+query'de taşınır (`routeQueryForView`); varsayılan değerler URL'e yazılmaz, yani
+gündelik adres eskisiyle aynı kalır. Bugünkü tek müşteri sohbet listesi sekmeleridir:
+
+```
+#/w/WS1/chat?list=workers          → Workers sekmesi
+#/w/WS1/chat/SES42?kind=task       → Görev türü filtresi + açık oturum
+#/w/WS1/chat?list=archived&kind=flow
+```
+`list` ∈ `active`(vars.)·`archived`·`workers`, `kind` ∈ `''`(Tümü)·`chat`·`task`·`flow`·
+`spawned`·`schedule`. Bilinmeyen değer sessizce varsayılana düşer; URL otoritedir
+(query yoksa sekmeler varsayılana döner).
 
 Ajan herhangi bir ekrana doğrudan `browser_navigate` ile zıplayabilir — menü gezmeye gerek yok.
 
@@ -257,7 +270,8 @@ hedefle (ör. `[data-testid="schedule-row"][data-schedule-id="SCH1"]`).
 | **Agents — form** | `agent-name-input`, `agent-soul-textarea`, `agent-identity-textarea`, `agent-save`, `agent-cancel`, `agent-delete`, `agent-thinking-level`, `agent-permission-mode`, `agent-preview-context`, `agent-copy-path`, `agent-reveal-folder` | `agent-color` (`data-color`). Not: `planningMode` 2026-06-28'de kaldırıldı (artık testid yok). |
 | **Agents — provider/tools/skills** | `provider-select`, `model-select`/`model-custom-input`, `model-reset-to-list`, `agent-tools-enable-checkbox`, `agent-tools-select-all/none` | `agent-tool-checkbox` (`data-tool-name`), `skill-move-up/down`, `skill-remove`, `skill-add-restricted/shared` (`data-skill-slug`) |
 | **Agents — picker/emoji** | `agent-picker-trigger`, `emoji-search-input`, `emoji-clear` | `agent-picker-option` (`data-agent-id`), `emoji-category` (`data-category`), `emoji-pick` (`data-emoji`) |
-| **Tasks** | `task-board-columns-editor`, `task-create-description-input`, `task-create-owner-wrap`, `task-create-flow-select`, `task-create-submit`, `task-sort-by-deps`, `task-detail-{close,save,delete,owner-wrap,deps-dropzone}`, `task-title-input`, `task-retitle-ai`, `task-description-textarea`, `task-boardstate-select` | `task-card` (`data-task-id`) |
+| **Tasks** | `task-board-columns-editor` (yalnızca "Durum" ekseninde görünür), `task-create-description-input`, `task-create-owner-wrap`, `task-create-flow-select`, `task-create-submit`, `task-detail-{close,save,delete,owner-wrap,deps-dropzone}`, `task-title-input`, `task-retitle-ai`, `task-description-textarea`, `task-boardstate-select`, `task-priority-select`, `task-start-date`, `task-due-date` | `task-card` (`data-task-id`) |
+| **Tasks — görünüm çubuğu** | `board-filter-search`, `board-view-menu`, `board-view-save`, `board-group-by`, `board-sort`, `board-filter-count` | — Not: `task-sort-by-deps` 2026-07-31'de kaldırıldı; bağımlılık sıralaması artık `board-sort` içinde bir seçenek. Bkz. [67](67-BOARD-GORUNUMLERI.md) |
 | **Tasks — sütun editörü** | `board-column-add`, `board-column-save` | `column-{label-input,color-toggle,color-preset,custom-color-input,hex-color-input,delete,move-up,move-down}` (`data-col-index`) |
 | **Schedules** | `schedule-create-{agent-wrap,cron-preset-select,cron-input,expires-input,prompt-input,submit}` | `schedule-row`, `schedule-{enable-toggle,run-now,edit,delete}`, `schedule-edit-{cron-input,prompt-input,save,cancel}` (`data-schedule-id`) |
 | **Settings — providers** | `custom-provider-{id-input,label-input,kind-select,default-model-input,base-url-input,models-input,save,cancel}` | `provider-{key-picker,clear-key,endpoint-input,test}` (`data-provider`), `custom-provider-{edit,delete}` (`data-provider-id`) |

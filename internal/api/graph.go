@@ -3,12 +3,20 @@ package api
 import (
 	"net/http"
 
+	"github.com/bilal-arikan/tionswarm/internal/agent"
+	"github.com/bilal-arikan/tionswarm/internal/db"
 	"github.com/bilal-arikan/tionswarm/internal/orchestration"
 )
 
 // graphNode is one entity in the workspace collaboration network. ID is
-// type-prefixed ("agent:<id>", "task:<id>", "flow:<id>", "skill:<slug>",
-// "mcp:<id>") so ids are unique across types and edges can reference them.
+// type-prefixed ("agent:<id>#<sessionID>", "task:<id>", "flow:<id>",
+// "skill:<slug>", "mcp:<id>") so ids are unique across types and edges can
+// reference them.
+//
+// Agents are RUNTIME INSTANCES, not definitions: one node per in-flight session
+// (chat / task / flow / schedule / spawned / worker / inbox). An agent driving
+// three sessions appears three times; an agent with nothing running does not
+// appear at all. That is why the agent id carries the session suffix.
 type graphNode struct {
 	ID     string `json:"id"`
 	Type   string `json:"type"` // agent | task | flow | skill | mcp
@@ -20,12 +28,21 @@ type graphNode struct {
 	Status string `json:"status,omitempty"` // task board state
 	Desc   string `json:"desc,omitempty"`   // longer description (task tooltip)
 
-	// Live activity (agents only): whether the agent has an in-flight run right
-	// now, what kind (task|flow|chat|schedule) and the type-prefixed id
-	// of the task/flow it is running (empty for chat/schedule).
+	// Live activity (agents only): agent nodes exist ONLY while running, so
+	// Running is always true on them. RunKind is the session kind driving this
+	// instance and RunTarget the type-prefixed id of the task/flow it is running
+	// (empty for chat/schedule/spawned).
 	Running   bool   `json:"running,omitempty"`
 	RunKind   string `json:"runKind,omitempty"`
 	RunTarget string `json:"runTarget,omitempty"`
+
+	// SessionID is the running session behind an agent instance node (agents
+	// only) — lets the UI deep-link an instance to its transcript.
+	SessionID string `json:"sessionId,omitempty"`
+
+	// AgentID is the underlying agent definition id shared by every instance of
+	// the same agent (agents only).
+	AgentID string `json:"agentId,omitempty"`
 }
 
 // graphEdge links two graph nodes. Kind names the relationship so the frontend
@@ -85,13 +102,8 @@ func (s *Server) handleWorkspaceGraph(w http.ResponseWriter, r *http.Request) {
 	nodes := make([]graphNode, 0, len(agents)+len(tasks)+len(flows))
 	edges := make([]graphEdge, 0)
 
-	// Per-agent live activity: which agent currently has an in-flight streaming
-	// run, derived from the process-wide running session set joined to this
-	// workspace's sessions. A task/flow-kind running session bonds the agent to
-	// that task/flow node in the live view; chat/schedule just mark it
-	// as running (a glow, no specific target).
-	type activity struct{ kind, target string }
-	agentAct := map[string]activity{}
+	// Which sessions are in flight right now, derived from the process-wide
+	// running session set joined to this workspace's sessions.
 	running := map[string]bool{}
 	for _, id := range s.runs.activeSessionIDs(wsp.ID) {
 		running[id] = true // chat-streaming turns
@@ -99,48 +111,28 @@ func (s *Server) handleWorkspaceGraph(w http.ResponseWriter, r *http.Request) {
 	for _, id := range wsp.Runtime.ActiveSessionIDs() {
 		running[id] = true // autonomous + flow/task runs (schedule/spawn/flow)
 	}
-	// Session list backs both the live activity (running) join and the completed
+	// Session list backs both the agent instance nodes and the completed
 	// run-history nodes built later.
 	sessions, _ := wsp.DB.ListSessions(ctx, "")
-	for _, sess := range sessions {
-		if !running[sess.ID] || sess.AgentID == "" {
-			continue
-		}
-		target := ""
-		switch sess.Kind {
-		case "task":
-			if sess.SourceID != "" {
-				target = taskPfx + sess.SourceID
-			}
-		case "flow":
-			if sess.SourceID != "" {
-				target = flowPfx + sess.SourceID
-			}
-		}
-		agentAct[sess.AgentID] = activity{kind: sess.Kind, target: target}
-	}
 
 	agentExists := make(map[string]bool, len(agents))
 	for _, a := range agents {
 		agentExists[a.ID] = true
-		sub := a.Provider
-		if a.Model != "" {
-			sub = a.Provider + " · " + a.Model
+	}
+
+	instanceNodes, agentInstances := buildAgentInstances(agents, sessions, running)
+	nodes = append(nodes, instanceNodes...)
+
+	// addAgentEdges links every live instance of an agent to another node. With
+	// no running instance the relationship simply isn't drawn.
+	addAgentEdges := func(agentID, other, kind string, agentIsSource bool) {
+		for _, inst := range agentInstances[agentID] {
+			if agentIsSource {
+				edges = append(edges, graphEdge{Source: inst, Target: other, Kind: kind})
+			} else {
+				edges = append(edges, graphEdge{Source: other, Target: inst, Kind: kind})
+			}
 		}
-		node := graphNode{
-			ID:    agentPfx + a.ID,
-			Type:  "agent",
-			Label: a.Name,
-			Sub:   sub,
-			Color: a.Color,
-			Emoji: a.Avatar,
-		}
-		if act, ok := agentAct[a.ID]; ok {
-			node.Running = true
-			node.RunKind = act.kind
-			node.RunTarget = act.target
-		}
-		nodes = append(nodes, node)
 	}
 
 	for _, t := range tasks {
@@ -148,11 +140,12 @@ func (s *Server) handleWorkspaceGraph(w http.ResponseWriter, r *http.Request) {
 		if label == "" {
 			label = "(başlıksız görev)"
 		}
-		// Cluster a task under its owner agent when one exists, so the layout
-		// draws tasks as spokes around their agent hub (like the reference graph).
+		// Cluster a task under its owner agent when that agent has a live
+		// instance, so the layout draws tasks as spokes around their agent hub.
+		// Multiple instances → cluster under the first one (a task has one hub).
 		group := ""
-		if t.OwnerAgentID != "" && agentExists[t.OwnerAgentID] {
-			group = agentPfx + t.OwnerAgentID
+		if inst := agentInstances[t.OwnerAgentID]; len(inst) > 0 {
+			group = inst[0]
 		}
 		nodes = append(nodes, graphNode{
 			ID:     taskPfx + t.ID,
@@ -162,11 +155,11 @@ func (s *Server) handleWorkspaceGraph(w http.ResponseWriter, r *http.Request) {
 			Group:  group,
 			Desc:   t.Description,
 		})
-		if t.OwnerAgentID != "" && agentExists[t.OwnerAgentID] {
-			edges = append(edges, graphEdge{Source: agentPfx + t.OwnerAgentID, Target: taskPfx + t.ID, Kind: "owns"})
+		if t.OwnerAgentID != "" {
+			addAgentEdges(t.OwnerAgentID, taskPfx+t.ID, "owns", true)
 		}
-		if t.CreatedBy != "" && t.CreatedBy != t.OwnerAgentID && agentExists[t.CreatedBy] {
-			edges = append(edges, graphEdge{Source: agentPfx + t.CreatedBy, Target: taskPfx + t.ID, Kind: "created"})
+		if t.CreatedBy != "" && t.CreatedBy != t.OwnerAgentID {
+			addAgentEdges(t.CreatedBy, taskPfx+t.ID, "created", true)
 		}
 		if t.FlowID != "" {
 			edges = append(edges, graphEdge{Source: taskPfx + t.ID, Target: flowPfx + t.FlowID, Kind: "runs"})
@@ -187,20 +180,24 @@ func (s *Server) handleWorkspaceGraph(w http.ResponseWriter, r *http.Request) {
 			for _, n := range g.Nodes {
 				if n.Type == orchestration.NodeAgent && n.AgentID != "" && !seen[n.AgentID] && agentExists[n.AgentID] {
 					seen[n.AgentID] = true
-					edges = append(edges, graphEdge{Source: flowPfx + f.ID, Target: agentPfx + n.AgentID, Kind: "uses"})
+					addAgentEdges(n.AgentID, flowPfx+f.ID, "uses", false)
 				}
 			}
 		}
 	}
 
-	// Skills: a shared library node per distinct slug used by any agent, with an
-	// agent→skill edge. Reveals which agents share which capabilities. The skill's
+	// Skills: a shared library node per distinct slug used by a RUNNING agent,
+	// with an edge to each of that agent's live instances. Skills of idle agents
+	// stay off the canvas — the network only shows what is in flight. The skill's
 	// organisation group (when set) rides along in Sub so the frontend can tint
 	// same-group skills alike.
 	skillStore := wsp.Runtime.Skills()
 	skillSeen := map[string]bool{}
 	skillCount := 0
 	for _, a := range agents {
+		if len(agentInstances[a.ID]) == 0 {
+			continue
+		}
 		for _, slug := range a.Skills {
 			if slug == "" {
 				continue
@@ -214,23 +211,31 @@ func (s *Server) handleWorkspaceGraph(w http.ResponseWriter, r *http.Request) {
 				}
 				nodes = append(nodes, graphNode{ID: skillPfx + slug, Type: "skill", Label: slug, Sub: group})
 			}
-			edges = append(edges, graphEdge{Source: agentPfx + a.ID, Target: skillPfx + slug, Kind: "skill"})
+			addAgentEdges(a.ID, skillPfx+slug, "skill", true)
 		}
 	}
 
 	// MCP servers: one node per enabled server; an agent→server edge for every
 	// MCP-enabled agent (coarse access signal — TionSwarm gates tools per agent via
 	// an allowlist, not per server, so this shows "which agents can reach MCP").
+	// Only agents with a live instance are wired up, and a server with no live
+	// consumer is left out entirely rather than floating unconnected.
 	mcpCount := 0
-	for _, srv := range mcpServers {
-		if !srv.Enabled {
-			continue
+	liveMCPAgents := make([]string, 0, len(agents))
+	for _, a := range agents {
+		if a.MCPEnabled && len(agentInstances[a.ID]) > 0 {
+			liveMCPAgents = append(liveMCPAgents, a.ID)
 		}
-		mcpCount++
-		nodes = append(nodes, graphNode{ID: mcpPfx + srv.ID, Type: "mcp", Label: srv.Name, Sub: srv.Transport})
-		for _, a := range agents {
-			if a.MCPEnabled {
-				edges = append(edges, graphEdge{Source: agentPfx + a.ID, Target: mcpPfx + srv.ID, Kind: "mcp"})
+	}
+	if len(liveMCPAgents) > 0 {
+		for _, srv := range mcpServers {
+			if !srv.Enabled {
+				continue
+			}
+			mcpCount++
+			nodes = append(nodes, graphNode{ID: mcpPfx + srv.ID, Type: "mcp", Label: srv.Name, Sub: srv.Transport})
+			for _, agentID := range liveMCPAgents {
+				addAgentEdges(agentID, mcpPfx+srv.ID, "mcp", true)
 			}
 		}
 	}
@@ -281,13 +286,106 @@ func (s *Server) handleWorkspaceGraph(w http.ResponseWriter, r *http.Request) {
 		Nodes: nodes,
 		Edges: edges,
 		Stats: map[string]int{
-			"agents": len(agents),
-			"tasks":  len(tasks),
-			"flows":  len(flows),
-			"skills": skillCount,
-			"mcp":    mcpCount,
-			"runs":   runCount,
-			"edges":  len(edges),
+			// "agents" counts live INSTANCES (what the canvas draws), while
+			// "agentsTotal" keeps the definition count for the "x / y" readout.
+			"agents":      instanceCount(agentInstances),
+			"agentsTotal": len(agents),
+			"tasks":       len(tasks),
+			"flows":       len(flows),
+			"skills":      skillCount,
+			"mcp":         mcpCount,
+			"runs":        runCount,
+			"edges":       len(edges),
 		},
 	})
+}
+
+// buildAgentInstances turns the running sessions into agent instance nodes: ONE
+// node per in-flight session, so a single agent driving a chat, a task and two
+// spawned runs shows up as four copies. An agent with nothing in flight
+// contributes no node at all — the network only ever shows live work.
+//
+// It returns the nodes plus an agentID → instance-node-ids index, so the
+// relationship edges can fan out across every live copy of an agent.
+func buildAgentInstances(agents []db.Agent, sessions []db.Session, running map[string]bool) ([]graphNode, map[string][]string) {
+	agentByID := make(map[string]db.Agent, len(agents))
+	for _, a := range agents {
+		agentByID[a.ID] = a
+	}
+	nodes := make([]graphNode, 0, len(agents))
+	instances := make(map[string][]string)
+	for _, sess := range sessions {
+		if !running[sess.ID] || sess.AgentID == "" {
+			continue
+		}
+		a, ok := agentByID[sess.AgentID]
+		if !ok {
+			continue // orphan session pointing at a deleted agent
+		}
+		target := ""
+		switch sess.Kind {
+		case "task":
+			if sess.SourceID != "" {
+				target = "task:" + sess.SourceID
+			}
+		case "flow", agent.SessionKindFlowCoordinator:
+			if sess.SourceID != "" {
+				target = "flow:" + sess.SourceID
+			}
+		}
+		id := "agent:" + sess.AgentID + "#" + sess.ID
+		instances[sess.AgentID] = append(instances[sess.AgentID], id)
+		nodes = append(nodes, graphNode{
+			ID:        id,
+			Type:      "agent",
+			Label:     a.Name,
+			Sub:       instanceSub(sess.Kind, sess.Title),
+			Color:     a.Color,
+			Emoji:     a.Avatar,
+			Running:   true,
+			RunKind:   sess.Kind,
+			RunTarget: target,
+			SessionID: sess.ID,
+			AgentID:   sess.AgentID,
+		})
+	}
+	return nodes, instances
+}
+
+// instanceCount totals the agent instance nodes across all agents.
+func instanceCount(m map[string][]string) int {
+	n := 0
+	for _, ids := range m {
+		n += len(ids)
+	}
+	return n
+}
+
+// instanceRunLabel names the execution path behind an agent instance in Turkish
+// (the UI language) — what makes two copies of the same agent tell apart.
+var instanceRunLabel = map[string]string{
+	"chat":             "Sohbet",
+	"task":             "Görev",
+	"flow":             "Akış",
+	"flow-coordinator": "Akış koordinatörü",
+	"schedule":         "Zamanlama",
+	"spawned":          "Spawn",
+	"worker":           "Worker",
+	"inbox":            "Inbox",
+}
+
+// instanceSub builds an agent instance's subtitle: the run kind plus the
+// session title when it has one, e.g. "Görev · Refactor the parser".
+func instanceSub(kind, title string) string {
+	label := instanceRunLabel[kind]
+	if label == "" {
+		label = kind
+	}
+	if label == "" {
+		label = "Çalışıyor"
+	}
+	if title != "" {
+		return label + " · " + title
+	}
+	return label
 }

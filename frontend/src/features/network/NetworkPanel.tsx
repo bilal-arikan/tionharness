@@ -16,6 +16,10 @@ interface Props {
 // flow where tasks gather under their status column and agents bond to the task
 // they're actively working — auto-refreshing on autonomous events). Layer chips
 // toggle node types and a density slider tunes packing.
+//
+// Agents on this canvas are RUNTIME INSTANCES: the backend emits one agent node
+// per in-flight session (chat / task / flow / schedule / spawn / worker), so a
+// busy agent appears once per run and an idle agent does not appear at all.
 export function NetworkPanel({ onError }: Props) {
   const [graph, setGraph] = useState<WorkspaceGraph | null>(null)
   const [loading, setLoading] = useState(false)
@@ -65,7 +69,9 @@ export function NetworkPanel({ onError }: Props) {
   // change AND any concurrent task mutation that may have happened alongside.
   // Works without SSE and across workspaces.
   useEffect(() => {
-    const handler = () => { load() }
+    const handler = () => {
+      load()
+    }
     window.addEventListener('tionswarm:board-columns-changed', handler)
     return () => window.removeEventListener('tionswarm:board-columns-changed', handler)
   }, [load])
@@ -93,7 +99,9 @@ export function NetworkPanel({ onError }: Props) {
   // user-toggleable (an agent's flows, skills and MCP servers drift with it).
   const layers =
     mode === 'live'
-      ? NODE_LAYERS.filter((l) => l.type === 'flow' || l.type === 'skill' || l.type === 'mcp' || l.type === 'run')
+      ? NODE_LAYERS.filter(
+          (l) => l.type === 'flow' || l.type === 'skill' || l.type === 'mcp' || l.type === 'run',
+        )
       : NODE_LAYERS.filter((l) => l.type !== 'run') // 'run' is a live-only archive layer
 
   const isEmpty = graph && graph.nodes.length === 0
@@ -105,8 +113,10 @@ export function NetworkPanel({ onError }: Props) {
         <span className="shrink-0 text-sm font-semibold">Ağ</span>
         {graph && (
           <span className="ml-auto truncate text-xs text-[var(--color-text-dim)]">
-            {graph.stats.agents} ajan · {graph.stats.tasks} görev · {graph.stats.flows} akış ·{' '}
-            {graph.stats.skills ?? 0} beceri · {graph.stats.mcp ?? 0} MCP
+            {graph.stats.agents} aktif ajan
+            {graph.stats.agentsTotal ? ` / ${graph.stats.agentsTotal}` : ''} · {graph.stats.tasks}{' '}
+            görev · {graph.stats.flows} akış · {graph.stats.skills ?? 0} beceri ·{' '}
+            {graph.stats.mcp ?? 0} MCP
           </span>
         )}
         <button
@@ -132,7 +142,8 @@ export function NetworkPanel({ onError }: Props) {
             ))}
           {mode === 'live' && (
             <span className="flex items-center gap-1 text-[var(--color-accent)]">
-              <Radio size={12} className="animate-pulse" /> canlı — olaylarda kendiliğinden güncellenir
+              <Radio size={12} className="animate-pulse" /> canlı — olaylarda kendiliğinden
+              güncellenir
             </span>
           )}
           {/* Mode toggle: relationship web vs live board-column flow. */}
@@ -140,7 +151,9 @@ export function NetworkPanel({ onError }: Props) {
             <button
               onClick={() => setMode('relation')}
               className={`flex items-center gap-1 rounded px-2 py-0.5 transition ${
-                mode === 'relation' ? 'bg-[var(--color-accent)] text-white' : 'text-[var(--color-text-dim)]'
+                mode === 'relation'
+                  ? 'bg-[var(--color-accent)] text-white'
+                  : 'text-[var(--color-text-dim)]'
               }`}
               title="İlişki ağı (tüm bağlar)"
             >
@@ -149,7 +162,9 @@ export function NetworkPanel({ onError }: Props) {
             <button
               onClick={() => setMode('live')}
               className={`flex items-center gap-1 rounded px-2 py-0.5 transition ${
-                mode === 'live' ? 'bg-[var(--color-accent)] text-white' : 'text-[var(--color-text-dim)]'
+                mode === 'live'
+                  ? 'bg-[var(--color-accent)] text-white'
+                  : 'text-[var(--color-text-dim)]'
               }`}
               title="Canlı boards (görevler durum sütunlarında, ajan aktif göreve bağlanır)"
             >
@@ -185,7 +200,10 @@ export function NetworkPanel({ onError }: Props) {
             </button>
           )
         })}
-        <label className="ml-auto flex items-center gap-2 text-[var(--color-text-dim)]" title="Düğümlerin sıkışıklığı">
+        <label
+          className="ml-auto flex items-center gap-2 text-[var(--color-text-dim)]"
+          title="Düğümlerin sıkışıklığı"
+        >
           Yoğunluk
           <input
             type="range"
@@ -203,11 +221,17 @@ export function NetworkPanel({ onError }: Props) {
       <div className="relative min-h-0 flex-1 bg-[var(--color-bg)]">
         {isEmpty ? (
           <div className="flex h-full items-center justify-center px-6 text-center text-sm text-[var(--color-text-dim)]">
-            Henüz görselleştirilecek bir ilişki yok. Ajan, görev veya akış ekledikçe ağ burada
-            belirir.
+            Henüz görselleştirilecek bir şey yok. Görev veya akış ekledikçe ağ burada belirir;
+            ajanlar yalnızca çalışırken (sohbet, görev, akış, otomasyon, spawn) görünür.
           </div>
         ) : (
-          <VisNetworkGraph nodes={nodes} edges={edges} mode={mode} density={density} lite={isMobile} />
+          <VisNetworkGraph
+            nodes={nodes}
+            edges={edges}
+            mode={mode}
+            density={density}
+            lite={isMobile}
+          />
         )}
       </div>
     </div>

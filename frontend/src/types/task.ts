@@ -23,12 +23,39 @@ export interface Task {
   // Referenced workspace artifacts (files dropped on the card become artifacts,
   // or existing artifacts linked from the editor). Order is user-meaningful.
   artifactIds?: string[]
+  // Completion percentage, 0..100 (absent/0 = not tracked).
+  progress?: number
+  // Planned window, both YYYY-MM-DD (absent = unset). dueDate drives the board's
+  // date facet (overdue / today / this week) and the future timeline view.
+  startDate?: string
+  dueDate?: string
   lastRunId: string
   lastRunStatus: string
   lastRunAt: number
   createdAt: number
   updatedAt: number
 }
+
+// The editable subset of a Task, as accepted by PUT /api/tasks/:id. Named so
+// callers that build a patch (the board's drag handlers, the form modal) share
+// one type instead of re-deriving the Pick inline.
+export type TaskPatch = Partial<
+  Pick<
+    Task,
+    | 'title'
+    | 'description'
+    | 'ownerAgentId'
+    | 'flowId'
+    | 'boardState'
+    | 'dependencies'
+    | 'priority'
+    | 'tags'
+    | 'artifactIds'
+    | 'progress'
+    | 'startDate'
+    | 'dueDate'
+  >
+>
 
 export interface Run {
   id: string

@@ -30,7 +30,7 @@ export const PROMPT_VARS: { name: string; desc: string }[] = [
   { name: '{{tag}}', desc: 'Tetikleyici etiket' },
   { name: '{{sessionId}}', desc: 'Biten oturumun ID’si' },
   { name: '{{iteration}}', desc: 'Bu ateşlemenin sıra no’su (1-tabanlı)' },
-  { name: '{{maxIterations}}', desc: 'Üst sınır (0 → ∞)' },
+  { name: '{{maxIterations}}', desc: 'Üst sınır (eski kayıtlarda 0 → ∞)' },
   { name: '{{agent}}', desc: 'Sonucu üreten ajanın adı ({{agentName}} eşdeğer)' },
   { name: '{{prevPrompt}}', desc: 'Bir önceki turu tetikleyen kullanıcı promptu' },
   { name: '{{automation}}', desc: 'Otomasyonun adı' },
@@ -53,7 +53,7 @@ export const BOARD_PROMPT_VARS: { name: string; desc: string }[] = [
   { name: '{{owner}}', desc: 'Atanan ajanın adı (boş = atanmamış)' },
   { name: '{{priority}}', desc: 'Öncelik (critical/high/medium/low, boş olabilir)' },
   { name: '{{iteration}}', desc: 'Bu ateşlemenin sıra no’su (1-tabanlı)' },
-  { name: '{{maxIterations}}', desc: 'Üst sınır (0 → ∞)' },
+  { name: '{{maxIterations}}', desc: 'Üst sınır (eski kayıtlarda 0 → ∞)' },
   { name: '{{automation}}', desc: 'Otomasyonun adı' },
   { name: '{{date}}', desc: 'Geçerli tarih' },
   { name: '{{time}}', desc: 'Geçerli saat' },
@@ -93,3 +93,19 @@ export const COLUMN_ACCENT = {
   tag: '#8b5cf6',
   board: '#0ea5e9',
 } as const
+
+// MAX_ITERATIONS_HARD_CAP is the ceiling the automation form allows.
+//
+// Mirrors db.MaxIterationsHardCap in internal/db/automation_limits.go — the SERVER
+// is authoritative and rejects out-of-range writes with a message, so if these two
+// ever drift the only symptom is a form whose `max` attribute is slightly off, not
+// an unbounded automation slipping through.
+//
+// The floor is 1, not 0: the runtime reads 0 as "unlimited", which is a
+// self-sustaining loop with no lifetime brake.
+export const MAX_ITERATIONS_HARD_CAP = 500
+
+// DEFAULT_MAX_ITERATIONS mirrors defaultAutomationMaxIterations in
+// internal/api/automations.go: the bound a new automation gets when the user does
+// not choose one.
+export const DEFAULT_MAX_ITERATIONS = 50

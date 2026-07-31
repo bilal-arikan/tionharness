@@ -177,23 +177,57 @@ type Session struct {
 	Participants []string `json:"participants,omitempty"`
 
 	// Multi-agent coordination (see internal/agent/coordination.go, _Docs/47).
-	// Role marks a session's part in a coordinator/worker relationship:
-	// "coordinator" (drives workers, gets the coordinator system prompt + the
-	// spawn_worker/send_to_worker/stop_worker tools), "worker" (spawned by a
-	// coordinator; coordination tools hidden to prevent recursion), or "" (an
-	// ordinary session, unchanged behavior). CoordinatorSessionID is the worker's
-	// back-link to the coordinator session that spawned it, so a finished worker
-	// turn can inject its <task-notification> into the right coordinator. Empty on
-	// a coordinator or ordinary session. Distinct from ParentSessionID, which is
-	// the handoff "continues-from" lineage — a worker is spawned-by, not a reset of.
+	//
+	// Since the unlimited-depth rework these are TWO ORTHOGONAL axes, because a
+	// mid-level node in a coordinator tree is BOTH a worker (it reports up) and a
+	// coordinator (it drives its own workers):
+	//
+	//   - Role is LINEAGE only: "worker" (this session was spawned by a
+	//     coordinator) or "" (top-level / ordinary). The legacy value
+	//     "coordinator" is still accepted on old sessions and read as
+	//     CoordinatorMode=true — always test with Session.IsCoordinator(), never
+	//     with Role == "coordinator".
+	//   - CoordinatorMode is the CAPABILITY: this session may spawn/drive workers
+	//     (gets the coordinator system prompt + the spawn_worker/send_to_worker/
+	//     stop_worker/list_workers tools).
+	//
+	// CoordinatorSessionID is the worker's back-link to the coordinator session
+	// that spawned it, so a finished worker turn can inject its
+	// <task-notification> into the right coordinator. Empty on a root coordinator
+	// or an ordinary session. Distinct from ParentSessionID, which is the handoff
+	// "continues-from" lineage — a worker is spawned-by, not a reset of.
 	Role                 string `json:"role,omitempty"`
+	CoordinatorMode      bool   `json:"coordinatorMode,omitempty"`
 	CoordinatorSessionID string `json:"coordinatorSessionId,omitempty"`
+
+	// RootCoordinatorSessionID / CoordinatorDepth address this session inside its
+	// coordinator TREE, mirroring FlowRun.RootRunID/ParentRunID (see _Docs/62):
+	// the root is reachable in O(1) instead of by walking CoordinatorSessionID
+	// hop by hop, and the depth backs the CoordinatorMaxDepth guard. Root is ""
+	// on the tree's own root (it is its own root — see RootCoordinator()); depth
+	// is 0 there and +1 per level below.
+	RootCoordinatorSessionID string `json:"rootCoordinatorSessionId,omitempty"`
+	CoordinatorDepth         int    `json:"coordinatorDepth,omitempty"`
 
 	// CoordinatorWorkflow is the slug of the selected coordinator recipe (M5) —
 	// a saved orchestration pattern (skill with kind=coordinator-workflow) whose
 	// body is injected into this coordinator session's system prompt. Empty means
-	// the free (recipe-less) coordinator. Only meaningful when Role=="coordinator".
+	// the free (recipe-less) coordinator. Only meaningful on a coordinator.
+	// NOT inherited by child coordinators: a recursive recipe (e.g. tournament)
+	// would otherwise repeat itself forever down the tree.
 	CoordinatorWorkflow string `json:"coordinatorWorkflow,omitempty"`
+	// CoordinatorReportPending marks a MID-LEVEL node whose finished turn was NOT
+	// reported to its coordinator, because its own workers were still running at
+	// the time (see agent/coordination_tree.go). It therefore still owes an upward
+	// report, delivered by report_to_coordinator or the settle backstop.
+	//
+	// Persisted rather than kept in memory: the gap it covers is precisely a
+	// restart. A mid-level node in this state looks perfectly healthy on disk — its
+	// last message is its own assistant reply — so orphan recovery does not touch
+	// it, and without this flag its coordinator would wait forever for a report
+	// nothing remembers is owed.
+	CoordinatorReportPending bool `json:"coordinatorReportPending,omitempty"`
+
 	// CoordinatorMaxTurns optionally overrides the workspace CoordinatorMaxTurns
 	// notify-loop cap for THIS coordinator session (0 = use the workspace default).
 	// Resolved from the selected recipe's max_turns when the workflow is set.
@@ -209,6 +243,54 @@ type Session struct {
 
 	CreatedAt int64 `json:"createdAt"`
 	UpdatedAt int64 `json:"updatedAt"`
+}
+
+// SessionRoleCoordinator is the LEGACY Role value written before coordinator mode
+// became its own field. It is still honoured on read (IsCoordinator) so sessions
+// created by older builds keep working without a migration, but nothing writes it
+// any more — new coordinators set CoordinatorMode instead.
+const SessionRoleCoordinator = "coordinator"
+
+// SessionRoleWorker marks a session that was spawned BY a coordinator. It says
+// nothing about whether this session itself drives workers (see CoordinatorMode):
+// a mid-level node in a coordinator tree carries Role=="worker" AND
+// CoordinatorMode==true.
+const SessionRoleWorker = "worker"
+
+// IsCoordinator reports whether this session may spawn and drive workers. Use this
+// everywhere instead of comparing Role to "coordinator": since the unlimited-depth
+// rework a worker can ALSO be a coordinator, and Role no longer carries the
+// capability. The legacy Role value is still accepted so pre-existing coordinator
+// sessions keep their tools and prompt.
+func (s Session) IsCoordinator() bool {
+	return s.CoordinatorMode || s.Role == SessionRoleCoordinator
+}
+
+// IsWorker reports whether this session reports UP to a coordinator, i.e. it has a
+// parent in a coordinator tree. Derived from the back-link rather than Role so it
+// stays true for a mid-level node (which is a worker and a coordinator at once).
+func (s Session) IsWorker() bool {
+	return s.CoordinatorSessionID != "" || s.Role == SessionRoleWorker
+}
+
+// RootCoordinator returns the id of the root of this session's coordinator tree.
+// A root is its own root (RootCoordinatorSessionID is stored empty there), so this
+// normalizes the "" case to the session's own id — callers can then key tree-wide
+// budgets on the result without a special case. Returns "" only for a session that
+// is neither a coordinator nor a worker.
+func (s Session) RootCoordinator() string {
+	if s.RootCoordinatorSessionID != "" {
+		return s.RootCoordinatorSessionID
+	}
+	// Legacy worker (spawned before the root was stamped): every pre-rework tree was
+	// exactly one level deep, so its parent IS the root.
+	if s.CoordinatorSessionID != "" {
+		return s.CoordinatorSessionID
+	}
+	if s.IsCoordinator() {
+		return s.ID
+	}
+	return ""
 }
 
 // Message is a single turn within a session.
@@ -243,7 +325,7 @@ type Message struct {
 	AuthorID    string `json:"authorId,omitempty"`
 	RecipientID string `json:"recipientId,omitempty"`
 
-	Text string `json:"text"`
+	Text             string `json:"text"`
 	ToolCalls        string `json:"toolCalls"`
 	ReasoningContent string `json:"reasoningContent"`
 	// Steps is a JSON array of agent.TurnStep records: the ordered trace of

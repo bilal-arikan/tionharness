@@ -1,4 +1,4 @@
-﻿package agent
+package agent
 
 import (
 	"sync"
@@ -48,6 +48,28 @@ const DefaultScheduleTimeoutMinutes = 30
 const (
 	DefaultCoordinatorMaxWorkers = 8  // max active workers a single coordinator may run at once
 	DefaultCoordinatorMaxTurns   = 50 // max auto-triggered coordinator turns per session (notify-loop cap)
+
+	// DefaultCoordinatorMaxDepth bounds how deep a coordinator TREE may nest: the
+	// root coordinator is depth 0, its workers depth 1, and a worker may only be
+	// spawned with coordinator mode on while its own children would still fit.
+	//
+	// A depth cap is not optional decoration. Worker count is per-coordinator, so
+	// depth multiplies rather than adds: with the default 8 workers per node, depth
+	// 5 already permits tens of thousands of sessions. 0 means unlimited, which is
+	// supported but deliberately not the default — combine it with the subtree
+	// budget below or a single runaway plan can spawn until the disk fills.
+	DefaultCoordinatorMaxDepth = 5
+
+	// DefaultCoordinatorSettleGraceSec — see agent.DefaultCoordinatorSettleGraceSec
+	// in coordination_tree.go, which owns the rationale. Mirrored here so every
+	// coordinator default reads from one block.
+
+	// DefaultCoordinatorMaxSubtreeSessions bounds the TOTAL number of worker
+	// sessions in one coordinator tree, across every level. The per-coordinator
+	// worker cap cannot do this job: it is enforced per node, so N nodes each
+	// legitimately under their own cap still add up without limit. This is the
+	// budget that actually stops exponential fan-out. 0 means unlimited.
+	DefaultCoordinatorMaxSubtreeSessions = 64
 )
 
 // Tunables holds process-wide, settings-driven knobs that cut across every
@@ -66,13 +88,16 @@ type Tunables struct {
 	delegMaxDepth    int  // 0 → DefaultMaxDelegationDepth
 	delegMaxCalls    int  // 0 → DefaultMaxDelegationCalls
 
-	spawnMaxConcurrent int // 0 → DefaultSpawnMaxConcurrent
-	spawnMaxPerTurn    int // 0 → DefaultSpawnMaxPerTurn
-	spawnTimeoutMin    int // 0 → DefaultSpawnTimeoutMinutes (spawn work-turn deadline, in minutes)
+	spawnMaxConcurrent  int // 0 → DefaultSpawnMaxConcurrent
+	spawnMaxPerTurn     int // 0 → DefaultSpawnMaxPerTurn
+	spawnTimeoutMin     int // 0 → DefaultSpawnTimeoutMinutes (spawn work-turn deadline, in minutes)
 	spawnIdleTimeoutMin int // 0 → DefaultSpawnIdleTimeoutMinutes (spawn/worker inactivity watchdog, in minutes)
-	schedTimeoutMin    int // 0 → DefaultScheduleTimeoutMinutes (scheduled-fire deadline, in minutes)
-	coordMaxWorkers    int // 0 → DefaultCoordinatorMaxWorkers
-	coordMaxTurns      int // 0 → DefaultCoordinatorMaxTurns
+	schedTimeoutMin     int // 0 → DefaultScheduleTimeoutMinutes (scheduled-fire deadline, in minutes)
+	coordMaxWorkers     int // 0 → DefaultCoordinatorMaxWorkers
+	coordMaxTurns       int // 0 → DefaultCoordinatorMaxTurns
+	coordMaxDepth       int // 0 → DefaultCoordinatorMaxDepth (-1 = unlimited nesting)
+	coordMaxSubtree     int // 0 → DefaultCoordinatorMaxSubtreeSessions (-1 = unlimited)
+	coordSettleGrace    int // 0 → DefaultCoordinatorSettleGraceSec (upward-report backstop delay)
 
 	// Turn recovery (A1) — structural handling of output-token cutoffs and
 	// context overflow inside the native agentic tool loop.
@@ -480,14 +505,73 @@ func (t *Tunables) ScheduleTimeout() time.Duration {
 }
 
 // SetCoordinatorLimits sets the coordinator/worker guards: the max number of
-// active workers a single coordinator may run at once and the max auto-triggered
-// coordinator turns per session (the notify-loop cap). A value of 0 selects the
-// built-in default.
-func (t *Tunables) SetCoordinatorLimits(maxWorkers, maxTurns int) {
+// active workers a single coordinator may run at once, the max auto-triggered
+// coordinator turns per session (the notify-loop cap), how deep a coordinator
+// TREE may nest, and how many worker sessions one whole tree may hold. A value of
+// 0 selects the built-in default; -1 disables the depth/subtree bound entirely.
+func (t *Tunables) SetCoordinatorLimits(maxWorkers, maxTurns, maxDepth, maxSubtree int) {
 	t.mu.Lock()
 	t.coordMaxWorkers = maxWorkers
 	t.coordMaxTurns = maxTurns
+	t.coordMaxDepth = maxDepth
+	t.coordMaxSubtree = maxSubtree
 	t.mu.Unlock()
+}
+
+// SetCoordinatorSettleGrace sets how long (seconds) the upward-report backstop
+// waits after a sub-coordinator's branch goes quiet before auto-reporting for it.
+// 0 selects the built-in default.
+func (t *Tunables) SetCoordinatorSettleGrace(sec int) {
+	t.mu.Lock()
+	t.coordSettleGrace = sec
+	t.mu.Unlock()
+}
+
+// CoordinatorSettleGrace returns the upward-report backstop delay. Tune it to the
+// model behind the coordinators: too short and a slow synthesis turn loses the
+// race, so the parent gets a needless "incomplete"; too long and a genuinely
+// stalled branch keeps its coordinator waiting.
+func (t *Tunables) CoordinatorSettleGrace() time.Duration {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	sec := t.coordSettleGrace
+	if sec <= 0 {
+		sec = DefaultCoordinatorSettleGraceSec
+	}
+	return time.Duration(sec) * time.Second
+}
+
+// CoordinatorMaxDepth returns how deep a coordinator tree may nest (root = depth
+// 0), or 0 for unlimited nesting. Settings pass -1 to mean unlimited; 0 there
+// means "use the default", so the two are mapped apart here — a caller only ever
+// has to check for 0.
+func (t *Tunables) CoordinatorMaxDepth() int {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	switch {
+	case t.coordMaxDepth < 0:
+		return 0 // explicitly unlimited
+	case t.coordMaxDepth == 0:
+		return DefaultCoordinatorMaxDepth
+	default:
+		return t.coordMaxDepth
+	}
+}
+
+// CoordinatorMaxSubtreeSessions returns the cap on the total number of worker
+// sessions in ONE coordinator tree (all levels combined), or 0 for unlimited.
+// Same 0-vs--1 mapping as CoordinatorMaxDepth.
+func (t *Tunables) CoordinatorMaxSubtreeSessions() int {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	switch {
+	case t.coordMaxSubtree < 0:
+		return 0 // explicitly unlimited
+	case t.coordMaxSubtree == 0:
+		return DefaultCoordinatorMaxSubtreeSessions
+	default:
+		return t.coordMaxSubtree
+	}
 }
 
 // CoordinatorMaxWorkers returns the cap on active workers per coordinator session

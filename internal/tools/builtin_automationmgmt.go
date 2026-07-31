@@ -138,6 +138,13 @@ func (t CreateAutomationTool) Call(ctx context.Context, input json.RawMessage) (
 	maxIter := defaultAutomationMax
 	if in.MaxIterations != nil {
 		maxIter = *in.MaxIterations
+		// Same validator the REST path uses. An agent creating an automation must
+		// not be able to write a value a human would be refused — this tool is the
+		// easier hole to slip an unbounded loop through, since nothing here is
+		// reviewed by a person before it runs.
+		if err := db.ValidateMaxIterations(maxIter); err != nil {
+			return "", err
+		}
 	}
 	cooldown := 0
 	if in.CooldownSec != nil {
@@ -305,6 +312,9 @@ func (t UpdateAutomationTool) Call(ctx context.Context, input json.RawMessage) (
 		cur.SpawnTags = *in.SpawnTags
 	}
 	if in.MaxIterations != nil {
+		if err := db.ValidateMaxIterations(*in.MaxIterations); err != nil {
+			return "", err
+		}
 		cur.MaxIterations = *in.MaxIterations
 	}
 	if in.CooldownSec != nil {

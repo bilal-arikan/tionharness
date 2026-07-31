@@ -357,6 +357,9 @@ func (s *Store) Apply(p Patch) (Settings, error) {
 	applyInt(&next.ScheduleTimeoutMin, p.ScheduleTimeoutMin)
 	applyInt(&next.CoordinatorMaxWorkers, p.CoordinatorMaxWorkers)
 	applyInt(&next.CoordinatorMaxTurns, p.CoordinatorMaxTurns)
+	applyInt(&next.CoordinatorMaxDepth, p.CoordinatorMaxDepth)
+	applyInt(&next.CoordinatorMaxSubtreeSessions, p.CoordinatorMaxSubtreeSessions)
+	applyInt(&next.CoordinatorSettleGraceSec, p.CoordinatorSettleGraceSec)
 
 	applyBool(&next.AutonomousConfine, p.AutonomousConfine)
 	applyBool(&next.AutonomousBootSeq, p.AutonomousBootSeq)
@@ -616,6 +619,31 @@ func normalize(v Settings) Settings {
 	}
 	if v.CoordinatorMaxTurns > 500 {
 		v.CoordinatorMaxTurns = 500
+	}
+	// -1 is meaningful here (explicitly unlimited), so only values below that are
+	// clamped. The upper bounds are sanity ceilings, not policy: depth 12 with the
+	// default 8 workers per node is already astronomically wide, and the subtree cap
+	// is the guard that actually holds.
+	if v.CoordinatorMaxDepth < -1 {
+		v.CoordinatorMaxDepth = -1
+	}
+	if v.CoordinatorMaxDepth > 12 {
+		v.CoordinatorMaxDepth = 12
+	}
+	if v.CoordinatorMaxSubtreeSessions < -1 {
+		v.CoordinatorMaxSubtreeSessions = -1
+	}
+	if v.CoordinatorMaxSubtreeSessions > 4096 {
+		v.CoordinatorMaxSubtreeSessions = 4096
+	}
+	// A backstop firing in a couple of seconds would race every normal synthesis
+	// turn and report "incomplete" over work that was about to finish; one that
+	// waits an hour is not a backstop. 0 keeps the built-in default.
+	if v.CoordinatorSettleGraceSec != 0 && v.CoordinatorSettleGraceSec < 5 {
+		v.CoordinatorSettleGraceSec = 5
+	}
+	if v.CoordinatorSettleGraceSec > 1800 {
+		v.CoordinatorSettleGraceSec = 1800
 	}
 	// Workspace backups: interval ≥ 1h, retention ≥ 1 archive; clamp ceilings.
 	if v.BackupIntervalHours < 1 {

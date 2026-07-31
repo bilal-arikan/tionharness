@@ -19,7 +19,7 @@ import (
 // never removes tools or hard-limits behaviour (max_turns is enforced separately
 // via Session.CoordinatorMaxTurns).
 func coordinatorRecipeBlock(wsp *workspace.Workspace, session db.Session) string {
-	if session.Role != "coordinator" || strings.TrimSpace(session.CoordinatorWorkflow) == "" {
+	if !session.IsCoordinator() || strings.TrimSpace(session.CoordinatorWorkflow) == "" {
 		return ""
 	}
 	store := wsp.Runtime.Skills()
@@ -63,13 +63,13 @@ func ResolveCoordinatorRecipe(store *skills.Store, slug string) (maxTurns int, e
 // lives under the COORDINATOR session's on-disk folder so every worker resolves the
 // same absolute path; it is created lazily. Returns "" for ordinary sessions.
 func coordinationScratchpadBlock(wsp *workspace.Workspace, session db.Session) string {
-	var coordID string
-	switch {
-	case session.Role == "coordinator":
-		coordID = session.ID
-	case session.CoordinatorSessionID != "":
-		coordID = session.CoordinatorSessionID
-	default:
+	// Keyed on the tree ROOT, not the direct parent: in a nested tree every node —
+	// root, mid-level, leaf — must resolve the SAME absolute path, otherwise each
+	// sub-coordinator would open its own private scratchpad and the cross-worker
+	// notes would fragment by level. For a one-level tree the root IS the direct
+	// coordinator, so this is unchanged behaviour there.
+	coordID := session.RootCoordinator()
+	if coordID == "" {
 		return ""
 	}
 	dir, err := wsp.DB.SessionDir(coordID)
@@ -83,6 +83,35 @@ func coordinationScratchpadBlock(wsp *workspace.Workspace, session db.Session) s
 	return fmt.Sprintf(
 		"## Shared scratchpad\nThis coordinator and all its workers share this directory for durable cross-worker notes:\n%s\nRead and write files here (with the normal file tools) to share findings, plans, and interim results across workers instead of repeating them in every task or notification. Prefer small, well-named files (e.g. findings.md, plan.md).",
 		pad)
+}
+
+// coordinatorSubordinateBlock tells a MID-LEVEL coordinator (a worker session that
+// also drives its own workers) where it sits in the tree and — the part that
+// actually matters — that finishing its first turn is NOT finishing its task.
+//
+// Without this the nesting silently misreports: a mid-level node's first turn ends
+// right after it spawns its sub-workers, and if it let that turn be reported as
+// "completed" its parent would move on while the subtree is still working. The
+// runtime already withholds the completion notification while sub-workers are
+// live (see runWorker), but the model must know it owns the moment of reporting —
+// hence the explicit report_to_coordinator contract.
+//
+// Returns "" for a root coordinator (no parent to report to).
+func coordinatorSubordinateBlock(session db.Session) string {
+	if session.CoordinatorSessionID == "" {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString("## You are a sub-coordinator\n")
+	fmt.Fprintf(&b, "You were spawned as a worker by coordinator session %s and you are at depth %d of a coordinator tree (root: %s). You are BOTH a worker (you owe that coordinator a result) and a coordinator (you may spawn your own workers with spawn_worker).\n\n",
+		session.CoordinatorSessionID, session.CoordinatorDepth, session.RootCoordinator())
+	b.WriteString("Reporting contract — this is the part you must not get wrong:\n")
+	b.WriteString("- Ending a turn does NOT report your task as done. As long as your own workers are running, your coordinator is told you are still delegating.\n")
+	b.WriteString("- When your part of the work is genuinely finished, call `report_to_coordinator` with the synthesized result. That — and only that — closes your task upstream.\n")
+	b.WriteString("- Synthesize your workers' findings YOURSELF before reporting. Do not forward raw worker output or write \"see my workers' results\": your coordinator cannot read your workers' sessions.\n")
+	b.WriteString("- If you cannot finish (blocked, out of budget, a worker failed), still call `report_to_coordinator` with status `failed` or `incomplete` and say what is missing. Silence stalls the whole tree above you.\n")
+	b.WriteString("- Only delegate further if the work genuinely splits into independent parts. Depth costs turns and tokens at every level; do the work yourself when it fits in one session.")
+	return b.String()
 }
 
 // The coordinator operating manual (M2, _Docs/47) lives in the central prompt

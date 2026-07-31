@@ -78,7 +78,7 @@ func (s *Server) handleServeFile(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "invalid path")
 			return
 		}
-		path = filepath.Join(wsp.DataDir, "workspace", clean)
+		path = filepath.Join(wsp.SandboxRoot(), clean)
 	} else {
 		raw := r.URL.Query().Get("path")
 		if raw == "" {

@@ -166,13 +166,23 @@ zincirlenir; ilk `block` kazanır.
 > çalışması gereken hook'u kabuk-bağımsız yaz — açık yorumlayıcı çağır (`powershell -NoProfile
 > -File script.ps1`, sqz hook'unun yaptığı) veya POSIX sözdizimi kullan. Ham-PS rtk hook'ları
 > bu yüzden CLI'da kırılır.
+>
+> **Kapatıldı (2026-07-31):** Bu uyarı yazılıydı ama **bozuk rtk şablonu gönderilmeye devam
+> ediyordu**; WS10/SES63'te ajanın her Bash çağrısı bloke oldu (başarısız PreToolUse hook'u
+> aracı durdurur). rtk hook şablonu **tamamen kaldırıldı** — rtk artık hook ile değil,
+> `shellCommandRewrite` **ayarıyla** bağlanıyor (in-process filtre; ölçülmüş beyaz liste +
+> `Degraded` koruması). Regresyon testi: `recommendations.test.ts` →
+> *"never offers an rtk HOOK…"*. Detay: [17-TOKEN-OPTIMIZASYON.md](17-TOKEN-OPTIMIZASYON.md).
+>
+> Ders: bir riski **dokümante etmek yetmiyor** — riski üreten şablon kodda durdukça
+> kullanıcı ona tek tıkla ulaşıyor. Uyarıyı yazarken şablonu da düzeltmek gerekirdi.
 
 
 
-> **sqz/rtk uyarısı (Windows):** Ayarlar ▸ Dış Araçlar'daki tek-tık "Bağla" artık
-> `Bash,PowerShell` matcher'ıyla hook kurar. Eski kurulumlarda matcher `Bash` kalmışsa
-> PowerShell komutları sıkıştırılmadan geçer — hook'u düzenleyip matcher'ı
-> `Bash,PowerShell` yapın (veya kaldırıp yeniden bağlayın).
+> **sqz uyarısı (Windows):** Ayarlar ▸ Dış Araçlar'daki tek-tık "Bağla" `Bash,PowerShell`
+> matcher'ıyla hook kurar. Eski kurulumlarda matcher `Bash` kalmışsa PowerShell komutları
+> sıkıştırılmadan geçer — hook'u düzenleyip matcher'ı `Bash,PowerShell` yapın (veya
+> kaldırıp yeniden bağlayın). **rtk artık burada değil** — ayarla bağlanıyor (yukarı bak).
 
 ## Akış (toolloop.go)
 

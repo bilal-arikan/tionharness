@@ -1,5 +1,12 @@
 # 47 — Koordinatör & Çoklu-Ajan Koordinasyonu
 
+> **GÜNCEL:** Koordinatör ağacı artık **sınırsız derinlikte** — bir worker kendi
+> worker'larını yönetebilir, her düğümden köke doğru izlenebilir, mod spawn anında
+> seçilir veya agent tarafından açılıp kapatılır. Bkz. **§14** (rol≠ebeveynlik,
+> ertelenmiş rapor, ağaç bütçeleri). §1–§13 tek-seviyeli tasarımın tarihçesidir;
+> mekanikler geçerli, ama `Role=="coordinator"` karşılaştırmaları artık
+> `Session.IsCoordinator()`'dır.
+>
 > **Durum:** M2 TAM UYGULANDI ✅ (2026-07-03, F0–F5 + CLI köprüsü + ayar UI'si +
 > M3 scratchpad + efemeral worker hedefi — bkz. §9 Uygulama Durumu). §1–§8 orijinal
 > tasarım metnidir. **LLM-in-the-loop görsel deneme ✅ canlı doğrulandı (2026-07-03,
@@ -713,7 +720,185 @@ oturumu açar, prompt'u yazar ve yerleşmeyi bekler. İki koordinatör-özel far
   `NotifyCoordinator` çağırmaz — çünkü `ResumeRunningFlows` düğümü zaten yeni bir
   koordinatör oturumuyla baştan çalıştırır; ikisi birlikte işi iki kez yapardı.
 - **Yerleşme (settle) beklemesi.** `waitCoordinatorIdle` slot'u yoklar
-  (`!running && !pending && workers==0`). Yarış yok: `runWorker`,
-  worker sayacını azaltan `defer`'inden önce `NotifyCoordinator`'ı çağırır.
+  (`!running && !pending && workers==0`) **ve ayrıca `activeSubtreeWorkers==0`**
+  ister. Slot sayacı yalnız DOĞRUDAN worker'ları izler; bir alt-koordinatör kendi
+  turu biter bitmez sayacı düşürür (dalı çalışmaya devam ederken), dolayısıyla
+  tek başına slot "yerleşti" der ve düğüm yarım sonucu alırdı. Doğrudan
+  çocuklarda yarış yok: `runWorker`, worker sayacını azaltan `defer`'inden önce
+  `NotifyCoordinator`'ı çağırır.
 
 Sözleşme + alanlar + UI: `_Docs/15-FLOW-CANVAS.md` → "`coordinator` node tipi".
+
+---
+
+## 14. Sınırsız derinlikte koordinatör ağacı (2026-08-01)
+
+Koordinatör/worker ilişkisi tek seviyeyle sınırlıydı: `withCoordination`
+`Role=="coordinator"` bakıyordu, worker ise `Role=="worker"` olduğu için
+koordinasyon araçlarını asla göremiyordu (bilinçli recursion guard, §3.6).
+Artık bir agent **sınırsız derinlikte** koordinatör ağacı kurabilir.
+
+### 14.1 Taşıyıcı karar: rol ≠ ebeveynlik
+
+`Role` ile yetenek ayrıldı — çünkü ağaçtaki bir **ara düğüm aynı anda hem worker
+hem koordinatördür** ve tek değerli bir alan bunu ifade edemez:
+
+| Alan | Anlam |
+|---|---|
+| `Session.Role` | **Soyağacı**: `"worker"` (bir koordinatör tarafından spawn edildi) veya `""`. Eski `"coordinator"` değeri okumada hâlâ kabul edilir (migrasyon yok). |
+| `Session.CoordinatorMode` | **Yetenek**: worker açıp yönetebilir. |
+| `Session.CoordinatorSessionID` | Ebeveyn (var olan alan). |
+| `Session.RootCoordinatorSessionID` | Ağacın kökü (`""` = kendisi kök). |
+| `Session.CoordinatorDepth` | Kökten uzaklık (kök = 0). |
+
+**Kural:** hiçbir yerde `Role == "coordinator"` karşılaştırması yapılmaz →
+`Session.IsCoordinator()` / `IsWorker()` / `RootCoordinator()` kullanılır
+(frontend'de `shared/lib/coordination.ts`). Root/depth deseni `FlowRun.RootRunID`
+ile birebir aynıdır (`_Docs/62`), `ListCoordinatorTree` de `ListFlowRunTree` gibi
+**ağacın herhangi bir üyesinin** id'siyle çağrılıp köke normalize edilir.
+
+Eski worker'larda `RootCoordinatorSessionID` boştur; `RootCoordinator()` bu
+durumda **ebeveyni** kök sayar — rework öncesi her ağaç zaten tek seviyeydi, bu
+sayede paylaşılan scratchpad yolu mevcut oturumlar için kaymaz.
+
+### 14.2 En kritik semantik: ara düğüm ne zaman "bitti" der?
+
+Bir ara düğümün turu, işini kendi worker'larına dağıttığı anda biter. Bu turu
+`completed` olarak yukarı raporlamak, **koordinatörüne dal daha başlamadan "bitti"
+demek** olurdu. Üç parçalı çözüm (`coordination_tree.go`):
+
+1. **Ertelenmiş rapor** — `deferWorkerReport`: düğüm koordinatörse ve kendi
+   worker'ları canlıysa `<task-notification>` gönderilmez; yerine bir kerelik
+   `<task-progress status="delegating">` gider. `slot.owesReport` işaretlenir.
+   **Başarısız/kill turlarda ertelenmez** (dal bozuk, ebeveyn hemen bilmeli) ve
+   alt ağaç cascade durdurulur.
+2. **Açık rapor** — `report_to_coordinator(summary, status)` aracı: sentezini
+   bitiren düğüm görevini kendisi kapatır. Kendi worker'ları çalışırken
+   `completed` raporu **reddedilir**.
+3. **Settle backstop** — `settleReportBackstop`: dal tamamen sustuğu hâlde
+   `CoordinatorSettleGraceSec` (vars. **30 sn**, ayarlanabilir 5–1800) içinde rapor
+   gelmezse otomatik rapor gider. Statüsü **daima `incomplete`** — runtime işin
+   bittiğini bilemez, "completed" demek yalan olurdu; gövdesinde son yanıt + "bu
+   doğrulanmış bir sonuç değildir" uyarısı taşınır. Süre modele bağlı olduğu için
+   ayardır: kısa olursa yavaş bir sentez turu yarışı kaybedip gereksiz
+   `incomplete` gönderir, uzun olursa takılmış dal koordinatörünü bekletir.
+
+**Rapor borcu kalıcıdır** (`Session.CoordinatorReportPending`). Bellekte tutmak
+tam da kapatması gereken boşluğu açık bırakıyordu: dalını bekleyen bir ara düğüm
+diskte **sağlıklı** görünür (son mesajı kendi asistan yanıtıdır), dolayısıyla
+yetim-tur kurtarması ona hiç dokunmaz — bayrak bellekte olsaydı restart'ta
+kaybolur, koordinatörü hiç gelmeyecek bir raporu sonsuza kadar beklerdi. Boot'ta
+`RecoverPendingReports` (orphan taramasından **sonra**) backstop'u yeniden kurar;
+kurtarılan worker'lardan tur alan düğüm slotu meşgul bulup kendisi rapor verir,
+yalnız gerçekten sessiz kalan otomatik raporlanır.
+
+Ayrıca `WorkerInfo.Delegating`: kendi turu olmayan ama worker'ları çalışan bir
+alt-koordinatör "bitti" değil **"dağıtıyor"** görünür (canlı worker-state bloğunda
+da, UI roster'ında da).
+
+### 14.3 Guard'lar — üstel dallanma
+
+| Guard | Kapsam | Varsayılan |
+|---|---|---|
+| `CoordinatorMaxWorkers` | düğüm başına aktif worker | 8 |
+| `CoordinatorMaxTurns` | oturum başına otomatik tur | 50 |
+| **`CoordinatorMaxDepth`** | ağacın seviye derinliği (kök = 0) | **5** (`-1` = sınırsız) |
+| **`CoordinatorMaxSubtreeSessions`** | **tüm ağaçtaki** toplam worker oturumu | **64** (`-1` = sınırsız) |
+
+Alt-ağaç bütçesi kritik: düğüm-başına worker limiti **düğüm bazında** uygulandığı
+için derinlikle **çarpılır** (8 worker × derinlik 4 ≈ 4096 oturum); üstel dallanmayı
+gerçekten durduran tek sınır budur. `spawn_worker(coordinator:true)` derinlik
+sınırında **hata verir, sessizce düz worker'a düşmez** — delegasyon yaptığını
+sanan bir koordinatör gelmeyecek bir raporu sonsuza kadar bekler.
+
+Deadlock notu: `SpawnMaxConcurrent` (16) global bir havuzdur ve `runWorker` tur
+boyunca bir slot tutar; `runCoordinatorTurn` **tutmaz**. Değişmez kural:
+*bir ara koordinatör, spawn slotu tutarken çocuklarını asla senkron beklemez.*
+Bu bozulursa derin ağaçta gerçek kaynak kilitlenmesi oluşur.
+
+**Derinlik-farkında slot rezervasyonu** (`acquireSpawnSlotAtDepth`): havuz global
+olduğu için meşgul bir derin dal tüm slotları doldurup kardeşlerini — ve alakasız
+chat/schedule spawn'larını — "spawn limit reached" ile aç bırakabilirdi. Deadlock
+değil (koordinatörün otomatik turu slot almaz, ağaç ilerlemeye devam eder) ama tam
+da insanın izlediği seviyeleri açlığa sokar. Bu yüzden `depth >= 2` spawn'ları
+havuzun **dörtte biri boş kalmak** şartıyla slot alır; sığ spawn'lar tam havuzu
+kullanır → ağacın tepesi kendi torunlarını beklemez.
+
+### 14.4 Mod seçimi
+
+- **Spawn anında:** `spawn_worker(agent, task, coordinator: true, workflow?)`.
+  Reçete **miras alınmaz** — özyinelemeli bir reçete (tournament) aksi hâlde
+  ağaç boyunca kendini tekrarlardı; `workflow` yalnız `coordinator:true` ile
+  geçerlidir, aksi hâlde hata döner.
+- **Kendi kendine:** `set_coordinator_mode(enabled)` aracı ve `PUT
+  /api/sessions/{id}/role` **aynı** runtime yolunu (`SetSessionCoordinatorMode`)
+  kullanır → iki kural her iki yolda da geçerli:
+  - Çalışan worker varken **kapatma reddedilir** (bildirimler yine gelir ama
+    agent'ın onlara müdahale edecek aracı kalmazdı).
+  - Toggle **prompt epoch'unu tazeler** (`RefreshPromptEpoch`). Bu olmadan
+    araç şemaları oturum başında donduğu için (`_Docs/57`) agent "mod açıldı"
+    yanıtını alır ama `spawn_worker`'ı asla göremezdi. Araç çıktısı değişikliğin
+    **bir sonraki turda** etkili olacağını açıkça söyler.
+
+### 14.5 Dayanıklılık
+
+- **Cascade stop** (`stopSubtree`): bir alt-koordinatör durdurulduğunda tüm alt
+  ağaç iptal edilir. Aksi hâlde torunlar bütçe yakmaya devam eder ve biten torun
+  artık kimsenin beklemediği bir düğüme notify atıp zombi tur uyandırırdı. Oturum
+  silme (`session_teardown.go`) ve flow düğümü vazgeçişi de bu yolu kullanır.
+- **Crash kurtarma BFS**: `RecoverOrphanedTurns` oturumları `CoordinatorDepth`'e
+  göre sığdan derine sıralar ve bu taramada kurtarılan bir düğüme notify
+  **atmaz** — ara düğüm hem worker hem koordinatör olduğu için, ölü ilan edilmiş
+  bir ebeveyni uyandırmak zombi tur demekti.
+
+### 14.6 Araçlar ve uçlar
+
+| Yeni/değişen | Ne |
+|---|---|
+| `spawn_worker` | `+ coordinator` `+ workflow` |
+| `list_workers` | `+ scope: "children" \| "subtree"` (girintili ağaç çıktısı) |
+| `stop_worker` | alt ağacı da durdurur; sahiplik kontrolü korunur |
+| **`report_to_coordinator`** | ara düğüm görevini yukarı kapatır (yalnız ebeveyni olan oturumda kayıtlı) |
+| **`set_coordinator_mode`** | agent kendi modunu açar/kapatır (her oturumda kayıtlı) |
+| `GET /api/sessions/{id}/coordinator-tree` | ağacın tamamı (herhangi bir üyenin id'siyle) + düğüm başına ve **ağaç geneli maliyet** |
+| `GET /api/sessions/{id}/coordinator-ancestors` | köke kadar breadcrumb |
+
+**Maliyet rollup'ı:** billing per-session olduğu için derin bir ağaç görünmez bir
+harcamadır — kökün kartı yalnız koordinatörün turlarını gösterir, asıl iş (ve para)
+kullanıcının hiç açmadığı torunlardadır. `coordinator-tree` her düğümün
+`calls/tokens/costUSD`'sini verir ve **per-model istatistikleri birleştirip** tek
+seferde fiyatlar (`mergeModelStats` + `modelRowsFor`) → aritmetik Bütçe ekranıyla
+birebir aynı, prompt-cache tasarrufu dahil. Oturum başına dolar toplamak yuvarlama
+kayması yaratırdı ve cache tasarrufu token kırılımı olmadan hesaplanamaz.
+
+Araç kaydı artık **fonksiyon-varlığına** göre (`CoordinationFuncs.Spawn/Report/
+SetMode` nil mi) yapılır; CLI köprüsü (`coordinationBridgeDefs(f)`) aynı alt kümeyi
+ilan eder → native ve claude-cli turları araç seti konusunda ayrışamaz.
+
+### 14.7 UI
+
+- `CoordinatorSection` worker'da artık **erken dönmüyor**: worker başlığı + üst
+  zincir breadcrumb'ı (`CoordinatorBreadcrumb`) gösterilip **altında koordinatör
+  kontrolleri** de çizilir (ara düğüm ikisine birden sahip).
+- **`CoordinatorTreeView`** (katlanır, varsayılan kapalı): ağacın tamamı seviyeye
+  göre girintili + düğüm başına maliyet + altta **ağaç toplamı**. Düz roster yalnız
+  doğrudan çocukları gösteriyor — tek seviyeli ağaçlarda eksiksizdi, ama bir
+  alt-koordinatörün koşturduğu dal (ve maliyetin çoğu) orada görünmüyor. Panel
+  kapalıyken fetch edilmez (her düğümü gezip fiyatlıyor).
+  **Sağlık vurgusu:** düğümün `health` alanı (`stuck` > `error` > ``) mevcut
+  oto-etiketlerden türer — yeni bir "bozuk" kavramı icat etmez, oturum listesi ve
+  onarım otomasyonlarıyla aynı sinyali kullanır. Bozuk satır kırmızı isim + ikon +
+  hafif kırmızı zemin alır; sayaç **katlanmış başlıkta da** görünür, çünkü derindeki
+  bir hata tam olarak kimsenin açıp bakmayacağı şeydir. `reportPending` ayrı bir
+  kum saati rozetidir (bozuk değil ama üstündeki dalı tutan durum).
+- Roster satırı "dağıtıyor" durumunu ayrı gösterir.
+- Sidebar "Workers" sekmesi `role==='worker'` yerine `isWorkerSession()` ile
+  süzülür — aksi hâlde ara düğümler ve dolayısıyla tüm dallar sekmeden düşerdi.
+- Ayarlar ▸ Araçlar: derinlik + ağaç-başına oturum limitleri.
+
+### 14.8 Testler
+
+`coordination_tree_test.go`: subtree re-rooting (ara düğüm ebeveyninin diğer
+dallarını görmemeli), ertelenmiş rapor, erken `completed` reddi, mod toggle
+kuralları, derinlik limiti, araç geçitleri, legacy oturum uyumu.
+`coordination_test.go`: iç içe spawn, derinlik limiti, ağaç bütçesi.

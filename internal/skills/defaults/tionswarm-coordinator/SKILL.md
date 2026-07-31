@@ -13,9 +13,11 @@ Bu skill, TionSwarm'daki **koordinatör/worker** desenini (M2) ve onunla birlikt
 kullanılabilen diğer koordinasyon yöntemlerini öğretir. Ayrıntılı tasarım:
 `_Docs/47-KOORDINATOR-COKLU-AJAN.md`.
 
-> **Koordinatör olmak için** oturumun `Role = "coordinator"` olmalıdır (Composer'daki
-> Koordinatör rozeti veya oturum ayarından). Yalnız o zaman `spawn_worker` /
-> `send_to_worker` / `stop_worker` / `list_workers` araçları görünür.
+> **Koordinatör olmak için** oturumun koordinatör modu açık olmalıdır — oturum
+> panelindeki toggle, `spawn_worker(coordinator: true)` ile açılmış olmak, ya da
+> kendi `set_coordinator_mode(enabled: true)` çağrın. Yalnız o zaman `spawn_worker` /
+> `send_to_worker` / `stop_worker` / `list_workers` araçları görünür. Kendi kendine
+> açtığında araçlar **bir sonraki turda** gelir (bu turun araç seti donmuştur).
 
 ## 1. Dört koordinasyon yöntemi — hangisi ne zaman?
 
@@ -84,7 +86,29 @@ bir skill olarak yazıp ekleyebilirsin.
   (context'te "Shared scratchpad" olarak verilir). Worker'lar arası kalıcı bulguları/
   planları her göreve tekrar yazmak yerine oraya küçük dosyalar (findings.md, plan.md)
   olarak yazın.
-- Worker oturumları koordinasyon araçlarını **göremez** → worker worker spawn edemez (recursion engeli).
 - Koordinatör başına aktif worker sayısı (`CoordinatorMaxWorkers`) ve otomatik koordinatör
   tur sayısı (`CoordinatorMaxTurns`) sınırlıdır; limit dolunca yeni bildirimler kaydedilir
-  ama otomatik tur tetiklenmez (manuel devam edebilirsin).
+  ama otomatik tur tetiklenmez (manuel devam edebilirsin). Ağaç genelinde ayrıca
+  derinlik (`CoordinatorMaxDepth`) ve toplam worker oturumu (`CoordinatorMaxSubtreeSessions`)
+  sınırları vardır — bunlara takılan bir spawn **hata verir**, sessizce düz worker'a düşmez.
+
+## 6. Derinlik — alt-koordinatörler
+
+`spawn_worker(coordinator: true)` ile açtığın worker senin yetkilerini alır: görevini
+kendi worker'larına bölebilir. Sınırsız derinlikte iç içe geçebilir.
+
+- **Ne zaman:** alt-görev gerçekten bağımsız parçalara ayrılıyorsa ("şu 4 alt sistemi
+  taşı", her biri kendi içinde birkaç dosya). **Varsayılan yapma** — her seviye tur,
+  token ve gecikme çarpar; işi yapan düz bir worker, işi bir kez daha devreden bir
+  alt-koordinatörden daima iyidir.
+- **`<task-progress status="delegating">` bir sonuç DEĞİLDİR.** O worker dağıtım yaptı,
+  hâlâ çalışıyor; gerçek `<task-notification>`'ı dalı bitince gelir. Boş boş bekleme,
+  diğer işlerine bak.
+- **Sen bir alt-koordinatörsen:** turunun bitmesi işinin bittiği anlamına gelmez.
+  Sentezini tamamlayınca `report_to_coordinator(summary, status)` çağır — görevini
+  yukarı kapatan tek şey budur. Tıkandıysan da `incomplete`/`failed` ile çağır;
+  sessiz kalmak üstündeki tüm ağacı bekletir. Özeti **kendin yaz**: koordinatörün
+  senin worker'larının oturumlarını okuyamaz.
+- `send_to_worker` yalnız **kendi doğrudan** worker'larına gider; bir alt-koordinatörün
+  worker'ları ona aittir. `list_workers(scope: "subtree")` ile tüm dalını görebilirsin.
+- Bir alt-koordinatörü `stop_worker` ile durdurmak **tüm dalını** durdurur.

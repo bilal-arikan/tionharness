@@ -32,10 +32,10 @@ var defaultInstructions string
 // Instructions is free-form guidance injected into agents running in this
 // workspace (workspace-specific system prompt addendum).
 type WSSettings struct {
-	Instructions    string `json:"instructions"`
-	Icon            string `json:"icon"`  // emoji shown in the switcher/rail
-	Color           string `json:"color"` // hex accent for visual identity
-	PauseAutonomy   bool   `json:"pauseAutonomy"`
+	Instructions  string `json:"instructions"`
+	Icon          string `json:"icon"`  // emoji shown in the switcher/rail
+	Color         string `json:"color"` // hex accent for visual identity
+	PauseAutonomy bool   `json:"pauseAutonomy"`
 
 	// Per-workspace appearance overrides (client-side visual only). Empty fields
 	// inherit the application-global appearance, so the UI re-themes itself when
@@ -54,6 +54,17 @@ type WSSettings struct {
 	// this workspace's recent past chat sessions is injected into an agent's context
 	// on the session's first turn, and the list_sessions / archive_sessions /
 	// conversation_search pull tools are always offered. Nothing is configurable.
+
+	// TerseMode appends the workspace's terse ("caveman") reply-style prompt to
+	// every agent's static system prefix. The text is the registry prompt "terse"
+	// (workspace override <workspace>/config/prompts/terse.md → embedded default),
+	// so it is editable per workspace like any other runtime prompt.
+	//
+	// Why a prompt and not a skill: a reply-style rule only works when it is always
+	// in force. As a skill it sits in the Available Skills catalog as a one-line
+	// summary and only reaches the model if the model itself decides to call
+	// use_skill — which in practice means it rarely fires. Default off.
+	TerseMode bool `json:"terseMode"`
 
 	// CodebaseMemoryEnabled toggles the codebase-memory capability system for this
 	// workspace: when a codebase-memory MCP server is present, inject a prompt hint,
@@ -93,6 +104,15 @@ type WSSettings struct {
 	// Empty/nil means "use db.DefaultBoardColumns()".
 	BoardColumns []db.BoardColumnDef `json:"boardColumns,omitempty"`
 
+	// BoardViews holds this workspace's user-created saved board views (named
+	// filter + groupBy + sort presets). The built-in views (Tümü / Bugün / …) live
+	// in the client and are never stored, so an empty list means "no custom views
+	// yet". Which view is ACTIVE is deliberately NOT stored here: that is
+	// per-window UI state (see _Docs/30-COKLU-PENCERE.md) and lives in the
+	// client's localStorage, so two open windows can sit on different views
+	// without overwriting each other.
+	BoardViews []db.BoardViewDef `json:"boardViews,omitempty"`
+
 	// IgnoredRecommendations holds the keys of post-create advisory cards
 	// (WorkspaceRecommendations) the user dismissed for this workspace, so they are
 	// not re-offered. Purely UI state — no runtime effect. Manageable (review +
@@ -128,10 +148,10 @@ func defaultWSSettings() WSSettings {
 // WSSettingsPatch is a partial update; nil fields are left unchanged. Name is
 // handled separately (workspace rename) since it lives in the registry Meta.
 type WSSettingsPatch struct {
-	Name            *string `json:"name"`
-	Instructions    *string `json:"instructions"`
-	Icon            *string `json:"icon"`
-	Color           *string `json:"color"`
+	Name              *string `json:"name"`
+	Instructions      *string `json:"instructions"`
+	Icon              *string `json:"icon"`
+	Color             *string `json:"color"`
 	PauseAutonomy     *bool   `json:"pauseAutonomy"`
 	DefaultWorkingDir *string `json:"defaultWorkingDir"`
 
@@ -139,6 +159,7 @@ type WSSettingsPatch struct {
 	Accent      *string `json:"accent"`
 	ThemePreset *string `json:"themePreset"`
 
+	TerseMode              *bool   `json:"terseMode"`
 	CodebaseMemoryEnabled  *bool   `json:"codebaseMemoryEnabled"`
 	PromptEpochEnabled     *bool   `json:"promptEpochEnabled"`
 	AutoCaptureArtifacts   *bool   `json:"autoCaptureArtifacts"`
@@ -146,6 +167,10 @@ type WSSettingsPatch struct {
 	ShellCommandRewrite    *string `json:"shellCommandRewrite"`
 
 	BoardColumns *[]db.BoardColumnDef `json:"boardColumns"`
+
+	// BoardViews replaces the whole saved-view list (add/rename/delete are all
+	// expressed as a full rewrite, matching how BoardColumns is edited).
+	BoardViews *[]db.BoardViewDef `json:"boardViews"`
 
 	IgnoredRecommendations *[]string `json:"ignoredRecommendations"`
 
@@ -233,6 +258,7 @@ func (w *Workspace) loadSettings() {
 	if w.Runtime != nil {
 		w.Runtime.SetPaused(s.PauseAutonomy)
 		w.Runtime.SetInstructions(s.Instructions)
+		w.Runtime.SetTerseMode(s.TerseMode)
 		w.Runtime.SetDefaultWorkDir(s.DefaultWorkingDir)
 		w.Runtime.SetCodebaseMemory(s.CodebaseMemoryEnabled)
 		w.Runtime.SetPromptEpoch(s.PromptEpochEnabled)
@@ -280,6 +306,14 @@ func (m *Manager) UpdateSettings(id string, patch WSSettingsPatch) (*Workspace, 
 		return nil, err
 	}
 
+	// Reject a malformed saved-view list BEFORE any part of the patch is applied,
+	// so a bad view cannot land half a settings update on disk.
+	if patch.BoardViews != nil {
+		if err := db.ValidateBoardViews(*patch.BoardViews); err != nil {
+			return nil, err
+		}
+	}
+
 	if patch.Name != nil {
 		if err := m.Rename(id, *patch.Name); err != nil {
 			return nil, err
@@ -298,6 +332,9 @@ func (m *Manager) UpdateSettings(id string, patch WSSettingsPatch) (*Workspace, 
 	}
 	if patch.PauseAutonomy != nil {
 		ws.settings.cur.PauseAutonomy = *patch.PauseAutonomy
+	}
+	if patch.TerseMode != nil {
+		ws.settings.cur.TerseMode = *patch.TerseMode
 	}
 	if patch.DefaultWorkingDir != nil {
 		ws.settings.cur.DefaultWorkingDir = *patch.DefaultWorkingDir
@@ -329,6 +366,9 @@ func (m *Manager) UpdateSettings(id string, patch WSSettingsPatch) (*Workspace, 
 	if patch.BoardColumns != nil {
 		ws.settings.cur.BoardColumns = *patch.BoardColumns
 	}
+	if patch.BoardViews != nil {
+		ws.settings.cur.BoardViews = *patch.BoardViews
+	}
 	if patch.IgnoredRecommendations != nil {
 		ws.settings.cur.IgnoredRecommendations = *patch.IgnoredRecommendations
 	}
@@ -339,6 +379,7 @@ func (m *Manager) UpdateSettings(id string, patch WSSettingsPatch) (*Workspace, 
 	}
 	paused := ws.settings.cur.PauseAutonomy
 	instructions := ws.settings.cur.Instructions
+	terseMode := ws.settings.cur.TerseMode
 	defaultWorkDir := ws.settings.cur.DefaultWorkingDir
 	cbmEnabled := ws.settings.cur.CodebaseMemoryEnabled
 	epochEnabled := ws.settings.cur.PromptEpochEnabled
@@ -357,6 +398,7 @@ func (m *Manager) UpdateSettings(id string, patch WSSettingsPatch) (*Workspace, 
 	if ws.Runtime != nil {
 		ws.Runtime.SetPaused(paused)
 		ws.Runtime.SetInstructions(instructions)
+		ws.Runtime.SetTerseMode(terseMode)
 		ws.Runtime.SetDefaultWorkDir(defaultWorkDir)
 		ws.Runtime.SetCodebaseMemory(cbmEnabled)
 		ws.Runtime.SetPromptEpoch(epochEnabled)

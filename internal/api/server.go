@@ -256,7 +256,9 @@ func (s *Server) applySettings() {
 	s.tun.SetScheduleTimeoutMinutes(cur.ScheduleTimeoutMin)
 	tools.SetShellTimeouts(cur.ShellDefaultTimeoutSec, cur.ShellMaxTimeoutSec)
 	tools.SetMaxToolOutputBytes(cur.MaxToolOutputKB * 1024)
-	s.tun.SetCoordinatorLimits(cur.CoordinatorMaxWorkers, cur.CoordinatorMaxTurns)
+	s.tun.SetCoordinatorLimits(cur.CoordinatorMaxWorkers, cur.CoordinatorMaxTurns,
+		cur.CoordinatorMaxDepth, cur.CoordinatorMaxSubtreeSessions)
+	s.tun.SetCoordinatorSettleGrace(cur.CoordinatorSettleGraceSec)
 	s.tun.SetWorkdirGuards(cur.AutonomousConfine, cur.AutonomousBootSeq)
 	s.tun.SetAutonomousTaskBudget(cur.AutonomousTaskBudgetTokens)
 	s.tun.SetNativeToolSearch(cur.AnthropicNativeToolSearch)
@@ -420,6 +422,8 @@ func (s *Server) registerSessionRoutes(mux *http.ServeMux) {
 	// Untrimmed activity trace for one turn — the listing above ships tool
 	// payloads cut to stepFieldCap.
 	mux.HandleFunc("GET /api/sessions/{id}/messages/{msgId}/steps", s.handleMessageSteps)
+	// Every file mutation in the session, untrimmed — the chat's bulk diff popup.
+	mux.HandleFunc("GET /api/sessions/{id}/changes", s.handleSessionChanges)
 	mux.HandleFunc("POST /api/sessions/{id}/rewind", s.handleRewindSession)
 	mux.HandleFunc("POST /api/sessions/{id}/title", s.handleGenerateSessionTitle)
 	mux.HandleFunc("PUT /api/sessions/{id}/state", s.handleSetSessionState)
@@ -430,6 +434,10 @@ func (s *Server) registerSessionRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("PUT /api/sessions/{id}/role", s.handleSetSessionRole)
 	mux.HandleFunc("PUT /api/sessions/{id}/workflow", s.handleSetSessionWorkflow)
 	mux.HandleFunc("GET /api/sessions/{id}/workers", s.handleListWorkers)
+	// Coordinator TREE navigation: /tree takes any member id and returns the whole
+	// tree from its root; /ancestors is the upward breadcrumb from a worker.
+	mux.HandleFunc("GET /api/sessions/{id}/coordinator-tree", s.handleSessionCoordinatorTree)
+	mux.HandleFunc("GET /api/sessions/{id}/coordinator-ancestors", s.handleSessionCoordinatorAncestors)
 	mux.HandleFunc("GET /api/sessions/{id}/workdir", s.handleGetSessionWorkdir)
 	mux.HandleFunc("PUT /api/sessions/{id}/workdir", s.handleSetSessionWorkdir)
 	mux.HandleFunc("GET /api/fs/browse", s.handleBrowseDirs)
@@ -719,9 +727,17 @@ func (s *Server) registerMiscRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/logs", s.handleClientLog)
 	// Autonomous event feed (task/schedule) — SSE, global.
 	mux.HandleFunc("GET /api/events", s.handleEvents)
-	// Detect optional external token-optimization tools on PATH (presence-only,
-	// never installs/runs them) — surfaced by the Settings diagnostics panel.
+	// Detect optional external tools on this host and read the version each one
+	// reports — surfaced by the Settings diagnostics panel. Path resolution runs
+	// nothing; the version probe runs only `<tool> --version` (3s cap).
 	mux.HandleFunc("GET /api/external-tools", s.handleExternalTools)
+	// Upstream release check (GitHub API, 6h disk cache). Split from detection
+	// because it leaves the machine and must not block the panel's first paint.
+	mux.HandleFunc("POST /api/external-tools/check-updates", s.handleExternalToolUpdates)
+	// Run one tool's update. Only package-manager-backed tools are accepted; the
+	// rest answer 409 with manual instructions. More specific literal routes below
+	// (rtk-config/reveal) still win over this pattern under Go's mux precedence.
+	mux.HandleFunc("POST /api/external-tools/{name}/update", s.handleExternalToolUpdate)
 	// Maintenance ACTIONS for the token optimizers (not settings — their config is
 	// machine-global while TionSwarm settings are per-workspace; see
 	// external_tools_maint.go). Fixed-argv commands, no request parameters.

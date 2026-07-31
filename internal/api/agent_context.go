@@ -180,6 +180,11 @@ func (s *Server) buildAgentStaticPrompt(ctx context.Context, wsp *workspace.Work
 	if ins := strings.TrimSpace(wsp.Settings().Instructions); ins != "" {
 		system = strings.TrimSpace(system + "\n\n# Workspace Instructions\n" + ins)
 	}
+	// Terse ("caveman") reply style: workspace toggle + registry prompt "terse".
+	// After the instructions so a workspace rule can be phrased to override it.
+	if tb := wsp.Runtime.TerseModeBlock(); tb != "" {
+		system = strings.TrimSpace(system + "\n\n" + tb)
+	}
 	system = strings.TrimSpace(system + "\n\n" + artifactGuidanceFor(wsp.Settings().AutoCaptureArtifacts))
 	if sb := wsp.Runtime.SkillsCatalogBlockForAgent(agent); sb != "" {
 		system = strings.TrimSpace(system + "\n\n" + sb)

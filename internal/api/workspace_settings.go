@@ -36,6 +36,10 @@ type workspaceSettingsDTO struct {
 	Accent      string `json:"accent"`
 	ThemePreset string `json:"themePreset"`
 
+	// TerseMode appends the workspace's terse ("caveman") reply-style prompt (the
+	// registry prompt "terse") to every agent's static system prefix.
+	TerseMode bool `json:"terseMode"`
+
 	// CodebaseMemoryEnabled toggles the codebase-memory capability system (hint +
 	// isolated store + auto-index + codebase_workspace_search) for this workspace.
 	CodebaseMemoryEnabled bool `json:"codebaseMemoryEnabled"`
@@ -63,6 +67,11 @@ type workspaceSettingsDTO struct {
 	// BoardColumns is the ordered column set for this workspace's kanban board.
 	// Always non-nil: falls back to db.DefaultBoardColumns() when unconfigured.
 	BoardColumns []db.BoardColumnDef `json:"boardColumns"`
+
+	// BoardViews lists this workspace's user-created saved board views (named
+	// filter + groupBy + sort presets). Always non-nil so the client can render an
+	// empty menu section cleanly; the built-in views are defined client-side.
+	BoardViews []db.BoardViewDef `json:"boardViews"`
 
 	// IgnoredRecommendations lists the dismissed advisory-card keys for this
 	// workspace (always non-nil so the client can render an empty list cleanly).
@@ -127,7 +136,10 @@ func toWorkspaceSettingsDTO(ctx context.Context, w *workspace.Workspace) workspa
 
 		BoardColumns: cols,
 
+		TerseMode: s.TerseMode,
+
 		// Non-nil for a clean empty array in JSON (nil marshals to null).
+		BoardViews:             append([]db.BoardViewDef{}, s.BoardViews...),
 		IgnoredRecommendations: append([]string{}, s.IgnoredRecommendations...),
 
 		DesktopNotifications: desktopNotificationsToString(s.DesktopNotifications),
@@ -207,6 +219,15 @@ func (s *Server) handleUpdateWorkspaceSettings(w http.ResponseWriter, r *http.Re
 	if !ok {
 		return
 	}
+	// Saved-view shape is client-authored, so a malformed one is a 400, not a 500.
+	// UpdateSettings validates again for non-HTTP callers; this check exists only
+	// to pick the right status code.
+	if patch.BoardViews != nil {
+		if err := db.ValidateBoardViews(*patch.BoardViews); err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+	}
 	updated, err := s.workspaces.UpdateSettings(wsp.ID, patch)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
@@ -220,6 +241,13 @@ func (s *Server) handleUpdateWorkspaceSettings(w http.ResponseWriter, r *http.Re
 	if patch.BoardColumns != nil {
 		publishEntityChange(wsp, "board", "Boards sütunları güncellendi", "",
 			map[string]string{"view": "board", "op": "columns_changed"})
+	}
+	// Saved views live in the same settings document, so the same board channel
+	// carries them: every open window re-pulls settings and picks up a view the
+	// user saved (or deleted) elsewhere.
+	if patch.BoardViews != nil {
+		publishEntityChange(wsp, "board", "Board görünümleri güncellendi", "",
+			map[string]string{"view": "board", "op": "views_changed"})
 	}
 	writeJSON(w, http.StatusOK, toWorkspaceSettingsDTO(r.Context(), updated))
 }

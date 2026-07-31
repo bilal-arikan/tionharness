@@ -1,4 +1,4 @@
-﻿package api
+package api
 
 import (
 	"context"
@@ -440,10 +440,15 @@ func interactionToolSpecs(tun *agent.Tunables, autonomous bool) []interaction.To
 	if tun != nil && tun.ShellEnabled() {
 		for _, name := range tools.ShellToolNames() {
 			switch name {
+			// AdvertiseOptimizerFlag: the schema is built here from a bare tool, but
+			// the real output filter is installed per turn by NewShellRunner — so
+			// no_compress IS supported at call time and must be declared, or the
+			// schema's "additionalProperties": false forbids the very escape hatch
+			// the optimizer's degraded note tells the agent to use.
 			case "Bash":
-				defs = append(defs, tools.NewShellTool(tools.Sandbox{}).Def())
+				defs = append(defs, tools.NewShellTool(tools.Sandbox{}).AdvertiseOptimizerFlag().Def())
 			case "PowerShell":
-				defs = append(defs, tools.NewPowerShellTool(tools.Sandbox{}).Def())
+				defs = append(defs, tools.NewPowerShellTool(tools.Sandbox{}).AdvertiseOptimizerFlag().Def())
 			}
 		}
 	}

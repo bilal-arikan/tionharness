@@ -6,7 +6,6 @@ package conversation
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 	"os"
 	"strconv"
@@ -252,7 +251,7 @@ func (m *Manager) Prepare(ctx context.Context, database *db.DB, provider provide
 
 	return Prepared{
 		Summary:       summary,
-		Messages:      toProviderMessages(pending),
+		Messages:      toProviderMessages(ctx, pending),
 		ContextTokens: contextTokens,
 		Compacted:     compacted,
 		Pressure:      pressure,
@@ -393,54 +392,21 @@ func recordCompaction(ctx context.Context, database *db.DB, agent db.Agent, u pr
 // ToProviderMessages maps a tail of stored turns to provider messages (same
 // rules as the internal compaction path). Exposed for the claude-cli resume path,
 // which sends only the messages the CLI has not yet seen (the delta) instead of
-// the full transcript.
-func ToProviderMessages(msgs []db.Message) []providers.Message {
-	return toProviderMessages(msgs)
+// the full transcript. ctx should carry WithAttachmentRoot (see attachments.go).
+func ToProviderMessages(ctx context.Context, msgs []db.Message) []providers.Message {
+	return toProviderMessages(ctx, msgs)
 }
 
 // toProviderMessages maps stored user/assistant turns to provider messages,
 // folding any user-message attachments into the text the model sees.
-func toProviderMessages(msgs []db.Message) []providers.Message {
+func toProviderMessages(ctx context.Context, msgs []db.Message) []providers.Message {
 	out := make([]providers.Message, 0, len(msgs))
 	for _, msg := range msgs {
 		if msg.Role == providers.RoleUser || msg.Role == providers.RoleAssistant {
-			out = append(out, providers.Message{Role: msg.Role, Text: withAttachments(msg)})
+			out = append(out, providers.Message{Role: msg.Role, Text: withAttachments(ctx, msg)})
 		}
 	}
 	return out
-}
-
-// InlineAttachments folds an attachment list into a piece of text using the same
-// block format chat turns use (text/code inlined verbatim; binary/image listed by
-// read_file path). Exposed so non-chat callers (e.g. flow runs) can give their
-// agents the same attachment context. Returns text unchanged when atts is empty.
-func InlineAttachments(text string, atts []db.Attachment) string {
-	return withAttachments(db.Message{Text: text, Attachments: atts})
-}
-
-// withAttachments appends an "Attachments" block to a user message's text. Text
-// and code attachments are inlined verbatim (the model reads them directly);
-// binary/image attachments are listed by relative path so an agent with the
-// read_file tool can open them from the workspace sandbox.
-func withAttachments(msg db.Message) string {
-	if len(msg.Attachments) == 0 {
-		return msg.Text
-	}
-	var b strings.Builder
-	b.WriteString(msg.Text)
-	b.WriteString("\n\n## Attachments\n")
-	for _, a := range msg.Attachments {
-		if a.TextContent != "" {
-			fmt.Fprintf(&b, "\n### %s (%s)\n```\n%s\n```\n", a.Name, a.Kind, a.TextContent)
-			continue
-		}
-		if a.RelPath != "" {
-			fmt.Fprintf(&b, "- %s (%s, %d bytes) — read_file path: %s\n", a.Name, a.Kind, a.Size, a.RelPath)
-		} else {
-			fmt.Fprintf(&b, "- %s (%s)\n", a.Name, a.Kind)
-		}
-	}
-	return strings.TrimSpace(b.String())
 }
 
 func envInt(key string, fallback int) int {

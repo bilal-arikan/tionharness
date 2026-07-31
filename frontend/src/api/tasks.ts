@@ -1,7 +1,7 @@
 // Tasks (kanban board) and cron schedules. The board is a passive status
 // surface: tasks are described, columned and optionally tagged with an agent or
 // flow. It never runs anything — flows, schedules and agent sessions do the work.
-import type { Task, Schedule, BoardState, Automation } from '@/types'
+import type { Task, TaskPatch, Schedule, BoardState, Automation } from '@/types'
 import { req } from './client'
 
 export const taskApi = {
@@ -16,30 +16,22 @@ export const taskApi = {
     priority?: Task['priority']
     tags?: string[]
     artifactIds?: string[]
+    progress?: number
+    startDate?: string
+    dueDate?: string
   }) =>
     req<Task>('/api/tasks', {
       method: 'POST',
       body: JSON.stringify(data),
     }),
   // (Re)generate a task title from its description.
-  generateTaskTitle: (id: string) =>
-    req<Task>(`/api/tasks/${id}/title`, { method: 'POST' }),
-  updateTask: (
-    id: string,
-    patch: Partial<
-      Pick<
-        Task,
-        | 'title' | 'description' | 'ownerAgentId' | 'flowId' | 'boardState'
-        | 'dependencies' | 'priority' | 'tags' | 'artifactIds'
-      >
-    >,
-  ) =>
+  generateTaskTitle: (id: string) => req<Task>(`/api/tasks/${id}/title`, { method: 'POST' }),
+  updateTask: (id: string, patch: TaskPatch) =>
     req<Task>(`/api/tasks/${id}`, {
       method: 'PUT',
       body: JSON.stringify(patch),
     }),
-  deleteTask: (id: string) =>
-    req<{ result: string }>(`/api/tasks/${id}`, { method: 'DELETE' }),
+  deleteTask: (id: string) => req<{ result: string }>(`/api/tasks/${id}`, { method: 'DELETE' }),
 
   // Schedules (cron).
   listSchedules: () => req<Schedule[]>('/api/schedules'),
@@ -57,7 +49,13 @@ export const taskApi = {
     }),
   updateSchedule: (
     id: string,
-    data: { agentId?: string; flowId?: string; cronExpr: string; prompt?: string; expiresAt?: number },
+    data: {
+      agentId?: string
+      flowId?: string
+      cronExpr: string
+      prompt?: string
+      expiresAt?: number
+    },
   ) =>
     req<Schedule>(`/api/schedules/${id}`, {
       method: 'PUT',
@@ -69,8 +67,7 @@ export const taskApi = {
       body: JSON.stringify({ enabled }),
     }),
   // Fire a schedule immediately ("Run" button), regardless of enabled state.
-  runSchedule: (id: string) =>
-    req<Schedule>(`/api/schedules/${id}/run`, { method: 'POST' }),
+  runSchedule: (id: string) => req<Schedule>(`/api/schedules/${id}/run`, { method: 'POST' }),
   setScheduleTags: (id: string, tags: string[]) =>
     req<{ id: string; tags: string[] }>(`/api/schedules/${id}/tags`, {
       method: 'PUT',

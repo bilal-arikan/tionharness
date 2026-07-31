@@ -1,4 +1,4 @@
-﻿// Package agent implements TionSwarm's multi-agent ("swarm") runtime: it owns each
+// Package agent implements TionSwarm's multi-agent ("swarm") runtime: it owns each
 // agent's provider calls, tool loop, delegation, cron scheduler and the headless
 // autonomous entry points (schedule/spawn/flow).
 package agent
@@ -173,6 +173,13 @@ type Runtime struct {
 	// settings), appended to every agent's static system prompt.
 	instructions atomic.Pointer[string]
 
+	// terseMode gates this workspace's terse ("caveman") reply-style prompt. When
+	// on, the registry prompt "terse" (workspace override → embedded default) is
+	// appended to every agent's STATIC system prefix, so the style holds for every
+	// turn instead of depending on the model choosing to load a skill. Static =
+	// cached: the bytes cost once per prompt-cache window, not once per turn.
+	terseMode atomic.Bool
+
 	// defaultWorkDir is this workspace's user-chosen default working directory (cwd)
 	// for new sessions, set from per-workspace settings. Empty = fall back to
 	// workDir (the physical workspace dir). A session's own WorkingDir overrides it.
@@ -265,6 +272,12 @@ func (r *Runtime) Paused() bool { return r.paused.Load() }
 
 // SetInstructions updates this workspace's agent-wide guidance.
 func (r *Runtime) SetInstructions(s string) { r.instructions.Store(&s) }
+
+// SetTerseMode updates this workspace's terse (caveman) reply-style toggle.
+func (r *Runtime) SetTerseMode(enabled bool) { r.terseMode.Store(enabled) }
+
+// TerseModeEnabled reports this workspace's terse-mode toggle.
+func (r *Runtime) TerseModeEnabled() bool { return r.terseMode.Load() }
 
 // SetDefaultWorkDir updates this workspace's default working directory for new
 // sessions (set from per-workspace settings). Empty clears it (back to workDir).
@@ -730,16 +743,20 @@ func (r *Runtime) BridgeTools(ctx context.Context, agent db.Agent) ([]providers.
 	// so session-scoped bridged tools (read_session_debug) default to this session.
 	sid := SessionIDFrom(ctx)
 
-	// Coordinator sessions (M2): bridge the spawn_worker/send_to_worker/stop_worker/
-	// list_workers tools to the CLI path too, so a claude-cli coordinator can drive
-	// workers. They dispatch outside reg (via the coordination runner), so they need
-	// no registry registration. Only advertised when this session is a coordinator.
+	// Coordination tools (M2): bridge them to the CLI path too, so a claude-cli
+	// coordinator can drive workers, a claude-cli sub-coordinator can report up, and
+	// any claude-cli session can toggle its own coordinator mode. They dispatch
+	// outside reg (via the coordination runner), so they need no registry
+	// registration. coordinationBridgeDefs advertises exactly the subset this
+	// session is entitled to — same per-function gating as the native registry.
 	var coordFuncs *tools.CoordinationFuncs
-	if sid != "" && r.sessionRole(ctx) == "coordinator" {
-		coordFuncs = r.coordinationFuncsFor(sid, agent.ID)
-		for _, d := range coordinationBridgeDefs() {
-			if allow == nil || allow(d.Name) {
-				defs = append(defs, d)
+	if sid != "" {
+		if sess, err := r.db.GetSession(ctx, sid); err == nil {
+			coordFuncs = r.coordinationFuncsFor(sess, agent.ID)
+			for _, d := range coordinationBridgeDefs(coordFuncs) {
+				if allow == nil || allow(d.Name) {
+					defs = append(defs, d)
+				}
 			}
 		}
 	}
@@ -1168,6 +1185,10 @@ func (r *Runtime) agentName(id string) string {
 	return id
 }
 
+// AgentName is agentName for callers outside the package (the coordinator-tree
+// API endpoints, which render agent names alongside session ids).
+func (r *Runtime) AgentName(id string) string { return r.agentName(id) }
+
 // BuildSystemPrompt composes the agent's persona from soul + identity. Exported
 // as the SINGLE persona assembler: the chat/preview path (api package) uses it
 // too, so the two paths can never drift apart.
@@ -1254,6 +1275,14 @@ func (r *Runtime) systemPrompt(a db.Agent) string {
 			out += "# Workspace Instructions\n" + ins
 		}
 	}
+	// Terse mode rides the same static prefix, AFTER the workspace instructions so
+	// a workspace rule can still be phrased to override the reply style.
+	if tb := r.TerseModeBlock(); tb != "" {
+		if out != "" {
+			out += "\n\n"
+		}
+		out += tb
+	}
 	return out
 }
 
@@ -1327,12 +1356,12 @@ func (r *Runtime) autonomousDynamicSuffix(ctx context.Context) string {
 	// Failure lessons (hata→ders döngüsü): the newest distilled lessons ride
 	// every headless turn so a fresh context does not repeat known failures.
 	// The turn's own agent (resolved via the stamped session) ranks first.
-	agentID, role := "", ""
+	agentID, isCoordinator := "", false
 	sid := SessionIDFrom(ctx)
 	if sid != "" {
 		if sess, err := r.db.GetSession(ctx, sid); err == nil {
 			agentID = sess.AgentID
-			role = sess.Role
+			isCoordinator = sess.IsCoordinator()
 		}
 	}
 	if lb := r.LessonsContextBlock(ctx, agentID); lb != "" {
@@ -1355,8 +1384,9 @@ func (r *Runtime) autonomousDynamicSuffix(ctx context.Context) string {
 	}
 	// Coordinator turns get an authoritative live worker-state block so the model
 	// can never believe a finished worker is still running (the coalesced-
-	// notification stall). Coordinator-only, reusing the session role loaded above.
-	if sid != "" && role == "coordinator" {
+	// notification stall). Coordinator-only, reusing the session loaded above —
+	// which includes a mid-level node, whose block also reports its own subtree.
+	if sid != "" && isCoordinator {
 		if wb := r.coordinatorWorkerStatusBlock(ctx, sid); wb != "" {
 			out += "\n\n" + wb
 		}

@@ -53,6 +53,12 @@ type Workspace struct {
 	settings settingsHolder // per-workspace overrides (ws-settings.json)
 }
 
+// SandboxRoot is the workspace's file sandbox (<DataDir>/workspace): the root
+// that uploads, artifacts and the files API resolve their relative paths
+// against. Named so the several call sites that used to spell out
+// filepath.Join(DataDir, "workspace") agree by construction.
+func (w *Workspace) SandboxRoot() string { return filepath.Join(w.DataDir, "workspace") }
+
 // Manager owns all workspaces and persists their registry.
 type Manager struct {
 	rootDir  string

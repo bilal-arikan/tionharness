@@ -1,4 +1,4 @@
-﻿package api
+package api
 
 import (
 	"context"
@@ -45,6 +45,7 @@ func (s *Server) wakeTurnRunner(rt *agent.Runtime) agent.WakeTurnFunc {
 		toolRecap := recentToolActivityBlock(history)
 		feedbackRecap := recentFeedbackBlock(history)
 		ctx = conversation.WithCompactPrompt(ctx, wsp.Runtime.CompactPromptTemplate())
+		ctx = conversation.WithAttachmentRoot(ctx, wsp.SandboxRoot())
 		prep, err := s.convo.Prepare(ctx, wsp.DB, provider, session, ag, history)
 		if err != nil {
 			return "", nil, fmt.Errorf("wake turn: prepare: %w", err)

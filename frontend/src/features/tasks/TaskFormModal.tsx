@@ -59,7 +59,18 @@ function excerpt(text: string, max = 60): string {
 // flow, dependencies). Replaces the old right-hand TaskDetailPanel and the
 // inline create form.
 export function TaskFormModal({
-  mode, task, agents, flows, columns, tasks, defaultBoardState, onClose, onSaved, onReplaceTemp, onDeleted, onError,
+  mode,
+  task,
+  agents,
+  flows,
+  columns,
+  tasks,
+  defaultBoardState,
+  onClose,
+  onSaved,
+  onReplaceTemp,
+  onDeleted,
+  onError,
 }: Props) {
   const firstCol = defaultBoardState ?? columns[0]?.key ?? 'todo'
   const [title, setTitle] = useState(task?.title ?? '')
@@ -72,6 +83,10 @@ export function TaskFormModal({
   const [tagInput, setTagInput] = useState('')
   const [depIds, setDepIds] = useState<string[]>(() => parseDeps(task?.dependencies ?? '[]'))
   const [artifactIds, setArtifactIds] = useState<string[]>(task?.artifactIds ?? [])
+  // Planned window (YYYY-MM-DD). dueDate feeds the board's date facet, its
+  // date-grouping axis and the overdue badge on the card.
+  const [startDate, setStartDate] = useState(task?.startDate ?? '')
+  const [dueDate, setDueDate] = useState(task?.dueDate ?? '')
   // Workspace artifacts, loaded once to resolve refs to titles/kinds and feed the
   // "link existing" picker; drag-dropped files append newly created artifacts.
   const [allArtifacts, setAllArtifacts] = useState<Artifact[]>([])
@@ -92,9 +107,12 @@ export function TaskFormModal({
 
   // Load workspace artifacts for the reference picker + chip resolution.
   useEffect(() => {
-    api.listArtifacts().then(setAllArtifacts).catch(() => {
-      /* non-fatal: picker just shows "no artifacts" */
-    })
+    api
+      .listArtifacts()
+      .then(setAllArtifacts)
+      .catch(() => {
+        /* non-fatal: picker just shows "no artifacts" */
+      })
   }, [])
 
   const addTag = () => {
@@ -113,6 +131,8 @@ export function TaskFormModal({
     priority,
     tags,
     artifactIds,
+    startDate,
+    dueDate,
   })
 
   const save = async () => {
@@ -153,6 +173,8 @@ export function TaskFormModal({
       priority: p.priority,
       tags: p.tags,
       artifactIds: p.artifactIds,
+      startDate: p.startDate,
+      dueDate: p.dueDate,
       lastRunId: '',
       lastRunStatus: '',
       lastRunAt: 0,
@@ -278,9 +300,13 @@ export function TaskFormModal({
                       key={col.key}
                       onClick={() => setBoardState(col.key as BoardState)}
                       className={`rounded-full px-2.5 py-1 text-xs transition ${
-                        active ? 'text-white' : 'bg-[var(--color-surface-2)] text-[var(--color-text-dim)] hover:text-[var(--color-text)]'
+                        active
+                          ? 'text-white'
+                          : 'bg-[var(--color-surface-2)] text-[var(--color-text-dim)] hover:text-[var(--color-text)]'
                       }`}
-                      style={active ? { backgroundColor: col.color || 'var(--color-accent)' } : undefined}
+                      style={
+                        active ? { backgroundColor: col.color || 'var(--color-accent)' } : undefined
+                      }
                     >
                       {col.label}
                     </button>
@@ -301,7 +327,10 @@ export function TaskFormModal({
                       style={
                         active
                           ? { backgroundColor: p.color, color: '#fff' }
-                          : { backgroundColor: 'var(--color-surface-2)', color: 'var(--color-text-dim)' }
+                          : {
+                              backgroundColor: 'var(--color-surface-2)',
+                              color: 'var(--color-text-dim)',
+                            }
                       }
                     >
                       {p.label}
@@ -313,9 +342,36 @@ export function TaskFormModal({
           </div>
 
           <div className="grid grid-cols-2 gap-4">
+            <Field label="Başlangıç tarihi">
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                data-testid="task-start-date"
+                className="w-full rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5 text-sm outline-none focus:border-[var(--color-accent)]"
+              />
+            </Field>
+            <Field label="Bitiş tarihi">
+              <input
+                type="date"
+                value={dueDate}
+                onChange={(e) => setDueDate(e.target.value)}
+                data-testid="task-due-date"
+                className="w-full rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5 text-sm outline-none focus:border-[var(--color-accent)]"
+              />
+            </Field>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
             <Field label="Ajan (atanan)">
               <div data-testid="task-detail-owner-wrap">
-                <AgentPicker agents={agents} value={ownerAgentId} onChange={setOwnerAgentId} placeholder="Ajan seç (opsiyonel)" clearable />
+                <AgentPicker
+                  agents={agents}
+                  value={ownerAgentId}
+                  onChange={setOwnerAgentId}
+                  placeholder="Ajan seç (opsiyonel)"
+                  clearable
+                />
               </div>
             </Field>
             <Field label="Akış (opsiyonel)">
@@ -326,7 +382,9 @@ export function TaskFormModal({
               >
                 <option value="">🔀 Akış yok</option>
                 {flows.map((f) => (
-                  <option key={f.id} value={f.id}>{normalizeAvatar(f.emoji) ?? '🔀'} {f.name}</option>
+                  <option key={f.id} value={f.id}>
+                    {normalizeAvatar(f.emoji) ?? '🔀'} {f.name}
+                  </option>
                 ))}
               </select>
             </Field>
@@ -335,9 +393,18 @@ export function TaskFormModal({
           <Field label="Etiketler">
             <div className="flex flex-wrap items-center gap-1.5">
               {tags.map((t) => (
-                <span key={t} className="inline-flex items-center gap-1 rounded-full bg-[var(--color-accent-soft)] px-2 py-0.5 text-xs text-[var(--color-accent)]">
+                <span
+                  key={t}
+                  className="inline-flex items-center gap-1 rounded-full bg-[var(--color-accent-soft)] px-2 py-0.5 text-xs text-[var(--color-accent)]"
+                >
                   #{t}
-                  <button onClick={() => setTags((prev) => prev.filter((x) => x !== t))} className="opacity-60 hover:opacity-100" title="Kaldır">×</button>
+                  <button
+                    onClick={() => setTags((prev) => prev.filter((x) => x !== t))}
+                    className="opacity-60 hover:opacity-100"
+                    title="Kaldır"
+                  >
+                    ×
+                  </button>
                 </span>
               ))}
               <input
@@ -396,7 +463,10 @@ export function TaskFormModal({
               {saving ? 'Kaydediliyor…' : mode === 'create' ? '+ Oluştur' : 'Kaydet'}
             </Button>
           </div>
-          <button onClick={onClose} className="rounded px-3 py-1.5 text-sm text-[var(--color-text-dim)] transition hover:text-[var(--color-text)]">
+          <button
+            onClick={onClose}
+            className="rounded px-3 py-1.5 text-sm text-[var(--color-text-dim)] transition hover:text-[var(--color-text)]"
+          >
             İptal
           </button>
           {mode === 'edit' && onDeleted && (

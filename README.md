@@ -9,7 +9,7 @@ Açık kaynaklı, kendi sunucunda barındırılan **çoklu-ajan (multi-agent) AI
 - 🧠 **Ajanlar** — soul/identity ile kişiselleştirilebilir; ajan başına sağlayıcı + model seçilebilir (`claude-cli`, `anthropic`, `minimax`), thinking seviyesi (off/low/medium/high)
 - 💬 **Sohbet** — çok-turlu, otomatik **bağlam sıkıştırma** (compaction) ile uzun oturumlarda da ucuz
 - ⚙️ **Otonom runtime** — zamanlama (cron) ve tek seferlik self-wake ile ajanlar kendi kendine ilerler
-- 🗂 **Görevler** — kanban panosu, "şimdi çalıştır", run geçmişi
+- 🗂 **Görevler** — kanban panosu, "şimdi çalıştır", run geçmişi; **görünüm katmanı**: facet filtreleri (öncelik/etiket/ajan/tarih/bağımlılık), gruplama ekseni (durum · ajan · öncelik · etiket · tarih — sürükleme eksenin alanını yazar) ve workspace başına kayıtlı görünümler — bkz. [Board Görünümleri](_Docs/67-BOARD-GORUNUMLERI.md)
 - ⏰ **Zamanlamalar** — `robfig/cron` ile workspace başına scheduler
 - ⛁ **Hafıza** — belge + günlük + yansıma (reflection/dream cycle), sözcüksel recall (anahtarsız/çevrimdışı)
 - 🛡 **Bütçe guardrail** — otonom çağrılar için ajan başına günlük çağrı/token limiti

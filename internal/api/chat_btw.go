@@ -90,6 +90,7 @@ func (s *Server) handleChatBtw(w http.ResponseWriter, r *http.Request) {
 	// legitimate shared side effect (the same fold the next real turn would have
 	// performed), not a side-chat mutation of the transcript.
 	ctx = conversation.WithCompactPrompt(ctx, ws(r).Runtime.CompactPromptTemplate())
+	ctx = conversation.WithAttachmentRoot(ctx, ws(r).SandboxRoot())
 	prep, err := s.convo.Prepare(ctx, database, provider, session, agentRow, history)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "compaction failed: "+err.Error())

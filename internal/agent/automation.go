@@ -195,7 +195,37 @@ func (e *AutomationEngine) guardsPass(ctx context.Context, a db.Automation) bool
 			return false
 		}
 	}
-	// Iteration cap: disable and stop once the budget is spent (0 = unlimited).
+	// Absolute backstop for automations stored with MaxIterations <= 0, the old
+	// "unlimited" value. Those rows never went through db.ValidateMaxIterations —
+	// they were written before the rule, imported from a market package, or
+	// hand-edited — so entry validation cannot help them and they would otherwise
+	// loop with no lifetime brake at all. (Four such rows existed when this landed,
+	// three of them enabled.)
+	//
+	// The threshold sits ABOVE the hard cap on purpose: this is a last resort for
+	// data nobody chose, so it must not stop a working board automation sooner than
+	// an explicit maximum would have. It is a warn, not an info: unlike a normal cap
+	// this is TionSwarm ending something the user never bounded.
+	if a.MaxIterations <= 0 && a.IterationCount >= db.AbsoluteIterationBackstop {
+		e.logger.Warn("automation: absolute iteration backstop reached (stored maxIterations<=0); auto-disabling",
+			"automation", a.ID, "trigger", automationTrigger(a),
+			"iterations", a.IterationCount, "backstop", db.AbsoluteIterationBackstop)
+		if err := e.db.SetAutomationEnabled(ctx, a.ID, false); err != nil {
+			e.logger.Warn("automation: auto-disable failed", "automation", a.ID, "error", err)
+		}
+		e.rt.publish(events.Event{
+			Type:  events.TypeAutomation,
+			Level: "warn",
+			Title: "🛑 Otomasyon durduruldu (mutlak fren) — " + automationLabel(a),
+			Body: "Bu otomasyon sınırsız (maxIterations=0) kayıtlıydı ve " +
+				strconv.Itoa(db.AbsoluteIterationBackstop) + " tetiğe ulaştı. Devre dışı bırakıldı; " +
+				"düzenleyip 1–" + strconv.Itoa(db.MaxIterationsHardCap) + " arası bir üst sınır verin.",
+			Target: map[string]string{"view": "schedules"},
+		})
+		return false
+	}
+	// Iteration cap: disable and stop once the budget is spent (0 = unlimited,
+	// bounded by the backstop above).
 	if a.MaxIterations > 0 && a.IterationCount >= a.MaxIterations {
 		e.logger.Info("automation: max iterations reached; auto-disabling",
 			"automation", a.ID, "trigger", automationTrigger(a), "iterations", a.IterationCount, "max", a.MaxIterations)

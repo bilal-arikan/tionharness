@@ -13,7 +13,15 @@ import { DirectionBadge } from './DirectionBadge'
 import { WorkingDots } from './WorkingDots'
 import { DeleteButton } from './DeleteButton'
 import { MessageDebugPanel } from './MessageDebugPanel'
-import { ACTION_CLUSTER, META_CLUSTER, TURN_FOOTER, actionChip, actionChipActive } from './messageActions'
+import { ChangesButton } from './ChangesButton'
+import { hasFileChanges } from '@/shared/lib/fileChanges'
+import {
+  ACTION_CLUSTER,
+  META_CLUSTER,
+  TURN_FOOTER,
+  actionChip,
+  actionChipActive,
+} from './messageActions'
 
 interface Props {
   message: Message
@@ -137,12 +145,28 @@ export const AssistantTurn = memo(function AssistantTurn({
     speak(m.text, () => setSpeaking(false))
   }
   // Stop this bubble's speech if it unmounts mid-utterance.
-  useEffect(() => () => { if (speaking) stopSpeaking() }, [speaking])
+  useEffect(
+    () => () => {
+      if (speaking) stopSpeaking()
+    },
+    [speaking],
+  )
+
+  // Did this turn mutate any file? Drives the bulk file-changes chip. Cheap
+  // probe rather than the full extraction — the modal does that work when
+  // opened. Skipped on the live bubble: the trace grows with every delta, and
+  // the diffs are worth browsing only once the turn has settled.
+  const mutatedFiles = useMemo(() => hasFileChanges(steps), [steps])
+  const showChanges = mutatedFiles && !isLastLive
 
   // Whether the in-bubble action row has anything to show at all (a live bubble
   // offers none of them, so it stays clean while streaming).
   const hasActions =
-    canSpeak || (!!onFeedback && !isLastLive) || canRetry || (!!onDelete && !isLastLive)
+    showChanges ||
+    canSpeak ||
+    (!!onFeedback && !isLastLive) ||
+    canRetry ||
+    (!!onDelete && !isLastLive)
 
   return (
     <div className="group flex flex-col gap-1">
@@ -194,7 +218,11 @@ export const AssistantTurn = memo(function AssistantTurn({
               the agent finishes the whole turn. Hidden once it completes or was
               interrupted/stopped. Gets a small top margin when content precedes it. */}
           {isLastLive && !m.interrupted && !m.cancelled && (
-            <div className={steps.length > 0 || m.text.trim() || m.reasoningContent ? 'mt-1.5' : undefined}>
+            <div
+              className={
+                steps.length > 0 || m.text.trim() || m.reasoningContent ? 'mt-1.5' : undefined
+              }
+            >
               <WorkingDots />
             </div>
           )}
@@ -253,6 +281,16 @@ export const AssistantTurn = memo(function AssistantTurn({
         </div>
         {hasActions && (
           <div className={ACTION_CLUSTER}>
+            {/* Every file this turn changed, browsable in one popup (with a
+                whole-session tab) instead of hunting the inline diff cards. */}
+            {showChanges && (
+              <ChangesButton
+                sessionId={sessionId}
+                msgId={m.id}
+                steps={steps}
+                onOpenFile={onOpenFile}
+              />
+            )}
             {/* Read this reply aloud (TTS). Toggles play/stop; strips code/tables.
                 The adjacent slider sets the GLOBAL read-aloud volume (all bubbles). */}
             {canSpeak && (

@@ -413,6 +413,12 @@ func toCRLF(s string) string {
 
 // globToRegexp converts a glob pattern (supporting **, *, ?) into an anchored
 // RE2 regexp matching slash-separated relative paths.
+//
+// "**/" is a DIRECTORY-BOUNDARY wildcard: it stands for "zero or more complete
+// path segments", so "**/x.go" matches "x.go" and "a/b/x.go" but never
+// "barx.go". Emitting it as ".*(?:/)?" (the obvious-looking translation) drops
+// that boundary and silently over-matches on any filename that merely ENDS with
+// the pattern — e.g. "**/log_2026*" hitting "d81c8e90-log_20260729.txt".
 func globToRegexp(pattern string) (*regexp.Regexp, error) {
 	pattern = filepath.ToSlash(pattern)
 	var b strings.Builder
@@ -422,12 +428,15 @@ func globToRegexp(pattern string) (*regexp.Regexp, error) {
 		switch c {
 		case '*':
 			if i+1 < len(pattern) && pattern[i+1] == '*' {
-				b.WriteString(".*") // ** spans directory separators
 				i++
-				// swallow a trailing slash after ** so "**/x" also matches "x"
 				if i+1 < len(pattern) && pattern[i+1] == '/' {
-					b.WriteString("(?:/)?")
+					// "**/" = any number of WHOLE leading segments (possibly none).
+					// The group must end in '/', which is what keeps the match on a
+					// directory boundary.
+					b.WriteString("(?:.*/)?")
 					i++
+				} else {
+					b.WriteString(".*") // bare ** spans directory separators
 				}
 			} else {
 				b.WriteString("[^/]*")

@@ -49,8 +49,13 @@ func TestRunCoordinatorNode_ReturnsFinalReply(t *testing.T) {
 	if err != nil {
 		t.Fatalf("get coordinator session: %v", err)
 	}
-	if sess.Role != "coordinator" {
-		t.Errorf("session role = %q, want coordinator", sess.Role)
+	// Capability, not lineage: the flow owns this session, so it is a coordinator
+	// with no parent to report to (Role stays empty).
+	if !sess.IsCoordinator() {
+		t.Error("flow coordinator session must have coordinator mode")
+	}
+	if sess.Role != "" {
+		t.Errorf("session role = %q, want empty (nothing above it to report to)", sess.Role)
 	}
 	if sess.Kind != SessionKindFlowCoordinator {
 		t.Errorf("session kind = %q, want %q", sess.Kind, SessionKindFlowCoordinator)

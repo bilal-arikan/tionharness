@@ -146,10 +146,7 @@ export function Composer({
   // Surface that resolved value on the option label, e.g. "Oto(Yüksek)" /
   // "Oto(Sor)", so the user can see what auto currently means without opening the
   // agent. When the agent has no explicit value the plain "Oto" label is kept.
-  const selectedAgent = useMemo(
-    () => agents.find((a) => a.id === agentId),
-    [agents, agentId],
-  )
+  const selectedAgent = useMemo(() => agents.find((a) => a.id === agentId), [agents, agentId])
   const thinkingOptions = useMemo(() => {
     const lvl = selectedAgent?.thinkingLevel
     const resolved = lvl ? THINKING_OPTIONS.find((o) => o.value === lvl)?.label : undefined
@@ -529,7 +526,7 @@ export function Composer({
           <button
             type="button"
             onClick={toggleControls}
-            title="Tur ayarları (düşünme · izin · çalışma dizini)"
+            title="Tur ayarları (düşünme · izin · çalışma dizini · araçlar)"
             aria-label="Tur ayarlarını göster/gizle"
             aria-expanded={showControls}
             data-testid="composer-controls-toggle"
@@ -558,6 +555,26 @@ export function Composer({
               iconOnly
             />
             <WorkDirBadge sessionId={sessionId} />
+            {/* Tool inspector: what this agent can use right now (active vs
+                on-demand) and what the MCP gateway has open. Read-only, so it is
+                never disabled by a streaming turn — only by having no agent to
+                inspect. Folded into this group so the narrow-width toolbar hides
+                it with the rest of the per-turn controls; collapsing the group
+                also closes an open panel, since the ⚙ toggle is not tagged
+                data-tool-access-toggle and so counts as an outside click. */}
+            <button
+              type="button"
+              onClick={() => setToolsOpen((o) => !o)}
+              disabled={!agentId}
+              title="Araçlar — bu ajanın kullanabildiği araçlar ve MCP durumu (salt bilgi)"
+              aria-label="Araç bilgisi"
+              aria-expanded={toolsOpen}
+              data-testid="composer-tools"
+              data-tool-access-toggle=""
+              className={`${BTN_ICON} ${toolsOpen ? 'border-[var(--color-accent)] text-[var(--color-accent)]' : ''}`}
+            >
+              <Wrench size={18} />
+            </button>
           </div>
           {/* Attach button + hidden multi-file input. */}
           <input ref={fileRef} type="file" multiple className="hidden" onChange={onPickFiles} />
@@ -571,23 +588,6 @@ export function Composer({
             className={BTN_ICON}
           >
             <Paperclip size={18} />
-          </button>
-
-          {/* Tool inspector: what this agent can use right now (active vs on-demand)
-              and what the MCP gateway has open. Read-only, so it is never disabled
-              by a streaming turn — only by having no agent to inspect. */}
-          <button
-            type="button"
-            onClick={() => setToolsOpen((o) => !o)}
-            disabled={!agentId}
-            title="Araçlar — bu ajanın kullanabildiği araçlar ve MCP durumu (salt bilgi)"
-            aria-label="Araç bilgisi"
-            aria-expanded={toolsOpen}
-            data-testid="composer-tools"
-            data-tool-access-toggle=""
-            className={`${BTN_ICON} ${toolsOpen ? 'border-[var(--color-accent)] text-[var(--color-accent)]' : ''}`}
-          >
-            <Wrench size={18} />
           </button>
 
           {/* Btw: a side question answered from the conversation's context but never

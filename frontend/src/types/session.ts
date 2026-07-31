@@ -36,11 +36,18 @@ export interface Session {
   // ordinary session.
   parentSessionId?: string
   handoffArtifactId?: string
-  // Multi-agent coordination (M2, _Docs/47): 'coordinator' | 'worker' | '' (or
-  // undefined for an ordinary session). coordinatorSessionId back-links a worker
-  // to the coordinator that spawned it. Drives the sidebar's "Workers" filter.
+  // Multi-agent coordination (M2, _Docs/47). Two INDEPENDENT axes since the
+  // unlimited-depth rework: `role` is lineage ('worker' = spawned by a
+  // coordinator, or '' ), `coordinatorMode` is the capability (drives workers).
+  // A mid-level node of a deep tree has both. coordinatorSessionId back-links to
+  // the coordinator above; rootCoordinatorSessionId/coordinatorDepth place the
+  // session in its tree. Never test `role === 'coordinator'` — use
+  // isCoordinatorSession() from shared/lib/coordination.
   role?: string
+  coordinatorMode?: boolean
   coordinatorSessionId?: string
+  rootCoordinatorSessionId?: string
+  coordinatorDepth?: number
   createdAt: number
   updatedAt: number
 }
@@ -271,11 +278,14 @@ export interface SessionInfo {
   // and the handoff artifact written into this session at reset.
   parentSessionId?: string
   handoffArtifactId?: string
-  // Coordinator/worker role (M2): 'coordinator' | 'worker' | ''. A coordinator
-  // session gets the coordinator prompt + worker tools; coordinatorSessionId is a
-  // worker's back-link to its coordinator.
+  // Coordination (M2). `role` is lineage ('worker' | ''), `coordinatorMode` the
+  // capability; see the Session type above. coordinatorSessionId back-links to
+  // the coordinator above, root/depth place this session in its tree.
   role?: string
+  coordinatorMode?: boolean
   coordinatorSessionId?: string
+  rootCoordinatorSessionId?: string
+  coordinatorDepth?: number
   // Selected coordinator recipe/workflow slug (M5), if any.
   coordinatorWorkflow?: string
   createdAt: number
@@ -322,4 +332,59 @@ export interface WorkerInfo {
   // turn opened directly on the worker session, or one that survived a restart)
   // — the UI then omits the duration rather than showing a bogus one.
   startedAt: number
+  // True for a SUB-COORDINATOR that is "running" only in the sense that its own
+  // workers are: it has no turn of its own in flight, it is waiting on its
+  // branch. Shown as "delegating" rather than "running", because there is no live
+  // turn whose elapsed time would mean anything.
+  delegating?: boolean
+}
+
+// CoordinatorTreeNode is one session in a coordinator tree
+// (GET /api/sessions/{id}/coordinator-tree), breadth-first from the root.
+export interface CoordinatorTreeNode {
+  sessionId: string
+  agentName: string
+  title: string
+  // Distance from the tree root (root = 0).
+  depth: number
+  // The coordinator this node reports to; empty on the root.
+  parentSessionId: string
+  // Whether this node drives workers of its own (a root or a mid-level node).
+  isCoordinator: boolean
+  state: string
+  // Whether a turn is in flight on this session right now.
+  running?: boolean
+  // Branch health, derived from the session's auto-tags: 'stuck' (autonomous
+  // turns refused — needs a human), 'error' (last turn failed), '' (fine).
+  // Surfaced in the tree because the deeper a failure sits, the less likely
+  // anyone opens the session it happened in.
+  health?: string
+  // Still owes its coordinator an upward report. A node parked here is the one
+  // shape of "silently blocking everything above it".
+  reportPending?: boolean
+  // This node's own lifetime spend. Absent when it has no recorded usage.
+  calls?: number
+  tokens?: number
+  costUSD?: number
+}
+
+// CoordinatorTree is the whole tree plus its rolled-up spend. The total matters
+// because billing is per-session: without it a deep fan-out's real cost is spread
+// across descendants nobody opens.
+export interface CoordinatorTree {
+  rootSessionId: string
+  nodes: CoordinatorTreeNode[]
+  totalCostUSD: number
+  totalSavingsUSD: number
+  priced: boolean
+  estimated: boolean
+}
+
+// CoordinatorAncestor is one step of the upward breadcrumb from a worker
+// (GET /api/sessions/{id}/coordinator-ancestors), root first.
+export interface CoordinatorAncestor {
+  sessionId: string
+  agentName: string
+  title: string
+  depth: number
 }

@@ -56,12 +56,7 @@ export function signalsForEvent(e: AppEvent): string[] {
     case 'flow':
       return [SIGNAL_FLOWS, SIGNAL_NETWORK, SIGNAL_EXECUTIONS, SIGNAL_ACTIVITY]
     case 'schedule':
-      return [
-        SIGNAL_SCHEDULES,
-        SIGNAL_NETWORK,
-        SIGNAL_EXECUTIONS,
-        SIGNAL_ACTIVITY,
-      ]
+      return [SIGNAL_SCHEDULES, SIGNAL_NETWORK, SIGNAL_EXECUTIONS, SIGNAL_ACTIVITY]
     case 'insight':
       // Scan started/finished: re-poll /api/activity (nav-rail İçgörü dot) and
       // /api/workspaces/activity (switcher pulse) so both update without lag.
@@ -71,9 +66,10 @@ export function signalsForEvent(e: AppEvent): string[] {
     case 'worker':
       return [SIGNAL_EXECUTIONS, SIGNAL_SCHEDULES, SIGNAL_NETWORK, SIGNAL_ACTIVITY]
     case 'task':
-      // Task run lifecycle (different from board CRUD). The same set of
-      // consumers is interested.
-      return [SIGNAL_BOARD, SIGNAL_EXECUTIONS, SIGNAL_ACTIVITY]
+      // Task run lifecycle (different from board CRUD). The network cares too:
+      // agent nodes ARE running sessions, so a task run starting or finishing
+      // adds/removes a node rather than just re-tinting one.
+      return [SIGNAL_BOARD, SIGNAL_EXECUTIONS, SIGNAL_ACTIVITY, SIGNAL_NETWORK]
     case 'agent':
       return [SIGNAL_AGENTS, SIGNAL_NETWORK]
     case 'artifact':

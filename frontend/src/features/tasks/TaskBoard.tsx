@@ -1,15 +1,26 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Paperclip, Trash2 } from 'lucide-react'
 import { api } from '@/api'
 import { useRefreshTrigger } from '@/shared/hooks/useRefreshTrigger'
-import type { Agent, Task, Flow, BoardColumnDef } from '@/types'
+import type { Agent, Task, TaskPatch, Flow, BoardColumnDef, BoardViewDef } from '@/types'
 import { artifactKindForUpload } from '@/features/artifacts/artifactMeta'
 import { AgentIdentity } from '@/shared/components/agents/AgentIdentity'
 import { normalizeAvatar } from '@/shared/lib/avatar'
 import { TaskFormModal } from './TaskFormModal'
 import { BoardColumnEditor } from './BoardColumnEditor'
-import { Button, SelectionBar, SelectionBarButton, PaneHeader, LoadingState } from '@/shared/components'
+import {
+  Button,
+  SelectionBar,
+  SelectionBarButton,
+  PaneHeader,
+  LoadingState,
+} from '@/shared/components'
 import { useMultiSelect } from '@/shared/hooks/useMultiSelect'
+import { BoardFilterBar } from './views/BoardFilterBar'
+import { useBoardView } from './views/useBoardView'
+import { filterTasks, parseDeps, sortTasks, topoLevels } from './views/filterTasks'
+import { DROP_REFUSED_REASON, columnKeysOf, deriveColumns, dropPatch } from './views/deriveColumns'
+import { todayISO } from './views/filterTasks'
 
 // Fallback columns used until workspace settings are loaded.
 const DEFAULT_COLUMNS: BoardColumnDef[] = [
@@ -33,37 +44,6 @@ const PRIORITY_META: Record<string, { label: string; color: string }> = {
   low: { label: 'Düşük', color: '#6b7280' },
 }
 
-// Parse a task's dependencies JSON string into an array of task IDs.
-function parseDeps(raw: string): string[] {
-  try {
-    const arr = JSON.parse(raw || '[]')
-    return Array.isArray(arr) ? (arr as string[]) : []
-  } catch {
-    return []
-  }
-}
-
-// Compute topological levels so tasks with no blockers sort first (level 0).
-// Cycles are broken by assigning level 0 to the repeated node.
-function topoLevels(tasks: Task[]): Map<string, number> {
-  const depsOf = new Map<string, string[]>()
-  for (const t of tasks) depsOf.set(t.id, parseDeps(t.dependencies))
-  const levels = new Map<string, number>()
-  const visiting = new Set<string>()
-  function level(id: string): number {
-    if (levels.has(id)) return levels.get(id)!
-    if (visiting.has(id)) return 0
-    visiting.add(id)
-    const deps = depsOf.get(id) ?? []
-    const l = deps.length === 0 ? 0 : Math.max(...deps.map((d) => level(d) + 1))
-    visiting.delete(id)
-    levels.set(id, l)
-    return l
-  }
-  for (const t of tasks) level(t.id)
-  return levels
-}
-
 interface Props {
   agents: Agent[]
   onError: (msg: string) => void
@@ -73,15 +53,21 @@ export function TaskBoard({ agents, onError }: Props) {
   const [tasks, setTasks] = useState<Task[]>([])
   const [flows, setFlows] = useState<Flow[]>([])
   const [columns, setColumns] = useState<BoardColumnDef[]>(DEFAULT_COLUMNS)
+  // User-created saved views, pulled from workspace settings alongside columns.
+  const [savedViews, setSavedViews] = useState<BoardViewDef[]>([])
   const [dragId, setDragId] = useState<string | null>(null)
   // Card id currently under an OS file-drag (for the "drop to attach" highlight).
   const [fileDropId, setFileDropId] = useState<string | null>(null)
   // Create/edit popup state: null = closed.
-  const [modal, setModal] = useState<{ mode: 'create' | 'edit'; taskId: string | null } | null>(null)
+  const [modal, setModal] = useState<{ mode: 'create' | 'edit'; taskId: string | null } | null>(
+    null,
+  )
   // Left-side column editor panel.
   const [editorOpen, setEditorOpen] = useState(false)
-  // When true, cards sort by topological dependency order (no-blocker tasks first).
-  const [depSort, setDepSort] = useState(false)
+  // Transient hint under the filter bar: a card that a drag pushed out of the
+  // current filter would otherwise just vanish silently.
+  const [hint, setHint] = useState<{ text: string; undo?: () => void } | null>(null)
+  const hintTimer = useRef<number | null>(null)
   // True until the first task list lands, so the board shows a loading state
   // instead of empty columns. Later reloads (SSE ticks) keep the board on screen.
   const [loading, setLoading] = useState(true)
@@ -93,6 +79,8 @@ export function TaskBoard({ agents, onError }: Props) {
       .catch((e) => onError(e.message))
       .finally(() => setLoading(false))
 
+  // Columns and saved views live in the same settings document, so one GET
+  // serves both.
   const loadColumns = () =>
     api
       .getWorkspaceSettings()
@@ -100,6 +88,7 @@ export function TaskBoard({ agents, onError }: Props) {
         if (s.boardColumns && s.boardColumns.length > 0) {
           setColumns(s.boardColumns)
         }
+        setSavedViews(s.boardViews ?? [])
       })
       .catch(() => {
         // non-fatal: keep defaults
@@ -108,7 +97,10 @@ export function TaskBoard({ agents, onError }: Props) {
   useEffect(() => {
     reload()
     loadColumns()
-    api.listFlows().then(setFlows).catch((e) => onError(e.message))
+    api
+      .listFlows()
+      .then(setFlows)
+      .catch((e) => onError(e.message))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -133,15 +125,28 @@ export function TaskBoard({ agents, onError }: Props) {
     window.dispatchEvent(new CustomEvent('tionswarm:board-columns-changed'))
   }
 
-  const move = async (task: Task, boardState: string) => {
-    if (task.boardState === boardState) return
+  // showHint displays a transient message under the filter bar (auto-clearing),
+  // optionally with an undo action.
+  const showHint = (text: string, undo?: () => void) => {
+    if (hintTimer.current) window.clearTimeout(hintTimer.current)
+    setHint({ text, undo })
+    hintTimer.current = window.setTimeout(() => setHint(null), 6000)
+  }
+  useEffect(
+    () => () => {
+      if (hintTimer.current) window.clearTimeout(hintTimer.current)
+    },
+    [],
+  )
+
+  // applyPatch optimistically applies a task edit and persists it, rolling the
+  // board back to server truth if the write fails.
+  const applyPatch = async (task: Task, patch: TaskPatch) => {
     setTasks((prev) =>
-      prev.map((t) =>
-        t.id === task.id ? { ...t, boardState, updatedAt: nowSec() } : t,
-      ),
+      prev.map((t) => (t.id === task.id ? { ...t, ...patch, updatedAt: nowSec() } : t)),
     )
     try {
-      await api.updateTask(task.id, { boardState })
+      await api.updateTask(task.id, patch)
     } catch (e) {
       onError((e as Error).message)
       reload()
@@ -206,32 +211,89 @@ export function TaskBoard({ agents, onError }: Props) {
     })
   }
 
-  const modalTask = modal?.taskId ? tasks.find((t) => t.id === modal.taskId) ?? null : null
+  const modalTask = modal?.taskId ? (tasks.find((t) => t.id === modal.taskId) ?? null) : null
+
+  // ---- View layer: filter → derive columns → sort ------------------------
+
+  const view = useBoardView(savedViews, setSavedViews, onError)
+  const { filter, groupBy, sort } = view.live
+
+  // The filter runs against the FULL list because dependency state is relational
+  // (a card's blocked-ness depends on cards the filter may have hidden).
+  const visible = useMemo(() => filterTasks(tasks, filter), [tasks, filter])
+
+  // Columns are derived from the grouping axis; 'status' returns the workspace's
+  // configured column set verbatim. Derived from the filtered list so an axis
+  // does not sprout columns for cards the filter excluded.
+  const derivedColumns = useMemo(
+    () => deriveColumns(groupBy, visible, agents, columns),
+    [groupBy, visible, agents, columns],
+  )
+
+  // Topo levels only matter for the dependency sort, and are computed over the
+  // full list so a hidden blocker still pushes its dependents down.
+  const levels = useMemo(() => (sort === 'deps' ? topoLevels(tasks) : null), [sort, tasks])
+
+  const today = todayISO()
+
+  // The rendered cards, per column key, in their final order.
+  const cardsByColumn = useMemo(() => {
+    const m = new Map<string, Task[]>()
+    for (const col of derivedColumns) m.set(col.key, [])
+    for (const t of visible) {
+      for (const key of columnKeysOf(t, groupBy, today)) {
+        m.get(key)?.push(t)
+      }
+    }
+    for (const [key, arr] of m) m.set(key, sortTasks(arr, sort, levels))
+    return m
+  }, [derivedColumns, visible, groupBy, sort, levels, today])
 
   // Multi-select (Ctrl/Cmd+Click, Shift-range) for bulk move/assign/delete.
   // The ordered id list mirrors the on-screen render order (column by column,
-  // each column in its current sort) so Shift+Click ranges are predictable.
+  // each column in its current sort) so Shift+Click ranges are predictable —
+  // and, critically, it is built from the VISIBLE cards only, so a Shift range
+  // can never sweep up a card the filter is hiding.
   const sel = useMultiSelect()
-  const orderedIds = useMemo(() => {
-    const lv = depSort ? topoLevels(tasks) : null
-    return columns.flatMap((col) => {
-      const arr = tasks.filter((t) => t.boardState === col.key)
-      arr.sort((a, b) => {
-        if (lv) {
-          const la = lv.get(a.id) ?? 0
-          const lb = lv.get(b.id) ?? 0
-          if (la !== lb) return la - lb
-        }
-        return b.updatedAt - a.updatedAt
-      })
-      return arr.map((t) => t.id)
-    })
-  }, [tasks, columns, depSort])
+  const orderedIds = useMemo(
+    () => derivedColumns.flatMap((col) => (cardsByColumn.get(col.key) ?? []).map((t) => t.id)),
+    [derivedColumns, cardsByColumn],
+  )
+
+  // Dropping a card onto a column writes whatever field the current axis names.
+  // A refused drop (the 'due' axis cannot invent a date) says so instead of
+  // silently doing nothing.
+  const handleDrop = (task: Task, columnKey: string) => {
+    const patch = dropPatch(groupBy, columnKey, task)
+    if (!patch) {
+      const reason = DROP_REFUSED_REASON[groupBy]
+      if (reason) showHint(reason)
+      return
+    }
+    // Snapshot only the fields the patch touches, so undo restores exactly what
+    // the drop changed.
+    const before = Object.fromEntries(
+      Object.keys(patch).map((k) => [k, task[k as keyof Task]]),
+    ) as TaskPatch
+    void applyPatch(task, patch)
+    // If the moved card no longer matches the filter it disappears on the spot.
+    // Say so — a silently vanishing card reads as data loss.
+    const after = { ...task, ...patch }
+    const stillVisible = filterTasks(
+      [...tasks.filter((t) => t.id !== task.id), after],
+      filter,
+    ).some((t) => t.id === task.id)
+    if (!stillVisible) {
+      showHint(`"${task.title}" filtre dışında kaldı`, () => void applyPatch(task, before))
+    }
+  }
 
   const bulkMove = async (boardState: string) => {
     if (!boardState) return
     const ids = [...sel.selected]
-    setTasks((prev) => prev.map((t) => (sel.selected.has(t.id) ? { ...t, boardState, updatedAt: nowSec() } : t)))
+    setTasks((prev) =>
+      prev.map((t) => (sel.selected.has(t.id) ? { ...t, boardState, updatedAt: nowSec() } : t)),
+    )
     sel.clear()
     try {
       await Promise.all(ids.map((id) => api.updateTask(id, { boardState })))
@@ -242,7 +304,9 @@ export function TaskBoard({ agents, onError }: Props) {
   }
   const bulkAssign = async (ownerAgentId: string) => {
     const ids = [...sel.selected]
-    setTasks((prev) => prev.map((t) => (sel.selected.has(t.id) ? { ...t, ownerAgentId, updatedAt: nowSec() } : t)))
+    setTasks((prev) =>
+      prev.map((t) => (sel.selected.has(t.id) ? { ...t, ownerAgentId, updatedAt: nowSec() } : t)),
+    )
     sel.clear()
     try {
       await Promise.all(ids.map((id) => api.updateTask(id, { ownerAgentId })))
@@ -272,9 +336,6 @@ export function TaskBoard({ agents, onError }: Props) {
     taskCountByColumn[t.boardState] = (taskCountByColumn[t.boardState] ?? 0) + 1
   }
 
-  // Precompute topo levels once when dep-sort is active.
-  const levels = depSort ? topoLevels(tasks) : null
-
   return (
     <div className="flex min-h-0 flex-1">
       {/* Left: column editor panel */}
@@ -288,59 +349,75 @@ export function TaskBoard({ agents, onError }: Props) {
       )}
 
       <div className="flex h-full flex-1 flex-col overflow-hidden">
-        {/* Top bar: title + board actions (Sütunlar / + Görev / Sırala). */}
+        {/* Top bar: title + board actions. Column editing only makes sense on the
+            status axis — the other axes derive their columns from the data. */}
         <PaneHeader
           title="Görevler"
           right={
             <>
-              <button
-                data-testid="task-board-columns-editor"
-                onClick={() => setEditorOpen((v) => !v)}
-                title="Sütunları düzenle"
-                className={`flex-shrink-0 rounded border px-2 py-1 text-xs transition ${
-                  editorOpen
-                    ? 'border-[var(--color-accent)] bg-[var(--color-accent-soft)] text-[var(--color-accent)]'
-                    : 'border-[var(--color-border)] text-[var(--color-text-dim)] hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]'
-                }`}
-              >
-                ⊞ Sütunlar
-              </button>
+              {groupBy === 'status' && (
+                <button
+                  data-testid="task-board-columns-editor"
+                  onClick={() => setEditorOpen((v) => !v)}
+                  title="Sütunları düzenle"
+                  className={`flex-shrink-0 rounded border px-2 py-1 text-xs transition ${
+                    editorOpen
+                      ? 'border-[var(--color-accent)] bg-[var(--color-accent-soft)] text-[var(--color-accent)]'
+                      : 'border-[var(--color-border)] text-[var(--color-text-dim)] hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]'
+                  }`}
+                >
+                  ⊞ Sütunlar
+                </button>
+              )}
               <div data-testid="task-create-submit">
                 <Button onClick={() => setModal({ mode: 'create', taskId: null })}>+ Görev</Button>
               </div>
-              <button
-                data-testid="task-sort-by-deps"
-                onClick={() => {
-                  if (!depSort && !confirm('Görevler bağımlılık sırasına göre yeniden dizilecek. Devam edilsin mi?')) return
-                  setDepSort((v) => !v)
-                }}
-                title={depSort ? 'Bağımlılık sıralamasını kapat' : 'Bağımlılığa göre sırala — önce bağımlısı olmayanlar'}
-                className={`rounded border px-2 py-1 text-xs transition ${
-                  depSort
-                    ? 'border-[var(--color-accent)] bg-[var(--color-accent-soft)] text-[var(--color-accent)]'
-                    : 'border-[var(--color-border)] text-[var(--color-text-dim)] hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]'
-                }`}
-              >
-                🔗 Sırala
-              </button>
             </>
           }
         />
+
+        <BoardFilterBar
+          view={view}
+          tasks={tasks}
+          visibleCount={visible.length}
+          agents={agents}
+          boardColumns={columns}
+        />
+
+        {hint && (
+          <div className="flex items-center gap-2 border-b border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-1.5 text-xs text-[var(--color-text-dim)]">
+            <span className="min-w-0 flex-1 truncate">{hint.text}</span>
+            {hint.undo && (
+              <button
+                onClick={() => {
+                  hint.undo?.()
+                  setHint(null)
+                }}
+                className="flex-shrink-0 rounded border border-[var(--color-accent)] px-1.5 py-0.5 text-[var(--color-accent)]"
+              >
+                Geri al
+              </button>
+            )}
+            <button
+              onClick={() => setHint(null)}
+              className="flex-shrink-0 px-1 text-[var(--color-text-dim)] hover:text-[var(--color-text)]"
+            >
+              ✕
+            </button>
+          </div>
+        )}
 
         {/* Board. Hidden (not unmounted) during the first load so column widths and
             scroll position are already settled when the cards appear. */}
         {loading && <LoadingState label="Görevler yükleniyor…" className="flex-1" />}
         <div className={`flex flex-1 gap-3 overflow-x-auto p-4 ${loading ? 'hidden' : ''}`}>
-          {columns.map((col) => {
-            const colTasksRaw = tasks.filter((t) => t.boardState === col.key)
-            const colTasks = depSort && levels
-              ? [...colTasksRaw].sort((a, b) => {
-                  const la = levels.get(a.id) ?? 0
-                  const lb = levels.get(b.id) ?? 0
-                  if (la !== lb) return la - lb
-                  return b.updatedAt - a.updatedAt
-                })
-              : [...colTasksRaw].sort((a, b) => b.updatedAt - a.updatedAt)
+          {derivedColumns.length === 0 && (
+            <div className="flex flex-1 items-center justify-center text-sm text-[var(--color-text-dim)]">
+              Bu filtreyle eşleşen görev yok.
+            </div>
+          )}
+          {derivedColumns.map((col) => {
+            const colTasks = cardsByColumn.get(col.key) ?? []
 
             return (
               <div
@@ -348,7 +425,7 @@ export function TaskBoard({ agents, onError }: Props) {
                 onDragOver={(e) => e.preventDefault()}
                 onDrop={() => {
                   const t = tasks.find((x) => x.id === dragId)
-                  if (t) move(t, col.key)
+                  if (t) handleDrop(t, col.key)
                   setDragId(null)
                 }}
                 className="flex w-64 flex-shrink-0 flex-col rounded-lg bg-[var(--color-surface)]"
@@ -428,7 +505,9 @@ export function TaskBoard({ agents, onError }: Props) {
                           void attachFilesToTask(t, files)
                         }}
                         className={`rounded-lg border bg-[var(--color-surface-2)] p-2 text-sm shadow-[var(--shadow-sm)] transition ${
-                          fileDropId === t.id ? 'ring-2 ring-[var(--color-accent)] ring-offset-1' : ''
+                          fileDropId === t.id
+                            ? 'ring-2 ring-[var(--color-accent)] ring-offset-1'
+                            : ''
                         } ${
                           pending
                             ? 'animate-pulse cursor-default border-[var(--color-border)] opacity-70'
@@ -451,25 +530,52 @@ export function TaskBoard({ agents, onError }: Props) {
                             </div>
                           )
                         )}
-                        {/* Rich attribute badges: priority, tags. */}
-                        {(t.priority || (t.tags?.length ?? 0) > 0) && (
+                        {/* Rich attribute badges: due date, priority, tags. */}
+                        {(t.dueDate || t.priority || (t.tags?.length ?? 0) > 0) && (
                           <div className="mt-1.5 flex flex-wrap items-center gap-1">
+                            {t.dueDate && (
+                              <span
+                                title={`Bitiş: ${t.dueDate}`}
+                                className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium ${
+                                  t.dueDate < today
+                                    ? 'bg-[var(--color-danger)]/15 text-[var(--color-danger)]'
+                                    : t.dueDate === today
+                                      ? 'bg-[var(--color-warning)]/15 text-[var(--color-warning)]'
+                                      : 'bg-[var(--color-surface)] text-[var(--color-text-dim)]'
+                                }`}
+                              >
+                                ◷ {t.dueDate.slice(5)}
+                              </span>
+                            )}
                             {t.priority && PRIORITY_META[t.priority] && (
                               <span
                                 className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium"
-                                style={{ backgroundColor: PRIORITY_META[t.priority].color + '22', color: PRIORITY_META[t.priority].color }}
+                                style={{
+                                  backgroundColor: PRIORITY_META[t.priority].color + '22',
+                                  color: PRIORITY_META[t.priority].color,
+                                }}
                               >
                                 ● {PRIORITY_META[t.priority].label}
                               </span>
                             )}
                             {t.tags?.map((tag) => (
-                              <span key={tag} className="rounded-full bg-[var(--color-accent-soft)] px-1.5 py-0.5 text-[10px] text-[var(--color-accent)]">#{tag}</span>
+                              <span
+                                key={tag}
+                                className="rounded-full bg-[var(--color-accent-soft)] px-1.5 py-0.5 text-[10px] text-[var(--color-accent)]"
+                              >
+                                #{tag}
+                              </span>
                             ))}
                           </div>
                         )}
-                        {(owner || t.flowId || depIds.length > 0 || (t.artifactIds?.length ?? 0) > 0) && (
+                        {(owner ||
+                          t.flowId ||
+                          depIds.length > 0 ||
+                          (t.artifactIds?.length ?? 0) > 0) && (
                           <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs text-[var(--color-text-dim)]">
-                            {owner && <AgentIdentity agent={owner} size="sm" className="max-w-[160px]" />}
+                            {owner && (
+                              <AgentIdentity agent={owner} size="sm" className="max-w-[160px]" />
+                            )}
                             {(t.artifactIds?.length ?? 0) > 0 && (
                               <span
                                 className="inline-flex items-center gap-0.5 rounded bg-[var(--color-surface)] px-1.5 py-0.5 text-[10px]"
@@ -483,33 +589,44 @@ export function TaskBoard({ agents, onError }: Props) {
                                 {normalizeAvatar(flow?.emoji) ?? '🔀'} {flow?.name ?? 'Akış'}
                               </span>
                             )}
-                            {depIds.length > 0 && (() => {
-                              // Color the chip based on the column of the first unmet dependency.
-                              const firstUnmetTask = unmetDeps.length > 0
-                                ? tasks.find((x) => x.id === unmetDeps[0])
-                                : null
-                              const unmetColColor = firstUnmetTask
-                                ? (columns.find((c) => c.key === firstUnmetTask.boardState)?.color ?? null)
-                                : null
-                              const chipStyle = unmetDeps.length > 0 && unmetColColor
-                                ? { backgroundColor: unmetColColor + '22', color: unmetColColor }
-                                : undefined
-                              return (
-                              <span
-                                className={`inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] ${
-                                  unmetDeps.length > 0 && !unmetColColor
-                                    ? 'bg-[var(--color-warning)]/15 text-[var(--color-warning)]'
-                                    : unmetDeps.length > 0
-                                    ? ''
-                                    : 'bg-[var(--color-success)]/10 text-[var(--color-success)]'
-                                }`}
-                                style={chipStyle}
-                                title={unmetDeps.length > 0 ? `${unmetDeps.length} bağımlılık tamamlanmadı` : 'Tüm bağımlılıklar tamamlandı'}
-                              >
-                                🔗 {depIds.length}
-                              </span>
-                              )
-                            })()}
+                            {depIds.length > 0 &&
+                              (() => {
+                                // Color the chip based on the column of the first unmet dependency.
+                                const firstUnmetTask =
+                                  unmetDeps.length > 0
+                                    ? tasks.find((x) => x.id === unmetDeps[0])
+                                    : null
+                                const unmetColColor = firstUnmetTask
+                                  ? (columns.find((c) => c.key === firstUnmetTask.boardState)
+                                      ?.color ?? null)
+                                  : null
+                                const chipStyle =
+                                  unmetDeps.length > 0 && unmetColColor
+                                    ? {
+                                        backgroundColor: unmetColColor + '22',
+                                        color: unmetColColor,
+                                      }
+                                    : undefined
+                                return (
+                                  <span
+                                    className={`inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] ${
+                                      unmetDeps.length > 0 && !unmetColColor
+                                        ? 'bg-[var(--color-warning)]/15 text-[var(--color-warning)]'
+                                        : unmetDeps.length > 0
+                                          ? ''
+                                          : 'bg-[var(--color-success)]/10 text-[var(--color-success)]'
+                                    }`}
+                                    style={chipStyle}
+                                    title={
+                                      unmetDeps.length > 0
+                                        ? `${unmetDeps.length} bağımlılık tamamlanmadı`
+                                        : 'Tüm bağımlılıklar tamamlandı'
+                                    }
+                                  >
+                                    🔗 {depIds.length}
+                                  </span>
+                                )
+                              })()}
                           </div>
                         )}
                       </div>

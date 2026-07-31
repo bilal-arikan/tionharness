@@ -10,9 +10,27 @@ import (
 )
 
 // builtin_coordination.go exposes the M2 coordinator/worker tools (see _Docs/47).
-// They are registered ONLY for a coordinator session and read their runner from
-// the context (like run_subagent), so an ordinary or worker session never sees
-// them — that also blocks a worker from spawning its own workers (recursion).
+// They are registered ONLY for a session with coordinator mode on and read their
+// runner from the context (like run_subagent), so an ordinary session never sees
+// them.
+//
+// Since the unlimited-depth rework a WORKER may have coordinator mode too (its
+// spawner asked for it, or it turned the mode on itself), which is exactly how a
+// tree nests past one level. The recursion brake is therefore no longer "workers
+// can't see these tools" but the explicit depth + subtree budgets enforced in
+// agent.SpawnWorker.
+
+// WorkerSpawnSpec carries the nesting options of one spawn_worker call from the
+// tool layer down to the runtime.
+type WorkerSpawnSpec struct {
+	ModelOverride string
+	// Coordinator makes the spawned worker a sub-coordinator (it may spawn its own
+	// workers). Rejected past the depth limit rather than downgraded.
+	Coordinator bool
+	// Workflow pins a coordinator recipe on the sub-coordinator; only meaningful
+	// together with Coordinator.
+	Workflow string
+}
 
 // CoordinationFuncs is the agent-side implementation the coordination tools call.
 // Injected per turn via WithCoordination, capturing the coordinator session id so
@@ -20,13 +38,23 @@ import (
 type CoordinationFuncs struct {
 	// Spawn launches a background worker (existing agent target) under the
 	// coordinator and returns its session id immediately.
-	Spawn func(ctx context.Context, agentRef, task, modelOverride string) (SpawnResult, error)
+	Spawn func(ctx context.Context, agentRef, task string, spec WorkerSpawnSpec) (SpawnResult, error)
 	// Send delivers a follow-up to an existing worker and re-runs its turn.
 	Send func(ctx context.Context, workerSessionID, message string) error
-	// Stop cancels an in-flight worker turn.
+	// Stop cancels an in-flight worker turn (and, for a sub-coordinator, its whole
+	// subtree).
 	Stop func(ctx context.Context, workerSessionID string) error
-	// List returns a human-readable snapshot of this coordinator's workers.
-	List func(ctx context.Context) (string, error)
+	// List returns a human-readable snapshot of this coordinator's workers. subtree
+	// widens it from the direct children to every descendant.
+	List func(ctx context.Context, subtree bool) (string, error)
+	// Report closes this session's task upstream, for a session that is itself a
+	// worker of another coordinator. Nil on a root coordinator (nothing above it),
+	// which is what gates registration of report_to_coordinator.
+	Report func(ctx context.Context, status, summary string) error
+	// SetMode turns THIS session's coordinator capability on or off at the agent's
+	// own initiative. Returns a human-readable note (e.g. when the change only
+	// takes effect on the next turn).
+	SetMode func(ctx context.Context, enabled bool) (string, error)
 }
 
 type coordinationKey struct{}
@@ -51,6 +79,8 @@ type spawnWorkerInput struct {
 	Agent         string `json:"agent"`
 	Task          string `json:"task"`
 	ModelOverride string `json:"modelOverride"`
+	Coordinator   bool   `json:"coordinator"`
+	Workflow      string `json:"workflow"`
 }
 
 // SpawnWorkerTool launches an async background worker under the current
@@ -71,13 +101,20 @@ func (SpawnWorkerTool) Def() providers.ToolDef {
 			"materialized into a reusable worker agent. The worker runs detached; you do NOT wait for " +
 			"it. When it finishes, its result is injected back into THIS session as a <task-notification> " +
 			"and a new coordinator turn starts automatically. Call several times in one turn to fan out " +
-			"parallel workers, then end your turn.",
+			"parallel workers, then end your turn.\n\n" +
+			"Set `coordinator: true` to make the worker a SUB-COORDINATOR that can split its task further " +
+			"and drive its own workers. Use it only when the subtask genuinely decomposes into independent " +
+			"parts — every extra level multiplies turns and tokens, and a sub-coordinator reports back only " +
+			"once its whole branch is done. It is refused (not silently downgraded) past the configured " +
+			"depth limit.",
 		InputSchema: json.RawMessage(`{
   "type": "object",
   "properties": {
     "agent": { "type": "string", "description": "An existing agent (name or id) OR a profile: \"explore\" | \"coder\" | \"reviewer\"." },
     "task": { "type": "string", "description": "A self-contained instruction. The worker starts fresh and sees only this — include file paths, line numbers, and what 'done' means." },
-    "modelOverride": { "type": "string", "description": "Optional model id override (provider unchanged)." }
+    "modelOverride": { "type": "string", "description": "Optional model id override (provider unchanged)." },
+    "coordinator": { "type": "boolean", "description": "Make this worker a sub-coordinator that may spawn its own workers. Default false (a plain leaf worker). Only for tasks that genuinely decompose further." },
+    "workflow": { "type": "string", "description": "Optional coordinator recipe slug for the sub-coordinator (only with coordinator: true). Not inherited from you — set it deliberately or leave empty for free coordination." }
   },
   "required": ["agent", "task"],
   "additionalProperties": false
@@ -99,11 +136,24 @@ func (SpawnWorkerTool) Call(ctx context.Context, input json.RawMessage) (string,
 	if f == nil || f.Spawn == nil {
 		return "", fmt.Errorf("spawn_worker is only available in a coordinator session")
 	}
-	res, err := f.Spawn(ctx, in.Agent, in.Task, strings.TrimSpace(in.ModelOverride))
+	if !in.Coordinator && strings.TrimSpace(in.Workflow) != "" {
+		// A recipe only means something to a coordinator. Accepting it silently on a
+		// leaf worker would look like it took effect.
+		return "", fmt.Errorf("\"workflow\" only applies to a sub-coordinator; pass \"coordinator\": true or drop it")
+	}
+	res, err := f.Spawn(ctx, in.Agent, in.Task, WorkerSpawnSpec{
+		ModelOverride: strings.TrimSpace(in.ModelOverride),
+		Coordinator:   in.Coordinator,
+		Workflow:      strings.TrimSpace(in.Workflow),
+	})
 	if err != nil {
 		return "", err
 	}
-	return fmt.Sprintf("Spawned worker %q (session %s). It runs in the background; you will get a <task-notification> when it finishes. Do not wait for it — end your turn.", res.AgentName, res.SessionID), nil
+	kind := "worker"
+	if in.Coordinator {
+		kind = "SUB-COORDINATOR (it may spawn its own workers, and reports back only when its whole branch is done)"
+	}
+	return fmt.Sprintf("Spawned %s %q (session %s). It runs in the background; you will get a <task-notification> when it finishes. Do not wait for it — end your turn.", kind, res.AgentName, res.SessionID), nil
 }
 
 // ---- send_to_worker ----
@@ -210,8 +260,12 @@ func (StopWorkerTool) Call(ctx context.Context, input json.RawMessage) (string, 
 
 // ---- list_workers ----
 
+type listWorkersInput struct {
+	Scope string `json:"scope"`
+}
+
 // ListWorkersTool reports this coordinator's workers and their status (Claude
-// Code's TaskList).
+// Code's TaskList), optionally widened to the whole subtree below it.
 type ListWorkersTool struct{}
 
 func NewListWorkersTool() ListWorkersTool { return ListWorkersTool{} }
@@ -221,15 +275,156 @@ func (ListWorkersTool) Def() providers.ToolDef {
 		Name: "list_workers",
 		Description: "List the workers spawned under this coordinator and their status (running / " +
 			"finished, with a one-line summary of each finished worker's last reply). Use it to see what " +
-			"is still in flight before deciding your next step.",
-		InputSchema: json.RawMessage(`{ "type": "object", "properties": {}, "additionalProperties": false }`),
+			"is still in flight before deciding your next step. Pass scope \"subtree\" to also see the " +
+			"workers your sub-coordinators spawned, indented by level.",
+		InputSchema: json.RawMessage(`{
+  "type": "object",
+  "properties": {
+    "scope": { "type": "string", "enum": ["children", "subtree"], "description": "\"children\" (default) = your direct workers only. \"subtree\" = every descendant, including sub-coordinators' workers." }
+  },
+  "additionalProperties": false
+}`),
 	}
 }
 
-func (ListWorkersTool) Call(ctx context.Context, _ json.RawMessage) (string, error) {
+func (ListWorkersTool) Call(ctx context.Context, input json.RawMessage) (string, error) {
 	f := CoordinationFrom(ctx)
 	if f == nil || f.List == nil {
 		return "", fmt.Errorf("list_workers is only available in a coordinator session")
 	}
-	return f.List(ctx)
+	scope := "children"
+	// The schema allows an empty body, so a missing/blank input is the default
+	// scope rather than a parse error.
+	if len(strings.TrimSpace(string(input))) > 0 && string(input) != "{}" {
+		in, err := parseInput[listWorkersInput]("list_workers", input)
+		if err != nil {
+			return "", err
+		}
+		if s := strings.TrimSpace(in.Scope); s != "" {
+			scope = s
+		}
+	}
+	switch scope {
+	case "children", "subtree":
+	default:
+		return "", fmt.Errorf("scope must be \"children\" or \"subtree\", got %q", scope)
+	}
+	return f.List(ctx, scope == "subtree")
+}
+
+// ---- report_to_coordinator ----
+
+type reportToCoordinatorInput struct {
+	Summary string `json:"summary"`
+	Status  string `json:"status"`
+}
+
+// ReportToCoordinatorTool closes a SUB-COORDINATOR's task upstream. It exists
+// because a mid-level node's turn ending means nothing: it typically ends right
+// after fanning out its own workers, while its actual result only exists once
+// those workers report and it synthesizes them. The runtime therefore withholds
+// the completion notification while its workers are live, and this tool is how
+// the node says "now I am done".
+//
+// Registered only when the session HAS a coordinator above it.
+type ReportToCoordinatorTool struct{}
+
+func NewReportToCoordinatorTool() ReportToCoordinatorTool { return ReportToCoordinatorTool{} }
+
+func (ReportToCoordinatorTool) Def() providers.ToolDef {
+	return providers.ToolDef{
+		Name: "report_to_coordinator",
+		Description: "Report YOUR finished result to the coordinator that spawned you, closing your task " +
+			"upstream. You are a sub-coordinator: simply ending a turn does NOT report you as done (your " +
+			"coordinator is told you are still delegating while your own workers run). Call this once your " +
+			"part is genuinely complete — with the synthesis written out in full, because your coordinator " +
+			"cannot read your workers' sessions. If you are blocked or a worker failed, still call it with " +
+			"status \"failed\" or \"incomplete\" and say what is missing; staying silent stalls everything " +
+			"above you.",
+		InputSchema: json.RawMessage(`{
+  "type": "object",
+  "properties": {
+    "summary": { "type": "string", "description": "The complete result for your coordinator: your own synthesis of your workers' findings, concrete and self-contained (file paths, line numbers, what changed, what is left)." },
+    "status": { "type": "string", "enum": ["completed", "incomplete", "failed"], "description": "\"completed\" (default) only when the task is genuinely done. \"incomplete\" when partially done, \"failed\" when it could not be done." }
+  },
+  "required": ["summary"],
+  "additionalProperties": false
+}`),
+	}
+}
+
+func (ReportToCoordinatorTool) Call(ctx context.Context, input json.RawMessage) (string, error) {
+	in, err := parseInput[reportToCoordinatorInput]("report_to_coordinator", input)
+	if err != nil {
+		return "", err
+	}
+	in.Summary = strings.TrimSpace(in.Summary)
+	if in.Summary == "" {
+		return "", fmt.Errorf("\"summary\" is required — your coordinator cannot read your workers' sessions, so an empty report tells it nothing")
+	}
+	status := strings.TrimSpace(in.Status)
+	if status == "" {
+		status = "completed"
+	}
+	switch status {
+	case "completed", "incomplete", "failed":
+	default:
+		return "", fmt.Errorf("status must be \"completed\", \"incomplete\" or \"failed\", got %q", status)
+	}
+	f := CoordinationFrom(ctx)
+	if f == nil || f.Report == nil {
+		return "", fmt.Errorf("report_to_coordinator is only available in a session that was spawned by a coordinator")
+	}
+	if err := f.Report(ctx, status, in.Summary); err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("Reported to your coordinator with status %q. Your task is now closed upstream — do not report again unless it sends you new work.", status), nil
+}
+
+// ---- set_coordinator_mode ----
+
+type setCoordinatorModeInput struct {
+	Enabled *bool `json:"enabled"`
+}
+
+// SetCoordinatorModeTool lets an agent turn its OWN session's coordinator mode on
+// or off, without a user toggling it in the UI. Registered on every session that
+// may hold the capability, including ones that do not have it yet — otherwise an
+// ordinary session could never turn it on.
+type SetCoordinatorModeTool struct{}
+
+func NewSetCoordinatorModeTool() SetCoordinatorModeTool { return SetCoordinatorModeTool{} }
+
+func (SetCoordinatorModeTool) Def() providers.ToolDef {
+	return providers.ToolDef{
+		Name: "set_coordinator_mode",
+		Description: "Turn coordinator mode on or off for YOUR OWN session. With it on you get the " +
+			"coordinator manual and the spawn_worker/send_to_worker/stop_worker/list_workers tools, so you " +
+			"can split work across background workers; with it off you work alone. Turn it on when a task " +
+			"is big enough to genuinely parallelize, and off when you are back to single-threaded work. " +
+			"Turning it OFF is refused while you still have running workers — stop or await them first.",
+		InputSchema: json.RawMessage(`{
+  "type": "object",
+  "properties": {
+    "enabled": { "type": "boolean", "description": "true to become a coordinator, false to go back to working alone." }
+  },
+  "required": ["enabled"],
+  "additionalProperties": false
+}`),
+	}
+}
+
+func (SetCoordinatorModeTool) Call(ctx context.Context, input json.RawMessage) (string, error) {
+	in, err := parseInput[setCoordinatorModeInput]("set_coordinator_mode", input)
+	if err != nil {
+		return "", err
+	}
+	if in.Enabled == nil {
+		return "", fmt.Errorf("\"enabled\" is required (true or false)")
+	}
+	f := CoordinationFrom(ctx)
+	if f == nil || f.SetMode == nil {
+		return "", fmt.Errorf("set_coordinator_mode is not available in this session")
+	}
+	return f.SetMode(ctx, *in.Enabled)
 }

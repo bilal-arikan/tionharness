@@ -1,9 +1,15 @@
 // useDeepLinks owns the per-view deep-link targets (the entity a routed screen
 // should pre-select) plus the cross-view "open X" helpers that set a target and
 // switch the view in one step.
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import type { View } from './NavRail'
 import { INITIAL_ROUTE } from './useAppNavigation'
+import {
+  KIND_FILTER_KEY,
+  normalizeKindFilter,
+  normalizeSessionListTab,
+  type SessionListTab,
+} from '@/features/sessions/sessionKindMeta'
 
 export function useDeepLinks(setView: (v: View) => void) {
   // Deep-link target for the schedules screen (highlights the routed schedule).
@@ -26,6 +32,22 @@ export function useDeepLinks(setView: (v: View) => void) {
   const [flowsTab, setFlowsTab] = useState<string | null>(
     INITIAL_ROUTE.view === 'flows' ? INITIAL_ROUTE.id : null,
   )
+  // Sessions sidebar tabs (deep-link aware): #/w/{ws}/chat/{sessionId}?list=…&kind=…
+  // They live here (not inside the sidebar) so the URL can address them; the chat
+  // view's single entity slot is already spent on the session id.
+  const [sessionListTab, setSessionListTab] = useState<SessionListTab>(() =>
+    normalizeSessionListTab(INITIAL_ROUTE.view === 'chat' ? INITIAL_ROUTE.query?.list : null),
+  )
+  // The kind filter is also persisted, so a plain "#/…/chat" load restores the
+  // last tab; an explicit ?kind= in the URL takes precedence over storage.
+  const [sessionKindTab, setSessionKindTab] = useState<string>(() => {
+    const fromUrl = INITIAL_ROUTE.view === 'chat' ? INITIAL_ROUTE.query?.kind : undefined
+    return normalizeKindFilter(fromUrl ?? localStorage.getItem(KIND_FILTER_KEY))
+  })
+  useEffect(() => {
+    localStorage.setItem(KIND_FILTER_KEY, sessionKindTab)
+  }, [sessionKindTab])
+
   // Artifact deep-link target: set when a chat artifact card is clicked, opening
   // the artifacts screen with that artifact pre-selected.
   const [artifactTarget, setArtifactTarget] = useState<string | null>(
@@ -34,10 +56,13 @@ export function useDeepLinks(setView: (v: View) => void) {
   // Flow deep-link target: set when a flow transcript links to its flow, opening
   // the Flows screen on that flow's run history.
   const [flowTarget, setFlowTarget] = useState<string | null>(null)
-  const openFlowRun = useCallback((flowId: string) => {
-    setFlowTarget(flowId)
-    setView('flows')
-  }, [setView])
+  const openFlowRun = useCallback(
+    (flowId: string) => {
+      setFlowTarget(flowId)
+      setView('flows')
+    },
+    [setView],
+  )
 
   // Clicking an artifact card/chip anywhere: preview it in a
   // modal overlay — no navigation to the Artifacts screen. The modal offers a
@@ -48,11 +73,14 @@ export function useDeepLinks(setView: (v: View) => void) {
   }, [])
   // Open the dedicated Artifacts screen on a specific artifact (from the preview
   // modal's "open in screen" shortcut).
-  const openArtifactFull = useCallback((id: string) => {
-    setPreviewArtifactId(null)
-    setArtifactTarget(id)
-    setView('artifacts')
-  }, [setView])
+  const openArtifactFull = useCallback(
+    (id: string) => {
+      setPreviewArtifactId(null)
+      setArtifactTarget(id)
+      setView('artifacts')
+    },
+    [setView],
+  )
 
   // Secrets moved under Settings as a sub-category: open the Settings screen
   // focused on the Secrets ("Sırlar") category.
@@ -62,14 +90,28 @@ export function useDeepLinks(setView: (v: View) => void) {
   }, [setView])
 
   return {
-    scheduleTarget, setScheduleTarget,
-    settingsCat, setSettingsCat,
-    workspaceTab, setWorkspaceTab,
-    insightTab, setInsightTab,
-    flowsTab, setFlowsTab,
-    artifactTarget, setArtifactTarget,
-    flowTarget, openFlowRun,
-    previewArtifactId, setPreviewArtifactId, openArtifact, openArtifactFull,
+    scheduleTarget,
+    setScheduleTarget,
+    settingsCat,
+    setSettingsCat,
+    workspaceTab,
+    setWorkspaceTab,
+    insightTab,
+    setInsightTab,
+    flowsTab,
+    setFlowsTab,
+    sessionListTab,
+    setSessionListTab,
+    sessionKindTab,
+    setSessionKindTab,
+    artifactTarget,
+    setArtifactTarget,
+    flowTarget,
+    openFlowRun,
+    previewArtifactId,
+    setPreviewArtifactId,
+    openArtifact,
+    openArtifactFull,
     openSecrets,
   }
 }

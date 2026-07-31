@@ -10,6 +10,7 @@
 // when it does not apply. Adding a recommendation = one RULES entry.
 import {
   Archive,
+  ArrowUpCircle,
   Bot,
   Brain,
   FolderCog,
@@ -21,7 +22,14 @@ import {
 import { api } from '@/api'
 import { systemApi } from '@/api/system'
 import type { HookInput } from '@/api/hooks'
-import type { AppSettings, ExternalToolStatus, Hook, MCPServer, WorkspaceSettings } from '@/types'
+import type {
+  AppSettings,
+  ExternalToolStatus,
+  ExternalToolUpdate,
+  Hook,
+  MCPServer,
+  WorkspaceSettings,
+} from '@/types'
 
 // Marker matched against an MCP server's command to tell whether codebase-memory is
 // already wired — the same rule the backend uses to route it to the isolated store.
@@ -36,14 +44,12 @@ const SQZ_HOOK: HookInput = {
   timeoutSec: 30,
   enabled: true,
 }
-const RTK_HOOK: HookInput = {
-  event: 'PreToolUse',
-  matcher: 'Bash,PowerShell',
-  command:
-    "$j=[Console]::In.ReadToEnd()|ConvertFrom-Json; $c=$j.tool_input.command; if($c -and -not ($c -like 'rtk *')){ $j.tool_input.command='rtk '+$c; @{updatedInput=$j.tool_input}|ConvertTo-Json -Compress }",
-  timeoutSec: 30,
-  enabled: true,
-}
+// There is deliberately no RTK_HOOK. The template that used to live here was a
+// PowerShell one-liner; claude-cli runs hooks through BASH, so it failed with
+// `syntax error near unexpected token '|'`, and a failing PreToolUse hook BLOCKS
+// the tool call — clicking this card bricked Bash for the whole workspace
+// (2026-07-31, WS10/SES63). rtk is now wired by the shellCommandRewrite SETTING,
+// which additionally limits rewriting to the commands measured to benefit.
 
 export type RecVariant = 'accent' | 'warning'
 
@@ -61,6 +67,12 @@ export interface RecContext {
   ws: WorkspaceSettings
   settings: AppSettings
   agentsCount: number
+  /**
+   * Upstream release check per tool. The ONLY part of the probe that leaves the
+   * machine, so it is allowed to come back empty (offline, GitHub rate-limited)
+   * — rules that read it must treat empty as "no opinion", never as "all current".
+   */
+  updates: ExternalToolUpdate[]
   nav: RecNav
 }
 
@@ -148,7 +160,11 @@ export const RULES: Rule[] = [
         desc: 'codebase-memory-mcp kurulu ama bu workspace’e eklenmemiş. MCP olarak eklersen kod arama/gezinme sub-ms ve düşük token olur; izole store’a yönlenir.',
         actionLabel: 'MCP’yi ekle',
         act: async () => {
-          await api.createMCPServer({ name: CBM_TOOL, transport: 'stdio', command: cbm.path ?? cbm.name })
+          await api.createMCPServer({
+            name: CBM_TOOL,
+            transport: 'stdio',
+            command: cbm.path ?? cbm.name,
+          })
         },
       }
     },
@@ -177,20 +193,19 @@ export const RULES: Rule[] = [
       key: 'token',
       icon: Zap,
       title: 'Token optimizasyonu bağla',
-      summary: 'rtk/sqz kuruluyken hiçbir token-optimizer hook’u bağlı değilse.',
+      summary: 'sqz kuruluyken çıktı sıkıştırma hook’u bağlı değilse.',
     },
     detect: (ctx) => {
-      const rtk = ctx.tools.find((t) => t.name === 'rtk' && t.found)
+      // Only sqz is offered here now. rtk is wired by a workspace SETTING, not a
+      // hook (see the note on RTK_HOOK's removal above), and it has its own toggle
+      // in Settings ▸ External Tools.
       const sqz = ctx.tools.find((t) => t.name === 'sqz' && t.found)
-      const live = tokenHookLive(ctx.hooks, 'rtk') || tokenHookLive(ctx.hooks, 'sqz')
-      const pick = rtk ?? sqz
-      if (!pick || live) return null
-      const isRtk = pick.name === 'rtk'
+      if (!sqz || tokenHookLive(ctx.hooks, 'sqz')) return null
       return {
-        desc: `${pick.name} bu cihazda kurulu ama bağlı değil. Hook olarak bağlarsan araç çıktıları kayıpsız sıkışır, token tasarrufu sağlar.`,
-        actionLabel: `${pick.name}’i bağla`,
+        desc: 'sqz bu cihazda kurulu ama bağlı değil. Hook olarak bağlarsan araç çıktıları kayıpsız sıkışır, token tasarrufu sağlar.',
+        actionLabel: 'sqz’i bağla',
         act: async () => {
-          await api.createHook(isRtk ? RTK_HOOK : SQZ_HOOK)
+          await api.createHook(SQZ_HOOK)
         },
       }
     },
@@ -200,13 +215,15 @@ export const RULES: Rule[] = [
       key: 'shell-compress',
       icon: Zap,
       title: 'Shell çıktısı sıkıştırmayı aç',
-      summary: 'sqz kuruluyken shell çıktısı in-process sıkıştırma pasifse (hook yok, otomatik devre dışı).',
+      summary:
+        'sqz kuruluyken shell çıktısı in-process sıkıştırma pasifse (hook yok, otomatik devre dışı).',
     },
     detect: (ctx) => {
       const sqz = ctx.tools.find((t) => t.name === 'sqz' && t.found)
       if (!sqz) return null
       // 'on' zaten zorluyor; 'off' kullanıcının açık tercihi — ikisine de dokunma.
-      if (ctx.ws.shellOutputCompression === 'on' || ctx.ws.shellOutputCompression === 'off') return null
+      if (ctx.ws.shellOutputCompression === 'on' || ctx.ws.shellOutputCompression === 'off')
+        return null
       // Otomatik mod yalnız bir sqz hook bağlıyken aktiftir; bağlıysa sıkıştırma zaten çalışıyor.
       if (tokenHookLive(ctx.hooks, 'sqz')) return null
       return {
@@ -254,6 +271,35 @@ export const RULES: Rule[] = [
   },
   {
     meta: {
+      key: 'tool-update',
+      icon: ArrowUpCircle,
+      title: 'Harici araç güncellemesi var',
+      summary: 'Kurulu bir harici aracın daha yeni bir sürümü yayımlanmışsa.',
+    },
+    detect: (ctx) => {
+      // Only 'outdated' counts. 'unknown' means a version could not be parsed on
+      // one side or the other — nudging an upgrade on that would be a guess, and
+      // for the manual tools a wrong guess costs the user a risky binary swap.
+      const stale = ctx.updates.filter((u) => u.status === 'outdated')
+      if (stale.length === 0) return null
+      const oneClick = stale.filter(
+        (u) => ctx.tools.find((t) => t.name === u.name)?.updateKind === 'command',
+      ).length
+      const names = stale.map((u) => `${u.name} → ${u.latest}`).join(', ')
+      return {
+        desc:
+          `${names} yayımlanmış. ` +
+          (oneClick > 0
+            ? `${oneClick} tanesi tek tıkla güncellenebilir; kalanlar elle (çalışan alt-süreç ikiliyi kilitlediği için TionSwarm üzerine yazmaz).`
+            : 'Bu araçlar elle güncellenir — çalışan bir alt-süreç ikiliyi kilitlediği için TionSwarm üzerine yazmaz; ekranda adım adım talimat var.'),
+        actionLabel: 'Harici araçlar',
+        variant: 'warning',
+        act: () => ctx.nav.settings('exttools'),
+      }
+    },
+  },
+  {
+    meta: {
       key: 'cli-tools',
       icon: Wrench,
       title: 'Kurulu CLI araçları var',
@@ -274,15 +320,21 @@ export const RULES: Rule[] = [
 // fetchRecommendationData probes everything the rules inspect (minus nav, which the
 // caller supplies). One place so both surfaces issue the same requests.
 export async function fetchRecommendationData(): Promise<Omit<RecContext, 'nav'>> {
-  const [tools, servers, hooks, ws, settings, agents] = await Promise.all([
+  const [tools, servers, hooks, ws, settings, agents, updates] = await Promise.all([
     systemApi.externalTools(),
     api.listMCPServers(),
     api.listHooks(),
     api.getWorkspaceSettings(),
     api.getSettings(),
     api.listAgents(),
+    // The update check is the one probe that hits the network (GitHub, via the
+    // backend's 6h cache — so this is usually a cache read, not a request). It is
+    // caught HERE rather than left to reject the Promise.all: an offline machine
+    // must not wipe out every other recommendation just because this one could
+    // not be answered. Empty means "no opinion", and the rule then returns null.
+    systemApi.checkExternalToolUpdates().catch(() => [] as ExternalToolUpdate[]),
   ])
-  return { tools, servers, hooks, ws, settings, agentsCount: agents.length }
+  return { tools, servers, hooks, ws, settings, agentsCount: agents.length, updates }
 }
 
 // runRules evaluates every rule against ctx and returns the applicable cards.

@@ -16,6 +16,21 @@ kaynağı budur. Maliyet: ~515KB ek (yalnız grafik görünümleri açılınca l
 ayrı chunk; ana bundle'a binmez).
 
 ## Workspace Ağı ("Ağ" — NavRail)
+
+> ### Ajanlar = çalışan **örnekler** (2026-08-01)
+> Ağda ajan **tanımı** değil, **çalışan oturumu** gösterilir: her in-flight oturum
+> (chat / task / flow / flow-coordinator / schedule / spawned (otomasyon+spawn) /
+> worker / inbox) için ajanın **bir kopyası** çizilir. Aynı ajan üç oturum
+> sürüyorsa **üç düğüm** olur; hiçbir şey çalışmıyorsa **hiç ajan düğümü olmaz**.
+> Bu yüzden ajan düğüm id'si oturumu taşır: `agent:<agentID>#<sessionID>`.
+> Düğüm `sessionId`/`agentId`/`runKind`/`runTarget` alanlarını da döndürür ve
+> `sub` alanı örneği ayırt eden alt-başlıktır ("Görev · <oturum başlığı>").
+> Ajana bağlı tüm kenarlar (`owns`/`created`/`uses`/`skill`/`mcp`) **her canlı
+> kopyaya** çoğaltılır; canlı kopyası olmayan ajanın kenarı hiç çizilmez. Skill ve
+> MCP düğümleri de yalnız çalışan bir ajan onları kullanıyorsa görünür.
+> `stats.agents` = canlı örnek sayısı, `stats.agentsTotal` = tanım sayısı
+> (başlıkta "N aktif ajan / M").
+
 Tüm workspace'in işbirliği ağı. **Düğüm türleri / şekilleri:** ajan (renkli disk),
 görev (**durum-renkli kare**; başlık altında etiket, **hover'da açıklama tooltip'i**),
 akış (mor baklava), **beceri/skill** (sarı **yıldız**), **MCP sunucusu** (teal **üçgen**).
@@ -71,9 +86,11 @@ Toolbar'daki **İlişki | Canlı** geçişiyle açılan, board akışını canla
   → kullanıcı **sürükleyebilir** ve bıraktığı yerde kalır. Artımlı güncelleme mevcut
   node'ların x/y'sini koruduğu için (yalnız yeni node'a konum verilir) canlı yenileme
   sürüklenen konumu **eski yerine sıçratmaz**.
-- **Boşta (idle) lobi:** alt-soldaki "Boşta" çekirdeği; aktif görevi olmayan
-  her ajan zayıf bir yayla buraya çekilir. Görev `in_progress` olunca güçlü aktif bağ
-  ajanı kartına çeker (idle yayını ezer), görev bitince ajan lobiye geri döner.
+- **"Çalışıyor" çekirdeği:** alt-soldaki çekirdek; bağlanacak task/flow hedefi
+  olmayan çalışan örnekler (chat / schedule / spawned / worker / inbox) zayıf bir
+  yayla buraya çekilir, böylece boşlukta savrulmazlar. Hedefli örnekleri güçlü
+  aktif bağ kendi kartına çeker. Hiç hedefsiz örnek yoksa çekirdek hiç çizilmez.
+  (Eskiden "Boşta" lobisiydi; ağda artık boşta ajan bulunmadığı için amacı değişti.)
 - **Ajanın akışı/skill/MCP'si:** Canlı modda `uses` (akış→ajan), `skill` ve `mcp`
   bağları korunur → ajanın bağlı olduğu akış/beceri/sunucu onunla birlikte sürüklenir.
   Görev/sütun yapısaldır; flow/skill/MCP katmanları chip'lerle açılıp kapatılır.
@@ -88,11 +105,12 @@ Toolbar'daki **İlişki | Canlı** geçişiyle açılan, board akışını canla
   olarak düşer — iş akışı görünür biçimde arşive akar.
   > Doğrulandı: MINIMAX'te `/api/executions` (non-running)=13 ↔ graph `run` node=13
   > (schedule 2 / chat 7 / flow 4) — birebir eşleşme.
-- **Canlı run / "şu an çalışıyor":** Backend `/api/graph` ajan düğümüne `running`+
-  `runKind`+`runTarget` ekler (process-wide çalışan oturum kümesi `s.runs.activeSessionIDs()`
-  → bu workspace'in oturumlarına join). Canlı modda: çalışan ajan **parlak "live"
-  glow** alır; oturumu task/flow-kind ise o **task/flow düğümüne aktif (accent) bağ**
-  kurulur. Aktif bağ ayrıca `in_progress` görev sahipliğiyle de (fallback) kurulur.
+- **Canlı run / "şu an çalışıyor":** Ajan düğümlerinin tamamı çalışan örnek
+  olduğu için hepsi **parlak "live" glow** alır. Çalışan oturum kümesi
+  `s.runs.activeSessionIDs()` → bu workspace'in oturumlarına join edilir. Örneğin
+  oturumu task/flow-kind ise o **task/flow düğümüne aktif (accent) bağ** kurulur;
+  aktif bağ ayrıca `in_progress` görev sahipliğiyle de (fallback) kurulur. Bağlar
+  örnek bazlıdır → aynı ajanın iki kopyası aynı anda iki farklı göreve bağlanabilir.
   > Çalışan kümesi iki kaynaktan birleşir: `s.runs.activeSessionIDs()` (chat
   > streaming turn'leri) **+** `Runtime.ActiveSessionIDs()` (otonom + flow run'ları).
   > **Flow run'ları artık tracker'a kaydoluyor:** `RunFlowRecorded` flow oturumunu
@@ -111,26 +129,37 @@ Toolbar'daki **İlişki | Canlı** geçişiyle açılan, board akışını canla
 
 - `internal/api/graph.go` — `registerGraphRoutes`:
   - `GET /api/graph` → workspace ağı (`workspaceGraph{nodes,edges,stats}`).
-    Düğüm id'leri tür-önekli: `agent:` / `task:` / `flow:` / `skill:<slug>` / `mcp:<id>`
-    (türler arası benzersiz). Akış→ajan kenarları `orchestration.ParseGraph` ile
-    akış graf'ından; skill kenarları `Agent.Skills`'ten; mcp kenarları etkin
-    `ListMCPServers` + `Agent.MCPEnabled`'dan çıkarılır. `stats` skills/mcp sayılarını da içerir.
+    Düğüm id'leri tür-önekli: `agent:<agentID>#<sessionID>` / `task:` / `flow:` /
+    `skill:<slug>` / `mcp:<id>` (türler arası benzersiz). Ajan düğümleri
+    `buildAgentInstances(agents, sessions, running)` ile üretilir — çalışan
+    oturum başına bir düğüm + `agentID → örnek id'leri` indeksi; `addAgentEdges`
+    ajana bağlı her kenarı bu indeks üzerinden tüm kopyalara çoğaltır. Akış→ajan
+    kenarları `orchestration.ParseGraph` ile akış graf'ından; skill kenarları
+    `Agent.Skills`'ten; mcp kenarları etkin `ListMCPServers` + `Agent.MCPEnabled`'dan
+    çıkarılır (ikisi de yalnız canlı örneği olan ajanlar için).
+    `stats` skills/mcp + `agents` (canlı örnek) / `agentsTotal` (tanım) içerir.
+    Testler: `graph_instances_test.go`.
 
 ## Frontend
 
 - `types/graph.ts` — `WorkspaceGraph` DTO'su (barrel: `types.ts`).
 - `api/graph.ts` — `graphApi.workspaceGraph()` (barrel: `api.ts`).
-- `lib/relationGraph.ts` — DTO → vis-network `{nodes, edges}` eşleyici
-  (`workspaceToVis(graph, visible, mode)`) + kenar/lejant/tür renk sabitleri
-  + yardımcılar (`tip`/`fmtDate`/`truncate`).
-- `components/graph/VisNetworkGraph.tsx` — vis-network sarmalayıcı: `Network`+`DataSet`
+- `features/network/relationGraph.ts` — DTO → vis-network `{nodes, edges}` eşleyici
+  (`workspaceToVis(graph, visible, mode, boardColumns)`) + kenar/lejant/tür renk
+  sabitleri + yardımcılar (`tip`/`truncate`). Ajan düğümünün etiketi iki satır:
+  ad + çalıştırma türü (aynı ajanın kopyalarını ayırt eder).
+- `features/network/VisNetworkGraph.tsx` — vis-network sarmalayıcı: `Network`+`DataSet`
   yaşam döngüsü, forceAtlas2 fizik düzeni. Prop'lar: **`mode`** (`relation`|`live` —
   canlı modda merkez-çekimi düşük), **`density`** (itme/yay uzunluğunu ölçekler — canlı
   `setOptions`), **`highlightNeighbors`** (hover'da komşu-dışı düğüm/kenarları soldurur),
   **`onSelect`** (düğüm seçim callback'i). Artımlı DataSet güncellemesi (sürüklenen/fizik
   konumlarını korur), stabilize sonrası `fit`.
-- `components/panels/NetworkPanel.tsx` — workspace ağı paneli (App'te lazy);
-  İlişki/Canlı mod, yoğunluk kaydırıcısı, katman chip'leri, Canlı modda SSE aboneliği.
+- `features/network/NetworkPanel.tsx` — workspace ağı paneli (App'te lazy);
+  İlişki/Canlı mod, yoğunluk kaydırıcısı, katman chip'leri, merkezî SSE yenileme
+  sinyali (`useRefreshTrigger('network')`). `app/eventToRefreshSignals.ts`'te
+  `chat`/`flow`/`schedule`/`spawned`/`worker`/**`task`**/`board`/`agent` olayları
+  ağ sinyalini tetikler — çalıştırma başlayınca/bitince ajan düğümü **eklenip
+  silindiği** için `task` de bu listede.
 
 > Eski React Flow tabanlı `RelationGraph.tsx`/`EntityNode.tsx` ve saf-TS force
 > layout fonksiyonları (`forcePositions`/`workspaceLayout`) vis-network

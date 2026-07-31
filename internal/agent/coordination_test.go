@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -269,18 +270,66 @@ func TestPlainSessionSerializesConcurrentTurns(t *testing.T) {
 // a spawn once the active-worker count is at the limit.
 func TestSpawnWorkerRespectsWorkerCap(t *testing.T) {
 	rt, _ := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))
-	rt.tun.SetCoordinatorLimits(2, 0)
+	rt.tun.SetCoordinatorLimits(2, 0, 0, 0)
 	ctx := context.Background()
 	if _, err := rt.db.CreateAgent(ctx, db.Agent{Name: "W", Provider: "anthropic", Model: "m"}); err != nil {
 		t.Fatalf("create agent: %v", err)
 	}
+	coord := newTestCoordinator(t, rt, 0)
 	// Simulate two workers already active under this coordinator.
-	slot := rt.coordSlotFor("COORD")
-	slot.workers.Add(2)
+	rt.coordSlotFor(coord).workers.Add(2)
 
-	if _, err := rt.SpawnWorker(ctx, "COORD", "W", "task", "", ""); err == nil {
+	if _, err := rt.SpawnWorker(ctx, coord, "W", "task", "", WorkerSpec{}); err == nil {
 		t.Fatal("expected worker-limit error when the cap is already reached")
 	}
+}
+
+// waitWorkersSettled blocks until no worker turn under coordID is still running.
+// Spawns are fire-and-forget, so without this a test can return while a detached
+// runWorker goroutine is still writing into the session store — which then fails
+// the t.TempDir cleanup with "directory not empty" rather than in the assertion.
+func waitWorkersSettled(t *testing.T, rt *Runtime, coordIDs ...string) {
+	t.Helper()
+	deadline := time.After(5 * time.Second)
+	for {
+		busy := false
+		for _, id := range coordIDs {
+			if rt.coordSlotFor(id).workers.Load() > 0 {
+				busy = true
+			}
+		}
+		if !busy {
+			return
+		}
+		select {
+		case <-deadline:
+			t.Fatal("worker turns did not settle in time")
+		case <-time.After(10 * time.Millisecond):
+		}
+	}
+}
+
+// newTestCoordinator creates a coordinator session at the given tree depth and
+// returns its id. Depth is stamped directly (rather than by spawning a chain) so a
+// test can exercise the depth guard without building the levels above it.
+func newTestCoordinator(t *testing.T, rt *Runtime, depth int) string {
+	t.Helper()
+	ctx := context.Background()
+	a, err := rt.db.CreateAgent(ctx, db.Agent{Name: "Coord" + strconv.Itoa(depth), Provider: "anthropic", Model: "m"})
+	if err != nil {
+		t.Fatalf("create coordinator agent: %v", err)
+	}
+	sess, err := rt.db.CreateSession(ctx, db.Session{
+		AgentID:          a.ID,
+		Kind:             "chat",
+		SourceID:         "test:coord:" + strconv.Itoa(depth),
+		CoordinatorMode:  true,
+		CoordinatorDepth: depth,
+	})
+	if err != nil {
+		t.Fatalf("create coordinator session: %v", err)
+	}
+	return sess.ID
 }
 
 // TestSpawnWorkerMaterializesProfile verifies a profile target (explore) is
@@ -294,7 +343,9 @@ func TestSpawnWorkerMaterializesProfile(t *testing.T) {
 		t.Fatalf("create base agent: %v", err)
 	}
 
-	r1, err := rt.SpawnWorker(ctx, "COORD", "explore", "map the code", "", base.ID)
+	coord := newTestCoordinator(t, rt, 0)
+	defer waitWorkersSettled(t, rt, coord)
+	r1, err := rt.SpawnWorker(ctx, coord, "explore", "map the code", base.ID, WorkerSpec{})
 	if err != nil {
 		t.Fatalf("spawn worker (explore): %v", err)
 	}
@@ -311,7 +362,7 @@ func TestSpawnWorkerMaterializesProfile(t *testing.T) {
 	}
 
 	// Second spawn reuses the same agent (no duplicate).
-	if _, err := rt.SpawnWorker(ctx, "COORD", "explore", "again", "", base.ID); err != nil {
+	if _, err := rt.SpawnWorker(ctx, coord, "explore", "again", base.ID, WorkerSpec{}); err != nil {
 		t.Fatalf("second spawn: %v", err)
 	}
 	agents, _ := rt.db.ListAgents(ctx)
@@ -334,10 +385,12 @@ func TestSpawnWorkerSetsCoordinatorLink(t *testing.T) {
 	if _, err := rt.db.CreateAgent(ctx, db.Agent{Name: "W", Provider: "anthropic", Model: "m"}); err != nil {
 		t.Fatalf("create agent: %v", err)
 	}
-	res, err := rt.SpawnWorker(ctx, "COORD", "W", "do it", "", "")
+	coord := newTestCoordinator(t, rt, 0)
+	res, err := rt.SpawnWorker(ctx, coord, "W", "do it", "", WorkerSpec{})
 	if err != nil {
 		t.Fatalf("spawn worker: %v", err)
 	}
+	defer waitWorkersSettled(t, rt, coord)
 	sess, err := rt.db.GetSession(ctx, res.SessionID)
 	if err != nil {
 		t.Fatalf("get session: %v", err)
@@ -348,8 +401,120 @@ func TestSpawnWorkerSetsCoordinatorLink(t *testing.T) {
 	if sess.Role != "worker" {
 		t.Errorf("role = %q, want worker", sess.Role)
 	}
-	if sess.CoordinatorSessionID != "COORD" {
-		t.Errorf("coordinatorSessionID = %q, want COORD", sess.CoordinatorSessionID)
+	if sess.CoordinatorSessionID != coord {
+		t.Errorf("coordinatorSessionID = %q, want %q", sess.CoordinatorSessionID, coord)
+	}
+	// Tree placement is stamped at creation, so the depth/subtree guards and the
+	// tree endpoints can trust it without walking parent links.
+	if sess.CoordinatorDepth != 1 {
+		t.Errorf("coordinatorDepth = %d, want 1", sess.CoordinatorDepth)
+	}
+	if sess.RootCoordinatorSessionID != coord {
+		t.Errorf("root = %q, want %q", sess.RootCoordinatorSessionID, coord)
+	}
+	if sess.IsCoordinator() {
+		t.Error("a plain worker must not get coordinator mode")
+	}
+}
+
+// TestSpawnSubCoordinatorNests verifies the whole point of the depth rework: a
+// worker spawned with Coordinator:true gets coordinator mode WITHOUT losing its
+// worker lineage, and can spawn a worker of its own one level deeper.
+func TestSpawnSubCoordinatorNests(t *testing.T) {
+	rt, _ := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))
+	ctx := context.Background()
+	if _, err := rt.db.CreateAgent(ctx, db.Agent{Name: "W", Provider: "anthropic", Model: "m"}); err != nil {
+		t.Fatalf("create agent: %v", err)
+	}
+	root := newTestCoordinator(t, rt, 0)
+
+	mid, err := rt.SpawnWorker(ctx, root, "W", "split this", "", WorkerSpec{Coordinator: true})
+	defer func() { waitWorkersSettled(t, rt, root, mid.SessionID) }()
+	if err != nil {
+		t.Fatalf("spawn sub-coordinator: %v", err)
+	}
+	midSess, _ := rt.db.GetSession(ctx, mid.SessionID)
+	if !midSess.IsCoordinator() {
+		t.Fatal("sub-coordinator must have coordinator mode")
+	}
+	if !midSess.IsWorker() {
+		t.Fatal("sub-coordinator must still be a worker of its parent")
+	}
+
+	leaf, err := rt.SpawnWorker(ctx, mid.SessionID, "W", "the actual work", "", WorkerSpec{})
+	if err != nil {
+		t.Fatalf("spawn under sub-coordinator: %v", err)
+	}
+	leafSess, _ := rt.db.GetSession(ctx, leaf.SessionID)
+	if leafSess.CoordinatorDepth != 2 {
+		t.Errorf("leaf depth = %d, want 2", leafSess.CoordinatorDepth)
+	}
+	// Every level shares ONE root, which is what keeps the tree-wide budget and the
+	// shared scratchpad path from fragmenting by level.
+	if leafSess.RootCoordinatorSessionID != root {
+		t.Errorf("leaf root = %q, want %q", leafSess.RootCoordinatorSessionID, root)
+	}
+
+	tree, err := rt.db.ListCoordinatorTree(ctx, leaf.SessionID)
+	if err != nil {
+		t.Fatalf("list tree from a leaf: %v", err)
+	}
+	if len(tree) != 3 {
+		t.Fatalf("tree size = %d, want 3 (root + mid + leaf)", len(tree))
+	}
+	if tree[0].ID != root {
+		t.Errorf("tree[0] = %q, want the root %q (a leaf's id must normalize to the root)", tree[0].ID, root)
+	}
+}
+
+// TestSpawnWorkerDepthLimit verifies the depth guard REFUSES a sub-coordinator
+// that would not have room for its own workers, instead of silently downgrading
+// it to a leaf — a coordinator that believes it delegated work it did not
+// delegate would wait forever for a report.
+func TestSpawnWorkerDepthLimit(t *testing.T) {
+	rt, _ := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))
+	rt.tun.SetCoordinatorLimits(0, 0, 2, 0) // max depth 2
+	ctx := context.Background()
+	if _, err := rt.db.CreateAgent(ctx, db.Agent{Name: "W", Provider: "anthropic", Model: "m"}); err != nil {
+		t.Fatalf("create agent: %v", err)
+	}
+	// A coordinator already at depth 1: its workers land at depth 2 (allowed as
+	// leaves) but a sub-coordinator there would need a depth-3 level.
+	coord := newTestCoordinator(t, rt, 1)
+	defer waitWorkersSettled(t, rt, coord)
+
+	if _, err := rt.SpawnWorker(ctx, coord, "W", "leaf work", "", WorkerSpec{}); err != nil {
+		t.Fatalf("a plain worker at the last allowed depth must be accepted: %v", err)
+	}
+	if _, err := rt.SpawnWorker(ctx, coord, "W", "split further", "", WorkerSpec{Coordinator: true}); err == nil {
+		t.Fatal("expected a sub-coordinator at the depth limit to be refused")
+	}
+}
+
+// TestSpawnWorkerSubtreeBudget verifies the tree-wide session budget, which is the
+// only guard that actually bounds exponential fan-out: the per-coordinator worker
+// cap is enforced per node, so depth multiplies it.
+func TestSpawnWorkerSubtreeBudget(t *testing.T) {
+	rt, _ := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))
+	rt.tun.SetCoordinatorLimits(0, 0, 0, 2) // whole tree: 2 worker sessions
+	ctx := context.Background()
+	if _, err := rt.db.CreateAgent(ctx, db.Agent{Name: "W", Provider: "anthropic", Model: "m"}); err != nil {
+		t.Fatalf("create agent: %v", err)
+	}
+	root := newTestCoordinator(t, rt, 0)
+
+	mid, err := rt.SpawnWorker(ctx, root, "W", "one", "", WorkerSpec{Coordinator: true})
+	if err != nil {
+		t.Fatalf("first spawn: %v", err)
+	}
+	defer func() { waitWorkersSettled(t, rt, root, mid.SessionID) }()
+	if _, err := rt.SpawnWorker(ctx, mid.SessionID, "W", "two", "", WorkerSpec{}); err != nil {
+		t.Fatalf("second spawn: %v", err)
+	}
+	// The third would be the 3rd worker session in the tree — refused even though it
+	// is requested from a DIFFERENT node whose own worker cap is untouched.
+	if _, err := rt.SpawnWorker(ctx, root, "W", "three", "", WorkerSpec{}); err == nil {
+		t.Fatal("expected the tree-wide budget to refuse the third worker")
 	}
 }
 

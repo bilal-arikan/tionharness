@@ -1,9 +1,22 @@
 import { useState } from 'react'
 import { LayoutGrid, Repeat, X } from 'lucide-react'
 import { api } from '@/api'
-import type { Agent, Automation, AutomationTriggerKind, BoardColumnDef, BoardOp, Flow } from '@/types'
+import type {
+  Agent,
+  Automation,
+  AutomationTriggerKind,
+  BoardColumnDef,
+  BoardOp,
+  Flow,
+} from '@/types'
 import { AgentPicker } from '@/shared/components/agents/AgentPicker'
-import { COLUMN_ACCENT, DEFAULT_PROMPT, STUCK_TEMPLATE } from './automationMeta'
+import {
+  COLUMN_ACCENT,
+  DEFAULT_MAX_ITERATIONS,
+  DEFAULT_PROMPT,
+  MAX_ITERATIONS_HARD_CAP,
+  STUCK_TEMPLATE,
+} from './automationMeta'
 import { BoardTriggerFields, PromptVarsField } from './AutomationFields'
 import { FormModal } from './FormModal'
 import { Field, FlowPicker, TargetModeToggle, inputCls } from './pickers'
@@ -48,8 +61,12 @@ export function AutomationModal({
   const [targetMode, setTargetMode] = useState<'agent' | 'flow'>(editing?.flowId ? 'flow' : 'agent')
   const [targetAgentId, setTargetAgentId] = useState(editing?.targetAgentId ?? '')
   const [flowId, setFlowId] = useState(editing?.flowId ?? '')
-  const [promptTemplate, setPromptTemplate] = useState(editing?.promptTemplate ?? DEFAULT_PROMPT[kind])
-  const [maxIterations, setMaxIterations] = useState(String(editing?.maxIterations ?? 50))
+  const [promptTemplate, setPromptTemplate] = useState(
+    editing?.promptTemplate ?? DEFAULT_PROMPT[kind],
+  )
+  const [maxIterations, setMaxIterations] = useState(
+    String(editing?.maxIterations ?? DEFAULT_MAX_ITERATIONS),
+  )
   const [cooldownSec, setCooldownSec] = useState(String(editing?.cooldownSec ?? 0))
   const [expiresAt, setExpiresAt] = useState(unixToLocalInput(editing?.expiresAt))
   // spawnTagsOverride: set by a template (e.g. stuck repair must NOT re-tag the
@@ -94,7 +111,10 @@ export function AutomationModal({
       ...trigger,
       ...(targetMode === 'flow' ? { flowId, targetAgentId: '' } : { targetAgentId, flowId: '' }),
       promptTemplate: promptTemplate.trim(),
-      maxIterations: Number(maxIterations) || 0,
+      // NOT `|| 0`: an empty or non-numeric field used to submit 0, which the
+      // runtime reads as UNLIMITED — the very value this form forbids. Fall back
+      // to the default bound so a blank field can never create a runaway loop.
+      maxIterations: Number(maxIterations) || DEFAULT_MAX_ITERATIONS,
       cooldownSec: Number(cooldownSec) || 0,
       expiresAt: expUnix,
     }
@@ -189,7 +209,7 @@ export function AutomationModal({
             value={maxIterations}
             onChange={(e) => setMaxIterations(e.target.value)}
             className="w-20 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5 text-sm outline-none"
-            title={`1 ile ${MAX_ITERATIONS_HARD_CAP} arası olmalı. 0 (sınırsız) artık kabul edilmiyor — sonsuz döngü riski.`}
+            title={`1 ile ${MAX_ITERATIONS_HARD_CAP} arası olmalı. 0 (sınırsız) kabul edilmiyor — sonsuz döngü riski. Sunucu da bu aralığı doğrular.`}
           />
         </label>
         <label className="flex items-center gap-1 text-xs text-[var(--color-text-dim)]">

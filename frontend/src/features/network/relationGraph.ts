@@ -2,12 +2,7 @@
 // data — the same library Agent-MCP's dashboard uses, so layout/physics are
 // handled by its engine (see components/graph/VisNetworkGraph).
 import type { Node, Edge } from 'vis-network'
-import type {
-  WorkspaceGraph,
-  WorkspaceGraphEdge,
-  WorkspaceNodeType,
-  BoardColumnDef,
-} from '@/types'
+import type { WorkspaceGraph, WorkspaceGraphEdge, WorkspaceNodeType, BoardColumnDef } from '@/types'
 
 // Edge colors per workspace relationship kind, so the network reads at a glance.
 const EDGE_COLOR: Record<WorkspaceGraphEdge['kind'], string> = {
@@ -57,7 +52,6 @@ const STATUS_COLOR: Record<string, string> = {
   done: '#10b981',
   failed: '#ef4444',
 }
-
 
 // groupHue maps an arbitrary group label to a stable HSL color (deterministic
 // hash → hue), so every skill sharing a group gets the same tint across renders.
@@ -171,99 +165,119 @@ const HIST_Y = 440
 // task nodes pick up their column's hue instead of the hard-coded STATUS_COLOR
 // fallback (which only knows the five built-in statuses).
 function nodeFor(n: WorkspaceGraph['nodes'][number], colColor?: Map<string, string>): Node {
-    if (n.type === 'agent') {
-      const c = n.color || '#7c3aed'
-      // The agent's identity glyph is baked into the node image; label only
-      // carries the name. Fall back to initials when no emoji is stored (and
-      // we don't try to render broken / mojibake strings as glyphs here — the
-      // upstream backend passes pre-cleaned emoji only).
-      const glyph = n.emoji && n.emoji.trim() !== '' ? n.emoji : initialsAscii(n.label)
-      const avatar = agentAvatarDataUrl(glyph, c)
-      return {
-        id: n.id,
-        label: n.label,
-        title: n.sub ? `${n.label} · ${n.sub}` : n.label,
-        shape: 'circularImage',
-        size: 28,
-        image: avatar,
-        brokenImage: avatar,
-        color: { background: c, border: c, highlight: { background: c, border: '#fff' } },
-        font: { color: '#f1f5f9', size: 14, strokeWidth: 3, strokeColor: '#0b0e14' },
-      }
+  if (n.type === 'agent') {
+    const c = n.color || '#7c3aed'
+    // The agent's identity glyph is baked into the node image; label only
+    // carries the name. Fall back to initials when no emoji is stored (and
+    // we don't try to render broken / mojibake strings as glyphs here — the
+    // upstream backend passes pre-cleaned emoji only).
+    const glyph = n.emoji && n.emoji.trim() !== '' ? n.emoji : initialsAscii(n.label)
+    const avatar = agentAvatarDataUrl(glyph, c)
+    // Every agent node is a live INSTANCE (one per running session), so the
+    // same agent can appear several times. The run kind goes on a second
+    // label line to tell the copies apart; the full subtitle (kind + session
+    // title) stays in the tooltip.
+    const kind = n.sub ? n.sub.split(' · ')[0] : ''
+    return {
+      id: n.id,
+      label: kind ? `${n.label}\n${kind}` : n.label,
+      title: tip(n.label, [n.sub]),
+      shape: 'circularImage',
+      size: 28,
+      image: avatar,
+      brokenImage: avatar,
+      color: { background: c, border: c, highlight: { background: c, border: '#fff' } },
+      font: { color: '#f1f5f9', size: 14, strokeWidth: 3, strokeColor: '#0b0e14' },
     }
-    if (n.type === 'flow') {
-      return {
-        id: n.id,
-        label: truncate(n.label, 22),
-        title: n.sub ? `${n.label} — ${n.sub}` : n.label,
-        shape: 'diamond',
-        size: 18,
-        color: { background: '#7c3aed', border: '#a78bfa', highlight: { background: '#8b5cf6', border: '#fff' } },
-        font: { color: '#e9d5ff', size: 12 },
-      }
-    }
-    if (n.type === 'skill') {
-      // Skills get a distinct star icon with the slug as a small label below.
-      // When a skill carries an organisation group (n.sub), same-group skills are
-      // tinted with a shared, group-derived hue so clusters read at a glance;
-      // ungrouped skills keep the default yellow.
-      const grouped = !!n.sub
-      const bg = grouped ? groupHue(n.sub!, 58) : '#eab308'
-      const border = grouped ? groupHue(n.sub!, 72) : '#fde047'
-      return {
-        id: n.id,
-        label: truncate(n.label, 20),
-        title: tip(n.label, [n.sub ? `Skill · ${n.sub}` : 'Skill']),
-        shape: 'star',
-        size: 14,
-        color: { background: bg, border, highlight: { background: border, border: '#fff' } },
-        font: { color: '#fde68a', size: 11 },
-      }
-    }
-    if (n.type === 'mcp') {
-      // MCP servers as triangles (kept distinct from the task square).
-      return {
-        id: n.id,
-        label: truncate(n.label, 20),
-        title: tip(n.label, [n.sub ? `MCP sunucusu · ${n.sub}` : 'MCP sunucusu']),
-        shape: 'triangle',
-        size: 15,
-        color: { background: '#14b8a6', border: '#5eead4', highlight: { background: '#2dd4bf', border: '#fff' } },
-        font: { color: '#99f6e4', size: 11 },
-      }
-    }
-    if (n.type === 'run') {
-      // Completed run (archive): a titled card like the Activity/kanban entries —
-      // a kind-colored bordered box showing the run title; kind + agent on hover.
-      const c = RUN_KIND_COLOR[n.runKind ?? ''] ?? '#52525b'
-      return {
-        id: n.id,
-        label: truncate(n.label, 26),
-        title: tip(n.label, [RUN_KIND_LABEL[n.runKind ?? ''] ?? 'Çalıştırma', n.sub ? `Ajan: ${n.sub}` : undefined]),
-        shape: 'box',
-        color: { background: 'rgba(24,24,27,0.95)', border: c, highlight: { background: '#27272a', border: c } },
-        font: { color: '#d4d4d8', size: 11 },
-        shapeProperties: { borderRadius: 6 },
-        margin: { top: 5, bottom: 5, left: 9, right: 9 } as Node['margin'],
-      }
-    }
-    // task: a board-colored square with the title below; the full description
-    // (and status) shows on hover via a rich tooltip. The square's color follows
-    // the task's board column (colColor), falling back to the built-in status
-    // tint and finally a neutral slate.
-    const sc = colColor?.get(n.status ?? '') ?? STATUS_COLOR[n.status ?? ''] ?? '#64748b'
+  }
+  if (n.type === 'flow') {
     return {
       id: n.id,
       label: truncate(n.label, 22),
-      title: tip(n.label, [
-        n.status ? `Durum: ${STATUS_LABEL[n.status] ?? n.status}` : undefined,
-        n.desc,
-      ]),
-      shape: 'square',
-      size: 14,
-      color: { background: sc, border: sc, highlight: { background: sc, border: '#fff' } },
-      font: { color: '#cbd5e1', size: 11 },
+      title: n.sub ? `${n.label} — ${n.sub}` : n.label,
+      shape: 'diamond',
+      size: 18,
+      color: {
+        background: '#7c3aed',
+        border: '#a78bfa',
+        highlight: { background: '#8b5cf6', border: '#fff' },
+      },
+      font: { color: '#e9d5ff', size: 12 },
     }
+  }
+  if (n.type === 'skill') {
+    // Skills get a distinct star icon with the slug as a small label below.
+    // When a skill carries an organisation group (n.sub), same-group skills are
+    // tinted with a shared, group-derived hue so clusters read at a glance;
+    // ungrouped skills keep the default yellow.
+    const grouped = !!n.sub
+    const bg = grouped ? groupHue(n.sub!, 58) : '#eab308'
+    const border = grouped ? groupHue(n.sub!, 72) : '#fde047'
+    return {
+      id: n.id,
+      label: truncate(n.label, 20),
+      title: tip(n.label, [n.sub ? `Skill · ${n.sub}` : 'Skill']),
+      shape: 'star',
+      size: 14,
+      color: { background: bg, border, highlight: { background: border, border: '#fff' } },
+      font: { color: '#fde68a', size: 11 },
+    }
+  }
+  if (n.type === 'mcp') {
+    // MCP servers as triangles (kept distinct from the task square).
+    return {
+      id: n.id,
+      label: truncate(n.label, 20),
+      title: tip(n.label, [n.sub ? `MCP sunucusu · ${n.sub}` : 'MCP sunucusu']),
+      shape: 'triangle',
+      size: 15,
+      color: {
+        background: '#14b8a6',
+        border: '#5eead4',
+        highlight: { background: '#2dd4bf', border: '#fff' },
+      },
+      font: { color: '#99f6e4', size: 11 },
+    }
+  }
+  if (n.type === 'run') {
+    // Completed run (archive): a titled card like the Activity/kanban entries —
+    // a kind-colored bordered box showing the run title; kind + agent on hover.
+    const c = RUN_KIND_COLOR[n.runKind ?? ''] ?? '#52525b'
+    return {
+      id: n.id,
+      label: truncate(n.label, 26),
+      title: tip(n.label, [
+        RUN_KIND_LABEL[n.runKind ?? ''] ?? 'Çalıştırma',
+        n.sub ? `Ajan: ${n.sub}` : undefined,
+      ]),
+      shape: 'box',
+      color: {
+        background: 'rgba(24,24,27,0.95)',
+        border: c,
+        highlight: { background: '#27272a', border: c },
+      },
+      font: { color: '#d4d4d8', size: 11 },
+      shapeProperties: { borderRadius: 6 },
+      margin: { top: 5, bottom: 5, left: 9, right: 9 } as Node['margin'],
+    }
+  }
+  // task: a board-colored square with the title below; the full description
+  // (and status) shows on hover via a rich tooltip. The square's color follows
+  // the task's board column (colColor), falling back to the built-in status
+  // tint and finally a neutral slate.
+  const sc = colColor?.get(n.status ?? '') ?? STATUS_COLOR[n.status ?? ''] ?? '#64748b'
+  return {
+    id: n.id,
+    label: truncate(n.label, 22),
+    title: tip(n.label, [
+      n.status ? `Durum: ${STATUS_LABEL[n.status] ?? n.status}` : undefined,
+      n.desc,
+    ]),
+    shape: 'square',
+    size: 14,
+    color: { background: sc, border: sc, highlight: { background: sc, border: '#fff' } },
+    font: { color: '#cbd5e1', size: 11 },
+  }
 }
 
 // edgeId is a stable, content-derived id so incremental DataSet updates can diff
@@ -313,7 +327,9 @@ export function workspaceToVis(
     return !visible || visible.has(t)
   }
   const shownIds = new Set(graph.nodes.filter((n) => show(n.type)).map((n) => n.id))
-  const statusOf = new Map(graph.nodes.filter((n) => n.type === 'task').map((n) => [n.id, n.status]))
+  const statusOf = new Map(
+    graph.nodes.filter((n) => n.type === 'task').map((n) => [n.id, n.status]),
+  )
 
   const nodes: Node[] = graph.nodes.filter((n) => show(n.type)).map((n) => nodeFor(n, colColor))
 
@@ -359,21 +375,6 @@ export function workspaceToVis(
         smooth: false,
       } as Edge)
     }
-    // Idle lobby anchor (bottom-left) — taskless agents drift here.
-    nodes.push({
-      id: IDLE_ID,
-      label: 'Boşta',
-      shape: 'box',
-      x: IDLE_X,
-      y: IDLE_Y,
-      physics: false, // immune to forces, but user-draggable
-
-      color: { background: 'rgba(30,39,51,0.7)', border: '#475569' },
-      font: { color: '#94a3b8', size: 13 } as Node['font'],
-      margin: { top: 6, bottom: 6, left: 14, right: 14 } as Node['margin'],
-      widthConstraint: { minimum: 90 } as Node['widthConstraint'],
-    })
-
     // History/archive anchor (bottom-right) — completed runs pile up here.
     const hasRuns = nodes.some((nd) => (nd.id as string).startsWith('run:'))
     if (hasRuns) {
@@ -406,35 +407,55 @@ export function workspaceToVis(
       }
     }
 
-    // Active bonds come from two signals: a live in-flight run (agent.running +
-    // runTarget — the strongest "doing it right now") and, as a fallback, owning
-    // an in_progress task. Collect the (agentId → targetNodeId) pairs.
+    // Active bonds come from two signals: the instance's own run target (a task/
+    // flow run — the strongest "doing it right now") and, as a fallback, owning
+    // an in_progress task. Collect the (agent node id → targetNodeId) pairs.
+    // Keys are INSTANCE ids, so two copies of the same agent can bond to two
+    // different tasks at once.
     const activeTarget = new Map<string, string>()
     for (const a of graph.nodes) {
-      if (a.type === 'agent' && a.running && a.runTarget) activeTarget.set(a.id, a.runTarget)
+      if (a.type === 'agent' && a.runTarget) activeTarget.set(a.id, a.runTarget)
     }
     for (const e of graph.edges) {
-      if (e.kind === 'owns' && statusOf.get(e.target) === 'in_progress' && !activeTarget.has(e.source)) {
+      if (
+        e.kind === 'owns' &&
+        statusOf.get(e.target) === 'in_progress' &&
+        !activeTarget.has(e.source)
+      ) {
         activeTarget.set(e.source, e.target)
       }
     }
-    // Busy = has an active target OR is running anything (chat/schedule glow).
-    const runningAgents = new Set(graph.nodes.filter((n) => n.type === 'agent' && n.running).map((n) => n.id))
-    const busyAgents = new Set<string>([...activeTarget.keys(), ...runningAgents])
-    // Idle agents drift to the lobby via a weak spring (an active task bond, when
-    // present, easily overpowers it and pulls the agent up to its card).
-    for (const a of graph.nodes) {
-      if (a.type !== 'agent' || busyAgents.has(a.id)) continue
-      edges.push({
-        id: edgeId('idle', a.id, IDLE_ID),
-        from: a.id,
-        to: IDLE_ID,
-        color: { color: '#475569', opacity: 0.35 },
-        width: 1,
-        length: 220,
-        dashes: true,
-        smooth: false,
-      } as Edge)
+    // Every agent node is a live instance, so all of them get the running glow.
+    const runningAgents = new Set(graph.nodes.filter((n) => n.type === 'agent').map((n) => n.id))
+    // Instances without a task/flow target (chat, schedule, spawn, worker, inbox)
+    // have nothing to bond to, so they drift to a shared "Çalışıyor" anchor
+    // instead of floating loose. The anchor only appears when someone needs it.
+    const untargeted = graph.nodes.filter((n) => n.type === 'agent' && !activeTarget.has(n.id))
+    if (untargeted.length > 0) {
+      nodes.push({
+        id: IDLE_ID,
+        label: 'Çalışıyor',
+        shape: 'box',
+        x: IDLE_X,
+        y: IDLE_Y,
+        physics: false, // immune to forces, but user-draggable
+        color: { background: 'rgba(30,39,51,0.7)', border: '#475569' },
+        font: { color: '#94a3b8', size: 13 } as Node['font'],
+        margin: { top: 6, bottom: 6, left: 14, right: 14 } as Node['margin'],
+        widthConstraint: { minimum: 90 } as Node['widthConstraint'],
+      })
+      for (const a of untargeted) {
+        edges.push({
+          id: edgeId('idle', a.id, IDLE_ID),
+          from: a.id,
+          to: IDLE_ID,
+          color: { color: '#475569', opacity: 0.35 },
+          width: 1,
+          length: 220,
+          dashes: true,
+          smooth: false,
+        } as Edge)
+      }
     }
 
     // Active bonds: agent → the task/flow it is running (or owns in_progress).
@@ -443,7 +464,13 @@ export function workspaceToVis(
         color: { color: 'var(--color-accent)', highlight: '#fff', opacity: 1 },
         width: 3,
         arrows: { to: { enabled: true, scaleFactor: 0.7 } },
-        shadow: { enabled: true, color: 'var(--color-accent)', size: 12, x: 0, y: 0 } as Edge['shadow'],
+        shadow: {
+          enabled: true,
+          color: 'var(--color-accent)',
+          size: 12,
+          x: 0,
+          y: 0,
+        } as Edge['shadow'],
       })
     }
     // Agent attachments: skills, MCP servers and the flow(s) it is wired into.
@@ -463,8 +490,17 @@ export function workspaceToVis(
         const nd = byId.get(id)
         if (!nd) continue
         nd.borderWidth = 3
-        nd.color = { background: (nd.color as { background?: string })?.background ?? '#7c3aed', border: '#fff' }
-        nd.shadow = { enabled: true, color: 'var(--color-accent)', size: 22, x: 0, y: 0 } as Node['shadow']
+        nd.color = {
+          background: (nd.color as { background?: string })?.background ?? '#7c3aed',
+          border: '#fff',
+        }
+        nd.shadow = {
+          enabled: true,
+          color: 'var(--color-accent)',
+          size: 22,
+          x: 0,
+          y: 0,
+        } as Node['shadow']
       }
     }
     return { nodes, edges }

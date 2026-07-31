@@ -375,7 +375,8 @@ func (s *Server) handleSessionRunFlow(w http.ResponseWriter, r *http.Request) {
 
 	// Fold any attachments into the flow input (same block format chat uses), so
 	// the flow's agent nodes see attached text/files via {{input}}.
-	flowInput := conversation.InlineAttachments(req.Input, req.Attachments)
+	flowInput := conversation.InlineAttachments(
+		conversation.WithAttachmentRoot(ctx, wsp.SandboxRoot()), req.Input, req.Attachments)
 
 	// Detach the flow execution from the request lifecycle: a client disconnect
 	// (tab close / navigation / network blip) must NOT cancel in-flight flow nodes,
@@ -536,7 +537,8 @@ func (s *Server) handleSessionRunFlowStream(w http.ResponseWriter, r *http.Reque
 
 	sse("meta", map[string]any{"userMessage": userMsg})
 
-	flowInput := conversation.InlineAttachments(req.Input, req.Attachments)
+	flowInput := conversation.InlineAttachments(
+		conversation.WithAttachmentRoot(ctx, wsp.SandboxRoot()), req.Input, req.Attachments)
 	obs := func(ev orchestration.NodeEvent) { sse("node", ev) }
 	// Detach flow execution from the request: if the client disconnects mid-run,
 	// the flow (and its in-flight parallel nodes) must finish and persist rather

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -13,6 +14,7 @@ import (
 	"github.com/bilal-arikan/tionswarm/internal/db"
 	"github.com/bilal-arikan/tionswarm/internal/events"
 	"github.com/bilal-arikan/tionswarm/internal/providers"
+	"github.com/bilal-arikan/tionswarm/internal/skills"
 	"github.com/bilal-arikan/tionswarm/internal/tools"
 )
 
@@ -67,69 +69,141 @@ type workerCtl struct {
 	startedAt time.Time
 }
 
-// sessionRole returns the Role of the session stamped on ctx ("coordinator" /
-// "worker" / ""), or "" when no session is stamped or it can't be loaded.
-func (r *Runtime) sessionRole(ctx context.Context) string {
+// sessionIsCoordinator reports whether the session stamped on ctx may drive
+// workers (db.Session.IsCoordinator). False when no session is stamped or it
+// can't be loaded. Note this is TRUE for a mid-level node too: since the
+// unlimited-depth rework a worker session that has coordinator mode on drives its
+// own workers while still reporting up to its parent.
+func (r *Runtime) sessionIsCoordinator(ctx context.Context) bool {
 	sid := SessionIDFrom(ctx)
 	if sid == "" {
-		return ""
+		return false
 	}
 	s, err := r.db.GetSession(ctx, sid)
 	if err != nil {
-		return ""
+		return false
 	}
-	return s.Role
+	return s.IsCoordinator()
 }
 
-// withCoordination wires the coordinator/worker tools for one turn — but ONLY when
-// the turn runs on a coordinator session. It captures the coordinator session id
-// (from ctx) and the caller so the tools carry just the worker-facing arguments.
-// A non-coordinator turn returns ctx unchanged, so buildRegistry never registers
-// the coordination tools there (and a worker can't spawn workers).
+// withCoordination wires the coordination runner for one turn. It always installs
+// the runner (when a session is stamped on ctx) but populates only the functions
+// this session may actually use; buildRegistry then registers each tool from the
+// presence of its function. Three independent surfaces:
+//
+//   - Spawn/Send/Stop/List — coordinator mode is on. This is the gate that used to
+//     cap a tree at one level: it tested Role=="coordinator", which a worker could
+//     never hold, so a worker could not nest. It now tests the CAPABILITY, so a
+//     worker spawned with coordinator:true (or one that turned the mode on itself)
+//     drives its own workers. Recursion is bounded by the depth/subtree budgets in
+//     SpawnWorker instead of by hiding the tools.
+//   - Report — this session has a coordinator above it (it owes a result upward).
+//   - SetMode — always, otherwise a plain session could never become a coordinator.
 func (r *Runtime) withCoordination(ctx context.Context, caller db.Agent) context.Context {
-	coordID := SessionIDFrom(ctx)
-	if coordID == "" || r.sessionRole(ctx) != "coordinator" {
+	sid := SessionIDFrom(ctx)
+	if sid == "" {
 		return ctx
 	}
-	return tools.WithCoordination(ctx, r.coordinationFuncsFor(coordID, caller.ID))
+	sess, err := r.db.GetSession(ctx, sid)
+	if err != nil {
+		return ctx
+	}
+	return tools.WithCoordination(ctx, r.coordinationFuncsFor(sess, caller.ID))
 }
 
-// coordinationFuncsFor builds the coordination runner bound to a coordinator
-// session + caller. Shared by the native path (withCoordination) and the CLI
-// bridge (BridgeTools), so both dispatch the coordinator tools identically.
-func (r *Runtime) coordinationFuncsFor(coordID, callerID string) *tools.CoordinationFuncs {
-	return &tools.CoordinationFuncs{
-		Spawn: func(c context.Context, agentRef, task, model string) (tools.SpawnResult, error) {
-			res, err := r.SpawnWorker(c, coordID, agentRef, task, model, callerID)
+// coordinationFuncsFor builds the coordination runner bound to a session + caller.
+// Shared by the native path (withCoordination) and the CLI bridge (BridgeTools),
+// so both dispatch the coordination tools identically. Functions the session is
+// not entitled to are left nil — that IS the per-tool gate.
+func (r *Runtime) coordinationFuncsFor(sess db.Session, callerID string) *tools.CoordinationFuncs {
+	coordID := sess.ID
+	f := &tools.CoordinationFuncs{
+		SetMode: func(c context.Context, enabled bool) (string, error) {
+			return r.SetSessionCoordinatorMode(c, coordID, enabled)
+		},
+	}
+	if sess.IsCoordinator() {
+		f.Spawn = func(c context.Context, agentRef, task string, spec tools.WorkerSpawnSpec) (tools.SpawnResult, error) {
+			ws, err := r.workerSpecFor(spec)
+			if err != nil {
+				return tools.SpawnResult{}, err
+			}
+			res, err := r.SpawnWorker(c, coordID, agentRef, task, callerID, ws)
 			if err != nil {
 				return tools.SpawnResult{}, err
 			}
 			return tools.SpawnResult{SessionID: res.SessionID, AgentName: res.AgentName}, nil
-		},
-		Send: func(c context.Context, workerSessionID, message string) error {
+		}
+		f.Send = func(c context.Context, workerSessionID, message string) error {
 			return r.SendToWorker(c, coordID, workerSessionID, message)
-		},
-		Stop: func(c context.Context, workerSessionID string) error {
-			return r.StopWorker(workerSessionID)
-		},
-		List: func(c context.Context) (string, error) {
+		}
+		f.Stop = func(c context.Context, workerSessionID string) error {
+			return r.StopWorker(c, coordID, workerSessionID)
+		}
+		f.List = func(c context.Context, subtree bool) (string, error) {
+			if subtree {
+				ws, err := r.ListSubtreeWorkers(c, coordID)
+				if err != nil {
+					return "", err
+				}
+				return formatWorkerTree(ws), nil
+			}
 			ws, err := r.ListWorkers(c, coordID)
 			if err != nil {
 				return "", err
 			}
 			return formatWorkerList(ws), nil
-		},
+		}
 	}
+	if sess.CoordinatorSessionID != "" {
+		f.Report = func(c context.Context, status, summary string) error {
+			return r.ReportToCoordinator(c, coordID, status, summary)
+		}
+	}
+	return f
 }
 
-// coordinationBridgeDefs returns the coordinator tool defs for the CLI bridge.
-func coordinationBridgeDefs() []providers.ToolDef {
-	return []providers.ToolDef{
-		tools.NewSpawnWorkerTool().Def(),
-		tools.NewSendToWorkerTool().Def(),
-		tools.NewStopWorkerTool().Def(),
-		tools.NewListWorkersTool().Def(),
+// workerSpecFor turns the tool-layer spawn options into the runtime spec,
+// resolving a requested coordinator recipe through the same gate the UI and the
+// flow node use. An unknown or wrong-kind slug fails the spawn rather than
+// falling back to free coordination — a sub-coordinator silently running a
+// different plan than it was given is worse than a refused spawn.
+func (r *Runtime) workerSpecFor(spec tools.WorkerSpawnSpec) (WorkerSpec, error) {
+	out := WorkerSpec{
+		ModelOverride: spec.ModelOverride,
+		Coordinator:   spec.Coordinator,
+		Workflow:      strings.TrimSpace(spec.Workflow),
 	}
+	if out.Workflow != "" {
+		maxTurns, err := skills.ResolveCoordinatorWorkflow(r.Skills(), out.Workflow)
+		if err != nil {
+			return WorkerSpec{}, err
+		}
+		out.WorkflowMaxTurns = maxTurns
+	}
+	return out, nil
+}
+
+// coordinationBridgeDefs returns the coordination tool defs for the CLI bridge,
+// filtered to what this session is entitled to (mirroring buildRegistry's
+// per-function gating, so the CLI advertises exactly the native tool set).
+func coordinationBridgeDefs(f *tools.CoordinationFuncs) []providers.ToolDef {
+	var defs []providers.ToolDef
+	if f.Spawn != nil {
+		defs = append(defs,
+			tools.NewSpawnWorkerTool().Def(),
+			tools.NewSendToWorkerTool().Def(),
+			tools.NewStopWorkerTool().Def(),
+			tools.NewListWorkersTool().Def(),
+		)
+	}
+	if f.Report != nil {
+		defs = append(defs, tools.NewReportToCoordinatorTool().Def())
+	}
+	if f.SetMode != nil {
+		defs = append(defs, tools.NewSetCoordinatorModeTool().Def())
+	}
+	return defs
 }
 
 // dispatchCoordinationBridge handles a coordinator tool call on the CLI bridge:
@@ -151,6 +225,10 @@ func dispatchCoordinationBridge(ctx context.Context, f *tools.CoordinationFuncs,
 		t = tools.NewStopWorkerTool()
 	case "list_workers":
 		t = tools.NewListWorkersTool()
+	case "report_to_coordinator":
+		t = tools.NewReportToCoordinatorTool()
+	case "set_coordinator_mode":
+		t = tools.NewSetCoordinatorModeTool()
 	default:
 		return "", false, nil
 	}
@@ -193,23 +271,65 @@ func (r *Runtime) isSessionActive(id string) bool {
 	return ok
 }
 
+// IsSessionActive is isSessionActive for callers outside the package (the
+// coordinator-tree endpoint, which marks live nodes in the tree view).
+func (r *Runtime) IsSessionActive(id string) bool { return r.isSessionActive(id) }
+
+// WorkerSpec describes one spawn_worker request beyond the plain target/task
+// pair: whether the new worker is itself a coordinator (the nesting switch) and,
+// if so, which recipe it runs under.
+type WorkerSpec struct {
+	ModelOverride string
+	// Coordinator makes the spawned worker a sub-coordinator: it gets the
+	// coordination tools and may nest another level. Rejected past
+	// CoordinatorMaxDepth rather than silently downgraded to a plain worker — a
+	// caller that asked for delegation must not get a worker that cannot delegate
+	// and never says so.
+	Coordinator bool
+	// Workflow optionally pins a coordinator recipe on the sub-coordinator. Only
+	// meaningful with Coordinator; never inherited from the parent.
+	Workflow string
+	// WorkflowMaxTurns is the recipe-resolved notify-loop cap for the child (0 =
+	// workspace default). Resolved by the caller, which owns the skills store.
+	WorkflowMaxTurns int
+}
+
 // SpawnWorker launches a background worker under a coordinator session. The
 // target must be an EXISTING agent (name or id) — a worker needs a persistent
 // session, so ephemeral run_subagent profiles (explore/coder/reviewer) are not
 // valid worker targets; use run_subagent (the sync M1 method) for those. Returns
 // the worker session id immediately; the turn runs detached and notifies the
-// coordinator on completion. Enforces CoordinatorMaxWorkers per coordinator on
-// top of the global spawn concurrency cap.
-func (r *Runtime) SpawnWorker(ctx context.Context, coordSessionID, agentRef, task, modelOverride, createdBy string) (SpawnResult, error) {
+// coordinator on completion.
+//
+// Three guards stack here, and they are not redundant:
+//   - CoordinatorMaxWorkers bounds the workers of THIS coordinator;
+//   - CoordinatorMaxDepth bounds how far below the root a sub-coordinator may sit;
+//   - CoordinatorMaxSubtreeSessions bounds the whole TREE, which is the only one
+//     that actually stops exponential fan-out (per-node caps multiply with depth).
+//
+// The global SpawnMaxConcurrent cap applies on top, inside SpawnSession.
+func (r *Runtime) SpawnWorker(ctx context.Context, coordSessionID, agentRef, task, createdBy string, spec WorkerSpec) (SpawnResult, error) {
 	coordSessionID = strings.TrimSpace(coordSessionID)
 	if coordSessionID == "" {
 		return SpawnResult{}, fmt.Errorf("spawn_worker requires a coordinator session")
+	}
+	parent, err := r.db.GetSession(ctx, coordSessionID)
+	if err != nil {
+		return SpawnResult{}, fmt.Errorf("coordinator session %s not found: %w", coordSessionID, err)
+	}
+	depth := parent.CoordinatorDepth + 1
+	rootID := parent.RootCoordinator()
+	if rootID == "" {
+		rootID = parent.ID // parent is a plain session being used as a root coordinator
+	}
+	if err := r.checkCoordinatorTreeBudget(ctx, parent, rootID, depth, spec.Coordinator); err != nil {
+		return SpawnResult{}, err
 	}
 	// A profile target (explore/coder/reviewer) is materialized into a persisted,
 	// reusable worker agent so the worker has a real session to run in. An ordinary
 	// target passes through unchanged (existing agent name/id). Resolved BEFORE the
 	// worker-count reservation so a bad target never leaks a slot.
-	agentRef, err := r.resolveWorkerTarget(ctx, coordSessionID, createdBy, agentRef)
+	agentRef, err = r.resolveWorkerTarget(ctx, coordSessionID, createdBy, agentRef)
 	if err != nil {
 		return SpawnResult{}, err
 	}
@@ -220,10 +340,15 @@ func (r *Runtime) SpawnWorker(ctx context.Context, coordSessionID, agentRef, tas
 		return SpawnResult{}, fmt.Errorf("coordinator worker limit reached (%d active); wait for some to finish before spawning more", max)
 	}
 	res, err := r.SpawnSession(ctx, agentRef, task, SpawnOptions{
-		ModelOverride:        modelOverride,
-		CreatedBy:            createdBy,
-		CoordinatorSessionID: coordSessionID,
-		Role:                 "worker",
+		ModelOverride:            spec.ModelOverride,
+		CreatedBy:                createdBy,
+		CoordinatorSessionID:     coordSessionID,
+		Role:                     db.SessionRoleWorker,
+		RootCoordinatorSessionID: rootID,
+		CoordinatorDepth:         depth,
+		CoordinatorMode:          spec.Coordinator,
+		CoordinatorWorkflow:      spec.Workflow,
+		CoordinatorMaxTurns:      spec.WorkflowMaxTurns,
 	})
 	if err != nil {
 		// SpawnSession never launched runWorker, so release the reservation here.
@@ -232,6 +357,41 @@ func (r *Runtime) SpawnWorker(ctx context.Context, coordSessionID, agentRef, tas
 	}
 	slot.markHadWorkers()
 	return res, nil
+}
+
+// checkCoordinatorTreeBudget enforces the TREE-WIDE guards before a worker session
+// is created: nesting depth and the total session count of the whole tree. Both
+// fail loudly — a caller that hits a ceiling gets an error naming the limit, never
+// a quietly downgraded worker, because a coordinator that believes it delegated
+// work it did not delegate stalls waiting for a report that will never come.
+func (r *Runtime) checkCoordinatorTreeBudget(ctx context.Context, parent db.Session, rootID string, depth int, wantCoordinator bool) error {
+	if maxDepth := r.tun.CoordinatorMaxDepth(); maxDepth > 0 && depth > maxDepth {
+		return fmt.Errorf("coordinator depth limit reached (max %d levels; this worker would sit at depth %d). Do this work in the current session, or ask your own coordinator to restructure the plan", maxDepth, depth)
+	}
+	// Spawning a NON-coordinator leaf at the last allowed level is fine; only the
+	// sub-coordinator itself needs room for a level below it.
+	if wantCoordinator {
+		if maxDepth := r.tun.CoordinatorMaxDepth(); maxDepth > 0 && depth >= maxDepth {
+			return fmt.Errorf("cannot spawn a sub-coordinator at depth %d: its own workers would exceed the coordinator depth limit (max %d). Spawn a plain worker here instead", depth, maxDepth)
+		}
+	}
+	maxSubtree := r.tun.CoordinatorMaxSubtreeSessions()
+	if maxSubtree <= 0 {
+		return nil
+	}
+	tree, err := r.db.ListCoordinatorTree(ctx, rootID)
+	if err != nil {
+		// The root is gone (deleted mid-run). Fall back to the parent's own subtree
+		// so the budget still bites rather than silently disappearing.
+		if tree, err = r.db.ListCoordinatorTree(ctx, parent.ID); err != nil {
+			return fmt.Errorf("cannot verify coordinator tree budget: %w", err)
+		}
+	}
+	// The root itself is not a worker; everything below it is.
+	if workers := len(tree) - 1; workers >= maxSubtree {
+		return fmt.Errorf("coordinator tree budget exhausted (%d/%d worker sessions across the whole tree); stop or conclude existing workers before spawning more", workers, maxSubtree)
+	}
+	return nil
 }
 
 // resolveWorkerTarget maps a spawn_worker target to a runnable persistent agent
@@ -313,7 +473,9 @@ func (r *Runtime) SendToWorker(ctx context.Context, coordSessionID, workerSessio
 	if err != nil {
 		return fmt.Errorf("worker agent gone: %w", err)
 	}
-	if !r.acquireSpawnSlot() {
+	// Same depth-aware reservation as a fresh spawn: continuing a deep worker is
+	// just as capable of draining the pool as starting one.
+	if !r.acquireSpawnSlotAtDepth(ws.CoordinatorDepth) {
 		return fmt.Errorf("background turn limit reached; try again once some finish")
 	}
 	if _, err := r.db.AddMessage(ctx, db.Message{
@@ -334,10 +496,40 @@ func (r *Runtime) SendToWorker(ctx context.Context, coordSessionID, workerSessio
 // StopWorker cancels an in-flight worker turn. The worker's current turn ends and
 // reports "killed" to the coordinator; the worker session survives and can be
 // continued later with send_to_worker.
-func (r *Runtime) StopWorker(workerSessionID string) error {
+//
+// When the target is a SUB-COORDINATOR its whole subtree is cancelled too. Left
+// running, its grandchildren would keep spending budget and then notify a node
+// whose task the coordinator has already written off — waking zombie turns under
+// a branch nobody is waiting on.
+//
+// Stopping a sub-coordinator that is idle between its own turns is legitimate
+// (that is exactly when it is waiting on its workers), so a target with a live
+// subtree is accepted even when it has no turn of its own in flight.
+func (r *Runtime) StopWorker(ctx context.Context, coordSessionID, workerSessionID string) error {
 	workerSessionID = strings.TrimSpace(workerSessionID)
+	if workerSessionID == "" {
+		return fmt.Errorf("stop_worker requires a worker session id")
+	}
+	ws, err := r.db.GetSession(ctx, workerSessionID)
+	if err != nil {
+		return fmt.Errorf("worker session %s not found: %w", workerSessionID, err)
+	}
+	if coordSessionID != "" && ws.CoordinatorSessionID != coordSessionID {
+		return fmt.Errorf("session %s is not a worker of this coordinator", workerSessionID)
+	}
+	subtreeRunning := 0
+	if ws.IsCoordinator() {
+		subtreeRunning = r.activeSubtreeWorkers(ctx, workerSessionID)
+		r.stopSubtree(ctx, workerSessionID, "stop_worker on their sub-coordinator")
+	}
 	v, ok := r.workerCancels.Load(workerSessionID)
 	if !ok {
+		if subtreeRunning > 0 {
+			// The sub-coordinator itself was between turns; its branch is what was
+			// actually running and we just cancelled it. Report that truthfully
+			// instead of the misleading "already finished?".
+			return nil
+		}
 		return fmt.Errorf("worker %s is not running (already finished?)", workerSessionID)
 	}
 	ctl := v.(*workerCtl)
@@ -359,6 +551,11 @@ type WorkerInfo struct {
 	// directly on the worker session rather than through the coordinator) — the
 	// start time is then genuinely unknown and the UI omits the duration.
 	StartedAt int64
+	// Delegating marks a SUB-COORDINATOR that is running only in the sense that its
+	// own workers are: it has no turn of its own in flight, it is waiting on its
+	// branch. The UI shows this differently ("delegating") because "running" would
+	// suggest a live turn whose elapsed time is meaningful.
+	Delegating bool
 }
 
 // ListWorkers returns the workers spawned under a coordinator session, newest
@@ -374,29 +571,43 @@ func (r *Runtime) ListWorkers(ctx context.Context, coordSessionID string) ([]Wor
 		if s.CoordinatorSessionID != coordSessionID {
 			continue
 		}
-		info := WorkerInfo{
-			SessionID: s.ID,
-			AgentName: r.agentName(s.AgentID),
-			Title:     s.Title,
-			Running:   r.isSessionActive(s.ID),
-		}
-		if info.Running {
-			if v, ok := r.workerCancels.Load(s.ID); ok {
-				info.StartedAt = v.(*workerCtl).startedAt.Unix()
-			}
-		} else {
-			if msgs, err := r.db.ListMessages(ctx, s.ID); err == nil {
-				for i := len(msgs) - 1; i >= 0; i-- {
-					if msgs[i].Role == "assistant" {
-						info.Summary = notifyLine(msgs[i].Text, 120)
-						break
-					}
-				}
-			}
-		}
-		out = append(out, info)
+		out = append(out, r.workerInfoFor(ctx, s))
 	}
 	return out, nil
+}
+
+// workerInfoFor snapshots one worker session for a coordinator-facing listing.
+// Shared by ListWorkers (direct children) and ListSubtreeWorkers (every
+// descendant) so both report liveness and summaries identically.
+//
+// A sub-coordinator counts as RUNNING while any of its own workers is running,
+// even when it has no turn of its own in flight: between its turns it is waiting
+// on its branch, and reporting it as finished there is exactly how a parent
+// concludes on top of work that is still in progress.
+func (r *Runtime) workerInfoFor(ctx context.Context, s db.Session) WorkerInfo {
+	info := WorkerInfo{
+		SessionID: s.ID,
+		AgentName: r.agentName(s.AgentID),
+		Title:     s.Title,
+		Running:   r.isSessionActive(s.ID),
+	}
+	if !info.Running && s.IsCoordinator() && r.coordSlotFor(s.ID).workers.Load() > 0 {
+		info.Running = true
+		info.Delegating = true
+	}
+	if info.Running {
+		if v, ok := r.workerCancels.Load(s.ID); ok {
+			info.StartedAt = v.(*workerCtl).startedAt.Unix()
+		}
+	} else if msgs, err := r.db.ListMessages(ctx, s.ID); err == nil {
+		for i := len(msgs) - 1; i >= 0; i-- {
+			if msgs[i].Role == "assistant" {
+				info.Summary = notifyLine(msgs[i].Text, 120)
+				break
+			}
+		}
+	}
+	return info
 }
 
 // runWorker executes a worker's background turn (initial spawn or a send_to_worker
@@ -498,6 +709,17 @@ func (r *Runtime) runWorker(agent db.Agent, workerSessionID, prompt, coordSessio
 	}
 	r.emitWorkerEvent(agent, workerSessionID, coordSessionID, status)
 
+	// A SUB-COORDINATOR that just fanned its work out is not finished, whatever its
+	// turn returned: reporting this turn as "completed" would tell its coordinator
+	// the subtask is done while the branch below has barely started. Withhold the
+	// completion notification, send an interim "delegating" note instead, and let
+	// the node close its own task later (report_to_coordinator / settle backstop).
+	// See coordination_tree.go for the full contract.
+	if ws, err := r.db.GetSession(ctx, workerSessionID); err == nil && r.deferWorkerReport(ctx, ws, status) {
+		r.notifyDelegating(coordSessionID, workerSessionID, agent.Name, int(r.coordSlotFor(workerSessionID).workers.Load()))
+		return
+	}
+
 	// The report the coordinator actually reads: the successful output verbatim, or
 	// the failure/kill note (so the coordinator can react to failures too).
 	note := formatTaskNotification(workerSessionID, agent.Name, status, replyText, countToolSteps(steps), time.Since(turnStart).Milliseconds())
@@ -526,16 +748,25 @@ func (r *Runtime) RecoverOrphanedTurns(ctx context.Context) {
 	if err != nil {
 		return
 	}
+	// Shallowest first, so a coordinator TREE is reclaimed from the root down. The
+	// order is load-bearing: a mid-level node is both a worker and a coordinator, so
+	// when we reach a child its parent has already been reclaimed and recorded in
+	// `reclaimed` below — and we can skip notifying a node that is itself dead
+	// instead of waking a zombie turn on it.
+	sort.SliceStable(sessions, func(i, j int) bool {
+		return sessions[i].CoordinatorDepth < sessions[j].CoordinatorDepth
+	})
+	reclaimed := map[string]bool{}
 	for _, sess := range sessions {
 		if sess.State == "archived" {
 			continue // do not resurrect work the user has archived
 		}
-		isWorker := sess.CoordinatorSessionID != "" || sess.Role == "worker"
+		isWorker := sess.IsWorker()
 		// A flow's coordinator node owns its coordinator session (kind
 		// "flow-coordinator"). Re-enqueueing a turn on it would race the flow
 		// runner, which resumes the owning run and re-executes the node against a
 		// FRESH coordinator session — so the orphan is left alone here.
-		isCoordinator := sess.Role == "coordinator" && sess.Kind != SessionKindFlowCoordinator
+		isCoordinator := sess.IsCoordinator() && sess.Kind != SessionKindFlowCoordinator
 		isSpawn := sess.Kind == "spawned" || sess.Kind == "worker"
 		if !isWorker && !isCoordinator && !isSpawn {
 			continue // ordinary interactive/inbox session — not an autonomous turn
@@ -554,11 +785,20 @@ func (r *Runtime) RecoverOrphanedTurns(ctx context.Context) {
 		switch {
 		case isWorker:
 			r.recordInterruptedReply(ctx, sess, "⏹️ Worker turu süreç yeniden başlarken yarıda kaldı (kurtarıldı).")
+			reclaimed[sess.ID] = true
 			// Tell the coordinator so it stops waiting and can re-dispatch or conclude.
-			// Skipped when the coordinator belongs to a flow's coordinator node: that
-			// session is abandoned on restart (the node re-runs with a fresh one), so a
-			// notification would only wake a zombie turn nobody is waiting on.
-			if !r.isFlowCoordinatorSession(ctx, sess.CoordinatorSessionID) {
+			// Skipped in two cases, both because the target cannot act on it:
+			//   - the coordinator belongs to a flow's coordinator node, which is
+			//     abandoned on restart (the node re-runs with a fresh session);
+			//   - the coordinator is a mid-level node THIS sweep already reclaimed and
+			//     reported dead upward — notifying it would wake a zombie turn on a
+			//     branch its own coordinator has already written off.
+			switch {
+			case reclaimed[sess.CoordinatorSessionID]:
+				r.logger.Info("recover: skipping notify, coordinator was reclaimed too",
+					"session", sess.ID, "coordinator", sess.CoordinatorSessionID)
+			case r.isFlowCoordinatorSession(ctx, sess.CoordinatorSessionID):
+			default:
 				note := formatTaskNotification(sess.ID, r.agentName(sess.AgentID), "killed",
 					"Worker turu süreç yeniden başlatılırken (crash/restart) yarıda kaldı; sonuç üretilemedi. Gerekirse yeniden görevlendir.", 0, 0)
 				r.NotifyCoordinator(sess.CoordinatorSessionID, note)
@@ -751,8 +991,42 @@ func (r *Runtime) drainCoordinator(coordSessionID string, slot *coordSlot) {
 		slot.running = false
 		slot.signalFree()
 		slot.mu.Unlock()
+		// This coordinator may itself be a worker that owes its own coordinator a
+		// result (a mid-level node). It has now had its reconcile turn with every
+		// worker finished; if it still has not called report_to_coordinator, the
+		// branch above it would wait forever. The backstop reports for it — see
+		// settleReportBackstop for why it never claims "completed".
+		r.scheduleSettleBackstop(coordSessionID)
 		return
 	}
+}
+
+// scheduleSettleBackstop arms the upward-report backstop for a mid-level node
+// whose drain loop just went idle. Delayed rather than immediate: a notification
+// racing the drain exit re-enters the loop and the node still gets its chance to
+// report itself, which is always preferable to the runtime guessing on its behalf.
+// A no-op for a node that owes nothing (the overwhelmingly common case: a root
+// coordinator).
+func (r *Runtime) scheduleSettleBackstop(coordSessionID string) {
+	probe, cancelProbe := context.WithTimeout(context.Background(), 10*time.Second)
+	owes := r.owesReportNow(probe, coordSessionID)
+	cancelProbe()
+	if !owes {
+		return
+	}
+	go func() {
+		time.Sleep(r.tun.CoordinatorSettleGrace())
+		slot := r.coordSlotFor(coordSessionID)
+		slot.mu.Lock()
+		busy := slot.running || slot.pending
+		slot.mu.Unlock()
+		if busy {
+			return // it woke up again; let it report for itself
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		r.settleReportBackstop(ctx, coordSessionID)
+	}()
 }
 
 // appendCoordinationStatus persists a one-shot <coordination-status> note into the
@@ -792,10 +1066,17 @@ func (r *Runtime) coordinatorWorkerStatusBlock(ctx context.Context, coordSession
 	b.WriteString("Regenerated every turn from real session state; trust THIS over the notifications in history.\n")
 	for _, w := range ws {
 		status := "finished"
-		if w.Running {
+		switch {
+		case w.Delegating:
+			// Not a live turn of its own: it is waiting on the workers it spawned.
+			// Spelling that out stops the coordinator reading "RUNNING" as "about to
+			// answer" and, worse, reading "finished" as "its result is in".
+			status = "DELEGATING (its own workers are running; it has not reported yet)"
+			running++
+		case w.Running:
 			status = "RUNNING"
 			running++
-		} else {
+		default:
 			finished++
 		}
 		fmt.Fprintf(&b, "- %s [%s] (%s)", w.AgentName, status, w.SessionID)

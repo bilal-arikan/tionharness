@@ -1,4 +1,4 @@
-﻿package agent
+package agent
 
 import (
 	"context"
@@ -195,17 +195,31 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 	// concurrency guards on every call.
 	builtins = append(builtins, tools.NewRunSubagentTool())
 
-	// Coordinator/worker tools (M2, _Docs/47): registered ONLY on a coordinator
-	// session's turn (withCoordination injected the runner into ctx). This keeps
-	// them off ordinary and worker sessions — and a worker therefore cannot spawn
-	// its own workers (recursion guard).
-	if tools.CoordinationFrom(ctx) != nil {
-		builtins = append(builtins,
-			tools.NewSpawnWorkerTool(),
-			tools.NewSendToWorkerTool(),
-			tools.NewStopWorkerTool(),
-			tools.NewListWorkersTool(),
-		)
+	// Coordinator/worker tools (M2, _Docs/47). withCoordination installs the runner
+	// on every session's turn, but populates only the capabilities that session
+	// actually has, and each tool is registered from the presence of ITS function —
+	// so the three surfaces stay independent:
+	//   - the worker-driving tools: coordinator mode is on (root OR a mid-level node
+	//     of a deep tree; the old "workers never get these" rule is what capped the
+	//     tree at one level, and the depth/subtree budgets replaced it);
+	//   - report_to_coordinator: this session has a coordinator ABOVE it;
+	//   - set_coordinator_mode: always, otherwise a plain session could never turn
+	//     the capability on for itself.
+	if cf := tools.CoordinationFrom(ctx); cf != nil {
+		if cf.Spawn != nil {
+			builtins = append(builtins,
+				tools.NewSpawnWorkerTool(),
+				tools.NewSendToWorkerTool(),
+				tools.NewStopWorkerTool(),
+				tools.NewListWorkersTool(),
+			)
+		}
+		if cf.Report != nil {
+			builtins = append(builtins, tools.NewReportToCoordinatorTool())
+		}
+		if cf.SetMode != nil {
+			builtins = append(builtins, tools.NewSetCoordinatorModeTool())
+		}
 	}
 
 	// Cross-session awareness: the list_sessions pull tool (complements the pushed

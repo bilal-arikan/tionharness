@@ -122,6 +122,12 @@ var specs = []Spec{
 		Hint:           "run_subagent 'config' profilinin (config/ editörü) sistem promptu. Not: 'worker:<profil>' ajanları oluşturulurken o anki metni kopyalar.",
 		EpochAffecting: true,
 	},
+	{
+		Key:            "terse",
+		Label:          "Terse (caveman) yanıt stili",
+		Hint:           "Workspace ▸ Genel ▸ 'Terse mod' anahtarı AÇIKKEN her ajanın statik system prefix'ine eklenen yanıt-stili talimatı. Kapalıyken hiç gönderilmez. Statik prefix'te olduğu için prompt-cache penceresi başına bir kez ödenir; düzenlemesi YENİ oturum/epoch'ta etkili olur.",
+		EpochAffecting: true,
+	},
 }
 
 // defaults maps key → embedded default text, loaded once at init. A missing

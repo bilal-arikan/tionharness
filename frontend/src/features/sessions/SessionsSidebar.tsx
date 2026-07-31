@@ -1,5 +1,24 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Settings, Pencil, Sparkles, ClipboardCopy, FolderOpen, Trash2, Search, X, MessageSquareText, Plus, RefreshCw, Archive, ArchiveRestore, Pin, PinOff, Table2, Users, type LucideIcon } from 'lucide-react'
+import {
+  Settings,
+  Pencil,
+  Sparkles,
+  ClipboardCopy,
+  FolderOpen,
+  Trash2,
+  Search,
+  X,
+  MessageSquareText,
+  Plus,
+  RefreshCw,
+  Archive,
+  ArchiveRestore,
+  Pin,
+  PinOff,
+  Table2,
+  Users,
+  type LucideIcon,
+} from 'lucide-react'
 import type { Agent, Session, SearchHit } from '@/types'
 import { api } from '@/api'
 import { AgentAvatar } from '@/shared/components/agents/AgentAvatar'
@@ -8,12 +27,15 @@ import { useOutsideClick } from '@/shared/hooks/useOutsideClick'
 import { useMultiSelect } from '@/shared/hooks/useMultiSelect'
 import { SelectionBar, SelectionBarButton, Skeleton } from '@/shared/components'
 import { useDelayedFlag } from '@/shared/hooks/useDelayedFlag'
-import { FILTERS, kindMeta, matchesKindFilter, StatusPill } from './sessionKindMeta'
+import {
+  FILTERS,
+  kindMeta,
+  matchesKindFilter,
+  StatusPill,
+  type SessionListTab,
+} from './sessionKindMeta'
 import type { ExecutionRuntime } from '@/app/useExecutionRuntime'
-
-// Persisted kind filter — the sidebar now lists every session kind, so the tab
-// choice is worth remembering across reloads (same rationale as the width).
-const KIND_FILTER_KEY = 'tionswarm.sessionKindFilter'
+import { isWorkerSession } from '@/shared/lib/coordination'
 
 interface Props {
   sessions: Session[]
@@ -30,6 +52,12 @@ interface Props {
   // replaced by skeletons so the column never claims "no sessions" prematurely.
   loading?: boolean
   newDisabled: boolean
+  // Tab state is owned by the app so it can live in the URL (deep-linkable /
+  // back-forward aware): ?list=active|archived|workers and ?kind=<filter key>.
+  view: SessionListTab
+  onViewChange: (v: SessionListTab) => void
+  kindFilter: string
+  onKindFilterChange: (k: string) => void
   // Open the bulk sessions table (searchable/sortable grid of every session).
   onOpenOverview: () => void
   // messageId is set when the user clicks a message-content search result, so the
@@ -61,6 +89,10 @@ export function SessionsSidebar({
   runtimeById,
   loading = false,
   newDisabled,
+  view,
+  onViewChange,
+  kindFilter,
+  onKindFilterChange,
   onOpenOverview,
   onSelectSession,
   onNewSession,
@@ -78,14 +110,9 @@ export function SessionsSidebar({
   // worker sessions). Archiving moves a session into the Archived view — it is
   // never deleted. Worker sessions live in their own view so they don't clutter
   // the active list. Derived booleans keep the downstream filter logic terse.
-  const [view, setView] = useState<'active' | 'archived' | 'workers'>('active')
+  // `view` + `kindFilter` are props (URL-owned), see Props.
   const showArchived = view === 'archived'
   const showWorkers = view === 'workers'
-  // Kind filter ('' = all). Persisted like the archive filter's sibling controls.
-  const [kindFilter, setKindFilter] = useState(() => localStorage.getItem(KIND_FILTER_KEY) ?? '')
-  useEffect(() => {
-    localStorage.setItem(KIND_FILTER_KEY, kindFilter)
-  }, [kindFilter])
   const [renamingId, setRenamingId] = useState<string | null>(null)
   const [renameText, setRenameText] = useState('')
   const [query, setQuery] = useState('')
@@ -108,7 +135,9 @@ export function SessionsSidebar({
   useEffect(() => {
     const onMove = (e: MouseEvent) => {
       if (!drag.current) return
-      setWidth(Math.min(MAX, Math.max(MIN, drag.current.startW + (e.clientX - drag.current.startX))))
+      setWidth(
+        Math.min(MAX, Math.max(MIN, drag.current.startW + (e.clientX - drag.current.startX))),
+      )
     }
     const onUp = () => {
       if (!drag.current) return
@@ -131,12 +160,17 @@ export function SessionsSidebar({
     document.body.style.cursor = 'col-resize'
   }
 
-
   // How many sessions are archived (drives the Archived filter's count badge).
-  const archivedCount = useMemo(() => sessions.filter((s) => s.state === 'archived').length, [sessions])
+  const archivedCount = useMemo(
+    () => sessions.filter((s) => s.state === 'archived').length,
+    [sessions],
+  )
   // How many (non-archived) worker sessions exist — the Workers tab's count badge.
+  // Uses the lineage helper, not `role === 'worker'`: a mid-level node of a nested
+  // coordinator tree is a worker too, and counting only leaves would hide whole
+  // branches from the tab.
   const workerCount = useMemo(
-    () => sessions.filter((s) => s.role === 'worker' && s.state !== 'archived').length,
+    () => sessions.filter((s) => isWorkerSession(s) && s.state !== 'archived').length,
     [sessions],
   )
 
@@ -149,7 +183,7 @@ export function SessionsSidebar({
     const map = new Map<Bucket, Session[]>()
     for (const s of sessions) {
       const isArchived = s.state === 'archived'
-      const isWorker = s.role === 'worker'
+      const isWorker = isWorkerSession(s)
       if (showWorkers) {
         if (!isWorker || isArchived) continue
       } else if (showArchived) {
@@ -295,7 +329,10 @@ export function SessionsSidebar({
 
       {/* Title search */}
       <div className="relative px-3 pb-2 pt-1">
-        <Search size={13} className="pointer-events-none absolute left-5 top-1/2 -translate-y-1/2 text-[var(--color-text-dim)]" />
+        <Search
+          size={13}
+          className="pointer-events-none absolute left-5 top-1/2 -translate-y-1/2 text-[var(--color-text-dim)]"
+        />
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
@@ -318,7 +355,7 @@ export function SessionsSidebar({
           cluttering the default list. */}
       <div className="flex gap-1 px-3 pb-2">
         <button
-          onClick={() => setView('active')}
+          onClick={() => onViewChange('active')}
           className={`flex-1 rounded-md px-2 py-1 text-xs font-medium transition ${
             view === 'active'
               ? 'bg-[var(--color-surface-2)] text-[var(--color-text)]'
@@ -328,7 +365,7 @@ export function SessionsSidebar({
           Aktif
         </button>
         <button
-          onClick={() => setView('archived')}
+          onClick={() => onViewChange('archived')}
           className={`flex flex-1 items-center justify-center gap-1 rounded-md px-2 py-1 text-xs font-medium transition ${
             view === 'archived'
               ? 'bg-[var(--color-surface-2)] text-[var(--color-text)]'
@@ -338,7 +375,7 @@ export function SessionsSidebar({
           <Archive size={12} /> Arşiv{archivedCount > 0 ? ` (${archivedCount})` : ''}
         </button>
         <button
-          onClick={() => setView('workers')}
+          onClick={() => onViewChange('workers')}
           title="Koordinatör tarafından başlatılan worker oturumları"
           className={`flex flex-1 items-center justify-center gap-1 rounded-md px-2 py-1 text-xs font-medium transition ${
             view === 'workers'
@@ -356,7 +393,7 @@ export function SessionsSidebar({
         {FILTERS.map((f) => (
           <button
             key={f.key}
-            onClick={() => setKindFilter(f.key)}
+            onClick={() => onKindFilterChange(f.key)}
             className={`rounded-full px-2.5 py-1 text-[11px] transition ${
               kindFilter === f.key
                 ? 'bg-[var(--color-accent-soft)] font-medium text-[var(--color-accent)]'
@@ -375,193 +412,220 @@ export function SessionsSidebar({
               Array.from({ length: 5 }, (_, i) => <Skeleton key={i} className="h-10 w-full" />)}
           </div>
         )}
-        {!loading && groups.map(({ bucket, items }) => (
-          <div key={bucket} className="mb-1">
-            <div className="px-3 pt-3 pb-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-dim)] opacity-70">
-              {BUCKET_LABELS[bucket]}
-            </div>
-            {items.map((s) => {
-              const owner = agents.find((a) => a.id === s.agentId)
-              const isActive = activeSessionId === s.id
-              const runtime = runtimeById?.get(s.id)
-              // Live either because THIS window is streaming the turn (instant, no
-              // poll lag) or because the executions poll reports it running (covers
-              // autonomous task/flow/schedule turns this window never streamed).
-              const isStreaming = (streamingSessionIds?.has(s.id) ?? false) || (runtime?.running ?? false)
-              const meta = kindMeta(s.kind)
-              const KindIcon = meta.icon
-              const isSelected = sel.isSelected(s.id)
-              return (
-                <div
-                  key={s.id}
-                  className={`group relative mb-0.5 flex w-full items-center rounded-lg pr-1 text-sm transition ${
-                    isSelected
-                      ? 'bg-[var(--color-accent-soft)] text-[var(--color-text)] ring-1 ring-[var(--color-accent)]'
-                      : isActive
-                        ? 'bg-[var(--color-surface-2)] text-[var(--color-text)]'
-                        : 'text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)]'
-                  }`}
-                >
-                  {renamingId === s.id ? (
-                    <input
-                      autoFocus
-                      value={renameText}
-                      onChange={(e) => setRenameText(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') commitRename(s.id)
-                        if (e.key === 'Escape') setRenamingId(null)
-                      }}
-                      onBlur={() => commitRename(s.id)}
-                      className="m-1 flex-1 rounded border border-[var(--color-accent)] bg-[var(--color-bg)] px-2 py-1 text-sm outline-none"
-                    />
-                  ) : (
-                    <button
-                      onClick={(e) => {
-                        // Ctrl/Cmd or Shift turns the click into a selection
-                        // gesture; a plain click opens the session as before.
-                        if (sel.handleClick(e, s.id, orderedIds, activeSessionId)) return
-                        onSelectSession(s.id)
-                      }}
-                      className="flex min-w-0 flex-1 items-center gap-2 px-3 py-2 text-left"
-                    >
-                      {owner ? (
-                        <AgentAvatar agent={owner} size={20} />
-                      ) : (
-                        <span className="h-5 w-5 shrink-0" />
-                      )}
-                      <span className="flex min-w-0 flex-1 flex-col">
-                        <span className="flex items-center gap-1.5">
-                          {isStreaming ? (
-                            // Live turn in progress: a pulsing dot takes precedence
-                            // over the unread dot.
-                            <span className="relative flex h-2 w-2 shrink-0" title="Yanıt üretiliyor">
-                              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[var(--color-success)] opacity-75" />
-                              <span className="relative inline-flex h-2 w-2 rounded-full bg-[var(--color-success)]" />
-                            </span>
-                          ) : (
-                            s.unread && (
-                              <span className="h-2 w-2 shrink-0 rounded-full bg-[var(--color-accent)]" title="Okunmadı" />
-                            )
-                          )}
-                          {s.pinned && (
-                            <Pin size={11} className="shrink-0 -rotate-45 text-[var(--color-accent)]" />
-                          )}
-                          <span className={`min-w-0 flex-1 truncate ${s.unread || isStreaming ? 'font-semibold text-[var(--color-text)]' : ''}`}>
-                            {s.title || 'Yeni sohbet'}
-                          </span>
-                          {s.kind === 'spawned' && (
-                            <span
-                              className="shrink-0 rounded-full bg-[var(--color-surface-2)] px-1.5 py-px text-[9px] text-[var(--color-text-dim)]"
-                              title={s.parentSessionId ? 'Bir devralma (handoff) ile oluşturuldu' : 'Spawn ile oluşturuldu'}
-                            >
-                              {s.parentSessionId ? '↩ handoff' : '✦ spawn'}
-                            </span>
-                          )}
-                          {/* Finished task/flow runs carry a pass/fail pill. */}
-                          {!isStreaming && runtime?.lastStatus && (
-                            <StatusPill status={runtime.lastStatus} />
-                          )}
-                        </span>
-                        {/* Meta row: kind badge + status/time on the left, the
-                            session ID on a row of its own below the title. */}
-                        <span className="flex items-center gap-1.5 text-[10px]">
-                          <KindIcon size={11} className="shrink-0 opacity-60" />
-                          <span className="shrink-0 opacity-60">{meta.label}</span>
-                          {isStreaming ? (
-                            <span className="truncate font-medium text-[var(--color-success)]">yazıyor…</span>
-                          ) : (
-                            <span className="truncate opacity-60">
-                              · {relativeTime(s.updatedAt)} · {s.messageCount} mesaj
-                            </span>
-                          )}
-                          <span className="ml-auto shrink-0 font-mono opacity-50" title="Oturum ID">
-                            {s.id}
-                          </span>
-                        </span>
-                      </span>
-                    </button>
-                  )}
-
-                  <button
-                    onClick={() => setMenuId((v) => (v === s.id ? null : s.id))}
-                    title="Oturum ayarları"
-                    className="ml-1 shrink-0 rounded p-1 text-[var(--color-text-dim)] opacity-0 transition hover:text-[var(--color-accent)] group-hover:opacity-100"
+        {!loading &&
+          groups.map(({ bucket, items }) => (
+            <div key={bucket} className="mb-1">
+              <div className="px-3 pt-3 pb-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-dim)] opacity-70">
+                {BUCKET_LABELS[bucket]}
+              </div>
+              {items.map((s) => {
+                const owner = agents.find((a) => a.id === s.agentId)
+                const isActive = activeSessionId === s.id
+                const runtime = runtimeById?.get(s.id)
+                // Live either because THIS window is streaming the turn (instant, no
+                // poll lag) or because the executions poll reports it running (covers
+                // autonomous task/flow/schedule turns this window never streamed).
+                const isStreaming =
+                  (streamingSessionIds?.has(s.id) ?? false) || (runtime?.running ?? false)
+                const meta = kindMeta(s.kind)
+                const KindIcon = meta.icon
+                const isSelected = sel.isSelected(s.id)
+                return (
+                  <div
+                    key={s.id}
+                    className={`group relative mb-0.5 flex w-full items-center rounded-lg pr-1 text-sm transition ${
+                      isSelected
+                        ? 'bg-[var(--color-accent-soft)] text-[var(--color-text)] ring-1 ring-[var(--color-accent)]'
+                        : isActive
+                          ? 'bg-[var(--color-surface-2)] text-[var(--color-text)]'
+                          : 'text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)]'
+                    }`}
                   >
-                    <Settings size={16} />
-                  </button>
+                    {renamingId === s.id ? (
+                      <input
+                        autoFocus
+                        value={renameText}
+                        onChange={(e) => setRenameText(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') commitRename(s.id)
+                          if (e.key === 'Escape') setRenamingId(null)
+                        }}
+                        onBlur={() => commitRename(s.id)}
+                        className="m-1 flex-1 rounded border border-[var(--color-accent)] bg-[var(--color-bg)] px-2 py-1 text-sm outline-none"
+                      />
+                    ) : (
+                      <button
+                        onClick={(e) => {
+                          // Ctrl/Cmd or Shift turns the click into a selection
+                          // gesture; a plain click opens the session as before.
+                          if (sel.handleClick(e, s.id, orderedIds, activeSessionId)) return
+                          onSelectSession(s.id)
+                        }}
+                        className="flex min-w-0 flex-1 items-center gap-2 px-3 py-2 text-left"
+                      >
+                        {owner ? (
+                          <AgentAvatar agent={owner} size={20} />
+                        ) : (
+                          <span className="h-5 w-5 shrink-0" />
+                        )}
+                        <span className="flex min-w-0 flex-1 flex-col">
+                          <span className="flex items-center gap-1.5">
+                            {isStreaming ? (
+                              // Live turn in progress: a pulsing dot takes precedence
+                              // over the unread dot.
+                              <span
+                                className="relative flex h-2 w-2 shrink-0"
+                                title="Yanıt üretiliyor"
+                              >
+                                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[var(--color-success)] opacity-75" />
+                                <span className="relative inline-flex h-2 w-2 rounded-full bg-[var(--color-success)]" />
+                              </span>
+                            ) : (
+                              s.unread && (
+                                <span
+                                  className="h-2 w-2 shrink-0 rounded-full bg-[var(--color-accent)]"
+                                  title="Okunmadı"
+                                />
+                              )
+                            )}
+                            {s.pinned && (
+                              <Pin
+                                size={11}
+                                className="shrink-0 -rotate-45 text-[var(--color-accent)]"
+                              />
+                            )}
+                            <span
+                              className={`min-w-0 flex-1 truncate ${s.unread || isStreaming ? 'font-semibold text-[var(--color-text)]' : ''}`}
+                            >
+                              {s.title || 'Yeni sohbet'}
+                            </span>
+                            {s.kind === 'spawned' && (
+                              <span
+                                className="shrink-0 rounded-full bg-[var(--color-surface-2)] px-1.5 py-px text-[9px] text-[var(--color-text-dim)]"
+                                title={
+                                  s.parentSessionId
+                                    ? 'Bir devralma (handoff) ile oluşturuldu'
+                                    : 'Spawn ile oluşturuldu'
+                                }
+                              >
+                                {s.parentSessionId ? '↩ handoff' : '✦ spawn'}
+                              </span>
+                            )}
+                            {/* Finished task/flow runs carry a pass/fail pill. */}
+                            {!isStreaming && runtime?.lastStatus && (
+                              <StatusPill status={runtime.lastStatus} />
+                            )}
+                          </span>
+                          {/* Meta row: kind badge + status/time on the left, the
+                            session ID on a row of its own below the title. */}
+                          <span className="flex items-center gap-1.5 text-[10px]">
+                            <KindIcon size={11} className="shrink-0 opacity-60" />
+                            <span className="shrink-0 opacity-60">{meta.label}</span>
+                            {isStreaming ? (
+                              <span className="truncate font-medium text-[var(--color-success)]">
+                                yazıyor…
+                              </span>
+                            ) : (
+                              <span className="truncate opacity-60">
+                                · {relativeTime(s.updatedAt)} · {s.messageCount} mesaj
+                              </span>
+                            )}
+                            <span
+                              className="ml-auto shrink-0 font-mono opacity-50"
+                              title="Oturum ID"
+                            >
+                              {s.id}
+                            </span>
+                          </span>
+                        </span>
+                      </button>
+                    )}
 
-                  {menuId === s.id && (
-                    <div className="absolute right-1 top-9 z-20 w-44 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-1 text-sm shadow-xl">
-                      <MenuItem icon={Pencil} label="Başlığı düzenle" onClick={() => startRename(s)} />
-                      <MenuItem
-                        icon={Sparkles}
-                        label="AI ile başlık"
-                        disabled={s.messageCount === 0}
-                        onClick={() => {
-                          onGenerateTitle(s.id)
-                          setMenuId(null)
-                        }}
-                      />
-                      <MenuItem
-                        icon={ClipboardCopy}
-                        label="Yolu kopyala"
-                        onClick={() => {
-                          onCopyPath(s.id)
-                          setMenuId(null)
-                        }}
-                      />
-                      <MenuItem
-                        icon={FolderOpen}
-                        label="Klasörü aç"
-                        onClick={() => {
-                          onRevealFolder(s.id)
-                          setMenuId(null)
-                        }}
-                      />
-                      <MenuItem
-                        icon={s.pinned ? PinOff : Pin}
-                        label={s.pinned ? 'Sabitlemeyi kaldır' : 'Üste sabitle'}
-                        onClick={() => {
-                          onSetPinned(s.id, !s.pinned)
-                          setMenuId(null)
-                        }}
-                      />
-                      {s.state === 'archived' ? (
+                    <button
+                      onClick={() => setMenuId((v) => (v === s.id ? null : s.id))}
+                      title="Oturum ayarları"
+                      className="ml-1 shrink-0 rounded p-1 text-[var(--color-text-dim)] opacity-0 transition hover:text-[var(--color-accent)] group-hover:opacity-100"
+                    >
+                      <Settings size={16} />
+                    </button>
+
+                    {menuId === s.id && (
+                      <div className="absolute right-1 top-9 z-20 w-44 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-1 text-sm shadow-xl">
                         <MenuItem
-                          icon={ArchiveRestore}
-                          label="Arşivden çıkar"
+                          icon={Pencil}
+                          label="Başlığı düzenle"
+                          onClick={() => startRename(s)}
+                        />
+                        <MenuItem
+                          icon={Sparkles}
+                          label="AI ile başlık"
+                          disabled={s.messageCount === 0}
                           onClick={() => {
-                            onSetArchived(s.id, false)
+                            onGenerateTitle(s.id)
                             setMenuId(null)
                           }}
                         />
-                      ) : (
                         <MenuItem
-                          icon={Archive}
-                          label="Arşivle"
+                          icon={ClipboardCopy}
+                          label="Yolu kopyala"
                           onClick={() => {
-                            onSetArchived(s.id, true)
+                            onCopyPath(s.id)
                             setMenuId(null)
                           }}
                         />
-                      )}
-                      <div className="my-1 border-t border-[var(--color-border)]" />
-                      <MenuItem
-                        icon={Trash2}
-                        label="Sil"
-                        danger
-                        onClick={() => {
-                          setMenuId(null)
-                          if (confirm(`"${s.title || 'Bu oturum'}" silinsin mi?`)) onDeleteSession(s.id)
-                        }}
-                      />
-                    </div>
-                  )}
-                </div>
-              )
-            })}
-          </div>
-        ))}
+                        <MenuItem
+                          icon={FolderOpen}
+                          label="Klasörü aç"
+                          onClick={() => {
+                            onRevealFolder(s.id)
+                            setMenuId(null)
+                          }}
+                        />
+                        <MenuItem
+                          icon={s.pinned ? PinOff : Pin}
+                          label={s.pinned ? 'Sabitlemeyi kaldır' : 'Üste sabitle'}
+                          onClick={() => {
+                            onSetPinned(s.id, !s.pinned)
+                            setMenuId(null)
+                          }}
+                        />
+                        {s.state === 'archived' ? (
+                          <MenuItem
+                            icon={ArchiveRestore}
+                            label="Arşivden çıkar"
+                            onClick={() => {
+                              onSetArchived(s.id, false)
+                              setMenuId(null)
+                            }}
+                          />
+                        ) : (
+                          <MenuItem
+                            icon={Archive}
+                            label="Arşivle"
+                            onClick={() => {
+                              onSetArchived(s.id, true)
+                              setMenuId(null)
+                            }}
+                          />
+                        )}
+                        <div className="my-1 border-t border-[var(--color-border)]" />
+                        <MenuItem
+                          icon={Trash2}
+                          label="Sil"
+                          danger
+                          onClick={() => {
+                            setMenuId(null)
+                            if (confirm(`"${s.title || 'Bu oturum'}" silinsin mi?`))
+                              onDeleteSession(s.id)
+                          }}
+                        />
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          ))}
         {!loading && groups.length === 0 && query.trim().length < 2 && (
           <p className="px-3 py-2 text-xs text-[var(--color-text-dim)]">
             {showWorkers
@@ -599,7 +663,9 @@ export function SessionsSidebar({
                   </span>
                   <span className="shrink-0">{relativeTime(h.createdAt)}</span>
                 </span>
-                <span className="line-clamp-2 text-xs text-[var(--color-text-dim)]">{h.snippet}</span>
+                <span className="line-clamp-2 text-xs text-[var(--color-text-dim)]">
+                  {h.snippet}
+                </span>
               </button>
             ))}
           </div>
@@ -619,7 +685,10 @@ export function SessionsSidebar({
           Sabitle
         </SelectionBarButton>
         {showArchived ? (
-          <SelectionBarButton icon={<ArchiveRestore size={13} />} onClick={() => bulkArchive(false)}>
+          <SelectionBarButton
+            icon={<ArchiveRestore size={13} />}
+            onClick={() => bulkArchive(false)}
+          >
             Arşivden çıkar
           </SelectionBarButton>
         ) : (

@@ -198,10 +198,8 @@ export default function App() {
   }, [])
 
   // Theme / keep-awake / desktop-notification preferences.
-  const { applyClientPrefs, onAppearanceSaved, onWorkspaceNotifySaved, notifyEnabled } = useAppearance(
-    activeWorkspaceId,
-    setError,
-  )
+  const { applyClientPrefs, onAppearanceSaved, onWorkspaceNotifySaved, notifyEnabled } =
+    useAppearance(activeWorkspaceId, setError)
 
   // Per-view deep-link targets + cross-view "open X" helpers.
   const links = useDeepLinks(setView)
@@ -320,7 +318,6 @@ export default function App() {
       cancelled = true
     }
   }, [openedSessionId, markPending])
-
 
   // Per-view "work in progress" flags for the nav-rail busy indicators.
   // The instant local chat signal must be workspace-scoped: useChatStream lives
@@ -446,6 +443,8 @@ export default function App() {
     workspaceTab: links.workspaceTab,
     insightTab: links.insightTab,
     flowsTab: links.flowsTab,
+    sessionListTab: links.sessionListTab,
+    sessionKindTab: links.sessionKindTab,
     pendingRouteRef: ctl.pendingRouteRef,
     switchWorkspace,
     selectSession: ctl.selectSession,
@@ -456,6 +455,8 @@ export default function App() {
     setWorkspaceTab: links.setWorkspaceTab,
     setInsightTab: links.setInsightTab,
     setFlowsTab: links.setFlowsTab,
+    setSessionListTab: links.setSessionListTab,
+    setSessionKindTab: links.setSessionKindTab,
   })
 
   // ---- First-run gating (must stay AFTER every hook above) ----
@@ -515,6 +516,10 @@ export default function App() {
               runtimeById={runtimeById}
               loading={ctl.bootstrapping}
               newDisabled={ctl.agents.length === 0}
+              view={links.sessionListTab}
+              onViewChange={links.setSessionListTab}
+              kindFilter={links.sessionKindTab}
+              onKindFilterChange={links.setSessionKindTab}
               onOpenOverview={() => setOverviewOpen(true)}
               onSelectSession={(id, messageId) => {
                 ctl.selectSession(id, messageId)
@@ -593,7 +598,7 @@ export default function App() {
             bootstrapping={ctl.bootstrapping}
             messagesLoading={ctl.messagesLoading}
             readOnly={!ctl.activeSessionWritable}
-            sessionRole={ctl.sessions.find((s) => s.id === ctl.activeSessionId)?.role}
+            sessionCoordination={ctl.sessions.find((s) => s.id === ctl.activeSessionId)}
             onSelectSession={ctl.selectSession}
             defaultAgentId={ctl.defaultAgentId}
             onNewSession={ctl.newSession}
@@ -679,7 +684,11 @@ export default function App() {
               // Refresh the App-level agents list so a freshly installed agent
               // shows on the Agents screen without a manual reload. Flows/skills/
               // providers panels reload on their own mount.
-              if (kind === 'agent') api.listAgents().then(ctl.setAgents).catch(() => {})
+              if (kind === 'agent')
+                api
+                  .listAgents()
+                  .then(ctl.setAgents)
+                  .catch(() => {})
             }}
           />
         )}
@@ -728,10 +737,7 @@ export default function App() {
         <>
           {/* Mobile: dim backdrop behind the right detail drawer. */}
           {isMobile && (
-            <div
-              className="fixed inset-0 z-30 bg-black/50 md:hidden"
-              onClick={toggleDetail}
-            />
+            <div className="fixed inset-0 z-30 bg-black/50 md:hidden" onClick={toggleDetail} />
           )}
           {/* Desktop: a right-hand column. Mobile: a right slide-in drawer. */}
           <div className="shrink-0 md:static max-md:fixed max-md:inset-y-0 max-md:right-0 max-md:z-40 max-md:shadow-xl">

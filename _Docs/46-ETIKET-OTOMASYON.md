@@ -345,6 +345,18 @@ kadar dönebiliyordu. Artık üç katmanlı savunma var:
 Yani doğrulama yeni kayıtları, backstop ise eski/ithal kayıtları kapatır — 1 ve 2
 olmadan 3 yetmez, 3 olmadan 1 ve 2 mevcut veriyi kurtarmaz.
 
+> **Uygulama notu (2026-07-31):** Bu sözleşme 2026-07-29'da **yazıldı ama kodlanmadı**.
+> UI `MAX_ITERATIONS_HARD_CAP`'i kullanıyordu, sabit hiçbir yerde tanımlı değildi →
+> `tsc -b` kırık (frontend build'i iki gün boyunca derlenmiyordu; `tsc --noEmit` ile
+> doğrulandığı için fark edilmemişti). Backend'de ise **hiçbir doğrulama yoktu**: REST de
+> ajan araçları da `0`'ı sorunsuz kabul ediyordu ve diskte **dördü `maxIterations=0`,
+> üçü aktif** otomasyon duruyordu. Üç katman da bu tarihte hayata geçirildi; frontend
+> sabitleri `automationMeta.ts`'te `db` değerlerini aynalar (sunucu otoriter, sapma
+> yalnız formun `max` niteliğini etkiler).
+>
+> **Ders:** sözleşmeyi dokümana yazmak onu yürürlüğe koymaz. Bu bölüm iki gün boyunca
+> var olmayan bir korumayı anlatıyordu.
+
 ## Test
 - `internal/db/automation_test.go` — CRUD, sayaç, aç/kapa-sıfırla, reset, reload
   kalıcılığı; `SetSessionTags` normalizasyonu.

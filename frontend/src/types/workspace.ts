@@ -1,11 +1,59 @@
 // Workspace identity, per-workspace settings and workspace-wide tool config.
 
+import type { TaskPriority } from './task'
+
 // A single kanban column definition: key is stored on tasks, label is shown,
 // color is an optional hex accent for the column header.
 export interface BoardColumnDef {
   key: string
   label: string
   color: string
+}
+
+// Board grouping axis. The board's columns are DERIVED from this: 'status' uses
+// the workspace's BoardColumnDef list (classic kanban), the others build columns
+// from the tasks themselves. Dragging a card writes the field the axis names.
+export type BoardGroupBy = 'status' | 'agent' | 'priority' | 'tag' | 'due'
+
+// Sort order applied within each board column.
+export type BoardSort = 'updated' | 'priority' | 'due' | 'deps' | 'title'
+
+// Due-date filter buckets. 'none' matches tasks with no due date at all.
+export type BoardDueFilter = 'overdue' | 'today' | 'week' | 'none'
+
+// Dependency filter buckets: 'blocked' = at least one dependency not done,
+// 'ready' = has dependencies and all are done.
+export type BoardDepFilter = '' | 'blocked' | 'ready'
+
+// Sentinel used in BoardFilter.agentIds to match tasks with no owner agent.
+// A real agent id can never be '-', so this cannot collide.
+export const UNASSIGNED_AGENT_ID = '-'
+
+// Narrows the board to a subset of tasks. Facets combine with AND; values within
+// one facet combine with OR. An empty slice / '' means the facet is inactive, so
+// the empty object matches every task.
+export interface BoardFilter {
+  text?: string
+  priorities?: TaskPriority[]
+  tags?: string[]
+  agentIds?: string[]
+  columns?: string[]
+  // Multi-select (OR within the facet), so "today OR already late" is expressible.
+  dues?: BoardDueFilter[]
+  // Single-valued: blocked and ready are mutually exclusive states of one task,
+  // so this renders as a radio rather than a checklist.
+  dep?: BoardDepFilter
+}
+
+// A named filter + layout preset stored per workspace. Built-in views live in
+// the client (boardViewTypes.ts) and are never persisted here.
+export interface BoardViewDef {
+  id: string
+  label: string
+  icon?: string
+  filter: BoardFilter
+  groupBy?: BoardGroupBy
+  sort?: BoardSort
 }
 
 export interface Workspace {
@@ -47,6 +95,10 @@ export interface WorkspaceSettings {
   theme: string
   accent: string
   themePreset: string
+  // Appends this workspace's terse ("caveman") reply-style prompt (the editable
+  // registry prompt `terse`) to every agent's static system prefix. A reply-style
+  // rule only holds when it is always in force, so it is a prompt, not a skill.
+  terseMode: boolean
   codebaseMemoryEnabled: boolean
   promptEpochEnabled: boolean
   autoCaptureArtifacts: boolean
@@ -57,6 +109,9 @@ export interface WorkspaceSettings {
   // knob: rtk reshapes the command before it runs, sqz compresses the output after.
   shellCommandRewrite: '' | 'on' | 'off'
   boardColumns: BoardColumnDef[]
+  // User-created saved board views. Always present (possibly empty); the
+  // built-in views are client-side and never round-trip through here.
+  boardViews: BoardViewDef[]
   // Keys of post-create advisory cards the user dismissed for this workspace.
   ignoredRecommendations: string[]
   // This workspace's override of the app-global desktop-notification master toggle.
@@ -81,12 +136,14 @@ export type WorkspaceSettingsPatch = Partial<
     | 'theme'
     | 'accent'
     | 'themePreset'
+    | 'terseMode'
     | 'codebaseMemoryEnabled'
     | 'promptEpochEnabled'
     | 'autoCaptureArtifacts'
     | 'shellOutputCompression'
     | 'shellCommandRewrite'
     | 'boardColumns'
+    | 'boardViews'
     | 'ignoredRecommendations'
     | 'desktopNotifications'
   >

@@ -1,4 +1,4 @@
-﻿package api
+package api
 
 import (
 	"context"
@@ -325,6 +325,7 @@ func (s *Server) runChatTurn(clientGone context.Context, wsp *workspace.Workspac
 			feedbackRecap := recentFeedbackBlock(history)
 			// Carry this workspace's editable compaction prompt onto the turn context.
 			ctx = conversation.WithCompactPrompt(ctx, wsp.Runtime.CompactPromptTemplate())
+			ctx = conversation.WithAttachmentRoot(ctx, wsp.SandboxRoot())
 			// PreCompact lifecycle hook (Claude Code parity): Prepare invokes this just
 			// before it folds older turns into the rolling summary. Fire-and-forget audit.
 			ctx = conversation.WithPreCompact(ctx, func(trigger string) {
@@ -353,7 +354,7 @@ func (s *Server) runChatTurn(clientGone context.Context, wsp *workspace.Workspac
 			}
 			// claude-cli session resume (opt-in): when engaged, this trims llmReq to the
 			// unseen delta and sets ResumeSessionID so the CLI reuses its warm cache.
-			resumePlan := s.planClaudeResume(provider, len(agents), session, rawHistory, &llmReq)
+			resumePlan := s.planClaudeResume(ctx, provider, len(agents), session, rawHistory, &llmReq)
 
 			// Attach a per-agent artifact sink so create_artifact / update_artifact
 			// persist content stamped with this session + agent — both on the native

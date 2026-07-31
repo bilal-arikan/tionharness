@@ -20,6 +20,7 @@ import { TodoPanel } from './TodoPanel'
 import { latestTodos } from './todos'
 import { useDelayedFlag } from '@/shared/hooks/useDelayedFlag'
 import type { useChatStream } from './useChatStream'
+import { isCoordinatorSession, type CoordinationFields } from '@/shared/lib/coordination'
 
 export interface ChatViewProps {
   chat: ReturnType<typeof useChatStream>
@@ -39,9 +40,12 @@ export interface ChatViewProps {
   // shown instead. The transcript, context preview, debug and info panels stay
   // fully available.
   readOnly: boolean
-  // The open session's coordination role ('coordinator' | 'worker' | ''). Only a
-  // coordinator gets the running-worker banner above the composer.
-  sessionRole?: string
+  // The open session's coordination fields (role/coordinatorMode/...). Only a
+  // session with coordinator mode gets the running-worker banner above the
+  // composer — which now includes a mid-level node of a nested tree, so this is
+  // the whole object rather than the old `role` string (`role === 'coordinator'`
+  // would silently miss every sub-coordinator).
+  sessionCoordination?: CoordinationFields
   // Opens another session's transcript (used to jump into a running worker).
   onSelectSession?: (id: string) => void
   // Empty-state ("Yeni sohbete başla") wiring, used when no session is active.
@@ -73,7 +77,7 @@ export function ChatView({
   bootstrapping,
   messagesLoading,
   readOnly,
-  sessionRole,
+  sessionCoordination,
   onSelectSession,
   defaultAgentId,
   onNewSession,
@@ -125,7 +129,7 @@ export function ChatView({
   // polled) for ordinary and worker sessions.
   const workers = useRunningWorkers(
     activeSessionId,
-    sessionRole === 'coordinator',
+    isCoordinatorSession(sessionCoordination),
     chat.activeStreaming,
   )
   const runningWorkers = useMemo(() => workers.filter((w) => w.running), [workers])
@@ -199,82 +203,82 @@ export function ChatView({
           </div>
         </div>
       ) : (
-      /* Floating bottom stack: overlays the transcript so bubbles scroll UNDER
+        /* Floating bottom stack: overlays the transcript so bubbles scroll UNDER
           the composer's transparent→black gradient. pointer-events pass through
           the transparent gaps to the transcript; each child re-enables them. */
-      <div
-        ref={bottomStackRef}
-        className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex flex-col [&>*]:pointer-events-auto"
-      >
-        {(chat.activePresence > 1 || chat.activeTyping) && (
-          <div className="flex justify-center pb-1">
-            <span className="rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-2.5 py-0.5 text-[11px] text-[var(--color-text-dim)] shadow-[var(--shadow-sm)]">
-              {chat.activeTyping
-                ? 'Başka bir pencere yazıyor…'
-                : chat.activeAsk
-                  ? `${chat.activePresence} pencerede açık — ilk cevaplayan geçerli`
-                  : `Bu oturum ${chat.activePresence} pencerede açık`}
-            </span>
-          </div>
-        )}
-        {chat.activeAsk &&
-          (chat.activeAsk.kind === 'permission' ? (
-            <PermissionPrompt ask={chat.activeAsk} onAnswer={chat.answerAsk} />
-          ) : chat.activeAsk.kind === 'plan' ? (
-            <PlanPrompt ask={chat.activeAsk} onAnswer={chat.answerAsk} />
-          ) : (
-            <AskPrompt ask={chat.activeAsk} onAnswer={chat.answerAsk} />
-          ))}
-        <TodoPanel todos={currentTodos} />
-        <PendingTray
-          items={chat.activeQueued}
-          onRemove={chat.removePending}
-          onSendNext={chat.sendQueuedNext}
-          onClear={chat.clearQueue}
-        />
-        <WorkerWaitBanner
-          workers={runningWorkers}
-          doneCount={workers.length - runningWorkers.length}
-          onSelectSession={onSelectSession}
-        />
-        {chat.activeWakeWait && (
-          <WakeWaitBanner
-            reason={chat.activeWakeWait.reason}
-            fireAt={chat.activeWakeWait.fireAt}
-            onCancel={chat.cancelWake}
+        <div
+          ref={bottomStackRef}
+          className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex flex-col [&>*]:pointer-events-auto"
+        >
+          {(chat.activePresence > 1 || chat.activeTyping) && (
+            <div className="flex justify-center pb-1">
+              <span className="rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-2.5 py-0.5 text-[11px] text-[var(--color-text-dim)] shadow-[var(--shadow-sm)]">
+                {chat.activeTyping
+                  ? 'Başka bir pencere yazıyor…'
+                  : chat.activeAsk
+                    ? `${chat.activePresence} pencerede açık — ilk cevaplayan geçerli`
+                    : `Bu oturum ${chat.activePresence} pencerede açık`}
+              </span>
+            </div>
+          )}
+          {chat.activeAsk &&
+            (chat.activeAsk.kind === 'permission' ? (
+              <PermissionPrompt ask={chat.activeAsk} onAnswer={chat.answerAsk} />
+            ) : chat.activeAsk.kind === 'plan' ? (
+              <PlanPrompt ask={chat.activeAsk} onAnswer={chat.answerAsk} />
+            ) : (
+              <AskPrompt ask={chat.activeAsk} onAnswer={chat.answerAsk} />
+            ))}
+          <TodoPanel todos={currentTodos} />
+          <PendingTray
+            items={chat.activeQueued}
+            onRemove={chat.removePending}
+            onSendNext={chat.sendQueuedNext}
+            onClear={chat.clearQueue}
           />
-        )}
-        <Composer
-          key={composerKey}
-          disabled={!activeSessionId}
-          sessionId={activeSessionId ?? undefined}
-          focusSessionId={focusSessionId}
-          streaming={chat.activeStreaming}
-          waiting={!!chat.activeWakeWait}
-          onCancelWait={chat.cancelWake}
-          onSend={(text, attachments) => {
-            jumpToBottom()
-            return chat.sendMessage(text, undefined, attachments)
-          }}
-          onStop={chat.stopTurn}
-          onInterrupt={chat.interruptTurn}
-          onQueue={(text) => {
-            jumpToBottom()
-            chat.queueMessage(text)
-          }}
-          onSteer={chat.steerTurn}
-          onTyping={chat.notifyTyping}
-          thinkingLevel={chat.thinkingLevel}
-          onThinkingLevelChange={chat.setThinkingLevel}
-          permissionMode={chat.permissionMode}
-          onPermissionModeChange={chat.setPermissionMode}
-          agentId={activeAgentId ?? ''}
-          onAgentChange={onAgentChange}
-          agents={agents}
-          commands={chat.chatCommands}
-          artifacts={artifacts}
-        />
-      </div>
+          <WorkerWaitBanner
+            workers={runningWorkers}
+            doneCount={workers.length - runningWorkers.length}
+            onSelectSession={onSelectSession}
+          />
+          {chat.activeWakeWait && (
+            <WakeWaitBanner
+              reason={chat.activeWakeWait.reason}
+              fireAt={chat.activeWakeWait.fireAt}
+              onCancel={chat.cancelWake}
+            />
+          )}
+          <Composer
+            key={composerKey}
+            disabled={!activeSessionId}
+            sessionId={activeSessionId ?? undefined}
+            focusSessionId={focusSessionId}
+            streaming={chat.activeStreaming}
+            waiting={!!chat.activeWakeWait}
+            onCancelWait={chat.cancelWake}
+            onSend={(text, attachments) => {
+              jumpToBottom()
+              return chat.sendMessage(text, undefined, attachments)
+            }}
+            onStop={chat.stopTurn}
+            onInterrupt={chat.interruptTurn}
+            onQueue={(text) => {
+              jumpToBottom()
+              chat.queueMessage(text)
+            }}
+            onSteer={chat.steerTurn}
+            onTyping={chat.notifyTyping}
+            thinkingLevel={chat.thinkingLevel}
+            onThinkingLevelChange={chat.setThinkingLevel}
+            permissionMode={chat.permissionMode}
+            onPermissionModeChange={chat.setPermissionMode}
+            agentId={activeAgentId ?? ''}
+            onAgentChange={onAgentChange}
+            agents={agents}
+            commands={chat.chatCommands}
+            artifacts={artifacts}
+          />
+        </div>
       )}
       {chat.rewindOpen && (
         <RewindDialog messages={messages} onClose={chat.closeRewind} onRewind={onRewind} />

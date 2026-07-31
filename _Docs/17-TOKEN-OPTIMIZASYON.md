@@ -416,6 +416,142 @@ Son satır bu bloğun asıl varlık sebebi: "çıktın sıkıştırılıyor" den
 Blok sonunda tek ortak kaçış yolu duyurulur: `no_compress: true`.
 Test: `TestTokenOptimizerGuidance_PerCombination`.
 
+## Canlı LLM doğrulaması ve çıkan üç kusur (2026-07-31)
+
+Zincirin tamamı **yeni build + gerçek claude-cli turlarıyla** sınandı (`serve.ps1`,
+WS10/AGT1). Her tur bir kusur açığa çıkardı — hepsi düzeltildi.
+
+| # | Test | Sonuç |
+|---|---|---|
+| 1 | `cd … && go test ./internal/db/` | ✅ `cd … && rtk go test …` · `Go test: 78 passed` |
+| 2 | `cd … && go test ./internal/tools/ 2>&1` | İlk turda **rewrite kaçtı** → `2>&1` muafiyeti eklendi → ✅ `230 passed` |
+| 3 | Bozuk `go.mod` (Degraded yolu) | Not iletildi ama **kurtarma yolu kırıktı** → iki düzeltme → ✅ iki çağrıda çözüldü |
+
+### Kusur 1 — `2>&1` rewrite'ı düşürüyordu
+
+Ajanlar komuta refleks olarak `2>&1` ekliyor. Operatör kuralı bunu reddediyordu.
+`2>&1` **hiçbir yere yazmaz**, akış birleştirir; rtk da token'ı olduğu gibi korur
+(`go test ./x 2>&1` → `rtk go test ./x 2>&1`). Tek istisna olarak geçirildi
+(`stripMergeStderr`). `2>dosya`, `> out`, `2>&1x` hâlâ reddediliyor.
+
+### Kusur 2 — `no_compress` string olarak gelince reddediliyordu
+
+Degraded notu ajana *"`no_compress: true` ile tekrar çalıştır"* diyor. Ajan dedi —
+ve çağrı **reddedildi**:
+
+```
+cannot unmarshal string into Go struct field shellArgs.no_compress of type bool
+```
+
+Model `"true"` (string) göndermişti. `flexBool` eklendi (`builtin_ask.go`'daki
+`flexOptions` deseninin aynısı): `true`/`"true"`/`"1"`/`"yes"`/`1` kabul,
+`"maybe"` hâlâ **hata** — belirsizi sessizce `false` saymak, görünür bir hatayı
+görünmezle takas etmek olurdu.
+
+### Kusur 3 — bridged şema `no_compress`'i YASAKLIYORDU
+
+Asıl sorun buydu. Bridge şemayı **filtresiz** bir araçtan üretiyordu:
+
+```go
+defs = append(defs, tools.NewShellTool(tools.Sandbox{}).Def())   // outFilter == nil
+```
+
+`Def()` ise `no_compress`'i yalnız `outFilter != nil` iken ilan ediyor — üstelik
+şemada `"additionalProperties": false` var. Yani parametre belgesiz değil,
+**yasaktı**. Oysa gerçek filtre tur başına `NewShellRunner` ile kuruluyor, dolayısıyla
+çağrı anında çalışıyordu.
+
+Sonuç: bir yerde önerilen kurtarma yolu başka bir yerde engelleniyordu. Ajan
+şemayı okuyup "bu seçenek yok" diye `> dosya 2>&1`'e düştü. `AdvertiseOptimizerFlag()`
+eklendi; bridge onu kullanıyor. Test: `TestBridgedShellAdvertisesNoCompress`.
+
+**Düzeltme öncesi/sonrası** (aynı senaryo, gerçek LLM):
+
+| | Çağrı sayısı | Nasıl |
+|---|---|---|
+| Önce | **4** | not → reddedilen `no_compress` → elle `ls`/`xxd` → elle `> dosya 2>&1` |
+| Sonra | **2** | not → aynı komut + `no_compress: true` → ham hata → kök neden |
+
+## `cd <dir> && …` kapsam boşluğu (2026-07-31)
+
+SES63'ün ikinci dersi. Hook engeli kalktıktan sonra Bash çalıştı ama **hiçbir adımda
+`optimizer` yoktu**. Sebep beklenmedik bir yerdeydi — komutların **şekli**:
+
+| Ölçüm (SES63, 11 shell komutu) | |
+|---|---|
+| İlk token `cd` olan | **10 / 11** |
+| Kabuk operatörü içeren | **10 / 11** |
+
+`rtkRewriteWorthIt` operatör içeren satırları topluca reddediyordu, dolayısıyla bu ajanın
+komutlarının **hiçbiri** yeniden yazılamazdı. Ajanlar dizini araç cwd'sine güvenmek yerine
+her çağrıda `cd <dir> &&` ile yeniden kuruyor — bu istisna değil, **baskın kalıp**. Sonuç:
+`go test` üzerinde ölçülen %99 kazanç pratikte hiç gerçekleşmiyordu.
+
+**rtk bu şekli zaten doğru işliyormuş** (doğrulandı):
+
+```
+cd /tmp && grep -rn foo .   →   cd /tmp && rtk grep -rn foo .
+```
+
+Yani boşluk tamamen bizim taraftaydı. `splitCdPrefix` eklendi: tek seviyeli `cd <dizin> &&`
+öneki ayrılır, **kuyruk** değerlendirilir, doğrulama `<aynı cd öneki> + "rtk "` bekler.
+
+Korunan sınırlar: kuyrukta operatör varsa yine reddedilir — `cd x && cmd > dosya` olsaydı
+rtk'nın **özeti dosyaya yazılırdı**. Çift `cd`, çıplak `cd`, `pushd` de kapsam dışı. Tırnaklı
+yol tek kelime sayılır (`cd "/c/My Proj" && npm run build` — Windows'ta kural, istisna değil).
+
+> **`grep` neden hâlâ listede değil:** aynı repoda ölçüldü — `rtk grep` çıktısı ham grep ile
+> **birebir aynı** (15 satır, 2152 bayt). Sonuç rtk'nın limitlerinin altında kaldığı için
+> passthrough oluyor. SES63'ün greplerini rtk kurtarmazdı; ölçüm bunu söylüyor.
+
+Test: `TestRtkCommandFilter_Gate` içinde **canlı binary'ye karşı** uçtan uca doğrulama —
+`cd /c/proj && go test ./...` → `cd /c/proj && rtk go test ./...`, ve kuyruktaki
+yönlendirmenin hâlâ reddedildiği.
+
+## rtk hook şablonu KALDIRILDI — shell'i bloke ediyordu (2026-07-31)
+
+**Belirti:** WS10/SES63'te ajanın **hiçbir Bash çağrısı** çalışmadı. İki denemede de:
+
+```
+PreToolUse:mcp__tionswarm_interaction__Bash hook error:
+  [$j=[Console]::In.ReadToEnd()|ConvertFrom-Json; ...]:
+  /usr/bin/bash: -c: line 1: syntax error near unexpected token `|'
+```
+
+Ajan pes edip PowerShell'e geçti. rtk hiç çalışmadı; **shell de çalışmadı.**
+
+**Kök neden:** Ayarlar ▸ Harici Araçlar'daki "rtk'yi bağla" butonu gövdesi **PowerShell
+tek satırlığı** olan bir PreToolUse hook'u yaratıyordu. TionSwarm'ın kendi hook runner'ı
+Windows'ta PowerShell olduğu için native yolda çalışıyordu — ama `writeCLISettings` bu
+hook'u claude-cli'ye devrettiğinde **CLI onu bash ile** çalıştırıyor ve ilk `|`'da ölüyor.
+Başarısız bir PreToolUse hook'u **araç çağrısını bloke ettiği** için sonuç: o workspace'te
+Bash tamamen kullanılamaz hale geliyor.
+
+Risk `climcp.go:280`'de zaten yazılıydı: *"CLI hooks run under the CLI's own hook
+runner/shell, which may differ from TionSwarm's execHook (PowerShell on Windows)."*
+Şablon bu uyarıyı ihlal ediyordu. HOK4 (sqz) aynı workspace'te sorunsuz çalışıyor çünkü
+doğru deseni kullanıyor: `powershell -NoProfile -ExecutionPolicy Bypass -File "...ps1"` —
+hem bash hem PowerShell için geçerli bir komut satırı.
+
+**Çözüm — şablonu düzeltmek değil, kaldırmak.** Hook bash-uyumlu hale getirilebilirdi ama
+zaten **yanlış mekanizmaydı**: her komutun başına `rtk ` ekliyordu — `git diff` ve `cat`
+dahil, yani rtk'nın ölçümle kaybettiği yerler dahil. In-process filtre bunların hepsini
+çözüyor (ölçülmüş beyaz liste + `Degraded` koruması + hem native hem bridged yol).
+
+Yapılanlar:
+
+| Yer | Değişiklik |
+|---|---|
+| `external_tools.go` | rtk'nın `wire`'ı `"hook"` → **`"setting"`** |
+| `ExternalToolsPanel.tsx` | `TOOL_HOOK_TEMPLATES.rtk` **silindi**; `wire:'setting'` satırı `shellCommandRewrite`'ı aç/kapat eder |
+| `recommendations.ts` | `RTK_HOOK` **silindi**; "token" kartı yalnız sqz önerir |
+| `recommendations.test.ts` | `never offers an rtk HOOK…` + şablonun imzası (`ReadToEnd`) geri gelirse kırılan assert |
+| WS10 (canlı) | HOK3 silindi; `shellCommandRewrite="on"`, `shellOutputCompression="on"` |
+
+> **Ders:** iki farklı hook runner (TionSwarm=PowerShell, claude-cli=bash) varken hook
+> gövdesi **ikisinde de geçerli** olmalı. Tek satırlık PowerShell yerine
+> `powershell -NoProfile -File <script.ps1>` deseni kullanılmalı — sqz'nin yaptığı gibi.
+
 ## Canlı doğrulama — WS16 / claude-cli (2026-07-28)
 
 Zincirin tamamı gerçek bir turda, gerçek bir worker'da doğrulandı. WS16'da

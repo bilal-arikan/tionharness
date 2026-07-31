@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -53,11 +54,14 @@ func (s *Server) teardownSessionRuntime(wsp *workspace.Workspace, sessionID stri
 
 	// Past here nothing can fail — commit the in-memory teardown.
 
-	// Phase 4: stop an autonomous worker turn if this session is one. "Not running" is
+	// Phase 4: stop an autonomous worker turn if this session is one — and, when it is
+	// a sub-coordinator, its whole subtree with it, so deleting a branch does not leave
+	// grandchildren running against a session that no longer exists. "Not running" is
 	// the common case (most sessions are not workers) and is not a teardown failure, so
-	// its error is intentionally ignored.
+	// its error is intentionally ignored. Empty coordinator id = skip the
+	// "is it really yours" ownership check; teardown is authoritative here.
 	if wsp != nil && wsp.Runtime != nil {
-		_ = wsp.Runtime.StopWorker(sessionID)
+		_ = wsp.Runtime.StopWorker(context.Background(), "", sessionID)
 	}
 
 	// Phase 5: drop the in-memory inbox entirely so the serial worker exits for good and

@@ -46,10 +46,85 @@ export function parseDiff(text: string): ParsedDiff {
   return { lines, stats: { added, removed } }
 }
 
+// ── Context folding ────────────────────────────────────────────────────────
+//
+// A patch's bulk is usually unchanged context. Collapsing long runs of it is the
+// single cheapest way to shrink a large diff before any rendering trick is
+// needed, so the panel view folds them behind a "… N satır" expander.
+
+/** A half-open [start, end) run of line indices that can be hidden. */
+export interface FoldRange {
+  start: number
+  end: number
+}
+
+// Context lines KEPT on each side of a fold, so a hunk never loses the lines
+// that explain it.
+const FOLD_CONTEXT = 3
+// Minimum number of lines a fold must actually hide to be worth an expander —
+// below this the "… 2 satır" row costs more than it saves.
+const FOLD_MIN_HIDDEN = 6
+
+/**
+ * Foldable runs of unchanged context in a parsed diff. Runs at the very start /
+ * end of the patch keep context only on their inner side: there is no hunk above
+ * the first line nor below the last, so the outer margin is pure noise.
+ */
+export function foldableRanges(lines: DiffLine[]): FoldRange[] {
+  const out: FoldRange[] = []
+  let run = -1
+  const flush = (end: number) => {
+    if (run < 0) return
+    const start = run === 0 ? 0 : run + FOLD_CONTEXT
+    const stop = end === lines.length ? end : end - FOLD_CONTEXT
+    if (stop - start >= FOLD_MIN_HIDDEN) out.push({ start, end: stop })
+    run = -1
+  }
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i].kind === 'ctx') {
+      if (run < 0) run = i
+      continue
+    }
+    flush(i)
+  }
+  flush(lines.length)
+  return out
+}
+
+/** One rendered row: either a diff line, or a collapsed run standing in for many. */
+export type DiffRow = { kind: 'line'; index: number } | { kind: 'fold'; id: number; count: number }
+
+/**
+ * Flatten `total` lines into the rows to render, replacing each still-collapsed
+ * fold range with a single marker row. `ranges` must be sorted and disjoint,
+ * which foldableRanges guarantees. `expanded` holds the indices (into `ranges`)
+ * the user has opened.
+ */
+export function diffRows(
+  total: number,
+  ranges: FoldRange[],
+  expanded: ReadonlySet<number>,
+): DiffRow[] {
+  const rows: DiffRow[] = []
+  let i = 0
+  let r = 0
+  while (i < total) {
+    if (r < ranges.length && ranges[r].start === i && !expanded.has(r)) {
+      rows.push({ kind: 'fold', id: r, count: ranges[r].end - ranges[r].start })
+      i = ranges[r].end
+      r++
+      continue
+    }
+    if (r < ranges.length && ranges[r].start === i) r++
+    rows.push({ kind: 'line', index: i })
+    i++
+  }
+  return rows
+}
+
 /** Heuristic: does this text look like a unified diff worth special rendering? */
 export function looksLikeDiff(text: string): boolean {
-  return /^(@@ |diff --git |--- |\+\+\+ )/m.test(text) ||
-    /^[+-].*\n[+-]/m.test(text)
+  return /^(@@ |diff --git |--- |\+\+\+ )/m.test(text) || /^[+-].*\n[+-]/m.test(text)
 }
 
 // synthDiff builds a unified-diff-style text from an edit/write tool's INPUT,

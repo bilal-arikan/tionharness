@@ -126,6 +126,20 @@ export interface SlashCommand {
   takesInput?: boolean
 }
 
+// SessionChangeStep is one file-mutating trace step lifted out of a session's
+// whole transcript by GET /api/sessions/{id}/changes, tagged with the turn it
+// came from. Unlike the transcript listing, its `step` is UNTRIMMED — the bulk
+// changes popup needs the full patch. Everything that is not a file mutation is
+// dropped server-side, which is what keeps the call cheap.
+export interface SessionChangeStep {
+  msgId: string
+  agentId?: string
+  createdAt: number
+  // The change was made by a subagent nested inside the turn.
+  nested?: boolean
+  step: TurnStep
+}
+
 export interface Message {
   id: string
   sessionId: string

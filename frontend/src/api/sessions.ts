@@ -5,6 +5,8 @@ import type {
   Message,
   SessionInfo,
   WorkerInfo,
+  CoordinatorTree,
+  CoordinatorAncestor,
   SessionContext,
   SessionContextPreview,
   SearchHit,
@@ -17,6 +19,7 @@ import type {
   SessionDebugEvent,
   TurnDebug,
   InflightSnapshot,
+  SessionChangeStep,
 } from '@/types'
 import { req } from './client'
 
@@ -49,8 +52,7 @@ export const sessionApi = {
       method: 'POST',
       body: JSON.stringify({ agentId, prompt, modelOverride }),
     }),
-  listMessages: (sessionId: string) =>
-    req<Message[]>(`/api/sessions/${sessionId}/messages`),
+  listMessages: (sessionId: string) => req<Message[]>(`/api/sessions/${sessionId}/messages`),
   // One turn's activity trace, UNTRIMMED. listMessages ships tool payloads cut
   // to a server-side cap (marked with the step's `*Truncated` flags) so opening
   // a long session stays cheap; this refetches the full trace for a single turn
@@ -60,13 +62,16 @@ export const sessionApi = {
     req<{ steps: string }>(
       `/api/sessions/${encodeURIComponent(sessionId)}/messages/${encodeURIComponent(messageId)}/steps`,
     ).then((r) => r.steps),
+  // Every file mutation in the session, oldest first, with UNTRIMMED patches.
+  // Backs the "all changes" popup's session tab: assembling it from the
+  // transcript would ship every Read/Grep/Bash payload too, just to find the
+  // edits, so the server filters them out before sending.
+  getSessionChanges: (sessionId: string) =>
+    req<SessionChangeStep[]>(`/api/sessions/${encodeURIComponent(sessionId)}/changes`),
   // Full-text search the workspace's message history. role: 'user' | 'assistant'
   // | 'all'; exclude skips a session id (e.g. the current one). Each hit carries
   // sessionId + messageId for deep-linking to the matched turn.
-  searchMessages: (
-    q: string,
-    opts: { limit?: number; role?: string; exclude?: string } = {},
-  ) => {
+  searchMessages: (q: string, opts: { limit?: number; role?: string; exclude?: string } = {}) => {
     const p = new URLSearchParams({ q })
     if (opts.limit) p.set('limit', String(opts.limit))
     if (opts.role && opts.role !== 'all') p.set('role', opts.role)
@@ -117,8 +122,11 @@ export const sessionApi = {
       method: 'PUT',
       body: JSON.stringify({ agentId }),
     }),
-  // Set the session's coordinator role (M2). role: 'coordinator' to enable
-  // coordinator mode (coordinator prompt + spawn_worker/... tools), '' to revert.
+  // Turn the session's COORDINATOR MODE on ('coordinator') or off (''). The field
+  // is still named `role` on the wire, but it no longer touches the session's
+  // lineage: a worker toggled on here becomes a mid-level node of its tree rather
+  // than being cut loose from its parent. Rejected (400) while the session still
+  // has running workers.
   setSessionRole: (sessionId: string, role: string) =>
     req<{ id: string; role: string }>(`/api/sessions/${sessionId}/role`, {
       method: 'PUT',
@@ -128,13 +136,22 @@ export const sessionApi = {
   // coordinator-workflow skill slug to apply it, or '' to clear. Rejects an
   // invalid slug (not a coordinator-workflow, or unknown pattern).
   setSessionWorkflow: (sessionId: string, workflow: string) =>
-    req<{ id: string; workflow: string; maxTurns: number }>(
-      `/api/sessions/${sessionId}/workflow`,
-      { method: 'PUT', body: JSON.stringify({ workflow }) },
-    ),
+    req<{ id: string; workflow: string; maxTurns: number }>(`/api/sessions/${sessionId}/workflow`, {
+      method: 'PUT',
+      body: JSON.stringify({ workflow }),
+    }),
   // List the workers spawned under a coordinator session (for the coordination panel).
   listWorkers: (sessionId: string) =>
     req<{ workers: WorkerInfo[] }>(`/api/sessions/${sessionId}/workers`),
+  // The whole coordinator TREE a session belongs to, breadth-first from its root.
+  // Callable with ANY member's id (root, mid-level node, or leaf) — the server
+  // normalizes to the root — so the panel can pass whatever session is open.
+  getCoordinatorTree: (sessionId: string) =>
+    req<CoordinatorTree>(`/api/sessions/${sessionId}/coordinator-tree`),
+  // The upward breadcrumb from a worker: its tree root first, its direct
+  // coordinator last. Empty for a root or an ordinary session.
+  getCoordinatorAncestors: (sessionId: string) =>
+    req<{ ancestors: CoordinatorAncestor[] }>(`/api/sessions/${sessionId}/coordinator-ancestors`),
   // On-demand summary/listing posted as an assistant message in the session.
   // kind: 'board' | 'flows' | 'tools'. Returns the new message.
   summarizeSession: (sessionId: string, kind: string) =>
@@ -176,11 +193,9 @@ export const sessionApi = {
       body: JSON.stringify({ messageId }),
     }),
   // Absolute folder holding the session's JSONL file.
-  sessionPath: (sessionId: string) =>
-    req<{ path: string }>(`/api/sessions/${sessionId}/path`),
+  sessionPath: (sessionId: string) => req<{ path: string }>(`/api/sessions/${sessionId}/path`),
   // Rich session detail: disk footprint, context composition, participating agents.
-  sessionInfo: (sessionId: string) =>
-    req<SessionInfo>(`/api/sessions/${sessionId}/info`),
+  sessionInfo: (sessionId: string) => req<SessionInfo>(`/api/sessions/${sessionId}/info`),
   // Recycle the session's warm (persistent-pool) claude-cli process so the next
   // turn cold-restarts fresh. Conversation untouched. Returns how many were dropped.
   dropSessionCliProcess: (sessionId: string) =>
@@ -189,8 +204,7 @@ export const sessionApi = {
   revealSession: (sessionId: string) =>
     req<{ path: string }>(`/api/sessions/${sessionId}/reveal`, { method: 'POST' }),
 
-  sessionContext: (sessionId: string) =>
-    req<SessionContext>(`/api/sessions/${sessionId}/context`),
+  sessionContext: (sessionId: string) => req<SessionContext>(`/api/sessions/${sessionId}/context`),
 
   // Per-session lifetime spend + savings (cost, per-origin/model breakdown,
   // cache savings, tool-output compaction bytes). The session-scoped analog of
@@ -222,9 +236,7 @@ export const sessionApi = {
   // per-tool breakdown), correlated by the reply message id. Backs the chat
   // message debug button.
   sessionTurnDebug: (sessionId: string, turnId: string) =>
-    req<TurnDebug>(
-      `/api/sessions/${sessionId}/turn-debug?turn=${encodeURIComponent(turnId)}`,
-    ),
+    req<TurnDebug>(`/api/sessions/${sessionId}/turn-debug?turn=${encodeURIComponent(turnId)}`),
 
   // Debug: preview the exact next-turn context (system + dynamic + transcript +
   // tools) the session's agent would be sent. Optional sample "next" user message.
@@ -233,7 +245,12 @@ export const sessionApi = {
   // accurate=true additionally asks the provider's REAL tokenizer to count the
   // composed request server-side (/v1/messages/count_tokens; anthropic only) —
   // returned as accurateTokens so heuristic drift is visible.
-  sessionContextPreview: (sessionId: string, message?: string, compact = false, accurate = false) => {
+  sessionContextPreview: (
+    sessionId: string,
+    message?: string,
+    compact = false,
+    accurate = false,
+  ) => {
     const p = new URLSearchParams()
     if (message) p.set('message', message)
     if (compact) p.set('compact', '1')
@@ -245,8 +262,7 @@ export const sessionApi = {
   },
 
   // Working directory (cwd) for the agent's file/shell tools.
-  getWorkdir: (sessionId: string) =>
-    req<WorkdirInfo>(`/api/sessions/${sessionId}/workdir`),
+  getWorkdir: (sessionId: string) => req<WorkdirInfo>(`/api/sessions/${sessionId}/workdir`),
   // Set (or clear, when dir is empty) the session's working directory.
   setWorkdir: (sessionId: string, dir: string) =>
     req<WorkdirInfo>(`/api/sessions/${sessionId}/workdir`, {
@@ -254,12 +270,10 @@ export const sessionApi = {
       body: JSON.stringify({ dir }),
     }),
   // List subdirectories of a path for the folder picker (empty path = roots).
-  browseDirs: (path: string) =>
-    req<BrowseResp>(`/api/fs/browse?path=${encodeURIComponent(path)}`),
+  browseDirs: (path: string) => req<BrowseResp>(`/api/fs/browse?path=${encodeURIComponent(path)}`),
 
   // Git state of a project path (repo?, branch, remote, identity).
-  gitInfo: (path: string) =>
-    req<GitInfo>(`/api/fs/gitinfo?path=${encodeURIComponent(path)}`),
+  gitInfo: (path: string) => req<GitInfo>(`/api/fs/gitinfo?path=${encodeURIComponent(path)}`),
   // Initialise a git repo (default branch "main") in an existing directory.
   gitInit: (path: string) =>
     req<GitInfo>('/api/git/init', { method: 'POST', body: JSON.stringify({ path }) }),

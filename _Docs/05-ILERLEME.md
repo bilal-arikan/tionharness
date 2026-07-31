@@ -1,6 +1,315 @@
 # TionSwarm — İlerleme Takibi
 
-> Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-07-28**
+> Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-08-01**
+
+## Terse (caveman) mod — workspace toggle + registry promptu ✅ (2026-08-01)
+
+- **Sorun:** `tionswarm-terse` skill'i katalogda yalnız slug + tek satır özet olarak
+  duruyordu; gövdesi `use_skill` çağrılınca yükleniyordu. Yani yanıt stilinin yürürlükte
+  olması modelin tetik kelimeyi fark edip aracı çağırmasına kalıyordu — pratikte kullanıcı
+  "terse" demedikçe hiç ateşlenmiyordu.
+- **Çözüm:** `WSSettings.TerseMode` (bool) + **registry promptu `terse`**. Anahtar açıkken
+  prompt her ajanın statik system prefix'ine, workspace instructions'ın ardından eklenir
+  (sıra bilinçli — workspace kuralı stili ezebilsin). Kapalıyken tek bayt gitmez.
+- **Neden skill değil prompt:** yanıt stili yalnız koşulsuz olduğunda çalışır; skill yolu
+  tanım gereği modelin takdirine bağlı. Prompt yolu ayrıca `capabilities.go`'daki
+  codebase-memory deseniyle aynı: workspace toggle → cachelenebilir statik blok.
+- **Düzenlenebilirlik:** metin `internal/prompts/defaults/terse.md` (gömülü) →
+  `<workspace>/config/prompts/terse.md` ile override edilebilir; boş/bozuk override
+  varsayılana düşer, kötü bir edit modu sessizce kapatamaz.
+- **Tek kaynak:** `Runtime.TerseModeBlock()` — headless (`systemPrompt`) ve api tarafı
+  (`chat_turn`, `agent_context`, `session_info`) aynı anahtarı + aynı metni okur. Dört
+  yerde ayrı ayrı kurulsa sessizce kayardı.
+- **İlk denenen ve geri alınan:** `alwaysSkills []string` — seçilen skill'lerin gövdesini
+  prompta basan genel liste. Çalışıyordu ama istenen tek anahtardı; liste UI'ı gereksiz
+  genellemeydi ve `skills.Store`'a `exclude` parametresi taşıyordu. Geri alındı.
+- **Kod:** `internal/agent/tersemode.go`, `internal/prompts/prompts.go` (+`defaults/terse.md`),
+  `internal/workspace/settings.go`, `internal/api/workspace_settings.go`,
+  `frontend/.../WorkspacePanel.tsx`. Test: `internal/agent/tersemode_test.go`.
+- Detay: `_Docs\06-WORKSPACES.md` ▸ "Terse (caveman) mod", registry `_Docs\61`.
+
+## Sınırsız derinlikte koordinatör ağacı ✅ (2026-08-01)
+
+- **Sorun:** Koordinatör/worker tek seviyeydi. `withCoordination`
+  `Role=="coordinator"` bakıyordu; worker `Role=="worker"` olduğu için koordinasyon
+  araçlarını asla göremiyordu (bilinçli recursion guard'dı). Bir agent, işini
+  kendi içinde bölecek bir agent'ı görevlendiremiyordu.
+- **Taşıyıcı karar — rol ≠ ebeveynlik:** `Session.Role` artık yalnız **soyağacı**
+  (`"worker"` / `""`), koordinatörlük ayrı bir **yetenek** alanı
+  (`CoordinatorMode`). Ara düğüm ikisine birden sahip. Yanına
+  `RootCoordinatorSessionID` + `CoordinatorDepth` (aynen `FlowRun.RootRunID`
+  deseni). Tüm çağrı yerleri `Session.IsCoordinator()`/`IsWorker()`/
+  `RootCoordinator()`'a çevrildi; legacy `Role=="coordinator"` okumada kabul edilir
+  (migrasyon yok), legacy worker'da kök = ebeveyn (eski ağaçlar zaten tek
+  seviyeydi → paylaşılan scratchpad yolu kaymaz).
+- **En kritik semantik — ara düğüm ne zaman "bitti" der:** turunun bitmesi işinin
+  bittiği anlamına gelmez (tur, işi worker'larına dağıttığı anda biter). Üç parça:
+  `deferWorkerReport` (dal canlıyken `<task-notification>` yerine bir kerelik
+  `<task-progress status="delegating">`), `report_to_coordinator` aracı (düğüm
+  görevini kendi kapatır; kendi worker'ları çalışırken `completed` reddedilir) ve
+  `settleReportBackstop` (dal sustuğu hâlde 30 sn rapor gelmezse otomatik rapor —
+  **daima `incomplete`**, runtime işin bittiğini bilemez). `WorkerInfo.Delegating`
+  ile roster ve canlı worker-state bloğu "dağıtıyor" der.
+- **Guard'lar:** `CoordinatorMaxDepth` (5, `-1`=sınırsız) + **`CoordinatorMaxSubtreeSessions`**
+  (64). İkincisi kritik: düğüm-başına worker limiti düğüm bazında olduğu için
+  derinlikle **çarpılır** (8 × derinlik 4 ≈ 4096 oturum); üstel dallanmayı durduran
+  tek sınır bu. Limite takılan `spawn_worker(coordinator:true)` **hata verir**,
+  sessizce düz worker'a düşmez — delegasyon yaptığını sanan koordinatör gelmeyecek
+  bir raporu sonsuza kadar beklerdi.
+- **Mod seçimi:** `spawn_worker(coordinator, workflow)` (reçete miras alınmaz —
+  özyinelemeli reçete ağaç boyunca kendini tekrarlardı) + `set_coordinator_mode`
+  aracı ve `PUT /sessions/{id}/role` aynı runtime yolunu kullanır. İki kural:
+  çalışan worker varken **kapatma reddedilir**, ve toggle **prompt epoch'unu
+  tazeler** — bu olmadan araç şemaları donuk kaldığı için (`_Docs/57`) agent "mod
+  açıldı" yanıtını alır ama `spawn_worker`'ı hiç göremezdi.
+- **Dayanıklılık:** `stopSubtree` cascade (durdurulan alt-koordinatörün torunları
+  bütçe yakıp zombi tur uyandırmasın; teardown + flow düğümü de kullanır),
+  `RecoverOrphanedTurns` **BFS** (sığdan derine; bu taramada kurtarılan bir düğüme
+  notify atılmaz) ve `waitCoordinatorIdle` artık `activeSubtreeWorkers==0` da ister
+  (slot sayacı yalnız doğrudan çocukları izliyordu, ara düğüm kendi turu bitince
+  sayacı düşürüyordu → flow düğümü yarım sonuç alabilirdi).
+- **Uçlar/UI:** `GET /sessions/{id}/coordinator-tree` (ağacın herhangi bir üyesiyle
+  çağrılıp köke normalize edilir) + `/coordinator-ancestors`;
+  `list_workers(scope:"subtree")`; `CoordinatorSection` worker'da artık erken
+  dönmüyor (üst-zincir breadcrumb'ı + altında koordinatör kontrolleri); sidebar
+  Workers filtresi `isWorkerSession()` (aksi hâlde ara düğümler ve tüm dalları
+  sekmeden düşerdi). Araç kaydı fonksiyon-varlığına göre; CLI köprüsü aynı alt
+  kümeyi ilan eder → native/CLI araç seti ayrışamaz.
+- **Takip (aynı gün):**
+  - **Ağaç görünümü** `CoordinatorTreeView` — seviyeye göre girintili tüm ağaç,
+    düğüm başına + toplam maliyet, katlanır ve kapalıyken fetch edilmez. Düz roster
+    yalnız doğrudan çocukları gösteriyordu; bir alt-koordinatörün dalı görünmüyordu.
+  - **Maliyet rollup'ı** — `coordinator-tree` per-model istatistikleri birleştirip
+    tek seferde fiyatlıyor (`mergeModelStats` + `modelRowsFor`) → Bütçe ekranıyla
+    birebir aynı aritmetik. Per-session dolar toplamak yuvarlama kaydırırdı ve
+    prompt-cache tasarrufu token kırılımı olmadan hesaplanamaz.
+  - **Derinlik-farkında spawn slotu** (`acquireSpawnSlotAtDepth`) — `depth>=2`
+    spawn'ları global havuzun dörtte biri boş kalmak şartıyla slot alır. Deadlock
+    yoktu (otomatik tur slot almıyor) ama meşgul bir derin dal kardeşlerini ve
+    alakasız chat/schedule spawn'larını aç bırakabiliyordu.
+  - **Rapor borcu kalıcı** (`Session.CoordinatorReportPending`) — bellekteki bayrak
+    tam da kapatması gereken boşluğu açık bırakıyordu: dalını bekleyen ara düğüm
+    diskte sağlıklı görünür (son mesajı kendi yanıtı), yetim-tur kurtarması ona
+    dokunmaz, bayrak restart'ta kaybolur ve koordinatörü sonsuza kadar beklerdi.
+    Boot'ta `RecoverPendingReports` (orphan taramasından **sonra**) backstop'u
+    yeniden kurar → kurtarılan worker'lardan tur alan düğüm kendisi rapor verir.
+  - **Backstop grace ayarlanabilir** (`CoordinatorSettleGraceSec`, vars. 30 sn,
+    5–1800 clamp) — doğru değer modele bağlı: kısa olursa yavaş sentez turu yarışı
+    kaybedip gereksiz `incomplete` gönderir, uzun olursa takılmış dal bekletir.
+  - **Ağaçta hatalı dal vurgusu** — düğümün `health` alanı (`stuck` > `error` > ``)
+    mevcut oto-etiketlerden türer (yeni "bozuk" kavramı yok → oturum listesi ve
+    onarım otomasyonlarıyla aynı sinyal). Kırmızı isim/ikon/zemin + **katlanmış
+    başlıkta sayaç**, çünkü derindeki hata kimsenin açıp bakmayacağı şeydir;
+    `reportPending` ayrı kum saati rozeti.
+  - **Canlı duman testi:** izole store'da backend açılıp `coordinator-tree`
+    (rollup alanları dahil), `coordinator-ancestors`, rol toggle'ı, bilinmeyen
+    oturumda 404 ve derinlik/alt-ağaç ayarlarının round-trip'i (`-1` = sınırsız
+    korunuyor) doğrulandı.
+- Detay: **`_Docs/47` §14**. Test: `coordination_tree_test.go` + `coordination_test.go`.
+
+## Toplu dosya-farkı görüntüleyici (chat) ✅ (2026-08-01)
+
+- **Sorun:** Bir turun dosya değişiklikleri yalnız araç izine dağılmış tekil
+  `DiffCard`'lardan izlenebiliyordu. "Bu ajan neye dokundu?" sorusunun tek bir
+  cevabı yoktu; oturum geneli için hiç yoktu.
+- **UI:** ajan balonunun altındaki aksiyon satırına `⧉ N dosya +A −R` çipi
+  (`ChangesButton.tsx`); açtığı popup (`ChangesModal.tsx`) **master-detail** —
+  solda dosya listesi, sağda yalnız seçili dosyanın yaması. Sekmeler: **Bu tur**
+  ve **Tüm oturum**. Popup yalnız açıkken mount edilir; canlı (streaming) balonda
+  çip gösterilmez — iz her delta'da büyürken çıkarım yapmanın anlamı yok.
+- **Yeni endpoint `GET /api/sessions/{id}/changes`** (`internal/api/session_changes.go`):
+  transkripti bir kez gezip **yalnız dosya değiştiren adımları** kırpılmamış
+  döndürür. Alternatif — her turun tam izini tek tek çekmek — bir avuç edit
+  bulmak için tüm Read/Grep/Bash çıktısını da taşırdı. Adımlar **ham TurnStep
+  JSON'u** olarak döner: claude-cli yolunda yama araç girdisinden sentezlenir ve
+  o sentez zaten frontend'de (`shared/lib/diff.ts`) yaşıyor; Go'da kopyalamak
+  popup ile sohbet kartına iki ayrı doğruluk kaynağı verirdi.
+- **Çıkarım** `shared/lib/fileChanges.ts`'te toplandı ve `TurnSteps`'in `DiffCard`
+  seçimiyle **birebir** aynı kuralı uygular (yoksa popup'ın sayısı görünen
+  kartlarla çelişir): `kind:diff` ya da başarılı `tool`+edit aracı; hatalı adım
+  atlanır; `subSteps` içine inilir (alt-ajan edit'i de gerçek, `nested` rozetiyle).
+- **Kırpma dürüstlüğü:** okuma yolu yamaları `stepFieldCap`'e kırpıyor. Çipte `≥`
+  işareti + popup açılışta tam izi çeker. Sentezlenen yamada kırpılan şey
+  **girdi** olduğundan satır sayıları da eksik kalır → `inputTruncated` de
+  "kırpılmış" sayılır.
+- **Büyük dosya stratejisi** (`DiffView` yeni `variant="panel"`): bağlam katlama
+  (`foldableRanges`/`diffRows`) → 400+ satırda sanallaştırma
+  (`useVirtualRows.ts`) → 20k satırda sert tavan (ilk 2k + gerçek sayıyla açık
+  buton, **sessiz kırpma yok**) → yeni dosya varsayılan kapalı (`Write`'ın
+  "farkı" dosyanın tamamıdır). Panelde satırlar bilerek **sarmaz**: sarma satır
+  yüksekliğini değiştirir, sabit-yükseklik varsayımı bozulunca sanal spacer'lar
+  içerikten kayar.
+- **Bilinçli sınır:** aynı dosyanın çoklu edit'i sıralı listelenir, birleştirilmiş
+  tek yama üretilmez — dosyanın öncesi/sonrası içeriği saklanmıyor, uydurulmuş
+  bir birleşim yanlış olurdu. Popup altında sabit not: gösterilen fark
+  değişiklik anındaki halidir, dosyanın şu anki içeriği değil.
+- Testler: `internal/api/session_changes_test.go` (filtre/rekürsiyon/ham geçiş),
+  `frontend/src/shared/lib/fileChanges.test.ts` (14 vaka: sentez, hata atlama,
+  gruplama, katlama). Detay `_Docs/07-CHAT-UX.md`.
+
+## Harici araçlar: sürüm + güncelleme kontrolü ✅ (2026-08-01)
+
+- **Sorun:** `/api/external-tools` yalnız "kurulu mu" diyordu. Kullanıcı hangi
+  sürümün kurulu olduğunu ve yenisinin çıkıp çıkmadığını uygulamadan göremiyordu.
+- **Yeni paket `internal/exttools`** — katalog `internal/api`'den buraya taşındı
+  (api yalnız HTTP kaldı). Her girdi artık `VersionArgs` + `UpdateSpec` taşır;
+  GitHub repo'su URL'den **türetilir** (`Tool.Repo()`) → ikinci alanla sapamaz.
+- **Sürüm okuma** (`version.go`): aracın kendi `--version` çıktısı, 3 sn timeout +
+  `proc.TreeKill`. Bu, katmanın "hiçbir şeyi çalıştırma" kuralından **bilinçli**
+  sapmasıdır: sürüm bayrağı yan etkisizdir ve timeout, bayrağı tanımayıp stdio
+  sunucusu olarak beklemeye geçen `codebase-memory-mcp` gibi bir aracı da keser.
+  Çıktı stdout+stderr birleşik okunur (ffmpeg banner'ı stderr'e yazar).
+- **Release kontrolü** (`release.go`): `releases/latest`, **6 saat disk cache**
+  (`<dataDir>/cache/exttools-releases.json`, atomik tmp→rename). Kimliksiz GitHub
+  limiti saatte 60 istek; 7 araç × birkaç tık limiti dakikalar içinde bitirirdi.
+  Ağ/limit hatasında **fail-open**: bayat cache `stale=true` ile döner, cache hiç
+  yoksa hata. `Compare` ayrıştıramadığı sürümde **`unknown`** der — asla tahmin
+  etmez; yerel sürüm ileri ise `up-to-date` (nightly build'i "güncelleme var" diye
+  göstermez).
+- **Güncelleme uygulama** (`update.go`) yalnız **paket-yöneticisi destekli**
+  araçlarda: `mmdc` → `npm install -g @mermaid-js/mermaid-cli`, `ffmpeg` →
+  `winget upgrade --id Gyan.FFmpeg`. Diğer hepsi `UpdateManual` — Windows'ta
+  çalışan bir alt-süreç (MCP stdio sunucusu kendi .exe'sini, piper sentezi kendi
+  dll'ini) dosyayı kilitler ve yarım kalan kopyalama aracı geri dönüşsüz bozar.
+  Komut istekten değil **katalogdan** gelir → enjeksiyon yolu yok.
+- **API:** `GET /api/external-tools` (+`version`/`versionError`/`updateKind`/
+  `updateCommand`/`updateNote`, probe'lar paralel) · `POST .../check-updates`
+  (`?refresh=1` cache atlar) · `POST .../{name}/update` (manual araçta **409** +
+  talimat). Güncelleme **ajan aracı olarak açılmadı** — ajan koştuğu makineyi
+  sessizce değiştirmesin.
+- **UI:** `ExternalToolsPanel` satırında `v0.8.1` çipi, güncelleme varsa release'e
+  giden `↑ <tag>` rozeti, `command` araçlarda **Güncelle** butonu + canlı çıktı
+  kutusu, `manual` araçlarda talimat callout'u; her `command` aracın altında
+  komutu panoya kopyalama. Kontrol butonu **açılışta otomatik çalışmaz** (ağa
+  çıkar) — tespit anında, release kontrolü istek üzerine.
+- **Öneri kuralı `tool-update`** (`recommendations.ts`): güncelleme varsa uyarı
+  kartı + kaç tanesinin tek tıkla güncellenebildiği. Yalnız `outdated` sayılır
+  (`unknown` kart çıkarmaz — manual araçta yanlış tahmin riskli ikili değişimine
+  iter). Probe `fetchRecommendationData`'nın **tek ağ çağrısı** olduğu için
+  `.catch(() => [])` ile sarıldı: çevrimdışı makine `Promise.all`'u reddedip
+  **tüm** önerileri düşürmesin; boş dizi "fikrim yok" demek, "hepsi güncel" değil.
+- Test: `exttools/{version,compare,release}_test.go` (banner ayrıştırma,
+  karşılaştırma tablosu, cache TTL + fail-open + soğuk-cache hatası, katalog
+  bütünlüğü) + `recommendations.test.ts` (30 test, yeni kural dahil).
+  Canlı doğrulama: 7/7 araç tespit + sürüm; codebase-memory-mcp 0.8.1→v0.9.0 ve
+  piper 1.2.0→v1.6.0 gerçekten "eski" çıktı. Detay `54-CAPABILITY-PROBE.md`.
+
+## Ağ ekranı: ajanlar artık çalışan **örnekler** ✅ (2026-08-01)
+
+- **Sorun:** Ağ ekranı ajan **tanımlarını** listeliyordu — workspace'te hiçbir şey
+  çalışmasa bile tüm ajanlar tuvalde duruyordu, aynı ajan aynı anda üç oturum
+  sürerken tek düğüm olarak görünüyordu. Ekran "kim ne yapıyor" değil "kimler var"
+  sorusunu cevaplıyordu.
+- **Çözüm:** `/api/graph` ajan düğümlerini **çalışan oturum başına** üretiyor
+  (`buildAgentInstances`): id `agent:<agentID>#<sessionID>`, düğümde
+  `sessionId`/`agentId`/`runKind`/`runTarget` + örneği ayırt eden alt-başlık
+  ("Görev · <oturum başlığı>"). Kapsanan kindler: chat / task / flow /
+  flow-coordinator / schedule / **spawned (otomasyon + spawn)** / worker / inbox.
+  Hiç çalışan yoksa hiç ajan düğümü yok.
+- Ajana bağlı kenarlar (`owns`/`created`/`uses`/`skill`/`mcp`) `addAgentEdges` ile
+  **her canlı kopyaya** çoğaltılır; canlı kopyası olmayan ajanın kenarı çizilmez.
+  Skill/MCP düğümleri de yalnız çalışan bir tüketicisi varsa eklenir (yoksa tuvalde
+  bağsız düğüm olarak asılı kalıyorlardı).
+- Frontend: ajan etiketi iki satır (ad + çalıştırma türü) → aynı ajanın kopyaları
+  ayırt edilir; aktif bağ haritası **örnek** id'siyle anahtarlanır (bir ajanın iki
+  kopyası iki farklı göreve bağlanabilir); "Boşta" lobisi **"Çalışıyor"** çekirdeğine
+  dönüştü (task/flow hedefi olmayan chat/schedule/spawn/worker örnekleri buraya
+  yaylanır) ve hedefsiz örnek yoksa hiç çizilmez. Başlıkta "N aktif ajan / M".
+- `eventToRefreshSignals.ts`: `task` olayı da artık `SIGNAL_NETWORK` bumpluyor —
+  çalıştırma başlayınca/bitince düğüm sadece renk değiştirmiyor, **eklenip siliniyor**.
+- Test: `internal/api/graph_instances_test.go` (boşta → 0 düğüm, oturum başına bir
+  kopya, silinmiş ajanın oturumu düşer, alt-başlık üretimi). Detay `_Docs\23`.
+
+## Glob `**/` sınır hatası + inline eşiği 32 KB + composer'da dizin/branch alt alta ✅ (2026-07-29)
+
+- **`globToRegexp` `**/` dizin-sınırını kaybediyordu (gerçek hata).** `**/` şu
+  şekilde çevriliyordu: `.*(?:/)?`. `.*` açgözlü ve `/` opsiyonel olduğu için
+  desen **segment ortasında** da tutuyordu → `**/x.go` deseni `barx.go`'yu
+  eşleştiriyordu. Somut etki: bir ajan `**/log_2026*` ile dosya ararken
+  `d81c8e90-log_20260729.txt`'i **yanlışlıkla** bulur (ya da tersi senaryolarda
+  alakasız dosyalar sonuç listesini kirletir). Doğru çeviri `(?:.*/)?` — grubun
+  `/` ile bitmek zorunda olması sınırı korur; boş geçebildiği için `**/x` yine
+  kökteki `x`'i de tutar. Çıplak `**` (sonda `/` yok) eskisi gibi `.*`.
+  Etki alanı `Glob` + `Grep`'in `glob` filtresi + `.gitignore` kuralları
+  (`ignore.go` aynı fonksiyonu kullanıyor — orada da doğru gitignore semantiğine
+  yaklaştı). Test: `TestGlobToRegexp`'e 10 vaka eklendi.
+  > Not: SES59'daki başarısız aramalar bu hatadan **değildi** — onlar claude-cli'ın
+  > native (ripgrep tabanlı) Glob'uydu ve sonuçları doğruydu; dosyanın diskteki
+  > adı `<id>-<isim>` olduğu için kullanıcının gördüğü isimle prefix araması
+  > tutmuyordu. Bu hata TionSwarm'ın kendi Glob'unda ayrıca duruyordu.
+- **`maxInlineTextBytes` 16 KB → 32 KB** (`api/uploads.go`). Eşiğin altındaki
+  text/code ekleri prompt'a gömülür (tek turda okunur), üstündekiler yola göre
+  `Read` edilir. Takas bilinçli: gömülü ek oturumun **her turunda** yeniden
+  gönderilir, listelenen ek yalnız gerektiğinde bir `Read` maliyeti çıkarır.
+  32 KB (~8K token) tipik "config/stack-trace yapıştır" vakasını kapsar.
+- **Composer'da dizin ve branch alt alta** (`WorkDirBadge`): 1. satır klasör adı,
+  2. satır `⎇ branch`. Yan yanayken ikisi aynı genişlik için yarışıyordu; artık
+  yanındaki ajan seçicisiyle aynı iki-satırlı yapıda, composer satırı hizalı.
+  Telefonda yine yalnız ikon.
+
+## Attachment'lar artık MUTLAK yolla veriliyor (ajan dosyasını aramıyor) ✅ (2026-07-29)
+
+**Bulgu (WS10/SES59):** kullanıcı 4.9 MB'lık bir Unity log'u ekledi; ajan dosyayı
+**okumaya başlayana kadar 15 araç çağrısı** harcadı — ikisi 20 sn'lik ripgrep
+timeout'u. Kök neden tek satırdı (`conversation/manager.go`):
+
+```
+- log.txt (text, 4942432 bytes) — read_file path: artifacts/SES59/d81c8e90-log.txt
+```
+
+Üç ayrı kusur:
+
+1. **Yol göreliydi ve neye göreli olduğu söylenmiyordu.** `Attachment.RelPath`
+   workspace sandbox kökü (`<DataDir>/workspace`) altındadır; ama oturumun cwd'si
+   `Session.WorkingDir` (rastgele bir proje klasörü, burada `Desktop/city-cleaner`).
+   Ajan yolu cwd'ye göre çözünce dosya yok; sonra `Glob`/`Grep` ile dosyayı kendi
+   ekinde aramaya başladı.
+2. **`read_file` diye bir araç yok** — fs araçları claude-cli ile aynı isimde
+   (`Read`/`Grep`). Prompt olmayan bir aracı işaret ediyordu.
+3. **Boyut ham byte'tı ve strateji önerisi yoktu.** 4.9 MB'ı `Read` ile baştan
+   okumak anlamsız; ajan bunu ancak deneyip görüyordu.
+
+**Düzeltme** — attachment mantığı `conversation/attachments.go`'ya ayrıldı:
+
+- **Yol mutlaklaştı.** Yeni `WithAttachmentRoot(ctx, root)` (ctx-taşımalı, çünkü
+  `Manager` workspace'ler arasında paylaşımlıdır — `WithCompactPrompt` ile aynı
+  gerekçe) sandbox kökünü turun bağlamına koyar; satır artık host'un native yol
+  stilinde tam yol basar. Kök `workspace.Workspace.SandboxRoot()`'tan gelir (5 yerde
+  elle yazılan `filepath.Join(DataDir, "workspace")` da bu helper'a çevrildi).
+- **Gerçek araç adı:** `— Read/Grep this exact path: C:\…\artifacts\SES59\…`.
+- **Okunabilir boyut + strateji ipucu:** `4.7 MB`; 256 KB üstü ek varsa bloğun
+  sonuna "önce Grep'le, sonra offset/limit ile çevresini Read'le" notu eklenir.
+- **Kök yoksa sessizce yanıltmıyor:** ctx kök taşımıyorsa yol "workspace sandbox
+  kökine göreli" diye **etiketlenir** — açılabilir gibi sunulmaz.
+
+Enjeksiyon noktaları: `chat_stream` · `chat_btw` · `summary` · `wake_turn` ·
+`chat_resume` (claude-cli delta) · `flows` ×2. `ToProviderMessages`/
+`InlineAttachments` artık `ctx` alır. Test: `attachments_test.go` (5 test —
+mutlak yol, köksüz etiket, büyük-dosya ipucu, boyut birimleri).
+
+## Ajan kimliği: ID ikinci satıra + sohbet listesi sekmeleri URL'de ✅ (2026-07-29)
+
+İki küçük ama uygulama-geneli UX düzeltmesi.
+
+- **Ajan ID'si ikinci satırda, modelin solunda.** `AgentIdentity` (`shared/components/
+  agents/`) `showId` ile ID'yi ismin **yanına** basıyordu; uzun isimlerde ikisi aynı
+  satırda yarışıyordu. Artık ikinci satır `ID · model` düzeninde: ID sola sabitlenmiş
+  ve asla kırpılmıyor (`shrink-0`), model kalan genişliği alıyor (`truncate`). Tek
+  bileşen olduğu için composer ajan seçici, sohbet balonu başlığı, oturum katılımcıları,
+  pano kartları ve ajan listeleri **hepsi birden** aynı yerleşimi aldı. `showId` var
+  ama `subtitle="none"` olduğunda ikinci satır yalnız ID'den oluşur.
+- **Sohbet listesi sekmeleri artık URL'de.** `SessionsSidebar`'ın Aktif/Arşiv/Workers
+  görünümü ve tür filtresi bileşen-içi `useState`'ti → paylaşılamıyor, geri/ileri
+  tuşunu tanımıyordu. Hash routing'e **query desteği** eklendi
+  (`#/w/{ws}/{view}[/{id}][?k=v]`): `parseRoute` '?'ten sonrasını `Route.query`'ye
+  ayrıştırır, `buildRoute` anahtarları sıralı + boşları atarak geri yazar (aynı state
+  → byte-aynı string, `useUrlSync` karşılaştırması bozulmasın diye). Sohbetin tek
+  entity yuvası `sessionId`'ye ait olduğundan sekmeler query'de:
+  `?list=archived&kind=task`. Varsayılanlar (`list=active`, `kind=''`) yazılmaz →
+  gündelik URL değişmedi. State `useDeepLinks`'e taşındı (diğer sekmelerle aynı yer),
+  `SessionsSidebar` kontrollü bileşen oldu. Tür filtresinin localStorage kalıcılığı
+  korundu; URL'de açık `?kind=` varsa storage'ı ezer. URL otoritedir: query taşımayan
+  bir link sekmeleri varsayılana döndürür. Detay `33-DIS-AJAN-OTOMASYONU.md` §B.1.
 
 ## Sohbet süre/zaman bilgileri artık sunucu-otoriter ✅ (2026-07-28)
 
@@ -804,6 +1113,11 @@ ve Çalışma dizini butonları bir toggle ile gösterilip gizlenebilsin.
 - Yeni `SlidersHorizontal` toggle butonu (`md:hidden`, yalnız dar ekran) kontrolleri
   aç/kapat yapar; açıkken accent kenarlık. Tercih `localStorage`
   (`tionswarm.composerControlsOpen`) ile kalıcı; varsayılan gizli. `tsc` yeşil.
+- **2026-08-01:** 🔧 **Araçlar** butonu da bu gruba alındı (dördüncü üye) —
+  toggle tooltip'i `düşünme · izin · çalışma dizini · araçlar` oldu. Grup
+  kapanınca açık bir araç paneli de kapanır: ⚙ toggle'ında
+  `data-tool-access-toggle` yok, dolayısıyla panelin dışarı-tıklama kapanışına
+  takılır — ek kod gerekmedi.
 
 ## Görev listesi UX: bilgi panelinden kaldırıldı + TodoPanel minimize/kapatılamaz ✅ (2026-07-24)
 

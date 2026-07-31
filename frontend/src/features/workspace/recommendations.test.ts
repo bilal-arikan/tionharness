@@ -31,6 +31,9 @@ function healthyCtx(over: Partial<RecContext> = {}): RecContext {
     ws: { defaultWorkingDir: 'C:/work', codebaseMemoryEnabled: true, shellOutputCompression: 'on' },
     settings: { backupEnabled: true },
     agentsCount: 3,
+    // No release check performed / nothing behind. Also the shape an OFFLINE
+    // probe produces, which must stay silent rather than claim anything.
+    updates: [],
     nav: NOOP_NAV,
     ...over,
   } as unknown as RecContext
@@ -79,8 +82,12 @@ describe('token-optimizer rules', () => {
     expect(keys).not.toContain('token-conflict')
   })
 
-  it('offers to wire an installed-but-unhooked optimizer', () => {
-    const keys = keysOf(healthyCtx({ hooks: [] } as unknown as Partial<RecContext>))
+  const sqzTool = { name: 'sqz', found: true, path: 'C:/sqz.exe', wire: 'hook' }
+
+  it('offers to wire sqz when it is installed but unhooked', () => {
+    const keys = keysOf(
+      healthyCtx({ tools: [sqzTool], hooks: [] } as unknown as Partial<RecContext>),
+    )
     expect(keys).toContain('token')
   })
 
@@ -89,11 +96,29 @@ describe('token-optimizer rules', () => {
     expect(keys).not.toContain('token')
   })
 
-  it('wires rtk (not sqz) when rtk is the installed one', async () => {
-    const recs = runRules(healthyCtx({ hooks: [] } as unknown as Partial<RecContext>))
+  // rtk is NOT offered as a hook any more. Its PowerShell one-liner template was
+  // executed by claude-cli through bash, failed on the first `|`, and a failing
+  // PreToolUse hook BLOCKS the tool — so this card used to brick Bash for the whole
+  // workspace (2026-07-31, WS10/SES63). rtk is wired by the shellCommandRewrite
+  // setting instead. This test locks the card away from rtk for good.
+  it('never offers an rtk HOOK, even when rtk is the only optimizer installed', async () => {
+    const ctx = healthyCtx({ hooks: [] } as unknown as Partial<RecContext>) // tools: rtk only
+    const recs = runRules(ctx)
+    const token = recs.find((r) => r.key === 'token')
+    expect(token).toBeUndefined()
+    expect(createHook).not.toHaveBeenCalled()
+  })
+
+  it('wires sqz — never rtk — when the card does fire', async () => {
+    const recs = runRules(
+      healthyCtx({ tools: [sqzTool], hooks: [] } as unknown as Partial<RecContext>),
+    )
     await recs.find((r) => r.key === 'token')?.act()
     expect(createHook).toHaveBeenCalledTimes(1)
-    expect(createHook.mock.calls[0][0]).toMatchObject({ command: expect.stringContaining('rtk') })
+    const cmd = createHook.mock.calls[0][0].command as string
+    expect(cmd).toContain('sqz')
+    // The removed template's signature — if it ever comes back, fail here.
+    expect(cmd).not.toContain('ReadToEnd')
   })
 })
 
@@ -105,7 +130,11 @@ describe('shell-output compression rule', () => {
       healthyCtx({
         tools: [sqzInstalled],
         hooks: [],
-        ws: { defaultWorkingDir: 'C:/work', codebaseMemoryEnabled: true, shellOutputCompression: 'auto' },
+        ws: {
+          defaultWorkingDir: 'C:/work',
+          codebaseMemoryEnabled: true,
+          shellOutputCompression: 'auto',
+        },
       } as unknown as Partial<RecContext>),
     )
     expect(keys).toContain('shell-compress')
@@ -118,7 +147,11 @@ describe('shell-output compression rule', () => {
       healthyCtx({
         tools: [sqzInstalled],
         hooks: [],
-        ws: { defaultWorkingDir: 'C:/work', codebaseMemoryEnabled: true, shellOutputCompression: mode },
+        ws: {
+          defaultWorkingDir: 'C:/work',
+          codebaseMemoryEnabled: true,
+          shellOutputCompression: mode,
+        },
       } as unknown as Partial<RecContext>),
     )
     expect(keys).not.toContain('shell-compress')
@@ -129,7 +162,11 @@ describe('shell-output compression rule', () => {
       healthyCtx({
         tools: [sqzInstalled],
         hooks: [{ enabled: true, command: 'sqz hook claude' }],
-        ws: { defaultWorkingDir: 'C:/work', codebaseMemoryEnabled: true, shellOutputCompression: 'auto' },
+        ws: {
+          defaultWorkingDir: 'C:/work',
+          codebaseMemoryEnabled: true,
+          shellOutputCompression: 'auto',
+        },
       } as unknown as Partial<RecContext>),
     )
     expect(keys).not.toContain('shell-compress')
@@ -163,7 +200,11 @@ describe('codebase-memory rules', () => {
     const keys = keysOf(
       healthyCtx({
         servers: [{ command: `C:/${CBM_TOOL}.exe` }],
-        ws: { defaultWorkingDir: 'C:/work', codebaseMemoryEnabled: false, shellOutputCompression: 'on' },
+        ws: {
+          defaultWorkingDir: 'C:/work',
+          codebaseMemoryEnabled: false,
+          shellOutputCompression: 'on',
+        },
       } as unknown as Partial<RecContext>),
     )
     expect(keys).toContain('cbm-enable')
@@ -199,11 +240,15 @@ describe('workspace-setup rules', () => {
   })
 
   it('flags an empty MCP server list', () => {
-    expect(keysOf(healthyCtx({ servers: [] } as unknown as Partial<RecContext>))).toContain('no-mcp')
+    expect(keysOf(healthyCtx({ servers: [] } as unknown as Partial<RecContext>))).toContain(
+      'no-mcp',
+    )
   })
 
   it('flags disabled backups', () => {
-    const keys = keysOf(healthyCtx({ settings: { backupEnabled: false } } as unknown as Partial<RecContext>))
+    const keys = keysOf(
+      healthyCtx({ settings: { backupEnabled: false } } as unknown as Partial<RecContext>),
+    )
     expect(keys).toContain('backup-off')
   })
 
@@ -222,6 +267,73 @@ describe('workspace-setup rules', () => {
     expect(cli?.desc).toContain('mmdc')
     expect(cli?.desc).toContain('ffmpeg')
     expect(cli?.desc).not.toContain('absent-cli')
+  })
+})
+
+describe('tool-update', () => {
+  // The rule's whole job: surface a real "newer version published" without ever
+  // inventing one. Every case below is about that boundary.
+  const withUpdates = (updates: unknown[], tools?: unknown[]) =>
+    healthyCtx({
+      updates,
+      ...(tools ? { tools } : {}),
+    } as unknown as Partial<RecContext>)
+
+  it('fires for an outdated tool and names the published version', () => {
+    const rec = runRules(
+      withUpdates([{ name: 'piper', status: 'outdated', latest: 'v1.6.0' }]),
+    ).find((r) => r.key === 'tool-update')
+    expect(rec?.desc).toContain('piper → v1.6.0')
+    expect(rec?.variant).toBe('warning')
+  })
+
+  it('stays silent when everything is current', () => {
+    expect(
+      keysOf(withUpdates([{ name: 'rtk', status: 'up-to-date', latest: 'v0.44.1' }])),
+    ).not.toContain('tool-update')
+  })
+
+  // 'unknown' means a version could not be parsed on one side. Nudging an
+  // upgrade on that guess would, for the manual tools, push the user into a
+  // risky binary swap they did not need.
+  it('does not treat an unparseable comparison as an update', () => {
+    expect(
+      keysOf(withUpdates([{ name: 'rtk', status: 'unknown', error: 'sürüm okunamadı' }])),
+    ).not.toContain('tool-update')
+  })
+
+  // The probe catches its own network failure and yields [], so an offline
+  // machine must simply produce no card — not a false "all up to date" claim
+  // and not a crash that takes every other recommendation down with it.
+  it('stays silent when the release check could not run', () => {
+    expect(keysOf(withUpdates([]))).not.toContain('tool-update')
+  })
+
+  it('counts how many of the outdated tools can be updated in one click', () => {
+    const rec = runRules(
+      withUpdates(
+        [
+          { name: 'mmdc', status: 'outdated', latest: '12.0.0' },
+          { name: 'piper', status: 'outdated', latest: 'v1.6.0' },
+        ],
+        [
+          { name: 'mmdc', found: true, wire: 'cli', updateKind: 'command' },
+          { name: 'piper', found: true, wire: '', updateKind: 'manual' },
+        ],
+      ),
+    ).find((r) => r.key === 'tool-update')
+    expect(rec?.desc).toContain('1 tanesi tek tıkla')
+  })
+
+  it('says everything is manual when none is package-manager backed', () => {
+    const rec = runRules(
+      withUpdates(
+        [{ name: 'piper', status: 'outdated', latest: 'v1.6.0' }],
+        [{ name: 'piper', found: true, wire: '', updateKind: 'manual' }],
+      ),
+    ).find((r) => r.key === 'tool-update')
+    expect(rec?.desc).toContain('elle güncellenir')
+    expect(rec?.desc).not.toContain('tek tıkla')
   })
 })
 

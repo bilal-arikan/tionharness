@@ -373,7 +373,7 @@ func artifactDiskPath(wsp *workspace.Workspace, a db.Artifact) string {
 		if filepath.IsAbs(rel) {
 			return rel
 		}
-		return filepath.Join(wsp.DataDir, "workspace", filepath.FromSlash(rel))
+		return filepath.Join(wsp.SandboxRoot(), filepath.FromSlash(rel))
 	}
 	return filepath.Join(wsp.DataDir, "store", "artifacts", a.ID+".json")
 }

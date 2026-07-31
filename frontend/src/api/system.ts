@@ -10,6 +10,8 @@ import type {
   AppEvent,
   WorkspaceUsage,
   ExternalToolStatus,
+  ExternalToolUpdate,
+  ExternalToolUpdateResult,
   TokenToolReport,
   VersionInfo,
   BackupStatus,
@@ -257,13 +259,36 @@ export const systemApi = {
   // Per-view "work in progress" flags for the left-nav busy indicators
   // (chat stream / running task / running flow / schedule-triggered run).
   getActivity: () =>
-    req<{ chat: boolean; task: boolean; flow: boolean; schedule: boolean; executions: boolean; insights?: boolean }>(
-      '/api/activity',
-    ),
+    req<{
+      chat: boolean
+      task: boolean
+      flow: boolean
+      schedule: boolean
+      executions: boolean
+      insights?: boolean
+    }>('/api/activity'),
 
-  // Detect optional external token-optimization tools (rtk, sqz) on the host
-  // PATH. Presence-only — the backend never runs or installs them.
+  // Detect optional external tools on the host and read the version each one
+  // reports. Path resolution runs nothing; the version probe runs only the
+  // tool's own version flag. Fast + local, so the panel calls it on open.
   externalTools: () => req<ExternalToolStatus[]>('/api/external-tools'),
+
+  // Check each installed tool against its latest published GitHub release.
+  // Separate from externalTools() because it leaves the machine: results are
+  // cached 6h server-side (GitHub allows 60 unauthenticated calls/hour), and
+  // `refresh` drops that cache. Never called automatically on open.
+  checkExternalToolUpdates: (refresh = false) =>
+    req<ExternalToolUpdate[]>(`/api/external-tools/check-updates${refresh ? '?refresh=1' : ''}`, {
+      method: 'POST',
+    }),
+
+  // Run one tool's update command. Only accepted for `updateKind === 'command'`
+  // tools; the rest answer 409 with their manual instructions, because
+  // overwriting a binary a running child holds open would break the tool.
+  updateExternalTool: (name: string) =>
+    req<ExternalToolUpdateResult>(`/api/external-tools/${encodeURIComponent(name)}/update`, {
+      method: 'POST',
+    }),
 
   // Token-optimizer MAINTENANCE (rtk / sqz). These are actions, not settings —
   // the tools' own config is machine-global while TionSwarm settings are
@@ -275,11 +300,13 @@ export const systemApi = {
   tokenToolReport: () => req<TokenToolReport>('/api/external-tools/token-report'),
   // Clears sqz's dedup cache — what sqz's own help prescribes when stale
   // `§ref:HASH§` pointers start confusing the agent. Stats/history are kept.
-  sqzResetCache: () => req<{ output: string }>('/api/external-tools/sqz-reset-cache', { method: 'POST' }),
+  sqzResetCache: () =>
+    req<{ output: string }>('/api/external-tools/sqz-reset-cache', { method: 'POST' }),
   // Opens rtk's config.toml in the OS file manager. Does NOT create it: rtk runs
   // on built-in defaults until `rtk config --create`, and materialising one from
   // here would change rtk for every tool on the machine.
-  revealRtkConfig: () => req<{ path: string }>('/api/external-tools/rtk-config/reveal', { method: 'POST' }),
+  revealRtkConfig: () =>
+    req<{ path: string }>('/api/external-tools/rtk-config/reveal', { method: 'POST' }),
 
   // Build / version info (injected via ldflags at build time; falls back to
   // "dev" for local development builds without explicit versioning).

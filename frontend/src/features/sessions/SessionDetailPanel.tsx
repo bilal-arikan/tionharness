@@ -267,161 +267,162 @@ export function SessionDetailPanel({
           while the content scrolls, so the scroll lives on the inner wrapper. */}
       <ResizeHandle onMouseDown={startDrag} side="left" />
       <div className="flex h-full flex-col overflow-y-auto">
-      <div className="flex items-center justify-between border-b border-[var(--color-border)] px-4 py-3">
-        <span className="text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
-          Oturum bilgisi
-        </span>
-        <div className="flex items-center gap-1">
-          <button
-            onClick={() => setLocalRefresh((n) => n + 1)}
-            disabled={loading}
-            title="Yenile"
-            className="rounded p-1 text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)] disabled:opacity-40"
-          >
-            <span className={`inline-block ${loading ? 'animate-spin' : ''}`}>↻</span>
-          </button>
-          <button
-            onClick={onClose}
-            title="Paneli kapat"
-            className="rounded p-1 text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)]"
-          >
-            ✕
-          </button>
+        <div className="flex items-center justify-between border-b border-[var(--color-border)] px-4 py-3">
+          <span className="text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
+            Oturum bilgisi
+          </span>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setLocalRefresh((n) => n + 1)}
+              disabled={loading}
+              title="Yenile"
+              className="rounded p-1 text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)] disabled:opacity-40"
+            >
+              <span className={`inline-block ${loading ? 'animate-spin' : ''}`}>↻</span>
+            </button>
+            <button
+              onClick={onClose}
+              title="Paneli kapat"
+              className="rounded p-1 text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)]"
+            >
+              ✕
+            </button>
+          </div>
         </div>
-      </div>
 
-      {loading && !info ? (
-        <p className="px-4 py-6 text-sm text-[var(--color-text-dim)]">Yükleniyor…</p>
-      ) : !info ? (
-        <p className="px-4 py-6 text-sm text-[var(--color-text-dim)]">Bilgi yok.</p>
-      ) : (
-        <div className="flex flex-col gap-5 px-4 py-4">
-          {/* Title + status */}
-          <SessionTitleBlock
-            info={info}
-            editingTitle={editingTitle}
-            titleDraft={titleDraft}
-            savingTitle={savingTitle}
-            setTitleDraft={setTitleDraft}
-            setEditingTitle={setEditingTitle}
-            startEditTitle={startEditTitle}
-            commitTitle={commitTitle}
-            onSelectSession={onSelectSession}
-            onGenerateTitle={handleTitle}
-            titling={titling}
-          />
-
-          {/* Background process: an in-flight turn and/or a warm persistent CLI
-              process for this session — with stop / restart / recycle controls. */}
-          {(info.running || info.warmCliProcess) && (
-            <SessionProcessCard
+        {loading && !info ? (
+          <p className="px-4 py-6 text-sm text-[var(--color-text-dim)]">Yükleniyor…</p>
+        ) : !info ? (
+          <p className="px-4 py-6 text-sm text-[var(--color-text-dim)]">Bilgi yok.</p>
+        ) : (
+          <div className="flex flex-col gap-5 px-4 py-4">
+            {/* Title + status */}
+            <SessionTitleBlock
               info={info}
-              nowTick={nowTick}
-              procBusy={procBusy}
-              onStop={handleStopProc}
-              onRestart={handleRestartProc}
-              onDrop={handleDropProc}
-              hasRerun={!!onRerun}
+              editingTitle={editingTitle}
+              titleDraft={titleDraft}
+              savingTitle={savingTitle}
+              setTitleDraft={setTitleDraft}
+              setEditingTitle={setEditingTitle}
+              startEditTitle={startEditTitle}
+              commitTitle={commitTitle}
+              onSelectSession={onSelectSession}
+              onGenerateTitle={handleTitle}
+              titling={titling}
             />
-          )}
 
-          {/* Tags — free-form labels (also drive tag-triggered automations) */}
-          <section>
-            <div className="mb-2 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-dim)] opacity-70">
-              <span>Etiketler</span>
-            </div>
-            <TagEditor
-              tags={info.tags ?? []}
-              onChange={async (tags) => {
-                setInfo((prev) => (prev ? { ...prev, tags } : prev))
-                try {
-                  await api.setSessionTags(sessionId, tags)
-                } catch {
-                  setLocalRefresh((n) => n + 1) // reload on failure to resync
-                }
-              }}
-              placeholder="Etiket ekle (otomasyon tetikleyicisi olabilir)…"
+            {/* Background process: an in-flight turn and/or a warm persistent CLI
+              process for this session — with stop / restart / recycle controls. */}
+            {(info.running || info.warmCliProcess) && (
+              <SessionProcessCard
+                info={info}
+                nowTick={nowTick}
+                procBusy={procBusy}
+                onStop={handleStopProc}
+                onRestart={handleRestartProc}
+                onDrop={handleDropProc}
+                hasRerun={!!onRerun}
+              />
+            )}
+
+            {/* Tags — free-form labels (also drive tag-triggered automations) */}
+            <section>
+              <div className="mb-2 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-dim)] opacity-70">
+                <span>Etiketler</span>
+              </div>
+              <TagEditor
+                tags={info.tags ?? []}
+                onChange={async (tags) => {
+                  setInfo((prev) => (prev ? { ...prev, tags } : prev))
+                  try {
+                    await api.setSessionTags(sessionId, tags)
+                  } catch {
+                    setLocalRefresh((n) => n + 1) // reload on failure to resync
+                  }
+                }}
+                placeholder="Etiket ekle (otomasyon tetikleyicisi olabilir)…"
+              />
+            </section>
+
+            {/* Coordinator/worker (M2): toggle coordinator mode + live worker roster */}
+            <CoordinatorSection
+              sessionId={sessionId}
+              role={info.role}
+              coordinatorMode={info.coordinatorMode}
+              coordinatorDepth={info.coordinatorDepth}
+              workflow={info.coordinatorWorkflow}
+              coordinatorSessionId={info.coordinatorSessionId}
+              refreshKey={(refreshKey ?? 0) + localRefresh}
+              onError={onError}
+              onRoleChanged={() => setLocalRefresh((n) => n + 1)}
+              onSelectSession={onSelectSession}
+              onOpenSkill={onOpenSkill}
             />
-          </section>
 
-          {/* Coordinator/worker (M2): toggle coordinator mode + live worker roster */}
-          <CoordinatorSection
-            sessionId={sessionId}
-            role={info.role}
-            workflow={info.coordinatorWorkflow}
-            coordinatorSessionId={info.coordinatorSessionId}
-            refreshKey={(refreshKey ?? 0) + localRefresh}
-            onError={onError}
-            onRoleChanged={() => setLocalRefresh((n) => n + 1)}
-            onSelectSession={onSelectSession}
-            onOpenSkill={onOpenSkill}
-          />
-
-          {/* Meta */}
-          <Section title="Genel">
-            <Row label="Başlama" value={formatDate(info.createdAt)} />
-            <Row label="Son etkinlik" value={formatDate(info.updatedAt)} />
-            {/* Prompt-cache warmth: how long the cached prefix stays warm after
+            {/* Meta */}
+            <Section title="Genel">
+              <Row label="Başlama" value={formatDate(info.createdAt)} />
+              <Row label="Son etkinlik" value={formatDate(info.updatedAt)} />
+              {/* Prompt-cache warmth: how long the cached prefix stays warm after
                 the last turn (1h Anthropic ephemeral TTL / prompt epoch). */}
-            <div className="flex items-center justify-between py-0.5 text-xs">
-              <span className="text-[var(--color-text-dim)]">Prompt cache</span>
-              <CacheWarmthBadge updatedAt={info.updatedAt} nowSec={nowTick} />
-            </div>
-            <Row label="Boyut" value={`${formatBytes(info.sizeBytes)} · ${info.fileCount} dosya`} />
-            <Row label="Mesaj sayısı" value={String(info.messageCount)} />
-          </Section>
+              <div className="flex items-center justify-between py-0.5 text-xs">
+                <span className="text-[var(--color-text-dim)]">Prompt cache</span>
+                <CacheWarmthBadge updatedAt={info.updatedAt} nowSec={nowTick} />
+              </div>
+              <Row
+                label="Boyut"
+                value={`${formatBytes(info.sizeBytes)} · ${info.fileCount} dosya`}
+              />
+              <Row label="Mesaj sayısı" value={String(info.messageCount)} />
+            </Section>
 
+            {/* Context window usage (/context-style) */}
+            <SessionContextUsage
+              info={info}
+              ctxWindow={ctxWindow}
+              ctxUsed={ctxUsed}
+              ctxFree={ctxFree}
+              ctxPct={ctxPct}
+            />
 
-          {/* Context window usage (/context-style) */}
-          <SessionContextUsage
-            info={info}
-            ctxWindow={ctxWindow}
-            ctxUsed={ctxUsed}
-            ctxFree={ctxFree}
-            ctxPct={ctxPct}
-          />
+            {/* Agents */}
+            <SessionAgentsSection info={info} onSelectAgent={onSelectAgent} />
 
-          {/* Agents */}
-          <SessionAgentsSection info={info} onSelectAgent={onSelectAgent} />
-
-          {/* This session's own lifetime spend + savings — the per-conversation
+            {/* This session's own lifetime spend + savings — the per-conversation
               cost (the session-scoped analog of the agent's daily total below). */}
-          {sessionUsage && sessionUsage.calls > 0 && (
-            <SessionUsageCard sessionUsage={sessionUsage} />
-          )}
+            {sessionUsage && sessionUsage.calls > 0 && (
+              <SessionUsageCard sessionUsage={sessionUsage} />
+            )}
 
-          {/* Debug / observability moved to its own panel — opened from the chat
+            {/* Debug / observability moved to its own panel — opened from the chat
               header's "Debug" button (SessionDebugModal). */}
 
-          {/* Actions / tools. AI title generation moved next to the title's edit
+            {/* Actions / tools. AI title generation moved next to the title's edit
               control (SessionTitleBlock); "Bağlam" lives in the chat header. */}
-          <Section title="Araçlar">
-            <div className="flex flex-col gap-1.5">
-              <ActionBtn
-                icon={info.state === 'archived' ? ArchiveRestore : Archive}
-                label={
-                  archiving
-                    ? '…'
-                    : info.state === 'archived'
-                      ? 'Arşivden kaldır'
-                      : 'Arşivle'
-                }
-                onClick={handleArchiveToggle}
-                disabled={archiving}
-                busy={archiving}
-              />
-              <ActionBtn
-                icon={Trash2}
-                label="Oturumu sil"
-                danger
-                onClick={() => {
-                  if (confirm(`"${info.title || 'Bu oturum'}" silinsin mi?`)) onDeleteSession(sessionId)
-                }}
-              />
-            </div>
-          </Section>
-        </div>
-      )}
+            <Section title="Araçlar">
+              <div className="flex flex-col gap-1.5">
+                <ActionBtn
+                  icon={info.state === 'archived' ? ArchiveRestore : Archive}
+                  label={
+                    archiving ? '…' : info.state === 'archived' ? 'Arşivden kaldır' : 'Arşivle'
+                  }
+                  onClick={handleArchiveToggle}
+                  disabled={archiving}
+                  busy={archiving}
+                />
+                <ActionBtn
+                  icon={Trash2}
+                  label="Oturumu sil"
+                  danger
+                  onClick={() => {
+                    if (confirm(`"${info.title || 'Bu oturum'}" silinsin mi?`))
+                      onDeleteSession(sessionId)
+                  }}
+                />
+              </div>
+            </Section>
+          </div>
+        )}
       </div>
     </aside>
   )

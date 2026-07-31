@@ -4,7 +4,12 @@
 // focus_view navigation) back into app state.
 import { useCallback, type MutableRefObject } from 'react'
 import { setActiveWorkspace, getActiveWorkspace } from '@/api'
-import { parseRoute, routeIdForView, type Route } from './url'
+import { parseRoute, routeIdForView, routeQueryForView, type Route } from './url'
+import {
+  normalizeKindFilter,
+  normalizeSessionListTab,
+  type SessionListTab,
+} from '@/features/sessions/sessionKindMeta'
 import { useUrlSync } from './useUrlSync'
 import type { View } from './NavRail'
 
@@ -26,6 +31,8 @@ export interface AppNavigationParams {
   workspaceTab: string | null
   insightTab: string | null
   flowsTab: string | null
+  sessionListTab: SessionListTab
+  sessionKindTab: string
   pendingRouteRef: MutableRefObject<Route | null>
   switchWorkspace: (id: string) => void
   selectSession: (id: string, messageId?: string) => void
@@ -36,13 +43,25 @@ export interface AppNavigationParams {
   setWorkspaceTab: (id: string | null) => void
   setInsightTab: (id: string | null) => void
   setFlowsTab: (id: string | null) => void
+  setSessionListTab: (t: SessionListTab) => void
+  setSessionKindTab: (k: string) => void
 }
 
 export function useAppNavigation(p: AppNavigationParams) {
   const {
-    setView, pendingRouteRef, switchWorkspace, selectSession, focusAgent,
-    setArtifactTarget, setScheduleTarget, setSettingsCat, setWorkspaceTab, setInsightTab,
+    setView,
+    pendingRouteRef,
+    switchWorkspace,
+    selectSession,
+    focusAgent,
+    setArtifactTarget,
+    setScheduleTarget,
+    setSettingsCat,
+    setWorkspaceTab,
+    setInsightTab,
     setFlowsTab,
+    setSessionListTab,
+    setSessionKindTab,
   } = p
 
   // Apply a Route (from back/forward, a manual URL edit, or a shared link) to
@@ -58,6 +77,10 @@ export function useAppNavigation(p: AppNavigationParams) {
         return
       }
       if (r.view === 'chat') {
+        // The URL is canonical for the sidebar tabs too — a link without ?list /
+        // ?kind means "the default list", not "keep whatever is on screen".
+        setSessionListTab(normalizeSessionListTab(r.query?.list))
+        setSessionKindTab(normalizeKindFilter(r.query?.kind))
         if (r.id) selectSession(r.id)
       } else if (r.view === 'agents') {
         if (r.id) focusAgent(r.id)
@@ -76,9 +99,19 @@ export function useAppNavigation(p: AppNavigationParams) {
       }
     },
     [
-      setView, pendingRouteRef, switchWorkspace, selectSession, focusAgent,
-      setArtifactTarget, setScheduleTarget, setSettingsCat, setWorkspaceTab, setInsightTab,
+      setView,
+      pendingRouteRef,
+      switchWorkspace,
+      selectSession,
+      focusAgent,
+      setArtifactTarget,
+      setScheduleTarget,
+      setSettingsCat,
+      setWorkspaceTab,
+      setInsightTab,
       setFlowsTab,
+      setSessionListTab,
+      setSessionKindTab,
     ],
   )
 
@@ -95,6 +128,10 @@ export function useAppNavigation(p: AppNavigationParams) {
       workspaceTab: p.workspaceTab,
       insightTab: p.insightTab,
       flowsTab: p.flowsTab,
+    }),
+    query: routeQueryForView(p.view, {
+      sessionListTab: p.sessionListTab,
+      sessionKindTab: p.sessionKindTab,
     }),
   }
   useUrlSync(route, !!p.activeWorkspaceId, applyRoute)

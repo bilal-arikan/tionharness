@@ -2,7 +2,7 @@
 // Feeds the vis-network canvas.
 
 // A node in the workspace collaboration network. `id` is type-prefixed by the
-// backend ("agent:…" / "task:…" / "flow:…").
+// backend ("agent:<agentId>#<sessionId>" / "task:…" / "flow:…").
 export type WorkspaceNodeType = 'agent' | 'task' | 'flow' | 'skill' | 'mcp' | 'run'
 
 export interface WorkspaceGraphNode {
@@ -15,10 +15,14 @@ export interface WorkspaceGraphNode {
   group?: string // owning hub id (cluster layout)
   status?: string // task board state
   desc?: string // longer description (task tooltip)
-  // Live activity (agents): in-flight run right now + what it's running.
+  // Live activity (agents): an agent node IS a running instance — one per
+  // in-flight session — so `running` is always true and the same agent can
+  // appear several times, once per session it is driving.
   running?: boolean
-  runKind?: string // task | flow | chat | schedule
+  runKind?: string // chat | task | flow | schedule | spawned | worker | inbox
   runTarget?: string // type-prefixed id of the running task/flow (or empty)
+  sessionId?: string // the session behind this agent instance
+  agentId?: string // agent definition id shared by all instances of an agent
 }
 
 export interface WorkspaceGraphEdge {

@@ -54,21 +54,21 @@ export interface AppSettings {
   contextBudgetFraction: number
 
   // Context reset / handoff (Anthropic "harness design").
-  handoffAuto: boolean        // auto-reset an autonomous turn that hit the context limit into a fresh session
-  handoffPressure: number     // context-fill ratio above which auto-reset is allowed (0 = default 0.90)
-  handoffMaxChain: number     // max consecutive resets before falling back to plain compaction (0 = default 20)
-  handoffWriteFile: boolean   // also write the handoff to <workdir>/.tionswarm/handoff.md
+  handoffAuto: boolean // auto-reset an autonomous turn that hit the context limit into a fresh session
+  handoffPressure: number // context-fill ratio above which auto-reset is allowed (0 = default 0.90)
+  handoffMaxChain: number // max consecutive resets before falling back to plain compaction (0 = default 20)
+  handoffWriteFile: boolean // also write the handoff to <workdir>/.tionswarm/handoff.md
 
   // Persistent progress (Anthropic claude-progress convention).
-  progressPersist: boolean    // persist the todo_write checklist to <cwd>/.tionswarm/progress.json
-  progressResume: boolean     // inject a resumed-progress block into a fresh session at start
+  progressPersist: boolean // persist the todo_write checklist to <cwd>/.tionswarm/progress.json
+  progressResume: boolean // inject a resumed-progress block into a fresh session at start
 
   // Event-driven session auto-tagging (tool-error/error/goal/goal-done/archived).
   autoTagSessions: boolean
 
   // Per-session debug journal (parallel observability stream).
   debugJournalEnabled: boolean // emit structured debug events to debug.jsonl
-  debugJournalCap: number      // newest events kept per session (0 = default 5000)
+  debugJournalCap: number // newest events kept per session (0 = default 5000)
 
   // Turn recovery (A1).
   reactiveCompact: boolean
@@ -87,8 +87,8 @@ export interface AppSettings {
   guardNoProgressWarn: number // identical successful idempotent repeats → warn (0 = default 2)
   guardNoProgressBlock: number // identical successful idempotent repeats → block, hard stop only (0 = default 5)
   stuckTurnThreshold: number // consecutive bad turns before "stuck" tag + autonomous suspension (0 = off)
-  lessonReflect: boolean     // distill failed turns into stored lessons injected into future turns
-  lessonMaxAgeDays: number   // prune a lesson not recurring within N days (0 = built-in default)
+  lessonReflect: boolean // distill failed turns into stored lessons injected into future turns
+  lessonMaxAgeDays: number // prune a lesson not recurring within N days (0 = built-in default)
 
   autoTitleEnabled: boolean
   titleModel: string
@@ -121,9 +121,18 @@ export interface AppSettings {
   shellMaxTimeoutSec: number
   maxToolOutputKB: number
 
-  // Coordinator/worker guards (M2): active workers per coordinator + auto-turn cap.
+  // Coordinator/worker guards (M2): active workers per coordinator + auto-turn cap,
+  // plus the TREE guards. The per-coordinator worker cap is enforced per node, so
+  // nesting multiplies it — coordinatorMaxSubtreeSessions is the one that actually
+  // bounds a deep tree. -1 = unlimited on both tree guards.
   coordinatorMaxWorkers: number
   coordinatorMaxTurns: number
+  coordinatorMaxDepth: number
+  coordinatorMaxSubtreeSessions: number
+  // Upward-report backstop delay (seconds). Too short and a slow synthesis turn
+  // loses the race, so the parent gets a needless "incomplete"; too long and a
+  // stalled branch keeps its coordinator waiting.
+  coordinatorSettleGraceSec: number
 
   // Working-directory guards for the (unconfined) fs/shell tools.
   autonomousConfine: boolean
@@ -139,7 +148,10 @@ export interface AppSettings {
 
 // Partial update. anthropicKey/minimaxKey/openrouterKey are write-only: "" clears, non-empty sets.
 export type SettingsPatch = Partial<
-  Omit<AppSettings, 'anthropicKeySet' | 'minimaxKeySet' | 'openrouterKeySet' | 'claudeCliAuthSet'> & {
+  Omit<
+    AppSettings,
+    'anthropicKeySet' | 'minimaxKeySet' | 'openrouterKeySet' | 'claudeCliAuthSet'
+  > & {
     anthropicKey: string
     minimaxKey: string
     openrouterKey: string
@@ -226,19 +238,58 @@ export interface VersionInfo {
 }
 
 // Detection result for an optional external CLI tool (rtk, sqz, mmdc, piper…).
-// Presence-only: the backend looks the executable up on PATH, never runs it.
+// The backend resolves the executable's path without running it, then reads the
+// version by invoking only the tool's version flag (side-effect free, 3s cap).
 // `category` groups tools in the panel; `wire` tells how it is used once present:
-//   'hook' → one-click PreToolUse/PostToolUse toggle
-//   'mcp'  → wired via Settings ▸ MCP (info badge)
-//   'cli'  → agent calls it directly via Bash (info badge)
+//   'hook'    → one-click PreToolUse/PostToolUse toggle
+//   'setting' → wired by a workspace setting rather than a hook (rtk)
+//   'mcp'     → wired via Settings ▸ MCP (info badge)
+//   'cli'     → agent calls it directly via Bash (info badge)
 export interface ExternalToolStatus {
   name: string
   desc: string
   url: string
   category: string
-  wire: 'hook' | 'mcp' | 'cli'
+  wire: 'hook' | 'setting' | 'mcp' | 'cli'
   found: boolean
   path?: string
+  /** Installed version, normalised to `major.minor.patch`. */
+  version?: string
+  /** Why `version` is empty — shown instead of silently omitting the chip. */
+  versionError?: string
+  /**
+   * How this tool is upgraded. 'command' → TionSwarm can run `updateCommand` for
+   * the user (a package manager already on the machine). 'manual' → the upgrade
+   * replaces a binary or unpacks an archive, which TionSwarm refuses to do
+   * because a running child locks the file on Windows; `updateNote` says what to
+   * do instead.
+   */
+  updateKind: 'command' | 'manual'
+  updateCommand?: string
+  updateNote?: string
+}
+
+// One tool's upstream release check (POST /api/external-tools/check-updates).
+// `status` is 'unknown' whenever either side is unparseable — never a guess.
+export interface ExternalToolUpdate {
+  name: string
+  status: 'up-to-date' | 'outdated' | 'unknown'
+  latest?: string
+  releaseUrl?: string
+  publishedAt?: string
+  /** Served from an expired cache because the live fetch failed (offline / rate-limited). */
+  stale?: boolean
+  error?: string
+}
+
+// Result of running one tool's update command.
+export interface ExternalToolUpdateResult {
+  name: string
+  ok: boolean
+  output?: string
+  version?: string
+  versionError?: string
+  error?: string
 }
 
 // Token-optimizer maintenance payload: each installed tool's OWN `gain` report

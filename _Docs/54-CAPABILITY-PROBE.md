@@ -170,6 +170,7 @@ Kurallar (sırayla — kartlar üstten alta yığılır):
 - **token**: rtk (yoksa sqz) kurulu ama hiç token-hook yok → `createHook(...)`.
 - **no-mcp**: hiç MCP yok (ve cbm bekleyen öneri değilse) → Market.
 - **backup-off**: `backupEnabled=false` → Yedekleme ayarları.
+- **tool-update** (⚠): kurulu bir aracın daha yeni sürümü yayımlanmış → Harici Araçlar.
 - **cli-tools**: PATH'te `wire=cli` araçlar (mmdc) → tek bilgi kartı, Harici Araçlar.
 
 Yeni algılama endpoint'i eklenmedi; hepsi mevcut endpoint'leri tüketir. Kartlar
@@ -217,6 +218,84 @@ seviyesinde her view'da mount olduğu için workspace ekranında da görünür.
   + `capabilities.go` (gate) · `internal/api/workspace_settings.go` (DTO alanı) ·
   `frontend/.../WorkspacePanel.tsx` (Toggle) · `ExternalToolsPanel.tsx` (callout) ·
   `types/workspace.ts` + `WorkspaceView.tsx` (tip/patch/mapping)
+- **Sürüm/güncelleme (2026-08-01):** `internal/exttools/{catalog,version,compare,release,update}.go`
+  (+ `{version,compare,release}_test.go`) · `internal/api/external_tools.go` (yeniden yazıldı,
+  katalog taşındı) · `internal/api/server.go` (2 yeni rota) · `frontend/src/types/settings.ts`
+  (`ExternalToolUpdate`/`ExternalToolUpdateResult`) · `api/system.ts` · `ExternalToolsPanel.tsx`
+
+## Harici araç sürüm + güncelleme kontrolü — `internal/exttools` (2026-08-01)
+
+Katalog (eskiden `internal/api.knownExternalTools`) kendi paketine taşındı; `api`
+yalnız HTTP katmanı olarak kaldı. Girdi başına iki yeni alan:
+
+```go
+VersionArgs []string   // ör. {"--version"}; boş = sürüm okunamaz
+Update      UpdateSpec // Kind: "command" | "manual"
+```
+
+- **`Tool.Repo()`** GitHub slug'ını **URL'den türetir** (ikinci bir alan tutulmaz
+  → sapamaz). `ffmpeg` GitHub'da olmadığı için `""` → release kontrolü yok.
+- **`LocalVersion`** aracı `--version` ile çalıştırır (3 sn timeout, `proc.TreeKill`,
+  `HardenedEnv`). Paketin geri kalanı hiçbir şey çalıştırmaz; bu **bilinçli**
+  istisnadır — sürüm bayrağı yan etkisizdir ve timeout, bayrağı tanımayıp stdio
+  MCP sunucusu olarak beklemeye geçecek `codebase-memory-mcp`'yi de keser.
+  stdout+stderr birleşik okunur (ffmpeg sürümü stderr'e yazar), çıkış kodu
+  sürüm bulunduysa yok sayılır (bazı araçlar bilinmeyen bayrakta 1 döner ama
+  yine de sürümü basar).
+- **`LatestRelease`** `releases/latest` + **6 sa disk cache**
+  (`<dataDir>/cache/exttools-releases.json`, tmp→rename). Kimliksiz GitHub limiti
+  saatte 60; 7 araçla cache olmadan birkaç tıkta biterdi. Ağ/limit hatasında
+  **fail-open** → bayat cache `stale=true` ile döner; cache yoksa hata.
+- **`Compare`** ayrıştıramadığında **`unknown`** — tahmin yok. Yerel sürüm
+  ileriyse `up-to-date` (dev build "eski" gösterilmez).
+
+### Güncelleme neden sadece kısmen otomatik
+
+| Kind | Araçlar | Neden |
+|------|---------|-------|
+| `command` | `mmdc` (npm), `ffmpeg` (winget) | Paket yöneticisi kurulum dizinini ve çalışan ikiliyi kendi yönetir |
+| `manual` | rtk, sqz, codebase-memory-mcp, piper, whisper-cli | İkiliyi/arşivi **yerinde değiştirmek** gerekir; Windows'ta çalışan alt-süreç (MCP stdio sunucusu kendi `.exe`'sini) dosyayı kilitler → yarım kalan kopya aracı geri dönüşsüz bozar |
+
+`RunUpdate` komutu **katalogdan** alır, istekten değil → enjeksiyon yolu yok.
+5 dk timeout + `TreeKill`; `HardenedEnv` sayesinde soru soracak bir paket
+yöneticisi asılmak yerine hızlı başarısız olur.
+
+### API
+
+| Endpoint | İş |
+|----------|-----|
+| `GET /api/external-tools` | tespit + sürüm (probe'lar paralel) + `updateKind`/`updateCommand`/`updateNote` |
+| `POST /api/external-tools/check-updates` | GitHub karşılaştırması; `?refresh=1` cache'i atlar |
+| `POST /api/external-tools/{name}/update` | yalnız `command` araçları; `manual` → **409** + talimat |
+
+Güncelleme **ajan aracı olarak açılmadı**: ajan koştuğu makineyi sessizce
+değiştirmemeli. Yol `isWorkspaceExempt` kapsamında (workspace-bağımsız).
+
+### UI
+
+`ExternalToolsPanel`: satırda `v<sürüm>` çipi (`data-testid="tool-version"`),
+güncelleme varsa release'e giden `↑ <tag>` rozeti (`tool-outdated`), `command`
+araçlarda **Güncelle** (`tool-update`) + çıktı kutusu, `manual` araçlarda talimat
+callout'u (`tool-manual-update`), komut kopyalama (`tool-copy-update-cmd`).
+Üstte "Güncellemeleri kontrol et" (`ext-tools-check-updates`) + "Önbelleği atla"
+(`ext-tools-refresh-updates`). Release kontrolü bu panelde **açılışta çalışmaz** —
+ağa çıkar; tespit anında, karşılaştırma istek üzerine.
+
+### Öneri kuralı `tool-update`
+
+`recommendations.ts`'e eklenen kural, kurulu bir aracın daha yenisi yayımlanmışsa
+uyarı kartı çıkarır (kaç tanesinin tek tıkla güncellenebildiğini de söyler).
+İki tasarım kararı:
+
+- **Yalnız `outdated` sayılır.** `unknown` (bir taraf ayrıştırılamadı) kart
+  çıkarmaz — manual araçlarda yanlış tahmin kullanıcıyı gereksiz ve riskli bir
+  ikili değiştirmeye iter.
+- **`fetchRecommendationData` içindeki tek ağ probe'u** olduğu için çağrı
+  `.catch(() => [])` ile sarılıdır: çevrimdışı bir makinede `Promise.all`
+  reddedip **tüm** önerileri düşürmesin. Boş dizi "fikrim yok" demektir, "hepsi
+  güncel" değil. (Backend'in 6sa cache'i sayesinde bu çoğunlukla cache okumasıdır.)
+
+Test: `recommendations.test.ts` (outdated/up-to-date/unknown/offline + tek-tık sayımı).
 
 ## Sıradaki adımlar (opsiyonel)
 

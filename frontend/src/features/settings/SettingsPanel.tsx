@@ -9,11 +9,7 @@ import type {
   SettingsPatch,
   SlashCommand,
 } from '@/types'
-import {
-  APP_CATS,
-  CatButton,
-  type Cat,
-} from './primitives'
+import { APP_CATS, CatButton, type Cat } from './primitives'
 import {
   ProfilePanel,
   NotificationsPanel,
@@ -69,7 +65,17 @@ function isCat(v: string | null | undefined): v is Cat {
 // left (like the chat session list) and the selected category's fields on the
 // right. App-global settings and per-workspace settings are separate scopes.
 // The per-category forms live in ./settings/*.
-export function SettingsPanel({ onError, onSaved, onWorkspaceNotifySaved, commands = [], cat: catProp, onCatChange, reloadNonce = 0, navOpen, onToggleNav }: Props) {
+export function SettingsPanel({
+  onError,
+  onSaved,
+  onWorkspaceNotifySaved,
+  commands = [],
+  cat: catProp,
+  onCatChange,
+  reloadNonce = 0,
+  navOpen,
+  onToggleNav,
+}: Props) {
   // Category is controlled by the parent (URL deep-link) when onCatChange is
   // given; an unknown/empty routed category falls back to 'profile'.
   const [catState, setCatState] = useState<Cat>('profile')
@@ -100,11 +106,29 @@ export function SettingsPanel({ onError, onSaved, onWorkspaceNotifySaved, comman
   const [openCmds, setOpenCmds] = useState<Record<string, boolean>>({})
 
   useEffect(() => {
-    api.getSettings().then((s) => { setDraft(s); setOriginal(s) }).catch((e) => onError((e as Error).message))
-    api.getPrompts().then((p) => { setPrompts(p.prompts); setPromptsDir(p.dir) }).catch(() => {})
-    api.listSecrets().then(setSecrets).catch(() => {})
+    api
+      .getSettings()
+      .then((s) => {
+        setDraft(s)
+        setOriginal(s)
+      })
+      .catch((e) => onError((e as Error).message))
+    api
+      .getPrompts()
+      .then((p) => {
+        setPrompts(p.prompts)
+        setPromptsDir(p.dir)
+      })
+      .catch(() => {})
+    api
+      .listSecrets()
+      .then(setSecrets)
+      .catch(() => {})
     // Active workspace's real claude-home path for the read-only Providers field.
-    api.getWorkspaceSettings().then((w) => setWsClaudeHome(w.claudeHomeDir)).catch(() => {})
+    api
+      .getWorkspaceSettings()
+      .then((w) => setWsClaudeHome(w.claudeHomeDir))
+      .catch(() => {})
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -126,7 +150,13 @@ export function SettingsPanel({ onError, onSaved, onWorkspaceNotifySaved, comman
   // first bump (>0) is the first real signal.
   useEffect(() => {
     if (reloadNonce === 0 || dirtyApp) return
-    api.getSettings().then((s) => { setDraft(s); setOriginal(s) }).catch(() => {})
+    api
+      .getSettings()
+      .then((s) => {
+        setDraft(s)
+        setOriginal(s)
+      })
+      .catch(() => {})
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reloadNonce])
 
@@ -136,8 +166,12 @@ export function SettingsPanel({ onError, onSaved, onWorkspaceNotifySaved, comman
   const saveApp = async () => {
     if (!draft) return
     const patch: SettingsPatch = {
-      theme: draft.theme, accent: draft.accent, themePreset: draft.themePreset, language: draft.language,
-      defaultPermissionMode: draft.defaultPermissionMode, claudeCliPath: draft.claudeCliPath,
+      theme: draft.theme,
+      accent: draft.accent,
+      themePreset: draft.themePreset,
+      language: draft.language,
+      defaultPermissionMode: draft.defaultPermissionMode,
+      claudeCliPath: draft.claudeCliPath,
       claudeConfigDir: draft.claudeConfigDir,
       minimaxBaseUrl: draft.minimaxBaseUrl,
       openrouterBaseUrl: draft.openrouterBaseUrl,
@@ -149,44 +183,73 @@ export function SettingsPanel({ onError, onSaved, onWorkspaceNotifySaved, comman
       anthropicServerCompaction: draft.anthropicServerCompaction,
       anthropicRefusalFallback: draft.anthropicRefusalFallback,
       autonomousTaskBudgetTokens: draft.autonomousTaskBudgetTokens,
-      desktopNotifications: draft.desktopNotifications, keepAwake: draft.keepAwake,
-      userName: draft.userName, userTimezone: draft.userTimezone, userCity: draft.userCity,
-      userCountry: draft.userCountry, userNotes: draft.userNotes,
-      maxContextTokens: draft.maxContextTokens, keepRecentMsgs: draft.keepRecentMsgs,
-      contextBudgetCeil: draft.contextBudgetCeil, contextBudgetFraction: draft.contextBudgetFraction,
-      reactiveCompact: draft.reactiveCompact, maxTokenRetries: draft.maxTokenRetries,
-      reactiveKeepRecent: draft.reactiveKeepRecent, maxOutputTokens: draft.maxOutputTokens,
+      desktopNotifications: draft.desktopNotifications,
+      keepAwake: draft.keepAwake,
+      userName: draft.userName,
+      userTimezone: draft.userTimezone,
+      userCity: draft.userCity,
+      userCountry: draft.userCountry,
+      userNotes: draft.userNotes,
+      maxContextTokens: draft.maxContextTokens,
+      keepRecentMsgs: draft.keepRecentMsgs,
+      contextBudgetCeil: draft.contextBudgetCeil,
+      contextBudgetFraction: draft.contextBudgetFraction,
+      reactiveCompact: draft.reactiveCompact,
+      maxTokenRetries: draft.maxTokenRetries,
+      reactiveKeepRecent: draft.reactiveKeepRecent,
+      maxOutputTokens: draft.maxOutputTokens,
       maxProviderRetries: draft.maxProviderRetries,
       // Self-healing (guardrails + stuck threshold + lessonReflect) moved to
       // İçgörü ▸ Öz-iyileşme; NOT patched here so a Settings save can't clobber a
       // change made there with this panel's stale draft.
-      handoffAuto: draft.handoffAuto, handoffPressure: draft.handoffPressure,
-      handoffMaxChain: draft.handoffMaxChain, handoffWriteFile: draft.handoffWriteFile,
-      progressPersist: draft.progressPersist, progressResume: draft.progressResume,
+      handoffAuto: draft.handoffAuto,
+      handoffPressure: draft.handoffPressure,
+      handoffMaxChain: draft.handoffMaxChain,
+      handoffWriteFile: draft.handoffWriteFile,
+      progressPersist: draft.progressPersist,
+      progressResume: draft.progressResume,
       autoTagSessions: draft.autoTagSessions,
-      debugJournalEnabled: draft.debugJournalEnabled, debugJournalCap: draft.debugJournalCap,
-      autoTitleEnabled: draft.autoTitleEnabled, titleModel: draft.titleModel,
+      debugJournalEnabled: draft.debugJournalEnabled,
+      debugJournalCap: draft.debugJournalCap,
+      autoTitleEnabled: draft.autoTitleEnabled,
+      titleModel: draft.titleModel,
       enableShell: draft.enableShell,
-      enableCliHooks: draft.enableCliHooks, enableCodeMode: draft.enableCodeMode,
+      enableCliHooks: draft.enableCliHooks,
+      enableCodeMode: draft.enableCodeMode,
       claudeResume: draft.claudeResume,
       claudePersistentSession: draft.claudePersistentSession,
       claudeSysPromptFile: draft.claudeSysPromptFile,
-      delegationMaxDepth: draft.delegationMaxDepth, delegationMaxCalls: draft.delegationMaxCalls,
-      spawnMaxConcurrent: draft.spawnMaxConcurrent, spawnMaxPerTurn: draft.spawnMaxPerTurn, spawnTimeoutMin: draft.spawnTimeoutMin,
+      delegationMaxDepth: draft.delegationMaxDepth,
+      delegationMaxCalls: draft.delegationMaxCalls,
+      spawnMaxConcurrent: draft.spawnMaxConcurrent,
+      spawnMaxPerTurn: draft.spawnMaxPerTurn,
+      spawnTimeoutMin: draft.spawnTimeoutMin,
       spawnIdleTimeoutMin: draft.spawnIdleTimeoutMin,
       scheduleTimeoutMin: draft.scheduleTimeoutMin,
-      shellDefaultTimeoutSec: draft.shellDefaultTimeoutSec, shellMaxTimeoutSec: draft.shellMaxTimeoutSec, maxToolOutputKB: draft.maxToolOutputKB,
-      coordinatorMaxWorkers: draft.coordinatorMaxWorkers, coordinatorMaxTurns: draft.coordinatorMaxTurns,
+      shellDefaultTimeoutSec: draft.shellDefaultTimeoutSec,
+      shellMaxTimeoutSec: draft.shellMaxTimeoutSec,
+      maxToolOutputKB: draft.maxToolOutputKB,
+      coordinatorMaxWorkers: draft.coordinatorMaxWorkers,
+      coordinatorMaxTurns: draft.coordinatorMaxTurns,
+      coordinatorMaxDepth: draft.coordinatorMaxDepth,
+      coordinatorMaxSubtreeSessions: draft.coordinatorMaxSubtreeSessions,
+      coordinatorSettleGraceSec: draft.coordinatorSettleGraceSec,
       autonomousConfine: draft.autonomousConfine,
       autonomousBootSeq: draft.autonomousBootSeq,
-      backupEnabled: draft.backupEnabled, backupIntervalHours: draft.backupIntervalHours,
-      backupRetain: draft.backupRetain, backupDir: draft.backupDir,
+      backupEnabled: draft.backupEnabled,
+      backupIntervalHours: draft.backupIntervalHours,
+      backupRetain: draft.backupRetain,
+      backupDir: draft.backupDir,
     }
     if (keyInput) patch.anthropicKey = keyInput
     if (minimaxKeyInput) patch.minimaxKey = minimaxKeyInput
     if (openrouterKeyInput) patch.openrouterKey = openrouterKeyInput
     const updated = await api.updateSettings(patch)
-    setDraft(updated); setOriginal(updated); setKeyInput(''); setMinimaxKeyInput(''); setOpenrouterKeyInput('')
+    setDraft(updated)
+    setOriginal(updated)
+    setKeyInput('')
+    setMinimaxKeyInput('')
+    setOpenrouterKeyInput('')
     onSaved(updated)
   }
 
@@ -212,7 +275,8 @@ export function SettingsPanel({ onError, onSaved, onWorkspaceNotifySaved, comman
   const clearKey = async (which: 'anthropic' | 'minimax' | 'openrouter') => {
     try {
       const updated = await api.updateSettings(keyPatch(which, ''))
-      setDraft(updated); setOriginal(updated)
+      setDraft(updated)
+      setOriginal(updated)
       if (which === 'anthropic') setKeyInput('')
       else if (which === 'minimax') setMinimaxKeyInput('')
       else setOpenrouterKeyInput('')
@@ -227,7 +291,8 @@ export function SettingsPanel({ onError, onSaved, onWorkspaceNotifySaved, comman
     if (!value) return
     try {
       const updated = await api.updateSettings(keyPatch(which, value))
-      setDraft(updated); setOriginal(updated)
+      setDraft(updated)
+      setOriginal(updated)
     } catch (e) {
       onError((e as Error).message)
     }
@@ -249,15 +314,26 @@ export function SettingsPanel({ onError, onSaved, onWorkspaceNotifySaved, comman
   return (
     <div className="flex min-h-0 flex-1">
       {/* Left: category rail (collapsible via the app header toggle; mobile drawer) */}
-      <CollapsibleListShell open={navOpen ?? true} onToggle={onToggleNav ?? (() => {})} label="Ayarlar" hideRail>
-      <aside className="flex h-full w-56 flex-shrink-0 flex-col gap-1 overflow-y-auto border-r border-[var(--color-border)] bg-[var(--color-surface)] p-2 max-md:w-[85vw] max-md:max-w-sm">
-        <div className="px-2 pb-1 pt-2 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
-          Uygulama
-        </div>
-        {APP_CATS.map((c) => (
-          <CatButton key={c.key} c={c} active={cat === c.key} onClick={() => setCat(c.key)} dirty={c.key !== 'about' && c.key !== 'secrets' && !!dirtyApp} />
-        ))}
-      </aside>
+      <CollapsibleListShell
+        open={navOpen ?? true}
+        onToggle={onToggleNav ?? (() => {})}
+        label="Ayarlar"
+        hideRail
+      >
+        <aside className="flex h-full w-56 flex-shrink-0 flex-col gap-1 overflow-y-auto border-r border-[var(--color-border)] bg-[var(--color-surface)] p-2 max-md:w-[85vw] max-md:max-w-sm">
+          <div className="px-2 pb-1 pt-2 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
+            Uygulama
+          </div>
+          {APP_CATS.map((c) => (
+            <CatButton
+              key={c.key}
+              c={c}
+              active={cat === c.key}
+              onClick={() => setCat(c.key)}
+              dirty={c.key !== 'about' && c.key !== 'secrets' && !!dirtyApp}
+            />
+          ))}
+        </aside>
       </CollapsibleListShell>
 
       {/* Right: content for the active category. min-w-0 lets this flex column
@@ -279,11 +355,16 @@ export function SettingsPanel({ onError, onSaved, onWorkspaceNotifySaved, comman
                 {dirty ? 'Kaydedilmemiş değişiklik' : 'Kayıtlı'}
               </span>
             )}
-            {cat !== 'about' && cat !== 'commands' && cat !== 'stepkinds' && cat !== 'hooks' && cat !== 'exttools' && cat !== 'secrets' && (
-              <Button onClick={save} disabled={!dirty || saving}>
-                {saving ? 'Kaydediliyor…' : 'Kaydet'}
-              </Button>
-            )}
+            {cat !== 'about' &&
+              cat !== 'commands' &&
+              cat !== 'stepkinds' &&
+              cat !== 'hooks' &&
+              cat !== 'exttools' &&
+              cat !== 'secrets' && (
+                <Button onClick={save} disabled={!dirty || saving}>
+                  {saving ? 'Kaydediliyor…' : 'Kaydet'}
+                </Button>
+              )}
           </div>
         </div>
 
@@ -292,58 +373,64 @@ export function SettingsPanel({ onError, onSaved, onWorkspaceNotifySaved, comman
           // catalog "Araçlar & MCP" now lives as a top-level NavRail view).
           <SecretsPanel onError={onError} />
         ) : (
-        <div className="mx-auto w-full max-w-2xl flex-1 space-y-4 overflow-y-auto p-6">
-          {!draft ? (
-            <div className="text-sm text-[var(--color-text-dim)]">Yükleniyor…</div>
-          ) : (
-            <>
-              {cat === 'profile' && <ProfilePanel draft={draft} set={set} setDraft={setDraft} />}
-              {cat === 'providers' && (
-                <ProvidersPanel
-                  draft={draft}
-                  set={set}
-                  setDraft={setDraft}
-                  test={test}
-                  runTest={runTest}
-                  clearKey={clearKey}
-                  applyKey={applyKey}
-                  secrets={secrets}
-                  onImportSecret={async (name) => (await api.revealSecret(name)).value}
-                  onManageSecrets={() => setCat('secrets')}
-                  workspaceClaudeHome={wsClaudeHome}
-                />
-              )}
-              {cat === 'context' && <ContextPanel draft={draft} set={set} setDraft={setDraft} />}
-              {cat === 'tools' && <ToolsPanel draft={draft} set={set} setDraft={setDraft} />}
-              {cat === 'backup' && <BackupPanel draft={draft} set={set} setDraft={setDraft} />}
-              {cat === 'hooks' && <HooksPanel onError={onError} />}
-              {cat === 'exttools' && <ExternalToolsPanel onError={onError} />}
-              {cat === 'sound' && <SoundPanel />}
-              {cat === 'advanced' && (
-                <>
-                  <AdvSection title="Bildirimler & Ekran" icon={Bell}>
-                    <NotificationsPanel draft={draft} set={set} setDraft={setDraft} onError={onError} onWorkspaceNotifySaved={onWorkspaceNotifySaved} />
-                  </AdvSection>
-                  <AdvSection title="Otomatik Başlık" icon={Tag}>
-                    <AutoTitlePanel draft={draft} set={set} setDraft={setDraft} />
-                  </AdvSection>
-                </>
-              )}
-              {cat === 'commands' && (
-                <CommandsPanel
-                  commands={commands}
-                  prompts={prompts}
-                  promptsDir={promptsDir}
-                  openCmds={openCmds}
-                  setOpenCmds={setOpenCmds}
-                  onError={onError}
-                />
-              )}
-              {cat === 'stepkinds' && <StepKindsPanel />}
-              {cat === 'about' && <AboutPanel />}
-            </>
-          )}
-        </div>
+          <div className="mx-auto w-full max-w-2xl flex-1 space-y-4 overflow-y-auto p-6">
+            {!draft ? (
+              <div className="text-sm text-[var(--color-text-dim)]">Yükleniyor…</div>
+            ) : (
+              <>
+                {cat === 'profile' && <ProfilePanel draft={draft} set={set} setDraft={setDraft} />}
+                {cat === 'providers' && (
+                  <ProvidersPanel
+                    draft={draft}
+                    set={set}
+                    setDraft={setDraft}
+                    test={test}
+                    runTest={runTest}
+                    clearKey={clearKey}
+                    applyKey={applyKey}
+                    secrets={secrets}
+                    onImportSecret={async (name) => (await api.revealSecret(name)).value}
+                    onManageSecrets={() => setCat('secrets')}
+                    workspaceClaudeHome={wsClaudeHome}
+                  />
+                )}
+                {cat === 'context' && <ContextPanel draft={draft} set={set} setDraft={setDraft} />}
+                {cat === 'tools' && <ToolsPanel draft={draft} set={set} setDraft={setDraft} />}
+                {cat === 'backup' && <BackupPanel draft={draft} set={set} setDraft={setDraft} />}
+                {cat === 'hooks' && <HooksPanel onError={onError} />}
+                {cat === 'exttools' && <ExternalToolsPanel onError={onError} />}
+                {cat === 'sound' && <SoundPanel />}
+                {cat === 'advanced' && (
+                  <>
+                    <AdvSection title="Bildirimler & Ekran" icon={Bell}>
+                      <NotificationsPanel
+                        draft={draft}
+                        set={set}
+                        setDraft={setDraft}
+                        onError={onError}
+                        onWorkspaceNotifySaved={onWorkspaceNotifySaved}
+                      />
+                    </AdvSection>
+                    <AdvSection title="Otomatik Başlık" icon={Tag}>
+                      <AutoTitlePanel draft={draft} set={set} setDraft={setDraft} />
+                    </AdvSection>
+                  </>
+                )}
+                {cat === 'commands' && (
+                  <CommandsPanel
+                    commands={commands}
+                    prompts={prompts}
+                    promptsDir={promptsDir}
+                    openCmds={openCmds}
+                    setOpenCmds={setOpenCmds}
+                    onError={onError}
+                  />
+                )}
+                {cat === 'stepkinds' && <StepKindsPanel />}
+                {cat === 'about' && <AboutPanel />}
+              </>
+            )}
+          </div>
         )}
       </div>
     </div>
@@ -353,7 +440,15 @@ export function SettingsPanel({ onError, onSaved, onWorkspaceNotifySaved, comman
 // AdvSection groups one former settings category under a labelled sub-header on
 // the combined "Gelişmiş" screen, with an accent icon badge and a divider
 // between groups.
-function AdvSection({ title, icon: Icon, children }: { title: string; icon: LucideIcon; children: ReactNode }) {
+function AdvSection({
+  title,
+  icon: Icon,
+  children,
+}: {
+  title: string
+  icon: LucideIcon
+  children: ReactNode
+}) {
   return (
     <section className="space-y-4 border-b border-[var(--color-border)] pb-6 last:border-b-0 last:pb-0">
       <h3 className="flex items-center gap-2 text-sm font-semibold text-[var(--color-text)]">

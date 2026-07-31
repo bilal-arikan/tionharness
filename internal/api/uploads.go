@@ -17,10 +17,13 @@ const (
 	// maxUploadBytes caps a single uploaded file (25 MB).
 	maxUploadBytes = 25 << 20
 	// maxInlineTextBytes caps how much of a text/pasted attachment is inlined into
-	// the provider message (the full file is still on disk for read_file). Kept
-	// modest so a large paste does not bloat every subsequent turn's context;
-	// bigger files are read on demand via the read_file tool.
-	maxInlineTextBytes = 16 << 10
+	// the provider message (the full file stays on disk, listed by absolute path
+	// — see conversation/attachments.go). It is a context-cost tradeoff: an
+	// inlined attachment is re-sent on EVERY subsequent turn of the session,
+	// whereas a listed one costs a single Read when the agent actually needs it.
+	// 32 KB (~8K tokens) covers the common "paste a config / a stack trace"
+	// case in one turn; anything larger is better read on demand.
+	maxInlineTextBytes = 32 << 10
 )
 
 // handleUpload stores one user-supplied file under the workspace uploads
@@ -67,8 +70,8 @@ func (s *Server) handleUpload(w http.ResponseWriter, r *http.Request) {
 	// one per-session folder: artifacts/<sessionId>/. Forward slashes match the
 	// agent's read_file path style.
 	rel := "artifacts/" + sessionID + "/" + id + "-" + name
-	artifactsRoot := filepath.Join(wsp.DataDir, "workspace", "artifacts")
-	abs := filepath.Join(wsp.DataDir, "workspace", filepath.FromSlash(rel))
+	artifactsRoot := filepath.Join(wsp.SandboxRoot(), "artifacts")
+	abs := filepath.Join(wsp.SandboxRoot(), filepath.FromSlash(rel))
 	// Defense in depth: the resolved file must stay inside the artifacts root even
 	// if some component slipped past the checks above.
 	if !withinDir(artifactsRoot, abs) {
@@ -146,7 +149,7 @@ func (s *Server) handleDeleteUpload(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid path")
 		return
 	}
-	abs := filepath.Join(wsp.DataDir, "workspace", clean)
+	abs := filepath.Join(wsp.SandboxRoot(), clean)
 	_ = os.Remove(abs) // best-effort: missing file is not an error
 	w.WriteHeader(http.StatusNoContent)
 }

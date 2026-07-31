@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"github.com/bilal-arikan/tionswarm/internal/conversation"
 	"github.com/bilal-arikan/tionswarm/internal/db"
 	"github.com/bilal-arikan/tionswarm/internal/providers"
@@ -21,7 +22,7 @@ type claudeResumePlan struct {
 // thread would collide). rawHistory is the un-annotated message list (it includes
 // this turn's just-added user message). Returns a plan whose sentCount is stored
 // after the turn together with the rotated Response.SessionID.
-func (s *Server) planClaudeResume(provider providers.Provider, agentCount int, session db.Session, rawHistory []db.Message, llmReq *providers.Request) claudeResumePlan {
+func (s *Server) planClaudeResume(ctx context.Context, provider providers.Provider, agentCount int, session db.Session, rawHistory []db.Message, llmReq *providers.Request) claudeResumePlan {
 	set := s.settings.Get()
 	// A multi-participant thread (2+ agents have taken part) must NOT warm-resume:
 	// the CLI session id is tracked per session, so resuming it for a DIFFERENT agent
@@ -35,7 +36,7 @@ func (s *Server) planClaudeResume(provider providers.Provider, agentCount int, s
 	if resumeID != "" {
 		// Warm resume: send only the unseen delta and ask the CLI to --resume.
 		llmReq.ResumeSessionID = resumeID
-		llmReq.Messages = conversation.ToProviderMessages(rawHistory[deltaStart:])
+		llmReq.Messages = conversation.ToProviderMessages(ctx, rawHistory[deltaStart:])
 	}
 	return plan
 }

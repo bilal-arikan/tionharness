@@ -92,6 +92,12 @@ func (s *Server) handleCreateAutomation(w http.ResponseWriter, r *http.Request) 
 	maxIter := defaultAutomationMaxIterations
 	if req.MaxIterations != nil {
 		maxIter = *req.MaxIterations
+		// Shared with the agent-tool path (tools.create_automation) via db, so the
+		// two entry points cannot diverge. See db.ValidateMaxIterations.
+		if err := db.ValidateMaxIterations(maxIter); err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
 	}
 	cooldown := 0
 	if req.CooldownSec != nil {
@@ -187,6 +193,10 @@ func (s *Server) handleUpdateAutomation(w http.ResponseWriter, r *http.Request) 
 	cur.Name = strings.TrimSpace(req.Name)
 	cur.SpawnTags = req.SpawnTags
 	if req.MaxIterations != nil {
+		if err := db.ValidateMaxIterations(*req.MaxIterations); err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
 		cur.MaxIterations = *req.MaxIterations
 	}
 	if req.CooldownSec != nil {

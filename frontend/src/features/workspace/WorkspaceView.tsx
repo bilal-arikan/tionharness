@@ -1,5 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Boxes, FileText, FolderGit2, Lightbulb, Palette, PackageCheck, type LucideIcon } from 'lucide-react'
+import {
+  Boxes,
+  FileText,
+  FolderGit2,
+  Lightbulb,
+  Palette,
+  PackageCheck,
+  type LucideIcon,
+} from 'lucide-react'
 import { api } from '@/api'
 import type { WorkspaceSettings } from '@/types'
 import type { Appearance } from '@/shared/lib/theme'
@@ -49,7 +57,17 @@ const TABS: { key: Tab; label: string; icon: LucideIcon }[] = [
 // workspace's General settings, its Project (path + git), and its prompt/
 // instruction Files. Moved out of the Settings screen so workspace + path
 // details have their own navbar-opened window.
-export function WorkspaceView({ onError, onWorkspaceChanged, onDeleteWorkspace, onAppearanceSaved, onShowRecommendations, tab: tabProp, onTabChange, navOpen, onToggleNav }: Props) {
+export function WorkspaceView({
+  onError,
+  onWorkspaceChanged,
+  onDeleteWorkspace,
+  onAppearanceSaved,
+  onShowRecommendations,
+  tab: tabProp,
+  onTabChange,
+  navOpen,
+  onToggleNav,
+}: Props) {
   const tab: Tab = TAB_KEYS.includes(tabProp as Tab) ? (tabProp as Tab) : 'general'
   const setTab = (t: Tab) => onTabChange?.(t)
   const [ws, setWs] = useState<WorkspaceSettings | null>(null)
@@ -85,9 +103,12 @@ export function WorkspaceView({ onError, onWorkspaceChanged, onDeleteWorkspace, 
       const updated = await api.updateWorkspaceSettings({
         // instructions are edited (and saved) in the Files tab as an editable
         // file; omit here so a save never clobbers a newer value.
-        name: ws.name, icon: ws.icon, color: ws.color,
+        name: ws.name,
+        icon: ws.icon,
+        color: ws.color,
         pauseAutonomy: ws.pauseAutonomy,
         defaultWorkingDir: ws.defaultWorkingDir,
+        terseMode: ws.terseMode,
         codebaseMemoryEnabled: ws.codebaseMemoryEnabled,
         promptEpochEnabled: ws.promptEpochEnabled,
         autoCaptureArtifacts: ws.autoCaptureArtifacts,
@@ -126,33 +147,41 @@ export function WorkspaceView({ onError, onWorkspaceChanged, onDeleteWorkspace, 
   return (
     <div className="flex min-h-0 flex-1">
       {/* Left sub-navbar (collapsible via the app header toggle; mobile drawer) */}
-      <CollapsibleListShell open={navOpen ?? true} onToggle={onToggleNav ?? (() => {})} label="Workspace" hideRail>
-      <aside className="flex h-full w-56 flex-shrink-0 flex-col gap-1 overflow-y-auto border-r border-[var(--color-border)] bg-[var(--color-surface)] p-2 max-md:w-[85vw] max-md:max-w-sm">
-        <div className="px-2 pb-1 pt-2 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
-          Workspace{ws ? ` · ${ws.name}` : ''}
-        </div>
-        {TABS.map((t) => (
-          <button
-            key={t.key}
-            onClick={() => setTab(t.key)}
-            className={`flex items-center gap-2 rounded-lg px-3 py-2 text-left text-sm transition ${
-              tab === t.key
-                ? 'bg-[var(--color-accent-soft)] text-[var(--color-text)]'
-                : 'text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)]'
-            }`}
-          >
-            <t.icon size={16} className="shrink-0" />
-            <span className="flex-1 truncate">{t.label}</span>
-            {(t.key === 'files'
-              ? !!filesState?.dirty
-              : t.key === 'appearance' || t.key === 'export' || t.key === 'recommendations'
-                ? false
-                : dirty) && (
-              <span className="h-1.5 w-1.5 rounded-full bg-[var(--color-accent)]" title="Kaydedilmemiş" />
-            )}
-          </button>
-        ))}
-      </aside>
+      <CollapsibleListShell
+        open={navOpen ?? true}
+        onToggle={onToggleNav ?? (() => {})}
+        label="Workspace"
+        hideRail
+      >
+        <aside className="flex h-full w-56 flex-shrink-0 flex-col gap-1 overflow-y-auto border-r border-[var(--color-border)] bg-[var(--color-surface)] p-2 max-md:w-[85vw] max-md:max-w-sm">
+          <div className="px-2 pb-1 pt-2 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
+            Workspace{ws ? ` · ${ws.name}` : ''}
+          </div>
+          {TABS.map((t) => (
+            <button
+              key={t.key}
+              onClick={() => setTab(t.key)}
+              className={`flex items-center gap-2 rounded-lg px-3 py-2 text-left text-sm transition ${
+                tab === t.key
+                  ? 'bg-[var(--color-accent-soft)] text-[var(--color-text)]'
+                  : 'text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)]'
+              }`}
+            >
+              <t.icon size={16} className="shrink-0" />
+              <span className="flex-1 truncate">{t.label}</span>
+              {(t.key === 'files'
+                ? !!filesState?.dirty
+                : t.key === 'appearance' || t.key === 'export' || t.key === 'recommendations'
+                  ? false
+                  : dirty) && (
+                <span
+                  className="h-1.5 w-1.5 rounded-full bg-[var(--color-accent)]"
+                  title="Kaydedilmemiş"
+                />
+              )}
+            </button>
+          ))}
+        </aside>
       </CollapsibleListShell>
 
       {/* Right content */}

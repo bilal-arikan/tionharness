@@ -23,6 +23,20 @@ func TestRtkRewriteWorthIt(t *testing.T) {
 		"go.exe test ./...", // and .exe-suffix tolerant on Windows
 		"git status",
 		"git log -30",
+		// The `cd <dir> &&` prefix is how agents overwhelmingly write commands —
+		// 10 of 11 shell calls in WS10/SES63. Rejecting the line on its `&&` meant
+		// rtk never fired for such an agent. rtk itself handles the shape, wrapping
+		// only the tail.
+		"cd /c/proj && go test ./...",
+		"cd /c/proj && cargo test",
+		`cd "/c/My Proj" && npm run build`,
+		"cd /c/proj && git status",
+		// Agents append `2>&1` reflexively — a live turn on 2026-07-31 lost the
+		// rewrite to it. It merges streams rather than writing anywhere, and rtk
+		// preserves the token, so it is the one redirection form allowed through.
+		"go test ./... 2>&1",
+		"cd /c/proj && go test ./... 2>&1",
+		"cargo test 2>&1",
 	}
 	for _, cmd := range allowed {
 		if !rtkRewriteWorthIt(cmd) {
@@ -31,16 +45,28 @@ func TestRtkRewriteWorthIt(t *testing.T) {
 	}
 
 	skipped := map[string]string{
-		"":                    "empty command",
-		"git diff":            "measured: rtk 12556 tokens vs sqz 7485 — sqz wins on diffs",
-		"git diff --stat":     "same family as git diff",
-		"cat big.txt":         "measured: rtk read returns MORE bytes than cat (adds line numbers)",
-		"ls -la":              "not measured; unmeasured families are left alone",
-		"echo hello":          "nothing to optimize",
-		"grep -r foo .":       "not measured",
-		"go test ./... | tee": "shell operators — the leading token no longer describes what runs",
-		"cd /tmp && go test":  "same: a compound line is not one program",
-		"go test $(pkg)":      "command substitution",
+		"":                         "empty command",
+		"git diff":                 "measured: rtk 12556 tokens vs sqz 7485 — sqz wins on diffs",
+		"git diff --stat":          "same family as git diff",
+		"cat big.txt":              "measured: rtk read returns MORE bytes than cat (adds line numbers)",
+		"ls -la":                   "not measured; unmeasured families are left alone",
+		"echo hello":               "nothing to optimize",
+		"grep -r foo .":            "not measured",
+		"go test ./... | tee":      "shell operators — the leading token no longer describes what runs",
+		"go test $(pkg)":           "command substitution",
+		"cd /tmp && go test > out": "redirect in the tail: rtk's SUMMARY would be written into the file",
+		"cd /tmp && go test | tee": "pipe in the tail",
+		"cd a && cd b && go test":  "two cd levels leave an operator in the remainder",
+		"cd /tmp && git diff":      "tail is eligible-shaped but git diff is excluded on merit",
+		"cd && go test":            "bare cd is not the shape being matched",
+		"cd /tmp /x && go test":    "cd with extra words is not the shape being matched",
+		"pushd /tmp && go test":    "only `cd` is unwrapped",
+		// Only the exact `2>&1` word is exempt; every other redirection still writes
+		// somewhere, where rtk's SUMMARY would land instead of the real output.
+		"go test ./... 2>err.txt":       "stderr to a FILE, not a stream merge",
+		"go test ./... > out 2>&1":      "the stdout redirect is still a file write",
+		"go test ./... 2>&1x":           "not the standalone token",
+		"cd /c/p && go test 2>&1 > out": "same, behind a cd prefix",
 	}
 	for cmd, why := range skipped {
 		if rtkRewriteWorthIt(cmd) {
@@ -134,6 +160,25 @@ func TestRtkCommandFilter_Gate(t *testing.T) {
 	// `rtk rewrite` itself would offer a replacement for it.
 	if got, gotOpt := f("git diff"); got != "" || gotOpt != nil {
 		t.Fatalf("git diff must be left alone (sqz compresses diffs better), got %q / %+v", got, gotOpt)
+	}
+
+	// The `cd <dir> &&` form must survive END TO END against the real binary: rtk
+	// keeps the prefix and wraps only the tail, and our prefix validation has to
+	// accept exactly that. This is the shape agents actually emit (10 of 11 calls
+	// in WS10/SES63), so a mismatch here silently disables rtk in practice while
+	// every unit test still passes.
+	cdCmd := "cd /c/proj && go test ./..."
+	cdOut, cdOpt := f(cdCmd)
+	if !strings.HasPrefix(cdOut, "cd /c/proj && rtk ") {
+		t.Fatalf("expected the cd prefix preserved and only the tail wrapped, got %q", cdOut)
+	}
+	if cdOpt == nil || cdOpt.Command != cdOut {
+		t.Fatalf("the rewritten compound command must be reported for the chip, got %+v", cdOpt)
+	}
+	// A redirect in the tail must still be refused even behind a cd prefix: rtk's
+	// summary would land in the file instead of the command's real output.
+	if got, _ := f("cd /c/proj && go test ./... > out.txt"); got != "" {
+		t.Fatalf("a redirect in the tail must not be rewritten, got %q", got)
 	}
 
 	// Per-workspace override, same tri-state as the sqz filter.

@@ -417,3 +417,32 @@ func TestInteractionBackend_UnknownToken(t *testing.T) {
 		t.Fatal("want error for unknown token")
 	}
 }
+
+// TestBridgedShellAdvertisesNoCompress: the bridged Bash/PowerShell schema must
+// declare no_compress. The bridge builds its definition from a bare, filter-less
+// tool while the real filter is installed per turn by NewShellRunner — so the flag
+// works at call time, but the schema omitted it AND set additionalProperties:false,
+// making it forbidden.
+//
+// That contradicted the optimizer's own degraded note, which tells the agent to
+// "re-run the SAME command with no_compress: true" when a rewritten command fails.
+// A live turn on 2026-07-31 followed that instruction, was rejected, and fell back
+// to `> file 2>&1` — the recovery path advertised in one place and blocked in
+// another.
+func TestBridgedShellAdvertisesNoCompress(t *testing.T) {
+	for _, def := range []providers.ToolDef{
+		tools.NewShellTool(tools.Sandbox{}).AdvertiseOptimizerFlag().Def(),
+		tools.NewPowerShellTool(tools.Sandbox{}).AdvertiseOptimizerFlag().Def(),
+	} {
+		schema := string(def.InputSchema)
+		if !strings.Contains(schema, `"no_compress"`) {
+			t.Errorf("%s: bridged schema must declare no_compress, got %s", def.Name, schema)
+		}
+		// Without the opt-in the flag stays hidden, so the native loop keeps its
+		// minimal schema when no optimizer is wired.
+	}
+	bare := string(tools.NewShellTool(tools.Sandbox{}).Def().InputSchema)
+	if strings.Contains(bare, `"no_compress"`) {
+		t.Errorf("a bare tool with no filter and no opt-in must NOT advertise no_compress: %s", bare)
+	}
+}

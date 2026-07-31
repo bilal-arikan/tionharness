@@ -29,15 +29,22 @@ type sessionInfoResp struct {
 	// /handoff) and the handoff artifact written into this session at reset.
 	ParentSessionID   string `json:"parentSessionId,omitempty"`
 	HandoffArtifactID string `json:"handoffArtifactId,omitempty"`
-	// Coordinator/worker role (M2): "coordinator" | "worker" | "". A coordinator
-	// session gets the coordinator prompt + spawn_worker/... tools;
-	// CoordinatorSessionID is a worker's back-link to its coordinator.
-	Role                 string `json:"role,omitempty"`
-	CoordinatorSessionID string `json:"coordinatorSessionId,omitempty"`
+	// Coordination (M2). Role is LINEAGE ("worker" = spawned by a coordinator, or
+	// ""); CoordinatorMode is the CAPABILITY (drives workers, gets the coordinator
+	// prompt + spawn_worker/... tools). They are independent — a mid-level node of
+	// a deep tree has both. CoordinatorSessionID is the back-link to the
+	// coordinator above; RootCoordinatorSessionID/CoordinatorDepth address this
+	// session inside its tree so the UI renders the hierarchy without walking
+	// parent links one request at a time.
+	Role                     string `json:"role,omitempty"`
+	CoordinatorMode          bool   `json:"coordinatorMode,omitempty"`
+	CoordinatorSessionID     string `json:"coordinatorSessionId,omitempty"`
+	RootCoordinatorSessionID string `json:"rootCoordinatorSessionId,omitempty"`
+	CoordinatorDepth         int    `json:"coordinatorDepth,omitempty"`
 	// CoordinatorWorkflow is the selected coordinator recipe slug (M5), if any.
 	CoordinatorWorkflow string `json:"coordinatorWorkflow,omitempty"`
 	CreatedAt           int64  `json:"createdAt"`
-	UpdatedAt            int64  `json:"updatedAt"`
+	UpdatedAt           int64  `json:"updatedAt"`
 
 	// Tags are the session's free-form labels (also drive tag-triggered automations).
 	Tags []string `json:"tags,omitempty"`
@@ -130,24 +137,27 @@ func (s *Server) handleSessionInfo(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp := sessionInfoResp{
-		ID:                   session.ID,
-		Title:                session.Title,
-		Kind:                 session.Kind,
-		State:                session.State,
-		AgentID:              session.AgentID,
-		MessageCount:         session.MessageCount,
-		Unread:               session.Unread,
-		Tags:                 session.Tags,
-		ParentSessionID:      session.ParentSessionID,
-		HandoffArtifactID:    session.HandoffArtifactID,
-		Role:                 session.Role,
-		CoordinatorSessionID: session.CoordinatorSessionID,
-		CoordinatorWorkflow:  session.CoordinatorWorkflow,
-		CreatedAt:            session.CreatedAt,
-		UpdatedAt:            session.UpdatedAt,
-		HasSummary:           session.Summary != "",
-		SummaryMsgCount:      session.SummaryMsgCount,
-		SummaryTokens:        conversation.EstimateText(session.Summary),
+		ID:                       session.ID,
+		Title:                    session.Title,
+		Kind:                     session.Kind,
+		State:                    session.State,
+		AgentID:                  session.AgentID,
+		MessageCount:             session.MessageCount,
+		Unread:                   session.Unread,
+		Tags:                     session.Tags,
+		ParentSessionID:          session.ParentSessionID,
+		HandoffArtifactID:        session.HandoffArtifactID,
+		Role:                     session.Role,
+		CoordinatorMode:          session.IsCoordinator(),
+		CoordinatorSessionID:     session.CoordinatorSessionID,
+		RootCoordinatorSessionID: session.RootCoordinator(),
+		CoordinatorDepth:         session.CoordinatorDepth,
+		CoordinatorWorkflow:      session.CoordinatorWorkflow,
+		CreatedAt:                session.CreatedAt,
+		UpdatedAt:                session.UpdatedAt,
+		HasSummary:               session.Summary != "",
+		SummaryMsgCount:          session.SummaryMsgCount,
+		SummaryTokens:            conversation.EstimateText(session.Summary),
 	}
 
 	// On-disk footprint: walk the session's folder.
@@ -282,6 +292,10 @@ func (s *Server) systemFillers(ctx context.Context, wsp *workspace.Workspace, se
 	}
 	if ins := strings.TrimSpace(wsp.Settings().Instructions); ins != "" {
 		system = strings.TrimSpace(system + "\n\n# Workspace Instructions\n" + ins)
+	}
+	// Terse ("caveman") reply style: workspace toggle + registry prompt "terse".
+	if tb := wsp.Runtime.TerseModeBlock(); tb != "" {
+		system = strings.TrimSpace(system + "\n\n" + tb)
 	}
 	if strings.TrimSpace(system) != "" {
 		out = append(out, contextFiller{Label: "Sistem promptu", Role: "system", Tokens: conversation.EstimateText(system), Count: 1})

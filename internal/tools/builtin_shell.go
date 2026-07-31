@@ -38,13 +38,13 @@ func SetShellTimeouts(defaultSec, maxSec int) {
 
 // shellArgs is the shared input schema for both the Bash and PowerShell tools.
 type shellArgs struct {
-	Command         string `json:"command"`
-	TimeoutSec      int    `json:"timeout_sec"`
-	RunInBackground bool   `json:"run_in_background"`
+	Command         string   `json:"command"`
+	TimeoutSec      int      `json:"timeout_sec"`
+	RunInBackground flexBool `json:"run_in_background"`
 	// NoCompress skips the token-optimizer output filter for THIS call, returning the
 	// byte-exact raw output. Advertised only when a filter is active (see Def). Use it
 	// when you need the output verbatim (a value you will parse/compare exactly).
-	NoCompress bool `json:"no_compress"`
+	NoCompress flexBool `json:"no_compress"`
 }
 
 // resolvePowerShell finds a PowerShell host for the PowerShell tool, preferring
@@ -94,6 +94,9 @@ type ShellTool struct {
 	outFilter ShellOutputFilter
 	// cmdFilter optionally rewrites the command before it runs (rtk). nil = as-typed.
 	cmdFilter ShellCommandFilter
+	// advertiseOptimizer forces no_compress into the SCHEMA even though no filter is
+	// wired into this instance. See AdvertiseOptimizerFlag.
+	advertiseOptimizer bool
 }
 
 // ShellOutputFilter post-processes a shell command's combined output before it is
@@ -142,6 +145,23 @@ func (t ShellTool) WithCommandFilter(f ShellCommandFilter) ShellTool {
 	return t
 }
 
+// AdvertiseOptimizerFlag puts no_compress in the SCHEMA even when this instance
+// carries no filter. It exists for the Interaction MCP bridge, which builds the
+// tool definition from a bare, sandbox-less tool while the ACTUAL filter is
+// installed per turn by Runtime.NewShellRunner.
+//
+// Without it the bridged schema omitted no_compress and set
+// "additionalProperties": false, so the flag was not merely undocumented — it was
+// forbidden. That broke a promise made elsewhere: when a rewritten command fails,
+// the optimizer note tells the agent to "re-run with no_compress: true", and on
+// 2026-07-31 an agent that obeyed had the call rejected, then reasoned from the
+// schema that the option did not exist and fell back to `> file 2>&1`. The escape
+// hatch has to be reachable on the path that recommends it.
+func (t ShellTool) AdvertiseOptimizerFlag() ShellTool {
+	t.advertiseOptimizer = true
+	return t
+}
+
 // Available reports whether a backing POSIX shell was found (always true on Unix;
 // on Windows only when a bash.exe is on PATH).
 func (t ShellTool) Available() bool { return t.exe != "" }
@@ -159,7 +179,7 @@ func (t ShellTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name:        "Bash",
 		Description: desc,
-		InputSchema: shellInputSchema(bg, t.outFilter != nil),
+		InputSchema: shellInputSchema(bg, t.outFilter != nil || t.advertiseOptimizer),
 	}
 }
 
@@ -195,6 +215,8 @@ type PowerShellTool struct {
 	outFilter ShellOutputFilter
 	// cmdFilter — see ShellTool.cmdFilter.
 	cmdFilter ShellCommandFilter
+	// advertiseOptimizer — see ShellTool.AdvertiseOptimizerFlag.
+	advertiseOptimizer bool
 }
 
 // NewPowerShellTool binds the tool to a base working directory and resolves a
@@ -222,6 +244,12 @@ func (t PowerShellTool) WithCommandFilter(f ShellCommandFilter) PowerShellTool {
 	return t
 }
 
+// AdvertiseOptimizerFlag — see ShellTool.AdvertiseOptimizerFlag.
+func (t PowerShellTool) AdvertiseOptimizerFlag() PowerShellTool {
+	t.advertiseOptimizer = true
+	return t
+}
+
 // Available reports whether a PowerShell host (pwsh/powershell.exe) was found.
 func (t PowerShellTool) Available() bool { return t.exe != "" }
 
@@ -241,7 +269,7 @@ func (t PowerShellTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name:        "PowerShell",
 		Description: desc,
-		InputSchema: shellInputSchema(bg, t.outFilter != nil),
+		InputSchema: shellInputSchema(bg, t.outFilter != nil || t.advertiseOptimizer),
 	}
 }
 

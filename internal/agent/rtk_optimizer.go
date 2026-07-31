@@ -85,10 +85,21 @@ func (r *Runtime) rtkCommandFilter(ctx context.Context) tools.ShellCommandFilter
 		// actually differ. Anything else means rtk returned something we did not
 		// expect, and running an unrecognised command on the user's machine on the
 		// strength of a parse is not a trade worth making.
-		if rewritten == "" || rewritten == strings.TrimSpace(cmd) || !strings.HasPrefix(rewritten, "rtk ") {
-			if rewritten != "" && !strings.HasPrefix(rewritten, "rtk ") {
+		//
+		// For a `cd <dir> && …` command rtk preserves the prefix and wraps only the
+		// tail (verified: `cd /tmp && grep -rn foo .` → `cd /tmp && rtk grep -rn foo .`),
+		// so the expected prefix is the SAME cd clause followed by "rtk ". Requiring
+		// the literal cd text back also means a rewrite that altered the directory
+		// would be rejected rather than run.
+		cdPrefix, _ := splitCdPrefix(cmd)
+		want := "rtk "
+		if cdPrefix != "" {
+			want = cdPrefix + " rtk "
+		}
+		if rewritten == "" || rewritten == strings.TrimSpace(cmd) || !strings.HasPrefix(rewritten, want) {
+			if rewritten != "" {
 				r.logger.Warn("rtk rewrite returned an unexpected command; running the original",
-					"command", cmd, "rewritten", rewritten)
+					"command", cmd, "rewritten", rewritten, "want prefix", want)
 			}
 			return "", nil
 		}
@@ -113,6 +124,7 @@ func (r *Runtime) rtkCommandFilter(ctx context.Context) tools.ShellCommandFilter
 // To extend it: run the command three ways (raw / sqz / rtk), compare token counts,
 // and add the family only if rtk (or rtk+sqz) wins. See _Docs/17.
 func rtkRewriteWorthIt(cmd string) bool {
+	_, cmd = splitCdPrefix(cmd)
 	fields := strings.Fields(cmd)
 	if len(fields) == 0 {
 		return false
@@ -120,7 +132,21 @@ func rtkRewriteWorthIt(cmd string) bool {
 	// A command line with shell operators may run several programs; the leading
 	// token no longer describes what happens, and rtk would wrap the whole string.
 	// Skip those rather than reason about them.
-	if strings.ContainsAny(cmd, "|&;><`") || strings.Contains(cmd, "$(") {
+	//
+	// This is checked AFTER the `cd … &&` prefix is stripped, because that prefix is
+	// how agents overwhelmingly write commands: in WS10/SES63, 10 of 11 shell calls
+	// began with `cd <dir> &&`. Rejecting the whole line on its `&&` meant rtk could
+	// never fire for such an agent — the measured 99% saving on `go test` simply
+	// never materialised. A redirect or pipe in the REMAINDER is still refused: `cd x
+	// && cmd > file` would otherwise write rtk's SUMMARY into the file.
+	//
+	// `2>&1` is exempt, and only it. It MERGES streams rather than writing anywhere,
+	// so wrapping is harmless, and rtk preserves the token verbatim (verified:
+	// `go test ./x 2>&1` → `rtk go test ./x 2>&1`). Agents append it reflexively —
+	// a live turn on 2026-07-31 lost the rewrite for exactly this reason — so
+	// refusing it would keep rtk off a large share of real commands for no safety
+	// gained. Every other redirection form stays refused.
+	if strings.ContainsAny(stripMergeStderr(cmd), "|&;><`") || strings.Contains(cmd, "$(") {
 		return false
 	}
 	program := strings.ToLower(strings.TrimSuffix(fields[0], ".exe"))
@@ -131,6 +157,52 @@ func rtkRewriteWorthIt(cmd string) bool {
 		return len(fields) > 1 && rtkGitSubcommands[strings.ToLower(fields[1])]
 	}
 	return rtkRunnerPrograms[program]
+}
+
+// stripMergeStderr removes standalone `2>&1` tokens so the operator scan does not
+// trip over them. Only the exact token is dropped, as a whole word: `2>&1x`,
+// `2>file` and `>&1` keep their operator characters and are still refused.
+func stripMergeStderr(cmd string) string {
+	fields := strings.Fields(cmd)
+	kept := fields[:0]
+	for _, f := range fields {
+		if f != "2>&1" {
+			kept = append(kept, f)
+		}
+	}
+	return strings.Join(kept, " ")
+}
+
+// splitCdPrefix separates a leading `cd <dir> &&` from the command it guards,
+// returning the prefix (including the "&&" and its trailing space) and the rest.
+// When there is no such prefix it returns ("", cmd).
+//
+// This one shape is worth special-casing because it is how agents actually write
+// commands — they re-establish the directory on every call rather than trusting
+// the tool's cwd. Only ONE level is unwrapped and only for `cd`: anything else
+// (`a && b`, `cd x && cd y && z`) leaves an operator in the remainder and is
+// rejected by the caller.
+func splitCdPrefix(cmd string) (prefix, rest string) {
+	i := strings.Index(cmd, "&&")
+	if i < 0 {
+		return "", cmd
+	}
+	head := strings.TrimSpace(cmd[:i])
+	rest, ok := strings.CutPrefix(strings.ToLower(head), "cd ")
+	if !ok {
+		return "", cmd
+	}
+	// Exactly `cd <one-directory>`. The argument must be a SINGLE shell word, but a
+	// Windows path routinely contains spaces, so a fully-quoted argument counts as
+	// one word — `cd "/c/My Proj" && npm run build` is an ordinary command here, and
+	// splitting it on whitespace would have rejected it. Anything else (bare `cd`,
+	// `cd a b`) is not the shape being matched and must not be reinterpreted.
+	dir := strings.TrimSpace(head[len(head)-len(rest):])
+	quoted := len(dir) >= 2 && (dir[0] == '"' && dir[len(dir)-1] == '"' || dir[0] == '\'' && dir[len(dir)-1] == '\'')
+	if dir == "" || (!quoted && strings.ContainsAny(dir, " \t")) {
+		return "", cmd
+	}
+	return cmd[:i+2], strings.TrimSpace(cmd[i+2:])
 }
 
 // rtkRunnerPrograms are the test/build runners whose verbose output rtk collapses

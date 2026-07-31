@@ -16,6 +16,9 @@ export function useUrlSync(route: Route, ready: boolean, onRoute: (r: Route) => 
   const onRouteRef = useRef(onRoute)
   onRouteRef.current = onRoute
   const firstWrite = useRef(true)
+  // The canonical hash for this state. Serialising up-front also gives the effect
+  // a single primitive dependency that covers the query sub-state.
+  const target = '#' + buildRoute(route)
 
   // state → URL
   useEffect(() => {
@@ -27,14 +30,13 @@ export function useUrlSync(route: Route, ready: boolean, onRoute: (r: Route) => 
     // real history entry the browser already created.
     const isFirst = firstWrite.current
     firstWrite.current = false
-    const target = '#' + buildRoute(route)
     if (window.location.hash === target) return
     if (isFirst) {
       window.history.replaceState(null, '', target)
     } else {
       window.history.pushState(null, '', target)
     }
-  }, [ready, route.workspaceId, route.view, route.id])
+  }, [ready, target])
 
   // URL → state (mounted once; reads the latest onRoute via the ref)
   useEffect(() => {
