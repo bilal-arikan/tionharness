@@ -896,7 +896,57 @@ ilan eder → native ve claude-cli turları araç seti konusunda ayrışamaz.
   süzülür — aksi hâlde ara düğümler ve dolayısıyla tüm dallar sekmeden düşerdi.
 - Ayarlar ▸ Araçlar: derinlik + ağaç-başına oturum limitleri.
 
-### 14.8 Testler
+### 14.8 Canlı LLM denemesi + ortaya çıkan auth hatası (2026-08-01)
+
+`claude-cli`/sonnet ile izole store'da 3 seviyeli ağaç (kök → alt-koordinatör →
+2 yaprak) uçtan uca koşturuldu. **M2 döngüsü ve derinlik mekanikleri doğrulandı:**
+
+- Kök `spawn_worker(coordinator=true)` ile alt-koordinatörü açtı; o da *worker
+  olmasına rağmen* koordinasyon araçlarını görüp kendi worker'larını açtı.
+- **Ertelenmiş rapor sahada çalıştı:** alt-koordinatörün ilk turu `completed`
+  olarak yukarı gitmedi, `<task-progress status="delegating">` gitti; ağaçta
+  `reportPending` göründü ve kök doğru okudu ("bu bir sonuç değil, bekliyorum").
+- Alt-koordinatör `report_to_coordinator`'ı **kendisi** çağırdı (backstop
+  gerekmedi); kök `ALPHA+BETA` sentezini aldı.
+- Ayrı bir koşuda backstop **kasıtlı tetiklendi** (alt-koordinatöre "asla rapor
+  etme" denildi): dal sustuktan `CoordinatorSettleGraceSec` sonra otomatik
+  `status=incomplete` raporu gitti, gövdesinde "DOĞRULANMIŞ bir sonuç değildir"
+  uyarısı + son yanıt. **`completed` iddia edilmedi.**
+
+**Ortaya çıkan bug (koordinatör kodunda değil, claude-home yönetiminde):** koşu
+ortasında turlar `authentication_failed` vermeye başladı ve workspace'in
+`claude-home/.credentials.json`'ı **sıfırlandı** (token'lar boş, `expiresAt=0`;
+`.bak-empty` yedeğini CLI'nin kendisi yazıyor). Zincir:
+
+1. `~/.tionswarm/claude-home` (self-heal'in 1. tercihi) **19 gün önce süresi
+   dolmuş** bir credential tutuyordu; `credentialUsable` yalnız "token boş mu"
+   baktığı için bunu geçerli saydı.
+2. CLI ölü refresh token ile yenilemeye çalıştı → `invalid_grant` → credential'ı
+   temizledi.
+3. Self-heal yalnız **workspace açılışında** koştuğu için hiçbir tur kendini
+   onaramadı; o workspace'teki her şey restart'a kadar öldü.
+4. Eşzamanlılık yangını büyüttü: refresh token'ları **tek kullanımlık**, ağaç ise
+   tek bir claude-home'a karşı 4+ eşzamanlı CLI süreci koşturuyor.
+
+**Üç parçalı düzeltme:**
+
+- **Aday sıralaması** (`credentialLiveness` + `credentialRank`, `claudehome.go`):
+  self-heal artık ilk uygun adayı değil, **en iyi sıralananı** seçer. Birincil
+  ölçüt **canlı access token** — çünkü diskte "bu refresh token harcanmış mı"
+  bilgisi *yok*. (İlk denemem sadece expiry damgalarına bakıyordu ve tuzağa
+  düştü: bayat home'un `refreshTokenExpiresAt`'i 4 gün ilerideydi, yani diskte
+  canlı görünüyordu. Canlı access token ise son bir saatte başarıyla kimlik
+  doğrulandığının kanıtıdır ve taklit edilemez.)
+- **Her tur self-heal** (`toolloop.go`, tek per-turn CLI dikişi): CLI credential'ı
+  silerse kayıp **tüm oturumu değil tek turu** götürür.
+- **Refresh serileştirme** (`claudeauth/refreshgate.go`): yalnız *yenileme gerekli
+  olan* pencerede tek süreç kabul edilir, refresh dosyaya düşünce kapı açılır
+  (30 sn tavan). Token sağlıklıyken **hiç kilit yok** → fan-out etkilenmez.
+
+Doğrulama: aynı 3 seviyeli koşu tekrarlandı → **auth hatası 0**, credential
+bozulmadan kaldı, yeni workspace canlı credential'ı seçti.
+
+### 14.9 Testler
 
 `coordination_tree_test.go`: subtree re-rooting (ara düğüm ebeveyninin diğer
 dallarını görmemeli), ertelenmiş rapor, erken `completed` reddi, mod toggle

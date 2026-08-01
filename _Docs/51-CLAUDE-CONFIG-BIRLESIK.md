@@ -49,13 +49,33 @@ ile tutarlı):
   `~/.tionswarm/claude-home` (global) içeriğini per-workspace eve **tohumlar**
   (login dahil; `projects/`, `sessions/`, `cache/` gibi çalışma-anı/büyük dizinler
   atlanır). Idempotent. **Skill taşımaz** — claude-home yalnız login/settings tutar.
-- **Credential self-heal (`ensureClaudeHomeCredential`):** her açılışta çalışır. Global
-  tohum home'un `.credentials.json`'ı **boş/token'sız** olabilir (accessToken="",
-  refreshToken="", expiresAt=0 scaffold) — bu durumda tohumlanan her yeni workspace CLI
-  login popup'ı verirdi. Guard: workspace home'un kendi credential'ı token taşımıyorsa
-  sırayla **global → gerçek `~/.claude`** ilk kullanılabilir credential'ı kopyalar
-  (keyless CLI = kullanıcının yerel login'i). Zaten token taşıyan per-workspace login
-  asla ezilmez.
+- **Credential self-heal (`ensureClaudeHomeCredential`):** her açılışta **ve her CLI
+  turunda** (`toolloop.go` per-turn dikişi) çalışır. Global tohum home'un
+  `.credentials.json`'ı **boş/token'sız** olabilir (accessToken="", refreshToken="",
+  expiresAt=0 scaffold) — bu durumda tohumlanan her yeni workspace CLI login popup'ı
+  verirdi. Guard: adaylar (**global `~/.tionswarm/claude-home` + gerçek `~/.claude`**)
+  `credentialRank` ile **sıralanır** ve en iyisi kopyalanır; workspace'in kendi
+  credential'ı daha iyi sıralanıyorsa asla ezilmez.
+
+  **Sıralama ölçütü: önce CANLI access token** (`credentialLiveness`). Bu, 2026-08-01'de
+  canlı bir 3-seviyeli koordinatör denemesinde bulunan hatanın düzeltmesidir
+  (`_Docs/47` §14.8): global home 19 gün önce ölmüş bir credential tutuyordu, eski
+  guard yalnız "token boş mu" baktığı için onu geçerli sayıp kullanıcının canlı
+  `~/.claude`'unun önüne koyuyordu. CLI ölü refresh token ile `invalid_grant` alıp
+  credential'ı **temizliyor**, self-heal de aynı ölü dosyayı geri kopyalıyordu — ve
+  eski hâliyle yalnız açılışta koştuğu için o workspace restart'a kadar ölüydü.
+  Yalnız expiry damgalarına bakmak yetmez: bayat home'un `refreshTokenExpiresAt`'i
+  **gelecekte** olabilir (diskte canlı görünür) ve bir refresh token'ın harcanmış
+  olduğu diskten **hiç anlaşılmaz**. Süresi dolmamış access token ise o home'un son
+  bir saat içinde başarıyla kimlik doğruladığının kanıtıdır ve taklit edilemez.
+
+- **Refresh serileştirme (`claudeauth/refreshgate.go`):** OAuth refresh token'ları
+  **tek kullanımlıktır**; TionSwarm ise tek bir claude-home'a karşı çok sayıda
+  eşzamanlı CLI süreci koşturur (koordinatör ağacı bunu tasarım gereği yapar).
+  Hepsi aynı anda yenilemeye kalkarsa kaybedenler `invalid_grant` alır ve CLI
+  credential'ı siler. `SerializeRefresh` yalnız **yenilemenin gerçekten gerekli
+  olduğu** pencerede tek süreç kabul eder, refresh dosyaya düşünce kapıyı açar
+  (30 sn tavan). Token sağlıklıyken kilit yoktur → paralel fan-out etkilenmez.
 
 ### Faz 2 — Skill tier'ı = `<claude-home>/skills` ⟲ (GERİ ALINDI 2026-07-05)
 Kısa süre denendi, sonra geri alındı. **Karar:** skill'ler eski yerinde kalsın
@@ -108,6 +128,17 @@ Alternatif (uygulanmadı): saf env-enjeksiyon — token'ı hiç kopyalamayıp ya
 TionSwarm'ın AES-GCM sır kasasında tutup her tur env ile enjekte etmek. Daha sıkı ama
 `claudeCliAuthKind` set olmasını zorunlu kılar.
 
+### Sürüm + plan rozeti (2026-08-01)
+
+`GET /api/catalog`'un `claude-cli` girdisi iki ek alan taşır: `cliVersion` (yerel
+`claude --version`, `exttools.LocalVersion` ile probe; başarıda 10 dk / hatada 1 dk
+TTL'li memo) ve `subscription` (`claudeauth.ReadCredentials(<workspace>/claude-home)`
+→ `claudeAiOauth.subscriptionType`, yani `max`/`pro`). Model seçicide ve Sağlayıcılar
+kartında `Claude Code v2.1.220 · Max` rozeti olarak gösterilir — claude-cli modelleri
+çıplak takma ad olduğu için "hangi kurulum, hangi plan" başka yerde görünmüyordu.
+Login per-workspace olduğundan rozet de per-workspace. `claudeCliAuthKind == "apikey"`
+iken plan yazılmaz (abonelik değil); okunamayan bilgi tahmin edilmez, parça düşer.
+
 ## Sınırda bırakılanlar (bilinçli)
 
 MCP sunucular, hooks, izinler, agent tanımları **DB'de** kalır ve her turda
@@ -124,6 +155,8 @@ paylaşılır.
 - `internal/agent/toolloop.go` — per-turn `SetConfigDir` seam
 - `internal/agent/climcp.go` — native `Skill` disallow kaldırıldı
 - `internal/workspace/manager.go` — `open()`'da migration çağrısı
+- `internal/api/catalog_claudecli.go` (yeni) + `catalog.go` — sürüm probe'u + plan okuma
+- `internal/claudeauth/read.go` (yeni) — `ReadCredentials` (WriteCredentials'ın salt-okunur eşi)
 
 ## İlgili
 

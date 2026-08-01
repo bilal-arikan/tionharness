@@ -2,6 +2,38 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-08-01**
 
+## claude-cli: modelin yanında Claude Code sürümü + plan rozeti ✅ (2026-08-01)
+
+- **Sorun:** `claude-cli` sağlayıcısının modelleri çıplak takma ad (`sonnet`, `opus`).
+  Ekranda yazan "Sonnet" her makinede aynı görünüyordu; onu gerçekte çalıştıran **yerel
+  Claude Code sürümü** ve **hangi Max/Pro planıyla** koştuğu hiçbir yerde görünmüyordu.
+- **Çözüm:** katalog DTO'suna iki alan — `cliVersion` + `subscription` (yalnız `claude-cli`
+  girdisinde dolu, diğerlerinde boş). Model seçicide ve Sağlayıcılar ekranındaki claude-cli
+  kartında `Claude Code v2.1.220 · Max` rozeti olarak çıkar.
+- **Sürüm nereden:** `exttools.LocalVersion(claude, --version)` — halihazırda Harici Araçlar
+  panelinin kullandığı, 3 sn timeout'lu, süreç-ağacı reap eden probe. Katalog her sayfa
+  açılışında çekildiği için sonuç **TTL'li memo**: başarıda 10 dk, başarısızlıkta 1 dk
+  (bozuk kurulum her istekte 3 sn yakmasın, düzelen kurulum da 10 dk görünmez kalmasın).
+- **Plan nereden:** `claudeauth.ReadCredentials(<workspace>/claude-home)` →
+  `claudeAiOauth.subscriptionType` (`max`/`pro`). Login **per-workspace** olduğu için rozet
+  de per-workspace. Uygulama ayarı `claudeCliAuthKind == "apikey"` ise plan **yazılmaz**
+  (API anahtarı token-başı faturalanır, abonelik değil) — home'daki bayat OAuth dosyası
+  yanıltıcı bir "Max" göstermesin.
+- **Tahmin yok:** sürüm okunamazsa veya `subscriptionType` yoksa ilgili parça çıkmaz;
+  rozet kısalır ya da hiç görünmez. Katalog isteği bundan dolayı hata döndürmez.
+- **Ajan kimlik satırı:** rozet `AgentIdentity`'nin 2. satırına da eklendi — `AGT3 · Sonnet ·
+  v2.1.220 · Max`. Orada **compact** biçim kullanılır (`resolveRuntimeBadge(entry, {compact:true})`,
+  "Claude Code" öneki tooltip'e iner) çünkü satırda zaten ID + model var. Rozet `shrink-0`:
+  yarım görünen bir sürüm **başka bir sürüm gibi okunur**, o yüzden yer daralınca model
+  etiketi kırpılır, rozet değil. Yalnız `subtitle="model"` durumunda çıkar (özel ReactNode
+  subtitle bir model satırı değildir).
+- **Asistan balonu:** `AgentHeader` artık `subtitle="model"` geçiyor — balonda daha önce
+  yalnız isim vardı; model satırı composer'daki ajan tetikleyicisiyle hizalandı ve rozet
+  cevabın olduğu yerde görünür oldu.
+- **Kod:** `internal/api/catalog.go` + `catalog_claudecli.go`, `internal/claudeauth/read.go`,
+  `Registry.ClaudeCLIPath()`, `shared/lib/catalog.ts → resolveRuntimeBadge`,
+  `ProviderModelSelect.tsx`, `ProvidersPanel.tsx`, `AgentIdentity.tsx`, `chat/AgentHeader.tsx`.
+
 ## Terse (caveman) mod — workspace toggle + registry promptu ✅ (2026-08-01)
 
 - **Sorun:** `tionswarm-terse` skill'i katalogda yalnız slug + tek satır özet olarak
@@ -105,7 +137,31 @@
     (rollup alanları dahil), `coordinator-ancestors`, rol toggle'ı, bilinmeyen
     oturumda 404 ve derinlik/alt-ağaç ayarlarının round-trip'i (`-1` = sınırsız
     korunuyor) doğrulandı.
-- Detay: **`_Docs/47` §14**. Test: `coordination_tree_test.go` + `coordination_test.go`.
+- **Canlı LLM denemesi ✅ (claude-cli/sonnet, 3 seviye):** ertelenmiş rapor sahada
+  çalıştı (alt-koordinatörün ilk turu `completed` gitmedi, `<task-progress
+  delegating>` gitti; kök "bu bir sonuç değil" dedi), alt-koordinatör
+  `report_to_coordinator`'ı kendisi çağırdı, kök `ALPHA+BETA` sentezini aldı.
+  Ayrı koşuda backstop **kasıtlı tetiklendi** ("asla rapor etme" talimatıyla) →
+  otomatik `status=incomplete` + "doğrulanmış sonuç değildir" uyarısı gitti,
+  `completed` iddia edilmedi.
+- **Denemede çıkan auth bug'ı + düzeltmesi:** koşu ortasında turlar
+  `authentication_failed` verip workspace credential'ı sıfırlandı. Zincir:
+  `~/.tionswarm/claude-home` (self-heal'in 1. tercihi) **19 gün önce ölmüş** bir
+  credential tutuyordu, `credentialUsable` yalnız "token boş mu" baktığı için
+  geçerli saydı → CLI ölü refresh token ile `invalid_grant` aldı → credential'ı
+  temizledi → self-heal yalnız workspace açılışında koştuğu için o workspace
+  restart'a kadar öldü. Eşzamanlılık büyüttü (refresh token'ları tek kullanımlık,
+  ağaç tek claude-home'a 4+ süreç koşuyor). Üç parça: **aday sıralaması**
+  (`credentialRank`, birincil ölçüt *canlı access token* — diskte "refresh token
+  harcanmış mı" bilgisi yok; ilk denemem sadece expiry damgalarına bakıp tuzağa
+  düşmüştü, bayat home'un `refreshTokenExpiresAt`'i 4 gün ileridedir), **her tur
+  self-heal** (`toolloop.go` — kayıp tüm oturumu değil tek turu götürür) ve
+  **refresh serileştirme** (`claudeauth/refreshgate.go` — yalnız yenileme gerekli
+  pencerede, sağlıklı token'da hiç kilit yok). Doğrulama: aynı koşu tekrarlandı →
+  **auth hatası 0**, credential bozulmadı.
+- Detay: **`_Docs/47` §14**. Test: `coordination_tree_test.go`,
+  `coordination_test.go`, `claudehome_credential_test.go`,
+  `claudeauth/refreshgate_test.go`.
 
 ## Toplu dosya-farkı görüntüleyici (chat) ✅ (2026-08-01)
 

@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"time"
 )
 
 // workspaceClaudeHomeDir is a workspace's per-workspace claude-cli config home
@@ -89,12 +90,19 @@ func EnsureWorkspaceClaudeHome(wsRoot string) {
 }
 
 // oauthCredential is the token-bearing part of the on-disk .credentials.json Claude
-// Code reads/writes (<home>/.credentials.json → {"claudeAiOauth": {...}}). Only the
-// two token fields matter for the usability check below.
+// Code reads/writes (<home>/.credentials.json → {"claudeAiOauth": {...}}).
 type oauthCredential struct {
 	ClaudeAiOauth struct {
 		AccessToken  string `json:"accessToken"`
 		RefreshToken string `json:"refreshToken"`
+		// ExpiresAt is the ACCESS token's expiry (unix ms). An expired access token
+		// is normal — the CLI refreshes it — but a long-expired one is the only
+		// on-disk hint that the whole credential may be dead.
+		ExpiresAt int64 `json:"expiresAt"`
+		// RefreshTokenExpiresAt is written by newer CLI builds (unix ms; absent on
+		// older files). When present it is the authoritative "this credential can no
+		// longer authenticate after" stamp.
+		RefreshTokenExpiresAt int64 `json:"refreshTokenExpiresAt"`
 	} `json:"claudeAiOauth"`
 }
 
@@ -104,33 +112,94 @@ type oauthCredential struct {
 // or blank-token file is NOT usable: seeding it into a workspace yields an interactive
 // login prompt on the first CLI turn. This is exactly the empty-scaffold shape
 // (accessToken:"", refreshToken:"", expiresAt:0) that made fresh workspaces prompt.
+//
+// It also rejects a credential whose refresh token is KNOWN to have expired
+// (refreshTokenExpiresAt in the past): copying that into a workspace produces the
+// same login prompt, one CLI turn later.
 func credentialUsable(path string) bool {
+	return credentialLiveness(path).usable
+}
+
+// credentialRank orders candidate credential files for seeding.
+type credentialRank struct {
+	// usable is false for a missing/unparseable/wiped file, or one whose refresh
+	// token is recorded as already expired. Seeding such a file yields a login
+	// prompt on the first CLI turn.
+	usable bool
+	// liveAccess is true when the ACCESS token has not expired yet — proof that
+	// this home authenticated successfully very recently. It is the primary
+	// ordering key, ahead of any expiry stamp, for the reason in credentialLiveness.
+	liveAccess bool
+	// expiresAt is the access-token expiry (unix ms): freshness within a tier.
+	expiresAt int64
+}
+
+// betterThan reports whether r is a better seed source than o.
+func (r credentialRank) betterThan(o credentialRank) bool {
+	if r.usable != o.usable {
+		return r.usable
+	}
+	if r.liveAccess != o.liveAccess {
+		return r.liveAccess
+	}
+	return r.expiresAt > o.expiresAt
+}
+
+// credentialLiveness ranks a credential file as a seed source.
+//
+// Ordering by "a live access token first" is not arbitrary — it is the only signal
+// on disk that actually predicted the live failure this fixes. The heal used to
+// take the FIRST usable candidate, so a TionSwarm global home whose access token
+// had expired 19 days earlier beat the user's live ~/.claude. Its refresh token had
+// long since been consumed (they are single-use), so the CLI got invalid_grant,
+// CLEARED the workspace credential, and the heal copied the same dead file back on
+// every turn.
+//
+// Ranking by expiry stamps alone does NOT fix that: the stale home recorded a
+// refreshTokenExpiresAt weeks in the FUTURE — it looks alive on disk and is not.
+// Whether a refresh token has already been spent is simply not observable here. A
+// non-expired ACCESS token is, and it means the home authenticated within the last
+// hour, which no dead credential can fake.
+func credentialLiveness(path string) credentialRank {
 	b, err := os.ReadFile(path)
 	if err != nil {
-		return false
+		return credentialRank{}
 	}
 	var c oauthCredential
 	if json.Unmarshal(b, &c) != nil {
-		return false
+		return credentialRank{}
 	}
-	return c.ClaudeAiOauth.AccessToken != "" || c.ClaudeAiOauth.RefreshToken != ""
+	o := c.ClaudeAiOauth
+	if o.AccessToken == "" && o.RefreshToken == "" {
+		return credentialRank{} // wiped scaffold or never logged in
+	}
+	nowMs := time.Now().UnixMilli()
+	if o.RefreshTokenExpiresAt > 0 && o.RefreshTokenExpiresAt <= nowMs {
+		return credentialRank{} // authoritatively dead: cannot authenticate at all
+	}
+	return credentialRank{
+		usable:     true,
+		liveAccess: o.AccessToken != "" && o.ExpiresAt > nowMs,
+		expiresAt:  o.ExpiresAt,
+	}
 }
 
-// ensureClaudeHomeCredential makes sure a workspace claude-home starts logged in. If
-// the home's own .credentials.json already carries a token it is left untouched — a
-// per-workspace login stays in control and is never clobbered. Otherwise it copies the
-// first USABLE credential from, in order: the TionSwarm global home
-// (~/.tionswarm/claude-home), then the user's real ~/.claude. Falling back to ~/.claude
-// matches the keyless claude-cli design (it runs against the user's local login) and
-// self-heals the case where the global home was never authenticated.
+// ensureClaudeHomeCredential makes sure a workspace claude-home is logged in. The
+// home's OWN credential wins whenever nothing available ranks better — a
+// per-workspace login stays in control and is never clobbered. Otherwise the
+// best-ranked usable credential is copied in from the TionSwarm global home
+// (~/.tionswarm/claude-home) or the user's real ~/.claude. Falling back to ~/.claude
+// matches the keyless claude-cli design (it runs against the user's local login).
+//
+// Ranked, not first-match: see credentialLiveness for why fixed candidate order was
+// the bug. Called both on workspace open and at the per-turn CLI seam, so a home the
+// CLI wiped mid-run recovers on the next turn instead of failing until a restart.
 //
 // Best-effort: if no usable source exists, the home is left as-is and the user logs in
 // once via the in-app popup (which writes this workspace's home directly).
 func ensureClaudeHomeCredential(home string) {
 	dst := filepath.Join(home, ".credentials.json")
-	if credentialUsable(dst) {
-		return
-	}
+
 	var candidates []string
 	if g := globalClaudeHomeDir(); g != "" && g != home {
 		candidates = append(candidates, filepath.Join(g, ".credentials.json"))
@@ -138,11 +207,15 @@ func ensureClaudeHomeCredential(home string) {
 	if uh, err := os.UserHomeDir(); err == nil && uh != "" {
 		candidates = append(candidates, filepath.Join(uh, ".claude", ".credentials.json"))
 	}
+
+	best, bestRank := "", credentialLiveness(dst)
 	for _, src := range candidates {
-		if credentialUsable(src) {
-			_ = copyFile(src, dst, 0o600)
-			return
+		if r := credentialLiveness(src); r.betterThan(bestRank) {
+			best, bestRank = src, r
 		}
+	}
+	if best != "" {
+		_ = copyFile(best, dst, 0o600)
 	}
 }
 

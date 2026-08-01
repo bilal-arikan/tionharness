@@ -7,10 +7,20 @@
 // the section reads as rows of the same shape, and custom providers render as a
 // real table.
 import { useEffect, useState } from 'react'
-import { Sparkles, Zap, KeyRound, Boxes, Plus, Trash2, Network, type LucideIcon } from 'lucide-react'
+import {
+  Sparkles,
+  Zap,
+  KeyRound,
+  Boxes,
+  Plus,
+  Trash2,
+  Network,
+  type LucideIcon,
+} from 'lucide-react'
 import { api } from '@/api'
 import type { AppSettings, ProviderTestResult, Secret } from '@/types'
 import type { CustomProvider, UpsertProviderInput, PriceTable } from '@/api/providers'
+import { useCatalog, resolveRuntimeBadge } from '@/shared/lib/catalog'
 import { inputCls, type AppSet } from './primitives'
 import { ClaudeAuthDialog } from './ClaudeAuthDialog'
 
@@ -23,18 +33,28 @@ function fmtPrice(n: number): string {
 // cacheModeLabel describes a prompt-cache mode for the capability badge.
 function cacheModeLabel(mode?: string): string {
   switch (mode) {
-    case 'native': return 'Cache: ✅ cache_control'
-    case 'auto': return 'Cache: ✅ otomatik'
-    case 'none': return 'Cache: ❌ yok'
-    default: return 'Cache: ? bilinmiyor'
+    case 'native':
+      return 'Cache: ✅ cache_control'
+    case 'auto':
+      return 'Cache: ✅ otomatik'
+    case 'none':
+      return 'Cache: ❌ yok'
+    default:
+      return 'Cache: ? bilinmiyor'
   }
 }
 
 function testBadge(test: Props['test'], provider: string) {
   const r = test[provider]
   if (!r) return null
-  if (r === 'pending') return <span className="text-xs text-[var(--color-warning)]">test ediliyor…</span>
-  if (r.ok) return <span className="text-xs text-[var(--color-success)]">✓ bağlandı{r.model ? ` (${r.model})` : ''}</span>
+  if (r === 'pending')
+    return <span className="text-xs text-[var(--color-warning)]">test ediliyor…</span>
+  if (r.ok)
+    return (
+      <span className="text-xs text-[var(--color-success)]">
+        ✓ bağlandı{r.model ? ` (${r.model})` : ''}
+      </span>
+    )
   return <span className="text-xs text-[var(--color-danger)]">✗ {r.error}</span>
 }
 
@@ -95,7 +115,9 @@ function KeyPicker({
           {secrets.length ? (isSet ? 'Değiştir: sırdan seç…' : 'Sırdan seç…') : 'Sır yok'}
         </option>
         {secrets.map((s) => (
-          <option key={s.name} value={s.name}>{s.name}</option>
+          <option key={s.name} value={s.name}>
+            {s.name}
+          </option>
         ))}
       </select>
       {isSet && (
@@ -186,11 +208,15 @@ function BuiltinProvider({
         <div className="flex min-w-0 items-center gap-2">
           <Icon size={15} className="shrink-0 text-[var(--color-accent)]" />
           <span className="truncate text-sm font-medium">{name}</span>
-          <span className="shrink-0 text-[10px] uppercase tracking-wide text-[var(--color-text-dim)]">{kindLabel}</span>
+          <span className="shrink-0 text-[10px] uppercase tracking-wide text-[var(--color-text-dim)]">
+            {kindLabel}
+          </span>
         </div>
         <span
           className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${
-            isSet ? 'bg-[var(--color-surface-2)] text-[var(--color-success)]' : 'bg-[var(--color-surface-2)] text-[var(--color-text-dim)]'
+            isSet
+              ? 'bg-[var(--color-surface-2)] text-[var(--color-success)]'
+              : 'bg-[var(--color-surface-2)] text-[var(--color-text-dim)]'
           }`}
         >
           {isSet ? '✓ Anahtar kayıtlı' : 'Anahtar yok'}
@@ -200,11 +226,19 @@ function BuiltinProvider({
       <div className={hideEndpoint ? 'grid gap-2' : 'grid gap-2 sm:grid-cols-2'}>
         <div className="flex flex-col gap-1">
           <span className="text-xs font-medium text-[var(--color-text-dim)]">{keyLabel}</span>
-          <KeyPicker isSet={isSet} secrets={secrets} onPick={onPick} onClear={onClear} provider={testProvider} />
+          <KeyPicker
+            isSet={isSet}
+            secrets={secrets}
+            onPick={onPick}
+            onClear={onClear}
+            provider={testProvider}
+          />
         </div>
         {!hideEndpoint && (
           <div className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-[var(--color-text-dim)]">{endpointLabel}</span>
+            <span className="text-xs font-medium text-[var(--color-text-dim)]">
+              {endpointLabel}
+            </span>
             <input
               data-testid="provider-endpoint-input"
               data-provider={testProvider}
@@ -222,12 +256,16 @@ function BuiltinProvider({
           <span className="text-xs font-medium text-[var(--color-text-dim)]">{endpoint2Label}</span>
           <input
             value={endpoint2Value ?? ''}
-            onChange={(e) => { if (!endpoint2ReadOnly) onEndpoint2(e.target.value) }}
+            onChange={(e) => {
+              if (!endpoint2ReadOnly) onEndpoint2(e.target.value)
+            }}
             readOnly={endpoint2ReadOnly}
             placeholder={endpoint2Placeholder}
             className={endpoint2ReadOnly ? `${inputCls} cursor-not-allowed opacity-60` : inputCls}
           />
-          {endpoint2Hint && <span className="text-[10px] text-[var(--color-text-dim)]">{endpoint2Hint}</span>}
+          {endpoint2Hint && (
+            <span className="text-[10px] text-[var(--color-text-dim)]">{endpoint2Hint}</span>
+          )}
         </div>
       )}
 
@@ -238,9 +276,11 @@ function BuiltinProvider({
           {isSet ? '✓ Kayıtlı (şifreli).' : requiredHint}
         </span>
         <div className="flex shrink-0 items-center gap-2">
-          {!isSet
-            ? <span className="text-xs text-[var(--color-text-dim)]">{testDisabledHint}</span>
-            : testBadge(test, testProvider)}
+          {!isSet ? (
+            <span className="text-xs text-[var(--color-text-dim)]">{testDisabledHint}</span>
+          ) : (
+            testBadge(test, testProvider)
+          )}
           <button
             data-testid="provider-test"
             data-provider={testProvider}
@@ -280,11 +320,11 @@ function SecretSource({
         className={`${inputCls} flex-1 text-xs`}
         disabled={secrets.length === 0}
       >
-        <option value="">
-          {secrets.length ? '🔑 Sırlardan içe aktar…' : 'Sır yok'}
-        </option>
+        <option value="">{secrets.length ? '🔑 Sırlardan içe aktar…' : 'Sır yok'}</option>
         {secrets.map((s) => (
-          <option key={s.name} value={s.name}>{s.name}</option>
+          <option key={s.name} value={s.name}>
+            {s.name}
+          </option>
         ))}
       </select>
       <button
@@ -298,8 +338,15 @@ function SecretSource({
 }
 
 const EMPTY_PROVIDER: UpsertProviderInput = {
-  id: '', label: '', kind: 'openai', baseUrl: '', defaultModel: '', models: '', key: '',
-  reasoning: false, promptCache: '',
+  id: '',
+  label: '',
+  kind: 'openai',
+  baseUrl: '',
+  defaultModel: '',
+  models: '',
+  key: '',
+  reasoning: false,
+  promptCache: '',
 }
 
 // CustomProviders manages user-added OpenAI/Anthropic-compatible endpoints
@@ -324,15 +371,26 @@ function CustomProviders({
   const [prices, setPrices] = useState<PriceTable>({})
 
   useEffect(() => {
-    api.listCustomProviders().then(setList).catch(() => {})
-    api.prices().then(setPrices).catch(() => {})
+    api
+      .listCustomProviders()
+      .then(setList)
+      .catch(() => {})
+    api
+      .prices()
+      .then(setPrices)
+      .catch(() => {})
   }, [])
 
-  const reset = () => { setDraft(EMPTY_PROVIDER); setEditing(false); setErr('') }
+  const reset = () => {
+    setDraft(EMPTY_PROVIDER)
+    setEditing(false)
+    setErr('')
+  }
   const upd = (patch: Partial<UpsertProviderInput>) => setDraft((d) => ({ ...d, ...patch }))
 
   const save = async () => {
-    setBusy(true); setErr('')
+    setBusy(true)
+    setErr('')
     try {
       const payload: UpsertProviderInput = { ...draft }
       // Blank key on save = keep the stored one (backend treats omitted as keep).
@@ -347,8 +405,19 @@ function CustomProviders({
   }
 
   const edit = (p: CustomProvider) => {
-    setDraft({ id: p.id, label: p.label, kind: p.kind, baseUrl: p.baseUrl, defaultModel: p.defaultModel, models: p.models, key: '', reasoning: !!p.reasoning, promptCache: p.promptCache ?? '' })
-    setEditing(true); setErr('')
+    setDraft({
+      id: p.id,
+      label: p.label,
+      kind: p.kind,
+      baseUrl: p.baseUrl,
+      defaultModel: p.defaultModel,
+      models: p.models,
+      key: '',
+      reasoning: !!p.reasoning,
+      promptCache: p.promptCache ?? '',
+    })
+    setEditing(true)
+    setErr('')
   }
   const remove = async (id: string) => {
     try {
@@ -364,7 +433,10 @@ function CustomProviders({
       {list.length > 0 && (
         <div className="grid gap-2">
           {list.map((p) => (
-            <div key={p.id} className="space-y-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
+            <div
+              key={p.id}
+              className="space-y-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3"
+            >
               <div className="flex items-center justify-between gap-2">
                 <div className="flex min-w-0 items-center gap-2">
                   <Boxes size={15} className="shrink-0 text-[var(--color-accent)]" />
@@ -375,7 +447,9 @@ function CustomProviders({
                 </div>
                 <span
                   className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${
-                    p.keySet ? 'bg-[var(--color-surface-2)] text-[var(--color-success)]' : 'bg-[var(--color-surface-2)] text-[var(--color-text-dim)]'
+                    p.keySet
+                      ? 'bg-[var(--color-surface-2)] text-[var(--color-success)]'
+                      : 'bg-[var(--color-surface-2)] text-[var(--color-text-dim)]'
                   }`}
                 >
                   {p.keySet ? '✓ Anahtar kayıtlı' : 'Anahtar yok'}
@@ -384,34 +458,78 @@ function CustomProviders({
 
               <div className="grid gap-x-3 gap-y-1 text-xs sm:grid-cols-2">
                 <div className="min-w-0 truncate" title={p.id}>
-                  <span className="text-[var(--color-text-dim)]">id: </span>{p.id}
+                  <span className="text-[var(--color-text-dim)]">id: </span>
+                  {p.id}
                 </div>
                 <div className="min-w-0 truncate" title={p.defaultModel}>
-                  <span className="text-[var(--color-text-dim)]">model: </span>{p.defaultModel || '—'}
+                  <span className="text-[var(--color-text-dim)]">model: </span>
+                  {p.defaultModel || '—'}
                   {(() => {
                     const pr = prices[p.id]?.[p.defaultModel]
                     return pr ? (
-                      <span className="ml-1 tabular-nums text-[var(--color-text-dim)]" title="giriş / çıkış — $/1M token">
+                      <span
+                        className="ml-1 tabular-nums text-[var(--color-text-dim)]"
+                        title="giriş / çıkış — $/1M token"
+                      >
                         ({fmtPrice(pr.inputPerMTok)} / {fmtPrice(pr.outputPerMTok)})
                       </span>
                     ) : null
                   })()}
                 </div>
-                <div className="col-span-full min-w-0 truncate text-[var(--color-text-dim)]" title={p.baseUrl}>{p.baseUrl}</div>
+                <div
+                  className="col-span-full min-w-0 truncate text-[var(--color-text-dim)]"
+                  title={p.baseUrl}
+                >
+                  {p.baseUrl}
+                </div>
               </div>
 
               <div className="flex flex-wrap gap-1.5">
-                <span className="rounded px-1.5 py-0.5 text-[10px]" style={{ background: p.reasoning ? 'var(--color-success, #16a34a)22' : 'var(--color-surface-2)', color: p.reasoning ? 'var(--color-success, #16a34a)' : 'var(--color-text-dim)' }}>
+                <span
+                  className="rounded px-1.5 py-0.5 text-[10px]"
+                  style={{
+                    background: p.reasoning
+                      ? 'var(--color-success, #16a34a)22'
+                      : 'var(--color-surface-2)',
+                    color: p.reasoning ? 'var(--color-success, #16a34a)' : 'var(--color-text-dim)',
+                  }}
+                >
                   {p.reasoning ? 'Düşünme: ✅' : 'Düşünme: —'}
                 </span>
-                <span className="rounded px-1.5 py-0.5 text-[10px]" style={{ background: (p.promptCache === 'native' || p.promptCache === 'auto') ? 'var(--color-success, #16a34a)22' : 'var(--color-surface-2)', color: (p.promptCache === 'native' || p.promptCache === 'auto') ? 'var(--color-success, #16a34a)' : 'var(--color-text-dim)' }}>
+                <span
+                  className="rounded px-1.5 py-0.5 text-[10px]"
+                  style={{
+                    background:
+                      p.promptCache === 'native' || p.promptCache === 'auto'
+                        ? 'var(--color-success, #16a34a)22'
+                        : 'var(--color-surface-2)',
+                    color:
+                      p.promptCache === 'native' || p.promptCache === 'auto'
+                        ? 'var(--color-success, #16a34a)'
+                        : 'var(--color-text-dim)',
+                  }}
+                >
                   {cacheModeLabel(p.promptCache)}
                 </span>
               </div>
 
               <div className="flex items-center justify-end gap-1.5">
-                <button data-testid="custom-provider-edit" data-provider-id={p.id} onClick={() => edit(p)} className="rounded border border-[var(--color-border)] px-2 py-1 text-xs hover:border-[var(--color-accent)]">Düzenle</button>
-                <button data-testid="custom-provider-delete" data-provider-id={p.id} onClick={() => remove(p.id)} className="rounded border border-[var(--color-border)] p-1 text-[var(--color-danger)] hover:border-[var(--color-danger)]"><Trash2 size={13} /></button>
+                <button
+                  data-testid="custom-provider-edit"
+                  data-provider-id={p.id}
+                  onClick={() => edit(p)}
+                  className="rounded border border-[var(--color-border)] px-2 py-1 text-xs hover:border-[var(--color-accent)]"
+                >
+                  Düzenle
+                </button>
+                <button
+                  data-testid="custom-provider-delete"
+                  data-provider-id={p.id}
+                  onClick={() => remove(p.id)}
+                  className="rounded border border-[var(--color-border)] p-1 text-[var(--color-danger)] hover:border-[var(--color-danger)]"
+                >
+                  <Trash2 size={13} />
+                </button>
               </div>
             </div>
           ))}
@@ -419,26 +537,78 @@ function CustomProviders({
       )}
 
       <div className="space-y-1.5 rounded-md border border-dashed border-[var(--color-border)] p-2">
-        <div className="text-xs font-medium">{editing ? `Düzenle: ${draft.id}` : 'Yeni özel sağlayıcı'}</div>
+        <div className="text-xs font-medium">
+          {editing ? `Düzenle: ${draft.id}` : 'Yeni özel sağlayıcı'}
+        </div>
         <div className="grid grid-cols-2 gap-1.5">
-          <input data-testid="custom-provider-id-input" placeholder="id (ör. openrouter)" value={draft.id} disabled={editing} onChange={(e) => upd({ id: e.target.value })} className={inputCls} />
-          <input data-testid="custom-provider-label-input" placeholder="Etiket" value={draft.label} onChange={(e) => upd({ label: e.target.value })} className={inputCls} />
-          <select data-testid="custom-provider-kind-select" value={draft.kind} onChange={(e) => upd({ kind: e.target.value })} className={inputCls}>
+          <input
+            data-testid="custom-provider-id-input"
+            placeholder="id (ör. openrouter)"
+            value={draft.id}
+            disabled={editing}
+            onChange={(e) => upd({ id: e.target.value })}
+            className={inputCls}
+          />
+          <input
+            data-testid="custom-provider-label-input"
+            placeholder="Etiket"
+            value={draft.label}
+            onChange={(e) => upd({ label: e.target.value })}
+            className={inputCls}
+          />
+          <select
+            data-testid="custom-provider-kind-select"
+            value={draft.kind}
+            onChange={(e) => upd({ kind: e.target.value })}
+            className={inputCls}
+          >
             <option value="openai">OpenAI-uyumlu (tool-use)</option>
             <option value="anthropic">Anthropic-uyumlu (tool-use + thinking)</option>
           </select>
-          <input data-testid="custom-provider-default-model-input" placeholder="varsayılan model" value={draft.defaultModel} onChange={(e) => upd({ defaultModel: e.target.value })} className={inputCls} />
+          <input
+            data-testid="custom-provider-default-model-input"
+            placeholder="varsayılan model"
+            value={draft.defaultModel}
+            onChange={(e) => upd({ defaultModel: e.target.value })}
+            className={inputCls}
+          />
         </div>
-        <input data-testid="custom-provider-base-url-input" placeholder="base URL (ör. https://openrouter.ai/api/v1)" value={draft.baseUrl} onChange={(e) => upd({ baseUrl: e.target.value })} className={inputCls} />
-        <input data-testid="custom-provider-models-input" placeholder="model id'leri — virgülle, opsiyonel" value={draft.models} onChange={(e) => upd({ models: e.target.value })} className={inputCls} />
+        <input
+          data-testid="custom-provider-base-url-input"
+          placeholder="base URL (ör. https://openrouter.ai/api/v1)"
+          value={draft.baseUrl}
+          onChange={(e) => upd({ baseUrl: e.target.value })}
+          className={inputCls}
+        />
+        <input
+          data-testid="custom-provider-models-input"
+          placeholder="model id'leri — virgülle, opsiyonel"
+          value={draft.models}
+          onChange={(e) => upd({ models: e.target.value })}
+          className={inputCls}
+        />
 
         {/* Capability flags: reasoning passthrough + prompt-cache mode. */}
         <div className="grid grid-cols-2 items-center gap-1.5">
-          <label className="flex items-center gap-1.5 text-xs" title="Açıksa OpenAI-uyumlu uca reasoning_effort gönderilir (ajanın Düşünme seviyesinden). Anthropic-uyumlu uçlar thinking'i native destekler.">
-            <input data-testid="custom-provider-reasoning" type="checkbox" checked={!!draft.reasoning} onChange={(e) => upd({ reasoning: e.target.checked })} />
+          <label
+            className="flex items-center gap-1.5 text-xs"
+            title="Açıksa OpenAI-uyumlu uca reasoning_effort gönderilir (ajanın Düşünme seviyesinden). Anthropic-uyumlu uçlar thinking'i native destekler."
+          >
+            <input
+              data-testid="custom-provider-reasoning"
+              type="checkbox"
+              checked={!!draft.reasoning}
+              onChange={(e) => upd({ reasoning: e.target.checked })}
+            />
             Düşünme (reasoning_effort)
           </label>
-          <select data-testid="custom-provider-cache-select" value={draft.promptCache || ''} onChange={(e) => upd({ promptCache: e.target.value })} className={inputCls} title="Prompt-cache davranışı: native = cache_control enjekte; auto = sunucu otomatik; none = yok.">
+          <select
+            data-testid="custom-provider-cache-select"
+            value={draft.promptCache || ''}
+            onChange={(e) => upd({ promptCache: e.target.value })}
+            className={inputCls}
+            title="Prompt-cache davranışı: native = cache_control enjekte; auto = sunucu otomatik; none = yok."
+          >
             <option value="">Cache: bilinmiyor</option>
             <option value="native">Cache: native (cache_control)</option>
             <option value="auto">Cache: otomatik</option>
@@ -447,41 +617,75 @@ function CustomProviders({
         </div>
 
         {/* Per-model price view (read-only) — shown when prices are known for this id. */}
-        {editing && (() => {
-          const table = prices[draft.id]
-          const ids = draft.models.split(/[\n,]/).map((s) => s.trim()).filter(Boolean)
-          if (!table || ids.length === 0) return null
-          const priced = ids.filter((m) => table[m])
-          if (priced.length === 0) return null
-          return (
-            <div className="rounded bg-[var(--color-surface-2)] p-1.5">
-              <div className="mb-1 text-[10px] uppercase tracking-wide text-[var(--color-text-dim)]">Fiyatlar — $/1M token (giriş / çıkış)</div>
-              <div className="max-h-40 overflow-y-auto">
-                {priced.map((m) => {
-                  const pr = table[m]
-                  return (
-                    <div key={m} className="flex items-center justify-between gap-3 px-1 py-0.5 text-[11px]">
-                      <span className="min-w-0 break-all font-mono">{m}</span>
-                      <span className="shrink-0 tabular-nums text-[var(--color-text-dim)]">{fmtPrice(pr.inputPerMTok)} / {fmtPrice(pr.outputPerMTok)}</span>
-                    </div>
-                  )
-                })}
+        {editing &&
+          (() => {
+            const table = prices[draft.id]
+            const ids = draft.models
+              .split(/[\n,]/)
+              .map((s) => s.trim())
+              .filter(Boolean)
+            if (!table || ids.length === 0) return null
+            const priced = ids.filter((m) => table[m])
+            if (priced.length === 0) return null
+            return (
+              <div className="rounded bg-[var(--color-surface-2)] p-1.5">
+                <div className="mb-1 text-[10px] uppercase tracking-wide text-[var(--color-text-dim)]">
+                  Fiyatlar — $/1M token (giriş / çıkış)
+                </div>
+                <div className="max-h-40 overflow-y-auto">
+                  {priced.map((m) => {
+                    const pr = table[m]
+                    return (
+                      <div
+                        key={m}
+                        className="flex items-center justify-between gap-3 px-1 py-0.5 text-[11px]"
+                      >
+                        <span className="min-w-0 break-all font-mono">{m}</span>
+                        <span className="shrink-0 tabular-nums text-[var(--color-text-dim)]">
+                          {fmtPrice(pr.inputPerMTok)} / {fmtPrice(pr.outputPerMTok)}
+                        </span>
+                      </div>
+                    )
+                  })}
+                </div>
+                <p className="mt-1 text-[10px] text-[var(--color-text-dim)]">
+                  Yaklaşık liste fiyatı; bütçe ekranı bu değerlerle maliyet hesaplar.
+                </p>
               </div>
-              <p className="mt-1 text-[10px] text-[var(--color-text-dim)]">Yaklaşık liste fiyatı; bütçe ekranı bu değerlerle maliyet hesaplar.</p>
-            </div>
-          )
-        })()}
+            )
+          })()}
 
-        <SecretSource secrets={secrets} onManage={onManageSecrets} onPick={async (n) => upd({ key: await onImportSecret(n) })} />
+        <SecretSource
+          secrets={secrets}
+          onManage={onManageSecrets}
+          onPick={async (n) => upd({ key: await onImportSecret(n) })}
+        />
         <div className="text-xs text-[var(--color-text-dim)]">
-          {draft.key ? '✓ Anahtar sırdan seçildi' : editing ? 'Anahtar korunacak (değiştirmek için sırdan seç)' : 'Anahtar: yalnızca sırdan seçilir (elle giriş kapalı)'}
+          {draft.key
+            ? '✓ Anahtar sırdan seçildi'
+            : editing
+              ? 'Anahtar korunacak (değiştirmek için sırdan seç)'
+              : 'Anahtar: yalnızca sırdan seçilir (elle giriş kapalı)'}
         </div>
         {err && <div className="text-xs text-[var(--color-danger)]">{err}</div>}
         <div className="flex gap-2">
-          <button data-testid="custom-provider-save" onClick={save} disabled={busy || !draft.id || !draft.baseUrl} className="flex items-center gap-1 rounded bg-[var(--color-accent)] px-3 py-1.5 text-xs font-medium text-white hover:opacity-90 disabled:opacity-30">
+          <button
+            data-testid="custom-provider-save"
+            onClick={save}
+            disabled={busy || !draft.id || !draft.baseUrl}
+            className="flex items-center gap-1 rounded bg-[var(--color-accent)] px-3 py-1.5 text-xs font-medium text-white hover:opacity-90 disabled:opacity-30"
+          >
             <Plus size={13} /> {editing ? 'Güncelle' : 'Ekle'}
           </button>
-          {editing && <button data-testid="custom-provider-cancel" onClick={reset} className="rounded border border-[var(--color-border)] px-3 py-1.5 text-xs">İptal</button>}
+          {editing && (
+            <button
+              data-testid="custom-provider-cancel"
+              onClick={reset}
+              className="rounded border border-[var(--color-border)] px-3 py-1.5 text-xs"
+            >
+              İptal
+            </button>
+          )}
         </div>
       </div>
     </div>
@@ -502,11 +706,15 @@ export function ProvidersPanel({
   workspaceClaudeHome,
 }: Props) {
   const [authOpen, setAuthOpen] = useState(false)
+  // Which Claude Code binary + plan actually backs the claude-cli card. Comes
+  // from the catalog (the backend probes `claude --version` and reads the
+  // workspace claude-home login), so the card names the install, not just "CLI".
+  const claudeRuntime = resolveRuntimeBadge(useCatalog().find((c) => c.id === 'claude-cli'))
   // Pre-flight login check for THIS workspace's claude-home (distinct from the
   // generic "test et", which probes the app-global config dir). 'idle' before run.
-  const [wsAuth, setWsAuth] = useState<
-    'idle' | 'pending' | { loggedIn: boolean; detail?: string }
-  >('idle')
+  const [wsAuth, setWsAuth] = useState<'idle' | 'pending' | { loggedIn: boolean; detail?: string }>(
+    'idle',
+  )
   const checkWsAuth = async () => {
     setWsAuth('pending')
     try {
@@ -529,7 +737,9 @@ export function ProvidersPanel({
       )}
       <div>
         <div className="mb-1.5 flex items-center justify-between gap-2">
-          <span className="text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">Yerleşik sağlayıcılar</span>
+          <span className="text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
+            Yerleşik sağlayıcılar
+          </span>
           <button
             onClick={onManageSecrets}
             className="flex items-center gap-1 text-xs text-[var(--color-text-dim)] hover:text-[var(--color-accent)]"
@@ -537,18 +747,33 @@ export function ProvidersPanel({
             <KeyRound size={12} /> Sırları yönet →
           </button>
         </div>
-        <p className="mb-2 text-xs text-[var(--color-text-dim)]">Anahtarlar yalnızca Sır kasasından seçilir — elle giriş kapalı.</p>
+        <p className="mb-2 text-xs text-[var(--color-text-dim)]">
+          Anahtarlar yalnızca Sır kasasından seçilir — elle giriş kapalı.
+        </p>
         <div className="grid gap-2">
           <div className="space-y-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
             <div className="flex items-center justify-between gap-2">
               <div className="flex min-w-0 items-center gap-2">
                 <Sparkles size={15} className="shrink-0 text-[var(--color-accent)]" />
                 <span className="truncate text-sm font-medium">Anthropic Pro/Max (OAuth)</span>
-                <span className="shrink-0 text-[10px] uppercase tracking-wide text-[var(--color-text-dim)]">claude-cli / abonelik</span>
+                <span className="shrink-0 text-[10px] uppercase tracking-wide text-[var(--color-text-dim)]">
+                  claude-cli / abonelik
+                </span>
+                {claudeRuntime && (
+                  <span
+                    data-testid="claude-cli-runtime"
+                    title="Kurulu Claude Code sürümü ve bu workspace'in giriş yaptığı plan"
+                    className="shrink-0 rounded bg-[var(--color-surface-2)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--color-text)]"
+                  >
+                    {claudeRuntime}
+                  </span>
+                )}
               </div>
               <span
                 className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${
-                  draft.claudeCliAuthSet ? 'bg-[var(--color-surface-2)] text-[var(--color-success)]' : 'bg-[var(--color-surface-2)] text-[var(--color-text-dim)]'
+                  draft.claudeCliAuthSet
+                    ? 'bg-[var(--color-surface-2)] text-[var(--color-success)]'
+                    : 'bg-[var(--color-surface-2)] text-[var(--color-text-dim)]'
                 }`}
               >
                 {draft.claudeCliAuthSet
@@ -558,7 +783,9 @@ export function ProvidersPanel({
             </div>
 
             <div className="flex flex-col gap-1">
-              <span className="text-xs font-medium text-[var(--color-text-dim)]">claude CLI yolu</span>
+              <span className="text-xs font-medium text-[var(--color-text-dim)]">
+                claude CLI yolu
+              </span>
               <input
                 data-testid="provider-endpoint-input"
                 data-provider="claude-cli"
@@ -570,7 +797,9 @@ export function ProvidersPanel({
             </div>
 
             <div className="flex flex-col gap-1">
-              <span className="text-xs font-medium text-[var(--color-text-dim)]">claude config dizini (bu workspace · salt-okunur)</span>
+              <span className="text-xs font-medium text-[var(--color-text-dim)]">
+                claude config dizini (bu workspace · salt-okunur)
+              </span>
               <input
                 value={workspaceClaudeHome || draft.claudeConfigDir}
                 readOnly
@@ -579,7 +808,7 @@ export function ProvidersPanel({
               />
               <span className="text-[10px] text-[var(--color-text-dim)]">
                 {workspaceClaudeHome
-                  ? 'Aktif workspace\'in kendi CLAUDE_CONFIG_DIR yolu — skill/ayar/login bu workspace ile paylaşılır. Her workspace farklı bir yol kullanır; salt-okunur (workspace kökünden türetilir).'
+                  ? "Aktif workspace'in kendi CLAUDE_CONFIG_DIR yolu — skill/ayar/login bu workspace ile paylaşılır. Her workspace farklı bir yol kullanır; salt-okunur (workspace kökünden türetilir)."
                   : 'Uygulama-geneli fallback (workspace çözülemedi). Normalde her workspace kendi <workspace>/claude-home dizinini kullanır; salt-okunur.'}
               </span>
             </div>
@@ -705,8 +934,16 @@ export function ProvidersPanel({
       <div className="flex items-center gap-1.5 pt-2 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
         <Boxes size={13} className="text-[var(--color-accent)]" /> Özel sağlayıcılar
       </div>
-      <p className="-mt-1 text-xs text-[var(--color-text-dim)]">OpenAI- veya Anthropic-uyumlu herhangi bir uç (OpenRouter, Gemini, Kimi, Ollama…). Eklenince ajan oluştururken sağlayıcı olarak seçilebilir. Değişiklikler anında kaydedilir (üstteki Kaydet'ten bağımsız).</p>
-      <CustomProviders secrets={secrets} onImportSecret={onImportSecret} onManageSecrets={onManageSecrets} />
+      <p className="-mt-1 text-xs text-[var(--color-text-dim)]">
+        OpenAI- veya Anthropic-uyumlu herhangi bir uç (OpenRouter, Gemini, Kimi, Ollama…). Eklenince
+        ajan oluştururken sağlayıcı olarak seçilebilir. Değişiklikler anında kaydedilir (üstteki
+        Kaydet'ten bağımsız).
+      </p>
+      <CustomProviders
+        secrets={secrets}
+        onImportSecret={onImportSecret}
+        onManageSecrets={onManageSecrets}
+      />
     </>
   )
 }

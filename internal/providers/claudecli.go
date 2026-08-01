@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/bilal-arikan/tionswarm/internal/claudeauth"
 	"github.com/bilal-arikan/tionswarm/internal/proc"
 )
 
@@ -556,6 +557,14 @@ func (c *ClaudeCLI) runAttempt(ctx context.Context, args []string, prompt, model
 	if serr != nil {
 		return nil, false, serr
 	}
+	// Admit only ONE launch while an OAuth refresh is due for this claude-home.
+	// Refresh tokens are single-use, so concurrent processes that all find the token
+	// expired race for it: the losers get invalid_grant and the CLI CLEARS the shared
+	// credential file, breaking every later turn in the workspace (observed live with
+	// a 3-level coordinator tree). A no-op while the token is comfortably valid —
+	// the normal case — so parallel fan-out is unaffected. Immediately before Start,
+	// so the gate covers the launch it admits rather than the whole turn.
+	claudeauth.SerializeRefresh(c.configDir)
 	if serr := cmd.Start(); serr != nil {
 		return nil, false, serr
 	}

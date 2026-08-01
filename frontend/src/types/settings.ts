@@ -225,6 +225,11 @@ export interface CatalogEntry {
   allowCustomModel: boolean
   available: boolean
   models: CatalogModel[]
+  // claude-cli only: the locally installed Claude Code version ("2.1.220") and
+  // the subscription tier it is logged into ("max" / "pro"). Both are absent for
+  // other providers, and either may be absent when it cannot be read.
+  cliVersion?: string
+  subscription?: string
 }
 
 // Build / version metadata returned by GET /api/version.

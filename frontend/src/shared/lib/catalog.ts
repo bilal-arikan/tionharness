@@ -23,7 +23,9 @@ export function loadCatalog(): Promise<CatalogEntry[]> {
 export function useCatalog(): CatalogEntry[] {
   const [catalog, setCatalog] = useState<CatalogEntry[]>(catalogCache ?? [])
   useEffect(() => {
-    loadCatalog().then(setCatalog).catch(() => {})
+    loadCatalog()
+      .then(setCatalog)
+      .catch(() => {})
   }, [])
   return catalog
 }
@@ -55,4 +57,29 @@ export function resolveModelLabel(
   if (model) return model // a custom model id not present in the curated list
   const def = entry.models[0]
   return stripTagline(def?.label || def?.id || provider)
+}
+
+// resolveRuntimeBadge renders the runtime behind a provider entry as one short
+// label — currently only claude-cli has one: "Claude Code v2.1.220 · Max".
+//
+// That provider's models are bare aliases ("sonnet"), so the model name alone
+// says nothing about which binary answers or which plan pays for it. Returns ""
+// for every other provider and whenever neither fact could be read.
+//
+// `compact` drops the "Claude Code" prefix ("v2.1.220 · Max") for lines that are
+// already tight and already name the model — the agent identity line. Callers
+// using it should put the full label in a title so the prefix is one hover away.
+export function resolveRuntimeBadge(
+  entry: CatalogEntry | undefined,
+  opts?: { compact?: boolean },
+): string {
+  if (!entry) return ''
+  const parts: string[] = []
+  if (entry.cliVersion) {
+    parts.push(opts?.compact ? `v${entry.cliVersion}` : `Claude Code v${entry.cliVersion}`)
+  }
+  if (entry.subscription) {
+    parts.push(entry.subscription.charAt(0).toUpperCase() + entry.subscription.slice(1))
+  }
+  return parts.join(' · ')
 }

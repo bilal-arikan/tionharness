@@ -224,7 +224,18 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 	// home. No-op when the workspace dir is unknown (keeps the provider's global
 	// default). This is the single per-turn seam every CLI turn passes through.
 	if isCLI {
-		cli.SetConfigDir(r.claudeHomeDir())
+		home := r.claudeHomeDir()
+		cli.SetConfigDir(home)
+		// Re-seed the login if this home lost it. The CLI can WIPE its own
+		// <home>/.credentials.json (accessToken:"", refreshToken:"", expiresAt:0) when
+		// an OAuth refresh fails — most easily when several of its processes race for
+		// the single-use refresh token, which a coordinator tree does by design. The
+		// boot-time heal (EnsureWorkspaceClaudeHome) never runs again after that, so
+		// EVERY remaining turn in the workspace failed "not logged in" until a
+		// restart. Healing at the per-turn seam bounds the damage to the turn that
+		// actually lost the race. Idempotent and cheap: a usable credential returns
+		// after one small file read.
+		ensureClaudeHomeCredential(home)
 	}
 	inter := tools.InteractionFrom(ctx)
 	// CLI turns that arrive without an Interaction endpoint — autonomous ones

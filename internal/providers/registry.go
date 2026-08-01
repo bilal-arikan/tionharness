@@ -29,12 +29,12 @@ type CustomSpec struct {
 // locally-available CLI tools. Its fields are mutable at runtime so the
 // Settings screen can update the Anthropic key or claude CLI path live.
 type Registry struct {
-	mu                 sync.RWMutex
-	anthropicKey       string
-	claudeCLIPath      string // resolved path to `claude` binary, or "" if absent
-	claudeConfigDir    string // CLAUDE_CONFIG_DIR override for claude-cli, or "" to inherit ~/.claude
-	claudeAuthKind     string // claude-cli credential kind: "oauth" | "apikey" | ""
-	claudeAuthToken    string // claude-cli credential value injected into the subprocess env
+	mu              sync.RWMutex
+	anthropicKey    string
+	claudeCLIPath   string // resolved path to `claude` binary, or "" if absent
+	claudeConfigDir string // CLAUDE_CONFIG_DIR override for claude-cli, or "" to inherit ~/.claude
+	claudeAuthKind  string // claude-cli credential kind: "oauth" | "apikey" | ""
+	claudeAuthToken string // claude-cli credential value injected into the subprocess env
 
 	betaExtendedCache    bool // anthropic extended prompt-cache TTL beta
 	betaContextEditing   bool // anthropic API-native context-editing beta (clear_tool_uses)
@@ -213,6 +213,15 @@ func (r *Registry) ClaudeCLIAvailable() bool {
 	return r.claudeCLIPath != ""
 }
 
+// ClaudeCLIPath returns the resolved path to the `claude` binary, or "" when it
+// was not found. Callers use it to probe the local install (version, login) —
+// building a provider is not needed just to ask about the binary.
+func (r *Registry) ClaudeCLIPath() string {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.claudeCLIPath
+}
+
 // AnthropicConfigured reports whether an Anthropic key is set.
 func (r *Registry) AnthropicConfigured() bool {
 	r.mu.RLock()
@@ -228,14 +237,14 @@ func (r *Registry) resolve(id string) ResolvedConfig {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	cfg := ResolvedConfig{
-		CLIPath:            r.claudeCLIPath,
-		CLIConfigDir:       r.claudeConfigDir,
-		CLIAuthKind:        r.claudeAuthKind,
-		CLIAuthToken:       r.claudeAuthToken,
-		ExtendedCache:      r.betaExtendedCache,
-		ContextEditing:     r.betaContextEditing,
-		ServerCompaction:   r.betaServerCompaction,
-		RefusalFallback:    r.betaRefusalFallback,
+		CLIPath:          r.claudeCLIPath,
+		CLIConfigDir:     r.claudeConfigDir,
+		CLIAuthKind:      r.claudeAuthKind,
+		CLIAuthToken:     r.claudeAuthToken,
+		ExtendedCache:    r.betaExtendedCache,
+		ContextEditing:   r.betaContextEditing,
+		ServerCompaction: r.betaServerCompaction,
+		RefusalFallback:  r.betaRefusalFallback,
 	}
 	switch id {
 	case "anthropic":

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useCatalog } from '@/shared/lib/catalog'
+import { useCatalog, resolveRuntimeBadge } from '@/shared/lib/catalog'
 
 const inputCls =
   'w-full rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5 text-sm outline-none focus:border-[var(--color-accent)]'
@@ -30,7 +30,13 @@ interface Props {
 // escape hatch for typing a custom id (model ids change often). With
 // `allowInherit`, an empty provider is selectable and means "use the app
 // default" (model becomes a free, optional text field).
-export function ProviderModelSelect({ provider, model, onChange, allowInherit, inheritLabel = '(uygulama varsayılanı)' }: Props) {
+export function ProviderModelSelect({
+  provider,
+  model,
+  onChange,
+  allowInherit,
+  inheritLabel = '(uygulama varsayılanı)',
+}: Props) {
   const catalog = useCatalog()
   const [custom, setCustom] = useState(false)
 
@@ -41,6 +47,10 @@ export function ProviderModelSelect({ provider, model, onChange, allowInherit, i
   const selectedModel = models.find((m) => m.id === model)
   const selectedDesc = selectedModel?.description
   const selectedWindow = formatContextWindow(selectedModel?.contextWindow)
+  // claude-cli's models are aliases ("sonnet") resolved by a local Claude Code
+  // binary on a Max/Pro plan — show which binary/plan alongside the model, since
+  // the alias alone is identical on every machine.
+  const runtimeBadge = resolveRuntimeBadge(entry)
 
   const isInherit = allowInherit && provider === ''
 
@@ -54,7 +64,12 @@ export function ProviderModelSelect({ provider, model, onChange, allowInherit, i
     <div className="grid grid-cols-2 gap-3">
       <label className="block space-y-1">
         <span className="text-xs font-medium text-[var(--color-text-dim)]">Sağlayıcı</span>
-        <select data-testid="provider-select" value={provider} onChange={(e) => selectProvider(e.target.value)} className={inputCls}>
+        <select
+          data-testid="provider-select"
+          value={provider}
+          onChange={(e) => selectProvider(e.target.value)}
+          className={inputCls}
+        >
           {allowInherit && <option value="">{inheritLabel}</option>}
           {!entry && provider !== '' && <option value={provider}>{provider}</option>}
           {catalog.map((c) => (
@@ -125,9 +140,20 @@ export function ProviderModelSelect({ provider, model, onChange, allowInherit, i
             {(entry?.allowCustomModel ?? true) && <option value="__custom__">Özel…</option>}
           </select>
         )}
-        {!showCustom && (selectedDesc || selectedWindow) && (
+        {(runtimeBadge || (!showCustom && (selectedDesc || selectedWindow))) && (
           <span className="flex items-center gap-1.5 text-xs text-[var(--color-text-dim)]">
-            {selectedWindow && (
+            {/* Shown for a custom model id too: the alias changes, the CLI behind
+                it does not. */}
+            {runtimeBadge && (
+              <span
+                data-testid="model-runtime-badge"
+                title="Bu modeli çalıştıran yerel Claude Code kurulumu ve abonelik planı"
+                className="shrink-0 rounded bg-[var(--color-surface-2)] px-1.5 py-px font-medium text-[var(--color-text)]"
+              >
+                {runtimeBadge}
+              </span>
+            )}
+            {!showCustom && selectedWindow && (
               <span
                 title="Yaklaşık bağlam penceresi (token)"
                 className="shrink-0 rounded bg-[var(--color-surface-2)] px-1.5 py-px font-medium text-[var(--color-text)]"
@@ -135,7 +161,9 @@ export function ProviderModelSelect({ provider, model, onChange, allowInherit, i
                 {selectedWindow} bağlam
               </span>
             )}
-            {selectedDesc && <span className="min-w-0 truncate">{selectedDesc}</span>}
+            {!showCustom && selectedDesc && (
+              <span className="min-w-0 truncate">{selectedDesc}</span>
+            )}
           </span>
         )}
       </label>
