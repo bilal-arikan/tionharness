@@ -322,6 +322,15 @@ func (r *Runtime) SpawnWorker(ctx context.Context, coordSessionID, agentRef, tas
 	if rootID == "" {
 		rootID = parent.ID // parent is a plain session being used as a root coordinator
 	}
+	// Hold the tree's spawn lock across the budget check AND the session creation.
+	// The budget counts sessions on disk, so a bare check-then-create lets N
+	// concurrent spawn_worker calls — which is precisely how a coordinator fans out —
+	// all read the same "one slot left" and every one of them create. The
+	// per-coordinator worker cap is safe because it reserves with an atomic add; the
+	// tree budget has nothing to add to until the session exists. Creation is cheap
+	// and the turn itself runs detached, so this serializes bookkeeping, not work.
+	unlockTree := lockCoordinatorTree(rootID)
+	defer unlockTree()
 	if err := r.checkCoordinatorTreeBudget(ctx, parent, rootID, depth, spec.Coordinator); err != nil {
 		return SpawnResult{}, err
 	}
@@ -357,6 +366,18 @@ func (r *Runtime) SpawnWorker(ctx context.Context, coordSessionID, agentRef, tas
 	}
 	slot.markHadWorkers()
 	return res, nil
+}
+
+// coordinatorTreeLocks holds one spawn lock per coordinator TREE, keyed by root id.
+var coordinatorTreeLocks sync.Map
+
+// lockCoordinatorTree serializes budget-check-plus-create for one coordinator tree
+// and returns the unlock func.
+func lockCoordinatorTree(rootID string) func() {
+	v, _ := coordinatorTreeLocks.LoadOrStore(rootID, &sync.Mutex{})
+	mu := v.(*sync.Mutex)
+	mu.Lock()
+	return mu.Unlock
 }
 
 // checkCoordinatorTreeBudget enforces the TREE-WIDE guards before a worker session

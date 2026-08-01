@@ -946,7 +946,35 @@ ortasında turlar `authentication_failed` vermeye başladı ve workspace'in
 Doğrulama: aynı 3 seviyeli koşu tekrarlandı → **auth hatası 0**, credential
 bozulmadan kaldı, yeni workspace canlı credential'ı seçti.
 
-### 14.9 Testler
+### 14.9 İstisna senaryoları — kapsanan ve kapsanmayan
+
+Ağaç, eşzamanlılığı **tasarım gereği** üretiyor (tek turda N `spawn_worker`), bu
+yüzden "check-then-act" desenleri burada teorik değil. Denetim sonucu:
+
+| Senaryo | Durum |
+|---|---|
+| **Sunucu ortada kapanır** | Yetim turlar `RecoverOrphanedTurns` (BFS, kurtarılan ebeveyne notify yok) + rapor borcu **diskte** (`CoordinatorReportPending`) → `RecoverPendingReports` boot'ta backstop'u yeniden kurar. `coordSlot` bellekte kaybolur ama boot'ta hiçbir şey çalışmadığı için "hepsi bitmiş" okuması doğrudur. Test: `TestPendingReportSurvivesProcessRestart` (iki Runtime, **aynı store**). |
+| **Rapor çift gönderimi** | `owesReportNow` → `setOwesReport(false)` **atomik değildi**: iki backstop (her drain çıkışında bir tane) veya backstop⇄`report_to_coordinator` aynı anda geçip aynı görevi iki kez, çelişkili statülerle raporlayabilirdi. → `db.ClaimCoordinatorReport` (store kilidi altında true→false CAS); yalnız kazanan gönderir. Test: `TestReportClaimIsExclusive`, `TestSettleBackstopDoesNotDoubleReport`. |
+| **Alt-ağaç bütçesi aşımı** | Bütçe diskteki oturumları sayıyor; say-sonra-yarat arasında N eşzamanlı spawn aynı "1 slot kaldı"yı okuyup hepsi yaratabilirdi (düğüm-başına worker cap'i atomic add ile güvenli, ağaç bütçesinin ekleyeceği bir şey yok). → kök başına spawn kilidi, kontrol + yaratma birlikte. Yaratma ucuz, tur zaten detached → iş değil muhasebe serileşir. Test: `TestSubtreeBudgetHoldsUnderConcurrentSpawns`. |
+| **Credential dosyası yarım okunur** | `copyFile` truncate-sonra-stream yapıyordu; heal'i **her tura** taşıyınca eşzamanlı bir CLI 0 baytlık `.credentials.json` görebilirdi ("not logged in"). → tmp+rename (POSIX + Windows'ta atomik). |
+| **Taze login'in eski kaynakla ezilmesi** | Heal "sırala → kopyala" arasında CLI dst'yi tazeleyebilir. → per-home kilit + kopyalamadan hemen önce dst'nin **yeniden** sıralanması; daha iyiyse kopyalama yapılmaz. |
+| **Çoklu pencere / ekran** | Rol toggle'ı ve worker geçişleri SSE ile yayılır (`emitCoordinationModeEvent` + `workerBus`); ağaç paneli aynı akışa abone. İki pencere aynı anda toggle ederse son yazan kazanır ve ikisi de olayı görür. |
+| **Aynı oturumda çift tur** | Değişmedi: `coordSlot` her oturumun tek tur kilidi (`_Docs/58`, §13); `runWorker` ve `runSpawn` de bu slotu alır. |
+
+**Bilinçli kapsam dışı (bilinmesi gerekenler):**
+
+- **`claudeauth.SerializeRefresh` süreç-içidir.** Aynı claude-home'a karşı **iki
+  TionSwarm süreci** koşarsa (ör. masaüstü uygulaması + dev sunucu) kapı işlemez.
+  Süreçler-arası koruma için dosya kilidi gerekir; şu an yok.
+- **Yarış dedektörü çalıştırılamadı** — bu makinede `-race` cgo (gcc) istiyor,
+  kurulu değil. Eşzamanlılık testleri gerçek goroutine'lerle koşuyor ve mantık
+  hatalarını yakalar, ama veri yarışlarını **tespit etmez**. CI'da gcc varsa
+  `CGO_ENABLED=1 go test -race ./internal/...` koşulmalı.
+- **Backstop tam da açık raporla aynı mikrosaniyede ateşlerse** koordinatör önce
+  runtime'ın `incomplete` notunu, sonra ajanın gerçek sonucunu görür. Bilinçli:
+  ikincisi daha bilgilendiricidir ve düşürmek yerine iletmek daha doğrudur.
+
+### 14.10 Testler
 
 `coordination_tree_test.go`: subtree re-rooting (ara düğüm ebeveyninin diğer
 dallarını görmemeli), ertelenmiş rapor, erken `completed` reddi, mod toggle

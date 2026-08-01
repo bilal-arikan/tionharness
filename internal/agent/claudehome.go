@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 )
 
@@ -200,6 +201,15 @@ func credentialLiveness(path string) credentialRank {
 func ensureClaudeHomeCredential(home string) {
 	dst := filepath.Join(home, ".credentials.json")
 
+	// Serialize heals per home. Concurrent CLI turns all reach this seam, and
+	// without the lock several would evaluate the same wiped destination and race
+	// to reseed it. The copy itself is atomic, so this is not about a torn file —
+	// it is about the decision: between ranking and copying, the CLI can refresh
+	// dst with a NEWER token, and an unsynchronized heal would then overwrite a
+	// live login with an older source.
+	unlock := lockCredentialHeal(home)
+	defer unlock()
+
 	var candidates []string
 	if g := globalClaudeHomeDir(); g != "" && g != home {
 		candidates = append(candidates, filepath.Join(g, ".credentials.json"))
@@ -214,9 +224,28 @@ func ensureClaudeHomeCredential(home string) {
 			best, bestRank = src, r
 		}
 	}
-	if best != "" {
-		_ = copyFile(best, dst, 0o600)
+	if best == "" {
+		return
 	}
+	// Re-read the destination immediately before overwriting it: the ranking above
+	// is only as fresh as the moment it ran, and a CLI refresh landing in that
+	// window must win over anything we were about to seed.
+	if credentialLiveness(dst).betterThan(bestRank) {
+		return
+	}
+	_ = copyFile(best, dst, 0o600)
+}
+
+// credentialHealLocks holds one mutex per claude-home, keyed by path.
+var credentialHealLocks sync.Map
+
+// lockCredentialHeal serializes credential healing for one claude-home and returns
+// the unlock func.
+func lockCredentialHeal(home string) func() {
+	v, _ := credentialHealLocks.LoadOrStore(home, &sync.Mutex{})
+	mu := v.(*sync.Mutex)
+	mu.Lock()
+	return mu.Unlock
 }
 
 // ensureClaudeHomeEffortLevel makes sure a workspace claude-home's settings.json
@@ -313,13 +342,27 @@ func copyFile(src, dst string, mode os.FileMode) error {
 	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
 		return err
 	}
-	out, err := os.OpenFile(dst, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, mode)
+	// Write to a temp file and rename into place. The destination may be read
+	// CONCURRENTLY by a claude CLI subprocess — .credentials.json especially, now
+	// that the credential heal runs at the per-turn seam — and truncate-then-stream
+	// would expose a zero-length or half-written file to whoever reads it in
+	// between, which the CLI reports as "not logged in". Rename is atomic within a
+	// directory on both POSIX and Windows (MOVEFILE_REPLACE_EXISTING).
+	tmp, err := os.CreateTemp(filepath.Dir(dst), ".tmp-copy-*")
 	if err != nil {
 		return err
 	}
-	if _, err := io.Copy(out, in); err != nil {
-		_ = out.Close()
+	tmpName := tmp.Name()
+	defer os.Remove(tmpName) // no-op once the rename succeeded
+	if _, err := io.Copy(tmp, in); err != nil {
+		_ = tmp.Close()
 		return err
 	}
-	return out.Close()
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	if err := os.Chmod(tmpName, mode); err != nil {
+		return err
+	}
+	return os.Rename(tmpName, dst)
 }

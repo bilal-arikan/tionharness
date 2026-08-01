@@ -206,11 +206,21 @@ func (r *Runtime) ReportToCoordinator(ctx context.Context, sessionID, status, su
 	if running := r.activeSubtreeWorkers(ctx, sessionID); running > 0 && status == turnStatusCompleted {
 		return fmt.Errorf("cannot report \"completed\" while %d of your own workers are still running: wait for their notifications and synthesize them first, or stop them and report \"incomplete\"", running)
 	}
-	r.setOwesReport(ctx, sessionID, false)
+	// Clear the outstanding report BEFORE sending, so an armed settle backstop
+	// racing this call finds nothing to claim and stays quiet. The agent's own
+	// synthesis is always the better report; the backstop only exists for silence.
+	// (A backstop that already fired microseconds earlier still wins the claim — the
+	// coordinator then gets the runtime's "incomplete" note followed by this real
+	// result, which is recoverable and strictly more informative than dropping it.)
+	claimed, err := r.db.ClaimCoordinatorReport(ctx, sessionID)
+	if err != nil {
+		return err
+	}
 	note := formatTaskNotification(sessionID, r.agentName(sess.AgentID), status, summary, 0, 0)
 	r.NotifyCoordinator(sess.CoordinatorSessionID, note)
 	r.logger.Info("coordination: sub-coordinator reported up",
-		"session", sessionID, "coordinator", sess.CoordinatorSessionID, "status", status)
+		"session", sessionID, "coordinator", sess.CoordinatorSessionID,
+		"status", status, "closedPendingReport", claimed)
 	return nil
 }
 
@@ -234,7 +244,15 @@ func (r *Runtime) settleReportBackstop(ctx context.Context, sessionID string) {
 	if err != nil || sess.CoordinatorSessionID == "" {
 		return
 	}
-	r.setOwesReport(ctx, sessionID, false)
+	// Take the report atomically. The check above is only a cheap early-out: two
+	// backstops can be armed for the same session (one per drain exit) and the
+	// agent's own report_to_coordinator can land in the same instant. Whoever loses
+	// the claim must stay silent, or the coordinator above sees one task reported
+	// twice with conflicting statuses.
+	won, err := r.db.ClaimCoordinatorReport(ctx, sessionID)
+	if err != nil || !won {
+		return
+	}
 	last := strings.TrimSpace(r.lastAssistantText(ctx, sessionID))
 	if last == "" {
 		last = "(bu oturumda kaydedilmiş bir yanıt yok)"

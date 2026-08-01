@@ -159,7 +159,18 @@
   **refresh serileştirme** (`claudeauth/refreshgate.go` — yalnız yenileme gerekli
   pencerede, sağlıklı token'da hiç kilit yok). Doğrulama: aynı koşu tekrarlandı →
   **auth hatası 0**, credential bozulmadı.
-- Detay: **`_Docs/47` §14**. Test: `coordination_tree_test.go`,
+- **İstisna/yarış denetimi (aynı gün):** ağaç eşzamanlılığı tasarım gereği ürettiği
+  için "check-then-act" desenleri tarandı; **üç gerçek açık** bulunup kapatıldı —
+  (a) rapor gönderimi atomik değildi (iki backstop veya backstop⇄açık rapor aynı
+  görevi çelişkili statülerle iki kez raporlayabilirdi) → `ClaimCoordinatorReport`
+  CAS; (b) alt-ağaç bütçesi say-sonra-yarat idi, eşzamanlı fan-out limiti aşabilirdi
+  → kök başına spawn kilidi; (c) `copyFile` truncate-sonra-stream yapıyordu ve
+  credential heal'i her tura taşımak eşzamanlı CLI'ye **yarım dosya** gösterebilirdi
+  → tmp+rename + per-home kilit + kopyalamadan önce dst'nin yeniden sıralanması
+  (taze login eski kaynakla ezilmesin). Kapsam dışı olduğu **açıkça yazılanlar**:
+  `SerializeRefresh` süreç-içidir (iki TionSwarm süreci aynı claude-home'a koşarsa
+  korumaz) ve `-race` bu makinede koşturulamadı (cgo/gcc yok). Detay `_Docs/47` §14.9.
+- Detay: **`_Docs/47` §14**. Test: `coordination_tree_test.go`, `coordination_race_test.go`,
   `coordination_test.go`, `claudehome_credential_test.go`,
   `claudeauth/refreshgate_test.go`.
 

@@ -487,6 +487,29 @@ func (d *DB) SetCoordinatorReportPending(ctx context.Context, sessionID string, 
 	})
 }
 
+// ClaimCoordinatorReport atomically takes ownership of a session's outstanding
+// upward report: it clears CoordinatorReportPending and returns whether THIS caller
+// is the one that flipped it. Only the winner may send the report.
+//
+// A plain read-then-clear is not enough. Two settle backstops can be armed for the
+// same session (one per drain exit), and a backstop can run alongside the agent's
+// own report_to_coordinator — each would pass its own "does it still owe one?"
+// check and send, so the coordinator above would receive the same task reported
+// twice, with different statuses. The store lock makes the flip indivisible.
+func (d *DB) ClaimCoordinatorReport(ctx context.Context, sessionID string) (bool, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	s, ok := d.sessions[sessionID]
+	if !ok {
+		return false, ErrNotFound
+	}
+	if !s.CoordinatorReportPending {
+		return false, nil // someone else already reported
+	}
+	s.CoordinatorReportPending = false
+	return true, d.persistSessionLocked(s)
+}
+
 // ListPendingCoordinatorReports returns every non-archived session that still owes
 // its coordinator a report. Read at boot to re-arm the settle backstop for nodes
 // whose owed report would otherwise be forgotten across a restart.
