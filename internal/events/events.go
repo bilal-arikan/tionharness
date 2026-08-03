@@ -29,6 +29,15 @@ type Event struct {
 	// happen. Opaque JSON here (the events package never imports agent), exactly
 	// like db.Message.Steps. Empty for ordinary notifications.
 	Step json.RawMessage `json:"step,omitempty"`
+	// Msg carries an already-marshalled db.Message for a "session_user_message"
+	// event: a user-role message the runtime INJECTED mid-autonomous-flow (a worker
+	// task-notification, a send_to_worker prompt, a coordination status/guard note).
+	// Bridged to the session hub as KindUserMessage so a window watching the session
+	// renders the note live and in order — assistant replies already bridge via
+	// publishAutonomousReply, but these injected user messages did not, so the reply
+	// appeared to answer a message the window never saw (_Docs/58). Opaque JSON here
+	// (this package never imports db). Empty for everything else.
+	Msg json.RawMessage `json:"msg,omitempty"`
 	// Node carries an already-marshalled orchestration.NodeEvent for a
 	// "flow_node" event: one flow node's lifecycle (start/done/error + output),
 	// broadcast keyed by the flow run id (Target["flowRunId"]) so any window

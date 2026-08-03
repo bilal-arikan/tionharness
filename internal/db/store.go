@@ -244,9 +244,28 @@ func (d *DB) UpdateAgent(ctx context.Context, agentID string, p AgentProfilePatc
 
 // ---- Sessions ----
 
+// A session directory holds its header and its transcript in SEPARATE files:
+//
+//	session.json    the header — one JSON object
+//	messages.jsonl  the transcript — one message per line, appended
+//
+// The split is what keeps a header-only edit — rename, tag, pin, mark-read,
+// rolling summary — off the transcript: it rewrites a few hundred bytes instead
+// of re-encoding every message in the session. Combined, those were O(messages)
+// per metadata edit, so toggling "pinned" on a long thread rewrote megabytes
+// while holding the store's write lock.
+//
+// LEGACY: a single session.jsonl carried the header on line 1 and the messages
+// after it. It is still readable and is migrated to the split layout on load.
+const (
+	sessionHeaderFile = "session.json"
+	sessionMsgsFile   = "messages.jsonl"
+	legacySessionFile = "session.jsonl"
+)
+
 func (d *DB) persistSessionLocked(s Session) error {
 	d.sessions[s.ID] = s
-	return d.writeSessionFileLocked(s)
+	return d.writeSessionHeaderLocked(s)
 }
 
 // mutateSessionLocked loads a session under the write lock, applies fn, and
@@ -264,21 +283,41 @@ func (d *DB) mutateSessionLocked(id string, fn func(*Session)) error {
 	return d.persistSessionLocked(s)
 }
 
-// writeSessionFileLocked (re)writes a session's JSONL file: line 1 is the
-// session header, the remaining lines are its messages in order.
-func (d *DB) writeSessionFileLocked(s Session) error {
+// writeSessionHeaderLocked writes ONLY the session header file. Every metadata
+// mutation takes this path, so it must never touch the transcript.
+func (d *DB) writeSessionHeaderLocked(s Session) error {
 	var buf bytes.Buffer
 	enc := json.NewEncoder(&buf)
 	enc.SetEscapeHTML(false)
-	if err := enc.Encode(s); err != nil { // header line
+	if err := enc.Encode(s); err != nil {
 		return err
 	}
-	for _, m := range d.messages[s.ID] {
+	return atomicWriteBytes(d.dir(dirSessions, s.ID, sessionHeaderFile), buf.Bytes())
+}
+
+// writeSessionMessagesLocked rewrites the whole transcript file. O(messages) —
+// reserved for callers that changed message CONTENT (edit, delete, rewind).
+// Adding a message must go through appendMessageLocked, which stays O(1).
+func (d *DB) writeSessionMessagesLocked(sessionID string) error {
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+	for _, m := range d.messages[sessionID] {
 		if err := enc.Encode(m); err != nil {
 			return err
 		}
 	}
-	return atomicWriteBytes(d.dir(dirSessions, s.ID, "session.jsonl"), buf.Bytes())
+	return atomicWriteBytes(d.dir(dirSessions, sessionID, sessionMsgsFile), buf.Bytes())
+}
+
+// writeSessionFileLocked (re)writes both of a session's files: header and full
+// transcript. Only for message-content changes — a header-only edit must use
+// persistSessionLocked instead.
+func (d *DB) writeSessionFileLocked(s Session) error {
+	if err := d.writeSessionHeaderLocked(s); err != nil {
+		return err
+	}
+	return d.writeSessionMessagesLocked(s.ID)
 }
 
 // CreateSession inserts a new session.
@@ -782,8 +821,8 @@ func addParticipant(list []string, kind, id string) []string {
 }
 
 // appendMessageLocked appends a single encoded message line to a session's
-// JSONL file. The header line is written at session creation, so the file
-// already exists with its header as line 1.
+// transcript file, creating it on the first message (a session's directory is
+// made at creation time, but messages.jsonl only appears once it has one).
 func (d *DB) appendMessageLocked(sessionID string, m Message) error {
 	var buf bytes.Buffer
 	enc := json.NewEncoder(&buf)
@@ -791,7 +830,7 @@ func (d *DB) appendMessageLocked(sessionID string, m Message) error {
 	if err := enc.Encode(m); err != nil {
 		return err
 	}
-	path := d.dir(dirSessions, sessionID, "session.jsonl")
+	path := d.dir(dirSessions, sessionID, sessionMsgsFile)
 	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
 	if err != nil {
 		return err
@@ -883,8 +922,9 @@ func (d *DB) ListMessages(ctx context.Context, sessionID string) ([]Message, err
 
 // ---- session loading (boot) ----
 
-// loadSessions reads every sessions/<id>/session.jsonl file: the first line is
-// the session header, the rest are its messages.
+// loadSessions reads every sessions/<id>/ directory: the header from
+// session.json and the transcript from messages.jsonl, migrating a legacy
+// combined session.jsonl on the way.
 func (d *DB) loadSessions() error {
 	entries, err := os.ReadDir(d.dir(dirSessions))
 	if os.IsNotExist(err) {
@@ -897,15 +937,15 @@ func (d *DB) loadSessions() error {
 		if !e.IsDir() {
 			continue
 		}
-		path := filepath.Join(d.dir(dirSessions), e.Name(), "session.jsonl")
-		s, msgs, err := readSessionFile(path)
+		dir := filepath.Join(d.dir(dirSessions), e.Name())
+		s, msgs, err := readSessionDir(dir)
 		if err != nil {
 			if os.IsNotExist(err) {
 				continue
 			}
 			return err
 		}
-		if s.ID == "" { // empty/headerless file — nothing usable
+		if s.ID == "" { // empty/headerless session — nothing usable
 			continue
 		}
 		d.sessions[s.ID] = s
@@ -914,10 +954,93 @@ func (d *DB) loadSessions() error {
 	return nil
 }
 
-func readSessionFile(path string) (Session, []Message, error) {
-	f, err := os.Open(path)
+// readSessionDir loads one session from the split layout, falling back to the
+// legacy combined file (and converting it) when no header file is present.
+func readSessionDir(dir string) (Session, []Message, error) {
+	b, err := os.ReadFile(filepath.Join(dir, sessionHeaderFile))
+	if os.IsNotExist(err) {
+		return migrateLegacySession(dir)
+	}
 	if err != nil {
 		return Session{}, nil, err
+	}
+	var s Session
+	if err := json.Unmarshal(b, &s); err != nil {
+		return Session{}, nil, err // header corruption is fatal
+	}
+	msgs, err := readMessagesFile(filepath.Join(dir, sessionMsgsFile))
+	if err != nil {
+		return Session{}, nil, err
+	}
+	return reconcileHeader(s, msgs), msgs, nil
+}
+
+// migrateLegacySession converts a combined session.jsonl (header on line 1,
+// messages after) into the split layout. Write order is what makes it
+// crash-safe: the transcript lands first, the header second — and the header is
+// the marker the loader keys on — so a crash before that point simply leaves the
+// legacy file in place for the next boot to redo. Dropping the legacy file last
+// is best-effort; a leftover copy is inert once session.json exists.
+func migrateLegacySession(dir string) (Session, []Message, error) {
+	path := filepath.Join(dir, legacySessionFile)
+	lines, err := readJSONLines(path)
+	if err != nil {
+		return Session{}, nil, err // includes IsNotExist → caller skips the dir
+	}
+	if len(lines) == 0 {
+		return Session{}, nil, nil
+	}
+	var s Session
+	if err := json.Unmarshal(lines[0], &s); err != nil {
+		return Session{}, nil, err // header corruption is fatal
+	}
+	msgs, err := decodeMessages(lines[1:])
+	if err != nil {
+		return Session{}, nil, err
+	}
+	s = reconcileHeader(s, msgs)
+
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+	for _, m := range msgs {
+		if err := enc.Encode(m); err != nil {
+			return Session{}, nil, err
+		}
+	}
+	if err := atomicWriteBytes(filepath.Join(dir, sessionMsgsFile), buf.Bytes()); err != nil {
+		return Session{}, nil, err
+	}
+	buf.Reset()
+	if err := enc.Encode(s); err != nil {
+		return Session{}, nil, err
+	}
+	if err := atomicWriteBytes(filepath.Join(dir, sessionHeaderFile), buf.Bytes()); err != nil {
+		return Session{}, nil, err
+	}
+	_ = os.Remove(path)
+	return s, msgs, nil
+}
+
+// readMessagesFile reads a transcript file. A session with no messages yet has
+// no file at all, which is not an error.
+func readMessagesFile(path string) ([]Message, error) {
+	lines, err := readJSONLines(path)
+	if os.IsNotExist(err) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return decodeMessages(lines)
+}
+
+// readJSONLines returns the file's non-empty lines, copied out of the scanner's
+// reused buffer.
+func readJSONLines(path string) ([][]byte, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
 	}
 	defer f.Close()
 
@@ -929,31 +1052,27 @@ func readSessionFile(path string) (Session, []Message, error) {
 		if len(line) == 0 {
 			continue
 		}
-		b := make([]byte, len(line)) // scanner reuses its buffer; copy out
+		b := make([]byte, len(line))
 		copy(b, line)
 		lines = append(lines, b)
 	}
 	if err := sc.Err(); err != nil {
-		return Session{}, nil, err
+		return nil, err
 	}
-	if len(lines) == 0 {
-		return Session{}, nil, nil
-	}
+	return lines, nil
+}
 
-	var s Session
-	if err := json.Unmarshal(lines[0], &s); err != nil {
-		return Session{}, nil, err // header corruption is fatal
-	}
-	msgs := make([]Message, 0, len(lines)-1)
-	for i := 1; i < len(lines); i++ {
+func decodeMessages(lines [][]byte) ([]Message, error) {
+	msgs := make([]Message, 0, len(lines))
+	for i, line := range lines {
 		var m Message
-		if err := json.Unmarshal(lines[i], &m); err != nil {
+		if err := json.Unmarshal(line, &m); err != nil {
 			// A torn trailing line (crash mid-append) is tolerated by dropping it;
 			// corruption on any earlier line is real and fatal.
 			if i == len(lines)-1 {
 				break
 			}
-			return Session{}, nil, err
+			return nil, err
 		}
 		// Back-fill the participant fields for messages stored before the model
 		// (idempotent once set), so consumers never see empty AuthorKind on legacy
@@ -961,10 +1080,15 @@ func readSessionFile(path string) (Session, []Message, error) {
 		m.NormalizeParticipants()
 		msgs = append(msgs, m)
 	}
-	// The append hot-path leaves the header's counters stale; recompute them from
-	// the actual message lines so in-memory state is always authoritative. The
-	// participant roster is rebuilt the same way (an agent added via the append
-	// path never reached the header), so it self-heals across a restart.
+	return msgs, nil
+}
+
+// reconcileHeader makes in-memory state authoritative over the stored header.
+// The append hot path deliberately leaves the header's counters stale (it never
+// rewrites it), so they are recomputed from the actual messages. The participant
+// roster is rebuilt the same way — an agent that joined via the append path
+// never reached the header — so it self-heals across a restart.
+func reconcileHeader(s Session, msgs []Message) Session {
 	s.MessageCount = len(msgs)
 	for _, m := range msgs {
 		s.Participants = addParticipant(s.Participants, m.AuthorKind, m.AuthorID)
@@ -973,5 +1097,5 @@ func readSessionFile(path string) (Session, []Message, error) {
 	if n := len(msgs); n > 0 && msgs[n-1].CreatedAt > s.UpdatedAt {
 		s.UpdatedAt = msgs[n-1].CreatedAt
 	}
-	return s, msgs, nil
+	return s
 }

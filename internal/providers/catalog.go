@@ -14,6 +14,12 @@ type ModelInfo struct {
 	// manifests stay free of churning numbers; a manifest may still set an
 	// explicit value to override the family default for a specific model.
 	MaxOutput int `json:"maxOutput,omitempty"`
+	// ResolvedModel is the concrete model id this entry's (possibly alias) ID was
+	// last OBSERVED to mean — "opus" → "claude-opus-5". Empty until a completed
+	// turn has revealed it. Filled by the API layer from the workspace's
+	// observation store, never here: which model an alias points at is a runtime
+	// fact that changes without a release, so a manifest must not claim it.
+	ResolvedModel string `json:"resolvedModel,omitempty"`
 }
 
 // CatalogEntry describes a provider and its known models for the UI's

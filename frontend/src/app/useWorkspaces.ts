@@ -53,7 +53,9 @@ export function useWorkspaces(setError: (msg: string) => void) {
   // Raw shared unread set (cross-window union, mirrored to localStorage). The
   // displayed set (`unreadWs` below) filters out this window's active workspace.
   const [unreadRaw, setUnreadRaw] = useState<Set<string>>(() => readSharedUnread())
-  const [favoriteWorkspaceId, setFavoriteWorkspaceId] = useState<string | null>(() => readFavorite())
+  const [favoriteWorkspaceId, setFavoriteWorkspaceId] = useState<string | null>(() =>
+    readFavorite(),
+  )
 
   // Sync the badge set when another window mutates it (storage events fire in
   // every same-origin document except the one that wrote the change).
@@ -138,24 +140,30 @@ export function useWorkspaces(setError: (msg: string) => void) {
 
   // Returns the created workspace on success (so callers can run post-create
   // gates, e.g. the claude-cli auth check), or undefined when creation failed.
-  const createWorkspace = useCallback(async (data: NewWorkspaceData) => {
-    try {
-      const wsNew = await api.createWorkspace(data)
-      // Re-fetch the list so the icon/color (stored in ws-settings, absent from
-      // the create response) are reflected immediately; fall back to appending.
+  const createWorkspace = useCallback(
+    async (data: NewWorkspaceData) => {
       try {
-        setWorkspaces(await api.listWorkspaces())
-      } catch {
-        setWorkspaces((prev) => [...prev, wsNew])
+        const wsNew = await api.createWorkspace(data)
+        // The optional `git init` is advisory: the workspace was created regardless,
+        // so a failure is surfaced as an error banner instead of failing the flow.
+        if (wsNew.gitInitError) setError('Git deposu başlatılamadı: ' + wsNew.gitInitError)
+        // Re-fetch the list so the icon/color (stored in ws-settings, absent from
+        // the create response) are reflected immediately; fall back to appending.
+        try {
+          setWorkspaces(await api.listWorkspaces())
+        } catch {
+          setWorkspaces((prev) => [...prev, wsNew])
+        }
+        setActiveWorkspace(wsNew.id)
+        setActiveWorkspaceId(wsNew.id)
+        return wsNew
+      } catch (e) {
+        setError((e as Error).message)
+        return undefined
       }
-      setActiveWorkspace(wsNew.id)
-      setActiveWorkspaceId(wsNew.id)
-      return wsNew
-    } catch (e) {
-      setError((e as Error).message)
-      return undefined
-    }
-  }, [setError])
+    },
+    [setError],
+  )
 
   // Adopt an existing on-disk workspace folder (first-run "select workspace"):
   // attach it on the backend, then make it active. Unlike createWorkspace this
@@ -252,7 +260,10 @@ export function useWorkspaces(setError: (msg: string) => void) {
 
   // Refresh the workspace list (e.g. after a rename in settings).
   const refreshWorkspaces = useCallback(() => {
-    api.listWorkspaces().then(setWorkspaces).catch(() => {})
+    api
+      .listWorkspaces()
+      .then(setWorkspaces)
+      .catch(() => {})
   }, [])
 
   return {

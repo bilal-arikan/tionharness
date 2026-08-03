@@ -88,7 +88,7 @@ kapalıysa veya oturum yoksa no-op'tur (best-effort, hata yutulur).
 | `error` | `toolloop.go fail()` + permission/budget hataları |
 | `compaction` | `toolloop.go` — reaktif compact başarılı olduğunda |
 | `recovery` | `toolloop.go` — çıktı-cap resume kurtarması |
-| `cache_break` | `cachebreak.go noteCacheOutcome` — sıcak prompt-cache öneki kaybolup soğuk yeniden yazıldığında (yalnız ana konuşma turları: chat/task/schedule/flow/spawn); sebep atıflı (`model-changed`/`prompt-or-tools-changed`/`ttl-or-server-eviction`). Claude Code `promptCacheBreakDetection` muadili — veri zaten `Usage.Cache*`'te, bu yalnız atıf ekler |
+| `cache_break` | `cachebreak.go noteCacheOutcome` — sıcak prompt-cache öneki kaybolup soğuk yeniden yazıldığında (yalnız ana konuşma turları: chat/task/schedule/flow/spawn); sebep atıflı (`model-changed`/`prompt-or-tools-changed`/`ttl-or-server-eviction`). Claude Code `promptCacheBreakDetection` muadili — veri zaten `Usage.Cache*`'te, bu yalnız atıf ekler. **Soğuma israfı:** yalnız `ttl-or-server-eviction` (geç gelen tur öneki soğuttu — model/prompt değişimi meşru geçersizleşmedir, israf değil) durumunda olay `wasteUsd`/`wasteEst` taşır = yeniden yazılan öneğin (native Anthropic `cache_creation`) yazma-tier'ı eksi zamanında okunsa ödenecek okuma-tier'ı (`providers.CoolingWaste`; abonelik sağlayıcıda tahmini). OpenRouter soğuk öneği input'a katıp write saymadığı için orada ~0 |
 
 ## Dosya yönetimi (cap + budama)
 
@@ -140,6 +140,15 @@ paneldeki (`MessageDebugPanel`) sıcak/soğuk göstergesiyle aynı formül, otur
 toplanmış. Veri hattı zaten mevcuttu (`budget.go RecordUsage` → `llm_call` olayı `CacheRead`/
 `CacheWrite` ile, tüm yollar + **claude-cli** dahil; `GetDebugSummary` toplar); bu değişiklik
 yalnız session kartında write + isabet oranını görünür kıldı (önceden sadece "Cache tok"=read).
+
+**Soğuma israfı hücresi (2026-08-03):** sağlık satırındaki "Cache kırılması" pill'inin yanında,
+`ttl-or-server-eviction` kırılmalarının izole USD maliyeti — `Soğuma israfı: ~$0.0123 · 3×`
+(abonelik sağlayıcıda `~` tahmini işareti + kırılma sayısı). Kaynak `DebugSummary.CoolingWasteUSD`/
+`CoolingBreaks`/`CoolingWasteEstimated` (yalnız `wasteUsd` taşıyan cache_break'lerden toplanır).
+Ham olay satırında da `· israf ~$…` görünür. Bu, "geç yanıt sıcak öneği soğuttu → yeniden yazım
+parası" farkını toplam maliyetten ayırıp tek hücrede gösterir (fiili para zaten `CacheWrite` olarak
+faturaya işleniyordu; bu kalem yalnız **önlenebilir** kısmı izole eder). Test: `providers.TestCoolingWaste`
++ `db.TestDebugSummaryCoolingWaste`.
 
 ## Ayarlar
 

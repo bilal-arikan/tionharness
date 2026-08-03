@@ -79,6 +79,13 @@ type DebugEvent struct {
 	Stop       string `json:"stop,omitempty"`       // turn stop reason
 	Err        bool   `json:"err,omitempty"`        // tool/turn failed
 	Detail     string `json:"detail,omitempty"`     // free-form (error msg, reason, decision)
+	// WasteUSD is the avoidable cooling overpay for a cache_break attributed to
+	// TTL expiry / server eviction (a warm prefix a timely turn would have kept):
+	// the re-written prefix billed at the write tier minus the read tier it would
+	// have cost warm. Set only on such cache_break events; WasteEstimated marks it
+	// as a subscription equivalent-API estimate (e.g. claude-cli).
+	WasteUSD       float64 `json:"wasteUsd,omitempty"`
+	WasteEstimated bool    `json:"wasteEst,omitempty"`
 }
 
 // debugPath returns the debug journal path for a session.
@@ -206,23 +213,31 @@ type DebugSummary struct {
 	// ThinkingTokens is the summed estimated hidden-reasoning portion of
 	// OutputTokens across the session's llm_calls (attribution, already inside
 	// OutputTokens). ThinkingShare is that fraction of output, 0..1.
-	ThinkingTokens int                      `json:"thinkingTokens,omitempty"`
-	ThinkingShare  float64                  `json:"thinkingShare,omitempty"`
-	CacheRead      int                      `json:"cacheReadTokens"`
-	CacheWrite     int                      `json:"cacheWriteTokens"`
-	ToolCalls      int                      `json:"toolCalls"`
-	Errors         int                      `json:"errors"`
-	Compactions    int                      `json:"compactions"`
-	Recoveries     int                      `json:"recoveries"`
-	CacheBreaks    int                      `json:"cacheBreaks"`
-	SavedBytes     int                      `json:"savedBytes"`
-	TurnDurMs      int64                    `json:"turnDurMs"`
-	ByTool         map[string]DebugToolStat `json:"byTool,omitempty"`
-	ByModel        map[string]int           `json:"byModel,omitempty"` // model → total tokens
-	TopTools       []string                 `json:"topTools,omitempty"`
-	LastError      string                   `json:"lastError,omitempty"`
-	FirstTs        int64                    `json:"firstTs,omitempty"`
-	LastTs         int64                    `json:"lastTs,omitempty"`
+	ThinkingTokens int     `json:"thinkingTokens,omitempty"`
+	ThinkingShare  float64 `json:"thinkingShare,omitempty"`
+	CacheRead      int     `json:"cacheReadTokens"`
+	CacheWrite     int     `json:"cacheWriteTokens"`
+	ToolCalls      int     `json:"toolCalls"`
+	Errors         int     `json:"errors"`
+	Compactions    int     `json:"compactions"`
+	Recoveries     int     `json:"recoveries"`
+	CacheBreaks    int     `json:"cacheBreaks"`
+	// CoolingBreaks counts the subset of CacheBreaks attributed to TTL expiry /
+	// server eviction (a late turn let the warm prefix cool), and CoolingWasteUSD
+	// is the summed avoidable overpay of re-warming those prefixes — the isolated
+	// "cooling waste" a timely reply would have saved. CoolingWasteEstimated is
+	// true when any contributing figure is a subscription estimate (e.g. claude-cli).
+	CoolingBreaks         int                      `json:"coolingBreaks,omitempty"`
+	CoolingWasteUSD       float64                  `json:"coolingWasteUsd,omitempty"`
+	CoolingWasteEstimated bool                     `json:"coolingWasteEstimated,omitempty"`
+	SavedBytes            int                      `json:"savedBytes"`
+	TurnDurMs             int64                    `json:"turnDurMs"`
+	ByTool                map[string]DebugToolStat `json:"byTool,omitempty"`
+	ByModel               map[string]int           `json:"byModel,omitempty"` // model → total tokens
+	TopTools              []string                 `json:"topTools,omitempty"`
+	LastError             string                   `json:"lastError,omitempty"`
+	FirstTs               int64                    `json:"firstTs,omitempty"`
+	LastTs                int64                    `json:"lastTs,omitempty"`
 	// LastCacheBreak is the human-readable reason of the most recent prompt-cache
 	// break (empty when none) — surfaced in the Debug card + the cache_break anomaly.
 	LastCacheBreak string `json:"lastCacheBreak,omitempty"`
@@ -291,6 +306,13 @@ func (d *DB) GetDebugSummary(ctx context.Context, sessionID string) (DebugSummar
 			sum.CacheBreaks++
 			if e.Detail != "" {
 				sum.LastCacheBreak = e.Detail
+			}
+			if e.WasteUSD > 0 {
+				sum.CoolingBreaks++
+				sum.CoolingWasteUSD += e.WasteUSD
+				if e.WasteEstimated {
+					sum.CoolingWasteEstimated = true
+				}
 			}
 		}
 	}

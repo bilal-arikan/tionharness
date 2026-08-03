@@ -42,6 +42,17 @@ type coordSlot struct {
 	turns      int          // auto-triggered coordinator turns so far (notify-loop cap)
 	capWarn    bool         // whether the "cap reached" warning has been posted
 	workers    atomic.Int64 // active workers under this coordinator
+	// spawnHallucStreak counts consecutive coordinator turns judged to have CLAIMED a
+	// spawn while making NO coordination tool call — the long-context degradation
+	// freeze. Bounds the corrective nudges so a wedged model cannot burn the notify
+	// loop; reset to 0 by any turn that actually calls a coordination tool. See
+	// guardCoordinatorStall (coordination_stall.go).
+	spawnHallucStreak int
+	// lastTurnUnix is the wall-clock (unix seconds) at which this coordinator's last
+	// real turn finished. 0 until the first real turn ran (a stubbed test never sets
+	// it). The stall sweeper reads it to find coordinators gone silent past the
+	// staleness window.
+	lastTurnUnix int64
 }
 
 // signalFree wakes turns blocked in claimCoordinatorSlot. Callers must hold mu.
@@ -499,11 +510,7 @@ func (r *Runtime) SendToWorker(ctx context.Context, coordSessionID, workerSessio
 	if !r.acquireSpawnSlotAtDepth(ws.CoordinatorDepth) {
 		return fmt.Errorf("background turn limit reached; try again once some finish")
 	}
-	if _, err := r.db.AddMessage(ctx, db.Message{
-		SessionID: workerSessionID,
-		Role:      "user",
-		Text:      message,
-	}); err != nil {
+	if _, err := r.recordInjectedUserNote(ctx, workerSessionID, "", message); err != nil {
 		r.releaseSpawnSlot()
 		return err
 	}
@@ -861,18 +868,65 @@ func (r *Runtime) NotifyCoordinator(coordSessionID, note string) {
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	if _, err := r.db.AddMessage(ctx, db.Message{
-		SessionID: coordSessionID,
-		Role:      "user",
-		Origin:    "worker-note",
-		Text:      note,
-	}); err != nil {
+	if _, err := r.recordInjectedUserNote(ctx, coordSessionID, "worker-note", note); err != nil {
 		cancel()
 		r.logger.Warn("coordination: failed to record task-notification", "coordinator", coordSessionID, "error", err)
 		return
 	}
 	cancel()
 	r.enqueueCoordinatorTurn(coordSessionID)
+}
+
+// recordInjectedUserNote persists a runtime-injected user-role note to a
+// coordination session (a worker task-notification, a send_to_worker prompt, a
+// coordination status/guard note) AND bridges it live to the session hub via the
+// bus. Interactive user messages already reach the hub from the send-queue worker
+// (chat_stream publishHub KindUserMessage); these injected ones bypassed it, so a
+// window watching the coordinator/worker rendered the assistant reply that
+// followed WITHOUT the message it answered — it looked like a duplicate reply
+// appearing out of nowhere, and only a page reload restored the real order
+// (_Docs/58, _Docs/47). Returns the persisted message so callers can chain.
+func (r *Runtime) recordInjectedUserNote(ctx context.Context, sessionID, origin, text string) (db.Message, error) {
+	return r.recordInjectedUserMessage(ctx, db.Message{
+		SessionID: sessionID,
+		Role:      "user",
+		Origin:    origin,
+		Text:      text,
+	})
+}
+
+// recordInjectedUserMessage is the general form of recordInjectedUserNote for
+// injected user turns that carry extra participant fields (a peer inbox delivery
+// stamps AuthorKind/AuthorID/RecipientID; a spawn/flow opening prompt is a plain
+// bubble). It persists m (Role should be "user") AND bridges it live to the hub.
+// Returns the persisted message.
+func (r *Runtime) recordInjectedUserMessage(ctx context.Context, m db.Message) (db.Message, error) {
+	msg, err := r.db.AddMessage(ctx, m)
+	if err != nil {
+		return db.Message{}, err
+	}
+	r.emitInjectedUserNote(msg.SessionID, msg)
+	return msg, nil
+}
+
+// emitInjectedUserNote broadcasts a just-persisted injected user message so the
+// bus→hub bridge (bridgeBusToHub) can render it live on every window watching the
+// session, mirroring how emitTurnStart / publishAutonomousReply cover the rest of
+// an autonomous turn. No-op on an empty session id or a marshal error (best-effort
+// live signal; the durable transcript backstops it on reload).
+func (r *Runtime) emitInjectedUserNote(sessionID string, msg db.Message) {
+	if sessionID == "" {
+		return
+	}
+	b, err := json.Marshal(msg)
+	if err != nil {
+		return
+	}
+	r.publish(events.Event{
+		Type:   events.TypeSessionUserMessage,
+		Target: map[string]string{"view": "chat", "sessionId": sessionID},
+		Msg:    b,
+	})
 }
 
 // BeginSessionUserTurn claims the session's turn slot for an interactive
@@ -1060,12 +1114,7 @@ func (r *Runtime) appendCoordinationStatus(coordSessionID string) {
 	const note = "<coordination-status>All workers under this coordinator have finished. " +
 		"Act on any results you have not handled yet, spawn the next steps if the plan has more, " +
 		"or conclude the project. Do NOT wait for a worker that has already finished.</coordination-status>"
-	if _, err := r.db.AddMessage(ctx, db.Message{
-		SessionID: coordSessionID,
-		Role:      "user",
-		Origin:    "worker-note",
-		Text:      note,
-	}); err != nil {
+	if _, err := r.recordInjectedUserNote(ctx, coordSessionID, "worker-note", note); err != nil {
 		r.logger.Warn("coordination: failed to record idle status note", "coordinator", coordSessionID, "error", err)
 	}
 }
@@ -1169,9 +1218,38 @@ func (r *Runtime) runCoordinatorTurn(coordSessionID string) {
 	// Coordinator turns are ordinary turns for the rest of the system: fire the hook
 	// so tags/automations on the coordinator session still work. The coordinator has
 	// no CoordinatorSessionID, so this never re-enters the coordination loop.
+	// Stamp turn-completion time for the stall sweeper's staleness check, regardless
+	// of success (a failed/stopped turn still counts as activity).
+	if slot := r.coordSlotFor(coordSessionID); slot != nil {
+		slot.mu.Lock()
+		slot.lastTurnUnix = time.Now().Unix()
+		slot.mu.Unlock()
+	}
 	if err == nil {
 		r.FireTurnFinished(coordSessionID, agent.ID, output)
+		// Catch the "narrated a spawn but never called the tool" degradation before the
+		// drain loop's post-turn pending check, so a corrective re-prompt runs THIS batch.
+		r.guardCoordinatorStall(coordSessionID, agent.ID, agent, output, steps)
 	}
+}
+
+// turnCalledCoordinationTool reports whether any (possibly nested) step in a turn
+// invoked a coordination tool. Matches the bare Tool name and the namespaced CallName
+// alike (mcp__tionswarm_interaction__spawn_worker on the claude-cli path).
+func turnCalledCoordinationTool(steps []TurnStep) bool {
+	for _, s := range steps {
+		if s.Kind == StepTool {
+			n := strings.ToLower(s.Tool + " " + s.CallName)
+			if strings.Contains(n, "spawn_worker") || strings.Contains(n, "list_workers") ||
+				strings.Contains(n, "send_to_worker") || strings.Contains(n, "stop_worker") {
+				return true
+			}
+		}
+		if len(s.SubSteps) > 0 && turnCalledCoordinationTool(s.SubSteps) {
+			return true
+		}
+	}
+	return false
 }
 
 // warnCoordinatorCap posts a one-time notice that a coordinator hit its auto-turn

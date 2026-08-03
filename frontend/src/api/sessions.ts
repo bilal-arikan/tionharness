@@ -161,12 +161,18 @@ export const sessionApi = {
     }),
   // Context reset (/handoff): write a handoff artifact for this session and spawn
   // a FRESH session to continue the work in a clean window. Returns the new
-  // session id (the UI switches to it) and the user "/handoff" bubble.
+  // session id (the UI switches to it) and the user "/handoff" bubble. When the
+  // session is a coordinator with running workers the reset is refused: no
+  // newSessionId, blocked=true, and replyMessage carries the in-thread notice.
   handoffSession: (sessionId: string) =>
-    req<{ userMessage: Message; newSessionId: string; agentName: string; artifactId: string }>(
-      `/api/sessions/${sessionId}/handoff`,
-      { method: 'POST' },
-    ),
+    req<{
+      userMessage: Message
+      newSessionId?: string
+      agentName?: string
+      artifactId?: string
+      blocked?: boolean
+      replyMessage?: Message
+    }>(`/api/sessions/${sessionId}/handoff`, { method: 'POST' }),
   // Run a flow and record its result as a turn in this session (user input +
   // assistant transcript). Powers triggering flows from the chat "/" menu.
   runFlowInSession: (sessionId: string, flowId: string, input: string) =>
@@ -274,9 +280,10 @@ export const sessionApi = {
 
   // Git state of a project path (repo?, branch, remote, identity).
   gitInfo: (path: string) => req<GitInfo>(`/api/fs/gitinfo?path=${encodeURIComponent(path)}`),
-  // Initialise a git repo (default branch "main") in an existing directory.
-  gitInit: (path: string) =>
-    req<GitInfo>('/api/git/init', { method: 'POST', body: JSON.stringify({ path }) }),
+  // Initialise a git repo (default branch "main") in a directory. createDir opts
+  // into laying the folder out first when it does not exist yet.
+  gitInit: (path: string, createDir = false) =>
+    req<GitInfo>('/api/git/init', { method: 'POST', body: JSON.stringify({ path, createDir }) }),
   // Apply repo-local git settings (origin remote URL + user.name/email).
   gitConfig: (path: string, cfg: { remote?: string; userName?: string; userEmail?: string }) =>
     req<GitInfo>('/api/git/config', {

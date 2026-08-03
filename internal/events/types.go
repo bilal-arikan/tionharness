@@ -56,6 +56,11 @@ const (
 	TypeProgress = "progress"
 	// TypeSessionStep carries one live turn-step frame (Event.Step).
 	TypeSessionStep = "session_step"
+	// TypeSessionUserMessage carries one runtime-injected user-role message
+	// (Event.Msg) for live hub bridging — a worker task-notification, a
+	// send_to_worker prompt, a coordination status/guard note. A control signal,
+	// never a toast (the assistant reply that follows carries the TypeChat toast).
+	TypeSessionUserMessage = "session_user_message"
 	// TypeFlowNode carries one live flow-node lifecycle frame (Event.Node).
 	TypeFlowNode = "flow_node"
 	// TypeLog carries one captured log record for the live Logs tail (Event.Log).

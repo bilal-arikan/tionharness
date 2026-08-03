@@ -33,7 +33,10 @@ function askCueText(ask: PendingAsk): { title: string; body: string } {
         body: ask.tool ? `${ask.tool}: ${ask.cmd ?? ask.risk ?? ''}`.trim() : (ask.cmd ?? ''),
       }
     case 'plan':
-      return { title: 'Plan onayı bekleniyor', body: first || 'Ajan hazırladığı planın onayını bekliyor.' }
+      return {
+        title: 'Plan onayı bekleniyor',
+        body: first || 'Ajan hazırladığı planın onayını bekliyor.',
+      }
     default:
       return { title: 'Ajan bir soru sordu', body: first || 'Ajan yanıtını bekliyor.' }
   }
@@ -116,11 +119,20 @@ export function makeHubHandlers(ctx: HubApplyCtx): SessionStreamHandlers {
     createdAt: ghostStartedAt || serverNow(),
   })
 
-  // syncGhost UPSERTs the ghost into the transcript (append if wiped by a reload).
-  const syncGhost = () => {
-    hasGhost = true
-    // Fallback stamp if steps arrive before AgentStart set the turn-start time.
-    if (!ghostStartedAt) ghostStartedAt = serverNow()
+  // ── Streaming coalescer ───────────────────────────────────────────────────
+  // The server publishes one Delta per RAW provider chunk (no batching), and a
+  // sync replaces the transcript with a new array reference. Downstream that
+  // re-runs every memo keyed on `messages` — MessageList's participant pass
+  // walks the WHOLE transcript — and re-parses the live bubble's entire
+  // markdown body. Per token, on a growing string, that is the streaming-jank
+  // hot spot. Collapsing syncs into ~20Hz frames keeps the text growth visually
+  // smooth (well above the ~10Hz where reading starts to feel steppy) while
+  // paying those costs once per frame instead of once per token.
+  const GHOST_SYNC_MS = 50
+  let ghostTimer: ReturnType<typeof setTimeout> | null = null
+  let ghostDirty = false
+
+  const upsertGhost = () => {
     const bubble = composeGhost()
     onSid((prev) =>
       prev.some((m) => m.id === ghostId)
@@ -129,7 +141,39 @@ export function makeHubHandlers(ctx: HubApplyCtx): SessionStreamHandlers {
     )
   }
 
+  // Cancelling is what keeps a trailing flush from RESURRECTING a ghost that was
+  // just dropped (upsertGhost appends when the id is absent), so every drop path
+  // must go through it.
+  const cancelGhostSync = () => {
+    if (ghostTimer) clearTimeout(ghostTimer)
+    ghostTimer = null
+    ghostDirty = false
+  }
+
+  // syncGhost UPSERTs the ghost into the transcript (append if wiped by a reload).
+  // Leading-edge throttle: the first sync of a burst lands immediately — so the
+  // bubble appears and the first token shows with no added latency — and the
+  // rest collapse into the open window, with one trailing flush carrying the
+  // accumulated text.
+  const syncGhost = () => {
+    hasGhost = true
+    // Fallback stamp if steps arrive before AgentStart set the turn-start time.
+    if (!ghostStartedAt) ghostStartedAt = serverNow()
+    if (ghostTimer) {
+      ghostDirty = true
+      return
+    }
+    upsertGhost()
+    ghostTimer = setTimeout(() => {
+      ghostTimer = null
+      if (!ghostDirty) return
+      ghostDirty = false
+      syncGhost() // trailing edge: flush what accumulated, reopen the window
+    }, GHOST_SYNC_MS)
+  }
+
   const dropGhost = () => {
+    cancelGhostSync()
     if (!hasGhost) return
     hasGhost = false
     ghostStartedAt = 0 // next turn re-stamps its own start
@@ -186,7 +230,13 @@ export function makeHubHandlers(ctx: HubApplyCtx): SessionStreamHandlers {
     // OS toast (master gate + backgrounded rule). Making it a real notify type is
     // what lets the user silence ask/permission toasts like any other.
     const { title, body } = askCueText(ask)
-    emitToast({ type: 'prompt', enabled: notifyEnabled.current, title, body, tag: `ask:${sid}:${id ?? ''}` })
+    emitToast({
+      type: 'prompt',
+      enabled: notifyEnabled.current,
+      title,
+      body,
+      tag: `ask:${sid}:${id ?? ''}`,
+    })
   }
 
   const resolveInteraction = (ev: HubEvent) => {
@@ -215,9 +265,26 @@ export function makeHubHandlers(ctx: HubApplyCtx): SessionStreamHandlers {
         case HubKind.UserMessage: {
           const m = ev.payload as Message
           if (!m?.id) return
-          // The serial worker just started this turn → mark the session busy.
-          setStreamingSessions((p) => withAdded(p, sid))
-          setPendingSessions((p) => withAdded(p, sid))
+          // A runtime-INJECTED note bridged from the bus (_Docs/58) does not itself
+          // start an interactive turn — the autonomous turn it belongs to may be
+          // deferred (coordinator turn cap) or is mid-run (auto-continue). So it must
+          // NOT arm the "working" indicator here; that turn's own AgentStart/Step lights
+          // it up if and when it actually runs. Covers the coordinator notes
+          // (worker-note/coordination-guard) and the scheduler/auto-continue notes that
+          // render as "⏰ …"/nudge cards rather than user bubbles. A genuine
+          // turn-starting message (spawn/inbox opening turn, origin unset) still marks
+          // the session busy immediately.
+          const injectedNote =
+            m.origin === 'worker-note' ||
+            m.origin === 'coordination-guard' ||
+            m.origin === 'auto-continue' ||
+            m.origin === 'wake' ||
+            m.origin === 'schedule'
+          if (!injectedNote) {
+            // The serial worker just started this turn → mark the session busy.
+            setStreamingSessions((p) => withAdded(p, sid))
+            setPendingSessions((p) => withAdded(p, sid))
+          }
           // Our message just entered the transcript → refresh an open Session Info
           // panel (message count, size, context usage).
           bumpMeter()
@@ -254,6 +321,13 @@ export function makeHubHandlers(ctx: HubApplyCtx): SessionStreamHandlers {
           // First live activity of an autonomous turn (no UserMessage preceded it):
           // mark busy so the session shows "working" like an interactive turn.
           setStreamingSessions((pp) => withAdded(pp, sid))
+          applyStep(ev.payload as TurnStep)
+          break
+        case HubKind.ToolDelta:
+          // A long-running tool's output, streamed in chunks keyed by call id.
+          // applyStep merges them into one card (ToolDeltaStep renders it). Unlike
+          // Step this does not arm the busy latch: tool output only ever flows
+          // inside a turn that already announced itself.
           applyStep(ev.payload as TurnStep)
           break
         case HubKind.Delta: {
@@ -329,6 +403,16 @@ export function makeHubHandlers(ctx: HubApplyCtx): SessionStreamHandlers {
       // Cursor unusable (server restart / ring eviction): resync from scratch.
       dropGhost()
       reload()
+    },
+    // Fires on every disconnect — a transient reconnect AND the unsubscribe that
+    // follows a session switch or unmount. FLUSH rather than cancel: a coalescing
+    // window open at that moment holds deltas that have not been painted yet, and
+    // on a transient drop no further event may arrive to carry them. Flushing
+    // also leaves no timer armed past the subscription.
+    onClose: () => {
+      const pending = ghostDirty
+      cancelGhostSync()
+      if (pending) upsertGhost() // dropGhost clears the flag, so a finished turn no-ops
     },
   }
 }

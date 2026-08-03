@@ -1,0 +1,44 @@
+# Created by TionSwarm on `git init`. Adjust it for your stack — this is only a
+# language-agnostic starting point covering secrets, build output and local noise.
+
+# Secrets / local environment
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Dependencies
+node_modules/
+vendor/
+.venv/
+venv/
+__pycache__/
+
+# Build output
+dist/
+build/
+out/
+target/
+bin/
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Logs & scratch
+*.log
+*.tmp
+tmp/
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Agent runtime working-dir state (TionSwarm session progress)
+.tionswarm/

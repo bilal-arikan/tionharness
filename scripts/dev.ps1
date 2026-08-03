@@ -40,6 +40,13 @@
 #         .\scripts\dev.ps1 -Port 8091      # override backend port
 #         .\scripts\dev.ps1 -NoKillPort     # don't kill an orphan on the port, abort instead
 #
+# Diagnostics: _devlogs\lifecycle.log records every launch/kill across runs, and
+# _devlogs\backend-stderr-<stamp>.log captures the backend's STDERR (Go runtime
+# fatals / panic traces; STDOUT stays live on the console). Empty captures are
+# deleted on exit, so a surviving stderr file always means something went wrong.
+# If the backend disappears and lifecycle.log shows NO cleanup entry for it, the
+# kill came from outside this script (external taskkill, window force-close).
+#
 # Pre-flight: before binding, a leftover listener on the backend port (8090) or
 # the Vite port (5173) -- typically a go/node child orphaned when a prior run was
 # killed from outside its finally block -- is detected and killed so the port is
@@ -57,6 +64,35 @@ param(
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
+
+# Dev-run diagnostics (_devlogs/, gitignored via *.log).
+#
+# WHY: the Go backend writes slog to STDOUT (mirrored to ~/.tionswarm/logs), but
+# Go runtime fatals -- "fatal error: out of memory", panic traces -- go to STDERR,
+# which used to be unredirected and therefore died with the console window. On
+# 2026-08-01 a backend death at 05:26:55 left NO evidence anywhere: no graceful
+# "shutting down" log line, no Windows WER report, no crash dump. It could not be
+# decided whether the process was force-killed from outside or hit a runtime
+# fatal. Two captures close that gap:
+#   * backend-stderr-<stamp>.log -- the crash text itself.
+#   * lifecycle.log              -- who killed what, appended across runs. A
+#     taskkill /T /F leaves no trace in the app log, so WITHOUT this line an
+#     external kill and our own cleanup look identical afterwards. If the backend
+#     vanishes and lifecycle.log has no "cleanup" entry, the kill came from
+#     outside this script.
+# Only STDERR is redirected: STDOUT stays on the console so the live log is
+# unchanged. The frontend is deliberately left alone (Vite reports build/TS
+# errors interactively; capturing it would hide them).
+$logDir = Join-Path $root "_devlogs"
+if (-not (Test-Path $logDir)) { New-Item -ItemType Directory -Path $logDir | Out-Null }
+$runStamp = Get-Date -Format "yyyyMMdd-HHmmss"
+$backendErrLog = Join-Path $logDir "backend-stderr-$runStamp.log"
+$lifecycleLog = Join-Path $logDir "lifecycle.log"
+
+function Write-Lifecycle($msg) {
+    $line = "{0} {1}" -f (Get-Date -Format "yyyy-MM-ddTHH:mm:ss.fffzzz"), $msg
+    try { Add-Content -Path $lifecycleLog -Value $line -Encoding UTF8 } catch { }
+}
 
 # Get-LanIP returns the primary IPv4 address of the adapter that owns the default
 # route (the one other LAN devices can reach). Falls back to 127.0.0.1 if none is
@@ -78,16 +114,42 @@ $bindHost = if ($Loopback) { "127.0.0.1" } else { "0.0.0.0" }
 $lanIP = if ($Loopback) { "127.0.0.1" } else { Get-LanIP }
 
 # Track launched processes so the finally block can tear them (and their
-# children: go->compiled exe, npm->node) down on exit.
+# children: go->compiled exe, npm->node) down on exit. Each entry carries the
+# label + stderr capture path so cleanup can report which one died.
 $procs = @()
 
-function Stop-Tree($p) {
+function Add-Proc($proc, $label, $errLog) {
+    # Touching .Handle keeps the process handle open, which is what makes
+    # .ExitCode readable after the process dies (a Start-Process -PassThru object
+    # otherwise reports $null). The exit code is a real diagnostic signal here:
+    # a Go runtime fatal exits 2, an outside taskkill /F exits 1.
+    try { $null = $proc.Handle } catch { }
+    $script:procs += [pscustomobject]@{ Proc = $proc; Label = $label; Err = $errLog }
+}
+
+function Get-ExitCodeSafe($p) {
+    # ExitCode throws while the process is still alive, and a Start-Process
+    # -PassThru object can also hand back $null once it has exited (the handle is
+    # not always retained). Both mean "unknown" -- never print a blank code.
+    try {
+        $c = $p.ExitCode
+        if ($null -eq $c) { return "?" }
+        return $c
+    } catch { return "?" }
+}
+
+function Stop-Tree($p, $label) {
     if ($null -eq $p) { return }
     try {
-        if (-not $p.HasExited) {
-            # /T kills the whole tree (go run's child binary, npm's node), /F forces it.
-            taskkill /PID $p.Id /T /F 2>$null | Out-Null
+        if ($p.HasExited) {
+            Write-Lifecycle "$label already exited on its own (pid=$($p.Id) exit=$(Get-ExitCodeSafe $p)) -- not killed by dev.ps1"
+            return
         }
+        # /T kills the whole tree (go run's child binary, npm's node), /F forces it.
+        # Logged BEFORE the kill so the record survives even if taskkill takes us
+        # down mid-teardown -- this is the line that proves the death was ours.
+        Write-Lifecycle "dev.ps1 cleanup: force-killing tree $label (pid=$($p.Id), taskkill /T /F)"
+        taskkill /PID $p.Id /T /F 2>$null | Out-Null
     } catch { }
 }
 
@@ -109,6 +171,7 @@ function Free-Port($pt, $label) {
             throw "port-busy"
         }
         Write-Host "==> $label portu $pt dolu (PID $procId / $name) -> orphan temizleniyor..." -ForegroundColor Yellow
+        Write-Lifecycle "dev.ps1 pre-flight: force-killing orphan on port $pt (pid=$procId name=$name, taskkill /T /F)"
         taskkill /PID $procId /T /F 2>$null | Out-Null
     }
     # Give the OS a moment to release the socket before we rebind.
@@ -116,6 +179,7 @@ function Free-Port($pt, $label) {
 }
 
 try {
+    Write-Lifecycle "dev.ps1 start (bind=${bindHost}:$Port backendOnly=$BackendOnly frontendOnly=$FrontendOnly)"
     if (-not $FrontendOnly) {
         # Pre-flight: clear any orphan still holding the backend port.
         Free-Port $Port "Backend"
@@ -124,9 +188,14 @@ try {
         # Gated feature (see SKILL.md / Ortam Notlari): the built-in shell.
         # (Self-management is ALWAYS installed since 2026-07-01 -- no env gate.)
         $env:TIONSWARM_ENABLE_SHELL = "1"
+        # -RedirectStandardError: keeps Go runtime fatals (OOM, panic traces) on
+        # disk. STDOUT is intentionally NOT redirected -- slog keeps streaming to
+        # this console live.
         $backend = Start-Process -FilePath "go" -ArgumentList "run", "./cmd/tionswarm" `
-            -WorkingDirectory $root -NoNewWindow -PassThru
-        $procs += $backend
+            -WorkingDirectory $root -NoNewWindow -PassThru `
+            -RedirectStandardError $backendErrLog
+        Add-Proc $backend "backend" $backendErrLog
+        Write-Lifecycle "backend launched (pid=$($backend.Id) stderr=$backendErrLog)"
     }
 
     # Wait for the backend to actually serve before starting Vite. `go run` may
@@ -171,7 +240,8 @@ try {
         # npm.cmd: on Windows npm is a batch shim; call the .cmd directly.
         $frontend = Start-Process -FilePath "npm.cmd" -ArgumentList $viteArgs `
             -WorkingDirectory $fe -NoNewWindow -PassThru
-        $procs += $frontend
+        Add-Proc $frontend "frontend" $null
+        Write-Lifecycle "frontend launched (pid=$($frontend.Id))"
     }
 
     if (-not $NoBrowser -and -not $BackendOnly) {
@@ -196,9 +266,11 @@ try {
     # Wait until one of them exits; if one dies, take the others down too.
     while ($true) {
         Start-Sleep -Milliseconds 500
-        foreach ($p in $procs) {
-            if ($p.HasExited) {
-                Write-Host "==> Bir surec sonlandi (PID $($p.Id)), digerleri kapatiliyor..." -ForegroundColor Yellow
+        foreach ($e in $procs) {
+            if ($e.Proc.HasExited) {
+                $code = Get-ExitCodeSafe $e.Proc
+                Write-Host "==> $($e.Label) sonlandi (PID $($e.Proc.Id), exit $code), digerleri kapatiliyor..." -ForegroundColor Yellow
+                Write-Lifecycle "$($e.Label) exited on its own (pid=$($e.Proc.Id) exit=$code)"
                 throw "child-exited"
             }
         }
@@ -206,6 +278,30 @@ try {
 }
 finally {
     Write-Host "==> Temizlik: surecler sonlandiriliyor..." -ForegroundColor Cyan
-    foreach ($p in $procs) { Stop-Tree $p }
+    Write-Lifecycle "dev.ps1 cleanup started (Ctrl+C, window close or child exit)"
+    foreach ($e in $procs) { Stop-Tree $e.Proc $e.Label }
+
+    # Surface captured stderr right here: a runtime fatal is worthless if nobody
+    # reads it. An EMPTY capture is deleted, so a surviving file always means the
+    # process wrote something to stderr.
+    foreach ($e in $procs) {
+        if (-not $e.Err) { continue }
+        if (-not (Test-Path $e.Err)) { continue }
+        $len = (Get-Item $e.Err).Length
+        if ($len -eq 0) { Remove-Item $e.Err -Force -ErrorAction SilentlyContinue; continue }
+        Write-Lifecycle "$($e.Label) stderr captured: $($e.Err) ($len bytes)"
+        Write-Host ""
+        Write-Host "==> $($e.Label) STDERR yakalandi ($len bayt): $($e.Err)" -ForegroundColor Red
+        Get-Content $e.Err -Tail 40 | ForEach-Object { Write-Host "    $_" -ForegroundColor DarkYellow }
+        Write-Host ""
+    }
+
+    # Keep only the 10 newest captures so _devlogs does not grow without bound.
+    Get-ChildItem $logDir -Filter "backend-stderr-*.log" -ErrorAction SilentlyContinue |
+        Sort-Object LastWriteTime -Descending |
+        Select-Object -Skip 10 |
+        Remove-Item -Force -ErrorAction SilentlyContinue
+
+    Write-Lifecycle "dev.ps1 cleanup finished"
     Write-Host "==> Kapandi." -ForegroundColor Green
 }

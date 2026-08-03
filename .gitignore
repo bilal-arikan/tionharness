@@ -27,6 +27,8 @@ workspaces.json
 credential-secret
 
 # Local dev logs + scratch (not part of the project)
+# _devlogs/: dev.ps1 lifecycle log + captured backend stderr (crash traces).
+/_devlogs/
 *.log
 *.log.err
 *.err

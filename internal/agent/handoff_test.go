@@ -112,3 +112,65 @@ func TestHandoffTitle(t *testing.T) {
 		t.Errorf("blank title should fall back to id, got %q", got)
 	}
 }
+
+// TestFormatBusyWorkers renders the running-worker list used in the handoff guard.
+func TestFormatBusyWorkers(t *testing.T) {
+	got := formatBusyWorkers([]WorkerInfo{
+		{SessionID: "SES9", AgentName: "Explorer"},
+		{SessionID: "SES10", Delegating: true},
+	})
+	if want := "SES9 (Explorer), SES10 [delegating]"; got != want {
+		t.Fatalf("formatBusyWorkers = %q, want %q", got, want)
+	}
+}
+
+// TestHandoffBlocksOnRunningWorkers verifies a coordinator cannot be handed off
+// while a worker it spawned is still active: the reset would orphan the in-flight
+// fleet, so HandoffSession refuses BEFORE it ever touches the provider.
+func TestHandoffBlocksOnRunningWorkers(t *testing.T) {
+	rt, _ := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))
+	ctx := context.Background()
+
+	coordID := newTestCoordinator(t, rt, 0)
+	coord, err := rt.db.GetSession(ctx, coordID)
+	if err != nil {
+		t.Fatalf("get coordinator: %v", err)
+	}
+	ag, err := rt.db.GetAgent(ctx, coord.AgentID)
+	if err != nil {
+		t.Fatalf("get agent: %v", err)
+	}
+
+	// A worker linked to this coordinator, marked active so it reads as running.
+	worker, err := rt.db.CreateSession(ctx, db.Session{
+		AgentID:              coord.AgentID,
+		Kind:                 "worker",
+		SourceID:             "test:worker:1",
+		CoordinatorSessionID: coordID,
+	})
+	if err != nil {
+		t.Fatalf("create worker session: %v", err)
+	}
+	rt.activeSessions.Store(worker.ID, struct{}{})
+
+	if _, err := rt.HandoffSession(ctx, coord, ag, HandoffOptions{}); err == nil {
+		t.Fatal("handoff must be blocked while a worker is running")
+	} else if !strings.Contains(err.Error(), worker.ID) || !strings.Contains(err.Error(), "engellendi") {
+		t.Fatalf("guard error should name the busy worker, got: %v", err)
+	}
+
+	// Once the worker settles, the guard clears (the reset then proceeds past it
+	// into the provider call, which is out of scope here — we only assert the
+	// guard no longer fires by flipping AllowRunningWorkers off with no active
+	// workers left).
+	rt.activeSessions.Delete(worker.ID)
+	workers, err := rt.ListWorkers(ctx, coordID)
+	if err != nil {
+		t.Fatalf("list workers: %v", err)
+	}
+	for _, wk := range workers {
+		if wk.Running || wk.Delegating {
+			t.Fatalf("worker %s still reads running after settle", wk.SessionID)
+		}
+	}
+}

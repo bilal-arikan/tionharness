@@ -27,8 +27,15 @@ değişmeden** çalışmaya devam etti.
 - Okumalar bellekten servis edilir (hızlı, sıralı).
 - Her mutasyon: belleği günceller **ve** etkilenen dosyayı **atomik** yazar
   (`*.tmp` yaz → `rename`), böylece çökme yarım dosya bırakmaz.
-- Tek `sync.RWMutex` eşzamanlılığı korur (ajan-başına goroutine + scheduler +
-  flow runner aynı anda yazabilir). SQLite'ın WAL + tx garantilerinin yerini alır.
+- Ana `sync.RWMutex` (`mu`) entity'leri korur (ajan-başına goroutine + scheduler
+  + flow runner aynı anda yazabilir). SQLite'ın WAL + tx garantilerinin yerini alır.
+- **Ayrı kilitler:** `debugMu` (debug günlüğü), `lessonsMu` (dersler),
+  `countersMu` (id sayaçları) ve `usageMu` (token/maliyet defteri) kendi
+  mutex'lerini kullanır. Bunların hiçbiri entity haritalarına dokunmaz, dolayısıyla
+  `mu`'yu bekletmeleri için sebep yoktur. Özellikle usage: her LLM çağrısında bir
+  satır diske yazılır ve bu `mu` altındayken **eşzamanlı ajanların birbiriyle
+  ilgisiz oturum okuma/yazmalarını** kendi defter yazımının arkasında sıraya
+  sokuyordu.
 
 ## Disk yapısı
 
@@ -37,7 +44,8 @@ Her workspace fiziksel olarak izole; kökü `{dataDir}/workspaces/{wsID}/store/`
 ```
 store/
 ├── agents/{id}.json
-├── sessions/{id}/session.jsonl      # satır 1: oturum header'ı, satır 2+: mesajlar
+├── sessions/{id}/session.json       # oturum header'ı (tek JSON nesnesi)
+│   ├── messages.jsonl                # transkript — mesaj başına bir satır, append-only
 │   └── inflight.json                 # (geçici) stream'lenen asistan turu — crash kurtarma sidecar'ı
 ├── tasks/{id}.json
 ├── runs/{id}.json
@@ -47,6 +55,9 @@ store/
 ├── flows/{id}.json
 ├── flow-runs/{id}.json
 ├── usage/{agentID}__{YYYY-MM-DD}.json
+├── model-resolutions.json            # "<provider>|<istenen model>" → gerçekte sunulan model
+│                                     #   (claude-cli takma adları: "opus" → "claude-opus-5");
+│                                     #   turlardan GÖZLEMLENİR, yalnız değer değişince yazılır
 └── counters.json                      # entity-başına insan-okunabilir id sayacı
 ```
 
@@ -79,10 +90,20 @@ store/
 > adı) de UUID'de kalır. Workspace ID'leri ise ayrıca `WS<n>`'e geçti (aşağıda).
 
 **Mekanik (`DB.nextID(prefix)`):**
-- Prefix-başına monoton sayaç; `counters.json`'da tutulur (`{"TSK":17,...}`),
-  her tahsiste **atomik** (`*.tmp`→`rename`) yazılır.
-- **Tekrar kullanım yok:** sayaç yalnız artar; silme bir numarayı serbest
-  bırakmaz, restart bir numarayı yeniden vermez (`load()` → `loadCounters()`).
+- Prefix-başına monoton sayaç; `counters.json`'da tutulur (`{"TSK":17,...}`).
+  Dosyadaki değer **son kullanılan** değil, **rezerve edilmiş** en yüksek
+  numaradır (`idBlock` = 32'lik blok). Bir id verilirken blokta yer varsa disk'e
+  hiç dokunulmaz → atomik yazım her entity oluşturmada değil, 32 oluşturmada bir
+  yapılır. (Öncesi her tahsiste tam yazımdı; Windows'ta NTFS + antivirüs yüzünden
+  çağrı başına 1–5 ms'ti ve `countersMu` bunu tüm entity türleri arasında
+  sıraya sokuyordu.)
+- **Tekrar kullanım yok:** silme bir numarayı serbest bırakmaz, restart bir
+  numarayı yeniden vermez — boot rezerve edilmiş marktan devam eder
+  (`load()` → `loadCounters()`).
+- **Boşluk yok (temiz kapanışta):** `Close()` → `releaseIDReservations()` bloğun
+  kullanılmayan kuyruğunu geri verir, yani sonraki boot yoğun numaralamayla
+  devam eder. Yalnız sert çökme (Close çalışmadan) blok kuyruğunu yakar; id'ler
+  yine monoton ve benzersizdir, sadece birkaç numara atlanır.
 - Eski UUID'ler **taranmaz/dikkate alınmaz**; prefix'li id'ler saf harf+rakam
   olduğundan bir UUID ile asla çakışamaz.
 - Kendi mutex'i (`countersMu`) vardır → hem `mu` alınmadan (çoğu `Create*`)
@@ -127,13 +148,14 @@ uygulama numaralamaya kaldığı yerden devam eder.
 
 ## Oturum biçimi (JSONL — Craft tarzı)
 
-`session.jsonl` her oturum için tek dosya:
+Her oturum **iki dosya** kullanır; header ile transkript ayrıdır:
 
-- **Satır 1** = `Session` header'ı (id, agentId, kind, title, messageCount, state,
-  summary, summaryMsgCount, zaman damgaları). **Zenginleştirilmiş alanlar (2026-06-26):**
-  `v` (SchemaVersion — header format sürümü, ileri-migration için), `pinned`
-  (sidebar'da üste sabitleme; `ListSessions` pinned'leri öne alır).
-- **Satır 2+** = `Message` kayıtları (role, text, toolCalls, reasoningContent,
+- **`session.json`** = `Session` header'ı, tek JSON nesnesi (id, agentId, kind,
+  title, messageCount, state, summary, summaryMsgCount, zaman damgaları).
+  **Zenginleştirilmiş alanlar (2026-06-26):** `v` (SchemaVersion — header format
+  sürümü, ileri-migration için), `pinned` (sidebar'da üste sabitleme;
+  `ListSessions` pinned'leri öne alır).
+- **`messages.jsonl`** = `Message` kayıtları (role, text, toolCalls, reasoningContent,
   steps, createdAt) — kronolojik. **Asistan turu zenginleştirmesi (2026-06-26):**
   `model` (turu cevaplayan gerçek model), `stopReason` (`end_turn|max_tokens|
   refusal|…` — kesilme/red UI uyarısı), `usage` (`{in,out,cacheRead,cacheWrite}`
@@ -143,18 +165,32 @@ uygulama numaralamaya kaldığı yerden devam eder.
   Hepsi `omitempty` (eski mesajlar + user/system turları boş).
 
 `AddMessage` mesajı belleğe ekler, oturum sayacını artırır ve **yalnızca yeni
-satırı dosyaya ekler** (`O_APPEND`, O(1)) — tüm dosyayı yeniden yazmaz. Eski
-davranış her mesajda dosyanın tamamını yeniden yazıyordu (mesaj başına O(n),
-oturum başına O(n²)); append-only ile bu O(1)'e indi. Header satırındaki
+satırı `messages.jsonl`'e ekler** (`O_APPEND`, O(1)) — dosyayı yeniden yazmaz.
+Eski davranış her mesajda dosyanın tamamını yeniden yazıyordu (mesaj başına O(n),
+oturum başına O(n²)); append-only ile bu O(1)'e indi. `session.json`'daki
 `messageCount`/`updatedAt` bu yüzden diskte **bayat** kalabilir; bu sayaçlar
-boot'ta mesaj satırlarından **yeniden hesaplanır** ve bir sonraki tam yeniden
-yazımda (başlık/özet değişimi) tazelenir. Header'ı değiştiren işlemler
-(`SetSessionTitle`, `SetSessionSummary`, oturum oluşturma) hâlâ atomik tam
-yeniden yazım yapar.
+(ve katılımcı listesi) boot'ta mesaj satırlarından **yeniden hesaplanır**
+(`reconcileHeader`).
+
+**Header/transkript ayrımı neden var:** header ile mesajlar tek dosyadayken
+*sadece* metadata değiştiren her işlem — yeniden adlandırma, etiket, pin,
+okundu işaretleme, rolling summary — tüm transkripti yeniden encode edip diske
+yazıyordu (metadata düzenlemesi başına O(mesaj), üstelik store'un yazma kilidi
+tutulurken). Binlerce mesajlı bir oturumda "pin" toggle'lamak megabaytlarca
+yazım demekti. Artık `persistSessionLocked` yalnız `session.json`'ı yazar;
+transkriptin tamamı sadece mesaj **içeriği** değiştiğinde yeniden yazılır
+(`SetMessageFeedback`, `DeleteMessage`, `DeleteMessagesFrom`).
+
+**Eski depolardan göç:** ayrımdan önce tek bir `session.jsonl` vardı (satır 1
+header, sonrası mesajlar). Bu biçim hâlâ okunur ve **açılışta otomatik olarak**
+yeni düzene çevrilir. Yazım sırası çökmeye dayanıklıdır: önce `messages.jsonl`,
+sonra `session.json` (yükleyicinin baktığı işaret budur), en son eski dosya
+silinir — arada bir çökme olursa eski dosya yerinde kalır ve sonraki açılış göçü
+baştan yapar.
 
 ## Tur-içi crash kurtarma (inflight sidecar)
 
-Asistan yanıtı `session.jsonl`'e yalnızca **stream tamamen bitince** eklenir
+Asistan yanıtı `messages.jsonl`'e yalnızca **stream tamamen bitince** eklenir
 (O(1) append). Süreç tam o anda ölürse (dev rebuild, OOM, elektrik kesintisi)
 stream'lenmiş ama henüz persist edilmemiş yanıt kaybolurdu — yenilemede tur
 "buharlaşmış" görünürdü. Bunu önlemek için her stream'lenen tur, oturum dizininde
@@ -170,7 +206,7 @@ biriktirilir) + o ana kadarki kalıcı iz (`TurnStep[]`).
 - **Boot'ta kurtarma** (`db.recoverInflight`, `loadSessions`'tan sonra): orphan
   bir `inflight.json` varsa → mesaj zaten persist edilmişse (append ile clear
   arasındaki minik pencerede çökme) dosya düşürülür; değilse kısmi yanıt
-  `Interrupted=true` asistan mesajı olarak `session.jsonl`'e eklenir. **Idempotent**:
+  `Interrupted=true` asistan mesajı olarak `messages.jsonl`'e eklenir. **Idempotent**:
   sidecar'ın `MessageID`'si nihai mesajla paylaşılır (`AddMessage` boş olmayan
   ID'yi korur), böylece tekrar boot'larda kopya oluşmaz.
 - Frontend `Message.interrupted` → asistan balonunda "Bu yanıt yarıda kesildi
@@ -180,8 +216,10 @@ biriktirilir) + o ana kadarki kalıcı iz (`TurnStep[]`).
 ### external-agent-oss ile karşılaştırma (ilham kaynağı)
 
 `external-agent-oss` (Electron + Pi/Claude Agent SDK; runtime sunucu, renderer ince
-istemci) aynı sorunu **çok-katmanlı** çözer. İlginç olan, aynı **`session.jsonl`
-(header + satırlar) + atomik `tmp→rename`** desenini kullanmasıdır:
+istemci) aynı sorunu **çok-katmanlı** çözer. İlginç olan, yakın bir **JSONL
+transkript + atomik `tmp→rename`** desenini kullanmasıdır; farkı, header'ı
+transkriptin ilk satırında tutması (TionSwarm onu ayrı `session.json`'a aldı —
+metadata düzenlemesi transkripti yeniden yazmasın diye):
 
 | Konu | external-agent-oss | TionSwarm |
 |------|------------------|---------|
@@ -201,7 +239,7 @@ desenkronu; TionSwarm tek binary → asıl risk sürecin tamamen ölmesi (boot r
 2. **`preserved_stale_messages` kuralı** — oturum yeniden yüklenirken sunucu listesi
    istemcidekinden kısa olsa bile istemcideki mesajları **silmeme** garantisi.
 
-Boot'ta `loadSessions` her `session.jsonl`'i okuyup header + mesaj satırlarını
+Boot'ta `loadSessions` her oturum dizinini okuyup header + mesaj satırlarını
 ayrıştırır. Append modeli gereği bir çökme **yarım bir son satır** bırakabilir;
 `readSessionFile` yalnızca **son** satır ayrıştırılamazsa onu sessizce atar
 (daha önceki bir satırdaki bozulma ise ölümcül hatadır). JSON encoder

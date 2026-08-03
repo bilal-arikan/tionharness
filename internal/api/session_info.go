@@ -115,8 +115,40 @@ func roleLabel(role string) string {
 		return "Araç"
 	case "system":
 		return "Sistem"
+	case fillerRoleWorkerNote:
+		return "Worker sonuçları"
+	case fillerRoleAutoPrompt:
+		return "Otomatik dürtme"
 	default:
 		return role
+	}
+}
+
+// Synthetic filler "roles" that split the user bucket. They are NOT message
+// roles — on the wire these messages carry role "user" (the model must replay
+// them as user turns) and are told apart by db.Message.Origin. Without the split
+// a coordinator session reads as "the user wrote 400 KB", when in truth the user
+// typed a few lines and the rest is machine-injected worker output.
+const (
+	fillerRoleWorkerNote = "worker-note" // <task-notification> / <coordination-status> injections
+	fillerRoleAutoPrompt = "auto-prompt" // schedule_wake resumes + scheduled routine prompts
+)
+
+// fillerRoleFor returns the bucket a message belongs to: its role, except that
+// user turns are split by Origin so machine-injected prompts do not masquerade
+// as the human's own input. Unknown origins fall back to the plain role, so a
+// new Origin value shows up as "Kullanıcı" rather than an unlabelled bucket.
+func fillerRoleFor(m db.Message) string {
+	if m.Role != "user" {
+		return m.Role
+	}
+	switch m.Origin {
+	case "worker-note":
+		return fillerRoleWorkerNote
+	case "wake", "schedule":
+		return fillerRoleAutoPrompt
+	default:
+		return m.Role
 	}
 }
 
@@ -174,8 +206,11 @@ func (s *Server) handleSessionInfo(w http.ResponseWriter, r *http.Request) {
 	}
 	// Non-message context sent on every turn (system prompt, tool/MCP schemas,
 	// artifact block) — estimated so the meter reflects the real footprint, not
-	// just the visible transcript.
-	extra := s.systemFillers(ctx, wsp, session)
+	// just the visible transcript. multiAgent changes the static prefix (a
+	// history-annotation note is prepended), so resolve it the way the real turn
+	// does; only the flag is used here, the labelled copy is the turn's business.
+	_, multiAgent := s.labelMultiAgentHistory(ctx, wsp.DB, session.AgentID, history)
+	extra := s.systemFillers(ctx, wsp, session, multiAgent)
 
 	// Context fillers: summary + per-role message buckets PLUS the non-message
 	// buckets (system/tools/artifacts), all sorted by token weight descending.
@@ -242,11 +277,12 @@ func buildFillers(summary string, pending []db.Message) []contextFiller {
 	byRole := map[string]*contextFiller{}
 	order := []string{}
 	for _, m := range pending {
-		f := byRole[m.Role]
+		role := fillerRoleFor(m)
+		f := byRole[role]
 		if f == nil {
-			f = &contextFiller{Label: roleLabel(m.Role), Role: m.Role}
-			byRole[m.Role] = f
-			order = append(order, m.Role)
+			f = &contextFiller{Label: roleLabel(role), Role: role}
+			byRole[role] = f
+			order = append(order, role)
 		}
 		// Include the per-message framing cost so the sum of the role buckets matches
 		// the aggregate EstimateTokens (which also adds MsgOverhead per message);
@@ -272,37 +308,68 @@ func buildFillers(summary string, pending []db.Message) []contextFiller {
 }
 
 // systemFillers estimates the context that is sent on every turn but never
-// appears as a chat message: the static system prompt (persona + user profile +
-// workspace instructions), the agent's effective tool catalog (built-in + MCP
-// schemas) and the session's artifact context block. Without these the meter
-// under-reports how full the model's context actually is. Mirrors the request
-// assembled by composeTurnRequest.
-func (s *Server) systemFillers(ctx context.Context, wsp *workspace.Workspace, session db.Session) []contextFiller {
+// appears as a chat message: the static prefix (persona + user profile +
+// workspace instructions + the skills / load-on-demand-tools catalogs), the
+// schemas actually shipped at turn start, and the session's artifact block.
+// Without these the meter under-reports how full the model's context is.
+//
+// The prefix is NOT re-derived here: it comes from buildStaticPrefix, the very
+// builder composeTurnRequest freezes into the prompt epoch. Hand-mirroring it
+// (as this function used to) silently drifts — that is how the skills catalog,
+// the lazy-tool catalog, the artifact guidance and the capability block all went
+// uncounted. Deliberately buildStaticPrefix and NOT Runtime.EpochStaticSystem:
+// the latter MUTATES (freezes + persists an epoch, emits a debug event) and this
+// is a read-only panel; the live prefix is what the next adopt point ships anyway.
+func (s *Server) systemFillers(ctx context.Context, wsp *workspace.Workspace, session db.Session, multiAgent bool) []contextFiller {
 	agentRow, err := wsp.DB.GetAgent(ctx, session.AgentID)
 	if err != nil {
 		return nil
 	}
 
-	out := make([]contextFiller, 0, 3)
+	out := make([]contextFiller, 0, 5)
+	system := s.buildStaticPrefix(ctx, wsp, session, agentRow, multiAgent)
 
-	// System prompt (static prefix): persona + user profile + workspace instructions.
-	system := buildSystemPrompt(agentRow)
-	if uc := userContextBlock(s.settings.Get()); uc != "" {
-		system = strings.TrimSpace(uc + "\n\n" + system)
+	// Carve the two self-contained catalog blocks out of the prefix into their own
+	// buckets. Both are costs the user can act on INDEPENDENTLY of the prompt text
+	// (unassign a skill / drop a tool to a leaner visibility tier), which is exactly
+	// what a single "system" bucket hides. Each block was appended verbatim, so it
+	// is removed by exact match; if a block is not found the tokens stay inside the
+	// system bucket rather than being counted twice.
+	carve := func(block, label, role string, count int) {
+		block = strings.TrimSpace(block)
+		if block == "" {
+			return
+		}
+		stripped, ok := stripBlock(system, block)
+		if !ok {
+			return
+		}
+		system = stripped
+		out = append(out, contextFiller{Label: label, Role: role, Tokens: conversation.EstimateText(block), Count: count})
 	}
-	if ins := strings.TrimSpace(wsp.Settings().Instructions); ins != "" {
-		system = strings.TrimSpace(system + "\n\n# Workspace Instructions\n" + ins)
-	}
-	// Terse ("caveman") reply style: workspace toggle + registry prompt "terse".
-	if tb := wsp.Runtime.TerseModeBlock(); tb != "" {
-		system = strings.TrimSpace(system + "\n\n" + tb)
-	}
+
+	// Available Skills: slug + summary per advertised skill. Only the CATALOG lives
+	// in the window — a skill BODY arrives via use_skill as a tool result, which is
+	// within-turn only and never persists into the next turn, so it cannot show up
+	// in this between-turns snapshot.
+	skills := wsp.Runtime.SkillsCatalogBlockForAgent(agentRow)
+	carve(skills, "Skill kataloğu", "skills", countCatalogSkills(skills))
+
+	// Load-on-demand tool catalog: names (+ tiered descriptions) of the lazy tools.
+	// Their SCHEMAS are not shipped — those arrive only after activate_tools — so
+	// this block is their entire standing cost and belongs beside "Araçlar", not
+	// inside it.
+	carve(wsp.Runtime.LazyToolsCatalogBlock(ctx, agentRow), "Araç kataloğu (talep üzerine)", "lazy-tools",
+		len(wsp.Runtime.LazyToolCatalog(ctx, agentRow)))
+
 	if strings.TrimSpace(system) != "" {
 		out = append(out, contextFiller{Label: "Sistem promptu", Role: "system", Tokens: conversation.EstimateText(system), Count: 1})
 	}
 
-	// Tool catalog (built-in + MCP) exactly as the agent receives it.
-	if cat := wsp.Runtime.ToolCatalog(ctx, agentRow); len(cat) > 0 {
+	// Tool schemas SHIPPED at turn start — the eager tier only. ToolCatalog (every
+	// allowed tool) was over-counting here by billing lazy tools for schemas that
+	// never leave the server; those are already covered by the catalog block above.
+	if cat := wsp.Runtime.ShippedToolCatalog(ctx, agentRow); len(cat) > 0 {
 		out = append(out, contextFiller{Label: "Araçlar", Role: "tools", Tokens: estimateToolCatalog(cat), Count: len(cat)})
 	}
 
@@ -312,6 +379,19 @@ func (s *Server) systemFillers(ctx context.Context, wsp *workspace.Workspace, se
 	}
 
 	return out
+}
+
+// countCatalogSkills counts the entries in a rendered "# Available Skills" block.
+// renderCatalog writes exactly one "- `slug`…" line per advertised skill, so the
+// line prefix is the entry marker; surrounding prose never uses it.
+func countCatalogSkills(block string) int {
+	n := 0
+	for _, line := range strings.Split(block, "\n") {
+		if strings.HasPrefix(strings.TrimSpace(line), "- `") {
+			n++
+		}
+	}
+	return n
 }
 
 // estimateToolCatalog approximates the token cost of a tool catalog as it is

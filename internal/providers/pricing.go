@@ -78,6 +78,43 @@ func (p Price) CostNoCaching(inputTokens, outputTokens, cacheReadTokens, cacheWr
 	return (in + out) / 1_000_000
 }
 
+// CoolingWasteUSD returns the AVOIDABLE USD overpay when a warm prompt-cache
+// prefix was lost to TTL expiry / server eviction and had to be re-written. The
+// reWrittenTokens are native Anthropic's cache_creation count for that cold call:
+// they were billed at the write multiplier, but had the cache stayed warm they
+// would have been served as a cache READ at the (far cheaper) read multiplier.
+// The difference (writeMult − readMult) is the money a timely turn would have
+// saved. It is NOT the whole re-write — seeding a cache always costs at least the
+// read tier — only the premium paid for having gone cold. Zero for a non-positive
+// count. (OpenRouter folds a cold prefix into plain input with no write counter,
+// so its re-paid prefix cannot be separated from genuinely-new input; there
+// reWrittenTokens is ~0 and this reports 0 rather than over-count.)
+func (p Price) CoolingWasteUSD(reWrittenTokens int) float64 {
+	if reWrittenTokens <= 0 {
+		return 0
+	}
+	delta := p.cacheWriteMult() - p.cacheReadMult()
+	if delta <= 0 {
+		return 0
+	}
+	return float64(reWrittenTokens) * p.InputPerMTok * delta / 1_000_000
+}
+
+// CoolingWaste resolves the price for provider+model (real list price, else a
+// subscription equivalent-API estimate, mirroring PriceFor/EstimateFor) and
+// returns the avoidable cooling overpay for a cold re-written prefix, whether the
+// figure is an estimate (subscription provider), and whether any price applied.
+// ok=false leaves the caller with no figure to record (unpriced/custom endpoint).
+func CoolingWaste(provider, model string, reWrittenTokens int) (usd float64, estimated, ok bool) {
+	if p, k := PriceFor(provider, model); k {
+		return p.CoolingWasteUSD(reWrittenTokens), false, true
+	}
+	if ep, k := EstimateFor(provider, model); k {
+		return ep.CoolingWasteUSD(reWrittenTokens), true, true
+	}
+	return 0, false, false
+}
+
 // priceTable holds APPROXIMATE list prices (USD per 1M tokens) for the metered
 // providers, keyed by provider kind then model id. These are list-price
 // estimates for the budget screen, not billing-grade figures — provider prices
@@ -94,15 +131,15 @@ var priceTable = map[string]map[string]Price{
 	// standard 1.25×).
 	"anthropic": {
 		// Opus 5 (2026-07-24) keeps Opus-tier pricing unchanged ($5/$25 per MTok).
-		"claude-opus-5":             {InputPerMTok: 5, OutputPerMTok: 25, CacheWriteMultOverride: CacheWrite1hMult},
-		"claude-opus-4-8":           {InputPerMTok: 5, OutputPerMTok: 25, CacheWriteMultOverride: CacheWrite1hMult},
+		"claude-opus-5":   {InputPerMTok: 5, OutputPerMTok: 25, CacheWriteMultOverride: CacheWrite1hMult},
+		"claude-opus-4-8": {InputPerMTok: 5, OutputPerMTok: 25, CacheWriteMultOverride: CacheWrite1hMult},
 		// Sonnet 5 standard list price ($3/$15). Introductory $2/$10 runs through
 		// 2026-08-31; the table tracks the standard rate as a stable ballpark.
 		"claude-sonnet-5":           {InputPerMTok: 3, OutputPerMTok: 15, CacheWriteMultOverride: CacheWrite1hMult},
 		"claude-sonnet-4-6":         {InputPerMTok: 3, OutputPerMTok: 15, CacheWriteMultOverride: CacheWrite1hMult},
 		"claude-haiku-4-5-20251001": {InputPerMTok: 1, OutputPerMTok: 5, CacheWriteMultOverride: CacheWrite1hMult},
 		// Fable 5 sits ABOVE Opus-tier pricing ($10/$50 per MTok).
-		"claude-fable-5":            {InputPerMTok: 10, OutputPerMTok: 50, CacheWriteMultOverride: CacheWrite1hMult},
+		"claude-fable-5": {InputPerMTok: 10, OutputPerMTok: 50, CacheWriteMultOverride: CacheWrite1hMult},
 	},
 	"minimax": {
 		"MiniMax-M2.1":           {InputPerMTok: 0.30, OutputPerMTok: 1.20, CacheReadMultOverride: 0.25},

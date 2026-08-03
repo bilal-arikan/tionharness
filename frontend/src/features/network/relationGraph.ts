@@ -35,13 +35,21 @@ const RUN_KIND_COLOR: Record<string, string> = {
   chat: '#3b82f6', // blue
   task: '#64748b', // slate
   flow: '#7c3aed', // violet
+  'flow-coordinator': '#8b5cf6', // violet-light
   schedule: '#0891b2', // cyan
+  worker: '#0d9488', // teal
+  spawned: '#d97706', // amber
+  inbox: '#db2777', // pink
 }
 const RUN_KIND_LABEL: Record<string, string> = {
   chat: 'Sohbet',
   task: 'Görev çalıştırması',
   flow: 'Akış çalıştırması',
+  'flow-coordinator': 'Akış koordinatörü',
   schedule: 'Zamanlama teslimi',
+  worker: 'Worker çalıştırması',
+  spawned: 'Spawn çalıştırması',
+  inbox: 'Inbox',
 }
 
 // Board-state tints for task nodes.
@@ -181,7 +189,11 @@ function nodeFor(n: WorkspaceGraph['nodes'][number], colColor?: Map<string, stri
     return {
       id: n.id,
       label: kind ? `${n.label}\n${kind}` : n.label,
-      title: tip(n.label, [n.sub]),
+      title: tip(n.label, [
+        n.sub,
+        n.sessionId ? `Oturum: ${n.sessionId}` : undefined,
+        '↗ oturumu açmak için tıkla',
+      ]),
       shape: 'circularImage',
       size: 28,
       image: avatar,
@@ -242,22 +254,27 @@ function nodeFor(n: WorkspaceGraph['nodes'][number], colColor?: Map<string, stri
   if (n.type === 'run') {
     // Completed run (archive): a titled card like the Activity/kanban entries —
     // a kind-colored bordered box showing the run title; kind + agent on hover.
+    // Archived runs get a dashed border + dimmer fill + an "🗄" prefix so they
+    // read as put-away without being hidden.
     const c = RUN_KIND_COLOR[n.runKind ?? ''] ?? '#52525b'
+    const archived = !!n.archived
     return {
       id: n.id,
-      label: truncate(n.label, 26),
+      label: (archived ? '🗄 ' : '') + truncate(n.label, archived ? 24 : 26),
       title: tip(n.label, [
         RUN_KIND_LABEL[n.runKind ?? ''] ?? 'Çalıştırma',
         n.sub ? `Ajan: ${n.sub}` : undefined,
+        archived ? 'Arşivlenmiş' : undefined,
+        '↗ oturumu açmak için tıkla',
       ]),
       shape: 'box',
       color: {
-        background: 'rgba(24,24,27,0.95)',
+        background: archived ? 'rgba(24,24,27,0.6)' : 'rgba(24,24,27,0.95)',
         border: c,
         highlight: { background: '#27272a', border: c },
       },
-      font: { color: '#d4d4d8', size: 11 },
-      shapeProperties: { borderRadius: 6 },
+      font: { color: archived ? '#a1a1aa' : '#d4d4d8', size: 11 },
+      shapeProperties: { borderRadius: 6, borderDashes: archived ? [4, 3] : false },
       margin: { top: 5, bottom: 5, left: 9, right: 9 } as Node['margin'],
     }
   }
@@ -400,7 +417,9 @@ export function workspaceToVis(
           to: HIST_ID,
           color: { color: '#3f3f46', opacity: 0.4 },
           width: 0.8,
-          length: 120,
+          // Long spring so the many archive cards fan out into a wide ring around
+          // the anchor rather than piling onto the same spot.
+          length: 260,
           dashes: true,
           smooth: false,
         } as Edge)
@@ -451,7 +470,9 @@ export function workspaceToVis(
           to: IDLE_ID,
           color: { color: '#475569', opacity: 0.35 },
           width: 1,
-          length: 220,
+          // Wide spring so running instances spread around the "Çalışıyor" core
+          // instead of stacking.
+          length: 260,
           dashes: true,
           smooth: false,
         } as Edge)

@@ -11,11 +11,20 @@
 package exttools
 
 import (
+	"os"
+	"runtime"
 	"strings"
+	"sync"
 
+	"github.com/bilal-arikan/tionswarm/internal/proc"
 	"github.com/bilal-arikan/tionswarm/internal/stt"
 	"github.com/bilal-arikan/tionswarm/internal/tts"
 )
+
+// ClaudeToolName is the catalog key for the Claude Code CLI. Named after the
+// executable (that is what PATH resolution and the version probe use), not after
+// the provider id "claude-cli" that wraps it.
+const ClaudeToolName = "claude"
 
 // UpdateKind classifies how a tool is upgraded.
 const (
@@ -48,6 +57,7 @@ type UpdateSpec struct {
 //   - "setting" → wired by a workspace setting, not a hook (UI offers that toggle)
 //   - "mcp"     → wired as an MCP server (UI shows an info badge → Settings ▸ MCP)
 //   - "cli"     → a plain CLI the agent calls directly via Bash (UI shows a "CLI" badge)
+//   - "provider" → drives an LLM provider (UI shows a badge → Settings ▸ Providers)
 //   - ""        → used automatically by a TionSwarm subsystem (voice)
 //
 // VersionArgs is the flag that makes the tool print its version; empty means the
@@ -64,8 +74,106 @@ type Tool struct {
 	Update      UpdateSpec
 }
 
+// wingetSpec builds a winget one-click update for the given package id — but ONLY
+// on Windows. TionSwarm also runs on Linux servers, where winget does not exist.
+//
+// Getting this wrong is not merely a dead button. RunUpdate would fail with a
+// clear error, but the panel ALSO renders a copy-to-clipboard chip for every
+// `command` spec, so a Ubuntu user would be handed an authoritative-looking
+// `winget upgrade --id …` line that cannot work on their machine. A wrong
+// instruction is worse than no instruction, so off-Windows these become `manual`
+// with a note pointing at the distro's own package manager.
+//
+// goos is a parameter rather than a direct runtime.GOOS read so both branches are
+// testable from either platform.
+func wingetSpec(goos, id, manualNote string) UpdateSpec {
+	if goos == "windows" {
+		return UpdateSpec{
+			Kind:    UpdateCommand,
+			Command: "winget",
+			Args:    []string{"upgrade", "--id", id, "--accept-source-agreements", "--accept-package-agreements"},
+		}
+	}
+	return UpdateSpec{Kind: UpdateManual, Note: manualNote}
+}
+
+// bunUpdateSpec: winget owns the install on Windows (that is how it is installed
+// there), but everywhere else bun ships its own updater, which is the supported
+// path and needs no package manager at all.
+func bunUpdateSpec(goos string) UpdateSpec {
+	if goos == "windows" {
+		return wingetSpec(goos, "Oven-sh.Bun", "")
+	}
+	return UpdateSpec{Kind: UpdateCommand, Command: "bun", Args: []string{"upgrade"}}
+}
+
+// nodeUpdateSpec / pythonUpdateSpec stay `manual` on every platform — TionSwarm
+// cannot know which tool owns the install (nvm, a distro package, pyenv, brew,
+// conda, an installer) and picking wrong fights the real owner. Only the NOTE is
+// platform-specific, because a note is an instruction the user will actually
+// follow: telling a Ubuntu admin to run winget is how a panel loses its
+// credibility.
+func nodeUpdateSpec(goos string) UpdateSpec {
+	note := "Node'u hangi aracın kurduğunu TionSwarm bilemez, o yüzden karışmaz: nvm kullanıyorsan `nvm install --lts && nvm alias default lts/*`, aksi halde dağıtımının paketi yerine **NodeSource** deposu önerilir (`apt`'taki node genelde çok eskidir). Sunucuda **LTS** hattında kal."
+	switch goos {
+	case "windows":
+		note = "Node'u hangi aracın kurduğunu TionSwarm bilemez, o yüzden karışmaz: nvm kullanıyorsan `nvm install --lts && nvm alias default lts/*` (winget/installer nvm'in kurulumuyla çakışır), aksi halde nodejs.org installer'ı veya `winget upgrade --id OpenJS.NodeJS.LTS`. Sunucuda **LTS** hattında kal."
+	case "darwin":
+		note = "Node'u hangi aracın kurduğunu TionSwarm bilemez, o yüzden karışmaz: nvm kullanıyorsan `nvm install --lts && nvm alias default lts/*`, Homebrew ile kurduysan `brew upgrade node`. **LTS** hattında kal."
+	}
+	return UpdateSpec{Kind: UpdateManual, Note: note}
+}
+
+func pythonUpdateSpec(goos string) UpdateSpec {
+	// The Linux warning is the important one: on Debian/Ubuntu the system
+	// interpreter is what apt's own tooling runs, so "upgrading python3" in place
+	// is a known way to brick a server. pyenv/venv is the safe answer there.
+	note := "Python'u hangi aracın kurduğunu TionSwarm bilemez, o yüzden karışmaz. **Dikkat:** Debian/Ubuntu'da sistem `python3`'ü apt'ın kendi araçları tarafından kullanılır — yerinde yükseltmek sunucuyu bozabilir. Yeni sürüm gerekiyorsa `deadsnakes` PPA'sından yan yana kur veya **pyenv** kullan; proje bağımlılıklarını `venv` içinde tut."
+	switch goos {
+	case "windows":
+		note = "Python'u hangi aracın kurduğunu TionSwarm bilemez (python.org installer'ı, winget, pyenv-win, conda…), o yüzden karışmaz. python.org'dan yeni sürümü kurabilir veya `winget upgrade --id Python.Python.3.13` diyebilirsin. Minör sürüm atlarken (3.13 → 3.14) `pip` paketlerinin yeniden kurulması gerekir."
+	case "darwin":
+		note = "Python'u hangi aracın kurduğunu TionSwarm bilemez (Homebrew, pyenv, conda, python.org installer'ı…), o yüzden karışmaz. Homebrew ile kurduysan `brew upgrade python@3.13`; macOS'un kendi sistem python'una dokunma. Minör sürüm atlarken `pip` paketleri yeniden kurulmalıdır."
+	}
+	return UpdateSpec{Kind: UpdateManual, Note: note}
+}
+
+// gitProjectURL picks the release feed git is compared against.
+//
+// git/git on GitHub is a read-only mirror that publishes TAGS but no RELEASES,
+// so it 404s on releases/latest and would report "sürüm karşılaştırılamadı"
+// forever. git-for-windows/git does publish releases, and its tags name the
+// upstream version they build (v2.55.0.windows.3 → 2.55.0), so the comparison is
+// meaningful. It is still a Windows distribution, so elsewhere the entry falls
+// back to the project site: no GitHub slug → no release check, which is the
+// honest answer rather than a Windows build number shown to a Linux user.
+var gitProjectURL = func() string {
+	if runtime.GOOS == "windows" {
+		return "https://github.com/git-for-windows/git"
+	}
+	return "https://git-scm.com"
+}()
+
 // Catalog is the ordered set of known external tools.
 var Catalog = []Tool{
+	// The Claude Code CLI is the only catalog entry TionSwarm depends on for a
+	// CORE feature rather than an optional nicety: the keyless `claude-cli`
+	// provider is this binary. It is listed here anyway (and not only in the
+	// provider settings) because the questions this panel answers — where is it,
+	// which version, is it current — are exactly the ones asked when a claude-cli
+	// agent misbehaves, and the answer used to be split across two screens.
+	{
+		Name:        ClaudeToolName,
+		Desc:        "Claude Code CLI — anahtarsız `claude-cli` sağlayıcısının çalıştırdığı ikili (Max/Pro aboneliğiyle). TionSwarm bunu OTOMATİK kullanır; yolu Ayarlar ▸ Sağlayıcılar'dan geçersiz kılınabilir, boşsa PATH'ten bulunur.",
+		URL:         "https://github.com/anthropics/claude-code",
+		Category:    "provider",
+		Wire:        "provider",
+		VersionArgs: []string{"--version"},
+		Update: UpdateSpec{
+			Kind: UpdateManual,
+			Note: "Claude Code kendini arka planda günceller — çoğu zaman bir şey yapman gerekmez. Elle güncellemek için terminalde `claude update` (native kurulum) veya `npm install -g @anthropic-ai/claude-code` (npm kurulumu) çalıştır. TionSwarm bunu kendisi koşturmaz: çalışan bir claude-cli turu ikiliyi kilitler ve yarım kalan güncelleme tüm claude-cli ajanlarını durdurur.",
+		},
+	},
 	// rtk is wired by the ShellCommandRewrite SETTING, not a hook. It used to ship a
 	// PreToolUse hook that prefixed `rtk ` onto every command; that template was
 	// removed after it bricked the shell (2026-07-31, WS10/SES63): the hook body was
@@ -113,6 +221,83 @@ var Catalog = []Tool{
 		},
 	},
 	{
+		Name:        "git",
+		Desc:        "Git — TionSwarm oturum bağlamına çalışma dizininin branch'ini enjekte eder, `scripts\\worktree.ps1` yardımcısı ve ajanın kendi shell komutları buna dayanır. Alt-süreçler non-interactive git env alır (`GIT_EDITOR=true` → editör/pinentry asılması yok).",
+		URL:         gitProjectURL,
+		Category:    "dev",
+		Wire:        "cli",
+		VersionArgs: []string{"--version"},
+		Update: wingetSpec(runtime.GOOS, "Git.Git",
+			"Dağıtımının paket yöneticisiyle güncelle (ör. `sudo apt update && sudo apt install --only-upgrade git`, ya da güncel sürüm için `ppa:git-core/ppa`)."),
+	},
+	// node/npm carry NO GitHub release feed, and that is a measured decision rather
+	// than an oversight (both were tried, 2026-08-02):
+	//
+	//   nodejs/node  releases/latest → v26.5.1 "(Current)". The endpoint returns the
+	//     newest release by date, which is the Current line, NOT the LTS a server
+	//     tool should sit on. Wiring it would flag an LTS user as "outdated" and
+	//     push them off LTS — worse than saying nothing. Node's LTS state lives in
+	//     nodejs.org/dist/index.json (an `lts` field), which is not a GitHub
+	//     release feed and would need a second fetcher.
+	//   npm/cli      releases/latest → "libnpmpack-v10.0.2" — a workspace package of
+	//     the monorepo, not the npm CLI. semverRe would happily read "10.0.2" out of
+	//     it and compare that against npm's real version, producing a confident and
+	//     meaningless verdict.
+	//
+	// A non-GitHub URL makes Repo() return "" so the check reports "no release feed"
+	// instead of inventing an answer. Presence + version + path is still the point:
+	// on this machine they resolve inside an nvm directory, which is exactly what
+	// someone debugging "why did mmdc break" needs to see.
+	{
+		Name:        "node",
+		Desc:        "Node.js — npm tabanlı araçların (ör. mmdc) çalışma zamanı. TionSwarm doğrudan kullanmaz; ajan geliştirmede Bash ile çağırır. Sürüm karşılaştırması bilerek yapılmaz: GitHub'ın `releases/latest`'i LTS'i değil Current'ı verir.",
+		URL:         "https://nodejs.org",
+		Category:    "dev",
+		Wire:        "cli",
+		VersionArgs: []string{"--version"},
+		Update:      nodeUpdateSpec(runtime.GOOS),
+	},
+	// bun is the third interpreter transform_data accepts (python3/node/bun). Unlike
+	// node/npm it DOES have a usable release feed: oven-sh/bun publishes releases and
+	// tags them "bun-v1.3.14" — semverRe reads 1.3.14 out of that, so the comparison
+	// is real. Verified 2026-08-03.
+	{
+		Name:        "bun",
+		Desc:        "Bun — `transform_data` aracının kabul ettiği üçüncü çalışma zamanı (python3/node/bun); node'dan hızlı başlar, tek dosyalık script'lerde tercih edilir.",
+		URL:         "https://github.com/oven-sh/bun",
+		Category:    "dev",
+		Wire:        "cli",
+		VersionArgs: []string{"--version"},
+		Update:      bunUpdateSpec(runtime.GOOS),
+	},
+	{
+		Name:        "npm",
+		Desc:        "npm — Node paket yöneticisi. TionSwarm bunu `mmdc` güncellemesini çalıştırmak için arar (Ayarlar ▸ Harici Araçlar ▸ Güncelle); yoksa o güncelleme başarısız olur.",
+		URL:         "https://www.npmjs.com",
+		Category:    "dev",
+		Wire:        "cli",
+		VersionArgs: []string{"--version"},
+		Update: UpdateSpec{
+			Kind:    UpdateCommand,
+			Command: "npm",
+			Args:    []string{"install", "-g", "npm@latest"},
+		},
+	},
+	// python is a REAL dependency, not an optional nicety: run_code and
+	// transform_data shell out to it, and code-mode generates Python bindings.
+	//
+	// No release feed — python/cpython answers releases/latest with 404 (it tags
+	// but does not publish releases), same as the git/git mirror. Verified rather
+	// than assumed, 2026-08-02.
+	{
+		Name:        "python",
+		Desc:        "Python — `run_code` ve `transform_data` araçlarını çalıştıran yorumlayıcı, code-mode'un ürettiği binding'ler de buna koşar. TionSwarm OTOMATİK kullanır. Windows'ta `python3.exe` genelde Microsoft Store kısayolu olduğu için önce `python` denenir.",
+		URL:         "https://www.python.org",
+		Category:    "dev",
+		VersionArgs: []string{"--version"},
+		Update:      pythonUpdateSpec(runtime.GOOS),
+	},
+	{
 		Name:        "codebase-memory-mcp",
 		Desc:        "Codebase Memory — kod tabanını kalıcı bilgi grafiğine indeksler (158 dil, sub-ms sorgu, ~%99 daha az token); search_graph/query_graph/trace_path/get_architecture araçları. Market'te 'Codebase Memory MCP' paketi ile kurulur",
 		URL:         "https://github.com/DeusData/codebase-memory-mcp",
@@ -152,11 +337,8 @@ var Catalog = []Tool{
 		URL:         "https://ffmpeg.org",
 		Category:    "voice",
 		VersionArgs: []string{"-version"},
-		Update: UpdateSpec{
-			Kind:    UpdateCommand,
-			Command: "winget",
-			Args:    []string{"upgrade", "--id", "Gyan.FFmpeg", "--accept-source-agreements", "--accept-package-agreements"},
-		},
+		Update: wingetSpec(runtime.GOOS, "Gyan.FFmpeg",
+			"Dağıtımının paket yöneticisiyle güncelle (ör. `sudo apt update && sudo apt install --only-upgrade ffmpeg`). Sunucuda genelde dağıtım paketi yeterlidir; daha yeni sürüm gerekiyorsa statik build indirilir."),
 	},
 }
 
@@ -188,13 +370,65 @@ func (t Tool) Repo() string {
 	return parts[0] + "/" + parts[1]
 }
 
+// pathOverrides holds user-configured absolute paths, keyed by catalog name.
+// Set from the settings layer (see SetPathOverride); empty by default.
+var pathOverrides = struct {
+	sync.RWMutex
+	m map[string]string
+}{m: map[string]string{}}
+
+// SetPathOverride records the path the rest of TionSwarm will actually run for a
+// tool, so this package reports on the same binary. An empty path clears the
+// override and restores normal resolution.
+//
+// Without this, a user who points Settings ▸ Providers at a specific claude
+// binary would see "bulunamadı" here (or worse, the version of a DIFFERENT
+// claude on PATH) while their agents ran happily — a panel that contradicts the
+// running system is worse than no panel.
+func SetPathOverride(name, path string) {
+	path = strings.TrimSpace(path)
+	pathOverrides.Lock()
+	defer pathOverrides.Unlock()
+	if path == "" {
+		delete(pathOverrides.m, name)
+		return
+	}
+	pathOverrides.m[name] = path
+}
+
+// pathOverride returns the configured path for name, or "".
+func pathOverride(name string) string {
+	pathOverrides.RLock()
+	defer pathOverrides.RUnlock()
+	return pathOverrides.m[name]
+}
+
 // Detect resolves a known tool's presence + absolute path. Most tools are found
 // on PATH (exec.LookPath, honouring PATHEXT on Windows), but piper and
 // whisper-cli usually live OUTSIDE PATH (a Progs install), so they use the
 // tts/stt resolvers (env / Progs / PATH) that the voice subsystems already rely
 // on. Detection never runs the tool.
 func Detect(name string) (bool, string) {
+	// An explicit override wins and does NOT fall back to PATH: the override is
+	// what TionSwarm executes, so if it points at nothing the honest answer is
+	// "not installed", not the version of some other binary that happens to be
+	// on PATH and will never be used.
+	if p := pathOverride(name); p != "" {
+		if st, err := os.Stat(p); err == nil && !st.IsDir() {
+			return true, p
+		}
+		return false, ""
+	}
 	switch name {
+	case "python":
+		// Same resolver run_code/transform_data use: candidate order plus skipping
+		// Microsoft Store alias stubs. A plain lookPath("python3") on Windows would
+		// "find" the WindowsApps stub, and the version probe would then report
+		// "Python was not found" for a machine with a perfectly good interpreter.
+		if p, ok := proc.LookInterpreter(proc.PythonCandidates()...); ok {
+			return true, p
+		}
+		return false, ""
 	case "piper":
 		if p := tts.BinaryPath(); p != "" {
 			return true, p

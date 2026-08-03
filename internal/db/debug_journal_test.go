@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"math"
 	"path/filepath"
 	"testing"
 )
@@ -166,6 +167,57 @@ func TestDebugSummaryCacheBreaks(t *testing.T) {
 	}
 	if code := anomalyCode(sum2.Anomalies, "cache_breaks"); code == nil || code.Severity != "warn" {
 		t.Errorf("two breaks should raise a warn cache_breaks anomaly, got %+v", sum2.Anomalies)
+	}
+}
+
+// TestDebugSummaryCoolingWaste verifies the isolated cooling-waste rollup: only
+// cache_break events carrying a WasteUSD contribute, they are summed, counted,
+// and the estimated flag latches when any contributing figure is an estimate.
+func TestDebugSummaryCoolingWaste(t *testing.T) {
+	ctx := context.Background()
+	d, _ := Open(filepath.Join(t.TempDir(), "store"))
+	agent, _ := d.CreateAgent(ctx, Agent{Name: "A", Provider: "anthropic"})
+	s, _ := d.CreateSession(ctx, Session{AgentID: agent.ID, Title: "cool"})
+
+	// Two TTL breaks with waste (one estimated) + a model-change break with none.
+	_ = d.AppendDebugEvent(s.ID, DebugEvent{Type: DebugCacheBreak, Name: "ttl-or-server-eviction", WasteUSD: 0.02}, 0)
+	_ = d.AppendDebugEvent(s.ID, DebugEvent{Type: DebugCacheBreak, Name: "ttl-or-server-eviction", WasteUSD: 0.03, WasteEstimated: true}, 0)
+	_ = d.AppendDebugEvent(s.ID, DebugEvent{Type: DebugCacheBreak, Name: "model-changed", Detail: "model değişti"}, 0)
+
+	sum, _ := d.GetDebugSummary(ctx, s.ID)
+	if sum.CacheBreaks != 3 {
+		t.Fatalf("cacheBreaks=%d, want 3", sum.CacheBreaks)
+	}
+	if sum.CoolingBreaks != 2 {
+		t.Errorf("coolingBreaks=%d, want 2 (only waste-bearing breaks)", sum.CoolingBreaks)
+	}
+	if math.Abs(sum.CoolingWasteUSD-0.05) > 1e-9 {
+		t.Errorf("coolingWasteUsd=%v, want 0.05", sum.CoolingWasteUSD)
+	}
+	if !sum.CoolingWasteEstimated {
+		t.Error("coolingWasteEstimated should latch true when any figure is estimated")
+	}
+}
+
+// TestAddCoolingWaste verifies cooling-waste USD accumulates into today's usage
+// row (upsert), latches the estimated flag, and ignores non-positive amounts.
+func TestAddCoolingWaste(t *testing.T) {
+	ctx := context.Background()
+	d, _ := Open(filepath.Join(t.TempDir(), "store"))
+	agent, _ := d.CreateAgent(ctx, Agent{Name: "A", Provider: "anthropic"})
+
+	if err := d.AddCoolingWaste(ctx, agent.ID, 0, false); err != nil {
+		t.Fatalf("zero waste err: %v", err)
+	}
+	_ = d.AddCoolingWaste(ctx, agent.ID, 0.02, false)
+	_ = d.AddCoolingWaste(ctx, agent.ID, 0.03, true) // estimate → latches flag
+
+	u, _ := d.GetUsageToday(ctx, agent.ID)
+	if math.Abs(u.CoolingWasteUSD-0.05) > 1e-9 {
+		t.Errorf("coolingWasteUsd=%v, want 0.05", u.CoolingWasteUSD)
+	}
+	if !u.CoolingWasteEstimated {
+		t.Error("estimated flag should latch true after an estimated contribution")
 	}
 }
 

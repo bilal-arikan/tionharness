@@ -645,7 +645,13 @@ export default function App() {
         )}
         {view === 'network' && (
           <Suspense fallback={<LoadingState label="Ağ yükleniyor…" className="flex-1" />}>
-            <NetworkPanel onError={setError} />
+            <NetworkPanel
+              onError={setError}
+              onOpenSession={(sid) => {
+                setView('chat')
+                ctl.selectSession(sid)
+              }}
+            />
           </Suspense>
         )}
         {view === 'board' && <TaskBoard agents={ctl.agents} onError={setError} />}

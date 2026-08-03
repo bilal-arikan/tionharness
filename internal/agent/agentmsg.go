@@ -117,7 +117,10 @@ func (r *Runtime) deliverOne(ctx context.Context, fromAgentID, fromName string, 
 	// SENDING agent — record that so the roster + labelMultiAgentHistory attribute
 	// it correctly ("[Ada → Kai (you)]"), not as a human "user" message. The
 	// formatAgentMessage wrapper is kept for the human-readable inbox view + summary.
-	if _, err := r.db.AddMessage(ctx, db.Message{
+	// Bridge the delivery to the hub too (session_user_message → KindUserMessage,
+	// _Docs/58) so a window watching the recipient's inbox renders the incoming peer
+	// message live and in order before the reply, not only on reload.
+	if _, err := r.recordInjectedUserMessage(ctx, db.Message{
 		SessionID:   inbox.ID,
 		Role:        "user",
 		Text:        text,

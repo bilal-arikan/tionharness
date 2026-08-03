@@ -144,7 +144,15 @@ davranıştır). Karşılama kartında **iki** aksiyon vardır:
   proje dizini**) → `POST /api/workspaces`. Veri klasörü **artık seçilmez**: data dir
   daima uygulama varsayılan konumunu kullanır (`Create(name, "", "")`). Girilen proje
   dizini workspace'in `DefaultWorkingDir`'ine (oturum cwd'si) yazılır (istek alanı
-  `projectDir`).
+  `projectDir`). Proje dizininin hemen altında **"Git deposu başlat"** onay kutusu
+  vardır (istek alanı `gitInit`): işaretliyse workspace oluşturulduktan sonra o
+  klasörde `git init -b main` çalışır (klasör yoksa önce açılır, klasör zaten repo
+  ise dokunulmaz) ve başlangıç `.gitignore`'ı yazılır (var olan dosya ezilmez —
+  bkz. `_Docs/26-CALISMA-DIZINI.md`). Onay kutusu yalnız yol girildiğinde, **makinede git kuruluysa**
+  ve klasör henüz repo değilse etkindir — durum `GET /api/fs/gitinfo`'nun yeni
+  `gitInstalled` alanından okunur ve sebep kutunun altında yazar. Git adımı
+  tavsiye niteliğindedir: başarısızlık workspace oluşturmayı bozmaz, yanıttaki
+  `gitInitError` alanıyla döner ve hata bandında gösterilir.
 - **Mevcut Workspace Seç** → native klasör seçici (`POST /api/pick-folder`) → seçilen
   yol `POST /api/workspaces/attach` ile **taşınmadan** kayıt defterine eklenir. Bu,
   başka makineden kopyalanan ya da önceki kurulumdan kalan bir workspace veri

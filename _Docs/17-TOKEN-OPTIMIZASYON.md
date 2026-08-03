@@ -787,6 +787,20 @@ Cache tasarrufu ile session bazlı kullanım/maliyet dağınık/gizli değildir;
 - UI: Bütçe ekranında **Tasarruf Merkezi** bölümü tek hücre — **Prompt-cache** (gerçek USD).
   Bayt/token tahmin hücreleri artık yoktur.
 
+### Soğuma israfı rollup'ı (2026-08-03)
+Tasarrufun tersi: geç gelen bir tur sıcak prompt-cache öneğini soğuttuğunda (TTL/eviction),
+önek okuma yerine **yazma** tarifesinden yeniden ödenir; bu **önlenebilir** primin izole USD'si.
+- **Kaynak:** cache-break tespiti (`agent/cachebreak.go`) yalnız `ttl-or-server-eviction` durumunda
+  `providers.CoolingWaste` ile hesaplar (native Anthropic `cache_creation` token'ı; abonelikte tahmini,
+  OpenRouter'da ~0) → hem debug olayına (`wasteUsd`) hem de günlük usage kaydına yazar
+  (`db.AddCoolingWaste` → `Usage.CoolingWasteUSD`/`CoolingWasteEstimated`). **Token maliyetiyle çift-sayım
+  yok** — o write token'ları zaten `ByModel`'de fiyatlı; bu yalnız kaçınılabilir kısmı ayırır.
+- **API:** `GET /api/usage` totals + cumulative `coolingWasteUSD`/`coolingWasteEstimated`, trend
+  `coolingWasteUsd`, per-agent satırda `coolingWasteUsd`.
+- **UI:** Bütçe ekranında cumulative kart **"Soğuma israfı (son Ng)"** + Tasarruf Merkezi'nde negatif tonlu
+  **"Soğuma israfı (önlenebilir)"** hücresi (ikisi de yalnız > 0 iken; abonelikte `~`). Detay `38-SESSION-DEBUG.md`.
+- Test: `providers.TestCoolingWaste` · `db.TestAddCoolingWaste` · `db.TestDebugSummaryCoolingWaste`.
+
 ### Session bazlı kullanım/maliyet
 - DB: `SessionUsage` rollup (`internal/db/store_session_usage.go`) — **sessionID anahtarlı, ömür-boyu**
   (gün-reset YOK); ByKind/ByModel + cache sayaçları. Dosya `store/session-usage/<sid>.json`.

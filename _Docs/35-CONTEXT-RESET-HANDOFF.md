@@ -40,6 +40,17 @@ graph LR
 
 ### Çekirdek akış — `Runtime.HandoffSession`
 
+0. **Koordinatör guard'ı:** oturum koordinatörse (`IsCoordinator`) ve altında hâlâ
+   **çalışan/delegating** worker varsa handoff **reddedilir** (`ListWorkers` →
+   `Running || Delegating`). Neden: handoff yalnız BU oturumun transcript'ini taze
+   pencereye taşır; spawn ettiği worker'ları ne devreder ne durdurur → reset onları
+   sahipsiz bırakır, ayrıca `BuildHandoff` senkron provider çağrısı olduğu için asılı
+   bir worker reset'i de kilitleyebilir. Çağıran önce fleet'i toparlamalı
+   (`stop_worker` ya da bitmesini bekle). `HandoffOptions.AllowRunningWorkers` bilinçli
+   bypass için. Guard tipli hata döner (`*agent.RunningWorkersError`); `/handoff`
+   endpoint'i bunu **200 + `blocked:true`** olarak sarar ve gerekçeyi **thread içi**
+   asistan uyarısı ("⚠️ Handoff yapılmadı — …") olarak yazar (500 toast'ı yok);
+   frontend oturumu değiştirmez, uyarıyı transcript'te gösterir.
 1. Oturum geçmişini (`ListMessages`) render et (`conversation.RenderTranscript`).
 2. **Handoff üret:** `conversation.BuildHandoff(...)` — compaction çekirdeğiyle aynı
    provider çağrısı (usage `KindCompact`), ama **devam-odaklı** `handoffPrompt` ile
@@ -142,7 +153,7 @@ oturum cold başlar. Uyumlu — özel bir iş gerektirmez.
 ## Testler
 
 - `conversation/handoff_test.go` — `BuildHandoff` env+transcript enjeksiyonu, boş-transcript guard, env render.
-- `agent/handoff_test.go` — chain-depth sayımı, `maybeAutoHandoff` no-op yolları (auto off / overflow yok / chain cap), continuation prompt içeriği, title temizleme.
+- `agent/handoff_test.go` — chain-depth sayımı, `maybeAutoHandoff` no-op yolları (auto off / overflow yok / chain cap), continuation prompt içeriği, title temizleme, **koordinatör running-worker guard'ı** (`TestHandoffBlocksOnRunningWorkers`, `TestFormatBusyWorkers`).
 
 ## Ayrıca bakınız
 

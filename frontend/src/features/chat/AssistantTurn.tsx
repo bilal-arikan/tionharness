@@ -15,6 +15,7 @@ import { DeleteButton } from './DeleteButton'
 import { MessageDebugPanel } from './MessageDebugPanel'
 import { ChangesButton } from './ChangesButton'
 import { hasFileChanges } from '@/shared/lib/fileChanges'
+import { modelDisplayName } from '@/shared/lib/modelLabel'
 import {
   ACTION_CLUSTER,
   META_CLUSTER,
@@ -267,7 +268,13 @@ export const AssistantTurn = memo(function AssistantTurn({
               className="flex items-center gap-1.5 text-[10px] text-[var(--color-text-dim)]"
               title="Bu turun modeli ve token tüketimi"
             >
-              {m.model && <span className="font-mono opacity-80">{m.model}</span>}
+              {/* Named, not mono: this is the model people talk about, while the
+                  numbers beside it stay mono. The exact id lives in the title. */}
+              {m.model && (
+                <span className="opacity-80" title={m.model}>
+                  {modelDisplayName(m.model)}
+                </span>
+              )}
               {m.usage && (
                 <span className="font-mono">
                   ↑{fmtTok(m.usage.in)} ↓{fmtTok(m.usage.out)}

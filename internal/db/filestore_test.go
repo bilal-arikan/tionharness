@@ -45,9 +45,9 @@ func TestRoundTrip(t *testing.T) {
 		t.Fatalf("add usage: %v", err)
 	}
 
-	// session.jsonl must exist on disk.
-	if _, err := os.Stat(filepath.Join(storeDir, dirSessions, sess.ID, "session.jsonl")); err != nil {
-		t.Fatalf("session file missing: %v", err)
+	// The session header must exist on disk.
+	if _, err := os.Stat(filepath.Join(storeDir, dirSessions, sess.ID, sessionHeaderFile)); err != nil {
+		t.Fatalf("session header missing: %v", err)
 	}
 	_ = d.Close()
 

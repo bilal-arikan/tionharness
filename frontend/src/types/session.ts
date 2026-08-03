@@ -129,6 +129,9 @@ export interface GitInfo {
   remote: string
   userName: string
   userEmail: string
+  // Whether a git binary exists on the machine at all (path-independent). Lets the
+  // UI distinguish "git is not installed" from "this folder is not a repo yet".
+  gitInstalled: boolean
 }
 
 // Execution is one row of the unified executions feed (GET /api/executions): a

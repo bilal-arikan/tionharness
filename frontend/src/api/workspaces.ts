@@ -15,8 +15,7 @@ export const workspaceApi = {
   // Cross-workspace live-run flags: for every workspace, whether it currently has
   // any run in flight. Powers the switcher's per-row "çalışıyor" pulse for
   // non-active workspaces (the active one's per-view busy comes from /api/activity).
-  listWorkspacesActivity: () =>
-    req<{ id: string; running: boolean }[]>('/api/workspaces/activity'),
+  listWorkspacesActivity: () => req<{ id: string; running: boolean }[]>('/api/workspaces/activity'),
   // Available workspace templates (agents/flow blueprints) for the create dialog.
   listWorkspaceTemplates: () => req<WorkspaceTemplate[]>('/api/workspace-templates'),
   createWorkspace: (data: {
@@ -26,8 +25,13 @@ export const workspaceApi = {
     icon?: string
     color?: string
     template?: string
+    // Run `git init` (branch "main") in projectDir after creating the workspace.
+    // Ignored without a projectDir; an already-versioned folder is left alone.
+    gitInit?: boolean
   }) =>
-    req<Workspace>('/api/workspaces', {
+    // The response is the Workspace plus the git-init outcome: the workspace is
+    // created either way, so a git failure arrives as gitInitError, not an HTTP error.
+    req<Workspace & { gitInit?: boolean; gitInitError?: string }>('/api/workspaces', {
       method: 'POST',
       body: JSON.stringify(data),
     }),
@@ -61,10 +65,9 @@ export const workspaceApi = {
   // Begin an in-app Claude subscription (Max/Pro) OAuth login: returns the
   // authorization URL to open + a flow id to complete with.
   startClaudeOAuth: () =>
-    req<{ flowId: string; authUrl: string }>(
-      '/api/workspace-settings/claude-auth/oauth/start',
-      { method: 'POST' },
-    ),
+    req<{ flowId: string; authUrl: string }>('/api/workspace-settings/claude-auth/oauth/start', {
+      method: 'POST',
+    }),
   // Finish the OAuth login: exchange the pasted "<code>#<state>" for a credential
   // and write it into THIS workspace's claude-home.
   completeClaudeOAuth: (flowId: string, code: string) =>
@@ -80,7 +83,11 @@ export const workspaceApi = {
       { method: 'POST' },
     ),
   claudeOAuthLoopbackStatus: (flowId: string) =>
-    req<{ status: 'pending' | 'ok' | 'error' | 'unknown'; detail?: string; claudeHomeDir?: string }>(
+    req<{
+      status: 'pending' | 'ok' | 'error' | 'unknown'
+      detail?: string
+      claudeHomeDir?: string
+    }>(
       `/api/workspace-settings/claude-auth/oauth/loopback/status?flowId=${encodeURIComponent(flowId)}`,
     ),
 

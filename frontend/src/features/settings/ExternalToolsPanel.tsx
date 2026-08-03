@@ -70,6 +70,7 @@ const TOOL_HOOK_TEMPLATES: Record<string, HookInput> = {
 
 // Human-readable group headings for the tool categories returned by the backend.
 const TOOL_CATEGORY_LABELS: Record<string, string> = {
+  provider: 'LLM sağlayıcı CLI’ları',
   token: 'Token / bağlam optimizasyonu',
   dev: 'Geliştirme araçları',
   render: 'Render / diyagram',
@@ -233,6 +234,21 @@ export function ExternalToolsPanel({ onError }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // Whether to offer the one-click "Güncelle" button for a tool.
+  //
+  // The rule is deliberately strict: a package-manager install runs ONLY when we
+  // can point at a concrete reason — a release feed that says this exact tool is
+  // behind. Tools with no feed (ffmpeg, npm, node, python, and git off Windows)
+  // therefore NEVER show the button, because their status can only ever be
+  // 'unknown' and "I don't know" is not grounds for mutating the user's machine.
+  //
+  // This used to be an emergent side effect of the inline `status === 'outdated'`
+  // check; naming it makes the intent explicit so a future change to the status
+  // logic cannot silently start offering unjustified updates. The copy-command
+  // chip below the row stays as the manual escape hatch for exactly these tools.
+  const canOfferUpdate = (t: ExternalToolStatus): boolean =>
+    t.found && t.updateKind === 'command' && updates[t.name]?.status === 'outdated'
+
   // The hook (if any) currently wiring a given external tool into TionSwarm,
   // matched by the tool name appearing in the hook command.
   const wiredHook = (toolName: string): Hook | undefined =>
@@ -329,7 +345,7 @@ export function ExternalToolsPanel({ onError }: Props) {
         TionSwarm ile birlikte kullanılabilecek isteğe bağlı CLI araçlarının (token optimizasyonu,
         geliştirme, render — ör. <code>sqz</code>, <code>mmdc</code>, <code>piper</code>) bu cihazda{' '}
         <span className="font-medium text-[var(--color-text)]">kurulu olup olmadığını</span> kontrol
-        eder. Yalnız PATH'te aranır — araçlar{' '}
+        eder. Önce Ayarlar'daki yol geçersiz kılması (varsa), yoksa PATH aranır — araçlar{' '}
         <span className="font-medium text-[var(--color-text)]">
           kurulmaz, çalıştırılmaz, değiştirilmez
         </span>
@@ -512,6 +528,14 @@ export function ExternalToolsPanel({ onError }: Props) {
                               MCP
                             </span>
                           )}
+                          {t.found && t.wire === 'provider' && (
+                            <span
+                              className="rounded px-1.5 py-0.5 font-mono text-[10px] bg-[var(--color-surface-2)] text-[var(--color-text-dim)]"
+                              title="Bir LLM sağlayıcısını çalıştırır — Ayarlar ▸ Sağlayıcılar'dan yapılandırılır, hook değil"
+                            >
+                              Sağlayıcı
+                            </span>
+                          )}
                           {t.found && t.wire === 'cli' && (
                             <span
                               className="rounded px-1.5 py-0.5 font-mono text-[10px] bg-[var(--color-surface-2)] text-[var(--color-text-dim)]"
@@ -520,24 +544,23 @@ export function ExternalToolsPanel({ onError }: Props) {
                               CLI
                             </span>
                           )}
-                          {/* One-click update, offered ONLY for package-manager-backed
-                            tools. For the rest the backend answers 409 by design —
-                            see the manual callout below the row. */}
-                          {t.found &&
-                            updates[t.name]?.status === 'outdated' &&
-                            t.updateKind === 'command' && (
-                              <button
-                                type="button"
-                                data-testid="tool-update"
-                                data-tool={t.name}
-                                disabled={updateBusy === t.name}
-                                onClick={() => runUpdate(t)}
-                                title={`Çalıştırılacak komut: ${t.updateCommand}`}
-                                className="rounded bg-[var(--color-accent)] px-2 py-0.5 text-xs font-medium text-white hover:opacity-90 disabled:opacity-50"
-                              >
-                                {updateBusy === t.name ? 'Güncelleniyor…' : 'Güncelle'}
-                              </button>
-                            )}
+                          {/* One-click update — see canOfferUpdate for the rule.
+                            Package-manager-backed AND proven behind by a release
+                            feed. For manual-kind tools the backend answers 409 by
+                            design; see the callout below the row. */}
+                          {canOfferUpdate(t) && (
+                            <button
+                              type="button"
+                              data-testid="tool-update"
+                              data-tool={t.name}
+                              disabled={updateBusy === t.name}
+                              onClick={() => runUpdate(t)}
+                              title={`Çalıştırılacak komut: ${t.updateCommand}`}
+                              className="rounded bg-[var(--color-accent)] px-2 py-0.5 text-xs font-medium text-white hover:opacity-90 disabled:opacity-50"
+                            >
+                              {updateBusy === t.name ? 'Güncelleniyor…' : 'Güncelle'}
+                            </button>
+                          )}
                           <a
                             href={t.url}
                             target="_blank"

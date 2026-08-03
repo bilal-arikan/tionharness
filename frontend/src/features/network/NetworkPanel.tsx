@@ -1,14 +1,33 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { RefreshCw, Share2, Radio } from 'lucide-react'
+import { RefreshCw } from 'lucide-react'
 import { api } from '@/api'
 import { useRefreshTrigger } from '@/shared/hooks/useRefreshTrigger'
 import type { WorkspaceGraph, WorkspaceNodeType, BoardColumnDef } from '@/types'
 import { VisNetworkGraph } from './VisNetworkGraph'
-import { workspaceToVis, EDGE_LEGEND, NODE_LAYERS, type WorkspaceMode } from './relationGraph'
+import { workspaceToVis, NODE_LAYERS, type WorkspaceMode } from './relationGraph'
+import { NetworkFilters } from './NetworkFilters'
+import { emptyNetworkFilter, filterGraph, type NetworkFilter } from './networkFilter'
 import { useIsMobile } from '@/shared/hooks/useMediaQuery'
 
 interface Props {
   onError: (msg: string) => void
+  // Open a session transcript — wired by App to setView('chat') + selectSession.
+  // Clicking an agent instance (or a run-history card) navigates to the session
+  // that instance is driving, so "which agent is on which session" is one click.
+  onOpenSession?: (sessionId: string) => void
+}
+
+// sessionIdFromNodeId extracts the backing session id from a clickable node id.
+// Agent instances carry it after '#' (agent:<agentID>#<sessionID>); run-history
+// cards are run:<sessionID>. Other node types (task/flow/skill/mcp/anchors) have
+// no session, so they return null and the click is ignored.
+function sessionIdFromNodeId(id: string): string | null {
+  if (id.startsWith('agent:')) {
+    const hash = id.indexOf('#')
+    return hash >= 0 ? id.slice(hash + 1) : null
+  }
+  if (id.startsWith('run:')) return id.slice('run:'.length)
+  return null
 }
 
 // NetworkPanel renders the workspace collaboration network with vis-network.
@@ -20,7 +39,7 @@ interface Props {
 // Agents on this canvas are RUNTIME INSTANCES: the backend emits one agent node
 // per in-flight session (chat / task / flow / schedule / spawn / worker), so a
 // busy agent appears once per run and an idle agent does not appear at all.
-export function NetworkPanel({ onError }: Props) {
+export function NetworkPanel({ onError, onOpenSession }: Props) {
   const [graph, setGraph] = useState<WorkspaceGraph | null>(null)
   const [loading, setLoading] = useState(false)
   // User-defined Kanban columns (mirrors the Board column editor). When set,
@@ -28,18 +47,32 @@ export function NetworkPanel({ onError }: Props) {
   // the built-in five-status defaults.
   const [boardColumns, setBoardColumns] = useState<BoardColumnDef[]>([])
   const [density, setDensity] = useState(1)
-  // Default to the live board-column flow so the animated, self-refreshing
-  // network is the primary view; users can switch to the static relation web.
-  const [mode, setMode] = useState<WorkspaceMode>('live')
+  // The network is always the live board-column flow now — the static relation
+  // web was dropped from the UI, so there is no mode toggle. `mode` stays a
+  // constant (relationGraph still branches on it) in case relation is reinstated.
+  const mode: WorkspaceMode = 'live'
   // Visible node layers (agents are always shown). Skills/MCP start hidden to
   // keep the default view focused on the agent/task/flow collaboration core.
   const [visible, setVisible] = useState<Set<WorkspaceNodeType>>(
     () => new Set<WorkspaceNodeType>(['task', 'flow', 'run']),
   )
+  // Board-style facet filter (search / agent / kind / status / tag / archive).
+  // Applied to the raw graph before it is mapped to vis nodes.
+  const [filter, setFilter] = useState<NetworkFilter>(() => emptyNetworkFilter())
 
   // Phones get the lightweight vis-network render (no shadows/curved edges) so
   // pan/zoom stays smooth on low-power GPUs.
   const isMobile = useIsMobile()
+
+  // Clicking an agent instance / run card opens its session transcript.
+  const handleSelect = useCallback(
+    (id: string | null) => {
+      if (!id || !onOpenSession) return
+      const sid = sessionIdFromNodeId(id)
+      if (sid) onOpenSession(sid)
+    },
+    [onOpenSession],
+  )
 
   const toggleLayer = (t: WorkspaceNodeType) =>
     setVisible((prev) => {
@@ -90,9 +123,17 @@ export function NetworkPanel({ onError }: Props) {
     load()
   }, [networkTick, load])
 
+  // Apply the facet filter to the raw graph first; the vis mapping then runs on
+  // the narrowed set (edges to dropped nodes and orphaned skill/MCP icons fall
+  // out inside filterGraph).
+  const filteredGraph = useMemo(() => (graph ? filterGraph(graph, filter) : null), [graph, filter])
+
   const { nodes, edges } = useMemo(
-    () => (graph ? workspaceToVis(graph, visible, mode, boardColumns) : { nodes: [], edges: [] }),
-    [graph, visible, mode, boardColumns],
+    () =>
+      filteredGraph
+        ? workspaceToVis(filteredGraph, visible, mode, boardColumns)
+        : { nodes: [], edges: [] },
+    [filteredGraph, visible, mode, boardColumns],
   )
 
   // In live mode tasks/columns are intrinsic; the flow/skill/MCP layers stay
@@ -105,6 +146,9 @@ export function NetworkPanel({ onError }: Props) {
       : NODE_LAYERS.filter((l) => l.type !== 'run') // 'run' is a live-only archive layer
 
   const isEmpty = graph && graph.nodes.length === 0
+  // Graph has content but the active filter matched nothing — distinct from the
+  // truly-empty workspace so we can hint that clearing the filter helps.
+  const filteredEmpty = !isEmpty && graph && filteredGraph && filteredGraph.nodes.length === 0
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -130,93 +174,60 @@ export function NetworkPanel({ onError }: Props) {
         </button>
       </header>
 
-      {/* Toolbar row 1: layout toggle + legend */}
-      <div className="flex flex-wrap items-center gap-3 border-b border-[var(--color-border)] px-4 py-2 text-xs">
-        <div className="ml-auto flex items-center gap-3">
-          {mode === 'relation' &&
-            EDGE_LEGEND.map((l) => (
-              <span key={l.kind} className="flex items-center gap-1 text-[var(--color-text-dim)]">
-                <span className="inline-block h-0.5 w-4 rounded" style={{ background: l.color }} />
-                {l.label}
-              </span>
-            ))}
-          {mode === 'live' && (
-            <span className="flex items-center gap-1 text-[var(--color-accent)]">
-              <Radio size={12} className="animate-pulse" /> canlı — olaylarda kendiliğinden
-              güncellenir
-            </span>
-          )}
-          {/* Mode toggle: relationship web vs live board-column flow. */}
-          <div className="flex gap-0.5 rounded-md bg-[var(--color-surface-2)] p-0.5">
-            <button
-              onClick={() => setMode('relation')}
-              className={`flex items-center gap-1 rounded px-2 py-0.5 transition ${
-                mode === 'relation'
-                  ? 'bg-[var(--color-accent)] text-white'
-                  : 'text-[var(--color-text-dim)]'
-              }`}
-              title="İlişki ağı (tüm bağlar)"
-            >
-              <Share2 size={13} /> İlişki
-            </button>
-            <button
-              onClick={() => setMode('live')}
-              className={`flex items-center gap-1 rounded px-2 py-0.5 transition ${
-                mode === 'live'
-                  ? 'bg-[var(--color-accent)] text-white'
-                  : 'text-[var(--color-text-dim)]'
-              }`}
-              title="Canlı boards (görevler durum sütunlarında, ajan aktif göreve bağlanır)"
-            >
-              <Radio size={13} /> Canlı
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Toolbar row 2: layer chips + density slider */}
-      <div className="flex flex-wrap items-center gap-3 border-b border-[var(--color-border)] px-4 py-1.5 text-xs">
-        <span className="text-[var(--color-text-dim)]">
-          {mode === 'live' ? 'boards · katmanlar:' : 'Katmanlar:'}
-        </span>
-        {layers.map((l) => {
-          const on = visible.has(l.type)
-          return (
-            <button
-              key={l.type}
-              onClick={() => toggleLayer(l.type)}
-              className={`flex items-center gap-1 rounded-full border px-2 py-0.5 transition ${
-                on
-                  ? 'border-transparent text-white'
-                  : 'border-[var(--color-border)] text-[var(--color-text-dim)] opacity-60'
-              }`}
-              style={on ? { background: l.color } : undefined}
-            >
-              <span
-                className="inline-block h-2 w-2 rounded-full"
-                style={{ background: on ? '#fff' : l.color }}
-              />
-              {l.label}
-            </button>
-          )
-        })}
-        <label
-          className="ml-auto flex items-center gap-2 text-[var(--color-text-dim)]"
-          title="Düğümlerin sıkışıklığı"
+      {/* Toolbar: one merged row — board-style facet filters (search /
+          agent / kind / status / tag / archive) PLUS the node-type layer chips
+          and the density slider, passed in as children. */}
+      {graph && filteredGraph && (
+        <NetworkFilters
+          filter={filter}
+          onChange={setFilter}
+          onClear={() => setFilter(emptyNetworkFilter())}
+          graph={graph}
+          visibleCount={filteredGraph.nodes.length}
+          boardColumns={boardColumns}
         >
-          Yoğunluk
-          <input
-            type="range"
-            min={0.4}
-            max={2}
-            step={0.1}
-            value={density}
-            onChange={(e) => setDensity(parseFloat(e.target.value))}
-            className="w-32 accent-[var(--color-accent)]"
-          />
-          <span className="w-7 tabular-nums">{density.toFixed(1)}×</span>
-        </label>
-      </div>
+          <span className="text-[var(--color-text-dim)]">
+            {mode === 'live' ? 'katmanlar:' : 'Katmanlar:'}
+          </span>
+          {layers.map((l) => {
+            const on = visible.has(l.type)
+            return (
+              <button
+                key={l.type}
+                onClick={() => toggleLayer(l.type)}
+                className={`flex items-center gap-1 rounded-full border px-2 py-0.5 transition ${
+                  on
+                    ? 'border-transparent text-white'
+                    : 'border-[var(--color-border)] text-[var(--color-text-dim)] opacity-60'
+                }`}
+                style={on ? { background: l.color } : undefined}
+              >
+                <span
+                  className="inline-block h-2 w-2 rounded-full"
+                  style={{ background: on ? '#fff' : l.color }}
+                />
+                {l.label}
+              </button>
+            )
+          })}
+          <label
+            className="flex items-center gap-2 text-[var(--color-text-dim)]"
+            title="Düğümlerin sıkışıklığı"
+          >
+            Yoğunluk
+            <input
+              type="range"
+              min={0.4}
+              max={2}
+              step={0.1}
+              value={density}
+              onChange={(e) => setDensity(parseFloat(e.target.value))}
+              className="w-24 accent-[var(--color-accent)]"
+            />
+            <span className="w-7 tabular-nums">{density.toFixed(1)}×</span>
+          </label>
+        </NetworkFilters>
+      )}
 
       <div className="relative min-h-0 flex-1 bg-[var(--color-bg)]">
         {isEmpty ? (
@@ -224,12 +235,23 @@ export function NetworkPanel({ onError }: Props) {
             Henüz görselleştirilecek bir şey yok. Görev veya akış ekledikçe ağ burada belirir;
             ajanlar yalnızca çalışırken (sohbet, görev, akış, otomasyon, spawn) görünür.
           </div>
+        ) : filteredEmpty ? (
+          <div className="flex h-full flex-col items-center justify-center gap-2 px-6 text-center text-sm text-[var(--color-text-dim)]">
+            Filtreye uyan düğüm yok.
+            <button
+              onClick={() => setFilter(emptyNetworkFilter())}
+              className="rounded border border-[var(--color-accent)] bg-[var(--color-accent-soft)] px-2 py-1 text-xs text-[var(--color-accent)]"
+            >
+              Filtreleri temizle
+            </button>
+          </div>
         ) : (
           <VisNetworkGraph
             nodes={nodes}
             edges={edges}
             mode={mode}
             density={density}
+            onSelect={handleSelect}
             lite={isMobile}
           />
         )}

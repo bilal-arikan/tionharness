@@ -21,6 +21,7 @@ import { api } from '@/api'
 import type { AppSettings, ProviderTestResult, Secret } from '@/types'
 import type { CustomProvider, UpsertProviderInput, PriceTable } from '@/api/providers'
 import { useCatalog, resolveRuntimeBadge } from '@/shared/lib/catalog'
+import { modelDisplayName } from '@/shared/lib/modelLabel'
 import { inputCls, type AppSet } from './primitives'
 import { ClaudeAuthDialog } from './ClaudeAuthDialog'
 
@@ -52,7 +53,8 @@ function testBadge(test: Props['test'], provider: string) {
   if (r.ok)
     return (
       <span className="text-xs text-[var(--color-success)]">
-        ✓ bağlandı{r.model ? ` (${r.model})` : ''}
+        ✓ bağlandı
+        {r.model ? <span title={r.model}> ({modelDisplayName(r.model)})</span> : ''}
       </span>
     )
   return <span className="text-xs text-[var(--color-danger)]">✗ {r.error}</span>

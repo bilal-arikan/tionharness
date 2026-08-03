@@ -144,8 +144,12 @@ Yeni bağımlılıklar: `react-markdown`, `remark-gfm`, `highlight.js`.
 - `DiffView.tsx` — unified diff'i satır bazlı +/- renkli ve `+N / −M` istatistik
   başlığıyla çizer (`lib/diff.ts` ayrıştırır).
 - `MermaidDiagram.tsx` — ```` ```mermaid ```` blokunu **tema-duyarlı SVG**'ye
-  çevirir. `mermaid@^11` **dinamik `import()`** ile lazy yüklenir (`vite.config.ts`
-  `vendor-mermaid` chunk'ı → ana bundle'a binmez). Tema base'i `<html data-theme>`'ten
+  çevirir. `mermaid@^11` **dinamik `import()`** ile lazy yüklenir; chunk bölmesini
+  bundler'ın kendisi yapar (elle `manualChunks` grubu **verilmez** — verildiğinde
+  paylaşılan preload helper'ı o dev chunk'ın içine düşüp mermaid'i entry'nin statik
+  bağımlılığı hâline getiriyor ve lazy yüklemeyi iptal ediyordu). Sonuç: mermaid
+  diyagram tipi başına ayrı chunk'a bölünür, ilk açılışta hiçbiri inmez.
+  Tema base'i `<html data-theme>`'ten
   seçilir, renkler CSS değişkenlerinden türetilir, `MutationObserver` tema değişiminde
   yeniden çizer. **Akış-dayanıklı:** 120ms debounce + hatada ham kaynağa düşer →
   yarım kalan diyagram patlatmaz. Toolbar: Source/Diagram, Expand (tam-ekran), Copy.
@@ -303,7 +307,26 @@ kırpıldı:
   çalışıyor — sonuçları bekleniyor · M/T bitti" + her worker için oturumunu açan çip.
   Koordinatör turu bitip ilk `<task-notification>` düşene kadar sohbetin bitmiş
   görünmesini engeller. Her çipte **canlı geçen süre** (`WorkerInfo.startedAt` + 1sn
-  tick; start zamanı bilinmiyorsa süre gizlenir). Veri `useRunningWorkers.ts`
+  tick; start zamanı bilinmiyorsa süre gizlenir).
+- **Composer üstü yüzen kartlar (2026-08-01):** composer'ın üstündeki **yedi** panel
+  (`TodoPanel`, `PendingTray`, `WorkerWaitBanner`, `WakeWaitBanner`, `AskPrompt`,
+  `PermissionPrompt`, `PlanPrompt`) geometriyi **tek sarmalayıcıdan** alır:
+  `ComposerCard.tsx` — şeffaf kapsayıcı (`-mb-2 px-3 pt-2 md:px-6`) + `rounded-2xl
+  rounded-b-lg` + `shadow-xl`; opak gri şerit yok, kartlar transkriptin üstünde yüzer ve
+  composer balonuna yaslanır. Çağıran yalnız `tone` (renk) + `className` (kendi iç
+  boşluğu/düzeni) verir. Ayırt edici olan **arka plan tonu** (hepsi `--color-surface`
+  üzerine `color-mix`, tema-nötr; sınıf metinleri Tailwind tarayıcısı görsün diye
+  `TONE` haritasında tam literal):
+
+  | Panel | `tone` | Ton |
+  |---|---|---|
+  | `TodoPanel` | `plain` | düz `--color-surface` |
+  | `PendingTray` | `muted` | `--color-text-dim` %10 |
+  | `WorkerWaitBanner` | `worker` | `--color-accent-soft` |
+  | `AskPrompt` | `ask` | `--color-accent` %8 |
+  | `WakeWaitBanner` | `wake` | `--color-warning` %12 (ikon/başlık da warning) |
+  | `PermissionPrompt` | `permission` | `--color-warning` %18 (onay kapısı daha acil okunsun) |
+  | `PlanPrompt` | `plan` | `--color-success` %10 | Veri `useRunningWorkers.ts`
   (`GET /api/sessions/{id}/workers`, yalnız `role==='coordinator'`) — **poll yok**,
   tazeleme `worker` SSE event'i ile: `useAppEvents` → `shared/lib/workerBus.ts`
   (coordinatorId anahtarlı pub/sub) → hook. Feed koparsa `api.subscribeReconnect`

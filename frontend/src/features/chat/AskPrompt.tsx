@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { MessageCircleQuestion } from 'lucide-react'
 import { Button, ScrollableCard } from '@/shared/components'
+import { ComposerCard } from './ComposerCard'
 
 export interface PendingAsk {
   question: string
@@ -53,7 +54,7 @@ function SingleAskPrompt({ ask, onAnswer }: Props) {
   }
 
   return (
-    <div className="mx-3 mb-2 rounded-lg border border-[var(--color-accent)] bg-[var(--color-surface)] px-3 py-2.5">
+    <ComposerCard tone="ask" className="px-3 py-2.5">
       <ScrollableCard>
         <div className="mb-2 flex items-start gap-2 text-sm text-[var(--color-text)]">
           <MessageCircleQuestion size={16} className="mt-0.5 shrink-0 text-[var(--color-accent)]" />
@@ -93,7 +94,7 @@ function SingleAskPrompt({ ask, onAnswer }: Props) {
           Gönder
         </Button>
       </form>
-    </div>
+    </ComposerCard>
   )
 }
 
@@ -109,7 +110,8 @@ function MultiAskPrompt({
   onAnswer: (text: string) => void
 }) {
   const [answers, setAnswers] = useState<string[]>(() => questions.map(() => ''))
-  const setAt = (i: number, v: string) => setAnswers((prev) => prev.map((a, j) => (j === i ? v : a)))
+  const setAt = (i: number, v: string) =>
+    setAnswers((prev) => prev.map((a, j) => (j === i ? v : a)))
   const allAnswered = answers.every((a) => a.trim().length > 0)
 
   const submit = () => {
@@ -118,7 +120,7 @@ function MultiAskPrompt({
   }
 
   return (
-    <div className="mx-3 mb-2 rounded-lg border border-[var(--color-accent)] bg-[var(--color-surface)] px-3 py-2.5">
+    <ComposerCard tone="ask" className="px-3 py-2.5">
       <div className="mb-2 flex items-center gap-2 text-sm font-medium text-[var(--color-text)]">
         <MessageCircleQuestion size={16} className="shrink-0 text-[var(--color-accent)]" />
         <span>Birkaç soru ({questions.length})</span>
@@ -132,39 +134,44 @@ function MultiAskPrompt({
         className="flex flex-col gap-3"
       >
         <ScrollableCard className="flex flex-col gap-3 pr-1">
-        {questions.map((q, i) => (
-          <div key={i} className="flex flex-col gap-1.5 border-t border-[var(--color-border)] pt-2 first:border-t-0 first:pt-0">
-            <div className="flex items-start gap-2 text-sm text-[var(--color-text)]">
-              <span className="mt-0.5 shrink-0 tabular-nums text-[var(--color-accent)]">{i + 1}.</span>
-              <span className="min-w-0 flex-1">{q.question}</span>
-            </div>
-            {!!q.options?.length && (
-              <div className="flex flex-wrap gap-1.5 pl-6">
-                {q.options.map((opt, oi) => (
-                  <button
-                    key={oi}
-                    type="button"
-                    onClick={() => setAt(i, opt)}
-                    className={`rounded-full border px-3 py-1 text-xs text-[var(--color-text)] hover:border-[var(--color-accent)] hover:bg-[var(--color-surface-2)] ${
-                      answers[i] === opt
-                        ? 'border-[var(--color-accent)] bg-[var(--color-surface-2)]'
-                        : 'border-[var(--color-border)] bg-[var(--color-bg)]'
-                    }`}
-                  >
-                    {opt}
-                  </button>
-                ))}
+          {questions.map((q, i) => (
+            <div
+              key={i}
+              className="flex flex-col gap-1.5 border-t border-[var(--color-border)] pt-2 first:border-t-0 first:pt-0"
+            >
+              <div className="flex items-start gap-2 text-sm text-[var(--color-text)]">
+                <span className="mt-0.5 shrink-0 tabular-nums text-[var(--color-accent)]">
+                  {i + 1}.
+                </span>
+                <span className="min-w-0 flex-1">{q.question}</span>
               </div>
-            )}
-            <input
-              autoFocus={i === 0}
-              value={answers[i]}
-              onChange={(e) => setAt(i, e.target.value)}
-              placeholder="Yanıtını yaz…"
-              className="ml-6 min-w-0 rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-2.5 py-1.5 text-sm text-[var(--color-text)] outline-none focus:border-[var(--color-accent)]"
-            />
-          </div>
-        ))}
+              {!!q.options?.length && (
+                <div className="flex flex-wrap gap-1.5 pl-6">
+                  {q.options.map((opt, oi) => (
+                    <button
+                      key={oi}
+                      type="button"
+                      onClick={() => setAt(i, opt)}
+                      className={`rounded-full border px-3 py-1 text-xs text-[var(--color-text)] hover:border-[var(--color-accent)] hover:bg-[var(--color-surface-2)] ${
+                        answers[i] === opt
+                          ? 'border-[var(--color-accent)] bg-[var(--color-surface-2)]'
+                          : 'border-[var(--color-border)] bg-[var(--color-bg)]'
+                      }`}
+                    >
+                      {opt}
+                    </button>
+                  ))}
+                </div>
+              )}
+              <input
+                autoFocus={i === 0}
+                value={answers[i]}
+                onChange={(e) => setAt(i, e.target.value)}
+                placeholder="Yanıtını yaz…"
+                className="ml-6 min-w-0 rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-2.5 py-1.5 text-sm text-[var(--color-text)] outline-none focus:border-[var(--color-accent)]"
+              />
+            </div>
+          ))}
         </ScrollableCard>
 
         <div className="flex justify-end">
@@ -173,6 +180,6 @@ function MultiAskPrompt({
           </Button>
         </div>
       </form>
-    </div>
+    </ComposerCard>
   )
 }

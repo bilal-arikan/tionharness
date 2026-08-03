@@ -6,6 +6,7 @@
 import { useEffect, useState } from 'react'
 import { AlarmClock, X } from 'lucide-react'
 import { serverNow } from '@/shared/lib/serverClock'
+import { ComposerCard } from './ComposerCard'
 
 interface Props {
   // The agent's stated reason for waiting (may be empty).
@@ -39,23 +40,21 @@ export function WakeWaitBanner({ reason, fireAt, onCancel }: Props) {
 
   const left = remainingLabel(fireAt, now)
   return (
-    <div className="border-t border-[var(--color-border)] bg-[var(--color-surface)] px-6 pt-3">
-      <div className="flex items-center gap-2 rounded-lg border border-[color-mix(in_srgb,var(--color-accent)_35%,var(--color-border))] bg-[var(--color-accent-soft)] px-3 py-2 text-sm">
-        <AlarmClock size={15} className="shrink-0 animate-pulse text-[var(--color-accent)]" />
-        <span className="min-w-0 flex-1 truncate text-[var(--color-text)]">
-          <span className="font-medium text-[var(--color-accent)]">Otomatik devam bekleniyor</span>
-          {left && <span className="text-[var(--color-text-dim)]"> · {left}</span>}
-          {reason && <span className="text-[var(--color-text-dim)]"> — {reason}</span>}
-        </span>
-        <button
-          onClick={onCancel}
-          title="Otomatik uyandırmayı durdur"
-          className="inline-flex shrink-0 items-center gap-1 rounded-md border border-[var(--color-border)] bg-[var(--color-surface-2)] px-2 py-1 text-xs font-medium text-[var(--color-text)] transition hover:border-[var(--color-danger)] hover:text-[var(--color-danger)]"
-        >
-          <X size={13} />
-          Durdur
-        </button>
-      </div>
-    </div>
+    <ComposerCard tone="wake" className="flex items-center gap-2 px-3 py-2 text-sm">
+      <AlarmClock size={15} className="shrink-0 animate-pulse text-[var(--color-warning)]" />
+      <span className="min-w-0 flex-1 truncate text-[var(--color-text)]">
+        <span className="font-medium text-[var(--color-warning)]">Otomatik devam bekleniyor</span>
+        {left && <span className="text-[var(--color-text-dim)]"> · {left}</span>}
+        {reason && <span className="text-[var(--color-text-dim)]"> — {reason}</span>}
+      </span>
+      <button
+        onClick={onCancel}
+        title="Otomatik uyandırmayı durdur"
+        className="inline-flex shrink-0 items-center gap-1 rounded-md border border-[var(--color-border)] bg-[var(--color-surface-2)] px-2 py-1 text-xs font-medium text-[var(--color-text)] transition hover:border-[var(--color-danger)] hover:text-[var(--color-danger)]"
+      >
+        <X size={13} />
+        Durdur
+      </button>
+    </ComposerCard>
   )
 }

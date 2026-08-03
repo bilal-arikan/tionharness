@@ -1,4 +1,4 @@
-﻿package agent
+package agent
 
 import (
 	"context"
@@ -226,14 +226,18 @@ func (s *Scheduler) deliverWake(ctx context.Context, sc db.Schedule) error {
 	// show a thinking indicator (phase=start). Origin "wake" makes the UI render it
 	// as a "⏰ Otomatik devam" note, not a user bubble — the agent resumed itself,
 	// the user did not re-ask. Role stays "user" so the model's context is unchanged.
-	if _, err := s.db.AddMessage(ctx, db.Message{
+	wakeMsg, err := s.db.AddMessage(ctx, db.Message{
 		SessionID: sc.SessionID,
 		Role:      "user",
 		Origin:    "wake",
 		Text:      sc.Prompt,
-	}); err != nil {
+	})
+	if err != nil {
 		return err
 	}
+	// Bridge it to the hub so a window watching this session renders the wake note
+	// live and in order before the reply (_Docs/58), not only on reload.
+	s.rt.emitInjectedUserNote(sc.SessionID, wakeMsg)
 	s.emitWakeEvent(sc, "start", "⏰ Otomatik uyandırma çalışıyor")
 
 	// A wake re-enters a real, human-visible chat session: mark the turn as an
@@ -442,14 +446,18 @@ func (s *Scheduler) deliverPrompt(ctx context.Context, sc db.Schedule) (string, 
 	// Record the scheduled prompt as a user turn first, so the schedule thread
 	// reads as a real conversation (the UI shows what was asked). Origin "schedule"
 	// renders it as a "⏰ Zamanlanmış görev" note rather than a user bubble.
-	if _, err := s.db.AddMessage(ctx, db.Message{
+	schedMsg, err := s.db.AddMessage(ctx, db.Message{
 		SessionID: session.ID,
 		Role:      "user",
 		Origin:    "schedule",
 		Text:      sc.Prompt,
-	}); err != nil {
+	})
+	if err != nil {
 		return session.ID, err
 	}
+	// Bridge it to the hub so a window watching this session renders the scheduled
+	// prompt live and in order before the reply (_Docs/58), not only on reload.
+	s.rt.emitInjectedUserNote(session.ID, schedMsg)
 	s.rt.trackSession(session.ID)
 	// Bound the scheduled turn with the spawn watchdog: it holds the per-session turn
 	// slot, so a hung turn must not block the session's queue forever (the slot's Cond

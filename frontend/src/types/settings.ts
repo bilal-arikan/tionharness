@@ -134,6 +134,12 @@ export interface AppSettings {
   // stalled branch keeps its coordinator waiting.
   coordinatorSettleGraceSec: number
 
+  // Coordinator stall/hallucination protection: judge-based turn-end guard +
+  // staleness sweeper that catch a coordinator narrating a spawn it never issued.
+  coordinatorStallGuard: boolean // master on/off (default true)
+  coordinatorStallSweepMin: number // staleness sweeper window in minutes (0 = default 5; -1 disables the sweeper)
+  coordinatorStallMaxNudges: number // max consecutive corrective nudges (0 = default 2)
+
   // Working-directory guards for the (unconfined) fs/shell tools.
   autonomousConfine: boolean
   // Inject the boot/verification-sequence reminder on autonomous turns.
@@ -216,6 +222,10 @@ export interface CatalogModel {
   // Approximate context window in tokens (0/undefined = unknown). Filled by the
   // backend catalog from the model-family table.
   contextWindow?: number
+  // The concrete model id this (possibly alias) id was last OBSERVED to mean —
+  // "opus" → "claude-opus-5". Absent until a completed turn revealed it, and
+  // absent for providers whose ids are already concrete.
+  resolvedModel?: string
 }
 
 export interface CatalogEntry {
@@ -250,12 +260,13 @@ export interface VersionInfo {
 //   'setting' → wired by a workspace setting rather than a hook (rtk)
 //   'mcp'     → wired via Settings ▸ MCP (info badge)
 //   'cli'     → agent calls it directly via Bash (info badge)
+//   'provider'→ runs an LLM provider, configured in Settings ▸ Providers (info badge)
 export interface ExternalToolStatus {
   name: string
   desc: string
   url: string
   category: string
-  wire: 'hook' | 'setting' | 'mcp' | 'cli'
+  wire: 'hook' | 'setting' | 'mcp' | 'cli' | 'provider'
   found: boolean
   path?: string
   /** Installed version, normalised to `major.minor.patch`. */

@@ -32,6 +32,10 @@ type agentBudgetRow struct {
 	CostUSD      float64             `json:"costUSD"`
 	Priced       bool                `json:"priced"`    // false when any of this agent's spend is unpriced (e.g. claude-cli)
 	Estimated    bool                `json:"estimated"` // true when cost is an equivalent-API estimate (subscription provider)
+	// CoolingWasteUSD is this agent's avoidable prompt-cache cooling overpay today
+	// (warm prefixes that went cold before the next turn). Informational — already
+	// inside CostUSD as re-written cache tokens; isolated here as the savable part.
+	CoolingWasteUSD float64 `json:"coolingWasteUsd,omitempty"`
 }
 
 // tokenTotals is the shared token-counter block carried by every spend slice
@@ -105,6 +109,9 @@ type dayPoint struct {
 	// NoCacheCostUSD (per day) feeds only the window-cumulative "cost without caching"
 	// baseline; it is not part of the per-day trend wire shape (json:"-").
 	NoCacheCostUSD float64 `json:"-"`
+	// CoolingWasteUSD is the day's avoidable cache-cooling overpay (plotted on the
+	// trend so the caching-ROI view shows waste over time).
+	CoolingWasteUSD float64 `json:"coolingWasteUsd,omitempty"`
 }
 
 // handleWorkspaceUsage returns the data behind the Budget screen: today's
@@ -136,6 +143,8 @@ func (s *Server) handleWorkspaceUsage(w http.ResponseWriter, r *http.Request) {
 	byModel := map[string]map[string]*modelStat{}
 	var totalCost, totalSavings float64
 	var totalCacheRead, totalCacheWrite int
+	var totalCoolingWaste float64
+	totalCoolingEstimated := false
 	totalPriced := true
 	totalEstimated := false
 	rows := make([]agentBudgetRow, 0, len(agents))
@@ -147,17 +156,18 @@ func (s *Server) handleWorkspaceUsage(w http.ResponseWriter, r *http.Request) {
 		}
 		roll := billing.RollupOf(u.ByModel)
 		row := agentBudgetRow{
-			AgentID:      a.ID,
-			Name:         a.Name,
-			Avatar:       a.Avatar,
-			Color:        a.Color,
-			Provider:     a.Provider,
-			Calls:        u.Calls,
-			InputTokens:  u.InputTokens,
-			OutputTokens: u.OutputTokens,
-			CostUSD:      roll.CostUSD,
-			Priced:       roll.Priced,
-			Estimated:    roll.Estimated,
+			AgentID:         a.ID,
+			Name:            a.Name,
+			Avatar:          a.Avatar,
+			Color:           a.Color,
+			Provider:        a.Provider,
+			Calls:           u.Calls,
+			InputTokens:     u.InputTokens,
+			OutputTokens:    u.OutputTokens,
+			CostUSD:         roll.CostUSD,
+			Priced:          roll.Priced,
+			Estimated:       roll.Estimated,
+			CoolingWasteUSD: u.CoolingWasteUSD,
 		}
 		if len(u.ByKind) > 0 {
 			row.ByKind = map[string]kindStat{}
@@ -227,6 +237,10 @@ func (s *Server) handleWorkspaceUsage(w http.ResponseWriter, r *http.Request) {
 		totals.InputTokens += u.InputTokens
 		totals.OutputTokens += u.OutputTokens
 		totalCost += roll.CostUSD
+		totalCoolingWaste += u.CoolingWasteUSD
+		if u.CoolingWasteEstimated {
+			totalCoolingEstimated = true
+		}
 		if !roll.Priced {
 			totalPriced = false
 		}
@@ -288,6 +302,7 @@ func (s *Server) handleWorkspaceUsage(w http.ResponseWriter, r *http.Request) {
 		p.NoCacheCostUSD += day.NoCacheCostUSD
 		p.CacheReadTokens += day.CacheReadTokens
 		p.CacheWriteTokens += day.CacheWriteTokens
+		p.CoolingWasteUSD += u.CoolingWasteUSD
 	}
 	trend := make([]dayPoint, 0, len(perDay))
 	for _, p := range perDay {
@@ -302,7 +317,7 @@ func (s *Server) handleWorkspaceUsage(w http.ResponseWriter, r *http.Request) {
 	// cacheWrite). It is the single ROI signal — higher means the static prefix
 	// is being reused instead of re-paid.
 	var cumCalls, cumIn, cumOut, cumCacheRead, cumCacheWrite int
-	var cumCost, cumSavings, cumNoCache float64
+	var cumCost, cumSavings, cumNoCache, cumCoolingWaste float64
 	for _, p := range trend {
 		cumCalls += p.Calls
 		cumIn += p.InputTokens
@@ -312,6 +327,7 @@ func (s *Server) handleWorkspaceUsage(w http.ResponseWriter, r *http.Request) {
 		cumCost += p.CostUSD
 		cumSavings += p.SavingsUSD
 		cumNoCache += p.NoCacheCostUSD
+		cumCoolingWaste += p.CoolingWasteUSD
 	}
 	var cacheHitRate float64
 	if denom := cumCacheRead + cumIn + cumCacheWrite; denom > 0 {
@@ -331,6 +347,10 @@ func (s *Server) handleWorkspaceUsage(w http.ResponseWriter, r *http.Request) {
 			"savingsUSD":       totalSavings,   // saved by prompt-cache reads vs full input price
 			"priced":           totalPriced,    // false when some spend is unpriced (subscription/custom)
 			"estimated":        totalEstimated, // true when cost includes equivalent-API estimates (e.g. claude-cli)
+			// coolingWasteUSD: today's avoidable overpay from warm prefixes that cooled
+			// (TTL/eviction) before the next turn — informational, already inside costUSD.
+			"coolingWasteUSD":       totalCoolingWaste,
+			"coolingWasteEstimated": totalCoolingEstimated,
 		},
 		"byProvider": providerRows,
 		"agents":     rows,
@@ -346,6 +366,10 @@ func (s *Server) handleWorkspaceUsage(w http.ResponseWriter, r *http.Request) {
 			"savingsUSD":       cumSavings,   // total saved by prompt-cache reads over the window
 			"noCacheCostUSD":   cumNoCache,   // counterfactual: what the window would cost with NO caching (cache read/write as fresh input)
 			"cacheHitRate":     cacheHitRate, // cacheRead / (cacheRead + input + cacheWrite)
+			// coolingWasteUSD: avoidable cache-cooling overpay across the window (isolated
+			// from cost — the part a timely reply would have saved).
+			"coolingWasteUSD":       cumCoolingWaste,
+			"coolingWasteEstimated": totalCoolingEstimated,
 		},
 	})
 }

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { api } from '@/api'
-import type { WorkspaceTemplate } from '@/types'
+import type { GitInfo, WorkspaceTemplate } from '@/types'
 import { EmojiField } from '@/shared/components/EmojiField'
 import { Button, ModalOverlay } from '@/shared/components'
 
@@ -11,6 +11,8 @@ export interface NewWorkspaceData {
   projectDir?: string
   icon?: string
   template?: string
+  // Run `git init` in projectDir right after creation (see the checkbox below).
+  gitInit?: boolean
 }
 
 interface Props {
@@ -32,11 +34,41 @@ export function WorkspaceCreateModal({ onCreate, onClose }: Props) {
   // Empty until templates load; the load effect auto-selects the blank default so
   // a valid market template id is always submitted.
   const [templateId, setTemplateId] = useState('')
+  // Optional `git init` in the project dir, plus the probed git state of that dir
+  // (null while unknown/unprobed) that decides whether the option is offerable.
+  const [gitInit, setGitInit] = useState(false)
+  const [git, setGit] = useState<GitInfo | null>(null)
   const nameRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     nameRef.current?.focus()
   }, [])
+
+  // Probe the typed/picked project dir: is git installed on this machine, does the
+  // folder exist, is it already a repo? Debounced because it runs on every
+  // keystroke of a manually typed path.
+  useEffect(() => {
+    const dir = projectDir.trim()
+    if (!dir) {
+      setGit(null)
+      return
+    }
+    let alive = true
+    const t = setTimeout(() => {
+      api
+        .gitInfo(dir)
+        .then((g) => alive && setGit(g))
+        .catch(() => alive && setGit(null)) // probe failure just hides the hint
+    }, 350)
+    return () => {
+      alive = false
+      clearTimeout(t)
+    }
+  }, [projectDir])
+
+  // git init is only meaningful with a path, with git installed, and when the
+  // folder is not already versioned.
+  const gitAvailable = !!projectDir.trim() && git?.gitInstalled === true && !git.isGitRepo
 
   // Load the available templates (market workspace-kind packs) for the picker.
   useEffect(() => {
@@ -85,7 +117,15 @@ export function WorkspaceCreateModal({ onCreate, onClose }: Props) {
       // state until the parent dismisses the modal on success. On failure the
       // creation path surfaces the error itself; we release busy so the user can
       // retry without a stuck spinner.
-      await onCreate({ name: name.trim(), projectDir: projectDir.trim() || undefined, icon, template: templateId })
+      await onCreate({
+        name: name.trim(),
+        projectDir: projectDir.trim() || undefined,
+        icon,
+        template: templateId,
+        // Only send it when the option is actually offerable, so a stale checkbox
+        // (ticked, then the path changed to an existing repo) cannot leak through.
+        gitInit: gitInit && gitAvailable,
+      })
     } catch (e) {
       setError('Workspace oluşturulamadı: ' + (e as Error).message)
     } finally {
@@ -155,9 +195,10 @@ export function WorkspaceCreateModal({ onCreate, onClose }: Props) {
         {/* Project directory (session cwd) — optional. The data dir always uses the
             app default location and is no longer user-selectable. */}
         <label className="mb-1 block text-xs text-[var(--color-text-dim)]">
-          Proje dizini (path) <span className="opacity-60">(opsiyonel — oturumların çalışma dizini)</span>
+          Proje dizini (path){' '}
+          <span className="opacity-60">(opsiyonel — oturumların çalışma dizini)</span>
         </label>
-        <div className="mb-4 flex gap-1">
+        <div className="mb-2 flex gap-1">
           <input
             value={projectDir}
             onChange={(e) => setProjectDir(e.target.value)}
@@ -171,6 +212,38 @@ export function WorkspaceCreateModal({ onCreate, onClose }: Props) {
           >
             {picking ? '…' : 'Gözat'}
           </button>
+        </div>
+
+        {/* git init — offered next to the project dir so a brand-new project folder
+            is under version control from the start. Disabled (with the reason) when
+            there is no path, no git on the machine, or the folder is already a repo. */}
+        <div className="mb-4">
+          <label
+            className={`flex items-center gap-2 text-xs ${
+              gitAvailable ? 'cursor-pointer' : 'cursor-not-allowed opacity-60'
+            }`}
+          >
+            <input
+              type="checkbox"
+              data-testid="workspace-create-git-init"
+              checked={gitInit && gitAvailable}
+              disabled={!gitAvailable}
+              onChange={(e) => setGitInit(e.target.checked)}
+              className="accent-[var(--color-accent)]"
+            />
+            Git deposu başlat (<code>git init</code>, dal: main, <code>.gitignore</code> ile)
+          </label>
+          {projectDir.trim() && git && (
+            <p className="mt-1 text-[11px] text-[var(--color-text-dim)]">
+              {!git.gitInstalled
+                ? 'Bu bilgisayarda git bulunamadı — kurup uygulamayı yeniden başlat.'
+                : git.isGitRepo
+                  ? `Bu klasör zaten bir git deposu${git.branch ? ` (${git.branch})` : ''}.`
+                  : git.exists
+                    ? 'Klasör mevcut, henüz versiyonlanmamış.'
+                    : 'Klasör yok — oluşturma sırasında açılacak.'}
+            </p>
+          )}
         </div>
 
         {error && <p className="mb-3 text-xs text-[var(--color-danger)]">{error}</p>}

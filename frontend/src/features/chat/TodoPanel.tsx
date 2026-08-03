@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { TodoItem } from '@/types'
 import { ScrollableCard } from '@/shared/components'
+import { ComposerCard } from './ComposerCard'
 
 interface Props {
   todos: TodoItem[]
@@ -30,49 +31,43 @@ export function TodoPanel({ todos }: Props) {
   const pct = Math.round((done / todos.length) * 100)
 
   return (
-    // Wrapped in its own bubble (matching the composer's card) that docks onto the
-    // input bubble below. The wrapper is transparent so the card floats over the
-    // transcript on its own shadow (no opaque strip behind it); the negative bottom
-    // margin pulls the bubble down to rest against the composer.
-    <div className="-mb-2 px-3 pt-2 md:px-6">
-      <div className="overflow-hidden rounded-2xl rounded-b-lg border border-[var(--color-border)] bg-[var(--color-surface)] shadow-xl shadow-black/40">
-        <div className="flex w-full items-center gap-2 text-xs">
-          <button
-            onClick={() => setOpen((o) => !o)}
-            className="flex min-w-0 flex-1 items-center gap-2 px-3 py-1.5 text-left hover:bg-[var(--color-surface-2)]"
-          >
-            <span>{allDone ? '✅' : '📋'}</span>
-            <span className="font-medium text-[var(--color-text)]">Görev Listesi</span>
-            {/* Slim progress bar. */}
-            <span className="ml-1 hidden h-1.5 w-24 overflow-hidden rounded-full bg-[var(--color-border)] sm:block">
-              <span
-                className="block h-full bg-[var(--color-accent)] transition-all"
-                style={{ width: `${pct}%` }}
-              />
-            </span>
-            <span className="ml-auto tabular-nums text-[var(--color-text-dim)]">
-              {done}/{todos.length}
-            </span>
-            <span className="shrink-0 opacity-50">{open ? '▾' : '▸'}</span>
-          </button>
-        </div>
-
-        {open && (
-          <ScrollableCard maxH="max-h-[45vh]">
-            <ul className="flex flex-col gap-0.5 border-t border-[var(--color-border)] px-3 py-2 text-xs">
-              {todos.map((t, i) => {
-                const m = MARK[t.status] ?? MARK.pending
-                return (
-                  <li key={i} className={`flex items-start gap-2 ${m.cls}`}>
-                    <span className="shrink-0 leading-5">{m.icon}</span>
-                    <span className="min-w-0 flex-1 leading-5">{t.content}</span>
-                  </li>
-                )
-              })}
-            </ul>
-          </ScrollableCard>
-        )}
+    <ComposerCard tone="plain" className="overflow-hidden">
+      <div className="flex w-full items-center gap-2 text-xs">
+        <button
+          onClick={() => setOpen((o) => !o)}
+          className="flex min-w-0 flex-1 items-center gap-2 px-3 py-1.5 text-left hover:bg-[var(--color-surface-2)]"
+        >
+          <span>{allDone ? '✅' : '📋'}</span>
+          <span className="font-medium text-[var(--color-text)]">Görev Listesi</span>
+          {/* Slim progress bar. */}
+          <span className="ml-1 hidden h-1.5 w-24 overflow-hidden rounded-full bg-[var(--color-border)] sm:block">
+            <span
+              className="block h-full bg-[var(--color-accent)] transition-all"
+              style={{ width: `${pct}%` }}
+            />
+          </span>
+          <span className="ml-auto tabular-nums text-[var(--color-text-dim)]">
+            {done}/{todos.length}
+          </span>
+          <span className="shrink-0 opacity-50">{open ? '▾' : '▸'}</span>
+        </button>
       </div>
-    </div>
+
+      {open && (
+        <ScrollableCard maxH="max-h-[45vh]">
+          <ul className="flex flex-col gap-0.5 border-t border-[var(--color-border)] px-3 py-2 text-xs">
+            {todos.map((t, i) => {
+              const m = MARK[t.status] ?? MARK.pending
+              return (
+                <li key={i} className={`flex items-start gap-2 ${m.cls}`}>
+                  <span className="shrink-0 leading-5">{m.icon}</span>
+                  <span className="min-w-0 flex-1 leading-5">{t.content}</span>
+                </li>
+              )
+            })}
+          </ul>
+        </ScrollableCard>
+      )}
+    </ComposerCard>
   )
 }

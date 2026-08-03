@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import type { Agent } from '@/types'
 import { AgentAvatar } from './AgentAvatar'
-import { useCatalog, resolveModelLabel, resolveRuntimeBadge } from '@/shared/lib/catalog'
+import { useCatalog, resolveModelLabel } from '@/shared/lib/catalog'
 
 // AgentLike is the minimal shape needed to render an agent's identity. id + name
 // are required; the rest are optional so callers can pass a full Agent or a thin
@@ -73,18 +73,12 @@ export function AgentIdentity({
   const s = SIZES[size]
 
   let sub: ReactNode = null
-  // Runtime chip: only meaningful next to a resolved model label (a custom
-  // subtitle is not one), and only claude-cli has one — its "Sonnet" is an alias
-  // whose real answer depends on the local Claude Code version + plan.
-  let runtime = ''
-  let runtimeFull = ''
   if (subtitle === 'model') {
-    if (agent.provider) {
-      sub = resolveModelLabel(catalog, agent.provider, agent.model ?? '')
-      const entry = catalog.find((c) => c.id === agent.provider)
-      runtime = resolveRuntimeBadge(entry, { compact: true })
-      runtimeFull = resolveRuntimeBadge(entry)
-    }
+    // resolveModelLabel already renders the observed version ("Opus 5") rather
+    // than the configured alias ("opus"), so this line names the model that
+    // actually answers. The Claude Code version/plan is a property of the
+    // install, not of the turn — it stays in Providers, off this line.
+    if (agent.provider) sub = resolveModelLabel(catalog, agent.provider, agent.model ?? '')
   } else if (subtitle !== 'none') {
     sub = subtitle
   }
@@ -106,24 +100,13 @@ export function AgentIdentity({
           </span>
         </span>
         {/* Second line: id first (fixed left anchor, never truncated), then the
-            secondary text (model) which absorbs the remaining width, then the
-            runtime chip — also never truncated, since a half-shown version reads
-            as a different version. The model label yields the width instead. */}
-        {(showId || runtime || (sub != null && sub !== '')) && (
+            secondary text (model) which absorbs the remaining width. */}
+        {(showId || (sub != null && sub !== '')) && (
           <span
             className={`flex min-w-0 items-baseline gap-1.5 ${s.sub} text-[var(--color-text-dim)]`}
           >
             {showId && <span className="shrink-0 font-mono opacity-60">{agent.id}</span>}
             {sub != null && sub !== '' && <span className="truncate">{sub}</span>}
-            {runtime && (
-              <span
-                data-testid="agent-runtime-badge"
-                title={runtimeFull}
-                className="shrink-0 rounded bg-[var(--color-surface-2)] px-1 py-px font-medium text-[var(--color-text)]"
-              >
-                {runtime}
-              </span>
-            )}
           </span>
         )}
       </span>

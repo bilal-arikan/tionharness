@@ -35,6 +35,7 @@ export interface BudgetAgentRow {
   costUSD: number
   priced: boolean
   estimated?: boolean // equivalent-API estimate for subscription providers (e.g. claude-cli)
+  coolingWasteUsd?: number // avoidable cache-cooling overpay today (isolated from costUSD)
 }
 
 export interface ProviderStat {
@@ -60,6 +61,7 @@ export interface BudgetTrendPoint {
   cacheWriteTokens: number
   costUSD: number
   savingsUSD: number
+  coolingWasteUsd?: number
 }
 
 // Window-cumulative totals across the selected trend window ("oturumlar arası
@@ -80,6 +82,11 @@ export interface BudgetCumulative {
   // the write premium). Always ≥ costUSD.
   noCacheCostUSD: number
   cacheHitRate: number
+  // coolingWasteUSD is the window's avoidable cache-cooling overpay (warm prefixes
+  // that cooled before the next turn); coolingWasteEstimated true when any figure
+  // is a subscription estimate (e.g. claude-cli). Isolated from cost.
+  coolingWasteUSD?: number
+  coolingWasteEstimated?: boolean
 }
 
 export interface WorkspaceUsage {
@@ -95,6 +102,8 @@ export interface WorkspaceUsage {
     savingsUSD: number
     priced: boolean
     estimated?: boolean // true when cost includes equivalent-API estimates (e.g. claude-cli)
+    coolingWasteUSD?: number
+    coolingWasteEstimated?: boolean
   }
   byProvider: ProviderStat[]
   agents: BudgetAgentRow[]
@@ -151,6 +160,13 @@ export interface SessionDebugSummary {
   // lastCacheBreak is the most recent attributed reason (P4).
   cacheBreaks: number
   lastCacheBreak?: string
+  // coolingBreaks is the subset of cacheBreaks caused by TTL expiry / server
+  // eviction (a late turn let the warm prefix cool); coolingWasteUsd is the summed
+  // avoidable overpay of re-warming them, coolingWasteEstimated true when any
+  // figure is a subscription estimate (e.g. claude-cli).
+  coolingBreaks?: number
+  coolingWasteUsd?: number
+  coolingWasteEstimated?: boolean
   savedBytes: number
   turnDurMs: number
   byTool?: Record<string, SessionDebugToolStat>
@@ -205,6 +221,10 @@ export interface SessionDebugEvent {
   stop?: string
   err?: boolean
   detail?: string
+  // cache_break only: avoidable cooling overpay (TTL/eviction), and whether that
+  // figure is a subscription estimate.
+  wasteUsd?: number
+  wasteEst?: boolean
 }
 
 // One tool execution within a single turn (per-message debug panel row).

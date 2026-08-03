@@ -124,12 +124,7 @@ func (r *Runtime) maybeAutoContinue(ctx context.Context, agent db.Agent, session
 		// (the wake-turn runner reads the prompt from history, not a separate arg) and
 		// the thread reads as a real prompt→reply progression.
 		nudge := r.readPrompt("auto-continue")
-		if _, err := r.db.AddMessage(ctx, db.Message{
-			SessionID: sessionID,
-			Role:      "user",
-			Origin:    "auto-continue",
-			Text:      nudge,
-		}); err != nil {
+		if _, err := r.recordInjectedUserNote(ctx, sessionID, "auto-continue", nudge); err != nil {
 			r.logger.Warn("auto-continue: failed to record nudge", "session", sessionID, "error", err)
 			return
 		}

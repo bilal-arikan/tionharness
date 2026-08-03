@@ -42,6 +42,40 @@ func TestCostDetailed_CacheTiers(t *testing.T) {
 	}
 }
 
+// TestCoolingWaste verifies the avoidable-overpay figure for a cold re-write:
+// the write-tier price minus the read tier a timely turn would have paid.
+func TestCoolingWaste(t *testing.T) {
+	p, ok := PriceFor("anthropic", "claude-opus-4-8") // $5/Mtok in, 1h write 2×, read 0.10×
+	if !ok {
+		t.Fatal("opus price missing")
+	}
+	// 1M re-written prefix: paid 2× ($10), would have read at 0.10× ($0.50) warm.
+	// Avoidable waste = 5 * (2.0 - 0.10) = $9.50 per 1M.
+	if got := p.CoolingWasteUSD(1_000_000); !approx(got, 9.5) {
+		t.Errorf("cooling waste = %v, want 9.5", got)
+	}
+	if got := p.CoolingWasteUSD(0); got != 0 {
+		t.Errorf("zero tokens should waste nothing, got %v", got)
+	}
+
+	// Resolver: real list price → not estimated.
+	usd, est, ok := CoolingWaste("anthropic", "claude-opus-4-8", 1_000_000)
+	if !ok || est || !approx(usd, 9.5) {
+		t.Errorf("CoolingWaste(anthropic) = %v est=%v ok=%v, want 9.5/false/true", usd, est, ok)
+	}
+	// claude-cli is a subscription → estimate via the Anthropic list price, but the
+	// write premium falls back to the 5-minute 1.25× tier (Claude Code's own TTL),
+	// so waste = 5 * (1.25 - 0.10) = $5.75 per 1M, flagged estimated.
+	usd, est, ok = CoolingWaste("claude-cli", "claude-opus-4-8", 1_000_000)
+	if !ok || !est || !approx(usd, 5.75) {
+		t.Errorf("CoolingWaste(claude-cli) = %v est=%v ok=%v, want 5.75/true/true", usd, est, ok)
+	}
+	// Unpriced/custom endpoint → no figure.
+	if _, _, ok := CoolingWaste("custom", "whatever", 1_000_000); ok {
+		t.Error("unpriced provider should report ok=false")
+	}
+}
+
 // TestCacheMultOverride verifies a per-model cache multiplier overrides the
 // package default (OpenRouter's general 0.25× read tier vs Anthropic's 0.10×).
 func TestCacheMultOverride(t *testing.T) {

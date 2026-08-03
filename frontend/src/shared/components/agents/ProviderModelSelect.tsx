@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useCatalog, resolveRuntimeBadge } from '@/shared/lib/catalog'
+import { useCatalog, resolveRuntimeBadge, formatModelVersion } from '@/shared/lib/catalog'
 
 const inputCls =
   'w-full rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5 text-sm outline-none focus:border-[var(--color-accent)]'
@@ -51,6 +51,9 @@ export function ProviderModelSelect({
   // binary on a Max/Pro plan — show which binary/plan alongside the model, since
   // the alias alone is identical on every machine.
   const runtimeBadge = resolveRuntimeBadge(entry)
+  // The alias also hides WHICH model it points at. Show the version last observed
+  // behind it ("Opus 5") — an observed fact, so it is absent until a turn has run.
+  const selectedVersion = formatModelVersion(selectedModel?.resolvedModel ?? '')
 
   const isInherit = allowInherit && provider === ''
 
@@ -130,9 +133,13 @@ export function ProviderModelSelect({
           >
             {models.map((m) => {
               const w = formatContextWindow(m.contextWindow)
+              // "Opus — en güçlü → Opus 5 · 1M": the arrow reads as "currently
+              // means", which is exactly what an observed resolution is.
+              const v = formatModelVersion(m.resolvedModel ?? '')
               return (
                 <option key={m.id || '__default__'} value={m.id}>
                   {m.label}
+                  {v ? ` → ${v}` : ''}
                   {w ? ` · ${w}` : ''}
                 </option>
               )
@@ -140,8 +147,17 @@ export function ProviderModelSelect({
             {(entry?.allowCustomModel ?? true) && <option value="__custom__">Özel…</option>}
           </select>
         )}
-        {(runtimeBadge || (!showCustom && (selectedDesc || selectedWindow))) && (
+        {(runtimeBadge || (!showCustom && (selectedVersion || selectedDesc || selectedWindow))) && (
           <span className="flex items-center gap-1.5 text-xs text-[var(--color-text-dim)]">
+            {!showCustom && selectedVersion && (
+              <span
+                data-testid="model-version-badge"
+                title={`Bu takma adın en son çözüldüğü model: ${selectedModel?.resolvedModel}`}
+                className="shrink-0 rounded bg-[var(--color-surface-2)] px-1.5 py-px font-medium text-[var(--color-text)]"
+              >
+                {selectedVersion}
+              </span>
+            )}
             {/* Shown for a custom model id too: the alias changes, the CLI behind
                 it does not. */}
             {runtimeBadge && (

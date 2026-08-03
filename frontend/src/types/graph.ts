@@ -19,10 +19,15 @@ export interface WorkspaceGraphNode {
   // in-flight session — so `running` is always true and the same agent can
   // appear several times, once per session it is driving.
   running?: boolean
-  runKind?: string // chat | task | flow | schedule | spawned | worker | inbox
+  runKind?: string // chat | task | flow | schedule | spawned | worker | inbox | flow-coordinator
   runTarget?: string // type-prefixed id of the running task/flow (or empty)
   sessionId?: string // the session behind this agent instance
-  agentId?: string // agent definition id shared by all instances of an agent
+  // agentId is the agent definition id — set on agent instances, on task nodes
+  // (the owner) and on run-history nodes (the session's agent), so the Network
+  // screen can filter by agent across all of them.
+  agentId?: string
+  archived?: boolean // backing session is archived (agent instances + run nodes)
+  tags?: string[] // free-form labels on the backing session/task (for filtering)
 }
 
 export interface WorkspaceGraphEdge {

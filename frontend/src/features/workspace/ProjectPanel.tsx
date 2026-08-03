@@ -52,10 +52,12 @@ export function ProjectPanel({ path, onSelectPath, onError }: Props) {
     load(path)
   }, [path, load])
 
-  const doInit = async () => {
+  // createDir: only set from the "folder does not exist" branch, so a typo in an
+  // otherwise valid path cannot silently create a stray directory.
+  const doInit = async (createDir = false) => {
     setSaving(true)
     try {
-      const g = await api.gitInit(path)
+      const g = await api.gitInit(path, createDir)
       setInfo(g)
     } catch (e) {
       onError((e as Error).message)
@@ -120,14 +122,37 @@ export function ProjectPanel({ path, onSelectPath, onError }: Props) {
           <p className="text-xs text-[var(--color-text-dim)]">Önce bir proje dizini seç.</p>
         ) : loading && !info ? (
           <p className="text-xs text-[var(--color-text-dim)]">Yükleniyor…</p>
+        ) : info && !info.gitInstalled ? (
+          // Checked before the path branches: no git binary means no git action on
+          // ANY path, so offering `git init` here could only fail. Say the real cause.
+          <p className="text-xs text-[var(--color-danger)]">
+            Bu bilgisayarda git bulunamadı (PATH'te yok). Git'i kurup uygulamayı yeniden başlat.
+          </p>
         ) : info && !info.exists ? (
-          <p className="text-xs text-[var(--color-danger)]">Dizin bulunamadı.</p>
+          <div className="space-y-3">
+            <p className="text-xs text-[var(--color-danger)]">
+              Dizin bulunamadı. Klasörü şimdi oluşturup sürüm kontrolünü başlatabilirsin:
+            </p>
+            <Button
+              onClick={() => doInit(true)}
+              disabled={saving}
+              size="lg"
+              className="flex items-center gap-1.5"
+            >
+              <GitBranch size={14} /> Klasörü oluştur + git init (main)
+            </Button>
+          </div>
         ) : info && !info.isGitRepo ? (
           <div className="space-y-3">
             <p className="text-xs text-[var(--color-text-dim)]">
               Bu dizin bir git deposu değil. Sürüm kontrolü için başlat:
             </p>
-            <Button onClick={doInit} disabled={saving} size="lg" className="flex items-center gap-1.5">
+            <Button
+              onClick={() => doInit()}
+              disabled={saving}
+              size="lg"
+              className="flex items-center gap-1.5"
+            >
               <GitBranch size={14} /> git init (main)
             </Button>
           </div>
@@ -150,13 +175,26 @@ export function ProjectPanel({ path, onSelectPath, onError }: Props) {
             </Field>
             <div className="grid grid-cols-2 gap-3">
               <Field label="user.name" hint="Bu repodaki commit yazarı adı.">
-                <input value={userName} onChange={(e) => setUserName(e.target.value)} className={inputCls} />
+                <input
+                  value={userName}
+                  onChange={(e) => setUserName(e.target.value)}
+                  className={inputCls}
+                />
               </Field>
               <Field label="user.email" hint="Bu repodaki commit yazarı e-postası.">
-                <input value={userEmail} onChange={(e) => setUserEmail(e.target.value)} className={inputCls} />
+                <input
+                  value={userEmail}
+                  onChange={(e) => setUserEmail(e.target.value)}
+                  className={inputCls}
+                />
               </Field>
             </div>
-            <Button onClick={saveGit} disabled={saving} size="lg" className="flex items-center gap-1.5">
+            <Button
+              onClick={saveGit}
+              disabled={saving}
+              size="lg"
+              className="flex items-center gap-1.5"
+            >
               <Check size={14} /> Git ayarlarını kaydet
             </Button>
           </div>

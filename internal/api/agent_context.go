@@ -165,32 +165,20 @@ func buildAgentDynamicPrompt(ctx context.Context, wsp *workspace.Workspace, agen
 	return strings.TrimSpace(dynamic)
 }
 
-// buildAgentStaticPrompt mirrors the STATIC half of composeTurnRequest for a
-// single agent with no session, so the preview matches what is actually sent.
-// Keep in sync with composeTurnRequest's static-prefix assembly.
+// buildAgentStaticPrompt returns the STATIC prefix an agent starts a fresh turn
+// with, for the "what does this agent begin with" preview.
+//
+// It does NOT mirror composeTurnRequest by hand — it CALLS the one builder the
+// real turn uses, with a zero db.Session standing in for "no session yet". The
+// hand-written mirror it replaced had drifted: it still carried the old
+// "@<AgentName> picks who answers" note (rewritten in buildStaticPrefix) and
+// never learned about the capability block, so the preview under-reported the
+// prefix and quoted text the agent no longer receives.
+//
+// The zero session is not a fudge — it is exactly a session with no coordinator
+// role and no working directory, which is what buildStaticPrefix reads off it
+// (IsCoordinator, WorkingDir). A real session without an explicit cwd produces
+// the same prefix. multiAgent is false: a fresh session has no other authors yet.
 func (s *Server) buildAgentStaticPrompt(ctx context.Context, wsp *workspace.Workspace, agent db.Agent) string {
-	system := buildSystemPrompt(agent)
-	if n := strings.TrimSpace(agent.Name); n != "" {
-		note := "You are the agent named \"" + n + "\". In this chat, the user picks which agent should answer by starting a message with \"@<AgentName>\". So an \"@" + n + "\" at the start of a message means the user is addressing you by name — treat it as being called, not as a file, skill, or entity to look up; just answer the rest of the message."
-		system = strings.TrimSpace(note + "\n\n" + system)
-	}
-	if uc := userContextBlock(s.settings.Get()); uc != "" {
-		system = strings.TrimSpace(uc + "\n\n" + system)
-	}
-	if ins := strings.TrimSpace(wsp.Settings().Instructions); ins != "" {
-		system = strings.TrimSpace(system + "\n\n# Workspace Instructions\n" + ins)
-	}
-	// Terse ("caveman") reply style: workspace toggle + registry prompt "terse".
-	// After the instructions so a workspace rule can be phrased to override it.
-	if tb := wsp.Runtime.TerseModeBlock(); tb != "" {
-		system = strings.TrimSpace(system + "\n\n" + tb)
-	}
-	system = strings.TrimSpace(system + "\n\n" + artifactGuidanceFor(wsp.Settings().AutoCaptureArtifacts))
-	if sb := wsp.Runtime.SkillsCatalogBlockForAgent(agent); sb != "" {
-		system = strings.TrimSpace(system + "\n\n" + sb)
-	}
-	if tb := wsp.Runtime.LazyToolsCatalogBlock(ctx, agent); tb != "" {
-		system = strings.TrimSpace(system + "\n\n" + tb)
-	}
-	return system
+	return s.buildStaticPrefix(ctx, wsp, db.Session{}, agent, false)
 }

@@ -305,6 +305,48 @@ export function ToolsPanel({ draft, set }: PanelProps) {
         </Field>
       </div>
 
+      <SubHead icon={Sparkles}>Koordinatör donma koruması</SubHead>
+      <p className="-mt-1 text-xs text-[var(--color-text-dim)]">
+        Bir koordinatör bazen "worker açtım / N kol açıldı" der ama gerçekte hiç `spawn_worker`
+        çağırmaz ve olmayan worker'ları bekleyerek sonsuza dek donar. Bu koruma her koordinatör
+        turundan sonra (ve periyodik bir tarayıcıyla) ucuz bir model yargıcına son mesajı sorar;
+        fantom spawn tespit edilirse düzeltici not enjekte edip bir tur daha zorlar.
+      </p>
+      <Toggle
+        label="Donma korumasını etkinleştir"
+        hint="Açıkken yargıç-tabanlı tur-sonu guard'ı + gecikme tarayıcısı çalışır. Yargıç, oturumun başlık-modeli (yoksa koordinatörün kendi modeli) ile çağrılır ve yalnızca koordinatör boştayken (araç çağırmadan) tetiklenir. Önerilen: AÇIK."
+        checked={draft.coordinatorStallGuard}
+        onChange={(v) => set('coordinatorStallGuard', v)}
+      />
+      <div className="grid grid-cols-2 gap-3">
+        <Field
+          label="Gecikme tarayıcı penceresi (dk)"
+          hint="Bir koordinatör bu kadar dakika sessiz kalıp hiç çalışan worker'ı yoksa tarayıcı yargıca sorar. 0 = varsayılan (5 dk). -1 = tarayıcıyı kapat (tur-sonu guard'ı yine çalışır)."
+        >
+          <input
+            type="number"
+            min={-1}
+            max={1440}
+            value={draft.coordinatorStallSweepMin}
+            onChange={(e) => set('coordinatorStallSweepMin', Number(e.target.value))}
+            className={inputCls}
+          />
+        </Field>
+        <Field
+          label="Maks. ardışık uyarı"
+          hint="Aynı koordinatöre peş peşe kaç düzeltici not enjekte edilebileceği. Bu sınıra ulaşınca sistem uyarıp gözlemlenebilir bir hata bırakır (sonsuza dek dırdır etmez). 0 = varsayılan (2)."
+        >
+          <input
+            type="number"
+            min={0}
+            max={10}
+            value={draft.coordinatorStallMaxNudges}
+            onChange={(e) => set('coordinatorStallMaxNudges', Number(e.target.value))}
+            className={inputCls}
+          />
+        </Field>
+      </div>
+
       <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-xs text-[var(--color-text-dim)]">
         <b>Çalışma dizini güvenliği.</b> Dosya/kabuk araçları artık workspace'e kilitli değil (her
         yola erişebilir). Aşağıdaki frenler bu gücü <b>otonom</b>

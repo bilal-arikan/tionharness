@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -150,6 +151,34 @@ func (s *Server) handleSessionHandoff(w http.ResponseWriter, r *http.Request) {
 		Reason: agent.HandoffReasonManual,
 	})
 	if herr != nil {
+		// The running-workers guard is a user-actionable precondition, not a server
+		// fault: record the reason in-thread (so the chat shows why nothing happened,
+		// right under the "/handoff" the user just ran) and return 409 instead of a
+		// generic 500 toast.
+		var rwErr *agent.RunningWorkersError
+		if errors.As(herr, &rwErr) {
+			notice, aerr := wsp.DB.AddMessage(ctx, db.Message{
+				SessionID: session.ID,
+				Role:      providers.RoleAssistant,
+				AgentID:   session.AgentID,
+				Text:      "⚠️ **Handoff yapılmadı** — " + rwErr.Error(),
+				Steps:     "[]",
+			})
+			if writeDBError(w, aerr, "session not found") {
+				return
+			}
+			emitSessionChange(wsp, session.ID, "message_added")
+			// 200 (not 409) with a blocked flag: the frontend's fetch wrapper throws
+			// on any non-2xx and would surface a generic "HTTP 409" toast, burying the
+			// friendly in-thread notice we just wrote. A blocked command is a normal,
+			// expected outcome here — the reply message IS the user-facing result.
+			writeJSON(w, http.StatusOK, map[string]any{
+				"userMessage":  userMsg,
+				"replyMessage": notice,
+				"blocked":      true,
+			})
+			return
+		}
 		writeError(w, http.StatusInternalServerError, "handoff failed: "+herr.Error())
 		return
 	}

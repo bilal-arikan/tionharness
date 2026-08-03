@@ -297,6 +297,9 @@ func (m *Manager) open(meta Meta) error {
 	// Durable Ask timeout sweeper: close ask/permission cards nobody answered in
 	// time (no-op until a TimeoutSec is stamped — 0 = unlimited by default).
 	rt.StartWaitingAskSweeper(context.Background())
+	// Coordinator stall sweeper: the long-horizon backstop for a coordinator frozen
+	// after narrating a spawn it never issued (no-op while the guard/window is off).
+	rt.StartCoordinatorStallSweeper(context.Background())
 
 	ws := &Workspace{Meta: meta, DB: database, Runtime: rt, Scheduler: sched, InsightCron: insightCron, Secrets: vault, DataDir: dir}
 	ws.loadSettings()    // apply persisted per-workspace overrides (e.g. autonomy pause)

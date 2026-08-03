@@ -21,6 +21,7 @@ interface Props {
 }
 
 import { ArrowUp, CornerDownRight, Hourglass, X } from 'lucide-react'
+import { ComposerCard } from './ComposerCard'
 
 // PendingTray lists the session's WAITING backend queue (+ any steers) above the
 // composer. Queue items show their position (#N), can be promoted to run next,
@@ -30,7 +31,7 @@ export function PendingTray({ items, onRemove, onSendNext, onClear }: Props) {
   const queueCount = items.filter((it) => it.kind === 'queue').length
   let qIndex = 0
   return (
-    <div className="flex flex-col gap-1.5 border-t border-[var(--color-border)] bg-[var(--color-surface)] px-6 pt-3">
+    <ComposerCard tone="muted" className="flex flex-col gap-1.5 px-3 py-2">
       <div className="flex items-center justify-between">
         <span className="text-[10px] font-medium uppercase tracking-wide text-[var(--color-text-dim)]">
           Bekleyenler — işleme alınmadan silebilirsin
@@ -57,7 +58,11 @@ export function PendingTray({ items, onRemove, onSendNext, onClear }: Props) {
                   ? 'bg-[color-mix(in_srgb,var(--color-warning)_20%,transparent)] text-[var(--color-warning)]'
                   : 'bg-[var(--color-accent-soft)] text-[var(--color-accent)]'
               }`}
-              title={it.kind === 'steer' ? 'Canlı yönlendirme (birazdan gönderilecek)' : 'Sıradaki mesaj (tur bitince gönderilecek)'}
+              title={
+                it.kind === 'steer'
+                  ? 'Canlı yönlendirme (birazdan gönderilecek)'
+                  : 'Sıradaki mesaj (tur bitince gönderilecek)'
+              }
             >
               {it.kind === 'steer' ? <CornerDownRight size={11} /> : <Hourglass size={11} />}
               {it.kind === 'steer' ? 'Yönlendir' : `Sırada #${pos}`}
@@ -82,6 +87,6 @@ export function PendingTray({ items, onRemove, onSendNext, onClear }: Props) {
           </div>
         )
       })}
-    </div>
+    </ComposerCard>
   )
 }

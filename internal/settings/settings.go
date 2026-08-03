@@ -327,6 +327,16 @@ type Settings struct {
 	// stalled branch keeps its coordinator waiting.
 	CoordinatorSettleGraceSec int `json:"coordinatorSettleGraceSec"`
 
+	// Coordinator stall/hallucination protection (see internal/agent/coordination_stall.go).
+	// CoordinatorStallGuard is the master switch for the judge-based turn-end guard +
+	// staleness sweeper that catch a coordinator narrating a spawn it never issued
+	// (default true). CoordinatorStallSweepMin is the staleness window in minutes
+	// (0 = default 5; negative disables the sweeper while leaving the turn-end guard
+	// on). CoordinatorStallMaxNudges caps consecutive corrective nudges (0 = default 2).
+	CoordinatorStallGuard     bool `json:"coordinatorStallGuard"`
+	CoordinatorStallSweepMin  int  `json:"coordinatorStallSweepMin"`
+	CoordinatorStallMaxNudges int  `json:"coordinatorStallMaxNudges"`
+
 	// Working-directory guards. The built-in fs/shell tools are unconfined (may
 	// touch any path); these brake that power on autonomous (no-human) turns.
 	AutonomousConfine bool `json:"autonomousConfine"` // confine fs/shell to the working dir on autonomous turns (default true)
@@ -470,6 +480,9 @@ func Default() Settings {
 		CoordinatorMaxDepth:           5,
 		CoordinatorMaxSubtreeSessions: 64,
 		CoordinatorSettleGraceSec:     30,
+		CoordinatorStallGuard:         true,
+		CoordinatorStallSweepMin:      5,
+		CoordinatorStallMaxNudges:     2,
 
 		// Autonomous turns confine fs/shell by default (safety brake).
 		AutonomousConfine: true,
@@ -592,11 +605,14 @@ type DTO struct {
 	ShellMaxTimeoutSec     int `json:"shellMaxTimeoutSec"`
 	MaxToolOutputKB        int `json:"maxToolOutputKB"`
 
-	CoordinatorMaxWorkers         int `json:"coordinatorMaxWorkers"`
-	CoordinatorMaxTurns           int `json:"coordinatorMaxTurns"`
-	CoordinatorMaxDepth           int `json:"coordinatorMaxDepth"`
-	CoordinatorMaxSubtreeSessions int `json:"coordinatorMaxSubtreeSessions"`
-	CoordinatorSettleGraceSec     int `json:"coordinatorSettleGraceSec"`
+	CoordinatorMaxWorkers         int  `json:"coordinatorMaxWorkers"`
+	CoordinatorMaxTurns           int  `json:"coordinatorMaxTurns"`
+	CoordinatorMaxDepth           int  `json:"coordinatorMaxDepth"`
+	CoordinatorMaxSubtreeSessions int  `json:"coordinatorMaxSubtreeSessions"`
+	CoordinatorSettleGraceSec     int  `json:"coordinatorSettleGraceSec"`
+	CoordinatorStallGuard         bool `json:"coordinatorStallGuard"`
+	CoordinatorStallSweepMin      int  `json:"coordinatorStallSweepMin"`
+	CoordinatorStallMaxNudges     int  `json:"coordinatorStallMaxNudges"`
 
 	AutonomousConfine bool `json:"autonomousConfine"`
 	AutonomousBootSeq bool `json:"autonomousBootSeq"`
@@ -712,6 +728,9 @@ func (s Settings) ToDTO() DTO {
 		CoordinatorMaxDepth:           s.CoordinatorMaxDepth,
 		CoordinatorMaxSubtreeSessions: s.CoordinatorMaxSubtreeSessions,
 		CoordinatorSettleGraceSec:     s.CoordinatorSettleGraceSec,
+		CoordinatorStallGuard:         s.CoordinatorStallGuard,
+		CoordinatorStallSweepMin:      s.CoordinatorStallSweepMin,
+		CoordinatorStallMaxNudges:     s.CoordinatorStallMaxNudges,
 
 		AutonomousConfine: s.AutonomousConfine,
 		AutonomousBootSeq: s.AutonomousBootSeq,
@@ -819,11 +838,14 @@ type Patch struct {
 	SpawnIdleTimeoutMin *int `json:"spawnIdleTimeoutMin"`
 	ScheduleTimeoutMin  *int `json:"scheduleTimeoutMin"`
 
-	CoordinatorMaxWorkers         *int `json:"coordinatorMaxWorkers"`
-	CoordinatorMaxTurns           *int `json:"coordinatorMaxTurns"`
-	CoordinatorMaxDepth           *int `json:"coordinatorMaxDepth"`
-	CoordinatorMaxSubtreeSessions *int `json:"coordinatorMaxSubtreeSessions"`
-	CoordinatorSettleGraceSec     *int `json:"coordinatorSettleGraceSec"`
+	CoordinatorMaxWorkers         *int  `json:"coordinatorMaxWorkers"`
+	CoordinatorMaxTurns           *int  `json:"coordinatorMaxTurns"`
+	CoordinatorMaxDepth           *int  `json:"coordinatorMaxDepth"`
+	CoordinatorMaxSubtreeSessions *int  `json:"coordinatorMaxSubtreeSessions"`
+	CoordinatorSettleGraceSec     *int  `json:"coordinatorSettleGraceSec"`
+	CoordinatorStallGuard         *bool `json:"coordinatorStallGuard"`
+	CoordinatorStallSweepMin      *int  `json:"coordinatorStallSweepMin"`
+	CoordinatorStallMaxNudges     *int  `json:"coordinatorStallMaxNudges"`
 
 	AutonomousConfine *bool `json:"autonomousConfine"`
 	AutonomousBootSeq *bool `json:"autonomousBootSeq"`

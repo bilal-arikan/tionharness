@@ -6,9 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"time"
 
@@ -178,10 +176,7 @@ func (t TransformDataTool) Call(ctx context.Context, input json.RawMessage) (str
 func resolveInterpreter(language string) (exePath, scriptExt string, err error) {
 	switch language {
 	case "python3":
-		cands := []string{"python3", "python"}
-		if runtime.GOOS == "windows" {
-			cands = []string{"python", "python3"}
-		}
+		cands := proc.PythonCandidates()
 		if p, ok := lookInterpreter(cands...); ok {
 			return p, ".py", nil
 		}
@@ -201,23 +196,10 @@ func resolveInterpreter(language string) (exePath, scriptExt string, err error) 
 	}
 }
 
-// lookInterpreter returns the first candidate found on PATH, skipping Windows
-// "app execution alias" stubs under WindowsApps — those are 0-byte reparse points
-// that, when run with a stripped env, print "Python was not found" and exit 9009
-// instead of executing a real interpreter.
-func lookInterpreter(candidates ...string) (string, bool) {
-	for _, c := range candidates {
-		p, err := exec.LookPath(c)
-		if err != nil {
-			continue
-		}
-		if runtime.GOOS == "windows" && strings.Contains(strings.ToLower(p), `\windowsapps\`) {
-			continue
-		}
-		return p, true
-	}
-	return "", false
-}
+// lookInterpreter resolves an interpreter on PATH. The rule (candidate order plus
+// skipping Microsoft Store app-execution-alias stubs) lives in internal/proc so the
+// external-tools catalog reports on exactly the binary this tool would run.
+var lookInterpreter = proc.LookInterpreter
 
 // writeTempScript writes src to a temp file with the given extension and returns
 // its path plus a cleanup func. Running from a real file (vs. -c/-e) gives correct

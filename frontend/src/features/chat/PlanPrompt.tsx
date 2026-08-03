@@ -2,6 +2,7 @@ import { ClipboardList } from 'lucide-react'
 import type { PendingAsk } from './AskPrompt'
 import { Markdown } from '@/shared/components/markdown/Markdown'
 import { ScrollableCard } from '@/shared/components'
+import { ComposerCard } from './ComposerCard'
 
 interface Props {
   ask: PendingAsk
@@ -16,13 +17,16 @@ interface Props {
 export function PlanPrompt({ ask, onAnswer }: Props) {
   const options = ask.options?.length ? ask.options : ['Planı onayla', 'Reddet']
   return (
-    <div className="mx-3 mb-2 rounded-lg border border-[var(--color-success)] bg-[color-mix(in_srgb,var(--color-success)_8%,var(--color-surface))] px-3 py-2.5">
+    <ComposerCard tone="plan" className="px-3 py-2.5">
       <div className="mb-2 flex items-start gap-2 text-sm text-[var(--color-text)]">
         <ClipboardList size={16} className="mt-0.5 shrink-0 text-[var(--color-success)]" />
         <span className="min-w-0 flex-1 font-medium">Ajan bir plan sunuyor. Onaylıyor musun?</span>
       </div>
       {ask.cmd && (
-        <ScrollableCard maxH="max-h-[55vh]" className="mb-2 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm">
+        <ScrollableCard
+          maxH="max-h-[55vh]"
+          className="mb-2 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm"
+        >
           <Markdown>{ask.cmd}</Markdown>
         </ScrollableCard>
       )}
@@ -44,6 +48,6 @@ export function PlanPrompt({ ask, onAnswer }: Props) {
           )
         })}
       </div>
-    </div>
+    </ComposerCard>
   )
 }

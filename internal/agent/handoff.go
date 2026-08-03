@@ -31,6 +31,10 @@ const (
 type HandoffOptions struct {
 	Reason    string // one of HandoffReason*; defaults to manual
 	CreatedBy string // provenance for the spawned session ("" = user/API)
+	// AllowRunningWorkers bypasses the coordinator running-workers guard. Left
+	// false by default so a handoff never silently orphans an in-flight fleet;
+	// set it only when the caller has knowingly decided to reset anyway.
+	AllowRunningWorkers bool
 }
 
 // HandoffResult is what a successful context reset returns: the fresh session that
@@ -54,6 +58,29 @@ func (r *Runtime) HandoffSession(ctx context.Context, session db.Session, agent 
 	reason := strings.TrimSpace(opts.Reason)
 	if reason == "" {
 		reason = HandoffReasonManual
+	}
+
+	// Guard: a coordinator with still-running workers must not be handed off.
+	// Handoff snapshots THIS session's transcript into a fresh window, but it
+	// neither carries over nor stops the workers this session spawned — resetting
+	// now would orphan them (their results never fold back in). And because the
+	// handoff summary is a SYNCHRONOUS provider call, a wedged worker could stall
+	// the reset itself. Make the caller settle the fleet first (stop_worker or
+	// wait for it to finish) instead of silently abandoning it.
+	if !opts.AllowRunningWorkers && session.IsCoordinator() {
+		workers, werr := r.ListWorkers(ctx, session.ID)
+		if werr != nil {
+			return HandoffResult{}, fmt.Errorf("handoff öncesi worker durumu okunamadı: %w", werr)
+		}
+		var busy []WorkerInfo
+		for _, wk := range workers {
+			if wk.Running || wk.Delegating {
+				busy = append(busy, wk)
+			}
+		}
+		if len(busy) > 0 {
+			return HandoffResult{}, &RunningWorkersError{Workers: busy}
+		}
 	}
 
 	provider, err := r.providers.Get(agent.Provider)
@@ -277,6 +304,38 @@ func handoffTitle(session db.Session) string {
 		return session.ID
 	}
 	return t
+}
+
+// RunningWorkersError is returned by HandoffSession when a coordinator still has
+// running/delegating workers. It is a user-actionable precondition, not a server
+// fault, so the API layer maps it to 409 + an in-thread notice instead of a 500.
+type RunningWorkersError struct {
+	Workers []WorkerInfo
+}
+
+func (e *RunningWorkersError) Error() string {
+	return fmt.Sprintf(
+		"handoff engellendi: bu koordinatör oturumunda %d worker hâlâ çalışıyor (%s). "+
+			"Handoff worker'ları devretmez veya durdurmaz; önce onları durdur (stop_worker) "+
+			"ya da bitmelerini bekle, sonra tekrar dene.",
+		len(e.Workers), formatBusyWorkers(e.Workers))
+}
+
+// formatBusyWorkers renders a short "SES.. (agent) [delegating], SES.. (agent)"
+// list of the still-running workers for the coordinator handoff guard message.
+func formatBusyWorkers(ws []WorkerInfo) string {
+	parts := make([]string, 0, len(ws))
+	for _, w := range ws {
+		label := w.SessionID
+		if name := strings.TrimSpace(w.AgentName); name != "" {
+			label += " (" + name + ")"
+		}
+		if w.Delegating {
+			label += " [delegating]"
+		}
+		parts = append(parts, label)
+	}
+	return strings.Join(parts, ", ")
 }
 
 // fileLine renders the optional handoff-file bullet for the tombstone message.

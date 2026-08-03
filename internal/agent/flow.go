@@ -1,4 +1,4 @@
-﻿package agent
+package agent
 
 import (
 	"context"
@@ -680,7 +680,7 @@ func (r *Runtime) recordFlowInput(ctx context.Context, flow db.Flow, input, sess
 	if sessionID == "" {
 		return
 	}
-	if _, err := r.db.AddMessage(ctx, db.Message{SessionID: sessionID, Role: "user", Text: flowInputText(flow, input)}); err != nil {
+	if _, err := r.recordInjectedUserNote(ctx, sessionID, "", flowInputText(flow, input)); err != nil {
 		r.logger.Warn("flow transcript: record input failed", "flow", flow.ID, "session", sessionID, "error", err)
 	}
 }
@@ -704,7 +704,7 @@ func (r *Runtime) recordFlowSessionTurn(ctx context.Context, flow db.Flow, run d
 		sessionID = sess.ID
 	}
 	if !inputRecorded {
-		if _, err := r.db.AddMessage(ctx, db.Message{SessionID: sessionID, Role: "user", Text: flowInputText(flow, input)}); err != nil {
+		if _, err := r.recordInjectedUserNote(ctx, sessionID, "", flowInputText(flow, input)); err != nil {
 			r.logger.Warn("flow transcript: record input failed", "flow", flow.ID, "session", sessionID, "error", err)
 		}
 	}

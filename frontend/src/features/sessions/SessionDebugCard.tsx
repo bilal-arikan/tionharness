@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Bug, ChevronDown, ChevronRight, Loader2, AlertTriangle, Info } from 'lucide-react'
 import { api } from '@/api'
 import type { SessionDebugSummary, SessionDebugEvent } from '@/types'
+import { modelDisplayName } from '@/shared/lib/modelLabel'
 import { SessionFlowViz } from './viz/SessionFlowViz'
 import { toolDisplayName } from './viz/flowVizData'
 
@@ -83,9 +84,8 @@ export function SessionDebugCard({
   // read + cache write). Mirrors the per-message panel's warm/cold indicator so the
   // session card and the message card agree. '—' when there is no prompt spend yet.
   const promptTotal = sum.inputTokens + sum.cacheReadTokens + sum.cacheWriteTokens
-  const cacheHitPct = promptTotal > 0
-    ? `%${Math.round((sum.cacheReadTokens / promptTotal) * 100)}`
-    : '—'
+  const cacheHitPct =
+    promptTotal > 0 ? `%${Math.round((sum.cacheReadTokens / promptTotal) * 100)}` : '—'
 
   return (
     <section>
@@ -97,7 +97,11 @@ export function SessionDebugCard({
           onClick={toggleOpen}
           className="flex w-full items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-dim)] opacity-70 transition hover:opacity-100"
         >
-          {open ? <ChevronDown size={12} className="shrink-0" /> : <ChevronRight size={12} className="shrink-0" />}
+          {open ? (
+            <ChevronDown size={12} className="shrink-0" />
+          ) : (
+            <ChevronRight size={12} className="shrink-0" />
+          )}
           <Bug size={12} className="shrink-0" /> Debug / Gözlemlenebilirlik
           {!open && (
             <span className="ml-auto flex items-center gap-1.5 normal-case tracking-normal">
@@ -112,206 +116,227 @@ export function SessionDebugCard({
 
       {open && (
         <div className="mt-2">
-      <p className="mb-2 text-[10px] text-[var(--color-text-dim)]">
-        Bu oturumun yapılandırılmış debug akışı (token, süre, araç, hata).
-      </p>
+          <p className="mb-2 text-[10px] text-[var(--color-text-dim)]">
+            Bu oturumun yapılandırılmış debug akışı (token, süre, araç, hata).
+          </p>
 
-      {/* Headline metric grid */}
-      <div className="grid grid-cols-3 gap-1.5">
-        <Metric label="Tur" value={String(sum.turns)} />
-        <Metric label="LLM çağrısı" value={String(sum.llmCalls)} />
-        <Metric label="Araç" value={String(sum.toolCalls)} />
-        <Metric label="Giriş tok" value={fmtTok(sum.inputTokens)} />
-        <Metric label="Çıkış tok" value={fmtTok(sum.outputTokens)} />
-        {/* Hidden-reasoning share of output tokens (estimated; already inside
+          {/* Headline metric grid */}
+          <div className="grid grid-cols-3 gap-1.5">
+            <Metric label="Tur" value={String(sum.turns)} />
+            <Metric label="LLM çağrısı" value={String(sum.llmCalls)} />
+            <Metric label="Araç" value={String(sum.toolCalls)} />
+            <Metric label="Giriş tok" value={fmtTok(sum.inputTokens)} />
+            <Metric label="Çıkış tok" value={fmtTok(sum.outputTokens)} />
+            {/* Hidden-reasoning share of output tokens (estimated; already inside
             "Çıkış tok"). Hidden when the session did no measurable thinking. */}
-        {(sum.thinkingTokens ?? 0) > 0 && (
-          <Metric
-            label="Düşünme"
-            value={`%${Math.round((sum.thinkingShare ?? 0) * 100)} · ${fmtTok(sum.thinkingTokens ?? 0)}`}
-          />
-        )}
-        <Metric label="Cache oku" value={fmtTok(sum.cacheReadTokens)} />
-        <Metric label="Cache yaz" value={fmtTok(sum.cacheWriteTokens)} />
-        <Metric label="Cache isabet" value={cacheHitPct} />
-      </div>
-
-      {/* Health row: errors / compactions / recoveries */}
-      <div className="mt-1.5 flex flex-wrap gap-1.5">
-        <Pill
-          label="Hata"
-          value={sum.errors}
-          tone={sum.errors > 0 ? 'error' : 'dim'}
-        />
-        <Pill label="Compaction" value={sum.compactions} tone="dim" />
-        <Pill label="Recovery" value={sum.recoveries} tone="dim" />
-        {sum.cacheBreaks > 0 && (
-          <Pill
-            label="Cache kırılması"
-            value={sum.cacheBreaks}
-            tone={sum.cacheBreaks >= 2 ? 'error' : 'dim'}
-          />
-        )}
-        {sum.turnDurMs > 0 && (
-          <Pill label="Toplam süre" value={fmtDur(sum.turnDurMs)} tone="dim" raw />
-        )}
-      </div>
-
-      {/* Anomalies (Faz 3): heuristic findings — slow/failing tools, error
-          bursts, frequent compaction. The same notes the reflector learns from. */}
-      {sum.anomalies && sum.anomalies.length > 0 && (
-        <div className="mt-2 flex flex-col gap-1">
-          {sum.anomalies.map((a, i) => {
-            const warn = a.severity === 'warn'
-            const col = warn ? 'var(--color-error)' : 'var(--color-text-dim)'
-            return (
-              <div
-                key={i}
-                className="flex items-start gap-1.5 rounded-lg border px-2 py-1.5 text-[11px]"
-                style={{
-                  color: col,
-                  borderColor: `color-mix(in srgb, ${col} 35%, transparent)`,
-                  background: `color-mix(in srgb, ${col} 7%, transparent)`,
-                }}
-              >
-                {warn ? (
-                  <AlertTriangle size={12} className="mt-0.5 shrink-0" />
-                ) : (
-                  <Info size={12} className="mt-0.5 shrink-0" />
-                )}
-                <span className="break-words">{a.message}</span>
-              </div>
-            )
-          })}
-        </div>
-      )}
-
-      {/* Time series (Faz 3): per-turn duration + per-call token sparklines. */}
-      {((sum.turnDurSeries && sum.turnDurSeries.length > 1) ||
-        (sum.tokenSeries && sum.tokenSeries.length > 1)) && (
-        <div className="mt-2 grid grid-cols-2 gap-2">
-          {sum.turnDurSeries && sum.turnDurSeries.length > 1 && (
-            <Sparkline label="Tur süresi" data={sum.turnDurSeries} format={fmtDur} />
-          )}
-          {sum.tokenSeries && sum.tokenSeries.length > 1 && (
-            <Sparkline label="Çağrı token" data={sum.tokenSeries} format={fmtTok} />
-          )}
-        </div>
-      )}
-
-      {sum.lastError && !sum.anomalies?.some((a) => a.code === 'error_burst') && (
-        <div className="mt-1.5 flex items-start gap-1.5 rounded-lg border border-[color-mix(in_srgb,var(--color-error)_40%,transparent)] bg-[color-mix(in_srgb,var(--color-error)_8%,transparent)] px-2 py-1.5 text-[11px] text-[var(--color-error)]">
-          <AlertTriangle size={12} className="mt-0.5 shrink-0" />
-          <span className="break-words">{sum.lastError}</span>
-        </div>
-      )}
-
-      {/* Slowest tools (the optimisation hot list) */}
-      {topTools.length > 0 && (
-        <div className="mt-2">
-          <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
-            En yavaş araçlar
+            {(sum.thinkingTokens ?? 0) > 0 && (
+              <Metric
+                label="Düşünme"
+                value={`%${Math.round((sum.thinkingShare ?? 0) * 100)} · ${fmtTok(sum.thinkingTokens ?? 0)}`}
+              />
+            )}
+            <Metric label="Cache oku" value={fmtTok(sum.cacheReadTokens)} />
+            <Metric label="Cache yaz" value={fmtTok(sum.cacheWriteTokens)} />
+            <Metric label="Cache isabet" value={cacheHitPct} />
           </div>
-          <div className="flex flex-col gap-1">
-            {topTools.map(({ name, stat }) => (
-              <div key={name} className="flex items-center justify-between text-[11px]">
-                <span className="truncate text-[var(--color-text-dim)]" title={toolDisplayName(name)}>
-                  {toolDisplayName(name)}
-                  {stat && stat.errors > 0 && (
-                    <span className="ml-1 text-[var(--color-error)]">·{stat.errors} hata</span>
-                  )}
-                </span>
-                <span className="ml-2 shrink-0 text-[var(--color-text)]">
-                  {stat ? `${fmtDur(stat.durMs)} · ${stat.calls}×` : '—'}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
 
-      {/* Token spend by model */}
-      {sum.byModel && Object.keys(sum.byModel).length > 0 && (
-        <div className="mt-2">
-          <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
-            Modele göre token
-          </div>
-          <div className="flex flex-col gap-1">
-            {Object.entries(sum.byModel)
-              .sort((a, b) => b[1] - a[1])
-              .slice(0, 4)
-              .map(([model, tok]) => (
-                <div key={model} className="flex items-center justify-between text-[11px]">
-                  <span className="truncate text-[var(--color-text-dim)]" title={model}>
-                    {model || '(varsayılan)'}
-                  </span>
-                  <span className="ml-2 shrink-0 text-[var(--color-text)]">{fmtTok(tok)}</span>
-                </div>
-              ))}
-          </div>
-        </div>
-      )}
-
-      {/* Workflow visualizations: tool-execution Sankey + concurrency timeline
-          (foldable, lazily fetches its own raw events). */}
-      <SessionFlowViz sessionId={sessionId} agentNames={agentNames} refreshKey={refreshKey} />
-
-      {/* Raw event log (lazy) */}
-      <button
-        onClick={() => setExpanded((v) => !v)}
-        className="mt-2 flex items-center gap-1 text-[11px] text-[var(--color-accent)] underline-offset-2 hover:underline"
-      >
-        {expanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
-        Ham olaylar ({sum.events})
-      </button>
-      {expanded && (
-        <div className="mt-1.5">
-          <div className="mb-1.5 flex flex-wrap gap-1">
-            {['', 'turn', 'llm_call', 'tool', 'hook', 'error', 'compaction', 'recovery', 'cache_break', 'epoch'].map(
-              (t) => (
-                <button
-                  key={t || 'all'}
-                  onClick={() => setTypeFilter(t)}
-                  className={`rounded px-1.5 py-0.5 text-[10px] transition ${
-                    typeFilter === t
-                      ? 'bg-[var(--color-accent)] text-white'
-                      : 'border border-[var(--color-border)] text-[var(--color-text-dim)] hover:text-[var(--color-text)]'
-                  }`}
-                >
-                  {t || 'hepsi'}
-                </button>
-              ),
+          {/* Health row: errors / compactions / recoveries */}
+          <div className="mt-1.5 flex flex-wrap gap-1.5">
+            <Pill label="Hata" value={sum.errors} tone={sum.errors > 0 ? 'error' : 'dim'} />
+            <Pill label="Compaction" value={sum.compactions} tone="dim" />
+            <Pill label="Recovery" value={sum.recoveries} tone="dim" />
+            {sum.cacheBreaks > 0 && (
+              <Pill
+                label="Cache kırılması"
+                value={sum.cacheBreaks}
+                tone={sum.cacheBreaks >= 2 ? 'error' : 'dim'}
+              />
+            )}
+            {/* Isolated cooling waste: the avoidable overpay from warm prefixes that
+            cooled (TTL/eviction) before the next turn — money a timely reply would
+            have saved. Estimated ("~") for subscription providers (claude-cli). */}
+            {(sum.coolingWasteUsd ?? 0) > 0 && (
+              <Pill
+                label="Soğuma israfı"
+                value={`${sum.coolingWasteEstimated ? '~' : ''}${fmtUsd(sum.coolingWasteUsd ?? 0)}${
+                  (sum.coolingBreaks ?? 0) > 0 ? ` · ${sum.coolingBreaks}×` : ''
+                }`}
+                tone="error"
+                raw
+              />
+            )}
+            {sum.turnDurMs > 0 && (
+              <Pill label="Toplam süre" value={fmtDur(sum.turnDurMs)} tone="dim" raw />
             )}
           </div>
-          {loadingEvents ? (
-            <div className="flex items-center gap-1.5 py-2 text-[11px] text-[var(--color-text-dim)]">
-              <Loader2 size={12} className="animate-spin" /> Yükleniyor…
-            </div>
-          ) : events && events.length > 0 ? (
-            <div className="max-h-64 overflow-y-auto rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] font-mono text-[10px]">
-              {events
-                .slice()
-                .reverse()
-                .map((e, i) => (
+
+          {/* Anomalies (Faz 3): heuristic findings — slow/failing tools, error
+          bursts, frequent compaction. The same notes the reflector learns from. */}
+          {sum.anomalies && sum.anomalies.length > 0 && (
+            <div className="mt-2 flex flex-col gap-1">
+              {sum.anomalies.map((a, i) => {
+                const warn = a.severity === 'warn'
+                const col = warn ? 'var(--color-error)' : 'var(--color-text-dim)'
+                return (
                   <div
                     key={i}
-                    className={`flex items-center gap-1.5 border-b border-[var(--color-border)] px-2 py-1 last:border-b-0 ${
-                      e.err ? 'text-[var(--color-error)]' : 'text-[var(--color-text-dim)]'
-                    }`}
+                    className="flex items-start gap-1.5 rounded-lg border px-2 py-1.5 text-[11px]"
+                    style={{
+                      color: col,
+                      borderColor: `color-mix(in srgb, ${col} 35%, transparent)`,
+                      background: `color-mix(in srgb, ${col} 7%, transparent)`,
+                    }}
                   >
-                    <span className="w-16 shrink-0 opacity-60">{fmtTime(e.ts)}</span>
-                    <span className="w-20 shrink-0 font-semibold text-[var(--color-text)]">
-                      {e.type}
+                    {warn ? (
+                      <AlertTriangle size={12} className="mt-0.5 shrink-0" />
+                    ) : (
+                      <Info size={12} className="mt-0.5 shrink-0" />
+                    )}
+                    <span className="break-words">{a.message}</span>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+
+          {/* Time series (Faz 3): per-turn duration + per-call token sparklines. */}
+          {((sum.turnDurSeries && sum.turnDurSeries.length > 1) ||
+            (sum.tokenSeries && sum.tokenSeries.length > 1)) && (
+            <div className="mt-2 grid grid-cols-2 gap-2">
+              {sum.turnDurSeries && sum.turnDurSeries.length > 1 && (
+                <Sparkline label="Tur süresi" data={sum.turnDurSeries} format={fmtDur} />
+              )}
+              {sum.tokenSeries && sum.tokenSeries.length > 1 && (
+                <Sparkline label="Çağrı token" data={sum.tokenSeries} format={fmtTok} />
+              )}
+            </div>
+          )}
+
+          {sum.lastError && !sum.anomalies?.some((a) => a.code === 'error_burst') && (
+            <div className="mt-1.5 flex items-start gap-1.5 rounded-lg border border-[color-mix(in_srgb,var(--color-error)_40%,transparent)] bg-[color-mix(in_srgb,var(--color-error)_8%,transparent)] px-2 py-1.5 text-[11px] text-[var(--color-error)]">
+              <AlertTriangle size={12} className="mt-0.5 shrink-0" />
+              <span className="break-words">{sum.lastError}</span>
+            </div>
+          )}
+
+          {/* Slowest tools (the optimisation hot list) */}
+          {topTools.length > 0 && (
+            <div className="mt-2">
+              <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
+                En yavaş araçlar
+              </div>
+              <div className="flex flex-col gap-1">
+                {topTools.map(({ name, stat }) => (
+                  <div key={name} className="flex items-center justify-between text-[11px]">
+                    <span
+                      className="truncate text-[var(--color-text-dim)]"
+                      title={toolDisplayName(name)}
+                    >
+                      {toolDisplayName(name)}
+                      {stat && stat.errors > 0 && (
+                        <span className="ml-1 text-[var(--color-error)]">·{stat.errors} hata</span>
+                      )}
                     </span>
-                    <span className="min-w-0 flex-1 truncate">{eventLabel(e)}</span>
+                    <span className="ml-2 shrink-0 text-[var(--color-text)]">
+                      {stat ? `${fmtDur(stat.durMs)} · ${stat.calls}×` : '—'}
+                    </span>
                   </div>
                 ))}
+              </div>
             </div>
-          ) : (
-            <p className="py-2 text-[11px] text-[var(--color-text-dim)]">(olay yok)</p>
           )}
-        </div>
-      )}
+
+          {/* Token spend by model */}
+          {sum.byModel && Object.keys(sum.byModel).length > 0 && (
+            <div className="mt-2">
+              <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
+                Modele göre token
+              </div>
+              <div className="flex flex-col gap-1">
+                {Object.entries(sum.byModel)
+                  .sort((a, b) => b[1] - a[1])
+                  .slice(0, 4)
+                  .map(([model, tok]) => (
+                    <div key={model} className="flex items-center justify-between text-[11px]">
+                      <span className="truncate text-[var(--color-text-dim)]" title={model}>
+                        {modelDisplayName(model)}
+                      </span>
+                      <span className="ml-2 shrink-0 text-[var(--color-text)]">{fmtTok(tok)}</span>
+                    </div>
+                  ))}
+              </div>
+            </div>
+          )}
+
+          {/* Workflow visualizations: tool-execution Sankey + concurrency timeline
+          (foldable, lazily fetches its own raw events). */}
+          <SessionFlowViz sessionId={sessionId} agentNames={agentNames} refreshKey={refreshKey} />
+
+          {/* Raw event log (lazy) */}
+          <button
+            onClick={() => setExpanded((v) => !v)}
+            className="mt-2 flex items-center gap-1 text-[11px] text-[var(--color-accent)] underline-offset-2 hover:underline"
+          >
+            {expanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+            Ham olaylar ({sum.events})
+          </button>
+          {expanded && (
+            <div className="mt-1.5">
+              <div className="mb-1.5 flex flex-wrap gap-1">
+                {[
+                  '',
+                  'turn',
+                  'llm_call',
+                  'tool',
+                  'hook',
+                  'error',
+                  'compaction',
+                  'recovery',
+                  'cache_break',
+                  'epoch',
+                ].map((t) => (
+                  <button
+                    key={t || 'all'}
+                    onClick={() => setTypeFilter(t)}
+                    className={`rounded px-1.5 py-0.5 text-[10px] transition ${
+                      typeFilter === t
+                        ? 'bg-[var(--color-accent)] text-white'
+                        : 'border border-[var(--color-border)] text-[var(--color-text-dim)] hover:text-[var(--color-text)]'
+                    }`}
+                  >
+                    {t || 'hepsi'}
+                  </button>
+                ))}
+              </div>
+              {loadingEvents ? (
+                <div className="flex items-center gap-1.5 py-2 text-[11px] text-[var(--color-text-dim)]">
+                  <Loader2 size={12} className="animate-spin" /> Yükleniyor…
+                </div>
+              ) : events && events.length > 0 ? (
+                <div className="max-h-64 overflow-y-auto rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] font-mono text-[10px]">
+                  {events
+                    .slice()
+                    .reverse()
+                    .map((e, i) => (
+                      <div
+                        key={i}
+                        className={`flex items-center gap-1.5 border-b border-[var(--color-border)] px-2 py-1 last:border-b-0 ${
+                          e.err ? 'text-[var(--color-error)]' : 'text-[var(--color-text-dim)]'
+                        }`}
+                      >
+                        <span className="w-16 shrink-0 opacity-60">{fmtTime(e.ts)}</span>
+                        <span className="w-20 shrink-0 font-semibold text-[var(--color-text)]">
+                          {e.type}
+                        </span>
+                        <span className="min-w-0 flex-1 truncate">{eventLabel(e)}</span>
+                      </div>
+                    ))}
+                </div>
+              ) : (
+                <p className="py-2 text-[11px] text-[var(--color-text-dim)]">(olay yok)</p>
+              )}
+            </div>
+          )}
         </div>
       )}
     </section>
@@ -386,8 +411,7 @@ function Pill({
   tone: 'error' | 'dim'
   raw?: boolean
 }) {
-  const color =
-    tone === 'error' ? 'var(--color-error)' : 'var(--color-text-dim)'
+  const color = tone === 'error' ? 'var(--color-error)' : 'var(--color-text-dim)'
   return (
     <span
       className="rounded-md border border-[var(--color-border)] px-1.5 py-0.5 text-[10px]"
@@ -420,7 +444,7 @@ function eventLabel(e: SessionDebugEvent): string {
     case 'cache_break':
       return `${e.name ?? 'cache-break'}${e.detail ? ` · ${e.detail}` : ''}${
         e.cacheWrite ? ` · yeniden yazılan ${e.cacheWrite}` : ''
-      }`
+      }${e.wasteUsd ? ` · israf ${e.wasteEst ? '~' : ''}${fmtUsd(e.wasteUsd)}` : ''}`
     case 'epoch':
       return `${e.name ?? 'epoch'}${e.detail ? ` · ${e.detail}` : ''}`
     case 'error':
@@ -439,6 +463,14 @@ function fmtTok(n: number): string {
 function fmtDur(ms: number): string {
   if (ms >= 1000) return `${(ms / 1000).toFixed(1)}s`
   return `${ms}ms`
+}
+
+// fmtUsd renders a small USD figure with enough precision for sub-cent cooling
+// costs (e.g. $0.0042) while staying compact for larger sums.
+function fmtUsd(v: number): string {
+  if (v >= 1) return `$${v.toFixed(2)}`
+  if (v >= 0.01) return `$${v.toFixed(3)}`
+  return `$${v.toFixed(4)}`
 }
 
 function fmtBytes(b: number): string {

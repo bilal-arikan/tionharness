@@ -31,9 +31,18 @@ export function kindColor(kind: string): string {
 export const ROLE_COLORS: Record<string, string> = {
   summary: '#f59e0b', // amber — folded history
   user: 'var(--color-accent)',
+  // Machine-injected prompts that ride the "user" role on the wire but are not
+  // the human typing: worker results in a coordinator session, and wake/schedule
+  // auto-resumes. Split out so a coordinator's context does not read as if the
+  // user wrote hundreds of KB. Deliberately NOT accent-coloured — the accent is
+  // reserved for the human's own share.
+  'worker-note': '#f97316', // orange — <task-notification> / <coordination-status>
+  'auto-prompt': '#eab308', // yellow — schedule_wake / scheduled routine prompts
   assistant: '#10b981', // emerald
   tool: '#8b5cf6', // violet — tool-result messages
   tools: '#a855f7', // purple — tool/MCP schemas (always-sent catalog)
+  skills: '#0ea5e9', // sky — Available Skills catalog block
+  'lazy-tools': '#c084fc', // light purple — load-on-demand tool catalog (names only)
   artifacts: '#ec4899', // pink — session artifact context block
   system: '#64748b', // slate
 }

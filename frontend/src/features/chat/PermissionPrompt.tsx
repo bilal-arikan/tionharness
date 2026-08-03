@@ -1,6 +1,7 @@
 import { ShieldAlert } from 'lucide-react'
 import type { PendingAsk } from './AskPrompt'
 import { ScrollableCard } from '@/shared/components'
+import { ComposerCard } from './ComposerCard'
 
 interface Props {
   ask: PendingAsk
@@ -26,13 +27,16 @@ function riskLabel(risk?: string): string {
 export function PermissionPrompt({ ask, onAnswer }: Props) {
   const options = ask.options?.length ? ask.options : ['İzin ver', 'Her zaman izin ver', 'Reddet']
   return (
-    <div className="mx-3 mb-2 rounded-lg border border-[var(--color-warning)]/70 bg-[var(--color-warning)]/5 px-3 py-2.5">
+    <ComposerCard tone="permission" className="px-3 py-2.5">
       <div className="mb-2 flex items-start gap-2 text-sm text-[var(--color-text)]">
         <ShieldAlert size={16} className="mt-0.5 shrink-0 text-[var(--color-warning)]" />
         <span className="min-w-0 flex-1">
           Ajan{' '}
-          <code className="rounded bg-[var(--color-surface-2)] px-1 py-0.5 text-xs">{ask.tool || 'bir araç'}</code>{' '}
-          aracını çalıştırmak istiyor (<span className="font-medium">{riskLabel(ask.risk)}</span>). İzin veriyor musun?
+          <code className="rounded bg-[var(--color-surface-2)] px-1 py-0.5 text-xs">
+            {ask.tool || 'bir araç'}
+          </code>{' '}
+          aracını çalıştırmak istiyor (<span className="font-medium">{riskLabel(ask.risk)}</span>).
+          İzin veriyor musun?
         </span>
       </div>
       {ask.cmd && (
@@ -63,6 +67,6 @@ export function PermissionPrompt({ ask, onAnswer }: Props) {
           )
         })}
       </div>
-    </div>
+    </ComposerCard>
   )
 }

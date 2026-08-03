@@ -43,6 +43,23 @@ type createWorkspaceReq struct {
 	Icon       string `json:"icon"`     // optional emoji identity
 	Color      string `json:"color"`    // optional hex accent
 	Template   string `json:"template"` // optional workspace template id (default "blank")
+
+	// GitInit asks for `git init` (branch "main") in ProjectDir right after the
+	// workspace is created — the common "new project folder" case, so the user does
+	// not have to visit Workspace ▸ Proje afterwards. Ignored without a ProjectDir.
+	// A missing folder is created first; a folder that is already a repo is left
+	// untouched. Failure never fails the create: it is reported in gitInitError.
+	GitInit bool `json:"gitInit"`
+}
+
+// createWorkspaceResp is the registry Meta (embedded, so the client's Workspace
+// shape is unchanged) plus the outcome of the optional git init. The git step is
+// advisory — the workspace exists either way — so its failure travels as a field
+// rather than an HTTP error.
+type createWorkspaceResp struct {
+	workspace.Meta
+	GitInit      bool   `json:"gitInit,omitempty"`
+	GitInitError string `json:"gitInitError,omitempty"`
 }
 
 func (s *Server) handleCreateWorkspace(w http.ResponseWriter, r *http.Request) {
@@ -81,7 +98,18 @@ func (s *Server) handleCreateWorkspace(w http.ResponseWriter, r *http.Request) {
 	// to the embedded "blank" template.
 	s.seedWorkspaceFromTemplate(r.Context(), wsNew, req.Template)
 
-	writeJSON(w, http.StatusCreated, wsNew.Meta)
+	resp := createWorkspaceResp{Meta: wsNew.Meta}
+	if req.GitInit && projectDir != "" {
+		// createDir=true: the create dialog explicitly offers "folder does not exist
+		// yet — it will be created", so laying it out here is the intended behaviour.
+		if err := prepareGitRepo(projectDir, true); err != nil {
+			resp.GitInitError = err.Error()
+			s.logger.Warn("workspace git init failed", "workspace", wsNew.ID, "dir", projectDir, "error", err)
+		} else {
+			resp.GitInit = true
+		}
+	}
+	writeJSON(w, http.StatusCreated, resp)
 }
 
 type attachWorkspaceReq struct {

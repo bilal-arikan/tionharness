@@ -41,8 +41,18 @@ type graphNode struct {
 	SessionID string `json:"sessionId,omitempty"`
 
 	// AgentID is the underlying agent definition id shared by every instance of
-	// the same agent (agents only).
+	// the same agent. Set on agent-instance nodes, on task nodes (the owner), and
+	// on run-history nodes (the session's agent) so the Network screen can filter
+	// by agent across all of them.
 	AgentID string `json:"agentId,omitempty"`
+
+	// Archived flags a node whose backing session is archived (agent instances and
+	// run-history nodes). Lets the UI hide/show archived work like the board does.
+	Archived bool `json:"archived,omitempty"`
+
+	// Tags are the free-form labels on the backing session/task, so the Network
+	// screen can filter by tag the same way the board does.
+	Tags []string `json:"tags,omitempty"`
 }
 
 // graphEdge links two graph nodes. Kind names the relationship so the frontend
@@ -148,12 +158,14 @@ func (s *Server) handleWorkspaceGraph(w http.ResponseWriter, r *http.Request) {
 			group = inst[0]
 		}
 		nodes = append(nodes, graphNode{
-			ID:     taskPfx + t.ID,
-			Type:   "task",
-			Label:  label,
-			Status: t.BoardState,
-			Group:  group,
-			Desc:   t.Description,
+			ID:      taskPfx + t.ID,
+			Type:    "task",
+			Label:   label,
+			Status:  t.BoardState,
+			Group:   group,
+			Desc:    t.Description,
+			AgentID: t.OwnerAgentID,
+			Tags:    t.Tags,
 		})
 		if t.OwnerAgentID != "" {
 			addAgentEdges(t.OwnerAgentID, taskPfx+t.ID, "owns", true)
@@ -246,15 +258,24 @@ func (s *Server) handleWorkspaceGraph(w http.ResponseWriter, r *http.Request) {
 	// (archive) anchor so finished work piles up there as titled cards. Capped to
 	// the most recent runHistoryCap by recency to bound the payload.
 	const runPfx = "run:"
-	const runHistoryCap = 30
+	const runHistoryCap = 50
 	agentName := make(map[string]string, len(agents))
 	for _, a := range agents {
 		agentName[a.ID] = a.Name
 	}
+	// historyKinds is every execution kind that piles up in the "Geçmiş" archive
+	// anchor. Beyond the Activity feed's chat/task/flow/schedule it now also
+	// includes worker/spawned/inbox and flow-coordinator, so finished coordinator
+	// workers are visible (and filterable) instead of vanishing when they end.
+	historyKinds := map[string]bool{
+		"chat": true, "task": true, "flow": true, "schedule": true,
+		"worker": true, "spawned": true, "inbox": true,
+		agent.SessionKindFlowCoordinator: true,
+	}
 	// sessions are newest-updated first from ListSessions; take the first N
-	// finished (not-running) ones — mirrors exactly what the Activity (executions)
-	// screen lists (chat/task/flow/schedule). Agent is optional (flow
-	// sessions may have none) and only enriches the tooltip.
+	// finished (not-running) ones. Agent is optional (flow sessions may have none)
+	// and only enriches the tooltip. Archived sessions are included but flagged, so
+	// the UI can hide them by default and reveal them on demand.
 	runCount := 0
 	for _, sess := range sessions {
 		if runCount >= runHistoryCap {
@@ -263,9 +284,7 @@ func (s *Server) handleWorkspaceGraph(w http.ResponseWriter, r *http.Request) {
 		if running[sess.ID] {
 			continue
 		}
-		switch sess.Kind {
-		case "chat", "task", "flow", "schedule":
-		default:
+		if !historyKinds[sess.Kind] {
 			continue
 		}
 		label := sess.Title
@@ -273,11 +292,14 @@ func (s *Server) handleWorkspaceGraph(w http.ResponseWriter, r *http.Request) {
 			label = "(" + sess.Kind + ")"
 		}
 		nodes = append(nodes, graphNode{
-			ID:      runPfx + sess.ID,
-			Type:    "run",
-			Label:   label,
-			RunKind: sess.Kind,
-			Sub:     agentName[sess.AgentID],
+			ID:       runPfx + sess.ID,
+			Type:     "run",
+			Label:    label,
+			RunKind:  sess.Kind,
+			Sub:      agentName[sess.AgentID],
+			AgentID:  sess.AgentID,
+			Archived: sess.State == "archived",
+			Tags:     sess.Tags,
 		})
 		runCount++
 	}
@@ -347,6 +369,8 @@ func buildAgentInstances(agents []db.Agent, sessions []db.Session, running map[s
 			RunTarget: target,
 			SessionID: sess.ID,
 			AgentID:   sess.AgentID,
+			Archived:  sess.State == "archived",
+			Tags:      sess.Tags,
 		})
 	}
 	return nodes, instances

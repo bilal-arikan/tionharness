@@ -1045,6 +1045,7 @@ func (r *Runtime) recordedComplete(ctx context.Context, agent db.Agent, provider
 				resp.Usage.ThinkingTokens = deriveThinkingTokens(resp)
 				r.RecordUsage(ctx, agent, resp.Model, resp.Usage, resp.ProviderCalls)
 				r.noteCacheOutcome(ctx, agent, req, resp.Model, resp.Usage)
+				r.noteResolvedModel(ctx, agent, req.Model, resp.Model)
 				return resp, nil
 			} else {
 				r.logger.Warn("persistent cli session failed; falling back to one-shot complete",
@@ -1062,6 +1063,7 @@ func (r *Runtime) recordedComplete(ctx context.Context, agent db.Agent, provider
 	resp.Usage.ThinkingTokens = deriveThinkingTokens(resp)
 	r.RecordUsage(ctx, agent, resp.Model, resp.Usage, resp.ProviderCalls)
 	r.noteCacheOutcome(ctx, agent, req, resp.Model, resp.Usage)
+	r.noteResolvedModel(ctx, agent, req.Model, resp.Model)
 	return resp, nil
 }
 
@@ -1091,5 +1093,6 @@ func (r *Runtime) recordedStream(ctx context.Context, agent db.Agent, sm provide
 	resp.Usage.ThinkingTokens = deriveThinkingTokens(resp)
 	r.RecordUsage(ctx, agent, resp.Model, resp.Usage, resp.ProviderCalls)
 	r.noteCacheOutcome(ctx, agent, req, resp.Model, resp.Usage)
+	r.noteResolvedModel(ctx, agent, req.Model, resp.Model)
 	return resp, nil
 }

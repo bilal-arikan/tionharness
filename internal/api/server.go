@@ -18,6 +18,7 @@ import (
 	"github.com/bilal-arikan/tionswarm/internal/conversation"
 	"github.com/bilal-arikan/tionswarm/internal/db"
 	"github.com/bilal-arikan/tionswarm/internal/events"
+	"github.com/bilal-arikan/tionswarm/internal/exttools"
 	"github.com/bilal-arikan/tionswarm/internal/gateway"
 	"github.com/bilal-arikan/tionswarm/internal/interaction"
 	"github.com/bilal-arikan/tionswarm/internal/logbuf"
@@ -229,6 +230,9 @@ func (s *Server) applySettings() {
 	cur := s.settings.Get()
 	s.providers.SetAnthropicKey(s.settings.AnthropicKey())
 	s.providers.SetClaudeCLIPath(cur.ClaudeCLIPath)
+	// Keep the external-tools panel pointed at the SAME binary the provider runs;
+	// an empty setting clears the override and restores PATH lookup.
+	exttools.SetPathOverride(exttools.ClaudeToolName, cur.ClaudeCLIPath)
 	s.providers.SetClaudeConfigDir(cur.ClaudeConfigDir)
 	s.providers.SetClaudeAuth(s.settings.ClaudeCliAuthToken(), cur.ClaudeCliAuthKind)
 	s.providers.SetAnthropicBetas(cur.ExtendedPromptCache, cur.AnthropicContextEditing, cur.AnthropicServerCompaction, cur.AnthropicRefusalFallback)
@@ -259,6 +263,7 @@ func (s *Server) applySettings() {
 	s.tun.SetCoordinatorLimits(cur.CoordinatorMaxWorkers, cur.CoordinatorMaxTurns,
 		cur.CoordinatorMaxDepth, cur.CoordinatorMaxSubtreeSessions)
 	s.tun.SetCoordinatorSettleGrace(cur.CoordinatorSettleGraceSec)
+	s.tun.SetCoordinatorStallGuard(cur.CoordinatorStallGuard, cur.CoordinatorStallSweepMin, cur.CoordinatorStallMaxNudges)
 	s.tun.SetWorkdirGuards(cur.AutonomousConfine, cur.AutonomousBootSeq)
 	s.tun.SetAutonomousTaskBudget(cur.AutonomousTaskBudgetTokens)
 	s.tun.SetNativeToolSearch(cur.AnthropicNativeToolSearch)
@@ -746,24 +751,55 @@ func (s *Server) registerMiscRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/external-tools/rtk-config/reveal", s.handleRevealRtkConfig)
 }
 
-// withWorkspace resolves the active workspace from the X-Workspace-Id header
-// (falling back to the default) and injects it into the request context.
+// workspaceQueryKeys are the query parameters that scope a request to a workspace,
+// for clients that cannot set headers (an <img src> loading an inline attachment) and
+// for external automation driving the API by URL alone. "ws" is the original; the
+// longer aliases exist because they are the obvious guesses and a silently-ignored
+// scope param is worse than an unknown one — it serves ANOTHER workspace's data under
+// the caller's id (see workspaceIDFromRequest).
+var workspaceQueryKeys = []string{"ws", "workspace", "workspaceId", "workspace_id"}
+
+// workspaceIDFromRequest returns the requested workspace id and whether it was named
+// EXPLICITLY in the query string. The distinction drives the unknown-id policy in
+// withWorkspace: a header id may be stale (localStorage surviving a deleted
+// workspace) and must degrade gracefully, while a query id is a deliberate,
+// per-request scope whose silent replacement would hand back the wrong workspace.
+func workspaceIDFromRequest(r *http.Request) (id string, fromQuery bool) {
+	q := r.URL.Query()
+	for _, k := range workspaceQueryKeys {
+		if v := strings.TrimSpace(q.Get(k)); v != "" {
+			return v, true
+		}
+	}
+	return strings.TrimSpace(r.Header.Get("X-Workspace-Id")), false
+}
+
+// withWorkspace resolves the active workspace from an explicit ?ws=/?workspace= query
+// param or the X-Workspace-Id header (falling back to the default) and injects it into
+// the request context. The resolved id is echoed back in the X-Workspace-Id response
+// header so a caller can always tell WHICH workspace answered rather than assuming.
 func (s *Server) withWorkspace(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		id := r.Header.Get("X-Workspace-Id")
-		// Fallback for requests that cannot set headers (e.g. an <img src> loading
-		// an inline attachment): accept ?ws=<id> as the workspace scope.
-		if id == "" {
-			id = r.URL.Query().Get("ws")
-		}
+		id, fromQuery := workspaceIDFromRequest(r)
 		var ws *workspace.Workspace
 		if id != "" {
-			// Fall back to the default workspace when the requested id is unknown
-			// (e.g. a stale id in localStorage after the workspace was deleted), so
-			// the app can always recover instead of bricking on 400s.
-			if found, err := s.workspaces.Get(id); err == nil {
+			found, err := s.workspaces.Get(id)
+			switch {
+			case err == nil:
 				ws = found
-			} else {
+			case fromQuery:
+				// An explicitly-scoped request naming a workspace that does not exist is
+				// an error, never a redirect: answering it from the default workspace
+				// returns another workspace's data under the caller's id — the caller
+				// reads it as authoritative and can act (or write) on the wrong store.
+				writeError(w, http.StatusBadRequest, "unknown workspace "+id)
+				return
+			default:
+				// Header path: the id may simply be stale (localStorage outliving a
+				// deleted workspace), so the app recovers on the default instead of
+				// bricking on 400s.
+				s.logger.Warn("api: unknown workspace in X-Workspace-Id; serving default",
+					"requested", id, "path", r.URL.Path)
 				ws = s.workspaces.Default()
 			}
 		} else {
@@ -777,6 +813,12 @@ func (s *Server) withWorkspace(next http.Handler) http.Handler {
 		if ws == nil && !workspaceOptionalPath(r.URL.Path) {
 			writeError(w, http.StatusConflict, "no active workspace — create one first")
 			return
+		}
+		// Echo the workspace that actually served the request: without it a caller
+		// whose scope silently fell back to the default cannot tell whose data it is
+		// holding (the failure mode this whole block exists to prevent).
+		if ws != nil {
+			w.Header().Set("X-Workspace-Id", ws.ID)
 		}
 		ctx := context.WithValue(r.Context(), workspaceCtxKey, ws)
 		next.ServeHTTP(w, r.WithContext(ctx))

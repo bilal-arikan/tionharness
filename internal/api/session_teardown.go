@@ -70,6 +70,13 @@ func (s *Server) teardownSessionRuntime(wsp *workspace.Workspace, sessionID stri
 	delete(s.inbox.sessions, sessionID)
 	s.inbox.unlock()
 
+	// Phase 6: release the session's hub state (seq, replay ring, subscribers).
+	// Nothing else ever frees it, so without this every session the process has
+	// seen — including the throwaway schedule/spawn/worker ones — keeps its ring
+	// buffer alive until restart. Any window still watching gets its channel
+	// closed, which ends its stream: correct for a session being deleted.
+	s.hub.Drop(sessionID)
+
 	return nil
 }
 

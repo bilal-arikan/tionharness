@@ -23,10 +23,18 @@ export function performSummarize(ctx: CommandContext, kind: string): void {
   const userTmp = `cmd-u-${Date.now()}`
   const botTmp = `cmd-a-${Date.now()}`
   const busyLabel =
-    kind === 'compact' ? '⏳ Sohbet sıkıştırılıyor…'
-    : kind === 'refresh-context' ? '⏳ Bağlam snapshot\'ı yenileniyor…'
-    : '⏳ Özetleniyor…'
-  const cmdBubble: Message = { id: userTmp, sessionId: sid, role: 'user', text: '/' + kind, createdAt: now }
+    kind === 'compact'
+      ? '⏳ Sohbet sıkıştırılıyor…'
+      : kind === 'refresh-context'
+        ? "⏳ Bağlam snapshot'ı yenileniyor…"
+        : '⏳ Özetleniyor…'
+  const cmdBubble: Message = {
+    id: userTmp,
+    sessionId: sid,
+    role: 'user',
+    text: '/' + kind,
+    createdAt: now,
+  }
   const placeholder: Message = {
     id: botTmp,
     sessionId: sid,
@@ -60,13 +68,20 @@ export interface HandoffContext extends CommandContext {
 // old session keeps a tombstone linking forward; the new session opens with the
 // handoff inline.
 export function performHandoff(ctx: HandoffContext): void {
-  const { activeSessionId, activeAgentId, setMessages, setError, refreshSessions, selectSession } = ctx
+  const { activeSessionId, activeAgentId, setMessages, setError, refreshSessions, selectSession } =
+    ctx
   const sid = activeSessionId
   if (!sid) return
   const now = Math.floor(Date.now() / 1000)
   const userTmp = `cmd-u-${Date.now()}`
   const botTmp = `cmd-a-${Date.now()}`
-  const cmdBubble: Message = { id: userTmp, sessionId: sid, role: 'user', text: '/handoff', createdAt: now }
+  const cmdBubble: Message = {
+    id: userTmp,
+    sessionId: sid,
+    role: 'user',
+    text: '/handoff',
+    createdAt: now,
+  }
   const placeholder: Message = {
     id: botTmp,
     sessionId: sid,
@@ -79,10 +94,22 @@ export function performHandoff(ctx: HandoffContext): void {
   setMessages((prev) => [...prev, cmdBubble, placeholder])
   api
     .handoffSession(sid)
-    .then(({ newSessionId }) => {
+    .then((res) => {
+      // Blocked (coordinator with running workers): no fresh session was spawned.
+      // Swap the optimistic placeholder for the persisted "/handoff" + notice pair
+      // so the reason shows in-thread; do NOT switch sessions or raise an error.
+      if (res.blocked || !res.newSessionId) {
+        setMessages((prev) => {
+          const kept = prev.filter((m) => m.id !== userTmp && m.id !== botTmp)
+          const extra = [res.userMessage, res.replyMessage].filter(Boolean) as Message[]
+          return [...kept, ...extra]
+        })
+        refreshSessions()
+        return
+      }
       // Refresh the list (old tombstone + new session) and jump to the fresh one.
       refreshSessions()
-      if (newSessionId) selectSession(newSessionId)
+      selectSession(res.newSessionId)
     })
     .catch((e) => {
       setMessages((prev) => prev.filter((m) => m.id !== userTmp && m.id !== botTmp))
@@ -179,24 +206,59 @@ export interface ChatCommandDeps {
 
 // Slash commands available in the chat composer ("/" menu): built-in session
 // commands plus one entry per flow (🔀, takes the rest of the line as input).
-export function buildChatCommands({ flows, summarize, handoff, openRewind, runFlow }: ChatCommandDeps): SlashCommand[] {
+export function buildChatCommands({
+  flows,
+  summarize,
+  handoff,
+  openRewind,
+  runFlow,
+}: ChatCommandDeps): SlashCommand[] {
   return [
-    { name: 'compact', icon: '🗜', description: 'Sohbeti şimdi özete sıkıştır', run: () => summarize('compact') },
-    { name: 'refresh-context', icon: '🔄', description: 'Donmuş bağlam snapshot\'ını yenile — araç/skill/talimat değişiklikleri sonraki turda görünür', run: () => summarize('refresh-context') },
-    { name: 'handoff', icon: '↪', description: 'Context reset — temiz pencerede devam et', run: () => handoff() },
-    { name: 'rewind', icon: '⟲', description: 'Sohbeti bir checkpoint\'e geri sar — mesajları geri al', run: () => openRewind() },
-    { name: 'tools', icon: '🔌', description: 'Kullanılabilir araçları listele', run: () => summarize('tools') },
-    { name: 'board', icon: '🗂', description: 'Görev panosunu özetle', run: () => summarize('board') },
+    {
+      name: 'compact',
+      icon: '🗜',
+      description: 'Sohbeti şimdi özete sıkıştır',
+      run: () => summarize('compact'),
+    },
+    {
+      name: 'refresh-context',
+      icon: '🔄',
+      description:
+        "Donmuş bağlam snapshot'ını yenile — araç/skill/talimat değişiklikleri sonraki turda görünür",
+      run: () => summarize('refresh-context'),
+    },
+    {
+      name: 'handoff',
+      icon: '↪',
+      description: 'Context reset — temiz pencerede devam et',
+      run: () => handoff(),
+    },
+    {
+      name: 'rewind',
+      icon: '⟲',
+      description: "Sohbeti bir checkpoint'e geri sar — mesajları geri al",
+      run: () => openRewind(),
+    },
+    {
+      name: 'tools',
+      icon: '🔌',
+      description: 'Kullanılabilir araçları listele',
+      run: () => summarize('tools'),
+    },
+    {
+      name: 'board',
+      icon: '🗂',
+      description: 'Görev panosunu özetle',
+      run: () => summarize('board'),
+    },
     { name: 'flows', icon: '🔀', description: 'Akışları özetle', run: () => summarize('flows') },
-    ...flows.map(
-      (f): SlashCommand => ({
-        name: flowSlug(f.name) || f.id.slice(0, 6),
-        icon: '🔀',
-        description: `${f.name} akışını çalıştır`,
-        takesInput: true,
-        run: (input?: string, attachments?: Attachment[]) =>
-          runFlow(f.id, f.name, input ?? '', attachments ?? []),
-      }),
-    ),
+    ...flows.map((f): SlashCommand => ({
+      name: flowSlug(f.name) || f.id.slice(0, 6),
+      icon: '🔀',
+      description: `${f.name} akışını çalıştır`,
+      takesInput: true,
+      run: (input?: string, attachments?: Attachment[]) =>
+        runFlow(f.id, f.name, input ?? '', attachments ?? []),
+    })),
   ]
 }

@@ -5,8 +5,11 @@ import { useVirtualRows } from '@/shared/hooks/useVirtualRows'
 interface Props {
   text: string
   /**
-   * 'inline' (default) — the small in-chat diff card: wraps long lines, renders
-   * every line, no folding. Kept unchanged so existing call sites are untouched.
+   * 'inline' (default) — the small in-chat diff card: wraps long lines and folds
+   * nothing, because wrapped rows have no fixed height and so cannot be
+   * virtualized. A long patch is therefore capped behind an explicit expander
+   * (see INLINE_CAP) — every line of a big diff would otherwise be a real DOM
+   * node living in the transcript for as long as the session is open.
    *
    * 'panel' — the bulk changes popup, sized for patches that can run to tens of
    * thousands of lines: long unchanged runs fold, lines do not wrap (fixed row
@@ -43,6 +46,12 @@ const VIRTUAL_MIN = 400
 const HARD_CAP = 20_000
 const CAP_PREVIEW = 2_000
 
+// The inline card's own cap. Far lower than the panel's because inline rows wrap
+// (no fixed height → no virtualization), so every rendered line is a permanent
+// DOM node in the transcript. Diffs under the cap render exactly as before.
+const INLINE_CAP = 500
+const INLINE_PREVIEW = 300
+
 // DiffView renders a unified diff with per-line +/- coloring and a small
 // add/remove stat header, matching the file-change cards in External Agent chat.
 export function DiffView({ text, variant = 'inline' }: Props) {
@@ -51,24 +60,64 @@ export function DiffView({ text, variant = 'inline' }: Props) {
   const { lines, stats } = useMemo(() => parseDiff(text), [text])
 
   if (variant === 'inline') {
-    return (
-      <Frame added={stats.added} removed={stats.removed}>
-        <pre className="overflow-x-auto bg-[var(--color-bg)] py-1 text-xs leading-relaxed">
-          <code className="block font-mono">
-            {lines.map((l, i) => (
-              <div key={i} className={`flex px-3 ${ROW[l.kind]}`}>
-                <span className="mr-2 select-none opacity-50">{GUTTER[l.kind]}</span>
-                <span className="whitespace-pre-wrap break-all">
-                  {l.kind === 'add' || l.kind === 'del' ? l.text.slice(1) : l.text}
-                </span>
-              </div>
-            ))}
-          </code>
-        </pre>
-      </Frame>
-    )
+    return <DiffInline lines={lines} added={stats.added} removed={stats.removed} />
   }
   return <DiffPanel lines={lines} added={stats.added} removed={stats.removed} />
+}
+
+// DiffInline is the in-chat card. Short patches render whole; a long one shows a
+// head slice plus an expander that states the real size — never a silent
+// truncation, same rule as the panel.
+function DiffInline({
+  lines,
+  added,
+  removed,
+}: {
+  lines: ReturnType<typeof parseDiff>['lines']
+  added: number
+  removed: number
+}) {
+  const [uncapped, setUncapped] = useState(false)
+  const capped = !uncapped && lines.length > INLINE_CAP
+  const shown = capped ? INLINE_PREVIEW : lines.length
+
+  return (
+    <Frame
+      added={added}
+      removed={removed}
+      extra={
+        capped ? (
+          <span className="ml-auto font-mono text-[10px] text-[var(--color-text-dim)]">
+            {lines.length.toLocaleString('tr-TR')} satır
+          </span>
+        ) : undefined
+      }
+    >
+      <pre className="overflow-x-auto bg-[var(--color-bg)] py-1 text-xs leading-relaxed">
+        <code className="block font-mono">
+          {lines.slice(0, shown).map((l, i) => (
+            <div key={i} className={`flex px-3 ${ROW[l.kind]}`}>
+              <span className="mr-2 select-none opacity-50">{GUTTER[l.kind]}</span>
+              <span className="whitespace-pre-wrap break-all">
+                {l.kind === 'add' || l.kind === 'del' ? l.text.slice(1) : l.text}
+              </span>
+            </div>
+          ))}
+        </code>
+      </pre>
+      {capped && (
+        <button
+          onClick={() => setUncapped(true)}
+          className="shrink-0 border-t border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-left text-[11px] text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)]"
+        >
+          İlk {INLINE_PREVIEW.toLocaleString('tr-TR')} satır gösteriliyor ·{' '}
+          <span className="font-medium">
+            kalan {(lines.length - INLINE_PREVIEW).toLocaleString('tr-TR')} satırı da yükle
+          </span>
+        </button>
+      )}
+    </Frame>
+  )
 }
 
 function Frame({

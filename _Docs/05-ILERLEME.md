@@ -1,6 +1,442 @@
 # TionSwarm — İlerleme Takibi
 
-> Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-08-01**
+> Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-08-03**
+
+## Koordinatör donma koruması: prose-regex → yargıç + gecikme tarayıcısı ✅ (2026-08-03)
+
+- **Sorun (WS17/SES101 nüksü):** 2026-08-02'de eklenen `guardSpawnHallucination`
+  prose-regex'i (`coordSpawnClaimRe`) uzun koşuda **sözlük-kaymasını kaçırdı**.
+  Koordinatör 15 tur sonra fantom spawn'ı "worker" demeden anlattı: *"Round 15
+  açıldı — 2 kol · SES144 (Kol AM) · SES145 (Kol AN)"*. Regex yalnız `worker`+fiil
+  ya da `[running]` aradığı için eşleşmedi → guard hiç ateşlenmedi (debug'da 0
+  guardrail), koordinatör olmayan SES144/145'i bekleyip dondu. 42 önceki
+  `spawn_worker` gerçekti; yalnız son tur `steps=[]`.
+- **Kök karar:** prose-regex kırılgan (determinizm değil, anlam sorunu). **Kaldırıldı.**
+  Yerine `internal/agent/coordination_stall.go`:
+  - **Deterministik kapı** (regex yok): tur hiç koordinasyon aracı çağırmadı **ve**
+    0 çalışan worker → ancak o zaman sınıflandırıcı çalışır (paid çağrı yalnız gerçek
+    boş turda).
+  - **Ucuz-model yargıcı** (`judgeCoordinatorStalled`): title-model override, yoksa
+    koordinatörün modeli (lessons/summary ile aynı politika); son mesaja bakıp
+    `{"stalled":true|false}` döner (`parseStallVerdict` fail-safe: bozuk → false).
+  - **Katman 1 — tur-sonu** (`guardCoordinatorStall`): pozitif verdikte
+    `<coordination-guard>` notu + `slot.pending` ile aynı batch'te bir tur zorlar.
+    `CoordinatorStallMaxNudges` (vars. 2) ile sınırlı; gerçek araç çağrısı streak'i
+    sıfırlar; yargıç hatasında nudge YOK (sweeper'a bırakılır).
+  - **Katman 2 — gecikme tarayıcısı** (`StartCoordinatorStallSweeper`, 60 sn tick):
+    canlı `coordSlots`'u gezer; `slotIsStallCandidate` (idle + hadWorkers + 0 worker +
+    `lastTurnUnix` `CoordinatorStallSweepMin` (vars. 5 dk) öncesinden eski) olanları
+    yargılar, `enqueueCoordinatorTurn` ile uyandırır. Bütçe biterse dırdır yerine
+    gözlemlenebilir `DebugError`. Restart/kaçırma horizonunu kapatır.
+- **Ayarlar (Ayarlar ▸ Araçlar ▸ "Koordinatör donma koruması"):** `CoordinatorStallGuard`
+  (master on/off, vars. açık) · `CoordinatorStallSweepMin` (0=vars.5dk, −1=tarayıcı
+  kapalı) · `CoordinatorStallMaxNudges` (0=vars.2). Tam plumbing: settings.go/store.go
+  (clamp) → tunables.go → api/server.go applySettings → manager.go boot; frontend
+  types/settings.ts + AppToolsPanel + SettingsPanel patch.
+- **Kod/Test:** `coordination_stall.go`, `coordination.go` (`coordSlot.lastTurnUnix`,
+  guard çağrısı agent taşır), sweeper `manager.go`'da başlatılır. Test:
+  `coordination_hallucination_test.go` → `parseStallVerdict` + `slotIsStallCandidate`
+  + `turnCalledCoordinationTool` (regex testi kaldırıldı). go build/vet/test yeşil.
+
+## API workspace kapsamı: `?workspace=` sessizce yok sayılıyordu ✅ (2026-08-02)
+
+## API workspace kapsamı: `?workspace=` sessizce yok sayılıyordu ✅ (2026-08-02)
+
+- **Sorun:** `withWorkspace` yalnız `X-Workspace-Id` header'ı ve `?ws=` kabul
+  ediyordu. `?workspace=WS17` gibi bir parametre **sessizce yok sayılıp** default
+  workspace'e düşüyordu → çağıran, **başka bir workspace'in verisini** kendi
+  istediği id'nin cevabı sanıyordu. Canlı örnek: `GET /api/mcp-servers?workspace=WS17`
+  7 workspace için de WS1'in sunucularını (`MCP31 mcp-chrome`) döndürdü; WS17'nin
+  gerçek listesi diskte `MCP1 codebase-memory` + `MCP2 playwright`. Teşhis sırasında
+  bu, "WS17'de mcp-chrome var" şeklinde **yanlış bir bulguya** yol açtı. Dış-ajan
+  otomasyonu için (`_Docs/33`) asıl risk okuma değil **yanlış store'a yazma**.
+- **Çözüm** (`internal/api/server.go`):
+  - `workspaceQueryKeys` = `ws` · `workspace` · `workspaceId` · `workspace_id`
+    (alias'lar bilerek geniş: sessizce yok sayılan bir kapsam parametresi,
+    bilinmeyen bir parametreden daha kötüdür).
+  - `workspaceIDFromRequest` id'yi **ve açıkça query ile mi geldiğini** döndürür.
+    Query, header'ı ezer (per-request kapsam > istemcinin ambient seçimi).
+  - **Bilinmeyen id politikası ikiye ayrıldı:** query ile gelen (kasıtlı kapsam) →
+    **400 `unknown workspace <id>`**, asla sessiz yönlendirme. Header ile gelen
+    (localStorage'da bayat kalmış olabilir) → eskisi gibi default'a düşer ama artık
+    **warn loglanır** — silinen workspace sonrası UI brick olmasın.
+  - Her yanıta **`X-Workspace-Id` response header'ı**: çağıran, isteğine hangi
+    workspace'in cevap verdiğini varsaymak yerine görebilir.
+- **Test:** `workspace_scope_test.go` (tüm alias'lar, query>header önceliği,
+  header'ın explicit sayılmaması, boşluk-only kapsam sayılmaz).
+
+## Koordinatör spawn halüsinasyon guard'ı ✅ (2026-08-02)
+
+- **Sorun (SES1 donması):** Uzun/ağır-compact bağlamda koordinatör turu prose'da
+  "3 worker başlattım, `list_workers` ile doğruladım hepsi `[running]`" **yazıyor
+  ama o turda hiç `spawn_worker`/`list_workers` çağırmıyordu** — debug.jsonl'de
+  sıfır `tool` olayı, iddia edilen SES95/96/97 diskte yok. Sonuç: hiç worker
+  yaratılmadan koordinatör hayalî worker'ları bekleyip donuyor ("worker başladı
+  deniyor ama başlamıyor"). Teşhis: 23:38 turu gerçek `spawn_worker`×2 yaptı
+  (SES93/94 çalıştı, 23:55-23:57'de raporladı); 23:58 turu aynı biçimi taklit etti
+  ama araç çağırmadı (cache okuması 1.34M→55K, arada ağır compaction).
+- **Çözüm:** `runCoordinatorTurn` başarılı tur sonrası `guardSpawnHallucination`
+  çağırır: turun metni spawn/verify iddia edip (`coordSpawnClaimRe`: `[running]`
+  ya da worker↔başlat/launch/spawn yakınlığı, bilingual) ama `steps`'te hiç
+  koordinasyon aracı (`spawn_worker`/`list_workers`/`send_to_worker`/`stop_worker`,
+  bare + namespaced CallName, subStep'lere iner) çağrılmadıysa → düzeltici
+  `<coordination-guard>` notu (origin `coordination-guard`) enjekte eder ve
+  `slot.pending=true` ile **aynı batch'te bir tur daha** zorlar; nudge:
+  "betimlemek spawn etmek değildir — gerçekten aracı çağır ya da bitir".
+- **Sınır:** per-koordinatör `coordSpawnHallucStreak` (`coordSlot`), tavan
+  `coordSpawnHallucMaxCorrections=2` → wedged model tüm notify-loop bütçesini
+  düzeltmeye harcayamaz; **gerçek bir koordinasyon aracı çağrısı streak'i sıfırlar.**
+  Warn log + `debug.jsonl` `error` anomalisi.
+- **Kod:** `internal/agent/coordination.go` (`guardSpawnHallucination`,
+  `turnCalledCoordinationTool`, `coordSpawnClaimRe`, `coordSlot.spawnHallucStreak`).
+  Test: `coordination_hallucination_test.go` (gerçek SES1 mesajları trip eder,
+  conclude/status turları etmez; bare + namespaced + nested tool tespiti).
+- **Tamamlayıcı:** aynı kök nedenin (koordinatör bağlam şişmesi — 93
+  `<task-notification>` ≈ 103k token) görüntü tarafı bugün ayrıca ele alındı
+  (bkz. bir alttaki "Bağlam metresi" girdisi). Kalan sertleştirme fikri: worker
+  raporlarını `NotifyCoordinator` enjeksiyonundan önce özetlemek.
+
+## Bağlam metresi: "Kullanıcı" kovası origin'e göre bölündü ✅ (2026-08-02)
+
+- **Sorun:** Koordinatör oturumunda bağlam penceresi "Kullanıcı" kovasını devasa
+  gösteriyordu. Ölçüm (WS17/SES1): 121 `user` mesajının **yalnız 9'u** insan
+  metni (~143 token); **93'ü** `<task-notification>` (~103k token, %98.7), 19'u
+  `<coordination-status>`. Yani panel "kullanıcı 400 KB yazdı" diyordu; gerçekte
+  kullanıcı birkaç satır yazmış, gerisi makine enjeksiyonuydu.
+- **Çözüm:** `buildFillers` artık kovayı `db.Message.Origin` ile ayırıyor —
+  ayırt edici alan **zaten veride vardı** (`origin: "worker-note"`), sadece
+  panelde kullanılmıyordu. Yeni sentetik filler rolleri: `worker-note`
+  ("Worker sonuçları", turuncu) ve `auto-prompt` ("Otomatik dürtme", sarı,
+  `wake`/`schedule` kaynaklı). Wire'daki `role` değişmedi — model bunları hâlâ
+  user turu olarak replay ediyor; bölünme yalnız **görüntüleme** katmanında.
+- **Bilinmeyen origin** düz `user` kovasına düşer (yeni bir Origin değeri
+  etiketsiz kova üretmesin diye); test bunu pinliyor.
+- **Renk seçimi:** accent bilerek yalnız insanın payında kaldı — turuncu/sarı
+  bakışta "bu benim yazdığım değil" diyor.
+- **Kod:** `internal/api/session_info.go` (`fillerRoleFor`, `roleLabel`),
+  `frontend/src/shared/lib/palette.ts`. Test: `session_fillers_test.go`
+  (kova sayıları + `Role` tekilliği — frontend legend'ı `key={f.role}` kullanıyor,
+  çakışma iki kovayı tek React key'inde eritirdi).
+
+## Harici araçlar: `winget` bağımlılığı GOOS'a bağlandı (Linux sunucu hatası) ✅ (2026-08-03)
+
+- **Bulgu:** "Bu komutlar Ubuntu sunucuda da çalışır mı?" sorusuyla yapılan denetim
+  gerçek bir hata ortaya çıkardı — **aynı gün eklenen `bun` girdisi Linux'ta bozuktu**.
+  `oven-sh/bun` release akışı Linux'ta da çalıştığı için statü `outdated` olabiliyor,
+  `canOfferUpdate` düğmeyi gösteriyor, düğme ise `winget` çağırıp hata veriyordu.
+- **Daha sinsi olan:** `git` ve `ffmpeg`'de akış olmadığı için düğme çıkmıyordu ama
+  panel her `command` spec'i için **komut kopyalama çipi** de render eder → Ubuntu
+  kullanıcısına otoriter görünen, asla çalışamayacak bir `winget upgrade --id …`
+  satırı sunuluyordu. Yanlış talimat, talimatsızlıktan kötüdür.
+- **Çözüm:** `wingetSpec(goos, id, note)` + `bunUpdateSpec(goos)`. Windows'ta winget,
+  değilse: `git`/`ffmpeg` → `manual` + apt notu, `bun` → **`bun upgrade`** (bun kendi
+  güncelleyicisini taşır, paket yöneticisi gerekmez). Karar `runtime.GOOS`'u doğrudan
+  okumak yerine **parametreli** verilir → her iki dal da Windows'tan test edilebilir.
+- **Kalıcı test:** `platform_test.go` — Linux dalında Kind manual/`bun`, komut winget
+  değil ve `UpdateCommandLine()` winget satırı döndürmüyor; ayrıca
+  `TestCatalogHasNoWingetOffWindows` canlı katalogu Linux host'ta tarar.
+- **Zaten doğru olanlar (denetlendi):** `exec.LookPath` Linux PATH'i, `--version`
+  probe'ları, `proc.PythonCandidates()` (Linux'ta `python3` önce), `IsWindowsAppAlias`
+  (Linux'ta daima false), `tts`/`stt` çözücüleri (`exeName()` `.exe`'yi düşürür,
+  PATH fallback), `gitProjectURL`. `GOOS=linux go build ./...` temiz.
+- **Devamı — `node`/`python` notları da bağlandı:** İkisi her platformda `manual`
+  KALIR (kurulumun sahibi bilinemez: nvm/dağıtım paketi/pyenv/brew/conda/installer —
+  yanlış seçmek gerçek sahiple kavga eder); platforma bağlanan yalnız **not
+  metnidir**, çünkü not kullanıcının uygulayacağı talimattır. Windows: nvm/installer/
+  winget · Linux: nvm/**NodeSource** (apt'taki node çok eski) ve python için
+  **deadsnakes/pyenv + venv** · macOS: `brew upgrade`. Linux python notu ayrıca
+  **Debian/Ubuntu'da sistem `python3`'ünü yerinde yükseltmenin apt araçlarını
+  bozabileceği** uyarısını taşır. Testler: notlar o platformda **var olmayan** paket
+  yöneticisini anamaz (Windows'ta `apt`/`brew`, Linux'ta `winget`/`brew` yasak) ve en
+  az bir geçerli yol göstermek zorundadır. `GOOS=windows/linux/darwin` üçü de derlendi.
+- **Dokunulan:** `internal/exttools/catalog.go` · `internal/exttools/platform_test.go` (yeni) · `_Docs/54`.
+
+## Harici araçlar: `bun` + "Güncelle" butonu kuralının isimlendirilmesi ✅ (2026-08-03)
+
+- **`bun` eklendi** (kategori `dev`, `Wire: "cli"`): `transform_data`'nın kabul ettiği
+  üçüncü çalışma zamanı (python3/node/bun). node/npm'in aksine **kullanılabilir bir
+  release akışı var** — `oven-sh/bun` release yayımlıyor ve tag'i `bun-v1.3.14`;
+  `semverRe` içinden `1.3.14`'ü okuyor, karşılaştırma gerçek. Ölçüldü: yerel `1.3.1`
+  → verdict `outdated` ✓. Güncelleme `command` (winget `Oven-sh.Bun`) — bu makinede
+  zaten winget ile kurulu (`WinGet\Links\bun.exe`).
+- **`canOfferUpdate` (asıl değişiklik):** "Güncelle" butonunun kuralı JSX içinde
+  satır-içi bir koşuldu ve akışsız araçlarda butonun çıkmaması **emergent** bir yan
+  etkiydi — kimse bunu kural olarak yazmamıştı. Tek bir isimlendirilmiş yardımcıya
+  taşındı: `kurulu ∧ updateKind==='command' ∧ akış "geride" dedi`. Yani `ffmpeg`,
+  `npm`, `node`, `python` (ve Windows dışı `git`) için buton **hiç render edilmez**;
+  statüleri ancak `unknown` olabilir ve "bilmiyorum" kullanıcının makinesinde paket
+  yöneticisi koşturmak için gerekçe değil. Komut kopyalama çipi manuel çıkış kapısı
+  olarak kalır. İsimlendirmenin amacı: statü mantığı ileride değişirse gerekçesiz
+  güncelleme önerisi sessizce geri gelmesin.
+- **Dokunulan:** `internal/exttools/catalog.go` · `ExternalToolsPanel.tsx` · `_Docs/54`.
+
+## Harici araçlar: `python` + yorumlayıcı çözümünün tek kaynağa taşınması ✅ (2026-08-02)
+
+- **Neden:** `python` opsiyonel değil **gerçek bağımlılık** — `run_code` ve
+  `transform_data` ona shell ediyor, code-mode binding'leri onda koşuyor. Panelde yoktu.
+- **Windows tuzağı (ölçüldü, varsayılmadı):**
+  `lookPath("python3")` → `...\AppData\Local\Microsoft\WindowsApps\python3.exe`, yani
+  Store **app-execution-alias stub'ı** (0-baytlık reparse point; sadeleştirilmiş env'de
+  `Python was not found` yazıp **9009** ile çıkar). Naif tespit "kurulu ✓" der, sürüm
+  probe'u patlar → gayet çalışan bir makinede "sürüm okunamadı".
+- **Çözüm — kopyalama değil, taşıma:** kural (`aday sırası` + `WindowsApps atla`) zaten
+  `tools/builtin_transform_data.go`'da vardı. Kopyalamak yerine `internal/proc/interp.go`'ya
+  taşındı (`PythonCandidates` / `LookInterpreter` / `IsWindowsAppAlias`); `tools` ve
+  `exttools` **aynı** fonksiyonu çağırıyor → panelin gösterdiği ikili ile `run_code`'un
+  çalıştırdığı ikili ayrışamaz. `proc` ikisinin de zaten bağımlı olduğu leaf paket.
+- **Doğrulandı:** naif `lookPath(python3)` → stub; `Detect(python)` →
+  `C:\Python313\python.exe` → `3.13.7` ✓. `python/cpython` `releases/latest` → **404**
+  (tag var, release yok — `git/git` ile aynı) → akış bağlanmadı.
+- **Dokunulan:** `internal/proc/interp.go` (yeni) · `internal/tools/builtin_transform_data.go`
+  (kopya kalktı) · `internal/exttools/catalog.go` · `_Docs/54`.
+
+## Harici araçlar: `node` + `npm` katalogda (release akışı bilerek yok) ✅ (2026-08-02)
+
+- **Neden:** `mmdc` güncellemesi `npm`'e dayanıyor ama npm'in kendisi listede yoktu;
+  npm yoksa o "Güncelle" düğmesi sessizce başarısız oluyordu.
+- **İki release akışı da denendi, ikisi de kullanılamaz çıktı:**
+  - `nodejs/node` → `v26.5.1 "(Current)"`. Endpoint tarihe göre en yenisini verir =
+    **Current** hattı. Yerel `v20.20.2` (LTS) "outdated" gösterilip kullanıcı
+    **LTS'ten itilirdi**. Node'un LTS bilgisi `nodejs.org/dist/index.json`'da,
+    GitHub release'inde değil.
+  - `npm/cli` → `libnpmpack-v10.0.2`, yani npm CLI değil **monorepo alt paketi**.
+    `semverRe` içinden `10.0.2` çekip yerel `10.8.2` ile karşılaştırır → sessizce
+    "güncel" der. Kendinden emin ve anlamsız.
+- **Karar:** GitHub olmayan URL (`nodejs.org` / `npmjs.com`) → `Repo()` boş →
+  "release akışı yok". Uydurmaktansa bilmediğini söyle.
+- **`Path` alanı burada asıl değer (düzeltme):** İlk yazdığım "bu makinede ikisi de
+  nvm dizininden çözülüyor" ifadesi **eksikti** — ölçüm Bash tool'unda yapılmıştı.
+  Gerçekte **iki ayrı Node** var ve hangisinin görüneceği sürecin PATH'ine bağlı:
+  PowerShell → `C:\Program Files\nodejs` (winget, LTS v24), Git Bash → nvm-sh'ın
+  `.bashrc`'den öne aldığı `~\.nvm\versions\node\...`. Yani `/api/external-tools`
+  çıktısı **backend'in nasıl başlatıldığına** göre değişir (`dev.ps1` → PowerShell →
+  Program Files). `exec.LookPath`'in doğru davranışı, ama panelin `Path` alanını
+  vazgeçilmez kılan da tam olarak bu.
+- **`node` → `manual`** (kurulumun sahibi nvm mi installer mı bilinemez; winget
+  nvm'in üstüne kurarsa çakışır), **`npm` → `command`** (`npm i -g npm@latest`).
+- **Windows'ta ölçüldü:** `npm` PATH'te `npm.cmd`'ye çözülüyor ve Go'nun `exec`'i
+  batch dosyasını sorunsuz çalıştırıyor → `10.8.2` okundu, `cmd /c` sarmalayıcısı
+  gerekmedi.
+- **Dokunulan:** `internal/exttools/catalog.go` · `_Docs/54`.
+
+## Harici araçlar: `git` katalogda (GOOS-farkındalı release akışı) ✅ (2026-08-01)
+
+- **Neden:** TionSwarm git'e üç yerde dayanır — oturum bağlamına branch enjeksiyonu,
+  `scripts\worktree.ps1`, `internal/proc`'un non-interactive git env'i — artı ajanın
+  kendi shell komutları. "Kurulu mu / hangi sürüm" sorusu panele ait.
+- **Tuzak:** İlk akla gelen `git/git` URL'si **çalışmaz**. O depo GitHub'da salt-okunur
+  ayna: tag yayımlar ama **release yayımlamaz** → `releases/latest` **404** → araç
+  sonsuza dek "sürüm karşılaştırılamadı" gösterirdi. Denendi, doğrulandı.
+- **Çözüm:** `gitProjectURL` çalışma anında seçer — Windows'ta
+  `git-for-windows/git` (release yayımlar; tag'i inşa ettiği **upstream** sürümü
+  adlandırır: `v2.55.0.windows.3` → `2.55.0`, yani karşılaştırma anlamlı), diğer
+  platformlarda `git-scm.com` → GitHub slug'ı yok → akış kapalı. Linux kullanıcısına
+  Windows build numarası göstermektense "bilmiyorum" demek doğru.
+- **Güncelleme `command`** (winget `Git.Git`) — ffmpeg ile aynı gerekçe: kurulum
+  dizinini ve çalışan ikiliyi paket yöneticisi yönetir.
+- **Uçtan uca ölçüldü:** `git` → `C:\Program Files\Git\mingw64\bin\git.exe`,
+  yerel `2.50.1` ↔ `v2.55.0.windows.3` → `outdated` ✓ ·
+  `claude` → yerel `2.1.220` ↔ `v2.1.220` → `up-to-date` ✓
+- **Dokunulan:** `internal/exttools/catalog.go` · `_Docs/54`.
+
+## Harici araçlar: `claude` (Claude Code CLI) katalogda + yol geçersiz kılma ✅ (2026-08-01)
+
+- **Sorun:** Ayarlar ▸ Harici Araçlar paneli TionSwarm'ın yanında kullanılabilecek
+  *opsiyonel* CLI'ları listeliyordu, ama en kritik ikili — anahtarsız `claude-cli`
+  sağlayıcısının çalıştırdığı `claude` — listede yoktu. "Hangi sürüm kurulu, güncel
+  mi, nerede?" soruları model seçicideki rozete ve Sağlayıcılar ekranına dağılmıştı;
+  bir claude-cli ajanı bozulduğunda tam da bu panele bakılıyordu.
+- **Çözüm:** `exttools.Catalog`'a `claude` girdisi (`ClaudeToolName` sabiti — ikilinin
+  adı, sağlayıcı id'si `claude-cli` **değil**; `Detect`/`LocalVersion` bu adı kullanır).
+  Kategori `provider` (yeni grup: "LLM sağlayıcı CLI'ları"), `Wire: "provider"` → panelde
+  **Sağlayıcı** rozeti. Sürüm `claude --version` (`2.1.220 (Claude Code)` → `2.1.220`),
+  release akışı `anthropics/claude-code` (`releases/latest` → `v2.1.220`, mevcut
+  `Tool.Repo()` URL türetmesiyle bedava geldi).
+- **Güncelleme `manual`, bilinçli:** Claude Code kendini arka planda zaten günceller;
+  ayrıca **süren bir claude-cli turu ikiliyi kilitler** → yarım kalan güncelleme
+  workspace'teki tüm claude-cli ajanlarını durdururdu. Note `claude update` (native)
+  ve `npm i -g @anthropic-ai/claude-code` (npm) yollarını söyler.
+- **`SetPathOverride` (asıl doğruluk düzeltmesi):** `Detect` yalnız PATH'e bakıyordu,
+  oysa `Settings.ClaudeCLIPath` sağlayıcının çalıştırdığı ikiliyi değiştirebiliyor →
+  panel, ajanların kullandığından **farklı** bir `claude`'un sürümünü gösterebilirdi.
+  `applySettings` artık her ayar değişiminde yolu `exttools`'a da iter. Override
+  varsa PATH'e **düşülmez**: yol geçersizse dürüst cevap "bulunamadı"dır.
+- **Dokunulan:** `internal/exttools/catalog.go` · `internal/api/server.go` (import +
+  applySettings) · `ExternalToolsPanel.tsx` (kategori etiketi + `provider` rozeti +
+  giriş metni artık "önce override, yoksa PATH" diyor) · `_Docs/54`.
+
+## Oturum Bilgisi ▸ Bağlam penceresi: Skill kataloğu ayrı segment ✅ (2026-08-01)
+
+- **Sorun:** Oturum Bilgisi panelindeki "Bağlam penceresi" kırılımı (`session_info.go`
+  → `systemFillers`) sistem promptunu, araç şemalarını ve artifact bloğunu sayıyor
+  ama **Available Skills kataloğunu hiç saymıyordu**. `composeTurnRequest` bu bloğu
+  statik prefix'e ekliyor, yani her turda bağlamda — ölçer onu eksik raporluyordu.
+  ("Bağlam önizle" ekranı, `session_context.go`, Skills'i zaten ayrı segment olarak
+  gösteriyordu; iki ekran ayrışmıştı.)
+- **Çözüm:** `systemFillers` artık `Runtime.SkillsCatalogBlockForAgent`'ı ayrı bir
+  filler olarak ekliyor — `role:"skills"`, etiket **"Skill kataloğu"**, `Count` =
+  ilan edilen skill sayısı (`countCatalogSkills`, `- \`slug\`` satırlarını sayar).
+  Frontend'de `ROLE_COLORS.skills` (sky `#0ea5e9`) ile kendi rengi var; çubuk ve
+  legend başka değişiklik istemedi (ikisi de `info.fillers` üzerinden generic).
+- **Neden ayrı segment:** şişmiş bir skill kütüphanesi, sistem promptundan bağımsız
+  olarak kullanıcının **küçültebileceği** bir maliyet (ajandan skill kaldır /
+  name-only tier). Aynı kovada gizlenince aksiyon alınamıyordu.
+- **Kapsam notu:** Skill **gövdesi** (`use_skill` çıktısı) bu ölçerde görünmez ve
+  görünmemeli — tool sonuçları tur-içi; kalıcı geçmişe yalnız user/assistant
+  mesajları yazılır (`historyToPreviewMessages`), yani bir sonraki turun penceresine
+  taşınmaz. Ayrı segment olan tek şey katalogdur.
+### Devamı: ölçer tek kaynağa bağlandı (drift kalıcı kapandı)
+
+Yukarıdaki eksik, tek bir skill kataloğundan ibaret değildi: `systemFillers`
+statik prefix'i **elle yeniden kuruyordu**, yani `chat_turn.go`'nun gerçek
+kompozisyonundan bağımsız bir kopyaydı ve zamanla ondan uzaklaşmıştı.
+
+- **Kök neden:** statik prefix'in üç eli vardı — gerçek yol (`buildStaticPrefix`),
+  ajan önizlemesi (`buildAgentStaticPrompt`, "keep in sync" yorumuyla) ve ölçer
+  (`systemFillers`). Üçüncüsü en çok sapanıydı: skills kataloğu, lazy-tool
+  kataloğu, artifact rehberi ve capability bloğu hiç sayılmıyordu.
+- **Çözüm:** `systemFillers` artık prefix'i `s.buildStaticPrefix(...)`'ten alıyor —
+  `composeTurnRequest`'in prompt epoch'a dondurduğu **aynı** üretici. Tek elden
+  gelen metinden iki blok `stripBlock` ile kendi kovasına ayrılıyor
+  (`carve` yardımcısı): **Skill kataloğu** (`role:"skills"`) ve **Araç kataloğu
+  (talep üzerine)** (`role:"lazy-tools"`, `#c084fc`). Blok birebir bulunamazsa
+  tokenlar sistem kovasında kalır — asla iki kez sayılmaz.
+- **`EpochStaticSystem` bilerek KULLANILMADI:** o fonksiyon mutasyon yapar (epoch
+  dondurur + diske yazar + debug olayı üretir); burası salt-okunur bir panel GET'i.
+  Canlı prefix zaten bir sonraki adopt noktasında gönderilecek olandır.
+- **İkinci doğruluk düzeltmesi — "Araçlar" fazla sayıyordu:** kova
+  `Runtime.ToolCatalog` (izin verilen **tüm** araçlar) kullanıyordu, oysa tur
+  başında yalnız **eager** tier'ın şeması gider. Artık `ShippedToolCatalog`.
+  Lazy araçların gerçek maliyeti = katalog bloğu, ki o da artık ayrı kovada.
+- **`multiAgent` doğru besleniyor:** statik prefix çok-ajanlı oturumda bir not
+  bloğuyla değişiyor → `labelMultiAgentHistory`'nin bayrağı ölçere de veriliyor.
+- **Testler** (`session_info_fillers_test.go`): `countCatalogSkills` **gerçek**
+  renderer çıktısına karşı doğrulanır (marker değişirse sayım sessizce 0'a düşerdi);
+  `stripBlock` iki ardışık blok eklendikten sonra ikisini de birebir bulabiliyor mu
+  — carve'ın sessiz no-op'a düşmesini yakalayan asıl guard budur.
+- **Kalan (bilinçli, kapsam dışı):** `session_context.go` önizleme GET'i hâlâ
+  `composeTurnRequest` üzerinden `EpochStaticSystem`'i çağırıyor → bir önizleme
+  epoch'u erken dondurabilir.
+
+### Devamı 2: `buildAgentStaticPrompt` de tek kaynağa indirgendi
+
+Ajan önizlemesinin kendi statik-prefix kopyası (`agent_context.go`) kaldırıldı;
+artık tek satır: `s.buildStaticPrefix(ctx, wsp, db.Session{}, agent, false)`.
+
+- **Kopya gerçekten sapmıştı** (varsayım değil, ölçüldü): ajan-adı notu hâlâ eski
+  metni taşıyordu — *"In this chat, the user picks which agent should answer by
+  starting a message with `@<AgentName>`"* — oysa `buildStaticPrefix` bu notu çoktan
+  yeniden yazmıştı (@name artık **yönlendirme değil, salt isim referansı**; ayrıca
+  `spawn_session` sonucunun bu sohbete dönmeyeceği uyarısı eklenmişti). Yani önizleme,
+  ajanın **artık almadığı** bir metni gösteriyordu. Kopya ayrıca capability bloğunu
+  (`CapabilityContext`) hiç öğrenmemişti → `SystemTokens` eksik raporlanıyordu.
+- **Sıfır `db.Session` bir kılıf değil:** `buildStaticPrefix` oturumdan yalnız iki
+  şey okur — `IsCoordinator()` (sıfır değerde `false`) ve `WorkingDir` (`""`).
+  Yani bu, "cwd'si olmayan, koordinatör olmayan oturum" ile **birebir aynı** prefix'i
+  üretir; taze bir oturumun gerçek durumu da budur. `multiAgent=false` çünkü taze
+  oturumda başka yazar yok.
+- **Neden test yazılmadı:** kopya silindiği için sapma artık bir test konusu değil,
+  yapısal olarak imkânsız. Geriye kalan tek statik-prefix üreticisi
+  `buildStaticPrefix`'tir.
+
+## dev.ps1: crash kanıtı kalıcılaştırma (stderr + lifecycle logu) ✅ (2026-08-01)
+
+- **Sorun:** 01.08.2026 05:26:55'te backend aniden öldü ve **neden olduğu tespit
+  edilemedi**. Elde hiçbir kanıt yoktu: uygulama logunda graceful `shutting down`
+  satırı yok (önceki tüm restart'larda var), panic izi yok, Windows WER raporu ve
+  crash dump yok, Kernel-Power/uyku/reboot olayı yok. Son kayıt playwright MCP
+  child'ının EOF vermesiydi — yani **önce çocuk süreç öldü**, sunucu bunu
+  loglayacak kadar yaşadı, sonra kendisi öldü.
+- **Kök neden (tanı boşluğu):** `internal/app/app.go:62` slog'u **stdout**'a yazar
+  (+ `~/.tionswarm/logs` aynası), ama Go runtime fatal'ları (`fatal error: out of
+  memory`, panic trace) **stderr**'e gider. `dev.ps1` backend'i `-NoNewWindow` ile
+  başlatıp stderr'i **hiçbir yere yönlendirmiyordu** → crash metni konsolla
+  birlikte yok oldu. Ayrıca script'in temizlik yolu `taskkill /T /F` kullanıyor;
+  bu, uygulama logunda **hiç iz bırakmaz** → "biz öldürdük" ile "kendi öldü"
+  olayları sonradan ayırt edilemiyordu.
+- **Çözüm — iki kayıt (`_devlogs/`, gitignored):**
+  - `backend-stderr-<stamp>.log` — `Start-Process -RedirectStandardError` ile
+    backend stderr'i diske. **Yalnız stderr** yönlendirilir: stdout konsolda canlı
+    kalır, yani dev deneyimi değişmez. Frontend bilerek dışarıda bırakıldı (Vite
+    hataları etkileşimli raporlanıyor; yakalamak onları gizlerdi).
+  - `lifecycle.log` — koşular arası **append**: launch, kendiliğinden çıkış
+    (exit code ile), pre-flight orphan kill ve cleanup kill'leri. Kill satırı
+    `taskkill`'den **önce** yazılır. Kural: backend kaybolmuş ve lifecycle.log'da
+    ona ait cleanup satırı **yoksa**, ölüm bu script'in dışından gelmiştir.
+- **Ayrıntılar:** boş stderr yakalamaları çıkışta silinir → duran bir dosya daima
+  "gerçekten bir şey oldu" demektir; çıkışta son 40 satır konsola kırmızı basılır
+  (yazılıp okunmayan log işe yaramaz); en yeni 10 yakalama saklanır.
+  `Add-Proc` süreç `.Handle`'ına dokunur — bu olmadan `Start-Process -PassThru`
+  nesnesi ölümden sonra `ExitCode`'u `$null` döndürüyor; exit code burada gerçek
+  sinyal (Go fatal = 2, dışarıdan `taskkill /F` = 1).
+- **Doğrulama:** panic atan geçici bir Go programı aynı bayraklarla koşuldu →
+  stdout konsolda kaldı, panic + goroutine izi + `exit status 2` dosyaya düştü.
+  `Stop-Tree`/`Write-Lifecycle` gerçek fonksiyonlar AST ile çıkarılıp iki senaryoda
+  test edildi (canlı süreç öldürülür ve loglanır; ölmüş süreç öldürülmez, `exit=7`
+  doğru okunur). Çalışan 8090 sunucusuna dokunulmadı.
+- **Not (çözülmedi):** bu değişiklik 05:26 ölümünü *açıklamaz*, **bir dahakini
+  açıklanabilir kılar**. O olayın iki adayı hâlâ ayrıştırılamıyor: (a) konsolun
+  Ctrl+C/kapatılmasıyla `finally` → `taskkill /T /F` (çocuğun önce ölmesi bununla
+  birebir uyuşuyor), (b) Go runtime fatal / OOM (03:20–05:26 arasında 36 opus
+  worker spawn'ı + playwright Chromium; 31 GB RAM'de bugün 9 claude süreciyle bile
+  yalnız 2.2 GB boş). Bir sonraki olayda `lifecycle.log` bu ikisini kesin ayıracak.
+
+## Model sürümü: takma adın arkasındaki gerçek model (gözlemlenerek) ✅ (2026-08-01)
+
+- **Sorun:** claude-cli model id'leri takma ad (`opus`, `sonnet`, hatta boş = "oturum
+  varsayılanı"). Arayüz her yerde "Opus" yazıyordu; **hangi Opus** (Opus 5 mi 4.8 mi)
+  hiçbir yerde görünmüyordu. Bilgi aslında elimizdeydi — CLI her turda gerçek id'yi
+  bildiriyor (`Response.Model` → `Message.Model`, ör. `claude-opus-5`) — ama takma adla
+  ilişkilendirilmediği için seçicilerde kayboluyordu.
+- **Çözüm — hardcode değil gözlem:** `<store>/model-resolutions.json` singleton'ı
+  `"<provider>|<istenen>" → {resolved, seenAt}` tutar. Statik bir `opus → claude-opus-5`
+  tablosu **bilinçli olarak yazılmadı**: Anthropic yeni model çıkardığında çürür — bu tam
+  olarak `ContextWindowFor`'un aile-bazlı kalarak kaçındığı hata. Doğru cevabı zaten her
+  tur söylüyor, o yüzden öğrenilir.
+- **Yazma yolu:** `Runtime.noteResolvedModel` → `DB.NoteModelResolution`, mevcut
+  `noteCacheOutcome` dikişlerinin yanında (guardedComplete + recordedComplete ×2 +
+  recordedStream). **Yeni bilgi yoksa diske yazmaz** → ısındıktan sonra dosya yalnız
+  sağlayıcı gerçekten farklı bir model sunmaya başlayınca değişir. Native sağlayıcılar
+  istedikleri id'nin aynısını döndürdüğü için store'da filtrelenir (`resolved == requested`
+  → no-op), yani harita yalnız gerçek takma adlarla dolar.
+- **Okuma yolu:** `GET /api/catalog` her `ModelInfo`'ya `resolvedModel` ekler
+  (`ws.DB.ResolvedModelFor`). Alan providers manifest'ine değil **API katmanına** ait —
+  bir takma adın nereye işaret ettiği sürümle değil çalışma-anıyla değişir.
+- **Etiketleme:** `formatModelVersion` id'yi **ayrıştırır**, tablo tutmaz —
+  `claude-opus-5`→`Opus 5`, `claude-sonnet-4-5-20250929`→`Sonnet 4.5`,
+  `claude-3-5-haiku-20241022`→`Haiku 3.5`. Rakamlar aile token'ından ayrı toplandığı için
+  token **sırası önemsiz**; aynı kod hem güncel hem eski (sürüm-önce) şemayı okur.
+  Bilinmeyen ailede `""` döner → çağıran ham id'ye düşer, **uydurma isim yok**.
+- **Nerede görünür:** `resolveModelLabel` artık gözlemlenen sürümü tercih ediyor → ajan
+  kimlik satırı (`AGT3 · Opus 5`), sohbet balonu, katılımcılar, pano — hepsi tek
+  fonksiyondan. Model seçicide ayrıca `Opus — en güçlü → Opus 5 · 1M` seçenek metni +
+  ham id'yi tooltip'te taşıyan rozet.
+- **Test edilebilirlik:** saf etiket mantığı `shared/lib/modelLabel.ts`'e ayrıldı
+  (`catalog.ts` re-export eder). Sebep: `catalog.ts` api client'ı import ediyor, o da
+  import anında `localStorage`'a dokunuyor → repo'nun `node` vitest ortamında suite
+  hiç yüklenemiyordu. Testler: `modelLabel.test.ts` (8) + `store_model_resolution_test.go` (3).
+- **Somut id'ler için tek giriş: `modelDisplayName`** (aynı dosya). Elde zaten somut bir id
+  varken (turun modeli, harcama satırı, debug özeti) katalog sorgusuna gerek yok — yalnız
+  biçimlendirme. Kullanıldığı yerler: Bütçe provider▸model tablosu, Oturum Debug "Modele göre
+  token", sohbet balonu altındaki tur meta çipi. **Ham id her yerde `title`'da kalır** —
+  faturayla/hata raporuyla eşleşmesi gereken değer odur, varsayılan okuma olmaması onu
+  erişilemez yapmamalı. Tanınmayan id (MiniMax, OpenRouter rotaları) **aynen** gösterilir:
+  harcama satırı ne gizleyebilir ne yaklaşık söyleyebilir.
+  İkisi arasındaki sınır: `resolveModelLabel` = ajanın **yapılandırılmış** modeli (takma ad
+  olabilir → katalog gerekir), `modelDisplayName` = elde **zaten somut** id.
+- **Kapsam (uygulama geneli tarandı):** Bütçe provider▸model tablosu · Oturum Debug "Modele
+  göre token" · sohbet balonu tur-meta çipi · mesaj Debug panelindeki "Model" satırı · Market
+  paket önizlemesindeki ajan modeli (iki yer) · Sağlayıcı test rozeti (`✓ bağlandı (Opus 5)`).
+  `MessageDebugPanel`'in `Row`'una bunun için `title` prop'u eklendi ve model satırından
+  `mono` kaldırıldı (artık insan adı, id değil).
+- **İki bilinçli istisna — ham kalır:**
+  1. Debug kartındaki **raw event listesi** (`eventLabel`, `llm_call`): kullanıcı orada model
+     *hakkında* değil **günlüğün kendisini** okuyor; çevirmek görünümün tek işini bozar.
+  2. Market'teki **`ModelList`** (sağlayıcı paketinin model id kataloğu): orada id **içeriğin
+     kendisi** — kopyalanıp config'e yazılır ve fiyat tablosu tam id ile anahtarlanır. İki
+     farklı id aynı isme düşebileceği için çevirmek eşlemeyi bozar; mono biçim doğru.
+- **Sınır:** rozet **son gözlem**tir. Takma ad yeni bir modele taşındıysa, o workspace'te
+  bir tur koşana kadar eski değer görünür (tooltip ham id'yi verir).
 
 ## claude-cli: modelin yanında Claude Code sürümü + plan rozeti ✅ (2026-08-01)
 
@@ -21,18 +457,17 @@
   yanıltıcı bir "Max" göstermesin.
 - **Tahmin yok:** sürüm okunamazsa veya `subscriptionType` yoksa ilgili parça çıkmaz;
   rozet kısalır ya da hiç görünmez. Katalog isteği bundan dolayı hata döndürmez.
-- **Ajan kimlik satırı:** rozet `AgentIdentity`'nin 2. satırına da eklendi — `AGT3 · Sonnet ·
-  v2.1.220 · Max`. Orada **compact** biçim kullanılır (`resolveRuntimeBadge(entry, {compact:true})`,
-  "Claude Code" öneki tooltip'e iner) çünkü satırda zaten ID + model var. Rozet `shrink-0`:
-  yarım görünen bir sürüm **başka bir sürüm gibi okunur**, o yüzden yer daralınca model
-  etiketi kırpılır, rozet değil. Yalnız `subtitle="model"` durumunda çıkar (özel ReactNode
-  subtitle bir model satırı değildir).
+- **Ajan kimlik satırında DEĞİL** (2026-08-01, aynı gün geri alındı): kısa süre
+  `AgentIdentity`'ye de eklendi, sonra kaldırıldı — Claude Code kurulumu **makinenin**
+  özelliği, turun değil. O satır cevabı veren modeli adlandırır ve artık gerçek sürümü
+  gösteriyor (üstteki bölüm). `compact` seçeneği `resolveRuntimeBadge`'de duruyor,
+  ileride dar bir yere gerekirse hazır.
 - **Asistan balonu:** `AgentHeader` artık `subtitle="model"` geçiyor — balonda daha önce
-  yalnız isim vardı; model satırı composer'daki ajan tetikleyicisiyle hizalandı ve rozet
-  cevabın olduğu yerde görünür oldu.
+  yalnız isim vardı; model satırı composer'daki ajan tetikleyicisiyle hizalandı, böylece
+  turu hangi modelin ürettiği cevabın yanında yazıyor.
 - **Kod:** `internal/api/catalog.go` + `catalog_claudecli.go`, `internal/claudeauth/read.go`,
-  `Registry.ClaudeCLIPath()`, `shared/lib/catalog.ts → resolveRuntimeBadge`,
-  `ProviderModelSelect.tsx`, `ProvidersPanel.tsx`, `AgentIdentity.tsx`, `chat/AgentHeader.tsx`.
+  `Registry.ClaudeCLIPath()`, `shared/lib/modelLabel.ts → resolveRuntimeBadge`,
+  `ProviderModelSelect.tsx`, `ProvidersPanel.tsx`, `chat/AgentHeader.tsx`.
 
 ## Terse (caveman) mod — workspace toggle + registry promptu ✅ (2026-08-01)
 

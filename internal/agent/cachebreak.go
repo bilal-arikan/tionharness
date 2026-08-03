@@ -90,7 +90,7 @@ func (r *Runtime) noteCacheOutcome(ctx context.Context, agent db.Agent, req prov
 	coldPrefix := u.CacheWriteTokens + u.InputTokens
 	if prev.warmed && coldPrefix >= cacheBreakMinTokens {
 		tag, detail := attributeCacheBreak(prev, sig, model)
-		r.emitDebug(ctx, db.DebugEvent{
+		ev := db.DebugEvent{
 			Type:       db.DebugCacheBreak,
 			AgentID:    agent.ID,
 			Model:      model,
@@ -98,7 +98,24 @@ func (r *Runtime) noteCacheOutcome(ctx context.Context, agent db.Agent, req prov
 			In:         u.InputTokens,
 			Name:       tag, // stable machine tag
 			Detail:     detail,
-		})
+		}
+		// Only a TTL/eviction break is avoidable "cooling waste": model/prompt/tool
+		// changes legitimately invalidate the prefix, so re-writing it is not a
+		// missed saving. Attribute the avoidable overpay from the re-written prefix
+		// (native Anthropic's cache_creation); OpenRouter folds it into input and
+		// reports ~0 write, so this is naturally 0 there (see CoolingWaste).
+		if tag == "ttl-or-server-eviction" {
+			if usd, est, ok := providers.CoolingWaste(agent.Provider, model, u.CacheWriteTokens); ok && usd > 0 {
+				ev.WasteUSD = usd
+				ev.WasteEstimated = est
+				// Roll the avoidable overpay into today's usage so the Budget screen can
+				// show a workspace/window total (best-effort; never gates the turn).
+				if err := r.db.AddCoolingWaste(ctx, agent.ID, usd, est); err != nil && r.logger != nil {
+					r.logger.Warn("record cooling waste", "agent", agent.ID, "error", err)
+				}
+			}
+		}
+		r.emitDebug(ctx, ev)
 	}
 	// Keep the warmth flag (a genuine break is rare; a cold write establishes a new
 	// baseline once the next call reads it) but refresh the signature/model. The probe

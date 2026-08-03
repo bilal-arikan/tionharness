@@ -29,13 +29,25 @@ func (s *Server) handleCatalog(w http.ResponseWriter, r *http.Request) {
 	// instead of producing a duplicate catalog entry — see MergeCatalog).
 	entries := providers.MergeCatalog(providers.Catalog(), s.providers.CustomCatalog())
 	out := make([]catalogEntryDTO, 0, len(entries))
+	wsp := ws(r)
 	for _, e := range entries {
 		dto := catalogEntryDTO{CatalogEntry: e, Available: s.providers.Available(e.ID)}
+		// Annotate each model with the concrete id this workspace last observed
+		// behind it. Only aliases carry one (claude-cli's "opus"); native providers
+		// echo the id they were given, which the store filters out as no news.
+		if wsp != nil {
+			models := make([]providers.ModelInfo, len(e.Models))
+			copy(models, e.Models)
+			for i := range models {
+				models[i].ResolvedModel = wsp.DB.ResolvedModelFor(e.ID, models[i].ID)
+			}
+			dto.Models = models
+		}
 		if e.ID == "claude-cli" && dto.Available {
 			dto.CliVersion = claudeCLIVersion(r.Context(), s.providers.ClaudeCLIPath())
 			// The login lives in THIS workspace's claude-home, so the tier is
 			// per-workspace too (one workspace may be on Max, another on an API key).
-			if wsp := ws(r); wsp != nil {
+			if wsp != nil {
 				dto.Subscription = claudeSubscriptionTier(
 					filepath.Join(wsp.DataDir, "claude-home"),
 					s.settings.Get().ClaudeCliAuthKind,

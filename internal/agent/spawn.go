@@ -166,12 +166,10 @@ func (r *Runtime) SpawnSession(ctx context.Context, agentRef, prompt string, opt
 	}
 
 	// Record the spawn prompt as the opening user turn so the thread reads as a
-	// real conversation in the activity feed.
-	if _, err := r.db.AddMessage(ctx, db.Message{
-		SessionID: session.ID,
-		Role:      "user",
-		Text:      prompt,
-	}); err != nil {
+	// real conversation in the activity feed — and bridge it to the hub so a window
+	// watching the spawned session renders the prompt live, in order before the reply
+	// (_Docs/58), not only on reload.
+	if _, err := r.recordInjectedUserNote(ctx, session.ID, "", prompt); err != nil {
 		r.releaseSpawnSlot()
 		return SpawnResult{}, err
 	}

@@ -109,6 +109,15 @@ type Usage struct {
 	ProviderCalls int                 `json:"providerCalls,omitempty"`
 	ByKind        map[string]KindStat `json:"byKind,omitempty"`
 	ByModel       map[string]KindStat `json:"byModel,omitempty"`
+	// CoolingWasteUSD is the day's summed AVOIDABLE prompt-cache overpay: warm
+	// prefixes that cooled (TTL expiry / server eviction) before the next turn and
+	// had to be re-written. It is NOT added to the token cost (those write tokens are
+	// already in ByModel and priced) — it isolates the portion a timely reply would
+	// have saved. CoolingWasteEstimated latches true when any contribution is a
+	// subscription equivalent-API estimate (e.g. claude-cli). Recorded out-of-band
+	// via AddCoolingWaste from the cache-break detector, not through AddUsageKind.
+	CoolingWasteUSD       float64 `json:"coolingWasteUsd,omitempty"`
+	CoolingWasteEstimated bool    `json:"coolingWasteEstimated,omitempty"`
 }
 
 // ModelKey builds the ByModel map key from a provider and model id.
@@ -161,8 +170,8 @@ func (d *DB) AddUsageKind(ctx context.Context, agentID, kind, provider, model st
 		kind = UsageKindOther
 	}
 	day := today()
-	d.mu.Lock()
-	defer d.mu.Unlock()
+	d.usageMu.Lock()
+	defer d.usageMu.Unlock()
 	u, ok := d.usage[usageKey(agentID, day)]
 	if !ok {
 		u = Usage{AgentID: agentID, Day: day}
@@ -191,12 +200,36 @@ func (d *DB) AddUsageKind(ctx context.Context, agentID, kind, provider, model st
 	return d.persistUsageLocked(u)
 }
 
+// AddCoolingWaste accumulates one detected cache-cooling overpay (USD) into an
+// agent's usage row for today (upsert), latching the estimated flag. It is the
+// out-of-band companion to AddUsageKind for the isolated "cooling waste" figure —
+// the token cost is already recorded through the normal usage path; this only
+// tracks the derived avoidable-overpay penalty so the budget screen can surface a
+// workspace/window rollup. A non-positive amount is a no-op.
+func (d *DB) AddCoolingWaste(ctx context.Context, agentID string, usd float64, estimated bool) error {
+	if usd <= 0 {
+		return nil
+	}
+	day := today()
+	d.usageMu.Lock()
+	defer d.usageMu.Unlock()
+	u, ok := d.usage[usageKey(agentID, day)]
+	if !ok {
+		u = Usage{AgentID: agentID, Day: day}
+	}
+	u.CoolingWasteUSD += usd
+	if estimated {
+		u.CoolingWasteEstimated = true
+	}
+	return d.persistUsageLocked(u)
+}
+
 // GetUsageToday returns an agent's usage for the current day (zero-valued if
 // nothing has been recorded yet).
 func (d *DB) GetUsageToday(ctx context.Context, agentID string) (Usage, error) {
 	day := today()
-	d.mu.RLock()
-	defer d.mu.RUnlock()
+	d.usageMu.RLock()
+	defer d.usageMu.RUnlock()
 	if u, ok := d.usage[usageKey(agentID, day)]; ok {
 		return u, nil
 	}
@@ -207,8 +240,8 @@ func (d *DB) GetUsageToday(ctx context.Context, agentID string) (Usage, error) {
 // for the workspace-wide budget screen. Agents with no activity that day are
 // simply absent.
 func (d *DB) UsageForDay(ctx context.Context, day string) ([]Usage, error) {
-	d.mu.RLock()
-	defer d.mu.RUnlock()
+	d.usageMu.RLock()
+	defer d.usageMu.RUnlock()
 	var out []Usage
 	for _, u := range d.usage {
 		if u.Day == day {
@@ -222,8 +255,8 @@ func (d *DB) UsageForDay(ctx context.Context, day string) ([]Usage, error) {
 // across all agents, for trend charts. Lexical comparison works because the day
 // format is zero-padded ISO.
 func (d *DB) UsageHistory(ctx context.Context, sinceDay string) ([]Usage, error) {
-	d.mu.RLock()
-	defer d.mu.RUnlock()
+	d.usageMu.RLock()
+	defer d.usageMu.RUnlock()
 	var out []Usage
 	for _, u := range d.usage {
 		if u.Day >= sinceDay {

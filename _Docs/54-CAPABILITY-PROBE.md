@@ -253,8 +253,8 @@ Update      UpdateSpec // Kind: "command" | "manual"
 
 | Kind | Araçlar | Neden |
 |------|---------|-------|
-| `command` | `mmdc` (npm), `ffmpeg` (winget) | Paket yöneticisi kurulum dizinini ve çalışan ikiliyi kendi yönetir |
-| `manual` | rtk, sqz, codebase-memory-mcp, piper, whisper-cli | İkiliyi/arşivi **yerinde değiştirmek** gerekir; Windows'ta çalışan alt-süreç (MCP stdio sunucusu kendi `.exe`'sini) dosyayı kilitler → yarım kalan kopya aracı geri dönüşsüz bozar |
+| `command` | `mmdc` (npm), `ffmpeg` (winget), `git` (winget `Git.Git`), `bun` (winget `Oven-sh.Bun`), `npm` (`npm i -g npm@latest`) | Paket yöneticisi kurulum dizinini ve çalışan ikiliyi kendi yönetir |
+| `manual` | claude, rtk, sqz, codebase-memory-mcp, piper, whisper-cli | İkiliyi/arşivi **yerinde değiştirmek** gerekir; Windows'ta çalışan alt-süreç (MCP stdio sunucusu kendi `.exe`'sini, süren bir claude-cli turu `claude`'u) dosyayı kilitler → yarım kalan kopya aracı geri dönüşsüz bozar |
 
 `RunUpdate` komutu **katalogdan** alır, istekten değil → enjeksiyon yolu yok.
 5 dk timeout + `TreeKill`; `HardenedEnv` sayesinde soru soracak bir paket
@@ -280,6 +280,184 @@ callout'u (`tool-manual-update`), komut kopyalama (`tool-copy-update-cmd`).
 Üstte "Güncellemeleri kontrol et" (`ext-tools-check-updates`) + "Önbelleği atla"
 (`ext-tools-refresh-updates`). Release kontrolü bu panelde **açılışta çalışmaz** —
 ağa çıkar; tespit anında, karşılaştırma istek üzerine.
+
+### `claude` katalog girdisi + yol geçersiz kılma (2026-08-01)
+
+Claude Code CLI de katalogda (`exttools.ClaudeToolName = "claude"` — ikilinin adı,
+sağlayıcı id'si `claude-cli` değil). Kategori `provider`, `Wire: "provider"` →
+panelde **Sağlayıcı** rozeti. Katalogdaki tek **çekirdek** bağımlılıktır (anahtarsız
+`claude-cli` sağlayıcısı bu ikilidir); yine de burada listelenir çünkü bir claude-cli
+ajanı bozulduğunda sorulan sorular tam olarak bu panelin cevapladıklarıdır
+(nerede · hangi sürüm · güncel mi). Güncelleme `manual`: Claude Code zaten kendini
+arka planda günceller, elle yol `claude update` / `npm i -g @anthropic-ai/claude-code`.
+
+**`SetPathOverride(name, path)`** (`catalog.go`): `Detect` önce bu haritaya bakar.
+`applySettings` her ayar değişiminde `ClaudeCLIPath`'i buraya iter → panel ile
+sağlayıcının çalıştırdığı ikili **daima aynı**. Override varsa PATH'e **düşülmez**:
+yol boşsa dürüst cevap "kurulu değil"dir, PATH'teki asla kullanılmayacak başka bir
+`claude`'un sürümü değil. Boş değer override'ı siler (PATH'e döner).
+
+### `git` katalog girdisi — release akışı neden git-for-windows (2026-08-01)
+
+`git` de katalogda (kategori `dev`, `Wire: "cli"`). TionSwarm git'e üç yerde
+dayanır: oturum bağlamına **branch enjeksiyonu**, `scripts\worktree.ps1`, ve
+`internal/proc`'un non-interactive git env'i — ayrıca ajanın kendi shell komutları.
+
+Release akışı **`gitProjectURL`** ile çalışma anında seçilir:
+
+| GOOS | URL | Sonuç |
+|------|-----|-------|
+| windows | `github.com/git-for-windows/git` | release var → karşılaştırma çalışır |
+| diğer | `git-scm.com` | GitHub slug'ı yok → "release akışı yok" (dürüst) |
+
+**`git/git` kullanılamaz:** o depo GitHub'da salt-okunur ayna; **tag yayımlar ama
+release yayımlamaz** → `releases/latest` **404** → araç sonsuza dek "sürüm
+karşılaştırılamadı" gösterirdi. git-for-windows release yayımlar ve tag'i inşa
+ettiği **upstream sürümü adlandırır** (`v2.55.0.windows.3` → `2.55.0`), yani
+karşılaştırma anlamlıdır. Yine de bir Windows dağıtımı olduğu için diğer
+platformlarda akış kapatılır — Linux kullanıcısına Windows build numarası
+göstermektense "bilmiyorum" demek doğru.
+
+Ölçülen (2026-08-01): yerel `2.50.1` ↔ `v2.55.0.windows.3` → `outdated` ✓
+
+### `node` / `npm` — release akışı neden BİLEREK yok (2026-08-02)
+
+İkisi de katalogda (kategori `dev`, `Wire: "cli"`), ama **GitHub akışı bağlanmadı**.
+Bu bir eksiklik değil, ölçülmüş bir karar — her iki aday da denendi:
+
+| Aday | `releases/latest` | Neden kullanılamaz |
+|------|-------------------|--------------------|
+| `nodejs/node` | `v26.5.1` "(Current)" | Endpoint **tarihe göre en yenisini** verir = **Current** hattı. LTS'teki kullanıcıyı "outdated" gösterip LTS'ten **iterdi**. Node'un LTS bilgisi `nodejs.org/dist/index.json`'daki `lts` alanında — GitHub release akışı değil, ikinci bir fetcher gerekir. |
+| `npm/cli` | `libnpmpack-v10.0.2` | npm CLI **değil**, monorepo'nun bir workspace paketi. `semverRe` içinden `10.0.2`'yi çeker, npm'in gerçek sürümüyle karşılaştırır → **kendinden emin ve anlamsız** bir verdict. |
+
+GitHub olmayan URL (`nodejs.org`, `npmjs.com`) → `Repo()` boş → "release akışı yok".
+Uydurmak yerine bilmediğini söyler.
+
+Panelin asıl değeri zaten **varlık + sürüm + yol** — ve `node` bunun neden önemli
+olduğunun ders kitabı örneği: bu makinede **iki ayrı Node** var ve hangisinin
+görüneceği **sürecin PATH'ine** bağlı.
+
+| Bağlam | Çözülen yol | Sürüm |
+|--------|-------------|-------|
+| PowerShell / winget kurulumu | `C:\Program Files\nodejs\node.exe` | v24 (LTS) |
+| Git Bash (nvm-sh `.bashrc`'den PATH'i öne alır) | `~\.nvm\versions\node\vNN\bin\node.exe` | ayrı, gölgeleyen sürüm |
+
+Yani `GET /api/external-tools` çıktısı **backend'in nasıl başlatıldığına** göre
+değişir (`dev.ps1` → PowerShell → Program Files; bash'ten başlatılırsa → nvm).
+Bu bir hata değil, `exec.LookPath`'in doğru davranışı — ama "mmdc neden bozuldu /
+hangi node ile çalışıyorum" derdine düşen birinin görmesi gereken tam olarak
+budur, ve `Path` alanı bunu tek bakışta söyler.
+
+`node` güncellemesi bu yüzden `manual`: kurulumun sahibi nvm mi installer mı
+bilinemez, winget nvm'in üstüne kurarsa çakışır. `npm` ise `command`
+(`npm i -g npm@latest`) — npm kendi kendini yönetir.
+
+**Windows notu (ölçüldü):** `npm` PATH'te `npm.cmd` olarak çözülür ve Go'nun
+`exec`'i batch dosyasını sorunsuz çalıştırır → `10.8.2` okundu. Ayrı bir
+`cmd /c` sarmalayıcısına gerek yok.
+
+### `python` — tespit neden `lookPath` DEĞİL (2026-08-02)
+
+`python` katalogda (kategori `dev`, `Wire: ""` → voice araçları gibi "bir TionSwarm
+alt sistemi otomatik kullanır"). Opsiyonel bir güzellik değil **gerçek bağımlılık**:
+`run_code` + `transform_data` ona shell eder, code-mode'un ürettiği binding'ler
+onda koşar.
+
+**Windows tuzağı (ölçüldü):** bu makinede
+
+```
+lookPath("python3") → C:\Users\...\AppData\Local\Microsoft\WindowsApps\python3.exe   ← Store stub
+proc.LookInterpreter → C:\Python313\python.exe                                        ← gerçek CPython 3.13.7
+```
+
+Store "app execution alias" stub'ı 0-baytlık bir reparse point; sadeleştirilmiş
+env ile çalıştırılınca `Python was not found` yazıp **9009** ile çıkar. Naif
+`lookPath("python3")` yapan bir tespit "kurulu ✓" der, sürüm probe'u patlar ve
+panel gayet çalışan bir makinede "sürüm okunamadı" gösterirdi.
+
+**Çözüm — tek kaynak:** aday sırası (Windows'ta `python` önce) + WindowsApps
+stub'ını atlama kuralı `internal/proc/interp.go`'ya taşındı
+(`PythonCandidates`, `LookInterpreter`, `IsWindowsAppAlias`). Hem
+`tools.resolveInterpreter` hem `exttools.Detect` artık **aynı** fonksiyonu çağırır
+→ panelin raporladığı ikili ile `run_code`'un çalıştırdığı ikili ayrışamaz.
+`internal/proc` zaten ikisinin de bağımlı olduğu leaf paket, yeni bağımlılık yok.
+
+Release akışı yok: `python/cpython` `releases/latest`'e **404** verir (tag yayımlar,
+release yayımlamaz) — `git/git` ile aynı durum, varsayılmadı, denendi.
+
+### "Güncelle" butonu ne zaman çıkar — `canOfferUpdate` (2026-08-03)
+
+Kural tek bir isimlendirilmiş yardımcıda (`ExternalToolsPanel.canOfferUpdate`):
+
+```
+kurulu  ∧  updateKind === 'command'  ∧  release akışı "geride" dedi
+```
+
+Yani **release akışı olmayan** `command` araçlarında (`ffmpeg`, `npm`, `node`,
+`python`, Windows dışında `git`) buton **hiç render edilmez** — statüleri ancak
+`unknown` olabilir ve *"bilmiyorum"* kullanıcının makinesinde paket yöneticisi
+koşturmak için gerekçe değildir. Onlarda satırın altındaki **komut kopyalama
+çipi** manuel çıkış kapısıdır.
+
+Bu davranış zaten böyleydi ama **emergent**'ti: JSX içindeki satır-içi
+`status === 'outdated'` kontrolünün yan etkisiydi, kimse bunu kural olarak
+yazmamıştı. İsimlendirildi ki statü mantığı ileride değişirse gerekçesiz
+güncelleme önerisi sessizce geri gelmesin.
+
+Backend ayrıca ikinci kapıdır: `POST /api/external-tools/{name}/update` yalnız
+`command` kind'ını çalıştırır, `manual` olana **409** + talimat döner.
+
+### Linux/sunucu davranışı — `winget` artık GOOS'a bağlı (2026-08-03)
+
+TionSwarm Windows masaüstünde de Ubuntu sunucuda da koşar. Katalogun **tespit +
+sürüm** katmanı zaten çapraz-platformdu:
+
+- `exec.LookPath` Linux PATH'ini doğal olarak kullanır; `--version` probe'ları aynı.
+- `proc.PythonCandidates()` Linux'ta `python3`'ü öne alır, `IsWindowsAppAlias` orada
+  daima `false` (Store stub'ı yalnız Windows sorunudur).
+- `tts`/`stt` çözücüleri `exeName()` ile `.exe`'yi düşürür ve PATH'e fallback yapar.
+- `gitProjectURL` Linux'ta akışı zaten kapatıyordu.
+
+**Güncelleme katmanı ise Windows'a çakılıydı** — üç girdi `winget` ilan ediyordu.
+Bu yalnız "ölü düğme" değildi: panel her `command` spec'i için **komut kopyalama
+çipi** de render eder, yani Ubuntu kullanıcısına otoriter görünen ama asla
+çalışamayacak bir `winget upgrade --id …` satırı verilirdi. Yanlış talimat,
+talimatsızlıktan kötüdür.
+
+| Araç | Windows | Linux/macOS |
+|------|---------|-------------|
+| `git` | winget `Git.Git` (`command`) | `manual` + apt notu |
+| `ffmpeg` | winget `Gyan.FFmpeg` (`command`) | `manual` + apt notu |
+| `bun` | winget `Oven-sh.Bun` (`command`) | **`bun upgrade`** (`command`) — bun kendi güncelleyicisini taşır |
+
+`bun` özellikle önemliydi: release akışı Linux'ta da çalıştığı için statü
+`outdated` olabiliyor → `canOfferUpdate` **düğmeyi gösteriyordu** → düğme `winget`
+çağırıp hata veriyordu. Diğer ikisinde akış olmadığı için düğme zaten çıkmıyordu,
+yalnız çip yanıltıyordu.
+
+**`node` / `python` — Kind değil, NOT platforma bağlı.** İkisi her platformda
+`manual` kalır (TionSwarm kurulumun sahibini bilemez: nvm, dağıtım paketi, pyenv,
+brew, conda, installer — yanlış seçmek gerçek sahiple kavga eder). Değişen yalnız
+**not metnidir**, çünkü not kullanıcının gerçekten uygulayacağı talimattır:
+
+| | Windows | Linux | macOS |
+|---|---|---|---|
+| `node` | nvm · nodejs.org · winget `OpenJS.NodeJS.LTS` | nvm · **NodeSource** (apt'taki node çok eskidir) | nvm · `brew upgrade node` |
+| `python` | python.org · winget `Python.Python.3.13` · pyenv-win | **`deadsnakes` PPA / pyenv + venv** | `brew upgrade python@3.13` |
+
+Linux python notu ayrıca **uyarı** taşır: Debian/Ubuntu'da sistem `python3`'ü
+apt'ın kendi araçlarının koştuğu yorumlayıcıdır; yerinde yükseltmek sunucuyu
+bozmanın bilinen yoludur → yan yana kurulum (deadsnakes) veya pyenv + `venv`.
+
+Tüm platform kararları `wingetSpec(goos, …)` / `bunUpdateSpec(goos)` /
+`nodeUpdateSpec(goos)` / `pythonUpdateSpec(goos)` ile **parametreli** verilir
+(doğrudan `runtime.GOOS` okunmaz), böylece her dal tek bir hosttan test edilebilir.
+`platform_test.go` şunları bağlar: Linux dalında komut winget değil ve
+`UpdateCommandLine()` winget satırı döndürmüyor; manual notlar o platformda
+**var olmayan** paket yöneticisini anmıyor (Windows notunda `apt`/`brew`, Linux
+notunda `winget`/`brew` yasak) ve en az bir geçerli yol gösteriyor; Linux python
+notu `apt` + `pyenv` uyarısını taşıyor; `TestCatalogHasNoWingetOffWindows` canlı
+katalogu Linux host'ta tarar.
 
 ### Öneri kuralı `tool-update`
 

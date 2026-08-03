@@ -78,6 +78,20 @@ func (r *Runtime) RecordUsage(ctx context.Context, agent db.Agent, model string,
 	}
 }
 
+// noteResolvedModel remembers which concrete model the provider actually served
+// for the requested id, so the UI can say "Opus 5" where the agent config only
+// says "opus". claude-cli reports the real id on every turn; native providers
+// echo what they were given and are filtered out in the store.
+//
+// Best-effort by design: a persistence failure is logged, never propagated — a
+// missing label must not fail a turn that already produced an answer.
+func (r *Runtime) noteResolvedModel(ctx context.Context, agent db.Agent, requested, resolved string) {
+	if err := r.db.NoteModelResolution(ctx, agent.Provider, requested, resolved); err != nil {
+		r.logger.Warn("record model resolution failed",
+			"agent", agent.ID, "provider", agent.Provider, "requested", requested, "error", err)
+	}
+}
+
 // guardedComplete is the single funnel for provider calls inside the runtime.
 // When autonomous, it honors the global autonomy brake first; it always records
 // usage afterward so the meter reflects every call.
@@ -112,6 +126,7 @@ func (r *Runtime) guardedComplete(ctx context.Context, agent db.Agent, req provi
 	}
 	resp.Usage.ThinkingTokens = deriveThinkingTokens(resp)
 	r.RecordUsage(ctx, agent, resp.Model, resp.Usage, resp.ProviderCalls)
+	r.noteResolvedModel(ctx, agent, req.Model, resp.Model)
 	return resp, nil
 }
 

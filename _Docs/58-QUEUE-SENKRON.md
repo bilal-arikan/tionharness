@@ -80,9 +80,25 @@ Per-session:
 - `subs map[int]chan Event` (aboneler).
 
 API: `Publish(sessionID, ev)` (seq atar, ring'e ekler, fan-out) ·
-`Subscribe(sessionID) (id, ch, cursor)` · `Replay(sessionID, since) []Event`.
+`Subscribe(sessionID) (id, ch, cursor)` · `Replay(sessionID, since) []Event` ·
+`Drop(sessionID)`.
 
 Efemer event'lerde `Publish` seq atamaz ve ring'e koymaz.
+
+**`Drop` — oturum durumunu serbest bırakır.** `states` haritası yalnızca
+büyüyordu: publish edilen ya da izlenen her oturum, silindikten sonra bile ring
+buffer'ını process ömrü boyunca tutuyordu — otonom bir workspace'in sürekli
+üretip attığı schedule/spawn/worker oturumları dahil. `Drop`, oturum silinirken
+`teardownSessionRuntime`'ın son fazında çağrılır ve açık abone kanallarını
+kapatır (stream handler iki-değerli okumayla temiz çıkar). Drop'tan **sonra**
+gelen bir `Publish`/`Subscribe` durumu sıfırdan yeniden yaratır; bu yüzden
+yalnız oturum gerçekten giderken çağrılmalıdır.
+
+> **Not (istemci kablolaması):** efemer `tool_delta`, hub'a geçiş sırasında
+> istemci `switch`'inde karşılıksız kalmıştı — sunucu yayınlıyor, `applyStep`'in
+> chunk birleştirme mantığı ve `ToolDeltaStep` render'ı hazır, ama `case` yoktu;
+> yani uzun süren araçların canlı çıktısı sessizce düşüyordu. `case
+> HubKind.ToolDelta` eklendi.
 
 ### Endpoint: cursor'lı resumable SSE
 
@@ -257,7 +273,9 @@ gap-fill** dayanıklı olmalı: `Last-Event-ID`, ring taşınca `reset`, ping/ke
   `TestRingKeepsUncommitted`.
 - **Autonomous simetri (F):** `bridgeBusToHub` tamamlanma event'inde son assistant
   mesajını `KindReply` olarak hub'a yayınlar (+turn_done+Commit) → autonomous tur
-  da canlı reply gösterir (`publishAutonomousReply`).
+  da canlı reply gösterir (`publishAutonomousReply`). Simetrik olarak enjekte
+  **user** mesajları da `session_user_message` bus tipiyle köprülenir (aşağıdaki
+  2026-08-03 bug fix); yani autonomous akışın hem soru hem cevap tarafı canlıdır.
 - **Bug fix — otonom canlı adım köprüsü (2026-07-11):** `session_step` guard'ı
   `live && !info.Autonomous` olmalı. `autonomousInteraction` otonom CLI turları için
   Interaction MCP token'ını eşleyen **token-only bir chatRun** kaydeder; eski guard
@@ -285,6 +303,31 @@ gap-fill** dayanıklı olmalı: `Last-Event-ID`, ring taşınca `reset`, ping/ke
   kaydeder (`context.WithCancel`) → izleyicinin Durdur/Kes'i otonom CLI turunu
   gerçekten durdurur; `runCoordinatorTurn`/`runWorker` `context.Canceled`'ı temiz
   "durduruldu" mesajına çevirir.
+- **Bug fix — enjekte USER mesajı köprüsü (2026-08-03):** Autonomous simetri (F)
+  yalnız assistant reply'ı köprülüyordu; runtime'ın koordinasyon akışında enjekte
+  ettiği **user-rol mesajları** (worker `<task-notification>`, `send_to_worker`
+  promptu, coordination status/guard notları) `db.AddMessage` ile sessizce diske
+  yazılıp hub'a hiç yayınlanmıyordu. Sonuç: açık koordinatör/worker sohbetinde
+  worker'ın cevabı canlı görünmüyor, ardından köprülenen koordinatör reply'ı
+  "görülmeyen bir mesaja yanıt" gibi (worker "2. kez cevap veriyor" izlenimi)
+  belirip ancak reload'da düzeliyordu. Çözüm: yeni bus tipi
+  `session_user_message` (`Event.Msg` = marshalled `db.Message`) + tek helper
+  `recordInjectedUserNote` (AddMessage + `emitInjectedUserNote`) tüm enjeksiyon
+  noktalarını sarar; `bridgeBusToHub` bunu **durable** `KindUserMessage` olarak
+  hub'a basar (interaktifle simetri, sırayı korur; run-canlılığından bağımsız —
+  enjekte mesajı hiçbir interaktif run yayınlamaz, çift-yayın yok; id ile idempotent).
+  `chatStreamHub` **not-tipi** enjekte origin'lerde (`worker-note`/`coordination-guard`/
+  `auto-continue`/`wake`/`schedule`) busy-state'i **kurmaz** (turun kendi AgentStart/Step'i
+  yakar → turn-cap/mid-run edge'inde takılı "çalışıyor" yok); gerçek tur-başı mesajlar
+  (spawn/inbox açılış turu, origin boş) eskisi gibi anında işaretler. Test:
+  `TestBridgeForwardsInjectedUserMessage`.
+  **Kapsam (tüm enjekte user turları):** koordinasyon (worker-note/send_to_worker/
+  status/guard/stall) + `spawn` açılış promptu + peer `inbox` teslimi (AuthorKind=agent
+  korunur) + `scheduler` (zamanlı prompt + wake) + `auto-continue` nudge + `flow` transkript
+  girdisi + `flow-coordinator` node promptu. Hepsi `recordInjectedUserNote`/
+  `recordInjectedUserMessage` funnel'ından geçer; her birinin ardından o oturuma
+  `sessionId` taşıyan bir completion event'i (`chat`/`spawned`/`schedule`/`flow`) gelir →
+  bridge turn_done'ı basıp busy-state'i temizler.
 - **Worker sağlamlığı:** `runTurnGuarded` panic-barrier — tek turun panic'i
   worker'ı öldürüp session kuyruğunu kilitlemez (log + hub turn_error + devam).
   `inbox.seen` dedupe seti kuyruk boşalınca sıfırlanır (sınırsız büyüme yok).

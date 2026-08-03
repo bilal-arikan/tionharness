@@ -36,18 +36,13 @@ export default defineConfig({
         manualChunks(id: string) {
           if (!id.includes('node_modules')) return
           if (id.includes('highlight.js')) return 'vendor-highlight'
-          // mermaid + its deps (d3, dagre, cytoscape, …) are lazy-loaded only
-          // when a diagram renders — keep them out of the main bundle.
-          if (
-            id.includes('mermaid') ||
-            id.includes('/d3') ||
-            id.includes('d3-') ||
-            id.includes('dagre') ||
-            id.includes('cytoscape') ||
-            id.includes('khroma') ||
-            id.includes('elkjs')
-          )
-            return 'vendor-mermaid'
+          // NOTE: do NOT hand-group mermaid + its deps (d3, dagre, cytoscape, …)
+          // into a named chunk. MermaidDiagram.tsx already `await import('mermaid')`s
+          // it, so the bundler splits it out on its own. Forcing a manual group made
+          // the shared dynamic-import preload helper land inside that 3 MB chunk,
+          // which turned it into a static dependency of the entry — index.html then
+          // modulepreloaded all of mermaid on every cold start, defeating the lazy
+          // load entirely. Leave the dynamic import to do the splitting.
           if (
             id.includes('react-markdown') ||
             id.includes('remark') ||

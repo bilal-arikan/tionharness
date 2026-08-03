@@ -8,8 +8,8 @@ import (
 	"testing"
 )
 
-// TestAddMessageAppendsLine verifies the O(1) append hot-path: the session file
-// is header line + one line per message (not rewritten), and reopening recovers
+// TestAddMessageAppendsLine verifies the O(1) append hot-path: the transcript
+// file is exactly one line per message (not rewritten), and reopening recovers
 // every message in order.
 func TestAddMessageAppendsLine(t *testing.T) {
 	ctx := context.Background()
@@ -29,15 +29,17 @@ func TestAddMessageAppendsLine(t *testing.T) {
 	}
 	_ = d.Close()
 
-	path := filepath.Join(storeDir, dirSessions, sess.ID, "session.jsonl")
-	raw, err := os.ReadFile(path)
+	raw, err := os.ReadFile(filepath.Join(storeDir, dirSessions, sess.ID, sessionMsgsFile))
 	if err != nil {
-		t.Fatalf("read file: %v", err)
+		t.Fatalf("read transcript: %v", err)
 	}
-	// header line + n message lines = n+1 non-empty lines.
-	lines := nonEmptyLines(string(raw))
-	if len(lines) != n+1 {
-		t.Fatalf("file has %d lines, want %d (header + %d msgs)", len(lines), n+1, n)
+	// The header lives in its own file, so the transcript is exactly n lines.
+	if lines := nonEmptyLines(string(raw)); len(lines) != n {
+		t.Fatalf("transcript has %d lines, want %d", len(lines), n)
+	}
+	// The header must NOT be in the transcript file.
+	if _, err := os.Stat(filepath.Join(storeDir, dirSessions, sess.ID, sessionHeaderFile)); err != nil {
+		t.Fatalf("header file missing: %v", err)
 	}
 
 	d2, err := Open(storeDir)
@@ -75,7 +77,7 @@ func TestReadSessionFileToleratesTornTrailingLine(t *testing.T) {
 	_ = d.Close()
 
 	// Append a torn (incomplete) JSON line, as a crash mid-write would leave.
-	path := filepath.Join(storeDir, dirSessions, sess.ID, "session.jsonl")
+	path := filepath.Join(storeDir, dirSessions, sess.ID, sessionMsgsFile)
 	f, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0o644)
 	if err != nil {
 		t.Fatalf("open for append: %v", err)

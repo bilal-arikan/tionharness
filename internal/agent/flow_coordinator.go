@@ -104,7 +104,7 @@ func (r *Runtime) RunCoordinatorNode(ctx context.Context, spec orchestration.Coo
 		Target: map[string]string{"sessionId": sess.ID, "op": "create"},
 	})
 
-	if _, err := r.db.AddMessage(ctx, db.Message{SessionID: sess.ID, Role: "user", Text: prompt}); err != nil {
+	if _, err := r.recordInjectedUserNote(ctx, sess.ID, "", prompt); err != nil {
 		return "", fmt.Errorf("coordinator prompt record failed: %w", err)
 	}
 

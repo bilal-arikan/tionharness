@@ -59,8 +59,8 @@ func (d *DB) AddSessionUsageKind(ctx context.Context, sessionID, agentID, kind, 
 	if kind == "" {
 		kind = UsageKindOther
 	}
-	d.mu.Lock()
-	defer d.mu.Unlock()
+	d.usageMu.Lock()
+	defer d.usageMu.Unlock()
 	u, ok := d.sessionUsage[sessionID]
 	if !ok {
 		u = SessionUsage{SessionID: sessionID, AgentID: agentID}
@@ -95,8 +95,8 @@ func (d *DB) AddSessionUsageKind(ctx context.Context, sessionID, agentID, kind, 
 // GetSessionUsage returns a session's lifetime usage rollup (zero-valued if
 // nothing has been recorded for it yet).
 func (d *DB) GetSessionUsage(ctx context.Context, sessionID string) (SessionUsage, error) {
-	d.mu.RLock()
-	defer d.mu.RUnlock()
+	d.usageMu.RLock()
+	defer d.usageMu.RUnlock()
 	if u, ok := d.sessionUsage[sessionID]; ok {
 		return u, nil
 	}

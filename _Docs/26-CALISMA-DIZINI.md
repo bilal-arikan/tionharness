@@ -136,10 +136,22 @@ butonuyla** açılan kendi penceresinde (`components/workspace/WorkspaceView.tsx
 Sol alt-navbar (Settings/Logs benzeri) üç sekme:
 - **Genel** — kimlik, sağlayıcı/model, otonomi, session bağlamı (`WorkspacePanel`).
 - **Proje** (`ProjectPanel`) — proje dizini (path) seçici + **git**: depo durumu,
-  `git init` (yoksa), origin remote URL + `user.name`/`user.email` ayarları.
+  `git init` (yoksa), klasör hiç yoksa **"Klasörü oluştur + git init"** (istek alanı
+  `createDir`; yalnız bu daldan gönderilir ki yazım hatası boş klasör açmasın),
+  origin remote URL + `user.name`/`user.email` ayarları.
 - **Promptlar & Dosyalar** — düzenlenebilir config dosyaları (`WorkspaceFilesPanel`).
 
 Git endpoint'leri (`internal/api/git.go`): `GET /api/fs/gitinfo?path=`,
 `POST /api/git/init`, `POST /api/git/config` (origin remote + commit kimliği).
+TionSwarm'ın kendi başlattığı her depoya (`prepareGitRepo`) gömülü bir **başlangıç
+`.gitignore`** yazılır (`internal/api/defaults/gitignore.txt`): sırlar (`.env`),
+bağımlılıklar (`node_modules/`, `.venv/`), build çıktısı, loglar, editör/OS artıkları
+ve `.tionswarm/`. **Var olan `.gitignore` asla ezilmez**; zaten repo olan klasöre
+hiç dokunulmaz. Dosya kullanıcının deposunda düz metindir, serbestçe düzenlenebilir.
+
+Yanıttaki `gitInstalled` alanı makinede git binary'si olup olmadığını söyler
+(`exec.LookPath`); yoksa UI `git init` butonu yerine "git kurulu değil" der ve
+endpoint 400 döner. Aynı kontrol workspace oluşturma modalındaki "Git deposu
+başlat" onay kutusunu da yönetir (bkz. `_Docs/06-WORKSPACES.md`).
 Secrets de NavRail'den çıkıp **Ayarlar ▸ Sırlar** alt-kategorisine taşındı; UI'da
 "Beceri/Beceriler" terimleri **Skill/Skills**'e çevrildi.

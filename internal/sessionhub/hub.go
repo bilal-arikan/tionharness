@@ -183,6 +183,36 @@ func (h *Hub) Unsubscribe(sessionID string, id int) {
 	}
 }
 
+// Drop discards a session's state entirely: its seq counter, its ring buffer and
+// its subscriber set. Without it the states map only ever grows — every session
+// that ever published or was watched keeps a ring (up to ringCap events) for the
+// life of the process, including the short-lived schedule/spawn/worker sessions
+// an autonomous workspace creates and discards constantly.
+//
+// Live subscriber channels are closed, which is the right signal for a session
+// that no longer exists: the stream handler reads with the two-value form and
+// ends its loop on a closed channel. A later Unsubscribe for a dropped session
+// finds no state and returns without double-closing.
+//
+// Call this only after the session is gone (or going) — a Publish or Subscribe
+// afterwards silently recreates the state from scratch.
+func (h *Hub) Drop(sessionID string) {
+	if h == nil || sessionID == "" {
+		return
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	st := h.states[sessionID]
+	if st == nil {
+		return
+	}
+	for id, ch := range st.subs {
+		delete(st.subs, id)
+		close(ch)
+	}
+	delete(h.states, sessionID)
+}
+
 // Replay returns the durable events a (re)connecting client is missing.
 //
 //   - FRESH subscribe (since <= 0): the client has just loaded the persisted

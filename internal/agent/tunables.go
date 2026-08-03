@@ -99,6 +99,16 @@ type Tunables struct {
 	coordMaxSubtree     int // 0 → DefaultCoordinatorMaxSubtreeSessions (-1 = unlimited)
 	coordSettleGrace    int // 0 → DefaultCoordinatorSettleGraceSec (upward-report backstop delay)
 
+	// Coordinator stall/hallucination protection (see coordination_stall.go). The
+	// master toggle gates the judge-based turn-end guard AND the staleness sweeper
+	// that together catch a coordinator narrating a spawn it never issued (the SES1
+	// freeze). coordStallSweepMin bounds the staleness window; <0 disables the
+	// sweeper while leaving the turn-end guard on. coordStallMaxNudges caps the
+	// consecutive corrective nudges before deferring to the sweeper / turn cap.
+	coordStallGuard     bool // master switch (default on)
+	coordStallSweepMin  int  // 0 → DefaultCoordinatorStallSweepMin; <0 disables the sweeper
+	coordStallMaxNudges int  // 0 → DefaultCoordinatorStallMaxNudges
+
 	// Turn recovery (A1) — structural handling of output-token cutoffs and
 	// context overflow inside the native agentic tool loop.
 	reactiveCompact    bool // fold older in-flight history + retry on context overflow
@@ -295,6 +305,11 @@ func NewTunables() *Tunables {
 		// SetAutoTagSessions); test runtimes that skip applySettings still auto-tag.
 		autoTagSessions: true,
 		maxToolIters:    -1,
+		// Coordinator stall protection on by default (production overrides from
+		// settings via SetCoordinatorStallGuard): it only acts on an idle coordinator
+		// that made no coordination tool call, and the judge call is gated behind that
+		// rare condition.
+		coordStallGuard: true,
 	}
 }
 
@@ -539,6 +554,51 @@ func (t *Tunables) CoordinatorSettleGrace() time.Duration {
 		sec = DefaultCoordinatorSettleGraceSec
 	}
 	return time.Duration(sec) * time.Second
+}
+
+// SetCoordinatorStallGuard configures the coordinator stall/hallucination
+// protection: the master toggle, the staleness sweeper window (minutes; 0 →
+// default, <0 disables the sweeper), and the max consecutive nudges (0 → default).
+func (t *Tunables) SetCoordinatorStallGuard(enabled bool, sweepMin, maxNudges int) {
+	t.mu.Lock()
+	t.coordStallGuard = enabled
+	t.coordStallSweepMin = sweepMin
+	t.coordStallMaxNudges = maxNudges
+	t.mu.Unlock()
+}
+
+// CoordinatorStallGuard reports whether the judge-based stall protection is on.
+func (t *Tunables) CoordinatorStallGuard() bool {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	return t.coordStallGuard
+}
+
+// CoordinatorStallSweep returns the staleness watchdog window as a duration, and
+// whether the sweeper is enabled at all. A negative setting disables the sweeper
+// (the turn-end guard still runs); 0 selects the built-in default.
+func (t *Tunables) CoordinatorStallSweep() (window time.Duration, enabled bool) {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	if t.coordStallSweepMin < 0 {
+		return 0, false
+	}
+	m := t.coordStallSweepMin
+	if m == 0 {
+		m = DefaultCoordinatorStallSweepMin
+	}
+	return time.Duration(m) * time.Minute, true
+}
+
+// CoordinatorStallMaxNudges returns the cap on consecutive corrective nudges
+// (default when unset).
+func (t *Tunables) CoordinatorStallMaxNudges() int {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	if t.coordStallMaxNudges <= 0 {
+		return DefaultCoordinatorStallMaxNudges
+	}
+	return t.coordStallMaxNudges
 }
 
 // CoordinatorMaxDepth returns how deep a coordinator tree may nest (root = depth

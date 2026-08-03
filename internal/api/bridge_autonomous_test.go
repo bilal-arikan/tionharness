@@ -85,3 +85,48 @@ func TestBridgeSkipsInteractiveSteps(t *testing.T) {
 		t.Fatal("interactive session_step was double-published by the bridge")
 	}
 }
+
+// TestBridgeForwardsInjectedUserMessage verifies that a runtime-injected user-role
+// message (a worker task-notification, a send_to_worker prompt, a coordination
+// status/guard note) is bridged to the hub as a durable KindUserMessage. Without
+// this, a window watching a coordinator/worker saw the assistant reply that
+// followed but never the message it answered — the "worker replies a second time
+// out of nowhere" bug that only a reload fixed (_Docs/58, _Docs/47).
+func TestBridgeForwardsInjectedUserMessage(t *testing.T) {
+	bus := events.NewBus()
+	srv := &Server{
+		bus:  bus,
+		hub:  sessionhub.New("test", 0),
+		runs: newChatRuns(),
+	}
+	const sid = "s-note"
+	_, ch, _ := srv.hub.Subscribe(sid)
+	go srv.bridgeBusToHub()
+
+	deadline := time.After(2 * time.Second)
+	tick := time.NewTicker(20 * time.Millisecond)
+	defer tick.Stop()
+	pub := func() {
+		bus.Publish(events.Event{
+			Type:   events.TypeSessionUserMessage,
+			Target: map[string]string{"sessionId": sid},
+			Msg:    json.RawMessage(`{"id":"MSG1","role":"user","text":"<task-notification>done</task-notification>"}`),
+		})
+	}
+	pub()
+	for {
+		select {
+		case ev := <-ch:
+			if ev.Kind == sessionhub.KindUserMessage {
+				if ev.Seq == 0 {
+					t.Fatal("injected user message must be durable (nonzero seq), not ephemeral")
+				}
+				return
+			}
+		case <-tick.C:
+			pub() // re-publish until the bridge goroutine has subscribed
+		case <-deadline:
+			t.Fatal("injected user message was not bridged to the hub")
+		}
+	}
+}

@@ -60,7 +60,9 @@ function buildOptions(density = 1, mode: VisMode = 'relation', lite = false): Op
     nodes: {
       borderWidth: 2,
       font: { color: '#e5e7eb', size: 13, face: 'Inter, system-ui, sans-serif' },
-      shadow: lite ? { enabled: false } : { enabled: true, size: 8, x: 0, y: 2, color: 'rgba(0,0,0,0.35)' },
+      shadow: lite
+        ? { enabled: false }
+        : { enabled: true, size: 8, x: 0, y: 2, color: 'rgba(0,0,0,0.35)' },
     },
     edges: {
       color: { color: '#475569', highlight: '#94a3b8', opacity: 0.7 },
@@ -73,14 +75,19 @@ function buildOptions(density = 1, mode: VisMode = 'relation', lite = false): Op
       enabled: true,
       solver: 'forceAtlas2Based',
       forceAtlas2Based: {
-        gravitationalConstant: (mode === 'live' ? -45 : -60) / d,
+        // Stronger repulsion in live mode so the many nodes sharing one anchor
+        // (run-history cards on "Geçmiş", instances on "Çalışıyor") push apart
+        // instead of stacking on top of each other.
+        gravitationalConstant: (mode === 'live' ? -70 : -60) / d,
         // Live mode: near-zero central gravity so the fixed, horizontally-spread
         // column anchors (not a central pull) shape the layout.
         centralGravity: mode === 'live' ? 0.004 : 0.012 * d,
         springLength: 110 / d,
         springConstant: 0.08,
         damping: 0.4,
-        avoidOverlap: mode === 'live' ? 0.6 : 0.5,
+        // avoidOverlap pushed to the max in live mode: box cards with long titles
+        // were overlapping at the shared anchors; 1 keeps them clear of each other.
+        avoidOverlap: mode === 'live' ? 1 : 0.6,
       },
       maxVelocity: 50,
       minVelocity: 0.75,

@@ -89,7 +89,7 @@ func TestReplayCommitBoundary(t *testing.T) {
 	for i := 0; i < 3; i++ {
 		h.Publish("S", KindStep, raw("s"), false)
 	}
-	h.Commit("S") // seq 1..3 are now in the persisted transcript
+	h.Commit("S")                             // seq 1..3 are now in the persisted transcript
 	h.Publish("S", KindStep, raw("t"), false) // seq 4 (in-flight)
 	h.Publish("S", KindStep, raw("t"), false) // seq 5 (in-flight)
 
@@ -136,5 +136,50 @@ func TestSubscribeReceivesLive(t *testing.T) {
 	}
 	if n := h.SubscriberCount("S"); n != 0 {
 		t.Fatalf("subscriber count after unsub = %d, want 0", n)
+	}
+}
+
+// Drop releases a deleted session's state: the ring, the seq counter and the
+// subscriber channels. Without it the states map grows for the process lifetime.
+func TestDropReleasesSessionState(t *testing.T) {
+	h := New("e", 8)
+	id, ch, _ := h.Subscribe("S")
+	h.Publish("S", KindStep, raw("a"), false)
+	h.Publish("S", KindStep, raw("b"), false)
+	if len(h.states) != 1 {
+		t.Fatalf("states = %d, want 1", len(h.states))
+	}
+
+	h.Drop("S")
+
+	if len(h.states) != 0 {
+		t.Fatalf("states after drop = %d, want 0", len(h.states))
+	}
+	// Watching windows must be released, not left hanging on a dead session.
+	for {
+		if _, open := <-ch; !open {
+			break
+		}
+	}
+	// A late Unsubscribe for the dropped session must not panic (double close).
+	h.Unsubscribe("S", id)
+	// And the counters are genuinely gone, not just hidden.
+	if got := h.Head("S"); got != 0 {
+		t.Fatalf("head after drop = %d, want 0", got)
+	}
+	if got := h.SubscriberCount("S"); got != 0 {
+		t.Fatalf("subscriber count after drop = %d, want 0", got)
+	}
+}
+
+// Drop is safe on a nil hub and on a session that was never seen.
+func TestDropIsSafeWhenAbsent(t *testing.T) {
+	var nilHub *Hub
+	nilHub.Drop("S") // must not panic
+	h := New("e", 8)
+	h.Drop("")
+	h.Drop("never-published")
+	if len(h.states) != 0 {
+		t.Fatalf("dropping an absent session created state: %d", len(h.states))
 	}
 }

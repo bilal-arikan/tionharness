@@ -103,9 +103,15 @@ func scanEntities(storeDir string, spec entitySpec) ([]idRec, error) {
 				continue
 			}
 			rec := idRec{ID: e.Name()}
-			// Read createdAt from the session header (first JSONL line) if present.
-			if hdr, ok := readSessionHeader(filepath.Join(dir, e.Name(), "session.jsonl")); ok {
-				rec.CreatedAt = hdr.CreatedAt
+			// Read createdAt from the session header. Current layout keeps it in
+			// its own session.json; a store that has not been opened since the
+			// split still has it as line 1 of the combined session.jsonl. Both are
+			// a single JSON object on the first line, so one reader covers them.
+			for _, name := range []string{"session.json", "session.jsonl"} {
+				if hdr, ok := readSessionHeader(filepath.Join(dir, e.Name(), name)); ok {
+					rec.CreatedAt = hdr.CreatedAt
+					break
+				}
 			}
 			out = append(out, rec)
 			continue

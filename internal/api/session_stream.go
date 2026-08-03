@@ -245,6 +245,23 @@ func (s *Server) bridgeBusToHub() {
 				continue
 			}
 			s.hub.Publish(sid, sessionhub.KindStep, e.Step, false)
+		case "session_user_message":
+			// A runtime-injected user-role message (a worker task-notification, a
+			// send_to_worker prompt, a coordination status/guard note) was just
+			// persisted mid-autonomous-flow. Publish it to the hub as a durable
+			// user_message so every window watching the coordinator/worker renders it
+			// live and IN ORDER — the assistant reply that follows already bridges via
+			// the completion case below, but without this the reply appeared to answer
+			// a message the window never saw (looked like a duplicate reply out of
+			// nowhere; only a reload restored order — _Docs/58). Unconditional (not
+			// run-liveness gated): no interactive run publishes this injected message,
+			// so there is nothing to double up with. Left UNcommitted here — the
+			// following turn's turn_done commits it, and a fresh subscriber that joins
+			// in between replays it (and dedupes by message id against listMessages).
+			if len(e.Msg) == 0 {
+				continue
+			}
+			s.hub.Publish(sid, sessionhub.KindUserMessage, e.Msg, false)
 		case "chat", "spawned", "worker", "schedule", "flow", "automation":
 			// An AUTONOMOUS turn (scheduler/spawn/worker/flow) finished: it publishes
 			// no hub reply/turn_done of its own, so bridge a turn_done here — every

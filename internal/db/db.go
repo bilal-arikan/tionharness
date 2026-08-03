@@ -35,24 +35,29 @@ func newID() string { return uuid.NewString() }
 type DB struct {
 	root string // store root directory
 
-	mu        sync.RWMutex
-	agents    map[string]Agent
-	sessions  map[string]Session
-	messages  map[string][]Message // keyed by session id, chronological
-	tasks     map[string]Task
-	runs      map[string]Run
-	schedules map[string]Schedule
-	mcp       map[string]MCPServer
-	flows       map[string]Flow
-	flowRuns    map[string]FlowRun
-	sessionAsks map[string]SessionAsk // durable ask suspend/resume (MVP)
-	automations map[string]Automation
-	artifacts   map[string]Artifact
-	hooks     map[string]Hook
-	usage     map[string]Usage // keyed by agentID + "|" + day
+	mu           sync.RWMutex
+	agents       map[string]Agent
+	sessions     map[string]Session
+	messages     map[string][]Message // keyed by session id, chronological
+	tasks        map[string]Task
+	runs         map[string]Run
+	schedules    map[string]Schedule
+	mcp          map[string]MCPServer
+	flows        map[string]Flow
+	flowRuns     map[string]FlowRun
+	sessionAsks  map[string]SessionAsk // durable ask suspend/resume (MVP)
+	automations  map[string]Automation
+	artifacts    map[string]Artifact
+	hooks        map[string]Hook
+	usage        map[string]Usage        // keyed by agentID + "|" + day
 	sessionUsage map[string]SessionUsage // keyed by session id (lifetime rollup)
 
 	toolConfig WorkspaceToolConfig // workspace-wide tool activation (singleton)
+
+	// modelResolutions maps "<provider>|<requested model>" to the concrete model
+	// a completed turn revealed behind it — the only way to know which Opus an
+	// agent configured with the alias "opus" is actually talking to.
+	modelResolutions map[string]ModelResolution
 
 	// boardHook is an optional observer invoked (best-effort) after a task's
 	// board state changes or a task is created/deleted. It backs board-triggered
@@ -76,36 +81,50 @@ type DB struct {
 	// lessons, self-healing) — independent of mu for the same reason as debugMu.
 	lessonsMu sync.Mutex
 
-	// counters holds the per-entity monotonic id sequence (prefix -> last n).
-	// It is persisted to counters.json so a number is never reused, even across
-	// deletions or restarts. Guarded by its own mutex (independent of mu) so it
-	// can be called both before and while mu is held.
+	// counters holds the per-entity id RESERVATION high-water mark (prefix -> the
+	// highest n that has been persisted as claimed). It is written to
+	// counters.json; issued tracks what has actually been handed out this
+	// process. issued <= counters always, and a boot starts issuing from the
+	// stored counters value — so a number is never reused across deletions or
+	// restarts. Guarded by its own mutex (independent of mu) so it can be called
+	// both before and while mu is held.
 	countersMu sync.Mutex
 	counters   map[string]int64
+	issued     map[string]int64
+
+	// usageMu guards usage + sessionUsage, independent of mu. Token/cost
+	// bookkeeping runs once per LLM call and writes its row to disk while holding
+	// its lock; under mu that put every concurrent agent's unrelated session reads
+	// and writes behind one agent's usage write. Nothing outside store_usage.go
+	// and store_session_usage.go touches these maps, so the split is total —
+	// mirroring what debugMu/lessonsMu already do for their own journals.
+	usageMu sync.RWMutex
 }
 
 // Open opens (creating if missing) the file-backed store rooted at path and
 // loads every entity into memory.
 func Open(path string) (*DB, error) {
 	d := &DB{
-		root:      path,
-		agents:    map[string]Agent{},
-		sessions:  map[string]Session{},
-		messages:  map[string][]Message{},
-		tasks:     map[string]Task{},
-		runs:      map[string]Run{},
-		schedules: map[string]Schedule{},
-		mcp:       map[string]MCPServer{},
-		flows:       map[string]Flow{},
-		flowRuns:    map[string]FlowRun{},
-		sessionAsks: map[string]SessionAsk{},
-		automations: map[string]Automation{},
-		artifacts:   map[string]Artifact{},
-		hooks:     map[string]Hook{},
-		usage:        map[string]Usage{},
-		sessionUsage: map[string]SessionUsage{},
-		debugCount:   map[string]int{},
-		counters:  map[string]int64{},
+		root:             path,
+		agents:           map[string]Agent{},
+		sessions:         map[string]Session{},
+		messages:         map[string][]Message{},
+		tasks:            map[string]Task{},
+		runs:             map[string]Run{},
+		schedules:        map[string]Schedule{},
+		mcp:              map[string]MCPServer{},
+		flows:            map[string]Flow{},
+		flowRuns:         map[string]FlowRun{},
+		sessionAsks:      map[string]SessionAsk{},
+		automations:      map[string]Automation{},
+		artifacts:        map[string]Artifact{},
+		hooks:            map[string]Hook{},
+		usage:            map[string]Usage{},
+		sessionUsage:     map[string]SessionUsage{},
+		debugCount:       map[string]int{},
+		counters:         map[string]int64{},
+		issued:           map[string]int64{},
+		modelResolutions: map[string]ModelResolution{},
 	}
 	if err := os.MkdirAll(path, 0o755); err != nil {
 		return nil, err
@@ -116,8 +135,31 @@ func Open(path string) (*DB, error) {
 	return d, nil
 }
 
-// Close is a no-op kept for API parity (all writes are synchronous).
-func (d *DB) Close() error { return nil }
+// Close releases the unspent tail of every reserved id block. Entity writes are
+// all synchronous, so this is the only thing left to do — and skipping it costs
+// nothing but id gaps (see idBlock).
+func (d *DB) Close() error { return d.releaseIDReservations() }
+
+// releaseIDReservations rewinds each persisted counter from the reserved
+// high-water mark down to what was actually handed out, so a CLEAN shutdown
+// leaves no gap and the next boot continues the numbering densely. Only a hard
+// crash (no Close) forfeits the block's tail — the ids stay monotonic and unique
+// either way, they just skip a few numbers.
+func (d *DB) releaseIDReservations() error {
+	d.countersMu.Lock()
+	defer d.countersMu.Unlock()
+	changed := false
+	for prefix, reserved := range d.counters {
+		if n := d.issued[prefix]; n < reserved {
+			d.counters[prefix] = n
+			changed = true
+		}
+	}
+	if !changed {
+		return nil
+	}
+	return atomicWriteJSON(d.dir(countersFile), d.counters)
+}
 
 // ---- paths ----
 
@@ -131,20 +173,20 @@ func (d *DB) dir(parts ...string) string {
 func (d *DB) Root() string { return d.root }
 
 const (
-	dirAgents    = "agents"
-	dirSessions  = "sessions"
-	dirTasks     = "tasks"
-	dirRuns      = "runs"
-	dirSchedules = "schedules"
-	dirMCP       = "mcp-servers"
-	dirFlows       = "flows"
-	dirFlowRuns    = "flow-runs"
-	dirSessionAsks = "session-asks"
-	dirAutomations = "automations"
-	dirArtifacts = "artifacts"
-	dirRender    = "render" // per-session render_template output (transient, swept)
-	dirHooks     = "hooks"
-	dirUsage     = "usage"
+	dirAgents       = "agents"
+	dirSessions     = "sessions"
+	dirTasks        = "tasks"
+	dirRuns         = "runs"
+	dirSchedules    = "schedules"
+	dirMCP          = "mcp-servers"
+	dirFlows        = "flows"
+	dirFlowRuns     = "flow-runs"
+	dirSessionAsks  = "session-asks"
+	dirAutomations  = "automations"
+	dirArtifacts    = "artifacts"
+	dirRender       = "render" // per-session render_template output (transient, swept)
+	dirHooks        = "hooks"
+	dirUsage        = "usage"
 	dirSessionUsage = "session-usage"
 )
 
@@ -157,15 +199,15 @@ const countersFile = "counters.json"
 // numbers are pure digits, so an id is trivially parseable and can never
 // collide with a UUID.
 const (
-	idAgent     = "AGT"
-	idSession   = "SES"
-	idTask      = "TSK"
-	idFlow      = "FLW"
-	idFlowRun   = "RUN"
+	idAgent      = "AGT"
+	idSession    = "SES"
+	idTask       = "TSK"
+	idFlow       = "FLW"
+	idFlowRun    = "RUN"
 	idSessionAsk = "SAK"
-	idArtifact  = "ART"
-	idKnowledge = "MEM"
-	idMCP       = "MCP"
+	idArtifact   = "ART"
+	idKnowledge  = "MEM"
+	idMCP        = "MCP"
 	idHook       = "HOK"
 	idSchedule   = "SCH"
 	idAutomation = "AUT"
@@ -184,26 +226,47 @@ func (d *DB) loadCounters() error {
 	}
 	if c != nil {
 		d.counters = c
+		// The stored value is a RESERVATION mark, not the last id actually used:
+		// the previous process may have claimed a block it never fully spent.
+		// Starting from it is what guarantees no number is ever reissued — the
+		// unspent tail of that block is simply skipped.
+		for prefix, n := range c {
+			d.issued[prefix] = n
+		}
 	}
 	return nil
 }
 
+// idBlock is how many ids one counters.json write claims up front. Persisting
+// per id put a full atomic write (marshal + temp file + rename) on the critical
+// path of EVERY entity creation — measurably slow on Windows, where NTFS and
+// antivirus filter drivers tax file creation, and serialised across all entity
+// types by countersMu. Claiming a block amortises that to one write per idBlock
+// creations. The cost is cosmetic: a restart skips the block's unspent tail, so
+// ids stay monotonic but may contain gaps.
+const idBlock = 32
+
 // nextID allocates the next monotonic, never-reused id for the given entity
-// prefix. The counter is bumped in memory and persisted before returning, so a
-// deletion never frees a number and a restart never reissues one. It takes its
-// own mutex, making it safe to call both before mu is acquired (most Create*
-// paths) and while mu is already held (e.g. createSessionLocked).
+// prefix. Ids come from a block reserved on disk ahead of use, so a deletion
+// never frees a number and a restart never reissues one. It takes its own mutex,
+// making it safe to call both before mu is acquired (most Create* paths) and
+// while mu is already held (e.g. createSessionLocked).
 func (d *DB) nextID(prefix string) string {
 	d.countersMu.Lock()
 	defer d.countersMu.Unlock()
-	d.counters[prefix]++
-	n := d.counters[prefix]
-	// Best-effort persist: a write error here only risks a future restart
-	// reissuing this number, which is acceptably rare for a local file store —
-	// but it must not stay invisible (it usually means a full disk or a
-	// permissions problem that will bite real entity writes next).
-	if err := atomicWriteJSON(d.dir(countersFile), d.counters); err != nil {
-		slog.Warn("persist id counters failed", "component", "db", "prefix", prefix, "error", err)
+	d.issued[prefix]++
+	n := d.issued[prefix]
+	if n > d.counters[prefix] {
+		// Block exhausted (or first id for this prefix): claim the next one and
+		// persist the new high-water mark BEFORE handing out an id from it.
+		d.counters[prefix] = n + idBlock - 1
+		// Best-effort persist: a write error here only risks a future restart
+		// reissuing this number, which is acceptably rare for a local file store —
+		// but it must not stay invisible (it usually means a full disk or a
+		// permissions problem that will bite real entity writes next).
+		if err := atomicWriteJSON(d.dir(countersFile), d.counters); err != nil {
+			slog.Warn("persist id counters failed", "component", "db", "prefix", prefix, "error", err)
+		}
 	}
 	return prefix + strconv.FormatInt(n, 10)
 }
@@ -401,6 +464,9 @@ func (d *DB) load() error {
 		return err
 	}
 	if err := d.loadToolConfig(); err != nil {
+		return err
+	}
+	if err := d.loadModelResolutions(); err != nil {
 		return err
 	}
 	if err := d.loadSessions(); err != nil {

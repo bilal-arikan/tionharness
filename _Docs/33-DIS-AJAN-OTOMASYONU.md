@@ -26,9 +26,18 @@ gözünden" doğrulama veya tarayıcı-bağımlı senaryolar için.
 - **CORS: wildcard açık** — `Access-Control-Allow-Origin: *`, izinli header'lar
   `Content-Type, Authorization, X-Workspace-Id` (`server.go:491`). Yani tarayıcı içinden
   (`fetch`) de, sunucudan da çağrılabilir.
-- **Workspace seçimi:** İstek `X-Workspace-Id: <id>` header'ı ile kapsamlanır
-  (alternatif `?ws=<id>` query — yalnız inline medya `<img>` için). Header yoksa **default
-  workspace**'e düşer. Hiçbir auth kapısı yok; workspace = veri görünürlük sınırı.
+- **Workspace seçimi:** İstek `X-Workspace-Id: <id>` header'ı **veya** query
+  parametresi ile kapsamlanır — `?ws=` · `?workspace=` · `?workspaceId=` ·
+  `?workspace_id=` (hepsi eşdeğer; query, header'ı **ezer**). Hiçbiri yoksa
+  **default workspace**'e düşer. Hiçbir auth kapısı yok; workspace = veri
+  görünürlük sınırı.
+  - **Bilinmeyen id:** query ile geldiyse **400 `unknown workspace <id>`** —
+    sessiz yönlendirme YOK (aksi halde çağıran, başka bir workspace'in verisini
+    kendi istediği id'nin cevabı sanar ve yanlış store'a yazabilir). Header ile
+    geldiyse default'a düşer (bayat localStorage id'si UI'yi kilitlemesin) ve
+    sunucuda warn loglanır.
+  - **Yanıt daima `X-Workspace-Id` header'ı taşır** → isteğe hangi workspace'in
+    cevap verdiğini varsayma, bu header'dan doğrula.
 - **Format:** İstek/yanıt `application/json`; akışlar `text/event-stream`. Hata gövdesi
   `{ "error": "mesaj" }`.
 

@@ -360,6 +360,9 @@ func (s *Store) Apply(p Patch) (Settings, error) {
 	applyInt(&next.CoordinatorMaxDepth, p.CoordinatorMaxDepth)
 	applyInt(&next.CoordinatorMaxSubtreeSessions, p.CoordinatorMaxSubtreeSessions)
 	applyInt(&next.CoordinatorSettleGraceSec, p.CoordinatorSettleGraceSec)
+	applyBool(&next.CoordinatorStallGuard, p.CoordinatorStallGuard)
+	applyInt(&next.CoordinatorStallSweepMin, p.CoordinatorStallSweepMin)
+	applyInt(&next.CoordinatorStallMaxNudges, p.CoordinatorStallMaxNudges)
 
 	applyBool(&next.AutonomousConfine, p.AutonomousConfine)
 	applyBool(&next.AutonomousBootSeq, p.AutonomousBootSeq)
@@ -644,6 +647,22 @@ func normalize(v Settings) Settings {
 	}
 	if v.CoordinatorSettleGraceSec > 1800 {
 		v.CoordinatorSettleGraceSec = 1800
+	}
+	// Stall sweeper window: 0 = built-in default (5 min); any negative = sweeper off
+	// (normalized to -1); positive is minutes with a 1-day sanity ceiling.
+	if v.CoordinatorStallSweepMin < -1 {
+		v.CoordinatorStallSweepMin = -1
+	}
+	if v.CoordinatorStallSweepMin > 1440 {
+		v.CoordinatorStallSweepMin = 1440
+	}
+	// Stall nudge cap: 0 = default (2); no negatives; a small sanity ceiling — beyond
+	// a handful the sweeper's escalation is the right tool, not more nagging.
+	if v.CoordinatorStallMaxNudges < 0 {
+		v.CoordinatorStallMaxNudges = 0
+	}
+	if v.CoordinatorStallMaxNudges > 10 {
+		v.CoordinatorStallMaxNudges = 10
 	}
 	// Workspace backups: interval ≥ 1h, retention ≥ 1 archive; clamp ceilings.
 	if v.BackupIntervalHours < 1 {
