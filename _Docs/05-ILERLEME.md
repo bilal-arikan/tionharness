@@ -2,6 +2,27 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-08-04**
 
+## Playwright MCP izinli-kök = oturum scratchpad (2026-08-04) ✅
+
+- **Sorun (FND-a96f35e0/f45b51ab/0a4871a6/bb25e7e3):** Playwright MCP dosya
+  yazımını izinli köklerine (bu client MCP root ilan etmediği için de cwd'sine)
+  kısıtlıyor; TionSwarm ise ajana çıktı yolu olarak oturum scratchpad'ini
+  veriyordu → `browser_take_screenshot`/PDF her çağrı `File access denied:
+  outside allowed roots`. Ek: paylaşılan havuz bağlantısı bayat oturuma çözülüyordu
+  (SES4'te SES1 scratchpad'i).
+- **Fix:** `mcp.ServerConfig`'e `Dir` (stdio alt-sürecin cwd'si; `DialStdio`
+  `cmd.Dir`) + yeni `internal/agent/mcp_playwright.go`
+  (`applyMCPScratchpadRoot`): dosya-yazan sunucu için scratchpad **her build'de
+  aktif oturumdan yeniden çözülür**, `cfg.Dir`=scratchpad + `--output-dir=` +
+  (session,agent) scope. `Dir` parmak izinde olduğu için bayat kök yerine yeniden
+  dial. Çözülemezse uyarı loglar (sessiz yutmaz). `toolsetup.go` döngüsünde tek
+  satır çağrı — codebase-memory bloğuyla çakışmayacak biçimde ayrı dosyada.
+- **Doküman:** `_Docs/52-MCP-GATEWAY.md` + workspace `CLAUDE.md` ("## Playwright
+  MCP": izinli köke kaydet, scratchpad'e mutlak yol verme, `Read` ile oku).
+- **Doğrulama:** `go build ./internal/mcp ./internal/agent` ✅, `go vet` ✅,
+  `go test ./internal/mcp ./internal/agent` ✅ (+ `TestIsFileWritingMCP`,
+  `TestEnsureOutputDirArg`).
+
 ## Shell-kapalı farkındalığı: ölü-araç kuralı (2026-08-04) ✅
 
 - **Sorun (FND-9c9a52aa · FND-6095a777 · FND-e9c79d9a · FND-495575b8):** Kabuk

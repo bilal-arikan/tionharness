@@ -796,3 +796,18 @@ active/tool_search/hidden). Tam app boot + canlı chat testi orantısız ağır/
   çağırıyor (`activateRelistTimeout = 1s`, normalde ~15ms'de döner). Güvenlik: açık stream yoksa hiç
   bloklamaz, her zaman timeout'lu → client re-list etmezse en fazla +1s, sonra tarihsel retry.
   Testler: `TestProbeRelistOrdering` (canlı, gated), `TestPushToolsChangedAndWait{Signalled,NoStream,Timeout}`.
+
+- ✅ **Dosya-yazan MCP → oturum scratchpad izinli kökü (Playwright, 2026-08-04):** Playwright MCP
+  (`browser_take_screenshot` / PDF), dosya yazımını **izinli köklerine** — bu client hiç MCP root
+  ilan etmediği için de yalnız **cwd**'sine — kısıtlar. TionSwarm ise ajana çıktı yolu olarak oturum
+  scratchpad'ini (`<store>/sessions/<SID>/scratchpad`) veriyordu; iki küme kesişmediği için her
+  dosya-yazan çağrı `File access denied: outside allowed roots` ile reddediliyordu (ek olarak paylaşılan
+  havuz bağlantısı bayat bir oturum kimliğine çözülüyordu — SES4'te SES1 scratchpad'i). **Fix:**
+  `mcp.ServerConfig`'e `Dir` alanı (stdio alt-sürecin cwd'si; `DialStdio` `cmd.Dir`'e yazar) +
+  `internal/agent/mcp_playwright.go` (`applyMCPScratchpadRoot`): dosya-yazan sunucu (bugün Playwright,
+  `command`+`args`'ta "playwright") için scratchpad **her build'de aktif oturumdan yeniden çözülür**
+  (`sessionScratchpad`), `cfg.Dir` = scratchpad + `--output-dir=<scratchpad>` (operatör verdiyse
+  saygı) + sunucu (session,agent) başına **scope**'lanır. `Dir` bağlantı parmak izinde olduğundan yeni
+  oturum bayat kök yerine yeniden dial eder. Çözülemezse (canlı oturumda) sessiz yutmaz — uyarı loglar.
+  Çağrı `internal/agent/toolsetup.go` sunucu döngüsünde tek satır (`applyMCPScratchpadRoot`).
+  Testler: `TestIsFileWritingMCP`, `TestEnsureOutputDirArg`.
