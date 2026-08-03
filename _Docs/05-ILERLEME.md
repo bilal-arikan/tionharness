@@ -1,6 +1,63 @@
 # TionSwarm — İlerleme Takibi
 
-> Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-08-03**
+> Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-08-04**
+
+## Hit-limit hata kartı + salt-okunur retry (2026-08-04) ✅
+
+- **İstek:** "Session'lar hit-limit hatası dönerse hata mesajı gibi göster ve
+  Yeniden Dene ile sürdürelim; salt-okunur oturumlarda da hatadan sonra tekrar
+  denemeyi mümkün kıl."
+- **Backend (`internal/agent/errclass.go` + `toolloop.go`):** yeni
+  `limitErrorText(errClass)` yardımcı fonksiyonu — `rate_limit`/`overloaded`/
+  `billing` sınıfları için net Türkçe, retry-odaklı mesaj (diğerlerinde "").
+  `fail()` closure'ı terminal hatayı sınıflandırır; limit sınıfıysa ham
+  "anthropic HTTP 429…" metnini açıklamayla değiştirir ve error step `Reason`'ını
+  spesifik tag'e çeker (ham detay altta kalır). Muhafazakâr sınıflandırma →
+  guardrail/max-iters hataları etkilenmez.
+- **Frontend `ErrorStep.tsx`:** `rate_limit`/`overloaded`/`billing` reason'larını
+  tanıyıp ⛔ başlık + "Yeniden dene ile sürdür" ipucu gösterir.
+- **Salt-okunur retry:** `performRetry` artık `preserve` parametresi alır;
+  read-only olmayan chat eskisi gibi hatalı çifti silip yeniden gönderir,
+  read-only run-log'larda (`retryMessagePreserve`) transkripti **silmeden**
+  tetikleyici prompt'u yeniden kuyruğa alır (audit izi korunur; backend enqueue
+  her oturum türünü kabul ettiği için tur gerçekten yeniden koşar). ChatView
+  read-only iken preserve varyantını geçer; banner metni retry'ı belirtir.
+- **Doğrulama:** `go build ./...` ✅, `go test ./internal/agent ./internal/providers` ✅
+  (+ yeni `TestLimitErrorText`), `tsc -b` ✅, `vitest` 151 ✅.
+
+## Sohbet listesi sekme belirteçleri + sekme sırası (2026-08-04) ✅
+
+- **İstek:** "Aktif, Arşiv ve Workers sekmelerinde tamamlanan ve devam eden
+  oturum belirteçlerini görelim; ayrıca Arşiv sekmesini en sona al."
+- **Yapılan (`frontend/src/features/sessions/SessionsSidebar.tsx`):**
+  - Eski `archivedCount`/`workerCount` memo'ları tek `tabStats` memo'suyla
+    değiştirildi — her sekme kapsamı (active/workers/archived) için
+    `{ongoing, completed}`. `ongoing` = satır-başı canlılık ölçütünün aynısı
+    (`streamingSessionIds` ∪ `runtimeById.running`), `completed` = total−ongoing.
+  - Yeni `TabActivity` bileşeni: yeşil nabız-nokta + devam eden sayısı, soluk
+    tamamlanan sayısı; her yarım sıfırken gizlenir (boş sekme hiçbir şey göstermez).
+    Üç sekmeye de (Aktif dahil) uygulandı.
+  - Sekme sırası **Aktif → Workers → Arşiv** (Arşiv en sona alındı); tüm sekmeler
+    aynı `flex items-center justify-center gap-1` düzenine hizalandı.
+
+## Z.ai GLM sağlayıcısı (6. kind, Anthropic modu) ✅ (2026-08-03)
+
+- **İstek:** "Z.ai GLM-5.2 gibi modellerin desteğini ekleyebilir miyiz?" — Z.ai,
+  GLM ailesini hem OpenAI- hem **Anthropic-uyumlu** uçtan (`https://api.z.ai/api/anthropic`,
+  istemci `/v1/messages` ekler) sunuyor; Anthropic yolu araç kullanımı + streaming +
+  düşünmeyi native taşıdığı için `minimax-anthropic` kalıbıyla eklendi.
+- **Yeni kind:** `internal/providers/kind_zai.go` — self-registering manifest
+  (`Kind:"zai"`, Order 5, `AllowCustomModel`), `NewAnthropic(key).WithEndpoint("zai", …, "glm-5.2")`.
+  Kendi API anahtarı (OpenRouter komisyonu yok, GLM Coding Plan aboneliğini kullanır).
+- **Bağlantılar (OpenRouter kalıbının aynısı):** `registry.go` (zaiKey/zaiBaseURL +
+  `SetZAI`/`ZAIConfigured` + resolve `case "zai"`), `settings/settings.go`
+  (`ZAIKeyEnc`/`ZAIBaseURL` struct+DTO+patch) + `store.go` (`ZAIKey()` accessor +
+  patch şifreleme + BaseURL applyString), `api/server.go` applySettings `SetZAI`,
+  `providers/pricing.go` (`zai` GLM yaklaşık fiyat tablosu). Frontend: `types/settings.ts`,
+  `SettingsPanel.tsx` (keyPatch/clearKey/applyKey union'a `'zai'`), `ProvidersPanel.tsx`
+  (**Z.ai GLM** BuiltinProvider kartı). Test: `kind_test.go` katalog 5→6.
+- **Not:** GLM-5.2 ayrıca OpenRouter kataloğunda (`z-ai/glm-5.2`) ve Özel Sağlayıcı ile
+  zaten erişilebiliyordu; bu native kind doğrudan/ucuz yolu ekler. Detay `01` §6.
 
 ## Token-eşiği tetikleyicili otomasyonlar (3. tetik türü) ✅ (2026-08-03)
 

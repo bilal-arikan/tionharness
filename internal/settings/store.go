@@ -110,6 +110,11 @@ func (s *Store) OpenRouterKey() string {
 	return s.decrypt(s.Get().OpenRouterKeyEnc)
 }
 
+// ZAIKey returns the decrypted Z.ai GLM API key, or "" if none.
+func (s *Store) ZAIKey() string {
+	return s.decrypt(s.Get().ZAIKeyEnc)
+}
+
 // CustomProviderKey returns the decrypted key for a custom provider id, or "".
 func (s *Store) CustomProviderKey(id string) string {
 	s.mu.RLock()
@@ -376,6 +381,7 @@ func (s *Store) Apply(p Patch) (Settings, error) {
 
 	applyString(&next.MinimaxBaseURL, p.MinimaxBaseURL)
 	applyString(&next.OpenRouterBaseURL, p.OpenRouterBaseURL)
+	applyString(&next.ZAIBaseURL, p.ZAIBaseURL)
 
 	// Secrets: write-only. Empty string clears; non-empty encrypts and replaces.
 	if p.ClaudeCliAuthToken != nil {
@@ -420,6 +426,17 @@ func (s *Store) Apply(p Patch) (Settings, error) {
 				return Settings{}, err
 			}
 			next.OpenRouterKeyEnc = enc
+		}
+	}
+	if p.ZAIKey != nil {
+		if *p.ZAIKey == "" {
+			next.ZAIKeyEnc = ""
+		} else {
+			enc, err := s.cipher.Encrypt(*p.ZAIKey)
+			if err != nil {
+				return Settings{}, err
+			}
+			next.ZAIKeyEnc = enc
 		}
 	}
 

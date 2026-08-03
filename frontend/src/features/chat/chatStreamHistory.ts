@@ -16,10 +16,24 @@ export interface HistoryContext {
 }
 
 // performRetry re-runs the turn behind a failed assistant bubble. It finds the
-// user message that triggered the failure, removes the failed pair (locally and
-// server-side if it was persisted), and re-sends the same text + attachments.
-// Deleting the old pair first keeps history clean (no duplicate user bubble).
-export async function performRetry(ctx: HistoryContext, failedId: string): Promise<void> {
+// user message that triggered the failure and re-sends the same text +
+// attachments.
+//
+// `preserve` picks the deletion policy:
+//   - false (default, interactive chat): delete the failed pair (locally and
+//     server-side if persisted) first, so a retried turn leaves no duplicate
+//     user bubble + stale error behind.
+//   - true (read-only run logs — task / flow / schedule): keep the whole
+//     transcript. A run log is an audit trail: deleting its messages would
+//     rewrite history, so the failed turn stays and the retry is appended after
+//     it. The backend send-queue accepts a message on any session kind (the
+//     read-only gate is purely a frontend composer decision), so re-enqueuing
+//     the triggering prompt genuinely re-runs the turn.
+export async function performRetry(
+  ctx: HistoryContext,
+  failedId: string,
+  preserve = false,
+): Promise<void> {
   const { activeSessionIdRef, messagesRef, setMessages, sendMessageRef } = ctx
   const sid = activeSessionIdRef.current
   if (!sid) return
@@ -39,14 +53,16 @@ export async function performRetry(ctx: HistoryContext, failedId: string): Promi
   const text = userMsg.text
   const attachments = userMsg.attachments ?? []
 
-  // A local-only bubble (optimistic/synthesized) has a client-side id prefix
-  // and was never persisted, so it only needs removing from view.
-  const isLocal = (id: string) =>
-    id.startsWith('tmp-') || id.startsWith('err-') || id.startsWith('live-')
-  const removeIds = [failedId, userMsg.id]
-  setMessages((prev) => prev.filter((m) => !removeIds.includes(m.id)))
-  for (const id of removeIds) {
-    if (!isLocal(id)) await api.deleteMessage(sid, id).catch(() => {})
+  if (!preserve) {
+    // A local-only bubble (optimistic/synthesized) has a client-side id prefix
+    // and was never persisted, so it only needs removing from view.
+    const isLocal = (id: string) =>
+      id.startsWith('tmp-') || id.startsWith('err-') || id.startsWith('live-')
+    const removeIds = [failedId, userMsg.id]
+    setMessages((prev) => prev.filter((m) => !removeIds.includes(m.id)))
+    for (const id of removeIds) {
+      if (!isLocal(id)) await api.deleteMessage(sid, id).catch(() => {})
+    }
   }
 
   await sendMessageRef.current(text, sid, attachments)

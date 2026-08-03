@@ -64,6 +64,25 @@ func TestErrClassRetryable(t *testing.T) {
 	}
 }
 
+func TestLimitErrorText(t *testing.T) {
+	// Only usage/rate-limit, overload and billing classes get a friendly, retry-
+	// oriented message; every other class must fall through to "" so the caller
+	// keeps the raw provider string (a normal crash is never dressed up as a
+	// recoverable limit).
+	withText := []errClass{errRateLimit, errOverloaded, errBilling}
+	for _, c := range withText {
+		if limitErrorText(c) == "" {
+			t.Errorf("limitErrorText(%q) = empty, want a message", c)
+		}
+	}
+	withoutText := []errClass{errServer, errTimeout, errContextOverflow, errAuth, errCancelled, errUnknown}
+	for _, c := range withoutText {
+		if got := limitErrorText(c); got != "" {
+			t.Errorf("limitErrorText(%q) = %q, want empty", c, got)
+		}
+	}
+}
+
 func TestRetryBackoff_BoundedAndGrowing(t *testing.T) {
 	for attempt := 0; attempt < 8; attempt++ {
 		d := retryBackoff(attempt)

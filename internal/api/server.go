@@ -243,6 +243,7 @@ func (s *Server) applySettings() {
 	s.providers.SetAnthropicBetas(cur.ExtendedPromptCache, cur.AnthropicContextEditing, cur.AnthropicServerCompaction, cur.AnthropicRefusalFallback)
 	s.providers.SetMinimax(s.settings.MinimaxKey(), cur.MinimaxBaseURL)
 	s.providers.SetOpenRouter(s.settings.OpenRouterKey(), cur.OpenRouterBaseURL)
+	s.providers.SetZAI(s.settings.ZAIKey(), cur.ZAIBaseURL)
 	s.providers.SetCustomProviders(s.customProviderSpecs(cur))
 	s.convo.SetLimits(cur.MaxContextTokens, cur.KeepRecentMsgs)
 	s.convo.SetBudgetShape(cur.ContextBudgetFraction, cur.ContextBudgetCeil) // model-aware budget knobs
@@ -642,6 +643,10 @@ func (s *Server) registerFlowRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/flow-runs/{id}/tree", s.handleFlowRunTree)
 	// Deliver input to a run suspended at an await-input node (durable resume).
 	mux.HandleFunc("POST /api/flow-runs/{id}/input", s.handleResumeFlowRun)
+
+	// Projection layer: the compact, context-cheap summary of a large entity —
+	// the same bytes the agent gets and the Bağlam panel shows (_Docs/66).
+	mux.HandleFunc("GET /api/views/{kind}/{id}", s.handleGetView)
 }
 
 // registerExecutionRoutes registers the unified executions feed — every run

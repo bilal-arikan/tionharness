@@ -6,10 +6,10 @@ import "testing"
 // kinds in Order and carries the expected built-in trio.
 func TestCatalogDerivedFromKinds(t *testing.T) {
 	cat := Catalog()
-	if len(cat) != 5 {
-		t.Fatalf("catalog: want 5 entries, got %d", len(cat))
+	if len(cat) != 6 {
+		t.Fatalf("catalog: want 6 entries, got %d", len(cat))
 	}
-	wantOrder := []string{"claude-cli", "anthropic", "minimax", "minimax-anthropic", "openrouter"}
+	wantOrder := []string{"claude-cli", "anthropic", "minimax", "minimax-anthropic", "openrouter", "zai"}
 	for i, id := range wantOrder {
 		if cat[i].ID != id {
 			t.Errorf("catalog[%d].ID = %q, want %q", i, cat[i].ID, id)

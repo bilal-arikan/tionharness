@@ -89,6 +89,7 @@ var builtinCategory = map[string]string{
 
 	// Diagnostics, validators, tool loading
 	"read_logs": CategoryDiagnostics, "read_session_debug": CategoryDiagnostics,
+	"get_view":         CategoryDiagnostics,
 	"mermaid_validate": CategoryDiagnostics, "transform_data": CategoryDiagnostics,
 	"activate_tools": CategoryDiagnostics, "deactivate_tools": CategoryDiagnostics,
 	"tool_search": CategoryDiagnostics,

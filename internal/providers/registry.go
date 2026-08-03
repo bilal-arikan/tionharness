@@ -47,6 +47,9 @@ type Registry struct {
 	openrouterKey     string // OpenRouter (OpenAI-compatible) API key
 	openrouterBaseURL string // OpenRouter base URL ("" = public default)
 
+	zaiKey     string // Z.ai GLM (Anthropic-compatible) API key
+	zaiBaseURL string // Z.ai base URL ("" = public Anthropic-mode default)
+
 	custom      map[string]CustomSpec // user-added providers, keyed by id
 	customOrder []string              // ids in catalog order
 }
@@ -130,6 +133,21 @@ func (r *Registry) OpenRouterConfigured() bool {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	return r.openrouterKey != ""
+}
+
+// SetZAI updates the Z.ai GLM (Anthropic-compatible) API key and base URL.
+func (r *Registry) SetZAI(key, baseURL string) {
+	r.mu.Lock()
+	r.zaiKey = key
+	r.zaiBaseURL = baseURL
+	r.mu.Unlock()
+}
+
+// ZAIConfigured reports whether a Z.ai key is set.
+func (r *Registry) ZAIConfigured() bool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.zaiKey != ""
 }
 
 // SetCustomProviders replaces the set of user-added providers (called from
@@ -259,6 +277,9 @@ func (r *Registry) resolve(id string) ResolvedConfig {
 	case "openrouter":
 		cfg.Key = r.openrouterKey
 		cfg.BaseURL = r.openrouterBaseURL
+	case "zai":
+		cfg.Key = r.zaiKey
+		cfg.BaseURL = r.zaiBaseURL
 	}
 	return cfg
 }

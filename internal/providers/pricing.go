@@ -162,6 +162,15 @@ var priceTable = map[string]map[string]Price{
 		"anthropic/claude-haiku-4.5":  {InputPerMTok: 1, OutputPerMTok: 5, CacheReadMultOverride: 0.10, CacheWriteMultOverride: 1.25},
 		"anthropic/claude-fable-5":    {InputPerMTok: 10, OutputPerMTok: 50, CacheReadMultOverride: 0.10, CacheWriteMultOverride: 1.25},
 	},
+	// Z.ai GLM family (Anthropic-mode transport). Ballpark list prices per 1M
+	// tokens; GLM undercuts frontier models heavily. IDs evolve → unlisted models
+	// fall through to unpriced.
+	"zai": {
+		"glm-5.2":     {InputPerMTok: 0.6, OutputPerMTok: 2.2, CacheReadMultOverride: 0.10},
+		"glm-5.1":     {InputPerMTok: 0.6, OutputPerMTok: 2.2, CacheReadMultOverride: 0.10},
+		"glm-5-turbo": {InputPerMTok: 0.2, OutputPerMTok: 1.1, CacheReadMultOverride: 0.10},
+		"glm-4.7":     {InputPerMTok: 0.4, OutputPerMTok: 1.6, CacheReadMultOverride: 0.10},
+	},
 	// NOTE: market provider-pack prices (xai, mistral, gemini, … ~25 providers, up to
 	// 15 models each) live in the generated pricing_market.go (var marketPrices,
 	// merged into priceTable at init). Single source: data/gen_providers.py.

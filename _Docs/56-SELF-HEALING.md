@@ -21,6 +21,17 @@
   (ayar `maxProviderRetries`, varsayılan 2, clamp 0..5, 0 = kapalı).
 - İptal (`context.Canceled`) artık `termCancelled` ile biter (önceden
   `provider_error` görünüyordu).
+- **Terminal hit-limit mesajı** (2026-08-04): retry bütçesi tükenip tur
+  `provider_error` ile bitince, hata `rate_limit`/`overloaded`/`billing`
+  sınıfındaysa `fail()` (toolloop.go) ham "HTTP 429…" metnini net Türkçe bir
+  açıklamayla değiştirir (`limitErrorText`) ve error step'in `Reason`'ını
+  spesifik sınıf tag'ine (`rate_limit`/`overloaded`/`billing`) çeker — ham detay
+  açıklamanın altında kalır. Sınıflandırma muhafazakâr olduğundan guardrail/
+  max-iters hataları etkilenmez. Frontend `ErrorStep` bu tag'leri tanıyıp
+  belirgin başlık + "Yeniden dene ile sürdür" ipucu gösterir; salt-okunur
+  oturumlarda (görev/akış/zamanlama günlüğü) retry **yıkıcı olmayan** varyantı
+  kullanır (`retryMessagePreserve` — transkripti silmeden tetikleyici prompt'u
+  yeniden kuyruğa alır; backend enqueue her oturum türünü kabul eder).
 
 ### Faz B — Tool-loop guardrail (döngü tespiti)
 - `internal/agent/toolguard.go`: yan-etkisiz saf kontrolcü (`check`/`observe`),

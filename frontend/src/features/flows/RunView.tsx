@@ -7,6 +7,7 @@ import type { Agent, Flow, FlowGraph, FlowNodeEvent, FlowRun, FlowState } from '
 import { Markdown } from '@/shared/components/markdown/Markdown'
 import { normalizeAvatar } from '@/shared/lib/avatar'
 import { subscribeFlowNode } from '@/shared/lib/flowNodeBus'
+import { ViewButton } from '@/features/view/ViewButton'
 import { FlowCanvas } from './FlowCanvas'
 import { RunNodeInspector } from './RunNodeInspector'
 import type { ChildProgress } from './runTree'
@@ -168,7 +169,13 @@ export function RunView({
     const extras = Object.values(live)
       .filter((ev) => ev.phase === 'done' && !seen.has(ev.nodeId))
       .sort((a, b) => a.index - b.index)
-      .map((ev) => ({ nodeId: ev.nodeId, type: ev.type, title: ev.title, output: ev.output ?? '', at: 0 }))
+      .map((ev) => ({
+        nodeId: ev.nodeId,
+        type: ev.type,
+        title: ev.title,
+        output: ev.output ?? '',
+        at: 0,
+      }))
     return [...base, ...extras]
   }, [st, live])
 
@@ -183,7 +190,11 @@ export function RunView({
     ])
     // A 'progress' frame (e.g. a join barrier reporting "2/5") keeps the node in
     // the running row too — its latest frame is progress, not start.
-    return Object.values(live).find((ev) => (ev.phase === 'start' || ev.phase === 'progress') && !done.has(ev.nodeId)) ?? null
+    return (
+      Object.values(live).find(
+        (ev) => (ev.phase === 'start' || ev.phase === 'progress') && !done.has(ev.nodeId),
+      ) ?? null
+    )
   }, [st, live])
 
   // Collapsible "Adım izi" (step trace) bottom panel. Persisted; defaults open on
@@ -206,7 +217,8 @@ export function RunView({
   // NodeInspector chat view. A selection for a node not in the graph (deleted
   // flow) or not yet executed collapses back to the flat list.
   const selectedNode = useMemo(
-    () => (selectedNodeId && graph ? (graph.nodes.find((n) => n.id === selectedNodeId) ?? null) : null),
+    () =>
+      selectedNodeId && graph ? (graph.nodes.find((n) => n.id === selectedNodeId) ?? null) : null,
     [selectedNodeId, graph],
   )
   const selectedEntry = useMemo(
@@ -298,6 +310,9 @@ export function RunView({
               <span className="ml-auto text-xs text-[var(--color-text-dim)]">
                 {new Date(run.createdAt * 1000).toLocaleString()}
               </span>
+              {/* Descended child runs get their own projection: the header
+                  button above belongs to the entry run only. */}
+              <ViewButton target={{ kind: 'flowrun', id: run.id }} />
               {onRerun && (
                 <button
                   type="button"
@@ -317,12 +332,16 @@ export function RunView({
             </div>
           )}
           {run.input && !inputInTrace && (
-            <div className={`${hideSummary ? '' : 'mt-1 '}truncate text-xs text-[var(--color-text-dim)]`}>
+            <div
+              className={`${hideSummary ? '' : 'mt-1 '}truncate text-xs text-[var(--color-text-dim)]`}
+            >
               Girdi: {run.input}
             </div>
           )}
           {run.error && (
-            <div className={`${hideSummary ? '' : 'mt-1 '}whitespace-pre-wrap text-xs text-[var(--color-danger)]`}>
+            <div
+              className={`${hideSummary ? '' : 'mt-1 '}whitespace-pre-wrap text-xs text-[var(--color-danger)]`}
+            >
               ⚠️ {run.error}
             </div>
           )}
@@ -385,7 +404,9 @@ export function RunView({
       {/* Trace: node outputs + error. A collapsible bottom panel — the header is a
           toggle button; when open it expands upward (capped) with its own scroll,
           when closed only the header bar remains so the canvas keeps the height. */}
-      <div className={`flex flex-col border-t border-[var(--color-border)] ${!graph && traceOpen ? 'min-h-0 flex-1' : ''}`}>
+      <div
+        className={`flex flex-col border-t border-[var(--color-border)] ${!graph && traceOpen ? 'min-h-0 flex-1' : ''}`}
+      >
         <button
           type="button"
           onClick={toggleTrace}
@@ -396,7 +417,7 @@ export function RunView({
           {traceOpen ? <ChevronDown size={13} /> : <ChevronUp size={13} />}
           <span>{selectedNode ? 'Node görünümü' : 'Adım izi'}</span>
           <span className="ml-auto opacity-70">
-            {selectedNode ? (selectedNode.title || selectedNode.id) : `${traceCount} adım`}
+            {selectedNode ? selectedNode.title || selectedNode.id : `${traceCount} adım`}
           </span>
         </button>
         {traceOpen && selectedNode ? (
@@ -425,7 +446,10 @@ export function RunView({
                 </li>
               )}
               {liveTrace.map((t, i) => (
-                <li key={`${t.nodeId}-${i}`} className="rounded bg-[var(--color-surface-2)] p-2 text-sm">
+                <li
+                  key={`${t.nodeId}-${i}`}
+                  className="rounded bg-[var(--color-surface-2)] p-2 text-sm"
+                >
                   <div className="mb-1 text-xs text-[var(--color-text-dim)]">
                     {i + 1}. [{t.type}] {t.title}
                   </div>

@@ -66,10 +66,13 @@ interface Props {
   setDraft: React.Dispatch<React.SetStateAction<AppSettings | null>>
   test: Record<string, ProviderTestResult | 'pending'>
   runTest: (provider: string, model?: string) => void
-  clearKey: (which: 'anthropic' | 'minimax' | 'openrouter') => void
+  clearKey: (which: 'anthropic' | 'minimax' | 'openrouter' | 'zai') => void
   // Apply a provider key immediately (resolved from a vault secret). Provider
   // keys are never typed — only selected from the secret store.
-  applyKey: (which: 'anthropic' | 'minimax' | 'openrouter', value: string) => void | Promise<void>
+  applyKey: (
+    which: 'anthropic' | 'minimax' | 'openrouter' | 'zai',
+    value: string,
+  ) => void | Promise<void>
   // Secrets vault (this workspace), reveal a value to import as a key, and a
   // jump to the Secrets screen for managing them.
   secrets: Secret[]
@@ -929,6 +932,26 @@ export function ProvidersPanel({
             testProvider="openrouter"
             testModel="anthropic/claude-sonnet-4.6"
             testDisabledHint="önce OpenRouter anahtarı ekle"
+          />
+          <BuiltinProvider
+            icon={Network}
+            name="Z.ai GLM"
+            kindLabel="Anthropic-uyumlu"
+            keyLabel="API anahtarı"
+            isSet={draft.zaiKeySet}
+            requiredHint="GLM modelleri için gerekli (Anthropic modu: araç kullanımı + düşünme)."
+            secrets={secrets}
+            onPick={async (n) => applyKey('zai', await onImportSecret(n))}
+            onClear={() => clearKey('zai')}
+            endpointLabel="base URL"
+            endpointValue={draft.zaiBaseUrl}
+            endpointPlaceholder="https://api.z.ai/api/anthropic/v1/messages"
+            onEndpoint={(v) => set('zaiBaseUrl', v)}
+            test={test}
+            runTest={runTest}
+            testProvider="zai"
+            testModel="glm-5.2"
+            testDisabledHint="önce Z.ai anahtarı ekle"
           />
         </div>
       </div>

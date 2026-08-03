@@ -14,10 +14,7 @@ import { intersectWith, withAdded, withRemoved, withoutKey } from './chatStreamH
 import type { AutoLiveEntry, ChatStreamDeps, WakeWait } from './chatStreamTypes'
 import { performSend } from './chatStreamSend'
 import { performRerunLast, performRetry, performRewindTo } from './chatStreamHistory'
-import {
-  clearAutoLiveEntry,
-  performReseedLive,
-} from './chatStreamAutoLive'
+import { clearAutoLiveEntry, performReseedLive } from './chatStreamAutoLive'
 import { makeHubHandlers } from './chatStreamHub'
 import { subscribeSessionStream, windowClientId } from '@/api/sessionStream'
 import {
@@ -151,10 +148,26 @@ export function useChatStream(deps: ChatStreamDeps) {
   }, [sendMessage])
 
   // retryMessage re-runs the turn behind a failed assistant bubble (see
-  // performRetry for the mechanics).
+  // performRetry for the mechanics). The destructive variant used by interactive
+  // chat: it deletes the failed pair before re-sending so history stays clean.
   const retryMessage = useCallback(
     async (failedId: string) => {
       await performRetry({ activeSessionIdRef, messagesRef, setMessages, sendMessageRef }, failedId)
+    },
+    [activeSessionIdRef, messagesRef, setMessages],
+  )
+
+  // retryMessagePreserve is the read-only run-log variant: it re-runs the failed
+  // turn WITHOUT deleting the transcript (a task / flow / schedule log is an
+  // audit trail). Wired by ChatView for read-only sessions so a hit-limit turn
+  // there can still be retried from its error card without rewriting history.
+  const retryMessagePreserve = useCallback(
+    async (failedId: string) => {
+      await performRetry(
+        { activeSessionIdRef, messagesRef, setMessages, sendMessageRef },
+        failedId,
+        true,
+      )
     },
     [activeSessionIdRef, messagesRef, setMessages],
   )
@@ -201,15 +214,18 @@ export function useChatStream(deps: ChatStreamDeps) {
   // permission / plan) via the resolve-once endpoint. Optimistically close the
   // card here; the server broadcasts interaction_resolved so every OTHER window
   // closes it too. A 409 (another window answered first) is expected and benign.
-  const answerAsk = useCallback((text: string) => {
-    const sid = activeSessionId
-    if (!sid) return
-    const ask = pendingAsks[sid]
-    setPendingAsks((p) => withoutKey(p, sid))
-    if (ask?.interactionId) {
-      api.answerInteraction(sid, ask.interactionId, { answer: text }).catch(() => {})
-    }
-  }, [activeSessionId, pendingAsks])
+  const answerAsk = useCallback(
+    (text: string) => {
+      const sid = activeSessionId
+      if (!sid) return
+      const ask = pendingAsks[sid]
+      setPendingAsks((p) => withoutKey(p, sid))
+      if (ask?.interactionId) {
+        api.answerInteraction(sid, ask.interactionId, { answer: text }).catch(() => {})
+      }
+    },
+    [activeSessionId, pendingAsks],
+  )
 
   // Interrupt: stop the active session's turn, then enqueue a new message to the
   // SAME session (it dispatches once the stopped turn unwinds).
@@ -332,7 +348,10 @@ export function useChatStream(deps: ChatStreamDeps) {
     setPresence(1)
     setTypingActive(false)
     const reload = () => {
-      api.listMessages(sid).then(setMessages).catch(() => {})
+      api
+        .listMessages(sid)
+        .then(setMessages)
+        .catch(() => {})
     }
     const handlers = makeHubHandlers({
       sid,
@@ -375,9 +394,12 @@ export function useChatStream(deps: ChatStreamDeps) {
 
   // Queue: with the backend serial queue, "queue" is just a normal send — the
   // server serialises it behind the running turn and shows it in the tray.
-  const queueMessage = useCallback((text: string) => {
-    void sendMessage(text)
-  }, [sendMessage])
+  const queueMessage = useCallback(
+    (text: string) => {
+      void sendMessage(text)
+    },
+    [sendMessage],
+  )
 
   // Steer: inject live guidance into the ACTIVE session's running turn
   // (session-scoped; the worker owns the run). Native providers fold it in via the
@@ -388,26 +410,35 @@ export function useChatStream(deps: ChatStreamDeps) {
   // a steer cannot reach the turn — a claude-cli agent in "auto" mode (no permission-
   // prompt boundary), or an older backend — in which case we queue the message and
   // tell the user, instead of silently dropping their guidance.
-  const steerTurn = useCallback((text: string) => {
-    const sid = activeSessionId
-    if (!sid || !text.trim()) return
-    api.sessionControl(sid, 'steer', text)
-      .then((r) => {
-        if (r?.result === 'unsupported') {
-          void sendMessage(text)
-          setError('Auto izin modunda canlı yönlendirme desteklenmiyor (claude-cli) — mesaj sıraya alındı. Canlı yönlendirme için ajanı "ask" moduna al.')
-        }
-      })
-      .catch((e) => setError((e as Error).message))
-  }, [activeSessionId, setError, sendMessage])
+  const steerTurn = useCallback(
+    (text: string) => {
+      const sid = activeSessionId
+      if (!sid || !text.trim()) return
+      api
+        .sessionControl(sid, 'steer', text)
+        .then((r) => {
+          if (r?.result === 'unsupported') {
+            void sendMessage(text)
+            setError(
+              'Auto izin modunda canlı yönlendirme desteklenmiyor (claude-cli) — mesaj sıraya alındı. Canlı yönlendirme için ajanı "ask" moduna al.',
+            )
+          }
+        })
+        .catch((e) => setError((e as Error).message))
+    },
+    [activeSessionId, setError, sendMessage],
+  )
 
   // Remove a WAITING queued message before it is dispatched (backend cancel).
-  const removePending = useCallback((id: string) => {
-    const sid = activeSessionId
-    if (!sid) return
-    setQueued((prev) => prev.filter((p) => p.id !== id))
-    api.cancelQueued(sid, id).catch(() => {})
-  }, [activeSessionId])
+  const removePending = useCallback(
+    (id: string) => {
+      const sid = activeSessionId
+      if (!sid) return
+      setQueued((prev) => prev.filter((p) => p.id !== id))
+      api.cancelQueued(sid, id).catch(() => {})
+    },
+    [activeSessionId],
+  )
 
   // Clear the whole waiting queue for the active session.
   const clearQueue = useCallback(() => {
@@ -418,15 +449,18 @@ export function useChatStream(deps: ChatStreamDeps) {
   }, [activeSessionId])
 
   // Promote a waiting message so it dispatches next ("öne al").
-  const sendQueuedNext = useCallback((id: string) => {
-    const sid = activeSessionId
-    if (!sid) return
-    setQueued((prev) => {
-      const it = prev.find((p) => p.id === id)
-      return it ? [it, ...prev.filter((p) => p.id !== id)] : prev
-    })
-    api.moveQueuedFront(sid, id).catch(() => {})
-  }, [activeSessionId])
+  const sendQueuedNext = useCallback(
+    (id: string) => {
+      const sid = activeSessionId
+      if (!sid) return
+      setQueued((prev) => {
+        const it = prev.find((p) => p.id === id)
+        return it ? [it, ...prev.filter((p) => p.id !== id)] : prev
+      })
+      api.moveQueuedFront(sid, id).catch(() => {})
+    },
+    [activeSessionId],
+  )
 
   // Run a "/" command that posts an assistant message: summary (board/flows/
   // tools) or conversation compaction (see performSummarize).
@@ -440,14 +474,27 @@ export function useChatStream(deps: ChatStreamDeps) {
   // Context reset (/handoff): write a handoff artifact and continue in a fresh
   // session (see performHandoff).
   const handoff = useCallback(() => {
-    performHandoff({ activeSessionId, activeAgentId, setMessages, setError, refreshSessions, selectSession })
+    performHandoff({
+      activeSessionId,
+      activeAgentId,
+      setMessages,
+      setError,
+      refreshSessions,
+      selectSession,
+    })
   }, [activeSessionId, activeAgentId, setMessages, setError, refreshSessions, selectSession])
 
   // Run a flow from the chat composer, streaming node-by-node progress over SSE
   // (see performRunFlow).
   const runFlow = useCallback(
     (flowId: string, flowName: string, input: string, attachments: Attachment[] = []) => {
-      performRunFlow({ activeSessionId, activeAgentId, setMessages, setError }, flowId, flowName, input, attachments)
+      performRunFlow(
+        { activeSessionId, activeAgentId, setMessages, setError },
+        flowId,
+        flowName,
+        input,
+        attachments,
+      )
     },
     [activeSessionId, activeAgentId, setMessages, setError],
   )
@@ -456,7 +503,10 @@ export function useChatStream(deps: ChatStreamDeps) {
   // Fetched once on mount; flows change rarely and the menu reads the latest list.
   const [flows, setFlows] = useState<Flow[]>([])
   useEffect(() => {
-    api.listFlows().then(setFlows).catch(() => {})
+    api
+      .listFlows()
+      .then(setFlows)
+      .catch(() => {})
   }, [])
 
   // Slash commands available in the chat composer ("/" menu): built-in session
@@ -469,8 +519,8 @@ export function useChatStream(deps: ChatStreamDeps) {
   // Derive the active session's view of the per-session streaming state.
   const activeStreaming = activeSessionId ? streamingSessions.has(activeSessionId) : false
   const activePending = activeSessionId ? pendingSessions.has(activeSessionId) : false
-  const activeAsk = activeSessionId ? pendingAsks[activeSessionId] ?? null : null
-  const activeWakeWait = activeSessionId ? wakeWaits[activeSessionId] ?? null : null
+  const activeAsk = activeSessionId ? (pendingAsks[activeSessionId] ?? null) : null
+  const activeWakeWait = activeSessionId ? (wakeWaits[activeSessionId] ?? null) : null
   // The active session's WAITING backend queue is already session-scoped (the hub
   // subscription is per active session), so it maps straight through.
   const activeQueued = queued
@@ -488,6 +538,7 @@ export function useChatStream(deps: ChatStreamDeps) {
     setPermissionMode: setPermissionModePersist,
     sendMessage,
     retryMessage,
+    retryMessagePreserve,
     rerunLast,
     stopTurn,
     answerAsk,

@@ -246,6 +246,12 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 		builtins = append(builtins, tools.NewReadSessionDebugTool(r.db))
 	}
 
+	// get_view: the PULL channel of the projection layer — a compact, deterministic
+	// summary of a large entity (today: flow runs) instead of reading its raw state.
+	// Always-on and read-only; it is strictly cheaper than the get_flow_run +
+	// parse-the-state-JSON path it replaces (_Docs/66).
+	builtins = append(builtins, tools.NewGetViewTool(r.db))
+
 	// read_lessons / delete_lesson: the agent inspects and prunes the workspace's
 	// auto-collected failure lessons (self-healing). The newest few already ride
 	// its context; these tools expose the full set + ids. Gated by the same

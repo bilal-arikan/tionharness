@@ -5,6 +5,7 @@ import { EmojiField } from '@/shared/components/EmojiField'
 import { normalizeAvatar } from '@/shared/lib/avatar'
 import { CopyPathButton } from '@/shared/components/CopyPathButton'
 import { RevealButton } from '@/shared/components/RevealButton'
+import { ViewButton } from '@/features/view/ViewButton'
 import { STATUS_LABEL, statusColor } from './RunView'
 import type { FlowTemplate } from './flowTemplates'
 import type { FlowsTab } from './flowsPanelShared'
@@ -115,10 +116,16 @@ export function FlowsHeader({
       right={
         tab === 'flows' && selectedId ? (
           <>
-            <CopyPathButton path={flowPath} label="Yolu kopyala" labelClassName="hidden" title="Akış yolunu kopyala" />
+            <CopyPathButton
+              path={flowPath}
+              label="Yolu kopyala"
+              labelClassName="hidden"
+              title="Akış yolunu kopyala"
+            />
             <RevealButton
               onReveal={() => {
-                if (selectedId) api.revealFlow(selectedId).catch((e) => onError((e as Error).message))
+                if (selectedId)
+                  api.revealFlow(selectedId).catch((e) => onError((e as Error).message))
               }}
               disabled={!selectedId}
               label="Aç"
@@ -134,25 +141,37 @@ export function FlowsHeader({
             <span className="hidden text-xs text-[var(--color-text-dim)] sm:inline">
               salt-okunur önizleme
             </span>
-            <Button onClick={() => instantiateTemplate(selectedTemplate)} size="lg" className="flex-shrink-0">
+            <Button
+              onClick={() => instantiateTemplate(selectedTemplate)}
+              size="lg"
+              className="flex-shrink-0"
+            >
               + Bu şablondan akış oluştur
             </Button>
           </>
         ) : tab === 'runs' && selectedRun ? (
-          <button
-            type="button"
-            onClick={() => rerunRun(selectedRun)}
-            disabled={rerunning || selectedRun.status === 'running' || !flows.some((f) => f.id === selectedRun.flowId)}
-            title={
-              !flows.some((f) => f.id === selectedRun.flowId)
-                ? 'Akış silinmiş — tekrar çalıştırılamaz'
-                : 'Bu koşuyu aynı girdiyle tekrar çalıştır'
-            }
-            className="flex shrink-0 items-center gap-1.5 rounded-md border border-[var(--color-border)] px-2.5 py-1 text-xs text-[var(--color-text-dim)] transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)] disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <RotateCcw size={13} className={rerunning ? 'animate-spin' : ''} />
-            {rerunning ? 'Çalışıyor…' : 'Tekrar çalıştır'}
-          </button>
+          <>
+            {/* The projection of this run — the same bytes an agent would get. */}
+            <ViewButton target={{ kind: 'flowrun', id: selectedRun.id }} />
+            <button
+              type="button"
+              onClick={() => rerunRun(selectedRun)}
+              disabled={
+                rerunning ||
+                selectedRun.status === 'running' ||
+                !flows.some((f) => f.id === selectedRun.flowId)
+              }
+              title={
+                !flows.some((f) => f.id === selectedRun.flowId)
+                  ? 'Akış silinmiş — tekrar çalıştırılamaz'
+                  : 'Bu koşuyu aynı girdiyle tekrar çalıştır'
+              }
+              className="flex shrink-0 items-center gap-1.5 rounded-md border border-[var(--color-border)] px-2.5 py-1 text-xs text-[var(--color-text-dim)] transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <RotateCcw size={13} className={rerunning ? 'animate-spin' : ''} />
+              {rerunning ? 'Çalışıyor…' : 'Tekrar çalıştır'}
+            </button>
+          </>
         ) : undefined
       }
     />

@@ -140,6 +140,11 @@ export function ChatView({
   )
   const runningWorkers = useMemo(() => workers.filter((w) => w.running), [workers])
 
+  // Retry policy for a failed turn's error card. Read-only run logs (task / flow
+  // / schedule) retry non-destructively so the audit trail is preserved;
+  // interactive chat deletes the failed pair first to keep history clean.
+  const onRetry = readOnly ? chat.retryMessagePreserve : chat.retryMessage
+
   // Both flags gate a skeleton, so they go through the same delay: a local
   // backend answers in well under it, and a one-frame skeleton would only flicker.
   // Hooks must run before any early return (rules-of-hooks).
@@ -188,7 +193,7 @@ export function ChatView({
           onOpenArtifact={onOpenArtifact}
           onDeleteMessage={onDeleteMessage}
           onRewind={onRewind}
-          onRetry={chat.retryMessage}
+          onRetry={onRetry}
           onFeedback={onFeedback}
           onOpenAgent={onOpenAgent}
           bottomInset={bottomInset}
@@ -206,7 +211,8 @@ export function ChatView({
           className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex justify-center px-4 pb-4"
         >
           <div className="pointer-events-auto rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-1.5 text-xs text-[var(--color-text-dim)] shadow-[var(--shadow-sm)]">
-            Bu oturum salt-okunurdur (görev / akış / zamanlama günlüğü).
+            Bu oturum salt-okunurdur (görev / akış / zamanlama günlüğü). Hatayla biten turlar hata
+            kartındaki “Yeniden dene” ile sürdürülebilir.
           </div>
         </div>
       ) : (

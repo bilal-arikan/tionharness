@@ -268,14 +268,19 @@ export function SettingsPanel({
   }
 
   // keyPatch builds a write-only key patch for the named provider ("" = clear).
-  const keyPatch = (which: 'anthropic' | 'minimax' | 'openrouter', value: string): SettingsPatch =>
+  const keyPatch = (
+    which: 'anthropic' | 'minimax' | 'openrouter' | 'zai',
+    value: string,
+  ): SettingsPatch =>
     which === 'anthropic'
       ? { anthropicKey: value }
       : which === 'minimax'
         ? { minimaxKey: value }
-        : { openrouterKey: value }
+        : which === 'openrouter'
+          ? { openrouterKey: value }
+          : { zaiKey: value }
 
-  const clearKey = async (which: 'anthropic' | 'minimax' | 'openrouter') => {
+  const clearKey = async (which: 'anthropic' | 'minimax' | 'openrouter' | 'zai') => {
     try {
       const updated = await api.updateSettings(keyPatch(which, ''))
       setDraft(updated)
@@ -290,7 +295,7 @@ export function SettingsPanel({
 
   // applyKey persists a provider key immediately (resolved from a vault secret).
   // Provider keys are never typed — they are only selected from the secret store.
-  const applyKey = async (which: 'anthropic' | 'minimax' | 'openrouter', value: string) => {
+  const applyKey = async (which: 'anthropic' | 'minimax' | 'openrouter' | 'zai', value: string) => {
     if (!value) return
     try {
       const updated = await api.updateSettings(keyPatch(which, value))

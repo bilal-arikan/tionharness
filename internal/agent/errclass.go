@@ -41,6 +41,27 @@ func (c errClass) retryable() bool {
 	}
 }
 
+// limitErrorText returns a clear, user-facing (Turkish) explanation for a
+// provider-error class that stems from a usage/rate limit, provider overload or
+// credit exhaustion, or "" for every other class. It exists so a terminal
+// hit-limit turn reads as an actionable message ("kullanım limitine ulaşıldı —
+// Yeniden dene") on the error card instead of the raw provider string
+// ("anthropic HTTP 429: …"). The caller keeps the raw detail below the
+// explanation. Only unambiguous limit classes return text; anything else falls
+// through so a normal failure is never dressed up as a retryable limit.
+func limitErrorText(c errClass) string {
+	switch c {
+	case errRateLimit:
+		return "Kullanım/oran limitine ulaşıldı (hit limit). Sağlayıcı isteği geçici olarak reddetti — bir süre bekleyip \"Yeniden dene\" ile sürdürebilirsiniz."
+	case errOverloaded:
+		return "Sağlayıcı şu anda aşırı yüklü (overloaded). Kısa bir bekleme sonrası \"Yeniden dene\" ile sürdürebilirsiniz."
+	case errBilling:
+		return "Kredi/kota tükendi (billing). Bakiyeyi yeniledikten sonra \"Yeniden dene\" ile sürdürebilirsiniz."
+	default:
+		return ""
+	}
+}
+
 // classifyProviderError maps a provider-call error onto the taxonomy. Matching
 // is deliberately conservative — provider errors are plain wrapped strings
 // (e.g. "anthropic HTTP 429: …"), so only unambiguous markers classify; any

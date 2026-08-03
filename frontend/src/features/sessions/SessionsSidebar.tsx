@@ -161,19 +161,32 @@ export function SessionsSidebar({
     document.body.style.cursor = 'col-resize'
   }
 
-  // How many sessions are archived (drives the Archived filter's count badge).
-  const archivedCount = useMemo(
-    () => sessions.filter((s) => s.state === 'archived').length,
-    [sessions],
-  )
-  // How many (non-archived) worker sessions exist — the Workers tab's count badge.
-  // Uses the lineage helper, not `role === 'worker'`: a mid-level node of a nested
-  // coordinator tree is a worker too, and counting only leaves would hide whole
-  // branches from the tab.
-  const workerCount = useMemo(
-    () => sessions.filter((s) => isWorkerSession(s) && s.state !== 'archived').length,
-    [sessions],
-  )
+  // Per-tab activity counts: for each view's scope, how many sessions are
+  // ongoing (a turn is streaming or an autonomous run is live) vs completed
+  // (idle/finished). Surfaced on every tab so live work is visible without
+  // opening it. `isLive` mirrors the per-row streaming check below.
+  // The Workers scope uses the lineage helper, not `role === 'worker'`: a
+  // mid-level node of a nested coordinator tree is a worker too, and counting
+  // only leaves would hide whole branches.
+  const tabStats = useMemo(() => {
+    const isLive = (s: Session) =>
+      (streamingSessionIds?.has(s.id) ?? false) || (runtimeById?.get(s.id)?.running ?? false)
+    const stat = (inScope: (s: Session) => boolean) => {
+      let ongoing = 0
+      let total = 0
+      for (const s of sessions) {
+        if (!inScope(s)) continue
+        total++
+        if (isLive(s)) ongoing++
+      }
+      return { total, ongoing, completed: total - ongoing }
+    }
+    return {
+      active: stat((s) => s.state !== 'archived' && !isWorkerSession(s)),
+      workers: stat((s) => isWorkerSession(s) && s.state !== 'archived'),
+      archived: stat((s) => s.state === 'archived'),
+    }
+  }, [sessions, streamingSessionIds, runtimeById])
 
   // Group the (already newest-first) sessions into recency buckets, preserving
   // order. The view (Active/Archived/Workers) narrows first, then the kind tab,
@@ -351,29 +364,20 @@ export function SessionsSidebar({
         )}
       </div>
 
-      {/* Active / Archived / Workers filter. Each non-default pill carries a count
-          so archived work and coordinator workers are discoverable without
-          cluttering the default list. */}
+      {/* Active / Workers / Archived filter. Each tab surfaces its live-vs-finished
+          counts (green pulse = ongoing, muted = completed) so activity is visible
+          without opening it. Archived is last (least-used). */}
       <div className="flex gap-1 px-3 pb-2">
         <button
           onClick={() => onViewChange('active')}
-          className={`flex-1 rounded-md px-2 py-1 text-xs font-medium transition ${
+          className={`flex flex-1 items-center justify-center gap-1 rounded-md px-2 py-1 text-xs font-medium transition ${
             view === 'active'
               ? 'bg-[var(--color-surface-2)] text-[var(--color-text)]'
               : 'text-[var(--color-text-dim)] hover:text-[var(--color-text)]'
           }`}
         >
           Aktif
-        </button>
-        <button
-          onClick={() => onViewChange('archived')}
-          className={`flex flex-1 items-center justify-center gap-1 rounded-md px-2 py-1 text-xs font-medium transition ${
-            view === 'archived'
-              ? 'bg-[var(--color-surface-2)] text-[var(--color-text)]'
-              : 'text-[var(--color-text-dim)] hover:text-[var(--color-text)]'
-          }`}
-        >
-          <Archive size={12} /> Arşiv{archivedCount > 0 ? ` (${archivedCount})` : ''}
+          <TabActivity ongoing={tabStats.active.ongoing} completed={tabStats.active.completed} />
         </button>
         <button
           onClick={() => onViewChange('workers')}
@@ -384,7 +388,22 @@ export function SessionsSidebar({
               : 'text-[var(--color-text-dim)] hover:text-[var(--color-text)]'
           }`}
         >
-          <Users size={12} /> Workers{workerCount > 0 ? ` (${workerCount})` : ''}
+          <Users size={12} /> Workers
+          <TabActivity ongoing={tabStats.workers.ongoing} completed={tabStats.workers.completed} />
+        </button>
+        <button
+          onClick={() => onViewChange('archived')}
+          className={`flex flex-1 items-center justify-center gap-1 rounded-md px-2 py-1 text-xs font-medium transition ${
+            view === 'archived'
+              ? 'bg-[var(--color-surface-2)] text-[var(--color-text)]'
+              : 'text-[var(--color-text-dim)] hover:text-[var(--color-text)]'
+          }`}
+        >
+          <Archive size={12} /> Arşiv
+          <TabActivity
+            ongoing={tabStats.archived.ongoing}
+            completed={tabStats.archived.completed}
+          />
         </button>
       </div>
 
@@ -710,6 +729,34 @@ export function SessionsSidebar({
         className="absolute right-0 top-0 h-full w-1 cursor-col-resize bg-transparent transition hover:bg-[var(--color-accent)]"
       />
     </aside>
+  )
+}
+
+// Compact per-tab activity indicator: a green pulsing dot + count for ongoing
+// (live) sessions, and a muted count for completed (idle/finished) ones. Each
+// half hides when zero, so an empty tab shows nothing.
+function TabActivity({ ongoing, completed }: { ongoing: number; completed: number }) {
+  if (ongoing === 0 && completed === 0) return null
+  return (
+    <span className="flex items-center gap-1 text-[10px]">
+      {ongoing > 0 && (
+        <span
+          className="flex items-center gap-0.5 font-semibold text-[var(--color-success)]"
+          title={`${ongoing} devam eden`}
+        >
+          <span className="relative flex h-1.5 w-1.5">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[var(--color-success)] opacity-75" />
+            <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-[var(--color-success)]" />
+          </span>
+          {ongoing}
+        </span>
+      )}
+      {completed > 0 && (
+        <span className="opacity-60" title={`${completed} tamamlanan`}>
+          {completed}
+        </span>
+      )}
+    </span>
   )
 }
 

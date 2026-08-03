@@ -467,8 +467,19 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 	// stitched full answer is returned even though it arrived in capped pieces.
 	var partial strings.Builder
 	// fail records a turn-level error as an inline step before the loop returns.
+	// A usage/rate-limit, overload or billing terminal error surfaces as a
+	// cryptic provider string ("anthropic HTTP 429: …"); replace it with a clear,
+	// actionable message and retag the step with the specific limit class so the
+	// UI renders a dedicated "hit limit" card + retry hint. The raw detail is kept
+	// below the explanation. Classification is conservative, so a guardrail/
+	// max-iters failure never matches and keeps its original reason + text.
 	fail := func(reason string, err error) {
-		st := TurnStep{Kind: StepError, Reason: reason, Text: err.Error(), IsError: true}
+		text := err.Error()
+		if cls := classifyProviderError(err); limitErrorText(cls) != "" {
+			reason = string(cls)
+			text = limitErrorText(cls) + "\n\n" + text
+		}
+		st := TurnStep{Kind: StepError, Reason: reason, Text: text, IsError: true}
 		steps = append(steps, st)
 		emit(st)
 		r.emitDebug(ctx, db.DebugEvent{Type: db.DebugError, AgentID: agent.ID, Detail: reason + ": " + err.Error(), Err: true})

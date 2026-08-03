@@ -97,6 +97,10 @@ type Settings struct {
 	OpenRouterKeyEnc  string `json:"openrouterKeyEnc"` // AES-GCM, never exposed
 	OpenRouterBaseURL string `json:"openrouterBaseUrl"`
 
+	// Z.ai GLM (Anthropic-compatible) provider — GLM family, one key.
+	ZAIKeyEnc  string `json:"zaiKeyEnc"` // AES-GCM, never exposed
+	ZAIBaseURL string `json:"zaiBaseUrl"`
+
 	// CustomProviders are user-added OpenAI- or Anthropic-compatible endpoints
 	// (OpenRouter, Gemini, Kimi, Ollama, ...). Each is selectable as a provider
 	// id alongside the built-ins; the key is AES-GCM encrypted like the others.
@@ -514,6 +518,8 @@ type DTO struct {
 	MinimaxBaseURL        string `json:"minimaxBaseUrl"`
 	OpenRouterKeySet      bool   `json:"openrouterKeySet"`
 	OpenRouterBaseURL     string `json:"openrouterBaseUrl"`
+	ZAIKeySet             bool   `json:"zaiKeySet"`
+	ZAIBaseURL            string `json:"zaiBaseUrl"`
 
 	CustomProviders []CustomProviderDTO `json:"customProviders"`
 
@@ -641,6 +647,8 @@ func (s Settings) ToDTO() DTO {
 		MinimaxBaseURL:        s.MinimaxBaseURL,
 		OpenRouterKeySet:      s.OpenRouterKeyEnc != "",
 		OpenRouterBaseURL:     s.OpenRouterBaseURL,
+		ZAIKeySet:             s.ZAIKeyEnc != "",
+		ZAIBaseURL:            s.ZAIBaseURL,
 		CustomProviders:       customProvidersToDTO(s.CustomProviders),
 
 		ExtendedPromptCache:        s.ExtendedPromptCache,
@@ -761,6 +769,8 @@ type Patch struct {
 	MinimaxBaseURL        *string `json:"minimaxBaseUrl"`
 	OpenRouterKey         *string `json:"openrouterKey"` // write-only
 	OpenRouterBaseURL     *string `json:"openrouterBaseUrl"`
+	ZAIKey                *string `json:"zaiKey"` // write-only
+	ZAIBaseURL            *string `json:"zaiBaseUrl"`
 
 	ExtendedPromptCache        *bool `json:"extendedPromptCache"`
 	AnthropicContextEditing    *bool `json:"anthropicContextEditing"`
