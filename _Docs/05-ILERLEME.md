@@ -2,6 +2,25 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-08-04**
 
+## Edit/Read eşleştirme sağlamlığı (2026-08-04) ✅
+
+- **İstek (FND-84c0981b + unicode bulguları):** `old_string` hafızadan yeniden
+  yazıldığında dosyadaki gerçek metinle (unicode « » ✅ ⏳, boşluk/hizalama) birebir
+  eşleşmiyor ve Edit "String to replace not found" ile düşüyordu.
+- **Kod (`internal/tools/builtin_fs.go`, `computeEdit`):** eşleştirme tek bir
+  yardımcıya toplandı ve kademelendi — (1) birebir → (2) cat -n satır-no / CRLF
+  normalizasyonu → (3) **boşluğa toleranslı, satır-tabanlı fallback** (önce satır-sonu
+  boşluk, sonra girinti; yalnız **tekil** konumda ateşler, `replace_all` yoksa çoklu
+  adayda hata; CRLF satır-sonu korunur — `fuzzyLineMatch`/`applyRanges`). Hiç eşleşme
+  yoksa `diagnoseNoMatch` **en yakın dosya satırını + ilk farklılaşan sütunu** gösteren
+  ve "kısa BENZERSIZ ASCII parça hedefle" diyen tanılayıcı hata döner; asla no-op yok.
+- **Prompt/doküman:** `Read`/`Edit` tool açıklamalarına "old_string'i birebir kopyala,
+  normalize etme, unicode/hizalamayı koru; tutmazsa benzersiz kısa ASCII parça" kuralı;
+  `CLAUDE.md` "Edit aracı — eşleşme" bölümü; `56-SELF-HEALING.md` girdisi.
+- **Doğrulama:** `go build ./...` ✅, `go test ./internal/tools` 241 ✅ (yeni
+  `builtin_edit_match_test.go`: fuzzy trailing-ws / girinti / CRLF-koruma / ambiguity /
+  no-match tanılama).
+
 ## Hit-limit hata kartı + salt-okunur retry (2026-08-04) ✅
 
 - **İstek:** "Session'lar hit-limit hatası dönerse hata mesajı gibi göster ve
