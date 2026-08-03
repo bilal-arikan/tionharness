@@ -37,8 +37,9 @@ func (FSApplyPatchTool) Def() providers.ToolDef {
 			"single call — the multi-hunk alternative to Edit. Each file section starts with `--- a/<path>` and " +
 			"`+++ b/<path>` header lines, followed by one or more `@@ ... @@` hunks of context (space-prefixed), " +
 			"removed (`-`) and added (`+`) lines. Hunks are matched by their context, so exact @@ line numbers are " +
-			"not required, but the context/removed lines MUST match the file — a mismatch rejects that whole file " +
-			"(nothing is half-applied). Read a file before patching it (same freshness guard as Edit). Use " +
+			"not required; if the exact context is not found, a whitespace-insensitive match is tried and accepted only " +
+			"when it is UNIQUE, otherwise that whole file is rejected (nothing is half-applied) with an error pointing at " +
+			"the closest line. Copy context/removed lines verbatim (keep unicode and alignment). Read a file before patching it (same freshness guard as Edit). Use " +
 			"`--- /dev/null` to create a file and `+++ /dev/null` to delete one. Paths may be absolute or relative " +
 			"to the working directory; a leading a/ or b/ is stripped.",
 		InputSchema: json.RawMessage(`{
@@ -289,7 +290,24 @@ func applyHunks(old string, hunks []diffHunk, create bool) (string, error) {
 	for hi, h := range hunks {
 		idx := indexOfBlock(oldLines, h.pre, cursor)
 		if idx < 0 {
-			return "", fmt.Errorf("hunk %d does not match the file (its context/removed lines were not found from line %d onward) — Read the file again and regenerate the patch", hi+1, cursor+1)
+			// Verbatim context failed. The hunk is often the RIGHT region but its
+			// context/removed lines differ from disk only in trailing whitespace or
+			// indentation (the model rewrote them from memory). Retry with widening
+			// per-line tolerance — but ONLY accept a UNIQUE location from the cursor
+			// onward, so a fuzzy match can never rewrite the wrong block.
+			for _, norm := range []func(string) string{rtrimLine, strings.TrimSpace} {
+				hits := blockMatchesNorm(oldLines, h.pre, cursor, norm)
+				if len(hits) == 1 {
+					idx = hits[0]
+					break
+				}
+				if len(hits) > 1 {
+					return "", fmt.Errorf("hunk %d has no exact context match and a whitespace-insensitive match is ambiguous (%d candidates from line %d) — regenerate the patch with exact, unique context", hi+1, len(hits), cursor+1)
+				}
+			}
+		}
+		if idx < 0 {
+			return "", diagnoseHunkMismatch(oldLines, h.pre, cursor, hi+1)
 		}
 		result = append(result, oldLines[cursor:idx]...) // unchanged run before the hunk
 		result = append(result, h.post...)               // the substitution
@@ -322,6 +340,72 @@ func indexOfBlock(lines, block []string, from int) int {
 		}
 	}
 	return -1
+}
+
+// blockMatchesNorm returns every index >= from at which block occurs contiguously in
+// lines when each line is compared under the per-line normalizer norm (e.g. trailing
+// whitespace or full indentation folded). Matches are non-overlapping. An empty block
+// matches once at `from`.
+func blockMatchesNorm(lines, block []string, from int, norm func(string) string) []int {
+	if len(block) == 0 {
+		return []int{from}
+	}
+	nb := make([]string, len(block))
+	for j, b := range block {
+		nb[j] = norm(b)
+	}
+	var hits []int
+	for i := from; i+len(block) <= len(lines); i++ {
+		match := true
+		for j := range nb {
+			if norm(lines[i+j]) != nb[j] {
+				match = false
+				break
+			}
+		}
+		if match {
+			hits = append(hits, i)
+			i += len(block) - 1 // skip past this match so hits never overlap
+		}
+	}
+	return hits
+}
+
+// diagnoseHunkMismatch builds the actionable error returned when a hunk's context
+// matches nowhere, even fuzzily: it points at the file line the hunk's first non-blank
+// context/removed line is closest to (searching from the cursor) and where they first
+// diverge, so the patch can be regenerated against exact bytes.
+func diagnoseHunkMismatch(lines, pre []string, from, hunkNum int) error {
+	anchor := ""
+	for _, l := range pre {
+		if strings.TrimSpace(l) != "" {
+			anchor = l
+			break
+		}
+	}
+	base := fmt.Sprintf("hunk %d does not match the file (context/removed lines not found from line %d onward)", hunkNum, from+1)
+	tail := "Read the file again and regenerate the patch from its exact bytes — trailing whitespace, indentation and unicode punctuation are the usual culprits"
+	if anchor == "" {
+		return fmt.Errorf("%s — %s", base, tail)
+	}
+	na := strings.TrimSpace(anchor)
+	bestIdx, bestScore := -1, -1
+	for i := from; i < len(lines); i++ {
+		ft := strings.TrimSpace(lines[i])
+		score := commonPrefixRunes(ft, na)
+		if na != "" && strings.Contains(ft, na) {
+			score = len([]rune(na)) + 1
+		}
+		if score > bestScore {
+			bestScore, bestIdx = score, i
+		}
+	}
+	if bestIdx < 0 || bestScore <= 0 {
+		return fmt.Errorf("%s — no similar line found. %s", base, tail)
+	}
+	col := firstDiffColumn(lines[bestIdx], anchor)
+	return fmt.Errorf("%s. Closest is line %d:\n  file:  %s\n  patch: %s\n  first differ at column %d. %s",
+		base, bestIdx+1, quoteForMsg(lines[bestIdx]), quoteForMsg(anchor), col, tail)
 }
 
 // joinLines is the inverse of splitLines (diff.go): it re-adds the trailing

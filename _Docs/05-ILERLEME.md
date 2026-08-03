@@ -17,9 +17,12 @@
 - **Prompt/doküman:** `Read`/`Edit` tool açıklamalarına "old_string'i birebir kopyala,
   normalize etme, unicode/hizalamayı koru; tutmazsa benzersiz kısa ASCII parça" kuralı;
   `CLAUDE.md` "Edit aracı — eşleşme" bölümü; `56-SELF-HEALING.md` girdisi.
-- **Doğrulama:** `go build ./...` ✅, `go test ./internal/tools` 241 ✅ (yeni
-  `builtin_edit_match_test.go`: fuzzy trailing-ws / girinti / CRLF-koruma / ambiguity /
-  no-match tanılama).
+- **apply_patch'e taşındı:** `applyHunks` de aynı kademeli toleransı kullanır
+  (`blockMatchesNorm`, cursor'dan sonra tekil konum; `diagnoseHunkMismatch`). Tool
+  açıklaması güncellendi. Testler `builtin_patch_match_test.go`.
+- **Doğrulama:** `go build ./...` ✅, `go test ./internal/tools` 246 ✅ (yeni
+  `builtin_edit_match_test.go` + `builtin_patch_match_test.go`: fuzzy trailing-ws /
+  girinti / CRLF-koruma / ambiguity / no-match tanılama).
 
 ## Hit-limit hata kartı + salt-okunur retry (2026-08-04) ✅
 

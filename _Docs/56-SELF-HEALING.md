@@ -186,6 +186,12 @@ toggle'lar daha önce kaydedilmiyordu — düzeltildi).
   Hiç eşleşme yoksa artık **en yakın dosya satırını ve ilk farklılaşan sütunu** gösteren
   tanılayıcı hata döner ("kısa BENZERSIZ ASCII parça hedefle" yönlendirmesiyle) — no-op
   yapmaz. Testler `builtin_edit_match_test.go`.
+- **apply_patch eşleştirme sağlamlığı** (`internal/tools/builtin_patch.go`,
+  `applyHunks`): hunk bağlamı birebir bulunamazsa aynı kademeli boşluk toleransı
+  (`blockMatchesNorm`: satir-sonu boşluk → girinti) devreye girer, **yalnız cursor'dan
+  sonra tekil konumda** kabul edilir (çoklu adayda hata). Hiç eşleşme yoksa
+  `diagnoseHunkMismatch` en yakın satırı + ilk farklılaşan sütunu gösterir; dosya asla
+  yarı-uygulanmaz. Testler `builtin_patch_match_test.go`.
 
 ### Canlı E2E doğrulaması (izole instance, gerçek claude-cli/fable-5)
 Doğrulanan zincir: başarısız Read×3 turu → `tool-error` auto-tag ✅ →
