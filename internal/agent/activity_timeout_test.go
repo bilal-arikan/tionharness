@@ -61,6 +61,42 @@ func TestActivityTimeoutHardCeiling(t *testing.T) {
 	}
 }
 
+// TestActivityHeartbeatKeepsAlive verifies startActivityHeartbeat keeps a
+// step-less turn alive past the idle window (the fix for a long non-streaming
+// completion / one-shot big write being falsely reclaimed as "hung"), and that
+// stopping it lets the watchdog reclaim the now-silent turn.
+func TestActivityHeartbeatKeepsAlive(t *testing.T) {
+	ctx, stop := withActivityTimeout(context.Background(), 10*time.Second, 120*time.Millisecond)
+	defer stop()
+	stopHB := startActivityHeartbeat(ctx)
+	// Heartbeat (interval = idle/2 = 60ms) touches often enough to survive ~3× the
+	// idle window with no emitted steps.
+	select {
+	case <-ctx.Done():
+		stopHB()
+		t.Fatal("heartbeat did not keep a step-less turn alive")
+	case <-time.After(360 * time.Millisecond):
+	}
+	// Stop the heartbeat: with nothing else touching, the idle watchdog must now
+	// reclaim the turn within about one idle window.
+	stopHB()
+	select {
+	case <-ctx.Done():
+	case <-time.After(2 * time.Second):
+		t.Fatal("idle watchdog did not fire after heartbeat stopped")
+	}
+}
+
+// TestActivityHeartbeatNoopWithoutWatchdog verifies the heartbeat is a nil-safe
+// no-op on a ctx that carries no watchdog (an interactive turn, or the idle-disabled
+// path), so the hot chat path pays nothing and stop() never blocks or panics.
+func TestActivityHeartbeatNoopWithoutWatchdog(t *testing.T) {
+	startActivityHeartbeat(context.Background())() // no watchdog at all
+	ctx, cancel := withActivityTimeout(context.Background(), time.Second, 0)
+	defer cancel()
+	startActivityHeartbeat(ctx)() // idle disabled → no touch installed
+}
+
 // TestSpawnIdleTimeoutTunable verifies the tunable default + override.
 func TestSpawnIdleTimeoutTunable(t *testing.T) {
 	var tun Tunables

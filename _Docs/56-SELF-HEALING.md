@@ -81,6 +81,24 @@
 - `RemoveSessionTags` ile `stuck` etiketi kaldırılınca sayaç da sıfırlanır
   (fixer çözdü → otonomi geri açılır).
 
+### Faz E — Etkinlik gözcüsü + kesinti kurtarma (idle watchdog)
+- `internal/agent/activity_timeout.go`: her arka-plan turu HEM mutlak süre tavanı
+  (`SpawnTimeout`) HEM boşta penceresi (`SpawnIdleTimeout`) ile sınırlıdır; step
+  emitter her adımda `touch()` ile boşta sayacını sıfırlar.
+- **Heartbeat** (`startActivityHeartbeat`, interval = idle/2): streaming OLMAYAN
+  provider tamamlaması ve tek-seferlik araç çağrısı (büyük `write_file`, uzun
+  shell, alt-ajan beklemesi) adım üretmez — bunlar sırasında gözcü periyodik
+  touch'lanır, böylece meşru uzun-ama-sessiz iş "asılı" sanılıp kesilmez. Streaming
+  yollar (token/düşünce/tool_delta) zaten her parçada touch ettiğinden heartbeat
+  ALMAZ; böylece takılan bir akış hâlâ idle ile geri alınır. Wedge olan tek işlem
+  yine sert tavanla sınırlıdır.
+- **Kesinti kurtarma**: `classifyTurnOutcome` iptal nedenini (`ErrTurnIdleTimeout`/
+  `ErrTurnHardTimeout`) + loop terminal işaretlerini okuyup "iş BİTMİŞ DEĞİL" notu
+  üretir. `reconcileTurnOutcome` bu notu kurtarılan kısmi metnin başına ekler, iz'e
+  işaret bırakır ve turu temiz kapatır; kesilmiş tur `FireTurnFinished`/başarı
+  sinyali tetiklemez (fragmanla otomasyon zincirlenmez). Spawn/worker'a ek olarak
+  wake/schedule/inbox yolları da bu kurtarmayı kullanır.
+
 ## Gözlemlenebilirlik
 - Yeni `debug.jsonl` olay türleri: `repair` (rule `Name`'de) ve `guardrail`
   (`warn`/`block`/`halt`/`stuck_gate` `Name`'de, tool/detay `Detail`'de).
