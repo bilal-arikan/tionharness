@@ -2,6 +2,28 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-08-04**
 
+## Shell-kapalı farkındalığı: ölü-araç kuralı (2026-08-04) ✅
+
+- **Sorun (FND-9c9a52aa · FND-6095a777 · FND-e9c79d9a · FND-495575b8):** Kabuk
+  araçları (Bash/PowerShell) kapalı oturumlarda ajana bu bildirilmiyordu. Ajan
+  bare `PowerShell`/`Bash` çağırıp *"No such tool available … not enabled in this
+  context"* alıyor, muadiline geçmeyip **aynı çağrıyı tekrarlıyor** ve 5 dk'lık tur
+  zaman aşımına düşüyordu. Ayrıca terminal varsayan rehberlik (`rtk`, `go test`,
+  `npm`) shell'siz ajanlara da telkin ediliyordu.
+- **Çözüm (`internal/agent/runtime.go` → `ShellToolsContextBlock`):** Blok artık
+  **hiç boş dönmez** ve shell yeteneğinin **tek kaynağıdır**. Gate açık + backing
+  shell varsa eskisi gibi Bash/PowerShell'i adıyla duyurur; **kapalıysa** (gate
+  kapalı VEYA `tools.ShellToolNames()` boş) "Shell execution is DISABLED" +
+  **ölü-araç kuralını** enjekte eder: bir araç "not enabled in this context" derse
+  onu yok kabul et, aynı çağrıyı tekrarlama, hedefe fs araçlarıyla (Read/Glob/Grep/
+  Edit/Write) ulaş ya da durumu raporla; terminal varsayan rehberlik bu bağlamda
+  geçersizdir. Kaynak tek → chat (`composeTurnRequest`) ve headless
+  (`autonomousDynamicSuffix`) yolları aynı metni paylaşır; volatile dinamik suffix
+  (gate mid-session değişebilir), epoch snapshot ile cache-güvenli.
+- **Doküman:** [53-CRAFTAGENT-PROMPT-PARITE.md](53-CRAFTAGENT-PROMPT-PARITE.md)
+  shell-gate satırı güncellendi.
+- **Doğrulama:** `rtk go build ./...` ✅.
+
 ## Hit-limit hata kartı + salt-okunur retry (2026-08-04) ✅
 
 - **İstek:** "Session'lar hit-limit hatası dönerse hata mesajı gibi göster ve

@@ -1279,24 +1279,35 @@ func EnvironmentContextBlock() string {
 		runtime.GOOS, runtime.GOARCH, shell, hint)
 }
 
-// ShellToolsContextBlock advertises the shell execution tools (Bash / PowerShell)
-// ONLY when this workspace's shell gate is on (Tunables.ShellEnabled) AND a
-// backing interpreter is present — mirroring buildRegistry's registration
-// conditions exactly (same resolvers via tools.ShellToolNames). When the gate is
-// off the block is empty, so the workspace instructions never promise a shell tool
-// that was never registered — the mismatch that made the model emit a bare
-// `PowerShell` call and hit "No such tool available: PowerShell … not enabled in
-// this context". It rides the VOLATILE dynamic suffix on both the chat
-// (composeTurnRequest) and headless (autonomousDynamicSuffix) paths because the
-// gate can toggle mid-session; the file tools (Read/Write/Edit/LS/Glob/Grep) stay
-// the always-on core named in the static instructions.
+// ShellToolsContextBlock states this session's shell-execution capability, and is
+// the SINGLE source for it on both the chat (composeTurnRequest) and headless
+// (autonomousDynamicSuffix) paths. It never returns empty:
+//
+//   - ENABLED — the shell gate is on (Tunables.ShellEnabled) AND a backing
+//     interpreter is present (same resolvers as buildRegistry via
+//     tools.ShellToolNames, so prompt ↔ catalog never drift): advertise the
+//     registered Bash/PowerShell tools by their exact names.
+//   - DISABLED — the gate is off OR no interpreter backs it: the Bash/PowerShell
+//     tools are NOT registered, so say so explicitly and give the dead-tool rule.
+//     Otherwise the model emits a bare `PowerShell`/`Bash` call, hits "No such
+//     tool available … not enabled in this context", and — with nothing telling it
+//     the tool is gone — repeats the identical call until the turn times out
+//     (FND-9c9a52aa, FND-6095a777, FND-e9c79d9a, FND-495575b8).
+//
+// It rides the VOLATILE dynamic suffix on both paths because the gate can toggle
+// mid-session; the file tools (Read/Write/Edit/LS/Glob/Grep) stay the always-on
+// core named in the static instructions.
 func (r *Runtime) ShellToolsContextBlock() string {
-	if !r.tun.ShellEnabled() {
-		return ""
-	}
 	names := tools.ShellToolNames()
-	if len(names) == 0 {
-		return ""
+	if !r.tun.ShellEnabled() || len(names) == 0 {
+		return "Shell execution is DISABLED for this session: there is NO Bash or PowerShell tool. " +
+			"Do NOT call Bash or PowerShell — such a call fails with \"No such tool available\" / " +
+			"\"not enabled in this context\". Any workspace guidance that assumes a terminal " +
+			"(rtk wrappers, `go test`, `npm …`, shell one-liners) does NOT apply here. " +
+			"General dead-tool rule: if ANY tool call returns \"No such tool available\" / " +
+			"\"not enabled in this context\", treat that tool as absent — do NOT repeat the identical " +
+			"call. Reach the goal with the file tools (Read / Glob / Grep / Edit / Write), or report " +
+			"that the step needs a shell that is not available in this context."
 	}
 	noun, verb := "tool", "runs"
 	if len(names) > 1 {
@@ -1412,9 +1423,10 @@ func (r *Runtime) autonomousDynamicSuffix(ctx context.Context) string {
 	if lb := r.LessonsContextBlock(ctx, agentID); lb != "" {
 		out += "\n\n" + lb
 	}
-	// Shell tools (Bash/PowerShell) are gated; advertise them only when actually
-	// registered (gate on + backing shell present). Volatile → dynamic suffix,
-	// mirroring the chat path, since the gate can toggle mid-session.
+	// Shell-execution capability, single-sourced with the chat path: advertises
+	// the registered Bash/PowerShell tools when the gate is on + a shell backs it,
+	// else states shell is disabled and gives the dead-tool rule. Volatile →
+	// dynamic suffix, since the gate can toggle mid-session.
 	if sh := r.ShellToolsContextBlock(); sh != "" {
 		out += "\n\n" + sh
 	}
