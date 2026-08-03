@@ -39,8 +39,13 @@ func (s *Server) handleRevealAgent(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"path": path})
 }
 
+// handleListAgents returns the workspace roster INCLUDING agents marked deleted
+// (each flagged with deleted:true). The client needs them to render the author
+// of a past conversation — the session outlives its agent — and filters them out
+// of its own pickers. Server-side code paths that must never select a deleted
+// agent use db.ListAgents, which excludes them.
 func (s *Server) handleListAgents(w http.ResponseWriter, r *http.Request) {
-	agents, err := ws(r).DB.ListAgents(r.Context())
+	agents, err := ws(r).DB.ListAgentsWithDeleted(r.Context())
 	if writeDBError(w, err, "") {
 		return
 	}
@@ -143,11 +148,55 @@ func (s *Server) firstAgentProviderModel(ctx context.Context, wsp *workspace.Wor
 	return agents[0].Provider, agents[0].Model
 }
 
-// handleDeleteAgent removes the agent together with the sessions, schedules and
-// tasks it owns.
+// agentRunning reports whether the agent has work in flight right now: a turn in
+// any session it owns or takes part in (interactive OR autonomous), or a task run
+// assigned to it. There is no per-agent run registry — both live registries are
+// keyed by session — so this intersects the active session ids with the agent's
+// own, the same way workspaceRunning unions them for the activity report.
+// Returns the id of the first live thing found, for the error message.
+func (s *Server) agentRunning(ctx context.Context, wsp *workspace.Workspace, agentID string) (bool, string) {
+	live := s.runs.activeSessionIDs(wsp.ID)
+	if wsp.Runtime != nil { // absent in tests and during early boot
+		live = append(live, wsp.Runtime.ActiveSessionIDs()...)
+	}
+	for _, sid := range live {
+		sess, err := wsp.DB.GetSession(ctx, sid)
+		if err != nil {
+			continue // vanished between the snapshot and the lookup
+		}
+		if sess.AgentID == agentID {
+			return true, sess.ID
+		}
+		// A multi-agent thread: the agent may be answering as a participant even
+		// though another agent owns the session.
+		for _, p := range sess.Participants {
+			if p == agentID {
+				return true, sess.ID
+			}
+		}
+	}
+	if runs, err := wsp.DB.ListRunningRuns(ctx); err == nil {
+		for _, run := range runs {
+			if run.AgentID == agentID {
+				return true, run.ID
+			}
+		}
+	}
+	return false, ""
+}
+
+// handleDeleteAgent marks the agent deleted and drops the schedules and tasks it
+// owns. The sessions it owns are KEPT — see db.DeleteAgent. Refuses while the
+// agent has a turn in flight: deleting mid-run would pull the roster entry out
+// from under a turn that is still writing.
 func (s *Server) handleDeleteAgent(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	wsp := ws(r)
+	if running, where := s.agentRunning(r.Context(), wsp, id); running {
+		writeError(w, http.StatusConflict,
+			"Ajan şu anda çalışıyor ("+where+"). Önce turu durdurun, sonra silin.")
+		return
+	}
 	if err := wsp.DB.DeleteAgent(r.Context(), id); writeDBError(w, err, "agent not found") {
 		return
 	}

@@ -19,6 +19,7 @@ import { UserTurn } from './UserTurn'
 import { UserBubble } from './UserBubble'
 import { PeerTurn } from './PeerTurn'
 import { AssistantTurn } from './AssistantTurn'
+import { agentName, resolveAgent } from '@/shared/lib/agentLookup'
 
 interface Props {
   messages: Message[]
@@ -144,7 +145,10 @@ export function MessageList({
   // is the human's own just-sent message we always re-pin to the bottom (see the
   // scroll effect), even if the user had scrolled up to read history.
   const prevLastId = useRef(messages[messages.length - 1]?.id)
-  const agentById = (id?: string) => (id ? agents.find((a) => a.id === id) : undefined)
+  // resolveAgent, not a raw find: a session outlives its agent, so the author of
+  // an old turn may be deleted. It comes back flagged (AgentIdentity shows the
+  // "silinmiş" badge) instead of undefined or a bare id.
+  const agentById = (id?: string) => resolveAgent(agents, id) ?? undefined
   // Multi-participant thread detection (generic participant model): count the
   // distinct agents that authored or were addressed in this transcript. Only when
   // 2+ agents take part do we surface the "→ <recipient>" direction cue — a 1:1
@@ -173,7 +177,7 @@ export function MessageList({
     const rid = m.recipientId
     if (!rid) return undefined
     if (rid === '*') return 'herkes'
-    return agents.find((a) => a.id === rid)?.name ?? rid
+    return agentName(agents, rid)
   }
   // Resolve a turn's "→ <name>" recipient label from recipientId (falling back to
   // the legacy agentId a user turn carries). Empty in a 1:1 thread or an undirected
@@ -183,7 +187,7 @@ export function MessageList({
     const rid = m.recipientId || (m.role === 'user' ? m.agentId : undefined)
     if (!rid) return undefined
     if (rid === '*') return 'herkes'
-    return agents.find((a) => a.id === rid)?.name ?? rid
+    return agentName(agents, rid)
   }
   // Per-message collapse of the tool-activity trace (the TurnSteps block). Keyed
   // by message id; a message is shown expanded unless its id is in the set.
@@ -399,140 +403,142 @@ export function MessageList({
         className="h-full overflow-y-auto px-[1px] pb-6 pt-2 md:px-6"
         style={bottomInset ? { paddingBottom: bottomInset } : undefined}
       >
-      <div className="flex w-full flex-col gap-4">
-        {messages.map((m, i) => {
-          let row: ReactNode
-          // isLastLive (assistant): the in-flight bubble while streaming. Hoisted
-          // here so the row wrapper can expose it as a DOM signal (data-streaming)
-          // for external automation to detect turn completion without polling.
-          const rowLive = m.role !== 'user' && !!streaming && i === messages.length - 1
-          // A real (typed) user message — the only rows eligible to pin at top.
-          // Peer/inbox deliveries share role "user" but are incoming, not typed.
-          const isTypedUser = m.role === 'user' && !m.origin && !isPeer(m)
-          if (m.role === 'user') {
-            // Peer/inbox delivery (another agent authored it): render as an
-            // incoming LEFT bubble with the sender's identity — not our own turn.
-            row = isPeer(m) ? (
-              <PeerTurn
-                message={m}
-                sender={agentById(m.authorId)}
-                recipientLabel={peerRecipient(m)}
-                onDelete={onDeleteMessage}
-                onOpenAgent={onOpenAgent}
-              />
-            ) : // Worker <task-notification> injections get their own collapsible
-            // card (raw XML is unreadable as a plain note); other origins keep
-            // the generic auto-continuation note.
-            m.origin === 'worker-note' ? (
-              <TaskNotificationNote message={m} onDelete={onDeleteMessage} />
-            ) : m.origin ? (
-              <AutoPromptNote message={m} onDelete={onDeleteMessage} />
-            ) : (
-              <UserTurn
-                message={m}
-                agents={agents}
-                artifacts={artifacts}
-                onDelete={onDeleteMessage}
-                onRewind={onRewind}
-                onOpenArtifact={onOpenArtifact}
-                recipientLabel={recipientLabel(m)}
-              />
-            )
-          } else {
-            // The in-flight assistant bubble is the last message while streaming; its
-            // createdAt marks the turn start, so a live timer counts up from it.
-            const isLastLive = rowLive
-            // Completed-turn working time comes FROM THE SERVER: the backend times
-            // the agent run and persists it as Message.durationMs. Legacy fallback
-            // (messages written before that field existed): the createdAt gap to the
-            // triggering user message — only meaningful when the previous message is
-            // the user's, since injected summaries or consecutive assistant turns
-            // would otherwise report idle gaps rather than real work. It is flagged
-            // as derived so the UI marks it approximate.
-            const prev = messages[i - 1]
-            const serverMs = m.durationMs ?? 0
-            const workedDerived = serverMs <= 0
-            const workedMs = workedDerived
-              ? prev?.role === 'user' ? (m.createdAt - prev.createdAt) * 1000 : 0
-              : serverMs
-            row = (
-              <AssistantTurn
-                message={m}
-                agent={agentById(m.agentId)}
-                sessionId={sessionId}
-                isLastLive={isLastLive}
-                workedMs={workedMs}
-                workedDerived={workedDerived}
-                toolsHidden={collapsedTools.has(m.id)}
-                onToggleTools={toggleTools}
-                onOpenFile={onOpenFile}
-                onOpenArtifact={onOpenArtifact}
-                onDelete={onDeleteMessage}
-                onRetry={onRetry}
-                onFeedback={onFeedback}
-                onOpenAgent={onOpenAgent}
-                recipientLabel={recipientLabel(m)}
-              />
-            )
-          }
-          // Rows stay full-height and in normal flow — the pinned question is a
-          // separate overlay header (rendered above), so nothing here changes the
-          // scroll layout. flashCls is the transient search deep-link highlight.
-          const flashCls =
-            flashId === m.id
-              ? 'rounded-2xl ring-2 ring-[var(--color-accent)] ring-offset-2 ring-offset-[var(--color-bg)] transition-shadow'
-              : ''
-          const wrapperCls = flashCls || undefined
-          // The flashed (deep-linked) row must render eagerly: it is scrolled to
-          // and highlighted, and a skipped subtree has no measurable height yet.
-          const skipOffscreen =
-            messages.length >= SKIP_OFFSCREEN_MIN_ROWS &&
-            i < messages.length - EAGER_TAIL_ROWS &&
-            flashId !== m.id
-          return (
-            <div
-              key={m.id}
-              data-msg-id={m.id}
-              data-testid="chat-message"
-              data-role={m.role}
-              data-streaming={rowLive ? 'true' : 'false'}
-              data-user-row={isTypedUser ? 'true' : undefined}
-              data-idx={isTypedUser ? i : undefined}
-              className={wrapperCls}
-              style={skipOffscreen ? SKIPPED_ROW : undefined}
-            >
-              {row}
-            </div>
-          )
-        })}
-
-        {showStandalonePending && (
-          <div className="group flex flex-col gap-1">
-            <div className="flex w-full justify-start">
-              <div className="w-full min-w-0 rounded-2xl bg-[color-mix(in_srgb,var(--color-surface-2)_65%,var(--color-bg))] px-4 py-3">
-                <AgentHeader agent={agentById(pendingAgentId)} onOpenAgent={onOpenAgent} />
-                <WorkingDots />
+        <div className="flex w-full flex-col gap-4">
+          {messages.map((m, i) => {
+            let row: ReactNode
+            // isLastLive (assistant): the in-flight bubble while streaming. Hoisted
+            // here so the row wrapper can expose it as a DOM signal (data-streaming)
+            // for external automation to detect turn completion without polling.
+            const rowLive = m.role !== 'user' && !!streaming && i === messages.length - 1
+            // A real (typed) user message — the only rows eligible to pin at top.
+            // Peer/inbox deliveries share role "user" but are incoming, not typed.
+            const isTypedUser = m.role === 'user' && !m.origin && !isPeer(m)
+            if (m.role === 'user') {
+              // Peer/inbox delivery (another agent authored it): render as an
+              // incoming LEFT bubble with the sender's identity — not our own turn.
+              row = isPeer(m) ? (
+                <PeerTurn
+                  message={m}
+                  sender={agentById(m.authorId)}
+                  recipientLabel={peerRecipient(m)}
+                  onDelete={onDeleteMessage}
+                  onOpenAgent={onOpenAgent}
+                />
+              ) : // Worker <task-notification> injections get their own collapsible
+              // card (raw XML is unreadable as a plain note); other origins keep
+              // the generic auto-continuation note.
+              m.origin === 'worker-note' ? (
+                <TaskNotificationNote message={m} onDelete={onDeleteMessage} />
+              ) : m.origin ? (
+                <AutoPromptNote message={m} onDelete={onDeleteMessage} />
+              ) : (
+                <UserTurn
+                  message={m}
+                  agents={agents}
+                  artifacts={artifacts}
+                  onDelete={onDeleteMessage}
+                  onRewind={onRewind}
+                  onOpenArtifact={onOpenArtifact}
+                  recipientLabel={recipientLabel(m)}
+                />
+              )
+            } else {
+              // The in-flight assistant bubble is the last message while streaming; its
+              // createdAt marks the turn start, so a live timer counts up from it.
+              const isLastLive = rowLive
+              // Completed-turn working time comes FROM THE SERVER: the backend times
+              // the agent run and persists it as Message.durationMs. Legacy fallback
+              // (messages written before that field existed): the createdAt gap to the
+              // triggering user message — only meaningful when the previous message is
+              // the user's, since injected summaries or consecutive assistant turns
+              // would otherwise report idle gaps rather than real work. It is flagged
+              // as derived so the UI marks it approximate.
+              const prev = messages[i - 1]
+              const serverMs = m.durationMs ?? 0
+              const workedDerived = serverMs <= 0
+              const workedMs = workedDerived
+                ? prev?.role === 'user'
+                  ? (m.createdAt - prev.createdAt) * 1000
+                  : 0
+                : serverMs
+              row = (
+                <AssistantTurn
+                  message={m}
+                  agent={agentById(m.agentId)}
+                  sessionId={sessionId}
+                  isLastLive={isLastLive}
+                  workedMs={workedMs}
+                  workedDerived={workedDerived}
+                  toolsHidden={collapsedTools.has(m.id)}
+                  onToggleTools={toggleTools}
+                  onOpenFile={onOpenFile}
+                  onOpenArtifact={onOpenArtifact}
+                  onDelete={onDeleteMessage}
+                  onRetry={onRetry}
+                  onFeedback={onFeedback}
+                  onOpenAgent={onOpenAgent}
+                  recipientLabel={recipientLabel(m)}
+                />
+              )
+            }
+            // Rows stay full-height and in normal flow — the pinned question is a
+            // separate overlay header (rendered above), so nothing here changes the
+            // scroll layout. flashCls is the transient search deep-link highlight.
+            const flashCls =
+              flashId === m.id
+                ? 'rounded-2xl ring-2 ring-[var(--color-accent)] ring-offset-2 ring-offset-[var(--color-bg)] transition-shadow'
+                : ''
+            const wrapperCls = flashCls || undefined
+            // The flashed (deep-linked) row must render eagerly: it is scrolled to
+            // and highlighted, and a skipped subtree has no measurable height yet.
+            const skipOffscreen =
+              messages.length >= SKIP_OFFSCREEN_MIN_ROWS &&
+              i < messages.length - EAGER_TAIL_ROWS &&
+              flashId !== m.id
+            return (
+              <div
+                key={m.id}
+                data-msg-id={m.id}
+                data-testid="chat-message"
+                data-role={m.role}
+                data-streaming={rowLive ? 'true' : 'false'}
+                data-user-row={isTypedUser ? 'true' : undefined}
+                data-idx={isTypedUser ? i : undefined}
+                className={wrapperCls}
+                style={skipOffscreen ? SKIPPED_ROW : undefined}
+              >
+                {row}
               </div>
-            </div>
-            {/* Turn started at the triggering (last) message; count up from it. */}
-            {last && (
-              <div className="flex items-center gap-2 pl-1">
-                <MessageTime unixSec={last.createdAt} />
-                <LiveTimer startUnixSec={last.createdAt} />
+            )
+          })}
+
+          {showStandalonePending && (
+            <div className="group flex flex-col gap-1">
+              <div className="flex w-full justify-start">
+                <div className="w-full min-w-0 rounded-2xl bg-[color-mix(in_srgb,var(--color-surface-2)_65%,var(--color-bg))] px-4 py-3">
+                  <AgentHeader agent={agentById(pendingAgentId)} onOpenAgent={onOpenAgent} />
+                  <WorkingDots />
+                </div>
               </div>
-            )}
-          </div>
-        )}
+              {/* Turn started at the triggering (last) message; count up from it. */}
+              {last && (
+                <div className="flex items-center gap-2 pl-1">
+                  <MessageTime unixSec={last.createdAt} />
+                  <LiveTimer startUnixSec={last.createdAt} />
+                </div>
+              )}
+            </div>
+          )}
 
-        {messages.length === 0 && !pending && (
-          <div className="mt-20 text-center text-[var(--color-text-dim)]">
-            <p className="text-lg">Sohbete başla</p>
-            <p className="mt-1 text-sm">Aşağıya bir mesaj yaz.</p>
-          </div>
-        )}
+          {messages.length === 0 && !pending && (
+            <div className="mt-20 text-center text-[var(--color-text-dim)]">
+              <p className="text-lg">Sohbete başla</p>
+              <p className="mt-1 text-sm">Aşağıya bir mesaj yaz.</p>
+            </div>
+          )}
 
-        <div />
-      </div>
+          <div />
+        </div>
       </div>
     </div>
   )

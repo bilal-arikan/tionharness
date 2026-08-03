@@ -31,6 +31,8 @@ type automationReq struct {
 	BoardToState   string   `json:"boardToState"`
 	BoardPriority  *int     `json:"boardPriority"`
 	BoardExclusive *bool    `json:"boardExclusive"`
+	TokenScope     string   `json:"tokenScope"`
+	TokenThreshold *int     `json:"tokenThreshold"`
 	TargetAgentID  string   `json:"targetAgentId"`
 	FlowID         string   `json:"flowId"`
 	PromptTemplate string   `json:"promptTemplate"`
@@ -51,22 +53,41 @@ func (s *Server) handleCreateAutomation(w http.ResponseWriter, r *http.Request) 
 	req.BoardOp = strings.TrimSpace(req.BoardOp)
 	req.BoardFromState = strings.TrimSpace(req.BoardFromState)
 	req.BoardToState = strings.TrimSpace(req.BoardToState)
+	req.TokenScope = strings.TrimSpace(req.TokenScope)
 	req.TargetAgentID = strings.TrimSpace(req.TargetAgentID)
 	req.FlowID = strings.TrimSpace(req.FlowID)
 	if strings.TrimSpace(req.PromptTemplate) == "" {
 		writeError(w, http.StatusBadRequest, "promptTemplate is required")
 		return
 	}
-	// Board automations trigger on card changes (no session tag); tag automations
-	// (the default) require a trigger tag.
-	if req.TriggerKind == db.TriggerBoard {
+	// Trigger-kind-specific requirements: board fires on card changes (no tag),
+	// token on spend crossings (no tag), tag (the default) needs a trigger tag.
+	tokenThreshold := 0
+	switch req.TriggerKind {
+	case db.TriggerBoard:
 		if !db.ValidBoardOp(req.BoardOp) {
 			writeError(w, http.StatusBadRequest, "invalid boardOp")
 			return
 		}
-	} else if req.TriggerTag == "" {
-		writeError(w, http.StatusBadRequest, "triggerTag is required for tag automations")
-		return
+	case db.TriggerToken:
+		if !db.ValidTokenScope(req.TokenScope) {
+			writeError(w, http.StatusBadRequest, "invalid tokenScope (session|workspace)")
+			return
+		}
+		if req.TokenThreshold == nil {
+			writeError(w, http.StatusBadRequest, "tokenThreshold is required for token automations")
+			return
+		}
+		if err := db.ValidateTokenThreshold(*req.TokenThreshold); err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		tokenThreshold = *req.TokenThreshold
+	default:
+		if req.TriggerTag == "" {
+			writeError(w, http.StatusBadRequest, "triggerTag is required for tag automations")
+			return
+		}
 	}
 	ctx := r.Context()
 	// The automation targets EITHER a flow or a single agent.
@@ -124,6 +145,8 @@ func (s *Server) handleCreateAutomation(w http.ResponseWriter, r *http.Request) 
 		BoardToState:   req.BoardToState,
 		BoardPriority:  boardPriority,
 		BoardExclusive: boardExclusive,
+		TokenScope:     req.TokenScope,
+		TokenThreshold: tokenThreshold,
 		TargetAgentID:  req.TargetAgentID,
 		FlowID:         req.FlowID,
 		PromptTemplate: req.PromptTemplate,
@@ -163,10 +186,33 @@ func (s *Server) handleUpdateAutomation(w http.ResponseWriter, r *http.Request) 
 			writeError(w, http.StatusBadRequest, "invalid boardOp")
 			return
 		}
+		if k == db.TriggerToken && !db.ValidTokenScope(strings.TrimSpace(req.TokenScope)) {
+			writeError(w, http.StatusBadRequest, "invalid tokenScope (session|workspace)")
+			return
+		}
 		cur.TriggerKind = k
 		cur.BoardOp = strings.TrimSpace(req.BoardOp)
 		cur.BoardFromState = strings.TrimSpace(req.BoardFromState)
 		cur.BoardToState = strings.TrimSpace(req.BoardToState)
+		if k == db.TriggerToken {
+			cur.TokenScope = strings.TrimSpace(req.TokenScope)
+		}
+	}
+	// TokenThreshold is a pointer field: absent in a partial patch means "leave as
+	// stored"; when present it is validated. A rule that ends up token-triggered
+	// must carry a valid threshold (guarded after the patches below).
+	if req.TokenThreshold != nil {
+		if err := db.ValidateTokenThreshold(*req.TokenThreshold); err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		cur.TokenThreshold = *req.TokenThreshold
+	}
+	if cur.TriggerKind == db.TriggerToken {
+		if err := db.ValidateTokenThreshold(cur.TokenThreshold); err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
 	}
 	// Targeting: apply only when the request specifies a target, so partial
 	// updates (e.g. spawnTags-only) don't wipe it. Setting a flow switches the

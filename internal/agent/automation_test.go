@@ -77,6 +77,47 @@ func TestBoardVarsSubstitution(t *testing.T) {
 	}
 }
 
+func TestCrossedMultiple(t *testing.T) {
+	cases := []struct {
+		name                string
+		prev, now, interval int64
+		want                bool
+	}{
+		{"crosses 100k boundary", 90_000, 110_000, 100_000, true},
+		{"stays below boundary", 10_000, 90_000, 100_000, false},
+		{"stays above without new multiple", 110_000, 150_000, 100_000, false},
+		{"exact boundary hit", 90_000, 100_000, 100_000, true},
+		{"just past a prior boundary", 100_000, 100_050, 100_000, false},
+		{"crosses second boundary", 190_000, 210_000, 100_000, true},
+		{"no movement", 100_000, 100_000, 100_000, false},
+		{"first crossing from zero", 0, 1_000, 1_000, true},
+		{"zero interval never crosses", 0, 500_000, 0, false},
+		{"negative prev clamps to zero", -5, 1_000, 1_000, true},
+	}
+	for _, c := range cases {
+		if got := crossedMultiple(c.prev, c.now, c.interval); got != c.want {
+			t.Errorf("%s: crossedMultiple(%d,%d,%d) = %v, want %v", c.name, c.prev, c.now, c.interval, got, c.want)
+		}
+	}
+}
+
+func TestTokenVarsSubstitution(t *testing.T) {
+	e := &AutomationEngine{}
+	a := db.Automation{TriggerKind: db.TriggerToken, TokenScope: db.TokenScopeSession, TokenThreshold: 100_000, MaxIterations: 5}
+	vars := e.tokenVars(a, "SES7", 200_000)
+	got := renderAutomationPrompt("{{scope}} {{sessionId}} {{tokens}}/{{threshold}} #{{iteration}}", vars)
+	want := "session SES7 200000/100000 #1"
+	if got != want {
+		t.Fatalf("got %q want %q", got, want)
+	}
+	// Workspace scope defaults an empty TokenScope to "session" only when unset;
+	// here an explicit workspace scope renders with an empty sessionId.
+	aw := db.Automation{TriggerKind: db.TriggerToken, TokenScope: db.TokenScopeWorkspace, TokenThreshold: 50_000}
+	if v := renderAutomationPrompt("{{scope}}|{{sessionId}}", e.tokenVars(aw, "", 50_000)); v != "workspace|" {
+		t.Fatalf("workspace vars render = %q", v)
+	}
+}
+
 func TestContainsTag(t *testing.T) {
 	if !containsTag([]string{"a", "loop", "b"}, "loop") {
 		t.Fatal("should find loop")

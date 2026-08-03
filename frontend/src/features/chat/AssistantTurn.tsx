@@ -1,6 +1,7 @@
 import { memo, useEffect, useMemo, useState } from 'react'
 import { RotateCcw, ThumbsUp, ThumbsDown, Volume2, Square } from 'lucide-react'
-import type { Agent, Message } from '@/types'
+import type { Message } from '@/types'
+import type { AgentLike } from '@/shared/components/agents/AgentIdentity'
 import { api } from '@/api'
 import { speak, stopSpeaking, ttsAvailable } from '@/shared/lib/tts'
 import { Markdown } from '@/shared/components/markdown/Markdown'
@@ -26,7 +27,9 @@ import {
 
 interface Props {
   message: Message
-  agent?: Agent
+  // AgentLike, not Agent: history can render a DELETED author, which resolves
+  // to an identity-only shape (see resolveAgent).
+  agent?: AgentLike
   // Session this turn belongs to — enables the per-message debug panel (fetches
   // the turn's spend/latency by reply id). Absent in previews with no session.
   sessionId?: string

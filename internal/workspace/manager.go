@@ -289,6 +289,9 @@ func (m *Manager) open(meta Meta) error {
 	database.SetBoardHook(func(ev db.BoardChangeEvent) {
 		go autoEngine.OnBoardChange(context.Background(), ev)
 	})
+	// Token-triggered automations: every recorded provider call signals cumulative
+	// spend so the engine can fire when a session/workspace crosses a threshold.
+	rt.AddUsageHook(autoEngine.OnUsageRecorded)
 
 	// Restart-safe: continue any flow runs interrupted by a previous shutdown.
 	rt.ResumeRunningFlows(context.Background())

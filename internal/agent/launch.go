@@ -18,6 +18,7 @@ const (
 	TriggerSchedule        RunTrigger = "schedule"
 	TriggerAutomationTag   RunTrigger = "automation:tag"
 	TriggerAutomationBoard RunTrigger = "automation:board"
+	TriggerAutomationToken RunTrigger = "automation:token"
 )
 
 // RunSpec describes a run to launch by exactly one driver: a flow (FlowID set,

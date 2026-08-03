@@ -80,11 +80,17 @@ func (d *DB) CreateAgent(ctx context.Context, a Agent) (Agent, error) {
 	return a, d.persistAgentLocked(a)
 }
 
-// DeleteAgent removes an agent, its on-disk file, and every record that becomes
-// unusable once the agent is gone:
-//   - sessions it owns (with their messages, folders and artifacts),
+// DeleteAgent marks an agent deleted and drops the forward-looking records that
+// can no longer fire without it:
 //   - schedules bound to it (AgentID),
 //   - tasks it owns (OwnerAgentID) together with their runs.
+//
+// The agent row itself is KEPT (Deleted=true) and so are the sessions it owns.
+// Conversations are history: destroying them to remove their author loses the
+// user's record of what happened, and every consumer that resolves a message's
+// agent id would fall back to a raw id (or, worse, to a different agent). The
+// row survives so that history still renders the real name/avatar/colour with a
+// "deleted" marker, while ListAgents hides it from rosters and pickers.
 //
 // Removing the schedules here only clears the persisted rows; callers that run a
 // live cron registry (the API server) must reload the scheduler afterwards so
@@ -92,20 +98,16 @@ func (d *DB) CreateAgent(ctx context.Context, a Agent) (Agent, error) {
 func (d *DB) DeleteAgent(ctx context.Context, id string) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	if _, ok := d.agents[id]; !ok {
+	a, ok := d.agents[id]
+	if !ok {
 		return ErrNotFound
 	}
-	delete(d.agents, id)
-	if err := removeFile(d.dir(dirAgents, id+".json")); err != nil {
+	a.Deleted = true
+	a.DeletedAt = now()
+	a.UpdatedAt = a.DeletedAt
+	d.agents[id] = a
+	if err := atomicWriteJSON(d.dir(dirAgents, id+".json"), a); err != nil {
 		return err
-	}
-	for sid, s := range d.sessions {
-		if s.AgentID == id {
-			delete(d.sessions, sid)
-			delete(d.messages, sid)
-			d.deleteSessionFilesLocked(sid)
-			_ = os.RemoveAll(d.dir(dirSessions, sid))
-		}
 	}
 	// Cascade: schedules deliver prompts to this agent, so they can no longer fire.
 	for scid, sc := range d.schedules {
@@ -176,12 +178,30 @@ func (d *DB) GetAgent(ctx context.Context, id string) (Agent, error) {
 	return a, nil
 }
 
-// ListAgents returns all agents, newest first.
+// ListAgents returns the live agents, newest first. Deleted agents are excluded:
+// this backs every server-side "pick an agent" path (defaults, budget rollups,
+// market publish, graph), none of which may ever select a deleted one.
 func (d *DB) ListAgents(ctx context.Context) ([]Agent, error) {
+	return d.listAgents(false)
+}
+
+// ListAgentsWithDeleted also returns agents marked deleted (flagged, so the
+// caller can tell them apart). The UI roster endpoint needs them: a past
+// conversation must still render its author's real name and avatar with a
+// "deleted" marker rather than falling back to a raw id — while the client
+// filters them out of its own pickers.
+func (d *DB) ListAgentsWithDeleted(ctx context.Context) ([]Agent, error) {
+	return d.listAgents(true)
+}
+
+func (d *DB) listAgents(includeDeleted bool) ([]Agent, error) {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 	out := make([]Agent, 0, len(d.agents))
 	for _, a := range d.agents {
+		if a.Deleted && !includeDeleted {
+			continue
+		}
 		out = append(out, a)
 	}
 	sort.SliceStable(out, func(i, j int) bool { return out[i].CreatedAt > out[j].CreatedAt })

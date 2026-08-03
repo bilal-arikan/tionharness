@@ -50,12 +50,22 @@ func (r *Runtime) RecordUsage(ctx context.Context, agent db.Agent, model string,
 	if err := r.db.AddUsageKind(ctx, agent.ID, kind, agent.Provider, model, delta); err != nil {
 		r.logger.Warn("record usage failed", "agent", agent.ID, "error", err)
 	}
+	// Token-automation crossing signal: this call's token contribution and the
+	// session's new cumulative total (filled in below). deltaTokens matches the
+	// token definition token automations use (input+output+cacheRead+cacheWrite).
+	deltaTokens := int64(u.InputTokens) + int64(u.OutputTokens) +
+		int64(u.CacheReadTokens) + int64(u.CacheWriteTokens)
+	sig := UsageRecorded{DeltaTokens: deltaTokens}
 	// Also attribute the same call to its originating session (lifetime rollup),
 	// so spend can be broken down per-conversation. A blank session id (e.g. a
 	// detached auxiliary call without a session stamp) is a no-op in the DB layer.
 	if sid := SessionIDFrom(ctx); sid != "" {
 		if err := r.db.AddSessionUsageKind(ctx, sid, agent.ID, kind, agent.Provider, model, delta); err != nil {
 			r.logger.Warn("record session usage failed", "agent", agent.ID, "session", sid, "error", err)
+		}
+		sig.SessionID = sid
+		if su, err := r.db.GetSessionUsage(ctx, sid); err == nil {
+			sig.SessionNewTotal = su.TotalTokens()
 		}
 		// Debug journal: record this provider call's per-call token spend (model +
 		// input/output/cache) so the per-session debug stream can attribute where
@@ -76,6 +86,9 @@ func (r *Runtime) RecordUsage(ctx context.Context, agent db.Agent, model string,
 			Calls:      providerCalls,
 		})
 	}
+	// Notify token-automation watchers. Detached inside FireUsageRecorded, so it
+	// never blocks the recording turn; a no-op when no usage hook is wired.
+	r.FireUsageRecorded(sig)
 }
 
 // noteResolvedModel remembers which concrete model the provider actually served

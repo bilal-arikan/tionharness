@@ -7,7 +7,28 @@ package db
 const (
 	TriggerTag   = "tag"   // fire when a session carrying TriggerTag ends a turn
 	TriggerBoard = "board" // fire when a board card changes (see BoardOp)
+	TriggerToken = "token" // fire when cumulative token spend crosses a TokenThreshold multiple
 )
+
+// Token automation scopes. A token-triggered automation watches either a single
+// session's lifetime token spend (TokenScopeSession, the default) or the whole
+// workspace's spend for the current day (TokenScopeWorkspace). TokenScope == ""
+// is treated as TokenScopeSession.
+const (
+	TokenScopeSession   = "session"
+	TokenScopeWorkspace = "workspace"
+)
+
+// ValidTokenScope reports whether scope is empty (defaults to session) or a known
+// token-automation scope.
+func ValidTokenScope(scope string) bool {
+	switch scope {
+	case "", TokenScopeSession, TokenScopeWorkspace:
+		return true
+	default:
+		return false
+	}
+}
 
 // Board operation filters for a board-triggered automation. BoardOp == "" is
 // treated as BoardOpMove (the common case: a card dragged to another column).
@@ -52,9 +73,22 @@ type Automation struct {
 	Name string `json:"name"`
 	// TriggerKind selects what fires the automation: TriggerTag (default, "" is
 	// treated the same) watches a finishing session's tags; TriggerBoard watches
-	// board (kanban) card changes. The board fields below apply only when
-	// TriggerKind == TriggerBoard.
+	// board (kanban) card changes; TriggerToken watches cumulative token spend. The
+	// board fields apply only when TriggerKind == TriggerBoard; the token fields
+	// only when TriggerKind == TriggerToken.
 	TriggerKind string `json:"triggerKind,omitempty"`
+	// TokenScope selects what a token automation watches: TokenScopeSession
+	// (default, "" is treated the same) = a single session's lifetime token spend;
+	// TokenScopeWorkspace = the whole workspace's spend for the current day. Ignored
+	// unless TriggerKind == TriggerToken.
+	TokenScope string `json:"tokenScope,omitempty"`
+	// TokenThreshold is the token INTERVAL for a token automation: it fires each
+	// time cumulative spend crosses another multiple of this value (e.g. 100000 →
+	// fires at 100k, 200k, 300k…). Crossing is detected statelessly from the
+	// previous vs new cumulative total at record time, so no per-scope ledger is
+	// needed. "Tokens" here means input+output+cacheRead+cacheWrite. Must be >=
+	// MinTokenThreshold. Ignored unless TriggerKind == TriggerToken.
+	TokenThreshold int `json:"tokenThreshold,omitempty"`
 	// TriggerTag is the session tag this rule watches (TriggerTag kind). A
 	// finishing session whose Tags contain TriggerTag fires the rule.
 	TriggerTag string `json:"triggerTag"`

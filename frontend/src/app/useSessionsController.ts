@@ -23,7 +23,12 @@ export function useSessionsController({
   setError,
   setView,
 }: SessionsControllerParams) {
-  const [agents, setAgents] = useState<Agent[]>([])
+  // allAgents is what the roster endpoint returns: live agents PLUS the ones
+  // marked deleted, which history needs to render a past conversation's author.
+  // `agents` is the live subset and stays the default everything else consumes,
+  // so no picker, roster or default-agent path can ever offer a deleted agent.
+  const [allAgents, setAllAgents] = useState<Agent[]>([])
+  const agents = useMemo(() => allAgents.filter((a) => !a.deleted), [allAgents])
   const [sessions, setSessions] = useState<Session[]>([])
   const [messages, setMessages] = useState<Message[]>([])
   const [activeAgentId, setActiveAgentId] = useState<string | null>(null)
@@ -49,8 +54,8 @@ export function useSessionsController({
   const pendingRouteRef = useRef<Route | null>(INITIAL_ROUTE)
   // Default agent for NEW sessions (chosen from the roster). Persisted so it
   // survives reloads; unmentioned turns in a session use the session's own agent.
-  const [defaultAgentId, setDefaultAgentId] = useState<string | null>(
-    () => localStorage.getItem('tionswarm.defaultAgentId'),
+  const [defaultAgentId, setDefaultAgentId] = useState<string | null>(() =>
+    localStorage.getItem('tionswarm.defaultAgentId'),
   )
   // Live handle to the chat hook for effects declared ABOVE its definition (the
   // messages-load effect): the ref is read post-render when the binding is set,
@@ -74,7 +79,7 @@ export function useSessionsController({
   // is session-based: sessions are listed flat, not nested under an agent).
   useEffect(() => {
     if (!activeWorkspaceId) return
-    setAgents([])
+    setAllAgents([])
     setSessions([])
     setMessages([])
     setActiveAgentId(null)
@@ -84,7 +89,7 @@ export function useSessionsController({
     Promise.all([api.listAgents(), api.listSessions()])
       .then(([ag, ss]) => {
         if (cancelled) return
-        setAgents(ag)
+        setAllAgents(ag)
         setSessions(ss)
         // Default selection: the most recent WRITABLE session. The sidebar now
         // lists every kind, but landing a returning user on a read-only flow or
@@ -102,11 +107,7 @@ export function useSessionsController({
           if (want.view === 'chat' && want.id && ss.some((s) => s.id === want.id)) {
             sid = want.id
             aid = ss.find((s) => s.id === want.id)?.agentId ?? aid
-          } else if (
-            want.view === 'agents' &&
-            want.id &&
-            ag.some((a) => a.id === want.id)
-          ) {
+          } else if (want.view === 'agents' && want.id && ag.some((a) => a.id === want.id)) {
             aid = want.id
           }
         }
@@ -124,14 +125,25 @@ export function useSessionsController({
     }
   }, [activeWorkspaceId, setError])
 
-  // Keep the default agent (for new sessions) valid: fall back to the first
-  // agent when unset or pointing at a removed agent.
+  // True when the stored default points at an agent that was DELETED — as
+  // opposed to one that merely isn't in this workspace (the preference is
+  // global, agents are per-workspace). Only allAgents can tell the two apart.
+  const defaultAgentDeleted = useMemo(
+    () => !!defaultAgentId && !!allAgents.find((a) => a.id === defaultAgentId)?.deleted,
+    [allAgents, defaultAgentId],
+  )
+
+  // Keep the default agent (for new sessions) valid. An id that is simply absent
+  // from this workspace self-heals to the first agent, silently — that is a
+  // workspace switch, not a deletion. A DELETED agent is left in place so the
+  // empty state can say so: quietly starting the next chat with a different
+  // agent than the user picked is worse than telling them their pick is gone.
   useEffect(() => {
-    if (agents.length === 0) return
+    if (agents.length === 0 || defaultAgentDeleted) return
     if (!defaultAgentId || !agents.some((a) => a.id === defaultAgentId)) {
       setDefaultAgentId(agents[0].id)
     }
-  }, [agents, defaultAgentId])
+  }, [agents, defaultAgentId, defaultAgentDeleted])
 
   // Bumped on every transcript load so only the newest one is allowed to commit:
   // a fast A → B → A switch would otherwise let B's late response overwrite A's
@@ -194,26 +206,37 @@ export function useSessionsController({
       setSessionArtifacts([])
       return
     }
-    api.listArtifacts().then(setSessionArtifacts).catch(() => {})
+    api
+      .listArtifacts()
+      .then(setSessionArtifacts)
+      .catch(() => {})
   }, [activeWorkspaceId, activeSessionId, meterRefresh])
 
   // Reload the session list (fresh order, updated times, unread flags).
   const refreshSessions = useCallback(() => {
-    api.listSessions().then(setSessions).catch(() => {})
+    api
+      .listSessions()
+      .then(setSessions)
+      .catch(() => {})
   }, [])
 
   // Change which agent answers the active chat session (the composer's mandatory
   // agent dropdown — "@mention" routing was removed). Updates the local selection
   // immediately and persists it to the session so it survives a reload.
-  const changeChatAgent = useCallback((id: string) => {
-    setActiveAgentId(id)
-    const sid = activeSessionIdRef.current
-    if (!sid) return
-    api
-      .setSessionAgent(sid, id)
-      .then(() => setSessions((prev) => prev.map((s) => (s.id === sid ? { ...s, agentId: id } : s))))
-      .catch((e) => setError((e as Error).message))
-  }, [setError])
+  const changeChatAgent = useCallback(
+    (id: string) => {
+      setActiveAgentId(id)
+      const sid = activeSessionIdRef.current
+      if (!sid) return
+      api
+        .setSessionAgent(sid, id)
+        .then(() =>
+          setSessions((prev) => prev.map((s) => (s.id === sid ? { ...s, agentId: id } : s))),
+        )
+        .catch((e) => setError((e as Error).message))
+    },
+    [setError],
+  )
 
   // Select a session: reflect its default agent and clear its unread flag.
   // When a cross-session search result is clicked, the target message id is
@@ -258,14 +281,17 @@ export function useSessionsController({
   )
 
   // ---- per-session actions (settings menu) ----
-  const renameSession = useCallback(async (id: string, title: string) => {
-    try {
-      await api.setSessionTitle(id, title)
-      setSessions((prev) => prev.map((s) => (s.id === id ? { ...s, title } : s)))
-    } catch (e) {
-      setError((e as Error).message)
-    }
-  }, [setError])
+  const renameSession = useCallback(
+    async (id: string, title: string) => {
+      try {
+        await api.setSessionTitle(id, title)
+        setSessions((prev) => prev.map((s) => (s.id === id ? { ...s, title } : s)))
+      } catch (e) {
+        setError((e as Error).message)
+      }
+    },
+    [setError],
+  )
 
   // Archive / restore a session (the sidebar Active/Archived filter). Archiving
   // updates state locally so the row leaves the active list at once; when the
@@ -275,7 +301,9 @@ export function useSessionsController({
       try {
         await api.setSessionState(id, archived ? 'archived' : 'active')
         setSessions((prev) => {
-          const next = prev.map((s) => (s.id === id ? { ...s, state: archived ? 'archived' : 'active' } : s))
+          const next = prev.map((s) =>
+            s.id === id ? { ...s, state: archived ? 'archived' : 'active' } : s,
+          )
           if (archived && activeSessionId === id) {
             const fallback = next.find((s) => s.id !== id && s.state !== 'archived')
             setActiveSessionId(fallback?.id ?? null)
@@ -291,32 +319,41 @@ export function useSessionsController({
   )
 
   // Pin / unpin a session (sidebar). Optimistic; ListSessions floats pinned to top.
-  const setSessionPinned = useCallback(async (id: string, pinned: boolean) => {
-    setSessions((prev) => prev.map((s) => (s.id === id ? { ...s, pinned } : s)))
-    try {
-      await api.setSessionPinned(id, pinned)
-      refreshSessions()
-    } catch (e) {
-      setError((e as Error).message)
-    }
-  }, [refreshSessions, setError])
+  const setSessionPinned = useCallback(
+    async (id: string, pinned: boolean) => {
+      setSessions((prev) => prev.map((s) => (s.id === id ? { ...s, pinned } : s)))
+      try {
+        await api.setSessionPinned(id, pinned)
+        refreshSessions()
+      } catch (e) {
+        setError((e as Error).message)
+      }
+    },
+    [refreshSessions, setError],
+  )
 
-  const copySessionPath = useCallback(async (id: string) => {
-    try {
-      const { path } = await api.sessionPath(id)
-      await copyToClipboard(path, 'Yolu kopyalayın (Ctrl+C, Enter):')
-    } catch (e) {
-      setError((e as Error).message)
-    }
-  }, [setError])
+  const copySessionPath = useCallback(
+    async (id: string) => {
+      try {
+        const { path } = await api.sessionPath(id)
+        await copyToClipboard(path, 'Yolu kopyalayın (Ctrl+C, Enter):')
+      } catch (e) {
+        setError((e as Error).message)
+      }
+    },
+    [setError],
+  )
 
-  const revealSession = useCallback(async (id: string) => {
-    try {
-      await api.revealSession(id)
-    } catch (e) {
-      setError((e as Error).message)
-    }
-  }, [setError])
+  const revealSession = useCallback(
+    async (id: string) => {
+      try {
+        await api.revealSession(id)
+      } catch (e) {
+        setError((e as Error).message)
+      }
+    },
+    [setError],
+  )
 
   const deleteSession = useCallback(
     async (id: string) => {
@@ -357,22 +394,28 @@ export function useSessionsController({
 
   // Rate an assistant turn (👍/👎). Optimistic: update the local message, then
   // persist; the new feedback rides into session.jsonl for the reflector/eval.
-  const rateMessage = useCallback(async (id: string, rating: number) => {
-    const sid = activeSessionIdRef.current
-    if (!sid) return
-    setMessages((prev) =>
-      prev.map((m) =>
-        m.id === id
-          ? { ...m, feedback: rating === 0 ? undefined : { rating, at: Math.floor(Date.now() / 1000) } }
-          : m,
-      ),
-    )
-    try {
-      await api.setMessageFeedback(sid, id, rating)
-    } catch (e) {
-      setError((e as Error).message)
-    }
-  }, [setError])
+  const rateMessage = useCallback(
+    async (id: string, rating: number) => {
+      const sid = activeSessionIdRef.current
+      if (!sid) return
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === id
+            ? {
+                ...m,
+                feedback: rating === 0 ? undefined : { rating, at: Math.floor(Date.now() / 1000) },
+              }
+            : m,
+        ),
+      )
+      try {
+        await api.setMessageFeedback(sid, id, rating)
+      } catch (e) {
+        setError((e as Error).message)
+      }
+    },
+    [setError],
+  )
 
   // Pick the default agent for NEW sessions (from the roster).
   const pickDefaultAgent = useCallback((id: string) => {
@@ -398,16 +441,19 @@ export function useSessionsController({
 
   // Open an agent's settings page (Agents view, that agent selected). Used by the
   // chat transcript so clicking an assistant's avatar/name jumps to its settings.
-  const openAgentSettings = useCallback((id: string) => {
-    setActiveAgentId(id)
-    setView('agents')
-  }, [setView])
+  const openAgentSettings = useCallback(
+    (id: string) => {
+      setActiveAgentId(id)
+      setView('agents')
+    },
+    [setView],
+  )
 
   const createAgent = useCallback(
     async (name: string, soul: string, provider: string, model?: string) => {
       try {
         const agent = await api.createAgent({ name, soul, provider, model })
-        setAgents((prev) => [agent, ...prev])
+        setAllAgents((prev) => [agent, ...prev])
         // Focus the new agent (so Agents/Tools views select it) but do NOT make
         // it the default for new chats: creating an agent must not silently
         // change the user's chosen default. The very first agent still becomes
@@ -423,25 +469,40 @@ export function useSessionsController({
 
   const updateAgent = useCallback(async (id: string, patch: AgentPatch) => {
     const updated = await api.updateAgent(id, patch)
-    setAgents((prev) => prev.map((a) => (a.id === id ? updated : a)))
+    setAllAgents((prev) => prev.map((a) => (a.id === id ? updated : a)))
   }, [])
 
-  // Delete an agent (and its owned sessions); refresh the affected lists.
-  const deleteAgent = useCallback(async (id: string) => {
-    try {
-      await api.deleteAgent(id)
-      setAgents((prev) => prev.filter((a) => a.id !== id))
-      // The agent's sessions were removed server-side; reload the list and drop
-      // the active session if it belonged to the deleted agent.
+  // Delete an agent. The server soft-deletes it: schedules and owned tasks go,
+  // the agent row and its SESSIONS stay. So mark it deleted here rather than
+  // dropping it — `agents` (the live subset) loses it immediately, while history
+  // can still resolve its name and avatar. The server refuses (409) while the
+  // agent has a turn in flight; that message reaches the user through setError.
+  const deleteAgent = useCallback(
+    async (id: string) => {
       try {
-        const fresh = await api.listSessions()
-        setSessions(fresh)
-        setActiveSessionId((cur) => (cur && fresh.some((s) => s.id === cur) ? cur : fresh[0]?.id ?? null))
-      } catch { /* ignore */ }
-    } catch (e) {
-      setError((e as Error).message)
-    }
-  }, [setError])
+        await api.deleteAgent(id)
+        setAllAgents((prev) =>
+          prev.map((a) =>
+            a.id === id ? { ...a, deleted: true, deletedAt: Date.now() / 1000 } : a,
+          ),
+        )
+        // Its sessions survive, but a cascade dropped its schedules/tasks — refresh
+        // the session list so any state derived from those is current.
+        try {
+          const fresh = await api.listSessions()
+          setSessions(fresh)
+          setActiveSessionId((cur) =>
+            cur && fresh.some((s) => s.id === cur) ? cur : (fresh[0]?.id ?? null),
+          )
+        } catch {
+          /* ignore */
+        }
+      } catch (e) {
+        setError((e as Error).message)
+      }
+    },
+    [setError],
+  )
 
   const newSession = useCallback(async () => {
     const aid = defaultAgentId ?? agents[0]?.id
@@ -461,16 +522,17 @@ export function useSessionsController({
   }, [defaultAgentId, agents, discardEmptyFresh, activeSessionIdRef])
 
   // Regenerate a session's title from its conversation on demand.
-  const regenerateSessionTitle = useCallback(async (sessionId: string) => {
-    try {
-      const { title } = await api.generateSessionTitle(sessionId)
-      setSessions((prev) =>
-        prev.map((s) => (s.id === sessionId ? { ...s, title } : s)),
-      )
-    } catch (e) {
-      setError((e as Error).message)
-    }
-  }, [setError])
+  const regenerateSessionTitle = useCallback(
+    async (sessionId: string) => {
+      try {
+        const { title } = await api.generateSessionTitle(sessionId)
+        setSessions((prev) => prev.map((s) => (s.id === sessionId ? { ...s, title } : s)))
+      } catch (e) {
+        setError((e as Error).message)
+      }
+    },
+    [setError],
+  )
 
   // Whether the open session accepts new user turns. Task / flow / schedule
   // transcripts are read-only run logs: the composer is hidden for them. An
@@ -484,25 +546,57 @@ export function useSessionsController({
 
   return {
     // state
-    agents, setAgents,
-    sessions, setSessions,
-    messages, setMessages,
-    activeAgentId, activeSessionId,
-    bootstrapping, messagesLoading,
+    // agents = live only (pickers, rosters, defaults).
+    // allAgents = live + deleted, for resolving the author of past history.
+    agents,
+    allAgents,
+    setAgents: setAllAgents,
+    sessions,
+    setSessions,
+    messages,
+    setMessages,
+    activeAgentId,
+    activeSessionId,
+    bootstrapping,
+    messagesLoading,
     activeSessionWritable,
     sessionArtifacts,
     defaultAgentId,
-    composerKey, setComposerKey,
-    focusSessionId, setFocusSessionId,
-    scrollToMsgId, setScrollToMsgId,
-    meterRefresh, setMeterRefresh, bumpMeter,
+    defaultAgentDeleted,
+    composerKey,
+    setComposerKey,
+    focusSessionId,
+    setFocusSessionId,
+    scrollToMsgId,
+    setScrollToMsgId,
+    meterRefresh,
+    setMeterRefresh,
+    bumpMeter,
     // refs
-    activeSessionIdRef, messagesRef, chatRef, pendingRouteRef,
+    activeSessionIdRef,
+    messagesRef,
+    chatRef,
+    pendingRouteRef,
     // actions
-    refreshSessions, changeChatAgent, selectSession, renameSession,
-    setSessionArchived, setSessionPinned, copySessionPath, revealSession,
-    deleteSession, deleteMessage, rateMessage, pickDefaultAgent, pickAgent,
-    focusAgent, openAgentSettings, createAgent, updateAgent, deleteAgent,
-    newSession, regenerateSessionTitle,
+    refreshSessions,
+    changeChatAgent,
+    selectSession,
+    renameSession,
+    setSessionArchived,
+    setSessionPinned,
+    copySessionPath,
+    revealSession,
+    deleteSession,
+    deleteMessage,
+    rateMessage,
+    pickDefaultAgent,
+    pickAgent,
+    focusAgent,
+    openAgentSettings,
+    createAgent,
+    updateAgent,
+    deleteAgent,
+    newSession,
+    regenerateSessionTitle,
   }
 }

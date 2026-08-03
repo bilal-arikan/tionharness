@@ -510,7 +510,7 @@ export default function App() {
           >
             <SessionsSidebar
               sessions={ctl.sessions}
-              agents={ctl.agents}
+              agents={ctl.allAgents}
               activeSessionId={ctl.activeSessionId}
               streamingSessionIds={chat.streamingSessions}
               runtimeById={runtimeById}
@@ -601,6 +601,8 @@ export default function App() {
             sessionCoordination={ctl.sessions.find((s) => s.id === ctl.activeSessionId)}
             onSelectSession={ctl.selectSession}
             defaultAgentId={ctl.defaultAgentId}
+            defaultAgentDeleted={ctl.defaultAgentDeleted}
+            allAgents={ctl.allAgents}
             onNewSession={ctl.newSession}
             onSelectDefaultAgent={ctl.pickDefaultAgent}
             onGoToAgents={() => selectView('agents')}

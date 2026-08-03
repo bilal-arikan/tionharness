@@ -69,6 +69,16 @@ type Agent struct {
 	// Agents may only edit/delete entities that were created by an agent.
 	CreatedBy string `json:"createdBy,omitempty"`
 
+	// Deleted marks the agent as removed WITHOUT destroying it: the sessions it
+	// owns stay readable and still resolve the name/avatar/colour they were
+	// written with, so past conversations render their author as deleted instead
+	// of degrading to a raw id. A deleted agent drops out of ListAgents (rosters,
+	// pickers, defaults) while GetAgent still returns it — that is what history
+	// rendering reads. Same shape as Session.State "archived" and
+	// Artifact.Archived: put away, never destroyed.
+	Deleted   bool  `json:"deleted,omitempty"`
+	DeletedAt int64 `json:"deletedAt,omitempty"`
+
 	CreatedAt int64 `json:"createdAt"`
 	UpdatedAt int64 `json:"updatedAt"`
 }

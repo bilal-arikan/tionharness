@@ -7,7 +7,7 @@ import { useCatalog, resolveModelLabel } from '@/shared/lib/catalog'
 // are required; the rest are optional so callers can pass a full Agent or a thin
 // summary (e.g. a session participant with only id/name/avatar/color).
 export type AgentLike = Pick<Agent, 'id' | 'name'> &
-  Partial<Pick<Agent, 'avatar' | 'color' | 'provider' | 'model'>>
+  Partial<Pick<Agent, 'avatar' | 'color' | 'provider' | 'model' | 'deleted'>>
 
 type Size = 'sm' | 'md' | 'lg'
 
@@ -92,12 +92,22 @@ export function AgentIdentity({
         <span className="flex min-w-0 items-baseline gap-1.5">
           <span
             className={`truncate ${s.name} ${
-              dim ? 'italic text-[var(--color-text-dim)]' : 'text-[var(--color-text)]'
+              dim || agent.deleted
+                ? 'italic text-[var(--color-text-dim)]'
+                : 'text-[var(--color-text)]'
             }`}
           >
             {agent.name}
             {nameSuffix}
           </span>
+          {/* A deleted agent still appears throughout history — its sessions
+              outlive it — so say so here once instead of leaving every view to
+              guess (or to quietly show nothing). */}
+          {agent.deleted && (
+            <span className="shrink-0 rounded bg-[var(--color-surface-2)] px-1 py-px text-[10px] font-medium text-[var(--color-text-dim)]">
+              silinmiş
+            </span>
+          )}
         </span>
         {/* Second line: id first (fixed left anchor, never truncated), then the
             secondary text (model) which absorbs the remaining width. */}

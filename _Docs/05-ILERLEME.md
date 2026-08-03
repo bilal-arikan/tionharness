@@ -2,6 +2,48 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-08-03**
 
+## Token-eşiği tetikleyicili otomasyonlar (3. tetik türü) ✅ (2026-08-03)
+
+- **İstek:** "Belli token geçilince kendi kendine optimizasyon/temizlik/bakım
+  otomasyonu çağır." Otomasyon motoruna **üçüncü tetik türü** (`TriggerKind="token"`)
+  eklendi — etiket ve pano'nun yanına.
+- **Semantik — "her-N" (tekrarlı, stateless):** `TokenThreshold` bir *aralık*tır;
+  kümülatif harcama her katını geçince ateşler (100k → 100k/200k/300k…). Geçiş,
+  `RecordUsage` içinde *önceki* vs *yeni* toplamdan `crossedMultiple`'la stateless
+  tespit edilir → **per-scope defter yok**. `TokenScope`: `session` (oturum ömrü,
+  `SessionUsage`) veya `workspace` (bugünkü toplam, `WorkspaceTokensToday`). Token =
+  `input+output+cacheRead+cacheWrite`. Guardrail'ler (cooldown/maxIter/expiry) ortak.
+- **Akış:** `agent/budget.go` `RecordUsage` → `Runtime.FireUsageRecorded`
+  (`UsageRecorded{SessionID,DeltaTokens,SessionNewTotal}`, detached) → `rt.AddUsageHook`
+  (workspace manager) → `AutomationEngine.OnUsageRecorded` → `fireToken` (guardsPass +
+  LaunchRun; session spawn'ı geçiş oturumunu `ParentSessionID` yapar, kendini döngülemez).
+- **Dosyalar:** `db/models_automation.go` (TriggerToken + TokenScope/TokenThreshold +
+  ValidTokenScope), `db/automation_limits.go` (ValidateTokenThreshold, min 1000),
+  `db/store_usage.go` (WorkspaceTokensToday) + `store_session_usage.go` (TotalTokens),
+  `agent/runtime.go` (usageHooks + FireUsageRecorded), `agent/budget.go`, `agent/automation.go`
+  (OnUsageRecorded/fireToken/tokenVars/crossedMultiple), `agent/launch.go`,
+  `workspace/manager.go`, `api/automations.go`, `tools/builtin_automationmgmt.go` + testler.
+  Frontend: `types/task.ts`, `api/tasks.ts`, `schedules/automationMeta.ts` + `AutomationFields`/
+  `AutomationModal`/`AutomationCard`/`AutomationBoard` (**4. şerit ⚡ Token**). Detay `46` §2.6.
+
+## Handoff continuation "Sohbet" filtresinde görünmüyordu → chat kind mirası ✅ (2026-08-03)
+
+- **Sorun:** Handoff (context reset) sonrası taze devam oturumu sidebar'da
+  görünmüyordu. Kök neden: `HandoffSession` → `SpawnSession` continuation'ı **her
+  zaman `kind="spawned"`** damgalıyordu; sidebar'ın **"Sohbet"** kind-filtresi ise
+  yalnız `kind ∈ {"", "chat"}`'i gösteriyor (`matchesKindFilter`). `selectSession`
+  transcript'i açıyor ama kind filtresini değiştirmiyor → satır gizli kalıyor.
+  Çelişki: `isWritableSessionKind` yorumu spawned/handoff çocuklarının **bilerek
+  insan-devamlı sohbetler** olduğunu söylüyor, ama "Sohbet" sekmesi onları dışlıyordu.
+- **Çözüm:** `SpawnOptions.Kind` override alanı (worker branch'ini ezmez) +
+  `continuationKind(parentKind)`: **chat ebeveyn (veya legacy `""`) → `chat`**
+  continuation, diğer tüm türler yazılabilir `spawned`'a düşer (task/flow/schedule
+  non-writable, worker/flow-coordinator back-link taşıyan tree kind'ları sızmasın).
+  Böylece sohbetten yapılan handoff "Sohbet" sekmesinde ebeveyninin yanında belirir.
+- **Dosyalar:** `internal/agent/spawn.go` (`SpawnOptions.Kind` + override),
+  `internal/agent/handoff.go` (`continuationKind` + spawn'a geçiş),
+  `internal/agent/handoff_test.go` (yeni). Detay `35`.
+
 ## Koordinatör donma koruması: prose-regex → yargıç + gecikme tarayıcısı ✅ (2026-08-03)
 
 - **Sorun (WS17/SES101 nüksü):** 2026-08-02'de eklenen `guardSpawnHallucination`

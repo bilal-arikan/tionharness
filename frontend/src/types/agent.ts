@@ -18,6 +18,10 @@ export interface Agent {
   avatar?: string
   color?: string
   mcpEnabled: boolean
+  // Soft delete: the agent was removed but its conversations survive, so history
+  // still resolves its name/avatar. Filtered out of pickers, kept for rendering.
+  deleted?: boolean
+  deletedAt?: number
   // Legacy allowlist (JSON array); retained for subagent profiles. User-facing
   // agents leave it empty and use blockedTools instead.
   allowedTools: string
@@ -74,6 +78,10 @@ export interface AgentToolEntry {
 
 export interface AgentTools {
   mcpEnabled: boolean
+  // Soft delete: the agent was removed but its conversations survive, so history
+  // still resolves its name/avatar. Filtered out of pickers, kept for rendering.
+  deleted?: boolean
+  deletedAt?: number
   // Per-agent override map: tool name (or "prefix*" pattern) → tier. A tool
   // absent from the map follows its defaultVisibility. This is the single model
   // for both visibility and banning ('blocked').
@@ -100,11 +108,7 @@ export interface ToolAccessEntry {
 
 // Why a server's tools are (not) in the agent's context.
 export type ToolAccessServerStatus =
-  | 'in-context'
-  | 'hidden-only'
-  | 'disabled'
-  | 'agent-mcp-off'
-  | 'no-tools'
+  'in-context' | 'hidden-only' | 'disabled' | 'agent-mcp-off' | 'no-tools'
 
 // One MCP server as the inspector shows it: config identity, how many of ITS
 // tools are eager/lazy for this agent, and its live pool connections. A disabled
@@ -135,6 +139,10 @@ export interface AgentToolAccess {
   agentName: string
   provider: string
   mcpEnabled: boolean
+  // Soft delete: the agent was removed but its conversations survive, so history
+  // still resolves its name/avatar. Filtered out of pickers, kept for rendering.
+  deleted?: boolean
+  deletedAt?: number
   eager: ToolAccessEntry[]
   lazy: ToolAccessEntry[]
   blocked: string[]

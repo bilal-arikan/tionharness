@@ -133,6 +133,13 @@ func (r *Runtime) HandoffSession(ctx context.Context, session db.Session, agent 
 		CreatedBy:       opts.CreatedBy,
 		ParentSessionID: session.ID,
 		Title:           "↪ " + handoffTitle(session),
+		// Keep a chat handoff in the "Sohbet" sidebar filter next to its parent:
+		// the default "spawned" kind is hidden under that tab, so a context reset
+		// from a chat would otherwise vanish from where the user expects it. Only
+		// chat parents inherit; task/flow/schedule/worker parents stay "spawned"
+		// (writable), since their non-writable kinds must not leak onto the
+		// human-continuable continuation.
+		Kind: continuationKind(session.Kind),
 		// Continue in the same directory the parent worked in (its explicit
 		// override, else the workspace default seeded by SpawnSession).
 		WorkingDir: strings.TrimSpace(session.WorkingDir),
@@ -292,6 +299,22 @@ func buildContinuationPrompt(tmpl, oldSessionID, artifactID, filePath, handoffTe
 		"artifact":   artifactID,
 		"fileNote":   fileNote,
 	})
+}
+
+// continuationKind picks the session kind for a handoff continuation. A chat
+// parent (kind "chat" or legacy "") yields a "chat" continuation so it appears
+// under the sidebar's "Sohbet" filter next to the thread it continues. Any other
+// parent kind falls back to "spawned" — the continuation is always a single-agent
+// human-continuable transcript, and inheriting a non-writable kind (task/flow/
+// schedule) or a tree kind (worker/flow-coordinator, which also carry back-links
+// this fresh session lacks) would misfile or misrender it.
+func continuationKind(parentKind string) string {
+	switch strings.TrimSpace(parentKind) {
+	case "", "chat":
+		return "chat"
+	default:
+		return "spawned"
+	}
 }
 
 // handoffTitle derives a short label for the handoff artifact + continuation

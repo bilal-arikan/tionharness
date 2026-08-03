@@ -11,6 +11,9 @@ import { Button } from '@/shared/components'
 interface Props {
   agents: Agent[]
   defaultAgentId: string | null
+  // The stored default points at a DELETED agent — say so instead of silently
+  // starting the next chat with someone else.
+  defaultAgentDeleted?: boolean
   // Start a fresh chat with the current default agent (ctl.newSession).
   onNewSession: () => void
   // Set which agent newSession will use (ctl.pickAgent).
@@ -34,13 +37,19 @@ function AgentDot({ agent }: { agent: Agent }) {
 export function ChatEmptyState({
   agents,
   defaultAgentId,
+  defaultAgentDeleted,
   onNewSession,
   onSelectDefaultAgent,
   onGoToAgents,
 }: Props) {
   const hasAgents = agents.length > 0
-  // The agent a new chat would open with (explicit default, else the first one).
-  const starting = agents.find((a) => a.id === defaultAgentId) ?? agents[0]
+  // The agent a new chat would open with. When the stored default was DELETED we
+  // deliberately do NOT fall through to agents[0]: substituting a different agent
+  // behind the user's back is how a chat gets started with someone they did not
+  // choose. They are told, and pick again.
+  const starting = defaultAgentDeleted
+    ? undefined
+    : (agents.find((a) => a.id === defaultAgentId) ?? agents[0])
 
   return (
     <div className="flex min-h-0 flex-1 items-center justify-center p-6">
@@ -58,6 +67,16 @@ export function ChatEmptyState({
             <p className="mb-5 text-sm text-[var(--color-text-dim)]">
               Bir ajan seç ve sohbete başla. Mesajlar seçtiğin ajanla yürütülür.
             </p>
+
+            {defaultAgentDeleted && (
+              <p
+                data-testid="chat-empty-default-deleted"
+                className="mb-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-left text-xs text-[var(--color-text-dim)]"
+              >
+                Seçili ajan silinmiş. Geçmiş sohbetleri duruyor; devam etmek için başka bir ajan
+                seç.
+              </p>
+            )}
 
             {/* Agent picker — only meaningful with more than one agent. Single
                 agent: just show which one will be used. */}
@@ -94,8 +113,8 @@ export function ChatEmptyState({
           <>
             <h2 className="mb-1 text-lg font-semibold">Önce bir ajan oluştur</h2>
             <p className="mb-5 text-sm text-[var(--color-text-dim)]">
-              Sohbet başlatmak için en az bir ajana ihtiyacın var. Ajanlar ekranından hızlıca
-              bir tane oluşturabilirsin.
+              Sohbet başlatmak için en az bir ajana ihtiyacın var. Ajanlar ekranından hızlıca bir
+              tane oluşturabilirsin.
             </p>
             <Button onClick={onGoToAgents} size="lg" className="w-full justify-center">
               <Bot size={16} /> Ajan oluştur

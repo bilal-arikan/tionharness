@@ -1,5 +1,6 @@
 import { memo } from 'react'
-import type { Agent, Message } from '@/types'
+import type { Message } from '@/types'
+import type { AgentLike } from '@/shared/components/agents/AgentIdentity'
 import { AgentHeader } from './AgentHeader'
 import { MessageTime } from './MessageMeta'
 import { DeleteButton } from './DeleteButton'
@@ -23,7 +24,7 @@ export const PeerTurn = memo(function PeerTurn({
 }: {
   message: Message
   // The authoring agent (resolved from Message.authorId); undefined when unknown.
-  sender?: Agent
+  sender?: AgentLike
   // "→ <name>" cue for the addressee (recipientId), or "herkes" for a broadcast.
   recipientLabel?: string
   onDelete?: (id: string) => void
@@ -37,7 +38,9 @@ export const PeerTurn = memo(function PeerTurn({
           {sender ? (
             <AgentHeader agent={sender} onOpenAgent={onOpenAgent} />
           ) : m.authorId ? (
-            <div className="mb-1.5 font-mono text-xs text-[var(--color-text-dim)]">{m.authorId}</div>
+            <div className="mb-1.5 font-mono text-xs text-[var(--color-text-dim)]">
+              {m.authorId}
+            </div>
           ) : null}
           <div className="whitespace-pre-wrap break-words text-sm leading-relaxed text-[var(--color-text)]">
             {m.text}

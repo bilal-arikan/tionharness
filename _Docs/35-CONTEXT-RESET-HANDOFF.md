@@ -59,9 +59,15 @@ graph LR
    `db.SetSessionHandoffArtifact` ile eski oturuma id'si işlenir.
 4. **(Ops.) Dosya yaz:** `HandoffWriteFile` açıksa `<workdir>/.tionswarm/handoff.md`
    (Anthropic'in "disk üstü progress dosyası" deseni; best-effort).
-5. **Spawn:** `SpawnSession(agent, continuationPrompt, {ParentSessionID: eski})` —
+5. **Spawn:** `SpawnSession(agent, continuationPrompt, {ParentSessionID: eski, Kind: …})` —
    **taze** bağımsız oturum. `continuationPrompt` handoff'u **inline** gömer + eski
    SID + artifact id + recovery yönergesi taşır (tek-tur araç gezintisi gerekmez).
+   **Continuation kind** `continuationKind(eski.Kind)` ile seçilir: **chat** ebeveyn
+   (veya legacy `""`) → `chat` continuation, böylece devam oturumu sidebar'ın
+   **"Sohbet"** kind-filtresinde ebeveyninin yanında görünür (varsayılan `spawned`
+   o sekmede gizli kalırdı → handoff sonrası "yeni oturum görünmüyor" hatası). Diğer
+   tüm ebeveyn türleri (task/flow/schedule/worker/flow-coordinator) yazılabilir
+   `spawned`'a düşer — non-writable/tree kind insan-devamlı continuation'a sızmaz.
 6. **Zincir + kapanış:** yeni oturum `ParentSessionID = eski`; eski oturuma
    **tombstone** asistan mesajı ("↪ Context reset — devam: SES…").
 

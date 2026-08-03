@@ -1,4 +1,4 @@
-import type { Agent } from '@/types'
+import type { AgentLike } from '@/shared/components/agents/AgentIdentity'
 import { AgentIdentity } from '@/shared/components/agents/AgentIdentity'
 
 // AgentHeader is the small avatar + name line atop an assistant bubble, telling
@@ -13,7 +13,9 @@ export function AgentHeader({
   agent,
   onOpenAgent,
 }: {
-  agent?: Agent
+  // AgentLike, not Agent: history can render a DELETED author, which resolves
+  // to an identity-only shape (see resolveAgent).
+  agent?: AgentLike
   onOpenAgent?: (id: string) => void
 }) {
   if (!agent) return null

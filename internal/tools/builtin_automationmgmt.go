@@ -47,27 +47,32 @@ func NewCreateAutomationTool(database *db.DB, actorID string) CreateAutomationTo
 func (CreateAutomationTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name: "create_automation",
-		Description: "Create an event-driven automation. Two trigger kinds: (a) triggerKind='tag' (default) — when a session " +
+		Description: "Create an event-driven automation. Three trigger kinds: (a) triggerKind='tag' (default) — when a session " +
 			"carrying triggerTag finishes a turn, its final reply is rendered into promptTemplate ({{result}}, {{title}}, " +
 			"{{tag}}, {{sessionId}}) and the target runs; (b) triggerKind='board' — when a kanban card changes (created/moved/" +
 			"updated/deleted), the target runs with the card context ({{taskId}}, {{title}}, {{op}}, {{from}}, {{to}}, " +
-			"{{toLabel}}, {{tags}}, {{owner}}, {{priority}}). The target is EITHER an agent (targetAgentId → a NEW session is spawned) OR an orchestration flow " +
+			"{{toLabel}}, {{tags}}, {{owner}}, {{priority}}); (c) triggerKind='token' — when cumulative token spend crosses each " +
+			"tokenThreshold multiple (tokenScope='session' watches one session's lifetime spend, 'workspace' the whole day's), " +
+			"the target runs with {{tokens}}, {{threshold}}, {{scope}}, {{sessionId}} — good for self-maintenance/cleanup. " +
+			"The target is EITHER an agent (targetAgentId → a NEW session is spawned) OR an orchestration flow " +
 			"(flowId → the rendered prompt is run as the flow input). For a tag automation the spawned session carries " +
-			"triggerTag by default (a self-continuing loop bounded by maxIterations); board automations do not self-loop.",
+			"triggerTag by default (a self-continuing loop bounded by maxIterations); board and token automations do not self-loop.",
 		InputSchema: json.RawMessage(`{
 			"type":"object",
 			"properties":{
 				"name":{"type":"string","description":"Optional display name"},
-				"triggerKind":{"type":"string","enum":["tag","board"],"description":"What fires the automation: 'tag' (default; session tag) or 'board' (kanban card change)"},
+				"triggerKind":{"type":"string","enum":["tag","board","token"],"description":"What fires the automation: 'tag' (default; session tag), 'board' (kanban card change), or 'token' (token-spend threshold crossing)"},
 				"triggerTag":{"type":"string","description":"[tag kind] The session tag that fires this automation when a tagged session's turn ends"},
 				"boardOp":{"type":"string","enum":["any","move","create","update","delete"],"description":"[board kind] Which card change fires it (default 'move')"},
 				"boardFromState":{"type":"string","description":"[board kind] Only fire when a card LEAVES this column (empty = any source)"},
 				"boardToState":{"type":"string","description":"[board kind] Only fire when a card ENTERS this column (empty = any target)"},
 				"boardPriority":{"type":"integer","description":"[board kind] Fire order among automations matching the SAME card change; lower runs first (default 0). Use it to sequence two rules on one column instead of letting them race."},
 				"boardExclusive":{"type":"boolean","description":"[board kind] Claim sole ownership of a matching card change: only this automation fires and every other match is suppressed (default false). Among several exclusive matches the lowest boardPriority wins."},
+				"tokenScope":{"type":"string","enum":["session","workspace"],"description":"[token kind] What to watch: 'session' (default; one session's lifetime tokens) or 'workspace' (whole workspace's tokens today)"},
+				"tokenThreshold":{"type":"integer","description":"[token kind] Token INTERVAL; fires each time cumulative spend crosses another multiple (e.g. 100000 → at 100k, 200k…). Min 1000. Tokens = input+output+cache."},
 				"targetAgentId":{"type":"string","description":"The agent that runs the spawned session (see list_agents). Omit when flowId is set."},
 				"flowId":{"type":"string","description":"Run this orchestration flow with the rendered prompt as its input instead of spawning an agent session (see list_flows)."},
-				"promptTemplate":{"type":"string","description":"Prompt for the spawned session (or flow input). Tag placeholders: {{result}}, {{title}}, {{tag}}, {{sessionId}}, {{prevPrompt}}, {{agent}}. Board placeholders: {{taskId}}, {{title}}, {{op}}, {{from}}, {{to}}, {{fromLabel}}, {{toLabel}}, {{board}}, {{tags}}, {{owner}}, {{priority}}. Common: {{iteration}}, {{maxIterations}}, {{automation}}, {{date}}, {{time}}, {{datetime}}"},
+				"promptTemplate":{"type":"string","description":"Prompt for the spawned session (or flow input). Tag placeholders: {{result}}, {{title}}, {{tag}}, {{sessionId}}, {{prevPrompt}}, {{agent}}. Board placeholders: {{taskId}}, {{title}}, {{op}}, {{from}}, {{to}}, {{fromLabel}}, {{toLabel}}, {{board}}, {{tags}}, {{owner}}, {{priority}}. Token placeholders: {{tokens}}, {{threshold}}, {{scope}}, {{sessionId}}. Common: {{iteration}}, {{maxIterations}}, {{automation}}, {{date}}, {{time}}, {{datetime}}"},
 				"spawnTags":{"type":"array","items":{"type":"string"},"description":"Tags applied to the spawned session (tag kind default: [triggerTag] → loop; pass [] to break the loop). Ignored for flow-backed and board automations."},
 				"maxIterations":{"type":"integer","description":"Max total fires before auto-disabling (0 = unlimited; default 50)"},
 				"cooldownSec":{"type":"integer","description":"Minimum seconds between fires (default 0)"},
@@ -93,6 +98,8 @@ func (t CreateAutomationTool) Call(ctx context.Context, input json.RawMessage) (
 		BoardToState   string   `json:"boardToState"`
 		BoardPriority  *int     `json:"boardPriority"`
 		BoardExclusive *bool    `json:"boardExclusive"`
+		TokenScope     string   `json:"tokenScope"`
+		TokenThreshold *int     `json:"tokenThreshold"`
 		TargetAgentID  string   `json:"targetAgentId"`
 		FlowID         string   `json:"flowId"`
 		PromptTemplate string   `json:"promptTemplate"`
@@ -110,17 +117,33 @@ func (t CreateAutomationTool) Call(ctx context.Context, input json.RawMessage) (
 	in.BoardOp = strings.TrimSpace(in.BoardOp)
 	in.BoardFromState = strings.TrimSpace(in.BoardFromState)
 	in.BoardToState = strings.TrimSpace(in.BoardToState)
+	in.TokenScope = strings.TrimSpace(in.TokenScope)
 	in.TargetAgentID = strings.TrimSpace(in.TargetAgentID)
 	in.FlowID = strings.TrimSpace(in.FlowID)
 	if strings.TrimSpace(in.PromptTemplate) == "" {
 		return "", fmt.Errorf("promptTemplate is required")
 	}
-	if in.TriggerKind == db.TriggerBoard {
+	tokenThreshold := 0
+	switch in.TriggerKind {
+	case db.TriggerBoard:
 		if !db.ValidBoardOp(in.BoardOp) {
 			return "", fmt.Errorf("invalid boardOp %q (any|move|create|update|delete)", in.BoardOp)
 		}
-	} else if in.TriggerTag == "" {
-		return "", fmt.Errorf("triggerTag is required for tag automations")
+	case db.TriggerToken:
+		if !db.ValidTokenScope(in.TokenScope) {
+			return "", fmt.Errorf("invalid tokenScope %q (session|workspace)", in.TokenScope)
+		}
+		if in.TokenThreshold == nil {
+			return "", fmt.Errorf("tokenThreshold is required for token automations")
+		}
+		if err := db.ValidateTokenThreshold(*in.TokenThreshold); err != nil {
+			return "", err
+		}
+		tokenThreshold = *in.TokenThreshold
+	default:
+		if in.TriggerTag == "" {
+			return "", fmt.Errorf("triggerTag is required for tag automations")
+		}
 	}
 	// Either a flow (flowId) or an agent (targetAgentId) is the target.
 	if in.FlowID != "" {
@@ -175,6 +198,8 @@ func (t CreateAutomationTool) Call(ctx context.Context, input json.RawMessage) (
 		BoardToState:   in.BoardToState,
 		BoardPriority:  boardPriority,
 		BoardExclusive: boardExclusive,
+		TokenScope:     in.TokenScope,
+		TokenThreshold: tokenThreshold,
 		TargetAgentID:  in.TargetAgentID,
 		FlowID:         in.FlowID,
 		PromptTemplate: in.PromptTemplate,
@@ -209,13 +234,15 @@ func (UpdateAutomationTool) Def() providers.ToolDef {
 			"properties":{
 				"id":{"type":"string","description":"The automation id (see list_automations)"},
 				"name":{"type":"string"},
-				"triggerKind":{"type":"string","enum":["tag","board"]},
+				"triggerKind":{"type":"string","enum":["tag","board","token"]},
 				"triggerTag":{"type":"string"},
 				"boardOp":{"type":"string","enum":["any","move","create","update","delete"]},
 				"boardFromState":{"type":"string","description":"[board kind] source-column filter (empty = any)"},
 				"boardToState":{"type":"string","description":"[board kind] target-column filter (empty = any)"},
 				"boardPriority":{"type":"integer","description":"[board kind] fire order among automations matching the same card change; lower runs first"},
 				"boardExclusive":{"type":"boolean","description":"[board kind] only this automation fires for a matching change; all other matches are suppressed"},
+				"tokenScope":{"type":"string","enum":["session","workspace"],"description":"[token kind] watch one session ('session') or the whole workspace/day ('workspace')"},
+				"tokenThreshold":{"type":"integer","description":"[token kind] token interval; fires each time cumulative spend crosses another multiple (min 1000)"},
 				"targetAgentId":{"type":"string"},
 				"flowId":{"type":"string","description":"Run this flow with the rendered prompt as input instead of spawning an agent session (see list_flows). Setting it clears the agent."},
 				"promptTemplate":{"type":"string"},
@@ -241,6 +268,8 @@ func (t UpdateAutomationTool) Call(ctx context.Context, input json.RawMessage) (
 		BoardToState   *string   `json:"boardToState"`
 		BoardPriority  *int      `json:"boardPriority"`
 		BoardExclusive *bool     `json:"boardExclusive"`
+		TokenScope     *string   `json:"tokenScope"`
+		TokenThreshold *int      `json:"tokenThreshold"`
 		TargetAgentID  *string   `json:"targetAgentId"`
 		FlowID         *string   `json:"flowId"`
 		PromptTemplate *string   `json:"promptTemplate"`
@@ -288,6 +317,25 @@ func (t UpdateAutomationTool) Call(ctx context.Context, input json.RawMessage) (
 	}
 	if in.BoardExclusive != nil {
 		cur.BoardExclusive = *in.BoardExclusive
+	}
+	if in.TokenScope != nil {
+		if scope := strings.TrimSpace(*in.TokenScope); db.ValidTokenScope(scope) {
+			cur.TokenScope = scope
+		} else {
+			return "", fmt.Errorf("invalid tokenScope %q (session|workspace)", scope)
+		}
+	}
+	if in.TokenThreshold != nil {
+		if err := db.ValidateTokenThreshold(*in.TokenThreshold); err != nil {
+			return "", err
+		}
+		cur.TokenThreshold = *in.TokenThreshold
+	}
+	// A rule that is (or becomes) token-triggered must carry a valid threshold.
+	if cur.TriggerKind == db.TriggerToken {
+		if err := db.ValidateTokenThreshold(cur.TokenThreshold); err != nil {
+			return "", err
+		}
 	}
 	// A non-empty flowId switches to flow-backed (and clears the agent); an
 	// explicit targetAgentId switches back to agent-backed (and clears the flow).
@@ -407,6 +455,8 @@ func (t ListAutomationsTool) Call(ctx context.Context, _ json.RawMessage) (strin
 		BoardToState   string `json:"boardToState,omitempty"`
 		BoardPriority  int    `json:"boardPriority,omitempty"`
 		BoardExclusive bool   `json:"boardExclusive,omitempty"`
+		TokenScope     string `json:"tokenScope,omitempty"`
+		TokenThreshold int    `json:"tokenThreshold,omitempty"`
 		TargetAgentID  string `json:"targetAgentId"`
 		FlowID         string `json:"flowId,omitempty"`
 		Enabled        bool   `json:"enabled"`
@@ -429,6 +479,8 @@ func (t ListAutomationsTool) Call(ctx context.Context, _ json.RawMessage) (strin
 			BoardToState:   a.BoardToState,
 			BoardPriority:  a.BoardPriority,
 			BoardExclusive: a.BoardExclusive,
+			TokenScope:     a.TokenScope,
+			TokenThreshold: a.TokenThreshold,
 			TargetAgentID:  a.TargetAgentID,
 			FlowID:         a.FlowID,
 			Enabled:        a.Enabled,

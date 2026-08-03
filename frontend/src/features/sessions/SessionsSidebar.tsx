@@ -1,3 +1,4 @@
+import { resolveAgent } from '@/shared/lib/agentLookup'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Settings,
@@ -419,7 +420,9 @@ export function SessionsSidebar({
                 {BUCKET_LABELS[bucket]}
               </div>
               {items.map((s) => {
-                const owner = agents.find((a) => a.id === s.agentId)
+                // Sessions outlive their agent, so resolve rather than find:
+                // a deleted owner still renders (badged) instead of vanishing.
+                const owner = resolveAgent(agents, s.agentId)
                 const isActive = activeSessionId === s.id
                 const runtime = runtimeById?.get(s.id)
                 // Live either because THIS window is streaming the turn (instant, no

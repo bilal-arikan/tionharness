@@ -50,6 +50,10 @@ export interface ChatViewProps {
   onSelectSession?: (id: string) => void
   // Empty-state ("Yeni sohbete başla") wiring, used when no session is active.
   defaultAgentId: string | null
+  defaultAgentDeleted?: boolean
+  // Roster INCLUDING deleted agents. The transcript renders HISTORY, so it must
+  // resolve an author that no longer exists; pickers keep using `agents`.
+  allAgents: Agent[]
   onNewSession: () => void
   onSelectDefaultAgent: (id: string) => void
   onGoToAgents: () => void
@@ -80,6 +84,8 @@ export function ChatView({
   sessionCoordination,
   onSelectSession,
   defaultAgentId,
+  defaultAgentDeleted,
+  allAgents,
   onNewSession,
   onSelectDefaultAgent,
   onGoToAgents,
@@ -154,6 +160,7 @@ export function ChatView({
       <ChatEmptyState
         agents={agents}
         defaultAgentId={defaultAgentId}
+        defaultAgentDeleted={defaultAgentDeleted}
         onNewSession={onNewSession}
         onSelectDefaultAgent={onSelectDefaultAgent}
         onGoToAgents={onGoToAgents}
@@ -172,7 +179,7 @@ export function ChatView({
           messages={messages}
           sessionId={activeSessionId ?? undefined}
           pending={chat.activePending}
-          agents={agents}
+          agents={allAgents}
           artifacts={artifacts}
           streaming={chat.activeStreaming}
           highlightMessageId={scrollToMsgId}

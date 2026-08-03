@@ -224,6 +224,25 @@ func (d *DB) AddCoolingWaste(ctx context.Context, agentID string, usd float64, e
 	return d.persistUsageLocked(u)
 }
 
+// WorkspaceTokensToday returns the workspace-wide total token count for the
+// current day: input+output+cacheRead+cacheWrite summed across every agent's
+// usage row for today. It is the scope total a workspace-scoped token automation
+// watches. Held under the same usage lock as the recorders so a reader never
+// observes a torn per-agent row.
+func (d *DB) WorkspaceTokensToday(ctx context.Context) int64 {
+	day := today()
+	d.usageMu.RLock()
+	defer d.usageMu.RUnlock()
+	var total int64
+	for _, u := range d.usage {
+		if u.Day == day {
+			total += int64(u.InputTokens) + int64(u.OutputTokens) +
+				int64(u.CacheReadTokens) + int64(u.CacheWriteTokens)
+		}
+	}
+	return total
+}
+
 // GetUsageToday returns an agent's usage for the current day (zero-valued if
 // nothing has been recorded yet).
 func (d *DB) GetUsageToday(ctx context.Context, agentID string) (Usage, error) {

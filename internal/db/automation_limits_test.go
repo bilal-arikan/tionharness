@@ -48,6 +48,45 @@ func TestValidateMaxIterations(t *testing.T) {
 	}
 }
 
+// TestValidateTokenThreshold locks the floor for a token automation's interval.
+// A tiny interval would cross on nearly every call and fire in a tight loop, so
+// the same validator guards both the REST handler and the agent tool.
+func TestValidateTokenThreshold(t *testing.T) {
+	for _, v := range []int{0, 1, MinTokenThreshold - 1, -100} {
+		err := ValidateTokenThreshold(v)
+		if err == nil {
+			t.Errorf("tokenThreshold=%d must be rejected (below floor %d)", v, MinTokenThreshold)
+			continue
+		}
+		if !errors.Is(err, ErrTokenThresholdRange) {
+			t.Errorf("tokenThreshold=%d must wrap ErrTokenThresholdRange, got %v", v, err)
+		}
+	}
+	for _, v := range []int{MinTokenThreshold, 100_000, 5_000_000} {
+		if err := ValidateTokenThreshold(v); err != nil {
+			t.Errorf("tokenThreshold=%d must be accepted, got %v", v, err)
+		}
+	}
+	// The message must name the floor so the user knows the minimum.
+	if err := ValidateTokenThreshold(1); !strings.Contains(err.Error(), strconv.Itoa(MinTokenThreshold)) {
+		t.Errorf("the floor message must state the floor, got %q", err)
+	}
+}
+
+// TestValidTokenScope pins the accepted scope set (empty defaults to session).
+func TestValidTokenScope(t *testing.T) {
+	for _, s := range []string{"", TokenScopeSession, TokenScopeWorkspace} {
+		if !ValidTokenScope(s) {
+			t.Errorf("scope %q must be valid", s)
+		}
+	}
+	for _, s := range []string{"daily", "agent", "bogus"} {
+		if ValidTokenScope(s) {
+			t.Errorf("scope %q must be invalid", s)
+		}
+	}
+}
+
 // TestIterationLimitOrdering pins the relationship between the two constants.
 // The backstop must sit ABOVE the hard cap: it exists for legacy rows nobody
 // bounded, so tripping it earlier than an explicit maximum would punish exactly

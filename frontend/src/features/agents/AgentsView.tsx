@@ -9,9 +9,19 @@ import { AgentActivityPanel } from './AgentActivityPanel'
 import { api } from '@/api'
 import { CopyPathButton } from '@/shared/components/CopyPathButton'
 import { RevealButton } from '@/shared/components/RevealButton'
-import { Button, PromptEditor, SelectionBar, SelectionBarButton, ListPane, PaneHeader } from '@/shared/components'
 import {
-  SidebarHeader, NewItemButton, SELECTED_ITEM_CLS, SELECTED_ITEM_RING,
+  Button,
+  PromptEditor,
+  SelectionBar,
+  SelectionBarButton,
+  ListPane,
+  PaneHeader,
+} from '@/shared/components'
+import {
+  SidebarHeader,
+  NewItemButton,
+  SELECTED_ITEM_CLS,
+  SELECTED_ITEM_RING,
 } from '@/shared/components/SidebarChrome'
 import { useMultiSelect } from '@/shared/hooks/useMultiSelect'
 import { useCollapsibleList } from '@/shared/hooks/useCollapsibleList'
@@ -111,7 +121,12 @@ export function AgentsView({
   const bulkDelete = async () => {
     const ids = [...sel.selected]
     if (ids.length === 0) return
-    if (!confirm(`${ids.length} ajan ve sahip oldukları oturumlar kalıcı olarak silinsin mi?`)) return
+    if (
+      !confirm(
+        `${ids.length} ajan silinsin mi?\n\nSohbet geçmişleri KORUNUR — ajan orada "silinmiş" olarak görünür. Zamanlamaları ve sahip oldukları görevler kalıcı olarak silinir. Çalışan bir ajan silinemez.`,
+      )
+    )
+      return
     for (const id of ids) await onDeleteAgent(id)
     sel.clear()
   }
@@ -218,7 +233,10 @@ export function AgentsView({
                   size="md"
                   active={defaultAgentId === a.id}
                   nameSuffix={
-                    <span className="ml-1.5 shrink-0 font-mono text-[10px] opacity-60" title="Ajan ID (klasör adı)">
+                    <span
+                      className="ml-1.5 shrink-0 font-mono text-[10px] opacity-60"
+                      title="Ajan ID (klasör adı)"
+                    >
                       {a.id}
                     </span>
                   }
@@ -312,46 +330,50 @@ export function AgentsView({
           }
         />
         <div className="flex min-h-0 flex-1">
-        {/* Middle: selected agent's settings */}
-        <div className="min-w-0 flex-1">
-        {selected ? (
-          <AgentSettingsForm
-            key={selected.id}
-            agent={selected}
-            dirtyView="agents"
-            isDefault={defaultAgentId === selected.id}
-            onSetDefault={() => onSetDefault(selected.id)}
-            onSave={(p) => onUpdateAgent(selected.id, p)}
-            onDelete={async () => {
-              if (confirm(`"${selected.name}" ajanı ve sahip olduğu oturumlar kalıcı olarak silinsin mi?`)) {
-                await onDeleteAgent(selected.id)
-                if (!onSelectAgent) setInternalId(null)
-              }
-            }}
-          />
-        ) : (
-          <div className="flex h-full items-center justify-center text-sm text-[var(--color-text-dim)]">
-            Düzenlemek için soldan bir ajan seç.
+          {/* Middle: selected agent's settings */}
+          <div className="min-w-0 flex-1">
+            {selected ? (
+              <AgentSettingsForm
+                key={selected.id}
+                agent={selected}
+                dirtyView="agents"
+                isDefault={defaultAgentId === selected.id}
+                onSetDefault={() => onSetDefault(selected.id)}
+                onSave={(p) => onUpdateAgent(selected.id, p)}
+                onDelete={async () => {
+                  if (
+                    confirm(
+                      `"${selected.name}" ajanı silinsin mi?\n\nSohbet geçmişi KORUNUR — ajan orada "silinmiş" olarak görünür. Zamanlamaları ve sahip olduğu görevler kalıcı olarak silinir. Çalışan bir ajan silinemez.`,
+                    )
+                  ) {
+                    await onDeleteAgent(selected.id)
+                    if (!onSelectAgent) setInternalId(null)
+                  }
+                }}
+              />
+            ) : (
+              <div className="flex h-full items-center justify-center text-sm text-[var(--color-text-dim)]">
+                Düzenlemek için soldan bir ajan seç.
+              </div>
+            )}
           </div>
-        )}
-      </div>
 
-      {/* Right: selected agent's live activity feed — opened from the top bar's
+          {/* Right: selected agent's live activity feed — opened from the top bar's
           "Aktivite" button. Desktop: a right-hand column. Mobile: a right slide-in
           drawer with a dim backdrop — same as the chat session-detail panel. */}
-      {activityOpen && (
-        <>
-          <div className="fixed inset-0 z-30 bg-black/50 md:hidden" onClick={toggleActivity} />
-          <div className="flex shrink-0 md:static max-md:fixed max-md:inset-y-0 max-md:right-0 max-md:z-40 max-md:w-[85vw] max-md:max-w-sm max-md:shadow-xl">
-            <AgentActivityPanel
-              agentId={selected?.id ?? null}
-              onError={onError ?? (() => {})}
-              onOpenExecution={onOpenExecution}
-              onClose={toggleActivity}
-            />
-          </div>
-        </>
-      )}
+          {activityOpen && (
+            <>
+              <div className="fixed inset-0 z-30 bg-black/50 md:hidden" onClick={toggleActivity} />
+              <div className="flex shrink-0 md:static max-md:fixed max-md:inset-y-0 max-md:right-0 max-md:z-40 max-md:w-[85vw] max-md:max-w-sm max-md:shadow-xl">
+                <AgentActivityPanel
+                  agentId={selected?.id ?? null}
+                  onError={onError ?? (() => {})}
+                  onOpenExecution={onOpenExecution}
+                  onClose={toggleActivity}
+                />
+              </div>
+            </>
+          )}
         </div>
       </div>
     </div>

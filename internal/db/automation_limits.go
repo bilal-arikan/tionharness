@@ -33,7 +33,27 @@ const (
 	// last-resort brake for data that predates the rule, not a limit anyone chose,
 	// so it should not stop a working setup earlier than an explicit maximum would.
 	AbsoluteIterationBackstop = 1000
+
+	// MinTokenThreshold is the smallest interval a token automation may set. A tiny
+	// interval would cross on nearly every call and fire in a tight loop (bounded
+	// only by cooldown/maxIterations); requiring at least this many tokens keeps a
+	// token trigger a meaningful "spend milestone" rather than a per-call hook.
+	MinTokenThreshold = 1000
 )
+
+// ErrTokenThresholdRange reports a tokenThreshold value below the accepted floor.
+var ErrTokenThresholdRange = errors.New("tokenThreshold out of range")
+
+// ValidateTokenThreshold rejects a token-automation interval that would fire too
+// often to be useful. Shared by the REST handlers and the agent tools (like
+// ValidateMaxIterations) so the two entry points cannot drift apart.
+func ValidateTokenThreshold(v int) error {
+	if v < MinTokenThreshold {
+		return fmt.Errorf("%w: en az %d olmalı (çok küçük bir aralık her çağrıda tetiklenir)",
+			ErrTokenThresholdRange, MinTokenThreshold)
+	}
+	return nil
+}
 
 // ErrMaxIterationsRange reports a maxIterations value outside the accepted range.
 var ErrMaxIterationsRange = errors.New("maxIterations out of range")

@@ -8,10 +8,11 @@ gerçekleşince hedef ajanı/akışı çalıştıran **otomasyonlar** — iki te
 **etiket** (etiketli oturum bir turu bitirince) ve **pano** (bir kanban kartı
 değişince, §2.5), (3) tur olaylarına göre **otomatik etiketleme** (§3).
 
-**Tetik türü (`Automation.TriggerKind`, 2026-07-06):** `""`/`"tag"` (varsayılan,
-geriye dönük uyumlu) = etiket tetikleyicili; `"board"` = pano tetikleyicili. Guardrail'ler
+**Tetik türü (`Automation.TriggerKind`):** `""`/`"tag"` (varsayılan,
+geriye dönük uyumlu) = etiket tetikleyicili; `"board"` = pano tetikleyicili (2026-07-06);
+`"token"` = token-harcaması eşiği tetikleyicili (2026-08-03, §2.6). Guardrail'ler
 (MaxIterations/CooldownSec/ExpiresAt/Enabled), hedefleme (TargetAgentID **veya** FlowID)
-ve iterasyon defteri iki tür için **ortaktır** (`guardsPass` paylaşılır).
+ve iterasyon defteri **üç tür için ortaktır** (`guardsPass` paylaşılır).
 
 ## 1. Etiketler
 
@@ -242,6 +243,60 @@ MaxIterations (vars. 50) + Cooldown bunu sınırlar. Bildirim tipi yine `automat
 - `internal/agent/automation_test.go` — `boardMatches` (op/from/to matrisi), `boardVars` (ikame).
 - `internal/db/store_task_hook_test.go` — hook create/move/no-op-move/update/delete olaylarında
   doğru `Op`/`From`/`To` ile ateşliyor.
+
+## 2.6 Token-Eşiği Tetikleyicili Otomasyonlar (2026-08-03)
+
+Aynı `Automation` entity'si, `TriggerKind="token"` ile **kümülatif token harcaması**
+bir eşik katını geçince tetiklenir. Amaç: "belli token geçilince kendi kendine
+optimizasyon/temizlik/bakım çağır" — periyodik öz-bakım. Etiket/pano türleriyle
+**aynı** hedefleme (ajan **veya** flow) ve guardrail'leri paylaşır.
+
+### Ek alanlar (yalnız `token` türünde anlamlı)
+| Alan | Anlam |
+|------|-------|
+| `TokenScope` | İzlenen kapsam: `session` (vars., boş=`session`) = bir oturumun **ömür-boyu** tokenı (`SessionUsage`); `workspace` = tüm workspace'in **bugünkü** toplamı (tüm ajan `Usage` satırları toplamı, gün-bazlı sıfırlanır). `db.ValidTokenScope`. |
+| `TokenThreshold` | Token **aralığı**: kümülatif her bu kadarın katını geçince ateşler (ör. 100000 → 100k, 200k, 300k…). En az `db.MinTokenThreshold` (1000). Token = `input+output+cacheRead+cacheWrite`. |
+
+### Semantik: "her-N" (tekrarlı), stateless geçiş tespiti
+Eşik bir kez geçilip üstünde kalacağından naif kontrol her turda tetiklerdi. Bunun
+yerine **her-N** modeli: `TokenThreshold` bir *aralık*tır. Geçiş, kayıt anında
+*önceki* vs *yeni* kümülatif toplamdan **stateless** hesaplanır —
+`crossedMultiple(prev, now, interval) = prev/interval < now/interval`. Böylece
+**per-scope defter (ledger) tutulmaz**; boundary tam olarak onu aşan tek çağrıda
+tespit edilir. Cooldown + MaxIterations + ExpiresAt sıklığı yine sınırlar.
+
+### Tetik: usage hook (tek huni `RecordUsage`)
+Her sağlayıcı çağrısının tokenı `agent/budget.go` `RecordUsage`'tan geçer (session
++ gün rollup'ı buraya yazılır). Kayıttan sonra `Runtime.FireUsageRecorded` bir
+`UsageRecorded{SessionID, DeltaTokens, SessionNewTotal}` sinyalini **detached
+goroutine**'lerde dağıtır (turu bloklamaz). Workspace manager `autoEngine.OnUsageRecorded`'ı
+`rt.AddUsageHook` ile bağlar.
+- **Session kapsam:** `SessionNewTotal − DeltaTokens = prev`; oturum yoksa (detached
+  aux çağrı) atlanır.
+- **Workspace kapsam:** `db.WorkspaceTokensToday()` (tüm ajan bugünkü toplamı) yeni
+  toplam; `prev = yeni − DeltaTokens`. Yalnız bir workspace-kapsam kuralı varsa lazy hesaplanır.
+
+Ateşleme: session-kapsam spawn'ı geçişi tetikleyen oturumu `ParentSessionID` yapar
+(workspace'te boş). `SpawnTags` **kendini döngülemez** (pano gibi; oturum tetik
+etiketi taşımaz). Spawn oturumu ayrı sayaçla başladığından hemen yeniden geçmez.
+
+### Prompt değişkenleri (`tokenVars`, `agent/automation.go`)
+`{{tokens}}` (eşiği geçen kümülatif toplam) · `{{threshold}}` · `{{scope}}` ·
+`{{sessionId}}` (workspace kapsamında boş) · ortak `{{iteration}}` · `{{maxIterations}}` ·
+`{{automation}}` · `{{date}}` · `{{time}}` · `{{datetime}}`. `{{result}}` **yoktur**.
+
+### API / Araç / UI
+- **API:** `automationReq`'e `tokenScope`/`tokenThreshold` (pointer). Create'te token türü
+  `triggerTag` istemez; scope doğrulanır, threshold zorunlu + `db.ValidateTokenThreshold`.
+  Update'te `tokenThreshold` kısmi patch (pointer); token türüne dönen kural geçerli eşik taşımalı.
+- **Araçlar:** `create/update/list_automation`'a aynı alanlar (üç tetik türü artık `token` içerir).
+- **UI:** Otomasyon panosuna **4. şerit "⚡ Token"** (`AutomationBoard.tsx`, `COLUMN_ACCENT.token`).
+  `AutomationModal` token dalı: kapsam seçici + eşik girişi (`TokenTriggerFields`); kart rozeti
+  `⚡ oturum/workspace · her N token`. Olaylar `automation` tipiyle (başlık `⚡`, başarı→executions).
+
+### Test
+- `internal/agent/automation_test.go` — `crossedMultiple` (boundary matrisi), `tokenVars` (ikame).
+- `internal/db/automation_limits_test.go` — `ValidateTokenThreshold` (floor), `ValidTokenScope`.
 
 ## 3. Otomatik Etiketleme (olay → etiket)
 

@@ -11,6 +11,10 @@ import type {
 import { req } from './client'
 
 export const agentApi = {
+  // Returns the roster INCLUDING agents marked deleted (flagged), because a past
+  // conversation must still resolve its author. Callers that offer a choice must
+  // filter on `deleted` — useSessionsController does this once, exposing `agents`
+  // (live) alongside `allAgents`.
   listAgents: () => req<Agent[]>('/api/agents'),
   createAgent: (data: {
     name: string
@@ -30,22 +34,19 @@ export const agentApi = {
       method: 'PUT',
       body: JSON.stringify(patch),
     }),
-  // Delete an agent and the sessions it owns.
-  deleteAgent: (id: string) =>
-    req<{ deleted: string }>(`/api/agents/${id}`, { method: 'DELETE' }),
+  // Soft-delete an agent: its schedules and owned tasks go, its SESSIONS stay
+  // (history renders it as deleted). Rejects with 409 while a turn is in flight.
+  deleteAgent: (id: string) => req<{ deleted: string }>(`/api/agents/${id}`, { method: 'DELETE' }),
 
   agentUsage: (agentId: string) => req<AgentUsage>(`/api/agents/${agentId}/usage`),
 
   agentContext: (agentId: string, message?: string) =>
     req<AgentContextPreview>(
-      `/api/agents/${agentId}/context${
-        message ? `?message=${encodeURIComponent(message)}` : ''
-      }`,
+      `/api/agents/${agentId}/context${message ? `?message=${encodeURIComponent(message)}` : ''}`,
     ),
 
   // Absolute path of the agent's on-disk JSON file.
-  agentPath: (agentId: string) =>
-    req<{ path: string }>(`/api/agents/${agentId}/path`),
+  agentPath: (agentId: string) => req<{ path: string }>(`/api/agents/${agentId}/path`),
   // Open the folder holding the agent's JSON file in the OS file manager (local
   // desktop), highlighting the file.
   revealAgent: (agentId: string) =>
@@ -54,8 +55,7 @@ export const agentApi = {
   agentTools: (agentId: string) => req<AgentTools>(`/api/agents/${agentId}/tools`),
   // Read-only "what can this agent use right now": eager vs lazy (gateway-
   // activatable) tools + the MCP server inventory. Purely informational.
-  agentToolAccess: (agentId: string) =>
-    req<AgentToolAccess>(`/api/agents/${agentId}/tool-access`),
+  agentToolAccess: (agentId: string) => req<AgentToolAccess>(`/api/agents/${agentId}/tool-access`),
   // Replaces the agent's whole override map (tool name → tier, 'blocked'
   // included). An empty map means "no overrides" — every tool follows the
   // workspace-effective tier.

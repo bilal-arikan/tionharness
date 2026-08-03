@@ -35,6 +35,13 @@ type SpawnOptions struct {
 	// inherits the workspace's configured default working directory (Path), same
 	// as a UI-created session — so spawns/handoffs start scoped to that folder.
 	WorkingDir string
+	// Kind overrides the created session's kind for a NON-worker spawn (ignored
+	// when CoordinatorSessionID is set, which always forces "worker"). Empty keeps
+	// the default "spawned". A context-reset handoff sets this to "chat" when it
+	// continues a chat, so the continuation lands under the sidebar's "Sohbet"
+	// filter next to its parent instead of being hidden under the "Spawn" tab —
+	// handoff children are explicitly human-continuable (see isWritableSessionKind).
+	Kind string
 	// Tags are applied to the spawned session at creation. Set by tag-triggered
 	// automations so the new session carries the trigger tag (and thus re-fires the
 	// automation on its own completion — the loop). Applying them at creation, not
@@ -135,6 +142,9 @@ func (r *Runtime) SpawnSession(ctx context.Context, agentRef, prompt string, opt
 	// Worker spawns (coordinator/worker M2) are tagged as such so the UI and the
 	// coordination loop can tell them apart from ordinary detached spawns.
 	kind := "spawned"
+	if k := strings.TrimSpace(opts.Kind); k != "" {
+		kind = k
+	}
 	coordID := strings.TrimSpace(opts.CoordinatorSessionID)
 	if coordID != "" {
 		kind = "worker"
