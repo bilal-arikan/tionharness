@@ -2,6 +2,27 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-08-04**
 
+## MCP "indekslenmemiş proje" onarım kuralı (2026-08-04) ✅
+
+- **İstek:** `mcp__codebase-memory-mcp__search_code` indekslenmemiş projeyle
+  çağrılınca "project not found or not indexed" dönüyor; ajan hatayı
+  `list_projects`'e / otomatik indekslemeye çevirmeden aynı çağrıyı tekrarlıyordu.
+- **Backend (`internal/agent/mcprepair.go` — yeni, izole):** tur-ömürlü
+  `mcpRepair` guard'ı. `repair()` post-execution'da not-indexed gövdesini
+  `available_projects` yönergesine çevirip sonuca ekler + çağrıyı poison'lar;
+  `precheck()` aynı araç+argümanlı ikinci çağrıyı (hard-stop'tan bağımsız)
+  sunucuya gitmeden reddeder. Yönerge doğru `list_projects` sibling aracını,
+  `C-Users-user-Desktop-<repo>` formatını ve repo listede yoksa Glob/Grep
+  fallback'ini söyler.
+- **Wiring (`toolloop.go`):** `guard` yanında `newMCPRepair()`; `guard.check`
+  öncesi `precheck`, `guard.observe` sonrası `repair` kancası. Debug:
+  `mcp_repair_block` / `mcp_repair`.
+- **Doküman kuralı:** kök `CLAUDE.md` → "codebase-memory-mcp kullanımı" (önce bir
+  kez `list_projects`, `project`'i birebir kopyala, yoksa Glob/Grep). Teknik not:
+  `_Docs/11-INTERACTION-MCP.md`.
+- **Doğrulama:** `go build ./internal/...` ✅, `go test ./internal/agent ./internal/tools`
+  ✅ (+ yeni `TestMCPRepair_*`, `TestParseAvailableProjects`).
+
 ## Hit-limit hata kartı + salt-okunur retry (2026-08-04) ✅
 
 - **İstek:** "Session'lar hit-limit hatası dönerse hata mesajı gibi göster ve

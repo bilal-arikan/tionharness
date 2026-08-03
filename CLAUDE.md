@@ -3,6 +3,23 @@
 Bu dosya, TionSwarm deposunda çalışan ajanlar için tekrar eden friction'dan
 türetilmiş kısa kurallar içerir. Terminal: PowerShell veya Git-Bash.
 
+## codebase-memory-mcp kullanımı (project argümanı)
+
+`mcp__codebase-memory-mcp__*` sorgu araçları (`search_code`, `search_graph`,
+`query_graph`, `trace_path`, `get_code_snippet`, `get_architecture`,
+`index_status`) **`project`** argümanı ister — bu, `repo_path` değil, indeksleme
+çıktısındaki yol-tabanlı kimliktir (format: `C-Users-user-Desktop-<repo>`).
+
+- **İlk çağrıdan ÖNCE bir kez `list_projects` çalıştır.** `project` argümanını
+  dönen listeden **birebir kopyala** — kimliği elle uydurma.
+- Yanlış/indekslenmemiş bir `project` verirsen sunucu
+  `"project not found or not indexed"` + `available_projects` döndürür. Bu hata
+  geldiğinde **aynı çağrıyı tekrarlama**; önce `list_projects` çağır, doğru
+  kimliği kopyala. (Ajan döngüsü bu durumu tek tekrar sonrası kendiliğinden
+  engelleyip yönergeyi enjekte eder — bkz. `internal/agent/mcprepair.go`.)
+- Hedef repo listede **yoksa** bu MCP'yi kullanma; o repo için `Glob`/`Grep`'e düş.
+- Bu depoda sorgular için `project` = `C-Users-user-Desktop-Projects-TionSwarm`.
+
 ## Grep/ripgrep kullanımı
 
 Buradaki yerleşik `Grep` aracı **ripgrep** sözdizimi kullanır (POSIX `grep`

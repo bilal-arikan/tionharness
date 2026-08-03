@@ -892,3 +892,36 @@ da erteleniyordu → ilk turda `No such tool available`.
   `internal/api/server.go` (`interactionSrv` concrete alan). Test:
   `TestInteraction_GetStreamReceivesPush`, `TestInteraction_PushNoStreamIsNoop`.
 - Spike prototipi: `_spikes/52-gateway/server/main.go` (aynı desen, claude-cli 2.1.201 ile doğrulandı).
+
+---
+
+## MCP "indekslenmemiş proje" onarım kuralı (2026-08-04)
+
+**Sorun.** `mcp__codebase-memory-mcp__search_code` (ve peer sorgu araçları)
+indekslenmemiş bir `project` argümanıyla çağrılınca sunucu `isError` gövdesinde
+`"project not found or not indexed"` + `available_projects` döndürüyordu. Ajan bu
+JSON'u bir eyleme bağlamayıp **aynı çağrıyı arka arkaya tekrarlıyordu**; genel
+döngü guardrail'ı bunu ancak birkaç tekrar sonra kırıyordu.
+
+**Çözüm.** `internal/agent/mcprepair.go` — tur-ömürlü, izole `mcpRepair` guard'ı
+(toolGuard desenine paralel, yan-etkisiz):
+
+- **`repair()` (post-execution):** `mcp__`-prefixli + `isError` + gövdesinde
+  marker geçen yanıtta, `available_projects` listesini bir **yönergeye** çevirip
+  sonuca ekler (aynı sunucunun `list_projects` aracını çağır; `project`'i
+  listeden birebir kopyala; format `C-Users-user-Desktop-<repo>`; repo listede
+  yoksa Glob/Grep'e düş) ve çağrıyı "poisoned" olarak işaretler.
+- **`precheck()` (pre-execution):** aynı araç+argümanla yapılan **ikinci** çağrıyı
+  sunucuya gitmeden, aynı yönergeyle reddeder. Döngü guardrail'ının hard-stop
+  ayarından **bağımsızdır** (bilerek: kesin başarısız olacak çağrıyı tekrarlamak
+  ilerleme değildir).
+
+**Wiring.** `internal/agent/toolloop.go` içinde iki minimal kanca: `guard`
+oluşturma yanında `repair := newMCPRepair()`; `guard.check` öncesi `precheck`
+bloğu; `guard.observe` sonrası `repair` bloğu. Debug olayları:
+`mcp_repair_block` / `mcp_repair` (`DebugGuardrail`).
+
+**Test.** `internal/agent/mcprepair_test.go` — enjeksiyon+poison, başarı/non-MCP
+yok sayma, düzeltilmiş argümanın engellenmemesi, `available_projects` parse.
+
+Doküman kuralı ayrıca kök `CLAUDE.md` → "codebase-memory-mcp kullanımı" bölümünde.
