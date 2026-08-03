@@ -12,6 +12,17 @@ scratchpad'ine **doğrudan mutlak yol vererek yazmaya çalışma** — dosyayı 
 köke (varsayılan olarak orası) kaydet, gerekiyorsa `Read` ile geri oku. Kök
 her istekte aktif oturumdan yeniden çözülür, dolayısıyla bayat oturum yolu
 kullanma.
+## Edit aracı — eşleşme
+
+- **Edit'ten önce hedef bölgeyi `Read` ile oku.** `old_string`'i çıktının birebir
+  kopyası olarak al: yalnız satır-no + tab ön ekini temizle, **içeriği normalize etme**
+  — unicode (« » ✅ ⏳), emoji ve hizalama/boşluk karakterlerini olduğu gibi bırak.
+  Hafızadan/özetten yeniden yazılan `old_string` çoğu kez birebir eşleşmez.
+- Eşleşme tutmazsa **kısa, BENZERSIZ bir ASCII parça** hedefle (unicode noktalama ve
+  satır-sonu boşluk en sık suçlulardır). Edit boşluk/hizalama farkını toleranslı
+  eşleştirmeyle telafi eder ama yalnız tekil konumda; başarısızlıkta en yakın satırı ve
+  ilk farklılaşan sütunu gösteren tanılayıcı hata döner (bkz. `computeEdit`,
+  `_Docs\56-SELF-HEALING.md`).
 
 ## Grep/ripgrep kullanımı
 

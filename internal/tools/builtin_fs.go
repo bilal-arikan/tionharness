@@ -38,7 +38,7 @@ func (FSReadFileTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name:   "Read",
 		Strict: true, // API-side input validation (schema has additionalProperties:false; registry normalizes required)
-		Description: "Read a UTF-8 text file. Output is line-numbered (\"<lineno>\\t<content>\", cat -n style) — when copying text for Edit's old_string, strip the number+tab prefix. " +
+		Description: "Read a UTF-8 text file. Output is line-numbered (\"<lineno>\\t<content>\", cat -n style) — when copying text for Edit's old_string, strip ONLY the number+tab prefix; keep the content byte-for-byte (unicode « » ✅ ⏳, emoji and alignment/whitespace exactly as shown, do not normalize). " +
 			"By default returns the first 2000 lines (up to 256KB); use offset (1-based start line) and limit (line count) to read a window of a large file. " +
 			"Accepts an absolute path or one relative to the working directory.",
 		InputSchema: json.RawMessage(`{
@@ -235,7 +235,7 @@ func NewFSEditFileTool(sb Sandbox, tracker *ReadTracker) FSEditFileTool {
 func (FSEditFileTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name:        "Edit",
-		Description: "Replace an exact string in a file. Read the file first: an edit errors if the file was never read or was modified since it was last read. By default old_string must occur exactly once; set replace_all to replace every occurrence. Accepts an absolute path or one relative to the working directory.",
+		Description: "Replace an exact string in a file. Read the target region first and copy old_string VERBATIM from that output — strip only the line-number+tab prefix, never normalize the content (keep unicode/emoji and alignment spaces as-is), since a string rewritten from memory usually will not match. An edit errors if the file was never read or was modified since. By default old_string must occur exactly once; set replace_all to replace every occurrence. If a match keeps failing, target a short UNIQUE ASCII fragment (unicode punctuation and trailing whitespace are the usual culprits). Accepts an absolute path or one relative to the working directory.",
 		InputSchema: json.RawMessage(`{
 			"type":"object",
 			"properties":{
@@ -277,41 +277,9 @@ func (t FSEditFileTool) Call(ctx context.Context, input json.RawMessage) (string
 		return "", err
 	}
 	old := string(data)
-	n := strings.Count(old, args.OldString)
-	if n == 0 {
-		// The model's old_string is often the RIGHT text but doesn't byte-match:
-		//   - it may carry cat -n line-number prefixes copied from Read's output, and/or
-		//   - it uses bare LF newlines while the file on disk uses CRLF (Windows) —
-		//     so a multi-line old_string never matches even though it looks identical.
-		// Try those normalizations (and their combination) and adopt the first that
-		// matches, applying the SAME transform to new_string so the write stays clean
-		// and the file keeps its own line ending.
-		cands := []func(string) string{stripCatNPrefixes}
-		if strings.Contains(old, "\r\n") {
-			cands = append(cands, toCRLF, func(s string) string { return toCRLF(stripCatNPrefixes(s)) })
-		}
-		for _, norm := range cands {
-			if cand := norm(args.OldString); cand != args.OldString && strings.Count(old, cand) > 0 {
-				args.OldString, args.NewString = cand, norm(args.NewString)
-				n = strings.Count(old, args.OldString)
-				break
-			}
-		}
-	}
-	if n == 0 {
-		return "", fmt.Errorf("old_string not found in %s — fix: Read the file first and copy the exact text, incl. whitespace/indentation (no line-number prefixes)", t.sb.Rel(abs))
-	}
-	if args.OldString == args.NewString {
-		return "", fmt.Errorf("old_string and new_string are identical after stripping line-number prefixes — nothing to change")
-	}
-	if n > 1 && !args.ReplaceAll {
-		return "", fmt.Errorf("old_string occurs %d times in %s; set replace_all or make it unique", n, t.sb.Rel(abs))
-	}
-	var content string
-	if args.ReplaceAll {
-		content = strings.ReplaceAll(old, args.OldString, args.NewString)
-	} else {
-		content = strings.Replace(old, args.OldString, args.NewString, 1)
+	content, n, err := computeEdit(old, args.OldString, args.NewString, args.ReplaceAll, t.sb.Rel(abs))
+	if err != nil {
+		return "", err
 	}
 	if err := os.WriteFile(abs, []byte(content), 0o644); err != nil {
 		return "", err
@@ -409,6 +377,248 @@ func stripCatNPrefixes(s string) string {
 // still land — and to keep the written replacement in the file's own convention.
 func toCRLF(s string) string {
 	return strings.ReplaceAll(strings.ReplaceAll(s, "\r\n", "\n"), "\n", "\r\n")
+}
+
+// computeEdit resolves an Edit's replacement against the on-disk content and returns
+// the new file content plus the number of occurrences replaced. Matching is tried in
+// widening order, and the first that lands wins:
+//
+//  1. Verbatim byte match (the fast, exact path).
+//  2. Recovery normalizations: strip cat -n line-number prefixes copied from Read's
+//     output, and/or align bare-LF newlines to a CRLF file — with the same transform
+//     applied to new_string so the write stays clean and the file keeps its endings.
+//  3. Whitespace-tolerant, LINE-BASED fallback for old_strings rewritten from memory
+//     that differ only in trailing whitespace or indentation. It fires ONLY on a
+//     UNIQUE location (or, with replace_all, on every location) so the wrong block is
+//     never edited, and it replaces the file's real bytes — never a silent no-op.
+//
+// When nothing matches it returns a diagnostic error that pinpoints the file line the
+// supplied text is closest to and the column at which they diverge, and steers toward
+// a short unique ASCII fragment (unicode punctuation/emoji and trailing spaces are the
+// usual culprits when a remembered old_string won't match).
+func computeEdit(old, oldStr, newStr string, replaceAll bool, rel string) (string, int, error) {
+	n := strings.Count(old, oldStr)
+	if n == 0 {
+		cands := []func(string) string{stripCatNPrefixes}
+		if strings.Contains(old, "\r\n") {
+			cands = append(cands, toCRLF, func(s string) string { return toCRLF(stripCatNPrefixes(s)) })
+		}
+		for _, norm := range cands {
+			if cand := norm(oldStr); cand != oldStr && strings.Count(old, cand) > 0 {
+				oldStr, newStr = cand, norm(newStr)
+				n = strings.Count(old, oldStr)
+				break
+			}
+		}
+	}
+	if n == 0 {
+		// Whitespace-tolerant line fallback. rtrim (drop trailing spaces/tabs/CR) is
+		// tried before full trim (also fold indentation) because it is the safer, more
+		// common divergence; each level demands uniqueness so a fuzzy match can never
+		// hit the wrong block.
+		fileCRLF := strings.Contains(old, "\r\n")
+		for _, norm := range []func(string) string{rtrimLine, strings.TrimSpace} {
+			ranges, endsBoundary := fuzzyLineMatch(old, oldStr, norm)
+			if len(ranges) == 0 {
+				continue
+			}
+			if !replaceAll && len(ranges) > 1 {
+				return "", 0, fmt.Errorf("old_string has no verbatim match in %s, and a whitespace-insensitive match is ambiguous (%d candidates) — add surrounding lines to make it unique, or set replace_all", rel, len(ranges))
+			}
+			repl := newStr
+			if fileCRLF {
+				repl = toCRLF(repl)
+			}
+			if endsBoundary {
+				nl := "\n"
+				if fileCRLF {
+					nl = "\r\n"
+				}
+				if !strings.HasSuffix(repl, nl) {
+					repl += nl // the needle owned a trailing line break; keep the file well-formed
+				}
+			}
+			return applyRanges(old, ranges, repl), len(ranges), nil
+		}
+	}
+	if n == 0 {
+		return "", 0, diagnoseNoMatch(old, oldStr, rel)
+	}
+	if oldStr == newStr {
+		return "", 0, fmt.Errorf("old_string and new_string are identical after stripping line-number prefixes — nothing to change")
+	}
+	if n > 1 && !replaceAll {
+		return "", 0, fmt.Errorf("old_string occurs %d times in %s; set replace_all or make it unique", n, rel)
+	}
+	if replaceAll {
+		return strings.ReplaceAll(old, oldStr, newStr), n, nil
+	}
+	return strings.Replace(old, oldStr, newStr, 1), n, nil
+}
+
+// rtrimLine drops trailing spaces, tabs and a carriage return from a single line —
+// the whitespace an old_string rewritten from memory most often gets wrong.
+func rtrimLine(s string) string { return strings.TrimRight(s, " \t\r") }
+
+// needleLineSlice splits a (possibly CRLF) old_string into its lines for line-based
+// matching. endsBoundary reports whether the needle ended on a line break, so the
+// caller can keep the file well-formed when it substitutes across that boundary.
+func needleLineSlice(needle string) (lines []string, endsBoundary bool) {
+	s := strings.ReplaceAll(needle, "\r\n", "\n")
+	if strings.HasSuffix(s, "\n") {
+		endsBoundary = true
+		s = strings.TrimSuffix(s, "\n")
+	}
+	if s == "" && !endsBoundary {
+		return nil, false
+	}
+	return strings.Split(s, "\n"), endsBoundary
+}
+
+// splitKeepOffsets returns each line of content (terminator excluded) alongside the
+// byte offset at which it begins, so a line-window match maps back to exact bytes.
+func splitKeepOffsets(content string) (lines []string, offs []int) {
+	i := 0
+	for {
+		j := strings.IndexByte(content[i:], '\n')
+		if j < 0 {
+			lines = append(lines, content[i:])
+			offs = append(offs, i)
+			return
+		}
+		lines = append(lines, content[i:i+j])
+		offs = append(offs, i)
+		i += j + 1
+	}
+}
+
+// fuzzyLineMatch locates every byte range in content whose consecutive lines equal
+// the needle's lines under the per-line normalizer norm. Ranges are non-overlapping.
+// endsBoundary is threaded back from the needle so the caller knows whether the range
+// should include the trailing line break.
+func fuzzyLineMatch(content, needle string, norm func(string) string) (ranges [][2]int, endsBoundary bool) {
+	nLines, eb := needleLineSlice(needle)
+	endsBoundary = eb
+	if len(nLines) == 0 {
+		return nil, eb
+	}
+	nn := make([]string, len(nLines))
+	for i, l := range nLines {
+		nn[i] = norm(l)
+	}
+	fLines, fOffs := splitKeepOffsets(content)
+	k := len(nn)
+	for i := 0; i+k <= len(fLines); i++ {
+		match := true
+		for j := 0; j < k; j++ {
+			if norm(fLines[i+j]) != nn[j] {
+				match = false
+				break
+			}
+		}
+		if !match {
+			continue
+		}
+		last := i + k - 1
+		start := fOffs[i]
+		var end int
+		if eb {
+			if last+1 < len(fOffs) {
+				end = fOffs[last+1] // include the terminator after the last matched line
+			} else {
+				end = len(content)
+			}
+		} else {
+			// Stop at the last line's visible content: a CRLF file leaves a '\r' on the
+			// split line, so exclude it too — otherwise the range bisects the CRLF and
+			// the write drops the '\r', corrupting the line ending.
+			end = fOffs[last] + len(strings.TrimSuffix(fLines[last], "\r"))
+		}
+		ranges = append(ranges, [2]int{start, end})
+		i = last // skip past this match so ranges never overlap
+	}
+	return ranges, eb
+}
+
+// applyRanges rebuilds content with every [start,end) range replaced by replacement.
+// Ranges must be ascending and non-overlapping (as fuzzyLineMatch returns them).
+func applyRanges(content string, ranges [][2]int, replacement string) string {
+	var b strings.Builder
+	prev := 0
+	for _, r := range ranges {
+		b.WriteString(content[prev:r[0]])
+		b.WriteString(replacement)
+		prev = r[1]
+	}
+	b.WriteString(content[prev:])
+	return b.String()
+}
+
+// diagnoseNoMatch builds the actionable error returned when an old_string matches
+// nowhere, even fuzzily. It finds the file line the supplied text is closest to and
+// reports where they first diverge, so the agent can copy exact bytes instead of
+// guessing again.
+func diagnoseNoMatch(old, oldStr, rel string) error {
+	needleLines, _ := needleLineSlice(oldStr)
+	anchor := ""
+	for _, l := range needleLines {
+		if strings.TrimSpace(l) != "" {
+			anchor = l
+			break
+		}
+	}
+	base := fmt.Sprintf("old_string not found in %s", rel)
+	tail := "Read the file first and copy a short, UNIQUE ASCII fragment verbatim — avoid unicode punctuation/emoji (« » ✅ ⏳) and trailing whitespace, which often differ from what you remember, and drop any line-number prefixes"
+	if anchor == "" {
+		return fmt.Errorf("%s — %s", base, tail)
+	}
+	na := strings.TrimSpace(anchor)
+	fLines := strings.Split(old, "\n")
+	bestIdx, bestScore := -1, -1
+	for i, fl := range fLines {
+		ft := strings.TrimSpace(fl)
+		score := commonPrefixRunes(ft, na)
+		if na != "" && strings.Contains(ft, na) {
+			score = len([]rune(na)) + 1 // a containing line beats any prefix overlap
+		}
+		if score > bestScore {
+			bestScore, bestIdx = score, i
+		}
+	}
+	if bestIdx < 0 || bestScore <= 0 {
+		return fmt.Errorf("%s — no similar line found. %s", base, tail)
+	}
+	fl := fLines[bestIdx]
+	col := firstDiffColumn(fl, anchor)
+	return fmt.Errorf("%s. Closest is line %d:\n  file:  %s\n  yours: %s\n  first differ at column %d. Copy the file's exact bytes there, or %s",
+		base, bestIdx+1, quoteForMsg(fl), quoteForMsg(anchor), col, tail)
+}
+
+// commonPrefixRunes counts the leading runes a and b share.
+func commonPrefixRunes(a, b string) int {
+	ra, rb := []rune(a), []rune(b)
+	n := 0
+	for n < len(ra) && n < len(rb) && ra[n] == rb[n] {
+		n++
+	}
+	return n
+}
+
+// firstDiffColumn returns the 1-based rune column at which a and b first differ (or
+// the length+1 of the shorter when one is a prefix of the other).
+func firstDiffColumn(a, b string) int {
+	return commonPrefixRunes(a, b) + 1
+}
+
+// quoteForMsg renders a line for an error message: quoted (so trailing whitespace and
+// unicode are visible) and length-capped so a long line cannot bloat the message.
+func quoteForMsg(s string) string {
+	const cap = 160
+	r := []rune(s)
+	if len(r) > cap {
+		s = string(r[:cap]) + "…"
+	}
+	return fmt.Sprintf("%q", s)
 }
 
 // globToRegexp converts a glob pattern (supporting **, *, ?) into an anchored
