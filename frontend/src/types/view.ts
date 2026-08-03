@@ -44,6 +44,9 @@ export interface ViewResult {
   source: string
   // How many items the projection deliberately hid. Always rendered.
   elided: number
+  // What was hidden ("kart", "eski mesaj", "node"). A bare count is ambiguous —
+  // 174 hidden messages and 174 hidden cards mean very different things.
+  elidedUnit?: string
   // Approximate token cost (chars/4) of header+body.
   tokens: number
 }

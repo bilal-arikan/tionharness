@@ -30,22 +30,27 @@ func NewGetViewTool(database *db.DB) GetViewTool { return GetViewTool{db: databa
 func (GetViewTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name: "get_view",
-		Description: "Get a COMPACT, deterministic summary of a large entity instead of reading it whole. " +
-			"A 40-node flow run collapses to a couple of lines that keep the shape of the graph: which " +
-			"nodes ran, how long each took, where the run is parked now, and what is wrong with it.\n\n" +
+		Description: "Get a COMPACT, deterministic summary of a large entity instead of reading it whole.\n\n" +
+			"  flowrun — a flow execution. A 40-node run collapses to a couple of lines that keep the " +
+			"shape of the graph: which nodes ran, how long each took, where the run is parked now, and " +
+			"what failed. sub=<nodeId> drills into one node.\n" +
+			"  session — a conversation. Cost, checklist progress, the last failure, stuck-turn count, a " +
+			"pending question, handoff lineage and coordinator role — WITHOUT reading the transcript.\n" +
+			"  board   — the kanban. Column histogram plus the signals that matter: cards stuck in a " +
+			"working column, failed cards, dependency-blocked cards, overdue cards, recent movement. " +
+			"Use id='board'.\n\n" +
 			"Numbers in a view are computed, never written by a model, so they can be trusted. The view " +
 			"always reports how many items it hid and offers drill-down handles for them — nothing is " +
 			"silently dropped.\n\n" +
-			"kind: 'flowrun' (a flow execution). id: the entity id. sub: optional drill-down (a node id).\n" +
-			"level: 'tiny' (one line) | 'card' (default) | 'full' (per-node detail).\n" +
+			"level: 'tiny' (one line) | 'card' (default) | 'full' (per-item detail).\n" +
 			"lens: 'health' (default) | 'stale' | 'recent' | 'errors' (failures only).\n\n" +
-			"Prefer this over get_flow_run + parsing state JSON: it is a fraction of the tokens and it " +
-			"surfaces the warning signals (stuck node, retry, suspended await-input) directly.",
+			"Prefer this over list_tasks / get_flow_run + parsing raw state: it is a fraction of the " +
+			"tokens and it surfaces the warning signals directly.",
 		InputSchema: json.RawMessage(`{
   "type": "object",
   "properties": {
-    "kind": { "type": "string", "enum": ["flowrun"], "description": "Entity type to project." },
-    "id": { "type": "string", "description": "Entity id (e.g. a flow run id)." },
+    "kind": { "type": "string", "enum": ["flowrun","session","board"], "description": "Entity type to project." },
+    "id": { "type": "string", "description": "Entity id (a flow run id, a session id, or 'board' for the kanban)." },
     "sub": { "type": "string", "description": "Optional drill-down target inside the entity (a node id for a flow run)." },
     "level": { "type": "string", "enum": ["tiny","card","full"], "description": "Budget tier (default card)." },
     "lens": { "type": "string", "enum": ["health","stale","recent","errors"], "description": "Which facts matter (default health)." }
@@ -55,7 +60,8 @@ func (GetViewTool) Def() providers.ToolDef {
 }`),
 		Examples: []json.RawMessage{
 			json.RawMessage(`{"kind":"flowrun","id":"RUN7f2"}`),
-			json.RawMessage(`{"kind":"flowrun","id":"RUN7f2","level":"full","lens":"errors"}`),
+			json.RawMessage(`{"kind":"board","id":"board","lens":"stale"}`),
+			json.RawMessage(`{"kind":"session","id":"SES9a1","level":"full"}`),
 			json.RawMessage(`{"kind":"flowrun","id":"RUN7f2","sub":"fetch-b"}`),
 		},
 	}
@@ -75,15 +81,18 @@ func (t GetViewTool) Call(ctx context.Context, input json.RawMessage) (string, e
 	if t.db == nil {
 		return "", fmt.Errorf("get_view: no workspace store in this context")
 	}
-	if strings.TrimSpace(in.ID) == "" {
+	kind := view.Kind(strings.TrimSpace(in.Kind))
+	id := strings.TrimSpace(in.ID)
+	// The board is the workspace's single kanban and has no id of its own, so an
+	// omitted id there is not a mistake to reject.
+	if id == "" && kind == view.KindBoard {
+		id = view.BoardRefID
+	}
+	if id == "" {
 		return "", fmt.Errorf("get_view: id is required")
 	}
 
-	ref := view.Ref{
-		Kind: view.Kind(strings.TrimSpace(in.Kind)),
-		ID:   strings.TrimSpace(in.ID),
-		Sub:  strings.TrimSpace(in.Sub),
-	}
+	ref := view.Ref{Kind: kind, ID: id, Sub: strings.TrimSpace(in.Sub)}
 	v, err := view.NewProjector(t.db).Project(ctx, ref, view.ParseLevel(in.Level), view.ParseLens(in.Lens))
 	if err != nil {
 		// A bad ref is returned as an error rather than an empty summary: a blank

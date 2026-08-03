@@ -4,6 +4,7 @@ import { api } from '@/api'
 import { useRefreshTrigger } from '@/shared/hooks/useRefreshTrigger'
 import type { Agent, Task, TaskPatch, Flow, BoardColumnDef, BoardViewDef } from '@/types'
 import { artifactKindForUpload } from '@/features/artifacts/artifactMeta'
+import { ViewButton } from '@/features/view/ViewButton'
 import { TaskFormModal } from './TaskFormModal'
 import { BoardColumnEditor } from './BoardColumnEditor'
 import {
@@ -406,6 +407,9 @@ export function TaskBoard({ agents, onError }: Props) {
           title="Görevler"
           right={
             <>
+              {/* The board's projection — the same bytes an agent gets from
+                  get_view{kind:'board'}: column histogram + the signals. */}
+              <ViewButton target={{ kind: 'board', id: 'board' }} />
               {groupBy === 'status' && (
                 <button
                   data-testid="task-board-columns-editor"

@@ -1,6 +1,7 @@
 # 66 — View (Projeksiyon) Katmanı: büyük durumun bağlam-ucuz özeti
 
-> **TASLAK / tasarım notu — kod yok.** Büyük veri yüzeylerinin (uzun session,
+> **Faz 1-4 CANLI** (flowrun + session + board projeksiyonları, `ViewPanel` UI,
+> `get_view` aracı); faz 5-6 tasarım. Büyük veri yüzeylerinin (uzun session,
 > çok-node'lu flow run, yüzlerce kartlı board, tüm workspace) o anki durumunu
 > **deterministik, cache'lenebilir, bütçe-farkındalı** bir projeksiyona indiren tek
 > primitif. Hem ajanlara (araç/suffix) hem kullanıcıya (UI paneli) **aynı çıktıyı**
@@ -128,28 +129,36 @@ start✓ → agent:collect✓(31s,4tool) → branch⑂[has_data] → parallel[3/
 
 40 node'luk bir koşu tek ekran satırına iner; hatalı node handle ile açılır.
 
-### Board
+### Board (gerçek çıktı — 62 token)
 
 ```
-BOARD ws:main · 187 kart · asOf 15:41
-todo 92 | doing 11 (WIP↑ limit 5) | review 6 | done 78
-⚠ 4 kart >7g doing'de: TSK-19, TSK-44, TSK-51, TSK-88
-⚠ review'da 6 kart, 2g hareketsiz
-Δ24s: +7 yeni · 5 done · 2 geri düştü (TSK-31 review→doing ×3 ping-pong)
-…173 kart gizlendi                              ↳ view(board, lens=stale)
+BOARD · 8 kart · 4 sütun · asOf 01:07:50
+todo 4 | in_progress 2 | done 1 | failed 1
+⚠ 1 kart >3g hareketsiz: T2
+✗ 1 başarısız kart: T4
+⛔ 1 kart bağımlılıkla bloke: T5
+📅 1 kart gecikmiş: T6
+Δ24s: 4 kart değişti (T3, T5, T6, T7)
+• 1 kartın sahibi yok
+…8 kart gizlendi  ↳ kart listesi
 ```
 
-Kart listesi **değil**, sinyal. 200 kart → 14 satır.
+Kart listesi **değil**, sinyal. Yaşlılık yalnız **çalışan sütunlarda**
+(`in_progress`/`review`) uyarıdır — hareketsiz bir backlog kartı normaldir.
 
-### Session
+### Session (gerçek çıktı — 60 token)
 
 ```
-SES:SES9a1 "auth refactor" · 214 msg · 187k tok · 3g12s · agent:builder · cache🔥
-Hedef: JWT→session cookie geçişi
-Durum: 7/11 todo tamam · son araç hatası yok · StuckTurns 0
-⚠ Açık soru: migration rollback stratejisi (turn 141, cevapsız)
-Son 3 tur: …                                    ↳ view(SES9a1, level=full)
+SES:SES9a1 "auth refactor" · 214 msg · 187k tok · 3g önce açıldı · agent:builder
+özet: JWT'den session cookie'ye geçiş yapılıyor.
+todo: 2/4 tamam · şu an: testleri güncelle
+⤺ ilk 120 mesaj özete katlandı (compaction)
+son hareket: 4dk önce
+…174 eski mesaj gizlendi  ↳ son turlar + tam özet
 ```
+
+Transkript **okunmadan** üretilir: header + usage bellek-içi, geri kalanı yalnız
+son 40 mesajlık kuyruktan. Okunmayan mesaj sayısı `Elided`'e yazılır.
 
 ### Workspace
 
@@ -177,15 +186,20 @@ Kritik tasarım tercihi: **ajanın gördüğü özetin birebir aynısı kullanı
 gösterilir.** Böylece view yanlış/eksikse kullanıcı fark eder — doğrulanabilirlik
 bedava gelir. Ayrı bir "insan özeti" üretilmez.
 
-### 1. Bağlam düğmesi (her büyük ekranda)
+### 1. `◱ Özet` düğmesi (her büyük ekranda)
 
-Chat header'ı, RunView, Board ve Workspace ekranlarına küçük bir **`◱ Bağlam`**
-butonu. Tıklayınca sağdan `ViewPanel` drawer'ı açılır.
+Chat header'ı, Akışlar ▸ Koşular, RunView ve Görevler (board) ekranlarında küçük
+bir **`◱ Özet`** butonu. Tıklayınca sağdan `ViewPanel` sheet'i açılır.
+
+> **Neden "Bağlam" değil:** chat header'ında **zaten bir "Bağlam" butonu var** ve
+> o tamamen başka bir şey yapar — sonraki turun **ham prompt'unu** önizler
+> (`onOpenContextPreview`). Aynı araç çubuğunda iki "Bağlam" düğmesi, biraz daha
+> soluk bir kelimeden çok daha kötü olurdu.
 
 ### 2. `ViewPanel` (`frontend/src/features/view/`)
 
 ```
-┌─ ◱ Bağlam — FLOW run:RUN7f2 ──────────────── ✕ ─┐
+┌─ ◱ Özet — flowrun:RUN7f2 ─────────────────── ✕ ─┐
 │ [tiny] [card] [full]      lens: [health ▾]      │  ← level + lens seçici
 │ asOf 15:41:07 (7sn önce)  ~112 tok   🔄 Yenile  │  ← tazelik + ölçülen maliyet
 ├─────────────────────────────────────────────────┤
@@ -193,7 +207,7 @@ butonu. Tıklayınca sağdan `ViewPanel` drawer'ı açılır.
 │ start✓ → agent:collect✓(31s,4tool) → …          │
 │ ⚠ node:fetch-b retry×2 (429 rate_limit)         │  ← tıklanabilir handle
 ├─────────────────────────────────────────────────┤
-│ 173 öğe gizlendi                                │  ← Elided her zaman görünür
+│ …173 kart gizlendi                              │  ← Elided + BİRİMİ her zaman
 │ [📋 Kopyala]  [⤓ Ajana gönder]                  │
 └─────────────────────────────────────────────────┘
 ```
@@ -201,10 +215,10 @@ butonu. Tıklayınca sağdan `ViewPanel` drawer'ı açılır.
 - **Ham DSL gösterilir** — güzelleştirilmiş kart değil. Model ne görüyorsa o.
 - **Token sayacı** görünür → hangi view'ın pahalı olduğu ölçülebilir.
 - **Handle'lar tıklanabilir** → panel içinde drill-down (breadcrumb'lı).
-- **"Ajana gönder"** → view'ı composer'a `view://…` referansı olarak yapıştırır.
-- Canlı entity'lerde SSE ile otomatik tazelenir (flow run çalışırken).
+- `Elided` **birimiyle** yazılır (`kart` / `eski mesaj` / `node`): çıplak bir sayı
+  belirsizdir — 174 gizli mesaj ile 174 gizli kart okuyucu için aynı şey değildir.
 
-### 3. Workspace Bağlam paneli
+### 3. Workspace özet paneli *(faz 6)*
 
 Workspace ekranında `workspace` view'ı sürekli görünür bir kart olarak; ileride
 supervisor bulguları da buraya düşer.
@@ -230,27 +244,85 @@ GET /api/views/workspace?level=tiny
 
 ## Faz planı
 
-| Faz | Kapsam | Çıktı |
+| Faz | Kapsam | Durum |
 |-----|--------|-------|
-| **1** | `internal/view` iskelet + **yalnız L0/L1** + **tek entity: flow run** | `Project()` + `GET /api/views/flowrun/{id}` |
-| **2** | `ViewPanel` + `◱ Bağlam` butonu (RunView) | UI'da görünür değer, DSL doğrulanır |
-| **3** | `get_view` aracı (pull kanalı) | Ajanlar kullanır |
-| **4** | `board` + `session` view'ları | Board/Chat ekranlarında buton |
-| **5** | L2 incremental fold + kalıcı cache | Uzun oturumlarda anlatı |
-| **6** | `workspace` view (tiny toplamı) | Supervisor ajanının girdisi hazır |
+| **1** | `internal/view` + **yalnız L0/L1** + **tek entity: flow run** + `GET /api/views/{kind}/{id}` | ✅ |
+| **2** | `ViewPanel` + `◱ Özet` butonu (Akışlar ▸ Koşular başlığı + alt koşular) | ✅ |
+| **3** | `get_view` aracı (pull kanalı) | ✅ |
+| **4** | `board` + `session` view'ları + Chat/Görevler ekranlarında buton | ✅ |
+| **5** | L2 incremental fold + kalıcı cache | ⬜ |
+| **6** | `workspace` view (tiny toplamı) → supervisor girdisi | ⬜ |
 
-Faz 1-2 bir günlük iş ve anında görünür değer üretir. Faz 5'e ancak 1-4 kanıtlanırsa
-geçilir.
+Faz 5'e ancak 1-4 kanıtlanırsa geçilir.
 
-## Açık sorular
+## Uygulanan (Faz 1-4)
 
-- `get_view` yeni bir araç mı, yoksa mevcut `list_*` / `read_session_debug`
-  araçlarına `level` parametresi mi? *(Yeni araç daha temiz görünüyor; mevcutları
-  kirletmemek adına.)*
-- DSL grameri nerede tanımlansın — kod içinde mi, `internal/prompts` benzeri
-  versiyonlu bir şablon dosyasında mı ([61](61-MERKEZI-PROMPT-REGISTRY.md))?
+**Backend — `internal/view`** (leaf paket; `db` + `orchestration` okur):
+
+- `view.go` — `Ref`/`Kind`/`Level`/`Lens`/`Handle`/`View` + `View.Text()` (elision
+  satırı dahil tam render) + `finalize()` (token tahmini = karakter/4, `AsOf`).
+- `dsl.go` — `lines` biriktirici + `dur`/`durMs`/`age`/`clip`/`collapseSpace`.
+  Her projeksiyon süreleri ve kısaltmayı aynı şekilde biçimler.
+- `flowrun.go` — projeksiyonun kendisi. Başlık (kimlik/ilerleme/süre/statü/asOf),
+  zincir (paralel çocuklar ebeveyne katlanır, ardışık node süresi trace
+  damgalarının farkından türer), L1 sinyaller, `LevelFull` node detayı,
+  handle'lar. `Sub` verilince tek-node drill-down'ı (`projectFlowNode`).
+- `board.go` — sütun histogramı + L1 sinyaller (çalışan sütunda yaşlanan kart,
+  başarısız kart, bağımlılıkla bloke, gecikmiş, Δ24s, sahipsiz). Sütunlar
+  **workspace ayarından değil, kartların kendisinden** türer: bu paketi settings
+  bağımlılığından kurtarır ve view'ı dürüst tutar — var olan panoyu raporlar,
+  yapılandırılmış olanı değil (yapılandırılmış-ama-boş sütun görünmez).
+- `session.go` — kimlik/maliyet/coordination soyağacı başlığı + rolling summary +
+  todo ilerlemesi + L1 sinyaller (StuckTurns, bekleyen soru, son hata, alarm
+  etiketleri, handoff, compaction). `agent` paketi **import edilmez** (cycle:
+  agent → tools → view); `TurnStep` yapısal olarak `stepLite` ile çözülür.
+- `project.go` — `Store` arayüzü (`*db.DB` sağlar) + `Projector.Project`
+  dispatch'i + `loadSession` (yalnız **son 40 mesaj**; `tiny` seviyede hiç dosya
+  okumaz). Bilinmeyen kind ve bozuk graph/state **hata** döner, boş view değil.
+
+**API** — `internal/api/views.go`: `GET /api/views/{kind}/{id}?level&lens&sub`.
+Yanıt hem yapısal zarfı hem `text`'i taşır; panel `text`'i olduğu gibi basar.
+Bilinmeyen kind → 400, olmayan entity → 404.
+
+**Araç** — `internal/tools/builtin_view.go`: `get_view{kind,id,sub,level,lens}`
+(`kind` ∈ flowrun|session|board), `toolsetup.go`'da her ajana açık (salt-okunur),
+kategori `diagnostics`. Çıktı = `View.Text()` + drill-down çağrı ipuçları.
+
+**UI** — `frontend/src/features/view/`:
+`ViewButton` (◱ Özet tetikleyicisi, sağdan açılan sheet) + `ViewPanel`
+(level/lens seçici, `asOf` + `~N tok` göstergesi, **ham DSL monospace**,
+birimli `elided` satırı, tıklanabilir handle'lar + breadcrumb, Kopyala).
+`api/views.ts` + `types/view.ts`. Bağlandığı yerler: Akışlar ▸ Koşular
+`FlowsHeader`, `RunView` özet satırı (inilen alt koşular), **`AppHeader`** (chat →
+`session`), **`TaskBoard`** PaneHeader (→ `board`).
+
+Örnek çıktı (7 node'luk koşu, **47 token**):
+
+```
+FLOW run:RUN7f2 "research-pipeline" · 5/7 node · 2m00s · RUNNING · asOf 00:45:55
+start✓(100ms) → agent:collect✓(31s) → parallel:fan[2/2✓ 48s] → agent:synth⚡RUNNING(40s)
+      → …2 pending
+```
+
+Testler: `internal/view/{flowrun,board,session}_test.go` (paralel katlama, mevcut
+node, hata + handle, waiting, lens filtreleri, elision, özel sütun sıralaması,
+boş pano, coordination soyağacı, boş girdi reddi) ve `internal/api/views_test.go`
+(üç kind uçtan uca + 400/404).
+
+## Açık sorular (kalanlar)
+
+- DSL grameri nerede versiyonlansın — bugün kod içinde; `internal/prompts` benzeri
+  bir şablon dosyasına taşınmalı mı ([61](61-MERKEZI-PROMPT-REGISTRY.md))?
 - L2 fold hangi modeli kullanmalı? (Ucuz model + `internal/prompts` anahtarı.)
-- Board view'ında "yaşlı kart" eşiği workspace ayarı mı, sabit mi?
+- Board view'ında "yaşlı kart" eşiği (bugün sabit 3 gün) ve WIP tavanı (8)
+  workspace ayarı olmalı mı?
+- **Göç sırası — hâlâ açık ve en önemlisi.** Katman kuruldu ama hiçbir eski
+  ad-hoc özetleyici henüz göç etmedi; kabul testi (bkz. "Neden") sağlanmadı.
+  Aday sıra: coordinator worker-state bloğu (en küçük) → insight prefilter →
+  handoff → `conversation` summarizer.
+- Session view'ı 40 mesajlık kuyruk okuyor. Bu, "board gibi tamamen bellek-içi"
+  olmayan tek projeksiyon — L2 fold (faz 5) gelince kuyruk yerine katlanmış
+  digest'ten okumalı mı?
 
 ## İlgili dokümanlar
 

@@ -130,6 +130,10 @@ type View struct {
 	// Elided is how many items the projection deliberately left out. Rendered
 	// unconditionally — see the package doc.
 	Elided int `json:"elided"`
+	// ElidedUnit names what was left out ("kart", "mesaj", "node"). A generic
+	// "item" count is ambiguous — 174 hidden messages and 174 hidden cards mean
+	// very different things to whoever reads the view. Empty renders as "öğe".
+	ElidedUnit string `json:"elidedUnit,omitempty"`
 	// Tokens is an approximate cost of Header+Body (chars/4). Approximate on
 	// purpose: it exists so the UI can show which views are expensive, not for
 	// billing.
@@ -151,9 +155,16 @@ func (v View) Text() string {
 		if !strings.HasSuffix(b.String(), "\n") {
 			b.WriteString("\n")
 		}
-		b.WriteString(fmt.Sprintf("…%d öğe gizlendi", v.Elided))
+		unit := v.ElidedUnit
+		if unit == "" {
+			unit = "öğe"
+		}
+		b.WriteString(fmt.Sprintf("…%d %s gizlendi", v.Elided, unit))
+		// Name the handle rather than its ref: the label says what opening it
+		// gets you, which is what a reader needs to decide. The exact call syntax
+		// is appended separately by the get_view tool.
 		if len(v.Handles) > 0 {
-			b.WriteString("  ↳ " + v.Handles[0].Ref.String())
+			b.WriteString("  ↳ " + v.Handles[0].Label)
 		}
 	}
 	return strings.TrimRight(b.String(), "\n")

@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/bilal-arikan/tionswarm/internal/db"
 )
@@ -86,6 +87,89 @@ func TestGetViewProjectsFlowRun(t *testing.T) {
 	}
 	if n, _ := got["tokens"].(float64); n <= 0 {
 		t.Errorf("token estimate not reported: %v", got["tokens"])
+	}
+}
+
+// TestGetViewProjectsBoard covers the board kind end to end, including the
+// signal that matters most: a card stuck in a working column.
+func TestGetViewProjectsBoard(t *testing.T) {
+	ctx := context.Background()
+	database, err := db.Open(t.TempDir())
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	t.Cleanup(func() { database.Close() })
+
+	fresh, _ := database.CreateTask(ctx, db.Task{Title: "aktif", BoardState: db.BoardTodo})
+	stuck, err := database.CreateTask(ctx, db.Task{Title: "takılı", BoardState: db.BoardInProgress})
+	if err != nil {
+		t.Fatalf("create task: %v", err)
+	}
+	// Backdate the in-progress card past the staleness threshold.
+	stuck.UpdatedAt = time.Now().Add(-10 * 24 * time.Hour).UnixMilli()
+	if err := database.UpdateTask(ctx, stuck); err != nil {
+		t.Fatalf("update task: %v", err)
+	}
+
+	rec := serveFlowRuns((&Server{}).handleGetView, database,
+		"/api/views/board/board",
+		map[string]string{"kind": "board", "id": "board"})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status %d: %s", rec.Code, rec.Body.String())
+	}
+
+	got := decodeView(t, rec.Body.Bytes())
+	text, _ := got["text"].(string)
+	if !strings.Contains(text, "2 kart") {
+		t.Errorf("card count missing:\n%s", text)
+	}
+	if !strings.Contains(text, "todo 1 | in_progress 1") {
+		t.Errorf("histogram missing:\n%s", text)
+	}
+	if !strings.Contains(text, "hareketsiz") {
+		t.Errorf("stale signal missing:\n%s", text)
+	}
+	if unit, _ := got["elidedUnit"].(string); unit != "kart" {
+		t.Errorf("elidedUnit = %q, want kart", unit)
+	}
+	_ = fresh
+}
+
+// TestGetViewProjectsSession pins that a session view answers from the header +
+// tail without the caller having to read the transcript.
+func TestGetViewProjectsSession(t *testing.T) {
+	ctx := context.Background()
+	database, err := db.Open(t.TempDir())
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	t.Cleanup(func() { database.Close() })
+
+	sess, err := database.CreateSession(ctx, db.Session{AgentID: "builder", Title: "auth refactor"})
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+	if _, err := database.AddMessage(ctx, db.Message{
+		SessionID: sess.ID, Role: "assistant", Text: "ilerliyorum",
+		Steps: `[{"kind":"todo","todos":[{"content":"a","status":"completed"},{"content":"b","status":"in_progress"}]}]`,
+	}); err != nil {
+		t.Fatalf("add message: %v", err)
+	}
+
+	rec := serveFlowRuns((&Server{}).handleGetView, database,
+		"/api/views/session/"+sess.ID,
+		map[string]string{"kind": "session", "id": sess.ID})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status %d: %s", rec.Code, rec.Body.String())
+	}
+
+	got := decodeView(t, rec.Body.Bytes())
+	text, _ := got["text"].(string)
+	if !strings.Contains(text, "auth refactor") || !strings.Contains(text, "agent:builder") {
+		t.Errorf("session header wrong:\n%s", text)
+	}
+	if !strings.Contains(text, "todo: 1/2 tamam") {
+		t.Errorf("checklist rollup missing:\n%s", text)
 	}
 }
 

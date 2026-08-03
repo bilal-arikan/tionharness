@@ -180,7 +180,7 @@ func TestFlowRunLongChainReportsElision(t *testing.T) {
 	if v.Elided == 0 {
 		t.Fatal("over-long chain must report elision")
 	}
-	if !strings.Contains(v.Text(), "öğe gizlendi") {
+	if !strings.Contains(v.Text(), "node gizlendi") {
 		t.Errorf("elision not rendered:\n%s", v.Text())
 	}
 }

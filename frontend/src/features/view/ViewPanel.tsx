@@ -16,7 +16,7 @@ interface Props {
   onSend?: (text: string, ref: ViewRef) => void
 }
 
-// ViewPanel is the "◱ Bağlam" drawer: the same compact projection an agent gets,
+// ViewPanel is the "◱ Özet" drawer: the same compact projection an agent gets,
 // shown verbatim.
 //
 // Two deliberate choices (see _Docs/66-VIEW-KATMANI.md):
@@ -80,7 +80,7 @@ export function ViewPanel({ target, onClose, onSend }: Props) {
             <ChevronLeft size={15} />
           </button>
         )}
-        <span className="truncate text-sm font-medium">◱ Bağlam</span>
+        <span className="truncate text-sm font-medium">◱ Özet</span>
         <span className="truncate font-mono text-xs text-[var(--color-text-dim)]">
           {refToString(ref)}
         </span>
@@ -160,8 +160,8 @@ export function ViewPanel({ target, onClose, onSend }: Props) {
               items misleads whoever reads it, model or human. */}
           {result.elided > 0 && (
             <p className="mb-2 text-xs text-[var(--color-text-dim)]">
-              {result.elided} öğe gizlendi — daha fazlası için seviyeyi yükselt veya bir bağlantıyı
-              aç.
+              {result.elided} {result.elidedUnit || 'öğe'} gizlendi — daha fazlası için seviyeyi
+              yükselt veya bir bağlantıyı aç.
             </p>
           )}
           {(result.handles ?? []).length > 0 && (

@@ -61,7 +61,7 @@ func ProjectFlowRun(in FlowRunInput, level Level, lens Lens) (View, error) {
 	}
 
 	segs, elided := flowChain(in, now)
-	v.Elided = elided
+	v.Elided, v.ElidedUnit = elided, "node"
 	v.Header = flowHeader(in, now)
 
 	if level == LevelTiny {

@@ -7,6 +7,7 @@ import { api } from '@/api'
 import type { Agent, Session } from '@/types'
 import { CopyPathButton } from '@/shared/components/CopyPathButton'
 import { RevealButton } from '@/shared/components/RevealButton'
+import { ViewButton } from '@/features/view/ViewButton'
 import type { View } from './NavRail'
 import { VIEW_TITLE } from './viewRegistry'
 
@@ -102,6 +103,13 @@ export function AppHeader({
               labelClassName="hidden sm:inline"
               title="Oturum klasörünü aç"
             />
+            {/* This session's projection — the compact summary an agent gets from
+                get_view. Distinct from the "Bağlam" button next to it, which
+                previews the raw prompt of the NEXT turn. */}
+            <ViewButton
+              target={{ kind: 'session', id: activeSessionId }}
+              className="!rounded-lg !py-1"
+            />
             {/* Next-turn context preview (moved here from the detail panel). */}
             <button
               onClick={onOpenContextPreview}
@@ -124,7 +132,11 @@ export function AppHeader({
             <button
               onClick={onOpenSessionFlow}
               aria-pressed={sessionFlowActive}
-              title={sessionFlowActive ? 'Sohbet transkriptine dön' : 'Bu oturumu anlık bir akış olarak gör'}
+              title={
+                sessionFlowActive
+                  ? 'Sohbet transkriptine dön'
+                  : 'Bu oturumu anlık bir akış olarak gör'
+              }
               className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs transition ${
                 sessionFlowActive
                   ? 'border-[var(--color-accent)] text-[var(--color-accent)]'

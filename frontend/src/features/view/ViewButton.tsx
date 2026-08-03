@@ -12,9 +12,13 @@ interface Props {
   disabled?: boolean
 }
 
-// ViewButton is the "◱ Bağlam" trigger that opens the projection drawer for one
+// ViewButton is the "◱ Özet" trigger that opens the projection drawer for one
 // entity. It owns the open/closed state so a host screen only has to say WHICH
 // entity it is showing.
+//
+// Labelled "Özet", not "Bağlam": the chat header already has a "Bağlam" button
+// that previews the raw prompt of the NEXT turn. Two buttons with one name in the
+// same toolbar would be worse than a slightly less evocative word.
 //
 // The drawer is right-anchored (a side sheet, not a centered dialog): the point
 // is to read the projection against the screen behind it, not to replace it.
@@ -27,11 +31,11 @@ export function ViewButton({ target, className = '', compact, disabled }: Props)
         type="button"
         onClick={() => setOpen(true)}
         disabled={disabled}
-        title="Bu ekranın ajana verilecek kompakt özeti (Bağlam)"
+        title="Bu ekranın ajana verilen kompakt özeti (get_view ile aynı çıktı)"
         className={`flex shrink-0 items-center gap-1.5 rounded-md border border-[var(--color-border)] px-2.5 py-1 text-xs text-[var(--color-text-dim)] transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)] disabled:cursor-not-allowed disabled:opacity-50 ${className}`}
       >
         <span className="leading-none">◱</span>
-        {!compact && 'Bağlam'}
+        {!compact && 'Özet'}
       </button>
       {open && (
         <ModalOverlay onClose={() => setOpen(false)} padding="p-0" className="!justify-end">

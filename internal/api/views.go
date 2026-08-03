@@ -40,16 +40,17 @@ func (s *Server) handleGetView(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
-		"ref":     v.Ref,
-		"level":   v.Level,
-		"lens":    v.Lens,
-		"header":  v.Header,
-		"body":    v.Body,
-		"text":    v.Text(),
-		"handles": v.Handles,
-		"asOf":    v.AsOf,
-		"source":  v.Source,
-		"elided":  v.Elided,
-		"tokens":  v.Tokens,
+		"ref":        v.Ref,
+		"level":      v.Level,
+		"lens":       v.Lens,
+		"header":     v.Header,
+		"body":       v.Body,
+		"text":       v.Text(),
+		"handles":    v.Handles,
+		"asOf":       v.AsOf,
+		"source":     v.Source,
+		"elided":     v.Elided,
+		"elidedUnit": v.ElidedUnit,
+		"tokens":     v.Tokens,
 	})
 }

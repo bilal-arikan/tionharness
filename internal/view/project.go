@@ -21,7 +21,17 @@ func decodeState(data string, st *orchestration.State) error {
 type Store interface {
 	GetFlowRun(ctx context.Context, id string) (db.FlowRun, error)
 	GetFlow(ctx context.Context, id string) (db.Flow, error)
+	GetSession(ctx context.Context, id string) (db.Session, error)
+	GetSessionUsage(ctx context.Context, id string) (db.SessionUsage, error)
+	ListMessages(ctx context.Context, sessionID string) ([]db.Message, error)
+	ListWaitingSessionAsks(ctx context.Context) ([]db.SessionAsk, error)
+	ListTasks(ctx context.Context) ([]db.Task, error)
 }
+
+// BoardRefID is the id a board ref carries. The board is the workspace's single
+// kanban, so it has no id of its own; naming it keeps Ref uniform (every ref has
+// an id) instead of special-casing an empty one.
+const BoardRefID = "board"
 
 // Projector resolves a Ref against a store and renders the matching projection.
 type Projector struct {
@@ -51,9 +61,65 @@ func (p *Projector) Project(ctx context.Context, ref Ref, level Level, lens Lens
 		}
 		in.Sub = ref.Sub
 		return ProjectFlowRun(in, level, lens)
+	case KindSession:
+		in, err := p.loadSession(ctx, ref.ID, level)
+		if err != nil {
+			return View{}, err
+		}
+		return ProjectSession(in, level, lens)
+	case KindBoard:
+		tasks, err := p.store.ListTasks(ctx)
+		if err != nil {
+			return View{}, fmt.Errorf("view: board: %w", err)
+		}
+		return ProjectBoard(BoardInput{Tasks: tasks}, level, lens)
 	default:
 		return View{}, fmt.Errorf("view: unsupported kind %q", ref.Kind)
 	}
+}
+
+// loadSession gathers the session header, its usage rollup, the transcript TAIL
+// and any pending question.
+//
+// Only the tail is read, and only above the tiny tier: a tiny view is answered
+// entirely from the in-memory session header, so pushing one costs no file I/O.
+// The number of messages skipped is reported as View.Elided.
+func (p *Projector) loadSession(ctx context.Context, id string, level Level) (SessionInput, error) {
+	sess, err := p.store.GetSession(ctx, id)
+	if err != nil {
+		return SessionInput{}, fmt.Errorf("view: session %s: %w", id, err)
+	}
+	in := SessionInput{Session: sess}
+
+	// A session with no recorded usage is normal (nothing has run yet); a read
+	// error is not worth failing the whole view over, so the cost line degrades
+	// to zero rather than taking the projection down.
+	if usage, err := p.store.GetSessionUsage(ctx, id); err == nil {
+		in.Usage = usage
+	}
+	if level == LevelTiny {
+		return in, nil
+	}
+
+	msgs, err := p.store.ListMessages(ctx, id)
+	if err != nil {
+		return SessionInput{}, fmt.Errorf("view: session %s messages: %w", id, err)
+	}
+	if len(msgs) > sessionTailMessages {
+		in.TailFrom = len(msgs) - sessionTailMessages
+		msgs = msgs[in.TailFrom:]
+	}
+	in.Messages = msgs
+
+	if asks, err := p.store.ListWaitingSessionAsks(ctx); err == nil {
+		for i := range asks {
+			if asks[i].SessionID == id {
+				in.WaitingAsk = &asks[i]
+				break
+			}
+		}
+	}
+	return in, nil
 }
 
 // loadFlowRun gathers the run, its flow and the parsed graph/state.

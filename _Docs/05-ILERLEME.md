@@ -45,6 +45,81 @@
   shell-gate satırı güncellendi.
 - **Doğrulama:** `rtk go build ./...` ✅.
 
+## View katmanı — Faz 4: board + session projeksiyonları (2026-08-04) ✅
+
+- **`internal/view/board.go`** — pano projeksiyonu. Sütun histogramı + L1
+  sinyaller: çalışan sütunda (`in_progress`/`review`) >3g hareketsiz kart,
+  başarısız kartlar, bağımlılıkla bloke kartlar, gecikmiş kartlar, Δ24s hareket,
+  sahipsiz kart sayısı. **8 kart → 62 token.** Sütunlar workspace ayarından
+  DEĞİL kartlardan türer → paket settings bağımlılığı almaz ve view var olan
+  panoyu raporlar (yapılandırılmış-ama-boş sütun görünmez). Yerleşik sütunlar
+  önce, özel sütunlar alfabetik sonra. Kart listesi card seviyesinde bilerek
+  yok → `Elided = tüm kart sayısı`.
+- **`internal/view/session.go`** — oturum projeksiyonu, **transkript okumadan**:
+  header + usage bellek-içi, geri kalanı yalnız son 40 mesajlık kuyruktan
+  (`tiny` seviyede hiç dosya okunmaz). Rolling summary, todo ilerlemesi
+  (`2/4 tamam · şu an: …`), L1 sinyaller (StuckTurns, durable ask beklemesi, son
+  hata adımı, alarm etiketleri, handoff soyağacı, compaction). Coordination
+  soyağacı **başlıkta** — bir worker'ın "stuck"ı koordinatörünün de sorunu.
+  **214 mesajlık oturum → 60 token.** Okunmayan mesaj sayısı `Elided`'e yazılır.
+- **Import cycle'dan kaçınma:** `view` paketi `internal/agent`'ı import edemez
+  (agent → tools → view). `TurnStep`/`TodoItem` yapısal olarak `stepLite`/
+  `todoLite` ile çözülür — okunan alanlar zaten kalıcı oturum formatının parçası.
+- **`Elided` artık birimli** (`ElidedUnit`: kart / eski mesaj / node). Çıplak
+  sayı belirsizdi: 174 gizli mesaj ile 174 gizli kart okuyucu için aynı şey değil.
+- **`get_view` üç kind'ı da alır** (`flowrun|session|board`); board'da `id`
+  boşsa `"board"`a düşer (panonun kendi id'si yok, bu bir hata değil).
+- **UI:** `◱ Özet` butonu **chat header**'ına (→ session) ve **Görevler**
+  PaneHeader'ına (→ board) eklendi. **İsim değişti: "Bağlam" → "Özet"** — chat
+  header'ında zaten bir "Bağlam" butonu var ve o sonraki turun **ham prompt'unu**
+  önizler; aynı çubukta iki "Bağlam" kötü olurdu.
+- **Testler:** `board_test.go` (5) + `session_test.go` (6) + genişletilen
+  `api/views_test.go` (board/session uçtan uca). Tüm suite + frontend build yeşil.
+- **Uyarı — kabul testi hâlâ sağlanmadı:** katman kuruldu ama mevcut ad-hoc
+  özetleyicilerden (coordinator worker-state bloğu, insight prefilter, handoff,
+  `conversation` summarizer) hiçbiri henüz göç etmedi. Göç olmadan bu, beşinci
+  bir özetleyici olarak kalır — sıradaki iş bu.
+
+## View (projeksiyon) katmanı — Faz 1-3 (2026-08-04) ✅
+
+- **İstek:** "Büyük verilerin toplandığı yerlerin (uzun session, flow akışı, çok
+  kartlı board) o anki durumunu bağlamı şişirmeden, bütün ajanlara verilebilecek
+  şekilde çıktı veren bir sistem" + "bu değerleri UI'da bir butonla/panelle
+  görebilelim". Tasarım notu: [66-VIEW-KATMANI.md](66-VIEW-KATMANI.md).
+- **Yeni paket `internal/view`** (leaf; `db`+`orchestration` okur):
+  `Project(ref, level, lens) → View{Header, Body, Handles, AsOf, Source, Elided,
+  Tokens}`. Üretim **deterministik**: L0 sayım + L1 kural-tabanlı sinyal, LLM yok
+  → sayılar uydurulamaz. Bütçe tier'ları `tiny`/`card`/`full`, dört lens
+  (`health`/`stale`/`recent`/`errors`). Çıktı JSON değil **satır-bazlı kompakt
+  DSL** (JSON'un tekrar eden anahtarları bu ölçekte saf token israfı).
+- **İlk entity: flow run** (`flowrun.go`). Paralel node'un çocukları ebeveyne
+  katlanır (`parallel:fan[2/2✓ 48s]`); ardışık node süresi trace damgalarının
+  farkından türer (motor sırayla koştuğu için bu gerçek duvar saati); koşunun
+  park ettiği node (running/waiting/failed) trace'te olmasa da gösterilir.
+  7 node'luk bir koşu **47 token**, 40 node'luk koşu iki satır. `sub` ile
+  tek-node drill-down'ı.
+- **Sessiz kesme yok:** `View.Elided` her zaman render edilir; zincir 24
+  segmenti aşarsa ortası katlanır ve kaç node atlandığı yazılır.
+- **Hata yutulmaz:** bilinmeyen kind → 400, olmayan koşu → 404, bozuk graph/state
+  JSON → hata. Boş view "sağlıklı boş entity" gibi okunacağı için asla
+  döndürülmez.
+- **API** `GET /api/views/{kind}/{id}?level&lens&sub` (`internal/api/views.go`);
+  yanıt `text` alanını taşır — ajanın aldığı baytların aynısı.
+- **Araç** `get_view` (`internal/tools/builtin_view.go`) — pull kanalı, her ajana
+  açık, kategori `diagnostics`. Push (dinamik suffix) bilerek yapılmadı: canlı bir
+  özeti her tura enjekte etmek prompt cache'ini kırar ([57](57-PROMPT-EPOCH.md)).
+- **UI `frontend/src/features/view/`** — `◱ Özet` butonu (Akışlar ▸ Koşular
+  başlığı + `RunView` özet satırı) → sağdan `ViewPanel` sheet'i: level/lens
+  seçici, `asOf` + `~N tok`, **ham DSL monospace** (güzelleştirilmiş kart değil →
+  projeksiyon yanlışsa kullanıcı görür), `elided` satırı, tıklanabilir handle'lar
+  + breadcrumb, Kopyala.
+- **Testler:** `internal/view/flowrun_test.go` (7 senaryo) +
+  `internal/api/views_test.go` (200/400/404). Tüm backend suite + frontend build
+  yeşil.
+- **Sırada:** faz 4 = `board` + `session` view'ları ve mevcut ad-hoc
+  özetleyicilerin (conversation summarizer, coordinator worker-state bloğu)
+  bu katmana göçü — kabul testi eskisinin **silinmesi**.
+
 ## Hit-limit hata kartı + salt-okunur retry (2026-08-04) ✅
 
 - **İstek:** "Session'lar hit-limit hatası dönerse hata mesajı gibi göster ve
