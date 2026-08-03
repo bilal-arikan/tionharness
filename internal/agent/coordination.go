@@ -1169,7 +1169,8 @@ func (r *Runtime) runCoordinatorTurn(coordSessionID string) {
 	// Hard wall-clock ceiling (settings-driven, same as spawns) PLUS an idle
 	// watchdog: a worker/coordinator turn that streams no step for SpawnIdleTimeout
 	// is reclaimed fast, while a long-but-productive one runs up to SpawnTimeout.
-	ctx, cancel := withActivityTimeout(context.Background(), r.tun.SpawnTimeout(), r.tun.SpawnIdleTimeout())
+	hardCap, idleCap := r.tun.SpawnTimeout(), r.tun.SpawnIdleTimeout()
+	ctx, cancel := withActivityTimeout(context.Background(), hardCap, idleCap)
 	defer cancel()
 
 	sess, err := r.db.GetSession(ctx, coordSessionID)
@@ -1191,6 +1192,10 @@ func (r *Runtime) runCoordinatorTurn(coordSessionID string) {
 	output, steps, err := r.runSessionTurn(turnCtx, agent, coordSessionID, "", true)
 	r.untrackSession(coordSessionID)
 
+	// A watchdog cut (hard/idle) or a self-truncated loop hands back salvaged text;
+	// lead it with the outcome note (nil error) so the recorded reply reads as a
+	// fragment, not a clean result, and the success-only follow-ups below are skipped.
+	output, steps, err, truncated := r.reconcileTurnOutcome(ctx, output, steps, err, hardCap, idleCap)
 	text := output
 	if err != nil {
 		if errors.Is(err, context.Canceled) {
@@ -1225,7 +1230,10 @@ func (r *Runtime) runCoordinatorTurn(coordSessionID string) {
 		slot.lastTurnUnix = time.Now().Unix()
 		slot.mu.Unlock()
 	}
-	if err == nil {
+	// A truncated turn only produced a fragment (already led with a "not done" note):
+	// withhold completion automations AND skip the spawn-narration stall check, which
+	// must not judge a turn the watchdog cut short.
+	if err == nil && !truncated {
 		r.FireTurnFinished(coordSessionID, agent.ID, output)
 		// Catch the "narrated a spawn but never called the tool" degradation before the
 		// drain loop's post-turn pending check, so a corrective re-prompt runs THIS batch.

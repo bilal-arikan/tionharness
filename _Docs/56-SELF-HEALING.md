@@ -97,7 +97,9 @@
   üretir. `reconcileTurnOutcome` bu notu kurtarılan kısmi metnin başına ekler, iz'e
   işaret bırakır ve turu temiz kapatır; kesilmiş tur `FireTurnFinished`/başarı
   sinyali tetiklemez (fragmanla otomasyon zincirlenmez). Spawn/worker'a ek olarak
-  wake/schedule/inbox yolları da bu kurtarmayı kullanır.
+  wake/schedule/inbox **ve koordinatör** turları da bu kurtarmayı kullanır;
+  koordinatörde kesilmiş tur ayrıca spawn-narration stall kontrolünü atlar (yarıda
+  kesilen tur bu heuristikle yargılanmaz).
 
 ## Gözlemlenebilirlik
 - Yeni `debug.jsonl` olay türleri: `repair` (rule `Name`'de) ve `guardrail`
