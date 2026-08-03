@@ -10,9 +10,10 @@ import (
 
 // boardFixture builds a board with one card per interesting condition.
 func boardFixture(now time.Time) BoardInput {
-	fresh := now.Add(-1 * time.Hour).UnixMilli()
-	old := now.Add(-9 * 24 * time.Hour).UnixMilli()
-	yesterday := now.Add(-25 * time.Hour).UnixMilli()
+	// Task.UpdatedAt is unix SECONDS (db.now()), not millis.
+	fresh := now.Add(-1 * time.Hour).Unix()
+	old := now.Add(-9 * 24 * time.Hour).Unix()
+	yesterday := now.Add(-25 * time.Hour).Unix()
 
 	return BoardInput{
 		Now: now,
@@ -92,7 +93,7 @@ func TestBoardFullListsCardsAndCountsDropped(t *testing.T) {
 	for i := 0; i < 60; i++ {
 		in.Tasks = append(in.Tasks, db.Task{
 			ID:    "X" + string(rune('a'+i%26)) + string(rune('a'+i/26)),
-			Title: "filler", BoardState: db.BoardTodo, UpdatedAt: now.UnixMilli(),
+			Title: "filler", BoardState: db.BoardTodo, UpdatedAt: now.Unix(),
 		})
 	}
 	v, err := ProjectBoard(in, LevelFull, LensHealth)
@@ -125,9 +126,9 @@ func TestBoardEmptyIsExplicit(t *testing.T) {
 func TestBoardCustomColumnsSortAfterBuiltins(t *testing.T) {
 	now := time.Now()
 	in := BoardInput{Now: now, Tasks: []db.Task{
-		{ID: "A", BoardState: "zeta_custom", UpdatedAt: now.UnixMilli()},
-		{ID: "B", BoardState: db.BoardTodo, UpdatedAt: now.UnixMilli()},
-		{ID: "C", BoardState: "alpha_custom", UpdatedAt: now.UnixMilli()},
+		{ID: "A", BoardState: "zeta_custom", UpdatedAt: now.Unix()},
+		{ID: "B", BoardState: db.BoardTodo, UpdatedAt: now.Unix()},
+		{ID: "C", BoardState: "alpha_custom", UpdatedAt: now.Unix()},
 	}}
 	v, err := ProjectBoard(in, LevelCard, LensHealth)
 	if err != nil {

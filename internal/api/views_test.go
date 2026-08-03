@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/bilal-arikan/tionswarm/internal/db"
 )
@@ -90,8 +89,15 @@ func TestGetViewProjectsFlowRun(t *testing.T) {
 	}
 }
 
-// TestGetViewProjectsBoard covers the board kind end to end, including the
-// signal that matters most: a card stuck in a working column.
+// TestGetViewProjectsBoard covers the board kind end to end: the store's tasks
+// reach the projection and come back rendered.
+//
+// Staleness/blocked/overdue signals are NOT asserted here — the store stamps
+// UpdatedAt on every write, so a test cannot age a card through the public API.
+// Those rules are covered in internal/view/board_test.go, where the fixture
+// controls the clock. (An earlier version of this test did assert staleness and
+// passed only because of a seconds-vs-millis bug that made every card look
+// years old.)
 func TestGetViewProjectsBoard(t *testing.T) {
 	ctx := context.Background()
 	database, err := db.Open(t.TempDir())
@@ -100,15 +106,11 @@ func TestGetViewProjectsBoard(t *testing.T) {
 	}
 	t.Cleanup(func() { database.Close() })
 
-	fresh, _ := database.CreateTask(ctx, db.Task{Title: "aktif", BoardState: db.BoardTodo})
-	stuck, err := database.CreateTask(ctx, db.Task{Title: "takılı", BoardState: db.BoardInProgress})
-	if err != nil {
+	if _, err := database.CreateTask(ctx, db.Task{Title: "aktif", BoardState: db.BoardTodo}); err != nil {
 		t.Fatalf("create task: %v", err)
 	}
-	// Backdate the in-progress card past the staleness threshold.
-	stuck.UpdatedAt = time.Now().Add(-10 * 24 * time.Hour).UnixMilli()
-	if err := database.UpdateTask(ctx, stuck); err != nil {
-		t.Fatalf("update task: %v", err)
+	if _, err := database.CreateTask(ctx, db.Task{Title: "devam", BoardState: db.BoardInProgress}); err != nil {
+		t.Fatalf("create task: %v", err)
 	}
 
 	rec := serveFlowRuns((&Server{}).handleGetView, database,
@@ -126,13 +128,14 @@ func TestGetViewProjectsBoard(t *testing.T) {
 	if !strings.Contains(text, "todo 1 | in_progress 1") {
 		t.Errorf("histogram missing:\n%s", text)
 	}
-	if !strings.Contains(text, "hareketsiz") {
-		t.Errorf("stale signal missing:\n%s", text)
+	// Freshly created cards must read as recent, not ancient — the shape a unit
+	// mix-up breaks first.
+	if !strings.Contains(text, "Δ24s") {
+		t.Errorf("freshly created cards not seen as recent:\n%s", text)
 	}
 	if unit, _ := got["elidedUnit"].(string); unit != "kart" {
 		t.Errorf("elidedUnit = %q, want kart", unit)
 	}
-	_ = fresh
 }
 
 // TestGetViewProjectsSession pins that a session view answers from the header +

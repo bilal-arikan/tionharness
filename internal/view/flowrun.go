@@ -170,12 +170,12 @@ func flowHeader(in FlowRunInput, now time.Time) string {
 	}
 
 	elapsed := time.Duration(0)
-	if in.Run.CreatedAt > 0 {
+	if start := tsSec(in.Run.CreatedAt); !start.IsZero() {
 		end := now
 		if in.Run.Status != db.FlowRunning && in.Run.UpdatedAt > 0 {
-			end = time.UnixMilli(in.Run.UpdatedAt)
+			end = tsSec(in.Run.UpdatedAt)
 		}
-		elapsed = end.Sub(time.UnixMilli(in.Run.CreatedAt))
+		elapsed = end.Sub(start)
 	}
 
 	head := fmt.Sprintf("FLOW run:%s %q · %d/%d node · %s · %s · asOf %s",
@@ -197,15 +197,23 @@ func flowChain(in FlowRunInput, now time.Time) ([]string, int) {
 	var pending []orchestration.TraceEntry // buffered parallel children
 	pendingParent := ""
 
-	// Sequential nodes carry only an `At` stamp, so their duration is the gap to
-	// the previous stamp. The engine runs them one at a time, so that gap IS the
-	// node's wall time (plus negligible bookkeeping). Parallel children carry
-	// explicit StartMs/EndMs and use those instead.
-	prev := in.Run.CreatedAt
+	// Sequential nodes carry only an `At` stamp (unix SECONDS), so their duration
+	// is the gap to the previous stamp. The engine runs them one at a time, so
+	// that gap IS the node's wall time (plus negligible bookkeeping). Parallel
+	// children carry explicit StartMs/EndMs (MILLIseconds) and use those instead —
+	// the two units live side by side in one struct, so each is converted
+	// explicitly here.
+	prevSec := in.Run.CreatedAt
 
 	flushPending := func() {
 		for _, p := range pending {
-			segs = append(segs, entrySegment(p, p.EndMs-p.StartMs))
+			// An unknown span must stay unknown: durMs(0) would render "0ms",
+			// which reads like a measurement rather than a missing one.
+			span := ""
+			if p.StartMs > 0 && p.EndMs > p.StartMs {
+				span = durMs(p.EndMs - p.StartMs)
+			}
+			segs = append(segs, entrySegment(p, span))
 		}
 		pending = nil
 		pendingParent = ""
@@ -218,28 +226,28 @@ func flowChain(in FlowRunInput, now time.Time) ([]string, int) {
 			}
 			pendingParent = parent
 			pending = append(pending, t)
-			prev = t.At
+			prevSec = t.At
 			continue
 		}
 		if t.Type == orchestration.NodeParallel && pendingParent == t.NodeID {
 			segs = append(segs, parallelSegment(t, pending))
 			pending = nil
 			pendingParent = ""
-			prev = t.At
+			prevSec = t.At
 			continue
 		}
 		flushPending()
-		gap := int64(0)
-		if prev > 0 && t.At > prev {
-			gap = t.At - prev
+		span := ""
+		if prevSec > 0 && t.At > prevSec {
+			span = durSec(t.At - prevSec)
 		}
-		segs = append(segs, entrySegment(t, gap))
-		prev = t.At
+		segs = append(segs, entrySegment(t, span))
+		prevSec = t.At
 	}
 	flushPending()
 
 	// The node the run is sitting on right now never has a trace entry yet.
-	if cur := currentSegment(in, now, prev); cur != "" {
+	if cur := currentSegment(in, now, prevSec); cur != "" {
 		segs = append(segs, cur)
 	}
 
@@ -263,9 +271,10 @@ func flowChain(in FlowRunInput, now time.Time) ([]string, int) {
 	return folded, dropped
 }
 
-// entrySegment renders one executed node. spanMs <= 0 renders without a duration
-// rather than printing a misleading "0ms".
-func entrySegment(t orchestration.TraceEntry, spanMs int64) string {
+// entrySegment renders one executed node. An empty span renders without a
+// duration rather than printing a misleading "0ms"; the caller formats it,
+// because sequential and parallel nodes carry their timing in different units.
+func entrySegment(t orchestration.TraceEntry, span string) string {
 	label := t.Type + ":" + clip(t.Title, 24)
 	switch t.Type {
 	case orchestration.NodeStart, orchestration.NodeEnd:
@@ -276,8 +285,8 @@ func entrySegment(t orchestration.TraceEntry, spanMs int64) string {
 		return fmt.Sprintf("branch:%s⑂[%s]", clip(t.Title, 20), arm)
 	}
 	seg := label + "✓"
-	if spanMs > 0 {
-		seg += "(" + durMs(spanMs) + ")"
+	if span != "" {
+		seg += "(" + span + ")"
 	}
 	return seg
 }
@@ -306,8 +315,10 @@ func parallelSegment(parent orchestration.TraceEntry, children []orchestration.T
 }
 
 // currentSegment renders the node the run is parked on — running, suspended at
-// an await-input, or failed. Returns "" for a run that has finished cleanly.
-func currentSegment(in FlowRunInput, now time.Time, lastAt int64) string {
+// an await-input, or failed. lastAtSec is the newest trace stamp (unix seconds),
+// used to show how long the node has been running. Returns "" for a run that has
+// finished cleanly.
+func currentSegment(in FlowRunInput, now time.Time, lastAtSec int64) string {
 	if in.State.WaitingAt != "" {
 		n, ok := in.Graph.NodeByID(in.State.WaitingAt)
 		title := in.State.WaitingAt
@@ -331,8 +342,8 @@ func currentSegment(in FlowRunInput, now time.Time, lastAt int64) string {
 		title = n.ID
 	}
 	seg := fmt.Sprintf("%s:%s⚡RUNNING", n.Type, clip(title, 24))
-	if lastAt > 0 {
-		seg += "(" + dur(now.Sub(time.UnixMilli(lastAt))) + ")"
+	if last := tsSec(lastAtSec); !last.IsZero() {
+		seg += "(" + dur(now.Sub(last)) + ")"
 	}
 	return seg
 }
@@ -347,7 +358,7 @@ func flowSignals(in FlowRunInput, now time.Time, lens Lens) []string {
 	}
 	if in.State.WaitingAt != "" {
 		out = append(out, fmt.Sprintf("⏸ await-input node:%s — %s bekliyor",
-			in.State.WaitingAt, age(in.Run.UpdatedAt, now)))
+			in.State.WaitingAt, age(tsSec(in.Run.UpdatedAt), now)))
 	}
 	if lens == LensErrors {
 		// The errors lens deliberately stops here: failures only, nothing else.
@@ -361,7 +372,7 @@ func flowSignals(in FlowRunInput, now time.Time, lens Lens) []string {
 		out = append(out, fmt.Sprintf("⑃ %d async çocuk koşu bekliyor (spawn)", n))
 	}
 	if in.Run.Status == db.FlowRunning && in.Run.UpdatedAt > 0 {
-		if idle := now.Sub(time.UnixMilli(in.Run.UpdatedAt)); idle > 2*time.Minute {
+		if idle := now.Sub(tsSec(in.Run.UpdatedAt)); idle > 2*time.Minute {
 			out = append(out, fmt.Sprintf("⚠ %s'dir aynı node'da — takılmış olabilir", dur(idle)))
 		}
 	}
@@ -392,7 +403,7 @@ func flowDetail(in FlowRunInput, now time.Time) (string, int) {
 	}
 	var l lines
 	for _, t := range trace {
-		l.add("%s %-10s %-24s %s", hhmmss(time.UnixMilli(t.At)), t.Type, clip(t.Title, 24), clip(t.Output, 110))
+		l.add("%s %-10s %-24s %s", hhmmss(tsSec(t.At)), t.Type, clip(t.Title, 24), clip(t.Output, 110))
 	}
 	if l.empty() {
 		return "", dropped

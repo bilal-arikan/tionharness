@@ -106,7 +106,7 @@ func sessionHeader(in SessionInput, now time.Time) string {
 
 	head := fmt.Sprintf("SES:%s %q · %d msg · %s tok · %s · agent:%s",
 		s.ID, clip(title, 60), s.MessageCount, compactCount(in.Usage.TotalTokens()),
-		age(s.CreatedAt*1000, now)+" önce açıldı", orDash(s.AgentID))
+		age(tsSec(s.CreatedAt), now)+" önce açıldı", orDash(s.AgentID))
 
 	if s.Kind != "" && s.Kind != "chat" {
 		head += " · " + s.Kind
@@ -135,7 +135,7 @@ func sessionSignals(in SessionInput, now time.Time, lens Lens) []string {
 	}
 	if in.WaitingAsk != nil {
 		out = append(out, fmt.Sprintf("⏸ cevap bekleyen soru (%s, %s'dir bekliyor) — ask:%s",
-			orDash(in.WaitingAsk.Kind), age(in.WaitingAsk.CreatedAt, now), in.WaitingAsk.ID))
+			orDash(in.WaitingAsk.Kind), age(tsSec(in.WaitingAsk.CreatedAt), now), in.WaitingAsk.ID))
 	}
 	if err := lastErrorStep(in.Messages); err != "" {
 		out = append(out, "✗ son hata: "+clip(err, 180))
@@ -154,7 +154,7 @@ func sessionSignals(in SessionInput, now time.Time, lens Lens) []string {
 		out = append(out, fmt.Sprintf("⤺ ilk %d mesaj özete katlandı (compaction)", s.SummaryMsgCount))
 	}
 	if s.UpdatedAt > 0 {
-		out = append(out, fmt.Sprintf("son hareket: %s önce", age(s.UpdatedAt*1000, now)))
+		out = append(out, fmt.Sprintf("son hareket: %s önce", age(tsSec(s.UpdatedAt), now)))
 	}
 	return out
 }

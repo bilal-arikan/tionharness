@@ -11,7 +11,11 @@ import (
 
 // base builds a small graph: start → collect → fan (a,b) → synth → end.
 func base(now time.Time) FlowRunInput {
-	t0 := now.Add(-2 * time.Minute).UnixMilli()
+	// The persisted model mixes units: FlowRun timestamps and TraceEntry.At are
+	// unix SECONDS, StartMs/EndMs are MILLIseconds. The fixture mirrors that
+	// exactly — an earlier all-millis fixture hid a real rendering bug.
+	t0 := now.Add(-2 * time.Minute).Unix()
+	t0ms := now.Add(-2 * time.Minute).UnixMilli()
 	g := orchestration.Graph{
 		Start: "start",
 		Nodes: []orchestration.Node{
@@ -28,17 +32,17 @@ func base(now time.Time) FlowRunInput {
 		Current: "synth",
 		Outputs: map[string]string{},
 		Trace: []orchestration.TraceEntry{
-			{NodeID: "start", Type: orchestration.NodeStart, Title: "start", At: t0 + 100},
-			{NodeID: "collect", Type: orchestration.NodeAgent, Title: "collect", Output: "ok", At: t0 + 31_100},
-			{NodeID: "a", Type: orchestration.NodeAgent, Title: "a", Output: "x", StartMs: t0 + 31_200, EndMs: t0 + 60_000, At: t0 + 60_000},
-			{NodeID: "b", Type: orchestration.NodeAgent, Title: "b", Output: "y", StartMs: t0 + 31_200, EndMs: t0 + 79_200, At: t0 + 79_200},
-			{NodeID: "fan", Type: orchestration.NodeParallel, Title: "fan", Output: "joined", At: t0 + 79_300},
+			{NodeID: "start", Type: orchestration.NodeStart, Title: "start", At: t0},
+			{NodeID: "collect", Type: orchestration.NodeAgent, Title: "collect", Output: "ok", At: t0 + 31},
+			{NodeID: "a", Type: orchestration.NodeAgent, Title: "a", Output: "x", StartMs: t0ms + 31_200, EndMs: t0ms + 60_000, At: t0 + 60},
+			{NodeID: "b", Type: orchestration.NodeAgent, Title: "b", Output: "y", StartMs: t0ms + 31_200, EndMs: t0ms + 79_200, At: t0 + 79},
+			{NodeID: "fan", Type: orchestration.NodeParallel, Title: "fan", Output: "joined", At: t0 + 79},
 		},
 	}
 	return FlowRunInput{
 		Run: db.FlowRun{
 			ID: "RUN7f2", FlowID: "FLW1", Status: db.FlowRunning,
-			CreatedAt: t0, UpdatedAt: t0 + 79_300, State: "unused",
+			CreatedAt: t0, UpdatedAt: t0 + 79, State: "unused",
 		},
 		Flow:  db.Flow{ID: "FLW1", Name: "research-pipeline"},
 		Graph: g,
@@ -162,12 +166,12 @@ func TestFlowRunLongChainReportsElision(t *testing.T) {
 	in := base(now)
 	in.Graph.Nodes = nil
 	in.State.Trace = nil
-	t0 := now.Add(-time.Minute).UnixMilli()
+	t0 := now.Add(-time.Minute).Unix()
 	for i := 0; i < 60; i++ {
 		id := "n" + string(rune('a'+i%26))
 		in.Graph.Nodes = append(in.Graph.Nodes, orchestration.Node{ID: id, Type: orchestration.NodeTransform})
 		in.State.Trace = append(in.State.Trace, orchestration.TraceEntry{
-			NodeID: id, Type: orchestration.NodeTransform, Title: id, At: t0 + int64(i)*100,
+			NodeID: id, Type: orchestration.NodeTransform, Title: id, At: t0 + int64(i),
 		})
 	}
 	in.Run.Status = db.FlowSuccess

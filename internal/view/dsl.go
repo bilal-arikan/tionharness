@@ -62,13 +62,44 @@ func dur(d time.Duration) string {
 // check before calling — an unknown span must not render as "0ms".
 func durMs(ms int64) string { return dur(time.Duration(ms) * time.Millisecond) }
 
-// age renders how long ago a unix-millisecond timestamp was, in calendar-ish
-// units ("7g" = 7 gün). Used for staleness signals.
-func age(unixMs int64, now time.Time) string {
-	if unixMs <= 0 {
+// durSec renders a second-resolution span.
+func durSec(s int64) string { return dur(time.Duration(s) * time.Second) }
+
+// tsSec / tsMs convert a stored timestamp to a time.Time, naming the unit at the
+// call site.
+//
+// This exists because the persisted models MIX units and nothing in the types
+// says which is which: db.now() (every entity's CreatedAt/UpdatedAt) and
+// orchestration.TraceEntry.At are unix SECONDS, while TraceEntry.StartMs/EndMs
+// are MILLISECONDS. Passing a raw int64 around made it possible — and it
+// happened — to read a seconds value as millis and render a card updated
+// yesterday as "20648g önce". A projection whose whole promise is "these numbers
+// are computed, so trust them" cannot afford that, so the unit is now spelled out
+// wherever a timestamp enters this package.
+//
+// A non-positive value means "unset" and yields the zero Time, which age()
+// reports as "?" rather than as 1970.
+func tsSec(v int64) time.Time {
+	if v <= 0 {
+		return time.Time{}
+	}
+	return time.Unix(v, 0)
+}
+
+func tsMs(v int64) time.Time {
+	if v <= 0 {
+		return time.Time{}
+	}
+	return time.UnixMilli(v)
+}
+
+// age renders how long ago t was, in calendar-ish units ("7g" = 7 gün). Used for
+// staleness signals. A zero t (unset timestamp) renders "?".
+func age(t, now time.Time) string {
+	if t.IsZero() {
 		return "?"
 	}
-	d := now.Sub(time.UnixMilli(unixMs))
+	d := now.Sub(t)
 	if d < 0 {
 		d = 0
 	}

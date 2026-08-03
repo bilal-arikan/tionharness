@@ -230,6 +230,29 @@ GET /api/views/{kind}/{id}?level=card&lens=health   → View (JSON zarf, Body ha
 GET /api/views/workspace?level=tiny
 ```
 
+## Zaman damgası birimleri (canlı testte yakalanan hata)
+
+Kalıcı modeller **birimleri karıştırıyor** ve tipler bunu söylemiyor:
+
+| Alan | Birim |
+|------|-------|
+| `db.now()` → her entity'nin `CreatedAt`/`UpdatedAt` (Task, FlowRun, Session, SessionAsk) | **saniye** |
+| `orchestration.TraceEntry.At` | **saniye** |
+| `orchestration.TraceEntry.StartMs` / `EndMs` | **milisaniye** |
+
+Son ikisi **aynı struct'ın içinde**. İlk sürüm saniyeleri milisaniye sanmıştı;
+sonuç sessiz değil ama **makul görünen yanlış sayılardı** — 1 saat önce dokunulmuş
+bir kart `20648g önce`, 3 saniyelik bir koşu `3ms`. "Bu sayılar hesaplanır, güvenebilirsin"
+diyen bir katman için mümkün olan en kötü hata biçimi. Unit testler kaçırdı çünkü
+fixture'lar gerçeği değil kendi varsayımını modelliyordu.
+
+**Önlem:** ham `int64` artık zaman fonksiyonlarına girmiyor — `tsSec()` / `tsMs()`
+dönüştürücüleri birimi çağrı yerinde yazmaya zorluyor (`dsl.go`), `age()` artık
+`time.Time` alıyor. Fixture'lar gerçek birimleri kullanıyor ve `units_test.go`
+her yol için **insan ölçeğinde** sonuç sabitliyor (`1sa önce`, `31s`, `1m30s`),
+tam string değil. Set edilmemiş damga `?` döner — `1970` değil, çünkü bir birim
+hatası tam olarak "1970'ten beri" kılığına giriyor.
+
 ## Tasarım tuzakları
 
 1. **Sessiz kesme yok.** "En önemli 10 kart"ı gösterip gerisini yutmak ajanı

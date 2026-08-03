@@ -488,7 +488,7 @@ export function Composer({
           the controls live on a fixed toolbar row beneath it, so they never stretch
           or shift as the text area expands. The card carries the border/focus ring. */}
       <div
-        className={`flex flex-col gap-2 rounded-2xl border bg-[var(--color-surface)] px-3 pb-2 pt-2.5 shadow-lg transition-colors focus-within:border-[var(--color-accent)] ${
+        className={`flex flex-col gap-2 rounded-2xl border bg-[var(--color-surface)] px-3 pb-2 pt-2.5 shadow-lg transition-colors focus-within:ring-1 focus-within:ring-inset focus-within:ring-[var(--color-accent)] ${
           active
             ? 'border-[color-mix(in_srgb,var(--color-accent)_55%,var(--color-border))]'
             : 'border-[var(--color-border)]'

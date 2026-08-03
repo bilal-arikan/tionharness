@@ -73,7 +73,7 @@ func TestSessionSurfacesTrouble(t *testing.T) {
 		Steps: `[{"kind":"tool","tool":"Bash","isError":true,"output":"exit 1: permission denied"}]`,
 	})
 	in.WaitingAsk = &db.SessionAsk{ID: "SAK1", SessionID: "SES9a1", Kind: "ask",
-		CreatedAt: now.Add(-30 * time.Minute).UnixMilli()}
+		CreatedAt: now.Add(-30 * time.Minute).Unix()}
 
 	v, err := ProjectSession(in, LevelCard, LensHealth)
 	if err != nil {

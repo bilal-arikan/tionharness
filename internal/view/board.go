@@ -214,7 +214,7 @@ func boardDetail(tasks []db.Task, now time.Time) (string, int) {
 			prio = "-"
 		}
 		l.add("%-12s %-10s p:%-8s %-14s %s", t.ID, t.BoardState, prio,
-			age(t.UpdatedAt, now)+" önce", clip(t.Title, 70))
+			age(tsSec(t.UpdatedAt), now)+" önce", clip(t.Title, 70))
 	}
 	if l.empty() {
 		return "", dropped
@@ -231,7 +231,7 @@ func isWorkingColumn(key string) bool {
 // staleCards are cards sitting untouched in a working column. A backlog card that
 // has not moved is normal; an in-progress one that has not moved is not.
 func staleCards(cols []boardColumn, now time.Time) []db.Task {
-	cutoff := now.Add(-time.Duration(boardStaleDays) * 24 * time.Hour).UnixMilli()
+	cutoff := now.Add(-time.Duration(boardStaleDays) * 24 * time.Hour).Unix()
 	var out []db.Task
 	for _, c := range cols {
 		if !isWorkingColumn(c.Key) {
@@ -306,7 +306,7 @@ func overdueCards(tasks []db.Task, now time.Time) []db.Task {
 
 // recentlyTouched are cards updated inside the window.
 func recentlyTouched(tasks []db.Task, now time.Time, window time.Duration) []db.Task {
-	cutoff := now.Add(-window).UnixMilli()
+	cutoff := now.Add(-window).Unix()
 	var out []db.Task
 	for _, t := range tasks {
 		if t.UpdatedAt >= cutoff {
