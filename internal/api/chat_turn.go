@@ -84,10 +84,11 @@ func (s *Server) composeTurnRequest(ctx context.Context, wsp *workspace.Workspac
 	// commands in the right syntax without guessing. Shares ONE source with the
 	// headless path (agent.autonomousSystemPrompt). Volatile side, never cached.
 	dynamic = strings.TrimSpace(dynamic + "\n\n" + agent.EnvironmentContextBlock())
-	// Shell tools (Bash/PowerShell) are gated: advertise them here — and only when
-	// the gate is on and a backing shell exists — so the static instructions don't
-	// promise a tool that isn't registered (a bare `PowerShell` call otherwise hits
-	// "not enabled in this context"). Volatile side: the gate can toggle mid-session.
+	// Shell-execution capability, single-sourced: when the gate is on + a shell
+	// backs it, this advertises the registered Bash/PowerShell tools; when it is
+	// off, it states shell is disabled and gives the dead-tool rule so a bare
+	// `PowerShell` call (which hits "not enabled in this context") is not looped
+	// on. Volatile side: the gate can toggle mid-session.
 	if sh := wsp.Runtime.ShellToolsContextBlock(); sh != "" {
 		dynamic = strings.TrimSpace(dynamic + "\n\n" + sh)
 	}
