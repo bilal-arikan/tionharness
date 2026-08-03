@@ -819,17 +819,27 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 			if f := subFutures[call.ID]; f != nil {
 				// Parallel run_subagent: the runner was launched before the loop; wait
 				// for it and adopt its result + nested trace (promoted to StepSubagent
-				// below via the per-call sink).
+				// below via the per-call sink). Heartbeat the watchdog while blocked so a
+				// long-but-productive subagent does not idle-kill this parent turn.
+				stopHeartbeat := startActivityHeartbeat(callCtx)
 				<-f.done
+				stopHeartbeat()
 				res = f.res
 				subs.steps = f.steps
 			} else if onStep != nil && call.ID != "" && reg.CanStream(call.Name) {
+				// Streaming tool: its tool_delta chunks touch the watchdog on every
+				// chunk, so a stall is still caught on idle — no heartbeat here.
 				res = reg.CallStream(callCtx, call, func(chunk string) {
 					streamed = true
 					emit(TurnStep{Kind: StepToolDelta, ID: call.ID, Tool: call.Name, Output: chunk})
 				})
 			} else {
+				// Non-streaming tool: a one-shot big write or a multi-minute shell
+				// command emits no step until it returns, so heartbeat the watchdog
+				// while it runs (else the idle window falsely reclaims the turn).
+				stopHeartbeat := startActivityHeartbeat(callCtx)
 				res = reg.Call(callCtx, call)
+				stopHeartbeat()
 			}
 			// Retract the live streaming placeholder; the final card (or the
 			// cancellation error below) takes its place.
@@ -1039,6 +1049,14 @@ func (r *Runtime) emitCLIToolDebug(ctx context.Context, agent db.Agent, trace []
 }
 
 func (r *Runtime) recordedComplete(ctx context.Context, agent db.Agent, provider providers.Provider, req providers.Request) (*providers.Response, error) {
+	// A non-streaming completion emits no incremental step, so the idle watchdog —
+	// fed only by emitted steps — would reclaim a legitimately long completion (long
+	// time-to-first-token, a single big CLI turn) as if it had hung. Heartbeat the
+	// watchdog while the provider call is in flight; the hard ceiling still bounds a
+	// genuinely wedged call. (The streaming path, recordedStream, deliberately skips
+	// this: its deltas already touch, so a stalled stream stays reclaimable.)
+	stopHeartbeat := startActivityHeartbeat(ctx)
+	defer stopHeartbeat()
 	req = r.withMaxOutput(agent.Provider, req)
 	// How claude-cli receives its appended system prompt (inline vs temp file). Set
 	// on every path (one-shot + persistent) since both flow through here. Ignored by

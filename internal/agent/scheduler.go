@@ -248,7 +248,8 @@ func (s *Scheduler) deliverWake(ctx context.Context, sc db.Schedule) error {
 	// now holds the per-session turn slot, so a hung wake (a provider that never
 	// returns) would otherwise block every other turn on the session indefinitely —
 	// the slot's Cond wait ignores ctx, so nothing else could release it.
-	turnBase, cancelTurn := withActivityTimeout(ctx, s.rt.tun.SpawnTimeout(), s.rt.tun.SpawnIdleTimeout())
+	hardCap, idleCap := s.rt.tun.SpawnTimeout(), s.rt.tun.SpawnIdleTimeout()
+	turnBase, cancelTurn := withActivityTimeout(ctx, hardCap, idleCap)
 	defer cancelTurn()
 	wakeCtx := tools.WithAsyncChat(WithSessionID(WithCallKind(turnBase, KindSchedule), sc.SessionID))
 	wakeCtx, wakeMeta := WithTurnMeta(wakeCtx)
@@ -258,6 +259,9 @@ func (s *Scheduler) deliverWake(ctx context.Context, sc db.Schedule) error {
 	// persisted as the last user message, so the history already carries it.
 	// runSessionTurn falls back to the prompt-only invoke when no runner is wired.
 	output, steps, invokeErr := s.rt.runSessionTurn(wakeCtx, agent, sc.SessionID, sc.Prompt, true)
+	// A watchdog cut / self-truncated loop hands back salvaged text; lead it with the
+	// outcome note (nil error) so it records as an explaining reply, not a clean one.
+	output, steps, invokeErr, truncated := s.rt.reconcileTurnOutcome(turnBase, output, steps, invokeErr, hardCap, idleCap)
 	if invokeErr != nil {
 		s.rt.recordTurnError(ctx, sc.SessionID, sc.AgentID, invokeErr, steps, wakeMeta, time.Since(wakeStart).Milliseconds(), "⚠️ Otomatik uyandırma çalıştırılamadı:")
 		s.emitWakeEvent(sc, "done", "⏰ Otomatik uyandırma başarısız")
@@ -269,8 +273,11 @@ func (s *Scheduler) deliverWake(ctx context.Context, sc db.Schedule) error {
 	// Auto-tag tool errors from this wake turn.
 	s.rt.AutoTagTurn(ctx, sc.SessionID, steps, "")
 	// Tag-triggered automations: a wake continues a real chat session, which may be
-	// tagged — signal its completion so an automation can pick up the result.
-	s.rt.FireTurnFinished(sc.SessionID, sc.AgentID, output)
+	// tagged — signal its completion so an automation can pick up the result. A
+	// truncated turn only produced a fragment (already noted), so withhold the signal.
+	if !truncated {
+		s.rt.FireTurnFinished(sc.SessionID, sc.AgentID, output)
+	}
 	return err
 }
 
@@ -462,13 +469,19 @@ func (s *Scheduler) deliverPrompt(ctx context.Context, sc db.Schedule) (string, 
 	// Bound the scheduled turn with the spawn watchdog: it holds the per-session turn
 	// slot, so a hung turn must not block the session's queue forever (the slot's Cond
 	// wait ignores ctx).
-	turnBase, cancelTurn := withActivityTimeout(ctx, s.rt.tun.SpawnTimeout(), s.rt.tun.SpawnIdleTimeout())
+	hardCap, idleCap := s.rt.tun.SpawnTimeout(), s.rt.tun.SpawnIdleTimeout()
+	turnBase, cancelTurn := withActivityTimeout(ctx, hardCap, idleCap)
 	defer cancelTurn()
 	turnCtx, overflow := withOverflowFlag(WithSessionID(WithCallKind(turnBase, KindSchedule), session.ID))
 	turnCtx, meta := WithTurnMeta(turnCtx)
 	turnStart := time.Now()
 	output, steps, err := s.rt.invokeTraced(turnCtx, agent, sc.Prompt, true) // scheduled = autonomous
 	s.rt.untrackSession(session.ID)
+	// A watchdog cut (hard/idle) or a self-truncated loop returns salvaged text that
+	// must not be recorded as a finished result: lead it with the outcome note and
+	// suppress the completion signal below. A real fault / human stop is left as an
+	// error for the branch that follows.
+	output, steps, err, truncated := s.rt.reconcileTurnOutcome(turnBase, output, steps, err, hardCap, idleCap)
 	if err != nil {
 		// Log the provider/tool-loop failure with the agent + its provider/model,
 		// so the logs view pinpoints what failed (e.g. missing key, model error)
@@ -496,7 +509,12 @@ func (s *Scheduler) deliverPrompt(ctx context.Context, sc db.Schedule) (string, 
 	// Auto-tag tool errors from this scheduled turn.
 	s.rt.AutoTagTurn(ctx, session.ID, steps, "")
 	// Tag-triggered automations: a scheduled delivery's session may be tagged too.
-	s.rt.FireTurnFinished(session.ID, agent.ID, output)
+	// A truncated turn produced only a fragment (already led with a "not done" note),
+	// so withhold the completion signal — firing it would chain automations onto
+	// half-done work.
+	if !truncated {
+		s.rt.FireTurnFinished(session.ID, agent.ID, output)
+	}
 	return session.ID, err
 }
 

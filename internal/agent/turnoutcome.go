@@ -156,6 +156,37 @@ func applyTurnOutcome(result string, o turnOutcome) string {
 	return o.Note + "\n\n---\n\n" + result
 }
 
+// reconcileTurnOutcome folds a truncation verdict into a background turn's
+// (output, steps, err) BEFORE it is recorded, so a cut-short turn can never be
+// reported as a clean one. It packages the handling that runSpawn/runWorker do
+// inline for the simpler notify paths (wake / schedule / inbox) that only record a
+// reply:
+//
+//   - Watchdog fired (hard/idle) — detected via the ctx cancellation cause, so it
+//     holds whether the loop returned the salvaged text with a nil error OR bailed
+//     with a bare "context canceled": lead the salvaged text with the outcome note,
+//     append the trace marker, and return a NIL error so the caller records an
+//     explaining assistant reply instead of a cryptic recordTurnError string.
+//   - Loop truncated itself (iteration cap / guardrail halt / context/output
+//     exhaustion, err == nil): same salvage — note + marker — err stays nil.
+//   - Clean turn, or a real provider error / human stop (not a deadline): returned
+//     unchanged so the caller keeps its normal success / error branch.
+//
+// The returned truncated flag lets a caller suppress success-only follow-ups
+// (FireTurnFinished, "completed" events) so a fragment is never signalled as a
+// finished result.
+func (r *Runtime) reconcileTurnOutcome(ctx context.Context, output string, steps []TurnStep, err error, hard, idle time.Duration) (string, []TurnStep, error, bool) {
+	outcome := classifyTurnOutcome(ctx, steps, hard, idle)
+	if !outcome.Truncated() {
+		// Clean finish, or an error that is NOT a deadline (real provider fault, or a
+		// human "Durdur"): leave (output, steps, err) for the caller's own branch.
+		return output, steps, err, false
+	}
+	steps = appendOutcomeStep(steps, outcome)
+	output = applyTurnOutcome(output, outcome)
+	return output, steps, nil, true
+}
+
 // formatMinutes renders a deadline the way the settings UI states it.
 func formatMinutes(d time.Duration) string {
 	if d < time.Minute {

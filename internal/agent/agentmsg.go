@@ -147,7 +147,8 @@ func (r *Runtime) runInboxDelivery(agent db.Agent, inboxID, prompt string) {
 
 	// Same hard ceiling + idle watchdog as spawn/worker turns: a productive turn
 	// runs up to SpawnTimeout, a hung one is reclaimed after SpawnIdleTimeout.
-	ctx, cancel := withActivityTimeout(context.Background(), r.tun.SpawnTimeout(), r.tun.SpawnIdleTimeout())
+	hardCap, idleCap := r.tun.SpawnTimeout(), r.tun.SpawnIdleTimeout()
+	ctx, cancel := withActivityTimeout(context.Background(), hardCap, idleCap)
 	defer cancel()
 
 	// Mark as async chat (a human may read the inbox) + autonomous, and stamp the
@@ -166,6 +167,10 @@ func (r *Runtime) runInboxDelivery(agent db.Agent, inboxID, prompt string) {
 	output, steps, err := r.runSessionTurn(turnCtx, agent, inboxID, prompt, true)
 	r.untrackSession(inboxID)
 
+	// A watchdog cut (hard/idle) or a self-truncated loop hands back salvaged text;
+	// lead it with the outcome note (nil error) so it records as an explaining reply,
+	// not a clean one, and the inbox event reports failure rather than success.
+	output, steps, err, truncated := r.reconcileTurnOutcome(ctx, output, steps, err, hardCap, idleCap)
 	if err != nil {
 		r.logger.Error("agent message: invoke failed",
 			"session", inboxID, "agent", agent.ID,
@@ -177,8 +182,11 @@ func (r *Runtime) runInboxDelivery(agent db.Agent, inboxID, prompt string) {
 	if _, addErr := r.recordAssistantReply(ctx, inboxID, agent.ID, output, steps, meta, time.Since(turnStart).Milliseconds(), "ℹ️ Ajan bu mesaj için boş yanıt döndürdü."); addErr != nil {
 		r.logger.Warn("agent message: failed to record reply", "session", inboxID, "error", addErr)
 	}
+	if truncated {
+		r.logger.Warn("agent message: turn truncated", "session", inboxID, "agent", agent.ID, "hardCap", hardCap, "idleCap", idleCap)
+	}
 	r.logger.Info("agent message: processed", "session", inboxID, "agent", agent.ID)
-	r.emitInboxEvent(agent, inboxID, true)
+	r.emitInboxEvent(agent, inboxID, !truncated)
 }
 
 // runSessionTurn runs a history-aware turn for agent on sessionID using the
