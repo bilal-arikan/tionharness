@@ -80,13 +80,15 @@ export const taskApi = {
   listAutomations: () => req<Automation[]>('/api/automations'),
   createAutomation: (data: {
     name?: string
-    triggerKind?: 'tag' | 'board'
+    triggerKind?: 'tag' | 'board' | 'token'
     triggerTag?: string
     boardOp?: 'any' | 'move' | 'create' | 'update' | 'delete'
     boardFromState?: string
     boardToState?: string
     boardPriority?: number
     boardExclusive?: boolean
+    tokenScope?: 'session' | 'workspace'
+    tokenThreshold?: number
     targetAgentId?: string
     flowId?: string
     promptTemplate: string
@@ -104,13 +106,15 @@ export const taskApi = {
     id: string,
     data: {
       name?: string
-      triggerKind?: 'tag' | 'board'
+      triggerKind?: 'tag' | 'board' | 'token'
       triggerTag?: string
       boardOp?: 'any' | 'move' | 'create' | 'update' | 'delete'
       boardFromState?: string
       boardToState?: string
       boardPriority?: number
       boardExclusive?: boolean
+      tokenScope?: 'session' | 'workspace'
+      tokenThreshold?: number
       targetAgentId?: string
       flowId?: string
       promptTemplate?: string

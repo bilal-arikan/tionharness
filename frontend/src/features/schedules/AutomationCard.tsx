@@ -1,4 +1,4 @@
-import { RotateCcw, Pencil, Workflow, LayoutGrid } from 'lucide-react'
+import { RotateCcw, Pencil, Workflow, LayoutGrid, Zap } from 'lucide-react'
 import type { Agent, Automation, BoardColumnDef, Flow } from '@/types'
 import { AgentAvatar } from '@/shared/components/agents/AgentAvatar'
 import { TagEditor } from '@/shared/components'
@@ -10,6 +10,7 @@ import { fmtTime, isPast } from './timeUtils'
 interface Props {
   automation: Automation
   isBoardKind: boolean
+  isTokenKind: boolean
   agents: Agent[]
   flows: Flow[]
   columns: BoardColumnDef[]
@@ -26,6 +27,7 @@ interface Props {
 export function AutomationCard({
   automation: a,
   isBoardKind,
+  isTokenKind,
   agents,
   flows,
   columns,
@@ -37,7 +39,8 @@ export function AutomationCard({
   const flow = flows.find((f) => f.id === a.flowId)
   const flowIcon = normalizeAvatar(flow?.emoji)
   const owner = agents.find((x) => x.id === a.targetAgentId)
-  const colLabel = (key?: string) => (key ? columns.find((c) => c.key === key)?.label ?? key : '—')
+  const colLabel = (key?: string) =>
+    key ? (columns.find((c) => c.key === key)?.label ?? key) : '—'
   const maxed = a.maxIterations > 0 && a.iterationCount >= a.maxIterations
   const expired = isPast(a.expiresAt)
   const opLabel = boardOpLabel(a.boardOp)
@@ -47,7 +50,13 @@ export function AutomationCard({
       data-testid="automation-row"
       data-automation-id={a.id}
       className="rounded-lg border border-l-4 border-[var(--color-border)] bg-[var(--color-surface)] px-2.5 py-2 text-sm"
-      style={{ borderLeftColor: isBoardKind ? COLUMN_ACCENT.board : COLUMN_ACCENT.tag }}
+      style={{
+        borderLeftColor: isBoardKind
+          ? COLUMN_ACCENT.board
+          : isTokenKind
+            ? COLUMN_ACCENT.token
+            : COLUMN_ACCENT.tag,
+      }}
     >
       <div className="flex items-start gap-2">
         <div className="flex shrink-0 flex-col items-center gap-1.5">
@@ -58,14 +67,20 @@ export function AutomationCard({
             }`}
             title={a.enabled ? 'Etkin' : 'Pasif'}
           >
-            <span className={`block h-4 w-4 rounded-full bg-white transition ${a.enabled ? 'translate-x-4' : ''}`} />
+            <span
+              className={`block h-4 w-4 rounded-full bg-white transition ${a.enabled ? 'translate-x-4' : ''}`}
+            />
           </button>
           {a.flowId ? (
             <span
               className="flex h-7 w-7 items-center justify-center rounded-full bg-[var(--color-accent-soft)] text-[var(--color-accent)]"
               title="Akış tabanlı otomasyon"
             >
-              {flowIcon ? <span className="text-base leading-none">{flowIcon}</span> : <Workflow size={15} />}
+              {flowIcon ? (
+                <span className="text-base leading-none">{flowIcon}</span>
+              ) : (
+                <Workflow size={15} />
+              )}
             </span>
           ) : owner ? (
             <AgentAvatar agent={owner} size={28} />
@@ -92,6 +107,15 @@ export function AutomationCard({
                   </span>
                 )}
               </span>
+            ) : isTokenKind ? (
+              <span
+                className="flex items-center gap-1 rounded bg-[var(--color-accent-soft)] px-1.5 py-0.5 text-[11px] text-[var(--color-accent)]"
+                title="Token tetikleyicili otomasyon — kümülatif harcama eşiği geçince çalışır"
+              >
+                <Zap size={11} />
+                {a.tokenScope === 'workspace' ? 'workspace' : 'oturum'} · her{' '}
+                {(a.tokenThreshold ?? 0).toLocaleString()} token
+              </span>
             ) : (
               <span className="rounded bg-[var(--color-accent-soft)] px-1.5 py-0.5 font-mono text-[11px] text-[var(--color-accent)]">
                 #{a.triggerTag}
@@ -114,11 +138,18 @@ export function AutomationCard({
               </span>
             )}
           </div>
-          {a.name && <div className="mt-0.5 truncate text-[13px] font-medium text-[var(--color-text)]">{a.name}</div>}
+          {a.name && (
+            <div className="mt-0.5 truncate text-[13px] font-medium text-[var(--color-text)]">
+              {a.name}
+            </div>
+          )}
           <div className="truncate text-xs text-[var(--color-text-dim)]">
-            → {a.flowId ? `${flowIcon ?? '🔀'} ${flow?.name ?? a.flowId}` : owner?.name ?? '—'}
+            → {a.flowId ? `${flowIcon ?? '🔀'} ${flow?.name ?? a.flowId}` : (owner?.name ?? '—')}
           </div>
-          <div className="mt-1 line-clamp-2 text-xs text-[var(--color-text-dim)]" title={a.promptTemplate}>
+          <div
+            className="mt-1 line-clamp-2 text-xs text-[var(--color-text-dim)]"
+            title={a.promptTemplate}
+          >
             {a.promptTemplate}
           </div>
         </div>
@@ -126,7 +157,9 @@ export function AutomationCard({
         {/* Edit (+ counter reset when maxed); deleting lives inside the popup. */}
         <div className="flex shrink-0 flex-col items-center gap-1.5">
           <CardAction icon={Pencil} label="Düzenle" onClick={onEdit} entityId={a.id} />
-          {maxed && <CardAction icon={RotateCcw} label="Sayacı sıfırla" onClick={onReset} entityId={a.id} />}
+          {maxed && (
+            <CardAction icon={RotateCcw} label="Sayacı sıfırla" onClick={onReset} entityId={a.id} />
+          )}
         </div>
       </div>
 
@@ -145,11 +178,17 @@ export function AutomationCard({
           </span>
         ) : null}
       </div>
-      {a.lastError && <div className="mt-0.5 text-[11px] text-[var(--color-danger)]">Hata: {a.lastError}</div>}
+      {a.lastError && (
+        <div className="mt-0.5 text-[11px] text-[var(--color-danger)]">Hata: {a.lastError}</div>
+      )}
 
       {isBoardKind ? (
         <div className="mt-1 text-[11px] text-[var(--color-text-dim)] opacity-80">
           Pano tetikleyicili — kendini döngülemez (spawn etiketleri yok sayılır).
+        </div>
+      ) : isTokenKind ? (
+        <div className="mt-1 text-[11px] text-[var(--color-text-dim)] opacity-80">
+          Token tetikleyicili — kendini döngülemez (spawn etiketleri yok sayılır).
         </div>
       ) : a.flowId ? (
         <div className="mt-1 text-[11px] text-[var(--color-text-dim)] opacity-80">

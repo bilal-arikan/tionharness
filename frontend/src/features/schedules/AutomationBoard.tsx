@@ -1,7 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
-import { Clock, LayoutGrid, Repeat } from 'lucide-react'
+import { Clock, LayoutGrid, Repeat, Zap } from 'lucide-react'
 import { api } from '@/api'
-import type { Agent, Automation, AutomationTriggerKind, BoardColumnDef, Flow, Schedule } from '@/types'
+import type {
+  Agent,
+  Automation,
+  AutomationTriggerKind,
+  BoardColumnDef,
+  Flow,
+  Schedule,
+} from '@/types'
 import { PaneHeader } from '@/shared/components'
 import { AutomationCard } from './AutomationCard'
 import { AutomationModal } from './AutomationModal'
@@ -67,7 +74,10 @@ export function AutomationBoard({ agents, focusId, onError }: Props) {
   useEffect(() => {
     reloadSchedules()
     reloadAutomations()
-    api.listFlows().then(setFlows).catch((e) => onError((e as Error).message))
+    api
+      .listFlows()
+      .then(setFlows)
+      .catch((e) => onError((e as Error).message))
     api
       .getWorkspaceSettings()
       .then((s) => {
@@ -199,34 +209,69 @@ export function AutomationBoard({ agents, focusId, onError }: Props) {
 
   // ---- render ---------------------------------------------------------------
 
-  const byKind = (kind: AutomationTriggerKind) => automations.filter((a) => (a.triggerKind ?? 'tag') === kind)
+  const byKind = (kind: AutomationTriggerKind) =>
+    automations.filter((a) => (a.triggerKind ?? 'tag') === kind)
+
+  const laneMeta: Record<
+    AutomationTriggerKind,
+    {
+      title: string
+      icon: typeof Repeat
+      accent: string
+      description: string
+      addLabel: string
+      emptyLabel: string
+    }
+  > = {
+    tag: {
+      title: 'Etiket otomasyonları',
+      icon: Repeat,
+      accent: COLUMN_ACCENT.tag,
+      description: 'Tetikleyici etiketli bir oturum turu bitince son yanıtla çalışır.',
+      addLabel: 'Yeni etiket otomasyonu',
+      emptyLabel: 'Henüz etiket otomasyonu yok.',
+    },
+    board: {
+      title: 'Pano otomasyonları',
+      icon: LayoutGrid,
+      accent: COLUMN_ACCENT.board,
+      description: 'Bir kanban kartı taşınınca/oluşunca/değişince kart bağlamıyla çalışır.',
+      addLabel: 'Yeni pano otomasyonu',
+      emptyLabel: 'Henüz pano otomasyonu yok.',
+    },
+    token: {
+      title: 'Token otomasyonları',
+      icon: Zap,
+      accent: COLUMN_ACCENT.token,
+      description: 'Oturum/workspace token harcaması eşiği geçince bakım/temizlik için çalışır.',
+      addLabel: 'Yeni token otomasyonu',
+      emptyLabel: 'Henüz token otomasyonu yok.',
+    },
+  }
 
   const renderAutomationLane = (kind: AutomationTriggerKind) => {
     const items = byKind(kind)
-    const isBoardKind = kind === 'board'
+    const meta = laneMeta[kind]
     return (
       <BoardColumn
         testId={`automation-lane-${kind}`}
-        title={isBoardKind ? 'Pano otomasyonları' : 'Etiket otomasyonları'}
-        icon={isBoardKind ? LayoutGrid : Repeat}
-        accent={isBoardKind ? COLUMN_ACCENT.board : COLUMN_ACCENT.tag}
+        title={meta.title}
+        icon={meta.icon}
+        accent={meta.accent}
         count={items.length}
-        description={
-          isBoardKind
-            ? 'Bir kanban kartı taşınınca/oluşunca/değişince kart bağlamıyla çalışır.'
-            : 'Tetikleyici etiketli bir oturum turu bitince son yanıtla çalışır.'
-        }
+        description={meta.description}
         onAdd={() => setEditor({ lane: kind, editing: null })}
-        addLabel={isBoardKind ? 'Yeni pano otomasyonu' : 'Yeni etiket otomasyonu'}
+        addLabel={meta.addLabel}
         loading={loadingAutomations}
         loadingLabel="Otomasyonlar yükleniyor…"
-        emptyLabel={isBoardKind ? 'Henüz pano otomasyonu yok.' : 'Henüz etiket otomasyonu yok.'}
+        emptyLabel={meta.emptyLabel}
       >
         {items.map((a) => (
           <AutomationCard
             key={a.id}
             automation={a}
-            isBoardKind={isBoardKind}
+            isBoardKind={kind === 'board'}
+            isTokenKind={kind === 'token'}
             agents={agents}
             flows={flows}
             columns={columns}
@@ -315,6 +360,7 @@ export function AutomationBoard({ agents, focusId, onError }: Props) {
 
         {renderAutomationLane('tag')}
         {renderAutomationLane('board')}
+        {renderAutomationLane('token')}
       </div>
 
       {editor?.lane === 'schedules' && (
@@ -324,7 +370,9 @@ export function AutomationBoard({ agents, focusId, onError }: Props) {
           editing={editor.editing}
           onClose={() => setEditor(null)}
           onSaved={(s, isNew) =>
-            setSchedules((prev) => (isNew ? [s, ...prev] : prev.map((x) => (x.id === s.id ? s : x))))
+            setSchedules((prev) =>
+              isNew ? [s, ...prev] : prev.map((x) => (x.id === s.id ? s : x)),
+            )
           }
           onDelete={editor.editing ? () => removeSchedule(editor.editing!) : undefined}
           onError={onError}

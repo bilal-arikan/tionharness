@@ -1,4 +1,4 @@
-import type { AutomationTriggerKind, BoardColumnDef, BoardOp } from '@/types'
+import type { AutomationTriggerKind, BoardColumnDef, BoardOp, TokenScope } from '@/types'
 
 // Fallback columns used until workspace board columns load (mirrors TaskBoard).
 export const DEFAULT_COLUMNS: BoardColumnDef[] = [
@@ -21,6 +21,16 @@ export const BOARD_OPS: { value: BoardOp; label: string }[] = [
 
 export function boardOpLabel(op?: BoardOp): string {
   return BOARD_OPS.find((o) => o.value === (op || 'move'))?.label ?? String(op ?? '')
+}
+
+// Token-trigger scope options (label = Turkish UI text).
+export const TOKEN_SCOPES: { value: TokenScope; label: string }[] = [
+  { value: 'session', label: 'Oturum (bir oturumun ömür-boyu tokenı)' },
+  { value: 'workspace', label: 'Workspace (bugünkü toplam token)' },
+]
+
+export function tokenScopeLabel(scope?: TokenScope): string {
+  return TOKEN_SCOPES.find((s) => s.value === (scope || 'session'))?.label ?? String(scope ?? '')
 }
 
 // Tag-trigger prompt placeholders (kept in sync with agent/automation.go turnVars).
@@ -60,10 +70,28 @@ export const BOARD_PROMPT_VARS: { name: string; desc: string }[] = [
   { name: '{{datetime}}', desc: 'Tarih + saat' },
 ]
 
+// Token-trigger prompt placeholders (kept in sync with agent/automation.go tokenVars).
+export const TOKEN_PROMPT_VARS: { name: string; desc: string }[] = [
+  { name: '{{tokens}}', desc: 'Eşiği geçen kümülatif token toplamı' },
+  { name: '{{threshold}}', desc: 'Token aralığı (eşik)' },
+  { name: '{{scope}}', desc: 'Kapsam (session/workspace)' },
+  { name: '{{sessionId}}', desc: 'Geçişi tetikleyen oturum (workspace kapsamında boş)' },
+  { name: '{{iteration}}', desc: 'Bu ateşlemenin sıra no’su (1-tabanlı)' },
+  { name: '{{maxIterations}}', desc: 'Üst sınır (eski kayıtlarda 0 → ∞)' },
+  { name: '{{automation}}', desc: 'Otomasyonun adı' },
+  { name: '{{date}}', desc: 'Geçerli tarih' },
+  { name: '{{time}}', desc: 'Geçerli saat' },
+  { name: '{{datetime}}', desc: 'Tarih + saat' },
+]
+
 // Default prompt template for a fresh automation of each kind.
 export const DEFAULT_PROMPT: Record<AutomationTriggerKind, string> = {
   tag: 'Devam et. Önceki sonuç:\n{{result}}',
   board: 'Bir kart taşındı: {{title}} ({{op}} → {{toLabel}}). Gereğini yap.',
+  token:
+    'Bu {{scope}} {{tokens}} token eşiğini ({{threshold}}) geçti. Kendi kendine bakım yap: ' +
+    'gereksiz artefaktları/oturumları temizle, bağlamı sıkıştır/özetle, optimizasyon fırsatlarını uygula. ' +
+    'Oturum: {{sessionId}}',
 }
 
 // Prefill body for the "stuck session repairer" template (self-healing, _Docs/56):
@@ -92,6 +120,7 @@ export const COLUMN_ACCENT = {
   schedules: '#6b8e23',
   tag: '#8b5cf6',
   board: '#0ea5e9',
+  token: '#f59e0b',
 } as const
 
 // MAX_ITERATIONS_HARD_CAP is the ceiling the automation form allows.
@@ -109,3 +138,10 @@ export const MAX_ITERATIONS_HARD_CAP = 500
 // internal/api/automations.go: the bound a new automation gets when the user does
 // not choose one.
 export const DEFAULT_MAX_ITERATIONS = 50
+
+// MIN_TOKEN_THRESHOLD mirrors db.MinTokenThreshold: the smallest interval a token
+// automation may set (server-authoritative; drift only nudges the form's `min`).
+export const MIN_TOKEN_THRESHOLD = 1000
+
+// DEFAULT_TOKEN_THRESHOLD is a sensible prefill for a new token automation.
+export const DEFAULT_TOKEN_THRESHOLD = 200000

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { LayoutGrid, Repeat, X } from 'lucide-react'
+import { LayoutGrid, Repeat, X, Zap } from 'lucide-react'
 import { api } from '@/api'
 import type {
   Agent,
@@ -8,16 +8,19 @@ import type {
   BoardColumnDef,
   BoardOp,
   Flow,
+  TokenScope,
 } from '@/types'
 import { AgentPicker } from '@/shared/components/agents/AgentPicker'
 import {
   COLUMN_ACCENT,
   DEFAULT_MAX_ITERATIONS,
   DEFAULT_PROMPT,
+  DEFAULT_TOKEN_THRESHOLD,
   MAX_ITERATIONS_HARD_CAP,
+  MIN_TOKEN_THRESHOLD,
   STUCK_TEMPLATE,
 } from './automationMeta'
-import { BoardTriggerFields, PromptVarsField } from './AutomationFields'
+import { BoardTriggerFields, PromptVarsField, TokenTriggerFields } from './AutomationFields'
 import { FormModal } from './FormModal'
 import { Field, FlowPicker, TargetModeToggle, inputCls } from './pickers'
 import { localInputToUnix, unixToLocalInput } from './timeUtils'
@@ -50,6 +53,7 @@ export function AutomationModal({
   onError,
 }: Props) {
   const isBoardKind = kind === 'board'
+  const isTokenKind = kind === 'token'
 
   const [name, setName] = useState(editing?.name ?? '')
   const [triggerTag, setTriggerTag] = useState(editing?.triggerTag ?? '')
@@ -58,6 +62,10 @@ export function AutomationModal({
   const [boardToState, setBoardToState] = useState(editing?.boardToState ?? '')
   const [boardPriority, setBoardPriority] = useState(editing?.boardPriority ?? 0)
   const [boardExclusive, setBoardExclusive] = useState(editing?.boardExclusive ?? false)
+  const [tokenScope, setTokenScope] = useState<TokenScope>(editing?.tokenScope ?? 'session')
+  const [tokenThreshold, setTokenThreshold] = useState(
+    editing?.tokenThreshold ?? DEFAULT_TOKEN_THRESHOLD,
+  )
   const [targetMode, setTargetMode] = useState<'agent' | 'flow'>(editing?.flowId ? 'flow' : 'agent')
   const [targetAgentId, setTargetAgentId] = useState(editing?.targetAgentId ?? '')
   const [flowId, setFlowId] = useState(editing?.flowId ?? '')
@@ -87,8 +95,12 @@ export function AutomationModal({
       onError('Prompt şablonu zorunlu')
       return
     }
-    if (!isBoardKind && !triggerTag.trim()) {
+    if (kind === 'tag' && !triggerTag.trim()) {
       onError('Tetikleyici etiket zorunlu')
+      return
+    }
+    if (isTokenKind && tokenThreshold < MIN_TOKEN_THRESHOLD) {
+      onError(`Token eşiği en az ${MIN_TOKEN_THRESHOLD} olmalı`)
       return
     }
     if (targetMode === 'flow' ? !flowId : !targetAgentId) {
@@ -102,7 +114,9 @@ export function AutomationModal({
     }
     const trigger = isBoardKind
       ? { boardOp, boardFromState, boardToState, boardPriority, boardExclusive }
-      : { triggerTag: triggerTag.trim() }
+      : isTokenKind
+        ? { tokenScope, tokenThreshold }
+        : { triggerTag: triggerTag.trim() }
     const body = {
       name: name.trim(),
       // A full edit always sends the (fixed) kind so the board filters below are
@@ -136,13 +150,19 @@ export function AutomationModal({
     }
   }
 
-  const kindLabel = isBoardKind ? 'pano otomasyonu' : 'etiket otomasyonu'
+  const kindLabel = isBoardKind
+    ? 'pano otomasyonu'
+    : isTokenKind
+      ? 'token otomasyonu'
+      : 'etiket otomasyonu'
 
   return (
     <FormModal
       title={`${editing ? 'Düzenle' : 'Yeni'} — ${kindLabel}`}
-      icon={isBoardKind ? LayoutGrid : Repeat}
-      accent={isBoardKind ? COLUMN_ACCENT.board : COLUMN_ACCENT.tag}
+      icon={isBoardKind ? LayoutGrid : isTokenKind ? Zap : Repeat}
+      accent={
+        isBoardKind ? COLUMN_ACCENT.board : isTokenKind ? COLUMN_ACCENT.token : COLUMN_ACCENT.tag
+      }
       submitLabel={editing ? 'Kaydet' : '+ Otomasyon'}
       onSubmit={submit}
       onClose={onClose}
@@ -174,6 +194,15 @@ export function AutomationModal({
               if (p.to !== undefined) setBoardToState(p.to)
               if (p.priority !== undefined) setBoardPriority(p.priority)
               if (p.exclusive !== undefined) setBoardExclusive(p.exclusive)
+            }}
+          />
+        ) : isTokenKind ? (
+          <TokenTriggerFields
+            scope={tokenScope}
+            threshold={tokenThreshold}
+            onChange={(p) => {
+              if (p.scope !== undefined) setTokenScope(p.scope)
+              if (p.threshold !== undefined) setTokenThreshold(p.threshold)
             }}
           />
         ) : (
@@ -245,7 +274,7 @@ export function AutomationModal({
         </label>
       </div>
 
-      {!isBoardKind && !editing && (
+      {kind === 'tag' && !editing && (
         <div className="flex flex-wrap items-center gap-2 border-t border-[var(--color-border)] pt-3 text-xs text-[var(--color-text-dim)]">
           Şablon:
           <button

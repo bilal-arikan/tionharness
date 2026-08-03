@@ -97,11 +97,15 @@ export interface Schedule {
 // spawned for targetAgentId. When the spawned session carries triggerTag too (the
 // default), each completion re-fires the rule — a self-continuing loop bounded by
 // maxIterations / cooldownSec / enabled. Surfaced in the Schedules screen.
-// Automation trigger kind: 'tag' (a tagged session finishing a turn) or 'board'
-// (a kanban card change). '' from older files is treated as 'tag'.
-export type AutomationTriggerKind = 'tag' | 'board'
+// Automation trigger kind: 'tag' (a tagged session finishing a turn), 'board'
+// (a kanban card change), or 'token' (cumulative token spend crossing a
+// threshold). '' from older files is treated as 'tag'.
+export type AutomationTriggerKind = 'tag' | 'board' | 'token'
 // Board card operation a board automation reacts to.
 export type BoardOp = 'any' | 'move' | 'create' | 'update' | 'delete'
+// Token automation scope: one session's lifetime spend, or the whole workspace's
+// spend for the current day. '' is treated as 'session'.
+export type TokenScope = 'session' | 'workspace'
 
 export interface Automation {
   id: string
@@ -119,6 +123,11 @@ export interface Automation {
   // When true this automation claims the matching card change alone: every other
   // matching board rule is suppressed ("single owner per column").
   boardExclusive?: boolean
+  // Token-trigger fields (only meaningful when triggerKind === 'token').
+  tokenScope?: TokenScope // default 'session'
+  // Token interval: fires each time cumulative spend crosses another multiple
+  // (e.g. 100000 → at 100k, 200k…). Min 1000. Tokens = input+output+cache.
+  tokenThreshold?: number
   targetAgentId: string
   // When set, the automation runs this flow (with the rendered prompt as input)
   // instead of spawning a session for targetAgentId. Per-trigger (no self-loop).

@@ -1,7 +1,14 @@
 import { useState } from 'react'
 import { Info } from 'lucide-react'
-import type { AutomationTriggerKind, BoardColumnDef, BoardOp } from '@/types'
-import { BOARD_OPS, BOARD_PROMPT_VARS, PROMPT_VARS } from './automationMeta'
+import type { AutomationTriggerKind, BoardColumnDef, BoardOp, TokenScope } from '@/types'
+import {
+  BOARD_OPS,
+  BOARD_PROMPT_VARS,
+  MIN_TOKEN_THRESHOLD,
+  PROMPT_VARS,
+  TOKEN_PROMPT_VARS,
+  TOKEN_SCOPES,
+} from './automationMeta'
 import { inputCls } from './pickers'
 
 const selCls =
@@ -27,7 +34,13 @@ export function BoardTriggerFields({
   priority: number
   exclusive: boolean
   columns: BoardColumnDef[]
-  onChange: (patch: { op?: BoardOp; from?: string; to?: string; priority?: number; exclusive?: boolean }) => void
+  onChange: (patch: {
+    op?: BoardOp
+    from?: string
+    to?: string
+    priority?: number
+    exclusive?: boolean
+  }) => void
 }) {
   const showFrom = op === 'move' || op === 'any' || op === 'delete'
   const showTo = op !== 'delete'
@@ -35,7 +48,11 @@ export function BoardTriggerFields({
     <div className="flex flex-wrap items-center gap-2">
       <label className="flex items-center gap-1 text-xs text-[var(--color-text-dim)]">
         Olay
-        <select value={op} onChange={(e) => onChange({ op: e.target.value as BoardOp })} className={selCls}>
+        <select
+          value={op}
+          onChange={(e) => onChange({ op: e.target.value as BoardOp })}
+          className={selCls}
+        >
           {BOARD_OPS.map((o) => (
             <option key={o.value} value={o.value}>
               {o.label}
@@ -46,7 +63,11 @@ export function BoardTriggerFields({
       {showFrom && (
         <label className="flex items-center gap-1 text-xs text-[var(--color-text-dim)]">
           Kaynak
-          <select value={from} onChange={(e) => onChange({ from: e.target.value })} className={selCls}>
+          <select
+            value={from}
+            onChange={(e) => onChange({ from: e.target.value })}
+            className={selCls}
+          >
             <option value="">(herhangi)</option>
             {columns.map((c) => (
               <option key={c.key} value={c.key}>
@@ -97,6 +118,52 @@ export function BoardTriggerFields({
   )
 }
 
+// TokenTriggerFields renders the scope selector and the token interval for a
+// token-triggered automation. The automation fires each time the watched
+// cumulative total crosses another multiple of the interval.
+export function TokenTriggerFields({
+  scope,
+  threshold,
+  onChange,
+}: {
+  scope: TokenScope
+  threshold: number
+  onChange: (patch: { scope?: TokenScope; threshold?: number }) => void
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <label className="flex items-center gap-1 text-xs text-[var(--color-text-dim)]">
+        Kapsam
+        <select
+          value={scope}
+          onChange={(e) => onChange({ scope: e.target.value as TokenScope })}
+          className={selCls}
+        >
+          {TOKEN_SCOPES.map((s) => (
+            <option key={s.value} value={s.value}>
+              {s.label}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label
+        className="flex items-center gap-1 text-xs text-[var(--color-text-dim)]"
+        title="Token aralığı: kümülatif harcama her bu kadar tokenın katını geçtiğinde tetiklenir (ör. 100000 → 100k, 200k…). Token = giriş+çıkış+cache."
+      >
+        Eşik (token aralığı)
+        <input
+          type="number"
+          min={MIN_TOKEN_THRESHOLD}
+          step={1000}
+          value={threshold}
+          onChange={(e) => onChange({ threshold: Number(e.target.value) || 0 })}
+          className={`${selCls} w-28`}
+        />
+      </label>
+    </div>
+  )
+}
+
 // PromptVarsField renders the prompt-template textarea plus the ℹ️ variable
 // picker popover, choosing the variable list by trigger kind.
 export function PromptVarsField({
@@ -109,7 +176,8 @@ export function PromptVarsField({
   onChange: (next: string) => void
 }) {
   const [show, setShow] = useState(false)
-  const vars = kind === 'board' ? BOARD_PROMPT_VARS : PROMPT_VARS
+  const vars =
+    kind === 'board' ? BOARD_PROMPT_VARS : kind === 'token' ? TOKEN_PROMPT_VARS : PROMPT_VARS
   return (
     <div className="relative">
       <div className="mb-1 flex items-center gap-1 text-[11px] font-medium uppercase tracking-wide text-[var(--color-text-dim)]">
