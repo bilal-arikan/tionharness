@@ -144,11 +144,16 @@ func (c *StdioClient) log(level slog.Level, msg string, args ...any) {
 }
 
 // DialStdio launches the given command as an MCP server and performs the
-// initialize handshake. Caller must Close the returned client.
-func DialStdio(ctx context.Context, command string, args, env []string) (*StdioClient, error) {
+// initialize handshake. Caller must Close the returned client. A non-empty dir
+// sets the subprocess working directory (empty inherits the host cwd) — used to
+// place a file-writing server's allowed root at the caller's scratchpad.
+func DialStdio(ctx context.Context, command string, args, env []string, dir string) (*StdioClient, error) {
 	cmd := proc.Command(command, args...)
 	if len(env) > 0 {
 		cmd.Env = append(cmd.Environ(), env...)
+	}
+	if dir != "" {
+		cmd.Dir = dir
 	}
 	stdin, err := cmd.StdinPipe()
 	if err != nil {

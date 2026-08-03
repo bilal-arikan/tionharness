@@ -3,6 +3,16 @@
 Bu dosya, TionSwarm deposunda çalışan ajanlar için tekrar eden friction'dan
 türetilmiş kısa kurallar içerir. Terminal: PowerShell veya Git-Bash.
 
+## Playwright MCP
+
+`browser_take_screenshot` / PDF çıktıları **yalnızca MCP'nin izinli kökü**
+altına yazılabilir. TionSwarm bu kökü otomatik olarak **aktif oturumun
+scratchpad'ine** (`<store>/sessions/<SID>/scratchpad`) ayarlar; oturum
+scratchpad'ine **doğrudan mutlak yol vererek yazmaya çalışma** — dosyayı izinli
+köke (varsayılan olarak orası) kaydet, gerekiyorsa `Read` ile geri oku. Kök
+her istekte aktif oturumdan yeniden çözülür, dolayısıyla bayat oturum yolu
+kullanma.
+
 ## Grep/ripgrep kullanımı
 
 Buradaki yerleşik `Grep` aracı **ripgrep** sözdizimi kullanır (POSIX `grep`

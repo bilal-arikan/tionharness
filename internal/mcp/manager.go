@@ -24,6 +24,15 @@ type ServerConfig struct {
 	URL       string
 	Env       map[string]string // extra environment variables (stdio)
 	Headers   map[string]string // extra request headers (http, e.g. Authorization)
+	// Dir is the working directory for a stdio subprocess (empty = inherit the
+	// host process cwd, the previous behaviour). A file-writing MCP server (notably
+	// the Playwright MCP) confines its file access to its workspace roots — and,
+	// when the client advertises none as we do, to its cwd — so setting Dir to the
+	// caller's session scratchpad is what lets browser_take_screenshot / PDF saves
+	// land inside an allowed root. It rides the connection fingerprint (see
+	// configFingerprint), so a per-session Dir re-dials rather than reusing a stale
+	// root. Ignored by the http/sse transports.
+	Dir string
 	// Description is a short, curated one-liner about what this server is for.
 	// It rides the per-server line of the load-on-demand catalog so the model
 	// keeps a semantic hint (e.g. "use for code search") even when the workspace
@@ -58,7 +67,7 @@ func (c ServerConfig) dial(ctx context.Context) (Client, error) {
 		if c.Command == "" {
 			return nil, fmt.Errorf("mcp %q: stdio transport requires a command", c.Name)
 		}
-		return DialStdio(ctx, c.Command, c.Args, c.envSlice())
+		return DialStdio(ctx, c.Command, c.Args, c.envSlice(), c.Dir)
 	case MCPTransportHTTP:
 		if c.URL == "" {
 			return nil, fmt.Errorf("mcp %q: http transport requires a url", c.Name)

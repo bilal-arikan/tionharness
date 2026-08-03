@@ -511,6 +511,11 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 			if m.Scope == "scoped" && mcpScopeKey != "" {
 				cfg.ScopeKey = mcpScopeKey
 			}
+			// A file-writing MCP (Playwright) is denied writes outside its allowed
+			// roots; add THIS turn's session scratchpad as a root so screenshot/PDF
+			// saves land where the agent is told to write. Self-contained in
+			// mcp_playwright.go (applyMCPScratchpadRoot); no-op for other servers.
+			cfg = r.applyMCPScratchpadRoot(ctx, cfg, m, mcpScopeKey)
 			// Route the codebase-memory server at this workspace's ISOLATED store so
 			// its index never mixes with other workspaces (store = workspace boundary).
 			// A user-set CBM_CACHE_DIR wins; we only fill it when unset.
