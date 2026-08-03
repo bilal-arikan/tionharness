@@ -463,6 +463,11 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 		noProgressBlck: gnb,
 	})
 	guardHaltReason := ""
+	// MCP not-indexed repair (self-healing): a codebase-memory (or peer) MCP call
+	// whose `project` is unindexed fails with a body the model does not act on, so
+	// it loops. This breaks the loop on the first repeat — independent of the loop
+	// guardrail's hard-stop setting. Per-turn, isolated to mcprepair.go.
+	repair := newMCPRepair()
 	// partial accumulates answer text across max-output-token resumes, so the
 	// stitched full answer is returned even though it arrived in capped pieces.
 	var partial strings.Builder
@@ -779,6 +784,20 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 				continue
 			}
 
+			// MCP not-indexed repair (pre-execution): refuse an identical repeat of
+			// a call that already failed this turn because its `project` is unindexed.
+			// Hitting the server again would return the same error; instead feed the
+			// recovery instruction (call list_projects, copy an exact project id).
+			if blocked, msg := repair.precheck(call); blocked {
+				r.logger.Info("mcp call blocked by not-indexed repair", "agent", agent.ID, "tool", call.Name)
+				r.emitDebug(ctx, db.DebugEvent{Type: db.DebugGuardrail, AgentID: agent.ID, Name: "mcp_repair_block", Detail: call.Name, Err: true})
+				results = append(results, providers.ToolResult{CallID: call.ID, Content: msg, IsError: true})
+				st := TurnStep{Kind: StepError, Tool: call.Name, Reason: "mcp_repair", Text: msg, IsError: true, Batch: batch}
+				steps = append(steps, st)
+				emit(st)
+				continue
+			}
+
 			// Loop guardrail (pre-execution): a call past a block threshold is
 			// refused with a synthetic error result (pairing invariant holds);
 			// past the halt threshold the whole turn ends after this batch.
@@ -908,6 +927,13 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 			if hint := guard.observe(call, res); hint != "" {
 				res.Content += hint
 				r.emitDebug(ctx, db.DebugEvent{Type: db.DebugGuardrail, AgentID: agent.ID, Name: "warn", Detail: call.Name})
+			}
+			// MCP not-indexed repair (post-execution): turn an "unindexed project"
+			// error body into an actionable instruction and remember the call so an
+			// identical repeat is refused above before it re-hits the server.
+			if hint, ok := repair.repair(call, res); ok {
+				res.Content += hint
+				r.emitDebug(ctx, db.DebugEvent{Type: db.DebugGuardrail, AgentID: agent.ID, Name: "mcp_repair", Detail: call.Name, Err: true})
 			}
 
 			results = append(results, res)
