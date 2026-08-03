@@ -145,27 +145,55 @@ func (r *Runtime) writeCLIMCPConfig(ctx context.Context, mcpEnabled bool, inter 
 		// (extended advertises nothing until tools/list_changed grows it, yet each grown
 		// tool is already permitted).
 		allowed = append(allowed, "mcp__"+interactionExtendedKey)
-		// Suppress the CLI's own equivalents, which can't be answered/honored in
-		// one-shot -p mode: AskUserQuestion has no live client, and ScheduleWakeup
-		// schedules a wake the CLI subprocess never lives to fire — TionSwarm's own
-		// schedule_wake (above) replaces it with a real timer.
-		//
+		// WS17 invariant — never leave the model with a suppressed native tool AND no
+		// advertised bridge. Some native suppressions below have a REQUIRED bridged
+		// replacement the system prompt / skill catalog actively mandates (the prompt
+		// says "ALWAYS call todo_write"; the skills block tells the model to call
+		// use_skill). If that bridge was filtered out of THIS turn's advertised set
+		// (workspace DisabledTools or the agent denylist dropped it from
+		// CoreToolNames/ExtendedToolNames), suppressing the native counterpart too
+		// leaves the model with no working tool — the "No such tool available" dead end.
+		// So those families are suppressed ONLY when their bridge is actually advertised;
+		// otherwise the native fallback is kept and the gap is logged (never silently
+		// swallowed). The advertised set is CoreToolNames ∪ ExtendedToolNames — an
+		// extended tool starts un-advertised on the wire but is reachable via
+		// activate_tools, so it still counts as an available bridge.
+		advertised := make(map[string]bool, len(inter.CoreToolNames)+len(inter.ExtendedToolNames))
+		for _, t := range inter.CoreToolNames {
+			advertised[t] = true
+		}
+		for _, t := range inter.ExtendedToolNames {
+			advertised[t] = true
+		}
+		suppressIfBridged := func(bridge string, natives ...string) {
+			if advertised[bridge] {
+				disallowed = append(disallowed, natives...)
+				return
+			}
+			r.logger.Warn("cli mcp config: required bridge tool not advertised; keeping native fallback",
+				"bridge", bridge, "natives", natives)
+		}
+		// AskUserQuestion / ScheduleWakeup have NO valid native fallback in one-shot -p
+		// mode (AskUserQuestion has no live client; a native wake the subprocess never
+		// lives to fire), so they are suppressed unconditionally — keeping them would
+		// only mislead, not help.
+		disallowed = append(disallowed, "AskUserQuestion", "ScheduleWakeup")
 		// The checklist family is the subtle one: newer Claude Code CLIs renamed the
 		// old TodoWrite into a TaskCreate/TaskUpdate/TaskList/TaskGet family. Whichever
 		// the CLI version exposes, it SHADOWS TionSwarm's bridged todo_write — the model
 		// reaches for the native tool, so nothing reaches the progress sink and the
-		// progress card stays empty. Suppress BOTH names (disallowing a tool the CLI
-		// doesn't have is harmless) so todo_write is the only checklist path.
-		disallowed = append(disallowed,
-			"AskUserQuestion",
-			"TodoWrite", "TaskCreate", "TaskUpdate", "TaskList", "TaskGet",
-			"ScheduleWakeup")
+		// progress card stays empty. Suppress the whole family (disallowing a tool the
+		// CLI doesn't have is harmless) so todo_write is the only checklist path — but
+		// only while todo_write is actually advertised (see the WS17 invariant above).
+		suppressIfBridged("todo_write",
+			"TodoWrite", "TaskCreate", "TaskUpdate", "TaskList", "TaskGet")
 		// Skill: the CLI's native skill tool only sees its own <CLAUDE_CONFIG_DIR>/skills
 		// dir, never TionSwarm's workspace tier (<workspace>/skills) or global tier
 		// (~/.tionswarm/skills) — so a weak model reaching for it fails with "Unknown
 		// skill". The bridged use_skill (above) is the single correct path (it serves
-		// both tiers), so suppress the native one to force it.
-		disallowed = append(disallowed, "Skill")
+		// both tiers), so suppress the native one to force it — but only while use_skill
+		// is advertised, else the native Skill stays as the (CLI-native-only) fallback.
+		suppressIfBridged("use_skill", "Skill")
 		// Subagent launcher: the CLI's native delegation tool (older CLIs call it
 		// `Task`, newer ones `Agent`) spawns a child entirely inside the CLI process —
 		// invisible to TionSwarm, so it bypasses the bridged run_subagent (no `subagent`

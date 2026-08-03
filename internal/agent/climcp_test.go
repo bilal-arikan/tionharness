@@ -100,3 +100,68 @@ func TestWriteCLIMCPConfigTwoTierInteraction(t *testing.T) {
 		}
 	}
 }
+
+// TestWriteCLIMCPConfigRequiredCoreInvariant locks the WS17 invariant: a native CLI
+// tool whose bridged replacement is prompt-/catalog-mandated (todo_write, use_skill)
+// is suppressed ONLY while that bridge is actually advertised for the turn. When the
+// bridge is filtered out of the advertised set, the native fallback must be KEPT so
+// the model is never left with a mandated-but-missing tool (the "No such tool
+// available" dead end). AskUserQuestion/ScheduleWakeup have no valid native fallback
+// in one-shot -p mode, so they are suppressed unconditionally either way.
+func TestWriteCLIMCPConfigRequiredCoreInvariant(t *testing.T) {
+	has := func(list []string, name string) bool {
+		for _, s := range list {
+			if s == name {
+				return true
+			}
+		}
+		return false
+	}
+
+	// Case A: the bridges ARE advertised → their native shadows are suppressed.
+	t.Run("bridge advertised suppresses native", func(t *testing.T) {
+		rt, _ := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))
+		inter := tools.InteractionEndpoint{
+			URL:           "http://127.0.0.1:8090/mcp/interaction",
+			Token:         "tok-A",
+			CoreToolNames: []string{"todo_write", "use_skill", "ask_user"},
+		}
+		_, _, disallowed, cleanup, err := rt.writeCLIMCPConfig(context.Background(), false, inter, "ask")
+		if err != nil {
+			t.Fatalf("writeCLIMCPConfig: %v", err)
+		}
+		defer cleanup()
+		for _, native := range []string{"TodoWrite", "TaskCreate", "Skill", "AskUserQuestion", "ScheduleWakeup"} {
+			if !has(disallowed, native) {
+				t.Errorf("expected native %q suppressed when its bridge is advertised; got %v", native, disallowed)
+			}
+		}
+	})
+
+	// Case B: the bridges are ABSENT (filtered out) → the native fallbacks are KEPT,
+	// but the fallback-less natives stay suppressed.
+	t.Run("bridge absent keeps native fallback", func(t *testing.T) {
+		rt, _ := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))
+		inter := tools.InteractionEndpoint{
+			URL:           "http://127.0.0.1:8090/mcp/interaction",
+			Token:         "tok-B",
+			CoreToolNames: []string{"ask_user", "permission_prompt"}, // no todo_write / use_skill
+		}
+		_, _, disallowed, cleanup, err := rt.writeCLIMCPConfig(context.Background(), false, inter, "ask")
+		if err != nil {
+			t.Fatalf("writeCLIMCPConfig: %v", err)
+		}
+		defer cleanup()
+		for _, native := range []string{"TodoWrite", "TaskCreate", "TaskUpdate", "TaskList", "TaskGet", "Skill"} {
+			if has(disallowed, native) {
+				t.Errorf("native %q must NOT be suppressed when its bridge is not advertised (dead-end guard); got %v", native, disallowed)
+			}
+		}
+		// No valid native fallback → suppressed regardless of the missing bridge.
+		for _, native := range []string{"AskUserQuestion", "ScheduleWakeup"} {
+			if !has(disallowed, native) {
+				t.Errorf("fallback-less native %q must stay suppressed; got %v", native, disallowed)
+			}
+		}
+	})
+}

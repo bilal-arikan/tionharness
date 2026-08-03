@@ -238,6 +238,16 @@ Her CLI'nin kendi mcp-config formatı + built-in-disable bayrağı var. Ortak ç
 4. `--append-system-prompt`'a kısa kullanım notu: "Kullanıcıya soru sormak için
    `ask_user`, ilerleme listesi için `todo_write` araçlarını kullan."
 
+**WS17 invariant (koşullu suppress).** `disallowed` listesi, native aracı yalnızca
+köprülenen TionSwarm eşdeğeri o tur **gerçekten advertise edildiğinde** kapatır.
+Prompt/skill-kataloğu `todo_write` / `use_skill`'i dayatırken bu köprü advertised
+set'ten (workspace `DisabledTools` veya agent denylist) düşmüşse, native shadow'u da
+kapatmak modeli çalışan hiçbir araçsız bırakır → CLI "No such tool available" ile
+reddeder. `climcp.go` bu iki aileyi (`todo_write`→TodoWrite/Task*, `use_skill`→Skill)
+`suppressIfBridged` ile koşullu kapatır; köprü yoksa native yedek korunur ve boşluk
+`logger.Warn` ile görünür kılınır (sessizce yutulmaz). `AskUserQuestion`/`ScheduleWakeup`
+tek-atım `-p` modunda geçerli native yedeğe sahip olmadığından koşulsuz kapatılır.
+
 Wiring köprüsü: API katmanı `{interactionURL, token}`'ı context ile runtime'a
 geçirir (`tools.WithInteractionEndpoint(ctx, ...)` — mevcut context köprü deseni);
 `writeCLIMCPConfig` bunu okuyup entry üretir.
