@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -22,7 +23,7 @@ func NewFSGrepTool(sb Sandbox) FSGrepTool { return FSGrepTool{sb: sb} }
 
 func (FSGrepTool) Def() providers.ToolDef {
 	return providers.ToolDef{
-		Name: "Grep",
+		Name:   "Grep",
 		Strict: true, // API-side input validation (schema has additionalProperties:false; registry normalizes required)
 		// Grep ships EAGERLY every turn, so the flag semantics live once in the
 		// description; the schema's ripgrep-style flag keys carry no per-property
@@ -208,6 +209,17 @@ func (t FSGrepTool) collectFiles(args grepArgs, want func(string) bool) ([]strin
 	return walkGrepFiles(t.sb.Root, args, want)
 }
 
+// maxWalkFiles bounds the Go fallback walk. This path only runs when ripgrep is
+// absent, and it collects EVERY candidate before reading any of them — so a tree
+// with a large un-gitignored directory (a node_modules, a data dump) would be
+// walked and then slurped into memory inside one tool call, with head_limit
+// capping only the OUTPUT rows. Refusing loudly past this many candidates beats
+// wedging the turn. rg has no such limit and remains the fast path.
+const maxWalkFiles = 20_000
+
+// errTooManyFiles stops the walk at the cap instead of finishing the traversal.
+var errTooManyFiles = errors.New("too many files")
+
 // walkGrepFiles walks root, honouring .gitignore (unless no_ignore) and the file
 // filter, and returns the matching files' absolute paths.
 func walkGrepFiles(root string, args grepArgs, want func(string) bool) ([]string, string, error) {
@@ -233,8 +245,16 @@ func walkGrepFiles(root string, args grepArgs, want func(string) bool) ([]string
 			return nil
 		}
 		files = append(files, p)
+		if len(files) > maxWalkFiles {
+			return errTooManyFiles
+		}
 		return nil
 	})
+	if errors.Is(err, errTooManyFiles) {
+		return nil, root, fmt.Errorf(
+			"search scope too large: more than %d candidate files. Narrow it with path/glob, "+
+				"or install ripgrep (rg) — the fast path has no such limit", maxWalkFiles)
+	}
 	// Lexical path order so content output is deterministic and matches the rg fast
 	// path (rg is run with --sort path).
 	sort.Strings(files)

@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -193,5 +194,48 @@ func TestGlobPathArg(t *testing.T) {
 	out, _ := g.Call(context.Background(), mustJSON(t, map[string]any{"pattern": "*.go", "path": "src"}))
 	if !strings.Contains(out, "main.go") || strings.Contains(out, "src/") {
 		t.Fatalf("path-scoped glob should be relative to src:\n%s", out)
+	}
+}
+
+// TestWalkGrepFilesCapsHugeTree pins the Go-fallback guard: this path collects
+// every candidate before reading any of them, so an unbounded tree would be
+// walked and slurped into memory inside a single tool call. Past the cap it must
+// refuse LOUDLY (naming the way out), not truncate silently.
+func TestWalkGrepFilesCapsHugeTree(t *testing.T) {
+	root := t.TempDir()
+	for i := 0; i <= maxWalkFiles+1; i++ {
+		if err := os.WriteFile(filepath.Join(root, fmt.Sprintf("f%d.txt", i)), []byte("x"), 0o644); err != nil {
+			t.Fatalf("seed %d: %v", i, err)
+		}
+	}
+	files, _, err := walkGrepFiles(root, grepArgs{}, func(string) bool { return true })
+	if err == nil {
+		t.Fatal("walk past the cap must fail, not return a truncated list")
+	}
+	if files != nil {
+		t.Fatalf("no partial result may leak out, got %d files", len(files))
+	}
+	for _, want := range []string{"too large", "ripgrep"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("error must mention %q so the caller knows the way out: %v", want, err)
+		}
+	}
+}
+
+// TestWalkGrepFilesUnderCapIsUntouched: the guard must not change the ordinary
+// case — a normal tree still returns every match.
+func TestWalkGrepFilesUnderCapIsUntouched(t *testing.T) {
+	root := t.TempDir()
+	for i := 0; i < 20; i++ {
+		if err := os.WriteFile(filepath.Join(root, fmt.Sprintf("f%d.txt", i)), []byte("x"), 0o644); err != nil {
+			t.Fatalf("seed: %v", err)
+		}
+	}
+	files, _, err := walkGrepFiles(root, grepArgs{}, func(string) bool { return true })
+	if err != nil {
+		t.Fatalf("normal tree must walk cleanly: %v", err)
+	}
+	if len(files) != 20 {
+		t.Fatalf("got %d files, want 20", len(files))
 	}
 }
