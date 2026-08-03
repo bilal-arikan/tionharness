@@ -991,6 +991,17 @@ ayrıntılı serileştirir + tokenizer farkı). **claude-cli major sürümü de�
 ölçümü yenile** (taban sistem promptu sürümler arası büyür). `cliOverheadPreview`
 artık `predictedOverhead` alanı taşır → UI ilk turdan önce de uyarabilir.
 
+**Ölçülen "Gerçek" tur-tipi ile eşleşmeli (fix 2026-08-03):** `computeCLIOverhead`
+`MeasuredTokens`'ı debug journal'daki `llm_call`'dan okur, ama tahmin bir **chat**
+turunu modeller (`composeTurnRequest`). Koordinatör oturumlarında en yeni `llm_call`
+çoğu zaman ağır bir **headless** tur (`kind=spawned/task/flow`; canlı worker-state
+bloğu + tek-çağrı → `in+cacheRead+cacheWrite` çok büyük); onu chat tahminiyle kıyaslamak
+hayali ~150k ek yük gösterirdi. Artık ölçüm **son `kind=="chat"` `llm_call`** ile
+eşleştiriliyor (`ReadDebugEvents` yalnız `Type` filtreler → tümü okunup geriden ilk chat
+seçilir), böylece raporlanan ek yük gerçek CLI tax'e iner. Worker-state bloğu chat
+turuna girmediği (yalnız `autonomousDynamicSuffix`) ve küçük (worker listesi) olduğu için
+tahmine katılmaz.
+
 - **Stabil prefix (Faz 1):** `providers.ClaudeCLI.buildSystemAndPrompt` — `--append-
   system-prompt` yalnız statik `req.System` taşır; volatil `req.SystemDynamic`
   (saniye-hassas saat + özet) konuşma prompt'una `[Context]` bloğu

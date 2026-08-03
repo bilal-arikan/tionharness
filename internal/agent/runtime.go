@@ -165,6 +165,11 @@ type Runtime struct {
 	// Set by the workspace manager once the api server exists; nil before then.
 	autoInteract AutonomousInteraction
 
+	// extActive reports the api server's in-flight INTERACTIVE chat sessions, which
+	// this runtime does not track itself. Read by AgentBusy. Set by the workspace
+	// manager once the api server exists; nil before then.
+	extActive ExternalActiveSessions
+
 	// wakeTurn runs a history-aware chat turn for a self-wake (schedule_wake), so
 	// the woken agent continues with the full conversation instead of just the
 	// wake prompt. Set by the workspace manager once the api server exists; nil

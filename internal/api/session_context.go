@@ -1,4 +1,4 @@
-﻿package api
+package api
 
 import (
 	"context"
@@ -488,22 +488,35 @@ func computeCLIOverhead(ctx context.Context, wsp *workspace.Workspace, provider,
 	// Agent-level preview (no session) passes an empty sessionID: there is no
 	// recorded turn to measure, so skip the debug/usage reads and return the
 	// predicted-only projection below.
-	// Most accurate next-turn projection: the REAL input of the most recent llm_call
-	// from the debug journal (steady-state), rather than a cold+warm lifetime
-	// average that under/over-states what the next turn will actually cost.
-	if evs, derr := wsp.DB.ReadDebugEvents(ctx, sessionID, db.DebugLLMCall, 1); sessionID != "" && derr == nil && len(evs) > 0 {
-		e := evs[len(evs)-1]
-		// claude-cli bills in/out/cache CUMULATIVELY across its internal tool-loop
-		// round-trips (e.Calls == result num_turns; verified: result cacheRead ==
-		// Σ per-assistant cacheRead). Divide by the round-trip count to recover ONE
-		// call's single-pass context. Native providers / single-call turns record
-		// e.Calls 0 or 1 → no division.
-		n := e.Calls
-		if n < 1 {
-			n = 1
+	// Most accurate next-turn projection: the REAL input of the most recent CHAT
+	// llm_call from the debug journal (steady-state), rather than a cold+warm
+	// lifetime average that under/over-states what the next turn will actually cost.
+	// Match the turn KIND the estimate models: handleSessionContextPreview composes
+	// a CHAT turn (composeTurnRequest), but a coordinator's newest llm_call is often
+	// a heavier headless turn (kind=spawned/task/flow — it carries the live
+	// worker-state block and runs single-call, so in+cacheRead+cacheWrite is much
+	// larger). Measuring THAT against a chat estimate reports a phantom overhead, so
+	// scan back to the newest chat-kind call. ReadDebugEvents filters by Type only,
+	// so read all llm_calls and pick the last with Kind=="chat".
+	if evs, derr := wsp.DB.ReadDebugEvents(ctx, sessionID, db.DebugLLMCall, 0); sessionID != "" && derr == nil {
+		for i := len(evs) - 1; i >= 0; i-- {
+			if evs[i].Kind != "chat" {
+				continue
+			}
+			e := evs[i]
+			// claude-cli bills in/out/cache CUMULATIVELY across its internal tool-loop
+			// round-trips (e.Calls == result num_turns; verified: result cacheRead ==
+			// Σ per-assistant cacheRead). Divide by the round-trip count to recover ONE
+			// call's single-pass context. Native providers / single-call turns record
+			// e.Calls 0 or 1 → no division.
+			n := e.Calls
+			if n < 1 {
+				n = 1
+			}
+			measured = (e.In + e.CacheRead + e.CacheWrite) / n
+			calls = n
+			break
 		}
-		measured = (e.In + e.CacheRead + e.CacheWrite) / n
-		calls = n
 	}
 	// Fallback (debug journal off / no llm_call yet): lifetime average per call. The
 	// session rollup tracks ProviderCalls (Σ num_turns), so dividing the cumulative

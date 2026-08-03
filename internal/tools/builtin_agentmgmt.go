@@ -55,6 +55,11 @@ type agentDeps struct {
 	// reloadSchedules refreshes the live cron registry after DeleteAgent drops
 	// the agent's schedules. Optional; nil in contexts without a scheduler.
 	reloadSchedules func(context.Context) error
+	// agentBusy reports whether an agent has a turn or run in flight, so a delete
+	// cannot pull the roster entry out from under work that is still writing. The
+	// live registries are not reachable from this package, so the runtime injects
+	// its AgentBusy. Optional; nil = no guard (the HTTP path keeps its own).
+	agentBusy func(context.Context, string) (bool, string)
 }
 
 // requireAgentCreatedByAgent loads an agent and verifies it was created by an
@@ -285,9 +290,21 @@ type DeleteAgentTool struct{ d agentDeps }
 
 // NewDeleteAgentTool constructs delete_agent. reloadSchedules (optional) is run
 // after deletion so the agent's now-removed schedules also leave the live cron
-// registry.
-func NewDeleteAgentTool(database *db.DB, actorID string, reloadSchedules func(context.Context) error) DeleteAgentTool {
-	return DeleteAgentTool{d: agentDeps{db: database, actorID: actorID, reloadSchedules: reloadSchedules}}
+// registry. agentBusy (optional) is the same in-flight check the HTTP delete
+// endpoint uses — without it an agent could delete a peer mid-turn, which the
+// user-facing path already refuses.
+func NewDeleteAgentTool(
+	database *db.DB,
+	actorID string,
+	reloadSchedules func(context.Context) error,
+	agentBusy func(context.Context, string) (bool, string),
+) DeleteAgentTool {
+	return DeleteAgentTool{d: agentDeps{
+		db:              database,
+		actorID:         actorID,
+		reloadSchedules: reloadSchedules,
+		agentBusy:       agentBusy,
+	}}
 }
 
 func (DeleteAgentTool) Def() providers.ToolDef {
@@ -319,6 +336,14 @@ func (t DeleteAgentTool) Call(ctx context.Context, input json.RawMessage) (strin
 	}
 	if _, err := t.d.requireAgentCreatedByAgent(ctx, in.ID); err != nil {
 		return "", err
+	}
+	// Same guard the HTTP delete enforces: a target with a turn or run in flight
+	// is not deletable. Skipping it here would let an agent do through a tool
+	// exactly what the user is refused in the UI.
+	if t.d.agentBusy != nil {
+		if busy, where := t.d.agentBusy(ctx, in.ID); busy {
+			return "", fmt.Errorf("agent %s is busy (%s) — stop its turn before deleting it", in.ID, where)
+		}
 	}
 	if err := t.d.db.DeleteAgent(ctx, in.ID); err != nil {
 		return "", fmt.Errorf("delete agent: %w", err)

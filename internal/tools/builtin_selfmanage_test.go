@@ -130,7 +130,7 @@ func TestDeleteAgentRejectsUserCreated(t *testing.T) {
 	if err != nil {
 		t.Fatalf("seed agent: %v", err)
 	}
-	del := NewDeleteAgentTool(d, "actor-1", nil)
+	del := NewDeleteAgentTool(d, "actor-1", nil, nil)
 	_, err = del.Call(ctx, json.RawMessage(`{"id":"`+userAgent.ID+`"}`))
 	if err == nil {
 		t.Fatal("expected delete of user-created agent to be rejected")
@@ -152,7 +152,7 @@ func TestDeleteAgentRejectsSelf(t *testing.T) {
 	if err != nil {
 		t.Fatalf("seed: %v", err)
 	}
-	del := NewDeleteAgentTool(d, self.ID, nil)
+	del := NewDeleteAgentTool(d, self.ID, nil, nil)
 	if _, err := del.Call(ctx, json.RawMessage(`{"id":"`+self.ID+`"}`)); err == nil {
 		t.Fatal("expected self-delete to be rejected")
 	}
@@ -246,5 +246,59 @@ func TestDeleteArtifactGuard(t *testing.T) {
 	}
 	if _, err := d.GetArtifact(ctx, agentArt.ID); err == nil {
 		t.Fatal("artifact should be gone")
+	}
+}
+
+// TestDeleteAgentRefusesBusyTarget: the tool must honour the SAME in-flight guard
+// the HTTP endpoint enforces. Without it an agent could do through a tool exactly
+// what the user is refused in the UI — delete a peer mid-turn.
+func TestDeleteAgentRefusesBusyTarget(t *testing.T) {
+	ctx := context.Background()
+	d := openTestDB(t)
+	target, err := d.CreateAgent(ctx, db.Agent{Name: "Worker", CreatedBy: "actor-1"})
+	if err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	busy := func(context.Context, string) (bool, string) { return true, "SES9" }
+	del := NewDeleteAgentTool(d, "actor-1", nil, busy)
+	_, err = del.Call(ctx, json.RawMessage(`{"id":"`+target.ID+`"}`))
+	if err == nil {
+		t.Fatal("expected delete of a busy agent to be rejected")
+	}
+	if !strings.Contains(err.Error(), "busy") || !strings.Contains(err.Error(), "SES9") {
+		t.Fatalf("error must name what is busy, got: %v", err)
+	}
+	// Untouched: not even soft-deleted.
+	got, err := d.GetAgent(ctx, target.ID)
+	if err != nil {
+		t.Fatalf("agent should still exist: %v", err)
+	}
+	if got.Deleted {
+		t.Fatal("busy agent was marked deleted despite the guard")
+	}
+}
+
+// TestDeleteAgentAllowsIdleTarget is the other half: the guard must not be a
+// blanket refusal, or an agent-created agent could never be cleaned up.
+func TestDeleteAgentAllowsIdleTarget(t *testing.T) {
+	ctx := context.Background()
+	d := openTestDB(t)
+	target, err := d.CreateAgent(ctx, db.Agent{Name: "Worker", CreatedBy: "actor-1"})
+	if err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	idle := func(context.Context, string) (bool, string) { return false, "" }
+	del := NewDeleteAgentTool(d, "actor-1", nil, idle)
+	if _, err := del.Call(ctx, json.RawMessage(`{"id":"`+target.ID+`"}`)); err != nil {
+		t.Fatalf("idle agent must be deletable: %v", err)
+	}
+	got, err := d.GetAgent(ctx, target.ID)
+	if err != nil {
+		t.Fatalf("soft delete must keep the row: %v", err)
+	}
+	if !got.Deleted {
+		t.Fatal("agent was not marked deleted")
 	}
 }

@@ -96,6 +96,12 @@ type Manager struct {
 	// runtimes. nil until wired.
 	autoInteractFactory func(*agent.Runtime) agent.AutonomousInteraction
 
+	// extActiveProbe reports a workspace's in-flight INTERACTIVE chat sessions.
+	// The api server owns that registry; the runtime needs it to answer "is this
+	// agent busy" (AgentBusy) for the delete guard. Wired in after the api server
+	// exists; applied to existing + later-opened runtimes. nil until wired.
+	extActiveProbe func(workspaceID string) []string
+
 	// wakeTurnFactory builds the history-aware self-wake turn runner for a runtime
 	// (so schedule_wake continues with the full conversation, not just the wake
 	// prompt). Wired in after the api server exists; applied to existing +
@@ -112,6 +118,21 @@ func (m *Manager) SetAutonomousInteraction(factory func(*agent.Runtime) agent.Au
 	m.autoInteractFactory = factory
 	for _, ws := range m.workspaces {
 		ws.Runtime.SetAutonomousInteraction(factory(ws.Runtime))
+	}
+}
+
+// SetExternalActiveSessions wires the api server's chat-run registry into every
+// existing workspace runtime and remembers it for workspaces opened later, so
+// Runtime.AgentBusy sees INTERACTIVE turns too — not just the autonomous ones it
+// tracks itself. The probe is bound per workspace (the registry is server-wide
+// and must be scoped).
+func (m *Manager) SetExternalActiveSessions(probe func(workspaceID string) []string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.extActiveProbe = probe
+	for _, ws := range m.workspaces {
+		id := ws.ID
+		ws.Runtime.SetExternalActiveSessions(func() []string { return probe(id) })
 	}
 }
 
@@ -252,6 +273,10 @@ func (m *Manager) open(meta Meta) error {
 	}
 	if m.autoInteractFactory != nil {
 		rt.SetAutonomousInteraction(m.autoInteractFactory(rt))
+	}
+	if m.extActiveProbe != nil {
+		probe, id := m.extActiveProbe, meta.ID
+		rt.SetExternalActiveSessions(func() []string { return probe(id) })
 	}
 	if m.wakeTurnFactory != nil {
 		rt.SetWakeTurnRunner(m.wakeTurnFactory(rt))

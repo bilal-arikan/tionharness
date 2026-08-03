@@ -249,6 +249,50 @@ export function TaskBoard({ agents, onError }: Props) {
     return m
   }, [derivedColumns, visible, groupBy, sort, levels, today])
 
+  // Everything a card shows that is DERIVED rather than on the task itself, keyed
+  // by task id and computed once per data change.
+  //
+  // It used to be inline in the render loop: each card ran agents.find +
+  // flows.find, then a tasks.find PER DEPENDENCY. That is O(cards × deps) linear
+  // scans, redone on every board render — and the board re-renders on drag-over,
+  // file-drop hover and selection ticks, none of which can change any of it. On a
+  // large board with dependencies that is what makes dragging feel heavy.
+  const cardMeta = useMemo(() => {
+    const taskById = new Map(tasks.map((t) => [t.id, t]))
+    const agentById = new Map(agents.map((a) => [a.id, a]))
+    const flowById = new Map(flows.map((f) => [f.id, f]))
+    // Dependency chips colour by the STATUS column of the blocker, whatever the
+    // current grouping axis is — so this reads `columns`, not derivedColumns.
+    const colorByState = new Map(columns.map((c) => [c.key, c.color ?? null]))
+
+    const m = new Map<
+      string,
+      {
+        owner: Agent | undefined
+        flow: Flow | undefined
+        depIds: string[]
+        unmetDeps: string[]
+        unmetColColor: string | null
+      }
+    >()
+    for (const t of tasks) {
+      const depIds = parseDeps(t.dependencies)
+      const unmetDeps = depIds.filter((id) => {
+        const dep = taskById.get(id)
+        return dep && dep.boardState !== 'done'
+      })
+      const firstUnmet = unmetDeps.length > 0 ? taskById.get(unmetDeps[0]) : undefined
+      m.set(t.id, {
+        owner: agentById.get(t.ownerAgentId),
+        flow: t.flowId ? flowById.get(t.flowId) : undefined,
+        depIds,
+        unmetDeps,
+        unmetColColor: firstUnmet ? (colorByState.get(firstUnmet.boardState) ?? null) : null,
+      })
+    }
+    return m
+  }, [tasks, agents, flows, columns])
+
   // Multi-select (Ctrl/Cmd+Click, Shift-range) for bulk move/assign/delete.
   // The ordered id list mirrors the on-screen render order (column by column,
   // each column in its current sort) so Shift+Click ranges are predictable —
@@ -458,14 +502,12 @@ export function TaskBoard({ agents, onError }: Props) {
                 </div>
                 <div className="flex-1 space-y-2 overflow-y-auto px-2 pb-2 pt-2">
                   {colTasks.map((t) => {
-                    const owner = agents.find((a) => a.id === t.ownerAgentId)
-                    const flow = t.flowId ? flows.find((f) => f.id === t.flowId) : undefined
+                    // Cards are drawn from `visible`, a subset of `tasks`, so every
+                    // card id has an entry — a miss is a real bug, not a case to
+                    // paper over with defaults.
+                    const meta = cardMeta.get(t.id)!
+                    const { owner, flow, depIds, unmetDeps, unmetColColor } = meta
                     const pending = t.id.startsWith('temp-')
-                    const depIds = parseDeps(t.dependencies)
-                    const unmetDeps = depIds.filter((id) => {
-                      const dep = tasks.find((x) => x.id === id)
-                      return dep && dep.boardState !== 'done'
-                    })
                     return (
                       <div
                         key={t.id}
@@ -591,15 +633,8 @@ export function TaskBoard({ agents, onError }: Props) {
                             )}
                             {depIds.length > 0 &&
                               (() => {
-                                // Color the chip based on the column of the first unmet dependency.
-                                const firstUnmetTask =
-                                  unmetDeps.length > 0
-                                    ? tasks.find((x) => x.id === unmetDeps[0])
-                                    : null
-                                const unmetColColor = firstUnmetTask
-                                  ? (columns.find((c) => c.key === firstUnmetTask.boardState)
-                                      ?.color ?? null)
-                                  : null
+                                // unmetColColor (the first unmet dependency's column
+                                // colour) comes precomputed from cardMeta.
                                 const chipStyle =
                                   unmetDeps.length > 0 && unmetColColor
                                     ? {

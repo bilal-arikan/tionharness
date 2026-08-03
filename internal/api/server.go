@@ -189,6 +189,11 @@ func NewServer(manager *workspace.Manager, registry *providers.Registry, store *
 	// Headless Interaction MCP: give autonomous (scheduler/spawn) CLI
 	// turns the same use_skill/shell/self-manage bridge chat turns get.
 	manager.SetAutonomousInteraction(s.autonomousInteraction)
+	// Let every runtime see the INTERACTIVE turns too: the chat-run registry lives
+	// here, but Runtime.AgentBusy is what BOTH agent-delete paths consult, so
+	// without this the self-management delete_agent tool would only ever see
+	// autonomous runs and could delete an agent mid-chat.
+	manager.SetExternalActiveSessions(s.runs.activeSessionIDs)
 	// History-aware self-wake: let schedule_wake continue with the full
 	// conversation (composed like a chat turn) instead of just the wake prompt.
 	manager.SetWakeTurnRunner(s.wakeTurnRunner)

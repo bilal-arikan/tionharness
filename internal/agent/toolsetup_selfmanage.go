@@ -28,7 +28,7 @@ func (r *Runtime) selfManageBuiltins(agent db.Agent) []tools.Tool {
 		// skill store.
 		tools.NewCreateAgentTool(r.db, agent.ID, skills.DefaultSkillSlugs(), r.skillExists),
 		tools.NewUpdateAgentTool(r.db, agent.ID),
-		tools.NewDeleteAgentTool(r.db, agent.ID, r.reloadSchedules),
+		tools.NewDeleteAgentTool(r.db, agent.ID, r.reloadSchedules, r.AgentBusy),
 		tools.NewListAgentsTool(r.db, agent.ID),
 		// Note: agent→agent work is unified under run_subagent (above) — async
 		// background runs go through its wait:"async" mode (→ SpawnSession). The

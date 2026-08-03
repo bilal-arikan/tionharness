@@ -148,18 +148,19 @@ func (s *Server) firstAgentProviderModel(ctx context.Context, wsp *workspace.Wor
 	return agents[0].Provider, agents[0].Model
 }
 
-// agentRunning reports whether the agent has work in flight right now: a turn in
-// any session it owns or takes part in (interactive OR autonomous), or a task run
-// assigned to it. There is no per-agent run registry — both live registries are
-// keyed by session — so this intersects the active session ids with the agent's
-// own, the same way workspaceRunning unions them for the activity report.
-// Returns the id of the first live thing found, for the error message.
+// agentRunning reports whether the agent has work in flight right now, delegating
+// to Runtime.AgentBusy — the single implementation both delete paths share (this
+// endpoint and the self-management delete_agent tool). The runtime sees the
+// interactive chat runs through the probe installed in NewServer.
+//
+// A workspace with no runtime yet (early boot) falls back to the chat-run
+// registry alone rather than reporting "idle": answering "not busy" without
+// having looked is exactly the failure the guard exists to prevent.
 func (s *Server) agentRunning(ctx context.Context, wsp *workspace.Workspace, agentID string) (bool, string) {
-	live := s.runs.activeSessionIDs(wsp.ID)
-	if wsp.Runtime != nil { // absent in tests and during early boot
-		live = append(live, wsp.Runtime.ActiveSessionIDs()...)
+	if wsp.Runtime != nil {
+		return wsp.Runtime.AgentBusy(ctx, agentID)
 	}
-	for _, sid := range live {
+	for _, sid := range s.runs.activeSessionIDs(wsp.ID) {
 		sess, err := wsp.DB.GetSession(ctx, sid)
 		if err != nil {
 			continue // vanished between the snapshot and the lookup
@@ -167,18 +168,9 @@ func (s *Server) agentRunning(ctx context.Context, wsp *workspace.Workspace, age
 		if sess.AgentID == agentID {
 			return true, sess.ID
 		}
-		// A multi-agent thread: the agent may be answering as a participant even
-		// though another agent owns the session.
 		for _, p := range sess.Participants {
 			if p == agentID {
 				return true, sess.ID
-			}
-		}
-	}
-	if runs, err := wsp.DB.ListRunningRuns(ctx); err == nil {
-		for _, run := range runs {
-			if run.AgentID == agentID {
-				return true, run.ID
 			}
 		}
 	}
