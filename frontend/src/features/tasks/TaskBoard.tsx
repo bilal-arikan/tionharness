@@ -1,11 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Paperclip, Trash2 } from 'lucide-react'
+import { Trash2 } from 'lucide-react'
 import { api } from '@/api'
 import { useRefreshTrigger } from '@/shared/hooks/useRefreshTrigger'
 import type { Agent, Task, TaskPatch, Flow, BoardColumnDef, BoardViewDef } from '@/types'
 import { artifactKindForUpload } from '@/features/artifacts/artifactMeta'
-import { AgentIdentity } from '@/shared/components/agents/AgentIdentity'
-import { normalizeAvatar } from '@/shared/lib/avatar'
 import { TaskFormModal } from './TaskFormModal'
 import { BoardColumnEditor } from './BoardColumnEditor'
 import {
@@ -16,6 +14,8 @@ import {
   LoadingState,
 } from '@/shared/components'
 import { useMultiSelect } from '@/shared/hooks/useMultiSelect'
+import { useStableCallback } from '@/shared/lib/useStableCallback'
+import { TaskCard, type TaskCardMeta } from './TaskCard'
 import { BoardFilterBar } from './views/BoardFilterBar'
 import { useBoardView } from './views/useBoardView'
 import { filterTasks, parseDeps, sortTasks, topoLevels } from './views/filterTasks'
@@ -35,14 +35,6 @@ const DEFAULT_COLUMNS: BoardColumnDef[] = [
 // Current unix time in seconds, matching the backend's task timestamps — used
 // for optimistic createdAt/updatedAt so cards sort consistently before reload.
 const nowSec = () => Math.floor(Date.now() / 1000)
-
-// Priority chip colors/labels, keyed by the stored priority slug.
-const PRIORITY_META: Record<string, { label: string; color: string }> = {
-  critical: { label: 'Kritik', color: '#ef4444' },
-  high: { label: 'Yüksek', color: '#f59e0b' },
-  medium: { label: 'Orta', color: '#3b82f6' },
-  low: { label: 'Düşük', color: '#6b7280' },
-}
 
 interface Props {
   agents: Agent[]
@@ -265,16 +257,7 @@ export function TaskBoard({ agents, onError }: Props) {
     // current grouping axis is — so this reads `columns`, not derivedColumns.
     const colorByState = new Map(columns.map((c) => [c.key, c.color ?? null]))
 
-    const m = new Map<
-      string,
-      {
-        owner: Agent | undefined
-        flow: Flow | undefined
-        depIds: string[]
-        unmetDeps: string[]
-        unmetColColor: string | null
-      }
-    >()
+    const m = new Map<string, TaskCardMeta>()
     for (const t of tasks) {
       const depIds = parseDeps(t.dependencies)
       const unmetDeps = depIds.filter((id) => {
@@ -303,6 +286,30 @@ export function TaskBoard({ agents, onError }: Props) {
     () => derivedColumns.flatMap((col) => (cardsByColumn.get(col.key) ?? []).map((t) => t.id)),
     [derivedColumns, cardsByColumn],
   )
+
+  // Card handlers, given stable identities so TaskCard's memo actually holds:
+  // a memoized card re-renders when ANY prop changes identity, and handlers
+  // declared inline in the render loop are fresh functions every time.
+  //
+  // The file-drop pair uses functional setState rather than reading fileDropId,
+  // which is what keeps these independent of the very state they update — a
+  // dependency on it would rebuild the callbacks on every hover tick and defeat
+  // the memo for the whole board.
+  const onCardDragStart = useStableCallback((taskId: string) => setDragId(taskId))!
+  const onCardOpenOrSelect = useStableCallback((e: React.MouseEvent, taskId: string) => {
+    if (sel.handleClick(e, taskId, orderedIds)) return
+    setModal({ mode: 'edit', taskId })
+  })!
+  const onCardFileDragEnter = useStableCallback((taskId: string) =>
+    setFileDropId((cur) => (cur === taskId ? cur : taskId)),
+  )!
+  const onCardFileDragLeave = useStableCallback((taskId: string) =>
+    setFileDropId((cur) => (cur === taskId ? null : cur)),
+  )!
+  const onCardFileDrop = useStableCallback((task: Task, files: File[]) => {
+    setFileDropId(null)
+    void attachFilesToTask(task, files)
+  })!
 
   // Dropping a card onto a column writes whatever field the current axis names.
   // A refused drop (the 'due' axis cannot invent a date) says so instead of
@@ -506,165 +513,20 @@ export function TaskBoard({ agents, onError }: Props) {
                     // card id has an entry — a miss is a real bug, not a case to
                     // paper over with defaults.
                     const meta = cardMeta.get(t.id)!
-                    const { owner, flow, depIds, unmetDeps, unmetColColor } = meta
-                    const pending = t.id.startsWith('temp-')
                     return (
-                      <div
+                      <TaskCard
                         key={t.id}
-                        data-testid="task-card"
-                        data-task-id={t.id}
-                        draggable={!pending}
-                        onDragStart={(e) => {
-                          if (pending) return
-                          setDragId(t.id)
-                          e.dataTransfer.setData('application/x-tionswarm-task', t.id)
-                          e.dataTransfer.effectAllowed = 'link'
-                        }}
-                        onClick={(e) => {
-                          if (pending) return
-                          if (sel.handleClick(e, t.id, orderedIds)) return
-                          setModal({ mode: 'edit', taskId: t.id })
-                        }}
-                        onDragOver={(e) => {
-                          // OS file drag over a card → offer to attach (a card being
-                          // dragged internally carries no 'Files', so moves are
-                          // unaffected and still bubble to the column).
-                          if (pending || !Array.from(e.dataTransfer.types).includes('Files')) return
-                          e.preventDefault()
-                          e.stopPropagation()
-                          if (fileDropId !== t.id) setFileDropId(t.id)
-                        }}
-                        onDragLeave={(e) => {
-                          if (!Array.from(e.dataTransfer.types).includes('Files')) return
-                          if (fileDropId === t.id) setFileDropId(null)
-                        }}
-                        onDrop={(e) => {
-                          const files = Array.from(e.dataTransfer.files)
-                          if (files.length === 0) return // not a file drop → let the column handle the move
-                          e.preventDefault()
-                          e.stopPropagation()
-                          setFileDropId(null)
-                          void attachFilesToTask(t, files)
-                        }}
-                        className={`rounded-lg border bg-[var(--color-surface-2)] p-2 text-sm shadow-[var(--shadow-sm)] transition ${
-                          fileDropId === t.id
-                            ? 'ring-2 ring-[var(--color-accent)] ring-offset-1'
-                            : ''
-                        } ${
-                          pending
-                            ? 'animate-pulse cursor-default border-[var(--color-border)] opacity-70'
-                            : `cursor-pointer hover:shadow-[var(--shadow-md)] active:cursor-grabbing ${
-                                sel.isSelected(t.id)
-                                  ? 'border-[var(--color-accent)] bg-[var(--color-accent-soft)] ring-1 ring-[var(--color-accent)]'
-                                  : 'border-[var(--color-border)] hover:border-[var(--color-accent)]'
-                              }`
-                        }`}
-                      >
-                        <div className="font-medium">{t.title}</div>
-                        {pending ? (
-                          <div className="mt-1 text-[11px] text-[var(--color-text-dim)]">
-                            başlık üretiliyor…
-                          </div>
-                        ) : (
-                          t.description && (
-                            <div className="mt-1 line-clamp-2 text-xs text-[var(--color-text-dim)]">
-                              {t.description}
-                            </div>
-                          )
-                        )}
-                        {/* Rich attribute badges: due date, priority, tags. */}
-                        {(t.dueDate || t.priority || (t.tags?.length ?? 0) > 0) && (
-                          <div className="mt-1.5 flex flex-wrap items-center gap-1">
-                            {t.dueDate && (
-                              <span
-                                title={`Bitiş: ${t.dueDate}`}
-                                className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium ${
-                                  t.dueDate < today
-                                    ? 'bg-[var(--color-danger)]/15 text-[var(--color-danger)]'
-                                    : t.dueDate === today
-                                      ? 'bg-[var(--color-warning)]/15 text-[var(--color-warning)]'
-                                      : 'bg-[var(--color-surface)] text-[var(--color-text-dim)]'
-                                }`}
-                              >
-                                ◷ {t.dueDate.slice(5)}
-                              </span>
-                            )}
-                            {t.priority && PRIORITY_META[t.priority] && (
-                              <span
-                                className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium"
-                                style={{
-                                  backgroundColor: PRIORITY_META[t.priority].color + '22',
-                                  color: PRIORITY_META[t.priority].color,
-                                }}
-                              >
-                                ● {PRIORITY_META[t.priority].label}
-                              </span>
-                            )}
-                            {t.tags?.map((tag) => (
-                              <span
-                                key={tag}
-                                className="rounded-full bg-[var(--color-accent-soft)] px-1.5 py-0.5 text-[10px] text-[var(--color-accent)]"
-                              >
-                                #{tag}
-                              </span>
-                            ))}
-                          </div>
-                        )}
-                        {(owner ||
-                          t.flowId ||
-                          depIds.length > 0 ||
-                          (t.artifactIds?.length ?? 0) > 0) && (
-                          <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs text-[var(--color-text-dim)]">
-                            {owner && (
-                              <AgentIdentity agent={owner} size="sm" className="max-w-[160px]" />
-                            )}
-                            {(t.artifactIds?.length ?? 0) > 0 && (
-                              <span
-                                className="inline-flex items-center gap-0.5 rounded bg-[var(--color-surface)] px-1.5 py-0.5 text-[10px]"
-                                title={`${t.artifactIds!.length} ek (artifact)`}
-                              >
-                                <Paperclip size={10} /> {t.artifactIds!.length}
-                              </span>
-                            )}
-                            {t.flowId && (
-                              <span className="inline-flex items-center gap-1 rounded bg-[var(--color-accent-soft)] px-1.5 py-0.5 text-[10px] text-[var(--color-accent)]">
-                                {normalizeAvatar(flow?.emoji) ?? '🔀'} {flow?.name ?? 'Akış'}
-                              </span>
-                            )}
-                            {depIds.length > 0 &&
-                              (() => {
-                                // unmetColColor (the first unmet dependency's column
-                                // colour) comes precomputed from cardMeta.
-                                const chipStyle =
-                                  unmetDeps.length > 0 && unmetColColor
-                                    ? {
-                                        backgroundColor: unmetColColor + '22',
-                                        color: unmetColColor,
-                                      }
-                                    : undefined
-                                return (
-                                  <span
-                                    className={`inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] ${
-                                      unmetDeps.length > 0 && !unmetColColor
-                                        ? 'bg-[var(--color-warning)]/15 text-[var(--color-warning)]'
-                                        : unmetDeps.length > 0
-                                          ? ''
-                                          : 'bg-[var(--color-success)]/10 text-[var(--color-success)]'
-                                    }`}
-                                    style={chipStyle}
-                                    title={
-                                      unmetDeps.length > 0
-                                        ? `${unmetDeps.length} bağımlılık tamamlanmadı`
-                                        : 'Tüm bağımlılıklar tamamlandı'
-                                    }
-                                  >
-                                    🔗 {depIds.length}
-                                  </span>
-                                )
-                              })()}
-                          </div>
-                        )}
-                      </div>
+                        task={t}
+                        meta={meta}
+                        selected={sel.isSelected(t.id)}
+                        fileDropActive={fileDropId === t.id}
+                        today={today}
+                        onDragStart={onCardDragStart}
+                        onOpenOrSelect={onCardOpenOrSelect}
+                        onFileDragEnter={onCardFileDragEnter}
+                        onFileDragLeave={onCardFileDragLeave}
+                        onFileDrop={onCardFileDrop}
+                      />
                     )
                   })}
                 </div>
