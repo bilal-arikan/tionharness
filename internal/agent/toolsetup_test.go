@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/bilal-arikan/tionswarm/internal/db"
 	"github.com/bilal-arikan/tionswarm/internal/providers"
@@ -26,6 +27,17 @@ func newTestRuntime(t *testing.T, workDir string) (*Runtime, *Tunables) {
 	tun := NewTunables()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	rt := NewRuntime(database, providers.NewRegistry(""), tun, workDir, nil, nil, "", "", nil, logger)
+	// Background turns (spawn / inbox delivery / wake) run detached and keep writing
+	// to the store after the test body returns. Wait for them to drain before
+	// t.TempDir()'s RemoveAll, or cleanup races a live write ("directory not empty")
+	// — a flake the -race build amplifies. Registered after the db-close cleanup so
+	// LIFO drains the turns first, then closes the db, then removes the temp dir.
+	t.Cleanup(func() {
+		deadline := time.Now().Add(5 * time.Second)
+		for rt.spawnActive.Load() > 0 && time.Now().Before(deadline) {
+			time.Sleep(5 * time.Millisecond)
+		}
+	})
 	return rt, tun
 }
 
