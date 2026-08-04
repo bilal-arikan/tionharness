@@ -63,6 +63,37 @@
   shell-gate satırı güncellendi.
 - **Doğrulama:** `rtk go build ./...` ✅.
 
+## View katmanı kabul testi: coordinator worker-state bloğu göçtü (2026-08-04) ✅
+
+- **Neden:** [66](66-VIEW-KATMANI.md)'nın kabul testi — katman kurulup eski ad-hoc
+  özetleyiciler yerinde kalırsa bu, beşinci bir özetleyici olurdu. İlk göç:
+  `Runtime.coordinatorWorkerStatusBlock`. **36 satırlık render mantığı silindi**,
+  geriye 16 satırlık veri toplama + `view.ProjectWorkers` çağrısı kaldı.
+- **`internal/view/workers.go`** — koordinatörün canlı worker filosu. Girdi
+  runtime state olduğu için (`agent` → `tools` → `view` cycle'ı) `WorkerInfo`
+  import edilmez; `agent` tarafında `toViewWorkers` map'ler.
+- **Kazanç 1 — elision cap.** Blok her koordinatör turuna enjekte edilen bir
+  **push** kanalı ve **sınırsızdı**; 40 worker'lı filo her turda 40 satır basardı.
+  Artık 20 ile sınırlı, **çalışanlar önce** korunur (cap'in koordinatörün beklediği
+  satırı düşürmesi en kötü sonuç olurdu) ve **özet satırı tüm filoyu** sayar →
+  gizlenenler aritmetiği bozmaz.
+- **Kazanç 2 — geçen süre.** `WorkerInfo.StartedAt` vardı ama yalnız UI banner'ı
+  kullanıyordu. Artık prompt'ta `RUNNING for 14m00s`; başlangıç bilinmiyorsa süre
+  **basılmaz** (uydurma yerine sessizlik).
+- **Korunan davranış:** "trust THIS over the notifications in history" çerçevesi,
+  `DELEGATING` durumunun açık ifadesi, filo boşalınca verilen kapanış dürtüsü —
+  üçü de coalesced-notification stall'ını engellediği için kelimesi kelimesine
+  taşındı ve teste bağlandı.
+- **Bilinçli istisna:** bu, paketteki tek **İngilizce** projeksiyon — tek tüketicisi
+  koordinatörün sistem prompt'u ve komşu blokların hepsi İngilizce. Bunun için
+  `View.ElidedNote` eklendi: yapısal `Elided` yine set edilir (sessiz kesme yasağı
+  bozulmaz), yalnız render edilen cümle override edilir.
+- **Testler:** `view/workers_test.go` (5 — çerçeve korunumu, geçen süre + bilinmeyen
+  başlangıç, boş filo dürtüsü, cap altında aritmetiğin bozulmaması, boş filo).
+  `internal/agent` paketi ve tüm suite yeşil.
+- **Durum: 1/4 göç etti.** Kalan adaylar: insight prefilter, handoff,
+  `conversation` summarizer.
+
 ## Panel (dashboard) ekranı + workspace projeksiyonu — Faz 6 (2026-08-04) ✅
 
 - **İstek:** "Workspace'in genel durumunu grafiklerle görebilmek ve genel

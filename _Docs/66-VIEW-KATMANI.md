@@ -27,6 +27,12 @@ de yazılacak.
 `internal/view`'e göç etmiş ve eski kodu **silinmiş** olmalı. Yeni bir katman eklenip
 eskilerin durması = başarısızlık.
 
+**Durum: 1/4 göç etti** (2026-08-04) — coordinator worker-state bloğu.
+`Runtime.coordinatorWorkerStatusBlock`'un 36 satırlık render mantığı **silindi**;
+geriye 16 satırlık veri toplama + `view.ProjectWorkers` çağrısı kaldı. Göç iki
+gerçek kazanç getirdi (aşağıda). Kalan üç aday: insight prefilter, handoff,
+`conversation` summarizer.
+
 ## Çekirdek fikir
 
 Bu bir "özetleyici" değil — **projeksiyon** katmanı. İstenen çıktının büyük kısmı
@@ -184,6 +190,40 @@ Tamamı **bellek-içi store okumaları** — geçmiş ne kadar büyürse büyüs
 yok, bu yüzden poll edilebilecek kadar ucuz. **Devre dışı bırakılmış** bir
 zamanlamanın son hatası raporlanmaz: bilerek duraklatılmış bir şeyi "bozuk" diye
 göstermek okuyucuya satırı yok saymayı öğretir.
+
+## Göç 1: coordinator worker-state bloğu (push projeksiyonu)
+
+Katmanın ilk **müşterisi**, yeni bir yüzey değil. `internal/view/workers.go`
+(`ProjectWorkers`) koordinatörün canlı worker filosunu render eder; `agent` yalnız
+`ListWorkers` sonucunu `[]view.Worker`'a map'ler.
+
+**Neden değdi — iki gerçek kazanç:**
+
+1. **Elision cap.** Blok her koordinatör turuna enjekte edilen bir **push**
+   kanalı ve eskiden **sınırsızdı** — 40 worker'lı bir filo her turda 40 satır
+   basardı. Artık 20 ile sınırlı, **çalışanlar önce** tutulur (cap'in koordinatörün
+   beklediği satırı düşürmesi en kötü sonuç olurdu) ve **özet satırı tüm filoyu**
+   sayar, gizlenenler dahil → aritmetik bozulmaz.
+2. **Geçen süre.** `WorkerInfo.StartedAt` zaten vardı ama yalnız UI banner'ı
+   kullanıyordu; prompt'ta yoktu. Artık `RUNNING for 14m00s` — 14 dakikadır koşan
+   bir worker, yeni başlamış olandan farklı bir karar gerektirir. Başlangıç bilinmiyorsa
+   süre **basılmaz** (uydurma süre yerine sessizlik).
+
+**Korunan davranış:** "trust THIS over the notifications in history" çerçevesi,
+`DELEGATING` durumunun açık ifadesi ve filo boşaldığında verilen kapanış dürtüsü —
+üçü de coalesced-notification stall'ını ([47](47-KOORDINATOR-COKLU-AJAN.md))
+engellediği için **kelimesi kelimesine** taşındı ve teste bağlandı.
+
+**Bilinçli istisna — dil:** bu projeksiyon paketteki tek **İngilizce** olanı.
+Tek tüketicisi koordinatörün sistem prompt'u ve oradaki komşu bloklar (autonomous
+boot reminder, shell capability, epoch note) İngilizce; tek bir prompt'un içinde dil
+karıştırmak iki seçenekten de kötü olurdu. Bunun için `View.ElidedNote` eklendi:
+yapısal `Elided` sayısı yine set edilir (sessiz kesme yasağı bozulmaz), yalnız
+render edilen cümle override edilir.
+
+**Yönlendirilemez:** `KindWorkers` `Projector` üzerinden çözülmez ve `get_view`'de
+sunulmaz — girdisi store değil **runtime** state; ayrıca koordinatörler bu bloğu
+zaten her turda alıyor, ihtiyaç hâlinde `list_workers` var.
 
 ## Ajanlara dağıtım: üç kanal, karıştırma
 

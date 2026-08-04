@@ -797,6 +797,14 @@ Ayrıca `WorkerInfo.Delegating`: kendi turu olmayan ama worker'ları çalışan 
 alt-koordinatör "bitti" değil **"dağıtıyor"** görünür (canlı worker-state bloğunda
 da, UI roster'ında da).
 
+> **Not (2026-08-04):** canlı worker-state bloğunun **render'ı**
+> `internal/view/workers.go` (`ProjectWorkers`) içine taşındı; `agent` yalnız
+> `ListWorkers` sonucunu map'ler. Davranış birebir korundu (otoriter çerçeve,
+> `DELEGATING`, filo boşalınca kapanış dürtüsü) ve iki şey eklendi: filo 20 satırla
+> **sınırlandı** (çalışanlar önce; özet satırı tüm filoyu sayar) ve çalışan
+> worker'lar artık **geçen süreyi** gösteriyor (`RUNNING for 14m00s`).
+> Detay [66](66-VIEW-KATMANI.md).
+
 ### 14.3 Guard'lar — üstel dallanma
 
 | Guard | Kapsam | Varsayılan |

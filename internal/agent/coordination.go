@@ -16,6 +16,7 @@ import (
 	"github.com/bilal-arikan/tionswarm/internal/providers"
 	"github.com/bilal-arikan/tionswarm/internal/skills"
 	"github.com/bilal-arikan/tionswarm/internal/tools"
+	"github.com/bilal-arikan/tionswarm/internal/view"
 )
 
 // coordination.go implements the M2 coordinator/worker method (see _Docs/47).
@@ -1125,41 +1126,44 @@ func (r *Runtime) appendCoordinationStatus(coordSessionID string) {
 // let the model overlook — this block is regenerated every turn from live session
 // state, so the coordinator can never believe a finished worker is still running.
 // Empty when the session has no workers.
+//
+// The rendering itself lives in internal/view (ProjectWorkers): this is a PUSH
+// projection into every coordinator turn, so it inherits that package's discipline
+// — a cap on how many entries a wide fleet may inject, with the dropped ones still
+// counted in the summary line the coordinator reasons over.
 func (r *Runtime) coordinatorWorkerStatusBlock(ctx context.Context, coordSessionID string) string {
 	ws, err := r.ListWorkers(ctx, coordSessionID)
 	if err != nil || len(ws) == 0 {
 		return ""
 	}
-	running, finished := 0, 0
-	var b strings.Builder
-	b.WriteString("# Worker status (live, authoritative)\n")
-	b.WriteString("Regenerated every turn from real session state; trust THIS over the notifications in history.\n")
+	v, err := view.ProjectWorkers(view.WorkersInput{Workers: toViewWorkers(ws)}, view.LevelCard, view.LensHealth)
+	if err != nil {
+		// The block is an optional prompt enrichment; losing it must not fail the
+		// turn. It IS worth a log line — a coordinator silently running without its
+		// authoritative fleet state is the exact condition this block prevents.
+		r.logger.Warn("coordination: worker status block render failed",
+			"coordinator", coordSessionID, "error", err)
+		return ""
+	}
+	return v.Text()
+}
+
+// toViewWorkers maps the runtime's live fleet onto the renderer's input. The
+// view package cannot import this one (agent → tools → view), so the mapping
+// lives here.
+func toViewWorkers(ws []WorkerInfo) []view.Worker {
+	out := make([]view.Worker, 0, len(ws))
 	for _, w := range ws {
-		status := "finished"
-		switch {
-		case w.Delegating:
-			// Not a live turn of its own: it is waiting on the workers it spawned.
-			// Spelling that out stops the coordinator reading "RUNNING" as "about to
-			// answer" and, worse, reading "finished" as "its result is in".
-			status = "DELEGATING (its own workers are running; it has not reported yet)"
-			running++
-		case w.Running:
-			status = "RUNNING"
-			running++
-		default:
-			finished++
-		}
-		fmt.Fprintf(&b, "- %s [%s] (%s)", w.AgentName, status, w.SessionID)
-		if w.Summary != "" {
-			fmt.Fprintf(&b, " — %s", w.Summary)
-		}
-		b.WriteByte('\n')
+		out = append(out, view.Worker{
+			SessionID:  w.SessionID,
+			AgentName:  w.AgentName,
+			Running:    w.Running,
+			Delegating: w.Delegating,
+			Summary:    w.Summary,
+			StartedAt:  w.StartedAt,
+		})
 	}
-	fmt.Fprintf(&b, "Summary: %d running, %d finished.", running, finished)
-	if running == 0 {
-		b.WriteString(" ALL workers are finished — there is NO running worker to wait for; spawn the remaining steps or conclude.")
-	}
-	return b.String()
+	return out
 }
 
 // runCoordinatorTurn runs one history-aware turn for the coordinator session so it

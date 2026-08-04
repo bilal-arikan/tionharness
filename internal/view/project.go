@@ -39,6 +39,10 @@ type Store interface {
 const (
 	BoardRefID     = "board"
 	WorkspaceRefID = "workspace"
+	// WorkersRefID labels a coordinator's fleet projection. It is not routable
+	// through Projector (see KindWorkers) — the id exists so the View is
+	// self-describing like every other one.
+	WorkersRefID = "workers"
 )
 
 // Projector resolves a Ref against a store and renders the matching projection.

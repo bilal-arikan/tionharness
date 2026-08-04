@@ -32,6 +32,12 @@ const (
 	KindSession Kind = "session"
 	KindBoard   Kind = "board"
 	KindSpace   Kind = "workspace"
+	// KindWorkers is a coordinator's live fleet. Unlike the others it is not
+	// resolvable through Projector: its input is runtime state, not store state,
+	// so the caller builds WorkersInput and calls ProjectWorkers directly. It is
+	// also not offered by get_view — coordinators already receive it in their
+	// prompt every turn, and list_workers covers the on-demand case.
+	KindWorkers Kind = "workers"
 )
 
 // Ref addresses one projection target. Sub is an optional drill-down selector
@@ -134,6 +140,12 @@ type View struct {
 	// "item" count is ambiguous — 174 hidden messages and 174 hidden cards mean
 	// very different things to whoever reads the view. Empty renders as "öğe".
 	ElidedUnit string `json:"elidedUnit,omitempty"`
+	// ElidedNote overrides the rendered elision sentence. It exists for the one
+	// projection that is not a UI surface: the coordinator worker block is an
+	// English prompt fragment, and the default Turkish sentence would drop a
+	// stray language switch into the middle of it. The structured Elided count
+	// is still set either way, so "no silent truncation" holds regardless.
+	ElidedNote string `json:"elidedNote,omitempty"`
 	// Tokens is an approximate cost of Header+Body (chars/4). Approximate on
 	// purpose: it exists so the UI can show which views are expensive, not for
 	// billing.
@@ -155,16 +167,20 @@ func (v View) Text() string {
 		if !strings.HasSuffix(b.String(), "\n") {
 			b.WriteString("\n")
 		}
-		unit := v.ElidedUnit
-		if unit == "" {
-			unit = "öğe"
-		}
-		b.WriteString(fmt.Sprintf("…%d %s gizlendi", v.Elided, unit))
-		// Name the handle rather than its ref: the label says what opening it
-		// gets you, which is what a reader needs to decide. The exact call syntax
-		// is appended separately by the get_view tool.
-		if len(v.Handles) > 0 {
-			b.WriteString("  ↳ " + v.Handles[0].Label)
+		if v.ElidedNote != "" {
+			b.WriteString(v.ElidedNote)
+		} else {
+			unit := v.ElidedUnit
+			if unit == "" {
+				unit = "öğe"
+			}
+			b.WriteString(fmt.Sprintf("…%d %s gizlendi", v.Elided, unit))
+			// Name the handle rather than its ref: the label says what opening it
+			// gets you, which is what a reader needs to decide. The exact call
+			// syntax is appended separately by the get_view tool.
+			if len(v.Handles) > 0 {
+				b.WriteString("  ↳ " + v.Handles[0].Label)
+			}
 		}
 	}
 	return strings.TrimRight(b.String(), "\n")
