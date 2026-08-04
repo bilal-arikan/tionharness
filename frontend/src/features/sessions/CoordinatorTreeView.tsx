@@ -5,6 +5,7 @@ import {
   ChevronRight,
   GitBranch,
   Hourglass,
+  Inbox,
   Loader2,
   Network,
   OctagonAlert,
@@ -205,6 +206,16 @@ function TreeRow({
         <Hourglass size={10} className="shrink-0 text-[var(--color-text-dim)]" />
       )}
       {node.running && <Play size={10} className="shrink-0 text-[var(--color-accent)]" />}
+      {/* A parked send_to_worker follow-up on this node: delivered when its turn
+          ends. Mirrors the flat roster's "kuyrukta" badge so a queued message deep
+          in the tree is visible from the root. */}
+      {node.running && node.queued && (
+        <Inbox
+          size={10}
+          className="shrink-0 text-[var(--color-warning)]"
+          aria-label="Bekleyen mesaj"
+        />
+      )}
       <span className="ml-auto shrink-0 text-[9px] text-[var(--color-text-dim)]">
         {node.costUSD ? formatUSD(node.costUSD) : ''}
       </span>
@@ -214,6 +225,7 @@ function TreeRow({
     `${node.title || node.sessionId}`,
     healthTitle,
     node.reportPending ? 'Koordinatörüne raporunu henüz kapatmadı' : '',
+    node.running && node.queued ? 'Bekleyen mesaj: bu tur bitince teslim edilecek' : '',
   ]
     .filter(Boolean)
     .join(' — ')

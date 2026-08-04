@@ -287,6 +287,11 @@ func (r *Runtime) isSessionActive(id string) bool {
 // coordinator-tree endpoint, which marks live nodes in the tree view).
 func (r *Runtime) IsSessionActive(id string) bool { return r.isSessionActive(id) }
 
+// HasQueuedMessage is the exported view of hasQueuedMessage for the api layer (the
+// coordinator tree endpoint), so a node with a parked send_to_worker follow-up can
+// show the same "queued" badge the flat roster does.
+func (r *Runtime) HasQueuedMessage(id string) bool { return r.hasQueuedMessage(id) }
+
 // WorkerSpec describes one spawn_worker request beyond the plain target/task
 // pair: whether the new worker is itself a coordinator (the nesting switch) and,
 // if so, which recipe it runs under.

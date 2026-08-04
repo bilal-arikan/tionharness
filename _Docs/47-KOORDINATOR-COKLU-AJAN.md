@@ -647,6 +647,12 @@ gösterir → koordinatör mesajın düştüğünü değil kuyruğa alındığı
 mevcut worker-bus olayları/`refreshKey` ile tazelendiği için teslimde rozet
 kendiliğinden kalkar.
 
+**Koordinatör ağacı** (`CoordinatorTreeView.tsx`) da aynı sinyali taşır: tree
+endpoint (`handleSessionCoordinatorTree`) her node için `HasQueuedMessage`'i
+(`IsSessionActive` gibi dışa-açık sarmalayıcı) okuyup `queued` alanı ekler; çalışan +
+bekleyen node'a küçük `Inbox` işareti + tooltip düşer. Böylece derin bir node'daki
+bekleyen mesaj kökten de görünür.
+
 ---
 
 ## 11. Workflow Desenleri (skill'e eklendi, 2026-07-14)

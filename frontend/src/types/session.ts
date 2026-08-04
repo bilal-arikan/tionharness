@@ -362,6 +362,10 @@ export interface CoordinatorTreeNode {
   state: string
   // Whether a turn is in flight on this session right now.
   running?: boolean
+  // A parked send_to_worker follow-up waiting for this node's current turn to end
+  // (single-slot per worker). Shown as a "queued" marker so a message on a deep
+  // node is visible from the root. Only meaningful while running.
+  queued?: boolean
   // Branch health, derived from the session's auto-tags: 'stuck' (autonomous
   // turns refused — needs a human), 'error' (last turn failed), '' (fine).
   // Surfaced in the tree because the deeper a failure sits, the less likely
