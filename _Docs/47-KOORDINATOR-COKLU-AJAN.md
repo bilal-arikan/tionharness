@@ -812,13 +812,32 @@ da, UI roster'ında da).
 | `CoordinatorMaxWorkers` | düğüm başına aktif worker | 8 |
 | `CoordinatorMaxTurns` | oturum başına otomatik tur | 50 |
 | **`CoordinatorMaxDepth`** | ağacın seviye derinliği (kök = 0) | **5** (`-1` = sınırsız) |
-| **`CoordinatorMaxSubtreeSessions`** | **tüm ağaçtaki** toplam worker oturumu | **64** (`-1` = sınırsız) |
+| **`CoordinatorMaxSubtreeSessions`** | **tüm ağaçtaki** CANLI worker oturumu | **64** (`-1` = sınırsız) |
 
 Alt-ağaç bütçesi kritik: düğüm-başına worker limiti **düğüm bazında** uygulandığı
 için derinlikle **çarpılır** (8 worker × derinlik 4 ≈ 4096 oturum); üstel dallanmayı
 gerçekten durduran tek sınır budur. `spawn_worker(coordinator:true)` derinlik
 sınırında **hata verir, sessizce düz worker'a düşmez** — delegasyon yaptığını
 sanan bir koordinatör gelmeyecek bir raporu sonsuza kadar bekler.
+
+**Bütçe CANLI worker sayar (reclaim).** Sayım `len(tree)-1` değil — biten
+worker'lar (concluded/failed/stopped) kotadan **geri alınır**. Bir worker
+yalnız *iş yapabildiği/dallanabildiği* sürece slot tutar: turu koşuyorsa ya da
+kendi dalı hâlâ canlı olan bir alt-koordinatörse (`countsAgainstTreeBudget` =
+`workerInfoFor.Running`'in mesaj çekmeyen ucuz ikizi). Böylece uzun ömürlü bir
+koordinatör, bitirdiği işin oturumlarıyla **kalıcı olarak brick olmaz** ve
+tükenme hatasının vaadi ("conclude existing workers before spawning more")
+artık **gerçekten** doğrudur (eskiden `len(tree)-1` sayımıyla concluding kotayı
+boşaltmıyordu — mesaj yanıltıcıydı). Ölçtüğü koruma değişmez: eşzamanlı
+patlamayı hâlâ durdurur; ardışık batch üretimi ise ajan başına günlük token
+bütçesiyle sınırlıdır.
+
+**Görünürlük.** Her başarılı `spawn_worker` sonucu artık `treeBudgetUsed/Total`
+taşır ve tool metnine `Tree budget: N/M live worker sessions in use (K
+remaining)` satırını ekler; %75 ve %90 eşiklerinde `⚠️` uyarısı çıkar. Tükenme
+hatası ayrıca **hangi worker'ların hâlâ aktif sayıldığını** listeler
+(`coordTreeBudget.activeList`) — koordinatör neyi concluding edeceğini görür.
+`total ≤ 0` (sınırsız) ise satır ve alanlar boştur.
 
 Deadlock notu: `SpawnMaxConcurrent` (16) global bir havuzdur ve `runWorker` tur
 boyunca bir slot tutar; `runCoordinatorTurn` **tutmaz**. Değişmez kural:
@@ -964,7 +983,8 @@ yüzden "check-then-act" desenleri burada teorik değil. Denetim sonucu:
 |---|---|
 | **Sunucu ortada kapanır** | Yetim turlar `RecoverOrphanedTurns` (BFS, kurtarılan ebeveyne notify yok) + rapor borcu **diskte** (`CoordinatorReportPending`) → `RecoverPendingReports` boot'ta backstop'u yeniden kurar. `coordSlot` bellekte kaybolur ama boot'ta hiçbir şey çalışmadığı için "hepsi bitmiş" okuması doğrudur. Test: `TestPendingReportSurvivesProcessRestart` (iki Runtime, **aynı store**). |
 | **Rapor çift gönderimi** | `owesReportNow` → `setOwesReport(false)` **atomik değildi**: iki backstop (her drain çıkışında bir tane) veya backstop⇄`report_to_coordinator` aynı anda geçip aynı görevi iki kez, çelişkili statülerle raporlayabilirdi. → `db.ClaimCoordinatorReport` (store kilidi altında true→false CAS); yalnız kazanan gönderir. Test: `TestReportClaimIsExclusive`, `TestSettleBackstopDoesNotDoubleReport`. |
-| **Alt-ağaç bütçesi aşımı** | Bütçe diskteki oturumları sayıyor; say-sonra-yarat arasında N eşzamanlı spawn aynı "1 slot kaldı"yı okuyup hepsi yaratabilirdi (düğüm-başına worker cap'i atomic add ile güvenli, ağaç bütçesinin ekleyeceği bir şey yok). → kök başına spawn kilidi, kontrol + yaratma birlikte. Yaratma ucuz, tur zaten detached → iş değil muhasebe serileşir. Test: `TestSubtreeBudgetHoldsUnderConcurrentSpawns`. |
+| **Alt-ağaç bütçesi aşımı** | Bütçe canlı worker'ları sayıyor; say-sonra-yarat arasında N eşzamanlı spawn aynı "1 slot kaldı"yı okuyup hepsi yaratabilirdi (düğüm-başına worker cap'i atomic add ile güvenli, ağaç bütçesinin ekleyeceği bir şey yok). → kök başına spawn kilidi, kontrol + yaratma birlikte. Yaratma ucuz, tur zaten detached → iş değil muhasebe serileşir. Test: `TestSubtreeBudgetHoldsUnderConcurrentSpawns` (kapasiteye kadar canlı worker seed'lenir, tüm eşzamanlı spawn'lar reddedilmeli). |
+| **Biten worker kotayı sızdırıyor** | `len(tree)-1` sayımı biten oturumları da sayıyordu → uzun ömürlü koordinatör bitmiş işin oturumlarıyla kalıcı brick oluyordu; hata mesajı "conclude…" diyordu ama concluding kotayı boşaltmıyordu. → `evalCoordinatorTreeBudget` yalnız CANLI worker'ları sayar, bitenler otomatik reclaim; hata artık aktif worker listesini de verir. Test: `TestSpawnWorkerSubtreeBudget` (kapasitede reddet → biri reclaim → tekrar spawn + `treeBudgetUsed/Total` görünürlüğü), `TestTreeBudgetLine` (eşik uyarıları). |
 | **Credential dosyası yarım okunur** | `copyFile` truncate-sonra-stream yapıyordu; heal'i **her tura** taşıyınca eşzamanlı bir CLI 0 baytlık `.credentials.json` görebilirdi ("not logged in"). → tmp+rename (POSIX + Windows'ta atomik). |
 | **Taze login'in eski kaynakla ezilmesi** | Heal "sırala → kopyala" arasında CLI dst'yi tazeleyebilir. → per-home kilit + kopyalamadan hemen önce dst'nin **yeniden** sıralanması; daha iyiyse kopyalama yapılmaz. |
 | **Çoklu pencere / ekran** | Rol toggle'ı ve worker geçişleri SSE ile yayılır (`emitCoordinationModeEvent` + `workerBus`); ağaç paneli aynı akışa abone. İki pencere aynı anda toggle ederse son yazan kazanır ve ikisi de olayı görür. |

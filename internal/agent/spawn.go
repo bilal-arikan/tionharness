@@ -88,6 +88,13 @@ type SpawnOptions struct {
 type SpawnResult struct {
 	SessionID string
 	AgentName string
+	// TreeBudgetUsed / TreeBudgetTotal report the coordinator TREE's LIVE-worker
+	// occupancy right after this spawn (Used counts the just-spawned worker). Total
+	// is the ceiling; 0 means no ceiling is configured (or this was not a worker
+	// spawn). They let a coordinator see remaining quota on every spawn instead of
+	// only when it slams into the wall.
+	TreeBudgetUsed  int
+	TreeBudgetTotal int
 }
 
 // SpawnSession opens a NEW, independent session ("spawned" kind), records the

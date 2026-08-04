@@ -491,30 +491,59 @@ func TestSpawnWorkerDepthLimit(t *testing.T) {
 	}
 }
 
-// TestSpawnWorkerSubtreeBudget verifies the tree-wide session budget, which is the
-// only guard that actually bounds exponential fan-out: the per-coordinator worker
-// cap is enforced per node, so depth multiplies it.
+// TestSpawnWorkerSubtreeBudget verifies the tree-wide budget counts only LIVE
+// workers and reclaims finished ones. The budget bounds concurrent fan-out (the
+// actual explosion vector); a worker that concluded, failed, or was stopped is
+// reclaimed so a long-running coordinator is not permanently bricked by the
+// sessions of work it already finished. The exhaustion error also names which
+// workers still hold the budget.
 func TestSpawnWorkerSubtreeBudget(t *testing.T) {
 	rt, _ := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))
-	rt.tun.SetCoordinatorLimits(0, 0, 0, 2) // whole tree: 2 worker sessions
+	rt.tun.SetCoordinatorLimits(0, 0, 0, 2) // whole tree: 2 LIVE worker sessions
 	ctx := context.Background()
 	if _, err := rt.db.CreateAgent(ctx, db.Agent{Name: "W", Provider: "anthropic", Model: "m"}); err != nil {
 		t.Fatalf("create agent: %v", err)
 	}
 	root := newTestCoordinator(t, rt, 0)
 
-	mid, err := rt.SpawnWorker(ctx, root, "W", "one", "", WorkerSpec{Coordinator: true})
+	// Seed the tree to capacity with two workers that are genuinely live (their turn
+	// markers are set). newTreeNode creates the sessions without running a turn, so
+	// liveness is fully under the test's control.
+	w1 := newTreeNode(t, rt, "w1", root, root, 1, false)
+	w2 := newTreeNode(t, rt, "w2", root, root, 1, false)
+	rt.trackSession(w1.ID)
+	rt.trackSession(w2.ID)
+
+	// A third worker is refused, and the error names both live workers holding the
+	// budget — the diagnostic a coordinator needs to decide what to conclude.
+	_, err := rt.SpawnWorker(ctx, root, "W", "three", "", WorkerSpec{})
+	if err == nil {
+		rt.untrackSession(w1.ID)
+		rt.untrackSession(w2.ID)
+		t.Fatal("expected the tree-wide budget to refuse a spawn while two workers are live")
+	}
+	if !strings.Contains(err.Error(), "exhausted") || !strings.Contains(err.Error(), "2/2") {
+		t.Errorf("error should report the exhausted budget, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), w1.ID) || !strings.Contains(err.Error(), w2.ID) {
+		t.Errorf("error should list the live workers holding the budget, got: %v", err)
+	}
+
+	// One worker finishes: its slot must be reclaimed so the coordinator can spawn
+	// again — the behavior the exhaustion message has always promised.
+	rt.untrackSession(w1.ID)
+	defer func() {
+		rt.untrackSession(w2.ID)
+		waitWorkersSettled(t, rt, root)
+	}()
+	res, err := rt.SpawnWorker(ctx, root, "W", "after-reclaim", "", WorkerSpec{})
 	if err != nil {
-		t.Fatalf("first spawn: %v", err)
+		t.Fatalf("spawn after a worker was reclaimed should succeed: %v", err)
 	}
-	defer func() { waitWorkersSettled(t, rt, root, mid.SessionID) }()
-	if _, err := rt.SpawnWorker(ctx, mid.SessionID, "W", "two", "", WorkerSpec{}); err != nil {
-		t.Fatalf("second spawn: %v", err)
-	}
-	// The third would be the 3rd worker session in the tree — refused even though it
-	// is requested from a DIFFERENT node whose own worker cap is untouched.
-	if _, err := rt.SpawnWorker(ctx, root, "W", "three", "", WorkerSpec{}); err == nil {
-		t.Fatal("expected the tree-wide budget to refuse the third worker")
+	// Visibility: the result reports the tree now sits at 2/2 (the still-live w2 plus
+	// the worker just spawned).
+	if res.TreeBudgetTotal != 2 || res.TreeBudgetUsed != 2 {
+		t.Errorf("spawn result budget = %d/%d, want 2/2", res.TreeBudgetUsed, res.TreeBudgetTotal)
 	}
 }
 

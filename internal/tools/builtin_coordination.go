@@ -153,7 +153,31 @@ func (SpawnWorkerTool) Call(ctx context.Context, input json.RawMessage) (string,
 	if in.Coordinator {
 		kind = "SUB-COORDINATOR (it may spawn its own workers, and reports back only when its whole branch is done)"
 	}
-	return fmt.Sprintf("Spawned %s %q (session %s). It runs in the background; you will get a <task-notification> when it finishes. Do not wait for it — end your turn.", kind, res.AgentName, res.SessionID), nil
+	msg := fmt.Sprintf("Spawned %s %q (session %s). It runs in the background; you will get a <task-notification> when it finishes. Do not wait for it — end your turn.", kind, res.AgentName, res.SessionID)
+	msg += treeBudgetLine(res.TreeBudgetUsed, res.TreeBudgetTotal)
+	return msg, nil
+}
+
+// treeBudgetLine renders the coordinator tree's remaining live-worker quota after
+// a spawn, with an escalating warning as it fills, so a coordinator sees the wall
+// coming instead of only hitting it. Empty when no ceiling is configured
+// (total <= 0) — there is nothing to report then.
+func treeBudgetLine(used, total int) string {
+	if total <= 0 {
+		return ""
+	}
+	remaining := total - used
+	if remaining < 0 {
+		remaining = 0
+	}
+	line := fmt.Sprintf("\nTree budget: %d/%d live worker sessions in use (%d remaining; finished workers are reclaimed automatically).", used, total, remaining)
+	switch frac := float64(used) / float64(total); {
+	case frac >= 0.90:
+		line += " ⚠️ Over 90% used — conclude or stop finished workers before fanning out further, or further spawns will be refused."
+	case frac >= 0.75:
+		line += " ⚠️ Over 75% used — watch the remaining capacity."
+	}
+	return line
 }
 
 // ---- send_to_worker ----

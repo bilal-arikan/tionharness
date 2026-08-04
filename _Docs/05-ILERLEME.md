@@ -2,6 +2,34 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-08-04**
 
+## Koordinatör ağaç bütçesi: görünürlük + reclaim (2026-08-04) ✅
+
+- **Sorun (FND-23385d87 · FND-dad4f7be · FND-4240b836):** `CoordinatorMaxSubtreeSessions`
+  tavanı GÖRÜNMEZDİ — koordinatör doluluğu ancak `tree budget exhausted (N/N)` ile
+  duvara çarpınca öğreniyordu; kalan kota önceden görünmüyordu. Dahası bütçe
+  `len(tree)-1` ile **tüm** oturumları (bitenler dahil) sayıyordu → uzun ömürlü
+  koordinatör bitirdiği işin oturumlarıyla **kalıcı brick** oluyor, hata mesajı
+  "conclude existing workers…" derken concluding kotayı boşaltmıyordu.
+- **Çözüm:** (1) `agent.SpawnResult`/`tools.SpawnResult`'a `TreeBudgetUsed/Total`
+  eklendi; her `spawn_worker` sonucu `Tree budget: N/M live … (K remaining)` satırı
+  + %75/%90 `⚠️` uyarısı gösterir (`treeBudgetLine`). (2) `checkCoordinatorTreeBudget`
+  → `evalCoordinatorTreeBudget` yalnız **CANLI** worker sayar
+  (`countsAgainstTreeBudget` = koşan tur veya dallanan alt-koordinatör); bitenler
+  otomatik **reclaim**. (3) Tükenme hatası artık hâlâ aktif sayılan worker'ları
+  listeler (`coordTreeBudget.activeList`). Mutex/kilit mantığı (per-tree spawn lock)
+  değişmedi.
+- **Not (semantik):** Tavan artık *lifetime-toplam* değil, *eşzamanlı-canlı* worker
+  tavanıdır. Üstel eşzamanlı patlama korumasını korur; ardışık batch üretimi ajan
+  başına günlük token bütçesiyle sınırlanır.
+- **Dosyalar:** `internal/agent/coordination.go`, `internal/agent/spawn.go`,
+  `internal/tools/builtin_spawn.go`, `internal/tools/builtin_coordination.go`
+  (+ testler: `coordination_test.go`, `coordination_race_test.go`,
+  `builtin_coordination_budget_test.go`).
+- **Doğrulama:** `go build ./internal/agent/... ./internal/tools/...` ✅,
+  `go test ./internal/agent/... ./internal/tools/...` ✅ (588 test;
+  `TestSpawnWorkerSubtreeBudget`, `TestSubtreeBudgetHoldsUnderConcurrentSpawns`,
+  `TestTreeBudgetLine`).
+
 ## Grep çoklu-path desteği (2026-08-04) ✅
 
 - **Sorun (FND-02391b62 · FND-be8c85b7 · FND-5253471e):** `Grep` `path` alanı tek
