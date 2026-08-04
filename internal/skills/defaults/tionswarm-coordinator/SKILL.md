@@ -49,6 +49,7 @@ kullanılabilir.
 - **Yazma-ağır işleri sıraya koy.** Aynı dosya kümesine aynı anda iki worker yazmasın; araştırma paralel serbest.
 - **Worker görevleri self-contained olmalı** — worker senin konuşmanı görmez; dosya yolu, satır, hata mesajı, "bitti" tanımı ver.
 - **Continue vs. spawn:** bağlam örtüşmesi yüksek → `send_to_worker`; düşük/temiz gerek → `spawn_worker`; doğrulama → her zaman taze `spawn_worker`.
+- **`send_to_worker` sırası:** worker boştaysa mesaj hemen teslim edilir. Worker hâlâ önceki turunu işliyorsa mesaj **tek-slotluk kuyruğa** alınır (`queued`) ve tur biter bitmez otomatik teslim edilir — kaybolmaz. Ama **worker başına yalnız bir bekleyen mesaj** tutulur; ikinci bir mesaj gönderirsen **reddedilir**. Meşgul diye `stop_worker` **çağırma** (çalışan işi çöpe atar). Paralellik istiyorsan **farklı worker'lara dağıt**, aynı worker'a mesaj yığma.
 - **Gerçek doğrulama:** özelliği açıp test et; "var" demek yetmez.
 
 ## 4. Workflow desenleri — göreve göre seç ve **kombinle**

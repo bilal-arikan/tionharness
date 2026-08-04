@@ -39,8 +39,12 @@ type CoordinationFuncs struct {
 	// Spawn launches a background worker (existing agent target) under the
 	// coordinator and returns its session id immediately.
 	Spawn func(ctx context.Context, agentRef, task string, spec WorkerSpawnSpec) (SpawnResult, error)
-	// Send delivers a follow-up to an existing worker and re-runs its turn.
-	Send func(ctx context.Context, workerSessionID, message string) error
+	// Send delivers a follow-up to an existing worker and re-runs its turn. When the
+	// worker is still mid-turn the message is parked in a single-slot per-worker
+	// queue and delivered the moment that turn ends; SendResult reports which of the
+	// two happened (and, when queued, how long the running turn has been going) so
+	// the coordinator need not reach for stop_worker.
+	Send func(ctx context.Context, workerSessionID, message string) (SendResult, error)
 	// Stop cancels an in-flight worker turn (and, for a sub-coordinator, its whole
 	// subtree).
 	Stop func(ctx context.Context, workerSessionID string) error
@@ -158,6 +162,18 @@ func (SpawnWorkerTool) Call(ctx context.Context, input json.RawMessage) (string,
 
 // ---- send_to_worker ----
 
+// SendResult reports how a send_to_worker landed. Exactly one of Delivered /
+// Queued is true. When Queued, the worker was still running a prior turn and the
+// message was parked in its single-slot queue; RunningForSeconds is the elapsed
+// time of that in-flight turn (0 when unknown), surfaced so the coordinator can
+// see the worker is genuinely busy rather than wedged — and therefore keep
+// waiting instead of issuing a destructive stop_worker.
+type SendResult struct {
+	Delivered         bool
+	Queued            bool
+	RunningForSeconds int64
+}
+
 type sendToWorkerInput struct {
 	Worker  string `json:"worker"`
 	Message string `json:"message"`
@@ -204,8 +220,20 @@ func (SendToWorkerTool) Call(ctx context.Context, input json.RawMessage) (string
 	if f == nil || f.Send == nil {
 		return "", fmt.Errorf("send_to_worker is only available in a coordinator session")
 	}
-	if err := f.Send(ctx, in.Worker, in.Message); err != nil {
+	res, err := f.Send(ctx, in.Worker, in.Message)
+	if err != nil {
 		return "", err
+	}
+	if res.Queued {
+		busy := ""
+		if res.RunningForSeconds > 0 {
+			busy = fmt.Sprintf(" (running for %ds)", res.RunningForSeconds)
+		}
+		return fmt.Sprintf("Worker %s is still running its current turn%s, so your message was QUEUED. "+
+			"It will be delivered automatically the instant that turn ends, and you will get a <task-notification> "+
+			"when the follow-up finishes. Do NOT stop_worker — the worker is busy, not stuck, and stopping would "+
+			"discard its in-flight work. Only one message can be queued per worker; sending another before this one "+
+			"is delivered will be refused.", in.Worker, busy), nil
 	}
 	return fmt.Sprintf("Sent follow-up to worker %s. It is re-running in the background; you will get a <task-notification> when it finishes.", in.Worker), nil
 }
