@@ -148,14 +148,6 @@ func (r *Runtime) runInboxDelivery(agent db.Agent, inboxID, prompt string) {
 	// Same hard ceiling + idle watchdog as spawn/worker turns: a productive turn
 	// runs up to SpawnTimeout, a hung one is reclaimed after SpawnIdleTimeout.
 	hardCap, idleCap := r.tun.SpawnTimeout(), r.tun.SpawnIdleTimeout()
-	ctx, cancel := withActivityTimeout(context.Background(), hardCap, idleCap)
-	defer cancel()
-
-	// Mark as async chat (a human may read the inbox) + autonomous, and stamp the
-	// session so the history-aware runner targets it.
-	turnCtx := tools.WithAsyncChat(WithSessionID(WithCallKind(ctx, KindSpawn), inboxID))
-	turnCtx, meta := WithTurnMeta(turnCtx)
-	turnStart := time.Now()
 
 	// Serialize this peer delivery with any concurrent turn on the same session
 	// (user chat / inbox worker / wake) — and, for a coordinator, its auto turns —
@@ -164,7 +156,27 @@ func (r *Runtime) runInboxDelivery(agent db.Agent, inboxID, prompt string) {
 	defer release()
 
 	r.trackSession(inboxID)
-	output, steps, err := r.runSessionTurn(turnCtx, agent, inboxID, prompt, true)
+
+	// Single-shot idle-resume (FND-708844f8): an idle-cut inbox turn gets ONE more
+	// attempt under a fresh window before reconcileTurnOutcome marks it unfinished.
+	// Mark as async chat (a human may read the inbox) + autonomous, and stamp the
+	// session so the history-aware runner targets it.
+	var (
+		turnCtx context.Context
+		meta    *turnMeta
+	)
+	turnStart := time.Now()
+	ctx, cancel, output, steps, err := r.runTurnWithIdleResume(context.Background(), hardCap, idleCap, r.tun.IdleResumeMax(),
+		func(attemptCtx context.Context, _ context.CancelFunc, attempt int, prevOutput string) (string, []TurnStep, error) {
+			turnCtx = tools.WithAsyncChat(WithSessionID(WithCallKind(attemptCtx, KindSpawn), inboxID))
+			turnCtx, meta = WithTurnMeta(turnCtx)
+			p := prompt
+			if attempt > 1 {
+				p = resumeContinuationPrompt(prompt, prevOutput)
+			}
+			return r.runSessionTurn(turnCtx, agent, inboxID, p, true)
+		})
+	defer cancel()
 	r.untrackSession(inboxID)
 
 	// A watchdog cut (hard/idle) or a self-truncated loop hands back salvaged text;

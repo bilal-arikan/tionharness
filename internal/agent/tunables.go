@@ -35,6 +35,15 @@ const DefaultSpawnTimeoutMinutes = 20
 // 0 selects this default.
 const DefaultSpawnIdleTimeoutMinutes = 5
 
+// DefaultIdleResumeMax is the single-shot budget for the OUT-OF-LOOP idle-timeout
+// resume (see runTurnWithIdleResume in turnoutcome.go): a background turn cut
+// specifically by the idle watchdog (ErrTurnIdleTimeout) is auto-restarted this many
+// times under a fresh idle window — continuing from its salvaged fragment — before it
+// is reported unfinished. 1 = one resume (the SES17 / FND-708844f8 fix); 0 disables
+// the resume entirely (turn is reported unfinished on the first idle cut, as it was
+// before the fix). Settings-driven (IdleResumeMax) via applySettings.
+const DefaultIdleResumeMax = 1
+
 // DefaultScheduleTimeoutMinutes bounds a single scheduled fire (task run or prompt
 // delivery / wake). Sized for current-generation models: one request can run many
 // minutes and a multi-iteration tool loop longer still. Runaway protection comes
@@ -92,6 +101,7 @@ type Tunables struct {
 	spawnMaxPerTurn     int // 0 → DefaultSpawnMaxPerTurn
 	spawnTimeoutMin     int // 0 → DefaultSpawnTimeoutMinutes (spawn work-turn deadline, in minutes)
 	spawnIdleTimeoutMin int // 0 → DefaultSpawnIdleTimeoutMinutes (spawn/worker inactivity watchdog, in minutes)
+	idleResumeMax       int // <0 → DefaultIdleResumeMax; 0 = disabled; N = N single-shot idle-timeout resumes
 	schedTimeoutMin     int // 0 → DefaultScheduleTimeoutMinutes (scheduled-fire deadline, in minutes)
 	coordMaxWorkers     int // 0 → DefaultCoordinatorMaxWorkers
 	coordMaxTurns       int // 0 → DefaultCoordinatorMaxTurns
@@ -271,6 +281,7 @@ func NewTunables() *Tunables {
 		maxTokenRetries:    DefaultMaxTokenRetries,
 		reactiveKeepRecent: DefaultReactiveKeepRecent,
 		providerRetryMax:   DefaultProviderRetryMax,
+		idleResumeMax:      DefaultIdleResumeMax,
 		// Guardrail warnings on by default (gentle nudge appended to failing
 		// results); the hard stop stays opt-in from settings.
 		toolGuardWarnings:  true,
@@ -496,6 +507,26 @@ func (t *Tunables) SpawnIdleTimeout() time.Duration {
 		m = DefaultSpawnIdleTimeoutMinutes
 	}
 	return time.Duration(m) * time.Minute
+}
+
+// SetIdleResumeMax configures how many times an idle-cut background turn is
+// auto-restarted under a fresh idle window (see runTurnWithIdleResume). Negative
+// selects the built-in default; 0 disables the resume.
+func (t *Tunables) SetIdleResumeMax(max int) {
+	t.mu.Lock()
+	t.idleResumeMax = max
+	t.mu.Unlock()
+}
+
+// IdleResumeMax returns the single-shot idle-resume budget. Negative (unset) maps to
+// the default; 0 means the resume is disabled.
+func (t *Tunables) IdleResumeMax() int {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	if t.idleResumeMax < 0 {
+		return DefaultIdleResumeMax
+	}
+	return t.idleResumeMax
 }
 
 // SetScheduleTimeoutMinutes sets the deadline (in minutes) that bounds a single

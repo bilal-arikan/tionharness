@@ -83,9 +83,32 @@ func (s *coordSlot) markHadWorkers() {
 // so it reports "killed" rather than "failed". startedAt stamps when the turn
 // began so ListWorkers can report a running worker's elapsed time.
 type workerCtl struct {
-	cancel    context.CancelFunc
+	mu        sync.Mutex         // guards cancelFn (re-pointed each idle-resume attempt)
+	cancelFn  context.CancelFunc // the turn attempt currently in flight
 	stopped   atomic.Bool
 	startedAt time.Time
+}
+
+// setCancel installs the cancel of the turn attempt now running. The idle-resume
+// loop calls it once per attempt so a coordinator stop_worker always aborts the
+// attempt actually in flight, not a stale (already-cancelled) one from before a
+// resume.
+func (c *workerCtl) setCancel(fn context.CancelFunc) {
+	c.mu.Lock()
+	c.cancelFn = fn
+	c.mu.Unlock()
+}
+
+// cancel aborts the attempt currently in flight. Nil-safe in the brief window
+// before the first attempt registers its cancel (a stop that lands there still sets
+// stopped, which the invoke closure re-checks before running).
+func (c *workerCtl) cancel() {
+	c.mu.Lock()
+	fn := c.cancelFn
+	c.mu.Unlock()
+	if fn != nil {
+		fn()
+	}
 }
 
 // sessionIsCoordinator reports whether the session stamped on ctx may drive
@@ -765,9 +788,7 @@ func (r *Runtime) runWorker(agent db.Agent, workerSessionID, prompt, coordSessio
 	// watchdog: a worker/coordinator turn that streams no step for SpawnIdleTimeout
 	// is reclaimed fast, while a long-but-productive one runs up to SpawnTimeout.
 	hardCap, idleCap := r.tun.SpawnTimeout(), r.tun.SpawnIdleTimeout()
-	ctx, cancel := withActivityTimeout(context.Background(), hardCap, idleCap)
-	defer cancel()
-	ctl := &workerCtl{cancel: cancel, startedAt: time.Now()}
+	ctl := &workerCtl{startedAt: time.Now()}
 	r.workerCancels.Store(workerSessionID, ctl)
 	defer r.workerCancels.Delete(workerSessionID)
 
@@ -780,10 +801,6 @@ func (r *Runtime) runWorker(agent db.Agent, workerSessionID, prompt, coordSessio
 	releaseSlot := r.claimSessionTurnSlot(workerSessionID)
 	defer releaseSlot()
 
-	turnCtx := tools.WithAsyncChat(WithSessionID(WithCallKind(ctx, KindSpawn), workerSessionID))
-	turnCtx, meta := WithTurnMeta(turnCtx)
-	turnStart := time.Now()
-
 	r.trackSession(workerSessionID)
 	// Raise the "thinking" indicator for the worker session (see emitTurnStart);
 	// the completion "worker" event clears it.
@@ -791,7 +808,33 @@ func (r *Runtime) runWorker(agent db.Agent, workerSessionID, prompt, coordSessio
 	// Tell the coordination UI a worker is now running (covers both the initial
 	// spawn and a send_to_worker continuation, since both land here).
 	r.emitWorkerStartEvent(agent, workerSessionID, coordSessionID)
-	output, steps, err := r.runSessionTurn(turnCtx, agent, workerSessionID, prompt, true)
+
+	// Single-shot idle-resume (FND-708844f8): an idle-cut worker turn — the exact
+	// SES17 case this file was written for — gets ONE more attempt under a fresh
+	// window before it reports "timeout"/unfinished up to its coordinator, which then
+	// re-tasks it (the SECOND line of defence, unchanged). setCancel re-points the
+	// coordinator's stop_worker at whichever attempt is in flight; the stopped
+	// re-check closes the tiny gap before the first attempt registers its cancel.
+	var (
+		turnCtx context.Context
+		meta    *turnMeta
+	)
+	turnStart := time.Now()
+	ctx, cancel, output, steps, err := r.runTurnWithIdleResume(context.Background(), hardCap, idleCap, r.tun.IdleResumeMax(),
+		func(attemptCtx context.Context, cancel context.CancelFunc, attempt int, prevOutput string) (string, []TurnStep, error) {
+			ctl.setCancel(cancel)
+			if ctl.stopped.Load() {
+				return "", nil, context.Canceled
+			}
+			turnCtx = tools.WithAsyncChat(WithSessionID(WithCallKind(attemptCtx, KindSpawn), workerSessionID))
+			turnCtx, meta = WithTurnMeta(turnCtx)
+			p := prompt
+			if attempt > 1 {
+				p = resumeContinuationPrompt(prompt, prevOutput)
+			}
+			return r.runSessionTurn(turnCtx, agent, workerSessionID, p, true)
+		})
+	defer cancel()
 	r.untrackSession(workerSessionID)
 
 	// Why the turn ended, independent of err: a watchdog cancellation (hard cap or
@@ -1298,26 +1341,44 @@ func (r *Runtime) runCoordinatorTurn(coordSessionID string) {
 	// watchdog: a worker/coordinator turn that streams no step for SpawnIdleTimeout
 	// is reclaimed fast, while a long-but-productive one runs up to SpawnTimeout.
 	hardCap, idleCap := r.tun.SpawnTimeout(), r.tun.SpawnIdleTimeout()
-	ctx, cancel := withActivityTimeout(context.Background(), hardCap, idleCap)
-	defer cancel()
 
-	sess, err := r.db.GetSession(ctx, coordSessionID)
+	// Metadata reads are quick and must not be bound to the turn watchdog (which the
+	// resume loop owns per attempt) — use the background context for them.
+	sess, err := r.db.GetSession(context.Background(), coordSessionID)
 	if err != nil {
 		r.logger.Warn("coordination: coordinator session gone", "coordinator", coordSessionID, "error", err)
 		return
 	}
-	agent, err := r.db.GetAgent(ctx, sess.AgentID)
+	agent, err := r.db.GetAgent(context.Background(), sess.AgentID)
 	if err != nil {
 		r.logger.Warn("coordination: coordinator agent gone", "coordinator", coordSessionID, "error", err)
 		return
 	}
 
-	turnCtx := tools.WithAsyncChat(WithSessionID(WithCallKind(ctx, KindSpawn), coordSessionID))
-	turnCtx, meta := WithTurnMeta(turnCtx)
+	// Single-shot idle-resume (FND-708844f8): an idle-cut coordinator DRAIN turn gets
+	// ONE more attempt under a fresh window before reconcileTurnOutcome marks it
+	// unfinished. Safe against the drain/stall machinery: the resume is transparent to
+	// the notify loop (it just sees one longer turn); slot.lastTurnUnix is stamped
+	// AFTER, and guardCoordinatorStall still runs only on a clean (err==nil, untruncated)
+	// turn — a resumed-then-idle turn stays truncated and skips it, exactly as Faz E.
+	// No double recovery: a coordinator reports UP via runWorker, not this drain turn.
+	var (
+		turnCtx context.Context
+		meta    *turnMeta
+	)
 	turnStart := time.Now()
-
 	r.trackSession(coordSessionID)
-	output, steps, err := r.runSessionTurn(turnCtx, agent, coordSessionID, "", true)
+	ctx, cancel, output, steps, err := r.runTurnWithIdleResume(context.Background(), hardCap, idleCap, r.tun.IdleResumeMax(),
+		func(attemptCtx context.Context, _ context.CancelFunc, attempt int, prevOutput string) (string, []TurnStep, error) {
+			turnCtx = tools.WithAsyncChat(WithSessionID(WithCallKind(attemptCtx, KindSpawn), coordSessionID))
+			turnCtx, meta = WithTurnMeta(turnCtx)
+			p := "" // the coordinator drains its inbox via history, not a prompt
+			if attempt > 1 {
+				p = resumeContinuationPrompt("", prevOutput)
+			}
+			return r.runSessionTurn(turnCtx, agent, coordSessionID, p, true)
+		})
+	defer cancel()
 	r.untrackSession(coordSessionID)
 
 	// A watchdog cut (hard/idle) or a self-truncated loop hands back salvaged text;

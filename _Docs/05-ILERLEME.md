@@ -64,6 +64,33 @@
   `TestCoordinationToolsAreEager`, `TestEscalateCoordinatorStallHaltIsOneShot`,
   `TestStallHaltStopsIdleReconcile`, `TestToolCallClearsStallHalt`) ✅.
 
+## Boşta-zaman-aşımı tek-atımlık resume (2026-08-04) ✅
+
+- **Sorun (FND-708844f8):** boşta gözcüsü (`ErrTurnIdleTimeout`) turu döngü DIŞINDA
+  kesiyor; `recovery.go` kurtarma bütçeleri (`decideRecovery`) yalnız döngü-içi
+  hatalar için tasarlı olduğundan, döngü-dışı boşta zaman aşımı hiçbir bütçeye
+  girmiyor → kısmi iş kalıcı yarım kalıyordu. Faz E (2026-08-04, `1613777`/`6e0b1a8`)
+  bu kesintiyi **görünür** kıldı (unfinished notu + koordinatöre "timeout" sinyali)
+  ama **otomatik yeniden deneme** eklemedi.
+- **Çözüm (`internal/agent/turnoutcome.go`):** `runTurnWithIdleResume` helper'ı
+  turu, **yalnız `ErrTurnIdleTimeout`** ile kapandıysa taze boşta penceresiyle **bütçe
+  kadar** otomatik yeniden başlatır; her resume önceki denemenin kurtarılan fragmanını
+  `resumeContinuationPrompt` ile alır (kaldığı yerden sürer). **Sert tavan
+  (`ErrTurnHardTimeout`) resume edilmez.** Bütçe tükenince tur yine unfinished
+  raporlanır (Faz E) → koordinatör re-task (çift kurtarma değil, yerinde ilk savunma).
+  Worker'da `workerCtl` `setCancel`/metot-`cancel` ile thread-safe; `stop_worker` her
+  denemede uçuştaki turu keser.
+- **Ayarlanabilir bütçe (adım 2):** `Tunables.IdleResumeMax` (ayar `idleResumeMax`,
+  varsayılan `DefaultIdleResumeMax=1`, 0 = kapalı, [0,5] clamp) — settings.go/store.go/
+  api server + frontend "Boşta yeniden başlatma" input'u ile uçtan uca bağlandı.
+- **Koordinatör drain turu da kapsandı (adım 1):** `runCoordinatorTurn` de resume
+  kullanır; drain/stall makinesine şeffaf (`lastTurnUnix` tur sonrası,
+  `guardCoordinatorStall` yalnız temiz turda). Bağlı yollar: spawn / worker / inbox /
+  wake / schedule / koordinatör.
+- **Doğrulama:** `go build ./...` ✅, `go test ./internal/agent/... ./internal/settings/...
+  ./internal/api/...` ✅ (533 test, `idleresume_test.go` 8 senaryo dâhil), frontend
+  `tsc -b` ✅ + prettier ✅.
+
 ## Grep çoklu-path desteği (2026-08-04) ✅
 
 - **Sorun (FND-02391b62 · FND-be8c85b7 · FND-5253471e):** `Grep` `path` alanı tek

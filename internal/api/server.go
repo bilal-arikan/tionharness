@@ -263,6 +263,7 @@ func (s *Server) applySettings() {
 	s.tun.SetSpawnLimits(cur.SpawnMaxConcurrent, cur.SpawnMaxPerTurn)
 	s.tun.SetSpawnTimeoutMinutes(cur.SpawnTimeoutMin)
 	s.tun.SetSpawnIdleTimeoutMinutes(cur.SpawnIdleTimeoutMin)
+	s.tun.SetIdleResumeMax(cur.IdleResumeMax)
 	s.tun.SetScheduleTimeoutMinutes(cur.ScheduleTimeoutMin)
 	tools.SetShellTimeouts(cur.ShellDefaultTimeoutSec, cur.ShellMaxTimeoutSec)
 	tools.SetMaxToolOutputBytes(cur.MaxToolOutputKB * 1024)

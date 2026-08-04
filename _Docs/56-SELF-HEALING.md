@@ -100,6 +100,25 @@
   wake/schedule/inbox **ve koordinatör** turları da bu kurtarmayı kullanır;
   koordinatörde kesilmiş tur ayrıca spawn-narration stall kontrolünü atlar (yarıda
   kesilen tur bu heuristikle yargılanmaz).
+- **Ayarlanabilir boşta-resume** (`runTurnWithIdleResume`, bütçe
+  `Tunables.IdleResumeMax` = ayar `idleResumeMax`, varsayılan `DefaultIdleResumeMax=1`,
+  FND-708844f8): boşta gözcüsü döngü DIŞINDA tetiklendiğinden döngü-içi kurtarma
+  bütçelerine (`decideRecovery`) hiç girmez; bu yüzden bir kez sessizleşen tur (uzun
+  streaming-olmayan araç çağrısı, alt-ajan beklemesi) hiçbir bütçeye girmeden yarım
+  kalırdı. Artık tur **yalnız `ErrTurnIdleTimeout`** ile kesildiyse taze bir boşta
+  penceresiyle **bütçe kadar** (varsayılan 1) otomatik yeniden başlatılır; her resume,
+  önceki denemenin kurtarılan fragmanını `resumeContinuationPrompt` ile alır (baştan
+  başlamaz, kaldığı yerden sürer). **Sert tavan (`ErrTurnHardTimeout`) resume EDİLMEZ**
+  — tekrar aynı tavana çarpar. Bütçe tükenince tur yine "timeout"/unfinished olarak
+  raporlanır (Faz E) ve üst koordinatör onu yeniden görevlendirir (ÇİFT kurtarma değil:
+  resume, koordinatör re-task'ından ÖNCEKİ yerinde ilk savunma). Worker yolunda
+  `workerCtl` her denemede `setCancel` ile güncellenir, böylece koordinatörün
+  `stop_worker`'ı daima uçuştaki denemeyi keser. **Bağlı yollar: spawn / worker /
+  inbox / wake / schedule VE koordinatör drain turu** — koordinatörde resume,
+  drain/stall makinesine şeffaftır (`lastTurnUnix` tur sonrası damgalanır,
+  `guardCoordinatorStall` yalnız temiz turda koşar; resume-sonrası-idle tur truncated
+  kalıp atlanır). `idleResumeMax=0` özelliği tümüyle kapatır (Ayarlar ▸ Araçlar ▸
+  "Boşta yeniden başlatma", 0–5).
 
 ## Gözlemlenebilirlik
 - Yeni `debug.jsonl` olay türleri: `repair` (rule `Name`'de) ve `guardrail`

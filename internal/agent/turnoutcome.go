@@ -187,6 +187,104 @@ func (r *Runtime) reconcileTurnOutcome(ctx context.Context, output string, steps
 	return output, steps, nil, true
 }
 
+// The idle-resume budget is the out-of-loop analogue of the in-loop recovery budgets
+// in recovery.go. The idle watchdog fires OUTSIDE decideRecovery — the loop never
+// observes ErrTurnIdleTimeout, its context is simply cancelled under it — so a turn
+// that went quiet (a long non-streaming tool call that outran even the heartbeat, an
+// alt-agent wait) entered NO recovery budget and its partial work stayed permanently
+// half-done (FND-708844f8). runTurnWithIdleResume grants a configurable number of
+// automatic re-runs (Tunables.IdleResumeMax, default DefaultIdleResumeMax = 1) under
+// a fresh idle window before the turn is reported unfinished.
+//
+// Scope is deliberately narrow so it never fights the layers around it:
+//   - IDLE only. A HARD wall-clock cut is a real ceiling; resuming would just blow
+//     it again, so ErrTurnHardTimeout is never resumed (see turnHitIdleTimeout).
+//   - Bounded + single-shot by default. Once the budget is spent, the final idle cut
+//     is terminal and flows straight through to the "timeout"/unfinished reporting the
+//     caller already does (Faz E) — no unbounded loop, and no double recovery with the
+//     coordinator's higher-level re-task, which stays the SECOND line of defence after
+//     this in-place first attempt.
+
+// turnHitIdleTimeout reports whether ctx was cancelled specifically by the idle
+// watchdog (ErrTurnIdleTimeout), as opposed to the hard ceiling (ErrTurnHardTimeout),
+// a clean finish, or a human "Durdur" (context.Canceled). Only an idle cut is
+// eligible for the single-shot resume. Reads the cancellation CAUSE, which
+// withActivityTimeout records under WithCancelCause and keeps as the FIRST cause —
+// so a later stop() (context.Canceled) never masks an idle cut the timer already set.
+func turnHitIdleTimeout(ctx context.Context) bool {
+	return errors.Is(context.Cause(ctx), ErrTurnIdleTimeout)
+}
+
+// runTurnWithIdleResume runs a background turn via invoke and grants it the
+// idle-resume budget maxResume (Tunables.IdleResumeMax; 0 disables the resume). Each
+// attempt runs under its OWN fresh watchdog window (hard, idle); invoke receives that
+// per-attempt ctx, the 1-based attempt number, and the PRIOR attempt's salvaged
+// output ("" on the first) so a resume can continue from where the interrupted work
+// stopped rather than restart it — see resumeContinuationPrompt. The turn is re-run
+// iff the just-finished attempt closed specifically on ErrTurnIdleTimeout AND the
+// budget (maxResume) is not yet spent.
+//
+// It returns the FINAL attempt's (ctx, cancel, output, steps, err): the caller keeps
+// its usual `defer cancel()` and its classifyTurnOutcome/reconcileTurnOutcome read
+// the returned ctx, whose cancellation cause is that final attempt's — so a resumed
+// turn that also idles still reports "timeout"/unfinished exactly as an un-resumed one
+// would. Intermediate attempts' timers are released before the next window opens.
+// invoke also receives the attempt's cancel func so a caller that lets an OUTSIDE
+// goroutine abort the turn (the worker path, whose coordinator can stop_worker) can
+// re-point its controller at the attempt currently in flight — otherwise a resume
+// would leave the stop wired to the previous, already-cancelled attempt.
+func (r *Runtime) runTurnWithIdleResume(
+	parent context.Context,
+	hard, idle time.Duration,
+	maxResume int,
+	invoke func(attemptCtx context.Context, cancel context.CancelFunc, attempt int, prevOutput string) (string, []TurnStep, error),
+) (context.Context, func(), string, []TurnStep, error) {
+	var (
+		output string
+		steps  []TurnStep
+		err    error
+	)
+	for attempt := 1; ; attempt++ {
+		ctx, cancel := withActivityTimeout(parent, hard, idle)
+		output, steps, err = invoke(ctx, cancel, attempt, output)
+		// Resume ONLY on a genuine idle-watchdog cut, and only within budget (attempt
+		// counts from 1, so `attempt > maxResume` first trips after maxResume resumes;
+		// maxResume == 0 disables it outright). A hard cut, a clean finish, a
+		// loop-internal terminal marker, or a human stop are all ineligible: returning
+		// here hands the outcome to the caller's normal branch.
+		if attempt > maxResume || !turnHitIdleTimeout(ctx) {
+			return ctx, cancel, output, steps, err
+		}
+		cancel() // release this attempt's timers before opening the fresh window
+		r.logger.Warn("turn: idle-timeout resume",
+			"attempt", attempt, "maxResume", maxResume, "idleCap", idle, "hardCap", hard)
+	}
+}
+
+// resumeContinuationPrompt builds the user turn for an idle resume. The prior
+// attempt went quiet and was reclaimed mid-work; rather than restart from the
+// original prompt (which would redo the finished part), lead the model with what it
+// had already produced and tell it to continue. A blank fragment (the turn stalled
+// before emitting any text) falls back to the original task unchanged. A blank
+// original (a history-driven turn such as the coordinator drain, whose prompt is "")
+// drops the "Original task" tail so the model just continues from the fragment +
+// whatever the history-aware runner already composed.
+func resumeContinuationPrompt(original, fragment string) string {
+	fragment = strings.TrimSpace(fragment)
+	if fragment == "" {
+		return original
+	}
+	p := "Your previous attempt was interrupted — it went idle and was reclaimed by " +
+		"the activity watchdog before finishing. Here is the partial work you had " +
+		"produced:\n\n" + fragment + "\n\n---\n\nContinue from where you left off and " +
+		"finish the remaining work. Do NOT repeat what is already done, and break the " +
+		"rest into smaller steps so you keep emitting progress."
+	if strings.TrimSpace(original) != "" {
+		p += " Original task:\n\n" + original
+	}
+	return p
+}
+
 // formatMinutes renders a deadline the way the settings UI states it.
 func formatMinutes(d time.Duration) string {
 	if d < time.Minute {

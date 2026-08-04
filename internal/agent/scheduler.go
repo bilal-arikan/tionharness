@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/robfig/cron/v3"
@@ -249,16 +250,25 @@ func (s *Scheduler) deliverWake(ctx context.Context, sc db.Schedule) error {
 	// returns) would otherwise block every other turn on the session indefinitely —
 	// the slot's Cond wait ignores ctx, so nothing else could release it.
 	hardCap, idleCap := s.rt.tun.SpawnTimeout(), s.rt.tun.SpawnIdleTimeout()
-	turnBase, cancelTurn := withActivityTimeout(ctx, hardCap, idleCap)
-	defer cancelTurn()
-	wakeCtx := tools.WithAsyncChat(WithSessionID(WithCallKind(turnBase, KindSchedule), sc.SessionID))
-	wakeCtx, wakeMeta := WithTurnMeta(wakeCtx)
+	// Single-shot idle-resume (FND-708844f8): an idle-cut wake turn gets ONE more
+	// attempt under a fresh window before reconcileTurnOutcome marks it unfinished.
+	// Prefer the history-aware runner (installed by the api server) so the woken agent
+	// continues with the FULL conversation — the wake prompt was just persisted as the
+	// last user message, so the history already carries it; runSessionTurn falls back
+	// to the prompt-only invoke when no runner is wired.
+	var wakeMeta *turnMeta
 	wakeStart := time.Now()
-	// Prefer the history-aware runner (installed by the api server) so the woken
-	// agent continues with the FULL conversation — the wake prompt was just
-	// persisted as the last user message, so the history already carries it.
-	// runSessionTurn falls back to the prompt-only invoke when no runner is wired.
-	output, steps, invokeErr := s.rt.runSessionTurn(wakeCtx, agent, sc.SessionID, sc.Prompt, true)
+	turnBase, cancelTurn, output, steps, invokeErr := s.rt.runTurnWithIdleResume(ctx, hardCap, idleCap, s.rt.tun.IdleResumeMax(),
+		func(attemptCtx context.Context, _ context.CancelFunc, attempt int, prevOutput string) (string, []TurnStep, error) {
+			wakeCtx := tools.WithAsyncChat(WithSessionID(WithCallKind(attemptCtx, KindSchedule), sc.SessionID))
+			wakeCtx, wakeMeta = WithTurnMeta(wakeCtx)
+			p := sc.Prompt
+			if attempt > 1 {
+				p = resumeContinuationPrompt(sc.Prompt, prevOutput)
+			}
+			return s.rt.runSessionTurn(wakeCtx, agent, sc.SessionID, p, true)
+		})
+	defer cancelTurn()
 	// A watchdog cut / self-truncated loop hands back salvaged text; lead it with the
 	// outcome note (nil error) so it records as an explaining reply, not a clean one.
 	output, steps, invokeErr, truncated := s.rt.reconcileTurnOutcome(turnBase, output, steps, invokeErr, hardCap, idleCap)
@@ -470,12 +480,25 @@ func (s *Scheduler) deliverPrompt(ctx context.Context, sc db.Schedule) (string, 
 	// slot, so a hung turn must not block the session's queue forever (the slot's Cond
 	// wait ignores ctx).
 	hardCap, idleCap := s.rt.tun.SpawnTimeout(), s.rt.tun.SpawnIdleTimeout()
-	turnBase, cancelTurn := withActivityTimeout(ctx, hardCap, idleCap)
-	defer cancelTurn()
-	turnCtx, overflow := withOverflowFlag(WithSessionID(WithCallKind(turnBase, KindSchedule), session.ID))
-	turnCtx, meta := WithTurnMeta(turnCtx)
+	// Single-shot idle-resume (FND-708844f8): an idle-cut scheduled turn gets ONE more
+	// attempt under a fresh window before reconcileTurnOutcome marks it unfinished.
+	var (
+		overflow *atomic.Bool
+		meta     *turnMeta
+	)
 	turnStart := time.Now()
-	output, steps, err := s.rt.invokeTraced(turnCtx, agent, sc.Prompt, true) // scheduled = autonomous
+	turnBase, cancelTurn, output, steps, err := s.rt.runTurnWithIdleResume(ctx, hardCap, idleCap, s.rt.tun.IdleResumeMax(),
+		func(attemptCtx context.Context, _ context.CancelFunc, attempt int, prevOutput string) (string, []TurnStep, error) {
+			var turnCtx context.Context
+			turnCtx, overflow = withOverflowFlag(WithSessionID(WithCallKind(attemptCtx, KindSchedule), session.ID))
+			turnCtx, meta = WithTurnMeta(turnCtx)
+			p := sc.Prompt
+			if attempt > 1 {
+				p = resumeContinuationPrompt(sc.Prompt, prevOutput)
+			}
+			return s.rt.invokeTraced(turnCtx, agent, p, true) // scheduled = autonomous
+		})
+	defer cancelTurn()
 	s.rt.untrackSession(session.ID)
 	// A watchdog cut (hard/idle) or a self-truncated loop returns salvaged text that
 	// must not be recorded as a finished result: lead it with the outcome note and

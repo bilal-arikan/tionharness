@@ -169,6 +169,19 @@ export function ToolsPanel({ draft, set }: PanelProps) {
           />
         </Field>
         <Field
+          label="Boşta yeniden başlatma (adet)"
+          hint="Boşta izleyicisi bir arka-plan turunu kesince, kaldığı yerden sürmek için taze bir boşta penceresinde kaç kez otomatik yeniden başlatılacağı (varsayılan 1; 0 = kapalı). Sert süre tavanı yeniden başlatılmaz."
+        >
+          <input
+            type="number"
+            min={0}
+            max={5}
+            value={draft.idleResumeMax}
+            onChange={(e) => set('idleResumeMax', Number(e.target.value))}
+            className={inputCls}
+          />
+        </Field>
+        <Field
           label="Zamanlama süresi (dk)"
           hint="Bir zamanlanmış tetiğin (cron görev/prompt + schedule_wake) süre sınırı (varsayılan 30)."
         >
