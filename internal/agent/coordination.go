@@ -181,7 +181,7 @@ func (r *Runtime) coordinationFuncsFor(sess db.Session, callerID string) *tools.
 				TreeBudgetTotal: res.TreeBudgetTotal,
 			}, nil
 		}
-		f.Send = func(c context.Context, workerSessionID, message string) error {
+		f.Send = func(c context.Context, workerSessionID, message string) (tools.SendResult, error) {
 			return r.SendToWorker(c, coordID, workerSessionID, message)
 		}
 		f.Stop = func(c context.Context, workerSessionID string) error {
@@ -321,6 +321,11 @@ func (r *Runtime) isSessionActive(id string) bool {
 // IsSessionActive is isSessionActive for callers outside the package (the
 // coordinator-tree endpoint, which marks live nodes in the tree view).
 func (r *Runtime) IsSessionActive(id string) bool { return r.isSessionActive(id) }
+
+// HasQueuedMessage is the exported view of hasQueuedMessage for the api layer (the
+// coordinator tree endpoint), so a node with a parked send_to_worker follow-up can
+// show the same "queued" badge the flat roster does.
+func (r *Runtime) HasQueuedMessage(id string) bool { return r.hasQueuedMessage(id) }
 
 // WorkerSpec describes one spawn_worker request beyond the plain target/task
 // pair: whether the new worker is itself a coordinator (the nesting switch) and,
@@ -618,30 +623,59 @@ func (r *Runtime) resolveWorkerTarget(ctx context.Context, coordSessionID, baseA
 // its turn again (history-aware, so it continues with full context), notifying the
 // coordinator on completion — the "continue" mechanism (Claude Code's SendMessage
 // to a worker). The worker must belong to this coordinator.
-func (r *Runtime) SendToWorker(ctx context.Context, coordSessionID, workerSessionID, message string) error {
+func (r *Runtime) SendToWorker(ctx context.Context, coordSessionID, workerSessionID, message string) (tools.SendResult, error) {
 	coordSessionID = strings.TrimSpace(coordSessionID)
 	workerSessionID = strings.TrimSpace(workerSessionID)
 	message = strings.TrimSpace(message)
 	if workerSessionID == "" || message == "" {
-		return fmt.Errorf("send_to_worker requires a worker session id and a message")
+		return tools.SendResult{}, fmt.Errorf("send_to_worker requires a worker session id and a message")
 	}
 	ws, err := r.db.GetSession(ctx, workerSessionID)
 	if err != nil {
-		return fmt.Errorf("worker session %s not found: %w", workerSessionID, err)
+		return tools.SendResult{}, fmt.Errorf("worker session %s not found: %w", workerSessionID, err)
 	}
 	if ws.CoordinatorSessionID != coordSessionID {
-		return fmt.Errorf("session %s is not a worker of this coordinator", workerSessionID)
-	}
-	if r.isSessionActive(workerSessionID) {
-		return fmt.Errorf("worker %s is still running its previous turn; wait for it to finish or stop_worker first", workerSessionID)
+		return tools.SendResult{}, fmt.Errorf("session %s is not a worker of this coordinator", workerSessionID)
 	}
 	agent, err := r.db.GetAgent(ctx, ws.AgentID)
 	if err != nil {
-		return fmt.Errorf("worker agent gone: %w", err)
+		return tools.SendResult{}, fmt.Errorf("worker agent gone: %w", err)
 	}
-	// Same depth-aware reservation as a fresh spawn: continuing a deep worker is
-	// just as capable of draining the pool as starting one.
-	if !r.acquireSpawnSlotAtDepth(ws.CoordinatorDepth) {
+
+	// Backpressure instead of rejection: a worker mid-turn no longer loses the
+	// message. The busy-check and the enqueue are done under workerQueueMu in one
+	// critical section so they stay atomic against drainWorkerQueue, which pops
+	// under the same mutex once the turn ends (see runWorker's deferred drain).
+	// isSessionActive flips false BEFORE that drain runs, so any message accepted
+	// here (active == true) is guaranteed to be seen by the drain — no lost update.
+	r.workerQueueMu.Lock()
+	if r.isSessionActive(workerSessionID) {
+		if _, exists := r.workerQueue[workerSessionID]; exists {
+			r.workerQueueMu.Unlock()
+			return tools.SendResult{}, fmt.Errorf("worker %s already has a queued message waiting for its current turn to finish; "+
+				"wait for that to be delivered before sending another (only one may be queued per worker)", workerSessionID)
+		}
+		r.workerQueue[workerSessionID] = message
+		r.workerQueueMu.Unlock()
+		return tools.SendResult{Queued: true, RunningForSeconds: r.workerRunningForSeconds(workerSessionID)}, nil
+	}
+	r.workerQueueMu.Unlock()
+
+	// Worker is idle: deliver immediately (same depth-aware slot reservation as a
+	// fresh spawn — continuing a deep worker drains the pool just as a spawn does).
+	if err := r.dispatchWorkerTurn(ctx, agent, workerSessionID, message, coordSessionID, ws.CoordinatorDepth); err != nil {
+		return tools.SendResult{}, err
+	}
+	return tools.SendResult{Delivered: true}, nil
+}
+
+// dispatchWorkerTurn reserves a background slot, records the follow-up as an
+// injected user note, and launches the worker's turn goroutine. Shared by the
+// immediate send_to_worker path and the queued-message drain; the busy / queue
+// guard lives in the callers. The workerRunFn seam replaces the goroutine in
+// tests so the queue's accept/refuse/deliver logic runs without a live provider.
+func (r *Runtime) dispatchWorkerTurn(ctx context.Context, agent db.Agent, workerSessionID, message, coordSessionID string, depth int) error {
+	if !r.acquireSpawnSlotAtDepth(depth) {
 		return fmt.Errorf("background turn limit reached; try again once some finish")
 	}
 	if _, err := r.recordInjectedUserNote(ctx, workerSessionID, "", message); err != nil {
@@ -651,8 +685,69 @@ func (r *Runtime) SendToWorker(ctx context.Context, coordSessionID, workerSessio
 	slot := r.coordSlotFor(coordSessionID)
 	slot.workers.Add(1)
 	slot.markHadWorkers()
+	if r.workerRunFn != nil {
+		// Test seam: the caller counts the slots, so mirror the real path's release.
+		defer r.releaseSpawnSlot()
+		defer slot.workers.Add(-1)
+		r.workerRunFn(agent, workerSessionID, message, coordSessionID)
+		return nil
+	}
 	go r.runWorker(agent, workerSessionID, message, coordSessionID)
 	return nil
+}
+
+// workerRunningForSeconds returns how long the worker's in-flight turn has been
+// running, or 0 when that is unknown (no live workerCtl — e.g. a turn opened
+// directly on the worker session rather than through the coordinator). Reported
+// to the coordinator so a queued send conveys "busy, not stuck".
+func (r *Runtime) workerRunningForSeconds(workerSessionID string) int64 {
+	if v, ok := r.workerCancels.Load(workerSessionID); ok {
+		if secs := int64(time.Since(v.(*workerCtl).startedAt).Seconds()); secs > 0 {
+			return secs
+		}
+	}
+	return 0
+}
+
+// hasQueuedMessage reports whether a follow-up is parked in the worker's
+// single-slot queue (surfaced to the coordination UI as a "queued" badge).
+func (r *Runtime) hasQueuedMessage(workerSessionID string) bool {
+	r.workerQueueMu.Lock()
+	_, ok := r.workerQueue[workerSessionID]
+	r.workerQueueMu.Unlock()
+	return ok
+}
+
+// drainWorkerQueue delivers a follow-up parked while the worker was mid-turn. It
+// runs as runWorker's LAST deferred action — after every slot release and after
+// untrackSession, so isSessionActive is already false and the delivery re-runs
+// the worker cleanly. The pop is done under workerQueueMu (the same mutex
+// SendToWorker enqueues under) so an enqueue that raced the turn end is either
+// fully visible here or already took the idle path. Runs on context.Background:
+// the worker turn's ctx is cancelled by now.
+func (r *Runtime) drainWorkerQueue(agent db.Agent, workerSessionID, coordSessionID string) {
+	r.workerQueueMu.Lock()
+	message, ok := r.workerQueue[workerSessionID]
+	if ok {
+		delete(r.workerQueue, workerSessionID)
+	}
+	r.workerQueueMu.Unlock()
+	if !ok {
+		return
+	}
+	ctx := context.Background()
+	depth := 0
+	if ws, err := r.db.GetSession(ctx, workerSessionID); err == nil {
+		depth = ws.CoordinatorDepth
+	}
+	if err := r.dispatchWorkerTurn(ctx, agent, workerSessionID, message, coordSessionID, depth); err != nil {
+		// The queued turn could not be launched (pool exhausted / DB error). Surface
+		// it to the coordinator rather than dropping the message silently, so it can
+		// react instead of waiting forever for a notification that will never come.
+		r.NotifyCoordinator(coordSessionID, fmt.Sprintf(
+			"<task-notification worker=%q status=\"failed\">Queued follow-up to worker %s could not be delivered: %v</task-notification>",
+			workerSessionID, workerSessionID, err))
+	}
 }
 
 // StopWorker cancels an in-flight worker turn. The worker's current turn ends and
@@ -718,6 +813,11 @@ type WorkerInfo struct {
 	// branch. The UI shows this differently ("delegating") because "running" would
 	// suggest a live turn whose elapsed time is meaningful.
 	Delegating bool
+	// Queued reports that a follow-up (send_to_worker) is parked in this worker's
+	// single-slot queue, waiting for its current turn to finish. Only meaningful
+	// while Running: the UI shows a "queued" badge so the coordinator can see the
+	// message landed and will be delivered, rather than assuming it was lost.
+	Queued bool
 }
 
 // ListWorkers returns the workers spawned under a coordinator session, newest
@@ -761,6 +861,7 @@ func (r *Runtime) workerInfoFor(ctx context.Context, s db.Session) WorkerInfo {
 		if v, ok := r.workerCancels.Load(s.ID); ok {
 			info.StartedAt = v.(*workerCtl).startedAt.Unix()
 		}
+		info.Queued = r.hasQueuedMessage(s.ID)
 	} else if msgs, err := r.db.ListMessages(ctx, s.ID); err == nil {
 		for i := len(msgs) - 1; i >= 0; i-- {
 			if msgs[i].Role == "assistant" {
@@ -779,6 +880,11 @@ func (r *Runtime) workerInfoFor(ctx context.Context, s db.Session) WorkerInfo {
 // It mirrors runSpawn but is coordinator-aware and notifies on EVERY outcome
 // (completed / failed / killed), unlike a plain spawn.
 func (r *Runtime) runWorker(agent db.Agent, workerSessionID, prompt, coordSessionID string) {
+	// Registered FIRST so it runs LAST — after every slot release, workerCancels
+	// delete, and untrackSession below. Only then is the worker idle enough for a
+	// parked follow-up (send_to_worker while this turn was busy) to be delivered as
+	// the next turn. No-op when nothing was queued.
+	defer r.drainWorkerQueue(agent, workerSessionID, coordSessionID)
 	defer r.releaseSpawnSlot()
 	if slot := r.coordSlotFor(coordSessionID); slot != nil {
 		defer slot.workers.Add(-1)

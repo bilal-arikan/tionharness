@@ -127,6 +127,7 @@ func (s *Server) handleListWorkers(w http.ResponseWriter, r *http.Request) {
 			"title":      wk.Title,
 			"running":    wk.Running,
 			"delegating": wk.Delegating,
+			"queued":     wk.Queued,
 			"summary":    wk.Summary,
 			"startedAt":  wk.StartedAt,
 		})
@@ -165,6 +166,10 @@ func (s *Server) handleSessionCoordinatorTree(w http.ResponseWriter, r *http.Req
 			"isCoordinator":   sess.IsCoordinator(),
 			"state":           sess.State,
 			"running":         wsp.Runtime.IsSessionActive(sess.ID),
+			// A parked send_to_worker follow-up, delivered when this node's turn ends —
+			// the same signal the flat roster badges, surfaced here so a queued message
+			// on a deep node is visible from the root too.
+			"queued": wsp.Runtime.HasQueuedMessage(sess.ID),
 			// Health, so a broken branch is visible from the root instead of only
 			// inside the session that broke. A tree is exactly where this matters:
 			// the deeper a failure sits, the less likely anyone opens that session.

@@ -91,6 +91,31 @@
   ./internal/api/...` ✅ (533 test, `idleresume_test.go` 8 senaryo dâhil), frontend
   `tsc -b` ✅ + prettier ✅.
 
+## send_to_worker meşgul-worker kuyruğu (2026-08-04) ✅
+
+- **Sorun (FND-befa7846 · FND-c28c48d0 · FND-4ff2cecc):** Koordinatör bir worker'a
+  `send_to_worker` çağırdığında worker hâlâ önceki turunu işliyorsa çağrı
+  `worker ... is still running its previous turn` ile **reddediliyordu**; mesaj
+  kayboluyor, tek çare yıkıcı `stop_worker` oluyordu. Worker başına backpressure yoktu.
+- **Çözüm (`internal/agent/coordination.go` + `runtime.go` + `tools/builtin_coordination.go`):**
+  worker başına **tek-slotluk bekleyen-mesaj kuyruğu** (`workerQueueMu` +
+  `workerQueue`). `SendToWorker`: worker boşsa hemen teslim (`Delivered`), meşgulse
+  mesajı kuyruğa park eder (`Queued`, çalışan turun süresi + "meşgul, tıkalı değil"
+  ipucu ile) → gereksiz `stop_worker`ı önler; kuyruk doluysa ikinci mesaj **net hata**.
+  Teslim `runWorker`'ın en-son çalışan `defer drainWorkerQueue`'una bağlı: tüm slot
+  release + `untrackSession`'dan sonra kuyruğu `workerQueueMu` altında pop edip
+  sıradaki turu başlatır (teslim edilemezse koordinatöre `failed` bildirimi). Busy-check
+  + enqueue tek kritik bölümde → lost-update/TOCTOU yok. `Send`/`SendToWorker` imzası
+  artık `(tools.SendResult, error)`.
+- **Doğrulama:** `go build ./internal/agent/... ./internal/tools/...` ✅,
+  `go test ./internal/agent ./internal/tools` ✅ (585 test; yeni `worker_queue_test.go`:
+  busy→queued, ikinci mesaj→hata, tur bitince teslim, boş→hemen teslim).
+- **UI:** `WorkerInfo.Queued` + `GET /sessions/{id}/workers` `queued` alanı; koordinasyon
+  panelinde çalışan+bekleyen worker'a **"kuyrukta"** rozeti (`CoordinatorSection.tsx`).
+  Backend+frontend: `go test ./internal/agent ./internal/api ./internal/tools` → 772 test ✅.
+- Ayrıntı: `_Docs/47` (§10 "send_to_worker meşgul-worker kuyruğu"). Prompt/SKILL notu:
+  `internal/prompts/defaults/coordinator.md` + `internal/skills/.../tionswarm-coordinator/SKILL.md`.
+
 ## Grep çoklu-path desteği (2026-08-04) ✅
 
 - **Sorun (FND-02391b62 · FND-be8c85b7 · FND-5253471e):** `Grep` `path` alanı tek

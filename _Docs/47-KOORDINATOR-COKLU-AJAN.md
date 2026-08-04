@@ -615,6 +615,55 @@ hızlı-ret UX olarak kalır, slot gerçek garantidir. (Serileştirme primitifi
 
 Kalan kapsam dışı: `flow.go` (flow-run oturumları interaktif/otonom tur almaz).
 
+### `send_to_worker` meşgul-worker kuyruğu (WS17, 2026-08-04)
+
+**Sorun** (FND-befa7846 / FND-c28c48d0 / FND-4ff2cecc): worker hâlâ önceki turunu
+işlerken `send_to_worker` çağrısı `worker ... is still running its previous turn`
+ile **reddediliyordu**; mesaj kayboluyor, tek çare yıkıcı `stop_worker` oluyordu.
+Worker başına backpressure yoktu.
+
+**Çözüm — tek-slotluk bekleyen-mesaj kuyruğu.** `Runtime`'a `workerQueueMu` +
+`workerQueue map[string]string` (worker oturum id → bekleyen mesaj) eklendi.
+`SendToWorker` artık:
+
+- Worker **boşsa** → mesajı hemen teslim eder (`dispatchWorkerTurn`), `SendResult{Delivered:true}`.
+- Worker **meşgulse** (`isSessionActive`) → mesajı kuyruğa park eder,
+  `SendResult{Queued:true, RunningForSeconds:...}` döner (koordinatör böylece
+  worker'ın "meşgul, tıkalı değil" olduğunu görüp gereksiz `stop_worker`a
+  yönelmez). Kuyruk **zaten doluysa** ikinci mesaj **net hata** ile reddedilir
+  (worker başına yalnız bir bekleyen mesaj).
+
+**Teslim** worker tur-yaşam döngüsüne bağlıdır: `runWorker` en başta
+`defer r.drainWorkerQueue(...)` kaydeder → tüm slot release'leri ve
+`untrackSession`'dan **sonra** (LIFO) çalışır. `drainWorkerQueue` kuyruğu
+`workerQueueMu` altında pop eder ve varsa `dispatchWorkerTurn` ile sıradaki turu
+başlatır; teslim edilemezse (havuz/DB hatası) sessizce düşürmez, koordinatöre
+`failed` task-notification yollar.
+
+**Yarış güvenliği:** busy-check + enqueue tek kritik bölümde (`workerQueueMu`);
+`isSessionActive` drain'den **önce** false'a döndüğü için, kabul edilen her mesajı
+(active==true iken) drain kesinlikle görür — lost-update yok. Kuyruk erişimi hep
+mutex altında; TOCTOU'ya yer bırakılmaz. `dispatchWorkerTurn` üstündeki `workerRunFn`
+test tohumu, canlı sağlayıcı olmadan accept/refuse/deliver mantığını koşturur
+(`worker_queue_test.go`: busy→queued, ikinci mesaj→hata, tur bitince teslim, boş→hemen).
+İmza değişikliği: `CoordinationFuncs.Send` ve `SendToWorker` artık
+`(tools.SendResult, error)` döner; `send_to_worker` tool'u queued/delivered'a göre
+farklı özet basar.
+
+**UI:** `WorkerInfo`'ya `Queued bool` eklendi (`workerInfoFor` çalışan worker için
+`hasQueuedMessage`'i okur); `GET /sessions/{id}/workers` yanıtında `queued` alanı
+çıkar. Koordinasyon panelindeki worker roster'ı (`CoordinatorSection.tsx`) çalışan +
+bekleyen-mesajı olan worker'a **"kuyrukta"** rozeti (`Inbox` ikonu, warning rengi)
+gösterir → koordinatör mesajın düştüğünü değil kuyruğa alındığını görür. Roster
+mevcut worker-bus olayları/`refreshKey` ile tazelendiği için teslimde rozet
+kendiliğinden kalkar.
+
+**Koordinatör ağacı** (`CoordinatorTreeView.tsx`) da aynı sinyali taşır: tree
+endpoint (`handleSessionCoordinatorTree`) her node için `HasQueuedMessage`'i
+(`IsSessionActive` gibi dışa-açık sarmalayıcı) okuyup `queued` alanı ekler; çalışan +
+bekleyen node'a küçük `Inbox` işareti + tooltip düşer. Böylece derin bir node'daki
+bekleyen mesaj kökten de görünür.
+
 ---
 
 ## 11. Workflow Desenleri (skill'e eklendi, 2026-07-14)
