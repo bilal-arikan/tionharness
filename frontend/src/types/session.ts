@@ -340,6 +340,11 @@ export interface WorkerInfo {
   // branch. Shown as "delegating" rather than "running", because there is no live
   // turn whose elapsed time would mean anything.
   delegating?: boolean
+  // True while a follow-up (send_to_worker) is parked in this worker's single-slot
+  // queue, waiting for the current turn to finish. Shown as a "queued" badge so the
+  // coordinator sees the message landed and will be delivered, not lost. Only
+  // meaningful while running.
+  queued?: boolean
 }
 
 // CoordinatorTreeNode is one session in a coordinator tree

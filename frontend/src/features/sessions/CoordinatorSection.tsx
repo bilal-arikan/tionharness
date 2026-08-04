@@ -9,6 +9,7 @@ import {
   ChevronRight,
   Workflow,
   ArrowLeft,
+  Inbox,
 } from 'lucide-react'
 import { api } from '@/api'
 import { InfoPopover } from '@/shared/components/InfoPopover'
@@ -328,7 +329,23 @@ export function CoordinatorSection({
                               Labelling it "çalışıyor" would suggest an answer is coming;
                               labelling it "bitti" would be worse still — its result does
                               not exist yet. */}
-                              <span className="ml-auto text-[9px] uppercase tracking-wide text-[var(--color-text-dim)]">
+                              {/* A parked follow-up (send_to_worker while the worker was
+                              busy): it will be delivered the instant this turn ends. The
+                              badge tells the coordinator the message landed, so it need
+                              not resend or reach for stop_worker. */}
+                              {w.running && w.queued && (
+                                <span
+                                  title="Bekleyen mesaj: bu tur bitince otomatik teslim edilecek"
+                                  className="ml-auto flex items-center gap-1 rounded-full bg-[var(--color-warning)]/10 px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide text-[var(--color-warning)]"
+                                >
+                                  <Inbox size={9} className="shrink-0" /> kuyrukta
+                                </span>
+                              )}
+                              <span
+                                className={`text-[9px] uppercase tracking-wide text-[var(--color-text-dim)] ${
+                                  w.running && w.queued ? '' : 'ml-auto'
+                                }`}
+                              >
                                 {w.delegating ? 'dağıtıyor' : w.running ? 'çalışıyor' : 'bitti'}
                               </span>
                             </div>

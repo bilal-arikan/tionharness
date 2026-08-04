@@ -639,6 +639,14 @@ test tohumu, canlı sağlayıcı olmadan accept/refuse/deliver mantığını ko�
 `(tools.SendResult, error)` döner; `send_to_worker` tool'u queued/delivered'a göre
 farklı özet basar.
 
+**UI:** `WorkerInfo`'ya `Queued bool` eklendi (`workerInfoFor` çalışan worker için
+`hasQueuedMessage`'i okur); `GET /sessions/{id}/workers` yanıtında `queued` alanı
+çıkar. Koordinasyon panelindeki worker roster'ı (`CoordinatorSection.tsx`) çalışan +
+bekleyen-mesajı olan worker'a **"kuyrukta"** rozeti (`Inbox` ikonu, warning rengi)
+gösterir → koordinatör mesajın düştüğünü değil kuyruğa alındığını görür. Roster
+mevcut worker-bus olayları/`refreshKey` ile tazelendiği için teslimde rozet
+kendiliğinden kalkar.
+
 ---
 
 ## 11. Workflow Desenleri (skill'e eklendi, 2026-07-14)

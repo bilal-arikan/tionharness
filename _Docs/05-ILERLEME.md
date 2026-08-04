@@ -21,6 +21,9 @@
 - **Doğrulama:** `go build ./internal/agent/... ./internal/tools/...` ✅,
   `go test ./internal/agent ./internal/tools` ✅ (585 test; yeni `worker_queue_test.go`:
   busy→queued, ikinci mesaj→hata, tur bitince teslim, boş→hemen teslim).
+- **UI:** `WorkerInfo.Queued` + `GET /sessions/{id}/workers` `queued` alanı; koordinasyon
+  panelinde çalışan+bekleyen worker'a **"kuyrukta"** rozeti (`CoordinatorSection.tsx`).
+  Backend+frontend: `go test ./internal/agent ./internal/api ./internal/tools` → 772 test ✅.
 - Ayrıntı: `_Docs/47` (§10 "send_to_worker meşgul-worker kuyruğu"). Prompt/SKILL notu:
   `internal/prompts/defaults/coordinator.md` + `internal/skills/.../tionswarm-coordinator/SKILL.md`.
 

@@ -109,6 +109,7 @@ func (s *Server) handleListWorkers(w http.ResponseWriter, r *http.Request) {
 			"title":      wk.Title,
 			"running":    wk.Running,
 			"delegating": wk.Delegating,
+			"queued":     wk.Queued,
 			"summary":    wk.Summary,
 			"startedAt":  wk.StartedAt,
 		})

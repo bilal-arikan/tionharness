@@ -571,6 +571,15 @@ func (r *Runtime) workerRunningForSeconds(workerSessionID string) int64 {
 	return 0
 }
 
+// hasQueuedMessage reports whether a follow-up is parked in the worker's
+// single-slot queue (surfaced to the coordination UI as a "queued" badge).
+func (r *Runtime) hasQueuedMessage(workerSessionID string) bool {
+	r.workerQueueMu.Lock()
+	_, ok := r.workerQueue[workerSessionID]
+	r.workerQueueMu.Unlock()
+	return ok
+}
+
 // drainWorkerQueue delivers a follow-up parked while the worker was mid-turn. It
 // runs as runWorker's LAST deferred action — after every slot release and after
 // untrackSession, so isSessionActive is already false and the delivery re-runs
@@ -666,6 +675,11 @@ type WorkerInfo struct {
 	// branch. The UI shows this differently ("delegating") because "running" would
 	// suggest a live turn whose elapsed time is meaningful.
 	Delegating bool
+	// Queued reports that a follow-up (send_to_worker) is parked in this worker's
+	// single-slot queue, waiting for its current turn to finish. Only meaningful
+	// while Running: the UI shows a "queued" badge so the coordinator can see the
+	// message landed and will be delivered, rather than assuming it was lost.
+	Queued bool
 }
 
 // ListWorkers returns the workers spawned under a coordinator session, newest
@@ -709,6 +723,7 @@ func (r *Runtime) workerInfoFor(ctx context.Context, s db.Session) WorkerInfo {
 		if v, ok := r.workerCancels.Load(s.ID); ok {
 			info.StartedAt = v.(*workerCtl).startedAt.Unix()
 		}
+		info.Queued = r.hasQueuedMessage(s.ID)
 	} else if msgs, err := r.db.ListMessages(ctx, s.ID); err == nil {
 		for i := len(msgs) - 1; i >= 0; i-- {
 			if msgs[i].Role == "assistant" {
