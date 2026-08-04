@@ -26,12 +26,20 @@ type Store interface {
 	ListMessages(ctx context.Context, sessionID string) ([]db.Message, error)
 	ListWaitingSessionAsks(ctx context.Context) ([]db.SessionAsk, error)
 	ListTasks(ctx context.Context) ([]db.Task, error)
+	ListAgents(ctx context.Context) ([]db.Agent, error)
+	ListSessions(ctx context.Context, agentID string) ([]db.Session, error)
+	ListFlowRuns(ctx context.Context, flowID string) ([]db.FlowRun, error)
+	ListSchedules(ctx context.Context) ([]db.Schedule, error)
+	WorkspaceTokensToday(ctx context.Context) int64
 }
 
-// BoardRefID is the id a board ref carries. The board is the workspace's single
-// kanban, so it has no id of its own; naming it keeps Ref uniform (every ref has
-// an id) instead of special-casing an empty one.
-const BoardRefID = "board"
+// BoardRefID / WorkspaceRefID are the ids a board or workspace ref carries. Both
+// are singletons within a workspace and have no id of their own; naming them
+// keeps Ref uniform (every ref has an id) instead of special-casing an empty one.
+const (
+	BoardRefID     = "board"
+	WorkspaceRefID = "workspace"
+)
 
 // Projector resolves a Ref against a store and renders the matching projection.
 type Projector struct {
@@ -73,9 +81,59 @@ func (p *Projector) Project(ctx context.Context, ref Ref, level Level, lens Lens
 			return View{}, fmt.Errorf("view: board: %w", err)
 		}
 		return ProjectBoard(BoardInput{Tasks: tasks}, level, lens)
+	case KindSpace:
+		in, err := p.loadWorkspace(ctx)
+		if err != nil {
+			return View{}, err
+		}
+		return ProjectWorkspace(in, level, lens)
 	default:
 		return View{}, fmt.Errorf("view: unsupported kind %q", ref.Kind)
 	}
+}
+
+// loadWorkspace gathers the roll-up inputs. Every one of these is an in-memory
+// store read, so a workspace view costs no disk I/O regardless of how much
+// history the workspace has — that is what makes it cheap enough to poll.
+//
+// A failure in any single source fails the whole projection rather than
+// rendering a partial workspace: a dashboard silently missing its flow runs
+// would read as "no runs", which is the opposite of the truth.
+func (p *Projector) loadWorkspace(ctx context.Context) (WorkspaceInput, error) {
+	agents, err := p.store.ListAgents(ctx)
+	if err != nil {
+		return WorkspaceInput{}, fmt.Errorf("view: workspace agents: %w", err)
+	}
+	sessions, err := p.store.ListSessions(ctx, "")
+	if err != nil {
+		return WorkspaceInput{}, fmt.Errorf("view: workspace sessions: %w", err)
+	}
+	tasks, err := p.store.ListTasks(ctx)
+	if err != nil {
+		return WorkspaceInput{}, fmt.Errorf("view: workspace tasks: %w", err)
+	}
+	runs, err := p.store.ListFlowRuns(ctx, "")
+	if err != nil {
+		return WorkspaceInput{}, fmt.Errorf("view: workspace flow runs: %w", err)
+	}
+	schedules, err := p.store.ListSchedules(ctx)
+	if err != nil {
+		return WorkspaceInput{}, fmt.Errorf("view: workspace schedules: %w", err)
+	}
+	asks, err := p.store.ListWaitingSessionAsks(ctx)
+	if err != nil {
+		return WorkspaceInput{}, fmt.Errorf("view: workspace asks: %w", err)
+	}
+
+	return WorkspaceInput{
+		Agents:      agents,
+		Sessions:    sessions,
+		Tasks:       tasks,
+		FlowRuns:    runs,
+		Schedules:   schedules,
+		WaitingAsks: asks,
+		TokensToday: p.store.WorkspaceTokensToday(ctx),
+	}, nil
 }
 
 // loadSession gathers the session header, its usage rollup, the transcript TAIL

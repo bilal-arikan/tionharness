@@ -36,6 +36,10 @@ func (GetViewTool) Def() providers.ToolDef {
 			"what failed. sub=<nodeId> drills into one node.\n" +
 			"  session — a conversation. Cost, checklist progress, the last failure, stuck-turn count, a " +
 			"pending question, handoff lineage and coordinator role — WITHOUT reading the transcript.\n" +
+			"  workspace — the whole workspace: agent/session/card/run counts, today's token " +
+			"spend, and the signals worth acting on (stuck sessions, pending questions, failed " +
+			"runs, broken schedules, stale cards). Start here when asked \"what is going on?\". " +
+			"Use id='workspace'.\n" +
 			"  board   — the kanban. Column histogram plus the signals that matter: cards stuck in a " +
 			"working column, failed cards, dependency-blocked cards, overdue cards, recent movement. " +
 			"Use id='board'.\n\n" +
@@ -49,8 +53,8 @@ func (GetViewTool) Def() providers.ToolDef {
 		InputSchema: json.RawMessage(`{
   "type": "object",
   "properties": {
-    "kind": { "type": "string", "enum": ["flowrun","session","board"], "description": "Entity type to project." },
-    "id": { "type": "string", "description": "Entity id (a flow run id, a session id, or 'board' for the kanban)." },
+    "kind": { "type": "string", "enum": ["flowrun","session","board","workspace"], "description": "Entity type to project." },
+    "id": { "type": "string", "description": "Entity id (a flow run id, a session id, or 'board'/'workspace' for the singletons)." },
     "sub": { "type": "string", "description": "Optional drill-down target inside the entity (a node id for a flow run)." },
     "level": { "type": "string", "enum": ["tiny","card","full"], "description": "Budget tier (default card)." },
     "lens": { "type": "string", "enum": ["health","stale","recent","errors"], "description": "Which facts matter (default health)." }
@@ -60,6 +64,7 @@ func (GetViewTool) Def() providers.ToolDef {
 }`),
 		Examples: []json.RawMessage{
 			json.RawMessage(`{"kind":"flowrun","id":"RUN7f2"}`),
+			json.RawMessage(`{"kind":"workspace","id":"workspace"}`),
 			json.RawMessage(`{"kind":"board","id":"board","lens":"stale"}`),
 			json.RawMessage(`{"kind":"session","id":"SES9a1","level":"full"}`),
 			json.RawMessage(`{"kind":"flowrun","id":"RUN7f2","sub":"fetch-b"}`),
@@ -83,10 +88,13 @@ func (t GetViewTool) Call(ctx context.Context, input json.RawMessage) (string, e
 	}
 	kind := view.Kind(strings.TrimSpace(in.Kind))
 	id := strings.TrimSpace(in.ID)
-	// The board is the workspace's single kanban and has no id of its own, so an
-	// omitted id there is not a mistake to reject.
-	if id == "" && kind == view.KindBoard {
+	// The board and the workspace are singletons with no id of their own, so an
+	// omitted id for those is not a mistake to reject.
+	switch {
+	case id == "" && kind == view.KindBoard:
 		id = view.BoardRefID
+	case id == "" && kind == view.KindSpace:
+		id = view.WorkspaceRefID
 	}
 	if id == "" {
 		return "", fmt.Errorf("get_view: id is required")

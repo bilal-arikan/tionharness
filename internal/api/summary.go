@@ -11,6 +11,7 @@ import (
 	"github.com/bilal-arikan/tionswarm/internal/conversation"
 	"github.com/bilal-arikan/tionswarm/internal/db"
 	"github.com/bilal-arikan/tionswarm/internal/providers"
+	"github.com/bilal-arikan/tionswarm/internal/sessionhub"
 	"github.com/bilal-arikan/tionswarm/internal/workspace"
 )
 
@@ -46,56 +47,56 @@ func (s *Server) handleSessionSummary(w http.ResponseWriter, r *http.Request) {
 	}
 	kind := strings.TrimSpace(req.Kind)
 
-	// Resolve the header + body for this command. compact is handled specially;
-	// the rest go through the model-summary path.
-	var header, body string
-	switch kind {
-	case "compact":
-		header = "🗜 **Sohbet sıkıştırma**"
-		cbody, cerr := s.compactSession(ctx, wsp, session)
-		if cerr != nil {
-			writeError(w, http.StatusInternalServerError, "compact failed: "+cerr.Error())
-			return
-		}
-		body = cbody
-	case "refresh-context":
-		// Prompt-epoch explicit adopt: drop the session's frozen prompt snapshot so
-		// the next turn recomposes tools + static system from live state (a chosen
-		// one-time cache re-write). No-op text when the feature is off.
-		header = "🔄 **Bağlam yenileme**"
-		if wsp.Runtime.PromptEpochEnabled() {
-			wsp.Runtime.RefreshPromptEpoch(ctx, session.ID)
-			body = "Statik bağlam snapshot'ı temizlendi: bir sonraki tur güncel araç kataloğu, skill listesi ve talimatlarla yeniden derlenecek (bilinçli tek seferlik cache yeniden yazımı)."
-		} else {
-			body = "Prompt-epoch (donmuş bağlam snapshot'ı) bu workspace'te kapalı; her tur zaten canlı durumdan derleniyor — yenilenecek bir snapshot yok."
-		}
-	default:
-		h, ok := summaryHeaders[kind]
-		if !ok {
-			writeError(w, http.StatusBadRequest, "unknown summary kind: "+kind)
-			return
-		}
-		header = h
-		summary, serr := wsp.Runtime.Summarize(ctx, session.AgentID, kind)
-		if serr != nil {
-			// Log before returning the 500: the funnel logs provider errors, but a
-			// data-gathering failure would otherwise leave only the HTTP response —
-			// match the title endpoints, which always log a degraded result.
-			s.logger.Warn("summary generation failed", "session", session.ID, "kind", kind, "error", serr)
-			writeError(w, http.StatusInternalServerError, "summary failed: "+serr.Error())
-			return
-		}
-		body = summary
+	// Validate the command up-front so an unknown kind fails cleanly BEFORE any
+	// durable side effect (persisted user message / hub events).
+	header, known := summaryHeader(kind)
+	if !known {
+		writeError(w, http.StatusBadRequest, "unknown summary kind: "+kind)
+		return
 	}
 
-	// Persist the command itself as a user message so the conversation shows what
-	// was run (rendered in the command style), then the assistant's result.
+	// For compact, snapshot the history BEFORE the "/compact" command message is
+	// appended, so the fold boundary is computed over the real conversation — the
+	// command bubble and its report are the freshest tail and must never be folded.
+	var compactHistory []db.Message
+	if kind == "compact" {
+		compactHistory, err = wsp.DB.ListMessages(ctx, session.ID)
+		if writeDBError(w, err, "session not found") {
+			return
+		}
+	}
+
+	// Event-source the command like a real turn (_Docs/58). Slash commands were the
+	// last chat action still rendered optimistic-only, outside the hub: the user +
+	// reply bubbles were client-local until the (often slow — compaction runs a
+	// summarize LLM call) op finished and only THEN persisted, so a page refresh
+	// mid-op made both bubbles vanish until it completed. Now the command message is
+	// persisted and published FIRST, and a live "working" bubble rides the hub, so a
+	// fresh subscriber replays the in-flight tail and both survive a refresh.
 	userMsg, err := wsp.DB.AddMessage(ctx, db.Message{
 		SessionID: session.ID,
 		Role:      providers.RoleUser,
 		Text:      "/" + kind,
 	})
 	if writeDBError(w, err, "session not found") {
+		return
+	}
+	s.publishHub(session.ID, sessionhub.KindUserMessage, userMsg, false)
+	// A durable agent_start + one text step give every window a live ghost bubble
+	// carrying the busy label while the op runs. Durable (not the ephemeral delta)
+	// so a subscriber that joins/refreshes mid-op replays them.
+	s.publishHub(session.ID, sessionhub.KindAgentStart, map[string]any{"agentId": session.AgentID}, false)
+	s.publishStep(session.ID, mustJSON(map[string]any{"kind": "text", "text": summaryBusyLabel(kind)}))
+
+	// Run the command. On failure, clear the "working" bubble in every window
+	// (turn_error + commit); the persisted "/kind" user message stays as an honest
+	// record that the command was attempted.
+	body, err := s.runSummaryKind(ctx, wsp, session, kind, compactHistory)
+	if err != nil {
+		s.publishHub(session.ID, sessionhub.KindTurnError, map[string]any{"error": err.Error(), "reason": "summary_failed"}, false)
+		s.hub.Commit(session.ID)
+		s.logger.Warn("summary command failed", "session", session.ID, "kind", kind, "error", err)
+		writeError(w, http.StatusInternalServerError, kind+" failed: "+err.Error())
 		return
 	}
 
@@ -109,13 +110,65 @@ func (s *Server) handleSessionSummary(w http.ResponseWriter, r *http.Request) {
 	if writeDBError(w, err, "session not found") {
 		return
 	}
-	// Cross-window sync: the new user+assistant pair lands in the transcript —
-	// a sibling window viewing this session reloads so the slash command + its
-	// output appear without a manual refresh. op="summary" / "message_added" so
-	// the listener knows to refresh the transcript and update last-message
-	// metadata.
+	// Reply + turn_done + commit: every window swaps the live ghost for the
+	// persisted report and stops showing "working"; the committed boundary advances
+	// so a later fresh subscriber skips replaying this finished turn.
+	s.publishHub(session.ID, sessionhub.KindReply, msg, false)
+	s.hub.Publish(session.ID, sessionhub.KindTurnDone, mustJSON(map[string]any{"sessionTitle": ""}), false)
+	s.hub.Commit(session.ID)
+	// Sibling windows NOT subscribed to this session's hub (e.g. the sessions list)
+	// still refresh their last-message metadata via the global bus.
 	emitSessionChange(wsp, session.ID, "summary")
 	writeJSON(w, http.StatusOK, map[string]any{"userMessage": userMsg, "replyMessage": msg})
+}
+
+// summaryHeader resolves the self-explanatory chat header for a slash command,
+// reporting known=false for an unrecognized kind (so the endpoint rejects it
+// before any side effect).
+func summaryHeader(kind string) (header string, known bool) {
+	switch kind {
+	case "compact":
+		return "🗜 **Sohbet sıkıştırma**", true
+	case "refresh-context":
+		return "🔄 **Bağlam yenileme**", true
+	default:
+		h, ok := summaryHeaders[kind]
+		return h, ok
+	}
+}
+
+// summaryBusyLabel is the text shown in the live "working" ghost bubble while a
+// slash command runs (mirrors the frontend's per-kind busy labels).
+func summaryBusyLabel(kind string) string {
+	switch kind {
+	case "compact":
+		return "⏳ Sohbet sıkıştırılıyor…"
+	case "refresh-context":
+		return "⏳ Bağlam snapshot'ı yenileniyor…"
+	default:
+		return "⏳ Özetleniyor…"
+	}
+}
+
+// runSummaryKind executes one slash command and returns its assistant-message
+// body. compact folds older history into the rolling summary; refresh-context
+// drops the frozen prompt snapshot; the rest go through the model-summary path.
+func (s *Server) runSummaryKind(ctx context.Context, wsp *workspace.Workspace, session db.Session, kind string, compactHistory []db.Message) (string, error) {
+	switch kind {
+	case "compact":
+		return s.compactSession(ctx, wsp, session, compactHistory)
+	case "refresh-context":
+		// Prompt-epoch explicit adopt: drop the session's frozen prompt snapshot so
+		// the next turn recomposes tools + static system from live state (a chosen
+		// one-time cache re-write). No-op text when the feature is off.
+		if wsp.Runtime.PromptEpochEnabled() {
+			wsp.Runtime.RefreshPromptEpoch(ctx, session.ID)
+			return "Statik bağlam snapshot'ı temizlendi: bir sonraki tur güncel araç kataloğu, skill listesi ve talimatlarla yeniden derlenecek (bilinçli tek seferlik cache yeniden yazımı).", nil
+		}
+		return "Prompt-epoch (donmuş bağlam snapshot'ı) bu workspace'te kapalı; her tur zaten canlı durumdan derleniyor — yenilenecek bir snapshot yok.", nil
+	default:
+		return wsp.Runtime.Summarize(ctx, session.AgentID, kind)
+	}
 }
 
 // handleSessionHandoff performs a manual context reset (/handoff): it writes a
@@ -146,6 +199,13 @@ func (s *Server) handleSessionHandoff(w http.ResponseWriter, r *http.Request) {
 	if writeDBError(w, err, "session not found") {
 		return
 	}
+	// Event-source the command on the OLD session's hub like /compact (_Docs/58):
+	// persist + publish the "/handoff" bubble and a live "working" ghost BEFORE the
+	// (potentially slow — writes a handoff artifact, spawns a fresh session) op, so
+	// a page refresh mid-op replays the in-flight tail instead of losing both bubbles.
+	s.publishHub(session.ID, sessionhub.KindUserMessage, userMsg, false)
+	s.publishHub(session.ID, sessionhub.KindAgentStart, map[string]any{"agentId": session.AgentID}, false)
+	s.publishStep(session.ID, mustJSON(map[string]any{"kind": "text", "text": "⏳ Context reset — handoff yazılıyor ve temiz oturum başlatılıyor…"}))
 
 	res, herr := wsp.Runtime.HandoffSession(ctx, session, agentRow, agent.HandoffOptions{
 		Reason: agent.HandoffReasonManual,
@@ -167,6 +227,12 @@ func (s *Server) handleSessionHandoff(w http.ResponseWriter, r *http.Request) {
 			if writeDBError(w, aerr, "session not found") {
 				return
 			}
+			// The session stays put (no fresh window) — swap the live ghost for the
+			// persisted notice on the hub so every window renders it and stops showing
+			// "working".
+			s.publishHub(session.ID, sessionhub.KindReply, notice, false)
+			s.hub.Publish(session.ID, sessionhub.KindTurnDone, mustJSON(map[string]any{"sessionTitle": ""}), false)
+			s.hub.Commit(session.ID)
 			emitSessionChange(wsp, session.ID, "message_added")
 			// 200 (not 409) with a blocked flag: the frontend's fetch wrapper throws
 			// on any non-2xx and would surface a generic "HTTP 409" toast, burying the
@@ -179,18 +245,27 @@ func (s *Server) handleSessionHandoff(w http.ResponseWriter, r *http.Request) {
 			})
 			return
 		}
+		// Hard failure: clear the live "working" bubble in every window; the persisted
+		// "/handoff" user message stays as an honest record it was attempted.
+		s.publishHub(session.ID, sessionhub.KindTurnError, map[string]any{"error": herr.Error(), "reason": "handoff_failed"}, false)
+		s.hub.Commit(session.ID)
 		writeError(w, http.StatusInternalServerError, "handoff failed: "+herr.Error())
 		return
 	}
 
 	// HandoffSession already dropped a tombstone (with the new session link) into
-	// the old session; return it as the reply message so the chat renders it.
-	//
+	// the old session; publish it on the old session's hub as the reply (+ turn_done)
+	// so a window still on the old session swaps the ghost for it — the sending
+	// window switches to the fresh session, but a sibling window or a return visit
+	// renders the durable tombstone. publishAutonomousReply reads the old session's
+	// last (assistant) message, which is exactly that tombstone.
+	s.publishAutonomousReply(session.ID, wsp.ID)
+	s.hub.Publish(session.ID, sessionhub.KindTurnDone, mustJSON(map[string]any{"sessionTitle": ""}), false)
+	s.hub.Commit(session.ID)
 	// Cross-window sync: Runtime.HandoffSession itself emits the "session"
 	// events for both the old (op="handoff") and the new (op="create") sessions
 	// — the same runtime call also backs the agent-driven handoff_session tool
-	// and the auto-handoff path, so all three entry points get a refresh. The
-	// handler therefore does NOT publish duplicates here.
+	// and the auto-handoff path, so all three entry points get a refresh.
 	writeJSON(w, http.StatusOK, map[string]any{
 		"userMessage":  userMsg,
 		"newSessionId": res.NewSessionID,
@@ -202,7 +277,7 @@ func (s *Server) handleSessionHandoff(w http.ResponseWriter, r *http.Request) {
 // compactSession forces a conversation compaction now: it folds older history
 // into the rolling summary (via the conversation Manager) and returns a short
 // human-readable report for the chat.
-func (s *Server) compactSession(ctx context.Context, wsp *workspace.Workspace, session db.Session) (string, error) {
+func (s *Server) compactSession(ctx context.Context, wsp *workspace.Workspace, session db.Session, history []db.Message) (string, error) {
 	agentRow, err := wsp.DB.GetAgent(ctx, session.AgentID)
 	if err != nil {
 		return "", err
@@ -215,10 +290,9 @@ func (s *Server) compactSession(ctx context.Context, wsp *workspace.Workspace, s
 	// direct provider.Complete, mirroring guardedComplete (else it falls back to
 	// the global home and can fail auth even when the workspace is logged in).
 	wsp.Runtime.PinClaudeHome(provider)
-	history, err := wsp.DB.ListMessages(ctx, session.ID)
-	if err != nil {
-		return "", err
-	}
+	// history is the pre-command snapshot captured by the caller (before the
+	// "/compact" user message was appended), so the fold boundary matches the real
+	// conversation.
 	ctx = conversation.WithCompactPrompt(ctx, wsp.Runtime.CompactPromptTemplate())
 	ctx = conversation.WithAttachmentRoot(ctx, wsp.SandboxRoot())
 	folded, summary, err := s.convo.ForceCompact(ctx, wsp.DB, provider, session, agentRow, history)

@@ -7,7 +7,7 @@
 // holds the React state and wires the callbacks to them.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '@/api'
-import type { Attachment, Flow, Message, SlashCommand, TurnStep } from '@/types'
+import type { Attachment, Message, SlashCommand, TurnStep } from '@/types'
 import type { PendingAsk } from './AskPrompt'
 import type { PendingItem } from './PendingTray'
 import { intersectWith, withAdded, withRemoved, withoutKey } from './chatStreamHelpers'
@@ -17,12 +17,7 @@ import { performRerunLast, performRetry, performRewindTo } from './chatStreamHis
 import { clearAutoLiveEntry, performReseedLive } from './chatStreamAutoLive'
 import { makeHubHandlers } from './chatStreamHub'
 import { subscribeSessionStream, windowClientId } from '@/api/sessionStream'
-import {
-  buildChatCommands,
-  performHandoff,
-  performRunFlow,
-  performSummarize,
-} from './chatStreamCommands'
+import { buildChatCommands, performHandoff, performSummarize } from './chatStreamCommands'
 
 export type { ChatStreamDeps } from './chatStreamTypes'
 
@@ -484,36 +479,12 @@ export function useChatStream(deps: ChatStreamDeps) {
     })
   }, [activeSessionId, activeAgentId, setMessages, setError, refreshSessions, selectSession])
 
-  // Run a flow from the chat composer, streaming node-by-node progress over SSE
-  // (see performRunFlow).
-  const runFlow = useCallback(
-    (flowId: string, flowName: string, input: string, attachments: Attachment[] = []) => {
-      performRunFlow(
-        { activeSessionId, activeAgentId, setMessages, setError },
-        flowId,
-        flowName,
-        input,
-        attachments,
-      )
-    },
-    [activeSessionId, activeAgentId, setMessages, setError],
-  )
-
-  // Flow list for the "/" command palette (each flow becomes a slash command).
-  // Fetched once on mount; flows change rarely and the menu reads the latest list.
-  const [flows, setFlows] = useState<Flow[]>([])
-  useEffect(() => {
-    api
-      .listFlows()
-      .then(setFlows)
-      .catch(() => {})
-  }, [])
-
   // Slash commands available in the chat composer ("/" menu): built-in session
-  // commands plus one entry per flow (see buildChatCommands).
+  // commands only (running a flow from the composer was removed — flows run from
+  // the Flows panel; see buildChatCommands).
   const chatCommands = useMemo<SlashCommand[]>(
-    () => buildChatCommands({ flows, summarize, handoff, openRewind, runFlow }),
-    [summarize, handoff, openRewind, flows, runFlow],
+    () => buildChatCommands({ summarize, handoff, openRewind }),
+    [summarize, handoff, openRewind],
   )
 
   // Derive the active session's view of the per-session streaming state.

@@ -472,6 +472,41 @@ girdisini kaldır. `CLISession.closeChecked` `os.ErrProcessDone`'u başarı saya
 hatasında `closed=false` bırakıp retry'a izin verir. Testler: `session_teardown_test.go`
 (stop/timeout/freeze/resume). `go build`/`go vet` temiz, 403 test geçiyor.
 
+## Slash komutları hub'a taşındı (durable, 2026-08-04)
+
+`/compact` (+ `/refresh-context`, `/tools`, `/board`, `/flows`) event-sourcing
+cutover'ının **dışında** kalmış son sohbet aksiyonlarıydı: `handleSessionSummary`
+işi **senkron** koşup user+reply mesajlarını **ancak bittikten sonra** persist
+ediyor, frontend ise iki balonu **optimistic-only** (client RAM) gösteriyordu.
+Sonuç: yavaş bir `/compact` (özetleme LLM çağrısı) sırasında **sayfa yenilenince**
+hem komut balonu hem de "çalışıyor" balonu kaybolur, işlem bitince geri gelirdi —
+çünkü diskte de hub ring'inde de hiçbir şey yoktu.
+
+Düzeltme (`internal/api/summary.go`): endpoint artık komutu **gerçek bir tur gibi**
+olaylaştırır — işten **önce** user mesajını persist eder ve `KindUserMessage` +
+`KindAgentStart` + bir **durable** text step (busy etiketi) yayınlar → mid-op
+yenileyen bir abone in-flight tail'i replay edip komut balonu + canlı ghost'u
+görür; iş bitince `KindReply` + `KindTurnDone` + `Commit`. Hata durumunda
+`KindTurnError` + `Commit` ghost'u temizler, persist edilen `/kind` mesajı
+denendiğinin dürüst kaydı olarak kalır. `compact` fold sınırı komut mesajından
+**önceki** history snapshot'ı üzerinden hesaplanır (komut + rapor daima en taze
+tail). Frontend `performSummarize` yalnız `tmp-` önekli optimistic user echo bırakır
+(hub `user_message` bunu düşürüp kalıcıyla değiştirir); asistan placeholder'ı hub
+ghost'u taşır.
+
+**`/handoff` de aynı desende (2026-08-04):** `handleSessionHandoff` komutu ESKİ
+oturumun hub'ında olaylaştırır — user mesajı + "⏳ context reset" ghost'u işten
+**önce** yayınlanır → mid-op yenileme in-flight tail'i replay eder. Başarıda
+tombstone reply'ı (`publishAutonomousReply` son assistant mesajını okur) + turn_done
++ commit; gönderen pencere taze oturuma geçer ama sibling/geri-dönüş kalıcı
+tombstone'u görür. Blocked (çalışan worker'lı koordinatör) yolunda uyarı notu reply
+olarak yayınlanır (oturum yerinde kalır); sert hata `turn_error` ile ghost'u temizler.
+
+**Flow'lar `/` menüsünden kaldırıldı (2026-08-04):** kompozer'dan flow çalıştırma
+(`performRunFlow` + per-flow `/<slug>` slash girdileri) kaldırıldı — flow'lar artık
+yalnız Flows panelinden koşulur; `/flows` hâlâ flow listesini **özetler**. Ölü
+`api.runFlowStream` (session-içi SSE) korunuyor (dış otomasyon endpoint'i açık).
+
 ## Doğrulama
 
 Her fazda `go build ./...` + `go vet`. Canlı: aynı session'ı iki pencerede aç →

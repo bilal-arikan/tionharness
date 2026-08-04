@@ -1,7 +1,8 @@
 # 66 — View (Projeksiyon) Katmanı: büyük durumun bağlam-ucuz özeti
 
-> **Faz 1-4 CANLI** (flowrun + session + board projeksiyonları, `ViewPanel` UI,
-> `get_view` aracı); faz 5-6 tasarım. Büyük veri yüzeylerinin (uzun session,
+> **Faz 1-4 + 6 CANLI** (flowrun + session + board + workspace projeksiyonları,
+> `ViewPanel` UI, `get_view` aracı, **Panel ekranı**); faz 5 (L2 fold) tasarım.
+> Büyük veri yüzeylerinin (uzun session,
 > çok-node'lu flow run, yüzlerce kartlı board, tüm workspace) o anki durumunu
 > **deterministik, cache'lenebilir, bütçe-farkındalı** bir projeksiyona indiren tek
 > primitif. Hem ajanlara (araç/suffix) hem kullanıcıya (UI paneli) **aynı çıktıyı**
@@ -160,11 +161,29 @@ son hareket: 4dk önce
 Transkript **okunmadan** üretilir: header + usage bellek-içi, geri kalanı yalnız
 son 40 mesajlık kuyruktan. Okunmayan mesaj sayısı `Elided`'e yazılır.
 
-### Workspace
+### Workspace (gerçek çıktı)
 
-Yukarıdakilerin `tiny`'lerinin toplamı. Bu, ileride tartışılan **workspace gözetmeni
-(supervisor) ajanının girdisidir** — supervisor bu katmanın bir *müşterisi* olur,
-ayrı bir izleme alt sistemi değil.
+Diğerlerinin roll-up'ı. **Panel ekranının** üst bloğu ve ileride tartışılan
+**workspace gözetmeni (supervisor) ajanının girdisi** — supervisor bu katmanın bir
+*müşterisi* olur, ayrı bir izleme alt sistemi değil.
+
+```
+WORKSPACE · 2 ajan · 5 oturum (3 aktif) · 3 kart · 4 koşu · 1.2M tok bugün · asOf 11:12:57
+pano: todo 1 | in_progress 1 | failed 1
+koşular: 1 çalışıyor · 1 bekliyor · 1 başarısız (son 24s: 3)
+⚠ 1 oturum takılmış (StuckTurns>0): SES2
+⏸ 2 oturum cevap bekliyor — en eskisi 1sa'dir: session:SES1
+✗ 1 başarısız akış koşusu: RUN4
+⏰ 1 zamanlama son çalışmada hata verdi
+✗ 1 başarısız kart: T3
+⚠ 1 kart >3g çalışan sütunda hareketsiz: T2
+⇵ 1 koordinatör oturumu
+```
+
+Tamamı **bellek-içi store okumaları** — geçmiş ne kadar büyürse büyüsün disk I/O
+yok, bu yüzden poll edilebilecek kadar ucuz. **Devre dışı bırakılmış** bir
+zamanlamanın son hatası raporlanmaz: bilerek duraklatılmış bir şeyi "bozuk" diye
+göstermek okuyucuya satırı yok saymayı öğretir.
 
 ## Ajanlara dağıtım: üç kanal, karıştırma
 
@@ -218,14 +237,39 @@ bir **`◱ Özet`** butonu. Tıklayınca sağdan `ViewPanel` sheet'i açılır.
 - `Elided` **birimiyle** yazılır (`kart` / `eski mesaj` / `node`): çıplak bir sayı
   belirsizdir — 174 gizli mesaj ile 174 gizli kart okuyucu için aynı şey değildir.
 
-### 3. Workspace özet paneli *(faz 6)*
+### 3. Panel (dashboard) ekranı — `features/dashboard/`
 
-Workspace ekranında `workspace` view'ı sürekli görünür bir kart olarak; ileride
-supervisor bulguları da buraya düşer.
+Sol navigasyonda **Panel** (`LayoutDashboard`, en üstte). Tek `GET /api/dashboard`
+çağrısı; seriler **backend'de** toplanır — tarayıcının her oturumu/kartı/koşuyu
+sayabilmek için indirmesi, bu katmanın önlemek için var olduğu maliyetin ta kendisi
+olurdu.
+
+Ekranın kurgusu tek bir fikre dayanır: üstteki metin bloğu **workspace
+projeksiyonunun ta kendisi** — `get_view{kind:"workspace"}` ile birebir aynı
+baytlar. Altındaki grafikler aynı gerçeklerin çizilmiş hâli, **ikinci bir bağımsız
+hesap değil**. İkisi çelişirse bu, kullanıcının görebildiği bir bug'dır.
+
+| Bölüm | İçerik |
+|-------|--------|
+| Stat kutuları | ajan · aktif oturum · **takılmış oturum** · açık kart · çalışan koşu · **başarısız koşu** (sorun olanlar renkli) |
+| ◱ Workspace özeti | ham DSL, monospace + `~N tok` + `asOf` |
+| Günlük trend ×3 | açılan oturum · akış koşusu · token (7/14/30/90g seçici) |
+| Kompozisyon ×3 | pano sütunları · koşu durumları · oturum türleri |
+| Sıralama | en yoğun ajanlar (oturum sayısı) |
+
+Grafikler **elle yazılmış SVG/CSS** (`charts.tsx`) — `sessions/viz`'in zaten
+kullandığı idiom. Üç şekil için büyük bir grafik kütüphanesi eklenmedi; ayrıca bu
+yolla tema CSS değişkenlerini bedavaya devralıyorlar.
+
+Grafiklerin ortak kuralı: **her biri kendi boş durumunu kelimeyle söyler.** Boş bir
+grafik alanı belirsizdir ("veri yok" ile "yüklenemedi" aynı görünür) ve bu ekranın
+işi ilk bakışta güvenilir olmak. Gün ekseni her zaman tam pencere kadar çizilir —
+sessiz bir hafta sonu trendden silinmek yerine boşluk olarak görünür.
 
 ### API
 
 ```
+GET /api/dashboard?days=14                          → sayaçlar + seriler + workspace projeksiyonu
 GET /api/views/{kind}/{id}?level=card&lens=health   → View (JSON zarf, Body ham DSL)
 GET /api/views/workspace?level=tiny
 ```
@@ -274,7 +318,7 @@ hatası tam olarak "1970'ten beri" kılığına giriyor.
 | **3** | `get_view` aracı (pull kanalı) | ✅ |
 | **4** | `board` + `session` view'ları + Chat/Görevler ekranlarında buton | ✅ |
 | **5** | L2 incremental fold + kalıcı cache | ⬜ |
-| **6** | `workspace` view (tiny toplamı) → supervisor girdisi | ⬜ |
+| **6** | `workspace` view + **Panel (dashboard) ekranı** | ✅ |
 
 Faz 5'e ancak 1-4 kanıtlanırsa geçilir.
 

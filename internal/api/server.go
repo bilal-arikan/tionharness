@@ -647,6 +647,10 @@ func (s *Server) registerFlowRoutes(mux *http.ServeMux) {
 	// Projection layer: the compact, context-cheap summary of a large entity —
 	// the same bytes the agent gets and the Bağlam panel shows (_Docs/66).
 	mux.HandleFunc("GET /api/views/{kind}/{id}", s.handleGetView)
+
+	// Workspace overview: counters + chart series + the workspace projection,
+	// in one call (_Docs/66).
+	mux.HandleFunc("GET /api/dashboard", s.handleDashboard)
 }
 
 // registerExecutionRoutes registers the unified executions feed — every run

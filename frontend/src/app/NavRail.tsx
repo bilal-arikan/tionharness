@@ -17,12 +17,29 @@ import {
   Settings,
   ChevronLeft,
   type LucideIcon,
+  LayoutDashboard,
 } from 'lucide-react'
 import type { Workspace } from '@/types'
 import { WorkspaceSwitcher } from '@/features/workspace/WorkspaceSwitcher'
 import type { NewWorkspaceData } from '@/features/workspace/WorkspaceCreateModal'
 
-export type View = 'chat' | 'agents' | 'network' | 'board' | 'schedules' | 'flows' | 'artifacts' | 'skills' | 'tools' | 'market' | 'budget' | 'logs' | 'insights' | 'workspace' | 'settings'
+export type View =
+  | 'dashboard'
+  | 'chat'
+  | 'agents'
+  | 'network'
+  | 'board'
+  | 'schedules'
+  | 'flows'
+  | 'artifacts'
+  | 'skills'
+  | 'tools'
+  | 'market'
+  | 'budget'
+  | 'logs'
+  | 'insights'
+  | 'workspace'
+  | 'settings'
 
 interface Props {
   view: View
@@ -53,6 +70,7 @@ interface Props {
 // NAV is the primary view list. Exported so the mobile bottom bar renders the
 // same set from a single source of truth.
 export const NAV: { key: View; label: string; icon: LucideIcon }[] = [
+  { key: 'dashboard', label: 'Panel', icon: LayoutDashboard },
   { key: 'chat', label: 'Sohbet', icon: MessageSquare },
   { key: 'agents', label: 'Ajanlar', icon: Users },
   { key: 'network', label: 'Ağ', icon: Share2 },
@@ -129,7 +147,10 @@ function NavDots({
   return (
     <span className="ml-auto flex items-center gap-1.5">
       {dirty && (
-        <span className="h-2 w-2 rounded-full bg-[var(--color-warning)]" title="Kaydedilmemiş değişiklik" />
+        <span
+          className="h-2 w-2 rounded-full bg-[var(--color-warning)]"
+          title="Kaydedilmemiş değişiklik"
+        />
       )}
       {(busy || unread) && (
         <span
@@ -166,9 +187,7 @@ export function NavRail({
   // "other workspace has activity" unread dot into a pulsing one so a live run
   // elsewhere reads differently from a merely-unseen completed one.
   const anyOtherBusy = Array.from(busyWorkspaceIds ?? []).some((id) => id !== activeWorkspaceId)
-  const [collapsed, setCollapsed] = useState(
-    () => localStorage.getItem(COLLAPSE_KEY) === '1',
-  )
+  const [collapsed, setCollapsed] = useState(() => localStorage.getItem(COLLAPSE_KEY) === '1')
 
   useEffect(() => {
     localStorage.setItem(COLLAPSE_KEY, collapsed ? '1' : '0')
@@ -204,7 +223,11 @@ export function NavRail({
               className={`absolute right-1 top-1 h-2 w-2 rounded-full bg-[var(--color-accent)] ring-2 ring-[var(--color-surface-2)] ${
                 anyOtherBusy ? 'animate-pulse' : ''
               }`}
-              title={anyOtherBusy ? 'Başka workspace’te işlem sürüyor' : 'Başka workspace’te yeni etkinlik'}
+              title={
+                anyOtherBusy
+                  ? 'Başka workspace’te işlem sürüyor'
+                  : 'Başka workspace’te yeni etkinlik'
+              }
             />
           )}
           {anyDirty && (
@@ -264,7 +287,11 @@ export function NavRail({
               data-testid={`nav-${item.key}`}
               aria-label={item.label}
               aria-current={isActive ? 'page' : undefined}
-              title={collapsed ? `${item.label}${busy ? ' · işlem sürüyor' : unread ? ' · yeni etkinlik' : ''}` : undefined}
+              title={
+                collapsed
+                  ? `${item.label}${busy ? ' · işlem sürüyor' : unread ? ' · yeni etkinlik' : ''}`
+                  : undefined
+              }
               className={navItemClass(isActive, collapsed)}
             >
               {isActive && <ActiveBar />}
@@ -283,7 +310,9 @@ export function NavRail({
           data-testid="nav-workspace"
           aria-label="Workspace"
           aria-current={view === 'workspace' ? 'page' : undefined}
-          title={collapsed ? (active?.name ? `Workspace · ${active.name}` : 'Workspace') : undefined}
+          title={
+            collapsed ? (active?.name ? `Workspace · ${active.name}` : 'Workspace') : undefined
+          }
           className={`w-full ${navItemClass(view === 'workspace', collapsed)}`}
         >
           {view === 'workspace' && <ActiveBar />}

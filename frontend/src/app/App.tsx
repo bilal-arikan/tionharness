@@ -42,6 +42,7 @@ import { SkillsPanel } from '@/features/skills/SkillsPanel'
 import { ToolsPanel as ToolCatalogPanel } from '@/features/tools/ToolsPanel'
 import { MarketPanel } from '@/features/market/MarketPanel'
 import { BudgetPanel } from '@/features/budget/BudgetPanel'
+import { DashboardPanel } from '@/features/dashboard/DashboardPanel'
 import { LogsPanel } from '@/features/logs/LogsPanel'
 import { InsightPanel } from '@/features/insight/InsightPanel'
 import { SettingsPanel } from '@/features/settings/SettingsPanel'
@@ -700,6 +701,7 @@ export default function App() {
             }}
           />
         )}
+        {view === 'dashboard' && <DashboardPanel onError={setError} />}
         {view === 'budget' && <BudgetPanel onError={setError} />}
         {view === 'logs' && <LogsPanel onError={setError} />}
         {view === 'insights' && (

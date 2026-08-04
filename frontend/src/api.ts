@@ -27,6 +27,7 @@ import { providerApi } from './api/providers'
 import { ttsServerApi } from './api/tts'
 import { sttServerApi } from './api/stt'
 import { viewApi } from './api/views'
+import { dashboardApi } from './api/dashboard'
 
 export { setActiveWorkspace, getActiveWorkspace, clearActiveWorkspace }
 export type { ChatStreamHandlers } from './api/chat'
@@ -55,4 +56,5 @@ export const api = {
   ...ttsServerApi,
   ...sttServerApi,
   ...viewApi,
+  ...dashboardApi,
 }

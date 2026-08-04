@@ -45,6 +45,40 @@
   shell-gate satırı güncellendi.
 - **Doğrulama:** `rtk go build ./...` ✅.
 
+## Panel (dashboard) ekranı + workspace projeksiyonu — Faz 6 (2026-08-04) ✅
+
+- **İstek:** "Workspace'in genel durumunu grafiklerle görebilmek ve genel
+  workspace özetini oradan da okuyabilmek."
+- **`internal/view/workspace.go`** — roll-up projeksiyonu (Faz 6). Başlık:
+  ajan/oturum(aktif)/kart/koşu sayıları + bugünkü token. Gövde: pano histogramı,
+  koşu durum satırı ve L1 sinyaller — takılmış oturumlar, cevap bekleyen sorular
+  (**en eskisi** raporlanır, çünkü bekleme süresini o sınırlar), başarısız koşular,
+  bozuk zamanlamalar, başarısız/yaşlanmış kartlar, koordinatör oturumları.
+  **Tamamı bellek-içi store okuması** → disk I/O yok, poll edilebilir.
+  **Devre dışı** bir zamanlamanın son hatası raporlanmaz: bilerek duraklatılmış
+  şeyi "bozuk" göstermek okuyucuya satırı yok saymayı öğretir.
+- **`GET /api/dashboard?days=N`** (`internal/api/dashboard.go`) — sayaçlar +
+  seriler + projeksiyon metni tek çağrıda. Seriler **backend'de** toplanır;
+  tarayıcının sayabilmek için tüm workspace'i indirmesi, bu katmanın önlemek için
+  var olduğu maliyetin ta kendisi olurdu. Gün ekseni **her zaman tam pencere** →
+  sessiz bir gün trendden silinmez, boşluk olarak görünür. `days` 1..90 arası
+  clamp'lenir. Token serisi Bütçe ekranıyla **aynı** usage rollup'ından okunur →
+  iki ekran farklı rakam söyleyemez.
+- **UI `features/dashboard/`** — sol navigasyonda **Panel**. Stat kutuları
+  (sorunlu olanlar renkli), **◱ Workspace özeti** bloğu (ham DSL, `~N tok`,
+  `asOf`), 3 günlük trend (oturum/koşu/token, 7·14·30·90g), 3 kompozisyon çubuğu
+  (pano/koşu/oturum türü), ajan sıralaması. Grafikler **elle yazılmış SVG/CSS**
+  (`charts.tsx`) — yeni bağımlılık yok, `sessions/viz` idiomu; tema değişkenleri
+  bedavaya geliyor. Her grafik **kendi boş durumunu kelimeyle söyler** (boş alan
+  "veri yok" mu "yüklenemedi" mi belli olmaz).
+- **Temel kurgu:** üstteki metin bloğu projeksiyonun **kendisi**, altındaki
+  grafikler aynı gerçeklerin çizilmiş hâli — ikinci bir bağımsız hesap değil.
+  Çelişirlerse kullanıcının görebildiği bir bug olur.
+- **`get_view` artık `workspace` kind'ını da alır** (id boşsa `"workspace"`a düşer).
+- **Testler:** `view/workspace_test.go` (8) + `api/dashboard_test.go` (4: seri
+  şekli, pencere clamp'i, gün ekseni, pencere-dışı damga elenmesi). İzole bir
+  instance'ta (ayrı port + geçici store) uçtan uca doğrulandı.
+
 ## View katmanı — Faz 4: board + session projeksiyonları (2026-08-04) ✅
 
 - **`internal/view/board.go`** — pano projeksiyonu. Sütun histogramı + L1
