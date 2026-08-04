@@ -68,6 +68,68 @@ func TestGrepOutputModes(t *testing.T) {
 	}
 }
 
+// TestGrepMultiPath: a comma-joined path list scans every listed file instead of
+// failing as one nonexistent path (the reported bug). Files outside the list stay out.
+func TestGrepMultiPath(t *testing.T) {
+	t.Setenv("TIONSWARM_GREP_NO_RG", "1") // pin the deterministic Go engine
+	sb := setupTree(t)
+	g := NewFSGrepTool(sb)
+
+	out, err := g.Call(context.Background(), mustJSON(t, map[string]any{
+		"pattern": "todo", "-i": true, "path": "src/main.go,src/util.go",
+	}))
+	if err != nil {
+		t.Fatalf("multi-path grep: %v", err)
+	}
+	if !strings.Contains(out, "src/main.go:2:") || !strings.Contains(out, "src/util.go:2:") {
+		t.Fatalf("multi-path should hit both listed files:\n%s", out)
+	}
+	if strings.Contains(out, "readme.md") {
+		t.Fatalf("multi-path leaked a file not in the list:\n%s", out)
+	}
+}
+
+// TestGrepMultiPathMissing: an invalid entry names exactly the bad path and offers a
+// way out — it must not echo the whole joined blob or read as "no matches".
+func TestGrepMultiPathMissing(t *testing.T) {
+	t.Setenv("TIONSWARM_GREP_NO_RG", "1")
+	sb := setupTree(t)
+	g := NewFSGrepTool(sb)
+
+	_, err := g.Call(context.Background(), mustJSON(t, map[string]any{
+		"pattern": "todo", "path": "src/main.go,src/nope.go",
+	}))
+	if err == nil {
+		t.Fatal("a missing path in the list must error, not silently drop it")
+	}
+	if !strings.Contains(err.Error(), "nope.go") {
+		t.Fatalf("error must name the missing path: %v", err)
+	}
+	if strings.Contains(err.Error(), "src/main.go,src/nope.go") {
+		t.Fatalf("error must not echo the whole joined string: %v", err)
+	}
+}
+
+// TestGrepMultiPathRGParity locks the ripgrep fast path to the Go engine for a
+// comma-joined path list. Skipped when rg is absent.
+func TestGrepMultiPathRGParity(t *testing.T) {
+	if rgExe() == "" {
+		t.Skip("ripgrep (rg) not on PATH")
+	}
+	sb := setupTree(t)
+	arg := map[string]any{"pattern": "todo", "-i": true, "path": "src/main.go,src/util.go"}
+
+	rgOut, _ := NewFSGrepTool(sb).Call(context.Background(), mustJSON(t, arg))
+	t.Setenv("TIONSWARM_GREP_NO_RG", "1")
+	goOut, _ := NewFSGrepTool(sb).Call(context.Background(), mustJSON(t, arg))
+	if rgOut != goOut {
+		t.Fatalf("multi-path parity mismatch\nrg:\n%q\ngo:\n%q", rgOut, goOut)
+	}
+	if !strings.Contains(rgOut, "src/main.go:2:") || !strings.Contains(rgOut, "src/util.go:2:") {
+		t.Fatalf("multi-path rg missing hits:\n%s", rgOut)
+	}
+}
+
 func TestGrepContext(t *testing.T) {
 	t.Setenv("TIONSWARM_GREP_NO_RG", "1")
 	sb := setupTree(t)

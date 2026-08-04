@@ -56,7 +56,7 @@ func (t FSGrepTool) tryRG(ctx context.Context, args grepArgs) (string, bool) {
 	if exe == "" {
 		return "", false
 	}
-	dir, target, ok := t.rgTarget(args)
+	dir, targets, ok := t.rgTarget(args)
 	if !ok {
 		return "", false
 	}
@@ -64,7 +64,7 @@ func (t FSGrepTool) tryRG(ctx context.Context, args grepArgs) (string, bool) {
 	if mode == "" {
 		mode = "content"
 	}
-	rgArgs, ok := buildRGArgs(args, mode, target)
+	rgArgs, ok := buildRGArgs(args, mode, targets)
 	if !ok {
 		return "", false
 	}
@@ -92,33 +92,52 @@ func (t FSGrepTool) tryRG(ctx context.Context, args grepArgs) (string, bool) {
 	return out, true
 }
 
-// rgTarget resolves the directory rg runs in and the positional target (a file name
-// or "." for the whole directory), mirroring collectFiles. ok=false when the sandbox
-// is unconfigured or the path cannot be resolved (defer to the Go engine's error).
-func (t FSGrepTool) rgTarget(args grepArgs) (dir, target string, ok bool) {
+// rgTarget resolves the directory rg runs in and the positional targets (a file
+// name or "." for a whole directory), mirroring collectFiles. ok=false when the
+// sandbox is unconfigured, a path cannot be resolved, or a path is missing — the
+// caller then defers to the Go engine, which reports the precise error.
+func (t FSGrepTool) rgTarget(args grepArgs) (dir string, targets []string, ok bool) {
 	if strings.TrimSpace(args.Path) != "" {
-		abs, err := t.sb.Resolve(args.Path)
-		if err != nil {
-			return "", "", false
+		abs, missing, _ := t.resolveGrepTargets(args.Path)
+		if len(missing) > 0 || len(abs) == 0 {
+			return "", nil, false // let the Go engine surface grepMissingPathErr
 		}
-		info, err := os.Stat(abs)
-		if err != nil {
-			return "", "", false
+		if len(abs) == 1 {
+			a := abs[0]
+			info, err := os.Stat(a)
+			if err != nil {
+				return "", nil, false
+			}
+			if info.IsDir() {
+				return a, []string{"."}, true
+			}
+			return filepath.Dir(a), []string{filepath.Base(a)}, true
 		}
-		if info.IsDir() {
-			return abs, ".", true
+		// Multiple targets: run from the sandbox root with each target expressed
+		// relative to it, so rg prints the same repo-relative paths as the Go engine.
+		if !t.sb.Ready() {
+			return "", nil, false
 		}
-		return filepath.Dir(abs), filepath.Base(abs), true
+		root := t.sb.Root
+		rel := make([]string, 0, len(abs))
+		for _, a := range abs {
+			r, err := filepath.Rel(root, a)
+			if err != nil {
+				return "", nil, false
+			}
+			rel = append(rel, filepath.ToSlash(r))
+		}
+		return root, rel, true
 	}
 	if !t.sb.Ready() {
-		return "", "", false
+		return "", nil, false
 	}
-	return t.sb.Root, ".", true
+	return t.sb.Root, []string{"."}, true
 }
 
 // buildRGArgs maps grepArgs to ripgrep flags. ok=false for an unsupported output mode
 // or unknown type filter, so the caller falls back to the Go engine.
-func buildRGArgs(args grepArgs, mode, target string) ([]string, bool) {
+func buildRGArgs(args grepArgs, mode string, targets []string) ([]string, bool) {
 	// --no-require-git makes rg honour .gitignore even outside a git repo (matching
 	// the Go IgnoreSet); --hidden searches dotfiles (rg still auto-skips .git);
 	// --path-separator / normalises Windows backslashes to the Go convention;
@@ -175,8 +194,9 @@ func buildRGArgs(args grepArgs, mode, target string) ([]string, bool) {
 			out = append(out, "--glob", "*"+e) // gitignore-style: matches at any depth
 		}
 	}
-	// -e guards patterns that begin with a dash; target is positional and last.
-	out = append(out, "--regexp", args.Pattern, target)
+	// -e guards patterns that begin with a dash; targets are positional and last.
+	out = append(out, "--regexp", args.Pattern)
+	out = append(out, targets...)
 	return out, true
 }
 

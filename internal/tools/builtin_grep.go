@@ -28,7 +28,7 @@ func (FSGrepTool) Def() providers.ToolDef {
 		// Grep ships EAGERLY every turn, so the flag semantics live once in the
 		// description; the schema's ripgrep-style flag keys carry no per-property
 		// descriptions (their meaning is standard and already stated above).
-		Description: "Search file contents for a regular expression (RE2). Searches the working directory by default; pass path to scope to a file or directory. " +
+		Description: "Search file contents for a regular expression (RE2). Searches the working directory by default; pass path to scope to a file or directory (several may be comma-separated). " +
 			"output_mode: \"content\" (matching lines, default), \"files_with_matches\" (paths only), or \"count\" (match count per file). " +
 			"Filter with glob (e.g. \"**/*.go\") or type (e.g. \"go\", \"ts\"). Content mode: -A/-B/-C context lines, -i case-insensitive, -n line numbers (default on), -o only-matching. " +
 			"multiline lets a match span lines. head_limit caps results. Honours .gitignore (always skips .git) unless no_ignore is set.",
@@ -36,7 +36,7 @@ func (FSGrepTool) Def() providers.ToolDef {
 			"type":"object",
 			"properties":{
 				"pattern":{"type":"string","description":"RE2 regular expression to search for"},
-				"path":{"type":"string","description":"File or directory to search; default working directory"},
+				"path":{"type":"string","description":"File or directory to search (or several comma-separated); default working directory"},
 				"glob":{"type":"string"},
 				"type":{"type":"string"},
 				"output_mode":{"type":"string","enum":["content","files_with_matches","count"]},
@@ -185,28 +185,139 @@ func grepFileFilter(args grepArgs) (func(rel string) bool, error) {
 }
 
 // collectFiles resolves the search target: a single file, or every in-scope,
-// non-ignored file under a directory. Returns absolute file paths and the root the
-// display paths are relative to.
+// non-ignored file under one or more directories. Returns absolute file paths and
+// the root the display paths are relative to.
 func (t FSGrepTool) collectFiles(args grepArgs, want func(string) bool) ([]string, string, error) {
 	if strings.TrimSpace(args.Path) != "" {
-		abs, err := t.sb.Resolve(args.Path)
+		targets, missing, err := t.resolveGrepTargets(args.Path)
 		if err != nil {
 			return nil, "", err
 		}
-		info, err := os.Stat(abs)
-		if err != nil {
-			return nil, "", err
+		if len(missing) > 0 {
+			return nil, "", grepMissingPathErr(missing)
 		}
-		if !info.IsDir() {
-			// Single file: the display root is its parent so we show just the name.
-			return []string{abs}, filepath.Dir(abs), nil
+		if len(targets) == 1 {
+			abs := targets[0]
+			info, err := os.Stat(abs)
+			if err != nil {
+				return nil, "", err
+			}
+			if !info.IsDir() {
+				// Single file: the display root is its parent so we show just the name.
+				return []string{abs}, filepath.Dir(abs), nil
+			}
+			return walkGrepFiles(abs, args, want)
 		}
-		return walkGrepFiles(abs, args, want)
+		// Multiple targets: collect across all, display paths relative to the sandbox
+		// root so they stay unambiguous across the different targets.
+		if !t.sb.Ready() {
+			return nil, "", fmt.Errorf("filesystem sandbox is not configured")
+		}
+		var files []string
+		for _, abs := range targets {
+			info, err := os.Stat(abs)
+			if err != nil {
+				return nil, "", err
+			}
+			if !info.IsDir() {
+				files = append(files, abs)
+				continue
+			}
+			sub, _, err := walkGrepFiles(abs, args, want)
+			if err != nil {
+				return nil, "", err
+			}
+			files = append(files, sub...)
+		}
+		sort.Strings(files)
+		return dedupeSorted(files), t.sb.Root, nil
 	}
 	if !t.sb.Ready() {
 		return nil, "", fmt.Errorf("filesystem sandbox is not configured")
 	}
 	return walkGrepFiles(t.sb.Root, args, want)
+}
+
+// resolveGrepTargets turns the path argument into one or more existing absolute
+// targets. It accepts a single path, or several joined by a comma or semicolon — a
+// shorthand models reach for when scanning a handful of files. If the whole string
+// resolves as-is it is treated as one target, so a real path that happens to
+// contain a comma still works. Entries that do not exist are returned in missing so
+// the caller can name exactly which ones are wrong instead of echoing the whole blob.
+func (t FSGrepTool) resolveGrepTargets(path string) (abs []string, missing []string, err error) {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return nil, nil, nil
+	}
+	// Whole-string first: honours a real file/dir whose name contains a separator.
+	if a, e := t.sb.Resolve(path); e == nil {
+		if _, e2 := os.Stat(a); e2 == nil {
+			return []string{a}, nil, nil
+		}
+	}
+	parts := []string{path}
+	if strings.ContainsAny(path, ",;") {
+		parts = splitGrepPaths(path)
+	}
+	for _, p := range parts {
+		a, e := t.sb.Resolve(p)
+		if e != nil {
+			missing = append(missing, p)
+			continue
+		}
+		if _, e2 := os.Stat(a); e2 != nil {
+			missing = append(missing, p)
+			continue
+		}
+		abs = append(abs, a)
+	}
+	return abs, missing, nil
+}
+
+// splitGrepPaths splits a comma/semicolon-joined path list into trimmed, non-empty
+// parts.
+func splitGrepPaths(p string) []string {
+	parts := strings.FieldsFunc(p, func(r rune) bool { return r == ',' || r == ';' })
+	out := make([]string, 0, len(parts))
+	for _, part := range parts {
+		if s := strings.TrimSpace(part); s != "" {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
+// grepMissingPathErr reports the invalid path entries (at most a few) with concrete
+// guidance, rather than echoing a giant joined string whose bad member is unclear.
+func grepMissingPathErr(missing []string) error {
+	const maxShow = 3
+	shown, more := missing, 0
+	if len(shown) > maxShow {
+		more = len(shown) - maxShow
+		shown = shown[:maxShow]
+	}
+	msg := "path does not exist: " + strings.Join(shown, ", ")
+	if more > 0 {
+		msg += fmt.Sprintf(" (and %d more)", more)
+	}
+	return errors.New(msg + `. To search several files pass their common parent as path and narrow with glob ` +
+		`(e.g. path:"internal/tools", glob:"*_test.go"), or make one Grep call per path. ` +
+		`Verify a path with Glob before passing it.`)
+}
+
+// dedupeSorted removes adjacent duplicates from a sorted slice (targets may overlap,
+// e.g. a directory and a file inside it).
+func dedupeSorted(in []string) []string {
+	if len(in) < 2 {
+		return in
+	}
+	out := in[:1]
+	for _, s := range in[1:] {
+		if s != out[len(out)-1] {
+			out = append(out, s)
+		}
+	}
+	return out
 }
 
 // maxWalkFiles bounds the Go fallback walk. This path only runs when ripgrep is

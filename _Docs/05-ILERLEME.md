@@ -2,6 +2,24 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-08-04**
 
+## Grep çoklu-path desteği (2026-08-04) ✅
+
+- **Sorun (FND-02391b62 · FND-be8c85b7 · FND-5253471e):** `Grep` `path` alanı tek
+  string olduğu için, model birden çok dosyayı tek çağrıda taramak isteyip yolları
+  virgülle birleştirince (`a_test.go,b_test.go`) tüm dize tek yol sanılıp
+  `os.Stat`'ta `path does not exist` ile düşüyordu — üstelik hata devasa birleşik
+  dizeyi geri yazdığı için hangi yolun geçersiz olduğu anlaşılmıyordu.
+- **Çözüm (`internal/tools/builtin_grep.go` + `grep_rg.go`):** `path` artık
+  virgül/noktalı-virgülle ayrılmış çoklu hedefi destekler. Yeni `resolveGrepTargets`
+  her parçayı ayrı çözer (önce **tüm-dize** dener → virgül içeren gerçek yol da
+  çalışır), geçerlileri toplar; rg hızlı-yolu sandbox kökünden **çoklu positional
+  target** ile koşar (Go fallback ile bayt-uyumlu), Go motoru dizinleri gezip
+  sonuçları kök-göreli birleştirir. Eksik parça(lar) varsa `grepMissingPathErr`
+  **yalnız geçersiz yolları** (en çok 3) + "ortak üst dizini `path` yapıp `glob` ile
+  daralt / her yol için ayrı çağrı" yönergesini döndürür (birleşik dizeyi yazmaz).
+- **Doğrulama:** `go build ./...` ✅, `go test ./internal/tools -run Grep` ✅
+  (+ `TestGrepMultiPath`, `TestGrepMultiPathMissing`, `TestGrepMultiPathRGParity`).
+
 ## Playwright MCP izinli-kök = oturum scratchpad (2026-08-04) ✅
 
 - **Sorun (FND-a96f35e0/f45b51ab/0a4871a6/bb25e7e3):** Playwright MCP dosya
