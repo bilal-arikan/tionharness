@@ -348,23 +348,37 @@ func TestSettleBackstopReportsIncomplete(t *testing.T) {
 
 	rt.settleReportBackstop(ctx, mid.ID)
 
-	msgs, err := rt.db.ListMessages(ctx, root.ID)
-	if err != nil || len(msgs) == 0 {
-		t.Fatalf("coordinator got nothing from the backstop (err=%v)", err)
+	// Locate the backstop note by its content, not by position: NotifyCoordinator
+	// enqueues the coordinator's own turn, whose drain goroutine may append further
+	// messages to root asynchronously — so the note is not reliably the LAST message
+	// (a loaded runner surfaces this as a flake). The note is the one carrying the
+	// node's seeded reply.
+	countBackstops := func() (int, string) {
+		msgs, err := rt.db.ListMessages(ctx, root.ID)
+		if err != nil {
+			t.Fatalf("list root messages: %v", err)
+		}
+		n, last := 0, ""
+		for _, m := range msgs {
+			if strings.Contains(m.Text, "iki worker açtım") {
+				n++
+				last = m.Text
+			}
+		}
+		return n, last
 	}
-	note := msgs[len(msgs)-1].Text
+
+	got, note := countBackstops()
+	if got == 0 {
+		t.Fatalf("coordinator got no backstop note carrying the node's reply")
+	}
 	if !strings.Contains(note, "<status>incomplete</status>") {
 		t.Errorf("backstop must not claim completion:\n%s", note)
 	}
-	if !strings.Contains(note, "iki worker açtım") {
-		t.Errorf("backstop should carry the node's last reply as the only material it has:\n%s", note)
-	}
-	// One-shot: a second sweep must not re-report.
-	before := len(msgs)
+	// One-shot: a second sweep must not re-report — the backstop-note count stays put.
 	rt.settleReportBackstop(ctx, mid.ID)
-	after, _ := rt.db.ListMessages(ctx, root.ID)
-	if len(after) != before {
-		t.Errorf("backstop fired twice: %d → %d messages", before, len(after))
+	if again, _ := countBackstops(); again != got {
+		t.Errorf("backstop fired twice: %d → %d notes", got, again)
 	}
 }
 

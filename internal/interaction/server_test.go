@@ -1,14 +1,45 @@
 package interaction
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
+
+// syncRecorder is a concurrency-safe http.ResponseWriter for streaming tests. A
+// plain httptest.ResponseRecorder races: the SSE handler writes frames from its own
+// goroutine while the test polls the body. All body access here is mutex-guarded.
+type syncRecorder struct {
+	mu     sync.Mutex
+	body   bytes.Buffer
+	header http.Header
+}
+
+func newSyncRecorder() *syncRecorder { return &syncRecorder{header: make(http.Header)} }
+
+func (r *syncRecorder) Header() http.Header { return r.header }
+
+func (r *syncRecorder) Write(p []byte) (int, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.body.Write(p)
+}
+
+func (r *syncRecorder) WriteHeader(int) {}
+
+func (r *syncRecorder) Flush() {}
+
+func (r *syncRecorder) String() string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.body.String()
+}
 
 // fakeBackend is a minimal Backend for protocol tests.
 type fakeBackend struct {
@@ -130,7 +161,7 @@ func TestInteraction_GetStreamReceivesPush(t *testing.T) {
 	defer cancel()
 	req := httptest.NewRequest(http.MethodGet, "/mcp/interaction", nil).WithContext(ctx)
 	req.Header.Set("Authorization", "Bearer good")
-	rec := httptest.NewRecorder()
+	rec := newSyncRecorder()
 
 	done := make(chan struct{})
 	go func() { srv.ServeHTTP(rec, req); close(done) }()
@@ -149,15 +180,15 @@ func TestInteraction_GetStreamReceivesPush(t *testing.T) {
 
 	// Give the writer a moment to flush, then close the stream and inspect the body.
 	for time.Now().Before(deadline) {
-		if strings.Contains(rec.Body.String(), "tools/list_changed") {
+		if strings.Contains(rec.String(), "tools/list_changed") {
 			break
 		}
 		time.Sleep(2 * time.Millisecond)
 	}
 	cancel()
 	<-done
-	if !strings.Contains(rec.Body.String(), "notifications/tools/list_changed") {
-		t.Fatalf("SSE stream did not carry list_changed; body=%q", rec.Body.String())
+	if !strings.Contains(rec.String(), "notifications/tools/list_changed") {
+		t.Fatalf("SSE stream did not carry list_changed; body=%q", rec.String())
 	}
 }
 

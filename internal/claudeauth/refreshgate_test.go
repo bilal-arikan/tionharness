@@ -104,9 +104,9 @@ func TestSerializeRefreshAdmitsOneThenReleasesOnRefresh(t *testing.T) {
 // forever — the watch window caps how long the gate stays closed.
 func TestSerializeRefreshReleasesWithoutRefresh(t *testing.T) {
 	// Shrink the backstop: the point is that it fires at all, not that it waits 30s.
-	prev := refreshWatchWindow
-	refreshWatchWindow = 600 * time.Millisecond
-	defer func() { refreshWatchWindow = prev }()
+	prev := refreshWatchWindow.Load()
+	refreshWatchWindow.Store(int64(600 * time.Millisecond))
+	defer refreshWatchWindow.Store(prev)
 
 	home := t.TempDir()
 	writeCred(t, home, time.Now().Add(-time.Minute).UnixMilli(), "old")
@@ -116,7 +116,7 @@ func TestSerializeRefreshReleasesWithoutRefresh(t *testing.T) {
 	go func() { SerializeRefresh(home); close(done) }()
 	select {
 	case <-done:
-	case <-time.After(refreshWatchWindow + 5*time.Second):
+	case <-time.After(time.Duration(refreshWatchWindow.Load()) + 5*time.Second):
 		t.Fatal("the gate never reopened after the watch window elapsed")
 	}
 }

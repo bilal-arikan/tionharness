@@ -2,6 +2,7 @@ package claudeauth
 
 import (
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -35,9 +36,12 @@ const refreshMargin = 10 * time.Minute
 // does not rewrite the file. Without a cap one such launch would block every
 // sibling in the workspace.
 //
-// A var, not a const, purely so the test for that backstop can shrink it: waiting
-// out the real window would add half a minute to every suite run.
-var refreshWatchWindow = 30 * time.Second
+// Atomic (nanoseconds), not a plain var, purely so the test for that backstop can
+// shrink it without racing the watcher goroutine that reads it: waiting out the
+// real window would add half a minute to every suite run.
+var refreshWatchWindow atomic.Int64
+
+func init() { refreshWatchWindow.Store(int64(30 * time.Second)) }
 
 // refreshPoll is how often the watcher re-reads the credential file while waiting
 // for the refresh to land.
@@ -93,7 +97,7 @@ func SerializeRefresh(homeDir string) {
 	// admitting), and the gate opens once its refresh is observable to siblings.
 	go func() {
 		defer lock.Unlock()
-		deadline := time.Now().Add(refreshWatchWindow)
+		deadline := time.Now().Add(time.Duration(refreshWatchWindow.Load()))
 		for time.Now().Before(deadline) {
 			time.Sleep(refreshPoll)
 			if expiryOf(homeDir) != before {

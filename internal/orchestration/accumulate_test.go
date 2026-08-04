@@ -3,14 +3,18 @@ package orchestration
 import (
 	"context"
 	"strings"
+	"sync"
 	"testing"
 )
 
 // threadRunner records the thread it was handed on each call and echoes the
 // prompt. It implements BOTH RunAgentNode (stateless fallback) and
 // RunAgentNodeThread (accumulate path) so tests can assert which path ran and
-// what prior context the node saw.
+// what prior context the node saw. A parallel node fans its children out across
+// goroutines, so the recording fields are mutex-guarded; the post-Run assertions
+// read them only after Run has joined every child.
 type threadRunner struct {
+	mu         sync.Mutex
 	threadLens []int    // len(thread) captured at each RunAgentNodeThread call
 	threads    [][]Msg  // the thread slice seen at each accumulate call
 	statelessN int      // times the stateless path ran
@@ -18,12 +22,16 @@ type threadRunner struct {
 }
 
 func (r *threadRunner) RunAgentNode(_ context.Context, _ string, prompt string) (string, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	r.statelessN++
 	r.calls = append(r.calls, prompt)
 	return "out:" + prompt, nil
 }
 
 func (r *threadRunner) RunAgentNodeThread(_ context.Context, _ string, thread []Msg, prompt, _ string) (string, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	r.threadLens = append(r.threadLens, len(thread))
 	cp := append([]Msg(nil), thread...)
 	r.threads = append(r.threads, cp)
