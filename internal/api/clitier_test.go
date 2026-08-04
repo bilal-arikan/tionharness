@@ -51,6 +51,31 @@ func TestCLITierProjectsVisibility(t *testing.T) {
 	}
 }
 
+// TestCoordinationToolsAreEager pins FND-8ea05c42: the coordinator's worker-driving
+// tools must ride EAGER (core, alwaysLoad) on the CLI wire, never deferred behind
+// ToolSearch — a coordinator that has to discover spawn_worker before calling it is
+// exactly the drift that ends in a phantom-spawn stall. They are registered as plain
+// builtins with the default Full visibility (nothing demotes them to lazy/name-only/
+// hidden), so the per-agent resolver reports Full and cliTier routes them to core.
+func TestCoordinationToolsAreEager(t *testing.T) {
+	// The live path uses the registry's VisibilityOf, which returns Full for any tool
+	// not explicitly demoted — coordination tools are never demoted. Model that here.
+	visOf := func(string) string { return tools.VisibilityFull }
+	for _, name := range []string{"spawn_worker", "list_workers", "send_to_worker", "stop_worker"} {
+		if got := cliTier(name, visOf); got != "core" {
+			t.Errorf("cliTier(%q) = %q, want core (coordination tools must stay eager)", name, got)
+		}
+	}
+	// And they must actually reach the core wire tier when bridged, not just classify.
+	bridge := []providers.ToolDef{{Name: "spawn_worker"}, {Name: "list_workers"}}
+	core, ext := splitInteractionTiers(nil, bridge, visOf)
+	for _, name := range []string{"spawn_worker", "list_workers"} {
+		if !contains(core, name) {
+			t.Errorf("%q must be advertised on the eager core tier: core=%v ext=%v", name, core, ext)
+		}
+	}
+}
+
 // TestSplitInteractionTiersHonorsVisibility verifies splitInteractionTiers routes a
 // full-promoted tool to core, a summary/name-only tool to extended, and drops a
 // hidden tool from BOTH wire tiers.

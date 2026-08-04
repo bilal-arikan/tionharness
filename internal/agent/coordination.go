@@ -49,6 +49,13 @@ type coordSlot struct {
 	// loop; reset to 0 by any turn that actually calls a coordination tool. See
 	// guardCoordinatorStall (coordination_stall.go).
 	spawnHallucStreak int
+	// stallHalted is the hard-halt escalation flag: set once the nudge budget is spent
+	// AND the coordinator is STILL judged to be phantom-spawning. It stops the drain
+	// loop from re-arming (or running the idle-reconcile turn) so a wedged coordinator
+	// no longer burns auto-turns, and gates the one-shot user-facing halt notice. Reset
+	// to false by any turn that actually calls a coordination tool (genuine recovery).
+	// See guardCoordinatorStall / escalateCoordinatorStallHalt (coordination_stall.go).
+	stallHalted bool
 	// lastTurnUnix is the wall-clock (unix seconds) at which this coordinator's last
 	// real turn finished. 0 until the first real turn ran (a stubbed test never sets
 	// it). The stall sweeper reads it to find coordinators gone silent past the
@@ -1045,6 +1052,20 @@ func (r *Runtime) drainCoordinator(coordSessionID string, slot *coordSlot) {
 		}
 
 		slot.mu.Lock()
+		// Hard-halt escalation (FND-99caeb31): the turn-end stall guard just spent the
+		// last nudge on a coordinator STILL narrating phantom spawns and escalated to a
+		// halt. Stop auto-turning it — no re-arm, and skip the idle-reconcile turn below
+		// (which would otherwise hand the wedged model one more shot). A real worker
+		// notification (enqueueCoordinatorTurn) still starts a fresh drain, and a turn
+		// that finally calls a coordination tool clears the flag. The sweeper stays live
+		// as the long-horizon backstop.
+		if slot.stallHalted {
+			slot.running = false
+			slot.pending = false
+			slot.signalFree()
+			slot.mu.Unlock()
+			return
+		}
 		if slot.pending {
 			slot.pending = false
 			slot.mu.Unlock()

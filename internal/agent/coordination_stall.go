@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/bilal-arikan/tionswarm/internal/db"
+	"github.com/bilal-arikan/tionswarm/internal/events"
 	"github.com/bilal-arikan/tionswarm/internal/providers"
 )
 
@@ -29,6 +30,10 @@ import (
 //     for a coordinator whose turn-end budget was spent or whose freeze was missed
 //     (e.g. a restart between turns): it periodically judges any live coordinator
 //     slot that has been silent past the staleness window with no running worker.
+//  3. Hard-halt escalation (escalateCoordinatorStallHalt) — when either layer above
+//     confirms the stall PERSISTS after the nudge budget is spent, it stops auto-
+//     turning the wedged coordinator (slot.stallHalted) and posts a one-shot user
+//     notice, instead of nudging forever or failing silent. Layers 1–2 still run.
 
 const (
 	// DefaultCoordinatorStallSweepMin is the staleness window (minutes): the sweeper
@@ -36,8 +41,9 @@ const (
 	// worker, so a coordinator mid-synthesis is never disturbed.
 	DefaultCoordinatorStallSweepMin = 5
 	// DefaultCoordinatorStallMaxNudges caps consecutive corrective nudges before the
-	// runtime stops arguing with a wedged model and leaves it to the sweeper's
-	// escalation (a loud, observable warning) / the notify-loop turn cap.
+	// runtime stops arguing with a wedged model. Past the cap, a coordinator STILL
+	// judged to be phantom-spawning is hard-halted: auto-turns stop and the user is
+	// notified (escalateCoordinatorStallHalt), rather than the runtime nudging forever.
 	DefaultCoordinatorStallMaxNudges = 2
 )
 
@@ -73,10 +79,11 @@ Reply with STRICT JSON and nothing else: {"stalled": true} or {"stalled": false}
 func (r *Runtime) guardCoordinatorStall(coordSessionID, agentID string, agent db.Agent, text string, steps []TurnStep) {
 	slot := r.coordSlotFor(coordSessionID)
 	// A real coordination tool call this turn means the model is executing, not
-	// narrating — clear any streak and never correct.
+	// narrating — clear any streak (and any prior hard-halt) and never correct.
 	if turnCalledCoordinationTool(steps) {
 		slot.mu.Lock()
 		slot.spawnHallucStreak = 0
+		slot.stallHalted = false
 		slot.mu.Unlock()
 		return
 	}
@@ -88,15 +95,11 @@ func (r *Runtime) guardCoordinatorStall(coordSessionID, agentID string, agent db
 	if slot.workers.Load() > 0 {
 		return
 	}
-	// Budget check BEFORE the paid judge call.
-	slot.mu.Lock()
-	spent := slot.spawnHallucStreak >= r.tun.CoordinatorStallMaxNudges()
-	slot.mu.Unlock()
-	if spent {
-		r.logger.Warn("coordination: stall-nudge budget spent; leaving to sweeper/turn cap", "coordinator", coordSessionID)
-		return
-	}
 
+	// The judge fires on any idle, no-worker turn — including one whose nudge budget is
+	// already spent, because confirming the stall PERSISTS is what justifies the hard
+	// halt below. Fails safe on a judge error: no nudge, no halt, leave it to the
+	// sweeper, so a judge outage can neither spam re-arms nor wrongly halt.
 	stalled, err := r.judgeCoordinatorStalled(context.Background(), agent, text)
 	if err != nil {
 		r.logger.Warn("coordination: stall judge failed; deferring to sweeper", "coordinator", coordSessionID, "error", err)
@@ -105,7 +108,56 @@ func (r *Runtime) guardCoordinatorStall(coordSessionID, agentID string, agent db
 	if !stalled {
 		return
 	}
+
+	// Confirmed phantom spawn. First detections inject a corrective nudge and re-arm one
+	// more turn (bounded by CoordinatorStallMaxNudges). Once that budget is spent and the
+	// coordinator is STILL stalling, escalate to a hard halt: stop auto-turning it and
+	// tell the user why (FND-99caeb31), instead of silently deferring to the sweeper.
+	slot.mu.Lock()
+	spent := slot.spawnHallucStreak >= r.tun.CoordinatorStallMaxNudges()
+	slot.mu.Unlock()
+	if spent {
+		r.escalateCoordinatorStallHalt(coordSessionID, agentID, agent, slot)
+		return
+	}
 	r.injectStallNudge(coordSessionID, agentID, slot, true /* re-arm this batch */)
+}
+
+// escalateCoordinatorStallHalt is the hard-halt escalation (FND-99caeb31): once the
+// nudge budget is spent and the coordinator is STILL judged to be narrating phantom
+// spawns, it marks the slot halted (the drain loop then stops re-arming and skips the
+// idle-reconcile turn) and posts a SINGLE user-facing notice explaining why auto-turns
+// stopped and how to resume. One-shot via slot.stallHalted so neither the turn-end
+// guard nor the every-60s sweeper can spam the notice. The sweeper is intentionally
+// left running as the long-horizon backstop — this is an added escalation layer, not a
+// replacement. A later turn that actually calls a coordination tool clears the flag.
+func (r *Runtime) escalateCoordinatorStallHalt(coordSessionID, agentID string, agent db.Agent, slot *coordSlot) {
+	slot.mu.Lock()
+	already := slot.stallHalted
+	slot.stallHalted = true
+	slot.pending = false
+	streak := slot.spawnHallucStreak
+	slot.mu.Unlock()
+	if already {
+		return
+	}
+	r.logger.Warn("coordination: phantom-spawn stall persists after nudge budget spent; halting coordinator auto-turns",
+		"coordinator", coordSessionID, "streak", streak)
+	r.emitDebug(WithSessionID(context.Background(), coordSessionID), db.DebugEvent{
+		Type:    db.DebugError,
+		AgentID: agentID,
+		Detail:  "coordinator stall halt: phantom spawn persisted after nudge budget spent; auto-turns stopped",
+		Err:     true,
+	})
+	r.publish(events.Event{
+		Type:  events.TypeCoordination,
+		Level: "warn",
+		Title: "🧭 Koordinatör durduruldu — hayalet spawn",
+		Body: "Koordinatör (" + agent.Name + ") worker başlattığını anlatıyor ama gerçek bir spawn_worker çağrısı yapmıyor; " +
+			"düzeltici uyarılar sonuç vermedi. Otomatik koordinatör turları durduruldu. Worker bildirimleri hâlâ kaydediliyor. " +
+			"Devam etmek için oturuma manuel bir mesaj gönderin (ör. \"spawn_worker'ı gerçekten çağır\").",
+		Target: map[string]string{"view": "executions", "sessionId": coordSessionID},
+	})
 }
 
 // injectStallNudge records the corrective note, bumps the nudge streak, and (when
@@ -292,15 +344,11 @@ func (r *Runtime) judgeAndNudgeStall(ctx context.Context, coordSessionID string,
 	spent := slot.spawnHallucStreak >= maxNudges
 	slot.mu.Unlock()
 	if spent {
-		// Give up nudging, but make the freeze observable rather than silent.
-		r.logger.Warn("coordination: coordinator appears frozen (stall nudges exhausted); manual attention needed",
-			"coordinator", coordSessionID)
-		r.emitDebug(WithSessionID(context.Background(), coordSessionID), db.DebugEvent{
-			Type:    db.DebugError,
-			AgentID: agent.ID,
-			Detail:  "coordinator frozen: stall persists after nudge budget spent",
-			Err:     true,
-		})
+		// Nudges exhausted and the stall still confirmed: escalate to the hard halt
+		// (one-shot user notice + stop auto-turns), the same path the turn-end guard
+		// takes — so a freeze the sweeper is the first to catch is surfaced to the user
+		// rather than left as a silent log line.
+		r.escalateCoordinatorStallHalt(coordSessionID, agent.ID, agent, slot)
 		return
 	}
 	r.injectStallNudge(coordSessionID, agent.ID, slot, false /* not mid-drain; kick below */)
