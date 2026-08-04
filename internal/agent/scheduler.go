@@ -258,7 +258,7 @@ func (s *Scheduler) deliverWake(ctx context.Context, sc db.Schedule) error {
 	// to the prompt-only invoke when no runner is wired.
 	var wakeMeta *turnMeta
 	wakeStart := time.Now()
-	turnBase, cancelTurn, output, steps, invokeErr := s.rt.runTurnWithIdleResume(ctx, hardCap, idleCap,
+	turnBase, cancelTurn, output, steps, invokeErr := s.rt.runTurnWithIdleResume(ctx, hardCap, idleCap, s.rt.tun.IdleResumeMax(),
 		func(attemptCtx context.Context, _ context.CancelFunc, attempt int, prevOutput string) (string, []TurnStep, error) {
 			wakeCtx := tools.WithAsyncChat(WithSessionID(WithCallKind(attemptCtx, KindSchedule), sc.SessionID))
 			wakeCtx, wakeMeta = WithTurnMeta(wakeCtx)
@@ -487,7 +487,7 @@ func (s *Scheduler) deliverPrompt(ctx context.Context, sc db.Schedule) (string, 
 		meta     *turnMeta
 	)
 	turnStart := time.Now()
-	turnBase, cancelTurn, output, steps, err := s.rt.runTurnWithIdleResume(ctx, hardCap, idleCap,
+	turnBase, cancelTurn, output, steps, err := s.rt.runTurnWithIdleResume(ctx, hardCap, idleCap, s.rt.tun.IdleResumeMax(),
 		func(attemptCtx context.Context, _ context.CancelFunc, attempt int, prevOutput string) (string, []TurnStep, error) {
 			var turnCtx context.Context
 			turnCtx, overflow = withOverflowFlag(WithSessionID(WithCallKind(attemptCtx, KindSchedule), session.ID))

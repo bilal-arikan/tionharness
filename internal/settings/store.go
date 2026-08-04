@@ -359,6 +359,7 @@ func (s *Store) Apply(p Patch) (Settings, error) {
 	applyInt(&next.SpawnMaxPerTurn, p.SpawnMaxPerTurn)
 	applyInt(&next.SpawnTimeoutMin, p.SpawnTimeoutMin)
 	applyInt(&next.SpawnIdleTimeoutMin, p.SpawnIdleTimeoutMin)
+	applyInt(&next.IdleResumeMax, p.IdleResumeMax)
 	applyInt(&next.ScheduleTimeoutMin, p.ScheduleTimeoutMin)
 	applyInt(&next.CoordinatorMaxWorkers, p.CoordinatorMaxWorkers)
 	applyInt(&next.CoordinatorMaxTurns, p.CoordinatorMaxTurns)
@@ -620,6 +621,14 @@ func normalize(v Settings) Settings {
 	}
 	if v.SpawnIdleTimeoutMin > v.SpawnTimeoutMin {
 		v.SpawnIdleTimeoutMin = v.SpawnTimeoutMin
+	}
+	// Idle-resume budget: 0 disables it, cap at 5 so a persistently-idle turn cannot
+	// chew through many full idle windows before it is finally reported unfinished.
+	if v.IdleResumeMax < 0 {
+		v.IdleResumeMax = 0
+	}
+	if v.IdleResumeMax > 5 {
+		v.IdleResumeMax = 5
 	}
 	if v.ScheduleTimeoutMin < 1 {
 		v.ScheduleTimeoutMin = 1

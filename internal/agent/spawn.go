@@ -251,7 +251,7 @@ func (r *Runtime) runSpawn(agent db.Agent, sessionID, prompt string, opts SpawnO
 		meta     *turnMeta
 	)
 	turnStart := time.Now()
-	ctx, cancel, output, steps, err := r.runTurnWithIdleResume(context.Background(), hardCap, idleCap,
+	ctx, cancel, output, steps, err := r.runTurnWithIdleResume(context.Background(), hardCap, idleCap, r.tun.IdleResumeMax(),
 		func(attemptCtx context.Context, _ context.CancelFunc, attempt int, prevOutput string) (string, []TurnStep, error) {
 			turnCtx, overflow = withOverflowFlag(WithSessionID(WithCallKind(attemptCtx, KindSpawn), sessionID))
 			turnCtx, meta = WithTurnMeta(turnCtx)

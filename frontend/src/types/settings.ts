@@ -116,6 +116,7 @@ export interface AppSettings {
   spawnMaxPerTurn: number
   spawnTimeoutMin: number
   spawnIdleTimeoutMin: number
+  idleResumeMax: number
   scheduleTimeoutMin: number
 
   // Tool execution guards (process-global tool behaviour).

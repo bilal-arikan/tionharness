@@ -225,6 +225,7 @@ export function SettingsPanel({
       spawnMaxPerTurn: draft.spawnMaxPerTurn,
       spawnTimeoutMin: draft.spawnTimeoutMin,
       spawnIdleTimeoutMin: draft.spawnIdleTimeoutMin,
+      idleResumeMax: draft.idleResumeMax,
       scheduleTimeoutMin: draft.scheduleTimeoutMin,
       shellDefaultTimeoutSec: draft.shellDefaultTimeoutSec,
       shellMaxTimeoutSec: draft.shellMaxTimeoutSec,

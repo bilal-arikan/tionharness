@@ -307,6 +307,7 @@ type Settings struct {
 	SpawnMaxPerTurn     int `json:"spawnMaxPerTurn"`     // max spawns per agent turn (0 = default 4)
 	SpawnTimeoutMin     int `json:"spawnTimeoutMin"`     // spawn work-turn deadline in minutes (0 = default 20); also budgets its auto-continue continuations
 	SpawnIdleTimeoutMin int `json:"spawnIdleTimeoutMin"` // spawn/worker inactivity watchdog in minutes (0 = default 5); cancels a turn that emits no step for this long
+	IdleResumeMax       int `json:"idleResumeMax"`       // single-shot auto-restarts for an idle-cut background turn (default 1; 0 = disabled)
 	ScheduleTimeoutMin  int `json:"scheduleTimeoutMin"`  // scheduled-fire (cron task/prompt + wake) deadline in minutes (0 = default 30)
 
 	// Tool execution guards (process-global tool behaviour).
@@ -473,6 +474,7 @@ func Default() Settings {
 		SpawnMaxPerTurn:     4,
 		SpawnTimeoutMin:     20,
 		SpawnIdleTimeoutMin: 5,
+		IdleResumeMax:       1,
 		ScheduleTimeoutMin:  30,
 
 		ShellDefaultTimeoutSec: 30,
@@ -605,6 +607,7 @@ type DTO struct {
 	SpawnMaxPerTurn     int `json:"spawnMaxPerTurn"`
 	SpawnTimeoutMin     int `json:"spawnTimeoutMin"`
 	SpawnIdleTimeoutMin int `json:"spawnIdleTimeoutMin"`
+	IdleResumeMax       int `json:"idleResumeMax"`
 	ScheduleTimeoutMin  int `json:"scheduleTimeoutMin"`
 
 	ShellDefaultTimeoutSec int `json:"shellDefaultTimeoutSec"`
@@ -725,6 +728,7 @@ func (s Settings) ToDTO() DTO {
 		SpawnMaxPerTurn:     s.SpawnMaxPerTurn,
 		SpawnTimeoutMin:     s.SpawnTimeoutMin,
 		SpawnIdleTimeoutMin: s.SpawnIdleTimeoutMin,
+		IdleResumeMax:       s.IdleResumeMax,
 		ScheduleTimeoutMin:  s.ScheduleTimeoutMin,
 
 		ShellDefaultTimeoutSec: s.ShellDefaultTimeoutSec,
@@ -846,6 +850,7 @@ type Patch struct {
 	SpawnMaxPerTurn     *int `json:"spawnMaxPerTurn"`
 	SpawnTimeoutMin     *int `json:"spawnTimeoutMin"`
 	SpawnIdleTimeoutMin *int `json:"spawnIdleTimeoutMin"`
+	IdleResumeMax       *int `json:"idleResumeMax"`
 	ScheduleTimeoutMin  *int `json:"scheduleTimeoutMin"`
 
 	CoordinatorMaxWorkers         *int  `json:"coordinatorMaxWorkers"`
