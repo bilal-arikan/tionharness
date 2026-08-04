@@ -177,6 +177,15 @@ bir not alır (`applyTurnOutcome`) — koordinatör fragmanı sonuç sanamaz.
 watchdog iptali ile kullanıcının "Durdur"u ayırt edilemezdi (ikisi de
 `context.Canceled`) ve süre dolması "killed" diye raporlanırdı.
 
+**Tek-atımlık boşta-resume (FND-708844f8):** `ErrTurnIdleTimeout` ile kesilen worker
+turu koordinatöre `timeout` raporlanmadan ÖNCE, `runTurnWithIdleResume` ile taze bir
+boşta penceresinde **bir kez** otomatik yeniden başlatılır (ilk denemenin fragmanını
+`resumeContinuationPrompt` ile taşır). İkinci deneme de boştaysa yine `timeout`
+raporlanır ve koordinatör re-task eder — yani resume, koordinatör re-task'ından
+ÖNCEKİ yerinde ilk savunmadır (çift kurtarma değil). Sert tavan resume edilmez.
+`workerCtl` her denemede `setCancel` ile güncellendiğinden `stop_worker` daima
+uçuştaki denemeyi keser. Ayrıntı: `_Docs/56` Faz E.
+
 ### 3.4 Kilit yeni bileşen: `CoordinationEngine` + per-session tur kuyruğu
 
 Yeni dosya `internal/agent/coordination.go`:

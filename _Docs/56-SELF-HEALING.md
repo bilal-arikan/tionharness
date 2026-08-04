@@ -100,6 +100,20 @@
   wake/schedule/inbox **ve koordinatör** turları da bu kurtarmayı kullanır;
   koordinatörde kesilmiş tur ayrıca spawn-narration stall kontrolünü atlar (yarıda
   kesilen tur bu heuristikle yargılanmaz).
+- **Tek-atımlık boşta-resume** (`runTurnWithIdleResume`, `idleResumeMax=1`,
+  FND-708844f8): boşta gözcüsü döngü DIŞINDA tetiklendiğinden döngü-içi kurtarma
+  bütçelerine (`decideRecovery`) hiç girmez; bu yüzden bir kez sessizleşen tur (uzun
+  streaming-olmayan araç çağrısı, alt-ajan beklemesi) hiçbir bütçeye girmeden yarım
+  kalırdı. Artık tur **yalnız `ErrTurnIdleTimeout`** ile kesildiyse taze bir boşta
+  penceresiyle **BİR KEZ** otomatik yeniden başlatılır; ikinci deneme, ilk denemenin
+  kurtarılan fragmanını `resumeContinuationPrompt` ile alır (baştan başlamaz,
+  kaldığı yerden sürer). **Sert tavan (`ErrTurnHardTimeout`) resume EDİLMEZ** —
+  tekrar aynı tavana çarpar. İkinci deneme de boştaysa tur yine "timeout"/unfinished
+  olarak raporlanır (Faz E) ve üst koordinatör onu yeniden görevlendirir (ÇİFT
+  kurtarma değil: resume, koordinatör re-task'ından ÖNCEKİ yerinde ilk savunma).
+  Worker yolunda `workerCtl` her denemede `setCancel` ile güncellenir, böylece
+  koordinatörün `stop_worker`'ı daima uçuştaki denemeyi keser. Bağlı yollar:
+  spawn / worker / inbox / wake / schedule (koordinatör turu hariç).
 
 ## Gözlemlenebilirlik
 - Yeni `debug.jsonl` olay türleri: `repair` (rule `Name`'de) ve `guardrail`

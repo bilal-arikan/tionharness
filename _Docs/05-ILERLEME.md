@@ -2,6 +2,26 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-08-04**
 
+## Boşta-zaman-aşımı tek-atımlık resume (2026-08-04) ✅
+
+- **Sorun (FND-708844f8):** boşta gözcüsü (`ErrTurnIdleTimeout`) turu döngü DIŞINDA
+  kesiyor; `recovery.go` kurtarma bütçeleri (`decideRecovery`) yalnız döngü-içi
+  hatalar için tasarlı olduğundan, döngü-dışı boşta zaman aşımı hiçbir bütçeye
+  girmiyor → kısmi iş kalıcı yarım kalıyordu. Faz E (2026-08-04, `1613777`/`6e0b1a8`)
+  bu kesintiyi **görünür** kıldı (unfinished notu + koordinatöre "timeout" sinyali)
+  ama **otomatik yeniden deneme** eklemedi.
+- **Çözüm (`internal/agent/turnoutcome.go`):** `runTurnWithIdleResume` helper'ı
+  turu, **yalnız `ErrTurnIdleTimeout`** ile kapandıysa taze boşta penceresiyle **BİR
+  KEZ** (`idleResumeMax=1`) otomatik yeniden başlatır. İkinci deneme ilk denemenin
+  kurtarılan fragmanını `resumeContinuationPrompt` ile alır (kaldığı yerden sürer).
+  **Sert tavan (`ErrTurnHardTimeout`) resume edilmez.** İkinci deneme de boştaysa tur
+  yine unfinished raporlanır (Faz E) → koordinatör re-task (çift kurtarma değil,
+  yerinde ilk savunma). Bağlı yollar: spawn / worker / inbox / wake / schedule
+  (koordinatör turu hariç). Worker'da `workerCtl` `setCancel`/metot-`cancel` ile
+  thread-safe; `stop_worker` her denemede uçuştaki turu keser.
+- **Doğrulama:** `go build ./...` ✅, `go test ./internal/agent/...` ✅ (337 test,
+  5 yeni `idleresume_test.go`).
+
 ## Grep çoklu-path desteği (2026-08-04) ✅
 
 - **Sorun (FND-02391b62 · FND-be8c85b7 · FND-5253471e):** `Grep` `path` alanı tek

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/google/uuid"
@@ -223,8 +224,6 @@ func (r *Runtime) runSpawn(agent db.Agent, sessionID, prompt string, opts SpawnO
 	// spawn that streams no step for SpawnIdleTimeout is reclaimed fast, while a
 	// long-but-productive one runs up to SpawnTimeout.
 	hardCap, idleCap := r.tun.SpawnTimeout(), r.tun.SpawnIdleTimeout()
-	ctx, cancel := withActivityTimeout(context.Background(), hardCap, idleCap)
-	defer cancel()
 
 	// Serialize this detached spawn turn on the session's turn slot so it never
 	// overlaps a user/wake/peer turn opened on the same session (all of which claim
@@ -240,10 +239,29 @@ func (r *Runtime) runSpawn(agent db.Agent, sessionID, prompt string, opts SpawnO
 	// an idle-looking composer until it happens to emit its next step. The
 	// completion "spawned" event clears it.
 	r.emitTurnStart(sessionID, "✨ Spawn turu çalışıyor")
-	turnCtx, overflow := withOverflowFlag(WithSessionID(WithCallKind(ctx, KindSpawn), sessionID))
-	turnCtx, meta := WithTurnMeta(turnCtx)
+
+	// Single-shot idle-resume: a spawn cut by the idle watchdog (a long non-streaming
+	// tool call that outran even the heartbeat) gets ONE more attempt under a fresh
+	// window before its partial work is reported unfinished (FND-708844f8). A hard-cap
+	// cut, a clean finish, or a loop-terminal outcome is never resumed. turnCtx/overflow/
+	// meta escape the closure so the post-turn handling below reads the FINAL attempt.
+	var (
+		turnCtx  context.Context
+		overflow *atomic.Bool
+		meta     *turnMeta
+	)
 	turnStart := time.Now()
-	output, steps, err := r.invokeTraced(turnCtx, agent, prompt, true)
+	ctx, cancel, output, steps, err := r.runTurnWithIdleResume(context.Background(), hardCap, idleCap,
+		func(attemptCtx context.Context, _ context.CancelFunc, attempt int, prevOutput string) (string, []TurnStep, error) {
+			turnCtx, overflow = withOverflowFlag(WithSessionID(WithCallKind(attemptCtx, KindSpawn), sessionID))
+			turnCtx, meta = WithTurnMeta(turnCtx)
+			p := prompt
+			if attempt > 1 {
+				p = resumeContinuationPrompt(prompt, prevOutput)
+			}
+			return r.invokeTraced(turnCtx, agent, p, true)
+		})
+	defer cancel()
 	r.untrackSession(sessionID)
 
 	// Why the turn ended, independent of err: a spawn can be cut short and still
