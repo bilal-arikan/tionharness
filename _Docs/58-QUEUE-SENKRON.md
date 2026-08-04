@@ -505,7 +505,11 @@ olarak yayınlanır (oturum yerinde kalır); sert hata `turn_error` ile ghost'u 
 **Flow'lar `/` menüsünden kaldırıldı (2026-08-04):** kompozer'dan flow çalıştırma
 (`performRunFlow` + per-flow `/<slug>` slash girdileri) kaldırıldı — flow'lar artık
 yalnız Flows panelinden koşulur; `/flows` hâlâ flow listesini **özetler**. Ölü
-`api.runFlowStream` (session-içi SSE) korunuyor (dış otomasyon endpoint'i açık).
+zincir tamamen temizlendi: frontend `api.runFlowStream`/`streamRunFlow`/
+`FlowStreamHandlers`/`runFlowInSession`, backend `handleSessionRunFlow(Stream)` +
+`sessionFlowReq`/`flowRunMarkdown`/`finalAgentID` ve `POST /api/sessions/{id}/run-flow`
++ `/run-flow-stream` route'ları. Standalone Flows-paneli yolu (`/api/flows/{id}/run`
++ `/run-stream` → `handleRunFlow(Stream)`) korunuyor.
 
 ## Doğrulama
 

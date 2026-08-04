@@ -1,5 +1,5 @@
 // Orchestration flows and their run history (Phase 7).
-import type { Attachment, Flow, FlowGraph, FlowRun, Message, TurnStep } from '@/types'
+import type { Flow, FlowGraph, FlowRun, TurnStep } from '@/types'
 import { req, wsHeaders, errorFromResponse } from './client'
 
 // One node lifecycle event streamed while a flow runs (mirrors
@@ -13,15 +13,6 @@ export interface FlowNodeEvent {
   index: number
   output?: string
   error?: string
-}
-
-// Handlers invoked as a streamed flow run dispatches parsed SSE events.
-export interface FlowStreamHandlers {
-  attachments?: Attachment[]
-  onMeta?: (m: { userMessage: Message }) => void
-  onNode: (ev: FlowNodeEvent) => void
-  onReply: (r: { replyMessage: Message }) => void
-  onError: (err: string) => void
 }
 
 // Handlers for a standalone flow run (FlowsPanel) streamed over SSE: node
@@ -66,43 +57,6 @@ async function pumpSSE(res: Response, route: (event: string, data: unknown) => v
       if (frame.trim()) dispatchSSE(frame, route)
     }
   }
-}
-
-// streamRunFlow POSTs to the in-session SSE run-flow endpoint and dispatches
-// parsed events (fetch streaming, since EventSource can't POST).
-async function streamRunFlow(
-  sessionId: string,
-  flowId: string,
-  input: string,
-  handlers: FlowStreamHandlers,
-  signal?: AbortSignal,
-): Promise<void> {
-  const res = await fetch(`/api/sessions/${sessionId}/run-flow-stream`, {
-    method: 'POST',
-    headers: wsHeaders(),
-    body: JSON.stringify({ flowId, input, attachments: handlers.attachments ?? [] }),
-    signal,
-  })
-  if (!res.ok || !res.body) {
-    handlers.onError(await errorFromResponse(res))
-    return
-  }
-  await pumpSSE(res, (event, data) => {
-    switch (event) {
-      case 'meta':
-        handlers.onMeta?.(data as { userMessage: Message })
-        break
-      case 'node':
-        handlers.onNode(data as FlowNodeEvent)
-        break
-      case 'reply':
-        handlers.onReply(data as { replyMessage: Message })
-        break
-      case 'error':
-        handlers.onError((data as { error: string }).error)
-        break
-    }
-  })
 }
 
 // streamRunFlowStandalone POSTs to the standalone SSE run endpoint (FlowsPanel),
@@ -150,8 +104,7 @@ export const flowApi = {
       method: 'PUT',
       body: JSON.stringify({ name, graph }),
     }),
-  deleteFlow: (id: string) =>
-    req<{ result: string }>(`/api/flows/${id}`, { method: 'DELETE' }),
+  deleteFlow: (id: string) => req<{ result: string }>(`/api/flows/${id}`, { method: 'DELETE' }),
   // Replace a flow's free-form tags (organizational).
   setFlowTags: (id: string, tags: string[]) =>
     req<{ id: string; tags: string[] }>(`/api/flows/${id}/tags`, {
@@ -167,8 +120,7 @@ export const flowApi = {
   // Absolute path of the flow's on-disk JSON file (copy-to-clipboard).
   flowPath: (id: string) => req<{ path: string }>(`/api/flows/${id}/path`),
   // Open the flow's folder in the OS file manager (local desktop).
-  revealFlow: (id: string) =>
-    req<{ path: string }>(`/api/flows/${id}/reveal`, { method: 'POST' }),
+  revealFlow: (id: string) => req<{ path: string }>(`/api/flows/${id}/reveal`, { method: 'POST' }),
   // Run a flow standalone (FlowsPanel). The backend also records the run into
   // the flow's transcript session; we unwrap to the FlowRun for the panel.
   runFlow: (id: string, input: string) =>
@@ -191,8 +143,7 @@ export const flowApi = {
   // Every run in one composed flow's tree, breadth-first (parent before its
   // children). Accepts ANY member id, not just the root — the backend normalises
   // to the root. Also the resync path when the live event stream drops.
-  flowRunTree: (id: string) =>
-    req<FlowRun[]>(`/api/flow-runs/${encodeURIComponent(id)}/tree`),
+  flowRunTree: (id: string) => req<FlowRun[]>(`/api/flow-runs/${encodeURIComponent(id)}/tree`),
   // One agent node's captured tool/thinking steps for a run, read from the
   // per-node sidecar. Returns [] for nodes with no steps (or pre-capture runs).
   flowRunNodeSteps: (runId: string, nodeId: string) =>
@@ -206,14 +157,6 @@ export const flowApi = {
       method: 'POST',
       body: JSON.stringify({ input }),
     }).then((r) => r.run),
-  // Run a flow inside a session over SSE, streaming each node's progress.
-  runFlowStream: (
-    sessionId: string,
-    flowId: string,
-    input: string,
-    handlers: FlowStreamHandlers,
-    signal?: AbortSignal,
-  ): Promise<void> => streamRunFlow(sessionId, flowId, input, handlers, signal),
   // Run a flow standalone (FlowsPanel) over SSE, streaming node-by-node progress.
   runFlowStreamStandalone: (
     flowId: string,

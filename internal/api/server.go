@@ -457,8 +457,6 @@ func (s *Server) registerSessionRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/git/config", s.handleGitConfig)
 	mux.HandleFunc("POST /api/sessions/{id}/summary", s.handleSessionSummary)
 	mux.HandleFunc("POST /api/sessions/{id}/handoff", s.handleSessionHandoff)
-	mux.HandleFunc("POST /api/sessions/{id}/run-flow", s.handleSessionRunFlow)
-	mux.HandleFunc("POST /api/sessions/{id}/run-flow-stream", s.handleSessionRunFlowStream)
 	mux.HandleFunc("POST /api/sessions/{id}/read", s.handleMarkSessionRead)
 	mux.HandleFunc("GET /api/sessions/{id}/info", s.handleSessionInfo)
 	mux.HandleFunc("GET /api/sessions/{id}/progress", s.handleSessionProgress)
