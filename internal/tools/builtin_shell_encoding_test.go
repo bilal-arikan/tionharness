@@ -1,17 +1,27 @@
 package tools
 
-import "testing"
+import (
+	"runtime"
+	"testing"
+)
 
 func TestIsWindowsPowerShell(t *testing.T) {
+	// isWindowsPowerShell resolves the executable name via filepath.Base, whose
+	// separator is platform-specific. The backslash Windows paths below only
+	// split correctly on Windows; on other GOOS filepath.Base keeps them whole
+	// and the cases fail spuriously. The function only runs on Windows anyway.
+	if runtime.GOOS != "windows" {
+		t.Skip("exercises Windows filepath.Base semantics for backslash paths")
+	}
 	cases := map[string]bool{
 		`C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe`: true,
-		"powershell.exe": true,
-		"powershell":     true,
-		"POWERSHELL.EXE": true,
+		"powershell.exe":                         true,
+		"powershell":                             true,
+		"POWERSHELL.EXE":                         true,
 		`C:\Program Files\PowerShell\7\pwsh.exe`: false,
-		"pwsh.exe": false,
-		"pwsh":     false,
-		"/usr/bin/pwsh": false,
+		"pwsh.exe":                               false,
+		"pwsh":                                   false,
+		"/usr/bin/pwsh":                          false,
 	}
 	for exe, want := range cases {
 		if got := isWindowsPowerShell(exe); got != want {

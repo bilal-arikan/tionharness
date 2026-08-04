@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"os/exec"
 	"strings"
 	"testing"
 
@@ -39,6 +40,14 @@ func createFlow(t *testing.T, rt *Runtime, g orchestration.Graph) string {
 // TestFlowPrecheckValidGraphPasses is the regression guard: a graph whose agents
 // exist and whose providers build must pass the precheck untouched.
 func TestFlowPrecheckValidGraphPasses(t *testing.T) {
+	// The precheck asserts every agent's provider can actually run. The keyless
+	// claude-cli provider needs the claude CLI on PATH, so without it a
+	// structurally valid graph legitimately fails readiness — skip rather than
+	// report a false failure on a runner that has no claude installed.
+	if _, err := exec.LookPath("claude"); err != nil {
+		t.Skip("keyless claude-cli provider needs the claude CLI on PATH")
+	}
+
 	rt, _ := newTestRuntime(t, t.TempDir())
 	a := newFlowAgent(t, rt, "worker")
 
