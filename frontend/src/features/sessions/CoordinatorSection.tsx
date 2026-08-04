@@ -9,6 +9,8 @@ import {
   ChevronRight,
   Workflow,
   ArrowLeft,
+  OctagonAlert,
+  RotateCw,
 } from 'lucide-react'
 import { api } from '@/api'
 import { InfoPopover } from '@/shared/components/InfoPopover'
@@ -32,6 +34,9 @@ interface Props {
   coordinatorMode?: boolean
   // This session's depth in its coordinator tree (root = 0).
   coordinatorDepth?: number
+  // True when the phantom-spawn stall guard hard-halted this coordinator's auto-turns.
+  // Drives the persistent "durduruldu" badge + resume CTA below.
+  stallHalted?: boolean
   // The session's selected coordinator recipe/workflow slug (M5), if any.
   workflow?: string
   // For a worker session: back-link to its coordinator, so the panel can offer a
@@ -62,6 +67,7 @@ export function CoordinatorSection({
   coordinatorDepth,
   workflow,
   coordinatorSessionId,
+  stallHalted,
   refreshKey,
   onError,
   onRoleChanged,
@@ -73,6 +79,7 @@ export function CoordinatorSection({
   const isWorker = isWorkerSession(session)
   const [toggling, setToggling] = useState(false)
   const [savingWf, setSavingWf] = useState(false)
+  const [resuming, setResuming] = useState(false)
   const [workers, setWorkers] = useState<WorkerInfo[]>([])
   // Worker roster collapse (persisted) — the list can get long, so let it fold.
   const [workersOpen, setWorkersOpen] = useState(
@@ -140,6 +147,19 @@ export function CoordinatorSection({
       onError((e as Error).message)
     } finally {
       setSavingWf(false)
+    }
+  }
+
+  const resumeCoordinator = async () => {
+    setResuming(true)
+    try {
+      await api.resumeCoordinator(sessionId)
+      // Refetch session info so the halt badge clears once the state flips.
+      onRoleChanged()
+    } catch (e) {
+      onError((e as Error).message)
+    } finally {
+      setResuming(false)
     }
   }
 
@@ -228,6 +248,35 @@ export function CoordinatorSection({
               {toggling ? '…' : 'Kapat'}
             </button>
           </div>
+
+          {/* Phantom-spawn hard-halt: a persistent, actionable banner (not a transient
+              toast). Shown until the coordinator recovers (a real spawn_worker call) or
+              the user resumes it here. */}
+          {stallHalted && (
+            <div className="space-y-1.5 rounded-lg border border-[var(--color-error)] bg-[var(--color-error)]/5 px-2.5 py-2">
+              <div className="flex items-center gap-1.5 text-[11px] font-semibold text-[var(--color-error)]">
+                <OctagonAlert size={13} className="shrink-0" /> Koordinatör durduruldu
+              </div>
+              <p className="text-[10px] leading-relaxed text-[var(--color-text-dim)]">
+                Koordinatör worker başlattığını anlatıp gerçek bir <code>spawn_worker</code> çağrısı
+                yapmadı; düzeltici uyarılar sonuç vermedi, otomatik turlar durduruldu. Sohbete{' '}
+                <code>spawn_worker'ı gerçekten çağır</code> gibi bir mesaj yazın ya da aşağıdan tek
+                turluk devam ettirin.
+              </p>
+              <button
+                onClick={resumeCoordinator}
+                disabled={resuming}
+                className="flex items-center gap-1.5 rounded-md border border-[var(--color-error)] px-2 py-1 text-[10px] font-medium text-[var(--color-error)] transition hover:bg-[var(--color-error)]/10 disabled:opacity-50"
+              >
+                {resuming ? (
+                  <Loader2 size={12} className="shrink-0 animate-spin" />
+                ) : (
+                  <RotateCw size={12} className="shrink-0" />
+                )}
+                Devam ettir
+              </button>
+            </div>
+          )}
 
           {/* Workflow (recipe) picker (M5): a saved orchestration pattern layered on
               the coordinator prompt. */}

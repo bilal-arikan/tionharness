@@ -291,6 +291,9 @@ export interface SessionInfo {
   coordinatorDepth?: number
   // Selected coordinator recipe/workflow slug (M5), if any.
   coordinatorWorkflow?: string
+  // True when the phantom-spawn stall guard hard-halted this coordinator's auto-turns
+  // (see coordination_stall.go). Drives the persistent "durduruldu" badge + resume CTA.
+  coordinatorStallHalted?: boolean
   createdAt: number
   updatedAt: number
 
@@ -365,6 +368,9 @@ export interface CoordinatorTreeNode {
   // Still owes its coordinator an upward report. A node parked here is the one
   // shape of "silently blocking everything above it".
   reportPending?: boolean
+  // Phantom-spawn hard-halt: this coordinator's auto-turns are stopped until a human
+  // resumes it (distinct from generic 'stuck' — it has a one-click resume action).
+  stallHalted?: boolean
   // This node's own lifetime spend. Absent when it has no recorded usage.
   calls?: number
   tokens?: number

@@ -212,6 +212,12 @@ function onEvent(d: AppEventDeps, e: AppEvent) {
     if (e.type === 'worker' && e.target?.coordinatorId) {
       publishWorkerChange(e.target.coordinatorId)
     }
+    // A coordination signal (e.g. the phantom-spawn hard-halt notice) targets the
+    // coordinator session directly; route it onto the same bus so the open session's
+    // info panel refetches and its "durduruldu" badge appears without a manual refresh.
+    if (e.type === 'coordination' && e.target?.sessionId) {
+      publishWorkerChange(e.target.sessionId)
+    }
   }
   // Cross-window panel refresh: every event may move rows / status /
   // memberships inside one or more panels (TaskBoard, NetworkPanel,

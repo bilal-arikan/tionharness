@@ -22,6 +22,15 @@
     atıf öncesi `list_workers`; düz metinde 'worker başlattım' demek stall'a düşürür" eklendi.
   - **Eager teyit:** `spawn_worker`/`list_workers` registry'de varsayılan `Full` → CLI
     `core`/alwaysLoad tier'ında (deferred değil) olduğu doğrulandı; regresyon testi eklendi.
+  - **UI — kalıcı "durduruldu" rozeti/CTA (2026-08-04):** halt durumu
+    `session_info.coordinatorStallHalted` + koordinatör-ağacı düğüm `stallHalted`
+    alanıyla sunulur (`Runtime.CoordinatorStallHalted`, in-memory slot). Koordinasyon
+    panelinde kırmızı **"Koordinatör durduruldu"** rozeti + **"Devam ettir"** butonu
+    (POST `/api/sessions/{id}/coordinator/resume` → `ResumeCoordinatorFromStall`:
+    halt+streak temizler, bir tur kickler); ağaç görünümünde OctagonAlert işareti.
+    Live güncelleme: `coordination` SSE olayı `workerBus`'a köprülenip panelin
+    `session_info` refetch'ini tetikler. Restart'ta rozet sweeper penceresinde geri gelir.
+    Testler: `TestCoordinatorStallHaltedReflectsState`, `TestResumeCoordinatorRejectsNonCoordinator`.
 - **Doğrulama:** `go build ./internal/agent/... ./internal/prompts/... ./internal/skills/...` ✅,
   `go test ./internal/agent/...` (335) ✅ ve `./internal/api/...` tier testleri (yeni
   `TestCoordinationToolsAreEager`, `TestEscalateCoordinatorStallHaltIsOneShot`,

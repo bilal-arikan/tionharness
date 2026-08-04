@@ -81,7 +81,9 @@ export function CoordinatorTreeView({ sessionId, refreshKey, onSelectSession }: 
   // Broken branches are counted for the collapsed header: a failure deep in the
   // tree is exactly the thing nobody scrolls down to find, so the fold itself has
   // to say it is there.
-  const unhealthy = nodes.filter((n) => n.health === 'stuck' || n.health === 'error')
+  const unhealthy = nodes.filter(
+    (n) => n.health === 'stuck' || n.health === 'error' || n.stallHalted,
+  )
 
   return (
     <div className="rounded-lg border border-[var(--color-border)] px-2.5 py-2">
@@ -172,19 +174,22 @@ function TreeRow({
   const clickable = !!onSelectSession && !isSelf
   const stuck = node.health === 'stuck'
   const errored = node.health === 'error'
+  const halted = !!node.stallHalted
   // Name colour carries the health: a broken node has to be findable by scanning,
   // not by reading each row's trailing icons.
   const nameColor =
-    stuck || errored
+    stuck || errored || halted
       ? 'text-[var(--color-error)]'
       : isSelf
         ? 'text-[var(--color-accent)]'
         : 'text-[var(--color-text)]'
-  const healthTitle = stuck
-    ? 'Takıldı — otonom turlar reddediliyor, müdahale gerekiyor'
-    : errored
-      ? 'Son turu hata ile bitti'
-      : ''
+  const healthTitle = halted
+    ? 'Durduruldu — hayalet spawn; otomatik turlar durdu, devam ettirilmesi gerekiyor'
+    : stuck
+      ? 'Takıldı — otonom turlar reddediliyor, müdahale gerekiyor'
+      : errored
+        ? 'Son turu hata ile bitti'
+        : ''
   const body = (
     <span className="flex w-full items-center gap-1.5">
       {node.isCoordinator ? (
@@ -195,8 +200,10 @@ function TreeRow({
       <span className={`truncate text-[11px] ${isSelf ? 'font-semibold' : ''} ${nameColor}`}>
         {node.agentName}
       </span>
-      {stuck && <OctagonAlert size={11} className="shrink-0 text-[var(--color-error)]" />}
-      {errored && !stuck && (
+      {(stuck || halted) && (
+        <OctagonAlert size={11} className="shrink-0 text-[var(--color-error)]" />
+      )}
+      {errored && !stuck && !halted && (
         <AlertTriangle size={11} className="shrink-0 text-[var(--color-error)]" />
       )}
       {/* A node that owes its coordinator a report is not broken, but it IS what
@@ -225,7 +232,7 @@ function TreeRow({
           onClick={() => onSelectSession!(node.sessionId)}
           title={title}
           className={`flex w-full items-center rounded px-1 py-0.5 text-left transition hover:bg-[var(--color-surface-2)] ${
-            stuck || errored ? 'bg-[var(--color-error)]/5' : ''
+            stuck || errored || halted ? 'bg-[var(--color-error)]/5' : ''
           }`}
         >
           {body}
@@ -234,7 +241,7 @@ function TreeRow({
         <div
           title={title}
           className={`flex w-full items-center rounded px-1 py-0.5 ${
-            stuck || errored ? 'bg-[var(--color-error)]/5' : ''
+            stuck || errored || halted ? 'bg-[var(--color-error)]/5' : ''
           }`}
         >
           {body}

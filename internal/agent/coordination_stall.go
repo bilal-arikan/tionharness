@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"time"
 
@@ -158,6 +159,51 @@ func (r *Runtime) escalateCoordinatorStallHalt(coordSessionID, agentID string, a
 			"Devam etmek için oturuma manuel bir mesaj gönderin (ör. \"spawn_worker'ı gerçekten çağır\").",
 		Target: map[string]string{"view": "executions", "sessionId": coordSessionID},
 	})
+}
+
+// CoordinatorStallHalted reports whether a coordinator session is currently in the
+// hard-halt state (auto-turns stopped after a persistent phantom-spawn stall). Read
+// from the in-memory slot WITHOUT creating one — a session that has never coordinated
+// has no slot and is trivially not halted, so a plain read must not allocate a slot
+// for every info-panel poll. The UI reads this to render a persistent "durduruldu"
+// badge; after a process restart the slot is fresh (false) and the sweeper re-detects
+// a still-frozen coordinator within its window, re-arming the badge.
+func (r *Runtime) CoordinatorStallHalted(coordSessionID string) bool {
+	v, ok := r.coordSlots.Load(coordSessionID)
+	if !ok {
+		return false
+	}
+	slot, _ := v.(*coordSlot)
+	if slot == nil {
+		return false
+	}
+	slot.mu.Lock()
+	defer slot.mu.Unlock()
+	return slot.stallHalted
+}
+
+// ResumeCoordinatorFromStall is the user-facing "Devam ettir" action behind the halt
+// badge: it clears the hard-halt state and the nudge streak (a human is back in the
+// loop, so the coordinator gets a genuine fresh budget) and kicks one coordinator
+// turn. If the model stalls again the guard re-halts (one-shot notice), so the button
+// can be pressed repeatedly without spamming. Errors if the session is not a live
+// coordinator, so the caller surfaces a real failure instead of silently no-oping.
+func (r *Runtime) ResumeCoordinatorFromStall(ctx context.Context, coordSessionID string) error {
+	sess, err := r.db.GetSession(ctx, coordSessionID)
+	if err != nil {
+		return err
+	}
+	if !sess.IsCoordinator() {
+		return fmt.Errorf("session %s is not a coordinator", coordSessionID)
+	}
+	slot := r.coordSlotFor(coordSessionID)
+	slot.mu.Lock()
+	slot.stallHalted = false
+	slot.spawnHallucStreak = 0
+	slot.mu.Unlock()
+	r.logger.Info("coordination: stall halt cleared by user; resuming coordinator", "coordinator", coordSessionID)
+	r.enqueueCoordinatorTurn(coordSessionID)
+	return nil
 }
 
 // injectStallNudge records the corrective note, bumps the nudge streak, and (when

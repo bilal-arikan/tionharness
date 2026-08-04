@@ -43,7 +43,11 @@ type sessionInfoResp struct {
 	CoordinatorDepth         int    `json:"coordinatorDepth,omitempty"`
 	// CoordinatorWorkflow is the selected coordinator recipe slug (M5), if any.
 	CoordinatorWorkflow string `json:"coordinatorWorkflow,omitempty"`
-	CreatedAt           int64  `json:"createdAt"`
+	// CoordinatorStallHalted is true when the phantom-spawn stall guard has hard-halted
+	// this coordinator's auto-turns (see coordination_stall.go). Drives the persistent
+	// "durduruldu" badge + resume CTA in the coordination panel.
+	CoordinatorStallHalted bool  `json:"coordinatorStallHalted,omitempty"`
+	CreatedAt              int64 `json:"createdAt"`
 	UpdatedAt           int64  `json:"updatedAt"`
 
 	// Tags are the session's free-form labels (also drive tag-triggered automations).
@@ -185,6 +189,7 @@ func (s *Server) handleSessionInfo(w http.ResponseWriter, r *http.Request) {
 		RootCoordinatorSessionID: session.RootCoordinator(),
 		CoordinatorDepth:         session.CoordinatorDepth,
 		CoordinatorWorkflow:      session.CoordinatorWorkflow,
+		CoordinatorStallHalted:   wsp.Runtime.CoordinatorStallHalted(id),
 		CreatedAt:                session.CreatedAt,
 		UpdatedAt:                session.UpdatedAt,
 		HasSummary:               session.Summary != "",

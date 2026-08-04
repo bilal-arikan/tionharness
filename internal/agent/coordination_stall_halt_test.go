@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"context"
 	"path/filepath"
 	"sync"
 	"testing"
@@ -40,6 +41,60 @@ func TestEscalateCoordinatorStallHaltIsOneShot(t *testing.T) {
 		t.Fatalf("second escalation must be a one-shot no-op; streak %d->%d halted=%v", streak, slot.spawnHallucStreak, slot.stallHalted)
 	}
 	slot.mu.Unlock()
+}
+
+// TestCoordinatorStallHaltedReflectsState verifies the UI accessor: false for a
+// session with no slot, true after the escalation, and false again after a resume —
+// the exact transitions the persistent "durduruldu" badge reads.
+func TestCoordinatorStallHaltedReflectsState(t *testing.T) {
+	rt, _ := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))
+	coord := newTestCoordinator(t, rt, 0)
+	rt.coordRunFn = func(string) {} // resume enqueues a turn; keep it a no-op
+
+	if rt.CoordinatorStallHalted("never-coordinated") {
+		t.Error("a session with no coord slot must not report halted")
+	}
+	if rt.CoordinatorStallHalted(coord) {
+		t.Error("a fresh coordinator must not report halted")
+	}
+
+	slot := rt.coordSlotFor(coord)
+	agent := db.Agent{ID: "A", Name: "Coord"}
+	rt.escalateCoordinatorStallHalt(coord, agent.ID, agent, slot)
+	if !rt.CoordinatorStallHalted(coord) {
+		t.Error("expected halted=true after escalation")
+	}
+
+	if err := rt.ResumeCoordinatorFromStall(context.Background(), coord); err != nil {
+		t.Fatalf("resume: %v", err)
+	}
+	if rt.CoordinatorStallHalted(coord) {
+		t.Error("resume must clear the halt")
+	}
+	slot.mu.Lock()
+	streak := slot.spawnHallucStreak
+	slot.mu.Unlock()
+	if streak != 0 {
+		t.Errorf("resume must reset the nudge streak, got %d", streak)
+	}
+}
+
+// TestResumeCoordinatorRejectsNonCoordinator verifies the resume action refuses a
+// plain session (so the CTA never silently no-ops on the wrong session).
+func TestResumeCoordinatorRejectsNonCoordinator(t *testing.T) {
+	rt, _ := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))
+	ctx := context.Background()
+	a, err := rt.db.CreateAgent(ctx, db.Agent{Name: "Plain", Provider: "anthropic", Model: "m"})
+	if err != nil {
+		t.Fatalf("create agent: %v", err)
+	}
+	sess, err := rt.db.CreateSession(ctx, db.Session{AgentID: a.ID, Kind: "chat", SourceID: "test:plain"})
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+	if err := rt.ResumeCoordinatorFromStall(ctx, sess.ID); err == nil {
+		t.Error("expected an error resuming a non-coordinator session")
+	}
 }
 
 // TestStallHaltStopsIdleReconcile verifies the drain loop honors the halt: a halted
