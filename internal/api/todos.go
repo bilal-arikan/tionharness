@@ -2,13 +2,13 @@ package api
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
 
 	"github.com/bilal-arikan/tionswarm/internal/agent"
 	"github.com/bilal-arikan/tionswarm/internal/db"
 	"github.com/bilal-arikan/tionswarm/internal/progress"
+	"github.com/bilal-arikan/tionswarm/internal/view"
 )
 
 // todoContextBlock builds a system-prompt section showing the session's active
@@ -28,7 +28,7 @@ func todoContextBlock(ctx context.Context, database *db.DB, sessionID, dir strin
 		return ""
 	}
 	if msgs, err := database.ListMessages(ctx, sessionID); err == nil {
-		if own := latestSessionTodos(msgs); len(own) > 0 {
+		if own := view.LatestTodos(msgs); !own.Empty() {
 			return renderTodoBlock(own)
 		}
 	}
@@ -79,78 +79,15 @@ func renderResumedBlock(rec progress.Record) string {
 // renderTodoBlock formats a checklist as the system-prompt section. Returns ""
 // for an empty list or one that is fully completed (nothing left to track —
 // mirrors the UI, which hides a completed list).
-func renderTodoBlock(todos []agent.TodoItem) string {
-	if len(todos) == 0 {
+//
+// The checklist ITSELF is rendered by view.TodoRollup (shared with the handoff
+// environment snapshot); only the heading and the "how to update it" instruction
+// are specific to this surface.
+func renderTodoBlock(r view.TodoRollup) string {
+	if r.Empty() || r.AllDone() {
 		return ""
 	}
-	allDone := true
-	for _, t := range todos {
-		if t.Status != "completed" {
-			allDone = false
-			break
-		}
-	}
-	if allDone {
-		return ""
-	}
-
-	var b strings.Builder
-	b.WriteString("## Active todo list (this session)\n")
-	b.WriteString("This is the checklist you are tracking with the todo_write tool. It persists here even if the original message has scrolled out of context. Keep it current: flip statuses with the compact form todo_write {\"set\":{\"<index>\":\"<status>\"}} using the 1-based indices below.\n")
-	for i, t := range todos {
-		mark := " "
-		switch t.Status {
-		case "completed":
-			mark = "x"
-		case "in_progress":
-			mark = "~"
-		}
-		fmt.Fprintf(&b, "%d. [%s] %s\n", i+1, mark, t.Content)
-	}
-	return strings.TrimSpace(b.String())
-}
-
-// latestSessionTodos returns the most recent todo checklist across a session's
-// messages (scanning newest-first), mirroring the frontend's latestTodos. Reads
-// the persisted step trace on each message.
-func latestSessionTodos(msgs []db.Message) []agent.TodoItem {
-	for i := len(msgs) - 1; i >= 0; i-- {
-		steps := parseMessageSteps(msgs[i].Steps)
-		for j := len(steps) - 1; j >= 0; j-- {
-			if todos := stepTodos(steps[j]); len(todos) > 0 {
-				return todos
-			}
-		}
-	}
-	return nil
-}
-
-// parseMessageSteps decodes a message's persisted step trace (JSON array).
-func parseMessageSteps(raw string) []agent.TurnStep {
-	if raw == "" || raw == "[]" {
-		return nil
-	}
-	var steps []agent.TurnStep
-	if err := json.Unmarshal([]byte(raw), &steps); err != nil {
-		return nil
-	}
-	return steps
-}
-
-// stepTodos returns the checklist items carried by a todo step (kind 'todo', or
-// a legacy todo_write tool step whose input still holds them).
-func stepTodos(step agent.TurnStep) []agent.TodoItem {
-	if step.Kind != agent.StepTodo && step.Tool != "todo_write" {
-		return nil
-	}
-	if len(step.Todos) > 0 {
-		return step.Todos
-	}
-	var in struct {
-		Todos []agent.TodoItem `json:"todos"`
-	}
-	if len(step.Input) > 0 && json.Unmarshal(step.Input, &in) == nil {
-		return in.Todos
-	}
-	return nil
+	return "## Active todo list (this session)\n" +
+		"This is the checklist you are tracking with the todo_write tool. It persists here even if the original message has scrolled out of context. Keep it current: flip statuses with the compact form todo_write {\"set\":{\"<index>\":\"<status>\"}} using the 1-based indices below.\n" +
+		r.RenderChecklist()
 }

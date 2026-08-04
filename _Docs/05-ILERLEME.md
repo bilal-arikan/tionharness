@@ -63,6 +63,33 @@
   shell-gate satırı güncellendi.
 - **Doğrulama:** `rtk go build ./...` ✅.
 
+## View katmanı göç 2/4: handoff — ölü alan + üç kopya (2026-08-04) ✅
+
+- **Bulunan hata:** `conversation.HandoffEnv.Todos` alanı **tanımlıydı, render'ı
+  ve testi vardı — ama hiç kimse doldurmuyordu.** Her handoff, devralan ajanın en
+  çok ihtiyaç duyduğu şey olmadan üretiliyordu: neyin bitmiş, neyin açık olduğu.
+  `agent.handoffEnv` artık zaten yüklü transkriptten (ikinci okuma yok) dolduruyor.
+- **`internal/view/todo.go`** — `TodoRollup` (Items + Done + Active) +
+  `LatestTodos(msgs)` + `RenderChecklist()`. "Transkriptteki en yeni checklist'i
+  bul" **üç yerde** ayrı yazılmıştı; tek uygulamaya indi:
+  - `view/session.go`: `latestTodos` silindi → `LatestTodos` + yerel Türkçe satır
+  - `api/todos.go`: `latestSessionTodos` + `parseMessageSteps` + `stepTodos`
+    **silindi** → `LatestTodos` + `RenderChecklist`
+  - `agent/handoff.go`: *(hiç yoktu — alan ölüydü)* → artık dolduruyor
+- **Adım çözme artık tek evde.** `agent.TurnStep`'i yapısal çözen kod dört yerde
+  tekrarlıyordu; üçü silindi, geriye `view/step.go` kaldı.
+- **Bilinçli fark:** sistem-prompt bloğu bitmiş listeyi **gizler** (izlenecek şey
+  kalmadı), handoff **gösterir** — "bunlar zaten yapıldı", taze ajanın işi baştan
+  yapmasını engelleyen şeyin ta kendisi. `RenderChecklist()` her şeyi basar,
+  gizleme kararı çağırana bırakılır (`AllDone()`).
+- **1-tabanlı indeksler korunur:** `todo_write {"set":{"3":"completed"}}` onları
+  kullanıyor; düşüren bir renderer ajanı listeyi güncelleyemez hâle getirirdi.
+- **Testler:** `view/todo_test.go` (7 — en yeni liste, boş≠bitmiş ayrımı, AllDone,
+  indeks korunumu, tamamlanmış listenin korunması, legacy input) +
+  `conversation/handoff_env_test.go` (2 — checklist render'ı, olmayan checklist'in
+  boş başlık üretmemesi) + `api/todos_test.go` bu yüzeye özgü sözleşmeye daraltıldı.
+- **Durum: 2/4 göç etti.** Kalan: `conversation` summarizer.
+
 ## View katmanı göç 2 (kısmi): insight paylaşılan primitifler (2026-08-04) ✅
 
 - **Önce bir düzeltme:** [66](66-VIEW-KATMANI.md)'da aday olarak "insight

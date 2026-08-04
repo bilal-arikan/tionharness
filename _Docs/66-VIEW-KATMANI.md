@@ -32,18 +32,24 @@ de yazılacak.
 `internal/view`'e göç etmiş ve eski kodu **silinmiş** olmalı. Yeni bir katman eklenip
 eskilerin durması = başarısızlık.
 
-**Durum: 1 tam + 1 kısmi göç** (2026-08-04)
+**Durum: 2/4 göç etti** (2026-08-04)
 
-- **1/4 tam — coordinator worker-state bloğu.**
+- **1/4 — coordinator worker-state bloğu.**
   `Runtime.coordinatorWorkerStatusBlock`'un 36 satırlık render mantığı **silindi**;
   geriye 16 satırlık veri toplama + `view.ProjectWorkers` çağrısı kaldı.
+- **2/4 — handoff.** Ölü `HandoffEnv.Todos` alanı `view.LatestTodos` ile
+  dolduruldu ve checklist taramasının **üç kopyası tek eve** indi (aşağıda).
 - **Kısmi — insight `buildSlice`.** `View` yapılmadı, **bilerek**: farklı soru
   ("bu hipotez için kanıt ne?" vs "bunun durumu ne?"), farklı kapsam (tüm
   transkript vs son 40 mesaj), farklı içerik (yalnız hata vs sağlıklı durum +
   sinyaller). Zorlamak dosya taşımak olurdu, tekrarı yok etmek değil. Bunun
-  yerine **paylaşılan primitifler** çıkarıldı (aşağıda) ve iki duplicate **silindi**.
-- Kalan gerçek adaylar: **handoff** (`ProjectSession(full)` ile örtüşüyor),
-  `conversation` summarizer (en büyük kazanç, faz 5'in L2 fold'uyla iç içe).
+  yerine **paylaşılan primitifler** çıkarıldı ve iki duplicate **silindi**.
+- Kalan aday: `conversation` summarizer (en büyük kazanç, faz 5'in L2 fold'uyla
+  iç içe).
+
+**Adım çözme artık tek evde.** `agent.TurnStep`'i yapısal çözen kod dört yerde
+tekrar ediyordu (`view/session.go`, `insight/scanner.go`, `api/todos.go` ve bir
+kopya daha); üçü silindi, geriye `view/step.go` kaldı.
 
 ## Çekirdek fikir
 
@@ -261,6 +267,35 @@ olaylara önceliklidir** — birincil kanıt onlar, debug olayları büyük öl�
 onları tekrar ediyor.
 
 Bu, "sessiz kesme yasak" kuralının view dışına, insight'a taşınması demek.
+
+## Göç 3 (2/4): handoff — ölü alan + üç kopya
+
+`internal/view/todo.go`: `TodoRollup` + `LatestTodos(msgs)` + `RenderChecklist()`.
+
+**Bulunan hata:** `conversation.HandoffEnv.Todos` alanı **tanımlıydı, render'ı
+vardı, testi vardı — ama hiç kimse doldurmuyordu.** Yani her handoff, devralan
+ajanın en çok ihtiyaç duyduğu şey olmadan üretiliyordu: neyin bitmiş, neyin açık
+olduğu. `agent.handoffEnv` artık zaten yüklü transkriptten (ikinci okuma yok)
+dolduruyor.
+
+**Üç kopya → tek uygulama.** "Transkriptteki en yeni checklist'i bul" üç yerde
+ayrı ayrı yazılmıştı:
+
+| Yer | Ne yapıyordu | Şimdi |
+|-----|--------------|-------|
+| `view/session.go` | `latestTodos` + Türkçe sayaç satırı | `LatestTodos` + yerel Türkçe format |
+| `api/todos.go` | `latestSessionTodos` + `parseMessageSteps` + `stepTodos` + checkbox render | `LatestTodos` + `RenderChecklist`; üç yardımcı **silindi** |
+| `agent/handoff.go` | *(hiç — alan ölüydü)* | `LatestTodos(...).RenderChecklist()` |
+
+**Bilinçli fark — tamamlanmış liste:** sistem-prompt bloğu bitmiş listeyi
+**gizler** (izlenecek bir şey kalmamıştır), handoff **gösterir** — "bunlar zaten
+yapıldı" bilgisi, taze ajanın işi baştan yapmasını engelleyen şeyin ta kendisi.
+Bu yüzden `RenderChecklist()` her şeyi basar, gizleme kararı çağırana bırakılır
+(`AllDone()`).
+
+**1-tabanlı indeksler korunur:** `todo_write {"set":{"3":"completed"}}` bu
+indeksleri kullanıyor; onları düşüren bir renderer, ajanı az önce gösterdiği
+listeyi güncelleyemez hâle getirirdi.
 
 ## Ajanlara dağıtım: üç kanal, karıştırma
 

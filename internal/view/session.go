@@ -176,40 +176,18 @@ func signalTags(tags []string) []string {
 
 // sessionTodoLine renders the most recent checklist as "7/11 tamam" plus what is
 // in flight — usually the single most informative line about a working session.
+// The scan itself is shared (LatestTodos); only this one-line Turkish shape is
+// local, because the other consumers are English prompt text.
 func sessionTodoLine(msgs []db.Message) string {
-	todos := latestTodos(msgs)
-	if len(todos) == 0 {
+	r := LatestTodos(msgs)
+	if r.Empty() {
 		return ""
 	}
-	done, active := 0, ""
-	for _, t := range todos {
-		switch t.Status {
-		case "completed":
-			done++
-		case "in_progress":
-			if active == "" {
-				active = t.Content
-			}
-		}
-	}
-	line := fmt.Sprintf("todo: %d/%d tamam", done, len(todos))
-	if active != "" {
-		line += " · şu an: " + clip(active, 70)
+	line := fmt.Sprintf("todo: %d/%d tamam", r.Done, len(r.Items))
+	if r.Active != "" {
+		line += " · şu an: " + clip(r.Active, 70)
 	}
 	return line
-}
-
-// latestTodos returns the newest checklist in the tail, scanning backwards.
-func latestTodos(msgs []db.Message) []TodoItem {
-	for i := len(msgs) - 1; i >= 0; i-- {
-		steps := DecodeSteps(msgs[i].Steps)
-		for j := len(steps) - 1; j >= 0; j-- {
-			if todos := steps[j].TodoItems(); len(todos) > 0 {
-				return todos
-			}
-		}
-	}
-	return nil
 }
 
 // lastErrorStep returns the newest failure in the tail — an error step or a tool

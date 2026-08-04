@@ -14,6 +14,7 @@ import (
 	"github.com/bilal-arikan/tionswarm/internal/events"
 	"github.com/bilal-arikan/tionswarm/internal/prompts"
 	"github.com/bilal-arikan/tionswarm/internal/tools"
+	"github.com/bilal-arikan/tionswarm/internal/view"
 )
 
 // handoffGitTimeout bounds the git calls used to snapshot the working tree for a
@@ -100,7 +101,7 @@ func (r *Runtime) HandoffSession(ctx context.Context, session db.Session, agent 
 		return HandoffResult{}, fmt.Errorf("nothing to hand off: session has no conversation yet")
 	}
 
-	env := r.handoffEnv(ctx, session)
+	env := r.handoffEnv(ctx, session, history)
 	handoffText, err := conversation.BuildHandoff(ctx, r.db, provider, agent, session.Summary, rendered, env, r.readPrompt("handoff"))
 	if err != nil {
 		return HandoffResult{}, fmt.Errorf("generate handoff: %w", err)
@@ -237,9 +238,18 @@ func (r *Runtime) handoffChainDepth(ctx context.Context, session db.Session) int
 }
 
 // handoffEnv gathers the environment snapshot for a handoff: the session's
-// working directory, the git branch/status there, and its existing artifacts.
-// Best-effort — any piece that can't be gathered is simply omitted.
-func (r *Runtime) handoffEnv(ctx context.Context, session db.Session) conversation.HandoffEnv {
+// working directory, the git branch/status there, its active checklist and its
+// existing artifacts. Best-effort — any piece that can't be gathered is simply
+// omitted.
+//
+// The checklist comes from the transcript the caller already loaded (no second
+// read) via the shared view.LatestTodos. HandoffEnv.Todos had been declared and
+// rendered since the field was introduced but NEVER populated: every handoff
+// shipped without the one piece of state a resuming agent most needs — what was
+// already done and what is still open. A COMPLETED list is kept here (unlike the
+// system-prompt block, which hides it), because "these are done" is precisely
+// what stops a fresh agent redoing them.
+func (r *Runtime) handoffEnv(ctx context.Context, session db.Session, history []db.Message) conversation.HandoffEnv {
 	dir := strings.TrimSpace(session.WorkingDir)
 	if dir == "" {
 		dir = r.WorkspaceDefaultDir()
@@ -248,6 +258,7 @@ func (r *Runtime) handoffEnv(ctx context.Context, session db.Session) conversati
 		WorkingDir: dir,
 		GitBranch:  gitOut(dir, "rev-parse", "--abbrev-ref", "HEAD"),
 		GitStatus:  gitOut(dir, "status", "--short", "--branch"),
+		Todos:      view.LatestTodos(history).RenderChecklist(),
 	}
 	if arts, err := r.db.ListArtifacts(ctx, session.ID); err == nil && len(arts) > 0 {
 		var b strings.Builder

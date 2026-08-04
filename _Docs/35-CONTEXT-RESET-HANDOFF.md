@@ -89,6 +89,14 @@ Rolling-summary'nin 8 bölümünü **reset-kritik** parçalarla genişletir:
 eğilimi kırılır. `HandoffEnv` (WorkingDir/GitBranch/GitStatus/Todos/Artifacts)
 8. bölümü gerçek değerlerle besler.
 
+> **Düzeltme (2026-08-04):** `HandoffEnv.Todos` tanımlıydı ve render'ı vardı ama
+> **hiç doldurulmuyordu** — yani her handoff, devralan ajanın en çok ihtiyaç
+> duyduğu bilgi olmadan üretiliyordu. Artık `agent.handoffEnv`, zaten yüklü
+> transkriptten `view.LatestTodos(...).RenderChecklist()` ile dolduruyor.
+> **Tamamlanmış maddeler de gösterilir** (sistem-prompt bloğunun aksine): "bunlar
+> zaten yapıldı", taze ajanın işi baştan yapmasını engelleyen şeyin ta kendisi.
+> Detay [66](66-VIEW-KATMANI.md).
+
 ## Otomatik tetik mekaniği
 
 TionSwarm'da otonom turlar (scheduler/spawn) **tek-prompt + tool-loop**'tur; turlar

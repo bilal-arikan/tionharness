@@ -4,47 +4,29 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bilal-arikan/tionswarm/internal/agent"
 	"github.com/bilal-arikan/tionswarm/internal/db"
 	"github.com/bilal-arikan/tionswarm/internal/progress"
+	"github.com/bilal-arikan/tionswarm/internal/view"
 )
 
 func todoMsg(steps string) db.Message { return db.Message{Role: "assistant", Steps: steps} }
 
-func TestLatestSessionTodos_PicksNewest(t *testing.T) {
+// The checklist scan and the [x]/[~]/[ ] rendering now live in internal/view
+// (shared with the session projection and the handoff snapshot), so their own
+// tests live there. What remains here is this surface's specific contract: the
+// heading, the update instruction, and hiding a finished list.
+func TestRenderTodoBlock(t *testing.T) {
 	msgs := []db.Message{
 		{Role: "user", Steps: ""},
-		todoMsg(`[{"kind":"todo","todos":[{"content":"a","status":"completed"},{"content":"b","status":"pending"}]}]`),
-		{Role: "user", Steps: ""},
+		todoMsg(`[{"kind":"todo","todos":[{"content":"a","status":"completed"}]}]`),
 		// Newer list supersedes the older one.
-		todoMsg(`[{"kind":"todo","todos":[{"content":"x","status":"in_progress"}]}]`),
+		todoMsg(`[{"kind":"todo","todos":[
+			{"content":"read","status":"completed"},
+			{"content":"work","status":"in_progress"},
+			{"content":"write","status":"pending"}]}]`),
 	}
-	got := latestSessionTodos(msgs)
-	if len(got) != 1 || got[0].Content != "x" || got[0].Status != "in_progress" {
-		t.Fatalf("expected newest single in_progress item, got %+v", got)
-	}
-}
+	out := renderTodoBlock(view.LatestTodos(msgs))
 
-func TestStepTodos_LegacyToolInput(t *testing.T) {
-	// A todo carried as a todo_write tool step's input (no typed Todos field).
-	step := agent.TurnStep{Kind: "tool", Tool: "todo_write", Input: []byte(`{"todos":[{"content":"c","status":"pending"}]}`)}
-	got := stepTodos(step)
-	if len(got) != 1 || got[0].Content != "c" {
-		t.Fatalf("expected legacy todo parse, got %+v", got)
-	}
-	// A non-todo step yields nothing.
-	if out := stepTodos(agent.TurnStep{Kind: "tool", Tool: "bash"}); out != nil {
-		t.Fatalf("expected nil for non-todo step, got %+v", out)
-	}
-}
-
-func TestRenderTodoBlock(t *testing.T) {
-	todos := []agent.TodoItem{
-		{Content: "read", Status: "completed"},
-		{Content: "work", Status: "in_progress"},
-		{Content: "write", Status: "pending"},
-	}
-	out := renderTodoBlock(todos)
 	// Numbered lines: the model references these 1-based indices in the
 	// compact todo_write {"set":{...}} update form.
 	for _, want := range []string{"1. [x] read", "2. [~] work", "3. [ ] write", `{"set":`, "Active todo list"} {
@@ -52,9 +34,20 @@ func TestRenderTodoBlock(t *testing.T) {
 			t.Fatalf("block missing %q\n%s", want, out)
 		}
 	}
+	// The superseded older list must not leak in.
+	if strings.Contains(out, "[x] a") {
+		t.Fatalf("older checklist leaked into the block:\n%s", out)
+	}
+
 	// All-completed → empty (nothing left to track).
-	if renderTodoBlock([]agent.TodoItem{{Content: "done", Status: "completed"}}) != "" {
+	done := view.LatestTodos([]db.Message{
+		todoMsg(`[{"kind":"todo","todos":[{"content":"done","status":"completed"}]}]`)})
+	if renderTodoBlock(done) != "" {
 		t.Fatal("expected empty block for all-completed list")
+	}
+	// No checklist at all → empty.
+	if renderTodoBlock(view.LatestTodos(nil)) != "" {
+		t.Fatal("expected empty block when the session has no checklist")
 	}
 }
 
