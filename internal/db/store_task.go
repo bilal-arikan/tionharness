@@ -76,9 +76,19 @@ func (d *DB) GetTask(ctx context.Context, id string) (Task, error) {
 	return dbGet(d, d.tasks, id)
 }
 
-// ListTasks returns all tasks, newest first.
+// ListTasks returns all tasks (including archived), newest first.
 func (d *DB) ListTasks(ctx context.Context) ([]Task, error) {
 	return dbList(d, d.tasks, func(a, b Task) bool { return a.CreatedAt > b.CreatedAt }), nil
+}
+
+// ListActiveTasks returns only non-archived tasks, newest first — the active
+// board. Used by the board-facing surfaces (the /api/tasks list, the get_view
+// board projection, the list_tasks tool) so archived cards drop off the board
+// without being deleted. ListTasks still returns everything for integrity paths.
+func (d *DB) ListActiveTasks(ctx context.Context) ([]Task, error) {
+	return dbFilter(d, d.tasks,
+		func(t Task) bool { return !t.Archived },
+		func(a, b Task) bool { return a.CreatedAt > b.CreatedAt }), nil
 }
 
 // UpdateTask edits the mutable fields of a task (title/description/prompt/owner/state).
@@ -147,6 +157,38 @@ func (d *DB) MoveTask(ctx context.Context, id, boardState string) error {
 			FromState: oldBoard, ToState: boardState, OwnerAgentID: owner, Tags: tags, Priority: prio,
 		})
 	}
+	return nil
+}
+
+// SetTaskArchived flips a task's Archived flag (reversible soft-hide, unlike
+// DeleteTask). Archiving is used by the "done → archive" board automation to
+// clear finished cards off the active board without an LLM call. It fires the
+// board hook as a plain update so other board rules can observe it, but archiving
+// itself never spawns — so an archive rule cannot re-fire on its own event. A
+// no-op (already in the requested state) neither persists nor fires.
+func (d *DB) SetTaskArchived(ctx context.Context, id string, archived bool) error {
+	d.mu.Lock()
+	t, ok := d.tasks[id]
+	if !ok {
+		d.mu.Unlock()
+		return ErrNotFound
+	}
+	if t.Archived == archived {
+		d.mu.Unlock()
+		return nil
+	}
+	t.Archived = archived
+	t.UpdatedAt = now()
+	err := d.persistTaskLocked(t)
+	title, owner, board, tags, prio := t.Title, t.OwnerAgentID, t.BoardState, t.Tags, t.Priority
+	d.mu.Unlock()
+	if err != nil {
+		return err
+	}
+	d.fireBoardHook(BoardChangeEvent{
+		TaskID: id, Title: title, Op: BoardOpUpdate,
+		ToState: board, OwnerAgentID: owner, Tags: tags, Priority: prio,
+	})
 	return nil
 }
 

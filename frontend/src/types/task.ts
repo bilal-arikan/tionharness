@@ -106,6 +106,10 @@ export type BoardOp = 'any' | 'move' | 'create' | 'update' | 'delete'
 // Token automation scope: one session's lifetime spend, or the whole workspace's
 // spend for the current day. '' is treated as 'session'.
 export type TokenScope = 'session' | 'workspace'
+// What a board automation does when it fires: 'spawn' (default, '' is treated the
+// same) runs the target agent/flow — the board drives execution; 'archive'
+// archives the card with no LLM call (the 'done → archive' cleanup).
+export type BoardAction = 'spawn' | 'archive'
 
 export interface Automation {
   id: string
@@ -123,6 +127,9 @@ export interface Automation {
   // When true this automation claims the matching card change alone: every other
   // matching board rule is suppressed ("single owner per column").
   boardExclusive?: boolean
+  // What firing does: 'spawn' (default) runs the target — the board drives
+  // execution; 'archive' archives the card with no LLM call (needs no target).
+  boardAction?: BoardAction
   // Token-trigger fields (only meaningful when triggerKind === 'token').
   tokenScope?: TokenScope // default 'session'
   // Token interval: fires each time cumulative spend crosses another multiple

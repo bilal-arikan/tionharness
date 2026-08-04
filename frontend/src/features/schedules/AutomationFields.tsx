@@ -1,7 +1,14 @@
 import { useState } from 'react'
 import { Info } from 'lucide-react'
-import type { AutomationTriggerKind, BoardColumnDef, BoardOp, TokenScope } from '@/types'
+import type {
+  AutomationTriggerKind,
+  BoardAction,
+  BoardColumnDef,
+  BoardOp,
+  TokenScope,
+} from '@/types'
 import {
+  BOARD_ACTIONS,
   BOARD_OPS,
   BOARD_PROMPT_VARS,
   MIN_TOKEN_THRESHOLD,
@@ -25,6 +32,7 @@ export function BoardTriggerFields({
   to,
   priority,
   exclusive,
+  action,
   columns,
   onChange,
 }: {
@@ -33,6 +41,7 @@ export function BoardTriggerFields({
   to: string
   priority: number
   exclusive: boolean
+  action: BoardAction
   columns: BoardColumnDef[]
   onChange: (patch: {
     op?: BoardOp
@@ -40,12 +49,30 @@ export function BoardTriggerFields({
     to?: string
     priority?: number
     exclusive?: boolean
+    action?: BoardAction
   }) => void
 }) {
   const showFrom = op === 'move' || op === 'any' || op === 'delete'
   const showTo = op !== 'delete'
   return (
     <div className="flex flex-wrap items-center gap-2">
+      <label
+        className="flex items-center gap-1 text-xs text-[var(--color-text-dim)]"
+        title="Tetiklendiğinde ne yapılır: hedef ajanı/akışı başlat (board yürütmeyi sürer) ya da kartı arşivle (LLM çağrısı yok)."
+      >
+        Aksiyon
+        <select
+          value={action}
+          onChange={(e) => onChange({ action: e.target.value as BoardAction })}
+          className={selCls}
+        >
+          {BOARD_ACTIONS.map((a) => (
+            <option key={a.value} value={a.value}>
+              {a.label}
+            </option>
+          ))}
+        </select>
+      </label>
       <label className="flex items-center gap-1 text-xs text-[var(--color-text-dim)]">
         Olay
         <select

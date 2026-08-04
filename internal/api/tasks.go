@@ -10,7 +10,13 @@ import (
 )
 
 func (s *Server) handleListTasks(w http.ResponseWriter, r *http.Request) {
-	tasks, err := ws(r).DB.ListTasks(r.Context())
+	// By default the board shows only active cards; archived cards are hidden but
+	// kept. ?archived=1 (or true) returns everything, for an "archived" view.
+	list := ws(r).DB.ListActiveTasks
+	if v := r.URL.Query().Get("archived"); v == "1" || v == "true" {
+		list = ws(r).DB.ListTasks
+	}
+	tasks, err := list(r.Context())
 	if writeDBError(w, err, "") {
 		return
 	}

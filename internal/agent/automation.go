@@ -284,6 +284,34 @@ func (e *AutomationEngine) fireBoard(ctx context.Context, a db.Automation, ev db
 	if !e.guardsPass(ctx, a) {
 		return
 	}
+
+	// Archive action: a lightweight, no-LLM bookkeeping fire (the "done → archive"
+	// cleanup). It hides the card off the active board instead of spawning a
+	// session. A delete event has no card to archive, and archiving an already
+	// archived card is a no-op inside SetTaskArchived.
+	if a.BoardAction == db.BoardActionArchive {
+		if ev.Op == db.BoardOpDelete || ev.TaskID == "" {
+			return
+		}
+		if err := e.db.SetTaskArchived(ctx, ev.TaskID, true); err != nil {
+			e.recordFailure(ctx, a, err.Error())
+			return
+		}
+		if err := e.db.RecordAutomationFire(ctx, a.ID, "", ""); err != nil {
+			e.logger.Warn("automation: record fire failed", "automation", a.ID, "error", err)
+		}
+		e.logger.Info("automation: fired (board·archive)",
+			"automation", a.ID, "op", ev.Op, "task", ev.TaskID, "iteration", a.IterationCount+1)
+		e.rt.publish(events.Event{
+			Type:   events.TypeAutomation,
+			Level:  "success",
+			Title:  "🗄 Otomasyon: kart arşivlendi — " + automationLabel(a),
+			Body:   ev.Title,
+			Target: map[string]string{"view": "tasks"},
+		})
+		return
+	}
+
 	prompt := renderAutomationPrompt(a.PromptTemplate, e.boardVars(ctx, a, ev))
 	if strings.TrimSpace(prompt) == "" {
 		e.recordFailure(ctx, a, "rendered prompt is empty")

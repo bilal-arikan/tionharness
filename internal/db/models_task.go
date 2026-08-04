@@ -66,27 +66,33 @@ func ValidPriority(p string) bool {
 // prompt to a single agent. Either path funnels through RunTask, so manual runs,
 // cron schedules and any future dispatcher support flows uniformly.
 type Task struct {
-	ID            string `json:"id"`
-	Title         string `json:"title"`
-	Description   string `json:"description"`
-	Prompt        string `json:"prompt"`
-	OwnerAgentID  string `json:"ownerAgentId"`
-	FlowID        string `json:"flowId"` // when set, running the task executes this flow
-	BoardState    string `json:"boardState"`
-	Dependencies  string `json:"dependencies"` // JSON array of task ids
+	ID           string `json:"id"`
+	Title        string `json:"title"`
+	Description  string `json:"description"`
+	Prompt       string `json:"prompt"`
+	OwnerAgentID string `json:"ownerAgentId"`
+	FlowID       string `json:"flowId"` // when set, running the task executes this flow
+	BoardState   string `json:"boardState"`
+	Dependencies string `json:"dependencies"` // JSON array of task ids
 	// Rich card attributes (obsidian-pm compatible). All optional; older task
 	// files without them decode to zero values.
-	Priority  string   `json:"priority,omitempty"`  // critical|high|medium|low ("" = unset)
-	Tags      []string `json:"tags,omitempty"`      // free-form labels
+	Priority string   `json:"priority,omitempty"` // critical|high|medium|low ("" = unset)
+	Tags     []string `json:"tags,omitempty"`     // free-form labels
 	// ArtifactIDs references workspace artifacts attached to this card (files
 	// dropped onto the card become artifacts, or existing artifacts linked from
 	// the editor). Order is user-meaningful; ids that no longer resolve are
 	// skipped by the UI. Independent of artifact lifecycle — deleting the task
 	// drops the refs, it does not delete the artifacts.
 	ArtifactIDs []string `json:"artifactIds,omitempty"`
-	Progress  int      `json:"progress,omitempty"`  // 0..100
-	StartDate string   `json:"startDate,omitempty"` // YYYY-MM-DD
-	DueDate   string   `json:"dueDate,omitempty"`   // YYYY-MM-DD
+	Progress    int      `json:"progress,omitempty"`  // 0..100
+	StartDate   string   `json:"startDate,omitempty"` // YYYY-MM-DD
+	DueDate     string   `json:"dueDate,omitempty"`   // YYYY-MM-DD
+	// Archived hides a finished card from the active board without deleting it
+	// (reversible, unlike DeleteTask). Set by SetTaskArchived — typically by the
+	// "done → archive" board automation — and excluded by default from the board
+	// list, the get_view board projection, and the list_tasks tool. The task file
+	// and its runs are kept, so an archived card can be restored.
+	Archived      bool   `json:"archived,omitempty"`
 	LastRunID     string `json:"lastRunId"`
 	LastRunStatus string `json:"lastRunStatus"`
 	LastRunAt     int64  `json:"lastRunAt"`
@@ -107,10 +113,10 @@ type Task struct {
 // agents. Either path funnels through Scheduler.run, so cron ticks and manual
 // "run now" support both uniformly.
 type Schedule struct {
-	ID                 string `json:"id"`
-	AgentID            string `json:"agentId"`
-	CronExpr           string `json:"cronExpr"`
-	Prompt             string `json:"prompt"`
+	ID       string `json:"id"`
+	AgentID  string `json:"agentId"`
+	CronExpr string `json:"cronExpr"`
+	Prompt   string `json:"prompt"`
 	// FlowID, when set, makes this a flow-backed schedule: firing runs that flow
 	// with Prompt as its input instead of delivering the prompt to AgentID.
 	FlowID             string `json:"flowId,omitempty"`

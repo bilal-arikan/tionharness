@@ -144,9 +144,36 @@ paylaşır; farkı yalnızca **tetik** ve **prompt değişkenleri**dir.
 | `BoardToState` | Kartın **girdiği** sütun filtresi (boş=herhangi). |
 | `BoardPriority` | **Aynı** kart değişimine uyan otomasyonlar arasında ateşleme sırası; küçük olan **önce** (vars. 0). |
 | `BoardExclusive` | Eşleşen değişimi **tek başına** sahiplenir; aynı olaya uyan diğer tüm pano otomasyonları bastırılır (vars. false). |
+| `BoardAction` | Ateşleyince ne yapılır: `spawn` (varsayılan, boş=`spawn`) → hedef ajanı/akışı başlatır (**board yürütmeyi sürer**); `archive` → kartı arşivler (`SetTaskArchived`), **LLM çağrısı yok, hedef gerekmez** — ucuz "done → archive" temizliği. `ValidBoardAction`. |
 
 `boardMatches(a, ev)`: op (boş→move; `any`→hepsi) **ve** from/to sütun filtreleri (boş→herhangi)
 eşleşince ateşler.
+
+### Board = yürütmenin kaynağı (generic, per-workspace) — 2026-08-04
+
+Board zaten bir kart değişiminde iş **başlatabiliyordu** (`fireBoard`); iki eksik kapatıldı:
+
+1. **Arşiv aksiyonu (`BoardAction=archive`)** — `fireBoard` artık dallanır: `archive` ise
+   `LaunchRun` yerine `db.SetTaskArchived(taskID, true)` çağırır (LLM yok). Arşivlenen kart
+   `Task.Archived=true` alır; **geri alınabilir** (silme değil). Sunum katmanı arşivi varsayılan
+   gizler: `list_tasks` aracı, `GET /api/tasks` (yeni `?archived=1` ile tümü) ve `get_view board`
+   projeksiyonu `db.ListActiveTasks`'e geçti (`ListTasks` bütünlük yolları için tümünü döndürmeye
+   devam eder). `UpdateTask` `Archived`'a dokunmaz → arşiv yalnız `SetTaskArchived`'den değişir.
+2. **Generic tohum (`EnsureDefaultBoardAutomations`, `internal/agent/automation_defaults.go`)** —
+   `EnsureDefaultFlows` desenini (silme-defterli `.seeded-automations.json`, `Automation.Seed`)
+   birebir taklit eder; her workspace store'una iki kural tohumlar: **`board-run-in-progress`**
+   (`move → in_progress`, `spawn`, hedef=ilk ajan) ve **`board-archive-done`** (`move → done`,
+   `archive`). Manager `open()` yolunda çağrılır → mevcut workspace'ler bir sonraki açılışta
+   backfill olur. **`Enabled:false` tohumlanır** (opt-in): board yürütmenin kaynağı olsun diye
+   Otomasyonlar ekranından tek toggle ile açılır — düz sohbet workspace'inde sürpriz maliyet yok.
+
+`BoardAction` create/update yolları: REST (`api/automations.go`) + agent aracı
+(`create_automation`/`update_automation`) `ValidBoardAction` doğrular; `archive` kuralı hedef
+ajan/akış **istemez**. UI: Otomasyon popup'ında pano tetikleyicisine "Aksiyon" seçici
+(`BoardTriggerFields`); arşiv seçilince hedef/prompt alanları gizlenir, kart bir arşiv rozeti gösterir.
+
+Koordinatöre (`prompts/defaults/coordinator.md`) board'ı **tek iş defteri** olarak kullan +
+durumu tekrar tekrar `list_tasks` yerine ucuz **`get_view board`** ile oku yönergesi eklendi.
 
 ### Aynı sütunda çoklu tetik: sıralama + tek sahip (2026-07-24)
 

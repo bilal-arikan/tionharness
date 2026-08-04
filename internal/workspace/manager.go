@@ -254,6 +254,12 @@ func (m *Manager) open(meta Meta) error {
 	if err := agent.MigrateFlowsStartEnd(context.Background(), database); err != nil {
 		m.logger.Warn("migrate flows to start-node model failed", "workspace", meta.ID, "error", err)
 	}
+	// Seed the built-in board automations (board-driven execution: card→in_progress
+	// spawns an agent, card→done archives). Idempotent, deletion-aware, and seeded
+	// DISABLED so activating it stays an explicit per-workspace opt-in.
+	if err := agent.EnsureDefaultBoardAutomations(context.Background(), database, storeDir); err != nil {
+		m.logger.Warn("seed default board automations failed", "workspace", meta.ID, "error", err)
+	}
 
 	// Per-workspace secret vault (AES-GCM encrypted), shared by the secret_* tools.
 	vault, err := secrets.Open(storeDir, m.cipher)

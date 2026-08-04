@@ -87,6 +87,7 @@ export const taskApi = {
     boardToState?: string
     boardPriority?: number
     boardExclusive?: boolean
+    boardAction?: 'spawn' | 'archive'
     tokenScope?: 'session' | 'workspace'
     tokenThreshold?: number
     targetAgentId?: string
@@ -113,6 +114,7 @@ export const taskApi = {
       boardToState?: string
       boardPriority?: number
       boardExclusive?: boolean
+      boardAction?: 'spawn' | 'archive'
       tokenScope?: 'session' | 'workspace'
       tokenThreshold?: number
       targetAgentId?: string

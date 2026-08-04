@@ -1,7 +1,6 @@
 package view
 
 import (
-	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -200,55 +199,15 @@ func sessionTodoLine(msgs []db.Message) string {
 	return line
 }
 
-// stepLite is the minimal shape of a persisted agent.TurnStep this package needs.
-//
-// It is decoded structurally instead of importing internal/agent: that package
-// depends on internal/tools, which depends on this one (the get_view tool), so
-// importing it would close an import cycle. The two fields read here are part of
-// the persisted session format, not internal API.
-type stepLite struct {
-	Kind    string          `json:"kind"`
-	Tool    string          `json:"tool"`
-	Text    string          `json:"text"`
-	Output  string          `json:"output"`
-	IsError bool            `json:"isError"`
-	Reason  string          `json:"reason"`
-	Todos   []todoLite      `json:"todos"`
-	Input   json.RawMessage `json:"input"`
-}
-
-type todoLite struct {
-	Content string `json:"content"`
-	Status  string `json:"status"`
-}
-
 // latestTodos returns the newest checklist in the tail, scanning backwards.
-func latestTodos(msgs []db.Message) []todoLite {
+func latestTodos(msgs []db.Message) []TodoItem {
 	for i := len(msgs) - 1; i >= 0; i-- {
-		steps := decodeSteps(msgs[i].Steps)
+		steps := DecodeSteps(msgs[i].Steps)
 		for j := len(steps) - 1; j >= 0; j-- {
-			if todos := stepTodoItems(steps[j]); len(todos) > 0 {
+			if todos := steps[j].TodoItems(); len(todos) > 0 {
 				return todos
 			}
 		}
-	}
-	return nil
-}
-
-// stepTodoItems reads a todo step's checklist, tolerating the legacy form where
-// the items lived in the todo_write tool input.
-func stepTodoItems(s stepLite) []todoLite {
-	if s.Kind != "todo" && s.Tool != "todo_write" {
-		return nil
-	}
-	if len(s.Todos) > 0 {
-		return s.Todos
-	}
-	var in struct {
-		Todos []todoLite `json:"todos"`
-	}
-	if len(s.Input) > 0 && json.Unmarshal(s.Input, &in) == nil {
-		return in.Todos
 	}
 	return nil
 }
@@ -257,7 +216,7 @@ func stepTodoItems(s stepLite) []todoLite {
 // call that came back as an error.
 func lastErrorStep(msgs []db.Message) string {
 	for i := len(msgs) - 1; i >= 0; i-- {
-		steps := decodeSteps(msgs[i].Steps)
+		steps := DecodeSteps(msgs[i].Steps)
 		for j := len(steps) - 1; j >= 0; j-- {
 			s := steps[j]
 			if s.Kind == "error" {
@@ -284,7 +243,7 @@ func sessionRecent(msgs []db.Message, now time.Time) string {
 	for _, m := range msgs[start:] {
 		text := m.Text
 		if text == "" {
-			text = fmt.Sprintf("(%d adım)", len(decodeSteps(m.Steps)))
+			text = fmt.Sprintf("(%d adım)", len(DecodeSteps(m.Steps)))
 		}
 		l.add("%-9s %s", m.Role, clip(text, 160))
 	}
@@ -302,20 +261,6 @@ func sessionHandles(in SessionInput, level Level) []Handle {
 		})
 	}
 	return hs
-}
-
-// decodeSteps parses a message's persisted step trace. A trace that will not
-// parse yields no steps: a single corrupt message must not fail the view, and
-// the caller only uses steps for optional signal lines.
-func decodeSteps(raw string) []stepLite {
-	if raw == "" || raw == "[]" {
-		return nil
-	}
-	var steps []stepLite
-	if err := json.Unmarshal([]byte(raw), &steps); err != nil {
-		return nil
-	}
-	return steps
 }
 
 // compactCount renders a large number as 187k / 2.4M so a header line stays one

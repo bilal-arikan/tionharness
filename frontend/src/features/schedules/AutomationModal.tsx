@@ -5,6 +5,7 @@ import type {
   Agent,
   Automation,
   AutomationTriggerKind,
+  BoardAction,
   BoardColumnDef,
   BoardOp,
   Flow,
@@ -62,6 +63,7 @@ export function AutomationModal({
   const [boardToState, setBoardToState] = useState(editing?.boardToState ?? '')
   const [boardPriority, setBoardPriority] = useState(editing?.boardPriority ?? 0)
   const [boardExclusive, setBoardExclusive] = useState(editing?.boardExclusive ?? false)
+  const [boardAction, setBoardAction] = useState<BoardAction>(editing?.boardAction ?? 'spawn')
   const [tokenScope, setTokenScope] = useState<TokenScope>(editing?.tokenScope ?? 'session')
   const [tokenThreshold, setTokenThreshold] = useState(
     editing?.tokenThreshold ?? DEFAULT_TOKEN_THRESHOLD,
@@ -103,7 +105,10 @@ export function AutomationModal({
       onError(`Token eşiği en az ${MIN_TOKEN_THRESHOLD} olmalı`)
       return
     }
-    if (targetMode === 'flow' ? !flowId : !targetAgentId) {
+    // An 'archive' board automation performs bookkeeping with no LLM call, so it
+    // needs no target agent/flow. Every other automation must have one.
+    const isArchive = isBoardKind && boardAction === 'archive'
+    if (!isArchive && (targetMode === 'flow' ? !flowId : !targetAgentId)) {
       onError(targetMode === 'flow' ? 'Hedef akış zorunlu' : 'Hedef ajan zorunlu')
       return
     }
@@ -113,17 +118,24 @@ export function AutomationModal({
       return
     }
     const trigger = isBoardKind
-      ? { boardOp, boardFromState, boardToState, boardPriority, boardExclusive }
+      ? { boardOp, boardFromState, boardToState, boardPriority, boardExclusive, boardAction }
       : isTokenKind
         ? { tokenScope, tokenThreshold }
         : { triggerTag: triggerTag.trim() }
+    // An archive rule carries no target; a spawn rule (and every non-board kind)
+    // carries either an agent or a flow.
+    const target = isArchive
+      ? { targetAgentId: '', flowId: '' }
+      : targetMode === 'flow'
+        ? { flowId, targetAgentId: '' }
+        : { targetAgentId, flowId: '' }
     const body = {
       name: name.trim(),
       // A full edit always sends the (fixed) kind so the board filters below are
       // re-applied together with it; a partial patch (e.g. spawnTags) omits it.
       triggerKind: kind,
       ...trigger,
-      ...(targetMode === 'flow' ? { flowId, targetAgentId: '' } : { targetAgentId, flowId: '' }),
+      ...target,
       promptTemplate: promptTemplate.trim(),
       // NOT `|| 0`: an empty or non-numeric field used to submit 0, which the
       // runtime reads as UNLIMITED — the very value this form forbids. Fall back
@@ -187,6 +199,7 @@ export function AutomationModal({
             to={boardToState}
             priority={boardPriority}
             exclusive={boardExclusive}
+            action={boardAction}
             columns={columns}
             onChange={(p) => {
               if (p.op !== undefined) setBoardOp(p.op)
@@ -194,6 +207,7 @@ export function AutomationModal({
               if (p.to !== undefined) setBoardToState(p.to)
               if (p.priority !== undefined) setBoardPriority(p.priority)
               if (p.exclusive !== undefined) setBoardExclusive(p.exclusive)
+              if (p.action !== undefined) setBoardAction(p.action)
             }}
           />
         ) : isTokenKind ? (
@@ -215,18 +229,27 @@ export function AutomationModal({
         )}
       </Field>
 
-      <Field label="Hedef" hint="Tetiklendiğinde çalışacak ajan ya da akış.">
-        <div className="flex flex-wrap items-center gap-2">
-          <TargetModeToggle mode={targetMode} onChange={setTargetMode} />
-          {targetMode === 'flow' ? (
-            <FlowPicker flows={flows} value={flowId} onChange={setFlowId} />
-          ) : (
-            <AgentPicker agents={agents} value={targetAgentId} onChange={setTargetAgentId} />
-          )}
+      {isBoardKind && boardAction === 'archive' ? (
+        <div className="rounded border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-xs text-[var(--color-text-dim)]">
+          Arşiv aksiyonu kartı panodan gizler — hedef ajan/akış ya da prompt gerekmez, LLM çağrısı
+          yapılmaz.
         </div>
-      </Field>
+      ) : (
+        <>
+          <Field label="Hedef" hint="Tetiklendiğinde çalışacak ajan ya da akış.">
+            <div className="flex flex-wrap items-center gap-2">
+              <TargetModeToggle mode={targetMode} onChange={setTargetMode} />
+              {targetMode === 'flow' ? (
+                <FlowPicker flows={flows} value={flowId} onChange={setFlowId} />
+              ) : (
+                <AgentPicker agents={agents} value={targetAgentId} onChange={setTargetAgentId} />
+              )}
+            </div>
+          </Field>
 
-      <PromptVarsField kind={kind} value={promptTemplate} onChange={setPromptTemplate} />
+          <PromptVarsField kind={kind} value={promptTemplate} onChange={setPromptTemplate} />
+        </>
+      )}
 
       <div className="flex flex-wrap items-end gap-3">
         <label className="flex items-center gap-1 text-xs text-[var(--color-text-dim)]">

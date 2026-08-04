@@ -1,4 +1,4 @@
-import { RotateCcw, Pencil, Workflow, LayoutGrid, Zap } from 'lucide-react'
+import { RotateCcw, Pencil, Workflow, LayoutGrid, Zap, Archive } from 'lucide-react'
 import type { Agent, Automation, BoardColumnDef, Flow } from '@/types'
 import { AgentAvatar } from '@/shared/components/agents/AgentAvatar'
 import { TagEditor } from '@/shared/components'
@@ -44,6 +44,7 @@ export function AutomationCard({
   const maxed = a.maxIterations > 0 && a.iterationCount >= a.maxIterations
   const expired = isPast(a.expiresAt)
   const opLabel = boardOpLabel(a.boardOp)
+  const isArchiveRule = isBoardKind && a.boardAction === 'archive'
 
   return (
     <div
@@ -71,7 +72,14 @@ export function AutomationCard({
               className={`block h-4 w-4 rounded-full bg-white transition ${a.enabled ? 'translate-x-4' : ''}`}
             />
           </button>
-          {a.flowId ? (
+          {isArchiveRule ? (
+            <span
+              className="flex h-7 w-7 items-center justify-center rounded-full bg-[var(--color-surface-2)] text-[var(--color-text-dim)]"
+              title="Arşiv aksiyonu — hedef yok, LLM çağrısı yapılmaz"
+            >
+              <Archive size={15} />
+            </span>
+          ) : a.flowId ? (
             <span
               className="flex h-7 w-7 items-center justify-center rounded-full bg-[var(--color-accent-soft)] text-[var(--color-accent)]"
               title="Akış tabanlı otomasyon"
@@ -104,6 +112,14 @@ export function AutomationCard({
                   <span className="opacity-80">
                     ({a.boardFromState ? colLabel(a.boardFromState) : '∗'} →{' '}
                     {a.boardToState ? colLabel(a.boardToState) : '∗'})
+                  </span>
+                )}
+                {isArchiveRule && (
+                  <span
+                    className="flex items-center gap-0.5 opacity-80"
+                    title="Kartı arşivler (LLM yok)"
+                  >
+                    <Archive size={10} /> arşiv
                   </span>
                 )}
               </span>

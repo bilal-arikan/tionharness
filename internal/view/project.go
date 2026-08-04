@@ -26,6 +26,7 @@ type Store interface {
 	ListMessages(ctx context.Context, sessionID string) ([]db.Message, error)
 	ListWaitingSessionAsks(ctx context.Context) ([]db.SessionAsk, error)
 	ListTasks(ctx context.Context) ([]db.Task, error)
+	ListActiveTasks(ctx context.Context) ([]db.Task, error)
 	ListAgents(ctx context.Context) ([]db.Agent, error)
 	ListSessions(ctx context.Context, agentID string) ([]db.Session, error)
 	ListFlowRuns(ctx context.Context, flowID string) ([]db.FlowRun, error)
@@ -80,7 +81,7 @@ func (p *Projector) Project(ctx context.Context, ref Ref, level Level, lens Lens
 		}
 		return ProjectSession(in, level, lens)
 	case KindBoard:
-		tasks, err := p.store.ListTasks(ctx)
+		tasks, err := p.store.ListActiveTasks(ctx)
 		if err != nil {
 			return View{}, fmt.Errorf("view: board: %w", err)
 		}

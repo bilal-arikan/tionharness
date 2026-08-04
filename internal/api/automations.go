@@ -31,6 +31,7 @@ type automationReq struct {
 	BoardToState   string   `json:"boardToState"`
 	BoardPriority  *int     `json:"boardPriority"`
 	BoardExclusive *bool    `json:"boardExclusive"`
+	BoardAction    string   `json:"boardAction"`
 	TokenScope     string   `json:"tokenScope"`
 	TokenThreshold *int     `json:"tokenThreshold"`
 	TargetAgentID  string   `json:"targetAgentId"`
@@ -53,6 +54,7 @@ func (s *Server) handleCreateAutomation(w http.ResponseWriter, r *http.Request) 
 	req.BoardOp = strings.TrimSpace(req.BoardOp)
 	req.BoardFromState = strings.TrimSpace(req.BoardFromState)
 	req.BoardToState = strings.TrimSpace(req.BoardToState)
+	req.BoardAction = strings.TrimSpace(req.BoardAction)
 	req.TokenScope = strings.TrimSpace(req.TokenScope)
 	req.TargetAgentID = strings.TrimSpace(req.TargetAgentID)
 	req.FlowID = strings.TrimSpace(req.FlowID)
@@ -67,6 +69,10 @@ func (s *Server) handleCreateAutomation(w http.ResponseWriter, r *http.Request) 
 	case db.TriggerBoard:
 		if !db.ValidBoardOp(req.BoardOp) {
 			writeError(w, http.StatusBadRequest, "invalid boardOp")
+			return
+		}
+		if !db.ValidBoardAction(req.BoardAction) {
+			writeError(w, http.StatusBadRequest, "invalid boardAction (spawn|archive)")
 			return
 		}
 	case db.TriggerToken:
@@ -90,8 +96,13 @@ func (s *Server) handleCreateAutomation(w http.ResponseWriter, r *http.Request) 
 		}
 	}
 	ctx := r.Context()
-	// The automation targets EITHER a flow or a single agent.
-	if req.FlowID != "" {
+	// A board automation whose action is "archive" performs bookkeeping with no
+	// LLM call, so it needs no target. Every other automation targets EITHER a flow
+	// or a single agent.
+	archiveAction := req.TriggerKind == db.TriggerBoard && req.BoardAction == db.BoardActionArchive
+	if archiveAction {
+		// no target required; ignore any flow/agent sent
+	} else if req.FlowID != "" {
 		if _, err := ws(r).DB.GetFlow(ctx, req.FlowID); err != nil {
 			writeError(w, http.StatusBadRequest, "target flow not found")
 			return
@@ -145,6 +156,7 @@ func (s *Server) handleCreateAutomation(w http.ResponseWriter, r *http.Request) 
 		BoardToState:   req.BoardToState,
 		BoardPriority:  boardPriority,
 		BoardExclusive: boardExclusive,
+		BoardAction:    req.BoardAction,
 		TokenScope:     req.TokenScope,
 		TokenThreshold: tokenThreshold,
 		TargetAgentID:  req.TargetAgentID,
@@ -186,6 +198,10 @@ func (s *Server) handleUpdateAutomation(w http.ResponseWriter, r *http.Request) 
 			writeError(w, http.StatusBadRequest, "invalid boardOp")
 			return
 		}
+		if k == db.TriggerBoard && !db.ValidBoardAction(strings.TrimSpace(req.BoardAction)) {
+			writeError(w, http.StatusBadRequest, "invalid boardAction (spawn|archive)")
+			return
+		}
 		if k == db.TriggerToken && !db.ValidTokenScope(strings.TrimSpace(req.TokenScope)) {
 			writeError(w, http.StatusBadRequest, "invalid tokenScope (session|workspace)")
 			return
@@ -194,6 +210,9 @@ func (s *Server) handleUpdateAutomation(w http.ResponseWriter, r *http.Request) 
 		cur.BoardOp = strings.TrimSpace(req.BoardOp)
 		cur.BoardFromState = strings.TrimSpace(req.BoardFromState)
 		cur.BoardToState = strings.TrimSpace(req.BoardToState)
+		if k == db.TriggerBoard {
+			cur.BoardAction = strings.TrimSpace(req.BoardAction)
+		}
 		if k == db.TriggerToken {
 			cur.TokenScope = strings.TrimSpace(req.TokenScope)
 		}

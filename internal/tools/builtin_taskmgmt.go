@@ -51,12 +51,12 @@ func (ListTasksTool) Def() providers.ToolDef {
 }
 
 func (t ListTasksTool) Call(ctx context.Context, _ json.RawMessage) (string, error) {
-	tasks, err := t.d.db.ListTasks(ctx)
+	tasks, err := t.d.db.ListActiveTasks(ctx)
 	if err != nil {
 		return "", err
 	}
 	type row struct {
-		ID             string `json:"id"`
+		ID             string   `json:"id"`
 		Title          string   `json:"title"`
 		BoardState     string   `json:"boardState"`
 		OwnerAgentID   string   `json:"ownerAgentId,omitempty"`

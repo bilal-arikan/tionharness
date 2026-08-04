@@ -2,13 +2,13 @@ package insight
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/bilal-arikan/tionswarm/internal/db"
+	"github.com/bilal-arikan/tionswarm/internal/view"
 )
 
 // Analyzer turns a prepared per-session analysis request into findings. The
@@ -264,30 +264,6 @@ func (s *Scanner) record(lensID string, sess db.Session, fp string, findingCount
 	})
 }
 
-// rawStep is the minimal shape of an agent.TurnStep needed for signal extraction.
-// Decoding into this local type keeps the insight package decoupled from the
-// heavy agent package (and avoids any import cycle) — only kind/reason/isError
-// and a little text are read.
-type rawStep struct {
-	Kind    string `json:"kind"`
-	Reason  string `json:"reason,omitempty"`
-	IsError bool   `json:"isError,omitempty"`
-	Tool    string `json:"tool,omitempty"`
-	Text    string `json:"text,omitempty"`
-	Output  string `json:"output,omitempty"`
-}
-
-func parseSteps(raw string) []rawStep {
-	if raw == "" || raw == "[]" {
-		return nil
-	}
-	var steps []rawStep
-	if json.Unmarshal([]byte(raw), &steps) != nil {
-		return nil
-	}
-	return steps
-}
-
 // extractSignals derives the cheap, LLM-free SessionSignals a prefilter matches
 // against: step kinds (a failed tool step also counts as an "error" signal),
 // debug event types (an errored event also counts as "error"), and the session's
@@ -299,7 +275,7 @@ func extractSignals(msgs []db.Message, events []db.DebugEvent) SessionSignals {
 		Tools:       map[string]int{},
 	}
 	for _, m := range msgs {
-		for _, st := range parseSteps(m.Steps) {
+		for _, st := range view.DecodeSteps(m.Steps) {
 			if st.Kind != "" {
 				sig.StepKinds[st.Kind]++
 			}
@@ -330,13 +306,19 @@ func extractSignals(msgs []db.Message, events []db.DebugEvent) SessionSignals {
 
 // buildSlice assembles the compact, error-focused transcript fed to the analyzer:
 // the session's error/recovery steps (and failed tools) plus the error/repair/
-// guardrail/recovery debug events, truncated to sliceCap. Faz 1 is error-centric
-// (the shipped tool-errors lens); scope-driven slicing arrives with more lenses.
+// guardrail/recovery debug events. Faz 1 is error-centric (the shipped
+// tool-errors lens); scope-driven slicing arrives with more lenses.
+//
+// The budget is applied per RECORD, not per byte (view.CapLines), and what did
+// not fit is COUNTED. A byte-sliced transcript ends mid-line, so the last error
+// arrives truncated into something that still reads like a complete record —
+// and the analyzer has no way to tell it was cut, nor how much it is missing.
+// Steps get first claim on the budget: they are the primary evidence, and the
+// debug events largely restate them.
 func (s *Scanner) buildSlice(sess db.Session, msgs []db.Message, events []db.DebugEvent) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "SESSION %s — %q\n\n## Error / recovery steps\n", sess.ID, sess.Title)
+	var stepLines []string
 	for _, m := range msgs {
-		for _, st := range parseSteps(m.Steps) {
+		for _, st := range view.DecodeSteps(m.Steps) {
 			if st.Kind != "error" && st.Kind != "recovery" && !st.IsError {
 				continue
 			}
@@ -350,10 +332,11 @@ func (s *Scanner) buildSlice(sess db.Session, msgs []db.Message, events []db.Deb
 			if txt := firstNonEmpty(st.Text, st.Output); txt != "" {
 				line += ": " + truncate(oneLine(txt), 300)
 			}
-			b.WriteString(line + "\n")
+			stepLines = append(stepLines, line)
 		}
 	}
-	b.WriteString("\n## Debug events (errors/repairs/guardrails)\n")
+
+	var eventLines []string
 	for _, e := range events {
 		switch e.Type {
 		case db.DebugError, db.DebugRepair, db.DebugGuardrail, db.DebugRecovery:
@@ -364,14 +347,37 @@ func (s *Scanner) buildSlice(sess db.Session, msgs []db.Message, events []db.Deb
 			if e.Detail != "" {
 				line += ": " + truncate(oneLine(e.Detail), 300)
 			}
-			b.WriteString(line + "\n")
+			eventLines = append(eventLines, line)
 		}
 	}
-	out := b.String()
-	if len(out) > s.sliceCap {
-		out = out[:s.sliceCap] + "\n…(truncated)"
+
+	header := fmt.Sprintf("SESSION %s — %q\n\n## Error / recovery steps\n", sess.ID, sess.Title)
+	const eventsHeader = "\n## Debug events (errors/repairs/guardrails)\n"
+
+	budget := s.sliceCap - len(header) - len(eventsHeader)
+	steps, stepsDropped := view.CapLines(stepLines, budget)
+	spent := 0
+	for _, ln := range steps {
+		spent += len(ln) + 1
 	}
-	return out
+	evts, evtsDropped := view.CapLines(eventLines, budget-spent)
+
+	var b strings.Builder
+	b.WriteString(header)
+	for _, ln := range steps {
+		b.WriteString(ln + "\n")
+	}
+	if stepsDropped > 0 {
+		fmt.Fprintf(&b, "…(%d more error/recovery step(s) omitted for size)\n", stepsDropped)
+	}
+	b.WriteString(eventsHeader)
+	for _, ln := range evts {
+		b.WriteString(ln + "\n")
+	}
+	if evtsDropped > 0 {
+		fmt.Fprintf(&b, "…(%d more debug event(s) omitted for size)\n", evtsDropped)
+	}
+	return b.String()
 }
 
 func firstNonEmpty(a, b string) string {

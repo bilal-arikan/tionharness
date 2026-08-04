@@ -1,4 +1,10 @@
-import type { AutomationTriggerKind, BoardColumnDef, BoardOp, TokenScope } from '@/types'
+import type {
+  AutomationTriggerKind,
+  BoardAction,
+  BoardColumnDef,
+  BoardOp,
+  TokenScope,
+} from '@/types'
 
 // Fallback columns used until workspace board columns load (mirrors TaskBoard).
 export const DEFAULT_COLUMNS: BoardColumnDef[] = [
@@ -22,6 +28,13 @@ export const BOARD_OPS: { value: BoardOp; label: string }[] = [
 export function boardOpLabel(op?: BoardOp): string {
   return BOARD_OPS.find((o) => o.value === (op || 'move'))?.label ?? String(op ?? '')
 }
+
+// Board-trigger action options: 'spawn' runs the target (board drives execution),
+// 'archive' hides the finished card off the board with no LLM call.
+export const BOARD_ACTIONS: { value: BoardAction; label: string }[] = [
+  { value: 'spawn', label: 'Ajanı/akışı başlat (yürütme)' },
+  { value: 'archive', label: 'Kartı arşivle (LLM yok)' },
+]
 
 // Token-trigger scope options (label = Turkish UI text).
 export const TOKEN_SCOPES: { value: TokenScope; label: string }[] = [

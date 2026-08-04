@@ -63,6 +63,35 @@
   shell-gate satırı güncellendi.
 - **Doğrulama:** `rtk go build ./...` ✅.
 
+## View katmanı göç 2 (kısmi): insight paylaşılan primitifler (2026-08-04) ✅
+
+- **Önce bir düzeltme:** [66](66-VIEW-KATMANI.md)'da aday olarak "insight
+  prefilter" yazıyordu — **yanlış adaydı**. `Prefilter.Match` bir *filtre*
+  (`SessionSignals` → `bool`), hiç metin üretmiyor; view katmanıyla paylaşacağı
+  bir şey yok. Asıl duplicate özetleyici **`Scanner.buildSlice`**. Doküman düzeltildi.
+- **`buildSlice` bilerek `View` YAPILMADI.** Farklı soru ("bu hipotez için kanıt
+  ne?" vs "bunun durumu ne?"), farklı kapsam (**tüm transkript** vs son 40 mesaj —
+  300 mesaj önceki hata tam da insight'ın aradığı şey), farklı içerik (yalnız
+  hata/recovery vs sağlıklı durum + sinyaller). Zorlamak kabul testini harfiyen
+  geçirir ama ruhunu ıskalardı: amaç dosya taşımak değil **tekrarı yok etmek**.
+- **`view.Step` + `DecodeSteps` (`step.go`)** — kalıcı `agent.TurnStep`'i yapısal
+  çözen **tek ev**. `view/session.go`'daki `stepLite` ile
+  `insight/scanner.go`'daki `rawStep` birbirinin kopyasıydı (ikisi de aynı
+  cycle'dan kaçmak için vardı); **ikisi de silindi**. `Step.TodoItems()` legacy
+  `todo_write` input formunu tolere eder.
+- **`view.CapLines` (`cap.go`)** — bütçeyi **kayıt sınırında** uygular, düşeni
+  **sayar**. `buildSlice` eskiden `out[:sliceCap]` ile **bayttan** kesiyordu: son
+  kayıt satır ortasından bölünüp **eksik ama tam görünen** bir şeye dönüşüyordu ve
+  `…(truncated)` ne kadar düştüğünü söylemiyordu. Artık
+  `…(%d more error/recovery step(s) omitted for size)`; ayrıca **adımlar olaylara
+  önceliklidir** (birincil kanıt onlar, debug olayları büyük ölçüde tekrar).
+- **Testler:** `view/cap_test.go` (8 — kayıt bütünlüğü, bütçe muhasebesi, bozuk
+  trace toleransı, legacy todo) + `insight/slice_test.go` (4 — düşenin
+  raporlanması, sınırda kayıt bütünlüğü, temiz dilimde yanlış omission iddiası
+  olmaması, adım önceliği). Mevcut insight testleri değişmeden geçti.
+- **Durum: 1 tam + 1 kısmi göç.** Kalan gerçek adaylar: **handoff**
+  (`ProjectSession(full)` ile örtüşüyor) ve `conversation` summarizer.
+
 ## View katmanı kabul testi: coordinator worker-state bloğu göçtü (2026-08-04) ✅
 
 - **Neden:** [66](66-VIEW-KATMANI.md)'nın kabul testi — katman kurulup eski ad-hoc

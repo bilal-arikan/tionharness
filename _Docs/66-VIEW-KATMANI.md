@@ -17,7 +17,12 @@ Bugün "büyük durumu küçült" işi en az dört yerde **birbirinden habersiz*
 | `conversation.Manager` | rolling-summary ile eski turları katlar | [35](35-CONTEXT-RESET-HANDOFF.md) |
 | handoff artifact | oturumu yeni oturuma devreder | [35](35-CONTEXT-RESET-HANDOFF.md) |
 | coordinator worker-state bloğu | canlı worker roster'ını her tura enjekte eder | [47](47-KOORDINATOR-COKLU-AJAN.md) |
-| insight prefilter | oturumları lens'e uygun mu diye eler | [60](60-RETROSPEKTIF-TARAMA.md) |
+| insight `buildSlice` | oturumu analyzer LLM'ine kompakt kanıt metnine indirger | [60](60-RETROSPEKTIF-TARAMA.md) |
+
+> **Düzeltme (2026-08-04):** bu satır önce "insight prefilter" yazıyordu — **yanlış
+> adaydı**. `Prefilter.Match` bir **filtre**: `SessionSignals` alır, `bool` döner,
+> hiç metin üretmez; view katmanıyla paylaşacağı bir şey yok. Duplicate özetleyici
+> `Scanner.buildSlice`.
 
 Dördü de aynı problemi çözüyor, dördü de farklı şekilde. Beşinci müşteri (workspace
 gözetmeni / supervisor ajanı) kapıda. Bu katman yazılmazsa beşinci ad-hoc özetleyici
@@ -27,11 +32,18 @@ de yazılacak.
 `internal/view`'e göç etmiş ve eski kodu **silinmiş** olmalı. Yeni bir katman eklenip
 eskilerin durması = başarısızlık.
 
-**Durum: 1/4 göç etti** (2026-08-04) — coordinator worker-state bloğu.
-`Runtime.coordinatorWorkerStatusBlock`'un 36 satırlık render mantığı **silindi**;
-geriye 16 satırlık veri toplama + `view.ProjectWorkers` çağrısı kaldı. Göç iki
-gerçek kazanç getirdi (aşağıda). Kalan üç aday: insight prefilter, handoff,
-`conversation` summarizer.
+**Durum: 1 tam + 1 kısmi göç** (2026-08-04)
+
+- **1/4 tam — coordinator worker-state bloğu.**
+  `Runtime.coordinatorWorkerStatusBlock`'un 36 satırlık render mantığı **silindi**;
+  geriye 16 satırlık veri toplama + `view.ProjectWorkers` çağrısı kaldı.
+- **Kısmi — insight `buildSlice`.** `View` yapılmadı, **bilerek**: farklı soru
+  ("bu hipotez için kanıt ne?" vs "bunun durumu ne?"), farklı kapsam (tüm
+  transkript vs son 40 mesaj), farklı içerik (yalnız hata vs sağlıklı durum +
+  sinyaller). Zorlamak dosya taşımak olurdu, tekrarı yok etmek değil. Bunun
+  yerine **paylaşılan primitifler** çıkarıldı (aşağıda) ve iki duplicate **silindi**.
+- Kalan gerçek adaylar: **handoff** (`ProjectSession(full)` ile örtüşüyor),
+  `conversation` summarizer (en büyük kazanç, faz 5'in L2 fold'uyla iç içe).
 
 ## Çekirdek fikir
 
@@ -224,6 +236,31 @@ render edilen cümle override edilir.
 **Yönlendirilemez:** `KindWorkers` `Projector` üzerinden çözülmez ve `get_view`'de
 sunulmaz — girdisi store değil **runtime** state; ayrıca koordinatörler bu bloğu
 zaten her turda alıyor, ihtiyaç hâlinde `list_workers` var.
+
+## Göç 2 (kısmi): insight — paylaşılan primitifler
+
+`buildSlice` **`View` yapılmadı** (gerekçe yukarıda). Bunun yerine iki gerçek
+tekrar `internal/view`'e çekildi ve eski kopyalar **silindi**:
+
+**1. `view.Step` + `DecodeSteps` (`step.go`)** — kalıcı `agent.TurnStep`'i
+yapısal çözen tek ev. `view/session.go`'daki `stepLite` ve
+`insight/scanner.go`'daki `rawStep` **birbirinin kopyasıydı**, ikisi de aynı
+sebeple vardı (`agent` → `tools` → `view` cycle'ından kaçınmak). İkisi de gitti;
+`Step.TodoItems()` legacy `todo_write` input formunu da tolere ediyor.
+
+**2. `view.CapLines` (`cap.go`)** — bütçeyi **kayıt sınırında** uygular ve düşeni
+**sayar**. `buildSlice` eskiden metni kurup `out[:sliceCap]` ile **baytdan**
+kesiyordu; iki hata modu vardı:
+
+- Satır ortasından kesiyordu → son hata kaydı **eksik ama tam görünen** bir
+  şeye dönüşüyordu; analyzer kesildiğini anlayamazdı.
+- `…(truncated)` sadece "bir şey düştü" diyordu, **ne kadar** düştüğünü değil.
+
+Artık: `…(%d more error/recovery step(s) omitted for size)`. Ayrıca **adımlar
+olaylara önceliklidir** — birincil kanıt onlar, debug olayları büyük ölçüde
+onları tekrar ediyor.
+
+Bu, "sessiz kesme yasak" kuralının view dışına, insight'a taşınması demek.
 
 ## Ajanlara dağıtım: üç kanal, karıştırma
 

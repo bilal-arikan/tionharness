@@ -139,6 +139,10 @@ graph TD
    kontrol et. Yoksa atla → bedava eleme.
 2. **Analiz (LLM):** eleyen session'ın **ilgili dilimini** (tüm transkript değil) ucuz
    modele ver → kanonik `Finding[]`. Session'lar paralel.
+   Dilim `Scanner.buildSlice`'ta kurulur; bütçe **kayıt sınırında** uygulanır ve
+   sığmayan kayıtlar **sayılarak** bildirilir (`view.CapLines`) — eskiden bayttan
+   kesiliyordu, son kayıt eksik ama tam görünüyordu. Adım çözümü ortak
+   `view.DecodeSteps` ile yapılır. Detay [66](66-VIEW-KATMANI.md).
 3. **Aggregate + dedupe:** imzayla birleştir (lessons dedupe emsali); tekrar → `occurrences++`
    + kanıt `sessionIds`.
 

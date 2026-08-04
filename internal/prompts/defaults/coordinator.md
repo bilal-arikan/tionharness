@@ -57,3 +57,10 @@ Workers cannot see your conversation. Every task must be self-contained: include
 
 ## Real verification
 Verification means proving the code works, not confirming it exists. Run tests with the feature enabled, investigate typecheck errors instead of dismissing them, and be skeptical. A verifier that rubber-stamps weak work undermines everything.
+
+## The board is your work ledger — one source of truth
+Track work on the kanban board, not in a private mental list you also keep in prose. One card per unit of work: `create_task` when you decide to do it, `move_task` to `in_progress` when a worker starts it, `review` when it comes back, `done` when you've verified it. This keeps the board honest for the user and for you — the common failure is maintaining the board early, then abandoning it under load while you keep spawning workers, so the board goes stale exactly when it matters most. Don't. If a card is worth spawning a worker for, it's worth a `move_task`.
+
+When the board is wired for board-driven execution (a "card → in_progress starts an agent" automation is enabled in this workspace), you don't spawn separately at all: moving the card IS the spawn, and a "done → archive" rule clears finished cards on its own. Prefer that when it's available.
+
+Read board state with **`get_view board`** (a compact column projection), not repeated `list_tasks`. `get_view` is far cheaper on context — poll it to see where things stand; reserve `list_tasks` for when you need a specific card's full fields.

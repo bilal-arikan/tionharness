@@ -52,6 +52,28 @@ func ValidBoardOp(op string) bool {
 	}
 }
 
+// Board automation actions. A board-triggered automation either SPAWNS a session
+// (BoardActionSpawn, the default — the card change starts an agent or flow, i.e.
+// the board drives execution) or performs a lightweight bookkeeping ACTION with
+// no LLM call. BoardActionArchive archives the card (see SetTaskArchived) — the
+// natural "done → archive" cleanup that would be wasteful as a spawned session.
+// BoardAction == "" is treated as BoardActionSpawn. Ignored for non-board triggers.
+const (
+	BoardActionSpawn   = "spawn"
+	BoardActionArchive = "archive"
+)
+
+// ValidBoardAction reports whether action is empty (defaults to spawn) or a known
+// board action.
+func ValidBoardAction(action string) bool {
+	switch action {
+	case "", BoardActionSpawn, BoardActionArchive:
+		return true
+	default:
+		return false
+	}
+}
+
 // Automation is an event-driven rule that starts a NEW session whenever a
 // session carrying TriggerTag finishes a turn (StopReason end_turn). It takes
 // the finishing session's final reply as the "result", renders it into
@@ -113,6 +135,11 @@ type Automation struct {
 	// "one owner per column" guarantee that replaces manually disabling the loser.
 	// Among several exclusive matches the lowest BoardPriority wins.
 	BoardExclusive bool `json:"boardExclusive,omitempty"`
+	// BoardAction selects what a board automation does when it fires:
+	// BoardActionSpawn (default, "" is treated the same) starts a session/flow —
+	// the board drives execution; BoardActionArchive archives the card with no LLM
+	// call (the cheap "done → archive" cleanup). Ignored for non-board triggers.
+	BoardAction string `json:"boardAction,omitempty"`
 	// TargetAgentID is the agent that runs the spawned session. Optional when
 	// FlowID is set (a flow-backed automation runs a flow instead of one agent).
 	TargetAgentID string `json:"targetAgentId"`
@@ -159,4 +186,11 @@ type Automation struct {
 	CreatedBy string `json:"createdBy,omitempty"`
 	CreatedAt int64  `json:"createdAt"`
 	UpdatedAt int64  `json:"updatedAt"`
+
+	// Seed is the stable identity of a built-in default automation provisioned by
+	// EnsureDefaultBoardAutomations. Empty for user/agent-created automations. It
+	// is used both to skip re-seeding an existing default and to record it in the
+	// deletion ledger so a user-deleted default is never resurrected (mirrors
+	// Flow.Seed).
+	Seed string `json:"seed,omitempty"`
 }
