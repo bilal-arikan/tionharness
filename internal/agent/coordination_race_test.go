@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"log/slog"
 	"path/filepath"
@@ -105,10 +106,12 @@ func TestSettleBackstopDoesNotDoubleReport(t *testing.T) {
 }
 
 // TestSubtreeBudgetHoldsUnderConcurrentSpawns is the guard for the budget that
-// actually stops exponential fan-out. Counting sessions on disk and then creating
-// one is a check-then-act: a coordinator fanning out in ONE turn issues its
-// spawn_worker calls concurrently, so without a per-tree lock they all read the
-// same remaining slots and every one of them creates.
+// actually stops exponential fan-out. Counting live workers and then creating one
+// is a check-then-act: a coordinator fanning out in ONE turn issues its
+// spawn_worker calls concurrently, so without a per-tree lock they could all read
+// the same remaining capacity and every one of them creates. Seeding the tree to
+// capacity with live workers makes every concurrent spawn a refusal — none may
+// slip a new session past the guard.
 func TestSubtreeBudgetHoldsUnderConcurrentSpawns(t *testing.T) {
 	rt, _ := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))
 	const budget = 3
@@ -118,7 +121,20 @@ func TestSubtreeBudgetHoldsUnderConcurrentSpawns(t *testing.T) {
 		t.Fatalf("create agent: %v", err)
 	}
 	root := newTestCoordinator(t, rt, 0)
-	defer waitWorkersSettled(t, rt, root)
+
+	// Fill the tree to capacity with live workers, so the budget is already spent
+	// when the concurrent storm hits.
+	seeded := make([]string, 0, budget)
+	for i := 0; i < budget; i++ {
+		w := newTreeNode(t, rt, fmt.Sprintf("seed%d", i), root, root, 1, false)
+		rt.trackSession(w.ID)
+		seeded = append(seeded, w.ID)
+	}
+	defer func() {
+		for _, id := range seeded {
+			rt.untrackSession(id)
+		}
+	}()
 
 	var wg sync.WaitGroup
 	start := make(chan struct{})
@@ -133,12 +149,14 @@ func TestSubtreeBudgetHoldsUnderConcurrentSpawns(t *testing.T) {
 	close(start)
 	wg.Wait()
 
+	// Not one concurrent spawn may have created a session: the tree was already at
+	// capacity with live workers, and the per-tree lock keeps every check honest.
 	tree, err := rt.db.ListCoordinatorTree(ctx, root)
 	if err != nil {
 		t.Fatalf("list tree: %v", err)
 	}
 	if workers := len(tree) - 1; workers > budget {
-		t.Fatalf("tree budget overshot: %d worker sessions created, cap is %d", workers, budget)
+		t.Fatalf("tree budget overshot: %d worker sessions in the tree, cap is %d", workers, budget)
 	}
 }
 

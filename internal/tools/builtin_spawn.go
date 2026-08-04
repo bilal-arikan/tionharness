@@ -15,6 +15,12 @@ import (
 type SpawnResult struct {
 	SessionID string
 	AgentName string
+	// TreeBudgetUsed / TreeBudgetTotal carry the coordinator tree's LIVE-worker
+	// occupancy after a spawn_worker call so the tool can surface remaining quota
+	// (and 75%/90% warnings) to the coordinator. Total 0 means no ceiling / not a
+	// worker spawn — the tool then omits the budget line.
+	TreeBudgetUsed  int
+	TreeBudgetTotal int
 }
 
 // SpawnFunc opens a new independent session, records the prompt, and runs the

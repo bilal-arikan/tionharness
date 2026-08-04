@@ -144,7 +144,12 @@ func (r *Runtime) coordinationFuncsFor(sess db.Session, callerID string) *tools.
 			if err != nil {
 				return tools.SpawnResult{}, err
 			}
-			return tools.SpawnResult{SessionID: res.SessionID, AgentName: res.AgentName}, nil
+			return tools.SpawnResult{
+				SessionID:       res.SessionID,
+				AgentName:       res.AgentName,
+				TreeBudgetUsed:  res.TreeBudgetUsed,
+				TreeBudgetTotal: res.TreeBudgetTotal,
+			}, nil
 		}
 		f.Send = func(c context.Context, workerSessionID, message string) error {
 			return r.SendToWorker(c, coordID, workerSessionID, message)
@@ -343,7 +348,8 @@ func (r *Runtime) SpawnWorker(ctx context.Context, coordSessionID, agentRef, tas
 	// and the turn itself runs detached, so this serializes bookkeeping, not work.
 	unlockTree := lockCoordinatorTree(rootID)
 	defer unlockTree()
-	if err := r.checkCoordinatorTreeBudget(ctx, parent, rootID, depth, spec.Coordinator); err != nil {
+	budget, err := r.checkCoordinatorTreeBudget(ctx, parent, rootID, depth, spec.Coordinator)
+	if err != nil {
 		return SpawnResult{}, err
 	}
 	// A profile target (explore/coder/reviewer) is materialized into a persisted,
@@ -377,6 +383,14 @@ func (r *Runtime) SpawnWorker(ctx context.Context, coordSessionID, agentRef, tas
 		return SpawnResult{}, err
 	}
 	slot.markHadWorkers()
+	// Surface the tree's live-worker occupancy so the coordinator sees remaining
+	// quota on every spawn. budget.used counted the LIVE workers before this call;
+	// the worker just created occupies one more slot now. Total 0 (unlimited) leaves
+	// both fields zero, which the tool reads as "no budget line to show".
+	res.TreeBudgetTotal = budget.total
+	if budget.total > 0 {
+		res.TreeBudgetUsed = budget.used + 1
+	}
 	return res, nil
 }
 
@@ -392,39 +406,128 @@ func lockCoordinatorTree(rootID string) func() {
 	return mu.Unlock
 }
 
-// checkCoordinatorTreeBudget enforces the TREE-WIDE guards before a worker session
-// is created: nesting depth and the total session count of the whole tree. Both
-// fail loudly — a caller that hits a ceiling gets an error naming the limit, never
-// a quietly downgraded worker, because a coordinator that believes it delegated
-// work it did not delegate stalls waiting for a report that will never come.
-func (r *Runtime) checkCoordinatorTreeBudget(ctx context.Context, parent db.Session, rootID string, depth int, wantCoordinator bool) error {
-	if maxDepth := r.tun.CoordinatorMaxDepth(); maxDepth > 0 && depth > maxDepth {
-		return fmt.Errorf("coordinator depth limit reached (max %d levels; this worker would sit at depth %d). Do this work in the current session, or ask your own coordinator to restructure the plan", maxDepth, depth)
+// liveWorkerRef names one worker that still occupies a tree-budget slot, for the
+// exhaustion error's "still active" listing.
+type liveWorkerRef struct {
+	SessionID  string
+	AgentName  string
+	Delegating bool // live only via its own running branch, not a turn of its own
+}
+
+// coordTreeBudget is a snapshot of a coordinator tree's LIVE-worker occupancy
+// against its ceiling. A worker counts while it can still do or spawn work; a
+// worker that has concluded, failed, or been stopped is reclaimed and no longer
+// counts — which is exactly what the exhaustion error has always promised
+// ("conclude existing workers before spawning more"). total <= 0 means unlimited.
+type coordTreeBudget struct {
+	used  int
+	total int
+	live  []liveWorkerRef
+}
+
+// exhausted reports whether a further worker would exceed the ceiling.
+func (b coordTreeBudget) exhausted() bool { return b.total > 0 && b.used >= b.total }
+
+// activeList renders the still-counted workers for the exhaustion error, so a
+// coordinator learns WHICH workers hold the budget rather than only that it is
+// full.
+func (b coordTreeBudget) activeList() string {
+	if len(b.live) == 0 {
+		return "No workers are currently counted as active."
 	}
-	// Spawning a NON-coordinator leaf at the last allowed level is fine; only the
-	// sub-coordinator itself needs room for a level below it.
-	if wantCoordinator {
-		if maxDepth := r.tun.CoordinatorMaxDepth(); maxDepth > 0 && depth >= maxDepth {
-			return fmt.Errorf("cannot spawn a sub-coordinator at depth %d: its own workers would exceed the coordinator depth limit (max %d). Spawn a plain worker here instead", depth, maxDepth)
+	var sb strings.Builder
+	sb.WriteString("Still counted as active: ")
+	for i, w := range b.live {
+		if i > 0 {
+			sb.WriteString(", ")
 		}
+		role := ""
+		if w.Delegating {
+			role = " (delegating sub-coordinator)"
+		}
+		fmt.Fprintf(&sb, "%s%s [%s]", w.AgentName, role, w.SessionID)
 	}
-	maxSubtree := r.tun.CoordinatorMaxSubtreeSessions()
-	if maxSubtree <= 0 {
-		return nil
+	sb.WriteString(".")
+	return sb.String()
+}
+
+// countsAgainstTreeBudget reports whether a worker session still occupies a slot
+// in its tree's budget. Mirrors workerInfoFor's liveness (a running turn, or a
+// sub-coordinator whose own branch is still live) without the message fetch, so
+// it is cheap to call for every node while holding the tree lock. A
+// concluded/failed/stopped worker returns false and is reclaimed.
+func (r *Runtime) countsAgainstTreeBudget(s db.Session) bool {
+	if r.isSessionActive(s.ID) {
+		return true
+	}
+	if s.IsCoordinator() && r.coordSlotFor(s.ID).workers.Load() > 0 {
+		return true
+	}
+	return false
+}
+
+// evalCoordinatorTreeBudget walks the whole tree and counts the workers that are
+// still LIVE (see countsAgainstTreeBudget). Finished workers are reclaimed rather
+// than held forever, so a long-running coordinator is not permanently bricked by
+// the sessions of work it already completed. total <= 0 short-circuits (no walk).
+func (r *Runtime) evalCoordinatorTreeBudget(ctx context.Context, parent db.Session, rootID string) (coordTreeBudget, error) {
+	b := coordTreeBudget{total: r.tun.CoordinatorMaxSubtreeSessions()}
+	if b.total <= 0 {
+		return b, nil
 	}
 	tree, err := r.db.ListCoordinatorTree(ctx, rootID)
 	if err != nil {
 		// The root is gone (deleted mid-run). Fall back to the parent's own subtree
 		// so the budget still bites rather than silently disappearing.
 		if tree, err = r.db.ListCoordinatorTree(ctx, parent.ID); err != nil {
-			return fmt.Errorf("cannot verify coordinator tree budget: %w", err)
+			return coordTreeBudget{}, fmt.Errorf("cannot verify coordinator tree budget: %w", err)
 		}
 	}
-	// The root itself is not a worker; everything below it is.
-	if workers := len(tree) - 1; workers >= maxSubtree {
-		return fmt.Errorf("coordinator tree budget exhausted (%d/%d worker sessions across the whole tree); stop or conclude existing workers before spawning more", workers, maxSubtree)
+	for _, s := range tree {
+		// The root has no coordinator parent; everything below it is a worker. (A
+		// worker always carries CoordinatorSessionID, so this cleanly skips the root
+		// regardless of which node the walk normalized to.)
+		if s.CoordinatorSessionID == "" {
+			continue
+		}
+		if !r.countsAgainstTreeBudget(s) {
+			continue // concluded/failed/stopped: reclaimed, no longer holds a slot
+		}
+		b.used++
+		b.live = append(b.live, liveWorkerRef{
+			SessionID:  s.ID,
+			AgentName:  r.agentName(s.AgentID),
+			Delegating: !r.isSessionActive(s.ID), // live only through its branch
+		})
 	}
-	return nil
+	return b, nil
+}
+
+// checkCoordinatorTreeBudget enforces the TREE-WIDE guards before a worker session
+// is created: nesting depth and the live-worker count of the whole tree. Both fail
+// loudly — a caller that hits a ceiling gets an error naming the limit, never a
+// quietly downgraded worker, because a coordinator that believes it delegated work
+// it did not delegate stalls waiting for a report that will never come. On success
+// it returns the budget snapshot so the caller can report remaining quota.
+func (r *Runtime) checkCoordinatorTreeBudget(ctx context.Context, parent db.Session, rootID string, depth int, wantCoordinator bool) (coordTreeBudget, error) {
+	if maxDepth := r.tun.CoordinatorMaxDepth(); maxDepth > 0 && depth > maxDepth {
+		return coordTreeBudget{}, fmt.Errorf("coordinator depth limit reached (max %d levels; this worker would sit at depth %d). Do this work in the current session, or ask your own coordinator to restructure the plan", maxDepth, depth)
+	}
+	// Spawning a NON-coordinator leaf at the last allowed level is fine; only the
+	// sub-coordinator itself needs room for a level below it.
+	if wantCoordinator {
+		if maxDepth := r.tun.CoordinatorMaxDepth(); maxDepth > 0 && depth >= maxDepth {
+			return coordTreeBudget{}, fmt.Errorf("cannot spawn a sub-coordinator at depth %d: its own workers would exceed the coordinator depth limit (max %d). Spawn a plain worker here instead", depth, maxDepth)
+		}
+	}
+	budget, err := r.evalCoordinatorTreeBudget(ctx, parent, rootID)
+	if err != nil {
+		return coordTreeBudget{}, err
+	}
+	if budget.exhausted() {
+		return budget, fmt.Errorf("coordinator tree budget exhausted (%d/%d LIVE worker sessions across the whole tree). %s Stop or conclude a still-running worker before spawning more (finished workers are already reclaimed)", budget.used, budget.total, budget.activeList())
+	}
+	return budget, nil
 }
 
 // resolveWorkerTarget maps a spawn_worker target to a runnable persistent agent
