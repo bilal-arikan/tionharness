@@ -146,16 +146,29 @@ func TestReportToCoordinatorRejectsPrematureCompletion(t *testing.T) {
 	if err := rt.ReportToCoordinator(ctx, mid.ID, turnStatusCompleted, "synthesis of both workers"); err != nil {
 		t.Fatalf("report after settling: %v", err)
 	}
+	// Find the report by content, not position: ReportToCoordinator enqueues the
+	// coordinator's own turn, whose drain goroutine may append further messages to
+	// root asynchronously — so the note is not reliably the LAST message (a loaded
+	// runner surfaces this as a flake).
 	msgs, err := rt.db.ListMessages(ctx, root.ID)
-	if err != nil || len(msgs) == 0 {
-		t.Fatalf("coordinator got no notification (err=%v)", err)
+	if err != nil {
+		t.Fatalf("list coordinator messages: %v", err)
 	}
-	last := msgs[len(msgs)-1]
-	if !strings.Contains(last.Text, "<task-notification>") || !strings.Contains(last.Text, "synthesis of both workers") {
-		t.Errorf("unexpected notification:\n%s", last.Text)
+	var note *db.Message
+	for i := range msgs {
+		if strings.Contains(msgs[i].Text, "synthesis of both workers") {
+			note = &msgs[i]
+			break
+		}
 	}
-	if last.Origin != "worker-note" {
-		t.Errorf("origin = %q, want worker-note (so the UI renders it as a worker report)", last.Origin)
+	if note == nil {
+		t.Fatalf("coordinator never received the settled report among %d messages", len(msgs))
+	}
+	if !strings.Contains(note.Text, "<task-notification>") {
+		t.Errorf("report should be a task-notification:\n%s", note.Text)
+	}
+	if note.Origin != "worker-note" {
+		t.Errorf("origin = %q, want worker-note (so the UI renders it as a worker report)", note.Origin)
 	}
 }
 
