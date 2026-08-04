@@ -15,6 +15,7 @@ import { SessionUsageCard } from './SessionUsageCard'
 import { CacheWarmthBadge } from './CacheWarmthBadge'
 import { formatBytes, formatDate, cacheRemaining } from './sessionDetailFormat'
 import { serverNow } from '@/shared/lib/serverClock'
+import { subscribeWorkerChange } from '@/shared/lib/workerBus'
 
 interface Props {
   sessionId: string
@@ -110,6 +111,14 @@ export function SessionDetailPanel({
       alive = false
     }
   }, [sessionId, refreshKey, localRefresh])
+
+  // Live coordination refresh: a worker transition OR a coordination signal for this
+  // session (fed onto workerBus by useAppEvents) refetches session info, so the
+  // phantom-spawn "durduruldu" badge appears/clears without waiting for a manual
+  // refresh or the busy-poll (a halted coordinator is idle, so nothing else refetches).
+  useEffect(() => {
+    return subscribeWorkerChange(sessionId, () => setLocalRefresh((n) => n + 1))
+  }, [sessionId])
 
   // While a turn is running (or a warm CLI process is held), poll the info endpoint
   // so the process card appears/updates/clears live even without a chat SSE bound to
@@ -352,6 +361,7 @@ export function SessionDetailPanel({
               coordinatorDepth={info.coordinatorDepth}
               workflow={info.coordinatorWorkflow}
               coordinatorSessionId={info.coordinatorSessionId}
+              stallHalted={info.coordinatorStallHalted}
               refreshKey={(refreshKey ?? 0) + localRefresh}
               onError={onError}
               onRoleChanged={() => setLocalRefresh((n) => n + 1)}

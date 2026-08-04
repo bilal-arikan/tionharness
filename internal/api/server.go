@@ -443,6 +443,7 @@ func (s *Server) registerSessionRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("PUT /api/sessions/{id}/messages/{msgId}/feedback", s.handleSetMessageFeedback)
 	mux.HandleFunc("PUT /api/sessions/{id}/agent", s.handleSetSessionAgent)
 	mux.HandleFunc("PUT /api/sessions/{id}/role", s.handleSetSessionRole)
+	mux.HandleFunc("POST /api/sessions/{id}/coordinator/resume", s.handleResumeCoordinator)
 	mux.HandleFunc("PUT /api/sessions/{id}/workflow", s.handleSetSessionWorkflow)
 	mux.HandleFunc("GET /api/sessions/{id}/workers", s.handleListWorkers)
 	// Coordinator TREE navigation: /tree takes any member id and returns the whole

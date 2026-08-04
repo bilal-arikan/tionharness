@@ -50,6 +50,24 @@ func (s *Server) handleSetSessionRole(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"id": id, "role": role})
 }
 
+// handleResumeCoordinator is the "Devam ettir" CTA behind the phantom-spawn halt
+// badge: it clears the hard-halt state (and the nudge streak) and kicks one fresh
+// coordinator turn. Idempotent-ish — pressing it on a non-halted coordinator just
+// enqueues a turn. Rejected for a non-coordinator session so the UI never offers the
+// action where it cannot apply.
+func (s *Server) handleResumeCoordinator(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	ctx := r.Context()
+	wsp := ws(r)
+	if err := wsp.Runtime.ResumeCoordinatorFromStall(ctx, id); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	// Cross-window sync: sibling windows drop the halt badge as the state clears.
+	emitSessionChange(wsp, id, "coordinator-resume")
+	writeJSON(w, http.StatusOK, map[string]any{"id": id, "resumed": true})
+}
+
 type setWorkflowReq struct {
 	Workflow string `json:"workflow"`
 }
@@ -155,6 +173,9 @@ func (s *Server) handleSessionCoordinatorTree(w http.ResponseWriter, r *http.Req
 			// — surfaced because a node stuck in this state is the one shape of
 			// "silently blocking the whole branch above it".
 			"reportPending": sess.CoordinatorReportPending,
+			// Phantom-spawn hard-halt: auto-turns stopped for this coordinator until a
+			// human resumes it — a distinct, actionable state from generic "stuck".
+			"stallHalted": wsp.Runtime.CoordinatorStallHalted(sess.ID),
 		}
 		if u, err := wsp.DB.GetSessionUsage(ctx, sess.ID); err == nil {
 			mergeModelStats(treeByModel, u.ByModel)

@@ -44,7 +44,10 @@ function onEvent(d: AppEventDeps, e: AppEvent) {
   // (theme/accent/notifications) live and signal the open Settings screen to
   // reload. App-global → no workspace badge, no toast.
   if (e.type === 'settings') {
-    api.getSettings().then(d.applyClientPrefs).catch(() => {})
+    api
+      .getSettings()
+      .then(d.applyClientPrefs)
+      .catch(() => {})
     d.setSettingsNonce((n) => n + 1)
     return
   }
@@ -80,10 +83,18 @@ function onEvent(d: AppEventDeps, e: AppEvent) {
     d.refreshSessions()
     if (sid === d.activeSessionId) {
       d.setMeterRefresh((n) => n + 1)
-      const transcriptOp = op === 'rewind' || op === 'delete_message' ||
-        op === 'feedback' || op === 'summary' || op === 'handoff' || op === 'message_added'
+      const transcriptOp =
+        op === 'rewind' ||
+        op === 'delete_message' ||
+        op === 'feedback' ||
+        op === 'summary' ||
+        op === 'handoff' ||
+        op === 'message_added'
       if (transcriptOp && sid) {
-        api.listMessages(sid).then(d.setMessages).catch(() => {})
+        api
+          .listMessages(sid)
+          .then(d.setMessages)
+          .catch(() => {})
       }
     }
     return
@@ -192,15 +203,21 @@ function onEvent(d: AppEventDeps, e: AppEvent) {
     // is just beginning, so it must not clear the ghost bubble, reload the
     // transcript or fan out a turn-end. It only feeds the coordination bus below.
     if (
-      (e.type === 'spawned' || e.type === 'worker' || e.type === 'schedule' ||
-        e.type === 'flow' || e.type === 'automation') &&
+      (e.type === 'spawned' ||
+        e.type === 'worker' ||
+        e.type === 'schedule' ||
+        e.type === 'flow' ||
+        e.type === 'automation') &&
       sid &&
       !(e.type === 'worker' && e.target?.phase === 'start')
     ) {
       d.chat.clearPending(sid)
       if (sid === d.activeSessionId) {
         d.chat.clearAutoLive(sid)
-        api.listMessages(sid).then(d.setMessages).catch(() => {})
+        api
+          .listMessages(sid)
+          .then(d.setMessages)
+          .catch(() => {})
       }
       // Same turn-end fan-out as the chat branch (see above): unconditional so a
       // transcript view showing this session hears it even off the chat screen.
@@ -211,6 +228,12 @@ function onEvent(d: AppEventDeps, e: AppEvent) {
     // replaces polling for it.
     if (e.type === 'worker' && e.target?.coordinatorId) {
       publishWorkerChange(e.target.coordinatorId)
+    }
+    // A coordination signal (e.g. the phantom-spawn hard-halt notice) targets the
+    // coordinator session directly; route it onto the same bus so the open session's
+    // info panel refetches and its "durduruldu" badge appears without a manual refresh.
+    if (e.type === 'coordination' && e.target?.sessionId) {
+      publishWorkerChange(e.target.sessionId)
     }
   }
   // Cross-window panel refresh: every event may move rows / status /
@@ -316,7 +339,10 @@ function onReconnect(d: AppEventDeps) {
   const sid = d.activeSessionId
   if (sid) {
     d.chat.clearAutoLive(sid)
-    api.listMessages(sid).then(d.setMessages).catch(() => {})
+    api
+      .listMessages(sid)
+      .then(d.setMessages)
+      .catch(() => {})
   }
 }
 

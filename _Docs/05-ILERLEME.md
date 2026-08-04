@@ -30,6 +30,40 @@
   `TestSpawnWorkerSubtreeBudget`, `TestSubtreeBudgetHoldsUnderConcurrentSpawns`,
   `TestTreeBudgetLine`).
 
+## Koordinatör stall — sert-halt eskalasyonu + prompt/eager teyidi (2026-08-04) ✅
+
+- **Sorun (FND-99caeb31 · FND-4fd06a80 · FND-c70cf8a7 · FND-8ea05c42):** Fantom-spawn
+  stall koruması (`coordination_stall.go`) nudge bütçesi bitince yalnız gözlemlenebilir
+  `DebugError` bırakıyordu — koordinatör hâlâ donuksa kullanıcı bilgilendirilmiyor ve
+  otomatik-turlama katmanları sessizce vazgeçiyordu. Ayrıca koordinatör prompt'unda
+  "düz metinde worker'dan bahsetmek spawn etmek değildir" kuralı açıkça yoktu.
+- **Çözüm:**
+  - **Sert-halt eskalasyonu (katman 3, `escalateCoordinatorStallHalt`):** nudge bütçesi
+    tükendiği hâlde yargıç stall'ı **hâlâ** doğruluyorsa `slot.stallHalted` set edilir →
+    drain döngüsü koordinatörü otomatik-turlamayı bırakır (re-arm YOK, idle-reconcile
+    turu YOK) ve **kullanıcıya tek-seferlik** `coordination` bildirimi (sebep + nasıl
+    devam edileceği) yayınlanır. Turn-end guard hem sweeper aynı yola girer; gerçek bir
+    koordinasyon aracı çağrısı bayrağı temizler; sweeper backstop olarak açık kalır.
+    `CoordinatorStallGuard` ayarına saygı gösterir.
+  - **Prompt kuralı:** `prompts/defaults/coordinator.md` + `tionswarm-coordinator/SKILL.md`
+    altın kurallarına "worker'dan bahsetmeden ÖNCE `spawn_worker` çağır; mevcut worker'lara
+    atıf öncesi `list_workers`; düz metinde 'worker başlattım' demek stall'a düşürür" eklendi.
+  - **Eager teyit:** `spawn_worker`/`list_workers` registry'de varsayılan `Full` → CLI
+    `core`/alwaysLoad tier'ında (deferred değil) olduğu doğrulandı; regresyon testi eklendi.
+  - **UI — kalıcı "durduruldu" rozeti/CTA (2026-08-04):** halt durumu
+    `session_info.coordinatorStallHalted` + koordinatör-ağacı düğüm `stallHalted`
+    alanıyla sunulur (`Runtime.CoordinatorStallHalted`, in-memory slot). Koordinasyon
+    panelinde kırmızı **"Koordinatör durduruldu"** rozeti + **"Devam ettir"** butonu
+    (POST `/api/sessions/{id}/coordinator/resume` → `ResumeCoordinatorFromStall`:
+    halt+streak temizler, bir tur kickler); ağaç görünümünde OctagonAlert işareti.
+    Live güncelleme: `coordination` SSE olayı `workerBus`'a köprülenip panelin
+    `session_info` refetch'ini tetikler. Restart'ta rozet sweeper penceresinde geri gelir.
+    Testler: `TestCoordinatorStallHaltedReflectsState`, `TestResumeCoordinatorRejectsNonCoordinator`.
+- **Doğrulama:** `go build ./internal/agent/... ./internal/prompts/... ./internal/skills/...` ✅,
+  `go test ./internal/agent/...` (335) ✅ ve `./internal/api/...` tier testleri (yeni
+  `TestCoordinationToolsAreEager`, `TestEscalateCoordinatorStallHaltIsOneShot`,
+  `TestStallHaltStopsIdleReconcile`, `TestToolCallClearsStallHalt`) ✅.
+
 ## Grep çoklu-path desteği (2026-08-04) ✅
 
 - **Sorun (FND-02391b62 · FND-be8c85b7 · FND-5253471e):** `Grep` `path` alanı tek

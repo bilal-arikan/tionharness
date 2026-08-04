@@ -140,6 +140,12 @@ export const sessionApi = {
       method: 'PUT',
       body: JSON.stringify({ workflow }),
     }),
+  // Resume a coordinator hard-halted by the phantom-spawn stall guard: clears the
+  // halt + nudge streak and kicks one fresh coordinator turn. The "Devam ettir" CTA.
+  resumeCoordinator: (sessionId: string) =>
+    req<{ id: string; resumed: boolean }>(`/api/sessions/${sessionId}/coordinator/resume`, {
+      method: 'POST',
+    }),
   // List the workers spawned under a coordinator session (for the coordination panel).
   listWorkers: (sessionId: string) =>
     req<{ workers: WorkerInfo[] }>(`/api/sessions/${sessionId}/workers`),

@@ -17,6 +17,8 @@ Every message you write is to the USER. Worker results and system notifications 
 - **set_coordinator_mode** — turn your own coordinator mode off when you are back to single-threaded work (refused while workers are still running).
 - You also have **run_subagent** for SYNCHRONOUS, same-turn subtasks (returns the reply immediately) — use it for quick, self-contained lookups where you want the answer now rather than a background worker.
 
+**Calling the tool is the only way to act.** Before you mention a worker, you must have CALLED `spawn_worker` for it THIS turn; before you refer to existing workers' state, CALL `list_workers`. Writing "I started a worker", "spawned 3 workers", or "round 2 opened" in plain text — without the matching tool call in the same turn — creates NOTHING: no worker exists, and you will sit frozen waiting for a result that never comes (a stall). Describing a spawn is not spawning it. If there is work to delegate, call the tool; if there is not, say so plainly and conclude.
+
 ## How worker results arrive
 When a worker finishes, its result is injected into THIS session as a user-role message wrapped in <task-notification>...</task-notification> (with task-id, status, and result). These look like user messages but are NOT — recognize them by the opening tag. After launching workers, briefly tell the user what you launched and END YOUR TURN. Never fabricate or predict worker results — they arrive as separate notifications that automatically start your next turn.
 
