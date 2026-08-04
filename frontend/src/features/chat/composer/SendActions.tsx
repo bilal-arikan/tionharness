@@ -7,6 +7,11 @@ interface Props {
   // into a pending self-wake that will auto-resume. Both give the busy look.
   streaming: boolean
   waiting: boolean
+  // workersActive: a coordinator session has background workers running while its
+  // own turn is NOT streaming (idle between turns). A message sent now is held in
+  // the tray and dispatched once the workers drain (backend runInboxWorker), so the
+  // send button is presented as a queue action to make that wait explicit.
+  workersActive?: boolean
   // Input state used to pick which action(s) are offered / enabled.
   hasText: boolean
   hasContent: boolean
@@ -35,6 +40,7 @@ interface Props {
 export function SendActions({
   streaming,
   waiting,
+  workersActive = false,
   hasText,
   hasContent,
   anyUploading,
@@ -72,7 +78,26 @@ export function SendActions({
     )
   }
 
-  if (!streaming) return sendBtn
+  if (!streaming) {
+    // Coordinator workers running while the coordinator's own turn is idle: sending
+    // now HOLDS the message in the tray until the workers drain, so present it as a
+    // queue action ("Sıraya") rather than a plain send. Same handler as Gönder — the
+    // backend does the holding — so attachments and slash commands still work.
+    if (workersActive && hasContent) {
+      return (
+        <ActionButton
+          onClick={onSend}
+          disabled={disabled || anyUploading}
+          title="Workerlar çalışıyor — bitince sıradan gönderilecek"
+          testId="composer-send"
+          icon={ListPlus}
+          label="Sıraya"
+          className={BTN_QUEUE}
+        />
+      )
+    }
+    return sendBtn
+  }
 
   if (hasText) {
     // Input filled while streaming → queue / interrupt / steer.

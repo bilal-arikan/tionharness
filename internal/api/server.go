@@ -49,9 +49,14 @@ type Server struct {
 	hub          *sessionhub.Hub   // per-session ordered event log (cursor-based, all windows subscribe)
 	interactions *interactionStore // per-session resolve-once human-in-the-loop prompts (CAS)
 	inbox        *inboxStore       // per-session durable command queue (serial worker → turns)
-	runs         *chatRuns         // in-flight streaming turns (stop/steer control)
-	grants       *permGrantStore   // per-session "Always allow" permission grants
-	logger       *slog.Logger
+	// workersBusyFn overrides the coordinator-worker liveness probe the inbox worker
+	// uses to HOLD a message while workers run. nil in production (the real probe,
+	// coordinatorWorkersBusy, is used); a test injects a fake to drive the park/
+	// dispatch loop without a live runtime.
+	workersBusyFn func(wsID, sessionID string) bool
+	runs          *chatRuns       // in-flight streaming turns (stop/steer control)
+	grants        *permGrantStore // per-session "Always allow" permission grants
+	logger        *slog.Logger
 
 	// market is a workspace-independent market store (bundled + global tiers),
 	// used by the workspace-template picker and create-from-template seeding so
@@ -541,6 +546,7 @@ func (s *Server) registerTaskRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/tasks", s.handleCreateTask)
 	mux.HandleFunc("PUT /api/tasks/{id}", s.handleUpdateTask)
 	mux.HandleFunc("DELETE /api/tasks/{id}", s.handleDeleteTask)
+	mux.HandleFunc("POST /api/tasks/{id}/archive", s.handleArchiveTask)
 	mux.HandleFunc("POST /api/tasks/{id}/title", s.handleGenerateTaskTitle)
 }
 

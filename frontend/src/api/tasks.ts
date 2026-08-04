@@ -5,7 +5,10 @@ import type { Task, TaskPatch, Schedule, BoardState, Automation } from '@/types'
 import { req } from './client'
 
 export const taskApi = {
-  listTasks: () => req<Task[]>('/api/tasks'),
+  // The active board (archived cards excluded). Pass includeArchived to also get
+  // archived cards (the "Arşivlenenler" view).
+  listTasks: (includeArchived = false) =>
+    req<Task[]>(`/api/tasks${includeArchived ? '?archived=1' : ''}`),
   createTask: (data: {
     title?: string
     description?: string
@@ -32,6 +35,12 @@ export const taskApi = {
       body: JSON.stringify(patch),
     }),
   deleteTask: (id: string) => req<{ result: string }>(`/api/tasks/${id}`, { method: 'DELETE' }),
+  // Archive (soft-hide) or restore a card. Reversible, unlike deleteTask.
+  archiveTask: (id: string, archived: boolean) =>
+    req<{ id: string; archived: boolean }>(`/api/tasks/${id}/archive`, {
+      method: 'POST',
+      body: JSON.stringify({ archived }),
+    }),
 
   // Schedules (cron).
   listSchedules: () => req<Schedule[]>('/api/schedules'),

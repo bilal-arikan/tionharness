@@ -1,5 +1,5 @@
 import { memo } from 'react'
-import { Paperclip } from 'lucide-react'
+import { Paperclip, ArchiveRestore } from 'lucide-react'
 import type { Agent, Flow, Task } from '@/types'
 import { AgentIdentity } from '@/shared/components/agents/AgentIdentity'
 import { normalizeAvatar } from '@/shared/lib/avatar'
@@ -36,6 +36,9 @@ interface Props {
   onFileDragEnter: (taskId: string) => void
   onFileDragLeave: (taskId: string) => void
   onFileDrop: (task: Task, files: File[]) => void
+  /** When provided (archived view), renders a "restore" button on the card. Must
+   *  be a stable identity so the card's memo still holds. */
+  onUnarchive?: (task: Task) => void
 }
 
 // TaskCard is one board card, memoized.
@@ -57,6 +60,7 @@ function TaskCardImpl({
   onFileDragEnter,
   onFileDragLeave,
   onFileDrop,
+  onUnarchive,
 }: Props) {
   const { owner, flow, depIds, unmetDeps, unmetColColor } = meta
   // An optimistic card: created locally, still waiting for the server id/title.
@@ -97,7 +101,7 @@ function TaskCardImpl({
         e.stopPropagation()
         onFileDrop(t, files)
       }}
-      className={`rounded-lg border bg-[var(--color-surface-2)] p-2 text-sm shadow-[var(--shadow-sm)] transition ${
+      className={`relative rounded-lg border bg-[var(--color-surface-2)] p-2 text-sm shadow-[var(--shadow-sm)] transition ${
         fileDropActive ? 'ring-2 ring-[var(--color-accent)] ring-offset-1' : ''
       } ${
         pending
@@ -109,6 +113,19 @@ function TaskCardImpl({
             }`
       }`}
     >
+      {onUnarchive && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation()
+            onUnarchive(t)
+          }}
+          title="Arşivden çıkar (panoya geri al)"
+          className="absolute right-1.5 top-1.5 inline-flex items-center gap-1 rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-1.5 py-0.5 text-[10px] text-[var(--color-text-dim)] transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
+        >
+          <ArchiveRestore size={11} /> Geri al
+        </button>
+      )}
       <div className="font-medium">{t.title}</div>
       {pending ? (
         <div className="mt-1 text-[11px] text-[var(--color-text-dim)]">başlık üretiliyor…</div>

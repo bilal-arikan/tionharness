@@ -29,6 +29,9 @@ export interface Task {
   // date facet (overdue / today / this week) and the future timeline view.
   startDate?: string
   dueDate?: string
+  // Archived cards are hidden from the active board (reversible soft-hide). Only
+  // present/true on archived cards; the default board list omits them entirely.
+  archived?: boolean
   lastRunId: string
   lastRunStatus: string
   lastRunAt: number

@@ -16,9 +16,17 @@ import type { Hook, SessionDebugEvent } from '@/types'
 type OptKind = 'rtk' | 'sqz' | 'hook'
 
 const KIND_META: Record<OptKind, { label: string; cls: string }> = {
-  rtk: { label: 'rtk', cls: 'bg-emerald-500/15 text-emerald-400' },
+  // sky has no semantic theme token, so it stays raw as a distinct categorical
+  // hue; rtk maps onto success and the neutral "hook" onto text-dim to re-theme.
+  rtk: {
+    label: 'rtk',
+    cls: 'bg-[color-mix(in_srgb,var(--color-success)_15%,transparent)] text-[var(--color-success)]',
+  },
   sqz: { label: 'sqz', cls: 'bg-sky-500/15 text-sky-400' },
-  hook: { label: 'hook', cls: 'bg-zinc-500/15 text-zinc-400' },
+  hook: {
+    label: 'hook',
+    cls: 'bg-[color-mix(in_srgb,var(--color-text-dim)_15%,transparent)] text-[var(--color-text-dim)]',
+  },
 }
 
 // classifyHook maps a hook command to a token-optimizer kind via the same
@@ -75,8 +83,8 @@ export function HookActivity({ events, hooks }: { events: SessionDebugEvent[]; h
   if (groups.length === 0) {
     return (
       <p className="text-[10px] text-[var(--color-text-dim)]">
-        Bu oturumda (native turlarda) hook ateşlemesi yok. Not: claude-cli turlarında hook'lar CLI içinde
-        çalışır ve buraya işlenmez.
+        Bu oturumda (native turlarda) hook ateşlemesi yok. Not: claude-cli turlarında hook'lar CLI
+        içinde çalışır ve buraya işlenmez.
       </p>
     )
   }
@@ -88,8 +96,13 @@ export function HookActivity({ events, hooks }: { events: SessionDebugEvent[]; h
           const meta = KIND_META[g.kind]
           const tools = Object.entries(g.byTool).sort((a, b) => b[1] - a[1])
           return (
-            <li key={g.hookId || 'unattributed'} className="flex flex-wrap items-center gap-1.5 text-[10px] leading-snug">
-              <span className={`shrink-0 rounded px-1.5 py-px font-medium ${meta.cls}`}>{meta.label}</span>
+            <li
+              key={g.hookId || 'unattributed'}
+              className="flex flex-wrap items-center gap-1.5 text-[10px] leading-snug"
+            >
+              <span className={`shrink-0 rounded px-1.5 py-px font-medium ${meta.cls}`}>
+                {meta.label}
+              </span>
               <span className="text-[var(--color-text-dim)]">{g.hookId || 'atıfsız'}</span>
               <span className="text-[var(--color-text)]">{g.fired} ateşleme</span>
               {tools.length > 0 && (
@@ -97,7 +110,9 @@ export function HookActivity({ events, hooks }: { events: SessionDebugEvent[]; h
                   · {tools.map(([t, n]) => `${t}×${n}`).join(' ')}
                 </span>
               )}
-              {g.errors > 0 && <span className="text-[var(--color-danger)]">· {g.errors} hata</span>}
+              {g.errors > 0 && (
+                <span className="text-[var(--color-danger)]">· {g.errors} hata</span>
+              )}
             </li>
           )
         })}

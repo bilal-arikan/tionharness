@@ -299,6 +299,40 @@ func equalStringSlice(a, b []string) bool {
 	return true
 }
 
+type archiveTaskReq struct {
+	Archived bool `json:"archived"`
+}
+
+// handleArchiveTask flips a task's Archived flag (reversible soft-hide). Archiving
+// drops the card off the active board without deleting it; unarchiving restores it.
+// This is the manual counterpart to the "done → archive" board automation.
+func (s *Server) handleArchiveTask(w http.ResponseWriter, r *http.Request) {
+	wsp := ws(r)
+	ctx := r.Context()
+	id := r.PathValue("id")
+	req, ok := bindJSON[archiveTaskReq](w, r)
+	if !ok {
+		return
+	}
+	task, err := wsp.DB.GetTask(ctx, id)
+	if writeDBError(w, err, "task not found") {
+		return
+	}
+	if err := wsp.DB.SetTaskArchived(ctx, id, req.Archived); writeDBError(w, err, "task not found") {
+		return
+	}
+	verb := "arşivlendi"
+	op := "archive"
+	if !req.Archived {
+		verb = "arşivden çıkarıldı"
+		op = "unarchive"
+	}
+	s.logger.Info("task archive toggled", "task", id, "archived", req.Archived)
+	publishEntityChange(wsp, "board", "Görev "+verb+": "+task.Title, task.BoardState,
+		map[string]string{"view": "board", "taskId": id, "op": op})
+	writeJSON(w, http.StatusOK, map[string]any{"id": id, "archived": req.Archived})
+}
+
 func (s *Server) handleDeleteTask(w http.ResponseWriter, r *http.Request) {
 	wsp := ws(r)
 	ctx := r.Context()

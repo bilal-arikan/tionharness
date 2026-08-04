@@ -34,7 +34,7 @@ export function ThinkingShareChart({ events }: { events: SessionDebugEvent[] }) 
   return (
     <div>
       <div className="mb-1.5 flex items-center gap-1.5 text-[10px]">
-        <span className="rounded bg-violet-500/15 px-1.5 py-px font-medium text-violet-400">
+        <span className="rounded bg-[color-mix(in_srgb,var(--color-accent)_15%,transparent)] px-1.5 py-px font-medium text-[var(--color-accent)]">
           Ortalama düşünme: %{Math.round(model.share * 100)}
         </span>
         <span className="text-[var(--color-text-dim)]">
@@ -47,7 +47,7 @@ export function ThinkingShareChart({ events }: { events: SessionDebugEvent[] }) 
           <div
             key={i}
             title={`${new Date(b.ts).toLocaleTimeString('tr-TR')} · %${Math.round(b.share * 100)} · ${b.think}/${b.out} tok`}
-            className="w-1.5 shrink-0 rounded-sm bg-violet-500/60"
+            className="w-1.5 shrink-0 rounded-sm bg-[color-mix(in_srgb,var(--color-accent)_60%,transparent)]"
             style={{ height: `${Math.max(2, Math.round(b.share * 100))}%` }}
           />
         ))}

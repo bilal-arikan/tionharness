@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Trash2 } from 'lucide-react'
+import { Trash2, Archive, ArchiveRestore } from 'lucide-react'
 import { api } from '@/api'
 import { useRefreshTrigger } from '@/shared/hooks/useRefreshTrigger'
 import type { Agent, Task, TaskPatch, Flow, BoardColumnDef, BoardViewDef } from '@/types'
@@ -64,11 +64,15 @@ export function TaskBoard({ agents, onError }: Props) {
   // True until the first task list lands, so the board shows a loading state
   // instead of empty columns. Later reloads (SSE ticks) keep the board on screen.
   const [loading, setLoading] = useState(true)
+  // Archived view: shows only archived cards (with a restore action) instead of
+  // the active board. The backend excludes archived from the default list, so the
+  // archived view asks for the full list (?archived=1) and keeps just the archived.
+  const [showArchived, setShowArchived] = useState(false)
 
   const reload = () =>
     api
-      .listTasks()
-      .then(setTasks)
+      .listTasks(showArchived)
+      .then((list) => setTasks(showArchived ? list.filter((t) => t.archived) : list))
       .catch((e) => onError(e.message))
       .finally(() => setLoading(false))
 
@@ -108,6 +112,13 @@ export function TaskBoard({ agents, onError }: Props) {
     loadColumns()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [boardTick])
+
+  // Reload when switching between the active board and the archived view.
+  useEffect(() => {
+    setLoading(true)
+    reload()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showArchived])
 
   const saveColumns = async (cols: BoardColumnDef[]) => {
     const updated = await api.updateWorkspaceSettings({ boardColumns: cols })
@@ -311,6 +322,8 @@ export function TaskBoard({ agents, onError }: Props) {
     setFileDropId(null)
     void attachFilesToTask(task, files)
   })!
+  // Stable so TaskCard's memo holds. Only wired into cards in the archived view.
+  const onCardUnarchive = useStableCallback((task: Task) => void setArchived(task, false))!
 
   // Dropping a card onto a column writes whatever field the current axis names.
   // A refused drop (the 'due' axis cannot invent a date) says so instead of
@@ -381,6 +394,32 @@ export function TaskBoard({ agents, onError }: Props) {
     }
   }
 
+  // Archive or restore a single card. Either way it leaves the CURRENT view (an
+  // archived card drops off the active board; a restored card drops off the
+  // archived view), so we optimistically remove it and roll back on failure.
+  const setArchived = async (task: Task, archived: boolean) => {
+    setTasks((prev) => prev.filter((t) => t.id !== task.id))
+    try {
+      await api.archiveTask(task.id, archived)
+    } catch (e) {
+      onError((e as Error).message)
+      reload()
+    }
+  }
+
+  const bulkArchive = async (archived: boolean) => {
+    const ids = [...sel.selected]
+    if (ids.length === 0) return
+    setTasks((prev) => prev.filter((t) => !sel.selected.has(t.id)))
+    sel.clear()
+    try {
+      await Promise.all(ids.map((id) => api.archiveTask(id, archived)))
+    } catch (e) {
+      onError((e as Error).message)
+      reload()
+    }
+  }
+
   // Task count per column key — used by the editor to guard against deleting
   // non-empty columns.
   const taskCountByColumn: Record<string, number> = {}
@@ -404,13 +443,28 @@ export function TaskBoard({ agents, onError }: Props) {
         {/* Top bar: title + board actions. Column editing only makes sense on the
             status axis — the other axes derive their columns from the data. */}
         <PaneHeader
-          title="Görevler"
+          title={showArchived ? 'Görevler — Arşiv' : 'Görevler'}
           right={
             <>
               {/* The board's projection — the same bytes an agent gets from
                   get_view{kind:'board'}: column histogram + the signals. */}
               <ViewButton target={{ kind: 'board', id: 'board' }} />
-              {groupBy === 'status' && (
+              <button
+                data-testid="task-board-archived-toggle"
+                onClick={() => {
+                  sel.clear()
+                  setShowArchived((v) => !v)
+                }}
+                title={showArchived ? 'Aktif panoya dön' : 'Arşivlenenleri göster'}
+                className={`flex flex-shrink-0 items-center gap-1 rounded border px-2 py-1 text-xs transition ${
+                  showArchived
+                    ? 'border-[var(--color-accent)] bg-[var(--color-accent-soft)] text-[var(--color-accent)]'
+                    : 'border-[var(--color-border)] text-[var(--color-text-dim)] hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]'
+                }`}
+              >
+                <Archive size={13} /> {showArchived ? 'Panoya dön' : 'Arşiv'}
+              </button>
+              {!showArchived && groupBy === 'status' && (
                 <button
                   data-testid="task-board-columns-editor"
                   onClick={() => setEditorOpen((v) => !v)}
@@ -424,9 +478,13 @@ export function TaskBoard({ agents, onError }: Props) {
                   ⊞ Sütunlar
                 </button>
               )}
-              <div data-testid="task-create-submit">
-                <Button onClick={() => setModal({ mode: 'create', taskId: null })}>+ Görev</Button>
-              </div>
+              {!showArchived && (
+                <div data-testid="task-create-submit">
+                  <Button onClick={() => setModal({ mode: 'create', taskId: null })}>
+                    + Görev
+                  </Button>
+                </div>
+              )}
             </>
           }
         />
@@ -459,6 +517,17 @@ export function TaskBoard({ agents, onError }: Props) {
             >
               ✕
             </button>
+          </div>
+        )}
+
+        {showArchived && !loading && (
+          <div className="flex items-center gap-2 border-b border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-1.5 text-xs text-[var(--color-text-dim)]">
+            <Archive size={13} className="flex-shrink-0" />
+            <span className="min-w-0 flex-1">
+              {tasks.length === 0
+                ? 'Arşivlenmiş görev yok.'
+                : `${tasks.length} arşivlenmiş görev — bir kartı geri almak için “Geri al”e bas.`}
+            </span>
           </div>
         )}
 
@@ -530,6 +599,7 @@ export function TaskBoard({ agents, onError }: Props) {
                         onFileDragEnter={onCardFileDragEnter}
                         onFileDragLeave={onCardFileDragLeave}
                         onFileDrop={onCardFileDrop}
+                        onUnarchive={showArchived ? onCardUnarchive : undefined}
                       />
                     )
                   })}
@@ -570,6 +640,18 @@ export function TaskBoard({ agents, onError }: Props) {
               </option>
             ))}
           </select>
+          {showArchived ? (
+            <SelectionBarButton
+              icon={<ArchiveRestore size={13} />}
+              onClick={() => bulkArchive(false)}
+            >
+              Geri al
+            </SelectionBarButton>
+          ) : (
+            <SelectionBarButton icon={<Archive size={13} />} onClick={() => bulkArchive(true)}>
+              Arşivle
+            </SelectionBarButton>
+          )}
           <SelectionBarButton icon={<Trash2 size={13} />} onClick={bulkDelete} danger>
             Sil
           </SelectionBarButton>

@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/bilal-arikan/tionswarm/internal/sessionhub"
+	"github.com/bilal-arikan/tionswarm/internal/workspace"
 )
 
 // inboxItem is one queued user turn awaiting dispatch. The whole chatReq is
@@ -201,6 +202,46 @@ func (s *Server) runInboxWorker(sessionID string) {
 			s.flushInbox(sessionID)
 			return
 		}
+		// Hold the queue while this coordinator session still has running workers: a
+		// message typed during a worker run stays visible in the tray and dispatches
+		// only once the workers drain, instead of running a coordinator turn mid-run
+		// (which flashed the chip away). Re-kicked from the worker-completion bridge
+		// (kickCoordinatorChain). The busy probe does I/O, so it runs UNLOCKED — the
+		// current items were observed above and can only grow, never vanish, until we
+		// pop, so releasing the lock here cannot lose a turn.
+		wsID := ib.wsID
+		s.inbox.unlock()
+		if s.holdForCoordinatorWorkers(wsID, sessionID) {
+			s.inbox.lock()
+			if ib := s.inbox.sessions[sessionID]; ib != nil {
+				ib.running = false
+			}
+			s.inbox.unlock()
+			// Keep the parked items visible in every window's tray.
+			s.flushInbox(sessionID)
+			// Close the drain-during-park race: if the workers finished between the
+			// probe above and marking ourselves not-running, the completion kick may
+			// have no-op'd (we were still flagged running) — re-check and self-kick so
+			// the message is never stranded.
+			if !s.holdForCoordinatorWorkers(wsID, sessionID) {
+				s.kickInbox(sessionID)
+			}
+			return
+		}
+		s.inbox.lock()
+		ib = s.inbox.sessions[sessionID]
+		if ib == nil || ib.closing || len(ib.items) == 0 {
+			if ib != nil {
+				ib.running = false
+				if !ib.closing {
+					ib.inflight = nil
+					ib.seen = make(map[string]bool)
+				}
+			}
+			s.inbox.unlock()
+			s.flushInbox(sessionID)
+			return
+		}
 		item := ib.items[0]
 		ib.items = ib.items[1:]
 		item.Attempts++
@@ -219,10 +260,13 @@ func (s *Server) runInboxWorker(sessionID string) {
 			continue
 		}
 
-		wsp := s.workspaces.Default()
-		if item.WorkspaceID != "" {
-			if w, err := s.workspaces.Get(item.WorkspaceID); err == nil {
-				wsp = w
+		var wsp *workspace.Workspace
+		if s.workspaces != nil {
+			wsp = s.workspaces.Default()
+			if item.WorkspaceID != "" {
+				if w, err := s.workspaces.Get(item.WorkspaceID); err == nil {
+					wsp = w
+				}
 			}
 		}
 		if wsp == nil {
@@ -274,10 +318,13 @@ func (s *Server) flushInbox(sessionID string) {
 	}
 	s.inbox.unlock()
 
-	wsp := s.workspaces.Default()
-	if wsID != "" {
-		if w, err := s.workspaces.Get(wsID); err == nil {
-			wsp = w
+	var wsp *workspace.Workspace
+	if s.workspaces != nil {
+		wsp = s.workspaces.Default()
+		if wsID != "" {
+			if w, err := s.workspaces.Get(wsID); err == nil {
+				wsp = w
+			}
 		}
 	}
 	if wsp != nil && wsp.DB != nil {

@@ -9,7 +9,7 @@ interface Props {
 
 // Glyph + colour per todo status (mirrors TodoCard).
 const MARK: Record<TodoItem['status'], { icon: string; cls: string }> = {
-  completed: { icon: '✓', cls: 'text-green-400 line-through opacity-70' },
+  completed: { icon: '✓', cls: 'text-[var(--color-success)] line-through opacity-70' },
   in_progress: { icon: '◐', cls: 'text-[var(--color-accent)] font-medium' },
   pending: { icon: '○', cls: 'text-[var(--color-text-dim)]' },
 }

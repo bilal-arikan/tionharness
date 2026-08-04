@@ -175,6 +175,14 @@ ajan/akış **istemez**. UI: Otomasyon popup'ında pano tetikleyicisine "Aksiyon
 Koordinatöre (`prompts/defaults/coordinator.md`) board'ı **tek iş defteri** olarak kullan +
 durumu tekrar tekrar `list_tasks` yerine ucuz **`get_view board`** ile oku yönergesi eklendi.
 
+**Arşiv görünümü (UI + REST) — 2026-08-04.** Görevler ekranında başlık çubuğunda **"🗄 Arşiv"**
+toggle'ı (`TaskBoard.tsx`, `task-board-archived-toggle`): aktif pano ↔ yalnız arşivlenmiş kartlar.
+Arşiv modunda kart oluşturma/sütun editörü gizli; her kartta **"↩ Geri al"** (`TaskCard.onUnarchive`,
+memo-güvenli stable callback) + seçim çubuğunda toplu **Arşivle/Geri al**. Manuel uç:
+`POST /api/tasks/{id}/archive {archived:bool}` → `SetTaskArchived`, board olayı yayınlar
+(`op:archive/unarchive`); `GET /api/tasks?archived=1` arşiv dahil tümünü döndürür (varsayılan hariç).
+Frontend `taskApi.listTasks(includeArchived)` + `taskApi.archiveTask(id, archived)`.
+
 ### Aynı sütunda çoklu tetik: sıralama + tek sahip (2026-07-24)
 
 **Sorun (TSK59):** İki kural aynı sütunu izlediğinde (ör. Kart Sınıflandırıcı ve Board Planner,

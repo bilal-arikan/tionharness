@@ -50,7 +50,7 @@ export const STATUS_LABEL: Record<string, string> = {
 export function statusColor(status: string): string {
   if (status === 'success') return 'text-[var(--color-success)]'
   if (status === 'failure') return 'text-[var(--color-danger)]'
-  if (status === 'waiting') return 'text-[#eab308]'
+  if (status === 'waiting') return 'text-[var(--color-warning)]'
   return 'text-[var(--color-accent)]'
 }
 
@@ -353,7 +353,7 @@ export function RunView({
           then reflects the run advancing. */}
       {run.status === 'waiting' && (
         <div className="flex items-center gap-2 border-b border-[color:#eab308] bg-[color:color-mix(in_srgb,#eab308_10%,var(--color-surface))] p-3">
-          <span className="shrink-0 text-xs text-[#eab308]">⏳ Girdi bekleniyor</span>
+          <span className="shrink-0 text-xs text-[var(--color-warning)]">⏳ Girdi bekleniyor</span>
           <input
             value={awaitInput}
             onChange={(e) => setAwaitInput(e.target.value)}
@@ -370,7 +370,7 @@ export function RunView({
           <button
             onClick={() => void deliverInput()}
             disabled={delivering}
-            className="flex shrink-0 items-center gap-1.5 rounded-md bg-[#eab308] px-3 py-1.5 text-xs font-medium text-black transition hover:opacity-90 disabled:opacity-50"
+            className="flex shrink-0 items-center gap-1.5 rounded-md bg-[var(--color-warning)] px-3 py-1.5 text-xs font-medium text-[var(--color-bg)] transition hover:opacity-90 disabled:opacity-50"
           >
             {delivering ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
             Gönder

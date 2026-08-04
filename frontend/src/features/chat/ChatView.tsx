@@ -139,6 +139,10 @@ export function ChatView({
     chat.activeStreaming,
   )
   const runningWorkers = useMemo(() => workers.filter((w) => w.running), [workers])
+  // Workers still running while the coordinator's own turn is idle: a message sent
+  // now is HELD in the tray until they drain (backend). Drives the composer's
+  // "Sıraya" affordance and the tray's "waiting on workers" hint.
+  const workersActive = !chat.activeStreaming && runningWorkers.length > 0
 
   // Retry policy for a failed turn's error card. Read-only run logs (task / flow
   // / schedule) retry non-destructively so the audit trail is preserved;
@@ -248,6 +252,7 @@ export function ChatView({
             onRemove={chat.removePending}
             onSendNext={chat.sendQueuedNext}
             onClear={chat.clearQueue}
+            workersActive={workersActive}
           />
           <WorkerWaitBanner
             workers={runningWorkers}
@@ -268,6 +273,10 @@ export function ChatView({
             focusSessionId={focusSessionId}
             streaming={chat.activeStreaming}
             waiting={!!chat.activeWakeWait}
+            // Workers running while the coordinator's own turn is idle → the composer
+            // offers "Sıraya" (a live turn already shows the queue/interrupt/steer
+            // cluster, so this is gated on NOT streaming inside workersActive).
+            workersActive={workersActive}
             onCancelWait={chat.cancelWake}
             onSend={(text, attachments) => {
               jumpToBottom()

@@ -18,6 +18,11 @@ interface Props {
   onSendNext?: (id: string) => void
   // Clear the whole waiting queue. Optional; shown when 2+ queue items wait.
   onClear?: () => void
+  // workersActive: the session's own turn is idle but coordinator workers are still
+  // running, so a queued message is being HELD until they drain (backend). Only the
+  // reason text changes — the queue is otherwise identical to "waiting behind a
+  // streaming turn".
+  workersActive?: boolean
 }
 
 import { ArrowUp, CornerDownRight, Hourglass, X } from 'lucide-react'
@@ -26,15 +31,26 @@ import { ComposerCard } from './ComposerCard'
 // PendingTray lists the session's WAITING backend queue (+ any steers) above the
 // composer. Queue items show their position (#N), can be promoted to run next,
 // removed individually, or cleared all at once.
-export function PendingTray({ items, onRemove, onSendNext, onClear }: Props) {
+export function PendingTray({
+  items,
+  onRemove,
+  onSendNext,
+  onClear,
+  workersActive = false,
+}: Props) {
   if (items.length === 0) return null
   const queueCount = items.filter((it) => it.kind === 'queue').length
+  // Held behind running workers (not a live turn) → say so, so a chip that just sits
+  // there reads as "waiting on the workers" instead of looking stuck.
+  const showWorkerHint = workersActive && queueCount > 0
   let qIndex = 0
   return (
     <ComposerCard tone="muted" className="flex flex-col gap-1.5 px-3 py-2">
       <div className="flex items-center justify-between">
         <span className="text-[10px] font-medium uppercase tracking-wide text-[var(--color-text-dim)]">
-          Bekleyenler — işleme alınmadan silebilirsin
+          {showWorkerHint
+            ? 'Workerlar çalışıyor — bitince gönderilecek · silebilirsin'
+            : 'Bekleyenler — işleme alınmadan silebilirsin'}
         </span>
         {onClear && queueCount > 1 && (
           <button
@@ -61,7 +77,9 @@ export function PendingTray({ items, onRemove, onSendNext, onClear }: Props) {
               title={
                 it.kind === 'steer'
                   ? 'Canlı yönlendirme (birazdan gönderilecek)'
-                  : 'Sıradaki mesaj (tur bitince gönderilecek)'
+                  : showWorkerHint
+                    ? 'Sıradaki mesaj (workerlar bitince gönderilecek)'
+                    : 'Sıradaki mesaj (tur bitince gönderilecek)'
               }
             >
               {it.kind === 'steer' ? <CornerDownRight size={11} /> : <Hourglass size={11} />}
