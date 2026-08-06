@@ -137,6 +137,37 @@ func (s *Server) handleCreateAgent(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, agent)
 }
 
+// handleDuplicateAgent creates a full copy of an existing agent: every profile
+// field, provider/model, thinking + permission mode, visual identity, skills and
+// the whole tool-access configuration (MCPEnabled + tool overrides / allow +
+// block lists) are carried over verbatim. Only identity fields are reset — the
+// clone gets a fresh ID (assigned by CreateAgent), a "(kopya)" name suffix, and
+// clean created/updated/deleted state. It is NOT marked as agent-created, so the
+// user keeps full edit/delete rights over the copy.
+func (s *Server) handleDuplicateAgent(w http.ResponseWriter, r *http.Request) {
+	src, err := ws(r).DB.GetAgent(r.Context(), r.PathValue("id"))
+	if writeDBError(w, err, "agent not found") {
+		return
+	}
+
+	clone := src
+	clone.ID = "" // CreateAgent assigns a new prefixed id
+	clone.Name = src.Name + " (kopya)"
+	clone.CreatedBy = ""  // user-owned copy, not an agent-created entity
+	clone.Deleted = false // never inherit the deleted flag
+	clone.DeletedAt = 0
+	clone.CreatedAt = 0 // stamped by CreateAgent
+	clone.UpdatedAt = 0
+
+	agent, err := ws(r).DB.CreateAgent(r.Context(), clone)
+	if writeDBError(w, err, "") {
+		return
+	}
+
+	s.logger.Info("agent duplicated", "source", src.ID, "clone", agent.ID, "name", agent.Name)
+	writeJSON(w, http.StatusCreated, agent)
+}
+
 // firstAgentProviderModel returns the provider/model of the first (newest)
 // existing agent in the workspace, or empty strings when none exist. New agents
 // inherit a real agent's concrete setup instead of an abstract workspace default.

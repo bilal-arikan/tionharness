@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { X, Copy, Download, FileText, Check } from 'lucide-react'
+import { X, Copy, Download, FileText } from 'lucide-react'
+import { toast } from '@/shared/components'
 import type { TurnStep } from '@/types'
 import { api } from '@/api'
 import { ModalOverlay } from '@/shared/components/ModalOverlay'
@@ -309,18 +310,14 @@ function downloadPatch(path: string, patch: string) {
 }
 
 function CopyButton({ text }: { text: string }) {
-  const [done, setDone] = useState(false)
   return (
     <IconAction
       title="Yamayı panoya kopyala"
       onClick={() => {
-        navigator.clipboard.writeText(text).then(() => {
-          setDone(true)
-          setTimeout(() => setDone(false), 1200)
-        })
+        navigator.clipboard.writeText(text).then(() => toast.info('Panoya kopyalandı'))
       }}
     >
-      {done ? <Check size={13} /> : <Copy size={13} />}
+      <Copy size={13} />
     </IconAction>
   )
 }

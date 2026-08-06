@@ -1,10 +1,17 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Check, ChevronRight, ChevronsDownUp, ChevronsUpDown, Copy, X } from 'lucide-react'
+import { ChevronRight, ChevronsDownUp, ChevronsUpDown, Copy, X } from 'lucide-react'
 import type { AgentContextPreview } from '@/types'
 import { api } from '@/api'
 import { copyToClipboard } from '@/shared/lib/clipboard'
 import { Markdown } from '@/shared/components/markdown/Markdown'
-import { Button, CollapsibleSection, InfoPopover, ModalOverlay, useBulkToggle } from '@/shared/components'
+import {
+  Button,
+  CollapsibleSection,
+  InfoPopover,
+  ModalOverlay,
+  toast,
+  useBulkToggle,
+} from '@/shared/components'
 
 // LAZY_VIS_CHIP labels a lazy tool's visibility tier next to its name so the
 // load-on-demand list reflects the same Tam/Özet/İsim/Gizli chips set in the tools
@@ -28,7 +35,6 @@ interface Props {
 export function AgentContextModal({ agentId, agentName, onClose }: Props) {
   const [data, setData] = useState<AgentContextPreview | null>(null)
   const [err, setErr] = useState<string | null>(null)
-  const [copied, setCopied] = useState(false)
   const [raw, setRaw] = useState(false)
   const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(false)
@@ -53,9 +59,7 @@ export function AgentContextModal({ agentId, agentName, onClose }: Props) {
   const copy = () => {
     if (!data) return
     copyToClipboard(data.system).then((ok) => {
-      if (!ok) return
-      setCopied(true)
-      setTimeout(() => setCopied(false), 1500)
+      if (ok) toast.info('Panoya kopyalandı')
     })
   }
 
@@ -90,11 +94,11 @@ export function AgentContextModal({ agentId, agentName, onClose }: Props) {
             {data && (
               <button
                 onClick={copy}
-                title={copied ? 'Kopyalandı' : 'Promptu kopyala'}
-                aria-label={copied ? 'Kopyalandı' : 'Promptu kopyala'}
+                title="Promptu kopyala"
+                aria-label="Promptu kopyala"
                 className="flex shrink-0 items-center rounded-md border border-[var(--color-border)] px-2.5 py-1.5 text-xs text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]"
               >
-                {copied ? <Check size={13} className="text-[var(--color-success)]" /> : <Copy size={13} />}
+                <Copy size={13} />
               </button>
             )}
             <button
@@ -120,7 +124,8 @@ export function AgentContextModal({ agentId, agentName, onClose }: Props) {
               />
               <span className="font-medium">Token özeti</span>
               <span className="text-[var(--color-text-dim)]">
-                · Toplam {data.totalTokens.toLocaleString()} <span className="opacity-70">(~tahmini)</span>
+                · Toplam {data.totalTokens.toLocaleString()}{' '}
+                <span className="opacity-70">(~tahmini)</span>
               </span>
               {data.cliOverhead && data.cliOverhead.predictedOverhead > 0 && (
                 <span className="rounded bg-[color-mix(in_srgb,var(--color-warning)_18%,transparent)] px-1.5 py-0.5 font-medium text-[var(--color-warning)]">
@@ -163,9 +168,13 @@ export function AgentContextModal({ agentId, agentName, onClose }: Props) {
                         />
                       </span>
                       <span className="text-[var(--color-text-dim)]">
-                        Tahmin <strong>{data.totalTokens.toLocaleString()}</strong> → beklenen taban ~
-                        <strong>{(data.totalTokens + data.cliOverhead.predictedOverhead).toLocaleString()}</strong>
-                        {' '}(+<strong>{data.cliOverhead.predictedOverhead.toLocaleString()}</strong> taban ek yük)
+                        Tahmin <strong>{data.totalTokens.toLocaleString()}</strong> → beklenen taban
+                        ~
+                        <strong>
+                          {(data.totalTokens + data.cliOverhead.predictedOverhead).toLocaleString()}
+                        </strong>{' '}
+                        (+<strong>{data.cliOverhead.predictedOverhead.toLocaleString()}</strong>{' '}
+                        taban ek yük)
                       </span>
                     </div>
                   </div>
@@ -206,8 +215,8 @@ export function AgentContextModal({ agentId, agentName, onClose }: Props) {
                 {data.provider === 'claude-cli' && (
                   <div className="mb-2 rounded-md border border-[color-mix(in_srgb,var(--color-warning)_30%,transparent)] bg-[color-mix(in_srgb,var(--color-warning)_8%,transparent)] px-2.5 py-1.5 text-[11px] leading-relaxed text-[var(--color-text-dim)]">
                     claude-cli: dinamik bağlam ayrı bir system bloğu olarak değil,{' '}
-                    <strong>son kullanıcı mesajının içine dokunularak</strong> gönderilir
-                    (sıcak cache prefix'ini bozmaz).
+                    <strong>son kullanıcı mesajının içine dokunularak</strong> gönderilir (sıcak
+                    cache prefix'ini bozmaz).
                   </div>
                 )}
                 {data.dynamic ? (
@@ -222,8 +231,8 @@ export function AgentContextModal({ agentId, agentName, onClose }: Props) {
                   )
                 ) : (
                   <p className="text-xs text-[var(--color-text-dim)]">
-                    Bu mesaj için dinamik bağlam yok. Özet · oturum artifact'ları · todo listesi gerçek bir
-                    oturumda, tur anında eklenir (burada simüle edilmez).
+                    Bu mesaj için dinamik bağlam yok. Özet · oturum artifact'ları · todo listesi
+                    gerçek bir oturumda, tur anında eklenir (burada simüle edilmez).
                   </p>
                 )}
               </CollapsibleSection>
@@ -293,7 +302,9 @@ export function AgentContextModal({ agentId, agentName, onClose }: Props) {
                 >
                   <p className="mb-1.5 text-[11px] text-[var(--color-text-dim)]">
                     Şema tura girmez — yalnızca ad+özet sistem promptundaki{' '}
-                    <code className="rounded bg-[var(--color-surface-2)] px-1">Available Tools (load on demand)</code>{' '}
+                    <code className="rounded bg-[var(--color-surface-2)] px-1">
+                      Available Tools (load on demand)
+                    </code>{' '}
                     bölümünde durur. Ajan{' '}
                     <code className="rounded bg-[var(--color-surface-2)] px-1">activate_tools</code>{' '}
                     ile istediğini bir sonraki adımda etkinleştirir.
@@ -305,7 +316,9 @@ export function AgentContextModal({ agentId, agentName, onClose }: Props) {
                         className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface-2)] px-2.5 py-1.5 opacity-75"
                       >
                         <div className="flex items-center gap-1.5">
-                          <code className="text-xs font-medium text-[var(--color-text-dim)]">{t.name}</code>
+                          <code className="text-xs font-medium text-[var(--color-text-dim)]">
+                            {t.name}
+                          </code>
                           {t.visibility && LAZY_VIS_CHIP[t.visibility] && (
                             <span className="rounded bg-[var(--color-surface-3)] px-1 py-0.5 text-[9px] font-medium uppercase tracking-wide text-[var(--color-text-dim)]">
                               {LAZY_VIS_CHIP[t.visibility]}
@@ -313,7 +326,9 @@ export function AgentContextModal({ agentId, agentName, onClose }: Props) {
                           )}
                         </div>
                         {t.description && (
-                          <p className="mt-0.5 text-[11px] text-[var(--color-text-dim)]">{t.description}</p>
+                          <p className="mt-0.5 text-[11px] text-[var(--color-text-dim)]">
+                            {t.description}
+                          </p>
                         )}
                       </li>
                     ))}
@@ -361,7 +376,13 @@ function Stat({
     : 'bg-[var(--color-surface-2)] text-[var(--color-text-dim)]'
   return (
     <span className={`rounded-md px-2 py-1 ${cls} ${dim ? 'opacity-60' : ''}`}>
-      {dim ? label : <>{label}: <strong>{value.toLocaleString()}</strong></>}
+      {dim ? (
+        label
+      ) : (
+        <>
+          {label}: <strong>{value.toLocaleString()}</strong>
+        </>
+      )}
     </span>
   )
 }

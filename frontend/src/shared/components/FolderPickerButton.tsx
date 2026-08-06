@@ -76,7 +76,9 @@ export function FolderPickerButton({
           </div>
 
           <div className="max-h-56 overflow-y-auto rounded-lg border border-[var(--color-border)]">
-            {busy && <div className="px-2 py-3 text-xs text-[var(--color-text-dim)]">Yükleniyor…</div>}
+            {busy && (
+              <div className="px-2 py-3 text-xs text-[var(--color-text-dim)]">Yükleniyor…</div>
+            )}
             {!busy && (browse?.entries.length ?? 0) === 0 && (
               <div className="px-2 py-3 text-xs text-[var(--color-text-dim)]">Alt klasör yok</div>
             )}
@@ -97,7 +99,7 @@ export function FolderPickerButton({
             onClick={() => browse?.path && pick(browse.path)}
             disabled={busy || !browse?.path}
             size="lg"
-            className="mt-2 flex w-full items-center justify-center gap-1.5"
+            className="mt-2 w-full"
           >
             <Check size={14} /> Bu klasörü seç
           </Button>

@@ -263,18 +263,6 @@ func (s *Server) bridgeBusToHub() {
 			}
 			s.hub.Publish(sid, sessionhub.KindUserMessage, e.Msg, false)
 		case "chat", "spawned", "worker", "schedule", "flow", "automation":
-			// A coordinator worker just finished: re-kick the coordinator's send-queue
-			// (and every ancestor's) so a message the user parked while workers ran now
-			// dispatches — the inbox worker holds the queue while workers run (see
-			// runInboxWorker / coordinatorWorkersBusy). This fires per worker; the inbox
-			// re-probes the running count and only dispatches once the last one drains.
-			// Done BEFORE the phase/liveness guards below, which are about turn_done
-			// bridging and would otherwise skip this kick.
-			if e.Type == "worker" && e.Target["phase"] != "start" {
-				if coord := e.Target["coordinatorId"]; coord != "" {
-					s.kickCoordinatorChain(e.WorkspaceID, coord)
-				}
-			}
 			// An AUTONOMOUS turn (scheduler/spawn/worker/flow) finished: it publishes
 			// no hub reply/turn_done of its own, so bridge a turn_done here — every
 			// window watching the session then reloads the persisted turn. Skip wake

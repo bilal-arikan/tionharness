@@ -120,9 +120,9 @@ func TestRunScheduleTool(t *testing.T) {
 	}
 }
 
-// TestDeleteAgentRejectsUserCreated verifies an agent cannot delete a
-// user-created agent (CreatedBy == "").
-func TestDeleteAgentRejectsUserCreated(t *testing.T) {
+// TestDeleteAgentAllowsUserCreated verifies the provenance gate is gone: an
+// agent can delete a user-created agent (CreatedBy == "").
+func TestDeleteAgentAllowsUserCreated(t *testing.T) {
 	ctx := context.Background()
 	d := openTestDB(t)
 
@@ -131,16 +131,17 @@ func TestDeleteAgentRejectsUserCreated(t *testing.T) {
 		t.Fatalf("seed agent: %v", err)
 	}
 	del := NewDeleteAgentTool(d, "actor-1", nil, nil)
-	_, err = del.Call(ctx, json.RawMessage(`{"id":"`+userAgent.ID+`"}`))
-	if err == nil {
-		t.Fatal("expected delete of user-created agent to be rejected")
+	if _, err = del.Call(ctx, json.RawMessage(`{"id":"`+userAgent.ID+`"}`)); err != nil {
+		t.Fatalf("delete of user-created agent should succeed: %v", err)
 	}
-	if !strings.Contains(err.Error(), "created by the user") {
-		t.Fatalf("unexpected error: %v", err)
+	// DeleteAgent is a soft delete (the row survives for history), so verify it is
+	// now marked deleted rather than absent.
+	got, err := d.GetAgent(ctx, userAgent.ID)
+	if err != nil {
+		t.Fatalf("get agent: %v", err)
 	}
-	// It must still exist.
-	if _, err := d.GetAgent(ctx, userAgent.ID); err != nil {
-		t.Fatalf("agent should still exist: %v", err)
+	if !got.Deleted {
+		t.Fatal("agent should be marked deleted")
 	}
 }
 
@@ -158,9 +159,9 @@ func TestDeleteAgentRejectsSelf(t *testing.T) {
 	}
 }
 
-// TestScheduleCreateAndGuard verifies create_schedule stamps provenance, reload
-// is invoked, and delete enforces provenance.
-func TestScheduleCreateAndGuard(t *testing.T) {
+// TestScheduleCreateAndDelete verifies create_schedule stamps provenance, reload
+// is invoked, and delete works regardless of provenance (no gate).
+func TestScheduleCreateAndDelete(t *testing.T) {
 	ctx := context.Background()
 	d := openTestDB(t)
 	const actor = "actor-1"
@@ -187,11 +188,14 @@ func TestScheduleCreateAndGuard(t *testing.T) {
 		t.Fatalf("CreatedBy = %q, want %q", sc.CreatedBy, actor)
 	}
 
-	// A user-created schedule must be undeletable by an agent.
+	// A user-created schedule is now deletable by an agent (no provenance gate).
 	userSc, _ := d.CreateSchedule(ctx, db.Schedule{AgentID: ag.ID, CronExpr: "0 0 * * *", Prompt: "x"})
 	del := NewDeleteScheduleTool(d, actor, reload)
-	if _, err := del.Call(ctx, json.RawMessage(`{"id":"`+userSc.ID+`"}`)); err == nil {
-		t.Fatal("expected delete of user-created schedule to be rejected")
+	if _, err := del.Call(ctx, json.RawMessage(`{"id":"`+userSc.ID+`"}`)); err != nil {
+		t.Fatalf("delete of user-created schedule should succeed: %v", err)
+	}
+	if _, err := d.GetSchedule(ctx, userSc.ID); err == nil {
+		t.Fatal("schedule should be gone")
 	}
 }
 
@@ -228,16 +232,19 @@ func TestFlowCreateValidatesGraph(t *testing.T) {
 	}
 }
 
-// TestDeleteArtifactGuard verifies only agent-created artifacts can be deleted.
-func TestDeleteArtifactGuard(t *testing.T) {
+// TestDeleteArtifact verifies any artifact — user- or agent-created — can be deleted.
+func TestDeleteArtifact(t *testing.T) {
 	ctx := context.Background()
 	d := openTestDB(t)
 	const actor = "actor-1"
 
 	userArt, _ := d.CreateArtifact(ctx, db.Artifact{Title: "User", Kind: "text", Content: "x"}) // AgentID == ""
 	del := NewDeleteArtifactTool(d, actor)
-	if _, err := del.Call(ctx, json.RawMessage(`{"id":"`+userArt.ID+`"}`)); err == nil {
-		t.Fatal("expected delete of user-created artifact to be rejected")
+	if _, err := del.Call(ctx, json.RawMessage(`{"id":"`+userArt.ID+`"}`)); err != nil {
+		t.Fatalf("delete of user-created artifact should succeed: %v", err)
+	}
+	if _, err := d.GetArtifact(ctx, userArt.ID); err == nil {
+		t.Fatal("user artifact should be gone")
 	}
 
 	agentArt, _ := d.CreateArtifact(ctx, db.Artifact{Title: "Agent", Kind: "text", Content: "y", AgentID: actor})
@@ -245,7 +252,7 @@ func TestDeleteArtifactGuard(t *testing.T) {
 		t.Fatalf("delete of agent-created artifact should succeed: %v", err)
 	}
 	if _, err := d.GetArtifact(ctx, agentArt.ID); err == nil {
-		t.Fatal("artifact should be gone")
+		t.Fatal("agent artifact should be gone")
 	}
 }
 

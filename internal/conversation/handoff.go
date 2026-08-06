@@ -76,6 +76,10 @@ func BuildHandoff(ctx context.Context, database *db.DB, provider providers.Provi
 	if prompts.Validate("handoff", promptTmpl) != nil {
 		promptTmpl = prompts.Default("handoff")
 	}
+	// Self-pin the workspace claude-home before the direct Complete (same reason
+	// as summarizeRendered: this runs outside guardedComplete). Carried on ctx via
+	// WithClaudeHome; no-op when the caller already pinned via PinClaudeHome.
+	pinClaudeHome(ctx, provider)
 	resp, err := provider.Complete(ctx, providers.Request{
 		Model:     agent.Model,
 		MaxTokens: compactMaxOutputTokens,

@@ -18,6 +18,7 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import { api } from '@/api'
+import { toast } from '@/shared/components'
 import type { AppSettings, ProviderTestResult, Secret } from '@/types'
 import type { CustomProvider, UpsertProviderInput, PriceTable } from '@/api/providers'
 import { useCatalog, resolveRuntimeBadge } from '@/shared/lib/catalog'
@@ -66,11 +67,11 @@ interface Props {
   setDraft: React.Dispatch<React.SetStateAction<AppSettings | null>>
   test: Record<string, ProviderTestResult | 'pending'>
   runTest: (provider: string, model?: string) => void
-  clearKey: (which: 'anthropic' | 'minimax' | 'openrouter' | 'zai') => void
+  clearKey: (which: 'anthropic' | 'minimax' | 'openrouter' | 'zai' | 'deepseek') => void
   // Apply a provider key immediately (resolved from a vault secret). Provider
   // keys are never typed — only selected from the secret store.
   applyKey: (
-    which: 'anthropic' | 'minimax' | 'openrouter' | 'zai',
+    which: 'anthropic' | 'minimax' | 'openrouter' | 'zai' | 'deepseek',
     value: string,
   ) => void | Promise<void>
   // Secrets vault (this workspace), reveal a value to import as a key, and a
@@ -428,6 +429,7 @@ function CustomProviders({
     try {
       setList(await api.deleteCustomProvider(id))
       if (draft.id === id) reset()
+      toast.success('Sağlayıcı silindi')
     } catch (e) {
       setErr((e as Error).message)
     }
@@ -952,6 +954,26 @@ export function ProvidersPanel({
             testProvider="zai"
             testModel="glm-5.2"
             testDisabledHint="önce Z.ai anahtarı ekle"
+          />
+          <BuiltinProvider
+            icon={Zap}
+            name="DeepSeek"
+            kindLabel="OpenAI-uyumlu"
+            keyLabel="API anahtarı"
+            isSet={draft.deepseekKeySet}
+            requiredHint="DeepSeek V4 modelleri için gerekli (1M bağlam, çok ucuz)."
+            secrets={secrets}
+            onPick={async (n) => applyKey('deepseek', await onImportSecret(n))}
+            onClear={() => clearKey('deepseek')}
+            endpointLabel="base URL"
+            endpointValue={draft.deepseekBaseUrl}
+            endpointPlaceholder="https://api.deepseek.com"
+            onEndpoint={(v) => set('deepseekBaseUrl', v)}
+            test={test}
+            runTest={runTest}
+            testProvider="deepseek"
+            testModel="deepseek-v4-flash"
+            testDisabledHint="önce DeepSeek anahtarı ekle"
           />
         </div>
       </div>

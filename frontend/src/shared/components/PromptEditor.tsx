@@ -6,9 +6,10 @@ import {
   type ButtonHTMLAttributes,
   type TextareaHTMLAttributes,
 } from 'react'
-import { Check, Columns2, Copy, Eye, Maximize2, Minimize2, Pencil } from 'lucide-react'
+import { Columns2, Copy, Eye, Maximize2, Minimize2, Pencil } from 'lucide-react'
 import { Markdown } from './markdown/Markdown'
 import { copyToClipboard } from '@/shared/lib/clipboard'
+import { toast } from './Toast'
 
 // Textarea attributes we forward verbatim (placeholder, rows, maxLength,
 // onKeyDown, autoFocus, data-testid, …). value/onChange are typed explicitly.
@@ -67,7 +68,6 @@ export function PromptEditor({
 }: Props) {
   // null until the first width measurement picks the default (edit vs split).
   const [mode, setMode] = useState<ViewMode | null>(null)
-  const [copied, setCopied] = useState(false)
   const [full, setFull] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
   // autoSize measurement targets — the INLINE textarea and split row only (the
@@ -106,10 +106,7 @@ export function PromptEditor({
   }, [autoSize, autoSizeMax, rows, value, m, full])
 
   const copy = async () => {
-    if (await copyToClipboard(value)) {
-      setCopied(true)
-      setTimeout(() => setCopied(false), 1500)
-    }
+    if (await copyToClipboard(value)) toast.info('Panoya kopyalandı')
   }
 
   // Escape exits fullscreen; lock body scroll while the overlay is open.
@@ -131,18 +128,33 @@ export function PromptEditor({
   // fullscreen flag swaps the expand icon for a collapse icon.
   const toolbar = (fullscreen: boolean) => (
     <div className="flex items-center justify-end gap-0.5 border-b border-[var(--color-border)] bg-[var(--color-surface)] px-1 py-0.5">
-      <ToolbarButton active={m === 'edit'} onClick={() => setMode('edit')} title="Düzenle" aria-label="Düzenle">
+      <ToolbarButton
+        active={m === 'edit'}
+        onClick={() => setMode('edit')}
+        title="Düzenle"
+        aria-label="Düzenle"
+      >
         <Pencil className="h-3.5 w-3.5" />
       </ToolbarButton>
-      <ToolbarButton active={m === 'preview'} onClick={() => setMode('preview')} title="Önizleme" aria-label="Markdown önizleme">
+      <ToolbarButton
+        active={m === 'preview'}
+        onClick={() => setMode('preview')}
+        title="Önizleme"
+        aria-label="Markdown önizleme"
+      >
         <Eye className="h-3.5 w-3.5" />
       </ToolbarButton>
-      <ToolbarButton active={m === 'split'} onClick={() => setMode('split')} title="Böl (düzenle + önizleme)" aria-label="Bölünmüş görünüm">
+      <ToolbarButton
+        active={m === 'split'}
+        onClick={() => setMode('split')}
+        title="Böl (düzenle + önizleme)"
+        aria-label="Bölünmüş görünüm"
+      >
         <Columns2 className="h-3.5 w-3.5" />
       </ToolbarButton>
       <span className="mx-0.5 h-3.5 w-px bg-[var(--color-border)]" />
       <ToolbarButton onClick={copy} title="Panoya kopyala" aria-label="Panoya kopyala">
-        {copied ? <Check className="h-3.5 w-3.5 text-[var(--color-success,#22c55e)]" /> : <Copy className="h-3.5 w-3.5" />}
+        <Copy className="h-3.5 w-3.5" />
       </ToolbarButton>
       <ToolbarButton
         onClick={() => setFull(!fullscreen)}
@@ -166,7 +178,13 @@ export function PromptEditor({
       // caller's short `rows`, which left it cut off next to a tall preview.
       rows={fullscreen || half ? undefined : rows}
       className={`w-full bg-transparent px-2.5 py-2 text-sm outline-none ${
-        fullscreen ? 'flex-1 resize-none px-4 py-3' : half ? 'h-full flex-1 resize-none' : autoSize ? 'resize-none' : 'resize-y'
+        fullscreen
+          ? 'flex-1 resize-none px-4 py-3'
+          : half
+            ? 'h-full flex-1 resize-none'
+            : autoSize
+              ? 'resize-none'
+              : 'resize-y'
       } ${mono ? 'font-mono' : ''} ${textareaClassName}`}
       {...rest}
     />
@@ -180,7 +198,13 @@ export function PromptEditor({
     <div
       className={
         'min-w-0 break-words overflow-y-auto ' +
-        (fullscreen ? 'flex-1 px-4 py-3' : half ? 'h-full px-2.5 py-2' : autoSize ? 'px-2.5 py-2' : 'min-h-[26rem] max-h-[65vh] px-2.5 py-2')
+        (fullscreen
+          ? 'flex-1 px-4 py-3'
+          : half
+            ? 'h-full px-2.5 py-2'
+            : autoSize
+              ? 'px-2.5 py-2'
+              : 'min-h-[26rem] max-h-[65vh] px-2.5 py-2')
       }
       // autoSize single-pane preview: shrink-wrap the content up to the cap.
       style={!fullscreen && !half && autoSize ? { maxHeight: autoSizeMax } : undefined}
@@ -210,7 +234,9 @@ export function PromptEditor({
           }`}
         >
           <div className="flex w-1/2 min-w-0 flex-col">{editArea(fullscreen, true)}</div>
-          <div className="flex w-1/2 min-w-0 flex-col bg-[var(--color-surface)]/30">{previewArea(fullscreen, true)}</div>
+          <div className="flex w-1/2 min-w-0 flex-col bg-[var(--color-surface)]/30">
+            {previewArea(fullscreen, true)}
+          </div>
         </div>
       )
     }

@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
-import { Check, ChevronDown, ChevronRight, Copy, RefreshCw, X } from 'lucide-react'
+import { ChevronDown, ChevronRight, Copy, RefreshCw, X } from 'lucide-react'
 import { api } from '@/api'
 import type { Agent, Task, Flow, BoardState, BoardColumnDef, TaskPriority, Artifact } from '@/types'
 import { AgentPicker } from '@/shared/components/agents/AgentPicker'
 import { DependencyPicker } from './DependencyPicker'
 import { TaskArtifactRefs } from './TaskArtifactRefs'
-import { Button, ModalOverlay } from '@/shared/components'
+import { Button, ModalOverlay, toast } from '@/shared/components'
 import { normalizeAvatar } from '@/shared/lib/avatar'
 import { copyToClipboard } from '@/shared/lib/clipboard'
 
@@ -92,8 +92,6 @@ export function TaskFormModal({
   const [allArtifacts, setAllArtifacts] = useState<Artifact[]>([])
   const [saving, setSaving] = useState(false)
   const [retitling, setRetitling] = useState(false)
-  // Transient "copied" tick for the card-id copy affordance (edit mode).
-  const [idCopied, setIdCopied] = useState(false)
   // Dependencies picker is collapsible; open by default only when the task
   // already has dependencies, so the section stays out of the way otherwise.
   const [depsOpen, setDepsOpen] = useState(depIds.length > 0)
@@ -144,6 +142,7 @@ export function TaskFormModal({
       setSaving(true)
       try {
         onSaved(await api.updateTask(task!.id, payload()))
+        toast.success('Görev güncellendi')
         onClose()
       } catch (e) {
         onError((e as Error).message)
@@ -186,6 +185,7 @@ export function TaskFormModal({
     try {
       const saved = await api.createTask(p)
       onReplaceTemp?.(tempId, saved)
+      toast.success('Görev oluşturuldu')
     } catch (e) {
       onReplaceTemp?.(tempId, null)
       onError((e as Error).message)
@@ -213,6 +213,7 @@ export function TaskFormModal({
     try {
       await api.deleteTask(task.id)
       onDeleted(task.id)
+      toast.success('Görev silindi')
       onClose()
     } catch (e) {
       onError((e as Error).message)
@@ -233,20 +234,13 @@ export function TaskFormModal({
             <button
               data-testid="task-id-copy"
               onClick={async () => {
-                if (await copyToClipboard(task.id)) {
-                  setIdCopied(true)
-                  setTimeout(() => setIdCopied(false), 1500)
-                }
+                if (await copyToClipboard(task.id)) toast.info('Panoya kopyalandı')
               }}
               title="ID'yi kopyala"
               className="inline-flex shrink-0 items-center gap-1 rounded bg-[var(--color-surface-2)] px-1.5 py-1 font-mono text-[11px] text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)]"
             >
               {task.id}
-              {idCopied ? (
-                <Check size={12} className="shrink-0 text-[var(--color-success)]" />
-              ) : (
-                <Copy size={12} className="shrink-0 opacity-60" />
-              )}
+              <Copy size={12} className="shrink-0 opacity-60" />
             </button>
           )}
           <input

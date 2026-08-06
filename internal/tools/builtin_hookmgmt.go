@@ -12,9 +12,8 @@ import (
 
 // Hook self-management tools let an agent read and manage PreToolUse/PostToolUse
 // hooks in its workspace — external commands that intercept native tool calls
-// (Claude Code hook contract). Safety boundary mirrors the rest of the
-// self-management surface: list/create are unrestricted, delete is limited to
-// hooks the agent itself created (provenance via Hook.CreatedBy).
+// (Claude Code hook contract). No provenance gate: list/create/delete act on any
+// hook, user- or agent-created (Hook.CreatedBy is kept for provenance/display).
 
 type hookDeps struct {
 	db      *db.DB
@@ -132,7 +131,7 @@ func (t CreateHookTool) Call(ctx context.Context, input json.RawMessage) (string
 
 // ---- delete_hook ----
 
-// DeleteHookTool removes an agent-created hook (provenance-enforced).
+// DeleteHookTool removes a hook (user- or agent-created).
 type DeleteHookTool struct{ d hookDeps }
 
 // NewDeleteHookTool constructs delete_hook.
@@ -143,7 +142,7 @@ func NewDeleteHookTool(database *db.DB, actorID string) DeleteHookTool {
 func (DeleteHookTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name:        "delete_hook",
-		Description: "Delete an agent-created hook (not one made by the user). Pass the hook id.",
+		Description: "Delete a hook (user- or agent-created). Pass the hook id.",
 		InputSchema: json.RawMessage(`{
 			"type":"object",
 			"properties":{"id":{"type":"string","description":"The hook id (see list_hooks)"}},
@@ -164,12 +163,8 @@ func (t DeleteHookTool) Call(ctx context.Context, input json.RawMessage) (string
 	if in.ID == "" {
 		return "", fmt.Errorf("id is required")
 	}
-	cur, err := t.d.db.GetHook(ctx, in.ID)
-	if err != nil {
+	if _, err := t.d.db.GetHook(ctx, in.ID); err != nil {
 		return "", fmt.Errorf("no hook with id %q (use list_hooks)", in.ID)
-	}
-	if cur.CreatedBy == "" {
-		return "", fmt.Errorf("hook %q was created by the user and cannot be deleted by an agent", in.ID)
 	}
 	if err := t.d.db.DeleteHook(ctx, in.ID); err != nil {
 		return "", fmt.Errorf("delete hook: %w", err)

@@ -36,7 +36,7 @@ const (
 	maxOutClaudeCapable = 32_768 // Opus / Sonnet 4.x / Fable 5 (real ceiling 64–128K)
 	maxOutClaudeSmall   = 16_384 // Haiku / generic Claude
 	maxOutMiniMax       = 32_768 // MiniMax M-series (M3 ceiling ≈ 512K)
-	maxOutDeepSeek      = 8_192  // DeepSeek family (conservative)
+	maxOutDeepSeek      = 32_768 // DeepSeek V4 family (real ceiling 384K; kept well below)
 	maxOutGemini        = 8_192  // Gemini family (conservative)
 )
 

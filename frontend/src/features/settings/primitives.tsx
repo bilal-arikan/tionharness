@@ -2,8 +2,22 @@
 // rail button, the read-only prompt viewer and the category taxonomy.
 import { type ReactNode } from 'react'
 import {
-  User, KeyRound, Brain, Shield, Command,
-  Blocks, Info, Boxes, FileText, Wrench, SlidersHorizontal, Webhook, Archive, ScanSearch, Volume2, type LucideIcon,
+  User,
+  KeyRound,
+  Brain,
+  Shield,
+  Command,
+  Blocks,
+  Info,
+  Boxes,
+  FileText,
+  Wrench,
+  SlidersHorizontal,
+  Webhook,
+  Archive,
+  ScanSearch,
+  Volume2,
+  type LucideIcon,
 } from 'lucide-react'
 import type { AppSettings, PromptInfo, WorkspaceSettings } from '@/types'
 import { CopyPathButton } from '@/shared/components/CopyPathButton'
@@ -66,7 +80,15 @@ export type WsSet = <K extends keyof WorkspaceSettings>(key: K, val: WorkspaceSe
 export const inputCls =
   'rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5 text-sm outline-none focus:border-[var(--color-accent)]'
 
-export function Field({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
+export function Field({
+  label,
+  hint,
+  children,
+}: {
+  label: string
+  hint?: string
+  children: ReactNode
+}) {
   return (
     <label className="flex flex-col gap-1">
       <span className="text-sm font-medium">{label}</span>
@@ -89,6 +111,10 @@ export function Toggle({
 }) {
   return (
     <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
       onClick={() => onChange(!checked)}
       className="flex items-center justify-between gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-left"
     >
@@ -221,12 +247,16 @@ export function CatButton({
     <button
       onClick={onClick}
       className={`flex items-center gap-2 rounded-lg px-3 py-2 text-left text-sm transition ${
-        active ? 'bg-[var(--color-accent-soft)] text-[var(--color-text)]' : 'text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)]'
+        active
+          ? 'bg-[var(--color-accent-soft)] text-[var(--color-text)]'
+          : 'text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)]'
       }`}
     >
       <c.icon size={16} className="shrink-0" />
       <span className="flex-1 truncate">{c.label}</span>
-      {dirty && <span className="h-1.5 w-1.5 rounded-full bg-[var(--color-accent)]" title="Kaydedilmemiş" />}
+      {dirty && (
+        <span className="h-1.5 w-1.5 rounded-full bg-[var(--color-accent)]" title="Kaydedilmemiş" />
+      )}
     </button>
   )
 }
@@ -234,26 +264,49 @@ export function CatButton({
 // PromptDetails renders one built-in prompt read-only (System / User-turn blocks
 // + note) with a button to open the source folder. Used inside the expandable
 // command cards on the Komutlar screen.
-export function PromptDetails({ p, dir, onReveal }: { p: PromptInfo; dir: string; onReveal: () => void }) {
+export function PromptDetails({
+  p,
+  dir,
+  onReveal,
+}: {
+  p: PromptInfo
+  dir: string
+  onReveal: () => void
+}) {
   return (
     <>
       <div className="mb-2 flex items-center justify-between gap-2">
-        <code className="rounded bg-[var(--color-surface-2)] px-1 text-[10px] text-[var(--color-text-dim)]">{p.file}</code>
+        <code className="rounded bg-[var(--color-surface-2)] px-1 text-[10px] text-[var(--color-text-dim)]">
+          {p.file}
+        </code>
         <div className="flex shrink-0 items-center gap-1">
           <CopyPathButton path={dir} />
-          <RevealButton onReveal={onReveal} disabled={!dir} label="Klasörü aç" title={dir ? displayPath(dir) : 'Klasör yolu bilinmiyor'} />
+          <RevealButton
+            onReveal={onReveal}
+            disabled={!dir}
+            label="Klasörü aç"
+            title={dir ? displayPath(dir) : 'Klasör yolu bilinmiyor'}
+          />
         </div>
       </div>
       {p.system && (
         <div className="mb-2">
-          <div className="text-[10px] uppercase tracking-wide text-[var(--color-text-dim)]">System</div>
-          <pre className="mt-0.5 max-h-40 overflow-auto whitespace-pre-wrap rounded bg-[var(--color-surface-2)] p-2 text-xs text-[var(--color-text)]">{p.system}</pre>
+          <div className="text-[10px] uppercase tracking-wide text-[var(--color-text-dim)]">
+            System
+          </div>
+          <pre className="mt-0.5 max-h-40 overflow-auto whitespace-pre-wrap rounded bg-[var(--color-surface-2)] p-2 text-xs text-[var(--color-text)]">
+            {p.system}
+          </pre>
         </div>
       )}
       {p.user && (
         <div className="mb-2">
-          <div className="text-[10px] uppercase tracking-wide text-[var(--color-text-dim)]">User turn</div>
-          <pre className="mt-0.5 max-h-40 overflow-auto whitespace-pre-wrap rounded bg-[var(--color-surface-2)] p-2 text-xs text-[var(--color-text)]">{p.user}</pre>
+          <div className="text-[10px] uppercase tracking-wide text-[var(--color-text-dim)]">
+            User turn
+          </div>
+          <pre className="mt-0.5 max-h-40 overflow-auto whitespace-pre-wrap rounded bg-[var(--color-surface-2)] p-2 text-xs text-[var(--color-text)]">
+            {p.user}
+          </pre>
         </div>
       )}
       {p.note && <p className="text-xs text-[var(--color-text-dim)]">{p.note}</p>}

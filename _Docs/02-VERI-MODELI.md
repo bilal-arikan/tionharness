@@ -161,24 +161,29 @@ erDiagram
 | `sessions` | Oturum: ajan ilişkisi, başlık, mesaj sayısı, durum; **compaction** özeti (`summary` + `summary_msg_count`) |
 | `session_messages` | Tur geçmişi: rol, metin, araç çağrıları, akıl yürütme içeriği, aktivite izi (`steps`); **`agent_id`** = turu üreten ajan (çok-ajanlı oturumda mesaj başına ajan) |
 | `agent_usage` | Ajan başına gün bazlı kullanım sayacı (çağrı + giriş/çıkış token) — `db.Usage`, `store_usage.go`. **Yalnız takip/raporlama** (Tasarruf Merkezi + spend metre); limit uygulamaz |
-| `tasks` | Pano durumu (`board_state`), sahiplik, ajana verilen `prompt`, son çalışma özeti, bağımlılıklar. **`flow_id`** dolu ise görev "flow-backed" — çalıştırılınca ajana prompt yerine o orchestration akışı koşar. **`created_by`** = görevi oluşturan ajan ("" = kullanıcı; ajan yalnız kendi oluşturduğunu silebilir) |
+| `tasks` | Pano durumu (`board_state`), sahiplik, ajana verilen `prompt`, son çalışma özeti, bağımlılıklar. **`flow_id`** dolu ise görev "flow-backed" — çalıştırılınca ajana prompt yerine o orchestration akışı koşar. **`created_by`** = görevi oluşturan ajan ("" = kullanıcı; yalnız köken/görüntü, silme kapısı değil) |
 | `schedules` | Cron zamanlama; ajana doğrudan `prompt` teslimi (panodan bağımsız — görev çalıştırmaz); sonraki/son çalışma + teslim durumu; etkin mi. **`expires_at`** dolu ise (opsiyonel son tarih, unix saniye) o tarihten sonra zamanlama çalışmaz ve otomatik pasifleşir (0 = süresiz) |
 | `runs` | Yürütme kaydı: durum, tetikleyici (`trigger`), ajan çıktısı (`output`), hata |
 | ~~`knowledge_sources`~~ | **KALDIRILDI (2026-07-05)** — hafıza alt sistemiyle birlikte çıkarıldı |
-| `mcp_servers` | İsim, taşıma (stdio; SSE/HTTP henüz yok), `command`/`args`/`url`, env config, `enabled`, `scope` (workspace). **`created_by`** = sunucuyu ekleyen ajan ("" = kullanıcı tanımlı, korumalı; ajan yalnız kendi eklediğini silebilir) |
+| `mcp_servers` | İsim, taşıma (stdio; SSE/HTTP henüz yok), `command`/`args`/`url`, env config, `enabled`, `scope` (workspace). **`created_by`** = sunucuyu ekleyen ajan ("" = kullanıcı tanımlı; yalnız köken/görüntü, silme kapısı değil) |
 | `flows` | Akış tanımı: `graph` (JSON `orchestration.Graph` — agent/branch/parallel node). **`created_by`** = akışı oluşturan ajan ("" = kullanıcı) |
 | `flow_runs` | Akış yürütmesi: durum, girdi/çıktı, **restart-safe** `state` (her node sonrası persist), hata |
 | `artifacts` | Ajanın ürettiği kalıcı içerik. **Sürümlenmez** — `update` içeriği yerinde ezer (revizyon geçmişi yok). `kind` ∈ metin kindleri (`markdown`/`code`/`html`/`text`/`svg`/`mermaid`) **veya** medya/dosya kindleri (`image`/`video`/`audio`/`file`) + `language` (kod için). Metin kindlerinde gövde diskte `artifacts/<session>/<id><ext>` altında tutulur, JSON `content_file` ile referanslar (yükte `content`'e okunur). Medya/dosya kindlerinde bytes diskte yaşar, `source_path` (workspace-göreli) ile referanslanır — `create_artifact sourcePath` ile verilen workspace-dışı dosyalar `artifacts/`'a kopyalanır. `origin` ∈ `chat`/`manual`/`agent`/`tool`; köken `session_id`/`agent_id`. Workspace-scoped — TionSwarm'nun Claude.ai artifact karşılığı |
 
 > **Köken (provenance) konvansiyonu — `created_by`:** Self-management ile ajan
 > tarafından oluşturulabilen entity'ler (`agents`, `tasks`, `schedules`, `flows`,
-> `hooks`, `mcp_servers`, **`workspaces`** — `workspaces.json` `createdBy`) ortak bir
-> `created_by` alanı taşır: **boş** = kullanıcı tarafından (UI/API) oluşturulmuş,
-> **korumalı**; **ajan id'si** = o ajan tarafından bir self-management tool'u ile
-> oluşturulmuş. Guard kuralı: bir ajan yalnızca **ajan-oluşturduğu** (`created_by`
-> dolu) entity'leri silebilir/düzenleyebilir; kullanıcı varlıklarına dokunamaz.
-> (Workspace silmede ek olarak **mevcut çalıştığı** ve **son kalan** workspace de
-> korumalıdır.)
+> `automations`, `hooks`, `mcp_servers`, `artifacts`, **`workspaces`** — `workspaces.json`
+> `createdBy`) ortak bir `created_by` (artifacts'te `agent_id`) alanı taşır: **boş** =
+> kullanıcı tarafından (UI/API) oluşturulmuş; **ajan id'si** = o ajan tarafından bir
+> self-management tool'u ile oluşturulmuş. **2026-08-05'ten beri bu alan çoğu türde
+> yalnız köken/görüntü amaçlıdır — silme/düzenleme kapısını kapatmaz.** Eskiden ajan
+> yalnız ajan-oluşturduğunu düzenleyip silebilirdi; bu guard `agents`/`tasks`/
+> `schedules`/`flows`/`automations`/`hooks`/`mcp_servers`/`artifacts` için **kaldırıldı**.
+> **Tek istisna `workspaces`:** benzersiz yıkıcı olduğu için (tüm workspace verisini
+> siler) köken guard'ı **workspace silmede korunur** — ajan yalnız kendi oluşturduğu
+> (`createdBy` dolu) workspace'i silebilir.
+> (Workspace silmede ayrıca **mevcut çalıştığı** ve **son kalan** workspace
+> operasyonel olarak korumalı kalır; ajan ayrıca **kendini** silemez.)
 
 ## Güvenlik / Şifreleme
 
@@ -212,7 +217,7 @@ erDiagram
 - **Tasks/Schedules** (eski `0003`): `Task.Prompt/LastRun*`, `Schedule.TaskID/Prompt`, `Run.Output/Trigger`.
 - **Context/Budget** (eski `0004`): `Session.Summary*`, `Usage` (gün-bazlı dosya). *(`Agent.Daily*Limit` alanları 2026-07-01'de kaldırıldı.)*
 - **MCP/Tools** (eski `0005`): `MCPServer.Command/Args/URL/Enabled/Scope`, `Agent.MCPEnabled/AllowedTools`. **Ajan denylist (2026-06-26):** `Agent.BlockedTools` (JSON dizi) eklendi — ajan-düzeyi araç erişimi allowlist'ten denylist'e geçti; varsayılan tüm araçlar açık, listelenenler engelli. `AllowedTools` legacy (subagent profilleri); eski allowlist'ler `GET tools`'ta denylist'e çevrilir, ilk kaydetmede temizlenir. Eski JSON'da boş → "[]" (geriye uyumlu). **Yeni-agent default (2026-06-29):** `db.CreateAgent` `MCPEnabled=false` (Go zero value) gelen çağrıları `true`'ya çevirir — tüm oluşturma yolları (UI/API `POST /api/agents`, market/ingest install, workspace-template seeding, `create_agent` self-management aracı) tutarlı şekilde **tool-açık** ajan üretir. Chat-only ajan isteyen sonradan `UpdateAgentTools` ile `MCPEnabled=false`'ya çekebilir (`POST /api/agents/{id}/tools`). Test: `TestCreateAgent_DefaultsMCPEnabledOn` + `TestUpdateAgentTools_Toggle` (`internal/db/store_agent_default_test.go`). **Ajan araç override haritası (2026-07-27):** `Agent.ToolOverrides` (JSON object: araç adı veya `prefix*` deseni → tier) eklendi — 4 görünürlük tier'ı + `blocked` tek skalada birleşti, `blocked` eski denylist'in yerini aldı. `BlockedTools` artık **türetilmiş ayna**: `UpdateAgentTools` her yazışta `blocked` girdilerinden sıralı üretip yazar (eski okuyucular + market/şablon paketleri bozulmaz). Okuma daima `agent.ParseToolOverrides` üzerinden — legacy denylist `blocked` olarak katlanır. Detay `_Docs/19`.
-- **Self-management köken** (sürümsüz, son eklenen): `created_by` alanı `Agent`/`Task`/`Schedule`/`Flow`/`Hook`/`MCPServer` struct'larına eklendi (boş = kullanıcı, korumalı). Eski JSON dosyaları okunurken boş kalır → kullanıcı varlığı sayılır (geriye dönük uyumlu).
+- **Self-management köken** (sürümsüz, son eklenen): `created_by` alanı `Agent`/`Task`/`Schedule`/`Flow`/`Hook`/`MCPServer` struct'larına eklendi (boş = kullanıcı). Eski JSON dosyaları okunurken boş kalır → kullanıcı varlığı sayılır (geriye dönük uyumlu). **Not (2026-08-05):** alan artık yalnız köken/görüntü amaçlı; silme/düzenleme kapısı olarak kullanılmıyor.
 - **Flows** (eski `0006`): `Flow.Graph`, `FlowRun` (restart-safe `State` JSON, status/input/output/error).
 - **Message steps** (eski `0007`): `Message.Steps` (JSON `[]TurnStep`: zengin sohbet tur izi — thinking/ara metin/tool çağrıları).
 

@@ -38,6 +38,10 @@ export const agentApi = {
   // (history renders it as deleted). Rejects with 409 while a turn is in flight.
   deleteAgent: (id: string) => req<{ deleted: string }>(`/api/agents/${id}`, { method: 'DELETE' }),
 
+  // Full-copy an agent (profile + provider/model + tool config + skills) into a
+  // new "(kopya)" with a fresh id. Returns the created clone.
+  duplicateAgent: (id: string) => req<Agent>(`/api/agents/${id}/duplicate`, { method: 'POST' }),
+
   agentUsage: (agentId: string) => req<AgentUsage>(`/api/agents/${agentId}/usage`),
 
   agentContext: (agentId: string, message?: string) =>

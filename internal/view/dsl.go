@@ -152,3 +152,18 @@ func collapseSpace(s string) string {
 
 // hhmmss formats a wall-clock stamp for the asOf marker.
 func hhmmss(t time.Time) string { return t.Format("15:04:05") }
+
+// usd renders a dollar amount for the DSL. Sub-cent figures keep three decimals
+// so a busy-but-cheap workspace does not round to "$0.00" and read as free;
+// everything else uses two. estimated prefixes "~" (subscription providers price
+// via an equivalent-API estimate, so the figure is not a real invoice).
+func usd(amount float64, estimated bool) string {
+	prefix := "$"
+	if estimated {
+		prefix = "~$"
+	}
+	if amount > 0 && amount < 0.01 {
+		return fmt.Sprintf("%s%.3f", prefix, amount)
+	}
+	return fmt.Sprintf("%s%.2f", prefix, amount)
+}

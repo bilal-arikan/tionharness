@@ -102,6 +102,9 @@ func (r *Runtime) HandoffSession(ctx context.Context, session db.Session, agent 
 	}
 
 	env := r.handoffEnv(ctx, session, history)
+	// Carry the claude-home on ctx too so the fold core self-pins (defense in
+	// depth alongside the explicit PinClaudeHome above).
+	ctx = conversation.WithClaudeHome(ctx, r.claudeHomeDir())
 	handoffText, err := conversation.BuildHandoff(ctx, r.db, provider, agent, session.Summary, rendered, env, r.readPrompt("handoff"))
 	if err != nil {
 		return HandoffResult{}, fmt.Errorf("generate handoff: %w", err)
@@ -130,21 +133,7 @@ func (r *Runtime) HandoffSession(ctx context.Context, session db.Session, agent 
 	// continues from the "Next Concrete Step". The continuation prompt embeds the
 	// handoff inline (no tool round-trip needed) plus recovery pointers.
 	cont := buildContinuationPrompt(r.readPrompt("continuation"), session.ID, ref.ID, filePath, handoffText)
-	spawn, err := r.SpawnSession(ctx, agent.ID, cont, SpawnOptions{
-		CreatedBy:       opts.CreatedBy,
-		ParentSessionID: session.ID,
-		Title:           "↪ " + handoffTitle(session),
-		// Keep a chat handoff in the "Sohbet" sidebar filter next to its parent:
-		// the default "spawned" kind is hidden under that tab, so a context reset
-		// from a chat would otherwise vanish from where the user expects it. Only
-		// chat parents inherit; task/flow/schedule/worker parents stay "spawned"
-		// (writable), since their non-writable kinds must not leak onto the
-		// human-continuable continuation.
-		Kind: continuationKind(session.Kind),
-		// Continue in the same directory the parent worked in (its explicit
-		// override, else the workspace default seeded by SpawnSession).
-		WorkingDir: strings.TrimSpace(session.WorkingDir),
-	})
+	spawn, err := r.SpawnSession(ctx, agent.ID, cont, handoffContinuationSpawnOpts(session, opts))
 	if err != nil {
 		return HandoffResult{}, fmt.Errorf("spawn continuation session: %w", err)
 	}
@@ -325,6 +314,32 @@ func continuationKind(parentKind string) string {
 		return "chat"
 	default:
 		return "spawned"
+	}
+}
+
+// handoffContinuationSpawnOpts builds the SpawnOptions for a /handoff continuation
+// session. It carries forward what makes the continuation the SAME work in a clean
+// window — the parent's working dir plus its COORDINATOR capability and workflow
+// recipe (CoordinatorMode + CoordinatorWorkflow + CoordinatorMaxTurns), so the new
+// session keeps the same multi-agent setup (coordinator prompt + spawn_worker/…
+// tools + selected recipe). Unlike a sub-coordinator SPAWN — where the recipe is
+// deliberately NOT inherited to stop a recursive recipe repeating down the tree —
+// a handoff is one logical session continuing, so inheriting is correct. Tree/worker
+// LINEAGE is intentionally dropped (no Role/CoordinatorSessionID/Root/Depth): the
+// continuation starts as its own fresh top-level coordinator, not a worker still
+// reporting to the old (now handed-off) tree.
+func handoffContinuationSpawnOpts(session db.Session, opts HandoffOptions) SpawnOptions {
+	return SpawnOptions{
+		CreatedBy:       opts.CreatedBy,
+		ParentSessionID: session.ID,
+		Title:           "↪ " + handoffTitle(session),
+		// Keep a chat handoff in the "Sohbet" sidebar filter next to its parent; other
+		// parent kinds fall back to the writable "spawned" kind (see continuationKind).
+		Kind:                continuationKind(session.Kind),
+		WorkingDir:          strings.TrimSpace(session.WorkingDir),
+		CoordinatorMode:     session.CoordinatorMode,
+		CoordinatorWorkflow: strings.TrimSpace(session.CoordinatorWorkflow),
+		CoordinatorMaxTurns: session.CoordinatorMaxTurns,
 	}
 }
 

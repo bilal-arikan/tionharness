@@ -63,6 +63,8 @@ update_settings → {"patch": {"autoTitleEnabled": false}}
 - `anthropicKey` — **write-only**; `""` clears. Read shows only `anthropicKeySet`.
 - `minimaxKey` (write-only), `minimaxBaseUrl` — MiniMax (OpenAI-compatible).
 - `openrouterKey` (write-only), `openrouterBaseUrl` — OpenRouter (OpenAI-compatible; one key, hundreds of models via `author/model-slug` ids).
+- `zaiKey` (write-only), `zaiBaseUrl` — Z.ai GLM (Anthropic-compatible; tool-use + thinking).
+- `deepseekKey` (write-only), `deepseekBaseUrl` — DeepSeek (OpenAI-compatible; V4 family, 1M context, very cheap). Models `deepseek-v4-flash`/`deepseek-v4-pro`. The `deepseek-anthropic` provider kind (Anthropic mode: tool-use + thinking) reuses this same key — no separate field.
 - `extendedPromptCache` — Anthropic extended (1h) prompt-cache beta (anthropic only). (The 1M-context beta was retired — 1M is GA since 2026-03, so there is no `oneMillionContext` setting anymore.)
 - `anthropicContextEditing` — Anthropic API-native context editing beta (anthropic only, default **off**). The server clears old tool_use/tool_result blocks from the cached prefix in place (`clear_tool_uses_20250919`, the microcompact analogue) once the prompt grows past ~100k input tokens, keeping the newest 3 tool uses. Complements TionSwarm's client-side compaction; does not replace it.
 - Custom providers are managed separately (Providers panel / market), not patched here.

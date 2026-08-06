@@ -4,14 +4,13 @@
 // lives in the app/use*.ts hooks; the view metadata in viewRegistry.tsx.
 import { useCallback, useEffect, useMemo, useState, Suspense } from 'react'
 import { api } from '@/api'
-import { ErrorToast } from '@/shared/components/ErrorToast'
-import { LoadingState } from '@/shared/components'
+import { LoadingState, Toaster, toast, CommandPalette, type Command } from '@/shared/components'
 import { NavRail, type View } from './NavRail'
 import { MobileNavBar } from './MobileNavBar'
 import { SplashScreen } from './SplashScreen'
 import { AppHeader } from './AppHeader'
 import { FlowsPanel, NetworkPanel } from './lazyPanels'
-import { HEADERLESS_VIEWS, SPLASH_MIN_MS } from './viewRegistry'
+import { HEADERLESS_VIEWS, SPLASH_MIN_MS, VIEW_TITLE } from './viewRegistry'
 import { INITIAL_ROUTE, useAppNavigation } from './useAppNavigation'
 import { useAppearance } from './useAppearance'
 import { useAppEvents } from './useAppEvents'
@@ -59,8 +58,15 @@ import { initServerTts, initTtsUnlock } from '@/shared/lib/tts'
 import { initServerStt } from '@/shared/lib/stt'
 
 export default function App() {
-  const [error, setError] = useState<string | null>(null)
+  // Error reporting funnels every `onError(msg)` sink into a toast. Kept under the
+  // old `setError` name/signature so the ~20 `onError={setError}` call sites and
+  // the setError-taking hooks (useWorkspaces/useAppearance/…) are unchanged.
+  const setError = useCallback((msg: string | null) => {
+    if (msg) toast.error(msg)
+  }, [])
   const [view, setView] = useState<View>(INITIAL_ROUTE.view)
+  // ⌘K / Ctrl+K command palette visibility.
+  const [paletteOpen, setPaletteOpen] = useState(false)
   // Bumped whenever an agent changes app settings (the `settings` SSE event), so
   // an open Settings screen reloads to reflect the change.
   const [settingsNonce, setSettingsNonce] = useState(0)
@@ -80,6 +86,39 @@ export default function App() {
     deleteActiveWorkspace,
     refreshWorkspaces,
   } = useWorkspaces(setError)
+
+  // Global ⌘K / Ctrl+K toggles the command palette. Registered once at the shell.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K')) {
+        e.preventDefault()
+        setPaletteOpen((o) => !o)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
+  // Palette command list: jump to any view + switch to any workspace. Kept lean
+  // and fully driven by existing handlers (setView / switchWorkspace) so it can
+  // never drift out of sync with what those actions actually do.
+  const paletteCommands = useMemo<Command[]>(() => {
+    const nav = (Object.keys(VIEW_TITLE) as View[]).map((v) => ({
+      id: `view:${v}`,
+      label: VIEW_TITLE[v],
+      group: 'Git',
+      keywords: v,
+      run: () => setView(v),
+    }))
+    const ws = workspaces.map((w) => ({
+      id: `ws:${w.id}`,
+      label: w.name || 'İsimsiz',
+      group: 'Workspace',
+      keywords: 'workspace çalışma alanı',
+      run: () => switchWorkspace(w.id),
+    }))
+    return [...nav, ...ws]
+  }, [workspaces, switchWorkspace])
 
   // Post-create claude-cli readiness gate: bumped once per successful workspace
   // creation so ClaudeAuthGate (re-)probes the new workspace's login state and
@@ -629,6 +668,7 @@ export default function App() {
             onSetDefault={ctl.pickAgent}
             onCreateAgent={ctl.createAgent}
             onUpdateAgent={ctl.updateAgent}
+            onDuplicateAgent={ctl.duplicateAgent}
             onDeleteAgent={ctl.deleteAgent}
             onRefresh={() =>
               api
@@ -701,7 +741,18 @@ export default function App() {
             }}
           />
         )}
-        {view === 'dashboard' && <DashboardPanel onError={setError} />}
+        {view === 'dashboard' && (
+          <DashboardPanel
+            onError={setError}
+            nav={{
+              openSession: (id) => {
+                setView('chat')
+                ctl.selectSession(id)
+              },
+              openView: (v) => setView(v),
+            }}
+          />
+        )}
         {view === 'budget' && <BudgetPanel onError={setError} />}
         {view === 'logs' && <LogsPanel onError={setError} />}
         {view === 'insights' && (
@@ -831,9 +882,17 @@ export default function App() {
         />
       )}
 
-      {/* App-wide error surface (replaces the per-view header error span so the
-          headerless, sidebar-to-top screens still show errors consistently). */}
-      <ErrorToast message={error ?? ''} onDismiss={() => setError(null)} />
+      {/* App-wide transient-message surface (error / success / info). Every
+          onError sink routes here via toast.error, so the headerless,
+          sidebar-to-top screens still surface messages consistently. */}
+      <Toaster />
+
+      {/* ⌘K / Ctrl+K command palette: jump to any view or workspace. */}
+      <CommandPalette
+        open={paletteOpen}
+        onClose={() => setPaletteOpen(false)}
+        commands={paletteCommands}
+      />
 
       {/* claude-cli gate: after a workspace is created/attached — and on every
           chat-screen entry when no provider is configured — probe the CLI login

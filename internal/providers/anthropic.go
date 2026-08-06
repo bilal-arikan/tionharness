@@ -97,6 +97,8 @@ type Anthropic struct {
 	defaultModel string // model applied when a request omits one
 	name         string // provider identity reported by Name()
 
+	reqTimeoutSecs int // per-request wall-clock budget override (0 = model-class default)
+
 	extendedCache    bool // 1h extended prompt cache TTL beta
 	contextEditing   bool // API-native context editing (clear_tool_uses) beta
 	serverCompaction bool // API-native compaction (compact_20260112) beta
@@ -158,11 +160,27 @@ func (a *Anthropic) WithRefusalFallback(enabled bool) *Anthropic {
 // models get the long budget (single Fable requests can run for minutes), the
 // rest keep the historical 120s. A sooner parent deadline still wins.
 func (a *Anthropic) requestCtx(ctx context.Context, model string) (context.Context, context.CancelFunc) {
-	d := time.Duration(requestTimeoutSecs) * time.Second
-	if UsesAdaptiveThinking(model) {
-		d = time.Duration(adaptiveRequestTimeoutSecs) * time.Second
-	}
+	d := time.Duration(effectiveRequestTimeoutSecs(a.reqTimeoutSecs, model)) * time.Second
 	return context.WithTimeout(ctx, d)
+}
+
+// WithRequestTimeout overrides the per-request wall-clock budget (seconds); 0
+// restores the model-class default. Returns the client for chaining.
+func (a *Anthropic) WithRequestTimeout(secs int) *Anthropic {
+	a.reqTimeoutSecs = secs
+	return a
+}
+
+// setRequestTimeout implements requestTimeoutConfigurable so Registry.Get can
+// apply a kind Manifest's declared budget after Build. It also lifts the
+// http.Client safety net above the new budget so the ctx deadline stays binding.
+func (a *Anthropic) setRequestTimeout(secs int) {
+	a.reqTimeoutSecs = secs
+	if secs > 0 && a.client != nil {
+		if d := clientSafetyTimeout(secs); d > a.client.Timeout {
+			a.client.Timeout = d
+		}
+	}
 }
 
 // Name implements Provider.

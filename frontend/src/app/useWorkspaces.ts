@@ -3,6 +3,7 @@
 // badge set. Switch/create/delete are exposed as stable callbacks.
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { api, setActiveWorkspace, getActiveWorkspace, clearActiveWorkspace } from '@/api'
+import { toast } from '@/shared/components'
 import type { Workspace } from '@/types'
 import type { NewWorkspaceData } from '@/features/workspace/WorkspaceCreateModal'
 
@@ -156,6 +157,7 @@ export function useWorkspaces(setError: (msg: string) => void) {
         }
         setActiveWorkspace(wsNew.id)
         setActiveWorkspaceId(wsNew.id)
+        toast.success('Workspace oluşturuldu')
         return wsNew
       } catch (e) {
         setError((e as Error).message)
@@ -180,6 +182,7 @@ export function useWorkspaces(setError: (msg: string) => void) {
     }
     setActiveWorkspace(wsNew.id)
     setActiveWorkspaceId(wsNew.id)
+    toast.success('Workspace eklendi')
     return wsNew
   }, [])
 
@@ -196,6 +199,7 @@ export function useWorkspaces(setError: (msg: string) => void) {
     if (!confirm(msg)) return
     try {
       await api.deleteWorkspace(activeWorkspaceId)
+      toast.success('Workspace silindi')
       const remaining = workspaces.filter((w) => w.id !== activeWorkspaceId)
       setWorkspaces(remaining)
       const next = remaining[0]?.id ?? null
@@ -224,6 +228,7 @@ export function useWorkspaces(setError: (msg: string) => void) {
       if (!confirm(msg)) return
       try {
         await api.deleteWorkspace(id)
+        toast.success('Workspace silindi')
         const remaining = workspaces.filter((w) => w.id !== id)
         setWorkspaces(remaining)
         if (id === activeWorkspaceId) {

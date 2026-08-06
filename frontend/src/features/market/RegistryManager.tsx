@@ -3,7 +3,7 @@ import { Globe, Plus, RefreshCw, Trash2, AlertTriangle, Server, Sparkles } from 
 import type { Registry } from '@/types'
 import type { ConnectorInfo } from '@/api/market'
 import { api } from '@/api'
-import { Button, ModalOverlay } from '@/shared/components'
+import { Button, ModalOverlay, toast } from '@/shared/components'
 
 interface Props {
   onClose: () => void
@@ -39,7 +39,6 @@ export function RegistryManager({ onClose, onChanged }: Props) {
     void load()
   }, [load])
 
-
   const add = useCallback(async () => {
     if (!url.trim()) {
       setErr('Registry URL gerekli (registry.json adresine işaret etmeli).')
@@ -52,6 +51,7 @@ export function RegistryManager({ onClose, onChanged }: Props) {
       setName('')
       setUrl('')
       onChanged()
+      toast.success('Registry eklendi')
     } catch (e) {
       setErr((e as Error).message)
     } finally {
@@ -66,6 +66,7 @@ export function RegistryManager({ onClose, onChanged }: Props) {
       try {
         setRegistries(await api.removeRegistry(u))
         onChanged()
+        toast.success('Registry silindi')
       } catch (e) {
         setErr((e as Error).message)
       } finally {
@@ -110,7 +111,8 @@ export function RegistryManager({ onClose, onChanged }: Props) {
           <div className="min-w-0 flex-1">
             <h2 className="text-sm font-semibold text-[var(--color-text)]">Market Kaynakları</h2>
             <p className="text-xs text-[var(--color-text-dim)]">
-              Uzak registry'lerden paket çek. Her kaynak bir <code>registry.json</code> (swarmregistry/v1) sunar.
+              Uzak registry'lerden paket çek. Her kaynak bir <code>registry.json</code>{' '}
+              (swarmregistry/v1) sunar.
             </p>
           </div>
           <button
@@ -139,14 +141,16 @@ export function RegistryManager({ onClose, onChanged }: Props) {
                   >
                     <div className="min-w-0 flex-1">
                       <div className="truncate text-sm font-medium">{c.name}</div>
-                      <div className="truncate text-[11px] text-[var(--color-text-dim)]">{c.detail}</div>
+                      <div className="truncate text-[11px] text-[var(--color-text-dim)]">
+                        {c.detail}
+                      </div>
                     </div>
                   </div>
                 ))}
               </div>
               <p className="text-[10px] text-[var(--color-text-dim)]">
-                Bu siteler binlerce skill barındırır. Market'teki <strong>arama çubuğundan</strong> arayıp sonuçları
-                kur (kurulumda GitHub'dan ingest edilir).
+                Bu siteler binlerce skill barındırır. Market'teki <strong>arama çubuğundan</strong>{' '}
+                arayıp sonuçları kur (kurulumda GitHub'dan ingest edilir).
               </p>
             </div>
           )}
@@ -154,7 +158,9 @@ export function RegistryManager({ onClose, onChanged }: Props) {
           {/* Add form */}
           <div className="space-y-2 rounded-md border border-[var(--color-border)] p-3">
             <label className="block">
-              <span className="mb-1 block text-xs font-medium text-[var(--color-text-dim)]">Registry URL</span>
+              <span className="mb-1 block text-xs font-medium text-[var(--color-text-dim)]">
+                Registry URL
+              </span>
               <input
                 data-testid="registry-url"
                 value={url}
@@ -171,7 +177,7 @@ export function RegistryManager({ onClose, onChanged }: Props) {
                 placeholder="Ad (opsiyonel)"
                 className={`${inputCls} flex-1`}
               />
-              <Button data-testid="registry-add" onClick={add} disabled={busy} className="flex items-center gap-1.5">
+              <Button data-testid="registry-add" onClick={add} disabled={busy}>
                 <Plus size={14} /> Ekle
               </Button>
             </div>
@@ -216,7 +222,10 @@ export function RegistryManager({ onClose, onChanged }: Props) {
         </div>
 
         <div className="flex items-center justify-end gap-2 border-t border-[var(--color-border)] px-5 py-4">
-          <button onClick={onClose} className="rounded px-3 py-1.5 text-sm text-[var(--color-text-dim)] hover:text-[var(--color-text)]">
+          <button
+            onClick={onClose}
+            className="rounded px-3 py-1.5 text-sm text-[var(--color-text-dim)] hover:text-[var(--color-text)]"
+          >
             Kapat
           </button>
         </div>

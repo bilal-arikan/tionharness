@@ -3,7 +3,7 @@ import { api } from '@/api'
 import { THEME_COLORS, type ThemeColorVariant } from '@/shared/lib/themePresets'
 import { applyAppearance, resolveAppearance, type Appearance } from '@/shared/lib/theme'
 import { Field } from './primitives'
-import { Button } from '@/shared/components'
+import { Button, LoadingState, toast } from '@/shared/components'
 
 // AppearancePanel edits the ACTIVE WORKSPACE's appearance override (the theme
 // preset — a color + light/dark variant). It is self-contained — it loads/saves
@@ -80,6 +80,7 @@ export function AppearancePanel({
       setHasOverride(true)
       revertRef.current = draft
       onAppearanceSaved?.(draft)
+      toast.success('Görünüm kaydedildi')
     } catch (e) {
       onError((e as Error).message)
     } finally {
@@ -98,6 +99,7 @@ export function AppearancePanel({
       revertRef.current = globalAppearance
       applyAppearance(globalAppearance)
       onAppearanceSaved?.(globalAppearance)
+      toast.success('Genele sıfırlandı')
     } catch (e) {
       onError((e as Error).message)
     } finally {
@@ -105,14 +107,20 @@ export function AppearancePanel({
     }
   }
 
-  if (loading) return <div className="text-sm text-[var(--color-text-dim)]">Yükleniyor…</div>
+  if (loading) return <LoadingState label="Yükleniyor…" />
 
   return (
     <>
       <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-xs text-[var(--color-text-dim)]">
-        Bu görünüm ayarları <span className="font-medium text-[var(--color-text)]">yalnızca bu workspace</span> için geçerlidir. Workspace değiştirdiğinde tema da değişir. Değişiklikler anında önizlenir; kalıcı olması için <span className="font-medium text-[var(--color-text)]">Kaydet</span> de.
+        Bu görünüm ayarları{' '}
+        <span className="font-medium text-[var(--color-text)]">yalnızca bu workspace</span> için
+        geçerlidir. Workspace değiştirdiğinde tema da değişir. Değişiklikler anında önizlenir;
+        kalıcı olması için <span className="font-medium text-[var(--color-text)]">Kaydet</span> de.
       </div>
-      <Field label="Tema rengi" hint="Bir renk ve onun açık/koyu varyantını seç; tüm arayüz anında yeniden renklenir.">
+      <Field
+        label="Tema rengi"
+        hint="Bir renk ve onun açık/koyu varyantını seç; tüm arayüz anında yeniden renklenir."
+      >
         <div className="space-y-2.5">
           {THEME_COLORS.map((c) => {
             const variant = (v: ThemeColorVariant, label: string) => {
@@ -135,7 +143,9 @@ export function AppearancePanel({
                   >
                     <span className="h-5 w-5 rounded-full" style={{ background: v.accent }} />
                   </span>
-                  <span className={`text-sm ${sel ? 'font-semibold text-[var(--color-text)]' : 'font-medium text-[var(--color-text-dim)]'}`}>
+                  <span
+                    className={`text-sm ${sel ? 'font-semibold text-[var(--color-text)]' : 'font-medium text-[var(--color-text-dim)]'}`}
+                  >
                     {label}
                   </span>
                 </button>
@@ -143,7 +153,9 @@ export function AppearancePanel({
             }
             return (
               <div key={c.id} className="flex items-center gap-4">
-                <span className="w-20 shrink-0 text-sm font-semibold text-[var(--color-text)]">{c.label}</span>
+                <span className="w-20 shrink-0 text-sm font-semibold text-[var(--color-text)]">
+                  {c.label}
+                </span>
                 <div className="flex gap-2.5">
                   {variant(c.dark, 'Koyu')}
                   {variant(c.light, 'Açık')}
@@ -166,7 +178,9 @@ export function AppearancePanel({
           Genele sıfırla
         </button>
         <span className="text-xs text-[var(--color-text-dim)]">
-          {hasOverride ? 'Bu workspace özel görünüm kullanıyor' : 'Uygulama-geneli görünüm kullanılıyor'}
+          {hasOverride
+            ? 'Bu workspace özel görünüm kullanıyor'
+            : 'Uygulama-geneli görünüm kullanılıyor'}
         </span>
       </div>
     </>

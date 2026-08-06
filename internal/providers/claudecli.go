@@ -278,9 +278,10 @@ type cliEvent struct {
 }
 
 // cliRateLimit mirrors the rate_limit_info object the CLI emits on a
-// "rate_limit_event". status is "allowed" in the normal case; anything else
-// (e.g. "rejected"/"blocked") means the subscription window is exhausted and,
-// when overage is disabled, the turn cannot proceed.
+// "rate_limit_event". status "allowed"/"allowed_warning" both let the turn
+// proceed (warning just means the window is filling up); anything outside the
+// "allowed" family (e.g. "rejected"/"blocked") means the subscription window is
+// exhausted and, when overage is disabled, the turn cannot proceed.
 type cliRateLimit struct {
 	Status                string `json:"status"`
 	RateLimitType         string `json:"rateLimitType"`
@@ -899,12 +900,17 @@ func (p *cliStreamParser) feed(line string) {
 
 	switch ev.Type {
 	case "rate_limit_event":
-		// The CLI reports the subscription rate-limit window on every turn. status
-		// "allowed" is the normal case; anything else means the window is exhausted.
-		// With overage disabled the upstream request is then rejected and the process
-		// exits non-zero before any assistant output — classify it so the caller sees
-		// a usage-limit error instead of a bare "exit status 1".
-		if rl := ev.RateLimit; rl != nil && rl.Status != "" && !strings.EqualFold(rl.Status, "allowed") {
+		// The CLI reports the subscription rate-limit window on every turn. The
+		// "allowed" family lets the request proceed: "allowed" is the normal case and
+		// "allowed_warning" only signals the window is filling up (observed event:
+		// status=allowed_warning, utilization 0.64, isUsingOverage=false — 36% of quota
+		// still free). Only a status OUTSIDE that family (e.g. "rejected"/"blocked")
+		// means the window is exhausted and, with overage disabled, the request is
+		// refused before any assistant output. Matching just "allowed" mis-flagged the
+		// warning as a hard limit, reported a bogus "usage/rate limit reached" and
+		// masked the real exit cause (letting the !sawModelTurn branch classify it,
+		// which is also retryable when no tool ran).
+		if rl := ev.RateLimit; rl != nil && rl.Status != "" && !strings.HasPrefix(strings.ToLower(rl.Status), "allowed") {
 			p.rateLimited = true
 			p.rateLimitMsg = describeRateLimit(rl)
 		}

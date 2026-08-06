@@ -16,13 +16,16 @@ import type { Hook, SessionDebugEvent } from '@/types'
 type OptKind = 'rtk' | 'sqz' | 'hook'
 
 const KIND_META: Record<OptKind, { label: string; cls: string }> = {
-  // sky has no semantic theme token, so it stays raw as a distinct categorical
-  // hue; rtk maps onto success and the neutral "hook" onto text-dim to re-theme.
+  // Every hue maps onto a theme token (success/info/text-dim) so the badges
+  // re-theme with presets and stay legible in the light theme.
   rtk: {
     label: 'rtk',
     cls: 'bg-[color-mix(in_srgb,var(--color-success)_15%,transparent)] text-[var(--color-success)]',
   },
-  sqz: { label: 'sqz', cls: 'bg-sky-500/15 text-sky-400' },
+  sqz: {
+    label: 'sqz',
+    cls: 'bg-[color-mix(in_srgb,var(--color-info)_15%,transparent)] text-[var(--color-info)]',
+  },
   hook: {
     label: 'hook',
     cls: 'bg-[color-mix(in_srgb,var(--color-text-dim)_15%,transparent)] text-[var(--color-text-dim)]',

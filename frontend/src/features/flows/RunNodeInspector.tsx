@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { X, Loader2, Copy, Check, ChevronRight, ChevronDown, ArrowRight } from 'lucide-react'
 import { api } from '@/api'
+import { toast } from '@/shared/components'
 import type { Agent, FlowMsg, FlowNode, FlowRun, FlowTraceEntry, TurnStep } from '@/types'
 import { Markdown } from '@/shared/components/markdown/Markdown'
 import { UserBubble } from '@/features/chat/UserBubble'
@@ -8,24 +9,21 @@ import { TurnSteps } from '@/features/chat/TurnSteps'
 import { subscribeFlowNodeStep } from '@/shared/lib/flowNodeStepBus'
 import type { NodeStatus } from './flowGraph'
 
-// CopyButton copies `text` to the clipboard, flashing a check for feedback. A
-// tiny local control so the node output can be lifted out without the full chat
-// message footer (which is session/message-bound).
+// CopyButton copies `text` to the clipboard, surfacing success through the
+// app-wide toast (single feedback channel). A tiny local control so the node
+// output can be lifted out without the full chat message footer (which is
+// session/message-bound).
 function CopyButton({ text, title }: { text: string; title: string }) {
-  const [done, setDone] = useState(false)
   return (
     <button
       type="button"
       title={title}
       onClick={() => {
-        void navigator.clipboard?.writeText(text).then(() => {
-          setDone(true)
-          setTimeout(() => setDone(false), 1200)
-        })
+        void navigator.clipboard?.writeText(text).then(() => toast.info('Panoya kopyalandı'))
       }}
       className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)]"
     >
-      {done ? <Check size={12} /> : <Copy size={12} />}
+      <Copy size={12} />
     </button>
   )
 }
@@ -88,7 +86,8 @@ function BranchCard({ node, entry }: { node: FlowNode; entry: FlowTraceEntry | u
     <div className="space-y-3">
       <div className="rounded bg-[var(--color-surface-2)] p-3 text-sm">
         <div className="mb-1 text-xs text-[var(--color-text-dim)]">
-          Değerlendirilen değer{node.jsonField ? ` (JSON alanı: ${node.jsonField})` : ''} · eşleşme: {modeLabel}
+          Değerlendirilen değer{node.jsonField ? ` (JSON alanı: ${node.jsonField})` : ''} · eşleşme:{' '}
+          {modeLabel}
         </div>
         <div className="max-h-40 overflow-y-auto whitespace-pre-wrap break-words">
           {value || <span className="italic text-[var(--color-text-dim)]">boş</span>}
@@ -113,7 +112,11 @@ function BranchCard({ node, entry }: { node: FlowNode; entry: FlowTraceEntry | u
                 <span className="w-[13px] shrink-0" />
               )}
               <span className="min-w-0 flex-1 truncate">
-                {isDefault ? <span className="italic text-[var(--color-text-dim)]">varsayılan</span> : b.contains}
+                {isDefault ? (
+                  <span className="italic text-[var(--color-text-dim)]">varsayılan</span>
+                ) : (
+                  b.contains
+                )}
               </span>
               {matched && b.next && (
                 <span className="flex shrink-0 items-center gap-1 text-xs text-[var(--color-text-dim)]">
@@ -199,7 +202,11 @@ function ParallelFanout({
                 {t?.output ?? <span className="italic">çıktı yok</span>}
               </span>
             )}
-            {hasBar && <span className="w-14 shrink-0 text-right text-xs text-[var(--color-text-dim)]">{fmtDur(dur)}</span>}
+            {hasBar && (
+              <span className="w-14 shrink-0 text-right text-xs text-[var(--color-text-dim)]">
+                {fmtDur(dur)}
+              </span>
+            )}
             <ChevronRight size={14} className="shrink-0 text-[var(--color-text-dim)]" />
           </button>
         )
@@ -343,13 +350,14 @@ export function RunNodeInspector({
             )}
             {running && (
               <div className="flex items-center gap-2 text-xs text-[var(--color-accent)]">
-                <Loader2 size={13} className="animate-spin" /> Koordinatör çalışıyor — workerlar bekleniyor…
+                <Loader2 size={13} className="animate-spin" /> Koordinatör çalışıyor — workerlar
+                bekleniyor…
               </div>
             )}
             {output && <AssistantBubble text={output} />}
             <p className="text-[11px] text-[var(--color-text-dim)]">
-              Worker adımları koordinatörün kendi oturumunda; Oturumlar ekranından
-              (“Akış Koordinatörü”) izlenebilir.
+              Worker adımları koordinatörün kendi oturumunda; Oturumlar ekranından (“Akış
+              Koordinatörü”) izlenebilir.
             </p>
           </>
         ) : !isAgent ? (

@@ -192,7 +192,7 @@ Diğerlerinin roll-up'ı. **Panel ekranının** üst bloğu ve ileride tartış�
 *müşterisi* olur, ayrı bir izleme alt sistemi değil.
 
 ```
-WORKSPACE · 2 ajan · 5 oturum (3 aktif) · 3 kart · 4 koşu · 1.2M tok bugün · asOf 11:12:57
+WORKSPACE · 2 ajan · 5 oturum (3 aktif) · 3 kart · 4 koşu · 1.2M tok bugün · $3.14 bugün · asOf 11:12:57
 pano: todo 1 | in_progress 1 | failed 1
 koşular: 1 çalışıyor · 1 bekliyor · 1 başarısız (son 24s: 3)
 ⚠ 1 oturum takılmış (StuckTurns>0): SES2
@@ -208,6 +208,13 @@ Tamamı **bellek-içi store okumaları** — geçmiş ne kadar büyürse büyüs
 yok, bu yüzden poll edilebilecek kadar ucuz. **Devre dışı bırakılmış** bir
 zamanlamanın son hatası raporlanmaz: bilerek duraklatılmış bir şeyi "bozuk" diye
 göstermek okuyucuya satırı yok saymayı öğretir.
+
+Başlıktaki **`$X bugün`** günün USD maliyetidir — `billing.RollupOf` ile (Bütçe
+ekranıyla aynı fiyatlama), abonelik sağlayıcıda `~$` (eşdeğer-API tahmini).
+Fiyatlanmış harcama yoksa satır **yazılmaz**: token>0 iken `$0.00` göstermek
+"ücretsiz" gibi okunurdu, oysa anlamı "bu sağlayıcının fiyatı yok" — farklı bir
+gerçek. `internal/view` bunun için `billing`'i import eder (billing → db+providers,
+döngü yok).
 
 ## Göç 1: coordinator worker-state bloğu (push projeksiyonu)
 
@@ -364,10 +371,13 @@ hesap değil**. İkisi çelişirse bu, kullanıcının görebildiği bir bug'dı
 | Bölüm | İçerik |
 |-------|--------|
 | Stat kutuları | ajan · aktif oturum · **takılmış oturum** · açık kart · çalışan koşu · **başarısız koşu** (sorun olanlar renkli) |
+| 💰 Maliyet | bugün · bu ay · günlük ort. (burn, delta'lı) · ay-sonu tahmini + önlenebilir cache israfı notu. Tümü `billing.RollupOf` ile — Bütçe ekranıyla asla çelişmez. Abonelik sağlayıcı `~` ile işaretlenir. |
+| 🔔 Dikkat gereken | workspace projeksiyonunun sinyal satırlarının **tıklanabilir** kardeşi: takılmış oturum / başarısız koşu-kart (danger) + bekleyen soru / hatalı zamanlama / hareketsiz kart (warn). Satır etiketi → ilgili **tam ekran** (`nav`); sağdaki **◱** → o varlığın **`get_view` projeksiyonunu** yandan açar (oturum/koşu/kart-sub/schedule, dördü de drill-down). Workspace özeti bloğunun altında `summary.handles` de tıklanabilir ◱ çip. |
+| ✅ Sonuçlar | biten kart · ort. tamamlanma süresi (cycle time) · koşu başarı oranı + biten-kart/gün trendi (tamamlanma tarafı; hacim değil) |
 | ◱ Workspace özeti | ham DSL, monospace + `~N tok` + `asOf` |
-| Günlük trend ×3 | açılan oturum · akış koşusu · token (7/14/30/90g seçici) |
+| Günlük trend ×4 | açılan oturum · akış koşusu · token · **maliyet** — her biri **dönem-üstü delta** rozetiyle (maliyette artış kırmızı) |
 | Kompozisyon ×3 | pano sütunları · koşu durumları · oturum türleri |
-| Sıralama | en yoğun ajanlar (oturum sayısı) |
+| Sıralama ×2 | en yoğun ajanlar (oturum sayısı) · **en maliyetli ajanlar ($)** |
 
 Grafikler **elle yazılmış SVG/CSS** (`charts.tsx`) — `sessions/viz`'in zaten
 kullandığı idiom. Üç şekil için büyük bir grafik kütüphanesi eklenmedi; ayrıca bu
@@ -450,7 +460,13 @@ Faz 5'e ancak 1-4 kanıtlanırsa geçilir.
   başarısız kart, bağımlılıkla bloke, gecikmiş, Δ24s, sahipsiz). Sütunlar
   **workspace ayarından değil, kartların kendisinden** türer: bu paketi settings
   bağımlılığından kurtarır ve view'ı dürüst tutar — var olan panoyu raporlar,
-  yapılandırılmış olanı değil (yapılandırılmış-ama-boş sütun görünmez).
+  yapılandırılmış olanı değil (yapılandırılmış-ama-boş sütun görünmez). `Sub`
+  verilince **tek-kart drill-down** (`projectCard`: durum/öncelik/sahip/termin/
+  bağımlılık ⛔/gecikme ⚠/son koşu; bilinmeyen kart id'si hata, boş kart değil).
+- `schedule.go` — tek cron zamanlaması (armed/disabled, son-çalışma statüsü+hatası,
+  sıradaki, hedef agent/flow, prompt). L0/L1 (küçük varlık, L2 yok). Roll-up'ın
+  aksine **devre dışı** zamanlamanın son hatası burada gösterilir: kullanıcı bu
+  zamanlamaya inmişse tam da onu soruyordur.
 - `session.go` — kimlik/maliyet/coordination soyağacı başlığı + rolling summary +
   todo ilerlemesi + L1 sinyaller (StuckTurns, bekleyen soru, son hata, alarm
   etiketleri, handoff, compaction). `agent` paketi **import edilmez** (cycle:
@@ -464,8 +480,9 @@ Yanıt hem yapısal zarfı hem `text`'i taşır; panel `text`'i olduğu gibi bas
 Bilinmeyen kind → 400, olmayan entity → 404.
 
 **Araç** — `internal/tools/builtin_view.go`: `get_view{kind,id,sub,level,lens}`
-(`kind` ∈ flowrun|session|board), `toolsetup.go`'da her ajana açık (salt-okunur),
-kategori `diagnostics`. Çıktı = `View.Text()` + drill-down çağrı ipuçları.
+(`kind` ∈ flowrun|session|board|workspace|schedule; `sub` = flowrun'da node,
+board'da kart), `toolsetup.go`'da her ajana açık (salt-okunur), kategori
+`diagnostics`. Çıktı = `View.Text()` + drill-down çağrı ipuçları.
 
 **UI** — `frontend/src/features/view/`:
 `ViewButton` (◱ Özet tetikleyicisi, sağdan açılan sheet) + `ViewPanel`

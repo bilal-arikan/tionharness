@@ -92,7 +92,7 @@ func isWSLBashLauncher(p string) bool {
 // standard install locations. Git-bash is the preferred Windows shell because it
 // shares the Windows filesystem and network stack — unlike WSL, whose separate
 // namespace makes a Windows path or a 127.0.0.1 service unreachable from inside.
-func lookGitBash() (string, bool) {
+var lookGitBash = func() (string, bool) {
 	var roots []string
 	if git, err := exec.LookPath("git"); err == nil {
 		// <root>\cmd\git.exe or <root>\bin\git.exe

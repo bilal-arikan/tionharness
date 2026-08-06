@@ -51,7 +51,7 @@ export function ComposerCard({ tone, className = '', children }: Props) {
   return (
     <div className="-mb-2 px-3 pt-2 md:px-6">
       <div
-        className={`rounded-2xl rounded-b-lg border shadow-xl shadow-black/40 ${TONE[tone]} ${className}`}
+        className={`rounded-2xl rounded-b-lg border shadow-[var(--shadow-lg)] ${TONE[tone]} ${className}`}
       >
         {children}
       </div>

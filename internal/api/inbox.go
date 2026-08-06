@@ -48,6 +48,24 @@ type sessionInbox struct {
 	// and resume instead of losing the user's queued messages. See session_teardown.go.
 	closing bool
 	wsID    string // owning workspace (for persistence + dispatch)
+	// idleSignal is closed whenever the serial slot transitions to idle (running
+	// flips false — a worker drain completed or a held slot was released). A waiter
+	// in acquireInboxSlot selects on it to be woken the instant the slot frees,
+	// instead of polling. It is lazily created by the first waiter and recreated
+	// after each broadcast (a closed channel can only fire once). nil when nobody
+	// is waiting.
+	idleSignal chan struct{}
+}
+
+// signalInboxIdleLocked wakes any acquireInboxSlot waiters after the serial slot
+// goes idle. MUST be called under the inbox lock, at every site that clears
+// ib.running. Closing the channel broadcasts to all waiters; a fresh one is not
+// allocated until the next waiter needs it.
+func signalInboxIdleLocked(ib *sessionInbox) {
+	if ib != nil && ib.idleSignal != nil {
+		close(ib.idleSignal)
+		ib.idleSignal = nil
+	}
 }
 
 // inboxStore holds every session's queue. Server-wide (like chatRuns), keyed by
@@ -175,6 +193,66 @@ func (s *Server) kickInbox(sessionID string) {
 	go s.runInboxWorker(sessionID)
 }
 
+// acquireInboxSlot conforms an OUT-OF-QUEUE operation — a slash command like
+// /compact or /handoff that runs a direct provider.Complete on the HTTP goroutine
+// rather than through runInboxWorker — to the session's serial send-queue. It
+// WAITS until the slot is idle, then claims it (running = true, with no draining
+// goroutine), so the command is ordered against chat turns in BOTH directions:
+//   - a chat turn already draining → the command waits behind it (no two
+//     subprocesses resuming the same claude-cli transcript at once);
+//   - a message submitted while the command holds the slot → it stays WAITING in
+//     the tray (kickInbox no-ops on a running worker) instead of being dispatched
+//     concurrently and yanking the queue panel away.
+//
+// While busy it blocks on the inbox's idleSignal (broadcast when running clears),
+// not a poll, and also on ctx so a client disconnect / timeout bails cleanly with
+// no side effect. On success it returns a release func that clears the slot,
+// broadcasts idle, and kicks the worker to drain anything that queued meanwhile;
+// release is idempotent and safe. On ctx cancellation it returns a non-nil error
+// and a no-op release.
+func (s *Server) acquireInboxSlot(ctx context.Context, sessionID, wsID string) (release func(), err error) {
+	for {
+		s.inbox.lock()
+		ib := s.inbox.sessions[sessionID]
+		if ib == nil {
+			ib = &sessionInbox{seen: make(map[string]bool), wsID: wsID}
+			s.inbox.sessions[sessionID] = ib
+		}
+		if ib.wsID == "" {
+			ib.wsID = wsID
+		}
+		if !ib.running && !ib.closing {
+			ib.running = true
+			s.inbox.unlock()
+			var once sync.Once
+			return func() {
+				once.Do(func() {
+					s.inbox.lock()
+					if ib2 := s.inbox.sessions[sessionID]; ib2 != nil {
+						ib2.running = false
+						signalInboxIdleLocked(ib2)
+					}
+					s.inbox.unlock()
+					s.kickInbox(sessionID)
+				})
+			}, nil
+		}
+		// Busy (a worker drains, or a teardown froze the queue): attach to the idle
+		// broadcast and wait for the slot to free or the request to be abandoned.
+		if ib.idleSignal == nil {
+			ib.idleSignal = make(chan struct{})
+		}
+		wait := ib.idleSignal
+		s.inbox.unlock()
+		select {
+		case <-wait:
+			// Slot changed state — loop and re-check under the lock.
+		case <-ctx.Done():
+			return func() {}, ctx.Err()
+		}
+	}
+}
+
 // runInboxWorker drains a session's queue one turn at a time. It pops the head
 // into the durable in-flight slot (so the persisted queue keeps that turn until
 // it completes AND shows the remaining WAITING tail), runs it under a watchdog,
@@ -187,6 +265,9 @@ func (s *Server) runInboxWorker(sessionID string) {
 		if ib == nil || ib.closing || len(ib.items) == 0 {
 			if ib != nil {
 				ib.running = false
+				// Wake any acquireInboxSlot waiter (a /compact or /handoff waiting to run
+				// after this drain) now that the serial slot is idle.
+				signalInboxIdleLocked(ib)
 				// closing means a teardown froze the queue: leave items + inflight + the
 				// dedupe set intact so an aborted delete can resume exactly where it
 				// paused. Only a genuine drain (empty queue) resets them.
@@ -195,46 +276,6 @@ func (s *Server) runInboxWorker(sessionID string) {
 					// Queue drained: reset the dedupe set so it can't grow without bound
 					// across a long-lived session (a re-submit of an old id after this is a
 					// genuinely new turn).
-					ib.seen = make(map[string]bool)
-				}
-			}
-			s.inbox.unlock()
-			s.flushInbox(sessionID)
-			return
-		}
-		// Hold the queue while this coordinator session still has running workers: a
-		// message typed during a worker run stays visible in the tray and dispatches
-		// only once the workers drain, instead of running a coordinator turn mid-run
-		// (which flashed the chip away). Re-kicked from the worker-completion bridge
-		// (kickCoordinatorChain). The busy probe does I/O, so it runs UNLOCKED — the
-		// current items were observed above and can only grow, never vanish, until we
-		// pop, so releasing the lock here cannot lose a turn.
-		wsID := ib.wsID
-		s.inbox.unlock()
-		if s.holdForCoordinatorWorkers(wsID, sessionID) {
-			s.inbox.lock()
-			if ib := s.inbox.sessions[sessionID]; ib != nil {
-				ib.running = false
-			}
-			s.inbox.unlock()
-			// Keep the parked items visible in every window's tray.
-			s.flushInbox(sessionID)
-			// Close the drain-during-park race: if the workers finished between the
-			// probe above and marking ourselves not-running, the completion kick may
-			// have no-op'd (we were still flagged running) — re-check and self-kick so
-			// the message is never stranded.
-			if !s.holdForCoordinatorWorkers(wsID, sessionID) {
-				s.kickInbox(sessionID)
-			}
-			return
-		}
-		s.inbox.lock()
-		ib = s.inbox.sessions[sessionID]
-		if ib == nil || ib.closing || len(ib.items) == 0 {
-			if ib != nil {
-				ib.running = false
-				if !ib.closing {
-					ib.inflight = nil
 					ib.seen = make(map[string]bool)
 				}
 			}

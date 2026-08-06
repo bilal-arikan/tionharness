@@ -50,6 +50,9 @@ type Registry struct {
 	zaiKey     string // Z.ai GLM (Anthropic-compatible) API key
 	zaiBaseURL string // Z.ai base URL ("" = public Anthropic-mode default)
 
+	deepseekKey     string // DeepSeek (OpenAI-compatible) API key
+	deepseekBaseURL string // DeepSeek base URL ("" = public default)
+
 	custom      map[string]CustomSpec // user-added providers, keyed by id
 	customOrder []string              // ids in catalog order
 }
@@ -148,6 +151,21 @@ func (r *Registry) ZAIConfigured() bool {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	return r.zaiKey != ""
+}
+
+// SetDeepSeek updates the DeepSeek (OpenAI-compatible) API key and base URL.
+func (r *Registry) SetDeepSeek(key, baseURL string) {
+	r.mu.Lock()
+	r.deepseekKey = key
+	r.deepseekBaseURL = baseURL
+	r.mu.Unlock()
+}
+
+// DeepSeekConfigured reports whether a DeepSeek key is set.
+func (r *Registry) DeepSeekConfigured() bool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.deepseekKey != ""
 }
 
 // SetCustomProviders replaces the set of user-added providers (called from
@@ -280,6 +298,13 @@ func (r *Registry) resolve(id string) ResolvedConfig {
 	case "zai":
 		cfg.Key = r.zaiKey
 		cfg.BaseURL = r.zaiBaseURL
+	case "deepseek":
+		cfg.Key = r.deepseekKey
+		cfg.BaseURL = r.deepseekBaseURL
+	case "deepseek-anthropic":
+		// Reuses the DeepSeek key but the Anthropic-compatible endpoint; the kind
+		// supplies its own base URL (deepseekBaseURL is the OpenAI base, N/A here).
+		cfg.Key = r.deepseekKey
 	}
 	return cfg
 }
@@ -302,7 +327,19 @@ func (r *Registry) Available(id string) bool {
 // claude-cli default.
 func (r *Registry) Get(name string) (Provider, error) {
 	if k, ok := lookupKind(name); ok {
-		return k.Build(r.resolve(name))
+		prov, err := k.Build(r.resolve(name))
+		if err != nil {
+			return nil, err
+		}
+		// Apply the kind's declared per-request budget override (0 = leave the
+		// model-class default). Threading it here keeps every kind's build function
+		// free of timeout plumbing; clients that support it implement the interface.
+		if secs := k.Manifest().RequestTimeoutSecs; secs > 0 {
+			if tc, ok := prov.(requestTimeoutConfigurable); ok {
+				tc.setRequestTimeout(secs)
+			}
+		}
+		return prov, nil
 	}
 	r.mu.RLock()
 	c, ok := r.custom[name]

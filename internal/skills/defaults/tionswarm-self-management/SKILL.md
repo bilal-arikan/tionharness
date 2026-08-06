@@ -157,6 +157,14 @@ FILE you produced on disk (e.g. a screenshot) use `kind=image|video|audio|file` 
 `sourcePath` set to the file path — never base64-embed bytes into `content`.
 (Screenshots and exported files are also auto-captured from a tool's saved path.)
 
+**Views (projections)** — `get_view` (`{kind, id, level?, lens?, sub?}`) collapses a
+large piece of state into a context-cheap compact DSL instead of re-listing it. Four
+kinds: `flowrun` (a run tree, optional `sub` for one node), `session`, `board` (the
+kanban ledger — `id:"board"`, optional `lens` e.g. `stale`), `workspace`
+(`id:"workspace"`). `level` = `tiny|card|full`. Prefer it over repeated
+`list_tasks`/`list_sessions` when you only need the shape — a coordinator watching the
+board should poll `get_view board` rather than re-listing every turn.
+
 **Logs** — `read_logs` (read the app log ring buffer). Load-on-demand — activate
 it like the rest of this suite.
 

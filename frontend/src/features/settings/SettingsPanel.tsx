@@ -9,6 +9,7 @@ import type {
   SettingsPatch,
   SlashCommand,
 } from '@/types'
+import { LoadingState, toast } from '@/shared/components'
 import { APP_CATS, CatButton, type Cat } from './primitives'
 import {
   ProfilePanel,
@@ -175,6 +176,8 @@ export function SettingsPanel({
       claudeConfigDir: draft.claudeConfigDir,
       minimaxBaseUrl: draft.minimaxBaseUrl,
       openrouterBaseUrl: draft.openrouterBaseUrl,
+      zaiBaseUrl: draft.zaiBaseUrl,
+      deepseekBaseUrl: draft.deepseekBaseUrl,
       extendedPromptCache: draft.extendedPromptCache,
       anthropicContextEditing: draft.anthropicContextEditing,
       anthropicNativeToolSearch: draft.anthropicNativeToolSearch,
@@ -261,6 +264,7 @@ export function SettingsPanel({
     setSaving(true)
     try {
       await saveApp()
+      toast.success('Kaydedildi')
     } catch (e) {
       onError((e as Error).message)
     } finally {
@@ -270,7 +274,7 @@ export function SettingsPanel({
 
   // keyPatch builds a write-only key patch for the named provider ("" = clear).
   const keyPatch = (
-    which: 'anthropic' | 'minimax' | 'openrouter' | 'zai',
+    which: 'anthropic' | 'minimax' | 'openrouter' | 'zai' | 'deepseek',
     value: string,
   ): SettingsPatch =>
     which === 'anthropic'
@@ -279,9 +283,11 @@ export function SettingsPanel({
         ? { minimaxKey: value }
         : which === 'openrouter'
           ? { openrouterKey: value }
-          : { zaiKey: value }
+          : which === 'zai'
+            ? { zaiKey: value }
+            : { deepseekKey: value }
 
-  const clearKey = async (which: 'anthropic' | 'minimax' | 'openrouter' | 'zai') => {
+  const clearKey = async (which: 'anthropic' | 'minimax' | 'openrouter' | 'zai' | 'deepseek') => {
     try {
       const updated = await api.updateSettings(keyPatch(which, ''))
       setDraft(updated)
@@ -296,7 +302,10 @@ export function SettingsPanel({
 
   // applyKey persists a provider key immediately (resolved from a vault secret).
   // Provider keys are never typed — they are only selected from the secret store.
-  const applyKey = async (which: 'anthropic' | 'minimax' | 'openrouter' | 'zai', value: string) => {
+  const applyKey = async (
+    which: 'anthropic' | 'minimax' | 'openrouter' | 'zai' | 'deepseek',
+    value: string,
+  ) => {
     if (!value) return
     try {
       const updated = await api.updateSettings(keyPatch(which, value))
@@ -384,7 +393,7 @@ export function SettingsPanel({
         ) : (
           <div className="mx-auto w-full max-w-2xl flex-1 space-y-4 overflow-y-auto p-6">
             {!draft ? (
-              <div className="text-sm text-[var(--color-text-dim)]">Yükleniyor…</div>
+              <LoadingState label="Yükleniyor…" />
             ) : (
               <>
                 {cat === 'profile' && <ProfilePanel draft={draft} set={set} setDraft={setDraft} />}

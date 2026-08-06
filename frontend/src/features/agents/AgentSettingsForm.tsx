@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Eye, Trash2, Star } from 'lucide-react'
+import { Eye, Trash2, Star, Copy } from 'lucide-react'
 import { useRegisterDirty } from '@/shared/lib/dirtySignals'
 import type { View } from '@/app/NavRail'
 import type { Agent, AgentPatch } from '@/types'
@@ -24,6 +24,10 @@ interface Props {
   cancelLabel?: string
   /** Danger action: when set, a "Sil" button is shown at the footer-left. */
   onDelete?: () => void
+  /** Clone the agent: when set, a "Kopyala" button is shown in the header. The
+   * copy carries over every setting (profile + provider/model + tools + skills).
+   * Resolves once the clone exists (the parent then selects it). */
+  onDuplicate?: () => Promise<string | undefined>
   /** Whether this agent is the default for new chats. Drives the header star
    * toggle's filled/active state. */
   isDefault?: boolean
@@ -41,7 +45,18 @@ interface Props {
 // fields). It is reused both inside the modal (roster gear) and as the right
 // pane of the two-panel Agents view. Mount with a key={agent.id} so switching
 // the selected agent resets the field state.
-export function AgentSettingsForm({ agent, onSave, onSaved, onCancel, cancelLabel = 'İptal', onDelete, isDefault, onSetDefault, dirtyView }: Props) {
+export function AgentSettingsForm({
+  agent,
+  onSave,
+  onSaved,
+  onCancel,
+  cancelLabel = 'İptal',
+  onDelete,
+  onDuplicate,
+  isDefault,
+  onSetDefault,
+  dirtyView,
+}: Props) {
   const [name, setName] = useState(agent.name)
   // Seed with a normalized avatar so an existing mojibake value is repaired on
   // open and persisted clean when the form is saved.
@@ -55,6 +70,7 @@ export function AgentSettingsForm({ agent, onSave, onSaved, onCancel, cancelLabe
   const [permissionMode, setPermissionMode] = useState(agent.permissionMode || 'auto')
   const [skills, setSkills] = useState<string[]>(agent.skills ?? [])
   const [saving, setSaving] = useState(false)
+  const [duplicating, setDuplicating] = useState(false)
   const [err, setErr] = useState<string | null>(null)
   const [savedAt, setSavedAt] = useState(0)
   const [previewOpen, setPreviewOpen] = useState(false)
@@ -73,7 +89,19 @@ export function AgentSettingsForm({ agent, onSave, onSaved, onCancel, cancelLabe
       thinkingLevel !== (agent.thinkingLevel ?? '') ||
       permissionMode !== (agent.permissionMode || 'auto') ||
       JSON.stringify(skills) !== JSON.stringify(agent.skills ?? []),
-    [name, avatar, color, soul, identity, provider, model, thinkingLevel, permissionMode, skills, agent],
+    [
+      name,
+      avatar,
+      color,
+      soul,
+      identity,
+      provider,
+      model,
+      thinkingLevel,
+      permissionMode,
+      skills,
+      agent,
+    ],
   )
   // Surface unsaved agent edits on the nav "Ajanlar" item (page reuse only).
   useRegisterDirty(dirtyView, dirty)
@@ -114,6 +142,21 @@ export function AgentSettingsForm({ agent, onSave, onSaved, onCancel, cancelLabe
     }
   }
 
+  const duplicate = async () => {
+    if (!onDuplicate) return
+    setDuplicating(true)
+    setErr(null)
+    try {
+      await onDuplicate()
+      // The parent selects the new clone, remounting this form via key={id}; no
+      // local state reset needed here.
+    } catch (e) {
+      setErr((e as Error).message)
+    } finally {
+      setDuplicating(false)
+    }
+  }
+
   return (
     <div className="flex h-full flex-col overflow-hidden">
       {/* Header with live avatar preview + actions (delete / save). */}
@@ -121,7 +164,9 @@ export function AgentSettingsForm({ agent, onSave, onSaved, onCancel, cancelLabe
         <AgentAvatar agent={preview} size={44} />
         <div className="min-w-0 flex-1">
           <div className="flex items-baseline gap-2">
-            <h2 className="truncate text-sm font-semibold text-[var(--color-text)]">{name || 'Ajan'}</h2>
+            <h2 className="truncate text-sm font-semibold text-[var(--color-text)]">
+              {name || 'Ajan'}
+            </h2>
             <span
               title="Ajan ID — disk klasörünün adı"
               className="shrink-0 rounded bg-[var(--color-surface-2)] px-1.5 py-0.5 font-mono text-[11px] text-[var(--color-text-dim)]"
@@ -138,9 +183,15 @@ export function AgentSettingsForm({ agent, onSave, onSaved, onCancel, cancelLabe
           {onSetDefault && (
             <button
               data-testid="agent-set-default-detail"
-              onClick={() => { if (!isDefault) onSetDefault() }}
+              onClick={() => {
+                if (!isDefault) onSetDefault()
+              }}
               disabled={isDefault}
-              title={isDefault ? 'Bu ajan yeni sohbetler için varsayılan' : 'Yeni sohbetler için varsayılan yap'}
+              title={
+                isDefault
+                  ? 'Bu ajan yeni sohbetler için varsayılan'
+                  : 'Yeni sohbetler için varsayılan yap'
+              }
               className={`flex items-center gap-1.5 rounded px-3 py-1.5 text-sm transition ${
                 isDefault
                   ? 'text-[var(--color-accent)]'
@@ -159,6 +210,17 @@ export function AgentSettingsForm({ agent, onSave, onSaved, onCancel, cancelLabe
           >
             <Eye size={14} /> Bağlam
           </button>
+          {onDuplicate && (
+            <button
+              data-testid="agent-duplicate"
+              onClick={duplicate}
+              disabled={duplicating}
+              title="Bu ajanın tüm ayarlarıyla (sağlayıcı/model, araçlar, yetenekler) bir kopyasını oluştur"
+              className="flex items-center gap-1.5 rounded px-3 py-1.5 text-sm text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)] disabled:opacity-50"
+            >
+              <Copy size={14} /> {duplicating ? 'Kopyalanıyor…' : 'Kopyala'}
+            </button>
+          )}
           {onCancel && (
             <button
               data-testid="agent-cancel"
@@ -250,15 +312,15 @@ export function AgentSettingsForm({ agent, onSave, onSaved, onCancel, cancelLabe
         <p className="-mt-2 text-xs text-[var(--color-text-dim)]">
           Uzatılmış akıl yürütme <strong>anthropic</strong> sağlayıcıda araçsız sohbette etkilidir.{' '}
           <strong>claude-cli</strong>'da seviye artık alt sürece de geçer: seçilen seviye CLI{' '}
-          <code>effortLevel</code>'ına eşlenir; <strong>Kapalı</strong> thinking'i tamamen kapatır
-          (<code>MAX_THINKING_TOKENS=0</code>).
+          <code>effortLevel</code>'ına eşlenir; <strong>Kapalı</strong> thinking'i tamamen kapatır (
+          <code>MAX_THINKING_TOKENS=0</code>).
         </p>
         {provider === 'claude-cli' && !thinkingLevel && (
           <p className="-mt-1 rounded-md border border-[color-mix(in_srgb,var(--color-accent)_25%,transparent)] bg-[color-mix(in_srgb,var(--color-accent)_6%,transparent)] px-2 py-1 text-xs text-[var(--color-text-dim)]">
-            ⚡ <strong>Kapalı + claude-cli:</strong> Claude Code ≥2.1.203 thinking açıkken paralel araç
-            çağrısı yapmaz ("think XOR batch"). Bu seçimle thinking kapanır ve paralel batch'ler
-            (tek istekte N araç) geri gelir — daha hızlı ve belirgin şekilde daha ucuz; bedeli derin
-            akıl yürütmenin olmaması.
+            ⚡ <strong>Kapalı + claude-cli:</strong> Claude Code ≥2.1.203 thinking açıkken paralel
+            araç çağrısı yapmaz ("think XOR batch"). Bu seçimle thinking kapanır ve paralel
+            batch'ler (tek istekte N araç) geri gelir — daha hızlı ve belirgin şekilde daha ucuz;
+            bedeli derin akıl yürütmenin olmaması.
           </p>
         )}
 
@@ -272,10 +334,11 @@ export function AgentSettingsForm({ agent, onSave, onSaved, onCancel, cancelLabe
           />
         </Field>
         <p className="-mt-2 text-xs text-[var(--color-text-dim)]">
-          <strong>Salt-okunur</strong> yalnız okuma araçlarına izin verir. <strong>Sor</strong> modunda yazma/komut
-          araçları için sohbette onay penceresi çıkar (Allow once / Always allow / Deny); onay verecek kimse yoksa
-          (otonom koşu) reddedilir. claude-cli ajanlarında bu mod CLI izin bayrağına çevrilir
-          (salt-okunur→<code>plan</code>, sor→<code>acceptEdits</code>, otomatik→<code>bypass</code>).
+          <strong>Salt-okunur</strong> yalnız okuma araçlarına izin verir. <strong>Sor</strong>{' '}
+          modunda yazma/komut araçları için sohbette onay penceresi çıkar (Allow once / Always allow
+          / Deny); onay verecek kimse yoksa (otonom koşu) reddedilir. claude-cli ajanlarında bu mod
+          CLI izin bayrağına çevrilir (salt-okunur→<code>plan</code>, sor→<code>acceptEdits</code>,
+          otomatik→<code>bypass</code>).
         </p>
 
         <Field label="Karakter / sistem promptu (soul)">
@@ -304,8 +367,9 @@ export function AgentSettingsForm({ agent, onSave, onSaved, onCancel, cancelLabe
           </h3>
           <p className="mb-3 text-xs text-[var(--color-text-dim)]">
             Bu ajan varsayılan olarak <strong>tüm</strong> workspace-aktif araçlara erişir. Burada
-            yalnızca <strong>kullanmasını istemediğin</strong> araçları yasakla. Yalnız workspace'te aktif
-            araçlar listelenir (aktivasyon <strong>Araçlar</strong> ekranından). Değişiklikler anında kaydedilir.
+            yalnızca <strong>kullanmasını istemediğin</strong> araçları yasakla. Yalnız workspace'te
+            aktif araçlar listelenir (aktivasyon <strong>Araçlar</strong> ekranından). Değişiklikler
+            anında kaydedilir.
           </p>
           <AgentToolsSection agentId={agent.id} onError={setErr} />
         </div>

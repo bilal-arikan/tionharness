@@ -36,6 +36,8 @@ interface Props {
   onSetDefault: (id: string) => void
   onCreateAgent: (name: string, soul: string, provider: string, model: string) => void
   onUpdateAgent: (id: string, patch: AgentPatch) => Promise<void>
+  /** Clone the agent (full profile + tool config) into a new "(kopya)". */
+  onDuplicateAgent: (id: string) => Promise<string | undefined>
   onDeleteAgent: (id: string) => Promise<void>
   /** Re-fetch the agent roster from the server. */
   onRefresh?: () => void | Promise<void>
@@ -55,6 +57,7 @@ export function AgentsView({
   onSetDefault,
   onCreateAgent,
   onUpdateAgent,
+  onDuplicateAgent,
   onDeleteAgent,
   onRefresh,
   onError,
@@ -340,6 +343,7 @@ export function AgentsView({
                 isDefault={defaultAgentId === selected.id}
                 onSetDefault={() => onSetDefault(selected.id)}
                 onSave={(p) => onUpdateAgent(selected.id, p)}
+                onDuplicate={() => onDuplicateAgent(selected.id)}
                 onDelete={async () => {
                   if (
                     confirm(

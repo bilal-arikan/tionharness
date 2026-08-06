@@ -46,15 +46,17 @@ export function DiffCard({ step, onOpenFile }: Props) {
   const hasPatch = !!patch.trim()
 
   return (
-    <div className="overflow-hidden rounded-lg bg-[var(--color-surface)] shadow-xl shadow-black/40">
+    <div className="overflow-hidden rounded-lg bg-[var(--color-surface)] shadow-[var(--shadow-lg)]">
       <button
-        onClick={() => setOpen((o) => hasPatch ? !o : o)}
+        onClick={() => setOpen((o) => (hasPatch ? !o : o))}
         className={`flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-left text-xs ${
           hasPatch ? 'hover:bg-[var(--color-surface-2)]' : 'cursor-default'
         }`}
       >
         <HeaderIcon size={14} className="shrink-0 text-[var(--color-text-dim)]" />
-        <span className="shrink-0 font-medium text-[var(--color-text)]">{actionLabel(step, created)}</span>
+        <span className="shrink-0 font-medium text-[var(--color-text)]">
+          {actionLabel(step, created)}
+        </span>
         {/* The path is shown short (…/dir/file) so it no longer spans the whole
             row; only the text itself opens the file (span, not <button>, to keep
             valid HTML inside the header <button>; stopPropagation so it doesn't
@@ -65,7 +67,10 @@ export function DiffCard({ step, onOpenFile }: Props) {
             role="button"
             tabIndex={0}
             title={path}
-            onClick={(e) => { e.stopPropagation(); onOpenFile?.(path) }}
+            onClick={(e) => {
+              e.stopPropagation()
+              onOpenFile?.(path)
+            }}
             onKeyDown={(e) => {
               if (e.key === 'Enter' || e.key === ' ') {
                 e.preventDefault()

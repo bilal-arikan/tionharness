@@ -3,7 +3,7 @@ import { Eye, EyeOff, Copy, Trash2, KeyRound } from 'lucide-react'
 import { api } from '@/api'
 import type { Secret } from '@/types'
 import { copyToClipboard } from '@/shared/lib/clipboard'
-import { Button } from '@/shared/components'
+import { Button, LoadingState, toast } from '@/shared/components'
 import { useAsync } from '@/shared/hooks/useAsync'
 
 interface Props {
@@ -47,8 +47,10 @@ export function SecretsPanel({ onError }: Props) {
     setSaving(true)
     try {
       await api.setSecret(n, value, description.trim())
+      const wasEditing = editing
       resetForm()
       load()
+      toast.success(wasEditing ? 'Sır güncellendi' : 'Sır eklendi')
     } catch (e) {
       onError((e as Error).message)
     } finally {
@@ -86,7 +88,7 @@ export function SecretsPanel({ onError }: Props) {
   const copyValue = async (s: Secret) => {
     try {
       const val = revealed[s.name] ?? (await api.revealSecret(s.name)).value
-      await copyToClipboard(val)
+      if (await copyToClipboard(val)) toast.info('Panoya kopyalandı')
     } catch (e) {
       onError((e as Error).message)
     }
@@ -97,6 +99,7 @@ export function SecretsPanel({ onError }: Props) {
     try {
       await api.deleteSecret(s.name)
       load()
+      toast.success('Sır silindi')
     } catch (e) {
       onError((e as Error).message)
     }
@@ -111,10 +114,11 @@ export function SecretsPanel({ onError }: Props) {
             <h2 className="text-sm font-semibold">Sırlar</h2>
           </div>
           <p className="mt-1 text-xs text-[var(--color-text-dim)]">
-            API anahtarları, token'lar ve şifreler bu workspace'in <strong>şifreli kasasında</strong> (AES-GCM)
-            saklanır. Bu workspace'teki ajanlar bunlara <code className="rounded bg-[var(--color-surface-2)] px-1 py-0.5">secret_list</code> ve{' '}
-            <code className="rounded bg-[var(--color-surface-2)] px-1 py-0.5">secret_get</code> araçlarıyla erişebilir.
-            Değerler listede gizlidir; göstermek için göz ikonunu kullan.
+            API anahtarları, token'lar ve şifreler bu workspace'in{' '}
+            <strong>şifreli kasasında</strong> (AES-GCM) saklanır. Bu workspace'teki ajanlar bunlara{' '}
+            <code className="rounded bg-[var(--color-surface-2)] px-1 py-0.5">secret_list</code> ve{' '}
+            <code className="rounded bg-[var(--color-surface-2)] px-1 py-0.5">secret_get</code>{' '}
+            araçlarıyla erişebilir. Değerler listede gizlidir; göstermek için göz ikonunu kullan.
           </p>
         </header>
 
@@ -150,10 +154,16 @@ export function SecretsPanel({ onError }: Props) {
             />
           </div>
           <p className="mt-2 text-xs text-[var(--color-text-dim)]">
-            Ad bir harfle başlamalı; harf, rakam, <code>_</code>, <code>-</code>, <code>.</code> içerebilir.
+            Ad bir harfle başlamalı; harf, rakam, <code>_</code>, <code>-</code>, <code>.</code>{' '}
+            içerebilir.
           </p>
           <div className="mt-3 flex items-center gap-2">
-            <Button data-testid="secret-save" onClick={save} disabled={saving || !name.trim() || !value} size="lg">
+            <Button
+              data-testid="secret-save"
+              onClick={save}
+              disabled={saving || !name.trim() || !value}
+              size="lg"
+            >
               {editing ? 'Güncelle' : 'Ekle'}
             </Button>
             {editing && (
@@ -178,11 +188,15 @@ export function SecretsPanel({ onError }: Props) {
                       {s.name}
                     </code>
                     {s.description && (
-                      <span className="ml-2 text-sm text-[var(--color-text-dim)]">{s.description}</span>
+                      <span className="ml-2 text-sm text-[var(--color-text-dim)]">
+                        {s.description}
+                      </span>
                     )}
                     <div className="mt-1.5 font-mono text-xs text-[var(--color-text-dim)]">
                       {revealed[s.name] !== undefined ? (
-                        <span className="break-all text-[var(--color-text)]">{revealed[s.name]}</span>
+                        <span className="break-all text-[var(--color-text)]">
+                          {revealed[s.name]}
+                        </span>
                       ) : (
                         '••••••••••••'
                       )}
@@ -231,9 +245,7 @@ export function SecretsPanel({ onError }: Props) {
                 Henüz sır eklenmedi. Yukarıdaki formla bir API anahtarı veya şifre ekle.
               </p>
             )}
-            {loading && (
-              <p className="px-4 py-6 text-center text-sm text-[var(--color-text-dim)]">Yükleniyor…</p>
-            )}
+            {loading && <LoadingState label="Yükleniyor…" />}
           </div>
         </section>
       </div>

@@ -1,6 +1,6 @@
 ---
 name: "TionSwarm Autonomous Ops"
-description: "How to reach the 'expert' level of agentic operation in TionSwarm: stop hand-prompting and review-looping, and instead encode repeatable work as skills, fire it on triggers with schedules and hooks, let goal-bounded autonomous agents loop until done, run work in parallel across isolated workspaces, mix models per task, and guard it all with budgets and the permission layer. The TionSwarm-native translation of the expert 'vibe coding' automation playbook."
+description: "How to reach the 'expert' level of agentic operation in TionSwarm: stop hand-prompting and review-looping, and instead encode repeatable work as skills, fire it on triggers with schedules and hooks, let goal-bounded autonomous agents loop until done, run work in parallel across isolated workspaces, mix models per task, and guard it all with the autonomy brake and the permission layer. The TionSwarm-native translation of the expert 'vibe coding' automation playbook."
 when_to_use: "When a user (or you) keeps doing the same prompt/review cycle by hand and wants to automate it — set up recurring sweeps (docs/tests/logs), event-driven reactions (hooks), long-running goal loops, parallel fan-out, or a multi-model build→write→review pipeline — and needs to know which TionSwarm primitive maps to which automation pattern."
 icon: "♻️"
 color: "#6366f1"
@@ -27,7 +27,7 @@ TionSwarm primitive, not an aspiration.
 | `agents.md` / `CLAUDE.md` rules | **Workspace config** (editable prompt/instructions) + per-agent system prompt + `tionswarm-settings` |
 | Skills ("anything done twice") | **File-based skills**: `create_skill` / `use_skill`, global+workspace tiers, auto-summary |
 | Automations (trigger → prompt) | **Schedules** (cron, workspace-scoped prompt delivery) for time triggers; **Hooks** (PreToolUse/PostToolUse) for event triggers |
-| Loops (run until goal) | **Schedules** (cron), **`schedule_wake`** (single-shot self-wake, interactive turn only), **`run_subagent` async** (detached background run), and **Flows** (graph engine) — all budget-guarded |
+| Loops (run until goal) | **Schedules** (cron), **`schedule_wake`** (single-shot self-wake, interactive turn only), **`run_subagent` async** (detached background run), and **Flows** (graph engine) — all gated by the per-workspace autonomy brake |
 | Quality gates | **Permission/approval layer** (`auto`/`ask`/`read-only`, arg-patterns) + **Hooks** |
 | Auto code review (e.g. Greptile) | A dedicated **reviewer agent** invoked by a flow or schedule |
 | Cloud vs local / infinite parallel | **Physical workspace isolation** + `run_subagent` (parallel isolated workers — sync or async) |
@@ -196,7 +196,8 @@ a flow, or a skill that says which agent to hand off to at each stage.
 
 ## 9. Guardrails — keep autonomy safe
 
-- **Global autonomy brake** — pausing autonomy stops all autonomous provider
+- **Autonomy brake (per-workspace)** — pausing autonomy (Schedules screen,
+  `pauseAutonomy` in `ws-settings.json`) stops that workspace's autonomous provider
   calls at the single `guardedComplete` funnel; every call is usage-metered.
 - **Permission layer** — `auto` / `ask` / `read-only` modes; arg-based patterns
   narrow a blanket "always allow" to a command family (e.g. `shell(git *)` runs
@@ -247,8 +248,8 @@ the `autonomousBootSeq` setting, default on); this section is the full recipe be
   A clean baseline is worth more than a half-built feature on a broken tree.
 
 ### Step 4 — Do the one task
-- Implement only the selected unit. Stay within budget (`daily_*_limit`) and the
-  permission mode you were launched in.
+- Implement only the selected unit. Stay within the permission mode you were
+  launched in (per-agent spend caps were removed — agents are unlimited).
 
 ### Step 5 — Close the loop (leave a clean handoff)
 - Re-run the baseline check; require green before you finish.
@@ -272,12 +273,12 @@ the `autonomousBootSeq` setting, default on); this section is the full recipe be
 4. Add **hooks** for event reactions (format-on-write) and hard gates (block destructive tools).
 5. For big jobs, **fan out with `run_subagent`** (parallel profiles or agents) and/or split across **workspaces**.
 6. Build the **multi-model flow** for feature work (plan → write → review).
-7. Cap everything with **budgets + permission mode** so it runs unattended safely.
+7. Cap everything with the **autonomy brake + permission mode** so it runs unattended safely.
 
 ## Pitfalls
 
 - **Loop with no goal** = runaway. Always state the stopping condition; rely on the
-  budget guard as a backstop, not the plan.
+  per-workspace autonomy brake as a backstop, not the plan.
 - **Same-workspace file conflicts** — parallel agents on the same files still
   collide; isolate by workspace or by code area.
 - **`run_subagent` fan-out is capped** — `DelegationMaxCalls` (default 8) per turn and `SpawnMaxConcurrent` (default 16) overall. Design fan-out within these limits.

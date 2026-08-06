@@ -4,7 +4,7 @@ import type { Pack, PackKind, Secret } from '@/types'
 import { api } from '@/api'
 import type { PriceTable } from '@/api/providers'
 import type { PreviewItem } from '@/api/ingest'
-import { ListPane, LoadingState } from '@/shared/components'
+import { ListPane, LoadingState, toast } from '@/shared/components'
 import { useCollapsibleList } from '@/shared/hooks/useCollapsibleList'
 import { SkillImportDialog } from '@/features/skills/SkillImportDialog'
 import { RegistryManager } from './RegistryManager'
@@ -102,9 +102,11 @@ export function MarketPanel({ onError, onManageSecrets, onInstalled }: Props) {
     void load()
     void loadSecrets()
     void loadExisting()
-    void api.prices().then(setPrices).catch(() => {})
+    void api
+      .prices()
+      .then(setPrices)
+      .catch(() => {})
   }, [load, loadSecrets, loadExisting])
-
 
   // Live directory-site (connector) search — skill tab only, debounced. The sites
   // hold thousands of skills, so results come from a search query, not a bulk list.
@@ -223,7 +225,7 @@ export function MarketPanel({ onError, onManageSecrets, onInstalled }: Props) {
         if (pack.sourceRef?.url) {
           const res = await api.ingestInstall({ source: 'github', url: pack.sourceRef.url })
           setInstalled((prev) => new Set(prev).add(pack.id))
-          onError(`✓ ${res.message}`)
+          toast.success(res.message || 'Kuruldu')
           await loadExisting()
           onInstalled?.('skill')
           return
@@ -232,7 +234,7 @@ export function MarketPanel({ onError, onManageSecrets, onInstalled }: Props) {
         if (pack.kind === 'provider' && apiKey.trim()) body.apiKey = apiKey.trim()
         const res = await api.installPack(pack.id, body)
         setInstalled((prev) => new Set(prev).add(pack.id))
-        onError(`✓ ${res.message}`)
+        toast.success(res.message || 'Kuruldu')
         await loadExisting() // re-mark the catalog (this pack is now installed)
         await load() // refresh installedVersion decoration (ledger updated)
         onInstalled?.(pack.kind) // let the host refresh its matching collection
@@ -258,54 +260,54 @@ export function MarketPanel({ onError, onManageSecrets, onInstalled }: Props) {
         testId="market-list-toggle"
         hideRail
       >
-      <div className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto p-2">
-        <div className="flex items-center px-2 py-1">
-          <span className="text-[10px] font-medium uppercase tracking-wide text-[var(--color-text-dim)]">
-            Kategoriler
-          </span>
+        <div className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto p-2">
+          <div className="flex items-center px-2 py-1">
+            <span className="text-[10px] font-medium uppercase tracking-wide text-[var(--color-text-dim)]">
+              Kategoriler
+            </span>
+          </div>
+          {KIND_NAV.map((k) => {
+            const Icon = k.icon
+            const count = packs.filter((p) => p.kind === k.key).length
+            const active = tab === k.key
+            return (
+              <button
+                key={k.key}
+                data-testid="market-kind-tab"
+                data-kind={k.key}
+                onClick={() => setTab(k.key)}
+                className={`flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition ${
+                  active
+                    ? 'bg-[var(--color-accent-soft)] font-medium text-[var(--color-accent)]'
+                    : 'text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]'
+                }`}
+              >
+                <Icon size={16} strokeWidth={2} className="shrink-0" />
+                <span className="min-w-0 flex-1 truncate text-left">{k.label}</span>
+                <span className="text-[10px] text-[var(--color-text-dim)]">{count}</span>
+              </button>
+            )
+          })}
         </div>
-        {KIND_NAV.map((k) => {
-          const Icon = k.icon
-          const count = packs.filter((p) => p.kind === k.key).length
-          const active = tab === k.key
-          return (
-            <button
-              key={k.key}
-              data-testid="market-kind-tab"
-              data-kind={k.key}
-              onClick={() => setTab(k.key)}
-              className={`flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition ${
-                active
-                  ? 'bg-[var(--color-accent-soft)] font-medium text-[var(--color-accent)]'
-                  : 'text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]'
-              }`}
-            >
-              <Icon size={16} strokeWidth={2} className="shrink-0" />
-              <span className="min-w-0 flex-1 truncate text-left">{k.label}</span>
-              <span className="text-[10px] text-[var(--color-text-dim)]">{count}</span>
-            </button>
-          )
-        })}
-      </div>
-      {/* Global market actions (moved here from the top header). */}
-      <div className="flex flex-col gap-1 border-t border-[var(--color-border)] p-2">
-        <button
-          data-testid="market-import"
-          onClick={() => setImporting(true)}
-          title="GitHub repo / plugin veya yerel klasörden içe aktar (skill / agent / komut / MCP)"
-          className="flex items-center gap-2 rounded-lg px-2.5 py-2 text-sm text-[var(--color-text-dim)] transition hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]"
-        >
-          <Download size={16} className="shrink-0" /> İçe Aktar
-        </button>
-        <button
-          data-testid="market-registries"
-          onClick={() => setManagingRegistries(true)}
-          title="Uzak kaynakları yönet (registry ekle/çıkar)"
-          className="flex items-center gap-2 rounded-lg px-2.5 py-2 text-sm text-[var(--color-text-dim)] transition hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]"
-        >
-          <Server size={16} className="shrink-0" /> Kaynaklar
-        </button>
-      </div>
+        {/* Global market actions (moved here from the top header). */}
+        <div className="flex flex-col gap-1 border-t border-[var(--color-border)] p-2">
+          <button
+            data-testid="market-import"
+            onClick={() => setImporting(true)}
+            title="GitHub repo / plugin veya yerel klasörden içe aktar (skill / agent / komut / MCP)"
+            className="flex items-center gap-2 rounded-lg px-2.5 py-2 text-sm text-[var(--color-text-dim)] transition hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]"
+          >
+            <Download size={16} className="shrink-0" /> İçe Aktar
+          </button>
+          <button
+            data-testid="market-registries"
+            onClick={() => setManagingRegistries(true)}
+            title="Uzak kaynakları yönet (registry ekle/çıkar)"
+            className="flex items-center gap-2 rounded-lg px-2.5 py-2 text-sm text-[var(--color-text-dim)] transition hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]"
+          >
+            <Server size={16} className="shrink-0" /> Kaynaklar
+          </button>
+        </div>
       </ListPane>
 
       {/* Catalog */}
@@ -346,17 +348,17 @@ export function MarketPanel({ onError, onManageSecrets, onInstalled }: Props) {
 
         {loading && <LoadingState label="Market yükleniyor…" />}
         {!loading && (
-        <MarketGrid
-          visible={visible}
-          tab={tab}
-          selected={selected}
-          installed={installed}
-          isInstalled={isInstalled}
-          openDetail={openDetail}
-          searching={searching}
-          remoteResults={remoteResults}
-          remoteWarnings={remoteWarnings}
-        />
+          <MarketGrid
+            visible={visible}
+            tab={tab}
+            selected={selected}
+            installed={installed}
+            isInstalled={isInstalled}
+            openDetail={openDetail}
+            searching={searching}
+            remoteResults={remoteResults}
+            remoteWarnings={remoteWarnings}
+          />
         )}
       </div>
 

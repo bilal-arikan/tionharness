@@ -511,20 +511,25 @@ zincir tamamen temizlendi: frontend `api.runFlowStream`/`streamRunFlow`/
 + `/run-flow-stream` route'ları. Standalone Flows-paneli yolu (`/api/flows/{id}/run`
 + `/run-stream` → `handleRunFlow(Stream)`) korunuyor.
 
-**Koordinatör workerları koşarken kuyrukta tut (2026-08-04):** koordinatörün kendi
-turu bitip workerları arka planda koşarken (session "boşta" görünürken) kullanıcının
-gönderdiği mesaj artık hemen bir koordinatör turu başlatmıyor — inbox worker'ı
-**park ediyor**: mesaj tepside görünür kalır ("Sırada #1") ve ancak workerlar
-tükendiğinde gönderilir. Mekanik: `runInboxWorker` pop öncesi `coordinatorWorkersBusy`
-(oturum `IsCoordinator` + herhangi bir çocuk `Running`/`Delegating`) sorar; meşgulse
-`running=false` yapıp öğeleri bırakır ve döner. Yeniden tetik `bridgeBusToHub`'ın
-`worker` completion olayından `kickCoordinatorChain` ile gelir (olayın koordinatör
-id'si + tüm ata koordinatörler yürünür — derin alt-ağaç kapsanır). Park anındaki
-drain yarışı park sonrası re-probe + self-kick ile kapatılır; leaf worker completion
-olayı `untrackSession`'dan SONRA yayınlandığı için son worker `Running=false` okunur,
-mesaj asla stranded olmaz. Frontend: workerlar koşarken (stream yokken) kompozer
-"Gönder" yerine "Sıraya" gösterir (`SendActions.workersActive`); gönderim yolu aynıdır
-(backend tutar). Testler: `inbox_coordinator_hold_test.go`.
+**Koordinatör workerları koşarken mesaj DOĞRUDAN teslim (2026-08-04, park KALDIRILDI):**
+Önce (aynı gün, ilk deneme) koordinatörün kendi turu bitip workerları arka planda
+koşarken kullanıcı mesajı inbox'ta **park ediliyordu** (tepside "Sırada #1", ancak
+workerlar tükenince gönderilir). Kullanıcı geri bildirimi: park istenmiyor — mesaj
+hemen koordinatöre gitsin, worker cevapları yine koordinatöre iletilsin. Park
+mekanizması **tamamen kaldırıldı**: silinen `inbox_coordinator_hold.go`
+(`holdForCoordinatorWorkers`/`coordinatorWorkersBusy`/`kickCoordinatorChain`) +
+`Server.workersBusyFn` alanı + `bridgeBusToHub`'ın `worker` completion re-kick'i +
+`inbox_coordinator_hold_test.go` + frontend `workersActive` zinciri
+(`ChatView`→`Composer`→`SendActions`/`PendingTray`, "Sıraya" affordance'ı).
+
+Artık `runInboxWorker` head'i **koşulsuz** pop edip dispatch eder. İki tur asla
+paralel koşmaz çünkü dispatch → `runChatTurn` → `BeginSessionUserTurn` **per-session
+tur slot'unu** (`coordSlot`) alır; worker `<task-notification>` oto-turları da
+`NotifyCoordinator`/`enqueueCoordinatorTurn` ile aynı slot'ta serileşir (bkz.
+`_Docs/47` §13). Yani kullanıcı mesajı, çalışan bir worker-note turu varsa yalnız o
+**tek tur** bitene kadar bekler (tüm workerları değil) ve doğrudan koşar; worker
+cevapları sonradan yine koordinatör oturumuna düşer. Kompozer workerlar koşarken de
+normal "Gönder" gösterir; `WorkerWaitBanner` bilgilendirici olarak kalır.
 
 ## Doğrulama
 

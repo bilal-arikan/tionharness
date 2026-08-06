@@ -226,6 +226,12 @@
   verirse (`mcp__foo__bar`), son `__`-segmenti katalogda **tekil** eşleşiyorsa o araca
   çözülür; belirsiz ad `unknown` kalır (asla yanlış yönlendirmez). Test:
   `builtin_activate_ns_test.go`.
+  **Arama semantiği: terim-skorlama (OR + sıralama) (2026-08-04):** `tool_search`
+  eskiden sorgu terimlerini **AND**'liyordu — model tek sorguya birden çok tam araç
+  adı verince (`list_tasks move_task create_task`) hiçbir araç hepsini içermediği için
+  **boş** dönüyordu (yanlışlıkla "araç yok" sanılıyordu). Artık **en az bir terimi**
+  içeren araçlar, eşleşen terim sayısına (ad eşleşmesi bonuslu) göre sıralanarak döner;
+  çoklu-ad sorgusu ilgili tüm araçları yüzeye çıkarır. Test: `TestToolSearchMultiNameOR`.
 - Per-turn **aktif set** (`internal/tools/activetools.go`, context üzerinden
   `buildRegistry`'ye taşınır). Tool loop her iterasyonda
   `reg.ActiveDefs(filter, active.Snapshot())` ile gönderilen şemayı yeniden

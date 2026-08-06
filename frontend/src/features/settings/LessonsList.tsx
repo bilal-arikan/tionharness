@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { RefreshCw, Trash2 } from 'lucide-react'
 import { api } from '@/api'
+import { toast } from '@/shared/components'
 import type { Lesson } from '@/types'
 
 // LessonsList shows the workspace's auto-collected failure lessons (read-only
@@ -32,13 +33,16 @@ export function LessonsList({ fill = false }: { fill?: boolean } = {}) {
     try {
       await api.deleteLesson(id)
       setLessons((cur) => (cur ? cur.filter((l) => l.id !== id) : cur))
+      toast.success('Ders silindi')
     } catch (e) {
       setError((e as Error).message)
     }
   }
 
   return (
-    <div className={`rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 ${fill ? 'flex h-full min-h-0 flex-col' : ''}`}>
+    <div
+      className={`rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 ${fill ? 'flex h-full min-h-0 flex-col' : ''}`}
+    >
       <div className="mb-1 flex items-center justify-between">
         <span className="text-xs font-medium text-[var(--color-text)]">
           Kayıtlı dersler {lessons ? `(${lessons.length})` : ''}
@@ -56,17 +60,23 @@ export function LessonsList({ fill = false }: { fill?: boolean } = {}) {
       {error && <p className="text-xs text-[var(--color-danger)]">{error}</p>}
       {lessons && lessons.length === 0 && !error && (
         <p className="text-xs text-[var(--color-text-dim)]">
-          Henüz ders yok — kötü biten bir turdan sonra burada görünür. En yeni 5 ders her turun bağlamına otomatik enjekte edilir.
+          Henüz ders yok — kötü biten bir turdan sonra burada görünür. En yeni 5 ders her turun
+          bağlamına otomatik enjekte edilir.
         </p>
       )}
       {lessons && lessons.length > 0 && (
         <ul className={`space-y-1.5 overflow-y-auto ${fill ? 'min-h-0 flex-1' : 'max-h-56'}`}>
           {lessons.map((l) => (
-            <li key={l.id} className="group flex items-start gap-2 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5">
+            <li
+              key={l.id}
+              className="group flex items-start gap-2 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5"
+            >
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-[var(--color-text-dim)]">
                   {l.tool && (
-                    <span className="rounded bg-[var(--color-surface-2)] px-1 py-px font-mono text-[10px] text-[var(--color-text)]">{l.tool}</span>
+                    <span className="rounded bg-[var(--color-surface-2)] px-1 py-px font-mono text-[10px] text-[var(--color-text)]">
+                      {l.tool}
+                    </span>
                   )}
                   {l.count > 1 && <span>{l.count}× görüldü</span>}
                   <span>{new Date(l.ts * 1000).toLocaleString('tr-TR')}</span>

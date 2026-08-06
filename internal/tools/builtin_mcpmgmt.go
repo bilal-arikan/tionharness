@@ -15,8 +15,8 @@ import (
 // external tool source (a stdio subprocess or an sse/http endpoint) for itself
 // and later agents. Newly created/enabled servers are picked up on the next
 // agent turn (the tool catalog is rebuilt per turn from enabled servers).
-// Safety boundary: list/create/toggle on any server, delete only on
-// agent-created servers (provenance via MCPServer.CreatedBy).
+// No provenance gate: list/create/toggle/delete on any server (user- or
+// agent-created). MCPServer.CreatedBy is still stamped for provenance/display.
 
 type mcpDeps struct {
 	db      *db.DB
@@ -209,7 +209,7 @@ func (t ToggleMCPServerTool) Call(ctx context.Context, input json.RawMessage) (s
 
 // ---- delete_mcp_server ----
 
-// DeleteMCPServerTool removes an agent-created MCP server (provenance-enforced).
+// DeleteMCPServerTool removes an MCP server (user- or agent-created).
 type DeleteMCPServerTool struct{ d mcpDeps }
 
 // NewDeleteMCPServerTool constructs delete_mcp_server.
@@ -220,7 +220,7 @@ func NewDeleteMCPServerTool(database *db.DB, actorID string) DeleteMCPServerTool
 func (DeleteMCPServerTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name:        "delete_mcp_server",
-		Description: "Delete an agent-created MCP server (not one configured by the user). Pass the server id.",
+		Description: "Delete an MCP server (user- or agent-created). Pass the server id.",
 		InputSchema: json.RawMessage(`{
 			"type":"object",
 			"properties":{"id":{"type":"string","description":"The server id (see list_mcp_servers)"}},
@@ -241,12 +241,8 @@ func (t DeleteMCPServerTool) Call(ctx context.Context, input json.RawMessage) (s
 	if in.ID == "" {
 		return "", fmt.Errorf("id is required")
 	}
-	cur, err := t.d.db.GetMCPServer(ctx, in.ID)
-	if err != nil {
+	if _, err := t.d.db.GetMCPServer(ctx, in.ID); err != nil {
 		return "", fmt.Errorf("no mcp server with id %q (use list_mcp_servers)", in.ID)
-	}
-	if cur.CreatedBy == "" {
-		return "", fmt.Errorf("mcp server %q was configured by the user and cannot be deleted by an agent", in.ID)
 	}
 	if err := t.d.db.DeleteMCPServer(ctx, in.ID); err != nil {
 		return "", fmt.Errorf("delete mcp server: %w", err)

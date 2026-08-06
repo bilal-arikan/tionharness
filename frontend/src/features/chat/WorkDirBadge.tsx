@@ -174,7 +174,7 @@ export function WorkDirBadge({ sessionId }: { sessionId?: string }) {
             onClick={() => browse?.path && apply(browse.path)}
             disabled={busy || !browse?.path}
             size="lg"
-            className="mt-2 flex w-full items-center justify-center gap-1.5"
+            className="mt-2 w-full"
           >
             <Check size={14} /> Bu klasörü kullan
           </Button>

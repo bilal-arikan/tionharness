@@ -105,7 +105,7 @@ export function ChatEmptyState({
               )
             )}
 
-            <Button onClick={onNewSession} size="lg" className="w-full justify-center">
+            <Button onClick={onNewSession} size="lg" className="w-full">
               <MessageSquarePlus size={16} /> Yeni sohbet
             </Button>
           </>
@@ -116,7 +116,7 @@ export function ChatEmptyState({
               Sohbet başlatmak için en az bir ajana ihtiyacın var. Ajanlar ekranından hızlıca bir
               tane oluşturabilirsin.
             </p>
-            <Button onClick={onGoToAgents} size="lg" className="w-full justify-center">
+            <Button onClick={onGoToAgents} size="lg" className="w-full">
               <Bot size={16} /> Ajan oluştur
             </Button>
           </>

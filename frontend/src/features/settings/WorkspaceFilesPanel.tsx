@@ -6,7 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '@/api'
 import type { WorkspaceConfig, WorkspaceConfigPatch } from '@/types'
 import { Field } from './primitives'
-import { PromptEditor } from '@/shared/components'
+import { PromptEditor, LoadingState, toast } from '@/shared/components'
 import { CopyPathButton } from '@/shared/components/CopyPathButton'
 import { RevealButton } from '@/shared/components/RevealButton'
 import { displayPath } from '@/shared/lib/paths'
@@ -88,6 +88,7 @@ export function WorkspaceFilesPanel({ onError, onState }: Props) {
       setConfig(updated)
       setDraft(toDraft(updated))
       setOriginal(toDraft(updated))
+      toast.success('Kaydedildi')
     } catch (e) {
       onError((e as Error).message)
     } finally {
@@ -103,7 +104,7 @@ export function WorkspaceFilesPanel({ onError, onState }: Props) {
   useEffect(() => () => onState?.(null), [onState])
 
   if (!config || !draft) {
-    return <div className="text-sm text-[var(--color-text-dim)]">Yükleniyor…</div>
+    return <LoadingState label="Yükleniyor…" />
   }
 
   const setPrompt = (key: string, val: string) =>
@@ -117,7 +118,9 @@ export function WorkspaceFilesPanel({ onError, onState }: Props) {
     <>
       <div className="flex items-center justify-between rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2">
         <span className="text-xs text-[var(--color-text-dim)]">
-          Bu dosyalar <code className="rounded bg-[var(--color-bg)] px-1">{displayPath(config.dir)}</code> altında. Hem buradan hem doğrudan diskten düzenleyebilirsin.
+          Bu dosyalar{' '}
+          <code className="rounded bg-[var(--color-bg)] px-1">{displayPath(config.dir)}</code>{' '}
+          altında. Hem buradan hem doğrudan diskten düzenleyebilirsin.
         </span>
         <div className="flex shrink-0 items-center gap-1">
           <CopyPathButton path={config.dir} />
@@ -125,8 +128,13 @@ export function WorkspaceFilesPanel({ onError, onState }: Props) {
         </div>
       </div>
 
-      <div className="text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">Workspace dosyaları</div>
-      <Field label="Talimatlar (instructions.md)" hint="Bu workspace'teki tüm ajanlara eklenen yönergeler. 'Genel' sekmesindeki talimatlarla senkronizedir.">
+      <div className="text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
+        Workspace dosyaları
+      </div>
+      <Field
+        label="Talimatlar (instructions.md)"
+        hint="Bu workspace'teki tüm ajanlara eklenen yönergeler. 'Genel' sekmesindeki talimatlarla senkronizedir."
+      >
         <PromptEditor
           value={draft.instructions}
           onChange={(v) => setDraft((d) => (d ? { ...d, instructions: v } : d))}
@@ -136,7 +144,9 @@ export function WorkspaceFilesPanel({ onError, onState }: Props) {
         />
       </Field>
 
-      <div className="pt-2 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">Runtime promptları</div>
+      <div className="pt-2 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
+        Runtime promptları
+      </div>
       {config.promptKeys.map((key) => {
         const meta = config.promptMeta?.[key] ?? { ...FALLBACK_META, label: key }
         const isDefault = draft.prompts[key].trim() === (config.defaults[key] ?? '').trim()
@@ -171,7 +181,10 @@ export function WorkspaceFilesPanel({ onError, onState }: Props) {
                 <span className="text-[11px] text-[var(--color-accent)]">özelleştirildi</span>
               )}
               {meta.epochAffecting && (
-                <span title="Bu prompt önbelleğe alınan statik sistem prefix'ine girer; değişiklik yeni oturum/epoch'larda etkili olur." className="rounded bg-[var(--color-surface-2)] px-1.5 py-0.5 text-[10px] text-[var(--color-text-dim)]">
+                <span
+                  title="Bu prompt önbelleğe alınan statik sistem prefix'ine girer; değişiklik yeni oturum/epoch'larda etkili olur."
+                  className="rounded bg-[var(--color-surface-2)] px-1.5 py-0.5 text-[10px] text-[var(--color-text-dim)]"
+                >
                   yeni oturumlarda etkili
                 </span>
               )}
@@ -184,7 +197,6 @@ export function WorkspaceFilesPanel({ onError, onState }: Props) {
           </Field>
         )
       })}
-
     </>
   )
 }

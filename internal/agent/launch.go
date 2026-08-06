@@ -14,11 +14,12 @@ import (
 type RunTrigger string
 
 const (
-	TriggerManual          RunTrigger = "manual"
-	TriggerSchedule        RunTrigger = "schedule"
-	TriggerAutomationTag   RunTrigger = "automation:tag"
-	TriggerAutomationBoard RunTrigger = "automation:board"
-	TriggerAutomationToken RunTrigger = "automation:token"
+	TriggerManual            RunTrigger = "manual"
+	TriggerSchedule          RunTrigger = "schedule"
+	TriggerAutomationTag     RunTrigger = "automation:tag"
+	TriggerAutomationBoard   RunTrigger = "automation:board"
+	TriggerAutomationToken   RunTrigger = "automation:token"
+	TriggerAutomationCounter RunTrigger = "automation:counter"
 )
 
 // RunSpec describes a run to launch by exactly one driver: a flow (FlowID set,

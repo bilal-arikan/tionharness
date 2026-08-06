@@ -50,10 +50,6 @@ interface Props {
   waiting?: boolean
   // onCancelWait disarms the pending self-wake (the waiting-state Durdur button).
   onCancelWait?: () => void
-  // workersActive: this coordinator session has background workers running while its
-  // own turn is idle. The send button then reads "Sıraya" — a message sent now is
-  // held in the tray and dispatched once the workers drain (backend side).
-  workersActive?: boolean
   onSend: (text: string, attachments: Attachment[]) => void
   onStop?: () => void
   onInterrupt?: (text: string) => void
@@ -92,7 +88,6 @@ export function Composer({
   streaming = false,
   waiting = false,
   onCancelWait,
-  workersActive = false,
   onSend,
   onStop,
   onInterrupt,
@@ -511,7 +506,7 @@ export function Composer({
           placeholder={
             waiting
               ? 'Otomatik devam bekleniyor — yazarsan konuşmayı devralırsın'
-              : 'Mesaj yaz — @ ajan adı, # artifact, / komut, 📎 dosya'
+              : 'Mesaj yaz — @ ajan adı, # artifact, / komut'
           }
           className="max-h-[12rem] w-full resize-none overflow-y-auto bg-transparent px-1 py-0.5 text-sm leading-5 outline-none placeholder:text-[var(--color-text-dim)]"
         />
@@ -622,7 +617,6 @@ export function Composer({
           <SendActions
             streaming={streaming}
             waiting={waiting}
-            workersActive={workersActive}
             hasText={hasText}
             hasContent={hasContent}
             anyUploading={anyUploading}

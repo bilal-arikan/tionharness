@@ -42,7 +42,7 @@ Bu tablo başlangıç planıydı. Faz 0–8 sonunda gerçekte kullanılan kararl
 | Depolama | modernc.org/sqlite | **dosya sistemi (JSON/JSONL, DB yok)** | bellek-içi maps + atomik diske yazma; bkz. `08-DEPOLAMA.md` |
 | Migration | golang-migrate | **yok (şema yok)** | dosya-store'da migration kavramı yok |
 | SQL üretimi | sqlc | **elle yazılmış store** | `internal/db/store_*.go` (artık SQL değil, dosya I/O) |
-| Anthropic | resmi SDK | **ince HTTP istemci (SDK yok)** | Tam kontrol; ayrıca **claude-cli** (anahtarsız), **minimax-anthropic**, **openrouter** (toplam 5 kind: `kind_*.go` dosyaları) |
+| Anthropic | resmi SDK | **ince HTTP istemci (SDK yok)** | Tam kontrol; ayrıca **claude-cli** (anahtarsız), **minimax-anthropic**, **openrouter**, **zai**, **deepseek**, **deepseek-anthropic** (toplam 8 kind: `kind_*.go` dosyaları) |
 | Web dağıtımı | ayrı statik sunum | **`go:embed all:dist`** (`internal/web/embed.go`) | `frontend/dist/` derleme anında binary'ye gömülür; tek çalıştırılabilir dosya, CDN/statik sunucu gerekmez |
 | Zamanlama | robfig/cron | ✅ **robfig/cron/v3** | Workspace başına scheduler |
 | WebSocket/streaming | coder/websocket | ✅ **SSE** (`POST /api/chat/stream`); WebSocket yok | SSE adım-adım akış kuruldu (bkz. `07-CHAT-UX.md`); kalıcı WebSocket hub'ı gerekmedi |

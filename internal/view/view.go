@@ -28,10 +28,11 @@ import (
 type Kind string
 
 const (
-	KindFlowRun Kind = "flowrun"
-	KindSession Kind = "session"
-	KindBoard   Kind = "board"
-	KindSpace   Kind = "workspace"
+	KindFlowRun  Kind = "flowrun"
+	KindSession  Kind = "session"
+	KindBoard    Kind = "board"
+	KindSpace    Kind = "workspace"
+	KindSchedule Kind = "schedule"
 	// KindWorkers is a coordinator's live fleet. Unlike the others it is not
 	// resolvable through Projector: its input is runtime state, not store state,
 	// so the caller builds WorkersInput and calls ProjectWorkers directly. It is

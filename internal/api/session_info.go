@@ -232,9 +232,19 @@ func (s *Server) handleSessionInfo(w http.ResponseWriter, r *http.Request) {
 		ctxUsed += f.Tokens
 	}
 	resp.ContextTokens = ctxUsed
-	// Effective window = the compaction threshold pushed into the conversation
-	// manager; once the pending window exceeds it, older turns fold into summary.
-	resp.ContextWindow = s.settings.Get().MaxContextTokens
+	// Effective window = the compaction threshold the conversation manager ACTUALLY
+	// uses, i.e. EffectiveBudget (the model-aware lift of the configured floor toward
+	// window*fraction, capped by the ceiling) — NOT the raw MaxContextTokens floor.
+	// The old code reported the floor, so for a big-window model (e.g. a claude-cli
+	// opus agent with a 1M window and a 512K ceil) the meter compared usage against
+	// the 63K floor and read 130%, promising a fold the engine had no intention of
+	// running until ~512K. Mirror Prepare's budget math so the meter and the engine
+	// agree. Unknown agent → fall back to the raw floor.
+	cur := s.settings.Get()
+	resp.ContextWindow = cur.MaxContextTokens
+	if ag, aerr := wsp.DB.GetAgent(ctx, session.AgentID); aerr == nil {
+		resp.ContextWindow = conversation.EffectiveBudget(ag.Provider, ag.Model, cur.MaxContextTokens, cur.ContextBudgetFraction, cur.ContextBudgetCeil)
+	}
 
 	// Participating agents: distinct agent per assistant turn (falling back to the
 	// session's default agent), with the default agent always present.
@@ -384,6 +394,20 @@ func (s *Server) systemFillers(ctx context.Context, wsp *workspace.Workspace, se
 	}
 
 	return out
+}
+
+// contextOverheadTokens estimates the non-message context shipped every turn —
+// static system prefix, skill/tool catalogs, eager tool schemas and the artifact
+// block — by summing the SAME buckets the context meter renders (systemFillers).
+// Fed into Prepare via conversation.WithContextOverhead so the budgeted fold gates
+// on the true footprint (messages + this), not on messages alone: reusing
+// systemFillers guarantees the meter and the fold engine agree on the overhead.
+func (s *Server) contextOverheadTokens(ctx context.Context, wsp *workspace.Workspace, session db.Session, multiAgent bool) int {
+	total := 0
+	for _, f := range s.systemFillers(ctx, wsp, session, multiAgent) {
+		total += f.Tokens
+	}
+	return total
 }
 
 // countCatalogSkills counts the entries in a rendered "# Available Skills" block.

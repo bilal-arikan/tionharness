@@ -101,6 +101,10 @@ type Settings struct {
 	ZAIKeyEnc  string `json:"zaiKeyEnc"` // AES-GCM, never exposed
 	ZAIBaseURL string `json:"zaiBaseUrl"`
 
+	// DeepSeek (OpenAI-compatible) provider — DeepSeek V4 family, one key.
+	DeepSeekKeyEnc  string `json:"deepseekKeyEnc"` // AES-GCM, never exposed
+	DeepSeekBaseURL string `json:"deepseekBaseUrl"`
+
 	// CustomProviders are user-added OpenAI- or Anthropic-compatible endpoints
 	// (OpenRouter, Gemini, Kimi, Ollama, ...). Each is selectable as a provider
 	// id alongside the built-ins; the key is AES-GCM encrypted like the others.
@@ -522,6 +526,8 @@ type DTO struct {
 	OpenRouterBaseURL     string `json:"openrouterBaseUrl"`
 	ZAIKeySet             bool   `json:"zaiKeySet"`
 	ZAIBaseURL            string `json:"zaiBaseUrl"`
+	DeepSeekKeySet        bool   `json:"deepseekKeySet"`
+	DeepSeekBaseURL       string `json:"deepseekBaseUrl"`
 
 	CustomProviders []CustomProviderDTO `json:"customProviders"`
 
@@ -652,6 +658,8 @@ func (s Settings) ToDTO() DTO {
 		OpenRouterBaseURL:     s.OpenRouterBaseURL,
 		ZAIKeySet:             s.ZAIKeyEnc != "",
 		ZAIBaseURL:            s.ZAIBaseURL,
+		DeepSeekKeySet:        s.DeepSeekKeyEnc != "",
+		DeepSeekBaseURL:       s.DeepSeekBaseURL,
 		CustomProviders:       customProvidersToDTO(s.CustomProviders),
 
 		ExtendedPromptCache:        s.ExtendedPromptCache,
@@ -775,6 +783,8 @@ type Patch struct {
 	OpenRouterBaseURL     *string `json:"openrouterBaseUrl"`
 	ZAIKey                *string `json:"zaiKey"` // write-only
 	ZAIBaseURL            *string `json:"zaiBaseUrl"`
+	DeepSeekKey           *string `json:"deepseekKey"` // write-only
+	DeepSeekBaseURL       *string `json:"deepseekBaseUrl"`
 
 	ExtendedPromptCache        *bool `json:"extendedPromptCache"`
 	AnthropicContextEditing    *bool `json:"anthropicContextEditing"`

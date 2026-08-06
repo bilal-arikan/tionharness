@@ -8,10 +8,8 @@ export type ButtonVariant = 'primary' | 'secondary' | 'danger'
 export type ButtonSize = 'sm' | 'md' | 'lg'
 
 const VARIANTS: Record<ButtonVariant, string> = {
-  primary:
-    'bg-[var(--color-accent)] font-medium text-white hover:opacity-90',
-  secondary:
-    'border border-[var(--color-border)] hover:bg-[var(--color-surface-2)]',
+  primary: 'bg-[var(--color-accent)] font-medium text-white hover:opacity-90',
+  secondary: 'border border-[var(--color-border)] hover:bg-[var(--color-surface-2)]',
   danger:
     'border border-[var(--color-danger)]/50 text-[var(--color-danger)] hover:bg-[var(--color-danger)]/10',
 }
@@ -30,7 +28,7 @@ interface Props extends ButtonHTMLAttributes<HTMLButtonElement> {
 export function Button({ variant = 'primary', size = 'md', className = '', ...props }: Props) {
   return (
     <button
-      className={`${SIZES[size]} ${VARIANTS[variant]} transition disabled:opacity-50 ${className}`}
+      className={`inline-flex items-center justify-center gap-1.5 ${SIZES[size]} ${VARIANTS[variant]} transition disabled:opacity-50 ${className}`}
       {...props}
     />
   )

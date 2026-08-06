@@ -246,6 +246,37 @@ func TestActivateToolsTool(t *testing.T) {
 	}
 }
 
+// TestToolSearchMultiNameOR guards the term-scoring (OR + rank) behaviour: a
+// query listing several distinct tool names must surface every matched tool
+// rather than returning empty (the old strict-AND trap, where no single tool
+// contained all terms). It also checks that the more-specific match ranks first.
+func TestToolSearchMultiNameOR(t *testing.T) {
+	cat := []providers.ToolDef{
+		{Name: "list_tasks", Description: "List kanban tasks"},
+		{Name: "move_task", Description: "Move a task between columns"},
+		{Name: "create_task", Description: "Create a new task"},
+		{Name: "unrelated", Description: "Nothing to do with the board"},
+	}
+	ts := NewToolSearchTool(cat)
+
+	// Passing several full tool names must match all three, not zero.
+	out, _ := ts.Call(context.Background(), json.RawMessage(`{"query":"list_tasks move_task create_task"}`))
+	for _, want := range []string{"list_tasks", "move_task", "create_task"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("multi-name query should surface %q; got %q", want, out)
+		}
+	}
+	if strings.Contains(out, "unrelated") {
+		t.Errorf("non-matching tool leaked into results: %q", out)
+	}
+
+	// A tool hitting more query terms ranks above one hitting fewer.
+	ranked, _ := ts.Call(context.Background(), json.RawMessage(`{"query":"task kanban"}`))
+	if i, j := strings.Index(ranked, "list_tasks"), strings.Index(ranked, "move_task"); i < 0 || j < 0 || i > j {
+		t.Errorf("list_tasks (2 term hits) should rank before move_task (1 hit): %q", ranked)
+	}
+}
+
 // exampledStub is a stub tool that carries input_examples.
 type exampledStub struct{}
 

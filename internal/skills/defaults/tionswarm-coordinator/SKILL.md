@@ -91,8 +91,20 @@ bir skill olarak yazıp ekleyebilirsin.
 - Koordinatör başına aktif worker sayısı (`CoordinatorMaxWorkers`) ve otomatik koordinatör
   tur sayısı (`CoordinatorMaxTurns`) sınırlıdır; limit dolunca yeni bildirimler kaydedilir
   ama otomatik tur tetiklenmez (manuel devam edebilirsin). Ağaç genelinde ayrıca
-  derinlik (`CoordinatorMaxDepth`) ve toplam worker oturumu (`CoordinatorMaxSubtreeSessions`)
-  sınırları vardır — bunlara takılan bir spawn **hata verir**, sessizce düz worker'a düşmez.
+  derinlik (`CoordinatorMaxDepth`) ve **eşzamanlı-canlı** worker oturumu
+  (`CoordinatorMaxSubtreeSessions`) sınırları vardır — bunlara takılan bir spawn
+  **hata verir**, sessizce düz worker'a düşmez.
+- **Ağaç bütçesi görünür + geri kazanılır.** Her `spawn_worker` sonucu
+  `Tree budget: N/M live … (K remaining)` satırı taşır (%75/%90'da `⚠️`). Tavan artık
+  *ömür-boyu toplam* değil, *eşzamanlı-canlı* worker sayısıdır: **biten** worker'lar
+  otomatik geri kazanılır (reclaim), yani uzun ömürlü bir koordinatör bitirdiği işle
+  kilitlenmez. Tükenirse hata hâlâ aktif sayılan worker'ları listeler.
+- **Stall sert-halt:** düz metinde worker uydurmak (araç çağrısı olmadan) fantom-spawn
+  stall'ına düşürür; nudge bütçesi bitip yargıç hâlâ stall doğrularsa koordinatör
+  **otomatik-turlamayı bırakır** ve sana tek-seferlik `coordination` bildirimi gider.
+  UI'da kırmızı **"Koordinatör durduruldu"** rozeti + **"Devam ettir"** butonu çıkar;
+  gerçek bir koordinasyon aracı çağrısı da halt'ı temizler. Kaçınmak için §3 altın
+  kuralına uy: worker'dan bahsetmeden ÖNCE `spawn_worker` çağır.
 
 ## 6. Derinlik — alt-koordinatörler
 

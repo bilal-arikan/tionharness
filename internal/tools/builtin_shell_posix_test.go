@@ -53,6 +53,92 @@ func TestResolvePOSIXShellSkipsWSLLauncher(t *testing.T) {
 	}
 }
 
+// TestResolvePOSIXShellPrefersGitBashOverWSL guards the SES49 regression: on a
+// host where the only bash on PATH is the System32 WSL launcher but a real
+// git-bash is installed, the resolver must fall through to git-bash rather than
+// stop at the launcher or drop to wsl.exe. Under WSL the drive is mounted at
+// /mnt/c, so a Windows-style "cd C:/..." fails ("No such file or directory") —
+// exactly what broke that session. git-bash reaches C: as both /c/ and C:/, so
+// the agent's Windows paths keep working only when git-bash wins.
+func TestResolvePOSIXShellPrefersGitBashOverWSL(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("windows-only resolver branch")
+	}
+	const (
+		launcher = `C:\Windows\System32\bash.exe`          // WSL launcher (must be rejected)
+		gitBash  = `C:\Program Files\Git\usr\bin\bash.exe` // real git-bash (must win)
+		wslExe   = `C:\Windows\System32\wsl.exe`           // last-resort fallback
+	)
+	restoreInterp, restoreGit := lookInterpreter, lookGitBash
+	defer func() { lookInterpreter, lookGitBash = restoreInterp, restoreGit }()
+
+	lookInterpreter = func(cands ...string) (string, bool) {
+		switch cands[0] {
+		case "bash":
+			return launcher, true
+		case "wsl":
+			return wslExe, true
+		}
+		return "", false
+	}
+	lookGitBash = func() (string, bool) { return gitBash, true }
+
+	exe, preArgs, ok := resolvePOSIXShell()
+	if !ok {
+		t.Fatal("resolvePOSIXShell returned ok=false with git-bash available")
+	}
+	if !strings.EqualFold(exe, gitBash) {
+		t.Fatalf("resolver picked %q, want git-bash %q", exe, gitBash)
+	}
+	if len(preArgs) != 0 {
+		t.Fatalf("git-bash needs no preArgs, got %v", preArgs)
+	}
+	if got := POSIXShellFlavor(); got != POSIXShellGitBash {
+		t.Fatalf("POSIXShellFlavor() = %q, want %q (drives at /c/, C:/ works)", got, POSIXShellGitBash)
+	}
+}
+
+// TestResolvePOSIXShellFallsBackToWSL documents the SES49 failure state itself:
+// with no real bash and no git-bash, the resolver routes through "wsl.exe -e
+// bash" and reports the wsl flavour so callers can warn the agent that drives
+// live at /mnt/c and Windows-style C:/ paths will not resolve.
+func TestResolvePOSIXShellFallsBackToWSL(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("windows-only resolver branch")
+	}
+	const (
+		launcher = `C:\Windows\System32\bash.exe`
+		wslExe   = `C:\Windows\System32\wsl.exe`
+	)
+	restoreInterp, restoreGit := lookInterpreter, lookGitBash
+	defer func() { lookInterpreter, lookGitBash = restoreInterp, restoreGit }()
+
+	lookInterpreter = func(cands ...string) (string, bool) {
+		switch cands[0] {
+		case "bash":
+			return launcher, true // only the launcher — rejected
+		case "wsl":
+			return wslExe, true
+		}
+		return "", false
+	}
+	lookGitBash = func() (string, bool) { return "", false } // no git-bash on host
+
+	exe, preArgs, ok := resolvePOSIXShell()
+	if !ok {
+		t.Fatal("resolvePOSIXShell returned ok=false with wsl available")
+	}
+	if !strings.EqualFold(exe, wslExe) {
+		t.Fatalf("resolver picked %q, want wsl.exe %q", exe, wslExe)
+	}
+	if len(preArgs) < 2 || preArgs[0] != "-e" || preArgs[1] != "bash" {
+		t.Fatalf("wsl route must run through \"-e bash\", got %v", preArgs)
+	}
+	if got := POSIXShellFlavor(); got != POSIXShellWSL {
+		t.Fatalf("POSIXShellFlavor() = %q, want %q", got, POSIXShellWSL)
+	}
+}
+
 // TestPOSIXShellExpandsVariables runs a real command through whatever shell the
 // resolver chose and asserts that assignments and command substitution survive.
 // This is the behavioural half of the regression: the WSL launcher returned

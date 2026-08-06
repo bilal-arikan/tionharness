@@ -293,6 +293,12 @@ func (s *Server) runChatTurn(clientGone context.Context, wsp *workspace.Workspac
 				s.failTurn(ctx, database, sse, session.ID, agentRow.ID, clientMsgID, "provider_unavailable", perr.Error())
 				return
 			}
+			// Pin this workspace's claude-home before Prepare's rolling compaction,
+			// which folds via a direct provider.Complete (summarizeRendered) that
+			// bypasses guardedComplete. Without this the claude-cli provider falls
+			// back to the global claude-home and fails auth even when the workspace
+			// is logged in (mirrors the manual /compact path in summary.go).
+			wsp.Runtime.PinClaudeHome(provider)
 
 			sse("agent", map[string]any{"agentId": agentRow.ID, "index": i})
 			// Mirror agent-start onto the hub so late-joining windows know which
@@ -326,6 +332,14 @@ func (s *Server) runChatTurn(clientGone context.Context, wsp *workspace.Workspac
 			// Carry this workspace's editable compaction prompt onto the turn context.
 			ctx = conversation.WithCompactPrompt(ctx, wsp.Runtime.CompactPromptTemplate())
 			ctx = conversation.WithAttachmentRoot(ctx, wsp.SandboxRoot())
+			ctx = conversation.WithClaudeHome(ctx, wsp.Runtime.ClaudeHomeDir())
+			// Budget the fold against the TRUE per-turn footprint: the non-message
+			// context (static prefix + tool/skill catalogs + eager schemas + artifacts)
+			// ships every turn but Prepare only folds messages, so without this a large
+			// static prefix keeps the message-only estimate under budget while the real
+			// footprint runs over — the fold never fires (the 127%-but-never-compacted
+			// coordinator case). systemFillers is the same basis the context meter uses.
+			ctx = conversation.WithContextOverhead(ctx, s.contextOverheadTokens(ctx, wsp, session, multiAgent))
 			// PreCompact lifecycle hook (Claude Code parity): Prepare invokes this just
 			// before it folds older turns into the rolling summary. Fire-and-forget audit.
 			ctx = conversation.WithPreCompact(ctx, func(trigger string) {
@@ -354,7 +368,7 @@ func (s *Server) runChatTurn(clientGone context.Context, wsp *workspace.Workspac
 			}
 			// claude-cli session resume (opt-in): when engaged, this trims llmReq to the
 			// unseen delta and sets ResumeSessionID so the CLI reuses its warm cache.
-			resumePlan := s.planClaudeResume(ctx, provider, len(agents), session, rawHistory, &llmReq)
+			resumePlan := s.planClaudeResume(ctx, provider, len(agents), session, rawHistory, prep.Compacted, &llmReq)
 
 			// Attach a per-agent artifact sink so create_artifact / update_artifact
 			// persist content stamped with this session + agent — both on the native

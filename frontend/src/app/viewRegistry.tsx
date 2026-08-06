@@ -30,7 +30,7 @@ export const VIEW_TITLE: Record<View, string> = {
 // Views that render their own left list-sidebar INSIDE the main area. For these we
 // skip the app-level top header entirely so the sidebar (and the panel's own
 // in-pane headers) reach the very top — matching the chat layout where the
-// sidebar is a sibling of <main>. Errors for these still surface via ErrorToast.
+// sidebar is a sibling of <main>. Errors for these still surface via the Toaster.
 export const HEADERLESS_VIEWS = new Set<View>([
   'agents',
   'artifacts',

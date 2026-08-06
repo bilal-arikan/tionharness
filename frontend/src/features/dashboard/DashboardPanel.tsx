@@ -2,11 +2,22 @@ import { useCallback, useEffect, useState } from 'react'
 import { Loader2, RefreshCw } from 'lucide-react'
 import { api } from '@/api'
 import { PaneHeader } from '@/shared/components'
-import type { Dashboard } from '@/types'
+import type { ActionItem, Dashboard } from '@/types'
 import { StatTiles } from './StatTiles'
-import { DayBars, StackedBar, RankBars } from './charts'
+import { CostSummary } from './CostSummary'
+import { ActionQueue } from './ActionQueue'
+import { OutcomeSummary } from './OutcomeSummary'
+import { CostRankBars, DayBars, StackedBar, RankBars, fmtUsd } from './charts'
+import { ViewButton } from '@/features/view/ViewButton'
 
 const RANGES = [7, 14, 30, 90]
+
+// DashboardNav lets an action-queue row jump to the screen it points at. The
+// parent (App) supplies the actual routing.
+export interface DashboardNav {
+  openSession: (id: string) => void
+  openView: (view: 'board' | 'flows' | 'schedules') => void
+}
 
 // DashboardPanel is the workspace overview: how much is running, how much is
 // stuck, and the trend behind those numbers.
@@ -17,7 +28,13 @@ const RANGES = [7, 14, 30, 90]
 // drawn; they are not a second, independently-computed truth. If the summary and
 // a chart ever disagree, that is a bug the user can see, which is exactly why
 // the raw projection is shown verbatim instead of being prettified away.
-export function DashboardPanel({ onError }: { onError?: (msg: string) => void }) {
+export function DashboardPanel({
+  onError,
+  nav,
+}: {
+  onError?: (msg: string) => void
+  nav?: DashboardNav
+}) {
   const [days, setDays] = useState(14)
   const [data, setData] = useState<Dashboard | null>(null)
   const [loading, setLoading] = useState(false)
@@ -42,6 +59,15 @@ export function DashboardPanel({ onError }: { onError?: (msg: string) => void })
   useEffect(() => {
     void load()
   }, [load])
+
+  // Route an action-queue click to the screen that owns the entity.
+  const onNavigate = (kind: ActionItem['kind'], id: string) => {
+    if (!nav) return
+    if (kind === 'session') nav.openSession(id)
+    else if (kind === 'run') nav.openView('flows')
+    else if (kind === 'card') nav.openView('board')
+    else if (kind === 'schedule') nav.openView('schedules')
+  }
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
@@ -93,6 +119,16 @@ export function DashboardPanel({ onError }: { onError?: (msg: string) => void })
           <div className="flex flex-col gap-4">
             <StatTiles c={data.counters} />
 
+            {/* Item 1 (cost) + item 2 (action queue): the two things a CEO reads
+                first — what it costs and what needs a decision. */}
+            <div className="grid gap-4 lg:grid-cols-2">
+              <CostSummary cost={data.cost} costDelta={data.deltas.cost} />
+              <ActionQueue items={data.actions} onNavigate={onNavigate} />
+            </div>
+
+            {/* Item 4: the completion side — throughput, cycle time, success rate. */}
+            <OutcomeSummary o={data.outcomes} />
+
             {/* The projection: the agent's own summary, shown raw. */}
             <section className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
               <div className="mb-2 flex flex-wrap items-baseline gap-2">
@@ -110,17 +146,54 @@ export function DashboardPanel({ onError }: { onError?: (msg: string) => void })
               <pre className="whitespace-pre-wrap break-words font-mono text-xs leading-relaxed">
                 {data.summary.text}
               </pre>
+              {data.summary.handles && data.summary.handles.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-1.5 border-t border-[var(--color-border)] pt-2">
+                  {data.summary.handles.map((h, i) => (
+                    <ViewButton
+                      key={`${h.ref.kind}-${h.ref.id}-${i}`}
+                      target={h.ref}
+                      label={h.label}
+                    />
+                  ))}
+                </div>
+              )}
             </section>
 
-            <div className="grid gap-4 lg:grid-cols-3">
+            {/* Item 3: every trend carries its period-over-period delta. */}
+            <div className="grid gap-4 lg:grid-cols-2">
               <section className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
-                <DayBars points={data.sessionsByDay} label="Açılan oturum" />
+                <DayBars
+                  points={data.sessionsByDay}
+                  label="Açılan oturum"
+                  delta={data.deltas.sessions}
+                />
               </section>
               <section className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
-                <DayBars points={data.runsByDay} label="Akış koşusu" color="#a855f7" />
+                <DayBars
+                  points={data.runsByDay}
+                  label="Akış koşusu"
+                  color="#a855f7"
+                  delta={data.deltas.runs}
+                />
               </section>
               <section className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
-                <DayBars points={data.tokensByDay} label="Token" color="#06b6d4" />
+                <DayBars
+                  points={data.tokensByDay}
+                  label="Token"
+                  color="#06b6d4"
+                  delta={data.deltas.tokens}
+                />
+              </section>
+              <section className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
+                {/* Cost trend: up is the bad direction, so its delta inverts. */}
+                <DayBars
+                  points={data.costByDay}
+                  label="Maliyet"
+                  color="#22c55e"
+                  delta={data.deltas.cost}
+                  invert
+                  format={(n) => fmtUsd(n, data.cost.estimated)}
+                />
               </section>
             </div>
 
@@ -136,6 +209,13 @@ export function DashboardPanel({ onError }: { onError?: (msg: string) => void })
               </section>
               <section className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
                 <RankBars items={data.topAgents} label="En yoğun ajanlar (oturum sayısı)" />
+              </section>
+              <section className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
+                <CostRankBars
+                  items={data.topAgentsCost}
+                  label="En maliyetli ajanlar"
+                  estimated={data.cost.estimated}
+                />
               </section>
             </div>
           </div>

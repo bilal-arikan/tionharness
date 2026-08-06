@@ -1,4 +1,4 @@
-import type { DaySeriesPoint, NamedCount } from '@/types'
+import type { DaySeriesPoint, DeltaStat, NamedCost, NamedCount } from '@/types'
 
 // Hand-rolled SVG/CSS charts, matching how features/sessions/viz already draws
 // its Sankey and Gantt. A charting library would add a large dependency for
@@ -18,6 +18,43 @@ export function compact(n: number): string {
   return `${Math.round(n / 100_000) / 10}M`
 }
 
+// fmtUsd renders a USD amount for a chart total or tile. Sub-cent figures keep
+// three decimals so a busy-but-cheap window does not round to "$0.00"; large ones
+// compact to $1.2k so a header stays short. estimated prefixes "~" (subscription
+// providers are priced by an equivalent-API estimate, not a real invoice).
+export function fmtUsd(n: number, estimated = false): string {
+  const p = estimated ? '~$' : '$'
+  if (n > 0 && n < 0.01) return `${p}${n.toFixed(3)}`
+  if (n < 1000) return `${p}${n.toFixed(2)}`
+  return `${p}${compact(n)}`
+}
+
+// DeltaBadge shows the period-over-period change as a coloured arrow. invert flips
+// the colour meaning for metrics where "up" is the bad direction (cost): an
+// increase there is red, a decrease green. A null pct (no baseline) reads as
+// "yeni" when there is new activity, and renders nothing when both periods were
+// empty — a badge that is always there stops being a signal.
+export function DeltaBadge({ d, invert = false }: { d: DeltaStat; invert?: boolean }) {
+  if (d.pct == null) {
+    if (d.curr > 0 && d.prev === 0)
+      return <span className="text-[10px] text-[var(--color-text-dim)]">yeni</span>
+    return null
+  }
+  if (Math.abs(d.pct) < 0.005)
+    return <span className="text-[10px] text-[var(--color-text-dim)]">≈ sabit</span>
+  const up = d.pct > 0
+  const good = invert ? !up : up
+  return (
+    <span
+      className="text-[10px] font-medium tabular-nums"
+      style={{ color: good ? '#22c55e' : 'var(--color-danger)' }}
+      title={`${d.curr} (önceki dönem ${d.prev})`}
+    >
+      {up ? '▲' : '▼'} {Math.round(Math.abs(d.pct) * 100)}%
+    </span>
+  )
+}
+
 // dayLabel is the short "04.08" form used on the x-axis.
 function dayLabel(day: string): string {
   const [, m, d] = day.split('-')
@@ -30,22 +67,40 @@ interface SparkProps {
   // Height of the plot area in px.
   height?: number
   label: string
+  // delta shows the period-over-period change next to the total; it describes the
+  // SAME quantity the bars plot, which is why it lives here and not on a stat tile.
+  delta?: DeltaStat
+  // invert flips the delta colour (cost: up is red). Ignored when delta is unset.
+  invert?: boolean
+  // format overrides how the total/peak are rendered (e.g. USD). Defaults to compact.
+  format?: (n: number) => string
 }
 
 // DayBars is the daily trend: one bar per day, with the peak value called out.
 // Bars (not a line) because the series is a COUNT per bucket — a line would
 // imply values between the days that do not exist.
-export function DayBars({ points, color = 'var(--color-accent)', height = 64, label }: SparkProps) {
+export function DayBars({
+  points,
+  color = 'var(--color-accent)',
+  height = 64,
+  label,
+  delta,
+  invert,
+  format = compact,
+}: SparkProps) {
   if (points.length === 0) return <p className={EMPTY}>{label}: veri yok</p>
   const max = Math.max(...points.map((p) => p.value))
   const total = points.reduce((a, p) => a + p.value, 0)
 
   return (
     <div>
-      <div className="mb-1 flex items-baseline justify-between">
-        <span className="text-xs font-medium">{label}</span>
+      <div className="mb-1 flex items-baseline justify-between gap-2">
+        <span className="flex items-baseline gap-1.5 text-xs font-medium">
+          {label}
+          {delta && <DeltaBadge d={delta} invert={invert} />}
+        </span>
         <span className="text-xs text-[var(--color-text-dim)]">
-          toplam {compact(total)} · tepe {compact(max)}
+          toplam {format(total)} · tepe {format(max)}
         </span>
       </div>
       {max === 0 ? (
@@ -146,6 +201,48 @@ export function StackedBar({ items, label }: { items: NamedCount[]; label: strin
             <span className="text-[var(--color-text-dim)]">{i.name}</span>
             <span className="font-medium">{i.count}</span>
           </span>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// CostRankBars ranks agents by priced spend — the money counterpart to RankBars,
+// which ranks by session volume. The costliest agent is not always the busiest.
+export function CostRankBars({
+  items,
+  label,
+  estimated,
+}: {
+  items: NamedCost[] | null
+  label: string
+  estimated?: boolean
+}) {
+  if (!items || items.length === 0) return <p className={EMPTY}>{label}: henüz maliyet yok</p>
+  const max = Math.max(...items.map((i) => i.cost))
+
+  return (
+    <div>
+      <div className="mb-1.5 text-xs font-medium">{label}</div>
+      <div className="flex flex-col gap-1.5">
+        {items.map((i) => (
+          <div key={i.name} className="flex items-center gap-2">
+            <span
+              className="w-28 shrink-0 truncate text-[11px] text-[var(--color-text-dim)]"
+              title={i.name}
+            >
+              {i.name}
+            </span>
+            <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-[var(--color-surface-2)]">
+              <div
+                className="h-full rounded-full"
+                style={{ width: `${max > 0 ? (i.cost / max) * 100 : 0}%`, background: '#22c55e' }}
+              />
+            </div>
+            <span className="w-14 shrink-0 text-right text-[11px] font-medium tabular-nums">
+              {fmtUsd(i.cost, estimated)}
+            </span>
+          </div>
         ))}
       </div>
     </div>

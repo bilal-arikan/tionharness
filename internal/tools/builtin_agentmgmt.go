@@ -42,10 +42,9 @@ func repairMojibake(s string) string {
 }
 
 // Agent self-management tools let an agent create, edit, delete and list the
-// OTHER agents in its workspace. Provenance is enforced: every agent created
-// this way is stamped with CreatedBy = the creating agent's ID, and only
-// agent-created agents (CreatedBy != "") may be edited or deleted — an agent can
-// never touch an agent the user made in the UI.
+// OTHER agents in its workspace. Every agent created this way is stamped with
+// CreatedBy = the creating agent's ID for provenance/display, but there is no
+// provenance gate: any agent — user- or agent-created — may be edited or deleted.
 
 // agentDeps carries what the agent-management tools need: the workspace DB and
 // the acting agent's ID (the provenance stamp).
@@ -62,15 +61,12 @@ type agentDeps struct {
 	agentBusy func(context.Context, string) (bool, string)
 }
 
-// requireAgentCreatedByAgent loads an agent and verifies it was created by an
-// agent (not the user), returning a friendly error otherwise.
-func (d agentDeps) requireAgentCreatedByAgent(ctx context.Context, id string) (db.Agent, error) {
+// requireAgent loads an agent by id, returning a friendly error if it does not
+// exist. No provenance gate: user- and agent-created agents are both editable.
+func (d agentDeps) requireAgent(ctx context.Context, id string) (db.Agent, error) {
 	a, err := d.db.GetAgent(ctx, id)
 	if err != nil {
 		return db.Agent{}, fmt.Errorf("no agent with id %q (use list_agents)", id)
-	}
-	if a.CreatedBy == "" {
-		return db.Agent{}, fmt.Errorf("agent %q was created by the user and cannot be edited or deleted by an agent", a.Name)
 	}
 	return a, nil
 }
@@ -222,7 +218,7 @@ func NewUpdateAgentTool(database *db.DB, actorID string) UpdateAgentTool {
 func (UpdateAgentTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name:        "update_agent",
-		Description: "Edit an existing agent that was created by an agent (not by the user). Pass the agent id and only the fields you want to change. Returns the updated agent id.",
+		Description: "Edit an existing agent (user- or agent-created). Pass the agent id and only the fields you want to change. Returns the updated agent id.",
 		InputSchema: json.RawMessage(`{
 			"type":"object",
 			"properties":{
@@ -259,7 +255,7 @@ func (t UpdateAgentTool) Call(ctx context.Context, input json.RawMessage) (strin
 	if in.ID == "" {
 		return "", fmt.Errorf("id is required")
 	}
-	if _, err := t.d.requireAgentCreatedByAgent(ctx, in.ID); err != nil {
+	if _, err := t.d.requireAgent(ctx, in.ID); err != nil {
 		return "", err
 	}
 	// Repair any UTF-8→Latin-1 mojibake from the CLI/MCP transport before saving.
@@ -310,7 +306,7 @@ func NewDeleteAgentTool(
 func (DeleteAgentTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name:        "delete_agent",
-		Description: "Delete an agent that was created by an agent (not by the user). This also removes the agent's sessions. Pass the agent id. You cannot delete yourself.",
+		Description: "Delete an agent (user- or agent-created). This also removes the agent's sessions. Pass the agent id. You cannot delete yourself.",
 		InputSchema: json.RawMessage(`{
 			"type":"object",
 			"properties":{"id":{"type":"string","description":"The agent id to delete (see list_agents)"}},
@@ -334,7 +330,7 @@ func (t DeleteAgentTool) Call(ctx context.Context, input json.RawMessage) (strin
 	if in.ID == t.d.actorID {
 		return "", fmt.Errorf("an agent cannot delete itself")
 	}
-	if _, err := t.d.requireAgentCreatedByAgent(ctx, in.ID); err != nil {
+	if _, err := t.d.requireAgent(ctx, in.ID); err != nil {
 		return "", err
 	}
 	// Same guard the HTTP delete enforces: a target with a turn or run in flight
@@ -367,7 +363,7 @@ func NewListAgentsTool(database *db.DB, actorID string) ListAgentsTool {
 func (ListAgentsTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name:        "list_agents",
-		Description: "List the agents in this workspace (id, name, provider/model, and whether each was created by an agent and is therefore editable/deletable by you).",
+		Description: "List the agents in this workspace (id, name, provider/model, and whether each was created by an agent — provenance only; you can edit/delete any of them).",
 		InputSchema: json.RawMessage(`{"type":"object","properties":{},"additionalProperties":false}`),
 	}
 }

@@ -19,6 +19,7 @@ import {
   extractParams,
   parseArgs,
 } from './toolMeta'
+import { toast } from '@/shared/components'
 import { useMultiSelect } from '@/shared/hooks/useMultiSelect'
 import { useCollapsibleList } from '@/shared/hooks/useCollapsibleList'
 
@@ -90,14 +91,20 @@ export function useToolsPanelState(onError: (msg: string) => void) {
   }
 
   const loadServers = useCallback(() => {
-    api.listMCPServers().then(setServers).catch((e) => onError(e.message))
+    api
+      .listMCPServers()
+      .then(setServers)
+      .catch((e) => onError(e.message))
   }, [onError])
 
   // Live pool snapshot for the reaper / live-connection indicator. Polled on a
   // light interval (best-effort; failures are swallowed so the panel stays calm).
   const [poolStats, setPoolStats] = useState<MCPPoolStats | null>(null)
   const loadPoolStats = useCallback(() => {
-    api.mcpPoolStats().then(setPoolStats).catch(() => {})
+    api
+      .mcpPoolStats()
+      .then(setPoolStats)
+      .catch(() => {})
   }, [])
   useEffect(() => {
     loadPoolStats()
@@ -109,7 +116,10 @@ export function useToolsPanelState(onError: (msg: string) => void) {
   const [importable, setImportable] = useState<ImportableMCPServer[]>([])
   const [addingImportable, setAddingImportable] = useState<string | null>(null)
   const loadImportable = useCallback(() => {
-    api.importableMCPServers().then(setImportable).catch((e) => onError(e.message))
+    api
+      .importableMCPServers()
+      .then(setImportable)
+      .catch((e) => onError(e.message))
   }, [onError])
 
   // Copy one server from another workspace into this one, then refresh both the
@@ -120,6 +130,7 @@ export function useToolsPanelState(onError: (msg: string) => void) {
       await api.addImportableMCPServer(item.workspaceId, item.server.id)
       loadServers()
       loadImportable()
+      toast.success('MCP sunucusu eklendi')
     } catch (e) {
       onError((e as Error).message)
     } finally {
@@ -144,7 +155,9 @@ export function useToolsPanelState(onError: (msg: string) => void) {
   useEffect(() => loadTools(), [loadTools, servers])
 
   const toggleTool = async (t: WorkspaceTool) => {
-    const next = t.enabled ? [...new Set([...disabled, t.name])] : disabled.filter((n) => n !== t.name)
+    const next = t.enabled
+      ? [...new Set([...disabled, t.name])]
+      : disabled.filter((n) => n !== t.name)
     setSavingTool(t.name)
     // Optimistic update.
     setTools((ts) => ts.map((x) => (x.name === t.name ? { ...x, enabled: !t.enabled } : x)))
@@ -230,11 +243,13 @@ export function useToolsPanelState(onError: (msg: string) => void) {
         scope: (scope === 'scoped' ? 'scoped' : undefined) as 'scoped' | undefined,
       }
       // Edit mode (editingId set) PATCHes the existing row; else create.
+      const wasEditing = !!editingId
       if (editingId) await api.updateMCPServer(editingId, payload)
       else await api.createMCPServer(payload)
       resetForm()
       loadServers()
       loadPoolStats()
+      toast.success(wasEditing ? 'MCP sunucusu güncellendi' : 'MCP sunucusu eklendi')
     } catch (e) {
       onError((e as Error).message)
     }
@@ -331,6 +346,7 @@ export function useToolsPanelState(onError: (msg: string) => void) {
     try {
       await api.deleteMCPServer(s.id)
       loadServers()
+      toast.success('MCP sunucusu silindi')
     } catch (e) {
       onError((e as Error).message)
     }

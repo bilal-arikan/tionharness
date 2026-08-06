@@ -6,6 +6,7 @@ import {
   Activity,
   Sparkles,
   Compass,
+  Zap,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -19,6 +20,9 @@ export const KIND_META: Record<string, { label: string; icon: LucideIcon }> = {
   task: { label: 'Görev', icon: LayoutGrid },
   flow: { label: 'Akış', icon: GitBranch },
   schedule: { label: 'Zamanlama', icon: Clock },
+  // One persistent maintenance thread per token automation (see internal/agent/
+  // automation_deliver.go); every fire continues it instead of spawning fresh.
+  automation: { label: 'Otomasyon', icon: Zap },
   spawned: { label: 'Spawn', icon: Sparkles },
   // A flow's coordinator node opens one of these per run (see internal/agent/
   // flow_coordinator.go); its workers hang off it like any coordinator's.
@@ -33,6 +37,7 @@ export const FILTERS: { key: string; label: string }[] = [
   { key: 'flow', label: 'Akış' },
   { key: 'spawned', label: 'Spawn' },
   { key: 'schedule', label: 'Zamanlama' },
+  { key: 'automation', label: 'Otomasyon' },
 ]
 
 // Top-level sidebar tab (Aktif / Arşiv / Workers). 'active' is the default and

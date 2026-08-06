@@ -265,12 +265,9 @@ func (r *Runtime) RemoveSessionTags(ctx context.Context, sessionID string, drop 
 }
 
 // permissionDenyMarkers are substrings that identify a policy denial (a disallowed
-// or ungranted tool, or a self-management provenance guard) rather than a genuine
-// tool failure. Matched case-insensitively against a tool step's reason/output/text
-// so the claude-cli disallowed-tool case, and rejections like requireAgentCreatedByAgent
-// (builtin_agentmgmt.go and its sibling *mgmt.go guards), are excluded from the
-// "tool-error" tag — an agent correctly refusing to touch a user-created entity is
-// not a bug to auto-repair.
+// or ungranted tool) rather than a genuine tool failure. Matched case-insensitively
+// against a tool step's reason/output/text so the claude-cli disallowed-tool case is
+// excluded from the "tool-error" tag — a policy refusal is not a bug to auto-repair.
 var permissionDenyMarkers = []string{
 	"permission_denied",
 	"requested permissions",
@@ -282,7 +279,6 @@ var permissionDenyMarkers = []string{
 	"isn't allowed",
 	"tool is not permitted",
 	"disallowed",
-	"was created by the user and cannot be",
 	// claude-cli rejection when the model calls a bridged tool by its BARE name
 	// (e.g. `PowerShell`) instead of the allowlisted namespaced form
 	// (`mcp__tionswarm_interaction__PowerShell`): "No such tool available: X. X

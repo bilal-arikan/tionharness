@@ -3,9 +3,12 @@ import type { SessionDebugEvent } from '@/types'
 import { buildSelfHealingSummary } from './flowVizData'
 
 const KIND_META: Record<string, { label: string; cls: string }> = {
-  // sky has no semantic theme token, so it stays raw as a distinct categorical
-  // hue; the rest map onto accent/warning/success so they re-theme with presets.
-  recovery: { label: 'kurtarma', cls: 'bg-sky-500/15 text-sky-400' },
+  // Every hue maps onto a theme token (accent/warning/success/info) so the badges
+  // re-theme with presets and stay legible in the light theme.
+  recovery: {
+    label: 'kurtarma',
+    cls: 'bg-[color-mix(in_srgb,var(--color-info)_15%,transparent)] text-[var(--color-info)]',
+  },
   repair: {
     label: 'onarım',
     cls: 'bg-[color-mix(in_srgb,var(--color-accent)_15%,transparent)] text-[var(--color-accent)]',

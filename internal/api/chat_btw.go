@@ -91,6 +91,14 @@ func (s *Server) handleChatBtw(w http.ResponseWriter, r *http.Request) {
 	// performed), not a side-chat mutation of the transcript.
 	ctx = conversation.WithCompactPrompt(ctx, ws(r).Runtime.CompactPromptTemplate())
 	ctx = conversation.WithAttachmentRoot(ctx, ws(r).SandboxRoot())
+	// Pin the workspace claude-home so Prepare's rolling fold (a direct
+	// provider.Complete outside the tool loop) doesn't fall back to the global
+	// claude-home and fail auth on a large side-chat session.
+	ctx = conversation.WithClaudeHome(ctx, ws(r).Runtime.ClaudeHomeDir())
+	// Budget the shared fold against the true per-turn footprint (messages + static
+	// prefix / tool schemas / artifacts), not messages alone — the same overhead the
+	// real turn and the context meter account for.
+	ctx = conversation.WithContextOverhead(ctx, s.contextOverheadTokens(ctx, ws(r), session, multiAgent))
 	prep, err := s.convo.Prepare(ctx, database, provider, session, agentRow, history)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "compaction failed: "+err.Error())

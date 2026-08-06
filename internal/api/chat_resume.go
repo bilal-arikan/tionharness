@@ -22,7 +22,7 @@ type claudeResumePlan struct {
 // thread would collide). rawHistory is the un-annotated message list (it includes
 // this turn's just-added user message). Returns a plan whose sentCount is stored
 // after the turn together with the rotated Response.SessionID.
-func (s *Server) planClaudeResume(ctx context.Context, provider providers.Provider, agentCount int, session db.Session, rawHistory []db.Message, llmReq *providers.Request) claudeResumePlan {
+func (s *Server) planClaudeResume(ctx context.Context, provider providers.Provider, agentCount int, session db.Session, rawHistory []db.Message, compacted bool, llmReq *providers.Request) claudeResumePlan {
 	set := s.settings.Get()
 	// A multi-participant thread (2+ agents have taken part) must NOT warm-resume:
 	// the CLI session id is tracked per session, so resuming it for a DIFFERENT agent
@@ -32,11 +32,27 @@ func (s *Server) planClaudeResume(ctx context.Context, provider providers.Provid
 	// agent, but the SESSION may still be shared by several agents across turns.
 	multiParticipant := len(db.SessionParticipants(session)) > 1
 	enabled := resumeGateEnabled(set.ClaudeResume, set.ClaudePersistentSession, agentCount, provider.Name(), multiParticipant)
-	plan, resumeID, deltaStart := claudeResumeDecision(enabled, session.CLISessionID, session.CLISentMsgCount, len(rawHistory))
+	plan, resumeID, deltaStart := claudeResumeDecision(enabled, session.CLISessionID, session.CLISentMsgCount, len(rawHistory), compacted)
 	if resumeID != "" {
 		// Warm resume: send only the unseen delta and ask the CLI to --resume.
 		llmReq.ResumeSessionID = resumeID
 		llmReq.Messages = conversation.ToProviderMessages(ctx, rawHistory[deltaStart:])
+	}
+	// On a fold (compacted → cold), llmReq.Messages is left untouched: it stays the
+	// compacted tail (summary + keepRecent) that Prepare produced, which a FRESH CLI
+	// session now receives — the point at which TionSwarm compaction actually reaches
+	// the claude-cli window (a warm --resume would keep the stale full history and
+	// only stack the summary on top). plan.sentCount stays rawLen so the next turn's
+	// delta continues from the compacted baseline, exactly like a warm turn.
+	//
+	// Surface that reset in the Logs: a fold that dropped an EXISTING warm CLI session
+	// is the single most useful diagnostic event here (it explains the one cache-cold
+	// turn and confirms compaction reached the CLI). Only when a warm session actually
+	// existed — a cold-anyway turn (first turn, edited history) is not noteworthy.
+	if enabled && compacted && session.CLISessionID != "" && s.logger != nil {
+		s.logger.Info("cli resume reset: fold re-baselined the claude-cli session",
+			"component", "conversation", "session", session.ID,
+			"prev_cli_session", session.CLISessionID, "raw_msgs", len(rawHistory))
 	}
 	return plan
 }
@@ -62,11 +78,21 @@ func resumeGateEnabled(claudeResume, persistentSession bool, agentCount int, pro
 // only when a prior id exists, the boundary is in (0, rawLen], and there is at
 // least one unseen message — otherwise it falls back to cold (e.g. after edits
 // shrank the history past the boundary).
-func claudeResumeDecision(enabled bool, cliSessionID string, sentCount, rawLen int) (plan claudeResumePlan, resumeID string, deltaStart int) {
+func claudeResumeDecision(enabled bool, cliSessionID string, sentCount, rawLen int, compacted bool) (plan claudeResumePlan, resumeID string, deltaStart int) {
 	if !enabled {
 		return claudeResumePlan{}, "", 0
 	}
 	plan = claudeResumePlan{active: true, sentCount: rawLen}
+	// A fold just re-baselined the transcript into the rolling summary. Warm-resuming
+	// here would keep the CLI's now-stale FULL history warm server-side and merely
+	// stack the fresh summary on top — the fold would never actually shrink the CLI's
+	// window (it would even grow it by the summary's size). Force a COLD start so this
+	// turn ships the compacted tail (summary + keepRecent) to a FRESH CLI session: the
+	// only point where TionSwarm compaction reaches the claude-cli. plan.sentCount
+	// stays rawLen, so subsequent turns resume from this compacted baseline normally.
+	if compacted {
+		return plan, "", 0
+	}
 	if cliSessionID != "" && sentCount > 0 && sentCount < rawLen {
 		return plan, cliSessionID, sentCount
 	}

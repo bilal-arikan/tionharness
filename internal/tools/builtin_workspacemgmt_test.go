@@ -63,7 +63,8 @@ func TestCreateWorkspaceStampsCreatedBy(t *testing.T) {
 
 // TestDeleteWorkspaceGuards verifies delete_workspace refuses user-created
 // workspaces, the current workspace, and unknown ids — and deletes an
-// agent-created one.
+// agent-created one. Workspace deletion keeps its provenance gate (uniquely
+// destructive) even though the other self-management tools dropped theirs.
 func TestDeleteWorkspaceGuards(t *testing.T) {
 	ctx := context.Background()
 	b := &fakeWorkspaceBridge{list: []WorkspaceInfo{

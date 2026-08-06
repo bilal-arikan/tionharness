@@ -71,6 +71,12 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 	if writeDBError(w, err, "") {
 		return
 	}
+	// Schedules and pending asks feed the action queue only; a failure there must
+	// not take the whole dashboard down, so they degrade to empty rather than 500.
+	schedules, _ := wsp.DB.ListSchedules(ctx)
+	asks, _ := wsp.DB.ListWaitingSessionAsks(ctx)
+
+	cost, costByDay := dashboardCost(ctx, wsp.DB, days, now)
 
 	// The workspace projection: the same text an agent reads. A failure here is
 	// reported rather than swallowed — a dashboard with a blank summary looks
@@ -99,6 +105,15 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		"runsByStatus":   runsByStatus(runs),
 		"sessionsByKind": sessionsByKind(sessions),
 		"topAgents":      topAgents(sessions, agents),
+		// Item 1 — cost. Item 2 — action queue. Item 3 — period deltas. Item 4 —
+		// outcomes. All priced/counted on the backend so the browser never
+		// downloads the workspace to compute them.
+		"cost":          cost,
+		"costByDay":     costByDay,
+		"topAgentsCost": topAgentsByCost(ctx, wsp.DB, agents, days, now),
+		"actions":       dashboardActions(sessions, tasks, runs, schedules, asks, now),
+		"deltas":        dashboardDeltas(ctx, wsp.DB, sessions, runs, days, now),
+		"outcomes":      dashboardOutcomes(tasks, runs, days, now),
 	})
 }
 

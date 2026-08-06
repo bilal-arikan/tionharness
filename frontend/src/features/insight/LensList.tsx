@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Play, Pencil, X } from 'lucide-react'
 import { api } from '@/api'
 import type { InsightLens } from '@/types'
+import { ModalOverlay, toast } from '@/shared/components'
 import { ChannelBadge } from './insightBadges'
 
 interface Props {
@@ -86,7 +87,8 @@ function LensEditor({
 
   // Lazy-load the raw file on first render.
   if (raw === null) {
-    api.getLensRaw(id)
+    api
+      .getLensRaw(id)
       .then((r) => setRaw(r.raw))
       .catch((e) => {
         onError((e as Error).message)
@@ -100,6 +102,7 @@ function LensEditor({
     try {
       await api.updateLens(id, raw)
       onSaved()
+      toast.success('Lens kaydedildi')
     } catch (e) {
       onError((e as Error).message)
     } finally {
@@ -108,11 +111,8 @@ function LensEditor({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
-      <div
-        className="flex max-h-[85vh] w-[min(800px,95vw)] flex-col rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-4"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <ModalOverlay onClose={onClose}>
+      <div className="flex max-h-[85vh] w-[min(800px,95vw)] flex-col rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
         <div className="mb-2 flex items-center justify-between">
           <h3 className="font-semibold">Lens düzenle — {id}</h3>
           <button onClick={onClose} className="rounded p-1 hover:bg-[var(--color-surface-2)]">
@@ -126,7 +126,10 @@ function LensEditor({
           className="min-h-[50vh] flex-1 rounded-md border border-[var(--color-border)] bg-[var(--color-surface-2)] p-2 font-mono text-xs"
         />
         <div className="mt-2 flex justify-end gap-2">
-          <button onClick={onClose} className="rounded-md px-3 py-1 text-sm hover:bg-[var(--color-surface-2)]">
+          <button
+            onClick={onClose}
+            className="rounded-md px-3 py-1 text-sm hover:bg-[var(--color-surface-2)]"
+          >
             İptal
           </button>
           <button
@@ -138,6 +141,6 @@ function LensEditor({
           </button>
         </div>
       </div>
-    </div>
+    </ModalOverlay>
   )
 }

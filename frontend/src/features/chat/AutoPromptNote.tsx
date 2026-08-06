@@ -20,7 +20,11 @@ export function AutoPromptNote({
         <AlarmClock size={14} className="mt-0.5 shrink-0 text-[var(--color-accent)]" />
         <span className="min-w-0">
           <span className="font-medium text-[var(--color-accent)]">
-            {m.origin === 'schedule' ? 'Zamanlanmış görev' : 'Otomatik devam'}
+            {m.origin === 'schedule'
+              ? 'Zamanlanmış görev'
+              : m.origin === 'automation'
+                ? 'Otomasyon tetiği'
+                : 'Otomatik devam'}
           </span>
           {m.text.trim() && <span className="text-[var(--color-text-dim)]"> — {m.text}</span>}
         </span>

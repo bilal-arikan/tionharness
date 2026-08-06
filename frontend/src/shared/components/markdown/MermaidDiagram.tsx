@@ -1,7 +1,8 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import { Lightbox } from '@/shared/components'
 import { copyToClipboard } from '@/shared/lib/clipboard'
-import { Copy, Check } from 'lucide-react'
+import { toast } from '../Toast'
+import { Copy } from 'lucide-react'
 
 interface Props {
   code: string
@@ -51,7 +52,6 @@ export function MermaidDiagram({ code }: Props) {
   const [error, setError] = useState(false)
   const [showSource, setShowSource] = useState(false)
   const [expanded, setExpanded] = useState(false)
-  const [copied, setCopied] = useState(false)
   // Bumped by a MutationObserver on <html data-theme> to force a re-render.
   const [themeTick, setThemeTick] = useState(0)
   const aliveRef = useRef(true)
@@ -66,7 +66,10 @@ export function MermaidDiagram({ code }: Props) {
   // Re-render diagrams when the appearance (light/dark or preset) changes.
   useEffect(() => {
     const obs = new MutationObserver(() => setThemeTick((t) => t + 1))
-    obs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'style'] })
+    obs.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['data-theme', 'style'],
+    })
     return () => obs.disconnect()
   }, [])
 
@@ -108,9 +111,7 @@ export function MermaidDiagram({ code }: Props) {
 
   const copy = () => {
     copyToClipboard(code).then((ok) => {
-      if (!ok) return
-      setCopied(true)
-      setTimeout(() => setCopied(false), 1200)
+      if (ok) toast.info('Panoya kopyalandı')
     })
   }
 
@@ -153,11 +154,11 @@ export function MermaidDiagram({ code }: Props) {
             )}
             <button
               onClick={copy}
-              title={copied ? 'Kopyalandı' : 'Kodu kopyala'}
-              aria-label={copied ? 'Kopyalandı' : 'Kodu kopyala'}
+              title="Kodu kopyala"
+              aria-label="Kodu kopyala"
               className="rounded px-1.5 py-0.5 hover:bg-[var(--color-surface-2)]"
             >
-              {copied ? <Check size={14} className="text-[var(--color-success)]" /> : <Copy size={14} />}
+              <Copy size={14} />
             </button>
           </div>
         </div>

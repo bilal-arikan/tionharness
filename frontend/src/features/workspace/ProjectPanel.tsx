@@ -133,12 +133,7 @@ export function ProjectPanel({ path, onSelectPath, onError }: Props) {
             <p className="text-xs text-[var(--color-danger)]">
               Dizin bulunamadı. Klasörü şimdi oluşturup sürüm kontrolünü başlatabilirsin:
             </p>
-            <Button
-              onClick={() => doInit(true)}
-              disabled={saving}
-              size="lg"
-              className="flex items-center gap-1.5"
-            >
+            <Button onClick={() => doInit(true)} disabled={saving} size="lg">
               <GitBranch size={14} /> Klasörü oluştur + git init (main)
             </Button>
           </div>
@@ -147,12 +142,7 @@ export function ProjectPanel({ path, onSelectPath, onError }: Props) {
             <p className="text-xs text-[var(--color-text-dim)]">
               Bu dizin bir git deposu değil. Sürüm kontrolü için başlat:
             </p>
-            <Button
-              onClick={() => doInit()}
-              disabled={saving}
-              size="lg"
-              className="flex items-center gap-1.5"
-            >
+            <Button onClick={() => doInit()} disabled={saving} size="lg">
               <GitBranch size={14} /> git init (main)
             </Button>
           </div>
@@ -189,12 +179,7 @@ export function ProjectPanel({ path, onSelectPath, onError }: Props) {
                 />
               </Field>
             </div>
-            <Button
-              onClick={saveGit}
-              disabled={saving}
-              size="lg"
-              className="flex items-center gap-1.5"
-            >
+            <Button onClick={saveGit} disabled={saving} size="lg">
               <Check size={14} /> Git ayarlarını kaydet
             </Button>
           </div>

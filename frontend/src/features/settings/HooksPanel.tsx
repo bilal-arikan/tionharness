@@ -7,7 +7,7 @@ import { api } from '@/api'
 import type { Hook, HookEvent, BuiltinHook } from '@/types'
 import type { HookInput } from '@/api/hooks'
 import { Field, Toggle, inputCls } from './primitives'
-import { Button } from '@/shared/components'
+import { Button, LoadingState, toast } from '@/shared/components'
 
 interface Props {
   onError: (msg: string) => void
@@ -38,7 +38,10 @@ export function HooksPanel({ onError }: Props) {
       .finally(() => setLoading(false))
 
   useEffect(() => {
-    api.listBuiltinHooks().then(setBuiltins).catch(() => {})
+    api
+      .listBuiltinHooks()
+      .then(setBuiltins)
+      .catch(() => {})
   }, [])
 
   useEffect(() => {
@@ -51,7 +54,13 @@ export function HooksPanel({ onError }: Props) {
     setEditing('')
   }
   const startEdit = (h: Hook) => {
-    setDraft({ event: h.event, matcher: h.matcher, command: h.command, timeoutSec: h.timeoutSec, enabled: h.enabled })
+    setDraft({
+      event: h.event,
+      matcher: h.matcher,
+      command: h.command,
+      timeoutSec: h.timeoutSec,
+      enabled: h.enabled,
+    })
     setEditing(h.id)
   }
   const cancel = () => setEditing(null)
@@ -67,6 +76,7 @@ export function HooksPanel({ onError }: Props) {
       else await api.createHook(draft)
       setEditing(null)
       await load()
+      toast.success(editing ? 'Hook güncellendi' : 'Hook eklendi')
     } catch (e) {
       onError((e as Error).message)
     } finally {
@@ -87,12 +97,14 @@ export function HooksPanel({ onError }: Props) {
     try {
       await api.deleteHook(h.id)
       await load()
+      toast.success('Hook silindi')
     } catch (e) {
       onError((e as Error).message)
     }
   }
 
-  const set = <K extends keyof HookInput>(k: K, v: HookInput[K]) => setDraft((d) => ({ ...d, [k]: v }))
+  const set = <K extends keyof HookInput>(k: K, v: HookInput[K]) =>
+    setDraft((d) => ({ ...d, [k]: v }))
 
   return (
     <div className="space-y-4">
@@ -102,17 +114,20 @@ export function HooksPanel({ onError }: Props) {
         </p>
         <p>
           Kancalar, native (anthropic/minimax) araç döngüsünde her araç çağrısının etrafında bir dış
-          komut çalıştırır. <strong>PreToolUse</strong> girdiyi değiştirebilir, çağrıyı onaylayabilir
-          veya engelleyebilir; <strong>PostToolUse</strong> çıktıyı dönüştürebilir (ör. sıkıştırma) ya
-          da bağlam ekleyebilir. Komut, JSON'u stdin'den alır, JSON'u stdout'a döner; <code>exit 2</code>{' '}
-          engelle demektir (Claude Code sözleşmesi). <em>claude-cli ajanlarında bu hook'lar, "Hook'ları{' '}
-          claude-cli'ye geçir" ayarı açıkken <code>--settings</code> ile CLI'nin kendi tool döngüsüne de{' '}
-          uygulanır; ancak CLI hook'ları CLI'nin kendi shell'inde koşar (Windows PowerShell uyumsuzluğuna dikkat).</em>
+          komut çalıştırır. <strong>PreToolUse</strong> girdiyi değiştirebilir, çağrıyı
+          onaylayabilir veya engelleyebilir; <strong>PostToolUse</strong> çıktıyı dönüştürebilir
+          (ör. sıkıştırma) ya da bağlam ekleyebilir. Komut, JSON'u stdin'den alır, JSON'u stdout'a
+          döner; <code>exit 2</code> engelle demektir (Claude Code sözleşmesi).{' '}
+          <em>
+            claude-cli ajanlarında bu hook'lar, "Hook'ları claude-cli'ye geçir" ayarı açıkken{' '}
+            <code>--settings</code> ile CLI'nin kendi tool döngüsüne de uygulanır; ancak CLI
+            hook'ları CLI'nin kendi shell'inde koşar (Windows PowerShell uyumsuzluğuna dikkat).
+          </em>
         </p>
       </div>
 
       {loading ? (
-        <div className="text-sm text-[var(--color-text-dim)]">Yükleniyor…</div>
+        <LoadingState label="Yükleniyor…" />
       ) : (
         <>
           <div className="flex flex-col gap-2">
@@ -151,10 +166,18 @@ export function HooksPanel({ onError }: Props) {
                 >
                   {h.enabled ? 'Aktif' : 'Pasif'}
                 </button>
-                <button onClick={() => startEdit(h)} className="text-[var(--color-text-dim)] hover:text-[var(--color-text)]">
+                <button
+                  onClick={() => startEdit(h)}
+                  className="text-[var(--color-text-dim)] hover:text-[var(--color-text)]"
+                >
                   <Pencil size={15} />
                 </button>
-                <button data-testid="hook-delete" data-hook-id={h.id} onClick={() => remove(h)} className="text-[var(--color-text-dim)] hover:text-[var(--color-danger)]">
+                <button
+                  data-testid="hook-delete"
+                  data-hook-id={h.id}
+                  onClick={() => remove(h)}
+                  className="text-[var(--color-text-dim)] hover:text-[var(--color-danger)]"
+                >
                   <Trash2 size={15} />
                 </button>
               </div>
@@ -162,7 +185,7 @@ export function HooksPanel({ onError }: Props) {
           </div>
 
           {editing === null ? (
-            <Button data-testid="hook-create" onClick={startCreate} className="flex items-center gap-1.5">
+            <Button data-testid="hook-create" onClick={startCreate}>
               <Plus size={15} /> Hook ekle
             </Button>
           ) : (
@@ -181,7 +204,9 @@ export function HooksPanel({ onError }: Props) {
                     <option value="PostToolUse">PostToolUse (çağrı sonrası)</option>
                   </optgroup>
                   <optgroup label="Yaşam döngüsü (native + claude-cli)">
-                    <option value="UserPromptSubmit">UserPromptSubmit (prompt öncesi — bağlam ekle/engelle)</option>
+                    <option value="UserPromptSubmit">
+                      UserPromptSubmit (prompt öncesi — bağlam ekle/engelle)
+                    </option>
                     <option value="SessionStart">SessionStart (oturum ilk turu)</option>
                     <option value="Stop">Stop (ana ajan turu bitti)</option>
                     <option value="SubagentStop">SubagentStop (alt-ajan bitti)</option>
@@ -191,10 +216,23 @@ export function HooksPanel({ onError }: Props) {
                   </optgroup>
                 </select>
               </Field>
-              <Field label="Eşleşme" hint="Araç olayları: araç adı glob'u (boş = tümü, örn: Bash, Write, http_*). SessionStart: kaynak (startup|resume). PreCompact: tetik (manual|auto). Diğer yaşam-döngüsü olayları: boş bırakın.">
-                <input data-testid="hook-matcher-input" data-hook-id={editing} value={draft.matcher} onChange={(e) => set('matcher', e.target.value)} className={inputCls} placeholder="*" />
+              <Field
+                label="Eşleşme"
+                hint="Araç olayları: araç adı glob'u (boş = tümü, örn: Bash, Write, http_*). SessionStart: kaynak (startup|resume). PreCompact: tetik (manual|auto). Diğer yaşam-döngüsü olayları: boş bırakın."
+              >
+                <input
+                  data-testid="hook-matcher-input"
+                  data-hook-id={editing}
+                  value={draft.matcher}
+                  onChange={(e) => set('matcher', e.target.value)}
+                  className={inputCls}
+                  placeholder="*"
+                />
               </Field>
-              <Field label="Komut" hint="Shell komutu (Windows: PowerShell). JSON stdin alır, JSON stdout döner.">
+              <Field
+                label="Komut"
+                hint="Shell komutu (Windows: PowerShell). JSON stdin alır, JSON stdout döner."
+              >
                 <textarea
                   data-testid="hook-command-input"
                   data-hook-id={editing}
@@ -219,7 +257,12 @@ export function HooksPanel({ onError }: Props) {
               </Field>
               <Toggle label="Aktif" checked={draft.enabled} onChange={(v) => set('enabled', v)} />
               <div className="flex gap-2">
-                <Button data-testid="hook-save" data-hook-id={editing} onClick={save} disabled={busy}>
+                <Button
+                  data-testid="hook-save"
+                  data-hook-id={editing}
+                  onClick={save}
+                  disabled={busy}
+                >
                   {busy ? 'Kaydediliyor…' : 'Kaydet'}
                 </Button>
                 <Button variant="secondary" onClick={cancel}>
@@ -237,8 +280,8 @@ export function HooksPanel({ onError }: Props) {
             <Lock size={14} /> Yerleşik davranışlar (salt-okunur)
           </p>
           <p className="text-[11px] text-[var(--color-text-dim)]">
-            TionSwarm'nun araç döngüsünün etrafına otomatik enjekte ettiği kancalar. Düzenlenemezler;
-            bazıları Ayarlar'daki ilgili anahtarla açılıp kapatılır.
+            TionSwarm'nun araç döngüsünün etrafına otomatik enjekte ettiği kancalar.
+            Düzenlenemezler; bazıları Ayarlar'daki ilgili anahtarla açılıp kapatılır.
           </p>
           {builtins.map((b) => (
             <div
@@ -251,9 +294,13 @@ export function HooksPanel({ onError }: Props) {
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
                   <span className="text-xs font-semibold text-[var(--color-text)]">{b.name}</span>
-                  <span className="font-mono text-[10px] text-[var(--color-text-dim)]">{b.event}</span>
+                  <span className="font-mono text-[10px] text-[var(--color-text-dim)]">
+                    {b.event}
+                  </span>
                 </div>
-                <div className="text-[11px] leading-snug text-[var(--color-text-dim)]">{b.description}</div>
+                <div className="text-[11px] leading-snug text-[var(--color-text-dim)]">
+                  {b.description}
+                </div>
                 {b.setting && (
                   <div className="mt-0.5 text-[10px] text-[var(--color-text-dim)]">
                     ayar: <code>{b.setting}</code>

@@ -472,6 +472,23 @@ export function useSessionsController({
     setAllAgents((prev) => prev.map((a) => (a.id === id ? updated : a)))
   }, [])
 
+  // Duplicate an agent: the server clones the whole profile + tool config into a
+  // new "(kopya)". Prepend it to the roster and focus it — like createAgent, this
+  // does NOT touch the default agent for new chats.
+  const duplicateAgent = useCallback(
+    async (id: string) => {
+      try {
+        const clone = await api.duplicateAgent(id)
+        setAllAgents((prev) => [clone, ...prev])
+        setActiveAgentId(clone.id)
+        return clone.id
+      } catch (e) {
+        setError((e as Error).message)
+      }
+    },
+    [setError],
+  )
+
   // Delete an agent. The server soft-deletes it: schedules and owned tasks go,
   // the agent row and its SESSIONS stay. So mark it deleted here rather than
   // dropping it — `agents` (the live subset) loses it immediately, while history
@@ -595,6 +612,7 @@ export function useSessionsController({
     openAgentSettings,
     createAgent,
     updateAgent,
+    duplicateAgent,
     deleteAgent,
     newSession,
     regenerateSessionTitle,

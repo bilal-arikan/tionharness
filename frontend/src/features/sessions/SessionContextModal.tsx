@@ -1,10 +1,18 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Check, ChevronRight, ChevronsDownUp, ChevronsUpDown, Copy, FoldVertical, X } from 'lucide-react'
+import { ChevronRight, ChevronsDownUp, ChevronsUpDown, Copy, FoldVertical, X } from 'lucide-react'
 import type { SessionContextPreview } from '@/types'
 import { api } from '@/api'
 import { copyToClipboard } from '@/shared/lib/clipboard'
 import { Markdown } from '@/shared/components/markdown/Markdown'
-import { Button, CollapsibleSection, InfoPopover, ModalOverlay, useBulkToggle, type BulkToggle } from '@/shared/components'
+import {
+  Button,
+  CollapsibleSection,
+  InfoPopover,
+  ModalOverlay,
+  toast,
+  useBulkToggle,
+  type BulkToggle,
+} from '@/shared/components'
 import { CacheWarmthBadge } from './CacheWarmthBadge'
 import { cacheRemaining } from './sessionDetailFormat'
 import { serverNow } from '@/shared/lib/serverClock'
@@ -46,7 +54,6 @@ export function SessionContextModal({ sessionId, title, updatedAt, onClose }: Pr
   // Live 1s tick for the prompt-cache warmth countdown; self-stops once cold.
   const [nowSec, setNowSec] = useState(() => serverNow())
   const [err, setErr] = useState<string | null>(null)
-  const [copied, setCopied] = useState(false)
   const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(false)
   // When on, the preview simulates this turn's budgeted compaction (fewer
@@ -92,7 +99,9 @@ export function SessionContextModal({ sessionId, title, updatedAt, onClose }: Pr
     if (!data) return
     const transcript = data.messages
       .map((m) => {
-        const who = m.author ? ` (${m.role === 'user' ? '→ ' : ''}${m.author}${m.self && m.role !== 'user' ? ', siz' : ''})` : ''
+        const who = m.author
+          ? ` (${m.role === 'user' ? '→ ' : ''}${m.author}${m.self && m.role !== 'user' ? ', siz' : ''})`
+          : ''
         return `### ${m.role}${who}\n${m.text}`
       })
       .join('\n\n')
@@ -100,9 +109,7 @@ export function SessionContextModal({ sessionId, title, updatedAt, onClose }: Pr
     const summary = data.summary ? `\n\n# Summary (folded)\n${data.summary}` : ''
     const full = `# System\n${data.system}${skills}${summary}\n\n# Dynamic\n${data.dynamic}\n\n# Messages\n${transcript}`
     copyToClipboard(full).then((ok) => {
-      if (!ok) return
-      setCopied(true)
-      setTimeout(() => setCopied(false), 1500)
+      if (ok) toast.info('Panoya kopyalandı')
     })
   }
 
@@ -123,7 +130,9 @@ export function SessionContextModal({ sessionId, title, updatedAt, onClose }: Pr
               Sıradaki tur bağlam önizleme{title ? ` — ${title}` : ''}
             </h2>
             <p className="truncate text-xs text-[var(--color-text-dim)]">
-              {data ? `${data.agentName} bu oturumda bir sonraki turda alacağı tam istek` : 'Yükleniyor…'}
+              {data
+                ? `${data.agentName} bu oturumda bir sonraki turda alacağı tam istek`
+                : 'Yükleniyor…'}
               {' · '}salt-okunur (tur çalıştırılmaz)
             </p>
           </div>
@@ -131,11 +140,11 @@ export function SessionContextModal({ sessionId, title, updatedAt, onClose }: Pr
             {data && (
               <button
                 onClick={copy}
-                title={copied ? 'Kopyalandı' : 'Bağlamı kopyala'}
-                aria-label={copied ? 'Kopyalandı' : 'Bağlamı kopyala'}
+                title="Bağlamı kopyala"
+                aria-label="Bağlamı kopyala"
                 className="flex shrink-0 items-center rounded-md border border-[var(--color-border)] px-2.5 py-1.5 text-xs text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]"
               >
-                {copied ? <Check size={13} className="text-[var(--color-success)]" /> : <Copy size={13} />}
+                <Copy size={13} />
               </button>
             )}
             <button
@@ -161,12 +170,18 @@ export function SessionContextModal({ sessionId, title, updatedAt, onClose }: Pr
               />
               <span className="font-medium">Token özeti</span>
               <span className="text-[var(--color-text-dim)]">
-                · Toplam {data.totalTokens.toLocaleString()} <span className="opacity-70">(~tahmini)</span>
+                · Toplam {data.totalTokens.toLocaleString()}{' '}
+                <span className="opacity-70">(~tahmini)</span>
                 {!!data.accurateTokens && (
                   <span className="ml-1 font-medium text-[var(--color-accent)]">
                     · Gerçek {data.accurateTokens.toLocaleString()}
                     <span className="opacity-70">
-                      {' '}({data.totalTokens > 0 ? `${data.accurateTokens >= data.totalTokens ? '+' : ''}${Math.round(((data.accurateTokens - data.totalTokens) / data.totalTokens) * 100)}% sapma` : ''})
+                      {' '}
+                      (
+                      {data.totalTokens > 0
+                        ? `${data.accurateTokens >= data.totalTokens ? '+' : ''}${Math.round(((data.accurateTokens - data.totalTokens) / data.totalTokens) * 100)}% sapma`
+                        : ''}
+                      )
                     </span>
                   </span>
                 )}
@@ -188,14 +203,22 @@ export function SessionContextModal({ sessionId, title, updatedAt, onClose }: Pr
                   <Stat label="Dinamik" value={data.dynamicTokens} />
                   <Stat label={`Mesajlar (${data.messages.length})`} value={data.messageTokens} />
                   {data.droppedMessages.length > 0 && (
-                    <Stat label={`Katlanmış (${data.droppedMessages.length})`} value={data.droppedTokens} dropped />
+                    <Stat
+                      label={`Katlanmış (${data.droppedMessages.length})`}
+                      value={data.droppedTokens}
+                      dropped
+                    />
                   )}
                   <Stat label={`Araçlar (${data.tools.length})`} value={data.toolTokens} />
                   {data.lazyTools.length > 0 && (
                     <Stat label={`Talep-üzerine (${data.lazyTools.length})`} value={0} dim />
                   )}
                   {data.cliOverhead && data.cliOverhead.measuredTokens > 0 && (
-                    <Stat label="Gerçek (CLI, ölçülen)" value={data.cliOverhead.measuredTokens} accent />
+                    <Stat
+                      label="Gerçek (CLI, ölçülen)"
+                      value={data.cliOverhead.measuredTokens}
+                      accent
+                    />
                   )}
                   {/* Predicted CLI projection — shown alongside the measured figure (dim)
                       and as the primary accent chip before the first turn is measured. */}
@@ -218,43 +241,54 @@ export function SessionContextModal({ sessionId, title, updatedAt, onClose }: Pr
                 {data.cliOverhead && (
                   <div className="bg-[color-mix(in_srgb,var(--color-warning)_8%,transparent)] px-5 py-2 text-[11px]">
                     <div className="flex flex-wrap items-center gap-2">
-              <span className="inline-flex items-center gap-1 rounded bg-[color-mix(in_srgb,var(--color-warning)_18%,transparent)] px-1.5 py-0.5 font-medium text-[var(--color-warning)]">
-                CLI ek yükü
-                <InfoPopover text={`${data.cliOverhead.note}\n\n${FLOOR_NOTE}`} label="CLI ek yükü nasıl hesaplanır?" />
-              </span>
-              {data.cliOverhead.measuredTokens > 0 ? (
-                <span className="text-[var(--color-text-dim)]">
-                  Tahmin <strong>{data.cliOverhead.estimatedTokens.toLocaleString()}</strong> →
-                  gerçek <strong>{data.cliOverhead.measuredTokens.toLocaleString()}</strong>
-                  {' '}(+<strong>{data.cliOverhead.overheadTokens.toLocaleString()}</strong> ek yük
-                  {data.cliOverhead.estimatedTokens > 0 &&
-                    `, ~${(data.cliOverhead.measuredTokens / data.cliOverhead.estimatedTokens).toFixed(1)}×`}
-                  {`, ${data.cliOverhead.calls} çağrı ort.`})
-                  {/* Also surface the reference-based FLOOR next to the measured value;
+                      <span className="inline-flex items-center gap-1 rounded bg-[color-mix(in_srgb,var(--color-warning)_18%,transparent)] px-1.5 py-0.5 font-medium text-[var(--color-warning)]">
+                        CLI ek yükü
+                        <InfoPopover
+                          text={`${data.cliOverhead.note}\n\n${FLOOR_NOTE}`}
+                          label="CLI ek yükü nasıl hesaplanır?"
+                        />
+                      </span>
+                      {data.cliOverhead.measuredTokens > 0 ? (
+                        <span className="text-[var(--color-text-dim)]">
+                          Tahmin{' '}
+                          <strong>{data.cliOverhead.estimatedTokens.toLocaleString()}</strong> →
+                          gerçek <strong>{data.cliOverhead.measuredTokens.toLocaleString()}</strong>{' '}
+                          (+<strong>{data.cliOverhead.overheadTokens.toLocaleString()}</strong> ek
+                          yük
+                          {data.cliOverhead.estimatedTokens > 0 &&
+                            `, ~${(data.cliOverhead.measuredTokens / data.cliOverhead.estimatedTokens).toFixed(1)}×`}
+                          {`, ${data.cliOverhead.calls} çağrı ort.`})
+                          {/* Also surface the reference-based FLOOR next to the measured value;
                       the gap (measured − floor) is accumulated warm context. */}
-                  {data.cliOverhead.predictedOverhead > 0 && (
-                    <>
-                      {' · '}beklenen taban ~
-                      <strong>
-                        {(data.cliOverhead.estimatedTokens + data.cliOverhead.predictedOverhead).toLocaleString()}
-                      </strong>
-                      {' '}(fark = birikmiş sıcak bağlam)
-                    </>
-                  )}
-                </span>
-              ) : data.cliOverhead.predictedOverhead > 0 ? (
-                <span className="text-[var(--color-text-dim)]">
-                  Tahmin <strong>{data.cliOverhead.estimatedTokens.toLocaleString()}</strong> →
-                  beklenen taban ~
-                  <strong>
-                    {(data.cliOverhead.estimatedTokens + data.cliOverhead.predictedOverhead).toLocaleString()}
-                  </strong>
-                  {' '}(+<strong>{data.cliOverhead.predictedOverhead.toLocaleString()}</strong> taban ek yük,
-                  henüz ölçülmedi)
-                </span>
-              ) : (
-                <span className="text-[var(--color-text-dim)]">henüz ölçülmedi</span>
-              )}
+                          {data.cliOverhead.predictedOverhead > 0 && (
+                            <>
+                              {' · '}beklenen taban ~
+                              <strong>
+                                {(
+                                  data.cliOverhead.estimatedTokens +
+                                  data.cliOverhead.predictedOverhead
+                                ).toLocaleString()}
+                              </strong>{' '}
+                              (fark = birikmiş sıcak bağlam)
+                            </>
+                          )}
+                        </span>
+                      ) : data.cliOverhead.predictedOverhead > 0 ? (
+                        <span className="text-[var(--color-text-dim)]">
+                          Tahmin{' '}
+                          <strong>{data.cliOverhead.estimatedTokens.toLocaleString()}</strong> →
+                          beklenen taban ~
+                          <strong>
+                            {(
+                              data.cliOverhead.estimatedTokens + data.cliOverhead.predictedOverhead
+                            ).toLocaleString()}
+                          </strong>{' '}
+                          (+<strong>{data.cliOverhead.predictedOverhead.toLocaleString()}</strong>{' '}
+                          taban ek yük, henüz ölçülmedi)
+                        </span>
+                      ) : (
+                        <span className="text-[var(--color-text-dim)]">henüz ölçülmedi</span>
+                      )}
                     </div>
                   </div>
                 )}
@@ -320,7 +354,11 @@ export function SessionContextModal({ sessionId, title, updatedAt, onClose }: Pr
           >
             Σ Gerçek sayım
           </button>
-          <Button onClick={() => load(message, simulate, accurate)} disabled={loading} className="shrink-0">
+          <Button
+            onClick={() => load(message, simulate, accurate)}
+            disabled={loading}
+            className="shrink-0"
+          >
             {loading ? '…' : 'Önizle'}
           </Button>
         </div>
@@ -365,7 +403,11 @@ export function SessionContextModal({ sessionId, title, updatedAt, onClose }: Pr
                         )
                       )}
                       {freshMsgs.length === 0 ? (
-                        <Dim>{cachedCount > 0 ? 'Taze mesaj yok (hepsi cache önekinde).' : 'Henüz mesaj yok.'}</Dim>
+                        <Dim>
+                          {cachedCount > 0
+                            ? 'Taze mesaj yok (hepsi cache önekinde).'
+                            : 'Henüz mesaj yok.'}
+                        </Dim>
                       ) : (
                         <div className="space-y-2">
                           {freshMsgs.map((m, i) => (
@@ -385,9 +427,10 @@ export function SessionContextModal({ sessionId, title, updatedAt, onClose }: Pr
                       >
                         {data.cache.summaryCached && (
                           <HintNote>
-                            Özet artık volatile Dinamik'te değil; <strong>cache'li önekin
-                            başında bir mesaj</strong> olarak gönderiliyor (P2) → iki katlama
-                            arasında <strong>cache-read</strong> (her tur taze değil).
+                            Özet artık volatile Dinamik'te değil;{' '}
+                            <strong>cache'li önekin başında bir mesaj</strong> olarak gönderiliyor
+                            (P2) → iki katlama arasında <strong>cache-read</strong> (her tur taze
+                            değil).
                           </HintNote>
                         )}
                         <Markdown>{data.summary}</Markdown>
@@ -411,7 +454,9 @@ export function SessionContextModal({ sessionId, title, updatedAt, onClose }: Pr
                           Bu mesajlar <strong>özete katlandı</strong> ve modele artık ham olarak
                           gönderilmiyor — içerikleri yukarıdaki <strong>Özet</strong> bölümünde
                           temsil ediliyor. Token'ları toplamda sayılmaz. Tam metni gerekirse{' '}
-                          <code className="rounded bg-[var(--color-surface-2)] px-1">conversation_search</code>{' '}
+                          <code className="rounded bg-[var(--color-surface-2)] px-1">
+                            conversation_search
+                          </code>{' '}
                           ile geri alınır.
                         </HintNote>
                         <div className="space-y-2">
@@ -474,8 +519,8 @@ export function SessionContextModal({ sessionId, title, updatedAt, onClose }: Pr
                   </HintNote>
                 ) : (
                   <p className="mb-1.5 text-[11px] text-[var(--color-text-dim)]">
-                    Bu araçların TAM şeması (açıklama + JSON girdi şeması + örnekler) her tur gönderilir.
-                    İçeriğini görmek için bir aracı genişlet.
+                    Bu araçların TAM şeması (açıklama + JSON girdi şeması + örnekler) her tur
+                    gönderilir. İçeriğini görmek için bir aracı genişlet.
                   </p>
                 )}
                 {data.tools.length === 0 ? (
@@ -533,17 +578,22 @@ export function SessionContextModal({ sessionId, title, updatedAt, onClose }: Pr
                 >
                   <p className="mb-1.5 text-[11px] text-[var(--color-text-dim)]">
                     Şema tura girmez — yalnızca ad+özet sistem promptundaki{' '}
-                    <code className="rounded bg-[var(--color-surface-2)] px-1">Available Tools (load on demand)</code>{' '}
+                    <code className="rounded bg-[var(--color-surface-2)] px-1">
+                      Available Tools (load on demand)
+                    </code>{' '}
                     bölümünde durur (token maliyeti “Sistem”de sayılır). Ajan{' '}
                     {data.cliOverhead ? (
                       <>
-                        bunlara CLI'nin kendi <code className="rounded bg-[var(--color-surface-2)] px-1">ToolSearch</code>'üyle
-                        ulaşır; oturum boyunca aktive edilenler sıcak kalır ama bu popup'ın “Araçlar”
-                        (her tur şema) sayısına girmez.
+                        bunlara CLI'nin kendi{' '}
+                        <code className="rounded bg-[var(--color-surface-2)] px-1">ToolSearch</code>
+                        'üyle ulaşır; oturum boyunca aktive edilenler sıcak kalır ama bu popup'ın
+                        “Araçlar” (her tur şema) sayısına girmez.
                       </>
                     ) : (
                       <>
-                        <code className="rounded bg-[var(--color-surface-2)] px-1">activate_tools</code>{' '}
+                        <code className="rounded bg-[var(--color-surface-2)] px-1">
+                          activate_tools
+                        </code>{' '}
                         ile istediğini bir sonraki adımda etkinleştirir.
                       </>
                     )}
@@ -555,7 +605,9 @@ export function SessionContextModal({ sessionId, title, updatedAt, onClose }: Pr
                         className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface-2)] px-2.5 py-1.5 opacity-75"
                       >
                         <div className="flex items-center gap-1.5">
-                          <code className="text-xs font-medium text-[var(--color-text-dim)]">{t.name}</code>
+                          <code className="text-xs font-medium text-[var(--color-text-dim)]">
+                            {t.name}
+                          </code>
                           {t.visibility && LAZY_VIS_CHIP[t.visibility] && (
                             <span className="rounded bg-[var(--color-surface-3)] px-1 py-0.5 text-[9px] font-medium uppercase tracking-wide text-[var(--color-text-dim)]">
                               {LAZY_VIS_CHIP[t.visibility]}
@@ -563,7 +615,9 @@ export function SessionContextModal({ sessionId, title, updatedAt, onClose }: Pr
                           )}
                         </div>
                         {t.description && (
-                          <p className="mt-0.5 text-[11px] text-[var(--color-text-dim)]">{t.description}</p>
+                          <p className="mt-0.5 text-[11px] text-[var(--color-text-dim)]">
+                            {t.description}
+                          </p>
                         )}
                       </li>
                     ))}
@@ -742,7 +796,13 @@ function Stat({
             : undefined
       }
     >
-      {dim ? label : <>{label}: <strong>{value.toLocaleString()}</strong></>}
+      {dim ? (
+        label
+      ) : (
+        <>
+          {label}: <strong>{value.toLocaleString()}</strong>
+        </>
+      )}
     </span>
   )
 }

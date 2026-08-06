@@ -41,9 +41,20 @@ ile tutarlı):
   turluk override eder. Boş değer yok sayılır (global varsayılan korunur).
 - `Runtime.claudeHomeDir()` = `<workspace>/claude-home` (workDir'in kardeşi).
 - **Choke point `toolloop.go`:** `cli, isCLI := provider.(*providers.ClaudeCLI)`
-  hemen sonrası `cli.SetConfigDir(r.claudeHomeDir())`. Tüm CLI turları (chat +
-  otonom, tüm çağrı noktaları) bu tek seam'den geçtiği için başka yeri değiştirmeye
-  gerek yok.
+  hemen sonrası `cli.SetConfigDir(r.claudeHomeDir())`. Tüm CLI **turları** (chat +
+  otonom, tüm çağrı noktaları) bu tek seam'den geçtiği için tur yolunda başka yeri
+  değiştirmeye gerek yok. Aux çağrılar (title/summary/lesson) `guardedComplete`'te
+  `PinClaudeHome` ile pinlenir.
+- **İstisna — fold yolları (compaction/handoff):** `conversation.summarizeRendered`
+  ve `BuildHandoff` tur döngüsünün ve `guardedComplete`'in DIŞINDA doğrudan
+  `provider.Complete` çağırır → toolloop seam'inden geçmez. Pinlenmezse **global**
+  claude-home'a düşüp login olsa bile `authentication_failed` verirdi (2026-08-04'te
+  `compaction_failed` olarak görüldü; otomatik rolling-compaction, `/btw` ve wake
+  turu pinlenmiyordu). **Kalıcı çözüm:** fold çekirdeği artık ctx'ten **self-pin**
+  yapıyor — `conversation.WithClaudeHome(ctx, Runtime.ClaudeHomeDir())` → çekirdekteki
+  `pinClaudeHome`. Her fold giriş noktası (`chat_stream`, `chat_btw`, `wake_turn`,
+  `summary`, `agent.handoff`) home'u ctx'e koyar; böylece yeni bir fold call-site
+  eklendiğinde pinlemeyi unutsa bile çekirdek korur.
 - **Migration/kopyalama:** `agent.EnsureWorkspaceClaudeHome(wsRoot)` — workspace
   açılışında (`workspace/manager.go open()`) çağrılır. İlk açılışta
   `~/.tionswarm/claude-home` (global) içeriğini per-workspace eve **tohumlar**

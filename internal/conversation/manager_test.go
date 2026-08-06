@@ -87,6 +87,65 @@ func TestPrepareComputesPressure(t *testing.T) {
 	}
 }
 
+// TestPrepareOverheadRaisesPressure verifies the non-message overhead threaded via
+// WithContextOverhead is added to the fold/pressure footprint: two identical runs
+// differ only by the overhead, and the overhead one must report exactly
+// (contextTokens + overhead) / maxTokens. keepRecent is high enough that neither
+// run folds, so the stub DB/provider are never touched.
+func TestPrepareOverheadRaisesPressure(t *testing.T) {
+	m := NewManager()
+	m.SetLimits(1000, 8) // budget high enough that neither run folds
+
+	history := []db.Message{
+		{Role: providers.RoleUser, Text: "hello there"},
+		{Role: providers.RoleAssistant, Text: "a short reply"},
+	}
+
+	base, err := m.Prepare(context.Background(), nil, nil, db.Session{}, db.Agent{}, history)
+	if err != nil {
+		t.Fatalf("base prepare: %v", err)
+	}
+
+	const overhead = 300
+	ctx := WithContextOverhead(context.Background(), overhead)
+	with, err := m.Prepare(ctx, nil, nil, db.Session{}, db.Agent{}, history)
+	if err != nil {
+		t.Fatalf("overhead prepare: %v", err)
+	}
+	if with.Compacted || base.Compacted {
+		t.Fatalf("did not expect compaction under keepRecent")
+	}
+	// ContextTokens (messages+summary) is unchanged — overhead is a budget input, not
+	// stored history — but pressure must fold the overhead in.
+	if with.ContextTokens != base.ContextTokens {
+		t.Fatalf("ContextTokens changed with overhead: %d vs %d", with.ContextTokens, base.ContextTokens)
+	}
+	want := float64(with.ContextTokens+overhead) / 1000.0
+	if with.Pressure != want {
+		t.Fatalf("overhead pressure = %f, want %f", with.Pressure, want)
+	}
+	if with.Pressure <= base.Pressure {
+		t.Fatalf("overhead pressure %f must exceed base %f", with.Pressure, base.Pressure)
+	}
+}
+
+// TestWithContextOverheadNoOp guards the default: a non-positive overhead leaves
+// the budget message-only, so behaviour matches a context with none set.
+func TestWithContextOverheadNoOp(t *testing.T) {
+	if got := contextOverheadFrom(WithContextOverhead(context.Background(), 0)); got != 0 {
+		t.Fatalf("overhead 0 = %d, want 0 (no-op)", got)
+	}
+	if got := contextOverheadFrom(WithContextOverhead(context.Background(), -5)); got != 0 {
+		t.Fatalf("negative overhead = %d, want 0 (no-op)", got)
+	}
+	if got := contextOverheadFrom(context.Background()); got != 0 {
+		t.Fatalf("unset overhead = %d, want 0", got)
+	}
+	if got := contextOverheadFrom(WithContextOverhead(context.Background(), 250)); got != 250 {
+		t.Fatalf("overhead 250 = %d, want 250", got)
+	}
+}
+
 // TestPrepareZeroPressureWhenBudgetDisabled ensures a non-positive budget yields
 // Pressure 0 (the feature is off) rather than a divide-by-zero.
 func TestPrepareZeroPressureWhenBudgetDisabled(t *testing.T) {

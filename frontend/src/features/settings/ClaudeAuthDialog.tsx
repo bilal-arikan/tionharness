@@ -10,7 +10,7 @@ import { KeyRound, Sparkles, Copy, Check, Globe, ExternalLink, Loader2 } from 'l
 import { api } from '@/api'
 import { copyToClipboard } from '@/shared/lib/clipboard'
 import type { AppSettings } from '@/types'
-import { Button, ModalOverlay } from '@/shared/components'
+import { Button, ModalOverlay, toast } from '@/shared/components'
 import { inputCls } from './primitives'
 
 // 'browser'  → in-app OAuth: open the auth URL, paste the code back (no terminal).
@@ -42,7 +42,6 @@ export function ClaudeAuthDialog({ configDir, currentKind, isSet, onClose, onSav
   const [token, setToken] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [copied, setCopied] = useState(false)
   const tokenRef = useRef<HTMLInputElement>(null)
 
   // In-app OAuth (browser) flow state: request an auth URL, open it, paste the
@@ -150,10 +149,7 @@ export function ClaudeAuthDialog({ configDir, currentKind, isSet, onClose, onSav
     : 'claude setup-token'
 
   const copyCmd = async () => {
-    if (await copyToClipboard(setupCmd)) {
-      setCopied(true)
-      setTimeout(() => setCopied(false), 1500)
-    }
+    if (await copyToClipboard(setupCmd)) toast.info('Panoya kopyalandı')
   }
 
   const save = async () => {
@@ -168,6 +164,7 @@ export function ClaudeAuthDialog({ configDir, currentKind, isSet, onClose, onSav
     try {
       const next = await api.updateSettings({ claudeCliAuthKind: method, claudeCliAuthToken: t })
       onSaved(next)
+      toast.success('Kaydedildi')
       onClose()
     } catch (e) {
       setError('Kaydedilemedi: ' + (e as Error).message)
@@ -182,6 +179,7 @@ export function ClaudeAuthDialog({ configDir, currentKind, isSet, onClose, onSav
     try {
       const next = await api.updateSettings({ claudeCliAuthKind: '', claudeCliAuthToken: '' })
       onSaved(next)
+      toast.success('Silindi')
       onClose()
     } catch (e) {
       setError('Silinemedi: ' + (e as Error).message)
@@ -209,11 +207,12 @@ export function ClaudeAuthDialog({ configDir, currentKind, isSet, onClose, onSav
       >
         <h2 className="mb-1 text-base font-semibold">claude-cli kimlik doğrulama</h2>
         <p className="mb-4 text-xs text-[var(--color-text-dim)]">
-          İzole config dizininde ayrı login yapmadan claude-cli'yi yetkilendir. Token şifreli saklanır ve
-          subprocess'e ortam değişkeni olarak verilir.
+          İzole config dizininde ayrı login yapmadan claude-cli'yi yetkilendir. Token şifreli
+          saklanır ve subprocess'e ortam değişkeni olarak verilir.
           {isSet && (
             <span className="ml-1 text-[var(--color-success)]">
-              ✓ Şu an kayıtlı{currentKind ? ` (${currentKind === 'oauth' ? 'Max/Pro' : 'API'})` : ''}.
+              ✓ Şu an kayıtlı
+              {currentKind ? ` (${currentKind === 'oauth' ? 'Max/Pro' : 'API'})` : ''}.
             </span>
           )}
         </p>
@@ -240,13 +239,15 @@ export function ClaudeAuthDialog({ configDir, currentKind, isSet, onClose, onSav
                 <p className="text-xs text-[var(--color-text-dim)]">
                   Bu workspace'in claude-home'una kimlik yazıldı. Yeni bir tur artık çalışmalı.
                 </p>
-                <Button onClick={onClose} size="lg" className="mt-2">Kapat</Button>
+                <Button onClick={onClose} size="lg" className="mt-2">
+                  Kapat
+                </Button>
               </div>
             ) : (
               <>
                 <p className="text-xs text-[var(--color-text-dim)]">
-                  Max/Pro aboneliğinle tarayıcıdan giriş yap — terminal gerekmez. Kimlik doğrudan
-                  bu workspace'in claude-home'una yazılır.
+                  Max/Pro aboneliğinle tarayıcıdan giriş yap — terminal gerekmez. Kimlik doğrudan bu
+                  workspace'in claude-home'una yazılır.
                 </p>
                 {/* Auto (loopback) vs manual (paste) sub-mode */}
                 <div className="flex gap-1 rounded-lg border border-[var(--color-border)] p-0.5 text-xs">
@@ -281,27 +282,47 @@ export function ClaudeAuthDialog({ configDir, currentKind, isSet, onClose, onSav
                 {browserMode === 'auto' ? (
                   !loopbackFlowId ? (
                     <Button onClick={startAutoLogin} size="lg" disabled={oauthBusy}>
-                      {oauthBusy ? <Loader2 size={15} className="animate-spin" /> : <Globe size={15} />}
+                      {oauthBusy ? (
+                        <Loader2 size={15} className="animate-spin" />
+                      ) : (
+                        <Globe size={15} />
+                      )}
                       {oauthBusy ? 'Bağlantı alınıyor…' : 'Giriş başlat (tarayıcıyı aç)'}
                     </Button>
                   ) : (
                     <div className="flex items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-3 text-xs text-[var(--color-text-dim)]">
-                      <Loader2 size={14} className="shrink-0 animate-spin text-[var(--color-accent)]" />
-                      <span className="flex-1">Tarayıcıda giriş yapmanı bekliyorum — yetkilendirince otomatik döner.</span>
-                      <a href={authUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[var(--color-accent)] hover:underline">
+                      <Loader2
+                        size={14}
+                        className="shrink-0 animate-spin text-[var(--color-accent)]"
+                      />
+                      <span className="flex-1">
+                        Tarayıcıda giriş yapmanı bekliyorum — yetkilendirince otomatik döner.
+                      </span>
+                      <a
+                        href={authUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-[var(--color-accent)] hover:underline"
+                      >
                         <ExternalLink size={12} /> Tekrar aç
                       </a>
                     </div>
                   )
                 ) : !authUrl ? (
                   <Button onClick={startBrowserLogin} size="lg" disabled={oauthBusy}>
-                    {oauthBusy ? <Loader2 size={15} className="animate-spin" /> : <Globe size={15} />}
+                    {oauthBusy ? (
+                      <Loader2 size={15} className="animate-spin" />
+                    ) : (
+                      <Globe size={15} />
+                    )}
                     {oauthBusy ? 'Bağlantı alınıyor…' : 'Giriş başlat (tarayıcıyı aç)'}
                   </Button>
                 ) : (
                   <div className="space-y-2">
                     <div className="flex items-center gap-2 text-xs text-[var(--color-text-dim)]">
-                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[var(--color-accent)]/15 text-[10px] font-semibold text-[var(--color-accent)]">1</span>
+                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[var(--color-accent)]/15 text-[10px] font-semibold text-[var(--color-accent)]">
+                        1
+                      </span>
                       Tarayıcıda giriş yapıp yetkilendir.
                       <a
                         href={authUrl}
@@ -313,7 +334,9 @@ export function ClaudeAuthDialog({ configDir, currentKind, isSet, onClose, onSav
                       </a>
                     </div>
                     <div className="flex items-center gap-2 text-xs text-[var(--color-text-dim)]">
-                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[var(--color-accent)]/15 text-[10px] font-semibold text-[var(--color-accent)]">2</span>
+                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[var(--color-accent)]/15 text-[10px] font-semibold text-[var(--color-accent)]">
+                        2
+                      </span>
                       Sayfadaki kodu kopyala ve aşağıya yapıştır:
                     </div>
                     <input
@@ -325,8 +348,17 @@ export function ClaudeAuthDialog({ configDir, currentKind, isSet, onClose, onSav
                       className={`${inputCls} w-full font-mono`}
                       data-testid="claude-oauth-code-input"
                     />
-                    <Button onClick={completeBrowserLogin} size="lg" disabled={oauthBusy} className="w-full">
-                      {oauthBusy ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />}
+                    <Button
+                      onClick={completeBrowserLogin}
+                      size="lg"
+                      disabled={oauthBusy}
+                      className="w-full"
+                    >
+                      {oauthBusy ? (
+                        <Loader2 size={15} className="animate-spin" />
+                      ) : (
+                        <Check size={15} />
+                      )}
                       {oauthBusy ? 'Doğrulanıyor…' : 'Girişi tamamla'}
                     </Button>
                   </div>
@@ -338,8 +370,8 @@ export function ClaudeAuthDialog({ configDir, currentKind, isSet, onClose, onSav
         ) : method === 'oauth' ? (
           <div className="mb-4 space-y-2">
             <p className="text-xs text-[var(--color-text-dim)]">
-              1) Bir terminalde aşağıdaki komutu çalıştır — tarayıcıda Max/Pro hesabınla giriş yap, 1 yıllık
-              token üretilir.
+              1) Bir terminalde aşağıdaki komutu çalıştır — tarayıcıda Max/Pro hesabınla giriş yap,
+              1 yıllık token üretilir.
             </p>
             <div className="flex items-stretch gap-1">
               <code className="flex-1 overflow-x-auto whitespace-nowrap rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-xs">
@@ -350,15 +382,17 @@ export function ClaudeAuthDialog({ configDir, currentKind, isSet, onClose, onSav
                 title="Komutu kopyala"
                 className="shrink-0 rounded-lg border border-[var(--color-border)] px-2 hover:bg-[var(--color-surface-2)]"
               >
-                {copied ? <Check size={14} className="text-[var(--color-success)]" /> : <Copy size={14} />}
+                <Copy size={14} />
               </button>
             </div>
-            <p className="text-xs text-[var(--color-text-dim)]">2) Çıkan token'ı aşağıya yapıştır:</p>
+            <p className="text-xs text-[var(--color-text-dim)]">
+              2) Çıkan token'ı aşağıya yapıştır:
+            </p>
           </div>
         ) : (
           <p className="mb-2 text-xs text-[var(--color-text-dim)]">
-            console.anthropic.com'dan bir API anahtarı (<code>sk-ant-…</code>) yapıştır. Bu yöntem aboneliği
-            değil API kredisini kullanır.
+            console.anthropic.com'dan bir API anahtarı (<code>sk-ant-…</code>) yapıştır. Bu yöntem
+            aboneliği değil API kredisini kullanır.
           </p>
         )}
 

@@ -22,13 +22,12 @@ type scheduleDeps struct {
 	reload  func(ctx context.Context) error
 }
 
-func (d scheduleDeps) requireScheduleCreatedByAgent(ctx context.Context, id string) (db.Schedule, error) {
+// requireSchedule loads a schedule by id, returning a friendly error if it does
+// not exist. No provenance gate: user- and agent-created schedules are both editable.
+func (d scheduleDeps) requireSchedule(ctx context.Context, id string) (db.Schedule, error) {
 	sc, err := d.db.GetSchedule(ctx, id)
 	if err != nil {
 		return db.Schedule{}, fmt.Errorf("no schedule with id %q (use list_schedules)", id)
-	}
-	if sc.CreatedBy == "" {
-		return db.Schedule{}, fmt.Errorf("schedule %q was created by the user and cannot be edited or deleted by an agent", id)
 	}
 	return sc, nil
 }
@@ -174,7 +173,7 @@ func (t CreateScheduleTool) Call(ctx context.Context, input json.RawMessage) (st
 	return string(b), nil
 }
 
-// UpdateScheduleTool edits an agent-created schedule.
+// UpdateScheduleTool edits a schedule (user- or agent-created).
 type UpdateScheduleTool struct{ d scheduleDeps }
 
 // NewUpdateScheduleTool constructs update_schedule.
@@ -185,7 +184,7 @@ func NewUpdateScheduleTool(database *db.DB, actorID string, reload func(context.
 func (UpdateScheduleTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name:        "update_schedule",
-		Description: "Edit an agent-created schedule (not one made by the user). Pass the schedule id and the fields to change (agentId, flowId, cronExpr, prompt, enabled, tags). Setting flowId makes it flow-backed (and clears the agent); setting agentId switches it back to prompt delivery.",
+		Description: "Edit a schedule (user- or agent-created). Pass the schedule id and the fields to change (agentId, flowId, cronExpr, prompt, enabled, tags). Setting flowId makes it flow-backed (and clears the agent); setting agentId switches it back to prompt delivery.",
 		InputSchema: json.RawMessage(`{
 			"type":"object",
 			"properties":{
@@ -226,7 +225,7 @@ func (t UpdateScheduleTool) Call(ctx context.Context, input json.RawMessage) (st
 	if in.ID == "" {
 		return "", fmt.Errorf("id is required")
 	}
-	cur, err := t.d.requireScheduleCreatedByAgent(ctx, in.ID)
+	cur, err := t.d.requireSchedule(ctx, in.ID)
 	if err != nil {
 		return "", err
 	}
@@ -272,7 +271,7 @@ func (t UpdateScheduleTool) Call(ctx context.Context, input json.RawMessage) (st
 	return string(b), nil
 }
 
-// DeleteScheduleTool removes an agent-created schedule.
+// DeleteScheduleTool removes a schedule (user- or agent-created).
 type DeleteScheduleTool struct{ d scheduleDeps }
 
 // NewDeleteScheduleTool constructs delete_schedule.
@@ -283,7 +282,7 @@ func NewDeleteScheduleTool(database *db.DB, actorID string, reload func(context.
 func (DeleteScheduleTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name:        "delete_schedule",
-		Description: "Delete an agent-created schedule (not one made by the user). Pass the schedule id.",
+		Description: "Delete a schedule (user- or agent-created). Pass the schedule id.",
 		InputSchema: json.RawMessage(`{
 			"type":"object",
 			"properties":{"id":{"type":"string","description":"The schedule id (see list_schedules)"}},
@@ -304,7 +303,7 @@ func (t DeleteScheduleTool) Call(ctx context.Context, input json.RawMessage) (st
 	if in.ID == "" {
 		return "", fmt.Errorf("id is required")
 	}
-	if _, err := t.d.requireScheduleCreatedByAgent(ctx, in.ID); err != nil {
+	if _, err := t.d.requireSchedule(ctx, in.ID); err != nil {
 		return "", err
 	}
 	if err := t.d.db.DeleteSchedule(ctx, in.ID); err != nil {
@@ -328,7 +327,7 @@ func NewListSchedulesTool(database *db.DB, actorID string) ListSchedulesTool {
 func (ListSchedulesTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name:        "list_schedules",
-		Description: "List the schedules (routines) in this workspace (id, agent, cron, prompt, enabled, and whether each was created by an agent and is therefore editable/deletable by you).",
+		Description: "List the schedules (routines) in this workspace (id, agent, cron, prompt, enabled, and whether each was created by an agent — provenance only; you can edit/delete any of them).",
 		InputSchema: json.RawMessage(`{"type":"object","properties":{},"additionalProperties":false}`),
 	}
 }

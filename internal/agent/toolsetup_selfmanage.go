@@ -12,8 +12,9 @@ import (
 // selfManageBuiltins builds the self-management tool suite: the tools that let an
 // agent create/edit/delete agents, flows, schedules, tasks, hooks and MCP
 // servers, manage artifacts, author skills, read/apply app settings, manage
-// workspaces, add memories and read logs. Provenance is enforced downstream —
-// agents only mutate agent-created entities.
+// workspaces, add memories and read logs. No provenance gate downstream — agents
+// may edit/delete any entity, user- or agent-created (CreatedBy is kept for
+// provenance/display only).
 //
 // It is split out of buildRegistry so that method reads as its high-level shape
 // (core tools → self-manage suite → visibility tiers → MCP) instead of a single
@@ -81,27 +82,26 @@ func (r *Runtime) selfManageBuiltins(agent db.Agent) []tools.Tool {
 		tools.NewListSchedulesTool(r.db, agent.ID),
 		// Manually fire a schedule now (the "Run now" trigger).
 		tools.NewRunScheduleTool(r.db, r.runScheduleNow),
-		// Tag-triggered automations (event-driven loops). Provenance-enforced.
+		// Tag-triggered automations (event-driven loops). No provenance gate.
 		tools.NewCreateAutomationTool(r.db, agent.ID),
 		tools.NewUpdateAutomationTool(r.db, agent.ID),
 		tools.NewDeleteAutomationTool(r.db, agent.ID),
 		tools.NewListAutomationsTool(r.db, agent.ID),
 		// Flow/schedule tags are edited via the `tags` field on update_flow /
 		// update_schedule; session tags via update_session. No separate tag tools.
-		// Tasks (kanban board). Read/create/edit/move on any task; delete only
-		// agent-created (provenance). The board is passive — no run tool.
+		// Tasks (kanban board). Read/create/edit/move/delete on any task. The board
+		// is passive — no run tool.
 		tools.NewListTasksTool(r.db, agent.ID),
 		tools.NewCreateTaskTool(r.db, agent.ID),
 		tools.NewUpdateTaskTool(r.db, agent.ID),
 		tools.NewMoveTaskTool(r.db, agent.ID),
 		tools.NewDeleteTaskTool(r.db, agent.ID),
-		// Hooks (PreToolUse/PostToolUse). List/create on any; delete only
-		// agent-created (provenance).
+		// Hooks (PreToolUse/PostToolUse). List/create/delete on any hook.
 		tools.NewListHooksTool(r.db, agent.ID),
 		tools.NewCreateHookTool(r.db, agent.ID),
 		tools.NewDeleteHookTool(r.db, agent.ID),
-		// MCP servers. List/create/toggle on any; delete only agent-created
-		// (provenance). New/enabled servers are picked up next turn.
+		// MCP servers. List/create/toggle/delete on any server. New/enabled servers
+		// are picked up next turn.
 		tools.NewListMCPServersTool(r.db, agent.ID),
 		tools.NewCreateMCPServerTool(r.db, agent.ID),
 		tools.NewToggleMCPServerTool(r.db, agent.ID),
@@ -134,7 +134,8 @@ func (r *Runtime) selfManageBuiltins(agent db.Agent) []tools.Tool {
 		)
 	}
 	// Workspaces: list/create/rename across all workspaces; delete only
-	// agent-created ones (and never the current or last). Cross-workspace, so
+	// agent-created ones (provenance kept — uniquely destructive) and never the
+	// current or last. Cross-workspace, so
 	// it goes through the bridge the manager wires from the api server. Only
 	// offered when that bridge is present.
 	if r.workspaceBridge != nil {

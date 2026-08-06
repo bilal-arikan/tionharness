@@ -162,14 +162,29 @@ var priceTable = map[string]map[string]Price{
 		"anthropic/claude-haiku-4.5":  {InputPerMTok: 1, OutputPerMTok: 5, CacheReadMultOverride: 0.10, CacheWriteMultOverride: 1.25},
 		"anthropic/claude-fable-5":    {InputPerMTok: 10, OutputPerMTok: 50, CacheReadMultOverride: 0.10, CacheWriteMultOverride: 1.25},
 	},
-	// Z.ai GLM family (Anthropic-mode transport). Ballpark list prices per 1M
-	// tokens; GLM undercuts frontier models heavily. IDs evolve → unlisted models
-	// fall through to unpriced.
+	// Z.ai GLM family (Anthropic-mode transport). Official Z.ai list prices per 1M
+	// tokens (2026-08; GLM-5.2 = $1.40/$4.40, cached input $0.26 → read mult ~0.19).
+	// Anthropic-protocol endpoint bills cache_control breakpoints, hence the write
+	// mult. IDs evolve → unlisted models fall through to unpriced.
 	"zai": {
-		"glm-5.2":     {InputPerMTok: 0.6, OutputPerMTok: 2.2, CacheReadMultOverride: 0.10},
-		"glm-5.1":     {InputPerMTok: 0.6, OutputPerMTok: 2.2, CacheReadMultOverride: 0.10},
-		"glm-5-turbo": {InputPerMTok: 0.2, OutputPerMTok: 1.1, CacheReadMultOverride: 0.10},
-		"glm-4.7":     {InputPerMTok: 0.4, OutputPerMTok: 1.6, CacheReadMultOverride: 0.10},
+		"glm-5.2":       {InputPerMTok: 1.40, OutputPerMTok: 4.40, CacheReadMultOverride: 0.19, CacheWriteMultOverride: 1.25},
+		"glm-5.1":       {InputPerMTok: 0.97, OutputPerMTok: 3.04, CacheReadMultOverride: 0.19, CacheWriteMultOverride: 1.25},
+		"glm-5":         {InputPerMTok: 0.60, OutputPerMTok: 1.92, CacheReadMultOverride: 0.19, CacheWriteMultOverride: 1.25},
+		"glm-4.7":       {InputPerMTok: 0.60, OutputPerMTok: 2.20, CacheReadMultOverride: 0.18, CacheWriteMultOverride: 1.25},
+		"glm-4.7-flash": {InputPerMTok: 0.06, OutputPerMTok: 0.40, CacheReadMultOverride: 0.19, CacheWriteMultOverride: 1.25},
+	},
+	// DeepSeek V4 family (first-party OpenAI-compatible endpoint). Official list
+	// prices per 1M tokens (2026-08): V4 Flash $0.14/$0.28, V4 Pro $0.435/$0.87.
+	// DeepSeek's context caching is automatic with no write premium and a very deep
+	// read discount — cache-hit input is ~$0.0028 (Flash) / ~$0.003625 (Pro), i.e.
+	// ~0.02×/~0.0083× of the cache-miss input rate — reported via prompt_cache_hit_tokens
+	// (see oaiUsage.toUsage). IDs evolve → unlisted models fall through to unpriced.
+	// NOTE: DeepSeek has announced a peak/off-peak policy (2× during 09:00–12:00 &
+	// 14:00–18:00 Beijing) not yet in effect — the table tracks the regular rate.
+	// The deepseek-anthropic kind shares this table via PriceFor.
+	"deepseek": {
+		"deepseek-v4-flash": {InputPerMTok: 0.14, OutputPerMTok: 0.28, CacheReadMultOverride: 0.02},
+		"deepseek-v4-pro":   {InputPerMTok: 0.435, OutputPerMTok: 0.87, CacheReadMultOverride: 0.008},
 	},
 	// NOTE: market provider-pack prices (xai, mistral, gemini, … ~25 providers, up to
 	// 15 models each) live in the generated pricing_market.go (var marketPrices,
@@ -199,6 +214,8 @@ func PriceFor(provider, model string) (Price, bool) {
 	switch provider {
 	case "minimax-anthropic":
 		provider = "minimax"
+	case "deepseek-anthropic":
+		provider = "deepseek"
 	}
 	models, ok := priceTable[provider]
 	if !ok {

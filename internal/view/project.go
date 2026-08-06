@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/bilal-arikan/tionswarm/internal/billing"
 	"github.com/bilal-arikan/tionswarm/internal/db"
 	"github.com/bilal-arikan/tionswarm/internal/orchestration"
 )
@@ -31,7 +32,9 @@ type Store interface {
 	ListSessions(ctx context.Context, agentID string) ([]db.Session, error)
 	ListFlowRuns(ctx context.Context, flowID string) ([]db.FlowRun, error)
 	ListSchedules(ctx context.Context) ([]db.Schedule, error)
+	GetSchedule(ctx context.Context, id string) (db.Schedule, error)
 	WorkspaceTokensToday(ctx context.Context) int64
+	UsageForDay(ctx context.Context, day string) ([]db.Usage, error)
 }
 
 // BoardRefID / WorkspaceRefID are the ids a board or workspace ref carries. Both
@@ -85,7 +88,13 @@ func (p *Projector) Project(ctx context.Context, ref Ref, level Level, lens Lens
 		if err != nil {
 			return View{}, fmt.Errorf("view: board: %w", err)
 		}
-		return ProjectBoard(BoardInput{Tasks: tasks}, level, lens)
+		return ProjectBoard(BoardInput{Tasks: tasks, Sub: ref.Sub}, level, lens)
+	case KindSchedule:
+		sc, err := p.store.GetSchedule(ctx, ref.ID)
+		if err != nil {
+			return View{}, fmt.Errorf("view: schedule %s: %w", ref.ID, err)
+		}
+		return ProjectSchedule(ScheduleInput{Schedule: sc}, level, lens)
 	case KindSpace:
 		in, err := p.loadWorkspace(ctx)
 		if err != nil {
@@ -130,7 +139,7 @@ func (p *Projector) loadWorkspace(ctx context.Context) (WorkspaceInput, error) {
 		return WorkspaceInput{}, fmt.Errorf("view: workspace asks: %w", err)
 	}
 
-	return WorkspaceInput{
+	in := WorkspaceInput{
 		Agents:      agents,
 		Sessions:    sessions,
 		Tasks:       tasks,
@@ -138,7 +147,38 @@ func (p *Projector) loadWorkspace(ctx context.Context) (WorkspaceInput, error) {
 		Schedules:   schedules,
 		WaitingAsks: asks,
 		TokensToday: p.store.WorkspaceTokensToday(ctx),
-	}, nil
+	}
+
+	// Price today's spend the same way every budget surface does (billing.RollupOf),
+	// so the header's dollar figure can never disagree with the Budget screen. A
+	// usage read error degrades the cost line to zero rather than failing the whole
+	// projection: the token figure and every signal above are still correct and
+	// useful without it.
+	if rows, err := p.store.UsageForDay(ctx, db.Today()); err == nil {
+		in.CostToday, in.CostEstimated = workspaceCost(rows)
+	}
+	return in, nil
+}
+
+// workspaceCost sums the USD cost of a day's usage rows across every agent,
+// merging their per-model breakdowns into one rollup. estimated is true when any
+// priced slice used an equivalent-API estimate or lacked a real list price — the
+// same "this is not a real invoice" flag the Budget screen shows.
+func workspaceCost(rows []db.Usage) (cost float64, estimated bool) {
+	merged := map[string]db.KindStat{}
+	for _, u := range rows {
+		for key, st := range u.ByModel {
+			m := merged[key]
+			m.Calls += st.Calls
+			m.InputTokens += st.InputTokens
+			m.OutputTokens += st.OutputTokens
+			m.CacheReadTokens += st.CacheReadTokens
+			m.CacheWriteTokens += st.CacheWriteTokens
+			merged[key] = m
+		}
+	}
+	roll := billing.RollupOf(merged)
+	return roll.CostUSD, roll.Estimated || !roll.Priced
 }
 
 // loadSession gathers the session header, its usage rollup, the transcript TAIL

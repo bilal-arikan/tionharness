@@ -70,77 +70,94 @@ export function PackDetailModal({
         </header>
 
         <div className="border-b border-[var(--color-border)] p-4">
-        <p className="text-xs text-[var(--color-text-dim)]">{selected.description}</p>
-        <PackMeta pack={selected} />
-        {selected.kind === 'provider' && (
-          <div className="mt-3">
-            <label className="text-[10px] uppercase tracking-wide text-[var(--color-text-dim)]">
-              API anahtarı (sırlardan)
-            </label>
-            <div className="mt-1 flex items-center gap-2">
-              <select
-                value={pickedSecret}
-                onChange={(e) => void pickSecret(e.target.value)}
-                disabled={secrets.length === 0}
-                className="flex-1 rounded border border-[var(--color-border)] bg-[var(--color-surface-2)] px-2 py-1.5 text-xs"
-              >
-                <option value="">
-                  {secrets.length ? '🔑 Sırdan seç… (opsiyonel)' : 'Sır yok — önce ekle'}
-                </option>
-                {secrets.map((s) => (
-                  <option key={s.name} value={s.name}>{s.name}</option>
-                ))}
-              </select>
-              {onManageSecrets && (
-                <button
-                  onClick={onManageSecrets}
-                  className="flex items-center gap-1 rounded border border-[var(--color-border)] px-2 py-1.5 text-xs hover:border-[var(--color-accent)]"
+          <p className="text-xs text-[var(--color-text-dim)]">{selected.description}</p>
+          <PackMeta pack={selected} />
+          {selected.kind === 'provider' && (
+            <div className="mt-3">
+              <label className="text-[10px] uppercase tracking-wide text-[var(--color-text-dim)]">
+                API anahtarı (sırlardan)
+              </label>
+              <div className="mt-1 flex items-center gap-2">
+                <select
+                  value={pickedSecret}
+                  onChange={(e) => void pickSecret(e.target.value)}
+                  disabled={secrets.length === 0}
+                  className="flex-1 rounded border border-[var(--color-border)] bg-[var(--color-surface-2)] px-2 py-1.5 text-xs"
                 >
-                  <KeyRound size={12} /> Sırlar →
-                </button>
-              )}
+                  <option value="">
+                    {secrets.length ? '🔑 Sırdan seç… (opsiyonel)' : 'Sır yok — önce ekle'}
+                  </option>
+                  {secrets.map((s) => (
+                    <option key={s.name} value={s.name}>
+                      {s.name}
+                    </option>
+                  ))}
+                </select>
+                {onManageSecrets && (
+                  <button
+                    onClick={onManageSecrets}
+                    className="flex items-center gap-1 rounded border border-[var(--color-border)] px-2 py-1.5 text-xs hover:border-[var(--color-accent)]"
+                  >
+                    <KeyRound size={12} /> Sırlar →
+                  </button>
+                )}
+              </div>
+              <p className="mt-1 text-[10px] text-[var(--color-text-dim)]">
+                {pickedSecret
+                  ? `🔑 "${pickedSecret}" kullanılacak`
+                  : "Anahtarsız da kurulabilir; sonra Ayarlar → Sağlayıcılar'dan girilebilir."}
+              </p>
             </div>
-            <p className="mt-1 text-[10px] text-[var(--color-text-dim)]">
-              {pickedSecret
-                ? `🔑 "${pickedSecret}" kullanılacak`
-                : "Anahtarsız da kurulabilir; sonra Ayarlar → Sağlayıcılar'dan girilebilir."}
-            </p>
-          </div>
-        )}
-        {(() => {
-          const here = isInstalled(selected)
-          const canUpdate = updateAvailable(selected)
-          // Providers are id-keyed (Upsert) so re-installing just updates the
-          // config/key — allowed and labelled "Güncelle". A pack with a newer
-          // version than the one recorded in the ledger is always updatable
-          // (overwrite). Other kinds with identity are blocked once present to
-          // avoid duplicates.
-          const blocked = here && selected.kind !== 'provider' && !canUpdate
-          const label = canUpdate
-            ? `Güncelle (v${selected.installedVersion}→v${selected.version})`
-            : blocked
-              ? 'Zaten kurulu'
-              : here && selected.kind === 'provider'
-                ? 'Güncelle'
-                : INSTALL_LABEL[selected.kind]
-          return (
-            <div data-testid="market-pack-install" data-pack-id={selected.id} className="contents">
-              <Button
-                onClick={() => void install(selected, canUpdate)}
-                disabled={busy || blocked}
-                className="mt-3 flex w-full items-center justify-center gap-1.5"
+          )}
+          {(() => {
+            const here = isInstalled(selected)
+            const canUpdate = updateAvailable(selected)
+            // Providers are id-keyed (Upsert) so re-installing just updates the
+            // config/key — allowed and labelled "Güncelle". A pack with a newer
+            // version than the one recorded in the ledger is always updatable
+            // (overwrite). Other kinds with identity are blocked once present to
+            // avoid duplicates.
+            const blocked = here && selected.kind !== 'provider' && !canUpdate
+            const label = canUpdate
+              ? `Güncelle (v${selected.installedVersion}→v${selected.version})`
+              : blocked
+                ? 'Zaten kurulu'
+                : here && selected.kind === 'provider'
+                  ? 'Güncelle'
+                  : INSTALL_LABEL[selected.kind]
+            return (
+              <div
+                data-testid="market-pack-install"
+                data-pack-id={selected.id}
+                className="contents"
               >
-                {canUpdate ? <ArrowUpCircle size={13} /> : blocked ? <Check size={13} /> : <Download size={13} />} {label}
-              </Button>
-            </div>
-          )
-        })()}
-      </div>
+                <Button
+                  onClick={() => void install(selected, canUpdate)}
+                  disabled={busy || blocked}
+                  className="mt-3 w-full"
+                >
+                  {canUpdate ? (
+                    <ArrowUpCircle size={13} />
+                  ) : blocked ? (
+                    <Check size={13} />
+                  ) : (
+                    <Download size={13} />
+                  )}{' '}
+                  {label}
+                </Button>
+              </div>
+            )
+          })()}
+        </div>
 
         {/* Payload preview — kind-specific, or a fetched GitHub preview for source-ref */}
         <div className="flex-1 overflow-y-auto p-4">
           {selected.sourceRef?.url ? (
-            <SourceRefPreview url={selected.sourceRef.url} items={preview} loading={previewLoading} />
+            <SourceRefPreview
+              url={selected.sourceRef.url}
+              items={preview}
+              loading={previewLoading}
+            />
           ) : (
             <PackPreview pack={selected} prices={prices} />
           )}

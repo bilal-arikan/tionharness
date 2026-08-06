@@ -37,6 +37,10 @@ type OpenAICompat struct {
 	// Anthropic-style cache_control breakpoint to the system prefix (forwarded by
 	// proxies like OpenRouter to Anthropic/Gemini backends).
 	cacheMode string
+	// reqTimeoutSecs overrides the per-request wall-clock budget (0 = model-class
+	// default). The real budget is applied as a per-request ctx deadline in
+	// requestCtx; the http.Client.Timeout is only a safety net above it.
+	reqTimeoutSecs int
 }
 
 // WithCaps sets the optional capability flags (reasoning-effort passthrough and
@@ -63,7 +67,39 @@ func NewOpenAICompat(name, apiKey, baseURL, defaultModel string) *OpenAICompat {
 		apiKey:       apiKey,
 		baseURL:      strings.TrimRight(strings.TrimSpace(baseURL), "/"),
 		defaultModel: defaultModel,
-		client:       &http.Client{Timeout: requestTimeoutSecs * time.Second},
+		// The http.Client.Timeout is the transport safety net; the binding limit is
+		// the per-request ctx deadline set in requestCtx (model-class aware). Keeping
+		// it at the largest budget lets reasoning models (DeepSeek V4 Pro) run their
+		// full ctx budget instead of being cut at a fixed 120s.
+		client: &http.Client{Timeout: clientTimeoutSecs * time.Second},
+	}
+}
+
+// requestCtx bounds one API call (retries included) by model class, mirroring the
+// native Anthropic client: reasoning models (DeepSeek V4 Pro) get the long budget,
+// the rest keep the historical 120s. A per-request override or a sooner parent
+// deadline still wins.
+func (m *OpenAICompat) requestCtx(ctx context.Context, model string) (context.Context, context.CancelFunc) {
+	d := time.Duration(effectiveRequestTimeoutSecs(m.reqTimeoutSecs, model)) * time.Second
+	return context.WithTimeout(ctx, d)
+}
+
+// WithRequestTimeout overrides the per-request wall-clock budget (seconds); 0
+// restores the model-class default. Returns the client for chaining.
+func (m *OpenAICompat) WithRequestTimeout(secs int) *OpenAICompat {
+	m.reqTimeoutSecs = secs
+	return m
+}
+
+// setRequestTimeout implements requestTimeoutConfigurable so Registry.Get can
+// apply a kind Manifest's declared budget after Build, lifting the http.Client
+// safety net above the new budget so the ctx deadline stays binding.
+func (m *OpenAICompat) setRequestTimeout(secs int) {
+	m.reqTimeoutSecs = secs
+	if secs > 0 && m.client != nil {
+		if d := clientSafetyTimeout(secs); d > m.client.Timeout {
+			m.client.Timeout = d
+		}
 	}
 }
 
@@ -255,6 +291,8 @@ func (m *OpenAICompat) Complete(ctx context.Context, req Request) (*Response, er
 	if model == "" {
 		model = m.defaultModel
 	}
+	ctx, cancel := m.requestCtx(ctx, model)
+	defer cancel()
 
 	body := oaiReq{
 		Model:           model,
@@ -333,6 +371,8 @@ func (m *OpenAICompat) Stream(ctx context.Context, req Request, onDelta func(Str
 	if model == "" {
 		model = m.defaultModel
 	}
+	ctx, cancel := m.requestCtx(ctx, model)
+	defer cancel()
 
 	body := oaiReq{
 		Model:           model,

@@ -16,10 +16,13 @@ import (
 // these reach across workspace boundaries, so they go through a bridge wired in
 // from the workspace manager (analogous to the settings bridge).
 //
-// Safety boundaries mirror the rest of the suite:
+// Safety boundaries:
 //   - list/create/rename are allowed on any workspace (non-destructive),
 //   - delete is provenance-guarded: only workspaces an agent CREATED
-//     (CreatedBy != "") may be removed â€” never a user-made workspace,
+//     (CreatedBy != "") may be removed — never a user-made workspace. Workspace
+//     deletion is uniquely destructive (it wipes ALL of a workspace's agents,
+//     sessions, secrets and files), so this gate is kept even though the other
+//     self-management tools no longer enforce provenance.
 //   - an agent can never delete the workspace it is currently running in,
 //   - the manager additionally forbids deleting the last remaining workspace.
 
@@ -245,6 +248,8 @@ func (t DeleteWorkspaceTool) Call(_ context.Context, input json.RawMessage) (str
 		return "", fmt.Errorf("an agent cannot delete the workspace it is currently running in")
 	}
 	// Provenance guard: only agent-created workspaces may be deleted by an agent.
+	// Workspace deletion is uniquely destructive (it wipes the whole workspace), so
+	// this gate is kept even though the other self-management tools dropped theirs.
 	var target *WorkspaceInfo
 	for _, w := range t.d.bridge.ListWorkspaces() {
 		if w.ID == in.ID {

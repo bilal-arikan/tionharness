@@ -5,7 +5,7 @@
 // re-composing it from header/body, so a wrong or stale projection is visible to
 // the user rather than hidden behind a prettier rendering.
 
-export type ViewKind = 'flowrun' | 'session' | 'board' | 'workspace'
+export type ViewKind = 'flowrun' | 'session' | 'board' | 'workspace' | 'schedule'
 
 // Budget tiers. tiny is one dense line (safe to push into a prompt suffix), card
 // is the default, full adds per-item detail.

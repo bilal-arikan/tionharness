@@ -49,14 +49,9 @@ type Server struct {
 	hub          *sessionhub.Hub   // per-session ordered event log (cursor-based, all windows subscribe)
 	interactions *interactionStore // per-session resolve-once human-in-the-loop prompts (CAS)
 	inbox        *inboxStore       // per-session durable command queue (serial worker → turns)
-	// workersBusyFn overrides the coordinator-worker liveness probe the inbox worker
-	// uses to HOLD a message while workers run. nil in production (the real probe,
-	// coordinatorWorkersBusy, is used); a test injects a fake to drive the park/
-	// dispatch loop without a live runtime.
-	workersBusyFn func(wsID, sessionID string) bool
-	runs          *chatRuns       // in-flight streaming turns (stop/steer control)
-	grants        *permGrantStore // per-session "Always allow" permission grants
-	logger        *slog.Logger
+	runs         *chatRuns         // in-flight streaming turns (stop/steer control)
+	grants       *permGrantStore   // per-session "Always allow" permission grants
+	logger       *slog.Logger
 
 	// market is a workspace-independent market store (bundled + global tiers),
 	// used by the workspace-template picker and create-from-template seeding so
@@ -249,6 +244,7 @@ func (s *Server) applySettings() {
 	s.providers.SetMinimax(s.settings.MinimaxKey(), cur.MinimaxBaseURL)
 	s.providers.SetOpenRouter(s.settings.OpenRouterKey(), cur.OpenRouterBaseURL)
 	s.providers.SetZAI(s.settings.ZAIKey(), cur.ZAIBaseURL)
+	s.providers.SetDeepSeek(s.settings.DeepSeekKey(), cur.DeepSeekBaseURL)
 	s.providers.SetCustomProviders(s.customProviderSpecs(cur))
 	s.convo.SetLimits(cur.MaxContextTokens, cur.KeepRecentMsgs)
 	s.convo.SetBudgetShape(cur.ContextBudgetFraction, cur.ContextBudgetCeil) // model-aware budget knobs
@@ -399,6 +395,8 @@ func (s *Server) registerAgentRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/agents", s.handleCreateAgent)
 	mux.HandleFunc("PUT /api/agents/{id}", s.handleUpdateAgent)
 	mux.HandleFunc("DELETE /api/agents/{id}", s.handleDeleteAgent)
+	// Clone an existing agent (full profile + tool config) into a new "(kopya)".
+	mux.HandleFunc("POST /api/agents/{id}/duplicate", s.handleDuplicateAgent)
 	// Fresh-start context preview (assembled system prompt + tool catalog).
 	mux.HandleFunc("GET /api/agents/{id}/context", s.handleAgentContext)
 	// On-disk JSON file path + reveal in the OS file manager (local desktop).

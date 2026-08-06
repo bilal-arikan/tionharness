@@ -26,6 +26,12 @@ type Manifest struct {
 	AllowCustomModel bool
 	// Order controls the catalog sort position (lower first).
 	Order int
+	// RequestTimeoutSecs overrides the per-request wall-clock budget (seconds) for
+	// every client this kind builds. 0 = model-class default (120s, or the long
+	// budget for reasoning/adaptive models — see LongRequestModel). Lets a slow
+	// endpoint declare a longer budget declaratively; Registry.Get applies it to
+	// the built provider after Build, with no per-kind build-function change.
+	RequestTimeoutSecs int
 	// Models is the curated suggestion list for the picker.
 	Models []ModelInfo
 }
@@ -35,16 +41,16 @@ type Manifest struct {
 // provider id. Fields a given kind does not use are simply left zero — the CLI
 // transport ignores Key/BaseURL, the HTTP transports ignore CLIPath.
 type ResolvedConfig struct {
-	Key           string // API key (anthropic, minimax)
-	BaseURL       string // custom endpoint ("" = kind default)
-	CLIPath       string // resolved `claude` binary path (claude-cli)
-	CLIConfigDir  string // CLAUDE_CONFIG_DIR override for the claude-cli subprocess ("" = inherit ~/.claude)
-	CLIAuthKind   string // claude-cli credential kind: "oauth" | "apikey" | "" (none)
-	CLIAuthToken   string // claude-cli credential value injected into the subprocess env
-	ExtendedCache    bool // anthropic extended prompt-cache beta
-	ContextEditing   bool // anthropic API-native context-editing beta (clear_tool_uses)
-	ServerCompaction bool // anthropic API-native compaction beta (compact_20260112)
-	RefusalFallback  bool // anthropic server-side refusal fallback (Fable-class requests)
+	Key              string // API key (anthropic, minimax)
+	BaseURL          string // custom endpoint ("" = kind default)
+	CLIPath          string // resolved `claude` binary path (claude-cli)
+	CLIConfigDir     string // CLAUDE_CONFIG_DIR override for the claude-cli subprocess ("" = inherit ~/.claude)
+	CLIAuthKind      string // claude-cli credential kind: "oauth" | "apikey" | "" (none)
+	CLIAuthToken     string // claude-cli credential value injected into the subprocess env
+	ExtendedCache    bool   // anthropic extended prompt-cache beta
+	ContextEditing   bool   // anthropic API-native context-editing beta (clear_tool_uses)
+	ServerCompaction bool   // anthropic API-native compaction beta (compact_20260112)
+	RefusalFallback  bool   // anthropic server-side refusal fallback (Fable-class requests)
 }
 
 // ProviderKind is one transport "plugin": it describes itself (Manifest),

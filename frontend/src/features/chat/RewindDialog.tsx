@@ -4,10 +4,10 @@
 // This is a CONVERSATION-ONLY rewind: file changes from past turns are NOT
 // reverted (git remains the source of truth for code). The removed prompt text is
 // handed back to the caller so it can be dropped into the composer for a re-try.
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { RotateCcw } from 'lucide-react'
 import type { Message } from '@/types'
-import { Button } from '@/shared/components'
+import { Button, ModalOverlay } from '@/shared/components'
 
 interface Props {
   messages: Message[]
@@ -27,14 +27,6 @@ export function RewindDialog({ messages, onRewind, onClose }: Props) {
   const [selected, setSelected] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
-    }
-    document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
-  }, [onClose])
-
   // Checkpoints = user prompts, newest first. Each carries how many messages
   // (itself + everything after) would be removed by rewinding to it.
   const checkpoints = useMemo(() => {
@@ -43,7 +35,12 @@ export function RewindDialog({ messages, onRewind, onClose }: Props) {
     for (let i = 0; i < messages.length; i++) {
       if (messages[i].role !== 'user') continue
       userSeen++
-      out.push({ id: messages[i].id, text: messages[i].text, removed: messages.length - i, n: userSeen })
+      out.push({
+        id: messages[i].id,
+        text: messages[i].text,
+        removed: messages.length - i,
+        n: userSeen,
+      })
     }
     return out.reverse()
   }, [messages])
@@ -59,26 +56,21 @@ export function RewindDialog({ messages, onRewind, onClose }: Props) {
   }
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 max-md:items-end max-md:p-0 max-md:[&>*]:!w-full max-md:[&>*]:!max-w-none max-md:[&>*]:!max-h-[92dvh] max-md:[&>*]:!rounded-b-none"
-      onMouseDown={onClose}
-    >
+    <ModalOverlay onClose={onClose}>
       <div
         role="dialog"
         aria-modal="true"
         aria-label="Sohbeti geri sar"
         data-testid="rewind-modal"
-        className="flex max-h-[80vh] w-full max-w-xl flex-col rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-2xl"
-        onMouseDown={(e) => e.stopPropagation()}
+        className="flex max-h-[80vh] w-full max-w-xl flex-col rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-[var(--shadow-lg)]"
       >
         <h2 className="mb-1 flex items-center gap-2 text-base font-semibold">
           <RotateCcw size={16} /> Sohbeti geri sar
         </h2>
         <p className="mb-4 text-xs text-[var(--color-text-dim)]">
-          Bir prompt seç — o prompt ve sonrasındaki tüm mesajlar silinir, sohbet o
-          checkpoint'e döner. <b>Dosya değişiklikleri geri alınmaz</b> (kod için git
-          kullan). Silinen prompt, düzenleyip yeniden göndermen için mesaj kutusuna
-          geri konur.
+          Bir prompt seç — o prompt ve sonrasındaki tüm mesajlar silinir, sohbet o checkpoint'e
+          döner. <b>Dosya değişiklikleri geri alınmaz</b> (kod için git kullan). Silinen prompt,
+          düzenleyip yeniden göndermen için mesaj kutusuna geri konur.
         </p>
 
         {checkpoints.length === 0 ? (
@@ -121,6 +113,6 @@ export function RewindDialog({ messages, onRewind, onClose }: Props) {
           </Button>
         </div>
       </div>
-    </div>
+    </ModalOverlay>
   )
 }

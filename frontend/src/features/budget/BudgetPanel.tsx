@@ -242,16 +242,20 @@ function SavingsCell({
   primary,
   sub,
   hint,
+  // 'success' (green) for real savings; 'warning' (orange) for a leak like
+  // cooling waste — a negative value, so painting it green would misread as a gain.
+  tone = 'success',
 }: {
   title: string
   primary: string
   sub: string
   hint: string
+  tone?: 'success' | 'warning'
 }) {
   return (
     <div className="px-4 py-3" title={hint}>
       <div className="text-[11px] text-[var(--color-text-dim)]">{title}</div>
-      <div className="mt-0.5 text-xl font-semibold" style={{ color: 'var(--color-success)' }}>
+      <div className="mt-0.5 text-xl font-semibold" style={{ color: `var(--color-${tone})` }}>
         {primary}
       </div>
       <div className="mt-0.5 text-[11px] text-[var(--color-text-dim)]">{sub}</div>
@@ -503,6 +507,7 @@ export function BudgetPanel({ onError }: Props) {
                 {(usage.cumulative.coolingWasteUSD ?? 0) > 0 && (
                   <div className="border-t border-[var(--color-border)]">
                     <SavingsCell
+                      tone="warning"
                       title="Soğuma israfı (önlenebilir)"
                       primary={`${usage.cumulative.coolingWasteEstimated ? '~' : ''}−${usd(usage.cumulative.coolingWasteUSD ?? 0)}`}
                       sub="TTL/eviction ile soğuyan öneklerin yeniden yazım primi"

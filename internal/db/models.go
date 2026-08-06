@@ -128,7 +128,14 @@ type Session struct {
 	SourceID     string `json:"sourceId,omitempty"`
 	Title        string `json:"title"`
 	MessageCount int    `json:"messageCount"`
-	State        string `json:"state"`
+	// ToolCallCount is the session's LIFETIME count of executed tool calls, summed
+	// from each persisted assistant message's tool steps (kind=="tool"). Like
+	// MessageCount it is a monotonic per-session counter; a counter-triggered
+	// automation with metric "tool" watches it crossing an interval multiple.
+	// Recomputed from the message lines on load (see rebuild paths) so it survives
+	// the header's stale on-disk value.
+	ToolCallCount int    `json:"toolCallCount"`
+	State         string `json:"state"`
 	// Unread is true when an agent reply landed in this session while it was not
 	// the one being viewed; cleared when the user opens it.
 	Unread bool `json:"unread"`

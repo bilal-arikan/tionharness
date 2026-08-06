@@ -510,6 +510,13 @@ func workspaceSkillsDir(workDir string) string {
 // when workDir is unknown (the provider then keeps its global-default config dir).
 func (r *Runtime) claudeHomeDir() string { return workspaceClaudeHomeDir(r.workDir) }
 
+// ClaudeHomeDir exposes this workspace's claude-cli config home so out-of-loop
+// fold paths (compaction/handoff) can carry it on the context via
+// conversation.WithClaudeHome, letting the fold core self-pin the shared
+// claude-cli provider instead of relying on every call site to remember
+// PinClaudeHome. Empty when workDir is unknown (no pinning, global default).
+func (r *Runtime) ClaudeHomeDir() string { return r.claudeHomeDir() }
+
 // Skills returns this runtime's skill store (never nil after construction).
 func (r *Runtime) Skills() *skills.Store { return r.skills }
 

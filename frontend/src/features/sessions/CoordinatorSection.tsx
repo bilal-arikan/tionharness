@@ -86,6 +86,17 @@ export function CoordinatorSection({
   const [workersOpen, setWorkersOpen] = useState(
     () => localStorage.getItem('tionswarm.coordWorkersOpen') !== '0',
   )
+  // Workflow (recipe) picker collapse (persisted) — once a recipe is chosen the
+  // full radio list is just noise, so let it fold away like the roster.
+  const [workflowOpen, setWorkflowOpen] = useState(
+    () => localStorage.getItem('tionswarm.coordWorkflowOpen') !== '0',
+  )
+  const toggleWorkflow = () =>
+    setWorkflowOpen((v) => {
+      const next = !v
+      localStorage.setItem('tionswarm.coordWorkflowOpen', next ? '1' : '0')
+      return next
+    })
   // Which worker bucket is shown: running vs finished (persisted).
   const [workerTab, setWorkerTab] = useState<'running' | 'done'>(() =>
     localStorage.getItem('tionswarm.coordWorkerTab') === 'done' ? 'done' : 'running',
@@ -283,23 +294,41 @@ export function CoordinatorSection({
               the coordinator prompt. */}
           <div className="rounded-lg border border-[var(--color-border)] px-2.5 py-2">
             {/* A plain heading, not a <label>: it labels no single control (the
-                radiogroup below carries its own aria-label) and it now contains a
-                button, which a label must not swallow clicks for. */}
-            <div className="mb-1 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
-              <Workflow size={12} /> Workflow
+                radiogroup below carries its own aria-label) and it now contains
+                buttons, which a label must not swallow clicks for. The heading
+                text is a collapse toggle; the ⓘ and spinner sit outside it so
+                they stay clickable/visible while folded. */}
+            <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
+              <button
+                type="button"
+                onClick={toggleWorkflow}
+                aria-expanded={workflowOpen}
+                className="flex min-w-0 flex-1 items-center gap-1.5 text-left transition hover:text-[var(--color-accent)]"
+              >
+                {workflowOpen ? (
+                  <ChevronDown size={12} className="shrink-0" />
+                ) : (
+                  <ChevronRight size={12} className="shrink-0" />
+                )}
+                <Workflow size={12} className="shrink-0" /> Workflow
+              </button>
               {/* fixed: the session panel is `overflow-hidden` + `overflow-y-auto`
                   and barely wider than the bubble, so an absolutely-positioned one
                   is clipped on both axes no matter which edge it aligns to. */}
               <InfoPopover text={WORKFLOW_HELP} label="Workflow nedir?" fixed />
               {savingWf && <Loader2 size={11} className="animate-spin" />}
             </div>
-            <CoordinatorWorkflowPicker
-              value={workflow}
-              onChange={selectWorkflow}
-              disabled={savingWf}
-              groupName={`coord-wf-${sessionId}`}
-              onOpenSkill={onOpenSkill}
-            />
+            {workflowOpen && (
+              <div className="mt-1">
+                <CoordinatorWorkflowPicker
+                  value={workflow}
+                  onChange={selectWorkflow}
+                  disabled={savingWf}
+                  groupName={`coord-wf-${sessionId}`}
+                  onOpenSkill={onOpenSkill}
+                />
+              </div>
+            )}
           </div>
 
           {workers.length === 0 ? (

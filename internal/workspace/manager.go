@@ -323,6 +323,18 @@ func (m *Manager) open(meta Meta) error {
 	// Token-triggered automations: every recorded provider call signals cumulative
 	// spend so the engine can fire when a session/workspace crosses a threshold.
 	rt.AddUsageHook(autoEngine.OnUsageRecorded)
+	// Counter-triggered automations: every message append signals the session's new
+	// message/tool counters so the engine can fire when one crosses an interval.
+	// Dispatched on a detached goroutine so an append is never blocked.
+	database.SetActivityHook(func(sig db.ActivitySignal) {
+		go autoEngine.OnActivityRecorded(context.Background(), agent.ActivityRecorded{
+			SessionID:    sig.SessionID,
+			MessageTotal: sig.MessageTotal,
+			MessageDelta: sig.MessageDelta,
+			ToolTotal:    sig.ToolTotal,
+			ToolDelta:    sig.ToolDelta,
+		})
+	})
 
 	// Restart-safe: continue any flow runs interrupted by a previous shutdown.
 	rt.ResumeRunningFlows(context.Background())

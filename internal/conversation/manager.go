@@ -105,6 +105,37 @@ func firePreCompact(ctx context.Context, trigger string) {
 	}
 }
 
+// contextOverheadCtxKey carries the estimated token cost of the NON-message
+// context shipped on every turn — the static system prefix, skill/tool catalogs,
+// eager tool schemas and the artifact block. Prepare folds only the message
+// history, but the model actually receives messages PLUS this fixed overhead, so
+// the fold decision must budget for both: a big static prefix (a claude-cli
+// coordinator with many MCP tool schemas) can hold the message-only estimate
+// under the budget forever while the real footprint sits far above it, so no fold
+// ever fires. Threading the overhead in makes the fold trigger against the true
+// footprint — the same basis the session_info context meter reports, so the meter
+// and the engine finally agree on both sides of the ratio.
+type contextOverheadCtxKey struct{}
+
+// WithContextOverhead returns a context carrying the non-message token overhead
+// for the upcoming turn. Non-positive input is a no-op (overhead 0 → unchanged
+// message-only budgeting, so direct callers and tests behave exactly as before).
+func WithContextOverhead(ctx context.Context, tokens int) context.Context {
+	if tokens <= 0 {
+		return ctx
+	}
+	return context.WithValue(ctx, contextOverheadCtxKey{}, tokens)
+}
+
+// contextOverheadFrom returns the non-message overhead stamped on the context, or
+// 0 when none was set.
+func contextOverheadFrom(ctx context.Context) int {
+	if v, ok := ctx.Value(contextOverheadCtxKey{}).(int); ok && v > 0 {
+		return v
+	}
+	return 0
+}
+
 // Manager performs token-budgeted compaction. It is safe to share and its
 // limits can be updated live from the Settings screen.
 type Manager struct {
@@ -216,8 +247,15 @@ func (m *Manager) Prepare(ctx context.Context, database *db.DB, provider provide
 		fraction, ceil := m.budgetShape()
 		maxTokens = EffectiveBudget(agent.Provider, agent.Model, maxTokens, fraction, ceil)
 	}
+	// Non-message context shipped every turn (static prefix + tool/skill catalogs +
+	// eager tool schemas + artifact block). The model receives messages PLUS this,
+	// so the fold must budget for both — otherwise a large fixed prefix keeps the
+	// message-only estimate under budget forever and no fold ever fires while the
+	// real footprint runs over. 0 when the caller did not supply an estimate, which
+	// preserves the previous message-only behaviour exactly.
+	overhead := contextOverheadFrom(ctx)
 	compacted := false
-	if before := EstimateTokens(summary, pending); before > maxTokens {
+	if before := EstimateTokens(summary, pending); before+overhead > maxTokens {
 		if fold, keepTail, newCount, ok := foldBoundary(history, start, keepRecent); ok {
 			// PreCompact lifecycle hook seam: fire before the fold runs (Claude Code
 			// parity). "auto" = the routine budgeted fold (manual /compact passes
@@ -235,18 +273,20 @@ func (m *Manager) Prepare(ctx context.Context, database *db.DB, provider provide
 			compacted = true
 			m.log(slog.LevelInfo, "context compacted (rolling summary fold)",
 				"session", session.ID, "agent", agent.ID,
-				"folded_msgs", len(fold), "before_tokens", before,
-				"after_tokens", EstimateTokens(summary, pending), "budget", maxTokens)
+				"folded_msgs", len(fold), "before_tokens", before, "overhead_tokens", overhead,
+				"after_tokens", EstimateTokens(summary, pending)+overhead, "budget", maxTokens)
 		}
 	}
 
 	contextTokens := EstimateTokens(summary, pending)
 	// Pressure is how full the context budget is after this turn's compaction —
 	// surfaced to the agent so it can persist anything important BEFORE the next
-	// silent fold (see api/chat_turn.go). 0 when the budget is disabled.
+	// silent fold (see api/chat_turn.go). Measured against the SAME footprint the
+	// fold gates on (messages + fixed overhead) so pressure reaches 100% exactly
+	// when the engine would fold. 0 when the budget is disabled.
 	pressure := 0.0
 	if maxTokens > 0 {
-		pressure = float64(contextTokens) / float64(maxTokens)
+		pressure = float64(contextTokens+overhead) / float64(maxTokens)
 	}
 
 	return Prepared{
@@ -348,6 +388,11 @@ func summarizeRendered(ctx context.Context, database *db.DB, provider providers.
 	if existing == "" {
 		existing = "(none)"
 	}
+	// Self-pin the workspace claude-home before the direct Complete: this fold
+	// runs outside guardedComplete/the tool loop, so without a pin the shared
+	// claude-cli provider uses its global-default config dir and fails auth. The
+	// home is carried on ctx via WithClaudeHome by every fold entry point.
+	pinClaudeHome(ctx, provider)
 	resp, err := provider.Complete(ctx, providers.Request{
 		Model:     agent.Model,
 		MaxTokens: compactMaxOutputTokens,

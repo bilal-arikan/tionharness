@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Loader2, Copy, Check, RefreshCw, X, ChevronLeft } from 'lucide-react'
+import { Loader2, Copy, RefreshCw, X, ChevronLeft } from 'lucide-react'
 import { api } from '@/api'
+import { toast } from '@/shared/components'
 import { VIEW_LENS_LABEL, refToString } from '@/types'
 import type { ViewLens, ViewLevel, ViewRef, ViewResult } from '@/types'
 
@@ -32,7 +33,6 @@ export function ViewPanel({ target, onClose, onSend }: Props) {
   const [result, setResult] = useState<ViewResult | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
-  const [copied, setCopied] = useState(false)
 
   const ref = trail[trail.length - 1]
 
@@ -63,8 +63,7 @@ export function ViewPanel({ target, onClose, onSend }: Props) {
   const copy = async () => {
     if (!result) return
     await navigator.clipboard.writeText(result.text)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 1200)
+    toast.info('Panoya kopyalandı')
   }
 
   return (
@@ -187,8 +186,8 @@ export function ViewPanel({ target, onClose, onSend }: Props) {
               onClick={() => void copy()}
               className="flex items-center gap-1.5 rounded-md border border-[var(--color-border)] px-2.5 py-1 text-xs text-[var(--color-text-dim)] transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
             >
-              {copied ? <Check size={13} /> : <Copy size={13} />}
-              {copied ? 'Kopyalandı' : 'Kopyala'}
+              <Copy size={13} />
+              Kopyala
             </button>
             {onSend && (
               <button

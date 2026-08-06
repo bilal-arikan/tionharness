@@ -3,7 +3,6 @@ package tools
 import (
 	"context"
 	"encoding/json"
-	"strings"
 	"testing"
 
 	"github.com/bilal-arikan/tionswarm/internal/db"
@@ -36,16 +35,19 @@ func TestCreateHookStampsCreatedBy(t *testing.T) {
 	}
 }
 
-// TestDeleteHookGuard verifies only agent-created hooks can be deleted.
-func TestDeleteHookGuard(t *testing.T) {
+// TestDeleteHook verifies any hook — user- or agent-created — can be deleted.
+func TestDeleteHook(t *testing.T) {
 	ctx := context.Background()
 	d := openTestDB(t)
 	const actor = "actor-1"
 
 	userHook, _ := d.CreateHook(ctx, db.Hook{Event: db.HookPreToolUse, Command: "x"}) // CreatedBy ""
 	del := NewDeleteHookTool(d, actor)
-	if _, err := del.Call(ctx, json.RawMessage(`{"id":"`+userHook.ID+`"}`)); err == nil || !strings.Contains(err.Error(), "created by the user") {
-		t.Fatalf("expected user-hook delete rejected, got %v", err)
+	if _, err := del.Call(ctx, json.RawMessage(`{"id":"`+userHook.ID+`"}`)); err != nil {
+		t.Fatalf("delete of user-created hook should succeed: %v", err)
+	}
+	if _, err := d.GetHook(ctx, userHook.ID); err == nil {
+		t.Fatal("user hook should be gone")
 	}
 
 	agentHook, _ := d.CreateHook(ctx, db.Hook{Event: db.HookPreToolUse, Command: "y", CreatedBy: actor})
@@ -86,16 +88,19 @@ func TestCreateMCPServerValidation(t *testing.T) {
 	}
 }
 
-// TestDeleteMCPServerGuard verifies only agent-created MCP servers can be deleted.
-func TestDeleteMCPServerGuard(t *testing.T) {
+// TestDeleteMCPServer verifies any MCP server — user- or agent-created — can be deleted.
+func TestDeleteMCPServer(t *testing.T) {
 	ctx := context.Background()
 	d := openTestDB(t)
 	const actor = "actor-1"
 
 	userSrv, _ := d.CreateMCPServer(ctx, db.MCPServer{Name: "U", Transport: "stdio", Command: "c"}) // CreatedBy ""
 	del := NewDeleteMCPServerTool(d, actor)
-	if _, err := del.Call(ctx, json.RawMessage(`{"id":"`+userSrv.ID+`"}`)); err == nil || !strings.Contains(err.Error(), "configured by the user") {
-		t.Fatalf("expected user-server delete rejected, got %v", err)
+	if _, err := del.Call(ctx, json.RawMessage(`{"id":"`+userSrv.ID+`"}`)); err != nil {
+		t.Fatalf("delete of user-created MCP server should succeed: %v", err)
+	}
+	if _, err := d.GetMCPServer(ctx, userSrv.ID); err == nil {
+		t.Fatal("user server should be gone")
 	}
 
 	agentSrv, _ := d.CreateMCPServer(ctx, db.MCPServer{Name: "A", Transport: "stdio", Command: "c", CreatedBy: actor})

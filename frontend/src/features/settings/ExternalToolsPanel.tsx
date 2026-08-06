@@ -10,6 +10,7 @@
 import { useEffect, useState } from 'react'
 import { ScanSearch, Eraser, FileCog, RefreshCw, ArrowUpCircle, Copy } from 'lucide-react'
 import { api } from '@/api'
+import { toast } from '@/shared/components'
 import { systemApi } from '@/api/system'
 import type {
   Hook,
@@ -108,7 +109,6 @@ export function ExternalToolsPanel({ onError }: Props) {
   const [updateLog, setUpdateLog] = useState<{ name: string; ok: boolean; text: string } | null>(
     null,
   )
-  const [copied, setCopied] = useState<string | null>(null)
 
   // Ask the backend to compare each installed tool with its latest release.
   // `refresh` bypasses the 6h server cache — offered so a user who just released
@@ -142,11 +142,10 @@ export function ExternalToolsPanel({ onError }: Props) {
     }
   }
 
-  const copyCommand = async (name: string, cmd: string) => {
+  const copyCommand = async (cmd: string) => {
     try {
       await navigator.clipboard.writeText(cmd)
-      setCopied(name)
-      setTimeout(() => setCopied(null), 1500)
+      toast.info('Panoya kopyalandı')
     } catch (e) {
       onError((e as Error).message)
     }
@@ -624,15 +623,12 @@ export function ExternalToolsPanel({ onError }: Props) {
                           type="button"
                           data-testid="tool-copy-update-cmd"
                           data-tool={t.name}
-                          onClick={() => copyCommand(t.name, t.updateCommand ?? '')}
+                          onClick={() => copyCommand(t.updateCommand ?? '')}
                           className="inline-flex w-fit items-center gap-1 rounded px-1 text-[11px] text-[var(--color-text-dim)] hover:text-[var(--color-text)]"
                           title="Güncelleme komutunu panoya kopyala"
                         >
                           <Copy size={10} />
                           <code>{t.updateCommand}</code>
-                          {copied === t.name && (
-                            <span className="text-[var(--color-success)]">kopyalandı</span>
-                          )}
                         </button>
                       )}
                       {/* codebase-memory integration: explanation + one-click MCP wiring,

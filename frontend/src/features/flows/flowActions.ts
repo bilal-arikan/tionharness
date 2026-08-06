@@ -1,6 +1,7 @@
 import type { Dispatch, SetStateAction } from 'react'
 import type { Edge } from '@xyflow/react'
 import { api } from '@/api'
+import { toast } from '@/shared/components'
 import type { EdgeStyle } from './FlowCanvas'
 import type { FlowTemplate } from './flowTemplates'
 import { reactFlowToGraph, ensureStartNode, type FlowRFNode } from './flowGraph'
@@ -77,6 +78,7 @@ export function createFlowActions({
       })
       setFlows((prev) => [f, ...prev])
       selectFlow(f)
+      toast.success('Akış oluşturuldu')
     } catch (e) {
       onError((e as Error).message)
     }
@@ -112,7 +114,7 @@ export function createFlowActions({
               ...n,
               spawnFlows: n.spawnFlows.map((ref) => {
                 const m = /^companion:(\d+)$/.exec(ref)
-                return m ? companionIds[Number(m[1])] ?? ref : ref
+                return m ? (companionIds[Number(m[1])] ?? ref) : ref
               }),
             }
           }
@@ -123,6 +125,7 @@ export function createFlowActions({
       setFlows((prev) => [f, ...created, ...prev])
       setTab('flows')
       selectFlow(f)
+      toast.success('Akış oluşturuldu')
     } catch (e) {
       onError((e as Error).message)
     }
@@ -138,6 +141,7 @@ export function createFlowActions({
       const f = await api.updateFlow(selectedId, name, graph)
       setFlows((prev) => prev.map((x) => (x.id === f.id ? f : x)))
       onError('') // clear
+      toast.success('Akış kaydedildi')
     } catch (e) {
       onError((e as Error).message)
     }
@@ -162,6 +166,7 @@ export function createFlowActions({
       await api.deleteFlow(f.id)
       if (selectedId === f.id) setSelectedId(null)
       loadFlows()
+      toast.success('Akış silindi')
     } catch (e) {
       onError((e as Error).message)
     }
@@ -186,6 +191,7 @@ export function createFlowActions({
     try {
       await Promise.all(ids.map((id) => api.deleteFlow(id)))
       loadFlows()
+      toast.success(`${ids.length} akış silindi`)
     } catch (e) {
       onError((e as Error).message)
     }

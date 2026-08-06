@@ -1,10 +1,23 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSessionState } from '@/shared/hooks/useSessionState'
 import {
-  FileText, FileCode, UploadCloud,
-  Trash2, ExternalLink, Copy, Check, Pencil, Save, X, Search,
-  ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown, FolderInput,
-  Archive, ArchiveRestore,
+  FileText,
+  FileCode,
+  UploadCloud,
+  Trash2,
+  ExternalLink,
+  Copy,
+  Pencil,
+  Save,
+  X,
+  Search,
+  ChevronDown,
+  ChevronRight,
+  ChevronsDownUp,
+  ChevronsUpDown,
+  FolderInput,
+  Archive,
+  ArchiveRestore,
 } from 'lucide-react'
 import { api } from '@/api'
 import type { Agent, Artifact, ArtifactKind } from '@/types'
@@ -17,15 +30,30 @@ import { copyToClipboard } from '@/shared/lib/clipboard'
 import { useMultiSelect } from '@/shared/hooks/useMultiSelect'
 import { useGroupedList } from '@/shared/hooks/useGroupedList'
 import { useGroupDnD } from '@/shared/hooks/useGroupDnD'
-import { SelectionBar, SelectionBarButton, ListPane, PaneHeader, LoadingState } from '@/shared/components'
+import {
+  SelectionBar,
+  SelectionBarButton,
+  ListPane,
+  PaneHeader,
+  LoadingState,
+  toast,
+} from '@/shared/components'
 import { useCollapsibleList } from '@/shared/hooks/useCollapsibleList'
 import { useRegisterDirty } from '@/shared/lib/dirtySignals'
 import {
-  SidebarHeader, RefreshButton, NewItemButton,
-  SELECTED_ITEM_CLS, SELECTED_ITEM_RING,
+  SidebarHeader,
+  RefreshButton,
+  NewItemButton,
+  SELECTED_ITEM_CLS,
+  SELECTED_ITEM_RING,
 } from '@/shared/components/SidebarChrome'
 import {
-  KIND_ICON, KIND_LABEL, OriginBadge, KINDS, isMediaKind, artifactKindForUpload,
+  KIND_ICON,
+  KIND_LABEL,
+  OriginBadge,
+  KINDS,
+  isMediaKind,
+  artifactKindForUpload,
 } from './artifactMeta'
 
 interface Props {
@@ -75,9 +103,11 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
   const [list, setList] = useState<Artifact[]>([])
   // Selection persists across screen switches within the session (resets on app
   // reload). A deep-link `selectedId` still overrides via the effect below.
-  const [activeId, setActiveId] = useSessionState<string | null>('artifacts.activeId', selectedId ?? null)
+  const [activeId, setActiveId] = useSessionState<string | null>(
+    'artifacts.activeId',
+    selectedId ?? null,
+  )
   const [active, setActive] = useState<Artifact | null>(null)
-  const [copied, setCopied] = useState(false)
   // On-disk path of the active artifact (its source file, or its store JSON),
   // loaded lazily so the copy-path / open-folder actions have a target.
   const [activePath, setActivePath] = useState<string>('')
@@ -92,7 +122,9 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
   // List filters: free-text title search + an origin facet (Tümü / chat / manual /
   // agent / tool).
   const [query, setQuery] = useState('')
-  const [originFilter, setOriginFilter] = useState<'all' | 'chat' | 'manual' | 'agent' | 'tool' | 'plan'>('all')
+  const [originFilter, setOriginFilter] = useState<
+    'all' | 'chat' | 'manual' | 'agent' | 'tool' | 'plan'
+  >('all')
   // Archived view toggle: false (default) hides archived artifacts and shows only
   // active ones; true flips to show ONLY archived artifacts (so they can be
   // reviewed and un-archived). Persisted so switching screens keeps the view.
@@ -186,6 +218,7 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
         await api.deleteArtifact(id)
         setList((prev) => prev.filter((a) => a.id !== id))
         setActiveId((cur) => (cur === id ? null : cur))
+        toast.success('Artifact silindi')
       } catch (e) {
         onError((e as Error).message)
       }
@@ -220,7 +253,10 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
   // Distinct existing group names (across the full list, not just the filtered
   // view), offered as bulk-group autocomplete suggestions.
   const groupNames = useMemo(
-    () => [...new Set(list.map((a) => a.group?.trim()).filter((g): g is string => !!g))].sort((a, b) => a.localeCompare(b, 'tr')),
+    () =>
+      [...new Set(list.map((a) => a.group?.trim()).filter((g): g is string => !!g))].sort((a, b) =>
+        a.localeCompare(b, 'tr'),
+      ),
     [list],
   )
   // Flattened visible (non-collapsed) id order, so a Shift+Click range can cross
@@ -259,7 +295,10 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
           setBulkGroup('')
           reload()
           if (activeId && sel.selected.has(activeId)) {
-            api.getArtifact(activeId).then(setActive).catch(() => {})
+            api
+              .getArtifact(activeId)
+              .then(setActive)
+              .catch(() => {})
           }
         })
         .catch((e) => onError((e as Error).message))
@@ -343,7 +382,13 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
       setList((prev) => [a, ...prev])
       setActiveId(a.id)
       setActive(a)
-      setDraft({ title: a.title, kind: a.kind, language: a.language, content: a.content, group: a.group ?? '' })
+      setDraft({
+        title: a.title,
+        kind: a.kind,
+        language: a.language,
+        content: a.content,
+        group: a.group ?? '',
+      })
     } catch (e) {
       onError((e as Error).message)
     }
@@ -392,6 +437,7 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
       setActive(updated)
       setDraft(null)
       setList((prev) => prev.map((a) => (a.id === updated.id ? updated : a)))
+      toast.success('Kaydedildi')
     } catch (e) {
       onError((e as Error).message)
     } finally {
@@ -417,9 +463,7 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
   const copy = useCallback(() => {
     if (!active) return
     copyToClipboard(active.content).then((ok) => {
-      if (!ok) return
-      setCopied(true)
-      setTimeout(() => setCopied(false), 1200)
+      if (ok) toast.info('Panoya kopyalandı')
     })
   }, [active])
 
@@ -494,10 +538,10 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
     <div
       className="relative flex h-full min-h-0 flex-1"
       onDragEnter={onDragEnter}
-        onDragOver={onDragOver}
-        onDragLeave={onDragLeave}
-        onDrop={onDrop}
-      >
+      onDragOver={onDragOver}
+      onDragLeave={onDragLeave}
+      onDrop={onDrop}
+    >
       {/* Drop overlay */}
       {(dragging || importing) && (
         <div className="pointer-events-none absolute inset-0 z-30 flex flex-col items-center justify-center gap-3 border-2 border-dashed border-[var(--color-accent)] bg-[color-mix(in_srgb,var(--color-accent)_12%,var(--color-bg))]/90 backdrop-blur-sm">
@@ -543,7 +587,10 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
         {/* Filters: title search + origin facet. */}
         <div className="flex flex-col gap-2 border-b border-[var(--color-border)] px-3 py-2">
           <div className="relative">
-            <Search size={13} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--color-text-dim)]" />
+            <Search
+              size={13}
+              className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--color-text-dim)]"
+            />
             <input
               data-testid="artifacts-search-input"
               value={query}
@@ -562,14 +609,16 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
             )}
           </div>
           <div className="flex flex-wrap gap-1">
-            {([
-              ['all', 'Tümü'],
-              ['chat', 'Sohbet eki'],
-              ['manual', 'Manuel'],
-              ['agent', 'Ajan'],
-              ['tool', 'Tool'],
-              ['plan', 'Plan'],
-            ] as const).map(([val, label]) => (
+            {(
+              [
+                ['all', 'Tümü'],
+                ['chat', 'Sohbet eki'],
+                ['manual', 'Manuel'],
+                ['agent', 'Ajan'],
+                ['tool', 'Tool'],
+                ['plan', 'Plan'],
+              ] as const
+            ).map(([val, label]) => (
               <button
                 key={val}
                 data-testid="artifacts-filter"
@@ -611,7 +660,9 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
             <div className="flex flex-col items-center gap-2 px-4 py-10 text-center text-sm text-[var(--color-text-dim)]">
               <FileCode size={28} className="opacity-40" />
               <p>
-                Henüz artifact yok. Bir oturumda dosya/doküman ürettiğinde otomatik buraya düşer; <strong>Yeni</strong> ile elle ekle; ya da <strong>resim/video/ses dosyalarını buraya sürükle-bırak</strong>.
+                Henüz artifact yok. Bir oturumda dosya/doküman ürettiğinde otomatik buraya düşer;{' '}
+                <strong>Yeni</strong> ile elle ekle; ya da{' '}
+                <strong>resim/video/ses dosyalarını buraya sürükle-bırak</strong>.
               </p>
             </div>
           )}
@@ -677,7 +728,9 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
                             <span className="block truncate font-medium">{a.title}</span>
                             <span className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-[var(--color-text-dim)]">
                               <OriginBadge origin={a.origin} />
-                              <span>{KIND_LABEL[a.kind] ?? a.kind} · {relativeTime(a.updatedAt)}</span>
+                              <span>
+                                {KIND_LABEL[a.kind] ?? a.kind} · {relativeTime(a.updatedAt)}
+                              </span>
                             </span>
                           </span>
                         </button>
@@ -721,7 +774,11 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
               icon={<FolderInput size={13} />}
               onClick={() => bulkSetGroup(bulkGroup.trim())}
               disabled={bulkGroupBusy}
-              title={bulkGroup.trim() ? `Seçili artifactları "${bulkGroup.trim()}" grubuna taşı` : 'Seçili artifactları grupsuz yap'}
+              title={
+                bulkGroup.trim()
+                  ? `Seçili artifactları "${bulkGroup.trim()}" grubuna taşı`
+                  : 'Seçili artifactları grupsuz yap'
+              }
             >
               {bulkGroup.trim() ? 'Ata' : 'Grupsuz'}
             </SelectionBarButton>
@@ -733,7 +790,9 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
             icon={showArchived ? <ArchiveRestore size={13} /> : <Archive size={13} />}
             onClick={() => bulkSetArchived(!showArchived)}
             disabled={bulkArchiveBusy}
-            title={showArchived ? 'Seçili artifactları arşivden çıkar' : 'Seçili artifactları arşivle'}
+            title={
+              showArchived ? 'Seçili artifactları arşivden çıkar' : 'Seçili artifactları arşivle'
+            }
           >
             {showArchived ? 'Arşivden çıkar' : 'Arşivle'}
           </SelectionBarButton>
@@ -808,8 +867,8 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
                       title="İçeriği kopyala"
                       className="flex shrink-0 items-center gap-1.5 rounded-md border border-[var(--color-border)] px-2 py-1 text-xs text-[var(--color-text-dim)] transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
                     >
-                      {copied ? <Check size={14} className="text-[var(--color-success)]" /> : <Copy size={14} />}
-                      <span>{copied ? 'Kopyalandı' : 'İçerik'}</span>
+                      <Copy size={14} />
+                      <span>İçerik</span>
                     </button>
                   </div>
                 )}
@@ -836,8 +895,19 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
                 ) : (
                   <>
                     {/* Edit moved next to the content-copy button in the chip row. */}
-                    <CopyPathButton path={activePath} label="Yolu kopyala" labelClassName="hidden" title="Yolu kopyala" />
-                    <RevealButton testId="artifact-detail-reveal" onReveal={reveal} disabled={!activePath} label="Aç" labelClassName="hidden sm:inline" />
+                    <CopyPathButton
+                      path={activePath}
+                      label="Yolu kopyala"
+                      labelClassName="hidden"
+                      title="Yolu kopyala"
+                    />
+                    <RevealButton
+                      testId="artifact-detail-reveal"
+                      onReveal={reveal}
+                      disabled={!activePath}
+                      label="Aç"
+                      labelClassName="hidden sm:inline"
+                    />
                     {active.sessionId && onOpenSession && (
                       <button
                         onClick={() => onOpenSession(active.sessionId)}
@@ -959,11 +1029,11 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
             ) : (
               <div className="min-h-0 flex-1 overflow-y-auto p-5">
                 <ArtifactView
-                kind={active.kind}
-                language={active.language}
-                content={active.content}
-                sourcePath={active.sourcePath}
-              />
+                  kind={active.kind}
+                  language={active.language}
+                  content={active.content}
+                  sourcePath={active.sourcePath}
+                />
               </div>
             )}
           </>

@@ -792,23 +792,48 @@ func (b *interactionBackend) callToolSearch(run *chatRun, args json.RawMessage) 
 		names = append(names, name)
 	}
 	sort.Strings(names)
-	var matches []string
+	// Term-scoring (OR + rank), not strict AND — mirrors the native builtin
+	// tool_search (internal/tools/builtin_activate.go): a tool matches when it
+	// contains AT LEAST ONE query term, ranked by how many distinct terms it hits
+	// (a name hit outweighs a description hit). Strict AND used to return empty
+	// when the model passed several full tool names in one query, since no single
+	// tool contains every term. Names are pre-sorted, so equal-score ties stay
+	// alphabetical.
+	type scored struct {
+		name     string
+		terms    int
+		nameHits int
+	}
+	var ranked []scored
 	for _, name := range names {
-		hay := strings.ToLower(name + " " + cands[name])
-		all := true
+		lname := strings.ToLower(name)
+		hay := lname + " " + strings.ToLower(cands[name])
+		var termHits, nameHits int
 		for _, term := range terms {
-			if !strings.Contains(hay, term) {
-				all = false
-				break
+			if strings.Contains(hay, term) {
+				termHits++
+				if strings.Contains(lname, term) {
+					nameHits++
+				}
 			}
 		}
-		if all {
-			desc := cands[name]
-			if len(desc) > 100 {
-				desc = desc[:100] + "…"
-			}
-			matches = append(matches, "- "+name+" — "+desc)
+		if termHits > 0 {
+			ranked = append(ranked, scored{name: name, terms: termHits, nameHits: nameHits})
 		}
+	}
+	sort.SliceStable(ranked, func(i, j int) bool {
+		if ranked[i].terms != ranked[j].terms {
+			return ranked[i].terms > ranked[j].terms
+		}
+		return ranked[i].nameHits > ranked[j].nameHits
+	})
+	var matches []string
+	for _, r := range ranked {
+		desc := cands[r.name]
+		if len(desc) > 100 {
+			desc = desc[:100] + "…"
+		}
+		matches = append(matches, "- "+r.name+" — "+desc)
 	}
 	if len(matches) == 0 {
 		return interaction.CallResult{Text: fmt.Sprintf("No on-demand tools match %q.", in.Query)}

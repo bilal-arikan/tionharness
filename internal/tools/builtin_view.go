@@ -42,7 +42,9 @@ func (GetViewTool) Def() providers.ToolDef {
 			"Use id='workspace'.\n" +
 			"  board   — the kanban. Column histogram plus the signals that matter: cards stuck in a " +
 			"working column, failed cards, dependency-blocked cards, overdue cards, recent movement. " +
-			"Use id='board'.\n\n" +
+			"Use id='board'. sub=<cardId> drills into one card.\n" +
+			"  schedule — one cron schedule: armed/disabled, last-fire status and error, next run, and " +
+			"what it delivers (agent or flow). Use the schedule id.\n\n" +
 			"Numbers in a view are computed, never written by a model, so they can be trusted. The view " +
 			"always reports how many items it hid and offers drill-down handles for them — nothing is " +
 			"silently dropped.\n\n" +
@@ -53,9 +55,9 @@ func (GetViewTool) Def() providers.ToolDef {
 		InputSchema: json.RawMessage(`{
   "type": "object",
   "properties": {
-    "kind": { "type": "string", "enum": ["flowrun","session","board","workspace"], "description": "Entity type to project." },
-    "id": { "type": "string", "description": "Entity id (a flow run id, a session id, or 'board'/'workspace' for the singletons)." },
-    "sub": { "type": "string", "description": "Optional drill-down target inside the entity (a node id for a flow run)." },
+    "kind": { "type": "string", "enum": ["flowrun","session","board","workspace","schedule"], "description": "Entity type to project." },
+    "id": { "type": "string", "description": "Entity id (a flow run / session / schedule id, or 'board'/'workspace' for the singletons)." },
+    "sub": { "type": "string", "description": "Optional drill-down target inside the entity (a node id for a flow run, a card id for the board)." },
     "level": { "type": "string", "enum": ["tiny","card","full"], "description": "Budget tier (default card)." },
     "lens": { "type": "string", "enum": ["health","stale","recent","errors"], "description": "Which facts matter (default health)." }
   },
@@ -68,6 +70,8 @@ func (GetViewTool) Def() providers.ToolDef {
 			json.RawMessage(`{"kind":"board","id":"board","lens":"stale"}`),
 			json.RawMessage(`{"kind":"session","id":"SES9a1","level":"full"}`),
 			json.RawMessage(`{"kind":"flowrun","id":"RUN7f2","sub":"fetch-b"}`),
+			json.RawMessage(`{"kind":"board","id":"board","sub":"T3"}`),
+			json.RawMessage(`{"kind":"schedule","id":"SCH1"}`),
 		},
 	}
 }

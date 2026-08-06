@@ -69,6 +69,15 @@ type DB struct {
 	boardHook   BoardChangeFn
 	boardHookMu sync.RWMutex
 
+	// activityHook is an optional observer invoked (best-effort) after a message is
+	// appended, carrying the session's new message/tool-call totals and this
+	// append's deltas. It backs counter-triggered automations (metric
+	// message/tool); the workspace manager wires it to the AutomationEngine. Like
+	// boardHook it is called AFTER the store lock is released and the callback is
+	// expected to dispatch on its own goroutine, so an append is never blocked.
+	activityHook   ActivityFn
+	activityHookMu sync.RWMutex
+
 	// debugCount tracks the on-disk line count of each session's debug.jsonl so
 	// the append path can cap the file (oldest events pruned) without re-reading
 	// it every write. Guarded by its own mutex (independent of mu) so a debug

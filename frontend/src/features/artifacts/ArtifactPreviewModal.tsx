@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { X, ExternalLink, Loader2 } from 'lucide-react'
 import { api } from '@/api'
 import type { Artifact } from '@/types'
+import { ModalOverlay } from '@/shared/components'
 import { ArtifactView } from './ArtifactView'
 import { KIND_ICON, KIND_LABEL, OriginBadge } from './artifactMeta'
 
@@ -42,25 +43,11 @@ export function ArtifactPreviewModal({ artifactId, onClose, onOpenFull, onError 
     }
   }, [artifactId, onError])
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
-    }
-    document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
-  }, [onClose])
-
   const Icon = artifact ? KIND_ICON[artifact.kind] : null
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm max-md:items-end max-md:p-0 max-md:[&>*]:!w-full max-md:[&>*]:!max-w-none max-md:[&>*]:!max-h-[92dvh] max-md:[&>*]:!rounded-b-none"
-      onClick={onClose}
-    >
-      <div
-        className="flex max-h-[85vh] w-full max-w-3xl flex-col overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-2xl"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <ModalOverlay onClose={onClose} className="backdrop-blur-sm">
+      <div className="flex max-h-[85vh] w-full max-w-3xl flex-col overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-[var(--shadow-lg)]">
         {/* Header */}
         <div className="flex items-center justify-between gap-3 border-b border-[var(--color-border)] px-4 py-3">
           <div className="flex min-w-0 items-center gap-2">
@@ -121,6 +108,6 @@ export function ArtifactPreviewModal({ artifactId, onClose, onOpenFull, onError 
           )}
         </div>
       </div>
-    </div>
+    </ModalOverlay>
   )
 }

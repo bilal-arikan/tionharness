@@ -3,6 +3,7 @@ import { ShieldCheck, Save } from 'lucide-react'
 import { api } from '@/api'
 import type { AppSettings } from '@/types'
 import { Field, Toggle, inputCls } from '@/features/settings/primitives'
+import { LoadingState } from '@/shared/components'
 
 interface Props {
   onError: (msg: string) => void
@@ -59,7 +60,7 @@ export function LessonsTab({ onError }: Props) {
   }
 
   if (!draft) {
-    return <div className="text-sm text-[var(--color-text-dim)]">Yükleniyor…</div>
+    return <LoadingState label="Yükleniyor…" />
   }
 
   return (
@@ -81,10 +82,12 @@ export function LessonsTab({ onError }: Props) {
       </div>
 
       <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-xs leading-relaxed text-[var(--color-text-dim)]">
-        Kendi kendini onaran oturum akışları (<code>56-SELF-HEALING</code>): araç döngüsü tur içinde tekrar eden hataları izler
-        (aynı çağrı 2 hatada uyarılır, aynı araç 3 ardışık hatada uyarılır); devre kesici açıksa 5 tekrarında çağrı bloklanır,
-        8 ardışık hatada tur kontrollü durdurulur. Üst üste kötü biten oturumlar <code>stuck</code> etiketi alır ve otonom turları
-        askıya alınır (manuel sohbet hiç etkilenmez). Ders çıkarma, başarısız turlardan kısa dersler damıtıp sonraki turlara enjekte eder.
+        Kendi kendini onaran oturum akışları (<code>56-SELF-HEALING</code>): araç döngüsü tur içinde
+        tekrar eden hataları izler (aynı çağrı 2 hatada uyarılır, aynı araç 3 ardışık hatada
+        uyarılır); devre kesici açıksa 5 tekrarında çağrı bloklanır, 8 ardışık hatada tur kontrollü
+        durdurulur. Üst üste kötü biten oturumlar <code>stuck</code> etiketi alır ve otonom turları
+        askıya alınır (manuel sohbet hiç etkilenmez). Ders çıkarma, başarısız turlardan kısa dersler
+        damıtıp sonraki turlara enjekte eder.
       </div>
 
       <Toggle
@@ -100,30 +103,97 @@ export function LessonsTab({ onError }: Props) {
         onChange={(v) => set('toolGuardHardStop', v)}
       />
       <div className="grid grid-cols-3 gap-3">
-        <Field label="Aynı çağrı: uyarı" hint="Birebir aynı (araç+argüman) başarısız çağrı bu sayıda uyarı alır (0 = varsayılan 2).">
-          <input type="number" min={0} max={50} value={draft.guardExactWarn} onChange={(e) => set('guardExactWarn', Number(e.target.value))} className={inputCls} />
+        <Field
+          label="Aynı çağrı: uyarı"
+          hint="Birebir aynı (araç+argüman) başarısız çağrı bu sayıda uyarı alır (0 = varsayılan 2)."
+        >
+          <input
+            type="number"
+            min={0}
+            max={50}
+            value={draft.guardExactWarn}
+            onChange={(e) => set('guardExactWarn', Number(e.target.value))}
+            className={inputCls}
+          />
         </Field>
-        <Field label="Aynı çağrı: blok" hint="Devre kesici açıkken birebir aynı başarısız çağrı bu sayıda çalıştırılmadan bloklanır (0 = varsayılan 5).">
-          <input type="number" min={0} max={50} value={draft.guardExactBlock} onChange={(e) => set('guardExactBlock', Number(e.target.value))} className={inputCls} />
+        <Field
+          label="Aynı çağrı: blok"
+          hint="Devre kesici açıkken birebir aynı başarısız çağrı bu sayıda çalıştırılmadan bloklanır (0 = varsayılan 5)."
+        >
+          <input
+            type="number"
+            min={0}
+            max={50}
+            value={draft.guardExactBlock}
+            onChange={(e) => set('guardExactBlock', Number(e.target.value))}
+            className={inputCls}
+          />
         </Field>
-        <Field label="Aynı araç: uyarı" hint="Aynı araç (farklı argümanlarla da olsa) bu kadar ardışık hatada uyarı alır (0 = varsayılan 3).">
-          <input type="number" min={0} max={50} value={draft.guardSameToolWarn} onChange={(e) => set('guardSameToolWarn', Number(e.target.value))} className={inputCls} />
+        <Field
+          label="Aynı araç: uyarı"
+          hint="Aynı araç (farklı argümanlarla da olsa) bu kadar ardışık hatada uyarı alır (0 = varsayılan 3)."
+        >
+          <input
+            type="number"
+            min={0}
+            max={50}
+            value={draft.guardSameToolWarn}
+            onChange={(e) => set('guardSameToolWarn', Number(e.target.value))}
+            className={inputCls}
+          />
         </Field>
-        <Field label="Aynı araç: tur durdur" hint="Devre kesici açıkken aynı araç bu kadar ardışık hatada turu kontrollü sonlandırır (0 = varsayılan 8).">
-          <input type="number" min={0} max={50} value={draft.guardSameToolHalt} onChange={(e) => set('guardSameToolHalt', Number(e.target.value))} className={inputCls} />
+        <Field
+          label="Aynı araç: tur durdur"
+          hint="Devre kesici açıkken aynı araç bu kadar ardışık hatada turu kontrollü sonlandırır (0 = varsayılan 8)."
+        >
+          <input
+            type="number"
+            min={0}
+            max={50}
+            value={draft.guardSameToolHalt}
+            onChange={(e) => set('guardSameToolHalt', Number(e.target.value))}
+            className={inputCls}
+          />
         </Field>
-        <Field label="İlerleme yok: uyarı" hint="Aynı salt-okunur çağrının başarılı tekrarları bu sayıyı aşınca uyarı alır (0 = varsayılan 2).">
-          <input type="number" min={0} max={50} value={draft.guardNoProgressWarn} onChange={(e) => set('guardNoProgressWarn', Number(e.target.value))} className={inputCls} />
+        <Field
+          label="İlerleme yok: uyarı"
+          hint="Aynı salt-okunur çağrının başarılı tekrarları bu sayıyı aşınca uyarı alır (0 = varsayılan 2)."
+        >
+          <input
+            type="number"
+            min={0}
+            max={50}
+            value={draft.guardNoProgressWarn}
+            onChange={(e) => set('guardNoProgressWarn', Number(e.target.value))}
+            className={inputCls}
+          />
         </Field>
-        <Field label="İlerleme yok: blok" hint="Devre kesici açıkken aynı salt-okunur çağrı bu sayıda tekrarda bloklanır (0 = varsayılan 5).">
-          <input type="number" min={0} max={50} value={draft.guardNoProgressBlock} onChange={(e) => set('guardNoProgressBlock', Number(e.target.value))} className={inputCls} />
+        <Field
+          label="İlerleme yok: blok"
+          hint="Devre kesici açıkken aynı salt-okunur çağrı bu sayıda tekrarda bloklanır (0 = varsayılan 5)."
+        >
+          <input
+            type="number"
+            min={0}
+            max={50}
+            value={draft.guardNoProgressBlock}
+            onChange={(e) => set('guardNoProgressBlock', Number(e.target.value))}
+            className={inputCls}
+          />
         </Field>
       </div>
       <Field
         label="Stuck oturum eşiği"
         hint="Üst üste bu kadar tur kötü biten (tur hatası / guardrail halt) oturum 'stuck' etiketi alır ve OTONOM turları reddedilir; temiz bir tur sayacı sıfırlar, etiketi kaldırmak da sıfırlar. 0 = kapalı."
       >
-        <input type="number" min={0} max={20} value={draft.stuckTurnThreshold} onChange={(e) => set('stuckTurnThreshold', Number(e.target.value))} className={inputCls} />
+        <input
+          type="number"
+          min={0}
+          max={20}
+          value={draft.stuckTurnThreshold}
+          onChange={(e) => set('stuckTurnThreshold', Number(e.target.value))}
+          className={inputCls}
+        />
       </Field>
       <Toggle
         label="Hatalardan ders çıkar (lesson reflect)"
@@ -135,7 +205,14 @@ export function LessonsTab({ onError }: Props) {
         label="Ders ömrü (gün)"
         hint="Bir dersin hata şekli bu kadar gün içinde tekrar etmezse bayat sayılıp budanır (bir sonraki ders yazımında). Düşük = daha hızlı unutma. 0 = yerleşik varsayılan (2 gün)."
       >
-        <input type="number" min={0} max={365} value={draft.lessonMaxAgeDays} onChange={(e) => set('lessonMaxAgeDays', Number(e.target.value))} className={inputCls} />
+        <input
+          type="number"
+          min={0}
+          max={365}
+          value={draft.lessonMaxAgeDays}
+          onChange={(e) => set('lessonMaxAgeDays', Number(e.target.value))}
+          className={inputCls}
+        />
       </Field>
     </div>
   )

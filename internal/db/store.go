@@ -799,13 +799,21 @@ func (d *DB) AddMessage(ctx context.Context, m Message) (Message, error) {
 	m.NormalizeParticipants()
 
 	d.mu.Lock()
-	defer d.mu.Unlock()
 	s, ok := d.sessions[m.SessionID]
 	if !ok {
+		d.mu.Unlock()
 		return m, ErrNotFound
 	}
 	d.messages[m.SessionID] = append(d.messages[m.SessionID], m)
 	s.MessageCount++
+	// Sum this message's executed tool calls into the session's lifetime tool
+	// counter (backs counter automations with metric "tool"). Only assistant
+	// messages carry tool steps; a user/system append contributes 0.
+	toolDelta := 0
+	if m.Role == "assistant" {
+		toolDelta = countToolSteps(m.Steps)
+		s.ToolCallCount += toolDelta
+	}
 	s.UpdatedAt = m.CreatedAt
 	// An agent reply marks the session unread; the UI clears it when opened.
 	if m.Role == "assistant" {
@@ -822,7 +830,20 @@ func (d *DB) AddMessage(ctx context.Context, m Message) (Message, error) {
 	// The header line keeps a stale MessageCount/UpdatedAt on disk; both are
 	// recomputed from the message lines on load and refreshed by the next full
 	// rewrite (title/summary change).
-	return m, d.appendMessageLocked(s.ID, m)
+	appendErr := d.appendMessageLocked(s.ID, m)
+	// Snapshot the totals for the activity signal, then release the lock BEFORE
+	// firing the hook (the observer dispatches on its own goroutine, which will
+	// itself take the store lock).
+	sig := ActivitySignal{
+		SessionID:    s.ID,
+		MessageTotal: s.MessageCount,
+		MessageDelta: 1,
+		ToolTotal:    s.ToolCallCount,
+		ToolDelta:    toolDelta,
+	}
+	d.mu.Unlock()
+	d.fireActivityHook(sig)
+	return m, appendErr
 }
 
 // addParticipant appends an agent id to a session's participant roster when it is
@@ -918,6 +939,14 @@ func (d *DB) DeleteMessagesFrom(ctx context.Context, sessionID, messageID string
 	// not aliased and can be GC'd.
 	d.messages[sessionID] = msgs[:idx:idx]
 	s.MessageCount = idx
+	// Recompute the lifetime tool counter over the retained messages so a truncate
+	// (rewind) rolls it back in step with MessageCount.
+	s.ToolCallCount = 0
+	for _, m := range msgs[:idx] {
+		if m.Role == "assistant" {
+			s.ToolCallCount += countToolSteps(m.Steps)
+		}
+	}
 	// If the truncation point falls before the summarized boundary, the rolling
 	// summary now describes messages that no longer exist. Reset it so the next
 	// turn re-derives context from the (shorter) live transcript instead of a
@@ -1110,9 +1139,13 @@ func decodeMessages(lines [][]byte) ([]Message, error) {
 // never reached the header — so it self-heals across a restart.
 func reconcileHeader(s Session, msgs []Message) Session {
 	s.MessageCount = len(msgs)
+	s.ToolCallCount = 0
 	for _, m := range msgs {
 		s.Participants = addParticipant(s.Participants, m.AuthorKind, m.AuthorID)
 		s.Participants = addParticipant(s.Participants, AuthorAgent, m.RecipientID)
+		if m.Role == "assistant" {
+			s.ToolCallCount += countToolSteps(m.Steps)
+		}
 	}
 	if n := len(msgs); n > 0 && msgs[n-1].CreatedAt > s.UpdatedAt {
 		s.UpdatedAt = msgs[n-1].CreatedAt

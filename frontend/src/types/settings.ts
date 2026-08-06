@@ -31,6 +31,8 @@ export interface AppSettings {
   openrouterBaseUrl: string
   zaiKeySet: boolean
   zaiBaseUrl: string
+  deepseekKeySet: boolean
+  deepseekBaseUrl: string
 
   extendedPromptCache: boolean
   anthropicContextEditing: boolean
@@ -159,12 +161,18 @@ export interface AppSettings {
 export type SettingsPatch = Partial<
   Omit<
     AppSettings,
-    'anthropicKeySet' | 'minimaxKeySet' | 'openrouterKeySet' | 'zaiKeySet' | 'claudeCliAuthSet'
+    | 'anthropicKeySet'
+    | 'minimaxKeySet'
+    | 'openrouterKeySet'
+    | 'zaiKeySet'
+    | 'deepseekKeySet'
+    | 'claudeCliAuthSet'
   > & {
     anthropicKey: string
     minimaxKey: string
     openrouterKey: string
     zaiKey: string
+    deepseekKey: string
     claudeCliAuthToken: string // write-only: "" clears, non-empty stores
   }
 >

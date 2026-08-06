@@ -73,8 +73,8 @@ func (e *AutomationEngine) OnTurnFinished(ctx context.Context, tf TurnFinished) 
 		return
 	}
 	for _, a := range autos {
-		if a.TriggerKind == db.TriggerBoard || a.TriggerKind == db.TriggerToken {
-			continue // board/token automations react to their own events, not turns
+		if a.TriggerKind == db.TriggerBoard || a.TriggerKind == db.TriggerToken || a.TriggerKind == db.TriggerCounter {
+			continue // board/token/counter automations react to their own events, not turns
 		}
 		if a.TriggerTag == "" || !containsTag(sess.Tags, a.TriggerTag) {
 			continue
@@ -136,6 +136,28 @@ func (e *AutomationEngine) OnUsageRecorded(ctx context.Context, sig UsageRecorde
 	// Resolve the workspace-day total once, lazily: only summed if some enabled
 	// automation actually watches the workspace scope.
 	var wsTotal int64 = -1
+	// Self-amplification guard: a token automation now delivers into its OWN
+	// persistent maintenance session (SessionKindAutomation), which spends tokens on
+	// every fire. For a session-scoped rule those upkeep tokens would push that same
+	// session across the next threshold multiple and re-fire it on a tight loop
+	// (bounded only by cooldown/maxIterations) — a self-sustaining loop the old
+	// fresh-session spawn never had. So skip session-scope crossings attributed to a
+	// maintenance session. Resolved lazily (one in-memory lookup) and only when a
+	// session-scoped rule is actually present. Workspace scope is intentionally NOT
+	// guarded: those tokens are real workspace spend and belong in the day total.
+	crossingIsMaint := false
+	maintResolved := false
+	isMaintSession := func() bool {
+		if !maintResolved {
+			maintResolved = true
+			if sig.SessionID != "" {
+				if s, err := e.db.GetSession(ctx, sig.SessionID); err == nil {
+					crossingIsMaint = s.Kind == SessionKindAutomation
+				}
+			}
+		}
+		return crossingIsMaint
+	}
 	for _, a := range autos {
 		if a.TriggerKind != db.TriggerToken || a.TokenThreshold <= 0 {
 			continue
@@ -152,6 +174,9 @@ func (e *AutomationEngine) OnUsageRecorded(ctx context.Context, sig UsageRecorde
 		default: // "" or TokenScopeSession
 			if sig.SessionID == "" {
 				continue // a session-scoped rule needs a session to attribute to
+			}
+			if isMaintSession() {
+				continue // don't let a maintenance session re-trigger its own rule
 			}
 			if crossedMultiple(sig.SessionNewTotal-sig.DeltaTokens, sig.SessionNewTotal, interval) {
 				e.fireToken(ctx, a, sig.SessionID, sig.SessionNewTotal)
@@ -186,27 +211,41 @@ func (e *AutomationEngine) fireToken(ctx context.Context, a db.Automation, sessi
 		e.recordFailure(ctx, a, "rendered prompt is empty")
 		return
 	}
-	// Like board automations, token fires do not self-loop via a trigger tag, so
-	// SpawnTags default to none. A session-scope fire links the spawned maintenance
-	// session to the crossing session as its parent (empty for workspace scope).
-	res, err := e.rt.LaunchRun(ctx, RunSpec{
-		Trigger:    TriggerAutomationToken,
-		Input:      prompt,
-		Autonomous: true,
-		FlowID:     a.FlowID,
-		AgentID:    a.TargetAgentID,
-		Spawn: SpawnOptions{
-			Title:           "⚡ " + automationLabel(a),
-			CreatedBy:       "automation:" + a.ID,
-			ParentSessionID: sessionID,
-			Tags:            a.SpawnTags,
-		},
-	})
+
+	// Continuity: unlike the fresh-session spawn a board/tag fire uses, a token fire
+	// delivers into its OWN persistent maintenance session so each crossing continues
+	// the same thread — the cron-schedule behavior the user asked for. The flow
+	// driver keeps running through LaunchRun (a flow already accumulates its own
+	// per-flow transcript, so the reuse is redundant there).
+	var (
+		firedSessionID string
+		driver         string
+		err            error
+	)
+	if a.FlowID != "" {
+		var res LaunchResult
+		res, err = e.rt.LaunchRun(ctx, RunSpec{
+			Trigger:    TriggerAutomationToken,
+			Input:      prompt,
+			Autonomous: true,
+			FlowID:     a.FlowID,
+		})
+		firedSessionID, driver = res.SessionID, "flow"
+	} else {
+		// The launch brake (LaunchRun's launchGate) is bypassed on the reuse path, so
+		// honor the workspace autonomy pause here before delivering an autonomous turn.
+		if e.rt.Paused() {
+			err = ErrAutonomyPaused
+		} else {
+			firedSessionID, err = e.rt.deliverAutomationTurn(ctx, a, prompt)
+			driver = "session"
+		}
+	}
 	if err != nil {
 		e.recordFailure(ctx, a, err.Error())
 		return
 	}
-	if err := e.db.RecordAutomationFire(ctx, a.ID, res.SessionID, ""); err != nil {
+	if err := e.db.RecordAutomationFire(ctx, a.ID, firedSessionID, ""); err != nil {
 		e.logger.Warn("automation: record fire failed", "automation", a.ID, "error", err)
 	}
 	scope := a.TokenScope
@@ -214,18 +253,18 @@ func (e *AutomationEngine) fireToken(ctx context.Context, a db.Automation, sessi
 		scope = db.TokenScopeSession
 	}
 	suffix := " (token·" + scope + ")"
-	if res.Driver == "flow" {
+	if driver == "flow" {
 		suffix = " (token·" + scope + "·akış)"
 	}
 	e.logger.Info("automation: fired (token)",
 		"automation", a.ID, "scope", scope, "total", total, "threshold", a.TokenThreshold,
-		"session", res.SessionID, "driver", res.Driver, "iteration", a.IterationCount+1)
+		"session", firedSessionID, "driver", driver, "iteration", a.IterationCount+1)
 	e.rt.publish(events.Event{
 		Type:   events.TypeAutomation,
 		Level:  "success",
 		Title:  "⚡ Otomasyon tetiklendi" + suffix + " — " + automationLabel(a),
 		Body:   notifyLine(prompt, 120),
-		Target: map[string]string{"view": "executions", "sessionId": res.SessionID},
+		Target: map[string]string{"view": "executions", "sessionId": firedSessionID},
 	})
 }
 

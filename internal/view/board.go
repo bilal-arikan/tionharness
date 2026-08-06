@@ -13,6 +13,10 @@ import (
 // BoardInput is everything the board projection reads.
 type BoardInput struct {
 	Tasks []db.Task
+	// Sub, when set, narrows the projection to a single card of the board — the
+	// drill-down a "kart" handle (or an action-queue row) points at. Empty means
+	// the whole board.
+	Sub string
 	// Now is the clock used for age computations. Zero means time.Now().
 	Now time.Time
 }
@@ -43,11 +47,15 @@ func ProjectBoard(in BoardInput, level Level, lens Lens) (View, error) {
 	}
 
 	v := View{
-		Ref:    Ref{Kind: KindBoard, ID: BoardRefID},
+		Ref:    Ref{Kind: KindBoard, ID: BoardRefID, Sub: in.Sub},
 		Level:  level,
 		Lens:   lens,
 		AsOf:   now,
 		Source: fmt.Sprintf("%d/%d", len(in.Tasks), boardRevision(in.Tasks)),
+	}
+
+	if in.Sub != "" {
+		return projectCard(in, v, now)
 	}
 
 	cols := boardColumns(in.Tasks)
@@ -93,6 +101,99 @@ func ProjectBoard(in BoardInput, level Level, lens Lens) (View, error) {
 	}}
 	v.finalize()
 	return v, nil
+}
+
+// projectCard renders a single card — the drill-down a board handle or an
+// action-queue row points at. A card id that is not on the active board is an
+// error, not an empty card: a blank "CARD ?" would read like a healthy empty
+// entity and hide the fact that the id is stale (e.g. the card was archived).
+func projectCard(in BoardInput, v View, now time.Time) (View, error) {
+	var card *db.Task
+	for i := range in.Tasks {
+		if in.Tasks[i].ID == in.Sub {
+			card = &in.Tasks[i]
+			break
+		}
+	}
+	if card == nil {
+		return View{}, fmt.Errorf("view: board has no card %q", in.Sub)
+	}
+
+	owner := card.OwnerAgentID
+	if owner == "" {
+		owner = "-"
+	}
+	prio := card.Priority
+	if prio == "" {
+		prio = "-"
+	}
+	v.Header = fmt.Sprintf("CARD %s · %s · p:%s · agent:%s · %s önce · asOf %s",
+		card.ID, card.BoardState, prio, owner, age(tsSec(card.UpdatedAt), now), hhmmss(now))
+
+	var l lines
+	l.addIf(card.Title != "", "başlık: %s", clip(card.Title, 100))
+	if body := firstNonBlank(card.Description, card.Prompt); body != "" {
+		l.add("özet: %s", clip(body, 160))
+	}
+	l.addIf(card.Progress > 0, "ilerleme: %%%d", card.Progress)
+	l.addIf(card.DueDate != "", "termin: %s%s", card.DueDate, overdueMark(card, now))
+	if deps := parseDependencies(card.Dependencies); len(deps) > 0 {
+		l.add("bağımlılık: %s%s", strings.Join(clipList(deps, boardSignalCards), ", "),
+			blockedMark(card, in.Tasks))
+	}
+	l.addIf(len(card.Tags) > 0, "etiket: %s", strings.Join(card.Tags, ", "))
+	if card.LastRunStatus != "" {
+		l.add("son koşu: %s (%s önce)", card.LastRunStatus, age(tsSec(card.LastRunAt), now))
+	}
+	if card.BoardState == db.BoardFailed {
+		l.add("✗ kart başarısız sütunda")
+	}
+
+	v.Body = l.String()
+	v.Handles = []Handle{{Label: "panoya dön", Ref: Ref{Kind: KindBoard, ID: BoardRefID}, Level: LevelCard}}
+	v.finalize()
+	return v, nil
+}
+
+// overdueMark flags a due date already passed on an unfinished card.
+func overdueMark(t *db.Task, now time.Time) string {
+	if t.DueDate != "" && t.DueDate < now.Format("2006-01-02") && t.BoardState != db.BoardDone {
+		return " ⚠gecikmiş"
+	}
+	return ""
+}
+
+// blockedMark flags that at least one of a card's dependencies is not done.
+func blockedMark(t *db.Task, all []db.Task) string {
+	done := map[string]bool{}
+	for _, x := range all {
+		done[x.ID] = x.BoardState == db.BoardDone
+	}
+	for _, dep := range parseDependencies(t.Dependencies) {
+		if !done[dep] {
+			return " ⛔bloke"
+		}
+	}
+	return ""
+}
+
+// clipList caps a string slice to max entries, appending a "+N" remainder so it
+// never implies it listed everything.
+func clipList(vals []string, max int) []string {
+	if len(vals) <= max {
+		return vals
+	}
+	return append(vals[:max:max], fmt.Sprintf("+%d", len(vals)-max))
+}
+
+// firstNonBlank returns the first non-empty string.
+func firstNonBlank(vals ...string) string {
+	for _, v := range vals {
+		if strings.TrimSpace(v) != "" {
+			return v
+		}
+	}
+	return ""
 }
 
 // boardColumn is one column's rollup.

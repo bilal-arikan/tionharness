@@ -12,8 +12,8 @@ import (
 )
 
 // Flow self-management tools let an agent create, edit, delete and list
-// multi-agent orchestration flows in its workspace. Provenance is enforced: an
-// agent may only edit/delete agent-created flows, never user-made ones.
+// multi-agent orchestration flows in its workspace. No provenance gate: an
+// agent may edit/delete any flow, user- or agent-created.
 //
 // A flow's graph is the orchestration JSON (see internal/orchestration.Graph):
 // a set of nodes (agent / branch / parallel) wired by edges, with template
@@ -34,13 +34,12 @@ type flowDeps struct {
 	resume  resumeFlowFn
 }
 
-func (d flowDeps) requireFlowCreatedByAgent(ctx context.Context, id string) (db.Flow, error) {
+// requireFlow loads a flow by id, returning a friendly error if it does not
+// exist. No provenance gate: user- and agent-created flows are both editable.
+func (d flowDeps) requireFlow(ctx context.Context, id string) (db.Flow, error) {
 	f, err := d.db.GetFlow(ctx, id)
 	if err != nil {
 		return db.Flow{}, fmt.Errorf("no flow with id %q (use list_flows)", id)
-	}
-	if f.CreatedBy == "" {
-		return db.Flow{}, fmt.Errorf("flow %q was created by the user and cannot be edited or deleted by an agent", f.Name)
 	}
 	return f, nil
 }
@@ -166,7 +165,7 @@ func NewUpdateFlowTool(database *db.DB, actorID string) UpdateFlowTool {
 func (UpdateFlowTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name:        "update_flow",
-		Description: "Edit an agent-created flow (not one made by the user). Pass the flow id and the fields to change (name, graph, tags).",
+		Description: "Edit a flow (user- or agent-created). Pass the flow id and the fields to change (name, graph, tags).",
 		InputSchema: json.RawMessage(`{
 			"type":"object",
 			"properties":{
@@ -203,7 +202,7 @@ func (t UpdateFlowTool) Call(ctx context.Context, input json.RawMessage) (string
 	if in.ID == "" {
 		return "", fmt.Errorf("id is required")
 	}
-	cur, err := t.d.requireFlowCreatedByAgent(ctx, in.ID)
+	cur, err := t.d.requireFlow(ctx, in.ID)
 	if err != nil {
 		return "", err
 	}
@@ -248,7 +247,7 @@ func NewDeleteFlowTool(database *db.DB, actorID string) DeleteFlowTool {
 func (DeleteFlowTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name:        "delete_flow",
-		Description: "Delete an agent-created flow (not one made by the user). This also removes the flow's runs. Pass the flow id.",
+		Description: "Delete a flow (user- or agent-created). This also removes the flow's runs. Pass the flow id.",
 		InputSchema: json.RawMessage(`{
 			"type":"object",
 			"properties":{"id":{"type":"string","description":"The flow id (see list_flows)"}},
@@ -269,7 +268,7 @@ func (t DeleteFlowTool) Call(ctx context.Context, input json.RawMessage) (string
 	if in.ID == "" {
 		return "", fmt.Errorf("id is required")
 	}
-	if _, err := t.d.requireFlowCreatedByAgent(ctx, in.ID); err != nil {
+	if _, err := t.d.requireFlow(ctx, in.ID); err != nil {
 		return "", err
 	}
 	if err := t.d.db.DeleteFlow(ctx, in.ID); err != nil {
@@ -290,7 +289,7 @@ func NewListFlowsTool(database *db.DB, actorID string) ListFlowsTool {
 func (ListFlowsTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name:        "list_flows",
-		Description: "List the orchestration flows in this workspace (id, name, and whether each was created by an agent and is therefore editable/deletable by you).",
+		Description: "List the orchestration flows in this workspace (id, name, and whether each was created by an agent — provenance only; you can edit/delete any of them).",
 		InputSchema: json.RawMessage(`{"type":"object","properties":{},"additionalProperties":false}`),
 	}
 }

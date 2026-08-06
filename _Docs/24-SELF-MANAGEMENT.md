@@ -30,30 +30,38 @@ native registry üzerinden dispatch edilir (`Runtime.BridgeTools` →
 `toolFilter` ve self-manage gate'i CLI'de de aynen geçerli. Detay:
 `_Docs/11-INTERACTION-MCP.md`.
 
-## Provenance guard'ı (`created_by`)
+## Provenance guard'ı KALDIRILDI — workspace HARİÇ (2026-08-05)
 
-Ajan **yalnızca kendi oluşturduğu** (`CreatedBy` dolu) entity'leri silebilir;
-kullanıcı varlıklarına (`CreatedBy == ""`) dokunamaz. Kapsam: agents, tasks,
-schedules, flows, hooks, mcp_servers, **workspaces** (`Meta.CreatedBy`). Detay:
-`_Docs/02-VERI-MODELI.md`.
+Eskiden ajan **yalnızca kendi oluşturduğu** (`CreatedBy` dolu) entity'leri
+düzenleyip silebilir, kullanıcı varlıklarına (`CreatedBy == ""`) dokunamazdı.
+**Bu engel kaldırıldı:** ajan artık agents, flows, schedules, automations,
+hooks, mcp_servers, artifacts ve tasks dahil **her varlığı** (kullanıcı- veya
+ajan-oluşturduğu) düzenleyip silebilir. `CreatedBy`/`AgentID` bu türlerde yalnız
+köken/görüntüleme için tutulur — silme/düzenleme kapısını artık kapatmaz.
 
-> Workspace silmede iki ek guard daha var: ajan **mevcut çalıştığı** workspace'i
-> silemez (kendini çalıştığı zeminden çıkaramaz) ve manager **son kalan**
-> workspace'i silmeyi reddeder (her zaman ≥1 workspace olmalı).
+> **Tek istisna — workspaces:** Workspace silme benzersiz derecede yıkıcıdır
+> (bir workspace'in TÜM agent/session/secret/dosyalarını geri dönüşsüz siler),
+> bu yüzden köken guard'ı **workspace silmede korunur**: ajan yalnız
+> **kendi oluşturduğu** (`Meta.CreatedBy` dolu) workspace'i silebilir, kullanıcı
+> workspace'ine dokunamaz.
+
+> Workspace silmede ayrıca iki operasyonel guard daha var: ajan **mevcut
+> çalıştığı** workspace'i silemez ve manager **son kalan** workspace'i silmeyi
+> reddeder. Ayrıca ajan **kendini** silemez (`delete_agent`).
 
 ## Araç ailesi
 
 | Alan | Araçlar | Notlar |
 |------|---------|--------|
-| **Agents** | `create_agent` / `update_agent` / `delete_agent` / `list_agents` | create canlı `Start`, delete `Stop`; delete provenance-guard'lı. **Cascade:** delete ajanın session'larını + bağlı schedule'larını (`AgentID`) + sahip olduğu task'ları (`OwnerAgentID`) ve run'larını da siler, ardından `reloadSchedules` ile cron registry'sini tazeler |
+| **Agents** | `create_agent` / `update_agent` / `delete_agent` / `list_agents` | create canlı `Start`, delete `Stop`; edit/delete köken filtresi YOK (ajan kendini silemez). **Cascade:** delete ajanın session'larını + bağlı schedule'larını (`AgentID`) + sahip olduğu task'ları (`OwnerAgentID`) ve run'larını da siler, ardından `reloadSchedules` ile cron registry'sini tazeler |
 | **Ajan delegasyonu** | `run_subagent` | izole işçi başlat (built-in profil: `explore`/`coder`/`reviewer`; ya da mevcut ajan adı/id). `wait:"sync"` (varsayılan, cevabı bekle) \| `"async"` (detached arka plan). Tek turda birden çok çağrı paralel koşar. **Yapılandırılmış görev sözleşmesi (2026-06-25):** opsiyonel `objective`/`output_format`/`boundaries` alanları subagent system-prompt'una "Task contract" bloğu olarak enjekte edilir (iş tekrarı/boşluğu önler; verilmezse eski düz-`task` davranışı). Daima kurulu (2026-07-02'den beri gate yok; görünürlük araç-bazlı Araçlar ekranından). Bkz. `25-SUBAGENT-ISOLATION.md` |
 | **Peer mesajlaşma** | `send_message` | başka ajana **adresli DM** (`{to, message, summary?}`); alıcının kalıcı **inbox** oturumuna `<agent_message from="…">` etiketiyle düşer, alıcı arka planda geçmiş-duyarlı turla işler (fire-and-forget, `SpawnMaxConcurrent` guard, kendine-mesaj reddi). run_subagent (sonuç-odaklı) yanında "süregelen işbirliği" yolu. Bkz. `28-PEER-MESAJLASMA-PLANI.md` |
 | **Flows** | `create_flow` / `update_flow` / `delete_flow` / `list_flows` / `get_flow` / `run_flow` | `run_flow` otonom, bütçe-gated, executions feed'ine kaydeder. `update_flow` `tags` alanı da alır (2026-07-04'te `set_flow_tags` bununla birleşti; ayrı `SetFlowTags` ile persist) |
 | **Schedules** | `create_schedule` / `update_schedule` / `delete_schedule` / `list_schedules` / `run_schedule` | her yazım `reloadSchedules` ile scheduler'ı tazeler; `run_schedule` bir zamanlamayı **şimdi** elle tetikler (`runScheduleNow`). `update_schedule` `tags` alanı da alır (2026-07-04'te `set_schedule_tags` bununla birleşti) |
-| **Tasks (kanban)** | `list_tasks` / `create_task` / `update_task` / `move_task` / `delete_task` | her görevde okuma/edit/move; **delete yalnız ajan-oluşturduğu**. Pano pasif — run yok. `artifactIds` alanı üçünde de (list çıktısı + create/update) desteklenir → bir aşama planı karta ID ile linkler (`Task.ArtifactIDs`), sonraki aşama başlık string-match yerine ID ile okur (kırılgan handoff çözümü) |
-| **Hooks** | `list_hooks` / `create_hook` / `delete_hook` | delete provenance-guard'lı. Bkz. `18-HOOKS.md` |
-| **MCP sunucuları** | `list_mcp_servers` / `create_mcp_server` / `toggle_mcp_server` / `delete_mcp_server` | yeni/etkin sunucunun araçları **sonraki turda** görünür; delete provenance-guard'lı, toggle her sunucuda |
-| **Workspaces** | `list_workspaces` / `create_workspace` / `rename_workspace` / `delete_workspace` | **çapraz-workspace**: `WorkspaceBridge` köprüsünden (manager). list/create/rename her workspace'te; **delete yalnız ajan-oluşturduğu** (`Meta.CreatedBy`), **mevcut çalıştığı** workspace'i ve **son kalan** workspace'i silemez. create blank şablonla tohumlanır; değişiklik UI'a `workspaces` SSE event'i yayar |
+| **Tasks (kanban)** | `list_tasks` / `create_task` / `update_task` / `move_task` / `delete_task` | her görevde okuma/edit/move/delete (köken filtresi yok). Pano pasif — run yok. `artifactIds` alanı üçünde de (list çıktısı + create/update) desteklenir → bir aşama planı karta ID ile linkler (`Task.ArtifactIDs`), sonraki aşama başlık string-match yerine ID ile okur (kırılgan handoff çözümü) |
+| **Hooks** | `list_hooks` / `create_hook` / `delete_hook` | delete köken filtresi YOK (her hook silinebilir). Bkz. `18-HOOKS.md` |
+| **MCP sunucuları** | `list_mcp_servers` / `create_mcp_server` / `toggle_mcp_server` / `delete_mcp_server` | yeni/etkin sunucunun araçları **sonraki turda** görünür; delete/toggle her sunucuda (köken filtresi yok) |
+| **Workspaces** | `list_workspaces` / `create_workspace` / `rename_workspace` / `delete_workspace` | **çapraz-workspace**: `WorkspaceBridge` köprüsünden (manager). list/create/rename her workspace'te; **delete yalnız ajan-oluşturduğu** (`Meta.CreatedBy`) — köken guard'ı **burada korunur** (benzersiz yıkıcı) —, **mevcut çalıştığı** workspace'i ve **son kalan** workspace'i silemez. create blank şablonla tohumlanır; değişiklik UI'a `workspaces` SSE event'i yayar |
 | **Artifacts** | `delete_artifact` / `list_artifacts` / `read_artifact` | create/update zaten tur-başı sink ile sağlanır; `list_artifacts` artık `contentFile` yolunu da döndürür; `read_artifact` ID ile içeriği döndürür (dosya yolu tahmin etmeye gerek yok) |
 | ~~**Memory**~~ | ~~`memory_add` / `memory_recall`~~ | **KALDIRILDI (2026-07-05)** — memory alt sistemi tamamen çıkarıldı |
 | **Oturum / handoff** | `handoff_session` | bağlam sınırına yaklaşan oturumu **temiz pencerede** sürdürür: handoff artifact yazıp child oturum açar (name-only tier'a terfi etti). Bkz. `35-CONTEXT-RESET-HANDOFF.md` |
@@ -82,8 +90,10 @@ tools.WorkspaceBridge (arayüz)
 ```
 
 `main.go` server kurulumundan sonra `SetSettingsBridge`'in hemen yanında bağlar.
-Köprü nil iken (server'dan önce) araçlar hiç eklenmez. Araç katmanı provenance +
-"mevcut/son silinemez" guard'larını taşır; manager `Delete` son-workspace guard'ını.
+Köprü nil iken (server'dan önce) araçlar hiç eklenmez. Araç katmanı workspace
+köken guard'ını + "mevcut/son silinemez" guard'larını taşır (köken filtresi yalnız
+**workspace** için korundu, diğer self-management türlerinde kaldırıldı); manager
+`Delete` son-workspace guard'ını.
 
 ## Ayarlar alt sistemi (settings)
 

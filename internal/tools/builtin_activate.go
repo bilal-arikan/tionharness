@@ -272,22 +272,51 @@ func (t ToolSearchTool) Call(ctx context.Context, input json.RawMessage) (string
 		return "Empty query.", nil
 	}
 	terms := strings.Fields(q)
-	var matches []string
+
+	// Term-scoring (OR + rank), not strict AND: a tool matches when it contains
+	// AT LEAST ONE query term, ranked by how many distinct terms it hits. This is
+	// forgiving of the common "search these several tool names" query — passing a
+	// list of full names (e.g. "list_tasks move_task create_task") surfaces all of
+	// them instead of the empty result strict AND used to give (no single tool
+	// contains every term). A name hit outweighs a description hit so exact-name
+	// candidates float to the top. Ties break on term-count, then name-hit, then name.
+	type scored struct {
+		e        lazyEntry
+		terms    int // distinct query terms found anywhere (name or desc)
+		nameHits int // distinct query terms found in the name (stronger signal)
+	}
+	var ranked []scored
 	for _, e := range t.entries {
-		hay := strings.ToLower(e.name + " " + e.desc)
-		all := true
+		name := strings.ToLower(e.name)
+		hay := name + " " + strings.ToLower(e.desc)
+		var termHits, nameHits int
 		for _, term := range terms {
-			if !strings.Contains(hay, term) {
-				all = false
-				break
+			if strings.Contains(hay, term) {
+				termHits++
+				if strings.Contains(name, term) {
+					nameHits++
+				}
 			}
 		}
-		if all {
-			matches = append(matches, fmt.Sprintf("- %s — %s", e.name, e.desc))
+		if termHits > 0 {
+			ranked = append(ranked, scored{e: e, terms: termHits, nameHits: nameHits})
 		}
 	}
-	if len(matches) == 0 {
+	if len(ranked) == 0 {
 		return fmt.Sprintf("No on-demand tools match %q.", in.Query), nil
+	}
+	sort.SliceStable(ranked, func(i, j int) bool {
+		if ranked[i].terms != ranked[j].terms {
+			return ranked[i].terms > ranked[j].terms
+		}
+		if ranked[i].nameHits != ranked[j].nameHits {
+			return ranked[i].nameHits > ranked[j].nameHits
+		}
+		return ranked[i].e.name < ranked[j].e.name
+	})
+	matches := make([]string, 0, len(ranked))
+	for _, r := range ranked {
+		matches = append(matches, fmt.Sprintf("- %s — %s", r.e.name, r.e.desc))
 	}
 	const max = 30
 	more := ""

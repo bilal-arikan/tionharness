@@ -21,6 +21,12 @@ type WorkspaceInput struct {
 	WaitingAsks []db.SessionAsk
 	// TokensToday is the workspace-wide token spend for the current day.
 	TokensToday int64
+	// CostToday is the workspace-wide USD cost for the current day, priced by
+	// billing.RollupOf. CostEstimated is set when any of that spend is priced via
+	// an equivalent-API estimate (subscription providers like claude-cli) rather
+	// than a real list price — the header then prefixes "~".
+	CostToday     float64
+	CostEstimated bool
 	// Now is the clock used for age computations. Zero means time.Now().
 	Now time.Time
 }
@@ -55,9 +61,17 @@ func ProjectWorkspace(in WorkspaceInput, level Level, lens Lens) (View, error) {
 	}
 
 	st := workspaceStats(in, now)
-	v.Header = fmt.Sprintf("WORKSPACE · %d ajan · %d oturum (%d aktif) · %d kart · %d koşu · %s tok bugün · asOf %s",
+	// Cost rides next to the token figure so the reader sees spend in money, not
+	// only volume. It is omitted (not shown as "$0.00") when there is no priced
+	// spend today: a bare $0.00 next to a non-zero token count would read as "free"
+	// when it actually means "this provider has no price", which is a different fact.
+	cost := ""
+	if in.CostToday > 0 {
+		cost = " · " + usd(in.CostToday, in.CostEstimated) + " bugün"
+	}
+	v.Header = fmt.Sprintf("WORKSPACE · %d ajan · %d oturum (%d aktif) · %d kart · %d koşu · %s tok bugün%s · asOf %s",
 		len(in.Agents), len(in.Sessions), st.ActiveSessions, len(in.Tasks),
-		len(in.FlowRuns), compactCount(in.TokensToday), hhmmss(now))
+		len(in.FlowRuns), compactCount(in.TokensToday), cost, hhmmss(now))
 
 	if level == LevelTiny {
 		v.finalize()

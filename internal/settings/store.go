@@ -13,11 +13,14 @@ import (
 // reservedProviderIDs are the built-in provider ids a custom provider must not
 // shadow.
 var reservedProviderIDs = map[string]bool{
-	"anthropic":         true,
-	"minimax":           true,
-	"claude-cli":        true,
-	"minimax-anthropic": true,
-	"openrouter":        true,
+	"anthropic":          true,
+	"minimax":            true,
+	"claude-cli":         true,
+	"minimax-anthropic":  true,
+	"openrouter":         true,
+	"zai":                true,
+	"deepseek":           true,
+	"deepseek-anthropic": true,
 }
 
 // providerIDRe constrains a custom provider id to a clean identifier.
@@ -113,6 +116,11 @@ func (s *Store) OpenRouterKey() string {
 // ZAIKey returns the decrypted Z.ai GLM API key, or "" if none.
 func (s *Store) ZAIKey() string {
 	return s.decrypt(s.Get().ZAIKeyEnc)
+}
+
+// DeepSeekKey returns the decrypted DeepSeek API key, or "" if none.
+func (s *Store) DeepSeekKey() string {
+	return s.decrypt(s.Get().DeepSeekKeyEnc)
 }
 
 // CustomProviderKey returns the decrypted key for a custom provider id, or "".
@@ -383,6 +391,7 @@ func (s *Store) Apply(p Patch) (Settings, error) {
 	applyString(&next.MinimaxBaseURL, p.MinimaxBaseURL)
 	applyString(&next.OpenRouterBaseURL, p.OpenRouterBaseURL)
 	applyString(&next.ZAIBaseURL, p.ZAIBaseURL)
+	applyString(&next.DeepSeekBaseURL, p.DeepSeekBaseURL)
 
 	// Secrets: write-only. Empty string clears; non-empty encrypts and replaces.
 	if p.ClaudeCliAuthToken != nil {
@@ -438,6 +447,17 @@ func (s *Store) Apply(p Patch) (Settings, error) {
 				return Settings{}, err
 			}
 			next.ZAIKeyEnc = enc
+		}
+	}
+	if p.DeepSeekKey != nil {
+		if *p.DeepSeekKey == "" {
+			next.DeepSeekKeyEnc = ""
+		} else {
+			enc, err := s.cipher.Encrypt(*p.DeepSeekKey)
+			if err != nil {
+				return Settings{}, err
+			}
+			next.DeepSeekKeyEnc = enc
 		}
 	}
 

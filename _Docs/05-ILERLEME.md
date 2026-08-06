@@ -1,6 +1,394 @@
 # TionSwarm — İlerleme Takibi
 
-> Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-08-04**
+> Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-08-06**
+
+## Fix: DeepSeek V4 Pro `context deadline exceeded` @120s (2026-08-06) ✅
+
+**Ne:** OpenAI-uyumlu client (`OpenAICompat`) her isteğe **sabit 120s** `http.Client.Timeout`
+uyguluyordu ve model-sınıfından habersizdi. Akıl-yürütme ağırlıklı `deepseek-v4-pro`
+tek isteği 120s'yi aşınca `context deadline exceeded` ile kesiliyordu (SES446/WS17: 3 kez
+tam 120.000 ms; 2 retry toparladı, 3.'de retry bütçesi bitti → tur öldü). Ayrıca native
+Anthropic yolundaki `requestCtx`, "uzun bütçe" kararını **thinking wire-format**
+sınıflandırıcısı `UsesAdaptiveThinking`'e bağlıyordu; deepseek orada olmadığı için
+`deepseek-anthropic` kind'ı da 120s alıyordu.
+
+**Nasıl:** İstek bütçesi wire-format'tan **ayrıldı** → yeni `internal/providers/timeouts.go`:
+`LongRequestModel` (adaptive sınıf + deepseek reasoning) + `RequestTimeoutSecsFor` +
+`effectiveRequestTimeoutSecs`. Her iki HTTP client artık **per-request ctx deadline**'ı
+model-sınıfı-farkında uygular (`OpenAICompat.requestCtx`; `http.Client.Timeout` yalnız
+630s güvenlik ağı). **Manifest-driven override:** `Manifest.RequestTimeoutSecs` (0 =
+model-sınıfı varsayılanı) → `Registry.Get` Build sonrası `requestTimeoutConfigurable`
+(her iki client) üzerinden uygular; hiçbir kind build fonksiyonu timeout plumbing'i
+taşımıyor. Testler: `timeouts_test.go` (deepseek-v4-pro→uzun, flash→120s, override kazanır).
+`go build ./...` + `go test ./internal/providers/` (118) ✅.
+
+## Feature: Token otomasyonları kalıcı oturumda devam ediyor (2026-08-06) ✅
+
+**Ne:** Token-eşiği tetikleyicili otomasyonlar, her geçişte **yeni oturum spawn
+etmek yerine** otomasyona ait tek **kalıcı bakım oturumunda** devam ediyor — cron
+schedule'ın stabil `schedule` oturumuyla aynı model. Kullanıcı isteği: "token'lı
+otomasyonlar her çalıştığında önceki sessiondan devam etsin, cronjob'lı otomasyonlar
+gibi".
+
+**Nasıl:** Yeni `Runtime.deliverAutomationTurn` (`internal/agent/automation_deliver.go`)
+promptu `GetOrCreateSourceSession(kind="automation", sourceID=otomasyon.ID)` oturumuna
+**history-aware** (`runSessionTurn`) teslim eder; scheduler `deliverPrompt`
+yaşam-döngüsünü yansıtır (turn slot, watchdog + idle-resume, reply/error record,
+bounded auto-continue). `fireToken` (`agent/automation.go`) session/agent driver'ı
+bu yola, flow driver'ı yine `LaunchRun`'a yönlendirir; reuse yolu launch-gate'i
+atladığı için `Paused()` elle kontrol edilir.
+
+**Self-amplification guard:** Bakım oturumu her fire'da token harcadığından
+session-kapsam kuralı kendini sonsuz döngüde tetikleyebilirdi. `OnUsageRecorded`
+session-kapsam dalı `Kind=="automation"` oturumlara atfedilen geçişleri **atlar**
+(lazy, bellek-içi lookup). Workspace kapsamı guard'lanmaz (gerçek harcama).
+
+`go build`/`vet` + `go test ./internal/agent/ ./internal/db/` ✅. Detay `_Docs\46 §2.6`.
+
+## Fix: `update_automation` token eşiğini kaydetmiyordu (2026-08-05) ✅
+
+**Ne:** `db.UpdateAutomation` (`internal/db/store_automation.go`) gelen struct'tan
+alanları tek tek kopyalarken **`TokenScope` ve `TokenThreshold`'u atlıyordu** →
+`update_automation` aracı `"updated"` dönüp başarı raporluyor ama token eşiği eski
+değerinde kalıyordu (araç katmanı doğru işliyordu, DB katmanı yutuyordu). Bir
+ajanın canlı workspace'te (SES353) kara-kutu keşfettiği hata.
+
+**Düzeltme:** `UpdateAutomation`'a `cur.TokenScope = a.TokenScope` +
+`cur.TokenThreshold = a.TokenThreshold` iki satırı eklendi. Regresyon testi:
+`automation_test.go > TestAutomationTokenThresholdUpdate` (eşik + scope güncellemesi
+persist + reload doğrular). `go build ./...` + `go test ./internal/db/` ✅.
+
+## Fix: Self-management "provenance guard" kaldırıldı — workspace hariç (2026-08-05) ✅
+
+**Ne:** Ajanların, kullanıcının UI/API'de oluşturduğu varlıkları düzenleyip/
+silmesini engelleyen köken (provenance) filtresi kaldırıldı. Eskiden
+`CreatedBy == ""` (veya artifact'te `AgentID == ""`) olan varlıklara ajan
+dokunamıyordu; artık **her varlık** (kullanıcı- veya ajan-oluşturduğu) ajan
+araçlarıyla düzenlenip silinebilir. Kapsam: **agents, flows, schedules,
+automations, hooks, mcp_servers, artifacts** (tasks'ta zaten kaldırılmıştı).
+`CreatedBy`/`AgentID` bu türlerde yalnız köken/görüntü için tutulur.
+
+**Tek istisna — workspaces:** Workspace silme benzersiz yıkıcı olduğu için (tüm
+workspace verisini geri dönüşsüz siler) köken guard'ı **workspace silmede
+korundu** — ajan yalnız kendi oluşturduğu workspace'i silebilir. (Kullanıcı
+isteği, 2026-08-05: "sadece workspace silmeyi devre dışı bırak, gerisi dursun".)
+
+**Korunan operasyonel guard'lar (köken filtresi değil):** ajan **kendini**
+silemez (`delete_agent`); **mevcut çalıştığı** ve **son kalan** workspace
+silinemez; tüm silme/düzenleme yollarında "bulunamadı" hatası aynen döner
+(sessiz no-op yok).
+
+**Dokunulan yerler:** `internal/tools/builtin_{agentmgmt,flowmgmt,schedulemgmt,
+automationmgmt,mcpmgmt,hookmgmt,artifactmgmt}.go` — `require*` helper'ları köken
+kontrolünden arındırıldı ve dürüst adlara (`requireAgent`, `requireFlow`,
+`requireSchedule`, `requireAutomation`) yeniden adlandırıldı; inline delete
+kontrolleri (mcp/hook/artifact) kaldırıldı; tool açıklama ve yorumları güncellendi.
+`builtin_workspacemgmt.go` köken guard'ını **korur** (yalnız yorum/açıklama netleşti).
+`internal/agent/toolsetup_selfmanage.go` + `autotag.go` (ölü deny-marker temizliği)
+yorumları. Testler: `builtin_selfmanage_test.go`, `builtin_controlgaps_test.go`
+yeni davranışa (izin verilir) çevrildi; `builtin_workspacemgmt_test.go` guard'lı
+kaldı. Doküman: `24-SELF-MANAGEMENT.md`, `02-VERI-MODELI.md`. `go build ./...` +
+`go test ./internal/tools/` ✅.
+
+## Feature: DeepSeek sağlayıcı kind'ı (V4 Flash/Pro) eklendi (2026-08-05) ✅
+
+**Ne:** Yeni birinci-parti `deepseek` provider kind'ı — DeepSeek'in OpenAI-uyumlu
+uç noktası (`https://api.deepseek.com`), paylaşılan `OpenAICompat` istemcisiyle
+(tool-use + streaming, native ajan döngüsü). Modeller: `deepseek-v4-flash`
+(varsayılan, hızlı/çok ucuz) + `deepseek-v4-pro` (akıl-yürütme). Legacy
+`deepseek-chat`/`deepseek-reasoner` 2026-07-24'te kaldırıldığı için dahil edilmedi;
+`AllowCustomModel` açık.
+
+**Dokunulan yerler:** `kind_deepseek.go` (yeni, self-registering `init`),
+`registry.go` (alanlar + `SetDeepSeek`/`DeepSeekConfigured` + `resolve` case),
+`pricing.go` (V4 fiyatları: flash $0.14/$0.28, pro $0.435/$0.87, cache-hit read
+mult ~0.02/0.008), `settings.go`+`store.go` (KeyEnc/BaseURL + DTO + Patch +
+write-only sır + `reservedProviderIDs`), `server.go applySettings`, frontend
+(`settings.ts`, `SettingsPanel.tsx`, `ProvidersPanel.tsx` yeni kart). Bağlam
+penceresi/max-output tabloları `deepseek` ailesini zaten kapsıyordu → değişmedi.
+`context_window.go` dokunulmadı.
+
+**Yan düzeltme:** `SettingsPanel` ana Kaydet gövdesi `zaiBaseUrl`'i göndermiyordu
+(pre-existing eksik) → `deepseekBaseUrl` ile birlikte eklendi. `reservedProviderIDs`
+listesine eksik olan `zai` de eklendi. `go build ./internal/...` + frontend
+`tsc --noEmit` ✅.
+
+**Ek (2026-08-05, resmi doküman doğrulaması):** DeepSeek'in **Anthropic-uyumlu ucu**
+(`https://api.deepseek.com/anthropic`) resmi dokümandan doğrulandı → `minimax-anthropic`
+deseninde ikinci bir `deepseek-anthropic` kind'ı eklendi: DeepSeek anahtarını yeniden
+kullanır (ayrı kart/anahtar yok), `NewAnthropic().WithEndpoint` ile native tool-use +
+**düşünme** sürer (özellikle reasoning-ağırlıklı V4 Pro için). `resolve()` case,
+`PriceFor` (`deepseek-anthropic`→`deepseek` eşlemesi), `reservedProviderIDs` ve
+katalog testi (7→8) güncellendi. Fiyatlar resmi sayfayla birebir doğrulandı; DeepSeek
+gerçek max-output 384K olduğundan `maxOutDeepSeek` 8K→**32K** yükseltildi (reasoning
+çıktısının erken kesilip resume döngüsüne girmesini azaltır, tavanın hâlâ ~12× altında).
+DeepSeek yakında peak/off-peak (2×) fiyatlandırmasına geçecek — henüz yürürlükte değil,
+not düşüldü. Toplam 8 kind. `go build ./...` + `go test ./internal/providers/...
+./internal/settings/...` + frontend `tsc` ✅.
+
+## Fix: bütçeli fold sistem-prompt/şema yükünü hesaba katmıyordu — "%127 ama özetlenmiyor" (2026-08-05) ✅
+
+**Belirti:** SES319 (WS17, claude-cli koordinatör) "Bağlam penceresi · 88.8k/70.0k
+(%127)" gösterdi ama hiç compact olmadı (`summary:""`, `debug.jsonl`'de 0 `compaction`
+olayı). İlk şüphe "spawned koordinatör turları `Prepare`'i atlıyor" idi — **yanlış**:
+`runCoordinatorTurn` → `runSessionTurn` → `wakeTurn` → `Prepare` zaten çalışıyor.
+
+**Kök neden:** İki taraf farklı temel sayıyordu. UI metresi (`session_info.go`)
+`ContextTokens`'ı **mesaj+özet + sistem promptu + skill/tool katalogları + eager tool
+şemaları + artifacts** (`systemFillers`) olarak toplar → 88.8k. Ama `Manager.Prepare`'in
+fold kararı yalnız **mesaj+özet** (`EstimateTokens(summary, pending)`) tokenine bakıyordu;
+her turda gönderilen sabit mesaj-dışı yükü (bir claude-cli koordinatöründe 20-40k) hiç
+saymıyordu. Sonuç: mesaj-only tahmin 70k floor'unun altında kaldıkça fold **hiç
+tetiklenmiyor**, oysa gerçek footprint bütçenin çok üstünde.
+
+**Fix:** `conversation.WithContextOverhead(ctx, tokens)` ctx-seam'i eklendi; `Prepare`
+fold gate'ini `before+overhead > maxTokens`'e ve pressure'ı `(contextTokens+overhead)/
+maxTokens`'e taşıdı (overhead=0 → eski davranış birebir korunur, testler/e2e harness
+değişmez). Üç çağrı sitesi (`chat_stream`/`chat_btw`/`wake_turn`) overhead'i metrenin
+kullandığı **aynı** `systemFillers` üzerinden (`s.contextOverheadTokens`) hesaplayıp
+ctx'e koyar → metre ve motor artık oranın **iki tarafında da** aynı temeli kullanır.
+Testler: `TestPrepareOverheadRaisesPressure`, `TestWithContextOverheadNoOp`. `go build`
++ `go test ./internal/conversation/... ./internal/api/...` ✅.
+
+**Tradeoff:** Fold artık gerçek footprint bütçeyi aşınca (daha erken) tetiklenir → biraz
+daha sık özetleyici (summarize) LLM çağrısı; istenen düzeltme tam da bu. Büyük sabit yük
+bütçeye yakınsa `keepRecent` yine taban olduğu için aşırı fold olmaz.
+
+## UX: Ajan detay ekranında "Kopyala" (ajan çoğaltma) butonu (2026-08-05) ✅
+
+**Ne:** Ajanlar ekranının detay (sağ pane) başlığına, seçili ajanın **tam kopyasını**
+oluşturan bir **Kopyala** butonu eklendi (Bağlam ile Sil arasında). Kopya, kaynağın
+_bütün_ ayarlarını taşır: profil (ad/avatar/renk/soul/identity), sağlayıcı+model,
+thinking + izin modu, yetenekler (skills) ve tam araç yapılandırması (MCPEnabled +
+ToolOverrides + allow/block listeleri). Yalnız kimlik alanları sıfırlanır — kopya yeni
+bir ID, `"<ad> (kopya)"` adı ve temiz created/updated/deleted durumu alır. `CreatedBy`
+boş bırakılır → kullanıcı-sahipli (agent-created değil).
+
+**Uygulama:** Backend `POST /api/agents/{id}/duplicate` → `handleDuplicateAgent`
+(`GetAgent` → struct kopyala → kimlik alanlarını temizle → `CreateAgent`; `CreateAgent`
+zaten tüm alanları literal'den kopyaladığı için araç/skill/görsel yapılandırma birebir
+korunur). Frontend: `api.duplicateAgent`, controller `duplicateAgent` (roster'a ekle +
+klonu seç, varsayılana dokunmaz), `AgentSettingsForm` başlığında `data-testid=
+agent-duplicate` buton. `go build ./...` + `tsc --noEmit` ✅.
+
+## Fix: claude-cli `allowed_warning` rate-limit yanlış sınıflandırması (2026-08-05) ✅
+
+**Belirti:** SES189'da manuel `/compact` sessizce başarısız oldu (asistan yanıtı yok,
+`debug.jsonl`'de kayıt yok). App log: `summary command failed … "claude CLI usage/rate
+limit reached: seven_day window, status=allowed_warning, resets 2026-08-10"`.
+
+**Kök neden:** Ham claude-cli dump'ı → `rate_limit_event` `status="allowed_warning"`,
+`utilization=0.64`, `isUsingOverage=false` (istek İZİNLİ, kotanın %36'sı boş). Ama
+`internal/providers/claudecli.go` `rate_limit_event` işleyicisi yalnız tam `"allowed"`
+string'ini geçerli sayıyor, `!EqualFold(status,"allowed")` ile `allowed_warning`'i
+ölümcül rate-limit olarak işaretliyordu → `p.rateLimited=true`, tur non-retryable
+hataya düşüp gerçek çıkış nedenini (init sonrası model çıktısı olmadan exit) maskeliyordu.
+
+**Düzeltme:** Guard `strings.HasPrefix(lower(status),"allowed")` oldu → `allowed` +
+`allowed_warning` ailesi tur ilerlemesine izin verir; yalnız `rejected`/`blocked` gibi
+"allowed" dışı statüler `rateLimited` set eder. Böylece uyarı statüsünde tur, gerçek
+sebebe göre (çoğunlukla `!sawModelTurn` → tool çalışmadıysa **retryable**) sınıflanır.
+`cliRateLimit` doc-comment'i güncellendi. Regresyon testi eklendi
+(`claudecli_ratelimit_test.go`: `allowed`/`allowed_warning`/boş status → rateLimited
+DEĞİL; `rejected`/`blocked` → rateLimited). `go build ./...` ✅.
+
+## UX: Bağlam bütçesi ayarında taban/tavan netleştirme + canlı önizleme (2026-08-05) ✅
+
+**Sorun:** "Maks. bağlam token" bir MAKSİMUM gibi duruyor ama aslında TABAN (floor) —
+`EffectiveBudget = clamp(pencere × oran, taban, tavan)`. Kullanıcı pencereyi küçültmek
+için tabanı 50K'ya çekti ama etkin bütçe `contextBudgetCeil=63000` tavanına kırpılı
+olduğundan (1M×0.6=600K→63K) değişmedi; taban yalnız YÜKSELTİR.
+
+**Düzeltme (`frontend/.../settings/ContextPanel.tsx`):** Etiketler netleşti —
+"Maks. bağlam token — TABAN" (hint: yalnız yükseltir, küçültmek için tavanı düşür) ve
+"Bütçe tavanı — ÜST SINIR" (hint: pencereyi küçültmek için değiştireceğin ayar budur).
+Ayrıca **canlı önizleme bloğu** eklendi: girilen taban/oran/tavan ile iki temsili pencere
+(1M Opus/Sonnet/Fable auto-0.45, 200K Haiku auto-0.40) için etkin bütçeyi ve HANGİ sınırın
+aktif olduğunu (`tavana kırpıldı` sarı · `tabana yükseltildi` accent · `pencere × oran`)
+gösterir. `effectiveBudget()` helper'ı backend `EffectiveBudget` mantığını birebir
+yansıtır (default'lar 12000/262144 mirror'landı). `npx tsc --noEmit` ✅.
+
+## Handoff: koordinatör + workflow ayarları devam oturumuna taşınıyor (2026-08-05) ✅
+
+**İstek:** `/handoff` ile açılan temiz-pencere devam oturumu, kaynak oturumun koordinatör
+ve workflow (recipe) ayarlarını da alsın.
+
+**Değişiklik:** `HandoffSession`'daki inline `SpawnOptions` kurulumu saf, test edilebilir
+`handoffContinuationSpawnOpts(session, opts)` helper'ına çıkarıldı. Devam oturumuna
+taşınanlar: `CoordinatorMode` (koordinatör promptu + `spawn_worker`/… araç seti),
+`CoordinatorWorkflow` (seçili recipe), `CoordinatorMaxTurns` (recipe'in notify-loop cap'i)
+— ayrıca mevcut `WorkingDir`. **Taşınmayanlar** (bilinçli): ağaç/worker lineage'ı
+(`Role`/`CoordinatorSessionID`/`Root`/`Depth`) → devam oturumu kendi taze **kök**
+koordinatörü olur, eski (artık handoff'lanmış) ağaca rapor veren bir worker değil.
+Alt-koordinatör SPAWN'ından farkı: orada recipe kasıtlı miras alınmaz (özyinelemeli
+recipe ağaçta tekrarlanmasın diye); handoff ise aynı mantıksal oturumun devamı → miras
+doğru. Üç handoff yolu (manuel `/handoff`, `handoff_session` aracı, oto-handoff) aynı
+helper'dan geçtiği için hepsi kapsanır. Test: `handoff_test.go` (koordinatör ayarları
+taşınır + lineage sızmaz; koordinatör-olmayan ebeveyn bayrak uydurmaz). `go build ./...`
++ `go vet` + `go test ./internal/agent` ✅.
+
+## Fix: compact sırasında kuyruk paneli kaybolması (seri slot tutulmuyordu) (2026-08-05) ✅
+
+**Belirti:** `/compact` çalışırken yeni mesaj gönderilince UI'daki "Bekleyenler" (sıra)
+paneli anında kayboluyordu; mesaj compact'in arkasında beklemek yerine onunla eşzamanlı
+koşuyordu (claude-cli'de aynı `cliSessionId`'de iki subprocess → transkript bozulma riski).
+
+**Kök neden:** `/compact` (ve diğer summary slash komutları) `handleSessionSummary`'de
+doğrudan `provider.Complete` ile HTTP goroutine'inde koşuyor, `runInboxWorker`'dan
+GEÇMİYOR. Bu yüzden inbox seri slot'u boş kalıyor; mesaj enqueue edilince `kickInbox`
+worker'ı hemen başlatıp mesajı pop ediyor → `ib.items` boşalıyor → boş `queue_update`
+→ tray kayboluyor.
+
+**Düzeltme (v2 — kuyruğa tam uyum):** `internal/api/inbox.go`'ya
+`acquireInboxSlot(ctx, sessionID, wsID) (release, err)` eklendi: kuyruk-dışı slash
+komutlarını (`/compact`, `/refresh-context`, `/handoff`) seri send-queue'ya HER İKİ
+yönde de uydurur. Slot meşgulse (bir tur akıyorsa) `idleSignal` broadcast kanalında
+**bloklayarak bekler** (poll değil), tur bitince slot'u kapar; komut sürerken gelen
+mesaj tray'de WAITING kalır (`kickInbox` running iken no-op), `release()` flag'i temizler
++ idle broadcast + worker'ı kick eder (birikeni drenajlar). `ctx` iptali (istemci
+kopması) yan etki öncesi temiz çıkar. `running=false` set eden iki yer (worker
+drain-tamam + release) `signalInboxIdleLocked` ile bekleyeni uyandırır. İlk sürümdeki
+`holdInbox` (tur akıyorsa `held=false` ile pas geçen band-aid) bununla değiştirildi —
+artık komut, önündeki turu bekler, arkasındakileri de bloklar.
+`handleSessionSummary` + `handleSessionHandoff` `acquireInboxSlot` + `defer release`
+ile sarıldı (compact/refresh-context/handoff kapsanır). Testler: `inbox_hold_test.go`
+(held iken dispatch engellenir; worker koşarken beklenir + uyanır; ctx iptalinde
+worker'a dokunmadan çıkar). `go build ./...` + `go vet` + `go test ./internal/api
+./internal/providers` ✅ (race detector bu makinede gcc yokluğundan çalıştırılamadı;
+kilitleme tek `inbox.mu` altında, capture-then-select lost-wakeup'a karşı güvenli).
+
+## View: board tek-kart + schedule projeksiyonu + aksiyon-kuyruğu drill-down (2026-08-05) ✅
+
+Aksiyon kuyruğundaki her satır artık ekrandan çıkmadan **◱ ile o varlığın `get_view`
+projeksiyonunu** yandan açabiliyor. İki boşluk kapatıldı:
+
+- **Board tek-kart `sub`:** `ProjectBoard`'a `Sub` → `projectCard` (durum/öncelik/
+  sahip/termin/bağımlılık ⛔/gecikme ⚠/son koşu; bilinmeyen id hata). `card` aksiyonu
+  `{kind:'board', sub:id}`.
+- **Schedule projeksiyonu (yeni `KindSchedule`):** `schedule.go` — armed/disabled,
+  son-çalışma statüsü+hatası, sıradaki, hedef agent/flow, prompt. L0/L1. Roll-up'ın
+  aksine devre-dışı zamanlamanın hatası burada gösterilir (kullanıcı ona inmişse).
+- **Araç + UI:** `get_view` kind enum'una `schedule` + board `sub`=kart eklendi.
+  `ViewButton`'a opsiyonel `label`; aksiyon satırına ◱ tetikleyicisi (iç içe buton
+  olmaması için satır yeniden yapılandırıldı); workspace özeti altında
+  `summary.handles` tıklanabilir ◱ çipler. `schedule` için projeksiyon yok değil artık
+  → dört aksiyon türü de drill-down. API değişmedi (routing generic).
+- **Test:** `schedule_test.go` (tek-kart sub + bilinmeyen-id hatası + schedule son-hata
+  + errors lens). view/api/tools yeşil, FE build geçer.
+
+## Panel: CEO kokpiti — maliyet + aksiyon kuyruğu + delta + sonuçlar (2026-08-04) ✅
+
+Dashboard (`66`) dört yeni blokla CEO görünümüne yaklaştı; hepsi backend'de
+hesaplanır (tarayıcı workspace'i indirmez), fiyatlama `billing.RollupOf` ile Bütçe
+ekranıyla tek kaynaktan.
+
+- **Maliyet (item 1):** workspace projeksiyonu başlığına `$X bugün` eklendi
+  (`internal/view` artık `billing` import eder; fiyatlanmış harcama yoksa satır
+  yazılmaz). Panelde 💰 blok: bugün / bu ay / günlük ort. (burn) / ay-sonu tahmini +
+  önlenebilir cache-israfı notu. Abonelik sağlayıcı `~$`. Ayrıca maliyet trendi +
+  "en maliyetli ajanlar ($)" sıralaması.
+- **Aksiyon kuyruğu (item 2):** projeksiyon sinyallerinin **tıklanabilir** hâli
+  (`dashboard_actions.go`) — takılmış oturum / başarısız koşu-kart (danger) +
+  bekleyen soru / hatalı zamanlama / hareketsiz kart (warn). Her satır ilgili ekrana
+  gider (`DashboardNav`: oturum→chat, koşu→flows, kart→board, zamanlama→schedules).
+- **Dönem-üstü delta (item 3):** açılan oturum · koşu · token · maliyet trendleri
+  önceki eşit-uzunluk pencereye göre ▲/▼% rozeti taşır (`dashboard_cost.go`;
+  maliyette artış kırmızı, baseline yoksa "yeni").
+- **Sonuç metrikleri (item 4):** biten kart/gün (velocity) · ort. tamamlanma süresi
+  (cycle time) · koşu başarı oranı (`dashboard_outcomes.go`) — hacim değil tamamlanma
+  tarafı. Her metrik kendi "veri yok" durumunu kelimeyle söyler.
+- **Test:** `dashboard_new_test.go` dört bloğu + aksiyon kuyruğunun gerçek sorunları
+  yakaladığını sabitler. `internal/view` + `internal/api` yeşil, FE prod build geçer.
+
+## UI tema-hizası + a11y + Toast/Komut-Paleti (2026-08-04) ✅
+
+- **Tema-hizası:** Ham renkler tema token'larına taşındı — `RunView` waiting durumu
+  (`#eab308`→`--color-warning`, buton yazısı `--color-bg` ile iki-temada kontrast),
+  `TodoPanel` completed (`green-400`→`--color-success`), `ThinkingShareChart`
+  (violet→`--color-accent`). viz olay-rozetleri (`SelfHealing`/`PromptCache`/
+  `HookActivity`) tümüyle token'landı; yeni **`--color-info`** (sky) token'ı eklendi
+  (dark `#38bdf8` / light `#0284c7`). 5 chat kartında `shadow-xl shadow-black/40`→
+  `--shadow-lg`. Hepsi preset + light temada re-theme oluyor.
+- **a11y:** Global `prefers-reduced-motion` (animasyon/transition kısılır); toggle
+  switch'lerine `role="switch"`+`aria-checked` (`settings/Toggle`, `ScheduleCard`,
+  `AutomationCard`).
+- **Tutarlılık:** 3 ad-hoc modal (`ArtifactPreviewModal`/`RewindDialog`/`LensList`)
+  paylaşılan `ModalOverlay`'e; 6 tam-panel yükleyici `LoadingState`'e taşındı.
+  (`PromptEditor` tam-ekran + `ServerManagement` testid'li bilinçli ad-hoc bırakıldı.)
+- **Toast (yeni):** Hata-özel `ErrorToast` → çok-tonlu **`Toast`** (error/success/info)
+  + `Toaster` host + modül-seviye `toast.*` API (context'siz, her yerden çağrılır).
+  Mevcut `onError` sink'leri `toast.error`'a yönlendi (geriye-uyumlu).
+  - **Pozitif toast'lar (yeni):** Başarıyla tamamlanan kullanıcı aksiyonlarına kısa
+    `toast.success`/`toast.info` eklendi. **Ayarlar:** ayar kaydet (`SettingsPanel`),
+    görünüm kaydet/genele sıfırla (`AppearancePanel`), workspace dosyaları kaydet
+    (`WorkspaceFilesPanel`), sır ekle/güncelle/sil + panoya kopyala (`SecretsPanel`),
+    hook ekle/güncelle/sil (`HooksPanel`), MCP sunucusu ekle/güncelle/sil
+    (`useToolsPanelState`). **Workspace:** oluştur/ekle/sil (`useWorkspaces`), genel
+    ayar kaydet (`WorkspaceView`). **Akışlar:** oluştur/şablondan oluştur/kaydet/sil
+    + toplu sil (`flowActions`). **Görevler:** oluştur/güncelle/sil (`TaskFormModal`).
+    **Zamanlama/otomasyon:** oluştur/güncelle (`ScheduleModal`/`AutomationModal`),
+    sil (`AutomationBoard`). **İçgörü:** ayar kaydet (`SettingsTab`), lens kaydet
+    (`LensList`), ders sil (`LessonsList`). **Sağlayıcı/kimlik:** özel sağlayıcı sil
+    (`ProvidersPanel`), claude-cli kimlik kaydet/sil (`ClaudeAuthDialog`).
+    **Market/registry:** paket kur (`MarketPanel`), registry ekle/sil
+    (`RegistryManager`), katalogdan MCP ekle (`useToolsPanelState.addImportable`).
+    **Artifact:** kaydet/sil (`ArtifactsPanel`). Yalnız onaylanmış başarıda (await
+    çözülüp hata fırlamadıysa) tetiklenir; hata yolu değişmedi, gürültü (her
+    tuş/otomatik-kayıt/toggle) yok. **Ton düzeltmesi:** `MarketPanel` kurulum
+    başarısını `onError('✓ …')` ile KIRMIZI hata toast'ında gösteriyordu →
+    `toast.success`'e alındı. Bilinçli atlananlar: zaten inline sonuç gösteren
+    `BackupPanel`, MCP import, `ExternalToolsPanel` bakım aksiyonları.
+  - **Kopyala geri bildirimi → tek kanal:** Tüm kopya butonlarındaki inline
+    "Kopyalandı"/✓-checkmark swap'ları (yerel `copied`/`done` state + `setTimeout`)
+    kaldırılıp tek `toast.info('Panoya kopyalandı')` kanalına taşındı: `CopyPathButton`,
+    `PromptEditor`, markdown `CodeBlock`/`MermaidDiagram`, `AgentContextModal`,
+    `SessionContextModal`, `ClaudeAuthDialog`, `ServerManagement`, `ExternalToolsPanel`,
+    `TaskFormModal` (kart-id), `ViewPanel`, `ArtifactsPanel`, `ChangesModal` +
+    `RunNodeInspector` `CopyButton`'ları. Buton artık her zaman `Copy` ikonu gösterir;
+    başarı geri bildirimi tek yerden (toast) gelir. Not: `CodeBlock`/`MermaidDiagram`
+    sohbette sık kopyalanır → gürültü olursa bu ikisinde inline ✓ geri getirilebilir.
+- **Komut paleti (yeni):** **⌘K / Ctrl+K** → generic `CommandPalette` (substring
+  filtre + klavye nav); komutlar = her view'a git + workspace değiştir. App shell'de
+  tek yerden beslenir (`setView`/`switchWorkspace`).
+- **Doğrulama:** `tsc -b` + `vite build` temiz.
+
+## Bağlam metresi ↔ compaction eşiği tutarsızlığı (2026-08-04) ✅
+
+- **Sorun:** `session_info.go` bağlam metresi pencereyi **ham `MaxContextTokens`
+  tabanı** (örn. 63K) olarak gösteriyordu; oysa `Prepare`'ın gerçek katlama eşiği
+  `EffectiveBudget` (büyük-pencere modelde tabanı `window*fraction`, `ceil` ile
+  sınırlı). claude-cli **opus** ajanda (1M pencere, `fraction=0.6`, `ceil=512K`)
+  gerçek eşik ~512K'ydı → metre 81.8K/63K = %130 gösterip "sonraki turda sıkışır"
+  derken motor 512K'ya kadar hiç katlamıyordu. Kullanıcı "bağlam sıkışmıyor" olarak
+  gördü (SES189/WS17).
+- **Çözüm (kod):** `session_info.go` `resp.ContextWindow` artık `MaxContextTokens`
+  yerine `conversation.EffectiveBudget(provider, model, floor, fraction, ceil)`
+  raporluyor → metre penceresi motorun gerçek eşiğiyle birebir. Ajan çözülemezse
+  ham tabana düşer.
+- **Not:** Metre "kullanılan" toplamı sistem-promptu/araç-şeması gibi ~sabit
+  overhead'i de içerir; `Prepare` yalnız mesajları sayar → küçük kalıcı fark
+  (erken uyarı yönünde, güvenli).
+
+### claude-cli resume ↔ compaction: fold'da cold-start (2026-08-04) ✅
+
+- **Sorun:** claude-cli **warm-resume** modunda (`claudeResume=on`) `--resume` CLI'nin
+  tam sunucu-taraflı geçmişini yükler; TionSwarm bir fold yapsa bile `planClaudeResume`
+  yalnız **ham delta** gönderir ve özeti prompt `[Context]` bloğuna **eklerdi** → fold
+  CLI penceresine hiç ulaşmaz, hatta özet kadar **büyütürdü** (mükerrer). Compaction
+  yalnız `native` yol ve CLI **cold-start** için etkiliydi.
+- **Çözüm:** `claudeResumeDecision` artık `compacted` parametresi alıyor; bir fold olan
+  turda (geçerli warm boundary olsa bile) **cold-start**'a zorlar → `llmReq.Messages`
+  Prepare'ın compacted kuyruğu (özet + `keepRecent`) olarak kalır ve **taze** bir CLI
+  oturumuna gönderilir. `plan.sentCount=rawLen` korunur → sonraki turlar compacted
+  temelden normal warm-resume eder. Maliyet: fold turunda tek seferlik cache-cold.
+  `planClaudeResume` çağrısı `prep.Compacted`'i geçirir; testte yeni vaka
+  ("compacted forces cold despite warm boundary"). Persistent yol etkilenmez
+  (resume gate zaten kapalı).
+- **Log:** Mevcut bir warm CLI oturumunu düşüren fold, Loglar'a
+  `component=conversation` altında `cli resume reset: fold re-baselined the
+  claude-cli session` (prev_cli_session + raw_msgs) satırıyla işaretlenir —
+  "context compacted" fold logunun yanında; tek cache-cold turu açıklar. İlk-tur /
+  edit kaynaklı zaten-cold turlar loglanmaz (gürültü değil).
 
 ## Koordinatör ağaç bütçesi: görünürlük + reclaim (2026-08-04) ✅
 
@@ -465,7 +853,12 @@
   `SetZAI`/`ZAIConfigured` + resolve `case "zai"`), `settings/settings.go`
   (`ZAIKeyEnc`/`ZAIBaseURL` struct+DTO+patch) + `store.go` (`ZAIKey()` accessor +
   patch şifreleme + BaseURL applyString), `api/server.go` applySettings `SetZAI`,
-  `providers/pricing.go` (`zai` GLM yaklaşık fiyat tablosu). Frontend: `types/settings.ts`,
+  `providers/pricing.go` (`zai` GLM fiyat tablosu — **gerçek z.ai fiyatları** 2026-08:
+  GLM-5.2 $1.40/$4.40, 5.1 $0.97/$3.04, 5 $0.60/$1.92, 4.7 $0.60/$2.20, 4.7-flash
+  $0.06/$0.40 · 1M; cache read mult ~0.19). Market girdileri de tazelendi
+  (`pricing_market.go` `glm-anthropic` + `zhipu-glm` → güncel GLM-5.x lineup; not:
+  dosya "gen_providers.py generated" başlığı taşır ama generator+`data/` repoda yok →
+  fiilen elle bakılıyor, doğrudan düzenlendi). Frontend: `types/settings.ts`,
   `SettingsPanel.tsx` (keyPatch/clearKey/applyKey union'a `'zai'`), `ProvidersPanel.tsx`
   (**Z.ai GLM** BuiltinProvider kartı). Test: `kind_test.go` katalog 5→6.
 - **Not:** GLM-5.2 ayrıca OpenRouter kataloğunda (`z-ai/glm-5.2`) ve Özel Sağlayıcı ile
@@ -3860,10 +4253,13 @@ karşılığı hata→ders döngüsü. Detay: `_Docs/56-SELF-HEALING.md` (Faz F 
    araç döngüsünde `refusal` artık boş balon yerine kategori+açıklamalı hata kartı üretir.
    Mid-output fallback echo kuralı için `sanitizeFallbackEcho` (sınır öncesi thinking/
    tool_use blokları düşülür). UI toggle + `fallback` iz adımı.
-3. **Zaman aşımları:** model-sınıflı istek bütçesi — adaptive sınıf (Fable/4.7+/Sonnet 5)
-   600s, eskiler 120s (`requestCtx`; client transport tavanı 630s). `scheduleTimeout`
-   120s → **30 dk** (Fable'ın dakikalarca süren tek istekleri + uzun araç döngüleri;
-   kaçak koruması iterasyon/bütçe guard'larında).
+3. **Zaman aşımları:** model-sınıflı istek bütçesi — uzun bütçe (600s) adaptive sınıf
+   (Fable/4.7+/Sonnet 5) **+ akıl-yürütme modelleri (deepseek-v4-pro)**, eskiler 120s.
+   Sınıflandırıcı `LongRequestModel` (`timeouts.go`) — thinking wire-format'tan ayrı; hem
+   native Anthropic hem OpenAI-uyumlu (`OpenAICompat.requestCtx`) client'ta uygulanır,
+   client transport tavanı 630s. `Manifest.RequestTimeoutSecs` ile kind bazında override
+   (`Registry.Get`). `scheduleTimeout` 120s → **30 dk** (Fable'ın dakikalarca süren tek
+   istekleri + uzun araç döngüleri; kaçak koruması iterasyon/bütçe guard'larında). Detay 2026-08-06 fix.
 4. **`model_context_window_exceeded` stop reason:** `decideRecovery`'ye dal eklendi —
    hata-şekilli taşmayla aynı tek-atım compact-and-retry; tekrarında tur artık
    "completed" değil `context_window_exhausted` olarak işaretlenir (iz kartı + kırpılma

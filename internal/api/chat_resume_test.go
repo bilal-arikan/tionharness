@@ -41,27 +41,31 @@ func TestClaudeResumeDecision(t *testing.T) {
 		cliID      string
 		sentCount  int
 		rawLen     int
+		compacted  bool
 		wantActive bool
 		wantResume string
 		wantDelta  int
 		wantSent   int
 	}{
 		// Gate off → inert (full transcript, no id captured/persisted).
-		{"disabled", false, "sess", 2, 5, false, "", 0, 0},
+		{"disabled", false, "sess", 2, 5, false, false, "", 0, 0},
 		// Cold start: no prior id → send full transcript, persist count for next turn.
-		{"cold first turn", true, "", 0, 1, true, "", 0, 1},
+		{"cold first turn", true, "", 0, 1, false, true, "", 0, 1},
 		// Warm resume: prior id + valid boundary + unseen delta.
-		{"warm with delta", true, "sess", 3, 5, true, "sess", 3, 5},
+		{"warm with delta", true, "sess", 3, 5, false, true, "sess", 3, 5},
 		// Boundary equals raw length → nothing new → cold fallback (re-capture id).
-		{"no new messages", true, "sess", 5, 5, true, "", 0, 5},
+		{"no new messages", true, "sess", 5, 5, false, true, "", 0, 5},
 		// Boundary past the end (history shrank after edits) → cold fallback.
-		{"boundary past end", true, "sess", 9, 5, true, "", 0, 5},
+		{"boundary past end", true, "sess", 9, 5, false, true, "", 0, 5},
 		// Prior id but zero boundary (shouldn't happen) → cold.
-		{"zero boundary", true, "sess", 0, 4, true, "", 0, 4},
+		{"zero boundary", true, "sess", 0, 4, false, true, "", 0, 4},
+		// A fold this turn forces a COLD start even with a valid warm boundary, so the
+		// compacted tail re-baselines a fresh CLI session; sentCount stays rawLen.
+		{"compacted forces cold despite warm boundary", true, "sess", 3, 5, true, true, "", 0, 5},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			plan, resumeID, delta := claudeResumeDecision(c.enabled, c.cliID, c.sentCount, c.rawLen)
+			plan, resumeID, delta := claudeResumeDecision(c.enabled, c.cliID, c.sentCount, c.rawLen, c.compacted)
 			if plan.active != c.wantActive {
 				t.Errorf("active = %v, want %v", plan.active, c.wantActive)
 			}

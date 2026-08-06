@@ -17,7 +17,7 @@ import { WorkspaceFilesPanel, type FilesSaveState } from '@/features/settings/Wo
 import { ProjectPanel } from './ProjectPanel'
 import { WorkspaceExportPanel } from './WorkspaceExportPanel'
 import { RecommendationsPanel } from './RecommendationsPanel'
-import { Button, CollapsibleListShell } from '@/shared/components'
+import { Button, CollapsibleListShell, toast } from '@/shared/components'
 import { useRegisterDirty } from '@/shared/lib/dirtySignals'
 
 type Tab = 'general' | 'appearance' | 'project' | 'files' | 'export' | 'recommendations'
@@ -118,6 +118,7 @@ export function WorkspaceView({
       setWs(updated)
       setWsOrig(updated)
       onWorkspaceChanged?.()
+      toast.success('Kaydedildi')
     } catch (e) {
       onError((e as Error).message)
     } finally {

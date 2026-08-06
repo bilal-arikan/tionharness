@@ -1,7 +1,7 @@
-import { useState } from 'react'
-import { Copy, Check } from 'lucide-react'
+import { Copy } from 'lucide-react'
 import { displayPath } from '@/shared/lib/paths'
 import { copyToClipboard } from '@/shared/lib/clipboard'
+import { toast } from './Toast'
 
 // Shared visual language for the path actions (copy path / open folder) used
 // across the app so they always look identical: a compact bordered icon button
@@ -24,24 +24,29 @@ interface Props {
   onError?: (msg: string) => void
 }
 
-// CopyPathButton copies a filesystem path to the clipboard and briefly flips to a
-// check on success. Standardised look shared with <RevealButton> via
-// PATH_ACTION_CLS.
-export function CopyPathButton({ path, getPath, label, labelClassName = '', title = 'Yolu kopyala', testId, onError }: Props) {
-  const [copied, setCopied] = useState(false)
+// CopyPathButton copies a filesystem path to the clipboard, surfacing success
+// through the app-wide toast (single feedback channel). Standardised look shared
+// with <RevealButton> via PATH_ACTION_CLS.
+export function CopyPathButton({
+  path,
+  getPath,
+  label,
+  labelClassName = '',
+  title = 'Yolu kopyala',
+  testId,
+  onError,
+}: Props) {
   if (!path && !getPath) return null
 
   const copy = async () => {
     try {
-      const text = getPath ? await getPath() : path ?? ''
+      const text = getPath ? await getPath() : (path ?? '')
       if (!text) return
       // copyToClipboard falls back to a manual-copy prompt when the browser
       // blocks programmatic copy (insecure LAN/HTTP context); it returns true
-      // only on a real programmatic copy, so gate the "Kopyalandı" flash on it.
-      const ok = await copyToClipboard(text, 'Yolu kopyalayın (Ctrl+C, Enter):')
-      if (!ok) return
-      setCopied(true)
-      setTimeout(() => setCopied(false), 1200)
+      // only on a real programmatic copy, so gate the toast on it.
+      if (await copyToClipboard(text, 'Yolu kopyalayın (Ctrl+C, Enter):'))
+        toast.info('Panoya kopyalandı')
     } catch (e) {
       onError?.(e instanceof Error ? e.message : String(e))
     }
@@ -52,11 +57,11 @@ export function CopyPathButton({ path, getPath, label, labelClassName = '', titl
       type="button"
       onClick={copy}
       data-testid={testId}
-      title={copied ? 'Kopyalandı' : path ? `${title}: ${displayPath(path)}` : title}
+      title={path ? `${title}: ${displayPath(path)}` : title}
       className={PATH_ACTION_CLS}
     >
-      {copied ? <Check size={14} className="text-[var(--color-success)]" /> : <Copy size={14} />}
-      {label && <span className={labelClassName}>{copied ? 'Kopyalandı' : label}</span>}
+      <Copy size={14} />
+      {label && <span className={labelClassName}>{label}</span>}
     </button>
   )
 }
