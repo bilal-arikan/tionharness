@@ -91,10 +91,40 @@ frontend'de büyük listeler için gerçek "load more".
 `TestListMCPServersPaginationAndSort`, `TestListSessionsToolSort`); frontend
 `npx tsc -b` ✅ + `npm run build` ✅.
 
-**Notlar / sıradaki:** SessionsSidebar + SessionsOverview hâlâ tam listeyi
-`/api/executions`'tan çekiyor (poll ediyor) — endpoint kontrata bağlandığı için
-istendiğinde aynı "load more" deseni oraya da uygulanabilir (sidebar poll ile
-sayfalamayı birleştirmek daha fazla iş). Commit'ler Board Reviewer tarafından atılır.
+### Sessions load-more (TSK68 kapsam genişletmesi devamı, 2026-08-07) ✅
+
+**Ne:** SessionsSidebar + SessionsOverview artık tam listeyi tek seferde çekmiyor;
+sidebar `/api/sessions` üzerinden 100'erlik sayfalarla yükleniyor (backend
+`maxPageLimit` = 100, sessiz klamp olmaması için istemci aynı değeri kullanır),
+altta `Daha fazla yükle (X/toplam)` butonu sonraki sayfayı ekliyor. Overview
+tablosu render-side sayfalıyor (veri zaten tam bellekte — runtime map'i için
+gerekli): filtre/sıralama tüm listede çalışır, yalnız DOM satırları 50'şerlik
+pencerede, `Daha fazla yükle (X/Y)` pencereyi büyütür; filtre değişince pencere
+sıfırlanır.
+
+**Nasıl:**
+- `useSessionsController.ts`: `SESSIONS_PAGE_SIZE = 100`; ilk yükleme + refresh
+  aynı pencereyi (`sessionsLimitRef`) yeniden çeker — sayfa derinliği olan
+  kullanıcı her event'te ilk sayfaya çökmez; `loadMoreSessions` offset'ten
+  sonraki sayfayı `id`-dedupe ile ekler, `total`/`hasMore` zarfından gelir.
+  `sessionApi.listSessions` artık `Promise<SessionPage>` döner (paramsız legacy
+  dizi istemci tarafında `asSessionPage` ile normalize edilir) — `r.items`
+  kullanımına geçildi.
+- `SessionsSidebar.tsx`: `totalSessions`/`hasMoreSessions`/`onLoadMore` prop'ları;
+  buton arama aktifken (mesaj eşleşmeleri kendi bölümünde) veya liste tamamen
+  yüklendiğinde gizlenir.
+- `SessionsOverview.tsx`: `OVERVIEW_RENDER_PAGE = 50`; `visibleRows` + load-more
+  butonu; `query/kind/sortKey/asc` değişince `useEffect` pencereyi sıfırlar.
+- `App.tsx`: controller'dan yeni üç prop'u sidebar'a bağlar.
+
+**Doğrulama:** `npx tsc -b` ✅ + `npm run build` ✅ (backend'e dokunulmadı — bu
+adım yalnız frontend). Backend kontratı bir önceki bölümdeki `b529649` ile
+commit'liydi.
+
+**Dokunulan dosyalar:** `frontend/src/api/sessions.ts`,
+`frontend/src/app/useSessionsController.ts`, `frontend/src/app/App.tsx`,
+`frontend/src/features/sessions/SessionsSidebar.tsx`,
+`frontend/src/features/sessions/SessionsOverview.tsx`.
 
 ## TSK66: Harita — yan-yana node kapatma + eksik node tipleri (2026-08-06) ✅
 

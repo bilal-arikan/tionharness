@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Search, X, ArrowUp, ArrowDown, Copy, type LucideIcon } from 'lucide-react'
 import type { Agent, Execution } from '@/types'
 import { AgentAvatar } from '@/shared/components/agents/AgentAvatar'
@@ -6,6 +6,12 @@ import { copyToClipboard } from '@/shared/lib/clipboard'
 import { relativeTime, fullDateTime, formatDuration } from '@/shared/lib/time'
 import { ModalOverlay } from '@/shared/components'
 import { FILTERS, kindMeta, matchesKindFilter, shortId, StatusPill } from './sessionKindMeta'
+
+// How many rows the table renders before the "Daha fazla yükle" button appears.
+// The full executions list is already in memory (useExecutionRuntime needs it to
+// build the sidebar's runtime map), so this is a render-side page: filters and
+// sort always run over the WHOLE list, only the DOM rows are capped.
+const OVERVIEW_RENDER_PAGE = 50
 
 interface Props {
   // Every execution row the sessions sidebar has loaded (workspace-wide).
@@ -18,7 +24,8 @@ interface Props {
 
 // Sortable columns. `get` maps a row to a comparable value; string values sort
 // case-insensitively, numbers numerically.
-type SortKey = 'title' | 'kind' | 'agent' | 'messages' | 'status' | 'duration' | 'created' | 'updated'
+type SortKey =
+  'title' | 'kind' | 'agent' | 'messages' | 'status' | 'duration' | 'created' | 'updated'
 
 // runElapsed is the wall-clock span of a run in seconds: for a finished run the
 // created→updated gap; for a live one, created→now (so the table keeps ticking).
@@ -56,6 +63,12 @@ export function SessionsOverview({ items, agents, onSelect, onClose }: Props) {
   const [kind, setKind] = useState('')
   const [sortKey, setSortKey] = useState<SortKey>('updated')
   const [asc, setAsc] = useState(false)
+  // Render-page limit: reset whenever the query/filter/sort changes so the next
+  // result set starts at the top instead of resuming mid-list.
+  const [renderLimit, setRenderLimit] = useState(OVERVIEW_RENDER_PAGE)
+  useEffect(() => {
+    setRenderLimit(OVERVIEW_RENDER_PAGE)
+  }, [query, kind, sortKey, asc])
   // Snapshot "now" once per render so live-duration values are stable within a
   // sort pass (avoids rows shuffling under a Date.now() called per-comparison).
   const nowSec = Math.floor(Date.now() / 1000)
@@ -103,6 +116,10 @@ export function SessionsOverview({ items, agents, onSelect, onClose }: Props) {
     })
   }, [items, query, kind, sortKey, asc, nowSec])
 
+  // The rows the table actually renders: the whole (filtered+sorted) list is
+  // capped to the render page, and the load-more button grows the window.
+  const visibleRows = rows.slice(0, renderLimit)
+
   // Toggle sort: same column flips direction, a new column selects it (numeric
   // and timestamp columns default to descending — biggest/newest first).
   const sortBy = (key: SortKey) => {
@@ -126,7 +143,9 @@ export function SessionsOverview({ items, agents, onSelect, onClose }: Props) {
         <div className="flex items-center justify-between border-b border-[var(--color-border)] px-5 py-3">
           <div className="flex items-baseline gap-2">
             <h2 className="text-sm font-semibold text-[var(--color-text)]">Oturumlar</h2>
-            <span className="text-xs text-[var(--color-text-dim)]">{rows.length} / {items.length}</span>
+            <span className="text-xs text-[var(--color-text-dim)]">
+              {rows.length} / {items.length}
+            </span>
           </div>
           <button
             onClick={onClose}
@@ -190,7 +209,9 @@ export function SessionsOverview({ items, agents, onSelect, onClose }: Props) {
                       c.align === 'right' ? 'text-right' : 'text-left'
                     }`}
                   >
-                    <span className={`inline-flex items-center gap-1 ${c.align === 'right' ? 'flex-row-reverse' : ''}`}>
+                    <span
+                      className={`inline-flex items-center gap-1 ${c.align === 'right' ? 'flex-row-reverse' : ''}`}
+                    >
                       {c.label}
                       {sortKey === c.key && <SortIcon size={11} />}
                     </span>
@@ -199,7 +220,7 @@ export function SessionsOverview({ items, agents, onSelect, onClose }: Props) {
               </tr>
             </thead>
             <tbody>
-              {rows.map((it) => {
+              {visibleRows.map((it) => {
                 const meta = kindMeta(it.kind)
                 const Icon: LucideIcon = meta.icon
                 const owner = agentById.get(it.agentId)
@@ -222,7 +243,10 @@ export function SessionsOverview({ items, agents, onSelect, onClose }: Props) {
                           </span>
                         ) : (
                           it.unread && (
-                            <span className="h-2 w-2 shrink-0 rounded-full bg-[var(--color-accent)]" title="Okunmadı" />
+                            <span
+                              className="h-2 w-2 shrink-0 rounded-full bg-[var(--color-accent)]"
+                              title="Okunmadı"
+                            />
                           )
                         )}
                         <span
@@ -267,7 +291,9 @@ export function SessionsOverview({ items, agents, onSelect, onClose }: Props) {
                     {/* Status */}
                     <td className="whitespace-nowrap px-3 py-2">
                       {it.running ? (
-                        <span className="text-[11px] font-medium text-[var(--color-success)]">çalışıyor…</span>
+                        <span className="text-[11px] font-medium text-[var(--color-success)]">
+                          çalışıyor…
+                        </span>
                       ) : (
                         <StatusPill status={it.lastStatus ?? ''} />
                       )}
@@ -295,7 +321,10 @@ export function SessionsOverview({ items, agents, onSelect, onClose }: Props) {
               })}
               {rows.length === 0 && (
                 <tr>
-                  <td colSpan={COLUMNS.length} className="px-3 py-8 text-center text-xs text-[var(--color-text-dim)]">
+                  <td
+                    colSpan={COLUMNS.length}
+                    className="px-3 py-8 text-center text-xs text-[var(--color-text-dim)]"
+                  >
                     {items.length === 0
                       ? 'Henüz oturum yok.'
                       : 'Aramayla eşleşen oturum bulunamadı.'}
@@ -304,6 +333,20 @@ export function SessionsOverview({ items, agents, onSelect, onClose }: Props) {
               )}
             </tbody>
           </table>
+
+          {/* Load more: grows the rendered window by one page (the data is
+              already fully loaded for the runtime map; this only caps DOM rows). */}
+          {rows.length > visibleRows.length && (
+            <div className="flex justify-center border-t border-[var(--color-border)] p-3">
+              <button
+                onClick={() => setRenderLimit((l) => l + OVERVIEW_RENDER_PAGE)}
+                data-testid="overview-load-more"
+                className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-4 py-1.5 text-xs font-medium text-[var(--color-text-dim)] transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
+              >
+                Daha fazla yükle ({visibleRows.length}/{rows.length})
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </ModalOverlay>

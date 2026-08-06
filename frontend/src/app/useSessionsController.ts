@@ -12,6 +12,11 @@ import type { Route } from './url'
 import { INITIAL_ROUTE } from './useAppNavigation'
 import { isWritableSessionKind } from './viewRegistry'
 
+// Sidebar list page size (TSK68 load-more): the session list is fetched one
+// page at a time and appended via loadMoreSessions. Kept under the backend's
+// maxPageLimit (100) so the server never clamps it silently.
+const SESSIONS_PAGE_SIZE = 100
+
 export interface SessionsControllerParams {
   activeWorkspaceId: string | null
   setError: (msg: string | null) => void
@@ -30,6 +35,18 @@ export function useSessionsController({
   const [allAgents, setAllAgents] = useState<Agent[]>([])
   const agents = useMemo(() => allAgents.filter((a) => !a.deleted), [allAgents])
   const [sessions, setSessions] = useState<Session[]>([])
+  // Paging state for the session list (TSK68 load-more): the sidebar renders
+  // the first page and appends with loadMoreSessions. total/hasMore come from
+  // the {items,total,offset,limit,hasMore} envelope; a parameter-less call that
+  // still returns the legacy array is normalized client-side to the same shape.
+  const [sessionsTotal, setSessionsTotal] = useState(0)
+  const [sessionsHasMore, setSessionsHasMore] = useState(false)
+  // How many sessions have been loaded so far — kept in a ref so refreshSessions
+  // can refetch the SAME window (instead of collapsing back to one page) without
+  // re-creating the callback on every append.
+  const sessionsLimitRef = useRef(SESSIONS_PAGE_SIZE)
+  const sessionsRef = useRef<Session[]>([])
+  sessionsRef.current = sessions
   const [messages, setMessages] = useState<Message[]>([])
   const [activeAgentId, setActiveAgentId] = useState<string | null>(null)
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null)
@@ -86,11 +103,15 @@ export function useSessionsController({
     setActiveSessionId(null)
     setBootstrapping(true)
     let cancelled = false
-    Promise.all([api.listAgents(), api.listSessions()])
-      .then(([ag, ss]) => {
+    Promise.all([api.listAgents(), api.listSessions({ limit: SESSIONS_PAGE_SIZE })])
+      .then(([ag, page]) => {
         if (cancelled) return
+        const ss = page.items
         setAllAgents(ag)
         setSessions(ss)
+        setSessionsTotal(page.total)
+        setSessionsHasMore(page.hasMore)
+        sessionsLimitRef.current = SESSIONS_PAGE_SIZE
         // Default selection: the most recent WRITABLE session. The sidebar now
         // lists every kind, but landing a returning user on a read-only flow or
         // schedule log (with no composer) would be a worse default than the last
@@ -212,11 +233,38 @@ export function useSessionsController({
       .catch(() => {})
   }, [activeWorkspaceId, activeSessionId, meterRefresh])
 
-  // Reload the session list (fresh order, updated times, unread flags).
+  // Reload the session list (fresh order, updated times, unread flags) while
+  // keeping the already-loaded window: refetch the same limit so a user who has
+  // paged deeper does not get collapsed back to the first page on every event.
   const refreshSessions = useCallback(() => {
     api
-      .listSessions()
-      .then(setSessions)
+      .listSessions({ limit: sessionsLimitRef.current })
+      .then((page) => {
+        setSessions(page.items)
+        setSessionsTotal(page.total)
+        setSessionsHasMore(page.hasMore)
+      })
+      .catch(() => {})
+  }, [])
+
+  // Append the next page to the session list (sidebar "Daha fazla yükle").
+  const loadMoreSessions = useCallback(() => {
+    const offset = sessionsRef.current.length
+    if (offset === 0) return
+    api
+      .listSessions({ limit: SESSIONS_PAGE_SIZE, offset })
+      .then((page) => {
+        if (page.items.length === 0) {
+          setSessionsHasMore(false)
+          return
+        }
+        const known = new Set(sessionsRef.current.map((s) => s.id))
+        const fresh = page.items.filter((s) => !known.has(s.id))
+        setSessions((prev) => [...prev, ...fresh])
+        sessionsLimitRef.current = offset + fresh.length
+        setSessionsTotal(page.total)
+        setSessionsHasMore(page.hasMore)
+      })
       .catch(() => {})
   }, [])
 
@@ -510,7 +558,7 @@ export function useSessionsController({
         // Its sessions survive, but a cascade dropped its schedules/tasks — refresh
         // the session list so any state derived from those is current.
         try {
-          const fresh = await api.listSessions()
+          const fresh = (await api.listSessions({ limit: sessionsLimitRef.current })).items
           setSessions(fresh)
           setActiveSessionId((cur) =>
             cur && fresh.some((s) => s.id === cur) ? cur : (fresh[0]?.id ?? null),
@@ -574,6 +622,9 @@ export function useSessionsController({
     setAgents: setAllAgents,
     sessions,
     setSessions,
+    sessionsTotal,
+    sessionsHasMore,
+    loadMoreSessions,
     messages,
     setMessages,
     activeAgentId,

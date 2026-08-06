@@ -54,6 +54,12 @@ interface Props {
   // replaced by skeletons so the column never claims "no sessions" prematurely.
   loading?: boolean
   newDisabled: boolean
+  // TSK68 load-more: total/hasMore from the paged /api/sessions envelope and the
+  // callback that appends the next page. When hasMore is true the list renders a
+  // "Daha fazla yükle" row at the bottom.
+  totalSessions?: number
+  hasMoreSessions?: boolean
+  onLoadMore?: () => void
   // Tab state is owned by the app so it can live in the URL (deep-linkable /
   // back-forward aware): ?list=active|archived|workers and ?kind=<filter key>.
   view: SessionListTab
@@ -91,6 +97,9 @@ export function SessionsSidebar({
   runtimeById,
   loading = false,
   newDisabled,
+  totalSessions,
+  hasMoreSessions,
+  onLoadMore,
   view,
   onViewChange,
   kindFilter,
@@ -668,6 +677,28 @@ export function SessionsSidebar({
                   : 'Oturum yok. + ile başlat.'}
           </p>
         )}
+
+        {/* TSK68 load-more: the list is paged; append the next page instead of
+            fetching every session up front. Hidden while searching (message hits
+            are their own section) or when the full list is already loaded. */}
+        {!loading &&
+          hasMoreSessions &&
+          onLoadMore &&
+          query.trim().length < 2 &&
+          groups.length > 0 && (
+            <button
+              onClick={onLoadMore}
+              data-testid="sessions-load-more"
+              className="mx-1 mt-2 flex w-[calc(100%-0.5rem)] items-center justify-center gap-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-xs font-medium text-[var(--color-text-dim)] transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
+            >
+              Daha fazla yükle
+              {totalSessions !== undefined && (
+                <span className="opacity-60">
+                  ({sessions.length}/{totalSessions})
+                </span>
+              )}
+            </button>
+          )}
 
         {/* Cross-session message matches (CG-16) — shown whenever a search is active. */}
         {query.trim().length >= 2 && (

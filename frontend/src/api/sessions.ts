@@ -23,12 +23,55 @@ import type {
 } from '@/types'
 import { req } from './client'
 
+// SessionPage is the paged listing envelope returned by listSessions — the API
+// twin of the agent tool's pageResult (TSK68). A parameter-less call still
+// receives the legacy unwrapped array on the wire and is normalized to this
+// shape client-side, so every caller can rely on items/total/hasMore.
+export interface SessionPage {
+  items: Session[]
+  total: number
+  offset: number
+  limit: number
+  hasMore: boolean
+}
+
+// asSessionPage normalizes either wire shape (unwrapped legacy array or paged
+// envelope) to the paged form.
+export function asSessionPage(r: Session[] | SessionPage): SessionPage {
+  return Array.isArray(r)
+    ? { items: r, total: r.length, offset: 0, limit: r.length, hasMore: false }
+    : r
+}
+
+export interface SessionListParams {
+  agentId?: string
+  limit?: number
+  offset?: number
+  // sort in the tool-layer format, e.g. "updated_desc" | "created_asc" | "title_asc".
+  sort?: string
+  kind?: string
+  state?: string
+}
+
 export const sessionApi = {
   // List sessions for an agent, or all sessions in the workspace when omitted.
-  listSessions: (agentId?: string) =>
-    req<Session[]>(
-      agentId ? `/api/sessions?agentId=${encodeURIComponent(agentId)}` : '/api/sessions',
-    ),
+  // Paging params (limit/offset/sort/kind/state) switch the server to the
+  // {items,total,offset,limit,hasMore} envelope (TSK68); a parameter-less call
+  // still receives the legacy unwrapped array and is normalized here so every
+  // caller can rely on the paged shape.
+  listSessions: (params?: SessionListParams): Promise<SessionPage> => {
+    const p = new URLSearchParams()
+    if (params?.agentId) p.set('agentId', params.agentId)
+    if (params?.limit !== undefined) p.set('limit', String(params.limit))
+    if (params?.offset !== undefined) p.set('offset', String(params.offset))
+    if (params?.sort) p.set('sort', params.sort)
+    if (params?.kind) p.set('kind', params.kind)
+    if (params?.state) p.set('state', params.state)
+    const qs = p.toString()
+    return req<Session[] | SessionPage>(qs ? `/api/sessions?${qs}` : '/api/sessions').then(
+      asSessionPage,
+    )
+  },
   // Session ids with a turn still streaming server-side. Queried after a reload
   // to restore the "thinking" indicator for detached turns still in flight.
   activeSessions: () =>

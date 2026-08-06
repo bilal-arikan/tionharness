@@ -567,6 +567,9 @@ export default function App() {
               onViewChange={links.setSessionListTab}
               kindFilter={links.sessionKindTab}
               onKindFilterChange={links.setSessionKindTab}
+              totalSessions={ctl.sessionsTotal}
+              hasMoreSessions={ctl.sessionsHasMore}
+              onLoadMore={ctl.loadMoreSessions}
               onOpenOverview={() => setOverviewOpen(true)}
               onSelectSession={(id, messageId) => {
                 ctl.selectSession(id, messageId)
