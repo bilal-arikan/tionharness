@@ -108,3 +108,36 @@ func TestListSessionsToolPagination(t *testing.T) {
 		t.Fatalf("expected past-end notice:\n%s", out)
 	}
 }
+
+// TestListSessionsToolSort verifies the shared sort argument reorders the
+// filtered rows (name_asc by title), while the default stays updated_desc —
+// the ordering existing callers already relied on.
+func TestListSessionsToolSort(t *testing.T) {
+	database, err := db.Open(filepath.Join(t.TempDir(), "store"))
+	if err != nil {
+		t.Fatalf("db open: %v", err)
+	}
+	t.Cleanup(func() { _ = database.Close() })
+	ctx := context.Background()
+
+	for _, name := range []string{"Zeta", "Alpha", "Mid"} {
+		database.CreateSession(ctx, db.Session{Kind: "chat", Title: name, State: "active"})
+	}
+	tool := NewListSessionsTool(database)
+
+	out, err := tool.Call(ctx, json.RawMessage(`{"sort":"name_asc"}`))
+	if err != nil {
+		t.Fatalf("call sort=name_asc: %v", err)
+	}
+	alpha := strings.Index(out, "Alpha")
+	mid := strings.Index(out, "Mid")
+	zeta := strings.Index(out, "Zeta")
+	if alpha == -1 || mid == -1 || zeta == -1 || !(alpha < mid && mid < zeta) {
+		t.Fatalf("name_asc should order Alpha < Mid < Zeta:\n%s", out)
+	}
+
+	// An invalid sort key is an explicit error, never a silent fallback.
+	if _, err := tool.Call(ctx, json.RawMessage(`{"sort":"bogus_desc"}`)); err == nil {
+		t.Fatal("sort=bogus_desc should error")
+	}
+}

@@ -208,7 +208,7 @@ export function useSessionsController({
     }
     api
       .listArtifacts()
-      .then(setSessionArtifacts)
+      .then((r) => setSessionArtifacts(r.items))
       .catch(() => {})
   }, [activeWorkspaceId, activeSessionId, meterRefresh])
 

@@ -39,6 +39,7 @@ import {
   toast,
 } from '@/shared/components'
 import { useCollapsibleList } from '@/shared/hooks/useCollapsibleList'
+import { useDebouncedValue } from '@/shared/hooks/useDebouncedValue'
 import { useRegisterDirty } from '@/shared/lib/dirtySignals'
 import {
   SidebarHeader,
@@ -67,6 +68,10 @@ interface Props {
 
 // Label for the bucket holding artifacts with no `group` set; always rendered last.
 const UNGROUPED = 'Grupsuz'
+
+// Page size for the server-side "load more" paging (the API caps a page at 100;
+// 50 keeps each fetch snappy while staying well under the cap).
+const ARTIFACTS_PAGE_SIZE = 50
 
 // Group key for one artifact: its `group` field, or the ungrouped bucket.
 function artifactGroupKey(a: Artifact): string {
@@ -129,34 +134,67 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
   // active ones; true flips to show ONLY archived artifacts (so they can be
   // reviewed and un-archived). Persisted so switching screens keeps the view.
   const [showArchived, setShowArchived] = useSessionState<boolean>('artifacts.showArchived', false)
-  // Count of archived artifacts across the whole list — drives the toggle's badge
-  // and lets us hide the toggle entirely when nothing has been archived yet.
-  const archivedCount = useMemo(() => list.filter((a) => a.archived).length, [list])
   // True until the first artifact list lands — the list column shows a loading
   // state rather than the "no artifacts yet" onboarding copy.
   const [loading, setLoading] = useState(true)
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase()
-    return list.filter((a) => {
-      // Archive facet: the default view lists active artifacts only; the archived
-      // view lists archived ones only. They are never mixed.
-      if (!!a.archived !== showArchived) return false
-      if (originFilter !== 'all' && (a.origin ?? '') !== originFilter) return false
-      if (q && !a.title.toLowerCase().includes(q)) return false
-      return true
-    })
-  }, [list, query, originFilter, showArchived])
+
+  // Server-side paging (same limit/offset contract as the list_artifacts tool):
+  // the panel loads ARTIFACTS_PAGE_SIZE rows at a time and appends on "load
+  // more". Filters (title search, origin facet, archived view) run server-side
+  // so paged results stay correct; total/hasMore drive the counter and button.
+  const [total, setTotal] = useState(0)
+  const [hasMore, setHasMore] = useState(false)
+  const [loadingMore, setLoadingMore] = useState(false)
+  // Count of archived artifacts across the whole store — drives the archived
+  // toggle's badge and hides the toggle entirely until something is archived.
+  const [archivedTotal, setArchivedTotal] = useState(0)
+  const archivedCount = archivedTotal
+  const debouncedQuery = useDebouncedValue(query, 300)
+  const hasActiveFilters = query.trim() !== '' || originFilter !== 'all' || showArchived
+
+  // Filters now apply server-side, so the rendered list IS the loaded page(s).
+  const filtered = list
+
+  const fetchPage = useCallback(
+    async (offset: number, append: boolean) => {
+      const origin = originFilter === 'all' ? undefined : originFilter
+      const r = await api.listArtifacts({
+        limit: ARTIFACTS_PAGE_SIZE,
+        offset,
+        q: debouncedQuery.trim() || undefined,
+        origin,
+        archived: showArchived,
+      })
+      setList((prev) => (append ? [...prev, ...r.items] : r.items))
+      setTotal(r.total)
+      setHasMore(r.hasMore)
+      if (!append) setActiveId((cur) => cur ?? r.items[0]?.id ?? null)
+    },
+    [originFilter, debouncedQuery, showArchived],
+  )
 
   const reload = useCallback(() => {
-    api
-      .listArtifacts()
-      .then((rows) => {
-        setList(rows)
-        setActiveId((cur) => cur ?? rows[0]?.id ?? null)
-      })
+    setLoading(true)
+    fetchPage(0, false)
       .catch((e) => onError((e as Error).message))
       .finally(() => setLoading(false))
-  }, [onError])
+    // Archive badge count — only meaningful from the active view (the archived
+    // view already knows its own total).
+    if (!showArchived) {
+      api
+        .listArtifacts({ archived: true, limit: 1 })
+        .then((r) => setArchivedTotal(r.total))
+        .catch(() => {})
+    }
+  }, [fetchPage, showArchived, onError])
+
+  const loadMore = useCallback(() => {
+    if (loadingMore || !hasMore) return
+    setLoadingMore(true)
+    fetchPage(list.length, true)
+      .catch((e) => onError((e as Error).message))
+      .finally(() => setLoadingMore(false))
+  }, [fetchPage, loadingMore, hasMore, list.length, onError])
 
   useEffect(() => reload(), [reload])
 
@@ -562,9 +600,7 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
         testId="artifacts-list-toggle"
         hideRail
       >
-        <SidebarHeader
-          title={`Artifactlar · ${filtered.length === list.length ? list.length : `${filtered.length}/${list.length}`}`}
-        >
+        <SidebarHeader title={`Artifactlar · ${list.length}${hasMore ? ` / ${total}` : ''}`}>
           {grouped.length > 1 && (
             <button
               data-testid="artifacts-toggle-all"
@@ -656,21 +692,22 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
 
         <div className="min-h-0 flex-1 overflow-y-auto p-2">
           {loading && <LoadingState label="Artifact'ler yükleniyor…" />}
-          {!loading && list.length === 0 && (
-            <div className="flex flex-col items-center gap-2 px-4 py-10 text-center text-sm text-[var(--color-text-dim)]">
-              <FileCode size={28} className="opacity-40" />
-              <p>
-                Henüz artifact yok. Bir oturumda dosya/doküman ürettiğinde otomatik buraya düşer;{' '}
-                <strong>Yeni</strong> ile elle ekle; ya da{' '}
-                <strong>resim/video/ses dosyalarını buraya sürükle-bırak</strong>.
-              </p>
-            </div>
-          )}
-          {list.length > 0 && filtered.length === 0 && (
-            <div className="px-4 py-8 text-center text-sm text-[var(--color-text-dim)]">
-              Filtreyle eşleşen artifact yok.
-            </div>
-          )}
+          {!loading &&
+            list.length === 0 &&
+            (hasActiveFilters ? (
+              <div className="px-4 py-8 text-center text-sm text-[var(--color-text-dim)]">
+                Filtreyle eşleşen artifact yok.
+              </div>
+            ) : (
+              <div className="flex flex-col items-center gap-2 px-4 py-10 text-center text-sm text-[var(--color-text-dim)]">
+                <FileCode size={28} className="opacity-40" />
+                <p>
+                  Henüz artifact yok. Bir oturumda dosya/doküman ürettiğinde otomatik buraya düşer;{' '}
+                  <strong>Yeni</strong> ile elle ekle; ya da{' '}
+                  <strong>resim/video/ses dosyalarını buraya sürükle-bırak</strong>.
+                </p>
+              </div>
+            ))}
           {grouped.map(([groupName, items]) => {
             const isCollapsed = collapsed.has(groupName)
             const isDropTarget = dnd.isOver(groupName)
@@ -741,6 +778,18 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
               </div>
             )
           })}
+          {hasMore && (
+            <div className="px-1 pb-1 pt-2">
+              <button
+                data-testid="artifacts-load-more"
+                onClick={loadMore}
+                disabled={loadingMore}
+                className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-surface-2)] py-1.5 text-xs font-medium text-[var(--color-text-dim)] hover:bg-[var(--color-surface-1)] hover:text-[var(--color-text)] disabled:opacity-50"
+              >
+                {loadingMore ? 'Yükleniyor…' : `Daha fazla yükle (${list.length}/${total})`}
+              </button>
+            </div>
+          )}
         </div>
 
         <SelectionBar

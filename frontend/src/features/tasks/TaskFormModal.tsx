@@ -107,7 +107,7 @@ export function TaskFormModal({
   useEffect(() => {
     api
       .listArtifacts()
-      .then(setAllArtifacts)
+      .then((r) => setAllArtifacts(r.items))
       .catch(() => {
         /* non-fatal: picker just shows "no artifacts" */
       })

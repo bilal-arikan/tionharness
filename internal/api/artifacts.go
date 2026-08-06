@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/bilal-arikan/tionswarm/internal/db"
@@ -202,15 +203,66 @@ func (s *Server) captureAttachmentArtifacts(ctx context.Context, database *db.DB
 
 // ---- HTTP handlers ----
 
-// handleListArtifacts lists artifacts in the workspace, optionally filtered to a
-// session via ?sessionId=. Newest-updated first.
+// handleListArtifacts lists artifacts in the workspace, optionally filtered via
+// query params: sessionId (origin session), kind, origin, q (title substring,
+// case-insensitive), archived (bool). With any of limit/offset/sort present the
+// response is the standard {items,total,offset,limit,hasMore} envelope (same
+// keys as the list_artifacts tool); without them it stays the legacy full
+// unwrapped list so existing UI clients keep working.
 func (s *Server) handleListArtifacts(w http.ResponseWriter, r *http.Request) {
-	sessionID := r.URL.Query().Get("sessionId")
+	q := r.URL.Query()
+	sessionID := q.Get("sessionId")
 	list, err := ws(r).DB.ListArtifacts(r.Context(), sessionID)
 	if writeDBError(w, err, "") {
 		return
 	}
-	writeJSON(w, http.StatusOK, list)
+
+	limit, offset, field, asc, listing, err := listQueryParams(q)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	kind := strings.TrimSpace(q.Get("kind"))
+	origin := strings.TrimSpace(q.Get("origin"))
+	search := strings.ToLower(strings.TrimSpace(q.Get("q")))
+	archived, archivedGiven, err := boolQuery(q, "archived")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	matches := make([]db.Artifact, 0, len(list))
+	for _, a := range list {
+		if kind != "" && a.Kind != kind {
+			continue
+		}
+		if origin != "" && a.Origin != origin {
+			continue
+		}
+		if search != "" && !strings.Contains(strings.ToLower(a.Title), search) {
+			continue
+		}
+		if archivedGiven && a.Archived != *archived {
+			continue
+		}
+		matches = append(matches, a)
+	}
+
+	if !listing {
+		writeJSON(w, http.StatusOK, matches)
+		return
+	}
+	less, err := tools.SortByField(matches, field, asc,
+		func(a db.Artifact) int64 { return a.UpdatedAt },
+		func(a db.Artifact) int64 { return a.CreatedAt },
+		func(a db.Artifact) string { return a.Title },
+	)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	sort.SliceStable(matches, less)
+	page, total := tools.SlicePage(matches, offset, limit)
+	pageJSONResponse(w, page, total, offset, limit)
 }
 
 // handleGetArtifact returns one artifact.

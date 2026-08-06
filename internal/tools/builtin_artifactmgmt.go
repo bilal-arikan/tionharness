@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/bilal-arikan/tionswarm/internal/db"
@@ -122,17 +123,77 @@ func NewListArtifactsTool(database *db.DB, actorID string) ListArtifactsTool {
 
 func (ListArtifactsTool) Def() providers.ToolDef {
 	return providers.ToolDef{
-		Name:        "list_artifacts",
-		Description: "List the artifacts in this workspace (id, title, kind, optional contentFile path, and whether each was created by an agent — provenance only; you can delete any of them). Use read_artifact to get content by id, update_artifact to edit, delete_artifact to remove.",
-		InputSchema: json.RawMessage(`{"type":"object","properties":{},"additionalProperties":false}`),
+		Name: "list_artifacts",
+		Description: "List the artifacts in this workspace (id, title, kind, optional contentFile path, and whether each " +
+			"was created by an agent — provenance only; you can delete any of them). Results are PAGINATED: " +
+			"pass limit (default 20, max 100) and offset to page; the reply reports total and hasMore, and you " +
+			"reach the next page with offset += limit. Filters: sessionId (only artifacts from that session), " +
+			"kind (markdown|code|html|text|svg|mermaid), origin (chat|manual|agent|tool|plan). Sort: updated_desc " +
+			"(default), updated_asc, created_desc, created_asc, name_asc, name_desc (name sorts by title). " +
+			"Use read_artifact to get content by id, update_artifact to edit, delete_artifact to remove.",
+		InputSchema: json.RawMessage(`{
+  "type": "object",
+  "properties": {
+    "sessionId": { "type": "string", "description": "Only artifacts created in this session." },
+    "kind": { "type": "string", "description": "Only artifacts of this kind (markdown|code|html|text|svg|mermaid)." },
+    "origin": { "type": "string", "description": "Only artifacts with this origin (chat|manual|agent|tool|plan)." },
+    "sort": { "type": "string", "enum": ["updated_desc", "updated_asc", "created_desc", "created_asc", "name_asc", "name_desc"], "description": "Result ordering (default updated_desc; name sorts by title)." },
+    "limit": { "type": "integer", "description": "Max artifacts per page (default 20, max 100)." },
+    "offset": { "type": "integer", "description": "How many matching artifacts to skip before this page (default 0)." }
+  },
+  "additionalProperties": false
+}`),
 	}
 }
 
-func (t ListArtifactsTool) Call(ctx context.Context, _ json.RawMessage) (string, error) {
-	artifacts, err := t.d.db.ListArtifacts(ctx, "") // "" = all sessions in workspace
+func (t ListArtifactsTool) Call(ctx context.Context, input json.RawMessage) (string, error) {
+	var in struct {
+		SessionID string `json:"sessionId"`
+		Kind      string `json:"kind"`
+		Origin    string `json:"origin"`
+		Sort      string `json:"sort"`
+		Limit     int    `json:"limit"`
+		Offset    int    `json:"offset"`
+	}
+	if len(input) > 0 {
+		if err := json.Unmarshal(input, &in); err != nil {
+			return "", argErr(err)
+		}
+	}
+	limit, offset := PageArgs(in.Limit, in.Offset)
+
+	artifacts, err := t.d.db.ListArtifacts(ctx, strings.TrimSpace(in.SessionID)) // "" = all sessions in workspace
 	if err != nil {
 		return "", err
 	}
+	kind := strings.TrimSpace(in.Kind)
+	origin := strings.TrimSpace(in.Origin)
+	matches := make([]db.Artifact, 0, len(artifacts))
+	for _, a := range artifacts {
+		if kind != "" && a.Kind != kind {
+			continue
+		}
+		if origin != "" && a.Origin != origin {
+			continue
+		}
+		matches = append(matches, a)
+	}
+
+	field, asc, err := SortOrder(in.Sort)
+	if err != nil {
+		return "", err
+	}
+	less, err := SortByField(matches, field, asc,
+		func(a db.Artifact) int64 { return a.UpdatedAt },
+		func(a db.Artifact) int64 { return a.CreatedAt },
+		func(a db.Artifact) string { return a.Title },
+	)
+	if err != nil {
+		return "", err
+	}
+	sort.SliceStable(matches, less)
+
+	page, total := SlicePage(matches, offset, limit)
 	type row struct {
 		ID             string `json:"id"`
 		Title          string `json:"title"`
@@ -140,8 +201,8 @@ func (t ListArtifactsTool) Call(ctx context.Context, _ json.RawMessage) (string,
 		ContentFile    string `json:"contentFile,omitempty"`
 		CreatedByAgent bool   `json:"createdByAgent"`
 	}
-	out := make([]row, 0, len(artifacts))
-	for _, a := range artifacts {
+	out := make([]row, 0, len(page))
+	for _, a := range page {
 		out = append(out, row{
 			ID:             a.ID,
 			Title:          a.Title,
@@ -150,6 +211,5 @@ func (t ListArtifactsTool) Call(ctx context.Context, _ json.RawMessage) (string,
 			CreatedByAgent: a.AgentID != "",
 		})
 	}
-	b, _ := json.Marshal(out)
-	return string(b), nil
+	return pageResult(out, total, offset, limit)
 }

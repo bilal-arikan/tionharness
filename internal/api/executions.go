@@ -6,6 +6,7 @@ import (
 	"sort"
 
 	"github.com/bilal-arikan/tionswarm/internal/db"
+	"github.com/bilal-arikan/tionswarm/internal/tools"
 	"github.com/bilal-arikan/tionswarm/internal/workspace"
 )
 
@@ -96,7 +97,32 @@ func (s *Server) handleListExecutions(w http.ResponseWriter, r *http.Request) {
 		}
 		return out[i].SessionID > out[j].SessionID
 	})
-	writeJSON(w, http.StatusOK, out)
+
+	// Paging/sorting contract: when any of limit/offset/sort is present the reply
+	// becomes the standard {items,total,offset,limit,hasMore} envelope (same keys
+	// as the list_* tools); with none of them it stays the legacy full list, so
+	// the polling sidebar keeps its current wire format.
+	limit, offset, field, asc, listing, err := listQueryParams(r.URL.Query())
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if !listing {
+		writeJSON(w, http.StatusOK, out)
+		return
+	}
+	less, err := tools.SortByField(out, field, asc,
+		func(e executionItem) int64 { return e.UpdatedAt },
+		func(e executionItem) int64 { return e.CreatedAt },
+		func(e executionItem) string { return e.Title },
+	)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	sort.SliceStable(out, less)
+	page, total := tools.SlicePage(out, offset, limit)
+	pageJSONResponse(w, page, total, offset, limit)
 }
 
 // lastStatusFor resolves a session's most recent run status where one exists

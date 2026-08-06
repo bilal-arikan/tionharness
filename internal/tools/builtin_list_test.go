@@ -451,3 +451,166 @@ func TestListWorkersRequiresCoordinator(t *testing.T) {
 		t.Fatal("list_workers outside a coordinator session should error")
 	}
 }
+
+// ---- list_artifacts ----
+
+func TestListArtifactsPaginationAndSort(t *testing.T) {
+	ctx := context.Background()
+	d := openTestDB(t)
+	for _, a := range []db.Artifact{
+		{Title: "Zebra", Kind: "markdown", Origin: "agent"},
+		{Title: "Alpha", Kind: "code", Origin: "tool"},
+		{Title: "Mid", Kind: "markdown", Origin: "manual"},
+	} {
+		if _, err := d.CreateArtifact(ctx, a); err != nil {
+			t.Fatalf("create artifact: %v", err)
+		}
+	}
+	tool := NewListArtifactsTool(d, "actor-1")
+
+	// Page 1 of 2 — default sort updated_desc.
+	out, err := tool.Call(ctx, json.RawMessage(`{"limit":2}`))
+	if err != nil {
+		t.Fatalf("list_artifacts: %v", err)
+	}
+	env := parseListEnv(t, out)
+	if env.Total != 3 || env.Limit != 2 || len(env.Items) == 0 || !env.HasMore {
+		t.Fatalf("page 1 = total %d limit %d items %d hasMore %v; want 3/2/>0/true", env.Total, env.Limit, len(env.Items), env.HasMore)
+	}
+
+	// Page 2 picks up the rest and hasMore flips to false.
+	out, _ = tool.Call(ctx, json.RawMessage(`{"limit":2,"offset":2}`))
+	env = parseListEnv(t, out)
+	if env.Total != 3 || env.Offset != 2 || env.HasMore {
+		t.Fatalf("page 2 = %+v; want total 3 offset 2 hasMore false", env)
+	}
+
+	// kind filter.
+	out, _ = tool.Call(ctx, json.RawMessage(`{"kind":"markdown"}`))
+	env = parseListEnv(t, out)
+	if env.Total != 2 {
+		t.Fatalf("kind=markdown total = %d, want 2", env.Total)
+	}
+
+	// origin filter.
+	out, _ = tool.Call(ctx, json.RawMessage(`{"origin":"tool"}`))
+	env = parseListEnv(t, out)
+	if env.Total != 1 {
+		t.Fatalf("origin=tool total = %d, want 1", env.Total)
+	}
+
+	// name_asc ordering (by title).
+	out, _ = tool.Call(ctx, json.RawMessage(`{"sort":"name_asc"}`))
+	env = parseListEnv(t, out)
+	var rows []struct{ Title string }
+	if err := json.Unmarshal(env.Items, &rows); err != nil {
+		t.Fatalf("items: %v", err)
+	}
+	if env.Total != 3 || rows[0].Title != "Alpha" {
+		t.Fatalf("name_asc first = %q (total %d); want Alpha / 3", rows[0].Title, env.Total)
+	}
+
+	// An invalid sort key is an explicit error, never a silent fallback.
+	if _, err := tool.Call(ctx, json.RawMessage(`{"sort":"bogus_desc"}`)); err == nil {
+		t.Fatal("sort=bogus_desc should error")
+	}
+}
+
+// ---- list_hooks ----
+
+func TestListHooksPaginationAndSort(t *testing.T) {
+	ctx := context.Background()
+	d := openTestDB(t)
+	for _, h := range []db.Hook{
+		{Event: "PreToolUse", Matcher: "Bash", Command: "echo pre"},
+		{Event: "PostToolUse", Matcher: "*", Command: "echo post"},
+		{Event: "PreToolUse", Matcher: "Read", Command: "echo read"},
+	} {
+		if _, err := d.CreateHook(ctx, h); err != nil {
+			t.Fatalf("create hook: %v", err)
+		}
+	}
+	tool := NewListHooksTool(d, "actor-1")
+
+	out, err := tool.Call(ctx, json.RawMessage(`{"limit":2}`))
+	if err != nil {
+		t.Fatalf("list_hooks: %v", err)
+	}
+	env := parseListEnv(t, out)
+	if env.Total != 3 || env.Limit != 2 || !env.HasMore {
+		t.Fatalf("page 1 = %+v; want total 3 limit 2 hasMore true", env)
+	}
+
+	// event filter.
+	out, _ = tool.Call(ctx, json.RawMessage(`{"event":"PreToolUse"}`))
+	env = parseListEnv(t, out)
+	if env.Total != 2 {
+		t.Fatalf("event=PreToolUse total = %d, want 2", env.Total)
+	}
+
+	// created_asc works; updated_* maps to creation time and is accepted too.
+	out, err = tool.Call(ctx, json.RawMessage(`{"sort":"created_asc","limit":10}`))
+	if err != nil {
+		t.Fatalf("created_asc: %v", err)
+	}
+	env = parseListEnv(t, out)
+	if env.Total != 3 || env.Limit != 10 {
+		t.Fatalf("created_asc = %+v; want total 3 limit 10", env)
+	}
+
+	// name_* is rejected with a clear error (hooks have no name field).
+	if _, err := tool.Call(ctx, json.RawMessage(`{"sort":"name_asc"}`)); err == nil {
+		t.Fatal("name_asc should error for hooks")
+	}
+}
+
+// ---- list_mcp_servers ----
+
+func TestListMCPServersPaginationAndSort(t *testing.T) {
+	ctx := context.Background()
+	d := openTestDB(t)
+	for _, m := range []db.MCPServer{
+		{Name: "files", Transport: "stdio", Command: "npx mcp-files", Enabled: true},
+		{Name: "web", Transport: "http", URL: "http://127.0.0.1:9999", Enabled: false},
+		{Name: "search", Transport: "stdio", Command: "npx mcp-search", Enabled: true},
+	} {
+		if _, err := d.CreateMCPServer(ctx, m); err != nil {
+			t.Fatalf("create mcp server: %v", err)
+		}
+	}
+	tool := NewListMCPServersTool(d, "actor-1")
+
+	out, err := tool.Call(ctx, json.RawMessage(`{"limit":2}`))
+	if err != nil {
+		t.Fatalf("list_mcp_servers: %v", err)
+	}
+	env := parseListEnv(t, out)
+	if env.Total != 3 || env.Limit != 2 || !env.HasMore {
+		t.Fatalf("page 1 = %+v; want total 3 limit 2 hasMore true", env)
+	}
+
+	// transport filter (case-insensitive substring).
+	out, _ = tool.Call(ctx, json.RawMessage(`{"transport":"STDIO"}`))
+	env = parseListEnv(t, out)
+	if env.Total != 2 {
+		t.Fatalf("transport=stdio total = %d, want 2", env.Total)
+	}
+
+	// enabled filter.
+	out, _ = tool.Call(ctx, json.RawMessage(`{"enabled":true}`))
+	env = parseListEnv(t, out)
+	if env.Total != 2 {
+		t.Fatalf("enabled=true total = %d, want 2", env.Total)
+	}
+
+	// name_asc ordering.
+	out, _ = tool.Call(ctx, json.RawMessage(`{"sort":"name_asc"}`))
+	env = parseListEnv(t, out)
+	var rows []struct{ Name string }
+	if err := json.Unmarshal(env.Items, &rows); err != nil {
+		t.Fatalf("items: %v", err)
+	}
+	if env.Total != 3 || rows[0].Name != "files" {
+		t.Fatalf("name_asc first = %q (total %d); want files / 3", rows[0].Name, env.Total)
+	}
+}

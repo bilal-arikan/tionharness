@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/bilal-arikan/tionswarm/internal/db"
@@ -35,17 +36,76 @@ func NewListMCPServersTool(database *db.DB, actorID string) ListMCPServersTool {
 
 func (ListMCPServersTool) Def() providers.ToolDef {
 	return providers.ToolDef{
-		Name:        "list_mcp_servers",
-		Description: "List the MCP (Model Context Protocol) servers configured in this workspace. Returns id, name, transport (stdio|sse|http), command/url, enabled, and whether you created it (and may therefore delete it). Enabled servers' tools are available to agents on their next turn.",
-		InputSchema: json.RawMessage(`{"type":"object","properties":{},"additionalProperties":false}`),
+		Name: "list_mcp_servers",
+		Description: "List the MCP (Model Context Protocol) servers configured in this workspace. Returns id, name, " +
+			"transport (stdio|sse|http), command/url, enabled, and whether you created it (and may therefore delete " +
+			"it). Enabled servers' tools are available to agents on their next turn. Results are PAGINATED: pass " +
+			"limit (default 20, max 100) and offset to page; the reply reports total and hasMore, and you reach " +
+			"the next page with offset += limit. Filters: transport (case-insensitive substring), enabled. Sort: " +
+			"updated_desc (default), updated_asc, created_desc, created_asc, name_asc, name_desc — servers are " +
+			"never edited in place, so updated_* sorts by creation time.",
+		InputSchema: json.RawMessage(`{
+  "type": "object",
+  "properties": {
+    "transport": { "type": "string", "description": "Only servers whose transport contains this substring (case-insensitive)." },
+    "enabled": { "type": "boolean", "description": "Only enabled or only disabled servers (omit for both)." },
+    "sort": { "type": "string", "enum": ["updated_desc", "updated_asc", "created_desc", "created_asc", "name_asc", "name_desc"], "description": "Result ordering (default updated_desc; updated maps to creation time — servers are immutable)." },
+    "limit": { "type": "integer", "description": "Max servers per page (default 20, max 100)." },
+    "offset": { "type": "integer", "description": "How many matching servers to skip before this page (default 0)." }
+  },
+  "additionalProperties": false
+}`),
 	}
 }
 
-func (t ListMCPServersTool) Call(ctx context.Context, _ json.RawMessage) (string, error) {
+func (t ListMCPServersTool) Call(ctx context.Context, input json.RawMessage) (string, error) {
+	var in struct {
+		Transport string `json:"transport"`
+		Enabled   *bool  `json:"enabled"`
+		Sort      string `json:"sort"`
+		Limit     int    `json:"limit"`
+		Offset    int    `json:"offset"`
+	}
+	if len(input) > 0 {
+		if err := json.Unmarshal(input, &in); err != nil {
+			return "", argErr(err)
+		}
+	}
+	limit, offset := PageArgs(in.Limit, in.Offset)
+
 	servers, err := t.d.db.ListMCPServers(ctx)
 	if err != nil {
 		return "", err
 	}
+	transport := strings.ToLower(strings.TrimSpace(in.Transport))
+	matches := make([]db.MCPServer, 0, len(servers))
+	for _, m := range servers {
+		if transport != "" && !strings.Contains(strings.ToLower(m.Transport), transport) {
+			continue
+		}
+		if in.Enabled != nil && m.Enabled != *in.Enabled {
+			continue
+		}
+		matches = append(matches, m)
+	}
+
+	field, asc, err := SortOrder(in.Sort)
+	if err != nil {
+		return "", err
+	}
+	// Servers are never edited in place (no updated timestamp), so the updated_*
+	// keys sort by CreatedAt — the same value as created_*.
+	less, err := SortByField(matches, field, asc,
+		func(m db.MCPServer) int64 { return m.CreatedAt },
+		func(m db.MCPServer) int64 { return m.CreatedAt },
+		func(m db.MCPServer) string { return m.Name },
+	)
+	if err != nil {
+		return "", err
+	}
+	sort.SliceStable(matches, less)
+
+	page, total := SlicePage(matches, offset, limit)
 	type row struct {
 		ID             string `json:"id"`
 		Name           string `json:"name"`
@@ -56,16 +116,15 @@ func (t ListMCPServersTool) Call(ctx context.Context, _ json.RawMessage) (string
 		Enabled        bool   `json:"enabled"`
 		CreatedByAgent bool   `json:"createdByAgent"`
 	}
-	out := make([]row, 0, len(servers))
-	for _, m := range servers {
+	out := make([]row, 0, len(page))
+	for _, m := range page {
 		out = append(out, row{
 			ID: m.ID, Name: m.Name, Description: m.Description, Transport: m.Transport,
 			Command: m.Command, URL: m.URL, Enabled: m.Enabled,
 			CreatedByAgent: m.CreatedBy != "",
 		})
 	}
-	b, _ := json.Marshal(out)
-	return string(b), nil
+	return pageResult(out, total, offset, limit)
 }
 
 // ---- create_mcp_server ----

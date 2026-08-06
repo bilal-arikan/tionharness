@@ -3,10 +3,12 @@ package api
 import (
 	"net/http"
 	"os/exec"
+	"sort"
 	"strings"
 
 	"github.com/bilal-arikan/tionswarm/internal/agent"
 	"github.com/bilal-arikan/tionswarm/internal/db"
+	"github.com/bilal-arikan/tionswarm/internal/tools"
 )
 
 type setStateReq struct {
@@ -64,7 +66,8 @@ func (s *Server) handleSetSessionState(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleListSessions(w http.ResponseWriter, r *http.Request) {
-	agentID := r.URL.Query().Get("agentId")
+	q := r.URL.Query()
+	agentID := q.Get("agentId")
 	sessions, err := ws(r).DB.ListSessions(r.Context(), agentID)
 	if writeDBError(w, err, "") {
 		return
@@ -72,7 +75,45 @@ func (s *Server) handleListSessions(w http.ResponseWriter, r *http.Request) {
 	if sessions == nil {
 		sessions = []db.Session{}
 	}
-	writeJSON(w, http.StatusOK, sessions)
+
+	// Filters: kind (chat|spawned|worker|flow|task|schedule) and state
+	// (active|archived). With any of limit/offset/sort present the response is
+	// the standard {items,total,offset,limit,hasMore} envelope; without them it
+	// stays the legacy full unwrapped list so existing UI clients keep working.
+	limit, offset, field, asc, listing, err := listQueryParams(q)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	kind := strings.TrimSpace(q.Get("kind"))
+	state := strings.TrimSpace(q.Get("state"))
+	matches := make([]db.Session, 0, len(sessions))
+	for _, s := range sessions {
+		if kind != "" && s.Kind != kind {
+			continue
+		}
+		if state != "" && s.State != state {
+			continue
+		}
+		matches = append(matches, s)
+	}
+
+	if !listing {
+		writeJSON(w, http.StatusOK, matches)
+		return
+	}
+	less, err := tools.SortByField(matches, field, asc,
+		func(s db.Session) int64 { return s.UpdatedAt },
+		func(s db.Session) int64 { return s.CreatedAt },
+		func(s db.Session) string { return s.Title },
+	)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	sort.SliceStable(matches, less)
+	page, total := tools.SlicePage(matches, offset, limit)
+	pageJSONResponse(w, page, total, offset, limit)
 }
 
 type createSessionReq struct {

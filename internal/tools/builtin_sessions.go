@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -25,9 +26,7 @@ func NewListSessionsTool(database *db.DB) ListSessionsTool {
 	return ListSessionsTool{db: database}
 }
 
-// listSessionsPageLimit is the default page size when the caller doesn't pass a
-// limit. ALL sessions are reachable by paging with the offset argument.
-const listSessionsPageLimit = 20
+// ---- list_sessions ----
 
 func (ListSessionsTool) Def() providers.ToolDef {
 	return providers.ToolDef{
@@ -39,13 +38,16 @@ func (ListSessionsTool) Def() providers.ToolDef {
 			"see what other work is currently in progress. Returns active sessions of all kinds by " +
 			"default; pass kind:\"...\" to narrow to one kind and state:\"all\" to include past " +
 			"(archived) ones. Each line is prefixed with [kind·state]. Results are paginated (newest " +
-			"first): the reply reports the total and, when more remain, the exact offset for the next page.",
+			"first): the reply reports the total and, when more remain, the exact offset for the next " +
+			"page. Sort: updated_desc (default), updated_asc, created_desc, created_asc, name_asc, " +
+			"name_desc (name sorts by title).",
 		InputSchema: json.RawMessage(`{
   "type": "object",
   "properties": {
     "state": { "type": "string", "enum": ["active", "all"], "description": "Which sessions to list (default: active)." },
     "kind": { "type": "string", "enum": ["chat", "spawned", "worker", "flow", "task", "schedule"], "description": "Narrow to a single session kind. Omit to list all kinds (default)." },
-    "limit": { "type": "integer", "description": "Max sessions per page (default 20). Use with offset to page through all of them." },
+    "sort": { "type": "string", "enum": ["updated_desc", "updated_asc", "created_desc", "created_asc", "name_asc", "name_desc"], "description": "Result ordering (default updated_desc; name sorts by title)." },
+    "limit": { "type": "integer", "description": "Max sessions per page (default 20, max 100). Use with offset to page through all of them." },
     "offset": { "type": "integer", "description": "How many matching sessions to skip before this page (default 0). Pass the offset from a previous reply to get the next page." }
   },
   "additionalProperties": false
@@ -57,6 +59,7 @@ func (t ListSessionsTool) Call(ctx context.Context, input json.RawMessage) (stri
 	var args struct {
 		State  string `json:"state"`
 		Kind   string `json:"kind"`
+		Sort   string `json:"sort"`
 		Limit  int    `json:"limit"`
 		Offset int    `json:"offset"`
 	}
@@ -65,12 +68,7 @@ func (t ListSessionsTool) Call(ctx context.Context, input json.RawMessage) (stri
 			return "", argErr(err)
 		}
 	}
-	if args.Limit <= 0 {
-		args.Limit = listSessionsPageLimit
-	}
-	if args.Offset < 0 {
-		args.Offset = 0
-	}
+	limit, offset := PageArgs(args.Limit, args.Offset)
 	onlyActive := args.State != "all"
 	kindFilter := strings.TrimSpace(args.Kind)
 
@@ -79,10 +77,10 @@ func (t ListSessionsTool) Call(ctx context.Context, input json.RawMessage) (stri
 		return "", err
 	}
 
-	// Collect every matching session first so we know the true total, then window
-	// it by [offset, offset+limit) for pagination. All kinds are listed by default
-	// (chat + autonomous runs); an optional kind filter narrows to one. Legacy
-	// sessions persisted before the kind field carry "" and count as chat.
+	// Collect every matching session first so we know the true total, then sort
+	// and window it by [offset, offset+limit) for pagination. All kinds are listed
+	// by default (chat + autonomous runs); an optional kind filter narrows to one.
+	// Legacy sessions persisted before the kind field carry "" and count as chat.
 	matches := make([]db.Session, 0, len(sessions))
 	for _, s := range sessions {
 		if kindFilter != "" && !sessKindMatches(s.Kind, kindFilter) {
@@ -93,19 +91,34 @@ func (t ListSessionsTool) Call(ctx context.Context, input json.RawMessage) (stri
 		}
 		matches = append(matches, s)
 	}
+
+	field, asc, err := SortOrder(args.Sort)
+	if err != nil {
+		return "", err
+	}
+	less, err := SortByField(matches, field, asc,
+		func(s db.Session) int64 { return s.UpdatedAt },
+		func(s db.Session) int64 { return s.CreatedAt },
+		func(s db.Session) string { return s.Title },
+	)
+	if err != nil {
+		return "", err
+	}
+	sort.SliceStable(matches, less)
+
 	total := len(matches)
 	if total == 0 {
 		return "No matching sessions in this workspace.", nil
 	}
-	if args.Offset >= total {
-		return fmt.Sprintf("Offset %d is past the last of %d matching sessions.", args.Offset, total), nil
+	if offset >= total {
+		return fmt.Sprintf("Offset %d is past the last of %d matching sessions.", offset, total), nil
 	}
 
-	end := args.Offset + args.Limit
+	end := offset + limit
 	if end > total {
 		end = total
 	}
-	page := matches[args.Offset:end]
+	page := matches[offset:end]
 
 	now := time.Now().Unix()
 	var b strings.Builder

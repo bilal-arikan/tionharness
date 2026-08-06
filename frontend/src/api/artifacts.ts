@@ -2,11 +2,56 @@
 import type { Artifact, ArtifactKind } from '@/types'
 import { req } from './client'
 
+// ArtifactPage is the paged listing envelope returned by listArtifacts — the
+// API twin of the agent tool's pageResult (TSK68 scope extension). A
+// parameter-less call still receives the legacy unwrapped array on the wire and
+// is normalized to this shape client-side, so every caller can rely on
+// items/total/hasMore.
+export interface ArtifactPage {
+  items: Artifact[]
+  total: number
+  offset: number
+  limit: number
+  hasMore: boolean
+}
+
+// asArtifactPage normalizes either wire shape (unwrapped legacy array or paged
+// envelope) to the paged form.
+export function asArtifactPage(r: Artifact[] | ArtifactPage): ArtifactPage {
+  return Array.isArray(r)
+    ? { items: r, total: r.length, offset: 0, limit: r.length, hasMore: false }
+    : r
+}
+
+export interface ListArtifactsParams {
+  sessionId?: string
+  // q filters by title substring (case-insensitive, server-side).
+  q?: string
+  kind?: string
+  origin?: string
+  archived?: boolean
+  limit?: number
+  offset?: number
+}
+
 export const artifactApi = {
-  listArtifacts: (sessionId?: string) =>
-    req<Artifact[]>(
-      sessionId ? `/api/artifacts?sessionId=${encodeURIComponent(sessionId)}` : '/api/artifacts',
-    ),
+  // Always resolves to the paged envelope: when paging params are given the
+  // server replies {items,total,offset,limit,hasMore}; when they are absent it
+  // replies the legacy unwrapped array, normalized here.
+  listArtifacts: (params: ListArtifactsParams = {}): Promise<ArtifactPage> => {
+    const p = new URLSearchParams()
+    if (params.sessionId) p.set('sessionId', params.sessionId)
+    if (params.q) p.set('q', params.q)
+    if (params.kind) p.set('kind', params.kind)
+    if (params.origin) p.set('origin', params.origin)
+    if (params.archived !== undefined) p.set('archived', params.archived ? 'true' : 'false')
+    if (params.limit !== undefined) p.set('limit', String(params.limit))
+    if (params.offset !== undefined) p.set('offset', String(params.offset))
+    const qs = p.toString()
+    return req<Artifact[] | ArtifactPage>(qs ? `/api/artifacts?${qs}` : '/api/artifacts').then(
+      asArtifactPage,
+    )
+  },
   getArtifact: (id: string) => req<Artifact>(`/api/artifacts/${id}`),
   createArtifact: (data: {
     title: string
@@ -17,8 +62,7 @@ export const artifactApi = {
     agentId?: string
     sourcePath?: string
     origin?: 'chat' | 'manual' | 'agent' | 'tool'
-  }) =>
-    req<Artifact>('/api/artifacts', { method: 'POST', body: JSON.stringify(data) }),
+  }) => req<Artifact>('/api/artifacts', { method: 'POST', body: JSON.stringify(data) }),
   updateArtifact: (
     id: string,
     patch: { content?: string; title?: string; kind?: ArtifactKind; language?: string },
@@ -42,8 +86,7 @@ export const artifactApi = {
       body: JSON.stringify({ archived }),
     }),
   // Locate the artifact on disk: its file path + containing folder.
-  artifactPath: (id: string) =>
-    req<{ path: string; dir: string }>(`/api/artifacts/${id}/path`),
+  artifactPath: (id: string) => req<{ path: string; dir: string }>(`/api/artifacts/${id}/path`),
   // Open the artifact's folder in the OS file manager (local desktop app).
   revealArtifact: (id: string) =>
     req<{ path: string; dir: string }>(`/api/artifacts/${id}/reveal`, { method: 'POST' }),
