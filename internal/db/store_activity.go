@@ -38,6 +38,28 @@ func (d *DB) fireActivityHook(sig ActivitySignal) {
 	}
 }
 
+// WorkspaceCounterTotal returns the workspace-wide cumulative total of the given
+// counter metric — the sum of every session's MessageCount (metric "message" or
+// "") or ToolCallCount (metric "tool"). It backs a workspace-scoped counter
+// automation, resolved lazily by the engine only when such a rule exists (the
+// analogue of WorkspaceTokensToday). Cumulative, not daily-reset: crossing the
+// next interval fires on every CounterInterval of new activity. An unknown metric
+// returns 0.
+func (d *DB) WorkspaceCounterTotal(metric string) int64 {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	var total int64
+	for _, s := range d.sessions {
+		switch metric {
+		case CounterMetricTool:
+			total += int64(s.ToolCallCount)
+		case "", CounterMetricMessage:
+			total += int64(s.MessageCount)
+		}
+	}
+	return total
+}
+
 // countToolSteps returns how many tool calls a persisted assistant message's
 // Steps JSON carries — the steps whose kind is "tool" (agent.StepTool). It is a
 // tolerant scan: an empty/"[]"/malformed Steps value counts as zero rather than

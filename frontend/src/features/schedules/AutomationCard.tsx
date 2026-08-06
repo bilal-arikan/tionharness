@@ -1,16 +1,17 @@
-import { RotateCcw, Pencil, Workflow, LayoutGrid, Zap, Archive } from 'lucide-react'
+import { RotateCcw, Pencil, Workflow, LayoutGrid, Zap, Hash, Archive } from 'lucide-react'
 import type { Agent, Automation, BoardColumnDef, Flow } from '@/types'
 import { AgentAvatar } from '@/shared/components/agents/AgentAvatar'
 import { TagEditor } from '@/shared/components'
 import { normalizeAvatar } from '@/shared/lib/avatar'
 import { CardAction } from './pickers'
-import { COLUMN_ACCENT, boardOpLabel } from './automationMeta'
+import { COLUMN_ACCENT, boardOpLabel, counterMetricLabel } from './automationMeta'
 import { fmtTime, isPast } from './timeUtils'
 
 interface Props {
   automation: Automation
   isBoardKind: boolean
   isTokenKind: boolean
+  isCounterKind: boolean
   agents: Agent[]
   flows: Flow[]
   columns: BoardColumnDef[]
@@ -28,6 +29,7 @@ export function AutomationCard({
   automation: a,
   isBoardKind,
   isTokenKind,
+  isCounterKind,
   agents,
   flows,
   columns,
@@ -45,6 +47,12 @@ export function AutomationCard({
   const expired = isPast(a.expiresAt)
   const opLabel = boardOpLabel(a.boardOp)
   const isArchiveRule = isBoardKind && a.boardAction === 'archive'
+  // Effective session mode (agent-backed only): explicit value wins, else the
+  // per-kind default (token/counter → continue). Flow-backed rules ignore it.
+  const kind = a.triggerKind ?? 'tag'
+  const effectiveMode =
+    a.sessionMode ?? (kind === 'token' || kind === 'counter' ? 'continue' : 'spawn')
+  const showContinue = !a.flowId && !isArchiveRule && effectiveMode === 'continue'
 
   return (
     <div
@@ -56,7 +64,9 @@ export function AutomationCard({
           ? COLUMN_ACCENT.board
           : isTokenKind
             ? COLUMN_ACCENT.token
-            : COLUMN_ACCENT.tag,
+            : isCounterKind
+              ? COLUMN_ACCENT.counter
+              : COLUMN_ACCENT.tag,
       }}
     >
       <div className="flex items-start gap-2">
@@ -136,6 +146,15 @@ export function AutomationCard({
                 {a.tokenScope === 'workspace' ? 'workspace' : 'oturum'} · her{' '}
                 {(a.tokenThreshold ?? 0).toLocaleString()} token
               </span>
+            ) : isCounterKind ? (
+              <span
+                className="flex items-center gap-1 rounded bg-[var(--color-accent-soft)] px-1.5 py-0.5 text-[11px] text-[var(--color-accent)]"
+                title="Sayaç tetikleyicili otomasyon — mesaj/tool sayısı aralığı geçince çalışır"
+              >
+                <Hash size={11} />
+                {a.counterScope === 'workspace' ? 'workspace' : 'oturum'} · her{' '}
+                {a.counterInterval ?? 0} {a.counterMetric === 'tool' ? 'tool' : 'mesaj'}
+              </span>
             ) : (
               <span className="rounded bg-[var(--color-accent-soft)] px-1.5 py-0.5 font-mono text-[11px] text-[var(--color-accent)]">
                 #{a.triggerTag}
@@ -155,6 +174,14 @@ export function AutomationCard({
                 title="Aynı kart değişimini yakalayan otomasyonlar arasındaki ateşleme sırası (küçük olan önce)."
               >
                 sıra {a.boardPriority}
+              </span>
+            )}
+            {showContinue && (
+              <span
+                className="rounded bg-[var(--color-bg)] px-1.5 py-0.5 text-[11px] text-[var(--color-text-dim)]"
+                title="Aynı oturumu sürdürür — ajan her tetikte önceki konuşmayı görür (geçmiş-farkında)."
+              >
+                🧵 sürdür
               </span>
             )}
           </div>
@@ -209,6 +236,11 @@ export function AutomationCard({
       ) : isTokenKind ? (
         <div className="mt-1 text-[11px] text-[var(--color-text-dim)] opacity-80">
           Token tetikleyicili — kendini döngülemez (spawn etiketleri yok sayılır).
+        </div>
+      ) : isCounterKind ? (
+        <div className="mt-1 text-[11px] text-[var(--color-text-dim)] opacity-80">
+          {counterMetricLabel(a.counterMetric)} sayacı — kendini döngülemez (spawn etiketleri yok
+          sayılır).
         </div>
       ) : a.flowId ? (
         <div className="mt-1 text-[11px] text-[var(--color-text-dim)] opacity-80">

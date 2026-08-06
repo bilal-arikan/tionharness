@@ -135,6 +135,9 @@ func ValidateAutomationShape(a Automation) error {
 		if !ValidCounterMetric(a.CounterMetric) {
 			return fmt.Errorf("%w: invalid counterMetric %q (message|tool)", ErrAutomationShape, a.CounterMetric)
 		}
+		if !ValidCounterScope(a.CounterScope) {
+			return fmt.Errorf("%w: invalid counterScope %q (session|workspace)", ErrAutomationShape, a.CounterScope)
+		}
 		if err := ValidateCounterInterval(a.CounterInterval); err != nil {
 			return err
 		}
@@ -142,6 +145,10 @@ func ValidateAutomationShape(a Automation) error {
 		if a.TriggerTag == "" {
 			return fmt.Errorf("%w: triggerTag is required for tag automations (an empty tag never fires)", ErrAutomationShape)
 		}
+	}
+	// Session mode is a free choice across kinds, but the value must be known.
+	if !ValidSessionMode(a.SessionMode) {
+		return fmt.Errorf("%w: invalid sessionMode %q (spawn|continue)", ErrAutomationShape, a.SessionMode)
 	}
 	// Every automation that reaches here spawns a session or runs a flow, so it
 	// needs exactly one runnable target. (Board 'archive' returned above.)

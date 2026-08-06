@@ -9,6 +9,7 @@ import { PRESET_GROUPS } from './cronPresets'
 import { FormModal } from './FormModal'
 import { Field, FlowPicker, TargetModeToggle, inputCls } from './pickers'
 import { localInputToUnix, unixToLocalInput } from './timeUtils'
+import { FieldError, useFieldErrors } from './useFieldErrors'
 
 interface Props {
   agents: Agent[]
@@ -39,22 +40,20 @@ export function ScheduleModal({
   const [cronExpr, setCronExpr] = useState(editing?.cronExpr ?? '*/5 * * * *')
   const [prompt, setPrompt] = useState(editing?.prompt ?? '')
   const [expiresAt, setExpiresAt] = useState(unixToLocalInput(editing?.expiresAt))
-  // attempted flips true on the first submit try so inline field errors appear
-  // only after the user acts (mirrors AutomationModal).
-  const [attempted, setAttempted] = useState(false)
 
   // A flow input is optional; an agent needs a prompt. Every schedule needs a
-  // target and a cron expression.
-  const cronError = !cronExpr.trim() ? 'Cron ifadesi zorunlu' : ''
-  const targetError =
-    targetMode === 'flow' ? (!flowId ? 'Akış seçilmeli' : '') : !agentId ? 'Ajan zorunlu' : ''
-  const promptError = targetMode === 'agent' && !prompt.trim() ? 'Prompt zorunlu' : ''
+  // target and a cron expression. Record order is the blocking priority.
+  const { markAttempted, firstError, errorFor } = useFieldErrors({
+    cron: !cronExpr.trim() ? 'Cron ifadesi zorunlu' : '',
+    target:
+      targetMode === 'flow' ? (!flowId ? 'Akış seçilmeli' : '') : !agentId ? 'Ajan zorunlu' : '',
+    prompt: targetMode === 'agent' && !prompt.trim() ? 'Prompt zorunlu' : '',
+  })
 
   const submit = async () => {
-    setAttempted(true)
-    const shapeError = cronError || targetError || promptError
-    if (shapeError) {
-      onError(shapeError)
+    markAttempted()
+    if (firstError) {
+      onError(firstError)
       return
     }
     const expUnix = localInputToUnix(expiresAt)
@@ -114,9 +113,7 @@ export function ScheduleModal({
             </div>
           )}
         </div>
-        {attempted && targetError && (
-          <p className="mt-1 text-xs text-[var(--color-danger)]">{targetError}</p>
-        )}
+        <FieldError message={errorFor('target')} />
       </Field>
 
       <Field label="Cron ifadesi" hint="Hazır ifadeyi seç ya da elle yaz.">
@@ -144,12 +141,10 @@ export function ScheduleModal({
             value={cronExpr}
             onChange={(e) => setCronExpr(e.target.value)}
             placeholder="cron: dk sa gün ay haftagünü"
-            className={`w-52 rounded border bg-[var(--color-bg)] px-2 py-1.5 font-mono text-sm outline-none focus:border-[var(--color-accent)] ${attempted && cronError ? 'border-[var(--color-danger)]' : 'border-[var(--color-border)]'}`}
+            className={`w-52 rounded border bg-[var(--color-bg)] px-2 py-1.5 font-mono text-sm outline-none focus:border-[var(--color-accent)] ${errorFor('cron') ? 'border-[var(--color-danger)]' : 'border-[var(--color-border)]'}`}
           />
         </div>
-        {attempted && cronError && (
-          <p className="mt-1 text-xs text-[var(--color-danger)]">{cronError}</p>
-        )}
+        <FieldError message={errorFor('cron')} />
       </Field>
 
       <Field label={targetMode === 'flow' ? 'Akış girdisi (opsiyonel)' : 'Prompt (zorunlu)'}>
@@ -162,11 +157,9 @@ export function ScheduleModal({
           placeholder={
             targetMode === 'flow' ? 'Akış girdisi (opsiyonel)' : 'Ajana gönderilecek talimat'
           }
-          className={`${inputCls} resize-y ${attempted && promptError ? 'border-[var(--color-danger)]' : ''}`}
+          className={`${inputCls} resize-y ${errorFor('prompt') ? 'border-[var(--color-danger)]' : ''}`}
         />
-        {attempted && promptError && (
-          <p className="mt-1 text-xs text-[var(--color-danger)]">{promptError}</p>
-        )}
+        <FieldError message={errorFor('prompt')} />
       </Field>
 
       <Field label="Son tarih (opsiyonel)" hint="Bu tarihten sonra zamanlama çalışmaz.">

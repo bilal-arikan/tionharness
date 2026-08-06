@@ -61,9 +61,17 @@ func (d *DB) ListEnabledAutomations(ctx context.Context) ([]Automation, error) {
 		func(a, b Automation) bool { return a.CreatedAt > b.CreatedAt }), nil
 }
 
-// UpdateAutomation edits the mutable fields of an automation. Enabled and the
-// runtime bookkeeping (iteration count, last fire) are left untouched — use
-// SetAutomationEnabled / RecordAutomationFire / ResetAutomationCount for those.
+// UpdateAutomation replaces the mutable configuration of an automation. Enabled
+// and the runtime bookkeeping (iteration count, last fire) are left untouched —
+// use SetAutomationEnabled / RecordAutomationFire / ResetAutomationCount for those.
+//
+// It takes every configuration field from the incoming value and preserves ONLY
+// identity + bookkeeping from the stored row. This replaced a field-by-field copy
+// that silently dropped any struct field it forgot to list: the counter fields and
+// SessionMode were both lost on update while create persisted them fine. Whole-
+// value replacement means a newly added field can never be silently dropped again;
+// the caller (REST/tool) already loads the current row and patches onto it, so the
+// incoming value carries the full merged configuration.
 func (d *DB) UpdateAutomation(ctx context.Context, a Automation) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -71,26 +79,19 @@ func (d *DB) UpdateAutomation(ctx context.Context, a Automation) error {
 	if !ok {
 		return ErrNotFound
 	}
-	cur.Name = a.Name
-	cur.TriggerKind = a.TriggerKind
-	cur.TriggerTag = strings.TrimSpace(a.TriggerTag)
-	cur.BoardOp = a.BoardOp
-	cur.BoardFromState = a.BoardFromState
-	cur.BoardToState = a.BoardToState
-	cur.BoardPriority = a.BoardPriority
-	cur.BoardExclusive = a.BoardExclusive
-	cur.BoardAction = a.BoardAction
-	cur.TargetAgentID = a.TargetAgentID
-	cur.FlowID = a.FlowID
-	cur.PromptTemplate = a.PromptTemplate
-	cur.SpawnTags = normalizeTags(a.SpawnTags)
-	cur.MaxIterations = a.MaxIterations
-	cur.CooldownSec = a.CooldownSec
-	cur.ExpiresAt = a.ExpiresAt
-	cur.TokenScope = a.TokenScope
-	cur.TokenThreshold = a.TokenThreshold
-	cur.UpdatedAt = now()
-	return d.persistAutomationLocked(cur)
+	// Preserve identity + runtime state; these have their own setters and must not
+	// change through a config edit.
+	a.Enabled = cur.Enabled
+	a.IterationCount = cur.IterationCount
+	a.LastFiredAt = cur.LastFiredAt
+	a.LastSessionID = cur.LastSessionID
+	a.LastError = cur.LastError
+	a.CreatedAt = cur.CreatedAt
+	a.CreatedBy = cur.CreatedBy
+	a.TriggerTag = strings.TrimSpace(a.TriggerTag)
+	a.SpawnTags = normalizeTags(a.SpawnTags)
+	a.UpdatedAt = now()
+	return d.persistAutomationLocked(a)
 }
 
 // SetAutomationEnabled toggles an automation on or off. Enabling resets the

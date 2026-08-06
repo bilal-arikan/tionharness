@@ -202,6 +202,61 @@ func crossedMultiple(prev, now, interval int64) bool {
 // runs its target flow or spawns its target agent with the token context in the
 // prompt. sessionID is the crossing session for session scope (empty for
 // workspace scope); total is the cumulative token count that crossed the boundary.
+// dispatchFire runs an automation's rendered prompt against its target, choosing
+// the session strategy from EffectiveSessionMode. Three routes, checked in order:
+//   - flow-backed → LaunchRun runs the flow (its own transcript; session mode n/a);
+//   - continue    → reuse the persistent per-automation thread (deliverAutomationTurn,
+//     history-aware). It bypasses LaunchRun's launch brake, so the workspace
+//     autonomy pause is honored here instead; SpawnOptions are ignored (no fresh
+//     session to tag/parent);
+//   - spawn        → LaunchRun spawns a FRESH session with the caller's SpawnOptions.
+//
+// Returns the fired session id and a driver label ("flow"|"session"). Shared by
+// all four fire paths so the mode choice lives in one place.
+func (e *AutomationEngine) dispatchFire(ctx context.Context, a db.Automation, prompt string, trigger RunTrigger, spawn SpawnOptions) (sessionID, driver string, err error) {
+	if a.FlowID != "" {
+		res, ferr := e.rt.LaunchRun(ctx, RunSpec{
+			Trigger:    trigger,
+			Input:      prompt,
+			Autonomous: true,
+			FlowID:     a.FlowID,
+		})
+		return res.SessionID, "flow", ferr
+	}
+	if a.EffectiveSessionMode() == db.SessionModeContinue {
+		if e.rt.Paused() {
+			return "", "session", ErrAutonomyPaused
+		}
+		sid, derr := e.rt.deliverAutomationTurn(ctx, a, prompt)
+		return sid, "session", derr
+	}
+	res, serr := e.rt.LaunchRun(ctx, RunSpec{
+		Trigger:    trigger,
+		Input:      prompt,
+		Autonomous: true,
+		AgentID:    a.TargetAgentID,
+		Spawn:      spawn,
+	})
+	return res.SessionID, res.Driver, serr
+}
+
+// notifyFired records a successful fire and publishes the standard success event.
+// The caller supplies the notification icon and the already-built title suffix so
+// each trigger kind keeps its own wording; the record + publish boilerplate is
+// shared by every fire path.
+func (e *AutomationEngine) notifyFired(ctx context.Context, a db.Automation, sessionID, icon, suffix, prompt string) {
+	if err := e.db.RecordAutomationFire(ctx, a.ID, sessionID, ""); err != nil {
+		e.logger.Warn("automation: record fire failed", "automation", a.ID, "error", err)
+	}
+	e.rt.publish(events.Event{
+		Type:   events.TypeAutomation,
+		Level:  "success",
+		Title:  icon + " Otomasyon tetiklendi" + suffix + " — " + automationLabel(a),
+		Body:   notifyLine(prompt, 120),
+		Target: map[string]string{"view": "executions", "sessionId": sessionID},
+	})
+}
+
 func (e *AutomationEngine) fireToken(ctx context.Context, a db.Automation, sessionID string, total int64) {
 	if !e.guardsPass(ctx, a) {
 		return
@@ -211,47 +266,16 @@ func (e *AutomationEngine) fireToken(ctx context.Context, a db.Automation, sessi
 		e.recordFailure(ctx, a, "rendered prompt is empty")
 		return
 	}
-
-	// Continuity: unlike the fresh-session spawn a board/tag fire uses, a token fire
-	// delivers into its OWN persistent maintenance session so each crossing continues
-	// the same thread — the cron-schedule behavior the user asked for. The flow
-	// driver keeps running through LaunchRun (a flow already accumulates its own
-	// per-flow transcript, so the reuse is redundant there).
-	var (
-		firedSessionID string
-		driver         string
-		err            error
-	)
-	if a.FlowID != "" {
-		var res LaunchResult
-		res, err = e.rt.LaunchRun(ctx, RunSpec{
-			Trigger:    TriggerAutomationToken,
-			Input:      prompt,
-			Autonomous: true,
-			FlowID:     a.FlowID,
-		})
-		firedSessionID, driver = res.SessionID, "flow"
-	} else {
-		// The launch brake (LaunchRun's launchGate) is bypassed on the reuse path, so
-		// honor the workspace autonomy pause here before delivering an autonomous turn.
-		if e.rt.Paused() {
-			err = ErrAutonomyPaused
-		} else {
-			firedSessionID, err = e.rt.deliverAutomationTurn(ctx, a, prompt)
-			driver = "session"
-		}
-	}
+	firedSessionID, driver, err := e.dispatchFire(ctx, a, prompt, TriggerAutomationToken, SpawnOptions{
+		Title:     "⚡ " + automationLabel(a),
+		CreatedBy: "automation:" + a.ID,
+		Tags:      a.SpawnTags, // token rules do not self-loop; nil = no tag
+	})
 	if err != nil {
 		e.recordFailure(ctx, a, err.Error())
 		return
 	}
-	if err := e.db.RecordAutomationFire(ctx, a.ID, firedSessionID, ""); err != nil {
-		e.logger.Warn("automation: record fire failed", "automation", a.ID, "error", err)
-	}
-	scope := a.TokenScope
-	if scope == "" {
-		scope = db.TokenScopeSession
-	}
+	scope := a.EffectiveTokenScope()
 	suffix := " (token·" + scope + ")"
 	if driver == "flow" {
 		suffix = " (token·" + scope + "·akış)"
@@ -259,39 +283,38 @@ func (e *AutomationEngine) fireToken(ctx context.Context, a db.Automation, sessi
 	e.logger.Info("automation: fired (token)",
 		"automation", a.ID, "scope", scope, "total", total, "threshold", a.TokenThreshold,
 		"session", firedSessionID, "driver", driver, "iteration", a.IterationCount+1)
-	e.rt.publish(events.Event{
-		Type:   events.TypeAutomation,
-		Level:  "success",
-		Title:  "⚡ Otomasyon tetiklendi" + suffix + " — " + automationLabel(a),
-		Body:   notifyLine(prompt, 120),
-		Target: map[string]string{"view": "executions", "sessionId": firedSessionID},
-	})
+	e.notifyFired(ctx, a, firedSessionID, "⚡", suffix, prompt)
 }
 
-// tokenVars assembles the placeholder values for a token automation's prompt.
-// There is no session result, so {{result}} is absent (nothing is appended).
-func (e *AutomationEngine) tokenVars(a db.Automation, sessionID string, total int64) map[string]string {
+// commonVars are the placeholder values every trigger kind shares: the iteration
+// bookkeeping ({{iteration}}/{{maxIterations}}), the automation name, and the
+// current date/time. Each kind's *Vars function starts from these and layers its
+// own trigger-specific keys on top, so the shared tail lives in one place.
+func commonVars(a db.Automation) map[string]string {
 	now := time.Now()
 	maxIter := strconv.Itoa(a.MaxIterations)
 	if a.MaxIterations == 0 {
 		maxIter = "∞"
 	}
-	scope := a.TokenScope
-	if scope == "" {
-		scope = db.TokenScopeSession
-	}
 	return map[string]string{
-		"tokens":        strconv.FormatInt(total, 10),
-		"threshold":     strconv.Itoa(a.TokenThreshold),
-		"scope":         scope,
-		"sessionId":     sessionID, // empty for workspace scope
-		"iteration":     strconv.Itoa(a.IterationCount + 1),
+		"iteration":     strconv.Itoa(a.IterationCount + 1), // 1-based: this fire's number
 		"maxIterations": maxIter,
 		"automation":    automationLabel(a),
 		"date":          now.Format("2006-01-02"),
 		"time":          now.Format("15:04"),
 		"datetime":      now.Format("2006-01-02 15:04"),
 	}
+}
+
+// tokenVars assembles the placeholder values for a token automation's prompt.
+// There is no session result, so {{result}} is absent (nothing is appended).
+func (e *AutomationEngine) tokenVars(a db.Automation, sessionID string, total int64) map[string]string {
+	v := commonVars(a)
+	v["tokens"] = strconv.FormatInt(total, 10)
+	v["threshold"] = strconv.Itoa(a.TokenThreshold)
+	v["scope"] = a.EffectiveTokenScope()
+	v["sessionId"] = sessionID // empty for workspace scope
+	return v
 }
 
 // boardMatches reports whether a board automation's op and column filters accept
@@ -359,40 +382,25 @@ func (e *AutomationEngine) fireBoard(ctx context.Context, a db.Automation, ev db
 
 	// SpawnTags default to none for board automations (an empty/nil slice) so a
 	// board fire does not tag its spawned session — board rules match on card
-	// changes, not tags, so there is no self-loop to seed. (Ignored on the flow driver.)
-	res, err := e.rt.LaunchRun(ctx, RunSpec{
-		Trigger:    TriggerAutomationBoard,
-		Input:      prompt,
-		Autonomous: true,
-		FlowID:     a.FlowID,
-		AgentID:    a.TargetAgentID,
-		Spawn: SpawnOptions{
-			Title:     "🗂 " + automationLabel(a),
-			CreatedBy: "automation:" + a.ID,
-			Tags:      a.SpawnTags,
-		},
+	// changes, not tags, so there is no self-loop to seed. (Ignored on the flow and
+	// continue drivers.)
+	firedSessionID, driver, err := e.dispatchFire(ctx, a, prompt, TriggerAutomationBoard, SpawnOptions{
+		Title:     "🗂 " + automationLabel(a),
+		CreatedBy: "automation:" + a.ID,
+		Tags:      a.SpawnTags,
 	})
 	if err != nil {
 		e.recordFailure(ctx, a, err.Error())
 		return
 	}
-	if err := e.db.RecordAutomationFire(ctx, a.ID, res.SessionID, ""); err != nil {
-		e.logger.Warn("automation: record fire failed", "automation", a.ID, "error", err)
-	}
 	suffix := " (pano)"
-	if res.Driver == "flow" {
+	if driver == "flow" {
 		suffix = " (pano·akış)"
 	}
 	e.logger.Info("automation: fired (board)",
 		"automation", a.ID, "op", ev.Op, "task", ev.TaskID,
-		"session", res.SessionID, "driver", res.Driver, "iteration", a.IterationCount+1)
-	e.rt.publish(events.Event{
-		Type:   events.TypeAutomation,
-		Level:  "success",
-		Title:  "🗂 Otomasyon tetiklendi" + suffix + " — " + automationLabel(a),
-		Body:   notifyLine(prompt, 120),
-		Target: map[string]string{"view": "executions", "sessionId": res.SessionID},
-	})
+		"session", firedSessionID, "driver", driver, "iteration", a.IterationCount+1)
+	e.notifyFired(ctx, a, firedSessionID, "🗂", suffix, prompt)
 }
 
 // guardsPass evaluates an automation's shared runtime guardrails (expiry,
@@ -503,44 +511,30 @@ func (e *AutomationEngine) fire(ctx context.Context, a db.Automation, sess db.Se
 		clearParentTags = []string{a.TriggerTag}
 	}
 
-	// Unified dispatch: flow-backed → run the flow; else → spawn a single-agent
-	// session. LaunchRun validates the target and normalizes flow-failure to an err.
-	res, err := e.rt.LaunchRun(ctx, RunSpec{
-		Trigger:    TriggerAutomationTag,
-		Input:      prompt,
-		Autonomous: true,
-		FlowID:     a.FlowID,
-		AgentID:    a.TargetAgentID,
-		Spawn: SpawnOptions{
-			Title:                    "🔁 " + automationLabel(a),
-			CreatedBy:                "automation:" + a.ID,
-			ParentSessionID:          sess.ID,
-			Tags:                     spawnTags,
-			ClearParentTagsOnSuccess: clearParentTags,
-		},
+	// Dispatch by session mode: spawn a fresh session (default) or continue the
+	// persistent per-automation thread. In continue mode the spawn-only options
+	// (parent link, loop tags) are ignored — the maintenance thread carries no
+	// trigger tag, so the tag self-loop is not seeded (like token/counter).
+	firedSessionID, driver, err := e.dispatchFire(ctx, a, prompt, TriggerAutomationTag, SpawnOptions{
+		Title:                    "🔁 " + automationLabel(a),
+		CreatedBy:                "automation:" + a.ID,
+		ParentSessionID:          sess.ID,
+		Tags:                     spawnTags,
+		ClearParentTagsOnSuccess: clearParentTags,
 	})
 	if err != nil {
 		e.recordFailure(ctx, a, err.Error())
 		return
 	}
 
-	if err := e.db.RecordAutomationFire(ctx, a.ID, res.SessionID, ""); err != nil {
-		e.logger.Warn("automation: record fire failed", "automation", a.ID, "error", err)
-	}
 	suffix := ""
-	if res.Driver == "flow" {
+	if driver == "flow" {
 		suffix = " (akış)"
 	}
 	e.logger.Info("automation: fired"+suffix,
 		"automation", a.ID, "tag", a.TriggerTag, "from", sess.ID,
-		"session", res.SessionID, "driver", res.Driver, "iteration", a.IterationCount+1)
-	e.rt.publish(events.Event{
-		Type:   events.TypeAutomation,
-		Level:  "success",
-		Title:  "🔁 Otomasyon tetiklendi" + suffix + " — " + automationLabel(a),
-		Body:   notifyLine(prompt, 120),
-		Target: map[string]string{"view": "executions", "sessionId": res.SessionID},
-	})
+		"session", firedSessionID, "driver", driver, "iteration", a.IterationCount+1)
+	e.notifyFired(ctx, a, firedSessionID, "🔁", suffix, prompt)
 }
 
 // recordFailure logs a fire failure, persists it on the automation (LastError,
@@ -580,37 +574,21 @@ func (e *AutomationEngine) turnVars(ctx context.Context, a db.Automation, sess d
 			}
 		}
 	}
-	now := time.Now()
-	maxIter := strconv.Itoa(a.MaxIterations)
-	if a.MaxIterations == 0 {
-		maxIter = "∞"
-	}
-	return map[string]string{
-		"result":        tf.Output,
-		"title":         sess.Title,
-		"tag":           a.TriggerTag,
-		"sessionId":     sess.ID,
-		"iteration":     strconv.Itoa(a.IterationCount + 1), // 1-based: this fire's number
-		"maxIterations": maxIter,
-		"agent":         agentName,
-		"agentName":     agentName, // alias
-		"prevPrompt":    prevPrompt,
-		"automation":    automationLabel(a),
-		"date":          now.Format("2006-01-02"),
-		"time":          now.Format("15:04"),
-		"datetime":      now.Format("2006-01-02 15:04"),
-	}
+	v := commonVars(a)
+	v["result"] = tf.Output
+	v["title"] = sess.Title
+	v["tag"] = a.TriggerTag
+	v["sessionId"] = sess.ID
+	v["agent"] = agentName
+	v["agentName"] = agentName // alias
+	v["prevPrompt"] = prevPrompt
+	return v
 }
 
 // boardVars assembles the placeholder values available to a board automation's
 // prompt template for one card change. There is no session result, so {{result}}
 // is absent (renderAutomationPrompt appends nothing).
 func (e *AutomationEngine) boardVars(ctx context.Context, a db.Automation, ev db.BoardChangeEvent) map[string]string {
-	now := time.Now()
-	maxIter := strconv.Itoa(a.MaxIterations)
-	if a.MaxIterations == 0 {
-		maxIter = "∞"
-	}
 	// Resolve the card owner to a human name (falling back to the raw id); empty
 	// when the card is unassigned.
 	owner := ev.OwnerAgentID
@@ -619,25 +597,19 @@ func (e *AutomationEngine) boardVars(ctx context.Context, a db.Automation, ev db
 			owner = ag.Name
 		}
 	}
-	return map[string]string{
-		"taskId":        ev.TaskID,
-		"title":         ev.Title,
-		"op":            ev.Op,
-		"from":          ev.FromState,
-		"to":            ev.ToState,
-		"fromLabel":     boardLabel(ev.FromState),
-		"toLabel":       boardLabel(ev.ToState),
-		"board":         ev.ToState, // convenience alias for the current column
-		"tags":          strings.Join(ev.Tags, ", "),
-		"owner":         owner,       // card owner agent's name ("" = unassigned)
-		"priority":      ev.Priority, // critical/high/medium/low ("" = unset)
-		"iteration":     strconv.Itoa(a.IterationCount + 1),
-		"maxIterations": maxIter,
-		"automation":    automationLabel(a),
-		"date":          now.Format("2006-01-02"),
-		"time":          now.Format("15:04"),
-		"datetime":      now.Format("2006-01-02 15:04"),
-	}
+	v := commonVars(a)
+	v["taskId"] = ev.TaskID
+	v["title"] = ev.Title
+	v["op"] = ev.Op
+	v["from"] = ev.FromState
+	v["to"] = ev.ToState
+	v["fromLabel"] = boardLabel(ev.FromState)
+	v["toLabel"] = boardLabel(ev.ToState)
+	v["board"] = ev.ToState // convenience alias for the current column
+	v["tags"] = strings.Join(ev.Tags, ", ")
+	v["owner"] = owner          // card owner agent's name ("" = unassigned)
+	v["priority"] = ev.Priority // critical/high/medium/low ("" = unset)
+	return v
 }
 
 // boardLabel resolves a column key to its human label using the built-in column

@@ -90,6 +90,38 @@ func TestActivityHookCarriesDeltas(t *testing.T) {
 	}
 }
 
+// TestWorkspaceCounterTotal verifies the workspace aggregate sums every session's
+// counter, for both metrics — the value a workspace-scoped counter automation
+// watches.
+func TestWorkspaceCounterTotal(t *testing.T) {
+	ctx := context.Background()
+	d, err := Open(filepath.Join(t.TempDir(), "store"))
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	defer d.Close()
+	agent, _ := d.CreateAgent(ctx, Agent{Name: "A", Provider: "anthropic"})
+	s1, _ := d.CreateSession(ctx, Session{AgentID: agent.ID})
+	s2, _ := d.CreateSession(ctx, Session{AgentID: agent.ID})
+
+	// s1: 1 user + 1 assistant(2 tools) = 2 msgs, 2 tools.
+	_, _ = d.AddMessage(ctx, Message{SessionID: s1.ID, Role: "user", Text: "a"})
+	_, _ = d.AddMessage(ctx, Message{SessionID: s1.ID, Role: "assistant", Text: "b", Steps: `[{"kind":"tool"},{"kind":"tool"}]`})
+	// s2: 1 assistant(3 tools) = 1 msg, 3 tools.
+	_, _ = d.AddMessage(ctx, Message{SessionID: s2.ID, Role: "assistant", Text: "c", Steps: `[{"kind":"tool"},{"kind":"tool"},{"kind":"tool"}]`})
+
+	if got := d.WorkspaceCounterTotal(CounterMetricMessage); got != 3 {
+		t.Errorf("workspace message total = %d, want 3", got)
+	}
+	if got := d.WorkspaceCounterTotal(CounterMetricTool); got != 5 {
+		t.Errorf("workspace tool total = %d, want 5", got)
+	}
+	// Empty metric defaults to message.
+	if got := d.WorkspaceCounterTotal(""); got != 3 {
+		t.Errorf("workspace default(message) total = %d, want 3", got)
+	}
+}
+
 // TestCountToolSteps pins the tolerant scan: empty/"[]"/malformed inputs count as
 // zero rather than erroring (a bad transcript line must not break persistence).
 func TestCountToolSteps(t *testing.T) {

@@ -33,6 +33,29 @@ func ValidCounterMetric(metric string) bool {
 	}
 }
 
+// Counter automation scopes. A counter-triggered automation watches either a
+// single session's lifetime counter (CounterScopeSession, the default) or the
+// whole workspace's lifetime counter — the sum of every session's counter
+// (CounterScopeWorkspace). The workspace total is cumulative (not daily-reset):
+// it fires every CounterInterval of new activity across the workspace, which is
+// the work-cadence a multi-agent setup wants. CounterScope == "" is treated as
+// CounterScopeSession.
+const (
+	CounterScopeSession   = "session"
+	CounterScopeWorkspace = "workspace"
+)
+
+// ValidCounterScope reports whether scope is empty (defaults to session) or a
+// known counter-automation scope.
+func ValidCounterScope(scope string) bool {
+	switch scope {
+	case "", CounterScopeSession, CounterScopeWorkspace:
+		return true
+	default:
+		return false
+	}
+}
+
 // Token automation scopes. A token-triggered automation watches either a single
 // session's lifetime token spend (TokenScopeSession, the default) or the whole
 // workspace's spend for the current day (TokenScopeWorkspace). TokenScope == ""
@@ -50,6 +73,63 @@ func ValidTokenScope(scope string) bool {
 		return true
 	default:
 		return false
+	}
+}
+
+// EffectiveTokenScope resolves the stored TokenScope to a concrete scope, mapping
+// the empty default to session. Callers (prompt vars, fire notifications) should
+// use this instead of repeating the `== "" → session` fallback.
+func (a Automation) EffectiveTokenScope() string {
+	if a.TokenScope == "" {
+		return TokenScopeSession
+	}
+	return a.TokenScope
+}
+
+// EffectiveCounterScope resolves the stored CounterScope to a concrete scope,
+// mapping the empty default to session (mirrors EffectiveTokenScope).
+func (a Automation) EffectiveCounterScope() string {
+	if a.CounterScope == "" {
+		return CounterScopeSession
+	}
+	return a.CounterScope
+}
+
+// Automation session modes. An agent-backed automation either spawns a FRESH
+// session on every fire (SessionModeSpawn — the tag/board default: each fire is
+// independent) or CONTINUES one persistent per-automation thread that carries its
+// earlier turns forward (SessionModeContinue — the token/counter default: each
+// fire resumes where the last left off, cron-schedule style). SessionMode == "" is
+// resolved per trigger kind by EffectiveSessionMode.
+const (
+	SessionModeSpawn    = "spawn"
+	SessionModeContinue = "continue"
+)
+
+// ValidSessionMode reports whether mode is empty (kind default) or a known mode.
+func ValidSessionMode(mode string) bool {
+	switch mode {
+	case "", SessionModeSpawn, SessionModeContinue:
+		return true
+	default:
+		return false
+	}
+}
+
+// EffectiveSessionMode resolves the stored SessionMode to a concrete mode. An
+// explicit value wins; empty falls back to the per-kind default that preserves the
+// original behavior — token/counter continue their maintenance thread, everything
+// else spawns fresh. (Meaningful only for agent-backed rules; the fire path ignores
+// it for flow-backed ones.)
+func (a Automation) EffectiveSessionMode() string {
+	if a.SessionMode != "" {
+		return a.SessionMode
+	}
+	switch a.TriggerKind {
+	case TriggerToken, TriggerCounter:
+		return SessionModeContinue
+	default:
+		return SessionModeSpawn
 	}
 }
 
@@ -138,6 +218,11 @@ type Automation struct {
 	// watches: CounterMetricMessage (default, "" is treated the same) or
 	// CounterMetricTool. Ignored unless TriggerKind == TriggerCounter.
 	CounterMetric string `json:"counterMetric,omitempty"`
+	// CounterScope selects what a counter automation watches: CounterScopeSession
+	// (default, "" is treated the same) = the crossing session's own counter;
+	// CounterScopeWorkspace = the whole workspace's cumulative counter (sum of every
+	// session). Ignored unless TriggerKind == TriggerCounter.
+	CounterScope string `json:"counterScope,omitempty"`
 	// CounterInterval is the count INTERVAL for a counter automation: it fires each
 	// time the watched session counter crosses another multiple of this value (e.g.
 	// 10 → fires at 10, 20, 30…). Crossing is detected statelessly from the previous
@@ -185,6 +270,13 @@ type Automation struct {
 	// carry no trigger tag and do not re-fire the rule), so the loop guardrails
 	// (MaxIterations/Cooldown/ExpiresAt) still bound how often the trigger fires.
 	FlowID string `json:"flowId,omitempty"`
+	// SessionMode selects, for an AGENT-backed automation, whether each fire runs in
+	// a fresh session (SessionModeSpawn) or continues one persistent per-automation
+	// thread that carries prior turns forward (SessionModeContinue, history-aware).
+	// Empty resolves per kind via EffectiveSessionMode (tag/board → spawn, token/
+	// counter → continue) so old rows keep their original behavior. Ignored for
+	// flow-backed automations (a flow always accumulates its own transcript).
+	SessionMode string `json:"sessionMode,omitempty"`
 	// PromptTemplate is the prompt delivered to the spawned session. Placeholders:
 	// {{result}} (the finishing session's final reply), {{title}} (its title),
 	// {{tag}} (TriggerTag), {{sessionId}} (the finishing session's id).

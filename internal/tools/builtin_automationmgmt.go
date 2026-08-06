@@ -53,10 +53,10 @@ func (CreateAutomationTool) Def() providers.ToolDef {
 			"{{toLabel}}, {{tags}}, {{owner}}, {{priority}}); (c) triggerKind='token' — when cumulative token spend crosses each " +
 			"tokenThreshold multiple (tokenScope='session' watches one session's lifetime spend, 'workspace' the whole day's), " +
 			"the target runs with {{tokens}}, {{threshold}}, {{scope}}, {{sessionId}} — good for self-maintenance/cleanup; " +
-			"(d) triggerKind='counter' — when a session's activity counter crosses each counterInterval multiple " +
-			"(counterMetric='message' watches message count, 'tool' watches executed tool calls), the target runs with " +
-			"{{count}}, {{interval}}, {{metric}}, {{sessionId}}. Prefer 'counter' over 'token' for a stable per-conversation " +
-			"cadence — token counts are cache-inflated and fire unpredictably. " +
+			"(d) triggerKind='counter' — when an activity counter crosses each counterInterval multiple " +
+			"(counterMetric='message'|'tool'; counterScope='session' watches the crossing session, 'workspace' the whole " +
+			"workspace's cumulative counter), the target runs with {{count}}, {{interval}}, {{metric}}, {{scope}}, {{sessionId}}. " +
+			"Prefer 'counter' over 'token' for a stable work-cadence — token counts are cache-inflated and fire unpredictably. " +
 			"The target is EITHER an agent (targetAgentId → a NEW session is spawned) OR an orchestration flow " +
 			"(flowId → the rendered prompt is run as the flow input). For a tag automation the spawned session carries " +
 			"triggerTag by default (a self-continuing loop bounded by maxIterations); board and token automations do not self-loop. " +
@@ -77,8 +77,10 @@ func (CreateAutomationTool) Def() providers.ToolDef {
 				"boardAction":{"type":"string","enum":["spawn","archive"],"description":"[board kind] What firing does: 'spawn' (default) runs the target agent/flow — the board drives execution; 'archive' archives the card with no LLM call (needs no target). Use 'archive' for a 'done → archive' cleanup rule."},
 				"tokenScope":{"type":"string","enum":["session","workspace"],"description":"[token kind] What to watch: 'session' (default; one session's lifetime tokens) or 'workspace' (whole workspace's tokens today)"},
 				"tokenThreshold":{"type":"integer","description":"[token kind] Token INTERVAL; fires each time cumulative spend crosses another multiple (e.g. 100000 → at 100k, 200k…). Min 1000. Tokens = input+output+cache."},
-				"counterMetric":{"type":"string","enum":["message","tool"],"description":"[counter kind] Which session counter to watch: 'message' (default; every user/assistant message) or 'tool' (executed tool calls)"},
-				"counterInterval":{"type":"integer","description":"[counter kind] Count INTERVAL; fires each time the session counter crosses another multiple (e.g. 10 → at 10, 20…). Min 2. Session-scoped."},
+				"counterMetric":{"type":"string","enum":["message","tool"],"description":"[counter kind] Which counter to watch: 'message' (default; every user/assistant message) or 'tool' (executed tool calls)"},
+				"counterScope":{"type":"string","enum":["session","workspace"],"description":"[counter kind] What to watch: 'session' (default; the crossing session's own counter) or 'workspace' (the whole workspace's cumulative counter — sum of every session; good for a multi-agent work-cadence trigger)"},
+				"counterInterval":{"type":"integer","description":"[counter kind] Count INTERVAL; fires each time the watched counter crosses another multiple (e.g. 10 → at 10, 20…). Min 2."},
+				"sessionMode":{"type":"string","enum":["spawn","continue"],"description":"[agent-backed] Session strategy per fire: 'spawn' (fresh session each time — tag/board default) or 'continue' (one persistent per-automation thread that carries prior turns forward, history-aware — token/counter default). Omit to use the per-kind default. Ignored for flow-backed rules."},
 				"targetAgentId":{"type":"string","description":"The agent that runs the spawned session (see list_agents). Omit when flowId is set."},
 				"flowId":{"type":"string","description":"Run this orchestration flow with the rendered prompt as its input instead of spawning an agent session (see list_flows)."},
 				"promptTemplate":{"type":"string","description":"Prompt for the spawned session (or flow input). Tag placeholders: {{result}}, {{title}}, {{tag}}, {{sessionId}}, {{prevPrompt}}, {{agent}}. Board placeholders: {{taskId}}, {{title}}, {{op}}, {{from}}, {{to}}, {{fromLabel}}, {{toLabel}}, {{board}}, {{tags}}, {{owner}}, {{priority}}. Token placeholders: {{tokens}}, {{threshold}}, {{scope}}, {{sessionId}}. Counter placeholders: {{count}}, {{interval}}, {{metric}}, {{sessionId}}. Common: {{iteration}}, {{maxIterations}}, {{automation}}, {{date}}, {{time}}, {{datetime}}"},
@@ -111,7 +113,9 @@ func (t CreateAutomationTool) Call(ctx context.Context, input json.RawMessage) (
 		TokenScope      string   `json:"tokenScope"`
 		TokenThreshold  *int     `json:"tokenThreshold"`
 		CounterMetric   string   `json:"counterMetric"`
+		CounterScope    string   `json:"counterScope"`
 		CounterInterval *int     `json:"counterInterval"`
+		SessionMode     string   `json:"sessionMode"`
 		TargetAgentID   string   `json:"targetAgentId"`
 		FlowID          string   `json:"flowId"`
 		PromptTemplate  string   `json:"promptTemplate"`
@@ -126,6 +130,8 @@ func (t CreateAutomationTool) Call(ctx context.Context, input json.RawMessage) (
 	}
 	in.TriggerKind = strings.TrimSpace(in.TriggerKind)
 	in.CounterMetric = strings.TrimSpace(in.CounterMetric)
+	in.CounterScope = strings.TrimSpace(in.CounterScope)
+	in.SessionMode = strings.TrimSpace(in.SessionMode)
 	in.TriggerTag = strings.TrimSpace(in.TriggerTag)
 	in.BoardOp = strings.TrimSpace(in.BoardOp)
 	in.BoardFromState = strings.TrimSpace(in.BoardFromState)
@@ -137,42 +143,23 @@ func (t CreateAutomationTool) Call(ctx context.Context, input json.RawMessage) (
 	if strings.TrimSpace(in.PromptTemplate) == "" {
 		return "", fmt.Errorf("promptTemplate is required")
 	}
+	// Pointer→value extraction for the interval fields + the one check the shape
+	// validator cannot express ("required interval omitted"). Every other per-kind
+	// rule is enforced once by db.ValidateAutomationShape below — the SAME validator
+	// the REST path runs, so the two entry points cannot drift.
 	tokenThreshold := 0
-	counterInterval := 0
-	switch in.TriggerKind {
-	case db.TriggerBoard:
-		if !db.ValidBoardOp(in.BoardOp) {
-			return "", fmt.Errorf("invalid boardOp %q (any|move|create|update|delete)", in.BoardOp)
-		}
-		if !db.ValidBoardAction(in.BoardAction) {
-			return "", fmt.Errorf("invalid boardAction %q (spawn|archive)", in.BoardAction)
-		}
-	case db.TriggerToken:
-		if !db.ValidTokenScope(in.TokenScope) {
-			return "", fmt.Errorf("invalid tokenScope %q (session|workspace)", in.TokenScope)
-		}
+	if in.TriggerKind == db.TriggerToken {
 		if in.TokenThreshold == nil {
 			return "", fmt.Errorf("tokenThreshold is required for token automations")
 		}
-		if err := db.ValidateTokenThreshold(*in.TokenThreshold); err != nil {
-			return "", err
-		}
 		tokenThreshold = *in.TokenThreshold
-	case db.TriggerCounter:
-		if !db.ValidCounterMetric(in.CounterMetric) {
-			return "", fmt.Errorf("invalid counterMetric %q (message|tool)", in.CounterMetric)
-		}
+	}
+	counterInterval := 0
+	if in.TriggerKind == db.TriggerCounter {
 		if in.CounterInterval == nil {
 			return "", fmt.Errorf("counterInterval is required for counter automations")
 		}
-		if err := db.ValidateCounterInterval(*in.CounterInterval); err != nil {
-			return "", err
-		}
 		counterInterval = *in.CounterInterval
-	default:
-		if in.TriggerTag == "" {
-			return "", fmt.Errorf("triggerTag is required for tag automations")
-		}
 	}
 	// A board 'archive' automation needs no target (no LLM call). Otherwise either
 	// a flow (flowId) or an agent (targetAgentId) is the target.
@@ -235,7 +222,9 @@ func (t CreateAutomationTool) Call(ctx context.Context, input json.RawMessage) (
 		TokenScope:      in.TokenScope,
 		TokenThreshold:  tokenThreshold,
 		CounterMetric:   in.CounterMetric,
+		CounterScope:    in.CounterScope,
 		CounterInterval: counterInterval,
+		SessionMode:     in.SessionMode,
 		TargetAgentID:   in.TargetAgentID,
 		FlowID:          in.FlowID,
 		PromptTemplate:  in.PromptTemplate,
@@ -287,7 +276,9 @@ func (UpdateAutomationTool) Def() providers.ToolDef {
 				"tokenScope":{"type":"string","enum":["session","workspace"],"description":"[token kind] watch one session ('session') or the whole workspace/day ('workspace')"},
 				"tokenThreshold":{"type":"integer","description":"[token kind] token interval; fires each time cumulative spend crosses another multiple (min 1000)"},
 				"counterMetric":{"type":"string","enum":["message","tool"],"description":"[counter kind] watch 'message' count or 'tool' calls"},
-				"counterInterval":{"type":"integer","description":"[counter kind] count interval; fires each time the session counter crosses another multiple (min 2)"},
+				"counterScope":{"type":"string","enum":["session","workspace"],"description":"[counter kind] watch one session ('session') or the whole workspace's cumulative counter ('workspace')"},
+				"counterInterval":{"type":"integer","description":"[counter kind] count interval; fires each time the watched counter crosses another multiple (min 2)"},
+				"sessionMode":{"type":"string","enum":["spawn","continue"],"description":"[agent-backed] 'spawn' (fresh session per fire) or 'continue' (persistent per-automation thread, history-aware). Omit for the per-kind default; ignored for flow-backed rules."},
 				"targetAgentId":{"type":"string"},
 				"flowId":{"type":"string","description":"Run this flow with the rendered prompt as input instead of spawning an agent session (see list_flows). Setting it clears the agent."},
 				"promptTemplate":{"type":"string"},
@@ -317,7 +308,9 @@ func (t UpdateAutomationTool) Call(ctx context.Context, input json.RawMessage) (
 		TokenScope      *string   `json:"tokenScope"`
 		TokenThreshold  *int      `json:"tokenThreshold"`
 		CounterMetric   *string   `json:"counterMetric"`
+		CounterScope    *string   `json:"counterScope"`
 		CounterInterval *int      `json:"counterInterval"`
+		SessionMode     *string   `json:"sessionMode"`
 		TargetAgentID   *string   `json:"targetAgentId"`
 		FlowID          *string   `json:"flowId"`
 		PromptTemplate  *string   `json:"promptTemplate"`
@@ -347,12 +340,11 @@ func (t UpdateAutomationTool) Call(ctx context.Context, input json.RawMessage) (
 	if in.TriggerTag != nil {
 		cur.TriggerTag = strings.TrimSpace(*in.TriggerTag)
 	}
+	// Field assignments only — format/range/coherence for the merged result is
+	// enforced once by db.ValidateAutomationShape below (the same validator the REST
+	// update + both create paths run), so the entry points cannot drift.
 	if in.BoardOp != nil {
-		if op := strings.TrimSpace(*in.BoardOp); db.ValidBoardOp(op) {
-			cur.BoardOp = op
-		} else {
-			return "", fmt.Errorf("invalid boardOp %q (any|move|create|update|delete)", op)
-		}
+		cur.BoardOp = strings.TrimSpace(*in.BoardOp)
 	}
 	if in.BoardFromState != nil {
 		cur.BoardFromState = strings.TrimSpace(*in.BoardFromState)
@@ -367,49 +359,25 @@ func (t UpdateAutomationTool) Call(ctx context.Context, input json.RawMessage) (
 		cur.BoardExclusive = *in.BoardExclusive
 	}
 	if in.BoardAction != nil {
-		if act := strings.TrimSpace(*in.BoardAction); db.ValidBoardAction(act) {
-			cur.BoardAction = act
-		} else {
-			return "", fmt.Errorf("invalid boardAction %q (spawn|archive)", act)
-		}
+		cur.BoardAction = strings.TrimSpace(*in.BoardAction)
 	}
 	if in.TokenScope != nil {
-		if scope := strings.TrimSpace(*in.TokenScope); db.ValidTokenScope(scope) {
-			cur.TokenScope = scope
-		} else {
-			return "", fmt.Errorf("invalid tokenScope %q (session|workspace)", scope)
-		}
+		cur.TokenScope = strings.TrimSpace(*in.TokenScope)
 	}
 	if in.TokenThreshold != nil {
-		if err := db.ValidateTokenThreshold(*in.TokenThreshold); err != nil {
-			return "", err
-		}
 		cur.TokenThreshold = *in.TokenThreshold
 	}
-	// A rule that is (or becomes) token-triggered must carry a valid threshold.
-	if cur.TriggerKind == db.TriggerToken {
-		if err := db.ValidateTokenThreshold(cur.TokenThreshold); err != nil {
-			return "", err
-		}
-	}
 	if in.CounterMetric != nil {
-		if metric := strings.TrimSpace(*in.CounterMetric); db.ValidCounterMetric(metric) {
-			cur.CounterMetric = metric
-		} else {
-			return "", fmt.Errorf("invalid counterMetric %q (message|tool)", metric)
-		}
+		cur.CounterMetric = strings.TrimSpace(*in.CounterMetric)
+	}
+	if in.CounterScope != nil {
+		cur.CounterScope = strings.TrimSpace(*in.CounterScope)
 	}
 	if in.CounterInterval != nil {
-		if err := db.ValidateCounterInterval(*in.CounterInterval); err != nil {
-			return "", err
-		}
 		cur.CounterInterval = *in.CounterInterval
 	}
-	// A rule that is (or becomes) counter-triggered must carry a valid interval.
-	if cur.TriggerKind == db.TriggerCounter {
-		if err := db.ValidateCounterInterval(cur.CounterInterval); err != nil {
-			return "", err
-		}
+	if in.SessionMode != nil {
+		cur.SessionMode = strings.TrimSpace(*in.SessionMode)
 	}
 	// A non-empty flowId switches to flow-backed (and clears the agent); an
 	// explicit targetAgentId switches back to agent-backed (and clears the flow).
@@ -539,6 +507,7 @@ func (t ListAutomationsTool) Call(ctx context.Context, _ json.RawMessage) (strin
 		TokenScope      string `json:"tokenScope,omitempty"`
 		TokenThreshold  int    `json:"tokenThreshold,omitempty"`
 		CounterMetric   string `json:"counterMetric,omitempty"`
+		CounterScope    string `json:"counterScope,omitempty"`
 		CounterInterval int    `json:"counterInterval,omitempty"`
 		TargetAgentID   string `json:"targetAgentId"`
 		FlowID          string `json:"flowId,omitempty"`
@@ -566,6 +535,7 @@ func (t ListAutomationsTool) Call(ctx context.Context, _ json.RawMessage) (strin
 			TokenScope:      a.TokenScope,
 			TokenThreshold:  a.TokenThreshold,
 			CounterMetric:   a.CounterMetric,
+			CounterScope:    a.CounterScope,
 			CounterInterval: a.CounterInterval,
 			TargetAgentID:   a.TargetAgentID,
 			FlowID:          a.FlowID,

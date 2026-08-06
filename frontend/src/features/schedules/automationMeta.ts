@@ -3,6 +3,8 @@ import type {
   BoardAction,
   BoardColumnDef,
   BoardOp,
+  CounterMetric,
+  CounterScope,
   TokenScope,
 } from '@/types'
 
@@ -44,6 +46,28 @@ export const TOKEN_SCOPES: { value: TokenScope; label: string }[] = [
 
 export function tokenScopeLabel(scope?: TokenScope): string {
   return TOKEN_SCOPES.find((s) => s.value === (scope || 'session'))?.label ?? String(scope ?? '')
+}
+
+// Counter-trigger metric options (label = Turkish UI text).
+export const COUNTER_METRICS: { value: CounterMetric; label: string }[] = [
+  { value: 'message', label: 'Mesaj (kullanıcı/asistan)' },
+  { value: 'tool', label: 'Tool çağrısı (çalıştırılan)' },
+]
+
+export function counterMetricLabel(metric?: CounterMetric): string {
+  return (
+    COUNTER_METRICS.find((m) => m.value === (metric || 'message'))?.label ?? String(metric ?? '')
+  )
+}
+
+// Counter-trigger scope options (label = Turkish UI text).
+export const COUNTER_SCOPES: { value: CounterScope; label: string }[] = [
+  { value: 'session', label: 'Oturum (bir oturumun sayacı)' },
+  { value: 'workspace', label: 'Workspace (tüm oturumların toplamı)' },
+]
+
+export function counterScopeLabel(scope?: CounterScope): string {
+  return COUNTER_SCOPES.find((s) => s.value === (scope || 'session'))?.label ?? String(scope ?? '')
 }
 
 // Tag-trigger prompt placeholders (kept in sync with agent/automation.go turnVars).
@@ -97,6 +121,21 @@ export const TOKEN_PROMPT_VARS: { name: string; desc: string }[] = [
   { name: '{{datetime}}', desc: 'Tarih + saat' },
 ]
 
+// Counter-trigger prompt placeholders (kept in sync with agent/automation_counter.go counterVars).
+export const COUNTER_PROMPT_VARS: { name: string; desc: string }[] = [
+  { name: '{{count}}', desc: 'Aralığı geçen kümülatif sayaç toplamı' },
+  { name: '{{interval}}', desc: 'Sayaç aralığı' },
+  { name: '{{metric}}', desc: 'Ölçüt (message/tool)' },
+  { name: '{{scope}}', desc: 'Kapsam (session/workspace)' },
+  { name: '{{sessionId}}', desc: 'Geçişi tetikleyen oturum (workspace kapsamında boş)' },
+  { name: '{{iteration}}', desc: 'Bu ateşlemenin sıra no’su (1-tabanlı)' },
+  { name: '{{maxIterations}}', desc: 'Üst sınır (eski kayıtlarda 0 → ∞)' },
+  { name: '{{automation}}', desc: 'Otomasyonun adı' },
+  { name: '{{date}}', desc: 'Geçerli tarih' },
+  { name: '{{time}}', desc: 'Geçerli saat' },
+  { name: '{{datetime}}', desc: 'Tarih + saat' },
+]
+
 // Default prompt template for a fresh automation of each kind.
 export const DEFAULT_PROMPT: Record<AutomationTriggerKind, string> = {
   tag: 'Devam et. Önceki sonuç:\n{{result}}',
@@ -105,6 +144,9 @@ export const DEFAULT_PROMPT: Record<AutomationTriggerKind, string> = {
     'Bu {{scope}} {{tokens}} token eşiğini ({{threshold}}) geçti. Kendi kendine bakım yap: ' +
     'gereksiz artefaktları/oturumları temizle, bağlamı sıkıştır/özetle, optimizasyon fırsatlarını uygula. ' +
     'Oturum: {{sessionId}}',
+  counter:
+    'Bu oturum {{count}} {{metric}} sayısına ulaştı (her {{interval}}). Kısa bir ara ver: ' +
+    'ilerlemeyi özetle, gereksiz bağlamı temizle, bir sonraki adımı netleştir. Oturum: {{sessionId}}',
 }
 
 // Prefill body for the "stuck session repairer" template (self-healing, _Docs/56):
@@ -134,6 +176,7 @@ export const COLUMN_ACCENT = {
   tag: '#8b5cf6',
   board: '#0ea5e9',
   token: '#f59e0b',
+  counter: '#10b981',
 } as const
 
 // MAX_ITERATIONS_HARD_CAP is the ceiling the automation form allows.
@@ -158,3 +201,11 @@ export const MIN_TOKEN_THRESHOLD = 1000
 
 // DEFAULT_TOKEN_THRESHOLD is a sensible prefill for a new token automation.
 export const DEFAULT_TOKEN_THRESHOLD = 200000
+
+// MIN_COUNTER_INTERVAL mirrors db.MinCounterInterval: the smallest interval a
+// counter automation may set (server-authoritative; drift only nudges the form's
+// `min`). An interval of 1 would fire on nearly every append.
+export const MIN_COUNTER_INTERVAL = 2
+
+// DEFAULT_COUNTER_INTERVAL is a sensible prefill for a new counter automation.
+export const DEFAULT_COUNTER_INTERVAL = 10

@@ -35,7 +35,9 @@ type automationReq struct {
 	TokenScope      string   `json:"tokenScope"`
 	TokenThreshold  *int     `json:"tokenThreshold"`
 	CounterMetric   string   `json:"counterMetric"`
+	CounterScope    string   `json:"counterScope"`
 	CounterInterval *int     `json:"counterInterval"`
+	SessionMode     string   `json:"sessionMode"`
 	TargetAgentID   string   `json:"targetAgentId"`
 	FlowID          string   `json:"flowId"`
 	PromptTemplate  string   `json:"promptTemplate"`
@@ -59,59 +61,35 @@ func (s *Server) handleCreateAutomation(w http.ResponseWriter, r *http.Request) 
 	req.BoardAction = strings.TrimSpace(req.BoardAction)
 	req.TokenScope = strings.TrimSpace(req.TokenScope)
 	req.CounterMetric = strings.TrimSpace(req.CounterMetric)
+	req.CounterScope = strings.TrimSpace(req.CounterScope)
+	req.SessionMode = strings.TrimSpace(req.SessionMode)
 	req.TargetAgentID = strings.TrimSpace(req.TargetAgentID)
 	req.FlowID = strings.TrimSpace(req.FlowID)
 	if strings.TrimSpace(req.PromptTemplate) == "" {
 		writeError(w, http.StatusBadRequest, "promptTemplate is required")
 		return
 	}
-	// Trigger-kind-specific requirements: board fires on card changes (no tag),
-	// token on spend crossings (no tag), tag (the default) needs a trigger tag.
+	// Pointer→value extraction for the interval fields, and the one check the shape
+	// validator cannot express: "you omitted a required interval" (an absent field
+	// reads as 0, which db.ValidateAutomationShape would otherwise report as a range
+	// error). Every other per-kind rule — boardOp/action, scope, threshold/interval
+	// bounds, tag presence, target presence — is enforced ONCE by ValidateAutomationShape
+	// below, so it cannot drift from the agent-tool path.
 	tokenThreshold := 0
-	counterInterval := 0
-	switch req.TriggerKind {
-	case db.TriggerBoard:
-		if !db.ValidBoardOp(req.BoardOp) {
-			writeError(w, http.StatusBadRequest, "invalid boardOp")
-			return
-		}
-		if !db.ValidBoardAction(req.BoardAction) {
-			writeError(w, http.StatusBadRequest, "invalid boardAction (spawn|archive)")
-			return
-		}
-	case db.TriggerToken:
-		if !db.ValidTokenScope(req.TokenScope) {
-			writeError(w, http.StatusBadRequest, "invalid tokenScope (session|workspace)")
-			return
-		}
+	if req.TriggerKind == db.TriggerToken {
 		if req.TokenThreshold == nil {
 			writeError(w, http.StatusBadRequest, "tokenThreshold is required for token automations")
 			return
 		}
-		if err := db.ValidateTokenThreshold(*req.TokenThreshold); err != nil {
-			writeError(w, http.StatusBadRequest, err.Error())
-			return
-		}
 		tokenThreshold = *req.TokenThreshold
-	case db.TriggerCounter:
-		if !db.ValidCounterMetric(req.CounterMetric) {
-			writeError(w, http.StatusBadRequest, "invalid counterMetric (message|tool)")
-			return
-		}
+	}
+	counterInterval := 0
+	if req.TriggerKind == db.TriggerCounter {
 		if req.CounterInterval == nil {
 			writeError(w, http.StatusBadRequest, "counterInterval is required for counter automations")
 			return
 		}
-		if err := db.ValidateCounterInterval(*req.CounterInterval); err != nil {
-			writeError(w, http.StatusBadRequest, err.Error())
-			return
-		}
 		counterInterval = *req.CounterInterval
-	default:
-		if req.TriggerTag == "" {
-			writeError(w, http.StatusBadRequest, "triggerTag is required for tag automations")
-			return
-		}
 	}
 	ctx := r.Context()
 	// A board automation whose action is "archive" performs bookkeeping with no
@@ -178,7 +156,9 @@ func (s *Server) handleCreateAutomation(w http.ResponseWriter, r *http.Request) 
 		TokenScope:      req.TokenScope,
 		TokenThreshold:  tokenThreshold,
 		CounterMetric:   req.CounterMetric,
+		CounterScope:    req.CounterScope,
 		CounterInterval: counterInterval,
+		SessionMode:     req.SessionMode,
 		TargetAgentID:   req.TargetAgentID,
 		FlowID:          req.FlowID,
 		PromptTemplate:  req.PromptTemplate,
@@ -219,23 +199,13 @@ func (s *Server) handleUpdateAutomation(w http.ResponseWriter, r *http.Request) 
 	// specifies it (a partial patch like spawnTags-only sends "" and must not flip
 	// a board automation back to a tag one). A full edit always sends the kind, so
 	// the board filters are re-applied together with it (empty = "any" / cleared).
+	// TriggerKind is applied only when the request specifies it (a partial patch
+	// like spawnTags-only sends "" and must not flip the kind). A full edit sends
+	// the kind, so the kind-specific filters are (re)applied together with it. All
+	// format/range/coherence checks on the MERGED result are enforced once by
+	// db.ValidateAutomationShape below — the same validator the create + agent-tool
+	// paths run, so the entry points cannot drift.
 	if k := strings.TrimSpace(req.TriggerKind); k != "" {
-		if k == db.TriggerBoard && !db.ValidBoardOp(strings.TrimSpace(req.BoardOp)) {
-			writeError(w, http.StatusBadRequest, "invalid boardOp")
-			return
-		}
-		if k == db.TriggerBoard && !db.ValidBoardAction(strings.TrimSpace(req.BoardAction)) {
-			writeError(w, http.StatusBadRequest, "invalid boardAction (spawn|archive)")
-			return
-		}
-		if k == db.TriggerToken && !db.ValidTokenScope(strings.TrimSpace(req.TokenScope)) {
-			writeError(w, http.StatusBadRequest, "invalid tokenScope (session|workspace)")
-			return
-		}
-		if k == db.TriggerCounter && !db.ValidCounterMetric(strings.TrimSpace(req.CounterMetric)) {
-			writeError(w, http.StatusBadRequest, "invalid counterMetric (message|tool)")
-			return
-		}
 		cur.TriggerKind = k
 		cur.BoardOp = strings.TrimSpace(req.BoardOp)
 		cur.BoardFromState = strings.TrimSpace(req.BoardFromState)
@@ -248,39 +218,16 @@ func (s *Server) handleUpdateAutomation(w http.ResponseWriter, r *http.Request) 
 		}
 		if k == db.TriggerCounter {
 			cur.CounterMetric = strings.TrimSpace(req.CounterMetric)
+			cur.CounterScope = strings.TrimSpace(req.CounterScope)
 		}
 	}
-	// TokenThreshold is a pointer field: absent in a partial patch means "leave as
-	// stored"; when present it is validated. A rule that ends up token-triggered
-	// must carry a valid threshold (guarded after the patches below).
+	// Interval fields are pointers: absent in a partial patch means "leave as
+	// stored"; ValidateAutomationShape validates whatever the merge ends up with.
 	if req.TokenThreshold != nil {
-		if err := db.ValidateTokenThreshold(*req.TokenThreshold); err != nil {
-			writeError(w, http.StatusBadRequest, err.Error())
-			return
-		}
 		cur.TokenThreshold = *req.TokenThreshold
 	}
-	if cur.TriggerKind == db.TriggerToken {
-		if err := db.ValidateTokenThreshold(cur.TokenThreshold); err != nil {
-			writeError(w, http.StatusBadRequest, err.Error())
-			return
-		}
-	}
-	// CounterInterval is a pointer field: absent in a partial patch means "leave as
-	// stored"; when present it is validated. A rule that ends up counter-triggered
-	// must carry a valid interval (guarded after the patches).
 	if req.CounterInterval != nil {
-		if err := db.ValidateCounterInterval(*req.CounterInterval); err != nil {
-			writeError(w, http.StatusBadRequest, err.Error())
-			return
-		}
 		cur.CounterInterval = *req.CounterInterval
-	}
-	if cur.TriggerKind == db.TriggerCounter {
-		if err := db.ValidateCounterInterval(cur.CounterInterval); err != nil {
-			writeError(w, http.StatusBadRequest, err.Error())
-			return
-		}
 	}
 	// Targeting: apply only when the request specifies a target, so partial
 	// updates (e.g. spawnTags-only) don't wipe it. Setting a flow switches the
@@ -303,9 +250,11 @@ func (s *Server) handleUpdateAutomation(w http.ResponseWriter, r *http.Request) 
 	if req.PromptTemplate != "" {
 		cur.PromptTemplate = req.PromptTemplate
 	}
-	// Name and spawnTags are always taken from the request (they may be cleared).
+	// Name, spawnTags and sessionMode are always taken from the request (they may be
+	// cleared; an empty sessionMode falls back to the per-kind default).
 	cur.Name = strings.TrimSpace(req.Name)
 	cur.SpawnTags = req.SpawnTags
+	cur.SessionMode = strings.TrimSpace(req.SessionMode)
 	if req.MaxIterations != nil {
 		if err := db.ValidateMaxIterations(*req.MaxIterations); err != nil {
 			writeError(w, http.StatusBadRequest, err.Error())

@@ -4,10 +4,8 @@ import (
 	"context"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/bilal-arikan/tionswarm/internal/db"
-	"github.com/bilal-arikan/tionswarm/internal/events"
 )
 
 // ActivityRecorded is the signal a message append delivers to the automation
@@ -48,8 +46,12 @@ func (e *AutomationEngine) OnActivityRecorded(ctx context.Context, sig ActivityR
 	}
 	// Self-amplification guard, resolved lazily and only when a counter rule is
 	// actually present: a counter automation delivers into its OWN persistent
-	// maintenance session (SessionKindAutomation), whose reply messages would push
-	// that same session across the next interval and re-fire the rule.
+	// maintenance session (SessionKindAutomation), whose reply messages/tool calls
+	// would push the watched counter across the next interval and re-fire the rule.
+	// Applied to BOTH scopes (unlike the token workspace scope, which counts its
+	// upkeep as real spend): a maintenance turn reliably adds messages+tools every
+	// fire, so letting it self-trigger would loop tightly. The upkeep still COUNTS
+	// toward the workspace total — it just does not itself cause a fire.
 	crossingIsMaint := false
 	maintResolved := false
 	isMaintSession := func() bool {
@@ -61,6 +63,10 @@ func (e *AutomationEngine) OnActivityRecorded(ctx context.Context, sig ActivityR
 		}
 		return crossingIsMaint
 	}
+	// Workspace-scope totals resolved once, lazily: only summed if some enabled
+	// counter automation actually watches the workspace scope (the token path's
+	// wsTotal pattern). -1 = not yet resolved.
+	wsMsg, wsTool := int64(-1), int64(-1)
 	for _, a := range autos {
 		if a.TriggerKind != db.TriggerCounter || a.CounterInterval <= 0 {
 			continue
@@ -69,18 +75,44 @@ func (e *AutomationEngine) OnActivityRecorded(ctx context.Context, sig ActivityR
 			continue
 		}
 		interval := int64(a.CounterInterval)
+		// delta is this append's contribution to the watched metric (same for both
+		// scopes); total is the post-append cumulative total at the watched scope.
 		var total, delta int64
-		switch a.CounterMetric {
+		metric := a.CounterMetric
+		switch metric {
 		case db.CounterMetricTool:
-			total, delta = int64(sig.ToolTotal), int64(sig.ToolDelta)
+			delta = int64(sig.ToolDelta)
 		default: // "" or CounterMetricMessage
-			total, delta = int64(sig.MessageTotal), int64(sig.MessageDelta)
+			delta = int64(sig.MessageDelta)
 		}
 		if delta <= 0 {
 			continue // this append did not move the watched metric
 		}
-		if crossedMultiple(total-delta, total, interval) {
-			e.fireCounter(ctx, a, sig.SessionID, total)
+		switch a.CounterScope {
+		case db.CounterScopeWorkspace:
+			if metric == db.CounterMetricTool {
+				if wsTool < 0 {
+					wsTool = e.db.WorkspaceCounterTotal(db.CounterMetricTool)
+				}
+				total = wsTool
+			} else {
+				if wsMsg < 0 {
+					wsMsg = e.db.WorkspaceCounterTotal(db.CounterMetricMessage)
+				}
+				total = wsMsg
+			}
+			if crossedMultiple(total-delta, total, interval) {
+				e.fireCounter(ctx, a, "", total) // no single crossing session for workspace scope
+			}
+		default: // "" or CounterScopeSession
+			if metric == db.CounterMetricTool {
+				total = int64(sig.ToolTotal)
+			} else {
+				total = int64(sig.MessageTotal)
+			}
+			if crossedMultiple(total-delta, total, interval) {
+				e.fireCounter(ctx, a, sig.SessionID, total)
+			}
 		}
 	}
 }
@@ -98,76 +130,37 @@ func (e *AutomationEngine) fireCounter(ctx context.Context, a db.Automation, ses
 		e.recordFailure(ctx, a, "rendered prompt is empty")
 		return
 	}
-
-	var (
-		firedSessionID string
-		driver         string
-		err            error
-	)
-	if a.FlowID != "" {
-		var res LaunchResult
-		res, err = e.rt.LaunchRun(ctx, RunSpec{
-			Trigger:    TriggerAutomationCounter,
-			Input:      prompt,
-			Autonomous: true,
-			FlowID:     a.FlowID,
-		})
-		firedSessionID, driver = res.SessionID, "flow"
-	} else {
-		// The launch brake is bypassed on the reuse path, so honor the workspace
-		// autonomy pause here before delivering an autonomous turn.
-		if e.rt.Paused() {
-			err = ErrAutonomyPaused
-		} else {
-			firedSessionID, err = e.rt.deliverAutomationTurn(ctx, a, prompt)
-			driver = "session"
-		}
-	}
+	firedSessionID, driver, err := e.dispatchFire(ctx, a, prompt, TriggerAutomationCounter, SpawnOptions{
+		Title:     "⚡ " + automationLabel(a),
+		CreatedBy: "automation:" + a.ID,
+		Tags:      a.SpawnTags, // counter rules do not self-loop; nil = no tag
+	})
 	if err != nil {
 		e.recordFailure(ctx, a, err.Error())
 		return
 	}
-	if err := e.db.RecordAutomationFire(ctx, a.ID, firedSessionID, ""); err != nil {
-		e.logger.Warn("automation: record fire failed", "automation", a.ID, "error", err)
-	}
 	metric := counterMetricLabel(a.CounterMetric)
-	suffix := " (counter·" + metric + ")"
+	scope := a.EffectiveCounterScope()
+	suffix := " (counter·" + scope + "·" + metric + ")"
 	if driver == "flow" {
-		suffix = " (counter·" + metric + "·akış)"
+		suffix = " (counter·" + scope + "·" + metric + "·akış)"
 	}
 	e.logger.Info("automation: fired (counter)",
-		"automation", a.ID, "metric", metric, "total", total, "interval", a.CounterInterval,
+		"automation", a.ID, "scope", scope, "metric", metric, "total", total, "interval", a.CounterInterval,
 		"session", firedSessionID, "driver", driver, "iteration", a.IterationCount+1)
-	e.rt.publish(events.Event{
-		Type:   events.TypeAutomation,
-		Level:  "success",
-		Title:  "⚡ Otomasyon tetiklendi" + suffix + " — " + automationLabel(a),
-		Body:   notifyLine(prompt, 120),
-		Target: map[string]string{"view": "executions", "sessionId": firedSessionID},
-	})
+	e.notifyFired(ctx, a, firedSessionID, "⚡", suffix, prompt)
 }
 
 // counterVars assembles the placeholder values for a counter automation's prompt.
 // There is no session result, so {{result}} is absent (nothing is appended).
 func (e *AutomationEngine) counterVars(a db.Automation, sessionID string, total int64) map[string]string {
-	now := time.Now()
-	maxIter := strconv.Itoa(a.MaxIterations)
-	if a.MaxIterations == 0 {
-		maxIter = "∞"
-	}
-	metric := counterMetricLabel(a.CounterMetric)
-	return map[string]string{
-		"count":         strconv.FormatInt(total, 10),
-		"metric":        metric,
-		"interval":      strconv.Itoa(a.CounterInterval),
-		"sessionId":     sessionID,
-		"iteration":     strconv.Itoa(a.IterationCount + 1),
-		"maxIterations": maxIter,
-		"automation":    automationLabel(a),
-		"date":          now.Format("2006-01-02"),
-		"time":          now.Format("15:04"),
-		"datetime":      now.Format("2006-01-02 15:04"),
-	}
+	v := commonVars(a)
+	v["count"] = strconv.FormatInt(total, 10)
+	v["metric"] = counterMetricLabel(a.CounterMetric)
+	v["scope"] = a.EffectiveCounterScope()
+	v["interval"] = strconv.Itoa(a.CounterInterval)
+	v["sessionId"] = sessionID // empty for workspace scope
+	return v
 }
 
 // counterMetricLabel normalizes an empty metric to the message default for

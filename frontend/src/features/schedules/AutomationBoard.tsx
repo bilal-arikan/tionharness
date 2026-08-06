@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Clock, LayoutGrid, Repeat, Zap } from 'lucide-react'
+import { Clock, Hash, LayoutGrid, Repeat, Zap } from 'lucide-react'
 import { api } from '@/api'
 import type {
   Agent,
@@ -249,6 +249,14 @@ export function AutomationBoard({ agents, focusId, onError }: Props) {
       addLabel: 'Yeni token otomasyonu',
       emptyLabel: 'Henüz token otomasyonu yok.',
     },
+    counter: {
+      title: 'Sayaç otomasyonları',
+      icon: Hash,
+      accent: COLUMN_ACCENT.counter,
+      description: 'Oturumun mesaj/tool sayısı aralığı geçince çalışır (token’dan kararlı ritim).',
+      addLabel: 'Yeni sayaç otomasyonu',
+      emptyLabel: 'Henüz sayaç otomasyonu yok.',
+    },
   }
 
   const renderAutomationLane = (kind: AutomationTriggerKind) => {
@@ -274,6 +282,7 @@ export function AutomationBoard({ agents, focusId, onError }: Props) {
             automation={a}
             isBoardKind={kind === 'board'}
             isTokenKind={kind === 'token'}
+            isCounterKind={kind === 'counter'}
             agents={agents}
             flows={flows}
             columns={columns}
@@ -363,6 +372,7 @@ export function AutomationBoard({ agents, focusId, onError }: Props) {
         {renderAutomationLane('tag')}
         {renderAutomationLane('board')}
         {renderAutomationLane('token')}
+        {renderAutomationLane('counter')}
       </div>
 
       {editor?.lane === 'schedules' && (

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { LayoutGrid, Repeat, X, Zap } from 'lucide-react'
+import { Hash, LayoutGrid, Repeat, X, Zap } from 'lucide-react'
 import { api } from '@/api'
 import type {
   Agent,
@@ -8,21 +8,32 @@ import type {
   BoardAction,
   BoardColumnDef,
   BoardOp,
+  CounterMetric,
+  CounterScope,
   Flow,
+  SessionMode,
   TokenScope,
 } from '@/types'
 import { AgentPicker } from '@/shared/components/agents/AgentPicker'
 import { toast } from '@/shared/components'
 import {
   COLUMN_ACCENT,
+  DEFAULT_COUNTER_INTERVAL,
   DEFAULT_MAX_ITERATIONS,
   DEFAULT_PROMPT,
   DEFAULT_TOKEN_THRESHOLD,
   MAX_ITERATIONS_HARD_CAP,
+  MIN_COUNTER_INTERVAL,
   MIN_TOKEN_THRESHOLD,
   STUCK_TEMPLATE,
 } from './automationMeta'
-import { BoardTriggerFields, PromptVarsField, TokenTriggerFields } from './AutomationFields'
+import {
+  BoardTriggerFields,
+  CounterTriggerFields,
+  PromptVarsField,
+  TokenTriggerFields,
+} from './AutomationFields'
+import { FieldError, useFieldErrors } from './useFieldErrors'
 import { FormModal } from './FormModal'
 import { Field, FlowPicker, TargetModeToggle, inputCls } from './pickers'
 import { localInputToUnix, unixToLocalInput } from './timeUtils'
@@ -56,6 +67,7 @@ export function AutomationModal({
 }: Props) {
   const isBoardKind = kind === 'board'
   const isTokenKind = kind === 'token'
+  const isCounterKind = kind === 'counter'
 
   const [name, setName] = useState(editing?.name ?? '')
   const [triggerTag, setTriggerTag] = useState(editing?.triggerTag ?? '')
@@ -69,9 +81,21 @@ export function AutomationModal({
   const [tokenThreshold, setTokenThreshold] = useState(
     editing?.tokenThreshold ?? DEFAULT_TOKEN_THRESHOLD,
   )
+  const [counterMetric, setCounterMetric] = useState<CounterMetric>(
+    editing?.counterMetric ?? 'message',
+  )
+  const [counterScope, setCounterScope] = useState<CounterScope>(editing?.counterScope ?? 'session')
+  const [counterInterval, setCounterInterval] = useState(
+    editing?.counterInterval ?? DEFAULT_COUNTER_INTERVAL,
+  )
   const [targetMode, setTargetMode] = useState<'agent' | 'flow'>(editing?.flowId ? 'flow' : 'agent')
   const [targetAgentId, setTargetAgentId] = useState(editing?.targetAgentId ?? '')
   const [flowId, setFlowId] = useState(editing?.flowId ?? '')
+  // Session strategy: default matches the backend's per-kind default so a new rule
+  // starts where the user expects (token/counter continue a thread; others spawn).
+  const [sessionMode, setSessionMode] = useState<SessionMode>(
+    editing?.sessionMode ?? (isTokenKind || isCounterKind ? 'continue' : 'spawn'),
+  )
   const [promptTemplate, setPromptTemplate] = useState(
     editing?.promptTemplate ?? DEFAULT_PROMPT[kind],
   )
@@ -83,26 +107,30 @@ export function AutomationModal({
   // spawnTagsOverride: set by a template (e.g. stuck repair must NOT re-tag the
   // fixer, or it would loop); null = backend default ([triggerTag]).
   const [spawnTagsOverride, setSpawnTagsOverride] = useState<string[] | null>(null)
-  // attempted flips true on the first submit try so inline field errors appear
-  // only after the user acts — mirrors the server's ValidateAutomationShape so the
-  // same violations are caught before the request instead of as a 400 toast.
-  const [attempted, setAttempted] = useState(false)
 
   const isArchive = isBoardKind && boardAction === 'archive'
   const missingTarget = !isArchive && (targetMode === 'flow' ? !flowId : !targetAgentId)
-  const tagError =
-    kind === 'tag' && !triggerTag.trim()
-      ? 'Tetikleyici etiket zorunlu (boş etiket hiç tetiklenmez)'
-      : ''
-  const tokenError =
-    isTokenKind && tokenThreshold < MIN_TOKEN_THRESHOLD
-      ? `Token eşiği en az ${MIN_TOKEN_THRESHOLD} olmalı`
-      : ''
-  const targetError = missingTarget
-    ? targetMode === 'flow'
-      ? 'Hedef akış zorunlu'
-      : 'Hedef ajan zorunlu'
-    : ''
+  // Required-field errors, mirroring db.ValidateAutomationShape. Record order is
+  // the blocking priority; useFieldErrors gates each behind a submit attempt.
+  const { markAttempted, firstError, errorFor } = useFieldErrors({
+    tag:
+      kind === 'tag' && !triggerTag.trim()
+        ? 'Tetikleyici etiket zorunlu (boş etiket hiç tetiklenmez)'
+        : '',
+    token:
+      isTokenKind && tokenThreshold < MIN_TOKEN_THRESHOLD
+        ? `Token eşiği en az ${MIN_TOKEN_THRESHOLD} olmalı`
+        : '',
+    counter:
+      isCounterKind && counterInterval < MIN_COUNTER_INTERVAL
+        ? `Sayaç aralığı en az ${MIN_COUNTER_INTERVAL} olmalı`
+        : '',
+    target: missingTarget
+      ? targetMode === 'flow'
+        ? 'Hedef akış zorunlu'
+        : 'Hedef ajan zorunlu'
+      : '',
+  })
 
   const applyStuckTemplate = () => {
     setName(STUCK_TEMPLATE.name)
@@ -114,7 +142,7 @@ export function AutomationModal({
   }
 
   const submit = async () => {
-    setAttempted(true)
+    markAttempted()
     // Prompt is required for every rule except an archive board rule (no LLM call).
     if (!isArchive && !promptTemplate.trim()) {
       onError('Prompt şablonu zorunlu')
@@ -122,9 +150,8 @@ export function AutomationModal({
     }
     // Shape guards, mirroring db.ValidateAutomationShape. The inline messages under
     // each field carry the detail; the toast is the catch-all for the first blocker.
-    const shapeError = tagError || tokenError || targetError
-    if (shapeError) {
-      onError(shapeError)
+    if (firstError) {
+      onError(firstError)
       return
     }
     const expUnix = localInputToUnix(expiresAt)
@@ -136,7 +163,9 @@ export function AutomationModal({
       ? { boardOp, boardFromState, boardToState, boardPriority, boardExclusive, boardAction }
       : isTokenKind
         ? { tokenScope, tokenThreshold }
-        : { triggerTag: triggerTag.trim() }
+        : isCounterKind
+          ? { counterMetric, counterScope, counterInterval }
+          : { triggerTag: triggerTag.trim() }
     // An archive rule carries no target; a spawn rule (and every non-board kind)
     // carries either an agent or a flow.
     const target = isArchive
@@ -151,6 +180,8 @@ export function AutomationModal({
       triggerKind: kind,
       ...trigger,
       ...target,
+      // Session mode only matters for an agent target; a flow always runs per-trigger.
+      ...(targetMode === 'agent' && !isArchive ? { sessionMode } : {}),
       promptTemplate: promptTemplate.trim(),
       // NOT `|| 0`: an empty or non-numeric field used to submit 0, which the
       // runtime reads as UNLIMITED — the very value this form forbids. Fall back
@@ -182,14 +213,22 @@ export function AutomationModal({
     ? 'pano otomasyonu'
     : isTokenKind
       ? 'token otomasyonu'
-      : 'etiket otomasyonu'
+      : isCounterKind
+        ? 'sayaç otomasyonu'
+        : 'etiket otomasyonu'
 
   return (
     <FormModal
       title={`${editing ? 'Düzenle' : 'Yeni'} — ${kindLabel}`}
-      icon={isBoardKind ? LayoutGrid : isTokenKind ? Zap : Repeat}
+      icon={isBoardKind ? LayoutGrid : isTokenKind ? Zap : isCounterKind ? Hash : Repeat}
       accent={
-        isBoardKind ? COLUMN_ACCENT.board : isTokenKind ? COLUMN_ACCENT.token : COLUMN_ACCENT.tag
+        isBoardKind
+          ? COLUMN_ACCENT.board
+          : isTokenKind
+            ? COLUMN_ACCENT.token
+            : isCounterKind
+              ? COLUMN_ACCENT.counter
+              : COLUMN_ACCENT.tag
       }
       submitLabel={editing ? 'Kaydet' : '+ Otomasyon'}
       onSubmit={submit}
@@ -235,20 +274,28 @@ export function AutomationModal({
               if (p.threshold !== undefined) setTokenThreshold(p.threshold)
             }}
           />
+        ) : isCounterKind ? (
+          <CounterTriggerFields
+            metric={counterMetric}
+            scope={counterScope}
+            interval={counterInterval}
+            onChange={(p) => {
+              if (p.metric !== undefined) setCounterMetric(p.metric)
+              if (p.scope !== undefined) setCounterScope(p.scope)
+              if (p.interval !== undefined) setCounterInterval(p.interval)
+            }}
+          />
         ) : (
           <input
             value={triggerTag}
             onChange={(e) => setTriggerTag(e.target.value)}
             placeholder="tetikleyici etiket (ör. loop)"
-            className={`${inputCls} font-mono ${attempted && tagError ? 'border-[var(--color-danger)]' : ''}`}
+            className={`${inputCls} font-mono ${errorFor('tag') ? 'border-[var(--color-danger)]' : ''}`}
           />
         )}
-        {attempted && tagError && (
-          <p className="mt-1 text-xs text-[var(--color-danger)]">{tagError}</p>
-        )}
-        {attempted && tokenError && (
-          <p className="mt-1 text-xs text-[var(--color-danger)]">{tokenError}</p>
-        )}
+        <FieldError message={errorFor('tag')} />
+        <FieldError message={errorFor('token')} />
+        <FieldError message={errorFor('counter')} />
       </Field>
 
       {isBoardKind && boardAction === 'archive' ? (
@@ -267,10 +314,43 @@ export function AutomationModal({
                 <AgentPicker agents={agents} value={targetAgentId} onChange={setTargetAgentId} />
               )}
             </div>
-            {attempted && targetError && (
-              <p className="mt-1 text-xs text-[var(--color-danger)]">{targetError}</p>
-            )}
+            <FieldError message={errorFor('target')} />
           </Field>
+
+          {targetMode === 'agent' && (
+            <Field
+              label="Oturum"
+              hint="Her tetiklemede yeni bir oturum mu açılsın, yoksa aynı kalıcı oturum sürdürülüp önceki konuşma okunsun mu?"
+            >
+              <div className="inline-flex overflow-hidden rounded border border-[var(--color-border)] text-xs">
+                {(
+                  [
+                    ['spawn', 'Yeni oturum'],
+                    ['continue', 'Aynı oturum · sürdür'],
+                  ] as [SessionMode, string][]
+                ).map(([m, label]) => (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => setSessionMode(m)}
+                    className={`px-2.5 py-1 transition ${
+                      sessionMode === m
+                        ? 'bg-[var(--color-accent)] text-white'
+                        : 'bg-[var(--color-bg)] text-[var(--color-text-dim)] hover:text-[var(--color-accent)]'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              {sessionMode === 'continue' && (
+                <p className="mt-1 text-[11px] text-[var(--color-text-dim)] opacity-80">
+                  Aynı oturum: ajan her tetikte önceki thread'i görür (cron benzeri kalıcı iş);
+                  etiket döngüsü tohumlanmaz.
+                </p>
+              )}
+            </Field>
+          )}
 
           <PromptVarsField kind={kind} value={promptTemplate} onChange={setPromptTemplate} />
         </>

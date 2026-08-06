@@ -83,6 +83,70 @@ func TestAutomationLifecycle(t *testing.T) {
 	}
 }
 
+// TestUpdateAutomationPersistsAllFields is the regression guard for the
+// field-by-field UpdateAutomation copy that silently dropped fields it forgot to
+// list: counter metric/scope/interval and sessionMode round-tripped through create
+// but were lost on update. UpdateAutomation now replaces the whole configuration,
+// so this test fails loudly if any config field stops persisting on update. It also
+// checks that the runtime bookkeeping (iteration count) is preserved across an edit.
+func TestUpdateAutomationPersistsAllFields(t *testing.T) {
+	d, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+
+	a, err := d.CreateAutomation(ctx, Automation{
+		TriggerKind:     TriggerCounter,
+		CounterMetric:   CounterMetricMessage,
+		CounterScope:    CounterScopeSession,
+		CounterInterval: 5,
+		SessionMode:     SessionModeContinue,
+		TargetAgentID:   "AGT1",
+		PromptTemplate:  "go",
+		Enabled:         true,
+		MaxIterations:   3,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A prior fire leaves bookkeeping the edit must preserve.
+	if err := d.RecordAutomationFire(ctx, a.ID, "SES1", ""); err != nil {
+		t.Fatal(err)
+	}
+
+	// Edit every config field the update paths can touch.
+	a.CounterMetric = CounterMetricTool
+	a.CounterScope = CounterScopeWorkspace
+	a.CounterInterval = 42
+	a.SessionMode = SessionModeSpawn
+	a.MaxIterations = 7
+	a.PromptTemplate = "changed"
+	if err := d.UpdateAutomation(ctx, a); err != nil {
+		t.Fatal(err)
+	}
+
+	got, _ := d.GetAutomation(ctx, a.ID)
+	switch {
+	case got.CounterMetric != CounterMetricTool:
+		t.Errorf("counterMetric not persisted: %q", got.CounterMetric)
+	case got.CounterScope != CounterScopeWorkspace:
+		t.Errorf("counterScope not persisted: %q", got.CounterScope)
+	case got.CounterInterval != 42:
+		t.Errorf("counterInterval not persisted: %d", got.CounterInterval)
+	case got.SessionMode != SessionModeSpawn:
+		t.Errorf("sessionMode not persisted: %q", got.SessionMode)
+	case got.MaxIterations != 7:
+		t.Errorf("maxIterations not persisted: %d", got.MaxIterations)
+	case got.PromptTemplate != "changed":
+		t.Errorf("promptTemplate not persisted: %q", got.PromptTemplate)
+	}
+	// Bookkeeping survives the config edit.
+	if got.IterationCount != 1 || got.LastSessionID != "SES1" {
+		t.Errorf("update clobbered bookkeeping: count=%d last=%q", got.IterationCount, got.LastSessionID)
+	}
+}
+
 func TestSetSessionTagsNormalizes(t *testing.T) {
 	d, err := Open(t.TempDir())
 	if err != nil {

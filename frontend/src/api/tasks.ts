@@ -89,7 +89,7 @@ export const taskApi = {
   listAutomations: () => req<Automation[]>('/api/automations'),
   createAutomation: (data: {
     name?: string
-    triggerKind?: 'tag' | 'board' | 'token'
+    triggerKind?: 'tag' | 'board' | 'token' | 'counter'
     triggerTag?: string
     boardOp?: 'any' | 'move' | 'create' | 'update' | 'delete'
     boardFromState?: string
@@ -99,6 +99,9 @@ export const taskApi = {
     boardAction?: 'spawn' | 'archive'
     tokenScope?: 'session' | 'workspace'
     tokenThreshold?: number
+    counterMetric?: 'message' | 'tool'
+    counterInterval?: number
+    sessionMode?: 'spawn' | 'continue'
     targetAgentId?: string
     flowId?: string
     promptTemplate: string
@@ -116,7 +119,7 @@ export const taskApi = {
     id: string,
     data: {
       name?: string
-      triggerKind?: 'tag' | 'board' | 'token'
+      triggerKind?: 'tag' | 'board' | 'token' | 'counter'
       triggerTag?: string
       boardOp?: 'any' | 'move' | 'create' | 'update' | 'delete'
       boardFromState?: string
@@ -126,6 +129,9 @@ export const taskApi = {
       boardAction?: 'spawn' | 'archive'
       tokenScope?: 'session' | 'workspace'
       tokenThreshold?: number
+      counterMetric?: 'message' | 'tool'
+      counterInterval?: number
+      sessionMode?: 'spawn' | 'continue'
       targetAgentId?: string
       flowId?: string
       promptTemplate?: string

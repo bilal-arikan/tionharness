@@ -10,10 +10,15 @@ func TestCounterVarsSubstitution(t *testing.T) {
 	e := &AutomationEngine{}
 	a := db.Automation{TriggerKind: db.TriggerCounter, CounterMetric: db.CounterMetricTool, CounterInterval: 10, MaxIterations: 5}
 	vars := e.counterVars(a, "SES7", 30)
-	got := renderAutomationPrompt("{{metric}} {{sessionId}} {{count}}/{{interval}} #{{iteration}}", vars)
-	want := "tool SES7 30/10 #1"
+	got := renderAutomationPrompt("{{metric}} {{scope}} {{sessionId}} {{count}}/{{interval}} #{{iteration}}", vars)
+	want := "tool session SES7 30/10 #1"
 	if got != want {
 		t.Fatalf("got %q want %q", got, want)
+	}
+	// Workspace scope renders {{scope}}=workspace with an empty sessionId.
+	aw := db.Automation{TriggerKind: db.TriggerCounter, CounterScope: db.CounterScopeWorkspace, CounterInterval: 150}
+	if v := renderAutomationPrompt("{{scope}}|{{sessionId}}", e.counterVars(aw, "", 300)); v != "workspace|" {
+		t.Fatalf("workspace vars render = %q", v)
 	}
 	// An empty metric renders as the "message" default.
 	am := db.Automation{TriggerKind: db.TriggerCounter, CounterInterval: 5}

@@ -350,8 +350,9 @@ biriktirir). Reuse yolu `LaunchRun`'un fren kapısını atladığından, otonom 
 
 ## 2.7 Sayaç (Mesaj/Tool) Tetikleyicili Otomasyonlar (2026-08-06)
 
-Aynı `Automation` entity'si, `TriggerKind="counter"` ile bir oturumun **aktivite
-sayacı** bir aralık katını geçince tetiklenir. Token tetikleyicisinin **kararlı
+Aynı `Automation` entity'si, `TriggerKind="counter"` ile bir **aktivite sayacı**
+(bir oturumun **veya** tüm workspace'in — `CounterScope`) bir aralık katını geçince
+tetiklenir. Token tetikleyicisinin **kararlı
 alternatifi**: token sayısı prompt-cache (`cacheRead`) yüzünden turda 200k–1M
 zıplayıp öngörülemez ateşlerken, sayaçlar yavaş ve öngörülebilir büyür — "her N
 mesajda/araç çağrısında bir özet/kontrol/bakım" gibi **tempo-bazlı** kurallar için
@@ -361,7 +362,8 @@ doğru primitif. Token bütçe bekçisi olarak kalır; tempo için `counter` ter
 | Alan | Anlam |
 |------|-------|
 | `CounterMetric` | İzlenen sayaç: `message` (vars., boş=`message`) = `Session.MessageCount` (her user/assistant mesajı); `tool` = `Session.ToolCallCount` (yürütülen araç çağrıları). `db.ValidCounterMetric`. |
-| `CounterInterval` | Sayaç **aralığı**: sayaç her bu kadarın katını geçince ateşler (ör. 10 → 10, 20, 30…). En az `db.MinCounterInterval` (2). **Oturum-kapsamlı** (geçişi yapan oturumun sayacı). |
+| `CounterScope` | İzlenen kapsam: `session` (vars., boş=`session`) = geçişi yapan oturumun kendi sayacı; `workspace` = tüm workspace'in **kümülatif** sayacı (her oturumun toplamı, `db.WorkspaceCounterTotal`). Gün-reset değil: her `interval` **yeni** aktivitede bir ateşler — çok-ajanlı iş temposu için doğru. `db.ValidCounterScope`. |
+| `CounterInterval` | Sayaç **aralığı**: izlenen sayaç her bu kadarın katını geçince ateşler (ör. 10 → 10, 20, 30…). En az `db.MinCounterInterval` (2). |
 
 `Session.ToolCallCount`, `AddMessage`'ta asistan mesajının `Steps` içindeki
 `kind=="tool"` adımları sayılarak beslenen monotonik bir sayaçtır (yükleme/rewind'de
@@ -376,30 +378,79 @@ Mesaj eklemenin tek choke-point'i `db.AddMessage`; sayaçları güncelledikten s
 **kilit serbest bırakılıp** `ActivitySignal{SessionID, MessageTotal/Delta,
 ToolTotal/Delta}` gönderir (`internal/db/store_activity.go`, `SetActivityHook`).
 Workspace manager bunu detached goroutine'de `autoEngine.OnActivityRecorded`'a
-bağlar. Board hook'un aynısı: append asla bloklanmaz. `OnActivityRecorded` metriğe
-göre `(total, delta)` seçip geçişi değerlendirir (`agent/automation_counter.go`).
+bağlar. Board hook'un aynısı: append asla bloklanmaz. `OnActivityRecorded` metrik +
+kapsama göre `(total, delta)` seçip geçişi değerlendirir (`agent/automation_counter.go`):
+- **Session kapsam:** `total` = sinyalin taşıdığı oturum toplamı (`sig.*Total`).
+- **Workspace kapsam:** `total` = `db.WorkspaceCounterTotal(metric)` (tüm oturumların
+  toplamı, token'ın `WorkspaceTokensToday` deseni — yalnız bir workspace-kuralı varsa
+  lazy hesaplanır). `prev = total − delta`.
 
 Ateşleme token ile aynı: **kalıcı bakım oturumuna** history-aware teslim
 (`deliverAutomationTurn`) veya `FlowID` varsa `LaunchRun`. **Self-amplification
-guard:** bakım oturumunun kendi mesajları sayacı ittiğinden `Kind=="automation"`
-oturumlara atfedilen geçişler atlanır (token session-kapsamıyla aynı).
+guard:** bakım oturumunun kendi mesaj/tool'ları sayacı ittiğinden `Kind=="automation"`
+oturumlara atfedilen geçişler **her iki kapsamda da** atlanır (token'da yalnız session
+guard'lıydı; sayaçta bakım turu her fire'da mesaj+tool eklediğinden workspace de guard'lı —
+upkeep toplama SAYILIR ama kendisi fire tetiklemez).
 
 ### Prompt değişkenleri (`counterVars`, `agent/automation_counter.go`)
-`{{count}}` (aralığı geçen toplam) · `{{interval}}` · `{{metric}}` · `{{sessionId}}` ·
-ortak `{{iteration}}`/`{{maxIterations}}`/`{{automation}}`/`{{date}}`/`{{time}}`/`{{datetime}}`.
+`{{count}}` (aralığı geçen toplam) · `{{interval}}` · `{{metric}}` · `{{scope}}` ·
+`{{sessionId}}` (workspace kapsamında boş) · ortak
+`{{iteration}}`/`{{maxIterations}}`/`{{automation}}`/`{{date}}`/`{{time}}`/`{{datetime}}`.
 `{{result}}` **yoktur**.
 
 ### API / Araç / Test
-- **API:** `automationReq`'e `counterMetric`/`counterInterval` (pointer). Create'te
-  metrik doğrulanır, interval zorunlu + `db.ValidateCounterInterval`. Update kısmi patch.
+- **API:** `automationReq`'e `counterMetric`/`counterScope`/`counterInterval` (pointer).
+  Create'te metrik+kapsam doğrulanır, interval zorunlu + `db.ValidateCounterInterval`.
+  Update kısmi patch.
 - **Araçlar:** `create/update/list_automation`'a aynı alanlar (tetik türü artık `counter` içerir).
-- **Test:** `db/activity_test.go` (ToolCallCount + hook deltaları + `countToolSteps`),
-  `db/automation_limits_test.go` (`ValidateCounterInterval`/`ValidCounterMetric`),
-  `agent/automation_counter_test.go` (`counterVars`).
-- **Not:** Workspace-kapsam (günlük mesaj/tool toplamı) henüz yok — sayaç oturum-kapsamlı;
-  gerekirse token'ın `WorkspaceTokensToday` benzeri bir gün-rollup ile eklenebilir.
-- **UI (bekliyor):** `AutomationBoard`/`AutomationModal` için `counter` şeridi + form
-  dalı henüz eklenmedi; kural REST/araçla oluşturulabilir.
+- **Test:** `db/activity_test.go` (ToolCallCount + hook deltaları + `countToolSteps` +
+  `WorkspaceCounterTotal`), `db/automation_limits_test.go`
+  (`ValidateCounterInterval`/`ValidCounterMetric`/`ValidCounterScope`),
+  `agent/automation_counter_test.go` (`counterVars` + workspace scope).
+- **UI (2026-08-06):** Otomasyon ekranına **5. şerit "Sayaç"** eklendi
+  (`AutomationBoard`, `COLUMN_ACCENT.counter`, `Hash` ikonu). `AutomationModal` sayaç
+  dalı + `CounterTriggerFields` (**kapsam** seçici session/workspace + metrik seçici
+  mesaj/tool + aralık girişi, min 2), `AutomationCard` rozeti
+  (`# oturum|workspace · her N mesaj/tool`), `task.ts` tipine
+  `counterMetric`/`counterScope`/`counterInterval`, `automationMeta` sabitleri
+  (`COUNTER_METRICS`/`COUNTER_SCOPES`/`COUNTER_PROMPT_VARS`/`MIN_COUNTER_INTERVAL`/`DEFAULT_COUNTER_INTERVAL`).
+
+### Ortak kod (refactor 2026-08-06)
+Dört tür büyüdükçe biriken kopya-kod tek kaynağa toplandı (davranış değişmedi, testler koruyor):
+- **`deliverContinuity(a, prompt, trigger)`** (`agent/automation.go`) — token+counter fire'ın
+  birebir aynı olan flow/session sürücü seçimi (+pause-guard) tek yerde. `fireToken`/`fireCounter`
+  ~30→~8 satır.
+- **`notifyFired(a, sessionID, icon, suffix, prompt)`** — dört fire yolunun (tag/board/token/counter)
+  `RecordAutomationFire` + success event `publish` boilerplate'i ortak; her tür yalnız ikon+suffix verir.
+- **`commonVars(a)`** — dört `*Vars` fonksiyonunun ortak kuyruğu (`iteration`/`maxIterations`/
+  `automation`/`date`/`time`/`datetime`, "∞" mantığı dahil) tek yerde; her tür kendi anahtarını ekler.
+- **`Automation.EffectiveTokenScope()` / `EffectiveCounterScope()`** (`db/models_automation.go`) —
+  `scope=="" → session` normalizasyonu accessor'a; dağınık fallback'ler kaldırıldı.
+- **Doğrulama tekilleştirme** — **dört yazma yolundaki** (REST + ajan aracı × create + update)
+  tür-bazlı `Valid*` tekrarları kaldırıldı; format/aralık/hedef doğrulaması artık **yalnız**
+  `db.ValidateAutomationShape`'te (yollar ayrışamaz). Create handler'larında kalan tek özel
+  kontrol: "zorunlu interval atlandı" (pointer nil). Update'te yalnız alan-atama + son shape freni.
+- **Not:** frontend `TokenTriggerFields` vs `CounterTriggerFields` **bilerek ayrı** bırakıldı —
+  counter'a `metric` alanı eklenince şekiller ayrıştı; zorlama ortak bileşen daha karmaşık olurdu.
+
+### Oturum modu (`SessionMode`, 2026-08-06)
+Ajan-hedefli otomasyonlar artık **her tetikte yeni oturum mu / aynı kalıcı oturumu mu** kullanacaklarını
+seçebiliyor. Eskiden bu tür-başına sabitti (tag/board = yeni spawn, token/counter = kalıcı bakım thread'i);
+artık kullanıcı seçer, varsayılan eski davranışı korur.
+- **Alan:** `Automation.SessionMode` ∈ `spawn` | `continue` | `""`. `EffectiveSessionMode()` boşu
+  tür-başına çözer (token/counter → `continue`, diğerleri → `spawn`) → eski kayıtlar aynı çalışır.
+  `ValidSessionMode` + `ValidateAutomationShape` değeri doğrular.
+- **Dispatch (`dispatchFire`, `agent/automation.go`):** flow-backed → her zaman `LaunchRun` (flow kendi
+  transcript'i); `continue` → `deliverAutomationTurn` (kalıcı per-otomasyon thread, **geçmiş-farkında**,
+  pause guard burada); `spawn` → `LaunchRun` + taze oturum + `SpawnOptions`. Dört fire yolu da bunu kullanır.
+- **`continue` semantiği:** ajan her tetikte önceki thread'i görür (cron benzeri). Spawn'a özel şeyler
+  (parent-tag temizliği, tag self-loop tohumu) `continue`'da **yok sayılır** — tıpkı token/counter'da olduğu gibi.
+  Yalnız ajan-hedefli için anlamlı; flow'da yok sayılır.
+- **"Geçmişi oku" ayrı seçenek DEĞİL:** `continue` zaten geçmiş-farkında; ayrı bir toggle gereksiz olurdu.
+- **UI:** `AutomationModal`'da ajan hedefi seçiliyken "Oturum: Yeni / Aynı·sürdür" seçici; `AutomationCard`'da
+  `🧵 sürdür` rozeti. `create/update_automation` şeması + REST `automationReq` alanı taşır.
+- **Test:** `db/automation_limits_test.go` → `TestValidSessionMode` + `TestEffectiveSessionMode` +
+  shape'te geçerli/geçersiz mode.
 
 ## 3. Otomatik Etiketleme (olay → etiket)
 

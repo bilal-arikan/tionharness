@@ -108,6 +108,58 @@ func TestValidCounterMetric(t *testing.T) {
 	}
 }
 
+// TestValidCounterScope pins the accepted scope set (empty defaults to session).
+func TestValidCounterScope(t *testing.T) {
+	for _, s := range []string{"", CounterScopeSession, CounterScopeWorkspace} {
+		if !ValidCounterScope(s) {
+			t.Errorf("scope %q must be valid", s)
+		}
+	}
+	for _, s := range []string{"daily", "agent", "bogus"} {
+		if ValidCounterScope(s) {
+			t.Errorf("scope %q must be invalid", s)
+		}
+	}
+}
+
+// TestValidSessionMode pins the accepted mode set (empty resolves per kind).
+func TestValidSessionMode(t *testing.T) {
+	for _, m := range []string{"", SessionModeSpawn, SessionModeContinue} {
+		if !ValidSessionMode(m) {
+			t.Errorf("mode %q must be valid", m)
+		}
+	}
+	for _, m := range []string{"new", "reuse", "bogus"} {
+		if ValidSessionMode(m) {
+			t.Errorf("mode %q must be invalid", m)
+		}
+	}
+}
+
+// TestEffectiveSessionMode locks the per-kind default resolution: an explicit mode
+// always wins; empty falls back to continue for token/counter (the maintenance
+// thread) and spawn for everything else — preserving pre-field behavior.
+func TestEffectiveSessionMode(t *testing.T) {
+	cases := []struct {
+		kind, stored, want string
+	}{
+		{TriggerTag, "", SessionModeSpawn},
+		{TriggerBoard, "", SessionModeSpawn},
+		{TriggerToken, "", SessionModeContinue},
+		{TriggerCounter, "", SessionModeContinue},
+		{"", "", SessionModeSpawn},                             // legacy empty kind → tag → spawn
+		{TriggerToken, SessionModeSpawn, SessionModeSpawn},     // explicit overrides default
+		{TriggerTag, SessionModeContinue, SessionModeContinue}, // explicit overrides default
+		{TriggerCounter, SessionModeSpawn, SessionModeSpawn},   // explicit overrides default
+	}
+	for _, c := range cases {
+		got := Automation{TriggerKind: c.kind, SessionMode: c.stored}.EffectiveSessionMode()
+		if got != c.want {
+			t.Errorf("kind=%q stored=%q → %q, want %q", c.kind, c.stored, got, c.want)
+		}
+	}
+}
+
 // TestValidTokenScope pins the accepted scope set (empty defaults to session).
 func TestValidTokenScope(t *testing.T) {
 	for _, s := range []string{"", TokenScopeSession, TokenScopeWorkspace} {
@@ -140,6 +192,9 @@ func TestValidateAutomationShape(t *testing.T) {
 		{TriggerKind: TriggerToken, TokenScope: TokenScopeWorkspace, TokenThreshold: 100_000, FlowID: "FL1"},
 		{TriggerKind: TriggerCounter, CounterInterval: MinCounterInterval, TargetAgentID: agent},
 		{TriggerKind: TriggerCounter, CounterMetric: CounterMetricTool, CounterInterval: 10, FlowID: "FL1"},
+		{TriggerKind: TriggerCounter, CounterMetric: CounterMetricTool, CounterScope: CounterScopeWorkspace, CounterInterval: 150, TargetAgentID: agent},
+		{TriggerKind: TriggerTag, TriggerTag: "loop", SessionMode: SessionModeContinue, TargetAgentID: agent},
+		{TriggerKind: TriggerToken, TokenThreshold: MinTokenThreshold, SessionMode: SessionModeSpawn, TargetAgentID: agent},
 	}
 	for i, a := range valid {
 		if err := ValidateAutomationShape(a); err != nil {
@@ -162,6 +217,8 @@ func TestValidateAutomationShape(t *testing.T) {
 		{"counter without interval", Automation{TriggerKind: TriggerCounter, TargetAgentID: agent}},
 		{"counter bad metric", Automation{TriggerKind: TriggerCounter, CounterMetric: "step", CounterInterval: 10, TargetAgentID: agent}},
 		{"counter valid interval but no target", Automation{TriggerKind: TriggerCounter, CounterInterval: 10}},
+		{"counter bad scope", Automation{TriggerKind: TriggerCounter, CounterScope: "daily", CounterInterval: 10, TargetAgentID: agent}},
+		{"bad sessionMode", Automation{TriggerKind: TriggerTag, TriggerTag: "loop", SessionMode: "reuse", TargetAgentID: agent}},
 	}
 	for _, tc := range rejected {
 		if err := ValidateAutomationShape(tc.a); err == nil {
