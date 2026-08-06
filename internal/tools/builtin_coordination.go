@@ -336,7 +336,11 @@ func (StopWorkerTool) Call(ctx context.Context, input json.RawMessage) (string, 
 // ---- list_workers ----
 
 type listWorkersInput struct {
-	Scope string `json:"scope"`
+	Scope  string `json:"scope"`
+	State  string `json:"state"`
+	Sort   string `json:"sort"`
+	Limit  int    `json:"limit"`
+	Offset int    `json:"offset"`
 }
 
 // ListWorkersTool reports this coordinator's workers and their status (Claude
@@ -374,33 +378,24 @@ func (ListWorkersTool) Call(ctx context.Context, input json.RawMessage) (string,
 	if f == nil || f.ListRows == nil {
 		return "", fmt.Errorf("list_workers is only available in a coordinator session")
 	}
-	scope := "children"
-	// The schema allows an empty body, so a missing/blank input is the default
-	// scope rather than a parse error.
+	// The schema allows an empty body, so a missing/blank input means defaults
+	// rather than a parse error. Parse ONCE into a single struct — the previous
+	// code unmarshaled the same input twice (Scope-only struct, then a separate
+	// State/Sort/Limit/Offset struct).
+	var in listWorkersInput
 	if len(strings.TrimSpace(string(input))) > 0 && string(input) != "{}" {
-		in, err := parseInput[listWorkersInput]("list_workers", input)
-		if err != nil {
-			return "", err
+		if err := json.Unmarshal(input, &in); err != nil {
+			return "", argErr(err)
 		}
-		if s := strings.TrimSpace(in.Scope); s != "" {
-			scope = s
-		}
+	}
+	scope := strings.TrimSpace(in.Scope)
+	if scope == "" {
+		scope = "children"
 	}
 	switch scope {
 	case "children", "subtree":
 	default:
 		return "", fmt.Errorf("scope must be \"children\" or \"subtree\", got %q", scope)
-	}
-	var in struct {
-		State  string `json:"state"`
-		Sort   string `json:"sort"`
-		Limit  int    `json:"limit"`
-		Offset int    `json:"offset"`
-	}
-	if len(input) > 0 && string(input) != "{}" {
-		if err := json.Unmarshal(input, &in); err != nil {
-			return "", argErr(err)
-		}
 	}
 	limit, offset := PageArgs(in.Limit, in.Offset)
 
