@@ -33,6 +33,13 @@ context'i tüketmeden sayfalayabilir (`hasMore` → `offset += limit`).
 - **Bug fix:** `list_workers` sıralaması filtrelenmemiş `rows` üzerinden karşılaştırıcı
   kuruyordu — filtre aktifken (örn. `state=running&sort=name_asc`) yanlış elemanlar
   karşılaştırılıyordu. Artık `SortByField(matches, …)` + regresyon testi.
+- **Ek düzeltme (review sonrası):** (1) API listing'lerinde `sort` verilmezse
+  artık araç katmanıyla aynı varsayılan (`updated` desc) dönüyor — aynı müşteri hem
+  API'den hem tool'dan sayfalarsa sıralama tutarlı kalıyor (`internal/api/listparams.go`).
+  (2) `list_workers` girdiyi iki kez parse ediyordu (önce Scope-only struct, sonra
+  ayrı struct); tek struct + tek `json.Unmarshal`'a indirildi
+  (`internal/tools/builtin_coordination.go`) — boş/whitespace girdi artık tutarlı
+  şekilde varsayılan demek.
 
 **Doğrulama:** `go build` ✅, `go vet` ✅, `go test ./... -count=1` ✅ (yeni:
 `tools/listpage_test.go` kontrat birim testleri, `tools/builtin_list_test.go` 7 tool
