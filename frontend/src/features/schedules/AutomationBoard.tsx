@@ -9,7 +9,7 @@ import type {
   Flow,
   Schedule,
 } from '@/types'
-import { PaneHeader } from '@/shared/components'
+import { PaneHeader, toast } from '@/shared/components'
 import { AutomationCard } from './AutomationCard'
 import { AutomationModal } from './AutomationModal'
 import { BoardColumn } from './BoardColumn'
@@ -157,6 +157,7 @@ export function AutomationBoard({ agents, focusId, onError }: Props) {
     setSchedules((prev) => prev.filter((x) => x.id !== s.id))
     try {
       await api.deleteSchedule(s.id)
+      toast.success('Zamanlama silindi')
     } catch (e) {
       onError((e as Error).message)
       reloadSchedules()
@@ -191,6 +192,7 @@ export function AutomationBoard({ agents, focusId, onError }: Props) {
     setAutomations((prev) => prev.filter((x) => x.id !== a.id))
     try {
       await api.deleteAutomation(a.id)
+      toast.success('Otomasyon silindi')
     } catch (e) {
       onError((e as Error).message)
       reloadAutomations()

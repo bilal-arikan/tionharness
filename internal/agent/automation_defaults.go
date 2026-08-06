@@ -122,7 +122,17 @@ func EnsureDefaultBoardAutomations(ctx context.Context, database *db.DB, storeDi
 		if present[dba.Seed] || recorded[dba.Seed] {
 			continue
 		}
-		if _, err := database.CreateAutomation(ctx, dba.Make(agentID)); err != nil {
+		auto := dba.Make(agentID)
+		// Same shape contract the create/update paths enforce (db.ValidateAutomationShape).
+		// The spawn seed intentionally carries an EMPTY target when the workspace has
+		// no agent yet: that fails the shape check, so we skip WITHOUT recording it in
+		// the ledger — the next startup (once an agent exists) backfills it. Any other
+		// shape failure means a malformed built-in seed (caught by the unit test); we
+		// likewise skip it rather than persist an unfireable rule.
+		if err := db.ValidateAutomationShape(auto); err != nil {
+			continue
+		}
+		if _, err := database.CreateAutomation(ctx, auto); err != nil {
 			return err
 		}
 		ledger.Seeded = append(ledger.Seeded, dba.Seed)

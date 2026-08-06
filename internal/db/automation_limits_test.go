@@ -73,6 +73,41 @@ func TestValidateTokenThreshold(t *testing.T) {
 	}
 }
 
+// TestValidateCounterInterval locks the floor for a counter automation's interval.
+// An interval of 1 would fire on nearly every append, so the same validator guards
+// both the REST handler and the agent tool.
+func TestValidateCounterInterval(t *testing.T) {
+	for _, v := range []int{0, 1, MinCounterInterval - 1, -5} {
+		err := ValidateCounterInterval(v)
+		if err == nil {
+			t.Errorf("counterInterval=%d must be rejected (below floor %d)", v, MinCounterInterval)
+			continue
+		}
+		if !errors.Is(err, ErrCounterIntervalRange) {
+			t.Errorf("counterInterval=%d must wrap ErrCounterIntervalRange, got %v", v, err)
+		}
+	}
+	for _, v := range []int{MinCounterInterval, 10, 100} {
+		if err := ValidateCounterInterval(v); err != nil {
+			t.Errorf("counterInterval=%d must be accepted, got %v", v, err)
+		}
+	}
+}
+
+// TestValidCounterMetric pins the accepted metric set (empty defaults to message).
+func TestValidCounterMetric(t *testing.T) {
+	for _, m := range []string{"", CounterMetricMessage, CounterMetricTool} {
+		if !ValidCounterMetric(m) {
+			t.Errorf("metric %q must be valid", m)
+		}
+	}
+	for _, m := range []string{"messages", "step", "bogus"} {
+		if ValidCounterMetric(m) {
+			t.Errorf("metric %q must be invalid", m)
+		}
+	}
+}
+
 // TestValidTokenScope pins the accepted scope set (empty defaults to session).
 func TestValidTokenScope(t *testing.T) {
 	for _, s := range []string{"", TokenScopeSession, TokenScopeWorkspace} {
@@ -83,6 +118,54 @@ func TestValidTokenScope(t *testing.T) {
 	for _, s := range []string{"daily", "agent", "bogus"} {
 		if ValidTokenScope(s) {
 			t.Errorf("scope %q must be invalid", s)
+		}
+	}
+}
+
+// TestValidateAutomationShape locks the create/update-shared contract. The bug it
+// closes: update_automation re-validated only the token threshold, so an agent
+// could switch a rule's kind (or clear a field) into a state create rejects — a
+// tag rule with no triggerTag (silently never fires) or a spawn rule with no
+// target (fails only at fire time). Both write paths now run this.
+func TestValidateAutomationShape(t *testing.T) {
+	agent := "AGT1"
+
+	valid := []Automation{
+		{TriggerKind: TriggerTag, TriggerTag: "loop", TargetAgentID: agent},
+		{TriggerKind: "", TriggerTag: "loop", FlowID: "FL1"},               // "" == tag
+		{TriggerKind: TriggerBoard, BoardAction: BoardActionArchive},       // archive needs no target
+		{TriggerKind: TriggerBoard, BoardAction: "", TargetAgentID: agent}, // "" == spawn
+		{TriggerKind: TriggerBoard, BoardAction: BoardActionSpawn, FlowID: "FL1"},
+		{TriggerKind: TriggerToken, TokenThreshold: MinTokenThreshold, TargetAgentID: agent},
+		{TriggerKind: TriggerToken, TokenScope: TokenScopeWorkspace, TokenThreshold: 100_000, FlowID: "FL1"},
+		{TriggerKind: TriggerCounter, CounterInterval: MinCounterInterval, TargetAgentID: agent},
+		{TriggerKind: TriggerCounter, CounterMetric: CounterMetricTool, CounterInterval: 10, FlowID: "FL1"},
+	}
+	for i, a := range valid {
+		if err := ValidateAutomationShape(a); err != nil {
+			t.Errorf("valid[%d] must pass, got %v", i, err)
+		}
+	}
+
+	rejected := []struct {
+		name string
+		a    Automation
+	}{
+		{"tag without triggerTag never fires", Automation{TriggerKind: TriggerTag, TargetAgentID: agent}},
+		{"legacy empty-kind without triggerTag", Automation{TriggerKind: "", TargetAgentID: agent}},
+		{"tag with tag but no target", Automation{TriggerKind: TriggerTag, TriggerTag: "loop"}},
+		{"board spawn without target", Automation{TriggerKind: TriggerBoard, BoardAction: BoardActionSpawn}},
+		{"board bad action", Automation{TriggerKind: TriggerBoard, BoardAction: "bogus", TargetAgentID: agent}},
+		{"token without threshold", Automation{TriggerKind: TriggerToken, TargetAgentID: agent}},
+		{"token bad scope", Automation{TriggerKind: TriggerToken, TokenScope: "daily", TokenThreshold: 100_000, TargetAgentID: agent}},
+		{"token valid threshold but no target", Automation{TriggerKind: TriggerToken, TokenThreshold: 100_000}},
+		{"counter without interval", Automation{TriggerKind: TriggerCounter, TargetAgentID: agent}},
+		{"counter bad metric", Automation{TriggerKind: TriggerCounter, CounterMetric: "step", CounterInterval: 10, TargetAgentID: agent}},
+		{"counter valid interval but no target", Automation{TriggerKind: TriggerCounter, CounterInterval: 10}},
+	}
+	for _, tc := range rejected {
+		if err := ValidateAutomationShape(tc.a); err == nil {
+			t.Errorf("%q must be rejected", tc.name)
 		}
 	}
 }

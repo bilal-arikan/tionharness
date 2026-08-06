@@ -12,6 +12,7 @@ import type {
   TokenScope,
 } from '@/types'
 import { AgentPicker } from '@/shared/components/agents/AgentPicker'
+import { toast } from '@/shared/components'
 import {
   COLUMN_ACCENT,
   DEFAULT_MAX_ITERATIONS,
@@ -82,6 +83,26 @@ export function AutomationModal({
   // spawnTagsOverride: set by a template (e.g. stuck repair must NOT re-tag the
   // fixer, or it would loop); null = backend default ([triggerTag]).
   const [spawnTagsOverride, setSpawnTagsOverride] = useState<string[] | null>(null)
+  // attempted flips true on the first submit try so inline field errors appear
+  // only after the user acts — mirrors the server's ValidateAutomationShape so the
+  // same violations are caught before the request instead of as a 400 toast.
+  const [attempted, setAttempted] = useState(false)
+
+  const isArchive = isBoardKind && boardAction === 'archive'
+  const missingTarget = !isArchive && (targetMode === 'flow' ? !flowId : !targetAgentId)
+  const tagError =
+    kind === 'tag' && !triggerTag.trim()
+      ? 'Tetikleyici etiket zorunlu (boş etiket hiç tetiklenmez)'
+      : ''
+  const tokenError =
+    isTokenKind && tokenThreshold < MIN_TOKEN_THRESHOLD
+      ? `Token eşiği en az ${MIN_TOKEN_THRESHOLD} olmalı`
+      : ''
+  const targetError = missingTarget
+    ? targetMode === 'flow'
+      ? 'Hedef akış zorunlu'
+      : 'Hedef ajan zorunlu'
+    : ''
 
   const applyStuckTemplate = () => {
     setName(STUCK_TEMPLATE.name)
@@ -93,23 +114,17 @@ export function AutomationModal({
   }
 
   const submit = async () => {
-    if (!promptTemplate.trim()) {
+    setAttempted(true)
+    // Prompt is required for every rule except an archive board rule (no LLM call).
+    if (!isArchive && !promptTemplate.trim()) {
       onError('Prompt şablonu zorunlu')
       return
     }
-    if (kind === 'tag' && !triggerTag.trim()) {
-      onError('Tetikleyici etiket zorunlu')
-      return
-    }
-    if (isTokenKind && tokenThreshold < MIN_TOKEN_THRESHOLD) {
-      onError(`Token eşiği en az ${MIN_TOKEN_THRESHOLD} olmalı`)
-      return
-    }
-    // An 'archive' board automation performs bookkeeping with no LLM call, so it
-    // needs no target agent/flow. Every other automation must have one.
-    const isArchive = isBoardKind && boardAction === 'archive'
-    if (!isArchive && (targetMode === 'flow' ? !flowId : !targetAgentId)) {
-      onError(targetMode === 'flow' ? 'Hedef akış zorunlu' : 'Hedef ajan zorunlu')
+    // Shape guards, mirroring db.ValidateAutomationShape. The inline messages under
+    // each field carry the detail; the toast is the catch-all for the first blocker.
+    const shapeError = tagError || tokenError || targetError
+    if (shapeError) {
+      onError(shapeError)
       return
     }
     const expUnix = localInputToUnix(expiresAt)
@@ -156,6 +171,7 @@ export function AutomationModal({
         })
         onSaved(created, true)
       }
+      toast.success(editing ? 'Otomasyon güncellendi' : 'Otomasyon oluşturuldu')
       onClose()
     } catch (e) {
       onError((e as Error).message)
@@ -224,8 +240,14 @@ export function AutomationModal({
             value={triggerTag}
             onChange={(e) => setTriggerTag(e.target.value)}
             placeholder="tetikleyici etiket (ör. loop)"
-            className={`${inputCls} font-mono`}
+            className={`${inputCls} font-mono ${attempted && tagError ? 'border-[var(--color-danger)]' : ''}`}
           />
+        )}
+        {attempted && tagError && (
+          <p className="mt-1 text-xs text-[var(--color-danger)]">{tagError}</p>
+        )}
+        {attempted && tokenError && (
+          <p className="mt-1 text-xs text-[var(--color-danger)]">{tokenError}</p>
         )}
       </Field>
 
@@ -245,6 +267,9 @@ export function AutomationModal({
                 <AgentPicker agents={agents} value={targetAgentId} onChange={setTargetAgentId} />
               )}
             </div>
+            {attempted && targetError && (
+              <p className="mt-1 text-xs text-[var(--color-danger)]">{targetError}</p>
+            )}
           </Field>
 
           <PromptVarsField kind={kind} value={promptTemplate} onChange={setPromptTemplate} />

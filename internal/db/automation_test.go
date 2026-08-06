@@ -146,6 +146,52 @@ func TestAutomationFlowIDRoundTrip(t *testing.T) {
 	}
 }
 
+// TestAutomationTokenThresholdUpdate is a regression guard for a bug where
+// UpdateAutomation copied every field EXCEPT TokenScope/TokenThreshold, so
+// update_automation reported success while silently keeping the old threshold.
+func TestAutomationTokenThresholdUpdate(t *testing.T) {
+	d, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+
+	a, err := d.CreateAutomation(ctx, Automation{
+		TriggerKind:    TriggerToken,
+		TokenScope:     TokenScopeSession,
+		TokenThreshold: 120000,
+		TargetAgentID:  "AGT1",
+		PromptTemplate: "go: {{tokens}}",
+		Enabled:        true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Double the threshold and switch scope — both must persist.
+	a.TokenThreshold = 240000
+	a.TokenScope = TokenScopeWorkspace
+	if err := d.UpdateAutomation(ctx, a); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := d.GetAutomation(ctx, a.ID)
+	if got.TokenThreshold != 240000 {
+		t.Fatalf("update did not persist TokenThreshold: got %d, want 240000", got.TokenThreshold)
+	}
+	if got.TokenScope != TokenScopeWorkspace {
+		t.Fatalf("update did not persist TokenScope: got %q, want %q", got.TokenScope, TokenScopeWorkspace)
+	}
+
+	// Survives a reload from disk.
+	d2, err := Open(d.root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := d2.GetAutomation(ctx, a.ID); got.TokenThreshold != 240000 {
+		t.Fatalf("TokenThreshold not persisted to disk: %d", got.TokenThreshold)
+	}
+}
+
 // TestScheduleFlowIDRoundTrip verifies a flow-backed schedule persists FlowID on
 // create and keeps it through an update.
 func TestScheduleFlowIDRoundTrip(t *testing.T) {

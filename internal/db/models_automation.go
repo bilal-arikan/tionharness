@@ -5,10 +5,33 @@ package db
 // change. TriggerKind == "" is treated as TriggerTag for backward compatibility
 // with automation files written before board triggers existed.
 const (
-	TriggerTag   = "tag"   // fire when a session carrying TriggerTag ends a turn
-	TriggerBoard = "board" // fire when a board card changes (see BoardOp)
-	TriggerToken = "token" // fire when cumulative token spend crosses a TokenThreshold multiple
+	TriggerTag     = "tag"     // fire when a session carrying TriggerTag ends a turn
+	TriggerBoard   = "board"   // fire when a board card changes (see BoardOp)
+	TriggerToken   = "token"   // fire when cumulative token spend crosses a TokenThreshold multiple
+	TriggerCounter = "counter" // fire when a session activity counter crosses a CounterInterval multiple
 )
+
+// Counter automation metrics. A counter-triggered automation watches one of a
+// session's monotonic activity counters cross an interval multiple. Unlike the
+// token trigger (which counts cache-inflated spend and so fires unpredictably), a
+// counter is a stable, intuitive cadence: message count grows ~1-2 per exchange,
+// tool count grows by the tools a turn actually ran. CounterMetric == "" is
+// treated as CounterMetricMessage.
+const (
+	CounterMetricMessage = "message" // Session.MessageCount (every user/assistant message)
+	CounterMetricTool    = "tool"    // Session.ToolCallCount (executed tool calls)
+)
+
+// ValidCounterMetric reports whether metric is empty (defaults to message) or a
+// known counter metric.
+func ValidCounterMetric(metric string) bool {
+	switch metric {
+	case "", CounterMetricMessage, CounterMetricTool:
+		return true
+	default:
+		return false
+	}
+}
 
 // Token automation scopes. A token-triggered automation watches either a single
 // session's lifetime token spend (TokenScopeSession, the default) or the whole
@@ -111,6 +134,18 @@ type Automation struct {
 	// needed. "Tokens" here means input+output+cacheRead+cacheWrite. Must be >=
 	// MinTokenThreshold. Ignored unless TriggerKind == TriggerToken.
 	TokenThreshold int `json:"tokenThreshold,omitempty"`
+	// CounterMetric selects which session activity counter a counter automation
+	// watches: CounterMetricMessage (default, "" is treated the same) or
+	// CounterMetricTool. Ignored unless TriggerKind == TriggerCounter.
+	CounterMetric string `json:"counterMetric,omitempty"`
+	// CounterInterval is the count INTERVAL for a counter automation: it fires each
+	// time the watched session counter crosses another multiple of this value (e.g.
+	// 10 → fires at 10, 20, 30…). Crossing is detected statelessly from the previous
+	// vs new count (new − delta = previous) at append time, so no per-scope ledger
+	// is needed. A counter automation is session-scoped: it watches the counter of
+	// the session whose activity crossed the boundary. Must be >= MinCounterInterval.
+	// Ignored unless TriggerKind == TriggerCounter.
+	CounterInterval int `json:"counterInterval,omitempty"`
 	// TriggerTag is the session tag this rule watches (TriggerTag kind). A
 	// finishing session whose Tags contain TriggerTag fires the rule.
 	TriggerTag string `json:"triggerTag"`
@@ -163,8 +198,10 @@ type Automation struct {
 	SpawnTags []string `json:"spawnTags"`
 	// Enabled is the kill switch. A disabled automation never fires.
 	Enabled bool `json:"enabled"`
-	// MaxIterations caps the total number of fires (0 = unlimited — dangerous, an
-	// unbounded loop). Default 50 in the create paths.
+	// MaxIterations caps the total number of fires. Valid range 1..MaxIterationsHardCap
+	// (500); 0 ("unlimited") is rejected at every write path by ValidateMaxIterations
+	// because a self-moving card could loop forever. Default 50 in the create paths.
+	// Legacy rows persisted with <=0 are bounded at fire time by AbsoluteIterationBackstop.
 	MaxIterations int `json:"maxIterations"`
 	// CooldownSec is the minimum number of seconds between two fires of this rule
 	// (0 = no cooldown). Bounds burst re-triggering.

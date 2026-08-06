@@ -87,6 +87,8 @@ func (d *DB) UpdateAutomation(ctx context.Context, a Automation) error {
 	cur.MaxIterations = a.MaxIterations
 	cur.CooldownSec = a.CooldownSec
 	cur.ExpiresAt = a.ExpiresAt
+	cur.TokenScope = a.TokenScope
+	cur.TokenThreshold = a.TokenThreshold
 	cur.UpdatedAt = now()
 	return d.persistAutomationLocked(cur)
 }

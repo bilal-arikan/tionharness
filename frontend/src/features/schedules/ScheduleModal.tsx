@@ -3,6 +3,7 @@ import { Clock, X } from 'lucide-react'
 import { api } from '@/api'
 import type { Agent, Flow, Schedule } from '@/types'
 import { AgentPicker } from '@/shared/components/agents/AgentPicker'
+import { toast } from '@/shared/components'
 import { COLUMN_ACCENT } from './automationMeta'
 import { PRESET_GROUPS } from './cronPresets'
 import { FormModal } from './FormModal'
@@ -23,33 +24,38 @@ interface Props {
 
 // ScheduleModal is the create/edit popup for cron schedules (the first board
 // column). It replaces the old always-visible inline form + inline edit row.
-export function ScheduleModal({ agents, flows, editing, onClose, onSaved, onDelete, onError }: Props) {
+export function ScheduleModal({
+  agents,
+  flows,
+  editing,
+  onClose,
+  onSaved,
+  onDelete,
+  onError,
+}: Props) {
   const [targetMode, setTargetMode] = useState<'agent' | 'flow'>(editing?.flowId ? 'flow' : 'agent')
   const [agentId, setAgentId] = useState(editing?.agentId ?? '')
   const [flowId, setFlowId] = useState(editing?.flowId ?? '')
   const [cronExpr, setCronExpr] = useState(editing?.cronExpr ?? '*/5 * * * *')
   const [prompt, setPrompt] = useState(editing?.prompt ?? '')
   const [expiresAt, setExpiresAt] = useState(unixToLocalInput(editing?.expiresAt))
+  // attempted flips true on the first submit try so inline field errors appear
+  // only after the user acts (mirrors AutomationModal).
+  const [attempted, setAttempted] = useState(false)
+
+  // A flow input is optional; an agent needs a prompt. Every schedule needs a
+  // target and a cron expression.
+  const cronError = !cronExpr.trim() ? 'Cron ifadesi zorunlu' : ''
+  const targetError =
+    targetMode === 'flow' ? (!flowId ? 'Akış seçilmeli' : '') : !agentId ? 'Ajan zorunlu' : ''
+  const promptError = targetMode === 'agent' && !prompt.trim() ? 'Prompt zorunlu' : ''
 
   const submit = async () => {
-    if (!cronExpr.trim()) {
-      onError('Cron ifadesi zorunlu')
+    setAttempted(true)
+    const shapeError = cronError || targetError || promptError
+    if (shapeError) {
+      onError(shapeError)
       return
-    }
-    if (targetMode === 'flow') {
-      if (!flowId) {
-        onError('Akış seçilmeli')
-        return
-      }
-    } else {
-      if (!agentId) {
-        onError('Ajan zorunlu')
-        return
-      }
-      if (!prompt.trim()) {
-        onError('Prompt zorunlu')
-        return
-      }
     }
     const expUnix = localInputToUnix(expiresAt)
     if (expUnix && expUnix <= Math.floor(Date.now() / 1000)) {
@@ -76,6 +82,7 @@ export function ScheduleModal({ agents, flows, editing, onClose, onSaved, onDele
         })
         onSaved(created, true)
       }
+      toast.success(editing ? 'Zamanlama güncellendi' : 'Zamanlama oluşturuldu')
       onClose()
     } catch (e) {
       onError((e as Error).message)
@@ -107,6 +114,9 @@ export function ScheduleModal({ agents, flows, editing, onClose, onSaved, onDele
             </div>
           )}
         </div>
+        {attempted && targetError && (
+          <p className="mt-1 text-xs text-[var(--color-danger)]">{targetError}</p>
+        )}
       </Field>
 
       <Field label="Cron ifadesi" hint="Hazır ifadeyi seç ya da elle yaz.">
@@ -134,9 +144,12 @@ export function ScheduleModal({ agents, flows, editing, onClose, onSaved, onDele
             value={cronExpr}
             onChange={(e) => setCronExpr(e.target.value)}
             placeholder="cron: dk sa gün ay haftagünü"
-            className="w-52 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5 font-mono text-sm outline-none focus:border-[var(--color-accent)]"
+            className={`w-52 rounded border bg-[var(--color-bg)] px-2 py-1.5 font-mono text-sm outline-none focus:border-[var(--color-accent)] ${attempted && cronError ? 'border-[var(--color-danger)]' : 'border-[var(--color-border)]'}`}
           />
         </div>
+        {attempted && cronError && (
+          <p className="mt-1 text-xs text-[var(--color-danger)]">{cronError}</p>
+        )}
       </Field>
 
       <Field label={targetMode === 'flow' ? 'Akış girdisi (opsiyonel)' : 'Prompt (zorunlu)'}>
@@ -146,9 +159,14 @@ export function ScheduleModal({ agents, flows, editing, onClose, onSaved, onDele
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
           rows={4}
-          placeholder={targetMode === 'flow' ? 'Akış girdisi (opsiyonel)' : 'Ajana gönderilecek talimat'}
-          className={`${inputCls} resize-y`}
+          placeholder={
+            targetMode === 'flow' ? 'Akış girdisi (opsiyonel)' : 'Ajana gönderilecek talimat'
+          }
+          className={`${inputCls} resize-y ${attempted && promptError ? 'border-[var(--color-danger)]' : ''}`}
         />
+        {attempted && promptError && (
+          <p className="mt-1 text-xs text-[var(--color-danger)]">{promptError}</p>
+        )}
       </Field>
 
       <Field label="Son tarih (opsiyonel)" hint="Bu tarihten sonra zamanlama çalışmaz.">

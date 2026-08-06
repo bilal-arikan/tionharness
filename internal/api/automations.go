@@ -23,25 +23,27 @@ func (s *Server) handleListAutomations(w http.ResponseWriter, r *http.Request) {
 }
 
 type automationReq struct {
-	Name           string   `json:"name"`
-	TriggerKind    string   `json:"triggerKind"`
-	TriggerTag     string   `json:"triggerTag"`
-	BoardOp        string   `json:"boardOp"`
-	BoardFromState string   `json:"boardFromState"`
-	BoardToState   string   `json:"boardToState"`
-	BoardPriority  *int     `json:"boardPriority"`
-	BoardExclusive *bool    `json:"boardExclusive"`
-	BoardAction    string   `json:"boardAction"`
-	TokenScope     string   `json:"tokenScope"`
-	TokenThreshold *int     `json:"tokenThreshold"`
-	TargetAgentID  string   `json:"targetAgentId"`
-	FlowID         string   `json:"flowId"`
-	PromptTemplate string   `json:"promptTemplate"`
-	SpawnTags      []string `json:"spawnTags"`
-	Enabled        *bool    `json:"enabled"`
-	MaxIterations  *int     `json:"maxIterations"`
-	CooldownSec    *int     `json:"cooldownSec"`
-	ExpiresAt      *int64   `json:"expiresAt"`
+	Name            string   `json:"name"`
+	TriggerKind     string   `json:"triggerKind"`
+	TriggerTag      string   `json:"triggerTag"`
+	BoardOp         string   `json:"boardOp"`
+	BoardFromState  string   `json:"boardFromState"`
+	BoardToState    string   `json:"boardToState"`
+	BoardPriority   *int     `json:"boardPriority"`
+	BoardExclusive  *bool    `json:"boardExclusive"`
+	BoardAction     string   `json:"boardAction"`
+	TokenScope      string   `json:"tokenScope"`
+	TokenThreshold  *int     `json:"tokenThreshold"`
+	CounterMetric   string   `json:"counterMetric"`
+	CounterInterval *int     `json:"counterInterval"`
+	TargetAgentID   string   `json:"targetAgentId"`
+	FlowID          string   `json:"flowId"`
+	PromptTemplate  string   `json:"promptTemplate"`
+	SpawnTags       []string `json:"spawnTags"`
+	Enabled         *bool    `json:"enabled"`
+	MaxIterations   *int     `json:"maxIterations"`
+	CooldownSec     *int     `json:"cooldownSec"`
+	ExpiresAt       *int64   `json:"expiresAt"`
 }
 
 func (s *Server) handleCreateAutomation(w http.ResponseWriter, r *http.Request) {
@@ -56,6 +58,7 @@ func (s *Server) handleCreateAutomation(w http.ResponseWriter, r *http.Request) 
 	req.BoardToState = strings.TrimSpace(req.BoardToState)
 	req.BoardAction = strings.TrimSpace(req.BoardAction)
 	req.TokenScope = strings.TrimSpace(req.TokenScope)
+	req.CounterMetric = strings.TrimSpace(req.CounterMetric)
 	req.TargetAgentID = strings.TrimSpace(req.TargetAgentID)
 	req.FlowID = strings.TrimSpace(req.FlowID)
 	if strings.TrimSpace(req.PromptTemplate) == "" {
@@ -65,6 +68,7 @@ func (s *Server) handleCreateAutomation(w http.ResponseWriter, r *http.Request) 
 	// Trigger-kind-specific requirements: board fires on card changes (no tag),
 	// token on spend crossings (no tag), tag (the default) needs a trigger tag.
 	tokenThreshold := 0
+	counterInterval := 0
 	switch req.TriggerKind {
 	case db.TriggerBoard:
 		if !db.ValidBoardOp(req.BoardOp) {
@@ -89,6 +93,20 @@ func (s *Server) handleCreateAutomation(w http.ResponseWriter, r *http.Request) 
 			return
 		}
 		tokenThreshold = *req.TokenThreshold
+	case db.TriggerCounter:
+		if !db.ValidCounterMetric(req.CounterMetric) {
+			writeError(w, http.StatusBadRequest, "invalid counterMetric (message|tool)")
+			return
+		}
+		if req.CounterInterval == nil {
+			writeError(w, http.StatusBadRequest, "counterInterval is required for counter automations")
+			return
+		}
+		if err := db.ValidateCounterInterval(*req.CounterInterval); err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		counterInterval = *req.CounterInterval
 	default:
 		if req.TriggerTag == "" {
 			writeError(w, http.StatusBadRequest, "triggerTag is required for tag automations")
@@ -147,27 +165,35 @@ func (s *Server) handleCreateAutomation(w http.ResponseWriter, r *http.Request) 
 	if req.BoardExclusive != nil {
 		boardExclusive = *req.BoardExclusive
 	}
-	created, err := ws(r).DB.CreateAutomation(ctx, db.Automation{
-		Name:           strings.TrimSpace(req.Name),
-		TriggerKind:    req.TriggerKind,
-		TriggerTag:     req.TriggerTag,
-		BoardOp:        req.BoardOp,
-		BoardFromState: req.BoardFromState,
-		BoardToState:   req.BoardToState,
-		BoardPriority:  boardPriority,
-		BoardExclusive: boardExclusive,
-		BoardAction:    req.BoardAction,
-		TokenScope:     req.TokenScope,
-		TokenThreshold: tokenThreshold,
-		TargetAgentID:  req.TargetAgentID,
-		FlowID:         req.FlowID,
-		PromptTemplate: req.PromptTemplate,
-		SpawnTags:      req.SpawnTags,
-		Enabled:        enabled,
-		MaxIterations:  maxIter,
-		CooldownSec:    cooldown,
-		ExpiresAt:      expiresAt,
-	})
+	auto := db.Automation{
+		Name:            strings.TrimSpace(req.Name),
+		TriggerKind:     req.TriggerKind,
+		TriggerTag:      req.TriggerTag,
+		BoardOp:         req.BoardOp,
+		BoardFromState:  req.BoardFromState,
+		BoardToState:    req.BoardToState,
+		BoardPriority:   boardPriority,
+		BoardExclusive:  boardExclusive,
+		BoardAction:     req.BoardAction,
+		TokenScope:      req.TokenScope,
+		TokenThreshold:  tokenThreshold,
+		CounterMetric:   req.CounterMetric,
+		CounterInterval: counterInterval,
+		TargetAgentID:   req.TargetAgentID,
+		FlowID:          req.FlowID,
+		PromptTemplate:  req.PromptTemplate,
+		SpawnTags:       req.SpawnTags,
+		Enabled:         enabled,
+		MaxIterations:   maxIter,
+		CooldownSec:     cooldown,
+		ExpiresAt:       expiresAt,
+	}
+	// Shared shape backstop: same contract as the agent tool + update paths.
+	if err := db.ValidateAutomationShape(auto); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	created, err := ws(r).DB.CreateAutomation(ctx, auto)
 	if writeDBError(w, err, "") {
 		return
 	}
@@ -206,6 +232,10 @@ func (s *Server) handleUpdateAutomation(w http.ResponseWriter, r *http.Request) 
 			writeError(w, http.StatusBadRequest, "invalid tokenScope (session|workspace)")
 			return
 		}
+		if k == db.TriggerCounter && !db.ValidCounterMetric(strings.TrimSpace(req.CounterMetric)) {
+			writeError(w, http.StatusBadRequest, "invalid counterMetric (message|tool)")
+			return
+		}
 		cur.TriggerKind = k
 		cur.BoardOp = strings.TrimSpace(req.BoardOp)
 		cur.BoardFromState = strings.TrimSpace(req.BoardFromState)
@@ -215,6 +245,9 @@ func (s *Server) handleUpdateAutomation(w http.ResponseWriter, r *http.Request) 
 		}
 		if k == db.TriggerToken {
 			cur.TokenScope = strings.TrimSpace(req.TokenScope)
+		}
+		if k == db.TriggerCounter {
+			cur.CounterMetric = strings.TrimSpace(req.CounterMetric)
 		}
 	}
 	// TokenThreshold is a pointer field: absent in a partial patch means "leave as
@@ -229,6 +262,22 @@ func (s *Server) handleUpdateAutomation(w http.ResponseWriter, r *http.Request) 
 	}
 	if cur.TriggerKind == db.TriggerToken {
 		if err := db.ValidateTokenThreshold(cur.TokenThreshold); err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+	}
+	// CounterInterval is a pointer field: absent in a partial patch means "leave as
+	// stored"; when present it is validated. A rule that ends up counter-triggered
+	// must carry a valid interval (guarded after the patches).
+	if req.CounterInterval != nil {
+		if err := db.ValidateCounterInterval(*req.CounterInterval); err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		cur.CounterInterval = *req.CounterInterval
+	}
+	if cur.TriggerKind == db.TriggerCounter {
+		if err := db.ValidateCounterInterval(cur.CounterInterval); err != nil {
 			writeError(w, http.StatusBadRequest, err.Error())
 			return
 		}
@@ -278,6 +327,12 @@ func (s *Server) handleUpdateAutomation(w http.ResponseWriter, r *http.Request) 
 	}
 	if req.BoardExclusive != nil {
 		cur.BoardExclusive = *req.BoardExclusive
+	}
+	// Final backstop on the merged result: the same shape check the agent tool and
+	// create paths run, so a partial patch can't leave the rule unable to fire.
+	if err := db.ValidateAutomationShape(cur); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
 	}
 	if err := ws(r).DB.UpdateAutomation(ctx, cur); writeDBError(w, err, "") {
 		return

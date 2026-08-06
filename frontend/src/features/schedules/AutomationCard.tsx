@@ -62,6 +62,10 @@ export function AutomationCard({
       <div className="flex items-start gap-2">
         <div className="flex shrink-0 flex-col items-center gap-1.5">
           <button
+            type="button"
+            role="switch"
+            aria-checked={a.enabled}
+            aria-label={a.enabled ? 'Etkin' : 'Pasif'}
             onClick={onToggle}
             className={`h-4 w-8 rounded-full transition ${
               a.enabled ? 'bg-[var(--color-accent)]' : 'bg-[var(--color-border)]'

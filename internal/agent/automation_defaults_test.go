@@ -16,7 +16,53 @@ func newAutomationSeedDB(t *testing.T) (*db.DB, string) {
 		t.Fatalf("db open: %v", err)
 	}
 	t.Cleanup(func() { _ = database.Close() })
+	// The spawn seed needs a real target agent to pass ValidateAutomationShape at
+	// seed time; a workspace normally has one before board automations matter.
+	if _, err := database.CreateAgent(context.Background(), db.Agent{Name: "Seed", Provider: "anthropic"}); err != nil {
+		t.Fatalf("create agent: %v", err)
+	}
 	return database, storeDir
+}
+
+// TestEnsureDefaultBoardAutomationsDefersSpawnWithoutAgent locks the seed-time
+// shape contract: when a workspace has no agent yet, the spawn seed (empty target)
+// fails ValidateAutomationShape and is skipped WITHOUT being recorded in the
+// deletion ledger, so a later startup — once an agent exists — backfills it. The
+// archive seed needs no target and seeds immediately.
+func TestEnsureDefaultBoardAutomationsDefersSpawnWithoutAgent(t *testing.T) {
+	ctx := context.Background()
+	storeDir := filepath.Join(t.TempDir(), "store")
+	database, err := db.Open(storeDir)
+	if err != nil {
+		t.Fatalf("db open: %v", err)
+	}
+	t.Cleanup(func() { _ = database.Close() })
+
+	// No agent yet.
+	if err := EnsureDefaultBoardAutomations(ctx, database, storeDir); err != nil {
+		t.Fatalf("seed (no agent): %v", err)
+	}
+	autos, _ := database.ListAutomations(ctx)
+	if len(autos) != 1 || autos[0].Seed != "board-archive-done" {
+		t.Fatalf("without an agent only the archive rule should seed, got %d: %+v", len(autos), autos)
+	}
+
+	// Now an agent exists → the deferred spawn rule backfills on the next startup.
+	if _, err := database.CreateAgent(ctx, db.Agent{Name: "A", Provider: "anthropic"}); err != nil {
+		t.Fatalf("create agent: %v", err)
+	}
+	if err := EnsureDefaultBoardAutomations(ctx, database, storeDir); err != nil {
+		t.Fatalf("reseed (with agent): %v", err)
+	}
+	autos, _ = database.ListAutomations(ctx)
+	if len(autos) != len(defaultBoardAutomations) {
+		t.Fatalf("spawn rule not backfilled: want %d, got %d", len(defaultBoardAutomations), len(autos))
+	}
+	for _, a := range autos {
+		if err := db.ValidateAutomationShape(a); err != nil {
+			t.Errorf("seeded rule %q is not shape-valid: %v", a.Seed, err)
+		}
+	}
 }
 
 // TestEnsureDefaultBoardAutomationsSeeds seeds every shipped default exactly once,

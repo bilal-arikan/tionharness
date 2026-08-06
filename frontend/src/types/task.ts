@@ -145,7 +145,7 @@ export interface Automation {
   promptTemplate: string // placeholders: {{result}} {{title}} {{tag}} {{sessionId}}
   spawnTags?: string[] // tags applied to the spawned session (default: [triggerTag])
   enabled: boolean
-  maxIterations: number // 0 = unlimited
+  maxIterations: number // range 1-500; 0/unlimited rejected on write (legacy <=0 rows bounded by backstop)
   cooldownSec: number
   expiresAt?: number // optional end date (unix seconds); 0/undefined = no end date
   // Runtime bookkeeping (read-only).

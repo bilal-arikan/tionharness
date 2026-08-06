@@ -39,7 +39,28 @@ const (
 	// only by cooldown/maxIterations); requiring at least this many tokens keeps a
 	// token trigger a meaningful "spend milestone" rather than a per-call hook.
 	MinTokenThreshold = 1000
+
+	// MinCounterInterval is the smallest interval a counter automation may set. An
+	// interval of 1 would fire on nearly every message/tool call; requiring at least
+	// this many keeps a counter trigger a meaningful cadence ("every N messages")
+	// rather than a per-append hook. Kept small because counters (unlike tokens)
+	// grow slowly and predictably, so a modest floor is enough.
+	MinCounterInterval = 2
 )
+
+// ErrCounterIntervalRange reports a counterInterval value below the accepted floor.
+var ErrCounterIntervalRange = errors.New("counterInterval out of range")
+
+// ValidateCounterInterval rejects a counter-automation interval that would fire
+// too often to be useful. Shared by the REST handlers and the agent tools so the
+// two entry points cannot drift apart.
+func ValidateCounterInterval(v int) error {
+	if v < MinCounterInterval {
+		return fmt.Errorf("%w: en az %d olmalı (çok küçük bir aralık neredeyse her mesajda tetiklenir)",
+			ErrCounterIntervalRange, MinCounterInterval)
+	}
+	return nil
+}
 
 // ErrTokenThresholdRange reports a tokenThreshold value below the accepted floor.
 var ErrTokenThresholdRange = errors.New("tokenThreshold out of range")
@@ -72,6 +93,60 @@ func ValidateMaxIterations(v int) error {
 			ErrMaxIterationsRange, MaxIterationsHardCap)
 	case v > MaxIterationsHardCap:
 		return fmt.Errorf("%w: en fazla %d olabilir", ErrMaxIterationsRange, MaxIterationsHardCap)
+	}
+	return nil
+}
+
+// ErrAutomationShape reports a trigger/target combination that could never fire
+// or has nothing to run.
+var ErrAutomationShape = errors.New("invalid automation")
+
+// ValidateAutomationShape enforces the per-trigger-kind requirements on a fully
+// MERGED automation. It lives in db, next to ValidateMaxIterations, so every
+// write path shares one contract: create_automation and update_automation cannot
+// drift. Without it, update could persist a state create rejects — a tag rule
+// with no triggerTag (silently never fires: TriggerTag=="" is skipped at fire
+// time) or a spawn rule with no target (fails only at fire time). The per-field
+// format checks (ValidBoardOp/ValidTokenScope) still run at the call sites for
+// immediate feedback; this is the final backstop on the merged result. The RANGE
+// validators (maxIterations, tokenThreshold) stay separate and are called
+// alongside this one.
+func ValidateAutomationShape(a Automation) error {
+	switch a.TriggerKind {
+	case TriggerBoard:
+		if !ValidBoardOp(a.BoardOp) {
+			return fmt.Errorf("%w: invalid boardOp %q (any|move|create|update|delete)", ErrAutomationShape, a.BoardOp)
+		}
+		if !ValidBoardAction(a.BoardAction) {
+			return fmt.Errorf("%w: invalid boardAction %q (spawn|archive)", ErrAutomationShape, a.BoardAction)
+		}
+		// An archive action does bookkeeping with no LLM call, so it needs no target.
+		if a.BoardAction == BoardActionArchive {
+			return nil
+		}
+	case TriggerToken:
+		if !ValidTokenScope(a.TokenScope) {
+			return fmt.Errorf("%w: invalid tokenScope %q (session|workspace)", ErrAutomationShape, a.TokenScope)
+		}
+		if err := ValidateTokenThreshold(a.TokenThreshold); err != nil {
+			return err
+		}
+	case TriggerCounter:
+		if !ValidCounterMetric(a.CounterMetric) {
+			return fmt.Errorf("%w: invalid counterMetric %q (message|tool)", ErrAutomationShape, a.CounterMetric)
+		}
+		if err := ValidateCounterInterval(a.CounterInterval); err != nil {
+			return err
+		}
+	default: // TriggerTag or "" (legacy files written before the kind existed)
+		if a.TriggerTag == "" {
+			return fmt.Errorf("%w: triggerTag is required for tag automations (an empty tag never fires)", ErrAutomationShape)
+		}
+	}
+	// Every automation that reaches here spawns a session or runs a flow, so it
+	// needs exactly one runnable target. (Board 'archive' returned above.)
+	if a.FlowID == "" && a.TargetAgentID == "" {
+		return fmt.Errorf("%w: targetAgentId or flowId is required", ErrAutomationShape)
 	}
 	return nil
 }

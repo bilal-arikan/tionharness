@@ -39,7 +39,9 @@ export const ScheduleCard = forwardRef<HTMLDivElement, Props>(function ScheduleC
       data-testid="schedule-row"
       data-schedule-id={s.id}
       className={`rounded-lg border border-l-4 bg-[var(--color-surface)] px-2.5 py-2 text-sm transition ${
-        highlighted ? 'border-[var(--color-accent)] ring-2 ring-[var(--color-accent)]' : 'border-[var(--color-border)]'
+        highlighted
+          ? 'border-[var(--color-accent)] ring-2 ring-[var(--color-accent)]'
+          : 'border-[var(--color-border)]'
       }`}
       style={{ borderLeftColor: COLUMN_ACCENT.schedules }}
     >
@@ -48,20 +50,30 @@ export const ScheduleCard = forwardRef<HTMLDivElement, Props>(function ScheduleC
           <button
             data-testid="schedule-enable-toggle"
             data-schedule-id={s.id}
+            type="button"
+            role="switch"
+            aria-checked={s.enabled}
+            aria-label={s.enabled ? 'Etkin' : 'Pasif'}
             onClick={onToggle}
             className={`h-4 w-8 rounded-full transition ${
               s.enabled ? 'bg-[var(--color-accent)]' : 'bg-[var(--color-border)]'
             }`}
             title={s.enabled ? 'Etkin' : 'Pasif'}
           >
-            <span className={`block h-4 w-4 rounded-full bg-white transition ${s.enabled ? 'translate-x-4' : ''}`} />
+            <span
+              className={`block h-4 w-4 rounded-full bg-white transition ${s.enabled ? 'translate-x-4' : ''}`}
+            />
           </button>
           {s.flowId ? (
             <span
               className="flex h-7 w-7 items-center justify-center rounded-full bg-[var(--color-accent-soft)] text-[var(--color-accent)]"
               title="Akış tabanlı zamanlama"
             >
-              {flowIcon ? <span className="text-base leading-none">{flowIcon}</span> : <Workflow size={15} />}
+              {flowIcon ? (
+                <span className="text-base leading-none">{flowIcon}</span>
+              ) : (
+                <Workflow size={15} />
+              )}
             </span>
           ) : owner ? (
             <AgentAvatar agent={owner} size={28} />
@@ -75,10 +87,13 @@ export const ScheduleCard = forwardRef<HTMLDivElement, Props>(function ScheduleC
         <div className="min-w-0 flex-1">
           <div className="font-mono text-[13px] text-[var(--color-accent)]">{s.cronExpr}</div>
           <div className="truncate text-xs text-[var(--color-text-dim)]">
-            → {s.flowId ? `${flowIcon ?? '🔀'} ${flow?.name ?? s.flowId}` : owner?.name ?? '—'}
+            → {s.flowId ? `${flowIcon ?? '🔀'} ${flow?.name ?? s.flowId}` : (owner?.name ?? '—')}
           </div>
           {(s.prompt || !s.flowId) && (
-            <div className="mt-1 line-clamp-2 text-xs text-[var(--color-text-dim)]" title={s.prompt}>
+            <div
+              className="mt-1 line-clamp-2 text-xs text-[var(--color-text-dim)]"
+              title={s.prompt}
+            >
               {s.flowId ? 'Girdi' : 'Prompt'}: {s.prompt}
             </div>
           )}
@@ -111,7 +126,9 @@ export const ScheduleCard = forwardRef<HTMLDivElement, Props>(function ScheduleC
           {s.lastDeliveryStatus ? (
             <span
               className={
-                s.lastDeliveryStatus === 'success' ? 'text-[var(--color-success)]' : 'text-[var(--color-danger)]'
+                s.lastDeliveryStatus === 'success'
+                  ? 'text-[var(--color-success)]'
+                  : 'text-[var(--color-danger)]'
               }
             >
               {s.lastDeliveryStatus} {fmtTime(s.lastRunAt)}
@@ -120,7 +137,9 @@ export const ScheduleCard = forwardRef<HTMLDivElement, Props>(function ScheduleC
             '—'
           )}
         </div>
-        {s.lastDeliveryError && <div className="text-[var(--color-danger)]">Hata: {s.lastDeliveryError}</div>}
+        {s.lastDeliveryError && (
+          <div className="text-[var(--color-danger)]">Hata: {s.lastDeliveryError}</div>
+        )}
         {s.expiresAt ? (
           <div className={expired ? 'text-[var(--color-danger)]' : ''}>
             Son tarih: {fmtTime(s.expiresAt)}
