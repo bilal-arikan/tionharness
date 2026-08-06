@@ -46,6 +46,56 @@ context'i tüketmeden sayfalayabilir (`hasMore` → `offset += limit`).
 testi — filtre+sort kombinasyonu dahil, `api/listparams_test.go`). Frontend etkilenmedi
 (paramsız çağrılar legacy düz-dizi alıyor).
 
+### Kapsam genişletmesi (2026-08-06, TSK68 sonrası) ✅
+
+**Ne:** Aynı `PageArgs`/`pageResult` kontratı kalan 4 list aracına da taşındı +
+frontend'de büyük listeler için gerçek "load more".
+
+**Nasıl:**
+- **Tools — 4 araç kontrata geçti:**
+  - `list_artifacts` (`internal/tools/builtin_artifactmgmt.go`): `limit/offset/sort`
+    + `sessionId`/`kind`/`origin` filtreleri; name = başlık.
+  - `list_hooks` (`internal/tools/builtin_hookmgmt.go`): `limit/offset/sort` +
+    `event` filtresi; hook'lar değişmez olduğundan `updated_*` → oluşturma zamanı
+    (belgelenmiş vekil), `name_*` açık hata (name alanı yok).
+  - `list_mcp_servers` (`internal/tools/builtin_mcpmgmt.go`): `limit/offset/sort` +
+    `transport` (substring)/`enabled` filtreleri; `updated_*` → oluşturma zamanı vekili.
+  - `list_sessions` (`internal/tools/builtin_sessions.go`): mevcut `state`/`kind`
+    filtreleri + pagination korundu; `sort` eklendi; limit artık `PageArgs`
+    normalizasyonundan geçiyor (max 100). Çıktı bilinçli olarak plain-text kaldı
+    (satır başı `[kind·state]` + `Showing X–Y of Z` + `offset:` ipucu — mevcut
+    ajanların alışık olduğu format; JSON zarfına geçilmedi).
+- **API — 3 endpoint kontrata bağlandı** (`internal/api/`): `/api/artifacts`
+  (ek filtreler: `kind`, `origin`, `q`=başlık substring, `archived` bool),
+  `/api/sessions` (`kind`, `state`), `/api/executions`. Hepsi `listQueryParams` +
+  `pageJSONResponse`; parametre verilmezse legacy düz-dizi davranışı korunur → UI bozulmadı.
+- **Frontend — Artifacts ekranında "load more"** (`frontend/src/features/artifacts/ArtifactsPanel.tsx`):
+  filtreler (başlık araması, origin, arşiv görünümü) **server'a taşındı** (pagination
+  ile tutarlılık için), 50'şer sayfa yüklenir, `Daha fazla yükle (X/toplam)` butonu
+  `offset += 50` ile ekler; `total`/`hasMore` server'dan. Arşiv rozet sayısı ayrı hafif
+  istekten (`archived=true&limit=1` → total). Yeni `shared/hooks/useDebouncedValue.ts`
+  (300ms) — arama kutusu her tuşta istek atmaz. `api/artifacts.ts` her çağrıyı
+  `ArtifactPage` zarfına normalleştirir (paramsız çağrı legacy diziyi client'ta sarar);
+  `useSessionsController`/`TaskFormModal` çağrıları `r.items` ile güncellendi.
+- **Dokunulan dosyalar:** `internal/tools/builtin_{artifactmgmt,hookmgmt,mcpmgmt,sessions}.go`,
+  `internal/tools/builtin_{list,sessions}_test.go`, `internal/api/{artifacts,sessions,executions}.go`,
+  `frontend/src/{api/artifacts.ts, features/artifacts/ArtifactsPanel.tsx,
+  app/useSessionsController.ts, features/tasks/TaskFormModal.tsx, shared/hooks/useDebouncedValue.ts}`.
+  (Not: ilk `tsc -b`'de `App.tsx:678` tip hatası göründü — working tree'deki BAŞKA işin
+  `api/agents.ts` (P1.3, `{agent, warning?}` dönüşü) değişikliği `AgentsView` prop'uyla
+  uyumsuzdu; o iş `AgentsView.tsx`'i eşzamanlı güncellediği için ikinci koşuda temizdi —
+  bu kapsamda o dosyaya dokunulmadı.)
+
+**Doğrulama:** `go build` ✅, `go vet` ✅, `go test ./internal/... -count=1` ✅
+(yeni: `TestListArtifactsPaginationAndSort`, `TestListHooksPaginationAndSort`,
+`TestListMCPServersPaginationAndSort`, `TestListSessionsToolSort`); frontend
+`npx tsc -b` ✅ + `npm run build` ✅.
+
+**Notlar / sıradaki:** SessionsSidebar + SessionsOverview hâlâ tam listeyi
+`/api/executions`'tan çekiyor (poll ediyor) — endpoint kontrata bağlandığı için
+istendiğinde aynı "load more" deseni oraya da uygulanabilir (sidebar poll ile
+sayfalamayı birleştirmek daha fazla iş). Commit'ler Board Reviewer tarafından atılır.
+
 ## TSK66: Harita — yan-yana node kapatma + eksik node tipleri (2026-08-06) ✅
 
 **Ne:** Workspace Explorer'da iki iyileştirme: (1) bir node açılınca aynı parent'ın

@@ -14,8 +14,54 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/bilal-arikan/tionswarm/internal/insight"
 	"github.com/bilal-arikan/tionswarm/internal/view"
 )
+
+// viewProjector builds the projection resolver for the current request, wiring
+// the optional non-store sources (skills catalog, insight findings, log buffer)
+// so the Explorer map's artifact/automation/skill/insight/logs nodes render.
+// Sources degrade to nil instead of failing: a missing runtime (or a broken
+// findings store) shows an explicit "yok" line on that node, never a dead map.
+func (s *Server) viewProjector(r *http.Request) *view.Projector {
+	p := view.NewProjector(ws(r).DB)
+	src := view.Sources{Logs: s.logs}
+	if rt := ws(r).Runtime; rt != nil {
+		src.Skills = rt.Skills()
+		if store, err := insight.OpenFindingStore(ws(r).DB.Root()); err == nil {
+			src.Findings = findingsSource{store}
+		}
+	}
+	return p.WithSources(src)
+}
+
+// findingsSource adapts *insight.FindingStore to view.FindingsSource. The view
+// layer cannot import insight (insight already imports view — a reverse edge
+// would cycle), so the mapping lives here, next to the HTTP layer that owns
+// both packages.
+type findingsSource struct{ store *insight.FindingStore }
+
+func (f findingsSource) ListFindings() []view.InsightFinding {
+	raw := f.store.List("", "")
+	out := make([]view.InsightFinding, 0, len(raw))
+	for _, fd := range raw {
+		out = append(out, view.InsightFinding{
+			ID:                 fd.ID,
+			LensID:             fd.LensID,
+			Channel:            string(fd.Channel),
+			Title:              fd.Title,
+			RootCause:          fd.RootCause,
+			ProposedFix:        fd.ProposedFix,
+			Severity:           fd.Severity,
+			Status:             string(fd.Status),
+			Occurrences:        fd.Occurrences,
+			EvidenceSessionIDs: fd.EvidenceSessionIDs,
+			Regressed:          fd.Regressed,
+			LastSeen:           fd.LastSeen,
+		})
+	}
+	return out
+}
 
 func (s *Server) handleGetView(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
@@ -25,7 +71,7 @@ func (s *Server) handleGetView(w http.ResponseWriter, r *http.Request) {
 		Sub:  strings.TrimSpace(q.Get("sub")),
 	}
 
-	v, err := view.NewProjector(ws(r).DB).Project(
+	v, err := s.viewProjector(r).Project(
 		r.Context(), ref, view.ParseLevel(q.Get("level")), view.ParseLens(q.Get("lens")))
 	if err != nil {
 		// An unknown kind is a client mistake; a missing entity is a 404. Both are
@@ -71,7 +117,7 @@ func (s *Server) handleGetViewChildren(w http.ResponseWriter, r *http.Request) {
 		Sub:  strings.TrimSpace(q.Get("sub")),
 	}
 
-	handles, err := view.NewProjector(ws(r).DB).Children(r.Context(), ref, view.ParseLens(q.Get("lens")))
+	handles, err := s.viewProjector(r).Children(r.Context(), ref, view.ParseLens(q.Get("lens")))
 	if err != nil {
 		// An unsupported kind is a client mistake (400); anything else is a store
 		// read failure. Neither degrades to an empty list, which would read like a

@@ -26,6 +26,7 @@ func toWorkspaceInfo(m workspace.Meta) tools.WorkspaceInfo {
 		Name:           m.Name,
 		Path:           m.Path,
 		CreatedByAgent: m.CreatedBy != "",
+		CreatedAt:      m.CreatedAt,
 	}
 }
 

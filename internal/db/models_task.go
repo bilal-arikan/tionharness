@@ -138,6 +138,7 @@ type Schedule struct {
 	// edit/delete agent-created schedules.
 	CreatedBy string `json:"createdBy,omitempty"`
 	CreatedAt int64  `json:"createdAt"`
+	UpdatedAt int64  `json:"updatedAt"`
 
 	// One-shot wake fields. When OneShot is true the schedule is NOT driven by a
 	// cron expression; it fires exactly once at FireAt (unix seconds) and is then

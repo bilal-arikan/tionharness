@@ -9,6 +9,11 @@ import {
   MessageSquare,
   GitBranch,
   Clock,
+  FileText,
+  Zap,
+  GraduationCap,
+  Lightbulb,
+  ScrollText,
   ChevronRight,
   ChevronDown,
   Loader2,
@@ -28,6 +33,24 @@ const KIND_ICON: Record<ViewKind, LucideIcon> = {
   session: MessageSquare,
   flowrun: GitBranch,
   schedule: Clock,
+  // TSK66 map extension: artifacts/automations/skills/insights are category
+  // members, logs is the inline-tail leaf.
+  artifact: FileText,
+  automation: Zap,
+  skill: GraduationCap,
+  insight: Lightbulb,
+  logs: ScrollText,
+}
+
+// KIND_COLOR tints the icon per kind so the extension layers stand out from the
+// structural core. Only the semantic palette is used (theme vars), so the colors
+// hold in both light and dark themes; existing kinds keep the accent.
+const KIND_COLOR: Partial<Record<ViewKind, string>> = {
+  artifact: 'var(--color-success)',
+  automation: 'var(--color-warning)',
+  skill: 'var(--color-info)',
+  insight: 'var(--color-warning)',
+  logs: 'var(--color-text-dim)',
 }
 
 // ExplorerNode is one map card: an icon + label, an expand chevron for drillable
@@ -58,7 +81,12 @@ export function ExplorerNode({ data }: NodeProps<ExplorerRFNode>) {
         style={{ background: 'var(--color-border)' }}
       />
 
-      <Icon size={15} className="shrink-0 text-[var(--color-accent)]" strokeWidth={2} />
+      <Icon
+        size={15}
+        className="shrink-0 text-[var(--color-accent)]"
+        strokeWidth={2}
+        style={KIND_COLOR[data.ref.kind] ? { color: KIND_COLOR[data.ref.kind] } : undefined}
+      />
       <span className={`truncate ${data.selected ? 'font-medium' : ''}`}>{data.label}</span>
 
       {!dense && (

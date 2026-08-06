@@ -24,6 +24,7 @@ import type { Agent, Session, SearchHit } from '@/types'
 import { api } from '@/api'
 import { AgentAvatar } from '@/shared/components/agents/AgentAvatar'
 import { relativeTime, bucketOf, BUCKET_LABELS, BUCKET_ORDER, type Bucket } from '@/shared/lib/time'
+import { modelDisplayName } from '@/shared/lib/modelLabel'
 import { useOutsideClick } from '@/shared/hooks/useOutsideClick'
 import { useMultiSelect } from '@/shared/hooks/useMultiSelect'
 import { SelectionBar, SelectionBarButton, Skeleton } from '@/shared/components'
@@ -543,6 +544,14 @@ export function SessionsSidebar({
                           <span className="flex items-center gap-1.5 text-[10px]">
                             <KindIcon size={11} className="shrink-0 opacity-60" />
                             <span className="shrink-0 opacity-60">{meta.label}</span>
+                            {s.model && (
+                              <span
+                                className="shrink-0 rounded bg-[var(--color-surface-2)] px-1 py-px font-mono text-[9px] text-[var(--color-text-dim)]"
+                                title={`Model: ${s.model}`}
+                              >
+                                {modelDisplayName(s.model)}
+                              </span>
+                            )}
                             {isStreaming ? (
                               <span className="truncate font-medium text-[var(--color-success)]">
                                 yazıyor…

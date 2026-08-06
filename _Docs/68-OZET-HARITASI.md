@@ -1,7 +1,9 @@
 # 68 — Özet Haritası (Workspace Explorer / semantic-zoom drill-down)
 
-> **Durum:** Faz 1-3 tamamlandı ✅ (2026-08-06). Kalan opsiyonel: MCP resource tree +
-> büyük-workspace performansı (sigma.js) — ihtiyaç kanıtlanınca.
+> **Durum:** Faz 1-3 tamamlandı ✅ (2026-08-06) + **TSK66 genişletmesi** ✅ (2026-08-06:
+> single-expand accordion + Artifacts/Otomasyonlar/Skill'ler/İçgörüler/Günlükler kovacıkları).
+> Kalan opsiyonel: MCP resource tree + büyük-workspace performansı (sigma.js) — ihtiyaç
+> kanıtlanınca.
 > **Önkoşul okuma:** `_Docs/66-VIEW-KATMANI.md` (bu özelliğin motoru), `internal/view/*`,
 > `frontend/src/features/network/*` (ayrışacağımız komşu ekran).
 
@@ -50,9 +52,26 @@ workspace (root)
 ├── Akışlar (category)        → flowrun:RUN*  → (node alt düğümleri, Sub)
 ├── Pano (board)              → board#<sütun> → kart (task) düğümleri
 ├── Ajanlar (category)        → agent:AGT*    → o ajanın oturumları
+├── Artifacts (category)      → artifact:ART* (yaprak — metadata projeksiyonu)
+├── Otomasyonlar (category)   → automation:AUT* (yaprak — tetik/durum/hata)
+├── Skill'ler (category)      → skill:<slug> (yaprak — katalog girişi)
+├── İçgörüler (category)      → insight:FND* (yaprak — bulgu özeti)
+├── Günlükler (logs, yaprak)  → process log kuyruğu inline (budget gibi)
 ├── Bütçe (budget)            → gün/model kırılımı
 └── Araçlar (tools)           → workspace-aktif araç seti / MCP sunucuları
 ```
+
+TSK66 notları:
+- Kök **11 düğüm** (eskiden 6); boş kovacık da görünür (harita şekli içerikle değişmez).
+- Yeni kovacıkların üyeleri **yapraktır** — tıklayınca yan panelde metadata projeksiyonu
+  açılır, içerik (artifact body / skill body / bulgu detayı) ilgili ekranda kalır.
+- `logs` yapraktır: ring-buffer kuyruğu inline render edilir; `errors` lens yalnız ERROR
+  kayıtlarını bırakır.
+- `errors` lens ayrıca Otomasyonlar'da son ateşlemesi hatalı kurallara, İçgörüler'de
+  yeni/regressed bulgulara daralır.
+- skills/findings/logs db'de değil → `Projector.WithSources(Sources{Skills, Findings,
+  Logs})`; `internal/insight` view'i import ettiği için findings view-local `InsightFinding`
+  tipine api-adapter'ıyla bağlanır (cycle yok).
 
 **Dikkat: bu bir AĞAÇ değil GRAF.** `agent → session`, `session(coordinator) →
 session(worker)` kenarları döngü üretebilir → lazy-expand'de **visited-set** ve
@@ -72,13 +91,16 @@ derinlik/çocuk cap'i şart (§8.1).
      handle olarak verir, kalanı `Elided` ile bildirir.
 3. **`Children(ctx, ref, lens) []Handle`** — Projector'a **yapısal çocuk** metodu
    (özet `Project`'ten ayrı; harita gezinirken her düğüm için tam `card` render
-   etmeden çocukları almak için). `workspace` → 6 kategori; `category:sessions` →
+   etmeden çocukları almak için). `workspace` → 11 kategori/yaprak; `category:sessions` →
    session handle'ları; `board` → sütun handle'ları; vb. **Lens** burada filtreler
    (`errors` → yalnız sorunlu çocuklar).
 4. **Endpoint:** `GET /api/views/{kind}/{id}/children?lens=` → `[]Handle`. Özet için
    mevcut `GET /api/views/{kind}/{id}` korunur.
 5. **Elision & cost sözleşmesi korunur:** kategori/harita düğümü kaç öğe gizlediğini
    (`Elided`+birim) ve `~N tok`'u taşır.
+6. **TSK66 ek Kind'ler:** `artifact`/`automation`/`skill`/`insight`/`logs` +
+   `artifacts`/`automations`/`skills`/`insights` kategorileri. Store-dışı kaynaklar
+   (`Sources`) opsiyoneldir; yoksa ilgili düğüm "yok" der, harita çökmez.
 
 ## 6. Agent tarafı
 
@@ -108,6 +130,9 @@ derinlik/çocuk cap'i şart (§8.1).
 - **Etkileşim:**
   - Düğüme tıkla → `children` çek → alt düğümleri ekle (bir katman derinleş); tekrar
     tıkla → collapse.
+  - **Single-expand (accordion, TSK66):** bir node açılınca aynı parent'ın diğer açık
+    node'ları kapanır (`nextExpandedSet`; `parentByKey` fetchChildren'da tutulur) — harita
+    fan-out değil drill-down okur. Her seviyede çalışır.
   - Düğümü seç → yanda `getView card` özeti.
   - **Semantic zoom:** uzak zoom'da tiny satır, odakta card (zoom eşiğine göre içerik).
   - **Breadcrumb + lens seçici + level seçici** üst barda (ViewPanel kontratıyla aynı).
@@ -146,12 +171,24 @@ derinlik/çocuk cap'i şart (§8.1).
   soldurur), **DOI pruning** (kök-dışı seçimde odak = seçili + ataları + doğrudan çocukları,
   gerisi solar), **kök otomatik-açılım**. `go test` + `tsc --noEmit` + vitest ✅.
   **Ertelendi (opsiyonel):** MCP resource tree, sigma.js (büyük-workspace performansı).
+- **TSK66 — Yeni kovacıklar + accordion:** ✅ (2026-08-06) root 6 → **11 node**
+  (Artifacts/Otomasyonlar/Skill'ler/İçgörüler/Günlükler eklendi; Bütçe zaten vardı).
+  Backend: `artifact/automation/skill/insight/logs` Kind'leri + 4 kategori, yeni
+  projeksiyonlar (`artifact.go`/`automation.go`/`skill.go`/`insight.go`/`logs.go`),
+  `Projector.WithSources(Sources{Skills,Findings,Logs})` (insight cycle'ı için view-local
+  `InsightFinding` + api adapter), `Store`'a 4 salt-okunur metot, `views.go`'da
+  `s.viewProjector(r)` kaynak bağlama. Frontend: `nextExpandedSet` accordion (sibling
+  kapatma), `parentByKey` izleme, 5 yeni ikon+renk, `ViewKind` genişletmesi.
+  `go build/vet/test ./internal/...` + `tsc -b` + `npm run build` + vitest ✅ + canlı
+  API smoke (11 node, artifact/automation/skill/logs projeksiyonları).
 
 ## 10. Kabul kriterleri
 
 - Root'tan başlayıp Oturumlar → bir oturum → koordinatör/worker'a **tıklayarak** inilebiliyor.
-- 6 kategori düğümü + `agent/budget/tools` özetleri deterministik (LLM yok), sayılar
+- 11 kök düğümü + `agent/budget/tools` özetleri deterministik (LLM yok), sayılar
   dashboard/billing ile tutarlı.
+- Bir node açılınca aynı parent'ın diğer açık node'ları kapanır (accordion); farklı
+  dallar açık kalır; collapse diğerlerine dokunmaz.
 - Döngülü workspace'te (koordinatör↔worker) açılım sonsuza gitmiyor; elision doğru.
 - Ajan `get_view`/`expand` ile aynı ağacı gezebiliyor (aynı backend).
 - Yeni ağır bağımlılık yok (React Flow mevcut; elkjs eklendiyse gerekçeli).
@@ -170,6 +207,10 @@ derinlik/çocuk cap'i şart (§8.1).
 - **Yeni (backend):** `internal/view/agent.go`, `budget.go`, `tools.go`, `category.go`,
   `children.go` (+ `*_test.go`). `view.go`'ya yeni Kind sabitleri. `api` view handler'ına
   `/children` route'u + `get_view`/`expand` aracı `internal/tools`.
+- **TSK66 ek (backend):** `internal/view/artifact.go`, `automation.go`, `skill.go`,
+  `insight.go`, `logs.go` (+ testler); `project.go`'da `Sources`/`WithSources` +
+  view-local `InsightFinding`; `views.go`'da `s.viewProjector(r)` + `findingsSource`
+  adapter.
 - **Yeni (frontend):** `frontend/src/features/explorer/*`, `types` (ViewRef zaten var,
   yeni Kind literalleri), NavRail + viewRegistry girişi.
 - **Doküman:** bu dosya + `00-GENEL-BAKIS.md` index satırı + iş bitince `05-ILERLEME.md`.

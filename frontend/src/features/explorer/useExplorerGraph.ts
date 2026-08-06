@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '@/api'
 import type { ViewLens, ViewRef } from '@/types'
 import { parseRef, refToString } from '@/types'
-import { buildGraph, isDrillable, ROOT_KEY, ROOT_REF } from './explorerModel'
+import { buildGraph, isDrillable, nextExpandedSet, ROOT_KEY, ROOT_REF } from './explorerModel'
 
 interface Options {
   lens: ViewLens
@@ -24,6 +24,11 @@ export function useExplorerGraph({ lens, search, onError, initialSelected, onSel
   const [refByKey, setRefByKey] = useState<Record<string, ViewRef>>({ [ROOT_KEY]: ROOT_REF })
   const [labelByKey, setLabelByKey] = useState<Record<string, string>>({ [ROOT_KEY]: 'Workspace' })
   const [childrenByKey, setChildrenByKey] = useState<Record<string, ViewRef[]>>({})
+  // parentByKey maps each fetched node's ref-string to its parent's ref-string —
+  // the sibling relation the single-expand (accordion) rule needs. It grows in
+  // fetchChildren, so it is complete for every expandable node (a node can only
+  // be expanded after its parent's children arrived).
+  const [parentByKey, setParentByKey] = useState<Record<string, string>>({})
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState<Set<string>>(new Set())
   // Seed the selection from a deep link when the ref string parses; otherwise root.
@@ -37,12 +42,16 @@ export function useExplorerGraph({ lens, search, onError, initialSelected, onSel
   // tick). Updated in effects (never during render) per the refs lint rule.
   const expandedRef = useRef(expanded)
   const refByKeyRef = useRef(refByKey)
+  const parentByKeyRef = useRef(parentByKey)
   useEffect(() => {
     expandedRef.current = expanded
   }, [expanded])
   useEffect(() => {
     refByKeyRef.current = refByKey
   }, [refByKey])
+  useEffect(() => {
+    parentByKeyRef.current = parentByKey
+  }, [parentByKey])
 
   const fetchChildren = useCallback(
     async (ref: ViewRef) => {
@@ -52,6 +61,11 @@ export function useExplorerGraph({ lens, search, onError, initialSelected, onSel
         const res = await api.viewChildren(ref, lens)
         const childRefs = res.children.map((h) => h.ref)
         setChildrenByKey((m) => ({ ...m, [key]: childRefs }))
+        setParentByKey((m) => {
+          const n = { ...m }
+          for (const c of childRefs) n[refToString(c)] = key
+          return n
+        })
         setRefByKey((m) => {
           const n = { ...m }
           for (const h of res.children) n[refToString(h.ref)] = h.ref
@@ -77,7 +91,8 @@ export function useExplorerGraph({ lens, search, onError, initialSelected, onSel
   )
 
   // toggle drills one layer in (fetching children on first expand) or collapses.
-  // A leaf kind only selects — there is nothing to expand into.
+  // A leaf kind only selects — there is nothing to expand into. Expanding
+  // applies the accordion rule: every other open sibling closes first.
   const toggle = useCallback(
     (ref: ViewRef) => {
       const key = refToString(ref)
@@ -85,13 +100,8 @@ export function useExplorerGraph({ lens, search, onError, initialSelected, onSel
       onSelect?.(key)
       if (!isDrillable(ref)) return
       setExpanded((prev) => {
-        const next = new Set(prev)
-        if (next.has(key)) {
-          next.delete(key)
-        } else {
-          next.add(key)
-          if (!childrenByKey[key]) void fetchChildren(ref)
-        }
+        const next = nextExpandedSet(prev, key, parentByKeyRef.current)
+        if (next.has(key) && !childrenByKey[key]) void fetchChildren(ref)
         return next
       })
     },
@@ -108,10 +118,10 @@ export function useExplorerGraph({ lens, search, onError, initialSelected, onSel
     }
   }, [fetchChildren])
 
-  // reload seeds/refreshes the map: auto-expand the root (so the six buckets are
-  // visible immediately, not a lone workspace node), drop stale child caches, and
-  // re-fetch every open branch under the current lens. Runs on mount and on every
-  // lens change.
+  // reload seeds/refreshes the map: auto-expand the root (so the eleven buckets
+  // are visible immediately, not a lone workspace node), drop stale child caches,
+  // and re-fetch every open branch under the current lens. Runs on mount and on
+  // every lens change.
   const reload = useCallback(() => {
     setChildrenByKey({})
     setExpanded((prev) => (prev.has(ROOT_KEY) ? prev : new Set(prev).add(ROOT_KEY)))

@@ -7,6 +7,7 @@ import { useEffect, useRef, type Dispatch, type MutableRefObject, type SetStateA
 import { api, getActiveWorkspace } from '@/api'
 import type { AppEvent, Message, TurnStep } from '@/types'
 import { emitToast } from '@/shared/lib/notifyBus'
+import { toast } from '@/shared/components/Toast'
 import { speakLatestReply } from '@/shared/lib/tts'
 import type { useChatStream } from '@/features/chat/useChatStream'
 import type { View } from './NavRail'
@@ -253,6 +254,15 @@ function onEvent(d: AppEventDeps, e: AppEvent) {
   // fire their badge / toast side below.
   if (!e.workspaceId || e.workspaceId === getActiveWorkspace()) {
     bumpSignalsForEvent(e)
+  }
+  // Agent model change: show an in-app info toast so the user in THIS window sees
+  // the notification even if they closed the form already. The model-change
+  // notification also goes through the desktop-notification funnel below (per-type
+  // mute applies), so other open windows also see it.
+  if (e.type === 'agent-model-changed') {
+    toast.info(e.title + ' — ' + e.body)
+    // Fall through: the agent-model-changed type is in notifyTypes → a desktop
+    // notification also fires below for backgrounded windows / other tabs.
   }
   // Chat completions are handled by the branch above (chime + toast via the
   // funnel); here they only drove the badge. Other event types raise a desktop

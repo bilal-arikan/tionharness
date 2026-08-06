@@ -83,6 +83,7 @@ func (d *DB) CreateAgent(ctx context.Context, a Agent) (Agent, error) {
 // DeleteAgent marks an agent deleted and drops the forward-looking records that
 // can no longer fire without it:
 //   - schedules bound to it (AgentID),
+//   - automations targeting it (TargetAgentID cleared, not deleted),
 //   - tasks it owns (OwnerAgentID) together with their runs.
 //
 // The agent row itself is KEPT (Deleted=true) and so are the sessions it owns.
@@ -114,6 +115,19 @@ func (d *DB) DeleteAgent(ctx context.Context, id string) error {
 		if sc.AgentID == id {
 			delete(d.schedules, scid)
 			_ = removeFile(d.dir(dirSchedules, scid+".json"))
+		}
+	}
+	// Cascade: automations targeting this agent lose their target so they don't
+	// fire a dangling reference at runtime. The automation stays intact (name,
+	// trigger, budget, history) and can be pointed at a new agent later.
+	for aid, a := range d.automations {
+		if a.TargetAgentID == id {
+			a.TargetAgentID = ""
+			a.UpdatedAt = now()
+			if err := atomicWriteJSON(d.dir(dirAutomations, aid+".json"), a); err != nil {
+				return err
+			}
+			d.automations[aid] = a
 		}
 	}
 	// Cascade: tasks owned by this agent (and their runs) — they cannot be
@@ -360,6 +374,13 @@ func (d *DB) createSessionLocked(s Session) (Session, error) {
 	if s.SchemaVersion == 0 {
 		s.SchemaVersion = SessionSchemaVersion
 	}
+	// Seed the session's model snapshot from its agent's configured model so
+	// the header answers "which model?" in O(1) without scanning messages.
+	if s.Model == "" && s.AgentID != "" {
+		if a, ok := d.agents[s.AgentID]; ok {
+			s.Model = a.Model
+		}
+	}
 	d.messages[s.ID] = nil
 	return s, d.persistSessionLocked(s)
 }
@@ -490,6 +511,15 @@ func (d *DB) SetSessionCLIResume(ctx context.Context, sessionID, cliSessionID st
 	return d.mutateSessionLocked(sessionID, func(s *Session) {
 		s.CLISessionID = cliSessionID
 		s.CLISentMsgCount = sentMsgCount
+	})
+}
+
+// SetSessionModel updates the session header's model snapshot — called after a
+// turn when the response model differs from the session's recorded model (e.g. the
+// agent was reconfigured mid-session). Does not bump UpdatedAt — bookkeeping only.
+func (d *DB) SetSessionModel(ctx context.Context, sessionID, model string) error {
+	return d.mutateSessionLocked(sessionID, func(s *Session) {
+		s.Model = model
 	})
 }
 

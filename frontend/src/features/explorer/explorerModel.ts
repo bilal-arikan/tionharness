@@ -45,7 +45,8 @@ const COL_W = 260
 const ROW_H = 72
 
 // drillableKinds are the node kinds the map can expand into children. budget /
-// tools / flowrun / schedule render their breakdown inline (leaves); a board card
+// tools / flowrun / schedule / logs render their breakdown inline (leaves), as
+// do the TSK66 leaves artifact / automation / skill / insight; a board card
 // (board ref with a sub) is a leaf too — handled in isDrillable.
 const drillableKinds = new Set<ViewKind>(['workspace', 'category', 'board', 'agent', 'session'])
 
@@ -54,6 +55,34 @@ const drillableKinds = new Set<ViewKind>(['workspace', 'category', 'board', 'age
 export function isDrillable(ref: ViewRef): boolean {
   if (ref.kind === 'board' && ref.sub) return false
   return drillableKinds.has(ref.kind)
+}
+
+// nextExpandedSet applies the single-expand (accordion) rule: expanding a node
+// collapses every OTHER open sibling — a node sharing the same parent — so at
+// most one node per level stays open. The map reads as a drill-down, not a
+// fan-out: clicking "Akışlar" closes "Oturumlar", clicking a board column closes
+// its neighbour, and so on. Collapsing a node keeps everything else.
+//
+// parentByKey maps every node's ref-string to its parent's ref-string (the root
+// has no entry). It is maintained by the hook as children are fetched, so it is
+// complete for every node that can actually be expanded — a node is only
+// expandable after its parent's children were fetched.
+export function nextExpandedSet(
+  expanded: Set<string>,
+  key: string,
+  parentByKey: Record<string, string>,
+): Set<string> {
+  const next = new Set(expanded)
+  if (next.has(key)) {
+    next.delete(key)
+    return next
+  }
+  const parent = parentByKey[key]
+  for (const k of next) {
+    if (k !== key && parentByKey[k] === parent) next.delete(k)
+  }
+  next.add(key)
+  return next
 }
 
 // GraphInputs is the hook state buildGraph turns into React Flow nodes/edges.

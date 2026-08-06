@@ -16,7 +16,7 @@ import { THINKING_OPTIONS, PERMISSION_OPTIONS } from './agentOptions'
 
 interface Props {
   agent: Agent
-  onSave: (patch: AgentPatch) => Promise<void>
+  onSave: (patch: AgentPatch) => Promise<{ warning?: string } | void>
   /** Called after a successful save (e.g. close the modal). */
   onSaved?: () => void
   /** Secondary action button (e.g. Cancel in the modal). */
@@ -24,8 +24,8 @@ interface Props {
   cancelLabel?: string
   /** Danger action: when set, a "Sil" button is shown at the footer-left. */
   onDelete?: () => void
-  /** Clone the agent: when set, a "Kopyala" button is shown in the header. The
-   * copy carries over every setting (profile + provider/model + tools + skills).
+  /** Clone the agent: when set, a "Klonla" button is shown in the header. The
+   * clone carries over every setting (profile + provider/model + tools + skills).
    * Resolves once the clone exists (the parent then selects it). */
   onDuplicate?: () => Promise<string | undefined>
   /** Whether this agent is the default for new chats. Drives the header star
@@ -74,6 +74,9 @@ export function AgentSettingsForm({
   const [err, setErr] = useState<string | null>(null)
   const [savedAt, setSavedAt] = useState(0)
   const [previewOpen, setPreviewOpen] = useState(false)
+  // P1.3: warning from the backend (e.g. "model not in price table"). Cleared on
+  // the next save or when the model/provider changes.
+  const [saveWarn, setSaveWarn] = useState<string | null>(null)
 
   // Unsaved-edits flag: current form fields vs the agent's persisted values.
   // (The tools section saves instantly on its own, so it is not part of this.)
@@ -120,8 +123,9 @@ export function AgentSettingsForm({
     }
     setSaving(true)
     setErr(null)
+    setSaveWarn(null)
     try {
-      await onSave({
+      const result = await onSave({
         name: name.trim(),
         avatar,
         color,
@@ -133,6 +137,7 @@ export function AgentSettingsForm({
         permissionMode,
         skills,
       })
+      if (result?.warning) setSaveWarn(result.warning)
       setSavedAt((n) => n + 1)
       onSaved?.()
     } catch (e) {
@@ -215,10 +220,10 @@ export function AgentSettingsForm({
               data-testid="agent-duplicate"
               onClick={duplicate}
               disabled={duplicating}
-              title="Bu ajanın tüm ayarlarıyla (sağlayıcı/model, araçlar, yetenekler) bir kopyasını oluştur"
+              title="Bu ajanın tüm ayarlarıyla (sağlayıcı/model, araçlar, yetenekler) bir klonunu oluştur"
               className="flex items-center gap-1.5 rounded px-3 py-1.5 text-sm text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)] disabled:opacity-50"
             >
-              <Copy size={14} /> {duplicating ? 'Kopyalanıyor…' : 'Kopyala'}
+              <Copy size={14} /> {duplicating ? 'Klonlanıyor…' : 'Klonla'}
             </button>
           )}
           {onCancel && (
@@ -375,6 +380,11 @@ export function AgentSettingsForm({
         </div>
 
         {err && <p className="text-xs text-[var(--color-danger)]">{err}</p>}
+        {saveWarn && (
+          <p className="rounded-md border border-[color-mix(in_srgb,var(--color-accent)_25%,transparent)] bg-[color-mix(in_srgb,var(--color-accent)_6%,transparent)] px-2 py-1.5 text-xs text-[var(--color-text-dim)]">
+            ⚠️ {saveWarn}
+          </p>
+        )}
       </div>
 
       {previewOpen && (

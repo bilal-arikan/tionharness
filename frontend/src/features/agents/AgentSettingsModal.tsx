@@ -5,7 +5,7 @@ import { ModalOverlay } from '@/shared/components'
 interface Props {
   agent: Agent
   onClose: () => void
-  onSave: (patch: AgentPatch) => Promise<void>
+  onSave: (patch: AgentPatch) => Promise<{ warning?: string } | void>
 }
 
 // AgentSettingsModal wraps the shared AgentSettingsForm in a centered dialog.

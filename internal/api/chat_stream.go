@@ -659,6 +659,23 @@ func (s *Server) runChatTurn(clientGone context.Context, wsp *workspace.Workspac
 				if rerr := database.SetSessionCLIResume(ctx, session.ID, resp.SessionID, resumePlan.sentCount+1); rerr != nil {
 					s.logger.Warn("persist cli resume state failed", "session", session.ID, "error", rerr)
 				}
+				// P1.4: claude-cli resume model mismatch — the CLI may have served the
+				// response with a different model than the agent's current configuration
+				// (e.g. agent was reconfigured but the warm CLI session still runs the old
+				// model). Log a debug event so the discrepancy is diagnosable.
+				if resp.Model != "" && resp.Model != agentRow.Model {
+					s.logger.Info("cli-resume-model-mismatch",
+						"session", session.ID, "agent", agentRow.ID,
+						"agent_model", agentRow.Model, "cli_model", resp.Model,
+						"cli_session", resp.SessionID)
+				}
+			}
+			// P1.1: update the session header's model snapshot when the actual
+			// response model differs — keeps the header's O(1) answer current.
+			if resp.Model != "" && resp.Model != session.Model {
+				if merr := database.SetSessionModel(ctx, session.ID, resp.Model); merr != nil {
+					s.logger.Warn("set session model failed", "session", session.ID, "error", merr)
+				}
 			}
 			// Reply is durable now; drop this agent's sidecar before the next agent
 			// (the top-level defer is the catch-all for early-return paths).

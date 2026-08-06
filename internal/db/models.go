@@ -258,6 +258,14 @@ type Session struct {
 	CLISessionID    string `json:"cliSessionId,omitempty"`
 	CLISentMsgCount int    `json:"cliSentMsgCount,omitempty"`
 
+	// Model is a snapshot of the model serving this session's CURRENT turn —
+	// set at creation from the agent's configured model and updated when a turn's
+	// actual response model differs (e.g. the agent was reconfigured mid-session).
+	// It answers "which model is this session running on?" in O(1) without
+	// scanning messages or SessionUsage.ByModel. Per-message accuracy is still in
+	// Message.Model.
+	Model string `json:"model,omitempty"`
+
 	CreatedAt int64 `json:"createdAt"`
 	UpdatedAt int64 `json:"updatedAt"`
 }

@@ -34,15 +34,17 @@ func (ExpandTool) Def() providers.ToolDef {
 			"get_view reads ONE node, expand tells you what that node drills into.\n\n" +
 			"Typical walk to answer \"what is going on?\":\n" +
 			"  1. get_view{kind:'workspace',id:'workspace'} — read the root.\n" +
-			"  2. expand{kind:'workspace',id:'workspace'} — the six buckets (Oturumlar, Akışlar, " +
-			"Pano, Ajanlar, Bütçe, Araçlar).\n" +
-			"  3. expand{kind:'category',id:'sessions'} (or 'flows'/'agents') — the members.\n" +
-			"  4. get_view the one session / run / card that matters.\n\n" +
+			"  2. expand{kind:'workspace',id:'workspace'} — the eleven buckets (Oturumlar, Akışlar, " +
+			"Pano, Ajanlar, Artifacts, Otomasyonlar, Skill'ler, İçgörüler, Günlükler, Bütçe, Araçlar).\n" +
+			"  3. expand{kind:'category',id:'sessions'} (or 'flows'/'agents'/'artifacts'/'automations'/" +
+			"'skills'/'insights') — the members.\n" +
+			"  4. get_view the one session / run / card / artifact / automation / skill / finding that matters.\n\n" +
 			"Also: expand{kind:'board',id:'board'} → columns; expand{kind:'category',id:'col:in_progress'} " +
 			"→ that column's cards; expand{kind:'agent',id:AG} → the agent's sessions; " +
 			"expand{kind:'session',id:SES} → a coordinator's worker sessions.\n\n" +
 			"lens narrows the children: 'errors' returns only the troubled ones (stuck sessions, failed " +
-			"runs, failed cards). Leaves (budget, tools, a single card, a flow run, a schedule) have no " +
+			"runs, failed cards, failed automations, fresh/regressed findings). Leaves (budget, tools, logs, " +
+			"a single card, a flow run, a schedule, one artifact/automation/skill/finding) have no " +
 			"children and return an empty list.",
 		InputSchema: json.RawMessage(`{
   "type": "object",

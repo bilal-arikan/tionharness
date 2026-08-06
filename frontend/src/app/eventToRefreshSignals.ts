@@ -72,6 +72,7 @@ export function signalsForEvent(e: AppEvent): string[] {
       // adds/removes a node rather than just re-tinting one.
       return [SIGNAL_BOARD, SIGNAL_EXECUTIONS, SIGNAL_ACTIVITY, SIGNAL_NETWORK, SIGNAL_EXPLORER]
     case 'agent':
+    case 'agent-model-changed':
       return [SIGNAL_AGENTS, SIGNAL_NETWORK, SIGNAL_EXPLORER]
     case 'artifact':
       return [SIGNAL_ARTIFACTS]

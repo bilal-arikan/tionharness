@@ -89,3 +89,63 @@ func TestSessionMetaAndMessageFields(t *testing.T) {
 		t.Errorf("feedback not cleared: %+v", msgs[0].Feedback)
 	}
 }
+
+// TestSessionModelSnapshot verifies the session header's Model field is seeded from
+// the agent at creation and can be updated via SetSessionModel (P1.1).
+func TestSessionModelSnapshot(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	d, err := Open(filepath.Join(dir, "store"))
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+
+	// Agent with a known model.
+	ag, err := d.CreateAgent(ctx, Agent{Name: "A", Provider: "anthropic", Model: "claude-sonnet-4-20250514"})
+	if err != nil {
+		t.Fatalf("create agent: %v", err)
+	}
+
+	// Session picks up the agent's model at creation.
+	sess, err := d.CreateSession(ctx, Session{AgentID: ag.ID, Title: "T"})
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+	if sess.Model != "claude-sonnet-4-20250514" {
+		t.Fatalf("session model = %q, want claude-sonnet-4-20250514", sess.Model)
+	}
+
+	// Round-trip: model survives close→reopen.
+	_ = d.Close()
+	d2, err := Open(filepath.Join(dir, "store"))
+	if err != nil {
+		t.Fatalf("reopen: %v", err)
+	}
+	got, err := d2.GetSession(ctx, sess.ID)
+	if err != nil {
+		t.Fatalf("get session: %v", err)
+	}
+	if got.Model != "claude-sonnet-4-20250514" {
+		t.Fatalf("model lost on disk: %q", got.Model)
+	}
+
+	// SetSessionModel updates the header.
+	if err := d2.SetSessionModel(ctx, sess.ID, "claude-opus-4-20250805"); err != nil {
+		t.Fatalf("set session model: %v", err)
+	}
+	got, _ = d2.GetSession(ctx, sess.ID)
+	if got.Model != "claude-opus-4-20250805" {
+		t.Fatalf("model not updated: %q", got.Model)
+	}
+
+	// Session without AgentID leaves Model empty.
+	ag2, _ := d2.CreateAgent(ctx, Agent{Name: "B", Provider: "minimax", Model: "minimax-m2.5"})
+	sess2, err := d2.CreateSession(ctx, Session{Title: "orphan"})
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+	if sess2.Model != "" {
+		t.Errorf("session without AgentID must have empty model, got %q", sess2.Model)
+	}
+	_ = ag2 // used
+}

@@ -3,11 +3,14 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"io"
+	"log/slog"
 	"net/http"
 	"strings"
 	"testing"
 
 	"github.com/bilal-arikan/tionswarm/internal/db"
+	"github.com/bilal-arikan/tionswarm/internal/logbuf"
 )
 
 // viewFixture stores a flow plus one run of it that has executed two nodes and is
@@ -177,7 +180,7 @@ func TestGetViewProjectsSession(t *testing.T) {
 }
 
 // TestGetViewChildrenWalksTheMap covers the Explorer drill-down endpoint end to
-// end: the workspace root returns its six structural children, and expanding the
+// end: the workspace root returns its eleven structural children, and expanding the
 // board returns one column node per column that exists.
 func TestGetViewChildrenWalksTheMap(t *testing.T) {
 	ctx := context.Background()
@@ -202,8 +205,8 @@ func TestGetViewChildrenWalksTheMap(t *testing.T) {
 	}
 	got := decodeView(t, rec.Body.Bytes())
 	children, _ := got["children"].([]any)
-	if len(children) != 6 {
-		t.Fatalf("workspace children = %d, want 6:\n%s", len(children), rec.Body.String())
+	if len(children) != 11 {
+		t.Fatalf("workspace children = %d, want 11:\n%s", len(children), rec.Body.String())
 	}
 
 	rec = serveFlowRuns((&Server{}).handleGetViewChildren, database,
@@ -229,6 +232,86 @@ func TestGetViewChildrenRejectsUnknownKind(t *testing.T) {
 		map[string]string{"kind": "galaxy", "id": "x"})
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("status %d (want 400): %s", rec.Code, rec.Body.String())
+	}
+}
+
+// TestGetViewProjectsArtifactAndAutomation pins the TSK66 leaves end to end: a
+// saved artifact and an automation rule render their metadata through the same
+// projection endpoint as every other kind.
+func TestGetViewProjectsArtifactAndAutomation(t *testing.T) {
+	ctx := context.Background()
+	database, err := db.Open(t.TempDir())
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	t.Cleanup(func() { database.Close() })
+
+	art, err := database.CreateArtifact(ctx, db.Artifact{
+		Title: "görev raporu", Kind: db.ArtifactMarkdown, Origin: "tool", AgentID: "AG1",
+	})
+	if err != nil {
+		t.Fatalf("create artifact: %v", err)
+	}
+	aut, err := database.CreateAutomation(ctx, db.Automation{
+		Name: "todo→review", TriggerTag: "done", TargetAgentID: "AG2",
+	})
+	if err != nil {
+		t.Fatalf("create automation: %v", err)
+	}
+
+	rec := serveFlowRuns((&Server{}).handleGetView, database,
+		"/api/views/artifact/"+art.ID,
+		map[string]string{"kind": "artifact", "id": art.ID})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("artifact status %d: %s", rec.Code, rec.Body.String())
+	}
+	got := decodeView(t, rec.Body.Bytes())
+	text, _ := got["text"].(string)
+	if !strings.Contains(text, "görev raporu") || !strings.Contains(text, "origin: tool") {
+		t.Errorf("artifact projection wrong:\n%s", text)
+	}
+
+	rec = serveFlowRuns((&Server{}).handleGetView, database,
+		"/api/views/automation/"+aut.ID,
+		map[string]string{"kind": "automation", "id": aut.ID})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("automation status %d: %s", rec.Code, rec.Body.String())
+	}
+	got = decodeView(t, rec.Body.Bytes())
+	text, _ = got["text"].(string)
+	if !strings.Contains(text, "todo→review") || !strings.Contains(text, "tetik: tag:done") {
+		t.Errorf("automation projection wrong:\n%s", text)
+	}
+}
+
+// TestGetViewProjectsLogs covers the logs leaf with a live ring buffer: entries
+// captured through the slog handler must come back rendered.
+func TestGetViewProjectsLogs(t *testing.T) {
+	database, err := db.Open(t.TempDir())
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	t.Cleanup(func() { database.Close() })
+
+	logs := logbuf.New(50)
+	logger := slog.New(logs.Handler(slog.NewTextHandler(io.Discard, nil)))
+	logger.Info("turn ok")
+	logger.Error("provider 429")
+
+	srv := &Server{logs: logs}
+	rec := serveFlowRuns(srv.handleGetView, database,
+		"/api/views/logs/logs",
+		map[string]string{"kind": "logs", "id": "logs"})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status %d: %s", rec.Code, rec.Body.String())
+	}
+	got := decodeView(t, rec.Body.Bytes())
+	text, _ := got["text"].(string)
+	if !strings.Contains(text, "provider 429") || !strings.Contains(text, "turn ok") {
+		t.Errorf("logs projection wrong:\n%s", text)
+	}
+	if !strings.Contains(text, "LOGS · 2 kayıt") {
+		t.Errorf("logs header wrong:\n%s", text)
 	}
 }
 

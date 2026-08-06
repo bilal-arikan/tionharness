@@ -29,8 +29,10 @@ export const agentApi = {
       method: 'POST',
       body: JSON.stringify(data),
     }),
+  // Returns the updated agent plus an optional warning when the model is not in
+  // the price table (P1.3 — unknown model advisory).
   updateAgent: (id: string, patch: AgentPatch) =>
-    req<Agent>(`/api/agents/${id}`, {
+    req<{ agent: Agent; warning?: string }>(`/api/agents/${id}`, {
       method: 'PUT',
       body: JSON.stringify(patch),
     }),

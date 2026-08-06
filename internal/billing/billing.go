@@ -21,6 +21,12 @@ import (
 // priced=true / cost=0 (there is nothing to price, so it never flags the rollup as
 // "contains unpriced spend"). Every budget surface routes through here so the
 // screens compute cost identically.
+//
+// INVARIANT: model değişikliği geçmiş kayıtları asla yeniden fiyatlamaz.
+// Usage.ByModel anahtarı çağrıyı gerçekten servis eden modeldir — agent.Model
+// değişse bile geçmiş anahtarlar ("claude-sonnet-4-20250514") korunur ve
+// PriceStat okuma anında o anahtara göre fiyat uygular. Bu davranış regresyon
+// testiyle korunmaktadır (bkz. internal/billing/model_change_poc_test.go).
 func PriceStat(provider, model string, st db.KindStat) (cost, save float64, priced, estimated bool) {
 	if p, ok := providers.PriceFor(provider, model); ok {
 		return p.CostDetailed(st.InputTokens, st.OutputTokens, st.CacheReadTokens, st.CacheWriteTokens),
@@ -77,9 +83,9 @@ type Row struct {
 // (per-agent rows, daily trend) and the "rows + totals" callers (the usage
 // endpoints) read what they need from one computation.
 type Rollup struct {
-	Rows             []Row
-	CostUSD          float64
-	SavingsUSD       float64
+	Rows       []Row
+	CostUSD    float64
+	SavingsUSD float64
 	// NoCacheCostUSD is the counterfactual total if caching did not exist (cache
 	// read/write billed as fresh input). The honest "cost without caching" baseline
 	// — always ≥ CostUSD, and NOT equal to CostUSD+SavingsUSD (that keeps the write

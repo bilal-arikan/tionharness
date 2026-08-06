@@ -8,7 +8,9 @@ import (
 
 	"github.com/bilal-arikan/tionswarm/internal/billing"
 	"github.com/bilal-arikan/tionswarm/internal/db"
+	"github.com/bilal-arikan/tionswarm/internal/logbuf"
 	"github.com/bilal-arikan/tionswarm/internal/orchestration"
+	"github.com/bilal-arikan/tionswarm/internal/skills"
 )
 
 // decodeState parses a persisted orchestration state snapshot.
@@ -39,6 +41,11 @@ type Store interface {
 	GetUsageToday(ctx context.Context, agentID string) (db.Usage, error)
 	ListMCPServers(ctx context.Context) ([]db.MCPServer, error)
 	GetWorkspaceToolConfig(ctx context.Context) (db.WorkspaceToolConfig, error)
+	// Artifacts + automations are store-backed Explorer leaves (TSK66).
+	GetArtifact(ctx context.Context, id string) (db.Artifact, error)
+	ListArtifacts(ctx context.Context, sessionID string) ([]db.Artifact, error)
+	GetAutomation(ctx context.Context, id string) (db.Automation, error)
+	ListAutomations(ctx context.Context) ([]db.Automation, error)
 }
 
 // BoardRefID / WorkspaceRefID are the ids a board or workspace ref carries. Both
@@ -52,19 +59,85 @@ const (
 	// of their own; naming them keeps every Ref uniform.
 	BudgetRefID = "budget"
 	ToolsRefID  = "tools"
+	// LogsRefID is the singleton id the logs projection carries. The log stream
+	// is process-global (one ring buffer for every workspace), so the ref names a
+	// singleton like budget/tools rather than a workspace-scoped entity.
+	LogsRefID = "logs"
 	// WorkersRefID labels a coordinator's fleet projection. It is not routable
 	// through Projector (see KindWorkers) — the id exists so the View is
 	// self-describing like every other one.
 	WorkersRefID = "workers"
 )
 
+// Sources carries the optional non-store inputs a few Explorer projections need:
+// the workspace skill catalog (held by the agent runtime), the insight findings
+// sidecar and the process log ring buffer. Everything store-backed goes through
+// Store; these are the three inputs that live outside it. A nil source degrades
+// its projection to an explicit "(yok)" line — a map node must never fail just
+// because the caller did not wire an optional source.
+type Sources struct {
+	Skills   SkillsSource
+	Findings FindingsSource
+	Logs     LogsSource
+}
+
+// SkillsSource enumerates and resolves the workspace skill catalog.
+type SkillsSource interface {
+	List() []skills.Skill
+	Get(slug string) (skills.Skill, bool)
+}
+
+// FindingsSource lists insight findings. The finding shape is view-local
+// (InsightFinding) because the insight package already imports view; a reverse
+// edge would cycle. The api layer adapts insight.Findings to this shape.
+type FindingsSource interface {
+	ListFindings() []InsightFinding
+}
+
+// LogsSource reads the process-wide log ring buffer.
+type LogsSource interface {
+	Entries(limit int) []logbuf.Entry
+}
+
+// InsightFinding is the projection's view of one insight finding — the minimal
+// field set the map renders (id, severity, status, evidence, recurrence).
+// Deliberately view-local: see FindingsSource.
+type InsightFinding struct {
+	ID                 string
+	LensID             string
+	Channel            string
+	Title              string
+	RootCause          string
+	ProposedFix        string
+	Severity           string
+	Status             string
+	Occurrences        int
+	EvidenceSessionIDs []string
+	Regressed          bool
+	LastSeen           int64 // unix seconds
+}
+
 // Projector resolves a Ref against a store and renders the matching projection.
 type Projector struct {
-	store Store
+	store   Store
+	sources Sources
 }
 
 // NewProjector wires a projector to a store.
 func NewProjector(s Store) *Projector { return &Projector{store: s} }
+
+// WithSources attaches the optional non-store inputs (skills catalog, insight
+// findings, log buffer) and returns the projector for chaining. Callers that
+// only have a store (the agent expand/get_view tools) may omit it — the
+// affected projections then report the source as unavailable rather than
+// failing the whole map.
+func (p *Projector) WithSources(src Sources) *Projector {
+	if p == nil {
+		return nil
+	}
+	p.sources = src
+	return p
+}
 
 // Project renders the view for ref at the requested level and lens.
 //
@@ -134,6 +207,32 @@ func (p *Projector) Project(ctx context.Context, ref Ref, level Level, lens Lens
 			return View{}, err
 		}
 		return ProjectCategory(CategoryInput{ID: ref.ID, Members: members}, level, lens)
+	case KindArtifact:
+		in, err := p.loadArtifact(ctx, ref.ID)
+		if err != nil {
+			return View{}, err
+		}
+		return ProjectArtifact(in, level, lens)
+	case KindAutomation:
+		in, err := p.loadAutomation(ctx, ref.ID)
+		if err != nil {
+			return View{}, err
+		}
+		return ProjectAutomation(in, level, lens)
+	case KindSkill:
+		sk, err := p.loadSkill(ref.ID)
+		if err != nil {
+			return View{}, err
+		}
+		return ProjectSkill(SkillInput{Skill: sk}, level, lens)
+	case KindInsight:
+		f, err := p.loadInsight(ref.ID)
+		if err != nil {
+			return View{}, err
+		}
+		return ProjectInsight(InsightInput{Finding: f}, level, lens)
+	case KindLogs:
+		return ProjectLogs(LogsInput{Entries: p.logEntries()}, level, lens)
 	default:
 		return View{}, fmt.Errorf("view: unsupported kind %q", ref.Kind)
 	}
@@ -349,4 +448,66 @@ func (p *Projector) loadTools(ctx context.Context) (ToolsInput, error) {
 		return ToolsInput{}, fmt.Errorf("view: tools config: %w", err)
 	}
 	return ToolsInput{MCPServers: servers, ToolConfig: cfg}, nil
+}
+
+// loadArtifact reads one artifact for its metadata projection. A missing id or
+// entity is an error, never a blank artifact — a blank card would read like a
+// real (but empty) artifact.
+func (p *Projector) loadArtifact(ctx context.Context, id string) (ArtifactInput, error) {
+	if id == "" {
+		return ArtifactInput{}, fmt.Errorf("view: artifact: empty id")
+	}
+	a, err := p.store.GetArtifact(ctx, id)
+	if err != nil {
+		return ArtifactInput{}, fmt.Errorf("view: artifact %s: %w", id, err)
+	}
+	return ArtifactInput{Artifact: a}, nil
+}
+
+// loadAutomation reads one automation rule for its projection.
+func (p *Projector) loadAutomation(ctx context.Context, id string) (AutomationInput, error) {
+	if id == "" {
+		return AutomationInput{}, fmt.Errorf("view: automation: empty id")
+	}
+	a, err := p.store.GetAutomation(ctx, id)
+	if err != nil {
+		return AutomationInput{}, fmt.Errorf("view: automation %s: %w", id, err)
+	}
+	return AutomationInput{Automation: a}, nil
+}
+
+// loadSkill resolves one skill from the optional catalog. A missing source is
+// reported distinctly from an absent slug — "catalog unavailable" is a wiring
+// gap, "not found" is a stale ref; neither may render as a blank skill.
+func (p *Projector) loadSkill(slug string) (skills.Skill, error) {
+	if p.sources.Skills == nil {
+		return skills.Skill{}, fmt.Errorf("view: skill %s: skill catalog unavailable", slug)
+	}
+	sk, ok := p.sources.Skills.Get(slug)
+	if !ok {
+		return skills.Skill{}, fmt.Errorf("view: skill %s not found", slug)
+	}
+	return sk, nil
+}
+
+// loadInsight resolves one finding from the optional findings source.
+func (p *Projector) loadInsight(id string) (InsightFinding, error) {
+	if p.sources.Findings == nil {
+		return InsightFinding{}, fmt.Errorf("view: insight %s: findings store unavailable", id)
+	}
+	for _, f := range p.sources.Findings.ListFindings() {
+		if f.ID == id {
+			return f, nil
+		}
+	}
+	return InsightFinding{}, fmt.Errorf("view: insight %s not found", id)
+}
+
+// logEntries reads the optional log buffer. The projection caps the tail itself,
+// so the full retained stream is passed in (the buffer holds at most ~2000 rows).
+func (p *Projector) logEntries() []logbuf.Entry {
+	if p.sources.Logs == nil {
+		return nil
+	}
+	return p.sources.Logs.Entries(0)
 }

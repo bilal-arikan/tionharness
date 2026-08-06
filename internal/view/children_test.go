@@ -7,17 +7,20 @@ import (
 	"time"
 
 	"github.com/bilal-arikan/tionswarm/internal/db"
+	"github.com/bilal-arikan/tionswarm/internal/skills"
 )
 
 // fakeStore is a hand-built Store for exercising the Projector's structural
 // Children walk without a real db. Only the reads Children uses carry data; the
 // rest satisfy the interface with zero values.
 type fakeStore struct {
-	agents   []db.Agent
-	sessions []db.Session
-	runs     []db.FlowRun
-	tasks    []db.Task
-	mcp      []db.MCPServer
+	agents      []db.Agent
+	sessions    []db.Session
+	runs        []db.FlowRun
+	tasks       []db.Task
+	mcp         []db.MCPServer
+	artifacts   []db.Artifact
+	automations []db.Automation
 }
 
 func (s *fakeStore) ListSessions(_ context.Context, agentID string) ([]db.Session, error) {
@@ -63,6 +66,18 @@ func (s *fakeStore) GetUsageToday(context.Context, string) (db.Usage, error) { r
 func (s *fakeStore) GetWorkspaceToolConfig(context.Context) (db.WorkspaceToolConfig, error) {
 	return db.WorkspaceToolConfig{}, nil
 }
+func (s *fakeStore) GetArtifact(context.Context, string) (db.Artifact, error) {
+	return db.Artifact{}, nil
+}
+func (s *fakeStore) ListArtifacts(_ context.Context, _ string) ([]db.Artifact, error) {
+	return s.artifacts, nil
+}
+func (s *fakeStore) GetAutomation(context.Context, string) (db.Automation, error) {
+	return db.Automation{}, nil
+}
+func (s *fakeStore) ListAutomations(_ context.Context) ([]db.Automation, error) {
+	return s.automations, nil
+}
 
 // childrenFixture wires a projector over a store with one of each drillable node.
 func childrenFixture() *Projector {
@@ -96,16 +111,16 @@ func kindsOf(hs []Handle) map[Kind]int {
 	return m
 }
 
-func TestChildrenWorkspaceIsSixCategories(t *testing.T) {
+func TestChildrenWorkspaceIsElevenNodes(t *testing.T) {
 	hs, err := childrenFixture().Children(context.Background(), Ref{Kind: KindSpace, ID: WorkspaceRefID}, LensHealth)
 	if err != nil {
 		t.Fatalf("children: %v", err)
 	}
-	if len(hs) != 6 {
-		t.Fatalf("workspace children = %d, want 6: %+v", len(hs), hs)
+	if len(hs) != 11 {
+		t.Fatalf("workspace children = %d, want 11: %+v", len(hs), hs)
 	}
-	// The map's shape is fixed: three group nodes plus board/budget/tools.
-	want := map[Kind]int{KindCategory: 3, KindBoard: 1, KindBudget: 1, KindTools: 1}
+	// The map's shape is fixed: seven group nodes plus board/logs/budget/tools.
+	want := map[Kind]int{KindCategory: 7, KindBoard: 1, KindLogs: 1, KindBudget: 1, KindTools: 1}
 	got := kindsOf(hs)
 	for k, n := range want {
 		if got[k] != n {
@@ -266,5 +281,144 @@ func TestChildrenCapsAtTopN(t *testing.T) {
 	}
 	if len(hs) != categoryTopN {
 		t.Errorf("children capped wrong: got %d, want %d", len(hs), categoryTopN)
+	}
+}
+
+// fakeSkillsSource is a hand-built SkillsSource for exercising the skills
+// category without a real catalog.
+type fakeSkillsSource struct{ catalog []skills.Skill }
+
+func (f fakeSkillsSource) List() []skills.Skill { return f.catalog }
+func (f fakeSkillsSource) Get(slug string) (skills.Skill, bool) {
+	for _, sk := range f.catalog {
+		if sk.Slug == slug {
+			return sk, true
+		}
+	}
+	return skills.Skill{}, false
+}
+
+// fakeFindingsSource is a hand-built FindingsSource for exercising the insights
+// category without the insight sidecar.
+type fakeFindingsSource struct{ findings []InsightFinding }
+
+func (f fakeFindingsSource) ListFindings() []InsightFinding { return f.findings }
+
+func TestChildrenArtifactsAndAutomations(t *testing.T) {
+	now := time.Now().Unix()
+	p := NewProjector(&fakeStore{
+		artifacts: []db.Artifact{
+			{ID: "ART1", Title: "görev raporu", UpdatedAt: now},
+			{ID: "ART2", Title: "şema", UpdatedAt: now},
+		},
+		automations: []db.Automation{
+			{ID: "AUT1", Name: "todo→review", CreatedAt: now},
+			{ID: "AUT2", Name: "failed kart", CreatedAt: now, LastError: "provider 429"},
+		},
+	})
+	ctx := context.Background()
+
+	arts, err := p.Children(ctx, Ref{Kind: KindCategory, ID: CategoryArtifacts}, LensHealth)
+	if err != nil {
+		t.Fatalf("artifacts: %v", err)
+	}
+	if len(arts) != 2 || kindsOf(arts)[KindArtifact] != 2 {
+		t.Errorf("artifacts category wrong: %+v", arts)
+	}
+
+	auts, err := p.Children(ctx, Ref{Kind: KindCategory, ID: CategoryAutomations}, LensHealth)
+	if err != nil {
+		t.Fatalf("automations: %v", err)
+	}
+	if len(auts) != 2 || kindsOf(auts)[KindAutomation] != 2 {
+		t.Errorf("automations category wrong: %+v", auts)
+	}
+
+	// Errors lens keeps only the rule whose last fire failed.
+	failed, err := p.Children(ctx, Ref{Kind: KindCategory, ID: CategoryAutomations}, LensErrors)
+	if err != nil {
+		t.Fatalf("automations errors: %v", err)
+	}
+	if len(failed) != 1 || failed[0].Ref.ID != "AUT2" {
+		t.Errorf("errors lens should keep only the failed automation: %+v", failed)
+	}
+}
+
+func TestChildrenSkillsAndInsightsNeedSources(t *testing.T) {
+	ctx := context.Background()
+	p := NewProjector(&fakeStore{})
+	p.WithSources(Sources{
+		Skills: fakeSkillsSource{catalog: []skills.Skill{
+			{Slug: "tionswarm-build", Name: "Build"},
+			{Slug: "tionswarm-guide", Name: "Guide"},
+		}},
+		Findings: fakeFindingsSource{findings: []InsightFinding{
+			{ID: "FND1", Title: "provider 429", Status: "new"},
+			{ID: "FND2", Title: "eski ders", Status: "applied", Regressed: true},
+			{ID: "FND3", Title: "triaj edildi", Status: "triaged"},
+		}},
+	})
+
+	sk, err := p.Children(ctx, Ref{Kind: KindCategory, ID: CategorySkills}, LensHealth)
+	if err != nil {
+		t.Fatalf("skills: %v", err)
+	}
+	if len(sk) != 2 || kindsOf(sk)[KindSkill] != 2 {
+		t.Errorf("skills category wrong: %+v", sk)
+	}
+
+	ins, err := p.Children(ctx, Ref{Kind: KindCategory, ID: CategoryInsights}, LensHealth)
+	if err != nil {
+		t.Fatalf("insights: %v", err)
+	}
+	if len(ins) != 3 || kindsOf(ins)[KindInsight] != 3 {
+		t.Errorf("insights category wrong: %+v", ins)
+	}
+
+	// Errors lens keeps fresh + regressed findings (needing attention).
+	needy, err := p.Children(ctx, Ref{Kind: KindCategory, ID: CategoryInsights}, LensErrors)
+	if err != nil {
+		t.Fatalf("insights errors: %v", err)
+	}
+	if len(needy) != 2 {
+		t.Errorf("errors lens should keep FND1 + FND2 (regressed): %+v", needy)
+	}
+
+	// Without sources the categories are a wiring error, never an empty list —
+	// an empty bucket would read like a genuinely empty workspace.
+	bare := NewProjector(&fakeStore{})
+	if _, err := bare.Children(ctx, Ref{Kind: KindCategory, ID: CategorySkills}, LensHealth); err == nil {
+		t.Error("skills category without a source must error")
+	}
+	if _, err := bare.Children(ctx, Ref{Kind: KindCategory, ID: CategoryInsights}, LensHealth); err == nil {
+		t.Error("insights category without a source must error")
+	}
+}
+
+func TestChildrenNewKindsAreLeaves(t *testing.T) {
+	ctx := context.Background()
+	p := childrenFixture()
+
+	hs, err := p.Children(ctx, Ref{Kind: KindLogs, ID: LogsRefID}, LensHealth)
+	if err != nil {
+		t.Fatalf("logs children: %v", err)
+	}
+	if len(hs) != 0 {
+		t.Errorf("logs must be a leaf, got %+v", hs)
+	}
+	// A single artifact/automation/skill/insight is a leaf too.
+	for _, ref := range []Ref{
+		{Kind: KindArtifact, ID: "ART1"},
+		{Kind: KindAutomation, ID: "AUT1"},
+		{Kind: KindSkill, ID: "x"},
+		{Kind: KindInsight, ID: "FND1"},
+	} {
+		hs, err := p.Children(ctx, ref, LensHealth)
+		if err != nil {
+			t.Errorf("%s children errored: %v", ref.Kind, err)
+		}
+		if len(hs) != 0 {
+			t.Errorf("%s must be a leaf, got %+v", ref.Kind, hs)
+		}
 	}
 }

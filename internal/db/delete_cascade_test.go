@@ -5,10 +5,13 @@ import (
 	"testing"
 )
 
-// TestDeleteAgentCascadesSchedulesAndTasks verifies that deleting an agent also
-// removes the schedules bound to it and the tasks it owns (with their runs),
+// TestDeleteAgentCascade verifies that deleting an agent also:
+//   - removes schedules bound to it,
+//   - clears TargetAgentID on automations that target it,
+//   - removes tasks it owns together with their runs,
+//
 // while leaving records belonging to a different agent untouched.
-func TestDeleteAgentCascadesSchedulesAndTasks(t *testing.T) {
+func TestDeleteAgentCascade(t *testing.T) {
 	ctx := context.Background()
 	d, err := Open(t.TempDir())
 	if err != nil {
@@ -33,6 +36,15 @@ func TestDeleteAgentCascadesSchedulesAndTasks(t *testing.T) {
 		t.Fatalf("seed keep schedule: %v", err)
 	}
 
+	victimAuto, err := d.CreateAutomation(ctx, Automation{Name: "V", TargetAgentID: victim.ID, TriggerKind: TriggerTag, TriggerTag: "t"})
+	if err != nil {
+		t.Fatalf("seed victim automation: %v", err)
+	}
+	keepAuto, err := d.CreateAutomation(ctx, Automation{Name: "K", TargetAgentID: keep.ID, TriggerKind: TriggerTag, TriggerTag: "k"})
+	if err != nil {
+		t.Fatalf("seed keep automation: %v", err)
+	}
+
 	victimTask, err := d.CreateTask(ctx, Task{Title: "T", OwnerAgentID: victim.ID})
 	if err != nil {
 		t.Fatalf("seed victim task: %v", err)
@@ -51,18 +63,39 @@ func TestDeleteAgentCascadesSchedulesAndTasks(t *testing.T) {
 		t.Fatalf("delete agent: %v", err)
 	}
 
+	// Schedules
 	if _, err := d.GetSchedule(ctx, victimSched.ID); err == nil {
 		t.Error("victim schedule should be deleted")
 	}
 	if _, err := d.GetSchedule(ctx, keepSched.ID); err != nil {
 		t.Errorf("keep schedule should survive: %v", err)
 	}
+
+	// Automations
+	gotV, err := d.GetAutomation(ctx, victimAuto.ID)
+	if err != nil {
+		t.Fatalf("victim automation should survive (cleared, not deleted): %v", err)
+	}
+	if gotV.TargetAgentID != "" {
+		t.Errorf("victim automation TargetAgentID should be cleared, got %q", gotV.TargetAgentID)
+	}
+	gotK, err := d.GetAutomation(ctx, keepAuto.ID)
+	if err != nil {
+		t.Fatalf("keep automation should survive: %v", err)
+	}
+	if gotK.TargetAgentID != keep.ID {
+		t.Errorf("keep automation TargetAgentID should be %q, got %q", keep.ID, gotK.TargetAgentID)
+	}
+
+	// Tasks
 	if _, err := d.GetTask(ctx, victimTask.ID); err == nil {
 		t.Error("victim task should be deleted")
 	}
 	if _, err := d.GetTask(ctx, keepTask.ID); err != nil {
 		t.Errorf("keep task should survive: %v", err)
 	}
+
+	// Runs
 	d.mu.RLock()
 	_, runExists := d.runs["run-victim"]
 	d.mu.RUnlock()

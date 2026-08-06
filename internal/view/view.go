@@ -49,6 +49,26 @@ const (
 	// the top-N as handles, reporting the remainder as Elided. Its ID names the
 	// bucket (see the Category* / categoryColumnPrefix constants in category.go).
 	KindCategory Kind = "category"
+	// KindArtifact projects one saved artifact's METADATA (identity, origin,
+	// kind, group, age) — the map leaf for the Artifacts category. The artifact's
+	// content itself stays in the Artifacts screen; a drill-down needs to know
+	// whether it is worth opening, not its body.
+	KindArtifact Kind = "artifact"
+	// KindAutomation projects one automation rule: trigger, target, enabled state
+	// and fire bookkeeping. Map leaf for the Otomasyonlar category.
+	KindAutomation Kind = "automation"
+	// KindSkill projects one skill catalog entry: slug, description, access tier
+	// and group. Map leaf for the Skill'ler category. The body (the skill's
+	// instructions) stays behind use_skill — the map only advertises it.
+	KindSkill Kind = "skill"
+	// KindInsight projects one insight finding (a retrospective scan result). Map
+	// leaf for the İçgörüler category. The projection uses a view-local finding
+	// shape (Sources.FindingsSource) because the insight package imports view — a
+	// reverse edge would cycle.
+	KindInsight Kind = "insight"
+	// KindLogs projects the recent process log stream (the global ring buffer) as
+	// a leaf node: the tail renders inline, exactly like budget/tools.
+	KindLogs Kind = "logs"
 	// KindWorkers is a coordinator's live fleet. Unlike the others it is not
 	// resolvable through Projector: its input is runtime state, not store state,
 	// so the caller builds WorkersInput and calls ProjectWorkers directly. It is

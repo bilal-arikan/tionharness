@@ -135,3 +135,9 @@ liste yalnızca depoda **gerçekten var olan** dosyaları içerir.
 `models_artifact.go`, `models_automation.go`, `models_attachment.go`). Ana
 `Usage`/`Session`/`Agent` modelleri `models.go` içindedir. `store_*_test.go`
 dosyaları ilgili store dosyalarının testleridir.
+
+## internal/billing
+
+`billing/billing.go` — fiyat hesaplama (`PriceStat`, `NoCacheCost`).
+`internal/billing/model_change_poc_test.go` — model değişiminin geçmiş kayıtları
+yeniden fiyatlamadığına dair regresyon testi (TSK67).

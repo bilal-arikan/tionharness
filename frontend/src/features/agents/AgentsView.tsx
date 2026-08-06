@@ -35,7 +35,7 @@ interface Props {
   /** Set an agent as the default for new chats. */
   onSetDefault: (id: string) => void
   onCreateAgent: (name: string, soul: string, provider: string, model: string) => void
-  onUpdateAgent: (id: string, patch: AgentPatch) => Promise<void>
+  onUpdateAgent: (id: string, patch: AgentPatch) => Promise<{ agent: Agent; warning?: string }>
   /** Clone the agent (full profile + tool config) into a new "(kopya)". */
   onDuplicateAgent: (id: string) => Promise<string | undefined>
   onDeleteAgent: (id: string) => Promise<void>

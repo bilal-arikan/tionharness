@@ -398,6 +398,17 @@ export function SessionDetailPanel({
                 <span className="text-[var(--color-text-dim)]">Prompt cache</span>
                 <CacheWarmthBadge updatedAt={info.updatedAt} nowSec={nowTick} />
               </div>
+              {info.model && (
+                <div className="flex items-center justify-between py-0.5 text-xs">
+                  <span className="text-[var(--color-text-dim)]">Model</span>
+                  <span
+                    className="rounded bg-[var(--color-surface-2)] px-1.5 py-px font-mono text-[var(--color-text-dim)]"
+                    title={info.model}
+                  >
+                    {info.model}
+                  </span>
+                </div>
+              )}
               <Row
                 label="Boyut"
                 value={`${formatBytes(info.sizeBytes)} · ${info.fileCount} dosya`}

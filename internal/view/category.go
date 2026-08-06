@@ -9,11 +9,17 @@ import (
 // Category ids. A category is a structural bucket in the Explorer map: it counts
 // its members and lists the top-N as drill-down handles. sessions/flows/agents
 // are the workspace-level buckets; a board column is a per-column bucket whose id
-// carries the column key.
+// carries the column key. artifacts/automations/skills/insights are the map
+// extension buckets (TSK66): artifacts + automations read from the store, skills
+// from the runtime catalog and insights from the findings sidecar.
 const (
-	CategorySessions = "sessions"
-	CategoryFlows    = "flows"
-	CategoryAgents   = "agents"
+	CategorySessions    = "sessions"
+	CategoryFlows       = "flows"
+	CategoryAgents      = "agents"
+	CategoryArtifacts   = "artifacts"
+	CategoryAutomations = "automations"
+	CategorySkills      = "skills"
+	CategoryInsights    = "insights"
 	// categoryColumnPrefix marks a board-column category: ID = "col:in_progress".
 	categoryColumnPrefix = "col:"
 )
@@ -89,6 +95,14 @@ func categoryMeta(id string) (label, unit string, ok bool) {
 		return "AKIŞLAR", "koşu", true
 	case CategoryAgents:
 		return "AJANLAR", "ajan", true
+	case CategoryArtifacts:
+		return "ARTIFACTS", "artifact", true
+	case CategoryAutomations:
+		return "OTOMASYONLAR", "otomasyon", true
+	case CategorySkills:
+		return "SKILL'LAR", "skill", true
+	case CategoryInsights:
+		return "İÇGÖRÜLER", "bulgu", true
 	}
 	if key, found := strings.CutPrefix(id, categoryColumnPrefix); found && key != "" {
 		return "SÜTUN:" + key, "kart", true

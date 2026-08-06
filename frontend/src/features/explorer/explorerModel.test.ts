@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import { parseRef, refToString, type ViewRef } from '@/types'
-import { buildGraph, isDrillable, ROOT_KEY, type GraphInputs } from './explorerModel'
+import {
+  buildGraph,
+  isDrillable,
+  nextExpandedSet,
+  ROOT_KEY,
+  type GraphInputs,
+} from './explorerModel'
 
 const sessions: ViewRef = { kind: 'category', id: 'sessions' }
 const board: ViewRef = { kind: 'board', id: 'board' }
@@ -112,6 +118,65 @@ describe('isDrillable', () => {
     expect(isDrillable({ kind: 'board', id: 'board', sub: 'T1' })).toBe(false)
     expect(isDrillable({ kind: 'budget', id: 'budget' })).toBe(false)
     expect(isDrillable(sessions)).toBe(true)
+  })
+
+  it('treats the TSK66 leaves as leaves', () => {
+    for (const ref of [
+      { kind: 'artifact', id: 'ART1' },
+      { kind: 'automation', id: 'AUT1' },
+      { kind: 'skill', id: 'tionswarm-build' },
+      { kind: 'insight', id: 'FND1' },
+      { kind: 'logs', id: 'logs' },
+    ] as ViewRef[]) {
+      expect(isDrillable(ref)).toBe(false)
+    }
+    // The extension BUCKETS themselves are categories → drillable.
+    expect(isDrillable({ kind: 'category', id: 'artifacts' })).toBe(true)
+    expect(isDrillable({ kind: 'category', id: 'skills' })).toBe(true)
+  })
+})
+
+describe('nextExpandedSet (single-expand accordion)', () => {
+  // Tree: root → [sessions, board]; sessions → [S1, S2]. Parents are recorded as
+  // the hook would after fetching children.
+  const parentByKey: Record<string, string> = {
+    'category:sessions': ROOT_KEY,
+    'board:board': ROOT_KEY,
+    'session:S1': 'category:sessions',
+    'session:S2': 'category:sessions',
+  }
+
+  it('expanding a node collapses every other open sibling', () => {
+    const expanded = new Set([ROOT_KEY, 'category:sessions'])
+    const next = nextExpandedSet(expanded, 'board:board', parentByKey)
+    expect(next.has('board:board')).toBe(true)
+    expect(next.has('category:sessions')).toBe(false) // same parent → closed
+    expect(next.has(ROOT_KEY)).toBe(true) // the root is not a sibling
+  })
+
+  it("keeps nodes in OTHER branches open (only the parent's children collapse)", () => {
+    // S1 and S2 are siblings under sessions; board is a different branch.
+    const expanded = new Set([ROOT_KEY, 'category:sessions', 'session:S1', 'board:board'])
+    const next = nextExpandedSet(expanded, 'session:S2', parentByKey)
+    expect(next.has('session:S2')).toBe(true)
+    expect(next.has('session:S1')).toBe(false) // sibling under the same parent
+    expect(next.has('category:sessions')).toBe(true) // ancestor stays
+    expect(next.has('board:board')).toBe(true) // unrelated branch stays
+    expect(next.has(ROOT_KEY)).toBe(true)
+  })
+
+  it('collapsing a node touches nothing else', () => {
+    const expanded = new Set([ROOT_KEY, 'category:sessions', 'board:board'])
+    const next = nextExpandedSet(expanded, 'category:sessions', parentByKey)
+    expect(next.has('category:sessions')).toBe(false)
+    expect(next.has('board:board')).toBe(true)
+    expect(next.has(ROOT_KEY)).toBe(true)
+  })
+
+  it('expanding with no open siblings only adds', () => {
+    const expanded = new Set([ROOT_KEY])
+    const next = nextExpandedSet(expanded, 'category:sessions', parentByKey)
+    expect([...next].sort()).toEqual([ROOT_KEY, 'category:sessions'].sort())
   })
 })
 

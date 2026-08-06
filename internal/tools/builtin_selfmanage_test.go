@@ -93,6 +93,64 @@ func TestCreateAgentSeedsSkills(t *testing.T) {
 	}
 }
 
+// TestCreateAgentInheritsCreatorProviderModel verifies that when the caller omits
+// provider (and model), the new agent inherits both from the creating agent as a
+// matched pair; and that an explicit provider suppresses inheritance so an
+// inherited model can never be paired with a mismatched provider.
+func TestCreateAgentInheritsCreatorProviderModel(t *testing.T) {
+	ctx := context.Background()
+	d := openTestDB(t)
+	creator, err := d.CreateAgent(ctx, db.Agent{Name: "Coordinator", Provider: "deepseek-anthropic", Model: "deepseek-v4-flash"})
+	if err != nil {
+		t.Fatalf("seed creator: %v", err)
+	}
+	create := NewCreateAgentTool(d, creator.ID, nil, nil)
+
+	// Neither provider nor model given → inherit both from the creator.
+	out, err := create.Call(ctx, json.RawMessage(`{"name":"Child"}`))
+	if err != nil {
+		t.Fatalf("create_agent: %v", err)
+	}
+	var r struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal([]byte(out), &r); err != nil {
+		t.Fatal(err)
+	}
+	child, _ := d.GetAgent(ctx, r.ID)
+	if child.Provider != "deepseek-anthropic" || child.Model != "deepseek-v4-flash" {
+		t.Fatalf("inherited provider/model = %q/%q, want deepseek-anthropic/deepseek-v4-flash", child.Provider, child.Model)
+	}
+
+	// Explicit provider given → no inheritance; model stays whatever the caller
+	// set (here empty, the provider's own default), never the creator's model.
+	out, err = create.Call(ctx, json.RawMessage(`{"name":"Anthropic child","provider":"anthropic"}`))
+	if err != nil {
+		t.Fatalf("create_agent: %v", err)
+	}
+	if err := json.Unmarshal([]byte(out), &r); err != nil {
+		t.Fatal(err)
+	}
+	child2, _ := d.GetAgent(ctx, r.ID)
+	if child2.Provider != "anthropic" || child2.Model != "" {
+		t.Fatalf("explicit provider = %q/%q, want anthropic/<empty>", child2.Provider, child2.Model)
+	}
+
+	// Unknown/empty actor (no creator to inherit from) → claude-cli fallback.
+	orphan := NewCreateAgentTool(d, "", nil, nil)
+	out, err = orphan.Call(ctx, json.RawMessage(`{"name":"Orphan"}`))
+	if err != nil {
+		t.Fatalf("create_agent: %v", err)
+	}
+	if err := json.Unmarshal([]byte(out), &r); err != nil {
+		t.Fatal(err)
+	}
+	child3, _ := d.GetAgent(ctx, r.ID)
+	if child3.Provider != "claude-cli" {
+		t.Fatalf("orphan provider = %q, want claude-cli", child3.Provider)
+	}
+}
+
 // TestRunScheduleTool verifies run_schedule fires the scheduler's RunNow for an
 // existing schedule and errors on an unknown id.
 func TestRunScheduleTool(t *testing.T) {

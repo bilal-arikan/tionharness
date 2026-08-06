@@ -12,6 +12,7 @@ func (d *DB) persistScheduleLocked(sc Schedule) error {
 func (d *DB) CreateSchedule(ctx context.Context, sc Schedule) (Schedule, error) {
 	sc.ID = d.nextID(idSchedule)
 	sc.CreatedAt = now()
+	sc.UpdatedAt = sc.CreatedAt
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	return sc, d.persistScheduleLocked(sc)
@@ -49,6 +50,7 @@ func (d *DB) UpdateSchedule(ctx context.Context, sc Schedule) error {
 	cur.Prompt = sc.Prompt
 	cur.FlowID = sc.FlowID
 	cur.ExpiresAt = sc.ExpiresAt
+	cur.UpdatedAt = now()
 	return d.persistScheduleLocked(cur)
 }
 
@@ -62,6 +64,7 @@ func (d *DB) SetScheduleTags(ctx context.Context, id string, tags []string) erro
 		return ErrNotFound
 	}
 	sc.Tags = normalizeTags(tags)
+	sc.UpdatedAt = now()
 	return d.persistScheduleLocked(sc)
 }
 
@@ -74,6 +77,7 @@ func (d *DB) SetScheduleEnabled(ctx context.Context, id string, enabled bool) er
 		return ErrNotFound
 	}
 	sc.Enabled = enabled
+	sc.UpdatedAt = now()
 	return d.persistScheduleLocked(sc)
 }
 
@@ -89,6 +93,7 @@ func (d *DB) SetScheduleDelivery(ctx context.Context, id, status, deliveryErr st
 	sc.LastDeliveryError = deliveryErr
 	sc.LastRunAt = now()
 	sc.NextRunAt = nextRunAt
+	sc.UpdatedAt = now()
 	return d.persistScheduleLocked(sc)
 }
 

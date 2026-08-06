@@ -467,10 +467,14 @@ export function useSessionsController({
     [setError],
   )
 
-  const updateAgent = useCallback(async (id: string, patch: AgentPatch) => {
-    const updated = await api.updateAgent(id, patch)
-    setAllAgents((prev) => prev.map((a) => (a.id === id ? updated : a)))
-  }, [])
+  const updateAgent = useCallback(
+    async (id: string, patch: AgentPatch): Promise<{ agent: Agent; warning?: string }> => {
+      const { agent, warning } = await api.updateAgent(id, patch)
+      setAllAgents((prev) => prev.map((a) => (a.id === id ? agent : a)))
+      return { agent, warning }
+    },
+    [],
+  )
 
   // Duplicate an agent: the server clones the whole profile + tool config into a
   // new "(kopya)". Prepend it to the roster and focus it — like createAgent, this

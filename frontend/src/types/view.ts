@@ -11,12 +11,17 @@ export type ViewKind =
   | 'board'
   | 'workspace'
   | 'schedule'
-  // Explorer map kinds (see _Docs/68-OZET-HARITASI.md): agent/budget/tools
-  // projections plus the structural `category` group node.
   | 'agent'
   | 'budget'
   | 'tools'
   | 'category'
+  // Explorer map extension kinds (TSK66): artifact/automation/skill/insight are
+  // category-member leaves, logs is an inline-tail leaf like budget/tools.
+  | 'artifact'
+  | 'automation'
+  | 'skill'
+  | 'insight'
+  | 'logs'
 
 // Budget tiers. tiny is one dense line (safe to push into a prompt suffix), card
 // is the default, full adds per-item detail.
@@ -88,6 +93,11 @@ const VIEW_KINDS: ViewKind[] = [
   'budget',
   'tools',
   'category',
+  'artifact',
+  'automation',
+  'skill',
+  'insight',
+  'logs',
 ]
 
 // parseRef is refToString's inverse: "category:col:in_progress" → {kind, id},

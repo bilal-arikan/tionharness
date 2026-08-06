@@ -20,6 +20,10 @@ export interface Session {
   state: string
   // Session-header format version (db.SessionSchemaVersion); 0 = pre-versioning.
   v?: number
+  // The model this session last ran with (per-turn history in Message.Model).
+  // Populated at session creation and updated each turn; O(1) answer to
+  // "which model is this conversation running on?".
+  model?: string
   // Pins the session to the top of the sidebar list regardless of recency.
   pinned?: boolean
   // Free-form labels, editable by the user and agents. Session tags also drive
@@ -313,6 +317,10 @@ export interface SessionInfo {
   // An in-flight turn (background provider/claude-cli process) for this session,
   // or absent when idle. Drives the "running process" card (stop / restart).
   running?: RunningTurn
+  // The model this session last ran with (per-turn history in Message.Model).
+  // Populated at session creation and updated each turn; O(1) answer to
+  // "which model is this conversation running on?".
+  model?: string
   // True when a persistent-pool claude-cli process is kept warm between turns for
   // this session (persistent-pool mode only). Offer to recycle it.
   warmCliProcess: boolean

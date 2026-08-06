@@ -6,6 +6,7 @@ import (
 	"sort"
 
 	"github.com/bilal-arikan/tionswarm/internal/db"
+	"github.com/bilal-arikan/tionswarm/internal/skills"
 )
 
 // Children returns the STRUCTURAL child handles of ref: the edges the Explorer
@@ -61,7 +62,8 @@ func (p *Projector) Children(ctx context.Context, ref Ref, lens Lens) ([]Handle,
 			return nil, err
 		}
 		return capHandles(workers, categoryTopN), nil
-	case KindBudget, KindTools, KindFlowRun, KindSchedule:
+	case KindBudget, KindTools, KindFlowRun, KindSchedule,
+		KindArtifact, KindAutomation, KindSkill, KindInsight, KindLogs:
 		// Leaves in the map: their breakdown is rendered inline by Project, so
 		// there is nothing structural to expand into.
 		return nil, nil
@@ -86,15 +88,22 @@ func IsExpandable(ref Ref) bool {
 	}
 }
 
-// workspaceChildren is the root's fixed set of six category/entity nodes. Static
-// and always six — a category that happens to be empty still appears, so the map's
-// shape does not change with the workspace's contents.
+// workspaceChildren is the root's fixed set of eleven category/entity nodes.
+// Static and always eleven — a category that happens to be empty still appears,
+// so the map's shape does not change with the workspace's contents. The first
+// four are the original buckets; artifacts/automations/skills/insights + logs
+// are the TSK66 extension; budget/tools round the existing set out.
 func workspaceChildren() []Handle {
 	return []Handle{
 		{Label: "Oturumlar", Ref: Ref{Kind: KindCategory, ID: CategorySessions}, Level: LevelCard},
 		{Label: "Akışlar", Ref: Ref{Kind: KindCategory, ID: CategoryFlows}, Level: LevelCard},
 		{Label: "Pano", Ref: Ref{Kind: KindBoard, ID: BoardRefID}, Level: LevelCard},
 		{Label: "Ajanlar", Ref: Ref{Kind: KindCategory, ID: CategoryAgents}, Level: LevelCard},
+		{Label: "Artifacts", Ref: Ref{Kind: KindCategory, ID: CategoryArtifacts}, Level: LevelCard},
+		{Label: "Otomasyonlar", Ref: Ref{Kind: KindCategory, ID: CategoryAutomations}, Level: LevelCard},
+		{Label: "Skill'ler", Ref: Ref{Kind: KindCategory, ID: CategorySkills}, Level: LevelCard},
+		{Label: "İçgörüler", Ref: Ref{Kind: KindCategory, ID: CategoryInsights}, Level: LevelCard},
+		{Label: "Günlükler", Ref: Ref{Kind: KindLogs, ID: LogsRefID}, Level: LevelCard},
 		{Label: "Bütçe", Ref: Ref{Kind: KindBudget, ID: BudgetRefID}, Level: LevelCard},
 		{Label: "Araçlar", Ref: Ref{Kind: KindTools, ID: ToolsRefID}, Level: LevelCard},
 	}
@@ -123,6 +132,28 @@ func (p *Projector) categoryMembers(ctx context.Context, id string, lens Lens) (
 			return nil, fmt.Errorf("view: category agents: %w", err)
 		}
 		return agentHandleList(agents), nil
+	case CategoryArtifacts:
+		artifacts, err := p.store.ListArtifacts(ctx, "")
+		if err != nil {
+			return nil, fmt.Errorf("view: category artifacts: %w", err)
+		}
+		return artifactHandleList(artifacts), nil
+	case CategoryAutomations:
+		automations, err := p.store.ListAutomations(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("view: category automations: %w", err)
+		}
+		return automationHandleList(automations, lens), nil
+	case CategorySkills:
+		if p.sources.Skills == nil {
+			return nil, fmt.Errorf("view: category skills: skill catalog unavailable")
+		}
+		return skillHandleList(p.sources.Skills.List()), nil
+	case CategoryInsights:
+		if p.sources.Findings == nil {
+			return nil, fmt.Errorf("view: category insights: findings store unavailable")
+		}
+		return insightHandleList(p.sources.Findings.ListFindings(), lens), nil
 	}
 	if key, found := cutColumnPrefix(id); found {
 		tasks, err := p.store.ListActiveTasks(ctx)
@@ -242,6 +273,79 @@ func agentHandleList(agents []db.Agent) []Handle {
 	return hs
 }
 
+// artifactHandleList renders every artifact (newest updated first) as an
+// artifact handle. The errors lens does not narrow artifacts — an artifact is
+// not itself an error state — so all pass.
+func artifactHandleList(artifacts []db.Artifact) []Handle {
+	sorted := append([]db.Artifact(nil), artifacts...)
+	sort.SliceStable(sorted, func(i, j int) bool { return sorted[i].UpdatedAt > sorted[j].UpdatedAt })
+	hs := make([]Handle, 0, len(sorted))
+	for _, a := range sorted {
+		hs = append(hs, Handle{
+			Label: "artifact:" + a.ID + " " + clip(orDash(a.Title), 40),
+			Ref:   Ref{Kind: KindArtifact, ID: a.ID},
+			Level: LevelCard,
+		})
+	}
+	return hs
+}
+
+// automationHandleList renders automations (newest first) as automation handles.
+// The errors lens keeps only rules whose last fire failed.
+func automationHandleList(automations []db.Automation, lens Lens) []Handle {
+	filtered := make([]db.Automation, 0, len(automations))
+	for _, a := range automations {
+		if automationMatchesLens(a, lens) {
+			filtered = append(filtered, a)
+		}
+	}
+	sort.SliceStable(filtered, func(i, j int) bool { return filtered[i].CreatedAt > filtered[j].CreatedAt })
+	hs := make([]Handle, 0, len(filtered))
+	for _, a := range filtered {
+		hs = append(hs, Handle{
+			Label: "automation:" + a.ID + " " + clip(orDash(a.Name), 40),
+			Ref:   Ref{Kind: KindAutomation, ID: a.ID},
+			Level: LevelCard,
+		})
+	}
+	return hs
+}
+
+// skillHandleList renders the catalog (display order) as skill handles. The
+// errors lens does not narrow skills — a skill is not an error state.
+func skillHandleList(skills []skills.Skill) []Handle {
+	hs := make([]Handle, 0, len(skills))
+	for _, sk := range skills {
+		hs = append(hs, Handle{
+			Label: "skill:" + sk.Slug + " " + clip(orDash(sk.Name), 40),
+			Ref:   Ref{Kind: KindSkill, ID: sk.Slug},
+			Level: LevelCard,
+		})
+	}
+	return hs
+}
+
+// insightHandleList renders findings (store order: priority-ranked, newest
+// evidence first) as insight handles. The errors lens keeps only findings that
+// still need attention (fresh or regressed).
+func insightHandleList(findings []InsightFinding, lens Lens) []Handle {
+	filtered := make([]InsightFinding, 0, len(findings))
+	for _, f := range findings {
+		if insightMatchesLens(f, lens) {
+			filtered = append(filtered, f)
+		}
+	}
+	hs := make([]Handle, 0, len(filtered))
+	for _, f := range filtered {
+		hs = append(hs, Handle{
+			Label: "insight:" + f.ID + " " + clip(f.Title, 40),
+			Ref:   Ref{Kind: KindInsight, ID: f.ID},
+			Level: LevelCard,
+		})
+	}
+	return hs
+}
+
 // columnCardHandles renders the cards of one board column as card handles
 // (KindBoard drill-down via Sub), applying the lens filter.
 func columnCardHandles(tasks []db.Task, columnKey string, lens Lens) []Handle {
@@ -289,6 +393,27 @@ func flowRunMatchesLens(r db.FlowRun, lens Lens) bool {
 func taskMatchesLens(t db.Task, lens Lens) bool {
 	if lens == LensErrors {
 		return t.BoardState == db.BoardFailed
+	}
+	return true
+}
+
+// automationMatchesLens narrows automations to rules whose last fire failed
+// under the errors lens — a rule that never fired has no error, and a disabled
+// rule is a deliberate pause, not a problem.
+func automationMatchesLens(a db.Automation, lens Lens) bool {
+	if lens == LensErrors {
+		return a.LastError != ""
+	}
+	return true
+}
+
+// insightMatchesLens narrows findings to ones needing attention under the
+// errors lens: a fresh (unreviewed) finding or a regressed (recurring after
+// being closed) one. A triaged/accepted/applied finding is under review and
+// not an open error.
+func insightMatchesLens(f InsightFinding, lens Lens) bool {
+	if lens == LensErrors {
+		return f.Status == insightStatusNew || f.Regressed
 	}
 	return true
 }

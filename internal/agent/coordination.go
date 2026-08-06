@@ -209,6 +209,40 @@ func (r *Runtime) coordinationFuncsFor(sess db.Session, callerID string) *tools.
 			}
 			return formatWorkerList(ws), nil
 		}
+		f.ListRows = func(c context.Context, subtree bool) ([]tools.WorkerRow, error) {
+			var ws []WorkerInfo
+			if subtree {
+				sub, err := r.ListSubtreeWorkers(c, coordID)
+				if err != nil {
+					return nil, err
+				}
+				for _, sw := range sub {
+					ws = append(ws, sw.WorkerInfo)
+				}
+			} else {
+				direct, err := r.ListWorkers(c, coordID)
+				if err != nil {
+					return nil, err
+				}
+				ws = direct
+			}
+			rows := make([]tools.WorkerRow, 0, len(ws))
+			for _, w := range ws {
+				rows = append(rows, tools.WorkerRow{
+					SessionID:  w.SessionID,
+					AgentName:  w.AgentName,
+					Title:      w.Title,
+					Running:    w.Running,
+					Delegating: w.Delegating,
+					Queued:     w.Queued,
+					Stuck:      w.Stuck,
+					Summary:    w.Summary,
+					CreatedAt:  w.CreatedAt,
+					UpdatedAt:  w.UpdatedAt,
+				})
+			}
+			return rows, nil
+		}
 	}
 	if sess.CoordinatorSessionID != "" {
 		f.Report = func(c context.Context, status, summary string) error {
@@ -826,6 +860,14 @@ type WorkerInfo struct {
 	// while Running: the UI shows a "queued" badge so the coordinator can see the
 	// message landed and will be delivered, rather than assuming it was lost.
 	Queued bool
+	// CreatedAt / UpdatedAt mirror the worker session's own timestamps so a
+	// listing can be sorted by them.
+	CreatedAt int64
+	UpdatedAt int64
+	// Stuck reports whether the worker session carries the "stuck" tag (the
+	// liveness signal the session-watchdog stamps on a session that stops making
+	// progress). Drives the list_workers state filter.
+	Stuck bool
 }
 
 // ListWorkers returns the workers spawned under a coordinator session, newest
@@ -846,6 +888,16 @@ func (r *Runtime) ListWorkers(ctx context.Context, coordSessionID string) ([]Wor
 	return out, nil
 }
 
+// hasSessionTag reports whether a session's tag list contains the given tag.
+func hasSessionTag(tags []string, want string) bool {
+	for _, t := range tags {
+		if t == want {
+			return true
+		}
+	}
+	return false
+}
+
 // workerInfoFor snapshots one worker session for a coordinator-facing listing.
 // Shared by ListWorkers (direct children) and ListSubtreeWorkers (every
 // descendant) so both report liveness and summaries identically.
@@ -860,6 +912,9 @@ func (r *Runtime) workerInfoFor(ctx context.Context, s db.Session) WorkerInfo {
 		AgentName: r.agentName(s.AgentID),
 		Title:     s.Title,
 		Running:   r.isSessionActive(s.ID),
+		CreatedAt: s.CreatedAt,
+		UpdatedAt: s.UpdatedAt,
+		Stuck:     hasSessionTag(s.Tags, "stuck"),
 	}
 	if !info.Running && s.IsCoordinator() && r.coordSlotFor(s.ID).workers.Load() > 0 {
 		info.Running = true

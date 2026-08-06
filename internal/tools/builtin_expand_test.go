@@ -32,16 +32,16 @@ func callExpand(t *testing.T, database *db.DB, input string) (string, error) {
 	return NewExpandTool(database).Call(context.Background(), json.RawMessage(input))
 }
 
-func TestExpandWorkspaceListsSixBuckets(t *testing.T) {
+func TestExpandWorkspaceListsElevenBuckets(t *testing.T) {
 	out, err := callExpand(t, expandDB(t), `{"kind":"workspace","id":"workspace"}`)
 	if err != nil {
 		t.Fatalf("expand: %v", err)
 	}
-	if !strings.Contains(out, "CHILDREN of workspace:workspace") || !strings.Contains(out, "· 6") {
-		t.Errorf("workspace should expand into 6 buckets:\n%s", out)
+	if !strings.Contains(out, "CHILDREN of workspace:workspace") || !strings.Contains(out, "· 11") {
+		t.Errorf("workspace should expand into 11 buckets:\n%s", out)
 	}
 	// The category buckets are themselves expandable; the hint must steer to expand.
-	for _, want := range []string{`expand{kind:"category",id:"sessions"}`, `expand{kind:"board",id:"board"}`, `get_view{kind:"budget"`} {
+	for _, want := range []string{`expand{kind:"category",id:"sessions"}`, `expand{kind:"board",id:"board"}`, `get_view{kind:"budget"`, `get_view{kind:"logs"`} {
 		if !strings.Contains(out, want) {
 			t.Errorf("missing hint %q:\n%s", want, out)
 		}
@@ -68,7 +68,7 @@ func TestExpandSingletonIdDefaulting(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expand: %v", err)
 	}
-	if !strings.Contains(out, "· 6") {
+	if !strings.Contains(out, "· 11") {
 		t.Errorf("empty workspace id should default to the singleton:\n%s", out)
 	}
 }

@@ -79,6 +79,12 @@ func resolveThinkingBudget(model, level string) int {
 //   - other provider + MCP    → TionSwarm's own agentic loop drives the tools via
 //     the unified registry (built-ins + MCP).
 //
+// The agent is passed by value — the turn captures its model at the start. If
+// the agent's model is changed mid-turn (via UpdateAgent), the in-flight turn
+// completes with the old model; the NEXT turn picks up the new one. This is
+// deliberate: switching models mid-turn would confuse the provider's prompt
+// cache and the turn's own tool-use state.
+//
 // autonomous gates the daily budget; usage is always recorded.
 func (r *Runtime) CompleteWithTools(ctx context.Context, agent db.Agent, provider providers.Provider, req providers.Request, autonomous bool) (*providers.Response, error) {
 	resp, _, err := r.CompleteWithToolsTraced(ctx, agent, provider, req, autonomous)
