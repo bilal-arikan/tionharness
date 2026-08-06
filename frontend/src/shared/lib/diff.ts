@@ -167,12 +167,18 @@ export function synthDiff(toolBase: string, input: unknown): string | null {
     if (!oldS && !newS) return null
     return lineDiff(oldS, newS)
   }
+  // apply_patch carries the unified diff verbatim in its `patch` field; the CLI
+  // output is just a confirmation line like "patched file.go (+3/-1)".
+  if (toolBase === 'apply_patch') {
+    if (typeof o.patch === 'string' && o.patch.trim().length) return o.patch
+    return null
+  }
   return null
 }
 
 // EDIT_TOOL_BASES are the file-mutating tool names whose chat step should render
 // as a prominent diff card (rather than a generic activity row).
-const EDIT_TOOL_BASES = ['edit', 'edit_file', 'write', 'write_file', 'multiedit']
+const EDIT_TOOL_BASES = ['edit', 'edit_file', 'write', 'write_file', 'multiedit', 'apply_patch']
 
 export function isEditToolBase(base: string): boolean {
   return EDIT_TOOL_BASES.includes(base)
@@ -200,8 +206,20 @@ export function synthDiffData(toolBase: string, input: unknown): SynthDiff | nul
     const o = input as Record<string, unknown>
     if (typeof o.file_path === 'string') path = o.file_path
     else if (typeof o.path === 'string') path = o.path
+    // apply_patch: extract the first file's path from the unified diff headers.
+    else if (toolBase === 'apply_patch' && typeof o.patch === 'string') {
+      path = firstPatchPath(o.patch)
+    }
   }
   return { patch, added: stats.added, removed: stats.removed, path }
+}
+
+// firstPatchPath extracts the target path from the first `---`/`+++` header pair
+// in a unified diff (used for apply_patch's multi-file patches).
+function firstPatchPath(patch: string): string {
+  const m = patch.match(/^\+\+\+ [ab]\/(.+?)(?:\t|$)/m)
+  if (m) return m[1]
+  return ''
 }
 
 // lineDiff produces a unified-diff-style string from two blocks of text using an
