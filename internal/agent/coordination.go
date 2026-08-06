@@ -56,6 +56,14 @@ type coordSlot struct {
 	// to false by any turn that actually calls a coordination tool (genuine recovery).
 	// See guardCoordinatorStall / escalateCoordinatorStallHalt (coordination_stall.go).
 	stallHalted bool
+	// stopRequested is set by runCoordinatorTurn when the live coordinator turn ended
+	// on a human Stop (plain context.Canceled, distinct from a watchdog cut). The drain
+	// loop consumes it right after the turn returns and EXITS without running the
+	// idle-reconcile turn — otherwise a manual Stop on a coordinator whose workers had
+	// all finished would inject a fresh <coordination-status> note and run one more
+	// turn, so the session looked like it "kept going" after the user stopped it.
+	// One-shot: a later worker notification re-arms the loop via enqueueCoordinatorTurn.
+	stopRequested bool
 	// lastTurnUnix is the wall-clock (unix seconds) at which this coordinator's last
 	// real turn finished. 0 until the first real turn ran (a stubbed test never sets
 	// it). The stall sweeper reads it to find coordinators gone silent past the
@@ -1312,6 +1320,7 @@ func (r *Runtime) drainCoordinator(coordSessionID string, slot *coordSlot) {
 		// that finally calls a coordination tool clears the flag. The sweeper stays live
 		// as the long-horizon backstop.
 		if slot.stallHalted {
+			slot.stopRequested = false
 			slot.running = false
 			slot.pending = false
 			slot.signalFree()
@@ -1320,9 +1329,21 @@ func (r *Runtime) drainCoordinator(coordSessionID string, slot *coordSlot) {
 		}
 		if slot.pending {
 			slot.pending = false
+			// A real worker notification supersedes an earlier human Stop: a still-running
+			// or just-finished worker is allowed to continue the coordinator (only the
+			// no-pending idle-reconcile is suppressed by a Stop — see below).
+			slot.stopRequested = false
 			slot.mu.Unlock()
 			continue
 		}
+		// Human Stop honoured (see coordSlot.stopRequested): the user cancelled the live
+		// coordinator turn AND no worker notification is pending. Suppress ONLY the
+		// idle-reconcile turn below — running it would inject a fresh <coordination-status>
+		// note and hand the coordinator one more turn, making a manual Stop look like it
+		// kept going. Consumed one-shot; a still-running worker re-arms the loop via
+		// enqueueCoordinatorTurn when it finishes (workers keep running through a Stop).
+		stopped := slot.stopRequested
+		slot.stopRequested = false
 		// Idle reconciliation (liveness backstop): if EVERY worker is now finished
 		// and we have not yet run a reconcile turn for this all-idle transition,
 		// inject an authoritative "all workers finished" note and loop ONCE more.
@@ -1331,7 +1352,7 @@ func (r *Runtime) drainCoordinator(coordSessionID string, slot *coordSlot) {
 		// forever on an already-finished worker" stall. One-shot per all-idle
 		// transition (ackedIdle, re-armed by the next notification) and bounded by
 		// CoordinatorMaxTurns (checked at the loop top), so it can never loop.
-		if !slot.ackedIdle && slot.hadWorkers && slot.workers.Load() == 0 {
+		if !stopped && !slot.ackedIdle && slot.hadWorkers && slot.workers.Load() == 0 {
 			slot.ackedIdle = true
 			slot.mu.Unlock()
 			r.appendCoordinationStatus(coordSessionID)
@@ -1498,6 +1519,13 @@ func (r *Runtime) runCoordinatorTurn(coordSessionID string) {
 			// turn (see autonomousInteraction). Report a clean stop, not a failure.
 			text = "⏹️ Koordinatör turu durduruldu."
 			r.logger.Info("coordination: coordinator turn stopped", "coordinator", coordSessionID)
+			// Signal the drain loop to exit without the idle-reconcile turn: honour the
+			// human Stop instead of injecting a <coordination-status> note and running
+			// once more (see coordSlot.stopRequested).
+			stopSlot := r.coordSlotFor(coordSessionID)
+			stopSlot.mu.Lock()
+			stopSlot.stopRequested = true
+			stopSlot.mu.Unlock()
 		} else {
 			text = "⚠️ Koordinatör turu çalıştırılamadı:\n\n" + err.Error()
 			r.logger.Error("coordination: coordinator turn failed", "coordinator", coordSessionID, "error", err)

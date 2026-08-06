@@ -29,6 +29,7 @@ import { writeSessionDraft } from '@/features/chat/useSessionDraft'
 import { SessionsSidebar } from '@/features/sessions/SessionsSidebar'
 import { SessionsOverview } from '@/features/sessions/SessionsOverview'
 import { SessionDetailPanel } from '@/features/sessions/SessionDetailPanel'
+import { CoordinatorPanel } from '@/features/sessions/CoordinatorPanel'
 import { SessionContextModal } from '@/features/sessions/SessionContextModal'
 import { SessionDebugModal } from '@/features/sessions/SessionDebugModal'
 import { SessionFlowInline } from '@/features/flows/SessionFlowInline'
@@ -236,6 +237,10 @@ export default function App() {
       return next
     })
   }, [])
+  // Coordination drawer (chat header's "Coord" button): a right-anchored side sheet
+  // hosting the coordination UI (worker roster, workflow, tree). Not persisted — it
+  // is an on-demand overlay, not a docked column like the detail panel.
+  const [coordOpen, setCoordOpen] = useState(false)
 
   // Theme / keep-awake / desktop-notification preferences.
   const { applyClientPrefs, onAppearanceSaved, onWorkspaceNotifySaved, notifyEnabled } =
@@ -605,6 +610,7 @@ export default function App() {
             navOpen={view === 'workspace' ? workspaceNav.open : settingsNav.open}
             onToggleNav={view === 'workspace' ? workspaceNav.toggle : settingsNav.toggle}
             onOpenContextPreview={() => setCtxPreviewOpen(true)}
+            onOpenCoord={() => setCoordOpen(true)}
             onOpenDebug={() => setDebugOpen(true)}
             onOpenSessionFlow={() => setSessionFlowOpen((v) => !v)}
             sessionFlowActive={sessionFlowOpen}
@@ -811,11 +817,22 @@ export default function App() {
               onRename={ctl.renameSession}
               onDeleteSession={ctl.deleteSession}
               onSelectSession={ctl.selectSession}
-              onOpenSkill={openSkill}
               onRerun={() => chat.rerunLast()}
             />
           </div>
         </>
+      )}
+
+      {/* Coordination side sheet, opened from the chat header's "Coord" button. */}
+      {view === 'chat' && coordOpen && ctl.activeSessionId && (
+        <CoordinatorPanel
+          sessionId={ctl.activeSessionId}
+          refreshKey={ctl.meterRefresh}
+          onClose={() => setCoordOpen(false)}
+          onError={setError}
+          onSelectSession={ctl.selectSession}
+          onOpenSkill={openSkill}
+        />
       )}
 
       {/* Bulk sessions overview: a searchable/sortable table of every session in

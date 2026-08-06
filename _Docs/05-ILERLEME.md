@@ -2,6 +2,52 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-08-06**
 
+## UI: Chat header'da "◱ Özet" → "Coord"; koordinasyon kendi drawer'ına, projeksiyon detay paneline (2026-08-06) ✅
+
+**Ne:** Sohbet başlık çubuğundaki `◱ Özet` (session `ViewButton`) kaldırıldı; yerine
+**"Coord"** butonu (Network ikonu) geldi. Yeni buton, koordinasyon UI'ını (koordinatör
+modu toggle + workflow seçici + canlı worker roster + koordinatör ağacı) sağdan açılan
+bir yan-sheet'te gösterir. Bu blok (`CoordinatorSection`) daha önce **"Oturum bilgisi"**
+detay panelinin içinde duruyordu; oradan çıkarıldı → tek yerde, kendi butonuyla. Boşalan
+yere, eski `◱ Özet` drawer'ının içeriği (ajanla aynı `get_view` projeksiyonu) **satır-içi**
+taşındı.
+
+**Nasıl:** Yeni `features/sessions/CoordinatorPanel.tsx` — `api.sessionInfo` çekip
+`CoordinatorSection`'ı `ModalOverlay` (right-anchored) içinde render eden drawer. `App.tsx`
+`coordOpen` state + `onOpenCoord` prop'u ile bağlar (kalıcı değil, on-demand overlay).
+`ViewPanel`'e `embedded` prop'u eklendi (opsiyonel `onClose`): drawer kromu/sabit yükseklik
+yerine host panelin akışında self-contained blok — `SessionDetailPanel`'de "Özet" bölümü
+olarak gömülü. `AppHeader`'dan `ViewButton` importu/kullanımı silindi (bileşen Görevler /
+Dashboard / Akışlar ekranlarında kalıyor). `SessionDetailPanel`'in artık kullanılmayan
+`onOpenSkill` prop'u temizlendi. Detay panelindeki "Özet" bölümü **katlanabilir**
+(başlık chevron toggle, `tionswarm.sessionSummaryOpen` ile kalıcı, varsayılan açık;
+katlıyken `ViewPanel` mount edilmez → gereksiz `get_view` çağrısı yok). Gömülü
+`ViewPanel`'in `target`'ı `useMemo(sessionId)` ile stabil — satır-içi obje her render'da
+kimlik değiştirip 1s timer/3s poll tick'lerinde `getView`'i (deterministik, LLM'siz)
+gereksizce yeniden çağırıyordu; artık yalnız oturum/seviye/lens değişince yükler.
+`tsc --noEmit` ✅.
+
+## Fix: Kullanıcı "Durdur" sonrası koordinatör idle-reconcile turu kaçağı (2026-08-06) ✅
+
+**Ne:** Bir oturumda kullanıcı koordinatörü durdurunca — o an worker koşmasa bile —
+koordinatör `<coordination-status>All workers ... have finished ...</coordination-status>`
+notunu görüp session devam etmeye başlıyordu. Kök neden: `run.cancel` koordinatörün
+o anki turunu `context.Canceled` ile bitiriyor (`runCoordinatorTurn` "⏹️ durduruldu"
+yazıyor) ama ayrı goroutine'deki `drainCoordinator` dönmeye devam edip **idle-reconcile**
+dalına düşüyor; koordinatörün workerları önceden bittiyse (`hadWorkers && workers==0`)
+notu enjekte edip bir tur daha koşuyordu.
+
+**Nasıl:** `coordSlot`'a tek-seferlik `stopRequested` bayrağı eklendi. `runCoordinatorTurn`
+insan-stop dalında (watchdog kesintisinden `classifyTurnContext`'in zaten ayırdığı plain
+`context.Canceled`) bayrağı set eder; `drainCoordinator` **yalnızca no-pending
+idle-reconcile'ı** bastırır. Önemli incelik (kullanıcı isteği): pending bir worker
+bildirimi varsa (çalışan/yeni-biten worker) o Stop'u geçersizler ve tur yine koşar —
+**çalışan worker'lar Durdur'a rağmen koordinatörü sürdürebilir**; yalnız hiç worker
+yokken tam durur. `scheduleSettleBackstop` korunur (mid-node üst-rapor borcu). Durdurma
+kalıcı değil: koşan worker bitince `enqueueCoordinatorTurn` loop'u yeniden başlatır.
+Detay `_Docs/47` §14.9. Testler: `TestUserStopSkipsIdleReconcile`,
+`TestUserStopHonoursPendingWorker`; `go build ./...` + `go vet` + `go test ./internal/agent/...` ✅.
+
 ## Fix: DeepSeek V4 Pro `context deadline exceeded` @120s (2026-08-06) ✅
 
 **Ne:** OpenAI-uyumlu client (`OpenAICompat`) her isteğe **sabit 120s** `http.Client.Timeout`

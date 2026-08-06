@@ -600,6 +600,99 @@ func TestIdleReconcileSweepRunsFinalTurn(t *testing.T) {
 	waitTurns(t, &mu, &turns, 4, "re-armed process + reconcile")
 }
 
+// TestUserStopSkipsIdleReconcile: when the user presses Stop on a coordinator's live
+// turn (runCoordinatorTurn sets slot.stopRequested), the drain loop must EXIT without
+// the idle-reconcile turn — even for a coordinator whose workers all finished, where
+// the sweep would otherwise inject a <coordination-status> note and run once more. The
+// bug this guards: a manual Stop looked like the session "kept going".
+func TestUserStopSkipsIdleReconcile(t *testing.T) {
+	rt, _ := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))
+
+	slot := rt.coordSlotFor("COORD")
+	slot.markHadWorkers() // all workers done → the idle sweep WOULD normally fire
+
+	var mu sync.Mutex
+	turns := 0
+	// Simulate the user pressing Stop during the first turn: runCoordinatorTurn sets
+	// stopRequested when the turn ends on context.Canceled.
+	rt.coordRunFn = func(string) {
+		mu.Lock()
+		turns++
+		mu.Unlock()
+		slot.mu.Lock()
+		slot.stopRequested = true
+		slot.mu.Unlock()
+	}
+
+	rt.enqueueCoordinatorTurn("COORD")
+	waitTurns(t, &mu, &turns, 1, "single stopped turn")
+
+	// No idle-reconcile turn may follow the stop, and the flag must be consumed.
+	time.Sleep(200 * time.Millisecond)
+	mu.Lock()
+	got := turns
+	mu.Unlock()
+	if got != 1 {
+		t.Fatalf("user Stop must skip idle-reconcile; got %d turns", got)
+	}
+	slot.mu.Lock()
+	stillSet, pending, running := slot.stopRequested, slot.pending, slot.running
+	slot.mu.Unlock()
+	if stillSet {
+		t.Fatal("stopRequested must be consumed (one-shot) by the drain loop")
+	}
+	if pending || running {
+		t.Fatalf("drain loop must exit clean after a Stop; pending=%v running=%v", pending, running)
+	}
+
+	// A later worker notification must still re-arm the loop (Stop is not permanent):
+	// process (2) + idle-reconcile (3), since stopRequested is no longer set.
+	rt.coordRunFn = func(string) { mu.Lock(); turns++; mu.Unlock() }
+	rt.enqueueCoordinatorTurn("COORD")
+	waitTurns(t, &mu, &turns, 3, "re-armed process + reconcile after stop")
+}
+
+// TestUserStopHonoursPendingWorker: a Stop must suppress ONLY the phantom idle-reconcile
+// turn. If a worker notification is pending when the user stops (a worker finished, or is
+// still running), that notification must still supersede the Stop and run a turn — a
+// running worker continues to drive the coordinator through a Stop.
+func TestUserStopHonoursPendingWorker(t *testing.T) {
+	rt, _ := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))
+
+	slot := rt.coordSlotFor("COORD")
+	slot.markHadWorkers()
+	slot.workers.Add(1) // a worker is still running through the Stop
+
+	var mu sync.Mutex
+	turns := 0
+	rt.coordRunFn = func(string) {
+		mu.Lock()
+		n := turns
+		turns++
+		mu.Unlock()
+		if n == 0 {
+			// The user stops the live turn AND a worker notification lands in the same window.
+			slot.mu.Lock()
+			slot.stopRequested = true
+			slot.pending = true
+			slot.mu.Unlock()
+		}
+	}
+
+	rt.enqueueCoordinatorTurn("COORD")
+	// The pending worker notification supersedes the Stop → a 2nd turn runs.
+	waitTurns(t, &mu, &turns, 2, "pending worker turn must survive a Stop")
+
+	// No idle-reconcile while a worker is still running (workers>0), and no extra turn.
+	time.Sleep(150 * time.Millisecond)
+	mu.Lock()
+	got := turns
+	mu.Unlock()
+	if got != 2 {
+		t.Fatalf("expected exactly 2 turns (no idle-reconcile while a worker runs), got %d", got)
+	}
+}
+
 // TestIdleReconcileSkippedWithoutWorkers: a coordinator that never spawned a worker
 // must NOT get an idle-reconcile turn (nothing to reconcile) — a single notification
 // yields exactly one turn.

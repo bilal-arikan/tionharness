@@ -11,10 +11,16 @@ const LENSES: ViewLens[] = ['health', 'stale', 'recent', 'errors']
 interface Props {
   // The entity to project. Changing it resets the drill-down trail.
   target: ViewRef
-  onClose: () => void
+  // Close affordance. Optional: when embedded inline (e.g. inside the session
+  // detail panel) there is no drawer to close, so the X button is hidden.
+  onClose?: () => void
   // Hand the projection to an agent (paste `view://…` into a composer). Absent →
   // the button is hidden.
   onSend?: (text: string, ref: ViewRef) => void
+  // Embedded mode: render as a self-contained block inside a host panel instead
+  // of a full-height right-anchored drawer (drops the side border / fixed height
+  // / bg so it flows in the host's scroll).
+  embedded?: boolean
 }
 
 // ViewPanel is the "◱ Özet" drawer: the same compact projection an agent gets,
@@ -26,7 +32,7 @@ interface Props {
 //     the model saw.
 //   - The token estimate and the asOf stamp are always on screen, so an expensive
 //     or stale view is obvious rather than something to discover later.
-export function ViewPanel({ target, onClose, onSend }: Props) {
+export function ViewPanel({ target, onClose, onSend, embedded }: Props) {
   const [trail, setTrail] = useState<ViewRef[]>([target])
   const [level, setLevel] = useState<ViewLevel>('card')
   const [lens, setLens] = useState<ViewLens>('health')
@@ -67,7 +73,13 @@ export function ViewPanel({ target, onClose, onSend }: Props) {
   }
 
   return (
-    <div className="flex h-full w-full max-w-[560px] flex-col border-l border-[var(--color-border)] bg-[var(--color-surface)]">
+    <div
+      className={
+        embedded
+          ? 'flex w-full flex-col'
+          : 'flex h-full w-full max-w-[560px] flex-col border-l border-[var(--color-border)] bg-[var(--color-surface)]'
+      }
+    >
       <header className="flex items-center gap-2 border-b border-[var(--color-border)] px-3 py-2">
         {trail.length > 1 && (
           <button
@@ -83,14 +95,16 @@ export function ViewPanel({ target, onClose, onSend }: Props) {
         <span className="truncate font-mono text-xs text-[var(--color-text-dim)]">
           {refToString(ref)}
         </span>
-        <button
-          type="button"
-          onClick={onClose}
-          title="Kapat"
-          className="ml-auto text-[var(--color-text-dim)] transition hover:text-[var(--color-danger)]"
-        >
-          <X size={15} />
-        </button>
+        {onClose && (
+          <button
+            type="button"
+            onClick={onClose}
+            title="Kapat"
+            className="ml-auto text-[var(--color-text-dim)] transition hover:text-[var(--color-danger)]"
+          >
+            <X size={15} />
+          </button>
+        )}
       </header>
 
       {/* Controls: budget tier + lens. Both are part of the contract the agent
@@ -141,7 +155,11 @@ export function ViewPanel({ target, onClose, onSend }: Props) {
         )}
       </div>
 
-      <div className="min-h-0 flex-1 overflow-auto p-3">
+      <div
+        className={
+          embedded ? 'max-h-[420px] overflow-auto p-3' : 'min-h-0 flex-1 overflow-auto p-3'
+        }
+      >
         {error ? (
           <p className="text-xs text-[var(--color-danger)]">{error}</p>
         ) : result ? (

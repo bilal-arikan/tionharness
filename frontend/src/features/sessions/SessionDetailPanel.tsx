@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react'
-import { Trash2, Archive, ArchiveRestore } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { Trash2, Archive, ArchiveRestore, ChevronDown, ChevronRight } from 'lucide-react'
 import { api } from '@/api'
 import type { SessionInfo, SessionUsageDetail } from '@/types'
-import { CoordinatorSection } from './CoordinatorSection'
+import { ViewPanel } from '@/features/view/ViewPanel'
 import { KeyValueRow as Row, TagEditor } from '@/shared/components'
 import { ResizeHandle } from '@/shared/components/SidebarChrome'
 import { useResizableSidebar } from '@/shared/hooks/useResizableSidebar'
@@ -34,10 +34,6 @@ interface Props {
   onSelectAgent?: (id: string) => void
   // Navigate to another session (used by the context-reset lineage link).
   onSelectSession?: (id: string) => void
-  // Navigate to the Skills view focused on a slug — used by the coordination
-  // section to open the selected workflow's recipe (a 'coordinator-workflow'
-  // skill). Optional so legacy/test usages still compile.
-  onOpenSkill?: (slug: string) => void
   // Restart the last turn (stop any in-flight run + re-send the last user prompt).
   // Wired to the chat hook's rerunLast so it reuses the one true turn path. Optional
   // so legacy/test usages still compile; the button hides when absent.
@@ -56,7 +52,6 @@ export function SessionDetailPanel({
   onDeleteSession,
   onSelectSession,
   onSelectAgent,
-  onOpenSkill,
   onRerun,
 }: Props) {
   // Persisted, drag-resizable width. The panel sits on the RIGHT, so its handle
@@ -85,6 +80,17 @@ export function SessionDetailPanel({
   // Manual-refresh nonce: bumped by the refresh button (and after a title
   // regeneration) to re-fetch without touching the parent's refreshKey.
   const [localRefresh, setLocalRefresh] = useState(0)
+  // "Özet" (session projection) collapse — persisted, defaults open. The DSL block
+  // can get tall, so let it fold away like the coordinator section used to.
+  const [summaryOpen, setSummaryOpen] = useState(
+    () => localStorage.getItem('tionswarm.sessionSummaryOpen') !== '0',
+  )
+  const toggleSummary = () =>
+    setSummaryOpen((v) => {
+      const next = !v
+      localStorage.setItem('tionswarm.sessionSummaryOpen', next ? '1' : '0')
+      return next
+    })
 
   useEffect(() => {
     let alive = true
@@ -262,6 +268,12 @@ export function SessionDetailPanel({
 
   // Context window figures (/context-style): used vs. the compaction threshold,
   // with the leftover shown as free space.
+  // Stable projection target: an inline object literal would change identity on
+  // every render, and the embedded ViewPanel refetches get_view whenever `target`
+  // changes — so while the 1s timer/3s poll re-renders this panel, the projection
+  // would refetch every tick. Memoize on sessionId so it only reloads on switch.
+  const summaryTarget = useMemo(() => ({ kind: 'session' as const, id: sessionId }), [sessionId])
+
   const ctxWindow = info ? info.contextWindow || info.contextTokens || 1 : 1
   const ctxUsed = info ? info.contextTokens : 0
   const ctxFree = Math.max(0, ctxWindow - ctxUsed)
@@ -353,21 +365,28 @@ export function SessionDetailPanel({
               />
             </section>
 
-            {/* Coordinator/worker (M2): toggle coordinator mode + live worker roster */}
-            <CoordinatorSection
-              sessionId={sessionId}
-              role={info.role}
-              coordinatorMode={info.coordinatorMode}
-              coordinatorDepth={info.coordinatorDepth}
-              workflow={info.coordinatorWorkflow}
-              coordinatorSessionId={info.coordinatorSessionId}
-              stallHalted={info.coordinatorStallHalted}
-              refreshKey={(refreshKey ?? 0) + localRefresh}
-              onError={onError}
-              onRoleChanged={() => setLocalRefresh((n) => n + 1)}
-              onSelectSession={onSelectSession}
-              onOpenSkill={onOpenSkill}
-            />
+            {/* Session projection ("Özet"): the same compact get_view output an
+              agent receives. Moved here from the chat header's old ◱ Özet drawer;
+              coordination now has its own "Coord" side sheet in the header. */}
+            <section>
+              <button
+                onClick={toggleSummary}
+                aria-expanded={summaryOpen}
+                className="mb-2 flex w-full items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-dim)] opacity-70 transition hover:text-[var(--color-accent)] hover:opacity-100"
+              >
+                {summaryOpen ? (
+                  <ChevronDown size={12} className="shrink-0" />
+                ) : (
+                  <ChevronRight size={12} className="shrink-0" />
+                )}
+                <span>Özet</span>
+              </button>
+              {summaryOpen && (
+                <div className="overflow-hidden rounded-lg border border-[var(--color-border)]">
+                  <ViewPanel embedded target={summaryTarget} />
+                </div>
+              )}
+            </section>
 
             {/* Meta */}
             <Section title="Genel">

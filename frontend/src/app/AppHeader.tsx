@@ -2,12 +2,11 @@
 // in-pane header (see HEADERLESS_VIEWS). On chat it shows the session title and
 // the folder/context/debug/detail shortcuts; on workspace/settings it hosts the
 // mobile category-rail toggle.
-import { Bug, Menu, PanelRight, ScanEye, Workflow } from 'lucide-react'
+import { Bug, Menu, Network, PanelRight, ScanEye, Workflow } from 'lucide-react'
 import { api } from '@/api'
 import type { Agent, Session } from '@/types'
 import { CopyPathButton } from '@/shared/components/CopyPathButton'
 import { RevealButton } from '@/shared/components/RevealButton'
-import { ViewButton } from '@/features/view/ViewButton'
 import type { View } from './NavRail'
 import { VIEW_TITLE } from './viewRegistry'
 
@@ -23,6 +22,7 @@ export interface AppHeaderProps {
   navOpen: boolean
   onToggleNav: () => void
   onOpenContextPreview: () => void
+  onOpenCoord: () => void
   onOpenDebug: () => void
   onOpenSessionFlow: () => void
   sessionFlowActive: boolean
@@ -42,6 +42,7 @@ export function AppHeader({
   navOpen,
   onToggleNav,
   onOpenContextPreview,
+  onOpenCoord,
   onOpenDebug,
   onOpenSessionFlow,
   sessionFlowActive,
@@ -103,13 +104,18 @@ export function AppHeader({
               labelClassName="hidden sm:inline"
               title="Oturum klasörünü aç"
             />
-            {/* This session's projection — the compact summary an agent gets from
-                get_view. Distinct from the "Bağlam" button next to it, which
-                previews the raw prompt of the NEXT turn. */}
-            <ViewButton
-              target={{ kind: 'session', id: activeSessionId }}
-              className="!rounded-lg !py-1"
-            />
+            {/* Coordination drawer (coordinator mode, workflow picker, worker
+                roster + tree). Moved out of the detail inspector into its own
+                affordance. The session projection that used to sit here (◱ Özet)
+                now lives inside the "Oturum bilgisi" detail panel. */}
+            <button
+              onClick={onOpenCoord}
+              title="Koordinasyon panelini aç (worker'lar, workflow, ağaç)"
+              className="flex items-center gap-1.5 rounded-lg border border-[var(--color-border)] px-2.5 py-1 text-xs text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)]"
+            >
+              <Network size={15} className="shrink-0" />
+              <span className="hidden sm:inline">Coord</span>
+            </button>
             {/* Next-turn context preview (moved here from the detail panel). */}
             <button
               onClick={onOpenContextPreview}
