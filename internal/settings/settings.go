@@ -271,7 +271,8 @@ type Settings struct {
 
 	// Auto-title generation.
 	AutoTitleEnabled bool   `json:"autoTitleEnabled"`
-	TitleModel       string `json:"titleModel"` // "" = use the agent's model
+	TitleModel       string `json:"titleModel"`      // "" = use the agent's model
+	TitleProviderID  string `json:"titleProviderId"` // "" = use the agent's provider
 
 	// Gated tool capabilities — off by default; each expands agent power/cost.
 	// (enableSelfManage was removed 2026-07-01: the self-management suite is always
@@ -445,6 +446,7 @@ func Default() Settings {
 
 		AutoTitleEnabled: true,
 		TitleModel:       "",
+		TitleProviderID:  "",
 
 		// CLI-path hooks default ON (preserves the hook-passthrough behaviour); turn
 		// off when a hook authored for TionSwarm's shell misbehaves under the CLI's.
@@ -591,6 +593,7 @@ type DTO struct {
 
 	AutoTitleEnabled bool   `json:"autoTitleEnabled"`
 	TitleModel       string `json:"titleModel"`
+	TitleProviderID  string `json:"titleProviderId"`
 
 	EnableShell    bool `json:"enableShell"`
 	EnableCLIHooks bool `json:"enableCliHooks"`
@@ -722,6 +725,7 @@ func (s Settings) ToDTO() DTO {
 
 		AutoTitleEnabled: s.AutoTitleEnabled,
 		TitleModel:       s.TitleModel,
+		TitleProviderID:  s.TitleProviderID,
 
 		EnableShell:             s.EnableShell,
 		EnableCLIHooks:          s.EnableCLIHooks,
@@ -846,6 +850,7 @@ type Patch struct {
 
 	AutoTitleEnabled *bool   `json:"autoTitleEnabled"`
 	TitleModel       *string `json:"titleModel"`
+	TitleProviderID  *string `json:"titleProviderId"`
 
 	EnableShell             *bool `json:"enableShell"`
 	EnableCLIHooks          *bool `json:"enableCliHooks"`

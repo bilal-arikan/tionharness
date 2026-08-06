@@ -212,10 +212,10 @@ type WorkspaceTemplateAgent struct {
 	Avatar         string   `json:"avatar,omitempty"`
 	Color          string   `json:"color,omitempty"`
 	MCPEnabled     bool     `json:"mcpEnabled,omitempty"`
-	AllowedTools   string   `json:"allowedTools,omitempty"` // legacy allowlist (JSON array)
+	AllowedTools   string   `json:"allowedTools,omitempty"`  // legacy allowlist (JSON array)
 	BlockedTools   string   `json:"blockedTools,omitempty"`  // legacy per-agent denylist (JSON array); folded into ToolOverrides on load
 	ToolOverrides  string   `json:"toolOverrides,omitempty"` // per-agent tool override map (JSON object: name/pattern → tier)
-	Skills         []string `json:"skills,omitempty"`       // skill slugs to assign (resolved against the seeded skills)
+	Skills         []string `json:"skills,omitempty"`        // skill slugs to assign (resolved against the seeded skills)
 }
 
 // WorkspaceTemplateSkill is a skill bundled with a template: its portable
@@ -250,6 +250,7 @@ type WorkspaceTemplateFlow struct {
 // WorkspaceTemplateSchedule is a starter cron schedule. It is always seeded
 // DISABLED so it never fires until the user opts in via the Schedules screen.
 type WorkspaceTemplateSchedule struct {
+	Name     string `json:"name,omitempty"`
 	AgentKey string `json:"agentKey"`
 	CronExpr string `json:"cronExpr"`
 	Prompt   string `json:"prompt"`
@@ -303,4 +304,3 @@ type MCPPayload struct {
 	// default) or "scoped" (a live connection per session+agent). Empty = shared.
 	Scope string `json:"scope,omitempty"`
 }
-

@@ -86,6 +86,8 @@ export interface WorkspaceSettings {
   icon: string
   color: string
   pauseAutonomy: boolean
+  // Default agent pre-selected for new sessions in this workspace.
+  defaultAgentId: string
   defaultWorkingDir: string
   // This workspace's resolved claude-cli config home (<workspace>/claude-home),
   // used as CLAUDE_CONFIG_DIR. Read-only/derived (not in the patch); shown in the
@@ -132,6 +134,7 @@ export type WorkspaceSettingsPatch = Partial<
     | 'icon'
     | 'color'
     | 'pauseAutonomy'
+    | 'defaultAgentId'
     | 'defaultWorkingDir'
     | 'theme'
     | 'accent'

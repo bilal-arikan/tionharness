@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"sort"
 	"time"
@@ -54,7 +55,7 @@ func (s *Server) handleListSchedules(w http.ResponseWriter, r *http.Request) {
 		less, err := tools.SortByField(matches, field, asc,
 			func(sc db.Schedule) int64 { return sc.UpdatedAt },
 			func(sc db.Schedule) int64 { return sc.CreatedAt },
-			func(sc db.Schedule) string { return sc.ID }) // schedules have no name — documented surrogate
+			func(sc db.Schedule) string { return sc.Name })
 		if err != nil {
 			writeError(w, http.StatusBadRequest, err.Error())
 			return
@@ -66,6 +67,7 @@ func (s *Server) handleListSchedules(w http.ResponseWriter, r *http.Request) {
 }
 
 type createScheduleReq struct {
+	Name     string `json:"name"`
 	AgentID  string `json:"agentId"`
 	CronExpr string `json:"cronExpr"`
 	Prompt   string `json:"prompt"`
@@ -111,6 +113,7 @@ func (s *Server) handleCreateSchedule(w http.ResponseWriter, r *http.Request) {
 	}
 
 	schedule, err := wsp.DB.CreateSchedule(r.Context(), db.Schedule{
+		Name:      req.Name,
 		AgentID:   req.AgentID,
 		CronExpr:  req.CronExpr,
 		Prompt:    req.Prompt,
@@ -129,6 +132,7 @@ func (s *Server) handleCreateSchedule(w http.ResponseWriter, r *http.Request) {
 }
 
 type updateScheduleReq struct {
+	Name     string `json:"name"`
 	AgentID  string `json:"agentId"`
 	CronExpr string `json:"cronExpr"`
 	Prompt   string `json:"prompt"`
@@ -174,6 +178,7 @@ func (s *Server) handleUpdateSchedule(w http.ResponseWriter, r *http.Request) {
 
 	err := wsp.DB.UpdateSchedule(r.Context(), db.Schedule{
 		ID:        id,
+		Name:      req.Name,
 		AgentID:   req.AgentID,
 		CronExpr:  req.CronExpr,
 		Prompt:    req.Prompt,
@@ -264,4 +269,46 @@ func (s *Server) handleDeleteSchedule(w http.ResponseWriter, r *http.Request) {
 		s.logger.Warn("scheduler reload failed", "error", err)
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"id": id, "result": "deleted"})
+}
+
+// handleGenerateScheduleTitle asks the runtime's title model for a short name
+// and updates the schedule. The source is built from the schedule's own prompt,
+// cron schedule and target (agent or flow).
+func (s *Server) handleGenerateScheduleTitle(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	wsp := ws(r)
+	if wsp.Runtime == nil {
+		writeError(w, http.StatusServiceUnavailable, "runtime not available")
+		return
+	}
+	sc, err := wsp.DB.GetSchedule(r.Context(), id)
+	if writeDBError(w, err, "schedule not found") {
+		return
+	}
+	source := fmt.Sprintf("Schedule: cron=%s prompt=%s", sc.CronExpr, sc.Prompt)
+	if sc.FlowID != "" {
+		if fl, err := wsp.DB.GetFlow(r.Context(), sc.FlowID); err == nil {
+			source += fmt.Sprintf(" flow=%s", fl.Name)
+		}
+	} else if sc.AgentID != "" {
+		if ag, err := wsp.DB.GetAgent(r.Context(), sc.AgentID); err == nil {
+			source += fmt.Sprintf(" agent=%s", ag.Name)
+		}
+	}
+	title, err := wsp.Runtime.TitleFor(r.Context(), "", source)
+	if err != nil {
+		s.logger.Warn("schedule title generation failed", "id", id, "error", err)
+	}
+	if title == "" {
+		writeError(w, http.StatusInternalServerError, "title generation produced empty result")
+		return
+	}
+	if err := wsp.DB.SetScheduleName(r.Context(), id, title); writeDBError(w, err, "") {
+		return
+	}
+	if err := wsp.Scheduler.Reload(r.Context()); err != nil {
+		s.logger.Warn("scheduler reload failed", "error", err)
+	}
+	sc.Name = title
+	writeJSON(w, http.StatusOK, sc)
 }

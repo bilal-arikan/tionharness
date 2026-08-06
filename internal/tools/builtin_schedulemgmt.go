@@ -101,17 +101,18 @@ func (CreateScheduleTool) Def() providers.ToolDef {
 		Name:        "create_schedule",
 		Description: "Create a recurring schedule (routine) on a cron expression. It either delivers a prompt to an agent (agentId+prompt) OR runs an orchestration flow (flowId, with prompt as the flow input). Example cronExpr: \"0 9 * * *\" (every day at 09:00), \"*/30 * * * *\" (every 30 minutes). The schedule is tagged as created by you. Returns the new schedule id.",
 		InputSchema: json.RawMessage(`{
-			"type":"object",
-			"properties":{
-				"agentId":{"type":"string","description":"The agent that receives the prompt when the schedule fires (see list_agents). Omit when flowId is set."},
-				"flowId":{"type":"string","description":"Run this orchestration flow on each fire instead of delivering the prompt to an agent (see list_flows). prompt becomes the flow input."},
-				"cronExpr":{"type":"string","description":"Standard 5-field cron expression, e.g. \"0 9 * * *\""},
-				"prompt":{"type":"string","description":"The prompt delivered to the agent on each fire (or the flow input when flowId is set)"},
-				"enabled":{"type":"boolean","description":"Whether the schedule is active immediately (default true)"}
-			},
-			"required":["cronExpr"],
-			"additionalProperties":false
-		}`),
+				"type":"object",
+				"properties":{
+					"name":{"type":"string","description":"A short label for the schedule, e.g. \"Haftalık rapor\"."},
+					"agentId":{"type":"string","description":"The agent that receives the prompt when the schedule fires (see list_agents). Omit when flowId is set."},
+					"flowId":{"type":"string","description":"Run this orchestration flow on each fire instead of delivering the prompt to an agent (see list_flows). prompt becomes the flow input."},
+					"cronExpr":{"type":"string","description":"Standard 5-field cron expression, e.g. \"0 9 * * *\""},
+					"prompt":{"type":"string","description":"The prompt delivered to the agent on each fire (or the flow input when flowId is set)"},
+					"enabled":{"type":"boolean","description":"Whether the schedule is active immediately (default true)"}
+				},
+				"required":["cronExpr"],
+				"additionalProperties":false
+			}`),
 		Examples: []json.RawMessage{
 			// Minimal: required fields only; standard 5-field cron (daily 09:00).
 			json.RawMessage(`{"agentId":"agt_7f3a","cronExpr":"0 9 * * *","prompt":"Summarise overnight changes and post them to the team."}`),
@@ -123,6 +124,7 @@ func (CreateScheduleTool) Def() providers.ToolDef {
 
 func (t CreateScheduleTool) Call(ctx context.Context, input json.RawMessage) (string, error) {
 	var in struct {
+		Name     string `json:"name"`
 		AgentID  string `json:"agentId"`
 		FlowID   string `json:"flowId"`
 		CronExpr string `json:"cronExpr"`
@@ -157,6 +159,7 @@ func (t CreateScheduleTool) Call(ctx context.Context, input json.RawMessage) (st
 		enabled = *in.Enabled
 	}
 	created, err := t.d.db.CreateSchedule(ctx, db.Schedule{
+		Name:      in.Name,
 		AgentID:   in.AgentID,
 		FlowID:    in.FlowID,
 		CronExpr:  in.CronExpr,
@@ -187,19 +190,20 @@ func (UpdateScheduleTool) Def() providers.ToolDef {
 		Name:        "update_schedule",
 		Description: "Edit a schedule (user- or agent-created). Pass the schedule id and the fields to change (agentId, flowId, cronExpr, prompt, enabled, tags). Setting flowId makes it flow-backed (and clears the agent); setting agentId switches it back to prompt delivery.",
 		InputSchema: json.RawMessage(`{
-			"type":"object",
-			"properties":{
-				"id":{"type":"string","description":"The schedule id (see list_schedules)"},
-				"agentId":{"type":"string"},
-				"flowId":{"type":"string","description":"Run this flow on each fire instead of an agent prompt (see list_flows). Setting it clears the agent."},
-				"cronExpr":{"type":"string"},
-				"prompt":{"type":"string"},
-				"enabled":{"type":"boolean"},
-				"tags":{"type":"array","items":{"type":"string"},"description":"Replace the schedule's organizational tags with this exact set"}
-			},
-			"required":["id"],
-			"additionalProperties":false
-		}`),
+				"type":"object",
+				"properties":{
+					"id":{"type":"string","description":"The schedule id (see list_schedules)"},
+					"name":{"type":"string","description":"Rename the schedule."},
+					"agentId":{"type":"string"},
+					"flowId":{"type":"string","description":"Run this flow on each fire instead of an agent prompt (see list_flows). Setting it clears the agent."},
+					"cronExpr":{"type":"string"},
+					"prompt":{"type":"string"},
+					"enabled":{"type":"boolean"},
+					"tags":{"type":"array","items":{"type":"string"},"description":"Replace the schedule's organizational tags with this exact set"}
+				},
+				"required":["id"],
+				"additionalProperties":false
+			}`),
 		Examples: []json.RawMessage{
 			// Partial update: pause a schedule without touching its cron/prompt.
 			json.RawMessage(`{"id":"sch_4f1","enabled":false}`),
@@ -212,6 +216,7 @@ func (UpdateScheduleTool) Def() providers.ToolDef {
 func (t UpdateScheduleTool) Call(ctx context.Context, input json.RawMessage) (string, error) {
 	var in struct {
 		ID       string    `json:"id"`
+		Name     *string   `json:"name"`
 		AgentID  *string   `json:"agentId"`
 		FlowID   *string   `json:"flowId"`
 		CronExpr *string   `json:"cronExpr"`
@@ -245,6 +250,9 @@ func (t UpdateScheduleTool) Call(ctx context.Context, input json.RawMessage) (st
 		}
 		cur.AgentID = *in.AgentID
 		cur.FlowID = ""
+	}
+	if in.Name != nil {
+		cur.Name = strings.TrimSpace(*in.Name)
 	}
 	if in.CronExpr != nil {
 		cur.CronExpr = strings.TrimSpace(*in.CronExpr)
@@ -328,12 +336,12 @@ func NewListSchedulesTool(database *db.DB, actorID string) ListSchedulesTool {
 func (ListSchedulesTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name: "list_schedules",
-		Description: "List the schedules (routines) in this workspace (id, agent, flowId, cron, prompt, enabled, " +
+		Description: "List the schedules (routines) in this workspace (id, name, agent, flowId, cron, prompt, enabled, " +
 			"and whether each was created by an agent — provenance only; you can edit/delete any of them). " +
 			"Results are PAGINATED: pass limit (default 20, max 100) and offset to page; the reply reports total " +
 			"and hasMore, and you reach the next page with offset += limit. Filters: enabled (true/false), " +
 			"agentId (exact). Sort: updated_desc (default), updated_asc, created_desc, created_asc, name_asc, " +
-			"name_desc (schedules have no name field — name_* orders by id).",
+			"name_desc.",
 		InputSchema: json.RawMessage(`{
   "type": "object",
   "properties": {
@@ -391,7 +399,7 @@ func (t ListSchedulesTool) Call(ctx context.Context, input json.RawMessage) (str
 	less, err := SortByField(matches, field, asc,
 		func(sc db.Schedule) int64 { return sc.UpdatedAt },
 		func(sc db.Schedule) int64 { return sc.CreatedAt },
-		func(sc db.Schedule) string { return sc.ID }, // schedules have no name — documented surrogate
+		func(sc db.Schedule) string { return sc.Name },
 	)
 	if err != nil {
 		return "", err
@@ -401,6 +409,7 @@ func (t ListSchedulesTool) Call(ctx context.Context, input json.RawMessage) (str
 	page, total := SlicePage(matches, offset, limit)
 	type row struct {
 		ID             string `json:"id"`
+		Name           string `json:"name,omitempty"`
 		AgentID        string `json:"agentId"`
 		FlowID         string `json:"flowId,omitempty"`
 		CronExpr       string `json:"cronExpr"`
@@ -412,6 +421,7 @@ func (t ListSchedulesTool) Call(ctx context.Context, input json.RawMessage) (str
 	for _, sc := range page {
 		out = append(out, row{
 			ID:             sc.ID,
+			Name:           sc.Name,
 			AgentID:        sc.AgentID,
 			FlowID:         sc.FlowID,
 			CronExpr:       sc.CronExpr,

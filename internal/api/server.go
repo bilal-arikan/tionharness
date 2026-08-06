@@ -249,6 +249,7 @@ func (s *Server) applySettings() {
 	s.convo.SetLimits(cur.MaxContextTokens, cur.KeepRecentMsgs)
 	s.convo.SetBudgetShape(cur.ContextBudgetFraction, cur.ContextBudgetCeil) // model-aware budget knobs
 	s.tun.SetTitleModel(cur.TitleModel)
+	s.tun.SetTitleProviderID(cur.TitleProviderID)
 	s.tun.SetHandoff(cur.HandoffAuto, cur.HandoffPressure, cur.HandoffMaxChain, cur.HandoffWriteFile)
 	s.tun.SetProgress(cur.ProgressPersist, cur.ProgressResume)
 	s.tun.SetAutoContinue(cur.AutonomousAutoContinue, cur.AutonomousAutoContinueMax)
@@ -557,6 +558,7 @@ func (s *Server) registerScheduleRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/schedules/{id}/run", s.handleRunSchedule)
 	mux.HandleFunc("PUT /api/schedules/{id}/tags", s.handleSetScheduleTags)
 	mux.HandleFunc("DELETE /api/schedules/{id}", s.handleDeleteSchedule)
+	mux.HandleFunc("POST /api/schedules/{id}/generate-title", s.handleGenerateScheduleTitle)
 	// Tag-triggered automations (event-driven loops), surfaced in the Schedules UI.
 	mux.HandleFunc("GET /api/automations/live-stats", s.handleAutomationLiveStats)
 	mux.HandleFunc("GET /api/automations", s.handleListAutomations)
@@ -565,6 +567,7 @@ func (s *Server) registerScheduleRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/automations/{id}/toggle", s.handleToggleAutomation)
 	mux.HandleFunc("POST /api/automations/{id}/reset", s.handleResetAutomation)
 	mux.HandleFunc("DELETE /api/automations/{id}", s.handleDeleteAutomation)
+	mux.HandleFunc("POST /api/automations/{id}/generate-title", s.handleGenerateAutomationTitle)
 }
 
 // registerUsageRoutes registers the spend meter + the context meter.

@@ -85,7 +85,16 @@ export const ScheduleCard = forwardRef<HTMLDivElement, Props>(function ScheduleC
         </div>
 
         <div className="min-w-0 flex-1">
-          <div className="font-mono text-[13px] text-[var(--color-accent)]">{s.cronExpr}</div>
+          {s.name ? (
+            <div className="truncate text-[13px] font-medium text-[var(--color-text)]">
+              {s.name}
+            </div>
+          ) : null}
+          <div
+            className={`font-mono text-[13px] ${s.name ? 'text-[var(--color-text-dim)]' : 'text-[var(--color-accent)]'}`}
+          >
+            {s.cronExpr}
+          </div>
           <div className="truncate text-xs text-[var(--color-text-dim)]">
             → {s.flowId ? `${flowIcon ?? '🔀'} ${flow?.name ?? s.flowId}` : (owner?.name ?? '—')}
           </div>

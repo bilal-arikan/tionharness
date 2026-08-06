@@ -121,6 +121,7 @@ type InsightFinding struct {
 type Projector struct {
 	store   Store
 	sources Sources
+	wsName  string // workspace display name, set by WithName
 }
 
 // NewProjector wires a projector to a store.
@@ -136,6 +137,18 @@ func (p *Projector) WithSources(src Sources) *Projector {
 		return nil
 	}
 	p.sources = src
+	return p
+}
+
+// WithName sets the workspace display name, so the workspace header can show
+// "WORKSPACE "TionSwarmRepo"" instead of just "WORKSPACE". Callers that only
+// have a store (the agent tool paths) omit it — the header falls back to the
+// generic label.
+func (p *Projector) WithName(name string) *Projector {
+	if p == nil {
+		return nil
+	}
+	p.wsName = name
 	return p
 }
 
@@ -272,6 +285,7 @@ func (p *Projector) loadWorkspace(ctx context.Context) (WorkspaceInput, error) {
 	}
 
 	in := WorkspaceInput{
+		Name:        p.wsName,
 		Agents:      agents,
 		Sessions:    sessions,
 		Tasks:       tasks,

@@ -46,16 +46,19 @@ func (r *Runtime) GenerateTitle(ctx context.Context, agent db.Agent, source stri
 	userPrompt := "Below is a request or conversation. Reply with ONLY a concise title of 3 to 6 words that summarizes it — no quotes, no trailing punctuation, no preamble, max 60 characters, same language as the content.\n\n---\n" +
 		truncateRunes(source, maxTitleSourceRunes) + "\n---\n\nTitle:"
 
-	// A settings override lets titles be generated with a cheaper/faster model
-	// than the agent normally uses; empty falls back to the agent's model.
-	model := agent.Model
+	// A settings override lets titles use a different provider+model than the
+	// agent normally uses; empty fields fall back to the agent's own.
+	agentCfg := agent
+	if override := r.tun.TitleProviderID(); override != "" {
+		agentCfg.Provider = override
+	}
 	if override := r.tun.TitleModel(); override != "" {
-		model = override
+		agentCfg.Model = override
 	}
 
 	titlePrompt := r.readPrompt("title")
-	resp, err := r.guardedComplete(WithPromptTrace(WithCallKind(ctx, KindTitle), "title", titlePrompt), agent, providers.Request{
-		Model:        model,
+	resp, err := r.guardedComplete(WithPromptTrace(WithCallKind(ctx, KindTitle), "title", titlePrompt), agentCfg, providers.Request{
+		Model:        agentCfg.Model,
 		System:       titlePrompt,
 		OutputSchema: titleOutputSchema,
 		Messages: []providers.Message{

@@ -45,6 +45,7 @@ export const taskApi = {
   // Schedules (cron).
   listSchedules: () => req<Schedule[]>('/api/schedules'),
   createSchedule: (data: {
+    name?: string
     agentId?: string
     flowId?: string
     cronExpr: string
@@ -59,6 +60,7 @@ export const taskApi = {
   updateSchedule: (
     id: string,
     data: {
+      name?: string
       agentId?: string
       flowId?: string
       cronExpr: string
@@ -84,6 +86,8 @@ export const taskApi = {
     }),
   deleteSchedule: (id: string) =>
     req<{ result: string }>(`/api/schedules/${id}`, { method: 'DELETE' }),
+  generateScheduleTitle: (id: string) =>
+    req<Schedule>(`/api/schedules/${id}/generate-title`, { method: 'POST' }),
 
   // Tag-triggered automations (event-driven loops; surfaced in the Schedules UI).
   listAutomations: () => req<Automation[]>('/api/automations'),
@@ -159,4 +163,6 @@ export const taskApi = {
     req<{ id: string; action: string }>(`/api/automations/${id}/reset`, { method: 'POST' }),
   deleteAutomation: (id: string) =>
     req<{ deleted: string }>(`/api/automations/${id}`, { method: 'DELETE' }),
+  generateAutomationTitle: (id: string) =>
+    req<Automation>(`/api/automations/${id}/generate-title`, { method: 'POST' }),
 }

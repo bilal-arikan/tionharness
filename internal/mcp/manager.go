@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 )
 
@@ -222,7 +223,7 @@ func CallNamespaced(ctx context.Context, cfgByServer map[string]ServerConfig, na
 	}
 	cfg, ok := cfgByServer[server]
 	if !ok {
-		return CallToolResult{}, fmt.Errorf("mcp: no server %q for tool %q", server, namespaced)
+		return CallToolResult{}, unknownServerErr(server, namespaced, cfgByServer)
 	}
 	client, err := cfg.dial(ctx)
 	if err != nil {
@@ -230,4 +231,110 @@ func CallNamespaced(ctx context.Context, cfgByServer map[string]ServerConfig, na
 	}
 	defer client.Close()
 	return client.CallTool(ctx, tool, args)
+}
+
+// unknownServerErr builds the error for a namespaced call whose server part is
+// not in cfgByServer, appending a "did you mean" hint listing the closest known
+// server names. The hint goes straight back to the model as tool output, so a
+// guessed namespace (e.g. "codebase_memory" for "codebase-memory-mcp") is
+// corrected on the next attempt instead of failing opaquely.
+func unknownServerErr(server, namespaced string, cfgByServer map[string]ServerConfig) error {
+	known := make([]string, 0, len(cfgByServer))
+	for name := range cfgByServer {
+		known = append(known, name)
+	}
+	msg := fmt.Sprintf("mcp: no server %q for tool %q", server, namespaced)
+	if sugg := SuggestServers(server, known); len(sugg) > 0 {
+		msg += "; did you mean " + strings.Join(sugg, ", ") + "?"
+	}
+	return fmt.Errorf("%s", msg)
+}
+
+// SuggestServers returns the known server names closest to want (case-
+// insensitive, normalized Levenshtein similarity), best first, capped at 3.
+// An empty result means nothing is close enough to suggest — the "no server"
+// error stands on its own. Used to turn a guessed/typo'd server namespace into
+// an actionable hint instead of a dead end.
+func SuggestServers(want string, known []string) []string {
+	const (
+		minSim  = 0.5 // below this a name is noise, not a typo
+		maxHits = 3
+	)
+	type scored struct {
+		name string
+		sim  float64
+	}
+	var cands []scored
+	for _, name := range known {
+		if sim := nameSimilarity(want, name); sim >= minSim {
+			cands = append(cands, scored{name, sim})
+		}
+	}
+	sort.Slice(cands, func(i, j int) bool {
+		if cands[i].sim != cands[j].sim {
+			return cands[i].sim > cands[j].sim
+		}
+		return cands[i].name < cands[j].name
+	})
+	out := make([]string, 0, min(len(cands), maxHits))
+	for i, c := range cands {
+		if i == maxHits {
+			break
+		}
+		out = append(out, c.name)
+	}
+	return out
+}
+
+// nameSimilarity is a case-insensitive normalized Levenshtein similarity in
+// [0,1]: 1.0 is an exact match, 0.0 shares nothing.
+func nameSimilarity(a, b string) float64 {
+	a, b = strings.ToLower(a), strings.ToLower(b)
+	if a == b {
+		return 1.0
+	}
+	if a == "" || b == "" {
+		return 0.0
+	}
+	d := levenshtein(a, b)
+	max := len(a)
+	if len(b) > max {
+		max = len(b)
+	}
+	return 1.0 - float64(d)/float64(max)
+}
+
+// levenshtein computes the edit distance between two strings (two-row DP).
+func levenshtein(a, b string) int {
+	la, lb := len(a), len(b)
+	prev := make([]int, lb+1)
+	cur := make([]int, lb+1)
+	for j := 0; j <= lb; j++ {
+		prev[j] = j
+	}
+	for i := 1; i <= la; i++ {
+		cur[0] = i
+		for j := 1; j <= lb; j++ {
+			cost := 1
+			if a[i-1] == b[j-1] {
+				cost = 0
+			}
+			cur[j] = min3(prev[j]+1, cur[j-1]+1, prev[j-1]+cost)
+		}
+		prev, cur = cur, prev
+	}
+	return prev[lb]
+}
+
+func min3(a, b, c int) int {
+	if a < b {
+		if a < c {
+			return a
+		}
+		return c
+	}
+	if b < c {
+		return b
+	}
+	return c
 }

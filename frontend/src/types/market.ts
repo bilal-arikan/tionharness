@@ -3,14 +3,7 @@
 // The catalog carries the manifest only; the kind-specific payload is fetched on
 // demand via the detail endpoint and used at install time. See _Docs/21-MARKET.md.
 
-export type PackKind =
-  | 'skill'
-  | 'agent'
-  | 'provider'
-  | 'flow'
-  | 'workspace'
-  | 'mcp'
-  | 'hook'
+export type PackKind = 'skill' | 'agent' | 'provider' | 'flow' | 'workspace' | 'mcp' | 'hook'
 export type PackSource = 'bundled' | 'global' | 'remote'
 
 export interface SkillPayload {
@@ -91,6 +84,7 @@ export interface WorkspaceTemplateFlow {
 }
 
 export interface WorkspaceTemplateSchedule {
+  name?: string
   agentKey: string
   cronExpr: string
   prompt: string

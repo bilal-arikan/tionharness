@@ -37,6 +37,11 @@ type WSSettings struct {
 	Color         string `json:"color"` // hex accent for visual identity
 	PauseAutonomy bool   `json:"pauseAutonomy"`
 
+	// DefaultAgentId is the agent pre-selected for new sessions in this workspace.
+	// Per-workspace (not global localStorage) so switching workspaces does not
+	// silently overwrite another workspace's choice.
+	DefaultAgentId string `json:"defaultAgentId"`
+
 	// Per-workspace appearance overrides (client-side visual only). Empty fields
 	// inherit the application-global appearance, so the UI re-themes itself when
 	// the active workspace changes. Theme is the legacy base mode (dark/light/
@@ -153,6 +158,7 @@ type WSSettingsPatch struct {
 	Icon              *string `json:"icon"`
 	Color             *string `json:"color"`
 	PauseAutonomy     *bool   `json:"pauseAutonomy"`
+	DefaultAgentId    *string `json:"defaultAgentId"`
 	DefaultWorkingDir *string `json:"defaultWorkingDir"`
 
 	Theme       *string `json:"theme"`
@@ -332,6 +338,9 @@ func (m *Manager) UpdateSettings(id string, patch WSSettingsPatch) (*Workspace, 
 	}
 	if patch.PauseAutonomy != nil {
 		ws.settings.cur.PauseAutonomy = *patch.PauseAutonomy
+	}
+	if patch.DefaultAgentId != nil {
+		ws.settings.cur.DefaultAgentId = *patch.DefaultAgentId
 	}
 	if patch.TerseMode != nil {
 		ws.settings.cur.TerseMode = *patch.TerseMode

@@ -27,6 +27,10 @@ type WorkspaceInput struct {
 	// than a real list price — the header then prefixes "~".
 	CostToday     float64
 	CostEstimated bool
+	// Name is the workspace display name (e.g. "TionSwarmRepo"). When empty, the
+	// header falls back to "WORKSPACE"; this happens in agent tool call paths where
+	// the projector lacks the workspace-wide identity.
+	Name string
 	// Now is the clock used for age computations. Zero means time.Now().
 	Now time.Time
 }
@@ -69,8 +73,12 @@ func ProjectWorkspace(in WorkspaceInput, level Level, lens Lens) (View, error) {
 	if in.CostToday > 0 {
 		cost = " · " + usd(in.CostToday, in.CostEstimated) + " bugün"
 	}
-	v.Header = fmt.Sprintf("WORKSPACE · %d ajan · %d oturum (%d aktif) · %d kart · %d koşu · %s tok bugün%s · asOf %s",
-		len(in.Agents), len(in.Sessions), st.ActiveSessions, len(in.Tasks),
+	label := "WORKSPACE"
+	if in.Name != "" {
+		label = "WORKSPACE " + fmt.Sprintf("%q", in.Name)
+	}
+	v.Header = fmt.Sprintf("%s · %d ajan · %d oturum (%d aktif) · %d kart · %d koşu · %s tok bugün%s · asOf %s",
+		label, len(in.Agents), len(in.Sessions), st.ActiveSessions, len(in.Tasks),
 		len(in.FlowRuns), compactCount(in.TokensToday), cost, hhmmss(now))
 
 	if level == LevelTiny {

@@ -127,11 +127,10 @@ func projectCard(in BoardInput, v View, now time.Time) (View, error) {
 	if prio == "" {
 		prio = "-"
 	}
-	v.Header = fmt.Sprintf("CARD %s · %s · p:%s · agent:%s · %s önce · asOf %s",
-		card.ID, card.BoardState, prio, owner, age(tsSec(card.UpdatedAt), now), hhmmss(now))
+	v.Header = fmt.Sprintf("CARD %s %q · %s · p:%s · agent:%s · %s önce · asOf %s",
+		card.ID, card.Title, card.BoardState, prio, owner, age(tsSec(card.UpdatedAt), now), hhmmss(now))
 
 	var l lines
-	l.addIf(card.Title != "", "başlık: %s", clip(card.Title, 100))
 	if body := firstNonBlank(card.Description, card.Prompt); body != "" {
 		l.add("özet: %s", clip(body, 160))
 	}

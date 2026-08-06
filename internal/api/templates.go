@@ -196,6 +196,7 @@ func (s *Server) seedWorkspaceTeam(ctx context.Context, wsNew *workspace.Workspa
 			continue
 		}
 		if _, err := wsNew.DB.CreateSchedule(ctx, db.Schedule{
+			Name:     ts.Name,
 			AgentID:  agentID,
 			CronExpr: ts.CronExpr,
 			Prompt:   ts.Prompt,

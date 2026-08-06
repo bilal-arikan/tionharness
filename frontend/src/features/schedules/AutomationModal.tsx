@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Hash, LayoutGrid, Repeat, X, Zap } from 'lucide-react'
+import { Hash, LayoutGrid, Repeat, Sparkles, X, Zap } from 'lucide-react'
 import { api } from '@/api'
 import type {
   Agent,
@@ -107,6 +107,7 @@ export function AutomationModal({
   // spawnTagsOverride: set by a template (e.g. stuck repair must NOT re-tag the
   // fixer, or it would loop); null = backend default ([triggerTag]).
   const [spawnTagsOverride, setSpawnTagsOverride] = useState<string[] | null>(null)
+  const [generatingTitle, setGeneratingTitle] = useState(false)
 
   const isArchive = isBoardKind && boardAction === 'archive'
   const missingTarget = !isArchive && (targetMode === 'flow' ? !flowId : !targetAgentId)
@@ -238,12 +239,37 @@ export function AutomationModal({
       testId={`automation-${kind}-modal`}
     >
       <Field label="Ad (opsiyonel)">
-        <input
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="Otomasyonun adı"
-          className={inputCls}
-        />
+        <div className="flex items-center gap-2">
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Otomasyonun adı"
+            className={inputCls}
+          />
+          {editing && (
+            <button
+              type="button"
+              disabled={generatingTitle}
+              onClick={async () => {
+                setGeneratingTitle(true)
+                try {
+                  const updated = await api.generateAutomationTitle(editing.id)
+                  setName(updated.name)
+                  toast.success('Başlık oluşturuldu')
+                } catch (e) {
+                  onError((e as Error).message)
+                } finally {
+                  setGeneratingTitle(false)
+                }
+              }}
+              className="flex shrink-0 items-center gap-1 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5 text-xs text-[var(--color-text-dim)] hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
+              title="AI ile başlık oluştur"
+            >
+              <Sparkles size={14} className={generatingTitle ? 'animate-pulse' : ''} />
+              {generatingTitle ? '...' : 'Oluştur'}
+            </button>
+          )}
+        </div>
       </Field>
 
       <Field label="Tetikleyici">

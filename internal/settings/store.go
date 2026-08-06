@@ -354,6 +354,7 @@ func (s *Store) Apply(p Patch) (Settings, error) {
 		next.AutoTitleEnabled = *p.AutoTitleEnabled
 	}
 	applyString(&next.TitleModel, p.TitleModel)
+	applyString(&next.TitleProviderID, p.TitleProviderID)
 
 	applyBool(&next.EnableShell, p.EnableShell)
 	applyBool(&next.EnableCLIHooks, p.EnableCLIHooks)

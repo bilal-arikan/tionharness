@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/bilal-arikan/tionswarm/internal/db"
+	"github.com/bilal-arikan/tionswarm/internal/mcp"
 )
 
 // Capability is a probe + context-block contract for an OPTIONAL external tool a
@@ -70,6 +71,23 @@ func codebaseMemoryCommand(servers []db.MCPServer) string {
 	return ""
 }
 
+// codebaseMemoryServerName returns the configured server NAME for the
+// codebase-memory-mcp stdio server ("" when absent). The prompt guidance needs the
+// exact namespaced tool names (`<server>__<tool>`), and the namespace prefix is the
+// server's stored name — so the hint must be built from the live row, never
+// hardcoded.
+func codebaseMemoryServerName(servers []db.MCPServer) string {
+	for _, m := range servers {
+		if m.Transport != db.MCPTransportStdio && m.Transport != "" {
+			continue
+		}
+		if strings.Contains(strings.ToLower(m.Command), codebaseMemoryCommandMarker) {
+			return m.Name
+		}
+	}
+	return ""
+}
+
 // codebaseMemoryCmd returns the enabled codebase-memory executable path for this
 // workspace, or "" when no such server is enabled. Backs the codebase_workspace_search
 // tool registration (fan-out search across the workspace store).
@@ -94,7 +112,12 @@ var codebaseMemoryCapability = Capability{
 	},
 	Context: func(ctx context.Context, r *Runtime, cwd string) string {
 		var b strings.Builder
-		b.WriteString(codebaseMemoryGuidance)
+		servers, err := r.db.ListEnabledMCPServers(ctx)
+		if err != nil {
+			r.logger.Warn("codebase-memory capability: server list failed", "error", err)
+			return ""
+		}
+		b.WriteString(codebaseMemoryGuidance(servers))
 		if r.CBMStoreDir() != "" {
 			b.WriteString("\nThis workspace uses an ISOLATED index store, so results never mix with other workspaces.")
 		}
@@ -106,15 +129,32 @@ var codebaseMemoryCapability = Capability{
 	},
 }
 
-const codebaseMemoryGuidance = "# Code knowledge-graph available\n" +
-	"A codebase-memory MCP server is connected. For ANY code search, navigation, or " +
-	"structural understanding, use its tools FIRST: search_code (text/symbol), " +
-	"search_graph + get_code_snippet (read a definition), query_graph / trace_path " +
-	"(relationships), get_architecture (workspace-wide overview). It is faster and far " +
-	"more token-efficient. Do NOT reach for raw shell greps (PowerShell Select-String, " +
-	"Get-Content -Recurse, grep, findstr) as your first move — they are the LAST resort, " +
-	"only when the index genuinely has no answer for a query. After code changes, re-run " +
-	"index_repository (or rely on the background watcher) so results stay fresh."
+// codebaseMemoryGuidance builds the prompt hint with the EXACT namespaced tool
+// names (`<server>__<tool>`) taken from the live MCP server row. Bare tool names
+// (search_code, …) were the root cause of models guessing a wrong namespace
+// (e.g. codebase_memory__search_code) and getting "no server" errors — the hint now
+// spells the full callable name so no guessing is possible. Returns "" when no
+// codebase-memory server row is present: a hint without a real namespace would
+// point the model at non-existent tools, which is worse than no hint at all.
+func codebaseMemoryGuidance(servers []db.MCPServer) string {
+	server := codebaseMemoryServerName(servers)
+	if server == "" {
+		return ""
+	}
+	ns := func(tool string) string {
+		return mcp.NamespaceTool(server, tool)
+	}
+	return "# Code knowledge-graph available\n" +
+		"A codebase-memory MCP server is connected. For ANY code search, navigation, or " +
+		"structural understanding, use its tools FIRST: " + ns("search_code") + " (text/symbol), " +
+		ns("search_graph") + " + " + ns("get_code_snippet") + " (read a definition), " +
+		ns("query_graph") + " / " + ns("trace_path") + " (relationships), " +
+		ns("get_architecture") + " (workspace-wide overview). It is faster and far " +
+		"more token-efficient. Do NOT reach for raw shell greps (PowerShell Select-String, " +
+		"Get-Content -Recurse, grep, findstr) as your first move — they are the LAST resort, " +
+		"only when the index genuinely has no answer for a query. After code changes, re-run " +
+		ns("index_repository") + " (or rely on the background watcher) so results stay fresh."
+}
 
 // projectIDForPath mirrors codebase-memory-mcp's path->project-id rule: path
 // separators (and the drive colon) collapse to '-', and any character outside

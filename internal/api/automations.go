@@ -1,6 +1,7 @@
 package api
 
 import (
+	"fmt"
 	"net/http"
 	"sort"
 	"strings"
@@ -398,4 +399,54 @@ func (s *Server) handleDeleteAutomation(w http.ResponseWriter, r *http.Request) 
 	}
 	s.logger.Info("automation deleted", "automation", id)
 	writeJSON(w, http.StatusOK, map[string]string{"deleted": id})
+}
+
+// handleGenerateAutomationTitle asks the runtime's title model for a short name
+// and updates the automation. The source is built from the automation's trigger
+// kind, target and prompt template.
+func (s *Server) handleGenerateAutomationTitle(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	wsp := ws(r)
+	if wsp.Runtime == nil {
+		writeError(w, http.StatusServiceUnavailable, "runtime not available")
+		return
+	}
+	auto, err := wsp.DB.GetAutomation(r.Context(), id)
+	if writeDBError(w, err, "automation not found") {
+		return
+	}
+	kind := auto.TriggerKind
+	if kind == "" {
+		kind = db.TriggerTag
+	}
+	source := fmt.Sprintf("Automation: trigger=%s", kind)
+	if auto.Name != "" {
+		source += fmt.Sprintf(" currentName=%s", auto.Name)
+	}
+	if auto.TargetAgentID != "" {
+		if ag, err := wsp.DB.GetAgent(r.Context(), auto.TargetAgentID); err == nil {
+			source += fmt.Sprintf(" agent=%s", ag.Name)
+		}
+	}
+	if auto.FlowID != "" {
+		if fl, err := wsp.DB.GetFlow(r.Context(), auto.FlowID); err == nil {
+			source += fmt.Sprintf(" flow=%s", fl.Name)
+		}
+	}
+	if auto.PromptTemplate != "" {
+		source += fmt.Sprintf(" prompt=%s", auto.PromptTemplate)
+	}
+	title, err := wsp.Runtime.TitleFor(r.Context(), "", source)
+	if err != nil {
+		s.logger.Warn("automation title generation failed", "id", id, "error", err)
+	}
+	if title == "" {
+		writeError(w, http.StatusInternalServerError, "title generation produced empty result")
+		return
+	}
+	if err := wsp.DB.SetAutomationName(r.Context(), id, title); writeDBError(w, err, "") {
+		return
+	}
+	auto.Name = title
+	writeJSON(w, http.StatusOK, auto)
 }

@@ -53,12 +53,22 @@ func (r *Runtime) CapabilityContext(ctx, cwd) string   // mevcut olanların blok
 - **Tespit:** `r.db.ListEnabledMCPServers` içinde `Transport=stdio` + `Command`'da
   `codebase-memory-mcp` işareti (`codebaseMemoryCommand`). MCP modelinde slug yok →
   Command üzerinden.
-- **Blok:** kısa; araç-tercihi yönlendirmesi (`search_code`/`search_graph`/
-  `get_code_snippet`/`query_graph`/`trace_path`/`get_architecture`) + izole store notu
-  + cwd'den türetilen `project` id.
+- **Blok:** kısa; araç-tercihi yönlendirmesi — **tam namespaced adlarla**
+  (`<server>__search_code`, `<server>__search_graph`, `<server>__get_code_snippet`,
+  `<server>__query_graph`, `<server>__trace_path`, `<server>__get_architecture`,
+  `<server>__index_repository`; server adı canlı MCP satırından, `codebaseMemoryServerName`)
+  + izole store notu + cwd'den türetilen `project` id. Çıplak adlar (sadece
+  `search_code`) **bilerek kullanılmaz** — model yanlış namespace tahmin edip
+  (`codebase_memory__search_code`) "no server" hatası alıyordu; tam ad yazınca tahmin
+  sıfırlanır. Sunucu satırı yoksa blok üretilmez.
 - **`projectIDForPath`:** path→id kuralını codebase-memory ile birebir taklit eder
   (ayraç+`:` → `-`, `[A-Za-z0-9-]` dışı düşer). İki gerçek örnekle test edildi; ıskalarsa
   blok ajanı `list_projects`'e yönlendirir (hedge).
+- **Namespace hatası kurtarma:** model yine de yanlış namespace'li bir ad üretirse
+  (ör. `codebase_memory__search_code`), registry `SuggestServers` ile yakın eşleşme
+  önerir: hataya `; did you mean codebase-memory-mcp?` eklenir (eşik 0.5 benzerlik,
+  en iyi 3, case-insensitive Levenshtein). Hem `manager.go` (registry yolu) hem
+  `pool.go` (gateway yolu) bu öneriyi verir — bkz. `internal/mcp/suggest_test.go`.
 
 ### 3. Enjeksiyon — iki senkron assembler (mevcut desen)
 

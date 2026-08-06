@@ -68,8 +68,29 @@ export function ViewPanel({ target, onClose, onSend, embedded }: Props) {
 
   const copy = async () => {
     if (!result) return
-    await navigator.clipboard.writeText(result.text)
-    toast.info('Panoya kopyalandı')
+    // Copy all three budget tiers so the user sees exactly what the agent would
+    // get at each level — no extra UI toggle needed.
+    try {
+      const [tiny, card, full] = await Promise.all([
+        api.getView(ref, 'tiny', lens),
+        api.getView(ref, 'card', lens),
+        api.getView(ref, 'full', lens),
+      ])
+      const combined = `[TINY — ~${tiny.tokens} tok · asOf ${new Date(tiny.asOf).toLocaleTimeString()}]
+${tiny.text}
+
+[CARD — ~${card.tokens} tok · asOf ${new Date(card.asOf).toLocaleTimeString()}]
+${card.text}
+
+[FULL — ~${full.tokens} tok · asOf ${new Date(full.asOf).toLocaleTimeString()}]
+${full.text}`
+      await navigator.clipboard.writeText(combined)
+      toast.info('Üç seviye (tiny·card·full) panoya kopyalandı')
+    } catch {
+      // Fallback: copy just the current level if the others fail.
+      await navigator.clipboard.writeText(result.text)
+      toast.info('Panoya kopyalandı')
+    }
   }
 
   return (

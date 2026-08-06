@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"os"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 )
@@ -172,6 +173,15 @@ func TestPoolCallErrors(t *testing.T) {
 	}
 	if _, err := p.Call(context.Background(), map[string]ServerConfig{}, NamespaceTool("ghost", "x"), nil); err == nil {
 		t.Fatal("want error for unknown server")
+	}
+	// A guessed namespace must surface a close-match hint, not a bare failure.
+	cfgByServer := map[string]ServerConfig{"codebase-memory-mcp": {Name: "codebase-memory-mcp"}}
+	_, err := p.Call(context.Background(), cfgByServer, NamespaceTool("codebase_memory", "search_code"), nil)
+	if err == nil {
+		t.Fatal("want error for unknown (guessed) server")
+	}
+	if !strings.Contains(err.Error(), "did you mean codebase-memory-mcp") {
+		t.Fatalf("expected suggestion in error, got %q", err.Error())
 	}
 }
 

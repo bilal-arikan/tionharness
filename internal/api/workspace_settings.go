@@ -20,6 +20,7 @@ type workspaceSettingsDTO struct {
 	Icon              string `json:"icon"`
 	Color             string `json:"color"`
 	PauseAutonomy     bool   `json:"pauseAutonomy"`
+	DefaultAgentId    string `json:"defaultAgentId"`
 	DefaultWorkingDir string `json:"defaultWorkingDir"`
 	CreatedAt         int64  `json:"createdAt"`
 
@@ -116,6 +117,7 @@ func toWorkspaceSettingsDTO(ctx context.Context, w *workspace.Workspace) workspa
 		Icon:              s.Icon,
 		Color:             s.Color,
 		PauseAutonomy:     s.PauseAutonomy,
+		DefaultAgentId:    s.DefaultAgentId,
 		DefaultWorkingDir: s.DefaultWorkingDir,
 		CreatedAt:         w.CreatedAt,
 

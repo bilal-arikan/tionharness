@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Clock, X } from 'lucide-react'
+import { Clock, Sparkles, X } from 'lucide-react'
 import { api } from '@/api'
 import type { Agent, Flow, Schedule } from '@/types'
 import { AgentPicker } from '@/shared/components/agents/AgentPicker'
@@ -35,11 +35,13 @@ export function ScheduleModal({
   onError,
 }: Props) {
   const [targetMode, setTargetMode] = useState<'agent' | 'flow'>(editing?.flowId ? 'flow' : 'agent')
+  const [name, setName] = useState(editing?.name ?? '')
   const [agentId, setAgentId] = useState(editing?.agentId ?? '')
   const [flowId, setFlowId] = useState(editing?.flowId ?? '')
   const [cronExpr, setCronExpr] = useState(editing?.cronExpr ?? '*/5 * * * *')
   const [prompt, setPrompt] = useState(editing?.prompt ?? '')
   const [expiresAt, setExpiresAt] = useState(unixToLocalInput(editing?.expiresAt))
+  const [generatingTitle, setGeneratingTitle] = useState(false)
 
   // A flow input is optional; an agent needs a prompt. Every schedule needs a
   // target and a cron expression. Record order is the blocking priority.
@@ -65,6 +67,7 @@ export function ScheduleModal({
     try {
       if (editing) {
         const updated = await api.updateSchedule(editing.id, {
+          name: name.trim() || undefined,
           ...target,
           cronExpr: cronExpr.trim(),
           prompt: prompt.trim(),
@@ -73,6 +76,7 @@ export function ScheduleModal({
         onSaved(updated, false)
       } else {
         const created = await api.createSchedule({
+          name: name.trim() || undefined,
           ...(targetMode === 'flow' ? { flowId } : { agentId }),
           cronExpr: cronExpr.trim(),
           prompt: prompt.trim(),
@@ -100,6 +104,41 @@ export function ScheduleModal({
       deleteTestId="schedule-delete"
       testId={editing ? 'schedule-edit-modal' : 'schedule-create-modal'}
     >
+      <Field label="Ad (opsiyonel)" hint="Zamanlamaya bir isim ver — kartta ve listede gösterilir.">
+        <div className="flex items-center gap-2">
+          <input
+            data-testid="schedule-create-name-input"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="örn: günlük rapor"
+            className={`w-full ${inputCls}`}
+          />
+          {editing && (
+            <button
+              type="button"
+              disabled={generatingTitle}
+              onClick={async () => {
+                setGeneratingTitle(true)
+                try {
+                  const updated = await api.generateScheduleTitle(editing.id)
+                  setName(updated.name)
+                  toast.success('Başlık oluşturuldu')
+                } catch (e) {
+                  onError((e as Error).message)
+                } finally {
+                  setGeneratingTitle(false)
+                }
+              }}
+              className="flex shrink-0 items-center gap-1 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5 text-xs text-[var(--color-text-dim)] hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
+              title="AI ile başlık oluştur"
+            >
+              <Sparkles size={14} className={generatingTitle ? 'animate-pulse' : ''} />
+              {generatingTitle ? '...' : 'Oluştur'}
+            </button>
+          )}
+        </div>
+      </Field>
+
       <Field label="Hedef" hint="Zamanlama bir ajana prompt gönderir ya da bir akış çalıştırır.">
         <div className="flex flex-wrap items-center gap-2">
           <TargetModeToggle mode={targetMode} onChange={setTargetMode} />

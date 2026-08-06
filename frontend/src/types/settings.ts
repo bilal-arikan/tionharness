@@ -96,6 +96,7 @@ export interface AppSettings {
 
   autoTitleEnabled: boolean
   titleModel: string
+  titleProviderId: string
 
   // Gated tool capabilities (off by default).
   enableShell: boolean

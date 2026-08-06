@@ -114,6 +114,7 @@ type Task struct {
 // "run now" support both uniformly.
 type Schedule struct {
 	ID       string `json:"id"`
+	Name     string `json:"name,omitempty"`
 	AgentID  string `json:"agentId"`
 	CronExpr string `json:"cronExpr"`
 	Prompt   string `json:"prompt"`

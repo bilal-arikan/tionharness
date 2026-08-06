@@ -228,7 +228,7 @@ func (s *Server) buildWorkspaceTemplatePayload(ctx context.Context, wsp *workspa
 			continue // agent not in the exported team → drop the orphan
 		}
 		wp.Schedules = append(wp.Schedules, market.WorkspaceTemplateSchedule{
-			AgentKey: key, CronExpr: sc.CronExpr, Prompt: sc.Prompt,
+			Name: sc.Name, AgentKey: key, CronExpr: sc.CronExpr, Prompt: sc.Prompt,
 		})
 	}
 

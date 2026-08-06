@@ -275,7 +275,7 @@ func (p *Pool) Call(ctx context.Context, cfgByServer map[string]ServerConfig, na
 	}
 	cfg, ok := cfgByServer[server]
 	if !ok {
-		return CallToolResult{}, fmt.Errorf("mcp: no server %q for tool %q", server, namespaced)
+		return CallToolResult{}, unknownServerErr(server, namespaced, cfgByServer)
 	}
 	// Route to the same slot Catalog used: scoped (per-caller) when cfg.ScopeKey is
 	// set, shared (workspace-wide) otherwise.

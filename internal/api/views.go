@@ -24,7 +24,7 @@ import (
 // Sources degrade to nil instead of failing: a missing runtime (or a broken
 // findings store) shows an explicit "yok" line on that node, never a dead map.
 func (s *Server) viewProjector(r *http.Request) *view.Projector {
-	p := view.NewProjector(ws(r).DB)
+	p := view.NewProjector(ws(r).DB).WithName(ws(r).Name)
 	src := view.Sources{Logs: s.logs}
 	if rt := ws(r).Runtime; rt != nil {
 		src.Skills = rt.Skills()

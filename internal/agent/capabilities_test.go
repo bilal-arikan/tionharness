@@ -2,6 +2,7 @@ package agent
 
 import (
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/bilal-arikan/tionswarm/internal/db"
@@ -38,6 +39,37 @@ func TestCodebaseMemoryCommand(t *testing.T) {
 	// auto-index helper shells out to a stdio executable only).
 	if got := codebaseMemoryCommand([]db.MCPServer{http}); got != "" {
 		t.Errorf("expected http transport to be skipped, got %q", got)
+	}
+}
+
+func TestCodebaseMemoryGuidance(t *testing.T) {
+	stdio := db.MCPServer{Name: "codebase-memory-mcp", Transport: db.MCPTransportStdio, Command: `C:\Progs\codebase-memory-mcp\codebase-memory-mcp.exe`}
+
+	g := codebaseMemoryGuidance([]db.MCPServer{stdio})
+	for _, want := range []string{
+		"codebase-memory-mcp__search_code",
+		"codebase-memory-mcp__search_graph",
+		"codebase-memory-mcp__get_code_snippet",
+		"codebase-memory-mcp__query_graph",
+		"codebase-memory-mcp__trace_path",
+		"codebase-memory-mcp__get_architecture",
+		"codebase-memory-mcp__index_repository",
+	} {
+		if !strings.Contains(g, want) {
+			t.Errorf("guidance missing namespaced tool %q\n%s", want, g)
+		}
+	}
+	// Bare tool names must NOT appear — a bare name is what made models guess a
+	// wrong namespace and hit "no server".
+	for _, bare := range []string{" search_code ", " search_graph ", " index_repository "} {
+		if strings.Contains(g, bare) {
+			t.Errorf("guidance still exposes bare tool name %q\n%s", strings.TrimSpace(bare), g)
+		}
+	}
+
+	// No server -> no hint at all (the capability block vanishes).
+	if got := codebaseMemoryGuidance(nil); got != "" {
+		t.Errorf("expected empty guidance when no codebase-memory server, got %q", got)
 	}
 }
 

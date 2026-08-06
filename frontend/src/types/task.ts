@@ -78,6 +78,8 @@ export interface Run {
 
 export interface Schedule {
   id: string
+  // Optional human-readable name (shown in the board card and modal).
+  name?: string
   agentId: string
   // When set, the schedule runs this flow (with prompt as input) instead of
   // delivering the prompt to agentId.

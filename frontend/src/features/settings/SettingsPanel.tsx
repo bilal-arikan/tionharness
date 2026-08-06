@@ -216,6 +216,7 @@ export function SettingsPanel({
       debugJournalCap: draft.debugJournalCap,
       autoTitleEnabled: draft.autoTitleEnabled,
       titleModel: draft.titleModel,
+      titleProviderId: draft.titleProviderId,
       enableShell: draft.enableShell,
       enableCliHooks: draft.enableCliHooks,
       enableCodeMode: draft.enableCodeMode,

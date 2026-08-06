@@ -69,11 +69,10 @@ export function useSessionsController({
   // Entity selection carried by an initial/cross-workspace deep link, consumed
   // once by the workspace-load effect after agents+sessions arrive.
   const pendingRouteRef = useRef<Route | null>(INITIAL_ROUTE)
-  // Default agent for NEW sessions (chosen from the roster). Persisted so it
-  // survives reloads; unmentioned turns in a session use the session's own agent.
-  const [defaultAgentId, setDefaultAgentId] = useState<string | null>(() =>
-    localStorage.getItem('tionswarm.defaultAgentId'),
-  )
+  // Default agent for NEW sessions (chosen from the roster). Persisted per-workspace
+  // on the backend so switching workspaces does not silently overwrite another
+  // workspace's choice. Unmentioned turns in a session use the session's own agent.
+  const [defaultAgentId, setDefaultAgentId] = useState<string | null>(null)
   // Live handle to the chat hook for effects declared ABOVE its definition (the
   // messages-load effect): the ref is read post-render when the binding is set,
   // sidestepping the temporal-dead-zone the const would hit in a deps array.
@@ -103,8 +102,12 @@ export function useSessionsController({
     setActiveSessionId(null)
     setBootstrapping(true)
     let cancelled = false
-    Promise.all([api.listAgents(), api.listSessions({ limit: SESSIONS_PAGE_SIZE })])
-      .then(([ag, page]) => {
+    Promise.all([
+      api.listAgents(),
+      api.listSessions({ limit: SESSIONS_PAGE_SIZE }),
+      api.getWorkspaceSettings().catch(() => null as unknown as { defaultAgentId: string }),
+    ])
+      .then(([ag, page, ws]) => {
         if (cancelled) return
         const ss = page.items
         setAllAgents(ag)
@@ -112,6 +115,12 @@ export function useSessionsController({
         setSessionsTotal(page.total)
         setSessionsHasMore(page.hasMore)
         sessionsLimitRef.current = SESSIONS_PAGE_SIZE
+        // Restore the per-workspace default agent from the backend. If it points to an
+        // agent that no longer exists in this workspace, the self-heal effect below will
+        // pick the first agent and persist the correction.
+        if (ws?.defaultAgentId && ag.some((a) => a.id === ws.defaultAgentId)) {
+          setDefaultAgentId(ws.defaultAgentId)
+        }
         // Default selection: the most recent WRITABLE session. The sidebar now
         // lists every kind, but landing a returning user on a read-only flow or
         // schedule log (with no composer) would be a worse default than the last
@@ -154,15 +163,17 @@ export function useSessionsController({
     [allAgents, defaultAgentId],
   )
 
-  // Keep the default agent (for new sessions) valid. An id that is simply absent
-  // from this workspace self-heals to the first agent, silently — that is a
-  // workspace switch, not a deletion. A DELETED agent is left in place so the
-  // empty state can say so: quietly starting the next chat with a different
-  // agent than the user picked is worse than telling them their pick is gone.
+  // Keep the default agent (for new sessions) valid. When the stored default is
+  // absent or deleted from this workspace, self-heal to the first live agent and
+  // persist the correction to the backend. A DELETED agent is left in place so the
+  // empty state can say so: quietly starting the next chat with a different agent
+  // than the user picked is worse than telling them their pick is gone.
   useEffect(() => {
     if (agents.length === 0 || defaultAgentDeleted) return
     if (!defaultAgentId || !agents.some((a) => a.id === defaultAgentId)) {
-      setDefaultAgentId(agents[0].id)
+      const fallback = agents[0].id
+      setDefaultAgentId(fallback)
+      api.updateWorkspaceSettings({ defaultAgentId: fallback }).catch(() => {})
     }
   }, [agents, defaultAgentId, defaultAgentDeleted])
 
@@ -465,10 +476,12 @@ export function useSessionsController({
     [setError],
   )
 
-  // Pick the default agent for NEW sessions (from the roster).
+  // Pick the default agent for NEW sessions (from the roster). Persists to
+  // the backend per-workspace so it survives reloads and never leaks across
+  // workspaces. The local state updates immediately for instant UI feedback.
   const pickDefaultAgent = useCallback((id: string) => {
     setDefaultAgentId(id)
-    localStorage.setItem('tionswarm.defaultAgentId', id)
+    api.updateWorkspaceSettings({ defaultAgentId: id }).catch(() => {})
   }, [])
 
   // Roster click: set it as the default agent (for new chats) and as the active

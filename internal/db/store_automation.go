@@ -151,3 +151,16 @@ func (d *DB) DeleteAutomation(ctx context.Context, id string) error {
 	defer d.mu.Unlock()
 	return dbDeleteLocked(d, d.automations, dirAutomations, id)
 }
+
+// SetAutomationName updates only the name field of an automation.
+func (d *DB) SetAutomationName(ctx context.Context, id, name string) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	a, ok := d.automations[id]
+	if !ok {
+		return ErrNotFound
+	}
+	a.Name = name
+	a.UpdatedAt = now()
+	return d.persistAutomationLocked(a)
+}
