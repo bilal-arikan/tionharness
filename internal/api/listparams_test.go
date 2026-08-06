@@ -38,10 +38,11 @@ func TestListQueryParams(t *testing.T) {
 		t.Fatalf("full params = (%d,%d,%q,%v,%v,%v)", limit, offset, field, asc, listing, err)
 	}
 
-	// limit only → default offset, capped at max.
-	limit, _, _, _, _, err = parse("limit=999")
-	if err != nil || limit != 100 {
-		t.Fatalf("limit cap = %d err %v, want 100", limit, err)
+	// limit only → default offset, capped at max, and the tool-layer default
+	// sort (updated_desc) so the API pages like the list_* tools.
+	limit, _, field, asc, _, err = parse("limit=999")
+	if err != nil || limit != 100 || field != "updated" || asc {
+		t.Fatalf("limit cap = %d field %q asc %v err %v, want 100 updated false", limit, field, asc, err)
 	}
 
 	// Malformed values are errors.

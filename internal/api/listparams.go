@@ -59,6 +59,11 @@ func listQueryParams(q url.Values) (limit, offset int, sortField string, sortAsc
 			return 0, 0, "", false, false, e
 		}
 		sortField, sortAsc = field, asc
+	} else {
+		// Same default as the list_* tools (updated_desc): a client paging with
+		// limit/offset but no sort must get the same ordering as the tool layer,
+		// or pages would disagree between the two surfaces.
+		sortField, sortAsc = "updated", false
 	}
 	return limit, offset, sortField, sortAsc, true, nil
 }
