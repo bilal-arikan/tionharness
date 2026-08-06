@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/bilal-arikan/tionswarm/internal/providers"
@@ -32,6 +33,23 @@ type WorkerSpawnSpec struct {
 	Workflow string
 }
 
+// WorkerRow is the structured view of one worker session, the row shape behind
+// list_workers (CoordinationFuncs.ListRows). It mirrors the runtime's
+// agent.WorkerInfo plus the timestamps and stuck flag needed for filtering and
+// sorting without making the tools package depend on the agent package.
+type WorkerRow struct {
+	SessionID  string `json:"sessionId"`
+	AgentName  string `json:"agentName"`
+	Title      string `json:"title"`
+	Running    bool   `json:"running"`
+	Delegating bool   `json:"delegating,omitempty"`
+	Queued     bool   `json:"queued,omitempty"`
+	Stuck      bool   `json:"stuck,omitempty"`
+	Summary    string `json:"summary,omitempty"`
+	CreatedAt  int64  `json:"createdAt"`
+	UpdatedAt  int64  `json:"updatedAt"`
+}
+
 // CoordinationFuncs is the agent-side implementation the coordination tools call.
 // Injected per turn via WithCoordination, capturing the coordinator session id so
 // the tools need only carry the worker-facing arguments.
@@ -51,6 +69,9 @@ type CoordinationFuncs struct {
 	// List returns a human-readable snapshot of this coordinator's workers. subtree
 	// widens it from the direct children to every descendant.
 	List func(ctx context.Context, subtree bool) (string, error)
+	// ListRows returns the same workers as structured rows so list_workers can
+	// filter (state), sort and paginate. subtree widens it to every descendant.
+	ListRows func(ctx context.Context, subtree bool) ([]WorkerRow, error)
 	// Report closes this session's task upstream, for a session that is itself a
 	// worker of another coordinator. Nil on a root coordinator (nothing above it),
 	// which is what gates registration of report_to_coordinator.
@@ -327,14 +348,21 @@ func NewListWorkersTool() ListWorkersTool { return ListWorkersTool{} }
 func (ListWorkersTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name: "list_workers",
-		Description: "List the workers spawned under this coordinator and their status (running / " +
-			"finished, with a one-line summary of each finished worker's last reply). Use it to see what " +
-			"is still in flight before deciding your next step. Pass scope \"subtree\" to also see the " +
-			"workers your sub-coordinators spawned, indented by level.",
+		Description: "List the workers spawned under this coordinator and their status (running / finished, " +
+			"with a one-line summary of each finished worker's last reply). Use it to see what is still in " +
+			"flight before deciding your next step. Pass scope \"subtree\" to also see the workers your " +
+			"sub-coordinators spawned (reported flat, without indentation). Results are PAGINATED: pass limit " +
+			"(default 20, max 100) and offset to page; the reply reports total and hasMore, and you reach the " +
+			"next page with offset += limit. Filters: state (running | idle | stuck). Sort: updated_desc " +
+			"(default), updated_asc, created_desc, created_asc, name_asc, name_desc (name = worker agent name).",
 		InputSchema: json.RawMessage(`{
   "type": "object",
   "properties": {
-    "scope": { "type": "string", "enum": ["children", "subtree"], "description": "\"children\" (default) = your direct workers only. \"subtree\" = every descendant, including sub-coordinators' workers." }
+    "scope": { "type": "string", "enum": ["children", "subtree"], "description": "\"children\" (default) = your direct workers only. \"subtree\" = every descendant, including sub-coordinators' workers." },
+    "state": { "type": "string", "enum": ["running", "idle", "stuck"], "description": "Only workers in this state: running = a turn is in flight; idle = finished/not running; stuck = tagged stuck by the watchdog." },
+    "sort": { "type": "string", "enum": ["updated_desc", "updated_asc", "created_desc", "created_asc", "name_asc", "name_desc"], "description": "Result ordering (default updated_desc)." },
+    "limit": { "type": "integer", "description": "Max workers per page (default 20, max 100)." },
+    "offset": { "type": "integer", "description": "How many matching workers to skip before this page (default 0)." }
   },
   "additionalProperties": false
 }`),
@@ -343,7 +371,7 @@ func (ListWorkersTool) Def() providers.ToolDef {
 
 func (ListWorkersTool) Call(ctx context.Context, input json.RawMessage) (string, error) {
 	f := CoordinationFrom(ctx)
-	if f == nil || f.List == nil {
+	if f == nil || f.ListRows == nil {
 		return "", fmt.Errorf("list_workers is only available in a coordinator session")
 	}
 	scope := "children"
@@ -363,7 +391,68 @@ func (ListWorkersTool) Call(ctx context.Context, input json.RawMessage) (string,
 	default:
 		return "", fmt.Errorf("scope must be \"children\" or \"subtree\", got %q", scope)
 	}
-	return f.List(ctx, scope == "subtree")
+	var in struct {
+		State  string `json:"state"`
+		Sort   string `json:"sort"`
+		Limit  int    `json:"limit"`
+		Offset int    `json:"offset"`
+	}
+	if len(input) > 0 && string(input) != "{}" {
+		if err := json.Unmarshal(input, &in); err != nil {
+			return "", argErr(err)
+		}
+	}
+	limit, offset := PageArgs(in.Limit, in.Offset)
+
+	rows, err := f.ListRows(ctx, scope == "subtree")
+	if err != nil {
+		return "", err
+	}
+
+	state := strings.TrimSpace(in.State)
+	switch state {
+	case "", "running", "idle", "stuck":
+	default:
+		return "", fmt.Errorf("state must be one of running, idle, stuck; got %q", state)
+	}
+	matches := make([]WorkerRow, 0, len(rows))
+	for _, w := range rows {
+		switch state {
+		case "running":
+			if !w.Running {
+				continue
+			}
+		case "idle":
+			if w.Running {
+				continue
+			}
+		case "stuck":
+			if !w.Stuck {
+				continue
+			}
+		}
+		matches = append(matches, w)
+	}
+
+	field, asc, err := SortOrder(in.Sort)
+	if err != nil {
+		return "", err
+	}
+	// Sort the FILTERED rows (matches), not the raw rows: less compares by index,
+	// and matches is a strict subset — indexing rows with matches' positions
+	// compares wrong elements whenever a state filter is active.
+	less, err := SortByField(matches, field, asc,
+		func(w WorkerRow) int64 { return w.UpdatedAt },
+		func(w WorkerRow) int64 { return w.CreatedAt },
+		func(w WorkerRow) string { return w.AgentName },
+	)
+	if err != nil {
+		return "", err
+	}
+	sort.SliceStable(matches, less)
+
+	page, total := SlicePage(matches, offset, limit)
+	return pageResult(page, total, offset, limit)
 }
 
 // ---- report_to_coordinator ----

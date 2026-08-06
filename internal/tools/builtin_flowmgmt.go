@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/bilal-arikan/tionswarm/internal/db"
@@ -288,34 +289,86 @@ func NewListFlowsTool(database *db.DB, actorID string) ListFlowsTool {
 
 func (ListFlowsTool) Def() providers.ToolDef {
 	return providers.ToolDef{
-		Name:        "list_flows",
-		Description: "List the orchestration flows in this workspace (id, name, and whether each was created by an agent — provenance only; you can edit/delete any of them).",
-		InputSchema: json.RawMessage(`{"type":"object","properties":{},"additionalProperties":false}`),
+		Name: "list_flows",
+		Description: "List the orchestration flows in this workspace (id, name, emoji, tags, and whether each was " +
+			"created by an agent — provenance only; you can edit/delete any of them). Results are PAGINATED: pass " +
+			"limit (default 20, max 100) and offset to page; the reply reports total and hasMore, and you reach " +
+			"the next page with offset += limit. Filters: tags (comma-separated; a flow must carry ALL of them). " +
+			"Sort: updated_desc (default), updated_asc, created_desc, created_asc, name_asc, name_desc.",
+		InputSchema: json.RawMessage(`{
+  "type": "object",
+  "properties": {
+    "tags": { "type": "string", "description": "Comma-separated tags; a flow must carry ALL of them." },
+    "sort": { "type": "string", "enum": ["updated_desc", "updated_asc", "created_desc", "created_asc", "name_asc", "name_desc"], "description": "Result ordering (default updated_desc)." },
+    "limit": { "type": "integer", "description": "Max flows per page (default 20, max 100)." },
+    "offset": { "type": "integer", "description": "How many matching flows to skip before this page (default 0)." }
+  },
+  "additionalProperties": false
+}`),
 	}
 }
 
-func (t ListFlowsTool) Call(ctx context.Context, _ json.RawMessage) (string, error) {
+func (t ListFlowsTool) Call(ctx context.Context, input json.RawMessage) (string, error) {
+	var in struct {
+		Tags   string `json:"tags"`
+		Sort   string `json:"sort"`
+		Limit  int    `json:"limit"`
+		Offset int    `json:"offset"`
+	}
+	if len(input) > 0 {
+		if err := json.Unmarshal(input, &in); err != nil {
+			return "", argErr(err)
+		}
+	}
+	limit, offset := PageArgs(in.Limit, in.Offset)
+
 	flows, err := t.d.db.ListFlows(ctx)
 	if err != nil {
 		return "", err
 	}
-	type row struct {
-		ID             string `json:"id"`
-		Name           string `json:"name"`
-		Emoji          string `json:"emoji,omitempty"`
-		CreatedByAgent bool   `json:"createdByAgent"`
-	}
-	out := make([]row, 0, len(flows))
+
+	wantTags := SplitTags(in.Tags)
+	matches := make([]db.Flow, 0, len(flows))
 	for _, f := range flows {
+		if len(wantTags) > 0 && !HasAllTags(f.Tags, wantTags) {
+			continue
+		}
+		matches = append(matches, f)
+	}
+
+	field, asc, err := SortOrder(in.Sort)
+	if err != nil {
+		return "", err
+	}
+	less, err := SortByField(matches, field, asc,
+		func(f db.Flow) int64 { return f.UpdatedAt },
+		func(f db.Flow) int64 { return f.CreatedAt },
+		func(f db.Flow) string { return f.Name },
+	)
+	if err != nil {
+		return "", err
+	}
+	sort.SliceStable(matches, less)
+
+	page, total := SlicePage(matches, offset, limit)
+	type row struct {
+		ID             string   `json:"id"`
+		Name           string   `json:"name"`
+		Emoji          string   `json:"emoji,omitempty"`
+		Tags           []string `json:"tags,omitempty"`
+		CreatedByAgent bool     `json:"createdByAgent"`
+	}
+	out := make([]row, 0, len(page))
+	for _, f := range page {
 		out = append(out, row{
 			ID:             f.ID,
 			Name:           f.Name,
 			Emoji:          f.Emoji,
+			Tags:           f.Tags,
 			CreatedByAgent: f.CreatedBy != "",
 		})
 	}
-	b, _ := json.Marshal(out)
-	return string(b), nil
+	return pageResult(out, total, offset, limit)
 }
 
 // ---- get_flow ----

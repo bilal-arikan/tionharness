@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/bilal-arikan/tionswarm/internal/db"
@@ -483,17 +484,91 @@ func NewListAutomationsTool(database *db.DB, actorID string) ListAutomationsTool
 
 func (ListAutomationsTool) Def() providers.ToolDef {
 	return providers.ToolDef{
-		Name:        "list_automations",
-		Description: "List the tag-triggered automations in this workspace (id, name, triggerTag, targetAgent, enabled, iterationCount/maxIterations, and whether each was created by an agent — provenance only; you can edit/delete any of them).",
-		InputSchema: json.RawMessage(`{"type":"object","properties":{},"additionalProperties":false}`),
+		Name: "list_automations",
+		Description: "List the automations in this workspace (id, name, triggerKind, triggerTag, targetAgentId, " +
+			"enabled, iterationCount/maxIterations, and whether each was created by an agent — provenance only; " +
+			"you can edit/delete any of them). Results are PAGINATED: pass limit (default 20, max 100) and offset " +
+			"to page; the reply reports total and hasMore, and you reach the next page with offset += limit. " +
+			"Filters: enabled (true/false), triggerKind (tag|board|token|counter), targetAgentId (exact). Sort: " +
+			"updated_desc (default), updated_asc, created_desc, created_asc, name_asc, name_desc.",
+		InputSchema: json.RawMessage(`{
+  "type": "object",
+  "properties": {
+    "enabled": { "type": "boolean", "description": "Only enabled (true) or disabled (false) automations." },
+    "triggerKind": { "type": "string", "enum": ["tag", "board", "token", "counter"], "description": "Only automations with this trigger kind." },
+    "targetAgentId": { "type": "string", "description": "Only automations targeting this agent." },
+    "sort": { "type": "string", "enum": ["updated_desc", "updated_asc", "created_desc", "created_asc", "name_asc", "name_desc"], "description": "Result ordering (default updated_desc)." },
+    "limit": { "type": "integer", "description": "Max automations per page (default 20, max 100)." },
+    "offset": { "type": "integer", "description": "How many matching automations to skip before this page (default 0)." }
+  },
+  "additionalProperties": false
+}`),
 	}
 }
 
-func (t ListAutomationsTool) Call(ctx context.Context, _ json.RawMessage) (string, error) {
+func (t ListAutomationsTool) Call(ctx context.Context, input json.RawMessage) (string, error) {
+	var in struct {
+		Enabled       *bool  `json:"enabled"`
+		TriggerKind   string `json:"triggerKind"`
+		TargetAgentID string `json:"targetAgentId"`
+		Sort          string `json:"sort"`
+		Limit         int    `json:"limit"`
+		Offset        int    `json:"offset"`
+	}
+	if len(input) > 0 {
+		if err := json.Unmarshal(input, &in); err != nil {
+			return "", argErr(err)
+		}
+	}
+	limit, offset := PageArgs(in.Limit, in.Offset)
+
 	autos, err := t.d.db.ListAutomations(ctx)
 	if err != nil {
 		return "", err
 	}
+
+	triggerKind := strings.TrimSpace(in.TriggerKind)
+	switch triggerKind {
+	case "", "tag", "board", "token", "counter":
+	default:
+		return "", fmt.Errorf("triggerKind must be one of tag, board, token, counter; got %q", triggerKind)
+	}
+	target := strings.TrimSpace(in.TargetAgentID)
+	matches := make([]db.Automation, 0, len(autos))
+	for _, a := range autos {
+		if in.Enabled != nil && a.Enabled != *in.Enabled {
+			continue
+		}
+		if triggerKind != "" {
+			kind := a.TriggerKind
+			if kind == "" {
+				kind = db.TriggerTag
+			}
+			if kind != triggerKind {
+				continue
+			}
+		}
+		if target != "" && a.TargetAgentID != target {
+			continue
+		}
+		matches = append(matches, a)
+	}
+
+	field, asc, err := SortOrder(in.Sort)
+	if err != nil {
+		return "", err
+	}
+	less, err := SortByField(matches, field, asc,
+		func(a db.Automation) int64 { return a.UpdatedAt },
+		func(a db.Automation) int64 { return a.CreatedAt },
+		func(a db.Automation) string { return a.Name },
+	)
+	if err != nil {
+		return "", err
+	}
+	sort.SliceStable(matches, less)
+
+	page, total := SlicePage(matches, offset, limit)
 	type row struct {
 		ID              string `json:"id"`
 		Name            string `json:"name"`
@@ -516,8 +591,8 @@ func (t ListAutomationsTool) Call(ctx context.Context, _ json.RawMessage) (strin
 		MaxIterations   int    `json:"maxIterations"`
 		CreatedByAgent  bool   `json:"createdByAgent"`
 	}
-	out := make([]row, 0, len(autos))
-	for _, a := range autos {
+	out := make([]row, 0, len(page))
+	for _, a := range page {
 		kind := a.TriggerKind
 		if kind == "" {
 			kind = db.TriggerTag
@@ -545,6 +620,5 @@ func (t ListAutomationsTool) Call(ctx context.Context, _ json.RawMessage) (strin
 			CreatedByAgent:  a.CreatedBy != "",
 		})
 	}
-	b, _ := json.Marshal(out)
-	return string(b), nil
+	return pageResult(out, total, offset, limit)
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/bilal-arikan/tionswarm/internal/db"
@@ -44,17 +45,91 @@ func NewListTasksTool(database *db.DB, actorID string) ListTasksTool {
 
 func (ListTasksTool) Def() providers.ToolDef {
 	return providers.ToolDef{
-		Name:        "list_tasks",
-		Description: "List the tasks on the kanban board in this workspace (id, title, boardState, ownerAgentId, flowId, priority, tags, artifactIds, last run status, and whether each was created by an agent). artifactIds are workspace artifacts attached to the card (e.g. a plan) — read one with read_artifact. You can edit, move and delete ANY task. Built-in board columns are: pbi, todo, in_progress, review, done, failed — this workspace may also define custom columns; check existing tasks' boardState values or the board UI to see them.",
-		InputSchema: json.RawMessage(`{"type":"object","properties":{},"additionalProperties":false}`),
+		Name: "list_tasks",
+		Description: "List the tasks on the kanban board in this workspace (id, title, boardState, ownerAgentId, " +
+			"flowId, priority, tags, artifactIds, last run status, and whether each was created by an agent). " +
+			"artifactIds are workspace artifacts attached to the card (e.g. a plan) — read one with read_artifact. " +
+			"You can edit, move and delete ANY task. Built-in board columns are: pbi, todo, in_progress, review, " +
+			"done, failed — this workspace may also define custom columns; check existing tasks' boardState values " +
+			"or the board UI to see them. Results are PAGINATED: pass limit (default 20, max 100) and offset to " +
+			"page; the reply reports total and hasMore, and you reach the next page with offset += limit. Filters: " +
+			"boardState (exact), priority (exact), ownerAgentId (exact), tags (comma-separated; a card must carry " +
+			"ALL of them). Sort: updated_desc (default), updated_asc, created_desc, created_asc, name_asc, " +
+			"name_desc (name = card title).",
+		InputSchema: json.RawMessage(`{
+  "type": "object",
+  "properties": {
+    "boardState": { "type": "string", "description": "Only tasks in this column (exact match)." },
+    "priority": { "type": "string", "description": "Only tasks with this priority: critical|high|medium|low." },
+    "ownerAgentId": { "type": "string", "description": "Only tasks owned by this agent." },
+    "tags": { "type": "string", "description": "Comma-separated tags; a task must carry ALL of them." },
+    "sort": { "type": "string", "enum": ["updated_desc", "updated_asc", "created_desc", "created_asc", "name_asc", "name_desc"], "description": "Result ordering (default updated_desc)." },
+    "limit": { "type": "integer", "description": "Max tasks per page (default 20, max 100)." },
+    "offset": { "type": "integer", "description": "How many matching tasks to skip before this page (default 0)." }
+  },
+  "additionalProperties": false
+}`),
 	}
 }
 
-func (t ListTasksTool) Call(ctx context.Context, _ json.RawMessage) (string, error) {
+func (t ListTasksTool) Call(ctx context.Context, input json.RawMessage) (string, error) {
+	var in struct {
+		BoardState   string `json:"boardState"`
+		Priority     string `json:"priority"`
+		OwnerAgentID string `json:"ownerAgentId"`
+		Tags         string `json:"tags"`
+		Sort         string `json:"sort"`
+		Limit        int    `json:"limit"`
+		Offset       int    `json:"offset"`
+	}
+	if len(input) > 0 {
+		if err := json.Unmarshal(input, &in); err != nil {
+			return "", argErr(err)
+		}
+	}
+	limit, offset := PageArgs(in.Limit, in.Offset)
+
 	tasks, err := t.d.db.ListActiveTasks(ctx)
 	if err != nil {
 		return "", err
 	}
+
+	boardState := strings.TrimSpace(in.BoardState)
+	priority := strings.TrimSpace(in.Priority)
+	owner := strings.TrimSpace(in.OwnerAgentID)
+	wantTags := SplitTags(in.Tags)
+	matches := make([]db.Task, 0, len(tasks))
+	for _, tk := range tasks {
+		if boardState != "" && tk.BoardState != boardState {
+			continue
+		}
+		if priority != "" && tk.Priority != priority {
+			continue
+		}
+		if owner != "" && tk.OwnerAgentID != owner {
+			continue
+		}
+		if len(wantTags) > 0 && !HasAllTags(tk.Tags, wantTags) {
+			continue
+		}
+		matches = append(matches, tk)
+	}
+
+	field, asc, err := SortOrder(in.Sort)
+	if err != nil {
+		return "", err
+	}
+	less, err := SortByField(matches, field, asc,
+		func(tk db.Task) int64 { return tk.UpdatedAt },
+		func(tk db.Task) int64 { return tk.CreatedAt },
+		func(tk db.Task) string { return tk.Title },
+	)
+	if err != nil {
+		return "", err
+	}
+	sort.SliceStable(matches, less)
+
+	page, total := SlicePage(matches, offset, limit)
 	type row struct {
 		ID             string   `json:"id"`
 		Title          string   `json:"title"`
@@ -67,8 +142,8 @@ func (t ListTasksTool) Call(ctx context.Context, _ json.RawMessage) (string, err
 		LastRunStatus  string   `json:"lastRunStatus,omitempty"`
 		CreatedByAgent bool     `json:"createdByAgent"`
 	}
-	out := make([]row, 0, len(tasks))
-	for _, tk := range tasks {
+	out := make([]row, 0, len(page))
+	for _, tk := range page {
 		out = append(out, row{
 			ID:             tk.ID,
 			Title:          tk.Title,
@@ -82,8 +157,7 @@ func (t ListTasksTool) Call(ctx context.Context, _ json.RawMessage) (string, err
 			CreatedByAgent: tk.CreatedBy != "",
 		})
 	}
-	b, _ := json.Marshal(out)
-	return string(b), nil
+	return pageResult(out, total, offset, limit)
 }
 
 // ---- create_task ----

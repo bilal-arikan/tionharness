@@ -3,9 +3,11 @@ package api
 import (
 	"context"
 	"net/http"
+	"sort"
 	"time"
 
 	"github.com/bilal-arikan/tionswarm/internal/db"
+	"github.com/bilal-arikan/tionswarm/internal/tools"
 )
 
 func (s *Server) handleListSchedules(w http.ResponseWriter, r *http.Request) {
@@ -22,7 +24,45 @@ func (s *Server) handleListSchedules(w http.ResponseWriter, r *http.Request) {
 		}
 		schedules = append(schedules, sc)
 	}
-	writeJSON(w, http.StatusOK, schedules)
+	q := r.URL.Query()
+	limit, offset, field, asc, listing, err := listQueryParams(q)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	enabled, hasEnabled, err := boolQuery(q, "enabled")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	agentID := q.Get("agentId")
+	matches := make([]db.Schedule, 0, len(schedules))
+	for _, sc := range schedules {
+		if hasEnabled && sc.Enabled != *enabled {
+			continue
+		}
+		if agentID != "" && sc.AgentID != agentID {
+			continue
+		}
+		matches = append(matches, sc)
+	}
+	if !listing {
+		writeJSON(w, http.StatusOK, matches)
+		return
+	}
+	if field != "" {
+		less, err := tools.SortByField(matches, field, asc,
+			func(sc db.Schedule) int64 { return sc.UpdatedAt },
+			func(sc db.Schedule) int64 { return sc.CreatedAt },
+			func(sc db.Schedule) string { return sc.ID }) // schedules have no name — documented surrogate
+		if err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		sort.SliceStable(matches, less)
+	}
+	page, total := tools.SlicePage(matches, offset, limit)
+	pageJSONResponse(w, page, total, offset, limit)
 }
 
 type createScheduleReq struct {

@@ -3,9 +3,11 @@ package api
 import (
 	"net/http"
 	"os/exec"
+	"sort"
 	"strings"
 
 	"github.com/bilal-arikan/tionswarm/internal/proc"
+	"github.com/bilal-arikan/tionswarm/internal/tools"
 	"github.com/bilal-arikan/tionswarm/internal/workspace"
 )
 
@@ -19,7 +21,7 @@ type workspaceListItem struct {
 	Color     string `json:"color"`
 }
 
-func (s *Server) handleListWorkspaces(w http.ResponseWriter, _ *http.Request) {
+func (s *Server) handleListWorkspaces(w http.ResponseWriter, r *http.Request) {
 	metas := s.workspaces.List()
 	out := make([]workspaceListItem, 0, len(metas))
 	for _, m := range metas {
@@ -31,7 +33,31 @@ func (s *Server) handleListWorkspaces(w http.ResponseWriter, _ *http.Request) {
 		}
 		out = append(out, item)
 	}
-	writeJSON(w, http.StatusOK, out)
+	q := r.URL.Query()
+	limit, offset, field, asc, listing, err := listQueryParams(q)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if !listing {
+		writeJSON(w, http.StatusOK, out)
+		return
+	}
+	if field != "" {
+		// Workspaces carry no updated-at (only rename mutates one and it preserves
+		// CreatedAt), so updated_* is a documented alias for created_*.
+		less, err := tools.SortByField(out, field, asc,
+			func(w workspaceListItem) int64 { return w.CreatedAt },
+			func(w workspaceListItem) int64 { return w.CreatedAt },
+			func(w workspaceListItem) string { return w.Name })
+		if err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		sort.SliceStable(out, less)
+	}
+	page, total := tools.SlicePage(out, offset, limit)
+	pageJSONResponse(w, page, total, offset, limit)
 }
 
 type createWorkspaceReq struct {

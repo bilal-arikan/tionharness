@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/bilal-arikan/tionswarm/internal/db"
@@ -326,17 +327,78 @@ func NewListSchedulesTool(database *db.DB, actorID string) ListSchedulesTool {
 
 func (ListSchedulesTool) Def() providers.ToolDef {
 	return providers.ToolDef{
-		Name:        "list_schedules",
-		Description: "List the schedules (routines) in this workspace (id, agent, cron, prompt, enabled, and whether each was created by an agent — provenance only; you can edit/delete any of them).",
-		InputSchema: json.RawMessage(`{"type":"object","properties":{},"additionalProperties":false}`),
+		Name: "list_schedules",
+		Description: "List the schedules (routines) in this workspace (id, agent, flowId, cron, prompt, enabled, " +
+			"and whether each was created by an agent — provenance only; you can edit/delete any of them). " +
+			"Results are PAGINATED: pass limit (default 20, max 100) and offset to page; the reply reports total " +
+			"and hasMore, and you reach the next page with offset += limit. Filters: enabled (true/false), " +
+			"agentId (exact). Sort: updated_desc (default), updated_asc, created_desc, created_asc, name_asc, " +
+			"name_desc (schedules have no name field — name_* orders by id).",
+		InputSchema: json.RawMessage(`{
+  "type": "object",
+  "properties": {
+    "enabled": { "type": "boolean", "description": "Only enabled (true) or disabled (false) schedules." },
+    "agentId": { "type": "string", "description": "Only schedules delivering to this agent." },
+    "sort": { "type": "string", "enum": ["updated_desc", "updated_asc", "created_desc", "created_asc", "name_asc", "name_desc"], "description": "Result ordering (default updated_desc)." },
+    "limit": { "type": "integer", "description": "Max schedules per page (default 20, max 100)." },
+    "offset": { "type": "integer", "description": "How many matching schedules to skip before this page (default 0)." }
+  },
+  "additionalProperties": false
+}`),
 	}
 }
 
-func (t ListSchedulesTool) Call(ctx context.Context, _ json.RawMessage) (string, error) {
+func (t ListSchedulesTool) Call(ctx context.Context, input json.RawMessage) (string, error) {
+	var in struct {
+		Enabled *bool  `json:"enabled"`
+		AgentID string `json:"agentId"`
+		Sort    string `json:"sort"`
+		Limit   int    `json:"limit"`
+		Offset  int    `json:"offset"`
+	}
+	if len(input) > 0 {
+		if err := json.Unmarshal(input, &in); err != nil {
+			return "", argErr(err)
+		}
+	}
+	limit, offset := PageArgs(in.Limit, in.Offset)
+
 	schedules, err := t.d.db.ListSchedules(ctx)
 	if err != nil {
 		return "", err
 	}
+
+	agentID := strings.TrimSpace(in.AgentID)
+	matches := make([]db.Schedule, 0, len(schedules))
+	for _, sc := range schedules {
+		// One-shot wakes (schedule_wake) are transient, not routines — hide them.
+		if sc.OneShot {
+			continue
+		}
+		if in.Enabled != nil && sc.Enabled != *in.Enabled {
+			continue
+		}
+		if agentID != "" && sc.AgentID != agentID {
+			continue
+		}
+		matches = append(matches, sc)
+	}
+
+	field, asc, err := SortOrder(in.Sort)
+	if err != nil {
+		return "", err
+	}
+	less, err := SortByField(matches, field, asc,
+		func(sc db.Schedule) int64 { return sc.UpdatedAt },
+		func(sc db.Schedule) int64 { return sc.CreatedAt },
+		func(sc db.Schedule) string { return sc.ID }, // schedules have no name — documented surrogate
+	)
+	if err != nil {
+		return "", err
+	}
+	sort.SliceStable(matches, less)
+
+	page, total := SlicePage(matches, offset, limit)
 	type row struct {
 		ID             string `json:"id"`
 		AgentID        string `json:"agentId"`
@@ -346,12 +408,8 @@ func (t ListSchedulesTool) Call(ctx context.Context, _ json.RawMessage) (string,
 		Enabled        bool   `json:"enabled"`
 		CreatedByAgent bool   `json:"createdByAgent"`
 	}
-	out := make([]row, 0, len(schedules))
-	for _, sc := range schedules {
-		// One-shot wakes (schedule_wake) are transient, not routines — hide them.
-		if sc.OneShot {
-			continue
-		}
+	out := make([]row, 0, len(page))
+	for _, sc := range page {
 		out = append(out, row{
 			ID:             sc.ID,
 			AgentID:        sc.AgentID,
@@ -362,6 +420,5 @@ func (t ListSchedulesTool) Call(ctx context.Context, _ json.RawMessage) (string,
 			CreatedByAgent: sc.CreatedBy != "",
 		})
 	}
-	b, _ := json.Marshal(out)
-	return string(b), nil
+	return pageResult(out, total, offset, limit)
 }

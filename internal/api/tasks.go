@@ -3,10 +3,12 @@ package api
 import (
 	"context"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
 	"github.com/bilal-arikan/tionswarm/internal/db"
+	"github.com/bilal-arikan/tionswarm/internal/tools"
 )
 
 func (s *Server) handleListTasks(w http.ResponseWriter, r *http.Request) {
@@ -23,7 +25,50 @@ func (s *Server) handleListTasks(w http.ResponseWriter, r *http.Request) {
 	if tasks == nil {
 		tasks = []db.Task{}
 	}
-	writeJSON(w, http.StatusOK, tasks)
+	q := r.URL.Query()
+	limit, offset, field, asc, listing, err := listQueryParams(q)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	// Optional filters (none by default → legacy full board).
+	boardState := q.Get("boardState")
+	priority := q.Get("priority")
+	owner := q.Get("ownerAgentId")
+	wantTags := tools.SplitTags(q.Get("tags"))
+	matches := make([]db.Task, 0, len(tasks))
+	for _, tk := range tasks {
+		if boardState != "" && tk.BoardState != boardState {
+			continue
+		}
+		if priority != "" && tk.Priority != priority {
+			continue
+		}
+		if owner != "" && tk.OwnerAgentID != owner {
+			continue
+		}
+		if len(wantTags) > 0 && !tools.HasAllTags(tk.Tags, wantTags) {
+			continue
+		}
+		matches = append(matches, tk)
+	}
+	if !listing {
+		writeJSON(w, http.StatusOK, matches)
+		return
+	}
+	if field != "" {
+		less, err := tools.SortByField(matches, field, asc,
+			func(tk db.Task) int64 { return tk.UpdatedAt },
+			func(tk db.Task) int64 { return tk.CreatedAt },
+			func(tk db.Task) string { return tk.Title })
+		if err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		sort.SliceStable(matches, less)
+	}
+	page, total := tools.SlicePage(matches, offset, limit)
+	pageJSONResponse(w, page, total, offset, limit)
 }
 
 type createTaskReq struct {

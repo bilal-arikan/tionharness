@@ -4,8 +4,11 @@ import (
 	"context"
 	"net/http"
 	"os/exec"
+	"sort"
+	"strings"
 
 	"github.com/bilal-arikan/tionswarm/internal/db"
+	"github.com/bilal-arikan/tionswarm/internal/tools"
 	"github.com/bilal-arikan/tionswarm/internal/workspace"
 )
 
@@ -52,7 +55,56 @@ func (s *Server) handleListAgents(w http.ResponseWriter, r *http.Request) {
 	if agents == nil {
 		agents = []db.Agent{}
 	}
-	writeJSON(w, http.StatusOK, agents)
+	q := r.URL.Query()
+	limit, offset, field, asc, listing, err := listQueryParams(q)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	// Optional filters (none by default → legacy full roster).
+	state := q.Get("state")
+	provider := strings.ToLower(q.Get("provider"))
+	model := strings.ToLower(q.Get("model"))
+	matches := make([]db.Agent, 0, len(agents))
+	for _, a := range agents {
+		switch state {
+		case "", "enabled":
+			if state == "enabled" && a.Deleted {
+				continue
+			}
+		case "disabled":
+			if !a.Deleted {
+				continue
+			}
+		default:
+			writeError(w, http.StatusBadRequest, "state must be enabled or disabled")
+			return
+		}
+		if provider != "" && !strings.Contains(strings.ToLower(a.Provider), provider) {
+			continue
+		}
+		if model != "" && !strings.Contains(strings.ToLower(a.Model), model) {
+			continue
+		}
+		matches = append(matches, a)
+	}
+	if !listing {
+		writeJSON(w, http.StatusOK, matches)
+		return
+	}
+	if field != "" {
+		less, err := tools.SortByField(matches, field, asc,
+			func(a db.Agent) int64 { return a.UpdatedAt },
+			func(a db.Agent) int64 { return a.CreatedAt },
+			func(a db.Agent) string { return a.Name })
+		if err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		sort.SliceStable(matches, less)
+	}
+	page, total := tools.SlicePage(matches, offset, limit)
+	pageJSONResponse(w, page, total, offset, limit)
 }
 
 type createAgentReq struct {

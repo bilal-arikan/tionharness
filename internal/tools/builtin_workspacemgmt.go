@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/bilal-arikan/tionswarm/internal/providers"
@@ -29,11 +30,15 @@ import (
 // WorkspaceInfo is the bridge-facing view of one workspace. CreatedByAgent is
 // true when the workspace was created by an agent (and is therefore deletable
 // by an agent); Path is the on-disk data directory ("" = default location).
+// CreatedAt backs list_workspaces sorting (workspaces have no updated-at
+// timestamp — the manager never mutates a workspace except rename, which
+// preserves CreatedAt).
 type WorkspaceInfo struct {
 	ID             string `json:"id"`
 	Name           string `json:"name"`
 	Path           string `json:"path,omitempty"`
 	CreatedByAgent bool   `json:"createdByAgent"`
+	CreatedAt      int64  `json:"createdAt"`
 }
 
 // WorkspaceBridge is the seam between the agent tools and the application's
@@ -75,34 +80,80 @@ func NewListWorkspacesTool(b WorkspaceBridge, actorID, currentWsID string) ListW
 
 func (ListWorkspacesTool) Def() providers.ToolDef {
 	return providers.ToolDef{
-		Name:        "list_workspaces",
-		Description: "List the application's workspaces (fully isolated stores, each with its own agents, sessions, flows and secrets). Returns id, name, on-disk path, whether you created it (and may therefore delete it), and whether it is the one you are currently running in. Use this before rename_workspace / delete_workspace to get ids.",
-		InputSchema: json.RawMessage(`{"type":"object","properties":{},"additionalProperties":false}`),
+		Name: "list_workspaces",
+		Description: "List the application's workspaces (fully isolated stores, each with its own agents, " +
+			"sessions, flows and secrets). Returns id, name, on-disk path, whether you created it (and may " +
+			"therefore delete it), and whether it is the one you are currently running in. Use this before " +
+			"rename_workspace / delete_workspace to get ids. Results are PAGINATED: pass limit (default 20, max " +
+			"100) and offset to page; the reply reports total and hasMore, and you reach the next page with " +
+			"offset += limit. Sort: updated_desc (default), updated_asc, created_desc, created_asc, name_asc, " +
+			"name_desc. Workspaces have no updated-at timestamp (only rename ever mutates one), so updated_* " +
+			"orders by creation time.",
+		InputSchema: json.RawMessage(`{
+  "type": "object",
+  "properties": {
+    "sort": { "type": "string", "enum": ["updated_desc", "updated_asc", "created_desc", "created_asc", "name_asc", "name_desc"], "description": "Result ordering (default updated_desc; updated_* = creation time, see description)." },
+    "limit": { "type": "integer", "description": "Max workspaces per page (default 20, max 100)." },
+    "offset": { "type": "integer", "description": "How many matching workspaces to skip before this page (default 0)." }
+  },
+  "additionalProperties": false
+}`),
 	}
 }
 
-func (t ListWorkspacesTool) Call(_ context.Context, _ json.RawMessage) (string, error) {
+func (t ListWorkspacesTool) Call(ctx context.Context, input json.RawMessage) (string, error) {
 	if t.d.bridge == nil {
 		return "", fmt.Errorf("workspace bridge not configured")
 	}
+	var in struct {
+		Sort   string `json:"sort"`
+		Limit  int    `json:"limit"`
+		Offset int    `json:"offset"`
+	}
+	if len(input) > 0 {
+		if err := json.Unmarshal(input, &in); err != nil {
+			return "", argErr(err)
+		}
+	}
+	limit, offset := PageArgs(in.Limit, in.Offset)
+
+	list := t.d.bridge.ListWorkspaces()
+
+	field, asc, err := SortOrder(in.Sort)
+	if err != nil {
+		return "", err
+	}
+	// Workspaces carry no updated-at: only rename mutates a workspace and it
+	// preserves CreatedAt, so updated_* is a documented alias for created_*.
+	less, err := SortByField(list, field, asc,
+		func(w WorkspaceInfo) int64 { return w.CreatedAt },
+		func(w WorkspaceInfo) int64 { return w.CreatedAt },
+		func(w WorkspaceInfo) string { return w.Name },
+	)
+	if err != nil {
+		return "", err
+	}
+	sort.SliceStable(list, less)
+
+	page, total := SlicePage(list, offset, limit)
 	type row struct {
 		ID             string `json:"id"`
 		Name           string `json:"name"`
 		Path           string `json:"path,omitempty"`
 		CreatedByAgent bool   `json:"createdByAgent"`
 		IsCurrent      bool   `json:"isCurrent"`
+		CreatedAt      int64  `json:"createdAt"`
 	}
-	list := t.d.bridge.ListWorkspaces()
-	out := make([]row, 0, len(list))
-	for _, w := range list {
+	out := make([]row, 0, len(page))
+	for _, w := range page {
 		out = append(out, row{
 			ID: w.ID, Name: w.Name, Path: w.Path,
 			CreatedByAgent: w.CreatedByAgent,
 			IsCurrent:      w.ID == t.d.currentWsID,
+			CreatedAt:      w.CreatedAt,
 		})
 	}
-	b, _ := json.Marshal(out)
-	return string(b), nil
+	return pageResult(out, total, offset, limit)
 }
 
 // ---- create_workspace ----

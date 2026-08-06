@@ -6,12 +6,14 @@ import (
 	"fmt"
 	"net/http"
 	"os/exec"
+	"sort"
 	"strings"
 	"sync"
 
 	"github.com/bilal-arikan/tionswarm/internal/agent"
 	"github.com/bilal-arikan/tionswarm/internal/db"
 	"github.com/bilal-arikan/tionswarm/internal/orchestration"
+	"github.com/bilal-arikan/tionswarm/internal/tools"
 )
 
 func (s *Server) handleListFlows(w http.ResponseWriter, r *http.Request) {
@@ -23,7 +25,37 @@ func (s *Server) handleListFlows(w http.ResponseWriter, r *http.Request) {
 	if flows == nil {
 		flows = []db.Flow{}
 	}
-	writeJSON(w, http.StatusOK, flows)
+	q := r.URL.Query()
+	limit, offset, field, asc, listing, err := listQueryParams(q)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	wantTags := tools.SplitTags(q.Get("tags"))
+	matches := make([]db.Flow, 0, len(flows))
+	for _, f := range flows {
+		if len(wantTags) > 0 && !tools.HasAllTags(f.Tags, wantTags) {
+			continue
+		}
+		matches = append(matches, f)
+	}
+	if !listing {
+		writeJSON(w, http.StatusOK, matches)
+		return
+	}
+	if field != "" {
+		less, err := tools.SortByField(matches, field, asc,
+			func(f db.Flow) int64 { return f.UpdatedAt },
+			func(f db.Flow) int64 { return f.CreatedAt },
+			func(f db.Flow) string { return f.Name })
+		if err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		sort.SliceStable(matches, less)
+	}
+	page, total := tools.SlicePage(matches, offset, limit)
+	pageJSONResponse(w, page, total, offset, limit)
 }
 
 // handleGetFlow returns a single flow by id (used by the chat "Akış olarak gör"

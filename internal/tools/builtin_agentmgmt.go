@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 	"unicode/utf8"
 
@@ -100,8 +101,8 @@ func (CreateAgentTool) Def() providers.ToolDef {
 				"name":{"type":"string","description":"Display name for the agent"},
 				"soul":{"type":"string","description":"Personality / system prompt that defines how the agent behaves"},
 				"identity":{"type":"string","description":"Short identity/role description"},
-				"provider":{"type":"string","description":"LLM provider id (e.g. claude-cli, anthropic, minimax). Defaults to the workspace default if omitted."},
-				"model":{"type":"string","description":"Model id for the chosen provider"},
+				"provider":{"type":"string","description":"LLM provider id (e.g. claude-cli, anthropic, minimax). If omitted, inherits the creating agent's provider (together with its model), falling back to claude-cli."},
+				"model":{"type":"string","description":"Model id for the chosen provider. If both provider and model are omitted, both are inherited from the creating agent."},
 				"avatar":{"type":"string","description":"Optional emoji shown in the roster avatar"},
 				"color":{"type":"string","description":"Optional hex accent color, e.g. #7c3aed"},
 				"skills":{"type":"array","items":{"type":"string"},"description":"Skill slugs to enable for the agent (use_skill). Omit to seed the default TionSwarm skill set; unknown slugs are skipped."}
@@ -144,11 +145,27 @@ func (t CreateAgentTool) Call(ctx context.Context, input json.RawMessage) (strin
 	}
 	// Default the provider so the agent is runnable: an empty provider produced
 	// agents (e.g. flow nodes) whose turns relied on implicit fallback and were
-	// hard to diagnose. claude-cli is the keyless default and matches the app's
-	// defaultProvider.
+	// hard to diagnose. When the caller omits the provider, inherit it — as a
+	// matched provider+model pair — from the creating agent: a coordinator running
+	// on e.g. deepseek that spawns sub-agents gets them on the same provider/model
+	// instead of forcing every new agent back to claude-cli (the app has no
+	// abstract per-workspace default; provider/model is agent-based). The model is
+	// inherited ONLY when the caller gave neither provider nor model, so an
+	// inherited model can never be paired with a mismatched caller-chosen provider.
+	// A missing/unknown creator (e.g. empty actor id on flow nodes) simply falls
+	// through to claude-cli, the keyless final fallback.
 	in.Provider = strings.TrimSpace(in.Provider)
+	in.Model = strings.TrimSpace(in.Model)
 	if in.Provider == "" {
-		in.Provider = "claude-cli"
+		if creator, err := t.d.db.GetAgent(ctx, t.d.actorID); err == nil && creator.Provider != "" {
+			in.Provider = creator.Provider
+			if in.Model == "" {
+				in.Model = creator.Model
+			}
+		}
+		if in.Provider == "" {
+			in.Provider = "claude-cli"
+		}
 	}
 
 	// Resolve the skill set: caller-provided (validated) or, when none given, the
@@ -362,36 +379,122 @@ func NewListAgentsTool(database *db.DB, actorID string) ListAgentsTool {
 
 func (ListAgentsTool) Def() providers.ToolDef {
 	return providers.ToolDef{
-		Name:        "list_agents",
-		Description: "List the agents in this workspace (id, name, provider/model, and whether each was created by an agent — provenance only; you can edit/delete any of them).",
-		InputSchema: json.RawMessage(`{"type":"object","properties":{},"additionalProperties":false}`),
+		Name: "list_agents",
+		Description: "List the agents in this workspace (id, name, state, provider/model, and whether each was " +
+			"created by an agent — provenance only; you can edit/delete any of them). Results are PAGINATED: " +
+			"pass limit (default 20, max 100) and offset to page; the reply reports total and hasMore, and you " +
+			"reach the next page with offset += limit. Filters: provider (case-insensitive substring), model " +
+			"(case-insensitive substring), state (enabled = the active roster, the default; disabled = agents " +
+			"marked deleted but kept so past conversations still render their author). Sort: updated_desc " +
+			"(default), updated_asc, created_desc, created_asc, name_asc, name_desc.",
+		InputSchema: json.RawMessage(`{
+  "type": "object",
+  "properties": {
+    "provider": { "type": "string", "description": "Only agents whose provider contains this substring (case-insensitive)." },
+    "model": { "type": "string", "description": "Only agents whose model contains this substring (case-insensitive)." },
+    "state": { "type": "string", "enum": ["enabled", "disabled"], "description": "enabled (default) = active roster; disabled = deleted-but-kept agents." },
+    "sort": { "type": "string", "enum": ["updated_desc", "updated_asc", "created_desc", "created_asc", "name_asc", "name_desc"], "description": "Result ordering (default updated_desc)." },
+    "limit": { "type": "integer", "description": "Max agents per page (default 20, max 100)." },
+    "offset": { "type": "integer", "description": "How many matching agents to skip before this page (default 0)." }
+  },
+  "additionalProperties": false
+}`),
 	}
 }
 
-func (t ListAgentsTool) Call(ctx context.Context, _ json.RawMessage) (string, error) {
-	agents, err := t.d.db.ListAgents(ctx)
+func (t ListAgentsTool) Call(ctx context.Context, input json.RawMessage) (string, error) {
+	var in struct {
+		Provider string `json:"provider"`
+		Model    string `json:"model"`
+		State    string `json:"state"`
+		Sort     string `json:"sort"`
+		Limit    int    `json:"limit"`
+		Offset   int    `json:"offset"`
+	}
+	if len(input) > 0 {
+		if err := json.Unmarshal(input, &in); err != nil {
+			return "", argErr(err)
+		}
+	}
+	limit, offset := PageArgs(in.Limit, in.Offset)
+
+	// state selects the source roster: enabled = the live roster (deleted agents
+	// are excluded by ListAgents); disabled = only the deleted-but-kept rows that
+	// history rendering still resolves.
+	var agents []db.Agent
+	var err error
+	switch strings.TrimSpace(in.State) {
+	case "", "enabled":
+		agents, err = t.d.db.ListAgents(ctx)
+	case "disabled":
+		all, e := t.d.db.ListAgentsWithDeleted(ctx)
+		if e != nil {
+			return "", e
+		}
+		for _, a := range all {
+			if a.Deleted {
+				agents = append(agents, a)
+			}
+		}
+	default:
+		return "", fmt.Errorf("state must be \"enabled\" or \"disabled\", got %q", in.State)
+	}
 	if err != nil {
 		return "", err
 	}
+
+	provider := strings.ToLower(strings.TrimSpace(in.Provider))
+	model := strings.ToLower(strings.TrimSpace(in.Model))
+	matches := make([]db.Agent, 0, len(agents))
+	for _, a := range agents {
+		if provider != "" && !strings.Contains(strings.ToLower(a.Provider), provider) {
+			continue
+		}
+		if model != "" && !strings.Contains(strings.ToLower(a.Model), model) {
+			continue
+		}
+		matches = append(matches, a)
+	}
+
+	field, asc, err := SortOrder(in.Sort)
+	if err != nil {
+		return "", err
+	}
+	less, err := SortByField(matches, field, asc,
+		func(a db.Agent) int64 { return a.UpdatedAt },
+		func(a db.Agent) int64 { return a.CreatedAt },
+		func(a db.Agent) string { return a.Name },
+	)
+	if err != nil {
+		return "", err
+	}
+	sort.SliceStable(matches, less)
+
+	page, total := SlicePage(matches, offset, limit)
 	type row struct {
 		ID             string `json:"id"`
 		Name           string `json:"name"`
+		State          string `json:"state"`
 		Provider       string `json:"provider"`
 		Model          string `json:"model"`
 		CreatedByAgent bool   `json:"createdByAgent"`
 		IsSelf         bool   `json:"isSelf"`
 	}
-	out := make([]row, 0, len(agents))
-	for _, a := range agents {
+	out := make([]row, 0, len(page))
+	for _, a := range page {
+		state := "enabled"
+		if a.Deleted {
+			state = "disabled"
+		}
 		out = append(out, row{
 			ID:             a.ID,
 			Name:           a.Name,
+			State:          state,
 			Provider:       a.Provider,
 			Model:          a.Model,
 			CreatedByAgent: a.CreatedBy != "",
 			IsSelf:         a.ID == t.d.actorID,
 		})
 	}
-	b, _ := json.Marshal(out)
-	return string(b), nil
+	return pageResult(out, total, offset, limit)
 }

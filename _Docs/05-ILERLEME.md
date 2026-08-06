@@ -2,6 +2,100 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-08-06**
 
+## TSK68: Liste araçlarına pagination + filtreleme + sıralama (2026-08-06) ✅
+
+**Ne:** Tüm liste araçları (`list_agents`, `list_tasks`, `list_flows`,
+`list_automations`, `list_schedules`, `list_workers`, `list_workspaces`) artık ortak
+`limit`/`offset`/`sort` sözleşmesini kullanıyor ve her yanıt standart
+`{items,total,offset,limit,hasMore}` zarfında geliyor. Agent'lar kalabalık listeleri
+context'i tüketmeden sayfalayabilir (`hasMore` → `offset += limit`).
+
+**Nasıl:**
+- **Paylaşılan kontrat** (`internal/tools/listpage.go`): `PageArgs` (limit≤0 → 20,
+  >100 → 100, offset<0 → 0), `SlicePage` (filtre-sonrası sayfalama), `SortOrder`
+  (updated/created/name × asc/desc; bilinmeyen anahtar = **açık hata**, sessiz düşüş yok),
+  `SortByField` (per-entity getter'larla tip güvenli karşılaştırıcı), `SplitTags`/
+  `HasAllTags` (AND semantiği). `pageResult` zarfı marshal'lar.
+- **7 tool** aynı desende: filtre → sırala → sayfala → zarf. Filtreler:
+  `list_agents` (provider/model substring + state enabled|disabled), `list_tasks`
+  (boardState/priority/ownerAgentId/tags), `list_flows` (tags; **flow modelinde
+  Enabled yok** — flow'lar disable edilmez, bu yüzden enabled filtresi uygulanamaz),
+  `list_automations` (enabled/triggerKind/targetAgentId), `list_schedules`
+  (enabled/agentId; one-shot wake'ler gizlenir; name_* → id sırası belgelenmiş vekil),
+  `list_workers` (state running|idle|stuck; yalnız koordinatör oturumunda),
+  `list_workspaces` (yalnız pagination; updated_* → created_* belgelenmiş vekil).
+- **API tarafı** (`internal/api/listparams.go`): `listQueryParams` (limit/offset/sort
+  + `listing` bayrağı — parametre yoksa **legacy davranış: düz dizi**, UI bozulmaz),
+  `boolQuery` (enabled=1/0/true/false), `pageJSONResponse`. Uygulandığı endpoint'ler:
+  `/api/agents`, `/api/tasks`, `/api/flows`, `/api/automations`, `/api/schedules`,
+  `/api/workspaces`. (`list_workers` bir REST kaynağı değil — koordinatör oturum içi
+  durum; HTTP endpoint'i yok.)
+- **Bug fix:** `list_workers` sıralaması filtrelenmemiş `rows` üzerinden karşılaştırıcı
+  kuruyordu — filtre aktifken (örn. `state=running&sort=name_asc`) yanlış elemanlar
+  karşılaştırılıyordu. Artık `SortByField(matches, …)` + regresyon testi.
+
+**Doğrulama:** `go build` ✅, `go vet` ✅, `go test ./... -count=1` ✅ (yeni:
+`tools/listpage_test.go` kontrat birim testleri, `tools/builtin_list_test.go` 7 tool
+testi — filtre+sort kombinasyonu dahil, `api/listparams_test.go`). Frontend etkilenmedi
+(paramsız çağrılar legacy düz-dizi alıyor).
+
+## TSK66: Harita — yan-yana node kapatma + eksik node tipleri (2026-08-06) ✅
+
+**Ne:** Workspace Explorer'da iki iyileştirme: (1) bir node açılınca aynı parent'ın
+diğer açık node'ları kapanıyor (accordion — tek seferde bir sibling açık), (2) root'a
+yeni kovacıklar: **Artifacts, Otomasyonlar, Skill'ler, İçgörüler, Günlükler** (Bütçe zaten
+vardı). Kök 6 → **11 node**.
+
+**Nasıl:**
+- **Single-expand (accordion):** `explorerModel.nextExpandedSet(expanded, key, parentByKey)`
+  saf fonksiyonu — genişletilen node'la aynı parent'a sahip diğer açık node'ları kapatır.
+  `useExplorerGraph` artık `parentByKey`'i `fetchChildren`'da tutar (her çocuğun parent'ı
+  kaydedilir); `toggle` accordion kuralını uygular. Her seviyede çalışır: root kovacıkları,
+  board sütunları, ajan oturumları, koordinatör worker'ları.
+- **Yeni backend Kind'leri** (`internal/view`): `artifact`, `automation`, `skill`,
+  `insight`, `logs` + 4 yeni kategori (`artifacts/automations/skills/insights`). Yeni
+  projeksiyonlar (deterministik, LLM yok): `artifact.go` (metadata: origin/session/grup/yaş),
+  `automation.go` (tetik/hedef/durum/ateşleme sayacı + hata), `skill.go` (katalog: erişim/
+  grup/açıklama), `insight.go` (bulgu: severity/durum/oluşum/kanıt), `logs.go` (process log
+  ring-buffer kuyruğu — budget/tools gibi yaprak; `errors` lens → yalnız ERROR kayıtları).
+- **Kaynaklar:** skills/logs/findings db'de değil → `Projector.WithSources(Sources{Skills,
+  Findings, Logs})` (narrow interface'ler; nil = "yok" satırı, asla sessiz boşluk değil).
+  `internal/insight` zaten `view`'i import ettiği için (cycle!) findings view-local
+  `InsightFinding` tipine `api/findingsSource` adapter'ıyla bağlanır. `Store` arayüzüne
+  `GetArtifact/ListArtifacts/GetAutomation/ListAutomations` eklendi.
+- **API:** `views.go` → `s.viewProjector(r)` runtime'dan skills + findings + logs kaynaklarını
+  bağlar. `expand` aracının açıklaması 11 kovacığa güncellendi.
+- **Frontend:** `ViewKind`'e 5 yeni literal; `ExplorerNode`'da ikon+renk haritası (artifact
+  FileText/success, automation Zap/warning, skill GraduationCap/info, insight Lightbulb/
+  warning, logs ScrollText/dim); `parseRef` yeni kind'ları tanır.
+
+`go build/vet ./...` ✅; `go test ./internal/...` ✅ (yeni: `artifact/automation/skill/
+insight/logs_test.go`, `children_test.go`'ya kategori+leaf+source testleri, `views_test.go`
+uçtan uca); `tsc -b` + `npm run build` ✅; vitest 167 ✅ (`nextExpandedSet` accordion
+senaryoları). Canlı smoke: kök 11 node, artifact/automation/skill/logs projeksiyonları ve
+kategori çocukları API'den doğrulandı.
+
+## UX: Ajan klonlama butonu "Kopyala" → "Klonla" (2026-08-06) ✅
+
+**Ne:** Ajanlar ekranının detay başlığındaki ajan çoğaltma butonu artık **Klonla**
+olarak adlandırılıyor (`AgentSettingsForm` başlığı, `data-testid=agent-duplicate`).
+Tooltip ve yükleme durumu da aynı dilde: "bir klonunu oluştur" / "Klonlanıyor…".
+Davranış değişmedi — hâlâ `POST /api/agents/{id}/duplicate` ile ajanın tüm
+ayarlarının birebir kopyasını oluşturur. `tsc -b` ✅.
+
+## `create_agent` provider mirası (2026-08-06) ✅
+
+**Ne:** Koordinatör bir ajan oluşturduğunda (provider belirtmeden) yeni ajanlar sabit
+`claude-cli`'ye düşüyor, kullanıcı her birini elle deepseek'e çeviriyordu (SES207).
+
+**Nasıl:** `create_agent` (`internal/tools/builtin_agentmgmt.go`) provider boşsa
+**oluşturan ajanın** provider+model'ini eşleşik çift olarak devralır (`GetAgent(actorID)`),
+yoksa `claude-cli`'ye düşer. Model yalnız hem provider hem model boşken miras alınır → miras
+model asla farklı bir caller-provider'ıyla eşleşmez. Kaldırılan soyut workspace-default'a
+dönmeden agent-bazlı felsefeye uygun. Test: `TestCreateAgentInheritsCreatorProviderModel`.
+Not: ID sayacı (silinen ajanlar sonrası yüksek AGT numaraları) **bilinçli** monotonik —
+silinen satır+geçmiş korunduğu için ID geri-kullanımı yapılmaz.
+
 ## Özet Haritası — Faz 3 (agent + cila): `expand` aracı, URL deep-link, arama, DOI (2026-08-06) ✅
 
 **Ne:** Haritanın son fazı: ajan tarafı + gezinme cilası. Ajan artık haritanın gezdiği

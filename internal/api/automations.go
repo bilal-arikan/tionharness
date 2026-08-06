@@ -2,9 +2,11 @@ package api
 
 import (
 	"net/http"
+	"sort"
 	"strings"
 
 	"github.com/bilal-arikan/tionswarm/internal/db"
+	"github.com/bilal-arikan/tionswarm/internal/tools"
 )
 
 // defaultAutomationMaxIterations bounds a new automation's loop by default, so a
@@ -34,7 +36,61 @@ func (s *Server) handleListAutomations(w http.ResponseWriter, r *http.Request) {
 	if autos == nil {
 		autos = []db.Automation{}
 	}
-	writeJSON(w, http.StatusOK, autos)
+	q := r.URL.Query()
+	limit, offset, field, asc, listing, err := listQueryParams(q)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	enabled, hasEnabled, err := boolQuery(q, "enabled")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	triggerKind := q.Get("triggerKind")
+	switch triggerKind {
+	case "", "tag", "board", "token", "counter":
+	default:
+		writeError(w, http.StatusBadRequest, "triggerKind must be one of tag, board, token, counter")
+		return
+	}
+	target := q.Get("targetAgentId")
+	matches := make([]db.Automation, 0, len(autos))
+	for _, a := range autos {
+		if hasEnabled && a.Enabled != *enabled {
+			continue
+		}
+		if triggerKind != "" {
+			kind := a.TriggerKind
+			if kind == "" {
+				kind = db.TriggerTag
+			}
+			if kind != triggerKind {
+				continue
+			}
+		}
+		if target != "" && a.TargetAgentID != target {
+			continue
+		}
+		matches = append(matches, a)
+	}
+	if !listing {
+		writeJSON(w, http.StatusOK, matches)
+		return
+	}
+	if field != "" {
+		less, err := tools.SortByField(matches, field, asc,
+			func(a db.Automation) int64 { return a.UpdatedAt },
+			func(a db.Automation) int64 { return a.CreatedAt },
+			func(a db.Automation) string { return a.Name })
+		if err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		sort.SliceStable(matches, less)
+	}
+	page, total := tools.SlicePage(matches, offset, limit)
+	pageJSONResponse(w, page, total, offset, limit)
 }
 
 type automationReq struct {
