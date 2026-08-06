@@ -77,7 +77,9 @@ func (s *Server) driveDurableAskResume(wsp *workspace.Workspace, sessionID strin
 			s.publishHub(sessionID, sessionhub.KindDelta, st, true)
 		case agent.StepToolDelta:
 			s.publishHub(sessionID, sessionhub.KindToolDelta, st, true)
-		case agent.StepAsk, agent.StepTombstone, agent.StepPermission, agent.StepPlan:
+		case agent.StepTombstone:
+			s.publishHub(sessionID, sessionhub.KindTombstone, st, true)
+		case agent.StepAsk, agent.StepPermission, agent.StepPlan:
 			// Interactive prompts ride the interaction CAS, not plain hub steps.
 		default:
 			s.publishHub(sessionID, sessionhub.KindStep, st, false)

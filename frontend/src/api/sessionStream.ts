@@ -66,6 +66,7 @@ export const HubKind = {
   Presence: 'presence',
   Delta: 'delta',
   ToolDelta: 'tool_delta',
+  Tombstone: 'tombstone',
   Typing: 'typing',
 } as const
 
@@ -171,7 +172,11 @@ export function subscribeSessionStream(
           if (forceReconnect) break
         }
         handlers.onClose?.()
-        try { ac.abort() } catch { /* already aborting */ }
+        try {
+          ac.abort()
+        } catch {
+          /* already aborting */
+        }
         if (forceReconnect) continue // immediate reconnect to gap-fill
       } catch {
         handlers.onClose?.()
@@ -189,7 +194,11 @@ export function subscribeSessionStream(
   return () => {
     closed = true
     if (ac) {
-      try { ac.abort() } catch { /* noop */ }
+      try {
+        ac.abort()
+      } catch {
+        /* noop */
+      }
     }
   }
 }

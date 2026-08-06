@@ -198,6 +198,12 @@ export function makeHubHandlers(ctx: HubApplyCtx): SessionStreamHandlers {
         steps = steps.map((s, k) => (k === idx ? merged : s))
       } else steps = [...steps, st]
     } else {
+      // A final tool step replaces the matching streaming tool_delta placeholder
+      // if one was emitted earlier. The proper fix is server-side tombstone
+      // publishing to the hub; this is the frontend safety net.
+      if (st.kind === 'tool' && st.id) {
+        steps = steps.filter((s) => !(s.kind === 'tool_delta' && s.id === st.id))
+      }
       steps = [...steps, st]
     }
     syncGhost()
@@ -328,6 +334,11 @@ export function makeHubHandlers(ctx: HubApplyCtx): SessionStreamHandlers {
           // applyStep merges them into one card (ToolDeltaStep renders it). Unlike
           // Step this does not arm the busy latch: tool output only ever flows
           // inside a turn that already announced itself.
+          applyStep(ev.payload as TurnStep)
+          break
+        case HubKind.Tombstone:
+          // Retract a live step (typically a tool_delta placeholder). The server
+          // publishes this after the streaming tool completes.
           applyStep(ev.payload as TurnStep)
           break
         case HubKind.Delta: {

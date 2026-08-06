@@ -44,6 +44,7 @@ const (
 	// Ephemeral kinds (seq 0, not ringed).
 	KindDelta     = "delta"
 	KindToolDelta = "tool_delta"
+	KindTombstone = "tombstone"
 	KindTyping    = "typing"
 )
 

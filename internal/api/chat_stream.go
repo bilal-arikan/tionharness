@@ -545,7 +545,9 @@ func (s *Server) runChatTurn(clientGone context.Context, wsp *workspace.Workspac
 						s.publishHub(session.ID, sessionhub.KindDelta, st, true)
 					case agent.StepToolDelta:
 						s.publishHub(session.ID, sessionhub.KindToolDelta, st, true)
-					case agent.StepAsk, agent.StepTombstone, agent.StepPermission, agent.StepPlan:
+					case agent.StepTombstone:
+						s.publishHub(session.ID, sessionhub.KindTombstone, st, true)
+					case agent.StepAsk, agent.StepPermission, agent.StepPlan:
 						// Interactive prompts are handled by the Phase 2 interaction CAS
 						// (interaction_open/resolved), not broadcast as plain hub steps —
 						// otherwise a passive window would show a card it cannot resolve.
