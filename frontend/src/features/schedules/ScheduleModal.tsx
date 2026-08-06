@@ -121,7 +121,7 @@ export function ScheduleModal({
                 setGeneratingTitle(true)
                 try {
                   const updated = await api.generateScheduleTitle(editing.id)
-                  setName(updated.name)
+                  setName(updated.name || '')
                   toast.success('Başlık oluşturuldu')
                 } catch (e) {
                   onError((e as Error).message)

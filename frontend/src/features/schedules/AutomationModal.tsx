@@ -254,7 +254,7 @@ export function AutomationModal({
                 setGeneratingTitle(true)
                 try {
                   const updated = await api.generateAutomationTitle(editing.id)
-                  setName(updated.name)
+                  setName(updated.name || '')
                   toast.success('Başlık oluşturuldu')
                 } catch (e) {
                   onError((e as Error).message)

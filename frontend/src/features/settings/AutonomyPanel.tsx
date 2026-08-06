@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Field, Toggle, inputCls } from './primitives'
 import type { PanelProps } from './settingsPanelShared'
-import { systemApi } from '@/api'
+import { api } from '@/api'
 import type { CatalogEntry, CatalogModel } from '@/types'
 
 // modelDisplayName shows a short label for a model, appending the resolved
@@ -18,7 +18,7 @@ export function AutoTitlePanel({ draft, set }: PanelProps) {
   const [loadingCatalog, setLoadingCatalog] = useState(true)
 
   useEffect(() => {
-    systemApi
+    api
       .getCatalog()
       .then(setCatalog)
       .catch(() => {})
@@ -27,8 +27,6 @@ export function AutoTitlePanel({ draft, set }: PanelProps) {
 
   const available = catalog.filter((c) => c.available)
   const selectedProvider = available.find((c) => c.id === draft.titleProviderId)
-  const selectedModel = selectedProvider?.models.find((m) => m.id === draft.titleModel)
-
   return (
     <>
       <Toggle
