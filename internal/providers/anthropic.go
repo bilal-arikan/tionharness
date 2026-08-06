@@ -403,7 +403,7 @@ func (m anthropicMessage) MarshalJSON() ([]byte, error) {
 type contentBlock struct {
 	Type string `json:"type"`
 	// text
-	Text string `json:"text,omitempty"`
+	Text string `json:"text"`
 	// tool_use
 	ID    string          `json:"id,omitempty"`
 	Name  string          `json:"name,omitempty"`
