@@ -9,7 +9,7 @@ import { NavRail, type View } from './NavRail'
 import { MobileNavBar } from './MobileNavBar'
 import { SplashScreen } from './SplashScreen'
 import { AppHeader } from './AppHeader'
-import { FlowsPanel, NetworkPanel } from './lazyPanels'
+import { FlowsPanel, NetworkPanel, ExplorerView } from './lazyPanels'
 import { HEADERLESS_VIEWS, SPLASH_MIN_MS, VIEW_TITLE } from './viewRegistry'
 import { INITIAL_ROUTE, useAppNavigation } from './useAppNavigation'
 import { useAppearance } from './useAppearance'
@@ -487,6 +487,7 @@ export default function App() {
     settingsCat: links.settingsCat,
     workspaceTab: links.workspaceTab,
     insightTab: links.insightTab,
+    explorerNode: links.explorerNode,
     flowsTab: links.flowsTab,
     sessionListTab: links.sessionListTab,
     sessionKindTab: links.sessionKindTab,
@@ -499,6 +500,7 @@ export default function App() {
     setSettingsCat: links.setSettingsCat,
     setWorkspaceTab: links.setWorkspaceTab,
     setInsightTab: links.setInsightTab,
+    setExplorerNode: links.setExplorerNode,
     setFlowsTab: links.setFlowsTab,
     setSessionListTab: links.setSessionListTab,
     setSessionKindTab: links.setSessionKindTab,
@@ -700,6 +702,19 @@ export default function App() {
                 setView('chat')
                 ctl.selectSession(sid)
               }}
+            />
+          </Suspense>
+        )}
+        {view === 'explorer' && (
+          <Suspense fallback={<LoadingState label="Harita yükleniyor…" className="flex-1" />}>
+            <ExplorerView
+              onError={setError}
+              onOpenSession={(sid) => {
+                setView('chat')
+                ctl.selectSession(sid)
+              }}
+              focusNode={links.explorerNode}
+              onFocusNode={links.setExplorerNode}
             />
           </Suspense>
         )}

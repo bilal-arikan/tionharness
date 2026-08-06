@@ -81,8 +81,13 @@ bir skill olarak yazıp ekleyebilirsin.
 ## 5. Sınırlar (guardrail)
 
 - `spawn_worker` hedefi var olan bir ajan **veya** bir profil (`explore`/`coder`/
-  `reviewer`) olabilir; profil verilirse kalıcı, yeniden-kullanılabilir bir
-  `worker:<profil>` ajanına otomatik materyalize edilir. (Anlık, senkron alt-görev
+  `reviewer`/`validator`) olabilir; profil verilirse kalıcı, yeniden-kullanılabilir bir
+  `worker:<profil>` ajanına otomatik materyalize edilir. **`validator`** kodu düzenlemeden
+  test/typecheck/build/e2e çalıştırıp kompakt PASS/FAIL verdict döner — doğrulamayı ona
+  delege et, diff'leri/logları kendi context'ine çekme. Testleri ve commit'i implementer
+  worker yapar (commit yalnız validator PASS sonrası); sen sadece verdict okur, yönlendirirsin.
+  Uzun bir worker çıktısı context'i şişirmesin diye cap'lenir ve tamamı bir artifact'a
+  taşınıp bildirimde handle olarak geçer. (Anlık, senkron alt-görev
   için hâlâ `run_subagent` (M1) daha uygun.)
 - **Ortak scratchpad:** koordinatör ve tüm worker'lar aynı paylaşılan dizini görür
   (context'te "Shared scratchpad" olarak verilir). Worker'lar arası kalıcı bulguları/

@@ -54,3 +54,44 @@ func (s *Server) handleGetView(w http.ResponseWriter, r *http.Request) {
 		"tokens":     v.Tokens,
 	})
 }
+
+// handleGetViewChildren exposes the Explorer map's structural drill-down:
+//
+//	GET /api/views/{kind}/{id}/children?lens=health&sub=<selector>
+//
+// It returns the child handles of one node — what expanding it reveals — without
+// rendering a full card for each child. This is the map's lazy-expand edge, the
+// same graph an agent walks; the node's own summary (with its elision count) comes
+// from GET /api/views/{kind}/{id}.
+func (s *Server) handleGetViewChildren(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	ref := view.Ref{
+		Kind: view.Kind(strings.TrimSpace(r.PathValue("kind"))),
+		ID:   strings.TrimSpace(r.PathValue("id")),
+		Sub:  strings.TrimSpace(q.Get("sub")),
+	}
+
+	handles, err := view.NewProjector(ws(r).DB).Children(r.Context(), ref, view.ParseLens(q.Get("lens")))
+	if err != nil {
+		// An unsupported kind is a client mistake (400); anything else is a store
+		// read failure. Neither degrades to an empty list, which would read like a
+		// genuine leaf node and hide the error.
+		status := http.StatusNotFound
+		if strings.Contains(err.Error(), "children unsupported") || strings.Contains(err.Error(), "no id") ||
+			strings.Contains(err.Error(), "unknown category") {
+			status = http.StatusBadRequest
+		}
+		writeError(w, status, err.Error())
+		return
+	}
+	// Never emit a null JSON array — a node with no children returns [].
+	if handles == nil {
+		handles = []view.Handle{}
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"ref":      ref,
+		"lens":     view.ParseLens(q.Get("lens")),
+		"children": handles,
+	})
+}

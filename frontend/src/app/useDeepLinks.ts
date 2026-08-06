@@ -28,6 +28,10 @@ export function useDeepLinks(setView: (v: View) => void) {
   const [insightTab, setInsightTab] = useState<string | null>(
     INITIAL_ROUTE.view === 'insights' ? INITIAL_ROUTE.id : null,
   )
+  // Selected Explorer map node (deep-link aware): #/w/{ws}/explorer/{refString}.
+  const [explorerNode, setExplorerNode] = useState<string | null>(
+    INITIAL_ROUTE.view === 'explorer' ? INITIAL_ROUTE.id : null,
+  )
   // Active Flows sub-tab (deep-link aware): #/w/{ws}/flows/{tab} (flows|templates|runs).
   const [flowsTab, setFlowsTab] = useState<string | null>(
     INITIAL_ROUTE.view === 'flows' ? INITIAL_ROUTE.id : null,
@@ -98,6 +102,8 @@ export function useDeepLinks(setView: (v: View) => void) {
     setWorkspaceTab,
     insightTab,
     setInsightTab,
+    explorerNode,
+    setExplorerNode,
     flowsTab,
     setFlowsTab,
     sessionListTab,

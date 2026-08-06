@@ -252,6 +252,11 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 	// parse-the-state-JSON path it replaces (_Docs/66).
 	builtins = append(builtins, tools.NewGetViewTool(r.db))
 
+	// expand: the structural drill-down companion to get_view (_Docs/68). Lists a
+	// node's children (the Workspace Explorer map's edges) so an agent can fan out
+	// over the workspace tree cheaply and get_view only the branch that matters.
+	builtins = append(builtins, tools.NewExpandTool(r.db))
+
 	// read_lessons / delete_lesson: the agent inspects and prunes the workspace's
 	// auto-collected failure lessons (self-healing). The newest few already ride
 	// its context; these tools expose the full set + ids. Gated by the same

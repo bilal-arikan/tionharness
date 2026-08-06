@@ -85,7 +85,7 @@ composable rather than one mega-skill.
 
 ## 4. Automations — triggers that prompt an agent
 
-Two trigger families:
+Three trigger families — pick by what fires the work:
 
 ### Time triggers → Schedules
 Cron-driven prompts delivered to an agent, scoped to a workspace
@@ -93,10 +93,23 @@ Cron-driven prompts delivered to an agent, scoped to a workspace
 intent: *"At 01:00 daily, review the codebase, update any stale docs, and report
 what changed."*
 
-### Event triggers → Hooks
+### Event triggers → Automations (the `Automation` entity)
+The richer, event-driven complement to a cron Schedule: `create_automation` fires a
+target agent **or** flow when a domain EVENT happens — a **tagged session finishing**
+a turn, a **kanban card changing**, cumulative **token spend** crossing a threshold,
+or a session's **message/tool count** crossing an interval. It carries its own
+guardrails (maxIterations/cooldown/expiry), a spawn-vs-continue **session mode**, and
+a bounded tag **self-loop**. This is how you build "when a card enters Review, run the
+reviewer" or "every 150k tokens, run a maintenance pass" without a clock.
+
+> Full trigger kinds, config surface, session mode, and recipes: load
+> **`tionswarm-automations`**. (Do not confuse these with cron Schedules — an
+> Automation reacts to events, not time.)
+
+### Tool-call triggers → Hooks
 `PreToolUse` / `PostToolUse` external commands intercept native tool calls (Claude
 Code hook contract) — `create_hook`. Use them to *gate* (block a risky tool before
-it runs) or *react* (lint/format/log after a write). This is your event-driven
+it runs) or *react* (lint/format/log after a write). This is your tool-level
 automation + part of your quality gate.
 
 > The video's "PR opened → wait for review comments → address → push" automation

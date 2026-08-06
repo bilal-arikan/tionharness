@@ -117,6 +117,12 @@ var specs = []Spec{
 		EpochAffecting: true,
 	},
 	{
+		Key:            "subagent-validator",
+		Label:          "Subagent: validator",
+		Hint:           "run_subagent/spawn_worker 'validator' profilinin (kodu düzenlemeden test/typecheck/build/e2e ile doğrulayan, kompakt PASS/FAIL verdict dönen) sistem promptu.",
+		EpochAffecting: true,
+	},
+	{
 		Key:            "subagent-config",
 		Label:          "Subagent: config",
 		Hint:           "run_subagent 'config' profilinin (config/ editörü) sistem promptu. Not: 'worker:<profil>' ajanları oluşturulurken o anki metni kopyalar.",

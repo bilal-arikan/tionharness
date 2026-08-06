@@ -9,6 +9,9 @@ interface Props {
   count: number
   /** Short explanation of what this column's rules do (column subtitle). */
   description: string
+  /** Optional live metric badge shown under the description (e.g. current
+   *  workspace token/message/tool totals for the scope this lane's rules watch). */
+  stat?: React.ReactNode
   /** Opens the create popup for this column's kind. */
   onAdd: () => void
   addLabel: string
@@ -29,6 +32,7 @@ export function BoardColumn({
   accent,
   count,
   description,
+  stat,
   onAdd,
   addLabel,
   loading,
@@ -56,7 +60,17 @@ export function BoardColumn({
               {count}
             </span>
           </div>
-          <p className="mt-0.5 text-[11px] leading-snug text-[var(--color-text-dim)]">{description}</p>
+          <p className="mt-0.5 text-[11px] leading-snug text-[var(--color-text-dim)]">
+            {description}
+          </p>
+          {stat && (
+            <div
+              className="mt-1 inline-flex items-center gap-1 rounded bg-[var(--color-surface)] px-1.5 py-0.5 font-mono text-[10px] text-[var(--color-text-dim)]"
+              title="Bu workspace’in şu anki değeri — kuralların izlediği metrik (canlı)"
+            >
+              {stat}
+            </div>
+          )}
         </div>
         <button
           type="button"

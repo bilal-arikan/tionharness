@@ -2,6 +2,90 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-08-06**
 
+## Özet Haritası — Faz 3 (agent + cila): `expand` aracı, URL deep-link, arama, DOI (2026-08-06) ✅
+
+**Ne:** Haritanın son fazı: ajan tarafı + gezinme cilası. Ajan artık haritanın gezdiği
+grafı **aynı backend'le** dolaşabiliyor; harita URL ile paylaşılabiliyor, aranabiliyor ve
+odak+bağlam ile soldurma yapıyor.
+
+**Nasıl:**
+- **`expand` aracı** (`internal/tools/builtin_expand.go`) — `expand{kind,id,sub,lens}` →
+  `Projector.Children`'ı sarar (haritayla birebir aynı). Her çocuğu doğru sonraki çağrıya
+  yönlendirir: çocuğu olan → `expand`, yaprak → `get_view`. Singleton id defaulting
+  (workspace/board), bilinmeyen kind/kategori = hata. `toolsetup.go`'da her ajana açık,
+  kategori `diagnostics`. View paketine `IsExpandable(ref)` helper'ı. Testler:
+  `builtin_expand_test.go`.
+- **URL deep-link** — `#/w/{ws}/explorer/{refString}`: seçili düğüm URL'ye yazılır ve
+  girişte geri-yüklenir. `url.ts` (VIEWS'a `explorer`, `routeIdForView`), `useDeepLinks`
+  (`explorerNode` state), `useAppNavigation` (applyRoute + route.id). `parseRef` (refString
+  → ViewRef; "col:" kategori kolonu ve "#sub" doğru ayrışır).
+- **Ekran-içi arama** — başlıkta arama kutusu; eşleşmeyen görünür düğümleri soldurur.
+- **DOI pruning** — kök-dışı bir düğüm seçilince odak = seçili + ataları + doğrudan
+  çocukları; gerisi (ve kenarları) solar. Küçük/odaksız harita soldurmaz. Soldurma
+  gizlemez — düğüm hâlâ tıklanabilir.
+- **Kök otomatik-açılım** — Harita açılınca kök yerine 6 kovacık hemen görünür.
+
+Yeni bağımlılık yok. `go build/vet/test ./internal/{tools,view,api}` ✅; `tsc --noEmit` +
+vitest (`explorerModel.test.ts` — buildGraph dimming/cycle/layout + parseRef) ✅; explorer
+dosyaları lint-temiz. **Ertelendi (opsiyonel):** MCP resource tree, sigma.js.
+
+## Özet Haritası — Faz 2 (frontend): "Harita" ekranı, React Flow lazy-expand (2026-08-06) ✅
+
+**Ne:** Faz 1 backend'inin üstüne **"Harita"** ekranı (NavRail'de Ağ'dan sonra, `Map`
+ikonu). Kök `workspace` düğümünden başlayıp tıkladıkça bir katman açılan semantic-zoom
+drill-down; seçili düğümün tam projeksiyonu (ajanın gördüğü ham DSL) yanda gösterilir.
+Bu ekran **Ağ'dan ayrıdır** — Ağ ilişki grafiği, Harita durum-drill-down.
+
+**Nasıl:** Yeni `features/explorer/`:
+- `explorerModel.ts` — graf modeli + **deterministik katmanlı yerleşim** (derinlik→sütun,
+  kardeş→satır) ve döngü-kırıcı visited-set (her düğüm bir kez yerleşir, DAG/döngü
+  geri-kenarı çizilir). elkjs/dagre eklenmedi.
+- `useExplorerGraph.ts` — durum: `expanded`/`childrenByKey`/`selected`, lazy children
+  fetch (`api.viewChildren`), lens değişiminde açık dalları yeniden çeker.
+- `ExplorerNode.tsx` — özel React Flow düğümü: kind ikonu + etiket + çocuk sayısı +
+  chevron; **semantic zoom** (uzak zoom → tek satır).
+- `ExplorerGraph.tsx` — React Flow canvas (pan/zoom + tıkla; sürüklenemez).
+- `ExplorerView.tsx` — ekran kabuğu: lens seçici + graf + gömülü `ViewPanel` yan-özet;
+  session düğümünde "Sohbeti aç".
+
+Yeni React Flow bağımlılığı YOK (Akış builder'dakini yeniden kullanır); lazy chunk
+(`lazyPanels.ts`). `api.viewChildren` + `ViewChildrenResult` tipi + `ViewKind`'e
+`agent/budget/tools/category`. Canlı güncelleme: `eventToRefreshSignals`'a `'explorer'`
+sinyali (Ağ ile aynı yaşam-döngüsü olayları) → yalnız açık dallar tazelenir.
+`tsc --noEmit` ✅; explorer dosyaları lint-temiz. **Faz 3'e ertelendi:** URL deep-link
+(`useAppNavigation`) ve ajan `expand` aracı.
+
+## Özet Haritası — Faz 1 (backend): Workspace Explorer drill-down (2026-08-06) ✅
+
+**Ne:** View katmanının (66) üstüne **Özet Haritası / Workspace Explorer** motorunun
+backend'i eklendi (bkz. [68](68-OZET-HARITASI.md)): kök `workspace` düğümünden başlayıp
+tıkladıkça bir katman açılan semantic-zoom drill-down için yapısal çocuk grafı ve dört
+yeni deterministik projeksiyon. Faz 2 (frontend `features/explorer`) ve Faz 3'e
+dokunulmadı.
+
+**Nasıl:** `internal/view`'a dört yeni **Kind** (`agent`/`budget`/`tools`/`category`) ve
+her biri için ayrı dosyada bir projeksiyon:
+- `agent.go` — `ProjectAgent`: ajan kimliği + bugünkü token/maliyet (`billing.RollupOf`,
+  yeniden fiyatlama yok) + oturum sayısı (aktif) + son etkinlik; handle'lar ajanın
+  oturumları, `agentSessionHandles` cap + elision.
+- `budget.go` — `ProjectBudget`: `billing.Rollup`'ı **sarar** (loader `UsageForDay`'i
+  birleştirip `RollupOf`'u bir kez çağırır); gün/model kırılımı, üst-N + `Elided`.
+- `tools.go` — `ProjectTools`: MCP sunucu havuzu (aktif önce) + kapalı araç sayısı.
+- `category.go` — `ProjectCategory`: grup düğümü, üyeleri sayar (dürüst toplam), üst-N'i
+  handle verir, kalanı `Elided`. Bilinmeyen kategori id = hata.
+- `children.go` — `Projector.Children(ctx, ref, lens) []Handle`: **yapısal** çocuk grafı
+  (özet `Project`'ten ayrı). `workspace`→6 kategori; `category:sessions/flows/agents`→üye
+  handle'ları; `board`→sütun düğümleri; `category:col:<key>`→kart handle'ları;
+  `agent:X`→oturumları; `session:COORD`→worker'ları. Lens `errors`'ta sorunlulara daralır;
+  `categoryTopN` (50) döngü/patlama cap'i. Bilinmeyen Kind = hata, sessiz boş liste değil.
+
+`Store` arayüzüne dört salt-okunur metot (`GetAgent`, `GetUsageToday`, `ListMCPServers`,
+`GetWorkspaceToolConfig`); leaf-paket disiplini korundu. API: `handleGetView`'in yanına
+`GET /api/views/{kind}/{id}/children?lens=` route'u (`views.go`). Testler mevcut
+`view/*_test.go` fixture desenini izler (hand-built `db.*` + `fakeStore`); her projeksiyon
++ `Children` + endpoint için kapsam. `go build ./... && go vet ./... && go test
+./internal/view/... ./internal/api/...` ✅.
+
 ## UI: Chat header'da "◱ Özet" → "Coord"; koordinasyon kendi drawer'ına, projeksiyon detay paneline (2026-08-06) ✅
 
 **Ne:** Sohbet başlık çubuğundaki `◱ Özet` (session `ViewButton`) kaldırıldı; yerine

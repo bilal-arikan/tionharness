@@ -11,6 +11,21 @@ import (
 // user who leaves the field blank still gets a runaway brake.
 const defaultAutomationMaxIterations = 50
 
+// handleAutomationLiveStats returns the live workspace-wide metrics that
+// workspace-scoped automations key on, so the automation screen can show "where
+// am I relative to the next fire" in each lane header: today's cumulative token
+// spend (what a token automation watches) and the cumulative message/tool counts
+// (what a counter automation watches). Cheap to compute — the same aggregates the
+// engine reads on each crossing.
+func (s *Server) handleAutomationLiveStats(w http.ResponseWriter, r *http.Request) {
+	database := ws(r).DB
+	writeJSON(w, http.StatusOK, map[string]int64{
+		"tokensToday": database.WorkspaceTokensToday(r.Context()),
+		"messages":    database.WorkspaceCounterTotal(db.CounterMetricMessage),
+		"tools":       database.WorkspaceCounterTotal(db.CounterMetricTool),
+	})
+}
+
 func (s *Server) handleListAutomations(w http.ResponseWriter, r *http.Request) {
 	autos, err := ws(r).DB.ListAutomations(r.Context())
 	if writeDBError(w, err, "") {

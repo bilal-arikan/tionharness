@@ -176,6 +176,62 @@ func TestGetViewProjectsSession(t *testing.T) {
 	}
 }
 
+// TestGetViewChildrenWalksTheMap covers the Explorer drill-down endpoint end to
+// end: the workspace root returns its six structural children, and expanding the
+// board returns one column node per column that exists.
+func TestGetViewChildrenWalksTheMap(t *testing.T) {
+	ctx := context.Background()
+	database, err := db.Open(t.TempDir())
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	t.Cleanup(func() { database.Close() })
+
+	if _, err := database.CreateTask(ctx, db.Task{Title: "a", BoardState: db.BoardTodo}); err != nil {
+		t.Fatalf("create task: %v", err)
+	}
+	if _, err := database.CreateTask(ctx, db.Task{Title: "b", BoardState: db.BoardInProgress}); err != nil {
+		t.Fatalf("create task: %v", err)
+	}
+
+	rec := serveFlowRuns((&Server{}).handleGetViewChildren, database,
+		"/api/views/workspace/workspace/children",
+		map[string]string{"kind": "workspace", "id": "workspace"})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status %d: %s", rec.Code, rec.Body.String())
+	}
+	got := decodeView(t, rec.Body.Bytes())
+	children, _ := got["children"].([]any)
+	if len(children) != 6 {
+		t.Fatalf("workspace children = %d, want 6:\n%s", len(children), rec.Body.String())
+	}
+
+	rec = serveFlowRuns((&Server{}).handleGetViewChildren, database,
+		"/api/views/board/board/children",
+		map[string]string{"kind": "board", "id": "board"})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("board children status %d: %s", rec.Code, rec.Body.String())
+	}
+	got = decodeView(t, rec.Body.Bytes())
+	children, _ = got["children"].([]any)
+	if len(children) != 2 {
+		t.Errorf("board should expand into 2 column nodes, got %d:\n%s", len(children), rec.Body.String())
+	}
+}
+
+// TestGetViewChildrenRejectsUnknownKind: expanding a kind with no children
+// defined is a 400, never an empty 200 that would read like a real leaf.
+func TestGetViewChildrenRejectsUnknownKind(t *testing.T) {
+	database, _ := viewFixture(t)
+
+	rec := serveFlowRuns((&Server{}).handleGetViewChildren, database,
+		"/api/views/galaxy/x/children",
+		map[string]string{"kind": "galaxy", "id": "x"})
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status %d (want 400): %s", rec.Code, rec.Body.String())
+	}
+}
+
 // TestGetViewRejectsUnknownKind: an unsupported projection is a 400, never an
 // empty 200. A blank summary reads like a healthy empty entity and would hide the
 // caller's mistake.

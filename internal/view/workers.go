@@ -2,6 +2,7 @@ package view
 
 import (
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -60,11 +61,18 @@ func ProjectWorkers(in WorkersInput, level Level, lens Lens) (View, error) {
 	}
 
 	running, finished := 0, 0
+	pass, fail := 0, 0
 	for _, w := range in.Workers {
 		if w.Running || w.Delegating {
 			running++
 		} else {
 			finished++
+			switch parseVerdict(w.Summary) {
+			case verdictPass:
+				pass++
+			case verdictFail:
+				fail++
+			}
 		}
 	}
 
@@ -79,7 +87,7 @@ func ProjectWorkers(in WorkersInput, level Level, lens Lens) (View, error) {
 		"Regenerated every turn from real session state; trust THIS over the notifications in history."
 
 	if level == LevelTiny || len(in.Workers) == 0 {
-		v.Body = workerSummaryLine(running, finished)
+		v.Body = workerSummaryLine(running, finished, pass, fail)
 		v.finalize()
 		return v, nil
 	}
@@ -103,10 +111,43 @@ func ProjectWorkers(in WorkersInput, level Level, lens Lens) (View, error) {
 	for _, w := range listed {
 		l.add("%s", workerLine(w, now))
 	}
-	l.add("%s", workerSummaryLine(running, finished))
+	l.add("%s", workerSummaryLine(running, finished, pass, fail))
 	v.Body = l.String()
 	v.finalize()
 	return v, nil
+}
+
+// Verdict markers a validator worker emits as the FIRST line of its report (see
+// the subagent-validator prompt). Reading this contracted marker is a rule-based
+// L1 signal — deterministic, no LLM — not fragile parsing of free prose: only the
+// exact "VERDICT: PASS|FAIL" contract is recognised, anything else yields none.
+const (
+	verdictPass = "PASS"
+	verdictFail = "FAIL"
+)
+
+// parseVerdict extracts a validator's PASS/FAIL from the first line of its reply,
+// or "" when the line is not a verdict marker (a non-validator worker, or a
+// validator that broke its contract — neither is guessed at).
+func parseVerdict(summary string) string {
+	line := summary
+	if i := strings.IndexByte(line, '\n'); i >= 0 {
+		line = line[:i]
+	}
+	line = strings.TrimSpace(line)
+	const prefix = "VERDICT:"
+	if !strings.HasPrefix(strings.ToUpper(line), prefix) {
+		return ""
+	}
+	rest := strings.ToUpper(strings.TrimSpace(line[len(prefix):]))
+	switch {
+	case strings.HasPrefix(rest, verdictPass):
+		return verdictPass
+	case strings.HasPrefix(rest, verdictFail):
+		return verdictFail
+	default:
+		return ""
+	}
 }
 
 // workerLine renders one worker: who, what state, how long, and what it said.
@@ -127,7 +168,20 @@ func workerLine(w Worker, now time.Time) string {
 		}
 	}
 
-	line := fmt.Sprintf("- %s [%s] (%s)", w.AgentName, status, w.SessionID)
+	// A finished validator's verdict is the signal a coordinator acts on, so it is
+	// hoisted into a scannable badge ahead of the free-text summary rather than left
+	// buried in it. Running workers have no verdict yet.
+	badge := ""
+	if !w.Running && !w.Delegating {
+		switch parseVerdict(w.Summary) {
+		case verdictPass:
+			badge = " ✅ PASS"
+		case verdictFail:
+			badge = " ❌ FAIL"
+		}
+	}
+
+	line := fmt.Sprintf("- %s [%s]%s (%s)", w.AgentName, status, badge, w.SessionID)
 	if w.Summary != "" {
 		line += " — " + clip(w.Summary, 200)
 	}
@@ -135,9 +189,18 @@ func workerLine(w Worker, now time.Time) string {
 }
 
 // workerSummaryLine is the arithmetic the coordinator acts on. It counts the
-// WHOLE fleet, including workers the list elided.
-func workerSummaryLine(running, finished int) string {
+// WHOLE fleet, including workers the list elided. When any finished worker carried
+// a validator verdict, a PASS/FAIL tally is appended so the coordinator can scan
+// outcomes without re-reading each line — and a FAIL is called out as needing a
+// re-task, since a failed verdict is work that is NOT done.
+func workerSummaryLine(running, finished, pass, fail int) string {
 	s := fmt.Sprintf("Summary: %d running, %d finished.", running, finished)
+	if pass > 0 || fail > 0 {
+		s += fmt.Sprintf(" Verdicts: %d PASS, %d FAIL.", pass, fail)
+		if fail > 0 {
+			s += " A FAIL is unfinished work — re-task its implementer; do not commit or conclude on it."
+		}
+	}
 	if running == 0 {
 		s += " ALL workers are finished — there is NO running worker to wait for;" +
 			" spawn the remaining steps or conclude."

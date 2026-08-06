@@ -1016,9 +1016,13 @@ func (r *Runtime) runWorker(agent db.Agent, workerSessionID, prompt, coordSessio
 		return
 	}
 
-	// The report the coordinator actually reads: the successful output verbatim, or
-	// the failure/kill note (so the coordinator can react to failures too).
-	note := formatTaskNotification(workerSessionID, agent.Name, status, replyText, countToolSteps(steps), time.Since(turnStart).Milliseconds())
+	// The report the coordinator actually reads: the successful output, or the
+	// failure/kill note (so the coordinator can react to failures too). buildWorkerResult
+	// bounds how much of it enters the coordinator's context — an overflowing result is
+	// capped and its full text offloaded to an artifact + worker-session handle, so a
+	// single verbose worker can no longer fill the coordinator's window (_Docs/47, P0/P2).
+	notifyResult := r.buildWorkerResult(ctx, workerSessionID, agent.ID, status, replyText)
+	note := formatTaskNotification(workerSessionID, agent.Name, status, notifyResult, countToolSteps(steps), time.Since(turnStart).Milliseconds())
 	r.NotifyCoordinator(coordSessionID, note)
 }
 
@@ -1652,8 +1656,13 @@ func formatTaskNotification(workerSessionID, agentName, status, result string, t
 	fmt.Fprintf(&b, "<agent>%s</agent>\n", agentName)
 	fmt.Fprintf(&b, "<status>%s</status>\n", status)
 	fmt.Fprintf(&b, "<summary>Worker %q %s</summary>\n", agentName, status)
-	if strings.TrimSpace(result) != "" {
-		fmt.Fprintf(&b, "<result>%s</result>\n", strings.TrimSpace(result))
+	if trimmed := strings.TrimSpace(result); trimmed != "" {
+		// Defensive structural cap for EVERY caller (leaf-worker results are already
+		// shaped by buildWorkerResult, but a sub-coordinator's report_to_coordinator
+		// summary and the settle backstop's salvaged text arrive here uncapped). Cap
+		// is rune-safe; overflow gets a short truncation notice.
+		capped, _ := capText(trimmed, coordinatorResultCapChars)
+		fmt.Fprintf(&b, "<result>%s</result>\n", capped)
 	}
 	b.WriteString("<usage>")
 	fmt.Fprintf(&b, "<tool_uses>%d</tool_uses><duration_ms>%d</duration_ms>", toolUses, durationMs)

@@ -101,7 +101,9 @@ func (SpawnWorkerTool) Def() providers.ToolDef {
 		Name: "spawn_worker",
 		Description: "Launch an asynchronous background WORKER under this coordinator session. `agent` is " +
 			"either an EXISTING agent (name or id) OR a built-in profile — \"explore\" (read-only " +
-			"research), \"coder\" (write/edit code), \"reviewer\" (read-only review) — which is " +
+			"research), \"coder\" (write/edit code), \"reviewer\" (read-only review), \"validator\" " +
+			"(runs tests/typecheck/build/e2e to prove a change works and returns a compact PASS/FAIL " +
+			"verdict, does NOT edit code) — which is " +
 			"materialized into a reusable worker agent. The worker runs detached; you do NOT wait for " +
 			"it. When it finishes, its result is injected back into THIS session as a <task-notification> " +
 			"and a new coordinator turn starts automatically. Call several times in one turn to fan out " +
@@ -114,7 +116,7 @@ func (SpawnWorkerTool) Def() providers.ToolDef {
 		InputSchema: json.RawMessage(`{
   "type": "object",
   "properties": {
-    "agent": { "type": "string", "description": "An existing agent (name or id) OR a profile: \"explore\" | \"coder\" | \"reviewer\"." },
+    "agent": { "type": "string", "description": "An existing agent (name or id) OR a profile: \"explore\" | \"coder\" | \"reviewer\" | \"validator\"." },
     "task": { "type": "string", "description": "A self-contained instruction. The worker starts fresh and sees only this — include file paths, line numbers, and what 'done' means." },
     "modelOverride": { "type": "string", "description": "Optional model id override (provider unchanged)." },
     "coordinator": { "type": "boolean", "description": "Make this worker a sub-coordinator that may spawn its own workers. Default false (a plain leaf worker). Only for tasks that genuinely decompose further." },

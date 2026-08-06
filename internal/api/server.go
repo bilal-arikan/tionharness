@@ -558,6 +558,7 @@ func (s *Server) registerScheduleRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("PUT /api/schedules/{id}/tags", s.handleSetScheduleTags)
 	mux.HandleFunc("DELETE /api/schedules/{id}", s.handleDeleteSchedule)
 	// Tag-triggered automations (event-driven loops), surfaced in the Schedules UI.
+	mux.HandleFunc("GET /api/automations/live-stats", s.handleAutomationLiveStats)
 	mux.HandleFunc("GET /api/automations", s.handleListAutomations)
 	mux.HandleFunc("POST /api/automations", s.handleCreateAutomation)
 	mux.HandleFunc("PUT /api/automations/{id}", s.handleUpdateAutomation)
@@ -651,6 +652,8 @@ func (s *Server) registerFlowRoutes(mux *http.ServeMux) {
 	// Projection layer: the compact, context-cheap summary of a large entity —
 	// the same bytes the agent gets and the Bağlam panel shows (_Docs/66).
 	mux.HandleFunc("GET /api/views/{kind}/{id}", s.handleGetView)
+	// Explorer map drill-down: the structural child handles of a node (_Docs/68).
+	mux.HandleFunc("GET /api/views/{kind}/{id}/children", s.handleGetViewChildren)
 
 	// Workspace overview: counters + chart series + the workspace projection,
 	// in one call (_Docs/66).

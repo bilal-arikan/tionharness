@@ -1,0 +1,97 @@
+package view
+
+import (
+	"fmt"
+	"strings"
+	"time"
+)
+
+// Category ids. A category is a structural bucket in the Explorer map: it counts
+// its members and lists the top-N as drill-down handles. sessions/flows/agents
+// are the workspace-level buckets; a board column is a per-column bucket whose id
+// carries the column key.
+const (
+	CategorySessions = "sessions"
+	CategoryFlows    = "flows"
+	CategoryAgents   = "agents"
+	// categoryColumnPrefix marks a board-column category: ID = "col:in_progress".
+	categoryColumnPrefix = "col:"
+)
+
+// categoryTopN is the per-node child cap (see _Docs/68 §8.1): a category lists at
+// most this many members as handles and reports the remainder as Elided, so a
+// 300-session workspace cannot blow the map up.
+const categoryTopN = 50
+
+// CategoryInput is a resolved category: its id plus the FULL (uncapped, already
+// lens-filtered) member list. The projection counts the members and caps the
+// handles — the count is honest because it sees every member, the handle list is
+// bounded because the map cannot render every one.
+type CategoryInput struct {
+	ID      string
+	Members []Handle
+	// Now is the clock used for the asOf stamp. Zero means time.Now().
+	Now time.Time
+}
+
+// ProjectCategory renders a group node: how many members the bucket holds and the
+// top-N as handles, reporting the rest as Elided. An unknown category id is an
+// error, not an empty node — a blank category would read like a real but empty
+// bucket and hide the caller's mistake.
+func ProjectCategory(in CategoryInput, level Level, lens Lens) (View, error) {
+	label, unit, ok := categoryMeta(in.ID)
+	if !ok {
+		return View{}, fmt.Errorf("view: unknown category %q", in.ID)
+	}
+	now := in.Now
+	if now.IsZero() {
+		now = time.Now()
+	}
+
+	v := View{
+		Ref:    Ref{Kind: KindCategory, ID: in.ID},
+		Level:  level,
+		Lens:   lens,
+		AsOf:   now,
+		Source: fmt.Sprintf("%s/%d", in.ID, len(in.Members)),
+	}
+	v.Header = fmt.Sprintf("%s · %d %s · asOf %s", label, len(in.Members), unit, hhmmss(now))
+
+	if level == LevelTiny {
+		v.finalize()
+		return v, nil
+	}
+
+	members := in.Members
+	if len(members) > categoryTopN {
+		v.Elided, v.ElidedUnit = len(members)-categoryTopN, unit
+		members = members[:categoryTopN]
+	}
+	v.Handles = members
+
+	if len(members) == 0 {
+		// An empty bucket says so rather than rendering a blank body.
+		var l lines
+		l.add("(bu kategoride %s yok)", unit)
+		v.Body = l.String()
+	}
+	v.finalize()
+	return v, nil
+}
+
+// categoryMeta resolves a category id to its display label and member unit,
+// reporting whether the id is known.
+func categoryMeta(id string) (label, unit string, ok bool) {
+	switch id {
+	case CategorySessions:
+		return "OTURUMLAR", "oturum", true
+	case CategoryFlows:
+		return "AKIŞLAR", "koşu", true
+	case CategoryAgents:
+		return "AJANLAR", "ajan", true
+	}
+	if key, found := strings.CutPrefix(id, categoryColumnPrefix); found && key != "" {
+		return "SÜTUN:" + key, "kart", true
+	}
+	return "", "", false
+}

@@ -87,6 +87,10 @@ export const taskApi = {
 
   // Tag-triggered automations (event-driven loops; surfaced in the Schedules UI).
   listAutomations: () => req<Automation[]>('/api/automations'),
+  // Live workspace metrics the automation-screen lane headers show: today's token
+  // spend (token lane) + cumulative message/tool counts (counter lane).
+  getAutomationLiveStats: () =>
+    req<{ tokensToday: number; messages: number; tools: number }>('/api/automations/live-stats'),
   createAutomation: (data: {
     name?: string
     triggerKind?: 'tag' | 'board' | 'token' | 'counter'

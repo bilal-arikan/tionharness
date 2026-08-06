@@ -3,6 +3,7 @@ import {
   MessageSquare,
   Users,
   Share2,
+  Map as MapIcon,
   LayoutGrid,
   Clock,
   GitBranch,
@@ -28,6 +29,7 @@ export type View =
   | 'chat'
   | 'agents'
   | 'network'
+  | 'explorer'
   | 'board'
   | 'schedules'
   | 'flows'
@@ -74,6 +76,7 @@ export const NAV: { key: View; label: string; icon: LucideIcon }[] = [
   { key: 'chat', label: 'Sohbet', icon: MessageSquare },
   { key: 'agents', label: 'Ajanlar', icon: Users },
   { key: 'network', label: 'Ağ', icon: Share2 },
+  { key: 'explorer', label: 'Harita', icon: MapIcon },
   { key: 'board', label: 'Görevler', icon: LayoutGrid },
   { key: 'schedules', label: 'Otomasyon', icon: Clock },
   { key: 'flows', label: 'Akışlar', icon: GitBranch },

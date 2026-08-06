@@ -1,4 +1,4 @@
-﻿package agent
+package agent
 
 import (
 	"context"
@@ -39,7 +39,13 @@ var defaultSubagentProfiles = map[string]SubagentProfile{
 	"explore":  {ID: "explore", AllowedTools: []string{"Read", "LS", "Glob", "Grep", "WebFetch"}},
 	"coder":    {ID: "coder", AllowedTools: []string{"Read", "LS", "Glob", "Grep", "Write", "Edit", "Bash"}},
 	"reviewer": {ID: "reviewer", AllowedTools: []string{"Read", "LS", "Glob", "Grep"}},
-	"config":   {ID: "config", AllowedTools: []string{"list_config", "read_config", "write_config", "config_validate"}},
+	// "validator" proves another worker's change actually works: it may run the
+	// codebase (tests, typecheck, build, git) and drive a browser for e2e, but it
+	// does NOT edit source — its verdict must reflect the code as written, not a
+	// fix it quietly slipped in. Its prompt (subagent-validator) enforces a compact
+	// PASS/FAIL verdict so the coordinator reads a decision, not raw logs.
+	"validator": {ID: "validator", AllowedTools: []string{"Read", "LS", "Glob", "Grep", "Bash"}},
+	"config":    {ID: "config", AllowedTools: []string{"list_config", "read_config", "write_config", "config_validate"}},
 }
 
 // subagentProfile resolves a built-in profile by target name, filling its
@@ -146,7 +152,7 @@ func (r *Runtime) runAgent(ctx context.Context, caller db.Agent, parentReq *prov
 	// Reject this impossible combination up front (before provider resolution and
 	// budget spend) so the error is deterministic and no budget unit is wasted.
 	if spec.Wait == "async" && ephemeral {
-		return tools.RunAgentResult{}, fmt.Errorf("async subagents require a persistent agent target; %q resolved to a built-in profile (explore|coder|reviewer|config) which has no session — create/name a workspace agent for async, or call this target with wait=\"sync\"", spec.Target)
+		return tools.RunAgentResult{}, fmt.Errorf("async subagents require a persistent agent target; %q resolved to a built-in profile (explore|coder|reviewer|validator|config) which has no session — create/name a workspace agent for async, or call this target with wait=\"sync\"", spec.Target)
 	}
 	if m := strings.TrimSpace(spec.Model); m != "" {
 		agent.Model = m
@@ -270,7 +276,7 @@ func (r *Runtime) resolveSubagentTarget(ctx context.Context, caller db.Agent, ta
 		}
 		return eph, true, nil
 	}
-	return db.Agent{}, false, fmt.Errorf("unknown subagent target %q: not an existing agent and not a built-in profile (explore|coder|reviewer|config)", target)
+	return db.Agent{}, false, fmt.Errorf("unknown subagent target %q: not an existing agent and not a built-in profile (explore|coder|reviewer|validator|config)", target)
 }
 
 // subFuture is the pending result of a run_subagent call started concurrently by

@@ -13,6 +13,7 @@ export const VIEW_TITLE: Record<View, string> = {
   chat: 'Sohbet',
   agents: 'Ajanlar',
   network: 'Ağ',
+  explorer: 'Harita',
   board: 'Görevler',
   schedules: 'Otomasyon',
   flows: 'Akışlar',
@@ -44,6 +45,7 @@ export const HEADERLESS_VIEWS = new Set<View>([
   'budget',
   'board',
   'network',
+  'explorer',
   'dashboard',
 ])
 

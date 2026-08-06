@@ -20,6 +20,29 @@
 İlgili dokümanlar: `22-SPAWN-SESSION`, `28-PEER-MESAJLASMA`, `15-FLOW-CANVAS`,
 `35-CONTEXT-RESET-HANDOFF`, `46-ETIKET-OTOMASYON`, `24-SELF-MANAGEMENT`.
 
+> **İnce koordinatör + validator (2026-08-06):** Amaç, koordinatörün context'ini
+> yavaş doldurmak — sadece yönlendirsin, doğrulama/commit/test alt-ajanlarda olsun.
+> **(P0)** Worker sonucu artık koordinatöre **cap'li** (rune-güvenli, `coordinatorResultCapChars`)
+> girer — eskiden worker'ın tüm final metni sınırsızca `<result>`'a enjekte ediliyordu
+> (`formatTaskNotification` + `buildWorkerResult`, `worker_report.go`). **(P2)** Cap'i
+> aşan çıktının tamamı worker oturumuna **artifact** olarak yazılır; bildirimde yalnız
+> kompakt baş + handle (artifact id + worker oturumu) geçer, koordinatör ayrıntıyı
+> **talep üzerine** çeker (`send_to_worker` / artifact) — hepsini context'e almaz.
+> **(P1)** Yeni **`validator` profili** (`subagent-validator` promptu): kodu
+> DÜZENLEMEDEN test/typecheck/build/e2e ile doğrular ve kompakt **PASS/FAIL verdict**
+> döner (`explore`/`coder`/`reviewer` yanına eklendi). `coordinator.md` artık
+> "doğrulamayı validator'a delege et, diff'leri kendi context'ine çekme, implementer
+> kendi testini koşup PASS sonrası kendi commit'ini atar" disiplinini öğretir.
+> **(P4)** Worker projeksiyonu (`view/workers.go`, her tur koordinatör prompt'una
+> PUSH edilir) validator'ın **sözleşmeli** `VERDICT: PASS|FAIL` ilk-satır markerını
+> okuyup satır başına **✅/❌ rozet** + özet satırında **PASS/FAIL tally** basar
+> (`parseVerdict`, kural-tabanlı L1 — LLM yok, serbest-prose regex'i değil; yalnız
+> tam marker tanınır). FAIL "bitmemiş iş, implementer'ı yeniden görevlendir" olarak
+> işaretlenir. Ayrı `get_view verdicts` kind'ı EKLENMEDİ (bilinçli): `KindWorkers`
+> zaten her tur push edilir + `list_workers` on-demand karşılar; yeni kind duplike olurdu.
+> Sıradaki (uygulanmadı): worker'lara yapılandırılmış `report_result(status,summary,evidence)`
+> tool'u; board-driven implement→validate→commit döngüsü + commit-gate (P3).
+
 ---
 
 ## 1. Motivasyon

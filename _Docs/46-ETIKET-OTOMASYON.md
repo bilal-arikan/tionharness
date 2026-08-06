@@ -414,6 +414,13 @@ upkeep toplama SAYILIR ama kendisi fire tetiklemez).
   (`# oturum|workspace · her N mesaj/tool`), `task.ts` tipine
   `counterMetric`/`counterScope`/`counterInterval`, `automationMeta` sabitleri
   (`COUNTER_METRICS`/`COUNTER_SCOPES`/`COUNTER_PROMPT_VARS`/`MIN_COUNTER_INTERVAL`/`DEFAULT_COUNTER_INTERVAL`).
+- **Canlı şerit istatistiği (2026-08-06):** `GET /api/automations/live-stats`
+  (`handleAutomationLiveStats`) `{tokensToday, messages, tools}` döner
+  (`WorkspaceTokensToday` + `WorkspaceCounterTotal`). `AutomationBoard` 5 sn'de bir
+  çekip **token** şerit başlığına `bugün N token`, **sayaç** şeridine `N mesaj · N tool`
+  rozeti (`BoardColumn.stat`) basar — yalnız o şeritte **workspace-scope kural** varsa
+  gösterilir (session-scope kuralların workspace-seviyesi tek değeri yok). Amaç: bir
+  sonraki ateşlemeye ne kadar kaldığını görüp aralığı kalibre etmek.
 
 ### Ortak kod (refactor 2026-08-06)
 Dört tür büyüdükçe biriken kopya-kod tek kaynağa toplandı (davranış değişmedi, testler koruyor):

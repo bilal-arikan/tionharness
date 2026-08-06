@@ -17,6 +17,7 @@ const VIEWS: View[] = [
   'chat',
   'agents',
   'network',
+  'explorer',
   'board',
   'schedules',
   'flows',
@@ -139,6 +140,7 @@ export function routeIdForView(
     workspaceTab: string | null
     insightTab: string | null
     flowsTab: string | null
+    explorerNode: string | null
   },
 ): string | null {
   switch (view) {
@@ -156,6 +158,10 @@ export function routeIdForView(
       return state.workspaceTab
     case 'insights':
       return state.insightTab
+    case 'explorer':
+      // The selected map node's ref string (e.g. "category:sessions"). The root
+      // carries no segment so a plain #/…/explorer stays clean.
+      return state.explorerNode
     case 'flows':
       // Default "flows" tab carries no URL segment (clean #/w/{ws}/flows); only
       // the runs/templates tabs add /{tab}.

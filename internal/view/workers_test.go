@@ -41,6 +41,53 @@ func TestWorkersBlockKeepsItsAuthoritativeFraming(t *testing.T) {
 	}
 }
 
+// TestWorkersVerdictBadgeAndTally: a finished validator's contracted VERDICT line
+// is hoisted into a PASS/FAIL badge and tallied, so a coordinator scans outcomes
+// without re-reading each report (P4). Non-verdict workers get no badge, and a
+// FAIL is flagged as unfinished work.
+func TestWorkersVerdictBadgeAndTally(t *testing.T) {
+	now := time.Now()
+	in := WorkersInput{Now: now, Workers: []Worker{
+		{SessionID: "SES1", AgentName: "validator", Summary: "VERDICT: PASS\ntests: 42/42"},
+		{SessionID: "SES2", AgentName: "validator", Summary: "VERDICT: FAIL — auth_test.go:88"},
+		{SessionID: "SES3", AgentName: "writer", Summary: "rapor hazır"},
+	}}
+
+	v, err := ProjectWorkers(in, LevelCard, LensHealth)
+	if err != nil {
+		t.Fatalf("project: %v", err)
+	}
+	txt := v.Text()
+	for _, want := range []string{
+		"- validator [finished] ✅ PASS (SES1)",
+		"- validator [finished] ❌ FAIL (SES2)",
+		"- writer [finished] (SES3) — rapor hazır", // no badge for a non-verdict worker
+		"Verdicts: 1 PASS, 1 FAIL.",
+		"A FAIL is unfinished work",
+	} {
+		if !strings.Contains(txt, want) {
+			t.Errorf("missing %q in:\n%s", want, txt)
+		}
+	}
+}
+
+func TestParseVerdict(t *testing.T) {
+	cases := map[string]string{
+		"VERDICT: PASS":             verdictPass,
+		"  verdict:  pass  ":        verdictPass,
+		"VERDICT: FAIL — x.go:1":    verdictFail,
+		"VERDICT: PASS\ntests: 1/1": verdictPass,
+		"rapor hazır":               "",
+		"the VERDICT: is unclear":   "", // marker must start the line
+		"VERDICT: MAYBE":            "",
+	}
+	for in, want := range cases {
+		if got := parseVerdict(in); got != want {
+			t.Errorf("parseVerdict(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
 // TestWorkersRunningShowsElapsed: elapsed time is what turns "RUNNING" into a
 // decision. It was available (WorkerInfo.StartedAt) but unused before the block
 // moved into this package.

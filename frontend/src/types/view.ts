@@ -5,7 +5,18 @@
 // re-composing it from header/body, so a wrong or stale projection is visible to
 // the user rather than hidden behind a prettier rendering.
 
-export type ViewKind = 'flowrun' | 'session' | 'board' | 'workspace' | 'schedule'
+export type ViewKind =
+  | 'flowrun'
+  | 'session'
+  | 'board'
+  | 'workspace'
+  | 'schedule'
+  // Explorer map kinds (see _Docs/68-OZET-HARITASI.md): agent/budget/tools
+  // projections plus the structural `category` group node.
+  | 'agent'
+  | 'budget'
+  | 'tools'
+  | 'category'
 
 // Budget tiers. tiny is one dense line (safe to push into a prompt suffix), card
 // is the default, full adds per-item detail.
@@ -51,9 +62,53 @@ export interface ViewResult {
   tokens: number
 }
 
+// ViewChildrenResult is the Explorer map's structural drill-down: the child
+// handles a node expands into (GET /api/views/{kind}/{id}/children). Separate
+// from a full projection — it lists what a node drills into without rendering a
+// card for each child. The node's own summary (with its elision count) comes from
+// getView.
+export interface ViewChildrenResult {
+  ref: ViewRef
+  lens: ViewLens
+  children: ViewHandle[]
+}
+
 // refToString spells a ref the way handles and the get_view tool do.
 export function refToString(ref: ViewRef): string {
   return `${ref.kind}:${ref.id}${ref.sub ? `#${ref.sub}` : ''}`
+}
+
+const VIEW_KINDS: ViewKind[] = [
+  'flowrun',
+  'session',
+  'board',
+  'workspace',
+  'schedule',
+  'agent',
+  'budget',
+  'tools',
+  'category',
+]
+
+// parseRef is refToString's inverse: "category:col:in_progress" → {kind, id},
+// "board:board#T1" → {kind, id, sub}. Splits kind at the FIRST colon (a category
+// id like "col:in_progress" keeps its own colon) and sub at the "#". Returns null
+// for a string that does not name a known kind — used to restore a deep-linked map
+// selection whose node has not been fetched yet.
+export function parseRef(s: string): ViewRef | null {
+  const colon = s.indexOf(':')
+  if (colon < 0) return null
+  const kind = s.slice(0, colon)
+  if (!(VIEW_KINDS as string[]).includes(kind)) return null
+  let rest = s.slice(colon + 1)
+  let sub: string | undefined
+  const hash = rest.indexOf('#')
+  if (hash >= 0) {
+    sub = rest.slice(hash + 1)
+    rest = rest.slice(0, hash)
+  }
+  if (!rest) return null
+  return { kind: kind as ViewKind, id: rest, ...(sub ? { sub } : {}) }
 }
 
 export const VIEW_LENS_LABEL: Record<ViewLens, string> = {

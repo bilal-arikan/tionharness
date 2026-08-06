@@ -33,6 +33,22 @@ const (
 	KindBoard    Kind = "board"
 	KindSpace    Kind = "workspace"
 	KindSchedule Kind = "schedule"
+	// KindAgent projects one agent: identity + today's token/cost + how many of
+	// its sessions are open + last activity. Its structural children are that
+	// agent's sessions.
+	KindAgent Kind = "agent"
+	// KindBudget wraps billing.RollupOf into a view: today's spend broken down by
+	// model. It re-renders the rollup, it never re-prices — the numbers come from
+	// the same computation every budget surface uses.
+	KindBudget Kind = "budget"
+	// KindTools projects the workspace tool surface: the MCP server pool and how
+	// many tools are switched off workspace-wide.
+	KindTools Kind = "tools"
+	// KindCategory is a group node in the Explorer map — a structural bucket
+	// (sessions, flows, agents, a board column) that counts its members and lists
+	// the top-N as handles, reporting the remainder as Elided. Its ID names the
+	// bucket (see the Category* / categoryColumnPrefix constants in category.go).
+	KindCategory Kind = "category"
 	// KindWorkers is a coordinator's live fleet. Unlike the others it is not
 	// resolvable through Projector: its input is runtime state, not store state,
 	// so the caller builds WorkersInput and calls ProjectWorkers directly. It is

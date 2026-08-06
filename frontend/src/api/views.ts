@@ -1,5 +1,5 @@
 // Projection layer (internal/view): the compact summary of a large entity.
-import type { ViewLens, ViewLevel, ViewRef, ViewResult } from '@/types'
+import type { ViewChildrenResult, ViewLens, ViewLevel, ViewRef, ViewResult } from '@/types'
 import { req } from './client'
 
 export const viewApi = {
@@ -11,6 +11,17 @@ export const viewApi = {
     if (ref.sub) q.set('sub', ref.sub)
     return req<ViewResult>(
       `/api/views/${encodeURIComponent(ref.kind)}/${encodeURIComponent(ref.id)}?${q}`,
+    )
+  },
+
+  // viewChildren fetches the structural child handles of a node — the Explorer
+  // map's lazy-expand edge. An unsupported kind is a 400 (never an empty 200 that
+  // would read like a real leaf); a node with no children returns an empty array.
+  viewChildren(ref: ViewRef, lens: ViewLens = 'health'): Promise<ViewChildrenResult> {
+    const q = new URLSearchParams({ lens })
+    if (ref.sub) q.set('sub', ref.sub)
+    return req<ViewChildrenResult>(
+      `/api/views/${encodeURIComponent(ref.kind)}/${encodeURIComponent(ref.id)}/children?${q}`,
     )
   },
 }

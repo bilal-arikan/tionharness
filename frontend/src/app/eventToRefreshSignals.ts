@@ -14,6 +14,7 @@ import { bumpSignal } from '@/shared/lib/refreshSignals'
 // Centralized here so a rename / add / remove is a single-file change.
 export const SIGNAL_BOARD = 'board' // task CRUD + board column changes
 export const SIGNAL_NETWORK = 'network' // collaboration graph
+export const SIGNAL_EXPLORER = 'explorer' // Özet Haritası drill-down (open branches)
 export const SIGNAL_ACTIVITY = 'activity' // useActivity's per-view busy flags
 export const SIGNAL_EXECUTIONS = 'executions' // GET /api/executions consumers (session runtime map)
 export const SIGNAL_AGENTS = 'agents' // AgentsView
@@ -39,7 +40,7 @@ export function signalsForEvent(e: AppEvent): string[] {
       // Task CRUD + column changes (op="create"/"update"/"move"/"delete"/
       // "columns_changed"). All three consumers re-fetch; useActivity doesn't
       // care about individual task mutations.
-      return [SIGNAL_BOARD, SIGNAL_NETWORK, SIGNAL_EXECUTIONS]
+      return [SIGNAL_BOARD, SIGNAL_NETWORK, SIGNAL_EXPLORER, SIGNAL_EXECUTIONS]
     case 'session':
       // Session CRUD (create / delete / archive / state / title /
       // workdir / agent / role / tags / spawn / handoff / rewind / feedback).
@@ -47,31 +48,31 @@ export function signalsForEvent(e: AppEvent): string[] {
       // for the chat sidebar; this signal additionally nudges the executions
       // feed (each execution is a session, so a new / deleted / state-changed
       // session can change the list).
-      return [SIGNAL_EXECUTIONS]
+      return [SIGNAL_EXECUTIONS, SIGNAL_EXPLORER]
     case 'chat':
       // Chat turn started / ended. App.tsx already handles wake phases +
       // active transcript reload. Panel-wise: executions list may flip
       // (running → done) and network may flip the agent's running glow.
-      return [SIGNAL_EXECUTIONS, SIGNAL_NETWORK, SIGNAL_ACTIVITY]
+      return [SIGNAL_EXECUTIONS, SIGNAL_NETWORK, SIGNAL_EXPLORER, SIGNAL_ACTIVITY]
     case 'flow':
-      return [SIGNAL_FLOWS, SIGNAL_NETWORK, SIGNAL_EXECUTIONS, SIGNAL_ACTIVITY]
+      return [SIGNAL_FLOWS, SIGNAL_NETWORK, SIGNAL_EXPLORER, SIGNAL_EXECUTIONS, SIGNAL_ACTIVITY]
     case 'schedule':
-      return [SIGNAL_SCHEDULES, SIGNAL_NETWORK, SIGNAL_EXECUTIONS, SIGNAL_ACTIVITY]
+      return [SIGNAL_SCHEDULES, SIGNAL_NETWORK, SIGNAL_EXPLORER, SIGNAL_EXECUTIONS, SIGNAL_ACTIVITY]
     case 'insight':
       // Scan started/finished: re-poll /api/activity (nav-rail İçgörü dot) and
       // /api/workspaces/activity (switcher pulse) so both update without lag.
       return [SIGNAL_ACTIVITY, SIGNAL_WORKSPACE_ACTIVITY]
     case 'spawned':
-      return [SIGNAL_EXECUTIONS, SIGNAL_NETWORK, SIGNAL_ACTIVITY]
+      return [SIGNAL_EXECUTIONS, SIGNAL_NETWORK, SIGNAL_EXPLORER, SIGNAL_ACTIVITY]
     case 'worker':
-      return [SIGNAL_EXECUTIONS, SIGNAL_SCHEDULES, SIGNAL_NETWORK, SIGNAL_ACTIVITY]
+      return [SIGNAL_EXECUTIONS, SIGNAL_SCHEDULES, SIGNAL_NETWORK, SIGNAL_EXPLORER, SIGNAL_ACTIVITY]
     case 'task':
       // Task run lifecycle (different from board CRUD). The network cares too:
       // agent nodes ARE running sessions, so a task run starting or finishing
       // adds/removes a node rather than just re-tinting one.
-      return [SIGNAL_BOARD, SIGNAL_EXECUTIONS, SIGNAL_ACTIVITY, SIGNAL_NETWORK]
+      return [SIGNAL_BOARD, SIGNAL_EXECUTIONS, SIGNAL_ACTIVITY, SIGNAL_NETWORK, SIGNAL_EXPLORER]
     case 'agent':
-      return [SIGNAL_AGENTS, SIGNAL_NETWORK]
+      return [SIGNAL_AGENTS, SIGNAL_NETWORK, SIGNAL_EXPLORER]
     case 'artifact':
       return [SIGNAL_ARTIFACTS]
     default:

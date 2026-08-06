@@ -11,3 +11,7 @@ export const FlowsPanel = lazy(() =>
 export const NetworkPanel = lazy(() =>
   import('@/features/network/NetworkPanel').then((m) => ({ default: m.NetworkPanel })),
 )
+// The Explorer (Harita) drill-down map is React Flow too — load on demand.
+export const ExplorerView = lazy(() =>
+  import('@/features/explorer/ExplorerView').then((m) => ({ default: m.ExplorerView })),
+)

@@ -35,6 +35,10 @@ type Store interface {
 	GetSchedule(ctx context.Context, id string) (db.Schedule, error)
 	WorkspaceTokensToday(ctx context.Context) int64
 	UsageForDay(ctx context.Context, day string) ([]db.Usage, error)
+	GetAgent(ctx context.Context, id string) (db.Agent, error)
+	GetUsageToday(ctx context.Context, agentID string) (db.Usage, error)
+	ListMCPServers(ctx context.Context) ([]db.MCPServer, error)
+	GetWorkspaceToolConfig(ctx context.Context) (db.WorkspaceToolConfig, error)
 }
 
 // BoardRefID / WorkspaceRefID are the ids a board or workspace ref carries. Both
@@ -43,6 +47,11 @@ type Store interface {
 const (
 	BoardRefID     = "board"
 	WorkspaceRefID = "workspace"
+	// BudgetRefID / ToolsRefID are the singleton ids the budget and tools
+	// projections carry. Like the board, both are workspace singletons with no id
+	// of their own; naming them keeps every Ref uniform.
+	BudgetRefID = "budget"
+	ToolsRefID  = "tools"
 	// WorkersRefID labels a coordinator's fleet projection. It is not routable
 	// through Projector (see KindWorkers) — the id exists so the View is
 	// self-describing like every other one.
@@ -101,6 +110,30 @@ func (p *Projector) Project(ctx context.Context, ref Ref, level Level, lens Lens
 			return View{}, err
 		}
 		return ProjectWorkspace(in, level, lens)
+	case KindAgent:
+		in, err := p.loadAgent(ctx, ref.ID)
+		if err != nil {
+			return View{}, err
+		}
+		return ProjectAgent(in, level, lens)
+	case KindBudget:
+		in, err := p.loadBudget(ctx)
+		if err != nil {
+			return View{}, err
+		}
+		return ProjectBudget(in, level, lens)
+	case KindTools:
+		in, err := p.loadTools(ctx)
+		if err != nil {
+			return View{}, err
+		}
+		return ProjectTools(in, level, lens)
+	case KindCategory:
+		members, err := p.categoryMembers(ctx, ref.ID, lens)
+		if err != nil {
+			return View{}, err
+		}
+		return ProjectCategory(CategoryInput{ID: ref.ID, Members: members}, level, lens)
 	default:
 		return View{}, fmt.Errorf("view: unsupported kind %q", ref.Kind)
 	}
@@ -255,4 +288,65 @@ func (p *Projector) loadFlowRun(ctx context.Context, id string) (FlowRunInput, e
 		}
 	}
 	return in, nil
+}
+
+// loadAgent gathers one agent, the sessions bound to it, and its usage row for
+// today. All three are in-memory reads. A missing agent is an error (a stale id
+// must not render as a blank agent); a missing usage row is normal (nothing has
+// run today) and degrades the cost/token line to zero rather than failing.
+func (p *Projector) loadAgent(ctx context.Context, id string) (AgentInput, error) {
+	agent, err := p.store.GetAgent(ctx, id)
+	if err != nil {
+		return AgentInput{}, fmt.Errorf("view: agent %s: %w", id, err)
+	}
+	sessions, err := p.store.ListSessions(ctx, id)
+	if err != nil {
+		return AgentInput{}, fmt.Errorf("view: agent %s sessions: %w", id, err)
+	}
+	in := AgentInput{Agent: agent, Sessions: sessions}
+	if usage, err := p.store.GetUsageToday(ctx, id); err == nil {
+		in.Usage = usage
+	}
+	return in, nil
+}
+
+// loadBudget prices today's spend exactly once, the same way every budget surface
+// does: merge every agent's per-model breakdown and hand it to billing.RollupOf.
+// The projection then only renders the rollup — it re-prices nothing.
+//
+// A usage read error fails the projection rather than rendering a zero budget: a
+// budget silently reading "$0.00" would be indistinguishable from a genuinely
+// idle day, which is a different fact.
+func (p *Projector) loadBudget(ctx context.Context) (BudgetInput, error) {
+	day := db.Today()
+	rows, err := p.store.UsageForDay(ctx, day)
+	if err != nil {
+		return BudgetInput{}, fmt.Errorf("view: budget usage: %w", err)
+	}
+	merged := map[string]db.KindStat{}
+	for _, u := range rows {
+		for key, st := range u.ByModel {
+			m := merged[key]
+			m.Calls += st.Calls
+			m.InputTokens += st.InputTokens
+			m.OutputTokens += st.OutputTokens
+			m.CacheReadTokens += st.CacheReadTokens
+			m.CacheWriteTokens += st.CacheWriteTokens
+			merged[key] = m
+		}
+	}
+	return BudgetInput{Rollup: billing.RollupOf(merged), Day: day}, nil
+}
+
+// loadTools gathers the MCP server pool and the workspace tool-activation config.
+func (p *Projector) loadTools(ctx context.Context) (ToolsInput, error) {
+	servers, err := p.store.ListMCPServers(ctx)
+	if err != nil {
+		return ToolsInput{}, fmt.Errorf("view: tools mcp servers: %w", err)
+	}
+	cfg, err := p.store.GetWorkspaceToolConfig(ctx)
+	if err != nil {
+		return ToolsInput{}, fmt.Errorf("view: tools config: %w", err)
+	}
+	return ToolsInput{MCPServers: servers, ToolConfig: cfg}, nil
 }

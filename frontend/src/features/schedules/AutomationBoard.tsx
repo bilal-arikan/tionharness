@@ -17,6 +17,14 @@ import { COLUMN_ACCENT, DEFAULT_COLUMNS } from './automationMeta'
 import { ScheduleCard } from './ScheduleCard'
 import { ScheduleModal } from './ScheduleModal'
 
+// compact renders a large count as a short human string (1_240_000 → "1.2M",
+// 850_000 → "850k"), for the token lane's live workspace total.
+function compact(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
+  if (n >= 1_000) return `${Math.round(n / 1_000)}k`
+  return String(n)
+}
+
 interface Props {
   agents: Agent[]
   /** Deep-link target: scroll to and highlight this schedule once loaded. */
@@ -43,6 +51,15 @@ export function AutomationBoard({ agents, focusId, onError }: Props) {
 
   const [loadingSchedules, setLoadingSchedules] = useState(true)
   const [loadingAutomations, setLoadingAutomations] = useState(true)
+
+  // Live workspace metrics shown in the token/counter lane headers so the user can
+  // see how close the workspace is to the next fire (and calibrate intervals). null
+  // until first fetch. Polled while the screen is open.
+  const [liveStats, setLiveStats] = useState<{
+    tokensToday: number
+    messages: number
+    tools: number
+  } | null>(null)
 
   const [editor, setEditor] = useState<Editor | null>(null)
   // Id of the schedule currently being run manually (disables its Run button).
@@ -86,6 +103,26 @@ export function AutomationBoard({ agents, focusId, onError }: Props) {
       })
       .catch((e) => onError((e as Error).message))
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Live workspace metrics for the lane headers: fetch on mount and poll every 5s
+  // while the screen is open (cheap in-memory aggregates on the server). Silent on
+  // failure — a stale/absent stat must never break the board.
+  useEffect(() => {
+    let alive = true
+    const load = () =>
+      api
+        .getAutomationLiveStats()
+        .then((s) => {
+          if (alive) setLiveStats(s)
+        })
+        .catch(() => {})
+    load()
+    const t = setInterval(load, 5000)
+    return () => {
+      alive = false
+      clearInterval(t)
+    }
   }, [])
 
   // When a deep-link target is present and loaded, scroll it into view and flash
@@ -259,6 +296,24 @@ export function AutomationBoard({ agents, focusId, onError }: Props) {
     },
   }
 
+  // Live lane stat: shown only for token/counter lanes that actually hold a
+  // workspace-scoped rule — the metric that rule keys on. Session-scoped rules vary
+  // per session and have no single workspace-level value, so no stat for them.
+  const laneStat = (kind: AutomationTriggerKind): React.ReactNode => {
+    if (!liveStats) return undefined
+    if (kind === 'token' && byKind('token').some((a) => a.tokenScope === 'workspace')) {
+      return <span>bugün {compact(liveStats.tokensToday)} token</span>
+    }
+    if (kind === 'counter' && byKind('counter').some((a) => a.counterScope === 'workspace')) {
+      return (
+        <span>
+          {liveStats.messages.toLocaleString()} mesaj · {liveStats.tools.toLocaleString()} tool
+        </span>
+      )
+    }
+    return undefined
+  }
+
   const renderAutomationLane = (kind: AutomationTriggerKind) => {
     const items = byKind(kind)
     const meta = laneMeta[kind]
@@ -270,6 +325,7 @@ export function AutomationBoard({ agents, focusId, onError }: Props) {
         accent={meta.accent}
         count={items.length}
         description={meta.description}
+        stat={laneStat(kind)}
         onAdd={() => setEditor({ lane: kind, editing: null })}
         addLabel={meta.addLabel}
         loading={loadingAutomations}
