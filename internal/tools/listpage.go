@@ -82,9 +82,9 @@ func SlicePage[T any](all []T, offset, limit int) ([]T, int) {
 // created_asc, name_asc, name_desc. Anything else is an explicit error — a
 // typo must NOT silently fall back to a different ordering.
 //
-// Entities without a name field (schedules) or without an updated timestamp
-// (workspaces) map those keys to a documented surrogate; the mapping is stated
-// in each tool's description, never hidden.
+// Entities without an updated timestamp (workspaces) map that key to a
+// documented surrogate; the mapping is stated in each tool's description, never
+// hidden.
 func SortOrder(sortArg string) (field string, asc bool, err error) {
 	s := strings.TrimSpace(sortArg)
 	if s == "" {
@@ -119,9 +119,17 @@ func SortOrder(sortArg string) (field string, asc bool, err error) {
 // created-at / name". A nil getter for a key means the entity has no such
 // field; the caller decides between rejecting the key and mapping it to a
 // documented surrogate.
+//
+// id is the MANDATORY tiebreak and is what makes paging safe. The store hands
+// back rows in Go map-iteration order (see db.dbList), which is randomized per
+// call, and the timestamps are unix SECONDS — so equal keys are common and would
+// otherwise land in a different order on every request. Since offset=0 and
+// offset=20 are separate calls, an unstable tie makes a paging reader skip rows
+// and see others twice. Ordering by id last pins the sequence.
 func SortByField[T any](items []T, field string, asc bool,
 	updated, created func(T) int64,
-	name func(T) string) (func(i, j int) bool, error) {
+	name func(T) string,
+	id func(T) string) (func(i, j int) bool, error) {
 
 	if updated == nil && field == "updated" {
 		return nil, fmt.Errorf("sort field \"updated\" is not supported for this entity")
@@ -132,6 +140,9 @@ func SortByField[T any](items []T, field string, asc bool,
 	if name == nil && field == "name" {
 		return nil, fmt.Errorf("sort field \"name\" is not supported for this entity")
 	}
+	if id == nil {
+		return nil, fmt.Errorf("sort requires an id tiebreak for stable paging")
+	}
 	// compare answers "is row i strictly before row j" for the resolved field.
 	// The desc branch calls it with swapped arguments instead of negating the
 	// result: negation makes equal keys compare "i < j" in BOTH directions,
@@ -140,12 +151,20 @@ func SortByField[T any](items []T, field string, asc bool,
 	compare := func(i, j int) bool {
 		switch field {
 		case "name":
-			return strings.ToLower(name(items[i])) < strings.ToLower(name(items[j]))
+			a, b := strings.ToLower(name(items[i])), strings.ToLower(name(items[j]))
+			if a != b {
+				return a < b
+			}
 		case "created":
-			return created(items[i]) < created(items[j])
+			if created(items[i]) != created(items[j]) {
+				return created(items[i]) < created(items[j])
+			}
 		default: // updated
-			return updated(items[i]) < updated(items[j])
+			if updated(items[i]) != updated(items[j]) {
+				return updated(items[i]) < updated(items[j])
+			}
 		}
+		return id(items[i]) < id(items[j])
 	}
 	return func(i, j int) bool {
 		if asc {

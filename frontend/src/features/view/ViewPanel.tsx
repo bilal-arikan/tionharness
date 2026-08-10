@@ -21,6 +21,12 @@ interface Props {
   // of a full-height right-anchored drawer (drops the side border / fixed height
   // / bg so it flows in the host's scroll).
   embedded?: boolean
+  // lens hands lens ownership to the host. The Explorer screen has its own lens
+  // selector that filters the MAP; leaving the panel a second, independent one
+  // let the two disagree — the map showing only failures while the panel beside
+  // it rendered the healthy summary. When set, the panel follows it and hides
+  // its own selector; when absent the panel owns its lens as before.
+  lens?: ViewLens
 }
 
 // ViewPanel is the "◱ Özet" drawer: the same compact projection an agent gets,
@@ -32,10 +38,11 @@ interface Props {
 //     the model saw.
 //   - The token estimate and the asOf stamp are always on screen, so an expensive
 //     or stale view is obvious rather than something to discover later.
-export function ViewPanel({ target, onClose, onSend, embedded }: Props) {
+export function ViewPanel({ target, onClose, onSend, embedded, lens: hostLens }: Props) {
   const [trail, setTrail] = useState<ViewRef[]>([target])
   const [level, setLevel] = useState<ViewLevel>('card')
-  const [lens, setLens] = useState<ViewLens>('health')
+  const [ownLens, setOwnLens] = useState<ViewLens>('health')
+  const lens = hostLens ?? ownLens
   const [result, setResult] = useState<ViewResult | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -76,16 +83,36 @@ export function ViewPanel({ target, onClose, onSend, embedded }: Props) {
         api.getView(ref, 'card', lens),
         api.getView(ref, 'full', lens),
       ])
-      const combined = `[TINY — ~${tiny.tokens} tok · asOf ${new Date(tiny.asOf).toLocaleTimeString()}]
-${tiny.text}
-
-[CARD — ~${card.tokens} tok · asOf ${new Date(card.asOf).toLocaleTimeString()}]
-${card.text}
-
-[FULL — ~${full.tokens} tok · asOf ${new Date(full.asOf).toLocaleTimeString()}]
-${full.text}`
+      // Tiers that render identically are merged into one block instead of being
+      // pasted three times. Small entities (a skill, a schedule, a category) have
+      // nothing extra to say above `card`, and three identical blocks under three
+      // different headings read as a bug — the reader assumes the levels were
+      // ignored rather than that this entity genuinely fits in one tier.
+      const tiers: Array<{ name: string; r: ViewResult }> = [
+        { name: 'TINY', r: tiny },
+        { name: 'CARD', r: card },
+        { name: 'FULL', r: full },
+      ]
+      const blocks: Array<{ names: string[]; r: ViewResult }> = []
+      for (const t of tiers) {
+        const last = blocks[blocks.length - 1]
+        if (last && last.r.text === t.r.text) last.names.push(t.name)
+        else blocks.push({ names: [t.name], r: t.r })
+      }
+      const combined = blocks
+        .map(
+          (b) =>
+            `[${b.names.join(' = ')} — ~${b.r.tokens} tok · asOf ${new Date(
+              b.r.asOf,
+            ).toLocaleTimeString()}]\n${b.r.text}`,
+        )
+        .join('\n\n')
       await navigator.clipboard.writeText(combined)
-      toast.info('Üç seviye (tiny·card·full) panoya kopyalandı')
+      toast.info(
+        blocks.length === 1
+          ? 'Panoya kopyalandı (üç seviye de aynı içeriği veriyor)'
+          : `${blocks.length} farklı seviye panoya kopyalandı`,
+      )
     } catch {
       // Fallback: copy just the current level if the others fail.
       await navigator.clipboard.writeText(result.text)
@@ -147,17 +174,23 @@ ${full.text}`
             </button>
           ))}
         </div>
-        <select
-          value={lens}
-          onChange={(e) => setLens(e.target.value as ViewLens)}
-          className="rounded-md border border-[var(--color-border)] bg-transparent px-2 py-1 text-[var(--color-text)]"
-        >
-          {LENSES.map((l) => (
-            <option key={l} value={l}>
-              {VIEW_LENS_LABEL[l]}
-            </option>
-          ))}
-        </select>
+        {hostLens ? (
+          // The host owns the lens: show which one is in force, do not offer a
+          // second control that could disagree with it.
+          <span className="text-[var(--color-text-dim)]">mercek: {VIEW_LENS_LABEL[lens]}</span>
+        ) : (
+          <select
+            value={lens}
+            onChange={(e) => setOwnLens(e.target.value as ViewLens)}
+            className="rounded-md border border-[var(--color-border)] bg-transparent px-2 py-1 text-[var(--color-text)]"
+          >
+            {LENSES.map((l) => (
+              <option key={l} value={l}>
+                {VIEW_LENS_LABEL[l]}
+              </option>
+            ))}
+          </select>
+        )}
         <button
           type="button"
           onClick={() => void load()}

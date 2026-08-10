@@ -255,6 +255,7 @@ func (s *Server) handleListArtifacts(w http.ResponseWriter, r *http.Request) {
 		func(a db.Artifact) int64 { return a.UpdatedAt },
 		func(a db.Artifact) int64 { return a.CreatedAt },
 		func(a db.Artifact) string { return a.Title },
+		func(a db.Artifact) string { return a.ID },
 	)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())

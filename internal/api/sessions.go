@@ -106,6 +106,7 @@ func (s *Server) handleListSessions(w http.ResponseWriter, r *http.Request) {
 		func(s db.Session) int64 { return s.UpdatedAt },
 		func(s db.Session) int64 { return s.CreatedAt },
 		func(s db.Session) string { return s.Title },
+		func(s db.Session) string { return s.ID },
 	)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())

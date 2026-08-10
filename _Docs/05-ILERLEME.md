@@ -1,6 +1,88 @@
 # TionSwarm — İlerleme Takibi
 
-> Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-08-06**
+> Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-08-10**
+
+## View katmanı: tek projektör kurulumu + tek sayım (2026-08-10) ✅
+
+Explorer ekranı ile `get_view` zaten aynı motoru (`internal/view`) kullanıyordu;
+ortaklaştırılmamış olan **kurulum** ve **sayım** idi. Dört çağrı yeri kendi
+projektörünü kuruyor, biri hariç hiçbiri opsiyonel kaynakları bağlamıyordu.
+
+- **`tools.ViewProjector(db, wsName, ViewSources{Skills, Logs})`** — projektörün
+  kurulduğu tek yer (`internal/tools/viewprojector.go`); findings adapter'ı da
+  buraya taşındı. `api/views.go`, `api/dashboard.go`, `get_view`, `expand`
+  dördü de bunu çağırır. `tools` paketi seçildi çünkü skills+insight+logbuf+view'ı
+  birlikte import eden tek paket o (`view` yapamaz: insight → view döngüsü).
+  **Kapattığı iki hata:** ajanın `get_view{skill|insight|logs}` çağrısı "kaynak
+  yok" derken kullanıcı aynı düğümü Harita'da dolu görüyordu; Panel ekranı
+  workspace başlığını isimsiz basıyordu.
+- **`get_view` kind listesi** `expand`'in ref verdiği her düğümü kapsıyor
+  (`agent`/`budget`/`tools`/`logs`/`artifact`/`automation`/`skill`/`insight`/
+  `category`). Şema beş kind'a kapalıyken ajan `expand`'den aldığı ref'i açamıyordu.
+- **`view.CountWorkspace` + `Projector.Workspace`** — Panel'in stat kutuları
+  `dashboardCounters`'ın ayrı döngüsüyle sayılıyordu; silindi. Metin ve sayaçlar
+  artık **tek yüklemeden, tek saatle** üretiliyor.
+- **Mercek tekleşti:** `ViewPanel` opsiyonel `lens` prop'u alır; Harita ekranında
+  başlıktaki mercek yan paneli de sürer (panel kendi seçicisini gizler). Önce
+  harita `errors`, yanındaki özet `health` gösterebiliyordu.
+- **Regresyon testleri:** `TestDashboardSummaryMatchesWorkspaceView` (`asOf`
+  hariç bayt-eşitlik) + `TestDashboardCountersComeFromTheProjection`.
+
+**Doğrulama:** `go build ./...` ✅, `go test ./internal/... -count=1` ✅ (33 paket),
+`tsc --noEmit` ✅, `npm test` ✅ (167 test).
+
+## Fullstack review düzeltmeleri (2026-08-10) ✅
+
+Son 17 commit'in (schedule adları, AI başlık üretimi, per-workspace varsayılan
+ajan, `expand`, tombstone yayını) uçtan uca incelemesi. Bulunan 9 hata düzeltildi.
+
+**P0 — `anthropic` provider'da her araç turu 400 riski.** `contentBlock` tek bir
+etiketli birlik; `Text` alanından `omitempty` kaldırılınca **tool_use ve
+tool_result** blokları da `"text":""` göndermeye başlamıştı ve API tanınmayan
+alanı reddeder. Alan `omitempty`'ye geri alındı; bunun yerine tip-farkındalı
+`contentBlock.MarshalJSON` eklendi — `text` bloğunda alan (boş olsa da) **her
+zaman** yazılır, diğer tiplerde **hiç** yazılmaz (`internal/providers/anthropic.go`).
+
+**P1 — Sayfalama eşit anahtarlarda satır atlıyordu.** `SortByField`'da tiebreak
+yoktu; `db.dbList` map üzerinde dolaştığı için eşitlikler her çağrıda farklı
+sıralanıyordu ve zaman damgaları saniye çözünürlüklü olduğu için eşitlik yaygın.
+`offset=0` ve `offset=20` ayrı çağrılar olduğundan okuyucu satır kaçırıp
+başkalarını iki kez görebiliyordu. Artık **zorunlu** `id` tiebreak parametresi var
+(20 çağrı yeri güncellendi); asc/desc birbirinin tam tersi.
+
+**P1 — AI başlık üretimi hatayı yutup çöp veriyi yazıyordu.** `TitleFor` asla ""
+döndürmez, hatada `FallbackTitle(source)` döner — yani LLM patlayınca ham
+"Schedule: cron=… prompt=…" metni isim olarak diske yazılıyor, UI ise başarı
+gösteriyordu. Artık hata 502 ile yüzeye çıkıyor. Ayrıca uç noktalar **öneri-only**
+oldu (`{title}` döner, yazmaz): buton bir düzenleme modalının içinde, yazmak
+kullanıcının onaylamadığı ismi kalıcı kılıyor ve İptal ile geri alınamıyordu.
+`SetScheduleName`/`SetAutomationName` kaldırıldı.
+
+**P2 — Zamanlama ismi silinemiyordu:** `UpdateSchedule`'daki `if sc.Name != ""`
+guard'ı ve frontend'in `|| undefined`'ı birlikte "ismi temizle"yi sessiz no-op
+yapıyordu. İkisi de kaldırıldı.
+
+**P2 — Ayarlarda aktif `titleModel` görünmez olmuştu:** model alanı yalnız
+sağlayıcı override'ı seçiliyken render ediliyordu, ama ayar tek başına yürürlükte.
+Artık her durumda görünür. Ek olarak select `models[0]`'ı seçili gösterirken kayıtlı
+değer "" idi (form durumu yanlış anlatıyordu) — artık değer birebir; sağlayıcı
+değişince model sıfırlanıyor.
+
+**P2 — Okuma hatası kullanıcı tercihini eziyordu:** `getWorkspaceSettings`
+başarısız olunca self-heal devreye girip varsayılan ajanı `agents[0]` ile kalıcı
+olarak değiştiriyordu. `wsSettingsLoaded` bayrağı ile geçici okuma hatası artık
+yazmaya dönüşmüyor; workspace değişiminde seçim de sıfırlanıyor.
+
+**P3:** `expand` çıktısı sınırsızdı (olgun bir workspace'te her oturum bir satır) →
+`view.CapLines` ile 4KB'a bağlandı, elenen sayı açıkça yazılıyor. View
+başlıklarındaki kırpma kaybı geri alındı (kart başlığı 100, schedule/workspace adı
+60). `internal/web/dist/.gitkeep` takibe alındı — takip edilmediği için temiz bir
+clone'da `go:embed all:dist` derlemeyi kırıyordu.
+
+**Doğrulama:** `go build` ✅, `go vet` ✅, `go test ./...` ✅, `tsc --noEmit` ✅.
+Yeni testler: `providers/anthropic_toolsearch_test.go` (blok tipi başına `text`),
+`tools/listpage_test.go` (tiebreak determinizmi + geliş sırasından bağımsızlık +
+zorunlu `id`), `tools/builtin_list_test.go` (gerçek `Name` sıralaması).
 
 ## TSK68: Liste araçlarına pagination + filtreleme + sıralama (2026-08-06) ✅
 
@@ -21,7 +103,8 @@ context'i tüketmeden sayfalayabilir (`hasMore` → `offset += limit`).
   (boardState/priority/ownerAgentId/tags), `list_flows` (tags; **flow modelinde
   Enabled yok** — flow'lar disable edilmez, bu yüzden enabled filtresi uygulanamaz),
   `list_automations` (enabled/triggerKind/targetAgentId), `list_schedules`
-  (enabled/agentId; one-shot wake'ler gizlenir; name_* → id sırası belgelenmiş vekil),
+  (enabled/agentId; one-shot wake'ler gizlenir; name_* gerçek `Schedule.Name`
+  alanına göre sıralar — 2026-08-10'dan beri),
   `list_workers` (state running|idle|stuck; yalnız koordinatör oturumunda),
   `list_workspaces` (yalnız pagination; updated_* → created_* belgelenmiş vekil).
 - **API tarafı** (`internal/api/listparams.go`): `listQueryParams` (limit/offset/sort
@@ -148,7 +231,8 @@ vardı). Kök 6 → **11 node**.
 - **Kaynaklar:** skills/logs/findings db'de değil → `Projector.WithSources(Sources{Skills,
   Findings, Logs})` (narrow interface'ler; nil = "yok" satırı, asla sessiz boşluk değil).
   `internal/insight` zaten `view`'i import ettiği için (cycle!) findings view-local
-  `InsightFinding` tipine `api/findingsSource` adapter'ıyla bağlanır. `Store` arayüzüne
+  `InsightFinding` tipine bir adapter'la bağlanır (2026-08-10'dan beri
+  `tools/viewprojector.go`; önce `api/findingsSource` idi). `Store` arayüzüne
   `GetArtifact/ListArtifacts/GetAutomation/ListAutomations` eklendi.
 - **API:** `views.go` → `s.viewProjector(r)` runtime'dan skills + findings + logs kaynaklarını
   bağlar. `expand` aracının açıklaması 11 kovacığa güncellendi.

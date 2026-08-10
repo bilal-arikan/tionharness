@@ -67,7 +67,9 @@ export function ScheduleModal({
     try {
       if (editing) {
         const updated = await api.updateSchedule(editing.id, {
-          name: name.trim() || undefined,
+          // Sent even when empty: `|| undefined` would drop the key and make
+          // clearing the name a silent no-op on a full-object PUT.
+          name: name.trim(),
           ...target,
           cronExpr: cronExpr.trim(),
           prompt: prompt.trim(),
@@ -120,9 +122,11 @@ export function ScheduleModal({
               onClick={async () => {
                 setGeneratingTitle(true)
                 try {
-                  const updated = await api.generateScheduleTitle(editing.id)
-                  setName(updated.name || '')
-                  toast.success('Başlık oluşturuldu')
+                  // Suggestion only — it lands in the form and is persisted by Save,
+                  // so Cancel still discards it.
+                  const { title } = await api.generateScheduleTitle(editing.id)
+                  setName(title)
+                  toast.success('Başlık önerildi — kaydetmeyi unutma')
                 } catch (e) {
                   onError((e as Error).message)
                 } finally {

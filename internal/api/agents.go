@@ -99,7 +99,8 @@ func (s *Server) handleListAgents(w http.ResponseWriter, r *http.Request) {
 		less, err := tools.SortByField(matches, field, asc,
 			func(a db.Agent) int64 { return a.UpdatedAt },
 			func(a db.Agent) int64 { return a.CreatedAt },
-			func(a db.Agent) string { return a.Name })
+			func(a db.Agent) string { return a.Name },
+			func(a db.Agent) string { return a.ID })
 		if err != nil {
 			writeError(w, http.StatusBadRequest, err.Error())
 			return

@@ -22,10 +22,23 @@ import (
 //
 // The bytes returned here are byte-identical to what the Bağlam panel shows the
 // user, so a wrong projection is something both of them can see.
-type GetViewTool struct{ db *db.DB }
+type GetViewTool struct {
+	db      *db.DB
+	wsName  string
+	sources ViewSources
+}
 
 // NewGetViewTool binds the tool to a workspace DB.
 func NewGetViewTool(database *db.DB) GetViewTool { return GetViewTool{db: database} }
+
+// WithSources attaches the workspace identity and the optional projection
+// sources, so an agent's get_view renders the same nodes the Explorer map does
+// (skills, insight findings, logs) instead of reporting them unavailable.
+func (t GetViewTool) WithSources(wsName string, src ViewSources) GetViewTool {
+	t.wsName = wsName
+	t.sources = src
+	return t
+}
 
 func (GetViewTool) Def() providers.ToolDef {
 	return providers.ToolDef{
@@ -44,7 +57,10 @@ func (GetViewTool) Def() providers.ToolDef {
 			"working column, failed cards, dependency-blocked cards, overdue cards, recent movement. " +
 			"Use id='board'. sub=<cardId> drills into one card.\n" +
 			"  schedule — one cron schedule: armed/disabled, last-fire status and error, next run, and " +
-			"what it delivers (agent or flow). Use the schedule id.\n\n" +
+			"what it delivers (agent or flow). Use the schedule id.\n" +
+			"  agent | budget | tools | logs | artifact | automation | skill | insight | category — the " +
+			"remaining Workspace Explorer nodes, the same ones `expand` hands you refs for. Use the id " +
+			"expand returned ('budget'/'tools'/'logs' and a category id like 'sessions' are singletons).\n\n" +
 			"Numbers in a view are computed, never written by a model, so they can be trusted. The view " +
 			"always reports how many items it hid and offers drill-down handles for them — nothing is " +
 			"silently dropped.\n\n" +
@@ -55,7 +71,7 @@ func (GetViewTool) Def() providers.ToolDef {
 		InputSchema: json.RawMessage(`{
   "type": "object",
   "properties": {
-    "kind": { "type": "string", "enum": ["flowrun","session","board","workspace","schedule"], "description": "Entity type to project." },
+    "kind": { "type": "string", "enum": ["flowrun","session","board","workspace","schedule","agent","budget","tools","logs","artifact","automation","skill","insight","category"], "description": "Entity type to project." },
     "id": { "type": "string", "description": "Entity id (a flow run / session / schedule id, or 'board'/'workspace' for the singletons)." },
     "sub": { "type": "string", "description": "Optional drill-down target inside the entity (a node id for a flow run, a card id for the board)." },
     "level": { "type": "string", "enum": ["tiny","card","full"], "description": "Budget tier (default card)." },
@@ -105,7 +121,8 @@ func (t GetViewTool) Call(ctx context.Context, input json.RawMessage) (string, e
 	}
 
 	ref := view.Ref{Kind: kind, ID: id, Sub: strings.TrimSpace(in.Sub)}
-	v, err := view.NewProjector(t.db).Project(ctx, ref, view.ParseLevel(in.Level), view.ParseLens(in.Lens))
+	v, err := ViewProjector(t.db, t.wsName, t.sources).
+		Project(ctx, ref, view.ParseLevel(in.Level), view.ParseLens(in.Lens))
 	if err != nil {
 		// A bad ref is returned as an error rather than an empty summary: a blank
 		// view reads like a healthy empty entity and would send the agent down the

@@ -92,6 +92,7 @@ func (t ListHooksTool) Call(ctx context.Context, input json.RawMessage) (string,
 		func(h db.Hook) int64 { return h.CreatedAt },
 		func(h db.Hook) int64 { return h.CreatedAt },
 		nil,
+		func(h db.Hook) string { return h.ID },
 	)
 	if err != nil {
 		return "", err

@@ -131,6 +131,46 @@ func TestAnthropicMessage_RawMarshal(t *testing.T) {
 	}
 }
 
+// TestContentBlockMarshal_TextPerType pins the per-type `text` contract: an
+// empty TEXT block must keep its (required) field, and a tool_use/tool_result
+// block must not carry one at all — the API rejects unrecognized properties, so
+// a blanket `"text":""` would 400 every tool-carrying turn.
+func TestContentBlockMarshal_TextPerType(t *testing.T) {
+	cases := []struct {
+		name     string
+		block    contentBlock
+		wantText bool
+	}{
+		{"empty text placeholder", contentBlock{Type: "text", Text: ""}, true},
+		{"populated text", contentBlock{Type: "text", Text: "hi"}, true},
+		{"tool_use", contentBlock{Type: "tool_use", ID: "t1", Name: "read", Input: json.RawMessage(`{}`)}, false},
+		{"tool_result", contentBlock{Type: "tool_result", ToolUseID: "t1", Content: "ok"}, false},
+		{"empty tool_result", contentBlock{Type: "tool_result", ToolUseID: "t1"}, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			b, err := json.Marshal(tc.block)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var got map[string]any
+			if err := json.Unmarshal(b, &got); err != nil {
+				t.Fatal(err)
+			}
+			if _, ok := got["text"]; ok != tc.wantText {
+				t.Fatalf("text present = %v, want %v: %s", ok, tc.wantText, b)
+			}
+			// The other fields must survive the custom marshaller untouched.
+			if tc.block.ID != "" && got["id"] != tc.block.ID {
+				t.Errorf("id lost: %s", b)
+			}
+			if tc.block.ToolUseID != "" && got["tool_use_id"] != tc.block.ToolUseID {
+				t.Errorf("tool_use_id lost: %s", b)
+			}
+		})
+	}
+}
+
 // TestToAnthropicMessages_RawPassthrough: a RawContent turn passes through
 // untouched — no breakpoint, no dynamic append, no coalescing into neighbours.
 func TestToAnthropicMessages_RawPassthrough(t *testing.T) {

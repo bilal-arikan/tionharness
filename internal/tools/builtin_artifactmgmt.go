@@ -187,6 +187,7 @@ func (t ListArtifactsTool) Call(ctx context.Context, input json.RawMessage) (str
 		func(a db.Artifact) int64 { return a.UpdatedAt },
 		func(a db.Artifact) int64 { return a.CreatedAt },
 		func(a db.Artifact) string { return a.Title },
+		func(a db.Artifact) string { return a.ID },
 	)
 	if err != nil {
 		return "", err

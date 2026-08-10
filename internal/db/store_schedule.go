@@ -45,9 +45,10 @@ func (d *DB) UpdateSchedule(ctx context.Context, sc Schedule) error {
 	if !ok {
 		return ErrNotFound
 	}
-	if sc.Name != "" {
-		cur.Name = sc.Name
-	}
+	// Name is assigned unconditionally like every other mutable field: guarding it
+	// on non-empty would make "clear the name" a silent no-op, and callers that
+	// want partial updates (the agent tool) already read-modify-write the row.
+	cur.Name = sc.Name
 	cur.AgentID = sc.AgentID
 	cur.CronExpr = sc.CronExpr
 	cur.Prompt = sc.Prompt
@@ -112,17 +113,4 @@ func (d *DB) DeleteSchedule(ctx context.Context, id string) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	return dbDeleteLocked(d, d.schedules, dirSchedules, id)
-}
-
-// SetScheduleName updates only the name field of a schedule.
-func (d *DB) SetScheduleName(ctx context.Context, id, name string) error {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	sc, ok := d.schedules[id]
-	if !ok {
-		return ErrNotFound
-	}
-	sc.Name = name
-	sc.UpdatedAt = now()
-	return d.persistScheduleLocked(sc)
 }

@@ -29,6 +29,12 @@ const (
 // 300-session workspace cannot blow the map up.
 const categoryTopN = 50
 
+// categoryFullMaxBytes budgets the LevelFull member listing (~600 tokens). It is
+// deliberately BELOW what categoryTopN full-width rows would occupy (~3.1KB): a
+// cap that the largest legal input cannot reach is decoration, and the elision
+// path it guards would never run in production or in a test.
+const categoryFullMaxBytes = 2400
+
 // CategoryInput is a resolved category: its id plus the FULL (uncapped, already
 // lens-filtered) member list. The projection counts the members and caps the
 // handles — the count is honest because it sees every member, the handle list is
@@ -80,6 +86,28 @@ func ProjectCategory(in CategoryInput, level Level, lens Lens) (View, error) {
 		var l lines
 		l.add("(bu kategoride %s yok)", unit)
 		v.Body = l.String()
+		v.finalize()
+		return v, nil
+	}
+
+	// LevelFull spells the members out as text. At card level they are handles
+	// only — clickable in the panel, but invisible to anyone reading the DSL, so
+	// a category rendered card and full identically and the panel's `full` button
+	// did nothing. The budget tier has to change what the TEXT says, otherwise it
+	// is not a budget tier.
+	if level == LevelFull {
+		rows := make([]string, 0, len(members))
+		for _, m := range members {
+			rows = append(rows, fmt.Sprintf("  %-46s %s", clip(m.Label, 46), m.Ref.String()))
+		}
+		kept, dropped := CapLines(rows, categoryFullMaxBytes)
+		v.Body = strings.Join(kept, "\n")
+		// Add to the topN overflow rather than replacing it: both are members this
+		// view is not showing, and reporting only one of them would understate the
+		// gap.
+		if dropped > 0 {
+			v.Elided, v.ElidedUnit = v.Elided+dropped, unit
+		}
 	}
 	v.finalize()
 	return v, nil

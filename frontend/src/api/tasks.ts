@@ -86,8 +86,10 @@ export const taskApi = {
     }),
   deleteSchedule: (id: string) =>
     req<{ result: string }>(`/api/schedules/${id}`, { method: 'DELETE' }),
+  // Suggests a name without writing it — the caller puts it in the form and the
+  // normal save persists it, so Cancel still discards the suggestion.
   generateScheduleTitle: (id: string) =>
-    req<Schedule>(`/api/schedules/${id}/generate-title`, { method: 'POST' }),
+    req<{ title: string }>(`/api/schedules/${id}/generate-title`, { method: 'POST' }),
 
   // Tag-triggered automations (event-driven loops; surfaced in the Schedules UI).
   listAutomations: () => req<Automation[]>('/api/automations'),
@@ -163,6 +165,7 @@ export const taskApi = {
     req<{ id: string; action: string }>(`/api/automations/${id}/reset`, { method: 'POST' }),
   deleteAutomation: (id: string) =>
     req<{ deleted: string }>(`/api/automations/${id}`, { method: 'DELETE' }),
+  // Suggests a name without writing it (see generateScheduleTitle).
   generateAutomationTitle: (id: string) =>
-    req<Automation>(`/api/automations/${id}/generate-title`, { method: 'POST' }),
+    req<{ title: string }>(`/api/automations/${id}/generate-title`, { method: 'POST' }),
 }

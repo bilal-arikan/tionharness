@@ -47,7 +47,8 @@ func (s *Server) handleListFlows(w http.ResponseWriter, r *http.Request) {
 		less, err := tools.SortByField(matches, field, asc,
 			func(f db.Flow) int64 { return f.UpdatedAt },
 			func(f db.Flow) int64 { return f.CreatedAt },
-			func(f db.Flow) string { return f.Name })
+			func(f db.Flow) string { return f.Name },
+			func(f db.Flow) string { return f.ID })
 		if err != nil {
 			writeError(w, http.StatusBadRequest, err.Error())
 			return

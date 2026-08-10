@@ -464,6 +464,7 @@ func (t ListAgentsTool) Call(ctx context.Context, input json.RawMessage) (string
 		func(a db.Agent) int64 { return a.UpdatedAt },
 		func(a db.Agent) int64 { return a.CreatedAt },
 		func(a db.Agent) string { return a.Name },
+		func(a db.Agent) string { return a.ID },
 	)
 	if err != nil {
 		return "", err

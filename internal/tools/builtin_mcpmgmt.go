@@ -99,6 +99,7 @@ func (t ListMCPServersTool) Call(ctx context.Context, input json.RawMessage) (st
 		func(m db.MCPServer) int64 { return m.CreatedAt },
 		func(m db.MCPServer) int64 { return m.CreatedAt },
 		func(m db.MCPServer) string { return m.Name },
+		func(m db.MCPServer) string { return m.ID },
 	)
 	if err != nil {
 		return "", err

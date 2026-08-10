@@ -133,3 +133,67 @@ func TestBucketByDayIgnoresOutOfWindowStamps(t *testing.T) {
 		t.Errorf("today's bucket = %d, want 1", points[len(points)-1].Value)
 	}
 }
+
+// TestDashboardSummaryMatchesWorkspaceView pins the claim _Docs/66 makes about
+// the Panel screen: its summary block is not a prettier parallel rendering, it
+// is byte-for-byte the workspace projection an agent reads. The two used to be
+// built by differently-configured projectors — one carried the workspace name,
+// the other did not — so the documented invariant was quietly false.
+func TestDashboardSummaryMatchesWorkspaceView(t *testing.T) {
+	database := dashboardFixture(t)
+	srv := &Server{}
+
+	dash := serveFlowRuns(srv.handleDashboard, database, "/api/dashboard?days=7", nil)
+	if dash.Code != http.StatusOK {
+		t.Fatalf("dashboard status %d: %s", dash.Code, dash.Body.String())
+	}
+	view := serveFlowRuns(srv.handleGetView, database,
+		"/api/views/workspace/workspace?level=card&lens=health",
+		map[string]string{"kind": "workspace", "id": "workspace"})
+	if view.Code != http.StatusOK {
+		t.Fatalf("view status %d: %s", view.Code, view.Body.String())
+	}
+
+	summary, _ := decodeView(t, dash.Body.Bytes())["summary"].(map[string]any)
+	if summary == nil {
+		t.Fatalf("no summary in %s", dash.Body.String())
+	}
+	got, _ := summary["text"].(string)
+	want, _ := decodeView(t, view.Body.Bytes())["text"].(string)
+
+	// asOf is a live clock and legitimately differs between the two calls; every
+	// other byte must match.
+	strip := func(s string) string {
+		if i := strings.Index(s, " · asOf "); i >= 0 {
+			if nl := strings.Index(s[i:], "\n"); nl >= 0 {
+				return s[:i] + s[i+nl:]
+			}
+			return s[:i]
+		}
+		return s
+	}
+	if strip(got) != strip(want) {
+		t.Errorf("dashboard summary and get_view{workspace} drifted apart:\n dashboard: %q\n get_view:  %q", got, want)
+	}
+}
+
+// TestDashboardCountersComeFromTheProjection guards the other half of the same
+// invariant: the stat tiles are the projection's own L0 pass, not a second tally
+// written next to it. A card in a non-done column must show up as open.
+func TestDashboardCountersComeFromTheProjection(t *testing.T) {
+	database := dashboardFixture(t)
+
+	rec := serveFlowRuns((&Server{}).handleDashboard, database, "/api/dashboard?days=7", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status %d: %s", rec.Code, rec.Body.String())
+	}
+	counters, _ := decodeView(t, rec.Body.Bytes())["counters"].(map[string]any)
+	if counters == nil {
+		t.Fatalf("no counters in %s", rec.Body.String())
+	}
+	for key, want := range map[string]float64{"tasksOpen": 1, "sessionsArchived": 0, "runsFailed": 0} {
+		if n, ok := counters[key].(float64); !ok || n != want {
+			t.Errorf("counters[%s] = %v, want %v", key, counters[key], want)
+		}
+	}
+}

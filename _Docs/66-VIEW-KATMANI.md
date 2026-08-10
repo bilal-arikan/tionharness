@@ -368,9 +368,23 @@ projeksiyonunun ta kendisi** — `get_view{kind:"workspace"}` ile birebir aynı
 baytlar. Altındaki grafikler aynı gerçeklerin çizilmiş hâli, **ikinci bir bağımsız
 hesap değil**. İkisi çelişirse bu, kullanıcının görebildiği bir bug'dır.
 
+> **Bu iddia iki kere yanlıştı; 2026-08-10'da kapatıldı ve teste bağlandı.**
+>
+> 1. **Baytlar aynı değildi.** `dashboard.go` projektörü `WithName`/`WithSources`
+>    olmadan kuruyordu: Panel `WORKSPACE`, ViewPanel `WORKSPACE "TionSwarmRepo"`
+>    basıyordu. Artık ikisi de `s.viewProjector(r)` üzerinden geçiyor.
+> 2. **Stat kutuları ikinci bir sayımdı.** `dashboardCounters` aynı
+>    oturum/kart/koşu dilimlerini kendi döngüsüyle sayıyordu — projeksiyonu
+>    render eden çağrının hemen yanında. Silindi; sayılar `Projector.Workspace`
+>    ile **tek yüklemeden** gelir (metin + sayaçlar aynı `in`, aynı `Now`).
+>
+> Regresyon: `api/dashboard_test.go` →
+> `TestDashboardSummaryMatchesWorkspaceView` (canlı saat olan `asOf` hariç
+> bayt-eşitlik) + `TestDashboardCountersComeFromTheProjection`.
+
 | Bölüm | İçerik |
 |-------|--------|
-| Stat kutuları | ajan · aktif oturum · **takılmış oturum** · açık kart · çalışan koşu · **başarısız koşu** (sorun olanlar renkli) |
+| Stat kutuları | ajan · aktif oturum · **takılmış oturum** · açık kart · çalışan koşu · **başarısız koşu** (sorun olanlar renkli). Sayılar `view.CountWorkspace` ile — özet bloğunun **kendi L0 geçişi**, ayrı bir sayım değil |
 | 💰 Maliyet | bugün · bu ay · günlük ort. (burn, delta'lı) · ay-sonu tahmini + önlenebilir cache israfı notu. Tümü `billing.RollupOf` ile — Bütçe ekranıyla asla çelişmez. Abonelik sağlayıcı `~` ile işaretlenir. |
 | 🔔 Dikkat gereken | workspace projeksiyonunun sinyal satırlarının **tıklanabilir** kardeşi: takılmış oturum / başarısız koşu-kart (danger) + bekleyen soru / hatalı zamanlama / hareketsiz kart (warn). Satır etiketi → ilgili **tam ekran** (`nav`); sağdaki **◱** → o varlığın **`get_view` projeksiyonunu** yandan açar (oturum/koşu/kart-sub/schedule, dördü de drill-down). Workspace özeti bloğunun altında `summary.handles` de tıklanabilir ◱ çip. |
 | ✅ Sonuçlar | biten kart · ort. tamamlanma süresi (cycle time) · koşu başarı oranı + biten-kart/gün trendi (tamamlanma tarafı; hacim değil) |

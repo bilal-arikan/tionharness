@@ -21,10 +21,22 @@ import (
 // It is deliberately thin: children are cheap edges (label + ref), so an agent can
 // fan out over the tree at a fraction of the tokens a full projection per node
 // would cost, and drill deep with get_view only where it needs the detail.
-type ExpandTool struct{ db *db.DB }
+type ExpandTool struct {
+	db      *db.DB
+	wsName  string
+	sources ViewSources
+}
 
 // NewExpandTool binds the tool to a workspace DB.
 func NewExpandTool(database *db.DB) ExpandTool { return ExpandTool{db: database} }
+
+// WithSources attaches the workspace identity and the optional projection
+// sources, so the children an agent walks are the ones the Explorer map shows.
+func (t ExpandTool) WithSources(wsName string, src ViewSources) ExpandTool {
+	t.wsName = wsName
+	t.sources = src
+	return t
+}
 
 func (ExpandTool) Def() providers.ToolDef {
 	return providers.ToolDef{
@@ -95,7 +107,7 @@ func (t ExpandTool) Call(ctx context.Context, input json.RawMessage) (string, er
 
 	ref := view.Ref{Kind: kind, ID: id, Sub: strings.TrimSpace(in.Sub)}
 	lens := view.ParseLens(in.Lens)
-	children, err := view.NewProjector(t.db).Children(ctx, ref, lens)
+	children, err := ViewProjector(t.db, t.wsName, t.sources).Children(ctx, ref, lens)
 	if err != nil {
 		// A bad ref is an error, never an empty list — a silent empty result reads
 		// like a genuine leaf node and would hide the mistake.
@@ -108,7 +120,8 @@ func (t ExpandTool) Call(ctx context.Context, input json.RawMessage) (string, er
 		b.WriteString(" — leaf (no children)")
 		return b.String(), nil
 	}
-	b.WriteString("\n")
+
+	rows := make([]string, 0, len(children))
 	for _, h := range children {
 		// Point each child at the right next call: expand for a node that itself has
 		// children, get_view for a leaf. Both are always valid; the hint just steers.
@@ -116,7 +129,26 @@ func (t ExpandTool) Call(ctx context.Context, input json.RawMessage) (string, er
 		if view.IsExpandable(h.Ref) {
 			next = "expand"
 		}
-		fmt.Fprintf(&b, "\n  %s → %s{kind:%q,id:%q%s}", h.Label, next, h.Ref.Kind, h.Ref.ID, subArg(h.Ref.Sub))
+		rows = append(rows, fmt.Sprintf("  %s → %s{kind:%q,id:%q%s}", h.Label, next, h.Ref.Kind, h.Ref.ID, subArg(h.Ref.Sub)))
+	}
+	// A category on a mature workspace holds every session/run/artifact ever
+	// created, so an uncapped listing defeats the whole point of the view layer.
+	// The total is already in the header, and the drop is stated outright — a
+	// silently short list would read like a complete one.
+	kept, dropped := view.CapLines(rows, expandMaxBytes)
+	b.WriteString("\n")
+	for _, ln := range kept {
+		b.WriteString("\n")
+		b.WriteString(ln)
+	}
+	if dropped > 0 {
+		fmt.Fprintf(&b, "\n\n  … +%d more (of %d) elided — narrow with lens, or get_view the branch you need",
+			dropped, len(children))
 	}
 	return b.String(), nil
 }
+
+// expandMaxBytes budgets the child listing. Roughly 1k tokens: enough for a full
+// board or agent roster, small enough that expanding a busy category cannot blow
+// a turn's context.
+const expandMaxBytes = 4000

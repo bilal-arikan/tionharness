@@ -440,6 +440,7 @@ func (ListWorkersTool) Call(ctx context.Context, input json.RawMessage) (string,
 		func(w WorkerRow) int64 { return w.UpdatedAt },
 		func(w WorkerRow) int64 { return w.CreatedAt },
 		func(w WorkerRow) string { return w.AgentName },
+		func(w WorkerRow) string { return w.SessionID },
 	)
 	if err != nil {
 		return "", err

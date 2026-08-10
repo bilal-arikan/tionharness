@@ -115,6 +115,7 @@ func (s *Server) handleListExecutions(w http.ResponseWriter, r *http.Request) {
 		func(e executionItem) int64 { return e.UpdatedAt },
 		func(e executionItem) int64 { return e.CreatedAt },
 		func(e executionItem) string { return e.Title },
+		func(e executionItem) string { return e.SessionID },
 	)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())

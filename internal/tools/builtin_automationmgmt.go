@@ -562,6 +562,7 @@ func (t ListAutomationsTool) Call(ctx context.Context, input json.RawMessage) (s
 		func(a db.Automation) int64 { return a.UpdatedAt },
 		func(a db.Automation) int64 { return a.CreatedAt },
 		func(a db.Automation) string { return a.Name },
+		func(a db.Automation) string { return a.ID },
 	)
 	if err != nil {
 		return "", err

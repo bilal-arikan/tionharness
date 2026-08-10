@@ -73,6 +73,9 @@ export function useSessionsController({
   // on the backend so switching workspaces does not silently overwrite another
   // workspace's choice. Unmentioned turns in a session use the session's own agent.
   const [defaultAgentId, setDefaultAgentId] = useState<string | null>(null)
+  // Whether this workspace's settings were actually READ. False both before the
+  // fetch lands and when it fails, and it gates the self-heal write below.
+  const [wsSettingsLoaded, setWsSettingsLoaded] = useState(false)
   // Live handle to the chat hook for effects declared ABOVE its definition (the
   // messages-load effect): the ref is read post-render when the binding is set,
   // sidestepping the temporal-dead-zone the const would hit in a deps array.
@@ -100,12 +103,16 @@ export function useSessionsController({
     setMessages([])
     setActiveAgentId(null)
     setActiveSessionId(null)
+    // The default agent is per-workspace, so the outgoing workspace's pick must
+    // not linger while the new one's settings are in flight.
+    setDefaultAgentId(null)
+    setWsSettingsLoaded(false)
     setBootstrapping(true)
     let cancelled = false
     Promise.all([
       api.listAgents(),
       api.listSessions({ limit: SESSIONS_PAGE_SIZE }),
-      api.getWorkspaceSettings().catch(() => null as unknown as { defaultAgentId: string }),
+      api.getWorkspaceSettings().catch(() => null),
     ])
       .then(([ag, page, ws]) => {
         if (cancelled) return
@@ -118,9 +125,15 @@ export function useSessionsController({
         // Restore the per-workspace default agent from the backend. If it points to an
         // agent that no longer exists in this workspace, the self-heal effect below will
         // pick the first agent and persist the correction.
+        //
+        // settingsLoaded gates that self-heal: when the GET simply FAILED we know
+        // nothing about the stored choice, and healing on that would overwrite the
+        // user's real pick with agents[0] — turning a transient read error into a
+        // permanent write.
         if (ws?.defaultAgentId && ag.some((a) => a.id === ws.defaultAgentId)) {
           setDefaultAgentId(ws.defaultAgentId)
         }
+        setWsSettingsLoaded(ws !== null)
         // Default selection: the most recent WRITABLE session. The sidebar now
         // lists every kind, but landing a returning user on a read-only flow or
         // schedule log (with no composer) would be a worse default than the last
@@ -169,13 +182,13 @@ export function useSessionsController({
   // empty state can say so: quietly starting the next chat with a different agent
   // than the user picked is worse than telling them their pick is gone.
   useEffect(() => {
-    if (agents.length === 0 || defaultAgentDeleted) return
+    if (!wsSettingsLoaded || agents.length === 0 || defaultAgentDeleted) return
     if (!defaultAgentId || !agents.some((a) => a.id === defaultAgentId)) {
       const fallback = agents[0].id
       setDefaultAgentId(fallback)
       api.updateWorkspaceSettings({ defaultAgentId: fallback }).catch(() => {})
     }
-  }, [agents, defaultAgentId, defaultAgentDeleted])
+  }, [agents, defaultAgentId, defaultAgentDeleted, wsSettingsLoaded])
 
   // Bumped on every transcript load so only the newest one is allowed to commit:
   // a fast A → B → A switch would otherwise let B's late response overwrite A's

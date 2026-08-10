@@ -127,8 +127,10 @@ func projectCard(in BoardInput, v View, now time.Time) (View, error) {
 	if prio == "" {
 		prio = "-"
 	}
+	// Clipped: a card title is free-form user text and the header is the one line
+	// every caller pays for, even at tier tiny.
 	v.Header = fmt.Sprintf("CARD %s %q · %s · p:%s · agent:%s · %s önce · asOf %s",
-		card.ID, card.Title, card.BoardState, prio, owner, age(tsSec(card.UpdatedAt), now), hhmmss(now))
+		card.ID, clip(card.Title, 100), card.BoardState, prio, owner, age(tsSec(card.UpdatedAt), now), hhmmss(now))
 
 	var l lines
 	if body := firstNonBlank(card.Description, card.Prompt); body != "" {

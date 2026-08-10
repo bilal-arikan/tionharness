@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/bilal-arikan/tionswarm/internal/billing"
 	"github.com/bilal-arikan/tionswarm/internal/db"
@@ -249,6 +250,29 @@ func (p *Projector) Project(ctx context.Context, ref Ref, level Level, lens Lens
 	default:
 		return View{}, fmt.Errorf("view: unsupported kind %q", ref.Kind)
 	}
+}
+
+// Workspace renders the workspace roll-up AND returns its counters from the
+// same load, for callers (the dashboard) that need both. Going through Project
+// and then counting the store again would give two tallies of the same facts,
+// taken at two different instants — exactly the drift this layer exists to stop.
+func (p *Projector) Workspace(ctx context.Context, level Level, lens Lens) (View, WorkspaceCounts, error) {
+	if p == nil || p.store == nil {
+		return View{}, WorkspaceCounts{}, fmt.Errorf("view: projector has no store")
+	}
+	in, err := p.loadWorkspace(ctx)
+	if err != nil {
+		return View{}, WorkspaceCounts{}, err
+	}
+	// Pin the clock so the text and the counters describe the same instant.
+	if in.Now.IsZero() {
+		in.Now = time.Now()
+	}
+	v, err := ProjectWorkspace(in, level, lens)
+	if err != nil {
+		return View{}, WorkspaceCounts{}, err
+	}
+	return v, CountWorkspace(in, in.Now), nil
 }
 
 // loadWorkspace gathers the roll-up inputs. Every one of these is an in-memory

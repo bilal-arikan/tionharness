@@ -111,6 +111,9 @@ derinlik/çocuk cap'i şart (§8.1).
   Salt-okunur, her ajana açık, kategori `diagnostics`. Ajanın doğal akışı:
   `get_view workspace` → `expand workspace` → ilgili kategoriyi `expand` → gereken dalı
   `get_view full`.
+  Çıktı **4KB'a cap'li** (`view.CapLines`, 2026-08-10): olgun bir workspace'te
+  `expand{category:sessions}` her oturumu satır satır dökerdi. Toplam sayı başlıkta,
+  elenen sayı ise açıkça yazılır — sessizce kısalmış bir liste eksiksiz sanılırdı.
 - **Opsiyonel (ertelendi):** haritayı **MCP resource tree** olarak sun (`view://workspace`
   → alt resource'lar) → herhangi bir MCP istemcisi (Claude Code dahil) gezer.
 
@@ -209,8 +212,22 @@ derinlik/çocuk cap'i şart (§8.1).
   `/children` route'u + `get_view`/`expand` aracı `internal/tools`.
 - **TSK66 ek (backend):** `internal/view/artifact.go`, `automation.go`, `skill.go`,
   `insight.go`, `logs.go` (+ testler); `project.go`'da `Sources`/`WithSources` +
-  view-local `InsightFinding`; `views.go`'da `s.viewProjector(r)` + `findingsSource`
-  adapter.
+  view-local `InsightFinding`; `views.go`'da `s.viewProjector(r)`.
+- **Projector kurulumu tek yerde** (2026-08-10): `internal/tools/viewprojector.go` →
+  `tools.ViewProjector(db, wsName, ViewSources{Skills, Logs})`. Findings adapter'ı
+  (`insight.FindingStore` → `view.FindingsSource`) da buraya taşındı; `api/views.go`,
+  `api/dashboard.go`, `get_view` ve `expand` dördü de bunu çağırır.
+  **Neden `tools` paketi:** skills + insight + logbuf + view'ı birlikte import eden tek
+  paket o; `view` bunu kendi içinde yapamaz (insight → view, ters kenar döngü olur).
+  **Kapattığı hata:** dört çağrı yerinden yalnız biri kaynakları bağlıyordu, dolayısıyla
+  ajanın `get_view{kind:'skill'|'insight'|'logs'}` çağrısı "kaynak yok" derken kullanıcı
+  aynı düğümü Harita'da dolu görüyordu. `ViewSources` bilerek **somut pointer** tutar:
+  nil `*skills.Store` doğrudan arayüz alanına atanırsa arayüz nil OLMAZ ve projeksiyonun
+  `== nil` koruması ıskalar.
+- **`get_view` kind listesi genişledi:** `expand`'in ref verdiği her düğüm artık
+  `get_view` ile de okunabiliyor (`agent`, `budget`, `tools`, `logs`, `artifact`,
+  `automation`, `skill`, `insight`, `category`). Eskiden şema beş kind'a kapalıydı;
+  ajan `expand`'den aldığı ref'i açamıyordu.
 - **Yeni (frontend):** `frontend/src/features/explorer/*`, `types` (ViewRef zaten var,
   yeni Kind literalleri), NavRail + viewRegistry girişi.
 - **Doküman:** bu dosya + `00-GENEL-BAKIS.md` index satırı + iş bitince `05-ILERLEME.md`.

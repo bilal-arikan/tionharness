@@ -250,12 +250,16 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 	// summary of a large entity (today: flow runs) instead of reading its raw state.
 	// Always-on and read-only; it is strictly cheaper than the get_flow_run +
 	// parse-the-state-JSON path it replaces (_Docs/66).
-	builtins = append(builtins, tools.NewGetViewTool(r.db))
+	// WithSources is what keeps the agent's projections identical to the ones the
+	// Explorer map renders: without it the skill / insight / logs nodes would
+	// report their source as unavailable to the agent while the UI showed them.
+	viewSources := tools.ViewSources{Skills: r.skills, Logs: r.logs}
+	builtins = append(builtins, tools.NewGetViewTool(r.db).WithSources(r.wsName, viewSources))
 
 	// expand: the structural drill-down companion to get_view (_Docs/68). Lists a
 	// node's children (the Workspace Explorer map's edges) so an agent can fan out
 	// over the workspace tree cheaply and get_view only the branch that matters.
-	builtins = append(builtins, tools.NewExpandTool(r.db))
+	builtins = append(builtins, tools.NewExpandTool(r.db).WithSources(r.wsName, viewSources))
 
 	// read_lessons / delete_lesson: the agent inspects and prunes the workspace's
 	// auto-collected failure lessons (self-healing). The newest few already ride

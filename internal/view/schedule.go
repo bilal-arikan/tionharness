@@ -46,7 +46,7 @@ func ProjectSchedule(in ScheduleInput, level Level, lens Lens) (View, error) {
 	}
 	if sc.Name != "" {
 		v.Header = fmt.Sprintf("SCHEDULE %s %q · %s · cron %q · asOf %s",
-			sc.ID, sc.Name, state, sc.CronExpr, hhmmss(now))
+			sc.ID, clip(sc.Name, 60), state, sc.CronExpr, hhmmss(now))
 	} else {
 		v.Header = fmt.Sprintf("SCHEDULE %s · %s · cron %q · asOf %s",
 			sc.ID, state, sc.CronExpr, hhmmss(now))

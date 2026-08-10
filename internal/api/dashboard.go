@@ -78,11 +78,14 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 
 	cost, costByDay := dashboardCost(ctx, wsp.DB, days, now)
 
-	// The workspace projection: the same text an agent reads. A failure here is
-	// reported rather than swallowed — a dashboard with a blank summary looks
-	// like an idle workspace.
-	v, err := view.NewProjector(wsp.DB).Project(
-		ctx, view.Ref{Kind: view.KindSpace, ID: view.WorkspaceRefID}, view.LevelCard, view.LensHealth)
+	// The workspace projection: the same text an agent reads, from the same
+	// fully-wired projector every other surface uses (so the header carries the
+	// workspace name here too, and this block stays byte-identical to
+	// GET /api/views/workspace). The counters come out of the SAME load — the
+	// stat tiles and the summary text can therefore never disagree. A failure is
+	// reported rather than swallowed: a dashboard with a blank summary looks like
+	// an idle workspace.
+	v, counts, err := s.viewProjector(r).Workspace(ctx, view.LevelCard, view.LensHealth)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -97,7 +100,7 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 			"elidedUnit": v.ElidedUnit,
 			"handles":    v.Handles,
 		},
-		"counters":       dashboardCounters(sessions, tasks, runs, agents, now),
+		"counters":       counts,
 		"sessionsByDay":  sessionsByDay(sessions, days, now),
 		"runsByDay":      runsByDay(runs, days, now),
 		"tokensByDay":    tokensByDay(ctx, wsp.DB, days, now),
@@ -117,58 +120,10 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// dashboardCounters are the headline numbers shown as stat tiles.
-func dashboardCounters(sessions []db.Session, tasks []db.Task, runs []db.FlowRun,
-	agents []db.Agent, now time.Time) map[string]any {
-
-	activeCutoff := now.Add(-24 * time.Hour).Unix()
-	active, stuck, archived := 0, 0, 0
-	for _, s := range sessions {
-		if s.State == "archived" {
-			archived++
-			continue
-		}
-		if s.UpdatedAt >= activeCutoff {
-			active++
-		}
-		if s.StuckTurns > 0 {
-			stuck++
-		}
-	}
-
-	running, waiting, failed := 0, 0, 0
-	for _, r := range runs {
-		switch r.Status {
-		case db.FlowRunning:
-			running++
-		case db.FlowWaiting:
-			waiting++
-		case db.FlowFailure:
-			failed++
-		}
-	}
-
-	openCards := 0
-	for _, t := range tasks {
-		if t.BoardState != db.BoardDone {
-			openCards++
-		}
-	}
-
-	return map[string]any{
-		"agents":           len(agents),
-		"sessions":         len(sessions),
-		"sessionsActive":   active,
-		"sessionsStuck":    stuck,
-		"sessionsArchived": archived,
-		"tasks":            len(tasks),
-		"tasksOpen":        openCards,
-		"runs":             len(runs),
-		"runsRunning":      running,
-		"runsWaiting":      waiting,
-		"runsFailed":       failed,
-	}
-}
+// The stat tiles are counted by view.CountWorkspace, not here: this handler used
+// to run its own tally of the same sessions/tasks/runs it then asked the view
+// layer to summarise, and two independent counts of one set of facts can drift
+// apart in front of the user. See internal/view.WorkspaceCounts.
 
 // dayKeys returns the last `days` day labels, oldest first, so a chart always
 // has a full x-axis even on days where nothing happened. Without this a quiet

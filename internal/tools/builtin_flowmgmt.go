@@ -344,6 +344,7 @@ func (t ListFlowsTool) Call(ctx context.Context, input json.RawMessage) (string,
 		func(f db.Flow) int64 { return f.UpdatedAt },
 		func(f db.Flow) int64 { return f.CreatedAt },
 		func(f db.Flow) string { return f.Name },
+		func(f db.Flow) string { return f.ID },
 	)
 	if err != nil {
 		return "", err

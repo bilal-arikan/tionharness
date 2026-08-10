@@ -400,6 +400,7 @@ func (t ListSchedulesTool) Call(ctx context.Context, input json.RawMessage) (str
 		func(sc db.Schedule) int64 { return sc.UpdatedAt },
 		func(sc db.Schedule) int64 { return sc.CreatedAt },
 		func(sc db.Schedule) string { return sc.Name },
+		func(sc db.Schedule) string { return sc.ID },
 	)
 	if err != nil {
 		return "", err

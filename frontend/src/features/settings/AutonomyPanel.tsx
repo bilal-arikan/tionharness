@@ -41,7 +41,14 @@ export function AutoTitlePanel({ draft, set }: PanelProps) {
       >
         <select
           value={draft.titleProviderId || ''}
-          onChange={(e) => set('titleProviderId', e.target.value)}
+          onChange={(e) => {
+            // Switching provider drops the model: a model id is only meaningful
+            // for the provider it came from, and silently carrying e.g. an
+            // Anthropic id over to OpenRouter produces a request that only fails
+            // at title time.
+            set('titleProviderId', e.target.value)
+            set('titleModel', '')
+          }}
           className={inputCls}
           disabled={loadingCatalog}
         >
@@ -53,7 +60,10 @@ export function AutoTitlePanel({ draft, set }: PanelProps) {
           ))}
         </select>
       </Field>
-      {selectedProvider && (
+      {/* The model field is shown even with no provider override. titleModel stays
+          in effect on its own (it is applied to whichever agent does the titling),
+          so hiding the input would leave a live setting invisible and uneditable. */}
+      {selectedProvider ? (
         <Field
           label="Başlık modeli"
           hint={
@@ -71,8 +81,11 @@ export function AutoTitlePanel({ draft, set }: PanelProps) {
               list="title-model-suggestions"
             />
           ) : (
+            // value is the stored setting VERBATIM: falling back to models[0]
+            // would paint a concrete model as selected while the saved value is
+            // still "" (provider default), so the form would lie about state.
             <select
-              value={draft.titleModel || selectedProvider.models[0]?.id || ''}
+              value={draft.titleModel || ''}
               onChange={(e) => set('titleModel', e.target.value)}
               className={inputCls}
             >
@@ -93,6 +106,18 @@ export function AutoTitlePanel({ draft, set }: PanelProps) {
               ))}
             </datalist>
           )}
+        </Field>
+      ) : (
+        <Field
+          label="Başlık modeli"
+          hint="Boş = ajanın kendi modeli. Sağlayıcı seçmeden de ucuz bir model adı yazabilirsin (örn. haiku)."
+        >
+          <input
+            value={draft.titleModel || ''}
+            onChange={(e) => set('titleModel', e.target.value)}
+            placeholder="örn. haiku"
+            className={inputCls}
+          />
         </Field>
       )}
     </>

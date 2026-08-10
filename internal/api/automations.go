@@ -83,7 +83,8 @@ func (s *Server) handleListAutomations(w http.ResponseWriter, r *http.Request) {
 		less, err := tools.SortByField(matches, field, asc,
 			func(a db.Automation) int64 { return a.UpdatedAt },
 			func(a db.Automation) int64 { return a.CreatedAt },
-			func(a db.Automation) string { return a.Name })
+			func(a db.Automation) string { return a.Name },
+			func(a db.Automation) string { return a.ID })
 		if err != nil {
 			writeError(w, http.StatusBadRequest, err.Error())
 			return
@@ -402,8 +403,13 @@ func (s *Server) handleDeleteAutomation(w http.ResponseWriter, r *http.Request) 
 }
 
 // handleGenerateAutomationTitle asks the runtime's title model for a short name
-// and updates the automation. The source is built from the automation's trigger
-// kind, target and prompt template.
+// and SUGGESTS it — it does not write. The source is built from the automation's
+// trigger kind, target and prompt template.
+//
+// Suggest-only is deliberate: the button lives inside an edit modal, so writing
+// here would persist a name the user never confirmed (and could not undo by
+// pressing Cancel), while leaving the caller's list showing the old one. The
+// name travels with the modal's normal save instead.
 func (s *Server) handleGenerateAutomationTitle(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	wsp := ws(r)
@@ -436,17 +442,15 @@ func (s *Server) handleGenerateAutomationTitle(w http.ResponseWriter, r *http.Re
 	if auto.PromptTemplate != "" {
 		source += fmt.Sprintf(" prompt=%s", auto.PromptTemplate)
 	}
+	// TitleFor DEGRADES rather than returning empty: on any failure it hands back
+	// FallbackTitle(source), which here would be the raw "Automation: trigger=… prompt=…"
+	// string. Persisting that would silently overwrite the name with the prompt, so
+	// the error has to stop the write, not just get logged.
 	title, err := wsp.Runtime.TitleFor(r.Context(), "", source)
 	if err != nil {
 		s.logger.Warn("automation title generation failed", "id", id, "error", err)
-	}
-	if title == "" {
-		writeError(w, http.StatusInternalServerError, "title generation produced empty result")
+		writeError(w, http.StatusBadGateway, "title generation failed: "+err.Error())
 		return
 	}
-	if err := wsp.DB.SetAutomationName(r.Context(), id, title); writeDBError(w, err, "") {
-		return
-	}
-	auto.Name = title
-	writeJSON(w, http.StatusOK, auto)
+	writeJSON(w, http.StatusOK, map[string]string{"title": title})
 }

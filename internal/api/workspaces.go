@@ -49,7 +49,8 @@ func (s *Server) handleListWorkspaces(w http.ResponseWriter, r *http.Request) {
 		less, err := tools.SortByField(out, field, asc,
 			func(w workspaceListItem) int64 { return w.CreatedAt },
 			func(w workspaceListItem) int64 { return w.CreatedAt },
-			func(w workspaceListItem) string { return w.Name })
+			func(w workspaceListItem) string { return w.Name },
+			func(w workspaceListItem) string { return w.ID })
 		if err != nil {
 			writeError(w, http.StatusBadRequest, err.Error())
 			return

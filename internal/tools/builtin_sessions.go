@@ -100,6 +100,7 @@ func (t ListSessionsTool) Call(ctx context.Context, input json.RawMessage) (stri
 		func(s db.Session) int64 { return s.UpdatedAt },
 		func(s db.Session) int64 { return s.CreatedAt },
 		func(s db.Session) string { return s.Title },
+		func(s db.Session) string { return s.ID },
 	)
 	if err != nil {
 		return "", err

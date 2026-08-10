@@ -60,7 +60,8 @@ func (s *Server) handleListTasks(w http.ResponseWriter, r *http.Request) {
 		less, err := tools.SortByField(matches, field, asc,
 			func(tk db.Task) int64 { return tk.UpdatedAt },
 			func(tk db.Task) int64 { return tk.CreatedAt },
-			func(tk db.Task) string { return tk.Title })
+			func(tk db.Task) string { return tk.Title },
+			func(tk db.Task) string { return tk.ID })
 		if err != nil {
 			writeError(w, http.StatusBadRequest, err.Error())
 			return

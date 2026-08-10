@@ -75,7 +75,7 @@ func ProjectWorkspace(in WorkspaceInput, level Level, lens Lens) (View, error) {
 	}
 	label := "WORKSPACE"
 	if in.Name != "" {
-		label = "WORKSPACE " + fmt.Sprintf("%q", in.Name)
+		label = "WORKSPACE " + fmt.Sprintf("%q", clip(in.Name, 60))
 	}
 	v.Header = fmt.Sprintf("%s · %d ajan · %d oturum (%d aktif) · %d kart · %d koşu · %s tok bugün%s · asOf %s",
 		label, len(in.Agents), len(in.Sessions), st.ActiveSessions, len(in.Tasks),
@@ -117,19 +117,73 @@ func ProjectWorkspace(in WorkspaceInput, level Level, lens Lens) (View, error) {
 	return v, nil
 }
 
+// WorkspaceCounts is the L0 counting pass exposed as data rather than prose.
+//
+// The dashboard's stat tiles used to be counted by a second, independently
+// written loop in the api package, right next to a call that rendered this same
+// projection. Two tallies of the same facts can disagree, and the disagreement
+// would be visible to the user as tiles that contradict the summary block above
+// them. There is one counting pass now; both surfaces read it.
+type WorkspaceCounts struct {
+	Agents           int `json:"agents"`
+	Sessions         int `json:"sessions"`
+	SessionsActive   int `json:"sessionsActive"`
+	SessionsStuck    int `json:"sessionsStuck"`
+	SessionsArchived int `json:"sessionsArchived"`
+	Tasks            int `json:"tasks"`
+	TasksOpen        int `json:"tasksOpen"`
+	Runs             int `json:"runs"`
+	RunsRunning      int `json:"runsRunning"`
+	RunsWaiting      int `json:"runsWaiting"`
+	RunsFailed       int `json:"runsFailed"`
+}
+
+// CountWorkspace runs the L0 pass and returns the counters alone. now may be
+// zero, in which case the current clock is used — the same rule ProjectWorkspace
+// follows, so a caller cannot get counters computed against a different instant
+// than the text.
+func CountWorkspace(in WorkspaceInput, now time.Time) WorkspaceCounts {
+	if now.IsZero() {
+		now = time.Now()
+	}
+	return countsFrom(in, workspaceStats(in, now))
+}
+
+// countsFrom projects an already-computed stats pass onto the exported shape.
+func countsFrom(in WorkspaceInput, st wsStats) WorkspaceCounts {
+	return WorkspaceCounts{
+		Agents:           len(in.Agents),
+		Sessions:         len(in.Sessions),
+		SessionsActive:   st.ActiveSessions,
+		SessionsStuck:    len(st.StuckSessions),
+		SessionsArchived: st.ArchivedSessions,
+		Tasks:            len(in.Tasks),
+		TasksOpen:        st.OpenCards,
+		Runs:             len(in.FlowRuns),
+		RunsRunning:      st.RunsRunning,
+		RunsWaiting:      st.RunsWaiting,
+		RunsFailed:       st.RunsFailed,
+	}
+}
+
 // wsStats are the counts every part of the projection shares, computed once.
 type wsStats struct {
-	ActiveSessions  int
-	StuckSessions   []db.Session
-	CoordinatorRuns int
-	RunsRunning     int
-	RunsWaiting     int
-	RunsFailed      int
-	RunsRecent      int
-	FailedRuns      []db.FlowRun
-	BrokenSchedules []db.Schedule
-	StaleCards      []db.Task
-	FailedCards     []db.Task
+	ActiveSessions int
+	// ArchivedSessions and OpenCards are not rendered by any signal line; they
+	// exist because the dashboard's stat tiles need them and must not count them
+	// a second, independently-written way (see CountWorkspace).
+	ArchivedSessions int
+	OpenCards        int
+	StuckSessions    []db.Session
+	CoordinatorRuns  int
+	RunsRunning      int
+	RunsWaiting      int
+	RunsFailed       int
+	RunsRecent       int
+	FailedRuns       []db.FlowRun
+	BrokenSchedules  []db.Schedule
+	StaleCards       []db.Task
+	FailedCards      []db.Task
 }
 
 // workspaceStats does the L0 counting pass.
@@ -139,6 +193,7 @@ func workspaceStats(in WorkspaceInput, now time.Time) wsStats {
 
 	for _, s := range in.Sessions {
 		if s.State == "archived" {
+			st.ArchivedSessions++
 			continue
 		}
 		if s.UpdatedAt >= activeCutoff {
@@ -174,6 +229,12 @@ func workspaceStats(in WorkspaceInput, now time.Time) wsStats {
 		// ignore the line.
 		if sc.Enabled && sc.LastDeliveryStatus == "error" {
 			st.BrokenSchedules = append(st.BrokenSchedules, sc)
+		}
+	}
+
+	for _, t := range in.Tasks {
+		if t.BoardState != db.BoardDone {
+			st.OpenCards++
 		}
 	}
 

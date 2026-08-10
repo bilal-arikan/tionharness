@@ -253,9 +253,11 @@ export function AutomationModal({
               onClick={async () => {
                 setGeneratingTitle(true)
                 try {
-                  const updated = await api.generateAutomationTitle(editing.id)
-                  setName(updated.name || '')
-                  toast.success('Başlık oluşturuldu')
+                  // Suggestion only — it lands in the form and is persisted by Save,
+                  // so Cancel still discards it.
+                  const { title } = await api.generateAutomationTitle(editing.id)
+                  setName(title)
+                  toast.success('Başlık önerildi — kaydetmeyi unutma')
                 } catch (e) {
                   onError((e as Error).message)
                 } finally {

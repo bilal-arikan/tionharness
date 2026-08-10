@@ -403,7 +403,7 @@ func (m anthropicMessage) MarshalJSON() ([]byte, error) {
 type contentBlock struct {
 	Type string `json:"type"`
 	// text
-	Text string `json:"text"`
+	Text string `json:"text,omitempty"`
 	// tool_use
 	ID    string          `json:"id,omitempty"`
 	Name  string          `json:"name,omitempty"`
@@ -415,6 +415,31 @@ type contentBlock struct {
 	// CacheControl marks a rolling cache breakpoint on the conversation history
 	// (attached to the last block of the last message). See toAnthropicMessages.
 	CacheControl *cacheControl `json:"cache_control,omitempty"`
+}
+
+// MarshalJSON emits `text` per BLOCK TYPE, because the union is one struct but
+// the API validates each type against its own schema:
+//
+//   - text block: `text` is required and must survive even when empty — the
+//     all-empty-message placeholder (see toAnthropicMessages) is a legitimate
+//     `{"type":"text","text":""}`, and dropping the field makes the API reject
+//     the block as missing a required property.
+//   - every other block (tool_use, tool_result): `text` must be ABSENT. The API
+//     rejects unrecognized properties, so an unconditional `"text":""` would 400
+//     every tool-carrying turn.
+//
+// The struct tag alone cannot express both, hence the seam here rather than a
+// blanket omitempty decision on the field.
+func (c contentBlock) MarshalJSON() ([]byte, error) {
+	type alias contentBlock // sheds this method, so json does not recurse
+	if c.Type != "text" {
+		return json.Marshal(alias(c)) // field tag carries omitempty
+	}
+	// The shallower Text field shadows the embedded one, forcing it to be emitted.
+	return json.Marshal(struct {
+		alias
+		Text string `json:"text"`
+	}{alias(c), c.Text})
 }
 
 type anthropicTool struct {

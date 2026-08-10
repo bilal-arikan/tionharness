@@ -262,11 +262,14 @@ func TestListAutomationsFiltersAndPagination(t *testing.T) {
 func TestListSchedulesFiltersAndUpdatedAt(t *testing.T) {
 	ctx := context.Background()
 	d := openTestDB(t)
-	sc1, err := d.CreateSchedule(ctx, db.Schedule{AgentID: "AG1", CronExpr: "0 0 * * *", Prompt: "a", Enabled: true})
+	// Names are set deliberately in REVERSE creation order, so name_asc can only
+	// pass by ordering on the real Name field — not by accidentally falling back
+	// to id or to the store's arrival order.
+	sc1, err := d.CreateSchedule(ctx, db.Schedule{Name: "zeta rapor", AgentID: "AG1", CronExpr: "0 0 * * *", Prompt: "a", Enabled: true})
 	if err != nil {
 		t.Fatalf("create schedule: %v", err)
 	}
-	_, err = d.CreateSchedule(ctx, db.Schedule{AgentID: "AG2", CronExpr: "0 6 * * *", Prompt: "b", Enabled: false})
+	sc2, err := d.CreateSchedule(ctx, db.Schedule{Name: "alfa rapor", AgentID: "AG2", CronExpr: "0 6 * * *", Prompt: "b", Enabled: false})
 	if err != nil {
 		t.Fatalf("create schedule: %v", err)
 	}
@@ -303,14 +306,22 @@ func TestListSchedulesFiltersAndUpdatedAt(t *testing.T) {
 		t.Fatalf("updated_desc first = %q, want %q (just toggled)", ids[0].ID, sc1.ID)
 	}
 
-	// name_* is a documented surrogate for the (absent) name field: orders by id.
+	// Schedules carry a real Name now, so name_* orders by it: "alfa" before "zeta".
 	out, _ = tool.Call(ctx, json.RawMessage(`{"sort":"name_asc"}`))
 	env = parseListEnv(t, out)
 	if err := json.Unmarshal(env.Items, &ids); err != nil {
 		t.Fatalf("items: %v", err)
 	}
-	if ids[0].ID != "SCH1" {
-		t.Fatalf("name_asc first = %q, want SCH1", ids[0].ID)
+	if ids[0].ID != sc2.ID {
+		t.Fatalf("name_asc first = %q, want %q (\"alfa rapor\")", ids[0].ID, sc2.ID)
+	}
+	out, _ = tool.Call(ctx, json.RawMessage(`{"sort":"name_desc"}`))
+	env = parseListEnv(t, out)
+	if err := json.Unmarshal(env.Items, &ids); err != nil {
+		t.Fatalf("items: %v", err)
+	}
+	if ids[0].ID != sc1.ID {
+		t.Fatalf("name_desc first = %q, want %q (\"zeta rapor\")", ids[0].ID, sc1.ID)
 	}
 }
 

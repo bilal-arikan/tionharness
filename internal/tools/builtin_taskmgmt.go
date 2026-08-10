@@ -123,6 +123,7 @@ func (t ListTasksTool) Call(ctx context.Context, input json.RawMessage) (string,
 		func(tk db.Task) int64 { return tk.UpdatedAt },
 		func(tk db.Task) int64 { return tk.CreatedAt },
 		func(tk db.Task) string { return tk.Title },
+		func(tk db.Task) string { return tk.ID },
 	)
 	if err != nil {
 		return "", err

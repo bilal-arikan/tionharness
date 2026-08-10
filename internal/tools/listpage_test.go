@@ -91,34 +91,87 @@ func TestPageResultEnvelope(t *testing.T) {
 	}
 }
 
-func TestSortByFieldDescTiesPreserveOrder(t *testing.T) {
-	// TSK68 review finding: the desc branch used to negate the ascending
-	// comparison, which made EQUAL keys compare "i < j" in both directions (no
-	// strict weak ordering). sort.SliceStable then reversed equal-key rows
-	// (a b c d → d c b a) instead of preserving their order, and asc/desc were
-	// not inverses. Regression: with all timestamps equal, both directions must
-	// keep the original order.
-	type row struct {
-		ID  string
-		Upd int64
-	}
-	rows := []row{{"a", 100}, {"b", 100}, {"c", 100}, {"d", 100}}
-	less, err := SortByField(rows, "updated", false,
-		func(r row) int64 { return r.Upd },
-		func(r row) int64 { return 0 },
-		nil,
+type sortRow struct {
+	ID  string
+	Upd int64
+}
+
+// sortIDs sorts a copy of rows by the resolved key and returns the id sequence.
+func sortIDs(t *testing.T, rows []sortRow, field string, asc bool) []string {
+	t.Helper()
+	cp := append([]sortRow(nil), rows...)
+	less, err := SortByField(cp, field, asc,
+		func(r sortRow) int64 { return r.Upd },
+		func(r sortRow) int64 { return 0 },
+		func(r sortRow) string { return r.ID },
+		func(r sortRow) string { return r.ID },
 	)
 	if err != nil {
 		t.Fatalf("SortByField: %v", err)
 	}
-	sort.SliceStable(rows, less)
-	want := []string{"a", "b", "c", "d"}
-	for i, r := range rows {
-		if r.ID != want[i] {
-			t.Fatalf("desc with equal keys = %v, want %v (ties must keep original order)",
-				[]string{rows[0].ID, rows[1].ID, rows[2].ID, rows[3].ID}, want)
+	sort.SliceStable(cp, less)
+	out := make([]string, len(cp))
+	for i, r := range cp {
+		out[i] = r.ID
+	}
+	return out
+}
+
+func TestSortByFieldTiesAreDeterministic(t *testing.T) {
+	// TSK68 review findings, both about EQUAL sort keys:
+	//
+	//  1. The desc branch used to negate the ascending comparison, so equal keys
+	//     compared "i < j" in both directions — no strict weak ordering.
+	//  2. Ties then fell through to sort.SliceStable's input order, which is Go
+	//     MAP-ITERATION order (see db.dbList): randomized per call. Since paging
+	//     issues offset=0 and offset=20 as separate calls, a reader skipped rows
+	//     and saw others twice.
+	//
+	// The id tiebreak fixes both: ties resolve by id, so the order is identical
+	// no matter how the store handed the rows over, and asc/desc stay inverses.
+	rows := []sortRow{{"a", 100}, {"b", 100}, {"c", 100}, {"d", 100}}
+	shuffled := []sortRow{{"c", 100}, {"a", 100}, {"d", 100}, {"b", 100}}
+
+	asc := sortIDs(t, rows, "updated", true)
+	if want := []string{"a", "b", "c", "d"}; !slicesEqual(asc, want) {
+		t.Fatalf("asc with equal keys = %v, want %v", asc, want)
+	}
+	// A different arrival order must produce the SAME result — this is the
+	// property that makes paging safe.
+	if got := sortIDs(t, shuffled, "updated", true); !slicesEqual(got, asc) {
+		t.Fatalf("arrival order leaked into the result: %v vs %v", got, asc)
+	}
+	// desc is the exact reverse of asc.
+	desc := sortIDs(t, rows, "updated", false)
+	if want := []string{"d", "c", "b", "a"}; !slicesEqual(desc, want) {
+		t.Fatalf("desc with equal keys = %v, want %v", desc, want)
+	}
+}
+
+// TestSortByFieldRequiresID: the tiebreak is mandatory, so no future call site
+// can silently reintroduce map-order-dependent paging.
+func TestSortByFieldRequiresID(t *testing.T) {
+	_, err := SortByField([]sortRow{}, "updated", true,
+		func(r sortRow) int64 { return r.Upd },
+		func(r sortRow) int64 { return 0 },
+		nil,
+		nil,
+	)
+	if err == nil {
+		t.Fatal("want error when the id tiebreak is missing")
+	}
+}
+
+func slicesEqual(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
 		}
 	}
+	return true
 }
 
 func TestSplitTagsAndHasAllTags(t *testing.T) {

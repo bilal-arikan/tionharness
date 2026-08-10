@@ -129,6 +129,7 @@ func (t ListWorkspacesTool) Call(ctx context.Context, input json.RawMessage) (st
 		func(w WorkspaceInfo) int64 { return w.CreatedAt },
 		func(w WorkspaceInfo) int64 { return w.CreatedAt },
 		func(w WorkspaceInfo) string { return w.Name },
+		func(w WorkspaceInfo) string { return w.ID },
 	)
 	if err != nil {
 		return "", err

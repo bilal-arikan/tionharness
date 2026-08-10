@@ -199,8 +199,9 @@ export function makeHubHandlers(ctx: HubApplyCtx): SessionStreamHandlers {
       } else steps = [...steps, st]
     } else {
       // A final tool step replaces the matching streaming tool_delta placeholder
-      // if one was emitted earlier. The proper fix is server-side tombstone
-      // publishing to the hub; this is the frontend safety net.
+      // if one was emitted earlier. The server publishes a tombstone for this
+      // (KindTombstone) and normally gets there first; this is the belt-and-
+      // braces path for a window that missed the ephemeral tombstone event.
       if (st.kind === 'tool' && st.id) {
         steps = steps.filter((s) => !(s.kind === 'tool_delta' && s.id === st.id))
       }

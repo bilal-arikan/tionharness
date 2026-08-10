@@ -55,7 +55,8 @@ func (s *Server) handleListSchedules(w http.ResponseWriter, r *http.Request) {
 		less, err := tools.SortByField(matches, field, asc,
 			func(sc db.Schedule) int64 { return sc.UpdatedAt },
 			func(sc db.Schedule) int64 { return sc.CreatedAt },
-			func(sc db.Schedule) string { return sc.Name })
+			func(sc db.Schedule) string { return sc.Name },
+			func(sc db.Schedule) string { return sc.ID })
 		if err != nil {
 			writeError(w, http.StatusBadRequest, err.Error())
 			return
@@ -272,8 +273,13 @@ func (s *Server) handleDeleteSchedule(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleGenerateScheduleTitle asks the runtime's title model for a short name
-// and updates the schedule. The source is built from the schedule's own prompt,
-// cron schedule and target (agent or flow).
+// and SUGGESTS it — it does not write. The source is built from the schedule's
+// own prompt, cron schedule and target (agent or flow).
+//
+// Suggest-only is deliberate: the button lives inside an edit modal, so writing
+// here would persist a name the user never confirmed (and could not undo by
+// pressing Cancel), while leaving the caller's list showing the old one. The
+// name travels with the modal's normal save instead.
 func (s *Server) handleGenerateScheduleTitle(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	wsp := ws(r)
@@ -295,20 +301,15 @@ func (s *Server) handleGenerateScheduleTitle(w http.ResponseWriter, r *http.Requ
 			source += fmt.Sprintf(" agent=%s", ag.Name)
 		}
 	}
+	// TitleFor DEGRADES rather than returning empty: on any failure it hands back
+	// FallbackTitle(source), which here would be the raw "Schedule: cron=… prompt=…"
+	// string. Persisting that would silently overwrite the name with the prompt, so
+	// the error has to stop the write, not just get logged.
 	title, err := wsp.Runtime.TitleFor(r.Context(), "", source)
 	if err != nil {
 		s.logger.Warn("schedule title generation failed", "id", id, "error", err)
-	}
-	if title == "" {
-		writeError(w, http.StatusInternalServerError, "title generation produced empty result")
+		writeError(w, http.StatusBadGateway, "title generation failed: "+err.Error())
 		return
 	}
-	if err := wsp.DB.SetScheduleName(r.Context(), id, title); writeDBError(w, err, "") {
-		return
-	}
-	if err := wsp.Scheduler.Reload(r.Context()); err != nil {
-		s.logger.Warn("scheduler reload failed", "error", err)
-	}
-	sc.Name = title
-	writeJSON(w, http.StatusOK, sc)
+	writeJSON(w, http.StatusOK, map[string]string{"title": title})
 }

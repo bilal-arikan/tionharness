@@ -121,7 +121,9 @@ export function ExplorerView({ onError, onOpenSession, focusNode, onFocusNode }:
           )}
           {/* Keyed by the ref so switching nodes resets the panel's own drill-trail. */}
           <div className="min-h-0 flex-1 overflow-auto">
-            <ViewPanel key={refToString(selectedRef)} target={selectedRef} embedded />
+            {/* The header's lens drives the panel too, so the map and the summary
+                beside it always describe the workspace through the same lens. */}
+            <ViewPanel key={refToString(selectedRef)} target={selectedRef} embedded lens={lens} />
           </div>
         </aside>
       </div>
