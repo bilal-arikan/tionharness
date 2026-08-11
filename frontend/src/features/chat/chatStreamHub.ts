@@ -13,6 +13,8 @@ import { emitToast } from '@/shared/lib/notifyBus'
 import type { PendingAsk } from './AskPrompt'
 import type { PendingItem } from './PendingTray'
 
+import { withAdded, withRemoved, withoutKey } from './chatStreamHelpers'
+
 // TurnEntry mirrors internal/turnqueue.Entry: one turn holding (or queued for) the
 // session's admission slot. `kind` names the entry path, so the tray can say WHAT a
 // message is waiting behind rather than just "meşgul".
@@ -36,7 +38,6 @@ function turnKindLabel(e: TurnEntry): string {
   const base = byKind[e.kind] ?? 'Tur çalışıyor'
   return e.label && e.kind === 'command' ? `${e.label} çalışıyor` : base
 }
-import { withAdded, withRemoved, withoutKey } from './chatStreamHelpers'
 
 // Interaction ids already announced (sound + OS toast), so the SAME pending
 // prompt is not re-announced when the hub replays it — a reconnect, a session
