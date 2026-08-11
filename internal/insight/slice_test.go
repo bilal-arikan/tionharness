@@ -26,7 +26,7 @@ func TestBuildSliceReportsWhatItDropped(t *testing.T) {
 	s := &Scanner{sliceCap: 400}
 	msgs := []db.Message{errStepsMsg(40, strings.Repeat("x", 40))}
 
-	out := s.buildSlice(db.Session{ID: "SES1", Title: "t"}, msgs, nil)
+	out := s.buildSlice(Lens{}, db.Session{ID: "SES1", Title: "t"}, msgs, nil)
 
 	if !strings.Contains(out, "more error/recovery step(s) omitted for size") {
 		t.Fatalf("dropped steps were not reported:\n%s", out)
@@ -44,7 +44,7 @@ func TestBuildSliceKeepsRecordsWholeAtTheBoundary(t *testing.T) {
 	s := &Scanner{sliceCap: 400}
 	msgs := []db.Message{errStepsMsg(40, strings.Repeat("y", 40))}
 
-	out := s.buildSlice(db.Session{ID: "SES1", Title: "t"}, msgs, nil)
+	out := s.buildSlice(Lens{}, db.Session{ID: "SES1", Title: "t"}, msgs, nil)
 
 	// The old byte-slice would end the payload mid-token. Now the last rendered
 	// step line ends with the step's own text, never a partial word boundary
@@ -71,7 +71,7 @@ func TestBuildSliceEmitsBothSectionsWhenEverythingFits(t *testing.T) {
 		{Type: db.DebugGuardrail, Name: "loop_detected", Detail: "aynı araç 5 kez"},
 	}
 
-	out := s.buildSlice(db.Session{ID: "SES1", Title: "auth"}, msgs, events)
+	out := s.buildSlice(Lens{}, db.Session{ID: "SES1", Title: "auth"}, msgs, events)
 
 	for _, want := range []string{
 		`SESSION SES1 — "auth"`,
@@ -103,7 +103,7 @@ func TestBuildSliceStepsOutrankEvents(t *testing.T) {
 		})
 	}
 
-	out := s.buildSlice(db.Session{ID: "SES1", Title: "t"}, msgs, events)
+	out := s.buildSlice(Lens{}, db.Session{ID: "SES1", Title: "t"}, msgs, events)
 
 	steps := strings.Count(out, "- [error] reason=")
 	if steps == 0 {
@@ -112,5 +112,67 @@ func TestBuildSliceStepsOutrankEvents(t *testing.T) {
 	// The events section still announces its omission rather than vanishing.
 	if !strings.Contains(out, "## Debug events") {
 		t.Errorf("events section header missing:\n%s", out)
+	}
+}
+
+// The prompt-cache surface is OPT-IN: a lens that did not ask for it must not be
+// charged tokens for cache events, and a lens that DID ask must receive the
+// attributed cause, the cold prefix size, the measured waste and the interleaved
+// epoch events (the adopt-vs-unexplained distinction depends on them).
+func TestBuildSliceCacheScope(t *testing.T) {
+	s := &Scanner{sliceCap: 4000}
+	events := []db.DebugEvent{
+		{Type: db.DebugEpoch, Name: "created", Time: 1_700_000_000_000},
+		{Type: db.DebugCacheBreak, Name: "ttl-or-server-eviction", Detail: "önek soğudu",
+			CacheWrite: 9000, In: 120, WasteUSD: 0.0213, WasteEstimated: true, Time: 1_700_003_600_000},
+	}
+
+	// No cache scope → the section is absent entirely.
+	plain := s.buildSlice(Lens{}, db.Session{ID: "SES1", Title: "t"}, nil, events)
+	if strings.Contains(plain, "cache_break") || strings.Contains(plain, "Prompt-cache events") {
+		t.Fatalf("a lens without scope:[cache] must not receive cache events:\n%s", plain)
+	}
+
+	// With cache scope → cause, cold size, waste and the epoch event all present.
+	out := s.buildSlice(Lens{Scope: []string{"debug", ScopeCache}}, db.Session{ID: "SES1", Title: "t"}, nil, events)
+	for _, want := range []string{
+		"Prompt-cache events",
+		"cause=ttl-or-server-eviction",
+		"coldTokens=9120",
+		"wasteUsd=0.0213(est)",
+		"[epoch] at=",
+		"created",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("cache slice missing %q:\n%s", want, out)
+		}
+	}
+	// Timestamps must be present: the cadence lens reasons about the GAP between
+	// events, so a slice without them cannot answer its own question.
+	if !strings.Contains(out, "2023-11-14") {
+		t.Errorf("cache lines must carry a readable timestamp:\n%s", out)
+	}
+}
+
+// extractSignals must index a cache break by its attributed CAUSE, so the two
+// cache lenses (ordering vs cooling) can prefilter on opposite causes of the same
+// event type — and flag measured waste separately.
+func TestExtractSignalsCacheCause(t *testing.T) {
+	sig := extractSignals(nil, []db.DebugEvent{
+		{Type: db.DebugCacheBreak, Name: "ttl-or-server-eviction", WasteUSD: 0.01},
+		{Type: db.DebugCacheBreak, Name: "ttl-or-server-eviction"},
+		{Type: db.DebugCacheBreak, Name: "model-changed"},
+	})
+	if got := sig.DebugEvents["cache_break"]; got != 3 {
+		t.Errorf("bare cache_break count = %d, want 3", got)
+	}
+	if got := sig.DebugEvents["cache_break:ttl-or-server-eviction"]; got != 2 {
+		t.Errorf("ttl cause count = %d, want 2", got)
+	}
+	if got := sig.DebugEvents["cache_break:model-changed"]; got != 1 {
+		t.Errorf("model cause count = %d, want 1", got)
+	}
+	if got := sig.DebugEvents["cooling_waste"]; got != 1 {
+		t.Errorf("cooling_waste = %d, want 1 (only the event carrying WasteUSD)", got)
 	}
 }

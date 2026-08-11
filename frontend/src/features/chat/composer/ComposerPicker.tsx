@@ -64,14 +64,21 @@ export function ComposerPicker({
           {options.map((o) => (
             <button
               key={o.value || 'default'}
+              type="button"
+              disabled={o.disabled}
+              aria-disabled={o.disabled || undefined}
+              title={o.disabled ? o.hint : undefined}
               onClick={() => {
+                if (o.disabled) return
                 onChange?.(o.value)
                 setOpen(false)
               }}
               className={`flex w-full items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-left text-sm ${
-                o.value === value
-                  ? 'bg-[var(--color-accent-soft)] text-[var(--color-text)]'
-                  : 'text-[var(--color-text-dim)] hover:bg-[var(--color-surface)]'
+                o.disabled
+                  ? 'cursor-not-allowed opacity-40'
+                  : o.value === value
+                    ? 'bg-[var(--color-accent-soft)] text-[var(--color-text)]'
+                    : 'text-[var(--color-text-dim)] hover:bg-[var(--color-surface)]'
               }`}
             >
               <span className="flex items-center gap-1.5 font-medium text-[var(--color-text)]">

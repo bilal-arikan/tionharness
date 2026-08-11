@@ -32,8 +32,9 @@ func (RequestConfirmationTool) Def() providers.ToolDef {
 		Name: "request_confirmation",
 		Description: "Ask the user to confirm a risky, destructive or irreversible action " +
 			"(deleting data, spending money, sending something external) BEFORE doing it. " +
-			"Blocks until the user decides. Returns 'confirmed' or 'denied' — only proceed " +
-			"with the action when the result is 'confirmed'.",
+			"Blocks until the user decides. Returns 'confirmed', 'denied', or 'ambiguous: <answer>' " +
+			"when the reply is unrecognized free text — only proceed with the action when the result " +
+			"is 'confirmed' (treat 'ambiguous' as not confirmed).",
 		InputSchema: json.RawMessage(`{
   "type": "object",
   "properties": {

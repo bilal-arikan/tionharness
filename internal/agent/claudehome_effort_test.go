@@ -74,12 +74,13 @@ func TestEnsureClaudeHomeEffortLevel(t *testing.T) {
 // TestCLIEffortLevel: ThinkingLevel → effortLevel mapping. Empty ("Kapalı"),
 // "off" and unknown pin "high" — thinking is disabled separately for those
 // levels (Request.DisableThinking) and high effort keeps simple-task batching.
+// xhigh/max pass through so the deep-reasoning tiers reach the CLI.
 func TestCLIEffortLevel(t *testing.T) {
 	cases := map[string]string{
 		"":        "high",
 		"high":    "high",
-		"xhigh":   "high",
-		"max":     "high",
+		"xhigh":   "xhigh",
+		"max":     "max",
 		"unknown": "high",
 		"off":     "high",
 		"medium":  "medium",
@@ -111,5 +112,28 @@ func TestWriteCLISettingsCarriesEffort(t *testing.T) {
 	}
 	if !strings.Contains(string(b), `"effortLevel": "high"`) {
 		t.Errorf("effortLevel missing from per-turn settings: %s", b)
+	}
+}
+
+// TestWriteCLISettingsClampsMaxToXhigh: Claude Code's settings.json enum rejects
+// "max", so the per-turn file must carry xhigh (the floor); the provider lifts it
+// to max via CLAUDE_CODE_EFFORT_LEVEL. A file "effortLevel":"max" would be
+// silently downgraded to high by the CLI, defeating the deep-work tier.
+func TestWriteCLISettingsClampsMaxToXhigh(t *testing.T) {
+	rt, _ := newTestRuntime(t, t.TempDir())
+	path, cleanup, err := rt.writeCLISettings(context.Background(), nil, "max")
+	if err != nil {
+		t.Fatalf("writeCLISettings: %v", err)
+	}
+	t.Cleanup(cleanup)
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read settings file: %v", err)
+	}
+	if !strings.Contains(string(b), `"effortLevel": "xhigh"`) {
+		t.Errorf("max must be clamped to xhigh in the settings file, got: %s", b)
+	}
+	if strings.Contains(string(b), `"max"`) {
+		t.Errorf("settings file must not carry the rejected max value: %s", b)
 	}
 }

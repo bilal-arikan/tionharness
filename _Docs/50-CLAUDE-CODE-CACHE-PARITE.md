@@ -177,6 +177,26 @@ graph LR
   `toolsCached`/`systemCached` = true, **özet mesajı cache'li**. Dinamik notu: "tail, cache-dışı,
   her tur taze". Bu, bu oturumda konuştuğumuz **önizleme-doğruluk boşluğunu** da kapatır.
 
+### P7 — Chat yüzeyi: kırılımı sohbette göster ✅ UYGULANDI (2026-08-11)
+> **Durum:** P4 tespiti/atfı zaten vardı ama yalnız oturum-seviyesi Debug kartında görünüyordu;
+> mesaj başına hiç yoktu (`GetTurnDebug` `cache_break` olayını toplamıyordu). Beş yüzey eklendi
+> — detay ve kasıt tablosu: `_Docs\07-CHAT-UX.md` → "Prompt-cache görünürlüğü".
+>
+> - **Backend:** `db.TurnDebug` += `CacheBreaks/CacheBreakReason/CacheBreakDetail/
+>   CoolingWasteUSD/CoolingWasteEstimated` + `GetTurnDebug`'a `DebugCacheBreak` dalı (olaylar
+>   zaten `TurnID` damgalı — `emitDebug`). Yeni `agent.StepCacheBreak` adımı +
+>   `TurnStep.ColdTokens`; `noteCacheOutcome` "bir şey değişti" sebeplerinde
+>   `Runtime.pendingCacheBreaks`'e tek-atımlık not bırakır, `ConsumeCacheBreak` boşaltır,
+>   `api.consumeCacheBreakLead` turun kalıcı izinin **başına** ekler (canlı SSE yok — sebep
+>   `07`'de). TTL kırılımı bilerek kartsız.
+> - **Frontend:** `CacheBreakCard` (katlanabilir, `prompt-or-tools-changed`'de epoch uyarısı +
+>   "Bağlamı yenile" aksiyonu), `CacheWarmthStrip` (composer üstü geri sayım + oturumun soğuk
+>   tur sayısı), `ColdCacheDivider` (transkriptte TTL'i aşan boşluk ayracı), `CacheWarmthDot`
+>   (tur altbilgisinde 🔥/❄), `MessageDebugPanel`'de sebep + kaçınılabilir fazla ödeme.
+> - **Testler:** `db.TestGetTurnDebugCacheBreak` (tur izolasyonu + waste), `agent.
+>   TestInlineCacheBreak` / `TestConsumeCacheBreak` / `TestCacheBreakStep`. Tüm Go suite +
+>   frontend `tsc`/vitest/build yeşil.
+
 ## 3. Sıralama / bağımlılıklar
 `P1` (mesaj cache'ini açar) → `P2` (özet cache'i) → `P6` (önizleme hizası) → `P4` (telemetriyle
 kanıt) → `P3`/`P5` (opsiyonel/sağlamlaştırma). claude-cli yolu zaten optimal — **regresyon

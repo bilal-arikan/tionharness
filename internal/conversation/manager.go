@@ -6,6 +6,7 @@ package conversation
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"os"
 	"strconv"
@@ -227,6 +228,7 @@ type Prepared struct {
 	Messages      []providers.Message // the turns to actually send
 	ContextTokens int                 // estimated tokens of summary + sent messages
 	Compacted     bool                // whether this call folded new messages into the summary
+	FoldedMsgs    int                 // messages folded into the summary this call (0 unless Compacted)
 	Pressure      float64             // ContextTokens / maxTokens (0..1+); 0 when maxTokens <= 0
 }
 
@@ -255,8 +257,10 @@ func (m *Manager) Prepare(ctx context.Context, database *db.DB, provider provide
 	// preserves the previous message-only behaviour exactly.
 	overhead := contextOverheadFrom(ctx)
 	compacted := false
+	foldedCount := 0
 	if before := EstimateTokens(summary, pending); before+overhead > maxTokens {
 		if fold, keepTail, newCount, ok := foldBoundary(history, start, keepRecent); ok {
+			foldedCount = len(fold)
 			// PreCompact lifecycle hook seam: fire before the fold runs (Claude Code
 			// parity). "auto" = the routine budgeted fold (manual /compact passes
 			// "manual" via its own path).
@@ -271,10 +275,15 @@ func (m *Manager) Prepare(ctx context.Context, database *db.DB, provider provide
 			}
 			pending = keepTail
 			compacted = true
+			afterTokens := EstimateTokens(summary, pending) + overhead
 			m.log(slog.LevelInfo, "context compacted (rolling summary fold)",
 				"session", session.ID, "agent", agent.ID,
 				"folded_msgs", len(fold), "before_tokens", before, "overhead_tokens", overhead,
-				"after_tokens", EstimateTokens(summary, pending)+overhead, "budget", maxTokens)
+				"after_tokens", afterTokens, "budget", maxTokens)
+			// Journal the fold to debug.jsonl (true footprint = messages + overhead,
+			// the same basis the fold gate above uses).
+			recordCompactionDebug(database, session.ID, agent.ID, "auto",
+				len(fold), before+overhead, afterTokens, maxTokens, len(renderDBMessages(fold)))
 		}
 	}
 
@@ -289,11 +298,16 @@ func (m *Manager) Prepare(ctx context.Context, database *db.DB, provider provide
 		pressure = float64(contextTokens+overhead) / float64(maxTokens)
 	}
 
+	foldedMsgs := 0
+	if compacted {
+		foldedMsgs = foldedCount
+	}
 	return Prepared{
 		Summary:       summary,
 		Messages:      toProviderMessages(ctx, pending),
 		ContextTokens: contextTokens,
 		Compacted:     compacted,
+		FoldedMsgs:    foldedMsgs,
 		Pressure:      pressure,
 	}, nil
 }
@@ -306,10 +320,11 @@ func (m *Manager) ForceCompact(ctx context.Context, database *db.DB, provider pr
 	summary = session.Summary
 	start := clampStart(session.SummaryMsgCount, len(history))
 	_, keepRecent := m.limits()
-	fold, _, newCount, ok := foldBoundary(history, start, keepRecent)
+	fold, keepTail, newCount, ok := foldBoundary(history, start, keepRecent)
 	if !ok {
 		return 0, summary, nil // not enough to compact
 	}
+	beforeTokens := EstimateTokens(summary, history[start:])
 	newSummary, err := m.summarize(ctx, database, provider, agent, summary, fold)
 	if err != nil {
 		return 0, "", err
@@ -319,6 +334,10 @@ func (m *Manager) ForceCompact(ctx context.Context, database *db.DB, provider pr
 	}
 	m.log(slog.LevelInfo, "context compacted (manual /compact)",
 		"session", session.ID, "agent", agent.ID, "folded_msgs", len(fold))
+	// Journal the manual fold too; budget 0 → omitted from Detail (manual is
+	// budget-independent).
+	recordCompactionDebug(database, session.ID, agent.ID, "manual",
+		len(fold), beforeTokens, EstimateTokens(newSummary, keepTail), 0, len(renderDBMessages(fold)))
 	return len(fold), newSummary, nil
 }
 
@@ -408,6 +427,36 @@ func summarizeRendered(ctx context.Context, database *db.DB, provider providers.
 	}
 	recordCompaction(ctx, database, agent, resp.Usage)
 	return strings.TrimSpace(resp.Text), nil
+}
+
+// recordCompactionDebug appends a structured "compaction" event to the session's
+// debug journal (debug.jsonl) so every fold — routine budgeted (trigger "auto")
+// or manual /compact ("manual") — is observable in the Debug modal, the
+// read_session_debug tool and the debug summary, not only in the in-app Logs.
+// This is the fix for the "compaction ran on a spawned/coordinator turn but I
+// can't see where it ran" gap: the fold happens in this layer regardless of the
+// turn kind, so journaling it here covers every path in one choke point.
+//
+// Best-effort and side-effect-only: a journal write failure is swallowed so
+// observability can never break a turn (AppendDebugEvent takes only its own lock).
+// Token figures ride Detail (not In/Out) because the debug summary sums In/Out for
+// llm_call events only — keeping them off the compaction event leaves the token
+// series clean while SavedBytes feeds the summary's existing compaction rollup.
+func recordCompactionDebug(database *db.DB, sessionID, agentID, trigger string, foldedMsgs, beforeTokens, afterTokens, budget, savedBytes int) {
+	if database == nil || sessionID == "" {
+		return
+	}
+	detail := fmt.Sprintf("folded %d msgs · %d→%d tokens", foldedMsgs, beforeTokens, afterTokens)
+	if budget > 0 {
+		detail += fmt.Sprintf(" · budget %d", budget)
+	}
+	_ = database.AppendDebugEvent(sessionID, db.DebugEvent{
+		Type:       db.DebugCompaction,
+		AgentID:    agentID,
+		Name:       trigger,
+		SavedBytes: savedBytes,
+		Detail:     detail,
+	}, 0)
 }
 
 // renderDBMessages flattens stored turns to the "role: text" transcript the

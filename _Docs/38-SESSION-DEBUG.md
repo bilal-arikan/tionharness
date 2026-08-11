@@ -86,7 +86,7 @@ kapalıysa veya oturum yoksa no-op'tur (best-effort, hata yutulur).
 | `tool` | `toolloop.go` native döngü — `reg.Call`/`CallStream` çevresi (sıkıştırma öncesi boyut) |
 | `hook` | `hooks.go` — her eşleşen Pre/PostToolUse hook'u kararıyla |
 | `error` | `toolloop.go fail()` + permission/budget hataları |
-| `compaction` | `toolloop.go` — reaktif compact başarılı olduğunda |
+| `compaction` | İki yol: (a) `toolloop.go` — reaktif (bağlam-taşması kurtarması) compact; (b) `conversation/manager.go` — rutin bütçe-tabanlı rolling-summary fold'u (`Prepare`, `Name="auto"`) **ve** manuel `/compact` (`ForceCompact`, `Name="manual"`). (b) `SavedBytes` + `Detail`("folded N msgs · before→after tokens") taşır; her tur-türünde (chat/spawned/wake/koordinatör) tek noktadan yazılır — böylece spawned turda katlanan bir fold da görünür olur |
 | `recovery` | `toolloop.go` — çıktı-cap resume kurtarması |
 | `cache_break` | `cachebreak.go noteCacheOutcome` — sıcak prompt-cache öneki kaybolup soğuk yeniden yazıldığında (yalnız ana konuşma turları: chat/task/schedule/flow/spawn); sebep atıflı (`model-changed`/`prompt-or-tools-changed`/`ttl-or-server-eviction`). Claude Code `promptCacheBreakDetection` muadili — veri zaten `Usage.Cache*`'te, bu yalnız atıf ekler. **Soğuma israfı:** yalnız `ttl-or-server-eviction` (geç gelen tur öneki soğuttu — model/prompt değişimi meşru geçersizleşmedir, israf değil) durumunda olay `wasteUsd`/`wasteEst` taşır = yeniden yazılan öneğin (native Anthropic `cache_creation`) yazma-tier'ı eksi zamanında okunsa ödenecek okuma-tier'ı (`providers.CoolingWaste`; abonelik sağlayıcıda tahmini). OpenRouter soğuk öneği input'a katıp write saymadığı için orada ~0 |
 
@@ -214,6 +214,11 @@ yanıtın tüm olayları (llm_call/tool/error/recovery/compaction) o mesaja bağ
   per-tool listesi (ad, gecikme, çıktı boyutu, hata). Maliyet API katmanında
   `modelRowsFor` ile (Bütçe ekranıyla aynı fiyatlandırma).
 - **API:** `GET /api/sessions/{id}/turn-debug?turn={replyMessageId}`.
+- **Cache kırılımı (2026-08-11):** rollup artık `cache_break` olaylarını da topluyor →
+  `CacheBreaks` + `CacheBreakReason`/`CacheBreakDetail` (atıflı sebep) +
+  `CoolingWasteUSD`/`CoolingWasteEstimated` (yalnız TTL/eviction dalında dolu).
+  Sıcak/soğuk ayrımı token sayılarından zaten türetilebiliyordu; panelde eksik olan
+  **sebep** buradan gelir. Bkz. `_Docs\50` P7.
 - **claude-cli araçları:** CLI kendi tool-loop'unu sürdüğü için per-tool olaylar
   normalde yayılmaz; `Runtime.emitCLIToolDebug` stream-json trace'inden her araç
   için bir `DebugTool` olayı yayar (boyut + hata; gecikme yalnız native yolda).

@@ -29,7 +29,8 @@ func (ReadSessionDebugTool) Def() providers.ToolDef {
 		Description: "Read this session's structured DEBUG journal — a parallel observability stream " +
 			"separate from the conversation. It captures, per session: turn timings + stop reason, " +
 			"per-LLM-call token spend (input/output/cache) by model, per-tool latency + output size + " +
-			"errors, hook decisions, compaction and recovery events. Use it to self-diagnose and optimise: " +
+			"errors, hook decisions, compaction, recovery, and other lifecycle events (cache-break attribution, " +
+			"sequence repair, guardrail decisions, distilled lessons, prompt-epoch changes). Use it to self-diagnose and optimise: " +
 			"see where tokens and time go, which tools are slow or failing, how often context is compacted.\n\n" +
 			"Default returns a SUMMARY (totals + per-tool + per-model rollups + the slowest tools + " +
 			"heuristic ANOMALIES — slow/failing tools, error bursts, frequent compaction — plus per-turn " +
@@ -41,7 +42,7 @@ func (ReadSessionDebugTool) Def() providers.ToolDef {
   "properties": {
     "session_id": { "type": "string", "description": "Session to inspect (default: the current session)." },
     "summary": { "type": "boolean", "description": "Return an aggregate summary instead of raw events (default true)." },
-    "type": { "type": "string", "enum": ["turn","llm_call","tool","hook","error","compaction","recovery"], "description": "When summary=false, filter raw events to a single type." },
+    "type": { "type": "string", "enum": ["turn","llm_call","tool","hook","error","compaction","recovery","cache_break","repair","guardrail","lesson","epoch"], "description": "When summary=false, filter raw events to a single type." },
     "limit": { "type": "integer", "description": "When summary=false, max newest events to return (default 100, max 1000)." }
   },
   "additionalProperties": false

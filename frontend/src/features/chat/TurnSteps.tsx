@@ -14,11 +14,15 @@ import { DiffCard } from './DiffCard'
 import { HookStep } from './HookStep'
 import { SubagentStep } from './SubagentStep'
 import { ContextChangeCard } from './ContextChangeCard'
+import { CacheBreakCard } from './CacheBreakCard'
 import { isEditToolBase, synthDiffData } from '@/shared/lib/diff'
 import { toolBase } from './tools'
 
 interface Props {
   steps: TurnStep[]
+  // The open session; only the cache-break card uses it (its "refresh context"
+  // remedy targets the session). Absent renders degrade to information only.
+  sessionId?: string
   onOpenFile?: (path: string) => void
   onOpenArtifact?: (id: string) => void
 }
@@ -42,6 +46,7 @@ function stableKey(step: TurnStep, i: number): string {
 function renderStep(
   step: TurnStep,
   key: string,
+  sessionId?: string,
   onOpenFile?: (path: string) => void,
   onOpenArtifact?: (id: string) => void,
 ) {
@@ -57,6 +62,8 @@ function renderStep(
   if (step.kind === 'steer') return <SteerStep key={key} step={step} />
   if (step.kind === 'hook') return <HookStep key={key} step={step} />
   if (step.kind === 'context_change') return <ContextChangeCard key={key} step={step} />
+  if (step.kind === 'cache_break')
+    return <CacheBreakCard key={key} step={step} sessionId={sessionId} />
   if (step.kind === 'tool_delta') return <ToolDeltaStep key={key} step={step} />
   // 'tombstone' is a control signal handled before render (App.onStep); skip.
   if (step.kind === 'tombstone') return null
@@ -100,7 +107,12 @@ function renderStep(
 // is what made scrolling a worker session stutter. The finished turns' `steps`
 // arrays are referentially stable (AssistantTurn memoizes the parse), so only
 // the live turn actually re-renders.
-export const TurnSteps = memo(function TurnSteps({ steps, onOpenFile, onOpenArtifact }: Props) {
+export const TurnSteps = memo(function TurnSteps({
+  steps,
+  sessionId,
+  onOpenFile,
+  onOpenArtifact,
+}: Props) {
   if (!steps.length) return null
   const out: ReactNode[] = []
   for (let i = 0; i < steps.length;) {
@@ -111,7 +123,7 @@ export const TurnSteps = memo(function TurnSteps({ steps, onOpenFile, onOpenArti
       while (j < steps.length && (steps[j].batch ?? 0) === b) j++
       const group = steps.slice(i, j)
       const rendered = group
-        .map((s, k) => renderStep(s, stableKey(s, i + k), onOpenFile, onOpenArtifact))
+        .map((s, k) => renderStep(s, stableKey(s, i + k), sessionId, onOpenFile, onOpenArtifact))
         .filter(Boolean)
       if (rendered.length > 1) {
         // Keyed by the batch id + first step's stable key so the group wrapper
@@ -136,7 +148,7 @@ export const TurnSteps = memo(function TurnSteps({ steps, onOpenFile, onOpenArti
       i = j
       continue
     }
-    const node = renderStep(steps[i], stableKey(steps[i], i), onOpenFile, onOpenArtifact)
+    const node = renderStep(steps[i], stableKey(steps[i], i), sessionId, onOpenFile, onOpenArtifact)
     if (node) out.push(node)
     i++
   }

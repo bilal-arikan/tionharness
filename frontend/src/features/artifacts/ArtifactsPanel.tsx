@@ -83,10 +83,10 @@ function artifactId(a: Artifact): string {
   return a.id
 }
 
-// Order groups: named groups alphabetically (tr) first, ungrouped bucket last.
+// Order groups: ungrouped bucket first, then named groups alphabetically (tr).
 function sortArtifactGroups(a: string, b: string): number {
-  if (a === UNGROUPED) return 1
-  if (b === UNGROUPED) return -1
+  if (a === UNGROUPED) return -1
+  if (b === UNGROUPED) return 1
   return a.localeCompare(b, 'tr')
 }
 
@@ -273,7 +273,7 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
   // Busy flag for the bulk archive / un-archive action on the selection.
   const [bulkArchiveBusy, setBulkArchiveBusy] = useState(false)
 
-  // Filtered artifacts bucketed by group (named groups first, ungrouped last),
+  // Filtered artifacts bucketed by group (ungrouped first, then named groups),
   // with persisted per-group collapse state. Mirrors the Skills screen so both
   // list screens organise the same way. Grouping runs on the already-filtered
   // list so search/origin facets still apply.

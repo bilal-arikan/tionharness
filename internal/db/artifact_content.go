@@ -64,6 +64,23 @@ func (d *DB) workspaceDir() string {
 	return filepath.Join(filepath.Dir(d.root), "workspace")
 }
 
+// sessionWorkingDir returns a session's pinned working directory ("" when the
+// session is unknown or has none). ImportMediaSource uses it as a fallback so a
+// RELATIVE sourcePath an agent writes from its project repo resolves against the
+// repo cwd instead of failing against the workspace sandbox root.
+func (d *DB) sessionWorkingDir(sessionID string) string {
+	if sessionID == "" {
+		return ""
+	}
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	s, ok := d.sessions[sessionID]
+	if !ok {
+		return ""
+	}
+	return strings.TrimSpace(s.WorkingDir)
+}
+
 // artifactSessionDir is the per-session folder segment that collects an
 // artifact's files. Session-scoped artifacts group under their session id;
 // sessionless ones (e.g. manual uploads) share a "_shared" bucket.
@@ -129,6 +146,22 @@ func (d *DB) ImportMediaSource(sessionID, src string) (string, error) {
 		abs = filepath.Join(wsDir, filepath.FromSlash(src))
 	}
 	info, err := os.Stat(abs)
+	wdTried := ""
+	if err != nil && !filepath.IsAbs(src) {
+		// Relative path missed under the workspace sandbox: fall back to the
+		// session's working directory (its project repo cwd) before giving up,
+		// so `create_artifact` with sourcePath like "_Docs/foo.md" resolves the
+		// way the agent's own file tools do.
+		if wd := d.sessionWorkingDir(sessionID); wd != "" {
+			wdTried = wd
+			if abs2, aerr := filepath.Abs(filepath.Join(wd, filepath.FromSlash(src))); aerr == nil {
+				if info2, serr := os.Stat(abs2); serr == nil && !info2.IsDir() {
+					abs, info = abs2, info2
+					err = nil
+				}
+			}
+		}
+	}
 	if err != nil {
 		// An absolute path that doesn't resolve is most often a path handed back by
 		// an MCP server that runs in a container / on a remote host / in a different
@@ -136,6 +169,9 @@ func (d *DB) ImportMediaSource(sessionID, src string) (string, error) {
 		// HERE. Point the caller at the real fix instead of a bare "not found".
 		if filepath.IsAbs(src) {
 			return "", fmt.Errorf("source file not accessible from TionSwarm: %s — an absolute path from an MCP server that runs in a container/remote host or a different filesystem does not resolve here; have that tool return the file CONTENT (e.g. base64) instead of a host path, or reference a file inside the workspace", src)
+		}
+		if wdTried != "" {
+			return "", fmt.Errorf("source file not found in the workspace: %s (resolved to %s; also tried session working dir %s)", src, abs, wdTried)
 		}
 		return "", fmt.Errorf("source file not found in the workspace: %s (resolved to %s)", src, abs)
 	}

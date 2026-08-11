@@ -106,10 +106,12 @@ TionSwarm/
 │   ├── web/                     # embed.go — go:embed all:dist → frontend SPA'yi binary'ye gömer, http.Handler sunar
 │   ├── agent/                   # runtime, worker, executor (RunTask), scheduler (cron), reflector, budget, titler, toolloop, toolsetup, climcp (claude-cli --mcp-config), trace (aktivite izi/StepKind), tunables, flow
 │   ├── conversation/            # token-bütçeli compaction (tokens.go, manager.go, reactive.go, repair.go)
+│   ├── turnqueue/               # per-session tur kabul kuyruğu (tek FIFO, _Docs/58)
 │   ├── orchestration/           # akış graf motoru (model.go, engine.go)
 │   ├── mcp/                     # SDK'sız JSON-RPC istemci: stdio + Streamable HTTP (client.go, manager.go, pool.go)
 │   ├── tools/                   # built-in (fs/shell akan + todo_write/ask_user + artifact + lazy-load meta) + MCP birleşik registry (registry.go, builtin_*.go, activetools.go, builtin_activate.go)
-│   ├── skills/                  # dosya-tabanlı skill sistemi (2 katman: global ~/.tionswarm/skills + workspace/skills); frontmatter-only katalog, lazy body; subskills; koşullu paths:+skill_search (SK-2); ${SKILL_DIR}+bundled files (SK-1); allowed_tools auto-grant (SK-3); provenance (SK-4); varsayılan seeding (defaults/)
+│   ├── skills/                  # dosya-tabanlı skill sistemi (2 katman: global ~/.tionswarm/skills + workspace/skills); frontmatter-only katalog, lazy body; subskills; koşullu paths:+skill_search (SK-2); ${SKILL_DIR}+bundled files (SK-1); allowed_tools auto-grant (SK-3); provenance (SK-4); varsayılan seeding (defaults/) — internal/seed ile sürüm-farkında tazelenir + "Varsayılan"a döndürme
+│   ├── seed/                    # gömülü default ağaçlarının SÜRÜM-FARKINDA tazelenmesi (seed.go, manifest.go): .shipped-versions.json hash ledger'ı ile "kullanıcı düzenledi mi?" tahmin edilmez, kanıtlanır → dokunulmamış dosyalar yeni sürümü alır, düzenlenmişler korunur. Tüketiciler: skills, insight (bkz. _Docs\60 Faz 6.4)
 │   ├── settings/                # uygulama-geneli ayarlar (settings.go, store.go — şifreli settings.json)
 │   ├── logbuf/                  # slog → ring buffer (tüm app+workspace logları); /api/logs (bkz. 12-LOGLAMA.md)
 │   ├── events/                  # Event + Bus (süreç-geneli pub/sub); otonom bildirimler → /api/events SSE

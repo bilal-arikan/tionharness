@@ -157,7 +157,7 @@ export const RULES: Rule[] = [
       const added = ctx.servers.some((s) => s.command.toLowerCase().includes(CBM_TOOL))
       if (!cbm || added) return null
       return {
-        desc: 'codebase-memory-mcp kurulu ama bu workspace’e eklenmemiş. MCP olarak eklersen kod arama/gezinme sub-ms ve düşük token olur; izole store’a yönlenir.',
+        desc: 'codebase-memory-mcp kurulu ama bu workspace’e eklenmemiş. MCP olarak eklersen kod arama/gezinme sub-ms ve düşük token olur.',
         actionLabel: 'MCP’yi ekle',
         act: async () => {
           await api.createMCPServer({

@@ -33,7 +33,7 @@ func (ListSessionsTool) Def() providers.ToolDef {
 		Name: "list_sessions",
 		Description: "List the sessions in this workspace for situational awareness — their kind, " +
 			"title, message counts, age and a short summary. Covers EVERY execution path by default: " +
-			"chat threads plus autonomous runs (spawn/worker, flow, task, schedule). Active (live) " +
+			"chat threads, inbox, plus autonomous runs (spawn/worker, flow, task, schedule). Active (live) " +
 			"sessions are NOT auto-injected into your context, so call this tool whenever you need to " +
 			"see what other work is currently in progress. Returns active sessions of all kinds by " +
 			"default; pass kind:\"...\" to narrow to one kind and state:\"all\" to include past " +
@@ -45,7 +45,7 @@ func (ListSessionsTool) Def() providers.ToolDef {
   "type": "object",
   "properties": {
     "state": { "type": "string", "enum": ["active", "all"], "description": "Which sessions to list (default: active)." },
-    "kind": { "type": "string", "enum": ["chat", "spawned", "worker", "flow", "task", "schedule"], "description": "Narrow to a single session kind. Omit to list all kinds (default)." },
+    "kind": { "type": "string", "enum": ["chat", "inbox", "spawned", "worker", "flow", "task", "schedule"], "description": "Narrow to a single session kind. Omit to list all kinds (default)." },
     "sort": { "type": "string", "enum": ["updated_desc", "updated_asc", "created_desc", "created_asc", "name_asc", "name_desc"], "description": "Result ordering (default updated_desc; name sorts by title)." },
     "limit": { "type": "integer", "description": "Max sessions per page (default 20, max 100). Use with offset to page through all of them." },
     "offset": { "type": "integer", "description": "How many matching sessions to skip before this page (default 0). Pass the offset from a previous reply to get the next page." }

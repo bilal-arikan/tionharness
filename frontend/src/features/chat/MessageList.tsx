@@ -20,6 +20,7 @@ import { UserBubble } from './UserBubble'
 import { PeerTurn } from './PeerTurn'
 import { AssistantTurn } from './AssistantTurn'
 import { agentName, resolveAgent } from '@/shared/lib/agentLookup'
+import { CACHE_TTL_SEC } from '@/features/sessions/sessionDetailFormat'
 
 interface Props {
   messages: Message[]
@@ -406,6 +407,13 @@ export function MessageList({
         <div className="flex w-full flex-col gap-4">
           {messages.map((m, i) => {
             let row: ReactNode
+            // Cold boundary: the gap to the previous message outran the prompt
+            // cache's 1h TTL, so this turn started from a fully cold prefix. Drawn
+            // as a divider (like a date separator) because the cause is the GAP
+            // between two messages, not either message — it answers "why was that
+            // turn expensive?" while scrolling, with no request and no backend field.
+            const gapSec = i > 0 ? m.createdAt - messages[i - 1].createdAt : 0
+            const coldBoundary = gapSec > CACHE_TTL_SEC
             // isLastLive (assistant): the in-flight bubble while streaming. Hoisted
             // here so the row wrapper can expose it as a DOM signal (data-streaming)
             // for external automation to detect turn completion without polling.
@@ -495,7 +503,7 @@ export function MessageList({
               messages.length >= SKIP_OFFSCREEN_MIN_ROWS &&
               i < messages.length - EAGER_TAIL_ROWS &&
               flashId !== m.id
-            return (
+            const rowEl = (
               <div
                 key={m.id}
                 data-msg-id={m.id}
@@ -508,6 +516,13 @@ export function MessageList({
                 style={skipOffscreen ? SKIPPED_ROW : undefined}
               >
                 {row}
+              </div>
+            )
+            if (!coldBoundary) return rowEl
+            return (
+              <div key={`cold-${m.id}`} className="flex flex-col gap-4">
+                <ColdCacheDivider gapSec={gapSec} />
+                {rowEl}
               </div>
             )
           })}
@@ -542,4 +557,30 @@ export function MessageList({
       </div>
     </div>
   )
+}
+
+// ColdCacheDivider marks a gap in the transcript longer than the prompt cache's
+// TTL: everything before it had gone cold, so the turn below re-paid the whole
+// cached prefix. Purely derived from the two timestamps — this is NOT a detected
+// cache_break event (those are attributed server-side and carded separately); it
+// is the ambient "why did this turn cost more" context while scrolling.
+function ColdCacheDivider({ gapSec }: { gapSec: number }) {
+  return (
+    <div
+      className="flex items-center gap-2 px-2 text-[10px] text-[var(--color-text-dim)]"
+      title={`Bu boşluk (${formatGap(gapSec)}) 1sa cache TTL'ini aştı — sonraki tur öneki soğuk olarak yeniden ödedi.`}
+    >
+      <span className="h-px flex-1 bg-[var(--color-border)]" />
+      <span className="shrink-0 opacity-80">❄️ cache soğudu · {formatGap(gapSec)} ara</span>
+      <span className="h-px flex-1 bg-[var(--color-border)]" />
+    </div>
+  )
+}
+
+// formatGap renders a between-messages gap in hours/days (it is always > 1h here).
+function formatGap(sec: number): string {
+  const h = Math.floor(sec / 3600)
+  if (h < 24) return `${h} sa`
+  const d = Math.floor(h / 24)
+  return `${d} gün`
 }

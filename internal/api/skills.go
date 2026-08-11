@@ -297,6 +297,44 @@ func (s *Server) handleSetSkillGroup(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, sk)
 }
 
+// handleRestoreSkill overwrites a shipped skill's SKILL.md with its embedded
+// default, discarding local changes, then reloads the catalog. The deliberate
+// counterpart to the automatic re-seed, which only touches files it can PROVE are
+// untouched prior ships (internal/seed) — an edited skill, or one seeded before
+// the shipped-hash ledger existed, stays frozen until asked from here.
+//
+// Only the GLOBAL tier has shipped defaults. A workspace-tier skill with the same
+// slug is a deliberate override in a different file: restoring "its" default would
+// silently write to a file the user is not looking at, so it is refused.
+func (s *Server) handleRestoreSkill(w http.ResponseWriter, r *http.Request) {
+	slug := r.PathValue("slug")
+	store := ws(r).Runtime.Skills()
+	sk, ok := store.Get(slug)
+	if !ok {
+		writeError(w, http.StatusNotFound, "skill not found")
+		return
+	}
+	if sk.Source != skills.SourceGlobal || !skills.HasDefault(slug) {
+		writeError(w, http.StatusNotFound, "skill has no shipped default")
+		return
+	}
+	// <globalDir>/<slug>/SKILL.md → <globalDir>. Derived from the resolved skill
+	// rather than re-deriving the data dir, so the write lands in the very tier the
+	// catalog resolved this skill from.
+	globalDir := filepath.Dir(filepath.Dir(sk.Path))
+	if err := skills.RestoreDefault(globalDir, slug); writeDBError(w, err, "") {
+		return
+	}
+	store.Reload()
+	restored, ok := store.Get(slug)
+	if !ok {
+		writeError(w, http.StatusInternalServerError, "restored skill failed to reload")
+		return
+	}
+	s.logger.Info("skill restored to default", "skill", slug)
+	writeJSON(w, http.StatusOK, restored)
+}
+
 // handleReloadSkills re-scans the skill tiers (after the user edits files on
 // disk) so the catalog and prompt block reflect the change without a restart.
 func (s *Server) handleReloadSkills(w http.ResponseWriter, r *http.Request) {

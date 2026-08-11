@@ -322,7 +322,7 @@ type Settings struct {
 
 	// Coordinator/worker guards (M2, _Docs/47).
 	CoordinatorMaxWorkers int `json:"coordinatorMaxWorkers"` // max active workers per coordinator (0 = default 8)
-	CoordinatorMaxTurns   int `json:"coordinatorMaxTurns"`   // max auto-triggered coordinator turns per session (0 = default 50)
+	CoordinatorMaxTurns   int `json:"coordinatorMaxTurns"`   // max auto-triggered coordinator turns per session (0 = default 50, -1 = unlimited)
 	// CoordinatorMaxDepth bounds how deep a coordinator TREE may nest (root = 0);
 	// -1 = unlimited nesting. CoordinatorMaxSubtreeSessions bounds the TOTAL worker
 	// sessions in one tree across every level; -1 = unlimited. The per-coordinator
@@ -488,9 +488,9 @@ func Default() Settings {
 		MaxToolOutputKB:        100,
 
 		CoordinatorMaxWorkers:         8,
-		CoordinatorMaxTurns:           50,
+		CoordinatorMaxTurns:           -1, // unlimited (not user-configurable; see normalize)
 		CoordinatorMaxDepth:           5,
-		CoordinatorMaxSubtreeSessions: 64,
+		CoordinatorMaxSubtreeSessions: -1, // unlimited (not user-configurable; see normalize)
 		CoordinatorSettleGraceSec:     30,
 		CoordinatorStallGuard:         true,
 		CoordinatorStallSweepMin:      5,

@@ -91,7 +91,11 @@ Adopt tüm entry'yi düşürür → hem system hem tools birlikte yeniden donar
   Emit noktaları `WithSessionID` damgalar (compose çağrıları tur damgasından önce
   gelir; damgasız ctx'te `emitDebug` olayı düşürürdü).
 - Mevcut `cache_break` olayı doğal doğrulayıcı: epoch açıkken
-  `prompt-or-tools-changed` kırılımları kaybolmalı.
+  `prompt-or-tools-changed` kırılımları kaybolmalı. **2026-08-11'den beri bu kural
+  kullanıcıya da görünür:** böyle bir kırılım olursa sohbette `cache_break` adımı
+  (`CacheBreakCard`) çıkar ve "epoch açıkken bu olmamalı" uyarısını + "Bağlamı
+  yenile" aksiyonunu gösterir (`_Docs\50` P7). Yani epoch regresyonu artık Debug
+  kartı açılmadan fark edilir.
 - **Debug paneli görselleştirmesi:** "İş akışı görselleştirmeleri" bölümüne
   **"Prompt-cache olayları"** kartı eklendi (`sessions/viz/PromptCacheEvents.tsx`
   + `flowVizData.buildPromptCacheSummary`): `epoch` (önleme) + `cache_break`
@@ -116,6 +120,7 @@ Adopt tüm entry'yi düşürür → hem system hem tools birlikte yeniden donar
   `sessionDetailFormat.cacheRemaining`). İki yerde: **Oturum bilgisi** panelinin
   "Genel" bölümünde satır (`SessionDetailPanel`) + **"Sıradaki tur bağlam
   önizleme"** popup'ının cache legend'ında TTL geri sayımı (`SessionContextModal`,
+  ayrıca 2026-08-11'den beri **chat composer'ının üstünde** `CacheWarmthStrip`,
   `updatedAt` App.tsx'ten geçer; per-segment cache'li/dışı bayrakları = token
   ekseni, TTL = zaman ekseni). Her iki yerde 1sn tick tur çalışırken **veya**
   cache sıcakken döner, soğuyunca kendini durdurur.

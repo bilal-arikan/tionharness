@@ -38,8 +38,8 @@ func (FSApplyPatchTool) Def() providers.ToolDef {
 			"`+++ b/<path>` header lines, followed by one or more `@@ ... @@` hunks of context (space-prefixed), " +
 			"removed (`-`) and added (`+`) lines. Hunks are matched by their context, so exact @@ line numbers are " +
 			"not required; if the exact context is not found, a whitespace-insensitive match is tried and accepted only " +
-			"when it is UNIQUE, otherwise that whole file is rejected (nothing is half-applied) with an error pointing at " +
-			"the closest line. Copy context/removed lines verbatim (keep unicode and alignment). Read a file before patching it (same freshness guard as Edit). Use " +
+			"when it is UNIQUE, otherwise the patch is rejected with an error pointing at " +
+			"the closest line. All files are validated BEFORE any is written, so if any file fails the ENTIRE patch is rejected — no file is modified (never half-applied). Copy context/removed lines verbatim (keep unicode and alignment). Read a file before patching it (same freshness guard as Edit). Use " +
 			"`--- /dev/null` to create a file and `+++ /dev/null` to delete one. Paths may be absolute or relative " +
 			"to the working directory; a leading a/ or b/ is stripped.",
 		InputSchema: json.RawMessage(`{

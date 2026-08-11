@@ -15,15 +15,15 @@ func TestShellToolsContextBlockDisabled(t *testing.T) {
 	r := &Runtime{tun: NewTunables()}
 	r.tun.SetShellEnabled(false) // gate off → shell unavailable regardless of the host
 
-	got := r.ShellToolsContextBlock()
+	got := r.ShellToolsContextBlock(false)
 	if got == "" {
 		t.Fatal("disabled block is empty; the agent would never learn shell is off")
 	}
 	for _, want := range []string{
 		"DISABLED",
 		"not enabled in this context", // the exact error the dead-tool rule keys on
-		"do NOT repeat the identical",  // no-retry rule
-		"Read / Glob / Grep",           // the fallback tools it must switch to
+		"do NOT repeat the identical", // no-retry rule
+		"Read / Glob / Grep",          // the fallback tools it must switch to
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("disabled block missing %q\nblock: %s", want, got)
@@ -42,7 +42,7 @@ func TestShellToolsContextBlockEnabled(t *testing.T) {
 	r := &Runtime{tun: NewTunables()}
 	r.tun.SetShellEnabled(true)
 
-	got := r.ShellToolsContextBlock()
+	got := r.ShellToolsContextBlock(false)
 	if !strings.Contains(got, "ENABLED") {
 		t.Errorf("enabled block does not announce ENABLED\nblock: %s", got)
 	}
@@ -54,6 +54,16 @@ func TestShellToolsContextBlockEnabled(t *testing.T) {
 			t.Errorf("enabled block omits registered tool %q\nblock: %s", n, got)
 		}
 	}
+	// The confined flag flips the scope clause so it never contradicts the
+	// working-directory block on an autonomous-confined turn.
+	if unconfined := got; !strings.Contains(unconfined, "not confined to the working directory") {
+		t.Errorf("unconfined block should say it is not confined\nblock: %s", unconfined)
+	}
+	confined := r.ShellToolsContextBlock(true)
+	if !strings.Contains(confined, "confined to the working directory") ||
+		strings.Contains(confined, "not confined to the working directory") {
+		t.Errorf("confined block should state confinement\nblock: %s", confined)
+	}
 }
 
 // The gate being on is not sufficient: if no interpreter backs it, the block must
@@ -64,7 +74,7 @@ func TestShellToolsContextBlockNeverEmpty(t *testing.T) {
 	for _, enabled := range []bool{false, true} {
 		r := &Runtime{tun: NewTunables()}
 		r.tun.SetShellEnabled(enabled)
-		if r.ShellToolsContextBlock() == "" {
+		if r.ShellToolsContextBlock(false) == "" {
 			t.Errorf("block empty with ShellEnabled=%v; must always state capability", enabled)
 		}
 	}

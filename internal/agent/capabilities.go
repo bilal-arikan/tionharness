@@ -2,7 +2,6 @@ package agent
 
 import (
 	"context"
-	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -118,9 +117,6 @@ var codebaseMemoryCapability = Capability{
 			return ""
 		}
 		b.WriteString(codebaseMemoryGuidance(servers))
-		if r.CBMStoreDir() != "" {
-			b.WriteString("\nThis workspace uses an ISOLATED index store, so results never mix with other workspaces.")
-		}
 		if p := projectIDForPath(cwd); p != "" {
 			b.WriteString("\nYour working directory maps to project id `" + p + "` (auto-indexed on first use). " +
 				"If a query reports the project is unknown, run list_projects to confirm the exact id.")
@@ -180,17 +176,6 @@ func projectIDForPath(p string) string {
 	return strings.Trim(string(b), "-")
 }
 
-// CBMStoreDir is this workspace's isolated codebase-memory index store: a sibling
-// of the workspace sandbox (like the skills/ and hook-scripts/ dirs). Empty when
-// the workspace dir is unknown (bare test runtimes) — callers then fall back to
-// the server's default store.
-func (r *Runtime) CBMStoreDir() string {
-	if r.workDir == "" {
-		return ""
-	}
-	return filepath.Join(filepath.Dir(r.workDir), "cbm-store")
-}
-
 // sessionCwd returns the session's EXPLICIT working directory (the repo the agent
 // operates on) from ctx, or "" when unset. Unlike effectiveWorkDir it does NOT
 // fall back to the workspace default, so the capability project-id hint and the
@@ -208,9 +193,9 @@ func (r *Runtime) sessionCwd(ctx context.Context) string {
 }
 
 // EnsureCodebaseIndexed fires a best-effort, background incremental index of cwd
-// into this workspace's isolated store, at most once per (cwd, store) per process.
-// No-op when cwd is empty or no codebase-memory server is enabled. Failures are
-// LOGGED (not silently swallowed) and clear the guard so a later turn can retry.
+// into the server's own store, at most once per cwd per process. No-op when cwd
+// is empty or no codebase-memory server is enabled. Failures are LOGGED (not
+// silently swallowed) and clear the guard so a later turn can retry.
 func (r *Runtime) EnsureCodebaseIndexed(ctx context.Context, cwd string) {
 	cwd = strings.TrimSpace(cwd)
 	if cwd == "" {
@@ -220,21 +205,14 @@ func (r *Runtime) EnsureCodebaseIndexed(ctx context.Context, cwd string) {
 	if command == "" {
 		return
 	}
-	store := r.CBMStoreDir()
-	key := cwd + "|" + store
+	key := cwd
 	if _, seen := r.cbmIndexed.LoadOrStore(key, true); seen {
 		return
 	}
 	go func() {
-		arg, _ := json.Marshal(map[string]string{"repo_path": filepath.ToSlash(cwd)})
-		cmd := exec.Command(command, "cli", "index_repository", string(arg))
+		// Flag form: codebase-memory-mcp 0.10 deprecated raw-JSON CLI args.
+		cmd := exec.Command(command, "cli", "index_repository", "--repo-path", filepath.ToSlash(cwd))
 		cmd.Env = os.Environ()
-		if store != "" {
-			if mkErr := os.MkdirAll(store, 0o755); mkErr != nil {
-				r.logger.Warn("codebase-memory store dir create failed", "store", store, "error", mkErr)
-			}
-			cmd.Env = append(cmd.Env, "CBM_CACHE_DIR="+store)
-		}
 		if out, runErr := cmd.CombinedOutput(); runErr != nil {
 			r.logger.Warn("codebase-memory auto-index failed",
 				"cwd", cwd, "error", runErr, "output", strings.TrimSpace(string(out)))

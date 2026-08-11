@@ -41,13 +41,13 @@ func logLevelRank(level string) int {
 func (ReadLogsTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name:        "read_logs",
-		Description: "Read recent log entries from the application + workspace log stream (for self-diagnosis). Optionally filter by minimum level (debug|info|warn|error), a case-insensitive substring query (message + attrs), an exact component (e.g. api, agent, scheduler) and/or an exact session id. Returns the most recent matching entries.",
+		Description: "Read recent log entries from the application + workspace log stream (for self-diagnosis). Optionally filter by minimum level (debug|info|warn|error), a case-insensitive substring query (matches message, attrs, and component/session/agent/workspace), an exact component (e.g. api, agent, scheduler) and/or an exact session id. Returns the most recent matching entries.",
 		InputSchema: json.RawMessage(`{
 			"type":"object",
 			"properties":{
 				"limit":{"type":"integer","description":"Max entries to return (default 100, max 500)"},
 				"level":{"type":"string","enum":["debug","info","warn","error"],"description":"Minimum log level to include"},
-				"q":{"type":"string","description":"Case-insensitive substring to match in the message and attributes"},
+				"q":{"type":"string","description":"Case-insensitive substring matched in the message, attributes, and the component/session/agent/workspace fields"},
 				"component":{"type":"string","description":"Exact component filter (originating subsystem, e.g. api, agent, scheduler, mcp, db)"},
 				"session":{"type":"string","description":"Exact session id filter"}
 			},

@@ -525,6 +525,13 @@ func (c *ClaudeCLI) runAttempt(ctx context.Context, args []string, prompt, model
 	if req.DisableThinking {
 		cmd.Env = append(cmd.Env, "MAX_THINKING_TOKENS=0")
 	}
+	// Max effort parity: Claude Code's settings.json effortLevel enum rejects "max"
+	// (it silently downgrades to high the moment the session touches /effort or
+	// /model), so the --settings file can only carry up to xhigh. The env var is
+	// the only channel the CLI honours for max reasoning — see Request.CLIEffortLevel.
+	if strings.EqualFold(req.CLIEffortLevel, "max") {
+		cmd.Env = append(cmd.Env, "CLAUDE_CODE_EFFORT_LEVEL=max")
+	}
 	// Isolated config home: point the CLI at a clean CLAUDE_CONFIG_DIR so its
 	// skills/settings/commands/global CLAUDE.md/login come from there instead of the
 	// shared ~/.claude. Appended last so it overrides any inherited value.

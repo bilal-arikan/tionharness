@@ -11,6 +11,7 @@ import (
 
 	"github.com/bilal-arikan/tionswarm/internal/db"
 	"github.com/bilal-arikan/tionswarm/internal/events"
+	"github.com/bilal-arikan/tionswarm/internal/turnqueue"
 )
 
 // spawnTimeout bounds the turn-finished / failed-turn HOOK firing (a completion
@@ -236,7 +237,7 @@ func (r *Runtime) runSpawn(agent db.Agent, sessionID, prompt string, opts SpawnO
 	// overlaps a user/wake/peer turn opened on the same session (all of which claim
 	// the same slot). A fresh spawn is usually alone, but the session can be chatted
 	// into or woken while the spawn runs.
-	releaseSlot := r.claimSessionTurnSlot(sessionID)
+	releaseSlot := r.claimSessionTurnSlot(sessionID, turnqueue.KindSpawn, "spawn turu")
 	defer releaseSlot()
 
 	r.trackSession(sessionID)

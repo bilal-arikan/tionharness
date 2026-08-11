@@ -935,3 +935,59 @@ bloğu; `guard.observe` sonrası `repair` bloğu. Debug olayları:
 yok sayma, düzeltilmiş argümanın engellenmemesi, `available_projects` parse.
 
 Doküman kuralı ayrıca kök `CLAUDE.md` → "codebase-memory-mcp kullanımı" bölümünde.
+
+### Düzeltme: guard hiç tetiklenmiyordu + otomatik onarım (2026-08-11)
+
+Yukarıdaki guard **yazıldığı günden beri ölüydü**. `mcpToolPrefix = "mcp__"`
+sabitini arıyordu; oysa TionSwarm'ın kendi ajan döngüsünde araç adları
+`mcp.NamespaceTool` (`internal/mcp/manager.go:89`) ile `<server>__<tool>`
+biçiminde üretiliyor — `mcp__` öneki **yok**. `precheck` ve `repair`, ilk
+`HasPrefix` kontrolünde her çağrıyı eliyordu. Testler yeşildi çünkü araç adını
+elle `"mcp__codebase-memory-mcp__search_code"` diye yazıyorlardı; üretimde var
+olmayan bir ad. Gerçek kanıt: bir worker oturumunda hata gövdesi markerı taşıdığı
+hâlde çıktıya hiçbir `[mcp repair]` yönergesi eklenmemiş, ajan 10 kez Grep'e
+düşmüştü.
+
+Ayrıca sunucu, **eksik** `project` argümanına da aynı
+`"project not found or not indexed"` yanıtını veriyor. Guard'ın metni bunu
+"adlandırdığın repo indeksli değil" diye yorumluyordu; argümanın hiç
+gönderilmediği ve reponun aslında indeksli olduğu durumda bu ajanı tam ters yöne,
+Glob/Grep'e yolluyordu.
+
+Yapılanlar:
+
+- **Ad eşleştirme:** `mcpToolPrefix` yerine `mcpNamespaceSep = "__"` +
+  `isMCPToolCall()`. Her iki biçim (CLI `mcp__<server>__<tool>` ve yerel
+  `<server>__<tool>`) eşleşir; built-in adlarda `__` bulunmadığı için ayraç
+  tek başına güvenli bir MCP işaretidir. Testler artık adı `mcp.NamespaceTool`
+  ile üretiyor, böylece format kayarsa test kırılır.
+- **Otomatik onarım (`repairPlan.Fixed`):** `repair()` artık `call.Input`'u okur.
+  `project` eksikse veya aynı repoyu farklı biçimde adlandırıyorsa (çıplak repo
+  adı, dosya yolu, harf farkı) doğru id `resolveProjectID` ile türetilir ve
+  **çağrı bir kez düzeltilip yeniden koşturulur** — model bir tur harcamaz.
+  Belirsizlikte (iki aday) asla tahmin edilmez; yönerge döner. Çağrı başına en
+  fazla bir düzeltme (`repaired` seti), aksi hâlde sunucuyla ping-pong olurdu.
+- **Otomatik indeksleme (`repairPlan.IndexPath`):** oturumun kendi reposu
+  `available_projects` içinde yoksa `EnsureCodebaseIndexed` tetiklenir. İndeks bu
+  tur içinde hazır olmaz; yönerge bunu açıkça söyler ve bu tur için Glob/Grep'e
+  yönlendirir (turu bloklayıp beklemek yerine).
+- **Yönerge metni:** eksik argüman ile indekslenmemiş repo artık iki ayrı cümle.
+
+**Şema kapısı (pre-execution) — `internal/agent/mcpargs.go` (yeni).** Asıl
+kaynağı kurutur: giden MCP çağrısı, sunucunun bildirdiği `inputSchema.required`
+alanlarına karşı **gönderilmeden önce** doğrulanır
+(`tools.Registry.MCPSchema`). Eksik alan `project` ise ve oturumun working
+directory'si biliniyorsa değer `projectIDForPath` ile doldurulur
+(`prefillMCPArgs`); dolduramıyorsa çağrı hiç gönderilmez ve model
+"bu çağrı gönderilmedi, şu argüman eksik — bu yerel bir şema kontrolü, veri
+hakkında bir hüküm değil" mesajını alır. Şema yoksa/`required` yoksa/parse
+edilemiyorsa kapı **hiçbir şey yapmaz** (tahminle bloklama yok). Yalnız `project`
+doldurulur; `qualified_name` gibi model niyeti taşıyan alanlar asla uydurulmaz.
+
+Debug olayları: `mcp_prefill`, `mcp_args_block`, `mcp_repair_retry`,
+`mcp_repair_index` (mevcut `mcp_repair_block` / `mcp_repair` yanında).
+
+**Test.** `internal/agent/mcprepair_test.go` (yerel ad regresyonu, otomatik
+düzeltme, belirsizlikte tahmin etmeme, tek-seferlik düzeltme, indeks tetikleme,
+`resolveProjectID` tablosu) ve `internal/agent/mcpargs_test.go` (required
+tespiti, prefill sınırları, mesaj metni).

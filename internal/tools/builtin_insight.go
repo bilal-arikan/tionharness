@@ -25,9 +25,10 @@ func NewInsightApplyFindingTool(database *db.DB) InsightApplyFindingTool {
 func (InsightApplyFindingTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name: "insight_apply_finding",
-		Description: "Triage an insight finding by setting its status: \"accepted\" (you will act on it), " +
-			"\"dismissed\" (not worth acting on), \"applied\" (the proposed fix has been done) or \"verified\" " +
-			"(the fix is confirmed effective). Records the decision only — it does not mutate the workspace. " +
+		Description: "Triage an insight finding by setting its status: \"new\" (untriaged), \"triaged\" (reviewed, " +
+			"not yet decided), \"accepted\" (you will act on it), \"dismissed\" (not worth acting on), \"applied\" " +
+			"(the proposed fix has been done) or \"verified\" (the fix is confirmed effective). Records the " +
+			"decision only — it does not mutate the workspace. " +
 			"Find ids with insight_list_findings.",
 		InputSchema: json.RawMessage(`{
   "type": "object",

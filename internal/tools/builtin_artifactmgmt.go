@@ -128,14 +128,14 @@ func (ListArtifactsTool) Def() providers.ToolDef {
 			"was created by an agent — provenance only; you can delete any of them). Results are PAGINATED: " +
 			"pass limit (default 20, max 100) and offset to page; the reply reports total and hasMore, and you " +
 			"reach the next page with offset += limit. Filters: sessionId (only artifacts from that session), " +
-			"kind (markdown|code|html|text|svg|mermaid), origin (chat|manual|agent|tool|plan). Sort: updated_desc " +
+			"kind (markdown|code|html|text|svg|mermaid|image|video|audio|file), origin (chat|manual|agent|tool|plan). Sort: updated_desc " +
 			"(default), updated_asc, created_desc, created_asc, name_asc, name_desc (name sorts by title). " +
 			"Use read_artifact to get content by id, update_artifact to edit, delete_artifact to remove.",
 		InputSchema: json.RawMessage(`{
   "type": "object",
   "properties": {
     "sessionId": { "type": "string", "description": "Only artifacts created in this session." },
-    "kind": { "type": "string", "description": "Only artifacts of this kind (markdown|code|html|text|svg|mermaid)." },
+    "kind": { "type": "string", "description": "Only artifacts of this kind (markdown|code|html|text|svg|mermaid|image|video|audio|file)." },
     "origin": { "type": "string", "description": "Only artifacts with this origin (chat|manual|agent|tool|plan)." },
     "sort": { "type": "string", "enum": ["updated_desc", "updated_asc", "created_desc", "created_asc", "name_asc", "name_desc"], "description": "Result ordering (default updated_desc; name sorts by title)." },
     "limit": { "type": "integer", "description": "Max artifacts per page (default 20, max 100)." },

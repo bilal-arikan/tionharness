@@ -136,7 +136,7 @@ func (m *ShellManager) Start(sb Sandbox, command, label string, build func(conte
 	}
 	if live >= bgShellMaxLive {
 		m.mu.Unlock()
-		return "", fmt.Errorf("too many background shells running (%d); stop one with shell_kill first", live)
+		return "", fmt.Errorf("too many background shells running (%d); stop one with shell_manage (action=kill) first", live)
 	}
 	m.pruneDoneLocked()
 	m.seq++
@@ -220,7 +220,7 @@ func (m *ShellManager) get(id string) *bgProc {
 func (m *ShellManager) Output(id string) (string, error) {
 	p := m.get(id)
 	if p == nil {
-		return "", fmt.Errorf("no background shell %q — use shell_list to see running shells", id)
+		return "", fmt.Errorf("no background shell %q — use shell_manage (action=list) to see running shells", id)
 	}
 	out, lost := p.w.drain()
 	var b strings.Builder
@@ -241,13 +241,13 @@ func (m *ShellManager) Output(id string) (string, error) {
 func (m *ShellManager) Kill(id string) (string, error) {
 	p := m.get(id)
 	if p == nil {
-		return "", fmt.Errorf("no background shell %q — use shell_list to see running shells", id)
+		return "", fmt.Errorf("no background shell %q — use shell_manage (action=list) to see running shells", id)
 	}
 	if p.isDone() {
 		return fmt.Sprintf("%s already finished (code %d)", id, p.exitCode), nil
 	}
 	p.cancel()
-	return fmt.Sprintf("Signalled %s to stop; poll shell_output to confirm it exited.", id), nil
+	return fmt.Sprintf("Signalled %s to stop; poll shell_manage (action=output) to confirm it exited.", id), nil
 }
 
 // List returns a one-line-per-shell summary of every tracked shell.

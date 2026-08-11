@@ -40,38 +40,38 @@ func TestSlotIsStallCandidate(t *testing.T) {
 
 	// Happy path: idle, had workers, none running, silent 10 min.
 	s := &coordSlot{hadWorkers: true, lastTurnUnix: now - 600}
-	if !slotIsStallCandidate(s, now, window) {
+	if !slotIsStallCandidate(s, false, now, window) {
 		t.Error("expected a long-silent idle coordinator to be a candidate")
 	}
 
 	// Still running a turn → not a candidate.
-	s = &coordSlot{running: true, hadWorkers: true, lastTurnUnix: now - 600}
-	if slotIsStallCandidate(s, now, window) {
+	s = &coordSlot{driving: true, hadWorkers: true, lastTurnUnix: now - 600}
+	if slotIsStallCandidate(s, false, now, window) {
 		t.Error("a running coordinator must not be a candidate")
 	}
 
 	// Never spawned a worker → nothing to reconcile.
 	s = &coordSlot{hadWorkers: false, lastTurnUnix: now - 600}
-	if slotIsStallCandidate(s, now, window) {
+	if slotIsStallCandidate(s, false, now, window) {
 		t.Error("a coordinator that never had workers must not be a candidate")
 	}
 
 	// A worker is still running → legitimately waiting, not stalled.
 	s = &coordSlot{hadWorkers: true, lastTurnUnix: now - 600}
 	s.workers.Store(1)
-	if slotIsStallCandidate(s, now, window) {
+	if slotIsStallCandidate(s, false, now, window) {
 		t.Error("a coordinator with a running worker must not be a candidate")
 	}
 
 	// Silent for less than the window → too soon.
 	s = &coordSlot{hadWorkers: true, lastTurnUnix: now - 60}
-	if slotIsStallCandidate(s, now, window) {
+	if slotIsStallCandidate(s, false, now, window) {
 		t.Error("a recently-active coordinator must not be a candidate")
 	}
 
 	// Never ran a real turn (lastTurnUnix == 0, e.g. a stubbed test) → excluded.
 	s = &coordSlot{hadWorkers: true, lastTurnUnix: 0}
-	if slotIsStallCandidate(s, now, window) {
+	if slotIsStallCandidate(s, false, now, window) {
 		t.Error("a coordinator with no recorded turn must not be a candidate")
 	}
 }

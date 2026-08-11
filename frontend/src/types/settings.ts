@@ -239,6 +239,15 @@ export interface CatalogModel {
   // "opus" → "claude-opus-5". Absent until a completed turn revealed it, and
   // absent for providers whose ids are already concrete.
   resolvedModel?: string
+  // Reasoning levels this model meaningfully supports ("off"/"low"/"medium"/
+  // "high"/"xhigh"/"max"), filled by the backend catalog from ThinkingTiersFor.
+  // The pickers keep every tier visible but grey out the ones absent here.
+  // Absent means "unknown" → all tiers enabled (the provider clamps anyway).
+  thinkingTiers?: string[]
+  // How the model handles extended reasoning ("always-on"/"adaptive"/
+  // "non-thinking"/"legacy"/"alias"), from the backend ThinkingClass. Paired with
+  // thinkingTiers so a greyed tier can explain WHY it is inactive.
+  thinkingClass?: string
 }
 
 export interface CatalogEntry {

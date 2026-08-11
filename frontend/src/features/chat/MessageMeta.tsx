@@ -1,6 +1,43 @@
 import { useEffect, useState } from 'react'
+import { Flame, Snowflake } from 'lucide-react'
+import type { MessageUsage } from '@/types'
 import { clockTime, fullDateTime, formatDuration, formatDurationMs } from '@/shared/lib/time'
 import { serverNow } from '@/shared/lib/serverClock'
+
+// CacheWarmthDot is the one-glyph prompt-cache verdict for a finished turn, shown
+// in the message footer so a transcript can be SCANNED for cold turns instead of
+// opening every debug panel. Derived purely from the usage already persisted on
+// the message — no request.
+//
+// Renders nothing without cache evidence: a read means warm, a write with no read
+// means the prefix was (re)paid cold, and neither means the provider reported no
+// cache counters at all (OpenRouter bills a cold prefix as plain input, and a
+// non-caching model has none) — claiming "cold" there would be a guess.
+export function CacheWarmthDot({ usage }: { usage?: MessageUsage }) {
+  const read = usage?.cacheRead ?? 0
+  const write = usage?.cacheWrite ?? 0
+  if (read > 0) {
+    return (
+      <span
+        title="Sıcak: bu tur cache'li öneki yeniden kullandı (ucuz)"
+        className="text-[var(--color-warning)] opacity-70"
+      >
+        <Flame size={10} />
+      </span>
+    )
+  }
+  if (write > 0) {
+    return (
+      <span
+        title="Soğuk: cache öneki bu turda baştan yazıldı (pahalı). Sebebi için debug panelini aç."
+        className="text-[var(--color-text-dim)] opacity-70"
+      >
+        <Snowflake size={10} />
+      </span>
+    )
+  }
+  return null
+}
 
 // MessageTime renders a message's send time as a short clock label, with the
 // full date+time available on hover. Lives in the turn footer, outside the bubble,
@@ -8,7 +45,10 @@ import { serverNow } from '@/shared/lib/serverClock'
 export function MessageTime({ unixSec }: { unixSec: number }) {
   if (!unixSec) return null
   return (
-    <span title={fullDateTime(unixSec)} className="text-[10px] text-[var(--color-text-dim)] opacity-70">
+    <span
+      title={fullDateTime(unixSec)}
+      className="text-[10px] text-[var(--color-text-dim)] opacity-70"
+    >
       {clockTime(unixSec)}
     </span>
   )

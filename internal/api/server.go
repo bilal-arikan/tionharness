@@ -616,6 +616,7 @@ func (s *Server) registerHookRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/insight/lenses/{id}/raw", s.handleGetInsightLensRaw)
 	mux.HandleFunc("PUT /api/insight/lenses/{id}", s.handleUpdateInsightLens)
 	mux.HandleFunc("POST /api/insight/lenses/{id}/toggle", s.handleToggleInsightLens)
+	mux.HandleFunc("POST /api/insight/lenses/{id}/restore", s.handleRestoreInsightLens)
 	mux.HandleFunc("GET /api/insight/findings", s.handleListInsightFindings)
 	mux.HandleFunc("POST /api/insight/findings/{id}/status", s.handleSetInsightFindingStatus)
 	mux.HandleFunc("DELETE /api/insight/findings/{id}", s.handleDeleteInsightFinding)
@@ -704,6 +705,7 @@ func (s *Server) registerSkillRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("PUT /api/skills/{slug}/name-only", s.handleSetSkillNameOnly)
 	mux.HandleFunc("PUT /api/skills/{slug}/visibility", s.handleSetSkillVisibility)
 	mux.HandleFunc("PUT /api/skills/{slug}/group", s.handleSetSkillGroup)
+	mux.HandleFunc("POST /api/skills/{slug}/restore", s.handleRestoreSkill)
 	mux.HandleFunc("POST /api/skills/{slug}/reveal", s.handleRevealSkill)
 }
 

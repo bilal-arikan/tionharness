@@ -52,7 +52,7 @@ func (ListTasksTool) Def() providers.ToolDef {
 			"You can edit, move and delete ANY task. Built-in board columns are: pbi, todo, in_progress, review, " +
 			"done, failed — this workspace may also define custom columns; check existing tasks' boardState values " +
 			"or the board UI to see them. Results are PAGINATED: pass limit (default 20, max 100) and offset to " +
-			"page; the reply reports total and hasMore, and you reach the next page with offset += limit. Filters: " +
+			"page; the reply reports total and hasMore, and you reach the next page with offset += limit. Archived cards are excluded (from both the results and total). Filters: " +
 			"boardState (exact), priority (exact), ownerAgentId (exact), tags (comma-separated; a card must carry " +
 			"ALL of them). Sort: updated_desc (default), updated_asc, created_desc, created_asc, name_asc, " +
 			"name_desc (name = card title).",
@@ -174,7 +174,7 @@ func NewCreateTaskTool(database *db.DB, actorID string) CreateTaskTool {
 func (CreateTaskTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name:        "create_task",
-		Description: "Create a task on the kanban board. Provide a prompt (the instruction run by the owner agent) and/or a flowId (the task runs that orchestration flow instead, with the prompt as its input). Optionally set title (auto-generated from prompt when omitted), description, ownerAgentId, boardState (default todo), dependencies (JSON array of task IDs that must complete before this one), priority (critical/high/medium/low) and tags (string array). The task is tagged as created by you. Returns the new task id.",
+		Description: "Create a task on the kanban board. Provide at least one of title, prompt (the instruction run by the owner agent), or flowId (the task runs that orchestration flow instead, with the prompt as its input). Optionally set title (auto-generated from prompt when omitted), description, ownerAgentId, boardState (default todo), dependencies (JSON array of task IDs that must complete before this one), priority (critical/high/medium/low), tags (string array) and artifactIds (workspace artifact ids to attach). The task is tagged as created by you. Returns the new task id.",
 		InputSchema: json.RawMessage(`{
 			"type":"object",
 			"properties":{

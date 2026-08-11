@@ -1,6 +1,312 @@
 # TionSwarm — İlerleme Takibi
 
-> Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-08-10**
+> Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-08-11**
+
+## codebase-memory per-workspace store kaldırıldı — cbm 0.10 tek-root kuralı (2026-08-11) ✅
+
+**Teşhis.** PC'deki `codebase-memory-mcp` 0.9.0 → **0.10.1**'e güncellendi. 0.10 ile gelen
+koordinasyon daemon'u **hesap başına TEK cache root** dayatıyor: farklı bir root talep eden
+ikinci istemci `active account daemon uses a different cache directory` ile reddediliyor.
+TionSwarm'ın workspace-başına store'u (`<workspace>/cbm-store`) bu kuralla bağdaşmıyordu —
+uygulama açıkken WS5 ve WS17 birbirini, ayrıca dışarıdaki tüm CBM istemcilerini (CLI,
+watcher, External Agent source'u) kilitliyordu; süreç öldürmek yarışı çözmüyordu çünkü
+TionSwarm sunucuyu anında yeniden doğuruyor.
+
+**Düzeltme.** `CBMStoreDir` + `applyCBMStore` tamamen kaldırıldı; ne native tool döngüsü
+(`toolsetup.go`) ne claude-cli config yazıcısı (`climcp.go`) artık `CBM_CACHE_DIR`
+enjekte ediyor — sunucu kendi store'unu kullanır, operatörün MCP satırına elle yazdığı
+env aynen taşınır. Sistem promptundaki "ISOLATED index store" cümlesi, UI'daki
+"izole store" rozeti ve `codebase_workspace_search`'ün `storeDir` parametresi silindi.
+`EnsureCodebaseIndexed` artık `--repo-path` bayrağını kullanıyor (0.10 raw-JSON arg'ı
+deprecate etti) ve guard'ı `(cwd,store)` yerine `cwd`.
+
+**Testler.** `TestWriteCLIMCPConfigRoutesCodebaseMemoryStore` → tersine çevrilip
+`TestWriteCLIMCPConfigKeepsCodebaseMemoryEnv` oldu (yazıcı env uydurmaz, operatör değerini
+taşır); `TestCBMStoreDir`/`TestApplyCBMStore` silindi. `go build ./...` +
+`go test ./internal/tools ./internal/agent` yeşil. Detay: `_Docs/54`.
+
+## Tek tur kuyruğu: `internal/turnqueue` (2026-08-11) ✅
+
+**Teşhis (SES612).** Koordinatör workerlarını sürerken sıraya eklenen kullanıcı mesajı
+UI'dan kayboldu, dakikalar sonra bir worker cevabı gelince sohbet akışına düştü. Aynı
+oturumu iki serileştirici yönetiyordu: görünür/kalıcı send-queue (`internal/api`) ve
+görünmez `coordSlot` mutex'i (`internal/agent`). Worker head'i **önce** pop ediyor
+(tray'den düşüyor), **sonra** slot'ta bloke oluyordu → mesaj ne kuyrukta ne
+transkriptte, iptal de edilemez. Kanıt: mesajın `createdAt`'i önceki asistan turunun
+bitiş saniyesiyle birebir aynı.
+
+**Refactor.** Kabul sırası bağımsız bir alt katmana taşındı: **`internal/turnqueue`**
+— FIFO baton devri, ctx-farkında claim, bekleyen varken barging yok, `Snapshot` ile
+gözlemlenebilir; her giriş yolu kendini adlandırır (`user`/`command`/`coordinator`/
+`worker`/`wake`/`peer`/`spawn`/`automation`). `coordSlot`'tan `running` kalktı; artık
+yalnız koordinatör politikası (`driving`/`pending`/`ackedIdle`/cap/stall). En kritik
+sonuç: `drainCoordinator` slot'u döngü boyunca tutmak yerine **her turda yeniden
+kuyruğa giriyor** → bekleyen kullanıcı mesajı mevcut turdan sonra koşar; adalet özel
+durum değil, yapısal.
+
+API tarafında: worker head'i pop etmeden **önce** slot'u alır (`turnSlotHeld` ile
+devreder) → mesaj WAITING'de görünür/iptal edilebilir kalır; ikinci serileştirici
+(`acquireInboxSlot` + idle sinyali) tamamen **silindi**, `/compact`+`/handoff` aynı
+kuyruğa girer; `queue_update` artık `queue`+`inflight`+`turns` taşır ve runtime
+tarafı değişince bus üzerinden yeniden yayınlanır. UI tray'i üç satır gösterir:
+"Şu an" (oturumu tutan otonom tur), "Gönderiliyor", "Sırada #N".
+
+**Testler.** `internal/turnqueue/queue_test.go`,
+`internal/agent/coordination_fairness_test.go`, `internal/api/inbox_turnslot_test.go`
+(sonuncusu eski sırayla kırmızı, doğrulandı). Detay: `_Docs/58`.
+
+## dev.ps1: `go run` sarmalayıcısı kaldırıldı — sahte "backend çöktü" bitti (2026-08-11) ✅
+
+**Teşhis.** 17:29:32'de `lifecycle.log` "backend exited on its own (exit=1)" yazdı, stderr
+yakalaması **0 bayt**tı, uygulama logunda `shutting down` **yoktu** ve log normal trafiğin
+ortasında kesiliyordu. Ama sunucu ölmemişti: `tionswarm.exe` 20 saniye daha istek işledi ve
+ancak sonraki koşunun port pre-flight'ında öldürüldü. Sebep yapısal — `go run` araya bir
+**go.exe sarmalayıcısı** koyuyor; dışarıdan gelen zorla-sonlandırma sarmalayıcıyı öldürünce
+script "çocuk öldü" sanıp Vite'ı indiriyor, gerçek sunucu ise :8090'da **öksüz** kalıyor.
+Aynı imza 02.08–11.08 arası **beş kez** tekrarlamış; hepsinde `go run` çocuğun ölümünü çıplak
+`exit status 1`'e indirgediği için sebep hiç görülememiş (Go panic olsaydı exit 2 + stack trace
+olurdu). Panic/OOM değil, hepsi dış zorla-sonlandırma.
+
+**Düzeltme (`scripts/dev.ps1`):**
+- **Derle-sonra-çalıştır:** `go build -o bin\tionswarm-dev.exe ./cmd/tionswarm` + exe'yi doğrudan
+  başlat. Tek süreç → öksüz sunucu ve sahte "çöktü" imkânsız; **gerçek exit kodu ve panic
+  trace** stderr yakalamasına düşer. Derleme hatası da Vite başlamadan, net biçimde patlar.
+- **Öksüz süpürme:** backend kendi kendine ölmüşse teardown'da `Free-Port 8090` koşar
+  (Stop-Tree ölü PID üzerinden torunlara ulaşamaz). Normal Ctrl+C kapanışında **çalışmaz** —
+  o an porttaki dinleyici başkasına aittir.
+- **Ölüm bağlamı:** dış kill stderr'e hiçbir şey yazmadığından, teardown artık uygulamanın
+  kendi log aynasının (`~/.tionswarm/logs/tionswarm.log`) son 25 satırını da ekrana basar.
+
+`bin/` zaten gitignored. Not: "kim öldürdü" sorusu Windows'ta geriye dönük cevaplanamıyor —
+süreç oluşturma/sonlandırma denetimi (4688/4689) kapalı; altıncı olay olursa artık exit kodu
+ve son loglar elimizde olacak.
+
+## Derin-çalışma / maksimum düşünme tiyerleri claude-cli'ye geçirildi (2026-08-11) ✅
+
+"Maksimum düşünme modunu aç, saatlerce derin çalış" isteğinin çekirdek engeli: UI zaten
+`xhigh`/`max` sunuyordu (`THINKING_OPTIONS`) ama backend `cliEffortLevel` bunları `high`'a
+**kırpıyordu** — claude-cli tavanı `high`'da kalıyordu. Düzeltildi:
+
+- **`cliEffortLevel`** (`internal/agent/climcp.go`): `xhigh`→`xhigh`, `max`→`max` artık geçer;
+  `""`/`off`/`high`/bilinmeyen yine `high` (batch-koruma). Bu tiyerlerde thinking açık →
+  paralel araç batch'i kapanır ("think XOR batch"), derin akıl yürütme için kabul edilen takas.
+- **`max` özel yolu:** Claude Code'un `settings.json` enum'u `max`'i reddedip sessizce `high`'a
+  düşürür (web-doğrulandı: anthropics/claude-code #65651, #52247). Bu yüzden `writeCLISettings`
+  `max` turunda dosyaya `xhigh` (taban) yazar ve provider `runAttempt` turu
+  `CLAUDE_CODE_EFFORT_LEVEL=max` env'i ile `max`'a yükseltir. Taşıyıcı: yeni
+  `Request.CLIEffortLevel` (`toolloop.go` `isCLI` seam'inde set edilir).
+- **Testler:** `TestCLIEffortLevel` (xhigh/max passthrough), yeni `TestWriteCLISettingsClampsMaxToXhigh`.
+- **UI/doküman:** AgentSettingsForm yardım metni + `_Docs/07` güncellendi.
+
+> Not: uzun-soluklu deliberate döngü (plan→araştır→eleştir→rafine→artifact) için ayrı bir
+> "Deep Work" skill/flow preset'i henüz eklenmedi — mevcut coordinator+validator+todo ile
+> yapılabilir; effort passthrough o presetin ön-koşuluydu.
+
+## Pending balonunda ajan başlığı (2026-08-11) ✅
+
+Asistanın ilk token'ı/`AgentStart`'ı gelene kadar gösterilen standalone "çalışıyor"
+balonu (WorkingDots) ajan başlığını (avatar+ad+model) taşımıyordu → kimlik yalnız yanıt
+akmaya başlayınca görünüyordu (worker session'larında en belirgin). `ChatView` artık
+`MessageList`'e `pendingAgentId={activeAgentId}` geçiyor (session seçilince
+`sess.agentId`'e set edilir, worker dahil) → pending balon `AgentHeader`'ı `AgentStart`
+öncesinde de çizer. Ghost balon zaten `AgentStart`'tan `agentId` alıyordu; boşluk yalnız
+pending penceresiydi. `frontend/src/features/chat/ChatView.tsx`.
+
+## Built-in tool tanımları denetimi + düzeltmeler (2026-08-11) ✅
+
+Tüm built-in tool `Def()`'leri (description/InputSchema/default) `Call()` gerçek
+davranışına karşı iki turda denetlendi (`internal/tools/builtin_*.go`). Bulunan
+tutarsızlıklar düzeltildi. **Fonksiyonel hatalar:**
+
+- **`shell_manage` yeniden adlandırma boşluğu:** Bash/PowerShell açıklamaları ve arka-plan
+  shell hata/durum mesajları hâlâ artık var olmayan `shell_output`/`shell_kill`/`shell_list`
+  araçlarını söylüyordu (ajan çağırınca "no such tool"). Hepsi `shell_manage (action=…)`
+  olarak düzeltildi (`builtin_shell.go`, `builtin_shell_bg.go`).
+- **`Read` satır kırpması byte kesiyordu:** 2000 sınırında `line[:2000]` çok-baytlı UTF-8
+  karakterini ortadan bölüp geçersiz bayt üretiyordu (tool'un "unicode aynen" garantisini
+  çiğniyor) → rune-tabanlı kırpmaya çevrildi.
+- **`update_automation.expiresAt`** şemada yoktu → `additionalProperties:false` yüzünden
+  erişilemezdi; şemaya eklendi.
+- **`read_lessons.limit`** `0=all` belgesine aykırıydı (`0→20`); `*int` ile "atlandı→20,
+  0→hepsi" yapıldı.
+- **`update_schedule.cronExpr`** boş set edilebiliyordu (create ile tutarsız) → boş reddedilir.
+- **`render_template.data`** şemada `required` ama zorlanmıyordu → nil kontrolü eklendi.
+- **`update_session.working_dir`** "absolute" diyordu ama relative kabul ediyordu →
+  `filepath.IsAbs` kontrolü.
+
+**Belge/şema tutarsızlıkları** (davranış değişmez): `glob` .git/no_ignore ifadesi;
+`list_sessions`/`list_artifacts`/`read_session_debug` enum'larına eksik türler;
+`update_flow`(emoji)/`update_schedule`(name)/`update_automation`(alan listesi)/`create_task`
+açıklama eksikleri; `create_automation` "Three→Four" + counter `{{scope}}` + board
+placeholder + spawnTags `[]` yanlışı; `request_confirmation` `ambiguous:`; `run_flow`
+await-input; `list_flow_runs` status enum; `insight_apply_finding` new/triaged; `read_logs.q`
+kapsamı; `apply_patch` tüm-patch atomikliği; `create_mcp_server` shared scope.
+
+**Belgelenmemiş sessiz limitler** ilgili açıklamalara eklendi (grep 200, glob 500, Read
+2000-char/satır, shell timeout ayar-bağımlı, LS 1000, codebase 40-proje, list_schedules
+one-shot eleme, tool_search 30); grep `files_with_matches`/`count` modlarına da **yalnız
+cap aşılınca** çıkan truncation işareti eklendi.
+
+Kalan bilinçli-bırakılan: `create_automation` spawnTags `[]` loop-break'i gerçekten çalışsın
+diye db katmanı değişikliği (nil↔empty ayrımı) ayrı iş olarak bırakıldı; `spawn_worker`'ın
+gizlice kabul ettiği `config` profili (fan-out için tasarlanmadığından belgelenmedi).
+
+## Salt-okunur oturumlarda worker izleme yüzeyleri (2026-08-11) ✅
+
+Salt-okunur oturumlar (task/flow/schedule **ve worker** günlükleri) composer'ın tüm
+alt yığınını gizliyordu; bu yığında canlı `TodoPanel`, park edilmiş `ask`/permission ve
+worker roster'ı da vardı — dolayısıyla worker ekranında yalnız transkriptteki donmuş
+inline `TodoCard`'lar görülüyor, worker sessizce girdi bekleyebiliyordu. `ChatView.tsx`'in
+`readOnly` dalı flex-col yığına çevrilip aşağıdaki yüzeyler eklendi (çoğu mevcut
+component'in yeniden kullanımı):
+
+- **Görünürlük (A):** `TodoPanel` (canlı `todo_write` ilerlemesi) + park edilmiş
+  `AskPrompt`/`PermissionPrompt`/`PlanPrompt` (yanıt = suspend çözümü, yeni tur değil) +
+  streaming sırasında yeni **`WorkerStatusStrip`** ("Worker çalışıyor").
+- **Navigasyon (B):** mevcut **`CoordinatorBreadcrumb`** (üst-koordinatör zinciri;
+  root/sıradan oturumda kendini gizler). Yeni **`floating`** varyantı chat yığınında
+  `ComposerCard` zemini kullanır (kardeş panellerle aynı opak yüzey; yan panel düz kalır).
+- **Kontrol (C):** `WorkerStatusStrip` içindeki **Durdur** (`chat.stopTurn`, run'ı sunucu
+  çözer; yalnız koordinatör-ağacı üyeleri) + `WakeWaitBanner`'ın yeni **`hideCancel`**
+  varyantı (schedule self-wake'ini salt-okunurdan iptal ettirmez).
+- **Navigasyon (B#4):** flow koşu log'unda **"Koşu geçmişini aç"** linki →
+  `useDeepLinks.openFlowRun(sourceId)` (flow session'ın `sourceId`'si = flow id;
+  Flows ekranını o flow'un koşularında açar). `openFlowRun` tanımlıydı ama hiç
+  çağrılmıyordu; App tek `activeSession.find` ile `onOpenRunHistory`'yi türetip
+  `ChatView`'e geçiriyor, link yalnız flow oturumunda çözülür.
+- **`WorkerWaitBanner`** self-gated (roster yalnız oturum kendisi koordinatörse dolu).
+- Dışarıda: `PendingTray`, `CacheWarmthStrip`, `Composer`.
+
+## Chat ekranında prompt-cache kırılım görünürlüğü (2026-08-11) ✅
+
+Kırılım tespiti/atfı (`cachebreak.go`, `_Docs\50` P4) 2026-07-05'ten beri vardı ama
+yalnız oturum-seviyesi Debug kartında görünüyordu — **mesaj başına hiç yoktu**
+(`GetTurnDebug` `cache_break` olayını hiç toplamıyordu, oysa olaylar `TurnID`
+damgalı). Sohbete beş yüzey eklendi; her biri farklı bir soruya cevap verir:
+
+- **`CacheWarmthStrip`** (composer üstü) — tek ÖNLEYİCİ yüzey: sıcak pencerenin geri
+  sayımı + oturumun soğuk tur sayısı. Backend alanı yok (son mesajın `createdAt`).
+- **`ColdCacheDivider`** — transkriptte 1sa TTL'i aşan boşluğa ayraç ("❄️ cache soğudu · 3 sa ara").
+- **`CacheWarmthDot`** — tur altbilgisinde 🔥/❄, `Message.usage`'tan; transkript taranabilir olur.
+- **`CacheBreakCard`** (`cache_break` TurnStep) — sebep + gerekçe + aksiyon. **Yalnız**
+  `model-changed` / `prompt-or-tools-changed` kart olur (`inlineCacheBreak`); TTL soğuması
+  normaldir, her molada kart basmak kullanıcıyı karta kör ederdi.
+- **`MessageDebugPanel`** — atıflı sebep + kaçınılabilir fazla ödeme (`coolingWasteUsd`).
+
+Tasarım kararları: (1) kart **canlı SSE ile yayılmaz**, kalıcı izin BAŞINA eklenir —
+kırılım turun başında ödenir ama ancak provider yanıtından bilinebilir; geç yayınlamak
+kartı akışın altına çizip reload'da yukarı zıplatırdı. (2) **Kanıt yoksa iddia yok**:
+🔥/❄ ve soğuk-tur sayacı yalnız `cacheRead`/`cacheWrite` varken konuşur (OpenRouter
+soğuk öneki düz `input` olarak faturalar → orada sessiz). (3) İlk tur soğuk sayılmaz
+(backend `warmed` koşuluyla aynı). (4) `prompt-or-tools-changed` kartı şüpheli tonda:
+prompt epoch açıkken bu oturum ortasında olmamalı → epoch regresyonu artık Debug kartı
+açılmadan fark edilir (`_Docs\57`).
+
+Dosyalar: `internal/db/debug_journal.go` (TurnDebug += 5 alan + `DebugCacheBreak` dalı),
+`internal/agent/{cachebreak,trace,runtime}.go` (`CacheBreak` + `pendingCacheBreaks` +
+`StepCacheBreak`/`ColdTokens`), `internal/api/{chat_turn,chat_stream}.go`
+(`consumeCacheBreakLead`), frontend `features/chat/{CacheBreakCard,CacheWarmthStrip}.tsx`
++ `MessageMeta`/`MessageList`/`TurnSteps`/`AssistantTurn`/`MessageDebugPanel`/`ChatView`
++ `shared/stepKinds.ts`. Testler: `TestGetTurnDebugCacheBreak`, `TestInlineCacheBreak`,
+`TestConsumeCacheBreak`, `TestCacheBreakStep`. Go suite + tsc + vitest (167) + build yeşil.
+Detay: `_Docs\50` P7, `_Docs\07` "Prompt-cache görünürlüğü".
+
+**Devamı — Insight cache lensleri (aynı gün):** mevcut `context-cache-opt` lensi
+`cache_break ≥ 2` ile prefilter'dan geçiyor ama `buildSlice` cache olaylarını **hiç
+yazmadığı** için analize kanıtsız dilim gidiyordu; ayrıca `Lens.Scope` frontmatter'da
+vardı ama hiçbir yerde kullanılmıyordu. Üçü birden düzeltildi: (1) `ScopeCache`
+("cache") ile opt-in "## Prompt-cache events" bölümü — `cause`/`coldTokens`/`wasteUsd`
++ `at=` damgası + araya `epoch` olayları (adopt'suz kırılım kuralı ancak böyle
+uygulanabilir); (2) `extractSignals` sebebi ayrı sinyal olarak indeksler
+(`cache_break:<cause>`, `cooling_waste`) — bu da `parseMinCount`'un ilk-iki-noktadan
+bölme hatasını açığa çıkardı (bileşik anahtar bozulup eşik sessizce düşüyordu → lens
+her oturumu eşlerdi), son-iki-noktadan bölmeye geçildi; (3) yeni **`cache-cooling-waste`**
+lensi TTL soğumasını *tempo* problemi olarak ele alır (schedule aralığı, oturum ömrü,
+prefix boyu), `context-cache-opt` ise yalnız `prompt-or-tools-changed`'e bakar. Testler:
+`TestBuildSliceCacheScope`, `TestExtractSignalsCacheCause`, `TestParseMinCountCompoundKey`,
+`TestEmbeddedDefaultsAllParse` (7 lens + scope + bileşik minCount). Detay: `_Docs\60` Faz 6.3.
+**Devamı — shipped-defaults tazeleme (`internal/seed`, aynı gün):** yukarıdaki iş bir üst
+sorunu açığa çıkardı — `insight.EnsureDefaults` "dosya varsa dokunma" dediği için lens
+düzeltmeleri mevcut kurulumlara **hiç ulaşmıyordu**; uygulamayı güncellemek lensleri
+güncellemiyordu. Skills'te zaten çalışan "shipped-hash ledger" deseni paylaşılan
+**`internal/seed`** paketine çıkarıldı ve insight ikinci tüketici oldu.
+
+Çekirdek fikir: *"kullanıcı düzenledi mi?"yi tahmin etmek yerine ne gönderdiğimizi kaydet.*
+`.shipped-versions.json` her dosya için tüm-dosya (`Files`) ve yalnız-gövde (`Bodies`) sha256'sı
+tutar → "dokunulmamış" kanıtlanabilir olgu olur, güvenle tazelenir. `Bodies` şart: uygulamanın
+KENDİSİ frontmatter'ı yerinde yazıyor (skills'te görünürlük, lenste `enabled` toggle'ı), tüm-dosya
+hash'i bir daha tutmaz; gövde ledger'ı olmasa **tek toggle dosyayı sonsuza dek dondururdu.**
+
+Lens merge politikası skills'ten **kasıtlı olarak farklı**: skills tüm frontmatter'ı korur, lens
+yalnız `enabled` + `model`'i taşır, `prefilter`/`scope`/`channel`/gövdeyi gönderilenden alır —
+çünkü lens frontmatter'ı ağırlıkla *mekanik*tir ve onu korumak bugünkü prefilter/scope
+düzeltmelerini kalıcı dondururdu. `SetFrontmatterEnabled` → `SetFrontmatterScalar` (yalnız
+üst-seviye anahtar; girintili satır nested `prefilter:` bloğunun).
+
+Kaçınılmaz sınır: ledger'dan ÖNCE gönderilmiş ve o gün bugün değişmiş dosya kullanıcı
+düzenlemesinden ayırt edilemez → `Ensure` dokunmaz. Çıkış kapısı: `seed.Restore` +
+`POST /api/insight/lenses/{id}/restore` + lens satırında iki adımlı **"Varsayılan"** butonu
+(yalnız `hasDefault` olanlarda). Restore manifest'e de yazar → **otomatik tazelemeyi yeniden
+kurar.**
+
+**Ledger görünür + skill paritesi:** `seed.Status` üç durum döner — `default` (dokunulmamış) ·
+`tuned` (yalnız config farklı, **yine otomatik tazelenir**) · `edited` (içerik değişmiş →
+**donmuş**). Lens ve skill DTO'larında `defaultState`; paylaşılan `SeedDefaultBadge` **yalnız
+`edited`**'i rozetler — diğer ikisi güncelleme almaya devam ettiği için onları rozetlemek her
+satıra bilgi vermeyen bir çip koyardı. Skill listesine de aynı "Varsayılan" butonu geldi
+(`POST /api/skills/{slug}/restore`, paylaşılan `RestoreDefaultButton`), yalnız **global tier**
+için: workspace-tier override başka bir dosyadır, onun "varsayılanını" yazmak kullanıcının
+bakmadığı dosyaya yazmak olurdu.
+
+Testler: `internal/seed/seed_test.go` (9 senaryo — merge sonrası donmama + **`Status`'ün
+`Ensure`'ün gerçekte yaptığıyla tutarlılığı**, aksi halde rozet yalan söyler), insight'ta 5,
+skills'te 2 test. Detay: `_Docs\60` Faz 6.4.
+
+## codebase-memory: ölü onarım guard'ı + izolasyon kaçağı + otomatik onarım (2026-08-11) ✅
+
+Bir worker oturumunun tek `get_code_snippet` çağrısı `project` argümanı olmadan
+gitti, sunucu `"project not found or not indexed"` döndürdü, ajan MCP'yi arızalı
+sanıp 10 kez Grep'e düştü — oysa repo indeksliydi. İz sürünce üç ayrı arıza çıktı.
+
+- **`mcpRepair` hiç tetiklenmiyordu.** `mcpToolPrefix = "mcp__"` arıyordu; yerel
+  ajan döngüsünde araç adları `mcp.NamespaceTool` ile `<server>__<tool>` üretiliyor.
+  `precheck`/`repair` ilk satırda her çağrıyı eliyordu. Testler yeşildi çünkü adı
+  elle `mcp__…` diye yazıyorlardı — üretimde var olmayan bir ad. Artık
+  `isMCPToolCall` (`__` ayracı) her iki biçimi eşliyor ve testler adı
+  `mcp.NamespaceTool` ile üretiyor.
+- **claude-cli yolunda store izolasyonu yoktu.** `CBM_CACHE_DIR` yalnız
+  `toolsetup.go`'da enjekte ediliyordu; `climcp.go` (`--mcp-config`) etmiyordu.
+  Sonuç: claude-cli sağlayıcılı her oturum sunucunun global default store'una
+  bağlanıyor, workspace'in `cbm-store`'undaki indeksi göremiyordu — sistem promptu
+  ise "ISOLATED index store" diyordu. Enjeksiyon tek kaynağa alındı
+  (`(*Runtime).applyCBMStore`), iki launch yolu da onu çağırıyor.
+- **Hata mesajı iki farklı arızayı aynı cümleyle anlatıyordu.** Eksik argüman ile
+  indekslenmemiş repo ayrıldı; eksik argüman artık "repo indeksli değil" demiyor.
+
+Eklenen koruma:
+
+- **Şema kapısı (`internal/agent/mcpargs.go` — yeni):** giden MCP çağrısı,
+  sunucunun `inputSchema.required` listesine karşı **gönderilmeden önce** kontrol
+  edilir. Eksik `project` oturumun working directory'sinden doldurulur; başka bir
+  eksik alan varsa çağrı hiç gönderilmez ve model yerel bir şema hatası alır.
+  Şema/`required` yoksa kapı hiçbir şey yapmaz — tahminle bloklama yok.
+- **Otomatik onarım:** `repair()` artık `repairPlan` döndürür. Düzeltilebilir
+  kimlik (çıplak repo adı, yol, harf farkı) çağrı **bir kez yeniden koşturularak**
+  onarılır; belirsizlikte tahmin edilmez. Çağrı başına tek düzeltme.
+- **Otomatik indeksleme:** oturumun reposu `available_projects` içinde yoksa
+  `EnsureCodebaseIndexed` tetiklenir; yönerge indeksin bu tur içinde hazır
+  olmayacağını açıkça söyler (turu bloklayıp beklemek yerine).
+- **Sınır:** claude-cli sağlayıcısında araç döngüsünü CLI koşturur, çağrılar
+  TionSwarm'dan geçmez — şema kapısı ve otomatik onarım orada devreye giremez.
+  O yolda kazanılan tek şey doğru store'a bağlanmaktır.
+
+Dosyalar: `internal/agent/mcprepair.go` · `mcpargs.go` (yeni) · `toolloop.go` ·
+`capabilities.go` (`applyCBMStore`) · `climcp.go` · `toolsetup.go` ·
+`internal/tools/registry.go` (`MCPSchema`). Testler: `mcprepair_test.go` (yeniden
+yazıldı), `mcpargs_test.go`, `registry_mcpschema_test.go` (yeni),
+`climcp_test.go` + `capabilities_test.go` (regresyon kalkanları).
+Doğrulama: `go build ./...` ✅ · `go vet ./...` ✅ · `go test ./... -count=1` ✅
+(33 paket, 0 FAIL). Teknik not: `_Docs/11-INTERACTION-MCP.md`, `_Docs/54-CAPABILITY-PROBE.md`.
 
 ## View katmanı: tek projektör kurulumu + tek sayım (2026-08-10) ✅
 
@@ -25,8 +331,16 @@ projektörünü kuruyor, biri hariç hiçbiri opsiyonel kaynakları bağlamıyor
 - **Mercek tekleşti:** `ViewPanel` opsiyonel `lens` prop'u alır; Harita ekranında
   başlıktaki mercek yan paneli de sürer (panel kendi seçicisini gizler). Önce
   harita `errors`, yanındaki özet `health` gösterebiliyordu.
+- **Kategori düğümünde `full` işe yaramıyordu:** `ProjectCategory` üyeleri yalnız
+  `Handle` olarak veriyordu, dolayısıyla `card` ile `full` aynı metni üretiyordu ve
+  Harita'daki `full` düğmesi hiçbir şey değiştirmiyordu. Artık `full` üyeleri satır
+  satır yazar (2400B cap + `Elided`). Kalan küçük yapraklarda `card` = `full` kasıtlı.
+- **Kopyala butonu** özdeş kademeleri birleştirir (`[CARD = FULL — …]`) — üç özdeş
+  blok "seviyeler yok sayılmış" gibi okunuyordu.
 - **Regresyon testleri:** `TestDashboardSummaryMatchesWorkspaceView` (`asOf`
-  hariç bayt-eşitlik) + `TestDashboardCountersComeFromTheProjection`.
+  hariç bayt-eşitlik), `TestDashboardCountersComeFromTheProjection`,
+  `TestCategoryFullListsMembersCardDoesNot`,
+  `TestCategoryFullElisionAddsToTopNOverflow`.
 
 **Doğrulama:** `go build ./...` ✅, `go test ./internal/... -count=1` ✅ (33 paket),
 `tsc --noEmit` ✅, `npm test` ✅ (167 test).

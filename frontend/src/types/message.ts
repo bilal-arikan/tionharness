@@ -25,6 +25,7 @@ export type StepKind =
   | 'hook'
   | 'subagent'
   | 'context_change'
+  | 'cache_break'
 
 export interface TodoItem {
   content: string
@@ -76,6 +77,9 @@ export interface TurnStep {
   // 'context_change' payload: the per-block added/removed diff of the frozen
   // static context (prompt-epoch drift). added/removed above hold rollup counts.
   areas?: ContextArea[]
+  // 'cache_break' payload: the prefix size (tokens) this turn had to re-pay cold
+  // after losing the warm prompt cache. `reason` carries the attributed cause.
+  coldTokens?: number
   // Truncation markers set by the SERVER on the transcript READ path only: a
   // long tool payload is cut to a cap so opening a session does not ship
   // megabytes the chat never paints. The persisted trace — and the model's

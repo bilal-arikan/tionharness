@@ -39,6 +39,73 @@ func TestEffortForThinkingBudget(t *testing.T) {
 	}
 }
 
+func TestThinkingTiersFor(t *testing.T) {
+	has := func(tiers []string, v string) bool {
+		for _, t := range tiers {
+			if t == v {
+				return true
+			}
+		}
+		return false
+	}
+	// Always-on class: no "off" (thinking cannot be disabled), full depth ramp.
+	fable := ThinkingTiersFor("claude-fable-5")
+	if has(fable, "off") {
+		t.Errorf("fable should not offer off: %v", fable)
+	}
+	if !has(fable, "max") || !has(fable, "xhigh") {
+		t.Errorf("fable should offer xhigh/max: %v", fable)
+	}
+	// Adaptive class: full ramp including off + xhigh/max.
+	adaptive := ThinkingTiersFor("claude-opus-4-8")
+	for _, v := range []string{"off", "low", "medium", "high", "xhigh", "max"} {
+		if !has(adaptive, v) {
+			t.Errorf("adaptive should offer %q: %v", v, adaptive)
+		}
+	}
+	// Concrete legacy model: off/low/medium/high, but NOT xhigh/max (they clamp).
+	legacy := ThinkingTiersFor("claude-haiku-4-5-20251001")
+	if has(legacy, "xhigh") || has(legacy, "max") {
+		t.Errorf("legacy should not offer xhigh/max: %v", legacy)
+	}
+	if !has(legacy, "off") || !has(legacy, "high") {
+		t.Errorf("legacy should offer off..high: %v", legacy)
+	}
+	// Bare alias / custom / empty: full ramp (provider clamps).
+	for _, m := range []string{"opus", "sonnet", ""} {
+		full := ThinkingTiersFor(m)
+		if len(full) != 6 || !has(full, "max") {
+			t.Errorf("alias %q should get full ramp: %v", m, full)
+		}
+	}
+	// Non-thinking (DeepSeek Flash): only "off".
+	flash := ThinkingTiersFor("deepseek-v4-flash")
+	if len(flash) != 1 || flash[0] != "off" {
+		t.Errorf("deepseek flash should offer only off: %v", flash)
+	}
+}
+
+func TestThinkingClass(t *testing.T) {
+	cases := map[string]string{
+		"claude-fable-5":             "always-on",
+		"mythos-5":                   "always-on",
+		"claude-opus-4-8":            "adaptive",
+		"claude-sonnet-5":            "adaptive",
+		"deepseek-v4-flash":          "non-thinking",
+		"deepseek/deepseek-v4-flash": "non-thinking",
+		"deepseek-v4-pro":            "legacy", // Pro reasons — not lumped with Flash
+		"claude-haiku-4-5":           "legacy",
+		"MiniMax-M3":                 "legacy",
+		"opus":                       "alias",
+		"":                           "alias",
+	}
+	for model, want := range cases {
+		if got := ThinkingClass(model); got != want {
+			t.Errorf("ThinkingClass(%q) = %q, want %q", model, got, want)
+		}
+	}
+}
+
 func TestThinkingFor(t *testing.T) {
 	// Adaptive class: budget translates to adaptive + effort, no budget_tokens.
 	p, cfg, mt := thinkingFor("claude-opus-4-8", 16384, 4096)

@@ -15,6 +15,7 @@ import {
   Pencil,
   RefreshCw,
   ShieldAlert,
+  Snowflake,
   Terminal,
   Trash2,
   TriangleAlert,
@@ -132,7 +133,8 @@ export const STEP_KINDS: StepKindInfo[] = [
     Icon: CornerDownRight,
     persisted: true,
     status: 'active',
-    description: 'Çalışan tura canlı eklenen kullanıcı yönlendirmesi (steer); modelden ayrı gösterilir.',
+    description:
+      'Çalışan tura canlı eklenen kullanıcı yönlendirmesi (steer); modelden ayrı gösterilir.',
   },
   {
     kind: 'tool_delta',
@@ -178,6 +180,15 @@ export const STEP_KINDS: StepKindInfo[] = [
     status: 'active',
     description:
       'Oturumun dondurulmuş statik bağlamı (persona/talimat/skill/araç kataloğu) oturum ortasında değişti; prompt cache’i korumak için önbelleğe giren prefix hâlâ oturum-başı snapshot’ını taşır. Değişen bloklar +/- diff olarak gösterilir. Drift başına bir kez yayılır; değişiklik bir sonraki bağlam yenilemesinde (/refresh-context, compaction, boşta kalma) tam uygulanır.',
+  },
+  {
+    kind: 'cache_break',
+    label: 'Cache kırılması',
+    Icon: Snowflake,
+    persisted: true,
+    status: 'active',
+    description:
+      'Bu tur oturumun sıcak prompt-cache önekini kaybetti ve öneki baştan (soğuk) ödedi. Yalnız “bir şey değişti” sebepleri kart olur: model değişimi ve sistem promptu/araç şeması değişimi. Uzun boşluk sonrası TTL soğuması kart açmaz (normaldir) — o yalnız mesaj debug panelinde ve transkriptteki soğuk ayracında görünür. Prompt epoch açıkken prompt/araç kaynaklı kırılım oturum ortasında BEKLENMEZ; görülüyorsa araştırılmalıdır.',
   },
   {
     kind: 'subagent',

@@ -657,19 +657,19 @@ func normalize(v Settings) Settings {
 	if v.ScheduleTimeoutMin > 1440 {
 		v.ScheduleTimeoutMin = 1440
 	}
-	// Coordinator guards: workers ≥ 1 (≤ 64), auto-turns ≥ 1 (≤ 500).
+	// Coordinator guards: workers ≥ 1 (≤ 64).
 	if v.CoordinatorMaxWorkers < 1 {
 		v.CoordinatorMaxWorkers = 1
 	}
 	if v.CoordinatorMaxWorkers > 64 {
 		v.CoordinatorMaxWorkers = 64
 	}
-	if v.CoordinatorMaxTurns < 1 {
-		v.CoordinatorMaxTurns = 1
-	}
-	if v.CoordinatorMaxTurns > 500 {
-		v.CoordinatorMaxTurns = 500
-	}
+	// Auto-turns and the tree-wide worker budget are no longer user-configurable:
+	// the settings UI dropped both inputs, and the product decision is that they
+	// stay unlimited (-1). normalize runs on every load and save, so this also
+	// coerces any previously-persisted finite value in existing workspaces to
+	// unlimited the next time their settings.json is read.
+	v.CoordinatorMaxTurns = -1
 	// -1 is meaningful here (explicitly unlimited), so only values below that are
 	// clamped. The upper bounds are sanity ceilings, not policy: depth 12 with the
 	// default 8 workers per node is already astronomically wide, and the subtree cap
@@ -680,12 +680,9 @@ func normalize(v Settings) Settings {
 	if v.CoordinatorMaxDepth > 12 {
 		v.CoordinatorMaxDepth = 12
 	}
-	if v.CoordinatorMaxSubtreeSessions < -1 {
-		v.CoordinatorMaxSubtreeSessions = -1
-	}
-	if v.CoordinatorMaxSubtreeSessions > 4096 {
-		v.CoordinatorMaxSubtreeSessions = 4096
-	}
+	// Tree-wide worker budget: welded unlimited alongside CoordinatorMaxTurns above
+	// (UI input removed; -1 = unlimited).
+	v.CoordinatorMaxSubtreeSessions = -1
 	// A backstop firing in a couple of seconds would race every normal synthesis
 	// turn and report "incomplete" over work that was about to finish; one that
 	// waits an hour is not a backstop. 0 keeps the built-in default.

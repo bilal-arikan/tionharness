@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 
 	"github.com/bilal-arikan/tionswarm/internal/agent"
@@ -89,7 +90,7 @@ func (s *Server) composeTurnRequest(ctx context.Context, wsp *workspace.Workspac
 	// off, it states shell is disabled and gives the dead-tool rule so a bare
 	// `PowerShell` call (which hits "not enabled in this context") is not looped
 	// on. Volatile side: the gate can toggle mid-session.
-	if sh := wsp.Runtime.ShellToolsContextBlock(); sh != "" {
+	if sh := wsp.Runtime.ShellToolsContextBlock(false); sh != "" {
 		dynamic = strings.TrimSpace(dynamic + "\n\n" + sh)
 	}
 	// Coordination scratchpad (M2/M3): a shared folder the coordinator and ALL its
@@ -159,6 +160,19 @@ func (s *Server) composeTurnRequest(ctx context.Context, wsp *workspace.Workspac
 	}
 }
 
+// compactionLeadStep builds the head-of-turn step that surfaces an auto-compaction
+// fold on screen (same 🗜 framing as the manual /compact report). foldedMsgs comes
+// from conversation.Prepared.FoldedMsgs. Shared by the interactive (chat_stream)
+// and autonomous (wake/coordinator/worker via wake_turn) turn paths so a budgeted
+// fold renders identically no matter which kind of turn triggered it — the fix for
+// "compaction ran on a spawned/coordinator turn but I can't see it".
+func compactionLeadStep(foldedMsgs int) agent.TurnStep {
+	return agent.TurnStep{
+		Kind: agent.StepText,
+		Text: fmt.Sprintf("🗜 Bağlam otomatik sıkıştırıldı — %d mesaj kalıcı özete katlandı.", foldedMsgs),
+	}
+}
+
 // consumeContextChangeLead returns a one-element lead trace (a context_change
 // step) when the session's frozen static context drifted this episode, else
 // nil. Consumes the one-shot so it fires once per drift episode. Lives here (not
@@ -167,6 +181,25 @@ func (s *Server) composeTurnRequest(ctx context.Context, wsp *workspace.Workspac
 func consumeContextChangeLead(rt *agent.Runtime, sessionID, agentID string) []agent.TurnStep {
 	if cc := rt.ConsumeContextChange(sessionID, agentID); cc != nil {
 		return []agent.TurnStep{agent.ContextChangeStep(cc)}
+	}
+	return nil
+}
+
+// consumeCacheBreakLead returns a one-element trace (a cache_break step) when the
+// turn that just ran lost the session's warm prompt-cache prefix for an
+// attributable "something changed" reason, else nil. Consumes the one-shot so the
+// break is carded once.
+//
+// Unlike the context_change lead this is consumed AFTER the completion, not
+// before: the break is only knowable from the provider's usage reply. It is still
+// prepended to the trace (the cold prefix was paid at the head of the turn) and
+// deliberately NOT emitted as a live SSE step — emitting it late would paint it
+// below the streamed answer, then jump to the top on reload.
+func consumeCacheBreakLead(rt *agent.Runtime, sessionID string) []agent.TurnStep {
+	if cb := rt.ConsumeCacheBreak(sessionID); cb != nil {
+		if st := agent.CacheBreakStep(cb); st.Kind != "" {
+			return []agent.TurnStep{st}
+		}
 	}
 	return nil
 }

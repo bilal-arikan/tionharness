@@ -893,9 +893,16 @@ da, UI roster'ında da).
 | Guard | Kapsam | Varsayılan |
 |---|---|---|
 | `CoordinatorMaxWorkers` | düğüm başına aktif worker | 8 |
-| `CoordinatorMaxTurns` | oturum başına otomatik tur | 50 |
+| `CoordinatorMaxTurns` | oturum başına otomatik tur | **sınırsız** (`-1`; ayar UI'sinden kaldırıldı, `normalize`'da sabitlendi) |
 | **`CoordinatorMaxDepth`** | ağacın seviye derinliği (kök = 0) | **5** (`-1` = sınırsız) |
-| **`CoordinatorMaxSubtreeSessions`** | **tüm ağaçtaki** CANLI worker oturumu | **64** (`-1` = sınırsız) |
+| **`CoordinatorMaxSubtreeSessions`** | **tüm ağaçtaki** CANLI worker oturumu | **sınırsız** (`-1`; ayar UI'sinden kaldırıldı, `normalize`'da sabitlendi) |
+
+> **Not (2026-08-11):** `CoordinatorMaxTurns` ve `CoordinatorMaxSubtreeSessions`
+> artık kullanıcı tarafından ayarlanamaz — Ayarlar ekranındaki iki giriş kaldırıldı
+> ve `settings.normalize` her ikisini de `-1` (sınırsız) olarak sabitler; bu, mevcut
+> workspace'lerin `settings.json`'undaki eski sonlu değerleri de yükleme anında
+> sınırsıza çevirir. Fan-out'u sınırlayan kalan korumalar: `CoordinatorMaxWorkers`
+> (düğüm başına), `CoordinatorMaxDepth` ve stall-sweeper.
 
 Alt-ağaç bütçesi kritik: düğüm-başına worker limiti **düğüm bazında** uygulandığı
 için derinlikle **çarpılır** (8 worker × derinlik 4 ≈ 4096 oturum); üstel dallanmayı
@@ -1071,7 +1078,7 @@ yüzden "check-then-act" desenleri burada teorik değil. Denetim sonucu:
 | **Credential dosyası yarım okunur** | `copyFile` truncate-sonra-stream yapıyordu; heal'i **her tura** taşıyınca eşzamanlı bir CLI 0 baytlık `.credentials.json` görebilirdi ("not logged in"). → tmp+rename (POSIX + Windows'ta atomik). |
 | **Taze login'in eski kaynakla ezilmesi** | Heal "sırala → kopyala" arasında CLI dst'yi tazeleyebilir. → per-home kilit + kopyalamadan hemen önce dst'nin **yeniden** sıralanması; daha iyiyse kopyalama yapılmaz. |
 | **Çoklu pencere / ekran** | Rol toggle'ı ve worker geçişleri SSE ile yayılır (`emitCoordinationModeEvent` + `workerBus`); ağaç paneli aynı akışa abone. İki pencere aynı anda toggle ederse son yazan kazanır ve ikisi de olayı görür. |
-| **Aynı oturumda çift tur** | Değişmedi: `coordSlot` her oturumun tek tur kilidi (`_Docs/58`, §13); `runWorker` ve `runSpawn` de bu slotu alır. |
+| **Aynı oturumda çift tur** | Tek tur kilidi artık `internal/turnqueue` (2026-08-11): her giriş yolu — worker, spawn, wake, peer, /compact, kullanıcı mesajı, koordinatör oto-turu — aynı FIFO'dan geçer. `coordSlot` yalnız koordinatör politikasını tutar. `_Docs/58`. |
 | **Kullanıcı "Durdur" → idle-reconcile turu kaçağı** (2026-08-06) | Kullanıcı koordinatörün canlı turunu durdurunca (`run.cancel` → tur `context.Canceled`) `runCoordinatorTurn` "⏹️ durduruldu" yazıyordu ama ayrı goroutine'deki `drainCoordinator` dönmeye devam edip idle-reconcile dalına düşüyordu; workerlar önceden bittiyse (`hadWorkers && workers==0`) `<coordination-status>...finished...</coordination-status>` notunu enjekte edip **bir tur daha** koşuyordu → durdurma "devam ediyor" gibi görünüyordu. → `runCoordinatorTurn` insan-stop dalında (watchdog kesintisinden `classifyTurnContext` ile ayrık plain `context.Canceled`) tek-seferlik `slot.stopRequested` set eder; `drainCoordinator` **yalnızca no-pending idle-reconcile'ı** bastırır: pending bir worker bildirimi VARSA (çalışan/yeni-biten worker) o bildirim Stop'u geçersizler ve tur yine koşar (`pending` dalı `stopRequested`'ı temizler) — **çalışan worker'lar Durdur'a rağmen koordinatörü sürdürebilir**. Pending yoksa idle-reconcile atlanıp temiz çıkılır (`running=false`, `scheduleSettleBackstop` korunur — mid-node üst-rapor borcu için). Kalıcı değil: hâlâ koşan bir worker bitince `enqueueCoordinatorTurn` ile loop'u yeniden başlatır. Testler: `TestUserStopSkipsIdleReconcile` (worker yok → tam durur), `TestUserStopHonoursPendingWorker` (pending bildirim Stop'u geçersizler). |
 
 **Bilinçli kapsam dışı (bilinmesi gerekenler):**

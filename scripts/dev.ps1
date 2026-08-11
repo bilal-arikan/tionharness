@@ -1,9 +1,18 @@
 # TionSwarm - development run (backend + frontend together).
 #
-# Starts the Go backend (go run ./cmd/tionswarm on 127.0.0.1:8090) and the Vite
-# dev server (npm run dev on :5173, proxies /api to 8090) side by side.
-# Closing this window or pressing Ctrl+C kills BOTH process trees so no orphan
-# node/go server is left listening.
+# Builds the Go backend to bin\tionswarm-dev.exe, runs it (127.0.0.1:8090) and
+# starts the Vite dev server (npm run dev on :5173, proxies /api to 8090) beside
+# it. Closing this window or pressing Ctrl+C kills BOTH process trees so no
+# orphan node/go server is left listening.
+#
+# WHY build-then-run instead of `go run` (changed 2026-08-11): `go run` inserts a
+# go.exe WRAPPER between this script and the real server. On 2026-08-11 17:29 the
+# wrapper was force-killed from outside while tionswarm.exe kept serving: the
+# script saw "backend exited", tore down Vite, and the orphaned server held :8090
+# for another 20s. `go run` also swallows the child's death into a bare "exit
+# status 1", which hid the cause of FIVE such deaths (2026-08-02..08-11). Running
+# the exe directly means one process, real exit codes, and panic traces landing
+# in the stderr capture.
 #
 # NOTE: keep this file ASCII-only. Windows PowerShell 5.1 mis-decodes a UTF-8
 # (no BOM) script as ANSI, which corrupts non-ASCII chars (em-dash, Turkish
@@ -16,8 +25,9 @@
 #
 # TROUBLESHOOTING -- "firewall allowed but phone still can't reach it":
 #   The usual cause is the Wi-Fi network being classified as PUBLIC. Windows
-#   Firewall blocks inbound on Public, and the go run temp exe gets a NEW path on
-#   every compile so a program-based allow rule goes stale. Fix (elevated shell):
+#   Firewall blocks inbound on Public; prefer PORT-based rules over program-based
+#   ones (the exe path is stable now, but the port rules are simpler anyway).
+#   Fix (elevated shell):
 #     Set-NetConnectionProfile -InterfaceAlias 'Wi-Fi' -NetworkCategory Private
 #     New-NetFirewallRule -DisplayName 'TionSwarm Dev 5173' -Direction Inbound -LocalPort 5173 -Protocol TCP -Action Allow -Profile Private
 #     New-NetFirewallRule -DisplayName 'TionSwarm Dev 8090' -Direction Inbound -LocalPort 8090 -Protocol TCP -Action Allow -Profile Private
@@ -42,8 +52,11 @@
 #
 # Diagnostics: _devlogs\lifecycle.log records every launch/kill across runs, and
 # _devlogs\backend-stderr-<stamp>.log captures the backend's STDERR (Go runtime
-# fatals / panic traces; STDOUT stays live on the console). Empty captures are
-# deleted on exit, so a surviving stderr file always means something went wrong.
+# fatals / panic traces; STDOUT stays live on the console AND is mirrored by the
+# app itself to ~/.tionswarm/logs/tionswarm.log). Empty captures are deleted on
+# exit, so a surviving stderr file always means something went wrong. On teardown
+# the tail of that app log is printed too -- an externally killed process writes
+# nothing to stderr, so its last log lines are the only context left.
 # If the backend disappears and lifecycle.log shows NO cleanup entry for it, the
 # kill came from outside this script (external taskkill, window force-close).
 #
@@ -88,6 +101,22 @@ if (-not (Test-Path $logDir)) { New-Item -ItemType Directory -Path $logDir | Out
 $runStamp = Get-Date -Format "yyyyMMdd-HHmmss"
 $backendErrLog = Join-Path $logDir "backend-stderr-$runStamp.log"
 $lifecycleLog = Join-Path $logDir "lifecycle.log"
+
+# Dev binary (bin/ is gitignored). Rebuilt on every run; the previous run's copy
+# is already dead by then, so the file is never locked.
+$backendExe = Join-Path $root "bin\tionswarm-dev.exe"
+
+# The app's own stdout mirror -- tailed on teardown because an externally killed
+# process leaves nothing in the stderr capture. TIONSWARM_DATA_DIR wins if set.
+$appLog = if ($env:TIONSWARM_DATA_DIR) {
+    Join-Path $env:TIONSWARM_DATA_DIR "logs\tionswarm.log"
+} else {
+    Join-Path $HOME ".tionswarm\logs\tionswarm.log"
+}
+
+# Set by Stop-Tree when the backend was already dead at teardown: its (possible)
+# orphaned children still hold the port, so cleanup sweeps it.
+$script:backendSelfExited = $false
 
 function Write-Lifecycle($msg) {
     $line = "{0} {1}" -f (Get-Date -Format "yyyy-MM-ddTHH:mm:ss.fffzzz"), $msg
@@ -143,6 +172,7 @@ function Stop-Tree($p, $label) {
     try {
         if ($p.HasExited) {
             Write-Lifecycle "$label already exited on its own (pid=$($p.Id) exit=$(Get-ExitCodeSafe $p)) -- not killed by dev.ps1"
+            if ($label -eq "backend") { $script:backendSelfExited = $true }
             return
         }
         # /T kills the whole tree (go run's child binary, npm's node), /F forces it.
@@ -183,15 +213,25 @@ try {
     if (-not $FrontendOnly) {
         # Pre-flight: clear any orphan still holding the backend port.
         Free-Port $Port "Backend"
-        Write-Host "==> Backend baslatiliyor: go run ./cmd/tionswarm  (${bindHost}:$Port)" -ForegroundColor Cyan
+        # Build FIRST, run the exe second (see the WHY note at the top of this
+        # file): no go.exe wrapper means no orphaned server and no "exit status 1"
+        # masking the real exit code. A compile error also surfaces here, before
+        # Vite starts, instead of as a mysterious early child exit.
+        Write-Host "==> Backend derleniyor: go build -o bin\tionswarm-dev.exe ./cmd/tionswarm" -ForegroundColor Cyan
+        & go build -o $backendExe ./cmd/tionswarm
+        if ($LASTEXITCODE -ne 0) {
+            Write-Lifecycle "backend build FAILED (exit=$LASTEXITCODE)"
+            throw "backend derlenemedi (go build exit $LASTEXITCODE)"
+        }
+        Write-Host "==> Backend baslatiliyor: bin\tionswarm-dev.exe  (${bindHost}:$Port)" -ForegroundColor Cyan
         $env:TIONSWARM_ADDR = "${bindHost}:$Port"
         # Gated feature (see SKILL.md / Ortam Notlari): the built-in shell.
         # (Self-management is ALWAYS installed since 2026-07-01 -- no env gate.)
         $env:TIONSWARM_ENABLE_SHELL = "1"
         # -RedirectStandardError: keeps Go runtime fatals (OOM, panic traces) on
         # disk. STDOUT is intentionally NOT redirected -- slog keeps streaming to
-        # this console live.
-        $backend = Start-Process -FilePath "go" -ArgumentList "run", "./cmd/tionswarm" `
+        # this console live, and the app mirrors it to ~/.tionswarm/logs anyway.
+        $backend = Start-Process -FilePath $backendExe `
             -WorkingDirectory $root -NoNewWindow -PassThru `
             -RedirectStandardError $backendErrLog
         Add-Proc $backend "backend" $backendErrLog
@@ -203,7 +243,7 @@ try {
     # yet, so starting Vite now would spam "ECONNREFUSED 127.0.0.1:8090" until the
     # binary finally launches. Polling /health first makes Vite start clean.
     if (-not $FrontendOnly -and -not $BackendOnly) {
-        Write-Host "==> Backend derleniyor/hazirlaniyor, /health bekleniyor (ilk derleme uzun surebilir)..." -ForegroundColor Cyan
+        Write-Host "==> Backend hazirlaniyor, /health bekleniyor..." -ForegroundColor Cyan
         $healthUrl = "http://127.0.0.1:$Port/health"
         $deadline = (Get-Date).AddSeconds(120)
         $ready = $false
@@ -281,6 +321,15 @@ finally {
     Write-Lifecycle "dev.ps1 cleanup started (Ctrl+C, window close or child exit)"
     foreach ($e in $procs) { Stop-Tree $e.Proc $e.Label }
 
+    # The backend died without us: anything it spawned (or, historically, the
+    # server behind a go run wrapper) can still own the port. Stop-Tree cannot
+    # reach those -- the parent handle is already dead -- so sweep the port by
+    # owner instead. Only on a self-exit: on a normal Ctrl+C teardown a listener
+    # on this port would belong to somebody else and must not be touched.
+    if ($script:backendSelfExited -and -not $FrontendOnly) {
+        try { Free-Port $Port "Backend (orphan)" } catch { }
+    }
+
     # Surface captured stderr right here: a runtime fatal is worthless if nobody
     # reads it. An EMPTY capture is deleted, so a surviving file always means the
     # process wrote something to stderr.
@@ -293,6 +342,17 @@ finally {
         Write-Host ""
         Write-Host "==> $($e.Label) STDERR yakalandi ($len bayt): $($e.Err)" -ForegroundColor Red
         Get-Content $e.Err -Tail 40 | ForEach-Object { Write-Host "    $_" -ForegroundColor DarkYellow }
+        Write-Host ""
+    }
+
+    # An externally killed process writes NOTHING to stderr, so the stderr block
+    # above stays silent exactly in the cases that matter most. The app's own log
+    # mirror is then the only record of what it was doing when it died -- surface
+    # its tail so the last lines are on screen next to the lifecycle verdict.
+    if ($script:backendSelfExited -and (Test-Path $appLog)) {
+        Write-Host ""
+        Write-Host "==> Backend kendi kendine oldu. Uygulama logunun sonu ($appLog):" -ForegroundColor Red
+        Get-Content $appLog -Tail 25 | ForEach-Object { Write-Host "    $_" -ForegroundColor DarkGray }
         Write-Host ""
     }
 

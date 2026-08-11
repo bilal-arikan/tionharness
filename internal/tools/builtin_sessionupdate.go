@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/bilal-arikan/tionswarm/internal/providers"
@@ -94,6 +95,12 @@ func (UpdateSessionTool) Call(ctx context.Context, input json.RawMessage) (strin
 		// fs/shell tools silently. Empty resets to the workspace default (no check).
 		dir = strings.TrimSpace(*in.WorkingDir)
 		if dir != "" {
+			// Require an absolute path (as the schema states): a relative path
+			// would resolve against the server process cwd — meaningless to the
+			// agent and unpredictable — so reject it instead of guessing.
+			if !filepath.IsAbs(dir) {
+				return "", fmt.Errorf("working_dir must be an absolute path: %s", dir)
+			}
 			info, err := os.Stat(dir)
 			if err != nil {
 				return "", fmt.Errorf("path does not exist or is not accessible: %s", dir)

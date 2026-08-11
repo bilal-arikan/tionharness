@@ -139,6 +139,13 @@ func scanDir(t tier) []Skill {
 		if info, statErr := os.Stat(path); statErr == nil {
 			sk.ModifiedAt = info.ModTime().Unix()
 		}
+		// How this file compares to the skill TionSwarm ships — only meaningful in
+		// the GLOBAL tier, where the defaults are seeded. A workspace-tier skill of
+		// the same slug is a deliberate override living in a different file, so it
+		// has no shipped default to be measured against or restored from.
+		if t.source == SourceGlobal {
+			sk.DefaultState = DefaultState(t.dir, slug)
+		}
 		sk.Visibility = skillVisibility(sk)
 		out = append(out, sk)
 	}

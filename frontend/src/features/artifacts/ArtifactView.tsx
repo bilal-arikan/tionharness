@@ -5,6 +5,7 @@ import { Markdown } from '@/shared/components/markdown/Markdown'
 import { CodeBlock } from '@/shared/components/markdown/CodeBlock'
 import { Lightbox } from '@/shared/components'
 import { fileURL } from '@/shared/lib/attachments'
+import { TextFileArtifact, textFileLang } from './TextFileArtifact'
 
 // ImageArtifact renders an image artifact with click-to-zoom into the shared
 // Lightbox (zoom + pan). Kept as its own component so the hook is valid even
@@ -19,7 +20,9 @@ function ImageArtifact({ url, alt }: { url: string; alt: string }) {
         onClick={() => setZoom(true)}
         className="max-h-[70vh] max-w-full cursor-zoom-in rounded transition hover:opacity-90"
       />
-      {zoom && <Lightbox imageSrc={url} imageAlt={alt} title={alt} onClose={() => setZoom(false)} />}
+      {zoom && (
+        <Lightbox imageSrc={url} imageAlt={alt} title={alt} onClose={() => setZoom(false)} />
+      )}
     </div>
   )
 }
@@ -90,6 +93,24 @@ export function ArtifactView({ kind, language, content, sourcePath }: Props) {
     }
     case 'file': {
       const url = fileURL(sourcePath)
+      const lang = sourcePath ? textFileLang(sourcePath) : undefined
+      // Text-like files (md, logs, code) are previewed inline; the download
+      // card below stays available for the raw bytes.
+      if (url && lang !== undefined) {
+        return (
+          <div className="space-y-3">
+            <TextFileArtifact url={url} lang={lang} />
+            <a
+              href={url}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-block text-xs text-[var(--color-accent)] hover:underline"
+            >
+              Aç / indir
+            </a>
+          </div>
+        )
+      }
       return (
         <div className="flex items-center gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] p-4">
           <FileIcon size={28} className="shrink-0 text-[var(--color-text-dim)]" />
@@ -97,7 +118,12 @@ export function ArtifactView({ kind, language, content, sourcePath }: Props) {
             <div className="truncate text-sm font-medium">{content || sourcePath || 'Dosya'}</div>
             <div className="text-xs text-[var(--color-text-dim)]">
               {url ? (
-                <a href={url} target="_blank" rel="noreferrer" className="text-[var(--color-accent)] hover:underline">
+                <a
+                  href={url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-[var(--color-accent)] hover:underline"
+                >
                   Aç / indir
                 </a>
               ) : (

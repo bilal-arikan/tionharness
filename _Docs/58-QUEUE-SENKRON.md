@@ -531,6 +531,86 @@ tur slot'unu** (`coordSlot`) alır; worker `<task-notification>` oto-turları da
 cevapları sonradan yine koordinatör oturumuna düşer. Kompozer workerlar koşarken de
 normal "Gönder" gösterir; `WorkerWaitBanner` bilgilendirici olarak kalır.
 
+## Tek kuyruk: `internal/turnqueue` (2026-08-11)
+
+**Bulunan hata (SES612).** Koordinatör workerlarını sürerken gönderilen kullanıcı
+mesajı UI'dan **kayboluyor**, sonra bir worker cevabı geldiğinde birden sohbet
+akışına düşüyordu. Sebep: bir oturumu **iki** serileştirici yönetiyordu ve biri
+görünmezdi — `internal/api`'deki kalıcı send-queue ve `internal/agent`'taki isimsiz
+`coordSlot` mutex'i. Kuyruk worker'ı head'i **önce** pop ediyor (mesaj WAITING
+listesinden, yani tray'den düşüyor), **sonra** `runChatTurn` içinde slot'ta bloke
+oluyordu → mesaj ne kuyrukta ne transkriptte, iptal de edilemez. Kanıt: kullanıcı
+mesajının `createdAt`'i, önceki asistan turunun bitiş saniyesiyle birebir aynı.
+
+### Yeni katman
+
+`internal/turnqueue` = **tur kabul kuyruğu**. Bağımlılığı yok, iki katman da onu
+tutar:
+
+```
+internal/api   → dayanıklılık (inbox.json: NE çalışacak, çökmeden sağ çıkar)
+turnqueue      → kabul sırası     (KİM çalışacak, arkasında ne bekliyor)
+internal/agent → politika         (koordinatör bir tur DAHA istiyor mu)
+```
+
+- `Acquire(ctx, session, kind, label)` — FIFO baton devri (broadcast yarışı yok),
+  ctx-farkında (vazgeçen bekleyen slot'u asla kilitlemez), **bekleyen varken serbest
+  slot kapılamaz**. Öncelik yoktur: önce isteyen önce koşar — öncelik şeması zaten
+  koordinatörün kullanıcıyı aç bırakmasının sebebiydi.
+- `Snapshot(session)` — çalışan + bekleyenler (`kind`+`label`+`since`). UI bunu
+  gösterir; "meşgul" yerine **neyin** arkasında beklendiği yazar.
+- Her giriş yolu kendini adlandırır: `user`, `command` (/compact, /handoff),
+  `coordinator`, `worker`, `wake`, `peer`, `spawn`, `automation`.
+
+Kuyruk bilerek **kalıcı değil**: zaten uçuşta olan turları sıralar; boot'ta
+dayanıklılığı sahiplenen taraflar (send-queue'nun `inbox.json`'ı, otonom turlar için
+`RecoverOrphanedTurns`) yeniden kurar.
+
+### `coordSlot` artık yalnız politika
+
+`running` alanı kalktı (kilit `turnqueue`'da). Kalanlar: `driving` (bir drain
+döngüsü var mı — bildirimlerin **tek** döngüde birleşmesi için), `pending`,
+`ackedIdle`, `hadWorkers`, `turns`/`capWarn`, stall guard'ları, `workers`.
+`drainCoordinator` artık slot'u döngü boyunca **tutmuyor**, her iterasyonda
+**yeniden kuyruğa giriyor** → kullanıcı mesajı zaten FIFO'da olduğu için mevcut
+turdan sonra koşar, tüm drain'in sonunda değil. Adalet bir özel-durum kontrolü
+değil, **yapısal**. `turns` sayacı artık slot alındıktan sonra artar (bekleyen ama
+hiç koşmamış tur bütçe harcamaz).
+
+Dışarıdan `running` okuyan üç yer artık kuyruğa soruyor: stall süpürücüsü
+(`slotIsStallCandidate`), flow-koordinatör sükûnet kontrolü (`coordSlotIdle`) ve
+`scheduleSettleBackstop`.
+
+### API tarafı
+
+- **Pop'tan önce claim:** worker head'i pop etmeden önce slot'u alır ve sahipliği
+  `chatReq.turnSlotHeld` ile `runChatTurn`'e devreder. Mesaj slot boşalana kadar
+  **WAITING** kalır: görünür ve iptal edilebilir. Defterler `popInboxHead` +
+  `endInboxDrain`'e ayrıldı (kayıp-uyandırma olmasın diye boşluk kontrolü ile
+  `running=false` aynı kilitte).
+- **İkinci serileştirici silindi:** `acquireInboxSlot` + `idleSignal` +
+  `signalInboxIdleLocked` kaldırıldı; `/compact` ve `/handoff` artık sadece
+  `ClaimSessionCommandTurn` ile aynı kuyruğa girer.
+- **Tek kuyruk yayını:** `queue_update` artık `queue` + `inflight` (metniyle) +
+  `turns` (kabul kuyruğu snapshot'ı) taşır. Runtime tarafı değişince
+  `TypeSessionTurnQueue` bus olayı → `republishQueue` (diske yazmadan) yayınlar.
+- **steer_undelivered** geri-enqueue'su kuyruğun **başına** girer.
+
+### UI
+
+Tray üç satır tipi gösterir: **Şu an** (oturumu tutan otonom tur — yalnız kullanıcının
+bekleyeni varken), **Gönderiliyor** (dispatch edilmiş, iptal edilemez; kendi balonu
+transkripte düşünce kaybolur), **Sırada #N** (iptal/öne al). Mesaj hiçbir anda
+"hiçbir yerde" değildir.
+
+### Testler
+
+`internal/turnqueue/queue_test.go` (FIFO sırası, barging yok, iptal wedge yapmaz,
+snapshot, Forget), `internal/agent/coordination_fairness_test.go` (koordinatör
+bekleyene yol verir + tersi + etiketler), `internal/api/inbox_turnslot_test.go`
+(slot tutulurken mesaj WAITING + iptal edilebilir; serbest kalınca dispatch — eski
+sırayla kırmızı olduğu doğrulandı).
+
 ## Doğrulama
 
 Her fazda `go build ./...` + `go vet`. Canlı: aynı session'ı iki pencerede aç →

@@ -246,9 +246,9 @@ export function ToolsPanel({ draft, set }: PanelProps) {
 
       <SubHead icon={Sparkles}>Koordinatör (çoklu-ajan) limitleri</SubHead>
       <p className="-mt-1 text-xs text-[var(--color-text-dim)]">
-        M2 koordinatör/worker döngüsü için sınırlar: bir koordinatör kaç worker'ı aynı anda
-        çalıştırabilir, worker bildirimleri kaç otomatik koordinatör turu tetikleyebilir ve
-        koordinatör ağacı ne kadar derinleşebilir.
+        M2 koordinatör/worker döngüsü için sınırlar: bir koordinatör aynı anda kaç worker
+        çalıştırabilir ve koordinatör ağacı ne kadar derinleşebilir. Otomatik tur sayısı ve ağaç
+        başına toplam worker oturumu <strong>sınırsızdır</strong> (limit kaldırıldı).
       </p>
       <div className="grid grid-cols-2 gap-3">
         <Field
@@ -265,19 +265,6 @@ export function ToolsPanel({ draft, set }: PanelProps) {
           />
         </Field>
         <Field
-          label="Maks. otomatik koordinatör turu"
-          hint="Oturum başına worker bildirimlerinin tetikleyebileceği otomatik tur sayısı; aşılınca bildirimler kaydedilir ama tur durur (1–500)."
-        >
-          <input
-            type="number"
-            min={1}
-            max={500}
-            value={draft.coordinatorMaxTurns}
-            onChange={(e) => set('coordinatorMaxTurns', Number(e.target.value))}
-            className={inputCls}
-          />
-        </Field>
-        <Field
           label="Maks. koordinatör derinliği"
           hint="Koordinatör ağacının kaç seviye derinleşebileceği (kök = 0). Bir alt-koordinatör ancak kendi worker'larına yer kalıyorsa açılabilir. -1 = sınırsız."
         >
@@ -287,19 +274,6 @@ export function ToolsPanel({ draft, set }: PanelProps) {
             max={12}
             value={draft.coordinatorMaxDepth}
             onChange={(e) => set('coordinatorMaxDepth', Number(e.target.value))}
-            className={inputCls}
-          />
-        </Field>
-        <Field
-          label="Ağaç başına maks. worker oturumu"
-          hint="Bir koordinatör ağacının TÜM seviyelerindeki toplam worker sayısı. Üstteki 'koordinatör başına' limiti düğüm bazında olduğu için derinlikle çarpılır; üstel dallanmayı asıl durduran sınır budur. -1 = sınırsız."
-        >
-          <input
-            type="number"
-            min={-1}
-            max={4096}
-            value={draft.coordinatorMaxSubtreeSessions}
-            onChange={(e) => set('coordinatorMaxSubtreeSessions', Number(e.target.value))}
             className={inputCls}
           />
         </Field>

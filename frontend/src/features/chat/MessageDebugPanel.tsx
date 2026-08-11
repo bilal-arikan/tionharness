@@ -8,6 +8,13 @@ import { modelDisplayName } from '@/shared/lib/modelLabel'
 // popover with THAT reply's debug/cost/performance detail — token spend, latency,
 // cost and the per-tool breakdown — fetched lazily from the per-turn debug rollup
 // (correlated by the reply message id). Read-only; shown on assistant turns only.
+// Human labels for the backend's stable cache-break tags (agent.attributeCacheBreak).
+const CACHE_BREAK_LABEL: Record<string, string> = {
+  'model-changed': 'Model değişti',
+  'prompt-or-tools-changed': 'Prompt / araç şeması değişti',
+  'ttl-or-server-eviction': 'TTL doldu ya da sunucu düşürdü',
+}
+
 export function MessageDebugPanel({ sessionId, turnId }: { sessionId: string; turnId: string }) {
   const [open, setOpen] = useState(false)
   const [data, setData] = useState<TurnDebug | null>(null)
@@ -85,7 +92,33 @@ export function MessageDebugPanel({ sessionId, turnId }: { sessionId: string; tu
                     >
                       {warm ? `🔥 sıcak · %${(hitRate * 100).toFixed(0)} cache` : '❄ soğuk'}
                     </span>
+                    {(data.cacheBreaks ?? 0) > 0 && <Tag tone="warn">cache kırıldı</Tag>}
                   </div>
+                  {/* WHY it ran cold. The warm/cold split above is derivable from the
+                  token counts; the attributed cause is not — it comes from the
+                  cache_break journal event this turn produced. */}
+                  {!!data.cacheBreakReason && (
+                    <div className="rounded bg-[var(--color-surface-2)] px-2 py-1.5">
+                      <div className="text-[9px] uppercase tracking-wide text-[var(--color-text-dim)]">
+                        Kırılma sebebi
+                      </div>
+                      <div className="mt-0.5 font-mono text-[10px]">
+                        {CACHE_BREAK_LABEL[data.cacheBreakReason] ?? data.cacheBreakReason}
+                      </div>
+                      {!!data.cacheBreakDetail && (
+                        <p className="mt-1 text-[10px] leading-snug text-[var(--color-text-dim)]">
+                          {data.cacheBreakDetail}
+                        </p>
+                      )}
+                      {(data.coolingWasteUsd ?? 0) > 0 && (
+                        <p className="mt-1 text-[10px] text-[var(--color-warning,#d97706)]">
+                          Kaçınılabilir fazla ödeme: {fmtUSD(data.coolingWasteUsd!)}
+                          {data.coolingWasteEstimated ? ' ≈' : ''} — tur daha erken gelseydi önek
+                          sıcak kalırdı.
+                        </p>
+                      )}
+                    </div>
+                  )}
                   {data.model && (
                     <Row label="Model" value={modelDisplayName(data.model)} title={data.model} />
                   )}

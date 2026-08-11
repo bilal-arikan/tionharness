@@ -58,6 +58,15 @@
 - **Görünürlük:** ✅ Çözüldü — koşulsuz kayıt sayesinde workspace tools ekranında listelenir; CLI yine
   kendi native'ini kullanır (`TestWebSearchVisibleInWorkspaceCatalog` ile doğrulandı).
 - **Operatör kurulumu:** `secret_set` ile `TAVILY_API_KEY` *veya* `SEARXNG_URL` ekle.
+- **Bu makinedeki kurulum (2026-08-11):** Anahtarsız yol seçildi — yerel SearXNG,
+  `C:\Users\user\Desktop\Progs\searxng` (Docker Compose, `searxng/searxng:latest`,
+  `127.0.0.1:8484` → container 8080, `restart: unless-stopped`). `settings.yml` içinde
+  `search.formats` listesine `json` eklendi (araç `GET /search?format=json` çağırır;
+  varsayılan imajda JSON kapalıdır) ve `server.limiter: false` (yerel, tek tüketici).
+  Vault kaydı: `SEARXNG_URL = http://127.0.0.1:8484` — **workspace başına izole**, yani
+  her workspace'e ayrı eklenir (şu an WS5 ve WS1'de var).
+  Yeniden başlatma: `cd C:\Users\user\Desktop\Progs\searxng; docker compose up -d`.
+  Docker Desktop kapalıysa arama `connection refused` verir — önce onu başlat.
 
 ### 2. `call_llm` — hafif ikincil LLM alt-görevi — **P1**
 

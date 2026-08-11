@@ -313,7 +313,15 @@ type cliHookSpec struct {
 // always non-empty, so the settings file is now written on every MCP-delegated
 // turn (previously only when a deny-list or hooks existed).
 func (r *Runtime) writeCLISettings(ctx context.Context, deny []string, effort string) (string, func(), error) {
-	set := cliSettings{EffortLevel: effort}
+	// Claude Code's settings.json effortLevel enum rejects "max" (silently
+	// downgrading to high), so the file can carry at most xhigh. A max turn writes
+	// xhigh as the floor here and the provider lifts it to max via the env var
+	// (CLAUDE_CODE_EFFORT_LEVEL) — see Request.CLIEffortLevel / runAttempt.
+	fileEffort := effort
+	if strings.EqualFold(fileEffort, "max") {
+		fileEffort = "xhigh"
+	}
+	set := cliSettings{EffortLevel: fileEffort}
 	if len(deny) > 0 {
 		set.Permissions = &cliPermissions{Deny: append([]string(nil), deny...)}
 	}
@@ -366,7 +374,7 @@ func (r *Runtime) writeCLISettings(ctx context.Context, deny []string, effort st
 	}
 	_ = f.Close()
 	r.logger.Info("cli settings written", "path", filepath.Base(path),
-		"deny", len(deny), "hookEvents", len(hooks), "effort", effort)
+		"deny", len(deny), "hookEvents", len(hooks), "effort", fileEffort)
 	return path, func() { _ = os.Remove(path) }, nil
 }
 
@@ -378,13 +386,23 @@ func (r *Runtime) writeCLISettings(ctx context.Context, deny []string, effort st
 // batch") — see _Docs/05 2026-07-09/10. Empty ("Kapalı") and "off" map to
 // "high": thinking is already disabled for those levels, and high effort keeps
 // simple-task batching (a low effort risks re-serialising it).
+//
+// xhigh/max pass through so the deep-reasoning tiers actually reach the CLI (the
+// deliberate deep-work path); the caller accepts that thinking-on serialises tool
+// calls at those tiers ("think XOR batch"). "max" cannot ride the --settings file
+// (Claude Code's enum rejects it) — writeCLISettings clamps it to xhigh there and
+// the provider lifts it via CLAUDE_CODE_EFFORT_LEVEL, see Request.CLIEffortLevel.
 func cliEffortLevel(thinkingLevel string) string {
 	switch thinkingLevel {
 	case "low":
 		return "low"
 	case "medium":
 		return "medium"
-	default: // "", "off", "high", "xhigh", "max", unknown
+	case "xhigh":
+		return "xhigh"
+	case "max":
+		return "max"
+	default: // "", "off", "high", unknown
 		return "high"
 	}
 }

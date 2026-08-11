@@ -1,10 +1,13 @@
 // A staged intervention waiting above the composer while a turn streams:
-// a queued message (sent when the turn ends) or a steer (live guidance sent
-// after a short cancellable delay). Either can be removed before it is applied.
+// a queued message (sent when the turn ends), a steer (live guidance sent after a
+// short cancellable delay), or the message the server just dispatched
+// ('dispatching' — no longer cancellable, shown until its bubble appears in the
+// transcript so a sent message is never invisible). Queue + steer can be removed
+// before they are applied.
 export interface PendingItem {
   id: string
   text: string
-  kind: 'queue' | 'steer'
+  kind: 'queue' | 'steer' | 'dispatching' | 'holding'
   // The session this intervention belongs to. The tray is filtered to the
   // active session, and queue flush / steer dispatch target this session's
   // turn — so staged items for a background turn never apply to another.
@@ -20,7 +23,7 @@ interface Props {
   onClear?: () => void
 }
 
-import { ArrowUp, CornerDownRight, Hourglass, X } from 'lucide-react'
+import { ArrowUp, CornerDownRight, Hourglass, Loader, Send, X } from 'lucide-react'
 import { ComposerCard } from './ComposerCard'
 
 // PendingTray lists the session's WAITING backend queue (+ any steers) above the
@@ -47,6 +50,45 @@ export function PendingTray({ items, onRemove, onSendNext, onClear }: Props) {
       </div>
       {items.map((it) => {
         const pos = it.kind === 'queue' ? ++qIndex : 0
+        if (it.kind === 'holding') {
+          // What the session is busy with right now (an autonomous turn from the
+          // admission queue). Informational: it tells the user WHAT their message is
+          // waiting behind, so a queued message never looks stuck for no reason.
+          return (
+            <div
+              key={it.id}
+              className="flex items-center gap-2 rounded-lg border border-dashed border-[var(--color-border)] px-2.5 py-1.5 text-sm"
+            >
+              <span
+                className="inline-flex shrink-0 items-center gap-1 rounded bg-[var(--color-surface-2)] px-1.5 py-0.5 text-[10px] font-semibold text-[var(--color-text-dim)]"
+                title="Oturum şu an bu turla meşgul; bekleyenler bittiğinde sırayla çalışacak"
+              >
+                <Loader size={11} />
+                Şu an
+              </span>
+              <span className="min-w-0 flex-1 truncate text-[var(--color-text-dim)]">
+                {it.text}
+              </span>
+            </div>
+          )
+        }
+        if (it.kind === 'dispatching') {
+          return (
+            <div
+              key={it.id}
+              className="flex items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-2.5 py-1.5 text-sm"
+            >
+              <span
+                className="inline-flex shrink-0 items-center gap-1 rounded bg-[color-mix(in_srgb,var(--color-info)_20%,transparent)] px-1.5 py-0.5 text-[10px] font-semibold text-[var(--color-info)]"
+                title="Sunucuya iletildi, tur başlıyor — artık iptal edilemez"
+              >
+                <Send size={11} />
+                Gönderiliyor
+              </span>
+              <span className="min-w-0 flex-1 truncate text-[var(--color-text)]">{it.text}</span>
+            </div>
+          )
+        }
         return (
           <div
             key={it.id}

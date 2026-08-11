@@ -596,6 +596,20 @@ func (r *Registry) Has(name string) bool {
 	return false
 }
 
+// MCPSchema returns the declared input schema of an attached MCP tool, addressed
+// by its namespaced name, or nil when the name is not an attached MCP tool (a
+// built-in, or unknown). Callers use it to validate a model-authored argument
+// object BEFORE it reaches the server, so a missing required field surfaces as
+// an accurate local error instead of whatever the server infers from it.
+func (r *Registry) MCPSchema(name string) json.RawMessage {
+	for _, e := range r.mcpEntries {
+		if e.NamespacedName == name {
+			return e.Tool.InputSchema
+		}
+	}
+	return nil
+}
+
 // Empty reports whether there are no tools at all.
 func (r *Registry) Empty() bool { return len(r.builtins) == 0 && len(r.mcpEntries) == 0 }
 

@@ -2,6 +2,8 @@ package conversation
 
 import (
 	"context"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/bilal-arikan/tionswarm/internal/db"
@@ -143,6 +145,62 @@ func TestWithContextOverheadNoOp(t *testing.T) {
 	}
 	if got := contextOverheadFrom(WithContextOverhead(context.Background(), 250)); got != 250 {
 		t.Fatalf("overhead 250 = %d, want 250", got)
+	}
+}
+
+// TestPrepareJournalsCompaction verifies the observability fix: when Prepare folds
+// history into the rolling summary, it appends a `compaction` event to the
+// session's debug journal (debug.jsonl) so the fold is visible in the Debug modal /
+// read_session_debug / debug summary — not only in the in-app Logs. Regression
+// guard for the "compaction ran on a spawned turn but I can't see where" gap.
+func TestPrepareJournalsCompaction(t *testing.T) {
+	ctx := context.Background()
+	d, err := db.Open(filepath.Join(t.TempDir(), "store"))
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	agent, _ := d.CreateAgent(ctx, db.Agent{Name: "A", Provider: "anthropic"})
+	sess, _ := d.CreateSession(ctx, db.Session{AgentID: agent.ID, Title: "T"})
+
+	m := NewManager()
+	m.SetLimits(1, 2) // budget 1 token forces a fold; keepRecent 2
+
+	// 6 alternating turns: more than keepRecent, so foldBoundary produces a fold.
+	history := []db.Message{
+		{Role: providers.RoleUser, Text: "u1"}, {Role: providers.RoleAssistant, Text: "a1"},
+		{Role: providers.RoleUser, Text: "u2"}, {Role: providers.RoleAssistant, Text: "a2"},
+		{Role: providers.RoleUser, Text: "u3"}, {Role: providers.RoleAssistant, Text: "a3"},
+	}
+	prep, err := m.Prepare(ctx, d, stubProvider{summary: "ROLLED UP"}, sess, agent, history)
+	if err != nil {
+		t.Fatalf("prepare: %v", err)
+	}
+	if !prep.Compacted {
+		t.Fatalf("expected a fold with budget 1")
+	}
+	if prep.FoldedMsgs <= 0 {
+		t.Fatalf("FoldedMsgs = %d, want > 0 (drives the on-screen compaction step)", prep.FoldedMsgs)
+	}
+
+	evs, err := d.ReadDebugEvents(ctx, sess.ID, db.DebugCompaction, 0)
+	if err != nil {
+		t.Fatalf("read debug: %v", err)
+	}
+	if len(evs) != 1 {
+		t.Fatalf("compaction events = %d, want 1", len(evs))
+	}
+	e := evs[0]
+	if e.Name != "auto" {
+		t.Errorf("trigger Name = %q, want \"auto\"", e.Name)
+	}
+	if e.SavedBytes <= 0 {
+		t.Errorf("SavedBytes = %d, want > 0", e.SavedBytes)
+	}
+	if !strings.Contains(e.Detail, "folded") || !strings.Contains(e.Detail, "tokens") {
+		t.Errorf("Detail = %q, want folded/tokens summary", e.Detail)
+	}
+	if e.AgentID != agent.ID {
+		t.Errorf("AgentID = %q, want %q", e.AgentID, agent.ID)
 	}
 }
 

@@ -22,8 +22,8 @@ func TestDiscoverInTreeGrouping(t *testing.T) {
 		"skills/copywriting/headlines/tips.md":  []byte("tips"),
 		// repo noise + unrelated top-level files (no owner)
 		".github/workflows/ci.yml": []byte("ci"),
-		"README.md":               []byte("top"),
-		"LICENSE":                 []byte("mit"),
+		"README.md":                []byte("top"),
+		"LICENSE":                  []byte("mit"),
 	}
 	found := groupSkills(files, "")
 	if len(found) != 3 {
@@ -59,9 +59,9 @@ func TestDiscoverInTreeGrouping(t *testing.T) {
 
 func TestDiscoverInTreePrefixFilter(t *testing.T) {
 	files := map[string][]byte{
-		"skills/keep/SKILL.md":  skillMD("Keep", "k"),
-		"other/drop/SKILL.md":   skillMD("Drop", "d"),
-		"plugins/p/x/SKILL.md":  skillMD("X", "x"),
+		"skills/keep/SKILL.md": skillMD("Keep", "k"),
+		"other/drop/SKILL.md":  skillMD("Drop", "d"),
+		"plugins/p/x/SKILL.md": skillMD("X", "x"),
 	}
 	found := groupSkills(files, "skills")
 	if len(found) != 1 || found[0].relPath != "skills/keep" {

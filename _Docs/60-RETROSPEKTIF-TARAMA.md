@@ -75,6 +75,16 @@ prefilter:
   minTokens: 50000               # session-düzeyi sayısal eşik
 ```
 
+**Bileşik sinyal — olay türü + atıflı sebep (2026-08-11).** Bir `cache_break` olayının
+**sebebi** hangi lensin bakması gerektiğini belirler: kararsız önek bir sıralama problemi,
+TTL soğuması bir **tempo** problemidir ve zıt öneriler gerektirir. Çıplak tür sayısı bunları
+ayıramadığı için `extractSignals` sebebi ayrı bir sinyal olarak da indeksler:
+`cache_break:ttl-or-server-eviction`, `cache_break:model-changed`, … (+ ölçülmüş israf varsa
+`cooling_waste`). Prefilter düz bir `ad→sayı` haritası olduğundan bileşik ad tek başına
+yeterli mekanizmadır — yeni alan gerekmez. **`parseMinCount` bu yüzden çiftin SON iki
+noktasından böler** (ilkinden bölmek anahtarı `"cache_break` yapıp eşiği sessizce düşürüyordu
+→ lens her oturumu eşlerdi).
+
 Sinyaller `debug.jsonl` olay türleri + step kind'larıdır. AND/OR/NOT/eşik ihtiyacını
 Turing-complete dil olmadan karşılar; yeni ihtiyaç = yeni sabit anahtar.
 **Faz 1:** yalnız `requiresAny` implement edilir (`tool-errors` bunu kullanır); struct diğer
@@ -82,8 +92,34 @@ alanları baştan taşır, motor Faz 2+ lensleri gelince doldurur.
 
 ### Başlangıç default lensleri
 `tool-errors` (app-fix), `tool-usage-opt`, `skill-usage-opt`, `context-hygiene`,
-`context-cache-opt`, `lessons-mining` (hepsi workspace-opt). Genişletme: `autonomy-safety`,
-`cost-hotspots`, `permission-friction`, `coordination-stalls`, `handoff-quality`.
+`context-cache-opt`, `cache-cooling-waste`, `lessons-mining` (hepsi workspace-opt).
+Genişletme: `autonomy-safety`, `cost-hotspots`, `permission-friction`,
+`coordination-stalls`, `handoff-quality`.
+
+**İki cache lensi, aynı olay türü, zıt sebep (2026-08-11):**
+
+| Lens | Prefilter | Soru | Öneri ekseni |
+|---|---|---|---|
+| `context-cache-opt` | `cache_break:prompt-or-tools-changed ≥ 2` | Önek neden değişiyor? | bağlam sıralaması / epoch |
+| `cache-cooling-waste` | `cache_break:ttl-or-server-eviction ≥ 2` | Neden zamanında kullanılmıyor? | schedule aralığı / oturum ömrü / prefix boyu |
+
+Her iki prompt da diğerinin sebebini **açıkça yok saymaya** talimatlıdır; aksi halde ikisi de
+aynı oturumda çakışan bulgular üretirdi.
+
+### Slice kapsamı — `scope: [cache]` (2026-08-11)
+
+`Lens.Scope` frontmatter'da baştan vardı ama **hiçbir yerde kullanılmıyordu**; `buildSlice`
+sabit biçimde yalnız `error/repair/guardrail/recovery` olaylarını yazıyordu. Sonuç:
+`context-cache-opt` `cache_break ≥ 2` ile prefilter'dan geçiyor, sonra analize **içinde tek bir
+cache kanıtı olmayan** bir dilim gidiyordu — lens tahmin etmekten başka bir şey yapamıyordu.
+
+`ScopeCache` ("cache") ilk kullanılan scope değeridir: lens isterse dilime
+"## Prompt-cache events" bölümü eklenir — `cache_break` satırları (`at=` zaman damgası,
+`cause=`, `coldTokens=`, `wasteUsd=`) **ve araya serpiştirilmiş `epoch` olayları. Zaman
+damgası şart: tempo lensi olaylar arası **boşluğu** ölçer. Epoch olayları da şart: bir kırılım
+bilinçli bir adopt'un (`created`/`refreshed`/`compaction`/`ttl-cold`) yanında mı duruyor,
+yoksa tek başına mı — `_Docs\57`'deki okuma kuralı ancak böyle uygulanabilir. Scope
+istemeyen lensler bu olayların token'ını ödemez (opt-in).
 
 ---
 
@@ -194,7 +230,9 @@ stateDiagram-v2
 | Yeni | İçerik | Durum |
 |------|--------|-------|
 | `internal/insight/finding.go` | Finding modeli + imza-dedupe store | ✅ Faz 1 |
-| `internal/insight/lens.go` | Lens tipi + Prefilter + parser + Registry | ✅ Faz 1 |
+| `internal/insight/lens.go` | Lens tipi + Prefilter + parser + Registry + `SetFrontmatterScalar` | ✅ Faz 1 |
+| `internal/seed/` | **Paylaşılan** shipped-defaults tazeleme (hash ledger + `Ensure`/`Restore`); tüketiciler: `insight`, `skills` | ✅ Faz 6.4 |
+| `internal/insight/defaults.go` | Gömülü lens ağacı + lens merge politikası (`userLensKeys`) + `RestoreDefault`/`HasDefault` | ✅ Faz 6.4 |
 | `internal/insight/prefilter.go` | Yapısal predikat `Match` (requiresAny/All/excludes/minCount/minTokens) | ✅ Faz 1 |
 | `internal/insight/ledger.go` | İnkremental durum (`UpdatedAt` + fingerprint) | ✅ Faz 1 |
 | `internal/insight/defaults.go` + `defaults/*.md` | Gömülü default lensler (`//go:embed`) + seed | ✅ Faz 1 |
@@ -224,7 +262,9 @@ toggle (Ayarlar ▸ Bağlam ile aynı `lessonReflect`) + kayıtlı dersler (`Les
 
 ## 8. API + Araçlar (hedef yüzey)
 
-- `GET  /api/insight/lenses` — lens listesi (seed+load; id/name/channel/enabled/prefilter) ✅
+- `GET  /api/insight/lenses` — lens listesi (seed+load; id/name/channel/enabled/prefilter/hasDefault) ✅
+- `POST /api/insight/lenses/{id}/restore` — lensi gönderilen varsayılana döndür (yerel
+  düzenlemeler silinir; manifest'e pristine yazılır → otomatik tazeleme yeniden kurulur) ✅
 - `POST /api/insight/scan` — `{ lensIds[], … }` → **arka planda başlatır**, `202 {started}` döner
   (senkron değil: tarama dakikalarca sürebilir + request-context iptali taramayı öldürürdü). Sonuç
   bulgu store'una + `🔍 İçgörü Taraması` session'ına düşer. Çakışma guard'ı: çalışırken ikinci tetik `409`. ✅
@@ -348,6 +388,72 @@ toggle (Ayarlar ▸ Bağlam ile aynı `lessonReflect`) + kayıtlı dersler (`Les
       üretilen bulgular) → `RunInsightScan.promoteMinedLessons` → `db.AddLesson` (imza-dedupe,
       Count++). Sadece taze bulgular beslenir (tüm store re-feed edilmez).
 - [x] Bulgu panosu occurrence göstergesi (`×N`) + status rozeti zaten mevcut.
+
+### Faz 6.3 — Cache lensleri: kör nokta kapatıldı + tempo lensi (2026-08-11) — TAMAM
+Chat'e prompt-cache görünürlüğü eklenirken (`_Docs\50` P7) Insight tarafında üç arıza çıktı:
+- [x] **`buildSlice` cache olaylarını hiç yazmıyordu.** `context-cache-opt` `cache_break ≥ 2`
+      ile prefilter'dan geçiyor ama analize giden dilimde tek bir cache kanıtı olmuyordu →
+      lens tahmin ediyordu. `ScopeCache` ("cache") ile opt-in "## Prompt-cache events" bölümü
+      eklendi (cause/coldTokens/wasteUsd + `at=` zaman damgası + araya `epoch` olayları).
+      `Lens.Scope` böylece ilk kez gerçekten **kullanılıyor**.
+- [x] **`parseMinCount` ilk iki noktadan bölüyordu** → iki nokta içeren bileşik sinyal adı
+      (`cache_break:ttl-or-server-eviction`) anahtarı bozup eşiği sessizce düşürüyordu (lens her
+      oturumu eşlerdi). Son iki noktadan bölmeye geçildi; `TestParseMinCountCompoundKey` kilitler.
+- [x] **Sebep bazlı sinyal** (`extractSignals`): `cache_break:<cause>` + `cooling_waste`.
+- [x] **Yeni lens `cache-cooling-waste`** (workspace-opt): TTL soğumasını *tempo* problemi
+      olarak ele alır — TTL'i biraz aşan schedule aralığı, uzun boşluklu tek oturum, büyük
+      statik prefix, seyrek uyanışlara yığılmış otonom iş. `context-cache-opt` ise artık yalnız
+      `prompt-or-tools-changed`'e bakar ve epoch olaylarıyla "adopt'suz kırılım" kuralını uygular.
+      İki prompt da diğerinin sebebini açıkça yok sayar (çakışan bulgu üretmesinler diye).
+- **Not (çözüldü → Faz 6.4):** `EnsureDefaults` o an mevcut dosyanın üzerine yazmıyordu →
+  hâlihazırdaki workspace'lerde `context-cache-opt.md` eski (kör) haliyle kalıyordu. Aşağıdaki
+  faz bunu kalıcı olarak çözdü.
+
+### Faz 6.4 — Shipped-defaults tazeleme (2026-08-11) — TAMAM
+Faz 6.3'ün ortaya çıkardığı asıl sorun: **lens düzeltmeleri mevcut kurulumlara hiç ulaşmıyordu.**
+`insight.EnsureDefaults` "dosya varsa dokunma" diyordu; bu kullanıcı düzenlemesini korurken
+**düzenlenmemiş dosyayı da donduruyordu** → uygulamayı güncellemek lensleri güncellemiyordu.
+
+- [x] **Paylaşılan `internal/seed` paketi.** Skills'teki "shipped-hash ledger" deseni
+      (`.shipped-versions.json`: `Files` = tüm-dosya hash'i, `Bodies` = yalnız gövde hash'i)
+      genel bir `seed.Ensure(Config)`'a çıkarıldı. Fikir: *"kullanıcı düzenledi mi?"yi tahmin
+      etmek yerine ne gönderdiğimizi kaydet* → "dokunulmamış" kanıtlanabilir bir olgu olur.
+      Skills davranışı birebir korundu (kendi `Body`/`Merge`'ünü veriyor; mevcut manifest'ler
+      geçerli kalsın diye `skillBody` bayt-sabit bırakıldı).
+- [x] **`Bodies` ledger'ı neden şart:** uygulamanın KENDİSİ frontmatter'ı yerinde yazıyor
+      (skills'te görünürlük işaretleri, lenste `enabled` toggle'ı) → tüm-dosya hash'i bir daha
+      tutmaz → gövde ledger'ı olmasa **tek bir toggle dosyayı sonsuza dek dondururdu.**
+- [x] **Lens merge politikası skills'ten KASITLI olarak farklı** (`insight.mergeLens`): skills
+      tüm frontmatter'ı korur, lens yalnız `enabled` + `model`'i (bu kuruluma ait kararlar)
+      taşır, geri kalanını **gönderilen dosyadan alır**. Çünkü lens frontmatter'ı ağırlıkla
+      *mekanik*tir (`prefilter`, `scope`, `channel`) — onu topluca korumak Faz 6.3'ün prefilter/
+      scope düzeltmelerini kalıcı olarak dondururdu. `SetFrontmatterEnabled` genelleştirilip
+      `SetFrontmatterScalar` oldu (yalnız **üst-seviye** anahtarı yerinde yazar; girintili satır
+      nested `prefilter:` bloğuna aittir).
+- [x] **Kaçınılmaz sınır + çıkış kapısı:** ledger'dan ÖNCE gönderilmiş ve o günden beri
+      değişmiş bir dosya, kullanıcı düzenlemesinden ayırt edilemez → `Ensure` ona dokunmaz.
+      Bunun için `seed.Restore` + `POST /api/insight/lenses/{id}/restore` + lens satırında
+      **"Varsayılan"** butonu (yalnız `hasDefault` olan lenslerde; iki adımlı onay). Restore
+      dosyayı manifest'e de yazar → **otomatik tazelemeyi yeniden kurar**, kullanıcı bir daha
+      sormak zorunda kalmaz.
+- [x] **Ledger görünür** (`seed.Status` → `seed.State`): `default` (dokunulmamış) ·
+      `tuned` (yalnız config farklı — **yine otomatik tazelenir**) · `edited` (içerik değişmiş →
+      **donmuş**). Lens ve skill DTO'larında `defaultState`. Paylaşılan
+      `SeedDefaultBadge` **yalnız `edited`** durumunu rozetler: diğer ikisi zaten güncelleme
+      almaya devam ettiği için onları rozetlemek her satıra bilgi vermeyen bir çip koyardı;
+      tek anlamlı bilgi "bu dosya artık güncelleme almıyor".
+- [x] **Skill listesinde de aynı buton** — `POST /api/skills/{slug}/restore` + paylaşılan
+      `RestoreDefaultButton`. Yalnız **global tier** (`Source==SourceGlobal`) ve gerçekten
+      gönderilen bir skill için; workspace-tier override başka bir dosyadır, "onun varsayılanını"
+      geri yazmak kullanıcının bakmadığı dosyaya yazmak olurdu → reddedilir.
+- [x] Testler: `internal/seed/seed_test.go` (tazeleme · kullanıcı düzenlemesi korunur · değişmiş
+      config altına gövde merge'ü + merge sonrası **donmama** · manifest'siz bootstrap ·
+      ledger-öncesi dosyanın restore ile kurtarılması ve otomatiğin yeniden kurulması ·
+      `Status`'ün üç durumu · **`Status`'ün `Ensure`'ün gerçekte yaptığıyla tutarlılığı** —
+      aksi halde rozet yalan söyler), `insight`: `TestMergeLensAdoptsMechanicsKeepsUserKeys`,
+      `TestMergeLensWithoutUserKeys`, `TestSetFrontmatterScalarInPlaceKeepsNestedBlock`,
+      `TestHasDefault`, `TestRestoreDefault`; `skills`: `TestSkillDefaultStateAndRestore`,
+      `TestSkillHasDefaultAndRestoreGuards`.
 
 ### Faz 5 — Kalite & Yaşam Döngüsü — TAMAM (build OK · 915 test · tsc temiz)
 Canlı taramalarda gözlenen zayıflıklara yönelik olgunlaştırma (üretim tarafı güçlüydü, döngü tarafı zayıftı):

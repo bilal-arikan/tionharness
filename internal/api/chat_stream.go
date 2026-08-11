@@ -57,7 +57,10 @@ func (s *Server) runChatTurn(clientGone context.Context, wsp *workspace.Workspac
 	// message was already delivered), so this is a no-op in the common case.
 	defer func() {
 		if msg := run.takeSteer(); msg != "" {
-			s.enqueueMessage(wsp.ID, chatReq{SessionID: req.SessionID, Message: msg, AgentIDs: req.AgentIDs}, "")
+			// To the FRONT of the queue: the user typed this steer to redirect THIS
+			// turn, before anything they queued afterwards, so appending it to the tail
+			// would deliver their oldest intent last.
+			s.enqueueMessageFront(wsp.ID, chatReq{SessionID: req.SessionID, Message: msg, AgentIDs: req.AgentIDs})
 		}
 	}()
 	ctx = agent.WithSteer(ctx, run.steer)
@@ -119,8 +122,14 @@ func (s *Server) runChatTurn(clientGone context.Context, wsp *workspace.Workspac
 	// arriving mid-turn coalesce and trigger one auto turn on release. Claiming for
 	// ALL sessions — not just coordinators — is what closes the plain-session
 	// concurrent-turn race (_Docs/58).
-	release := wsp.Runtime.BeginSessionUserTurn(session.ID)
-	defer release()
+	//
+	// The send-queue worker claims the slot BEFORE it pops this message (so it stays
+	// visible in the queue tray while it waits) and hands ownership over via
+	// turnSlotHeld; claiming again here would deadlock the turn behind itself.
+	if !req.turnSlotHeld {
+		release := wsp.Runtime.BeginSessionUserTurn(session.ID)
+		defer release()
+	}
 	firstTurn := s.isFirstUntitledTurn(session)
 	// Captured before the user message is appended: primes cross-session context
 	// on a fresh session's first turn.
@@ -361,6 +370,16 @@ func (s *Server) runChatTurn(clientGone context.Context, wsp *workspace.Workspac
 			// chat history shows when the change landed. The agent already read the diff
 			// via the dynamic-suffix note composeTurnRequest injected.
 			leadSteps := consumeContextChangeLead(wsp.Runtime, session.ID, agentRow.ID)
+			// Auto-compaction visibility: Prepare folds older history into the rolling
+			// summary silently, inside this already-serialized turn (it holds the inbox
+			// slot, so it cannot and must not re-enter the send-queue like the manual
+			// /compact command — that would self-deadlock on the serial slot). What it
+			// lacked was on-screen presence. Surface it as a lead step on the SAME hub
+			// channel the manual command uses (live SSE + cross-window publish + persisted
+			// trace via leadSteps below) so the fold shows up like any other turn event.
+			if prep.Compacted {
+				leadSteps = append([]agent.TurnStep{compactionLeadStep(prep.FoldedMsgs)}, leadSteps...)
+			}
 			for _, st := range leadSteps {
 				sse("step", st)
 				wsp.Runtime.EmitSessionStep(session.ID, st)
@@ -561,6 +580,12 @@ func (s *Server) runChatTurn(clientGone context.Context, wsp *workspace.Workspac
 					snapshot()
 				},
 			)
+			// Prompt-cache break card: the completion's usage revealed that this turn
+			// re-paid the whole cached prefix because the model or the prompt/tool
+			// schemas changed. Appended to the lead so it sits at the head of the
+			// persisted trace (that is where the cold prefix was paid) on every exit
+			// path below — success, provider error and durable-ask suspend alike.
+			leadSteps = append(leadSteps, consumeCacheBreakLead(wsp.Runtime, session.ID)...)
 			// Durable Ask suspend: the native loop parked at a clean ask_user point.
 			// This is NOT an error — persist the suspend snapshot (lead + loop trace),
 			// open a durable card keyed to the ask id, clear the crash sidecar (the wait

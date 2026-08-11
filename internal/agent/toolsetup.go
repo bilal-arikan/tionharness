@@ -275,12 +275,12 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 	builtins = append(builtins, tools.NewInsightScanTool(r), tools.NewInsightFindingsTool(r.db), tools.NewInsightApplyFindingTool(r.db))
 
 	// codebase_workspace_search: fan out codebase-memory's project-scoped search_code
-	// across EVERY project in this workspace's isolated store, for "where in the whole
-	// workspace is X?" queries (graph/architecture queries are already fleet-wide;
-	// this fills the text-search gap). Only when an enabled codebase-memory server is
-	// present — the tool shells out to that same executable + this workspace's store.
+	// across EVERY project in the server's store, for "where is X?" queries
+	// (graph/architecture queries are already fleet-wide; this fills the text-search
+	// gap). Only when an enabled codebase-memory server is present — the tool shells
+	// out to that same executable.
 	if cmd := r.codebaseMemoryCmd(ctx); cmd != "" {
-		builtins = append(builtins, tools.NewCodebaseWorkspaceSearchTool(cmd, r.CBMStoreDir()))
+		builtins = append(builtins, tools.NewCodebaseWorkspaceSearchTool(cmd))
 	}
 
 	// get_session_info: the read counterpart of the session-edit tools — the
@@ -499,12 +499,6 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 		// state (e.g. the gateway's activate_tools) survives across calls. The
 		// catalog refreshes on tools/list_changed (and a safety-net TTL).
 		cfgs := make([]mcp.ServerConfig, 0, len(servers))
-		// Only route codebase-memory at the isolated store when the feature is on;
-		// disabled → leave the server on its own default store (fully vanilla).
-		cbmStore := ""
-		if r.CodebaseMemoryEnabled() {
-			cbmStore = r.CBMStoreDir()
-		}
 		// Hybrid MCP scoping: a server marked scope="scoped" gets its OWN live
 		// connection per (session, agent) instead of the shared workspace-wide one,
 		// so its per-connection server state can't bleed between sessions and its
@@ -525,17 +519,6 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 			// saves land where the agent is told to write. Self-contained in
 			// mcp_playwright.go (applyMCPScratchpadRoot); no-op for other servers.
 			cfg = r.applyMCPScratchpadRoot(ctx, cfg, m, mcpScopeKey)
-			// Route the codebase-memory server at this workspace's ISOLATED store so
-			// its index never mixes with other workspaces (store = workspace boundary).
-			// A user-set CBM_CACHE_DIR wins; we only fill it when unset.
-			if cbmStore != "" && strings.Contains(strings.ToLower(m.Command), codebaseMemoryCommandMarker) {
-				if cfg.Env == nil {
-					cfg.Env = map[string]string{}
-				}
-				if _, set := cfg.Env["CBM_CACHE_DIR"]; !set {
-					cfg.Env["CBM_CACHE_DIR"] = cbmStore
-				}
-			}
 			cfgs = append(cfgs, cfg)
 		}
 		entries, cfgByServer, errs := r.mcpPool.Catalog(ctx, cfgs)

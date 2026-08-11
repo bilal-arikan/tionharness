@@ -55,18 +55,17 @@ func (s *Server) handleSessionSummary(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Serialize against the session's send-queue: this command runs a direct
-	// provider.Complete outside runInboxWorker, so it must claim the serial slot to
-	// avoid racing a chat turn in either direction (a turn already running, or a
-	// message sent mid-compact — the latter otherwise empties the queue tray). Waits
-	// for any in-flight turn, then holds the slot so a message queued during the op
-	// stays WAITING until release kicks the worker. A client disconnect while waiting
-	// bails cleanly before any side effect.
-	releaseInbox, err := s.acquireInboxSlot(ctx, session.ID, wsp.ID)
+	// This command runs a direct provider.Complete outside runInboxWorker, so it
+	// takes the session's admission slot like any other turn: it waits behind
+	// whatever is running (a chat turn, a coordinator auto-turn — no two subprocesses
+	// resuming the same claude-cli transcript at once), and a message sent meanwhile
+	// stays WAITING in the tray behind it. A client disconnect while waiting bails
+	// cleanly, before any side effect.
+	releaseTurn, err := wsp.Runtime.ClaimSessionCommandTurn(ctx, session.ID, "/"+kind)
 	if err != nil {
 		return
 	}
-	defer releaseInbox()
+	defer releaseTurn()
 
 	// For compact, snapshot the history BEFORE the "/compact" command message is
 	// appended, so the fold boundary is computed over the real conversation — the
@@ -203,17 +202,17 @@ func (s *Server) handleSessionHandoff(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Serialize against the session's send-queue like /compact: /handoff spawns a
-	// fresh session outside runInboxWorker, so it waits for any in-flight turn and
-	// holds the slot while it runs — a message sent during the handoff stays WAITING
-	// in the tray (and re-dispatches on the OLD session after release, though the UI
-	// usually follows the switch to the new one). A client disconnect while waiting
-	// bails before any side effect.
-	releaseInbox, err := s.acquireInboxSlot(ctx, session.ID, wsp.ID)
+	// Takes the session's admission slot like /compact: /handoff spawns a fresh
+	// session outside runInboxWorker, so it waits for any in-flight turn (chat,
+	// coordinator auto-turn, wake) and holds the slot while it runs — a message sent
+	// during the handoff stays WAITING in the tray (and re-dispatches on the OLD
+	// session after release, though the UI usually follows the switch to the new
+	// one). A client disconnect while waiting bails before any side effect.
+	releaseTurn, err := wsp.Runtime.ClaimSessionCommandTurn(ctx, session.ID, "/handoff")
 	if err != nil {
 		return
 	}
-	defer releaseInbox()
+	defer releaseTurn()
 
 	// Record the command itself as a user message so the thread shows what was run.
 	userMsg, err := wsp.DB.AddMessage(ctx, db.Message{

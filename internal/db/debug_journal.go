@@ -369,18 +369,31 @@ type TurnDebug struct {
 	OutputTokens int    `json:"outputTokens"`
 	// ThinkingTokens is the estimated hidden-reasoning portion of OutputTokens
 	// for this turn (attribution; already inside OutputTokens).
-	ThinkingTokens int                 `json:"thinkingTokens,omitempty"`
-	CacheRead      int                 `json:"cacheReadTokens"`
-	CacheWrite     int                 `json:"cacheWriteTokens"`
-	ToolCalls      int                 `json:"toolCalls"`
-	Tools          []TurnToolCall      `json:"tools,omitempty"`
-	Errors         int                 `json:"errors"`
-	Recoveries     int                 `json:"recoveries"`
-	Compactions    int                 `json:"compactions"`
-	LastError      string              `json:"lastError,omitempty"`
-	FirstTs        int64               `json:"firstTs,omitempty"`
-	LastTs         int64               `json:"lastTs,omitempty"`
-	ByModel        map[string]KindStat `json:"-"` // cost calc input (API layer); not serialized
+	ThinkingTokens int            `json:"thinkingTokens,omitempty"`
+	CacheRead      int            `json:"cacheReadTokens"`
+	CacheWrite     int            `json:"cacheWriteTokens"`
+	ToolCalls      int            `json:"toolCalls"`
+	Tools          []TurnToolCall `json:"tools,omitempty"`
+	Errors         int            `json:"errors"`
+	Recoveries     int            `json:"recoveries"`
+	Compactions    int            `json:"compactions"`
+	// CacheBreaks counts the prompt-cache breaks attributed to THIS turn (warm
+	// prefix lost and re-paid cold); CacheBreakReason is the stable machine tag of
+	// the last one (model-changed / prompt-or-tools-changed / ttl-or-server-eviction)
+	// and CacheBreakDetail its human explanation. CoolingWasteUSD is the avoidable
+	// overpay of re-warming a TTL/eviction break (0 for the other causes, which
+	// legitimately invalidate the prefix), Estimated when any figure is a
+	// subscription estimate. This is what lets the per-message debug panel say WHY
+	// a turn ran cold instead of only that it did.
+	CacheBreaks           int                 `json:"cacheBreaks,omitempty"`
+	CacheBreakReason      string              `json:"cacheBreakReason,omitempty"`
+	CacheBreakDetail      string              `json:"cacheBreakDetail,omitempty"`
+	CoolingWasteUSD       float64             `json:"coolingWasteUsd,omitempty"`
+	CoolingWasteEstimated bool                `json:"coolingWasteEstimated,omitempty"`
+	LastError             string              `json:"lastError,omitempty"`
+	FirstTs               int64               `json:"firstTs,omitempty"`
+	LastTs                int64               `json:"lastTs,omitempty"`
+	ByModel               map[string]KindStat `json:"-"` // cost calc input (API layer); not serialized
 }
 
 // GetTurnDebug aggregates a session's debug journal down to the events tagged with
@@ -441,6 +454,20 @@ func (d *DB) GetTurnDebug(ctx context.Context, sessionID, turnID string) (TurnDe
 			td.Recoveries++
 		case DebugCompaction:
 			td.Compactions++
+		case DebugCacheBreak:
+			// The cold/warm split is already visible from CacheRead/CacheWrite; what
+			// the message panel cannot derive is the ATTRIBUTED cause, so carry the
+			// tag/detail (last one wins — a turn breaks at most once in practice) and
+			// sum the avoidable cooling overpay.
+			td.CacheBreaks++
+			if e.Name != "" {
+				td.CacheBreakReason = e.Name
+				td.CacheBreakDetail = e.Detail
+			}
+			td.CoolingWasteUSD += e.WasteUSD
+			if e.WasteEstimated {
+				td.CoolingWasteEstimated = true
+			}
 		}
 	}
 	return td, nil

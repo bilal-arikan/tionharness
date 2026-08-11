@@ -40,6 +40,10 @@ export const skillApi = {
   deleteSkill: (slug: string) =>
     req<{ ok: boolean }>(`/api/skills/${encodeURIComponent(slug)}`, { method: 'DELETE' }),
   reloadSkills: () => req<{ ok: boolean }>('/api/skills/reload', { method: 'POST' }),
+  // Overwrite a shipped skill's SKILL.md with its default, discarding local
+  // edits. Global tier only (defaultState set); 404 otherwise.
+  restoreSkill: (slug: string) =>
+    req<Skill>(`/api/skills/${encodeURIComponent(slug)}/restore`, { method: 'POST' }),
   setSkillAccess: (slug: string, shared: boolean) =>
     req<Skill>(`/api/skills/${encodeURIComponent(slug)}/access`, {
       method: 'PUT',

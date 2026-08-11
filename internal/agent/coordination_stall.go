@@ -330,7 +330,7 @@ func (r *Runtime) sweepCoordinatorStallsAt(ctx context.Context, now int64) {
 		if id == "" || slot == nil {
 			return true
 		}
-		if !slotIsStallCandidate(slot, now, windowSec) {
+		if !slotIsStallCandidate(slot, r.sessionTurnBusy(id), now, windowSec) {
 			return true
 		}
 		cands = append(cands, cand{id, slot})
@@ -345,11 +345,12 @@ func (r *Runtime) sweepCoordinatorStallsAt(ctx context.Context, now int64) {
 // slotIsStallCandidate is the pure, deterministic gate the sweeper applies before
 // spending a judge call: an idle coordinator that spawned workers, has none running
 // now, and has been silent at least `windowSec`. lastTurnUnix==0 (never ran a real
-// turn — e.g. a stubbed test) is excluded.
-func slotIsStallCandidate(slot *coordSlot, now, windowSec int64) bool {
+// turn — e.g. a stubbed test) is excluded. turnBusy comes from the admission queue
+// (a turn of ANY kind holds the session) — a busy session is alive, not stalled.
+func slotIsStallCandidate(slot *coordSlot, turnBusy bool, now, windowSec int64) bool {
 	slot.mu.Lock()
 	defer slot.mu.Unlock()
-	if slot.running || !slot.hadWorkers {
+	if turnBusy || slot.driving || !slot.hadWorkers {
 		return false
 	}
 	if slot.workers.Load() > 0 {

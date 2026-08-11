@@ -224,6 +224,18 @@ derinlik/çocuk cap'i şart (§8.1).
   aynı düğümü Harita'da dolu görüyordu. `ViewSources` bilerek **somut pointer** tutar:
   nil `*skills.Store` doğrudan arayüz alanına atanırsa arayüz nil OLMAZ ve projeksiyonun
   `== nil` koruması ıskalar.
+- **Bütçe kademesi kategoride gerçek oldu** (2026-08-10): `ProjectCategory` yalnız
+  `tiny`'yi ayırıyordu; `card` ve `full` **birebir aynı** DSL'i üretiyordu çünkü üyeler
+  yalnız `Handle` olarak veriliyordu (panelde tıklanabilir, metinde görünmez). Artık
+  `full` üyeleri satır satır yazar (`categoryFullMaxBytes` = 2400B ≈ 600 tok,
+  `CapLines` + `Elided`), `card` handle-only kalır. Cap bilerek `categoryTopN`
+  satırının toplam boyutunun (~3.1KB) **altında**: en büyük meşru girdinin
+  ulaşamadığı bir cap dekordur, koruduğu elision yolu hiç çalışmaz.
+  **Kalan yapraklar** (`skill`/`artifact`/`insight`/`schedule`/`agent`) `card` = `full`
+  — küçük varlıkların söyleyecek fazlası yok, bu kasıtlı.
+- **Kopyala butonu** artık aynı çıkan kademeleri **birleştirir** (`[CARD = FULL — …]`).
+  Eskiden üç başlık altında üç özdeş blok yapıştırıyordu; okuyan "seviyeler yok
+  sayılmış" diye okuyordu, oysa varlık gerçekten tek kademeye sığıyordu.
 - **`get_view` kind listesi genişledi:** `expand`'in ref verdiği her düğüm artık
   `get_view` ile de okunabiliyor (`agent`, `budget`, `tools`, `logs`, `artifact`,
   `automation`, `skill`, `insight`, `category`). Eskiden şema beş kind'a kapalıydı;

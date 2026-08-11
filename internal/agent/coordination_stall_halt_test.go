@@ -127,9 +127,9 @@ func TestStallHaltStopsIdleReconcile(t *testing.T) {
 	deadline := time.After(2 * time.Second)
 	for {
 		slot.mu.Lock()
-		running := slot.running
+		driving := slot.driving
 		slot.mu.Unlock()
-		if !running {
+		if !driving {
 			break
 		}
 		select {

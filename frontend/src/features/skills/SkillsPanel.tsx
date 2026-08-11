@@ -1,6 +1,18 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useSessionState } from '@/shared/hooks/useSessionState'
-import { ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown, FolderInput, Globe, Lock, Pencil, RefreshCw, Sparkles, Trash2 } from 'lucide-react'
+import {
+  ChevronDown,
+  ChevronRight,
+  ChevronsDownUp,
+  ChevronsUpDown,
+  FolderInput,
+  Globe,
+  Lock,
+  Pencil,
+  RefreshCw,
+  Sparkles,
+  Trash2,
+} from 'lucide-react'
 import type { Skill, SkillDetail, SkillSource, ToolVisibility } from '@/types'
 import { api } from '@/api'
 import { VISIBILITY_TIERS, visibilityMeta } from '@/features/tools/toolMeta'
@@ -12,8 +24,19 @@ import { SkillEditor } from './SkillEditor'
 import { useMultiSelect } from '@/shared/hooks/useMultiSelect'
 import { useGroupedList } from '@/shared/hooks/useGroupedList'
 import { useGroupDnD } from '@/shared/hooks/useGroupDnD'
-import { SelectionBar, SelectionBarButton, ListPane, PaneHeader } from '@/shared/components'
-import { NewItemButton, SELECTED_ITEM_CLS, SELECTED_ITEM_RING } from '@/shared/components/SidebarChrome'
+import {
+  SelectionBar,
+  SelectionBarButton,
+  ListPane,
+  PaneHeader,
+  RestoreDefaultButton,
+  SeedDefaultBadge,
+} from '@/shared/components'
+import {
+  NewItemButton,
+  SELECTED_ITEM_CLS,
+  SELECTED_ITEM_RING,
+} from '@/shared/components/SidebarChrome'
 import { useCollapsibleList } from '@/shared/hooks/useCollapsibleList'
 import { relativeTime, fullDateTime } from '@/shared/lib/time'
 
@@ -60,7 +83,9 @@ function SourceBadge({ source }: { source: SkillSource }) {
       ? 'bg-[var(--color-accent-soft)] text-[var(--color-accent)]'
       : 'bg-[var(--color-surface-2)] text-[var(--color-text-dim)]'
   return (
-    <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide ${tone}`}>
+    <span
+      className={`rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide ${tone}`}
+    >
       {SOURCE_LABEL[source]}
     </span>
   )
@@ -178,7 +203,9 @@ export function SkillsPanel({ onError }: Props) {
   const [bulkGroup, setBulkGroup] = useState('')
   const [bulkGroupBusy, setBulkGroupBusy] = useState(false)
   // Editor overlay: null = closed, otherwise create or edit (with the loaded skill).
-  const [editor, setEditor] = useState<{ mode: 'create' | 'edit'; initial?: SkillDetail } | null>(null)
+  const [editor, setEditor] = useState<{ mode: 'create' | 'edit'; initial?: SkillDetail } | null>(
+    null,
+  )
   const { open: listOpen, toggle: toggleList } = useCollapsibleList('tionswarm.skillsListOpen')
 
   // Skills sorted newest-edited first. Since useGroupedList preserves incoming
@@ -267,7 +294,15 @@ export function SkillsPanel({ onError }: Props) {
         .setSkillVisibility(active.slug, tier)
         .then((sk) => {
           setActive((a) =>
-            a ? { ...a, visibility: sk.visibility, autoSummary: sk.autoSummary, nameOnly: sk.nameOnly, summaryOnly: sk.summaryOnly } : a,
+            a
+              ? {
+                  ...a,
+                  visibility: sk.visibility,
+                  autoSummary: sk.autoSummary,
+                  nameOnly: sk.nameOnly,
+                  summaryOnly: sk.summaryOnly,
+                }
+              : a,
           )
           if (active.source === 'global') setInfoMsg(GLOBAL_CHANGE_MSG)
           reload()
@@ -291,9 +326,24 @@ export function SkillsPanel({ onError }: Props) {
   )
 
   // Delete the selected skill (confirm first), then refresh + clear selection.
+  // After restoring a shipped default the file on disk is a different document —
+  // frontmatter AND body. Clear the loaded detail and re-select it so the body,
+  // the visibility flags and the "edited" badge are all re-read rather than
+  // showing the pre-restore copy.
+  const restoreDone = useCallback(() => {
+    const slug = active?.slug ?? null
+    setActive(null)
+    reload()
+    if (slug) setActiveSlug(slug)
+  }, [active, reload, setActiveSlug])
+
   const removeActive = useCallback(() => {
     if (!active) return
-    if (!window.confirm(`"${active.name}" becerisini silmek istediğine emin misin? Bu, klasörünü diskten kaldırır.`)) {
+    if (
+      !window.confirm(
+        `"${active.name}" becerisini silmek istediğine emin misin? Bu, klasörünü diskten kaldırır.`,
+      )
+    ) {
       return
     }
     setDeleteBusy(true)
@@ -319,7 +369,8 @@ export function SkillsPanel({ onError }: Props) {
   const bulkDelete = useCallback(() => {
     const slugs = [...sel.selected]
     if (slugs.length === 0) return
-    if (!window.confirm(`${slugs.length} beceri silinsin mi? Bu, klasörlerini diskten kaldırır.`)) return
+    if (!window.confirm(`${slugs.length} beceri silinsin mi? Bu, klasörlerini diskten kaldırır.`))
+      return
     Promise.all(slugs.map((slug) => api.deleteSkill(slug)))
       .then(() => {
         if (activeSlug && sel.selected.has(activeSlug)) {
@@ -345,7 +396,10 @@ export function SkillsPanel({ onError }: Props) {
         .then(() => {
           reload()
           if (activeSlug && sel.selected.has(activeSlug)) {
-            api.getSkill(activeSlug).then(setActive).catch(() => {})
+            api
+              .getSkill(activeSlug)
+              .then(setActive)
+              .catch(() => {})
           }
         })
         .catch((e) => onError((e as Error).message))
@@ -367,7 +421,10 @@ export function SkillsPanel({ onError }: Props) {
         .then(() => {
           reload()
           if (activeSlug && sel.selected.has(activeSlug)) {
-            api.getSkill(activeSlug).then(setActive).catch(() => {})
+            api
+              .getSkill(activeSlug)
+              .then(setActive)
+              .catch(() => {})
           }
         })
         .catch((e) => onError((e as Error).message))
@@ -390,7 +447,10 @@ export function SkillsPanel({ onError }: Props) {
           setBulkGroup('')
           reload()
           if (activeSlug && sel.selected.has(activeSlug)) {
-            api.getSkill(activeSlug).then(setActive).catch(() => {})
+            api
+              .getSkill(activeSlug)
+              .then(setActive)
+              .catch(() => {})
           }
         })
         .catch((e) => onError((e as Error).message))
@@ -406,7 +466,8 @@ export function SkillsPanel({ onError }: Props) {
     (slugs: string[], group: string) => {
       Promise.all(slugs.map((slug) => api.setSkillGroup(slug, group)))
         .then(() => {
-          if (activeSlug && slugs.includes(activeSlug)) return api.getSkill(activeSlug).then(setActive)
+          if (activeSlug && slugs.includes(activeSlug))
+            return api.getSkill(activeSlug).then(setActive)
         })
         .catch((e) => onError((e as Error).message))
         // Refresh either way: on success to re-bucket the list, on failure so the
@@ -430,7 +491,11 @@ export function SkillsPanel({ onError }: Props) {
       .reloadSkills()
       .then(() => {
         reload()
-        if (activeSlug) api.getSkill(activeSlug).then(setActive).catch(() => {})
+        if (activeSlug)
+          api
+            .getSkill(activeSlug)
+            .then(setActive)
+            .catch(() => {})
       })
       .catch((e) => onError((e as Error).message))
   }, [reload, activeSlug, onError])
@@ -484,8 +549,8 @@ export function SkillsPanel({ onError }: Props) {
               <Sparkles size={28} className="opacity-40" />
               <p>
                 Henüz beceri yok. <code>SKILL.md</code> içeren bir klasörü{' '}
-                <code>~/.tionswarm/skills/</code> (global) ya da workspace{' '}
-                <code>skills/</code> altına koyup <strong>Tara</strong>'ya bas.
+                <code>~/.tionswarm/skills/</code> (global) ya da workspace <code>skills/</code>{' '}
+                altına koyup <strong>Tara</strong>'ya bas.
               </p>
             </div>
           )}
@@ -540,13 +605,16 @@ export function SkillsPanel({ onError }: Props) {
                                 : 'text-[var(--color-text)] hover:bg-[var(--color-surface-2)]'
                           } ${dnd.dragIds.has(sk.slug) ? 'opacity-50' : ''}`}
                         >
-                          <span className="mt-0.5 shrink-0 text-base leading-none">{sk.icon || '✨'}</span>
+                          <span className="mt-0.5 shrink-0 text-base leading-none">
+                            {sk.icon || '✨'}
+                          </span>
                           <span className="min-w-0 flex-1">
                             <span className="flex items-center gap-1.5">
                               <span className="min-w-0 flex-1 truncate font-medium">{sk.name}</span>
                               {!sk.shared && <RestrictedBadge />}
                               <VisibilityChip v={skillVisibility(sk)} />
                               <SourceBadge source={sk.source} />
+                              <SeedDefaultBadge state={sk.defaultState} />
                             </span>
                             <span className="mt-0.5 block truncate text-[11px] text-[var(--color-text-dim)]">
                               {sk.description || sk.slug}
@@ -650,7 +718,11 @@ export function SkillsPanel({ onError }: Props) {
               icon={<FolderInput size={13} />}
               onClick={() => bulkSetGroup(bulkGroup.trim())}
               disabled={bulkGroupBusy}
-              title={bulkGroup.trim() ? `Seçili becerileri "${bulkGroup.trim()}" grubuna taşı` : 'Seçili becerileri grupsuz yap'}
+              title={
+                bulkGroup.trim()
+                  ? `Seçili becerileri "${bulkGroup.trim()}" grubuna taşı`
+                  : 'Seçili becerileri grupsuz yap'
+              }
             >
               {bulkGroup.trim() ? 'Ata' : 'Grupsuz'}
             </SelectionBarButton>
@@ -692,10 +764,18 @@ export function SkillsPanel({ onError }: Props) {
                 {!active.shared && <RestrictedBadge />}
                 <VisibilityChip v={skillVisibility(active)} />
                 <SourceBadge source={active.source} />
+                <SeedDefaultBadge state={active.defaultState} />
                 {/* Push the Tam/Özet/İsim/Gizli selector to the right of the row. */}
                 <span className="ml-auto flex">
                   <SkillVisibilitySelector
-                    value={active.visibility ?? (active.autoSummary === false ? 'hidden' : active.nameOnly ? 'name-only' : 'full')}
+                    value={
+                      active.visibility ??
+                      (active.autoSummary === false
+                        ? 'hidden'
+                        : active.nameOnly
+                          ? 'name-only'
+                          : 'full')
+                    }
                     busy={visBusy}
                     onSet={setVisibility}
                   />
@@ -712,7 +792,7 @@ export function SkillsPanel({ onError }: Props) {
                   title="Bu beceriyi düzenle (ad, simge, açıklama, içerik)"
                   className="flex items-center gap-1.5 rounded-md border border-[var(--color-border)] px-2.5 py-1.5 text-xs text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]"
                 >
-                  <Pencil size={14} /> 
+                  <Pencil size={14} />
                 </button>
                 <button
                   data-testid="skill-detail-toggle-access"
@@ -736,6 +816,18 @@ export function SkillsPanel({ onError }: Props) {
                   labelClassName="hidden sm:inline"
                   title="Skill klasörünü dosya yöneticisinde aç"
                 />
+                {/* Shipped skills only. The automatic re-seed refreshes a skill
+                    ONLY when it can prove nobody edited its body, so an edited
+                    (or pre-ledger) one needs this deliberate opt-in to start
+                    receiving shipped improvements again. */}
+                {active.defaultState && (
+                  <RestoreDefaultButton
+                    label={active.name}
+                    onRestore={() => api.restoreSkill(active.slug)}
+                    onDone={restoreDone}
+                    onError={onError}
+                  />
+                )}
                 <button
                   data-testid="skill-detail-delete"
                   onClick={removeActive}
@@ -768,7 +860,8 @@ export function SkillsPanel({ onError }: Props) {
                 )}
                 {active.modifiedAt ? (
                   <p className="mt-1 text-xs text-[var(--color-text-dim)]">
-                    <span className="font-medium">Son düzenleme:</span> {fullDateTime(active.modifiedAt)}{' '}
+                    <span className="font-medium">Son düzenleme:</span>{' '}
+                    {fullDateTime(active.modifiedAt)}{' '}
                     <span className="opacity-70">({relativeTime(active.modifiedAt)})</span>
                   </p>
                 ) : null}
@@ -776,10 +869,7 @@ export function SkillsPanel({ onError }: Props) {
                   <p className="mt-1 flex flex-wrap items-center gap-1 text-[11px] text-[var(--color-text-dim)]">
                     <span className="font-medium">İzinli araçlar:</span>
                     {active.alwaysAllow.map((tool) => (
-                      <code
-                        key={tool}
-                        className="rounded bg-[var(--color-surface-2)] px-1 py-0.5"
-                      >
+                      <code key={tool} className="rounded bg-[var(--color-surface-2)] px-1 py-0.5">
                         {tool}
                       </code>
                     ))}
@@ -787,7 +877,10 @@ export function SkillsPanel({ onError }: Props) {
                 )}
                 {active.subSkills && active.subSkills.length > 0 && (
                   <p className="mt-1 flex flex-wrap items-center gap-1 text-[11px] text-[var(--color-text-dim)]">
-                    <span className="font-medium" title="use_skill ile gerektiğinde yüklenen daha ayrıntılı beceriler">
+                    <span
+                      className="font-medium"
+                      title="use_skill ile gerektiğinde yüklenen daha ayrıntılı beceriler"
+                    >
                       Alt beceriler:
                     </span>
                     {active.subSkills.map((sub) => {
@@ -821,7 +914,9 @@ export function SkillsPanel({ onError }: Props) {
                   <Markdown>{active.body}</Markdown>
                 </div>
               ) : (
-                <p className="text-sm text-[var(--color-text-dim)]">Bu becerinin gövde içeriği yok.</p>
+                <p className="text-sm text-[var(--color-text-dim)]">
+                  Bu becerinin gövde içeriği yok.
+                </p>
               )}
             </div>
           </>

@@ -5,6 +5,9 @@ export interface PillOption {
   // A leading glyph (emoji or symbol) shown before the label, matching the
   // composer's per-turn picker icon language.
   icon?: string
+  // When true the pill is shown greyed and non-selectable (e.g. a reasoning tier
+  // the current model can't honour). `hint` then carries the reason (tooltip).
+  disabled?: boolean
 }
 
 interface Props {
@@ -23,23 +26,35 @@ interface Props {
 // active choice) so the agent settings read the same way.
 export function OptionPills({ value, onChange, options, ariaLabel, testid }: Props) {
   return (
-    <div role="radiogroup" aria-label={ariaLabel} data-testid={testid} className="flex flex-wrap gap-1.5">
+    <div
+      role="radiogroup"
+      aria-label={ariaLabel}
+      data-testid={testid}
+      className="flex flex-wrap gap-1.5"
+    >
       {options.map((o) => {
         const active = o.value === value
+        const disabled = !!o.disabled
         return (
           <button
             key={o.value || '_default'}
             type="button"
             role="radio"
             aria-checked={active}
+            aria-disabled={disabled || undefined}
+            disabled={disabled}
             data-testid={testid ? `${testid}-option` : undefined}
             data-value={o.value}
-            onClick={() => onChange(o.value)}
+            onClick={() => {
+              if (!disabled) onChange(o.value)
+            }}
             title={o.hint}
             className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-sm transition ${
-              active
-                ? 'border-[var(--color-accent)] bg-[var(--color-accent-soft)] text-[var(--color-text)]'
-                : 'border-[var(--color-border)] text-[var(--color-text-dim)] hover:border-[var(--color-accent)] hover:text-[var(--color-text)]'
+              disabled
+                ? 'cursor-not-allowed border-[var(--color-border)] text-[var(--color-text-dim)] opacity-40'
+                : active
+                  ? 'border-[var(--color-accent)] bg-[var(--color-accent-soft)] text-[var(--color-text)]'
+                  : 'border-[var(--color-border)] text-[var(--color-text-dim)] hover:border-[var(--color-accent)] hover:text-[var(--color-text)]'
             }`}
           >
             {o.icon && <span className="text-base leading-none">{o.icon}</span>}

@@ -2,12 +2,18 @@ import { useEffect, useState } from 'react'
 import { ArrowLeft, ChevronRight } from 'lucide-react'
 import { api } from '@/api'
 import type { CoordinatorAncestor } from '@/types'
+import { ComposerCard } from '@/features/chat/ComposerCard'
 
 interface Props {
   sessionId: string
   // Opens another session. Without it the chain is rendered as plain text (there
   // is nowhere to navigate to).
   onSelectSession?: (id: string) => void
+  // Floating variant for the read-only chat stack: wrap in a ComposerCard so the
+  // panel gets the same opaque surface + shadow as its siblings (todo/wake), since
+  // it overlays the transcript. Default (side panel) keeps the flat bordered box,
+  // which already sits on a solid panel background.
+  floating?: boolean
 }
 
 // CoordinatorBreadcrumb renders the chain of coordinators ABOVE a worker session,
@@ -17,7 +23,7 @@ interface Props {
 // the work actually came from.
 //
 // Renders nothing for a root coordinator or an ordinary session (empty chain).
-export function CoordinatorBreadcrumb({ sessionId, onSelectSession }: Props) {
+export function CoordinatorBreadcrumb({ sessionId, onSelectSession, floating }: Props) {
   const [chain, setChain] = useState<CoordinatorAncestor[]>([])
 
   useEffect(() => {
@@ -39,8 +45,8 @@ export function CoordinatorBreadcrumb({ sessionId, onSelectSession }: Props) {
 
   if (chain.length === 0) return null
 
-  return (
-    <div className="rounded-lg border border-[var(--color-border)] px-2.5 py-2">
+  const inner = (
+    <>
       <div className="mb-1 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
         <ArrowLeft size={12} /> Üst zincir
       </div>
@@ -68,6 +74,16 @@ export function CoordinatorBreadcrumb({ sessionId, onSelectSession }: Props) {
           bu oturum
         </span>
       </div>
-    </div>
+    </>
   )
+
+  // Floating: same opaque surface + shadow as the sibling ComposerCards it stacks
+  // with. Default: the flat bordered box, for the (solid) side panel.
+  if (floating)
+    return (
+      <ComposerCard tone="plain" className="px-2.5 py-2">
+        {inner}
+      </ComposerCard>
+    )
+  return <div className="rounded-lg border border-[var(--color-border)] px-2.5 py-2">{inner}</div>
 }

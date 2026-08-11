@@ -25,6 +25,40 @@ type cacheProbe struct {
 // as plain input — so summing the two catches a break on either transport.
 const cacheBreakMinTokens = 2000
 
+// CacheBreak is one attributed prompt-cache break, held as a one-shot so the chat
+// turn that paid for it can surface it inline. Reason is the stable machine tag,
+// Detail the human explanation and ColdTokens the prefix that had to be re-paid.
+type CacheBreak struct {
+	Reason     string
+	Detail     string
+	ColdTokens int
+	Model      string
+}
+
+// inlineCacheBreak reports whether a break cause is worth an inline chat card.
+// A ttl-or-server-eviction break is the NORMAL cost of a long pause — carding it
+// would fire on every coffee break and train the user to ignore the card. The two
+// causes kept are "something changed": with the prompt epoch on they should not
+// happen mid-session at all (_Docs/57), so seeing one is a real signal.
+func inlineCacheBreak(tag string) bool {
+	return tag == "model-changed" || tag == "prompt-or-tools-changed"
+}
+
+// ConsumeCacheBreak returns and clears the pending inline cache break for a
+// session, or nil when there is none. Called once per chat turn while building
+// the persisted trace, so a break is carded exactly once.
+func (r *Runtime) ConsumeCacheBreak(sessionID string) *CacheBreak {
+	if sessionID == "" {
+		return nil
+	}
+	v, ok := r.pendingCacheBreaks.LoadAndDelete(sessionID)
+	if !ok {
+		return nil
+	}
+	cb, _ := v.(CacheBreak)
+	return &cb
+}
+
 // cachePrefixSig hashes the part of a request that MUST stay byte-stable for the
 // prompt cache to hit: the static system prefix and the tool definitions (name +
 // schema). The volatile dynamic and the messages are excluded on purpose — since
@@ -116,6 +150,17 @@ func (r *Runtime) noteCacheOutcome(ctx context.Context, agent db.Agent, req prov
 			}
 		}
 		r.emitDebug(ctx, ev)
+		// Arm the inline chat card for the "something changed" causes. Stored rather
+		// than emitted here because this runs deep inside the provider call, with no
+		// step sink in reach; the chat handler consumes it while assembling the
+		// turn's persisted trace (see api.consumeCacheBreakLead). A session that
+		// breaks twice before the consume keeps the LAST break — the pending slot is
+		// a notice, not a log (the journal above is the log).
+		if inlineCacheBreak(tag) {
+			r.pendingCacheBreaks.Store(sid, CacheBreak{
+				Reason: tag, Detail: detail, ColdTokens: coldPrefix, Model: model,
+			})
+		}
 	}
 	// Keep the warmth flag (a genuine break is rare; a cold write establishes a new
 	// baseline once the next call reads it) but refresh the signature/model. The probe

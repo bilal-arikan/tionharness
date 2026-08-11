@@ -36,7 +36,9 @@ export const FILTERS: { key: string; label: string }[] = [
   { key: 'task', label: 'Görev' },
   { key: 'flow', label: 'Akış' },
   { key: 'spawned', label: 'Spawn' },
-  { key: 'schedule', label: 'Zamanlama' },
+  // Cron schedules are time-triggered automations, so the list filter unifies
+  // both kinds under one "Otomasyon" chip (matching the management screen's
+  // umbrella naming). The per-row icon still distinguishes them (Clock vs Zap).
   { key: 'automation', label: 'Otomasyon' },
 ]
 
@@ -57,6 +59,8 @@ export function normalizeSessionListTab(v: string | null | undefined): SessionLi
 
 // normalizeKindFilter coerces an untrusted value to a known filter key ('' = all).
 export function normalizeKindFilter(v: string | null | undefined): string {
+  // A legacy ?kind=schedule deep-link now resolves to the unified automation chip.
+  if (v === 'schedule') return 'automation'
   return v != null && FILTERS.some((f) => f.key === v) ? v : ''
 }
 
@@ -70,6 +74,9 @@ export function kindMeta(kind: string) {
 export function matchesKindFilter(kind: string, filter: string): boolean {
   if (!filter) return true
   if (filter === 'chat') return kind === '' || kind === 'chat'
+  // The "Otomasyon" chip is an umbrella over both event-triggered automations
+  // and time-triggered cron schedules (two distinct Session.Kind values).
+  if (filter === 'automation') return kind === 'automation' || kind === 'schedule'
   return kind === filter
 }
 

@@ -81,21 +81,26 @@ func (r *Runtime) CapabilityContext(ctx, cwd) string   // mevcut olanların blok
 desenini izler. Statik prefix'te çünkü **varlık oturum boyunca sabit** →
 cache-dostu.
 
-### 4. Per-workspace store (§C)
+### 4. Store: TEK cache root (per-workspace izolasyon KALDIRILDI — 2026-08-11)
 
-- **`(*Runtime).CBMStoreDir()`** = `filepath.Join(filepath.Dir(workDir), "cbm-store")`
-  — `skills/`, `hook-scripts/` ile aynı kardeş-dizin deseni. `workDir` boşsa "" →
-  sunucunun default store'una düşülür.
-- **`toolsetup.go`:** `cfgs` kurulurken codebase-memory sunucusunun stdio env'ine
-  `CBM_CACHE_DIR = CBMStoreDir()` enjekte edilir (kullanıcı elle set etmişse o kazanır).
-  `mcp.ServerConfig.Env` → `DialStdio` env'i → sunucu yalnız bu store'u görür.
+Eskiden her workspace'e `<workspace-container>/cbm-store` verilip `CBM_CACHE_DIR`
+enjekte ediliyordu (`CBMStoreDir` + `applyCBMStore`). **codebase-memory-mcp 0.10**
+"hesap başına TEK cache root" kuralını getirdi: farklı bir root talep eden ikinci
+istemci `active account daemon uses a different cache directory` ile reddediliyor.
+Per-workspace store bu kuralla bağdaşmıyordu — TionSwarm'ın iki workspace'i bile
+birbirini (ve dışarıdaki her CBM istemcisini: CLI, watcher, External Agent) kilitliyordu.
+
+Bugün: **TionSwarm hiçbir yerde `CBM_CACHE_DIR` enjekte etmez.** Sunucu kendi
+store'unu (default `~/.cache/codebase-memory-mcp`) kullanır; operatör isterse MCP
+sunucu satırının `envConfig`'ine elle yazar ve o değer aynen taşınır. Kalkan:
+`TestWriteCLIMCPConfigKeepsCodebaseMemoryEnv`.
 
 ### 5. Auto-index (§C)
 
 - **`(*Runtime).EnsureCodebaseIndexed(ctx, cwd)`** — best-effort, arka planda
-  `command cli index_repository {repo_path}` + `CBM_CACHE_DIR`. `(cwd,store)` başına
-  **süreç-içi tek sefer** (`cbmIndexed sync.Map`). Chat turunda `session.WorkingDir`
-  ile tetiklenir.
+  `command cli index_repository --repo-path <cwd>` (0.10 raw-JSON arg'ı deprecate etti).
+  `cwd` başına **süreç-içi tek sefer** (`cbmIndexed sync.Map`). Chat turunda
+  `session.WorkingDir` ile tetiklenir.
 - **Hata yutulmaz:** başarısızlık `logger.Warn` ile loglanır ve guard silinir →
   sonraki tur retry edebilir.
 
@@ -122,16 +127,10 @@ noktaları değişmez.
 - **Sınırlar:** toplam sonuç `limit` (vars. 30), fan-out `maxCodebaseProjects` (40);
   boş-sonuç project'ler atlanır, bir project'in hatası tüm aramayı düşürmez.
 - **Bağlama:** `toolsetup.go` — yalnız enabled codebase-memory sunucusu varsa
-  (`r.codebaseMemoryCmd(ctx) != ""`), `CBMStoreDir()` ile aynı store'a. Risk `RiskRead`
-  (classify.go) → read-only modda da açık; kategori `CategorySearch`.
+  (`r.codebaseMemoryCmd(ctx) != ""`). Risk `RiskRead` (classify.go) → read-only modda
+  da açık; kategori `CategorySearch`.
 - **Not:** graf/mimari sorguları (`get_architecture`, `query_graph`) zaten native
   fleet; bu tool yalnız metin-arama boşluğunu doldurur.
-
-## Frontend — "izole store" rozeti
-
-`ToolsPanel.tsx` MCP sunucu satırında, `command` içinde `codebase-memory-mcp` geçen
-sunucuya **"izole store"** rozeti + tooltip (`CBM_CACHE_DIR = <workspace>/cbm-store`).
-`data-testid="mcp-server-isolated-store"`.
 
 ## Aç/kapa — workspace toggle
 
@@ -219,10 +218,11 @@ seviyesinde her view'da mount olduğu için workspace ekranında da görünür.
   + `codebaseMemoryCmd` + `EnsureCodebaseIndexed`) · `capabilities_test.go` (yeni)
 - `internal/agent/runtime.go` (`cbmIndexed` alanı + headless enjeksiyon, `autonomousSystemPrompt(ctx,a)`)
 - `internal/agent/executor.go` · `subagent.go` (ctx'li çağrı)
-- `internal/agent/toolsetup.go` (`CBM_CACHE_DIR` env enjeksiyonu + tool kaydı)
+- `internal/agent/toolsetup.go` (tool kaydı + MCP şema kapısı)
+- `internal/agent/climcp.go` (claude-cli `--mcp-config`) ·
+  `climcp_test.go` (`TestWriteCLIMCPConfigKeepsCodebaseMemoryEnv`)
 - `internal/api/chat_turn.go` (chat enjeksiyon + `EnsureCodebaseIndexed`)
 - `internal/tools/builtin_codebase_search.go` (+test) · `classify.go` · `categories.go`
-- `frontend/src/components/panels/ToolsPanel.tsx` (izole store rozeti)
 - **Toggle:** `internal/workspace/settings.go` (`CodebaseMemoryEnabled` alan/default/patch/apply +test)
   · `internal/agent/runtime.go` (atomic + `Set/CodebaseMemoryEnabled`) · `internal/agent/toolsetup.go`
   + `capabilities.go` (gate) · `internal/api/workspace_settings.go` (DTO alanı) ·

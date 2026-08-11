@@ -15,6 +15,10 @@ interface Props {
   fireAt: number
   // Durdur: disarm the pending wake.
   onCancel: () => void
+  // Read-only run logs (schedule/automation) surface the countdown for context
+  // but must not let a viewer disarm the automation's own self-wake — the Durdur
+  // control is hidden for them.
+  hideCancel?: boolean
 }
 
 // remainingLabel renders the seconds left until fireAt as a compact "~Xs" / "~Xm Ys".
@@ -30,7 +34,7 @@ function remainingLabel(fireAt: number, nowSec: number): string | null {
 
 // WakeWaitBanner shows the "waiting to auto-resume" state for a session with a
 // pending self-wake, plus a Durdur control.
-export function WakeWaitBanner({ reason, fireAt, onCancel }: Props) {
+export function WakeWaitBanner({ reason, fireAt, onCancel, hideCancel }: Props) {
   // Tick once a second so the countdown stays live without a parent re-render.
   const [now, setNow] = useState(() => serverNow())
   useEffect(() => {
@@ -47,14 +51,16 @@ export function WakeWaitBanner({ reason, fireAt, onCancel }: Props) {
         {left && <span className="text-[var(--color-text-dim)]"> · {left}</span>}
         {reason && <span className="text-[var(--color-text-dim)]"> — {reason}</span>}
       </span>
-      <button
-        onClick={onCancel}
-        title="Otomatik uyandırmayı durdur"
-        className="inline-flex shrink-0 items-center gap-1 rounded-md border border-[var(--color-border)] bg-[var(--color-surface-2)] px-2 py-1 text-xs font-medium text-[var(--color-text)] transition hover:border-[var(--color-danger)] hover:text-[var(--color-danger)]"
-      >
-        <X size={13} />
-        Durdur
-      </button>
+      {!hideCancel && (
+        <button
+          onClick={onCancel}
+          title="Otomatik uyandırmayı durdur"
+          className="inline-flex shrink-0 items-center gap-1 rounded-md border border-[var(--color-border)] bg-[var(--color-surface-2)] px-2 py-1 text-xs font-medium text-[var(--color-text)] transition hover:border-[var(--color-danger)] hover:text-[var(--color-danger)]"
+        >
+          <X size={13} />
+          Durdur
+        </button>
+      )}
     </ComposerCard>
   )
 }

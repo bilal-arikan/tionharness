@@ -230,6 +230,10 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 	// home. No-op when the workspace dir is unknown (keeps the provider's global
 	// default). This is the single per-turn seam every CLI turn passes through.
 	if isCLI {
+		// Carry the resolved effort into the provider so a "max" turn can be lifted
+		// via CLAUDE_CODE_EFFORT_LEVEL (the --settings file can't hold max). Lower
+		// levels ride the settings file and the provider ignores this field.
+		req.CLIEffortLevel = cliEffortLevel(agent.ThinkingLevel)
 		home := r.claudeHomeDir()
 		cli.SetConfigDir(home)
 		// Re-seed the login if this home lost it. The CLI can WIPE its own
@@ -804,6 +808,31 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 				continue
 			}
 
+			// MCP schema gate (pre-execution): a call that omits a required argument
+			// is either completed from context TionSwarm already holds (the `project`
+			// of a codebase-memory tool is the session's own repo) or refused here
+			// with an accurate message. Letting it through means the model reads the
+			// server's inference about an incomplete call, which for this server
+			// reports a missing argument as an unindexed project.
+			if missing := missingRequiredArgs(reg.MCPSchema(call.Name), call.Input); len(missing) > 0 {
+				if fixed, ok := prefillMCPArgs(call, missing, r.sessionCwd(ctx)); ok {
+					r.logger.Info("mcp call prefilled", "agent", agent.ID, "tool", call.Name, "args", strings.Join(missing, ","))
+					r.emitDebug(ctx, db.DebugEvent{Type: db.DebugGuardrail, AgentID: agent.ID, Name: "mcp_prefill", Detail: call.Name})
+					call = fixed
+					missing = missingRequiredArgs(reg.MCPSchema(call.Name), call.Input)
+				}
+				if len(missing) > 0 {
+					msg := missingArgsMessage(call.Name, missing)
+					r.logger.Info("mcp call missing required args", "agent", agent.ID, "tool", call.Name, "args", strings.Join(missing, ","))
+					r.emitDebug(ctx, db.DebugEvent{Type: db.DebugGuardrail, AgentID: agent.ID, Name: "mcp_args_block", Detail: call.Name, Err: true})
+					results = append(results, providers.ToolResult{CallID: call.ID, Content: msg, IsError: true})
+					st := TurnStep{Kind: StepError, Tool: call.Name, Reason: "mcp_args", Text: msg, IsError: true, Batch: batch}
+					steps = append(steps, st)
+					emit(st)
+					continue
+				}
+			}
+
 			// Loop guardrail (pre-execution): a call past a block threshold is
 			// refused with a synthetic error result (pairing invariant holds);
 			// past the halt threshold the whole turn ends after this batch.
@@ -934,12 +963,46 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 				res.Content += hint
 				r.emitDebug(ctx, db.DebugEvent{Type: db.DebugGuardrail, AgentID: agent.ID, Name: "warn", Detail: call.Name})
 			}
-			// MCP not-indexed repair (post-execution): turn an "unindexed project"
-			// error body into an actionable instruction and remember the call so an
-			// identical repeat is refused above before it re-hits the server.
-			if hint, ok := repair.repair(call, res); ok {
-				res.Content += hint
-				r.emitDebug(ctx, db.DebugEvent{Type: db.DebugGuardrail, AgentID: agent.ID, Name: "mcp_repair", Detail: call.Name, Err: true})
+			// MCP not-indexed repair (post-execution). Three outcomes, cheapest first:
+			// re-run the call with a corrected `project` (the model never pays a turn
+			// for it), start a background index of the session's repo, or append the
+			// recovery instruction and remember the call so an identical repeat is
+			// refused above before it re-hits the server.
+			if plan, ok := repair.repair(call, res, r.sessionCwd(ctx)); ok {
+				switch {
+				case plan.Fixed != nil:
+					r.logger.Info("mcp call auto-repaired", "agent", agent.ID, "tool", call.Name, "project", callProjectArg(*plan.Fixed))
+					r.emitDebug(ctx, db.DebugEvent{Type: db.DebugGuardrail, AgentID: agent.ID, Name: "mcp_repair_retry", Detail: call.Name})
+					retryStart := time.Now()
+					res = reg.Call(callCtx, *plan.Fixed)
+					r.emitDebug(ctx, db.DebugEvent{
+						Type:     db.DebugTool,
+						AgentID:  agent.ID,
+						Name:     call.Name,
+						DurMs:    time.Since(retryStart).Milliseconds(),
+						OutBytes: len(res.Content),
+						Err:      res.IsError,
+					})
+					// The corrected arguments become the recorded ones: the step card and
+					// the model's history must show the call that actually produced this
+					// result, not the one that failed.
+					call.Input = plan.Fixed.Input
+					// A retry that failed again gets the normal treatment (hint + poison),
+					// so a broken repair degrades to the old behaviour instead of hiding.
+					if plan2, ok2 := repair.repair(call, res, r.sessionCwd(ctx)); ok2 {
+						res.Content += plan2.Hint
+						if plan2.IndexPath != "" {
+							r.EnsureCodebaseIndexed(ctx, plan2.IndexPath)
+						}
+					}
+				default:
+					res.Content += plan.Hint
+					if plan.IndexPath != "" {
+						r.EnsureCodebaseIndexed(ctx, plan.IndexPath)
+						r.emitDebug(ctx, db.DebugEvent{Type: db.DebugGuardrail, AgentID: agent.ID, Name: "mcp_repair_index", Detail: plan.IndexPath})
+					}
+					r.emitDebug(ctx, db.DebugEvent{Type: db.DebugGuardrail, AgentID: agent.ID, Name: "mcp_repair", Detail: call.Name, Err: true})
+				}
 			}
 
 			results = append(results, res)

@@ -14,10 +14,12 @@ import (
 // boundary instead. Absolute paths are honoured as-is; relative paths resolve
 // against Root.
 //
-// When Confined is true the original strict behaviour is kept: absolute paths
-// and ".." escapes are rejected so a tool can never leave Root. This is used for
-// the narrow config-dir sandbox, where an agent may only edit its own
-// <workspace>/config/ files.
+// When Confined is true every resolved path is kept inside Root: ".." escapes
+// and absolute paths that point outside Root are rejected, while an absolute path
+// that already resolves inside Root is honoured. This is used for the narrow
+// config-dir sandbox, where an agent may only touch its own
+// <workspace>/config/ files, and for autonomous turns re-confined to their
+// working dir.
 type Sandbox struct {
 	Root     string // absolute, cleaned base dir for relative paths (default cwd)
 	Confined bool   // when true, reject absolute paths and ".." escapes
@@ -58,8 +60,9 @@ func (s Sandbox) Ready() bool { return s.Root != "" }
 // resolve against Root (or, when Root is empty, the process working directory);
 // ".." escapes are allowed.
 //
-// Confined: requires a configured Root, rejects absolute inputs, and rejects any
-// path that would escape Root via "..". The empty path resolves to Root.
+// Confined: requires a configured Root and keeps every path inside it — a ".."
+// escape or an absolute path outside Root is rejected, while an absolute path that
+// resolves inside Root is honoured. The empty path resolves to Root.
 func (s Sandbox) Resolve(rel string) (string, error) {
 	rel = strings.TrimSpace(rel)
 
@@ -67,10 +70,16 @@ func (s Sandbox) Resolve(rel string) (string, error) {
 		if !s.Ready() {
 			return "", fmt.Errorf("filesystem sandbox is not configured")
 		}
+		// Confinement guards against ESCAPE, not against spelling a path absolutely.
+		// An absolute path that resolves inside Root is safe, so honour it and let the
+		// escape check below be the single boundary — rejecting in-Root absolutes only
+		// forces autonomous agents into avoidable retries.
+		var abs string
 		if filepath.IsAbs(rel) {
-			return "", fmt.Errorf("absolute paths are not allowed; use a path relative to the root")
+			abs = filepath.Clean(rel)
+		} else {
+			abs = filepath.Clean(filepath.Join(s.Root, rel))
 		}
-		abs := filepath.Clean(filepath.Join(s.Root, rel))
 		if abs != s.Root && !strings.HasPrefix(abs, s.Root+string(filepath.Separator)) {
 			return "", fmt.Errorf("path %q escapes the sandbox", rel)
 		}

@@ -16,6 +16,7 @@ import (
 	"github.com/bilal-arikan/tionswarm/internal/providers"
 	"github.com/bilal-arikan/tionswarm/internal/skills"
 	"github.com/bilal-arikan/tionswarm/internal/tools"
+	"github.com/bilal-arikan/tionswarm/internal/turnqueue"
 	"github.com/bilal-arikan/tionswarm/internal/view"
 )
 
@@ -30,14 +31,22 @@ import (
 // pile up while the coordinator is mid-turn coalesce into the next one (their
 // notifications are already in history) — this is the whole point of coordSlot.
 
-// coordSlot serializes coordinator turns for one coordinator session and counts
-// its active workers. Guarded by mu except workers (atomic, touched from the
-// spawn path without the turn lock).
+// coordSlot holds one coordinator session's DRAIN POLICY: should another auto-turn
+// run, has this batch been reconciled, is the notify loop capped, is the model
+// wedged. Mutual exclusion is NOT here — every turn (coordinator or not) is ordered
+// by the per-session admission queue in internal/turnqueue, which the drain loop
+// re-enters once per iteration exactly like any other caller. That is what keeps a
+// waiting user message from starving behind a coordinator's own auto-turns
+// (_Docs/58). Guarded by mu except workers (atomic, touched from the spawn path
+// without the turn lock).
 type coordSlot struct {
-	mu         sync.Mutex
-	free       *sync.Cond   // lazily created; broadcast whenever running flips false
-	running    bool         // a turn (auto OR interactive) is currently executing
-	pending    bool         // >=1 notification arrived while running; run once more after
+	mu sync.Mutex
+	// driving marks that a drainCoordinator goroutine owns this coordinator's
+	// auto-turn loop. It is NOT "a turn is running" (ask the queue for that): it
+	// exists so concurrent notifications coalesce into the ONE loop instead of
+	// starting a second one.
+	driving    bool
+	pending    bool         // >=1 notification arrived mid-turn; run once more after
 	ackedIdle  bool         // ran the "all workers idle" reconcile turn for this batch
 	hadWorkers bool         // at least one worker was ever spawned (gates the idle sweep)
 	turns      int          // auto-triggered coordinator turns so far (notify-loop cap)
@@ -69,13 +78,6 @@ type coordSlot struct {
 	// it). The stall sweeper reads it to find coordinators gone silent past the
 	// staleness window.
 	lastTurnUnix int64
-}
-
-// signalFree wakes turns blocked in claimCoordinatorSlot. Callers must hold mu.
-func (s *coordSlot) signalFree() {
-	if s.free != nil {
-		s.free.Broadcast()
-	}
 }
 
 // markHadWorkers records that this coordinator has spawned at least one worker, so
@@ -967,7 +969,7 @@ func (r *Runtime) runWorker(agent db.Agent, workerSessionID, prompt, coordSessio
 	// session: a second send_to_worker that raced the isSessionActive check (that
 	// check is a UI hint, not a lock), or a user/wake/peer turn opened on the worker
 	// session (all of which now claim this same slot).
-	releaseSlot := r.claimSessionTurnSlot(workerSessionID)
+	releaseSlot := r.claimSessionTurnSlot(workerSessionID, turnqueue.KindWorker, "worker görevi")
 	defer releaseSlot()
 
 	r.trackSession(workerSessionID)
@@ -1256,83 +1258,25 @@ func (r *Runtime) emitInjectedUserNote(sessionID string, msg db.Message) {
 	})
 }
 
-// BeginSessionUserTurn claims the session's turn slot for an interactive
-// (user-initiated) turn so it never overlaps ANY other turn on the same session —
-// a concurrent direct /chat/stream call, a queued inbox turn, an auto-triggered
-// coordinator turn, a scheduler wake, or a peer inbox delivery. This is the single
-// per-session turn lock: EVERY turn-entry path claims it, not just coordinator
-// sessions (that coordinator-only gate was the source of the concurrent-turn race
-// on plain sessions — see _Docs/58). Turns arriving meanwhile block until this
-// call's release runs; a coordinator's auto turns instead fall into pending
-// (enqueueCoordinatorTurn sees running=true) and coalesce into one turn on release.
-// The slot's coordinator-only fields (pending/turns) stay unused on a plain
-// session, so release is a clean unlock there. A user turn also resets the
-// auto-turn cap (a human is back in the loop); harmless on a plain session where
-// the cap is never consulted. The returned release func MUST be deferred.
-func (r *Runtime) BeginSessionUserTurn(sessionID string) (release func()) {
-	return r.claimCoordinatorSlot(sessionID, true)
-}
+// The per-session turn lock itself lives in turnslot.go / internal/turnqueue; this
+// file only decides WHETHER the coordinator wants another turn.
 
-// claimSessionTurnSlot claims the session's turn slot for an AUTONOMOUS turn
-// (scheduler wake, scheduled prompt, peer inbox delivery) so it serializes with
-// every other turn on the same session — exactly like an interactive chat turn.
-// It always claims (no coordinator gate): a plain session gets real mutual
-// exclusion too, closing the wake-vs-user / peer-vs-user race. Unlike a user turn
-// it does NOT reset the auto-turn cap (no human re-entered the loop). Returns the
-// release func — defer it.
-func (r *Runtime) claimSessionTurnSlot(sessionID string) (release func()) {
-	return r.claimCoordinatorSlot(sessionID, false)
-}
-
-// claimCoordinatorSlot is the low-level per-session turn lock: it blocks until the
-// session's turn slot is free, claims it, and returns the release func (see
-// BeginSessionUserTurn / claimSessionTurnSlot for semantics). Despite the name it
-// backs EVERY session's turn serialization, not only coordinators — a plain
-// session simply never touches the coordinator-only pending/turns fields. resetCap
-// additionally zeroes the auto-turn budget (human back in the loop).
-func (r *Runtime) claimCoordinatorSlot(coordSessionID string, resetCap bool) func() {
-	slot := r.coordSlotFor(coordSessionID)
-	slot.mu.Lock()
-	if slot.free == nil {
-		slot.free = sync.NewCond(&slot.mu)
-	}
-	for slot.running {
-		slot.free.Wait()
-	}
-	slot.running = true
-	if resetCap {
-		slot.turns = 0
-		slot.capWarn = false
-	}
-	slot.mu.Unlock()
-	return func() {
-		slot.mu.Lock()
-		slot.running = false
-		pending := slot.pending
-		slot.pending = false
-		slot.signalFree()
-		slot.mu.Unlock()
-		if pending {
-			r.enqueueCoordinatorTurn(coordSessionID)
-		}
-	}
-}
-
-// enqueueCoordinatorTurn schedules one coordinator turn. If a turn is already
-// running it just flags pending (the running turn will loop once more and see the
-// freshly-persisted notification in history). Otherwise it starts the drain loop.
+// enqueueCoordinatorTurn schedules one coordinator turn. If a drain loop already
+// owns this coordinator it just flags pending — that loop will run once more and
+// see the freshly-persisted notification in history (coalescing). Otherwise it
+// starts the loop, which queues for the session's turn slot like any other caller.
 func (r *Runtime) enqueueCoordinatorTurn(coordSessionID string) {
 	slot := r.coordSlotFor(coordSessionID)
 	slot.mu.Lock()
 	// A fresh notification (a worker just finished or continued) re-arms the
 	// idle-reconcile sweep: this batch is no longer "acknowledged idle".
 	slot.ackedIdle = false
-	if slot.running {
+	if slot.driving {
 		slot.pending = true
 		slot.mu.Unlock()
 		return
 	}
-	slot.running = true
+	slot.driving = true
 	slot.mu.Unlock()
 	go r.drainCoordinator(coordSessionID, slot)
 }
@@ -1340,6 +1284,12 @@ func (r *Runtime) enqueueCoordinatorTurn(coordSessionID string) {
 // drainCoordinator runs coordinator turns until no more notifications are pending,
 // bounded by CoordinatorMaxTurns (the notify-loop guard). Each iteration runs one
 // history-aware turn that sees every notification persisted so far.
+//
+// The loop re-enters the session's admission queue EVERY iteration rather than
+// holding the slot across the drain. That is the fairness property: a message the
+// user queued mid-drain is already in the FIFO, so it runs after the current turn —
+// not after the whole drain. Nothing is lost by yielding; the notification that
+// re-armed us is persisted in history and slot.pending carries the intent.
 func (r *Runtime) drainCoordinator(coordSessionID string, slot *coordSlot) {
 	for {
 		slot.mu.Lock()
@@ -1352,16 +1302,28 @@ func (r *Runtime) drainCoordinator(coordSessionID string, slot *coordSlot) {
 		if slot.turns >= maxTurns {
 			warn := !slot.capWarn
 			slot.capWarn = true
-			slot.running = false
 			slot.pending = false
-			slot.signalFree()
+			slot.driving = false
 			slot.mu.Unlock()
 			if warn {
 				r.warnCoordinatorCap(coordSessionID, slot.turns)
 			}
 			return
 		}
+		slot.mu.Unlock()
+
+		// Queue for the slot like everyone else. Whatever is ahead of us — a user
+		// message, a /compact, a peer delivery — runs first.
+		release := r.claimSessionTurnSlot(coordSessionID, turnqueue.KindCoordinator, "worker bildirimi")
+		slot.mu.Lock()
+		// Count the auto-turn HERE, not before the wait: while we were queued a user
+		// turn may have reset the cap (a human is back in the loop), and a turn that
+		// never ran must not spend the budget.
 		slot.turns++
+		// Consume the notification(s) that armed this iteration: the turn about to run
+		// is history-aware, so it sees every note persisted so far, including any that
+		// landed while we waited for the slot.
+		slot.pending = false
 		slot.mu.Unlock()
 
 		if r.coordRunFn != nil {
@@ -1369,6 +1331,7 @@ func (r *Runtime) drainCoordinator(coordSessionID string, slot *coordSlot) {
 		} else {
 			r.runCoordinatorTurn(coordSessionID)
 		}
+		release()
 
 		slot.mu.Lock()
 		// Hard-halt escalation (FND-99caeb31): the turn-end stall guard just spent the
@@ -1380,14 +1343,12 @@ func (r *Runtime) drainCoordinator(coordSessionID string, slot *coordSlot) {
 		// as the long-horizon backstop.
 		if slot.stallHalted {
 			slot.stopRequested = false
-			slot.running = false
 			slot.pending = false
-			slot.signalFree()
+			slot.driving = false
 			slot.mu.Unlock()
 			return
 		}
 		if slot.pending {
-			slot.pending = false
 			// A real worker notification supersedes an earlier human Stop: a still-running
 			// or just-finished worker is allowed to continue the coordinator (only the
 			// no-pending idle-reconcile is suppressed by a Stop — see below).
@@ -1417,8 +1378,7 @@ func (r *Runtime) drainCoordinator(coordSessionID string, slot *coordSlot) {
 			r.appendCoordinationStatus(coordSessionID)
 			continue
 		}
-		slot.running = false
-		slot.signalFree()
+		slot.driving = false
 		slot.mu.Unlock()
 		// This coordinator may itself be a worker that owes its own coordinator a
 		// result (a mid-level node). It has now had its reconcile turn with every
@@ -1447,9 +1407,12 @@ func (r *Runtime) scheduleSettleBackstop(coordSessionID string) {
 		time.Sleep(r.tun.CoordinatorSettleGrace())
 		slot := r.coordSlotFor(coordSessionID)
 		slot.mu.Lock()
-		busy := slot.running || slot.pending
+		busy := slot.driving || slot.pending
 		slot.mu.Unlock()
-		if busy {
+		// Also check the admission queue: a turn from ANY path (a user message, a
+		// peer delivery) may have taken this session meanwhile — the node is alive
+		// and should report for itself.
+		if busy || r.sessionTurnBusy(coordSessionID) {
 			return // it woke up again; let it report for itself
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)

@@ -14,6 +14,7 @@ import (
 	"github.com/bilal-arikan/tionswarm/internal/db"
 	"github.com/bilal-arikan/tionswarm/internal/events"
 	"github.com/bilal-arikan/tionswarm/internal/tools"
+	"github.com/bilal-arikan/tionswarm/internal/turnqueue"
 )
 
 // The scheduled-fire deadline is settings-driven (ScheduleTimeoutMinutes, default
@@ -220,7 +221,7 @@ func (s *Scheduler) deliverWake(ctx context.Context, sc db.Schedule) error {
 	// turn slot so the wake turn never overlaps a concurrent user turn (inbox
 	// worker / direct chat) or, for a coordinator, an auto turn — worker
 	// notifications arriving meanwhile coalesce and run after release.
-	release := s.rt.claimSessionTurnSlot(sc.SessionID)
+	release := s.rt.claimSessionTurnSlot(sc.SessionID, turnqueue.KindWake, "uyandırma")
 	defer release()
 
 	// Record the wake prompt as a user turn and tell the open screen to refresh +
@@ -458,7 +459,7 @@ func (s *Scheduler) deliverPrompt(ctx context.Context, sc db.Schedule) (string, 
 	// Serialize this scheduled turn with any concurrent turn on the same session
 	// (user chat / inbox worker / wake) — and, for a coordinator, its auto turns —
 	// via the single per-session turn slot.
-	release := s.rt.claimSessionTurnSlot(session.ID)
+	release := s.rt.claimSessionTurnSlot(session.ID, turnqueue.KindWake, "zamanlanmış tur")
 	defer release()
 	// Record the scheduled prompt as a user turn first, so the schedule thread
 	// reads as a real conversation (the UI shows what was asked). Origin "schedule"

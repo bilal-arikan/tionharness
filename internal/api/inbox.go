@@ -48,24 +48,6 @@ type sessionInbox struct {
 	// and resume instead of losing the user's queued messages. See session_teardown.go.
 	closing bool
 	wsID    string // owning workspace (for persistence + dispatch)
-	// idleSignal is closed whenever the serial slot transitions to idle (running
-	// flips false — a worker drain completed or a held slot was released). A waiter
-	// in acquireInboxSlot selects on it to be woken the instant the slot frees,
-	// instead of polling. It is lazily created by the first waiter and recreated
-	// after each broadcast (a closed channel can only fire once). nil when nobody
-	// is waiting.
-	idleSignal chan struct{}
-}
-
-// signalInboxIdleLocked wakes any acquireInboxSlot waiters after the serial slot
-// goes idle. MUST be called under the inbox lock, at every site that clears
-// ib.running. Closing the channel broadcasts to all waiters; a fresh one is not
-// allocated until the next waiter needs it.
-func signalInboxIdleLocked(ib *sessionInbox) {
-	if ib != nil && ib.idleSignal != nil {
-		close(ib.idleSignal)
-		ib.idleSignal = nil
-	}
 }
 
 // inboxStore holds every session's queue. Server-wide (like chatRuns), keyed by
@@ -112,6 +94,18 @@ func (s *Server) enqueueMessage(wsID string, req chatReq, clientMsgID string) bo
 	s.flushInbox(req.SessionID)
 	s.kickInbox(req.SessionID)
 	return true
+}
+
+// enqueueMessageFront enqueues a turn and immediately promotes it to the head of
+// the WAITING queue — for a message that is older than whatever is already queued
+// (the steer_undelivered fallback: guidance the user typed to redirect the turn
+// that just ended). Best effort by construction: if the worker dispatches the queue
+// between the two steps the promotion simply finds nothing to move.
+func (s *Server) enqueueMessageFront(wsID string, req chatReq) {
+	clientMsgID := uuid.NewString()
+	if s.enqueueMessage(wsID, req, clientMsgID) {
+		s.moveQueuedToFront(req.SessionID, clientMsgID)
+	}
 }
 
 // withInbox runs fn under the inbox lock against a session's queue and, when fn
@@ -193,102 +187,33 @@ func (s *Server) kickInbox(sessionID string) {
 	go s.runInboxWorker(sessionID)
 }
 
-// acquireInboxSlot conforms an OUT-OF-QUEUE operation — a slash command like
-// /compact or /handoff that runs a direct provider.Complete on the HTTP goroutine
-// rather than through runInboxWorker — to the session's serial send-queue. It
-// WAITS until the slot is idle, then claims it (running = true, with no draining
-// goroutine), so the command is ordered against chat turns in BOTH directions:
-//   - a chat turn already draining → the command waits behind it (no two
-//     subprocesses resuming the same claude-cli transcript at once);
-//   - a message submitted while the command holds the slot → it stays WAITING in
-//     the tray (kickInbox no-ops on a running worker) instead of being dispatched
-//     concurrently and yanking the queue panel away.
-//
-// While busy it blocks on the inbox's idleSignal (broadcast when running clears),
-// not a poll, and also on ctx so a client disconnect / timeout bails cleanly with
-// no side effect. On success it returns a release func that clears the slot,
-// broadcasts idle, and kicks the worker to drain anything that queued meanwhile;
-// release is idempotent and safe. On ctx cancellation it returns a non-nil error
-// and a no-op release.
-func (s *Server) acquireInboxSlot(ctx context.Context, sessionID, wsID string) (release func(), err error) {
-	for {
-		s.inbox.lock()
-		ib := s.inbox.sessions[sessionID]
-		if ib == nil {
-			ib = &sessionInbox{seen: make(map[string]bool), wsID: wsID}
-			s.inbox.sessions[sessionID] = ib
-		}
-		if ib.wsID == "" {
-			ib.wsID = wsID
-		}
-		if !ib.running && !ib.closing {
-			ib.running = true
-			s.inbox.unlock()
-			var once sync.Once
-			return func() {
-				once.Do(func() {
-					s.inbox.lock()
-					if ib2 := s.inbox.sessions[sessionID]; ib2 != nil {
-						ib2.running = false
-						signalInboxIdleLocked(ib2)
-					}
-					s.inbox.unlock()
-					s.kickInbox(sessionID)
-				})
-			}, nil
-		}
-		// Busy (a worker drains, or a teardown froze the queue): attach to the idle
-		// broadcast and wait for the slot to free or the request to be abandoned.
-		if ib.idleSignal == nil {
-			ib.idleSignal = make(chan struct{})
-		}
-		wait := ib.idleSignal
-		s.inbox.unlock()
-		select {
-		case <-wait:
-			// Slot changed state — loop and re-check under the lock.
-		case <-ctx.Done():
-			return func() {}, ctx.Err()
-		}
-	}
-}
-
-// runInboxWorker drains a session's queue one turn at a time. It pops the head
-// into the durable in-flight slot (so the persisted queue keeps that turn until
-// it completes AND shows the remaining WAITING tail), runs it under a watchdog,
-// clears the slot, then loops. A crash while the head runs is reclaimed at boot
-// from the in-flight slot; the WAITING tail stays durable in inbox.json.
+// runInboxWorker drains a session's queue one turn at a time. Each lap it first
+// claims the session's RUNTIME turn slot, then pops the head into the durable
+// in-flight slot (so the persisted queue keeps that turn until it completes AND
+// shows the remaining WAITING tail), runs it under a watchdog, clears the slot and
+// releases the runtime slot, then loops. A crash while the head runs is reclaimed
+// at boot from the in-flight slot; the WAITING tail stays durable in inbox.json.
 func (s *Server) runInboxWorker(sessionID string) {
 	for {
-		s.inbox.lock()
-		ib := s.inbox.sessions[sessionID]
-		if ib == nil || ib.closing || len(ib.items) == 0 {
-			if ib != nil {
-				ib.running = false
-				// Wake any acquireInboxSlot waiter (a /compact or /handoff waiting to run
-				// after this drain) now that the serial slot is idle.
-				signalInboxIdleLocked(ib)
-				// closing means a teardown froze the queue: leave items + inflight + the
-				// dedupe set intact so an aborted delete can resume exactly where it
-				// paused. Only a genuine drain (empty queue) resets them.
-				if !ib.closing {
-					ib.inflight = nil
-					// Queue drained: reset the dedupe set so it can't grow without bound
-					// across a long-lived session (a re-submit of an old id after this is a
-					// genuinely new turn).
-					ib.seen = make(map[string]bool)
-				}
-			}
-			s.inbox.unlock()
-			s.flushInbox(sessionID)
+		if s.endInboxDrain(sessionID) {
 			return
 		}
-		item := ib.items[0]
-		ib.items = ib.items[1:]
-		item.Attempts++
-		inflight := item
-		ib.inflight = &inflight
-		s.inbox.unlock()
+		// Claim the runtime turn slot BEFORE popping. That slot is the session's other
+		// serializer — a coordinator auto-turn, a worker notification, a scheduler wake
+		// all hold it without passing through this queue — and the turn we are about to
+		// dispatch blocks on it anyway (runChatTurn). Popping first meant the message
+		// left the WAITING tail (vanishing from every window's queue tray) and then
+		// waited, invisible and no longer cancellable, until the coordinator released
+		// the slot — surfacing in the transcript only when some worker's reply happened
+		// to end that turn. Waiting HERE keeps it WAITING until it can really run.
+		// See _Docs/58-QUEUE-SENKRON.md.
+		release := s.claimRuntimeTurn(sessionID)
+		item, ok := s.popInboxHead(sessionID)
+		if !ok {
+			// Drained or frozen while we waited for the runtime slot.
+			release()
+			continue
+		}
 		// Persist with the head moved into the durable in-flight slot: if the process
 		// dies mid-turn (even a hard kill before the turn writes its own inflight
 		// sidecar), boot re-dispatches this exact item instead of losing it.
@@ -297,6 +222,7 @@ func (s *Server) runInboxWorker(sessionID string) {
 		// Poison guard: a turn that has already wedged the process too many times is
 		// dropped (with a visible turn_error) so it can never block the queue forever.
 		if item.Attempts > maxInboxAttempts {
+			release()
 			s.dropPoisonedInflight(sessionID, item)
 			continue
 		}
@@ -311,17 +237,83 @@ func (s *Server) runInboxWorker(sessionID string) {
 			}
 		}
 		if wsp == nil {
+			release()
 			s.clearInflight(sessionID)
 			continue
 		}
+		// The turn slot is already ours: tell runChatTurn not to claim it again (it
+		// would deadlock behind itself).
+		item.Req.turnSlotHeld = true
 		// Server-driven turn: no single owning client, so clientGone never fires —
 		// an interactive ask_user waits for an answer from ANY window (via the
 		// interaction CAS) instead of bailing. All UI rides the hub (write=nil).
 		// runQueuedTurn adds a panic barrier AND a watchdog so ONE bad turn can never
 		// kill the worker goroutine or wedge the queue by never returning.
 		s.runQueuedTurn(wsp, sessionID, item.Req)
+		release()
 		s.clearInflight(sessionID)
 	}
+}
+
+// endInboxDrain ends the serial drain when the session's queue is empty (or frozen
+// by a teardown), clearing the running flag under the SAME lock that observes the
+// emptiness so a message enqueued in that instant can never find running=true with
+// no worker left to drain it. Returns true when the worker should exit.
+func (s *Server) endInboxDrain(sessionID string) bool {
+	s.inbox.lock()
+	ib := s.inbox.sessions[sessionID]
+	if ib != nil && !ib.closing && len(ib.items) > 0 {
+		s.inbox.unlock()
+		return false
+	}
+	if ib != nil {
+		ib.running = false
+		// closing means a teardown froze the queue: leave items + inflight + the
+		// dedupe set intact so an aborted delete can resume exactly where it
+		// paused. Only a genuine drain (empty queue) resets them.
+		if !ib.closing {
+			ib.inflight = nil
+			// Queue drained: reset the dedupe set so it can't grow without bound
+			// across a long-lived session (a re-submit of an old id after this is a
+			// genuinely new turn).
+			ib.seen = make(map[string]bool)
+		}
+	}
+	s.inbox.unlock()
+	s.flushInbox(sessionID)
+	return true
+}
+
+// popInboxHead moves the head of a session's queue into the durable in-flight slot
+// and returns it. Reports false when the queue emptied or froze meanwhile (the
+// worker waits for the runtime turn slot between the two, so the queue it saw is
+// not necessarily the queue it pops from). Attempts advances here — the instant the
+// turn is committed to run — so the poison guard counts dispatches, not waits.
+func (s *Server) popInboxHead(sessionID string) (inboxItem, bool) {
+	s.inbox.lock()
+	defer s.inbox.unlock()
+	ib := s.inbox.sessions[sessionID]
+	if ib == nil || ib.closing || len(ib.items) == 0 {
+		return inboxItem{}, false
+	}
+	item := ib.items[0]
+	ib.items = ib.items[1:]
+	item.Attempts++
+	inflight := item
+	ib.inflight = &inflight
+	return item, true
+}
+
+// claimRuntimeTurn blocks until the session's runtime turn slot is free and claims
+// it as a user turn, returning the release. A session whose workspace/runtime can't
+// be resolved (a store that vanished) yields a no-op release rather than wedging the
+// queue — the turn then fails its own way, visibly.
+func (s *Server) claimRuntimeTurn(sessionID string) func() {
+	wsp := s.inboxWorkspace(sessionID)
+	if wsp == nil || wsp.Runtime == nil {
+		return func() {}
+	}
+	return wsp.Runtime.BeginSessionUserTurn(sessionID)
 }
 
 // queueView is the client-facing shape of one waiting queue entry.
@@ -345,12 +337,18 @@ func (s *Server) flushInbox(sessionID string) {
 	view := make([]queueView, 0)
 	wsID := ""
 	inflightID := ""
+	var inflightView *queueView
 	if ib != nil {
 		snapshot.Items = append([]inboxItem{}, ib.items...)
 		if ib.inflight != nil {
 			cp := *ib.inflight
 			snapshot.Inflight = &cp
 			inflightID = ib.inflight.ClientMsgID
+			inflightView = &queueView{
+				ClientMsgID: cp.ClientMsgID,
+				Text:        cp.Req.Message,
+				EnqueuedAt:  cp.EnqueuedAt,
+			}
 		}
 		for _, it := range ib.items {
 			view = append(view, queueView{ClientMsgID: it.ClientMsgID, Text: it.Req.Message, EnqueuedAt: it.EnqueuedAt})
@@ -375,11 +373,62 @@ func (s *Server) flushInbox(sessionID string) {
 			_ = wsp.DB.WriteInbox(sessionID, data)
 		}
 	}
-	// inflightClientMsgId lets a queue observer (the /chat + /chat/stream handlers)
-	// tell "my message was dispatched and is running" (== inflight) from "my message
-	// was cancelled/cleared before running" (absent from both) — the latter never
-	// produces a terminal event, so the observer must close instead of hanging.
-	s.publishHub(sessionID, sessionhub.KindQueueUpdate, map[string]any{"queue": view, "inflightClientMsgId": inflightID}, false)
+	s.publishQueue(sessionID, view, inflightID, inflightView)
+}
+
+// publishQueue broadcasts a session's complete turn queue to every window: the
+// user's own durable send-queue (staged / dispatched) PLUS the runtime admission
+// queue (what actually holds the session and what is queued behind it — a
+// coordinator's worker notification, a wake, a peer delivery). The two used to be
+// invisible to each other, which is how a dispatched message could sit waiting on
+// something the UI never showed (_Docs/58).
+//
+// It is called from flushInbox (queue mutated) AND from the admission-queue
+// observer bridge (runtime state changed), so the view stays live either way. The
+// runtime part is re-read here rather than carried on the event, so a burst of
+// changes coalesces into one read.
+func (s *Server) publishQueue(sessionID string, view []queueView, inflightID string, inflightView *queueView) {
+	payload := map[string]any{
+		// inflightClientMsgId lets a queue observer (the /chat + /chat/stream handlers)
+		// tell "my message was dispatched and is running" (== inflight) from "my message
+		// was cancelled/cleared before running" (absent from both) — the latter never
+		// produces a terminal event, so the observer must close instead of hanging.
+		// inflight carries its TEXT too, so the UI can keep showing the dispatched
+		// message (as "gönderiliyor") in the tray until its user bubble appears in the
+		// transcript — no window where the message is nowhere to be seen.
+		"queue":               view,
+		"inflightClientMsgId": inflightID,
+		"inflight":            inflightView,
+	}
+	if wsp := s.inboxWorkspace(sessionID); wsp != nil && wsp.Runtime != nil {
+		snap := wsp.Runtime.TurnQueue().Snapshot(sessionID)
+		payload["turns"] = snap
+	}
+	s.publishHub(sessionID, sessionhub.KindQueueUpdate, payload, false)
+}
+
+// republishQueue re-broadcasts a session's queue view from the CURRENT inbox state
+// without touching the disk sidecar — the admission-queue observer path, where only
+// the runtime half changed. Splitting this from flushInbox keeps a per-turn-boundary
+// event from rewriting inbox.json every time.
+func (s *Server) republishQueue(sessionID string) {
+	s.inbox.lock()
+	ib := s.inbox.sessions[sessionID]
+	view := make([]queueView, 0)
+	inflightID := ""
+	var inflightView *queueView
+	if ib != nil {
+		if ib.inflight != nil {
+			cp := *ib.inflight
+			inflightID = cp.ClientMsgID
+			inflightView = &queueView{ClientMsgID: cp.ClientMsgID, Text: cp.Req.Message, EnqueuedAt: cp.EnqueuedAt}
+		}
+		for _, it := range ib.items {
+			view = append(view, queueView{ClientMsgID: it.ClientMsgID, Text: it.Req.Message, EnqueuedAt: it.EnqueuedAt})
+		}
+	}
+	s.inbox.unlock()
+	s.publishQueue(sessionID, view, inflightID, inflightView)
 }
 
 // recoverInboxes re-enqueues every session's persisted WAITING queue at boot and

@@ -670,7 +670,7 @@ export function ExternalToolsPanel({ onError }: Props) {
                                   ? 'Önce bu araç PATH’te bulunmalı (yukarıda "kurulu" görünmeli)'
                                   : cbmServer()
                                     ? 'MCP sunucusunu kaldır'
-                                    : 'MCP sunucusunu otomatik ekle (izole store’a yönlenir)'
+                                    : 'MCP sunucusunu otomatik ekle'
                               }
                             >
                               {mcpBusy

@@ -5,6 +5,9 @@ export interface PickerOption {
   label: string
   hint: string
   icon?: string
+  // When true the entry is shown greyed and non-selectable in the menu (e.g. a
+  // reasoning tier the current model can't honour); `hint` carries the reason.
+  disabled?: boolean
 }
 
 // Reasoning levels offered in the composer picker. '' defers to the agent's own
@@ -17,7 +20,12 @@ export const THINKING_OPTIONS: PickerOption[] = [
   { value: 'low', label: 'Düşük', hint: 'Kısa akıl yürütme', icon: '◔' },
   { value: 'medium', label: 'Orta', hint: 'Dengeli', icon: '◑' },
   { value: 'high', label: 'Yüksek', hint: 'Derin akıl yürütme', icon: '●' },
-  { value: 'xhigh', label: 'Çok yüksek', hint: 'effort xhigh — kodlama/ajan işleri (güncel modeller)', icon: '◉' },
+  {
+    value: 'xhigh',
+    label: 'Çok yüksek',
+    hint: 'effort xhigh — kodlama/ajan işleri (güncel modeller)',
+    icon: '◉',
+  },
   { value: 'max', label: 'Maks', hint: 'effort max — en zor işler (güncel modeller)', icon: '✦' },
 ]
 

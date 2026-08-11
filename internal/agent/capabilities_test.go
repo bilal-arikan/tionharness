@@ -73,14 +73,10 @@ func TestCodebaseMemoryGuidance(t *testing.T) {
 	}
 }
 
-func TestCBMStoreDir(t *testing.T) {
-	if (&Runtime{}).CBMStoreDir() != "" {
-		t.Error("expected empty store dir when workDir unknown")
-	}
-	container := t.TempDir()
-	r := &Runtime{workDir: filepath.Join(container, "workspace")}
-	want := filepath.Join(container, "cbm-store")
-	if got := r.CBMStoreDir(); got != want {
-		t.Errorf("CBMStoreDir() = %q, want %q", got, want)
-	}
+// cbmRuntime builds a Runtime whose codebase-memory feature toggle is on.
+func cbmRuntime(t *testing.T) *Runtime {
+	t.Helper()
+	r := &Runtime{workDir: filepath.Join(t.TempDir(), "workspace")}
+	r.codebaseMemoryEnabled.Store(true)
+	return r
 }

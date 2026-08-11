@@ -78,4 +78,8 @@ export const insightApi = {
       method: 'POST',
       body: JSON.stringify({ enabled }),
     }),
+  // Overwrite a lens with its shipped default, discarding local edits. Only
+  // meaningful for lenses with hasDefault; 404 otherwise.
+  restoreLens: (id: string) =>
+    req<InsightLens>(`/api/insight/lenses/${id}/restore`, { method: 'POST' }),
 }

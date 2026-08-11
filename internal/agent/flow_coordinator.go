@@ -120,6 +120,7 @@ func (r *Runtime) RunCoordinatorNode(ctx context.Context, spec orchestration.Coo
 	// so a long-lived workspace does not accumulate one entry per coordinator node.
 	// A late straggler notification simply re-creates a fresh slot.
 	r.coordSlots.Delete(sess.ID)
+	r.turns.Forget(sess.ID)
 	if waitErr != nil {
 		r.stopCoordinatorWorkers(ctx, sess.ID)
 		return "", waitErr
@@ -164,19 +165,24 @@ func (r *Runtime) waitCoordinatorIdle(ctx context.Context, coordSessionID string
 			// decrements it the moment its own turn ends — while its branch keeps
 			// working — so the slot alone would read as settled with grandchildren
 			// still running, and the node would take a half-finished result.
-			if coordSlotIdle(slot) && r.activeSubtreeWorkers(ctx, coordSessionID) == 0 {
+			if r.coordSlotIdle(coordSessionID, slot) && r.activeSubtreeWorkers(ctx, coordSessionID) == 0 {
 				return nil
 			}
 		}
 	}
 }
 
-// coordSlotIdle reports whether a coordinator slot is fully quiescent.
-func coordSlotIdle(slot *coordSlot) bool {
+// coordSlotIdle reports whether a coordinator is fully quiescent: no turn holds (or
+// is queued for) its admission slot, no notification is pending, no drain loop is
+// active, and no worker is running.
+func (r *Runtime) coordSlotIdle(coordSessionID string, slot *coordSlot) bool {
 	slot.mu.Lock()
-	busy := slot.running || slot.pending
+	busy := slot.driving || slot.pending
 	slot.mu.Unlock()
-	return !busy && slot.workers.Load() == 0
+	if busy || slot.workers.Load() > 0 {
+		return false
+	}
+	return !r.sessionTurnBusy(coordSessionID) && r.turns.Waiting(coordSessionID) == 0
 }
 
 // stopCoordinatorWorkers cancels every still-running worker of a coordinator

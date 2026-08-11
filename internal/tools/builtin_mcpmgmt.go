@@ -141,7 +141,7 @@ func NewCreateMCPServerTool(database *db.DB, actorID string) CreateMCPServerTool
 func (CreateMCPServerTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name:        "create_mcp_server",
-		Description: "Add an MCP (Model Context Protocol) server to this workspace. For transport=stdio set command (executable) and optionally args (JSON array string) and env (JSON object string). For transport=sse or http set url. The server is enabled and tagged as created by you; its tools become available to agents on their next turn. Returns the new server id.",
+		Description: "Add an MCP (Model Context Protocol) server to this workspace. For transport=stdio set command (executable) and optionally args (JSON array string) and env (JSON object string). For transport=sse or http set url. The server is enabled, given workspace-wide scope (shared — one connection visible to every agent), and tagged as created by you; its tools become available to agents on their next turn. Returns the new server id.",
 		InputSchema: json.RawMessage(`{
 			"type":"object",
 			"properties":{

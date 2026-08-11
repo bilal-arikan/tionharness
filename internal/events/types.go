@@ -61,6 +61,11 @@ const (
 	// send_to_worker prompt, a coordination status/guard note. A control signal,
 	// never a toast (the assistant reply that follows carries the TypeChat toast).
 	TypeSessionUserMessage = "session_user_message"
+	// TypeSessionTurnQueue signals that a session's TURN ADMISSION state changed —
+	// a turn took the slot, finished it, or queued behind it (internal/turnqueue).
+	// Deliberately payload-free: the API re-reads the snapshot when it bridges this,
+	// so a burst of changes coalesces into one read. A control signal, never a toast.
+	TypeSessionTurnQueue = "session_turn_queue"
 	// TypeFlowNode carries one live flow-node lifecycle frame (Event.Node).
 	TypeFlowNode = "flow_node"
 	// TypeLog carries one captured log record for the live Logs tail (Event.Log).

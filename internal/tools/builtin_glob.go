@@ -23,7 +23,7 @@ func (FSGlobTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name: "Glob",
 		Description: "Find files matching a glob pattern (e.g. \"**/*.go\", \"src/*.ts\"). Results are sorted by modification time, most-recently-modified first. " +
-			"Searches the working directory by default; pass path to search a different directory. Honours .gitignore (and always skips .git) unless no_ignore is set. Returns paths relative to the search root.",
+			"Searches the working directory by default; pass path to search a different directory. Honours .gitignore and skips .git — unless no_ignore is set, which disables both and traverses everything. Returns paths relative to the search root, up to 500 matches (a marker is appended only when that cap is hit).",
 		InputSchema: json.RawMessage(`{
 			"type":"object",
 			"properties":{

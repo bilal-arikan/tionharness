@@ -20,6 +20,18 @@ type ModelInfo struct {
 	// observation store, never here: which model an alias points at is a runtime
 	// fact that changes without a release, so a manifest must not claim it.
 	ResolvedModel string `json:"resolvedModel,omitempty"`
+	// ThinkingTiers is the set of reasoning levels this model meaningfully
+	// supports, as the stable tokens the UI pickers use ("off"/"low"/"medium"/
+	// "high"/"xhigh"/"max"). Filled at Catalog() build time from ThinkingTiersFor
+	// so the composer/agent pickers can grey out tiers that would be a no-op on
+	// the selected model (e.g. "off" on the always-on Fable class, or "xhigh"/
+	// "max" on legacy models that clamp them down). Never set in manifests.
+	ThinkingTiers []string `json:"thinkingTiers,omitempty"`
+	// ThinkingClass is how the model handles extended reasoning (ThinkingClass):
+	// "always-on"/"adaptive"/"non-thinking"/"legacy"/"alias". The pickers pair it
+	// with ThinkingTiers to explain why a greyed-out tier is inactive. Filled at
+	// Catalog() build time; never set in manifests.
+	ThinkingClass string `json:"thinkingClass,omitempty"`
 }
 
 // CatalogEntry describes a provider and its known models for the UI's
@@ -53,6 +65,12 @@ func Catalog() []CatalogEntry {
 			}
 			if models[i].MaxOutput == 0 {
 				models[i].MaxOutput = MaxOutputFor(m.Kind, models[i].ID)
+			}
+			if models[i].ThinkingTiers == nil {
+				models[i].ThinkingTiers = ThinkingTiersFor(models[i].ID)
+			}
+			if models[i].ThinkingClass == "" {
+				models[i].ThinkingClass = ThinkingClass(models[i].ID)
 			}
 		}
 		out = append(out, CatalogEntry{

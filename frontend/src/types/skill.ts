@@ -3,6 +3,7 @@
 // markdown body is fetched on demand via the detail endpoint.
 
 import type { ToolVisibility } from './workspace'
+import type { SeedDefaultState } from './seed'
 
 export type SkillSource = 'global' | 'workspace'
 
@@ -60,6 +61,9 @@ export interface Skill {
   // SKILL.md last-modified time (Unix seconds). Surfaced in the Skills screen as
   // a "last edited" label; skills are sorted within each group newest-first by it.
   modifiedAt?: number
+  // How this file compares to the skill TionSwarm ships. Set only for global-tier
+  // shipped skills; absent means there is no default to compare with or restore.
+  defaultState?: SeedDefaultState
 }
 
 export interface SkillDetail extends Skill {

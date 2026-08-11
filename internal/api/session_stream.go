@@ -245,6 +245,13 @@ func (s *Server) bridgeBusToHub() {
 				continue
 			}
 			s.hub.Publish(sid, sessionhub.KindStep, e.Step, false)
+		case "session_turn_queue":
+			// The session's TURN ADMISSION state changed (a turn took the slot, released
+			// it, or queued behind it). Re-publish the session's queue view so every
+			// window sees the whole picture — the user's own staged messages AND the
+			// autonomous turns they are waiting behind. Payload-free by design: we read
+			// the current snapshot here, so a burst coalesces into one read.
+			s.republishQueue(sid)
 		case "session_user_message":
 			// A runtime-injected user-role message (a worker task-notification, a
 			// send_to_worker prompt, a coordination status/guard note) was just

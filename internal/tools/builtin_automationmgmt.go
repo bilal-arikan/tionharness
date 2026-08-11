@@ -47,11 +47,11 @@ func NewCreateAutomationTool(database *db.DB, actorID string) CreateAutomationTo
 func (CreateAutomationTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name: "create_automation",
-		Description: "Create an event-driven automation. Three trigger kinds: (a) triggerKind='tag' (default) — when a session " +
+		Description: "Create an event-driven automation. Four trigger kinds: (a) triggerKind='tag' (default) — when a session " +
 			"carrying triggerTag finishes a turn, its final reply is rendered into promptTemplate ({{result}}, {{title}}, " +
 			"{{tag}}, {{sessionId}}) and the target runs; (b) triggerKind='board' — when a kanban card changes (created/moved/" +
 			"updated/deleted), the target runs with the card context ({{taskId}}, {{title}}, {{op}}, {{from}}, {{to}}, " +
-			"{{toLabel}}, {{tags}}, {{owner}}, {{priority}}); (c) triggerKind='token' — when cumulative token spend crosses each " +
+			"{{fromLabel}}, {{toLabel}}, {{board}}, {{tags}}, {{owner}}, {{priority}}); (c) triggerKind='token' — when cumulative token spend crosses each " +
 			"tokenThreshold multiple (tokenScope='session' watches one session's lifetime spend, 'workspace' the whole day's), " +
 			"the target runs with {{tokens}}, {{threshold}}, {{scope}}, {{sessionId}} — good for self-maintenance/cleanup; " +
 			"(d) triggerKind='counter' — when an activity counter crosses each counterInterval multiple " +
@@ -84,8 +84,8 @@ func (CreateAutomationTool) Def() providers.ToolDef {
 				"sessionMode":{"type":"string","enum":["spawn","continue"],"description":"[agent-backed] Session strategy per fire: 'spawn' (fresh session each time — tag/board default) or 'continue' (one persistent per-automation thread that carries prior turns forward, history-aware — token/counter default). Omit to use the per-kind default. Ignored for flow-backed rules."},
 				"targetAgentId":{"type":"string","description":"The agent that runs the spawned session (see list_agents). Omit when flowId is set."},
 				"flowId":{"type":"string","description":"Run this orchestration flow with the rendered prompt as its input instead of spawning an agent session (see list_flows)."},
-				"promptTemplate":{"type":"string","description":"Prompt for the spawned session (or flow input). Tag placeholders: {{result}}, {{title}}, {{tag}}, {{sessionId}}, {{prevPrompt}}, {{agent}}. Board placeholders: {{taskId}}, {{title}}, {{op}}, {{from}}, {{to}}, {{fromLabel}}, {{toLabel}}, {{board}}, {{tags}}, {{owner}}, {{priority}}. Token placeholders: {{tokens}}, {{threshold}}, {{scope}}, {{sessionId}}. Counter placeholders: {{count}}, {{interval}}, {{metric}}, {{sessionId}}. Common: {{iteration}}, {{maxIterations}}, {{automation}}, {{date}}, {{time}}, {{datetime}}"},
-				"spawnTags":{"type":"array","items":{"type":"string"},"description":"Tags applied to the spawned session (tag kind default: [triggerTag] → loop; pass [] to break the loop). Ignored for flow-backed and board automations."},
+				"promptTemplate":{"type":"string","description":"Prompt for the spawned session (or flow input). Tag placeholders: {{result}}, {{title}}, {{tag}}, {{sessionId}}, {{prevPrompt}}, {{agent}}. Board placeholders: {{taskId}}, {{title}}, {{op}}, {{from}}, {{to}}, {{fromLabel}}, {{toLabel}}, {{board}}, {{tags}}, {{owner}}, {{priority}}. Token placeholders: {{tokens}}, {{threshold}}, {{scope}}, {{sessionId}}. Counter placeholders: {{count}}, {{interval}}, {{metric}}, {{scope}}, {{sessionId}}. Common: {{iteration}}, {{maxIterations}}, {{automation}}, {{date}}, {{time}}, {{datetime}}"},
+				"spawnTags":{"type":"array","items":{"type":"string"},"description":"Tags applied to the spawned session (tag kind default: [triggerTag] → self-continuing loop). To stop the loop, set a DIFFERENT tag that no automation triggers on — an empty [] does NOT break the loop (it is re-defaulted to [triggerTag]). Ignored for flow-backed and board automations."},
 				"maxIterations":{"type":"integer","description":"Max total fires before auto-disabling. Range 1-500; 0/unlimited is REJECTED (infinite-loop risk). Omit for the default 50."},
 				"cooldownSec":{"type":"integer","description":"Minimum seconds between fires (default 0)"},
 				"expiresAt":{"type":"integer","description":"Optional end date (unix seconds); after it the automation auto-disables. 0 = no end date"},
@@ -260,7 +260,7 @@ func NewUpdateAutomationTool(database *db.DB, actorID string) UpdateAutomationTo
 func (UpdateAutomationTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name:        "update_automation",
-		Description: "Edit an automation (user- or agent-created). Pass the id and the fields to change (name, triggerTag, targetAgentId, flowId, promptTemplate, spawnTags, maxIterations, cooldownSec, boardPriority, boardExclusive, enabled). Setting flowId makes it flow-backed (and clears the agent); setting targetAgentId switches it back to agent-backed.",
+		Description: "Edit an automation (user- or agent-created). Pass the id and any field shown in the schema to change it (name, triggerKind, the tag/board/token/counter trigger fields, targetAgentId, flowId, promptTemplate, spawnTags, sessionMode, maxIterations, cooldownSec, expiresAt, enabled). Setting flowId makes it flow-backed (and clears the agent); setting targetAgentId switches it back to agent-backed.",
 		InputSchema: json.RawMessage(`{
 			"type":"object",
 			"properties":{
@@ -286,6 +286,7 @@ func (UpdateAutomationTool) Def() providers.ToolDef {
 				"spawnTags":{"type":"array","items":{"type":"string"}},
 				"maxIterations":{"type":"integer","description":"Max total fires before auto-disabling. Range 1-500; 0/unlimited is rejected."},
 				"cooldownSec":{"type":"integer"},
+				"expiresAt":{"type":"integer","description":"Optional end date (unix seconds); after it the automation auto-disables. 0 = no end date"},
 				"enabled":{"type":"boolean"}
 			},
 			"required":["id"],

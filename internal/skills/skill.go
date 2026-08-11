@@ -13,6 +13,8 @@ package skills
 import (
 	"fmt"
 	"strings"
+
+	"github.com/bilal-arikan/tionswarm/internal/seed"
 )
 
 // Visibility tiers describe how much of a skill rides in the per-turn "# Available
@@ -204,6 +206,13 @@ type Skill struct {
 	// so the Skills screen can show a "last edited" date and sort skills within a
 	// group newest-first. 0 when the file could not be stat'd. Set in scanDir.
 	ModifiedAt int64 `json:"modifiedAt,omitempty"`
+	// DefaultState says how this file compares to the skill TionSwarm ships:
+	// "" = not a shipped default (user-authored, imported, or a workspace-tier
+	// override), "default" = untouched, "tuned" = only frontmatter differs (the
+	// app's own visibility/group edits — still auto-refreshes), "edited" = the body
+	// was changed, so shipped improvements no longer reach it. Set in scanDir for
+	// the global tier only; drives the "restore default" button and its badge.
+	DefaultState seed.State `json:"defaultState,omitempty"`
 	// Path is the absolute path of the backing SKILL.md (not serialised; the
 	// body is exposed via the detail endpoint instead).
 	Path string `json:"-"`

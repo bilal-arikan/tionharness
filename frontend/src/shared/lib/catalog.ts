@@ -23,6 +23,41 @@ export function loadCatalog(): Promise<CatalogEntry[]> {
   return catalogPromise
 }
 
+// ThinkingInfo pairs a model's supported reasoning tiers (null = unknown → all
+// tiers enabled) with its class, so the pickers can both gate the buttons and
+// explain a greyed-out one. Both come straight from the backend catalog.
+export interface ThinkingInfo {
+  tiers: string[] | null
+  cls: string
+}
+
+// thinkingInfoForModel looks up the given provider+model in the catalog and
+// returns its reasoning tiers + class. Lookup is an exact id match against the
+// provider's curated model list, so bare aliases and custom typed models fall
+// through to {tiers:null} — callers then leave every tier enabled and let the
+// provider clamp anything the concrete model can't honour. The classification
+// itself is computed backend-side (ThinkingTiersFor / ThinkingClass); this is
+// just the client lookup.
+export function thinkingInfoForModel(
+  catalog: CatalogEntry[],
+  provider: string,
+  model: string,
+): ThinkingInfo {
+  const entry = catalog.find((c) => c.id === provider)
+  const m = entry?.models.find((x) => x.id === model)
+  return { tiers: m?.thinkingTiers ?? null, cls: m?.thinkingClass ?? '' }
+}
+
+// thinkingTierDisabledReason returns a short Turkish explanation for why a tier
+// is inactive on a model of the given class. Called only for tiers the model
+// does NOT support (absent from thinkingTiers); the class decides the wording.
+export function thinkingTierDisabledReason(cls: string, tier: string): string {
+  if (cls === 'always-on' && tier === 'off') return 'Bu model her zaman düşünür — kapatılamaz'
+  if (cls === 'non-thinking') return 'Bu model düşünmez (akıl yürütme yok)'
+  if (tier === 'xhigh' || tier === 'max') return 'Bu modelde "Yüksek"e (high) düşer'
+  return 'Bu model bu seviyeyi desteklemez'
+}
+
 // useCatalog returns the cached catalog, loading it on first use. Starts as the
 // cache (or empty) and updates once the fetch resolves.
 export function useCatalog(): CatalogEntry[] {

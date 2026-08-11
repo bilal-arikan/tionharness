@@ -96,6 +96,13 @@ const (
 	// a context refresh (the frozen prefix is kept byte-stable until then to
 	// preserve the prompt cache).
 	StepContextChange StepKind = "context_change"
+	// StepCacheBreak announces that this turn lost the session's warm prompt-cache
+	// prefix and had to re-pay it cold: Reason carries the attributed cause
+	// (model-changed / prompt-or-tools-changed), Text the human explanation and
+	// ColdTokens the re-written prefix size. Only the "something changed" causes are
+	// carded — a TTL/eviction break is the normal cost of a pause and would be pure
+	// noise inline (it stays in the debug journal and the per-message panel).
+	StepCacheBreak StepKind = "cache_break"
 	// StepSubagent is one run_subagent invocation rendered as a collapsible nested
 	// agent card: Tool holds the resolved target (profile id or agent name), Text
 	// the delegated task, Output the subagent's final reply, and SubSteps the
@@ -166,6 +173,8 @@ type TurnStep struct {
 	// Areas carries the per-block added/removed diff for a StepContextChange step
 	// (the prompt-epoch drift). Added/Removed above hold the rollup counts.
 	Areas []ContextArea `json:"areas,omitempty"`
+	// ColdTokens is the prefix size a StepCacheBreak step had to re-pay cold.
+	ColdTokens int `json:"coldTokens,omitempty"`
 	// Optimizer records that an external token-optimizer (sqz / rtk) shrank this
 	// shell step's output before it re-entered the model's context, so the UI can
 	// show a chip instead of the rewrite being invisible. nil = untouched.
@@ -184,6 +193,21 @@ func ContextChangeStep(c *ContextChange) TurnStep {
 		Added:   c.Added,
 		Removed: c.Removed,
 		Areas:   c.Areas,
+	}
+}
+
+// CacheBreakStep builds the persisted TurnStep for an attributed prompt-cache
+// break. Returns a zero step for a nil break so callers can pass a consume result
+// straight through.
+func CacheBreakStep(b *CacheBreak) TurnStep {
+	if b == nil || b.Reason == "" {
+		return TurnStep{}
+	}
+	return TurnStep{
+		Kind:       StepCacheBreak,
+		Reason:     b.Reason,
+		Text:       b.Detail,
+		ColdTokens: b.ColdTokens,
 	}
 }
 

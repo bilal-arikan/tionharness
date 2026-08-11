@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/bilal-arikan/tionswarm/internal/seed"
 	"github.com/bilal-arikan/tionswarm/internal/skills"
 )
 
@@ -32,6 +33,13 @@ type Lens struct {
 	Prefilter   Prefilter `json:"prefilter"`
 	Prompt      string    `json:"-"`    // markdown body = analysis instruction (LLM prompt)
 	Path        string    `json:"path"` // source file, for editing
+	// DefaultState says how this file compares to the lens TionSwarm ships:
+	// "" = not a shipped lens, "default" = untouched, "tuned" = only enabled/model
+	// differ (still auto-refreshes), "edited" = the analysis body was changed, so
+	// shipped improvements no longer reach it. Derived (not parsed from the file)
+	// and filled by the registry loader; drives both the "restore default" button
+	// and the badge that tells the user which lenses stopped updating.
+	DefaultState seed.State `json:"defaultState,omitempty"`
 }
 
 // Prefilter is a declarative predicate (NO expression language / NO parser,
@@ -126,6 +134,7 @@ func LoadRegistry(dir string) (*Registry, []error) {
 			errs = append(errs, parseErr)
 			continue
 		}
+		lens.DefaultState = DefaultState(dir, lens.ID)
 		r.lenses[lens.ID] = lens
 	}
 	return r, errs
@@ -159,11 +168,21 @@ func (r *Registry) Enabled() []Lens {
 }
 
 // SetFrontmatterEnabled returns raw with its frontmatter `enabled:` set to the
-// given value — replacing an existing enabled line in place, or inserting one
-// right after the opening `---`. Content with no frontmatter block is returned
-// unchanged (nothing safe to edit). Used by the lens enable/disable toggle so the
-// UI can flip a lens without the user hand-editing the file.
+// given value. Used by the lens enable/disable toggle so the UI can flip a lens
+// without the user hand-editing the file.
 func SetFrontmatterEnabled(raw []byte, enabled bool) []byte {
+	return SetFrontmatterScalar(raw, "enabled", strconv.FormatBool(enabled))
+}
+
+// SetFrontmatterScalar returns raw with frontmatter key set to val — replacing an
+// existing line for that key in place (so its position is preserved), or
+// inserting one right after the opening `---`. Content with no frontmatter block
+// is returned unchanged (nothing safe to edit).
+//
+// Only TOP-LEVEL keys are matched: an indented line belongs to a nested block
+// (the `prefilter:` sub-keys), and rewriting one of those from here would corrupt
+// the block it belongs to.
+func SetFrontmatterScalar(raw []byte, key, val string) []byte {
 	lines := strings.Split(string(raw), "\n")
 	// Find the opening and closing frontmatter fences.
 	open := -1
@@ -186,16 +205,21 @@ func SetFrontmatterEnabled(raw []byte, enabled bool) []byte {
 	if close == -1 {
 		return raw
 	}
-	val := "enabled: " + strconv.FormatBool(enabled)
+	line := key + ": " + val
+	prefix := key + ":"
 	for i := open + 1; i < close; i++ {
-		if strings.HasPrefix(strings.TrimSpace(lines[i]), "enabled:") {
-			lines[i] = val
+		// Top-level only: an indented line is a nested block's sub-key.
+		if lines[i] != strings.TrimLeft(lines[i], " \t") {
+			continue
+		}
+		if strings.HasPrefix(lines[i], prefix) {
+			lines[i] = line
 			return []byte(strings.Join(lines, "\n"))
 		}
 	}
-	// No existing enabled line → insert just after the opening fence.
+	// No existing line for this key → insert just after the opening fence.
 	out := append([]string{}, lines[:open+1]...)
-	out = append(out, val)
+	out = append(out, line)
 	out = append(out, lines[open+1:]...)
 	return []byte(strings.Join(out, "\n"))
 }
@@ -212,6 +236,12 @@ func atoiSafe(s string) int {
 // parseMinCount parses the inline-map form the flat frontmatter parser leaves as
 // a raw scalar — `{ signal: 3, other: 2 }` — into a signal→threshold map. Blank
 // or malformed input yields nil (the prefilter then imposes no count threshold).
+//
+// The pair is split on its LAST colon, not its first: signal names may themselves
+// contain one (`"cache_break:ttl-or-server-eviction"` — a cache break narrowed to
+// its attributed cause), while the value is always the trailing integer. Splitting
+// on the first colon silently produced the key `"cache_break` and a value that
+// failed to parse, dropping the threshold — a lens would then match every session.
 func parseMinCount(s string) map[string]int {
 	s = strings.TrimSpace(s)
 	s = strings.TrimPrefix(s, "{")
@@ -221,12 +251,12 @@ func parseMinCount(s string) map[string]int {
 	}
 	out := map[string]int{}
 	for _, pair := range strings.Split(s, ",") {
-		kv := strings.SplitN(pair, ":", 2)
-		if len(kv) != 2 {
+		colon := strings.LastIndex(pair, ":")
+		if colon < 0 {
 			continue
 		}
-		key := unquoteYAML(strings.TrimSpace(kv[0]))
-		n, err := strconv.Atoi(strings.TrimSpace(kv[1]))
+		key := unquoteYAML(strings.TrimSpace(pair[:colon]))
+		n, err := strconv.Atoi(strings.TrimSpace(pair[colon+1:]))
 		if key == "" || err != nil {
 			continue
 		}

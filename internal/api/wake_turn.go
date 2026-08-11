@@ -68,7 +68,26 @@ func (s *Server) wakeTurnRunner(rt *agent.Runtime) agent.WakeTurnFunc {
 		// session-step emitter streams this turn's activity to the bus so a window
 		// viewing the session sees the woken/worker/coordinator turn unfold live,
 		// just like an interactive chat turn (nil when the ctx carries no session id).
-		resp, steps, err := wsp.Runtime.CompleteWithToolsStream(ctx, ag, provider, req, true, wsp.Runtime.SessionStepEmitter(ctx))
+		emit := wsp.Runtime.SessionStepEmitter(ctx)
+		// Auto-compaction visibility on autonomous turns (schedule_wake / worker /
+		// coordinator): Prepare may have folded older history silently. Surface it as a
+		// head-of-turn step on the SAME feed the turn's own steps use — emitted live for
+		// a watching window and prepended to the persisted trace below so it survives a
+		// refresh. This is the path that carried the invisible SES548 spawned-turn fold.
+		var compactionStep *agent.TurnStep
+		if prep.Compacted {
+			st := compactionLeadStep(prep.FoldedMsgs)
+			compactionStep = &st
+			if emit != nil {
+				emit(st)
+			}
+		}
+		resp, steps, err := wsp.Runtime.CompleteWithToolsStream(ctx, ag, provider, req, true, emit)
+		// Prepend on both success and error so a folded-then-failed turn still records
+		// that the compaction happened.
+		if compactionStep != nil {
+			steps = append([]agent.TurnStep{*compactionStep}, steps...)
+		}
 		if err != nil {
 			return "", steps, err
 		}

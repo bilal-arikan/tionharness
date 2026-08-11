@@ -1,13 +1,12 @@
 package skills
 
 import (
-	"crypto/sha256"
 	"embed"
-	"encoding/hex"
 	"io/fs"
-	"os"
-	"path/filepath"
 	"sort"
+	"strings"
+
+	"github.com/bilal-arikan/tionswarm/internal/seed"
 )
 
 // defaultsFS holds the built-in skills shipped with TionSwarm. They are seeded
@@ -35,139 +34,65 @@ func DefaultSkillSlugs() []string {
 	return out
 }
 
-// sha256Hex returns the lowercase hex sha256 of b.
-func sha256Hex(b []byte) string {
-	sum := sha256.Sum256(b)
-	return hex.EncodeToString(sum[:])
+// seedConfig describes the shipped skill tree to the shared seeder. SKILL.md is
+// the body-aware file: its frontmatter is USER config (the app rewrites the
+// access/group/visibility markers in place), so a shipped body update must land
+// underneath whatever frontmatter is currently there rather than replacing it.
+func seedConfig(dir string) seed.Config {
+	return seed.Config{
+		FS:        defaultsFS,
+		Root:      "defaults",
+		Dir:       dir,
+		BodyAware: func(name string) bool { return name == "SKILL.md" },
+		Body:      func(content []byte) string { return skillBody(content) },
+		Merge: func(onDisk, embedded []byte) []byte {
+			fmText, _ := splitFrontmatter(string(onDisk))
+			return rebuildSkillFile(fmText, skillBody(embedded))
+		},
+	}
 }
 
-// EnsureDefaults writes the built-in default skills into dir, VERSION-AWARE and
-// (for SKILL.md files) FRONTMATTER-AWARE:
-//
-//   - A missing file is written and its shipped hashes recorded.
-//   - An on-disk file identical to the embedded one is left as-is (its hashes
-//     are recorded, so future ships know it is pristine).
-//   - An on-disk file whose WHOLE content matches the previously shipped hash
-//     (manifest Files) is unmodified by the user → fully refreshed, frontmatter
-//     included. This is what makes shipped skill updates reach existing installs.
-//   - A SKILL.md whose whole hash matches nothing but whose BODY matches the
-//     embedded or previously shipped body (manifest Bodies) only had its
-//     FRONTMATTER tuned (the app rewrites access/group/visibility markers in
-//     place). The frontmatter is user config and is always preserved; a
-//     previously-shipped pristine body is refreshed to the new embedded body
-//     underneath it. Without this, one visibility toggle froze the file forever.
-//   - Anything else is a USER EDIT and is preserved untouched.
-//
-// A blank dir is a no-op. Bootstrapping: with no manifest (or a legacy flat
-// one), files are preserved; hashes then seed themselves for every file whose
-// content (or body) currently matches the embedded tree, so subsequent ships
-// can refresh them.
+// EnsureDefaults writes the built-in default skills into dir, version-aware and
+// (for SKILL.md) frontmatter-aware. The rules — and why guessing at "did the user
+// edit this?" is replaced by a shipped-hash ledger — live in package seed; this
+// only supplies the skill-specific split (frontmatter = user config, body = ours).
+// A blank dir is a no-op.
 func EnsureDefaults(dir string) error {
-	if dir == "" {
-		return nil
+	return seed.Ensure(seedConfig(dir))
+}
+
+// DefaultFileRel is the path of a skill's SKILL.md inside the defaults tree.
+func DefaultFileRel(slug string) string {
+	if slug == "" || strings.ContainsAny(slug, `/\`) {
+		return ""
 	}
-	manifest := loadShippedManifest(dir)
-	changed := false
+	return slug + "/SKILL.md"
+}
 
-	walkErr := fs.WalkDir(defaultsFS, "defaults", func(p string, d fs.DirEntry, err error) error {
-		if err != nil || d.IsDir() {
-			return err
-		}
-		rel, relErr := filepath.Rel("defaults", p)
-		if relErr != nil {
-			return relErr
-		}
-		key := filepath.ToSlash(rel) // stable manifest key across OSes
-		dest := filepath.Join(dir, filepath.FromSlash(rel))
-
-		embedded, readErr := defaultsFS.ReadFile(p)
-		if readErr != nil {
-			return readErr
-		}
-		hEmbed := sha256Hex(embedded)
-		isSkill := d.Name() == "SKILL.md"
-		var embedBody, hEmbedBody string
-		if isSkill {
-			embedBody = skillBody(embedded)
-			hEmbedBody = sha256Hex([]byte(embedBody))
-		}
-		recordShipped := func() {
-			if manifest.Files[key] != hEmbed {
-				manifest.Files[key] = hEmbed
-				changed = true
-			}
-			if isSkill && manifest.Bodies[key] != hEmbedBody {
-				manifest.Bodies[key] = hEmbedBody
-				changed = true
-			}
-		}
-
-		onDisk, statErr := os.ReadFile(dest)
-		if statErr != nil {
-			// Missing (or unreadable) — write it fresh and record the shipped hashes.
-			if mkErr := os.MkdirAll(filepath.Dir(dest), 0o755); mkErr != nil {
-				return mkErr
-			}
-			if wErr := os.WriteFile(dest, embedded, 0o644); wErr != nil {
-				return wErr
-			}
-			recordShipped()
-			return nil
-		}
-
-		hDisk := sha256Hex(onDisk)
-		if hDisk == hEmbed {
-			// Already current — just make sure the manifest records it as pristine.
-			recordShipped()
-			return nil
-		}
-
-		// Untouched previously-shipped WHOLE file → full refresh (this path also
-		// ships frontmatter changes, so it stays first).
-		if prev, ok := manifest.Files[key]; ok && prev == hDisk {
-			if wErr := os.WriteFile(dest, embedded, 0o644); wErr != nil {
-				return wErr
-			}
-			recordShipped()
-			return nil
-		}
-
-		if !isSkill {
-			return nil // user edit — preserve
-		}
-
-		// Frontmatter-aware path: compare bodies alone so shipped BODY updates
-		// still land under a user-tuned frontmatter. The frontmatter itself is
-		// never touched here.
-		diskFM, diskBody := splitFrontmatter(string(onDisk))
-		hDiskBody := sha256Hex([]byte(diskBody))
-		if hDiskBody == hEmbedBody {
-			// Body already current — only the frontmatter differs. Track the body
-			// as pristine so the NEXT shipped body update can refresh it.
-			if manifest.Bodies[key] != hEmbedBody {
-				manifest.Bodies[key] = hEmbedBody
-				changed = true
-			}
-			return nil
-		}
-		if prev, ok := manifest.Bodies[key]; ok && prev == hDiskBody {
-			// Pristine previously-shipped body under user frontmatter → refresh
-			// the body, keep the frontmatter verbatim.
-			if wErr := os.WriteFile(dest, rebuildSkillFile(diskFM, embedBody), 0o644); wErr != nil {
-				return wErr
-			}
-			manifest.Bodies[key] = hEmbedBody
-			changed = true
-			return nil
-		}
-		// Body edited by the user → preserve.
-		return nil
-	})
-	if walkErr != nil {
-		return walkErr
+// RestoreDefault overwrites a shipped skill's SKILL.md with its embedded default,
+// discarding local changes, and records it as pristine so future ships refresh it
+// automatically. Errors when the slug names no shipped skill.
+func RestoreDefault(dir, slug string) error {
+	rel := DefaultFileRel(slug)
+	if rel == "" {
+		return fs.ErrNotExist
 	}
-	if changed {
-		return saveShippedManifest(dir, manifest)
+	return seed.Restore(seedConfig(dir), rel)
+}
+
+// HasDefault reports whether a slug is one of the shipped default skills.
+func HasDefault(slug string) bool {
+	rel := DefaultFileRel(slug)
+	// A blank rel would open the defaults DIRECTORY, which succeeds.
+	return rel != "" && seed.HasDefault(seedConfig(""), rel)
+}
+
+// DefaultState classifies a skill's file against its shipped default (see
+// seed.State). seed.StateNone for a user-authored or imported skill.
+func DefaultState(dir, slug string) seed.State {
+	rel := DefaultFileRel(slug)
+	if rel == "" {
+		return seed.StateNone
 	}
-	return nil
+	return seed.Status(seedConfig(dir), rel)
 }

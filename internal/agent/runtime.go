@@ -26,6 +26,7 @@ import (
 	"github.com/bilal-arikan/tionswarm/internal/secrets"
 	"github.com/bilal-arikan/tionswarm/internal/skills"
 	"github.com/bilal-arikan/tionswarm/internal/tools"
+	"github.com/bilal-arikan/tionswarm/internal/turnqueue"
 )
 
 // Runtime owns the lifecycle of all autonomous agent workers.
@@ -107,11 +108,17 @@ type Runtime struct {
 	// Guarded by the same mutex.
 	usageHooks []func(context.Context, UsageRecorded)
 
-	// coordSlots serializes turns per session for the coordinator/worker loop: one
-	// slot per coordinator session so concurrent worker notifications never run two
-	// coordinator turns at once, and notifications that arrive mid-turn coalesce
-	// into the next single turn (they are already persisted as history). Keyed by
-	// session id; value is *coordSlot. See NotifyCoordinator + coordination.go.
+	// turns is the per-session TURN ADMISSION queue (internal/turnqueue): the single
+	// FIFO every turn-entry path — a queued user message, a coordinator auto-turn, a
+	// worker, a scheduler wake, a peer delivery, a slash command — passes through, so
+	// exactly one turn runs per session and the wait order is first-come-first-served
+	// AND observable. See _Docs/58.
+	turns *turnqueue.Queue
+
+	// coordSlots holds the coordinator POLICY state per session (notify coalescing,
+	// the auto-turn cap, idle reconciliation, stall guards). Mutual exclusion itself
+	// lives in `turns`, not here — this is only "what should the coordinator do
+	// next". Keyed by session id; value is *coordSlot. See coordination.go.
 	coordSlots sync.Map
 
 	// readTrackers holds one *tools.ReadTracker per session id, the freshness
@@ -259,6 +266,12 @@ type Runtime struct {
 	// (P4, cachebreak.go). Keyed by session id; zero value ready. Best-effort
 	// telemetry only — never gates a turn.
 	cacheProbes sync.Map
+
+	// pendingCacheBreaks holds the one-shot inline notice for a cache break the
+	// chat turn should card (keyed by session id, value agent.CacheBreak). Armed by
+	// noteCacheOutcome for the "something changed" causes only, drained by
+	// ConsumeCacheBreak while the turn's trace is assembled.
+	pendingCacheBreaks sync.Map
 
 	// promptEpochEnabled gates the prompt-epoch (frozen prompt-prefix snapshot)
 	// system for this workspace: when on, a session's static system prefix and
@@ -416,11 +429,15 @@ func NewRuntime(database *db.DB, registry *providers.Registry, tun *Tunables, wo
 		mcpPool:     mcp.NewPool(),
 		cliSessions: providers.NewCLISessionPool(),
 		workerQueue: make(map[string]string),
+		turns:       turnqueue.New(func() int64 { return time.Now().Unix() }),
 	}
 	// The codebase-memory capability defaults ON; workspace settings (loadSettings)
 	// override it at boot. Seeded here so bare runtimes (before settings apply) still
 	// behave as "on" rather than silently off.
 	r.codebaseMemoryEnabled.Store(true)
+	// Push every admission-queue change (a turn took the slot, released it, or queued
+	// behind it) onto the bus so the API can render the session's live turn queue.
+	r.turns.Observe(r.publishTurnQueue)
 	// Surface MCP connection lifecycle (dial / re-dial / list_changed) in the
 	// in-app Logs screen; the persistent pool is otherwise opaque.
 	if logger != nil {
@@ -1319,7 +1336,7 @@ func EnvironmentContextBlock() string {
 // It rides the VOLATILE dynamic suffix on both paths because the gate can toggle
 // mid-session; the file tools (Read/Write/Edit/LS/Glob/Grep) stay the always-on
 // core named in the static instructions.
-func (r *Runtime) ShellToolsContextBlock() string {
+func (r *Runtime) ShellToolsContextBlock(confined bool) string {
 	names := tools.ShellToolNames()
 	if !r.tun.ShellEnabled() || len(names) == 0 {
 		return "Shell execution is DISABLED for this session: there is NO Bash or PowerShell tool. " +
@@ -1335,8 +1352,12 @@ func (r *Runtime) ShellToolsContextBlock() string {
 	if len(names) > 1 {
 		noun, verb = "tools", "run"
 	}
+	scope := "not confined to the working directory (absolute paths and `..` allowed)"
+	if confined {
+		scope = "confined to the working directory (write relative paths; an in-root absolute path is allowed, but escapes are rejected)"
+	}
 	return "Shell execution is ENABLED for this session: the " + strings.Join(names, " / ") + " " + noun +
-		" " + verb + " host commands — not confined to the working directory (absolute paths and `..` allowed), " +
+		" " + verb + " host commands — " + scope + ", " +
 		"with the permission mode as the safety layer. Call " + strings.Join(names, " / ") + " by that exact name."
 }
 
@@ -1445,11 +1466,21 @@ func (r *Runtime) autonomousDynamicSuffix(ctx context.Context) string {
 	if lb := r.LessonsContextBlock(ctx, agentID); lb != "" {
 		out += "\n\n" + lb
 	}
+	// Working-directory context: the chat path injects workdirContextBlock, but a
+	// headless turn had none — so an autonomous worker learned its root and the
+	// relative-path rule only by trial (a rejected in-root absolute, a mis-rooted
+	// guess). State it up front, and describe the confinement when the autonomous
+	// brake is on. Volatile (the brake is a toggamble tunable) → dynamic suffix.
+	confined := r.tun != nil && r.tun.AutonomousConfine()
+	if wb := r.workdirConfineBlock(ctx, confined); wb != "" {
+		out += "\n\n" + wb
+	}
 	// Shell-execution capability, single-sourced with the chat path: advertises
 	// the registered Bash/PowerShell tools when the gate is on + a shell backs it,
 	// else states shell is disabled and gives the dead-tool rule. Volatile →
-	// dynamic suffix, since the gate can toggle mid-session.
-	if sh := r.ShellToolsContextBlock(); sh != "" {
+	// dynamic suffix, since the gate can toggle mid-session. The confined flag keeps
+	// its "confined/not confined" clause consistent with the block above.
+	if sh := r.ShellToolsContextBlock(confined); sh != "" {
 		out += "\n\n" + sh
 	}
 	// Prompt-epoch drift notice (mirrors the chat path): the frozen snapshot is
@@ -1471,6 +1502,38 @@ func (r *Runtime) autonomousDynamicSuffix(ctx context.Context) string {
 		}
 	}
 	return out
+}
+
+// workdirConfineBlock renders the headless turn's working-directory context: its
+// root and, when confined is true, the rule that the fs/shell tools cannot leave
+// it (write relative paths; an in-root absolute is accepted, escapes rejected).
+// Mirrors the chat path's workdirContextBlock, which a headless turn never got —
+// so an autonomous worker no longer discovers the boundary by a rejected path.
+// The root is taken from the same source the sandbox roots at: the turn's resolved
+// working dir when ctx carries it, else the session's effective working dir.
+func (r *Runtime) workdirConfineBlock(ctx context.Context, confined bool) string {
+	dir := ""
+	if rw, ok := resolvedWorkDirFromCtx(ctx); ok && strings.TrimSpace(rw.dir) != "" {
+		dir = rw.dir
+	} else {
+		dir = r.effectiveWorkDir(ctx)
+	}
+	dir = strings.TrimSpace(dir)
+	if dir == "" {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString("## Working directory\n")
+	if confined {
+		b.WriteString("Your file and shell tools are CONFINED to this directory. Write paths relative to it; " +
+			"an absolute path inside it is accepted, but any path that escapes it (an outside absolute path or a " +
+			"`..` traversal) is rejected. Orient with Glob/Grep before guessing a path.\n\n")
+	} else {
+		b.WriteString("Your file and shell tools operate from this directory. Relative paths resolve here; " +
+			"you may also use absolute paths.\n\n")
+	}
+	b.WriteString("- Path: `" + dir + "`\n")
+	return strings.TrimSpace(b.String())
 }
 
 // autonomousBootReminder frames every headless turn (schedule/spawn/flow/

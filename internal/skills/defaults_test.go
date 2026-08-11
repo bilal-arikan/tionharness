@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+
+	"github.com/bilal-arikan/tionswarm/internal/seed"
 	"strings"
 	"testing"
 )
@@ -41,9 +43,9 @@ func TestEnsureDefaultsBodyRefreshUnderUserFrontmatter(t *testing.T) {
 	if err := os.WriteFile(guide, rebuildSkillFile(userFM, oldBody), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	m := loadShippedManifest(dir)
-	m.Bodies["tionswarm-guide/SKILL.md"] = sha256Hex([]byte(oldBody))
-	if err := saveShippedManifest(dir, m); err != nil {
+	m := seed.LoadManifest(dir)
+	m.Bodies["tionswarm-guide/SKILL.md"] = seed.SHA256Hex([]byte(oldBody))
+	if err := seed.SaveManifest(dir, m); err != nil {
 		t.Fatal(err)
 	}
 
@@ -58,7 +60,7 @@ func TestEnsureDefaultsBodyRefreshUnderUserFrontmatter(t *testing.T) {
 	if gotBody != embedBody {
 		t.Errorf("pristine shipped body was NOT refreshed to the embedded body")
 	}
-	if loadShippedManifest(dir).Bodies["tionswarm-guide/SKILL.md"] != sha256Hex([]byte(embedBody)) {
+	if seed.LoadManifest(dir).Bodies["tionswarm-guide/SKILL.md"] != seed.SHA256Hex([]byte(embedBody)) {
 		t.Errorf("manifest body hash not updated after refresh")
 	}
 }
@@ -99,9 +101,9 @@ func TestEnsureDefaultsTracksBodyWhenOnlyFrontmatterTuned(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Legacy manifest: flat map with a stale whole-file hash (an old ship).
-	legacy := map[string]string{"tionswarm-guide/SKILL.md": sha256Hex([]byte("some old whole-file ship"))}
+	legacy := map[string]string{"tionswarm-guide/SKILL.md": seed.SHA256Hex([]byte("some old whole-file ship"))}
 	data, _ := json.Marshal(legacy)
-	if err := os.WriteFile(filepath.Join(dir, shippedManifestName), data, 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, seed.ManifestName), data, 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -112,7 +114,7 @@ func TestEnsureDefaultsTracksBodyWhenOnlyFrontmatterTuned(t *testing.T) {
 	if string(got) != string(content) {
 		t.Errorf("frontmatter-tuned file with current body must be left untouched")
 	}
-	if loadShippedManifest(dir).Bodies["tionswarm-guide/SKILL.md"] != sha256Hex([]byte(embedBody)) {
+	if seed.LoadManifest(dir).Bodies["tionswarm-guide/SKILL.md"] != seed.SHA256Hex([]byte(embedBody)) {
 		t.Errorf("current body under tuned frontmatter was not recorded as pristine")
 	}
 }
@@ -122,10 +124,10 @@ func TestEnsureDefaultsTracksBodyWhenOnlyFrontmatterTuned(t *testing.T) {
 func TestLoadShippedManifestLegacyFlat(t *testing.T) {
 	dir := t.TempDir()
 	flat := `{"a/SKILL.md": "deadbeef"}`
-	if err := os.WriteFile(filepath.Join(dir, shippedManifestName), []byte(flat), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, seed.ManifestName), []byte(flat), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	m := loadShippedManifest(dir)
+	m := seed.LoadManifest(dir)
 	if m.Files["a/SKILL.md"] != "deadbeef" {
 		t.Errorf("legacy flat manifest not folded into Files: %+v", m)
 	}
@@ -147,4 +149,71 @@ func TestRebuildSkillFileRoundTrip(t *testing.T) {
 	if !strings.HasPrefix(string(out), "---\n") {
 		t.Errorf("rebuilt file must start with a frontmatter fence")
 	}
+}
+
+// The Skills screen's badge/button depend on DefaultState being set for shipped
+// GLOBAL skills and on RestoreDefault bringing a mangled one back.
+func TestSkillDefaultStateAndRestore(t *testing.T) {
+	dir, guide, embedFM, embedBody := seedAndSplitGuide(t)
+
+	if got := DefaultState(dir, "tionswarm-guide"); got != seed.StateDefault {
+		t.Errorf("freshly seeded skill = %q, want default", got)
+	}
+	// The app's own frontmatter edits (visibility/group) must NOT read as "edited":
+	// they still auto-refresh, and badging them would warn about every toggled skill.
+	if err := os.WriteFile(guide, rebuildSkillFile(embedFM+"\naccess: shared", embedBody), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got := DefaultState(dir, "tionswarm-guide"); got != seed.StateTuned {
+		t.Errorf("frontmatter-only change = %q, want tuned", got)
+	}
+	// A body edit is the case worth surfacing: this file stops receiving updates.
+	if err := os.WriteFile(guide, rebuildSkillFile(embedFM, "MY OWN BODY"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got := DefaultState(dir, "tionswarm-guide"); got != seed.StateEdited {
+		t.Errorf("body edit = %q, want edited", got)
+	}
+
+	if err := RestoreDefault(dir, "tionswarm-guide"); err != nil {
+		t.Fatal(err)
+	}
+	if got := DefaultState(dir, "tionswarm-guide"); got != seed.StateDefault {
+		t.Errorf("after restore = %q, want default", got)
+	}
+	if _, gotBody := splitFrontmatter(string(mustRead(t, guide))); gotBody != embedBody {
+		t.Error("restore did not bring back the shipped body")
+	}
+}
+
+// A slug that is not shipped (or that could escape the tree) must report nothing
+// and refuse to restore — the UI gates its button on exactly this.
+func TestSkillHasDefaultAndRestoreGuards(t *testing.T) {
+	dir := t.TempDir()
+	if err := EnsureDefaults(dir); err != nil {
+		t.Fatal(err)
+	}
+	if !HasDefault("tionswarm-guide") {
+		t.Error("a shipped skill must report a default")
+	}
+	for _, slug := range []string{"", "my-own-skill", "../escape", "a/b"} {
+		if HasDefault(slug) {
+			t.Errorf("slug %q must not report a shipped default", slug)
+		}
+		if err := RestoreDefault(dir, slug); err == nil {
+			t.Errorf("restoring %q must fail", slug)
+		}
+	}
+	if got := DefaultState(dir, "my-own-skill"); got != seed.StateNone {
+		t.Errorf("user-authored skill = %q, want none", got)
+	}
+}
+
+func mustRead(t *testing.T, path string) []byte {
+	t.Helper()
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return b
 }

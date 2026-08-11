@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/bilal-arikan/tionswarm/internal/seed"
 )
 
 // writeSkill creates <dir>/<slug>/SKILL.md with the given content.
@@ -589,10 +591,10 @@ func TestSetFrontmatterFields(t *testing.T) {
 func TestSlugify(t *testing.T) {
 	cases := map[string]string{
 		"Görev Planlayıcı": "gorev-planlayici",
-		"  Hello World!  ":  "hello-world",
-		"a/b.c_d":           "a-b-c-d",
-		"---":               "",
-		"ÇÖŞ":               "cos",
+		"  Hello World!  ": "hello-world",
+		"a/b.c_d":          "a-b-c-d",
+		"---":              "",
+		"ÇÖŞ":              "cos",
 	}
 	for in, want := range cases {
 		if got := slugify(in); got != want {
@@ -641,9 +643,9 @@ func TestEnsureDefaultsRefreshesPristine(t *testing.T) {
 	if err := os.WriteFile(guide, oldBody, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	m := loadShippedManifest(dir)
-	m.Files["tionswarm-guide/SKILL.md"] = sha256Hex(oldBody)
-	if err := saveShippedManifest(dir, m); err != nil {
+	m := seed.LoadManifest(dir)
+	m.Files["tionswarm-guide/SKILL.md"] = seed.SHA256Hex(oldBody)
+	if err := seed.SaveManifest(dir, m); err != nil {
 		t.Fatal(err)
 	}
 
@@ -656,7 +658,7 @@ func TestEnsureDefaultsRefreshesPristine(t *testing.T) {
 		t.Errorf("pristine prior-shipped default was NOT refreshed to embedded content")
 	}
 	// The manifest must now record the fresh embedded hash.
-	if loadShippedManifest(dir).Files["tionswarm-guide/SKILL.md"] != sha256Hex(embedded) {
+	if seed.LoadManifest(dir).Files["tionswarm-guide/SKILL.md"] != seed.SHA256Hex(embedded) {
 		t.Errorf("manifest not updated to the refreshed hash")
 	}
 }

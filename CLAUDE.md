@@ -32,12 +32,21 @@ kullanma.
 
 - **İlk çağrıdan ÖNCE bir kez `list_projects` çalıştır.** `project` argümanını
   dönen listeden **birebir kopyala** — kimliği elle uydurma.
-- Yanlış/indekslenmemiş bir `project` verirsen sunucu
-  `"project not found or not indexed"` + `available_projects` döndürür. Bu hata
-  geldiğinde **aynı çağrıyı tekrarlama**; önce `list_projects` çağır, doğru
-  kimliği kopyala. (Ajan döngüsü bu durumu tek tekrar sonrası kendiliğinden
-  engelleyip yönergeyi enjekte eder — bkz. `internal/agent/mcprepair.go`.)
+- `project`'i **hiç göndermezsen** sunucu, yanlış kimlik göndermişsin gibi aynı
+  `"project not found or not indexed"` mesajını döndürür. Bu mesaj tek başına
+  "repo indeksli değil" demek DEĞİLDİR — önce argümanı gerçekten yolladığını
+  doğrula.
+- Yanlış/indekslenmemiş bir `project` verirsen sunucu aynı hatayı +
+  `available_projects` döndürür. Bu hata geldiğinde **aynı çağrıyı tekrarlama**;
+  `available_projects`'ten doğru kimliği kopyala.
 - Hedef repo listede **yoksa** bu MCP'yi kullanma; o repo için `Glob`/`Grep`'e düş.
+- TionSwarm'ın **kendi** ajan döngüsü bunları büyük ölçüde otomatik halleder:
+  eksik `project` gönderilmeden önce oturumun working directory'sinden doldurulur,
+  düzeltilebilir bir kimlik hatası çağrı tekrar koşturularak onarılır, oturumun
+  reposu indeksli değilse arka planda indeksleme tetiklenir
+  (`internal/agent/mcpargs.go`, `mcprepair.go`). **claude-cli sağlayıcısında bu
+  koruma yoktur** — araç döngüsünü CLI kendi koşturur, çağrılar TionSwarm'dan
+  geçmez; orada yukarıdaki kuralları elle uygula.
 - Bu depoda sorgular için `project` = `C-Users-user-Desktop-Projects-TionSwarm`.
 
 ## Grep/ripgrep kullanımı

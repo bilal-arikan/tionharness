@@ -88,6 +88,31 @@ func (s *Server) handleToggleInsightLens(w http.ResponseWriter, r *http.Request)
 	writeJSON(w, http.StatusOK, updated)
 }
 
+// handleRestoreInsightLens overwrites a lens with its shipped default, discarding
+// local changes. The deliberate counterpart to the automatic refresh: EnsureDefaults
+// only touches files it can PROVE are untouched prior ships, so a lens that was
+// edited — or that was seeded before the shipped-hash ledger existed — stays frozen
+// until the user asks for the default back from here.
+func (s *Server) handleRestoreInsightLens(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if !insight.HasDefault(id) {
+		writeError(w, http.StatusNotFound, "lens has no shipped default")
+		return
+	}
+	dir := insight.LensesDir(ws(r).DB.Root())
+	if err := insight.RestoreDefault(dir, id); writeDBError(w, err, "") {
+		return
+	}
+	reg, _ := insight.LoadRegistry(dir)
+	restored, ok := reg.Get(id)
+	if !ok {
+		writeError(w, http.StatusInternalServerError, "restored lens failed to reload")
+		return
+	}
+	s.logger.Info("insight lens restored to default", "lens", id)
+	writeJSON(w, http.StatusOK, restored)
+}
+
 // handleListInsightLenses seeds the default lenses (if missing) and returns the
 // workspace's lens catalog.
 func (s *Server) handleListInsightLenses(w http.ResponseWriter, r *http.Request) {

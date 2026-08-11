@@ -41,20 +41,24 @@ func (ReadLessonsTool) Def() providers.ToolDef {
 
 func (t ReadLessonsTool) Call(ctx context.Context, input json.RawMessage) (string, error) {
 	var args struct {
-		Limit int `json:"limit"`
+		Limit *int `json:"limit"`
 	}
 	if len(input) > 0 {
 		if err := json.Unmarshal(input, &args); err != nil {
 			return "", argErr(err)
 		}
 	}
-	if args.Limit == 0 {
-		args.Limit = 20
+	// Omitted → default 20. An explicit 0 (or negative) means "all", matching
+	// the documented contract and ListLessons' limit<=0 semantics. Using a
+	// pointer is the only way to tell an omitted limit from an explicit 0.
+	limit := 20
+	if args.Limit != nil {
+		limit = *args.Limit
 	}
-	if args.Limit < 0 {
-		args.Limit = 0
+	if limit < 0 {
+		limit = 0
 	}
-	lessons, err := t.db.ListLessons(args.Limit)
+	lessons, err := t.db.ListLessons(limit)
 	if err != nil {
 		return "", err
 	}

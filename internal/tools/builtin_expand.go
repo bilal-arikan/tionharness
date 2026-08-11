@@ -64,7 +64,7 @@ func (ExpandTool) Def() providers.ToolDef {
     "kind": { "type": "string", "enum": ["workspace","category","board","agent","session"], "description": "Node type to expand." },
     "id": { "type": "string", "description": "Node id ('workspace'/'board' for the singletons; a category id like 'sessions'/'flows'/'agents'/'col:<column>'; an agent or session id)." },
     "sub": { "type": "string", "description": "Optional drill-down selector on the node (unused for most; a board with a sub is a single card and has no children)." },
-    "lens": { "type": "string", "enum": ["health","stale","recent","errors"], "description": "Which children matter (default health; 'errors' = troubled only)." }
+    "lens": { "type": "string", "enum": ["health","stale","recent","errors"], "description": "Which children matter (default health; 'errors' = troubled only). For expand, only 'errors' filters — 'stale'/'recent' behave like 'health' (pass-through) here." }
   },
   "required": ["kind","id"],
   "additionalProperties": false

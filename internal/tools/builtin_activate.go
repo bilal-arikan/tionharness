@@ -248,7 +248,8 @@ func (ToolSearchTool) Def() providers.ToolDef {
 		Description: "Search the on-demand tool catalog by keyword to find a tool's exact name before " +
 			"activating it. Returns matching name — description lines. Use this when a tool you need is " +
 			"not listed individually in the \"Available Tools (load on demand)\" block (e.g. MCP tools, " +
-			"which are summarised per server in MCP-heavy workspaces).",
+			"which are summarised per server in MCP-heavy workspaces). Returns up to 30 matches; when more " +
+			"exist it appends '…and N more; refine the query' so you can narrow it.",
 		InputSchema: json.RawMessage(`{
   "type": "object",
   "properties": {

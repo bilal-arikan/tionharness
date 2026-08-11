@@ -124,7 +124,7 @@ onClick={(e) => {
   Seçili her artifact için `api.setArtifactGroup(id, group)` → `PUT /api/artifacts/
   {id}/group` (backend `DB.SetArtifactGroup`, yalnız `group` alanını yazar). Gruplama
   **arama+origin filtresinden sonra** çalışır (filtreli görünümde de kovalar). Grup
-  başlıkları alfabetik (tr), "Grupsuz" en sonda. Detay artifact başlığında grup rozeti
+  başlıkları alfabetik (tr), "Grupsuz" en üstte. Detay artifact başlığında grup rozeti
   gösterilir. `Artifact.Group` first-class JSON alanı (skill'lerden farklı olarak
   frontmatter değil, entity alanı — artifact'lar dosya-tabanlı JSON entity'dir).
   Collapse durumu `tionswarm.artifactsCollapsedGroups` localStorage'da kalıcı.

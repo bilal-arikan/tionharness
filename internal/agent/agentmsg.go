@@ -9,6 +9,7 @@ import (
 	"github.com/bilal-arikan/tionswarm/internal/db"
 	"github.com/bilal-arikan/tionswarm/internal/events"
 	"github.com/bilal-arikan/tionswarm/internal/tools"
+	"github.com/bilal-arikan/tionswarm/internal/turnqueue"
 )
 
 // inboxSessionKind is the persistent per-agent session that accumulates direct
@@ -152,7 +153,7 @@ func (r *Runtime) runInboxDelivery(agent db.Agent, inboxID, prompt string) {
 	// Serialize this peer delivery with any concurrent turn on the same session
 	// (user chat / inbox worker / wake) — and, for a coordinator, its auto turns —
 	// via the single per-session turn slot.
-	release := r.claimSessionTurnSlot(inboxID)
+	release := r.claimSessionTurnSlot(inboxID, turnqueue.KindPeer, "ajan mesajı")
 	defer release()
 
 	r.trackSession(inboxID)

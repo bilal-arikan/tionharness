@@ -5,15 +5,26 @@ description: "Find prompt-cache breaks caused by unstable context ordering and p
 channel: workspace-opt
 enabled: true
 model: claude-cli
-scope: [steps, debug]
+scope: [steps, debug, cache]
 prefilter:
-  minCount: { cache_break: 2 }
+  minCount: { "cache_break:prompt-or-tools-changed": 2 }
 ---
 
 # Analysis Instruction
 
-You are given one session that suffered repeated prompt-cache breaks. Cache breaks waste tokens
-because the stable prefix has to be re-sent. Diagnose the CAUSE and propose a workspace fix:
+You are given one session whose cached prompt PREFIX kept changing between turns
+(`cause=prompt-or-tools-changed`), forcing it to be re-sent. Diagnose the CAUSE and propose a
+workspace fix.
+
+Note first: with the prompt epoch on (the default) a session's static prefix and tool schemas
+are FROZEN at session start, so this cause should be impossible mid-session — drift is held
+back until a deliberate adopt. The cache-event list interleaves `epoch` events; a break sitting
+next to `created` / `refreshed` / `compaction` / `ttl-cold` is an EXPECTED adopt and must be
+ignored. A break with no adopt beside it is the real finding: either the epoch is disabled for
+this workspace, or some path is bypassing the snapshot. Report that as the root cause when the
+timestamps show it, rather than guessing at content ordering.
+
+Otherwise, the classic causes:
 
 - **Volatile content early in the prompt** — a timestamp, counter, or freshly-reordered block
   placed before otherwise-stable context. Propose moving it after the stable prefix.
@@ -28,4 +39,6 @@ For each cause produce a workspace-opt finding:
 - **signature** — stable dedupe key naming the culprit (e.g. `context:clock-header:early`).
 - **proposedFix** — the concrete workspace/context change the user can apply.
 
-If cache breaks were unavoidable (genuine content change), say so and return no findings.
+Ignore breaks whose cause is `ttl-or-server-eviction` (nothing changed; the prefix simply
+cooled) — the `cache-cooling-waste` lens owns those. If the breaks were unavoidable (a genuine
+content change, or an adopt you can see in the epoch events), say so and return no findings.

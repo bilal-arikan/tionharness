@@ -257,6 +257,16 @@ export interface TurnDebug {
   errors: number
   recoveries: number
   compactions: number
+  // Prompt-cache breaks attributed to THIS turn: the count, the last one's stable
+  // machine tag (model-changed / prompt-or-tools-changed / ttl-or-server-eviction)
+  // with its human explanation, and the avoidable overpay of re-warming a
+  // TTL/eviction break (0 for the other causes — they invalidate the prefix
+  // legitimately). coolingWasteEstimated marks a subscription estimate.
+  cacheBreaks?: number
+  cacheBreakReason?: string
+  cacheBreakDetail?: string
+  coolingWasteUsd?: number
+  coolingWasteEstimated?: boolean
   lastError?: string
   costUSD: number
   savingsUSD: number

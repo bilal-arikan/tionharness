@@ -71,3 +71,58 @@ func TestIsConversationKind(t *testing.T) {
 		}
 	}
 }
+
+// Only the "something changed" causes reach the chat as a card. A TTL cooldown is
+// the normal price of a pause; carding it every time would train the user to
+// ignore the card.
+func TestInlineCacheBreak(t *testing.T) {
+	for _, tag := range []string{"model-changed", "prompt-or-tools-changed"} {
+		if !inlineCacheBreak(tag) {
+			t.Errorf("%q should be carded inline", tag)
+		}
+	}
+	if inlineCacheBreak("ttl-or-server-eviction") {
+		t.Error("a TTL/eviction break must NOT be carded inline (normal, would be noise)")
+	}
+}
+
+// ConsumeCacheBreak is a one-shot per session: it returns the armed break once,
+// clears it, and keeps sessions isolated from each other.
+func TestConsumeCacheBreak(t *testing.T) {
+	r := &Runtime{}
+	if r.ConsumeCacheBreak("SES1") != nil {
+		t.Fatal("nothing armed → nil")
+	}
+	if r.ConsumeCacheBreak("") != nil {
+		t.Fatal("a blank session id must be a no-op")
+	}
+
+	r.pendingCacheBreaks.Store("SES1", CacheBreak{Reason: "model-changed", Detail: "d", ColdTokens: 9000})
+	r.pendingCacheBreaks.Store("SES2", CacheBreak{Reason: "prompt-or-tools-changed"})
+
+	cb := r.ConsumeCacheBreak("SES1")
+	if cb == nil || cb.Reason != "model-changed" || cb.ColdTokens != 9000 {
+		t.Fatalf("first consume = %+v, want the armed SES1 break", cb)
+	}
+	if again := r.ConsumeCacheBreak("SES1"); again != nil {
+		t.Errorf("second consume = %+v, want nil (one-shot)", again)
+	}
+	if other := r.ConsumeCacheBreak("SES2"); other == nil || other.Reason != "prompt-or-tools-changed" {
+		t.Errorf("SES2 = %+v, want its own untouched break", other)
+	}
+}
+
+// CacheBreakStep maps a consumed break onto the persisted trace step, and yields
+// a ZERO step (which callers drop) for nil / reasonless input.
+func TestCacheBreakStep(t *testing.T) {
+	st := CacheBreakStep(&CacheBreak{Reason: "model-changed", Detail: "Model değişti", ColdTokens: 12000})
+	if st.Kind != StepCacheBreak || st.Reason != "model-changed" || st.Text != "Model değişti" || st.ColdTokens != 12000 {
+		t.Fatalf("step = %+v, want a populated cache_break step", st)
+	}
+	if got := CacheBreakStep(nil); got.Kind != "" {
+		t.Errorf("nil break = %+v, want the zero step", got)
+	}
+	if got := CacheBreakStep(&CacheBreak{}); got.Kind != "" {
+		t.Errorf("reasonless break = %+v, want the zero step", got)
+	}
+}

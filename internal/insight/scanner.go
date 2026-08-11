@@ -177,7 +177,7 @@ enumerate:
 				break enumerate
 			}
 			tasks = append(tasks, analysisTask{
-				lens: l, sess: sess, fp: fp, transcript: s.buildSlice(sess, msgs, events),
+				lens: l, sess: sess, fp: fp, transcript: s.buildSlice(l, sess, msgs, events),
 			})
 		}
 	}
@@ -294,6 +294,24 @@ func extractSignals(msgs []db.Message, events []db.DebugEvent) SessionSignals {
 		if e.Type == db.DebugTool && e.Name != "" {
 			sig.Tools[e.Name]++
 		}
+		if e.Type == db.DebugCacheBreak {
+			// A cache break's CAUSE decides which lens should look: an unstable
+			// prefix is a context-ordering problem, a TTL cooldown is a cadence
+			// problem, and they need opposite advice. The bare `cache_break` count
+			// cannot tell them apart, so index the attributed cause as its own
+			// signal ("cache_break:ttl-or-server-eviction") — the prefilter is a
+			// flat name→count map, so a compound name is the whole mechanism needed.
+			if e.Name != "" {
+				sig.DebugEvents[db.DebugCacheBreak+":"+e.Name]++
+			}
+			// Waste is only MEASURED on native Anthropic (OpenRouter folds the cold
+			// prefix into plain input and reports no write). Kept as a secondary
+			// signal — a lens that must fire on every provider should prefilter on
+			// the cause tag above, not on this.
+			if e.WasteUSD > 0 {
+				sig.DebugEvents["cooling_waste"]++
+			}
+		}
 		if e.Err {
 			sig.DebugEvents["error"]++
 		}
@@ -315,7 +333,24 @@ func extractSignals(msgs []db.Message, events []db.DebugEvent) SessionSignals {
 // and the analyzer has no way to tell it was cut, nor how much it is missing.
 // Steps get first claim on the budget: they are the primary evidence, and the
 // debug events largely restate them.
-func (s *Scanner) buildSlice(sess db.Session, msgs []db.Message, events []db.DebugEvent) string {
+// ScopeCache is the lens `scope:` value that adds the prompt-cache section to the
+// slice (cache_break events with their attributed cause + cost, and the epoch
+// lifecycle events that explain whether a break was a DELIBERATE adopt). Without
+// it the slice stays error-centric, so a lens that does not care about caching is
+// not charged tokens for events it will not use.
+const ScopeCache = "cache"
+
+// hasScope reports whether a lens requested a slice surface.
+func hasScope(l Lens, want string) bool {
+	for _, s := range l.Scope {
+		if strings.EqualFold(strings.TrimSpace(s), want) {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *Scanner) buildSlice(lens Lens, sess db.Session, msgs []db.Message, events []db.DebugEvent) string {
 	var stepLines []string
 	for _, m := range msgs {
 		for _, st := range view.DecodeSteps(m.Steps) {
@@ -351,16 +386,62 @@ func (s *Scanner) buildSlice(sess db.Session, msgs []db.Message, events []db.Deb
 		}
 	}
 
+	// Prompt-cache surface (opt-in via `scope: [cache]`). Without this a lens that
+	// prefilters on cache_break was handed a slice containing NO cache evidence at
+	// all — it could only guess. Each line carries the attributed cause, the cold
+	// prefix size and the measured waste; the interleaved epoch events tell the
+	// analyzer whether a break sat next to a DELIBERATE adopt (expected) or stood
+	// alone (the signal worth a finding — _Docs/57).
+	var cacheLines []string
+	if hasScope(lens, ScopeCache) {
+		for _, e := range events {
+			switch e.Type {
+			case db.DebugCacheBreak:
+				line := "- [cache_break] at=" + msTime(e.Time)
+				if e.Name != "" {
+					line += " cause=" + e.Name
+				}
+				if cold := e.CacheWrite + e.In; cold > 0 {
+					line += fmt.Sprintf(" coldTokens=%d", cold)
+				}
+				if e.WasteUSD > 0 {
+					line += fmt.Sprintf(" wasteUsd=%.4f", e.WasteUSD)
+					if e.WasteEstimated {
+						line += "(est)"
+					}
+				}
+				if e.Detail != "" {
+					line += ": " + truncate(oneLine(e.Detail), 200)
+				}
+				cacheLines = append(cacheLines, line)
+			case db.DebugEpoch:
+				line := "- [epoch] at=" + msTime(e.Time)
+				if e.Name != "" {
+					line += " " + e.Name
+				}
+				cacheLines = append(cacheLines, line)
+			}
+		}
+	}
+
 	header := fmt.Sprintf("SESSION %s — %q\n\n## Error / recovery steps\n", sess.ID, sess.Title)
 	const eventsHeader = "\n## Debug events (errors/repairs/guardrails)\n"
+	const cacheHeader = "\n## Prompt-cache events (breaks + epoch lifecycle, oldest→newest)\n"
 
 	budget := s.sliceCap - len(header) - len(eventsHeader)
+	if len(cacheLines) > 0 {
+		budget -= len(cacheHeader)
+	}
 	steps, stepsDropped := view.CapLines(stepLines, budget)
 	spent := 0
 	for _, ln := range steps {
 		spent += len(ln) + 1
 	}
 	evts, evtsDropped := view.CapLines(eventLines, budget-spent)
+	for _, ln := range evts {
+		spent += len(ln) + 1
+	}
+	cache, cacheDropped := view.CapLines(cacheLines, budget-spent)
 
 	var b strings.Builder
 	b.WriteString(header)
@@ -377,7 +458,26 @@ func (s *Scanner) buildSlice(sess db.Session, msgs []db.Message, events []db.Deb
 	if evtsDropped > 0 {
 		fmt.Fprintf(&b, "…(%d more debug event(s) omitted for size)\n", evtsDropped)
 	}
+	if len(cacheLines) > 0 {
+		b.WriteString(cacheHeader)
+		for _, ln := range cache {
+			b.WriteString(ln + "\n")
+		}
+		if cacheDropped > 0 {
+			fmt.Fprintf(&b, "…(%d more cache event(s) omitted for size)\n", cacheDropped)
+		}
+	}
 	return b.String()
+}
+
+// msTime renders a debug event's unix-millisecond stamp as a UTC clock label. The
+// cadence lenses reason about the GAP between events (a warm prefix cools after
+// an hour of silence), so the slice must carry when each one happened.
+func msTime(ms int64) string {
+	if ms <= 0 {
+		return "?"
+	}
+	return time.UnixMilli(ms).UTC().Format("2006-01-02 15:04:05Z")
 }
 
 func firstNonEmpty(a, b string) string {

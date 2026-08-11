@@ -12,6 +12,7 @@ import { AgentSkillsSection } from './AgentSkillsSection'
 import { AgentContextModal } from './AgentContextModal'
 import { Button, PromptEditor } from '@/shared/components'
 import { OptionPills } from '@/shared/components/OptionPills'
+import { useCatalog, thinkingInfoForModel, thinkingTierDisabledReason } from '@/shared/lib/catalog'
 import { THINKING_OPTIONS, PERMISSION_OPTIONS } from './agentOptions'
 
 interface Props {
@@ -77,6 +78,23 @@ export function AgentSettingsForm({
   // P1.3: warning from the backend (e.g. "model not in price table"). Cleared on
   // the next save or when the model/provider changes.
   const [saveWarn, setSaveWarn] = useState<string | null>(null)
+
+  // Reasoning tiers + class for the chosen provider+model. Every pill stays
+  // visible; no-op levels are shown greyed with a reason (e.g. "Kapalı" on the
+  // always-on Fable class, "Çok yüksek"/"Maks" on legacy models that clamp them,
+  // or every level but off on a non-thinking model). tiers null = unknown/custom
+  // → all enabled. The pill list uses '' for off (backend token "off"); the
+  // currently-stored level stays selectable even if outside the set.
+  const catalog = useCatalog()
+  const thinkingOptions = useMemo(() => {
+    const { tiers, cls } = thinkingInfoForModel(catalog, provider, model)
+    if (tiers == null) return THINKING_OPTIONS
+    return THINKING_OPTIONS.map((o) => {
+      const token = o.value === '' ? 'off' : o.value
+      const supported = o.value === thinkingLevel || tiers.includes(token)
+      return supported ? o : { ...o, disabled: true, hint: thinkingTierDisabledReason(cls, token) }
+    })
+  }, [catalog, provider, model, thinkingLevel])
 
   // Unsaved-edits flag: current form fields vs the agent's persisted values.
   // (The tools section saves instantly on its own, so it is not part of this.)
@@ -309,15 +327,19 @@ export function AgentSettingsForm({
           <OptionPills
             value={thinkingLevel}
             onChange={setThinkingLevel}
-            options={THINKING_OPTIONS}
+            options={thinkingOptions}
             ariaLabel="Düşünme seviyesi"
             testid="agent-thinking-level"
           />
         </Field>
         <p className="-mt-2 text-xs text-[var(--color-text-dim)]">
           Uzatılmış akıl yürütme <strong>anthropic</strong> sağlayıcıda araçsız sohbette etkilidir.{' '}
-          <strong>claude-cli</strong>'da seviye artık alt sürece de geçer: seçilen seviye CLI{' '}
-          <code>effortLevel</code>'ına eşlenir; <strong>Kapalı</strong> thinking'i tamamen kapatır (
+          <strong>claude-cli</strong>'da seviye alt sürece geçer: seçilen seviye CLI{' '}
+          <code>effortLevel</code>'ına eşlenir (<strong>Yüksek+ / Maks</strong> derin-çalışma
+          tiyerleri artık gerçekten CLI'ye ulaşır). <strong>Maks</strong>, settings.json'ın
+          reddettiği tek değer olduğu için <code>CLAUDE_CODE_EFFORT_LEVEL=max</code> env
+          değişkeniyle uygulanır; bu tiyerlerde thinking açık kaldığından paralel araç batch'i
+          kapanır ("think XOR batch"). <strong>Kapalı</strong> thinking'i tamamen kapatır (
           <code>MAX_THINKING_TOKENS=0</code>).
         </p>
         {provider === 'claude-cli' && !thinkingLevel && (

@@ -311,3 +311,46 @@ func TestDebugJournalCapPrunes(t *testing.T) {
 		t.Errorf("newest survivor DurMs = %d, want 39", last.DurMs)
 	}
 }
+
+// TestGetTurnDebugCacheBreak verifies the PER-MESSAGE rollup attributes a cache
+// break to the turn that paid for it: the reason/detail travel with it, the
+// avoidable cooling overpay is summed with its estimated flag, and a break tagged
+// to a DIFFERENT turn never leaks into this one.
+func TestGetTurnDebugCacheBreak(t *testing.T) {
+	ctx := context.Background()
+	d, _ := Open(filepath.Join(t.TempDir(), "store"))
+	agent, _ := d.CreateAgent(ctx, Agent{Name: "A", Provider: "anthropic"})
+	s, _ := d.CreateSession(ctx, Session{AgentID: agent.ID, Title: "t"})
+
+	_ = d.AppendDebugEvent(s.ID, DebugEvent{
+		Type: DebugLLMCall, TurnID: "MSG1", Model: "opus", In: 12, Out: 3, CacheWrite: 9000,
+	}, 0)
+	_ = d.AppendDebugEvent(s.ID, DebugEvent{
+		Type: DebugCacheBreak, TurnID: "MSG1", Name: "ttl-or-server-eviction",
+		Detail: "Önek değişmedi ama cache okunmadı", WasteUSD: 0.021, WasteEstimated: true,
+	}, 0)
+	// A second turn's break must stay out of MSG1's rollup.
+	_ = d.AppendDebugEvent(s.ID, DebugEvent{
+		Type: DebugCacheBreak, TurnID: "MSG2", Name: "model-changed", Detail: "Model değişti",
+	}, 0)
+
+	td, err := d.GetTurnDebug(ctx, s.ID, "MSG1")
+	if err != nil {
+		t.Fatalf("GetTurnDebug: %v", err)
+	}
+	if td.CacheBreaks != 1 {
+		t.Fatalf("cacheBreaks=%d, want 1 (MSG2's break must not leak)", td.CacheBreaks)
+	}
+	if td.CacheBreakReason != "ttl-or-server-eviction" || td.CacheBreakDetail == "" {
+		t.Errorf("reason=%q detail=%q, want the ttl tag with its detail", td.CacheBreakReason, td.CacheBreakDetail)
+	}
+	if td.CoolingWasteUSD != 0.021 || !td.CoolingWasteEstimated {
+		t.Errorf("waste=%v est=%v, want 0.021 / true", td.CoolingWasteUSD, td.CoolingWasteEstimated)
+	}
+
+	// A turn with no break reports none — the zero value, so the panel renders nothing.
+	td2, _ := d.GetTurnDebug(ctx, s.ID, "MSG3")
+	if td2.CacheBreaks != 0 || td2.CacheBreakReason != "" {
+		t.Errorf("unknown turn should carry no break, got %+v", td2)
+	}
+}

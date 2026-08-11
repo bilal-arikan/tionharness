@@ -14,8 +14,20 @@ import (
 // result, so the body is the only reliable signal.
 const mcpNotIndexedMarker = "project not found or not indexed"
 
-// mcpToolPrefix is the namespace every MCP tool call carries (mcp__<server>__<tool>).
-const mcpToolPrefix = "mcp__"
+// mcpNamespaceSep separates server from tool in a namespaced MCP tool name.
+// Two forms reach this guard and BOTH must match:
+//
+//   - claude-cli form:  mcp__<server>__<tool>
+//   - native-loop form: <server>__<tool>  (mcp.NamespaceTool, manager.go)
+//
+// Matching only the "mcp__" prefix silently disabled the whole guard on
+// TionSwarm's own agentic loop — the only loop it can actually run in — because
+// the registry never produces that prefix. Built-in tool names carry no "__",
+// so this separator is an unambiguous MCP marker.
+const mcpNamespaceSep = "__"
+
+// isMCPToolCall reports whether name is a namespaced MCP tool call.
+func isMCPToolCall(name string) bool { return strings.Contains(name, mcpNamespaceSep) }
 
 // mcpRepair is a per-turn repair for MCP tool calls that fail because their
 // `project` argument names a repo the server has not indexed. Without it the
@@ -35,10 +47,27 @@ const mcpToolPrefix = "mcp__"
 // toolGuard pattern in this package.
 type mcpRepair struct {
 	poisoned map[string]bool // callKey → already answered with a not-indexed repair this turn
+	repaired map[string]bool // callKey → already auto-corrected once this turn (no second rewrite)
 }
 
 func newMCPRepair() *mcpRepair {
-	return &mcpRepair{poisoned: map[string]bool{}}
+	return &mcpRepair{poisoned: map[string]bool{}, repaired: map[string]bool{}}
+}
+
+// repairPlan is the verdict repair() hands back to the loop. Exactly one of the
+// three fields drives the loop's next move; Hint may accompany IndexPath.
+//
+//   - Fixed non-nil    → re-run this corrected call once, in place of the failed one.
+//   - IndexPath non-empty → kick off a background index of that repo, then explain.
+//   - Hint non-empty   → append to the result body so the model reads the recovery
+//     instruction where the failure happened.
+//
+// Keeping the decision data-only leaves mcpRepair free of Runtime dependencies,
+// so it stays unit-testable without a live workspace.
+type repairPlan struct {
+	Fixed     *providers.ToolCall
+	IndexPath string
+	Hint      string
 }
 
 // precheck runs BEFORE a call executes. It returns a non-empty message when this
@@ -48,28 +77,164 @@ func newMCPRepair() *mcpRepair {
 // project the same (unindexed) way cannot make progress, so it is always
 // short-circuited.
 func (m *mcpRepair) precheck(call providers.ToolCall) (blocked bool, msg string) {
-	if !strings.HasPrefix(call.Name, mcpToolPrefix) {
+	if !isMCPToolCall(call.Name) {
 		return false, ""
 	}
 	if m.poisoned[callKey(call)] {
-		return true, mcpRepairInstruction(call.Name, nil)
+		return true, mcpRepairInstruction(call.Name, "", nil)
 	}
 	return false, ""
 }
 
-// repair runs AFTER a call executed. On a not-indexed error it records the call
-// as poisoned and returns a guidance hint to append to the result body (the raw
-// server error is kept so the model still sees the available_projects list).
-// Returns ("", false) for anything else, leaving the result untouched.
-func (m *mcpRepair) repair(call providers.ToolCall, res providers.ToolResult) (hint string, ok bool) {
-	if !res.IsError || !strings.HasPrefix(call.Name, mcpToolPrefix) {
-		return "", false
+// repair runs AFTER a call executed. On a not-indexed error it decides, in this
+// order:
+//
+//  1. The `project` argument can be derived unambiguously from the server's own
+//     available_projects list (it was missing, or it names the same repo in a
+//     different shape) → return the corrected call so the loop re-runs it once.
+//     The model never sees the failure and spends no turn on recovery.
+//  2. The repo the session actually works on is absent from that list → ask the
+//     loop to start a background index of sessionCwd, and explain that this turn
+//     must fall back to Glob/Grep.
+//  3. Neither → record the call as poisoned and hand back the guidance hint (the
+//     raw server error is kept, so the model still sees available_projects).
+//
+// Returns (zero, false) for anything else, leaving the result untouched.
+func (m *mcpRepair) repair(call providers.ToolCall, res providers.ToolResult, sessionCwd string) (repairPlan, bool) {
+	if !res.IsError || !isMCPToolCall(call.Name) {
+		return repairPlan{}, false
 	}
 	if !strings.Contains(res.Content, mcpNotIndexedMarker) {
-		return "", false
+		return repairPlan{}, false
 	}
-	m.poisoned[callKey(call)] = true
-	return mcpRepairInstruction(call.Name, parseAvailableProjects(res.Content)), true
+	key := callKey(call)
+	available := parseAvailableProjects(res.Content)
+	want := callProjectArg(call)
+	preferred := projectIDForPath(sessionCwd)
+
+	// (1) Auto-correct — at most once per call, so a rewrite that still fails
+	// cannot ping-pong with the server.
+	if !m.repaired[key] {
+		if fixed := resolveProjectID(want, preferred, available); fixed != "" && fixed != want {
+			corrected, err := withProjectArg(call, fixed)
+			if err == nil {
+				m.repaired[key] = true
+				return repairPlan{Fixed: &corrected}, true
+			}
+			// A malformed Input cannot be rewritten; fall through to the hint so
+			// the failure stays visible instead of being silently dropped.
+		}
+	}
+
+	m.poisoned[key] = true
+	plan := repairPlan{Hint: mcpRepairInstruction(call.Name, want, available)}
+	// (2) The session's own repo is not in the index — trigger it for later turns.
+	if preferred != "" && !containsProject(available, preferred) {
+		plan.IndexPath = sessionCwd
+		plan.Hint += " An index of this session's repo (" + preferred + ") has been started in the background; it will not be ready within this turn, so use Glob/Grep now and retry the index tools on a later turn."
+	}
+	return plan, true
+}
+
+// callProjectArg reads the `project` argument of an MCP call. A missing field, a
+// non-string value or malformed JSON all read as "" — the caller treats that as
+// "unspecified", which is exactly the case auto-correction exists for.
+func callProjectArg(call providers.ToolCall) string {
+	var args struct {
+		Project string `json:"project"`
+	}
+	if err := json.Unmarshal(call.Input, &args); err != nil {
+		return ""
+	}
+	return strings.TrimSpace(args.Project)
+}
+
+// withProjectArg returns a copy of call whose `project` argument is set to id,
+// preserving every other argument. Errors when Input is not a JSON object.
+func withProjectArg(call providers.ToolCall, id string) (providers.ToolCall, error) {
+	args := map[string]any{}
+	if len(call.Input) > 0 {
+		if err := json.Unmarshal(call.Input, &args); err != nil {
+			return call, err
+		}
+	}
+	args["project"] = id
+	raw, err := json.Marshal(args)
+	if err != nil {
+		return call, err
+	}
+	call.Input = raw
+	return call, nil
+}
+
+// containsProject reports an exact membership test on the indexed-project list.
+func containsProject(available []string, id string) bool {
+	for _, a := range available {
+		if a == id {
+			return true
+		}
+	}
+	return false
+}
+
+// resolveProjectID derives the project id this call SHOULD have carried, or ""
+// when no single answer is defensible. It never guesses between two candidates:
+// silently querying the wrong repo is worse than surfacing the error.
+//
+//	want      the `project` argument as sent ("" when omitted)
+//	preferred the id of the repo this session works on ("" when unknown)
+//	available the ids the server reports as indexed
+func resolveProjectID(want, preferred string, available []string) string {
+	if len(available) == 0 {
+		return ""
+	}
+	if want != "" && containsProject(available, want) {
+		return "" // argument is already right; the error has another cause
+	}
+	if want == "" {
+		// Omitted argument — the single most common shape of this failure.
+		if preferred != "" && containsProject(available, preferred) {
+			return preferred
+		}
+		if len(available) == 1 {
+			return available[0]
+		}
+		return ""
+	}
+	// Present but unknown: accept it only when exactly one indexed id plausibly
+	// denotes the same repo (a bare repo name, a path, or a case difference).
+	if match := matchProjectID(want, available); match != "" {
+		return match
+	}
+	if preferred != "" && containsProject(available, preferred) {
+		return preferred
+	}
+	if len(available) == 1 {
+		return available[0]
+	}
+	return ""
+}
+
+// matchProjectID finds the one indexed id that denotes the same repo as want,
+// tolerating case, a bare repo name ("SampleRepo") and a filesystem path
+// ("C:\...\SampleRepo"). Ambiguity (two or more candidates) returns "".
+func matchProjectID(want string, available []string) string {
+	norm := strings.ToLower(want)
+	if p := projectIDForPath(want); p != "" {
+		norm = strings.ToLower(p)
+	}
+	var found string
+	for _, a := range available {
+		la := strings.ToLower(a)
+		if la != norm && !strings.HasSuffix(la, "-"+norm) {
+			continue
+		}
+		if found != "" {
+			return "" // ambiguous
+		}
+		found = a
+	}
+	return found
 }
 
 // parseAvailableProjects extracts the available_projects list from a not-indexed
@@ -107,13 +272,24 @@ func mcpSiblingTool(tool, sibling string) string {
 // not-indexed MCP call. It names the exact list_projects tool for the same
 // server, states the project-id format, lists the currently indexed projects when
 // known, and prescribes the Glob/Grep fallback when the target repo is absent.
-func mcpRepairInstruction(tool string, projects []string) string {
+//
+// The opening sentence is chosen from `want`, because the server returns the same
+// "project not found or not indexed" body for two very different faults. Telling a
+// model its argument named an unindexed repo when it in fact sent NO argument sent
+// it hunting for a missing index and straight to Glob/Grep — the exact wrong move
+// when the repo was indexed all along.
+func mcpRepairInstruction(tool, want string, projects []string) string {
 	list := mcpSiblingTool(tool, "list_projects")
 	var b strings.Builder
-	b.WriteString("\n\n[mcp repair] The `project` argument names a repo that is not indexed, so this call cannot succeed — repeating it unchanged will fail identically. ")
-	b.WriteString("Before calling any mcp__ codebase-memory tool again: call ")
+	if want == "" {
+		b.WriteString("\n\n[mcp repair] This call omitted the required `project` argument, so the server could not resolve a project — the error does NOT mean the repo is unindexed. ")
+		b.WriteString("Re-issue the call with `project` set. ")
+	} else {
+		b.WriteString("\n\n[mcp repair] The `project` argument (`" + want + "`) does not match any indexed repo, so this call cannot succeed — repeating it unchanged will fail identically. ")
+	}
+	b.WriteString("If you are unsure of the id, call ")
 	b.WriteString(list)
-	b.WriteString(" once, then copy a project id VERBATIM from its output into `project` (format: C-Users-user-Desktop-<repo>). ")
+	b.WriteString(" once and copy one VERBATIM from its output (format: C-Users-user-Desktop-<repo>). ")
 	if len(projects) > 0 {
 		b.WriteString("Indexed projects right now: ")
 		b.WriteString(strings.Join(projects, ", "))

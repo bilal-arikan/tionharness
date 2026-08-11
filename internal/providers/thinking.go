@@ -109,6 +109,73 @@ func SupportsProgrammaticTools(model string) bool {
 	return false
 }
 
+// ThinkingClass classifies how a model handles extended reasoning. It is the
+// single classifier the UI reads twice: ThinkingTiersFor gates which tier
+// buttons are active, and the client uses the class to explain WHY an inactive
+// tier is inactive. One of:
+//
+//   - "always-on": thinking cannot be disabled (Fable/Mythos) — {type:"disabled"}
+//     400s and "off" merely omits the field, so "off" is dropped.
+//   - "adaptive": the full effort ramp incl. xhigh/max, reaching the model as
+//     output_config.effort (Opus 4.7/4.8, Sonnet 5).
+//   - "non-thinking": the model does not reason at all, so only "off" is
+//     meaningful (DeepSeek V4 Flash — "düşünmeyen mod").
+//   - "legacy": a concrete model that reasons but has no distinct xhigh/max wire
+//     form, so those clamp down to high (legacy Claude, MiniMax — whose
+//     reasoning_effort tops out at "high" — DeepSeek Pro, …).
+//   - "alias": a bare family alias / custom / empty id ("opus", "sonnet",
+//     "Varsayılan") whose concrete model is unknown here; offered the full ramp
+//     and clamped provider-side.
+func ThinkingClass(model string) string {
+	switch {
+	case AlwaysOnThinking(model):
+		return "always-on"
+	case UsesAdaptiveThinking(model):
+		return "adaptive"
+	case isNonThinking(model):
+		return "non-thinking"
+	case hasConcreteVersion(model):
+		return "legacy"
+	default:
+		return "alias"
+	}
+}
+
+// isNonThinking reports whether the model has no extended-reasoning mode at all,
+// so every tier but "off" is a no-op. DeepSeek's V4 Flash tier is the sole
+// current case; its Pro sibling reasons and is left in the "legacy" class.
+func isNonThinking(model string) bool {
+	m := strings.ToLower(model)
+	return strings.Contains(m, "deepseek") && strings.Contains(m, "flash")
+}
+
+// ThinkingTiersFor returns the reasoning tiers a model meaningfully supports, as
+// the stable tokens the UI pickers use: "off","low","medium","high","xhigh",
+// "max". The set is derived from ThinkingClass so the composer / agent pickers
+// can grey out tiers that would be a silent no-op on the selected model (they
+// are shown disabled with a reason, not hidden).
+func ThinkingTiersFor(model string) []string {
+	switch ThinkingClass(model) {
+	case "always-on":
+		return []string{"low", "medium", "high", "xhigh", "max"}
+	case "adaptive", "alias":
+		return []string{"off", "low", "medium", "high", "xhigh", "max"}
+	case "non-thinking":
+		return []string{"off"}
+	default: // legacy
+		return []string{"off", "low", "medium", "high"}
+	}
+}
+
+// hasConcreteVersion reports whether the model id carries a version digit, i.e.
+// it names a concrete model rather than a bare family alias ("opus", "sonnet").
+// Bare aliases resolve to whatever the provider currently points them at (often
+// the adaptive flagship), so they get the full ramp rather than the clamped
+// legacy set.
+func hasConcreteVersion(model string) bool {
+	return strings.ContainsAny(model, "0123456789")
+}
+
 // EffortForThinkingBudget maps a legacy thinking token budget (as produced by
 // the agent's ThinkingLevel) to the output_config.effort value used by
 // adaptive-class models. 0 means "no override" (server default). The xhigh/max

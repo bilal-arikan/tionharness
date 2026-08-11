@@ -34,14 +34,14 @@ const (
 // registry-build time to the resolved executable path and store dir; registered
 // only when an enabled codebase-memory server is present (command != "").
 type CodebaseWorkspaceSearchTool struct {
-	command  string // absolute path to codebase-memory-mcp executable
-	storeDir string // CBM_CACHE_DIR for this workspace ("" = server default store)
+	command string // absolute path to codebase-memory-mcp executable
 }
 
-// NewCodebaseWorkspaceSearchTool binds the tool to the codebase-memory executable
-// and this workspace's isolated store directory.
-func NewCodebaseWorkspaceSearchTool(command, storeDir string) CodebaseWorkspaceSearchTool {
-	return CodebaseWorkspaceSearchTool{command: command, storeDir: storeDir}
+// NewCodebaseWorkspaceSearchTool binds the tool to the codebase-memory executable.
+// The server owns its own store (one cache root per account since cbm 0.10), so
+// nothing is injected here.
+func NewCodebaseWorkspaceSearchTool(command string) CodebaseWorkspaceSearchTool {
+	return CodebaseWorkspaceSearchTool{command: command}
 }
 
 func (CodebaseWorkspaceSearchTool) Def() providers.ToolDef {
@@ -52,7 +52,7 @@ func (CodebaseWorkspaceSearchTool) Def() providers.ToolDef {
 			"Use this for \"where in the workspace is X?\" when you don't know which repo holds it; for a " +
 			"single known repo prefer the codebase-memory search_code tool (project-scoped, cheaper). " +
 			"`pattern` is text (or a regex when `regex` is true). `mode`: compact (signatures, default), " +
-			"full (with source), files (paths only). `limit` caps total results.",
+			"full (with source), files (paths only). `limit` caps total results (default 30). Fans out to at most 40 projects; when the store holds more, the reply sets `truncated_projects` so you know coverage was partial.",
 		InputSchema: json.RawMessage(`{
   "type": "object",
   "properties": {
@@ -168,9 +168,9 @@ func (t CodebaseWorkspaceSearchTool) Call(ctx context.Context, input json.RawMes
 	return string(b), nil
 }
 
-// runCLI invokes the codebase-memory executable in CLI mode against this
-// workspace's store and returns the last non-empty stdout line (the JSON result;
-// the tool also emits info logs to stderr, kept separate).
+// runCLI invokes the codebase-memory executable in CLI mode and returns the last
+// non-empty stdout line (the JSON result; the tool also emits info logs to stderr,
+// kept separate).
 func (t CodebaseWorkspaceSearchTool) runCLI(ctx context.Context, tool string, payload map[string]any) (string, error) {
 	arg, err := json.Marshal(payload)
 	if err != nil {
@@ -178,9 +178,6 @@ func (t CodebaseWorkspaceSearchTool) runCLI(ctx context.Context, tool string, pa
 	}
 	cmd := exec.CommandContext(ctx, t.command, "cli", tool, string(arg))
 	cmd.Env = os.Environ()
-	if t.storeDir != "" {
-		cmd.Env = append(cmd.Env, "CBM_CACHE_DIR="+t.storeDir)
-	}
 	stdout, err := cmd.Output()
 	if err != nil {
 		return "", err

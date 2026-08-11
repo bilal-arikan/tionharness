@@ -166,7 +166,7 @@ func NewUpdateFlowTool(database *db.DB, actorID string) UpdateFlowTool {
 func (UpdateFlowTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name:        "update_flow",
-		Description: "Edit a flow (user- or agent-created). Pass the flow id and the fields to change (name, graph, tags).",
+		Description: "Edit a flow (user- or agent-created). Pass the flow id and the fields to change (name, graph, tags, emoji).",
 		InputSchema: json.RawMessage(`{
 			"type":"object",
 			"properties":{
@@ -388,7 +388,7 @@ func NewGetFlowTool(database *db.DB, actorID string) GetFlowTool {
 func (GetFlowTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name:        "get_flow",
-		Description: "Get one orchestration flow in full, including its graph JSON (the node graph). Use this to read a flow's current graph before editing it with update_flow. Returns id, name, graph and whether it was created by an agent. Allowed on any flow.",
+		Description: "Get one orchestration flow in full, including its graph JSON (the node graph). Use this to read a flow's current graph before editing it with update_flow. Returns id, name, graph, emoji and whether it was created by an agent. Allowed on any flow.",
 		InputSchema: json.RawMessage(`{
 			"type":"object",
 			"properties":{"id":{"type":"string","description":"The flow id (see list_flows)"}},
@@ -439,7 +439,7 @@ func NewRunFlowTool(database *db.DB, actorID string, run runFlowFn) RunFlowTool 
 func (RunFlowTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name:        "run_flow",
-		Description: "Run an orchestration flow now with the given input (the value bound to {{input}} in the graph). Drives the flow to completion, records a run in the executions feed, and returns the status and (truncated) final output. Allowed on any flow.",
+		Description: "Run an orchestration flow now with the given input (the value bound to {{input}} in the graph). Runs the flow — which may SUSPEND at an await-input node (returned status 'waiting', resume it with deliver_flow_input) rather than finishing — records a run in the executions feed, and returns the current status and (truncated) output. Allowed on any flow.",
 		InputSchema: json.RawMessage(`{
 			"type":"object",
 			"properties":{
@@ -504,7 +504,7 @@ func (ListFlowRunsTool) Def() providers.ToolDef {
 			"type":"object",
 			"properties":{
 				"flowId":{"type":"string","description":"Only runs of this flow (optional)"},
-				"status":{"type":"string","description":"Only runs with this status: running|waiting|success|failure (optional)"},
+				"status":{"type":"string","enum":["running","waiting","success","failure"],"description":"Only runs with this status (optional)"},
 				"limit":{"type":"integer","description":"Max runs to return (default 20)"}
 			},
 			"additionalProperties":false

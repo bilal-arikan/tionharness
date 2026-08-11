@@ -2780,8 +2780,11 @@ medya farkındalığı**ydı.
    girmez: dosya yolu verilir, `ArtifactSink.CreateArtifact` artık `CreateArtifactSpec`
    struct'ı alır, sink `db.ImportMediaSource` ile yolu workspace-göreli hale getirir
    (workspace dışındaki dosyayı — ör. Downloads'taki screenshot — `artifacts/<session>/`
-   altına **kopyalar**, içindekini olduğu yerden referanslar). Doğrulama: text kind →
-   `content` zorunlu, media kind → `sourcePath` zorunlu.
+   altına **kopyalar**, içindekini olduğu yerden referanslar). Göreli `sourcePath`
+   önce workspace sandbox kökünde aranır; bulunamazsa **session'ın `workingDir`'ine**
+   (ajanın proje repo cwd'si) düşer — `_Docs/foo.md` gibi repo-göreli yollar mutlak
+   yol istenmeden çözülür; ikisi de yoksa hata her iki denemeyi de söyler. Doğrulama:
+   text kind → `content` zorunlu, media kind → `sourcePath` zorunlu.
 2. **Auto-capture genişletildi** (`artifacts_auto.go`) — (a) `artifactKindForPath`
    medya uzantılarını (`.png/.jpg/.gif/.webp/.mp4/.mp3/.pdf/.zip/...`) doğru media
    kind'a eşler (artık `text`'e düşmez); (b) `Write`/`create_file` medya dosyası

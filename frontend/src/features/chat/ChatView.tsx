@@ -3,6 +3,7 @@
 // wake banner, composer) and the rewind dialog. Extracted from App.tsx so the
 // shell only composes; all chat-turn machinery arrives via the `chat` handle.
 import { useEffect, useMemo, useRef, useState, type ComponentProps } from 'react'
+import { History } from 'lucide-react'
 import type { Agent, Artifact, Message } from '@/types'
 import { MessageList } from './MessageList'
 import { Composer } from './Composer'
@@ -14,13 +15,20 @@ import { PermissionPrompt } from './PermissionPrompt'
 import { PlanPrompt } from './PlanPrompt'
 import { PendingTray } from './PendingTray'
 import { WakeWaitBanner } from './WakeWaitBanner'
+import { CacheWarmthStrip } from './CacheWarmthStrip'
 import { WorkerWaitBanner } from './WorkerWaitBanner'
 import { useRunningWorkers } from './useRunningWorkers'
 import { TodoPanel } from './TodoPanel'
+import { WorkerStatusStrip } from './WorkerStatusStrip'
 import { latestTodos } from './todos'
 import { useDelayedFlag } from '@/shared/hooks/useDelayedFlag'
 import type { useChatStream } from './useChatStream'
-import { isCoordinatorSession, type CoordinationFields } from '@/shared/lib/coordination'
+import { CoordinatorBreadcrumb } from '@/features/sessions/CoordinatorBreadcrumb'
+import {
+  isCoordinatorSession,
+  isInCoordinatorTree,
+  type CoordinationFields,
+} from '@/shared/lib/coordination'
 
 export interface ChatViewProps {
   chat: ReturnType<typeof useChatStream>
@@ -48,6 +56,10 @@ export interface ChatViewProps {
   sessionCoordination?: CoordinationFields
   // Opens another session's transcript (used to jump into a running worker).
   onSelectSession?: (id: string) => void
+  // For a read-only flow run log: opens the Flows screen on this flow's run
+  // history. Undefined for any non-flow session, so the link is shown only when
+  // it resolves.
+  onOpenRunHistory?: () => void
   // Empty-state ("Yeni sohbete başla") wiring, used when no session is active.
   defaultAgentId: string | null
   defaultAgentDeleted?: boolean
@@ -83,6 +95,7 @@ export function ChatView({
   readOnly,
   sessionCoordination,
   onSelectSession,
+  onOpenRunHistory,
   defaultAgentId,
   defaultAgentDeleted,
   allAgents,
@@ -184,6 +197,12 @@ export function ChatView({
           messages={messages}
           sessionId={activeSessionId ?? undefined}
           pending={chat.activePending}
+          // Who the not-yet-arrived turn belongs to, so the standalone "working"
+          // bubble carries the agent header BEFORE the first token/AgentStart —
+          // otherwise the identity only appears once the reply streams in. The
+          // active session's agent (set to sess.agentId on select, worker sessions
+          // included) is the responder for the pending turn.
+          pendingAgentId={activeAgentId ?? undefined}
           agents={allAgents}
           artifacts={artifacts}
           streaming={chat.activeStreaming}
@@ -208,12 +227,89 @@ export function ChatView({
       {readOnly ? (
         <div
           ref={bottomStackRef}
-          className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex justify-center px-4 pb-4"
+          className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex flex-col gap-1 px-4 pb-2 [&>*]:pointer-events-auto"
         >
-          <div className="pointer-events-auto rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-1.5 text-xs text-[var(--color-text-dim)] shadow-[var(--shadow-sm)]">
-            Bu oturum salt-okunurdur (görev / akış / zamanlama günlüğü). Hatayla biten turlar hata
-            kartındaki “Yeniden dene” ile sürdürülebilir.
+          {/* The read-only notice sits at the TOP of the stack (above every status
+              panel) so it always reads as the header for this run log, rather than
+              getting pushed off-screen under a tall todo/ask panel. */}
+          <div className="flex justify-center">
+            <div className="rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-1.5 text-xs text-[var(--color-text-dim)] shadow-[var(--shadow-sm)]">
+              Bu oturum salt-okunurdur (görev / akış / zamanlama günlüğü). Hatayla biten turlar hata
+              kartındaki “Yeniden dene” ile sürdürülebilir.
+            </div>
           </div>
+          {/* Prompt-cache warmth also matters in a read-only log: a worker parked
+              on an ask/permission (below) is answered as a suspend-point resolve,
+              and that reply reads the still-warm prefix — so the countdown is
+              actionable here too. Same gate as the writable stack. */}
+          {!chat.activeStreaming && <CacheWarmthStrip messages={messages} />}
+          {/* NAVIGATION (B): the upward coordinator chain, so a worker log links
+              back to where the work came from. Self-hides for a root/ordinary
+              session (empty ancestor chain). */}
+          {activeSessionId && (
+            <CoordinatorBreadcrumb
+              sessionId={activeSessionId}
+              onSelectSession={onSelectSession}
+              floating
+            />
+          )}
+          {/* VISIBILITY (A): a durable ask/permission/plan that the worker parked
+              on. Hidden here before, this made a worker silently block on input
+              with no on-screen cue. Answering resolves a suspend point (not a new
+              user turn), so it is legitimate even in a read-only log. */}
+          {chat.activeAsk &&
+            (chat.activeAsk.kind === 'permission' ? (
+              <PermissionPrompt ask={chat.activeAsk} onAnswer={chat.answerAsk} />
+            ) : chat.activeAsk.kind === 'plan' ? (
+              <PlanPrompt ask={chat.activeAsk} onAnswer={chat.answerAsk} />
+            ) : (
+              <AskPrompt ask={chat.activeAsk} onAnswer={chat.answerAsk} />
+            ))}
+          {/* Read-only status surfaces the transcript can't replace: the LIVE
+              checklist (always the latest todo_write, updating as items tick) and
+              the running sub-worker roster. Both are display-only — no user input —
+              so they belong here even though the composer stack is gone. The
+              worker banner self-gates: its roster is empty unless THIS session is
+              itself a coordinator, so a plain worker log shows nothing. */}
+          <TodoPanel todos={currentTodos} />
+          <WorkerWaitBanner
+            workers={runningWorkers}
+            doneCount={workers.length - runningWorkers.length}
+            onSelectSession={onSelectSession}
+          />
+          {/* CONTROL (C): the self-wake countdown for context — but with its Durdur
+              hidden, since disarming an automation's own wake from a read-only log
+              would silently derail it. */}
+          {chat.activeWakeWait && (
+            <WakeWaitBanner
+              reason={chat.activeWakeWait.reason}
+              fireAt={chat.activeWakeWait.fireAt}
+              onCancel={chat.cancelWake}
+              hideCancel
+            />
+          )}
+          {/* VISIBILITY + CONTROL (A/C): while a worker/sub-coordinator turn is
+              streaming, show it is alive and offer a Durdur. Scoped to
+              coordinator-tree members so plain flow/schedule logs don't get a stop
+              button whose side effects are less obvious. */}
+          {chat.activeStreaming && isInCoordinatorTree(sessionCoordination) && (
+            <WorkerStatusStrip onStop={chat.stopTurn} />
+          )}
+          {/* NAVIGATION (B#4): a flow run log links to its flow's run history, so a
+              viewer can jump from this single run to the full runs/builder screen.
+              Present only for flow sessions (onOpenRunHistory resolves there). */}
+          {onOpenRunHistory && (
+            <div className="flex justify-center pb-1">
+              <button
+                type="button"
+                onClick={onOpenRunHistory}
+                className="inline-flex items-center gap-1.5 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1 text-xs font-medium text-[var(--color-text-dim)] shadow-[var(--shadow-sm)] transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
+              >
+                <History size={13} />
+                Koşu geçmişini aç
+              </button>
+            </div>
+          )}
         </div>
       ) : (
         /* Floating bottom stack: overlays the transcript so bubbles scroll UNDER
@@ -223,6 +319,13 @@ export function ChatView({
           ref={bottomStackRef}
           className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex flex-col [&>*]:pointer-events-auto"
         >
+          {/* Prompt-cache warmth: the one cache surface that can still change the
+              outcome — it counts down the warm window BEFORE the next turn is sent.
+              Sits at the TOP of the bottom stack so it stays visible above any
+              transient panel (todo checklist, pending tray, ask/permission
+              prompts). Hidden while a turn streams (the countdown is about to
+              reset anyway) and on an empty session (nothing is cached yet). */}
+          {!chat.activeStreaming && <CacheWarmthStrip messages={messages} />}
           {(chat.activePresence > 1 || chat.activeTyping) && (
             <div className="flex justify-center pb-1">
               <span className="rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-2.5 py-0.5 text-[11px] text-[var(--color-text-dim)] shadow-[var(--shadow-sm)]">

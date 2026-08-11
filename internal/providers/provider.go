@@ -217,6 +217,14 @@ type Request struct {
 	// batching and the pre-regression cost profile (_Docs/05 2026-07-10). HTTP
 	// providers ignore it (ThinkingBudget==0 already means off there).
 	DisableThinking bool
+	// CLIEffortLevel is the resolved Claude Code effortLevel for a claude-cli turn
+	// (low/medium/high/xhigh/max). Levels up to xhigh flow through the --settings
+	// file; "max" is the exception — Claude Code's settings.json effortLevel enum
+	// rejects it and silently downgrades to high, so the provider lifts a max turn
+	// via the CLAUDE_CODE_EFFORT_LEVEL env var instead (the only channel the CLI
+	// honours for max reasoning). Empty on non-max turns and for HTTP providers,
+	// which ignore it.
+	CLIEffortLevel string
 }
 
 // Usage reports token consumption. For providers with prompt caching, the cache

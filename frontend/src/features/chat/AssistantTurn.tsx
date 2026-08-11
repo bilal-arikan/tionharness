@@ -8,7 +8,7 @@ import { Markdown } from '@/shared/components/markdown/Markdown'
 import { TtsVolumeSlider } from './TtsVolumeSlider'
 import { TurnSteps, parseSteps, stepTruncated } from './TurnSteps'
 import { ThinkingBlock } from './ThinkingBlock'
-import { MessageTime, TurnDuration, LiveTimer } from './MessageMeta'
+import { MessageTime, TurnDuration, LiveTimer, CacheWarmthDot } from './MessageMeta'
 import { AgentHeader } from './AgentHeader'
 import { DirectionBadge } from './DirectionBadge'
 import { WorkingDots } from './WorkingDots'
@@ -214,7 +214,12 @@ export const AssistantTurn = memo(function AssistantTurn({
             </div>
           )}
           {!toolsHidden && (
-            <TurnSteps steps={steps} onOpenFile={onOpenFile} onOpenArtifact={onOpenArtifact} />
+            <TurnSteps
+              steps={steps}
+              sessionId={sessionId}
+              onOpenFile={onOpenFile}
+              onOpenArtifact={onOpenArtifact}
+            />
           )}
           {m.text.trim() && <Markdown onOpenFile={onOpenFile}>{m.text}</Markdown>}
           {/* Working indicator: while the turn is in flight (isLastLive) keep the
@@ -286,6 +291,10 @@ export const AssistantTurn = memo(function AssistantTurn({
                   )}
                 </span>
               )}
+              {/* Warm/cold at a glance, so scanning a transcript shows WHICH turns
+                  paid a cold prefix without opening each debug panel. Derived from
+                  the usage already persisted on the message — no fetch. */}
+              <CacheWarmthDot usage={m.usage} />
             </span>
           )}
         </div>

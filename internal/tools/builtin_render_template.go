@@ -49,7 +49,7 @@ func (RenderTemplateTool) Def() providers.ToolDef {
 		InputSchema: json.RawMessage(`{
 			"type":"object",
 			"properties":{
-				"template":{"type":"string","description":"Absolute path to the .html template file (e.g. an expanded ${SKILL_DIR}/templates/report.html)"},
+				"template":{"type":"string","description":"Path to the .html template file (absolute, or relative to the working directory; e.g. an expanded ${SKILL_DIR}/templates/report.html)"},
 				"data":{"type":"object","description":"JSON object of field values fed to the template (e.g. {\"title\":\"Q1\",\"items\":[...]})"},
 				"output_name":{"type":"string","description":"Optional output file basename (defaults to <template>-<hash>.html). Written under the session render dir; any directory part is stripped."}
 			},
@@ -70,6 +70,13 @@ func (t RenderTemplateTool) Call(_ context.Context, input json.RawMessage) (stri
 	}
 	if strings.TrimSpace(args.Template) == "" {
 		return "", fmt.Errorf("template path is required")
+	}
+	// data is declared required in the schema; enforce it here too (mirroring
+	// transform_data) so an omitted object fails loudly instead of silently
+	// rendering every field empty. An explicit empty object {} is allowed for
+	// templates with no dynamic fields.
+	if args.Data == nil {
+		return "", fmt.Errorf("data is required (pass {} for a template with no dynamic fields)")
 	}
 	if t.renderDir == "" {
 		return "", fmt.Errorf("render_template is unavailable: no session is bound to this turn")

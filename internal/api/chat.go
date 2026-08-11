@@ -1,4 +1,4 @@
-﻿package api
+package api
 
 import (
 	"context"
@@ -103,6 +103,13 @@ type chatReq struct {
 	// reconnect replays so the same message is enqueued at most once. Empty on the
 	// legacy direct /chat/stream path. See _Docs/58-QUEUE-SENKRON.md Faz 3.
 	ClientMsgID string `json:"clientMsgId,omitempty"`
+	// turnSlotHeld marks a turn whose per-session runtime turn slot was ALREADY
+	// claimed by the caller — the send-queue worker, which now claims it before
+	// popping the head so a queued message stays visible (and cancellable) in the
+	// queue tray while it waits, instead of vanishing into a blocking claim inside
+	// the turn. Unexported on purpose: it is an internal hand-off, never client
+	// input (JSON decoding cannot set it). See inbox.go / _Docs/58.
+	turnSlotHeld bool
 }
 
 type chatResp struct {

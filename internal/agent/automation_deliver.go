@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/bilal-arikan/tionswarm/internal/db"
+	"github.com/bilal-arikan/tionswarm/internal/turnqueue"
 )
 
 // ErrEmptyAutomationPrompt guards deliverAutomationTurn against an empty rendered
@@ -56,7 +57,7 @@ func (r *Runtime) deliverAutomationTurn(ctx context.Context, a db.Automation, pr
 	// Serialize this fire's turn with any concurrent turn on the same session (a
 	// prior fire still running, a user who opened the maintenance thread) via the
 	// single per-session turn slot.
-	release := r.claimSessionTurnSlot(session.ID)
+	release := r.claimSessionTurnSlot(session.ID, turnqueue.KindAutomation, "otomasyon tetiği")
 	defer release()
 
 	// Record the automation prompt as a user turn first so the thread reads as a

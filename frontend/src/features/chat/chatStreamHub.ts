@@ -12,6 +12,30 @@ import { noteServerTime, serverNow } from '@/shared/lib/serverClock'
 import { emitToast } from '@/shared/lib/notifyBus'
 import type { PendingAsk } from './AskPrompt'
 import type { PendingItem } from './PendingTray'
+
+// TurnEntry mirrors internal/turnqueue.Entry: one turn holding (or queued for) the
+// session's admission slot. `kind` names the entry path, so the tray can say WHAT a
+// message is waiting behind rather than just "meşgul".
+interface TurnEntry {
+  kind: string
+  label?: string
+  since: number
+}
+
+// turnKindLabel renders an admission-queue entry for the tray.
+function turnKindLabel(e: TurnEntry): string {
+  const byKind: Record<string, string> = {
+    coordinator: 'Worker bildirimi işleniyor',
+    worker: 'Worker görevi çalışıyor',
+    wake: 'Zamanlanmış tur çalışıyor',
+    peer: 'Ajan mesajı işleniyor',
+    spawn: 'Spawn turu çalışıyor',
+    automation: 'Otomasyon turu çalışıyor',
+    command: 'Komut çalışıyor',
+  }
+  const base = byKind[e.kind] ?? 'Tur çalışıyor'
+  return e.label && e.kind === 'command' ? `${e.label} çalışıyor` : base
+}
 import { withAdded, withRemoved, withoutKey } from './chatStreamHelpers'
 
 // Interaction ids already announced (sound + OS toast), so the SAME pending
@@ -52,7 +76,7 @@ export interface HubApplyCtx {
   // setQueued renders this session's WAITING backend queue (queue_update) in the
   // composer tray; setPresence surfaces "open in N windows" (Faz 4); setTyping
   // surfaces "another window is typing…".
-  setQueued: (items: PendingItem[]) => void
+  setQueued: Dispatch<SetStateAction<PendingItem[]>>
   setPresence: (count: number) => void
   setTyping: (active: boolean) => void
   // reload pulls the authoritative transcript (listMessages) — used on a reset,
@@ -295,6 +319,11 @@ export function makeHubHandlers(ctx: HubApplyCtx): SessionStreamHandlers {
           // Our message just entered the transcript → refresh an open Session Info
           // panel (message count, size, context usage).
           bumpMeter()
+          // The dispatched-head placeholder handed over to a real bubble: drop it,
+          // so the tray shows it exactly until the transcript does.
+          if (!injectedNote) {
+            setQueued((prev) => prev.filter((p) => p.kind !== 'dispatching'))
+          }
           // Drop any local optimistic bubble (none in the queue path, but harmless)
           // and upsert the real user message in place.
           onSid((prev) => {
@@ -373,13 +402,42 @@ export function makeHubHandlers(ctx: HubApplyCtx): SessionStreamHandlers {
           resolveInteraction(ev)
           break
         case HubKind.QueueUpdate: {
-          const p = (ev.payload ?? {}) as { queue?: { clientMsgId: string; text: string }[] }
+          const p = (ev.payload ?? {}) as {
+            queue?: { clientMsgId: string; text: string }[]
+            inflight?: { clientMsgId: string; text: string } | null
+            turns?: { running?: TurnEntry | null; waiting?: TurnEntry[] }
+          }
           const items: PendingItem[] = (p.queue ?? []).map((q) => ({
             id: q.clientMsgId,
             text: q.text,
             kind: 'queue',
             sid,
           }))
+          // The dispatched head stays visible (as "gönderiliyor") until its user
+          // bubble lands in the transcript: a message must never be in neither
+          // place. Not cancellable — it is already running.
+          if (p.inflight) {
+            items.unshift({
+              id: p.inflight.clientMsgId,
+              text: p.inflight.text,
+              kind: 'dispatching',
+              sid,
+            })
+          }
+          // The AUTONOMOUS half of the same queue (internal/turnqueue): what actually
+          // holds the session and what else is queued for it. Shown only while the
+          // user has something of their own waiting — otherwise the running turn is
+          // already obvious from the transcript. This is what makes "my message is
+          // waiting behind a worker notification" visible instead of a silent stall.
+          const holder = p.turns?.running
+          if (items.length > 0 && holder && holder.kind !== 'user') {
+            items.unshift({
+              id: `turn-${holder.kind}-${holder.since}`,
+              text: turnKindLabel(holder),
+              kind: 'holding',
+              sid,
+            })
+          }
           setQueued(items)
           break
         }

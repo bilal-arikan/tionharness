@@ -176,15 +176,6 @@ export function ServerManagement(props: {
                         </span>
                       )
                     })()}
-                    {s.command.toLowerCase().includes('codebase-memory-mcp') && (
-                      <span
-                        data-testid="mcp-server-isolated-store"
-                        className="rounded bg-[var(--color-accent-soft)] px-1.5 py-0.5 text-xs text-[var(--color-accent)]"
-                        title="Bu sunucu workspace'e özel izole bir indeks store kullanır (CBM_CACHE_DIR = <workspace>/cbm-store) — indeksler workspace'ler arası karışmaz."
-                      >
-                        izole store
-                      </span>
-                    )}
                     {!s.enabled && (
                       <span className="text-xs text-[var(--color-text-dim)]">(devre dışı)</span>
                     )}

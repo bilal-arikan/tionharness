@@ -299,6 +299,17 @@ export default function App() {
     chatRef.current = chat
   })
 
+  // Open session, resolved once for the ChatView props below. A flow run log
+  // (kind 'flow') gets a shortcut to its flow's run history (B#4): a flow
+  // session's sourceId IS its flow id, and openFlowRun opens the Flows screen on
+  // that flow's runs. Undefined for every other kind, so the link surfaces only
+  // where it resolves.
+  const activeSession = ctl.sessions.find((s) => s.id === ctl.activeSessionId)
+  const openRunHistory =
+    activeSession?.kind === 'flow' && activeSession.sourceId
+      ? () => links.openFlowRun(activeSession.sourceId as string)
+      : undefined
+
   // handleRewind rewinds the conversation to a message (via the "/rewind" dialog
   // or a user bubble's ⟲ hover action): truncate to that checkpoint, then drop the
   // removed prompt back into the composer (draft write + remount) for a re-try.
@@ -649,7 +660,8 @@ export default function App() {
             bootstrapping={ctl.bootstrapping}
             messagesLoading={ctl.messagesLoading}
             readOnly={!ctl.activeSessionWritable}
-            sessionCoordination={ctl.sessions.find((s) => s.id === ctl.activeSessionId)}
+            sessionCoordination={activeSession}
+            onOpenRunHistory={openRunHistory}
             onSelectSession={ctl.selectSession}
             defaultAgentId={ctl.defaultAgentId}
             defaultAgentDeleted={ctl.defaultAgentDeleted}

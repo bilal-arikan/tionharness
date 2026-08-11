@@ -215,28 +215,38 @@ func TestWaitCoordinatorIdle_TimesOut(t *testing.T) {
 	}
 }
 
-// TestCoordSlotIdle covers the quiescence predicate the settle wait polls.
+// TestCoordSlotIdle covers the quiescence predicate the settle wait polls. It spans
+// BOTH halves now: the coordinator's own policy state (drain loop / pending
+// notification / live workers) AND the session's admission queue, so a node that is
+// busy with a turn from any other path (a user message, a peer delivery) never
+// reads as settled.
 func TestCoordSlotIdle(t *testing.T) {
-	slot := &coordSlot{}
-	if !coordSlotIdle(slot) {
+	rt, _ := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))
+	slot := rt.coordSlotFor("COORD")
+	if !rt.coordSlotIdle("COORD", slot) {
 		t.Error("a fresh slot should read idle")
 	}
-	slot.running = true
-	if coordSlotIdle(slot) {
-		t.Error("a running turn must not read idle")
+	slot.driving = true
+	if rt.coordSlotIdle("COORD", slot) {
+		t.Error("an active drain loop must not read idle")
 	}
-	slot.running = false
+	slot.driving = false
 	slot.pending = true
-	if coordSlotIdle(slot) {
-		t.Error("a pending turn must not read idle")
+	if rt.coordSlotIdle("COORD", slot) {
+		t.Error("a pending notification must not read idle")
 	}
 	slot.pending = false
 	slot.workers.Add(1)
-	if coordSlotIdle(slot) {
+	if rt.coordSlotIdle("COORD", slot) {
 		t.Error("an active worker must not read idle")
 	}
 	slot.workers.Add(-1)
-	if !coordSlotIdle(slot) {
+	release := rt.BeginSessionUserTurn("COORD")
+	if rt.coordSlotIdle("COORD", slot) {
+		t.Error("a turn holding the admission slot must not read idle")
+	}
+	release()
+	if !rt.coordSlotIdle("COORD", slot) {
 		t.Error("slot should read idle once everything is quiet")
 	}
 }

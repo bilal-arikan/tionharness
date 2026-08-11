@@ -5,6 +5,7 @@ import { AttachmentChip } from './AttachmentChip'
 import { WorkDirBadge } from './WorkDirBadge'
 import { api } from '@/api'
 import { PASTE_AS_FILE_THRESHOLD } from '@/shared/lib/attachments'
+import { useCatalog, thinkingInfoForModel, thinkingTierDisabledReason } from '@/shared/lib/catalog'
 import { BTN_ICON } from './composer/buttonStyles'
 import { AgentSelect } from './composer/AgentSelect'
 import { ComposerPicker } from './composer/ComposerPicker'
@@ -147,13 +148,33 @@ export function Composer({
   // "Oto(Sor)", so the user can see what auto currently means without opening the
   // agent. When the agent has no explicit value the plain "Oto" label is kept.
   const selectedAgent = useMemo(() => agents.find((a) => a.id === agentId), [agents, agentId])
+  // Reasoning tiers + class for the selected agent's model. tiers null =
+  // unknown/custom → every tier stays enabled (the provider clamps anything the
+  // concrete model can't honour).
+  const catalog = useCatalog()
+  const thinking = useMemo(
+    () =>
+      selectedAgent
+        ? thinkingInfoForModel(catalog, selectedAgent.provider, selectedAgent.model)
+        : { tiers: null, cls: '' },
+    [catalog, selectedAgent],
+  )
   const thinkingOptions = useMemo(() => {
     const lvl = selectedAgent?.thinkingLevel
     const resolved = lvl ? THINKING_OPTIONS.find((o) => o.value === lvl)?.label : undefined
-    return THINKING_OPTIONS.map((o) =>
-      o.value === '' ? { ...o, label: resolved ? `Oto(${resolved})` : o.label } : o,
-    )
-  }, [selectedAgent])
+    const { tiers, cls } = thinking
+    return THINKING_OPTIONS.map((o) => {
+      // "Oto" defers to the agent and whatever this turn is already set to stays
+      // selectable; every other unsupported tier is shown greyed with a reason.
+      const supported =
+        o.value === '' || o.value === thinkingLevel || tiers == null || tiers.includes(o.value)
+      const withLabel =
+        o.value === '' ? { ...o, label: resolved ? `Oto(${resolved})` : o.label } : o
+      return supported
+        ? withLabel
+        : { ...withLabel, disabled: true, hint: thinkingTierDisabledReason(cls, o.value) }
+    })
+  }, [selectedAgent, thinking, thinkingLevel])
   const permissionOptions = useMemo(() => {
     const mode = selectedAgent?.permissionMode
     const resolved = mode ? PERMISSION_OPTIONS.find((o) => o.value === mode)?.label : undefined

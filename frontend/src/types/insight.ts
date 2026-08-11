@@ -1,5 +1,6 @@
 // Retrospective session scanning (Insight, _Docs/60) — mirrors the Go models in
 // internal/insight.
+import type { SeedDefaultState } from './seed'
 
 export type InsightChannel = 'app-fix' | 'workspace-opt'
 
@@ -21,6 +22,9 @@ export interface InsightLens {
   scope?: string[]
   prefilter: LensPrefilter
   path: string
+  // How this file compares to the lens TionSwarm ships (see SeedDefaultState).
+  // Absent = user-authored, so there is no default to badge against or restore.
+  defaultState?: SeedDefaultState
 }
 
 export interface InsightFinding {

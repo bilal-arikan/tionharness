@@ -58,6 +58,12 @@ const (
 	DefaultCoordinatorMaxWorkers = 8  // max active workers a single coordinator may run at once
 	DefaultCoordinatorMaxTurns   = 50 // max auto-triggered coordinator turns per session (notify-loop cap)
 
+	// UnlimitedCoordinatorTurns is the effective ceiling returned when the notify
+	// loop is configured unlimited (settings value -1). It is a finite sentinel, not
+	// a real infinity: the drain loop compares turns >= cap, so any value it can
+	// never reach disables the cap while keeping the comparison total-order safe.
+	UnlimitedCoordinatorTurns = 1 << 30
+
 	// DefaultCoordinatorMaxDepth bounds how deep a coordinator TREE may nest: the
 	// root coordinator is depth 0, its workers depth 1, and a worker may only be
 	// spawned with coordinator mode on while its own children would still fit.
@@ -693,15 +699,20 @@ func (t *Tunables) CoordinatorMaxWorkers() int {
 }
 
 // CoordinatorMaxTurns returns the cap on auto-triggered coordinator turns per
-// session (default when unset). 0 in settings means "use default"; the loop
-// treats the returned value as a hard ceiling.
+// session. 0 in settings means "use default"; -1 means unlimited (returns the
+// UnlimitedCoordinatorTurns sentinel, which the drain loop can never reach); any
+// positive value is a hard ceiling. Same 0-vs--1 mapping as the subtree budget.
 func (t *Tunables) CoordinatorMaxTurns() int {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
-	if t.coordMaxTurns <= 0 {
+	switch {
+	case t.coordMaxTurns < 0:
+		return UnlimitedCoordinatorTurns
+	case t.coordMaxTurns == 0:
 		return DefaultCoordinatorMaxTurns
+	default:
+		return t.coordMaxTurns
 	}
-	return t.coordMaxTurns
 }
 
 // SetRecoveryLimits configures the A1 turn-recovery knobs: whether reactive

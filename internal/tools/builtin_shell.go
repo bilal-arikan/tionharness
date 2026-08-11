@@ -170,7 +170,7 @@ func (t ShellTool) Def() providers.ToolDef {
 	bg := t.mgr != nil
 	desc := "Run a command through the POSIX shell (/bin/sh on Unix, bash.exe on Windows) and " +
 		"return its combined stdout+stderr (truncated to 64KB). Starts in the working directory but may " +
-		"operate on any path. Bounded by a timeout (default 30s, max 120s). Use POSIX/Bash syntax. This is " +
+		"operate on any path. Bounded by a timeout (default 30s, max 120s; both configurable in settings). Use POSIX/Bash syntax. This is " +
 		"the PREFERRED shell — reach for it first, including on Windows. Only switch to the PowerShell tool " +
 		"for Windows-native tasks Bash cannot do (cmdlets, registry, $env: variables)."
 	if bg {
@@ -259,7 +259,7 @@ func (t PowerShellTool) Def() providers.ToolDef {
 		"and return its combined stdout+stderr (truncated to 64KB). Use ONLY when the Bash tool cannot do " +
 		"the job — i.e. for Windows-native tasks (cmdlets, registry, $env: variables); prefer Bash for " +
 		"everything else. Starts in the working directory but " +
-		"may operate on any path. Bounded by a timeout (default 30s, max 120s). Use PowerShell syntax: " +
+		"may operate on any path. Bounded by a timeout (default 30s, max 120s; both configurable in settings). Use PowerShell syntax: " +
 		"cmdlets (Get-ChildItem), $env:VAR for environment variables, 2>$null (not 2>/dev/null), and " +
 		"registry PSDrives (HKLM:\\). The command runs DIRECTLY in PowerShell — do NOT wrap it in another " +
 		"`powershell -Command \"...\"` (that re-parses the string and strips $variable references)."
@@ -306,10 +306,10 @@ func (t PowerShellTool) CallStream(ctx context.Context, input json.RawMessage, o
 // appear in the schema in the first place (don't offer what you'll refuse).
 func shellInputSchema(withBackground, withCompress bool) json.RawMessage {
 	props := `"command":{"type":"string","description":"The command line to execute"},
-		"timeout_sec":{"type":"integer","description":"Timeout in seconds (default 30, max 120)."}`
+		"timeout_sec":{"type":"integer","description":"Timeout in seconds (default 30, max 120; both configurable in settings)."}`
 	if withBackground {
 		props = `"command":{"type":"string","description":"The command line to execute"},
-		"timeout_sec":{"type":"integer","description":"Timeout in seconds (default 30, max 120). Ignored when run_in_background is true."},
+		"timeout_sec":{"type":"integer","description":"Timeout in seconds (default 30, max 120; both configurable in settings). Ignored when run_in_background is true."},
 		"run_in_background":{"type":"boolean","description":"Run detached and return a shell id immediately instead of waiting. Use for long-running processes (dev servers, watchers); read output with shell_output and stop with shell_kill."}`
 	}
 	// no_compress is advertised only when an output token-optimizer is active for this
@@ -323,7 +323,7 @@ func shellInputSchema(withBackground, withCompress bool) json.RawMessage {
 
 // bgHint is the trailing run_in_background sentence appended to a shell tool's
 // description only when background execution is actually available.
-const bgHint = " Set run_in_background=true for a long-running command (dev server, watcher): it returns a shell id immediately — poll shell_output and stop it with shell_kill."
+const bgHint = " Set run_in_background=true for a long-running command (dev server, watcher): it returns a shell id immediately — poll it with shell_manage (action=output) and stop it with shell_manage (action=kill)."
 
 func parseShellArgs(input json.RawMessage) (shellArgs, error) {
 	var args shellArgs
@@ -351,7 +351,7 @@ func startBackgroundShell(mgr *ShellManager, sb Sandbox, args shellArgs, label s
 	if err != nil {
 		return "", err
 	}
-	return fmt.Sprintf("Started background %s shell %q. Read its output with shell_output (shell_id=%q) and stop it with shell_kill.", label, id, id), nil
+	return fmt.Sprintf("Started background %s shell %q. Read its output with shell_manage (action=output, shell_id=%q) and stop it with shell_manage (action=kill).", label, id, id), nil
 }
 
 // runShell is the shared execution core for the Bash and PowerShell tools: the

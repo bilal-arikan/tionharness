@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/bilal-arikan/tionswarm/internal/db"
+	"github.com/bilal-arikan/tionswarm/internal/turnqueue"
 )
 
 // TestFormatTaskNotification checks the coordinator-facing XML carries the
@@ -217,7 +218,7 @@ func TestClaimSessionTurnSlot(t *testing.T) {
 	slot.mu.Lock()
 	slot.turns = 7
 	slot.mu.Unlock()
-	release := rt.claimSessionTurnSlot("COORD")
+	release := rt.claimSessionTurnSlot("COORD", turnqueue.KindWake, "uyandırma")
 	rt.enqueueCoordinatorTurn("COORD")
 	time.Sleep(50 * time.Millisecond)
 	mu.Lock()
@@ -248,7 +249,7 @@ func TestPlainSessionSerializesConcurrentTurns(t *testing.T) {
 	// A concurrent autonomous turn (e.g. a scheduler wake re-entering this chat
 	// session) tries to claim the same slot — it MUST block until release.
 	acquired := make(chan func(), 1)
-	go func() { acquired <- rt.claimSessionTurnSlot("PLAIN") }()
+	go func() { acquired <- rt.claimSessionTurnSlot("PLAIN", turnqueue.KindWake, "uyandırma") }()
 
 	select {
 	case <-acquired:
@@ -636,13 +637,16 @@ func TestUserStopSkipsIdleReconcile(t *testing.T) {
 		t.Fatalf("user Stop must skip idle-reconcile; got %d turns", got)
 	}
 	slot.mu.Lock()
-	stillSet, pending, running := slot.stopRequested, slot.pending, slot.running
+	stillSet, pending, driving := slot.stopRequested, slot.pending, slot.driving
 	slot.mu.Unlock()
 	if stillSet {
 		t.Fatal("stopRequested must be consumed (one-shot) by the drain loop")
 	}
-	if pending || running {
-		t.Fatalf("drain loop must exit clean after a Stop; pending=%v running=%v", pending, running)
+	if pending || driving {
+		t.Fatalf("drain loop must exit clean after a Stop; pending=%v driving=%v", pending, driving)
+	}
+	if rt.sessionTurnBusy("COORD") {
+		t.Fatal("the admission slot must be free once the drain exits")
 	}
 
 	// A later worker notification must still re-arm the loop (Stop is not permanent):

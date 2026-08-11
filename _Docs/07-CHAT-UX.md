@@ -787,14 +787,14 @@ best-effort — hiçbir hata enqueue/reply akışını bozmaz. Frontend'e dokunu
   saniyesini taşır → `noteServerTime` skew tahminini günceller (≥2 sn fark olunca adopte edilir,
   ağ jitter'ı sayacı zıplatmaz), `serverNow()` de "şimdi"yi verir. Müşteriler: `LiveTimer`,
   `WorkerWaitBanner`, `WakeWaitBanner`, prompt-cache sıcaklık geri sayımları
-  (`SessionDetailPanel`/`SessionContextModal`). Tur başlangıcı da sunucudan: **`agent_start`**
+  (`SessionDetailPanel`/`SessionContextModal`/`CacheWarmthStrip`). Tur başlangıcı da sunucudan: **`agent_start`**
   hub olayının `time` alanı kullanılır — durable/ringed olduğu için
   tur ortasında açılan/yenilenen pencere turu gerçek başlangıcından sayar, bağlandığı andan
   değil. Mutlak saat etiketleri (`MessageTime`) bilerek yerel saat diliminde kalır.
 - **Tur altbilgisi: meta solda, aksiyon çipleri sağda — balonun DIŞINDA (2026-07-23):**
   Her mesajın altında, **balonun dışında** tek bir satır var:
-  - **Sol:** pasif meta — saat, süre, model, token
-    (`00:35 · ⏱ 4 dk 32 sn · claude-opus-4-8 · ↑34 ↓9.8k ⚡6.5M`); kullanıcı turunda
+  - **Sol:** pasif meta — saat, süre, model, token, cache sıcaklık noktası
+    (`00:35 · ⏱ 4 dk 32 sn · claude-opus-4-8 · ↑34 ↓9.8k ⚡6.5M 🔥`); kullanıcı turunda
     saat + yönlendirme rozeti.
   - **Sağ:** aksiyon çipleri — asistanda 🔊 sesli oku + 👍/👎 puan + "Yeniden dene" +
     🗑 sil; kullanıcıda ⟲ geri sar + 🗑 sil.
@@ -853,6 +853,38 @@ iskelet satırlar, lazy panellerin `Suspense` fallback'leri ise düz metin yerin
 ile başlar — ilk paint "boş" değil "yükleniyor" olur; `TaskBoard`, `Schedules`,
 `Automations`, `FlowsPanel`, `MarketPanel`, `ArtifactsPanel` bu desene taşındı.
 
+### Prompt-cache görünürlüğü (2026-08-11)
+
+Cache kırılımı artık yalnız Debug kartında değil, **sohbetin kendisinde** görünür.
+Beş yüzey, kasıtlı olarak farklı sorulara cevap verir — hiçbiri diğerini tekrar etmez.
+Tespit/atıf katmanı değişmedi (`internal/agent/cachebreak.go`, `_Docs\50` P4).
+
+| Yüzey | Soru | Kaynak |
+|---|---|---|
+| `CacheWarmthStrip` (composer üstü) | "Şimdi göndersem ucuz mu?" | son mesajın `createdAt` + 1sn tick; ek istek yok |
+| `ColdCacheDivider` (transkript ayracı) | "Bu turu ne pahalılaştırdı?" | iki mesaj arası boşluk > `CACHE_TTL_SEC` |
+| `CacheWarmthDot` (tur altbilgisi 🔥/❄) | "Hangi turlar soğuk koştu?" | `Message.usage.cacheRead/cacheWrite` |
+| `CacheBreakCard` (`cache_break` adımı) | "Neden kırıldı, ne yapmalıyım?" | backend atıflı `cache_break` olayı |
+| `MessageDebugPanel` cache bölümü | "Sebep + kaçınılabilir fazla ödeme?" | `TurnDebug.cacheBreak*`/`coolingWaste*` |
+
+Kritik ayrımlar:
+
+- **Yalnız "bir şey değişti" kırılımı kart olur** (`model-changed`, `prompt-or-tools-changed`;
+  `agent.inlineCacheBreak`). TTL soğuması normaldir → kart yerine ayraç + panel. Her molada
+  kart basmak kullanıcıyı karta kör ederdi.
+- **Kart canlı SSE ile yayılmaz**, yalnız kalıcı ize **başa** eklenir
+  (`api.consumeCacheBreakLead`, `chat_stream.go`). Kırılım turun başında ödenir ama ancak
+  provider yanıtından *bilinebilir*; geç yayınlamak kartı akışın altına çizip reload'da yukarı
+  zıplatırdı. Non-stream `/api/chat` yolunda kart yoktur (`context_change` ile aynı kapsam).
+- **Kanıt yoksa iddia yok:** 🔥/❄ noktası ve "soğuk tur" sayacı yalnız `cacheRead>0` ya da
+  `cacheWrite>0` varken konuşur. OpenRouter soğuk öneki düz `input` olarak faturalar (write
+  sayacı yok) → orada gösterge sessiz kalır, tahmin üretmez.
+- **İlk tur soğuk sayılmaz** — oturum başlatmanın kaçınılmaz bedelidir; backend detektörünün
+  `warmed` koşuluyla aynı mantık.
+- `prompt-or-tools-changed` kartı **şüpheli** tonda: prompt epoch açıkken (varsayılan) bu
+  kırılım oturum ortasında olmamalı (`_Docs\57`) → kart bunu söyler ve "Bağlamı yenile"
+  (`/refresh-context`) aksiyonunu sunar.
+
 ## Doğrulama
 
 - `go build ./...` ve `tsc --noEmit` temiz.
@@ -873,12 +905,31 @@ ile başlar — ilk paint "boş" değil "yükleniyor" olur; `TaskBoard`, `Schedu
 ## Notlar / Sıradaki
 
 - `thinking` adımları: **hem native (anthropic) hem claude-cli** yolunda gösterilir.
-  Ajanın `ThinkingLevel`'i (low/medium/high) `thinkingBudgetForLevel` ile token bütçesine
-  çevrilir ve **araçsız (MCP kapalı) turlarda** `Request.ThinkingBudget` olarak gönderilir.
+  Ajanın `ThinkingLevel`'i (low/medium/high/**xhigh/max**) `thinkingBudgetForLevel` ile token
+  bütçesine çevrilir ve **araçsız (MCP kapalı) turlarda** `Request.ThinkingBudget` olarak gönderilir.
+  **Derin-çalışma tiyerleri (claude-cli):** `cliEffortLevel` artık `xhigh`/`max`'i CLI'ye **geçirir**
+  (önceden `high`'a kırpılıyordu). `max`, Claude Code'un `settings.json` enum'unun reddettiği tek
+  değer (sessizce `high`'a düşürür), bu yüzden `--settings` dosyasına `xhigh` (taban) yazılır ve
+  provider (`runAttempt`) turu `CLAUDE_CODE_EFFORT_LEVEL=max` env'i ile `max`'a yükseltir
+  (`Request.CLIEffortLevel`). Bu tiyerlerde thinking açık kaldığından paralel araç batch'i kapanır
+  ("think XOR batch") — derin akıl yürütme için kabul edilen takas.
   **Tur-bazlı override:** composer'daki `🧠` seçici (`chatReq.ThinkingLevel`) bu turun
   seviyesini ajan ayarının yerine geçirir — handler yanıtlayan ajanın **yerel kopyasının**
   `ThinkingLevel`'ini değiştirir (kalıcı değil); boş = ajan ayarı. claude-cli/minimax bütçeyi
   yok sayar.
+  **Model-farkında tiyer butonları (2026-08-11):** hangi seviyelerin **aktif** olacağı seçili
+  modele göre değişir. Tek doğruluk kaynağı `providers.ThinkingClass(model)` (→ `ThinkingTiersFor`);
+  `Catalog()` build'inde her `ModelInfo.ThinkingTiers` (`off/low/medium/high/xhigh/max`) + `ThinkingClass`
+  doldurulup `/api/catalog` ile taşınır. **Beş sınıf:** `always-on` (Fable/Mythos → `off` yok, daima
+  düşünür); `adaptive` (Opus 4.7/4.8, Sonnet 5 → tam rampa); `non-thinking` (**DeepSeek V4 Flash** →
+  yalnız `off`); `legacy` (somut eski Claude/MiniMax — reasoning_effort tavanı `high` — DeepSeek Pro →
+  `xhigh/max` yok); `alias` (claude-cli `opus`/`Varsayılan`/özel → tam rampa, provider kırpar).
+  **Gizleme değil pasifleştirme:** desteklenmeyen tiyer butonu gizlenmez, **soluk+disabled** gösterilir
+  ve tooltip sebebini yazar (`thinkingTierDisabledReason(cls, tier)` — "her zaman düşünür — kapatılamaz"
+  / "düşünmez" / "\"Yüksek\"e düşer"). Composer (`ComposerPicker`) ve ajan formu (`OptionPills`) artık
+  `disabled` opsiyonlarını destekler; kaynak `thinkingInfoForModel(catalog, provider, model)`. Model
+  kataloğda yoksa (özel id) tüm tiyerler aktif; mevcut seçili seviye ve "Oto" her zaman tıklanabilir
+  kalır. Backend kırpma güvenlik ağı yerinde durur.
   - **Native streaming** (`anthropic.Stream`): SSE `content_block_delta` artık `text_delta`
     **ve** `thinking_delta`'yı ayrıştırır. Tipli `providers.StreamDelta{Kind: text|thinking}`
     ile yayılır → `recordedStream` thinking parçalarını sabit `liveThinkingID` ile canlı

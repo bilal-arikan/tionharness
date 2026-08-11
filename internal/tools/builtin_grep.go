@@ -28,15 +28,15 @@ func (FSGrepTool) Def() providers.ToolDef {
 		// Grep ships EAGERLY every turn, so the flag semantics live once in the
 		// description; the schema's ripgrep-style flag keys carry no per-property
 		// descriptions (their meaning is standard and already stated above).
-		Description: "Search file contents for a regular expression (RE2). Searches the working directory by default; pass path to scope to a file or directory (several may be comma-separated). " +
+		Description: "Search file contents for a regular expression (RE2). Searches the working directory by default; pass path to scope to a file or directory (several may be comma- or semicolon-separated). " +
 			"output_mode: \"content\" (matching lines, default), \"files_with_matches\" (paths only), or \"count\" (match count per file). " +
 			"Filter with glob (e.g. \"**/*.go\") or type (e.g. \"go\", \"ts\"). Content mode: -A/-B/-C context lines, -i case-insensitive, -n line numbers (default on), -o only-matching. " +
-			"multiline lets a match span lines. head_limit caps results. Honours .gitignore (always skips .git) unless no_ignore is set.",
+			"multiline lets a match span lines. head_limit caps results (default 200; a truncation marker is appended only when the cap is hit). Honours .gitignore (always skips .git) unless no_ignore is set.",
 		InputSchema: json.RawMessage(`{
 			"type":"object",
 			"properties":{
 				"pattern":{"type":"string","description":"RE2 regular expression to search for"},
-				"path":{"type":"string","description":"File or directory to search (or several comma-separated); default working directory"},
+				"path":{"type":"string","description":"File or directory to search (or several comma- or semicolon-separated); default working directory"},
 				"glob":{"type":"string"},
 				"type":{"type":"string"},
 				"output_mode":{"type":"string","enum":["content","files_with_matches","count"]},
@@ -47,7 +47,7 @@ func (FSGrepTool) Def() providers.ToolDef {
 				"-C":{"type":"integer"},
 				"-o":{"type":"boolean"},
 				"multiline":{"type":"boolean"},
-				"head_limit":{"type":"integer"},
+				"head_limit":{"type":"integer","description":"Max results (default 200)"},
 				"no_ignore":{"type":"boolean"}
 			},
 			"required":["pattern"],
@@ -383,6 +383,7 @@ func readSearchable(path string) (string, bool) {
 
 func grepFilesWithMatches(files []string, root string, re *regexp.Regexp, limit int) string {
 	var out []string
+	truncated := false
 	for _, f := range files {
 		content, ok := readSearchable(f)
 		if !ok {
@@ -391,6 +392,7 @@ func grepFilesWithMatches(files []string, root string, re *regexp.Regexp, limit 
 		if re.MatchString(content) {
 			out = append(out, relTo(root, f))
 			if len(out) >= limit {
+				truncated = true
 				break
 			}
 		}
@@ -399,11 +401,17 @@ func grepFilesWithMatches(files []string, root string, re *regexp.Regexp, limit 
 		return "No matches."
 	}
 	sort.Strings(out)
-	return strings.Join(out, "\n")
+	res := strings.Join(out, "\n")
+	// Only warn when the cap was actually hit — a truthful signal, not noise.
+	if truncated {
+		res += fmt.Sprintf("\n\n[stopped at %d files — narrow the search or raise head_limit]", limit)
+	}
+	return res
 }
 
 func grepCount(files []string, root string, re *regexp.Regexp, multiline bool, limit int) string {
 	var out []string
+	truncated := false
 	for _, f := range files {
 		content, ok := readSearchable(f)
 		if !ok {
@@ -413,6 +421,7 @@ func grepCount(files []string, root string, re *regexp.Regexp, multiline bool, l
 		if n > 0 {
 			out = append(out, fmt.Sprintf("%s:%d", relTo(root, f), n))
 			if len(out) >= limit {
+				truncated = true
 				break
 			}
 		}
@@ -421,7 +430,12 @@ func grepCount(files []string, root string, re *regexp.Regexp, multiline bool, l
 		return "No matches."
 	}
 	sort.Strings(out)
-	return strings.Join(out, "\n")
+	res := strings.Join(out, "\n")
+	// Only warn when the cap was actually hit — a truthful signal, not noise.
+	if truncated {
+		res += fmt.Sprintf("\n\n[stopped at %d files — narrow the search or raise head_limit]", limit)
+	}
+	return res
 }
 
 // countMatches counts non-overlapping matches — per line unless multiline.

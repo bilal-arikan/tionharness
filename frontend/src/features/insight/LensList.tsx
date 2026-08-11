@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Play, Pencil, X } from 'lucide-react'
 import { api } from '@/api'
 import type { InsightLens } from '@/types'
-import { ModalOverlay, toast } from '@/shared/components'
+import { ModalOverlay, RestoreDefaultButton, SeedDefaultBadge, toast } from '@/shared/components'
 import { ChannelBadge } from './insightBadges'
 
 interface Props {
@@ -35,6 +35,7 @@ export function LensList({ lenses, scanning, onToggle, onScanLens, onSaved, onEr
               <span className="font-medium">{l.name}</span>
               <ChannelBadge channel={l.channel} />
               <code className="text-xs text-[var(--color-text-dim)]">{l.id}</code>
+              <SeedDefaultBadge state={l.defaultState} />
             </div>
             <div className="truncate text-xs text-[var(--color-text-dim)]">{l.description}</div>
           </div>
@@ -52,6 +53,17 @@ export function LensList({ lenses, scanning, onToggle, onScanLens, onSaved, onEr
           >
             <Pencil className="h-3.5 w-3.5" /> Düzenle
           </button>
+          {/* Shipped lenses only: the automatic re-seed refreshes a lens ONLY
+              when it can prove nobody edited it, so an edited (or pre-ledger)
+              lens needs this deliberate opt-in to pick up shipped improvements. */}
+          {l.defaultState && (
+            <RestoreDefaultButton
+              label={l.id}
+              onRestore={() => api.restoreLens(l.id)}
+              onDone={onSaved}
+              onError={onError}
+            />
+          )}
         </div>
       ))}
       {lenses.length === 0 && <div className="text-sm text-[var(--color-text-dim)]">Lens yok.</div>}

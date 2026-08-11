@@ -39,7 +39,7 @@ func (FSReadFileTool) Def() providers.ToolDef {
 		Name:   "Read",
 		Strict: true, // API-side input validation (schema has additionalProperties:false; registry normalizes required)
 		Description: "Read a UTF-8 text file. Output is line-numbered (\"<lineno>\\t<content>\", cat -n style) — when copying text for Edit's old_string, strip ONLY the number+tab prefix; keep the content byte-for-byte (unicode « » ✅ ⏳, emoji and alignment/whitespace exactly as shown, do not normalize). " +
-			"By default returns the first 2000 lines (up to 256KB); use offset (1-based start line) and limit (line count) to read a window of a large file. " +
+			"By default returns the first 2000 lines (up to 256KB); use offset (1-based start line) and limit (line count) to read a window of a large file. Lines longer than 2000 chars are truncated (marked '… [line truncated]') — avoid copying old_string from such a line. " +
 			"Accepts an absolute path or one relative to the working directory.",
 		InputSchema: json.RawMessage(`{
 			"type":"object",
@@ -128,8 +128,11 @@ func renderNumbered(content string, offset, limit int) string {
 	byteCap := false
 	for i := start - 1; i < end; i++ {
 		line := lines[i]
-		if len(line) > fsReadMaxLineLen {
-			line = line[:fsReadMaxLineLen] + "… [line truncated]"
+		// Truncate on runes, not bytes: slicing raw bytes could cut a multibyte
+		// UTF-8 character in half and emit an invalid byte, breaking the tool's
+		// promise to reproduce content (unicode included) exactly.
+		if r := []rune(line); len(r) > fsReadMaxLineLen {
+			line = string(r[:fsReadMaxLineLen]) + "… [line truncated]"
 		}
 		row := fmt.Sprintf("%6d\t%s\n", i+1, line)
 		if b.Len()+len(row) > fsReadMaxBytes {
@@ -305,7 +308,7 @@ func NewFSListDirTool(sb Sandbox) FSListDirTool { return FSListDirTool{sb: sb} }
 func (FSListDirTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name:        "LS",
-		Description: "List the files and subdirectories of a directory. Accepts an absolute path or one relative to the working directory. Use an empty path or \".\" for the working directory itself.",
+		Description: "List the files and subdirectories of a directory. Accepts an absolute path or one relative to the working directory. Use an empty path or \".\" for the working directory itself. Lists up to 1000 entries (a '... (N more)' marker is appended when that cap is hit).",
 		InputSchema: json.RawMessage(`{
 			"type":"object",
 			"properties":{"path":{"type":"string","description":"Absolute path, or relative to the working directory (default working directory)"}},

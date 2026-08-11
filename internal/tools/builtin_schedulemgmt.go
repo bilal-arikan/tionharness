@@ -188,7 +188,7 @@ func NewUpdateScheduleTool(database *db.DB, actorID string, reload func(context.
 func (UpdateScheduleTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name:        "update_schedule",
-		Description: "Edit a schedule (user- or agent-created). Pass the schedule id and the fields to change (agentId, flowId, cronExpr, prompt, enabled, tags). Setting flowId makes it flow-backed (and clears the agent); setting agentId switches it back to prompt delivery.",
+		Description: "Edit a schedule (user- or agent-created). Pass the schedule id and the fields to change (name, agentId, flowId, cronExpr, prompt, enabled, tags). Setting flowId makes it flow-backed (and clears the agent); setting agentId switches it back to prompt delivery.",
 		InputSchema: json.RawMessage(`{
 				"type":"object",
 				"properties":{
@@ -255,7 +255,13 @@ func (t UpdateScheduleTool) Call(ctx context.Context, input json.RawMessage) (st
 		cur.Name = strings.TrimSpace(*in.Name)
 	}
 	if in.CronExpr != nil {
-		cur.CronExpr = strings.TrimSpace(*in.CronExpr)
+		// Reject an empty cron on update, mirroring create — a blank cron would
+		// leave the schedule with no valid fire time.
+		expr := strings.TrimSpace(*in.CronExpr)
+		if expr == "" {
+			return "", fmt.Errorf("cronExpr cannot be empty")
+		}
+		cur.CronExpr = expr
 	}
 	if in.Prompt != nil {
 		cur.Prompt = *in.Prompt
@@ -338,6 +344,7 @@ func (ListSchedulesTool) Def() providers.ToolDef {
 		Name: "list_schedules",
 		Description: "List the schedules (routines) in this workspace (id, name, agent, flowId, cron, prompt, enabled, " +
 			"and whether each was created by an agent — provenance only; you can edit/delete any of them). " +
+			"One-shot schedule_wake entries are transient, not routines, so they are excluded (this also shapes total/hasMore). " +
 			"Results are PAGINATED: pass limit (default 20, max 100) and offset to page; the reply reports total " +
 			"and hasMore, and you reach the next page with offset += limit. Filters: enabled (true/false), " +
 			"agentId (exact). Sort: updated_desc (default), updated_asc, created_desc, created_asc, name_asc, " +
