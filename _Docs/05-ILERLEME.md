@@ -2,6 +2,35 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-08-11**
 
+## Koordinasyon araçları allowlist'ten muaf — canlı testte bulunan sessiz delegasyon kaybı (2026-08-11) ✅
+
+**Canlı koşuda bulundu.** "Ürün Ekibi" şablonu uçtan uca denenirken CTO,
+`spawn_worker(agent:"explore", coordinator:true, workflow:"coordinator-wf-plan-dev-test")`
+çağırdı. Oturum koordinatör doğdu, prompt'u "worker aç" dedi — ama `worker:explore`
+ajanının profil allowlist'i (`Read/LS/Glob/Grep/WebFetch`) koordinasyon yüzeyinin
+**tamamını** süzmüştü: 5 araç, ne `spawn_worker` ne `report_to_coordinator`.
+Alt-koordinatör ne delege edebildi ne rapor verebildi, **işi kendisi yaptı** — ve
+hiçbir şey hata vermedi, çünkü claude-cli yolunda `Read`/`Edit`/`Bash` CLI-native'dir
+ve bu süzgeçten geçmez. Delegasyon sessizce buharlaştı.
+
+**Kök neden.** İki gate karıştırılmıştı. Allowlist = profil personasının **iş**
+araçları (ajan özelliği). Worker sürme / yukarı rapor borcu = **oturum** özelliği,
+zaten `CoordinationFuncs` ile kapılı. Kayıt katmanı o kapıya göre doğru davranıyordu;
+allowlist ikinci ve yanlış bir kapıydı.
+
+**Düzeltme.** `toolFilter` koordinasyon araçlarını **yalnız allowlist'ten** muaf tutar
+(`tools.IsCoordinationTool`). Workspace anahtarı ve ajanın açık denylist'i aynen
+geçerli — "bu ajanda spawn_worker'ı kapat" bilinçli bir karardır. Tek noktada
+düzeltildi, dolayısıyla native ve CLI köprüsü birlikte kapsandı (`BridgeTools` da
+aynı `toolFilter`'ı kullanır). `spawn_worker` açıklamasına ayrıca "alt-koordinatör
+hedefi olarak profil değil var olan bir ajan seç" notu eklendi.
+
+**Testler.** `toolfilter_coordination_test.go` (3): allowlist muafiyeti + iş
+araçlarının hâlâ kısıtlı kalması, denylist'in hâlâ kazanması, `CoordinationToolNames`
+↔ CLI köprü dispatch'i tutarlılığı (listede eksik bir ad, o araç için hatayı sessizce
+geri getirirdi). Muafiyet elle geri alınıp testin gerçekten kırmızıya döndüğü
+doğrulandı. Tüm `go test ./internal/...` yeşil. Detay: `_Docs/47` §15.5.
+
 ## Koordinatörlük artık bir AJAN varsayılanı + "Ürün Ekibi" şablonu (2026-08-11) ✅
 
 **Teşhis.** `CoordinatorMode` yalnızca `db.Session` alanıydı. Bir workspace şablonu

@@ -694,6 +694,21 @@ func (r *Runtime) workspaceDisabledSet(ctx context.Context) map[string]bool {
 // AND permitted by the agent's allowlist. The denylist is the user-facing model
 // (empty = all tools); the allowlist is the legacy subagent-profile restriction
 // (empty = all). Both empty + no workspace denylist => nil (offer everything).
+//
+// The COORDINATION tools are exempt from the ALLOWLIST (only — the workspace
+// switch and the explicit denylist still apply). The allowlist describes which
+// WORK tools a profile persona may use; whether a session may drive workers or
+// owes a report upward is a property of the SESSION, gated precisely by
+// CoordinationFuncs, and the two must not be conflated.
+//
+// Found live: a coordinator spawning a profile target as a sub-coordinator
+// (spawn_worker with a profile + coordinator:true) produced a session with
+// coordinator mode ON and the coordinator manual in its prompt, while the
+// profile's read-only allowlist stripped every coordination tool — including
+// report_to_coordinator. It could neither delegate nor report, so it silently did
+// the work itself (CLI-native Read/Edit/Bash do not pass through this filter, so
+// nothing visibly failed). That is exactly the "asked for delegation, got a worker
+// that cannot delegate and never says so" failure SpawnWorker refuses elsewhere.
 func (r *Runtime) toolFilter(ctx context.Context, agent db.Agent) func(string) bool {
 	disabled := r.workspaceDisabledSet(ctx)
 	agentAllow := allowFunc(agent) // nil => agent allows all
@@ -707,6 +722,9 @@ func (r *Runtime) toolFilter(ctx context.Context, agent db.Agent) func(string) b
 		}
 		if agentBlock != nil && agentBlock(name) {
 			return false
+		}
+		if tools.IsCoordinationTool(name) {
+			return true // session-gated, not allowlist-gated (see above)
 		}
 		return agentAllow == nil || agentAllow(name)
 	}

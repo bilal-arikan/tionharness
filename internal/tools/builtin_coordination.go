@@ -21,6 +21,33 @@ import (
 // can't see these tools" but the explicit depth + subtree budgets enforced in
 // agent.SpawnWorker.
 
+// CoordinationToolNames is every tool in this file — the coordination SURFACE, as
+// opposed to the work tools an agent uses to actually do things.
+//
+// The distinction matters because these tools are gated by the SESSION
+// (CoordinationFuncs, built from db.Session), not by the agent's tool config: a
+// session either may drive workers / owes a report upward, or it does not. Callers
+// that filter an agent's work tools consult IsCoordinationTool to leave this
+// surface alone — see agent.toolFilter for the case that made it necessary.
+var CoordinationToolNames = []string{
+	"spawn_worker",
+	"send_to_worker",
+	"stop_worker",
+	"list_workers",
+	"report_to_coordinator",
+	"set_coordinator_mode",
+}
+
+// IsCoordinationTool reports whether name is part of the coordination surface.
+func IsCoordinationTool(name string) bool {
+	for _, n := range CoordinationToolNames {
+		if n == name {
+			return true
+		}
+	}
+	return false
+}
+
 // WorkerSpawnSpec carries the nesting options of one spawn_worker call from the
 // tool layer down to the runtime.
 type WorkerSpawnSpec struct {
@@ -135,7 +162,9 @@ func (SpawnWorkerTool) Def() providers.ToolDef {
 			"and drive its own workers. Use it only when the subtask genuinely decomposes into independent " +
 			"parts — every extra level multiplies turns and tokens, and a sub-coordinator reports back only " +
 			"once its whole branch is done. It is refused (not silently downgraded) past the configured " +
-			"depth limit.",
+			"depth limit. For a sub-coordinator prefer an EXISTING agent over a profile: the profiles are " +
+			"single-purpose leaf personas (an \"explore\" sub-coordinator is told both to research and to " +
+			"delegate), so pick the agent whose role actually owns that branch.",
 		InputSchema: json.RawMessage(`{
   "type": "object",
   "properties": {

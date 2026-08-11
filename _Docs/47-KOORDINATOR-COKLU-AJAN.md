@@ -1169,7 +1169,45 @@ koordinatörüne `spawn_worker(coordinator: true, workflow: "coordinator-wf-plan
 ile pinlenir; böylece diff/log/retry churn'ü o alt-koordinatörde kalır, üste yalnız tek
 bir kompakt verdict çıkar.
 
-### 15.5 Testler
+### 15.5 Koordinasyon araçları allowlist'ten muaf (canlı testte bulundu)
+
+**Belirti (2026-08-11 canlı koşu).** CTO,
+`spawn_worker(agent:"explore", coordinator:true, workflow:"coordinator-wf-plan-dev-test")`
+çağırdı. Oturum koordinatör doğdu ve prompt'unda "worker aç" yazıyordu — ama
+`worker:explore` ajanının profil allowlist'i (`["Read","LS","Glob","Grep","WebFetch"]`)
+**tüm koordinasyon yüzeyini** süzdü: erişilebilir araç sayısı 5, içinde ne
+`spawn_worker` ne `report_to_coordinator` vardı. Alt-koordinatör ne delege
+edebildi ne rapor verebildi; **işi kendisi yaptı** ve bu hiç fark edilmedi, çünkü
+claude-cli yolunda `Read`/`Edit`/`Bash` CLI-native araçlardır ve bu süzgeçten
+geçmezler. Yani hiçbir çağrı hata vermedi — yalnızca delegasyon sessizce buharlaştı.
+
+Bu, `SpawnWorker`'ın başka yerde bilerek reddettiği durumun ta kendisiydi:
+*"delegasyon isteyen bir çağıran, delege edemeyen ve bunu hiç söylemeyen bir worker
+almamalı."*
+
+**Kök neden — iki gate'in karıştırılması.** Allowlist, bir profil personasının hangi
+**iş** araçlarını kullanabileceğini tarif eder (ajan-özelliği). Bir oturumun worker
+sürüp süremeyeceği ya da yukarı rapor borcu olup olmadığı ise **oturum** özelliğidir
+ve `CoordinationFuncs` ile zaten hassas biçimde kapılıdır. Kayıt katmanı (native
+`buildRegistry`, CLI `coordinationBridgeDefs`) o kapıya göre zaten yalnız oturumun
+hak ettiği aracı ekliyordu; allowlist ikinci ve **yanlış** bir kapıydı.
+
+**Düzeltme.** `toolFilter` koordinasyon araçlarını **yalnız allowlist'ten** muaf
+tutar (`tools.IsCoordinationTool`). Workspace anahtarı ve ajanın açık denylist'i
+aynen geçerlidir — "spawn_worker'ı bu ajanda kapat" bilinçli bir karardır. Tek
+noktada düzeltildiği için hem native hem CLI köprüsü kapsanır (`BridgeTools` da
+aynı `toolFilter`'ı kullanır).
+
+`tools.CoordinationToolNames` kanonik listedir; bir test onu CLI köprüsünün
+dispatch switch'iyle karşılaştırır — listede eksik kalan bir araç, o araç için
+hatayı sessizce geri getirirdi.
+
+Ayrıca `spawn_worker` açıklamasına not eklendi: alt-koordinatör hedefi olarak
+profil değil **var olan bir ajan** tercih edilmeli (profil yaprak personadır).
+
+### 15.6 Testler
 
 `coordination_agent_default_test.go`: yeni oturum tohumu (+ sıradan ajana sızmama),
 ağaç-içi dokunulmazlık, `SpawnWorker` OR kuralı, derinlik tavanında düşürme.
+`toolfilter_coordination_test.go`: allowlist muafiyeti (+ iş araçlarının hâlâ
+kısıtlı kalması), denylist'in hâlâ kazanması, ad listesi ↔ köprü tutarlılığı.
