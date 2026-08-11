@@ -31,6 +31,14 @@ export interface Agent {
   // List of skill slugs enabled for this agent (picked from the shared skill
   // library; agents never own skills).
   skills?: string[]
+  // Coordinator DEFAULT for the sessions this agent opens: every new session
+  // starts in coordinator mode (spawn_worker & co. available) instead of needing
+  // a per-thread toggle. Existing sessions are unaffected by a change here —
+  // the session's own flag stays the live value.
+  coordinatorMode?: boolean
+  // Optional coordinator recipe slug pinned on those sessions (a skill with
+  // kind=coordinator-workflow). Only meaningful with coordinatorMode.
+  coordinatorWorkflow?: string
   createdAt: number
   updatedAt: number
 }
@@ -48,6 +56,8 @@ export interface AgentPatch {
   avatar?: string
   color?: string
   skills?: string[]
+  coordinatorMode?: boolean
+  coordinatorWorkflow?: string
 }
 
 import type { ModelStat, KindStat } from './usage'

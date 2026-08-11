@@ -219,12 +219,29 @@ payload yalnız detay/kurulum anında okunur (skills'teki body-lazy kalıbı).
   "skills":  [{ "slug": "...", "body": "---\n...", "files": {} }],
   "agents":  [{ "key": "execute", "name": "...", "soul": "...",
                 "permissionMode": "auto", "toolOverrides": "{...}",
+                "coordinatorMode": true,               // ajanın açtığı oturumlar koordinatör doğar
+                "coordinatorWorkflow": "coordinator-wf-plan-dev-test",  // opsiyonel reçete
                 "skills": ["..."] }],
   "flows":   [{ "name": "...", "steps": [...] }],   // veya "graph": "{...}" (agentId = "tmpl:<key>")
-  "schedules": [{ "agentKey": "...", "cronExpr": "0 8 * * *", "prompt": "..." }]
+  "schedules": [{ "agentKey": "...", "cronExpr": "0 8 * * *", "prompt": "..." }],
+  "automations": [{ "name": "...", "triggerKind": "board", "boardOp": "move",
+                    "boardToState": "in_progress", "boardAction": "spawn",
+                    "boardExclusive": true,
+                    "agentKey": "cto",                 // veya "flowName": "..."
+                    "promptTemplate": "..." }]
 }}
 ```
-> Seed sırası: skills → agents → flows → schedules. Zamanlamalar **pasif** kurulur.
+> Seed sırası: skills → agents → flows → schedules → automations. Zamanlamalar **ve**
+> otomasyonlar **pasif** kurulur — kablolama gelir, harcama gelmez.
+>
+> **Referanslar isimledir, id'yle değil:** otomasyon ajana `agentKey`, akışa `flowName`
+> ile bağlanır; çözülmeyen referans **atlanır** (hedefi boş bir pano kuralı her kart
+> taşımasında ateşleyip başarısız olurdu). Publish tarafı simetriktir; `Seed != ""` olan
+> gömülü default kurallar dışa aktarılmaz (her workspace kendi kopyasını açılışta üretir).
+>
+> **`coordinatorMode`** ajan tanımına yazılır, oturuma **doğuşta** kopyalanır (bkz.
+> `_Docs/47` §15). Pinlenmiş `coordinatorWorkflow` kurulumda çözülemezse **düşürülür** —
+> ajan serbest koordinasyonla çalışır, kurulum patlamaz.
 
 **mcp** — MCP araç sunucusu:
 ```jsonc

@@ -36,7 +36,12 @@ type SubagentProfile struct {
 // config/ files. It is sandboxed to the config tools (which are themselves
 // rooted at config/), so it can never wander the filesystem or grow the change.
 var defaultSubagentProfiles = map[string]SubagentProfile{
-	"explore":  {ID: "explore", AllowedTools: []string{"Read", "LS", "Glob", "Grep", "WebFetch"}},
+	"explore": {ID: "explore", AllowedTools: []string{"Read", "LS", "Glob", "Grep", "WebFetch"}},
+	// "planner" turns a task into an executable plan: it reads the code (like
+	// explore) but its product is an ordered set of change sites, not findings. It
+	// is read-only for the same reason validator is — a planner that "just fixes
+	// this one thing" produces a plan that no longer matches the tree.
+	"planner":  {ID: "planner", AllowedTools: []string{"Read", "LS", "Glob", "Grep", "WebFetch"}},
 	"coder":    {ID: "coder", AllowedTools: []string{"Read", "LS", "Glob", "Grep", "Write", "Edit", "Bash"}},
 	"reviewer": {ID: "reviewer", AllowedTools: []string{"Read", "LS", "Glob", "Grep"}},
 	// "validator" proves another worker's change actually works: it may run the

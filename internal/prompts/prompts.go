@@ -105,6 +105,12 @@ var specs = []Spec{
 		EpochAffecting: true,
 	},
 	{
+		Key:            "subagent-planner",
+		Label:          "Subagent: planner",
+		Hint:           "run_subagent/spawn_worker 'planner' profilinin (kodu okuyup uygulanabilir plan üreten, düzenleme yapmayan) sistem promptu.",
+		EpochAffecting: true,
+	},
+	{
 		Key:            "subagent-coder",
 		Label:          "Subagent: coder",
 		Hint:           "run_subagent 'coder' profilinin (kod yazan/düzenleyen) sistem promptu.",

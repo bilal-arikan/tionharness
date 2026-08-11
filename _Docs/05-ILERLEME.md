@@ -2,6 +2,61 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-08-11**
 
+## Koordinatörlük artık bir AJAN varsayılanı + "Ürün Ekibi" şablonu (2026-08-11) ✅
+
+**Teşhis.** `CoordinatorMode` yalnızca `db.Session` alanıydı. Bir workspace şablonu
+"bu ajan koordinatördür" diyemiyordu: şablonla gelen ajanla açılan her yeni sohbet düz
+bir ajan olarak doğuyor, kullanıcının UI'dan (veya ajanın `set_coordinator_mode` ile)
+oturum başına anahtarı açması gerekiyordu. Yani "workspace açılır açılmaz çalışan bir
+PM/CTO ekibi" kurulamıyordu.
+
+**Düzeltme — varsayılan/canlı ayrımı.** `db.Agent`'a `CoordinatorMode` +
+`CoordinatorWorkflow` eklendi; oturum bunları **doğuşta** alır. Tohumlama
+`createSessionLocked`'da, `Model` anlık görüntüsünün hemen yanında (aynı desen: ajan
+varsayılanı tutar, oturum canlı değeri). Oturum alanı ve `set_coordinator_mode`
+aynen duruyor — bu bir varsayılan, taşıma değil.
+
+- **Ağaç içinde tohumlama YOK.** `CoordinatorSessionID != "" || CoordinatorDepth > 0`
+  ise db katmanı karışmaz: orada kararı spawn eden verir, çünkü derinlik bütçesini
+  yalnız o bilir.
+- **`SpawnWorker` OR kuralı.** Ajan varsayılanı yeteneği **ekler**, açıkça istenmiş
+  olanı asla kaldırmaz. Derinlik tavanında **sessizce** düz worker'a düşer — açık
+  `coordinator: true` orada hâlâ *hata* verir; asimetri bilinçli: açık istek cevap
+  bekleyen bir taleptir, varsayılan yalnızca bir tercih.
+- **Reçete doğrulaması katmana göre.** API create/update bilinmeyen slug'ı **reddeder**
+  (etkileşimli düzenleme = yazım hatası görünür olmalı); seed/install'da `resolvableRecipe`
+  ile **düşürülür** (paket kendi skill'ini getiremediyse oturum serbest koordinasyonla
+  çalışır, kurulum patlamaz).
+
+**`planner` profili (G4).** `explore/coder/reviewer/validator/config` yanına beşincisi:
+salt-okunur, çıktısı GOAL/FILES/STEPS/VERIFY/RISKS. `subagent-planner` prompt anahtarı +
+`spawn_worker`/`run_subagent` şemalarında ilan. Yanına
+`coordinator-wf-plan-dev-test` reçetesi (gömülü skill): planner → coder → validator,
+en fazla 2 onarım turu, PASS'siz commit yok.
+
+**Şablon otomasyon taşıyor (G2).** `WorkspacePayload.Automations` +
+`seedTemplateAutomations` (6 adımlı seed sırası) + publish simetrisi
+(`publishInclude.AutomationIDs`, `Seed != ""` gömülü default'lar hariç). Kural: ajan
+**key**'iyle, akış **adıyla** referans verir; çözülmeyen referans seed'lenmez, **atlanır**
+— hedefi boş bir pano kuralı her kart taşımasında ateşleyip başarısız olurdu. Hepsi
+**kapalı** gelir (starter schedule'larla aynı sözleşme). Bu, gömülü
+`EnsureDefaultBoardAutomations` kurallarının şablon ekipleri için neden yetmediğini de
+kapatıyor: onlar workspace açılışında, yani şablon ajanları var olmadan önce tohumlanır
+→ `TargetAgentID` boş kalır.
+
+**Yeni gömülü şablon.** `workspace.productteam.swarmpack.json` — PM + CTO, ikisi de
+koordinatör; `product-team-charter` skill'i; pano sütunları; CTO'ya bağlı
+`boardExclusive` bir "kart → geliştiriliyor" kuralı (gömülü default'u bastırır, kapalı
+gelir). Zincir: `kullanıcı → PM → CTO → özellik koordinatörü → planner/coder/validator`.
+
+**Testler.** `coordination_agent_default_test.go` (4): yeni oturum tohumu, ağaç-içi
+dokunulmazlık, `SpawnWorker` OR kuralı, derinlik tavanında düşürme.
+`templates_test.go`: paket bütünlüğüne otomasyon referansı + pinlenmiş reçete kontrolü,
+ayrı `TestProductTeamTemplateShape`. Frontend: ajan formunda koordinatör anahtarı +
+reçete seçici (`CoordinatorWorkflowPicker` yeniden kullanıldı), roster'da 🕸 rozeti.
+`go build ./...` + `go vet` + tüm `go test ./internal/...` + `tsc` + 167 vitest yeşil.
+Detay: `_Docs/47` §15, `_Docs/21` §2.1.
+
 ## codebase-memory per-workspace store kaldırıldı — cbm 0.10 tek-root kuralı (2026-08-11) ✅
 
 **Teşhis.** PC'deki `codebase-memory-mcp` 0.9.0 → **0.10.1**'e güncellendi. 0.10 ile gelen

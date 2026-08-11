@@ -12,6 +12,7 @@ import { AgentSkillsSection } from './AgentSkillsSection'
 import { AgentContextModal } from './AgentContextModal'
 import { Button, PromptEditor } from '@/shared/components'
 import { OptionPills } from '@/shared/components/OptionPills'
+import { CoordinatorWorkflowPicker } from '@/shared/components/CoordinatorWorkflowPicker'
 import { useCatalog, thinkingInfoForModel, thinkingTierDisabledReason } from '@/shared/lib/catalog'
 import { THINKING_OPTIONS, PERMISSION_OPTIONS } from './agentOptions'
 
@@ -70,6 +71,8 @@ export function AgentSettingsForm({
   const [thinkingLevel, setThinkingLevel] = useState(agent.thinkingLevel ?? '')
   const [permissionMode, setPermissionMode] = useState(agent.permissionMode || 'auto')
   const [skills, setSkills] = useState<string[]>(agent.skills ?? [])
+  const [coordinatorMode, setCoordinatorMode] = useState(agent.coordinatorMode ?? false)
+  const [coordinatorWorkflow, setCoordinatorWorkflow] = useState(agent.coordinatorWorkflow ?? '')
   const [saving, setSaving] = useState(false)
   const [duplicating, setDuplicating] = useState(false)
   const [err, setErr] = useState<string | null>(null)
@@ -109,6 +112,8 @@ export function AgentSettingsForm({
       model !== (agent.model ?? '') ||
       thinkingLevel !== (agent.thinkingLevel ?? '') ||
       permissionMode !== (agent.permissionMode || 'auto') ||
+      coordinatorMode !== (agent.coordinatorMode ?? false) ||
+      coordinatorWorkflow !== (agent.coordinatorWorkflow ?? '') ||
       JSON.stringify(skills) !== JSON.stringify(agent.skills ?? []),
     [
       name,
@@ -120,6 +125,8 @@ export function AgentSettingsForm({
       model,
       thinkingLevel,
       permissionMode,
+      coordinatorMode,
+      coordinatorWorkflow,
       skills,
       agent,
     ],
@@ -154,6 +161,10 @@ export function AgentSettingsForm({
         thinkingLevel,
         permissionMode,
         skills,
+        coordinatorMode,
+        // A recipe without coordinator mode has nothing to apply to; clear it
+        // rather than persisting a setting that silently does nothing.
+        coordinatorWorkflow: coordinatorMode ? coordinatorWorkflow : '',
       })
       if (result?.warning) setSaveWarn(result.warning)
       setSavedAt((n) => n + 1)
@@ -367,6 +378,38 @@ export function AgentSettingsForm({
           CLI izin bayrağına çevrilir (salt-okunur→<code>plan</code>, sor→<code>acceptEdits</code>,
           otomatik→<code>bypass</code>).
         </p>
+
+        <Field label="Koordinatör">
+          <label className="flex cursor-pointer items-start gap-2 text-sm text-[var(--color-text)]">
+            <input
+              type="checkbox"
+              data-testid="agent-coordinator-mode"
+              checked={coordinatorMode}
+              onChange={(e) => setCoordinatorMode(e.target.checked)}
+              className="mt-0.5 accent-[var(--color-accent)]"
+            />
+            <span>
+              Bu ajanın açtığı <strong>yeni</strong> oturumlar koordinatör olarak başlasın
+            </span>
+          </label>
+        </Field>
+        <p className="-mt-2 text-xs text-[var(--color-text-dim)]">
+          Açıkken ajan her yeni oturumda koordinatör el kitabını ve <code>spawn_worker</code> /{' '}
+          <code>send_to_worker</code> / <code>stop_worker</code> / <code>list_workers</code>{' '}
+          araçlarını hazır bulur — oturum başına elle açman gerekmez. Bu bir{' '}
+          <strong>varsayılan</strong>: <em>mevcut</em> oturumlar etkilenmez, ve ajan tek-iş moduna
+          dönerken kendi oturumunun modunu <code>set_coordinator_mode</code> ile kapatabilir.
+        </p>
+        {coordinatorMode && (
+          <Field label="Varsayılan koordinasyon reçetesi">
+            <CoordinatorWorkflowPicker
+              value={coordinatorWorkflow}
+              onChange={setCoordinatorWorkflow}
+              disabled={saving}
+              groupName={`agent-recipe-${agent.id}`}
+            />
+          </Field>
+        )}
 
         <Field label="Karakter / sistem promptu (soul)">
           <PromptEditor

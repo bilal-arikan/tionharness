@@ -236,12 +236,26 @@ export function AgentsView({
                   size="md"
                   active={defaultAgentId === a.id}
                   nameSuffix={
-                    <span
-                      className="ml-1.5 shrink-0 font-mono text-[10px] opacity-60"
-                      title="Ajan ID (klasör adı)"
-                    >
-                      {a.id}
-                    </span>
+                    <>
+                      {/* Which agents orchestrate is otherwise invisible until you open
+                          each one — and in a delegation workspace that is the first
+                          thing you need to see. */}
+                      {a.coordinatorMode && (
+                        <span
+                          data-testid="agent-coordinator-badge"
+                          className="ml-1.5 shrink-0 text-[11px]"
+                          title="Koordinatör: açtığı yeni oturumlar worker yönetebilir"
+                        >
+                          🕸
+                        </span>
+                      )}
+                      <span
+                        className="ml-1.5 shrink-0 font-mono text-[10px] opacity-60"
+                        title="Ajan ID (klasör adı)"
+                      >
+                        {a.id}
+                      </span>
+                    </>
                   }
                   subtitle={
                     resolveModelLabel(catalog, a.provider, a.model) +

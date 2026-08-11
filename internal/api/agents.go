@@ -125,6 +125,11 @@ type createAgentReq struct {
 	// default on) apart from an explicit false (opt-out). New agents get tools
 	// by default.
 	MCPEnabled *bool `json:"mcpEnabled"`
+	// CoordinatorMode makes every session this agent opens a coordinator (see
+	// db.Agent.CoordinatorMode); CoordinatorWorkflow optionally pins a recipe slug.
+	// Unlike MCPEnabled these default OFF — coordination is opt-in.
+	CoordinatorMode     bool   `json:"coordinatorMode"`
+	CoordinatorWorkflow string `json:"coordinatorWorkflow"`
 }
 
 func (s *Server) handleCreateAgent(w http.ResponseWriter, r *http.Request) {
@@ -165,15 +170,27 @@ func (s *Server) handleCreateAgent(w http.ResponseWriter, r *http.Request) {
 		mcpEnabled = *req.MCPEnabled
 	}
 
+	// A pinned recipe is validated here (unlike at seed/install time, where an
+	// unresolvable slug is dropped): this is a direct, interactive edit, so a typo
+	// must come back as an error rather than silently becoming free coordination.
+	if req.CoordinatorWorkflow != "" {
+		if _, err := ResolveCoordinatorRecipe(ws(r).Runtime.Skills(), req.CoordinatorWorkflow); err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+	}
+
 	agent, err := ws(r).DB.CreateAgent(r.Context(), db.Agent{
-		Name:           req.Name,
-		Soul:           req.Soul,
-		Identity:       req.Identity,
-		Provider:       req.Provider,
-		Model:          req.Model,
-		ThinkingLevel:  req.ThinkingLevel,
-		PermissionMode: req.PermissionMode,
-		MCPEnabled:     mcpEnabled,
+		Name:                req.Name,
+		Soul:                req.Soul,
+		Identity:            req.Identity,
+		Provider:            req.Provider,
+		Model:               req.Model,
+		ThinkingLevel:       req.ThinkingLevel,
+		PermissionMode:      req.PermissionMode,
+		MCPEnabled:          mcpEnabled,
+		CoordinatorMode:     req.CoordinatorMode,
+		CoordinatorWorkflow: req.CoordinatorWorkflow,
 	})
 	if writeDBError(w, err, "") {
 		return
@@ -299,6 +316,12 @@ type updateAgentReq struct {
 	Avatar         *string   `json:"avatar"`
 	Color          *string   `json:"color"`
 	Skills         *[]string `json:"skills"`
+	// Coordinator defaults for NEW sessions of this agent. Pointers so omitting
+	// them leaves the current setting alone and an explicit false turns it off.
+	// Existing sessions keep whatever mode they are already in — the toggle is a
+	// default, not a broadcast (see db.Agent.CoordinatorMode).
+	CoordinatorMode     *bool   `json:"coordinatorMode"`
+	CoordinatorWorkflow *string `json:"coordinatorWorkflow"`
 }
 
 func (s *Server) handleUpdateAgent(w http.ResponseWriter, r *http.Request) {
@@ -314,21 +337,32 @@ func (s *Server) handleUpdateAgent(w http.ResponseWriter, r *http.Request) {
 	wsp := ws(r)
 	agentID := r.PathValue("id")
 
+	// Same rule as create: an interactive edit naming an unknown recipe is an
+	// error, not a silent downgrade to free coordination. Clearing it ("") is fine.
+	if req.CoordinatorWorkflow != nil && *req.CoordinatorWorkflow != "" {
+		if _, err := ResolveCoordinatorRecipe(wsp.Runtime.Skills(), *req.CoordinatorWorkflow); err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+	}
+
 	// Snapshot the agent before the update so we can detect a model change and
 	// emit an event (P1.2). Harmless when the read fails — we skip the event.
 	prev, _ := wsp.DB.GetAgent(r.Context(), agentID)
 
 	agent, err := wsp.DB.UpdateAgent(r.Context(), agentID, db.AgentProfilePatch{
-		Name:           req.Name,
-		Soul:           req.Soul,
-		Identity:       req.Identity,
-		Provider:       req.Provider,
-		Model:          req.Model,
-		ThinkingLevel:  req.ThinkingLevel,
-		PermissionMode: req.PermissionMode,
-		Avatar:         req.Avatar,
-		Color:          req.Color,
-		Skills:         req.Skills,
+		Name:                req.Name,
+		Soul:                req.Soul,
+		Identity:            req.Identity,
+		Provider:            req.Provider,
+		Model:               req.Model,
+		ThinkingLevel:       req.ThinkingLevel,
+		PermissionMode:      req.PermissionMode,
+		Avatar:              req.Avatar,
+		Color:               req.Color,
+		Skills:              req.Skills,
+		CoordinatorMode:     req.CoordinatorMode,
+		CoordinatorWorkflow: req.CoordinatorWorkflow,
 	})
 	if writeDBError(w, err, "agent not found") {
 		return

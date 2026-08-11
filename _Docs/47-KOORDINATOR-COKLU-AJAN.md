@@ -1,5 +1,9 @@
 # 47 — Koordinatör & Çoklu-Ajan Koordinasyonu
 
+> **EN YENİ (2026-08-11):** Koordinatörlük artık bir **ajan varsayılanı** da olabilir
+> (`Agent.CoordinatorMode` → oturuma doğuşta tohumlanır) ve yeni bir `planner` profili
+> + `coordinator-wf-plan-dev-test` reçetesi var. Bkz. **§15**.
+>
 > **GÜNCEL:** Koordinatör ağacı artık **sınırsız derinlikte** — bir worker kendi
 > worker'larını yönetebilir, her düğümden köke doğru izlenebilir, mod spawn anında
 > seçilir veya agent tarafından açılıp kapatılır. Bkz. **§14** (rol≠ebeveynlik,
@@ -1100,3 +1104,72 @@ yüzden "check-then-act" desenleri burada teorik değil. Denetim sonucu:
 dallarını görmemeli), ertelenmiş rapor, erken `completed` reddi, mod toggle
 kuralları, derinlik limiti, araç geçitleri, legacy oturum uyumu.
 `coordination_test.go`: iç içe spawn, derinlik limiti, ağaç bütçesi.
+
+---
+
+## 15. Koordinatörlük bir AJAN varsayılanı (2026-08-11)
+
+**Sorun.** `CoordinatorMode` yalnızca oturum alanıydı. Bir workspace şablonu "bu ajan
+koordinatördür" diyemiyordu: şablonla gelen ajanla açılan her sohbet düz doğuyor,
+kullanıcının oturum başına anahtarı açması gerekiyordu. "Workspace açılır açılmaz
+çalışan PM/CTO ekibi" kurulamıyordu.
+
+**Çözüm: varsayılan ≠ canlı değer.** `db.Agent.CoordinatorMode` +
+`CoordinatorWorkflow` **varsayılanı** tutar; `db.Session.CoordinatorMode` canlı değeri
+tutar ve her gate'in okuduğu şey (`Session.IsCoordinator()`) odur. Aynı desen `Model`
+ile zaten vardı — ajanda konfigüre edilir, oturuma anlık görüntü olarak düşer. Oturum
+alanı ve `set_coordinator_mode` **aynen** kalır: taşıma değil, üstüne ekleme.
+
+### 15.1 Tohumlama noktası ve ağaç istisnası
+
+Tohum `db.createSessionLocked`'da, `Model` anlık görüntüsünün yanında — tek nokta,
+bütün oturum yaratma yolları (chat, task, flow, schedule, inbox, düz spawn) kapsanır.
+
+**Ağaç içinde tohumlama yapılmaz:** `CoordinatorSessionID != "" || CoordinatorDepth > 0`
+ise db katmanı karışmaz. Orada kararı **spawn eden** verir, çünkü derinlik bütçesini
+yalnız o bilir; db yine de bayrağı açsaydı `SpawnWorker`'ın bilinçli olarak esirgediği
+yetenek bir katman aşağıda sessizce geri gelirdi.
+
+### 15.2 `SpawnWorker` — OR kuralı ve asimetrik derinlik davranışı
+
+```
+etkin = spec.Coordinator || (ajanVarsayılanı && derinlikUygun)
+```
+
+Ajan varsayılanı yeteneği **ekler**, açıkça istenmiş olanı asla kaldırmaz. Derinlik
+tavanında davranış **kasıtlı olarak asimetriktir**:
+
+| İstek | Tavanda sonuç | Neden |
+|---|---|---|
+| Açık `coordinator: true` | **Hata** | Çağıran cevap bekleyen bir talepte bulundu; sessizce düz worker vermek, delege ettiğini sanan bir koordinatörü gelmeyecek bir rapor için bekletir |
+| Ajan varsayılanı | **Sessizce düz worker** | Çağıran zaten düz worker istedi; çalışan bir worker doğru cevaptır |
+
+Aynı mantık pinlenmiş reçeteye de uygulanır: varsayılan reçete çözülemezse serbest
+koordinasyona düşülür ve `Warn` yazılır, spawn reddedilmez.
+
+### 15.3 Reçete doğrulaması katmana göre değişir
+
+- **API create/update** (`handleCreateAgent`/`handleUpdateAgent`): bilinmeyen slug
+  **reddedilir** — etkileşimli bir düzenlemede yazım hatası görünür olmalı.
+- **Seed / install** (`seedWorkspaceTeam`, `installAgentPack`): `resolvableRecipe` ile
+  **düşürülür** — paket kendi reçete skill'ini getiremediyse kurulum patlamamalı.
+  Zaten `coordinatorRecipeBlock` çözülemeyen slug'da boş döner, yani en kötü hâl
+  serbest koordinasyondur.
+
+### 15.4 `planner` profili
+
+`explore/coder/reviewer/validator/config` yanına beşincisi: **salt-okunur**, ürünü
+bulgu değil **uygulanabilir plan** (GOAL / FILES / STEPS / VERIFY / RISKS). Salt-okunur
+olmasının sebebi validator'ınkiyle aynı — "bu arada şunu da düzelttim" diyen bir planner,
+artık ağaca uymayan bir plan üretir. Prompt anahtarı `subagent-planner`.
+
+Yanında `coordinator-wf-plan-dev-test` reçetesi (gömülü skill): planner → coder →
+validator, en fazla **2** onarım turu, PASS olmadan commit yok. Bir özellik
+koordinatörüne `spawn_worker(coordinator: true, workflow: "coordinator-wf-plan-dev-test")`
+ile pinlenir; böylece diff/log/retry churn'ü o alt-koordinatörde kalır, üste yalnız tek
+bir kompakt verdict çıkar.
+
+### 15.5 Testler
+
+`coordination_agent_default_test.go`: yeni oturum tohumu (+ sıradan ajana sızmama),
+ağaç-içi dokunulmazlık, `SpawnWorker` OR kuralı, derinlik tavanında düşürme.

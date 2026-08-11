@@ -96,7 +96,8 @@ func (RunSubagentTool) Def() providers.ToolDef {
 		// are part of every request's fixed token cost.
 		Description: "Launch an isolated subagent for a self-contained task and get back ONLY its final " +
 			"result — its intermediate tool output never enters your context. `target` is a built-in " +
-			"profile (\"explore\" read-only search, \"coder\" edits code, \"reviewer\" read-only review) " +
+			"profile (\"explore\" read-only search, \"planner\" read-only planning, \"coder\" edits code, " +
+			"\"reviewer\" read-only review) " +
 			"or an existing agent's name/id. Defaults: sync + isolated context. Call several times in one " +
 			"turn to fan work out in parallel. For long (multi-minute) tasks prefer `wait:\"async\"` with an " +
 			"EXISTING agent target and poll the filesystem for the expected output — a long sync call can hit " +
@@ -105,7 +106,7 @@ func (RunSubagentTool) Def() providers.ToolDef {
 		InputSchema: json.RawMessage(`{
   "type": "object",
   "properties": {
-    "target": { "type": "string", "description": "Profile id (\"explore\" | \"coder\" | \"reviewer\") or an existing agent's name/id." },
+    "target": { "type": "string", "description": "Profile id (\"explore\" | \"planner\" | \"coder\" | \"reviewer\") or an existing agent's name/id." },
     "task": { "type": "string", "description": "A clear, self-contained instruction. The subagent sees nothing of your context unless context=inherited." },
     "wait": { "type": "string", "enum": ["sync", "async"], "description": "\"sync\" (default): run now, return the reply. \"async\": detach into a background session (EXISTING agents only) — prefer for long tasks." },
     "context": { "type": "string", "enum": ["isolated", "inherited"], "description": "\"isolated\" (default): clean context. \"inherited\": also pass the current conversation." },

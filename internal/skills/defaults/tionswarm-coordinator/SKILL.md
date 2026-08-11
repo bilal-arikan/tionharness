@@ -80,9 +80,12 @@ bir skill olarak yazıp ekleyebilirsin.
 
 ## 5. Sınırlar (guardrail)
 
-- `spawn_worker` hedefi var olan bir ajan **veya** bir profil (`explore`/`coder`/
-  `reviewer`/`validator`) olabilir; profil verilirse kalıcı, yeniden-kullanılabilir bir
-  `worker:<profil>` ajanına otomatik materyalize edilir. **`validator`** kodu düzenlemeden
+- `spawn_worker` hedefi var olan bir ajan **veya** bir profil (`explore`/`planner`/
+  `coder`/`reviewer`/`validator`) olabilir; profil verilirse kalıcı, yeniden-kullanılabilir
+  bir `worker:<profil>` ajanına otomatik materyalize edilir. **`planner`** kodu okuyup
+  uygulanabilir bir plan (GOAL/FILES/STEPS/VERIFY/RISKS) döner, düzenleme yapmaz —
+  planner → coder → validator zincirini hazır kurmak için
+  `coordinator-wf-plan-dev-test` reçetesini kullan. **`validator`** kodu düzenlemeden
   test/typecheck/build/e2e çalıştırıp kompakt PASS/FAIL verdict döner — doğrulamayı ona
   delege et, diff'leri/logları kendi context'ine çekme. Testleri ve commit'i implementer
   worker yapar (commit yalnız validator PASS sonrası); sen sadece verdict okur, yönlendirirsin.

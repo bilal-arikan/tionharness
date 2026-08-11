@@ -237,6 +237,12 @@ type AgentProfilePatch struct {
 	// Skills is the agent's ordered skill-slug selection. Non-nil replaces the
 	// whole list (an empty slice clears it).
 	Skills *[]string
+	// CoordinatorMode / CoordinatorWorkflow are the agent's coordinator DEFAULTS
+	// for the sessions it opens (see Agent.CoordinatorMode). Pointers so an
+	// explicit false is distinguishable from "not in this patch"; changing them
+	// never touches sessions that already exist.
+	CoordinatorMode     *bool
+	CoordinatorWorkflow *string
 }
 
 // UpdateAgent applies a partial profile patch to an existing agent and persists
@@ -272,6 +278,12 @@ func (d *DB) UpdateAgent(ctx context.Context, agentID string, p AgentProfilePatc
 		}
 		if p.Skills != nil {
 			a.Skills = *p.Skills
+		}
+		if p.CoordinatorMode != nil {
+			a.CoordinatorMode = *p.CoordinatorMode
+		}
+		if p.CoordinatorWorkflow != nil {
+			a.CoordinatorWorkflow = *p.CoordinatorWorkflow
 		}
 	})
 }
@@ -379,6 +391,24 @@ func (d *DB) createSessionLocked(s Session) (Session, error) {
 	if s.Model == "" && s.AgentID != "" {
 		if a, ok := d.agents[s.AgentID]; ok {
 			s.Model = a.Model
+		}
+	}
+	// Seed coordinator mode from the agent's default, so an agent configured as a
+	// coordinator (a template's PM/CTO) arrives ready instead of needing a toggle
+	// on every new thread. Same shape as the model snapshot above: the agent holds
+	// the default, the session holds the live value everything else reads.
+	//
+	// Deliberately skipped inside a coordinator TREE (a spawned worker): there the
+	// spawner has already decided, and it is the only layer that knows the depth
+	// budget — see Runtime.SpawnWorker, which folds the agent default in itself and
+	// degrades to a plain worker at the depth limit. Without this exemption the db
+	// would silently re-enable a mode the spawner deliberately withheld.
+	if !s.CoordinatorMode && s.AgentID != "" && s.CoordinatorSessionID == "" && s.CoordinatorDepth == 0 {
+		if a, ok := d.agents[s.AgentID]; ok && a.CoordinatorMode {
+			s.CoordinatorMode = true
+			if s.CoordinatorWorkflow == "" {
+				s.CoordinatorWorkflow = a.CoordinatorWorkflow
+			}
 		}
 	}
 	d.messages[s.ID] = nil

@@ -68,6 +68,37 @@ export interface WorkspaceTemplateAgent {
   /** Per-agent tool override map (JSON object: name/pattern → tier | "blocked"). */
   toolOverrides?: string
   skills?: string[]
+  /** Seed the agent as a coordinator by default (its sessions get the coordination tools). */
+  coordinatorMode?: boolean
+  /** Optional coordinator recipe slug pinned on those sessions. */
+  coordinatorWorkflow?: string
+}
+
+/** A starter automation rule shipped with a workspace template. Always seeded
+ *  DISABLED — the wiring ships, the spending does not. Targets are referenced by
+ *  template agent key / flow name so the rule stays portable. */
+export interface WorkspaceTemplateAutomation {
+  name: string
+  triggerKind?: string
+  triggerTag?: string
+  boardOp?: string
+  boardFromState?: string
+  boardToState?: string
+  boardPriority?: number
+  boardExclusive?: boolean
+  boardAction?: string
+  tokenScope?: string
+  tokenThreshold?: number
+  counterMetric?: string
+  counterScope?: string
+  counterInterval?: number
+  agentKey?: string
+  flowName?: string
+  sessionMode?: string
+  promptTemplate?: string
+  spawnTags?: string[]
+  maxIterations?: number
+  cooldownSec?: number
 }
 
 export interface WorkspaceTemplateStep {
@@ -110,6 +141,7 @@ export interface WorkspacePayload {
   agents?: WorkspaceTemplateAgent[]
   flows?: WorkspaceTemplateFlow[]
   schedules?: WorkspaceTemplateSchedule[]
+  automations?: WorkspaceTemplateAutomation[]
 }
 
 export interface MCPPayload {

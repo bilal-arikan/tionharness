@@ -205,11 +205,15 @@ type publishRequest struct {
 // schedules independently. A template still needs at least one agent (rejected
 // upstream otherwise). The boolean flags gate the file categories verbatim.
 type publishInclude struct {
-	AgentIDs     []string `json:"agentIds"`    // nil = all agents
-	FlowIDs      []string `json:"flowIds"`     // nil = all flows, [] = none
-	SkillSlugs   []string `json:"skillSlugs"`  // nil = all workspace skills, [] = none
-	ScheduleIDs  []string `json:"scheduleIds"` // nil = all schedules, [] = none
-	Instructions bool     `json:"instructions"`
-	Prompts      bool     `json:"prompts"` // non-default runtime prompts + README
-	BoardColumns bool     `json:"boardColumns"`
+	AgentIDs    []string `json:"agentIds"`    // nil = all agents
+	FlowIDs     []string `json:"flowIds"`     // nil = all flows, [] = none
+	SkillSlugs  []string `json:"skillSlugs"`  // nil = all workspace skills, [] = none
+	ScheduleIDs []string `json:"scheduleIds"` // nil = all schedules, [] = none
+	// AutomationIDs selects starter automation rules. nil = all, [] = none. Rules
+	// whose target agent/flow is not itself exported are dropped as orphans, the
+	// same way schedules are.
+	AutomationIDs []string `json:"automationIds"`
+	Instructions  bool     `json:"instructions"`
+	Prompts       bool     `json:"prompts"` // non-default runtime prompts + README
+	BoardColumns  bool     `json:"boardColumns"`
 }

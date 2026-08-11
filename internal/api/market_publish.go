@@ -105,13 +105,15 @@ func (s *Server) handlePublishMarket(w http.ResponseWriter, r *http.Request) {
 // buildWorkspaceTemplatePayload captures a live workspace's current state into a
 // portable WorkspacePayload — the inverse of seedWorkspaceTeam: workspace-tier
 // skills, the agent team (with stable local keys), flows (agent ids rewritten to
-// "tmpl:<key>"), schedules (wired by key), and identity/instructions/board layout.
-// Secrets, sessions, artifacts and other runtime data are never included.
+// "tmpl:<key>"), schedules and automations (wired by key/name), and identity/
+// instructions/board layout. Secrets, sessions, artifacts and other runtime data
+// are never included.
 //
 // inc selects which parts to capture. A nil pointer means "everything" (backward
 // compatible with callers that don't select). When present, its id/slug slices
-// filter agents/flows/skills/schedules independently (nil slice = all, present
-// slice = exactly its members) and its boolean flags gate the file categories.
+// filter agents/flows/skills/schedules/automations independently (nil slice = all,
+// present slice = exactly its members) and its boolean flags gate the file
+// categories.
 func (s *Server) buildWorkspaceTemplatePayload(ctx context.Context, wsp *workspace.Workspace, inc *publishInclude) (market.WorkspacePayload, error) {
 	all := inc == nil
 	incInstructions := all || inc.Instructions
@@ -121,13 +123,14 @@ func (s *Server) buildWorkspaceTemplatePayload(ctx context.Context, wsp *workspa
 	// Selection predicates. everything=true means no filtering (nil slice / whole
 	// export); otherwise only ids present in the set pass.
 	var (
-		agentSet, flowSet, skillSet, schedSet    map[string]bool
-		allAgents, allFlows, allSkills, allSched bool
+		agentSet, flowSet, skillSet, schedSet, autoSet     map[string]bool
+		allAgents, allFlows, allSkills, allSched, allAutos bool
 	)
 	agentSet, allAgents = wantSet(all, sliceOrNil(inc, func(i *publishInclude) []string { return i.AgentIDs }))
 	flowSet, allFlows = wantSet(all, sliceOrNil(inc, func(i *publishInclude) []string { return i.FlowIDs }))
 	skillSet, allSkills = wantSet(all, sliceOrNil(inc, func(i *publishInclude) []string { return i.SkillSlugs }))
 	schedSet, allSched = wantSet(all, sliceOrNil(inc, func(i *publishInclude) []string { return i.ScheduleIDs }))
+	autoSet, allAutos = wantSet(all, sliceOrNil(inc, func(i *publishInclude) []string { return i.AutomationIDs }))
 
 	cfg := wsp.Settings()
 	wp := market.WorkspacePayload{
@@ -181,6 +184,11 @@ func (s *Server) buildWorkspaceTemplatePayload(ctx context.Context, wsp *workspa
 			MCPEnabled: a.MCPEnabled, AllowedTools: a.AllowedTools, BlockedTools: a.BlockedTools,
 			ToolOverrides: a.ToolOverrides,
 			Skills:        a.Skills,
+			// Without these a published team loses its orchestration shape: the agents
+			// come back as plain chat agents and the user has to rediscover which one
+			// was the coordinator.
+			CoordinatorMode:     a.CoordinatorMode,
+			CoordinatorWorkflow: a.CoordinatorWorkflow,
 		})
 	}
 
@@ -189,6 +197,7 @@ func (s *Server) buildWorkspaceTemplatePayload(ctx context.Context, wsp *workspa
 	if ferr != nil {
 		return wp, ferr
 	}
+	flowIDToName := make(map[string]string, len(flows))
 	for _, f := range flows {
 		if !allFlows && !flowSet[f.ID] {
 			continue // not selected for this export
@@ -212,6 +221,7 @@ func (s *Server) buildWorkspaceTemplatePayload(ctx context.Context, wsp *workspa
 		wp.Flows = append(wp.Flows, market.WorkspaceTemplateFlow{
 			Name: f.Name, Graph: string(raw),
 		})
+		flowIDToName[f.ID] = f.Name
 	}
 
 	// Schedules → reference the agent by key (skip orphans).
@@ -229,6 +239,66 @@ func (s *Server) buildWorkspaceTemplatePayload(ctx context.Context, wsp *workspa
 		}
 		wp.Schedules = append(wp.Schedules, market.WorkspaceTemplateSchedule{
 			Name: sc.Name, AgentKey: key, CronExpr: sc.CronExpr, Prompt: sc.Prompt,
+		})
+	}
+
+	// Automations → reference the agent by key / the flow by name (skip orphans).
+	// The built-in seeded board defaults are excluded: every workspace provisions
+	// its own copy at open time (EnsureDefaultBoardAutomations), so exporting them
+	// would either duplicate the rule on install or resurrect one the installing
+	// user had deliberately deleted.
+	autos, aerr := wsp.DB.ListAutomations(ctx)
+	if aerr != nil {
+		return wp, aerr
+	}
+	for _, a := range autos {
+		if !allAutos && !autoSet[a.ID] {
+			continue // not selected for this export
+		}
+		if a.Seed != "" {
+			continue // built-in default, provisioned per workspace
+		}
+		agentKey := ""
+		if a.TargetAgentID != "" {
+			key, ok := idToKey[a.TargetAgentID]
+			if !ok {
+				continue // agent not in the exported team → drop the orphan
+			}
+			agentKey = key
+		}
+		flowName := ""
+		if a.FlowID != "" {
+			name, ok := flowIDToName[a.FlowID]
+			if !ok {
+				continue // flow not in the export → drop the orphan
+			}
+			flowName = name
+		}
+		if agentKey == "" && flowName == "" && a.BoardAction != db.BoardActionArchive {
+			continue // nothing to run
+		}
+		wp.Automations = append(wp.Automations, market.WorkspaceTemplateAutomation{
+			Name:            a.Name,
+			TriggerKind:     a.TriggerKind,
+			TriggerTag:      a.TriggerTag,
+			BoardOp:         a.BoardOp,
+			BoardFromState:  a.BoardFromState,
+			BoardToState:    a.BoardToState,
+			BoardPriority:   a.BoardPriority,
+			BoardExclusive:  a.BoardExclusive,
+			BoardAction:     a.BoardAction,
+			TokenScope:      a.TokenScope,
+			TokenThreshold:  a.TokenThreshold,
+			CounterMetric:   a.CounterMetric,
+			CounterScope:    a.CounterScope,
+			CounterInterval: a.CounterInterval,
+			AgentKey:        agentKey,
+			FlowName:        flowName,
+			SessionMode:     a.SessionMode,
+			PromptTemplate:  a.PromptTemplate,
+			SpawnTags:       a.SpawnTags,
+			MaxIterations:   a.MaxIterations,
+			CooldownSec:     a.CooldownSec,
 		})
 	}
 

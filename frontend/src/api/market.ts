@@ -27,6 +27,9 @@ export interface WorkspaceExportInclude {
   flowIds: string[] | null
   skillSlugs: string[] | null
   scheduleIds: string[] | null
+  /** Starter automation rules. Built-in seeded board defaults are excluded by the
+   *  server regardless — every workspace provisions its own copy at open time. */
+  automationIds: string[] | null
   instructions: boolean
   prompts: boolean // non-default runtime prompts + README
   boardColumns: boolean
@@ -80,6 +83,5 @@ export const marketApi = {
       // include; blank fields are dropped so the server applies its defaults.
       body: JSON.stringify({ kind, sourceId, include, ...meta }),
     }),
-  importPack: (raw: string) =>
-    req<Pack>('/api/market/import', { method: 'POST', body: raw }),
+  importPack: (raw: string) => req<Pack>('/api/market/import', { method: 'POST', body: raw }),
 }

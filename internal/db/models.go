@@ -64,6 +64,30 @@ type Agent struct {
 	// (global/workspace/project tiers) — never agent-owned.
 	Skills []string `json:"skills"`
 
+	// CoordinatorMode makes this agent a coordinator BY DEFAULT: every new session
+	// opened for it starts with Session.CoordinatorMode on, so the agent arrives
+	// with the coordinator manual and the spawn_worker/send_to_worker/stop_worker/
+	// list_workers tools instead of needing a per-session toggle. This is what lets
+	// a workspace template ship a ready-to-run PM/CTO team.
+	//
+	// It is a DEFAULT, not the live state: the session keeps its own flag, which is
+	// what every gate actually reads (Session.IsCoordinator). An agent may still
+	// turn its own session's mode off with set_coordinator_mode when it drops back
+	// to single-threaded work, exactly as before — same shape as Model, which is
+	// also configured on the agent and snapshotted per session.
+	//
+	// Seeding is skipped for sessions created INSIDE a coordinator tree: there the
+	// spawner decides (see Runtime.SpawnWorker), because that is the only place
+	// that knows the depth budget and can degrade to a plain worker.
+	CoordinatorMode bool `json:"coordinatorMode,omitempty"`
+
+	// CoordinatorWorkflow optionally pins a coordinator recipe (a skill with
+	// kind=coordinator-workflow) on the sessions this agent opens. Only meaningful
+	// together with CoordinatorMode. An unresolvable slug degrades to free
+	// coordination rather than failing the session (see api/coordinator_prompt.go),
+	// so a template whose recipe skill failed to install still runs.
+	CoordinatorWorkflow string `json:"coordinatorWorkflow,omitempty"`
+
 	// CreatedBy records the ID of the agent that created this agent through a
 	// self-management tool. Empty means it was created by the user (UI/API).
 	// Agents may only edit/delete entities that were created by an agent.
@@ -206,7 +230,10 @@ type Session struct {
 	//     with Role == "coordinator".
 	//   - CoordinatorMode is the CAPABILITY: this session may spawn/drive workers
 	//     (gets the coordinator system prompt + the spawn_worker/send_to_worker/
-	//     stop_worker/list_workers tools).
+	//     stop_worker/list_workers tools). It is seeded at creation from the
+	//     agent's own default (Agent.CoordinatorMode) and stays the live value
+	//     from then on — set_coordinator_mode and the UI toggle move THIS field,
+	//     never the agent's.
 	//
 	// CoordinatorSessionID is the worker's back-link to the coordinator session
 	// that spawned it, so a finished worker turn can inject its

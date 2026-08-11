@@ -161,21 +161,31 @@ func (s *Server) seedWorkspaceTeam(ctx context.Context, wsNew *workspace.Workspa
 		if !mcpEnabled {
 			mcpEnabled = true
 		}
+		// A pinned coordinator recipe is only carried over when it resolves against
+		// this workspace's skills (the pack normally bundles it — seeded in step 1
+		// above, before agents, precisely so this works).
+		workflow := resolvableRecipe(skillStore, ta.CoordinatorWorkflow)
+		if workflow == "" && strings.TrimSpace(ta.CoordinatorWorkflow) != "" {
+			s.logger.Warn("seed template agent: unknown coordinator recipe, ignoring",
+				"workspace", wsNew.ID, "agent", ta.Name, "workflow", ta.CoordinatorWorkflow)
+		}
 		agent, err := wsNew.DB.CreateAgent(ctx, db.Agent{
-			Name:           ta.Name,
-			Soul:           ta.Soul,
-			Identity:       ta.Identity,
-			Avatar:         ta.Avatar,
-			Color:          ta.Color,
-			Provider:       ap,
-			Model:          am,
-			ThinkingLevel:  ta.ThinkingLevel,
-			PermissionMode: ta.PermissionMode,
-			MCPEnabled:     mcpEnabled,
-			AllowedTools:   ta.AllowedTools,
-			BlockedTools:   ta.BlockedTools,
-			ToolOverrides:  ta.ToolOverrides,
-			Skills:         known,
+			Name:                ta.Name,
+			Soul:                ta.Soul,
+			Identity:            ta.Identity,
+			Avatar:              ta.Avatar,
+			Color:               ta.Color,
+			Provider:            ap,
+			Model:               am,
+			ThinkingLevel:       ta.ThinkingLevel,
+			PermissionMode:      ta.PermissionMode,
+			MCPEnabled:          mcpEnabled,
+			AllowedTools:        ta.AllowedTools,
+			BlockedTools:        ta.BlockedTools,
+			ToolOverrides:       ta.ToolOverrides,
+			Skills:              known,
+			CoordinatorMode:     ta.CoordinatorMode,
+			CoordinatorWorkflow: workflow,
 		})
 		if err != nil {
 			s.logger.Warn("seed template agent failed", "workspace", wsNew.ID, "agent", ta.Name, "error", err)
@@ -184,9 +194,13 @@ func (s *Server) seedWorkspaceTeam(ctx context.Context, wsNew *workspace.Workspa
 		ids[ta.Key] = agent.ID
 	}
 
-	// 3) Flows (linear or non-linear), each wired to the seeded agents.
+	// 3) Flows (linear or non-linear), each wired to the seeded agents. The
+	// name → id map feeds flow-backed automations in step 5.
+	flowIDs := make(map[string]string, len(wp.Flows))
 	for _, tf := range wp.Flows {
-		s.seedTemplateFlow(ctx, wsNew, tf, ids)
+		if id := s.seedTemplateFlow(ctx, wsNew, tf, ids); id != "" {
+			flowIDs[tf.Name] = id
+		}
 	}
 
 	// 4) Starter schedules (always disabled).
@@ -206,8 +220,82 @@ func (s *Server) seedWorkspaceTeam(ctx context.Context, wsNew *workspace.Workspa
 		}
 	}
 
-	// 5) Editable config files: non-default runtime prompts + README.
+	// 5) Starter automations (always disabled), wired to the seeded team.
+	s.seedTemplateAutomations(ctx, wsNew, wp.Automations, ids, flowIDs)
+
+	// 6) Editable config files: non-default runtime prompts + README.
 	s.seedTemplateConfigFiles(wsNew, wp)
+}
+
+// seedTemplateAutomations creates a template's starter automation rules, resolving
+// each rule's agent key / flow name against the team seeded above. A rule whose
+// target does not resolve is SKIPPED, not seeded with an empty target: a board
+// rule with no agent fires and then fails on every card move, which is worse than
+// a rule that is simply absent. (This is also why the built-in board defaults —
+// seeded at workspace-open time, before any template agents exist — cannot serve a
+// template team: their target is empty by construction.)
+//
+// Every rule is seeded DISABLED, matching starter schedules and the built-in board
+// defaults: the wiring ships, the spending does not.
+func (s *Server) seedTemplateAutomations(ctx context.Context, wsNew *workspace.Workspace, autos []market.WorkspaceTemplateAutomation, agentIDs, flowIDs map[string]string) {
+	for _, ta := range autos {
+		agentID, flowID := "", ""
+		if ta.AgentKey != "" {
+			id, ok := agentIDs[ta.AgentKey]
+			if !ok {
+				s.logger.Warn("seed template automation skipped: unknown agent key",
+					"workspace", wsNew.ID, "automation", ta.Name, "agentKey", ta.AgentKey)
+				continue
+			}
+			agentID = id
+		}
+		if ta.FlowName != "" {
+			id, ok := flowIDs[ta.FlowName]
+			if !ok {
+				s.logger.Warn("seed template automation skipped: unknown flow",
+					"workspace", wsNew.ID, "automation", ta.Name, "flow", ta.FlowName)
+				continue
+			}
+			flowID = id
+		}
+		// A spawn-action rule with neither target would fire into the void.
+		// Archive-action board rules legitimately have no target (no LLM call).
+		if agentID == "" && flowID == "" && ta.BoardAction != db.BoardActionArchive {
+			s.logger.Warn("seed template automation skipped: no agent or flow target",
+				"workspace", wsNew.ID, "automation", ta.Name)
+			continue
+		}
+		maxIter := ta.MaxIterations
+		if maxIter <= 0 {
+			maxIter = db.MaxIterationsHardCap
+		}
+		if _, err := wsNew.DB.CreateAutomation(ctx, db.Automation{
+			Name:            ta.Name,
+			TriggerKind:     ta.TriggerKind,
+			TriggerTag:      ta.TriggerTag,
+			BoardOp:         ta.BoardOp,
+			BoardFromState:  ta.BoardFromState,
+			BoardToState:    ta.BoardToState,
+			BoardPriority:   ta.BoardPriority,
+			BoardExclusive:  ta.BoardExclusive,
+			BoardAction:     ta.BoardAction,
+			TokenScope:      ta.TokenScope,
+			TokenThreshold:  ta.TokenThreshold,
+			CounterMetric:   ta.CounterMetric,
+			CounterScope:    ta.CounterScope,
+			CounterInterval: ta.CounterInterval,
+			TargetAgentID:   agentID,
+			FlowID:          flowID,
+			SessionMode:     ta.SessionMode,
+			PromptTemplate:  ta.PromptTemplate,
+			SpawnTags:       ta.SpawnTags,
+			MaxIterations:   maxIter,
+			CooldownSec:     ta.CooldownSec,
+			Enabled:         false,
+		}); err != nil {
+			s.logger.Warn("seed template automation failed", "workspace", wsNew.ID, "automation", ta.Name, "error", err)
+		}
+	}
 }
 
 // seedTemplateConfigFiles writes a template's non-default runtime prompt overrides
@@ -271,23 +359,28 @@ func (s *Server) seedTemplateSkills(wsNew *workspace.Workspace, skills []market.
 // seedTemplateFlow resolves a template flow's graph (linear steps OR a full
 // orchestration graph with branch/parallel/delay/transform), wiring agent keys
 // to real IDs, and persists it. A flow referencing a missing agent is skipped.
-func (s *Server) seedTemplateFlow(ctx context.Context, wsNew *workspace.Workspace, tf market.WorkspaceTemplateFlow, ids map[string]string) {
+// Returns the created flow's id ("" when the flow was skipped) so a flow-backed
+// starter automation can bind to it by name.
+func (s *Server) seedTemplateFlow(ctx context.Context, wsNew *workspace.Workspace, tf market.WorkspaceTemplateFlow, ids map[string]string) string {
 	graph, ok := resolveTemplateFlowGraph(tf, ids)
 	if !ok {
 		s.logger.Warn("seed flow skipped: unresolved/invalid", "workspace", wsNew.ID, "flow", tf.Name)
-		return
+		return ""
 	}
 	raw, err := json.Marshal(graph)
 	if err != nil {
 		s.logger.Warn("seed flow marshal failed", "workspace", wsNew.ID, "error", err)
-		return
+		return ""
 	}
-	if _, err := wsNew.DB.CreateFlow(ctx, db.Flow{
+	created, err := wsNew.DB.CreateFlow(ctx, db.Flow{
 		Name:  tf.Name,
 		Graph: string(raw),
-	}); err != nil {
+	})
+	if err != nil {
 		s.logger.Warn("seed flow create failed", "workspace", wsNew.ID, "error", err)
+		return ""
 	}
+	return created.ID
 }
 
 // resolveTemplateFlowGraph builds the runnable orchestration graph for a template

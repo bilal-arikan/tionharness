@@ -176,6 +176,10 @@ export interface Automation {
   lastSessionId?: string
   lastError?: string
   createdBy?: string
+  // Stable identity of a built-in default rule provisioned into every workspace
+  // (EnsureDefaultBoardAutomations). Empty for user/agent-created rules. Template
+  // export skips these — the installing workspace makes its own copy.
+  seed?: string
   createdAt: number
   updatedAt: number
 }

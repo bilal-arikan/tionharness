@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/bilal-arikan/tionswarm/internal/db"
 	"github.com/bilal-arikan/tionswarm/internal/market"
 	"github.com/bilal-arikan/tionswarm/internal/orchestration"
 )
@@ -113,9 +114,45 @@ func TestBundledTemplatePacksIntegrity(t *testing.T) {
 			for k := range keys {
 				ids[k] = "agent-" + k
 			}
+			flowNames := map[string]bool{}
 			for _, tf := range wp.Flows {
 				if _, ok := resolveTemplateFlowGraph(tf, ids); !ok {
 					t.Fatalf("flow %q did not resolve to a valid graph", tf.Name)
+				}
+				flowNames[tf.Name] = true
+			}
+
+			// Automations must reference a declared agent key / flow name, since
+			// seedTemplateAutomations SKIPS the ones that do not resolve — a pack
+			// shipping a dangling reference would silently install one rule short.
+			for _, au := range wp.Automations {
+				if au.AgentKey != "" && !keys[au.AgentKey] {
+					t.Fatalf("automation %q references unknown agent key %q", au.Name, au.AgentKey)
+				}
+				if au.FlowName != "" && !flowNames[au.FlowName] {
+					t.Fatalf("automation %q references unknown flow %q", au.Name, au.FlowName)
+				}
+				if au.AgentKey == "" && au.FlowName == "" && au.BoardAction != db.BoardActionArchive {
+					t.Fatalf("automation %q has no agent or flow to run", au.Name)
+				}
+			}
+
+			// A pinned coordinator recipe must be a skill the pack itself bundles or
+			// one shipped as a built-in default — otherwise seeding drops it and the
+			// agent quietly runs free coordination instead of the advertised recipe.
+			bundled := map[string]bool{}
+			for _, sk := range wp.Skills {
+				bundled[sk.Slug] = true
+			}
+			for _, a := range wp.Agents {
+				if a.CoordinatorWorkflow == "" {
+					continue
+				}
+				if !a.CoordinatorMode {
+					t.Fatalf("agent %q pins a coordinator recipe but is not a coordinator", a.Key)
+				}
+				if !bundled[a.CoordinatorWorkflow] && !strings.HasPrefix(a.CoordinatorWorkflow, "coordinator-wf-") {
+					t.Fatalf("agent %q pins unbundled recipe %q", a.Key, a.CoordinatorWorkflow)
 				}
 			}
 		})
@@ -123,5 +160,47 @@ func TestBundledTemplatePacksIntegrity(t *testing.T) {
 
 	if !sawBlank {
 		t.Fatalf("expected a bundled %q template", blankTemplateID)
+	}
+}
+
+// TestProductTeamTemplateShape locks the delegation chain the product-team pack
+// exists to ship. Every assertion here is a way the pack could look installed-and-
+// fine while being useless: a PM that is not a coordinator cannot hand work to the
+// CTO at all, and a board rule that is not exclusive fires alongside the built-in
+// default (seeded into every workspace with an EMPTY target) so one card move
+// starts two runs, one of which immediately fails.
+func TestProductTeamTemplateShape(t *testing.T) {
+	store := market.New("", "")
+	pack, ok := store.Get("workspace-product-team")
+	if !ok {
+		t.Fatal("bundled product-team template pack not found")
+	}
+	wp := pack.Payload.Workspace
+	if wp == nil {
+		t.Fatal("product-team pack has no workspace payload")
+	}
+
+	coordinators := map[string]bool{}
+	for _, a := range wp.Agents {
+		if a.CoordinatorMode {
+			coordinators[a.Key] = true
+		}
+	}
+	for _, key := range []string{"pm", "cto"} {
+		if !coordinators[key] {
+			t.Errorf("agent %q must ship as a coordinator — the whole point of the pack", key)
+		}
+	}
+
+	if len(wp.Automations) == 0 {
+		t.Fatal("expected the board-driven-execution rule to ship with the pack")
+	}
+	for _, au := range wp.Automations {
+		if au.TriggerKind != db.TriggerBoard {
+			continue
+		}
+		if !au.BoardExclusive {
+			t.Errorf("board automation %q must be exclusive so it wins over the built-in default", au.Name)
+		}
 	}
 }

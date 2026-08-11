@@ -47,10 +47,18 @@ artık `WorkspaceView`'in kendi **Dışa Aktar** sekmesindedir (Genel ▸ Görü
 Promptlar & Dosyalar ▸ **Dışa Aktar**). Genel tab'ından çıkarıldı çünkü içerik seçimi
 detaylandırıldı. Panel: `frontend/src/components/workspace/WorkspaceExportPanel.tsx`.
 
-- **Öğe-bazlı seçim (2026-07-01):** Ajanlar, Akışlar, Workspace skill'leri ve Zamanlamalar
-  artık **tek tek** seçilir (dört ayrı checkbox listesi — yeniden kullanılabilir
-  `ExportPickList.tsx`). Her liste varsayılan tümü-seçili; ajanlarda ≥1 zorunlu. Dosya
-  kategorileri (Talimatlar / Promptlar & README / Pano sütunları) toggle olarak kalır.
+- **Öğe-bazlı seçim (2026-07-01):** Ajanlar, Akışlar, Workspace skill'leri, Zamanlamalar
+  ve **Otomasyonlar** (2026-08-11) **tek tek** seçilir (beş ayrı checkbox listesi —
+  yeniden kullanılabilir `ExportPickList.tsx`). Her liste varsayılan tümü-seçili;
+  ajanlarda ≥1 zorunlu. Dosya kategorileri (Talimatlar / Promptlar & README / Pano
+  sütunları) toggle olarak kalır.
+- **Otomasyonlar (2026-08-11):** kural, ajana `agentKey` / akışa `flowName` ile referans
+  verir ve kurulumda **pasif** gelir. Hedefi hariç bırakılmış olanlar (orphan) atılır —
+  panel bunu bağımlılık uyarısı ve canlı önizleme sayacıyla gösterir. Gömülü pano
+  varsayılanları (`Seed != ""`) dışa aktarılmaz: her workspace açılışta kendi kopyasını
+  üretir, taşımak çift kural veya kullanıcının sildiği kuralın dirilmesi demek olurdu.
+- **Koordinatörlük (2026-08-11):** ajanın `coordinatorMode`/`coordinatorWorkflow`
+  varsayılanı da taşınır — yayınlanan bir ekip orkestrasyon şeklini kaybetmez.
 - **Promptlar & README (2026-07-01):** "Promptlar & Dosyalar" ekranındaki runtime promptları
   (summary/reflect/title/…) ve README de dışa aktarılabilir — **yalnız varsayılandan farklı
   olanlar**. Panel `getWorkspaceConfig`'ten non-default prompt + README sayısını gösterir.

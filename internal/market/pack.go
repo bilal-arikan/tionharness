@@ -151,6 +151,12 @@ type AgentPayload struct {
 	MCPEnabled     bool     `json:"mcpEnabled,omitempty"`
 	AllowedTools   string   `json:"allowedTools,omitempty"`
 	Skills         []string `json:"skills,omitempty"`
+	// Coordinator defaults for the sessions this agent opens (see
+	// db.Agent.CoordinatorMode). Kept in sync with WorkspaceTemplateAgent so a
+	// coordinator survives being shared either as a standalone agent pack or as
+	// part of a workspace template.
+	CoordinatorMode     bool   `json:"coordinatorMode,omitempty"`
+	CoordinatorWorkflow string `json:"coordinatorWorkflow,omitempty"`
 }
 
 // ProviderPayload is a custom provider config WITHOUT its API key. The key is
@@ -216,6 +222,13 @@ type WorkspaceTemplateAgent struct {
 	BlockedTools   string   `json:"blockedTools,omitempty"`  // legacy per-agent denylist (JSON array); folded into ToolOverrides on load
 	ToolOverrides  string   `json:"toolOverrides,omitempty"` // per-agent tool override map (JSON object: name/pattern → tier)
 	Skills         []string `json:"skills,omitempty"`        // skill slugs to assign (resolved against the seeded skills)
+	// CoordinatorMode seeds the agent as a coordinator BY DEFAULT, so every session
+	// it opens arrives with the coordination tools — this is what lets a template
+	// ship a team that orchestrates out of the box (a PM/CTO pair) instead of one
+	// the user must toggle per thread. CoordinatorWorkflow optionally pins a
+	// coordinator recipe slug (a bundled kind=coordinator-workflow skill).
+	CoordinatorMode     bool   `json:"coordinatorMode,omitempty"`
+	CoordinatorWorkflow string `json:"coordinatorWorkflow,omitempty"`
 }
 
 // WorkspaceTemplateSkill is a skill bundled with a template: its portable
@@ -256,6 +269,56 @@ type WorkspaceTemplateSchedule struct {
 	Prompt   string `json:"prompt"`
 }
 
+// WorkspaceTemplateAutomation is a starter automation rule. Like a template flow
+// it references its agent by AgentKey (a WorkspaceTemplateAgent.Key) and its flow
+// by FlowName rather than by id, so the rule is portable; both are resolved
+// against the freshly seeded team at install time and a rule whose reference does
+// not resolve is skipped rather than seeded broken.
+//
+// It is always seeded DISABLED, exactly like WorkspaceTemplateSchedule and the
+// built-in board automations: installing a template must never silently start
+// spending money on every card move. The value it carries is the WIRING — right
+// trigger, right column, right agent, right prompt — so turning the behaviour on
+// is one toggle instead of a form.
+//
+// Mirrors the portable subset of db.Automation. Runtime bookkeeping (iteration
+// count, last fired…) and ExpiresAt (an absolute timestamp, meaningless once
+// shared) are deliberately absent.
+type WorkspaceTemplateAutomation struct {
+	Name string `json:"name"`
+	// TriggerKind: "tag" | "board" | "token" | "counter" ("" = tag).
+	TriggerKind string `json:"triggerKind,omitempty"`
+	TriggerTag  string `json:"triggerTag,omitempty"`
+
+	// Board trigger filters (TriggerKind == "board").
+	BoardOp        string `json:"boardOp,omitempty"`
+	BoardFromState string `json:"boardFromState,omitempty"`
+	BoardToState   string `json:"boardToState,omitempty"`
+	BoardPriority  int    `json:"boardPriority,omitempty"`
+	BoardExclusive bool   `json:"boardExclusive,omitempty"`
+	BoardAction    string `json:"boardAction,omitempty"` // "spawn" | "archive"
+
+	// Token trigger (TriggerKind == "token").
+	TokenScope     string `json:"tokenScope,omitempty"`
+	TokenThreshold int    `json:"tokenThreshold,omitempty"`
+
+	// Counter trigger (TriggerKind == "counter").
+	CounterMetric   string `json:"counterMetric,omitempty"`
+	CounterScope    string `json:"counterScope,omitempty"`
+	CounterInterval int    `json:"counterInterval,omitempty"`
+
+	// Target: an agent (by template key) or a flow (by name). A flow-backed rule
+	// leaves AgentKey empty. An archive-action board rule needs neither.
+	AgentKey string `json:"agentKey,omitempty"`
+	FlowName string `json:"flowName,omitempty"`
+
+	SessionMode    string   `json:"sessionMode,omitempty"` // "spawn" | "continue"
+	PromptTemplate string   `json:"promptTemplate,omitempty"`
+	SpawnTags      []string `json:"spawnTags,omitempty"`
+	MaxIterations  int      `json:"maxIterations,omitempty"` // 0 → seeded at the hard cap
+	CooldownSec    int      `json:"cooldownSec,omitempty"`
+}
+
 // WorkspacePayload is a workspace template: visual identity + instructions, an
 // optional kanban layout, and an optional starter ecosystem — bundled skills,
 // a richly-configured agent team, one or more flows (linear or non-linear)
@@ -277,11 +340,14 @@ type WorkspacePayload struct {
 	Readme  string            `json:"readme,omitempty"`
 
 	// Starter ecosystem (all optional). Seed order: skills → agents → flows →
-	// schedules, so agent skill assignments and flow agent-key wiring resolve.
-	Skills    []WorkspaceTemplateSkill    `json:"skills,omitempty"`
-	Agents    []WorkspaceTemplateAgent    `json:"agents,omitempty"`
-	Flows     []WorkspaceTemplateFlow     `json:"flows,omitempty"`
-	Schedules []WorkspaceTemplateSchedule `json:"schedules,omitempty"`
+	// schedules → automations, so agent skill assignments, flow agent-key wiring
+	// and an automation's agent/flow references all resolve against things that
+	// already exist.
+	Skills      []WorkspaceTemplateSkill      `json:"skills,omitempty"`
+	Agents      []WorkspaceTemplateAgent      `json:"agents,omitempty"`
+	Flows       []WorkspaceTemplateFlow       `json:"flows,omitempty"`
+	Schedules   []WorkspaceTemplateSchedule   `json:"schedules,omitempty"`
+	Automations []WorkspaceTemplateAutomation `json:"automations,omitempty"`
 }
 
 // MCPPayload is a Model Context Protocol server config. Secrets in EnvConfig and

@@ -427,7 +427,38 @@ func (r *Runtime) SpawnWorker(ctx context.Context, coordSessionID, agentRef, tas
 	// and the turn itself runs detached, so this serializes bookkeeping, not work.
 	unlockTree := lockCoordinatorTree(rootID)
 	defer unlockTree()
-	budget, err := r.checkCoordinatorTreeBudget(ctx, parent, rootID, depth, spec.Coordinator)
+	// Fold in the target agent's own coordinator DEFAULT (Agent.CoordinatorMode).
+	// The agent default can only ADD the capability, never remove one the caller
+	// explicitly asked for — so a team whose CTO is configured as a coordinator
+	// nests correctly even when the spawning prompt forgot `coordinator: true`.
+	// Resolved BEFORE the budget check because the depth guard's answer differs for
+	// a coordinator vs a plain worker.
+	coordinator, workflow, maxTurns := spec.Coordinator, spec.Workflow, spec.WorkflowMaxTurns
+	if !coordinator {
+		if mode, wf := r.agentCoordinatorDefaults(ctx, agentRef); mode {
+			// Degrade SILENTLY at the depth ceiling instead of failing the spawn: an
+			// explicit `coordinator: true` is a request that must be answered (see
+			// checkCoordinatorTreeBudget), but a default is only a preference — the
+			// caller asked for a worker and a working plain worker is the right answer.
+			if maxDepth := r.tun.CoordinatorMaxDepth(); maxDepth <= 0 || depth < maxDepth {
+				coordinator = true
+				if workflow == "" && wf != "" {
+					// An unresolvable default recipe drops to free coordination rather
+					// than failing a spawn nobody asked to be recipe-driven.
+					if mt, err := skills.ResolveCoordinatorWorkflow(r.Skills(), wf); err == nil {
+						workflow, maxTurns = wf, mt
+					} else {
+						r.logger.Warn("coordination: ignoring agent default recipe",
+							"agent", agentRef, "workflow", wf, "error", err)
+					}
+				}
+			} else {
+				r.logger.Info("coordination: agent coordinator default degraded to plain worker at depth limit",
+					"agent", agentRef, "depth", depth)
+			}
+		}
+	}
+	budget, err := r.checkCoordinatorTreeBudget(ctx, parent, rootID, depth, coordinator)
 	if err != nil {
 		return SpawnResult{}, err
 	}
@@ -452,9 +483,9 @@ func (r *Runtime) SpawnWorker(ctx context.Context, coordSessionID, agentRef, tas
 		Role:                     db.SessionRoleWorker,
 		RootCoordinatorSessionID: rootID,
 		CoordinatorDepth:         depth,
-		CoordinatorMode:          spec.Coordinator,
-		CoordinatorWorkflow:      spec.Workflow,
-		CoordinatorMaxTurns:      spec.WorkflowMaxTurns,
+		CoordinatorMode:          coordinator,
+		CoordinatorWorkflow:      workflow,
+		CoordinatorMaxTurns:      maxTurns,
 	})
 	if err != nil {
 		// SpawnSession never launched runWorker, so release the reservation here.
@@ -607,6 +638,26 @@ func (r *Runtime) checkCoordinatorTreeBudget(ctx context.Context, parent db.Sess
 		return budget, fmt.Errorf("coordinator tree budget exhausted (%d/%d LIVE worker sessions across the whole tree). %s Stop or conclude a still-running worker before spawning more (finished workers are already reclaimed)", budget.used, budget.total, budget.activeList())
 	}
 	return budget, nil
+}
+
+// agentCoordinatorDefaults reports the coordinator DEFAULTS configured on a
+// spawn_worker target (Agent.CoordinatorMode / CoordinatorWorkflow).
+//
+// A built-in profile target (explore/coder/validator…) never carries one: those
+// are single-purpose leaf workers, and the agent materialized for one is created
+// without the flag. An unresolvable target answers "no default" rather than an
+// error — resolveWorkerTarget runs later on the same reference and is the single
+// place that reports a bad target, so failing here would just duplicate (and
+// reorder) that diagnosis.
+func (r *Runtime) agentCoordinatorDefaults(ctx context.Context, target string) (mode bool, workflow string) {
+	if _, isProfile := r.subagentProfile(strings.TrimSpace(target)); isProfile {
+		return false, ""
+	}
+	a, err := r.resolveAgent(ctx, target)
+	if err != nil {
+		return false, ""
+	}
+	return a.CoordinatorMode, strings.TrimSpace(a.CoordinatorWorkflow)
 }
 
 // resolveWorkerTarget maps a spawn_worker target to a runnable persistent agent

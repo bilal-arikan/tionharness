@@ -58,6 +58,23 @@ func ResolveCoordinatorRecipe(store *skills.Store, slug string) (maxTurns int, e
 	return skills.ResolveCoordinatorWorkflow(store, slug)
 }
 
+// resolvableRecipe returns slug when it names a coordinator recipe that exists in
+// this workspace, and "" otherwise. It is the install/seed-time filter for the
+// coordinator recipe an agent (pack or template) was published with: a pinned slug
+// that does not resolve here would leave the agent claiming a recipe while actually
+// running free coordination, so it is dropped at the door instead. An empty slug
+// passes through unchanged — "no recipe" is the normal case, not a failure.
+func resolvableRecipe(store *skills.Store, slug string) string {
+	slug = strings.TrimSpace(slug)
+	if slug == "" {
+		return ""
+	}
+	if _, err := ResolveCoordinatorRecipe(store, slug); err != nil {
+		return ""
+	}
+	return slug
+}
+
 // coordinationScratchpadBlock returns a system-context line pointing a coordinator
 // session and its workers at a SHARED scratchpad directory (M2/M3). The directory
 // lives under the COORDINATOR session's on-disk folder so every worker resolves the
