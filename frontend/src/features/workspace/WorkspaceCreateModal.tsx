@@ -165,6 +165,10 @@ export function WorkspaceCreateModal({ onCreate, onClose }: Props) {
                       {t.name}
                       <span className="text-[10px] font-normal text-[var(--color-text-dim)]">
                         {t.agentCount} ajan{t.hasFlow ? ' · akış' : ''}
+                        {/* "2 ajan" reads identically for a chat pair and for a
+                            delegation chain — say which one this is. */}
+                        {!!t.coordinatorCount && ` · ${t.coordinatorCount} koordinatör`}
+                        {!!t.automationCount && ` · ${t.automationCount} otomasyon`}
                       </span>
                     </span>
                     <span className="mt-0.5 block text-xs text-[var(--color-text-dim)]">

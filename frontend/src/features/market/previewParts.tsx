@@ -35,7 +35,11 @@ export function CapBadge({ label, on }: { label: string; on: boolean }) {
 
 // ColumnsPreview renders a kanban column layout as colored chips (shared by the
 // board and workspace previews).
-export function ColumnsPreview({ columns }: { columns?: { key: string; label: string; color?: string }[] }) {
+export function ColumnsPreview({
+  columns,
+}: {
+  columns?: { key: string; label: string; color?: string }[]
+}) {
   if (!columns || columns.length === 0) return null
   return (
     <div className="flex flex-wrap gap-1.5">
@@ -58,9 +62,20 @@ export function ColumnsPreview({ columns }: { columns?: { key: string; label: st
 // ModelList renders a provider pack's models, each with its ballpark price
 // (input / output per 1M tokens) when known. providerId is the pack slug used to
 // look up prices[providerId][model].
-export function ModelList({ models, providerId, prices }: { models?: string; providerId: string; prices: PriceTable }) {
+export function ModelList({
+  models,
+  providerId,
+  prices,
+}: {
+  models?: string
+  providerId: string
+  prices: PriceTable
+}) {
   if (!models) return null
-  const ids = models.split('\n').map((s) => s.trim()).filter(Boolean)
+  const ids = models
+    .split('\n')
+    .map((s) => s.trim())
+    .filter(Boolean)
   const table = prices[providerId] || {}
   return (
     <div className="pt-1">
@@ -69,10 +84,16 @@ export function ModelList({ models, providerId, prices }: { models?: string; pro
         {ids.map((id) => {
           const pr = table[id]
           return (
-            <div key={id} className="flex items-center justify-between gap-3 px-1 py-0.5 text-[11px]">
+            <div
+              key={id}
+              className="flex items-center justify-between gap-3 px-1 py-0.5 text-[11px]"
+            >
               <span className="min-w-0 break-all font-mono">{id}</span>
               {pr ? (
-                <span className="shrink-0 tabular-nums text-[var(--color-text-dim)]" title="giriş / çıkış — $/1M token">
+                <span
+                  className="shrink-0 tabular-nums text-[var(--color-text-dim)]"
+                  title="giriş / çıkış — $/1M token"
+                >
                   {fmtPrice(pr.inputPerMTok)} / {fmtPrice(pr.outputPerMTok)}
                 </span>
               ) : (
@@ -82,20 +103,32 @@ export function ModelList({ models, providerId, prices }: { models?: string; pro
           )
         })}
       </div>
-      <p className="mt-1 text-[10px] text-[var(--color-text-dim)]">$/1M token (giriş / çıkış) — yaklaşık liste fiyatı.</p>
+      <p className="mt-1 text-[10px] text-[var(--color-text-dim)]">
+        $/1M token (giriş / çıkış) — yaklaşık liste fiyatı.
+      </p>
     </div>
   )
 }
 
 // StatChip is one cell of the workspace stat strip. The icon is a monochrome
 // lucide glyph (inherits the muted text color) rather than a colored emoji.
-export function StatChip({ icon: Icon, label, value }: { icon: LucideIcon; label: string; value: number }) {
+export function StatChip({
+  icon: Icon,
+  label,
+  value,
+}: {
+  icon: LucideIcon
+  label: string
+  value: number
+}) {
   return (
     <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-2 text-center">
       <div className="flex items-center justify-center gap-1 text-sm font-semibold">
         <Icon size={13} className="text-[var(--color-text-dim)]" /> {value}
       </div>
-      <div className="text-[10px] uppercase tracking-wide text-[var(--color-text-dim)]">{label}</div>
+      <div className="text-[10px] uppercase tracking-wide text-[var(--color-text-dim)]">
+        {label}
+      </div>
     </div>
   )
 }
@@ -104,38 +137,65 @@ export function StatChip({ icon: Icon, label, value }: { icon: LucideIcon; label
 export function PreviewSection({ title, children }: { title: string; children: ReactNode }) {
   return (
     <div>
-      <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">{title}</div>
+      <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
+        {title}
+      </div>
       {children}
     </div>
   )
 }
 
 // MiniChip is a small inline label (modes, skills, flow tags).
-export function MiniChip({ children }: { children: ReactNode }) {
+// title is optional and carries the hover explanation for chips whose label is a
+// term rather than a value (e.g. "koordinatör", "tek sahip") — a pack preview is
+// read by someone deciding whether to install, so an unexplained term is a dead end.
+export function MiniChip({ children, title }: { children: ReactNode; title?: string }) {
   return (
-    <span className="rounded bg-[var(--color-bg)] px-1.5 py-0.5 text-[10px] text-[var(--color-text-dim)]">{children}</span>
+    <span
+      title={title}
+      className="rounded bg-[var(--color-bg)] px-1.5 py-0.5 text-[10px] text-[var(--color-text-dim)]"
+    >
+      {children}
+    </span>
   )
 }
 
 // PackMeta renders a row of metadata chips (source, installed version, created
 // date, tags) shown under the description for every pack kind.
 export function PackMeta({ pack }: { pack: Pack }) {
-  const created = pack.createdAt ? new Date(pack.createdAt * 1000).toLocaleDateString('tr-TR') : null
+  const created = pack.createdAt
+    ? new Date(pack.createdAt * 1000).toLocaleDateString('tr-TR')
+    : null
   const src = pack.source ? (SOURCE_LABEL[pack.source] ?? pack.source) : null
   if (!src && !created && !pack.installedVersion && !(pack.tags && pack.tags.length)) return null
   return (
     <div className="mt-2 flex flex-wrap items-center gap-1.5">
-      {src && <MiniChip>{src}{pack.registryName ? ` · ${pack.registryName}` : ''}</MiniChip>}
+      {src && (
+        <MiniChip>
+          {src}
+          {pack.registryName ? ` · ${pack.registryName}` : ''}
+        </MiniChip>
+      )}
       {pack.installedVersion && <MiniChip>Kurulu: v{pack.installedVersion}</MiniChip>}
       {created && <MiniChip>📅 {created}</MiniChip>}
-      {pack.tags?.map((t) => <MiniChip key={t}>#{t}</MiniChip>)}
+      {pack.tags?.map((t) => (
+        <MiniChip key={t}>#{t}</MiniChip>
+      ))}
     </div>
   )
 }
 
 // SourceRefPreview renders the GitHub-fetched preview of a directory-site (source-ref)
 // catalog entry: the source link plus each discovered artifact's rendered body.
-export function SourceRefPreview({ url, items, loading }: { url: string; items: PreviewItem[] | null; loading: boolean }) {
+export function SourceRefPreview({
+  url,
+  items,
+  loading,
+}: {
+  url: string
+  items: PreviewItem[] | null
+  loading: boolean
+}) {
   return (
     <div className="space-y-3">
       <a
@@ -146,9 +206,13 @@ export function SourceRefPreview({ url, items, loading }: { url: string; items: 
       >
         <Globe2 size={12} /> {url}
       </a>
-      {loading && <p className="text-xs text-[var(--color-text-dim)]">Önizleme GitHub'dan yükleniyor…</p>}
+      {loading && (
+        <p className="text-xs text-[var(--color-text-dim)]">Önizleme GitHub'dan yükleniyor…</p>
+      )}
       {!loading && items && items.length === 0 && (
-        <p className="text-xs text-[var(--color-text-dim)]">Önizleme alınamadı (kurulumda yine de denenir).</p>
+        <p className="text-xs text-[var(--color-text-dim)]">
+          Önizleme alınamadı (kurulumda yine de denenir).
+        </p>
       )}
       {!loading &&
         items &&
@@ -160,7 +224,9 @@ export function SourceRefPreview({ url, items, loading }: { url: string; items: 
               </div>
             )}
             {it.warnings && it.warnings.length > 0 && (
-              <p className="text-[10px] text-[var(--color-warning,#d97706)]">{it.warnings.join(' · ')}</p>
+              <p className="text-[10px] text-[var(--color-warning,#d97706)]">
+                {it.warnings.join(' · ')}
+              </p>
             )}
             <div className="text-xs">
               <Markdown>{stripFrontmatter(it.body || it.description || '')}</Markdown>

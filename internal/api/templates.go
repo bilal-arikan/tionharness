@@ -41,6 +41,12 @@ type templateListItem struct {
 	Icon        string `json:"icon"`
 	AgentCount  int    `json:"agentCount"`
 	HasFlow     bool   `json:"hasFlow"`
+	// CoordinatorCount / AutomationCount describe how the team is WIRED, which the
+	// agent count alone cannot: "2 agents" reads the same for a chat pair and for a
+	// delegation chain. Both 0 for an ordinary template, so the picker only
+	// mentions them when they exist.
+	CoordinatorCount int `json:"coordinatorCount"`
+	AutomationCount  int `json:"automationCount"`
 }
 
 // handleListWorkspaceTemplates returns the available workspace templates, sourced
@@ -56,6 +62,12 @@ func (s *Server) handleListWorkspaceTemplates(w http.ResponseWriter, _ *http.Req
 			wp := full.Payload.Workspace
 			item.AgentCount = len(wp.Agents)
 			item.HasFlow = len(wp.Flows) > 0
+			item.AutomationCount = len(wp.Automations)
+			for _, a := range wp.Agents {
+				if a.CoordinatorMode {
+					item.CoordinatorCount++
+				}
+			}
 		}
 		out = append(out, item)
 	}

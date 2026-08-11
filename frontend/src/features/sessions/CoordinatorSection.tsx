@@ -260,6 +260,13 @@ export function CoordinatorSection({
               {toggling ? '…' : 'Kapat'}
             </button>
           </div>
+          {/* Scope, not decoration: an agent can be configured as a coordinator BY
+              DEFAULT, in which case closing it here and opening a new chat looks like
+              the switch "came back on". It did not — this one is per-session. */}
+          <p className="px-0.5 text-[10px] leading-relaxed text-[var(--color-text-dim)]">
+            Bu anahtar yalnız <strong>bu oturumu</strong> etkiler. Ajan koordinatör olarak
+            ayarlanmışsa (Ajanlar ▸ Koordinatör) açtığı her yeni oturum yine koordinatör başlar.
+          </p>
 
           {/* Phantom-spawn hard-halt: a persistent, actionable banner (not a transient
               toast). Shown until the coordinator recovers (a real spawn_worker call) or

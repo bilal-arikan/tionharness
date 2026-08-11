@@ -1,4 +1,4 @@
-import { Sparkles, Users, GitBranch, Clock } from 'lucide-react'
+import { Sparkles, Users, GitBranch, Clock, Zap } from 'lucide-react'
 import type { Pack, WorkspacePayload } from '@/types'
 import type { PriceTable } from '@/api/providers'
 import { Markdown } from '@/shared/components/markdown/Markdown'
@@ -141,20 +141,28 @@ export function PackPreview({ pack, prices }: { pack: Pack; prices: PriceTable }
 
 // WorkspacePackPreview renders the full starter ecosystem of a workspace-template
 // pack: a stat strip plus the agent team (with config), flows (with node types),
-// schedules, embedded skills, instructions and board layout.
+// schedules, automations, embedded skills, instructions and board layout.
 function WorkspacePackPreview({ wsp }: { wsp: WorkspacePayload }) {
   const agents = wsp.agents ?? []
   const flows = wsp.flows ?? []
   const schedules = wsp.schedules ?? []
+  const automations = wsp.automations ?? []
   const skills = wsp.skills ?? []
   const promptKeys = Object.keys(wsp.prompts ?? {})
+  // An agent key → display name map, so an automation's target reads as the agent
+  // the installer will actually see rather than the template's internal key.
+  const agentName = (key: string) => agents.find((a) => a.key === key)?.name || key
   return (
     <div className="space-y-4">
-      {/* Stat strip */}
-      <div className="grid grid-cols-4 gap-2">
+      {/* Stat strip. Automations only take a slot when the pack ships some — an
+          always-visible "0" would imply every template has them. */}
+      <div className={`grid gap-2 ${automations.length > 0 ? 'grid-cols-5' : 'grid-cols-4'}`}>
         <StatChip icon={Users} label="Ajan" value={agents.length} />
         <StatChip icon={GitBranch} label="Akış" value={flows.length} />
         <StatChip icon={Clock} label="Zamanlama" value={schedules.length} />
+        {automations.length > 0 && (
+          <StatChip icon={Zap} label="Otomasyon" value={automations.length} />
+        )}
         <StatChip icon={Sparkles} label="Skill" value={skills.length} />
       </div>
 
@@ -180,6 +188,14 @@ function WorkspacePackPreview({ wsp }: { wsp: WorkspacePayload }) {
                   {a.permissionMode && <MiniChip>{a.permissionMode}</MiniChip>}
                   {a.thinkingLevel && <MiniChip>🧠 {a.thinkingLevel}</MiniChip>}
                   {a.mcpEnabled && <MiniChip>MCP</MiniChip>}
+                  {/* The headline property of an orchestrating template: which agents
+                      arrive able to drive workers. Invisible otherwise until install. */}
+                  {a.coordinatorMode && (
+                    <MiniChip title="Açtığı yeni oturumlar koordinatör başlar (worker yönetebilir)">
+                      🕸 koordinatör
+                    </MiniChip>
+                  )}
+                  {a.coordinatorWorkflow && <MiniChip>📐 {a.coordinatorWorkflow}</MiniChip>}
                 </div>
                 {(a.provider || a.model) && (
                   <div className="mt-0.5 text-[10px] text-[var(--color-text-dim)]">
@@ -289,6 +305,47 @@ function WorkspacePackPreview({ wsp }: { wsp: WorkspacePayload }) {
           </div>
           <p className="mt-1 text-[10px] text-[var(--color-text-dim)]">
             Zamanlamalar pasif (disabled) kurulur — Zamanlamalar ekranından açılır.
+          </p>
+        </PreviewSection>
+      )}
+
+      {automations.length > 0 && (
+        <PreviewSection title={`Otomasyonlar (${automations.length})`}>
+          <div className="space-y-1.5">
+            {automations.map((a, i) => (
+              <div
+                key={i}
+                className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] p-2 text-[11px]"
+              >
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="text-xs font-medium">{a.name}</span>
+                  <MiniChip>{a.triggerKind || 'tag'}</MiniChip>
+                  {a.boardToState && <MiniChip>→ {a.boardToState}</MiniChip>}
+                  {a.boardAction && <MiniChip>{a.boardAction}</MiniChip>}
+                  {/* An exclusive rule silences every other rule on the same card
+                      change — worth seeing BEFORE install, not after. */}
+                  {a.boardExclusive && (
+                    <MiniChip title="Aynı kart değişiminde tek sahip">tek sahip</MiniChip>
+                  )}
+                </div>
+                <div className="mt-0.5 text-[10px] text-[var(--color-text-dim)]">
+                  {a.flowName
+                    ? `akış → ${a.flowName}`
+                    : a.agentKey
+                      ? `ajan → ${agentName(a.agentKey)}`
+                      : 'LLM çağrısı yok'}
+                </div>
+                {a.promptTemplate && (
+                  <p className="mt-1 line-clamp-2 leading-relaxed text-[var(--color-text-dim)]">
+                    {a.promptTemplate}
+                  </p>
+                )}
+              </div>
+            ))}
+          </div>
+          <p className="mt-1 text-[10px] text-[var(--color-text-dim)]">
+            Otomasyonlar da <strong>pasif</strong> kurulur — kablolama gelir, harcama gelmez.
+            Otomasyonlar ekranından tek anahtarla açılır.
           </p>
         </PreviewSection>
       )}
