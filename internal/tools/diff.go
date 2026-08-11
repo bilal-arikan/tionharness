@@ -68,7 +68,28 @@ func lineDiff(oldText, newText string) (added, removed int, patch string) {
 	oldLines := splitLines(oldText)
 	newLines := splitLines(newText)
 
+	// Trim the common prefix and suffix first: the LCS table below is O(n*m)
+	// memory, so a one-line edit to a 10k-line file must not cost a 10k×10k
+	// table (that is exactly the maxDiffLines trap — the whole file used to be
+	// reported as added/removed). Most edits touch a small region, and after
+	// the trim only that region pays for the table. The patch is built from the
+	// trimmed middle, so it stays readable instead of echoing 10k context lines.
+	start := 0
+	for start < len(oldLines) && start < len(newLines) && oldLines[start] == newLines[start] {
+		start++
+	}
+	oldEnd, newEnd := len(oldLines), len(newLines)
+	for oldEnd > start && newEnd > start && oldLines[oldEnd-1] == newLines[newEnd-1] {
+		oldEnd--
+		newEnd--
+	}
+	oldLines = oldLines[start:oldEnd]
+	newLines = newLines[start:newEnd]
+
 	if len(oldLines) > maxDiffLines || len(newLines) > maxDiffLines {
+		// Even the changed region is huge; report coarse counts for THAT region
+		// (not the whole file) without a patch, rather than spending O(n*m)
+		// memory on the LCS table.
 		return len(newLines), len(oldLines), ""
 	}
 

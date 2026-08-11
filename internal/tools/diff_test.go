@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -23,6 +24,46 @@ func TestLineDiffNewFile(t *testing.T) {
 	added, removed, _ := lineDiff("", "x\ny\n")
 	if added != 2 || removed != 0 {
 		t.Errorf("new file: got added=%d removed=%d, want 2/0", added, removed)
+	}
+}
+
+// TestLineDiffLargeFileSmallEdit pins the maxDiffLines trap: a small edit in a
+// file larger than maxDiffLines must report the REAL change, not the whole file
+// as added/removed. Regression for SES589 — a 10.5k-line doc with a 35/1 edit
+// was showing +10526/−10492 in the UI.
+func TestLineDiffLargeFileSmallEdit(t *testing.T) {
+	var oldB strings.Builder
+	for i := 0; i < 6000; i++ {
+		fmt.Fprintf(&oldB, "line %06d\n", i)
+	}
+	old := oldB.String()
+	newText := strings.Replace(old, "line 003000\n", "line 003000\nline 003001\nline 003002\nline 003003\n", 1)
+
+	added, removed, patch := lineDiff(old, newText)
+	if added != 3 || removed != 0 {
+		t.Fatalf("large-file edit: got added=%d removed=%d, want added=3 removed=0", added, removed)
+	}
+	if !strings.Contains(patch, "+ line 003001") || !strings.Contains(patch, "+ line 003002") {
+		t.Errorf("patch missing inserted lines:\n%s", patch)
+	}
+}
+
+// TestLineDiffLargeFileReplacement: a single line swapped inside a large file
+// counts as one removed + one added, exactly like the small-file case.
+func TestLineDiffLargeFileReplacement(t *testing.T) {
+	var oldB strings.Builder
+	for i := 0; i < 6000; i++ {
+		fmt.Fprintf(&oldB, "line %06d\n", i)
+	}
+	old := oldB.String()
+	newText := strings.Replace(old, "line 004200\n", "line 00REPLACED\n", 1)
+
+	added, removed, patch := lineDiff(old, newText)
+	if added != 1 || removed != 1 {
+		t.Fatalf("large-file replace: got added=%d removed=%d, want 1/1", added, removed)
+	}
+	if !strings.Contains(patch, "- line 004200") || !strings.Contains(patch, "+ line 00REPLACED") {
+		t.Errorf("patch missing replacement lines:\n%s", patch)
 	}
 }
 
