@@ -49,11 +49,6 @@ type workspaceSettingsDTO struct {
 	// system for this workspace (see promptepoch.go).
 	PromptEpochEnabled bool `json:"promptEpochEnabled"`
 
-	// AutoCaptureArtifacts toggles turn-end auto-capture of written files as
-	// artifacts (see artifacts_auto.go). Off = only deliberate create_artifact
-	// calls produce artifacts.
-	AutoCaptureArtifacts bool `json:"autoCaptureArtifacts"`
-
 	// ShellOutputCompression is the in-process shell-output token-optimizer
 	// override: "" (auto — follow the sqz-hook opt-in), "on" or "off". Must be
 	// echoed back, otherwise the settings selector always renders "auto" and a
@@ -131,7 +126,6 @@ func toWorkspaceSettingsDTO(ctx context.Context, w *workspace.Workspace) workspa
 
 		CodebaseMemoryEnabled: s.CodebaseMemoryEnabled,
 		PromptEpochEnabled:    s.PromptEpochEnabled,
-		AutoCaptureArtifacts:  s.AutoCaptureArtifacts,
 
 		ShellOutputCompression: s.ShellOutputCompression,
 		ShellCommandRewrite:    s.ShellCommandRewrite,

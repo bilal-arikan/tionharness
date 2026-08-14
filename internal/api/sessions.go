@@ -2,7 +2,6 @@ package api
 
 import (
 	"net/http"
-	"os/exec"
 	"sort"
 	"strings"
 
@@ -443,23 +442,6 @@ func (s *Server) handleSessionPath(w http.ResponseWriter, r *http.Request) {
 	path, err := ws(r).DB.SessionDir(id)
 	if writeDBError(w, err, "session not found") {
 		return
-	}
-	writeJSON(w, http.StatusOK, map[string]string{"path": path})
-}
-
-// handleRevealSession opens the session's folder in the OS file manager on the
-// machine running the backend (local desktop app). Windows: Explorer.
-func (s *Server) handleRevealSession(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
-	path, err := ws(r).DB.SessionDir(id)
-	if writeDBError(w, err, "session not found") {
-		return
-	}
-	// Detached from r.Context() so it isn't killed when the handler returns.
-	if err := exec.Command("explorer.exe", path).Start(); err != nil {
-		// explorer.exe returns a non-zero exit code even on success; only a
-		// failure to *start* the process is a real error.
-		s.logger.Warn("reveal session folder failed", "session", id, "error", err)
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"path": path})
 }

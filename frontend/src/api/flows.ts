@@ -120,7 +120,6 @@ export const flowApi = {
   // Absolute path of the flow's on-disk JSON file (copy-to-clipboard).
   flowPath: (id: string) => req<{ path: string }>(`/api/flows/${id}/path`),
   // Open the flow's folder in the OS file manager (local desktop).
-  revealFlow: (id: string) => req<{ path: string }>(`/api/flows/${id}/reveal`, { method: 'POST' }),
   // Run a flow standalone (FlowsPanel). The backend also records the run into
   // the flow's transcript session; we unwrap to the FlowRun for the panel.
   runFlow: (id: string, input: string) =>

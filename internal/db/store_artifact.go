@@ -190,42 +190,6 @@ func (d *DB) SetArtifactArchived(ctx context.Context, id string, archived bool) 
 	return a, d.persistArtifactLocked(&a)
 }
 
-// SaveFileArtifact upserts an artifact mirroring a file the agent wrote: if one
-// already exists for the same session + source path it is overwritten in place,
-// otherwise a new one is created. This dedups repeated writes of the same file
-// within a session so the Artifacts screen shows the latest content once.
-func (d *DB) SaveFileArtifact(ctx context.Context, sessionID, agentID, sourcePath, title, kind, language, content, origin string) (Artifact, error) {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	for _, a := range d.artifacts {
-		if a.SessionID == sessionID && a.SourcePath != "" && a.SourcePath == sourcePath {
-			a.Content = content
-			a.Title = title
-			a.Kind = kind
-			a.Language = language
-			if origin != "" {
-				a.Origin = origin
-			}
-			a.UpdatedAt = now()
-			return a, d.persistArtifactLocked(&a)
-		}
-	}
-	a := Artifact{
-		ID:         d.nextID(idArtifact),
-		SessionID:  sessionID,
-		AgentID:    agentID,
-		Title:      title,
-		Kind:       kind,
-		Language:   language,
-		Content:    content,
-		SourcePath: sourcePath,
-		Origin:     origin,
-		CreatedAt:  now(),
-		UpdatedAt:  now(),
-	}
-	return a, d.persistArtifactLocked(&a)
-}
-
 // UpsertAttachmentArtifact records a chat attachment as an artifact so every file
 // added to a session appears in the Artifacts screen, tagged with its origin
 // session. The uploaded file IS the artifact's file: media kinds reference it via

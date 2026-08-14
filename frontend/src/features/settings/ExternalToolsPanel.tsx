@@ -8,7 +8,7 @@
 // Detection is local and instant, so it runs on open. The update CHECK leaves
 // the machine (GitHub API) and is therefore explicit — a button, never automatic.
 import { useEffect, useState } from 'react'
-import { ScanSearch, Eraser, FileCog, RefreshCw, ArrowUpCircle, Copy } from 'lucide-react'
+import { ScanSearch, Eraser, RefreshCw, ArrowUpCircle, Copy } from 'lucide-react'
 import { api } from '@/api'
 import { toast } from '@/shared/components'
 import { systemApi } from '@/api/system'
@@ -812,25 +812,6 @@ export function ExternalToolsPanel({ onError }: Props) {
                         >
                           <Eraser size={12} />
                           {maintBusy === 'sqz-reset' ? '…' : 'sqz dedup önbelleğini temizle'}
-                        </button>
-                      )}
-                      {report.rtkFound && report.rtkConfigPath && (
-                        <button
-                          type="button"
-                          data-testid="rtk-config-reveal"
-                          disabled={maintBusy === 'rtk-config'}
-                          onClick={() =>
-                            runMaint(
-                              'rtk-config',
-                              systemApi.revealRtkConfig,
-                              () => 'rtk config klasörü açıldı.',
-                            )
-                          }
-                          className="inline-flex items-center gap-1.5 rounded bg-[var(--color-surface-2)] px-2.5 py-1 font-medium hover:text-[var(--color-text)] disabled:opacity-50"
-                          title={report.rtkConfigPath}
-                        >
-                          <FileCog size={12} />
-                          {maintBusy === 'rtk-config' ? '…' : 'rtk config dosyasını aç'}
                         </button>
                       )}
                       {maintMsg && <span className="text-[var(--color-success)]">{maintMsg}</span>}

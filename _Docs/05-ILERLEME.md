@@ -1,6 +1,88 @@
 # TionSwarm — İlerleme Takibi
 
-> Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-08-11**
+> Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-08-14**
+
+## DeepSeek fiyatları zam sonrasına güncellendi (2026-08-14) ✅
+
+DeepSeek 2026-08-06'da zammı duyurdu; yeni tarife **2026-08-16 16:00 UTC**'de
+yürürlüğe giriyor ve düz oran yerine **peak/off-peak** ikili tarifeye geçiyor
+(peak: 01:00–04:00 ve 06:00–10:00 UTC — günde 7 saat; off-peak yarı fiyat).
+
+| Model | off-peak (tabloda bu var) | peak (2×) | cache-hit input (off-peak) |
+|---|---|---|---|
+| V4 Flash | $0.22 / $0.66 | $0.44 / $1.32 | $0.007 (~0.032× input) |
+| V4 Pro | $0.66 / $1.98 | $1.32 / $3.96 | $0.022 (~0.033× input) |
+
+Eskisi flash $0.14/$0.28, pro $0.435/$0.87 idi → output tarafında peak'te ~4.5–4.7×,
+off-peak'te ~2.3× artış. Cache-hit indirimi de sığlaştı ($0.0028 → $0.007).
+
+**Karar:** `Price` zaman-bağımsız olduğu için tablo **off-peak (normal) oranı**
+tutar — günün çoğunluğu. Peak penceresine düşen turlar 2× eksik raporlanır; doğru
+çözüm zaman-farkında `Price` (henüz yok, bilinçli borç).
+
+**Dokunulan yerler:** `pricing.go` (`deepseek` tablosu + açıklama bloğu),
+`kind_deepseek.go` ve `kind_deepseek_anthropic.go` model açıklamalarındaki fiyat
+metinleri. `go build ./...` + provider fiyat testleri yeşil.
+
+## Otomatik artifact yakalama tamamen kaldırıldı (2026-08-14) ✅
+
+Tur sonunda ajanın yazdığı dosyaları taramaca artifact'a çeviren mekanizma
+(`AutoCaptureArtifacts` toggle'ı + tarama kodu) **tümüyle silindi**. Artifact
+bundan sonra yalnız **bilerek** oluşur: ajan `create_artifact`/`update_artifact`
+araçlarını çağırır ya da artifacts API/UI kullanılır. Dosya yazmak (Write/Edit,
+shell, script) artifact üretmez.
+
+**Kaldırılanlar.** Backend: `internal/api/artifacts_auto.go` (+ iki test dosyası)
+— `captureFileArtifacts`, `parseFileWrite`, `artifactKindForPath`,
+`extractProducedMediaPaths` ve yardımcıları; `chat_stream.go`'daki iki çağrı
+yeri (normal tur sonu + kesilen/durdurulan tur); artık çağrılmayan
+`db.SaveFileArtifact` (source-path'e göre upsert eden depo fonksiyonu);
+`workspace.WSSettings.AutoCaptureArtifacts` alanı + default + patch + `UpdateSettings`
+kolu; `api.workspaceSettingsDTO.AutoCaptureArtifacts`. Frontend: WorkspacePanel'deki
+"Artifact yakalama" toggle'ı ve `WorkspaceSettings(+Patch).autoCaptureArtifacts`
+alanı ile WorkspaceView'ün save payload'u.
+
+**Prompt tarafı.** İki varyantlı yönlendirme (`artifactGuidanceFor` +
+`artifactDeliverableGuidanceManual`) tek sabite indi: `artifactDeliverableGuidance`
+artık koşulsuz "dosya yazmak artifact YAPMAZ, deliverable'ı `create_artifact` ile
+bilerek kaydet" der (statik prefix, `chat_turn.go`). `tionswarm-deliverables`
+skill'indeki "auto-capture kapalı olabilir" notu da bu tek gerçeğe göre yazıldı
+(seed hash-ledger'ı düzenlenmemiş kopyaları tazeler).
+
+**Dokunulmayan.** Araç yolu (`agent/artifactsink.go`, `tools` create/update
+artifact), chat eki → artifact (`UpsertAttachmentArtifact`), plan artifact'ı,
+medya/binary `sourcePath` desteği, koordinatörün taşan worker çıktısını artifact'a
+yazması. Diskteki eski `origin:"agent"` artifact'lar olduğu gibi kalır.
+
+`go build ./...` + `go vet ./...` + `go test ./internal/api ./internal/workspace ./internal/db`
+yeşil; frontend `tsc --noEmit` temiz.
+
+## "Klasörü aç" (Explorer reveal) butonları tamamen kaldırıldı (2026-08-12) ✅
+
+Uygulama genelinde yol eylemleri **yolu kopyala + klasörü aç** çifti olarak
+duruyordu. Açma tarafı artık gereksiz görüldü ve tek seferde silindi; kopyalama
+(`CopyPathButton`) her yerde aynen kaldı.
+
+**Kaldırılanlar.** Frontend: paylaşılan `RevealButton` bileşeni ve 8 kullanım
+yeri — sohbet başlığı (`AppHeader`), oturum ⚙ menüsü (`SessionsSidebar`), Ajanlar,
+Akışlar, Skill'ler, Artifact'lar, Loglar, Workspace dosyaları, Komutlar
+(`PromptDetails`) ve Ayarlar'daki "rtk config dosyasını aç". Backend: dokuz
+`handleReveal*` handler'ı + route'ları (`agents`/`sessions`/`flows`/`artifacts`/
+`skills`/`prompts`/`logs`/`workspace-config`/`rtk-config`) ve karşılık gelen
+`api/*.ts` istemci fonksiyonları. Böylece `explorer.exe` çağıran tek yüzey de
+kalmadı.
+
+**Dokunulmayan.** `GET .../path` uç noktaları (kopyalama hâlâ onları kullanır) ve
+adı benzeşen ama tamamen farklı olan **`GET /api/secrets/{name}/reveal`** (sır
+değerinin sahibe gösterilmesi).
+
+**Devamı — `CopyPathButton` ikon-only.** Çift buton gidince etiket taşıma
+mekanizmasının (`label` + `labelClassName`) da anlamı kalmadı: her çağrı yeri zaten
+`labelClassName="hidden"` ile etiketi gizliyordu. İki prop kaldırıldı, bileşen tek
+`<Copy>` ikonu render eder; yol bilgisi başlıkta (tooltip) durur. `PATH_ACTION_CLS`
+artık `gap` taşımıyor.
+
+`go build ./...` + `go test ./internal/api` + `npm run build` yeşil.
 
 ## Koordinasyon araçları allowlist'ten muaf — canlı testte bulunan sessiz delegasyon kaybı (2026-08-11) ✅
 
@@ -3641,6 +3723,9 @@ matcher yazılıyor → sqz/rtk gerçekten ateşlenir.
   binary'nin görmesi için yeniden derleme + restart gerekir.
 
 ## Otomatik artifact yakalama toggle'ı (`AutoCaptureArtifacts`) ✅ (2026-07-13)
+
+> **GEÇERSİZ (2026-08-14):** bu toggle ve arkasındaki yakalama mekanizması tamamen
+> kaldırıldı — bkz. dosyanın başındaki "Otomatik artifact yakalama tamamen kaldırıldı".
 
 - **Ne:** Yazılan dosyaların tur sonunda otomatik artifact yapılması artık **workspace
   ayarı** ile açılıp kapanabiliyor ve **varsayılan KAPALI**. Kapalıyken yalnız ajanın

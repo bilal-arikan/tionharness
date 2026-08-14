@@ -4,7 +4,6 @@ import { api } from '@/api'
 import type { LogEntry } from '@/types'
 import { groupConsecutive } from './logGroup'
 import { CopyPathButton } from '@/shared/components/CopyPathButton'
-import { RevealButton } from '@/shared/components/RevealButton'
 import { PaneHeader } from '@/shared/components'
 
 interface Props {
@@ -121,7 +120,10 @@ export function LogsPanel({ onError }: Props) {
 
   // Resolve the on-disk log file path once for the copy/open-folder actions.
   useEffect(() => {
-    api.logsPath().then((r) => setLogPath(r.path)).catch(() => setLogPath(''))
+    api
+      .logsPath()
+      .then((r) => setLogPath(r.path))
+      .catch(() => setLogPath(''))
   }, [])
 
   // Debounce the search box (the input itself stays instant).
@@ -152,7 +154,9 @@ export function LogsPanel({ onError }: Props) {
   }, [level, qDebounced, component, sinceMs, onError])
 
   // Initial + reactive load when filters change.
-  useEffect(() => { void load() }, [load])
+  useEffect(() => {
+    void load()
+  }, [load])
 
   // Client-side twin of the server filters, applied to live SSE entries.
   const matchesFilters = useCallback(
@@ -193,13 +197,18 @@ export function LogsPanel({ onError }: Props) {
 
   useEffect(() => {
     if (!follow) return
-    const id = setInterval(() => { void load() }, 30_000)
+    const id = setInterval(() => {
+      void load()
+    }, 30_000)
     return () => clearInterval(id)
   }, [follow, load])
 
   // Collapse runs of identical adjacent entries when grouping is enabled.
   const rows = useMemo(
-    () => (group ? groupConsecutive(logs) : logs.map((e) => ({ entry: e, count: 1, firstTime: e.time, lastTime: e.time }))),
+    () =>
+      group
+        ? groupConsecutive(logs)
+        : logs.map((e) => ({ entry: e, count: 1, firstTime: e.time, lastTime: e.time })),
     [logs, group],
   )
 
@@ -266,12 +275,6 @@ export function LogsPanel({ onError }: Props) {
                 : `${logs.length} kayıt`}
             </span>
             <CopyPathButton path={logPath} title="Log dosyası yolunu kopyala" />
-            <RevealButton
-              onReveal={() => api.revealLogs().catch((e) => onError((e as Error).message))}
-              label="Aç"
-              labelClassName="hidden sm:inline"
-              title="Log klasörünü aç"
-            />
             <button
               onClick={exportLogs}
               className="flex items-center gap-1 rounded border border-[var(--color-border)] px-2 py-1 text-xs hover:border-[var(--color-accent)]"
@@ -315,7 +318,9 @@ export function LogsPanel({ onError }: Props) {
         >
           <option value="">Bileşen: hepsi</option>
           {components.map((c) => (
-            <option key={c} value={c}>{c}</option>
+            <option key={c} value={c}>
+              {c}
+            </option>
           ))}
         </select>
         <select
@@ -325,7 +330,9 @@ export function LogsPanel({ onError }: Props) {
           title="Zaman aralığına göre filtrele"
         >
           {RANGES.map((r) => (
-            <option key={r.key} value={r.key}>{r.label}</option>
+            <option key={r.key} value={r.key}>
+              {r.label}
+            </option>
           ))}
         </select>
         <input
@@ -355,102 +362,122 @@ export function LogsPanel({ onError }: Props) {
 
       {/* Log lines */}
       <div className="relative flex min-h-0 flex-1 flex-col">
-      <div ref={scrollRef} onScroll={onScroll} className="@container flex-1 overflow-y-auto p-3 font-mono text-xs leading-relaxed">
-        {rows.length === 0 && (
-          <p className="text-[var(--color-text-dim)]">Kayıt yok.</p>
-        )}
-        {rows.map((g) => {
-          const e = g.entry
-          return (
-            <div
-              key={e.seq}
-              className="group flex gap-2 border-b border-[var(--color-border)]/30 py-0.5"
-              // Skip layout/paint for offscreen rows — cheap virtualization that
-              // keeps a 1000-row list responsive without a windowing library.
-              style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 22px' }}
-            >
-              <span
-                className="shrink-0 text-[var(--color-text-dim)]"
-                title={g.count > 1 ? `${clockTime(g.firstTime)} → ${clockTime(g.lastTime)}` : fmtTime(e.time)}
+        <div
+          ref={scrollRef}
+          onScroll={onScroll}
+          className="@container flex-1 overflow-y-auto p-3 font-mono text-xs leading-relaxed"
+        >
+          {rows.length === 0 && <p className="text-[var(--color-text-dim)]">Kayıt yok.</p>}
+          {rows.map((g) => {
+            const e = g.entry
+            return (
+              <div
+                key={e.seq}
+                className="group flex gap-2 border-b border-[var(--color-border)]/30 py-0.5"
+                // Skip layout/paint for offscreen rows — cheap virtualization that
+                // keeps a 1000-row list responsive without a windowing library.
+                style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 22px' }}
               >
-                {clockTime(e.time)}
-                {/* Milliseconds only on a genuinely wide panel (@2xl ≈ 672px) — on
+                <span
+                  className="shrink-0 text-[var(--color-text-dim)]"
+                  title={
+                    g.count > 1
+                      ? `${clockTime(g.firstTime)} → ${clockTime(g.lastTime)}`
+                      : fmtTime(e.time)
+                  }
+                >
+                  {clockTime(e.time)}
+                  {/* Milliseconds only on a genuinely wide panel (@2xl ≈ 672px) — on
                     narrow/medium widths they crowd the row and add little (the full
                     time incl. ms is always in the row's title tooltip). */}
-                <span className="hidden @2xl:inline">.{msPart(e.time)}</span>
-              </span>
-              {/* Level: single-letter (I/W/E/D) when narrow, full label when wide. */}
-              <span
-                className={`w-3 shrink-0 font-semibold @sm:w-12 ${LEVEL_COLOR[e.level] ?? ''}`}
-                title={e.level}
-              >
-                <span className="@sm:hidden">{e.level.charAt(0)}</span>
-                <span className="hidden @sm:inline">{e.level}</span>
-              </span>
-              {e.component && (
-                <button
-                  onClick={() => setComponent(e.component!)}
-                  className="hidden shrink-0 rounded bg-[var(--color-surface-2)] px-1.5 text-[var(--color-text-dim)] hover:text-[var(--color-accent)] @sm:inline"
-                  title={`Bileşene göre filtrele: ${e.component}`}
-                >
-                  {e.component}
-                </button>
-              )}
-              {g.count > 1 && (
-                <span
-                  className="shrink-0 rounded bg-[var(--color-surface-2)] px-1.5 font-semibold text-[var(--color-accent)]"
-                  title={`${g.count} kez tekrarlandı (${clockTime(g.firstTime)} → ${clockTime(g.lastTime)})`}
-                >
-                  ×{g.count}
+                  <span className="hidden @2xl:inline">.{msPart(e.time)}</span>
                 </span>
-              )}
-              <span className="min-w-0 flex-1 break-words">
-                <span className="text-[var(--color-text)]">{highlight(e.message, qDebounced)}</span>
-                {e.session && (
-                  <span className="ml-2 text-[var(--color-text-dim)]">
-                    session=<span className="text-[var(--color-accent)]">{highlight(e.session, qDebounced)}</span>
+                {/* Level: single-letter (I/W/E/D) when narrow, full label when wide. */}
+                <span
+                  className={`w-3 shrink-0 font-semibold @sm:w-12 ${LEVEL_COLOR[e.level] ?? ''}`}
+                  title={e.level}
+                >
+                  <span className="@sm:hidden">{e.level.charAt(0)}</span>
+                  <span className="hidden @sm:inline">{e.level}</span>
+                </span>
+                {e.component && (
+                  <button
+                    onClick={() => setComponent(e.component!)}
+                    className="hidden shrink-0 rounded bg-[var(--color-surface-2)] px-1.5 text-[var(--color-text-dim)] hover:text-[var(--color-accent)] @sm:inline"
+                    title={`Bileşene göre filtrele: ${e.component}`}
+                  >
+                    {e.component}
+                  </button>
+                )}
+                {g.count > 1 && (
+                  <span
+                    className="shrink-0 rounded bg-[var(--color-surface-2)] px-1.5 font-semibold text-[var(--color-accent)]"
+                    title={`${g.count} kez tekrarlandı (${clockTime(g.firstTime)} → ${clockTime(g.lastTime)})`}
+                  >
+                    ×{g.count}
                   </span>
                 )}
-                {e.agent && (
-                  <span className="ml-2 text-[var(--color-text-dim)]">
-                    agent=<span className="text-[var(--color-accent)]">{highlight(e.agent, qDebounced)}</span>
+                <span className="min-w-0 flex-1 break-words">
+                  <span className="text-[var(--color-text)]">
+                    {highlight(e.message, qDebounced)}
                   </span>
-                )}
-                {e.workspace && (
-                  <span className="ml-2 text-[var(--color-text-dim)]">
-                    workspace=<span className="text-[var(--color-accent)]">{highlight(e.workspace, qDebounced)}</span>
-                  </span>
-                )}
-                {e.attrs &&
-                  Object.entries(e.attrs).map(([k, v]) => (
-                    <span key={k} className="ml-2 text-[var(--color-text-dim)]">
-                      {k}=<span className="text-[var(--color-accent)]">{highlight(v, qDebounced)}</span>
+                  {e.session && (
+                    <span className="ml-2 text-[var(--color-text-dim)]">
+                      session=
+                      <span className="text-[var(--color-accent)]">
+                        {highlight(e.session, qDebounced)}
+                      </span>
                     </span>
-                  ))}
-              </span>
-              <button
-                onClick={() => copyLine(e)}
-                className="invisible shrink-0 self-start text-[var(--color-text-dim)] hover:text-[var(--color-accent)] group-hover:visible"
-                title="Satırı kopyala"
-              >
-                <Copy size={12} />
-              </button>
-            </div>
-          )
-        })}
-      </div>
-      {/* Jump-to-bottom: shown when following but the user scrolled up, so new
+                  )}
+                  {e.agent && (
+                    <span className="ml-2 text-[var(--color-text-dim)]">
+                      agent=
+                      <span className="text-[var(--color-accent)]">
+                        {highlight(e.agent, qDebounced)}
+                      </span>
+                    </span>
+                  )}
+                  {e.workspace && (
+                    <span className="ml-2 text-[var(--color-text-dim)]">
+                      workspace=
+                      <span className="text-[var(--color-accent)]">
+                        {highlight(e.workspace, qDebounced)}
+                      </span>
+                    </span>
+                  )}
+                  {e.attrs &&
+                    Object.entries(e.attrs).map(([k, v]) => (
+                      <span key={k} className="ml-2 text-[var(--color-text-dim)]">
+                        {k}=
+                        <span className="text-[var(--color-accent)]">
+                          {highlight(v, qDebounced)}
+                        </span>
+                      </span>
+                    ))}
+                </span>
+                <button
+                  onClick={() => copyLine(e)}
+                  className="invisible shrink-0 self-start text-[var(--color-text-dim)] hover:text-[var(--color-accent)] group-hover:visible"
+                  title="Satırı kopyala"
+                >
+                  <Copy size={12} />
+                </button>
+              </div>
+            )
+          })}
+        </div>
+        {/* Jump-to-bottom: shown when following but the user scrolled up, so new
           lines no longer drag the view down. Click re-pins to the bottom. */}
-      {follow && !atBottom && (
-        <button
-          onClick={scrollToBottom}
-          title="En alta in"
-          className="absolute bottom-3 right-4 flex items-center gap-1 rounded-full border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-1.5 text-xs text-[var(--color-text)] shadow-md transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
-        >
-          <ArrowDown size={12} />
-          En alta in
-        </button>
-      )}
+        {follow && !atBottom && (
+          <button
+            onClick={scrollToBottom}
+            title="En alta in"
+            className="absolute bottom-3 right-4 flex items-center gap-1 rounded-full border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-1.5 text-xs text-[var(--color-text)] shadow-md transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
+          >
+            <ArrowDown size={12} />
+            En alta in
+          </button>
+        )}
       </div>
     </div>
   )

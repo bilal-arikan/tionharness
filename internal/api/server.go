@@ -387,7 +387,6 @@ func (s *Server) registerWorkspaceRoutes(mux *http.ServeMux) {
 	// <workspace>/config/), editable by the user on disk or via the UI.
 	mux.HandleFunc("GET /api/workspace-config", s.handleGetWorkspaceConfig)
 	mux.HandleFunc("PUT /api/workspace-config", s.handleUpdateWorkspaceConfig)
-	mux.HandleFunc("POST /api/workspace-config/reveal", s.handleRevealWorkspaceConfig)
 }
 
 // registerAgentRoutes registers agent CRUD.
@@ -400,9 +399,8 @@ func (s *Server) registerAgentRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/agents/{id}/duplicate", s.handleDuplicateAgent)
 	// Fresh-start context preview (assembled system prompt + tool catalog).
 	mux.HandleFunc("GET /api/agents/{id}/context", s.handleAgentContext)
-	// On-disk JSON file path + reveal in the OS file manager (local desktop).
+	// On-disk JSON file path (for the copy-path action).
 	mux.HandleFunc("GET /api/agents/{id}/path", s.handleAgentPath)
-	mux.HandleFunc("POST /api/agents/{id}/reveal", s.handleRevealAgent)
 }
 
 // registerSessionRoutes registers chat sessions + messages + titling.
@@ -470,7 +468,6 @@ func (s *Server) registerSessionRoutes(mux *http.ServeMux) {
 	// tools) this session's agent would be sent. Optional ?message= sample turn.
 	mux.HandleFunc("GET /api/sessions/{id}/context-preview", s.handleSessionContextPreview)
 	mux.HandleFunc("GET /api/sessions/{id}/path", s.handleSessionPath)
-	mux.HandleFunc("POST /api/sessions/{id}/reveal", s.handleRevealSession)
 }
 
 // envTruthy reports whether an env value opts a feature in (1/true/on/yes).
@@ -640,9 +637,8 @@ func (s *Server) registerFlowRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("PUT /api/flows/{id}/tags", s.handleSetFlowTags)
 	mux.HandleFunc("PUT /api/flows/{id}/emoji", s.handleSetFlowEmoji)
 	mux.HandleFunc("DELETE /api/flows/{id}", s.handleDeleteFlow)
-	// Locate the flow on disk: copy its path or open its folder in Explorer.
+	// Locate the flow on disk (copy-path action).
 	mux.HandleFunc("GET /api/flows/{id}/path", s.handleFlowPath)
-	mux.HandleFunc("POST /api/flows/{id}/reveal", s.handleRevealFlow)
 	mux.HandleFunc("POST /api/flows/{id}/run", s.handleRunFlow)
 	mux.HandleFunc("POST /api/flows/{id}/run-stream", s.handleRunFlowStream)
 	mux.HandleFunc("GET /api/flow-runs", s.handleListFlowRuns)
@@ -685,9 +681,8 @@ func (s *Server) registerArtifactRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("PUT /api/artifacts/{id}/group", s.handleSetArtifactGroup)
 	// Archive / un-archive an artifact (a soft, reversible hide).
 	mux.HandleFunc("PUT /api/artifacts/{id}/archive", s.handleSetArtifactArchived)
-	// Locate the artifact on disk: copy its path or open its folder in Explorer.
+	// Locate the artifact on disk (copy-path action).
 	mux.HandleFunc("GET /api/artifacts/{id}/path", s.handleArtifactPath)
-	mux.HandleFunc("POST /api/artifacts/{id}/reveal", s.handleRevealArtifact)
 }
 
 // registerSkillRoutes registers the file-based skill catalog (reusable agent
@@ -706,7 +701,6 @@ func (s *Server) registerSkillRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("PUT /api/skills/{slug}/visibility", s.handleSetSkillVisibility)
 	mux.HandleFunc("PUT /api/skills/{slug}/group", s.handleSetSkillGroup)
 	mux.HandleFunc("POST /api/skills/{slug}/restore", s.handleRestoreSkill)
-	mux.HandleFunc("POST /api/skills/{slug}/reveal", s.handleRevealSkill)
 }
 
 // registerSettingsRoutes registers the global application settings document.
@@ -716,7 +710,6 @@ func (s *Server) registerSettingsRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/settings/test-provider", s.handleTestProvider)
 	mux.HandleFunc("GET /api/catalog", s.handleCatalog)
 	mux.HandleFunc("GET /api/prompts", s.handleListPrompts)
-	mux.HandleFunc("POST /api/prompts/reveal", s.handleRevealPrompts)
 	// Custom (user-added) OpenAI/Anthropic-compatible providers.
 	mux.HandleFunc("GET /api/providers", s.handleListProviders)
 	mux.HandleFunc("PUT /api/providers", s.handleUpsertProvider)
@@ -750,9 +743,8 @@ func (s *Server) registerMiscRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("DELETE /api/uploads", s.handleDeleteUpload)
 	// Application + workspace logs (global ring buffer).
 	mux.HandleFunc("GET /api/logs", s.handleListLogs)
-	// On-disk log file path + reveal in the OS file manager (local desktop).
+	// On-disk log file path (for the copy-path action).
 	mux.HandleFunc("GET /api/logs/path", s.handleLogsPath)
-	mux.HandleFunc("POST /api/logs/reveal", s.handleRevealLogs)
 	// Frontend error bridge: client-side crashes/rejections funnel into the log
 	// stream so they surface in the Logs screen, not just the browser console.
 	mux.HandleFunc("POST /api/logs", s.handleClientLog)
@@ -766,15 +758,13 @@ func (s *Server) registerMiscRoutes(mux *http.ServeMux) {
 	// because it leaves the machine and must not block the panel's first paint.
 	mux.HandleFunc("POST /api/external-tools/check-updates", s.handleExternalToolUpdates)
 	// Run one tool's update. Only package-manager-backed tools are accepted; the
-	// rest answer 409 with manual instructions. More specific literal routes below
-	// (rtk-config/reveal) still win over this pattern under Go's mux precedence.
+	// rest answer 409 with manual instructions.
 	mux.HandleFunc("POST /api/external-tools/{name}/update", s.handleExternalToolUpdate)
 	// Maintenance ACTIONS for the token optimizers (not settings — their config is
 	// machine-global while TionSwarm settings are per-workspace; see
 	// external_tools_maint.go). Fixed-argv commands, no request parameters.
 	mux.HandleFunc("GET /api/external-tools/token-report", s.handleTokenToolReport)
 	mux.HandleFunc("POST /api/external-tools/sqz-reset-cache", s.handleSqzResetCache)
-	mux.HandleFunc("POST /api/external-tools/rtk-config/reveal", s.handleRevealRtkConfig)
 }
 
 // workspaceQueryKeys are the query parameters that scope a request to a workspace,

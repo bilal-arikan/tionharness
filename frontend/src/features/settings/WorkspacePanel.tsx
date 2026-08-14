@@ -84,16 +84,6 @@ export function WorkspacePanel({ ws, setWsField, onDeleteWorkspace }: Props) {
       />
 
       <div className="mt-2 border-t border-[var(--color-border)] pt-3 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
-        Artifact yakalama
-      </div>
-      <Toggle
-        label="Yazılan dosyaları otomatik artifact yap"
-        hint="Varsayılan KAPALI. Kapalıyken yalnız ajanın BİLEREK create_artifact çağırdığı içerikler artifact olur; proje kaynak dosyalarını düzenlemek Artifacts ekranını kirletmez. Açıkken ajanın Write/create_file ile yazdığı her dosya tur sonunda otomatik Artifacts'a düşer. Prompt yönlendirmesi de bu ayara göre değişir."
-        checked={ws.autoCaptureArtifacts}
-        onChange={(v) => setWsField('autoCaptureArtifacts', v)}
-      />
-
-      <div className="mt-2 border-t border-[var(--color-border)] pt-3 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
         Shell çıktısı sıkıştırma (sqz)
       </div>
       <Field

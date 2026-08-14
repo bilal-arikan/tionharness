@@ -18,7 +18,6 @@ import { api } from '@/api'
 import { VISIBILITY_TIERS, visibilityMeta } from '@/features/tools/toolMeta'
 import { Markdown } from '@/shared/components/markdown/Markdown'
 import { CopyPathButton } from '@/shared/components/CopyPathButton'
-import { RevealButton } from '@/shared/components/RevealButton'
 import { InfoToast } from '@/shared/components/InfoToast'
 import { SkillEditor } from './SkillEditor'
 import { useMultiSelect } from '@/shared/hooks/useMultiSelect'
@@ -259,12 +258,6 @@ export function SkillsPanel({ onError }: Props) {
       .then(setActive)
       .catch((e) => onError((e as Error).message))
       .finally(() => setLoadingBody(false))
-  }, [activeSlug, onError])
-
-  // Open the selected skill's folder in the OS file manager (local desktop app).
-  const reveal = useCallback(() => {
-    if (!activeSlug) return
-    api.revealSkill(activeSlug).catch((e) => onError((e as Error).message))
   }, [activeSlug, onError])
 
   // Flip the selected skill between shared (on-demand) and restricted; rewrites
@@ -808,14 +801,7 @@ export function SkillsPanel({ onError }: Props) {
                   {active.shared ? <Lock size={14} /> : <Globe size={14} />}
                   {active.shared ? 'Kısıtla' : 'Paylaş'}
                 </button>
-                <CopyPathButton path={active.dir} label="Yolu kopyala" labelClassName="hidden" />
-                <RevealButton
-                  testId="skill-detail-reveal"
-                  onReveal={reveal}
-                  label="Aç"
-                  labelClassName="hidden sm:inline"
-                  title="Skill klasörünü dosya yöneticisinde aç"
-                />
+                <CopyPathButton path={active.dir} />
                 {/* Shipped skills only. The automatic re-seed refreshes a skill
                     ONLY when it can prove nobody edited its body, so an edited
                     (or pre-ledger) one needs this deliberate opt-in to start

@@ -12,9 +12,6 @@ func TestDefaultWSSettings(t *testing.T) {
 	if !d.CodebaseMemoryEnabled {
 		t.Error("codebase-memory capability should default on")
 	}
-	if d.AutoCaptureArtifacts {
-		t.Error("auto-capture artifacts should default OFF (deliberate create_artifact only)")
-	}
 	if d.DesktopNotifications != nil {
 		t.Error("desktopNotifications should default to nil (inherit the global toggle)")
 	}

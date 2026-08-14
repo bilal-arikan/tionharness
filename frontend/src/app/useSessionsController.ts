@@ -416,17 +416,6 @@ export function useSessionsController({
     [setError],
   )
 
-  const revealSession = useCallback(
-    async (id: string) => {
-      try {
-        await api.revealSession(id)
-      } catch (e) {
-        setError((e as Error).message)
-      }
-    },
-    [setError],
-  )
-
   const deleteSession = useCallback(
     async (id: string) => {
       if (id === freshEmptyRef.current) freshEmptyRef.current = null
@@ -683,7 +672,6 @@ export function useSessionsController({
     setSessionArchived,
     setSessionPinned,
     copySessionPath,
-    revealSession,
     deleteSession,
     deleteMessage,
     rateMessage,

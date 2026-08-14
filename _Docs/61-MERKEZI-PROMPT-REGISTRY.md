@@ -79,8 +79,8 @@ cevaplanır. Damgalı yollar: summary, title, lesson, insight-analyzer, btw-syst
   içten kaydırılır; edit/preview/split görünümlerinin üçünde de geçerli, tam
   ekran etkilenmez; `autoSize={false}` eski sabit kutu) — kısa promptlarda sabit
   26rem'lik boş kutu kalmadı (2026-07-23).
-- `GET /api/prompts` (salt-okunur vitrin) artık tüm registry'yi listeler;
-  `POST /api/prompts/reveal` `internal/prompts/defaults` klasörünü açar.
+- `GET /api/prompts` (salt-okunur vitrin) artık tüm registry'yi listeler; klasör
+  yolu yalnız kopyalanabilir (klasörü açan `reveal` uç noktası 2026-08-12'de kaldırıldı).
 - Market publish + workspace şablonları `agent.PromptKeys` üzerinden döndüğü için
   özelleştirilmiş TÜM promptları otomatik taşır.
 

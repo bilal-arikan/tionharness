@@ -87,7 +87,4 @@ export const artifactApi = {
     }),
   // Locate the artifact on disk: its file path + containing folder.
   artifactPath: (id: string) => req<{ path: string; dir: string }>(`/api/artifacts/${id}/path`),
-  // Open the artifact's folder in the OS file manager (local desktop app).
-  revealArtifact: (id: string) =>
-    req<{ path: string; dir: string }>(`/api/artifacts/${id}/reveal`, { method: 'POST' }),
 }

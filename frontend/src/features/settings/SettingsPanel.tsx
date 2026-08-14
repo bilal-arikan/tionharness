@@ -442,7 +442,6 @@ export function SettingsPanel({
                     promptsDir={promptsDir}
                     openCmds={openCmds}
                     setOpenCmds={setOpenCmds}
-                    onError={onError}
                   />
                 )}
                 {cat === 'stepkinds' && <StepKindsPanel />}

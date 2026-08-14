@@ -97,14 +97,6 @@ type WSSettings struct {
 	// the OUTPUT after. They compose — see _Docs/17.
 	ShellCommandRewrite string `json:"shellCommandRewrite,omitempty"`
 
-	// AutoCaptureArtifacts toggles the turn-end trace scan that upserts every file
-	// the agent wrote (Write/create_file) as an artifact automatically. Default OFF:
-	// only files the agent DELIBERATELY registers via create_artifact become
-	// artifacts — plain file writes (e.g. editing project source) stay off the
-	// Artifacts screen. On: any file deliverable lands in the Artifacts screen
-	// without an explicit call. The deliverable prompt guidance follows this toggle.
-	AutoCaptureArtifacts bool `json:"autoCaptureArtifacts"`
-
 	// BoardColumns overrides the default kanban column set for this workspace.
 	// Empty/nil means "use db.DefaultBoardColumns()".
 	BoardColumns []db.BoardColumnDef `json:"boardColumns,omitempty"`
@@ -143,10 +135,6 @@ func defaultWSSettings() WSSettings {
 		Instructions:          defaultInstructions,
 		CodebaseMemoryEnabled: true,
 		PromptEpochEnabled:    true,
-		// Default OFF: writing a file no longer auto-registers an artifact. Only a
-		// deliberate create_artifact call produces one, so editing project source
-		// files does not pollute the Artifacts screen. Opt in per workspace.
-		AutoCaptureArtifacts: false,
 	}
 }
 
@@ -168,7 +156,6 @@ type WSSettingsPatch struct {
 	TerseMode              *bool   `json:"terseMode"`
 	CodebaseMemoryEnabled  *bool   `json:"codebaseMemoryEnabled"`
 	PromptEpochEnabled     *bool   `json:"promptEpochEnabled"`
-	AutoCaptureArtifacts   *bool   `json:"autoCaptureArtifacts"`
 	ShellOutputCompression *string `json:"shellOutputCompression"`
 	ShellCommandRewrite    *string `json:"shellCommandRewrite"`
 
@@ -362,9 +349,6 @@ func (m *Manager) UpdateSettings(id string, patch WSSettingsPatch) (*Workspace, 
 	}
 	if patch.PromptEpochEnabled != nil {
 		ws.settings.cur.PromptEpochEnabled = *patch.PromptEpochEnabled
-	}
-	if patch.AutoCaptureArtifacts != nil {
-		ws.settings.cur.AutoCaptureArtifacts = *patch.AutoCaptureArtifacts
 	}
 	if patch.ShellOutputCompression != nil {
 		ws.settings.cur.ShellOutputCompression = *patch.ShellOutputCompression

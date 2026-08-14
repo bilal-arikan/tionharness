@@ -248,9 +248,6 @@ export const sessionApi = {
   // turn cold-restarts fresh. Conversation untouched. Returns how many were dropped.
   dropSessionCliProcess: (sessionId: string) =>
     req<{ dropped: number }>(`/api/sessions/${sessionId}/cli-process`, { method: 'DELETE' }),
-  // Open the session's folder in the OS file manager (local desktop).
-  revealSession: (sessionId: string) =>
-    req<{ path: string }>(`/api/sessions/${sessionId}/reveal`, { method: 'POST' }),
 
   sessionContext: (sessionId: string) => req<SessionContext>(`/api/sessions/${sessionId}/context`),
 

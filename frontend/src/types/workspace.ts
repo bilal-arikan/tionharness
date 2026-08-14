@@ -108,7 +108,6 @@ export interface WorkspaceSettings {
   terseMode: boolean
   codebaseMemoryEnabled: boolean
   promptEpochEnabled: boolean
-  autoCaptureArtifacts: boolean
   // In-process shell-output compression (sqz) override: '' = auto (follow sqz-hook
   // detection), 'on' = force on (needs the sqz binary), 'off' = disable.
   shellOutputCompression: '' | 'on' | 'off'
@@ -147,7 +146,6 @@ export type WorkspaceSettingsPatch = Partial<
     | 'terseMode'
     | 'codebaseMemoryEnabled'
     | 'promptEpochEnabled'
-    | 'autoCaptureArtifacts'
     | 'shellOutputCompression'
     | 'shellCommandRewrite'
     | 'boardColumns'

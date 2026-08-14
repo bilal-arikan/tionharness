@@ -33,8 +33,8 @@ func init() {
 			AllowCustomModel: true,
 			Order:            6,
 			Models: []ModelInfo{
-				{ID: "deepseek-v4-flash", Label: "DeepSeek V4 Flash — hızlı/çok ucuz", Description: "1M bağlam, yüksek hacim; düşünmeyen mod ($0.14/$0.28 · 1M, cache-hit ~$0.003)"},
-				{ID: "deepseek-v4-pro", Label: "DeepSeek V4 Pro — güçlü/akıl-yürütme", Description: "1M bağlam, düşünme ağırlıklı katman ($0.435/$0.87 · 1M, cache-hit ~$0.004)"},
+				{ID: "deepseek-v4-flash", Label: "DeepSeek V4 Flash — hızlı/ucuz", Description: "1M bağlam, yüksek hacim; düşünmeyen mod ($0.22/$0.66 · 1M, cache-hit ~$0.007; peak saatlerde 2×)"},
+				{ID: "deepseek-v4-pro", Label: "DeepSeek V4 Pro — güçlü/akıl-yürütme", Description: "1M bağlam, düşünme ağırlıklı katman ($0.66/$1.98 · 1M, cache-hit ~$0.022; peak saatlerde 2×)"},
 			},
 		},
 		func(cfg ResolvedConfig) bool { return cfg.Key != "" },

@@ -23,7 +23,6 @@ import { api } from '@/api'
 import type { Agent, Artifact, ArtifactKind } from '@/types'
 import { ArtifactView } from './ArtifactView'
 import { CopyPathButton } from '@/shared/components/CopyPathButton'
-import { RevealButton } from '@/shared/components/RevealButton'
 import { AgentAvatar } from '@/shared/components/agents/AgentAvatar'
 import { relativeTime } from '@/shared/lib/time'
 import { copyToClipboard } from '@/shared/lib/clipboard'
@@ -242,12 +241,6 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
       cancelled = true
     }
   }, [activeId])
-
-  // Open the active artifact's folder in the OS file manager (local desktop app).
-  const reveal = useCallback(() => {
-    if (!activeId) return
-    api.revealArtifact(activeId).catch((e) => onError((e as Error).message))
-  }, [activeId, onError])
 
   const remove = useCallback(
     async (id: string) => {
@@ -944,19 +937,7 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
                 ) : (
                   <>
                     {/* Edit moved next to the content-copy button in the chip row. */}
-                    <CopyPathButton
-                      path={activePath}
-                      label="Yolu kopyala"
-                      labelClassName="hidden"
-                      title="Yolu kopyala"
-                    />
-                    <RevealButton
-                      testId="artifact-detail-reveal"
-                      onReveal={reveal}
-                      disabled={!activePath}
-                      label="Aç"
-                      labelClassName="hidden sm:inline"
-                    />
+                    <CopyPathButton path={activePath} title="Yolu kopyala" />
                     {active.sessionId && onOpenSession && (
                       <button
                         onClick={() => onOpenSession(active.sessionId)}

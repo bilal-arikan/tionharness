@@ -40,10 +40,12 @@ da yazar: `<dataDir>/logs/tionswarm.log` (append, best-effort — açılamazsa s
 stdout-only'e düşer). Yol çözümü `config.LogFilePath()` (= `config.DefaultDataDir()`
 + `logs/tionswarm.log`), böylece `api` paketi `app`'i import etmeden yolu bilir.
 
-Loglar ekranında (`LogsPanel`) **yolu kopyala** + **klasörü aç** (Explorer
-`/select`) eklendi. Endpoint'ler: `GET /api/logs/path`, `POST /api/logs/reveal`
+Loglar ekranında (`LogsPanel`) **yolu kopyala** var; endpoint `GET /api/logs/path`
 (`api/logs_path.go`). Bellek-içi ring buffer (2000 kayıt) UI'ın canlı akışını,
 disk dosyası ise tam geçmişi tutar.
+
+> "Klasörü aç" (Explorer reveal) butonları ve `POST .../reveal` uç noktaları
+> **2026-08-12'de tüm uygulamadan kaldırıldı** — geriye yalnız yol kopyalama kaldı.
 
 ## Takip edilmeyen hataları yakalama (son savunma hattı, 2026-06-18)
 

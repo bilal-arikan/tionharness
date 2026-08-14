@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"os/exec"
 	"sort"
 	"strings"
 	"sync"
@@ -171,23 +170,6 @@ func (s *Server) handleFlowPath(w http.ResponseWriter, r *http.Request) {
 	path, err := ws(r).DB.FlowPath(r.PathValue("id"))
 	if writeDBError(w, err, "flow not found") {
 		return
-	}
-	writeJSON(w, http.StatusOK, map[string]string{"path": path})
-}
-
-// handleRevealFlow opens the folder holding the flow's JSON file in the OS file
-// manager (Windows: Explorer, highlighting the file) on the local desktop.
-func (s *Server) handleRevealFlow(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
-	path, err := ws(r).DB.FlowPath(id)
-	if writeDBError(w, err, "flow not found") {
-		return
-	}
-	// Detached from r.Context() so the fire-and-forget launch isn't killed when
-	// the handler returns. explorer.exe returns non-zero even on success, so only
-	// a failure to *start* the process is a real error.
-	if err := exec.Command("explorer.exe", "/select,"+path).Start(); err != nil {
-		s.logger.Warn("reveal flow folder failed", "flow", id, "error", err)
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"path": path})
 }

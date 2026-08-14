@@ -14,18 +14,15 @@ or show media to the user.
 
 ## 1. Substantial output → write it as an artifact
 
-When asked to produce a **file / document / dataset / report / code**, write it
-with your file tool (`write_file` / `Write`) or call `create_artifact`. Do NOT
-deliver substantial output only as inline chat text, and do NOT write it only
-via an ad-hoc shell command — that bypasses artifact capture, so the user never
-gets a real, openable deliverable in the Artifacts screen.
+When asked to produce a **file / document / dataset / report / code**, register it
+as an artifact by calling `create_artifact` (the artifacts API does the same). Do
+NOT deliver substantial output only as inline chat text — the user never gets a
+real, openable deliverable in the Artifacts screen.
 
-> **Auto-capture may be OFF for this workspace.** By default every file you write
-> is auto-captured as an artifact; a workspace can turn that off
-> (`AutoCaptureArtifacts`). When it is off, a plain file write does NOT create an
-> artifact — register deliverables **deliberately** with `create_artifact`, and
-> ordinary edits to project source files stay out of the Artifacts screen. Your
-> turn's deliverable-guidance line tells you which mode is active.
+> **There is no automatic capture.** Writing a file never creates an artifact by
+> itself: artifacts exist only when you create them **deliberately** with
+> `create_artifact`. Ordinary edits to project source files therefore stay out of
+> the Artifacts screen.
 
 For a **binary file already on disk** (e.g. a screenshot, a generated PDF), call
 `create_artifact` with `kind=image|file` and `sourcePath` set to the path on

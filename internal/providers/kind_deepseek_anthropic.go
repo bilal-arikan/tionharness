@@ -26,8 +26,8 @@ func init() {
 			AllowCustomModel: true,
 			Order:            7,
 			Models: []ModelInfo{
-				{ID: "deepseek-v4-flash", Label: "DeepSeek V4 Flash — hızlı/çok ucuz", Description: "Anthropic modu: araç kullanımı ($0.14/$0.28 · 1M)"},
-				{ID: "deepseek-v4-pro", Label: "DeepSeek V4 Pro — güçlü/akıl-yürütme", Description: "Anthropic modu: araç kullanımı + düşünme ($0.435/$0.87 · 1M)"},
+				{ID: "deepseek-v4-flash", Label: "DeepSeek V4 Flash — hızlı/ucuz", Description: "Anthropic modu: araç kullanımı ($0.22/$0.66 · 1M, peak saatlerde 2×)"},
+				{ID: "deepseek-v4-pro", Label: "DeepSeek V4 Pro — güçlü/akıl-yürütme", Description: "Anthropic modu: araç kullanımı + düşünme ($0.66/$1.98 · 1M, peak saatlerde 2×)"},
 			},
 		},
 		func(cfg ResolvedConfig) bool { return cfg.Key != "" },

@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type Dispatch,
+  type SetStateAction,
+} from 'react'
 import { useNodesState, useEdgesState, type Edge } from '@xyflow/react'
 import { api } from '@/api'
 import { useRegisterDirty } from '@/shared/lib/dirtySignals'
@@ -6,12 +14,7 @@ import type { FlowNodeEvent } from '@/api/flows'
 import { TemplatePreview } from './TemplatePreview'
 import { RunTreeView } from './RunTreeView'
 import { FLOW_TEMPLATES } from './flowTemplates'
-import {
-  graphToReactFlow,
-  reactFlowToGraph,
-  canonicalGraphKey,
-  type FlowRFNode,
-} from './flowGraph'
+import { graphToReactFlow, reactFlowToGraph, canonicalGraphKey, type FlowRFNode } from './flowGraph'
 import type { EdgeStyle } from './FlowCanvas'
 import { safeParse, type FlowsTab } from './flowsPanelShared'
 import { createFlowGraphOps } from './flowGraphOps'
@@ -66,7 +69,10 @@ export function FlowsPanel({ agents, onError, openFlowId, tab: tabProp, onTabCha
   // flow is one row instead of a burst of its subflow/spawn children. The children
   // are not lost — they are still reachable by id and through the run tree.
   const [showSubRuns, setShowSubRuns] = useSessionState('flows.showSubRuns', false)
-  const [selectedRunId, setSelectedRunId] = useSessionState<string | null>('flows.selectedRunId', null)
+  const [selectedRunId, setSelectedRunId] = useSessionState<string | null>(
+    'flows.selectedRunId',
+    null,
+  )
   // Left-list search (adapts to the active tab: flow/template name, or a run's
   // flow name).
   const [q, setQ] = useState('')
@@ -196,7 +202,10 @@ export function FlowsPanel({ agents, onError, openFlowId, tab: tabProp, onTabCha
     (f: Flow) => {
       setSelectedId(f.id)
       setFlowPath('')
-      api.flowPath(f.id).then((r) => setFlowPath(r.path)).catch(() => setFlowPath(''))
+      api
+        .flowPath(f.id)
+        .then((r) => setFlowPath(r.path))
+        .catch(() => setFlowPath(''))
       setName(f.name)
       setEmoji(f.emoji ?? '')
       setTags(f.tags ?? [])
@@ -215,7 +224,8 @@ export function FlowsPanel({ agents, onError, openFlowId, tab: tabProp, onTabCha
         setStart(g.start ?? '')
         setEdgeStyle(
           (g.edgeStyle as EdgeStyle) ||
-            ((localStorage.getItem('tionswarm.flowEdgeStyle') as EdgeStyle) || 'default'),
+            (localStorage.getItem('tionswarm.flowEdgeStyle') as EdgeStyle) ||
+            'default',
         )
         setAnimated(!!g.animated)
         // Default ON unless the flow explicitly stored accumulate:false. The raw
@@ -248,7 +258,11 @@ export function FlowsPanel({ agents, onError, openFlowId, tab: tabProp, onTabCha
   // run / delete. Runs fire-and-forget with an empty input.
   const sel = useMultiSelect()
   // Left flow list collapse (slim rail / mobile drawer).
-  const { open: flowsListOpen, toggle: toggleFlowsList, setOpen: setFlowsListOpen } = useCollapsibleList('tionswarm.flowsListOpen')
+  const {
+    open: flowsListOpen,
+    toggle: toggleFlowsList,
+    setOpen: setFlowsListOpen,
+  } = useCollapsibleList('tionswarm.flowsListOpen')
   // Landing on the screen with no flow selected: open the list drawer so a narrow
   // screen shows the pickable flow list instead of an empty canvas. Runs once on
   // mount; on md+ the list is always visible so this is a no-op there.
@@ -321,7 +335,11 @@ export function FlowsPanel({ agents, onError, openFlowId, tab: tabProp, onTabCha
   const rerunRun = useCallback(
     async (r: FlowRun) => {
       setRerunning(true)
-      const refresh = () => api.listAllFlowRuns(!showSubRuns).then(setRuns).catch(() => {})
+      const refresh = () =>
+        api
+          .listAllFlowRuns(!showSubRuns)
+          .then(setRuns)
+          .catch(() => {})
       try {
         await api.runFlowStreamStandalone(r.flowId, r.input, {
           // Surface the new running run in the left list as it progresses.
@@ -436,7 +454,6 @@ export function FlowsPanel({ agents, onError, openFlowId, tab: tabProp, onTabCha
           instantiateTemplate={actions.instantiateTemplate}
           rerunRun={rerunRun}
           rerunning={rerunning}
-          onError={onError}
         />
         {/* Main: template preview or flow editor */}
         {tab === 'templates' ? (
@@ -444,7 +461,8 @@ export function FlowsPanel({ agents, onError, openFlowId, tab: tabProp, onTabCha
             {!selectedTemplate ? (
               <div className="flex-1 p-6">
                 <p className="text-sm text-[var(--color-text-dim)]">
-                  Soldan bir şablon seçin — yapısını önizleyin, sonra "Bu şablondan akış oluştur" deyin.
+                  Soldan bir şablon seçin — yapısını önizleyin, sonra "Bu şablondan akış oluştur"
+                  deyin.
                 </p>
               </div>
             ) : (
@@ -458,8 +476,8 @@ export function FlowsPanel({ agents, onError, openFlowId, tab: tabProp, onTabCha
           !selectedRun ? (
             <div className="flex-1 p-6">
               <p className="text-sm text-[var(--color-text-dim)]">
-                Soldan bir koşu seçin — akışın hangi aşamada olduğunu, node çıktılarını ve
-                hataları salt-okunur görün.
+                Soldan bir koşu seçin — akışın hangi aşamada olduğunu, node çıktılarını ve hataları
+                salt-okunur görün.
               </p>
             </div>
           ) : (
@@ -469,7 +487,12 @@ export function FlowsPanel({ agents, onError, openFlowId, tab: tabProp, onTabCha
               agents={agents}
               onRerun={rerunRun}
               rerunning={rerunning}
-              onResumed={() => api.listAllFlowRuns(!showSubRuns).then(setRuns).catch(() => {})}
+              onResumed={() =>
+                api
+                  .listAllFlowRuns(!showSubRuns)
+                  .then(setRuns)
+                  .catch(() => {})
+              }
             />
           )
         ) : !selectedId ? (

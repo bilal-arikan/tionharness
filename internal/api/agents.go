@@ -3,7 +3,6 @@ package api
 import (
 	"context"
 	"net/http"
-	"os/exec"
 	"sort"
 	"strings"
 	"time"
@@ -21,26 +20,6 @@ func (s *Server) handleAgentPath(w http.ResponseWriter, r *http.Request) {
 	path, err := ws(r).DB.AgentPath(id)
 	if writeDBError(w, err, "agent not found") {
 		return
-	}
-	writeJSON(w, http.StatusOK, map[string]string{"path": path})
-}
-
-// handleRevealAgent opens the folder holding the agent's JSON file in the OS
-// file manager (Windows: Explorer, highlighting the file) on the machine running
-// the backend (local desktop app).
-func (s *Server) handleRevealAgent(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
-	path, err := ws(r).DB.AgentPath(id)
-	if writeDBError(w, err, "agent not found") {
-		return
-	}
-	// /select highlights the specific agent file inside the agents/ folder.
-	// Detached from r.Context(): a fire-and-forget launch must not be killed when
-	// the HTTP handler returns (CommandContext would race explorer to death).
-	if err := exec.Command("explorer.exe", "/select,"+path).Start(); err != nil {
-		// explorer.exe returns a non-zero exit code even on success; only a
-		// failure to *start* the process is a real error.
-		s.logger.Warn("reveal agent folder failed", "agent", id, "error", err)
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"path": path})
 }

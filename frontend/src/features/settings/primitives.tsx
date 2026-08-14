@@ -21,8 +21,6 @@ import {
 } from 'lucide-react'
 import type { AppSettings, PromptInfo, WorkspaceSettings } from '@/types'
 import { CopyPathButton } from '@/shared/components/CopyPathButton'
-import { RevealButton } from '@/shared/components/RevealButton'
-import { displayPath } from '@/shared/lib/paths'
 
 // Category keys: the app-global sections plus the per-workspace section.
 export type Cat =
@@ -262,17 +260,9 @@ export function CatButton({
 }
 
 // PromptDetails renders one built-in prompt read-only (System / User-turn blocks
-// + note) with a button to open the source folder. Used inside the expandable
-// command cards on the Komutlar screen.
-export function PromptDetails({
-  p,
-  dir,
-  onReveal,
-}: {
-  p: PromptInfo
-  dir: string
-  onReveal: () => void
-}) {
+// + note) with a button to copy the source folder path. Used inside the
+// expandable command cards on the Komutlar screen.
+export function PromptDetails({ p, dir }: { p: PromptInfo; dir: string }) {
   return (
     <>
       <div className="mb-2 flex items-center justify-between gap-2">
@@ -281,12 +271,6 @@ export function PromptDetails({
         </code>
         <div className="flex shrink-0 items-center gap-1">
           <CopyPathButton path={dir} />
-          <RevealButton
-            onReveal={onReveal}
-            disabled={!dir}
-            label="Klasörü aç"
-            title={dir ? displayPath(dir) : 'Klasör yolu bilinmiyor'}
-          />
         </div>
       </div>
       {p.system && (

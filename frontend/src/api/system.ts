@@ -217,7 +217,6 @@ export const systemApi = {
 
   // Built-in runtime prompts (read-only) + the source folder that holds them.
   getPrompts: () => req<PromptsResponse>('/api/prompts'),
-  revealPrompts: () => req<{ path: string }>('/api/prompts/reveal', { method: 'POST' }),
 
   // Autonomous event feed (task/schedule) — global SSE stream.
   subscribeEvents,
@@ -248,9 +247,8 @@ export const systemApi = {
     return req<LogEntry[]>(`/api/logs${qs ? `?${qs}` : ''}`)
   },
 
-  // On-disk log file path (copy) + reveal it in the OS file manager (desktop).
+  // On-disk log file path (for the copy-path action).
   logsPath: () => req<{ path: string }>('/api/logs/path'),
-  revealLogs: () => req<{ path: string }>('/api/logs/reveal', { method: 'POST' }),
 
   // Workspace-wide budget/usage: today's totals + per-origin breakdown,
   // per-agent table and a daily trend over the last `days` days.
@@ -302,11 +300,6 @@ export const systemApi = {
   // `§ref:HASH§` pointers start confusing the agent. Stats/history are kept.
   sqzResetCache: () =>
     req<{ output: string }>('/api/external-tools/sqz-reset-cache', { method: 'POST' }),
-  // Opens rtk's config.toml in the OS file manager. Does NOT create it: rtk runs
-  // on built-in defaults until `rtk config --create`, and materialising one from
-  // here would change rtk for every tool on the machine.
-  revealRtkConfig: () =>
-    req<{ path: string }>('/api/external-tools/rtk-config/reveal', { method: 'POST' }),
 
   // Build / version info (injected via ldflags at build time; falls back to
   // "dev" for local development builds without explicit versioning).

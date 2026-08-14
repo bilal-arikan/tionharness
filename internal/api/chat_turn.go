@@ -266,10 +266,10 @@ func (s *Server) buildStaticPrefix(ctx context.Context, wsp *workspace.Workspace
 	if tb := wsp.Runtime.TerseModeBlock(); tb != "" {
 		system = strings.TrimSpace(system + "\n\n" + tb)
 	}
-	// Always-on: deliverables (files/documents) should surface as artifacts. The
-	// guidance follows the workspace auto-capture toggle — when off, the agent is
-	// told to register deliverables deliberately with create_artifact.
-	system = strings.TrimSpace(system + "\n\n" + artifactGuidanceFor(wsp.Settings().AutoCaptureArtifacts))
+	// Always-on: deliverables (files/documents) surface as artifacts only when the
+	// agent registers them deliberately (create_artifact / artifacts API) — there is
+	// no automatic capture of written files.
+	system = strings.TrimSpace(system + "\n\n" + artifactDeliverableGuidance)
 	// Advertise the skills THIS agent has selected (slug + summary only, in the
 	// agent's chosen order). The full body is loaded lazily via use_skill. Part of
 	// the cached static prefix since an agent's skill selection changes rarely.

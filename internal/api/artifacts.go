@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -16,35 +15,17 @@ import (
 )
 
 // artifactDeliverableGuidance is the always-on instruction (kept in the static
-// prompt prefix) that makes "produce a file/document" requests surface as
-// artifacts by default — the user expects deliverables to open in the Artifacts
-// screen, not be buried in chat or written only via an ad-hoc script. Only the
-// two-line rule of thumb lives here to keep the cached prefix small; the full
-// rules (binary files, inline media, galleries) live in the `tionswarm-deliverables`
-// skill so they cost attention/tokens only when a deliverable is actually in play.
+// prompt prefix) telling the agent that artifacts are created DELIBERATELY: there
+// is no automatic capture path — writing a file never registers an artifact by
+// itself, so ordinary edits to project source files stay out of the Artifacts
+// screen. Only the short rule of thumb lives here to keep the cached prefix small;
+// the full rules (binary files, inline media, galleries) live in the
+// `tionswarm-deliverables` skill so they cost attention/tokens only when a
+// deliverable is actually in play.
 const artifactDeliverableGuidance = "# Deliverables → Artifacts\n" +
-	"When asked to produce a file/document/dataset/report/code, write it with your file tool (write_file / Write) or call create_artifact — don't deliver substantial output only as inline chat text or an ad-hoc shell command (that bypasses artifact capture). " +
-	"Content meant to be SEEN (a diagram, an image/video, a gallery) goes INLINE in your reply (markdown ![alt](path), a ```mermaid block) — not hidden in a separate Artifacts tab. " +
-	"For the full rules (binary files via sourcePath, inline media, galleries, updating by id), load the `tionswarm-deliverables` skill before producing the deliverable."
-
-// artifactDeliverableGuidanceManual is the variant used when a workspace has
-// AutoCaptureArtifacts turned OFF: plain file writes are NOT captured, so the
-// agent must register a deliverable DELIBERATELY with create_artifact. Editing
-// project source files therefore no longer pollutes the Artifacts screen.
-const artifactDeliverableGuidanceManual = "# Deliverables → Artifacts\n" +
-	"Writing a file does NOT create an artifact in this workspace. When you produce a deliverable the user should keep (a document/dataset/report/standalone code file), register it DELIBERATELY by calling create_artifact — do not assume a plain file write will surface it. Ordinary edits to project source files stay out of the Artifacts screen. " +
+	"Writing a file does NOT create an artifact. When you produce a deliverable the user should keep (a document/dataset/report/standalone code file), register it DELIBERATELY by calling create_artifact (or the artifacts API) — do not assume a plain file write will surface it. Ordinary edits to project source files stay out of the Artifacts screen. " +
 	"Content meant to be SEEN (a diagram, an image/video, a gallery) goes INLINE in your reply (markdown ![alt](path), a ```mermaid block). " +
 	"For the full rules (binary files via sourcePath, inline media, galleries, updating by id), load the `tionswarm-deliverables` skill before producing the deliverable."
-
-// artifactGuidanceFor picks the deliverable guidance matching the workspace's
-// auto-capture setting so the prompt never tells the agent to rely on a capture
-// path that is switched off.
-func artifactGuidanceFor(autoCapture bool) string {
-	if autoCapture {
-		return artifactDeliverableGuidance
-	}
-	return artifactDeliverableGuidanceManual
-}
 
 // artifactsContextBlock builds a system-prompt section listing the artifacts a
 // session already has, so the agent can revise them with update_artifact (by id)
@@ -443,25 +424,4 @@ func (s *Server) handleArtifactPath(w http.ResponseWriter, r *http.Request) {
 	}
 	path := artifactDiskPath(wsp, a)
 	writeJSON(w, http.StatusOK, map[string]string{"path": path, "dir": filepath.Dir(path)})
-}
-
-// handleRevealArtifact opens the folder containing the artifact's file in the OS
-// file manager (Windows: Explorer) and returns the file path.
-//
-// POST /api/artifacts/{id}/reveal
-func (s *Server) handleRevealArtifact(w http.ResponseWriter, r *http.Request) {
-	wsp := ws(r)
-	a, err := wsp.DB.GetArtifact(r.Context(), r.PathValue("id"))
-	if writeDBError(w, err, "artifact not found") {
-		return
-	}
-	path := artifactDiskPath(wsp, a)
-	dir := filepath.Dir(path)
-	// Detached from r.Context() so it isn't killed when the handler returns.
-	if err := exec.Command("explorer.exe", dir).Start(); err != nil {
-		// explorer.exe returns a non-zero exit code even on success; only a
-		// failure to *start* the process is a real error.
-		s.logger.Warn("reveal artifact folder failed", "id", a.ID, "error", err)
-	}
-	writeJSON(w, http.StatusOK, map[string]string{"path": path, "dir": dir})
 }

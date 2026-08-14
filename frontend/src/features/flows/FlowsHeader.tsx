@@ -1,10 +1,8 @@
 import type { Dispatch, SetStateAction } from 'react'
 import { RotateCcw } from 'lucide-react'
-import { api } from '@/api'
 import { EmojiField } from '@/shared/components/EmojiField'
 import { normalizeAvatar } from '@/shared/lib/avatar'
 import { CopyPathButton } from '@/shared/components/CopyPathButton'
-import { RevealButton } from '@/shared/components/RevealButton'
 import { ViewButton } from '@/features/view/ViewButton'
 import { STATUS_LABEL, statusColor } from './RunView'
 import type { FlowTemplate } from './flowTemplates'
@@ -29,7 +27,6 @@ interface Props {
   instantiateTemplate: (t: FlowTemplate) => void
   rerunRun: (r: FlowRun) => void
   rerunning: boolean
-  onError: (msg: string) => void
 }
 
 // FlowsHeader is the flows screen's top PaneHeader: the flow editor's
@@ -53,7 +50,6 @@ export function FlowsHeader({
   instantiateTemplate,
   rerunRun,
   rerunning,
-  onError,
 }: Props) {
   return (
     <PaneHeader
@@ -116,22 +112,7 @@ export function FlowsHeader({
       right={
         tab === 'flows' && selectedId ? (
           <>
-            <CopyPathButton
-              path={flowPath}
-              label="Yolu kopyala"
-              labelClassName="hidden"
-              title="Akış yolunu kopyala"
-            />
-            <RevealButton
-              onReveal={() => {
-                if (selectedId)
-                  api.revealFlow(selectedId).catch((e) => onError((e as Error).message))
-              }}
-              disabled={!selectedId}
-              label="Aç"
-              labelClassName="hidden sm:inline"
-              title="Akış klasörünü aç"
-            />
+            <CopyPathButton path={flowPath} title="Akış yolunu kopyala" />
             <Button onClick={saveFlow} size="lg" className="flex-shrink-0">
               Kaydet
             </Button>

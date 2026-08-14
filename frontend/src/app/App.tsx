@@ -594,7 +594,6 @@ export default function App() {
               onRenameSession={ctl.renameSession}
               onGenerateTitle={ctl.regenerateSessionTitle}
               onCopyPath={ctl.copySessionPath}
-              onRevealFolder={ctl.revealSession}
               onDeleteSession={ctl.deleteSession}
               onSetArchived={ctl.setSessionArchived}
               onSetPinned={ctl.setSessionPinned}
@@ -631,7 +630,6 @@ export default function App() {
             onOpenSessionFlow={() => setSessionFlowOpen((v) => !v)}
             sessionFlowActive={sessionFlowOpen}
             onToggleDetail={toggleDetail}
-            onRevealSession={ctl.revealSession}
             onError={setError}
           />
         )}

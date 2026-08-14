@@ -5,7 +5,6 @@ import {
   Pencil,
   Sparkles,
   ClipboardCopy,
-  FolderOpen,
   Trash2,
   Search,
   X,
@@ -77,7 +76,6 @@ interface Props {
   onRenameSession: (id: string, title: string) => void
   onGenerateTitle: (id: string) => void
   onCopyPath: (id: string) => void
-  onRevealFolder: (id: string) => void
   onDeleteSession: (id: string) => void
   // Archive (true) or restore (false) a session — drives the Active/Archived filter.
   onSetArchived: (id: string, archived: boolean) => void
@@ -111,7 +109,6 @@ export function SessionsSidebar({
   onRenameSession,
   onGenerateTitle,
   onCopyPath,
-  onRevealFolder,
   onDeleteSession,
   onSetArchived,
   onSetPinned,
@@ -610,14 +607,6 @@ export function SessionsSidebar({
                           label="Yolu kopyala"
                           onClick={() => {
                             onCopyPath(s.id)
-                            setMenuId(null)
-                          }}
-                        />
-                        <MenuItem
-                          icon={FolderOpen}
-                          label="Klasörü aç"
-                          onClick={() => {
-                            onRevealFolder(s.id)
                             setMenuId(null)
                           }}
                         />

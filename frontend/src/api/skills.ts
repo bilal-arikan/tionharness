@@ -75,6 +75,4 @@ export const skillApi = {
       method: 'PUT',
       body: JSON.stringify({ group }),
     }),
-  revealSkill: (slug: string) =>
-    req<{ path: string }>(`/api/skills/${encodeURIComponent(slug)}/reveal`, { method: 'POST' }),
 }

@@ -173,18 +173,26 @@ var priceTable = map[string]map[string]Price{
 		"glm-4.7":       {InputPerMTok: 0.60, OutputPerMTok: 2.20, CacheReadMultOverride: 0.18, CacheWriteMultOverride: 1.25},
 		"glm-4.7-flash": {InputPerMTok: 0.06, OutputPerMTok: 0.40, CacheReadMultOverride: 0.19, CacheWriteMultOverride: 1.25},
 	},
-	// DeepSeek V4 family (first-party OpenAI-compatible endpoint). Official list
-	// prices per 1M tokens (2026-08): V4 Flash $0.14/$0.28, V4 Pro $0.435/$0.87.
-	// DeepSeek's context caching is automatic with no write premium and a very deep
-	// read discount — cache-hit input is ~$0.0028 (Flash) / ~$0.003625 (Pro), i.e.
-	// ~0.02×/~0.0083× of the cache-miss input rate — reported via prompt_cache_hit_tokens
-	// (see oaiUsage.toUsage). IDs evolve → unlisted models fall through to unpriced.
-	// NOTE: DeepSeek has announced a peak/off-peak policy (2× during 09:00–12:00 &
-	// 14:00–18:00 Beijing) not yet in effect — the table tracks the regular rate.
+	// DeepSeek V4 family (first-party OpenAI-compatible endpoint). DeepSeek's
+	// context caching is automatic with no write premium and a deep read discount,
+	// reported via prompt_cache_hit_tokens (see oaiUsage.toUsage). IDs evolve →
+	// unlisted models fall through to unpriced.
+	//
+	// Prices per 1M tokens, effective 2026-08-16 16:00 UTC (the price hike that
+	// ended the flat rate). Billing is now peak/off-peak: peak is 01:00–04:00 and
+	// 06:00–10:00 UTC (7h/day), off-peak is everything else and costs half.
+	// This table is time-independent, so it tracks the OFF-PEAK (regular) rate —
+	// the majority of the day. Turns that land in a peak window are therefore
+	// under-reported by 2×; a time-aware Price would be needed to fix that.
+	//
+	//	          off-peak (this table)   peak (2×)     cache-hit input (off-peak)
+	//	V4 Flash  $0.22 / $0.66           $0.44/$1.32   $0.007   (~0.032× input)
+	//	V4 Pro    $0.66 / $1.98           $1.32/$3.96   $0.022   (~0.033× input)
+	//
 	// The deepseek-anthropic kind shares this table via PriceFor.
 	"deepseek": {
-		"deepseek-v4-flash": {InputPerMTok: 0.14, OutputPerMTok: 0.28, CacheReadMultOverride: 0.02},
-		"deepseek-v4-pro":   {InputPerMTok: 0.435, OutputPerMTok: 0.87, CacheReadMultOverride: 0.008},
+		"deepseek-v4-flash": {InputPerMTok: 0.22, OutputPerMTok: 0.66, CacheReadMultOverride: 0.032},
+		"deepseek-v4-pro":   {InputPerMTok: 0.66, OutputPerMTok: 1.98, CacheReadMultOverride: 0.033},
 	},
 	// NOTE: market provider-pack prices (xai, mistral, gemini, … ~25 providers, up to
 	// 15 models each) live in the generated pricing_market.go (var marketPrices,

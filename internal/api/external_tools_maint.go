@@ -119,31 +119,3 @@ func (s *Server) handleSqzResetCache(w http.ResponseWriter, r *http.Request) {
 	s.logger.Info("sqz dedup cache cleared from settings")
 	writeJSON(w, http.StatusOK, map[string]string{"output": out})
 }
-
-// handleRevealRtkConfig opens rtk's config file in the OS file manager. It does
-// NOT create the file: rtk runs on built-in defaults until `rtk config --create`
-// is run, and silently materialising a config from here would change how rtk
-// behaves for every tool on this machine, from a screen that is scoped to one
-// workspace. When the file is absent the containing folder is opened instead.
-func (s *Server) handleRevealRtkConfig(w http.ResponseWriter, r *http.Request) {
-	path := rtkConfigPath()
-	if path == "" {
-		writeError(w, http.StatusNotFound, "rtk config yolu bu platformda çözülemedi")
-		return
-	}
-	target := "/select," + path
-	if _, err := os.Stat(path); err != nil {
-		dir := filepath.Dir(path)
-		if _, derr := os.Stat(dir); derr != nil {
-			writeError(w, http.StatusNotFound, "rtk config klasörü yok — önce `rtk config --create` çalıştırın")
-			return
-		}
-		target = dir
-	}
-	// Detached from r.Context(): a fire-and-forget launch must not be killed when
-	// the handler returns. explorer.exe returns non-zero even on success.
-	if err := exec.Command("explorer.exe", target).Start(); err != nil {
-		s.logger.Warn("reveal rtk config failed", "error", err)
-	}
-	writeJSON(w, http.StatusOK, map[string]string{"path": path})
-}

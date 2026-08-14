@@ -322,15 +322,16 @@ durur:
 
 Aynı gerekçeyle bu araçların config **anahtarları** ayar olarak yansıtılmadı: onların
 yapılandırması makine geneli, TionSwarm ayarları workspace başına — anahtarı buraya koymak,
-ayarın tutamayacağı bir kapsam sözü vermek olurdu. Bunun yerine üç **eylem**:
+ayarın tutamayacağı bir kapsam sözü vermek olurdu. Bunun yerine iki **eylem**
+(rtk config'i Explorer'da açan üçüncü eylem 2026-08-12'de kaldırıldı; config yolu
+panelde hâlâ metin olarak gösterilir):
 
 | Eylem | Uç nokta | Ne yapar |
 |---|---|---|
 | Tasarruf raporu | `GET /api/external-tools/token-report` | `rtk gain` + `sqz gain` çıktısını **birebir** gösterir; TionSwarm yeniden hesaplamaz, böylece araçların muhasebesinden sapamaz |
 | sqz dedup önbelleğini temizle | `POST /api/external-tools/sqz-reset-cache` | `sqz reset --cache-only` — bayat `§ref:…§` işaretçileri ajanı şaşırttığında sqz'nin kendi önerdiği işlem. İstatistikler korunur |
-| rtk config dosyasını aç | `POST /api/external-tools/rtk-config/reveal` | `%APPDATA%\rtk\config.toml`'u Explorer'da gösterir. Dosyayı **oluşturmaz** — rtk o ana dek yerleşik varsayılanlarla çalışır ve buradan sessizce config yaratmak makinedeki tüm araçların davranışını değiştirirdi |
 
-Güvenlik: üç uç nokta da **parametre almaz**; komutlar sabit argv. Kabuğa ulaşan hiçbir
+Güvenlik: iki uç nokta da **parametre almaz**; komutlar sabit argv. Kabuğa ulaşan hiçbir
 istek alanı yok.
 
 Panel ayrıca eski *"rtk ve sqz'yi aynı anda açma"* uyarısını taşıyordu — o metin de

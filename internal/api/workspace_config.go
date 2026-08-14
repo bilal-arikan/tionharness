@@ -3,7 +3,6 @@ package api
 import (
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 
 	"github.com/bilal-arikan/tionswarm/internal/agent"
@@ -133,21 +132,4 @@ func (s *Server) handleUpdateWorkspaceConfig(w http.ResponseWriter, r *http.Requ
 	}
 
 	writeJSON(w, http.StatusOK, buildWSConfigDTO(wsDir))
-}
-
-// handleRevealWorkspaceConfig opens the workspace config folder in the OS file
-// manager (Windows Explorer).
-func (s *Server) handleRevealWorkspaceConfig(w http.ResponseWriter, r *http.Request) {
-	dir := agent.WorkspaceConfigDir(ws(r).DataDir)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	// Detached from r.Context() so it isn't killed when the handler returns.
-	if err := exec.Command("explorer.exe", dir).Start(); err != nil {
-		// explorer.exe returns a non-zero exit code even on success; only a
-		// genuine start failure (missing binary) is logged.
-		s.logger.Warn("reveal workspace config folder failed", "error", err)
-	}
-	writeJSON(w, http.StatusOK, map[string]string{"path": dir})
 }

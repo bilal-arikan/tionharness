@@ -6,7 +6,6 @@ import { Bug, Menu, Network, PanelRight, ScanEye, Workflow } from 'lucide-react'
 import { api } from '@/api'
 import type { Agent, Session } from '@/types'
 import { CopyPathButton } from '@/shared/components/CopyPathButton'
-import { RevealButton } from '@/shared/components/RevealButton'
 import type { View } from './NavRail'
 import { VIEW_TITLE } from './viewRegistry'
 
@@ -27,7 +26,6 @@ export interface AppHeaderProps {
   onOpenSessionFlow: () => void
   sessionFlowActive: boolean
   onToggleDetail: () => void
-  onRevealSession: (id: string) => void
   onError: (msg: string) => void
 }
 
@@ -47,7 +45,6 @@ export function AppHeader({
   onOpenSessionFlow,
   sessionFlowActive,
   onToggleDetail,
-  onRevealSession,
   onError,
 }: AppHeaderProps) {
   return (
@@ -90,19 +87,11 @@ export function AppHeader({
       <div className="flex shrink-0 items-center gap-3">
         {view === 'chat' && activeSessionId && (
           <div className="flex items-center gap-1.5">
-            {/* Folder shortcuts (moved here from the detail panel's Klasör card). */}
+            {/* Folder path shortcut (moved here from the detail panel's Klasör card). */}
             <CopyPathButton
               getPath={async () => (await api.sessionPath(activeSessionId)).path}
-              label="Yolu kopyala"
-              labelClassName="hidden"
               title="Oturum klasörü yolunu kopyala"
               onError={onError}
-            />
-            <RevealButton
-              onReveal={() => onRevealSession(activeSessionId)}
-              label="Aç"
-              labelClassName="hidden sm:inline"
-              title="Oturum klasörünü aç"
             />
             {/* Coordination drawer (coordinator mode, workflow picker, worker
                 roster + tree). Moved out of the detail inspector into its own

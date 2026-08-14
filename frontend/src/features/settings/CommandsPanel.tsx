@@ -1,6 +1,5 @@
 // Komutlar category: read-only reference of the chat slash commands, each an
 // expandable card revealing the built-in prompt behind it.
-import { api } from '@/api'
 import type { PromptInfo, SlashCommand } from '@/types'
 import { PromptDetails } from './primitives'
 
@@ -10,15 +9,15 @@ interface Props {
   promptsDir: string
   openCmds: Record<string, boolean>
   setOpenCmds: React.Dispatch<React.SetStateAction<Record<string, boolean>>>
-  onError: (msg: string) => void
 }
 
-export function CommandsPanel({ commands, prompts, promptsDir, openCmds, setOpenCmds, onError }: Props) {
-  const reveal = () => api.revealPrompts().catch((e) => onError((e as Error).message))
+export function CommandsPanel({ commands, prompts, promptsDir, openCmds, setOpenCmds }: Props) {
   return (
     <>
       <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-xs text-[var(--color-text-dim)]">
-        Sohbet kutusuna <code className="rounded bg-[var(--color-bg)] px-1">/</code> yazınca açılan komut paleti. Bir komutu komut olarak değil düz metin olarak göndermek istersen tırnak içine al: <code className="rounded bg-[var(--color-bg)] px-1">"/komut"</code>.
+        Sohbet kutusuna <code className="rounded bg-[var(--color-bg)] px-1">/</code> yazınca açılan
+        komut paleti. Bir komutu komut olarak değil düz metin olarak göndermek istersen tırnak içine
+        al: <code className="rounded bg-[var(--color-bg)] px-1">"/komut"</code>.
       </div>
       {commands.length === 0 ? (
         <div className="text-sm text-[var(--color-text-dim)]">Kayıtlı komut yok.</div>
@@ -33,7 +32,10 @@ export function CommandsPanel({ commands, prompts, promptsDir, openCmds, setOpen
                 : undefined
             const open = !!openCmds[c.name]
             return (
-              <div key={c.name} className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)]">
+              <div
+                key={c.name}
+                className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)]"
+              >
                 <button
                   onClick={() => setOpenCmds((o) => ({ ...o, [c.name]: !o[c.name] }))}
                   className="flex w-full items-center gap-3 px-3 py-2 text-left"
@@ -42,18 +44,25 @@ export function CommandsPanel({ commands, prompts, promptsDir, openCmds, setOpen
                     {c.icon ?? '⚡'}
                   </span>
                   <div className="min-w-0 flex-1">
-                    <div className="font-mono text-sm font-medium text-[var(--color-text)]">/{c.name}</div>
-                    <div className="truncate text-xs text-[var(--color-text-dim)]">{c.description}</div>
+                    <div className="font-mono text-sm font-medium text-[var(--color-text)]">
+                      /{c.name}
+                    </div>
+                    <div className="truncate text-xs text-[var(--color-text-dim)]">
+                      {c.description}
+                    </div>
                   </div>
-                  <span className="shrink-0 text-xs text-[var(--color-text-dim)]">{open ? '▾' : '▸'}</span>
+                  <span className="shrink-0 text-xs text-[var(--color-text-dim)]">
+                    {open ? '▾' : '▸'}
+                  </span>
                 </button>
                 {open && (
                   <div className="border-t border-[var(--color-border)] px-3 py-2.5">
                     {p ? (
-                      <PromptDetails p={p} dir={promptsDir} onReveal={reveal} />
+                      <PromptDetails p={p} dir={promptsDir} />
                     ) : (
                       <p className="text-xs text-[var(--color-text-dim)]">
-                        Bu komut deterministiktir — model/prompt kullanmaz; sonuç runtime'da doğrudan üretilir.
+                        Bu komut deterministiktir — model/prompt kullanmaz; sonuç runtime'da
+                        doğrudan üretilir.
                       </p>
                     )}
                   </div>
@@ -69,21 +78,32 @@ export function CommandsPanel({ commands, prompts, promptsDir, openCmds, setOpen
             .map((p) => {
               const open = !!openCmds['__title']
               return (
-                <div key={p.key} className="rounded-lg border border-dashed border-[var(--color-border)] bg-[var(--color-bg)]">
+                <div
+                  key={p.key}
+                  className="rounded-lg border border-dashed border-[var(--color-border)] bg-[var(--color-bg)]"
+                >
                   <button
                     onClick={() => setOpenCmds((o) => ({ ...o, __title: !o.__title }))}
                     className="flex w-full items-center gap-3 px-3 py-2 text-left"
                   >
-                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-[var(--color-surface-2)] text-base">🏷</span>
+                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-[var(--color-surface-2)] text-base">
+                      🏷
+                    </span>
                     <div className="min-w-0 flex-1">
-                      <div className="text-sm font-medium text-[var(--color-text)]">Otomatik başlık</div>
-                      <div className="truncate text-xs text-[var(--color-text-dim)]">Komut değil — sohbet/görev başlığı üretimi</div>
+                      <div className="text-sm font-medium text-[var(--color-text)]">
+                        Otomatik başlık
+                      </div>
+                      <div className="truncate text-xs text-[var(--color-text-dim)]">
+                        Komut değil — sohbet/görev başlığı üretimi
+                      </div>
                     </div>
-                    <span className="shrink-0 text-xs text-[var(--color-text-dim)]">{open ? '▾' : '▸'}</span>
+                    <span className="shrink-0 text-xs text-[var(--color-text-dim)]">
+                      {open ? '▾' : '▸'}
+                    </span>
                   </button>
                   {open && (
                     <div className="border-t border-[var(--color-border)] px-3 py-2.5">
-                      <PromptDetails p={p} dir={promptsDir} onReveal={reveal} />
+                      <PromptDetails p={p} dir={promptsDir} />
                     </div>
                   )}
                 </div>

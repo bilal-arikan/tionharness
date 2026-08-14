@@ -111,7 +111,6 @@ export function WorkspaceView({
         terseMode: ws.terseMode,
         codebaseMemoryEnabled: ws.codebaseMemoryEnabled,
         promptEpochEnabled: ws.promptEpochEnabled,
-        autoCaptureArtifacts: ws.autoCaptureArtifacts,
         shellOutputCompression: ws.shellOutputCompression,
         shellCommandRewrite: ws.shellCommandRewrite,
       })

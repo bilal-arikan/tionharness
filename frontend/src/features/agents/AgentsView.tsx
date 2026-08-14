@@ -8,7 +8,6 @@ import { AgentSettingsForm } from './AgentSettingsForm'
 import { AgentActivityPanel } from './AgentActivityPanel'
 import { api } from '@/api'
 import { CopyPathButton } from '@/shared/components/CopyPathButton'
-import { RevealButton } from '@/shared/components/RevealButton'
 import {
   Button,
   PromptEditor,
@@ -312,19 +311,6 @@ export function AgentsView({
                     getPath={async () => (await api.agentPath(selected.id)).path}
                     title="Ajanın disk üzerindeki JSON dosya yolunu kopyala"
                     onError={onError}
-                  />
-                  <RevealButton
-                    testId="agent-reveal-folder"
-                    onReveal={async () => {
-                      try {
-                        await api.revealAgent(selected.id)
-                      } catch (e) {
-                        onError?.((e as Error).message)
-                      }
-                    }}
-                    label="Aç"
-                    labelClassName="hidden sm:inline"
-                    title="Ajanın JSON dosyasının bulunduğu klasörü dosya yöneticisinde aç"
                   />
                 </>
               )}

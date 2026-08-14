@@ -98,6 +98,4 @@ export const workspaceApi = {
       method: 'PUT',
       body: JSON.stringify(patch),
     }),
-  revealWorkspaceConfig: () =>
-    req<{ path: string }>('/api/workspace-config/reveal', { method: 'POST' }),
 }
