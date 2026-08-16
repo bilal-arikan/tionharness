@@ -57,8 +57,10 @@ detaylandırıldı. Panel: `frontend/src/components/workspace/WorkspaceExportPan
   panel bunu bağımlılık uyarısı ve canlı önizleme sayacıyla gösterir. Gömülü pano
   varsayılanları (`Seed != ""`) dışa aktarılmaz: her workspace açılışta kendi kopyasını
   üretir, taşımak çift kural veya kullanıcının sildiği kuralın dirilmesi demek olurdu.
-- **Koordinatörlük (2026-08-11):** ajanın `coordinatorMode`/`coordinatorWorkflow`
-  varsayılanı da taşınır — yayınlanan bir ekip orkestrasyon şeklini kaybetmez.
+- **Koordinatörlük (2026-08-11):** ajanın
+  `coordinatorMode`/`coordinatorWorkflow`/`coordinatorPrompt` varsayılanı da taşınır —
+  yayınlanan bir ekip orkestrasyon şeklini de, ajana özel delegasyon yönergesini de
+  kaybetmez.
 - **Promptlar & README (2026-07-01):** "Promptlar & Dosyalar" ekranındaki runtime promptları
   (summary/reflect/title/…) ve README de dışa aktarılabilir — **yalnız varsayılandan farklı
   olanlar**. Panel `getWorkspaceConfig`'ten non-default prompt + README sayısını gösterir.
@@ -337,6 +339,7 @@ kuralı stili ezebilsin diye). Kapalıyken tek bayt gönderilmez.
 ## Notlar / Gelecek
 
 - **Runtime izolasyonu:** Her workspace'in kendi agent runtime'ı var → bir workspace'in otonom ajanları diğerini etkilemez. Tüm workspace'lerin zamanlayıcıları paralel çalışır.
+- **Süreç-geneli per-session yapılar `(workspace, session)` ile anahtarlanır.** Oturum/ajan id'leri her store'un kendi sayacından gelir (`SES1`/`AGT1` HER workspace'te vardır), bu yüzden tüm workspace'ler için tek olan yapılar — session hub, gönderi kuyruğu, koşan turlar, etkileşim kartları, izin grant'ları — session id'yi tek başına anahtar olarak kullanamaz. 2026-08-14'te tam bu yüzden bir workspace'in oturumu diğerinde görünüyordu; detay `58-QUEUE-SENKRON.md` → "Workspace kapsamı".
 - **Silme koruması:** En az bir workspace her zaman kalır.
 - **fs/shell artık kilitli DEĞİL (2026-06-22):** `workspace/` dizini eskiden built-in
   `Read`/`Write`/`Edit`/`LS`/`Glob`/`Grep`/`Bash` araçları için

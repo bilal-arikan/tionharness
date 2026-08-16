@@ -1,6 +1,10 @@
 # 47 — Koordinatör & Çoklu-Ajan Koordinasyonu
 
-> **EN YENİ (2026-08-11):** Koordinatörlük artık bir **ajan varsayılanı** da olabilir
+> **EN YENİ (2026-08-17):** Ajanlara, **yalnız koordinatör modu açıkken** enjekte
+> edilen serbest metin bir alan eklendi (`Agent.CoordinatorPrompt`); ortak el
+> kitabının hemen ardından girer, boşken sıfır token maliyeti olur. Bkz. **§16**.
+>
+> **(2026-08-11):** Koordinatörlük artık bir **ajan varsayılanı** da olabilir
 > (`Agent.CoordinatorMode` → oturuma doğuşta tohumlanır) ve yeni bir `planner` profili
 > + `coordinator-wf-plan-dev-test` reçetesi var. Bkz. **§15**.
 >
@@ -283,7 +287,7 @@ Role                 string   // "coordinator" | "worker" | "" (normal)
 | Sonsuz notify döngüsü | Koordinatör turu sayacı `CoordinatorMaxTurns` (vars. ~50, automation MaxIterations gibi); aşılınca notify enjeksiyonu durur, kullanıcıya uyarı. |
 | Koordinatör oturumu kapanınca kaçak worker | Oturum silme/arşivde `stop_worker` hepsine (cascade cancel). |
 | Aynı oturumda çift tur | §3.4 per-session kuyruk. |
-| **Spawn halüsinasyonu / donma** (uzun bağlamda koordinatör spawn'ı **yazar ama `spawn_worker` ÇAĞIRMAZ** → hiç worker yaratılmaz, koordinatör hayalî worker'ları bekleyip donar — SES1 + WS17/SES101 vakaları) | **Yargıç-tabanlı koruma** (`coordination_stall.go`, 2026-08-03; eski prose-regex `coordSpawnClaimRe` sözlük-kaymasında —"kol açıldı"/"SES144 açıldı"— kaçırdığı için **kaldırıldı**). Deterministik kapı: tur koordinasyon aracı çağırmadı **ve** 0 çalışan worker → ucuz-model yargıcı (title-model, yoksa koordinatör modeli) son mesaja bakar; fantom spawn derse (`{"stalled":true}`) `<coordination-guard>` notu enjekte edilir. İki katman: **(1)** tur-sonu `guardCoordinatorStall` → `slot.pending` ile aynı batch'te bir tur zorlar (`CoordinatorStallMaxNudges` vars. 2 ile sınırlı, gerçek araç çağrısı streak'i sıfırlar, yargıç hatası → nudge YOK/fail-safe). **(2)** gecikme tarayıcısı `StartCoordinatorStallSweeper` (60 sn tick): `CoordinatorStallSweepMin` (vars. 5 dk) sessiz + 0 worker olan canlı slot'ları yargılar, `enqueueCoordinatorTurn` ile uyandırır → restart/kaçırma horizonu da kapanır. **(3) Sert-halt eskalasyonu** (`escalateCoordinatorStallHalt`, 2026-08-04): nudge bütçesi (1) veya (2) katmanında tükendiği hâlde yargıç stall'ı **hâlâ** doğruluyorsa `slot.stallHalted` set edilir — drain döngüsü koordinatörü otomatik-turlamayı bırakır (re-arm YOK, idle-reconcile turu YOK) ve **kullanıcıya tek-seferlik** `coordination` bildirimi (sebep + nasıl devam edileceği) yayınlanır; gerçek bir koordinasyon aracı çağrısı bayrağı temizler, tarayıcı backstop olarak açık kalır. **UI (kalıcı rozet/CTA):** halt durumu `session_info.coordinatorStallHalted` ve koordinatör-ağacı düğümlerinin `stallHalted` alanıyla sunulur; koordinasyon panelinde (`CoordinatorSection`) kırmızı **"Koordinatör durduruldu"** rozeti + **"Devam ettir"** butonu (POST `/api/sessions/{id}/coordinator/resume` → `ResumeCoordinatorFromStall`: halt+streak temizler, bir tur kickler) gösterilir; ağaç görünümünde de OctagonAlert işaretlenir. Rozet in-memory slot'tan okunur → süreç yeniden başlatıldığında sweeper penceresi içinde yeniden kurulur. Ek olarak: koordinatör soul/prompt'una "worker'dan bahsetmeden ÖNCE `spawn_worker` çağır; düz metinde 'worker başlattım' demek stall'a düşürür" kuralı eklendi, ve `spawn_worker`/`list_workers` **eager** (CLI `core`/alwaysLoad) tier'da doğrulandı (deferred değil). Ayar: `CoordinatorStallGuard` (master) / `CoordinatorStallSweepMin` (−1=tarayıcı kapalı) / `CoordinatorStallMaxNudges` — Ayarlar ▸ Araçlar. |
+| **Spawn halüsinasyonu / donma** (uzun bağlamda koordinatör spawn'ı **yazar ama `spawn_worker` ÇAĞIRMAZ** → hiç worker yaratılmaz, koordinatör hayalî worker'ları bekleyip donar — SES1 + WS17/SES101 vakaları) | **Yargıç-tabanlı koruma** (`coordination_stall.go`, 2026-08-03; eski prose-regex `coordSpawnClaimRe` sözlük-kaymasında —"kol açıldı"/"SES144 açıldı"— kaçırdığı için **kaldırıldı**). Deterministik kapı: tur koordinasyon aracı çağırmadı **ve** 0 çalışan worker → ucuz-model yargıcı (title-model, yoksa koordinatör modeli) son mesaja bakar; fantom spawn derse (`{"stalled":true}`) `<coordination-guard>` notu enjekte edilir. İki katman: **(1)** tur-sonu `guardCoordinatorStall` → `slot.pending` ile aynı batch'te bir tur zorlar (`CoordinatorStallMaxNudges` vars. 2 ile sınırlı, gerçek araç çağrısı streak'i sıfırlar, yargıç hatası → nudge YOK/fail-safe). **(2)** gecikme tarayıcısı `StartCoordinatorStallSweeper` (60 sn tick): `CoordinatorStallSweepMin` (vars. 5 dk) sessiz + 0 worker olan canlı slot'ları yargılar, `enqueueCoordinatorTurn` ile uyandırır → restart/kaçırma horizonu da kapanır. **(3) Sert-halt eskalasyonu** (`escalateCoordinatorStallHalt`, 2026-08-04): nudge bütçesi (1) veya (2) katmanında tükendiği hâlde yargıç stall'ı **hâlâ** doğruluyorsa `slot.stallHalted` set edilir — drain döngüsü koordinatörü otomatik-turlamayı bırakır (re-arm YOK, idle-reconcile turu YOK) ve **kullanıcıya tek-seferlik** `coordination` bildirimi (sebep + nasıl devam edileceği) yayınlanır; gerçek bir koordinasyon aracı çağrısı bayrağı temizler, tarayıcı backstop olarak açık kalır. **UI (kalıcı rozet/CTA):** halt durumu `session_info.coordinatorStallHalted` ve koordinatör-ağacı düğümlerinin `stallHalted` alanıyla sunulur; koordinasyon panelinde (`CoordinatorSection`) kırmızı **"Koordinatör durduruldu"** rozeti + **"Devam ettir"** butonu (POST `/api/sessions/{id}/coordinator/resume` → `ResumeCoordinatorFromStall`: halt+streak temizler, bir tur kickler) gösterilir; ağaç görünümünde de OctagonAlert işaretlenir. Rozet in-memory slot'tan okunur → süreç yeniden başlatıldığında sweeper penceresi içinde yeniden kurulur. Ek olarak: koordinatör soul/prompt'una "worker'dan bahsetmeden ÖNCE `spawn_worker` çağır; düz metinde 'worker başlattım' demek stall'a düşürür" kuralı eklendi, ve `spawn_worker`/`list_workers` **eager** (CLI `core`/alwaysLoad) tier'da doğrulandı (deferred değil). Ayar: `CoordinatorStallGuard` (master) / `CoordinatorStallSweepMin` (−1=tarayıcı kapalı) / `CoordinatorStallMaxNudges` — Ayarlar ▸ Araçlar. **Kalıcı sayaç (2026-08-17):** `injectStallNudge` her düzeltici notta `db.BumpSessionStallNudges` çağırır → `Session.StallNudges` (`session.json`, `stallNudges`). Bellekteki `slot.spawnHallucStreak` **ardışık** seridir (temiz koordinasyon çağrısında sıfırlanır, süreçle ölür); `StallNudges` ise **kümülatif** ve yeniden başlatmaya dayanıklıdır — `StuckTurns` ile aynı desen. Şu an yalnız **sayar ve gözlemlenebilir kılar** (tur ÖLDÜRÜLMEZ, iptal edilmez); sayaç-tabanlı bir kill katmanı **bilinçli olarak ertelendi**, sonraki bir karar. |
 
 ---
 
@@ -1211,3 +1215,66 @@ profil değil **var olan bir ajan** tercih edilmeli (profil yaprak personadır).
 ağaç-içi dokunulmazlık, `SpawnWorker` OR kuralı, derinlik tavanında düşürme.
 `toolfilter_coordination_test.go`: allowlist muafiyeti (+ iş araçlarının hâlâ
 kısıtlı kalması), denylist'in hâlâ kazanması, ad listesi ↔ köprü tutarlılığı.
+
+## 16. Ajana özel koordinatör promptu (2026-08-17)
+
+**Sorun.** Manager tipi ajanların soul'una "işi böl, worker aç, delege et" yazılıyordu.
+Ama soul **koşulsuz** enjekte edilir: aynı ajan koordinatör modu kapalı bir oturumda
+çalıştığında bu yönerge yine bağlama giriyor — hem token yakıyor, hem de elinde
+`spawn_worker` bile yokken delege etmesi söylenmiş oluyordu. Ortak koordinatör el
+kitabı ise her koordinatörde **aynı**; "bu ajan işi nasıl bölsün" gibi ajana özel
+yönergenin gideceği bir yer yoktu.
+
+**Çözüm.** Ajana tek bir serbest metin alanı eklendi: `Agent.CoordinatorPrompt`
+(`internal/db/models.go`, json: `coordinatorPrompt`, `omitempty`). İçeriği sistem
+bağlamına **yalnızca oturum gerçekten koordine ederken** — yani manuel enjeksiyonunu
+kapılayan `Session.IsCoordinator()` doğruyken — ve **ortak el kitabının hemen
+ardından** girer.
+
+Enjeksiyon sırası (`coordinatorLeadBlock`, `internal/api/coordinator_prompt.go`):
+
+| # | Parça | Kaynak |
+|---|-------|--------|
+| 1 | Ortak koordinatör el kitabı | registry prompt `coordinator` |
+| 2 | **Ajanın kendi koordinatör promptu** | `Agent.CoordinatorPrompt` |
+| 3 | Seçili reçete (M5) | `coordinatorRecipeBlock` |
+| 4 | Ara-düğüm/rapor sözleşmesi | `coordinatorSubordinateBlock` |
+
+Her parça isteğe bağlıdır ve **boş olan parça tamamen düşer**: boş bir
+`CoordinatorPrompt` ne başlık ne boş blok üretir — koordine etmeyen bir ajana
+**sıfır token** maliyeti olur. Alan opsiyoneldir; bu alandan önce yazılmış
+`agents.json` dosyaları sıfır değerle (boş metin) sorunsuz yüklenir, **migration
+gerekmez**.
+
+### 16.1 Nereden ayarlanır
+
+- **HTTP**: `POST /api/agents` ve `PUT /api/agents/{id}` gövdesinde
+  `coordinatorPrompt` (`internal/api/agents.go`). Update tarafında pointer — alanı
+  hiç göndermezsen mevcut metin korunur, açıkça `""` gönderirsen temizlenir.
+- **Araç**: `create_agent` / `update_agent`
+  (`internal/tools/builtin_agentmgmt.go`) — ajanlar birbirinin koordinatör
+  promptunu kendileri yazabilir.
+- **UI**: Ajan ayarları formunda **"Koordinatör promptu"** alanı, yalnız
+  koordinatör modu açıkken görünür (`AgentSettingsForm.tsx`). Reçete alanıyla aynı
+  mantık: mod kapatılıp kaydedilirse alan temizlenir, çünkü mod kapalıyken zaten
+  hiç enjekte edilmeyecek ölü metindir. Aynı üçlü (mod anahtarı + reçete + prompt)
+  **yeni ajan oluşturma formunda** da vardır (`AgentsView.tsx`), böylece koordinatör
+  doğrudan doğru yapılandırmayla açılır; mod kapalıyken reçete ve prompt boş
+  gönderilir.
+- **Paketleme**: alan market paketlerinde ve workspace şablonlarında taşınır
+  (`market.AgentPayload`, `market.WorkspaceTemplateAgent`) — bkz. `_Docs/21-MARKET.md`.
+  Reçetenin aksine çözülecek bir referansı olmadığı için kurulumda **birebir**
+  yazılır.
+
+### 16.2 Testler
+
+`coordinator_prompt_agent_test.go`: mod AÇIK + dolu prompt → metin bağlamda ve el
+kitabının **ardında**; mod KAPALI → hiç yok (el kitabı da yok); boş/yalnız-boşluk
+prompt → çıktı birebir el kitabı (ayırıcı bile eklenmez); store round-trip
+(create/get, alakasız patch'in metni ezmemesi, açık `""` ile temizleme, alansız
+ajanın boş değerle yüklenmesi).
+
+`market_coordinator_prompt_test.go`: publish → paket → install turu — hem agent
+paketi (`market.AgentPayload`) hem workspace şablonu
+(`market.WorkspaceTemplateAgent`) için prompt JSON'dan geçip kurulan ajanda
+birebir korunuyor mu; alansız paket boş değerle çözülüyor mu.

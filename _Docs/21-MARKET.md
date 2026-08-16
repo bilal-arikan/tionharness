@@ -221,6 +221,7 @@ payload yalnız detay/kurulum anında okunur (skills'teki body-lazy kalıbı).
                 "permissionMode": "auto", "toolOverrides": "{...}",
                 "coordinatorMode": true,               // ajanın açtığı oturumlar koordinatör doğar
                 "coordinatorWorkflow": "coordinator-wf-plan-dev-test",  // opsiyonel reçete
+                "coordinatorPrompt": "Önce planla, sonra iki worker aç.", // koordinatör-özel prompt
                 "skills": ["..."] }],
   "flows":   [{ "name": "...", "steps": [...] }],   // veya "graph": "{...}" (agentId = "tmpl:<key>")
   "schedules": [{ "agentKey": "...", "cronExpr": "0 8 * * *", "prompt": "..." }],
@@ -241,7 +242,9 @@ payload yalnız detay/kurulum anında okunur (skills'teki body-lazy kalıbı).
 >
 > **`coordinatorMode`** ajan tanımına yazılır, oturuma **doğuşta** kopyalanır (bkz.
 > `_Docs/47` §15). Pinlenmiş `coordinatorWorkflow` kurulumda çözülemezse **düşürülür** —
-> ajan serbest koordinasyonla çalışır, kurulum patlamaz.
+> ajan serbest koordinasyonla çalışır, kurulum patlamaz. `coordinatorPrompt` serbest
+> metindir, çözülecek bir referansı yoktur: **olduğu gibi** taşınır ve kurulur; boşsa
+> hiç yazılmaz (`omitempty`). Aynı üç alan **agent** paketinde de taşınır.
 
 **mcp** — MCP araç sunucusu:
 ```jsonc

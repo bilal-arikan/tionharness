@@ -129,6 +129,22 @@ Komut, **stdin'den JSON** alır, **stdout'a JSON** döner. `exit 2` = engelle.
 - **Güvenlik:** timeout (vars. 30s, clamp 1–120), çıktı cap'i (64 KB), hook
   hatası/timeout **fail-open** (çağrı devam eder — bozuk hook turu kilitlemez).
 
+> **Interpreter hatası ≠ engelle (2026-08-17):** POSIX sh/bash bir **sözdizimi
+> hatasında da `exit 2`** döner — yani Claude Code sözleşmesinin "engelle" için
+> ayırdığı kodun aynısı. Bu yüzden yanlış lehçede yazılmış bir hook, kasıtlı bir
+> deny'den ayırt edilemiyor ve eşleştiği aracı **oturum boyunca sessizce bloke
+> ediyordu** (canlı bulgu: rtk PreToolUse hook'u `syntax error near unexpected
+> token '|'` ile ölüp Bash'i devre dışı bırakıyordu).
+>
+> `execHook` artık exit kodunu yorumlamadan **önce** stderr'i inceler
+> (`interpreterFailure`): parse/başlatma imzası varsa (`syntax error`,
+> `unexpected token`, `command not found`, `ParserError`, …) sonuç bir **karar
+> değil hatadır** — fail-open akar, araç çağrısı geçer. Sıradan bir stderr
+> sebebiyle gelen `exit 2` **hâlâ engeller**. Hata mesajı beklenen lehçeyi
+> (`PowerShell` / `POSIX sh`) ve suçlu satırı taşır; çağıran taraf bunu
+> `debug.jsonl`'e `<tool>:error:<mesaj>` olarak yazar, böylece bozuk hook turu
+> yeniden koşturmadan teşhis edilir.
+
 ## Veri modeli + depolama
 
 `db.Hook` (`internal/db/models_hook.go`): `ID, Event, Matcher, Type("command"),
@@ -176,6 +192,23 @@ zincirlenir; ilk `block` kazanır.
 >
 > Ders: bir riski **dokümante etmek yetmiyor** — riski üreten şablon kodda durdukça
 > kullanıcı ona tek tıkla ulaşıyor. Uyarıyı yazarken şablonu da düzeltmek gerekirdi.
+>
+> **Lehçe köprüsü (2026-08-17):** Şablon kaldırıldı ama **eski hook kayıtları
+> workspace store'larında duruyor** (5 workspace, 11 dosya) — yani "yaz-ve-uyar"
+> hâlâ yetmiyordu. `writeCLISettings` artık komutu da çevirir: `cliHookCommand`
+> (`climcp_hookcmd.go`), Windows'ta PowerShell **kaynak kodu** olan bir komutu
+> (`$` ataması, `[Type]::Üye`, `&`/`.` çağrı operatörü, `Verb-Noun` cmdlet)
+> `powershell.exe -NoProfile -NonInteractive -Command '<gövde>'` içine sarar —
+> gövde POSIX tek-tırnakla kaçırılır, yani bash için tek kelime, PowerShell için
+> orijinal metin. Yorumlayıcısını **zaten açıkça çağıran** komutlar
+> (`sqz hook claude`, `powershell -File …`, `node hook.js`) **aynen geçer**;
+> sarmalamak kendi tırnaklamalarını bozardı. stdin miras alındığı için payload
+> sözleşmesi değişmez. Test: `climcp_hookcmd_test.go`.
+>
+> Matcher köprüsü (lehçe #1) ile birlikte bu, native↔CLI arasındaki **ikinci**
+> sessiz lehçe farkını kapatır. Çalışma zamanı tarafı da sertleştirildi — bkz.
+> yukarıdaki *"Interpreter hatası ≠ engelle"*: artık bozuk bir hook aracı
+> susturamaz, yalnızca `debug.jsonl`'e hata yazar.
 
 
 

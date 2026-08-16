@@ -45,6 +45,9 @@ erDiagram
         text title
         int  message_count
         text state
+        text run_state
+        int  run_state_at
+        int  stall_nudges
         text summary
         int  summary_msg_count
         int  created_at
@@ -158,7 +161,7 @@ erDiagram
 | Tablo | Sorumluluk |
 |-------|-----------|
 | `agents` | Ajan tanımı: soul, kimlik, sağlayıcı, model, `thinking_level`, `permission_mode`; **araç ayarları** (`mcp_enabled`; `blocked_tools` ajan denylist = varsayılan tüm araçlar açık, listelenenler engelli; `allowed_tools` legacy allowlist yalnız subagent profilleri için). *(Per-ajan günlük bütçe limitleri 2026-07-01'de kaldırıldı.)* **`deleted`/`deleted_at`** = yumuşak silme: ajan silinince kaydı **durur** ve sahip olduğu **oturumlar da durur** — geçmiş sohbetler okunur kalsın, yazarı ham id'ye düşmek yerine gerçek adıyla "silinmiş" görünsün diye. `ListAgents` silinmişleri eler (roster/seçiciler onu asla sunamaz), `GetAgent` elemez (geçmiş render'ı çözsün), `/api/agents` ise bayrakla **hepsini** döner — istemci `agents` (canlı) / `allAgents` (hepsi) diye ayırır. Zamanlamalar ve sahip olunan görevler+run'lar gerçekten silinir (ileriye dönük; ajansız çalışamazlar). **Çalışan ajan silinemez:** tek karar noktası `Runtime.AgentBusy` — ajanın sahip olduğu **ve katıldığı** oturumları canlı kayıtlarla kesiştirir, artı ajana atanmış koşan run'a bakar. Silmenin **iki** yolu da (HTTP `handleDeleteAgent` → **409**, ve self-management `delete_agent` aracı → hata) aynı fonksiyondan geçer; yalnız birini koruyan bir kontrol, koruma gibi göründüğü için hiç kontrol olmamasından kötüdür. Canlı kayıtlar oturum-bazlıdır ve **interaktif** turlar api sunucusunda yaşadığı için `Manager.SetExternalActiveSessions` ile runtime'a enjekte edilir (`SetAutonomousInteraction` ile aynı desen); enjeksiyon olmadan runtime yalnız otonom işleri görürdü. |
-| `sessions` | Oturum: ajan ilişkisi, başlık, mesaj sayısı, durum; **compaction** özeti (`summary` + `summary_msg_count`) |
+| `sessions` | Oturum: ajan ilişkisi, başlık, mesaj sayısı, durum; **compaction** özeti (`summary` + `summary_msg_count`). **`state` ile `run_state` KARIŞTIRILMAMALI** — aşağıya bakın |
 | `session_messages` | Tur geçmişi: rol, metin, araç çağrıları, akıl yürütme içeriği, aktivite izi (`steps`); **`agent_id`** = turu üreten ajan (çok-ajanlı oturumda mesaj başına ajan) |
 | `agent_usage` | Ajan başına gün bazlı kullanım sayacı (çağrı + giriş/çıkış token) — `db.Usage`, `store_usage.go`. **Yalnız takip/raporlama** (Tasarruf Merkezi + spend metre); limit uygulamaz |
 | `tasks` | Pano durumu (`board_state`), sahiplik, ajana verilen `prompt`, son çalışma özeti, bağımlılıklar. **`flow_id`** dolu ise görev "flow-backed" — çalıştırılınca ajana prompt yerine o orchestration akışı koşar. **`created_by`** = görevi oluşturan ajan ("" = kullanıcı; yalnız köken/görüntü, silme kapısı değil) |
@@ -169,6 +172,33 @@ erDiagram
 | `flows` | Akış tanımı: `graph` (JSON `orchestration.Graph` — agent/branch/parallel node). **`created_by`** = akışı oluşturan ajan ("" = kullanıcı) |
 | `flow_runs` | Akış yürütmesi: durum, girdi/çıktı, **restart-safe** `state` (her node sonrası persist), hata |
 | `artifacts` | Ajanın ürettiği kalıcı içerik. **Sürümlenmez** — `update` içeriği yerinde ezer (revizyon geçmişi yok). `kind` ∈ metin kindleri (`markdown`/`code`/`html`/`text`/`svg`/`mermaid`) **veya** medya/dosya kindleri (`image`/`video`/`audio`/`file`) + `language` (kod için). Metin kindlerinde gövde diskte `artifacts/<session>/<id><ext>` altında tutulur, JSON `content_file` ile referanslar (yükte `content`'e okunur). Medya/dosya kindlerinde bytes diskte yaşar, `source_path` (workspace-göreli) ile referanslanır — `create_artifact sourcePath` ile verilen workspace-dışı dosyalar `artifacts/`'a kopyalanır. `origin` ∈ `chat`/`manual`/`tool` (+ tarihsel `agent` — otomatik yakalama kaldırıldı, yeni artifact üretmez); köken `session_id`/`agent_id`. **Otomatik yakalama YOK:** artifact yalnız araçla (`create_artifact`/`update_artifact`) veya API/UI ile bilerek oluşturulur; dosya yazmak artifact üretmez. Workspace-scoped — TionSwarm'nun Claude.ai artifact karşılığı |
+
+> **`state` (görünürlük) ve `run_state` (koşu sonucu) AYRI alanlardır.**
+>
+> - **`state`** yalnız iki değer alır: `active` | `archived`. Bu bir **görünürlük**
+>   alanıdır — kenar çubuğu filtresi (`SessionsSidebar.tsx`) ve API doğrulaması
+>   (`internal/api/sessions.go`, `handleSetSessionState`) tam olarak bu iki değere
+>   bağlıdır. Buraya bir koşu sonucu yazmak her ikisini de bozar.
+> - **`run_state`** oturumun **son arka plan (worker) turunun nasıl bittiğini**
+>   saklar; değerler `turnoutcome.go`'daki sabitlerdir: `completed` | `failed` |
+>   `killed` | `timeout` | `incomplete`. Yanında `run_state_at` (unix saniye)
+>   damgası bulunur. `internal/agent/coordination.go` içinde, tur sonucu
+>   sınıflandırıldıktan **sonra** ve **her dal için** yazılır — sağlayıcı hatasıyla
+>   ölen ya da iptal edilen bir koşu da `failed`/`killed` olarak kaydedilir.
+>
+> Amaç kalıcılık: transkript mesajı, `worker` olayı ve etiketler yalnız o an
+> yayınlanan sinyallerdir; yeniden başlatmadan sonra **bitmiş bir worker'ı canlı
+> olanından ayırt eden tek şey** `run_state`'tir. **Runtime'a aittir, salt-okunur**
+> olarak sunulur — API'nin oturum güncelleme uçları bu alanı girdi olarak kabul
+> etmez. `omitempty`: alanı taşımayan eski `session.json` dosyaları **olduğu gibi
+> yüklenir**, hiçbir migrasyon diskteki dosyaları yeniden yazmaz; eski oturumlarda
+> `run_state` basitçe boştur.
+>
+> **`stall_nudges`** koordinatör "hayalet spawn" sayacıdır (bkz. `_Docs/47`):
+> bellekteki ardışık seri (`slot.spawnHallucStreak`) temiz bir koordinasyon
+> çağrısında sıfırlanır ve süreçle birlikte kaybolur; bu alan ise **kümülatif** ve
+> yeniden başlatmaya dayanıklıdır, böylece sonraki bir eskalasyon katmanı geçmişe
+> bakarak karar verebilir.
 
 > **Köken (provenance) konvansiyonu — `created_by`:** Self-management ile ajan
 > tarafından oluşturulabilen entity'ler (`agents`, `tasks`, `schedules`, `flows`,
