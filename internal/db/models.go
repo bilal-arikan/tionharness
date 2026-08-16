@@ -207,6 +207,23 @@ type Session struct {
 	// process-restart-surviving sibling of the per-turn loop guards.
 	StuckTurns int `json:"stuckTurns,omitempty"`
 
+	// StallNudges counts how many times the coordinator stall guard has caught this
+	// session claiming a spawn it never made (see internal/agent/coordination_stall.go).
+	// The in-memory slot streak resets on a clean coordination call and dies with the
+	// process; this is the cumulative, restart-surviving tally a later escalation tier
+	// (or a forensic pass over session.json) can act on.
+	StallNudges int `json:"stallNudges,omitempty"`
+
+	// RunState records how this session's LAST background work turn ended, using the
+	// turn-outcome vocabulary (completed / failed / killed / timeout / incomplete).
+	// DISTINCT from State, which is the two-valued visibility field (active/archived).
+	// Empty on a session that has never run a background turn — including every
+	// session written before this field existed, which is why it is omitempty: no
+	// migration rewrites old session.json files.
+	RunState string `json:"runState,omitempty"`
+	// RunStateAt is when RunState was last written (unix seconds).
+	RunStateAt int64 `json:"runStateAt,omitempty"`
+
 	// Conversation compaction state (see internal/conversation).
 	Summary         string `json:"summary"`
 	SummaryMsgCount int    `json:"summaryMsgCount"`

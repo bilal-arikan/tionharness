@@ -17,7 +17,14 @@ export interface Session {
   sourceId?: string
   title: string
   messageCount: number
+  // Visibility only: 'active' | 'archived'. NOT the run outcome — see runState.
   state: string
+  // How the last background work turn ended: 'completed' | 'failed' | 'killed' |
+  // 'timeout' | 'incomplete'. Runtime-owned and read-only — the API never accepts
+  // it as input. Absent on sessions that never ran a background turn.
+  runState?: string
+  // When runState was last written (unix seconds).
+  runStateAt?: number
   // Session-header format version (db.SessionSchemaVersion); 0 = pre-versioning.
   v?: number
   // The model this session last ran with (per-turn history in Message.Model).

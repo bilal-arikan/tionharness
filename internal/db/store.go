@@ -502,6 +502,30 @@ func (d *DB) SetSessionStuckTurns(ctx context.Context, sessionID string, n int) 
 	})
 }
 
+// SetSessionRunState persists how the session's last background work turn ended
+// (the turn-outcome vocabulary: completed / failed / killed / timeout /
+// incomplete), so a finished run is distinguishable from a live one after a
+// restart. `at` is the unix second the outcome was decided. Does not bump
+// UpdatedAt — the caller records the reply message, which is the real activity.
+func (d *DB) SetSessionRunState(ctx context.Context, sessionID, state string, at int64) error {
+	return d.mutateSessionLocked(sessionID, func(s *Session) {
+		s.RunState = state
+		s.RunStateAt = at
+	})
+}
+
+// BumpSessionStallNudges increments the cumulative coordinator-stall counter and
+// returns the new value. Persisted (unlike the in-memory slot streak) so a later
+// escalation tier survives a restart. Does not bump UpdatedAt — bookkeeping.
+func (d *DB) BumpSessionStallNudges(ctx context.Context, sessionID string) (int, error) {
+	n := 0
+	err := d.mutateSessionLocked(sessionID, func(s *Session) {
+		s.StallNudges++
+		n = s.StallNudges
+	})
+	return n, err
+}
+
 // SetSessionPinned pins/unpins a session to the top of the sidebar list. Does not
 // bump UpdatedAt (pinning is a view preference, not activity).
 func (d *DB) SetSessionPinned(ctx context.Context, sessionID string, pinned bool) error {

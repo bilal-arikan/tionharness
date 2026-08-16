@@ -224,8 +224,16 @@ func (r *Runtime) injectStallNudge(coordSessionID, agentID string, slot *coordSl
 	if _, err := r.recordInjectedUserNote(ctx, coordSessionID, "coordination-guard", coordStallNote); err != nil {
 		r.logger.Warn("coordination: failed to record stall note", "coordinator", coordSessionID, "error", err)
 	}
+	// The slot streak above is consecutive and in-memory: a clean coordination call
+	// zeroes it and a restart loses it entirely. Persist a cumulative tally next to
+	// StuckTurns so a later escalation tier — and a forensic pass over session.json —
+	// can see how often this coordinator has phantom-spawned across its whole life.
+	total, err := r.db.BumpSessionStallNudges(ctx, coordSessionID)
+	if err != nil {
+		r.logger.Warn("coordination: failed to persist stall counter", "coordinator", coordSessionID, "error", err)
+	}
 	r.logger.Warn("coordination: coordinator narrated a spawn with no tool call; injected corrective note",
-		"coordinator", coordSessionID, "streak", streak)
+		"coordinator", coordSessionID, "streak", streak, "totalStalls", total)
 	r.emitDebug(WithSessionID(context.Background(), coordSessionID), db.DebugEvent{
 		Type:    db.DebugError,
 		AgentID: agentID,
