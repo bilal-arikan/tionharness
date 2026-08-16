@@ -221,7 +221,7 @@ func (r *Runtime) runAgent(ctx context.Context, caller db.Agent, parentReq *prov
 		System: sys,
 		// Volatile turn-start clock (+ lessons when ctx carries a session)
 		// rides the dynamic suffix, keeping the static prefix cacheable.
-		SystemDynamic: r.autonomousDynamicSuffix(ctx),
+		SystemDynamic: r.autonomousDynamicSuffix(ctx, agent),
 		Messages:      msgs,
 	}
 

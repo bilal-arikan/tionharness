@@ -90,7 +90,7 @@ func (s *Server) composeTurnRequest(ctx context.Context, wsp *workspace.Workspac
 	// off, it states shell is disabled and gives the dead-tool rule so a bare
 	// `PowerShell` call (which hits "not enabled in this context") is not looped
 	// on. Volatile side: the gate can toggle mid-session.
-	if sh := wsp.Runtime.ShellToolsContextBlock(false); sh != "" {
+	if sh := wsp.Runtime.ShellToolsContextBlock(ctx, agentRow, false); sh != "" {
 		dynamic = strings.TrimSpace(dynamic + "\n\n" + sh)
 	}
 	// Coordination scratchpad (M2/M3): a shared folder the coordinator and ALL its

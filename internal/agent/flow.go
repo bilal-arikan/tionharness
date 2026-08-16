@@ -35,7 +35,7 @@ func (f flowRunner) RunAgentNodeSchema(ctx context.Context, agentID, prompt, out
 	}
 	// Volatile clock/lessons ride the dynamic suffix so the node's static system
 	// prefix stays byte-stable across nodes and runs (cacheable).
-	return f.rt.complete(ctx, agent, f.rt.systemPrompt(agent), f.rt.autonomousDynamicSuffix(ctx), prompt, outputSchema, f.autonomous)
+	return f.rt.complete(ctx, agent, f.rt.systemPrompt(agent), f.rt.autonomousDynamicSuffix(ctx, agent), prompt, outputSchema, f.autonomous)
 }
 
 // RunAgentNodeThread implements orchestration.ThreadAgentRunner: an accumulate-mode
@@ -47,7 +47,7 @@ func (f flowRunner) RunAgentNodeThread(ctx context.Context, agentID string, thre
 	if err != nil {
 		return "", err
 	}
-	return f.rt.completeThread(ctx, agent, f.rt.systemPrompt(agent), f.rt.autonomousDynamicSuffix(ctx), thread, prompt, outputSchema, f.autonomous)
+	return f.rt.completeThread(ctx, agent, f.rt.systemPrompt(agent), f.rt.autonomousDynamicSuffix(ctx, agent), thread, prompt, outputSchema, f.autonomous)
 }
 
 // subflowDepthKey carries the nested-subflow depth so a flow that (directly or

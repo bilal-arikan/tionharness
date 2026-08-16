@@ -1324,20 +1324,27 @@ func EnvironmentContextBlock() string {
 //
 //   - ENABLED — the shell gate is on (Tunables.ShellEnabled) AND a backing
 //     interpreter is present (same resolvers as buildRegistry via
-//     tools.ShellToolNames, so prompt ↔ catalog never drift): advertise the
-//     registered Bash/PowerShell tools by their exact names.
-//   - DISABLED — the gate is off OR no interpreter backs it: the Bash/PowerShell
-//     tools are NOT registered, so say so explicitly and give the dead-tool rule.
+//     tools.ShellToolNames, so prompt ↔ catalog never drift) AND the agent's own
+//     tool filter actually offers the tool: advertise only the shell tools that
+//     survive all three, by their exact names.
+//   - DISABLED — the gate is off OR no interpreter backs it OR the agent's
+//     allow/denylist strips every shell tool: the Bash/PowerShell tools are NOT
+//     registered for this agent, so say so explicitly and give the dead-tool rule.
 //     Otherwise the model emits a bare `PowerShell`/`Bash` call, hits "No such
 //     tool available … not enabled in this context", and — with nothing telling it
 //     the tool is gone — repeats the identical call until the turn times out
 //     (FND-9c9a52aa, FND-6095a777, FND-e9c79d9a, FND-495575b8).
 //
+// The per-agent filter is the SAME gate ToolCatalog applies (ToolAllowedFunc), so
+// the block can never advertise a tool the agent's allowlist would strip: a
+// read-only profile (allowlist without Bash/PowerShell) used to be told shell was
+// ENABLED, called Bash, and got "No such tool available" on every attempt.
+//
 // It rides the VOLATILE dynamic suffix on both paths because the gate can toggle
 // mid-session; the file tools (Read/Write/Edit/LS/Glob/Grep) stay the always-on
 // core named in the static instructions.
-func (r *Runtime) ShellToolsContextBlock(confined bool) string {
-	names := tools.ShellToolNames()
+func (r *Runtime) ShellToolsContextBlock(ctx context.Context, agent db.Agent, confined bool) string {
+	names := r.availableShellToolNames(ctx, agent)
 	if !r.tun.ShellEnabled() || len(names) == 0 {
 		return "Shell execution is DISABLED for this session: there is NO Bash or PowerShell tool. " +
 			"Do NOT call Bash or PowerShell — such a call fails with \"No such tool available\" / " +
@@ -1359,6 +1366,23 @@ func (r *Runtime) ShellToolsContextBlock(confined bool) string {
 	return "Shell execution is ENABLED for this session: the " + strings.Join(names, " / ") + " " + noun +
 		" " + verb + " host commands — " + scope + ", " +
 		"with the permission mode as the safety layer. Call " + strings.Join(names, " / ") + " by that exact name."
+}
+
+// availableShellToolNames narrows the host's backing shell interpreters
+// (tools.ShellToolNames) to the ones THIS agent may actually call, by running each
+// name through the agent's effective tool filter — the same predicate ToolCatalog
+// uses. Host support and the agent's allow/denylist are independent gates: a
+// machine can have bash.exe while the agent's profile allowlist omits "Bash", and
+// only the intersection is real. Returns nil when the agent can call neither.
+func (r *Runtime) availableShellToolNames(ctx context.Context, agent db.Agent) []string {
+	allowed := r.ToolAllowedFunc(ctx, agent)
+	var names []string
+	for _, n := range tools.ShellToolNames() {
+		if allowed(n) {
+			names = append(names, n)
+		}
+	}
+	return names
 }
 
 // systemPrompt builds an agent's static system prefix: its soul+identity persona
@@ -1450,7 +1474,11 @@ func DateTimeContextBlock() string {
 // lessons. Chat turns assemble the same pieces in composeTurnRequest; keeping
 // them out of autonomousSystemPrompt keeps the static prefix byte-stable across
 // turns so cache-capable providers reuse it.
-func (r *Runtime) autonomousDynamicSuffix(ctx context.Context) string {
+//
+// agent is the turn's own agent: the shell-capability block below is per-agent
+// (its allow/denylist decides whether Bash/PowerShell are offered at all), so it
+// cannot be derived from the session id alone.
+func (r *Runtime) autonomousDynamicSuffix(ctx context.Context, agent db.Agent) string {
 	out := DateTimeContextBlock()
 	// Failure lessons (hata→ders döngüsü): the newest distilled lessons ride
 	// every headless turn so a fresh context does not repeat known failures.
@@ -1480,7 +1508,7 @@ func (r *Runtime) autonomousDynamicSuffix(ctx context.Context) string {
 	// else states shell is disabled and gives the dead-tool rule. Volatile →
 	// dynamic suffix, since the gate can toggle mid-session. The confined flag keeps
 	// its "confined/not confined" clause consistent with the block above.
-	if sh := r.ShellToolsContextBlock(confined); sh != "" {
+	if sh := r.ShellToolsContextBlock(ctx, agent, confined); sh != "" {
 		out += "\n\n" + sh
 	}
 	// Prompt-epoch drift notice (mirrors the chat path): the frozen snapshot is

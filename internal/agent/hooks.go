@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"os/exec"
 
 	"github.com/bilal-arikan/tionswarm/internal/proc"
@@ -146,8 +147,13 @@ func (r *Runtime) runPreToolHooks(ctx context.Context, sessionID string, call pr
 		hookStart := time.Now()
 		dec, derr := r.execHook(ctx, h, payload)
 		if derr != nil {
-			r.logger.Warn("pre hook failed (fail-open)", "hook", h.ID, "tool", call.Name, "error", derr)
-			r.emitDebug(ctx, db.DebugEvent{Type: db.DebugHook, Name: db.HookPreToolUse, HookID: h.ID, DurMs: time.Since(hookStart).Milliseconds(), Detail: call.Name + ":error", Err: true})
+			// FAIL-OPEN, LOUDLY: a broken hook must not disable the tool it matches.
+			// The error rides the debug journal with its message (not just an ":error"
+			// tag) so a mis-authored command is diagnosable without re-running the
+			// turn — a silent skip is exactly how a dialect-mismatched hook stayed
+			// invisible while blocking every Bash call.
+			r.logger.Warn("pre hook failed (fail-open, tool allowed)", "hook", h.ID, "tool", call.Name, "error", derr)
+			r.emitDebug(ctx, db.DebugEvent{Type: db.DebugHook, Name: db.HookPreToolUse, HookID: h.ID, DurMs: time.Since(hookStart).Milliseconds(), Detail: call.Name + ":error:" + derr.Error(), Err: true})
 			continue
 		}
 		r.emitDebug(ctx, db.DebugEvent{Type: db.DebugHook, Name: db.HookPreToolUse, HookID: h.ID, DurMs: time.Since(hookStart).Milliseconds(), Detail: call.Name + ":" + hookDecisionLabel(dec)})
@@ -360,6 +366,21 @@ func (r *Runtime) execHook(ctx context.Context, h db.Hook, payload hookPayload) 
 		out = out[:hookOutputCap]
 	}
 
+	// The INTERPRETER failing to parse or launch the command is checked before any
+	// exit-code interpretation, because the two are otherwise indistinguishable:
+	// POSIX sh/bash exit 2 on a syntax error — the very code the Claude Code
+	// contract reserves for a deliberate "block" — so a hook authored in the wrong
+	// dialect looked exactly like a deny and silently blocked its matched tool on
+	// every call for the rest of the session. A parse failure is an ERROR, not a
+	// decision: it fails open (the caller logs it and lets the call through) while a
+	// real deny still blocks. The message names the fault and the expected dialect,
+	// so debug.jsonl is diagnosable without re-running the turn.
+	if runErr != nil {
+		if msg := interpreterFailure(stderr.String()); msg != "" {
+			return hookDecision{}, fmt.Errorf("hook interpreter failed (command is not valid %s syntax): %s", hookShellName(), msg)
+		}
+	}
+
 	// Exit code 2 = block, with stderr carrying the reason (Claude Code contract).
 	if ee, ok := runErr.(*exec.ExitError); ok && ee.ExitCode() == 2 {
 		return hookDecision{Decision: "block", Reason: strings.TrimSpace(stderr.String())}, nil
@@ -381,6 +402,49 @@ func (r *Runtime) execHook(ctx context.Context, h db.Hook, payload hookPayload) 
 		}
 	}
 	return dec, nil
+}
+
+// interpreterShellErrors are the stderr signatures a shell emits when it could not
+// PARSE or LAUNCH the command at all, as opposed to running it to a non-zero exit.
+// Matched case-insensitively against the hook's stderr.
+var interpreterShellErrors = []string{
+	"syntax error",                  // sh/bash parse failure (exits 2)
+	"unexpected token",              // bash `near unexpected token '|'`; powershell uses the same wording
+	"unexpected end of file",        // bash: unterminated construct
+	"command not found",             // the interpreter could not resolve the program
+	"is not recognized as the name", // powershell: unknown cmdlet/executable
+	"parsererror",                   // powershell: ParserError from -Command
+}
+
+// interpreterFailure reports the stderr line proving the hook's INTERPRETER failed
+// (parse/launch), or "" when stderr shows no such signature — in which case an
+// exit-2 is honoured as the Claude Code "block" decision it is meant to be.
+func interpreterFailure(stderr string) string {
+	s := strings.TrimSpace(stderr)
+	if s == "" {
+		return ""
+	}
+	low := strings.ToLower(s)
+	for _, sig := range interpreterShellErrors {
+		if strings.Contains(low, sig) {
+			// Report the first line only — enough to identify the fault, and it keeps
+			// the warning readable in debug.jsonl.
+			if i := strings.IndexAny(s, "\r\n"); i > 0 {
+				return s[:i]
+			}
+			return s
+		}
+	}
+	return ""
+}
+
+// hookShellName names the interpreter execHook spawns on this platform, so the
+// error text tells the operator which dialect the command must be written in.
+func hookShellName() string {
+	if runtime.GOOS == "windows" {
+		return "PowerShell"
+	}
+	return "POSIX sh"
 }
 
 // hookStep builds an audit TurnStep card for a hook action.

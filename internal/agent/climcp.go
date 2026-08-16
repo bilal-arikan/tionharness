@@ -305,9 +305,10 @@ type cliHookSpec struct {
 // Returns ("", noop, nil) when there is nothing to write (no deny + no hooks), so
 // the caller passes --settings only when it carries something.
 //
-// Caveat: CLI hooks run under the CLI's own hook runner/shell, which may differ
-// from TionSwarm's execHook (PowerShell on Windows). A hook authored for TionSwarm's
-// shell may need adjusting to run identically here.
+// CLI hooks run under the CLI's own hook runner, which uses a POSIX shell on every
+// platform — unlike TionSwarm's execHook, which uses PowerShell on Windows. The
+// command is therefore translated by cliHookCommand so a hook authored in the
+// workspace's native dialect runs identically on both paths.
 //
 // effort pins the CLI's effortLevel for this turn (see cliEffortLevel); it is
 // always non-empty, so the settings file is now written on every MCP-delegated
@@ -346,7 +347,10 @@ func (r *Runtime) writeCLISettings(ctx context.Context, deny []string, effort st
 				// Translate TionSwarm's comma-glob matcher to Claude Code regex — a
 				// verbatim comma list never matches in the CLI (see cliMatcherRegex).
 				Matcher: cliMatcherRegex(h.Matcher),
-				Hooks:   []cliHookSpec{{Type: "command", Command: h.Command, Timeout: h.TimeoutSec}},
+				// Translate the command to the interpreter the CLI actually spawns
+				// (POSIX bash, on Windows too) — a PowerShell-authored hook passed
+				// verbatim dies with a bash syntax error (see cliHookCommand).
+				Hooks: []cliHookSpec{{Type: "command", Command: cliHookCommand(h.Command), Timeout: h.TimeoutSec}},
 			})
 		}
 	}
