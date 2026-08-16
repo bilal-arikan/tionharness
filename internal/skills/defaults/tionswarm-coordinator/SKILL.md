@@ -1,7 +1,7 @@
 ---
 name: "Koordinatör (Çoklu-Ajan)"
-description: "Bir koordinatör oturumunun paralel worker'ları async yönetmesi: spawn_worker ile fan-out, <task-notification> ile geri bildirim, send_to_worker ile devam, stop_worker ile durdurma. Araştırma→sentez→uygulama→doğrulama döngüsü. M1 (run_subagent sync), M3 (send_message peer) ve M4 (flow) yöntemleriyle ne zaman hangisini seçeceğini de açıklar."
-when_to_use: "Uzun veya çok-fazlı bir işi birden çok ajana paralel dağıtıp sonuçları tek merkezden sentezlemek istediğinde; koordinatör turlar boyunca canlı kalıp fan-out + sentez + doğrulama yapmalı"
+description: "MEKANİK (nasıl çağrılır), politika DEĞİL: koordinatör/worker araçlarının somut kullanımı — spawn_worker ile fan-out, <task-notification> ile geri bildirim, send_to_worker ile devam, stop_worker ile durdurma, guardrail'ler (worker/derinlik sınırları) ve alt-koordinatör derinliği. M1 (run_subagent sync), M3 (send_message peer), M4 (flow) arasından hangi yöntemi seçeceğini de açıklar. Kartın ne zaman done olacağına dair KARAR kuralları için: orchestrator-doctrine."
+when_to_use: "Araçların kendisini kullanman gerektiğinde: koordinatör modunu açmak, worker spawn etmek/durdurmak, bildirimleri işlemek, hangi koordinasyon yönteminin (M1–M4) uygun olduğunu seçmek, bir guardrail hatasını çözmek. Yalnız 'kartı done'a taşıyabilir miyim / doğrulamayı kime veririm' gibi disiplin sorusu için bunu YÜKLEME."
 icon: "🧭"
 color: "#0ea5e9"
 access: shared
@@ -63,7 +63,7 @@ Aşağıdaki altı desen, yukarıdaki M1–M4 mekanikleri üstünde koştuğun *
 |-------|----------|-----------------|----------|
 | **Fanout-And-Synthesize** | Alt-görevlere böl, her dala bir worker, sonuçları birleştir | `spawn_worker` ×N (M2) veya `run_subagent` ×N (M1) → SEN sentezle | Derin araştırma: N kaynağı paralel tara → tek rapor |
 | **Adversarial Verification** | Bir worker'ın çıktısını **ikinci bir worker** kırmaya/çürütmeye çalışır | Çıktıyı taze `spawn_worker(reviewer)`'a ver; "refute et, rubber-stamp etme" | İddiaları fact-check, kod/plan doğrulama |
-| **Loop Until Done** | Durma koşulu sağlanana dek yeni worker spawn et | Notify geldikçe `spawn_worker`; `CoordinatorMaxTurns` guard'ı | "Yeni bulgu var mı? → devam" (Ralph-loop); GAN-loop skill'i de bunu yapar |
+| **Loop Until Done** | Durma koşulu sağlanana dek yeni worker spawn et | Notify geldikçe `spawn_worker`; tur sayısı sınırsız olduğundan durma koşulunu **sen** tanımla (bkz. §5) | "Yeni bulgu var mı? → devam" (Ralph-loop); GAN-loop skill'i de bunu yapar |
 | **Classify-And-Act** | Görevi türüne göre doğru worker/yola yönlendir | Önce sınıflandır → `spawn_worker(target=profil)` ile doğru profile (explore/coder/reviewer) yönlendir | Karışık istekleri kategoriye ayırma |
 | **Generate-And-Filter** | Çok seçenek üret, rubric + dedupe ile en iyileri süz | Fan-out ile N aday üret → SEN kendi bağlamında rubric'le ele | Beyin fırtınası: 10 fikir → en güçlü 3 |
 | **Tournament** | Adaylar ikişerli yargılarla elenir → kazanan | Ardışık `spawn_worker(judge)` turları; coalescing biriktirir | En iyi tek çözümü seçmek |
@@ -96,17 +96,26 @@ bir skill olarak yazıp ekleyebilirsin.
   (context'te "Shared scratchpad" olarak verilir). Worker'lar arası kalıcı bulguları/
   planları her göreve tekrar yazmak yerine oraya küçük dosyalar (findings.md, plan.md)
   olarak yazın.
-- Koordinatör başına aktif worker sayısı (`CoordinatorMaxWorkers`) ve otomatik koordinatör
-  tur sayısı (`CoordinatorMaxTurns`) sınırlıdır; limit dolunca yeni bildirimler kaydedilir
-  ama otomatik tur tetiklenmez (manuel devam edebilirsin). Ağaç genelinde ayrıca
-  derinlik (`CoordinatorMaxDepth`) ve **eşzamanlı-canlı** worker oturumu
-  (`CoordinatorMaxSubtreeSessions`) sınırları vardır — bunlara takılan bir spawn
+- **Gerçekte bağlayan iki sınır var:** koordinatör başına aktif worker sayısı
+  (`CoordinatorMaxWorkers`, varsayılan 8, tavan 64) ve ağaç derinliği
+  (`CoordinatorMaxDepth`, varsayılan 5, tavan 12). Bunlara takılan bir spawn
   **hata verir**, sessizce düz worker'a düşmez.
-- **Ağaç bütçesi görünür + geri kazanılır.** Her `spawn_worker` sonucu
-  `Tree budget: N/M live … (K remaining)` satırı taşır (%75/%90'da `⚠️`). Tavan artık
-  *ömür-boyu toplam* değil, *eşzamanlı-canlı* worker sayısıdır: **biten** worker'lar
-  otomatik geri kazanılır (reclaim), yani uzun ömürlü bir koordinatör bitirdiği işle
-  kilitlenmez. Tükenirse hata hâlâ aktif sayılan worker'ları listeler.
+- **Otomatik tur sayısı ve ağaç geneli worker bütçesi artık sınırsızdır.**
+  `normalize` her yükleme/kaydetmede `CoordinatorMaxTurns` ve
+  `CoordinatorMaxSubtreeSessions` değerlerini **-1'e (sınırsız) sabitler**
+  (`internal/settings/store.go:689` ve `:702`); ayarlar arayüzündeki iki girdi de
+  kaldırılmıştır. Yani bu ikisi pratikte hiçbir zaman devreye girmez: notify
+  döngüsü tur sayısı yüzünden durmaz, ağaç genelinde toplam worker bütçesi
+  yüzünden spawn reddedilmez. Daha önce sonlu bir değer kaydedilmiş
+  workspace'lerde de ilk okumada sınırsıza çevrilir.
+- **Ağaç bütçesi kapalı olduğu için `Tree budget:` satırı da çıkmaz.** Bütçe
+  değerlendirmesi sınırsızda (`<= 0`) hemen dönüyor
+  (`evalCoordinatorTreeBudget`, `internal/agent/coordination.go:583`), dolayısıyla
+  `spawn_worker` sonucunda `Tree budget: N/M live …` satırını **bekleme** ve
+  spawn'ın ağaç bütçesi yüzünden reddedilmesini planlama. Fan-out'u sen
+  sınırlarsın: `CoordinatorMaxWorkers` (eşzamanlı) + `CoordinatorMaxDepth`
+  (derinlik) dışında duracak yer yok, o yüzden durma koşulunu görevin kendisine
+  yaz.
 - **Stall sert-halt:** düz metinde worker uydurmak (araç çağrısı olmadan) fantom-spawn
   stall'ına düşürür; nudge bütçesi bitip yargıç hâlâ stall doğrularsa koordinatör
   **otomatik-turlamayı bırakır** ve sana tek-seferlik `coordination` bildirimi gider.
