@@ -73,6 +73,7 @@ export function AgentSettingsForm({
   const [skills, setSkills] = useState<string[]>(agent.skills ?? [])
   const [coordinatorMode, setCoordinatorMode] = useState(agent.coordinatorMode ?? false)
   const [coordinatorWorkflow, setCoordinatorWorkflow] = useState(agent.coordinatorWorkflow ?? '')
+  const [coordinatorPrompt, setCoordinatorPrompt] = useState(agent.coordinatorPrompt ?? '')
   const [saving, setSaving] = useState(false)
   const [duplicating, setDuplicating] = useState(false)
   const [err, setErr] = useState<string | null>(null)
@@ -114,6 +115,7 @@ export function AgentSettingsForm({
       permissionMode !== (agent.permissionMode || 'auto') ||
       coordinatorMode !== (agent.coordinatorMode ?? false) ||
       coordinatorWorkflow !== (agent.coordinatorWorkflow ?? '') ||
+      coordinatorPrompt !== (agent.coordinatorPrompt ?? '') ||
       JSON.stringify(skills) !== JSON.stringify(agent.skills ?? []),
     [
       name,
@@ -127,6 +129,7 @@ export function AgentSettingsForm({
       permissionMode,
       coordinatorMode,
       coordinatorWorkflow,
+      coordinatorPrompt,
       skills,
       agent,
     ],
@@ -165,6 +168,9 @@ export function AgentSettingsForm({
         // A recipe without coordinator mode has nothing to apply to; clear it
         // rather than persisting a setting that silently does nothing.
         coordinatorWorkflow: coordinatorMode ? coordinatorWorkflow : '',
+        // Same reasoning as the recipe above: this prompt is only ever injected
+        // while coordinating, so without coordinator mode it is dead text.
+        coordinatorPrompt: coordinatorMode ? coordinatorPrompt : '',
       })
       if (result?.warning) setSaveWarn(result.warning)
       setSavedAt((n) => n + 1)
@@ -409,6 +415,25 @@ export function AgentSettingsForm({
               groupName={`agent-recipe-${agent.id}`}
             />
           </Field>
+        )}
+        {coordinatorMode && (
+          <>
+            <Field label="Koordinatör promptu">
+              <PromptEditor
+                data-testid="agent-coordinator-prompt-textarea"
+                value={coordinatorPrompt}
+                onChange={setCoordinatorPrompt}
+                rows={3}
+              />
+            </Field>
+            <p className="-mt-2 text-xs text-[var(--color-text-dim)]">
+              Yalnızca oturum <strong>koordinatör modundayken</strong>, ortak koordinatör el
+              kitabının hemen ardından sistem bağlamına eklenir. Bu ajana özel delegasyon yönergesi
+              (hangi worker'lar açılsın, iş nasıl bölünsün) buraya yazılır — soul'a değil: mod
+              kapalıyken hiç enjekte edilmez, dolayısıyla <strong>sıfır token</strong> maliyeti
+              olur.
+            </p>
+          </>
         )}
 
         <Field label="Karakter / sistem promptu (soul)">

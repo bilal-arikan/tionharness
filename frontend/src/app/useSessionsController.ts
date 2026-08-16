@@ -513,9 +513,23 @@ export function useSessionsController({
   )
 
   const createAgent = useCallback(
-    async (name: string, soul: string, provider: string, model?: string) => {
+    async (
+      name: string,
+      soul: string,
+      provider: string,
+      model?: string,
+      coordinator?: { mode: boolean; workflow: string; prompt: string },
+    ) => {
       try {
-        const agent = await api.createAgent({ name, soul, provider, model })
+        const agent = await api.createAgent({
+          name,
+          soul,
+          provider,
+          model,
+          coordinatorMode: coordinator?.mode,
+          coordinatorWorkflow: coordinator?.workflow,
+          coordinatorPrompt: coordinator?.prompt,
+        })
         setAllAgents((prev) => [agent, ...prev])
         // Focus the new agent (so Agents/Tools views select it) but do NOT make
         // it the default for new chats: creating an agent must not silently

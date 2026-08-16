@@ -243,6 +243,10 @@ type AgentProfilePatch struct {
 	// never touches sessions that already exist.
 	CoordinatorMode     *bool
 	CoordinatorWorkflow *string
+	// CoordinatorPrompt is the agent's coordinator-only prompt block (see
+	// Agent.CoordinatorPrompt). Pointer so clearing it ("") is distinguishable
+	// from "not in this patch".
+	CoordinatorPrompt *string
 }
 
 // UpdateAgent applies a partial profile patch to an existing agent and persists
@@ -284,6 +288,9 @@ func (d *DB) UpdateAgent(ctx context.Context, agentID string, p AgentProfilePatc
 		}
 		if p.CoordinatorWorkflow != nil {
 			a.CoordinatorWorkflow = *p.CoordinatorWorkflow
+		}
+		if p.CoordinatorPrompt != nil {
+			a.CoordinatorPrompt = *p.CoordinatorPrompt
 		}
 	})
 }

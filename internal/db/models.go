@@ -81,6 +81,19 @@ type Agent struct {
 	// that knows the depth budget and can degrade to a plain worker.
 	CoordinatorMode bool `json:"coordinatorMode,omitempty"`
 
+	// CoordinatorPrompt is free-text orchestration guidance injected into the
+	// system context ONLY while the session is actually coordinating
+	// (Session.IsCoordinator), right after the shared coordinator manual. It is
+	// where per-agent delegation direction belongs — "which workers to spawn",
+	// "how to split this team's work" — instead of the Soul, which is injected
+	// unconditionally and therefore costs tokens (and misleads) on a session that
+	// has no delegation tools at all.
+	//
+	// Optional: an empty value injects NOTHING — no header, no blank block — so an
+	// agent that never coordinates pays zero tokens for it. Agents persisted
+	// before this field existed load with the zero value; no migration needed.
+	CoordinatorPrompt string `json:"coordinatorPrompt,omitempty"`
+
 	// CoordinatorWorkflow optionally pins a coordinator recipe (a skill with
 	// kind=coordinator-workflow) on the sessions this agent opens. Only meaningful
 	// together with CoordinatorMode. An unresolvable slug degrades to free

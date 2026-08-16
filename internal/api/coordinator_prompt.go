@@ -11,6 +11,29 @@ import (
 	"github.com/bilal-arikan/tionswarm/internal/workspace"
 )
 
+// coordinatorLeadBlock composes the system-prompt lead that ONLY a coordinator
+// session receives, in injection order:
+//
+//	manual        the shared coordinator operating manual (registry prompt)
+//	agentPrompt   this agent's own Agent.CoordinatorPrompt — per-agent delegation
+//	              direction, riding directly behind the manual
+//	recipe        the selected coordinator recipe (M5), if any
+//	subordinate   a mid-level node's place in the tree + upward-reporting contract
+//
+// Every part is optional and blank parts are dropped whole: an empty agentPrompt
+// contributes NOTHING — no header, no blank block — so the field is free for an
+// agent that never coordinates. The caller gates the whole block on
+// Session.IsCoordinator(), which is what keeps it out of a non-coordinator turn.
+func coordinatorLeadBlock(manual, agentPrompt, recipe, subordinate string) string {
+	parts := make([]string, 0, 4)
+	for _, p := range []string{manual, agentPrompt, recipe, subordinate} {
+		if t := strings.TrimSpace(p); t != "" {
+			parts = append(parts, t)
+		}
+	}
+	return strings.Join(parts, "\n\n")
+}
+
 // coordinatorRecipeBlock returns the selected coordinator recipe (M5) as a system
 // block for a coordinator session: the recipe's markdown body plus its suggested
 // worker targets and stop condition. Returns "" when no recipe is selected, the

@@ -198,6 +198,7 @@ func (s *Server) seedWorkspaceTeam(ctx context.Context, wsNew *workspace.Workspa
 			Skills:              known,
 			CoordinatorMode:     ta.CoordinatorMode,
 			CoordinatorWorkflow: workflow,
+			CoordinatorPrompt:   ta.CoordinatorPrompt,
 		})
 		if err != nil {
 			s.logger.Warn("seed template agent failed", "workspace", wsNew.ID, "agent", ta.Name, "error", err)

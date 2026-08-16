@@ -39,6 +39,10 @@ export interface Agent {
   // Optional coordinator recipe slug pinned on those sessions (a skill with
   // kind=coordinator-workflow). Only meaningful with coordinatorMode.
   coordinatorWorkflow?: string
+  // Free-text orchestration guidance injected into the system context ONLY while
+  // the session is in coordinator mode, right after the shared coordinator
+  // manual. Empty injects nothing at all, so it is free when not coordinating.
+  coordinatorPrompt?: string
   createdAt: number
   updatedAt: number
 }
@@ -58,6 +62,7 @@ export interface AgentPatch {
   skills?: string[]
   coordinatorMode?: boolean
   coordinatorWorkflow?: string
+  coordinatorPrompt?: string
 }
 
 import type { ModelStat, KindStat } from './usage'

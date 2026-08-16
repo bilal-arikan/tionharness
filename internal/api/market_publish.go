@@ -189,6 +189,7 @@ func (s *Server) buildWorkspaceTemplatePayload(ctx context.Context, wsp *workspa
 			// was the coordinator.
 			CoordinatorMode:     a.CoordinatorMode,
 			CoordinatorWorkflow: a.CoordinatorWorkflow,
+			CoordinatorPrompt:   a.CoordinatorPrompt,
 		})
 	}
 

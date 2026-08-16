@@ -282,6 +282,9 @@ func (s *Server) installAgentPack(r *http.Request, wsp *workspace.Workspace, pac
 		// a recipe it references may simply not exist in this workspace.
 		CoordinatorMode:     ap.CoordinatorMode,
 		CoordinatorWorkflow: resolvableRecipe(skillStore, ap.CoordinatorWorkflow),
+		// Unlike the recipe slug this needs no resolution against the workspace: it
+		// is free text the pack carries whole, so it installs verbatim.
+		CoordinatorPrompt: ap.CoordinatorPrompt,
 	})
 	if err != nil {
 		return market.InstallResult{}, httpErr{http.StatusInternalServerError, err.Error()}

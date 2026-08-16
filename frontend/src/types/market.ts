@@ -72,6 +72,8 @@ export interface WorkspaceTemplateAgent {
   coordinatorMode?: boolean
   /** Optional coordinator recipe slug pinned on those sessions. */
   coordinatorWorkflow?: string
+  /** Coordinator-only prompt block, injected while the session coordinates. */
+  coordinatorPrompt?: string
 }
 
 /** A starter automation rule shipped with a workspace template. Always seeded

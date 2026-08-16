@@ -157,6 +157,11 @@ type AgentPayload struct {
 	// part of a workspace template.
 	CoordinatorMode     bool   `json:"coordinatorMode,omitempty"`
 	CoordinatorWorkflow string `json:"coordinatorWorkflow,omitempty"`
+	// CoordinatorPrompt is the agent's coordinator-only prompt block (see
+	// db.Agent.CoordinatorPrompt). Carried alongside the two above: without it a
+	// published coordinator installs with its delegation direction stripped and
+	// only the generic manual left.
+	CoordinatorPrompt string `json:"coordinatorPrompt,omitempty"`
 }
 
 // ProviderPayload is a custom provider config WITHOUT its API key. The key is
@@ -227,8 +232,12 @@ type WorkspaceTemplateAgent struct {
 	// ship a team that orchestrates out of the box (a PM/CTO pair) instead of one
 	// the user must toggle per thread. CoordinatorWorkflow optionally pins a
 	// coordinator recipe slug (a bundled kind=coordinator-workflow skill).
+	// CoordinatorPrompt carries the agent's coordinator-only prompt block (see
+	// db.Agent.CoordinatorPrompt) so a templated team keeps its per-agent
+	// delegation direction, not just the shared manual.
 	CoordinatorMode     bool   `json:"coordinatorMode,omitempty"`
 	CoordinatorWorkflow string `json:"coordinatorWorkflow,omitempty"`
+	CoordinatorPrompt   string `json:"coordinatorPrompt,omitempty"`
 }
 
 // WorkspaceTemplateSkill is a skill bundled with a template: its portable

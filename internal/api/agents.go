@@ -109,6 +109,9 @@ type createAgentReq struct {
 	// Unlike MCPEnabled these default OFF — coordination is opt-in.
 	CoordinatorMode     bool   `json:"coordinatorMode"`
 	CoordinatorWorkflow string `json:"coordinatorWorkflow"`
+	// CoordinatorPrompt is injected only while a session of this agent is
+	// coordinating (see db.Agent.CoordinatorPrompt).
+	CoordinatorPrompt string `json:"coordinatorPrompt"`
 }
 
 func (s *Server) handleCreateAgent(w http.ResponseWriter, r *http.Request) {
@@ -170,6 +173,7 @@ func (s *Server) handleCreateAgent(w http.ResponseWriter, r *http.Request) {
 		MCPEnabled:          mcpEnabled,
 		CoordinatorMode:     req.CoordinatorMode,
 		CoordinatorWorkflow: req.CoordinatorWorkflow,
+		CoordinatorPrompt:   req.CoordinatorPrompt,
 	})
 	if writeDBError(w, err, "") {
 		return
@@ -301,6 +305,9 @@ type updateAgentReq struct {
 	// default, not a broadcast (see db.Agent.CoordinatorMode).
 	CoordinatorMode     *bool   `json:"coordinatorMode"`
 	CoordinatorWorkflow *string `json:"coordinatorWorkflow"`
+	// CoordinatorPrompt is the coordinator-only prompt block. Pointer so omitting
+	// it leaves the stored text alone and an explicit "" clears it.
+	CoordinatorPrompt *string `json:"coordinatorPrompt"`
 }
 
 func (s *Server) handleUpdateAgent(w http.ResponseWriter, r *http.Request) {
@@ -342,6 +349,7 @@ func (s *Server) handleUpdateAgent(w http.ResponseWriter, r *http.Request) {
 		Skills:              req.Skills,
 		CoordinatorMode:     req.CoordinatorMode,
 		CoordinatorWorkflow: req.CoordinatorWorkflow,
+		CoordinatorPrompt:   req.CoordinatorPrompt,
 	})
 	if writeDBError(w, err, "agent not found") {
 		return

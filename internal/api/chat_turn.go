@@ -86,10 +86,11 @@ func (s *Server) composeTurnRequest(ctx context.Context, wsp *workspace.Workspac
 	// headless path (agent.autonomousSystemPrompt). Volatile side, never cached.
 	dynamic = strings.TrimSpace(dynamic + "\n\n" + agent.EnvironmentContextBlock())
 	// Shell-execution capability, single-sourced: when the gate is on + a shell
-	// backs it, this advertises the registered Bash/PowerShell tools; when it is
-	// off, it states shell is disabled and gives the dead-tool rule so a bare
-	// `PowerShell` call (which hits "not enabled in this context") is not looped
-	// on. Volatile side: the gate can toggle mid-session.
+	// backs it + THIS agent's tool filter offers it, this advertises the registered
+	// Bash/PowerShell tools; otherwise it states shell is disabled and gives the
+	// dead-tool rule so a bare `PowerShell` call (which hits "not enabled in this
+	// context") is not looped on. Volatile side: the gate can toggle mid-session.
+	// agentRow is passed because the allowlist is per-agent, not per-workspace.
 	if sh := wsp.Runtime.ShellToolsContextBlock(ctx, agentRow, false); sh != "" {
 		dynamic = strings.TrimSpace(dynamic + "\n\n" + sh)
 	}
@@ -223,19 +224,9 @@ func (s *Server) buildStaticPrefix(ctx context.Context, wsp *workspace.Workspace
 	// rules for its parent.
 	if session.IsCoordinator() {
 		// Registry prompt "coordinator" (workspace override → embedded default).
-		lead := agent.WorkspacePrompt(wsp.DataDir, "coordinator")
-		// A selected coordinator recipe (M5) layers its saved orchestration pattern
-		// between the manual and the persona. Slug is stable for the session, so it
-		// rides the cached static prefix alongside the manual.
-		if rb := coordinatorRecipeBlock(wsp, session); rb != "" {
-			lead = lead + "\n\n" + rb
-		}
-		// A mid-level node also gets its place in the tree and the contract for
-		// reporting back up (report_to_coordinator). Both are fixed for the session's
-		// lifetime, so they belong in the cached prefix next to the manual.
-		if sb := coordinatorSubordinateBlock(session); sb != "" {
-			lead = lead + "\n\n" + sb
-		}
+		manual := agent.WorkspacePrompt(wsp.DataDir, "coordinator")
+		lead := coordinatorLeadBlock(manual, agentRow.CoordinatorPrompt,
+			coordinatorRecipeBlock(wsp, session), coordinatorSubordinateBlock(session))
 		system = strings.TrimSpace(lead + "\n\n" + system)
 	}
 	// Tell the agent its own name and how "@name" references work. The message is

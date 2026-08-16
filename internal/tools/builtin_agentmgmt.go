@@ -105,7 +105,8 @@ func (CreateAgentTool) Def() providers.ToolDef {
 				"model":{"type":"string","description":"Model id for the chosen provider. If both provider and model are omitted, both are inherited from the creating agent."},
 				"avatar":{"type":"string","description":"Optional emoji shown in the roster avatar"},
 				"color":{"type":"string","description":"Optional hex accent color, e.g. #7c3aed"},
-				"skills":{"type":"array","items":{"type":"string"},"description":"Skill slugs to enable for the agent (use_skill). Omit to seed the default TionSwarm skill set; unknown slugs are skipped."}
+				"skills":{"type":"array","items":{"type":"string"},"description":"Skill slugs to enable for the agent (use_skill). Omit to seed the default TionSwarm skill set; unknown slugs are skipped."},
+				"coordinatorPrompt":{"type":"string","description":"Orchestration guidance injected ONLY while the agent's session is in coordinator mode (right after the shared coordinator manual). Put delegation direction here instead of in the soul, so it costs nothing when the agent is not coordinating."}
 			},
 			"required":["name"],
 			"additionalProperties":false
@@ -129,6 +130,8 @@ func (t CreateAgentTool) Call(ctx context.Context, input json.RawMessage) (strin
 		Avatar   string   `json:"avatar"`
 		Color    string   `json:"color"`
 		Skills   []string `json:"skills"`
+		// CoordinatorPrompt is injected only while the agent coordinates.
+		CoordinatorPrompt string `json:"coordinatorPrompt"`
 	}
 	if err := json.Unmarshal(input, &in); err != nil {
 		return "", argErr(err)
@@ -139,6 +142,7 @@ func (t CreateAgentTool) Call(ctx context.Context, input json.RawMessage) (strin
 	in.Soul = repairMojibake(in.Soul)
 	in.Identity = repairMojibake(in.Identity)
 	in.Avatar = repairMojibake(in.Avatar)
+	in.CoordinatorPrompt = repairMojibake(in.CoordinatorPrompt)
 	in.Name = strings.TrimSpace(in.Name)
 	if in.Name == "" {
 		return "", fmt.Errorf("name is required")
@@ -183,6 +187,8 @@ func (t CreateAgentTool) Call(ctx context.Context, input json.RawMessage) (strin
 		Skills:     skills,
 		MCPEnabled: true,
 		CreatedBy:  t.d.actorID,
+
+		CoordinatorPrompt: in.CoordinatorPrompt,
 	})
 	if err != nil {
 		return "", fmt.Errorf("create agent: %w", err)
@@ -246,7 +252,8 @@ func (UpdateAgentTool) Def() providers.ToolDef {
 				"provider":{"type":"string"},
 				"model":{"type":"string"},
 				"avatar":{"type":"string"},
-				"color":{"type":"string"}
+				"color":{"type":"string"},
+				"coordinatorPrompt":{"type":"string","description":"Orchestration guidance injected ONLY while the agent's session is in coordinator mode (right after the shared coordinator manual). Pass \"\" to clear it."}
 			},
 			"required":["id"],
 			"additionalProperties":false
@@ -264,6 +271,8 @@ func (t UpdateAgentTool) Call(ctx context.Context, input json.RawMessage) (strin
 		Model    *string `json:"model"`
 		Avatar   *string `json:"avatar"`
 		Color    *string `json:"color"`
+		// CoordinatorPrompt: omitted leaves it alone, "" clears it.
+		CoordinatorPrompt *string `json:"coordinatorPrompt"`
 	}
 	if err := json.Unmarshal(input, &in); err != nil {
 		return "", argErr(err)
@@ -276,7 +285,7 @@ func (t UpdateAgentTool) Call(ctx context.Context, input json.RawMessage) (strin
 		return "", err
 	}
 	// Repair any UTF-8→Latin-1 mojibake from the CLI/MCP transport before saving.
-	for _, p := range []*string{in.Name, in.Soul, in.Identity, in.Avatar} {
+	for _, p := range []*string{in.Name, in.Soul, in.Identity, in.Avatar, in.CoordinatorPrompt} {
 		if p != nil {
 			*p = repairMojibake(*p)
 		}
@@ -289,6 +298,8 @@ func (t UpdateAgentTool) Call(ctx context.Context, input json.RawMessage) (strin
 		Model:    in.Model,
 		Avatar:   in.Avatar,
 		Color:    in.Color,
+
+		CoordinatorPrompt: in.CoordinatorPrompt,
 	}
 	updated, err := t.d.db.UpdateAgent(ctx, in.ID, patch)
 	if err != nil {

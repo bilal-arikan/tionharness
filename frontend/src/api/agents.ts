@@ -24,6 +24,12 @@ export const agentApi = {
     model?: string
     avatar?: string
     color?: string
+    // Coordinator defaults for the sessions the new agent opens. coordinatorMode
+    // defaults OFF server-side; the recipe slug and the coordinator-only prompt
+    // are only meaningful while it is on.
+    coordinatorMode?: boolean
+    coordinatorWorkflow?: string
+    coordinatorPrompt?: string
   }) =>
     req<Agent>('/api/agents', {
       method: 'POST',

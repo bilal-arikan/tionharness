@@ -8,6 +8,7 @@ import { AgentSettingsForm } from './AgentSettingsForm'
 import { AgentActivityPanel } from './AgentActivityPanel'
 import { api } from '@/api'
 import { CopyPathButton } from '@/shared/components/CopyPathButton'
+import { CoordinatorWorkflowPicker } from '@/shared/components/CoordinatorWorkflowPicker'
 import {
   Button,
   PromptEditor,
@@ -33,7 +34,15 @@ interface Props {
   onSelectAgent?: (id: string) => void
   /** Set an agent as the default for new chats. */
   onSetDefault: (id: string) => void
-  onCreateAgent: (name: string, soul: string, provider: string, model: string) => void
+  onCreateAgent: (
+    name: string,
+    soul: string,
+    provider: string,
+    model: string,
+    /** Coordinator defaults for the sessions the new agent opens. Optional so
+     * callers that never expose the toggle keep the plain four-arg shape. */
+    coordinator?: { mode: boolean; workflow: string; prompt: string },
+  ) => void
   onUpdateAgent: (id: string, patch: AgentPatch) => Promise<{ agent: Agent; warning?: string }>
   /** Clone the agent (full profile + tool config) into a new "(kopya)". */
   onDuplicateAgent: (id: string) => Promise<string | undefined>
@@ -98,6 +107,12 @@ export function AgentsView({
   const [soul, setSoul] = useState('')
   const [provider, setProvider] = useState('claude-cli')
   const [model, setModel] = useState('')
+  // Coordinator defaults on the create form, mirroring AgentSettingsForm: the
+  // recipe and the prompt only appear once the mode is on, and are sent empty
+  // when it is off so a non-coordinator carries no orchestration leftovers.
+  const [coordinatorMode, setCoordinatorMode] = useState(false)
+  const [coordinatorWorkflow, setCoordinatorWorkflow] = useState('')
+  const [coordinatorPrompt, setCoordinatorPrompt] = useState('')
 
   // Selection is controlled by the parent (deep-link aware) when provided,
   // otherwise tracked internally.
@@ -135,9 +150,16 @@ export function AgentsView({
 
   const submit = () => {
     if (!name.trim()) return
-    onCreateAgent(name.trim(), soul.trim(), provider, model)
+    onCreateAgent(name.trim(), soul.trim(), provider, model, {
+      mode: coordinatorMode,
+      workflow: coordinatorMode ? coordinatorWorkflow : '',
+      prompt: coordinatorMode ? coordinatorPrompt : '',
+    })
     setName('')
     setSoul('')
+    setCoordinatorMode(false)
+    setCoordinatorWorkflow('')
+    setCoordinatorPrompt('')
     setShowForm(false)
   }
 
@@ -201,6 +223,41 @@ export function AgentsView({
                 }}
               />
             </div>
+            <label className="flex cursor-pointer items-start gap-2 text-xs text-[var(--color-text)]">
+              <input
+                type="checkbox"
+                data-testid="agent-create-coordinator-mode"
+                checked={coordinatorMode}
+                onChange={(e) => setCoordinatorMode(e.target.checked)}
+                className="mt-0.5 accent-[var(--color-accent)]"
+              />
+              <span>
+                Bu ajanın açtığı <strong>yeni</strong> oturumlar koordinatör olarak başlasın
+              </span>
+            </label>
+            {coordinatorMode && (
+              <>
+                <CoordinatorWorkflowPicker
+                  value={coordinatorWorkflow}
+                  onChange={setCoordinatorWorkflow}
+                  groupName="agent-create-recipe"
+                />
+                <PromptEditor
+                  data-testid="agent-create-coordinator-prompt-textarea"
+                  value={coordinatorPrompt}
+                  onChange={setCoordinatorPrompt}
+                  placeholder="Koordinatör promptu"
+                  rows={3}
+                />
+                <p className="text-xs text-[var(--color-text-dim)]">
+                  Yalnızca oturum <strong>koordinatör modundayken</strong>, ortak koordinatör el
+                  kitabının hemen ardından sistem bağlamına eklenir. Bu ajana özel delegasyon
+                  yönergesi (hangi worker'lar açılsın, iş nasıl bölünsün) buraya yazılır — soul'a
+                  değil: mod kapalıyken hiç enjekte edilmez, dolayısıyla{' '}
+                  <strong>sıfır token</strong> maliyeti olur.
+                </p>
+              </>
+            )}
             <Button onClick={submit} data-testid="agent-create-submit" className="w-full">
               Oluştur
             </Button>
