@@ -156,7 +156,11 @@ func (r *Runtime) runInboxDelivery(agent db.Agent, inboxID, prompt string) {
 	release := r.claimSessionTurnSlot(inboxID, turnqueue.KindPeer, "ajan mesajı")
 	defer release()
 
-	r.trackSession(inboxID)
+	// Own cancelable context for this delivery turn so a human "Durdur"
+	// (CancelSession) can stop it — it never enters the api server's chatRuns.
+	runCtx, cancelRun := context.WithCancel(context.Background())
+	defer cancelRun()
+	r.trackSession(inboxID, cancelRun)
 
 	// Single-shot idle-resume (FND-708844f8): an idle-cut inbox turn gets ONE more
 	// attempt under a fresh window before reconcileTurnOutcome marks it unfinished.
@@ -167,7 +171,7 @@ func (r *Runtime) runInboxDelivery(agent db.Agent, inboxID, prompt string) {
 		meta    *turnMeta
 	)
 	turnStart := time.Now()
-	ctx, cancel, output, steps, err := r.runTurnWithIdleResume(context.Background(), hardCap, idleCap, r.tun.IdleResumeMax(),
+	ctx, cancel, output, steps, err := r.runTurnWithIdleResume(runCtx, hardCap, idleCap, r.tun.IdleResumeMax(),
 		func(attemptCtx context.Context, _ context.CancelFunc, attempt int, prevOutput string) (string, []TurnStep, error) {
 			turnCtx = tools.WithAsyncChat(WithSessionID(WithCallKind(attemptCtx, KindSpawn), inboxID))
 			turnCtx, meta = WithTurnMeta(turnCtx)

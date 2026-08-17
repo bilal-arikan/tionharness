@@ -58,7 +58,7 @@ func TestSendToWorkerQueuesWhenBusy(t *testing.T) {
 
 	// Worker is mid-turn: isSessionActive == true, and a workerCtl so the elapsed
 	// time is reported back.
-	rt.trackSession(workerID)
+	rt.trackSession(workerID, func() {})
 	rt.workerCancels.Store(workerID, &workerCtl{startedAt: time.Now().Add(-3 * time.Second)})
 
 	res, err := rt.SendToWorker(ctx, coordID, workerID, "second task")
@@ -89,7 +89,7 @@ func TestSendToWorkerRefusesSecondQueuedMessage(t *testing.T) {
 	rt, coordID, workerID, _ := queueTestFixture(t)
 	ctx := context.Background()
 
-	rt.trackSession(workerID)
+	rt.trackSession(workerID, func() {})
 
 	if _, err := rt.SendToWorker(ctx, coordID, workerID, "first"); err != nil {
 		t.Fatalf("first queue should succeed: %v", err)
@@ -117,7 +117,7 @@ func TestDrainWorkerQueueDeliversOnTurnEnd(t *testing.T) {
 	wa, _ := rt.db.GetAgent(ctx, agent.AgentID)
 
 	// Park a message while the worker is busy.
-	rt.trackSession(workerID)
+	rt.trackSession(workerID, func() {})
 	if _, err := rt.SendToWorker(ctx, coordID, workerID, "queued task"); err != nil {
 		t.Fatalf("queue: %v", err)
 	}

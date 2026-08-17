@@ -1023,7 +1023,11 @@ func (r *Runtime) runWorker(agent db.Agent, workerSessionID, prompt, coordSessio
 	releaseSlot := r.claimSessionTurnSlot(workerSessionID, turnqueue.KindWorker, "worker görevi")
 	defer releaseSlot()
 
-	r.trackSession(workerSessionID)
+	// Own cancelable context for this worker turn so a human "Durdur"
+	// (CancelSession) can stop it, alongside the coordinator's own stop_worker.
+	runCtx, cancelRun := context.WithCancel(context.Background())
+	defer cancelRun()
+	r.trackSession(workerSessionID, cancelRun)
 	// Raise the "thinking" indicator for the worker session (see emitTurnStart);
 	// the completion "worker" event clears it.
 	r.emitTurnStart(workerSessionID, "🤝 Worker turu çalışıyor")
@@ -1042,7 +1046,7 @@ func (r *Runtime) runWorker(agent db.Agent, workerSessionID, prompt, coordSessio
 		meta    *turnMeta
 	)
 	turnStart := time.Now()
-	ctx, cancel, output, steps, err := r.runTurnWithIdleResume(context.Background(), hardCap, idleCap, r.tun.IdleResumeMax(),
+	ctx, cancel, output, steps, err := r.runTurnWithIdleResume(runCtx, hardCap, idleCap, r.tun.IdleResumeMax(),
 		func(attemptCtx context.Context, cancel context.CancelFunc, attempt int, prevOutput string) (string, []TurnStep, error) {
 			ctl.setCancel(cancel)
 			if ctl.stopped.Load() {
@@ -1567,8 +1571,12 @@ func (r *Runtime) runCoordinatorTurn(coordSessionID string) {
 		meta    *turnMeta
 	)
 	turnStart := time.Now()
-	r.trackSession(coordSessionID)
-	ctx, cancel, output, steps, err := r.runTurnWithIdleResume(context.Background(), hardCap, idleCap, r.tun.IdleResumeMax(),
+	// Own cancelable context for the drain turn so a human "Durdur"
+	// (CancelSession) can stop the coordinator mid-drain.
+	drainCtx, cancelDrain := context.WithCancel(context.Background())
+	defer cancelDrain()
+	r.trackSession(coordSessionID, cancelDrain)
+	ctx, cancel, output, steps, err := r.runTurnWithIdleResume(drainCtx, hardCap, idleCap, r.tun.IdleResumeMax(),
 		func(attemptCtx context.Context, _ context.CancelFunc, attempt int, prevOutput string) (string, []TurnStep, error) {
 			turnCtx = tools.WithAsyncChat(WithSessionID(WithCallKind(attemptCtx, KindSpawn), coordSessionID))
 			turnCtx, meta = WithTurnMeta(turnCtx)

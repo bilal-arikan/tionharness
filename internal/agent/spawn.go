@@ -240,7 +240,11 @@ func (r *Runtime) runSpawn(agent db.Agent, sessionID, prompt string, opts SpawnO
 	releaseSlot := r.claimSessionTurnSlot(sessionID, turnqueue.KindSpawn, "spawn turu")
 	defer releaseSlot()
 
-	r.trackSession(sessionID)
+	// Own cancelable context for this detached turn so a human "Durdur"
+	// (CancelSession) can stop it — a spawn is never registered in chatRuns.
+	runCtx, cancelRun := context.WithCancel(context.Background())
+	defer cancelRun()
+	r.trackSession(sessionID, cancelRun)
 	// Raise the chat "thinking" indicator immediately, mirroring the wake path: a
 	// spawned turn runs detached in the runtime (never registered in the api
 	// server's chatRuns), so without this the session shows no running state and
@@ -259,7 +263,7 @@ func (r *Runtime) runSpawn(agent db.Agent, sessionID, prompt string, opts SpawnO
 		meta     *turnMeta
 	)
 	turnStart := time.Now()
-	ctx, cancel, output, steps, err := r.runTurnWithIdleResume(context.Background(), hardCap, idleCap, r.tun.IdleResumeMax(),
+	ctx, cancel, output, steps, err := r.runTurnWithIdleResume(runCtx, hardCap, idleCap, r.tun.IdleResumeMax(),
 		func(attemptCtx context.Context, _ context.CancelFunc, attempt int, prevOutput string) (string, []TurnStep, error) {
 			turnCtx, overflow = withOverflowFlag(WithSessionID(WithCallKind(attemptCtx, KindSpawn), sessionID))
 			turnCtx, meta = WithTurnMeta(turnCtx)

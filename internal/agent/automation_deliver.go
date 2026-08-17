@@ -76,7 +76,11 @@ func (r *Runtime) deliverAutomationTurn(ctx context.Context, a db.Automation, pr
 	// Bridge it to the hub so a window watching this session renders the note live
 	// and in order before the reply (_Docs/58), not only on reload.
 	r.emitInjectedUserNote(session.ID, autoMsg)
-	r.trackSession(session.ID)
+	// Own cancelable context for the delivery turn so a human "Durdur"
+	// (CancelSession) can stop it — it never enters the api server's chatRuns.
+	runCtx, cancelRun := context.WithCancel(ctx)
+	defer cancelRun()
+	r.trackSession(session.ID, cancelRun)
 	defer r.untrackSession(session.ID)
 
 	// Bound the turn with the spawn watchdog: it holds the per-session turn slot, so
@@ -92,7 +96,7 @@ func (r *Runtime) deliverAutomationTurn(ctx context.Context, a db.Automation, pr
 	// window before reconcileTurnOutcome marks it unfinished. runSessionTurn is the
 	// history-aware runner — the automation prompt was just persisted as the last
 	// user message, so the agent continues with the FULL prior thread.
-	turnBase, cancelTurn, output, steps, err := r.runTurnWithIdleResume(ctx, hardCap, idleCap, r.tun.IdleResumeMax(),
+	turnBase, cancelTurn, output, steps, err := r.runTurnWithIdleResume(runCtx, hardCap, idleCap, r.tun.IdleResumeMax(),
 		func(attemptCtx context.Context, _ context.CancelFunc, attempt int, prevOutput string) (string, []TurnStep, error) {
 			var turnCtx context.Context
 			turnCtx, overflow = withOverflowFlag(WithSessionID(WithCallKind(attemptCtx, KindSchedule), session.ID))

@@ -259,7 +259,13 @@ func (s *Scheduler) deliverWake(ctx context.Context, sc db.Schedule) error {
 	// to the prompt-only invoke when no runner is wired.
 	var wakeMeta *turnMeta
 	wakeStart := time.Now()
-	turnBase, cancelTurn, output, steps, invokeErr := s.rt.runTurnWithIdleResume(ctx, hardCap, idleCap, s.rt.tun.IdleResumeMax(),
+	// Own cancelable context + active-session tracking so a wake turn is stoppable
+	// from the UI, exactly like a scheduled or spawned turn.
+	wakeRunCtx, cancelWakeRun := context.WithCancel(ctx)
+	defer cancelWakeRun()
+	s.rt.trackSession(sc.SessionID, cancelWakeRun)
+	defer s.rt.untrackSession(sc.SessionID)
+	turnBase, cancelTurn, output, steps, invokeErr := s.rt.runTurnWithIdleResume(wakeRunCtx, hardCap, idleCap, s.rt.tun.IdleResumeMax(),
 		func(attemptCtx context.Context, _ context.CancelFunc, attempt int, prevOutput string) (string, []TurnStep, error) {
 			wakeCtx := tools.WithAsyncChat(WithSessionID(WithCallKind(attemptCtx, KindSchedule), sc.SessionID))
 			wakeCtx, wakeMeta = WithTurnMeta(wakeCtx)
@@ -476,7 +482,11 @@ func (s *Scheduler) deliverPrompt(ctx context.Context, sc db.Schedule) (string, 
 	// Bridge it to the hub so a window watching this session renders the scheduled
 	// prompt live and in order before the reply (_Docs/58), not only on reload.
 	s.rt.emitInjectedUserNote(session.ID, schedMsg)
-	s.rt.trackSession(session.ID)
+	// Own cancelable context for this turn so a human "Durdur" (CancelSession) can
+	// stop a scheduled run that never enters the api server's chatRuns.
+	runCtx, cancelRun := context.WithCancel(ctx)
+	defer cancelRun()
+	s.rt.trackSession(session.ID, cancelRun)
 	// Bound the scheduled turn with the spawn watchdog: it holds the per-session turn
 	// slot, so a hung turn must not block the session's queue forever (the slot's Cond
 	// wait ignores ctx).
@@ -488,7 +498,7 @@ func (s *Scheduler) deliverPrompt(ctx context.Context, sc db.Schedule) (string, 
 		meta     *turnMeta
 	)
 	turnStart := time.Now()
-	turnBase, cancelTurn, output, steps, err := s.rt.runTurnWithIdleResume(ctx, hardCap, idleCap, s.rt.tun.IdleResumeMax(),
+	turnBase, cancelTurn, output, steps, err := s.rt.runTurnWithIdleResume(runCtx, hardCap, idleCap, s.rt.tun.IdleResumeMax(),
 		func(attemptCtx context.Context, _ context.CancelFunc, attempt int, prevOutput string) (string, []TurnStep, error) {
 			var turnCtx context.Context
 			turnCtx, overflow = withOverflowFlag(WithSessionID(WithCallKind(attemptCtx, KindSchedule), session.ID))

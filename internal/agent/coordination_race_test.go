@@ -127,7 +127,7 @@ func TestSubtreeBudgetHoldsUnderConcurrentSpawns(t *testing.T) {
 	seeded := make([]string, 0, budget)
 	for i := 0; i < budget; i++ {
 		w := newTreeNode(t, rt, fmt.Sprintf("seed%d", i), root, root, 1, false)
-		rt.trackSession(w.ID)
+		rt.trackSession(w.ID, func() {})
 		seeded = append(seeded, w.ID)
 	}
 	defer func() {

@@ -579,7 +579,12 @@ func (r *Runtime) RunFlowRecorded(ctx context.Context, flowID, input string, aut
 		Title:    flow.Name,
 	}); serr == nil {
 		sessionID = sess.ID
-		r.trackSession(sessionID)
+		// Own cancelable context for the whole recorded run so a human "Durdur"
+		// (CancelSession) can stop the flow — it never enters the api chatRuns.
+		runCtx, cancelRun := context.WithCancel(ctx)
+		defer cancelRun()
+		ctx = runCtx
+		r.trackSession(sessionID, cancelRun)
 		defer r.untrackSession(sessionID)
 		// Record the user turn AND announce the session up front, so the chat
 		// sidebar shows the run — with its input bubble — the instant it starts,

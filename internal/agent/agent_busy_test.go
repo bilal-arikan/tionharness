@@ -38,7 +38,7 @@ func TestAgentBusy_IdleIsNotBusy(t *testing.T) {
 // spawn, inbox delivery, flow nodes) must count.
 func TestAgentBusy_OwnAutonomousSession(t *testing.T) {
 	rt, agent, sess := busyFixture(t)
-	rt.trackSession(sess.ID)
+	rt.trackSession(sess.ID, func() {})
 
 	busy, where := rt.AgentBusy(context.Background(), agent.ID)
 	if !busy {
@@ -93,7 +93,7 @@ func TestAgentBusy_ParticipantCounts(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("add message: %v", err)
 	}
-	rt.trackSession(sess.ID)
+	rt.trackSession(sess.ID, func() {})
 
 	if busy, _ := rt.AgentBusy(ctx, peer.ID); !busy {
 		t.Fatal("a participant answering in someone else's session must be busy")
@@ -112,7 +112,7 @@ func TestAgentBusy_UnrelatedSessionDoesNotBlock(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create other: %v", err)
 	}
-	rt.trackSession(sess.ID)
+	rt.trackSession(sess.ID, func() {})
 
 	if busy, where := rt.AgentBusy(ctx, other.ID); busy {
 		t.Fatalf("unrelated agent reported busy (at %q)", where)

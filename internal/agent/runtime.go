@@ -239,7 +239,8 @@ type Runtime struct {
 	optLog optimizerLog
 
 	// activeSessions tracks sessions currently executing an autonomous invoke
-	// (schedule / spawn). Keyed by session id; value is struct{}.
+	// (schedule / wake / spawn / coordination). Keyed by session id; value is the
+	// context.CancelFunc of that turn, so CancelSession can stop it.
 	// Used by the executions feed to show a live "running" indicator for
 	// autonomous runs that aren't chat-streaming turns.
 	activeSessions sync.Map
@@ -286,8 +287,33 @@ type Runtime struct {
 	epochCache map[string]map[string]*promptEpochEntry
 }
 
-// trackSession marks a session as actively running an autonomous invoke.
-func (r *Runtime) trackSession(id string) { r.activeSessions.Store(id, struct{}{}) }
+// trackSession marks a session as actively running an autonomous invoke and
+// stores the cancel func of that turn's context, so the run can be stopped from
+// the API ("Durdur") even though it was never registered in the api server's
+// chatRuns. cancel is REQUIRED — callers must wrap the turn in their own
+// cancelable context; a nil cancel would leave the session untoppable, so it
+// fails loudly here instead of being silently swallowed.
+func (r *Runtime) trackSession(id string, cancel context.CancelFunc) {
+	if cancel == nil {
+		panic("agent: trackSession requires a non-nil cancel func for session " + id)
+	}
+	r.activeSessions.Store(id, cancel)
+}
+
+// CancelSession cancels the in-flight autonomous turn of a session, if any.
+// Reports whether a running turn was found and cancelled.
+func (r *Runtime) CancelSession(id string) bool {
+	v, ok := r.activeSessions.Load(id)
+	if !ok {
+		return false
+	}
+	cancel, ok := v.(context.CancelFunc)
+	if !ok {
+		return false
+	}
+	cancel()
+	return true
+}
 
 // untrackSession removes the running marker when an invoke finishes.
 func (r *Runtime) untrackSession(id string) { r.activeSessions.Delete(id) }
@@ -300,6 +326,18 @@ func (r *Runtime) ActiveSessionIDs() []string {
 		return true
 	})
 	return ids
+}
+
+// HasActiveSessions reports whether any autonomous invoke is in flight, stopping
+// at the first hit and allocating nothing — ActiveSessionIDs builds a slice the
+// activity poll immediately throws away, once per workspace per tick.
+func (r *Runtime) HasActiveSessions() bool {
+	active := false
+	r.activeSessions.Range(func(_, _ any) bool {
+		active = true
+		return false // stop the walk
+	})
+	return active
 }
 
 // SetPaused toggles this workspace's autonomy brake.

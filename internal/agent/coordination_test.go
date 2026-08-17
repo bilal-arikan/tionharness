@@ -512,8 +512,8 @@ func TestSpawnWorkerSubtreeBudget(t *testing.T) {
 	// liveness is fully under the test's control.
 	w1 := newTreeNode(t, rt, "w1", root, root, 1, false)
 	w2 := newTreeNode(t, rt, "w2", root, root, 1, false)
-	rt.trackSession(w1.ID)
-	rt.trackSession(w2.ID)
+	rt.trackSession(w1.ID, func() {})
+	rt.trackSession(w2.ID, func() {})
 
 	// A third worker is refused, and the error names both live workers holding the
 	// budget — the diagnostic a coordinator needs to decide what to conclude.

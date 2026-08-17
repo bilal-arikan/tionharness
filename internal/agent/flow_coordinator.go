@@ -94,7 +94,12 @@ func (r *Runtime) RunCoordinatorNode(ctx context.Context, spec orchestration.Coo
 	if err != nil {
 		return "", fmt.Errorf("coordinator session create failed: %w", err)
 	}
-	r.trackSession(sess.ID)
+	// Own cancelable context for the coordinator node so a human "Durdur"
+	// (CancelSession) can stop the wait/drain — it never enters the api chatRuns.
+	runCtx, cancelRun := context.WithCancel(ctx)
+	defer cancelRun()
+	ctx = runCtx
+	r.trackSession(sess.ID, cancelRun)
 	defer r.untrackSession(sess.ID)
 	// Announce it up front so the sidebar/executions feed shows the coordinator
 	// (and, through it, its workers) while the node is still running.

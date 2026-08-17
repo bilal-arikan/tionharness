@@ -98,7 +98,7 @@ func TestDeferWorkerReportWithholdsWhileDelegating(t *testing.T) {
 	// Its own worker is now in flight (both the slot counter and the live session
 	// set, mirroring what SpawnWorker + runWorker do).
 	rt.coordSlotFor(mid.ID).workers.Add(1)
-	rt.trackSession(leaf.ID)
+	rt.trackSession(leaf.ID, func() {})
 	defer rt.untrackSession(leaf.ID)
 
 	if !rt.deferWorkerReport(ctx, mid, turnStatusCompleted) {
@@ -131,7 +131,7 @@ func TestReportToCoordinatorRejectsPrematureCompletion(t *testing.T) {
 	mid := newTreeNode(t, rt, "mid", root.ID, root.ID, 1, true)
 	leaf := newTreeNode(t, rt, "leaf", mid.ID, root.ID, 2, false)
 
-	rt.trackSession(leaf.ID)
+	rt.trackSession(leaf.ID, func() {})
 	err := rt.ReportToCoordinator(ctx, mid.ID, turnStatusCompleted, "all done!")
 	rt.untrackSession(leaf.ID)
 	if err == nil {
@@ -182,7 +182,7 @@ func TestSetCoordinatorModeRefusesOffWithRunningWorkers(t *testing.T) {
 	coord := newTreeNode(t, rt, "coord", "", "", 0, true)
 	leaf := newTreeNode(t, rt, "leaf", coord.ID, coord.ID, 1, false)
 
-	rt.trackSession(leaf.ID)
+	rt.trackSession(leaf.ID, func() {})
 	_, err := rt.SetSessionCoordinatorMode(ctx, coord.ID, false)
 	rt.untrackSession(leaf.ID)
 	if err == nil {
@@ -314,7 +314,7 @@ func TestOwesReportSurvivesRestart(t *testing.T) {
 	leaf := newTreeNode(t, rt, "leaf", mid.ID, root.ID, 2, false)
 
 	rt.coordSlotFor(mid.ID).workers.Add(1)
-	rt.trackSession(leaf.ID)
+	rt.trackSession(leaf.ID, func() {})
 	if !rt.deferWorkerReport(ctx, mid, turnStatusCompleted) {
 		t.Fatal("expected the report to be withheld while the branch is live")
 	}

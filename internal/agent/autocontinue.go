@@ -129,12 +129,16 @@ func (r *Runtime) maybeAutoContinue(ctx context.Context, agent db.Agent, session
 			return
 		}
 
-		r.trackSession(sessionID)
-		turnCtx, overflow := withOverflowFlag(WithSessionID(WithCallKind(ctx, kind), sessionID))
+		// Own cancelable context per continuation turn so a human "Durdur"
+		// (CancelSession) can stop the autonomous loop mid-turn.
+		runCtx, cancelRun := context.WithCancel(ctx)
+		r.trackSession(sessionID, cancelRun)
+		turnCtx, overflow := withOverflowFlag(WithSessionID(WithCallKind(runCtx, kind), sessionID))
 		turnCtx, meta := WithTurnMeta(turnCtx)
 		turnStart := time.Now()
 		output, cSteps, err := r.runSessionTurn(turnCtx, agent, sessionID, nudge, true)
 		r.untrackSession(sessionID)
+		cancelRun()
 
 		if err != nil {
 			// A provider error or a daily-budget stop ends the loop; surface it inline
