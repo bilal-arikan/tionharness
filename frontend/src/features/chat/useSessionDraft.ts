@@ -1,26 +1,43 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { getActiveWorkspace } from '@/api'
 
 // Per-session composer draft persistence. A half-written, unsent message is kept
-// in localStorage keyed by session id, so it survives switching to another
-// session (and back) and a full page reload. Sending or clearing the composer
-// removes the draft; an empty draft is never stored.
+// in localStorage keyed by workspace + session id, so it survives switching to
+// another session (and back) and a full page reload. Sending or clearing the
+// composer removes the draft; an empty draft is never stored.
+//
+// The workspace is part of the key because session ids are per-workspace
+// sequences: "SES1" is the first session of EVERY workspace, so a bare-id key
+// showed one workspace's unsent draft in another workspace's composer.
 
 const PREFIX = 'tionswarm:draft:'
 
+// draftKey scopes a session's draft to the ACTIVE workspace. Read at call time
+// (not captured): the composer remounts on a workspace switch, so each mount
+// resolves the key for the workspace it is rendering.
+function draftKey(sessionId?: string): string | null {
+  if (!sessionId) return null
+  const ws = getActiveWorkspace()
+  if (!ws) return null
+  return PREFIX + ws + ':' + sessionId
+}
+
 function read(sessionId?: string): string {
-  if (!sessionId) return ''
+  const key = draftKey(sessionId)
+  if (!key) return ''
   try {
-    return localStorage.getItem(PREFIX + sessionId) ?? ''
+    return localStorage.getItem(key) ?? ''
   } catch {
     return ''
   }
 }
 
 function write(sessionId: string | undefined, text: string) {
-  if (!sessionId) return
+  const key = draftKey(sessionId)
+  if (!key) return
   try {
-    if (text) localStorage.setItem(PREFIX + sessionId, text)
-    else localStorage.removeItem(PREFIX + sessionId)
+    if (text) localStorage.setItem(key, text)
+    else localStorage.removeItem(key)
   } catch {
     // Ignore quota / private-mode write failures — drafts are best-effort.
   }

@@ -280,6 +280,7 @@ export default function App() {
   const chat = useChatStream({
     agents: ctl.agents,
     sessions: ctl.sessions,
+    activeWorkspaceId,
     activeSessionId: ctl.activeSessionId,
     activeAgentId: ctl.activeAgentId,
     activeSessionIdRef: ctl.activeSessionIdRef,

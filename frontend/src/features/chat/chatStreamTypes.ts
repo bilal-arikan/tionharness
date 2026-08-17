@@ -8,6 +8,11 @@ import type { Agent, Attachment, Message, Session, TurnStep } from '@/types'
 export interface ChatStreamDeps {
   agents: Agent[]
   sessions: Session[]
+  // The session hub is scoped by (workspace, session) on the server, because
+  // session ids repeat across workspace stores. The subscription therefore keys
+  // on BOTH: switching workspace must re-open the stream even when the newly
+  // active session carries the same id as the one just left.
+  activeWorkspaceId: string | null
   activeSessionId: string | null
   activeAgentId: string | null
   // Ref to the active session id so the detached SSE callbacks can tell whether

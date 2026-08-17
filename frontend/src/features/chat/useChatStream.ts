@@ -24,6 +24,7 @@ export type { ChatStreamDeps } from './chatStreamTypes'
 export function useChatStream(deps: ChatStreamDeps) {
   const {
     sessions,
+    activeWorkspaceId,
     activeSessionId,
     activeAgentId,
     activeSessionIdRef,
@@ -336,7 +337,9 @@ export function useChatStream(deps: ChatStreamDeps) {
   // Replaces the old bus-ghost + inflight-text-polling machinery.
   useEffect(() => {
     const sid = activeSessionId
-    if (!sid) return
+    // No workspace → no identifiable session (ids repeat across stores), so there
+    // is nothing to subscribe to yet.
+    if (!sid || !activeWorkspaceId) return
     // Fresh session view: clear the previous session's queue/presence until this
     // one's first queue_update / presence frame arrives.
     setQueued([])
@@ -363,7 +366,15 @@ export function useChatStream(deps: ChatStreamDeps) {
       bumpMeter,
     })
     return subscribeSessionStream(sid, handlers)
-  }, [activeSessionId, activeSessionIdRef, setMessages, setTyping, notifyEnabled, bumpMeter])
+  }, [
+    activeWorkspaceId,
+    activeSessionId,
+    activeSessionIdRef,
+    setMessages,
+    setTyping,
+    notifyEnabled,
+    bumpMeter,
+  ])
 
   // ---- self-wake (schedule_wake) waiting state ----
 
