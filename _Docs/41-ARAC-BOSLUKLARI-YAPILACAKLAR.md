@@ -42,8 +42,13 @@
 - **Neden önemli:** Ajan güncel bilgiye (dokümantasyon sürümü, hata mesajı, kütüphane API'si, güncel
   olaylar) erişemiyor. Model bilgi-kesim tarihiyle sınırlı kalıyor. Tek net **işlevsel** boşluk.
 - **Uygulanan yaklaşım:**
-  - **Provider-bağımsız**, vault'tan otomatik backend seçimi: `SEARXNG_URL` (self-host, anahtarsız) varsa
-    o, yoksa `TAVILY_API_KEY` (Tavily, 1k ücretsiz/ay). İkisi de yoksa **sessizce yutmaz** — açık hata.
+  - **Provider-bağımsız**, vault'tan otomatik backend seçimi: önce `SEARXNG_URL` (self-host, anahtarsız),
+    sonra `TAVILY_API_KEY` (Tavily, 1k ücretsiz/ay). İkisi de yoksa **sessizce yutmaz** — açık hata.
+  - **Yedekleme (2026-08-16):** Backend'ler artık sırayla denenir. İlki hata verirse (servis kapalı,
+    rate-limit, hatalı yapılandırma) ikincisine düşülür; ikisi de düşerse hata **her backend'i ve
+    hatasını** adlandırır. Bağlantı düzeyi hatalarına (`connection refused`, `no such host`, timeout)
+    "the backend is unreachable — is the service running at that address?" ipucu eklenir. Bu, durmuş
+    bir SearXNG konteynerinin ajanı tümüyle aramasız bırakmasını engeller (SES286 vakası).
   - **claude-cli hariç:** Araç `WebFetch` gibi **koşulsuz** kaydedilir (workspace tools ekranında görünür),
     ama claude-cli'ye **bridge'lenmez** — TionSwarm built-in'leri CLI'ye yalnızca elle küratörlenen
     `interactionToolSpecs` listesiyle ulaşır, WebSearch o listede yok → CLI kendi native'ini kullanır.
@@ -67,6 +72,11 @@
   her workspace'e ayrı eklenir (şu an WS5 ve WS1'de var).
   Yeniden başlatma: `cd C:\Users\user\Desktop\Progs\searxng; docker compose up -d`.
   Docker Desktop kapalıysa arama `connection refused` verir — önce onu başlat.
+  **Konteyner `restart: unless-stopped` olsa da elle durdurulduğunda geri gelmez** — 2026-08-16'da
+  tam olarak bu oldu ve zamanlanmış bir oturum (WS1/SES286) aramayı hiç yapamadı. Sağlık kontrolü:
+  `curl "http://127.0.0.1:8484/search?q=test&format=json"` → HTTP 200 + JSON gövde beklenir.
+  Git-Bash'ten `docker run -v` kullanılacaksa `MSYS_NO_PATHCONV=1` şart, yoksa konteyner içi hedef yol
+  (`/etc/searxng`) `C:/Program Files/Git/etc/searxng` olarak bozulur ve settings.yml sessizce bağlanmaz.
 
 ### 2. `call_llm` — hafif ikincil LLM alt-görevi — **P1**
 

@@ -125,10 +125,13 @@ liste yalnızca depoda **gerçekten var olan** dosyaları içerir.
 |-------|-------------------|
 | `store.go` | Agents, **Sessions**, **Messages** ve önyükleme (boot) yüklemesi — çekirdek store |
 | `db.go` | `DB` tipi, açılış, dizin sabitleri, kilit/persist yardımcıları |
+| `store_messages_read.go` | Dar transkript okuyucuları: `ListMessagesTail`, `LastMessage`, `FindMessage`, `StreamMessages` — tam kopya çıkarmadan kuyruk/tek-mesaj/tarama |
+| `store_stats.go` | `Stats()`: store'un RAM ayak izi (yüklü oturum, mesaj sayısı, yaklaşık bayt) + boot faz süreleri |
+| `loadpar.go` | `parallelLoad`: boot'taki dosya okumalarını sınırlı worker havuzuyla eşzamanlı koşturur |
 | `store_artifact.go` | Artifacts; oturum başına tekil "onaylanan planlar" rolling artifact |
 | `store_task.go` | Kanban board görevleri (task kartları) ve board değişiklik olayları |
 | `store_flow.go` | Flows ve flow run'ları |
-| `store_run.go` | Çalışan run'ların (running) listelenmesi |
+| `store_runcount.go` | Running flow-run sayacının drift koruması (`ReconcileRunCounters`) |
 | `store_schedule.go` | Schedules (zamanlanmış çalıştırmalar) |
 | `store_hook.go` | Hook yapılandırmaları |
 | `store_mcp.go` | MCP sunucu yapılandırmaları |
@@ -138,6 +141,13 @@ liste yalnızca depoda **gerçekten var olan** dosyaları içerir.
 | `store_usage.go` | Ajan/gün bazlı LLM kullanım (usage) rollup'ı ve çağrı taksonomisi |
 | `store_session_usage.go` | Oturum ömrü boyunca LLM kullanım rollup'ı (`SessionUsage`) |
 | `store_lessons.go` | Workspace düzeyi hata→ders (lessons) JSONL store'u (`lessons.jsonl`) |
+
+**Mesaj okurken `ListMessages` varsayılanın DEĞİL.** O, oturumun tüm mesaj
+slice'ını her çağrıda kopyalar (uzun bir oturumda megabaytlarca `Steps` JSON'u).
+Son mesaj için `LastMessage`, son N için `ListMessagesTail` (ikinci dönüş değeri
+kuyruğun başlangıç indeksidir), id ile tek mesaj için `FindMessage`, "hepsini gez
+ama neredeyse hiçbir şey tutma" için `StreamMessages` kullan. Tam transkripti
+yalnız gerçekten tamamı gerektiğinde (tur bağlamı, compaction) iste.
 
 İlgili model tanımları ayrı `models_*.go` dosyalarındadır (ör.
 `models_task.go`, `models_flow.go`, `models_hook.go`, `models_mcp.go`,

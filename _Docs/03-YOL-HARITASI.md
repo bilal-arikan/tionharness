@@ -74,7 +74,8 @@ graph LR
   bilgi etiketi. Backend temizliği: `run_task` agent tool + schedule↔task (karttan-cron) bağı
   **silindi**; ajan görev tool ailesi 5 araca indi (list/create/update/move/delete). Yetim run yolu
   da temizlendi: `RunTask`/`RunTaskStream`/`runTaskFlow` + `/run`·`/run-stream`·`/runs` uçları +
-  ölü DB metotları silindi (`db.Run` + `ListRunningRuns` korundu — activity/executions feed). Detay: `05-ILERLEME.md`.
+  ölü DB metotları silindi. (`db.Run` o turda korunmuştu; 2026-08-16'da entity'nin
+  tamamı kaldırıldı — hiçbir yol run üretmiyordu.) Detay: `05-ILERLEME.md`.
 - [~] **Görev dispatcher'ı:** pivot sonrası **kapsam dışı** — pano pasif olduğundan
   "ajan todo'yu otomatik koşar" akışı artık hedef değil. Otomasyon flow/schedule katmanında.
 

@@ -632,10 +632,13 @@ flow'a bu alanla bağlanır; graph.go/executions.go bozulmaz) **yeni** bir sessi
 `recordFlowSessionTurn`'e geçirir (çift-oluşturmayı önler; boşsa fallback create). Böylece bir koşunun
 transkripti — ve reify'ı — tam olarak **tek koşu** gösterir. `RunFlow` (kayıtsız, `handleSessionRunFlow`)
 oturuma dokunmaz → etkilenmez. Test: `flow_session_test.go` (iki koşu → iki ayrı session, kind/sourceID,
-2 mesaj). **Bilinen kozmetik sınır:** `executions.go lastStatusFor` flow session'ı için
-`ListFlowRuns(flow.ID)[0]` (flow'un en yeni koşusu) döndürür → eski bir koşu-oturumu daha yeni bir koşu
-oluşunca statü çipinde onu gösterir (oluşturma anında doğru). Tam eşleme FlowRun↔session linkage'i
-gerektirir (sonraki). **Not:** backend değişikliği; canlı görmek için backend yeniden derlenip
+2 mesaj). **Bilinen kozmetik sınır:** `executions.go lastStatusFor` flow session'ı için flow'un **en
+yeni** koşusunun statüsünü döndürür → eski bir koşu-oturumu daha yeni bir koşu oluşunca statü çipinde
+onu gösterir (oluşturma anında doğru). Tam eşleme FlowRun↔session linkage'i gerektirir (sonraki).
+**Not (2026-08-16):** "en yeni" artık deterministik — `ListFlowRuns` yalnız saniye-granülerlikli
+`CreatedAt` ile sıralıyordu, aynı saniyedeki iki koşunun sırası map iterasyonuna kalıyordu; şimdi
+`flowRunBefore` (id sayacı tie-break) kullanılıyor. Ayrıca statü artık poll başına tek taramayla
+kurulan `newestFlowRunStatus` indeksinden okunuyor (oturum başına `ListFlowRuns` değil). **Not:** backend değişikliği; canlı görmek için backend yeniden derlenip
 başlatılmalı (Go hot-reload olmaz).
 
 ### Flow oturumu: anında sidebar + boş-ekran fix (2026-07-27)

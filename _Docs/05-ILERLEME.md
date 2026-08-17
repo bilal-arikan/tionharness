@@ -1,6 +1,387 @@
 # TionSwarm — İlerleme Takibi
 
-> Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-08-14**
+> Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-08-17**
+
+## Store yüklemesi paralelleştirildi — boot 3–6× (2026-08-17) ✅
+
+Bir önceki maddede ölçülen "boot'un maliyeti parse değil, **soğuk dosya açma**
+(15 ms/dosya)" bulgusunun doğrudan karşılığı. Maliyet CPU değil **gecikme**
+olduğu için worker'lar çekirdek değil bekleyen syscall harcıyor; havuz açmayı
+üst üste bindirince gecikme gizleniyor.
+
+**Yeni: `internal/db/loadpar.go`** — `parallelLoad[In, Out]`, sınırlı worker
+havuzu (`min(2×CPU, 16)`). İki garanti **kasıtlı**:
+
+- Sonuçlar **giriş sırasında** döner (çağıranlar konuma göre indeksliyor).
+- Hata **giriş sırasına göre ilki** seçilir. Boot bozuk bir entity dosyasını
+  ölümcül sayıyor; hangi dosyanın suçlanacağı — ve boot'un düşüp düşmeyeceği —
+  goroutine zamanlamasına bağlı olamaz. Aksi hâlde ayda bir tekrarlanan,
+  testte hiç görünmeyen bir hata olurdu.
+
+**Paralelleştirilen yollar:**
+
+| Yol | Ne okuyordu |
+|---|---|
+| `loadJSONDir` (db.go) | Tüm entity dizinleri: agents, tasks, schedules, mcp, flows, flow-runs, session-asks, automations, artifacts, hooks, usage, session-usage |
+| Artifact içerikleri (db.go `load`) | Metin artifact'lerinin ayrı gövde dosyaları (WS1'de 156 artifact) |
+| `loadSessions` (store.go) | Oturum başına `session.json` + `messages.jsonl` — en büyük kalem |
+| `recoverInflight` (inflight.go) | Oturum başına `inflight.json` sondası; temiz kapanışta hepsi ıska ama **ıska da soğuk bir dosya açması** |
+
+`recoverInflight` ayrıca yeniden yapılandırıldı: sondalar kilit **dışında** ve
+eşzamanlı koşuyor, mutasyon geçişi seri ve kilitli kalıyor. Oturum id'leri
+sıralanıyor ki kurtarma sırası (dolayısıyla üretilen mesaj id'leri) boot'lar
+arasında tekrarlanabilir olsun. Okunamayan sidecar artık **sessizce atlanmıyor**,
+`slog.Warn` ile loglanıyor (dosya diskte kalıyor, sonraki boot tekrar deniyor).
+
+**Kontrollü ölçüm** (aynı ağacın yarısı seri / yarısı 16 worker — iki yarı da
+eşit soğuk):
+
+| Store | Seri | Paralel | Hızlanma |
+|---|---|---|---|
+| WS5 (701 dosya) | 13,48 ms/dosya | 2,13 ms/dosya | **6,3×** |
+| WS16 (265 dosya) | 25,67 ms/dosya | 8,69 ms/dosya | **3,0×** |
+
+Gerçekçi bant **3–6×** → 59 sn'lik toplam boot ~10–20 sn'ye iner.
+
+**Testler:** `loadpar_test.go` — giriş sırası korunumu, deterministik hata seçimi
+(50 tekrarlı), 0/1/15/16/17/500 öğede havuz doğruluğu, `loadWorkers` sınırları,
+bozuk entity dosyasının hâlâ boot'u düşürmesi, ve 60 oturumluk bir store'un
+yeniden açılışta birebir aynı gelmesi (transkriptlerin çapraz bağlanmadığı dahil).
+
+**Not:** Paralelleştirme 15 ms/dosya maliyetini **gizler, kaldırmaz**.
+`~/.tionswarm` için bir Defender istisnası hâlâ en büyük tek kazanç olabilir.
+
+## Mesaj belleği — Aşama 0+1: ölçüm + dar transkript okuyucuları (2026-08-16) ✅
+
+Madde 5 (tüm mesajların RAM'de tutulması) planının ilk iki, risksiz aşaması.
+Lazy yükleme **henüz yok**; bu adım ölçümü kuruyor ve "tam transkript kopyala"
+israfını kaldırıyor.
+
+**Aşama 0 — ölçüm.** `db.Stats()` (`store_stats.go`) store'un RAM ayak izini
+döndürür: `sessions`, `loadedSessions`, `messages`, `messageBytes` + entity
+sayıları. İki yerden okunur:
+
+- **Boot log'u** — workspace başına `store opened workspace=… ms=… sessions=…
+  messages=… message_mb=…` (`internal/workspace/manager.go`). Yavaş açılışta
+  sorumlu workspace doğrudan görünür.
+- **`GET /api/debug/store-stats`** — workspace başına satır + `totals`
+  (`debug_store_stats.go`). Global uç; workspace-scoped değil.
+
+`loadedSessions` bugün `sessions`'a eşit (yükleme eager). **Lazy yükleme
+geldiğinde hareket edecek metrik budur** — aynı uç, sözleşmesi değişmeden
+"ne kadar fayda etti?" sorusunu yanıtlar. Hiç yazılmamış oturum `nil` slice
+tuttuğu için "loaded" sayılmaz, aksi hâlde ayak izi olduğundan büyük görünürdü.
+
+**Aşama 1 — dar okuyucular** (`store_messages_read.go`). `ListMessages` her
+çağrıda oturumun **tüm** mesaj slice'ını kopyalıyordu; çağrı yerlerinin çoğu
+aslında son 1–64 mesajı istiyordu.
+
+| Yeni okuyucu | Ne döner |
+|---|---|
+| `ListMessagesTail(ctx, sid, n)` | Son n mesaj **+ kuyruğun başlangıç indeksi** |
+| `LastMessage(ctx, sid)` | Son mesaj, `ok=false` = boş oturum |
+| `FindMessage(ctx, sid, mid)` | Tek mesaj; `ErrMessageNotFound` ≠ `ErrNotFound` |
+| `StreamMessages(ctx, sid, fn)` | Kopyasız gezinti; `fn false` dönerse durur |
+
+Taşınan çağrı yerleri:
+
+| Yer | Önce | Sonra |
+|---|---|---|
+| `api/session_stream.go` `publishAutonomousReply` | tam kopya → son mesaj | `LastMessage` |
+| `view/project.go` `loadSession` | tam kopya → son 40 | `ListMessagesTail`; `TailFrom` artık ikinci dönüş değeri |
+| `api/sessions.go` `handleMessageSteps` | tam kopya → tek mesaj | `FindMessage` |
+| `api/session_changes.go` | tam kopya → sadece diff step'leri | `StreamMessages` |
+| `api/chat_queue.go` `writeChatReply` | tam kopya → son assistant | `ListMessagesTail(16)` + kuyruk kesikse tam tarama |
+| `api/todos.go` `todoContextBlock` | tam kopya → son checklist | `ListMessagesTail(64)` + kuyruk kesikse tam tarama |
+
+Son iki satırdaki geri düşüş **kasıtlı ve gerekli**: kuyruk kesilmişse
+"bulunamadı" henüz kesin değildir, sessizce boş dönmek yalan olurdu.
+`ListMessagesTail`'in ikinci dönüş değeri (`from > 0`) tam olarak bu kararı verir.
+
+`view.Store` arayüzünde `ListMessages` yerine artık `ListMessagesTail` var —
+projeksiyon zaten kuyruktan fazlasını render etmiyordu.
+
+**Davranış farkı:** yeni okuyucular bilinmeyen oturumda `ErrNotFound` döner
+(`ListMessages` boş slice dönüyordu). Yanlış oturum id'sinin "boş sohbet" gibi
+görünmesi bu şekilde biter.
+
+**Testler:** `store_messages_read_test.go` (pencere aritmetiği tablo testi, boş
+vs. bilinmeyen oturum ayrımı, kopya-değil-alias güvencesi, erken durdurma,
+`Stats` ölçümü), `debug_store_stats_test.go` (workspace başına + toplam,
+manager'sız sunucuda panik yerine boş rapor).
+
+### Aşama 0'ın ilk sonucu: planın gerekçesi kısmen çürüdü (2026-08-17)
+
+İlk gerçek ölçüm iki tahmini bozdu:
+
+| | Tahmin | Ölçülen |
+|---|---|---|
+| Mesajların RAM maliyeti | 250–400 MB | **95 MB** (300 MB RSS'in ~%32'si) |
+| Boot yavaşlığının sebebi | 93 MB JSON parse | **Soğuk dosya açma, 15 ms/dosya** |
+
+`Message.Steps` diskte zaten JSON **string** olduğundan struct'a dönüşte 3–4×
+şişme yok. Boot ise (10 workspace toplamı **59,1 sn**) mesaj MB'ıyla değil
+**dosya sayısıyla** ölçekleniyor — WS1: 2 MB mesaj / 104 oturum / 13,2 sn.
+
+WS1 store'unda (720 dosya, 3,9 MB): soğuk seri okuma **15,02 ms/dosya**, sıcak
+**0,14 ms/dosya** — 107× fark, yani dosya-açma başına bir filtre sürücüsü
+(Defender) maliyeti. Maliyet CPU değil gecikme olduğu için paralel okuma
+neredeyse doğrusal kazanıyor: WS17 (1315 dosya) 16 worker ile **15,9 sn → 1,9 sn
+(8,5×)**.
+
+Bu yüzden `load()`'a **faz bazlı ölçüm** eklendi (`timeLoadPhase`/`markLoadPhase`,
+`db.go`); boot log'u artık `phases_ms="sessions=… entities=… …"` taşıyor ve
+`Stats().LoadPhaseMs` ile `/api/debug/store-stats`'ten de okunur.
+
+**Sırada (öncelik değişti):** (1) store yüklemesini paralelleştir — boot ~59 sn →
+~7 sn, format değişikliği yok; (2) `~/.tionswarm` için Defender istisnası (kod
+dışı); (3) sonra plan'ın Aşama 2 (watermark) → Aşama 3 (lazy yükleme) — artık
+gerekçesi boot değil **RAM (95 MB)** + `d.mu` çekişmesi + pagination UX'i.
+Ayrıntı: `_Docs/16-PROFILLEME.md` → "Vaka: 59 sn'lik boot".
+
+## `Run` entity'si kaldırıldı (2026-08-16) ✅
+
+Bir önceki maddede "ölü map" olarak tespit edilen `db.Run` tamamen silindi. Kanıt
+netti: `d.runs`'a **boot dışında hiçbir yerde yazılmıyordu** — `CreateRun`/`FinishRun`
+diye bir fonksiyon depoda yoktu, gerçek store'daki `runs/` klasörü **0 dosya**
+içeriyordu. Board görev çalıştırmıyor; entity yalnızca kendi taramasının maliyetini
+üretiyordu.
+
+**Silinenler:** `db.Run` struct'ı + `RunPending/RunRunning/RunSuccess/RunFailure`
+sabitleri (`models_task.go`), `d.runs` map'i + `dirRuns` + `load()` bloğu +
+`runningRuns` sayacı (`db.go`), `store_run.go` dosyasının tamamı
+(`ListRunningRuns`, `HasRunningRuns`, `deleteRunLocked`), `DeleteAgent` ve
+`DeleteTask` içindeki cascade döngüleri, `AgentBusy`'nin board-run dalı
+(`agent_busy.go`), frontend `Run` arayüzü (`types/task.ts` — hiçbir yerden import
+edilmiyordu).
+
+**`activityState.Task` de kaldırıldı.** Tek kaynağı silinen run taramasıydı;
+oturum-kind switch'inde `"task"` case'i yok ve production'da `"task"` kind'lı oturum
+da üretilmiyor (`GetOrCreateSourceSession` yalnız automation için kullanılıyor).
+Yani alan kalsaydı **kalıcı olarak `false`** dönecekti — çalışan bir gösterge gibi
+okunan ölü bir alan, hiç alan olmamasından kötüdür. `GET /api/activity` yanıtından
+`task` alanı ve frontend'deki `if (a.task) s.add('board')` satırı gitti; board nav
+noktası zaten hiç yanmıyordu. `schedule` etkilenmedi — canlı kaynağı var
+(`sess.Kind == "schedule"`).
+
+**Korunanlar (bilinçli):** `Task.LastRunID/LastRunStatus/LastRunAt`. Bunlar Run
+entity'sinin parçası değil, Task'ın alanları; onları da hiçbir kod yazmıyor ama eski
+build'lerin yazdığı task dosyaları gerçek değerler taşıyor ve board görünümü +
+`list_tasks` hâlâ gösteriyor. Alanları düşürmek, her task'ın bir sonraki yazımında o
+geçmişi sessizce silerdi. Legacy oldukları model içinde yorumla işaretlendi.
+
+Diskteki eski `runs/*.json` dosyalarına **dokunulmuyor** — artık okunmuyorlar,
+kullanıcı verisini sessizce silmek doğru değil.
+
+✅ `go build`/`vet` + `go test ./...` + frontend `tsc -b`/vitest yeşil.
+
+## Boşta CPU: activity polling O(1) sayaca indi + poll'lar visibility-kapılı (2026-08-16) ✅
+
+Boşta duran backend **249 s CPU / 116 dk** yakıyordu (~%3,6). Suçlu
+`GET /api/workspaces/activity`: `workspaceRunning()` her workspace için
+`ListRunningRuns` + `ListRunningFlowRuns` çağırıp `d.runs`/`d.flowRuns` map'lerini
+**tamamen tarıyor**, sıralıyor ve bunu `d.mu.RLock()` altında yapıyordu. 5 pencere ×
+4 sn × 10 workspace ≈ **saniyede ~25 tam-store taraması**. Beteri: `appendMessageLocked`
+aynı `d.mu`'yu **senkron dosya yazımı boyunca** yazma modunda tutuyor ve Go'da bekleyen
+yazar yeni okurları bloklar → poll ile canlı tur birbirini serileştiriyordu.
+
+**Sayaç.** `internal/db`'ye `runningRuns` / `runningFlowRuns` `atomic.Int64` eklendi
+(`db.go`), `load()`'da diskten tohumlanır. Flow tarafında tek boğaz noktası:
+`persistFlowRunLocked(prev string, r FlowRun)` — `prev` **zorunlu parametre**, çünkü
+derleyici böylece 6 çağrı yerinin hepsini işaretliyor ve ileride eklenecek bir
+durum-geçiş yolu sayacı sessizce atlayamıyor. Okuma (`HasRunningRuns` /
+`HasRunningFlowRuns`) `d.mu`'ya **hiç dokunmaz**.
+
+Sayaç *cevap* değil **hızlı-negatif kapısı**: 0 ise tarama hiç koşmaz (boşta hâli),
+>0 ise tarama koşar — o an makine zaten meşgul. Böylece fazla-sayma zararsız, tek
+gerçek risk eksik-sayma. Ona karşı `ReconcileRunCounters` (`store_runcount.go`) mevcut
+flow sweeper'ının 20. tick'inde (10 dk) çalışır, sapmayı düzeltir **ve `Error`
+seviyesinde loglar** — sessiz self-heal hatayı görünmez kılardı.
+
+**Ölçüm** (`BenchmarkWorkspaceRunning`, 2000 flow-run'lı store):
+272.932 ns/op + 385 KB/çağrı → **27,8 ns/op, 0 alloc**. ~9.800×. 125 çağrı/s × 273 µs
+= saniyede 34 ms CPU = **%3,4** — ölçülen %3,6 ile birebir örtüşüyor.
+
+**Yan bulgu 1 — `d.runs` ölü map.** Boot dışında hiçbir yerde yazılmıyor; `CreateRun`
+diye bir fonksiyon yok. Yani `st.Task` pratikte hiç `true` olmuyor ve o tarama tamamen
+boşaydı. → Takip eden maddede entity tamamen **silindi**.
+
+**Yan bulgu 2 — `executions.go` O(oturum × flowRun).** `lastStatusFor` her flow
+oturumu için `ListFlowRuns` çağırıyordu (tam tarama + sort), 5 sn'de bir, her pencere
+için. Artık poll başına **tek tarama** ile `newestFlowRunStatus` indeksi kuruluyor ve
+yalnız feed'de gerçekten flow oturumu varsa.
+
+**Yan bulgu 3 — `ListFlowRuns` non-determinizmi (gerçek hata, test yakaladı).**
+Yalnız saniye-granülerlikli `CreatedAt` ile sıralıyordu; aynı saniyede oluşan iki
+koşunun sırası map iterasyonuna kalıyor, yani her çağrıda değişiyordu → `runs[0]`
+("en yeni koşu") rastgele seçiliyordu. Depoda tam bu iş için duran `flowRunBefore`
+(id sayacıyla tie-break) artık `ListFlowRuns` ve `ListRootFlowRuns`'ta kullanılıyor.
+
+**Frontend.** `useAsync`'e `pauseWhenHidden` (varsayılan açık) + `setInterval` tabanlı
+paneller için `useVisiblePoll` eklendi: gizli pencere hiç poll etmez, görünür olunca
+bir yakalama koşusu yapar. 5 pencerenin 4'ü arka plandaysa trafiğin ~%80'i gider.
+SSE yedeği olan interval'lar gevşetildi: activity 3→15 sn, workspaces/activity 4→20 sn,
+executions 5→20 sn, flow runs 3→15 sn, automation stats 5→15 sn, MCP pool 5→10 sn.
+`useActivity` `useAsync`'e taşındı (kapıyı bedava aldı). `LogsPanel` incelendi —
+zaten SSE-birincil + 30 sn uzlaştırma, dokunulmadı.
+
+**Tam SSE'ye taşıma (event-driven `workspaces/activity`) bilinçli olarak YAPILMADI:**
+SSE zaten bağlı (`SIGNAL_WORKSPACE_ACTIVITY`) ve poll onun yedeği; sayaçtan sonra bir
+poll'un maliyeti workspace başına 4 atomik yükleme. Yeni event tipi + ikinci bir "her
+geçişi yakala" yükümlülüğü + reconnect senaryosu bu kazanca değmiyor.
+
+Testler: `internal/db/store_runcount_test.go` (yaşam döngüsü, cascade, reload,
+500-op rastgele dizi, drift tespiti), `internal/api/activity_test.go`,
+`executions_flowstatus_test.go`, `activity_bench_test.go`.
+✅ `go build`/`vet` + `go test ./...` + frontend `tsc -b`/vitest yeşil.
+
+## Kuyruk watchdog'u boşta-farkında + her kesinti artık görünür (2026-08-16) ✅
+
+Yukarıdaki düzeltmenin devamı; iki kalan açık kapatıldı.
+
+**1) Boşta izleyicisi.** Duvar saati tek başına "asılı tur" ile "yavaş tur"u ayıramaz —
+bu yüzden tavan cömert olmak zorunda, cömert tavan da gerçek bir wedge'in saatlerce
+kuyruğu tutmasına izin veriyordu. Ayırt eden ölçü **sessizlik**: `runQueuedTurn` artık
+15 sn'de bir yoklar ve **ya** tavanı aşan **ya da** `TurnIdleWatchdogMin` (varsayılan
+**20 dk**) boyunca hiç olay üretmeyen turu keser. Adım yayan tur ne kadar uzun koşarsa
+koşsun dokunulmaz.
+
+Canlılık sinyali `sessionhub`'dan geliyor: `sessionState.lastPublish` her `Publish`'te
+damgalanır — **ephemeral token delta'ları dâhil** (yalnız durable olayları saysaydık,
+araç çağırmadan uzun metin üreten tur asılı sanılırdı) — ve `Hub.LastActivity()` ile
+okunur. Sıcak yolda ek kilit yok: damga zaten alınan `h.mu` altında. Ölçüm
+`(workspace, session)` kapsamlı, yoksa WS2/SES trafiği WS1/SES'i canlı gösterirdi.
+
+**2) Görünürlük açığı.** `turn_error` yalnızca tur iptali **30 sn içinde
+yanıtlamazsa** yazılıyordu; yaygın durumda (iptal gelir, tur hemen çözülür) transkriptte
+**hiçbir iz kalmıyordu** — SES76'da sohbetin sebepsiz yarıda kalmış görünmesinin sebebi
+buydu. Artık `recordWatchdogCut` **her** kesintide çalışır: kalıcı `kind=error` kartı +
+`debug.jsonl` olayı + canlı `turn_error`. Sebep alanı ayrık: `watchdog` (tavan),
+`watchdog-idle` (sessizlik), iptali de yanıtlamayan tur için `-detached` soneki.
+
+**3) Panelde sessizlik göstergesi.** Aynı sinyal Oturum Bilgisi'ndeki süreç kartına
+bağlandı: `running` DTO'su artık `lastActivityAt` + `idleLimitSec` + `hardLimitSec`
+taşır, kart "N sessiz — sınır M" satırını gösterir (pencerenin %25'ini geçince görünür,
+yarısını geçince `warning` rengine döner). **Süre değil mutlak zaman damgası
+gönderiliyor:** panel yalnız konuşma değişince yeniden çeker, yani sessiz oturumda
+hazır hesaplanmış bir süre donup kalırdı — tam da önemli olan durumda. İstemci
+damgayı sunucu saatine karşı saniyede bir işler. İlk olay gelmeden önce ölçüm turun
+başlangıcına düşer (kurulumda asılan tur da sayılır).
+
+Testler: `internal/sessionhub/activity_test.go` (ephemeral damga + workspace kapsamı),
+`internal/api/inbox_watchdog_test.go` (boşta ölçümü), `internal/agent/turnwatchdog_test.go`
+(idle penceresi tavanı aşamaz). UI: Ayarlar → Araçlar'da "Tur boşta süresi (dk)" +
+Oturum Bilgisi süreç kartında sessizlik satırı.
+
+## Kuyruk watchdog'u 20 dk sabitinden ayara taşındı (2026-08-16) ✅
+
+**Bulgu (WS15/SES76).** Sağlıklı bir sohbet turu tam `19m57s`'de kesildi:
+`queued turn exceeded watchdog; force-cancelling after=20m0s`. Tur asılı değildi —
+134 tool çağrısıyla ilerleyen bir Rust build/clippy döngüsüydü; iptal anında son
+`Bash` çağrısı hâlâ çalışıyordu (`debug.jsonl`'de `durMs` yok).
+
+**Kök neden.** 2026-07-28'de `spawnTimeoutMin` **120 dk**'ya çekilmişti (aşağıdaki
+SES17 kaydı), ama sonradan eklenen kuyruk watchdog'u (`internal/api/inbox_durability.go`,
+`_Docs/58`) **sabit 20 dk** idi ve ayarı hiç okumuyordu. Yani güvenlik ağı, korumak
+istediği işin tavanından **dört kat dardı** — tıkanma freni, üretken turu kesiyordu.
+
+**Düzeltme.** Sabit kaldırıldı; `TurnWatchdogMin` ayarı eklendi (varsayılan **120**,
+1–1440 dk, Ayarlar → Araçlar'da "Tur izleyicisi (dk)"). `agent.Tunables.TurnWatchdog()`
+değeri **spawn/zamanlama tavanlarının altına inemeyecek şekilde tabanlar** (aynı taban
+`settings.normalize`'da da var) → bu sınıf hata yapısal olarak tekrarlayamaz. Ayar
+global `~/.tionswarm/settings.json`'da olduğu için **tüm workspace'ler** için geçerli;
+mevcut dosyalarda alan yoksa `Open` default'tan 120 alır. Regresyon testi:
+`internal/agent/turnwatchdog_test.go`.
+
+## Insight araçları varsayılan NAME-ONLY (2026-08-15) ✅
+
+`insight_scan` / `insight_list_findings` / `insight_apply_finding` şimdiye kadar
+**eager** idi: üç tam şema her turun cache prefix'inde taşınıyordu, oysa bu araçlar
+yalnız retrospektif tarama/triyaj turlarında kullanılıyor. `buildRegistry`'deki
+varsayılan NAME-ONLY setine eklendiler (`internal/agent/toolsetup.go`) — katalogda
+yalnız adlarıyla listelenir, şema `tool_search`/`activate_tools` ile çekilir;
+claude-cli yolunda `tionswarm_extended` köprüsünden ToolSearch ile gelir, yani
+yetenek aynı. Yan düzeltme: `insight_scan`'i "eager araç örneği" olarak kullanan
+yorumlar/test fixture'ları `todo_write`/`create_artifact` ile değiştirildi.
+Detay: `_Docs/19` (Default NameOnly seti), `_Docs/60`.
+
+## Düşük-frekanslı eager araç taraması → 5 araç daha NAME-ONLY (2026-08-15) ✅
+
+**Yöntem.** Tahmin yerine ölçüm: (a) geçici bir audit testi `ShippedToolCatalog`
+ile eager şemaları döküp token maliyetini çıkardı; (b) `~/.tionswarm` altındaki
+**355 `debug.jsonl`** günlüğü taranarak her aracın gerçek çağrı sayısı sayıldı.
+Maliyet × nadirlik kesişimi seçildi.
+
+**Sonuç.** `archive_sessions` (~820 tok / 4 çağrı), `expand` (~761 / 12),
+`apply_patch` (~403 / 1), `read_lessons` (~181 / 2), `delete_lesson` (~146 / 0)
+NAME-ONLY oldu. Eager 23→18 araç, **~9031 → ~6720 token** (≈ **%26**, tur/ajan
+başına ~2311 token cache prefix'inden düştü).
+
+**Bilerek eager bırakılanlar.** `get_view` (994 tok) tek başına en pahalısı ama
+51 çağrıyla aktif ve alternatifi (ham state okuma) daha pahalı — doğru hamle
+şemayı **kısaltmak**, ertelemek değil. `run_subagent` (707/13) `_Docs/19`'daki
+"Strateji B": ertelemek delegasyon davranışını söndürebilir, önce prompt'a tek
+satır nudge ister. `ask_user`/`request_confirmation`/`todo_write`/`create_artifact`
+davranışsal dürtü. `WebFetch` 2026-06-26'da **bilerek** NameOnly'den eager'a
+alınmıştı (commit 97ebf39) → dokunulmadı.
+
+Detay + tablo: `_Docs/19` ("Düşük-frekanslı eager taraması").
+
+## Workspace-kapsamlı oturum durumu — oturumlar workspace'ler arasına sızıyordu (2026-08-14) ✅
+
+**Olay.** İki yeni workspace açıldı (`WS18` TionFramework, `WS19` FalciBaci),
+birinde sohbet başlatıldı; UI'dan ikincisine geçilince orada **önceki
+workspace'in oturumu** göründü.
+
+**Kök sebep.** Oturum id'leri her workspace store'unun kendi `counters.json`'ından
+gelir → `SES1` her workspace'te vardır. Süreç-geneli beş yapı ise yalnız session
+id ile anahtarlanıyordu: `sessionhub.Hub`, `inboxStore`, `chatRuns`
+(`sessionRunInfo`/`interactionToken`), `interactionStore`, `permGrantStore`. Yani
+WS18/SES1 ile WS19/SES1 tek hub ring'ini, tek gönderi kuyruğunu ve tek izin/
+etkileşim kaydını paylaşıyordu. Diskte bulaşma yok — sızıntı tamamen bellek
+içindeki bu ortak anahtarlardan.
+
+**Düzeltme.** Hepsi `scopeKey(wsID, sessionID)` ile anahtarlandı; `sessionhub`
+metotları `(wsID, sessionID)` alır (derleyici tüm çağrı yerlerini yakalasın diye
+imza değiştirildi, ~160 nokta). Ayrıca aynı sınıf hataya yol açan
+**default-workspace geri dönüşleri kaldırıldı** (`flushInbox`,
+`publishAutonomousReply`, `recordQueueTurnFailure` → `workspaceByID`, çözülemezse
+log + `nil`); `teardownSessionRuntime` workspace'siz çağrıda hata döner; bus
+köprüsü `e.WorkspaceID` kullanır. Geriye dönük uyum: `recoverInboxes` her
+`inbox.json` kalemine bulunduğu store'un workspace id'sini yeniden damgalar.
+Frontend: taslak anahtarı `tionswarm:draft:<ws>:<session>`, hub aboneliği
+`activeWorkspaceId`'ye de bağlı.
+
+Detay + tablo: `_Docs8-QUEUE-SENKRON.md` → "Workspace kapsamı".
+Testler: `internal/api/workspace_session_scope_test.go`, güncellenen
+`session_teardown_test.go`.
+
+## dev.ps1: Vite heap tavanı + exit koduna sebep etiketi (2026-08-14) ✅
+
+**Olay.** 16:29:51'de web arayüzü gitti. `lifecycle.log`: `frontend exited on its
+own (pid=43292 exit=-1)` → ardından dev.ps1 kendi kuralı gereği backend'i de
+indirdi. Backend son milisaniyeye kadar sağlıklıydı (16:29:50'de 200 dönen istek,
+stderr yakalaması boş). Aynı ölüm 2026-08-12'de de olmuştu (`exit=1073807364`).
+Yani **frontend düştü, backend onunla birlikte götürüldü**; 16:25:33'te açılan
+`WS18` workspace'i ile ilgisi yok (4 dakika sorunsuz çalıştı).
+
+**İki değişiklik (`scripts/dev.ps1`):**
+
+- **`Get-ExitReason`** — ham exit kodu `lifecycle.log`'a artık `reason=<...>` ile
+  çözümlenmiş yazılır (`-1`, `0x40010004`, `0xC0000409`, `0xC0000005` …). Çıplak
+  sayı aylar sonra okunmuyordu. .NET `ExitCode`'u **signed Int32** verdiği için
+  0x7FFFFFFF üstü NTSTATUS değerleri negatif geliyor; unsigned hex string'e
+  normalize edip tek tablodan bakıyoruz. **Tuzak:** maske `0xFFFFFFFFL` olmalı —
+  WinPS 5.1 `0xFFFFFFFF`'i Int32 `-1` parse ettiği için maske etkisiz kalıyor ve
+  `[uint32]` cast'i tam da çözmek istediğimiz negatif kodlarda patlıyordu.
+- **`NODE_OPTIONS=--max-old-space-size=4096`** — Vite çocuğuna heap tavanı. node'un
+  varsayılan old-space'i toplam RAM'den türer; HMR modül grafiğini + source map'leri
+  canlı tuttuğu için günlerce açık kalan dev server yukarı sürükleniyor (30 saat ve
+  5 saat uptime'lı iki ölüm). Tavan, süreç abort'a gitmeden GC'yi zorlar. Zaten set
+  edilmiş `NODE_OPTIONS` korunur, yalnız flag eksikse eklenir.
+
+Not: "frontend ölünce backend de ölsün" davranışı **bilerek korundu** (teşhis için
+tek kapanış noktası). Frontend-only otomatik restart ayrı bir iş olarak açık.
 
 ## DeepSeek fiyatları zam sonrasına güncellendi (2026-08-14) ✅
 
@@ -4216,8 +4597,15 @@ matcher yazılıyor → sqz/rtk gerçekten ateşlenir.
 Daha önce kod-sabiti olan 4 değer settings-driven yapıldı (applySettings ile canlı,
 0 → yerleşik default). Ayarlar → App/Tools panelinde:
 
-- **Zamanlama süresi** (`ScheduleTimeoutMin`, default 30 dk) — `scheduler.fire/fireWake`
+- **Zamanlama süresi** (`ScheduleTimeoutMin`, default **60 dk**) — `scheduler.fire/fireWake`
   artık `s.rt.tun.ScheduleTimeout()` kullanır; spawn süresiyle aynı desen.
+  **2026-08-16:** default 30 → 60 yükseltildi ve elle **"Şimdi çalıştır"** yolu
+  (`handleRunSchedule`, `internal/api/schedules.go`) da aynı tunable'a bağlandı — orada
+  sabit kodlu 10 dk vardı, yani ayar sessizce yok sayılıyordu. Araştırma tipi bir
+  zamanlanmış prompt (WS1/SES286) tam bu yüzden `context deadline exceeded` ile 10.
+  dakikada kesilmişti. `TurnWatchdogMin` (120) tavanın üstünde kaldığı için tıkanma
+  freni hâlâ geçerli; `settings/store.go` zaten watchdog'u schedule süresinin altına
+  düşürmüyor.
 - **Kabuk varsayılan/maks. süre** (`ShellDefaultTimeoutSec`/`ShellMaxTimeoutSec`, 30/120 sn)
   — `tools.SetShellTimeouts`; per-call `timeout_sec` yine geçersiz kılar, maks. ile kırpılır.
 - **Araç çıktı sınırı** (`MaxToolOutputKB`, default 100 KB) — `tools.SetMaxToolOutputBytes`;
