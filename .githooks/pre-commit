@@ -25,13 +25,30 @@ if [ -n "$staged_fe" ]; then
   fi
 fi
 
-# --- backend (gofmt) -------------------------------------------------------
+# --- backend (BOM + gofmt) -------------------------------------------------
 staged_go=$(git diff --cached --name-only --diff-filter=ACM -- '*.go')
 if [ -n "$staged_go" ]; then
+  # A UTF-8 BOM on a .go file is latent damage: go build and go vet tolerate it,
+  # but `go test -cover` rewrites the file for instrumentation and the leftover
+  # BOM ends up mid-file, failing the whole package with "invalid BOM in the
+  # middle of the file". Strip it here — only the 3 BOM bytes go, line endings
+  # are left untouched.
+  printf '%s\n' "$staged_go" | while IFS= read -r f; do
+    [ -f "$repo_root/$f" ] || continue
+    case $(head -c3 "$repo_root/$f" | od -An -tx1 | tr -d ' \n') in
+      efbbbf*)
+        tail -c +4 "$repo_root/$f" > "$repo_root/$f.bomtmp" && mv "$repo_root/$f.bomtmp" "$repo_root/$f"
+        echo "pre-commit: stripped UTF-8 BOM from $f" >&2
+        ;;
+    esac
+  done
+
   if command -v gofmt >/dev/null 2>&1; then
     printf '%s\n' "$staged_go" | xargs gofmt -w
-    printf '%s\n' "$staged_go" | xargs git add
   else
     echo "pre-commit: gofmt not on PATH; skipping Go formatting." >&2
   fi
+
+  # Re-stage regardless of gofmt: the BOM strip above may be the only rewrite.
+  printf '%s\n' "$staged_go" | xargs git add
 fi
