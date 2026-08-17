@@ -59,6 +59,10 @@
 # nothing to stderr, so its last log lines are the only context left.
 # If the backend disappears and lifecycle.log shows NO cleanup entry for it, the
 # kill came from outside this script (external taskkill, window force-close).
+# Every self-exit line also carries reason=<decoded exit code> (Get-ExitReason):
+# NTSTATUS/DBG codes are unreadable as bare numbers months later. The Vite child
+# additionally runs under NODE_OPTIONS=--max-old-space-size=4096 so a long-lived
+# dev server hits the GC instead of drifting into an abort.
 #
 # Pre-flight: before binding, a leftover listener on the backend port (8090) or
 # the Vite port (5173) -- typically a go/node child orphaned when a prior run was
@@ -167,11 +171,42 @@ function Get-ExitCodeSafe($p) {
     } catch { return "?" }
 }
 
+# Get-ExitReason turns a raw exit code into the sentence we actually want in
+# lifecycle.log. WHY: the bare number is useless months later -- on 2026-08-12 the
+# frontend logged "exit=1073807364" and on 2026-08-14 "exit=-1"; both are the same
+# story (killed from outside / died), but nobody decodes 0x40010004 from memory.
+# .NET reports ExitCode as a SIGNED Int32, so NTSTATUS values above 0x7FFFFFFF
+# arrive negative (0xC0000005 -> -1073741819). Normalising to an unsigned hex
+# string first makes one lookup table cover both shapes.
+function Get-ExitReason($code) {
+    if ($code -eq "?") { return "cikis kodu okunamadi" }
+    $n = 0
+    if (-not [int]::TryParse([string]$code, [ref]$n)) { return "cozumlenemeyen cikis kodu" }
+    # 0xFFFFFFFFL, not 0xFFFFFFFF: WinPS 5.1 parses the latter as Int32 -1, so the
+    # mask is a no-op and the [uint32] cast then throws on every negative code --
+    # i.e. on exactly the NTSTATUS values this function exists to decode.
+    $hex = "0x{0:X8}" -f ([uint32]([long]$n -band 0xFFFFFFFFL))
+    switch ($hex) {
+        "0x00000000" { return "temiz cikis" }
+        "0x00000001" { return "genel hata ya da disaridan taskkill /F" }
+        "0x00000002" { return "Go runtime fatal (panic / out of memory) -- stderr yakalamasina bak" }
+        "0x00000086" { return "abort() -- node JS heap OOM adayi" }
+        "0x40010004" { return "DBG_TERMINATE_PROCESS -- disaridan sonlandirildi (konsol kapandi / taskkill)" }
+        "0xC0000005" { return "ACCESS_VIOLATION -- native cokme" }
+        "0xC000013A" { return "Ctrl+C / konsol kapatma sinyali" }
+        "0xC00000FD" { return "STACK_OVERFLOW" }
+        "0xC0000409" { return "__fastfail / STATUS_STACK_BUFFER_OVERRUN -- node JS heap OOM adayi" }
+        "0xFFFFFFFF" { return "disaridan sonlandirildi ya da coktu (bellek baskisi adayi)" }
+        default { return "bilinmeyen kod ($hex)" }
+    }
+}
+
 function Stop-Tree($p, $label) {
     if ($null -eq $p) { return }
     try {
         if ($p.HasExited) {
-            Write-Lifecycle "$label already exited on its own (pid=$($p.Id) exit=$(Get-ExitCodeSafe $p)) -- not killed by dev.ps1"
+            $c = Get-ExitCodeSafe $p
+            Write-Lifecycle "$label already exited on its own (pid=$($p.Id) exit=$c reason=$(Get-ExitReason $c)) -- not killed by dev.ps1"
             if ($label -eq "backend") { $script:backendSelfExited = $true }
             return
         }
@@ -276,6 +311,20 @@ try {
         # (default is localhost-only). "--" forwards the flag through npm to vite.
         $viteArgs = @("run", "dev")
         if (-not $Loopback) { $viteArgs += @("--", "--host", "0.0.0.0") }
+        # Vite heap ceiling. WHY: node's default old-space is sized from total RAM
+        # and a dev server that stays up for a day or two (HMR keeps module graphs
+        # + source maps alive) drifts upward until the process is aborted -- the
+        # frontend died that way on 2026-08-12 (30h uptime) and 2026-08-14 (5h).
+        # An explicit ceiling makes the GC work earlier instead of letting the heap
+        # grow until the OS or node's fail-fast path kills it. Respect an existing
+        # NODE_OPTIONS (a devcontainer or the user may already set flags there).
+        if (-not $env:NODE_OPTIONS) {
+            $env:NODE_OPTIONS = "--max-old-space-size=4096"
+            Write-Host "==> NODE_OPTIONS=$($env:NODE_OPTIONS) (Vite heap tavani)" -ForegroundColor DarkGray
+        } elseif ($env:NODE_OPTIONS -notmatch "max-old-space-size") {
+            $env:NODE_OPTIONS = "$($env:NODE_OPTIONS) --max-old-space-size=4096"
+            Write-Host "==> NODE_OPTIONS=$($env:NODE_OPTIONS) (Vite heap tavani eklendi)" -ForegroundColor DarkGray
+        }
         Write-Host "==> Frontend baslatiliyor: npm run dev  (http://${lanIP}:5173)" -ForegroundColor Cyan
         # npm.cmd: on Windows npm is a batch shim; call the .cmd directly.
         $frontend = Start-Process -FilePath "npm.cmd" -ArgumentList $viteArgs `
@@ -309,8 +358,9 @@ try {
         foreach ($e in $procs) {
             if ($e.Proc.HasExited) {
                 $code = Get-ExitCodeSafe $e.Proc
-                Write-Host "==> $($e.Label) sonlandi (PID $($e.Proc.Id), exit $code), digerleri kapatiliyor..." -ForegroundColor Yellow
-                Write-Lifecycle "$($e.Label) exited on its own (pid=$($e.Proc.Id) exit=$code)"
+                $reason = Get-ExitReason $code
+                Write-Host "==> $($e.Label) sonlandi (PID $($e.Proc.Id), exit $code -- $reason), digerleri kapatiliyor..." -ForegroundColor Yellow
+                Write-Lifecycle "$($e.Label) exited on its own (pid=$($e.Proc.Id) exit=$code reason=$reason)"
                 throw "child-exited"
             }
         }
