@@ -1111,6 +1111,16 @@ func (r *Runtime) runWorker(agent db.Agent, workerSessionID, prompt, coordSessio
 		}
 	}
 
+	// Persist the outcome on the session itself. Placed after the branches above so
+	// it covers EVERY status — a run that died on a provider error or a cancelled
+	// context lands here with failed/killed/timeout, not just the happy path. The
+	// transcript message, the "worker" event and the tags are all in-flight signals;
+	// this is the one that survives a restart, so forensic tooling reading
+	// session.json can tell a finished worker from a live one.
+	if rsErr := r.db.SetSessionRunState(ctx, workerSessionID, status, time.Now().Unix()); rsErr != nil {
+		r.logger.Warn("worker: failed to persist run state", "session", workerSessionID, "status", status, "error", rsErr)
+	}
+
 	// replyText was pre-composed above (success output / failure / kill / empty note).
 	if addErr := r.recordAssistantMessage(ctx, workerSessionID, agent.ID, replyText, steps, meta, time.Since(turnStart).Milliseconds()); addErr != nil {
 		r.logger.Warn("worker: failed to record reply", "session", workerSessionID, "error", addErr)
