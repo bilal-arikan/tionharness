@@ -103,10 +103,3 @@ func TestAgentRunning_OtherWorkspaceTurnDoesNotBlock(t *testing.T) {
 		t.Fatalf("a turn in another workspace blocked the delete (at %q)", where)
 	}
 }
-
-// NOTE: agentRunning also consults ListRunningRuns (task runs carry an AgentID),
-// but that branch is untested here on purpose: the store exposes no way to create
-// a Run — they are legacy rows, only ever loaded from disk (see _Docs/08 on
-// "Task Run ID'leri … legacy, artık üretilmiyor"). The branch is kept because
-// workspaceRunning still reads the same source, so a store that does hold legacy
-// running rows is handled consistently.

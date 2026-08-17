@@ -192,7 +192,7 @@ func (d *DB) SetTaskArchived(ctx context.Context, id string, archived bool) erro
 	return nil
 }
 
-// DeleteTask removes a task and all of its runs.
+// DeleteTask removes a task.
 func (d *DB) DeleteTask(ctx context.Context, id string) error {
 	d.mu.Lock()
 	t, ok := d.tasks[id]
@@ -204,13 +204,6 @@ func (d *DB) DeleteTask(ctx context.Context, id string) error {
 	if err := removeFile(d.dir(dirTasks, id+".json")); err != nil {
 		d.mu.Unlock()
 		return err
-	}
-	// Cascade: remove runs belonging to this task.
-	for rid, r := range d.runs {
-		if r.TaskID == id {
-			delete(d.runs, rid)
-			_ = removeFile(d.dir(dirRuns, rid+".json"))
-		}
 	}
 	title, board, owner, tags, prio := t.Title, t.BoardState, t.OwnerAgentID, t.Tags, t.Priority
 	d.mu.Unlock()

@@ -98,10 +98,9 @@ func (d *DB) DeleteFlow(ctx context.Context, id string) error {
 	if err := removeFile(d.dir(dirFlows, id+".json")); err != nil {
 		return err
 	}
-	for rid, r := range d.flowRuns {
+	for _, r := range d.flowRuns {
 		if r.FlowID == id {
-			delete(d.flowRuns, rid)
-			_ = removeFile(d.dir(dirFlowRuns, rid+".json"))
+			d.deleteFlowRunLocked(r)
 		}
 	}
 	return nil
@@ -109,9 +108,48 @@ func (d *DB) DeleteFlow(ctx context.Context, id string) error {
 
 // ---- Flow runs ----
 
-func (d *DB) persistFlowRunLocked(r FlowRun) error {
-	return dbPersistLocked(d, d.flowRuns, dirFlowRuns, r.ID, r)
+// persistFlowRunLocked stores r and keeps runningFlowRuns in sync. prev is the
+// row's status BEFORE this write ("" for a brand-new run).
+//
+// prev is a required parameter rather than something read back from the map on
+// purpose: every caller already loads the old row in order to mutate it, so it
+// costs nothing — and making it mandatory is what forces a future
+// status-flipping path to confront the counter instead of silently skipping it
+// (the compiler flags the missing argument). The caller must hold d.mu.
+func (d *DB) persistFlowRunLocked(prev string, r FlowRun) error {
+	if err := dbPersistLocked(d, d.flowRuns, dirFlowRuns, r.ID, r); err != nil {
+		return err
+	}
+	d.applyFlowRunDelta(prev, r.Status)
+	return nil
 }
+
+// applyFlowRunDelta moves runningFlowRuns by the running-ness EDGE between two
+// statuses: a no-op when both sides are running or neither is. Deleting a run is
+// expressed as next == "".
+func (d *DB) applyFlowRunDelta(prev, next string) {
+	switch {
+	case prev != FlowRunning && next == FlowRunning:
+		d.runningFlowRuns.Add(1)
+	case prev == FlowRunning && next != FlowRunning:
+		d.runningFlowRuns.Add(-1)
+	}
+}
+
+// deleteFlowRunLocked removes a run row plus its file and releases its running
+// slot. Caller must hold d.mu.
+func (d *DB) deleteFlowRunLocked(r FlowRun) {
+	delete(d.flowRuns, r.ID)
+	_ = removeFile(d.dir(dirFlowRuns, r.ID+".json"))
+	d.applyFlowRunDelta(r.Status, "")
+}
+
+// HasRunningFlowRuns reports, in O(1) and WITHOUT taking d.mu, whether any flow
+// run is in the running state. It is the fast-negative gate for the activity
+// endpoints: a false answer skips the full scan entirely (the idle case), a true
+// answer only means "now run the real query". Waiting runs do NOT count,
+// mirroring ListRunningFlowRuns — a suspended run must not pulse the UI.
+func (d *DB) HasRunningFlowRuns() bool { return d.runningFlowRuns.Load() > 0 }
 
 // CreateFlowRun opens a new run in the running state.
 func (d *DB) CreateFlowRun(ctx context.Context, r FlowRun) (FlowRun, error) {
@@ -126,7 +164,7 @@ func (d *DB) CreateFlowRun(ctx context.Context, r FlowRun) (FlowRun, error) {
 	}
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	return r, d.persistFlowRunLocked(r)
+	return r, d.persistFlowRunLocked("", r)
 }
 
 // GetFlowRun loads a run by id.
@@ -135,10 +173,17 @@ func (d *DB) GetFlowRun(ctx context.Context, id string) (FlowRun, error) {
 }
 
 // ListFlowRuns returns runs for a flow (or all if flowID is empty), newest first.
+//
+// The order is the exact reverse of flowRunBefore, NOT a plain CreatedAt compare:
+// CreatedAt has second granularity (see now()), so two runs started within the
+// same second are indistinguishable by time and a bare timestamp sort leaves
+// their relative order down to map iteration — i.e. different on every call.
+// Callers that take runs[0] as "the newest run" (the executions feed's status
+// chip) would then flip between them at random. The id counter breaks the tie.
 func (d *DB) ListFlowRuns(ctx context.Context, flowID string) ([]FlowRun, error) {
 	return dbFilter(d, d.flowRuns,
 		func(r FlowRun) bool { return flowID == "" || r.FlowID == flowID },
-		func(a, b FlowRun) bool { return a.CreatedAt > b.CreatedAt }), nil
+		func(a, b FlowRun) bool { return flowRunBefore(b, a) }), nil
 }
 
 // ListRootFlowRuns is ListFlowRuns restricted to runs nothing else launched, so
@@ -147,7 +192,7 @@ func (d *DB) ListFlowRuns(ctx context.Context, flowID string) ([]FlowRun, error)
 func (d *DB) ListRootFlowRuns(ctx context.Context, flowID string) ([]FlowRun, error) {
 	return dbFilter(d, d.flowRuns,
 		func(r FlowRun) bool { return (flowID == "" || r.FlowID == flowID) && r.IsRootRun() },
-		func(a, b FlowRun) bool { return a.CreatedAt > b.CreatedAt }), nil
+		func(a, b FlowRun) bool { return flowRunBefore(b, a) }), nil // same tie-break as ListFlowRuns
 }
 
 // flowRunSeq extracts the monotonic counter nextID appended to a run id
@@ -249,7 +294,7 @@ func (d *DB) SetFlowRunState(ctx context.Context, id, state string) error {
 	}
 	r.State = state
 	r.UpdatedAt = now()
-	return d.persistFlowRunLocked(r)
+	return d.persistFlowRunLocked(r.Status, r) // status untouched: zero delta
 }
 
 // SetFlowRunSession links a run to the transcript session it produced. Merges
@@ -264,7 +309,7 @@ func (d *DB) SetFlowRunSession(ctx context.Context, id, sessionID string) error 
 	}
 	r.SessionID = sessionID
 	r.UpdatedAt = now()
-	return d.persistFlowRunLocked(r)
+	return d.persistFlowRunLocked(r.Status, r) // status untouched: zero delta
 }
 
 // FinishFlowRun records the terminal status, final output and error.
@@ -275,11 +320,12 @@ func (d *DB) FinishFlowRun(ctx context.Context, id, status, output, errText stri
 	if !ok {
 		return ErrNotFound
 	}
+	prev := r.Status // read BEFORE the mutation below overwrites it
 	r.Status = status
 	r.Output = output
 	r.Error = errText
 	r.UpdatedAt = now()
-	return d.persistFlowRunLocked(r)
+	return d.persistFlowRunLocked(prev, r)
 }
 
 // ListRunningFlowRuns returns runs still in the running state (for resume on boot),
@@ -301,10 +347,11 @@ func (d *DB) MarkFlowRunWaiting(ctx context.Context, id, state string) error {
 	if !ok {
 		return ErrNotFound
 	}
+	prev := r.Status // read BEFORE the mutation below overwrites it
 	r.State = state
 	r.Status = FlowWaiting
 	r.UpdatedAt = now()
-	return d.persistFlowRunLocked(r)
+	return d.persistFlowRunLocked(prev, r)
 }
 
 // ListWaitingFlowRuns returns runs suspended at an await-input node (for the
@@ -329,9 +376,10 @@ func (d *DB) ClaimWaitingFlowRun(ctx context.Context, id string) (FlowRun, error
 	if r.Status != FlowWaiting {
 		return FlowRun{}, fmt.Errorf("flow run %s is not waiting (status %q)", id, r.Status)
 	}
+	prev := r.Status // FlowWaiting, checked above — read before the flip
 	r.Status = FlowRunning
 	r.UpdatedAt = now()
-	if err := d.persistFlowRunLocked(r); err != nil {
+	if err := d.persistFlowRunLocked(prev, r); err != nil {
 		return FlowRun{}, err
 	}
 	return r, nil

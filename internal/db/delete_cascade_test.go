@@ -53,12 +53,6 @@ func TestDeleteAgentCascade(t *testing.T) {
 	if err != nil {
 		t.Fatalf("seed keep task: %v", err)
 	}
-	// Runs are written by execution layers, not a public store method; seed the
-	// in-memory map directly (same package) to exercise the cascade.
-	d.mu.Lock()
-	d.runs["run-victim"] = Run{ID: "run-victim", TaskID: victimTask.ID, AgentID: victim.ID}
-	d.mu.Unlock()
-
 	if err := d.DeleteAgent(ctx, victim.ID); err != nil {
 		t.Fatalf("delete agent: %v", err)
 	}
@@ -93,14 +87,6 @@ func TestDeleteAgentCascade(t *testing.T) {
 	}
 	if _, err := d.GetTask(ctx, keepTask.ID); err != nil {
 		t.Errorf("keep task should survive: %v", err)
-	}
-
-	// Runs
-	d.mu.RLock()
-	_, runExists := d.runs["run-victim"]
-	d.mu.RUnlock()
-	if runExists {
-		t.Error("victim run should be deleted")
 	}
 }
 

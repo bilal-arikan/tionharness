@@ -16,8 +16,8 @@ type ExternalActiveSessions func() []string
 func (r *Runtime) SetExternalActiveSessions(fn ExternalActiveSessions) { r.extActive = fn }
 
 // AgentBusy reports whether the agent has work in flight right now: a turn in
-// any session it owns or takes part in, or a task run assigned to it. The second
-// return is the id of the first live thing found, for the caller's message.
+// any session it owns or takes part in. The second return is the id of the first
+// live thing found, for the caller's message.
 //
 // This is the ONE implementation, deliberately: an agent can be deleted from two
 // places — the HTTP endpoint and the self-management delete_agent tool — and a
@@ -47,14 +47,6 @@ func (r *Runtime) AgentBusy(ctx context.Context, agentID string) (bool, string) 
 		for _, p := range sess.Participants {
 			if p == agentID {
 				return true, sess.ID
-			}
-		}
-	}
-	// Board work is tracked separately from chat turns.
-	if runs, err := r.db.ListRunningRuns(ctx); err == nil {
-		for _, run := range runs {
-			if run.AgentID == agentID {
-				return true, run.ID
 			}
 		}
 	}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -323,19 +324,47 @@ func awaitTimeoutExceeded(timeoutSec int, updatedAt, now int64) bool {
 // StartWaitingFlowSweeper launches the background timeout sweeper: it periodically
 // fails any await-input run that has out-waited its node's TimeoutSec, so a run
 // nobody ever feeds can't sleep forever. Stops when ctx is cancelled.
+//
+// It doubles as the host for the running-counter drift check (see
+// runCounterCheckEvery): that check needs a slow, always-on tick and this
+// sweeper already has one, so it costs no extra goroutine or timer.
 func (r *Runtime) StartWaitingFlowSweeper(ctx context.Context) {
 	go func() {
 		t := time.NewTicker(waitingSweepInterval)
 		defer t.Stop()
+		ticks := 0
 		for {
 			select {
 			case <-ctx.Done():
 				return
 			case <-t.C:
 				r.sweepWaitingFlowsAt(ctx, time.Now().Unix())
+				ticks++
+				if ticks%runCounterCheckEvery == 0 {
+					r.checkRunCounterDrift()
+				}
 			}
 		}
 	}()
+}
+
+// runCounterCheckEvery is how many sweeper ticks pass between running-counter
+// drift checks — 20 × 30s = every 10 minutes. The check is a full store scan,
+// exactly what the counter exists to avoid, so it must stay rare.
+const runCounterCheckEvery = 20
+
+// checkRunCounterDrift verifies the O(1) running-flow-run counter still agrees
+// with the store, correcting it if not. Drift is a BUG — some path flipped a
+// run's status without going through the counter — so it is logged at Error
+// level rather than quietly repaired: the correction keeps the UI honest, but
+// the defect that caused it needs to be visible.
+func (r *Runtime) checkRunCounterDrift() {
+	drift := r.db.ReconcileRunCounters()
+	if drift.Zero() {
+		return
+	}
+	slog.Error("running-flow-run counter drift detected; a status transition skipped the counter",
+		"component", "agent", "flow_runs", drift.FlowRuns)
 }
 
 // sweepWaitingFlowsAt fails every waiting run whose await node's TimeoutSec has

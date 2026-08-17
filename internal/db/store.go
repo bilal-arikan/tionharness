@@ -130,20 +130,11 @@ func (d *DB) DeleteAgent(ctx context.Context, id string) error {
 			d.automations[aid] = a
 		}
 	}
-	// Cascade: tasks owned by this agent (and their runs) — they cannot be
-	// delivered without an owner.
-	deletedTasks := make(map[string]bool)
+	// Cascade: tasks owned by this agent — they cannot be delivered without an owner.
 	for tid, t := range d.tasks {
 		if t.OwnerAgentID == id {
 			delete(d.tasks, tid)
 			_ = removeFile(d.dir(dirTasks, tid+".json"))
-			deletedTasks[tid] = true
-		}
-	}
-	for rid, r := range d.runs {
-		if r.AgentID == id || deletedTasks[r.TaskID] {
-			delete(d.runs, rid)
-			_ = removeFile(d.dir(dirRuns, rid+".json"))
 		}
 	}
 	return nil

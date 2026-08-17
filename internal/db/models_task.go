@@ -59,12 +59,12 @@ func ValidPriority(p string) bool {
 	}
 }
 
-// Task is a unit of work on the board, optionally owned by an agent. When run,
-// the owner agent is given Prompt and the textual result is stored as a Run.
-// Alternatively, when FlowID is set the task is "flow-backed": running it executes
-// that orchestration flow (with Prompt as the flow input) instead of delivering a
-// prompt to a single agent. Either path funnels through RunTask, so manual runs,
-// cron schedules and any future dispatcher support flows uniformly.
+// Task is a unit of work on the board, optionally owned by an agent.
+//
+// The board does NOT execute tasks: there is no dispatcher and, since the Run
+// entity was removed, no execution record either. A card carries the intent —
+// Prompt, or FlowID for a flow-backed one — and running it happens wherever the
+// user or an agent takes it.
 type Task struct {
 	ID           string `json:"id"`
 	Title        string `json:"title"`
@@ -91,8 +91,12 @@ type Task struct {
 	// (reversible, unlike DeleteTask). Set by SetTaskArchived — typically by the
 	// "done → archive" board automation — and excluded by default from the board
 	// list, the get_view board projection, and the list_tasks tool. The task file
-	// and its runs are kept, so an archived card can be restored.
-	Archived      bool   `json:"archived,omitempty"`
+	// is kept, so an archived card can be restored.
+	Archived bool `json:"archived,omitempty"`
+	// LastRun* are LEGACY and read-only: nothing sets them since the board stopped
+	// executing tasks. They are kept because task files written by older builds
+	// carry real values that the board view and list_tasks still surface — dropping
+	// the fields would discard that history on the next write of each task.
 	LastRunID     string `json:"lastRunId"`
 	LastRunStatus string `json:"lastRunStatus"`
 	LastRunAt     int64  `json:"lastRunAt"`
@@ -151,33 +155,4 @@ type Schedule struct {
 	FireAt    int64  `json:"fireAt,omitempty"`
 	SessionID string `json:"sessionId,omitempty"`
 	Reason    string `json:"reason,omitempty"`
-}
-
-// Run statuses.
-const (
-	RunPending = "pending"
-	RunRunning = "running"
-	RunSuccess = "success"
-	RunFailure = "failure"
-)
-
-// Run is a single execution attempt of a task (or a scheduled delivery).
-//
-// SessionID links the run to the task's transcript session (see Session.Kind
-// "task"): each run appends a user turn (the prompt/input) plus an assistant turn
-// (the rich activity trace) to that session, so a board run is viewable in the
-// same streamable transcript as a chat. MessageID is the assistant turn this run
-// produced, for deep-linking straight to it.
-type Run struct {
-	ID        string `json:"id"`
-	TaskID    string `json:"taskId"`
-	AgentID   string `json:"agentId"`
-	SessionID string `json:"sessionId,omitempty"`
-	MessageID string `json:"messageId,omitempty"`
-	Status    string `json:"status"`
-	Trigger   string `json:"trigger"` // manual | schedule | dependency
-	Output    string `json:"output"`
-	Error     string `json:"error"`
-	CreatedAt int64  `json:"createdAt"`
-	UpdatedAt int64  `json:"updatedAt"`
 }

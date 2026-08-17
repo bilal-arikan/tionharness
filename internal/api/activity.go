@@ -11,19 +11,24 @@ import (
 // left rail can show a live "busy" indicator on them. It unifies the
 // authoritative running signals for the active workspace:
 //   - chat:       an in-flight streaming chat turn (any window)
-//   - task:       a task run in the running state (manual / dependency / schedule)
-//   - flow:       a flow run in the running state
-//   - schedule:   a running run that was triggered by a schedule
+//   - flow:       a flow run in the running state, or a flow session mid-turn
+//   - schedule:   a schedule session mid-turn
 //   - executions: ANY in-flight run — chat stream, autonomous invoke (schedule
-//     wake, spawned agent session, inbox delivery) or a running task/flow. This
+//     wake, spawned agent session, inbox delivery) or a running flow. This
 //     is what lights the unified "Aktivite" view, which would otherwise stay
 //     dark for background sessions an agent/flow/schedule spins up on its own.
+//
+// There is deliberately NO board/task flag: the board does not execute tasks, so
+// nothing could ever set it. It used to be derived from the Run entity, which was
+// removed once it turned out nothing had written a Run in a long time — the flag
+// was reporting "idle" not because the board was idle but because the signal was
+// dead. A permanently-false field in this reply is worse than no field: it reads
+// as a working indicator.
 //
 // Because every run path persists its running state (or registers an active
 // session), this covers both interactive (streamed) and autonomous executions.
 type activityState struct {
 	Chat       bool `json:"chat"`
-	Task       bool `json:"task"`
 	Flow       bool `json:"flow"`
 	Schedule   bool `json:"schedule"`
 	Executions bool `json:"executions"`
@@ -68,20 +73,9 @@ func (s *Server) handleActivity(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Task / schedule: a running run means a task is executing on the board; a
-	// schedule-triggered run also lights the schedules view.
-	if runs, err := wsp.DB.ListRunningRuns(ctx); err == nil {
-		for _, run := range runs {
-			st.Task = true
-			st.Executions = true
-			if run.Trigger == "schedule" {
-				st.Schedule = true
-			}
-		}
-	}
-
-	// Flow: any running flow run.
-	if fr, err := wsp.DB.ListRunningFlowRuns(ctx); err == nil && len(fr) > 0 {
+	// Flow: any running flow run. Pure existence question, so the counter IS the
+	// answer — no scan, and no store lock, on either path.
+	if wsp.DB.HasRunningFlowRuns() {
 		st.Flow = true
 		st.Executions = true
 	}
@@ -94,8 +88,8 @@ func (s *Server) handleActivity(w http.ResponseWriter, r *http.Request) {
 
 // workspaceRunning reports whether the given workspace has ANY run in flight —
 // a streamed chat turn, an autonomous runtime invoke (schedule wake / spawned
-// session / inbox delivery / flow agent node), a running task run, or a running
-// flow run. It is the cross-workspace-safe subset of handleActivity: it skips the
+// session / inbox delivery / flow agent node), or a running flow run. It is the
+// cross-workspace-safe subset of handleActivity: it skips the
 // per-view breakdown (no session-kind lookup) so it stays cheap to call for every
 // workspace on each poll.
 func (s *Server) workspaceRunning(ctx context.Context, wsp *workspace.Workspace) bool {
@@ -107,12 +101,8 @@ func (s *Server) workspaceRunning(ctx context.Context, wsp *workspace.Workspace)
 	if len(wsp.Runtime.ActiveSessionIDs()) > 0 {
 		return true
 	}
-	// A task run executing on the board.
-	if runs, err := wsp.DB.ListRunningRuns(ctx); err == nil && len(runs) > 0 {
-		return true
-	}
 	// A flow run in progress.
-	if fr, err := wsp.DB.ListRunningFlowRuns(ctx); err == nil && len(fr) > 0 {
+	if wsp.DB.HasRunningFlowRuns() {
 		return true
 	}
 	// A retrospective insight scan in flight (so the switcher pulses this workspace).

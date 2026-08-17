@@ -60,22 +60,6 @@ export type TaskPatch = Partial<
   >
 >
 
-export interface Run {
-  id: string
-  taskId: string
-  agentId: string
-  // Transcript session this run threaded into, and the assistant message it
-  // produced — for deep-linking a board run to its conversation.
-  sessionId?: string
-  messageId?: string
-  status: 'pending' | 'running' | 'success' | 'failure'
-  trigger: string
-  output: string
-  error: string
-  createdAt: number
-  updatedAt: number
-}
-
 export interface Schedule {
   id: string
   // Optional human-readable name (shown in the board card and modal).

@@ -19,6 +19,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/google/uuid"
@@ -40,7 +41,6 @@ type DB struct {
 	sessions     map[string]Session
 	messages     map[string][]Message // keyed by session id, chronological
 	tasks        map[string]Task
-	runs         map[string]Run
 	schedules    map[string]Schedule
 	mcp          map[string]MCPServer
 	flows        map[string]Flow
@@ -101,6 +101,15 @@ type DB struct {
 	counters   map[string]int64
 	issued     map[string]int64
 
+	// runningFlowRuns is an O(1) live-state counter for the activity endpoints. It
+	// is read WITHOUT taking mu: an idle poll must never queue behind
+	// appendMessageLocked, which holds the WRITE lock across a synchronous file
+	// write — and a pending writer blocks new readers, so the poll and the live
+	// turn were serialising each other. It is written under mu, in the same
+	// critical section as the map mutation, so a reader sees a value that is at
+	// worst microseconds stale. See ReconcileRunCounters for the drift guard.
+	runningFlowRuns atomic.Int64
+
 	// usageMu guards usage + sessionUsage, independent of mu. Token/cost
 	// bookkeeping runs once per LLM call and writes its row to disk while holding
 	// its lock; under mu that put every concurrent agent's unrelated session reads
@@ -119,7 +128,6 @@ func Open(path string) (*DB, error) {
 		sessions:         map[string]Session{},
 		messages:         map[string][]Message{},
 		tasks:            map[string]Task{},
-		runs:             map[string]Run{},
 		schedules:        map[string]Schedule{},
 		mcp:              map[string]MCPServer{},
 		flows:            map[string]Flow{},
@@ -185,7 +193,6 @@ const (
 	dirAgents       = "agents"
 	dirSessions     = "sessions"
 	dirTasks        = "tasks"
-	dirRuns         = "runs"
 	dirSchedules    = "schedules"
 	dirMCP          = "mcp-servers"
 	dirFlows        = "flows"
@@ -375,14 +382,6 @@ func (d *DB) load() error {
 		d.tasks[t.ID] = t
 	}
 
-	runs, err := loadJSONDir[Run](d.dir(dirRuns))
-	if err != nil {
-		return err
-	}
-	for _, r := range runs {
-		d.runs[r.ID] = r
-	}
-
 	schedules, err := loadJSONDir[Schedule](d.dir(dirSchedules))
 	if err != nil {
 		return err
@@ -411,9 +410,18 @@ func (d *DB) load() error {
 	if err != nil {
 		return err
 	}
+	// Seed the O(1) running counter from disk. Store (not Add) so load() stays
+	// idempotent — a test that opens the same store twice must not double-count.
+	// Waiting runs are deliberately NOT counted (they sleep until input),
+	// mirroring ListRunningFlowRuns.
+	var runningFlowRuns int64
 	for _, r := range flowRuns {
 		d.flowRuns[r.ID] = r
+		if r.Status == FlowRunning {
+			runningFlowRuns++
+		}
 	}
+	d.runningFlowRuns.Store(runningFlowRuns)
 
 	sessionAsks, err := loadJSONDir[SessionAsk](d.dir(dirSessionAsks))
 	if err != nil {

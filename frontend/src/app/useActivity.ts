@@ -8,67 +8,50 @@
 // lifecycle event lands in the active workspace, and the hook re-polls on
 // every bump. Saves a per-panel SSE listener (the singleton EventSource stays
 // — only this hook's filter callback goes away).
-import { useCallback, useEffect, useMemo, useState } from 'react'
+//
+// The interval is a BACKSTOP for a missed/reconnected SSE event, not the primary
+// path — hence coarse. It runs through useAsync so it also inherits the
+// visibility gate (a hidden window polls nothing).
+import { useEffect, useMemo } from 'react'
 import { api } from '@/api'
+import { useAsync } from '@/shared/hooks/useAsync'
 import { useRefreshTrigger } from '@/shared/hooks/useRefreshTrigger'
+import { SIGNAL_ACTIVITY } from './eventToRefreshSignals'
 import type { View } from './NavRail'
 
-const POLL_MS = 3000
+const POLL_MS = 15000
 
 export function useActivity(activeWorkspaceId: string | null, chatStreaming: boolean): Set<View> {
-  const [busy, setBusy] = useState<Set<View>>(() => new Set())
+  const { data, refresh } = useAsync(
+    () => (activeWorkspaceId ? api.getActivity() : Promise.resolve(null)),
+    [activeWorkspaceId],
+    { pollMs: POLL_MS },
+  )
+
   // App.tsx bumps this signal on every run-lifecycle event in the active
-  // workspace; the polling effect re-runs and re-pulls /api/activity.
-  const activityTick = useRefreshTrigger('activity')
-
-  // Stable poll fn so the deps stay valid across re-renders.
-  const poll = useCallback(async () => {
-    try {
-      const a = await api.getActivity()
-      const s = new Set<View>()
-      if (a.chat) s.add('chat')
-      if (a.task) s.add('board')
-      if (a.flow) s.add('flows')
-      if (a.schedule) s.add('schedules')
-      // Every run funnels into a session, and the chat screen is now the unified
-      // transcript view for all of them — so ANY in-flight run (including a
-      // background session a flow/schedule/agent spawned, which no other view
-      // owns) lights the chat dot.
-      if (a.executions) s.add('chat')
-      if (a.insights) s.add('insights')
-      setBusy(s)
-    } catch {
-      /* transient fetch failure — keep the last known flags */
-    }
-  }, [])
-
+  // workspace — the path that actually makes the dots feel live.
+  const activityTick = useRefreshTrigger(SIGNAL_ACTIVITY)
   useEffect(() => {
-    if (!activeWorkspaceId) {
-      // Workspace switched away: drop the stale busy flags immediately. This
-      // is a legitimate "reset on dep change" rather than a setState-in-effect
-      // smell — the rule's strict variant flags it, hence the disable.
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setBusy(new Set())
-      return
-    }
-    let cancelled = false
-    const guardedPoll = async () => {
-      if (cancelled) return
-      await poll()
-    }
-    guardedPoll()
-    const id = setInterval(guardedPoll, POLL_MS)
-    return () => {
-      cancelled = true
-      clearInterval(id)
-    }
-  }, [activeWorkspaceId, poll, activityTick])
+    refresh()
+  }, [activityTick, refresh])
 
-  // Merge the instant local chat-stream signal so the chat dot has no poll lag.
   return useMemo(() => {
-    if (!chatStreaming || busy.has('chat')) return busy
-    const s = new Set(busy)
-    s.add('chat')
+    const s = new Set<View>()
+    // No workspace (or nothing fetched yet) means no busy flags, so switching
+    // away drops the previous workspace's dots rather than stranding them.
+    if (!activeWorkspaceId || !data) return chatStreaming ? new Set<View>(['chat']) : s
+
+    if (data.chat) s.add('chat')
+    if (data.flow) s.add('flows')
+    if (data.schedule) s.add('schedules')
+    // Every run funnels into a session, and the chat screen is now the unified
+    // transcript view for all of them — so ANY in-flight run (including a
+    // background session a flow/schedule/agent spawned, which no other view
+    // owns) lights the chat dot.
+    if (data.executions) s.add('chat')
+    if (data.insights) s.add('insights')
+    // Merge this window's own stream so the chat dot has no poll lag at all.
+    if (chatStreaming) s.add('chat')
     return s
-  }, [busy, chatStreaming])
+  }, [data, activeWorkspaceId, chatStreaming])
 }

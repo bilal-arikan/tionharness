@@ -255,11 +255,11 @@ export const systemApi = {
   workspaceUsage: (days = 7) => req<WorkspaceUsage>(`/api/usage?days=${days}`),
 
   // Per-view "work in progress" flags for the left-nav busy indicators
-  // (chat stream / running task / running flow / schedule-triggered run).
+  // (chat stream / running flow / schedule session / insight scan). There is no
+  // board flag: the board does not execute tasks, so nothing could set one.
   getActivity: () =>
     req<{
       chat: boolean
-      task: boolean
       flow: boolean
       schedule: boolean
       executions: boolean
