@@ -2,7 +2,7 @@ import { memo, useState } from 'react'
 import type { ReactNode } from 'react'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import type { TurnStep } from '@/types'
-import { toolMeta, isReadTool, toolBase } from './tools'
+import { toolMeta, isReadTool, isShellTool, toolBase } from './tools'
 import { parseDiff, looksLikeDiff, synthDiff } from '@/shared/lib/diff'
 import { DiffView } from '@/shared/components/markdown/DiffView'
 import { Markdown } from '@/shared/components/markdown/Markdown'
@@ -43,9 +43,7 @@ function headerBadge(step: TurnStep, diffText: string | null, output: string): R
       // input; painting it green/red reads as "the change went through". When
       // the step is in error, dim the counts so the user clearly sees these
       // were the intended — not the applied — line deltas.
-      const addedCls = step.isError
-        ? 'text-[var(--color-text-dim)]'
-        : 'text-[var(--color-success)]'
+      const addedCls = step.isError ? 'text-[var(--color-text-dim)]' : 'text-[var(--color-success)]'
       const removedCls = step.isError
         ? 'text-[var(--color-text-dim)]'
         : 'text-[var(--color-danger)]'
@@ -57,7 +55,9 @@ function headerBadge(step: TurnStep, diffText: string | null, output: string): R
       )
     }
   }
-  if (isReadTool(step.tool || '') && output.trim()) {
+  // File readers and shell tools both push their raw output into the context
+  // window, so the collapsed header carries how many lines that was.
+  if ((isReadTool(step.tool || '') || isShellTool(step.tool || '')) && output.trim()) {
     const count = output.replace(/\n$/, '').split('\n').length
     return <span className="shrink-0 text-[var(--color-text-dim)]">{count} satır</span>
   }
@@ -129,9 +129,7 @@ export const ActivityCard = memo(function ActivityCard({ step, onOpenFile }: Pro
                 Girdi
               </div>
               <pre className="overflow-x-auto rounded bg-[var(--color-bg)] p-2 text-[var(--color-text-dim)]">
-                {typeof step.input === 'string'
-                  ? step.input
-                  : JSON.stringify(step.input, null, 2)}
+                {typeof step.input === 'string' ? step.input : JSON.stringify(step.input, null, 2)}
               </pre>
             </div>
           )}

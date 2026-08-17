@@ -32,6 +32,12 @@ export function isReadTool(name: string): boolean {
   return base === 'read' || base === 'read_file'
 }
 
+/** True for shell tools whose stdout/stderr is fed back into the context. */
+export function isShellTool(name: string): boolean {
+  const base = toolBase(name)
+  return base === 'bash' || base === 'powershell'
+}
+
 /** A readable label: "Memory Recall", "server · tool" for MCP. */
 function pickLabel(name: string): string {
   const i = name.lastIndexOf('__')
@@ -75,7 +81,13 @@ function summarizeArray(arr: unknown[]): string {
 // tool name is noise (e.g. ask_user.options is the answer choices, not the
 // question; archive_sessions.exclude is a filter). Skip them in the fallback.
 const SECONDARY_ARRAY_KEYS = new Set([
-  'options', 'tags', 'dependencies', 'exclude', 'args', 'spawntags', 'skills',
+  'options',
+  'tags',
+  'dependencies',
+  'exclude',
+  'args',
+  'spawntags',
+  'skills',
 ])
 
 /** A field's value as a string, or '' when absent/non-string. */
@@ -141,9 +153,30 @@ function summarize(base: string, input: unknown): string {
   if (rich) return rich
   // Prefer a genuine content value over structural keys.
   const first =
-    o.command ?? o.query ?? o.url ?? o.path ?? o.file_path ?? o.pattern ?? o.q ?? o.agent ??
-    o.slug ?? o.skill ?? o.question ?? o.title ?? o.name ?? o.message ?? o.text ?? o.prompt ??
-    o.objective ?? o.symbol ?? o.template ?? o.worker ?? o.reason ?? o.to ?? o.recipient ?? o.input
+    o.command ??
+    o.query ??
+    o.url ??
+    o.path ??
+    o.file_path ??
+    o.pattern ??
+    o.q ??
+    o.agent ??
+    o.slug ??
+    o.skill ??
+    o.question ??
+    o.title ??
+    o.name ??
+    o.message ??
+    o.text ??
+    o.prompt ??
+    o.objective ??
+    o.symbol ??
+    o.template ??
+    o.worker ??
+    o.reason ??
+    o.to ??
+    o.recipient ??
+    o.input
   if (typeof first === 'string') return first
   // transform_data: show the interpreter and destination path (its actual
   // values) instead of the raw key list, so the card reads e.g.
