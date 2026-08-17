@@ -52,17 +52,17 @@ func TestActivateAmbiguousStaysUnknown(t *testing.T) {
 }
 
 // TestActivateAlreadyAvailableTool: activating an always-on (eager) tool that is
-// NOT in the lazy catalog (e.g. insight_scan) must return a helpful "already
+// NOT in the lazy catalog (e.g. todo_write) must return a helpful "already
 // available" note rather than the misleading "unknown name" — and must NOT push
 // it into the active set (it is already shipped every turn).
 func TestActivateAlreadyAvailableTool(t *testing.T) {
 	catalog := []providers.ToolDef{{Name: "lazy_a", Description: "A"}}
-	eager := map[string]bool{"insight_scan": true, "insight_list_findings": true}
+	eager := map[string]bool{"todo_write": true, "create_artifact": true}
 	active := NewActiveTools()
 	tool := NewActivateToolsTool(active, catalog, eager)
 
 	// Exact eager name → "already available", not unknown, not activated.
-	out, err := tool.Call(context.Background(), mustJSON(t, map[string]any{"names": []string{"insight_scan"}}))
+	out, err := tool.Call(context.Background(), mustJSON(t, map[string]any{"names": []string{"todo_write"}}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -72,20 +72,20 @@ func TestActivateAlreadyAvailableTool(t *testing.T) {
 	if strings.Contains(out, "Unknown") {
 		t.Fatalf("eager tool must not be reported unknown:\n%s", out)
 	}
-	if active.Has("insight_scan") {
+	if active.Has("todo_write") {
 		t.Fatalf("eager tool must not enter the active set")
 	}
 
 	// Namespace-prefixed eager name still resolves to the always-available note.
-	out, _ = tool.Call(context.Background(), mustJSON(t, map[string]any{"names": []string{"mcp__x__insight_list_findings"}}))
+	out, _ = tool.Call(context.Background(), mustJSON(t, map[string]any{"names": []string{"mcp__x__create_artifact"}}))
 	if !strings.Contains(out, "already available") || strings.Contains(out, "Unknown") {
 		t.Fatalf("prefixed eager name should report already available:\n%s", out)
 	}
 
 	// Mixed: one lazy (activates) + one eager (noted) in a single call.
-	out, _ = tool.Call(context.Background(), mustJSON(t, map[string]any{"names": []string{"lazy_a", "insight_scan"}}))
+	out, _ = tool.Call(context.Background(), mustJSON(t, map[string]any{"names": []string{"lazy_a", "todo_write"}}))
 	if !strings.Contains(out, "Activated") || !strings.Contains(strings.ToLower(out), "already available") {
-		t.Fatalf("mixed call should both activate lazy_a and note insight_scan:\n%s", out)
+		t.Fatalf("mixed call should both activate lazy_a and note todo_write:\n%s", out)
 	}
 	if !active.Has("lazy_a") {
 		t.Fatalf("lazy_a should have activated in the mixed call")

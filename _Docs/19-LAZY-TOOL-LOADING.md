@@ -211,6 +211,22 @@
     `mermaid_validate` — salt-okuma, yalnız authoring/diyagram anlarında kullanılır.
     Native builtin + NameOnly → lazy olduğundan claude-cli'da `tionswarm_extended`
     köprüsünden ToolSearch ile gelir (BridgeableDefs otomatik kapsar).
+  - **Insight araçları (2026-08-15)**: `insight_scan`, `insight_list_findings`,
+    `insight_apply_finding` (önceden eager) — adları kendini açıklar, turların çok
+    küçük bir kısmında (retrospektif tarama/triyaj) kullanılır; şema `tool_search`/
+    `activate_tools` ile çekilir. Detay: `_Docs/60`.
+  - **Düşük-frekanslı eager taraması (2026-08-15)**: 355 `debug.jsonl` günlüğündeki
+    gerçek çağrı sayıları ile eager şema maliyeti karşılaştırıldı; beş araç daha
+    NAME-ONLY'e indi: `archive_sessions` (~820 tok / tüm geçmişte 4 çağrı),
+    `expand` (~761 / 12), `apply_patch` (~403 / 1), `read_lessons` (~181 / 2),
+    `delete_lesson` (~146 / 0). `expand` güvenli çünkü **eager kalan `get_view`'ün
+    açıklaması onu adıyla anıyor** ("the same ones `expand` hands you refs for") →
+    keşfedilebilirlik kaybolmuyor. `apply_patch` batch (çok-hunk) editör; tekil
+    `Edit` eager kaldığı için normal düzenleme etkilenmez. Salt-okunur ajan dalındaki
+    `MarkLazy("Write","Edit","apply_patch")` → `apply_patch` zaten yukarıda lazy
+    olduğu için listeden çıkarıldı.
+    **Ölçüm (Audit, anthropic ajanı, shell kapalı):** eager 23→18 araç,
+    **~9031 → ~6720 token** (tur/ajan başına **~2311 token**, %26).
 
   **Eager kalanlar** (davranışsal dürtü veya yüksek frekans): `todo_write`,
   `ask_user`, `request_confirmation`, `create_artifact`/`update_artifact`,

@@ -244,7 +244,7 @@ func (r *Registry) IsLazy(name string) bool { return r.lazy[name] }
 // EagerNames returns the set of built-in tools that ship EVERY turn (not lazy) —
 // i.e. those already callable without activate_tools. allow filters by name (nil
 // = allow all). activate_tools consults this so a request to activate an already
-// eager tool (e.g. insight_scan) reports "already available" rather than the
+// eager tool (e.g. todo_write) reports "already available" rather than the
 // confusing "unknown name". MCP tools are omitted: they are lazy by default and
 // any eager MCP tool is still callable, so a stray activation of one is harmless
 // and the lazy-catalog path already covers the tools an agent needs to activate.

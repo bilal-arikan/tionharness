@@ -270,8 +270,9 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 	}
 
 	// insight_scan / insight_list_findings: trigger a retrospective scan and review
-	// what it surfaced (app-fix + workspace-opt findings). Always available so an
-	// agent can self-improve out of the box; scans are incremental/idempotent (_Docs/60).
+	// what it surfaced (app-fix + workspace-opt findings). Always built so an agent
+	// can self-improve out of the box; scans are incremental/idempotent (_Docs/60).
+	// Default visibility is NAME-ONLY (see the MarkNameOnly block below).
 	builtins = append(builtins, tools.NewInsightScanTool(r), tools.NewInsightFindingsTool(r.db), tools.NewInsightApplyFindingTool(r.db))
 
 	// codebase_workspace_search: fan out codebase-memory's project-scoped search_code
@@ -448,6 +449,22 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 		// Artifact revise + meta — create_artifact stays eager (behavioral); revise
 		// and the deactivate meta-tool are reached on demand.
 		"update_artifact", "deactivate_tools",
+		// archive_sessions — bulk housekeeping over OTHER sessions; a handful of calls
+		// across the whole journal history, and the largest schema after get_view.
+		"archive_sessions",
+		// expand — structural drill-down; get_view's EAGER description names it
+		// explicitly ("the same ones `expand` hands you refs for"), so the model still
+		// discovers it and pulls the schema when it actually fans out over the tree.
+		"expand",
+		// apply_patch — the batch (multi-hunk/multi-file) sibling of Edit. Edit stays
+		// eager, so single edits are unaffected; the batch path is pulled on demand.
+		"apply_patch",
+		// Self-healing lessons — read/prune the auto-collected failure lessons. The
+		// newest few already ride the context, so these are for deliberate inspection.
+		"read_lessons", "delete_lesson",
+		// Insight (retrospective scanning) — self-descriptive names, used in a small
+		// minority of turns; the model pulls a schema when it actually scans/triages.
+		"insight_scan", "insight_list_findings", "insight_apply_finding",
 		// Validation tools — read-only, used only around authoring/diagram emission.
 		"skill_validate", "config_validate", "mermaid_validate",
 		// render_template — occasional (only when a branded-HTML skill is in play);
@@ -479,7 +496,7 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 	// load-on-demand for read-only agents (still reachable via activate_tools, and
 	// still execution-gated by the permission layer). "ask"/"auto" keep them eager.
 	if agent.PermissionMode == "read-only" {
-		reg.MarkLazy("Write", "Edit", "apply_patch") // write_config already lazy above
+		reg.MarkLazy("Write", "Edit") // write_config + apply_patch already lazy above
 	}
 	// Per-tool visibility overrides from the workspace tools screen are applied
 	// AFTER AttachMCP below (so they win over both code defaults and the MCP
@@ -661,7 +678,7 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 			d := deact.Def()
 			lazyCat = append(lazyCat, providers.ToolDef{Name: d.Name, Description: d.Description})
 		}
-		// eagerNames: the always-on built-ins (e.g. insight_scan) so activate_tools can
+		// eagerNames: the always-on built-ins (e.g. todo_write) so activate_tools can
 		// answer a stray "activate an already-shipped tool" request with a clear
 		// "already available" note instead of a misleading "unknown name".
 		eagerNames := reg.EagerNames(nil)
