@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/http"
 	"sort"
-	"time"
 
 	"github.com/bilal-arikan/tionswarm/internal/db"
 	"github.com/bilal-arikan/tionswarm/internal/tools"
@@ -243,7 +242,12 @@ func (s *Server) handleRunSchedule(w http.ResponseWriter, r *http.Request) {
 	// and look "cut off". Mirror the chat-stream detach (context.WithoutCancel) so
 	// generation runs to completion regardless of the client; a generous timeout
 	// still bounds a genuinely hung run. Cron fires already detach via Background.
-	runCtx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), 10*time.Minute)
+	//
+	// The bound is the SAME configured schedule deadline the cron path uses
+	// (Scheduler.fire → tun.ScheduleTimeout()). It used to be a hard-coded 10
+	// minutes here, which silently ignored scheduleTimeoutMin and killed manual
+	// runs of research-style prompts that the cron tick would have finished.
+	runCtx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), s.tun.ScheduleTimeout())
 	defer cancel()
 	runErr := wsp.Scheduler.RunNow(runCtx, id)
 	sc, err := wsp.DB.GetSchedule(r.Context(), id)

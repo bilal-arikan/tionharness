@@ -183,7 +183,7 @@ export function ToolsPanel({ draft, set }: PanelProps) {
         </Field>
         <Field
           label="Zamanlama süresi (dk)"
-          hint="Bir zamanlanmış tetiğin (cron görev/prompt + schedule_wake) süre sınırı (varsayılan 30)."
+          hint="Bir zamanlanmış tetiğin (cron görev/prompt + schedule_wake) ve elle 'Şimdi çalıştır' koşusunun süre sınırı (varsayılan 60)."
         >
           <input
             type="number"
@@ -191,6 +191,32 @@ export function ToolsPanel({ draft, set }: PanelProps) {
             max={1440}
             value={draft.scheduleTimeoutMin}
             onChange={(e) => set('scheduleTimeoutMin', Number(e.target.value))}
+            className={inputCls}
+          />
+        </Field>
+        <Field
+          label="Tur izleyicisi (dk)"
+          hint="Kuyruktaki bir turun MUTLAK tavanı: bu süreyi aşan tur zorla iptal edilir ki oturum kuyruğu asılı bir turun arkasında tıkanmasın (varsayılan 120). Tıkanma freni olduğu için spawn/zamanlama sürelerinin ALTINA inemez — daha küçük girilirse otomatik yükseltilir."
+        >
+          <input
+            type="number"
+            min={1}
+            max={1440}
+            value={draft.turnWatchdogMin}
+            onChange={(e) => set('turnWatchdogMin', Number(e.target.value))}
+            className={inputCls}
+          />
+        </Field>
+        <Field
+          label="Tur boşta süresi (dk)"
+          hint="Kuyruktaki bir tur bu kadar süre hiçbir etkinlik (araç adımı, düşünce, token) üretmezse asılı sayılıp iptal edilir; üretken tur üst sınıra kadar koşar (varsayılan 20). Üst sınırın üstüne çıkamaz."
+        >
+          <input
+            type="number"
+            min={1}
+            max={1440}
+            value={draft.turnIdleWatchdogMin}
+            onChange={(e) => set('turnIdleWatchdogMin', Number(e.target.value))}
             className={inputCls}
           />
         </Field>

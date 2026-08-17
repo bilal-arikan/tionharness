@@ -206,7 +206,6 @@ export function SettingsPanel({
       // İçgörü ▸ Öz-iyileşme; NOT patched here so a Settings save can't clobber a
       // change made there with this panel's stale draft.
       handoffAuto: draft.handoffAuto,
-      handoffPressure: draft.handoffPressure,
       handoffMaxChain: draft.handoffMaxChain,
       handoffWriteFile: draft.handoffWriteFile,
       progressPersist: draft.progressPersist,
@@ -231,6 +230,8 @@ export function SettingsPanel({
       spawnIdleTimeoutMin: draft.spawnIdleTimeoutMin,
       idleResumeMax: draft.idleResumeMax,
       scheduleTimeoutMin: draft.scheduleTimeoutMin,
+      turnWatchdogMin: draft.turnWatchdogMin,
+      turnIdleWatchdogMin: draft.turnIdleWatchdogMin,
       shellDefaultTimeoutSec: draft.shellDefaultTimeoutSec,
       shellMaxTimeoutSec: draft.shellMaxTimeoutSec,
       maxToolOutputKB: draft.maxToolOutputKB,

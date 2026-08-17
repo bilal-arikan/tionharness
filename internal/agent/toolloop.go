@@ -19,9 +19,12 @@ import (
 // (and schedule_wake-driven async flows) room to finish before the loop cap ends the turn.
 const defaultMaxToolIters = 500
 
-// maxToolIters is the live loop bound, defaulting to defaultMaxToolIters and
-// overridable via TIONSWARM_MAX_TOOL_ITERS (positive integer) for power users who
-// want longer or shorter native tool loops without a rebuild.
+// maxToolIters is the loop bound, defaulting to defaultMaxToolIters and overridable
+// ONLY via TIONSWARM_MAX_TOOL_ITERS (positive integer) for power users who want
+// longer or shorter native tool loops without a rebuild. It is resolved once at
+// package init: there is deliberately no Settings field for it, so it does not
+// change mid-process. (A Tunables setter/getter pair used to exist here, claiming
+// the loop re-read it every iteration — it never did, and was removed.)
 var maxToolIters = resolveMaxToolIters()
 
 // resolveMaxToolIters reads the env override once at package init, falling back to

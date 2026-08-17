@@ -295,9 +295,6 @@ func (s *Store) Apply(p Patch) (Settings, error) {
 	if p.HandoffAuto != nil {
 		next.HandoffAuto = *p.HandoffAuto
 	}
-	if p.HandoffPressure != nil {
-		next.HandoffPressure = *p.HandoffPressure
-	}
 	applyInt(&next.HandoffMaxChain, p.HandoffMaxChain)
 	if p.HandoffWriteFile != nil {
 		next.HandoffWriteFile = *p.HandoffWriteFile
@@ -370,6 +367,11 @@ func (s *Store) Apply(p Patch) (Settings, error) {
 	applyInt(&next.SpawnIdleTimeoutMin, p.SpawnIdleTimeoutMin)
 	applyInt(&next.IdleResumeMax, p.IdleResumeMax)
 	applyInt(&next.ScheduleTimeoutMin, p.ScheduleTimeoutMin)
+	applyInt(&next.TurnWatchdogMin, p.TurnWatchdogMin)
+	applyInt(&next.TurnIdleWatchdogMin, p.TurnIdleWatchdogMin)
+	applyInt(&next.ShellDefaultTimeoutSec, p.ShellDefaultTimeoutSec)
+	applyInt(&next.ShellMaxTimeoutSec, p.ShellMaxTimeoutSec)
+	applyInt(&next.MaxToolOutputKB, p.MaxToolOutputKB)
 	applyInt(&next.CoordinatorMaxWorkers, p.CoordinatorMaxWorkers)
 	applyInt(&next.CoordinatorMaxTurns, p.CoordinatorMaxTurns)
 	applyInt(&next.CoordinatorMaxDepth, p.CoordinatorMaxDepth)
@@ -526,16 +528,6 @@ func normalize(v Settings) Settings {
 	if v.ContextBudgetFraction > 1 {
 		v.ContextBudgetFraction = 1
 	}
-	// Handoff pressure ratio: 0 selects the default; otherwise clamp to a sane band
-	// (well above the memory-pressure warning, below a full window).
-	if v.HandoffPressure != 0 {
-		if v.HandoffPressure < 0.5 {
-			v.HandoffPressure = 0.5
-		}
-		if v.HandoffPressure > 0.99 {
-			v.HandoffPressure = 0.99
-		}
-	}
 	// Handoff chain depth cap: 0 selects the default; otherwise clamp to [1,100].
 	if v.HandoffMaxChain != 0 {
 		if v.HandoffMaxChain < 1 {
@@ -656,6 +648,31 @@ func normalize(v Settings) Settings {
 	}
 	if v.ScheduleTimeoutMin > 1440 {
 		v.ScheduleTimeoutMin = 1440
+	}
+	// Queued-turn watchdog: same day-long bound, but it must stay ABOVE the deadlines
+	// above — it exists to break a wedged queue, not to cut a turn those knobs still
+	// permit. Raising it here (rather than rejecting) keeps an inconsistent config
+	// working; agent.Tunables.TurnWatchdog applies the same floor at read time.
+	if v.TurnWatchdogMin < 1 {
+		v.TurnWatchdogMin = 1
+	}
+	if v.TurnWatchdogMin < v.SpawnTimeoutMin {
+		v.TurnWatchdogMin = v.SpawnTimeoutMin
+	}
+	if v.TurnWatchdogMin < v.ScheduleTimeoutMin {
+		v.TurnWatchdogMin = v.ScheduleTimeoutMin
+	}
+	if v.TurnWatchdogMin > 1440 {
+		v.TurnWatchdogMin = 1440
+	}
+	// The inactivity window must stay BELOW the hard ceiling, else it can never fire
+	// and a wedged turn burns the full wall clock — the same ordering rule the
+	// spawn idle watchdog above follows.
+	if v.TurnIdleWatchdogMin < 1 {
+		v.TurnIdleWatchdogMin = 1
+	}
+	if v.TurnIdleWatchdogMin > v.TurnWatchdogMin {
+		v.TurnIdleWatchdogMin = v.TurnWatchdogMin
 	}
 	// Coordinator guards: workers ≥ 1 (≤ 64).
 	if v.CoordinatorMaxWorkers < 1 {

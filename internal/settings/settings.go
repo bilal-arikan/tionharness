@@ -182,13 +182,12 @@ type Settings struct {
 	// Context reset / handoff (Anthropic "harness design"). When HandoffAuto is on,
 	// an autonomous turn that hits the context limit writes a handoff artifact and
 	// continues in a FRESH session instead of only compacting in place.
-	// HandoffPressure is the context-fill ratio that allows it; HandoffMaxChain caps
-	// consecutive resets; HandoffWriteFile also drops the handoff to a file in the
-	// working dir. 0 values select the built-in defaults.
-	HandoffAuto      bool    `json:"handoffAuto"`
-	HandoffPressure  float64 `json:"handoffPressure"`
-	HandoffMaxChain  int     `json:"handoffMaxChain"`
-	HandoffWriteFile bool    `json:"handoffWriteFile"`
+	// The trigger is the turn's overflow signal, not a fill-ratio threshold.
+	// HandoffMaxChain caps consecutive resets; HandoffWriteFile also drops the handoff
+	// to a file in the working dir. 0 values select the built-in defaults.
+	HandoffAuto      bool `json:"handoffAuto"`
+	HandoffMaxChain  int  `json:"handoffMaxChain"`
+	HandoffWriteFile bool `json:"handoffWriteFile"`
 
 	// Persistent progress (Anthropic claude-progress convention). When
 	// ProgressPersist is on, the todo_write checklist is persisted to
@@ -313,7 +312,17 @@ type Settings struct {
 	SpawnTimeoutMin     int `json:"spawnTimeoutMin"`     // spawn work-turn deadline in minutes (0 = default 20); also budgets its auto-continue continuations
 	SpawnIdleTimeoutMin int `json:"spawnIdleTimeoutMin"` // spawn/worker inactivity watchdog in minutes (0 = default 5); cancels a turn that emits no step for this long
 	IdleResumeMax       int `json:"idleResumeMax"`       // single-shot auto-restarts for an idle-cut background turn (default 1; 0 = disabled)
-	ScheduleTimeoutMin  int `json:"scheduleTimeoutMin"`  // scheduled-fire (cron task/prompt + wake) deadline in minutes (0 = default 30)
+	ScheduleTimeoutMin  int `json:"scheduleTimeoutMin"`  // scheduled-fire (cron task/prompt + wake, and the manual "Run now") deadline in minutes (0 = default 60)
+	// TurnWatchdogMin bounds a single QUEUED turn (chat, coordinator, worker, wake…)
+	// before the serial per-session worker force-cancels it. A wedge breaker, not a
+	// work budget — it is floored at the spawn/schedule ceilings so it can never cut
+	// a turn those knobs still permit (0 = default 120).
+	TurnWatchdogMin int `json:"turnWatchdogMin"`
+	// TurnIdleWatchdogMin cancels a queued turn that emits NOTHING (no step, no
+	// token) for this long. Wall clock cannot tell a wedged turn from a slow one;
+	// silence can, so this is the measure that reclaims a hang quickly while a
+	// productive turn runs on to TurnWatchdogMin (0 = default 20).
+	TurnIdleWatchdogMin int `json:"turnIdleWatchdogMin"`
 
 	// Tool execution guards (process-global tool behaviour).
 	ShellDefaultTimeoutSec int `json:"shellDefaultTimeoutSec"` // default Bash/PowerShell timeout in seconds (0 = default 30); per-call timeout_sec still overrides
@@ -387,7 +396,6 @@ func Default() Settings {
 		// Context reset / handoff: off by default; the manual /handoff command and the
 		// handoff_session tool work regardless. Defaults match agent.DefaultHandoff*.
 		HandoffAuto:      false,
-		HandoffPressure:  0.90,
 		HandoffMaxChain:  20,
 		HandoffWriteFile: false,
 
@@ -481,7 +489,9 @@ func Default() Settings {
 		SpawnTimeoutMin:     20,
 		SpawnIdleTimeoutMin: 5,
 		IdleResumeMax:       1,
-		ScheduleTimeoutMin:  30,
+		ScheduleTimeoutMin:  60,
+		TurnWatchdogMin:     120,
+		TurnIdleWatchdogMin: 20,
 
 		ShellDefaultTimeoutSec: 30,
 		ShellMaxTimeoutSec:     120,
@@ -557,10 +567,9 @@ type DTO struct {
 	ContextBudgetCeil     int     `json:"contextBudgetCeil"`
 	ContextBudgetFraction float64 `json:"contextBudgetFraction"`
 
-	HandoffAuto      bool    `json:"handoffAuto"`
-	HandoffPressure  float64 `json:"handoffPressure"`
-	HandoffMaxChain  int     `json:"handoffMaxChain"`
-	HandoffWriteFile bool    `json:"handoffWriteFile"`
+	HandoffAuto      bool `json:"handoffAuto"`
+	HandoffMaxChain  int  `json:"handoffMaxChain"`
+	HandoffWriteFile bool `json:"handoffWriteFile"`
 
 	ProgressPersist bool `json:"progressPersist"`
 	ProgressResume  bool `json:"progressResume"`
@@ -618,6 +627,8 @@ type DTO struct {
 	SpawnIdleTimeoutMin int `json:"spawnIdleTimeoutMin"`
 	IdleResumeMax       int `json:"idleResumeMax"`
 	ScheduleTimeoutMin  int `json:"scheduleTimeoutMin"`
+	TurnWatchdogMin     int `json:"turnWatchdogMin"`
+	TurnIdleWatchdogMin int `json:"turnIdleWatchdogMin"`
 
 	ShellDefaultTimeoutSec int `json:"shellDefaultTimeoutSec"`
 	ShellMaxTimeoutSec     int `json:"shellMaxTimeoutSec"`
@@ -690,7 +701,6 @@ func (s Settings) ToDTO() DTO {
 		ContextBudgetFraction: s.ContextBudgetFraction,
 
 		HandoffAuto:      s.HandoffAuto,
-		HandoffPressure:  s.HandoffPressure,
 		HandoffMaxChain:  s.HandoffMaxChain,
 		HandoffWriteFile: s.HandoffWriteFile,
 
@@ -742,6 +752,8 @@ func (s Settings) ToDTO() DTO {
 		SpawnIdleTimeoutMin: s.SpawnIdleTimeoutMin,
 		IdleResumeMax:       s.IdleResumeMax,
 		ScheduleTimeoutMin:  s.ScheduleTimeoutMin,
+		TurnWatchdogMin:     s.TurnWatchdogMin,
+		TurnIdleWatchdogMin: s.TurnIdleWatchdogMin,
 
 		ShellDefaultTimeoutSec: s.ShellDefaultTimeoutSec,
 		ShellMaxTimeoutSec:     s.ShellMaxTimeoutSec,
@@ -814,10 +826,9 @@ type Patch struct {
 	ContextBudgetCeil     *int     `json:"contextBudgetCeil"`
 	ContextBudgetFraction *float64 `json:"contextBudgetFraction"`
 
-	HandoffAuto      *bool    `json:"handoffAuto"`
-	HandoffPressure  *float64 `json:"handoffPressure"`
-	HandoffMaxChain  *int     `json:"handoffMaxChain"`
-	HandoffWriteFile *bool    `json:"handoffWriteFile"`
+	HandoffAuto      *bool `json:"handoffAuto"`
+	HandoffMaxChain  *int  `json:"handoffMaxChain"`
+	HandoffWriteFile *bool `json:"handoffWriteFile"`
 
 	ProgressPersist *bool `json:"progressPersist"`
 	ProgressResume  *bool `json:"progressResume"`
@@ -867,6 +878,12 @@ type Patch struct {
 	SpawnIdleTimeoutMin *int `json:"spawnIdleTimeoutMin"`
 	IdleResumeMax       *int `json:"idleResumeMax"`
 	ScheduleTimeoutMin  *int `json:"scheduleTimeoutMin"`
+	TurnWatchdogMin     *int `json:"turnWatchdogMin"`
+	TurnIdleWatchdogMin *int `json:"turnIdleWatchdogMin"`
+
+	ShellDefaultTimeoutSec *int `json:"shellDefaultTimeoutSec"`
+	ShellMaxTimeoutSec     *int `json:"shellMaxTimeoutSec"`
+	MaxToolOutputKB        *int `json:"maxToolOutputKB"`
 
 	CoordinatorMaxWorkers         *int  `json:"coordinatorMaxWorkers"`
 	CoordinatorMaxTurns           *int  `json:"coordinatorMaxTurns"`

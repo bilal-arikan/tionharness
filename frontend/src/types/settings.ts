@@ -59,7 +59,6 @@ export interface AppSettings {
 
   // Context reset / handoff (Anthropic "harness design").
   handoffAuto: boolean // auto-reset an autonomous turn that hit the context limit into a fresh session
-  handoffPressure: number // context-fill ratio above which auto-reset is allowed (0 = default 0.90)
   handoffMaxChain: number // max consecutive resets before falling back to plain compaction (0 = default 20)
   handoffWriteFile: boolean // also write the handoff to <workdir>/.tionswarm/handoff.md
 
@@ -121,6 +120,8 @@ export interface AppSettings {
   spawnIdleTimeoutMin: number
   idleResumeMax: number
   scheduleTimeoutMin: number
+  turnWatchdogMin: number
+  turnIdleWatchdogMin: number
 
   // Tool execution guards (process-global tool behaviour).
   shellDefaultTimeoutSec: number

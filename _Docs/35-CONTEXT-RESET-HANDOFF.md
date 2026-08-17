@@ -51,7 +51,13 @@ graph LR
    endpoint'i bunu **200 + `blocked:true`** olarak sarar ve gerekçeyi **thread içi**
    asistan uyarısı ("⚠️ Handoff yapılmadı — …") olarak yazar (500 toast'ı yok);
    frontend oturumu değiştirmez, uyarıyı transcript'te gösterir.
-1. Oturum geçmişini (`ListMessages`) render et (`conversation.RenderTranscript`).
+1. Oturum geçmişini (`ListMessages`) al ve **yalnız son compaction sınırından
+   sonrasını** render et: `conversation.PendingAfterSummary(history,
+   session.SummaryMsgCount)` → `conversation.RenderTranscript`. Sınırın öncesi
+   zaten `session.Summary` içinde taşınıyor ve prompt'a ayrıca veriliyor; tam
+   transcript'i göndermek aynı içeriği iki kez yollar ve eski detayın güncel işi
+   bastırmasına yol açar. Transcript boş olsa bile özet doluysa handoff üretilir
+   (guard artık ikisi de boşken devreye girer).
 2. **Handoff üret:** `conversation.BuildHandoff(...)` — compaction çekirdeğiyle aynı
    provider çağrısı (usage `KindCompact`), ama **devam-odaklı** `handoffPrompt` ile
    (9 bölüm, aşağıda). Env snapshot enjekte edilir.
@@ -120,13 +126,21 @@ turda overflow oldu **ve** `Pressure ≥ HandoffPressure` bandı **ve** reset zi
 | Alan | Anlam | Vars. | Clamp |
 |------|-------|-------|-------|
 | `handoffAuto` | otomatik reset aç/kapa | `false` | — |
-| `handoffPressure` | otomatik reset basınç eşiği | `0.90` | 0=default; aksi 0.5–0.99 |
 | `handoffMaxChain` | maks. ardışık reset | `20` | 0=default; aksi 1–100 |
 | `handoffWriteFile` | handoff'u dosyaya da yaz | `false` | — |
 
 Canlı push: `api/server.go::applySettings` → `Tunables.SetHandoff(...)`. UI:
 **Ayarlar → Bağlam → "Context reset (handoff)"** bölümü. Knob'lar `0` iken
 `agent.DefaultHandoff*` devreye girer.
+
+**2026-08-16 — `handoffPressure` KALDIRILDI.** Ayar, DTO/Patch alanı, clamp'i,
+`Tunables.HandoffPressure()` getter'ı, `DefaultHandoffPressure` sabiti ve UI
+slider'ı silindi. Gerekçe: tetikleyici hiçbir zaman doluluk oranı olmadı —
+`maybeAutoHandoff` (`agent/handoff.go`) yalnız turun **overflow** sinyaline
+(reaktif sıkıştırma tetiklendi mi) + `handoffAuto` + zincir derinliğine bakar.
+Eşik hiçbir kod yolundan okunmuyordu, yani ayarı değiştirmek davranışı
+değiştirmiyordu. Eski `settings.json` dosyalarındaki alan artık bilinmeyen
+anahtar olarak yok sayılır ve ilk yazımda düşer.
 
 ## Oturum modeli + soyağacı
 

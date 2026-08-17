@@ -1,5 +1,5 @@
 import { Layers, LifeBuoy, FlaskConical, RotateCcw, ListChecks, Bug, Tags } from 'lucide-react'
-import { Field, Toggle, Slider, inputCls } from './primitives'
+import { Field, Toggle, inputCls } from './primitives'
 import { SubHead } from './settingsPanelShared'
 import type { PanelProps } from './settingsPanelShared'
 
@@ -221,16 +221,6 @@ export function ContextPanel({ draft, set }: PanelProps) {
         hint="Bağlam sınırına çarpan (reactive compaction tetikleyen) otonom tur, handoff yazıp temiz oturumda devam eder. Yalnız otonom turlar; manuel sohbet etkilenmez."
         checked={draft.handoffAuto}
         onChange={(v) => set('handoffAuto', v)}
-      />
-      <Slider
-        label="Otomatik reset basınç eşiği"
-        min={0.5}
-        max={0.99}
-        step={0.01}
-        value={draft.handoffPressure || 0.9}
-        onChange={(v) => set('handoffPressure', v)}
-        badge={`%${Math.round((draft.handoffPressure || 0.9) * 100)}`}
-        hint="Otomatik reset yalnız bağlam doluluğu bu oranın üstündeyken yapılır (bellek-basıncı uyarısının üstünde tutun)."
       />
       <Field
         label="Maks. reset zinciri"

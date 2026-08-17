@@ -250,7 +250,7 @@ func (s *Server) applySettings() {
 	s.convo.SetBudgetShape(cur.ContextBudgetFraction, cur.ContextBudgetCeil) // model-aware budget knobs
 	s.tun.SetTitleModel(cur.TitleModel)
 	s.tun.SetTitleProviderID(cur.TitleProviderID)
-	s.tun.SetHandoff(cur.HandoffAuto, cur.HandoffPressure, cur.HandoffMaxChain, cur.HandoffWriteFile)
+	s.tun.SetHandoff(cur.HandoffAuto, cur.HandoffMaxChain, cur.HandoffWriteFile)
 	s.tun.SetProgress(cur.ProgressPersist, cur.ProgressResume)
 	s.tun.SetAutoContinue(cur.AutonomousAutoContinue, cur.AutonomousAutoContinueMax)
 	s.tun.SetFileFreshnessGuard(cur.FileFreshnessGuard)
@@ -267,6 +267,8 @@ func (s *Server) applySettings() {
 	s.tun.SetSpawnIdleTimeoutMinutes(cur.SpawnIdleTimeoutMin)
 	s.tun.SetIdleResumeMax(cur.IdleResumeMax)
 	s.tun.SetScheduleTimeoutMinutes(cur.ScheduleTimeoutMin)
+	s.tun.SetTurnWatchdogMinutes(cur.TurnWatchdogMin)
+	s.tun.SetTurnIdleWatchdogMinutes(cur.TurnIdleWatchdogMin)
 	tools.SetShellTimeouts(cur.ShellDefaultTimeoutSec, cur.ShellMaxTimeoutSec)
 	tools.SetMaxToolOutputBytes(cur.MaxToolOutputKB * 1024)
 	s.tun.SetCoordinatorLimits(cur.CoordinatorMaxWorkers, cur.CoordinatorMaxTurns,

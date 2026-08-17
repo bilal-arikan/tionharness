@@ -44,12 +44,32 @@ const DefaultSpawnIdleTimeoutMinutes = 5
 // before the fix). Settings-driven (IdleResumeMax) via applySettings.
 const DefaultIdleResumeMax = 1
 
+// DefaultTurnWatchdogMinutes bounds a single QUEUED turn (the serial per-session
+// inbox worker in internal/api) before it is force-cancelled so the queue keeps
+// moving. It is a wedge breaker, not a work budget: it must stay ABOVE every
+// legitimate turn ceiling (spawn/schedule), else a healthy long turn — a heavy
+// build/test loop streaming tool calls for an hour — is cut as if it were hung.
+// TurnWatchdog() enforces that ordering. Settings-driven (TurnWatchdogMin) via
+// applySettings; 0 selects this default.
+const DefaultTurnWatchdogMinutes = 120
+
+// DefaultTurnIdleWatchdogMinutes bounds INACTIVITY inside a queued turn: no event
+// of any kind (tool step, thinking, token delta) reaching the session hub for this
+// long means the turn is wedged, not busy. This is the measure that actually
+// separates the two — wall clock cannot, which is why the hard ceiling above has to
+// be generous and therefore leaves a real wedge running for hours. Sized well above
+// the shell max timeout (a blocking command emits nothing until it returns).
+// Settings-driven (TurnIdleWatchdogMin); 0 selects this default.
+const DefaultTurnIdleWatchdogMinutes = 20
+
 // DefaultScheduleTimeoutMinutes bounds a single scheduled fire (task run or prompt
 // delivery / wake). Sized for current-generation models: one request can run many
 // minutes and a multi-iteration tool loop longer still. Runaway protection comes
 // from the loop guards (iteration cap, budgets), not this wall clock. Settings-driven
-// (ScheduleTimeoutMinutes) via applySettings; 0 selects this default.
-const DefaultScheduleTimeoutMinutes = 30
+// (ScheduleTimeoutMinutes) via applySettings; 0 selects this default. Raised from
+// 30 to 60: research-style scheduled prompts (search → fetch → synthesise over many
+// sources) routinely spend that long in the tool loop and were being cut mid-run.
+const DefaultScheduleTimeoutMinutes = 60
 
 // Default coordinator/worker guards (see internal/agent/coordination.go). They
 // bound the M2 coordination loop so a coordinator can neither fan out unbounded
@@ -110,6 +130,8 @@ type Tunables struct {
 	spawnIdleTimeoutMin int // 0 → DefaultSpawnIdleTimeoutMinutes (spawn/worker inactivity watchdog, in minutes)
 	idleResumeMax       int // <0 → DefaultIdleResumeMax; 0 = disabled; N = N single-shot idle-timeout resumes
 	schedTimeoutMin     int // 0 → DefaultScheduleTimeoutMinutes (scheduled-fire deadline, in minutes)
+	turnWatchdogMin     int // 0 → DefaultTurnWatchdogMinutes (queued-turn wedge breaker, in minutes)
+	turnIdleWatchdogMin int // 0 → DefaultTurnIdleWatchdogMinutes (queued-turn inactivity window, in minutes)
 	coordMaxWorkers     int // 0 → DefaultCoordinatorMaxWorkers
 	coordMaxTurns       int // 0 → DefaultCoordinatorMaxTurns
 	coordMaxDepth       int // 0 → DefaultCoordinatorMaxDepth (-1 = unlimited nesting)
@@ -171,19 +193,15 @@ type Tunables struct {
 	// → select one task → verify the baseline → work → close the loop before acting.
 	autonomousBootSeq bool // inject the boot-sequence reminder on autonomous turns (default on)
 
-	// Native tool-loop iteration cap (applied each iteration, so settings changes
-	// take effect on the next turn without restart). <0 → defaultMaxToolIters;
-	// 0 → unlimited (only recovery steps may terminate the loop); >0 → cap.
-	maxToolIters int
-
 	// Context reset / handoff (Anthropic "harness design" pattern). When a long
 	// autonomous turn runs up against the context limit, in-place compaction alone
 	// leaves "context anxiety"; instead the runtime can write a handoff artifact and
 	// spawn a FRESH session to continue in a clean window.
-	handoffAuto      bool    // auto-reset after an autonomous turn that hit the context limit (default off)
-	handoffPressure  float64 // context-fill ratio above which auto-reset is allowed (0 → DefaultHandoffPressure)
-	handoffMaxChain  int     // max reset-chain depth before falling back to plain compaction (0 → DefaultHandoffMaxChain)
-	handoffWriteFile bool    // also write the handoff to <workdir>/.tionswarm/handoff.md (default off)
+	// The trigger is the turn's overflow signal (reactive compaction fired), not a
+	// fill-ratio threshold — see maybeAutoHandoff in handoff.go.
+	handoffAuto      bool // auto-reset after an autonomous turn that hit the context limit (default off)
+	handoffMaxChain  int  // max reset-chain depth before falling back to plain compaction (0 → DefaultHandoffMaxChain)
+	handoffWriteFile bool // also write the handoff to <workdir>/.tionswarm/handoff.md (default off)
 
 	// Persistent progress (Anthropic claude-progress convention). When on, the
 	// todo_write checklist is persisted to <cwd>/.tionswarm/progress.json so it
@@ -272,11 +290,8 @@ const DefaultDebugJournalCap = 5000
 // auto-issue to finish work the agent left pending, when no explicit max is set.
 const DefaultAutoContinueMax = 10
 
-// Default context-reset / handoff bounds.
-const (
-	DefaultHandoffPressure = 0.90 // auto-reset only well above the memory-pressure warning (0.70)
-	DefaultHandoffMaxChain = 20   // cap consecutive context resets so a loop can't chain forever
-)
+// DefaultHandoffMaxChain caps consecutive context resets so a loop can't chain forever.
+const DefaultHandoffMaxChain = 20
 
 // NewTunables constructs a Tunables with the recovery knobs at their built-in
 // defaults (the other knobs default to their zero value = off/unset). Production
@@ -322,7 +337,6 @@ func NewTunables() *Tunables {
 		// Auto-tagging on by default (production overrides from settings via
 		// SetAutoTagSessions); test runtimes that skip applySettings still auto-tag.
 		autoTagSessions: true,
-		maxToolIters:    -1,
 		// Coordinator stall protection on by default (production overrides from
 		// settings via SetCoordinatorStallGuard): it only acts on an idle coordinator
 		// that made no coordination tool call, and the judge call is gated behind that
@@ -570,6 +584,61 @@ func (t *Tunables) ScheduleTimeout() time.Duration {
 		m = DefaultScheduleTimeoutMinutes
 	}
 	return time.Duration(m) * time.Minute
+}
+
+// SetTurnWatchdogMinutes sets the wall-clock ceiling (in minutes) after which a
+// queued turn is force-cancelled so the per-session queue cannot stay wedged
+// behind it. 0 selects the built-in default.
+func (t *Tunables) SetTurnWatchdogMinutes(minutes int) {
+	t.mu.Lock()
+	t.turnWatchdogMin = minutes
+	t.mu.Unlock()
+}
+
+// TurnWatchdog returns the queued-turn wedge breaker as a duration. It is floored
+// at the LONGEST legitimate turn ceiling (spawn / schedule) so the safety net can
+// never be tighter than the work it is meant to survive: a spawn turn allowed 120
+// minutes must not be killed by a 20-minute queue watchdog. Configure it above
+// those ceilings; the floor only rescues an inconsistent configuration.
+func (t *Tunables) TurnWatchdog() time.Duration {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	m := t.turnWatchdogMin
+	if m <= 0 {
+		m = DefaultTurnWatchdogMinutes
+	}
+	for _, ceiling := range []int{t.spawnTimeoutMin, t.schedTimeoutMin} {
+		if ceiling > m {
+			m = ceiling
+		}
+	}
+	return time.Duration(m) * time.Minute
+}
+
+// SetTurnIdleWatchdogMinutes sets the inactivity window (in minutes) after which a
+// queued turn that has emitted nothing is force-cancelled. 0 selects the built-in
+// default.
+func (t *Tunables) SetTurnIdleWatchdogMinutes(minutes int) {
+	t.mu.Lock()
+	t.turnIdleWatchdogMin = minutes
+	t.mu.Unlock()
+}
+
+// TurnIdleWatchdog returns the queued-turn inactivity window, capped at the hard
+// ceiling: an idle window ABOVE the wall-clock cap could never fire, which would
+// silently give back the very wedge detection it configures.
+func (t *Tunables) TurnIdleWatchdog() time.Duration {
+	hard := t.TurnWatchdog()
+	t.mu.RLock()
+	m := t.turnIdleWatchdogMin
+	t.mu.RUnlock()
+	if m <= 0 {
+		m = DefaultTurnIdleWatchdogMinutes
+	}
+	if idle := time.Duration(m) * time.Minute; idle < hard {
+		return idle
+	}
+	return hard
 }
 
 // SetCoordinatorLimits sets the coordinator/worker guards: the max number of
@@ -918,13 +987,12 @@ func (t *Tunables) AutonomousBootSeq() bool {
 }
 
 // SetHandoff configures the context-reset/handoff knobs: whether autonomous turns
-// that hit the context limit auto-reset into a fresh session, the context-fill
-// ratio that allows it, the max reset-chain depth, and whether the handoff is also
-// written to a file in the working dir. Zero pressure/chain select the defaults.
-func (t *Tunables) SetHandoff(auto bool, pressure float64, maxChain int, writeFile bool) {
+// that hit the context limit auto-reset into a fresh session, the max reset-chain
+// depth, and whether the handoff is also written to a file in the working dir. A
+// zero chain selects the default.
+func (t *Tunables) SetHandoff(auto bool, maxChain int, writeFile bool) {
 	t.mu.Lock()
 	t.handoffAuto = auto
-	t.handoffPressure = pressure
 	t.handoffMaxChain = maxChain
 	t.handoffWriteFile = writeFile
 	t.mu.Unlock()
@@ -935,17 +1003,6 @@ func (t *Tunables) HandoffAuto() bool {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 	return t.handoffAuto
-}
-
-// HandoffPressure returns the context-fill ratio above which an autonomous turn
-// may auto-reset (default when unset).
-func (t *Tunables) HandoffPressure() float64 {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
-	if t.handoffPressure <= 0 {
-		return DefaultHandoffPressure
-	}
-	return t.handoffPressure
 }
 
 // HandoffMaxChain returns the max reset-chain depth (default when unset).
@@ -1156,29 +1213,4 @@ func (t *Tunables) NativeToolSearch() bool {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 	return t.nativeToolSearch
-}
-
-// SetMaxToolIters overrides the native agentic tool-loop iteration cap.
-//   - max < 0   -> reset to the built-in default (see defaultMaxToolIters in toolloop.go)
-//   - max == 0  -> UNLIMITED - the loop never breaks on its own (only recovery steps can)
-//   - max > 0   -> cap to this many iterations per turn
-//
-// The value is read on every iteration of the tool loop, so a settings change
-// takes effect on the next turn without a restart.
-func (t *Tunables) SetMaxToolIters(max int) {
-	t.mu.Lock()
-	t.maxToolIters = max
-	t.mu.Unlock()
-}
-
-// MaxToolIters returns the effective native tool-loop iteration cap, applying
-// the default for negative / unset values. The caller is responsible for
-// interpreting a returned value of 0 as "unlimited".
-func (t *Tunables) MaxToolIters() int {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
-	if t.maxToolIters < 0 {
-		return defaultMaxToolIters
-	}
-	return t.maxToolIters
 }

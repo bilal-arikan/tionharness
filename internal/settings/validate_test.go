@@ -72,3 +72,19 @@ func TestApplyClampsNumerics(t *testing.T) {
 		t.Errorf("delegationMaxCalls not clamped: %d", out.DelegationMaxCalls)
 	}
 }
+
+// TestScheduleTimeoutDefaultIsOneHour pins the scheduled-fire budget. Both the
+// cron path and the manual "Run now" button bound their turn with this value, and
+// research-style prompts (search → fetch → synthesise) were being cut at the old
+// ceiling. TurnWatchdogMin must stay at or above it, otherwise the wedge breaker
+// would kill a legitimately long scheduled run.
+func TestScheduleTimeoutDefaultIsOneHour(t *testing.T) {
+	d := Default()
+	if d.ScheduleTimeoutMin != 60 {
+		t.Errorf("ScheduleTimeoutMin = %d, want 60", d.ScheduleTimeoutMin)
+	}
+	if d.TurnWatchdogMin < d.ScheduleTimeoutMin {
+		t.Errorf("TurnWatchdogMin (%d) must not be below ScheduleTimeoutMin (%d)",
+			d.TurnWatchdogMin, d.ScheduleTimeoutMin)
+	}
+}
