@@ -7,6 +7,13 @@ export interface UseAsyncOptions {
   // When false, skip the initial (and polled) fetch entirely. Useful to defer a
   // load until some precondition holds. Defaults to true.
   enabled?: boolean
+  // Pause polling while the document is hidden, and fire one catch-up run when
+  // it becomes visible again. Defaults to true: a background window polling an
+  // indicator nobody can see is pure waste, and with several windows open on the
+  // same backend the hidden ones are most of the traffic. Set false only for a
+  // poll whose RESULT must keep advancing off-screen (none currently do — every
+  // consumer renders what it fetches).
+  pauseWhenHidden?: boolean
 }
 
 export interface UseAsyncState<T> {
@@ -30,7 +37,7 @@ export function useAsync<T>(
   deps: React.DependencyList,
   opts: UseAsyncOptions = {},
 ): UseAsyncState<T> {
-  const { pollMs, enabled = true } = opts
+  const { pollMs, enabled = true, pauseWhenHidden = true } = opts
   const [data, setData] = useState<T | null>(null)
   // Starts true whenever a fetch is going to run, so the first paint renders a
   // loading state instead of momentarily looking like an empty result.
@@ -75,9 +82,39 @@ export function useAsync<T>(
     if (!enabled) return
     run()
     if (!pollMs) return
-    const t = setInterval(run, pollMs)
-    return () => clearInterval(t)
-  }, [run, pollMs, enabled])
+    if (!pauseWhenHidden) {
+      const t = setInterval(run, pollMs)
+      return () => clearInterval(t)
+    }
+
+    // Visibility-gated polling: the interval only exists while the document is
+    // visible, and becoming visible fires an immediate catch-up so returning to
+    // a window never shows data as stale as the time it spent hidden.
+    let timer: ReturnType<typeof setInterval> | null = null
+    const stop = () => {
+      if (timer !== null) {
+        clearInterval(timer)
+        timer = null
+      }
+    }
+    const start = () => {
+      if (timer === null) timer = setInterval(run, pollMs)
+    }
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') {
+        stop()
+        return
+      }
+      run()
+      start()
+    }
+    if (document.visibilityState !== 'hidden') start()
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => {
+      stop()
+      document.removeEventListener('visibilitychange', onVisibility)
+    }
+  }, [run, pollMs, enabled, pauseWhenHidden])
 
   return { data, loading, error, refresh: run }
 }

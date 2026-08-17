@@ -1,4 +1,10 @@
-import { useCallback, useEffect, useMemo, useState, type MouseEvent as ReactMouseEvent } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type MouseEvent as ReactMouseEvent,
+} from 'react'
 import {
   MessageSquare,
   LayoutGrid,
@@ -13,6 +19,7 @@ import {
 import type { Execution } from '@/types'
 import { api } from '@/api'
 import { relativeTime } from '@/shared/lib/time'
+import { useVisiblePoll } from '@/shared/hooks/useVisiblePoll'
 
 interface Props {
   // The agent whose activity to show; null clears the panel.
@@ -33,7 +40,8 @@ const KIND_META: Record<string, { label: string; icon: LucideIcon }> = {
   schedule: { label: 'Zamanlama', icon: Clock },
 }
 
-const POLL_MS = 5000
+// Backstop refresh; the panel is visibility-gated (see useVisiblePoll).
+const POLL_MS = 10000
 
 function kindMeta(kind: string) {
   return KIND_META[kind] ?? { label: kind || 'Diğer', icon: Activity }
@@ -80,40 +88,34 @@ export function AgentActivityPanel({ agentId, onError, onOpenExecution, onClose 
     [width],
   )
 
-  // Poll the unified feed and keep only this agent's rows (newest-updated first,
+  // Pull the unified feed and keep only this agent's rows (newest-updated first,
   // matching the backend's sort).
+  const refresh = useCallback(() => {
+    if (!agentId) return Promise.resolve()
+    return api
+      .listExecutions()
+      .then((all) => setItems(all.filter((e) => e.agentId === agentId)))
+      .catch((e) => onError((e as Error).message))
+  }, [agentId, onError])
+
+  // Initial load on agent change.
   useEffect(() => {
     if (!agentId) {
       setItems([])
       return
     }
     let alive = true
-    const load = () => {
-      api
-        .listExecutions()
-        .then((all) => {
-          if (alive) setItems(all.filter((e) => e.agentId === agentId))
-        })
-        .catch((e) => onError((e as Error).message))
-    }
     setLoading(true)
-    Promise.resolve()
-      .then(load)
-      .finally(() => alive && setLoading(false))
-    const t = setInterval(load, POLL_MS)
+    refresh().finally(() => {
+      if (alive) setLoading(false)
+    })
     return () => {
       alive = false
-      clearInterval(t)
     }
-  }, [agentId, onError])
+  }, [agentId, refresh])
 
-  const refresh = () => {
-    if (!agentId) return
-    api
-      .listExecutions()
-      .then((all) => setItems(all.filter((e) => e.agentId === agentId)))
-      .catch((e) => onError((e as Error).message))
-  }
+  // Backstop refresh, paused while this window is hidden.
+  useVisiblePoll(refresh, POLL_MS, [refresh], Boolean(agentId))
 
   const runningCount = useMemo(() => items.filter((i) => i.running).length, [items])
 

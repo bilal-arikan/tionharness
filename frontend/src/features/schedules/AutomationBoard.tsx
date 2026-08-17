@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Clock, Hash, LayoutGrid, Repeat, Zap } from 'lucide-react'
 import { api } from '@/api'
+import { useVisiblePoll } from '@/shared/hooks/useVisiblePoll'
 import type {
   Agent,
   Automation,
@@ -16,6 +17,9 @@ import { BoardColumn } from './BoardColumn'
 import { COLUMN_ACCENT, DEFAULT_COLUMNS } from './automationMeta'
 import { ScheduleCard } from './ScheduleCard'
 import { ScheduleModal } from './ScheduleModal'
+
+// Backstop refresh for the lane-header metrics; visibility-gated.
+const LIVE_STATS_POLL_MS = 15000
 
 // compact renders a large count as a short human string (1_240_000 → "1.2M",
 // 850_000 → "850k"), for the token lane's live workspace total.
@@ -105,25 +109,28 @@ export function AutomationBoard({ agents, focusId, onError }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Live workspace metrics for the lane headers: fetch on mount and poll every 5s
-  // while the screen is open (cheap in-memory aggregates on the server). Silent on
+  // Live workspace metrics for the lane headers: fetch on mount, then refresh on
+  // an interval while the screen is open AND this window is visible. Silent on
   // failure — a stale/absent stat must never break the board.
-  useEffect(() => {
-    let alive = true
-    const load = () =>
+  const loadLiveStats = useCallback(
+    () =>
       api
         .getAutomationLiveStats()
-        .then((s) => {
-          if (alive) setLiveStats(s)
-        })
-        .catch(() => {})
-    load()
-    const t = setInterval(load, 5000)
+        .then(setLiveStats)
+        .catch(() => {}),
+    [],
+  )
+  useEffect(() => {
+    let alive = true
+    api
+      .getAutomationLiveStats()
+      .then((s) => alive && setLiveStats(s))
+      .catch(() => {})
     return () => {
       alive = false
-      clearInterval(t)
     }
   }, [])
+  useVisiblePoll(loadLiveStats, LIVE_STATS_POLL_MS, [loadLiveStats])
 
   // When a deep-link target is present and loaded, scroll it into view and flash
   // a highlight ring that fades after a moment.

@@ -1,7 +1,6 @@
 package api
 
 import (
-	"context"
 	"net/http"
 
 	"github.com/bilal-arikan/tionswarm/internal/workspace"
@@ -88,28 +87,20 @@ func (s *Server) handleActivity(w http.ResponseWriter, r *http.Request) {
 
 // workspaceRunning reports whether the given workspace has ANY run in flight —
 // a streamed chat turn, an autonomous runtime invoke (schedule wake / spawned
-// session / inbox delivery / flow agent node), or a running flow run. It is the
-// cross-workspace-safe subset of handleActivity: it skips the
+// session / inbox delivery / flow agent node), or a running flow run. It is the cross-workspace-safe subset of handleActivity: it skips the
 // per-view breakdown (no session-kind lookup) so it stays cheap to call for every
 // workspace on each poll.
-func (s *Server) workspaceRunning(ctx context.Context, wsp *workspace.Workspace) bool {
-	// A turn in flight: server-wide chat runs scoped to this workspace, plus the
-	// workspace runtime's own active (autonomous) sessions.
-	if len(s.runs.activeSessionIDs(wsp.ID)) > 0 {
-		return true
-	}
-	if len(wsp.Runtime.ActiveSessionIDs()) > 0 {
-		return true
-	}
-	// A flow run in progress.
-	if wsp.DB.HasRunningFlowRuns() {
-		return true
-	}
-	// A retrospective insight scan in flight (so the switcher pulses this workspace).
-	if wsp.Runtime.InsightScanActive() {
-		return true
-	}
-	return false
+//
+// Every source is O(1) and allocation-free: a lock-free atomic counter plus
+// early-exit registry probes. It used to scan the runs and flowRuns maps in
+// full — under d.mu, the same lock appendMessageLocked holds across a synchronous
+// file write — once per workspace per poll, which with ten workspaces and five
+// windows was ~25 whole-store scans per second while completely idle.
+func (s *Server) workspaceRunning(wsp *workspace.Workspace) bool {
+	return s.runs.hasActive(wsp.ID) || // streamed chat turn in this workspace
+		wsp.Runtime.HasActiveSessions() || // autonomous invoke
+		wsp.DB.HasRunningFlowRuns() || // flow run in progress
+		wsp.Runtime.InsightScanActive() // retrospective scan
 }
 
 // workspaceActivityItem is one row of the cross-workspace activity report: a
@@ -126,7 +117,6 @@ type workspaceActivityItem struct {
 // active workspace (which /api/activity already covers per nav view). Global
 // route: it reads no request-bound workspace, so it works with none active.
 func (s *Server) handleWorkspacesActivity(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
 	metas := s.workspaces.List()
 	out := make([]workspaceActivityItem, 0, len(metas))
 	for _, m := range metas {
@@ -134,7 +124,7 @@ func (s *Server) handleWorkspacesActivity(w http.ResponseWriter, r *http.Request
 		if err != nil {
 			continue
 		}
-		out = append(out, workspaceActivityItem{ID: m.ID, Running: s.workspaceRunning(ctx, wsp)})
+		out = append(out, workspaceActivityItem{ID: m.ID, Running: s.workspaceRunning(wsp)})
 	}
 	writeJSON(w, http.StatusOK, out)
 }

@@ -26,6 +26,10 @@ import type { Agent, Flow, FlowRun, FlowState } from '@/types'
 import { useMultiSelect } from '@/shared/hooks/useMultiSelect'
 import { useCollapsibleList } from '@/shared/hooks/useCollapsibleList'
 import { useSessionState } from '@/shared/hooks/useSessionState'
+import { useVisiblePoll } from '@/shared/hooks/useVisiblePoll'
+
+// Backstop refresh for the Koşular tab; run lifecycle also arrives over SSE.
+const RUNS_POLL_MS = 15000
 
 interface Props {
   agents: Agent[]
@@ -168,19 +172,25 @@ export function FlowsPanel({ agents, onError, openFlowId, tab: tabProp, onTabCha
   useEffect(() => {
     if (tab !== 'runs') return
     let alive = true
-    const tick = () => {
-      api
-        .listAllFlowRuns(!showSubRuns)
-        .then((rs) => alive && setRuns(rs))
-        .catch(() => {})
-    }
-    tick()
-    const id = setInterval(tick, 3000)
+    api
+      .listAllFlowRuns(!showSubRuns)
+      .then((rs) => alive && setRuns(rs))
+      .catch(() => {})
     return () => {
       alive = false
-      clearInterval(id)
     }
   }, [tab, showSubRuns])
+  useVisiblePoll(
+    () => {
+      api
+        .listAllFlowRuns(!showSubRuns)
+        .then(setRuns)
+        .catch(() => {})
+    },
+    RUNS_POLL_MS,
+    [showSubRuns],
+    tab === 'runs',
+  )
 
   // Deep-link from the Activity screen: open this flow's run history and select
   // its latest run (runs are newest-first). Consumed once per target so polling

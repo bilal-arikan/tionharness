@@ -21,7 +21,11 @@ import { useAsync } from '@/shared/hooks/useAsync'
 import { useRefreshTrigger } from '@/shared/hooks/useRefreshTrigger'
 import { SIGNAL_EXECUTIONS, SIGNAL_WORKSPACE_ACTIVITY } from './eventToRefreshSignals'
 
-const POLL_MS = 4000
+// Backstop only: the two SSE signals below are what make the pulse feel live, so
+// the interval just covers a missed/reconnected event. It was 4s, which — times
+// every open window, times every workspace the endpoint reports on — was the
+// single largest source of idle backend work.
+const POLL_MS = 20000
 
 export function useWorkspaceActivity(activeWorkspaceId: string | null): Set<string> {
   const { data, refresh } = useAsync(

@@ -17,7 +17,8 @@ import { useAsync } from '@/shared/hooks/useAsync'
 import { useRefreshTrigger } from '@/shared/hooks/useRefreshTrigger'
 import { SIGNAL_EXECUTIONS } from './eventToRefreshSignals'
 
-const POLL_MS = 5000
+// Backstop only — SIGNAL_EXECUTIONS below carries the live updates.
+const POLL_MS = 20000
 
 export interface ExecutionRuntime {
   running: boolean

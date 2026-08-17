@@ -22,6 +22,11 @@ import {
 import { toast } from '@/shared/components'
 import { useMultiSelect } from '@/shared/hooks/useMultiSelect'
 import { useCollapsibleList } from '@/shared/hooks/useCollapsibleList'
+import { useVisiblePoll } from '@/shared/hooks/useVisiblePoll'
+
+// The MCP pool snapshot has no SSE signal, so this interval IS the update path —
+// but it only drives an indicator, so it stays coarse and visibility-gated.
+const POOL_STATS_POLL_MS = 10000
 
 // useToolsPanelState holds all state, data loading, and mutation handlers for
 // the ToolsPanel screen (extracted so the component file stays readable).
@@ -108,9 +113,8 @@ export function useToolsPanelState(onError: (msg: string) => void) {
   }, [])
   useEffect(() => {
     loadPoolStats()
-    const t = setInterval(loadPoolStats, 5000)
-    return () => clearInterval(t)
   }, [loadPoolStats])
+  useVisiblePoll(loadPoolStats, POOL_STATS_POLL_MS, [loadPoolStats])
 
   // Servers configured in OTHER workspaces, offered for one-click copy here.
   const [importable, setImportable] = useState<ImportableMCPServer[]>([])

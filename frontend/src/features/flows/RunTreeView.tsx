@@ -4,6 +4,7 @@ import { api } from '@/api'
 import type { Agent, Flow, FlowRun } from '@/types'
 import { subscribeFlowTree } from '@/shared/lib/flowNodeBus'
 import { flowRunRootOf } from '@/shared/lib/flowRunTree'
+import { useVisiblePoll } from '@/shared/hooks/useVisiblePoll'
 import { RunView } from './RunView'
 import { RunTreePanel } from './RunTreePanel'
 import {
@@ -73,15 +74,8 @@ export function RunTreeView({ run, flows, agents, onRerun, rerunning, onResumed 
     run.status === 'running' ||
     run.status === 'waiting' ||
     treeRuns.some((r) => r.status === 'running' || r.status === 'waiting')
-  useEffect(() => {
-    const cancel = loadTree()
-    if (!active) return cancel
-    const id = setInterval(loadTree, TREE_POLL_MS)
-    return () => {
-      cancel()
-      clearInterval(id)
-    }
-  }, [loadTree, active])
+  useEffect(loadTree, [loadTree])
+  useVisiblePoll(loadTree, TREE_POLL_MS, [loadTree], active)
 
   // Live frames from every run in the tree — including children that did not
   // exist when this subscription was made, which is why it is keyed by the root.
