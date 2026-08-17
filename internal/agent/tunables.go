@@ -14,6 +14,25 @@ const (
 	DefaultStuckTurnThreshold = 3 // consecutive bad turns before a session is tagged "stuck" (autonomy refused)
 )
 
+// DefaultCoordinatorStallHaltTotal is the CUMULATIVE stall-nudge count at which a
+// coordinator is hard-halted regardless of its in-memory streak. Same shape as
+// DefaultStuckTurnThreshold, and deliberately the same number: three strikes of the
+// same failure is where "the model is having a bad turn" becomes "the model is
+// wedged". The two counters answer different questions and this tier reads the
+// PERSISTENT one — see Session.StallNudges vs coordSlot.spawnHallucStreak:
+//
+//   - spawnHallucStreak is CONSECUTIVE and in-memory: a clean coordination call zeroes
+//     it and a process restart erases it. It bounds the corrective nudges (max-nudges)
+//     within one wedged stretch.
+//   - Session.StallNudges is CUMULATIVE and persisted: it survives restarts, so a
+//     coordinator that stalls, is nudged into one real call, then stalls again — over
+//     and over, each stretch staying under the nudge cap — is still caught here.
+//
+// A genuinely clean coordinator turn resets the persistent counter too, so the
+// threshold only ever fires on a coordinator that keeps relapsing without recovering.
+// 0 disables this tier (the nudge-budget escalation still runs); <0 → this default.
+const DefaultCoordinatorStallHaltTotal = 3
+
 // Default spawn guards. They bound the fire-and-forget spawn_session surface so a
 // burst of spawns can neither pin unbounded goroutines nor fan a single turn out
 // into a spawn storm.
@@ -147,6 +166,10 @@ type Tunables struct {
 	coordStallGuard     bool // master switch (default on)
 	coordStallSweepMin  int  // 0 → DefaultCoordinatorStallSweepMin; <0 disables the sweeper
 	coordStallMaxNudges int  // 0 → DefaultCoordinatorStallMaxNudges
+	// coordStallHaltTotal is the CUMULATIVE (persisted) stall count that hard-halts a
+	// coordinator even when its in-memory streak keeps being reset. <0 →
+	// DefaultCoordinatorStallHaltTotal; 0 disables this tier.
+	coordStallHaltTotal int
 
 	// Turn recovery (A1) — structural handling of output-token cutoffs and
 	// context overflow inside the native agentic tool loop.
@@ -342,6 +365,10 @@ func NewTunables() *Tunables {
 		// that made no coordination tool call, and the judge call is gated behind that
 		// rare condition.
 		coordStallGuard: true,
+		// Cumulative-count halt tier on by default at the built-in threshold: it only
+		// fires on a coordinator that has relapsed into phantom-spawning this many times
+		// across its whole life, which no healthy coordinator ever reaches.
+		coordStallHaltTotal: DefaultCoordinatorStallHaltTotal,
 	}
 }
 
@@ -721,6 +748,27 @@ func (t *Tunables) CoordinatorStallMaxNudges() int {
 		return DefaultCoordinatorStallMaxNudges
 	}
 	return t.coordStallMaxNudges
+}
+
+// SetCoordinatorStallHaltTotal configures the cumulative-count halt tier: the
+// number of PERSISTED stall nudges (Session.StallNudges) at which a coordinator is
+// hard-halted even though its in-memory streak never reached the nudge cap. 0
+// disables the tier; negative selects the built-in default.
+func (t *Tunables) SetCoordinatorStallHaltTotal(n int) {
+	t.mu.Lock()
+	t.coordStallHaltTotal = n
+	t.mu.Unlock()
+}
+
+// CoordinatorStallHaltTotal returns the cumulative stall threshold that hard-halts a
+// coordinator. A returned 0 means the tier is disabled, which is a valid setting.
+func (t *Tunables) CoordinatorStallHaltTotal() int {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	if t.coordStallHaltTotal < 0 {
+		return DefaultCoordinatorStallHaltTotal
+	}
+	return t.coordStallHaltTotal
 }
 
 // CoordinatorMaxDepth returns how deep a coordinator tree may nest (root = depth

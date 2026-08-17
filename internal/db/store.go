@@ -517,6 +517,17 @@ func (d *DB) BumpSessionStallNudges(ctx context.Context, sessionID string) (int,
 	return n, err
 }
 
+// SetSessionStallNudges overwrites the cumulative coordinator-stall counter. The
+// counterpart of the bump above: a coordinator turn that genuinely drives workers
+// (a real coordination tool call) clears the tally with 0, so the cumulative halt
+// tier only ever fires on a coordinator that keeps relapsing without recovering.
+// Does not bump UpdatedAt — bookkeeping, same as the bump.
+func (d *DB) SetSessionStallNudges(ctx context.Context, sessionID string, n int) error {
+	return d.mutateSessionLocked(sessionID, func(s *Session) {
+		s.StallNudges = n
+	})
+}
+
 // SetSessionPinned pins/unpins a session to the top of the sidebar list. Does not
 // bump UpdatedAt (pinning is a view preference, not activity).
 func (d *DB) SetSessionPinned(ctx context.Context, sessionID string, pinned bool) error {

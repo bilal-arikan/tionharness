@@ -32,9 +32,17 @@ import (
 //     (e.g. a restart between turns): it periodically judges any live coordinator
 //     slot that has been silent past the staleness window with no running worker.
 //  3. Hard-halt escalation (escalateCoordinatorStallHalt) — when either layer above
-//     confirms the stall PERSISTS after the nudge budget is spent, it stops auto-
-//     turning the wedged coordinator (slot.stallHalted) and posts a one-shot user
-//     notice, instead of nudging forever or failing silent. Layers 1–2 still run.
+//     confirms the stall PERSISTS, it stops auto-turning the wedged coordinator
+//     (slot.stallHalted) and posts a one-shot user notice, instead of nudging forever
+//     or failing silent. Layers 1–2 still run. TWO independent counters trip it:
+//     the CONSECUTIVE in-memory nudge budget (slot.spawnHallucStreak vs
+//     CoordinatorStallMaxNudges), and the CUMULATIVE persisted tally
+//     (Session.StallNudges vs CoordinatorStallHaltTotal). The second exists because
+//     the first is blind to relapse: a coordinator that stalls, is nudged into one
+//     real tool call (zeroing the streak), then stalls again never reaches the nudge
+//     cap and would loop forever. The persisted tally also survives a restart, which
+//     the streak does not. Any turn that genuinely calls a coordination tool clears
+//     BOTH, so the cumulative tier measures relapses-without-recovery.
 
 const (
 	// DefaultCoordinatorStallSweepMin is the staleness window (minutes): the sweeper
@@ -86,6 +94,11 @@ func (r *Runtime) guardCoordinatorStall(coordSessionID, agentID string, agent db
 		slot.spawnHallucStreak = 0
 		slot.stallHalted = false
 		slot.mu.Unlock()
+		// The PERSISTED tally is cleared by the same recovery signal, so the cumulative
+		// halt tier below measures relapses-without-recovery rather than a lifetime
+		// total that only ever grows. Best-effort: a store error here must not deny the
+		// coordinator its (successful) turn, and the tier stays conservative either way.
+		r.clearStallTally(coordSessionID)
 		return
 	}
 	if !r.tun.CoordinatorStallGuard() {
@@ -118,21 +131,35 @@ func (r *Runtime) guardCoordinatorStall(coordSessionID, agentID string, agent db
 	spent := slot.spawnHallucStreak >= r.tun.CoordinatorStallMaxNudges()
 	slot.mu.Unlock()
 	if spent {
-		r.escalateCoordinatorStallHalt(coordSessionID, agentID, agent, slot)
+		r.escalateCoordinatorStallHalt(coordSessionID, agentID, agent, slot, "nudge budget spent")
 		return
 	}
-	r.injectStallNudge(coordSessionID, agentID, slot, true /* re-arm this batch */)
+	// This nudge is about to be counted; the cumulative tier reads the tally AFTER the
+	// bump so the Nth stall is the one that halts (not the N+1st). The in-memory streak
+	// alone cannot catch the relapse pattern this tier exists for: a coordinator that
+	// stalls, gets nudged into one real call (zeroing the streak), then stalls again
+	// would loop forever with the streak never reaching the nudge cap.
+	total := r.injectStallNudge(coordSessionID, agentID, slot, true /* re-arm this batch */)
+	if limit := r.tun.CoordinatorStallHaltTotal(); limit > 0 && total >= limit {
+		r.escalateCoordinatorStallHalt(coordSessionID, agentID, agent, slot,
+			fmt.Sprintf("cumulative stall threshold reached (%d/%d)", total, limit))
+	}
 }
 
-// escalateCoordinatorStallHalt is the hard-halt escalation (FND-99caeb31): once the
-// nudge budget is spent and the coordinator is STILL judged to be narrating phantom
+// escalateCoordinatorStallHalt is the hard-halt escalation (FND-99caeb31): once a
+// stall tier fires and the coordinator is STILL judged to be narrating phantom
 // spawns, it marks the slot halted (the drain loop then stops re-arming and skips the
 // idle-reconcile turn) and posts a SINGLE user-facing notice explaining why auto-turns
 // stopped and how to resume. One-shot via slot.stallHalted so neither the turn-end
 // guard nor the every-60s sweeper can spam the notice. The sweeper is intentionally
 // left running as the long-horizon backstop — this is an added escalation layer, not a
 // replacement. A later turn that actually calls a coordination tool clears the flag.
-func (r *Runtime) escalateCoordinatorStallHalt(coordSessionID, agentID string, agent db.Agent, slot *coordSlot) {
+//
+// Two tiers reach it: the consecutive nudge budget (slot.spawnHallucStreak vs
+// CoordinatorStallMaxNudges) and the cumulative persisted tally (Session.StallNudges
+// vs CoordinatorStallHaltTotal). `reason` names which one, so the log and the debug
+// journal say what actually tripped rather than always claiming the nudge budget.
+func (r *Runtime) escalateCoordinatorStallHalt(coordSessionID, agentID string, agent db.Agent, slot *coordSlot, reason string) {
 	slot.mu.Lock()
 	already := slot.stallHalted
 	slot.stallHalted = true
@@ -142,12 +169,12 @@ func (r *Runtime) escalateCoordinatorStallHalt(coordSessionID, agentID string, a
 	if already {
 		return
 	}
-	r.logger.Warn("coordination: phantom-spawn stall persists after nudge budget spent; halting coordinator auto-turns",
-		"coordinator", coordSessionID, "streak", streak)
+	r.logger.Warn("coordination: phantom-spawn stall confirmed; halting coordinator auto-turns",
+		"coordinator", coordSessionID, "streak", streak, "reason", reason)
 	r.emitDebug(WithSessionID(context.Background(), coordSessionID), db.DebugEvent{
 		Type:    db.DebugError,
 		AgentID: agentID,
-		Detail:  "coordinator stall halt: phantom spawn persisted after nudge budget spent; auto-turns stopped",
+		Detail:  "coordinator stall halt (" + reason + "): auto-turns stopped",
 		Err:     true,
 	})
 	r.publish(events.Event{
@@ -201,16 +228,37 @@ func (r *Runtime) ResumeCoordinatorFromStall(ctx context.Context, coordSessionID
 	slot.stallHalted = false
 	slot.spawnHallucStreak = 0
 	slot.mu.Unlock()
+	// The persisted tally is part of "a genuine fresh budget": leaving it at or above
+	// the cumulative threshold would re-halt the coordinator on its very next stall,
+	// making the button look broken. A human in the loop resets both counters.
+	r.clearStallTally(coordSessionID)
 	r.logger.Info("coordination: stall halt cleared by user; resuming coordinator", "coordinator", coordSessionID)
 	r.enqueueCoordinatorTurn(coordSessionID)
 	return nil
+}
+
+// clearStallTally resets the PERSISTED cumulative stall counter after a coordinator
+// turn that actually drove workers. Best-effort by design: the caller is on the
+// success path of a healthy turn, so a store failure is logged and ignored rather
+// than propagated — the only consequence is that the cumulative tier stays armed a
+// little longer, which errs toward halting a wedged coordinator, not past one.
+func (r *Runtime) clearStallTally(coordSessionID string) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := r.db.SetSessionStallNudges(ctx, coordSessionID, 0); err != nil {
+		r.logger.Warn("coordination: failed to clear stall counter", "coordinator", coordSessionID, "error", err)
+	}
 }
 
 // injectStallNudge records the corrective note, bumps the nudge streak, and (when
 // rearm) sets slot.pending so the coordinator gets one more turn to act on it. The
 // sweeper passes rearm=false and separately kicks a fresh turn via
 // enqueueCoordinatorTurn (the coordinator is idle, not mid-drain).
-func (r *Runtime) injectStallNudge(coordSessionID, agentID string, slot *coordSlot, rearm bool) {
+//
+// Returns the new CUMULATIVE (persisted) stall count, which the cumulative halt tier
+// compares against its threshold. Returns 0 when the counter could not be persisted —
+// a value no threshold matches, so a store outage can never manufacture a halt.
+func (r *Runtime) injectStallNudge(coordSessionID, agentID string, slot *coordSlot, rearm bool) int {
 	slot.mu.Lock()
 	slot.spawnHallucStreak++
 	streak := slot.spawnHallucStreak
@@ -231,6 +279,7 @@ func (r *Runtime) injectStallNudge(coordSessionID, agentID string, slot *coordSl
 	total, err := r.db.BumpSessionStallNudges(ctx, coordSessionID)
 	if err != nil {
 		r.logger.Warn("coordination: failed to persist stall counter", "coordinator", coordSessionID, "error", err)
+		total = 0 // unknown tally: report a value no threshold matches rather than a stale one
 	}
 	r.logger.Warn("coordination: coordinator narrated a spawn with no tool call; injected corrective note",
 		"coordinator", coordSessionID, "streak", streak, "totalStalls", total)
@@ -240,6 +289,7 @@ func (r *Runtime) injectStallNudge(coordSessionID, agentID string, slot *coordSl
 		Detail:  "coordinator stall: claimed workers with no spawn_worker/list_workers call",
 		Err:     true,
 	})
+	return total
 }
 
 // judgeCoordinatorStalled asks a cheap model whether `text` claims a spawn that
@@ -403,10 +453,19 @@ func (r *Runtime) judgeAndNudgeStall(ctx context.Context, coordSessionID string,
 		// (one-shot user notice + stop auto-turns), the same path the turn-end guard
 		// takes — so a freeze the sweeper is the first to catch is surfaced to the user
 		// rather than left as a silent log line.
-		r.escalateCoordinatorStallHalt(coordSessionID, agent.ID, agent, slot)
+		r.escalateCoordinatorStallHalt(coordSessionID, agent.ID, agent, slot, "nudge budget spent")
 		return
 	}
-	r.injectStallNudge(coordSessionID, agent.ID, slot, false /* not mid-drain; kick below */)
+	// Same cumulative tier as the turn-end guard: the sweeper is often the layer that
+	// SEES the relapse pattern (each stretch dies with its process, so only the
+	// persisted tally connects them), and kicking a fresh turn into a coordinator that
+	// has already crossed the threshold is exactly what the tier exists to stop.
+	total := r.injectStallNudge(coordSessionID, agent.ID, slot, false /* not mid-drain; kick below */)
+	if limit := r.tun.CoordinatorStallHaltTotal(); limit > 0 && total >= limit {
+		r.escalateCoordinatorStallHalt(coordSessionID, agent.ID, agent, slot,
+			fmt.Sprintf("cumulative stall threshold reached in sweep (%d/%d)", total, limit))
+		return
+	}
 	r.enqueueCoordinatorTurn(coordSessionID)
 }
 

@@ -197,8 +197,11 @@ erDiagram
 > **`stall_nudges`** koordinatör "hayalet spawn" sayacıdır (bkz. `_Docs/47`):
 > bellekteki ardışık seri (`slot.spawnHallucStreak`) temiz bir koordinasyon
 > çağrısında sıfırlanır ve süreçle birlikte kaybolur; bu alan ise **kümülatif** ve
-> yeniden başlatmaya dayanıklıdır, böylece sonraki bir eskalasyon katmanı geçmişe
-> bakarak karar verebilir.
+> yeniden başlatmaya dayanıklıdır. Artık yalnız gözlem değil, **karar alanıdır**:
+> `CoordinatorStallHaltTotal` (vars. 3) eşiğine ulaşınca koordinatör sert-halt
+> edilir. Gerçekten koordinasyon aracı çağıran temiz bir tur alanı **0'a çeker**
+> (`SetSessionStallNudges`), dolayısıyla eşik "toplam ömür" değil **toparlanmadan
+> nüks** ölçer — `stuck_turns` ile aynı ardışık-sıfırlama deseni.
 
 > **Köken (provenance) konvansiyonu — `created_by`:** Self-management ile ajan
 > tarafından oluşturulabilen entity'ler (`agents`, `tasks`, `schedules`, `flows`,

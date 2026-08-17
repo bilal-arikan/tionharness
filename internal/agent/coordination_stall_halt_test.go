@@ -25,7 +25,7 @@ func TestEscalateCoordinatorStallHaltIsOneShot(t *testing.T) {
 	slot.pending = true
 	slot.mu.Unlock()
 
-	rt.escalateCoordinatorStallHalt(coord, agent.ID, agent, slot)
+	rt.escalateCoordinatorStallHalt(coord, agent.ID, agent, slot, "nudge budget spent")
 
 	slot.mu.Lock()
 	halted, pending, streak := slot.stallHalted, slot.pending, slot.spawnHallucStreak
@@ -35,7 +35,7 @@ func TestEscalateCoordinatorStallHaltIsOneShot(t *testing.T) {
 	}
 
 	// Second call is a no-op: nothing about the slot state changes.
-	rt.escalateCoordinatorStallHalt(coord, agent.ID, agent, slot)
+	rt.escalateCoordinatorStallHalt(coord, agent.ID, agent, slot, "nudge budget spent")
 	slot.mu.Lock()
 	if slot.spawnHallucStreak != streak || !slot.stallHalted {
 		t.Fatalf("second escalation must be a one-shot no-op; streak %d->%d halted=%v", streak, slot.spawnHallucStreak, slot.stallHalted)
@@ -60,7 +60,7 @@ func TestCoordinatorStallHaltedReflectsState(t *testing.T) {
 
 	slot := rt.coordSlotFor(coord)
 	agent := db.Agent{ID: "A", Name: "Coord"}
-	rt.escalateCoordinatorStallHalt(coord, agent.ID, agent, slot)
+	rt.escalateCoordinatorStallHalt(coord, agent.ID, agent, slot, "nudge budget spent")
 	if !rt.CoordinatorStallHalted(coord) {
 		t.Error("expected halted=true after escalation")
 	}
