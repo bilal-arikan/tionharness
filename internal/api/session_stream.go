@@ -10,6 +10,7 @@ import (
 
 	"github.com/bilal-arikan/tionswarm/internal/db"
 	"github.com/bilal-arikan/tionswarm/internal/sessionhub"
+	"github.com/bilal-arikan/tionswarm/internal/workspace"
 )
 
 // handleSessionStream is the single server-authoritative event stream every
@@ -48,11 +49,15 @@ func (s *Server) handleSessionStream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Confirm the session exists in this workspace before opening a long-lived
-	// stream (fail fast with a normal JSON 404 rather than a dangling SSE).
-	if _, err := ws(r).DB.GetSession(r.Context(), sessionID); err != nil {
+	// stream (fail fast with a normal JSON 404 rather than a dangling SSE). Note
+	// this check alone does NOT identify the session: "SES1" exists in every
+	// workspace, which is why every hub call below is scoped by wsp.ID.
+	wsp := ws(r)
+	if _, err := wsp.DB.GetSession(r.Context(), sessionID); err != nil {
 		writeError(w, http.StatusNotFound, "session not found")
 		return
 	}
+	wsID := wsp.ID
 
 	since := int64(0)
 	if v := r.URL.Query().Get("since"); v != "" {
@@ -62,15 +67,15 @@ func (s *Server) handleSessionStream(w http.ResponseWriter, r *http.Request) {
 	}
 	clientEpoch := r.URL.Query().Get("epoch")
 
-	subID, ch, head := s.hub.Subscribe(sessionID)
+	subID, ch, head := s.hub.Subscribe(wsID, sessionID)
 	defer func() {
-		s.hub.Unsubscribe(sessionID, subID)
+		s.hub.Unsubscribe(wsID, sessionID, subID)
 		// Presence dropped by one: tell the remaining windows.
-		s.publishPresence(sessionID)
+		s.publishPresence(wsID, sessionID)
 	}()
 	// Presence: this window just joined — broadcast the new viewer count so every
 	// window can show "open in N windows" / "another window is answering".
-	s.publishPresence(sessionID)
+	s.publishPresence(wsID, sessionID)
 
 	h := w.Header()
 	h.Set("Content-Type", "text/event-stream")
@@ -102,7 +107,7 @@ func (s *Server) handleSessionStream(w http.ResponseWriter, r *http.Request) {
 	// Gap-fill from the cursor, or ask the client to resync when it can't be trusted.
 	if clientEpoch != "" && clientEpoch != s.hub.Epoch() {
 		writeFrame("reset", 0, map[string]any{"head": head})
-	} else if replay, okReplay := s.hub.Replay(sessionID, since); okReplay {
+	} else if replay, okReplay := s.hub.Replay(wsID, sessionID, since); okReplay {
 		for _, ev := range replay {
 			writeFrame("hub", ev.Seq, ev)
 		}
@@ -114,7 +119,7 @@ func (s *Server) handleSessionStream(w http.ResponseWriter, r *http.Request) {
 	// (ephemeral → live to current subscribers, not added to the ring), so a card
 	// survives a backend restart that cleared the in-memory hub. The disk row is the
 	// source of truth. No-op when there are none.
-	s.restoreWaitingAsks(ws(r), sessionID)
+	s.restoreWaitingAsks(wsp, sessionID)
 
 	ping := time.NewTicker(eventsPingInterval)
 	defer ping.Stop()
@@ -138,8 +143,8 @@ func (s *Server) handleSessionStream(w http.ResponseWriter, r *http.Request) {
 // publishStep is the server-side helper the chat turn uses to put one durable
 // TurnStep onto a session's hub stream. step is the already-marshalled TurnStep
 // JSON (opaque here). A no-op on a nil hub.
-func (s *Server) publishStep(sessionID string, step json.RawMessage) {
-	s.hub.Publish(sessionID, sessionhub.KindStep, step, false)
+func (s *Server) publishStep(wsID, sessionID string, step json.RawMessage) {
+	s.hub.Publish(wsID, sessionID, sessionhub.KindStep, step, false)
 }
 
 type typingReq struct {
@@ -161,7 +166,7 @@ func (s *Server) handleTyping(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	s.hub.Publish(sessionID, sessionhub.KindTyping, mustJSON(map[string]any{
+	s.hub.Publish(ws(r).ID, sessionID, sessionhub.KindTyping, mustJSON(map[string]any{
 		"active":   req.Active,
 		"clientId": req.ClientID,
 	}), true)
@@ -171,9 +176,9 @@ func (s *Server) handleTyping(w http.ResponseWriter, r *http.Request) {
 // publishPresence broadcasts the current live viewer count for a session as an
 // ephemeral hub event (seq 0, not retained) — the raw signal behind the
 // "open in N windows" / "another window is answering" UI (Faz 4).
-func (s *Server) publishPresence(sessionID string) {
-	s.hub.Publish(sessionID, sessionhub.KindPresence, mustJSON(map[string]any{
-		"count": s.hub.SubscriberCount(sessionID),
+func (s *Server) publishPresence(wsID, sessionID string) {
+	s.hub.Publish(wsID, sessionID, sessionhub.KindPresence, mustJSON(map[string]any{
+		"count": s.hub.SubscriberCount(wsID, sessionID),
 	}), true)
 }
 
@@ -190,7 +195,7 @@ func mustJSON(v any) json.RawMessage {
 // publishHub marshals v and publishes it under kind. ephemeral events (delta,
 // typing) carry seq 0 and are not retained for replay. A no-op on a nil hub or
 // a marshal error.
-func (s *Server) publishHub(sessionID, kind string, v any, ephemeral bool) {
+func (s *Server) publishHub(wsID, sessionID, kind string, v any, ephemeral bool) {
 	// A completed reply carries the turn's whole activity trace. Trim its
 	// oversized tool payloads the same way the transcript listing does, so a
 	// turn does not render one way live and a shorter way after a reload — and
@@ -206,7 +211,7 @@ func (s *Server) publishHub(sessionID, kind string, v any, ephemeral bool) {
 	if err != nil {
 		return
 	}
-	s.hub.Publish(sessionID, kind, b, ephemeral)
+	s.hub.Publish(wsID, sessionID, kind, b, ephemeral)
 }
 
 // bridgeBusToHub mirrors AUTONOMOUS turns' live steps from the process-wide bus
@@ -224,6 +229,18 @@ func (s *Server) bridgeBusToHub() {
 	for e := range ch {
 		sid := e.Target["sessionId"]
 		if sid == "" {
+			continue
+		}
+		// Every runtime-published event is stamped with its workspace (Runtime.publish).
+		// Without it the session id alone cannot identify a session — "SES1" exists in
+		// every workspace — so an unstamped event is dropped and logged rather than
+		// bridged into whichever workspace happens to hold that id.
+		wsID := e.WorkspaceID
+		if wsID == "" {
+			if s.logger != nil {
+				s.logger.Warn("bus event without workspace id; not bridged to hub",
+					"type", e.Type, "session", sid)
+			}
 			continue
 		}
 		switch e.Type {
@@ -244,14 +261,14 @@ func (s *Server) bridgeBusToHub() {
 			if e.Target["origin"] == "interactive" {
 				continue
 			}
-			s.hub.Publish(sid, sessionhub.KindStep, e.Step, false)
+			s.hub.Publish(wsID, sid, sessionhub.KindStep, e.Step, false)
 		case "session_turn_queue":
 			// The session's TURN ADMISSION state changed (a turn took the slot, released
 			// it, or queued behind it). Re-publish the session's queue view so every
 			// window sees the whole picture — the user's own staged messages AND the
 			// autonomous turns they are waiting behind. Payload-free by design: we read
 			// the current snapshot here, so a burst coalesces into one read.
-			s.republishQueue(sid)
+			s.republishQueue(wsID, sid)
 		case "session_user_message":
 			// A runtime-injected user-role message (a worker task-notification, a
 			// send_to_worker prompt, a coordination status/guard note) was just
@@ -268,7 +285,7 @@ func (s *Server) bridgeBusToHub() {
 			if len(e.Msg) == 0 {
 				continue
 			}
-			s.hub.Publish(sid, sessionhub.KindUserMessage, e.Msg, false)
+			s.hub.Publish(wsID, sid, sessionhub.KindUserMessage, e.Msg, false)
 		case "chat", "spawned", "worker", "schedule", "flow", "automation":
 			// An AUTONOMOUS turn (scheduler/spawn/worker/flow) finished: it publishes
 			// no hub reply/turn_done of its own, so bridge a turn_done here — every
@@ -278,14 +295,14 @@ func (s *Server) bridgeBusToHub() {
 			if ph := e.Target["phase"]; ph == "armed" || ph == "start" {
 				continue
 			}
-			if _, live := s.runs.sessionRunInfo(sid); live {
+			if _, live := s.runs.sessionRunInfo(wsID, sid); live {
 				continue
 			}
 			// Symmetry with interactive turns: publish the persisted reply so windows
 			// render it live, then turn_done. (Reload still backstops it.)
-			s.publishAutonomousReply(sid, e.WorkspaceID)
-			s.hub.Publish(sid, sessionhub.KindTurnDone, mustJSON(map[string]any{"sessionTitle": ""}), false)
-			s.hub.Commit(sid)
+			s.publishAutonomousReply(wsID, sid)
+			s.hub.Publish(wsID, sid, sessionhub.KindTurnDone, mustJSON(map[string]any{"sessionTitle": ""}), false)
+			s.hub.Commit(wsID, sid)
 		}
 	}
 }
@@ -295,23 +312,48 @@ func (s *Server) bridgeBusToHub() {
 // live (interactive turns already do this from runChatTurn). Best-effort: a no-op
 // when the workspace/message can't be resolved or the last message isn't an
 // assistant turn.
-func (s *Server) publishAutonomousReply(sessionID, wsID string) {
-	wsp := s.workspaces.Default()
-	if wsID != "" {
-		if w, err := s.workspaces.Get(wsID); err == nil {
-			wsp = w
-		}
-	}
+//
+// The workspace is NEVER guessed: falling back to the default workspace here used
+// to publish one workspace's transcript into a same-numbered session elsewhere.
+func (s *Server) publishAutonomousReply(wsID, sessionID string) {
+	wsp := s.workspaceByID(wsID)
 	if wsp == nil || wsp.DB == nil {
 		return
 	}
-	msgs, err := wsp.DB.ListMessages(context.Background(), sessionID)
-	if err != nil || len(msgs) == 0 {
+	last, ok, err := wsp.DB.LastMessage(context.Background(), sessionID)
+	if err != nil || !ok {
 		return
 	}
-	last := msgs[len(msgs)-1]
 	if last.Role != "assistant" {
 		return
 	}
-	s.publishHub(sessionID, sessionhub.KindReply, last, false)
+	s.publishHub(wsID, sessionID, sessionhub.KindReply, last, false)
+}
+
+// logError logs at error level, tolerating the nil logger a bare test Server has.
+func (s *Server) logError(msg string, args ...any) {
+	if s.logger != nil {
+		s.logger.Error(msg, args...)
+	}
+}
+
+// workspaceByID resolves a workspace by id, logging and returning nil when it
+// cannot be resolved. Deliberately WITHOUT a default-workspace fallback: every
+// per-session server-side structure is scoped by workspace, and silently serving
+// the default one is how a session's events, queue and inflight state leaked into
+// another workspace's same-numbered session.
+func (s *Server) workspaceByID(wsID string) *workspace.Workspace {
+	if s.workspaces == nil {
+		return nil
+	}
+	if wsID == "" {
+		s.logError("workspace id missing where one is required")
+		return nil
+	}
+	wsp, err := s.workspaces.Get(wsID)
+	if err != nil {
+		s.logError("workspace not resolvable", "workspace", wsID, "error", err)
+		return nil
+	}
+	return wsp
 }

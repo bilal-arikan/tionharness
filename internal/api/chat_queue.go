@@ -58,8 +58,8 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 	req.ClientMsgID = clientMsgID
 
 	// Subscribe BEFORE enqueue so we cannot miss our turn's first frames.
-	subID, ch, _ := s.hub.Subscribe(req.SessionID)
-	defer s.hub.Unsubscribe(req.SessionID, subID)
+	subID, ch, _ := s.hub.Subscribe(wsp.ID, req.SessionID)
+	defer s.hub.Unsubscribe(wsp.ID, req.SessionID, subID)
 
 	h := w.Header()
 	h.Set("Content-Type", "text/event-stream")
@@ -108,7 +108,7 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 			// so a fan-out drop leaves no later event to trigger gap detection — the
 			// relay would hang. Reconcile any unseen durable events from the ring here.
 			if lastSeq > 0 {
-				if done := s.drainReplay(req.SessionID, &lastSeq, frame); done {
+				if done := s.drainReplay(wsp.ID, req.SessionID, &lastSeq, frame); done {
 					return
 				}
 			}
@@ -121,7 +121,7 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 			// Gap-fill: the hub's non-blocking fan-out drops a frame to a slow consumer
 			// rather than stalling — which could skip our terminal turn_done and hang the
 			// relay. On a seq gap, replay the missed durable events from the ring first.
-			if done := s.relayGapThenEvent(req.SessionID, ev, &lastSeq, frame); done {
+			if done := s.relayGapThenEvent(wsp.ID, req.SessionID, ev, &lastSeq, frame); done {
 				return
 			}
 		}
@@ -154,8 +154,8 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 
 	clientMsgID := uuid.NewString()
 	req.ClientMsgID = clientMsgID
-	subID, ch, _ := s.hub.Subscribe(req.SessionID)
-	defer s.hub.Unsubscribe(req.SessionID, subID)
+	subID, ch, _ := s.hub.Subscribe(wsp.ID, req.SessionID)
+	defer s.hub.Unsubscribe(wsp.ID, req.SessionID, subID)
 	if !s.enqueueMessage(wsp.ID, req, clientMsgID) {
 		writeError(w, http.StatusInternalServerError, "could not enqueue message")
 		return
@@ -216,7 +216,7 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 			return
 		case <-ping.C:
 			if lastSeq > 0 {
-				if done := s.drainReplay(req.SessionID, &lastSeq, process); done {
+				if done := s.drainReplay(wsp.ID, req.SessionID, &lastSeq, process); done {
 					return
 				}
 			}
@@ -225,7 +225,7 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 				writeError(w, http.StatusInternalServerError, "stream closed before reply")
 				return
 			}
-			if done := s.relayGapThenEvent(req.SessionID, ev, &lastSeq, process); done {
+			if done := s.relayGapThenEvent(wsp.ID, req.SessionID, ev, &lastSeq, process); done {
 				return
 			}
 		}
@@ -237,9 +237,9 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 // terminal frame is never skipped. It advances *lastSeq and returns true as soon as
 // fn signals completion (the terminal event was handled). Ephemeral events (seq 0)
 // are passed straight through.
-func (s *Server) relayGapThenEvent(sessionID string, ev sessionhub.Event, lastSeq *int64, fn func(sessionhub.Event) bool) bool {
+func (s *Server) relayGapThenEvent(wsID, sessionID string, ev sessionhub.Event, lastSeq *int64, fn func(sessionhub.Event) bool) bool {
 	if ev.Seq > 0 && *lastSeq > 0 && ev.Seq > *lastSeq+1 {
-		if replay, ok := s.hub.Replay(sessionID, *lastSeq); ok {
+		if replay, ok := s.hub.Replay(wsID, sessionID, *lastSeq); ok {
 			for _, rev := range replay {
 				if rev.Seq <= *lastSeq || rev.Seq >= ev.Seq {
 					continue
@@ -263,8 +263,8 @@ func (s *Server) relayGapThenEvent(sessionID string, ev sessionhub.Event, lastSe
 // consumer there is no later event to trigger relayGapThenEvent's gap detection — the
 // observer would hang forever. Reconciling from the ring on each tick recovers it.
 // Returns true as soon as fn signals completion. A no-op when nothing new is retained.
-func (s *Server) drainReplay(sessionID string, lastSeq *int64, fn func(sessionhub.Event) bool) bool {
-	replay, ok := s.hub.Replay(sessionID, *lastSeq)
+func (s *Server) drainReplay(wsID, sessionID string, lastSeq *int64, fn func(sessionhub.Event) bool) bool {
+	replay, ok := s.hub.Replay(wsID, sessionID, *lastSeq)
 	if !ok {
 		return false
 	}

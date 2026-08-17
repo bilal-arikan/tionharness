@@ -1,4 +1,4 @@
-﻿package api
+package api
 
 import (
 	"context"
@@ -486,8 +486,11 @@ type chatRuns struct {
 	// reused, so the CLI mcp-config (which carries the token in an Authorization header)
 	// stays byte-identical turn-to-turn → the persistent launch fingerprint does not
 	// churn → the warm process is reused (Doc 52 §3-D, §11-decision 6). Keyed
-	// "sessionID\x00agentID". A per-run uuid (the old scheme) changed every turn and
-	// forced a cold restart of any persistent session with the Interaction MCP wired.
+	// "workspaceID\x00sessionID\x00agentID" — both ids are per-workspace sequences
+	// (WS18/SES1/AGT1 and WS19/SES1/AGT1 are different pairs), so a workspace-blind
+	// key handed one workspace's live Bearer token to another's turn. A per-run uuid
+	// (the old scheme) changed every turn and forced a cold restart of any persistent
+	// session with the Interaction MCP wired.
 	secrets map[string]string
 	// active maps a live Bearer secret → the run currently serving it, so byToken can
 	// resolve a stable (reused) token to the single in-flight turn. Only one turn per
@@ -508,8 +511,8 @@ func newChatRuns() *chatRuns {
 // every turn of that pair so the CLI mcp-config stays byte-identical and the
 // persistent claude-cli process is not cold-restarted each turn (Doc 52 §3-D).
 // Callers must also bindActive(token, run) for the turn so byToken can resolve it.
-func (c *chatRuns) interactionToken(sessionID, agentID string) string {
-	key := sessionID + "\x00" + agentID
+func (c *chatRuns) interactionToken(wsID, sessionID, agentID string) string {
+	key := scopeKey(wsID, sessionID) + "\x00" + agentID
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if t, ok := c.secrets[key]; ok {
@@ -582,6 +585,25 @@ func (c *chatRuns) activeSessionIDs(workspaceID string) []string {
 	return ids
 }
 
+// hasActive reports whether ANY in-flight turn belongs to workspaceID (same
+// scoping rules as activeSessionIDs, "" meaning process-wide). It exists because
+// the activity poll only ever asked "is this set empty?" — and answering that
+// with activeSessionIDs cost a map plus two slices per workspace per tick.
+func (c *chatRuns) hasActive(workspaceID string) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for _, run := range c.runs {
+		if run.sessionID == "" {
+			continue
+		}
+		if workspaceID != "" && run.workspaceID != workspaceID {
+			continue
+		}
+		return true
+	}
+	return false
+}
+
 // runInfo is a snapshot of one in-flight turn, for the Session Info panel.
 type runInfo struct {
 	RunID      string
@@ -593,14 +615,18 @@ type runInfo struct {
 // sessionRunInfo returns a snapshot of the (first) in-flight turn for a session,
 // or ok=false when the session has no running turn. Used by the Session Info panel
 // to show + control the background process.
-func (c *chatRuns) sessionRunInfo(sessionID string) (runInfo, bool) {
-	if sessionID == "" {
+//
+// The workspace is part of the identity: this registry is SERVER-WIDE and session
+// ids repeat across stores, so matching on the id alone reported (and let a caller
+// cancel, or block a delete on) another workspace's running turn.
+func (c *chatRuns) sessionRunInfo(wsID, sessionID string) (runInfo, bool) {
+	if wsID == "" || sessionID == "" {
 		return runInfo{}, false
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	for id, run := range c.runs {
-		if run.sessionID != sessionID {
+		if run.sessionID != sessionID || run.workspaceID != wsID {
 			continue
 		}
 		return runInfo{

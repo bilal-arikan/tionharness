@@ -88,6 +88,20 @@ type runningTurnDTO struct {
 	StartedAt  int64  `json:"startedAt"` // unix seconds
 	Autonomous bool   `json:"autonomous"`
 	Provider   string `json:"provider,omitempty"`
+
+	// Liveness, from the same signal the queue watchdog judges on (see
+	// Server.turnIdleFor). Elapsed time alone cannot answer "is this turn working
+	// or wedged?" — a 40-minute turn emitting steps is fine, a 3-minute one that
+	// has gone silent may not be.
+	//
+	// This is an ABSOLUTE timestamp, not a precomputed idle duration: the panel
+	// refetches when the conversation changes, so a silent session would freeze a
+	// duration at its last value — understating idleness exactly when it matters.
+	// The client ticks it against the server clock instead. Limits are the two
+	// bounds that will cut the turn, so the panel can show how close either is.
+	LastActivityAt int64 `json:"lastActivityAt"` // unix seconds
+	IdleLimitSec   int64 `json:"idleLimitSec"`
+	HardLimitSec   int64 `json:"hardLimitSec"`
 }
 
 type contextFiller struct {
@@ -257,12 +271,21 @@ func (s *Server) handleSessionInfo(w http.ResponseWriter, r *http.Request) {
 
 	// Live background process: an in-flight turn (chat-streaming or autonomous) and,
 	// in persistent-pool mode, a warm claude-cli process kept between turns.
-	if info, ok := s.runs.sessionRunInfo(id); ok {
+	if info, ok := s.runs.sessionRunInfo(wsp.ID, id); ok {
 		resp.Running = &runningTurnDTO{
 			RunID:      info.RunID,
 			StartedAt:  info.StartedAt.Unix(),
 			Autonomous: info.Autonomous,
 			Provider:   info.Provider,
+
+			// Fall back to the turn's start: before the first event lands, the turn has
+			// been silent since it began — which is precisely the setup-wedge case.
+			LastActivityAt: info.StartedAt.Unix(),
+			IdleLimitSec:   int64(s.inboxTurnIdleWatchdog().Seconds()),
+			HardLimitSec:   int64(s.inboxTurnWatchdog().Seconds()),
+		}
+		if last, ok := s.hub.LastActivity(wsp.ID, id); ok && last.After(info.StartedAt) {
+			resp.Running.LastActivityAt = last.Unix()
 		}
 	}
 	resp.WarmCLIProcess = wsp.Runtime.HasWarmCLISession(id)

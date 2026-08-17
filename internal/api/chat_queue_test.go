@@ -128,13 +128,13 @@ func TestDrainReplayRecoversDroppedTerminal(t *testing.T) {
 	sid := "SES1"
 	// A turn's durable events land in the ring; simulate the observer having seen
 	// NONE of them (lastSeq stays 0, as if every live frame was dropped).
-	s.hub.Publish(sid, sessionhub.KindStep, json.RawMessage(`{}`), false)
-	s.hub.Publish(sid, sessionhub.KindStep, json.RawMessage(`{}`), false)
-	s.hub.Publish(sid, sessionhub.KindTurnDone, json.RawMessage(`{"clientMsgId":"me"}`), false)
+	s.hub.Publish("WS1", sid, sessionhub.KindStep, json.RawMessage(`{}`), false)
+	s.hub.Publish("WS1", sid, sessionhub.KindStep, json.RawMessage(`{}`), false)
+	s.hub.Publish("WS1", sid, sessionhub.KindTurnDone, json.RawMessage(`{"clientMsgId":"me"}`), false)
 
 	var seen []string
 	lastSeq := int64(0)
-	done := s.drainReplay(sid, &lastSeq, func(ev sessionhub.Event) bool {
+	done := s.drainReplay("WS1", sid, &lastSeq, func(ev sessionhub.Event) bool {
 		seen = append(seen, ev.Kind)
 		return ev.Kind == sessionhub.KindTurnDone && payloadClientMsgID(ev.Payload) == "me"
 	})

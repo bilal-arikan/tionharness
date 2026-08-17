@@ -20,7 +20,9 @@ import (
 // newWorkspaceServer builds a real (if minimal) Server over a temp workspace tree:
 // the send-queue tests below need a live Runtime, because the property under test is
 // exactly how the queue and the runtime's turn slot interact.
-func newWorkspaceServer(t *testing.T) (*Server, *workspace.Workspace) {
+// Takes testing.TB rather than *testing.T so benchmarks can use the same harness
+// (BenchmarkWorkspaceRunning needs a real store + Runtime, not a stub).
+func newWorkspaceServer(t testing.TB) (*Server, *workspace.Workspace) {
 	t.Helper()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	dir := t.TempDir()
@@ -76,7 +78,7 @@ func TestQueuedMessageStaysWaitingWhileTurnSlotHeld(t *testing.T) {
 	// Give the worker every chance to (wrongly) dispatch.
 	time.Sleep(150 * time.Millisecond)
 	s.inbox.lock()
-	ib := s.inbox.sessions[sess.ID]
+	ib := s.inbox.at(wsp.ID, sess.ID)
 	waiting := len(ib.items)
 	inflight := ib.inflight
 	s.inbox.unlock()
@@ -88,7 +90,7 @@ func TestQueuedMessageStaysWaitingWhileTurnSlotHeld(t *testing.T) {
 	}
 
 	// It is still cancellable — the whole point of leaving it in the queue.
-	if !s.cancelQueued(sess.ID, "m1") {
+	if !s.cancelQueued(wsp.ID, sess.ID, "m1") {
 		t.Fatal("a message waiting on the turn slot must still be cancellable")
 	}
 	releaseSlot()
@@ -114,7 +116,7 @@ func TestQueuedMessageDispatchesAfterTurnSlotReleased(t *testing.T) {
 	deadline := time.After(3 * time.Second)
 	for {
 		s.inbox.lock()
-		ib := s.inbox.sessions[sess.ID]
+		ib := s.inbox.at(wsp.ID, sess.ID)
 		waiting := len(ib.items)
 		s.inbox.unlock()
 		if waiting == 0 {

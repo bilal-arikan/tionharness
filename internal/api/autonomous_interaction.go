@@ -1,4 +1,4 @@
-﻿package api
+package api
 
 import (
 	"context"
@@ -124,7 +124,7 @@ func (s *Server) autonomousInteraction(rt *agent.Runtime) agent.AutonomousIntera
 		// Stable per-(session,agent) Bearer token (see chat_stream): keeps the CLI
 		// mcp-config byte-identical across turns so a persistent process stays warm
 		// (Doc 52 §3-D). bindActive resolves it to this in-flight run.
-		tok := s.runs.interactionToken(sessionID, ag.ID)
+		tok := s.runs.interactionToken(rt.WorkspaceID(), sessionID, ag.ID)
 		s.runs.bindActive(tok, run)
 		ctx = tools.WithInteractionEndpoint(ctx, url, tok, coreNames, extNames)
 		return ctx, func() { cancel(); s.runs.unregister(runID) }

@@ -93,20 +93,20 @@ func (s *Server) handleSessionSummary(w http.ResponseWriter, r *http.Request) {
 	if writeDBError(w, err, "session not found") {
 		return
 	}
-	s.publishHub(session.ID, sessionhub.KindUserMessage, userMsg, false)
+	s.publishHub(wsp.ID, session.ID, sessionhub.KindUserMessage, userMsg, false)
 	// A durable agent_start + one text step give every window a live ghost bubble
 	// carrying the busy label while the op runs. Durable (not the ephemeral delta)
 	// so a subscriber that joins/refreshes mid-op replays them.
-	s.publishHub(session.ID, sessionhub.KindAgentStart, map[string]any{"agentId": session.AgentID}, false)
-	s.publishStep(session.ID, mustJSON(map[string]any{"kind": "text", "text": summaryBusyLabel(kind)}))
+	s.publishHub(wsp.ID, session.ID, sessionhub.KindAgentStart, map[string]any{"agentId": session.AgentID}, false)
+	s.publishStep(wsp.ID, session.ID, mustJSON(map[string]any{"kind": "text", "text": summaryBusyLabel(kind)}))
 
 	// Run the command. On failure, clear the "working" bubble in every window
 	// (turn_error + commit); the persisted "/kind" user message stays as an honest
 	// record that the command was attempted.
 	body, err := s.runSummaryKind(ctx, wsp, session, kind, compactHistory)
 	if err != nil {
-		s.publishHub(session.ID, sessionhub.KindTurnError, map[string]any{"error": err.Error(), "reason": "summary_failed"}, false)
-		s.hub.Commit(session.ID)
+		s.publishHub(wsp.ID, session.ID, sessionhub.KindTurnError, map[string]any{"error": err.Error(), "reason": "summary_failed"}, false)
+		s.hub.Commit(wsp.ID, session.ID)
 		s.logger.Warn("summary command failed", "session", session.ID, "kind", kind, "error", err)
 		writeError(w, http.StatusInternalServerError, kind+" failed: "+err.Error())
 		return
@@ -125,9 +125,9 @@ func (s *Server) handleSessionSummary(w http.ResponseWriter, r *http.Request) {
 	// Reply + turn_done + commit: every window swaps the live ghost for the
 	// persisted report and stops showing "working"; the committed boundary advances
 	// so a later fresh subscriber skips replaying this finished turn.
-	s.publishHub(session.ID, sessionhub.KindReply, msg, false)
-	s.hub.Publish(session.ID, sessionhub.KindTurnDone, mustJSON(map[string]any{"sessionTitle": ""}), false)
-	s.hub.Commit(session.ID)
+	s.publishHub(wsp.ID, session.ID, sessionhub.KindReply, msg, false)
+	s.hub.Publish(wsp.ID, session.ID, sessionhub.KindTurnDone, mustJSON(map[string]any{"sessionTitle": ""}), false)
+	s.hub.Commit(wsp.ID, session.ID)
 	// Sibling windows NOT subscribed to this session's hub (e.g. the sessions list)
 	// still refresh their last-message metadata via the global bus.
 	emitSessionChange(wsp, session.ID, "summary")
@@ -227,9 +227,9 @@ func (s *Server) handleSessionHandoff(w http.ResponseWriter, r *http.Request) {
 	// persist + publish the "/handoff" bubble and a live "working" ghost BEFORE the
 	// (potentially slow — writes a handoff artifact, spawns a fresh session) op, so
 	// a page refresh mid-op replays the in-flight tail instead of losing both bubbles.
-	s.publishHub(session.ID, sessionhub.KindUserMessage, userMsg, false)
-	s.publishHub(session.ID, sessionhub.KindAgentStart, map[string]any{"agentId": session.AgentID}, false)
-	s.publishStep(session.ID, mustJSON(map[string]any{"kind": "text", "text": "⏳ Context reset — handoff yazılıyor ve temiz oturum başlatılıyor…"}))
+	s.publishHub(wsp.ID, session.ID, sessionhub.KindUserMessage, userMsg, false)
+	s.publishHub(wsp.ID, session.ID, sessionhub.KindAgentStart, map[string]any{"agentId": session.AgentID}, false)
+	s.publishStep(wsp.ID, session.ID, mustJSON(map[string]any{"kind": "text", "text": "⏳ Context reset — handoff yazılıyor ve temiz oturum başlatılıyor…"}))
 
 	res, herr := wsp.Runtime.HandoffSession(ctx, session, agentRow, agent.HandoffOptions{
 		Reason: agent.HandoffReasonManual,
@@ -254,9 +254,9 @@ func (s *Server) handleSessionHandoff(w http.ResponseWriter, r *http.Request) {
 			// The session stays put (no fresh window) — swap the live ghost for the
 			// persisted notice on the hub so every window renders it and stops showing
 			// "working".
-			s.publishHub(session.ID, sessionhub.KindReply, notice, false)
-			s.hub.Publish(session.ID, sessionhub.KindTurnDone, mustJSON(map[string]any{"sessionTitle": ""}), false)
-			s.hub.Commit(session.ID)
+			s.publishHub(wsp.ID, session.ID, sessionhub.KindReply, notice, false)
+			s.hub.Publish(wsp.ID, session.ID, sessionhub.KindTurnDone, mustJSON(map[string]any{"sessionTitle": ""}), false)
+			s.hub.Commit(wsp.ID, session.ID)
 			emitSessionChange(wsp, session.ID, "message_added")
 			// 200 (not 409) with a blocked flag: the frontend's fetch wrapper throws
 			// on any non-2xx and would surface a generic "HTTP 409" toast, burying the
@@ -271,8 +271,8 @@ func (s *Server) handleSessionHandoff(w http.ResponseWriter, r *http.Request) {
 		}
 		// Hard failure: clear the live "working" bubble in every window; the persisted
 		// "/handoff" user message stays as an honest record it was attempted.
-		s.publishHub(session.ID, sessionhub.KindTurnError, map[string]any{"error": herr.Error(), "reason": "handoff_failed"}, false)
-		s.hub.Commit(session.ID)
+		s.publishHub(wsp.ID, session.ID, sessionhub.KindTurnError, map[string]any{"error": herr.Error(), "reason": "handoff_failed"}, false)
+		s.hub.Commit(wsp.ID, session.ID)
 		writeError(w, http.StatusInternalServerError, "handoff failed: "+herr.Error())
 		return
 	}
@@ -283,9 +283,9 @@ func (s *Server) handleSessionHandoff(w http.ResponseWriter, r *http.Request) {
 	// window switches to the fresh session, but a sibling window or a return visit
 	// renders the durable tombstone. publishAutonomousReply reads the old session's
 	// last (assistant) message, which is exactly that tombstone.
-	s.publishAutonomousReply(session.ID, wsp.ID)
-	s.hub.Publish(session.ID, sessionhub.KindTurnDone, mustJSON(map[string]any{"sessionTitle": ""}), false)
-	s.hub.Commit(session.ID)
+	s.publishAutonomousReply(wsp.ID, session.ID)
+	s.hub.Publish(wsp.ID, session.ID, sessionhub.KindTurnDone, mustJSON(map[string]any{"sessionTitle": ""}), false)
+	s.hub.Commit(wsp.ID, session.ID)
 	// Cross-window sync: Runtime.HandoffSession itself emits the "session"
 	// events for both the old (op="handoff") and the new (op="create") sessions
 	// — the same runtime call also backs the agent-driven handoff_session tool

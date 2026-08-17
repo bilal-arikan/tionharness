@@ -13,6 +13,10 @@ import (
 // bridge's subscribe race) and reports whether a KindStep frame reaches the hub
 // within the deadline. origin tags the event's source ("interactive" or "" for
 // autonomous), exactly as emitSessionStep does.
+// testWSID is the workspace every bridge test publishes/subscribes under: the
+// hub is workspace-scoped, so a bus event must carry the same id to be bridged.
+const testWSID = "WS1"
+
 func waitForStep(bus *events.Bus, hubCh <-chan sessionhub.Event, sid, origin string) bool {
 	deadline := time.After(2 * time.Second)
 	tick := time.NewTicker(20 * time.Millisecond)
@@ -23,9 +27,10 @@ func waitForStep(bus *events.Bus, hubCh <-chan sessionhub.Event, sid, origin str
 			target["origin"] = origin
 		}
 		bus.Publish(events.Event{
-			Type:   "session_step",
-			Target: target,
-			Step:   json.RawMessage(`{"kind":"tool","text":"ran a tool"}`),
+			Type:        "session_step",
+			WorkspaceID: testWSID,
+			Target:      target,
+			Step:        json.RawMessage(`{"kind":"tool","text":"ran a tool"}`),
 		})
 	}
 	pub()
@@ -55,7 +60,7 @@ func TestBridgeForwardsAutonomousSteps(t *testing.T) {
 		runs: newChatRuns(),
 	}
 	const sid = "s-auto"
-	_, ch, _ := srv.hub.Subscribe(sid)
+	_, ch, _ := srv.hub.Subscribe(testWSID, sid)
 	go srv.bridgeBusToHub()
 
 	if !waitForStep(bus, ch, sid, "") {
@@ -78,7 +83,7 @@ func TestBridgeSkipsInteractiveSteps(t *testing.T) {
 		runs: newChatRuns(),
 	}
 	const sid = "s-inter"
-	_, ch, _ := srv.hub.Subscribe(sid)
+	_, ch, _ := srv.hub.Subscribe(testWSID, sid)
 	go srv.bridgeBusToHub()
 
 	if waitForStep(bus, ch, sid, "interactive") {
@@ -100,7 +105,7 @@ func TestBridgeForwardsInjectedUserMessage(t *testing.T) {
 		runs: newChatRuns(),
 	}
 	const sid = "s-note"
-	_, ch, _ := srv.hub.Subscribe(sid)
+	_, ch, _ := srv.hub.Subscribe(testWSID, sid)
 	go srv.bridgeBusToHub()
 
 	deadline := time.After(2 * time.Second)
@@ -108,9 +113,10 @@ func TestBridgeForwardsInjectedUserMessage(t *testing.T) {
 	defer tick.Stop()
 	pub := func() {
 		bus.Publish(events.Event{
-			Type:   events.TypeSessionUserMessage,
-			Target: map[string]string{"sessionId": sid},
-			Msg:    json.RawMessage(`{"id":"MSG1","role":"user","text":"<task-notification>done</task-notification>"}`),
+			Type:        events.TypeSessionUserMessage,
+			WorkspaceID: testWSID,
+			Target:      map[string]string{"sessionId": sid},
+			Msg:         json.RawMessage(`{"id":"MSG1","role":"user","text":"<task-notification>done</task-notification>"}`),
 		})
 	}
 	pub()

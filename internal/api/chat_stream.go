@@ -82,8 +82,8 @@ func (s *Server) runChatTurn(clientGone context.Context, wsp *workspace.Workspac
 		s.logger.Error("chat turn preflight failed", "session", req.SessionID, "reason", reason, "detail", detail)
 		payload := map[string]any{"error": detail, "reason": reason, "clientMsgId": clientMsgID}
 		run.emit("error", payload)
-		s.publishHub(req.SessionID, sessionhub.KindTurnError, payload, false)
-		s.hub.Commit(req.SessionID)
+		s.publishHub(wsp.ID, req.SessionID, sessionhub.KindTurnError, payload, false)
+		s.hub.Commit(wsp.ID, req.SessionID)
 	}
 
 	database := wsp.DB
@@ -188,7 +188,7 @@ func (s *Server) runChatTurn(clientGone context.Context, wsp *workspace.Workspac
 	sse("meta", map[string]any{"userMessage": userMsg, "runId": runID})
 	// Put the user message onto the session hub so EVERY window watching this
 	// session (not just the one that submitted) renders it live, in order.
-	s.publishHub(session.ID, sessionhub.KindUserMessage, userMsg, false)
+	s.publishHub(wsp.ID, session.ID, sessionhub.KindUserMessage, userMsg, false)
 
 	// Wire the interactive asker: the ask_user tool emits a transient "ask" step
 	// and blocks here until the client POSTs an answer (or the turn is stopped).
@@ -197,7 +197,7 @@ func (s *Server) runChatTurn(clientGone context.Context, wsp *workspace.Workspac
 		// Resolve-once interaction on the session hub: EVERY window renders the card
 		// and the first to answer wins (CAS). clientGone still aborts a detached turn
 		// whose user navigated away so the goroutine never leaks.
-		pi := s.openInteraction(session.ID, "ask", map[string]any{"question": question, "options": options})
+		pi := s.openInteraction(wsp.ID, session.ID, "ask", map[string]any{"question": question, "options": options})
 		return s.waitInteraction(ctx, clientGone, pi)
 	})
 
@@ -205,7 +205,7 @@ func (s *Server) runChatTurn(clientGone context.Context, wsp *workspace.Workspac
 	// carrying all of them; every window renders a combined form and any POSTs a JSON
 	// array of answers, which FormatMultiAnswer folds into a single labeled block.
 	ctx = tools.WithMultiAsker(ctx, func(ctx context.Context, questions []tools.AskQuestion) (string, error) {
-		pi := s.openInteraction(session.ID, "ask", map[string]any{"questions": questions})
+		pi := s.openInteraction(wsp.ID, session.ID, "ask", map[string]any{"questions": questions})
 		ans, err := s.waitInteraction(ctx, clientGone, pi)
 		if err != nil {
 			return "", err
@@ -218,11 +218,11 @@ func (s *Server) runChatTurn(clientGone context.Context, wsp *workspace.Workspac
 	// and blocks on the same answer channel as ask_user; "Always allow" is
 	// recorded in the session grants so it isn't re-asked. Also wired onto the run
 	// so the CLI permission-prompt tool shares the same grant set.
-	grants := s.grants.forSession(session.ID)
+	grants := s.grants.forSession(wsp.ID, session.ID)
 	run.setGrants(grants)
 	ctx = tools.WithGrants(ctx, grants)
 	ctx = tools.WithPermissionPrompter(ctx, func(ctx context.Context, tool, risk, arg string, options []string) (string, error) {
-		pi := s.openInteraction(session.ID, "permission", map[string]any{
+		pi := s.openInteraction(wsp.ID, session.ID, "permission", map[string]any{
 			"tool": tool, "reason": risk, "text": arg, "options": options,
 		})
 		return s.waitInteraction(ctx, clientGone, pi)
@@ -265,7 +265,7 @@ func (s *Server) runChatTurn(clientGone context.Context, wsp *workspace.Workspac
 			Steps:     marshalSteps(ups.Steps),
 		})
 		if berr != nil {
-			s.failTurn(ctx, database, sse, session.ID, agents[0].ID, clientMsgID, "hook_block_persist", berr.Error())
+			s.failTurn(ctx, wsp, sse, session.ID, agents[0].ID, clientMsgID, "hook_block_persist", berr.Error())
 			return
 		}
 		sse("reply", map[string]any{"replyMessage": blockMsg})
@@ -299,7 +299,7 @@ func (s *Server) runChatTurn(clientGone context.Context, wsp *workspace.Workspac
 			}
 			provider, perr := s.providers.Get(agentRow.Provider)
 			if perr != nil {
-				s.failTurn(ctx, database, sse, session.ID, agentRow.ID, clientMsgID, "provider_unavailable", perr.Error())
+				s.failTurn(ctx, wsp, sse, session.ID, agentRow.ID, clientMsgID, "provider_unavailable", perr.Error())
 				return
 			}
 			// Pin this workspace's claude-home before Prepare's rolling compaction,
@@ -312,11 +312,11 @@ func (s *Server) runChatTurn(clientGone context.Context, wsp *workspace.Workspac
 			sse("agent", map[string]any{"agentId": agentRow.ID, "index": i})
 			// Mirror agent-start onto the hub so late-joining windows know which
 			// agent is answering (multi-agent threads render each turn's author).
-			s.publishHub(session.ID, sessionhub.KindAgentStart, map[string]any{"agentId": agentRow.ID, "index": i}, false)
+			s.publishHub(wsp.ID, session.ID, sessionhub.KindAgentStart, map[string]any{"agentId": agentRow.ID, "index": i}, false)
 
 			history, herr := database.ListMessages(ctx, session.ID)
 			if herr != nil {
-				s.failTurn(ctx, database, sse, session.ID, agentRow.ID, clientMsgID, "history_error", herr.Error())
+				s.failTurn(ctx, wsp, sse, session.ID, agentRow.ID, clientMsgID, "history_error", herr.Error())
 				return
 			}
 			session, _ = database.GetSession(ctx, session.ID)
@@ -359,7 +359,7 @@ func (s *Server) runChatTurn(clientGone context.Context, wsp *workspace.Workspac
 			})
 			prep, cerr := s.convo.Prepare(ctx, database, provider, session, agentRow, history)
 			if cerr != nil {
-				s.failTurn(ctx, database, sse, session.ID, agentRow.ID, clientMsgID, "compaction_failed", "compaction failed: "+cerr.Error())
+				s.failTurn(ctx, wsp, sse, session.ID, agentRow.ID, clientMsgID, "compaction_failed", "compaction failed: "+cerr.Error())
 				return
 			}
 
@@ -383,7 +383,7 @@ func (s *Server) runChatTurn(clientGone context.Context, wsp *workspace.Workspac
 			for _, st := range leadSteps {
 				sse("step", st)
 				wsp.Runtime.EmitSessionStep(session.ID, st)
-				s.publishHub(session.ID, sessionhub.KindStep, st, false)
+				s.publishHub(wsp.ID, session.ID, sessionhub.KindStep, st, false)
 			}
 			// claude-cli session resume (opt-in): when engaged, this trims llmReq to the
 			// unseen delta and sets ResumeSessionID so the CLI reuses its warm cache.
@@ -511,7 +511,7 @@ func (s *Server) runChatTurn(clientGone context.Context, wsp *workspace.Workspac
 				// Stable per-(session,agent) Bearer token (not run.token): keeps the CLI
 				// mcp-config byte-identical across turns so a persistent process stays warm
 				// (Doc 52 §3-D). bindActive resolves it to this in-flight run.
-				tok := s.runs.interactionToken(req.SessionID, agentRow.ID)
+				tok := s.runs.interactionToken(wsp.ID, req.SessionID, agentRow.ID)
 				s.runs.bindActive(tok, run)
 				turnCtx = tools.WithInteractionEndpoint(turnCtx, url, tok, coreNames, extNames)
 			}
@@ -561,11 +561,11 @@ func (s *Server) runChatTurn(clientGone context.Context, wsp *workspace.Workspac
 					case agent.StepDelta:
 						partial.WriteString(st.Text)
 						// Ephemeral token growth: best-effort live, seq 0, not retained.
-						s.publishHub(session.ID, sessionhub.KindDelta, st, true)
+						s.publishHub(wsp.ID, session.ID, sessionhub.KindDelta, st, true)
 					case agent.StepToolDelta:
-						s.publishHub(session.ID, sessionhub.KindToolDelta, st, true)
+						s.publishHub(wsp.ID, session.ID, sessionhub.KindToolDelta, st, true)
 					case agent.StepTombstone:
-						s.publishHub(session.ID, sessionhub.KindTombstone, st, true)
+						s.publishHub(wsp.ID, session.ID, sessionhub.KindTombstone, st, true)
 					case agent.StepAsk, agent.StepPermission, agent.StepPlan:
 						// Interactive prompts are handled by the Phase 2 interaction CAS
 						// (interaction_open/resolved), not broadcast as plain hub steps —
@@ -575,7 +575,7 @@ func (s *Server) runChatTurn(clientGone context.Context, wsp *workspace.Workspac
 						// Durable activity (thinking/tool/todo/diff/recovery/error/…) →
 						// seq'd on the hub so every window renders it live and a reconnect
 						// gap-fills it from the ring.
-						s.publishHub(session.ID, sessionhub.KindStep, st, false)
+						s.publishHub(wsp.ID, session.ID, sessionhub.KindStep, st, false)
 					}
 					snapshot()
 				},
@@ -598,8 +598,8 @@ func (s *Server) runChatTurn(clientGone context.Context, wsp *workspace.Workspac
 						s.logger.Error("durable ask: persist suspend failed", "session", session.ID, "error", perr)
 					} else {
 						_ = database.ClearInflight(session.ID)
-						s.openDurableAskCard(session.ID, ask, false)
-						s.hub.Commit(session.ID)
+						s.openDurableAskCard(wsp.ID, session.ID, ask, false)
+						s.hub.Commit(wsp.ID, session.ID)
 						s.logger.Info("durable ask: turn suspended", "session", session.ID, "ask", ask.ID)
 						sse("ask_suspended", map[string]any{"askId": ask.ID})
 						return
@@ -643,8 +643,8 @@ func (s *Server) runChatTurn(clientGone context.Context, wsp *workspace.Workspac
 					payload["replyMessage"] = msg
 					// Push the interrupted/stopped reply onto the hub so other windows
 					// render the preserved partial instead of a dangling live bubble.
-					s.publishHub(session.ID, sessionhub.KindReply, msg, false)
-					s.hub.Commit(session.ID)
+					s.publishHub(wsp.ID, session.ID, sessionhub.KindReply, msg, false)
+					s.hub.Commit(wsp.ID, session.ID)
 				}
 				_ = database.ClearInflight(session.ID)
 				// Auto-tag the turn failure (skips a clean user "stopped"), plus any real
@@ -653,8 +653,8 @@ func (s *Server) runChatTurn(clientGone context.Context, wsp *workspace.Workspac
 				sse("error", payload)
 				// Terminal error onto the hub so every window clears its "thinking"
 				// indicator and shows the failure, not just the submitting window.
-				s.publishHub(session.ID, sessionhub.KindTurnError, payload, false)
-				s.hub.Commit(session.ID)
+				s.publishHub(wsp.ID, session.ID, sessionhub.KindTurnError, payload, false)
+				s.hub.Commit(wsp.ID, session.ID)
 				return
 			}
 
@@ -671,7 +671,7 @@ func (s *Server) runChatTurn(clientGone context.Context, wsp *workspace.Workspac
 				DurationMs: time.Since(agentStart).Milliseconds(),
 			})
 			if aerr != nil {
-				s.failTurn(ctx, database, sse, session.ID, agentRow.ID, clientMsgID, "persist_error", aerr.Error())
+				s.failTurn(ctx, wsp, sse, session.ID, agentRow.ID, clientMsgID, "persist_error", aerr.Error())
 				return
 			}
 			// Persist the rotated claude-cli session id so the NEXT turn resumes it and
@@ -705,10 +705,10 @@ func (s *Server) runChatTurn(clientGone context.Context, wsp *workspace.Workspac
 			sse("reply", map[string]any{"replyMessage": replyMsg})
 			// Canonical reply onto the hub: every window replaces its live-accumulated
 			// bubble with this persisted, authoritative message (steps + usage + model).
-			s.publishHub(session.ID, sessionhub.KindReply, replyMsg, false)
+			s.publishHub(wsp.ID, session.ID, sessionhub.KindReply, replyMsg, false)
 			// This agent's turn is now in the persisted transcript → a fresh
 			// subscriber need not replay it (only the next agent's in-flight tail).
-			s.hub.Commit(session.ID)
+			s.hub.Commit(wsp.ID, session.ID)
 
 			s.logger.Info("chat turn completed",
 				"session", session.ID, "agent", agentRow.Name, "provider", agentRow.Provider,
@@ -749,8 +749,8 @@ func (s *Server) runChatTurn(clientGone context.Context, wsp *workspace.Workspac
 	// Terminal success onto the hub: every window stops its live indicator and
 	// picks up the (possibly new) session title. clientMsgId lets a queue observer
 	// (legacy /chat + /chat/stream) recognise its own turn's completion.
-	s.publishHub(session.ID, sessionhub.KindTurnDone, map[string]any{"sessionTitle": sessionTitle, "clientMsgId": clientMsgID}, false)
-	s.hub.Commit(session.ID)
+	s.publishHub(wsp.ID, session.ID, sessionhub.KindTurnDone, map[string]any{"sessionTitle": sessionTitle, "clientMsgId": clientMsgID}, false)
+	s.hub.Commit(wsp.ID, session.ID)
 
 	// Publish a chat-completion event so other workspaces can flag activity with
 	// a badge when the user is viewing a different workspace. The frontend uses
@@ -801,7 +801,8 @@ func (s *Server) resolveTurnAgents(ctx context.Context, database *db.DB, session
 // agentID is the responding agent (may be "" if none was selected yet); reason
 // is a stable machine tag (provider_error, compaction_failed, …) shown as a
 // badge; detail is the human-readable message.
-func (s *Server) failTurn(ctx context.Context, database *db.DB, sse func(string, any), sessionID, agentID, clientMsgID, reason, detail string) {
+func (s *Server) failTurn(ctx context.Context, wsp *workspace.Workspace, sse func(string, any), sessionID, agentID, clientMsgID, reason, detail string) {
+	database := wsp.DB
 	// Surface the failure in the server log too — without this a turn that dies
 	// before producing output (provider unavailable, compaction failure, …) is
 	// invisible server-side and only visible as a red card in the UI.
@@ -823,6 +824,6 @@ func (s *Server) failTurn(ctx context.Context, database *db.DB, sse func(string,
 	// on this turn) clears its "thinking" state and sees the failure — previously
 	// failTurn only wrote the legacy SSE sink, leaving hub clients to discover it on
 	// reload and the /chat + /chat/stream queue observers hanging.
-	s.publishHub(sessionID, sessionhub.KindTurnError, payload, false)
-	s.hub.Commit(sessionID)
+	s.publishHub(wsp.ID, sessionID, sessionhub.KindTurnError, payload, false)
+	s.hub.Commit(wsp.ID, sessionID)
 }

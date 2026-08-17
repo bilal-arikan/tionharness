@@ -21,7 +21,7 @@ import (
 // hub so every window renders it — the durable analog of openInteraction. The card
 // id is the SessionAsk id (SAK…), which the answer endpoint routes to the durable
 // resume; durable:true tells the frontend to treat it as a durable card.
-func (s *Server) openDurableAskCard(sessionID string, ask db.SessionAsk, ephemeral bool) {
+func (s *Server) openDurableAskCard(wsID, sessionID string, ask db.SessionAsk, ephemeral bool) {
 	var payload map[string]any
 	if ask.Payload != "" {
 		_ = json.Unmarshal([]byte(ask.Payload), &payload)
@@ -36,7 +36,7 @@ func (s *Server) openDurableAskCard(sessionID string, ask db.SessionAsk, ephemer
 	// submitting window renders it and a reconnect gap-fills it. Boot restore
 	// re-publishes ephemerally per-subscribe (the disk row is the source of truth),
 	// so the ring is never polluted with duplicate cards across reconnects.
-	s.publishHub(sessionID, sessionhub.KindInteractionOpen, payload, ephemeral)
+	s.publishHub(wsID, sessionID, sessionhub.KindInteractionOpen, payload, ephemeral)
 }
 
 // answerDurableAsk routes an interaction answer to a durably-suspended ask when it
@@ -54,7 +54,7 @@ func (s *Server) answerDurableAsk(r *http.Request, sessionID, askID, answer, by 
 		return false // not a waiting durable ask, or lost the answer race
 	}
 	// Close the card on every window (the resolve-once broadcast).
-	s.publishHub(sessionID, sessionhub.KindInteractionResolve, map[string]any{
+	s.publishHub(wsp.ID, sessionID, sessionhub.KindInteractionResolve, map[string]any{
 		"id": askID, "answer": answer, "resolvedBy": by,
 	}, false)
 	// Re-drive detached: the answering HTTP request must not block on the turn. The
@@ -68,37 +68,38 @@ func (s *Server) answerDurableAsk(r *http.Request, sessionID, askID, answer, by 
 // session hub. Runs in its own goroutine, detached from the HTTP request.
 func (s *Server) driveDurableAskResume(wsp *workspace.Workspace, sessionID string, ask db.SessionAsk, answer string) {
 	ctx := context.Background()
+	wsID := wsp.ID
 	onStep := func(st agent.TurnStep) {
 		// Mirror the resumed turn's live activity onto the hub so every window renders
 		// it — the same routing runChatTurn uses for a normal turn.
 		wsp.Runtime.EmitSessionStep(sessionID, st)
 		switch st.Kind {
 		case agent.StepDelta:
-			s.publishHub(sessionID, sessionhub.KindDelta, st, true)
+			s.publishHub(wsID, sessionID, sessionhub.KindDelta, st, true)
 		case agent.StepToolDelta:
-			s.publishHub(sessionID, sessionhub.KindToolDelta, st, true)
+			s.publishHub(wsID, sessionID, sessionhub.KindToolDelta, st, true)
 		case agent.StepTombstone:
-			s.publishHub(sessionID, sessionhub.KindTombstone, st, true)
+			s.publishHub(wsID, sessionID, sessionhub.KindTombstone, st, true)
 		case agent.StepAsk, agent.StepPermission, agent.StepPlan:
 			// Interactive prompts ride the interaction CAS, not plain hub steps.
 		default:
-			s.publishHub(sessionID, sessionhub.KindStep, st, false)
+			s.publishHub(wsID, sessionID, sessionhub.KindStep, st, false)
 		}
 	}
 	msg, reSuspend, err := wsp.Runtime.ResumeAskAndRecord(ctx, ask, answer, onStep)
 	if err != nil {
-		s.recordQueueTurnFailure(sessionID, "ask_resume_error", "Durable ask resume failed: "+err.Error())
-		s.hub.Commit(sessionID)
+		s.recordQueueTurnFailure(wsp, sessionID, "ask_resume_error", "Durable ask resume failed: "+err.Error())
+		s.hub.Commit(wsID, sessionID)
 		return
 	}
 	if reSuspend != nil {
 		// The resumed turn asked again at a clean point → a fresh durable card.
-		s.openDurableAskCard(sessionID, *reSuspend, false)
-		s.hub.Commit(sessionID)
+		s.openDurableAskCard(wsID, sessionID, *reSuspend, false)
+		s.hub.Commit(wsID, sessionID)
 		return
 	}
-	s.publishHub(sessionID, sessionhub.KindReply, *msg, false)
-	s.hub.Commit(sessionID)
+	s.publishHub(wsID, sessionID, sessionhub.KindReply, *msg, false)
+	s.hub.Commit(wsID, sessionID)
 	// GC the resolved ask row (its snapshot is spent).
 	_ = wsp.DB.DeleteSessionAsk(ctx, ask.ID)
 }
@@ -117,7 +118,7 @@ func (s *Server) restoreWaitingAsks(wsp *workspace.Workspace, sessionID string) 
 	}
 	for _, a := range asks {
 		if a.SessionID == sessionID {
-			s.openDurableAskCard(sessionID, a, true)
+			s.openDurableAskCard(wsp.ID, sessionID, a, true)
 		}
 	}
 }

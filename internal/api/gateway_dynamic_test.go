@@ -29,8 +29,8 @@ func TestGatewayDynamicExtendedSurface(t *testing.T) {
 
 	runs := newChatRuns()
 	b := &interactionBackend{runs: runs, tun: tun}
-	run := runs.register("r1", "s1", "", func() {})
-	tok := runs.interactionToken("s1", "a1")
+	run := runs.register("r1", "s1", "ws1", func() {})
+	tok := runs.interactionToken("ws1", "s1", "a1")
 	runs.bindActive(tok, run)
 
 	// Extended starts empty (nothing activated yet).
@@ -90,8 +90,8 @@ func TestGatewayActivateAcceptsNamespacedName(t *testing.T) {
 	tun := agent.NewTunables()
 	runs := newChatRuns()
 	b := &interactionBackend{runs: runs, tun: tun}
-	run := runs.register("r1", "s1", "", func() {})
-	tok := runs.interactionToken("s1", "a1")
+	run := runs.register("r1", "s1", "ws1", func() {})
+	tok := runs.interactionToken("ws1", "s1", "a1")
 	runs.bindActive(tok, run)
 
 	res, _ := b.callActivate(tok, run, json.RawMessage(`{"tools":["mcp__tionswarm_extended__notify"]}`), true)
@@ -118,8 +118,8 @@ func TestGatewayHiddenActivatableAndToolSearch(t *testing.T) {
 	tun := agent.NewTunables()
 	runs := newChatRuns()
 	b := &interactionBackend{runs: runs, tun: tun}
-	run := runs.register("r1", "s1", "", func() {})
-	tok := runs.interactionToken("s1", "a1")
+	run := runs.register("r1", "s1", "ws1", func() {})
+	tok := runs.interactionToken("ws1", "s1", "a1")
 	runs.bindActive(tok, run)
 
 	// Bridge a hidden-classified tool with a dispatcher.
@@ -163,8 +163,8 @@ func TestInteractionToolsHonorDisabled(t *testing.T) {
 	tun := agent.NewTunables()
 	runs := newChatRuns()
 	b := &interactionBackend{runs: runs, tun: tun}
-	run := runs.register("r1", "s1", "", func() {})
-	tok := runs.interactionToken("s1", "a1")
+	run := runs.register("r1", "s1", "ws1", func() {})
+	tok := runs.interactionToken("ws1", "s1", "a1")
 	runs.bindActive(tok, run)
 
 	// Baseline (no filter installed): create_artifact is on the core tier and notify

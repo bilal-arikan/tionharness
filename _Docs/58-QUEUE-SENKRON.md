@@ -79,9 +79,13 @@ Per-session:
 - `ring []Event` (son N dayanıklı event; gap replay için, örn. 512).
 - `subs map[int]chan Event` (aboneler).
 
-API: `Publish(sessionID, ev)` (seq atar, ring'e ekler, fan-out) ·
-`Subscribe(sessionID) (id, ch, cursor)` · `Replay(sessionID, since) []Event` ·
-`Drop(sessionID)`.
+API: `Publish(wsID, sessionID, ev)` (seq atar, ring'e ekler, fan-out) ·
+`Subscribe(wsID, sessionID) (id, ch, cursor)` ·
+`Replay(wsID, sessionID, since) []Event` · `Drop(wsID, sessionID)`.
+
+**Anahtar (wsID, sessionID) — session id TEK BAŞINA kimlik değildir.** Oturum
+id'leri her workspace'in kendi store'unda (`counters.json`) üretilir, yani `SES1`
+HER workspace'in ilk oturumudur. Bkz. "Workspace kapsamı" bölümü.
 
 Efemer event'lerde `Publish` seq atamaz ve ring'e koymaz.
 
@@ -159,11 +163,32 @@ type PendingInteraction struct {
   bug: head, tur çalışmadan **önce** kuyruktan silinip persist ediliyordu → sidecar
   da yoksa mesaj **tümden kayboluyordu** (SES10 "ajan hiç başlamıyor" semptomu).
 - **Worker watchdog + poison guard (2026-07-12):** her kuyruk turu `runQueuedTurn`
-  ile panik-bariyeri **+ 20 dk watchdog** altında koşar; asılan tur süreyi aşınca
+  ile panik-bariyeri **+ tur watchdog'u** altında koşar; asılan tur süreyi aşınca
   worker live-run'ı `cancel()` eder → goroutine çözülür, kuyruk kilitlenmez. Her
   dispatch `inboxItem.Attempts++` sayar; `maxInboxAttempts` (3) aşılırsa mesaj
   "poison" olarak düşürülür (görünür `turn_error`) → her boot'ta çöken tur kuyruğu
   sonsuza dek bloklayamaz.
+- **Watchdog süresi ayara bağlandı (2026-08-16):** süre sabit 20 dk idi ve
+  `spawnTimeoutMin`'i (kullanıcıda 120) hiç okumuyordu → tıkanma freni, izin verilen
+  işin tavanından dardı ve **sağlıklı** uzun turları kesiyordu (WS15/SES76: 19m57s'de
+  kesilen canlı Rust build döngüsü). Artık `TurnWatchdogMin` ayarı (varsayılan 120,
+  Ayarlar → Araçlar) `Tunables.TurnWatchdog()` üzerinden okunur ve değer
+  spawn/zamanlama tavanlarının **altına inemez** (hem okuma anında hem
+  `settings.normalize`'da tabanlanır) → aynı ters-sıralama tekrar oluşamaz.
+- **Boşta izleyicisi + görünür kesinti (2026-08-16):** watchdog artık tek duvar-saati
+  değil, **çift** bağ: `runQueuedTurn` 15 sn'de bir yoklar, turu **ya** tavanda **ya da**
+  `TurnIdleWatchdogMin` (varsayılan 20 dk) boyunca **hiç olay üretmemişse** keser.
+  Canlılık `Hub.LastActivity()` — `sessionState.lastPublish` her `Publish`'te (ephemeral
+  delta'lar dâhil, mevcut kilidin altında) damgalanır; ölçüm `(workspace, session)`
+  kapsamlı. Böylece adım yayan tur ne kadar uzarsa uzasın kesilmez, sessiz kalan tur
+  saatlerce beklemeden geri alınır. Ayrıca `recordWatchdogCut` **her** kesintide
+  kalıcı hata kartı + `debug.jsonl` + `turn_error` yazar (önceden yalnız iptali 30 sn
+  yanıtlamayan tur kayda geçiyordu → hızlı çözülen kesinti transkriptte **izsiz**
+  kalıyordu). Sebepler: `watchdog` · `watchdog-idle` · `-detached` soneki.
+  Aynı sinyal Oturum Bilgisi süreç kartında da görünür: `running` DTO'su
+  `lastActivityAt` (mutlak damga — panel yalnız konuşma değişince çektiği için
+  hazır süre sessizlikte donardı) + `idleLimitSec`/`hardLimitSec` taşır, kart
+  "N sessiz — sınır M" satırını pencerenin %25'inden sonra gösterir.
 - **Kuyruk-hatası kalıcılaştırma (2026-07-13):** üç bariyer de (panic/watchdog/
   poison) artık `recordQueueTurnFailure` ile hatayı **kalıcı** yazar: `session.jsonl`'e
   `kind=error` asistan mesajı (hub `KindReply` → yenilemeye dayanıklı kırmızı kart,
@@ -303,6 +328,17 @@ gap-fill** dayanıklı olmalı: `Last-Event-ID`, ring taşınca `reset`, ping/ke
   kaydeder (`context.WithCancel`) → izleyicinin Durdur/Kes'i otonom CLI turunu
   gerçekten durdurur; `runCoordinatorTurn`/`runWorker` `context.Canceled`'ı temiz
   "durduruldu" mesajına çevirir.
+- **Schedule/spawn turlarını durdurma (2026-08-16):** Schedule, wake, spawn,
+  koordinasyon, automation ve flow turları API'nin `chatRuns` kaydına hiç
+  girmediğinden `POST /api/sessions/{id}/control` `404 no in-flight turn` dönüyordu.
+  Çözüm: `Runtime.activeSessions` artık turun `context.CancelFunc`'ını tutar
+  (`trackSession(id, cancel)`) ve yeni `Runtime.CancelSession(id)` onu iptal eder;
+  `handleSessionControl` canlı chat run yoksa `stop` için buna düşer. UI tarafında
+  `WorkerStatusStrip` artık koordinatör ağacıyla sınırlı değil — **her** salt-okunur
+  oturumda (schedule/flow günlükleri dahil) tur akarken görünür. İptal edilen otonom
+  tur transkripte `reason=user_stopped` kartı yazar ("Turu kullanıcı durdurdu.",
+  `internal/api/session_stop_note.go`) ve aynı adı taşıyan bir debug olayı bırakır.
+  Testler: `internal/agent/cancel_session_test.go`.
 - **Bug fix — enjekte USER mesajı köprüsü (2026-08-03):** Autonomous simetri (F)
   yalnız assistant reply'ı köprülüyordu; runtime'ın koordinasyon akışında enjekte
   ettiği **user-rol mesajları** (worker `<task-notification>`, `send_to_worker`
@@ -611,6 +647,35 @@ bekleyene yol verir + tersi + etiketler), `internal/api/inbox_turnslot_test.go`
 (slot tutulurken mesaj WAITING + iptal edilebilir; serbest kalınca dispatch — eski
 sırayla kırmızı olduğu doğrulandı).
 
+## Kuyruğa alınan mesajda ek dosya (attachment) — 2026-08-17 (TSK130)
+
+Backend kuyruğu zaten tüm `chatReq`'i (ek dosyalar dahil) taşıyor ve kalıcılaştırıyordu;
+kayıp **frontend'deydi**: `Composer.act()` yalnız metni iletiyor, `pending` ek dosyaları
+composer'da bırakıyordu. Sonuç: bir tur akarken "Sıraya" / "Kes" ile gönderilen mesaj
+eksiz gidiyordu ve sadece-ek (metinsiz) bir mesaj hiç kuyruğa alınamıyordu.
+
+Düzeltme:
+
+- `Composer.actWithAttachments()` — Sıraya/Kes yolunda metin **ve** hazır ek dosyalar
+  birlikte gönderilir, composer tamamen temizlenir. Yükleme sürerken (`anyUploading`)
+  eylem bloklanır, böylece yarım yüklenmiş dosya düşmez.
+- Yönlendir (steer) metin-only kalır (canlı yönlendirme dosya taşıyamaz); bekleyen ek
+  dosyalar composer'da durur.
+- `SendActions` artık `hasContent` ile dallanır → sadece-ek mesaj da kuyruğa alınabilir;
+  steer butonu metin yoksa disabled.
+- `useChatStream.queueMessage/interruptTurn` ek dosya parametresi alır.
+- Kuyruk çipi metinsiz mesajda "N ek" etiketiyle görünür (iptal edilebilir kalsın diye).
+
+**Öksüz dosya temizliği** (`internal/api/inbox_cleanup.go`): kuyruktan düşen bir tur,
+yüklediği `artifacts/<sessionId>/<uuid>-<ad>` dosyalarının **tek** referansıdır — tur
+hiç koşmadığı için ne user message'a yazılır ne de attachment→artifact yakalaması
+çalışır. Bu yüzden `cancelQueued` / `clearQueued` düşen öğelerin dosyalarını diskten
+siler (`purgeQueuedAttachments`; sandbox kökünün dışına çıkan `RelPath` atlanır, zaten
+silinmiş dosya sorun değil). Testler: `internal/api/inbox_cleanup_test.go`.
+
+Kasıtlı kapsam dışı: poison guard ile düşürülen tur (`maxInboxAttempts`) dosyalarını
+korur — kullanıcıya hata bildirilir ve yeniden denenebilmesi beklenir.
+
 ## Doğrulama
 
 Her fazda `go build ./...` + `go vet`. Canlı: aynı session'ı iki pencerede aç →
@@ -618,3 +683,48 @@ Her fazda `go build ./...` + `go vet`. Canlı: aynı session'ı iki pencerede a�
 bir ekrandan cevaplanınca diğerinde kart kapanır; (3) aynı anda iki cevap →
 biri kazanır, diğeri `already_resolved`; (4) reload → gap cursor'dan doldurulur,
 mesaj kaybı yok.
+
+
+## Workspace kapsamı — süreç-geneli per-session yapıların anahtarı (2026-08-14)
+
+**Bulunan hata:** iki yeni workspace açıp birinde sohbet başlatınca, UI'dan
+ikincisine geçildiğinde orada **önceki workspace'in oturumu** görünüyordu.
+
+**Kök sebep:** session id'leri workspace store'una özel sıralardır (`SES1` her
+workspace'te vardır), ama süreç-geneli (tüm workspace'ler için tek) beş yapı
+yalnız session id ile anahtarlanıyordu:
+
+| Yapı | Dosya | Etkisi |
+|------|-------|--------|
+| `sessionhub.Hub` | `internal/sessionhub/hub.go` | WS-A'nın canlı turu, WS-B'nin aynı numaralı oturumunu izleyen pencereye akıyor; abone olurken uçuştaki kuyruk (`Replay`) da geri oynatılıyordu |
+| `inboxStore` | `internal/api/inbox.go` | İki oturum tek kuyruğu paylaşıyor; paylaşılan girdinin `wsID`'si İLK yazana kilitlendiği için kuyruk sidecar'ı (`inbox.json`) **yanlış workspace'in store'una** yazılabiliyor, tur yanlış runtime'da koşabiliyordu |
+| `chatRuns` (`sessionRunInfo`, `interactionToken`) | `internal/api/chat_control.go` | Bir workspace'teki koşan tur diğerinde "çalışıyor" görünüyor (silmeyi bloklar, "durdur" onu iptal eder); Interaction MCP Bearer token'ı paylaşılıyordu |
+| `interactionStore` | `internal/api/interactions.go` | ask/permission kartı başka workspace'ten cevaplanabiliyordu |
+| `permGrantStore` | `internal/api/permgrants.go` | "Her zaman izin ver" kararı aynı numaralı başka oturuna miras kalıyordu |
+
+**Düzeltme:** hepsi `scopeKey(wsID, sessionID)` (`internal/api/scope.go`, NUL
+ayraçlı) ile anahtarlandı; `sessionhub` metodları `(wsID, sessionID)` alır.
+Telde hiçbir şey değişmedi — `Event.SessionID` çıplak id kalır, workspace her
+zamanki gibi `X-Workspace-Id`'den gelir; kapsam yalnız sunucu tarafındadır.
+
+Yan düzeltmeler (aynı sınıf hata):
+- **Default-workspace geri dönüşü kaldırıldı.** `flushInbox`/`publishAutonomousReply`/
+  `recordQueueTurnFailure`, workspace çözülemezse eskiden `Default()`'a düşüyordu —
+  bu, bir oturumun verisini başka workspace'e yazmanın ta kendisiydi. Yerine
+  `workspaceByID` (log'lar ve `nil` döner) geldi. `teardownSessionRuntime` workspace
+  olmadan **hata döner** (fail-closed).
+- **Bus köprüsü:** `bridgeBusToHub` artık `e.WorkspaceID` kullanır; damgasız event
+  köprülenmez (uyarı log'lanır). Runtime her event'e zaten damga basıyor.
+- **Geriye dönük uyum:** `recoverInboxes`, açtığı store'daki her `inbox.json`
+  kalemine o store'un workspace id'sini yeniden damgalar — paylaşılan girdi
+  yüzünden yabancı `workspaceId` taşıyan eski bir sidecar, boot'ta yanlış
+  workspace'e dispatch edilmez.
+- **Frontend:** composer taslakları `tionswarm:draft:<ws>:<session>` ile
+  anahtarlanır (eskiden bir workspace'in gönderilmemiş taslağı diğerinin
+  composer'ında çıkıyordu); hub aboneliği artık `activeWorkspaceId`'ye de bağlı,
+  yani aynı id'li oturuma geçilse bile akış yeniden açılır.
+
+**Testler:** `internal/api/workspace_session_scope_test.go` (hub/inbox/grants/
+interaction/chatRuns izolasyonu), `internal/api/session_teardown_test.go`
+(WS-A'nın silinmesi WS-B'nin aynı id'li oturumuna dokunmaz; workspace'siz teardown
+reddedilir).

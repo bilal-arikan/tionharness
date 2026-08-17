@@ -1,6 +1,7 @@
 package api
 
 import (
+	"errors"
 	"net/http"
 	"sort"
 	"strings"
@@ -279,17 +280,17 @@ func (s *Server) handleListMessages(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleMessageSteps(w http.ResponseWriter, r *http.Request) {
 	sessionID := r.PathValue("id")
 	msgID := r.PathValue("msgId")
-	messages, err := ws(r).DB.ListMessages(r.Context(), sessionID)
+	// One message by id — never the whole transcript. Copying every turn's trace
+	// to return one of them was the single most expensive way to serve this.
+	m, err := ws(r).DB.FindMessage(r.Context(), sessionID, msgID)
+	if errors.Is(err, db.ErrMessageNotFound) {
+		writeError(w, http.StatusNotFound, "message not found")
+		return
+	}
 	if writeDBError(w, err, "") {
 		return
 	}
-	for _, m := range messages {
-		if m.ID == msgID {
-			writeJSON(w, http.StatusOK, map[string]string{"steps": m.Steps})
-			return
-		}
-	}
-	writeError(w, http.StatusNotFound, "message not found")
+	writeJSON(w, http.StatusOK, map[string]string{"steps": m.Steps})
 }
 
 // handleActiveSessions returns the session ids that currently have an in-flight

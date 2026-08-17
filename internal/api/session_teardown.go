@@ -28,26 +28,34 @@ const sessionTeardownGrace = 15 * time.Second
 // discard the in-memory queue. The DB row/folder (and the on-disk inbox sidecar inside
 // it) are removed by the caller's DB.DeleteSession afterwards.
 func (s *Server) teardownSessionRuntime(wsp *workspace.Workspace, sessionID string) error {
+	// Every phase below is workspace-scoped (ids repeat across stores), so a missing
+	// workspace cannot be worked around — teardown is fail-closed: refuse rather than
+	// tear down whatever session happens to carry this id elsewhere.
+	if wsp == nil {
+		return fmt.Errorf("session teardown requires a workspace")
+	}
+	wsID := wsp.ID
+
 	// Phase 1: freeze the inbox worker (stop popping new turns; keep the queue).
 	s.inbox.lock()
-	if ib := s.inbox.sessions[sessionID]; ib != nil {
+	if ib := s.inbox.at(wsID, sessionID); ib != nil {
 		ib.closing = true
 	}
 	s.inbox.unlock()
 
 	// Phase 2: cancel the in-flight turn and WAIT for it to fully unwind (tears down the
 	// subprocess). If it will not stop in time, abort: unfreeze + resume, keep the session.
-	if err := s.stopInflightTurn(sessionID, sessionTeardownGrace); err != nil {
-		s.resumeInboxAfterAbortedTeardown(sessionID)
+	if err := s.stopInflightTurn(wsID, sessionID, sessionTeardownGrace); err != nil {
+		s.resumeInboxAfterAbortedTeardown(wsID, sessionID)
 		return err
 	}
 
 	// Phase 3: kill warm claude-cli processes kept between turns, verifying each kill. A
 	// process we cannot terminate blocks the delete (fail closed) — it stays tracked in
 	// the pool, not orphaned.
-	if wsp != nil && wsp.Runtime != nil {
+	if wsp.Runtime != nil {
 		if _, err := wsp.Runtime.DropWarmCLISessionChecked(sessionID); err != nil {
-			s.resumeInboxAfterAbortedTeardown(sessionID)
+			s.resumeInboxAfterAbortedTeardown(wsID, sessionID)
 			return fmt.Errorf("warm claude-cli teardown: %w", err)
 		}
 	}
@@ -60,14 +68,14 @@ func (s *Server) teardownSessionRuntime(wsp *workspace.Workspace, sessionID stri
 	// the common case (most sessions are not workers) and is not a teardown failure, so
 	// its error is intentionally ignored. Empty coordinator id = skip the
 	// "is it really yours" ownership check; teardown is authoritative here.
-	if wsp != nil && wsp.Runtime != nil {
+	if wsp.Runtime != nil {
 		_ = wsp.Runtime.StopWorker(context.Background(), "", sessionID)
 	}
 
 	// Phase 5: drop the in-memory inbox entirely so the serial worker exits for good and
 	// never re-dispatches a turn for a deleted session.
 	s.inbox.lock()
-	delete(s.inbox.sessions, sessionID)
+	delete(s.inbox.sessions, scopeKey(wsID, sessionID))
 	s.inbox.unlock()
 
 	// Phase 6: release the session's hub state (seq, replay ring, subscribers).
@@ -75,7 +83,7 @@ func (s *Server) teardownSessionRuntime(wsp *workspace.Workspace, sessionID stri
 	// seen — including the throwaway schedule/spawn/worker ones — keeps its ring
 	// buffer alive until restart. Any window still watching gets its channel
 	// closed, which ends its stream: correct for a session being deleted.
-	s.hub.Drop(sessionID)
+	s.hub.Drop(wsID, sessionID)
 
 	return nil
 }
@@ -85,10 +93,10 @@ func (s *Server) teardownSessionRuntime(wsp *workspace.Workspace, sessionID stri
 // error only when a turn is still running after grace — the signal that it could not
 // be stopped. Loops so a straggler direct/autonomous run settling right after the
 // first is also caught; the frozen inbox guarantees no NEW queued turn starts meanwhile.
-func (s *Server) stopInflightTurn(sessionID string, grace time.Duration) error {
+func (s *Server) stopInflightTurn(wsID, sessionID string, grace time.Duration) error {
 	deadline := time.Now().Add(grace)
 	for {
-		info, live := s.runs.sessionRunInfo(sessionID)
+		info, live := s.runs.sessionRunInfo(wsID, sessionID)
 		if !live {
 			return nil
 		}
@@ -113,11 +121,11 @@ func (s *Server) stopInflightTurn(sessionID string, grace time.Duration) error {
 // resumeInboxAfterAbortedTeardown unfreezes a session's inbox and re-kicks its worker
 // after a delete was aborted (a process would not die), so messages queued behind the
 // freeze drain now that the session lives on.
-func (s *Server) resumeInboxAfterAbortedTeardown(sessionID string) {
+func (s *Server) resumeInboxAfterAbortedTeardown(wsID, sessionID string) {
 	s.inbox.lock()
-	if ib := s.inbox.sessions[sessionID]; ib != nil {
+	if ib := s.inbox.at(wsID, sessionID); ib != nil {
 		ib.closing = false
 	}
 	s.inbox.unlock()
-	s.kickInbox(sessionID)
+	s.kickInbox(wsID, sessionID)
 }

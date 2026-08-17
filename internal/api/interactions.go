@@ -20,7 +20,10 @@ import (
 // resolved. This is the generic "resolve-once" primitive (Faz 2 of
 // _Docs/58-QUEUE-SENKRON.md) that replaces the old per-request-SSE ask channel.
 type pendingInteraction struct {
-	id        string
+	id string
+	// wsID + sessionID identify the session: ids repeat across workspace stores, so
+	// the card is registered and broadcast under the pair, never the id alone.
+	wsID      string
 	sessionID string
 	kind      string // ask | permission | plan
 	// state is 0 while open, 1 once resolved (CAS target — first writer wins).
@@ -31,7 +34,7 @@ type pendingInteraction struct {
 }
 
 // interactionStore holds every session's outstanding interactions, keyed by
-// session id then interaction id.
+// scopeKey(workspaceID, sessionID) then interaction id.
 type interactionStore struct {
 	mu        sync.Mutex
 	bySession map[string]map[string]*pendingInteraction
@@ -42,32 +45,34 @@ func newInteractionStore() *interactionStore {
 }
 
 func (st *interactionStore) add(pi *pendingInteraction) {
+	key := scopeKey(pi.wsID, pi.sessionID)
 	st.mu.Lock()
 	defer st.mu.Unlock()
-	m := st.bySession[pi.sessionID]
+	m := st.bySession[key]
 	if m == nil {
 		m = make(map[string]*pendingInteraction)
-		st.bySession[pi.sessionID] = m
+		st.bySession[key] = m
 	}
 	m[pi.id] = pi
 }
 
-func (st *interactionStore) get(sessionID, id string) *pendingInteraction {
+func (st *interactionStore) get(wsID, sessionID, id string) *pendingInteraction {
 	st.mu.Lock()
 	defer st.mu.Unlock()
-	if m := st.bySession[sessionID]; m != nil {
+	if m := st.bySession[scopeKey(wsID, sessionID)]; m != nil {
 		return m[id]
 	}
 	return nil
 }
 
-func (st *interactionStore) remove(sessionID, id string) {
+func (st *interactionStore) remove(wsID, sessionID, id string) {
+	key := scopeKey(wsID, sessionID)
 	st.mu.Lock()
 	defer st.mu.Unlock()
-	if m := st.bySession[sessionID]; m != nil {
+	if m := st.bySession[key]; m != nil {
 		delete(m, id)
 		if len(m) == 0 {
-			delete(st.bySession, sessionID)
+			delete(st.bySession, key)
 		}
 	}
 }
@@ -76,9 +81,10 @@ func (st *interactionStore) remove(sessionID, id string) {
 // session hub (so EVERY window renders the card), and returns the handle the
 // tool call blocks on. payload is the card descriptor (question/options/tool/…),
 // merged with the assigned interaction id.
-func (s *Server) openInteraction(sessionID, kind string, payload map[string]any) *pendingInteraction {
+func (s *Server) openInteraction(wsID, sessionID, kind string, payload map[string]any) *pendingInteraction {
 	pi := &pendingInteraction{
 		id:        uuid.NewString(),
+		wsID:      wsID,
 		sessionID: sessionID,
 		kind:      kind,
 		answer:    make(chan string, 1),
@@ -89,7 +95,7 @@ func (s *Server) openInteraction(sessionID, kind string, payload map[string]any)
 	}
 	payload["id"] = pi.id
 	payload["kind"] = kind
-	s.publishHub(sessionID, sessionhub.KindInteractionOpen, payload, false)
+	s.publishHub(wsID, sessionID, sessionhub.KindInteractionOpen, payload, false)
 	return pi
 }
 
@@ -97,8 +103,8 @@ func (s *Server) openInteraction(sessionID, kind string, payload map[string]any)
 // FIRST caller only; a second concurrent answer (another window) returns false.
 // On success it delivers the answer to the blocked tool call and broadcasts
 // interaction_resolved so every window closes the card and records the answer.
-func (s *Server) resolveInteraction(sessionID, id, answer, by string) bool {
-	pi := s.interactions.get(sessionID, id)
+func (s *Server) resolveInteraction(wsID, sessionID, id, answer, by string) bool {
+	pi := s.interactions.get(wsID, sessionID, id)
 	if pi == nil {
 		return false
 	}
@@ -109,8 +115,8 @@ func (s *Server) resolveInteraction(sessionID, id, answer, by string) bool {
 	case pi.answer <- answer:
 	default:
 	}
-	s.interactions.remove(sessionID, id)
-	s.publishHub(sessionID, sessionhub.KindInteractionResolve, map[string]any{
+	s.interactions.remove(wsID, sessionID, id)
+	s.publishHub(wsID, sessionID, sessionhub.KindInteractionResolve, map[string]any{
 		"id":         id,
 		"answer":     answer,
 		"resolvedBy": by,
@@ -163,8 +169,8 @@ func (s *Server) cancelInteraction(pi *pendingInteraction, reason string) {
 	if !atomic.CompareAndSwapInt32(&pi.state, 0, 1) {
 		return
 	}
-	s.interactions.remove(pi.sessionID, pi.id)
-	s.publishHub(pi.sessionID, sessionhub.KindInteractionResolve, map[string]any{
+	s.interactions.remove(pi.wsID, pi.sessionID, pi.id)
+	s.publishHub(pi.wsID, pi.sessionID, sessionhub.KindInteractionResolve, map[string]any{
 		"id":        pi.id,
 		"cancelled": true,
 		"reason":    reason,
@@ -201,7 +207,7 @@ func (s *Server) handleInteractionAnswer(w http.ResponseWriter, r *http.Request)
 	if req.AnswersJSON != "" {
 		answer = req.AnswersJSON
 	}
-	if s.resolveInteraction(sessionID, iid, answer, req.ClientID) {
+	if s.resolveInteraction(ws(r).ID, sessionID, iid, answer, req.ClientID) {
 		writeJSON(w, http.StatusOK, map[string]string{"result": "ok"})
 		return
 	}

@@ -18,6 +18,12 @@
 // every stream carries an Epoch (minted once at boot): when a client presents a
 // cursor from a previous epoch the endpoint tells it to reset (full resync via
 // listMessages) instead of trusting a stale seq.
+//
+// SCOPE: every method is keyed by (workspaceID, sessionID), never by the session
+// id alone. Session ids are allocated per workspace STORE ("SES1" exists in every
+// workspace), so a bare-id hub would fan one workspace's live turn out to a window
+// watching a same-numbered session in another workspace — and replay its in-flight
+// tail on subscribe. See _Docs/58-QUEUE-SENKRON.md.
 package sessionhub
 
 import (
@@ -59,6 +65,10 @@ type Event struct {
 	Time      int64           `json:"time"`
 }
 
+// scopeKey namespaces a session id by its workspace. NUL is the separator because
+// neither id can contain it, so no (ws, session) pair can alias another.
+func scopeKey(wsID, sessionID string) string { return wsID + "\x00" + sessionID }
+
 // sessionState is the per-session seq counter + ring buffer + subscriber set.
 type sessionState struct {
 	seq int64
@@ -69,10 +79,15 @@ type sessionState struct {
 	committed int64
 	ring      []Event // durable events only, capped at Hub.ringCap
 	subs      map[int]chan Event
+	// lastPublish stamps the newest event of ANY kind — ephemeral token deltas
+	// included, because a turn streaming text is alive even though its deltas never
+	// bump seq. This is the liveness signal the queue's idle watchdog reads, so it
+	// deliberately does not care whether the event was retained.
+	lastPublish time.Time
 }
 
 // Hub fans per-session events out to live subscribers and retains a bounded
-// replay window per session.
+// replay window per session. states is keyed by scopeKey(workspaceID, sessionID).
 type Hub struct {
 	mu      sync.Mutex
 	epoch   string
@@ -103,27 +118,33 @@ func (h *Hub) Epoch() string {
 	return h.epoch
 }
 
-// stateLocked returns (creating if needed) the state for a session. Caller holds h.mu.
-func (h *Hub) stateLocked(sessionID string) *sessionState {
-	st := h.states[sessionID]
+// stateLocked returns (creating if needed) the state for a scoped session. Caller
+// holds h.mu.
+func (h *Hub) stateLocked(key string) *sessionState {
+	st := h.states[key]
 	if st == nil {
 		st = &sessionState{subs: make(map[int]chan Event)}
-		h.states[sessionID] = st
+		h.states[key] = st
 	}
 	return st
 }
 
-// Publish records + broadcasts one event. Durable events (ephemeral=false) get
-// the next per-session seq and are appended to the ring; ephemeral events keep
-// seq 0 and are only fanned out live. Returns the assigned seq (0 for ephemeral).
-// Safe on a nil hub (no-op) so zero-value wiring never panics.
-func (h *Hub) Publish(sessionID, kind string, payload json.RawMessage, ephemeral bool) int64 {
-	if h == nil || sessionID == "" {
+// Publish records + broadcasts one event to the (workspace, session) scope.
+// Durable events (ephemeral=false) get the next per-session seq and are appended
+// to the ring; ephemeral events keep seq 0 and are only fanned out live. Returns
+// the assigned seq (0 for ephemeral). Safe on a nil hub (no-op) so zero-value
+// wiring never panics. An unresolved workspace (empty wsID) publishes NOTHING
+// rather than falling into a shared scope — that is what leaked across workspaces.
+// Event.SessionID stays the bare id: the scope is server-side, the wire contract
+// with the client is unchanged.
+func (h *Hub) Publish(wsID, sessionID, kind string, payload json.RawMessage, ephemeral bool) int64 {
+	if h == nil || wsID == "" || sessionID == "" {
 		return 0
 	}
 	ev := Event{SessionID: sessionID, Kind: kind, Payload: payload, Time: time.Now().Unix()}
 	h.mu.Lock()
-	st := h.stateLocked(sessionID)
+	st := h.stateLocked(scopeKey(wsID, sessionID))
+	st.lastPublish = time.Now()
 	if !ephemeral {
 		st.seq++
 		ev.Seq = st.seq
@@ -159,10 +180,10 @@ func (h *Hub) Publish(sessionID, kind string, payload json.RawMessage, ephemeral
 // Subscribe registers a listener for a session and returns its id, receive
 // channel, and the current head seq (so the caller can report where the live
 // edge is). Call Unsubscribe with the id when done.
-func (h *Hub) Subscribe(sessionID string) (int, <-chan Event, int64) {
+func (h *Hub) Subscribe(wsID, sessionID string) (int, <-chan Event, int64) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	st := h.stateLocked(sessionID)
+	st := h.stateLocked(scopeKey(wsID, sessionID))
 	id := h.nextSub
 	h.nextSub++
 	ch := make(chan Event, 256)
@@ -171,10 +192,10 @@ func (h *Hub) Subscribe(sessionID string) (int, <-chan Event, int64) {
 }
 
 // Unsubscribe removes a listener and closes its channel.
-func (h *Hub) Unsubscribe(sessionID string, id int) {
+func (h *Hub) Unsubscribe(wsID, sessionID string, id int) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	st := h.states[sessionID]
+	st := h.states[scopeKey(wsID, sessionID)]
 	if st == nil {
 		return
 	}
@@ -197,13 +218,14 @@ func (h *Hub) Unsubscribe(sessionID string, id int) {
 //
 // Call this only after the session is gone (or going) — a Publish or Subscribe
 // afterwards silently recreates the state from scratch.
-func (h *Hub) Drop(sessionID string) {
-	if h == nil || sessionID == "" {
+func (h *Hub) Drop(wsID, sessionID string) {
+	if h == nil || wsID == "" || sessionID == "" {
 		return
 	}
+	key := scopeKey(wsID, sessionID)
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	st := h.states[sessionID]
+	st := h.states[key]
 	if st == nil {
 		return
 	}
@@ -211,7 +233,7 @@ func (h *Hub) Drop(sessionID string) {
 		delete(st.subs, id)
 		close(ch)
 	}
-	delete(h.states, sessionID)
+	delete(h.states, key)
 }
 
 // Replay returns the durable events a (re)connecting client is missing.
@@ -223,13 +245,13 @@ func (h *Hub) Drop(sessionID string) {
 //   - RECONNECT (since > 0): gap-fill from the cursor (seq > since). ok=false when
 //     the cursor fell before the retained ring window — the caller then tells the
 //     client to reset (full resync) instead of silently losing a gap.
-func (h *Hub) Replay(sessionID string, since int64) ([]Event, bool) {
+func (h *Hub) Replay(wsID, sessionID string, since int64) ([]Event, bool) {
 	if h == nil {
 		return nil, true
 	}
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	st := h.states[sessionID]
+	st := h.states[scopeKey(wsID, sessionID)]
 	if st == nil {
 		return nil, since <= 0
 	}
@@ -260,39 +282,56 @@ func (h *Hub) Replay(sessionID string, since int64) ([]Event, bool) {
 // current head is now in the persisted transcript, so a future fresh subscriber
 // skips replaying it (only the next in-flight tail is replayed). Called by the
 // turn runner after each reply and at turn end.
-func (h *Hub) Commit(sessionID string) {
+func (h *Hub) Commit(wsID, sessionID string) {
 	if h == nil {
 		return
 	}
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	if st := h.states[sessionID]; st != nil {
+	if st := h.states[scopeKey(wsID, sessionID)]; st != nil {
 		st.committed = st.seq
 	}
 }
 
 // Head returns the current head (latest durable seq) for a session, 0 if none.
-func (h *Hub) Head(sessionID string) int64 {
+func (h *Hub) Head(wsID, sessionID string) int64 {
 	if h == nil {
 		return 0
 	}
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	if st := h.states[sessionID]; st != nil {
+	if st := h.states[scopeKey(wsID, sessionID)]; st != nil {
 		return st.seq
 	}
 	return 0
 }
 
+// LastActivity returns when the session last published an event of any kind
+// (durable step OR ephemeral token delta), and whether such an event exists.
+// It is the liveness probe behind the queue's idle watchdog: a turn that is
+// still emitting is working, however long it has been running, while one that
+// has gone completely silent is the wedge the watchdog exists to break.
+func (h *Hub) LastActivity(wsID, sessionID string) (time.Time, bool) {
+	if h == nil {
+		return time.Time{}, false
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if st := h.states[scopeKey(wsID, sessionID)]; st != nil && !st.lastPublish.IsZero() {
+		return st.lastPublish, true
+	}
+	return time.Time{}, false
+}
+
 // SubscriberCount returns how many live subscribers a session currently has —
 // the raw signal behind presence ("this session is open in N windows").
-func (h *Hub) SubscriberCount(sessionID string) int {
+func (h *Hub) SubscriberCount(wsID, sessionID string) int {
 	if h == nil {
 		return 0
 	}
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	if st := h.states[sessionID]; st != nil {
+	if st := h.states[scopeKey(wsID, sessionID)]; st != nil {
 		return len(st.subs)
 	}
 	return 0

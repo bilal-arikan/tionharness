@@ -14,7 +14,7 @@ import (
 // the single winning reply.
 func TestResolveInteractionCAS(t *testing.T) {
 	srv := &Server{hub: sessionhub.New("t", 0), interactions: newInteractionStore()}
-	pi := srv.openInteraction("s1", "ask", map[string]any{"question": "q"})
+	pi := srv.openInteraction("ws1", "s1", "ask", map[string]any{"question": "q"})
 
 	const N = 16
 	var wins int64
@@ -25,7 +25,7 @@ func TestResolveInteractionCAS(t *testing.T) {
 		go func(i int) {
 			defer wg.Done()
 			<-start // maximise the race
-			if srv.resolveInteraction("s1", pi.id, fmt.Sprintf("ans-%d", i), "w") {
+			if srv.resolveInteraction("ws1", "s1", pi.id, fmt.Sprintf("ans-%d", i), "w") {
 				atomic.AddInt64(&wins, 1)
 			}
 		}(i)
@@ -46,7 +46,7 @@ func TestResolveInteractionCAS(t *testing.T) {
 		t.Fatal("winning answer not delivered")
 	}
 	// The interaction is gone from the store (removed on resolve).
-	if got := srv.interactions.get("s1", pi.id); got != nil {
+	if got := srv.interactions.get("ws1", "s1", pi.id); got != nil {
 		t.Fatal("resolved interaction should be removed from the store")
 	}
 }

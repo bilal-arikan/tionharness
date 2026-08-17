@@ -43,7 +43,7 @@ func TestInteractionBackend_AskRoundTrip(t *testing.T) {
 		hub:          sessionhub.New("test", 0),
 		interactions: newInteractionStore(),
 	}
-	run := srv.runs.register("r1", "s-r1", "", func() {})
+	run := srv.runs.register("r1", "s-r1", "ws1", func() {})
 	defer srv.runs.unregister("r1")
 
 	b := &interactionBackend{runs: srv.runs, apiSrv: srv}
@@ -56,7 +56,7 @@ func TestInteractionBackend_AskRoundTrip(t *testing.T) {
 
 	// Subscribe BEFORE the call so the live interaction_open frame is not missed,
 	// then resolve it with the answer as soon as it opens.
-	_, ch, _ := srv.hub.Subscribe("s-r1")
+	_, ch, _ := srv.hub.Subscribe("ws1", "s-r1")
 	gotOpen := make(chan struct{}, 1)
 	go func() {
 		for ev := range ch {
@@ -75,7 +75,7 @@ func TestInteractionBackend_AskRoundTrip(t *testing.T) {
 			if p.Kind != "ask" || p.Question != "color?" || len(p.Options) != 2 {
 				t.Errorf("unexpected interaction_open: %+v", p)
 			}
-			srv.resolveInteraction("s-r1", p.ID, "BLUE", "test")
+			srv.resolveInteraction("ws1", "s-r1", p.ID, "BLUE", "test")
 			gotOpen <- struct{}{}
 			return
 		}
@@ -223,7 +223,7 @@ func contains(ss []string, want string) bool {
 // default case through the run's bridge dispatcher.
 func TestInteractionBridge(t *testing.T) {
 	runs := newChatRuns()
-	run := runs.register("rb", "s-rb", "", func() {})
+	run := runs.register("rb", "s-rb", "ws1", func() {})
 	defer runs.unregister("rb")
 
 	var gotName string
@@ -275,7 +275,7 @@ func TestInteractionBackend_AskTurnEnded(t *testing.T) {
 		hub:          sessionhub.New("test", 0),
 		interactions: newInteractionStore(),
 	}
-	run := srv.runs.register("r2", "s-r2", "", func() {})
+	run := srv.runs.register("r2", "s-r2", "ws1", func() {})
 	b := &interactionBackend{runs: srv.runs, apiSrv: srv}
 
 	// End the turn (closes run.done) while the ask is blocked; waitInteractionCLI
@@ -295,7 +295,7 @@ func TestInteractionBackend_AskTurnEnded(t *testing.T) {
 
 func TestInteractionBackend_Todo(t *testing.T) {
 	runs := newChatRuns()
-	run := runs.register("r3", "s-r3", "", func() {})
+	run := runs.register("r3", "s-r3", "ws1", func() {})
 	defer runs.unregister("r3")
 	steps, mu := captureRun(run)
 	b := &interactionBackend{runs: runs}
@@ -322,12 +322,12 @@ func TestInteractionBackend_Confirm(t *testing.T) {
 		hub:          sessionhub.New("test", 0),
 		interactions: newInteractionStore(),
 	}
-	run := srv.runs.register("rc", "s-rc", "", func() {})
+	run := srv.runs.register("rc", "s-rc", "ws1", func() {})
 	defer srv.runs.unregister("rc")
 	b := &interactionBackend{runs: srv.runs, apiSrv: srv}
 
 	// Resolve the confirm interaction with "Onayla" as soon as it opens on the hub.
-	_, ch, _ := srv.hub.Subscribe("s-rc")
+	_, ch, _ := srv.hub.Subscribe("ws1", "s-rc")
 	go func() {
 		for ev := range ch {
 			if ev.Kind != sessionhub.KindInteractionOpen {
@@ -339,7 +339,7 @@ func TestInteractionBackend_Confirm(t *testing.T) {
 			if json.Unmarshal(ev.Payload, &p) != nil {
 				return
 			}
-			srv.resolveInteraction("s-rc", p.ID, "Onayla", "test")
+			srv.resolveInteraction("ws1", "s-rc", p.ID, "Onayla", "test")
 			return
 		}
 	}()
@@ -367,7 +367,7 @@ func (f *fakeSink) UpdateArtifact(_ context.Context, id, content string) (tools.
 
 func TestInteractionBackend_Artifact(t *testing.T) {
 	runs := newChatRuns()
-	run := runs.register("ra", "s-ra", "", func() {})
+	run := runs.register("ra", "s-ra", "ws1", func() {})
 	defer runs.unregister("ra")
 	sink := &fakeSink{}
 	run.setArtifacts(sink)
@@ -396,7 +396,7 @@ func TestInteractionBackend_Artifact(t *testing.T) {
 // return an error result at once instead of blocking until the 15-minute timeout.
 func TestInteractionBackend_AutonomousAskBails(t *testing.T) {
 	runs := newChatRuns()
-	run := runs.register("rauto", "s-rauto", "", func() {})
+	run := runs.register("rauto", "s-rauto", "ws1", func() {})
 	defer runs.unregister("rauto")
 	run.autonomous = true
 	b := &interactionBackend{runs: runs}

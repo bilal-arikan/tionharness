@@ -30,7 +30,7 @@ func (b *interactionBackend) callAsk(ctx context.Context, run *chatRun, args jso
 		}
 		// Route through the session interaction store (CAS + hub broadcast) so the
 		// combined-form card shows in EVERY window and the first answer wins.
-		pi := b.apiSrv.openInteraction(run.sessionID, "ask", map[string]any{"questions": questions})
+		pi := b.apiSrv.openInteraction(run.workspaceID, run.sessionID, "ask", map[string]any{"questions": questions})
 		ans, reason := b.apiSrv.waitInteractionCLI(ctx, run, pi)
 		switch reason {
 		case "":
@@ -69,7 +69,7 @@ func (b *interactionBackend) blockForAnswer(ctx context.Context, run *chatRun, q
 	if run.autonomous {
 		return interaction.CallResult{Text: "no interactive session is available (autonomous run); proceed on your own", IsError: true}, nil
 	}
-	pi := b.apiSrv.openInteraction(run.sessionID, "ask", map[string]any{"question": question, "options": options})
+	pi := b.apiSrv.openInteraction(run.workspaceID, run.sessionID, "ask", map[string]any{"question": question, "options": options})
 	ans, reason := b.apiSrv.waitInteractionCLI(ctx, run, pi)
 	switch reason {
 	case "":
@@ -121,7 +121,7 @@ func (b *interactionBackend) callPermission(ctx context.Context, run *chatRun, a
 		// steer here as additionalContext (claude-cli has no steer channel).
 		return interaction.CallResult{Text: permDecisionCtx(true, in.Input, "", b.steerContext(run))}, nil
 	}
-	pi := b.apiSrv.openInteraction(run.sessionID, "permission", map[string]any{
+	pi := b.apiSrv.openInteraction(run.workspaceID, run.sessionID, "permission", map[string]any{
 		"tool": toolName, "reason": string(risk), "text": arg, "options": tools.PermissionOptions,
 	})
 	ans, reason := b.apiSrv.waitInteractionCLI(ctx, run, pi)
@@ -168,7 +168,7 @@ func (b *interactionBackend) callExitPlan(ctx context.Context, run *chatRun, inp
 		b.capturePlanArtifact(run, plan)
 		return interaction.CallResult{Text: permDecision(true, input, "")}, nil
 	}
-	pi := b.apiSrv.openInteraction(run.sessionID, "plan", map[string]any{"text": plan, "options": tools.PlanOptions})
+	pi := b.apiSrv.openInteraction(run.workspaceID, run.sessionID, "plan", map[string]any{"text": plan, "options": tools.PlanOptions})
 	ans, reason := b.apiSrv.waitInteractionCLI(ctx, run, pi)
 	switch reason {
 	case "":
