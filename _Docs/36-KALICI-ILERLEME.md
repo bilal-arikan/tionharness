@@ -1,4 +1,4 @@
-﻿# 36 — Kalıcı Todo / PROGRESS Dosyası (Structured Note-Taking)
+# 36 — Kalıcı Todo / PROGRESS Dosyası (Structured Note-Taking)
 
 > **Durum (2026-06-25): UYGULANDI.** Anthropic'in *"Effective harnesses for
 > long-running agents"* + *"Effective context engineering for AI agents"*

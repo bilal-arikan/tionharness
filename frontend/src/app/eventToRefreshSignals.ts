@@ -1,4 +1,4 @@
-﻿// Maps a global SSE AppEvent to the set of panel-level refresh signal keys
+// Maps a global SSE AppEvent to the set of panel-level refresh signal keys
 // that should re-fetch in response. App.tsx's central onEventRef handler calls
 // this for every event and bumps the returned keys (debounced) so subscribers
 // in useRefreshTrigger re-render and re-fetch.

@@ -1,4 +1,4 @@
-﻿# 11 — TionSwarm Interaction MCP
+# 11 — TionSwarm Interaction MCP
 
 > **Durum: ✅ UYGULANDI.** Faz 0–3 tamamlandı (2026-06-16 … 2026-06-26); üzerine
 > iki-tier endpoint (2026-06-26) ve stateful streaming + `tools/list_changed` push

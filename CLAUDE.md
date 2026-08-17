@@ -110,7 +110,10 @@ paketleri (`agent`/`api`/`tools`) kapsamaz hale gelmişti.
 
 - **`.go` dosyalarına BOM yazma.** `go build`/`go vet` tolere eder ama cover instrumentation
   dosyayı yeniden yazınca BOM ortada kalır ve paket `invalid BOM in the middle of the file`
-  ile derlenmez → `go test -cover` o pakette tamamen çöker.
+  ile derlenmez → `go test -cover` o pakette tamamen çöker. Pre-commit hook artık stage'lenmiş
+  her `.go` dosyasından BOM'u soyar ve `pre-commit: stripped UTF-8 BOM from <dosya>` diye
+  bildirir, ama bu yalnız hook kuruluysa (`git config core.hooksPath .githooks`) ve
+  `--no-verify` kullanılmadıysa korur — hâlâ BOM'suz yazmak esas kuraldır.
 - **Harici araç isteyen testler `t.Skip` ile geçitlenir** (rg, python, node, claude CLI, ağ).
   Yeni bir testin böyle bir bağımlılığı varsa aynı deseni izle, yoksa CI kırılır.
 - `-race` bu makinede CGO kapalı olduğu için koşmaz; CI (linux) koşar.

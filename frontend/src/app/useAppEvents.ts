@@ -1,4 +1,4 @@
-﻿// useAppEvents owns the app-wide SSE subscription: autonomous-event handling
+// useAppEvents owns the app-wide SSE subscription: autonomous-event handling
 // (notifications, badges, live list refreshes, cross-window panel signals) and
 // live turn-step frames. The subscription is mounted once; a deps ref refreshed
 // each render keeps the handlers reading current state/closures — the same

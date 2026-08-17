@@ -1,4 +1,4 @@
-﻿# 35 — Context Reset + Handoff Artifact
+# 35 — Context Reset + Handoff Artifact
 
 > Uzun otonom görevlerde, bağlam sınırına yaklaşan bir oturumu **yerinde
 > özetlemek yerine** tamamen temiz bir pencerede sürdürmek: bir **handoff

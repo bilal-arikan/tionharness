@@ -1,4 +1,4 @@
-﻿# 24 — Self-Management + Ayarlar Alt Sistemi
+# 24 — Self-Management + Ayarlar Alt Sistemi
 
 Bir ajanın **TionSwarm'nun kendisini** araçlarla yönetmesini sağlayan tool ailesi ve
 uygulama-geneli ayarların canlı okunup yazıldığı ayarlar köprüsü.
