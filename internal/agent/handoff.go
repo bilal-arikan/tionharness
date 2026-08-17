@@ -96,8 +96,13 @@ func (r *Runtime) HandoffSession(ctx context.Context, session db.Session, agent 
 	if err != nil {
 		return HandoffResult{}, err
 	}
-	rendered := conversation.RenderTranscript(history)
-	if strings.TrimSpace(rendered) == "" {
+	// Only the turns after the most recent compaction are re-read: everything
+	// before that boundary is already carried by session.Summary, which is passed
+	// alongside. Rendering the full transcript here would ship the same content
+	// twice and let long-folded detail crowd out the recent work.
+	pending := conversation.PendingAfterSummary(history, session.SummaryMsgCount)
+	rendered := conversation.RenderTranscript(pending)
+	if strings.TrimSpace(rendered) == "" && strings.TrimSpace(session.Summary) == "" {
 		return HandoffResult{}, fmt.Errorf("nothing to hand off: session has no conversation yet")
 	}
 

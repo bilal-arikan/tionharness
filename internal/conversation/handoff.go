@@ -104,3 +104,16 @@ func BuildHandoff(ctx context.Context, database *db.DB, provider providers.Provi
 func RenderTranscript(msgs []db.Message) string {
 	return renderDBMessages(msgs)
 }
+
+// PendingAfterSummary returns the part of a session's history that is NOT yet
+// folded into the rolling summary — everything after the most recent compaction
+// boundary (session.SummaryMsgCount). Callers that re-summarize a session
+// (handoff, manual compact, automatic resets) must scan only this tail: the
+// older turns are already represented by the summary, so re-reading them both
+// wastes context and lets stale detail outweigh recent work.
+func PendingAfterSummary(history []db.Message, summaryMsgCount int) []db.Message {
+	if summaryMsgCount <= 0 {
+		return history
+	}
+	return history[clampStart(summaryMsgCount, len(history)):]
+}
