@@ -30,7 +30,8 @@ see "Calibrate by doc type" below.
 ## The six criteria (score each /5)
 
 1. **Commands / workflows** — are the concrete run/build/test commands present and
-   copy-pasteable (PowerShell on this machine), or buried in prose?
+   copy-pasteable (Bash on this machine — PowerShell only for Windows-native work
+   Bash cannot do), or buried in prose?
 2. **Architecture clarity** — folder map, tech stack, key decisions legible at a glance?
 3. **Non-obvious patterns (gotchas)** — the traps a fresh agent would hit
    (`--bare` breaks claude-cli login, port 8080 collides with unity-mcp, the vite
