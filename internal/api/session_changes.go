@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"strings"
+
+	"github.com/bilal-arikan/tionswarm/internal/db"
 )
 
 // The chat's "all file changes" popup needs every file mutation a session ever
@@ -52,24 +54,28 @@ type sessionChange struct {
 // handleSessionChanges returns every file mutation in a session, oldest first.
 // GET /api/sessions/{id}/changes
 func (s *Server) handleSessionChanges(w http.ResponseWriter, r *http.Request) {
-	messages, err := ws(r).DB.ListMessages(r.Context(), r.PathValue("id"))
-	if writeDBError(w, err, "") {
-		return
-	}
 	out := []sessionChange{}
-	for _, m := range messages {
+	// Streamed, not listed: this walks every turn but keeps only the file-mutating
+	// steps, so materialising a copy of the whole transcript first would be pure
+	// waste. The callback only parses and appends — no store calls, as
+	// StreamMessages requires.
+	err := ws(r).DB.StreamMessages(r.Context(), r.PathValue("id"), func(m db.Message) bool {
 		if len(m.Steps) < 2 {
-			continue
+			return true
 		}
 		var steps []json.RawMessage
 		// A trace that will not parse is skipped rather than failing the request:
 		// one unreadable turn should not hide every other change in the session.
 		if json.Unmarshal([]byte(m.Steps), &steps) != nil {
-			continue
+			return true
 		}
 		for _, raw := range steps {
 			out = appendChanges(out, raw, m.ID, m.AgentID, m.CreatedAt, false)
 		}
+		return true
+	})
+	if writeDBError(w, err, "") {
+		return
 	}
 	writeJSON(w, http.StatusOK, out)
 }

@@ -308,6 +308,24 @@ func relayLegacyFrame(write func(string, any), ev sessionhub.Event, myClientMsgI
 	return false
 }
 
+// replyTailWindow is how many trailing messages writeChatReply inspects before
+// falling back to the full transcript. The reply it wants was appended by the
+// turn that just ended; a window this size absorbs a back-to-back next turn's
+// user message and any tool/system appends after it.
+const replyTailWindow = 16
+
+// lastAssistant returns the newest assistant message in msgs. A back-to-back next
+// turn can append a newer user message, so the scan runs from the end for the
+// last assistant ROLE rather than trusting the very last message.
+func lastAssistant(msgs []db.Message) (db.Message, bool) {
+	for i := len(msgs) - 1; i >= 0; i-- {
+		if msgs[i].Role == providers.RoleAssistant {
+			return msgs[i], true
+		}
+	}
+	return db.Message{}, false
+}
+
 // writeChatReply builds the legacy non-stream chat response for a completed queued
 // turn. It prefers the assistant reply carried by the hub KindReply event we observed
 // for THIS turn (replyPayload); only if that is missing does it fall back to scanning
@@ -330,12 +348,19 @@ func (s *Server) writeChatReply(w http.ResponseWriter, database *db.DB, sessionI
 		}
 	}
 	if !haveReply {
-		if msgs, err := database.ListMessages(context.Background(), sessionID); err == nil {
-			for i := len(msgs) - 1; i >= 0; i-- {
-				if msgs[i].Role == providers.RoleAssistant {
-					reply = msgs[i]
-					haveReply = true
-					break
+		// The turn just finished, so its reply is at (or very near) the end of the
+		// transcript — a short tail answers this without copying the session. The
+		// full-transcript fallback below is NOT decoration: a turn that produced
+		// only tool/system messages can push the last assistant reply out of the
+		// tail, and silently reporting "no reply" there would be a lie.
+		msgs, from, err := database.ListMessagesTail(context.Background(), sessionID, replyTailWindow)
+		if err == nil {
+			reply, haveReply = lastAssistant(msgs)
+			// from > 0 means the tail cut something off, so "not found" is not yet
+			// conclusive; from == 0 means we already saw the whole transcript.
+			if !haveReply && from > 0 {
+				if all, aerr := database.ListMessages(context.Background(), sessionID); aerr == nil {
+					reply, haveReply = lastAssistant(all)
 				}
 			}
 		}

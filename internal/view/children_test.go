@@ -51,7 +51,9 @@ func (s *fakeStore) GetSession(context.Context, string) (db.Session, error) {
 func (s *fakeStore) GetSessionUsage(context.Context, string) (db.SessionUsage, error) {
 	return db.SessionUsage{}, nil
 }
-func (s *fakeStore) ListMessages(context.Context, string) ([]db.Message, error) { return nil, nil }
+func (s *fakeStore) ListMessagesTail(context.Context, string, int) ([]db.Message, int, error) {
+	return nil, 0, nil
+}
 func (s *fakeStore) ListWaitingSessionAsks(context.Context) ([]db.SessionAsk, error) {
 	return nil, nil
 }

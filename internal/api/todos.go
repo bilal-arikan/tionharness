@@ -11,6 +11,11 @@ import (
 	"github.com/bilal-arikan/tionswarm/internal/view"
 )
 
+// todoTailWindow is how many trailing messages the checklist lookup reads before
+// widening to the full transcript. A live checklist is rewritten by todo_write
+// throughout a turn, so the newest one is near the end in practice.
+const todoTailWindow = 64
+
 // todoContextBlock builds a system-prompt section showing the session's active
 // todo checklist (the latest todo_write), so the agent keeps tracking it even
 // after the original tool message has scrolled out of the live context window or
@@ -27,9 +32,20 @@ func todoContextBlock(ctx context.Context, database *db.DB, sessionID, dir strin
 	if sessionID == "" {
 		return ""
 	}
-	if msgs, err := database.ListMessages(ctx, sessionID); err == nil {
+	// LatestTodos scans newest-first and stops at the first checklist, so a tail
+	// answers it in almost every case. When the tail is truncated AND holds no
+	// checklist the question is still open — fall back to the full transcript
+	// rather than reporting "no checklist" for a session that has one.
+	if msgs, from, err := database.ListMessagesTail(ctx, sessionID, todoTailWindow); err == nil {
 		if own := view.LatestTodos(msgs); !own.Empty() {
 			return renderTodoBlock(own)
+		}
+		if from > 0 {
+			if all, aerr := database.ListMessages(ctx, sessionID); aerr == nil {
+				if own := view.LatestTodos(all); !own.Empty() {
+					return renderTodoBlock(own)
+				}
+			}
 		}
 	}
 	if !resume {

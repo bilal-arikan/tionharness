@@ -27,7 +27,11 @@ type Store interface {
 	GetFlow(ctx context.Context, id string) (db.Flow, error)
 	GetSession(ctx context.Context, id string) (db.Session, error)
 	GetSessionUsage(ctx context.Context, id string) (db.SessionUsage, error)
-	ListMessages(ctx context.Context, sessionID string) ([]db.Message, error)
+	// ListMessagesTail is deliberately the only transcript reader here: a
+	// projection never renders more than the tail (sessionTailMessages), so
+	// asking for the whole transcript would copy megabytes to throw them away.
+	// The second result is the tail's start index, which is exactly TailFrom.
+	ListMessagesTail(ctx context.Context, sessionID string, n int) ([]db.Message, int, error)
 	ListWaitingSessionAsks(ctx context.Context) ([]db.SessionAsk, error)
 	ListTasks(ctx context.Context) ([]db.Task, error)
 	ListActiveTasks(ctx context.Context) ([]db.Task, error)
@@ -374,14 +378,11 @@ func (p *Projector) loadSession(ctx context.Context, id string, level Level) (Se
 		return in, nil
 	}
 
-	msgs, err := p.store.ListMessages(ctx, id)
+	msgs, tailFrom, err := p.store.ListMessagesTail(ctx, id, sessionTailMessages)
 	if err != nil {
 		return SessionInput{}, fmt.Errorf("view: session %s messages: %w", id, err)
 	}
-	if len(msgs) > sessionTailMessages {
-		in.TailFrom = len(msgs) - sessionTailMessages
-		msgs = msgs[in.TailFrom:]
-	}
+	in.TailFrom = tailFrom
 	in.Messages = msgs
 
 	if asks, err := p.store.ListWaitingSessionAsks(ctx); err == nil {
