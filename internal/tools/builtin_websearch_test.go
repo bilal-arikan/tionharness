@@ -1,6 +1,8 @@
 package tools
 
 import (
+	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -126,5 +128,48 @@ func TestFormatSearchResultsEmpty(t *testing.T) {
 	out := formatSearchResults("nothing", "tavily", nil)
 	if !strings.Contains(out, "no results") {
 		t.Errorf("expected 'no results', got %q", out)
+	}
+}
+
+// fakeSearchBackend lets the fallback loop be exercised without a network.
+type fakeSearchBackend struct {
+	label   string
+	results []searchResult
+	err     error
+}
+
+func (f fakeSearchBackend) name() string { return f.label }
+
+func (f fakeSearchBackend) search(context.Context, *http.Client, string, int) ([]searchResult, error) {
+	return f.results, f.err
+}
+
+func TestWebSearchFallsBackToNextBackend(t *testing.T) {
+	backends := []searchBackend{
+		fakeSearchBackend{label: "searxng", err: errors.New("dial tcp 127.0.0.1:8888: connection refused")},
+		fakeSearchBackend{label: "tavily", results: []searchResult{{Title: "hit", URL: "https://h", Snippet: "c"}}},
+	}
+	out, err := searchWithBackends(t.Context(), http.DefaultClient, backends, "q", 5)
+	if err != nil {
+		t.Fatalf("expected fallback to succeed: %v", err)
+	}
+	if !strings.Contains(out, "via tavily") || !strings.Contains(out, "https://h") {
+		t.Errorf("expected the second backend's results, got:\n%s", out)
+	}
+}
+
+func TestWebSearchAllBackendsFailReportsEachAndHintsUnreachable(t *testing.T) {
+	backends := []searchBackend{
+		fakeSearchBackend{label: "searxng", err: errors.New("dial tcp 127.0.0.1:8888: connection refused")},
+		fakeSearchBackend{label: "tavily", err: errors.New("HTTP 401: bad key")},
+	}
+	_, err := searchWithBackends(t.Context(), http.DefaultClient, backends, "q", 5)
+	if err == nil {
+		t.Fatal("expected an error when every backend fails")
+	}
+	for _, want := range []string{"searxng", "tavily", "connection refused", "unreachable", "HTTP 401"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error missing %q: %v", want, err)
+		}
 	}
 }

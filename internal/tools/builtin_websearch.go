@@ -108,35 +108,75 @@ func (t WebSearchTool) Call(ctx context.Context, input json.RawMessage) (string,
 		count = webSearchMaxCount
 	}
 
-	backend, err := t.selectBackend()
+	backends, err := t.selectBackends()
 	if err != nil {
 		return "", err
 	}
 
-	results, err := backend.search(ctx, t.client, query, count)
-	if err != nil {
-		return "", fmt.Errorf("%s search failed: %w", backend.name(), err)
-	}
-	return formatSearchResults(query, backend.name(), results), nil
+	return searchWithBackends(ctx, t.client, backends, query, count)
 }
 
-// selectBackend picks the search backend from the workspace vault. A self-hosted
-// SearXNG URL wins when present (a deliberate, keyless infra choice); otherwise a
-// Tavily key is used. With neither configured it returns an explicit error rather
-// than silently degrading — the operator must add one credential via secret_set.
-func (t WebSearchTool) selectBackend() (searchBackend, error) {
+// searchWithBackends tries each backend in order and returns the first success.
+// A backend that errors (its service is down, rate-limited, misconfigured) must
+// not sink the call when another one is configured — the previous single-backend
+// behaviour turned a stopped SearXNG container into "the agent has no web search
+// at all". When every backend fails, the returned error names each one and what
+// it failed with.
+func searchWithBackends(ctx context.Context, client *http.Client, backends []searchBackend, query string, count int) (string, error) {
+	var failures []string
+	for _, backend := range backends {
+		results, err := backend.search(ctx, client, query, count)
+		if err != nil {
+			failures = append(failures, fmt.Sprintf("%s: %s", backend.name(), searchFailureHint(err)))
+			continue
+		}
+		return formatSearchResults(query, backend.name(), results), nil
+	}
+	return "", fmt.Errorf("web search failed on every configured backend — %s",
+		strings.Join(failures, "; "))
+}
+
+// searchFailureHint annotates a backend error with the operator action it implies.
+// Connection-level failures mean the service itself is not answering, which reads
+// very differently from an HTTP error the service produced deliberately.
+func searchFailureHint(err error) string {
+	msg := err.Error()
+	low := strings.ToLower(msg)
+	switch {
+	case strings.Contains(low, "connection refused"),
+		strings.Contains(low, "no such host"),
+		strings.Contains(low, "actively refused"),
+		strings.Contains(low, "timeout"),
+		strings.Contains(low, "deadline exceeded"):
+		return msg + " (the backend is unreachable — is the service running at that address?)"
+	default:
+		return msg
+	}
+}
+
+// selectBackends lists the search backends configured in the workspace vault, in
+// preference order: a self-hosted SearXNG (a deliberate, keyless infra choice)
+// first, a Tavily key second. Both are returned when both are configured so the
+// caller can fall back. With neither configured it returns an explicit error
+// rather than silently degrading — the operator must add one credential via
+// secret_set.
+func (t WebSearchTool) selectBackends() ([]searchBackend, error) {
 	if t.vault == nil {
 		return nil, fmt.Errorf("no secret vault is available, so no search backend is configured " +
 			"(add SEARXNG_URL or TAVILY_API_KEY)")
 	}
+	var backends []searchBackend
 	if base, ok := t.vault.Get("SEARXNG_URL"); ok && strings.TrimSpace(base) != "" {
-		return searxngBackend{baseURL: strings.TrimSpace(base)}, nil
+		backends = append(backends, searxngBackend{baseURL: strings.TrimSpace(base)})
 	}
 	if key, ok := t.vault.Get("TAVILY_API_KEY"); ok && strings.TrimSpace(key) != "" {
-		return tavilyBackend{apiKey: strings.TrimSpace(key)}, nil
+		backends = append(backends, tavilyBackend{apiKey: strings.TrimSpace(key)})
 	}
-	return nil, fmt.Errorf("no web-search backend configured: add a secret named SEARXNG_URL " +
-		"(self-hosted SearXNG base URL) or TAVILY_API_KEY (Tavily API key) via secret_set")
+	if len(backends) == 0 {
+		return nil, fmt.Errorf("no web-search backend configured: add a secret named SEARXNG_URL " +
+			"(self-hosted SearXNG base URL) or TAVILY_API_KEY (Tavily API key) via secret_set")
+	}
+	return backends, nil
 }
 
 // formatSearchResults renders hits as a numbered Markdown list with a header
