@@ -75,6 +75,7 @@ const TOOL_CATEGORY_LABELS: Record<string, string> = {
   token: 'Token / bağlam optimizasyonu',
   dev: 'Geliştirme araçları',
   render: 'Render / diyagram',
+  design: 'Tasarım',
   voice: 'Ses (TTS / STT)',
 }
 

@@ -264,7 +264,7 @@ Update      UpdateSpec // Kind: "command" | "manual"
 | Kind | Araçlar | Neden |
 |------|---------|-------|
 | `command` | `mmdc` (npm), `ffmpeg` (winget), `git` (winget `Git.Git`), `bun` (winget `Oven-sh.Bun`), `npm` (`npm i -g npm@latest`) | Paket yöneticisi kurulum dizinini ve çalışan ikiliyi kendi yönetir |
-| `manual` | claude, rtk, sqz, codebase-memory-mcp, piper, whisper-cli | İkiliyi/arşivi **yerinde değiştirmek** gerekir; Windows'ta çalışan alt-süreç (MCP stdio sunucusu kendi `.exe`'sini, süren bir claude-cli turu `claude`'u) dosyayı kilitler → yarım kalan kopya aracı geri dönüşsüz bozar |
+| `manual` | claude, rtk, sqz, codebase-memory-mcp, openpencil, piper, whisper-cli | İkiliyi/arşivi **yerinde değiştirmek** gerekir; Windows'ta çalışan alt-süreç (MCP stdio sunucusu kendi `.exe`'sini, süren bir claude-cli turu `claude`'u, açık `op` sunucusu `op.exe`'yi) dosyayı kilitler → yarım kalan kopya aracı geri dönüşsüz bozar |
 
 `RunUpdate` komutu **katalogdan** alır, istekten değil → enjeksiyon yolu yok.
 5 dk timeout + `TreeKill`; `HardenedEnv` sayesinde soru soracak bir paket
@@ -306,6 +306,34 @@ arka planda günceller, elle yol `claude update` / `npm i -g @anthropic-ai/claud
 sağlayıcının çalıştırdığı ikili **daima aynı**. Override varsa PATH'e **düşülmez**:
 yol boşsa dürüst cevap "kurulu değil"dir, PATH'teki asla kullanılmayacak başka bir
 `claude`'un sürümü değil. Boş değer override'ı siler (PATH'e döner).
+
+### `openpencil` katalog girdisi — `op` ad çakışması + prerelease akışı (2026-08-15)
+
+OpenPencil (açık kaynak, ajan-yerlisi vektör tasarım aracı) katalogda: kategori
+`design` → panelde **Tasarım** başlığı, `Wire: "cli"` çünkü ajan onu `openpencil-design`
+skill'i üzerinden shell ile sürer. İki tuzağı var ve ikisi de "cevapsızlık" değil
+**kendinden emin yanlış cevap** üretirdi:
+
+**1. İkilinin adı `op` — 1Password CLI de aynı adı kullanıyor.** Bu yüzden katalog
+anahtarı `exttools.OpenPencilToolName = "openpencil"` (ikilinin adı DEĞİL) ve
+`openPencilExe()` çözümlemesi şu sırayla çalışır: `TIONSWARM_OPENPENCIL` env →
+`~\Desktop\Progs\openpencil\cli\op` → PATH — ama **PATH sonucu ancak yolunda
+"openpencil" geçiyorsa kabul edilir**. Aksi halde panel 1Password'ün sürümünü okur,
+onu OpenPencil'in release akışıyla karşılaştırır ve kullanıcıya tasarım aracının
+yıllardır güncellenmediğini söyler. Scoop (`scoop\apps\openpencil\…`) ve brew
+(`Cellar/openpencil/…`) kurulumları desenle eşleşir; başka bir konum env ister.
+Kırık bir env override PATH'e **düşmez** (claude'daki `SetPathOverride` ile aynı gerekçe).
+
+**2. Her release `prerelease` işaretli** (v0.8.0…v0.8.4, 2026-08-15'te doğrulandı),
+dolayısıyla `releases/latest` kalıcı 404 verir. `Tool.PreRelease` bunun için var:
+açıkken `LatestPreRelease` 404'te `/releases?per_page=10` listesine düşer ve
+draft olmayan **en yeni** kaydı alır. Global fallback DEĞİL, araç-başına opt-in —
+gerçek beta yayımlayan bir projede stabil kullanıcıyı beta ile kıyaslamak
+node/npm girdilerinin reddettiği aynı yanlış verdikti olurdu. Cache anahtarı
+`repo#pre` ile ayrılır ki iki mod 6 saat boyunca birbirini gölgelemesin.
+
+Sürüm probu: `op --version` düz semver değil **JSON** basar (`{"version":"0.8.4"}`);
+`semverRe` bunu sorunsuz okur (regresyon testi `openpencil_test.go`'da).
 
 ### `git` katalog girdisi — release akışı neden git-for-windows (2026-08-01)
 

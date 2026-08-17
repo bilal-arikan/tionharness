@@ -112,7 +112,11 @@ func (s *Server) handleExternalToolUpdates(w http.ResponseWriter, r *http.Reques
 		wg.Add(1)
 		go func(i int, t exttools.Tool, repo, path string) {
 			defer wg.Done()
-			rel, stale, err := exttools.LatestRelease(r.Context(), repo)
+			fetch := exttools.LatestRelease
+			if t.PreRelease {
+				fetch = exttools.LatestPreRelease
+			}
+			rel, stale, err := fetch(r.Context(), repo)
 			if err != nil {
 				out[i].Error = err.Error()
 				return
