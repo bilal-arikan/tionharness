@@ -339,6 +339,14 @@ export interface RunningTurn {
   startedAt: number // unix seconds
   autonomous: boolean
   provider?: string
+  // Liveness, from the same signal the queue watchdog judges on. Elapsed time
+  // alone cannot tell a working turn from a wedged one; silence can. Tick
+  // lastActivityAt against the server clock rather than trusting a fetched
+  // duration — the panel only refetches when the conversation changes, so a
+  // silent session (the case that matters) would never update it.
+  lastActivityAt: number // unix seconds
+  idleLimitSec: number // inactivity window that will cancel the turn
+  hardLimitSec: number // wall-clock ceiling that will cancel the turn
 }
 
 // WorkerInfo is one worker's status under a coordinator session (M2).
