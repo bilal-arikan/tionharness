@@ -1,4 +1,4 @@
-﻿package api
+package api
 
 import (
 	"github.com/bilal-arikan/tionswarm/internal/events"
