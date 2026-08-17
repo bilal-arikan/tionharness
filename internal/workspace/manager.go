@@ -220,6 +220,34 @@ func NewManager(rootDir string, registry *providers.Registry, tun *agent.Tunable
 	return m, nil
 }
 
+// formatLoadPhases renders the store's boot phase timings slowest-first as
+// "name=ms" pairs, dropping sub-millisecond phases so the line stays readable.
+// The total on its own never says WHICH loader to fix; this does.
+func formatLoadPhases(phases map[string]int64) string {
+	if len(phases) == 0 {
+		return ""
+	}
+	type kv struct {
+		name string
+		ms   int64
+	}
+	list := make([]kv, 0, len(phases))
+	for name, ms := range phases {
+		if ms > 0 {
+			list = append(list, kv{name, ms})
+		}
+	}
+	sort.Slice(list, func(i, j int) bool { return list[i].ms > list[j].ms })
+	var b strings.Builder
+	for i, e := range list {
+		if i > 0 {
+			b.WriteByte(' ')
+		}
+		fmt.Fprintf(&b, "%s=%d", e.name, e.ms)
+	}
+	return b.String()
+}
+
 // open instantiates a workspace's DB + runtime and registers it in memory.
 func (m *Manager) open(meta Meta) error {
 	// A user-chosen Path overrides the default per-workspace location.
@@ -238,10 +266,24 @@ func (m *Manager) open(meta Meta) error {
 	agent.EnsureWorkspaceClaudeHome(dir)
 
 	storeDir := filepath.Join(dir, "store")
+	storeOpenStart := time.Now()
 	database, err := db.Open(storeDir)
 	if err != nil {
 		return err
 	}
+	// Boot cost of THIS workspace's store, attributed per workspace so a slow
+	// startup points at the workspace responsible instead of a single total. It is
+	// the regression metric for the message lazy-loading work: db.Open parses every
+	// session's whole transcript today (db.load → loadSessions), so message_mb is
+	// exactly the resident cost that work is meant to remove.
+	storeStats := database.Stats()
+	m.logger.Info("store opened",
+		"workspace", meta.ID,
+		"ms", time.Since(storeOpenStart).Milliseconds(),
+		"sessions", storeStats.Sessions,
+		"messages", storeStats.Messages,
+		"message_mb", storeStats.MessageBytes>>20,
+		"phases_ms", formatLoadPhases(storeStats.LoadPhaseMs))
 
 	// Seed the built-in default flows into this workspace's store. Idempotent and
 	// deletion-aware (a ledger keeps a user-removed default from coming back).

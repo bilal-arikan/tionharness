@@ -1064,23 +1064,44 @@ func (d *DB) loadSessions() error {
 	if err != nil {
 		return err
 	}
+	dirs := make([]string, 0, len(entries))
 	for _, e := range entries {
-		if !e.IsDir() {
-			continue
+		if e.IsDir() {
+			dirs = append(dirs, filepath.Join(d.dir(dirSessions), e.Name()))
 		}
-		dir := filepath.Join(d.dir(dirSessions), e.Name())
+	}
+	// The dominant boot cost: two cold file opens per session (session.json +
+	// messages.jsonl), each taxed ~15 ms by the AV filter driver on Windows. Read
+	// them concurrently (see loadpar.go) and populate the maps serially after.
+	type loadedSession struct {
+		s    Session
+		msgs []Message
+		skip bool // absent or headerless directory — not an error
+	}
+	loaded, err := parallelLoad(dirs, func(dir string) (loadedSession, error) {
 		s, msgs, err := readSessionDir(dir)
 		if err != nil {
+			// A directory that vanished between ReadDir and the open is skipped, as
+			// before; any other read/parse failure stays fatal.
 			if os.IsNotExist(err) {
-				continue
+				return loadedSession{skip: true}, nil
 			}
-			return err
+			return loadedSession{}, err
 		}
 		if s.ID == "" { // empty/headerless session — nothing usable
+			return loadedSession{skip: true}, nil
+		}
+		return loadedSession{s: s, msgs: msgs}, nil
+	})
+	if err != nil {
+		return err
+	}
+	for _, l := range loaded {
+		if l.skip {
 			continue
 		}
-		d.sessions[s.ID] = s
-		d.messages[s.ID] = msgs
+		d.sessions[l.s.ID] = l.s
+		d.messages[l.s.ID] = l.msgs
 	}
 	return nil
 }

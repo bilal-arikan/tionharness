@@ -117,6 +117,12 @@ type DB struct {
 	// and store_session_usage.go touches these maps, so the split is total —
 	// mirroring what debugMu/lessonsMu already do for their own journals.
 	usageMu sync.RWMutex
+
+	// loadPhases records how long each boot phase took, so a slow Open can be
+	// attributed to a specific loader instead of guessed at. Written only by
+	// load() (single-threaded, before the DB is published) and read-only after,
+	// so it needs no lock.
+	loadPhases map[string]time.Duration
 }
 
 // Open opens (creating if missing) the file-backed store rooted at path and
@@ -328,7 +334,9 @@ func readJSONFile(path string, v any) error {
 }
 
 // loadJSONDir reads every "*.json" file in a directory and unmarshals each into
-// a fresh T, returning the slice. A missing directory yields an empty slice.
+// a fresh T, returning the slice in directory order. A missing directory yields
+// an empty slice. The files are read CONCURRENTLY — see loadpar.go for why that
+// is the single biggest lever on boot time.
 func loadJSONDir[T any](dir string) ([]T, error) {
 	entries, err := os.ReadDir(dir)
 	if errors.Is(err, os.ErrNotExist) {
@@ -337,19 +345,22 @@ func loadJSONDir[T any](dir string) ([]T, error) {
 	if err != nil {
 		return nil, err
 	}
-	out := make([]T, 0, len(entries))
+	paths := make([]string, 0, len(entries))
 	for _, e := range entries {
 		name := e.Name()
 		if e.IsDir() || !strings.HasSuffix(name, ".json") || strings.HasSuffix(name, ".tmp") {
 			continue
 		}
-		var v T
-		if err := readJSONFile(filepath.Join(dir, name), &v); err != nil {
-			return nil, err
-		}
-		out = append(out, v)
+		paths = append(paths, filepath.Join(dir, name))
 	}
-	return out, nil
+	return parallelLoad(paths, func(p string) (T, error) {
+		var v T
+		if err := readJSONFile(p, &v); err != nil {
+			var zero T
+			return zero, err
+		}
+		return v, nil
+	})
 }
 
 func removeFile(path string) error {
@@ -362,9 +373,14 @@ func removeFile(path string) error {
 
 // load reads every entity from disk into the in-memory maps.
 func (d *DB) load() error {
-	if err := d.loadCounters(); err != nil {
+	if err := d.timeLoadPhase("counters", d.loadCounters); err != nil {
 		return err
 	}
+	// One bucket for the flat entity directories (agents/tasks/schedules/mcp/
+	// flows/flow-runs/session-asks/automations/artifacts/hooks): they share one
+	// loader and one failure mode, so splitting them further would be noise until
+	// the bucket itself shows up as expensive.
+	phaseStart := time.Now()
 
 	agents, err := loadJSONDir[Agent](d.dir(dirAgents))
 	if err != nil {
@@ -443,19 +459,28 @@ func (d *DB) load() error {
 	if err != nil {
 		return err
 	}
+	// Text artifacts whose body lives in a content file need a SECOND file read
+	// each, so they get the same concurrent treatment as the entity files above —
+	// a workspace with a few hundred artifacts otherwise pays hundreds of serial
+	// cold opens here alone. readArtifactContent only fills the value it is given.
+	artifacts, err = parallelLoad(artifacts, func(a Artifact) (Artifact, error) {
+		if isTextArtifact(a.Kind) && a.Content == "" && a.ContentFile != "" {
+			d.readArtifactContent(&a)
+		}
+		return a, nil
+	})
+	if err != nil {
+		return err
+	}
 	var migrate []Artifact
 	for _, a := range artifacts {
-		switch {
-		case isTextArtifact(a.Kind) && a.Content == "" && a.ContentFile != "":
-			// Body lives in a content file — read it back into memory.
-			d.readArtifactContent(&a)
-			d.artifacts[a.ID] = a
-		case isTextArtifact(a.Kind) && a.Content != "" && a.ContentFile == "":
-			// Legacy artifact with an embedded body: move it to a content file.
-			d.artifacts[a.ID] = a
+		d.artifacts[a.ID] = a
+		// Legacy artifact with an embedded body: move it to a content file. This is
+		// the ONLY case the loop still distinguishes — the read-back branch happened
+		// in the concurrent pass above, and the condition here is untouched by it
+		// (the read only runs when ContentFile is set).
+		if isTextArtifact(a.Kind) && a.Content != "" && a.ContentFile == "" {
 			migrate = append(migrate, a)
-		default:
-			d.artifacts[a.ID] = a
 		}
 	}
 	// One-time migration of legacy embedded bodies → files (idempotent: once a
@@ -474,33 +499,55 @@ func (d *DB) load() error {
 		d.hooks[h.ID] = h
 	}
 
-	if err := d.loadUsage(); err != nil {
+	d.markLoadPhase("entities", phaseStart)
+
+	if err := d.timeLoadPhase("usage", d.loadUsage); err != nil {
 		return err
 	}
-	if err := d.loadSessionUsage(); err != nil {
+	if err := d.timeLoadPhase("sessionUsage", d.loadSessionUsage); err != nil {
 		return err
 	}
-	if err := d.loadToolConfig(); err != nil {
+	if err := d.timeLoadPhase("toolConfig", d.loadToolConfig); err != nil {
 		return err
 	}
-	if err := d.loadModelResolutions(); err != nil {
+	if err := d.timeLoadPhase("modelResolutions", d.loadModelResolutions); err != nil {
 		return err
 	}
-	if err := d.loadSessions(); err != nil {
+	if err := d.timeLoadPhase("sessions", d.loadSessions); err != nil {
 		return err
 	}
 	// Reclaim any assistant turn that was streaming when the process last died,
 	// so a mid-turn crash leaves a partial-but-saved reply instead of nothing.
-	if err := d.recoverInflight(); err != nil {
+	if err := d.timeLoadPhase("recoverInflight", d.recoverInflight); err != nil {
 		return err
 	}
 	// Consolidate any pre-unification files into the per-session artifacts layout
 	// and back existing chat attachments with artifacts (idempotent, best-effort).
-	d.migrateUnifiedLayout()
+	d.timeLoadPhase("migrateUnifiedLayout", func() error { d.migrateUnifiedLayout(); return nil })
 	// Reclaim transient render_template output: drop dirs for sessions that no
 	// longer exist and TTL-sweep stale files (startup-only, best-effort).
-	d.cleanupRenders()
+	d.timeLoadPhase("cleanupRenders", func() error { d.cleanupRenders(); return nil })
 	return nil
+}
+
+// timeLoadPhase runs one boot phase and records how long it took under name.
+// Boot is measured phase-by-phase because the aggregate number ("the store took
+// 13 seconds") never says WHICH of the dozen loaders to fix — and on this
+// codebase the intuitive answer (transcript parsing) turned out to be wrong.
+func (d *DB) timeLoadPhase(name string, fn func() error) error {
+	start := time.Now()
+	err := fn()
+	d.markLoadPhase(name, start)
+	return err
+}
+
+// markLoadPhase records the elapsed time since start under name. load() is
+// single-threaded, so no lock is needed.
+func (d *DB) markLoadPhase(name string, start time.Time) {
+	if d.loadPhases == nil {
+		d.loadPhases = map[string]time.Duration{}
+	}
+	d.loadPhases[name] += time.Since(start)
 }
 
 // ---- context is accepted for API parity but not used by the file store ----

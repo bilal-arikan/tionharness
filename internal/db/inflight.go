@@ -2,7 +2,9 @@ package db
 
 import (
 	"encoding/json"
+	"log/slog"
 	"os"
+	"sort"
 )
 
 // inflightFile is the per-session sidecar holding the assistant turn that is
@@ -99,12 +101,50 @@ func (d *DB) readInflight(sessionID string) (InflightTurn, bool, error) {
 // and before serving. Best-effort: a bad sidecar is logged-by-return but never
 // aborts boot for other sessions.
 func (d *DB) recoverInflight() error {
+	// Probe every session's sidecar CONCURRENTLY and outside the store lock. In
+	// the common case (a clean shutdown) all of these are misses, but a miss is
+	// still a cold file open — one per session — and on Windows that is ~15 ms
+	// each, so a 100-session workspace paid over a second here for nothing. The
+	// mutation pass below stays serial and locked.
+	d.mu.RLock()
+	ids := make([]string, 0, len(d.sessions))
+	for id := range d.sessions {
+		ids = append(ids, id)
+	}
+	d.mu.RUnlock()
+	// Map iteration is random; sort so recovery order (and therefore the ids of
+	// any recovered messages) is reproducible across boots.
+	sort.Strings(ids)
+
+	type sidecar struct {
+		id string
+		t  InflightTurn
+		ok bool
+	}
+	found, err := parallelLoad(ids, func(id string) (sidecar, error) {
+		t, ok, rerr := d.readInflight(id)
+		if rerr != nil {
+			// Unreadable sidecar: nothing to recover from it, same as before. It is
+			// left on disk rather than deleted, so the next boot retries.
+			slog.Warn("inflight sidecar unreadable", "component", "db", "session", id, "error", rerr)
+			return sidecar{id: id}, nil
+		}
+		return sidecar{id: id, t: t, ok: ok}, nil
+	})
+	if err != nil {
+		return err
+	}
+
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	for sessionID, s := range d.sessions {
-		t, ok, err := d.readInflight(sessionID)
-		if err != nil || !ok {
-			continue // unreadable or absent: nothing to recover
+	for _, f := range found {
+		if !f.ok {
+			continue // no sidecar: nothing to recover
+		}
+		sessionID, t := f.id, f.t
+		s, exists := d.sessions[sessionID]
+		if !exists {
+			continue
 		}
 		// Already persisted? (crash between append and clear) → just drop it.
 		alreadyPersisted := false

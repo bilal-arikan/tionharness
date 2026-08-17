@@ -314,6 +314,10 @@ func (s *Server) Routes() http.Handler {
 
 	mux.HandleFunc("GET /health", s.handleHealth)
 	mux.HandleFunc("GET /api/version", s.handleVersion)
+	// In-memory store footprint per workspace — the measurement baseline for the
+	// message lazy-loading work. Global (not workspace-scoped) on purpose: the
+	// question it answers is "what does the PROCESS hold?".
+	mux.HandleFunc("GET /api/debug/store-stats", s.handleStoreStats)
 
 	s.registerWorkspaceRoutes(mux)
 	s.registerAgentRoutes(mux)
