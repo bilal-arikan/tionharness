@@ -4,9 +4,10 @@
 // finished. It surfaces the agent's reason, a live countdown to the wake, and a
 // "Durdur" control that disarms the wake (POST /api/chat/wake/cancel).
 import { useEffect, useState } from 'react'
-import { AlarmClock, X } from 'lucide-react'
+import { AlarmClock, Square } from 'lucide-react'
 import { serverNow } from '@/shared/lib/serverClock'
 import { ComposerCard } from './ComposerCard'
+import { BTN_STOP_COMPACT } from './composer/buttonStyles'
 
 interface Props {
   // The agent's stated reason for waiting (may be empty).
@@ -52,12 +53,8 @@ export function WakeWaitBanner({ reason, fireAt, onCancel, hideCancel }: Props) 
         {reason && <span className="text-[var(--color-text-dim)]"> — {reason}</span>}
       </span>
       {!hideCancel && (
-        <button
-          onClick={onCancel}
-          title="Otomatik uyandırmayı durdur"
-          className="inline-flex shrink-0 items-center gap-1 rounded-md border border-[var(--color-border)] bg-[var(--color-surface-2)] px-2 py-1 text-xs font-medium text-[var(--color-text)] transition hover:border-[var(--color-danger)] hover:text-[var(--color-danger)]"
-        >
-          <X size={13} />
+        <button onClick={onCancel} title="Otomatik uyandırmayı durdur" className={BTN_STOP_COMPACT}>
+          <Square size={13} />
           Durdur
         </button>
       )}

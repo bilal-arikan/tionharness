@@ -288,12 +288,15 @@ export function ChatView({
               hideCancel
             />
           )}
-          {/* VISIBILITY + CONTROL (A/C): while a worker/sub-coordinator turn is
-              streaming, show it is alive and offer a Durdur. Scoped to
-              coordinator-tree members so plain flow/schedule logs don't get a stop
-              button whose side effects are less obvious. */}
-          {chat.activeStreaming && isInCoordinatorTree(sessionCoordination) && (
-            <WorkerStatusStrip onStop={chat.stopTurn} />
+          {/* VISIBILITY + CONTROL (A/C): while an autonomous turn is streaming,
+              show it is alive and offer a Durdur. Every read-only log gets it —
+              schedule and flow runs included: the server stops an autonomous turn
+              through Runtime.CancelSession when it has no live chat run. */}
+          {chat.activeStreaming && (
+            <WorkerStatusStrip
+              coordinatorTree={isInCoordinatorTree(sessionCoordination)}
+              onStop={chat.stopTurn}
+            />
           )}
           {/* NAVIGATION (B#4): a flow run log links to its flow's run history, so a
               viewer can jump from this single run to the full runs/builder screen.
@@ -378,9 +381,9 @@ export function ChatView({
             }}
             onStop={chat.stopTurn}
             onInterrupt={chat.interruptTurn}
-            onQueue={(text) => {
+            onQueue={(text, attachments) => {
               jumpToBottom()
-              chat.queueMessage(text)
+              chat.queueMessage(text, attachments)
             }}
             onSteer={chat.steerTurn}
             onTyping={chat.notifyTyping}
