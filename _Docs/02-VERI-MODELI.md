@@ -194,6 +194,21 @@ erDiagram
 > yüklenir**, hiçbir migrasyon diskteki dosyaları yeniden yazmaz; eski oturumlarda
 > `run_state` basitçe boştur.
 >
+> **UI (2026-08-17):** kenar çubuğu satırlarında `RunStateBadge` rozeti gösterilir
+> (`frontend/src/features/sessions/`; etiket/ton tablosu ve "hiç koşmamış" kuralı
+> `runStateMeta.ts`, bileşen `sessionKindMeta.tsx`, ortak `Badge` yeniden
+> kullanılır). Etiketler `TaskNotificationNote`'un sözlüğüyle aynı: `tamamlandı`
+> (sakin/`muted`) · `başarısız` (`danger`) · `durduruldu` (`warning`) · `zaman
+> aşımı` (`warning`) · `yarım kaldı` (`accent`) — üç kötü sonuç birbirinden
+> ayırt edilebilir kalır, çünkü farklı eylem gerektirirler. **Boş `run_state`
+> rozet ÜRETMEZ** (alan var olmadan yazılmış eski oturumlara uydurma "tamamlandı"
+> basmamak için), tanınmayan bir değer de sessizce atlanır. Rozet **arşiv
+> filtresinden tamamen bağımsızdır** — sidebar'ın `state` tabanlı sekme filtresine
+> dokunulmadı; canlı tur sırasında gizlenir (yanıp sönen nokta + "yazıyor…" zaten
+> o anki durumu söyler, bayat bir sonuç yanlarında çelişkili okunur). Test:
+> `runStateMeta.test.ts`. `Execution` tipi bu alanı taşımadığı için toplu
+> **genel bakış tablosunda** (`SessionsOverview`) henüz gösterilmiyor.
+>
 > **`stall_nudges`** koordinatör "hayalet spawn" sayacıdır (bkz. `_Docs/47`):
 > bellekteki ardışık seri (`slot.spawnHallucStreak`) temiz bir koordinasyon
 > çağrısında sıfırlanır ve süreçle birlikte kaybolur; bu alan ise **kümülatif** ve

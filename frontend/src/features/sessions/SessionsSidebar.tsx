@@ -32,6 +32,7 @@ import {
   FILTERS,
   kindMeta,
   matchesKindFilter,
+  RunStateBadge,
   StatusPill,
   type SessionListTab,
 } from './sessionKindMeta'
@@ -544,6 +545,13 @@ export function SessionsSidebar({
                             {!isStreaming && runtime?.lastStatus && (
                               <StatusPill status={runtime.lastStatus} />
                             )}
+                            {/* How the last BACKGROUND turn ended (worker/spawn/
+                              schedule runs). Independent of the archive filter:
+                              this is the run outcome, `state` is visibility.
+                              Hidden while a turn is live — the pulsing dot and
+                              "yazıyor…" already say what is happening now, and a
+                              stale outcome next to them reads as contradictory. */}
+                            {!isStreaming && <RunStateBadge runState={s.runState} />}
                           </span>
                           {/* Meta row: kind badge + status/time on the left, the
                             session ID on a row of its own below the title. */}

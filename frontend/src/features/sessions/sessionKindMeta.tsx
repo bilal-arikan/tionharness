@@ -9,6 +9,8 @@ import {
   Zap,
   type LucideIcon,
 } from 'lucide-react'
+import { Badge } from '@/shared/components'
+import { runStateMeta } from './runStateMeta'
 
 // Shared display metadata for session-kind rendering. Every execution path
 // (chat / task / flow / schedule / spawn) funnels into a Session tagged with a
@@ -84,6 +86,19 @@ export function matchesKindFilter(kind: string, filter: string): boolean {
 // (the full id is shown — and copyable — in the detail header).
 export function shortId(id: string) {
   return id.length > 8 ? id.slice(-8) : id
+}
+
+// RunStateBadge renders a session's last run outcome, or nothing when the session
+// has never run a background turn (or carries a value this UI does not know). The
+// label/tone table and the never-ran rule live in ./runStateMeta.
+export function RunStateBadge({ runState }: { runState?: string }) {
+  const meta = runStateMeta(runState)
+  if (!meta) return null
+  return (
+    <Badge tone={meta.tone} className="shrink-0">
+      <span title={meta.title}>{meta.label}</span>
+    </Badge>
+  )
 }
 
 // StatusPill shows a finished run's pass/fail outcome (task/flow kinds).
