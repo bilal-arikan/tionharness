@@ -79,12 +79,15 @@ export function SendActions({
     return sendBtn
   }
 
-  if (hasText) {
-    // Input filled while streaming → queue / interrupt / steer.
+  if (hasContent) {
+    // Input filled while streaming → queue / interrupt / steer. An attachment with
+    // no text still counts: it can be queued or interrupt-sent as its own turn.
+    // Steer is the exception — live guidance is text-only.
     return (
       <div className="flex items-end gap-1.5">
         <ActionButton
           onClick={onQueue}
+          disabled={anyUploading}
           title="Bu tur bitince gönder"
           testId="composer-queue"
           icon={ListPlus}
@@ -93,6 +96,7 @@ export function SendActions({
         />
         <ActionButton
           onClick={onInterrupt}
+          disabled={anyUploading}
           title="Turu kes ve hemen gönder"
           testId="composer-interrupt"
           icon={Scissors}
@@ -101,6 +105,7 @@ export function SendActions({
         />
         <ActionButton
           onClick={onSteer}
+          disabled={!hasText}
           title="Çalışan turu canlı yönlendir (araç döngüsünde etkili)"
           testId="composer-steer"
           icon={Compass}

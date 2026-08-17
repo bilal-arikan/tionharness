@@ -38,7 +38,16 @@ export async function performSend(
   targetSid: string | undefined,
   attachments: Attachment[],
 ): Promise<void> {
-  const { activeSessionId, sessions, thinkingLevel, permissionMode, setPendingSessions, setQueued, setWakeWaits, setError } = ctx
+  const {
+    activeSessionId,
+    sessions,
+    thinkingLevel,
+    permissionMode,
+    setPendingSessions,
+    setQueued,
+    setWakeWaits,
+    setError,
+  } = ctx
   const sid = targetSid ?? activeSessionId
   if (!sid) return
   setError(null)
@@ -55,10 +64,24 @@ export async function performSend(
   // server's queue_update — carrying the SAME clientMsgId — reconciles it (kept
   // while it waits, dropped when the worker runs it and a real bubble appears).
   if (sid === activeSessionId) {
-    setQueued((prev) => (prev.some((p) => p.id === clientMsgId) ? prev : [...prev, { id: clientMsgId, text, kind: 'queue', sid }]))
+    // An attachment-only turn has no text; label the chip by its files so the
+    // tray shows something the user can recognise (and cancel).
+    const chipText = text.trim() ? text : `${attachments.length} ek`
+    setQueued((prev) =>
+      prev.some((p) => p.id === clientMsgId)
+        ? prev
+        : [...prev, { id: clientMsgId, text: chipText, kind: 'queue', sid }],
+    )
   }
   try {
-    await api.enqueueMessage(sid, { message: text, agentIds, attachments, thinkingLevel, permissionMode, clientMsgId })
+    await api.enqueueMessage(sid, {
+      message: text,
+      agentIds,
+      attachments,
+      thinkingLevel,
+      permissionMode,
+      clientMsgId,
+    })
   } catch (e) {
     setPendingSessions((p) => withRemoved(p, sid))
     setQueued((prev) => prev.filter((p) => p.id !== clientMsgId))

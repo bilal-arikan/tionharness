@@ -53,8 +53,8 @@ interface Props {
   onCancelWait?: () => void
   onSend: (text: string, attachments: Attachment[]) => void
   onStop?: () => void
-  onInterrupt?: (text: string) => void
-  onQueue?: (text: string) => void
+  onInterrupt?: (text: string, attachments: Attachment[]) => void
+  onQueue?: (text: string, attachments: Attachment[]) => void
   onSteer?: (text: string) => void
   // Fired on keystrokes to broadcast a cross-window "user is typing" signal.
   onTyping?: () => void
@@ -395,7 +395,20 @@ export function Composer({
     clearComposer()
   }
 
-  // Streaming-turn actions (only when a turn is in flight). Each consumes the input.
+  // Streaming-turn actions that carry the composer's payload (Sıraya / Kes): they
+  // run as a full turn later, so the attachments must travel with the text —
+  // clearing only the text would strand the uploaded files in the composer and
+  // silently send an attachment-less turn.
+  const actWithAttachments = (fn?: (t: string, a: Attachment[]) => void) => {
+    if (!fn || anyUploading) return
+    const t = text.trim()
+    if (!t && readyAttachments.length === 0) return
+    fn(t, readyAttachments)
+    clearComposer()
+  }
+
+  // Text-only streaming action (Yönlendir): live guidance is injected into the
+  // running turn and cannot carry files, so pending attachments stay put.
   const act = (fn?: (t: string) => void) => {
     const t = text.trim()
     if (!t || !fn) return
@@ -441,7 +454,7 @@ export function Composer({
       // While streaming, Enter queues the typed message (safest default) rather
       // than interrupting the in-flight turn.
       if (streaming) {
-        if (hasText) act(onQueue)
+        if (hasContent) actWithAttachments(onQueue)
       } else {
         send()
       }
@@ -645,8 +658,8 @@ export function Composer({
             onSend={send}
             onStop={onStop}
             onCancelWait={onCancelWait}
-            onQueue={() => act(onQueue)}
-            onInterrupt={() => act(onInterrupt)}
+            onQueue={() => actWithAttachments(onQueue)}
+            onInterrupt={() => actWithAttachments(onInterrupt)}
             onSteer={() => act(onSteer)}
           />
         </div>

@@ -226,11 +226,11 @@ export function useChatStream(deps: ChatStreamDeps) {
   // Interrupt: stop the active session's turn, then enqueue a new message to the
   // SAME session (it dispatches once the stopped turn unwinds).
   const interruptTurn = useCallback(
-    (text: string) => {
+    (text: string, attachments?: Attachment[]) => {
       const sid = activeSessionId
       if (!sid) return
       api.sessionControl(sid, 'stop').catch(() => {})
-      void sendMessage(text, sid)
+      void sendMessage(text, sid, attachments)
     },
     [activeSessionId, sendMessage],
   )
@@ -401,8 +401,8 @@ export function useChatStream(deps: ChatStreamDeps) {
   // Queue: with the backend serial queue, "queue" is just a normal send — the
   // server serialises it behind the running turn and shows it in the tray.
   const queueMessage = useCallback(
-    (text: string) => {
-      void sendMessage(text)
+    (text: string, attachments?: Attachment[]) => {
+      void sendMessage(text, undefined, attachments)
     },
     [sendMessage],
   )
