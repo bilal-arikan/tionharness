@@ -60,6 +60,27 @@ type agentDeps struct {
 	// live registries are not reachable from this package, so the runtime injects
 	// its AgentBusy. Optional; nil = no guard (the HTTP path keeps its own).
 	agentBusy func(context.Context, string) (bool, string)
+	// resolveProvider resolves a provider INSTANCE id to the (kind, instanceID)
+	// pair to persist (_Docs/71 §2.5, K3) — the tools package cannot import
+	// internal/agent's SyncProviderFields directly (internal/agent already
+	// imports internal/tools, so the reverse import would cycle), so the
+	// runtime injects its bound implementation. nil = 1:1 legacy mirror
+	// (kind-id-only, no instance resolution) for contexts without a registry.
+	resolveProvider func(instanceID string) (kind, providerInstanceID string, err error)
+}
+
+// syncProvider resolves instanceID via the injected resolver, falling back to
+// the historical 1:1 kind-mirror when no resolver was wired — including the
+// same empty-id → keyless claude-cli default SyncProviderFields applies, so
+// callers see identical behaviour whether or not a registry is wired.
+func (d agentDeps) syncProvider(instanceID string) (kind, providerInstanceID string, err error) {
+	if d.resolveProvider != nil {
+		return d.resolveProvider(instanceID)
+	}
+	if instanceID == "" {
+		instanceID = "claude-cli"
+	}
+	return instanceID, instanceID, nil
 }
 
 // requireAgent loads an agent by id, returning a friendly error if it does not
@@ -86,9 +107,11 @@ type CreateAgentTool struct {
 
 // NewCreateAgentTool constructs create_agent. defaultSkills seeds new agents when
 // the caller passes none; skillExists validates caller-supplied slugs (nil = allow
-// all). Both may be nil/empty in minimal contexts.
-func NewCreateAgentTool(database *db.DB, actorID string, defaultSkills []string, skillExists func(slug string) bool) CreateAgentTool {
-	return CreateAgentTool{d: agentDeps{db: database, actorID: actorID}, defaultSkills: defaultSkills, skillExists: skillExists}
+// all). resolveProvider resolves a provider instance id to (kind, instanceID)
+// (nil = legacy 1:1 mirror, see agentDeps.resolveProvider). All may be nil/empty
+// in minimal contexts.
+func NewCreateAgentTool(database *db.DB, actorID string, defaultSkills []string, skillExists func(slug string) bool, resolveProvider func(string) (string, string, error)) CreateAgentTool {
+	return CreateAgentTool{d: agentDeps{db: database, actorID: actorID, resolveProvider: resolveProvider}, defaultSkills: defaultSkills, skillExists: skillExists}
 }
 
 func (CreateAgentTool) Def() providers.ToolDef {
@@ -163,30 +186,29 @@ func (t CreateAgentTool) Call(ctx context.Context, input json.RawMessage) (strin
 	// out of the box, and codex-cli is opt-in like every other provider.
 	in.Provider = strings.TrimSpace(in.Provider)
 	in.Model = strings.TrimSpace(in.Model)
-	// providerInstanceID mirrors in.Provider (_Docs/71 §2.5, K3): for every
-	// default (migrated) instance the id equals its kind id, so accepting
-	// in.Provider as an instance id here is byte-for-byte the historical
-	// behaviour. Inheriting from the creator carries ITS instance id too — not
-	// just its kind — so a creator bound to a non-default instance (e.g. a
-	// second "anthropic" instance with its own key) propagates correctly
-	// instead of silently falling back to the default instance of that kind.
-	providerInstanceID := in.Provider
-	if in.Provider == "" {
+	// in.Provider is accepted as a provider INSTANCE id (_Docs/71 §5); resolved
+	// via the injected resolver so a non-default instance (e.g. "PRV3") works,
+	// not just ids that happen to equal their kind. Inheriting from the creator
+	// carries ITS instance id too — not just its kind — so a creator bound to a
+	// non-default instance propagates correctly instead of silently falling
+	// back to the default instance of that kind.
+	instanceInput := in.Provider
+	if instanceInput == "" {
 		if creator, err := t.d.db.GetAgent(ctx, t.d.actorID); err == nil && creator.Provider != "" {
-			in.Provider = creator.Provider
-			providerInstanceID = creator.ProviderInstanceID
-			if providerInstanceID == "" {
-				providerInstanceID = creator.Provider
+			instanceInput = creator.ProviderInstanceID
+			if instanceInput == "" {
+				instanceInput = creator.Provider
 			}
 			if in.Model == "" {
 				in.Model = creator.Model
 			}
 		}
-		if in.Provider == "" {
-			in.Provider = "claude-cli"
-			providerInstanceID = "claude-cli"
-		}
 	}
+	providerKind, providerInstanceID, err := t.d.syncProvider(instanceInput)
+	if err != nil {
+		return "", err
+	}
+	in.Provider = providerKind
 
 	// Resolve the skill set: caller-provided (validated) or, when none given, the
 	// default TionSwarm set. Unknown caller slugs are dropped and reported.
@@ -250,9 +272,11 @@ func (t CreateAgentTool) resolveSkills(provided []string) (skills, skipped []str
 // UpdateAgentTool edits an agent-created agent's profile.
 type UpdateAgentTool struct{ d agentDeps }
 
-// NewUpdateAgentTool constructs update_agent.
-func NewUpdateAgentTool(database *db.DB, actorID string) UpdateAgentTool {
-	return UpdateAgentTool{d: agentDeps{db: database, actorID: actorID}}
+// NewUpdateAgentTool constructs update_agent. resolveProvider resolves a
+// provider instance id to (kind, instanceID) (nil = legacy 1:1 mirror, see
+// agentDeps.resolveProvider).
+func NewUpdateAgentTool(database *db.DB, actorID string, resolveProvider func(string) (string, string, error)) UpdateAgentTool {
+	return UpdateAgentTool{d: agentDeps{db: database, actorID: actorID, resolveProvider: resolveProvider}}
 }
 
 func (UpdateAgentTool) Def() providers.ToolDef {
@@ -311,21 +335,23 @@ func (t UpdateAgentTool) Call(ctx context.Context, input json.RawMessage) (strin
 		Name:     in.Name,
 		Soul:     in.Soul,
 		Identity: in.Identity,
-		Provider: in.Provider,
 		Model:    in.Model,
 		Avatar:   in.Avatar,
 		Color:    in.Color,
 
 		CoordinatorPrompt: in.CoordinatorPrompt,
 	}
-	// in.Provider is accepted as a kind id here (this tool has no registry
-	// access to resolve an arbitrary instance id — agentDeps carries only db +
-	// actorID). ProviderInstanceID mirrors it 1:1, which is exactly right for
-	// every DEFAULT (migrated) instance, since its id equals its kind id
-	// (_Docs/71 §3, K3); a non-default instance is not selectable through this
-	// tool today.
+	// in.Provider is accepted as a provider INSTANCE id (_Docs/71 §5); resolved
+	// via the injected resolver so a non-default instance (e.g. "PRV3") works,
+	// not just ids that happen to equal their kind. Only sync when the request
+	// actually touches it (nil = "not in this patch").
 	if in.Provider != nil {
-		patch.ProviderInstanceID = in.Provider
+		providerKind, providerInstanceID, err := t.d.syncProvider(*in.Provider)
+		if err != nil {
+			return "", err
+		}
+		patch.Provider = &providerKind
+		patch.ProviderInstanceID = &providerInstanceID
 	}
 	updated, err := t.d.db.UpdateAgent(ctx, in.ID, patch)
 	if err != nil {

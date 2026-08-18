@@ -6,7 +6,7 @@ import type { Agent, AgentPatch } from '@/types'
 import { AVATAR_COLORS, normalizeAvatar, resolveColor } from '@/shared/lib/avatar'
 import { AgentAvatar } from '@/shared/components/agents/AgentAvatar'
 import { EmojiField } from '@/shared/components/EmojiField'
-import { ProviderModelSelect } from '@/shared/components/agents/ProviderModelSelect'
+import { ProviderInstanceModelSelect } from '@/shared/components/agents/ProviderInstanceModelSelect'
 import { AgentToolsSection } from './AgentToolsSection'
 import { AgentSkillsSection } from './AgentSkillsSection'
 import { AgentContextModal } from './AgentContextModal'
@@ -67,6 +67,9 @@ export function AgentSettingsForm({
   const [soul, setSoul] = useState(agent.soul ?? '')
   const [identity, setIdentity] = useState(agent.identity ?? '')
   const [provider, setProvider] = useState(agent.provider)
+  const [providerInstanceId, setProviderInstanceId] = useState(
+    agent.providerInstanceId || agent.provider,
+  )
   const [model, setModel] = useState(agent.model ?? '')
   const [thinkingLevel, setThinkingLevel] = useState(agent.thinkingLevel ?? '')
   const [permissionMode, setPermissionMode] = useState(agent.permissionMode || 'auto')
@@ -109,7 +112,7 @@ export function AgentSettingsForm({
       color !== (agent.color ?? '') ||
       soul !== (agent.soul ?? '') ||
       identity !== (agent.identity ?? '') ||
-      provider !== agent.provider ||
+      providerInstanceId !== (agent.providerInstanceId || agent.provider) ||
       model !== (agent.model ?? '') ||
       thinkingLevel !== (agent.thinkingLevel ?? '') ||
       permissionMode !== (agent.permissionMode || 'auto') ||
@@ -123,7 +126,7 @@ export function AgentSettingsForm({
       color,
       soul,
       identity,
-      provider,
+      providerInstanceId,
       model,
       thinkingLevel,
       permissionMode,
@@ -159,7 +162,9 @@ export function AgentSettingsForm({
         color,
         soul,
         identity,
-        provider,
+        // AgentPatch.provider is interpreted server-side as a provider INSTANCE
+        // id (_Docs/71 §5) — send the selected instance, not the derived kind.
+        provider: providerInstanceId,
         model: model.trim(),
         thinkingLevel,
         permissionMode,
@@ -331,11 +336,12 @@ export function AgentSettingsForm({
           </div>
         </Field>
 
-        <ProviderModelSelect
-          provider={provider}
+        <ProviderInstanceModelSelect
+          providerInstanceId={providerInstanceId}
           model={model}
-          onChange={(p, m) => {
-            setProvider(p)
+          onChange={(kindId, instanceId, m) => {
+            setProvider(kindId)
+            setProviderInstanceId(instanceId)
             setModel(m)
           }}
         />

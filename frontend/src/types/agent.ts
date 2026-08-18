@@ -9,6 +9,13 @@ export interface Agent {
   soul: string
   identity: string
   provider: string
+  // The provider INSTANCE this agent is bound to (_Docs/71 §2.5). The single
+  // source of truth for provider resolution; `provider` is derived from it
+  // (the instance's kind id) and kept in sync server-side. Backfilled from
+  // `provider` on read when the agent predates instances, so this id is
+  // always present — it may still reference an instance no longer in
+  // useProviderInstances().instances if that instance was deleted since.
+  providerInstanceId?: string
   model: string
   thinkingLevel?: string
   // Tool-use permission gate: "read-only" | "ask" | "auto". Empty = auto.

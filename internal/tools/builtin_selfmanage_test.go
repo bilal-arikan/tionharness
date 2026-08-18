@@ -26,7 +26,7 @@ func TestCreateAgentStampsCreatedBy(t *testing.T) {
 	d := openTestDB(t)
 	const actor = "actor-1"
 
-	create := NewCreateAgentTool(d, actor, nil, nil)
+	create := NewCreateAgentTool(d, actor, nil, nil, nil)
 	out, err := create.Call(ctx, json.RawMessage(`{"name":"Helper","soul":"helpful"}`))
 	if err != nil {
 		t.Fatalf("create_agent: %v", err)
@@ -51,7 +51,7 @@ func TestCreateAgentSeedsSkills(t *testing.T) {
 	d := openTestDB(t)
 	known := map[string]bool{"tionswarm-guide": true, "custom": true}
 	exists := func(s string) bool { return known[s] }
-	create := NewCreateAgentTool(d, "actor", []string{"tionswarm-guide"}, exists)
+	create := NewCreateAgentTool(d, "actor", []string{"tionswarm-guide"}, exists, nil)
 
 	// No skills → defaults seeded + persisted.
 	out, err := create.Call(ctx, json.RawMessage(`{"name":"A"}`))
@@ -104,7 +104,7 @@ func TestCreateAgentInheritsCreatorProviderModel(t *testing.T) {
 	if err != nil {
 		t.Fatalf("seed creator: %v", err)
 	}
-	create := NewCreateAgentTool(d, creator.ID, nil, nil)
+	create := NewCreateAgentTool(d, creator.ID, nil, nil, nil)
 
 	// Neither provider nor model given → inherit both from the creator.
 	out, err := create.Call(ctx, json.RawMessage(`{"name":"Child"}`))
@@ -137,7 +137,7 @@ func TestCreateAgentInheritsCreatorProviderModel(t *testing.T) {
 	}
 
 	// Unknown/empty actor (no creator to inherit from) → claude-cli fallback.
-	orphan := NewCreateAgentTool(d, "", nil, nil)
+	orphan := NewCreateAgentTool(d, "", nil, nil, nil)
 	out, err = orphan.Call(ctx, json.RawMessage(`{"name":"Orphan"}`))
 	if err != nil {
 		t.Fatalf("create_agent: %v", err)

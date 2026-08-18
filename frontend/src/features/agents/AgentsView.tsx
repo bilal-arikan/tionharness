@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { RefreshCw, Trash2, Activity } from 'lucide-react'
 import type { Agent, AgentPatch } from '@/types'
 import { AgentIdentity } from '@/shared/components/agents/AgentIdentity'
-import { ProviderModelSelect } from '@/shared/components/agents/ProviderModelSelect'
+import { ProviderInstanceModelSelect } from '@/shared/components/agents/ProviderInstanceModelSelect'
 import { useCatalog, resolveModelLabel } from '@/shared/lib/catalog'
 import { AgentSettingsForm } from './AgentSettingsForm'
 import { AgentActivityPanel } from './AgentActivityPanel'
@@ -105,6 +105,8 @@ export function AgentsView({
   }
   const [name, setName] = useState('')
   const [soul, setSoul] = useState('')
+  // provider holds the provider INSTANCE id (default "claude-cli" — the
+  // built-in default instance's id equals its kind id, _Docs/71 §3).
   const [provider, setProvider] = useState('claude-cli')
   const [model, setModel] = useState('')
   // Coordinator defaults on the create form, mirroring AgentSettingsForm: the
@@ -214,11 +216,11 @@ export function AgentsView({
               data-testid="agent-create-soul-textarea"
             />
             <div data-testid="agent-create-provider-wrap" className="contents">
-              <ProviderModelSelect
-                provider={provider}
+              <ProviderInstanceModelSelect
+                providerInstanceId={provider}
                 model={model}
-                onChange={(p, m) => {
-                  setProvider(p)
+                onChange={(_kindId, instanceId, m) => {
+                  setProvider(instanceId)
                   setModel(m)
                 }}
               />

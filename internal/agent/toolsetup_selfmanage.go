@@ -27,8 +27,8 @@ func (r *Runtime) selfManageBuiltins(agent db.Agent) []tools.Tool {
 		// Agents. New agents are seeded with the default TionSwarm skill set when
 		// the caller passes none; caller-supplied slugs are validated against the
 		// skill store.
-		tools.NewCreateAgentTool(r.db, agent.ID, skills.DefaultSkillSlugs(), r.skillExists),
-		tools.NewUpdateAgentTool(r.db, agent.ID),
+		tools.NewCreateAgentTool(r.db, agent.ID, skills.DefaultSkillSlugs(), r.skillExists, r.resolveProviderInstance),
+		tools.NewUpdateAgentTool(r.db, agent.ID, r.resolveProviderInstance),
 		tools.NewDeleteAgentTool(r.db, agent.ID, r.reloadSchedules, r.AgentBusy),
 		tools.NewListAgentsTool(r.db, agent.ID),
 		// Note: agent→agent work is unified under run_subagent (above) — async
