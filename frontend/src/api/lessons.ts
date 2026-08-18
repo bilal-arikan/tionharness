@@ -4,6 +4,5 @@ import { req } from './client'
 
 export const lessonApi = {
   listLessons: () => req<Lesson[]>('/api/lessons'),
-  deleteLesson: (id: string) =>
-    req<{ result: string }>(`/api/lessons/${id}`, { method: 'DELETE' }),
+  deleteLesson: (id: string) => req<{ result: string }>(`/api/lessons/${id}`, { method: 'DELETE' }),
 }

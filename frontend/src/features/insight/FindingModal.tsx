@@ -47,25 +47,33 @@ export function FindingModal({ f, onClose, onStatus, onDelete, onAddCard, onOpen
         <div className="flex-1 space-y-3 overflow-auto p-4 text-sm">
           {f.rootCause && (
             <div>
-              <div className="mb-0.5 text-xs font-semibold text-[var(--color-text-dim)]">Kök neden</div>
+              <div className="mb-0.5 text-xs font-semibold text-[var(--color-text-dim)]">
+                Kök neden
+              </div>
               <p className="leading-snug">{f.rootCause}</p>
             </div>
           )}
           {f.proposedFix && (
             <div>
-              <div className="mb-0.5 text-xs font-semibold text-[var(--color-text-dim)]">Önerilen çözüm</div>
+              <div className="mb-0.5 text-xs font-semibold text-[var(--color-text-dim)]">
+                Önerilen çözüm
+              </div>
               <p className="leading-snug">{f.proposedFix}</p>
             </div>
           )}
           {f.filePointer && (
             <div>
-              <div className="mb-0.5 text-xs font-semibold text-[var(--color-text-dim)]">Dosya (öneri)</div>
+              <div className="mb-0.5 text-xs font-semibold text-[var(--color-text-dim)]">
+                Dosya (öneri)
+              </div>
               <code className="text-xs">{f.filePointer}</code>
             </div>
           )}
           {f.evidenceSessionIds && f.evidenceSessionIds.length > 0 && (
             <div>
-              <div className="mb-0.5 text-xs font-semibold text-[var(--color-text-dim)]">Kanıt oturumları</div>
+              <div className="mb-0.5 text-xs font-semibold text-[var(--color-text-dim)]">
+                Kanıt oturumları
+              </div>
               <div className="flex flex-wrap gap-1.5">
                 {f.evidenceSessionIds.map((sid) => (
                   <button
@@ -87,17 +95,46 @@ export function FindingModal({ f, onClose, onStatus, onDelete, onAddCard, onOpen
 
         {/* Actions */}
         <div className="flex flex-wrap items-center gap-2 border-t border-[var(--color-border)] p-3">
-          <button onClick={() => act('accepted')} className="flex items-center gap-1 rounded-md bg-[var(--color-accent)] px-3 py-1 text-sm text-white">
+          <button
+            onClick={() => act('accepted')}
+            className="flex items-center gap-1 rounded-md bg-[var(--color-accent)] px-3 py-1 text-sm text-white"
+          >
             <Check className="h-3.5 w-3.5" /> Kabul
           </button>
-          <button onClick={() => act('applied')} className="rounded-md border border-[var(--color-border)] px-3 py-1 text-sm hover:bg-[var(--color-surface-2)]">Uygulandı</button>
-          <button onClick={() => act('verified')} className="rounded-md border border-[var(--color-border)] px-3 py-1 text-sm hover:bg-[var(--color-surface-2)]">Doğrulandı</button>
-          <button onClick={() => act('dismissed')} className="rounded-md border border-[var(--color-border)] px-3 py-1 text-sm text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)]">Yoksay</button>
-          <button onClick={() => { onAddCard(f); onClose() }} className="flex items-center gap-1 rounded-md border border-[var(--color-border)] px-3 py-1 text-sm hover:bg-[var(--color-surface-2)]">
+          <button
+            onClick={() => act('applied')}
+            className="rounded-md border border-[var(--color-border)] px-3 py-1 text-sm hover:bg-[var(--color-surface-2)]"
+          >
+            Uygulandı
+          </button>
+          <button
+            onClick={() => act('verified')}
+            className="rounded-md border border-[var(--color-border)] px-3 py-1 text-sm hover:bg-[var(--color-surface-2)]"
+          >
+            Doğrulandı
+          </button>
+          <button
+            onClick={() => act('dismissed')}
+            className="rounded-md border border-[var(--color-border)] px-3 py-1 text-sm text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)]"
+          >
+            Yoksay
+          </button>
+          <button
+            onClick={() => {
+              onAddCard(f)
+              onClose()
+            }}
+            className="flex items-center gap-1 rounded-md border border-[var(--color-border)] px-3 py-1 text-sm hover:bg-[var(--color-surface-2)]"
+          >
             <LayoutGrid className="h-3.5 w-3.5" /> Karta ekle
           </button>
           <button
-            onClick={() => { if (confirm('Bu bulgu silinsin mi?')) { onDelete(f.id); onClose() } }}
+            onClick={() => {
+              if (confirm('Bu bulgu silinsin mi?')) {
+                onDelete(f.id)
+                onClose()
+              }
+            }}
             className="ml-auto flex items-center gap-1 rounded-md px-3 py-1 text-sm text-[var(--color-danger)] hover:bg-[var(--color-danger)]/10"
           >
             <Trash2 className="h-3.5 w-3.5" /> Sil

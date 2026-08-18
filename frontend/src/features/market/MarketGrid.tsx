@@ -97,7 +97,9 @@ export function MarketGrid({
             {!searching && <span>· {remoteResults.length}</span>}
           </div>
           {remoteWarnings.length > 0 && (
-            <p className="mb-2 text-[10px] text-[var(--color-warning,#d97706)]">{remoteWarnings.join(' · ')}</p>
+            <p className="mb-2 text-[10px] text-[var(--color-warning,#d97706)]">
+              {remoteWarnings.join(' · ')}
+            </p>
           )}
         </div>
       )}
@@ -111,7 +113,9 @@ export function MarketGrid({
               data-pack-id={p.id}
               onClick={() => void openDetail(p)}
               className={`flex flex-col gap-2 rounded-lg border p-3 text-left transition hover:border-[var(--color-accent)] ${
-                selected?.id === p.id ? 'border-[var(--color-accent)] bg-[var(--color-surface-2)]' : 'border-[var(--color-border)]'
+                selected?.id === p.id
+                  ? 'border-[var(--color-accent)] bg-[var(--color-surface-2)]'
+                  : 'border-[var(--color-border)]'
               }`}
             >
               <div className="flex items-center gap-2">

@@ -37,8 +37,8 @@ export class ErrorBoundary extends Component<Props, State> {
         <div className="text-4xl">⚠️</div>
         <h1 className="text-lg font-semibold">Bir şeyler ters gitti</h1>
         <p className="max-w-md text-sm text-[var(--color-text-dim)]">
-          Arayüzde beklenmeyen bir hata oluştu. Hata kaydedildi (Loglar ekranında görünür).
-          Sayfayı yeniden yükleyerek devam edebilirsin.
+          Arayüzde beklenmeyen bir hata oluştu. Hata kaydedildi (Loglar ekranında görünür). Sayfayı
+          yeniden yükleyerek devam edebilirsin.
         </p>
         <pre className="max-w-md overflow-auto rounded bg-[var(--color-surface-2)] p-3 text-left text-xs text-[var(--color-danger)]">
           {this.state.error.message}

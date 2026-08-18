@@ -10,7 +10,15 @@ export function AwaitInputNode({ id, data, selected }: NodeProps<FlowRFNode>) {
   const { node, isStart, status } = data
   const isEnd = useIsEndNode(id)
   return (
-    <NodeShell id={id} type="await-input" title={node.title} isStart={isStart} isEnd={isEnd} selected={selected} status={status}>
+    <NodeShell
+      id={id}
+      type="await-input"
+      title={node.title}
+      isStart={isStart}
+      isEnd={isEnd}
+      selected={selected}
+      status={status}
+    >
       <Handle type="target" position={Position.Top} title="Giriş" />
       <div className="text-[11px] text-[var(--color-text-dim)]">
         {status === 'waiting' ? '⏳ girdi bekleniyor…' : 'dış girdi bekler → {{last}}'}

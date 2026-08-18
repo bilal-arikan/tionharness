@@ -47,7 +47,20 @@ function openInNewWindow(id: string) {
   window.open(`${window.location.origin}${window.location.pathname}#${route}`, '_blank', 'noopener')
 }
 
-export function WorkspaceSwitcher({ workspaces, activeId, unreadIds, busyIds, activeBusy, activeDirty, favoriteId, onToggleFavorite, onSwitch, onCreate, onOpenSettings, trailing }: Props) {
+export function WorkspaceSwitcher({
+  workspaces,
+  activeId,
+  unreadIds,
+  busyIds,
+  activeBusy,
+  activeDirty,
+  favoriteId,
+  onToggleFavorite,
+  onSwitch,
+  onCreate,
+  onOpenSettings,
+  trailing,
+}: Props) {
   const [open, setOpen] = useState(false)
   const [showCreate, setShowCreate] = useState(false)
   // Close the dropdown when clicking anywhere outside it (detached while closed).
@@ -73,48 +86,55 @@ export function WorkspaceSwitcher({ workspaces, activeId, unreadIds, busyIds, ac
   return (
     <div ref={rootRef} className="relative border-b border-[var(--color-border)] px-3 py-3">
       <div className="flex items-center gap-1">
-      <button
-        onClick={() => setOpen((v) => !v)}
-        data-testid="workspace-switcher"
-        aria-haspopup="listbox"
-        aria-expanded={open}
-        aria-label={active?.name ? `Workspace: ${active.name}` : 'Workspace seç'}
-        className="flex min-w-0 flex-1 items-center justify-between rounded-lg bg-[var(--color-surface-2)] px-3 py-2 text-sm hover:opacity-90"
-      >
-        <span className="flex min-w-0 items-center gap-2">
-          <span
-            className="relative flex h-5 w-5 shrink-0 items-center justify-center rounded text-sm"
-            style={active?.color ? { backgroundColor: active.color + '33' } : undefined}
-          >
-            {active?.icon || '⬡'}
-            {(hasUnread || hasOtherBusy) && (
-              <span
-                className={`absolute -right-1 -top-1 h-2 w-2 rounded-full bg-[var(--color-accent)] ring-2 ring-[var(--color-surface-2)] ${
-                  hasOtherBusy ? 'animate-pulse' : ''
-                }`}
-                title={hasOtherBusy ? 'Başka workspace’te işlem sürüyor' : 'Başka workspace’te yeni etkinlik'}
-              />
-            )}
-          </span>
-          {/* Active-workspace signals sit inline next to the icon so the parent's
-              `truncate` (overflow:hidden) never clips a corner-positioned dot. */}
-          {(activeBusy || activeDirty) && (
-            <span className="flex shrink-0 items-center gap-1">
-              {activeDirty && (
-                <span className="h-2 w-2 rounded-full bg-[var(--color-warning)]" title="Kaydedilmemiş değişiklik" />
-              )}
-              {activeBusy && (
+        <button
+          onClick={() => setOpen((v) => !v)}
+          data-testid="workspace-switcher"
+          aria-haspopup="listbox"
+          aria-expanded={open}
+          aria-label={active?.name ? `Workspace: ${active.name}` : 'Workspace seç'}
+          className="flex min-w-0 flex-1 items-center justify-between rounded-lg bg-[var(--color-surface-2)] px-3 py-2 text-sm hover:opacity-90"
+        >
+          <span className="flex min-w-0 items-center gap-2">
+            <span
+              className="relative flex h-5 w-5 shrink-0 items-center justify-center rounded text-sm"
+              style={active?.color ? { backgroundColor: active.color + '33' } : undefined}
+            >
+              {active?.icon || '⬡'}
+              {(hasUnread || hasOtherBusy) && (
                 <span
-                  className="h-2 w-2 animate-pulse rounded-full bg-[var(--color-accent)]"
-                  title="İşlem sürüyor"
+                  className={`absolute -right-1 -top-1 h-2 w-2 rounded-full bg-[var(--color-accent)] ring-2 ring-[var(--color-surface-2)] ${
+                    hasOtherBusy ? 'animate-pulse' : ''
+                  }`}
+                  title={
+                    hasOtherBusy
+                      ? 'Başka workspace’te işlem sürüyor'
+                      : 'Başka workspace’te yeni etkinlik'
+                  }
                 />
               )}
             </span>
-          )}
-          <span className="truncate font-medium">{active?.name || 'Workspace seç'}</span>
-        </span>
-        <span className="text-xs text-[var(--color-text-dim)]">▾</span>
-      </button>
+            {/* Active-workspace signals sit inline next to the icon so the parent's
+              `truncate` (overflow:hidden) never clips a corner-positioned dot. */}
+            {(activeBusy || activeDirty) && (
+              <span className="flex shrink-0 items-center gap-1">
+                {activeDirty && (
+                  <span
+                    className="h-2 w-2 rounded-full bg-[var(--color-warning)]"
+                    title="Kaydedilmemiş değişiklik"
+                  />
+                )}
+                {activeBusy && (
+                  <span
+                    className="h-2 w-2 animate-pulse rounded-full bg-[var(--color-accent)]"
+                    title="İşlem sürüyor"
+                  />
+                )}
+              </span>
+            )}
+            <span className="truncate font-medium">{active?.name || 'Workspace seç'}</span>
+          </span>
+          <span className="text-xs text-[var(--color-text-dim)]">▾</span>
+        </button>
         {trailing}
       </div>
 
@@ -192,14 +212,20 @@ export function WorkspaceSwitcher({ workspaces, activeId, unreadIds, busyIds, ac
               {onToggleFavorite && (
                 <button
                   onClick={() => onToggleFavorite(w.id)}
-                  title={favoriteId === w.id ? 'Başlangıç workspace’i (kaldır)' : 'Başlangıçta bunu aç'}
+                  title={
+                    favoriteId === w.id ? 'Başlangıç workspace’i (kaldır)' : 'Başlangıçta bunu aç'
+                  }
                   className={`flex h-7 w-7 shrink-0 items-center justify-center rounded transition hover:bg-[var(--color-surface)] ${
                     favoriteId === w.id
                       ? 'text-[var(--color-accent)]'
                       : 'text-[var(--color-text-dim)] opacity-0 hover:text-[var(--color-accent)] focus:opacity-100 group-hover:opacity-100'
                   }`}
                 >
-                  <Star size={14} strokeWidth={2} fill={favoriteId === w.id ? 'currentColor' : 'none'} />
+                  <Star
+                    size={14}
+                    strokeWidth={2}
+                    fill={favoriteId === w.id ? 'currentColor' : 'none'}
+                  />
                 </button>
               )}
               <button

@@ -48,14 +48,17 @@ function renderWithMentions(text: string, agents: Agent[]): ReactNode[] {
     const raw = m[0]
     const q = norm(raw.slice(1))
     const ag =
-      agents.find((a) => norm(a.name) === q) ??
-      agents.find((a) => norm(a.name).startsWith(q))
+      agents.find((a) => norm(a.name) === q) ?? agents.find((a) => norm(a.name).startsWith(q))
     const color = ag ? resolveColor(ag) : undefined
     out.push(
       <span
         key={`${m.index}-${raw}`}
         className="mx-0.5 rounded px-1 font-semibold"
-        style={color ? { backgroundColor: color, color: '#fff' } : { backgroundColor: 'rgba(255,255,255,0.28)' }}
+        style={
+          color
+            ? { backgroundColor: color, color: '#fff' }
+            : { backgroundColor: 'rgba(255,255,255,0.28)' }
+        }
       >
         {raw}
       </span>,
@@ -67,7 +70,6 @@ function renderWithMentions(text: string, agents: Agent[]): ReactNode[] {
 }
 
 // Attachment images open in the shared Lightbox (zoom + pan + Escape/backdrop).
-
 
 // UserBubble renders a user chat message. Plain messages keep the accent bubble;
 // messages that reference agents (@) get highlighted name chips + a ring, and
@@ -125,7 +127,14 @@ export function UserBubble({
   if (isCommand) {
     return (
       <>
-        {lightbox && <Lightbox imageSrc={lightbox.url} imageAlt={lightbox.name} title={lightbox.name} onClose={() => setLightbox(null)} />}
+        {lightbox && (
+          <Lightbox
+            imageSrc={lightbox.url}
+            imageAlt={lightbox.name}
+            title={lightbox.name}
+            onClose={() => setLightbox(null)}
+          />
+        )}
         <div className="flex flex-col items-end">
           <div className="flex max-w-[80%] min-w-0 items-center gap-2 rounded-2xl border border-[var(--color-accent)]/60 bg-[var(--color-accent-soft)] px-4 py-2.5 font-mono text-sm break-words text-[var(--color-text)]">
             <span className="text-[var(--color-accent)]">⌘</span>
@@ -139,7 +148,14 @@ export function UserBubble({
 
   return (
     <>
-      {lightbox && <Lightbox imageSrc={lightbox.url} imageAlt={lightbox.name} title={lightbox.name} onClose={() => setLightbox(null)} />}
+      {lightbox && (
+        <Lightbox
+          imageSrc={lightbox.url}
+          imageAlt={lightbox.name}
+          title={lightbox.name}
+          onClose={() => setLightbox(null)}
+        />
+      )}
       <div className="flex flex-col items-end">
         {text.trim() && (
           <div

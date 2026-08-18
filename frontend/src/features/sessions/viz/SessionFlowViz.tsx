@@ -26,9 +26,7 @@ export function SessionFlowViz({
   agentNames: Record<string, string>
   refreshKey?: number
 }) {
-  const [open, setOpen] = useState(
-    () => localStorage.getItem('tionswarm.flowVizOpen') === '1',
-  )
+  const [open, setOpen] = useState(() => localStorage.getItem('tionswarm.flowVizOpen') === '1')
   const [events, setEvents] = useState<SessionDebugEvent[] | null>(null)
   const [hooks, setHooks] = useState<Hook[]>([])
   const [loading, setLoading] = useState(false)
@@ -87,8 +85,8 @@ export function SessionFlowViz({
                   Araç yürütme akışı (Sankey)
                 </div>
                 <p className="mb-1 text-[10px] text-[var(--color-text-dim)]">
-                  Ajandan araca çağrı akışı; bant kalınlığı çağrı sayısıyla orantılı,
-                  varsa hata dalı ayrılır.
+                  Ajandan araca çağrı akışı; bant kalınlığı çağrı sayısıyla orantılı, varsa hata
+                  dalı ayrılır.
                 </p>
                 <ToolSankey events={events} agentNames={agentNames} />
               </div>
@@ -98,8 +96,8 @@ export function SessionFlowViz({
                   Eşzamanlılık zaman çizelgesi
                 </div>
                 <p className="mb-1 text-[10px] text-[var(--color-text-dim)]">
-                  Ajan başına şeritte olayların zaman ekseni; şeritler arası çakışma
-                  gerçek eşzamanlılığı gösterir.
+                  Ajan başına şeritte olayların zaman ekseni; şeritler arası çakışma gerçek
+                  eşzamanlılığı gösterir.
                 </p>
                 <ConcurrencyTimeline events={events} agentNames={agentNames} />
               </div>
@@ -109,8 +107,8 @@ export function SessionFlowViz({
                   Self-healing olayları
                 </div>
                 <p className="mb-1 text-[10px] text-[var(--color-text-dim)]">
-                  Tur kurtarmaları, mesaj dizisi onarımları, guardrail kararları ve
-                  damıtılan dersler (56-SELF-HEALING).
+                  Tur kurtarmaları, mesaj dizisi onarımları, guardrail kararları ve damıtılan
+                  dersler (56-SELF-HEALING).
                 </p>
                 <SelfHealingEvents events={events} />
               </div>
@@ -120,10 +118,9 @@ export function SessionFlowViz({
                   Prompt-cache olayları
                 </div>
                 <p className="mb-1 text-[10px] text-[var(--color-text-dim)]">
-                  Donmuş bağlam snapshot'ının yaşam döngüsü (dondurma, adopt,
-                  bekletilen drift, elle yenileme; 57-PROMPT-EPOCH) ve tespit
-                  edilen cache kırılımları — kırılım yalnız bilinçli adopt
-                  anlarında beklenir.
+                  Donmuş bağlam snapshot'ının yaşam döngüsü (dondurma, adopt, bekletilen drift, elle
+                  yenileme; 57-PROMPT-EPOCH) ve tespit edilen cache kırılımları — kırılım yalnız
+                  bilinçli adopt anlarında beklenir.
                 </p>
                 <PromptCacheEvents events={events} />
               </div>
@@ -133,9 +130,9 @@ export function SessionFlowViz({
                   Düşünme (gizli akıl yürütme) payı
                 </div>
                 <p className="mb-1 text-[10px] text-[var(--color-text-dim)]">
-                  Çağrı başına çıktı token'ının gizli akıl yürütmeye giden tahmini
-                  oranı (API ayırmıyor → out−görünür türetimi; _Docs/38). Yüksek
-                  pay basit görevlerde ThinkingLevel'i düşürme fırsatıdır.
+                  Çağrı başına çıktı token'ının gizli akıl yürütmeye giden tahmini oranı (API
+                  ayırmıyor → out−görünür türetimi; _Docs/38). Yüksek pay basit görevlerde
+                  ThinkingLevel'i düşürme fırsatıdır.
                 </p>
                 <ThinkingShareChart events={events} />
               </div>
@@ -145,8 +142,8 @@ export function SessionFlowViz({
                   Hook / token-optimizer aktivitesi
                 </div>
                 <p className="mb-1 text-[10px] text-[var(--color-text-dim)]">
-                  Bu oturumda ateşlenen hook'lar, hook başına atfedilmiş (rtk/sqz dahil):
-                  kaç kez, hangi araçta. Aktivite göstergesidir — byte tasarrufu değil (_Docs/17).
+                  Bu oturumda ateşlenen hook'lar, hook başına atfedilmiş (rtk/sqz dahil): kaç kez,
+                  hangi araçta. Aktivite göstergesidir — byte tasarrufu değil (_Docs/17).
                 </p>
                 <HookActivity events={events} hooks={hooks} />
               </div>

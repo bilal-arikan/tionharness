@@ -68,7 +68,9 @@ export function TaskNotificationNote({
   const p = parseTaskNotification(message.text)
   // Unparseable worker-note (foreign/legacy format): show the raw text folded so
   // nothing is silently hidden.
-  const status = p ? STATUS_META[p.status] ?? { label: p.status, cls: 'text-[var(--color-text-dim)]', Icon: Bot } : null
+  const status = p
+    ? (STATUS_META[p.status] ?? { label: p.status, cls: 'text-[var(--color-text-dim)]', Icon: Bot })
+    : null
   const body = p ? p.result || p.summary : message.text
   const duration = p ? fmtDuration(p.durationMs) : ''
 

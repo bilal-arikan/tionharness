@@ -83,9 +83,7 @@ export function SkillEditor({ mode, initial, groups = [], onClose, onSaved }: Pr
               {mode === 'create' ? 'Yeni skill' : name || 'Skill'}
             </h2>
             <p className="text-xs text-[var(--color-text-dim)]">
-              {mode === 'create'
-                ? 'Workspace skill oluştur'
-                : `Skill düzenle · ${initial?.slug}`}
+              {mode === 'create' ? 'Workspace skill oluştur' : `Skill düzenle · ${initial?.slug}`}
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-2">
@@ -168,9 +166,7 @@ export function SkillEditor({ mode, initial, groups = [], onClose, onSaved }: Pr
               onChange={(e) => setShared(e.target.checked)}
               className="h-4 w-4 accent-[var(--color-accent)]"
             />
-            <span>
-              Gerektiğinde (paylaşımlı) — tüm ajanlar atama gerekmeden kullanabilir
-            </span>
+            <span>Gerektiğinde (paylaşımlı) — tüm ajanlar atama gerekmeden kullanabilir</span>
           </label>
 
           <Field label="İçerik (Markdown talimatları)">

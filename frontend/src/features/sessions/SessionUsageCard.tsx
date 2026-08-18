@@ -13,7 +13,8 @@ export function SessionUsageCard({ sessionUsage }: { sessionUsage: SessionUsageD
           {(sessionUsage.estimated ? '~' : '') + usd(sessionUsage.costUSD)}
         </span>
         <span className="text-[10px] text-[var(--color-text-dim)]">
-          {sessionUsage.calls} çağrı · {fmtTok(sessionUsage.inputTokens + sessionUsage.outputTokens)} token
+          {sessionUsage.calls} çağrı ·{' '}
+          {fmtTok(sessionUsage.inputTokens + sessionUsage.outputTokens)} token
         </span>
       </div>
       {/* Savings breakdown: prompt-cache USD */}

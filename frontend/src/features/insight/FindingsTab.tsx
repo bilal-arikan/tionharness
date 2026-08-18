@@ -33,7 +33,12 @@ const bucketOf = (status: string) => {
   return COLUMNS.some((c) => c.key === s) ? s : 'new'
 }
 
-const SEV2PRI: Record<string, string> = { high: 'high', med: 'medium', medium: 'medium', low: 'low' }
+const SEV2PRI: Record<string, string> = {
+  high: 'high',
+  med: 'medium',
+  medium: 'medium',
+  low: 'low',
+}
 
 function cardBody(f: InsightFinding): string {
   const parts: string[] = []
@@ -66,11 +71,16 @@ export function FindingsTab({ findings, lenses, reload, onOpenSession, onError, 
     for (const c of COLUMNS) m[c.key] = []
     for (const f of filtered) m[bucketOf(f.status)].push(f)
     for (const k of Object.keys(m)) {
-      m[k].sort((a, b) => priorityScore(b) - priorityScore(a) || (b.lastSeen ?? 0) - (a.lastSeen ?? 0))
+      m[k].sort(
+        (a, b) => priorityScore(b) - priorityScore(a) || (b.lastSeen ?? 0) - (a.lastSeen ?? 0),
+      )
     }
     return m
   }, [filtered])
-  const orderedIds = useMemo(() => COLUMNS.flatMap((c) => byColumn[c.key].map((f) => f.id)), [byColumn])
+  const orderedIds = useMemo(
+    () => COLUMNS.flatMap((c) => byColumn[c.key].map((f) => f.id)),
+    [byColumn],
+  )
 
   const setStatus = async (id: string, status: string) => {
     try {
@@ -127,7 +137,7 @@ export function FindingsTab({ findings, lenses, reload, onOpenSession, onError, 
     }
   }
 
-  const modalFinding = modalId ? findings.find((f) => f.id === modalId) ?? null : null
+  const modalFinding = modalId ? (findings.find((f) => f.id === modalId) ?? null) : null
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -175,8 +185,14 @@ export function FindingsTab({ findings, lenses, reload, onOpenSession, onError, 
                     <div className="mb-1 flex flex-wrap items-center gap-1">
                       <ChannelBadge channel={f.channel} />
                       {f.severity && <SeverityBadge severity={f.severity} />}
-                      {f.regressed && <span className="text-xs font-semibold text-[var(--color-danger)]">⚠</span>}
-                      {f.occurrences > 1 && <span className="text-[11px] text-[var(--color-text-dim)]">×{f.occurrences}</span>}
+                      {f.regressed && (
+                        <span className="text-xs font-semibold text-[var(--color-danger)]">⚠</span>
+                      )}
+                      {f.occurrences > 1 && (
+                        <span className="text-[11px] text-[var(--color-text-dim)]">
+                          ×{f.occurrences}
+                        </span>
+                      )}
                     </div>
                     <div className="line-clamp-3 leading-snug">{f.title}</div>
                   </div>
@@ -192,7 +208,9 @@ export function FindingsTab({ findings, lenses, reload, onOpenSession, onError, 
 
       {filtered.length === 0 && (
         <div className="mt-2 text-sm text-[var(--color-text-dim)]">
-          {findings.length === 0 ? 'Henüz bulgu yok. Bir tarama başlat.' : 'Filtreyle eşleşen bulgu yok.'}
+          {findings.length === 0
+            ? 'Henüz bulgu yok. Bir tarama başlat.'
+            : 'Filtreyle eşleşen bulgu yok.'}
         </div>
       )}
 
@@ -209,7 +227,9 @@ export function FindingsTab({ findings, lenses, reload, onOpenSession, onError, 
         >
           <option value="">↦ Statü…</option>
           {COLUMNS.map((c) => (
-            <option key={c.key} value={c.key}>{c.label}</option>
+            <option key={c.key} value={c.key}>
+              {c.label}
+            </option>
           ))}
         </select>
         <SelectionBarButton icon={<LayoutGrid size={13} />} onClick={bulkCard}>

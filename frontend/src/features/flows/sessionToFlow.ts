@@ -7,7 +7,16 @@
 // can be viewed as an already-finished flow run (RunView shows prompts on the
 // canvas AND replies in the step trace) without saving anything. Branch/parallel
 // structure can't be inferred from a flat transcript, so the result is linear.
-import type { Flow, FlowGraph, FlowNode, FlowRun, FlowState, FlowTraceEntry, Message, TurnStep } from '@/types'
+import type {
+  Flow,
+  FlowGraph,
+  FlowNode,
+  FlowRun,
+  FlowState,
+  FlowTraceEntry,
+  Message,
+  TurnStep,
+} from '@/types'
 
 function truncate(s: string, n: number): string {
   const t = s.trim().replace(/\s+/g, ' ')
@@ -45,7 +54,8 @@ function expandAssistant(m: Message): Segment[] {
       // malformed steps → fall through to the single-node path
     }
   }
-  const allText = steps.length >= 2 && steps.every((s) => s.kind === 'text' && !!(s.text ?? '').trim())
+  const allText =
+    steps.length >= 2 && steps.every((s) => s.kind === 'text' && !!(s.text ?? '').trim())
   if (allText) return steps.map((s) => splitTitle(s.text ?? ''))
   return [{ title: '', output: m.text ?? '' }]
 }
@@ -124,7 +134,14 @@ export function sessionToFlowRun(
   if (pendingUser) {
     const id = `n${++idx}`
     const title = truncate(pendingUser, 40)
-    nodes.push({ id, type: 'agent', title, agentId: fallbackAgentId, prompt: pendingUser, next: '' })
+    nodes.push({
+      id,
+      type: 'agent',
+      title,
+      agentId: fallbackAgentId,
+      prompt: pendingUser,
+      next: '',
+    })
     link(id)
     trace.push({ nodeId: id, type: 'agent', title, output: '', at: 0 })
     outputs[id] = ''
@@ -132,7 +149,12 @@ export function sessionToFlowRun(
 
   // Prepend the required start node (the reified flow reads like a real flow:
   // Başlangıç → …). It shows as a completed pass-through at the top of the view.
-  const startNode: FlowNode = { id: 'start', type: 'start', title: 'Başlangıç', next: nodes[0]?.id ?? '' }
+  const startNode: FlowNode = {
+    id: 'start',
+    type: 'start',
+    title: 'Başlangıç',
+    next: nodes[0]?.id ?? '',
+  }
   const allNodes = [startNode, ...nodes]
   const graph: FlowGraph = { start: 'start', nodes: allNodes, accumulate: true }
   const state: FlowState = {

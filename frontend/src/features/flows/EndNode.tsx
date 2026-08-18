@@ -8,7 +8,15 @@ export function EndNode({ id, data, selected }: NodeProps<FlowRFNode>) {
   const { node, status } = data
   const hasSchema = !!node.outputSchema?.trim()
   return (
-    <NodeShell id={id} type="end" title={node.title || 'Bitiş'} isStart={false} isEnd selected={selected} status={status}>
+    <NodeShell
+      id={id}
+      type="end"
+      title={node.title || 'Bitiş'}
+      isStart={false}
+      isEnd
+      selected={selected}
+      status={status}
+    >
       <Handle type="target" position={Position.Top} title="Giriş" />
       <div className="text-[11px] text-[var(--color-text-dim)]">
         {hasSchema ? 'akış biter · çıktı şeması zorunlu' : 'akış burada biter'}

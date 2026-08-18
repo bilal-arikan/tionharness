@@ -60,9 +60,39 @@ export interface FindingCluster {
 }
 
 const STOPWORDS = new Set([
-  'the', 'and', 'but', 'for', 'with', 'that', 'this', 'into', 'from', 'not', 'was', 'were',
-  'are', 'its', 'has', 'had', 'when', 'which', 'instead', 'than', 'then', 'even', 'though',
-  'tool', 'tools', 'agent', 'model', 'call', 'calls', 'called', 'using', 'use', 'used',
+  'the',
+  'and',
+  'but',
+  'for',
+  'with',
+  'that',
+  'this',
+  'into',
+  'from',
+  'not',
+  'was',
+  'were',
+  'are',
+  'its',
+  'has',
+  'had',
+  'when',
+  'which',
+  'instead',
+  'than',
+  'then',
+  'even',
+  'though',
+  'tool',
+  'tools',
+  'agent',
+  'model',
+  'call',
+  'calls',
+  'called',
+  'using',
+  'use',
+  'used',
 ])
 
 function tokenize(s: string): Set<string> {
@@ -117,7 +147,14 @@ export interface FindingSummary {
 }
 
 export function summarize(findings: InsightFinding[]): FindingSummary {
-  const s: FindingSummary = { total: findings.length, appFix: 0, workspaceOpt: 0, high: 0, regressed: 0, open: 0 }
+  const s: FindingSummary = {
+    total: findings.length,
+    appFix: 0,
+    workspaceOpt: 0,
+    high: 0,
+    regressed: 0,
+    open: 0,
+  }
   for (const f of findings) {
     if (f.channel === 'app-fix') s.appFix++
     else if (f.channel === 'workspace-opt') s.workspaceOpt++

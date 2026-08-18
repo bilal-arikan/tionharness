@@ -6,7 +6,11 @@ export function StepKindsPanel() {
   return (
     <>
       <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-xs text-[var(--color-text-dim)]">
-        Bir asistan turunun aktivite izi (<code className="rounded bg-[var(--color-bg)] px-1">TurnStep</code>) farklı <strong>türlerden</strong> oluşur. Aşağıda her türün ne anlama geldiği, kalıcı mı yoksa yalnız-canlı mı olduğu ve şu an aktif mi listelenir. (Kaynak: <code className="rounded bg-[var(--color-bg)] px-1">internal/agent/trace.go</code>)
+        Bir asistan turunun aktivite izi (
+        <code className="rounded bg-[var(--color-bg)] px-1">TurnStep</code>) farklı{' '}
+        <strong>türlerden</strong> oluşur. Aşağıda her türün ne anlama geldiği, kalıcı mı yoksa
+        yalnız-canlı mı olduğu ve şu an aktif mi listelenir. (Kaynak:{' '}
+        <code className="rounded bg-[var(--color-bg)] px-1">internal/agent/trace.go</code>)
       </div>
       <div className="flex flex-col gap-1.5">
         {STEP_KINDS.map((s) => (

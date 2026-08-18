@@ -18,7 +18,13 @@ interface Props {
 // AgentPicker is a custom dropdown that, unlike a native <select>, renders each
 // agent's circular avatar (custom emoji or derived initials) next to its name —
 // both in the trigger and the option list. Closes on outside click.
-export function AgentPicker({ agents, value, onChange, placeholder = 'Ajan seç', clearable = false }: Props) {
+export function AgentPicker({
+  agents,
+  value,
+  onChange,
+  placeholder = 'Ajan seç',
+  clearable = false,
+}: Props) {
   const [open, setOpen] = useState(false)
   const rootRef = useOutsideClick<HTMLDivElement>(() => setOpen(false), open)
   const selected = agents.find((a) => a.id === value)

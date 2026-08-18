@@ -70,7 +70,11 @@ export function installGlobalErrorHandlers(): void {
   window.addEventListener('unhandledrejection', (e: PromiseRejectionEvent) => {
     const reason = e.reason
     const message =
-      reason instanceof Error ? reason.message : typeof reason === 'string' ? reason : 'unhandled promise rejection'
+      reason instanceof Error
+        ? reason.message
+        : typeof reason === 'string'
+          ? reason
+          : 'unhandled promise rejection'
     reportClientError({
       source: 'unhandledrejection',
       message,

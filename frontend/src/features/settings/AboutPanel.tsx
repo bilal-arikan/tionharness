@@ -8,7 +8,8 @@ export function AboutPanel() {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    api.getVersion()
+    api
+      .getVersion()
       .then(setInfo)
       .catch((e: Error) => setError(e.message))
       .finally(() => setLoading(false))
@@ -37,7 +38,9 @@ export function AboutPanel() {
           ) : error ? (
             <span className="text-[var(--color-danger)]">Alınamadı</span>
           ) : isDev ? (
-            <span className="rounded bg-[var(--color-warning)]/15 px-1.5 py-0.5 text-[var(--color-warning)] font-mono text-xs">dev build</span>
+            <span className="rounded bg-[var(--color-warning)]/15 px-1.5 py-0.5 text-[var(--color-warning)] font-mono text-xs">
+              dev build
+            </span>
           ) : (
             <span className="font-mono">{info!.version}</span>
           )}
@@ -51,7 +54,9 @@ export function AboutPanel() {
 
         {info && info.buildDate !== 'dev' && (
           <AboutRow label="Build tarihi">
-            <span>{new Date(info.buildDate).toLocaleDateString('tr-TR', { dateStyle: 'medium' })}</span>
+            <span>
+              {new Date(info.buildDate).toLocaleDateString('tr-TR', { dateStyle: 'medium' })}
+            </span>
           </AboutRow>
         )}
 
@@ -67,15 +72,15 @@ export function AboutPanel() {
       {/* Güncelleme notu */}
       <div className="rounded-lg border border-[var(--color-border)] px-3 py-2.5 text-[var(--color-text-dim)]">
         <span className="mr-1.5 text-[var(--color-warning)]">⚠</span>
-        Otomatik güncelleme kontrolü henüz desteklenmiyor. Yeni sürümler için
-        projeyi manuel olarak kontrol edin.
+        Otomatik güncelleme kontrolü henüz desteklenmiyor. Yeni sürümler için projeyi manuel olarak
+        kontrol edin.
       </div>
 
       {/* Depolama açıklaması */}
       <p className="text-[var(--color-text-dim)] leading-relaxed">
         Uygulama ayarları{' '}
-        <code className="rounded bg-[var(--color-surface-2)] px-1">settings.json</code>,
-        workspace ayarları her workspace&apos;in{' '}
+        <code className="rounded bg-[var(--color-surface-2)] px-1">settings.json</code>, workspace
+        ayarları her workspace&apos;in{' '}
         <code className="rounded bg-[var(--color-surface-2)] px-1">ws-settings.json</code>{' '}
         dosyasında saklanır. Veritabanı kullanılmaz; tüm veriler düz dosyalardır.
       </p>

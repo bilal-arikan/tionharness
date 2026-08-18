@@ -44,7 +44,10 @@ export function SessionAgentsSection({ info, onSelectAgent }: Props) {
               className="group flex w-full items-center justify-between rounded-md border border-transparent px-2 py-1.5 text-left transition hover:border-[var(--color-border)] hover:bg-[var(--color-surface-hover)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]"
             >
               <span className="min-w-0 flex-1">{row}</span>
-              <ChevronRight className="h-3.5 w-3.5 shrink-0 text-[var(--color-text-dim)] opacity-0 transition group-hover:opacity-100" aria-hidden />
+              <ChevronRight
+                className="h-3.5 w-3.5 shrink-0 text-[var(--color-text-dim)] opacity-0 transition group-hover:opacity-100"
+                aria-hidden
+              />
             </button>
           )
         })}

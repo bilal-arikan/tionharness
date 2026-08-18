@@ -26,7 +26,14 @@ const run = (id: string, parentRunId?: string, rootRunId?: string): FlowRun =>
   }) as FlowRun
 
 const ev = (over: Partial<FlowNodeEvent> = {}): FlowNodeEvent =>
-  ({ phase: 'start', nodeId: 'n1', type: 'agent', title: 'İnceleme', index: 1, ...over }) as FlowNodeEvent
+  ({
+    phase: 'start',
+    nodeId: 'n1',
+    type: 'agent',
+    title: 'İnceleme',
+    index: 1,
+    ...over,
+  }) as FlowNodeEvent
 
 describe('buildRunTreeRows', () => {
   it('indents each run one level below its parent', () => {
@@ -78,8 +85,16 @@ describe('applyChildFrame', () => {
     // Node ids are unique only WITHIN a graph. The root and a child can each own
     // an "n1"; a flat node-id key would paint one child's progress onto the
     // other's canvas.
-    let map = applyChildFrame({}, { runId: 'R2', parentRunId: 'R1', parentNodeId: 'n1', ev: ev({ title: 'A' }) })
-    map = applyChildFrame(map, { runId: 'R3', parentRunId: 'R2', parentNodeId: 'n1', ev: ev({ title: 'B' }) })
+    let map = applyChildFrame(
+      {},
+      { runId: 'R2', parentRunId: 'R1', parentNodeId: 'n1', ev: ev({ title: 'A' }) },
+    )
+    map = applyChildFrame(map, {
+      runId: 'R3',
+      parentRunId: 'R2',
+      parentNodeId: 'n1',
+      ev: ev({ title: 'B' }),
+    })
     expect(map.R1.n1.title).toBe('A')
     expect(map.R2.n1.title).toBe('B')
   })
@@ -87,7 +102,9 @@ describe('applyChildFrame', () => {
   it('ignores a frame with no parent linkage, returning the map untouched', () => {
     // The tree root's own frames arrive on the same subscription; they belong to
     // the canvas already being drawn, not to a subflow node on it.
-    const prev = { R1: { sub1: { phase: 'done', title: 'x', index: 1, runId: 'R2' } as ChildProgress } }
+    const prev = {
+      R1: { sub1: { phase: 'done', title: 'x', index: 1, runId: 'R2' } as ChildProgress },
+    }
     expect(applyChildFrame(prev, { runId: 'R1', ev: ev() })).toBe(prev)
     // A run_flow child knows its parent run but hangs off no node — there is
     // nowhere to roll it up to, so it must not guess a node.
@@ -109,8 +126,16 @@ describe('applyChildFrame', () => {
   })
 
   it('keeps two sibling subflow nodes of the same parent independent', () => {
-    let map = applyChildFrame({}, { runId: 'R2', parentRunId: 'R1', parentNodeId: 'sub1', ev: ev({ title: 'A' }) })
-    map = applyChildFrame(map, { runId: 'R3', parentRunId: 'R1', parentNodeId: 'sub2', ev: ev({ title: 'B' }) })
+    let map = applyChildFrame(
+      {},
+      { runId: 'R2', parentRunId: 'R1', parentNodeId: 'sub1', ev: ev({ title: 'A' }) },
+    )
+    map = applyChildFrame(map, {
+      runId: 'R3',
+      parentRunId: 'R1',
+      parentNodeId: 'sub2',
+      ev: ev({ title: 'B' }),
+    })
     expect(map.R1.sub1.runId).toBe('R2')
     expect(map.R1.sub2.runId).toBe('R3')
   })
@@ -168,15 +193,21 @@ describe('childProgressFromTree', () => {
 })
 
 describe('mergeChildProgress', () => {
-  const seed = { R1: { sub1: { phase: 'done', title: 'eski', index: 1, runId: 'R2' } as ChildProgress } }
+  const seed = {
+    R1: { sub1: { phase: 'done', title: 'eski', index: 1, runId: 'R2' } as ChildProgress },
+  }
 
   it('lets a live frame win over the persisted seed', () => {
-    const live = { R1: { sub1: { phase: 'start', title: 'yeni', index: 5, runId: 'R2' } as ChildProgress } }
+    const live = {
+      R1: { sub1: { phase: 'start', title: 'yeni', index: 5, runId: 'R2' } as ChildProgress },
+    }
     expect(mergeChildProgress(seed, live).R1.sub1).toMatchObject({ title: 'yeni', index: 5 })
   })
 
   it('keeps seeded nodes the live map says nothing about', () => {
-    const live = { R1: { sub2: { phase: 'start', title: 'b', index: 1, runId: 'R3' } as ChildProgress } }
+    const live = {
+      R1: { sub2: { phase: 'start', title: 'b', index: 1, runId: 'R3' } as ChildProgress },
+    }
     const out = mergeChildProgress(seed, live)
     expect(out.R1.sub1.title).toBe('eski')
     expect(out.R1.sub2.runId).toBe('R3')

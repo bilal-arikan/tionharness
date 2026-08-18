@@ -34,7 +34,10 @@ export function AgentToolsSection({ agentId, onError }: Props) {
   const sel = useMultiSelect()
 
   const load = useCallback(() => {
-    api.agentTools(agentId).then(setData).catch((e) => onError?.(e.message))
+    api
+      .agentTools(agentId)
+      .then(setData)
+      .catch((e) => onError?.(e.message))
   }, [agentId, onError])
 
   useEffect(() => load(), [load])
@@ -105,7 +108,10 @@ export function AgentToolsSection({ agentId, onError }: Props) {
   // They are kept — dropping them would silently lift a ban — but listed apart
   // since there is no default to diff against.
   const orphans = useMemo(
-    () => Object.keys(overrides).filter((n) => !byName.has(n)).sort(),
+    () =>
+      Object.keys(overrides)
+        .filter((n) => !byName.has(n))
+        .sort(),
     [overrides, byName],
   )
 
@@ -246,15 +252,22 @@ export function AgentToolsSection({ agentId, onError }: Props) {
                     }}
                     disabled={busy}
                     className={`flex w-full items-start gap-2 rounded px-1 py-1 text-left hover:bg-[var(--color-surface-2)] ${
-                      sel.isSelected(t.name) ? 'bg-[var(--color-accent-soft)] ring-1 ring-[var(--color-accent)]' : ''
+                      sel.isSelected(t.name)
+                        ? 'bg-[var(--color-accent-soft)] ring-1 ring-[var(--color-accent)]'
+                        : ''
                     }`}
                   >
-                    <AgentTierBadge tier={t.defaultVisibility} className="mt-0.5 shrink-0 opacity-70" />
+                    <AgentTierBadge
+                      tier={t.defaultVisibility}
+                      className="mt-0.5 shrink-0 opacity-70"
+                    />
                     <span className="min-w-0">
                       <code className="rounded bg-[var(--color-surface-2)] px-1.5 py-0.5 text-xs">
                         {t.name}
                       </code>
-                      <span className="ml-2 text-xs text-[var(--color-text-dim)]">{t.description}</span>
+                      <span className="ml-2 text-xs text-[var(--color-text-dim)]">
+                        {t.description}
+                      </span>
                     </span>
                   </button>
                 )
@@ -265,7 +278,9 @@ export function AgentToolsSection({ agentId, onError }: Props) {
           <SelectionBar
             count={sel.count}
             onClear={sel.clear}
-            onSelectAll={available.length ? () => sel.selectAll(available.map((t) => t.name)) : undefined}
+            onSelectAll={
+              available.length ? () => sel.selectAll(available.map((t) => t.name)) : undefined
+            }
           >
             {AGENT_TIERS.map((tier) => (
               <SelectionBarButton

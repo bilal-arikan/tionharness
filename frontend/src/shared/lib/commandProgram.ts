@@ -8,8 +8,21 @@
 
 // Transparent prefix commands: they run another command, so skip to the next token.
 const PREFIX_COMMANDS = new Set([
-  'sudo', 'time', 'nice', 'nohup', 'env', 'timeout', 'strace', 'ltrace',
-  'ionice', 'taskset', 'watch', 'caffeinate', 'doas', 'stdbuf', 'xargs',
+  'sudo',
+  'time',
+  'nice',
+  'nohup',
+  'env',
+  'timeout',
+  'strace',
+  'ltrace',
+  'ionice',
+  'taskset',
+  'watch',
+  'caffeinate',
+  'doas',
+  'stdbuf',
+  'xargs',
 ])
 
 // Shell hosts whose `-c`/`-Command` argument carries the REAL command to inspect.

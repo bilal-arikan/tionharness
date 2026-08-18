@@ -5,10 +5,7 @@ import type { LucideIcon } from 'lucide-react'
 // the real data arrives.
 export function Skeleton({ className = '' }: { className?: string }) {
   return (
-    <div
-      aria-hidden
-      className={`animate-pulse rounded bg-[var(--color-surface-2)] ${className}`}
-    />
+    <div aria-hidden className={`animate-pulse rounded bg-[var(--color-surface-2)] ${className}`} />
   )
 }
 

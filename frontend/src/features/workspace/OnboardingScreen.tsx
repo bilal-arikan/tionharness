@@ -60,9 +60,9 @@ export function OnboardingScreen({ onCreate, onAttach }: Props) {
             TionSwarm'ya hoş geldin
           </h1>
           <p className="text-sm text-[var(--color-text-dim)]">
-            Başlamak için bir workspace oluştur ya da daha önce kullandığın bir workspace
-            klasörünü seç. Tüm ajanların, oturumların ve verilerin seçtiğin workspace içinde
-            izole şekilde saklanır.
+            Başlamak için bir workspace oluştur ya da daha önce kullandığın bir workspace klasörünü
+            seç. Tüm ajanların, oturumların ve verilerin seçtiğin workspace içinde izole şekilde
+            saklanır.
           </p>
         </div>
 
@@ -90,8 +90,7 @@ export function OnboardingScreen({ onCreate, onAttach }: Props) {
         )}
 
         <p className="text-xs text-[var(--color-text-dim)]">
-          Workspace oluşturmadan ya da seçmeden devam edemezsin — varsayılan bir kurulum
-          yapılmaz.
+          Workspace oluşturmadan ya da seçmeden devam edemezsin — varsayılan bir kurulum yapılmaz.
         </p>
       </div>
 

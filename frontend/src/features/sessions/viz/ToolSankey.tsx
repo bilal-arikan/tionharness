@@ -17,9 +17,7 @@ export function ToolSankey({
   const code = useMemo(() => buildToolSankey(events, agentNames), [events, agentNames])
   if (!code) {
     return (
-      <p className="py-2 text-[11px] text-[var(--color-text-dim)]">
-        Bu oturumda araç çağrısı yok.
-      </p>
+      <p className="py-2 text-[11px] text-[var(--color-text-dim)]">Bu oturumda araç çağrısı yok.</p>
     )
   }
   return <MermaidDiagram code={code} />

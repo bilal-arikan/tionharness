@@ -20,8 +20,22 @@ export const AVATAR_COLORS = [
 
 // Small set of suggested glyphs for quick selection in the editor.
 export const AVATAR_GLYPHS = [
-  '🤖', '🧠', '🛰️', '⚙️', '🔭', '🧭', '📡', '🦾',
-  '🧪', '📊', '✍️', '🎯', '🔮', '🐝', '🦉', '🐙',
+  '🤖',
+  '🧠',
+  '🛰️',
+  '⚙️',
+  '🔭',
+  '🧭',
+  '📡',
+  '🦾',
+  '🧪',
+  '📊',
+  '✍️',
+  '🎯',
+  '🔮',
+  '🐝',
+  '🦉',
+  '🐙',
 ] as const
 
 // hashString folds a string into a small non-negative integer (djb2).

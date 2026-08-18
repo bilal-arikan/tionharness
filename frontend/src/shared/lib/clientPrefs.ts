@@ -8,10 +8,14 @@ async function acquireWakeLock() {
   if (!keepAwakeOn) return
   try {
     // navigator.wakeLock is not in older TS DOM libs; guard at runtime.
-    const nav = navigator as Navigator & { wakeLock?: { request: (t: 'screen') => Promise<WakeLockSentinel> } }
+    const nav = navigator as Navigator & {
+      wakeLock?: { request: (t: 'screen') => Promise<WakeLockSentinel> }
+    }
     if (!nav.wakeLock) return
     wakeLock = await nav.wakeLock.request('screen')
-    wakeLock.addEventListener?.('release', () => { wakeLock = null })
+    wakeLock.addEventListener?.('release', () => {
+      wakeLock = null
+    })
   } catch {
     // permission denied / not supported — ignore.
   }
@@ -60,7 +64,13 @@ export function ensureNotificationPermission(enabled: boolean) {
 // of the same origin, each receives the same SSE event and would otherwise raise
 // its own OS toast. Passing a stable, event-derived tag makes the browser replace
 // (not stack) same-tag notifications, so the user sees exactly one.
-export function notify(enabled: boolean, title: string, body: string, onClick?: () => void, tag?: string) {
+export function notify(
+  enabled: boolean,
+  title: string,
+  body: string,
+  onClick?: () => void,
+  tag?: string,
+) {
   if (!enabled || !('Notification' in window)) return
   if (Notification.permission !== 'granted') return
   if (document.visibilityState === 'visible') return
@@ -69,7 +79,11 @@ export function notify(enabled: boolean, title: string, body: string, onClick?: 
     if (onClick) {
       n.onclick = () => {
         // Bring the app to the foreground, then run the navigation callback.
-        try { window.focus() } catch { /* ignore */ }
+        try {
+          window.focus()
+        } catch {
+          /* ignore */
+        }
         onClick()
         n.close()
       }

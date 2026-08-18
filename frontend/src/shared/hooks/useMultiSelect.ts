@@ -25,7 +25,12 @@ export interface MultiSelect {
    * Returns true when the click was a SELECTION gesture (a modifier was held);
    * the caller should then suppress its normal navigation (open/activate).
    */
-  handleClick: (e: ClickModifiers, id: string, ordered: string[], activeId?: string | null) => boolean
+  handleClick: (
+    e: ClickModifiers,
+    id: string,
+    ordered: string[],
+    activeId?: string | null,
+  ) => boolean
   /** Toggle a single id (used by explicit checkboxes / select-all UIs). */
   toggle: (id: string) => void
   clear: () => void
@@ -47,53 +52,56 @@ export function useMultiSelect(): MultiSelect {
 
   const isSelected = useCallback((id: string) => selected.has(id), [selected])
 
-  const handleClick = useCallback((e: ClickModifiers, id: string, ordered: string[], activeId?: string | null): boolean => {
-    const additive = e.ctrlKey || e.metaKey
-    const range = e.shiftKey
-    // The item that is currently "open"/active in the detail pane, so a Ctrl/Shift
-    // gesture that starts a fresh multi-selection can include it. Callers may pass
-    // it explicitly (covers the default-selected-on-load row that was never
-    // clicked); otherwise we fall back to the anchor (the last plain-clicked row).
-    const seed = activeId ?? anchor.current
+  const handleClick = useCallback(
+    (e: ClickModifiers, id: string, ordered: string[], activeId?: string | null): boolean => {
+      const additive = e.ctrlKey || e.metaKey
+      const range = e.shiftKey
+      // The item that is currently "open"/active in the detail pane, so a Ctrl/Shift
+      // gesture that starts a fresh multi-selection can include it. Callers may pass
+      // it explicitly (covers the default-selected-on-load row that was never
+      // clicked); otherwise we fall back to the anchor (the last plain-clicked row).
+      const seed = activeId ?? anchor.current
 
-    if (range && anchor.current && ordered.includes(anchor.current)) {
-      const a = ordered.indexOf(anchor.current)
-      const b = ordered.indexOf(id)
-      const lo = Math.min(a, b)
-      const hi = Math.max(a, b)
-      const slice = ordered.slice(lo, hi + 1)
-      setSelected((prev) => {
-        // Shift+Click replaces the selection with the range; Ctrl+Shift+Click
-        // merges the range into the existing selection.
-        const next = new Set(additive ? prev : [])
-        for (const x of slice) next.add(x)
-        return next
-      })
-      // Anchor intentionally stays put so the user can re-extend the same range.
-      return true
-    }
+      if (range && anchor.current && ordered.includes(anchor.current)) {
+        const a = ordered.indexOf(anchor.current)
+        const b = ordered.indexOf(id)
+        const lo = Math.min(a, b)
+        const hi = Math.max(a, b)
+        const slice = ordered.slice(lo, hi + 1)
+        setSelected((prev) => {
+          // Shift+Click replaces the selection with the range; Ctrl+Shift+Click
+          // merges the range into the existing selection.
+          const next = new Set(additive ? prev : [])
+          for (const x of slice) next.add(x)
+          return next
+        })
+        // Anchor intentionally stays put so the user can re-extend the same range.
+        return true
+      }
 
-    if (additive) {
-      setSelected((prev) => {
-        const next = new Set(prev)
-        // Beginning a multi-selection from a single open item: fold that item in
-        // first so Ctrl/Cmd+Click on a second row selects BOTH, not just the newly
-        // clicked one.
-        if (next.size === 0 && seed && seed !== id) next.add(seed)
-        if (next.has(id)) next.delete(id)
-        else next.add(id)
-        return next
-      })
+      if (additive) {
+        setSelected((prev) => {
+          const next = new Set(prev)
+          // Beginning a multi-selection from a single open item: fold that item in
+          // first so Ctrl/Cmd+Click on a second row selects BOTH, not just the newly
+          // clicked one.
+          if (next.size === 0 && seed && seed !== id) next.add(seed)
+          if (next.has(id)) next.delete(id)
+          else next.add(id)
+          return next
+        })
+        anchor.current = id
+        return true
+      }
+
+      // Plain click: this is navigation, not selection. Reset any selection and
+      // remember the row as the anchor for a subsequent Shift+Click.
       anchor.current = id
-      return true
-    }
-
-    // Plain click: this is navigation, not selection. Reset any selection and
-    // remember the row as the anchor for a subsequent Shift+Click.
-    anchor.current = id
-    setSelected((prev) => (prev.size ? new Set() : prev))
-    return false
-  }, [])
+      setSelected((prev) => (prev.size ? new Set() : prev))
+      return false
+    },
+    [],
+  )
 
   const toggle = useCallback((id: string) => {
     setSelected((prev) => {
@@ -129,5 +137,14 @@ export function useMultiSelect(): MultiSelect {
     return () => document.removeEventListener('keydown', onKey)
   }, [selected.size, clear])
 
-  return { selected, count: selected.size, isSelected, handleClick, toggle, clear, selectAll, replace }
+  return {
+    selected,
+    count: selected.size,
+    isSelected,
+    handleClick,
+    toggle,
+    clear,
+    selectAll,
+    replace,
+  }
 }

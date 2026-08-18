@@ -3,15 +3,7 @@
 // the persisted user message.
 
 export type AttachmentKind =
-  | 'image'
-  | 'text'
-  | 'code'
-  | 'pdf'
-  | 'office'
-  | 'archive'
-  | 'audio'
-  | 'video'
-  | 'file'
+  'image' | 'text' | 'code' | 'pdf' | 'office' | 'archive' | 'audio' | 'video' | 'file'
 
 export interface Attachment {
   id: string

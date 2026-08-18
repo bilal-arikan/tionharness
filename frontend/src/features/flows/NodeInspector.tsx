@@ -2,7 +2,10 @@ import type { Agent, BranchMatchMode, Flow, FlowNode } from '@/types'
 import { AgentPicker } from '@/shared/components/agents/AgentPicker'
 import { PromptEditor } from '@/shared/components'
 import { InfoPopover } from '@/shared/components/InfoPopover'
-import { CoordinatorWorkflowPicker, WORKFLOW_HELP } from '@/shared/components/CoordinatorWorkflowPicker'
+import {
+  CoordinatorWorkflowPicker,
+  WORKFLOW_HELP,
+} from '@/shared/components/CoordinatorWorkflowPicker'
 import { Workflow } from 'lucide-react'
 import { chromeFor } from './nodeStyles'
 import { FlowVarsButton } from './FlowVarsButton'
@@ -22,14 +25,22 @@ interface Props {
   onDelete: () => void
 }
 
-const input =
-  'w-full rounded bg-[var(--color-surface-2)] px-2 py-1 text-xs outline-none'
+const input = 'w-full rounded bg-[var(--color-surface-2)] px-2 py-1 text-xs outline-none'
 
 // NodeInspector edits the currently selected node. A node's TYPE is fixed once
 // created (it is chosen from the palette and never changes here) — the inspector
 // only edits its intrinsic fields (title, agent, prompt, branch conditions).
 // Routing (next/parallel/joinNext) is managed by drawing edges on the canvas.
-export function NodeInspector({ node, agents, isStart, allNodes, flows, onPatch, onDuplicate, onDelete }: Props) {
+export function NodeInspector({
+  node,
+  agents,
+  isStart,
+  allNodes,
+  flows,
+  onPatch,
+  onDuplicate,
+  onDelete,
+}: Props) {
   const chrome = chromeFor(node.type)
   // Spawn nodes in this flow, for the join node's "which spawn to await" picker.
   const spawnNodes = allNodes.filter((n) => n.type === 'spawn')
@@ -45,7 +56,11 @@ export function NodeInspector({ node, agents, isStart, allNodes, flows, onPatch,
           {isStart && ' ▶'}
         </span>
         <div className="flex flex-wrap gap-2">
-          <button onClick={onDuplicate} className="text-xs text-[var(--color-accent)]" title="Çoğalt">
+          <button
+            onClick={onDuplicate}
+            className="text-xs text-[var(--color-accent)]"
+            title="Çoğalt"
+          >
             ⧉ Çoğalt
           </button>
           <button onClick={onDelete} className="text-xs text-[var(--color-danger)]" title="Sil">
@@ -113,7 +128,10 @@ export function NodeInspector({ node, agents, isStart, allNodes, flows, onPatch,
               onChange={(e) => onPatch({ fresh: e.target.checked })}
             />
             <span>
-              Taze bağlam <span className="text-[var(--color-text-dim)]">(birikmiş konuşmayı görmez — yalnız "Bağlamı biriktir" açıkken etkili)</span>
+              Taze bağlam{' '}
+              <span className="text-[var(--color-text-dim)]">
+                (birikmiş konuşmayı görmez — yalnız "Bağlamı biriktir" açıkken etkili)
+              </span>
             </span>
           </label>
         </>
@@ -122,7 +140,9 @@ export function NodeInspector({ node, agents, isStart, allNodes, flows, onPatch,
       {node.type === 'coordinator' && (
         <>
           <div className="block">
-            <span className="mb-1 block text-xs text-[var(--color-text-dim)]">Koordinatör ajan</span>
+            <span className="mb-1 block text-xs text-[var(--color-text-dim)]">
+              Koordinatör ajan
+            </span>
             <AgentPicker
               agents={agents}
               value={node.agentId ?? ''}
@@ -170,7 +190,9 @@ export function NodeInspector({ node, agents, isStart, allNodes, flows, onPatch,
               type="number"
               min={0}
               value={node.maxTurns ?? 0}
-              onChange={(e) => onPatch({ maxTurns: Math.max(0, Math.round(Number(e.target.value) || 0)) })}
+              onChange={(e) =>
+                onPatch({ maxTurns: Math.max(0, Math.round(Number(e.target.value) || 0)) })
+              }
               className={input}
             />
           </label>
@@ -182,14 +204,17 @@ export function NodeInspector({ node, agents, isStart, allNodes, flows, onPatch,
               type="number"
               min={0}
               value={node.timeoutSec ?? 0}
-              onChange={(e) => onPatch({ timeoutSec: Math.max(0, Math.round(Number(e.target.value) || 0)) })}
+              onChange={(e) =>
+                onPatch({ timeoutSec: Math.max(0, Math.round(Number(e.target.value) || 0)) })
+              }
               className={input}
             />
           </label>
           <p className="text-[11px] text-[var(--color-text-dim)]">
-            Ajan kendi koordinatör oturumunda çalışır ve <b>kaç worker açacağına anlık karar verir</b>.
-            Düğüm, tüm workerlar bitip koordinatör susana kadar bloklar; son yanıtı çıktı olur. Zaman
-            aşımında çalışan workerlar durdurulur ve akış hata verir.
+            Ajan kendi koordinatör oturumunda çalışır ve{' '}
+            <b>kaç worker açacağına anlık karar verir</b>. Düğüm, tüm workerlar bitip koordinatör
+            susana kadar bloklar; son yanıtı çıktı olur. Zaman aşımında çalışan workerlar durdurulur
+            ve akış hata verir.
           </p>
         </>
       )}
@@ -262,7 +287,11 @@ export function NodeInspector({ node, agents, isStart, allNodes, flows, onPatch,
         <div className="space-y-2">
           <label className="block">
             <span className="mb-1 block text-xs text-[var(--color-text-dim)]">Alt-akış</span>
-            <select value={node.flowRef ?? ''} onChange={(e) => onPatch({ flowRef: e.target.value })} className={input}>
+            <select
+              value={node.flowRef ?? ''}
+              onChange={(e) => onPatch({ flowRef: e.target.value })}
+              className={input}
+            >
               <option value="">— akış seç —</option>
               {flows.map((f) => (
                 <option key={f.id} value={f.id}>
@@ -275,7 +304,10 @@ export function NodeInspector({ node, agents, isStart, allNodes, flows, onPatch,
           <div className="block">
             <div className="mb-1 flex flex-wrap items-center gap-1 text-xs text-[var(--color-text-dim)]">
               <span>Girdi şablonu</span>
-              <FlowVarsButton nodeRefs={nodeRefs} onInsert={(t) => onPatch({ template: (node.template ?? '') + t })} />
+              <FlowVarsButton
+                nodeRefs={nodeRefs}
+                onInsert={(t) => onPatch({ template: (node.template ?? '') + t })}
+              />
             </div>
             <PromptEditor
               value={node.template ?? ''}
@@ -296,7 +328,9 @@ export function NodeInspector({ node, agents, isStart, allNodes, flows, onPatch,
       {node.type === 'spawn' && (
         <div className="space-y-2">
           <div className="block">
-            <span className="mb-1 block text-xs text-[var(--color-text-dim)]">Async akışlar (birden çok seç)</span>
+            <span className="mb-1 block text-xs text-[var(--color-text-dim)]">
+              Async akışlar (birden çok seç)
+            </span>
             <div className="max-h-40 space-y-1 overflow-auto rounded bg-[var(--color-surface-2)] p-1.5">
               {flows.length === 0 && (
                 <div className="text-[11px] text-[var(--color-text-dim)]">başka akış yok</div>
@@ -304,14 +338,19 @@ export function NodeInspector({ node, agents, isStart, allNodes, flows, onPatch,
               {flows.map((f) => {
                 const selected = (node.spawnFlows ?? []).includes(f.id)
                 return (
-                  <label key={f.id} className="flex cursor-pointer items-center gap-1.5 text-[11px]">
+                  <label
+                    key={f.id}
+                    className="flex cursor-pointer items-center gap-1.5 text-[11px]"
+                  >
                     <input
                       type="checkbox"
                       checked={selected}
                       onChange={(e) => {
                         const cur = node.spawnFlows ?? []
                         onPatch({
-                          spawnFlows: e.target.checked ? [...cur, f.id] : cur.filter((x) => x !== f.id),
+                          spawnFlows: e.target.checked
+                            ? [...cur, f.id]
+                            : cur.filter((x) => x !== f.id),
                         })
                       }}
                     />
@@ -327,7 +366,10 @@ export function NodeInspector({ node, agents, isStart, allNodes, flows, onPatch,
           <div className="block">
             <div className="mb-1 flex flex-wrap items-center gap-1 text-xs text-[var(--color-text-dim)]">
               <span>Girdi şablonu (her çocuğa)</span>
-              <FlowVarsButton nodeRefs={nodeRefs} onInsert={(t) => onPatch({ template: (node.template ?? '') + t })} />
+              <FlowVarsButton
+                nodeRefs={nodeRefs}
+                onInsert={(t) => onPatch({ template: (node.template ?? '') + t })}
+              />
             </div>
             <PromptEditor
               value={node.template ?? ''}
@@ -348,8 +390,14 @@ export function NodeInspector({ node, agents, isStart, allNodes, flows, onPatch,
       {node.type === 'join' && (
         <div className="space-y-2">
           <label className="block">
-            <span className="mb-1 block text-xs text-[var(--color-text-dim)]">Beklenecek spawn node</span>
-            <select value={node.spawnRef ?? ''} onChange={(e) => onPatch({ spawnRef: e.target.value })} className={input}>
+            <span className="mb-1 block text-xs text-[var(--color-text-dim)]">
+              Beklenecek spawn node
+            </span>
+            <select
+              value={node.spawnRef ?? ''}
+              onChange={(e) => onPatch({ spawnRef: e.target.value })}
+              className={input}
+            >
               <option value="">tümü (tüm bekleyen spawn'lar)</option>
               {spawnNodes.map((n) => (
                 <option key={n.id} value={n.id}>
@@ -359,12 +407,16 @@ export function NodeInspector({ node, agents, isStart, allNodes, flows, onPatch,
             </select>
           </label>
           <label className="block">
-            <span className="mb-1 block text-xs text-[var(--color-text-dim)]">Zaman aşımı (saniye, 0 = süresiz)</span>
+            <span className="mb-1 block text-xs text-[var(--color-text-dim)]">
+              Zaman aşımı (saniye, 0 = süresiz)
+            </span>
             <input
               type="number"
               min={0}
               value={node.joinTimeoutSec ?? 0}
-              onChange={(e) => onPatch({ joinTimeoutSec: Math.max(0, Math.round(Number(e.target.value) || 0)) })}
+              onChange={(e) =>
+                onPatch({ joinTimeoutSec: Math.max(0, Math.round(Number(e.target.value) || 0)) })
+              }
               className={input}
             />
           </label>
@@ -424,17 +476,21 @@ export function NodeInspector({ node, agents, isStart, allNodes, flows, onPatch,
       {node.type === 'loop' && (
         <div className="space-y-2">
           <p className="text-xs text-[var(--color-text-dim)]">
-            Gövdeyi (alttaki <b>gövde</b> tutamağı) yinele; bitince <b>çıkış</b> tutamağındaki node'a
-            geç. Gövde node'ları <code>{'{{iteration}}'}</code> (0-tabanlı) kullanabilir.
+            Gövdeyi (alttaki <b>gövde</b> tutamağı) yinele; bitince <b>çıkış</b> tutamağındaki
+            node'a geç. Gövde node'ları <code>{'{{iteration}}'}</code> (0-tabanlı) kullanabilir.
           </p>
           <label className="block">
-            <span className="mb-1 block text-xs text-[var(--color-text-dim)]">En çok iterasyon</span>
+            <span className="mb-1 block text-xs text-[var(--color-text-dim)]">
+              En çok iterasyon
+            </span>
             <input
               type="number"
               min={0}
               step={1}
               value={node.maxIters ?? 0}
-              onChange={(e) => onPatch({ maxIters: Math.max(0, Math.round(Number(e.target.value) || 0)) })}
+              onChange={(e) =>
+                onPatch({ maxIters: Math.max(0, Math.round(Number(e.target.value) || 0)) })
+              }
               className={input}
             />
             <span className="mt-1 block text-[11px] text-[var(--color-text-dim)]">
@@ -442,7 +498,9 @@ export function NodeInspector({ node, agents, isStart, allNodes, flows, onPatch,
             </span>
           </label>
           <label className="block">
-            <span className="mb-1 block text-xs text-[var(--color-text-dim)]">Çıkış koşulu (eşleşince biter)</span>
+            <span className="mb-1 block text-xs text-[var(--color-text-dim)]">
+              Çıkış koşulu (eşleşince biter)
+            </span>
             <input
               value={node.until ?? ''}
               onChange={(e) => onPatch({ until: e.target.value })}

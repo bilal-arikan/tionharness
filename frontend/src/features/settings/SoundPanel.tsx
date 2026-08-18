@@ -29,7 +29,9 @@ export function SoundPanel() {
   return (
     <div className="flex flex-col gap-4">
       <p className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-xs leading-relaxed text-[var(--color-text-dim)]">
-        Bu sayfadaki tüm ses ayarları <span className="font-medium text-[var(--color-text)]">bu cihaza özeldir</span> ve anında uygulanır (Kaydet gerekmez).
+        Bu sayfadaki tüm ses ayarları{' '}
+        <span className="font-medium text-[var(--color-text)]">bu cihaza özeldir</span> ve anında
+        uygulanır (Kaydet gerekmez).
       </p>
 
       <div className="flex flex-col gap-2">

@@ -50,7 +50,9 @@ export function RunTreePanel({ runs, flows, viewRunId, onSelect }: Props) {
               >
                 <span
                   className={
-                    run.id === viewRunId ? 'shrink-0 opacity-90' : `shrink-0 ${statusColor(run.status)}`
+                    run.id === viewRunId
+                      ? 'shrink-0 opacity-90'
+                      : `shrink-0 ${statusColor(run.status)}`
                   }
                 >
                   {(STATUS_LABEL[run.status] ?? '•').charAt(0)}

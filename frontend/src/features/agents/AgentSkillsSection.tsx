@@ -61,8 +61,8 @@ export function AgentSkillsSection({ selected, onChange, onError }: Props) {
       <p className="mb-3 text-xs text-[var(--color-text-dim)]">
         Bu ajana hangi <strong>kısıtlı</strong> skill'lerin verileceğini seç. Atanan skill'ler
         ajanın sistem promptunda görünür ve <code>use_skill</code> ile yüklenebilir.
-        <strong> Gerektiğinde</strong> (paylaşımlı) skill'ler ise atama gerekmeden tüm ajanlara zaten
-        açıktır. Skills ortak havuzdandır — <strong>Skills</strong> ekranından yönetilir.
+        <strong> Gerektiğinde</strong> (paylaşımlı) skill'ler ise atama gerekmeden tüm ajanlara
+        zaten açıktır. Skills ortak havuzdandır — <strong>Skills</strong> ekranından yönetilir.
       </p>
 
       {/* Selected (unordered set) — chips, mirroring the add pickers below. The
@@ -82,7 +82,11 @@ export function AgentSkillsSection({ selected, onChange, onError }: Props) {
                 data-testid="skill-remove"
                 data-skill-slug={slug}
                 onClick={() => remove(slug)}
-                title={missing ? `bulunamadı: ${slug} · Kaldırmak için tıkla` : `${sk?.description ?? ''} · Kaldırmak için tıkla`}
+                title={
+                  missing
+                    ? `bulunamadı: ${slug} · Kaldırmak için tıkla`
+                    : `${sk?.description ?? ''} · Kaldırmak için tıkla`
+                }
                 className={`group flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs transition hover:border-[var(--color-danger)] hover:bg-[color-mix(in_srgb,var(--color-danger)_12%,var(--color-surface-2))] ${
                   missing
                     ? 'border-[var(--color-danger)]/40 bg-[var(--color-surface-2)] text-[var(--color-danger)]'
@@ -91,7 +95,10 @@ export function AgentSkillsSection({ selected, onChange, onError }: Props) {
               >
                 <span className="leading-none">{sk?.icon || '✨'}</span>
                 <span className="max-w-40 truncate">{sk?.name || slug}</span>
-                <X size={12} className="shrink-0 text-[var(--color-text-dim)] group-hover:text-[var(--color-danger)]" />
+                <X
+                  size={12}
+                  className="shrink-0 text-[var(--color-text-dim)] group-hover:text-[var(--color-danger)]"
+                />
               </button>
             )
           })}
@@ -101,8 +108,8 @@ export function AgentSkillsSection({ selected, onChange, onError }: Props) {
       {/* Available to add */}
       {loaded && all.length === 0 && (
         <p className="flex items-center gap-1.5 text-xs text-[var(--color-text-dim)]">
-          <Sparkles size={13} className="opacity-50" /> Hiç skill yok. Önce{' '}
-          <strong>Skills</strong> ekranından ekle.
+          <Sparkles size={13} className="opacity-50" /> Hiç skill yok. Önce <strong>Skills</strong>{' '}
+          ekranından ekle.
         </p>
       )}
       {/* Restricted (must-be-assigned) skills: NOT available unless explicitly
@@ -129,7 +136,9 @@ export function AgentSkillsSection({ selected, onChange, onError }: Props) {
                 <Plus size={12} className="text-[var(--color-text-dim)]" />
                 <span>{s.icon || '✨'}</span>
                 <span>{s.name}</span>
-                <span className="text-[10px] text-[var(--color-text-dim)]">· {SOURCE_LABEL[s.source]}</span>
+                <span className="text-[10px] text-[var(--color-text-dim)]">
+                  · {SOURCE_LABEL[s.source]}
+                </span>
               </button>
             ))}
           </div>

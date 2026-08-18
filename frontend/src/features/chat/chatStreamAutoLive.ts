@@ -18,7 +18,9 @@ export function clearAutoLiveEntry(
   if (!autoLiveRef.current.has(sid)) return
   const entry = autoLiveRef.current.get(sid)!
   autoLiveRef.current.delete(sid)
-  setMessages((prev) => prev.filter((m) => m.id !== entry.id && !m.id.startsWith(`live-auto-${sid}`)))
+  setMessages((prev) =>
+    prev.filter((m) => m.id !== entry.id && !m.id.startsWith(`live-auto-${sid}`)),
+  )
 }
 
 // performReseedLive re-injected the owning window's live bubble after a

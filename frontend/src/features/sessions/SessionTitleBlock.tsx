@@ -69,7 +69,10 @@ export function SessionTitleBlock({
         // `opacity-0 group-hover:opacity-100` ghosts, which made renaming and AI
         // title generation undiscoverable unless you happened to hover the row.
         <div className="flex items-center gap-1.5">
-          <h3 className="min-w-0 flex-1 truncate text-sm font-semibold text-[var(--color-text)]" title={info.title}>
+          <h3
+            className="min-w-0 flex-1 truncate text-sm font-semibold text-[var(--color-text)]"
+            title={info.title}
+          >
             {info.title || 'Yeni sohbet'}
           </h3>
           <button

@@ -22,7 +22,9 @@ const BUBBLE_W = 320
 export function FlowVarsButton({ nodeRefs, onInsert, context = 'node' }: Props) {
   const [open, setOpen] = useState(false)
   const btnRef = useRef<HTMLButtonElement>(null)
-  const [pos, setPos] = useState<{ left: number; top: number; placement: 'top' | 'bottom' } | null>(null)
+  const [pos, setPos] = useState<{ left: number; top: number; placement: 'top' | 'bottom' } | null>(
+    null,
+  )
 
   const nodeVars: { name: string; desc: string }[] = [
     { name: '{{input}}', desc: 'Akışın girdisi (RunFlow input)' },
@@ -85,7 +87,9 @@ export function FlowVarsButton({ nodeRefs, onInsert, context = 'node' }: Props) 
       <code className="shrink-0 rounded bg-[var(--color-accent-soft)] px-1 py-0.5 font-mono text-[11px] text-[var(--color-accent)]">
         {name}
       </code>
-      <span className={`text-[11px] text-[var(--color-text-dim)]${truncate ? ' truncate' : ''}`}>{desc}</span>
+      <span className={`text-[11px] text-[var(--color-text-dim)]${truncate ? ' truncate' : ''}`}>
+        {desc}
+      </span>
     </button>
   )
 

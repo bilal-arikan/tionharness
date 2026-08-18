@@ -1,12 +1,6 @@
 import type { Dispatch, SetStateAction } from 'react'
 import type { Edge } from '@xyflow/react'
-import {
-  reactFlowToGraph,
-  autoLayout,
-  blankNode,
-  nextNodeId,
-  type FlowRFNode,
-} from './flowGraph'
+import { reactFlowToGraph, autoLayout, blankNode, nextNodeId, type FlowRFNode } from './flowGraph'
 import type { Agent, FlowNode, FlowNodeType } from '@/types'
 
 // Dependencies the canvas node operations need from FlowsPanel's editor state.
@@ -71,11 +65,7 @@ export function createFlowGraphOps({
         const before = rn.data.node
         const merged = { ...before, ...patch }
         if (patch.type && patch.type !== before.type) prune = true
-        if (
-          patch.branches &&
-          patch.branches.length < (before.branches?.length ?? 0)
-        )
-          prune = true
+        if (patch.branches && patch.branches.length < (before.branches?.length ?? 0)) prune = true
         return { ...rn, type: merged.type, data: { ...rn.data, node: merged } }
       }),
     )
@@ -131,7 +121,9 @@ export function createFlowGraphOps({
     const graph = reactFlowToGraph(nodes, edges, start)
     const pos = autoLayout(graph)
     setNodes((prev) =>
-      prev.map((rn) => (pos[rn.id] ? { ...rn, position: { x: pos[rn.id].x, y: pos[rn.id].y } } : rn)),
+      prev.map((rn) =>
+        pos[rn.id] ? { ...rn, position: { x: pos[rn.id].x, y: pos[rn.id].y } } : rn,
+      ),
     )
   }
 

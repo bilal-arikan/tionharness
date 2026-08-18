@@ -17,7 +17,12 @@ const selectCls =
 
 export function FilterBar({ filter, setFilter, lenses, cluster, setCluster }: Props) {
   const active =
-    filter.channel || filter.status || filter.severity || filter.lens || filter.regressedOnly || filter.search
+    filter.channel ||
+    filter.status ||
+    filter.severity ||
+    filter.lens ||
+    filter.regressedOnly ||
+    filter.search
   return (
     <div className="flex flex-wrap items-center gap-2">
       <div className="relative">
@@ -31,13 +36,21 @@ export function FilterBar({ filter, setFilter, lenses, cluster, setCluster }: Pr
         />
       </div>
 
-      <select className={selectCls} value={filter.channel ?? ''} onChange={(e) => setFilter({ ...filter, channel: e.target.value || undefined })}>
+      <select
+        className={selectCls}
+        value={filter.channel ?? ''}
+        onChange={(e) => setFilter({ ...filter, channel: e.target.value || undefined })}
+      >
         <option value="">Tüm kanallar</option>
         <option value="app-fix">app-fix</option>
         <option value="workspace-opt">workspace-opt</option>
       </select>
 
-      <select className={selectCls} value={filter.status ?? ''} onChange={(e) => setFilter({ ...filter, status: e.target.value || undefined })}>
+      <select
+        className={selectCls}
+        value={filter.status ?? ''}
+        onChange={(e) => setFilter({ ...filter, status: e.target.value || undefined })}
+      >
         <option value="">Tüm statüler</option>
         <option value="new">yeni</option>
         <option value="accepted">kabul</option>
@@ -46,17 +59,27 @@ export function FilterBar({ filter, setFilter, lenses, cluster, setCluster }: Pr
         <option value="dismissed">yoksayıldı</option>
       </select>
 
-      <select className={selectCls} value={filter.severity ?? ''} onChange={(e) => setFilter({ ...filter, severity: e.target.value || undefined })}>
+      <select
+        className={selectCls}
+        value={filter.severity ?? ''}
+        onChange={(e) => setFilter({ ...filter, severity: e.target.value || undefined })}
+      >
         <option value="">Tüm önem</option>
         <option value="high">yüksek</option>
         <option value="med">orta</option>
         <option value="low">düşük</option>
       </select>
 
-      <select className={selectCls} value={filter.lens ?? ''} onChange={(e) => setFilter({ ...filter, lens: e.target.value || undefined })}>
+      <select
+        className={selectCls}
+        value={filter.lens ?? ''}
+        onChange={(e) => setFilter({ ...filter, lens: e.target.value || undefined })}
+      >
         <option value="">Tüm lensler</option>
         {lenses.map((l) => (
-          <option key={l.id} value={l.id}>{l.id}</option>
+          <option key={l.id} value={l.id}>
+            {l.id}
+          </option>
         ))}
       </select>
 

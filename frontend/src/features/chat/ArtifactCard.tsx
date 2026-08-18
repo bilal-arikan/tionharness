@@ -40,7 +40,9 @@ export function ArtifactCard({ step, onOpenArtifact }: Props) {
     return (
       <div className="flex items-center gap-2 rounded-lg border border-[color-mix(in_srgb,var(--color-danger)_30%,transparent)] bg-[color-mix(in_srgb,var(--color-danger)_6%,transparent)] px-3 py-1.5 text-xs text-[var(--color-danger)]">
         <FileCode size={14} className="shrink-0" />
-        <span className="truncate">Artifact kaydedilemedi{step.output ? `: ${step.output}` : ''}</span>
+        <span className="truncate">
+          Artifact kaydedilemedi{step.output ? `: ${step.output}` : ''}
+        </span>
       </div>
     )
   }
@@ -54,7 +56,9 @@ export function ArtifactCard({ step, onOpenArtifact }: Props) {
         <FileCode size={16} />
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-sm font-medium text-[var(--color-accent)]">{ref.title}</span>
+        <span className="block truncate text-sm font-medium text-[var(--color-accent)]">
+          {ref.title}
+        </span>
         <span className="block text-[11px] text-[var(--color-text-dim)]">
           {KIND_LABEL[ref.kind] ?? ref.kind} ·{' '}
           {ref.action === 'update' ? 'güncellendi' : 'oluşturuldu'}

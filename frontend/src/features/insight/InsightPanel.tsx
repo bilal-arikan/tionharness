@@ -1,5 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { RefreshCw, Play, Bug, ShieldCheck, GraduationCap, ScanSearch, Boxes, History, Settings, type LucideIcon } from 'lucide-react'
+import {
+  RefreshCw,
+  Play,
+  Bug,
+  ShieldCheck,
+  GraduationCap,
+  ScanSearch,
+  Boxes,
+  History,
+  Settings,
+  type LucideIcon,
+} from 'lucide-react'
 import { api } from '@/api'
 import type { InsightLens, InsightFinding, InsightSettings } from '@/types'
 import { FindingsTab } from './FindingsTab'
@@ -40,7 +51,7 @@ const TABS: { key: Tab; label: string; icon: LucideIcon }[] = [
 export function InsightPanel({ onError, onOpenSession, tab: tabProp, onTabChange }: Props) {
   const [localTab, setLocalTab] = useState<Tab>('findings')
   // URL-controlled when a valid tab arrives via the route; else local state.
-  const tab: Tab = (TABS.some((t) => t.key === tabProp) ? (tabProp as Tab) : localTab)
+  const tab: Tab = TABS.some((t) => t.key === tabProp) ? (tabProp as Tab) : localTab
   const setTab = (t: Tab) => {
     setLocalTab(t)
     onTabChange?.(t)
@@ -53,18 +64,30 @@ export function InsightPanel({ onError, onOpenSession, tab: tabProp, onTabChange
   const pollRef = useRef<number | null>(null)
 
   const loadFindings = useCallback(() => {
-    api.listInsightFindings().then(setFindings).catch((e) => onError((e as Error).message))
+    api
+      .listInsightFindings()
+      .then(setFindings)
+      .catch((e) => onError((e as Error).message))
   }, [onError])
 
   const loadLenses = useCallback(() => {
-    api.listInsightLenses().then(setLenses).catch((e) => onError((e as Error).message))
+    api
+      .listInsightLenses()
+      .then(setLenses)
+      .catch((e) => onError((e as Error).message))
   }, [onError])
 
   const load = useCallback(() => {
     loadLenses()
-    api.getInsightSettings().then(setSettings).catch((e) => onError((e as Error).message))
+    api
+      .getInsightSettings()
+      .then(setSettings)
+      .catch((e) => onError((e as Error).message))
     loadFindings()
-    api.getInsightScanStatus().then((s) => setScanning(s.scanning)).catch(() => {})
+    api
+      .getInsightScanStatus()
+      .then((s) => setScanning(s.scanning))
+      .catch(() => {})
   }, [onError, loadFindings, loadLenses])
 
   useEffect(load, [load])
@@ -73,13 +96,16 @@ export function InsightPanel({ onError, onOpenSession, tab: tabProp, onTabChange
   useEffect(() => {
     if (!scanning) return
     const tick = () => {
-      api.getInsightScanStatus().then((s) => {
-        if (!s.scanning) {
-          setScanning(false)
-          setScanNote('Tarama tamamlandı — bulgular güncellendi.')
-          loadFindings()
-        }
-      }).catch(() => {})
+      api
+        .getInsightScanStatus()
+        .then((s) => {
+          if (!s.scanning) {
+            setScanning(false)
+            setScanNote('Tarama tamamlandı — bulgular güncellendi.')
+            loadFindings()
+          }
+        })
+        .catch(() => {})
     }
     pollRef.current = window.setInterval(tick, 4000)
     return () => {
@@ -145,23 +171,23 @@ export function InsightPanel({ onError, onOpenSession, tab: tabProp, onTabChange
 
         {/* Sub-page rail. */}
         <div className="flex flex-col gap-1 p-2">
-        {TABS.map((t) => {
-          const Icon = t.icon
-          const active = tab === t.key
-          return (
-            <button
-              key={t.key}
-              onClick={() => setTab(t.key)}
-              className={`flex items-center gap-2 rounded-md px-3 py-2 text-left text-sm transition ${
-                active
-                  ? 'bg-[var(--color-accent-soft)] font-medium text-[var(--color-accent)]'
-                  : 'text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]'
-              }`}
-            >
-              <Icon size={15} /> {t.label}
-            </button>
-          )
-        })}
+          {TABS.map((t) => {
+            const Icon = t.icon
+            const active = tab === t.key
+            return (
+              <button
+                key={t.key}
+                onClick={() => setTab(t.key)}
+                className={`flex items-center gap-2 rounded-md px-3 py-2 text-left text-sm transition ${
+                  active
+                    ? 'bg-[var(--color-accent-soft)] font-medium text-[var(--color-accent)]'
+                    : 'text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]'
+                }`}
+              >
+                <Icon size={15} /> {t.label}
+              </button>
+            )
+          })}
         </div>
       </aside>
 
@@ -199,7 +225,12 @@ export function InsightPanel({ onError, onOpenSession, tab: tabProp, onTabChange
         {tab === 'fleet' && <FleetTab onError={onError} />}
         {tab === 'runs' && <RunsTab onError={onError} />}
         {tab === 'settings' && (
-          <SettingsTab settings={settings} setSettings={setSettings} onError={onError} onReset={load} />
+          <SettingsTab
+            settings={settings}
+            setSettings={setSettings}
+            onError={onError}
+            onReset={load}
+          />
         )}
       </div>
     </div>

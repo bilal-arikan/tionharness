@@ -66,7 +66,9 @@ export function InfoPopover({
           role="tooltip"
           style={fixed ? fixedStyle : undefined}
           className={`z-50 block w-80 max-w-[80vw] whitespace-pre-line rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-[11px] leading-relaxed text-[var(--color-text-dim)] shadow-[var(--shadow-lg)] ${
-            fixed ? 'fixed overflow-y-auto' : `absolute top-5 ${align === 'right' ? 'right-0' : 'left-0'}`
+            fixed
+              ? 'fixed overflow-y-auto'
+              : `absolute top-5 ${align === 'right' ? 'right-0' : 'left-0'}`
           }`}
         >
           {text}

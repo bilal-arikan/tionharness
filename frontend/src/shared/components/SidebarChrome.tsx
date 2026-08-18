@@ -16,13 +16,7 @@ export const SELECTED_ITEM_RING = 'ring-1 ring-[var(--color-accent)]'
 // and optional actions (typically a RefreshButton) on the right. Like the chat
 // sessions sidebar, it has NO collapse button — on mobile the drawer is dismissed
 // by tapping the backdrop; on desktop the column is always visible.
-export function SidebarHeader({
-  title,
-  children,
-}: {
-  title: string
-  children?: ReactNode
-}) {
+export function SidebarHeader({ title, children }: { title: string; children?: ReactNode }) {
   return (
     <div className="flex items-center justify-between px-4 pt-4 pb-1">
       <span className="text-xs font-medium uppercase tracking-wide text-[var(--color-text-dim)]">
@@ -34,7 +28,13 @@ export function SidebarHeader({
 }
 
 // RefreshButton is the standard icon-only reload control for a sidebar header.
-export function RefreshButton({ onClick, title = 'Yenile' }: { onClick: () => void; title?: string }) {
+export function RefreshButton({
+  onClick,
+  title = 'Yenile',
+}: {
+  onClick: () => void
+  title?: string
+}) {
   return (
     <button
       onClick={onClick}

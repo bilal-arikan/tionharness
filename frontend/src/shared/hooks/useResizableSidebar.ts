@@ -17,7 +17,13 @@ interface Options {
 // Extracting it here lets every secondary sidebar be resizable the same way.
 // Returns the current width plus a mousedown handler to wire onto a drag handle
 // (pair it with the shared <ResizeHandle />).
-export function useResizableSidebar({ storageKey, defaultWidth, min = 200, max = 640, invert = false }: Options) {
+export function useResizableSidebar({
+  storageKey,
+  defaultWidth,
+  min = 200,
+  max = 640,
+  invert = false,
+}: Options) {
   const [width, setWidth] = useState(() => {
     const saved = Number(localStorage.getItem(storageKey))
     return saved >= min && saved <= max ? saved : defaultWidth

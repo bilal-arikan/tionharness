@@ -23,20 +23,26 @@ export function AttachmentChip({ attachment, onRemove, previewURL, uploading, on
   const img = previewURL ?? imageURL(attachment)
 
   const Tag = onClick ? 'button' : 'div'
-  const clickTitle = attachment.source === 'artifact' ? 'Artifactı aç' : attachment.kind === 'image' ? 'Görseli aç' : 'Dosyayı aç'
+  const clickTitle =
+    attachment.source === 'artifact'
+      ? 'Artifactı aç'
+      : attachment.kind === 'image'
+        ? 'Görseli aç'
+        : 'Dosyayı aç'
   const clickProps = onClick ? { type: 'button' as const, onClick, title: clickTitle } : {}
 
   return (
-    <Tag
-      {...clickProps}
-      className={`group relative shrink-0${onClick ? ' cursor-pointer' : ''}`}
-    >
+    <Tag {...clickProps} className={`group relative shrink-0${onClick ? ' cursor-pointer' : ''}`}>
       {img ? (
-        <div className={`h-[52px] w-[52px] overflow-hidden rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] transition${onClick ? ' hover:opacity-80 hover:border-[var(--color-accent)]' : ''}`}>
+        <div
+          className={`h-[52px] w-[52px] overflow-hidden rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] transition${onClick ? ' hover:opacity-80 hover:border-[var(--color-accent)]' : ''}`}
+        >
           <img src={img} alt={attachment.name} className="h-full w-full object-cover" />
         </div>
       ) : (
-        <div className={`flex h-[52px] w-[160px] items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-2.5 transition${onClick ? ' hover:border-[var(--color-accent)] hover:bg-[var(--color-accent-soft)]' : ''}`}>
+        <div
+          className={`flex h-[52px] w-[160px] items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-2.5 transition${onClick ? ' hover:border-[var(--color-accent)] hover:bg-[var(--color-accent-soft)]' : ''}`}
+        >
           <Icon size={20} className={`shrink-0 ${tint}`} />
           <span className="flex min-w-0 flex-col">
             <span className="truncate text-xs font-medium text-[var(--color-text)]">

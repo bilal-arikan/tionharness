@@ -137,8 +137,14 @@ export function ToolsPanel({ onError }: Props) {
                   className="rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide transition"
                   style={
                     on
-                      ? { backgroundColor: `color-mix(in srgb, ${tier.color} 22%, transparent)`, color: tier.color }
-                      : { backgroundColor: 'var(--color-surface-2)', color: 'var(--color-text-dim)' }
+                      ? {
+                          backgroundColor: `color-mix(in srgb, ${tier.color} 22%, transparent)`,
+                          color: tier.color,
+                        }
+                      : {
+                          backgroundColor: 'var(--color-surface-2)',
+                          color: 'var(--color-text-dim)',
+                        }
                   }
                 >
                   {tier.label}
@@ -203,7 +209,9 @@ export function ToolsPanel({ onError }: Props) {
                     className={`flex-shrink-0 transition-transform ${isCollapsed ? '' : 'rotate-90'}`}
                   />
                   <span className="truncate">{g.label}</span>
-                  <span className="ml-auto font-normal tabular-nums opacity-70">{g.tools.length}</span>
+                  <span className="ml-auto font-normal tabular-nums opacity-70">
+                    {g.tools.length}
+                  </span>
                 </button>
                 {!isCollapsed &&
                   g.tools.map((t) => {
@@ -284,56 +292,56 @@ export function ToolsPanel({ onError }: Props) {
           onToggleList={toggleList}
         />
         <div className="flex-1 overflow-y-auto p-6">
-        {selected ? (
-          <ToolDetail
-            tool={selected}
-            params={params}
-            saving={savingTool === selected.name}
-            visBusy={visBusy === selected.name}
-            onToggle={() => toggleTool(selected)}
-            onSetVisibility={(tier) => setToolVisibility(selected, tier)}
-          />
-        ) : (
-          <ServerManagement
-            servers={servers}
-            tools={tools}
-            onServerVisibility={setServerVisibility}
-            testing={testing}
-            testResult={testResult}
-            name={name}
-            setName={setName}
-            transport={transport}
-            setTransport={setTransport}
-            command={command}
-            setCommand={setCommand}
-            argsText={argsText}
-            setArgsText={setArgsText}
-            url={url}
-            setUrl={setUrl}
-            headersText={headersText}
-            setHeadersText={setHeadersText}
-            scope={scope}
-            setScope={setScope}
-            editingId={editingId}
-            onEdit={startEdit}
-            onCancelEdit={cancelEdit}
-            poolStats={poolStats}
-            onAdd={addServer}
-            onToggle={toggleServer}
-            onTest={testServer}
-            onRemove={removeServer}
-            importText={importText}
-            setImportText={setImportText}
-            importing={importing}
-            importMsg={importMsg}
-            onImport={importServers}
-            importable={importable}
-            addingImportable={addingImportable}
-            onLoadImportable={loadImportable}
-            onAddImportable={addImportable}
-          />
-        )}
-      </div>
+          {selected ? (
+            <ToolDetail
+              tool={selected}
+              params={params}
+              saving={savingTool === selected.name}
+              visBusy={visBusy === selected.name}
+              onToggle={() => toggleTool(selected)}
+              onSetVisibility={(tier) => setToolVisibility(selected, tier)}
+            />
+          ) : (
+            <ServerManagement
+              servers={servers}
+              tools={tools}
+              onServerVisibility={setServerVisibility}
+              testing={testing}
+              testResult={testResult}
+              name={name}
+              setName={setName}
+              transport={transport}
+              setTransport={setTransport}
+              command={command}
+              setCommand={setCommand}
+              argsText={argsText}
+              setArgsText={setArgsText}
+              url={url}
+              setUrl={setUrl}
+              headersText={headersText}
+              setHeadersText={setHeadersText}
+              scope={scope}
+              setScope={setScope}
+              editingId={editingId}
+              onEdit={startEdit}
+              onCancelEdit={cancelEdit}
+              poolStats={poolStats}
+              onAdd={addServer}
+              onToggle={toggleServer}
+              onTest={testServer}
+              onRemove={removeServer}
+              importText={importText}
+              setImportText={setImportText}
+              importing={importing}
+              importMsg={importMsg}
+              onImport={importServers}
+              importable={importable}
+              addingImportable={addingImportable}
+              onLoadImportable={loadImportable}
+              onAddImportable={addImportable}
+            />
+          )}
+        </div>
       </div>
     </div>
   )

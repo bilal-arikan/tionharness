@@ -42,7 +42,10 @@ export function WorkspaceRecommendations({
         if (!alive) return
         const ign = data.ws.ignoredRecommendations ?? []
         setIgnored(ign)
-        const all = runRules({ ...data, nav: { view: onNavigateView, settings: onNavigateSettings } })
+        const all = runRules({
+          ...data,
+          nav: { view: onNavigateView, settings: onNavigateSettings },
+        })
         // Hide anything the user already ignored for this workspace.
         if (alive) setRecs(all.filter((r) => !ign.includes(r.key)))
       } catch (e) {

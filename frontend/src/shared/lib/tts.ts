@@ -270,10 +270,12 @@ export function initTtsUnlock() {
   const unlock = () => {
     const a = getAudio()
     a.src = SILENT_WAV
-    a.play().catch(() => {}).finally(() => {
-      a.pause()
-      a.currentTime = 0
-    })
+    a.play()
+      .catch(() => {})
+      .finally(() => {
+        a.pause()
+        a.currentTime = 0
+      })
     window.removeEventListener('pointerdown', unlock)
     window.removeEventListener('keydown', unlock)
     window.removeEventListener('touchstart', unlock)
@@ -391,7 +393,7 @@ function splitForSpeech(text: string): string[] {
     // Hard-wrap an over-long sentence on word boundaries so it still fits a chunk.
     let cur = ''
     for (const word of s.split(/\s+/)) {
-      if (cur && (cur.length + 1 + word.length) > CHUNK_MAX) {
+      if (cur && cur.length + 1 + word.length > CHUNK_MAX) {
         chunks.push(cur)
         cur = word
       } else {

@@ -29,8 +29,16 @@ export function ContextChangeCard({ step }: Props) {
       >
         <HeaderIcon size={14} className="shrink-0" />
         <span className="min-w-0 flex-1 truncate font-medium">{summary}</span>
-        {added > 0 && <span className="shrink-0 font-mono text-[10px] text-[var(--color-success)]">+{added}</span>}
-        {removed > 0 && <span className="shrink-0 font-mono text-[10px] text-[var(--color-danger)]">-{removed}</span>}
+        {added > 0 && (
+          <span className="shrink-0 font-mono text-[10px] text-[var(--color-success)]">
+            +{added}
+          </span>
+        )}
+        {removed > 0 && (
+          <span className="shrink-0 font-mono text-[10px] text-[var(--color-danger)]">
+            -{removed}
+          </span>
+        )}
         {areas.length > 0 && (
           <ChevronRight
             size={13}

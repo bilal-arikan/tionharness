@@ -1,7 +1,23 @@
 // Shared visual styling for flow canvas nodes: per-type accent + run status.
 import { createContext, useContext } from 'react'
 import { useStore } from '@xyflow/react'
-import { Bot, Split, Zap, Timer, Puzzle, Repeat, MessageCircleQuestion, Workflow, Play, Square, Circle, Rocket, GitMerge, Compass, type LucideIcon } from 'lucide-react'
+import {
+  Bot,
+  Split,
+  Zap,
+  Timer,
+  Puzzle,
+  Repeat,
+  MessageCircleQuestion,
+  Workflow,
+  Play,
+  Square,
+  Circle,
+  Rocket,
+  GitMerge,
+  Compass,
+  type LucideIcon,
+} from 'lucide-react'
 import type { Agent, FlowNodeType } from '@/types'
 import type { NodeStatus } from './flowGraph'
 

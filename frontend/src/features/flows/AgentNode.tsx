@@ -14,7 +14,15 @@ export function AgentNode({ id, data, selected }: NodeProps<FlowRFNode>) {
   // agent's OUTPUT is visible on the canvas (not just its prompt).
   const showOutput = status === 'done' && !!output?.trim()
   return (
-    <NodeShell id={id} type="agent" title={node.title} isStart={isStart} isEnd={isEnd} selected={selected} status={status}>
+    <NodeShell
+      id={id}
+      type="agent"
+      title={node.title}
+      isStart={isStart}
+      isEnd={isEnd}
+      selected={selected}
+      status={status}
+    >
       <Handle type="target" position={Position.Top} title="Giriş" />
       <div className="flex items-center gap-1.5 text-xs font-medium">
         {agent ? (

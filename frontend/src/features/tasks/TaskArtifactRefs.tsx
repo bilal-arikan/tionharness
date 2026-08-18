@@ -24,7 +24,14 @@ interface Props {
 // artifacts as removable chips, lets the user link an existing artifact from a
 // searchable picker, and accepts dropped files — each dropped file is uploaded
 // into the workspace, saved as an artifact, and its id appended to the card.
-export function TaskArtifactRefs({ value, onChange, artifacts, onArtifactsChanged, bucket, onError }: Props) {
+export function TaskArtifactRefs({
+  value,
+  onChange,
+  artifacts,
+  onArtifactsChanged,
+  bucket,
+  onError,
+}: Props) {
   const [pickerOpen, setPickerOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [dragging, setDragging] = useState(false)

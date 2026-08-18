@@ -15,7 +15,11 @@ interface Props extends PanelProps {
 }
 
 const WS_NOTIFY_OPTIONS: { value: DesktopNotificationsMode; label: string; hint?: string }[] = [
-  { value: 'inherit', label: 'Genel ayarı kullan', hint: 'Uygulama genelindeki masaüstü bildirimleri ayarını izler.' },
+  {
+    value: 'inherit',
+    label: 'Genel ayarı kullan',
+    hint: 'Uygulama genelindeki masaüstü bildirimleri ayarını izler.',
+  },
   { value: 'on', label: 'Açık', hint: 'Bu workspace için bildirimler her zaman açık.' },
   { value: 'off', label: 'Kapalı', hint: 'Bu workspace için bildirimler her zaman kapalı.' },
 ]
@@ -47,10 +51,15 @@ export function NotificationsPanel({ draft, set, onError, onWorkspaceNotifySaved
   const [wsMode, setWsMode] = useState<DesktopNotificationsMode>('inherit')
   useEffect(() => {
     let cancelled = false
-    api.getWorkspaceSettings()
-      .then((w) => { if (!cancelled) setWsMode(w.desktopNotifications) })
+    api
+      .getWorkspaceSettings()
+      .then((w) => {
+        if (!cancelled) setWsMode(w.desktopNotifications)
+      })
       .catch(() => {})
-    return () => { cancelled = true }
+    return () => {
+      cancelled = true
+    }
   }, [])
   const saveWsMode = async (mode: DesktopNotificationsMode) => {
     const prev = wsMode
@@ -66,18 +75,31 @@ export function NotificationsPanel({ draft, set, onError, onWorkspaceNotifySaved
 
   return (
     <>
-      <Toggle label="Masaüstü bildirimleri" hint="Pencere arkadayken olay gerçekleşince tarayıcı bildirimi gösterir (izin ister). Bu, tüm workspace'ler için genel varsayılandır." checked={draft.desktopNotifications} onChange={(v) => set('desktopNotifications', v)} />
+      <Toggle
+        label="Masaüstü bildirimleri"
+        hint="Pencere arkadayken olay gerçekleşince tarayıcı bildirimi gösterir (izin ister). Bu, tüm workspace'ler için genel varsayılandır."
+        checked={draft.desktopNotifications}
+        onChange={(v) => set('desktopNotifications', v)}
+      />
       <Segmented
         label="Bu workspace için bildirimler"
         value={wsMode}
         options={WS_NOTIFY_OPTIONS}
         onChange={saveWsMode}
       />
-      <Toggle label="Ekranı açık tut" hint="Uygulama açıkken ekran uyku moduna geçmez (Wake Lock)." checked={draft.keepAwake} onChange={(v) => set('keepAwake', v)} />
+      <Toggle
+        label="Ekranı açık tut"
+        hint="Uygulama açıkken ekran uyku moduna geçmez (Wake Lock)."
+        checked={draft.keepAwake}
+        onChange={(v) => set('keepAwake', v)}
+      />
 
       <SubHead icon={Bell}>Bildirim türleri</SubHead>
       <p className="-mt-1 text-xs text-[var(--color-text-dim)]">
-        Bir türü kapatınca o olay için masaüstü bildirimi gösterilmez. Uygulamanın gönderebileceği <b>tüm</b> bildirim türleri burada listelenir. Bu ayarlar bu cihaza özeldir ve anında uygulanır. 🔊 işaretli türlerin ayrıca bir ses uyarısı vardır (ses, Ses ekranındaki "Ses efektleri" tercihine bağlıdır; bu türü kapatmak yalnız masaüstü bildirimini susturur).
+        Bir türü kapatınca o olay için masaüstü bildirimi gösterilmez. Uygulamanın gönderebileceği{' '}
+        <b>tüm</b> bildirim türleri burada listelenir. Bu ayarlar bu cihaza özeldir ve anında
+        uygulanır. 🔊 işaretli türlerin ayrıca bir ses uyarısı vardır (ses, Ses ekranındaki "Ses
+        efektleri" tercihine bağlıdır; bu türü kapatmak yalnız masaüstü bildirimini susturur).
       </p>
       {NOTIFY_TYPES.map((t) => (
         <Toggle

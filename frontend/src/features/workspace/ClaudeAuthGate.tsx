@@ -124,7 +124,10 @@ export function ClaudeAuthGate({
               <p className="font-medium text-[var(--color-text)]">
                 Yeni workspace için claude-cli girişi gerekli
               </p>
-              <p className="mt-0.5 break-words text-xs text-[var(--color-text-dim)]" title={notice.detail}>
+              <p
+                className="mt-0.5 break-words text-xs text-[var(--color-text-dim)]"
+                title={notice.detail}
+              >
                 Bu workspace'in claude-home'u henüz yetkilendirilmedi. Kimlik doğrulamadan
                 claude-cli turları çalışmaz.
               </p>

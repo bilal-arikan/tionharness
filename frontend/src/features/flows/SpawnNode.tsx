@@ -12,7 +12,15 @@ export function SpawnNode({ id, data, selected }: NodeProps<FlowRFNode>) {
   const isEnd = useIsEndNode(id)
   const n = node.spawnFlows?.length ?? 0
   return (
-    <NodeShell id={id} type="spawn" title={node.title} isStart={isStart} isEnd={isEnd} selected={selected} status={status}>
+    <NodeShell
+      id={id}
+      type="spawn"
+      title={node.title}
+      isStart={isStart}
+      isEnd={isEnd}
+      selected={selected}
+      status={status}
+    >
       <Handle type="target" position={Position.Top} title="Giriş" />
       <div className="text-[11px] text-[var(--color-text-dim)]">
         {n > 0 ? `🚀 ${n} akış (async)` : 'akış seçilmedi'}

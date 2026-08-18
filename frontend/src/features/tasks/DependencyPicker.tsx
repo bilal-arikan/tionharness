@@ -28,11 +28,7 @@ export function DependencyPicker({ tasks, value, onChange }: Props) {
   }
 
   if (tasks.length === 0) {
-    return (
-      <p className="text-xs text-[var(--color-text-dim)]">
-        Başka görev yok.
-      </p>
-    )
+    return <p className="text-xs text-[var(--color-text-dim)]">Başka görev yok.</p>
   }
 
   return (

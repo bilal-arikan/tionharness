@@ -21,7 +21,12 @@ export function RewindButton({ onClick }: { onClick: () => void }) {
         >
           Geri sar
         </button>
-        <button onClick={() => setArmed(false)} title="Vazgeç" aria-label="Vazgeç" className={actionChip()}>
+        <button
+          onClick={() => setArmed(false)}
+          title="Vazgeç"
+          aria-label="Vazgeç"
+          className={actionChip()}
+        >
           <X size={12} />
         </button>
       </span>

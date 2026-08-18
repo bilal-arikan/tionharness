@@ -87,7 +87,9 @@ export function Gallery({ code }: Props) {
 
   return (
     <div className="my-2">
-      {title && <div className="mb-1.5 text-xs font-medium text-[var(--color-text-dim)]">{title}</div>}
+      {title && (
+        <div className="mb-1.5 text-xs font-medium text-[var(--color-text-dim)]">{title}</div>
+      )}
       <div className="grid grid-cols-[repeat(auto-fill,minmax(120px,1fr))] gap-2">
         {images.map((img, i) => (
           <button
@@ -128,12 +130,7 @@ export function Gallery({ code }: Props) {
         ))}
       </div>
       {open !== null && (
-        <Lightbox
-          images={images}
-          index={open}
-          title={title}
-          onClose={() => setOpen(null)}
-        />
+        <Lightbox images={images} index={open} title={title} onClose={() => setOpen(null)} />
       )}
     </div>
   )

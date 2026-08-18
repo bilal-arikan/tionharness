@@ -15,7 +15,15 @@ export function CoordinatorNode({ id, data, selected }: NodeProps<FlowRFNode>) {
   // inline so the canvas carries the RESULT, not only the delegated goal.
   const showOutput = status === 'done' && !!output?.trim()
   return (
-    <NodeShell id={id} type="coordinator" title={node.title} isStart={isStart} isEnd={isEnd} selected={selected} status={status}>
+    <NodeShell
+      id={id}
+      type="coordinator"
+      title={node.title}
+      isStart={isStart}
+      isEnd={isEnd}
+      selected={selected}
+      status={status}
+    >
       <Handle type="target" position={Position.Top} title="Giriş" />
       <div className="flex items-center gap-1.5 text-xs font-medium">
         {agent ? (

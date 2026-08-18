@@ -11,15 +11,15 @@ import type { Skill } from '@/types'
 // What a coordinator workflow IS — the picker offers slugs with no explanation of
 // the concept, which is the gap this note fills.
 export const WORKFLOW_HELP =
-  'Kayıtlı bir orkestrasyon reçetesi: koordinatör prompt\'unun üzerine bindirilir, ' +
-  'worker\'ların hangi sırayla başlayıp sonuçlarının nasıl birleşeceğini tarif eder.\n\n' +
+  "Kayıtlı bir orkestrasyon reçetesi: koordinatör prompt'unun üzerine bindirilir, " +
+  "worker'ların hangi sırayla başlayıp sonuçlarının nasıl birleşeceğini tarif eder.\n\n" +
   'Her reçete bir skill dosyasıdır (kind: coordinator-workflow) — satırdaki 📖 ile ' +
   'içeriğini açabilirsin. "Serbest" seçilirse koordinatör kendi kararıyla ilerler.'
 
 // Human labels for the orchestration strategies a recipe can encode, so the
 // per-recipe note explains the pattern instead of echoing a raw slug.
 const PATTERN_LABEL: Record<string, string> = {
-  fanout: 'Fan-out & sentez — paralel worker\'lar, sonuçları koordinatör birleştirir',
+  fanout: "Fan-out & sentez — paralel worker'lar, sonuçları koordinatör birleştirir",
   adversarial: 'Karşıt doğrulama — bir üretici, bir de onu çürütmeye çalışan worker',
   loop: 'Bitene kadar döngü — durma koşulu sağlanana dek tur tekrarlanır',
   classify: 'Sınıflandır & yönlendir — girdi önce etiketlenir, sonra ilgili profile gider',
@@ -71,7 +71,13 @@ interface Props {
 // the per-recipe (ⓘ) and "open skill" buttons, and picking a recipe blind — by
 // name alone — is the thing those buttons fix. Native radios keep arrow-key and
 // screen-reader behaviour for free.
-export function CoordinatorWorkflowPicker({ value, onChange, disabled, groupName, onOpenSkill }: Props) {
+export function CoordinatorWorkflowPicker({
+  value,
+  onChange,
+  disabled,
+  groupName,
+  onOpenSkill,
+}: Props) {
   const [recipes, setRecipes] = useState<Skill[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -113,7 +119,8 @@ export function CoordinatorWorkflowPicker({ value, onChange, disabled, groupName
       )}
       {!loading && recipes.length === 0 && (
         <div className="px-1.5 py-1 text-[11px] text-[var(--color-text-dim)]">
-          Kayıtlı reçete yok — Skills ekranından <code>kind: coordinator-workflow</code> bir skill ekleyin.
+          Kayıtlı reçete yok — Skills ekranından <code>kind: coordinator-workflow</code> bir skill
+          ekleyin.
         </div>
       )}
       {recipes.map((r) => (

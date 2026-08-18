@@ -17,10 +17,7 @@ export interface ClientPrefs {
   desktopNotifications: boolean
 }
 
-export function useAppearance(
-  activeWorkspaceId: string | null,
-  setError: (msg: string) => void,
-) {
+export function useAppearance(activeWorkspaceId: string | null, setError: (msg: string) => void) {
   // Effective desktop-notification preference (global master ⊕ active-workspace
   // override), read live in callbacks without re-binding. The two source values
   // live in their own refs so a global-settings save and a workspace switch can
@@ -41,33 +38,45 @@ export function useAppearance(
 
   // Apply the client-side preferences carried by app settings. Theme resolution
   // honors the active workspace's override on top of these global defaults.
-  const applyClientPrefs = useCallback((s: ClientPrefs) => {
-    globalAppearanceRef.current = { themePreset: s.themePreset ?? '' }
-    applyResolvedTheme()
-    applyKeepAwake(s.keepAwake)
-    globalNotifyRef.current = s.desktopNotifications
-    applyResolvedNotify()
-  }, [applyResolvedTheme, applyResolvedNotify])
+  const applyClientPrefs = useCallback(
+    (s: ClientPrefs) => {
+      globalAppearanceRef.current = { themePreset: s.themePreset ?? '' }
+      applyResolvedTheme()
+      applyKeepAwake(s.keepAwake)
+      globalNotifyRef.current = s.desktopNotifications
+      applyResolvedNotify()
+    },
+    [applyResolvedTheme, applyResolvedNotify],
+  )
 
   // onAppearanceSaved is invoked by the Settings "Görünüm" panel after it persists
   // the active workspace's appearance override, so the ref + the live theme stay
   // in sync (a later global save must not clobber the workspace choice).
-  const onAppearanceSaved = useCallback((a: Partial<Appearance>) => {
-    wsAppearanceRef.current = a
-    applyResolvedTheme()
-  }, [applyResolvedTheme])
+  const onAppearanceSaved = useCallback(
+    (a: Partial<Appearance>) => {
+      wsAppearanceRef.current = a
+      applyResolvedTheme()
+    },
+    [applyResolvedTheme],
+  )
 
   // onWorkspaceNotifySaved is invoked by the Settings "Bildirimler" panel after it
   // persists this workspace's desktopNotifications override, so the effective gate
   // updates live without waiting for a workspace switch or a global-settings reload.
-  const onWorkspaceNotifySaved = useCallback((mode: DesktopNotificationsMode) => {
-    wsNotifyModeRef.current = mode
-    applyResolvedNotify()
-  }, [applyResolvedNotify])
+  const onWorkspaceNotifySaved = useCallback(
+    (mode: DesktopNotificationsMode) => {
+      wsNotifyModeRef.current = mode
+      applyResolvedNotify()
+    },
+    [applyResolvedNotify],
+  )
 
   // Load global settings once and apply theme + client-side behaviours.
   useEffect(() => {
-    api.getSettings().then(applyClientPrefs).catch((e) => setError(e.message))
+    api
+      .getSettings()
+      .then(applyClientPrefs)
+      .catch((e) => setError(e.message))
   }, [applyClientPrefs, setError])
 
   // Re-theme whenever the active workspace changes: fetch that workspace's
@@ -75,7 +84,8 @@ export function useAppearance(
   useEffect(() => {
     if (!activeWorkspaceId) return
     let cancelled = false
-    api.getWorkspaceSettings()
+    api
+      .getWorkspaceSettings()
       .then((w) => {
         if (cancelled) return
         wsAppearanceRef.current = { themePreset: w.themePreset }
@@ -84,7 +94,9 @@ export function useAppearance(
         applyResolvedNotify()
       })
       .catch(() => {})
-    return () => { cancelled = true }
+    return () => {
+      cancelled = true
+    }
   }, [activeWorkspaceId, applyResolvedTheme, applyResolvedNotify])
 
   return { applyClientPrefs, onAppearanceSaved, onWorkspaceNotifySaved, notifyEnabled }

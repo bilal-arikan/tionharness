@@ -13,9 +13,17 @@ import {
 import { Field, Segmented, inputCls } from './primitives'
 
 const ENGINE_OPTIONS: { value: SttEngine; label: string; hint?: string }[] = [
-  { value: 'auto', label: 'Otomatik', hint: 'Sunucuda whisper varsa onu, yoksa tarayıcı tanımasını kullanır.' },
+  {
+    value: 'auto',
+    label: 'Otomatik',
+    hint: 'Sunucuda whisper varsa onu, yoksa tarayıcı tanımasını kullanır.',
+  },
   { value: 'browser', label: 'Tarayıcı', hint: 'Web Speech API (Chromium; anlık ara sonuç).' },
-  { value: 'server', label: 'Sunucu (whisper)', hint: 'Kaydı sunucuya yükler, whisper.cpp çevirir — offline, WebView2 dahil.' },
+  {
+    value: 'server',
+    label: 'Sunucu (whisper)',
+    hint: 'Kaydı sunucuya yükler, whisper.cpp çevirir — offline, WebView2 dahil.',
+  },
 ]
 
 // SttSettings owns the dictation LANGUAGE (used by both engines), plus the STT

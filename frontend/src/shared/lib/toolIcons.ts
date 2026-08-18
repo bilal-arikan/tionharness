@@ -5,46 +5,98 @@
 // "server__tool" prefix stripped — see toolBase in ./tools).
 import {
   // file system
-  FileText, FilePlus2, FilePen, FolderTree, FolderSearch, TextSearch, SquareTerminal,
+  FileText,
+  FilePlus2,
+  FilePen,
+  FolderTree,
+  FolderSearch,
+  TextSearch,
+  SquareTerminal,
   // web
   Globe,
   // search / view
-  MessagesSquare, ScanSearch, Search, Focus,
+  MessagesSquare,
+  ScanSearch,
+  Search,
+  Focus,
   // agents / sessions
-  UserPlus, UserCog, UserMinus, Users, Bot, MessageSquarePlus, Send, ArrowLeftRight,
-  Inbox, FolderCog, Pencil,
+  UserPlus,
+  UserCog,
+  UserMinus,
+  Users,
+  Bot,
+  MessageSquarePlus,
+  Send,
+  ArrowLeftRight,
+  Inbox,
+  FolderCog,
+  Pencil,
   // artifacts
-  PackageOpen, PackagePlus, PackageCheck, PackageMinus, Package,
+  PackageOpen,
+  PackagePlus,
+  PackageCheck,
+  PackageMinus,
+  Package,
   // config
-  FileCog, Save, Files,
+  FileCog,
+  Save,
+  Files,
   // ask / confirm / notify
-  MessageCircleQuestion, ShieldQuestion, Bell,
+  MessageCircleQuestion,
+  ShieldQuestion,
+  Bell,
   // debug / logs
-  Bug, ScrollText,
+  Bug,
+  ScrollText,
   // flows
-  Workflow, PencilRuler, ListTree, GitBranch, Play,
+  Workflow,
+  PencilRuler,
+  ListTree,
+  GitBranch,
+  Play,
   // hooks
   Webhook,
   // mcp
-  Plug, PlugZap, Power, Unplug,
+  Plug,
+  PlugZap,
+  Power,
+  Unplug,
   // schedule
-  AlarmClock, CalendarPlus, CalendarCog, CalendarX, CalendarClock,
+  AlarmClock,
+  CalendarPlus,
+  CalendarCog,
+  CalendarX,
+  CalendarClock,
   // secrets
   KeyRound,
   // settings
-  Settings, SlidersHorizontal,
+  Settings,
+  SlidersHorizontal,
   // skills
-  Sparkles, WandSparkles, Wand2, Download,
+  Sparkles,
+  WandSparkles,
+  Wand2,
+  Download,
   // tasks / todo
-  ListTodo, ListPlus, SquarePen, Move, ListChecks,
+  ListTodo,
+  ListPlus,
+  SquarePen,
+  Move,
+  ListChecks,
   // wake
   AlarmClockPlus,
   // workspaces
-  Boxes, FolderPlus, FolderPen, FolderX,
+  Boxes,
+  FolderPlus,
+  FolderPen,
+  FolderX,
   // activate
-  Zap, ZapOff,
+  Zap,
+  ZapOff,
   // generic
-  Trash2, Puzzle, Wrench,
+  Trash2,
+  Puzzle,
+  Wrench,
   type LucideIcon,
 } from 'lucide-react'
 

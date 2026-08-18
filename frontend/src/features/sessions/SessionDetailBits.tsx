@@ -52,7 +52,11 @@ export function ProcBtn({
       title={title ?? label}
       className="flex items-center gap-1 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1 text-[11px] text-[var(--color-text)] transition hover:border-[var(--color-accent)] disabled:opacity-40"
     >
-      {busy ? <Loader2 size={12} className="shrink-0 animate-spin" /> : <Icon size={12} className="shrink-0" />}
+      {busy ? (
+        <Loader2 size={12} className="shrink-0 animate-spin" />
+      ) : (
+        <Icon size={12} className="shrink-0" />
+      )}
       {label}
     </button>
   )
@@ -99,7 +103,11 @@ export function ActionBtn({
           : 'text-[var(--color-text)] hover:bg-[var(--color-surface-2)]'
       }`}
     >
-      {busy ? <Loader2 size={14} className="shrink-0 animate-spin" /> : <Icon size={14} className="shrink-0" />}
+      {busy ? (
+        <Loader2 size={14} className="shrink-0 animate-spin" />
+      ) : (
+        <Icon size={14} className="shrink-0" />
+      )}
       <span className="flex-1">{label}</span>
       {caret && <ChevronDown size={14} className="text-[var(--color-text-dim)]" />}
     </button>

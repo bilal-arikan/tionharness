@@ -14,9 +14,7 @@ function readStepTodos(step: TurnStep): TodoItem[] {
   if (input && typeof input === 'object') {
     const todos = (input as { todos?: unknown }).todos
     if (Array.isArray(todos)) {
-      return todos.filter(
-        (t): t is TodoItem => !!t && typeof (t as TodoItem).content === 'string',
-      )
+      return todos.filter((t): t is TodoItem => !!t && typeof (t as TodoItem).content === 'string')
     }
   }
   return []

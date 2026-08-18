@@ -144,7 +144,9 @@ function HtmlFrame({ src }: { src: string }) {
   }
   if (html === null) {
     return (
-      <div className="bg-[var(--color-bg)] p-3 text-xs text-[var(--color-text-dim)]">yükleniyor…</div>
+      <div className="bg-[var(--color-bg)] p-3 text-xs text-[var(--color-text-dim)]">
+        yükleniyor…
+      </div>
     )
   }
   return (

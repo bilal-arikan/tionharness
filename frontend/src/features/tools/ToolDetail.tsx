@@ -63,7 +63,9 @@ export function ToolDetail({
 
       {toolSource(tool) === 'mcp' && (
         <div>
-          <code className="rounded bg-[var(--color-surface-2)] px-1.5 py-0.5 text-xs">{tool.name}</code>
+          <code className="rounded bg-[var(--color-surface-2)] px-1.5 py-0.5 text-xs">
+            {tool.name}
+          </code>
         </div>
       )}
 
@@ -72,7 +74,9 @@ export function ToolDetail({
           Bağlam görünürlüğü
         </h3>
         <VisibilitySelector value={tool.visibility} busy={visBusy} onSelect={onSetVisibility} />
-        <p className="mt-2 text-xs text-[var(--color-text-dim)]">{visibilityMeta(tool.visibility).hint}</p>
+        <p className="mt-2 text-xs text-[var(--color-text-dim)]">
+          {visibilityMeta(tool.visibility).hint}
+        </p>
       </section>
 
       <section>

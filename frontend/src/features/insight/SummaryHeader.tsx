@@ -12,9 +12,18 @@ export function SummaryHeader({ summary, onPick }: Props) {
     { label: 'Toplam', value: summary.total, onClick: () => onPick({}) },
     { label: 'Açık', value: summary.open, onClick: () => onPick({}) },
     { label: 'app-fix', value: summary.appFix, onClick: () => onPick({ channel: 'app-fix' }) },
-    { label: 'workspace-opt', value: summary.workspaceOpt, onClick: () => onPick({ channel: 'workspace-opt' }) },
+    {
+      label: 'workspace-opt',
+      value: summary.workspaceOpt,
+      onClick: () => onPick({ channel: 'workspace-opt' }),
+    },
     { label: 'yüksek', value: summary.high, onClick: () => onPick({ severity: 'high' }) },
-    { label: '⚠ regresyon', value: summary.regressed, danger: true, onClick: () => onPick({ regressedOnly: true }) },
+    {
+      label: '⚠ regresyon',
+      value: summary.regressed,
+      danger: true,
+      onClick: () => onPick({ regressedOnly: true }),
+    },
   ]
   return (
     <div className="flex flex-wrap gap-2">

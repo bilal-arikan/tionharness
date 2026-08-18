@@ -30,9 +30,17 @@ import {
 import { Field, Slider, Segmented, inputCls } from './primitives'
 
 const ENGINE_OPTIONS: { value: TtsEngine; label: string; hint?: string }[] = [
-  { value: 'auto', label: 'Otomatik', hint: 'Sunucuda Piper varsa onu, yoksa tarayıcı sesini kullanır.' },
+  {
+    value: 'auto',
+    label: 'Otomatik',
+    hint: 'Sunucuda Piper varsa onu, yoksa tarayıcı sesini kullanır.',
+  },
   { value: 'browser', label: 'Tarayıcı', hint: 'Cihazın kendi sesleri (speechSynthesis).' },
-  { value: 'server', label: 'Sunucu (Piper)', hint: 'Sunucuda üretilir, her cihazda aynı ses — telefonda da çalar.' },
+  {
+    value: 'server',
+    label: 'Sunucu (Piper)',
+    hint: 'Sunucuda üretilir, her cihazda aynı ses — telefonda da çalar.',
+  },
 ]
 
 // TtsSettings exposes read-aloud engine + voice controls: server (Piper) vs
@@ -111,7 +119,11 @@ export function TtsSettings() {
           label="Sunucu sesi (Piper)"
           hint={`${srv.voices.length} ses yüklü. Sunucuda üretilir; telefon dahil her cihazda aynı ses.`}
         >
-          <select className={inputCls} value={srvVoice} onChange={(e) => pickServerVoice(e.target.value)}>
+          <select
+            className={inputCls}
+            value={srvVoice}
+            onChange={(e) => pickServerVoice(e.target.value)}
+          >
             <option value="">Otomatik (ilk yüklü ses)</option>
             {srv.voices.map((v) => (
               <option key={v.id} value={v.id}>
@@ -130,7 +142,11 @@ export function TtsSettings() {
                 : 'Ses listesi yükleniyor veya cihazda TTS sesi yok.'
             }
           >
-            <select className={inputCls} value={voiceURI} onChange={(e) => pickBrowserVoice(e.target.value)}>
+            <select
+              className={inputCls}
+              value={voiceURI}
+              onChange={(e) => pickBrowserVoice(e.target.value)}
+            >
               <option value="">Otomatik (dile göre)</option>
               {sortedBrowser.map((v) => (
                 <option key={v.voiceURI} value={v.voiceURI}>

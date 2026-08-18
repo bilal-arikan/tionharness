@@ -12,7 +12,8 @@ export function RunsTab({ onError }: { onError: (msg: string) => void }) {
 
   const load = useCallback(() => {
     setLoading(true)
-    api.getInsightRuns()
+    api
+      .getInsightRuns()
       .then(setRuns)
       .catch((e) => onError((e as Error).message))
       .finally(() => setLoading(false))
@@ -23,8 +24,13 @@ export function RunsTab({ onError }: { onError: (msg: string) => void }) {
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <p className="text-sm text-[var(--color-text-dim)]">Son taramalar (session değil — kayıt log'u).</p>
-        <button onClick={load} className="flex items-center gap-1 rounded-md px-2 py-1 text-sm hover:bg-[var(--color-surface-2)]">
+        <p className="text-sm text-[var(--color-text-dim)]">
+          Son taramalar (session değil — kayıt log'u).
+        </p>
+        <button
+          onClick={load}
+          className="flex items-center gap-1 rounded-md px-2 py-1 text-sm hover:bg-[var(--color-surface-2)]"
+        >
           <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} /> Yenile
         </button>
       </div>
@@ -50,7 +56,9 @@ export function RunsTab({ onError }: { onError: (msg: string) => void }) {
                 <td className="py-1 pr-3">{r.analyzed}</td>
                 <td className="py-1 pr-3">{r.skipped}</td>
                 <td className="py-1 pr-3">{r.findings}</td>
-                <td className={`py-1 pr-3 ${r.errors > 0 ? 'text-[var(--color-danger)]' : ''}`}>{r.errors}</td>
+                <td className={`py-1 pr-3 ${r.errors > 0 ? 'text-[var(--color-danger)]' : ''}`}>
+                  {r.errors}
+                </td>
               </tr>
             ))}
           </tbody>

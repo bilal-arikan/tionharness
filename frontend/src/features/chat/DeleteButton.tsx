@@ -20,7 +20,12 @@ export function DeleteButton({ onClick }: { onClick: () => void }) {
         >
           Sil
         </button>
-        <button onClick={() => setArmed(false)} title="Vazgeç" aria-label="Vazgeç" className={actionChip()}>
+        <button
+          onClick={() => setArmed(false)}
+          title="Vazgeç"
+          aria-label="Vazgeç"
+          className={actionChip()}
+        >
           <X size={12} />
         </button>
       </span>

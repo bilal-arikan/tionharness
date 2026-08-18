@@ -12,7 +12,15 @@ export function LoopNode({ id, data, selected }: NodeProps<FlowRFNode>) {
   const cap = node.maxIters && node.maxIters > 0 ? `≤${node.maxIters}×` : '∞'
   const until = node.until ? ` · çıkış: "${node.until}"` : ''
   return (
-    <NodeShell id={id} type="loop" title={node.title} isStart={isStart} isEnd={isEnd} selected={selected} status={status}>
+    <NodeShell
+      id={id}
+      type="loop"
+      title={node.title}
+      isStart={isStart}
+      isEnd={isEnd}
+      selected={selected}
+      status={status}
+    >
       <Handle type="target" position={Position.Top} title="Giriş" />
       <div className="text-[11px] text-[var(--color-text-dim)]">
         {cap} yinele{until}

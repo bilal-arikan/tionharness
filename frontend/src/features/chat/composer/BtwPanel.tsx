@@ -83,9 +83,9 @@ export function BtwPanel({ sessionId, agentId, onClose }: Props) {
       </div>
 
       <p className="mb-2 text-xs leading-4 text-[var(--color-text-dim)]">
-        Ajan bu soruyu mevcut konuşmanın tam bağlamıyla yanıtlar, ama soru ve cevap sohbet
-        geçmişine <strong>eklenmez</strong> ve ana görev kesilmez. Yan sohbette araç kullanımı
-        yoktur (komut çalıştıramaz, dosya düzenleyemez).
+        Ajan bu soruyu mevcut konuşmanın tam bağlamıyla yanıtlar, ama soru ve cevap sohbet geçmişine{' '}
+        <strong>eklenmez</strong> ve ana görev kesilmez. Yan sohbette araç kullanımı yoktur (komut
+        çalıştıramaz, dosya düzenleyemez).
       </p>
 
       <textarea

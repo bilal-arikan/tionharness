@@ -14,7 +14,12 @@ export const THINKING_OPTIONS: PillOption[] = [
   { value: 'low', label: 'Düşük', hint: '~2K token / effort low', icon: '◔' },
   { value: 'medium', label: 'Orta', hint: '~8K token / effort medium', icon: '◑' },
   { value: 'high', label: 'Yüksek', hint: '~16K token / effort high', icon: '●' },
-  { value: 'xhigh', label: 'Çok yüksek', hint: 'effort xhigh — kodlama/ajan işleri (güncel modeller)', icon: '◉' },
+  {
+    value: 'xhigh',
+    label: 'Çok yüksek',
+    hint: 'effort xhigh — kodlama/ajan işleri (güncel modeller)',
+    icon: '◉',
+  },
   { value: 'max', label: 'Maks', hint: 'effort max — en zor işler (güncel modeller)', icon: '✦' },
 ]
 

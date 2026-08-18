@@ -67,12 +67,54 @@ interface ColorDef {
 }
 
 const COLORS: ColorDef[] = [
-  { id: 'violet', label: 'Mor', darkAccent: '#8b5cf6', darkSoft: '#2c2545', lightAccent: '#7c3aed', lightSoft: '#ece7fb' },
-  { id: 'blue', label: 'Mavi', darkAccent: '#58a6ff', darkSoft: '#16304d', lightAccent: '#2f6fed', lightSoft: '#d8e4fb' },
-  { id: 'emerald', label: 'Zümrüt', darkAccent: '#34d399', darkSoft: '#123528', lightAccent: '#15915b', lightSoft: '#d6f0e3' },
-  { id: 'rose', label: 'Gül', darkAccent: '#fb7185', darkSoft: '#3a1f29', lightAccent: '#e11d48', lightSoft: '#fbe0e6' },
-  { id: 'amber', label: 'Kehribar', darkAccent: '#f59e0b', darkSoft: '#3a2a12', lightAccent: '#b45309', lightSoft: '#f7e6cf' },
-  { id: 'nord', label: 'Nord', darkAccent: '#88c0d0', darkSoft: '#2b3d44', lightAccent: '#3b7e93', lightSoft: '#d9eaf0' },
+  {
+    id: 'violet',
+    label: 'Mor',
+    darkAccent: '#8b5cf6',
+    darkSoft: '#2c2545',
+    lightAccent: '#7c3aed',
+    lightSoft: '#ece7fb',
+  },
+  {
+    id: 'blue',
+    label: 'Mavi',
+    darkAccent: '#58a6ff',
+    darkSoft: '#16304d',
+    lightAccent: '#2f6fed',
+    lightSoft: '#d8e4fb',
+  },
+  {
+    id: 'emerald',
+    label: 'Zümrüt',
+    darkAccent: '#34d399',
+    darkSoft: '#123528',
+    lightAccent: '#15915b',
+    lightSoft: '#d6f0e3',
+  },
+  {
+    id: 'rose',
+    label: 'Gül',
+    darkAccent: '#fb7185',
+    darkSoft: '#3a1f29',
+    lightAccent: '#e11d48',
+    lightSoft: '#fbe0e6',
+  },
+  {
+    id: 'amber',
+    label: 'Kehribar',
+    darkAccent: '#f59e0b',
+    darkSoft: '#3a2a12',
+    lightAccent: '#b45309',
+    lightSoft: '#f7e6cf',
+  },
+  {
+    id: 'nord',
+    label: 'Nord',
+    darkAccent: '#88c0d0',
+    darkSoft: '#2b3d44',
+    lightAccent: '#3b7e93',
+    lightSoft: '#d9eaf0',
+  },
 ]
 
 // The default applied when nothing is selected yet.
@@ -115,8 +157,18 @@ export interface ThemeColor {
 export const THEME_COLORS: ThemeColor[] = COLORS.map((c) => ({
   id: c.id,
   label: c.label,
-  dark: { id: `${c.id}-dark`, accent: c.darkAccent, bg: DARK_NEUTRALS.bg, border: DARK_NEUTRALS.border },
-  light: { id: `${c.id}-light`, accent: c.lightAccent, bg: LIGHT_NEUTRALS.bg, border: LIGHT_NEUTRALS.border },
+  dark: {
+    id: `${c.id}-dark`,
+    accent: c.darkAccent,
+    bg: DARK_NEUTRALS.bg,
+    border: DARK_NEUTRALS.border,
+  },
+  light: {
+    id: `${c.id}-light`,
+    accent: c.lightAccent,
+    bg: LIGHT_NEUTRALS.bg,
+    border: LIGHT_NEUTRALS.border,
+  },
 }))
 
 export const presetById = (id: string): ThemePreset | undefined =>

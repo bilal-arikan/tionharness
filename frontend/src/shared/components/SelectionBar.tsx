@@ -21,7 +21,14 @@ interface Props {
 // SelectionBar is the shared bulk-action strip that appears whenever a list has
 // ≥1 multi-selected item. It owns no selection state itself — the count and the
 // action buttons are supplied by the host list (driven by useMultiSelect).
-export function SelectionBar({ count, onClear, children, hiddenCount = 0, onSelectAll, position = 'bottom' }: Props) {
+export function SelectionBar({
+  count,
+  onClear,
+  children,
+  hiddenCount = 0,
+  onSelectAll,
+  position = 'bottom',
+}: Props) {
   if (count === 0) return null
   return (
     <div
@@ -37,7 +44,9 @@ export function SelectionBar({ count, onClear, children, hiddenCount = 0, onSele
       <span className="font-medium text-[var(--color-text)]">
         {count} seçili
         {hiddenCount > 0 && (
-          <span className="ml-1 font-normal text-[var(--color-text-dim)]">(+{hiddenCount} filtre dışı)</span>
+          <span className="ml-1 font-normal text-[var(--color-text-dim)]">
+            (+{hiddenCount} filtre dışı)
+          </span>
         )}
       </span>
       {onSelectAll && (
@@ -64,7 +73,14 @@ interface ButtonProps {
 }
 
 // SelectionBarButton is a compact action button styled for the SelectionBar.
-export function SelectionBarButton({ onClick, icon, children, danger, disabled, title }: ButtonProps) {
+export function SelectionBarButton({
+  onClick,
+  icon,
+  children,
+  danger,
+  disabled,
+  title,
+}: ButtonProps) {
   return (
     <button
       onClick={onClick}

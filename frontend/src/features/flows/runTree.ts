@@ -131,7 +131,10 @@ export function childProgressFromTree(runs: FlowRun[]): ChildProgressMap {
 // mergeChildProgress layers live frames over the tree-seeded map. Live wins per
 // (parent run, node): it reflects the child's CURRENT node, while the seed is
 // only as fresh as the last tree fetch.
-export function mergeChildProgress(seed: ChildProgressMap, live: ChildProgressMap): ChildProgressMap {
+export function mergeChildProgress(
+  seed: ChildProgressMap,
+  live: ChildProgressMap,
+): ChildProgressMap {
   const out: ChildProgressMap = { ...seed }
   for (const [runID, nodes] of Object.entries(live)) {
     out[runID] = { ...out[runID], ...nodes }

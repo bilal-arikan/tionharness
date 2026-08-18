@@ -1,7 +1,10 @@
 import { useState } from 'react'
 import type { Workspace } from '@/types'
 import { useOutsideClick } from '@/shared/hooks/useOutsideClick'
-import { WorkspaceCreateModal, type NewWorkspaceData } from '@/features/workspace/WorkspaceCreateModal'
+import {
+  WorkspaceCreateModal,
+  type NewWorkspaceData,
+} from '@/features/workspace/WorkspaceCreateModal'
 
 interface Props {
   workspaces: Workspace[]
@@ -18,7 +21,14 @@ interface Props {
 // an UPWARD menu (the bar sits at the screen bottom) to switch between workspaces
 // or create a new one. It is intentionally rendered OUTSIDE the nav's horizontal
 // scroll strip so its upward popup is not clipped by the scroller's overflow.
-export function MobileWorkspaceButton({ workspaces, activeId, unreadIds, busyIds, onSwitch, onCreate }: Props) {
+export function MobileWorkspaceButton({
+  workspaces,
+  activeId,
+  unreadIds,
+  busyIds,
+  onSwitch,
+  onCreate,
+}: Props) {
   const [open, setOpen] = useState(false)
   const [showCreate, setShowCreate] = useState(false)
   const rootRef = useOutsideClick<HTMLDivElement>(() => setOpen(false), open)
@@ -34,7 +44,10 @@ export function MobileWorkspaceButton({ workspaces, activeId, unreadIds, busyIds
   }
 
   return (
-    <div ref={rootRef} className="relative shrink-0 self-stretch border-r border-[var(--color-border)]">
+    <div
+      ref={rootRef}
+      className="relative shrink-0 self-stretch border-r border-[var(--color-border)]"
+    >
       <button
         onClick={() => setOpen((v) => !v)}
         data-testid="mnav-workspace-switcher"
@@ -129,7 +142,9 @@ export function MobileWorkspaceButton({ workspaces, activeId, unreadIds, busyIds
         </div>
       )}
 
-      {showCreate && <WorkspaceCreateModal onCreate={create} onClose={() => setShowCreate(false)} />}
+      {showCreate && (
+        <WorkspaceCreateModal onCreate={create} onClose={() => setShowCreate(false)} />
+      )}
     </div>
   )
 }

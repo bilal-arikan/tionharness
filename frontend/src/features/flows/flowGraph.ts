@@ -67,7 +67,7 @@ export function graphToReactFlow(graph: FlowGraph): { nodes: FlowRFNode[]; edges
       case 'end':
         break // terminal — no outgoing edge
       case 'branch':
-        (n.branches ?? []).forEach((b, i) =>
+        ;(n.branches ?? []).forEach((b, i) =>
           add(n.id, b.next, {
             slot: `b${i}`,
             sourceHandle: `b${i}`,
@@ -77,7 +77,7 @@ export function graphToReactFlow(graph: FlowGraph): { nodes: FlowRFNode[]; edges
         )
         break
       case 'parallel':
-        (n.parallel ?? []).forEach((childId) =>
+        ;(n.parallel ?? []).forEach((childId) =>
           add(n.id, childId, { slot: 'fan', sourceHandle: 'fan' }),
         )
         add(n.id, n.joinNext ?? '', { slot: 'join', sourceHandle: 'join', label: 'join' })
@@ -93,11 +93,7 @@ export function graphToReactFlow(graph: FlowGraph): { nodes: FlowRFNode[]; edges
 
 // reactFlowToGraph rebuilds a FlowGraph from canvas nodes + edges, reading the
 // routing back out of the edges (by source handle) and persisting positions.
-export function reactFlowToGraph(
-  nodes: FlowRFNode[],
-  edges: Edge[],
-  start: string,
-): FlowGraph {
+export function reactFlowToGraph(nodes: FlowRFNode[], edges: Edge[], start: string): FlowGraph {
   const out: FlowNode[] = nodes.map((rn) => {
     const base: FlowNode = { ...rn.data.node, x: round(rn.position.x), y: round(rn.position.y) }
     const outgoing = edges.filter((e) => e.source === rn.id)

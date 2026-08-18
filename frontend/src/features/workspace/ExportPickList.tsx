@@ -25,7 +25,15 @@ interface Props {
   note?: string
 }
 
-export function ExportPickList({ title, icon: Icon, entries, picked, setPicked, emptyHint, note }: Props) {
+export function ExportPickList({
+  title,
+  icon: Icon,
+  entries,
+  picked,
+  setPicked,
+  emptyHint,
+  note,
+}: Props) {
   const allPicked = entries.length > 0 && picked.size === entries.length
   const toggle = (id: string) =>
     setPicked((prev) => {
@@ -46,7 +54,10 @@ export function ExportPickList({ title, icon: Icon, entries, picked, setPicked, 
           </span>
         </span>
         {entries.length > 0 && (
-          <button onClick={toggleAll} className="text-xs text-[var(--color-accent)] hover:underline">
+          <button
+            onClick={toggleAll}
+            className="text-xs text-[var(--color-accent)] hover:underline"
+          >
             {allPicked ? 'Tümünü kaldır' : 'Tümünü seç'}
           </button>
         )}
@@ -72,7 +83,9 @@ export function ExportPickList({ title, icon: Icon, entries, picked, setPicked, 
               >
                 <span
                   className={`flex h-4 w-4 flex-shrink-0 items-center justify-center rounded border text-[10px] ${
-                    on ? 'border-[var(--color-accent)] bg-[var(--color-accent)] text-white' : 'border-[var(--color-border)]'
+                    on
+                      ? 'border-[var(--color-accent)] bg-[var(--color-accent)] text-white'
+                      : 'border-[var(--color-border)]'
                   }`}
                 >
                   {on ? '✓' : ''}
@@ -82,7 +95,11 @@ export function ExportPickList({ title, icon: Icon, entries, picked, setPicked, 
                 </span>
                 <span className="flex min-w-0 flex-1 flex-col">
                   <span className="truncate">{e.label}</span>
-                  {e.sub && <span className="truncate text-[11px] text-[var(--color-text-dim)]">{e.sub}</span>}
+                  {e.sub && (
+                    <span className="truncate text-[11px] text-[var(--color-text-dim)]">
+                      {e.sub}
+                    </span>
+                  )}
                 </span>
               </button>
             )

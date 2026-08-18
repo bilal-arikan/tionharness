@@ -31,7 +31,12 @@ export function updateAvailable(pack: Pack): boolean {
 // any pre-release/build suffix after '-'/'+' is ignored. Mirrors the backend.
 function compareVersions(a: string, b: string): number {
   const parts = (v: string) =>
-    v.trim().replace(/^v/, '').split(/[-+]/)[0].split('.').map((s) => parseInt(s, 10) || 0)
+    v
+      .trim()
+      .replace(/^v/, '')
+      .split(/[-+]/)[0]
+      .split('.')
+      .map((s) => parseInt(s, 10) || 0)
   const pa = parts(a)
   const pb = parts(b)
   const n = Math.max(pa.length, pb.length)
@@ -118,12 +123,16 @@ export const NODE_ICON: Record<string, LucideIcon> = {
 
 // SOURCE_LABEL labels which tier/source a pack came from.
 export const SOURCE_LABEL: Record<string, string> = {
-  bundled: '📦 Gömülü', global: '💾 Yerel', remote: '🌐 Uzak',
+  bundled: '📦 Gömülü',
+  global: '💾 Yerel',
+  remote: '🌐 Uzak',
 }
 
 // flowSummary returns a flow's node list for the preview, from either its full
 // graph JSON or its linear steps.
-export function flowSummary(flow: WorkspaceTemplateFlow): { id: string; type: string; title?: string }[] {
+export function flowSummary(
+  flow: WorkspaceTemplateFlow,
+): { id: string; type: string; title?: string }[] {
   if (flow.graph) return flowNodeSummary(flow.graph)
   if (flow.steps) return flow.steps.map((s) => ({ id: s.id, type: 'agent', title: s.title }))
   return []

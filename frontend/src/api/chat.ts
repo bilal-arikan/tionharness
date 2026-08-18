@@ -120,7 +120,8 @@ export const chatApi = {
     signal?: AbortSignal,
     thinkingLevel?: string,
     permissionMode?: string,
-  ): Promise<void> => streamChat(sessionId, message, agentIds, handlers, signal, thinkingLevel, permissionMode),
+  ): Promise<void> =>
+    streamChat(sessionId, message, agentIds, handlers, signal, thinkingLevel, permissionMode),
 
   // Side chat ("btw"): ask a one-shot question against the session's context
   // WITHOUT writing it into the history. The agent gets no tools, and neither the

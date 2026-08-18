@@ -37,10 +37,7 @@ export function ConcurrencyTimeline({
   events: SessionDebugEvent[]
   agentNames: Record<string, string>
 }) {
-  const model = useMemo(
-    () => buildConcurrencyTimeline(events, agentNames),
-    [events, agentNames],
-  )
+  const model = useMemo(() => buildConcurrencyTimeline(events, agentNames), [events, agentNames])
   if (!model) {
     return (
       <p className="py-2 text-[11px] text-[var(--color-text-dim)]">
@@ -75,7 +72,12 @@ function TimelineSVG({ model }: { model: TimelineModel }) {
           {hasOverlap ? 'eşzamanlı' : 'seri'}
         </span>
       </div>
-      <svg viewBox={`0 0 ${W} ${height}`} width="100%" height={height} preserveAspectRatio="xMidYMid meet">
+      <svg
+        viewBox={`0 0 ${W} ${height}`}
+        width="100%"
+        height={height}
+        preserveAspectRatio="xMidYMid meet"
+      >
         {/* Lane rows: label + baseline */}
         {lanes.map((lane, i) => {
           const y = TOP + i * LANE_H

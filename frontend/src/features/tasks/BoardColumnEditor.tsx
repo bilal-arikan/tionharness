@@ -39,9 +39,7 @@ interface Props {
 }
 
 export function BoardColumnEditor({ columns, taskCountByColumn, onSave, onClose }: Props) {
-  const [draft, setDraft] = useState<BoardColumnDef[]>(() =>
-    columns.map((c) => ({ ...c })),
-  )
+  const [draft, setDraft] = useState<BoardColumnDef[]>(() => columns.map((c) => ({ ...c })))
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   // Index of the column whose color picker is open (-1 = none).
@@ -50,9 +48,7 @@ export function BoardColumnEditor({ columns, taskCountByColumn, onSave, onClose 
   const [dragIdx, setDragIdx] = useState<number | null>(null)
 
   const update = (idx: number, patch: Partial<BoardColumnDef>) => {
-    setDraft((prev) =>
-      prev.map((c, i) => (i === idx ? { ...c, ...patch } : c)),
-    )
+    setDraft((prev) => prev.map((c, i) => (i === idx ? { ...c, ...patch } : c)))
   }
 
   const addColumn = () => {
@@ -99,7 +95,9 @@ export function BoardColumnEditor({ columns, taskCountByColumn, onSave, onClose 
     const keys = new Set<string>()
     for (const col of draft) {
       if (!isValidKey(col.key)) {
-        setError(`"${col.label}" için geçersiz anahtar: "${col.key}" (sadece küçük harf, rakam, alt çizgi)`)
+        setError(
+          `"${col.label}" için geçersiz anahtar: "${col.key}" (sadece küçük harf, rakam, alt çizgi)`,
+        )
         return
       }
       if (!col.label.trim()) {
@@ -253,8 +251,8 @@ export function BoardColumnEditor({ columns, taskCountByColumn, onSave, onClose 
                     taskCount > 0
                       ? `${taskCount} görev bu sütunda — önce taşıyın`
                       : draft.length <= 1
-                      ? 'Son sütun silinemez'
-                      : 'Sütunu sil'
+                        ? 'Son sütun silinemez'
+                        : 'Sütunu sil'
                   }
                   className="flex-shrink-0 rounded p-1 text-xs text-[var(--color-text-dim)] hover:bg-[var(--color-danger)]/10 hover:text-[var(--color-danger)] disabled:cursor-not-allowed disabled:opacity-30"
                 >
@@ -266,7 +264,9 @@ export function BoardColumnEditor({ columns, taskCountByColumn, onSave, onClose 
                 <span className="text-[10px] text-[var(--color-text-dim)]">anahtar:</span>
                 <input
                   value={col.key}
-                  onChange={(e) => update(idx, { key: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '') })}
+                  onChange={(e) =>
+                    update(idx, { key: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '') })
+                  }
                   placeholder="ornek_anahtar"
                   className={`w-32 rounded border px-1.5 py-0.5 font-mono text-[11px] outline-none ${
                     col.key && !isValidKey(col.key)
@@ -319,7 +319,9 @@ export function BoardColumnEditor({ columns, taskCountByColumn, onSave, onClose 
       {/* Footer */}
       <div className="border-t border-[var(--color-border)] p-3 space-y-2">
         {error && (
-          <div className="rounded bg-[var(--color-danger)]/10 px-2 py-1 text-xs text-[var(--color-danger)]">{error}</div>
+          <div className="rounded bg-[var(--color-danger)]/10 px-2 py-1 text-xs text-[var(--color-danger)]">
+            {error}
+          </div>
         )}
         <div data-testid="board-column-save">
           <Button onClick={handleSave} disabled={saving} className="w-full">

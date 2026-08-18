@@ -22,6 +22,5 @@ export const hookApi = {
       method: 'POST',
       body: JSON.stringify({ enabled }),
     }),
-  deleteHook: (id: string) =>
-    req<{ result: string }>(`/api/hooks/${id}`, { method: 'DELETE' }),
+  deleteHook: (id: string) => req<{ result: string }>(`/api/hooks/${id}`, { method: 'DELETE' }),
 }

@@ -81,7 +81,9 @@ export async function req<T>(path: string, init?: RequestInit): Promise<T> {
     res = await fetch(path, { cache: 'no-store', headers: wsHeaders(), ...init })
   } catch {
     // fetch rejects (no response at all) when the dev server / network is down.
-    throw new Error('Sunucuya bağlanılamadı. Ağ bağlantını ve backend\'in çalışıp çalışmadığını kontrol et.')
+    throw new Error(
+      "Sunucuya bağlanılamadı. Ağ bağlantını ve backend'in çalışıp çalışmadığını kontrol et.",
+    )
   }
   if (!res.ok) {
     throw new Error(await errorFromResponse(res))

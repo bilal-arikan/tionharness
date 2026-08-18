@@ -75,7 +75,13 @@ export const ingestApi = {
   ingestScan: (input: IngestSource) =>
     req<IngestScanResult>('/api/ingest/scan', { method: 'POST', body: JSON.stringify(input) }),
   ingestPreview: (input: IngestSource) =>
-    req<{ items: PreviewItem[] }>('/api/ingest/preview', { method: 'POST', body: JSON.stringify(input) }),
+    req<{ items: PreviewItem[] }>('/api/ingest/preview', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
   ingestInstall: (input: IngestInstallInput) =>
-    req<IngestInstallResult>('/api/ingest/install', { method: 'POST', body: JSON.stringify(input) }),
+    req<IngestInstallResult>('/api/ingest/install', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
 }

@@ -12,7 +12,8 @@ export function FleetTab({ onError }: { onError: (msg: string) => void }) {
 
   const load = useCallback(() => {
     setLoading(true)
-    api.getFleetFindings()
+    api
+      .getFleetFindings()
       .then(setRows)
       .catch((e) => onError((e as Error).message))
       .finally(() => setLoading(false))
@@ -26,7 +27,10 @@ export function FleetTab({ onError }: { onError: (msg: string) => void }) {
         <p className="text-sm text-[var(--color-text-dim)]">
           Tüm workspace'lerin app-fix bulguları, kanonik imzayla birleştirilmiş.
         </p>
-        <button onClick={load} className="flex items-center gap-1 rounded-md px-2 py-1 text-sm hover:bg-[var(--color-surface-2)]">
+        <button
+          onClick={load}
+          className="flex items-center gap-1 rounded-md px-2 py-1 text-sm hover:bg-[var(--color-surface-2)]"
+        >
           <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} /> Yenile
         </button>
       </div>
@@ -47,7 +51,10 @@ export function FleetTab({ onError }: { onError: (msg: string) => void }) {
             <div className="mt-2 flex flex-wrap items-center gap-1">
               <span className="text-xs text-[var(--color-text-dim)]">Workspace:</span>
               {f.workspaces.map((w) => (
-                <span key={w} className="rounded border border-[var(--color-border)] px-1.5 py-0.5 text-xs">
+                <span
+                  key={w}
+                  className="rounded border border-[var(--color-border)] px-1.5 py-0.5 text-xs"
+                >
                   {w}
                 </span>
               ))}

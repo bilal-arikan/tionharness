@@ -36,7 +36,16 @@ interface Props {
 // a left toggle for the list panel + a title, optional subtitle, and right-side
 // actions. Screens render it above their two-column body so the whole app shares
 // one header look and one "open the left panel" affordance.
-export function PaneHeader({ title, titleSlot, listOpen, onToggleList, subtitle, right, secondary, secondaryAlwaysWrap }: Props) {
+export function PaneHeader({
+  title,
+  titleSlot,
+  listOpen,
+  onToggleList,
+  subtitle,
+  right,
+  secondary,
+  secondaryAlwaysWrap,
+}: Props) {
   const hamburger = onToggleList && (
     <button
       onClick={onToggleList}
@@ -52,7 +61,9 @@ export function PaneHeader({ title, titleSlot, listOpen, onToggleList, subtitle,
   const titleContent = titleSlot ?? (
     <>
       {title && <span className="shrink-0 truncate text-sm font-semibold">{title}</span>}
-      {subtitle && <span className="truncate text-sm text-[var(--color-text-dim)]">{subtitle}</span>}
+      {subtitle && (
+        <span className="truncate text-sm text-[var(--color-text-dim)]">{subtitle}</span>
+      )}
     </>
   )
 
@@ -67,7 +78,9 @@ export function PaneHeader({ title, titleSlot, listOpen, onToggleList, subtitle,
           secondaryAlwaysWrap ? '' : 'md:flex-nowrap'
         }`}
       >
-        <div className={`order-1 flex min-w-0 items-center gap-2 ${secondaryAlwaysWrap ? 'flex-1' : 'max-md:flex-1'}`}>
+        <div
+          className={`order-1 flex min-w-0 items-center gap-2 ${secondaryAlwaysWrap ? 'flex-1' : 'max-md:flex-1'}`}
+        >
           {hamburger}
           {titleContent}
         </div>
@@ -79,7 +92,9 @@ export function PaneHeader({ title, titleSlot, listOpen, onToggleList, subtitle,
           {secondary}
         </div>
         {right && (
-          <div className={`order-2 flex shrink-0 items-center gap-2 ${secondaryAlwaysWrap ? '' : 'md:order-3'}`}>
+          <div
+            className={`order-2 flex shrink-0 items-center gap-2 ${secondaryAlwaysWrap ? '' : 'md:order-3'}`}
+          >
             {right}
           </div>
         )}

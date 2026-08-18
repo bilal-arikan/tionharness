@@ -11,8 +11,7 @@ const TONES: Record<BadgeTone, string> = {
     'bg-[color-mix(in_srgb,var(--color-success)_16%,transparent)] text-[var(--color-success)]',
   warning:
     'bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)] text-[var(--color-warning)]',
-  danger:
-    'bg-[color-mix(in_srgb,var(--color-danger)_16%,transparent)] text-[var(--color-danger)]',
+  danger: 'bg-[color-mix(in_srgb,var(--color-danger)_16%,transparent)] text-[var(--color-danger)]',
   muted: 'bg-[var(--color-surface-2)] text-[var(--color-text-dim)]',
 }
 

@@ -48,7 +48,11 @@ export function FlowPicker({
   return (
     <div className="flex items-center gap-1.5 rounded border border-[var(--color-border)] bg-[var(--color-bg)] pl-1.5 focus-within:border-[var(--color-accent)]">
       <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-[var(--color-accent-soft)] text-[var(--color-accent)]">
-        {selectedEmoji ? <span className="text-sm leading-none">{selectedEmoji}</span> : <Workflow size={13} />}
+        {selectedEmoji ? (
+          <span className="text-sm leading-none">{selectedEmoji}</span>
+        ) : (
+          <Workflow size={13} />
+        )}
       </span>
       <select
         data-testid="flow-picker"

@@ -67,11 +67,12 @@ export function RecommendationsPanel({ onError, onShowCards }: Props) {
   return (
     <div className="space-y-3">
       <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-xs leading-relaxed text-[var(--color-text-dim)]">
-        Yeni bir workspace oluşturulduğunda sağ-altta çıkan öneri kartları. Buradan
-        hepsinin <span className="font-medium text-[var(--color-text)]">şu anki durumunu</span> görür,
-        <span className="font-medium text-[var(--color-text)]"> yok saydıklarını</span> gözden geçirir ve{' '}
-        <span className="font-medium text-[var(--color-text)]">yok saymayı kaldırabilirsin</span>. Yok sayılan bir
-        öneri bir daha kart olarak gösterilmez.
+        Yeni bir workspace oluşturulduğunda sağ-altta çıkan öneri kartları. Buradan hepsinin{' '}
+        <span className="font-medium text-[var(--color-text)]">şu anki durumunu</span> görür,
+        <span className="font-medium text-[var(--color-text)]"> yok saydıklarını</span> gözden
+        geçirir ve{' '}
+        <span className="font-medium text-[var(--color-text)]">yok saymayı kaldırabilirsin</span>.
+        Yok sayılan bir öneri bir daha kart olarak gösterilmez.
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
@@ -113,7 +114,9 @@ export function RecommendationsPanel({ onError, onShowCards }: Props) {
               key={key}
               data-testid={`rec-row-${key}`}
               className={`flex items-start justify-between gap-3 rounded-lg border px-3 py-2 ${
-                isIgnored ? 'border-[var(--color-border)] opacity-60' : 'border-[var(--color-border)]'
+                isIgnored
+                  ? 'border-[var(--color-border)] opacity-60'
+                  : 'border-[var(--color-border)]'
               }`}
             >
               <div className="flex min-w-0 items-start gap-2">
@@ -144,7 +147,11 @@ export function RecommendationsPanel({ onError, onShowCards }: Props) {
                 disabled={busy === key}
                 data-testid={`rec-toggle-${key}`}
                 className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-[var(--color-border)] px-2.5 py-1 text-xs font-medium transition hover:border-[var(--color-accent)] disabled:opacity-50"
-                title={isIgnored ? 'Yok saymayı kaldır — tekrar önerilebilir' : 'Yok say — bir daha önerme'}
+                title={
+                  isIgnored
+                    ? 'Yok saymayı kaldır — tekrar önerilebilir'
+                    : 'Yok say — bir daha önerme'
+                }
               >
                 {busy === key ? (
                   '…'

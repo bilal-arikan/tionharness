@@ -41,9 +41,19 @@ export function ListPane({
   hideRail,
   children,
 }: Props) {
-  const { width, startDrag } = useResizableSidebar({ storageKey: widthKey, defaultWidth, min: minWidth })
+  const { width, startDrag } = useResizableSidebar({
+    storageKey: widthKey,
+    defaultWidth,
+    min: minWidth,
+  })
   return (
-    <CollapsibleListShell open={open} onToggle={onToggle} label={label} testId={testId} hideRail={hideRail}>
+    <CollapsibleListShell
+      open={open}
+      onToggle={onToggle}
+      label={label}
+      testId={testId}
+      hideRail={hideRail}
+    >
       <aside
         style={{ width }}
         className="relative flex h-full flex-shrink-0 flex-col border-r border-[var(--color-border)] bg-[var(--color-surface)] max-md:w-[85vw] max-md:max-w-sm"

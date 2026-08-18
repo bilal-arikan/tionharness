@@ -11,7 +11,15 @@ export function BranchNode({ id, data, selected }: NodeProps<FlowRFNode>) {
   const arms = node.branches ?? []
   const isEnd = useIsEndNode(id)
   return (
-    <NodeShell id={id} type="branch" title={node.title} isStart={isStart} isEnd={isEnd} selected={selected} status={status}>
+    <NodeShell
+      id={id}
+      type="branch"
+      title={node.title}
+      isStart={isStart}
+      isEnd={isEnd}
+      selected={selected}
+      status={status}
+    >
       <Handle type="target" position={Position.Top} title="Giriş" />
       <ul className="space-y-1">
         {arms.map((b, i) => (
@@ -26,9 +34,7 @@ export function BranchNode({ id, data, selected }: NodeProps<FlowRFNode>) {
             />
           </li>
         ))}
-        {arms.length === 0 && (
-          <li className="text-[11px] text-[var(--color-text-dim)]">dal yok</li>
-        )}
+        {arms.length === 0 && <li className="text-[11px] text-[var(--color-text-dim)]">dal yok</li>}
       </ul>
     </NodeShell>
   )

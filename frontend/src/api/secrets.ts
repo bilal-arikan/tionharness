@@ -11,9 +11,7 @@ export const secretApi = {
       body: JSON.stringify({ name, value, description }),
     }),
   revealSecret: (name: string) =>
-    req<{ name: string; value: string }>(
-      `/api/secrets/${encodeURIComponent(name)}/reveal`,
-    ),
+    req<{ name: string; value: string }>(`/api/secrets/${encodeURIComponent(name)}/reveal`),
   deleteSecret: (name: string) =>
     req<{ result: string }>(`/api/secrets/${encodeURIComponent(name)}`, {
       method: 'DELETE',
