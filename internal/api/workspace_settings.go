@@ -32,6 +32,12 @@ type workspaceSettingsDTO struct {
 	// every workspace). Mirrors agent.workspaceClaudeHomeDir / EnsureWorkspaceClaudeHome.
 	ClaudeHomeDir string `json:"claudeHomeDir"`
 
+	// CodexHomeDir is THIS workspace's resolved codex-cli config home
+	// (<workspace>/codex-home), exported into the CLI subprocess as CODEX_HOME.
+	// Same read-only/informational reasoning as ClaudeHomeDir above — mirrors
+	// agent.workspaceCodexHomeDir (internal/agent/codexhome.go).
+	CodexHomeDir string `json:"codexHomeDir"`
+
 	// Per-workspace appearance overrides (empty = inherit global).
 	Theme       string `json:"theme"`
 	Accent      string `json:"accent"`
@@ -119,6 +125,7 @@ func toWorkspaceSettingsDTO(ctx context.Context, w *workspace.Workspace) workspa
 		// <workspace>/claude-home — DataDir is the workspace root (see workspace
 		// manager: EnsureWorkspaceClaudeHome(dir) with the same join).
 		ClaudeHomeDir: filepath.Join(w.DataDir, "claude-home"),
+		CodexHomeDir:  filepath.Join(w.DataDir, "codex-home"),
 
 		Theme:       s.Theme,
 		Accent:      s.Accent,
@@ -183,9 +190,17 @@ func (s *Server) handleWorkspaceClaudeAuth(w http.ResponseWriter, r *http.Reques
 		writeJSON(w, http.StatusOK, claudeAuthDTO{ClaudeHomeDir: home, Detail: err.Error()})
 		return
 	}
-	cli, ok := p.(*providers.ClaudeCLI)
+	// Branch on the capabilities the probe actually needs (CLI transport + a
+	// pre-flight auth check) instead of on the concrete type, so a second CLI
+	// transport reuses this path unchanged.
+	cli, ok := providers.AsCLI(p)
 	if !ok {
 		writeError(w, http.StatusInternalServerError, "claude-cli provider unavailable")
+		return
+	}
+	prober, ok := cli.(providers.AuthProber)
+	if !ok {
+		writeError(w, http.StatusInternalServerError, "claude-cli provider cannot probe authentication")
 		return
 	}
 	// The CLI binary must exist before a login probe makes sense. When it is
@@ -200,7 +215,7 @@ func (s *Server) handleWorkspaceClaudeAuth(w http.ResponseWriter, r *http.Reques
 	cli.SetConfigDir(home)
 	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 	defer cancel()
-	if perr := cli.ProbeAuth(ctx); perr != nil {
+	if perr := prober.ProbeAuth(ctx); perr != nil {
 		writeJSON(w, http.StatusOK, claudeAuthDTO{Installed: true, ClaudeHomeDir: home, Detail: perr.Error()})
 		return
 	}

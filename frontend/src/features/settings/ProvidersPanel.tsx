@@ -15,6 +15,7 @@ import {
   Plus,
   Trash2,
   Network,
+  Terminal,
   type LucideIcon,
 } from 'lucide-react'
 import { api } from '@/api'
@@ -84,6 +85,9 @@ interface Props {
   // claudeConfigDir. This is what actually differs per workspace — the global draft
   // value is identical for all workspaces and was previously (wrongly) shown here.
   workspaceClaudeHome?: string
+  // Active workspace's resolved codex-cli config home (<workspace>/codex-home),
+  // same reasoning as workspaceClaudeHome above.
+  workspaceCodexHome?: string
 }
 
 // KeyPicker is the vault-only key selector (no free text): the key can only be
@@ -711,12 +715,17 @@ export function ProvidersPanel({
   onImportSecret,
   onManageSecrets,
   workspaceClaudeHome,
+  workspaceCodexHome,
 }: Props) {
   const [authOpen, setAuthOpen] = useState(false)
+  const catalog = useCatalog()
   // Which Claude Code binary + plan actually backs the claude-cli card. Comes
   // from the catalog (the backend probes `claude --version` and reads the
   // workspace claude-home login), so the card names the install, not just "CLI".
-  const claudeRuntime = resolveRuntimeBadge(useCatalog().find((c) => c.id === 'claude-cli'))
+  const claudeRuntime = resolveRuntimeBadge(catalog.find((c) => c.id === 'claude-cli'))
+  // Same idea for codex-cli: backend probes `codex --version` and checks for a
+  // readable auth.json in the workspace codex-home (see catalog_codexcli.go).
+  const codexRuntime = resolveRuntimeBadge(catalog.find((c) => c.id === 'codex-cli'))
   // Pre-flight login check for THIS workspace's claude-home (distinct from the
   // generic "test et", which probes the app-global config dir). 'idle' before run.
   const [wsAuth, setWsAuth] = useState<'idle' | 'pending' | { loggedIn: boolean; detail?: string }>(
@@ -875,6 +884,75 @@ export function ProvidersPanel({
               </div>
             </div>
           </div>
+
+          <div className="space-y-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex min-w-0 items-center gap-2">
+                <Terminal size={15} className="shrink-0 text-[var(--color-accent)]" />
+                <span className="truncate text-sm font-medium">ChatGPT / Codex (abonelik)</span>
+                <span className="shrink-0 text-[10px] uppercase tracking-wide text-[var(--color-text-dim)]">
+                  codex-cli / abonelik
+                </span>
+                {codexRuntime && (
+                  <span
+                    data-testid="codex-cli-runtime"
+                    title="Kurulu Codex CLI sürümü ve bu workspace'in codex-home'unda okunan giriş durumu"
+                    className="shrink-0 rounded bg-[var(--color-surface-2)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--color-text)]"
+                  >
+                    {codexRuntime}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <span className="text-xs font-medium text-[var(--color-text-dim)]">
+                codex CLI yolu
+              </span>
+              <input
+                data-testid="provider-endpoint-input"
+                data-provider="codex-cli"
+                value={draft.codexCliPath}
+                onChange={(e) => set('codexCliPath', e.target.value)}
+                placeholder="otomatik (PATH)"
+                className={inputCls}
+              />
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <span className="text-xs font-medium text-[var(--color-text-dim)]">
+                codex config dizini (bu workspace · salt-okunur)
+              </span>
+              <input
+                value={workspaceCodexHome || draft.codexConfigDir}
+                readOnly
+                placeholder="per-workspace: <workspace>/codex-home"
+                className={`${inputCls} cursor-not-allowed opacity-60`}
+              />
+              <span className="text-[10px] text-[var(--color-text-dim)]">
+                {workspaceCodexHome
+                  ? "Aktif workspace'in kendi CODEX_HOME yolu — login/config.toml bu workspace ile paylaşılır. Her workspace farklı bir yol kullanır; salt-okunur (workspace kökünden türetilir)."
+                  : 'Uygulama-geneli fallback (workspace çözülemedi). Normalde her workspace kendi <workspace>/codex-home dizinini kullanır; salt-okunur.'}
+              </span>
+            </div>
+
+            {/* codex-cli has no env-var credential channel like claude-cli's
+                CLAUDE_CODE_OAUTH_TOKEN/ANTHROPIC_API_KEY injection, and there is no
+                backend login endpoint for it (unlike ClaudeAuthDialog's target) —
+                so this is help text pointing at the CLI's own login command, not a
+                button that would silently do nothing. */}
+            <div className="space-y-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] p-2.5">
+              <span className="text-xs font-medium text-[var(--color-text-dim)]">Giriş yap</span>
+              <p className="text-[11px] text-[var(--color-text-dim)]">
+                TionSwarm codex-cli için otomatik giriş akışı sunmaz. Yukarıdaki config dizinini
+                işaret ederek terminalde login komutunu çalıştır:
+              </p>
+              <code className="block overflow-x-auto rounded bg-[var(--color-surface-2)] px-2 py-1 text-[11px]">
+                CODEX_HOME={workspaceCodexHome || '<workspace>/codex-home'} codex login
+              </code>
+            </div>
+          </div>
+
           <BuiltinProvider
             icon={Sparkles}
             name="Anthropic API"

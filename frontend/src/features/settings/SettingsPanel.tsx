@@ -97,6 +97,9 @@ export function SettingsPanel({
   // shown read-only in the Providers panel. Per-workspace, unlike the app-global
   // claudeConfigDir fallback — fetched from the workspace-settings endpoint.
   const [wsClaudeHome, setWsClaudeHome] = useState('')
+  // Active workspace's resolved codex-cli config home (<workspace>/codex-home),
+  // same reasoning as wsClaudeHome above.
+  const [wsCodexHome, setWsCodexHome] = useState('')
 
   const [saving, setSaving] = useState(false)
 
@@ -128,7 +131,10 @@ export function SettingsPanel({
     // Active workspace's real claude-home path for the read-only Providers field.
     api
       .getWorkspaceSettings()
-      .then((w) => setWsClaudeHome(w.claudeHomeDir))
+      .then((w) => {
+        setWsClaudeHome(w.claudeHomeDir)
+        setWsCodexHome(w.codexHomeDir)
+      })
       .catch(() => {})
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -412,6 +418,7 @@ export function SettingsPanel({
                     onImportSecret={async (name) => (await api.revealSecret(name)).value}
                     onManageSecrets={() => setCat('secrets')}
                     workspaceClaudeHome={wsClaudeHome}
+                    workspaceCodexHome={wsCodexHome}
                   />
                 )}
                 {cat === 'context' && <ContextPanel draft={draft} set={set} setDraft={setDraft} />}

@@ -1,6 +1,39 @@
 # TionSwarm — İlerleme Takibi
 
-> Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-08-17**
+> Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-08-18**
+
+## codex-cli sağlayıcısı: katalog + fiyatlandırma + frontend yüzeyi (2026-08-18) ✅
+
+Çok-worker turunun (W1-W7) son ayağı — backend `codex-cli` transport'u
+(`internal/providers/codexcli*.go`, `kind_codexcli.go`) diğer worker'larca
+tamamlandıktan sonra kalan yüzey işi:
+
+- **`internal/api/catalog_codexcli.go`** (yeni) — `codex --version` sürüm
+  probe'u (`claudeCLIVersion`'ın aynısı, 10 dk/1 dk TTL) + `codexSubscriptionTier`
+  (workspace `codex-home/auth.json` var/okunabilir mi → `"chatgpt"`/`""`; Codex'in
+  auth dosyası claude'unki gibi plan adı taşımıyor, bu yüzden zengin tier yok).
+  `catalog.go`'ya `codex-cli` dalı eklendi.
+- **`internal/providers/pricing.go`** — yeni `"openai"` fiyat tablosu (yalnız
+  `EstimateFor`'un `codex-cli` case'ini besliyor; `priceTable`'da `codex-cli`
+  YOK, abonelik = fiyatsız). `gpt-5.6-sol/terra/luna`, `gpt-5.5`, `gpt-5.4-mini`
+  eklendi (iki bağımsız kaynaktan doğrulandı). `gpt-5.4` (ChatGPT hesabıyla
+  kullanılamıyor) ve `gpt-5.2` (yayınlanmış fiyat yok) **bilerek atlandı**.
+- **`internal/exttools/catalog.go`** — `CodexToolName = "codex"` girişi
+  (Harici Araçlar panelinde claude'un kardeşi). `server.go:applySettings`'e
+  eksik kalan `exttools.SetPathOverride(CodexToolName, …)` satırı eklendi.
+- **`internal/api/workspace_settings.go`** — `codexHomeDir` alanı
+  (`claudeHomeDir`'in kardeşi, `<workspace>/codex-home`).
+- **Frontend** — `ProvidersPanel.tsx`'e ikinci bir kart: CLI yolu + salt-okunur
+  workspace config dizini + **login butonu yerine** `CODEX_HOME=… codex login`
+  komutunu gösteren yardım metni (backend login endpoint'i bu turda yok,
+  sessizce çalışmayan buton yerine gerçek komut tercih edildi).
+- **Doğrulama:** `go build ./...` temiz; `go test ./internal/providers/
+  ./internal/exttools/ -count=1` yeşil (`internal/api` paketi, bu işin dışında
+  başka bir worker'ın bıraktığı `TestSteerableForTurn` çift tanımından derleme
+  hatası veriyor — ayrıca raporlandı, bu turun kapsamı değil). Frontend `tsc
+  --noEmit` ve `vitest run` (245+ test) temiz; dokunulan dosyalar prettier'e
+  uygun (config'li).
+- Detay ve plan-vs-gerçek farkları → `_Docs/70-CODEX-CLI-UYGULAMA-PLANI.md` §8.
 
 ## Store yüklemesi paralelleştirildi — boot 3–6× (2026-08-17) ✅
 

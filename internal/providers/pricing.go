@@ -141,6 +141,34 @@ var priceTable = map[string]map[string]Price{
 		// Fable 5 sits ABOVE Opus-tier pricing ($10/$50 per MTok).
 		"claude-fable-5": {InputPerMTok: 10, OutputPerMTok: 50, CacheWriteMultOverride: CacheWrite1hMult},
 	},
+	// codex-cli is intentionally absent from this table for the SAME reason as
+	// claude-cli above: it runs against a ChatGPT subscription login (CODEX_HOME),
+	// so its calls are flat-rate, not per-token. EstimateFor supplies an
+	// equivalent-API estimate using OpenAI's first-party per-token prices instead
+	// (see the "openai" table below and the codex-cli case in EstimateFor).
+	//
+	// OpenAI first-party API prices (USD per 1M tokens), verified 2026-08-18
+	// against two independent sources (devtk.ai, cloudzero.com/apidog) that agree
+	// on GPT-5.5 and GPT-5.4-mini. All OpenAI cache reads are a flat 0.10× of
+	// input (verified per-model below); OpenAI has no separate cache-WRITE
+	// premium (caching is automatic, not opt-in like Anthropic's), so
+	// CacheWriteMultOverride is left unset (falls back to CacheWriteMult, which
+	// is never charged for codex-cli since it has no priceTable entry — this
+	// table exists only to feed EstimateFor).
+	//
+	// gpt-5.4 and gpt-5.2 are deliberately OMITTED: gpt-5.4 has a published price
+	// but codex-cli's own catalog notes it "ChatGPT hesabıyla kullanılamaz" (see
+	// kind_codexcli.go) — not worth pricing a model this transport can't run on a
+	// ChatGPT login. gpt-5.2 has NO published per-token price in either source
+	// checked — guessing one is worse than omitting it (PriceFor/EstimateFor
+	// correctly report unpriced for anything absent here).
+	"openai": {
+		"gpt-5.6-sol":   {InputPerMTok: 5.00, OutputPerMTok: 30.00, CacheReadMultOverride: 0.10},
+		"gpt-5.6-terra": {InputPerMTok: 2.00, OutputPerMTok: 12.00, CacheReadMultOverride: 0.10},
+		"gpt-5.6-luna":  {InputPerMTok: 0.20, OutputPerMTok: 1.20, CacheReadMultOverride: 0.10},
+		"gpt-5.5":       {InputPerMTok: 5.00, OutputPerMTok: 30.00, CacheReadMultOverride: 0.10},
+		"gpt-5.4-mini":  {InputPerMTok: 0.75, OutputPerMTok: 4.50, CacheReadMultOverride: 0.10},
+	},
 	"minimax": {
 		"MiniMax-M2.1":           {InputPerMTok: 0.30, OutputPerMTok: 1.20, CacheReadMultOverride: 0.25},
 		"MiniMax-M2.1-lightning": {InputPerMTok: 0.20, OutputPerMTok: 0.80, CacheReadMultOverride: 0.25},
@@ -251,6 +279,15 @@ func EstimateFor(provider, model string) (Price, bool) {
 		// claude-cli agent's cache-write cost is over-estimated by ~60%.
 		if p, ok := priceTable["anthropic"][model]; ok {
 			p.CacheWriteMultOverride = 0 // fall back to CacheWriteMult (1.25×), the 5-minute tier
+			return p, true
+		}
+	case "codex-cli":
+		// codex-cli runs via ChatGPT/Codex subscription login; reuse OpenAI's own
+		// first-party list price for the same model id as an informational
+		// estimate. No cache-write premium to strip here (unlike claude-cli/
+		// anthropic) — the "openai" table never set one; caching is automatic on
+		// OpenAI's side, not an opt-in TTL choice.
+		if p, ok := priceTable["openai"][model]; ok {
 			return p, true
 		}
 	}

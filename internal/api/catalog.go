@@ -12,11 +12,11 @@ import (
 type catalogEntryDTO struct {
 	providers.CatalogEntry
 	Available bool `json:"available"`
-	// CliVersion and Subscription describe the local Claude Code install behind
-	// the claude-cli provider; both stay empty for every other provider. That
-	// provider's models are bare aliases ("sonnet"), so the pickers show the CLI
-	// version — and the Max/Pro plan it runs on — beside the model to make clear
-	// what is actually going to answer.
+	// CliVersion and Subscription describe the local CLI install behind the
+	// claude-cli / codex-cli providers; both stay empty for every other provider.
+	// Those providers' models are bare aliases ("sonnet") or bare OpenAI slugs, so
+	// the pickers show the CLI version — and the subscription it runs on — beside
+	// the model to make clear what is actually going to answer.
 	CliVersion   string `json:"cliVersion,omitempty"`
 	Subscription string `json:"subscription,omitempty"`
 }
@@ -52,6 +52,14 @@ func (s *Server) handleCatalog(w http.ResponseWriter, r *http.Request) {
 					filepath.Join(wsp.DataDir, "claude-home"),
 					s.settings.Get().ClaudeCliAuthKind,
 				)
+			}
+		}
+		if e.ID == "codex-cli" && dto.Available {
+			dto.CliVersion = codexCLIVersion(r.Context(), s.providers.CodexCLIPath())
+			// Same per-workspace reasoning as claude-cli: the login lives in THIS
+			// workspace's codex-home, so it is checked there, not the global default.
+			if wsp != nil {
+				dto.Subscription = codexSubscriptionTier(filepath.Join(wsp.DataDir, "codex-home"))
 			}
 		}
 		out = append(out, dto)

@@ -27,6 +27,11 @@ import (
 // the provider id "claude-cli" that wraps it.
 const ClaudeToolName = "claude"
 
+// CodexToolName is the catalog key for the Codex CLI, the sibling of
+// ClaudeToolName above: named after the executable ("codex"), not the provider
+// id "codex-cli" that wraps it.
+const CodexToolName = "codex"
+
 // OpenPencilToolName is the catalog key for OpenPencil. Deliberately NOT the
 // executable name: the binary is `op`, which is ALSO the 1Password CLI. Keying
 // the catalog on "openpencil" keeps Find/Detect/the update endpoint unambiguous,
@@ -186,6 +191,22 @@ var Catalog = []Tool{
 		Update: UpdateSpec{
 			Kind: UpdateManual,
 			Note: "Claude Code kendini arka planda günceller — çoğu zaman bir şey yapman gerekmez. Elle güncellemek için terminalde `claude update` (native kurulum) veya `npm install -g @anthropic-ai/claude-code` (npm kurulumu) çalıştır. TionSwarm bunu kendisi koşturmaz: çalışan bir claude-cli turu ikiliyi kilitler ve yarım kalan güncelleme tüm claude-cli ajanlarını durdurur.",
+		},
+	},
+	// codex is claude's sibling: the second CLI transport TionSwarm can drive as
+	// a subprocess, this time the keyless `codex-cli` provider on a ChatGPT/Codex
+	// subscription. Same reasoning as the entry above for why it is listed here
+	// as well as in provider settings.
+	{
+		Name:        CodexToolName,
+		Desc:        "Codex CLI — anahtarsız `codex-cli` sağlayıcısının çalıştırdığı ikili (ChatGPT/Codex aboneliğiyle). TionSwarm bunu OTOMATİK kullanır; yolu Ayarlar ▸ Sağlayıcılar'dan geçersiz kılınabilir, boşsa PATH'ten bulunur.",
+		URL:         "https://github.com/openai/codex",
+		Category:    "provider",
+		Wire:        "provider",
+		VersionArgs: []string{"--version"},
+		Update: UpdateSpec{
+			Kind: UpdateManual,
+			Note: "Terminalde `npm install -g @openai/codex` çalıştır (npm kurulumu). TionSwarm bunu kendisi koşturmaz: çalışan bir codex-cli turu ikiliyi kilitler ve yarım kalan güncelleme tüm codex-cli ajanlarını durdurur.",
 		},
 	},
 	// rtk is wired by the ShellCommandRewrite SETTING, not a hook. It used to ship a
