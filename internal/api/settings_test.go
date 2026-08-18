@@ -74,8 +74,8 @@ func TestTestProvider_UnknownFieldRejected(t *testing.T) {
 // a Patch field, update this list AND the frontend type in the same change.
 var settingsPatchGoldenFields = []string{
 	"theme", "accent", "themePreset", "language",
-	"defaultPermissionMode", "claudeCliPath", "claudeConfigDir", "claudeCliAuthKind",
-	"claudeCliAuthToken", "codexCliPath", "codexConfigDir", "anthropicKey",
+	"defaultPermissionMode", "claudeConfigDir", "claudeCliAuthKind",
+	"claudeCliAuthToken", "anthropicKey",
 	"extendedPromptCache", "anthropicContextEditing", "anthropicNativeToolSearch",
 	"anthropicProgrammaticTools", "anthropicRefusalFallback", "anthropicWebTools",
 	"anthropicServerCompaction", "autonomousTaskBudgetTokens",

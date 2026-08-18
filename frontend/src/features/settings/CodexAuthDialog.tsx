@@ -75,13 +75,20 @@ export function CodexAuthDialog({ isLoggedIn, onClose, onLoggedIn }: Props) {
   const startDeviceLogin = async () => {
     setDeviceBusy(true)
     setDeviceErr(null)
+    // Open the tab NOW, synchronously inside the click handler: a window.open()
+    // issued after `await` has lost the user-gesture context and is blocked by
+    // the popup blocker. The blank tab is redirected once the URL arrives (and
+    // closed again if the request failed).
+    const tab = window.open('about:blank', '_blank', 'noopener,noreferrer')
     try {
       const r = await api.startCodexDeviceAuth()
       setVerifyUrl(r.verifyUrl)
       setCode(r.code)
-      window.open(r.verifyUrl, '_blank', 'noopener,noreferrer')
+      if (tab && !tab.closed) tab.location.href = r.verifyUrl
+      else window.open(r.verifyUrl, '_blank', 'noopener,noreferrer')
       startPolling()
     } catch (e) {
+      if (tab && !tab.closed) tab.close()
       const msg = (e as Error).message
       if (msg.includes('409')) {
         setDeviceErr('Bu workspace için zaten devam eden bir giriş var.')

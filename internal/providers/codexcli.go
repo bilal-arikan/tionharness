@@ -64,6 +64,13 @@ func (c *CodexCLI) SetConfigDir(dir string) {
 	c.configDir = dir
 }
 
+// ConfigDir returns the CODEX_HOME this provider currently exports — either
+// the value baked in at construction (the instance's own configDir field,
+// K1) or one set later via SetConfigDir. Callers use this to tell whether
+// the instance already owns a dedicated config home before falling back to
+// a workspace-derived one.
+func (c *CodexCLI) ConfigDir() string { return c.configDir }
+
 // ConfigureCLIMCP implements CLIProvider. Only spec.Servers is consumed: codex
 // has no --mcp-config equivalent, so the servers are rendered into the
 // CODEX_HOME's config.toml at launch. The claude-only knobs (AllowedTools,

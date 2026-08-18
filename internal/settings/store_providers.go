@@ -92,6 +92,13 @@ func OpenProviderStore(dataDir string, cipher Cipher) (*ProviderStore, error) {
 		instances = deduped
 	}
 
+	if sanitized, changed := sanitizeLegacyConfigDirs(dataDir, instances); changed {
+		if err := writeProviderInstanceFiles(s.path, sanitized); err != nil {
+			return nil, fmt.Errorf("repair legacy provider instance configDir in %s: %w", providersFileName, err)
+		}
+		instances = sanitized
+	}
+
 	s.cur = instances
 	s.fileExisted = true
 	return s, nil
@@ -129,6 +136,64 @@ func dedupeInstancesLastWins(list []ProviderInstance) ([]ProviderInstance, []str
 	}
 	sort.Strings(dropped)
 	return out, dropped
+}
+
+// legacyDefaultConfigDir returns the pre-instance-model global CLI config home
+// for a kind — the fixed path claude-cli/codex-cli used before per-instance
+// configDir existed (agent.globalClaudeHomeDir / agent.globalCodexHomeDir
+// mirror this on the runtime side: <dataDir>/claude-home, <dataDir>/codex-home).
+// "" for any other kind (only these two ever had such a global default).
+func legacyDefaultConfigDir(dataDir, kindID string) string {
+	switch kindID {
+	case "claude-cli":
+		return filepath.Join(dataDir, "claude-home")
+	case "codex-cli":
+		return filepath.Join(dataDir, "codex-home")
+	default:
+		return ""
+	}
+}
+
+// sanitizeLegacyConfigDirs clears a provider instance's configDir when it is
+// an EXACT match for the OLD global default path of its kind
+// (legacyDefaultConfigDir) — a migration artifact from before the
+// per-instance config-home model existed (_Docs/71 K1). MigrateFromSettings
+// copied the legacy Settings.ClaudeConfigDir/CodexConfigDir value into the
+// new instance's config verbatim; for a user who never set a custom CLI
+// config path, that value simply WAS the app's fixed global default, not a
+// deliberate per-instance override. Left in place, K1 (empty configDir =
+// follow the workspace's own home; non-empty = use exactly this home)
+// would silently pin every future turn to that fixed directory instead of
+// the workspace-following behavior the user was actually getting before
+// instances existed — worse for codex-cli, whose migrated default dir may
+// not even exist on disk, which the per-turn seam requires.
+//
+// This only fires on an exact string match with the historical default,
+// so a value the user genuinely configured to something else — including
+// one that happens to look similar — is never touched. Idempotent: once
+// cleared, the field no longer matches and repeat calls are a no-op.
+// Returns a defensive copy (the input list/maps are never mutated) and
+// whether anything changed.
+func sanitizeLegacyConfigDirs(dataDir string, list []ProviderInstance) ([]ProviderInstance, bool) {
+	changed := false
+	out := make([]ProviderInstance, len(list))
+	for i, p := range list {
+		out[i] = p
+		legacy := legacyDefaultConfigDir(dataDir, p.KindID)
+		if legacy == "" {
+			continue
+		}
+		if cur, ok := p.Config["configDir"]; !ok || cur == "" || cur != legacy {
+			continue
+		}
+		cfg := copyStringMap(p.Config)
+		cfg["configDir"] = ""
+		out[i].Config = cfg
+		changed = true
+		slog.Warn("providers.json: cleared migration-artifact configDir pinned to the old global default; instance now follows its workspace's own config home",
+			"instance", p.ID, "kind", p.KindID, "path", legacy)
+	}
+	return out, changed
 }
 
 // Path returns the absolute path of providers.json on disk.

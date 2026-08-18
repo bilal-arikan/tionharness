@@ -164,7 +164,6 @@ export function SettingsPanel({
       themePreset: draft.themePreset,
       language: draft.language,
       defaultPermissionMode: draft.defaultPermissionMode,
-      claudeCliPath: draft.claudeCliPath,
       claudeConfigDir: draft.claudeConfigDir,
       extendedPromptCache: draft.extendedPromptCache,
       anthropicContextEditing: draft.anthropicContextEditing,
@@ -340,7 +339,6 @@ export function SettingsPanel({
                 {cat === 'providers' && (
                   <ProvidersPanel
                     draft={draft}
-                    set={set}
                     setDraft={setDraft}
                     test={test}
                     runTest={runTest}

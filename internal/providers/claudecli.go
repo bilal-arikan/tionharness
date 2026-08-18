@@ -113,6 +113,13 @@ func (c *ClaudeCLI) SetConfigDir(dir string) {
 	c.configDir = dir
 }
 
+// ConfigDir returns the CLAUDE_CONFIG_DIR this provider currently exports —
+// either the value baked in at construction (the instance's own configDir
+// field, K1) or one set later via SetConfigDir. Callers use this to tell
+// whether the instance already owns a dedicated config home before falling
+// back to a workspace-derived one.
+func (c *ClaudeCLI) ConfigDir() string { return c.configDir }
+
 // Name implements Provider.
 func (c *ClaudeCLI) Name() string { return "claude-cli" }
 

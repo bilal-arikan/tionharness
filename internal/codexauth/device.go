@@ -180,7 +180,13 @@ func (m *Manager) Start(ctx context.Context, binPath, homeDir string) (*Flow, er
 	}
 
 	env := append(os.Environ(), "CODEX_HOME="+homeDir)
-	stdout, wait, kill, err := m.runner.Start(ctx, binPath, env, "login", "--device-auth")
+	// The subprocess MUST outlive ctx: ctx only bounds how long we wait for the
+	// prompt, while the login itself keeps running in the background until the
+	// user approves in their browser. Binding the process to ctx killed it the
+	// moment the HTTP handler returned, surfacing as "exit status 1" seconds
+	// after the code was displayed. Cancellation before the prompt is still
+	// honoured explicitly via kill() below.
+	stdout, wait, kill, err := m.runner.Start(context.WithoutCancel(ctx), binPath, env, "login", "--device-auth")
 	if err != nil {
 		return nil, fmt.Errorf("start codex login: %w", err)
 	}

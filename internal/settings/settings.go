@@ -78,8 +78,11 @@ type Settings struct {
 	// DefaultPermissionMode seeds new agents' tool-use permission gate:
 	// "read-only" | "ask" | "auto". "" falls back to "auto".
 	DefaultPermissionMode string `json:"defaultPermissionMode"`
-	ClaudeCLIPath         string `json:"claudeCliPath"`   // "" = auto-detect on PATH
-	ClaudeConfigDir       string `json:"claudeConfigDir"` // CLAUDE_CONFIG_DIR for claude-cli; "" = inherit ~/.claude
+	// ClaudeCLIPath and CodexCLIPath: no live functional reader remains outside
+	// MigrateFromSettings (kept for that one-time boot migration; never exposed
+	// to the API — see DTO/Patch below).
+	ClaudeCLIPath   string `json:"claudeCliPath"`   // "" = auto-detect on PATH
+	ClaudeConfigDir string `json:"claudeConfigDir"` // CLAUDE_CONFIG_DIR for claude-cli; "" = inherit ~/.claude
 	// claude-cli credential injected into the subprocess env so an isolated config
 	// dir authenticates without an interactive in-dir `claude login`. The token is
 	// AES-GCM encrypted (never serialized to the API); the kind selects the env var:
@@ -539,19 +542,17 @@ type DTO struct {
 	Language    string `json:"language"`
 
 	DefaultPermissionMode string `json:"defaultPermissionMode"`
-	ClaudeCLIPath         string `json:"claudeCliPath"`
 	ClaudeConfigDir       string `json:"claudeConfigDir"`
 	ClaudeCliAuthKind     string `json:"claudeCliAuthKind"`
 	ClaudeCliAuthSet      bool   `json:"claudeCliAuthSet"`
-	CodexCLIPath          string `json:"codexCliPath"`
-	CodexConfigDir        string `json:"codexConfigDir"`
 	// AnthropicKeySet reflects AnthropicKeyEnc, which stays live: it seeds the
 	// default "anthropic" provider instance from ANTHROPIC_API_KEY at boot
-	// (internal/app/app.go) and from a manual key entry via Patch.AnthropicKey
-	// — the one built-in provider card ProvidersPanel.tsx still renders
-	// (_Docs/71 Faz 5). Every other legacy typed provider field (Minimax/
-	// OpenRouter/ZAI/DeepSeek/CustomProviders) was removed from the DTO/Patch:
-	// they have no live reader/writer left outside MigrateFromSettings, which
+	// (internal/app/app.go) and from a manual key entry via Patch.AnthropicKey,
+	// which app.go also calls internally at boot — not just an API-facing field.
+	// Every other legacy typed provider field (Minimax/OpenRouter/ZAI/DeepSeek/
+	// CustomProviders/ClaudeCLIPath/CodexCLIPath/CodexConfigDir) was removed
+	// from the DTO/Patch: they have no live reader/writer left outside
+	// MigrateFromSettings, which
 	// reads the underlying Settings struct fields directly (kept for that
 	// one-time boot migration; never exposed to the API).
 	AnthropicKeySet bool `json:"anthropicKeySet"`
@@ -674,12 +675,9 @@ func (s Settings) ToDTO() DTO {
 		Language:    s.Language,
 
 		DefaultPermissionMode: s.DefaultPermissionMode,
-		ClaudeCLIPath:         s.ClaudeCLIPath,
 		ClaudeConfigDir:       s.ClaudeConfigDir,
 		ClaudeCliAuthKind:     s.ClaudeCliAuthKind,
 		ClaudeCliAuthSet:      s.ClaudeCliAuthTokenEnc != "",
-		CodexCLIPath:          s.CodexCLIPath,
-		CodexConfigDir:        s.CodexConfigDir,
 		AnthropicKeySet:       s.AnthropicKeyEnc != "",
 
 		ExtendedPromptCache:        s.ExtendedPromptCache,
@@ -794,13 +792,10 @@ type Patch struct {
 	Language    *string `json:"language"`
 
 	DefaultPermissionMode *string `json:"defaultPermissionMode"`
-	ClaudeCLIPath         *string `json:"claudeCliPath"`
 	ClaudeConfigDir       *string `json:"claudeConfigDir"`
 	ClaudeCliAuthKind     *string `json:"claudeCliAuthKind"`
 	ClaudeCliAuthToken    *string `json:"claudeCliAuthToken"` // write-only
-	CodexCLIPath          *string `json:"codexCliPath"`
-	CodexConfigDir        *string `json:"codexConfigDir"`
-	AnthropicKey          *string `json:"anthropicKey"` // write-only
+	AnthropicKey          *string `json:"anthropicKey"`       // write-only
 
 	ExtendedPromptCache        *bool `json:"extendedPromptCache"`
 	AnthropicContextEditing    *bool `json:"anthropicContextEditing"`

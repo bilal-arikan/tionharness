@@ -262,6 +262,27 @@ göremez). Dolu `configDir` login'siz ise ilk turda `codexcli_errors.go:95`
 benzeri net bir "bu ev login'li değil" hatası dönmeli — sessiz ambient-home
 fallback'i **yok**.
 
+**Uygulama durumu (2026-08-19): K1 artık CLI turlarının per-turn işlem
+noktasında (seam) da uygulanıyor.** Önceden `internal/agent/toolloop.go`'daki
+`isCLI` bloğu, örneğin `configDir` alanı ne olursa olsun her turda koşulsuz
+workspace evini (`<workspace>/claude-home`, `r.codexHomeDir()`) dayatıyordu —
+alan yalnız kozmetikti. Artık `ClaudeCLI.ConfigDir()` /
+`CodexCLI.ConfigDir()` (kurulumda örneğin `config["configDir"]` değerinden
+set edilir) doluysa o ev korunur; yalnız boşsa workspace evine düşülür ve
+credential-heal (`ensureClaudeHomeCredential`) / `MkdirAll` (codex) fiilen
+kullanılan eve uygulanır — artık sabit workspace evine değil.
+
+Ayrıca `internal/settings/store_providers.go`'ya (`OpenProviderStore`,
+`sanitizeLegacyConfigDirs`) idempotent bir yükleme-zamanı onarım eklendi:
+eski tekli-sağlayıcı modelinden migrate edilmiş bir örneğin `configDir`'i,
+kendi kind'ının ESKİ global varsayılan yoluna (`<dataDir>/claude-home`,
+`<dataDir>/codex-home`) **birebir** eşitse bu bir migrasyon artığı sayılır ve
+BOŞA çekilir (`slog.Warn` ile loglanır) — K1 devreye girmeden önce her
+kullanıcının migrate edilmiş örneği yanlışlıkla "kendi evim var" durumuna
+düşüp (codex için var olmayan bir dizine, claude için sessizce workspace
+evinden sabit global eve) kaymasın diye. Kullanıcının elle yazdığı farklı bir
+yol asla dokunulmaz; onarım ikinci açılışta no-op'tur.
+
 ---
 
 ## 5. API yüzeyi

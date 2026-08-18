@@ -228,10 +228,15 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 	// delegation path when external MCP is enabled OR an Interaction MCP endpoint
 	// is wired for this turn (so ask_user/todo_write work even with MCP off).
 	cli, isCLI := providers.AsCLI(provider)
-	// Point the CLI at THIS workspace's config home (<workspace>/claude-home) so it
-	// reads the same skills/settings/login as the workspace instead of one global
-	// home. No-op when the workspace dir is unknown (keeps the provider's global
-	// default). This is the single per-turn seam every CLI turn passes through.
+	// Point the CLI at a config home so it reads the right skills/settings/login.
+	// K1 (_Docs/71-SAGLAYICI-ORNEKLERI-PLANI.md): an instance whose own configDir
+	// field is set (ConfigDir() already non-empty, baked in at construction from
+	// the provider instance's config) keeps that dedicated home untouched here —
+	// only an instance with NO configDir of its own falls back to THIS workspace's
+	// home (<workspace>/claude-home or <workspace>/codex-home), sharing its
+	// skills/settings/login with the workspace. No-op when the workspace dir is
+	// unknown (keeps the provider's global default). This is the single per-turn
+	// seam every CLI turn passes through.
 	if isCLI {
 		// The config home and the credential heal below are claude-specific: both
 		// name <workspace>/claude-home and the CLI's own .credentials.json. A second
@@ -243,8 +248,11 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 			// via CLAUDE_CODE_EFFORT_LEVEL (the --settings file can't hold max). Lower
 			// levels ride the settings file and the provider ignores this field.
 			req.CLIEffortLevel = cliEffortLevel(agent.ThinkingLevel)
-			home := r.claudeHomeDir()
-			cc.SetConfigDir(home)
+			home := cc.ConfigDir()
+			if home == "" {
+				home = r.claudeHomeDir()
+				cc.SetConfigDir(home)
+			}
 			// Re-seed the login if this home lost it. The CLI can WIPE its own
 			// <home>/.credentials.json (accessToken:"", refreshToken:"", expiresAt:0) when
 			// an OAuth refresh fails — most easily when several of its processes race for
@@ -253,25 +261,33 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 			// EVERY remaining turn in the workspace failed "not logged in" until a
 			// restart. Healing at the per-turn seam bounds the damage to the turn that
 			// actually lost the race. Idempotent and cheap: a usable credential returns
-			// after one small file read.
+			// after one small file read. Applied to whichever home this turn actually
+			// uses — the instance's own configDir when it has one, the workspace home
+			// otherwise — never hardcoded to the workspace home.
 			ensureClaudeHomeCredential(home)
 		}
 		// codex-cli's sibling of the block above. CODEX_HOME must point at an
 		// EXISTING directory or the subprocess errors out immediately (unlike
 		// claude-cli, which tolerates a missing home); there is no boot-time
 		// provisioning step for codex-home yet, so MkdirAll here is load-bearing,
-		// not defensive. No credential heal: codex's auth.json is not known to be
-		// wiped by a losing refresh race the way claude's credentials.json is, so
-		// mirroring ensureClaudeHomeCredential would be speculative until that
-		// failure mode is actually observed on this provider.
+		// not defensive — including for an instance's OWN configDir, so a missing
+		// login surfaces as codex's own clear auth error rather than a confusing
+		// "CODEX_HOME is not an existing directory" one. No credential heal: codex's
+		// auth.json is not known to be wiped by a losing refresh race the way
+		// claude's credentials.json is, so mirroring ensureClaudeHomeCredential would
+		// be speculative until that failure mode is actually observed on this
+		// provider.
 		if cx, ok := provider.(*providers.CodexCLI); ok {
-			home := r.codexHomeDir()
+			home := cx.ConfigDir()
+			if home == "" {
+				home = r.codexHomeDir()
+				cx.SetConfigDir(home)
+			}
 			if home != "" {
 				if err := os.MkdirAll(home, 0o755); err != nil {
 					r.logger.Warn("codex home dir create failed", "dir", home, "error", err)
 				}
 			}
-			cx.SetConfigDir(home)
 		}
 	}
 	inter := tools.InteractionFrom(ctx)

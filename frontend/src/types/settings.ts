@@ -13,7 +13,6 @@ export interface AppSettings {
   language: 'tr' | 'en'
 
   defaultPermissionMode: string
-  claudeCliPath: string
   // CLAUDE_CONFIG_DIR for claude-cli subprocesses. Now a FALLBACK only: each turn
   // is overridden to the per-workspace config home (<workspace>/claude-home) so the
   // CLI shares skills/settings/login with its workspace (see _Docs/51). This global
@@ -24,13 +23,6 @@ export interface AppSettings {
   // var: "oauth" → CLAUDE_CODE_OAUTH_TOKEN, "apikey" → ANTHROPIC_API_KEY, "" → none.
   claudeCliAuthKind: string
   claudeCliAuthSet: boolean // whether a token is stored (the token itself is never returned)
-  // codex-cli, the second keyless CLI transport. codexCliPath resolves the binary
-  // ("" = auto-detect on PATH); codexConfigDir is its CODEX_HOME, holding the
-  // subscription login and the generated config.toml. Codex has no env-var
-  // credential channel, so there is no token counterpart to claudeCliAuthKind —
-  // authentication is always a `codex login` inside that home.
-  codexCliPath: string
-  codexConfigDir: string
   // anthropicKeySet reflects the one legacy built-in provider key still live
   // (the ANTHROPIC_API_KEY env boot-seed, see internal/app/app.go). The other
   // legacy typed provider fields (MiniMax/OpenRouter/Z.ai/DeepSeek/custom

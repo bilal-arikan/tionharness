@@ -13,7 +13,7 @@ import type { AppSettings, ProviderTestResult } from '@/types'
 import type { ProviderInstance } from '@/api/providers'
 import { useCatalog, resolveRuntimeBadge } from '@/shared/lib/catalog'
 import { modelDisplayName } from '@/shared/lib/modelLabel'
-import { inputCls, type AppSet } from './primitives'
+import { inputCls } from './primitives'
 import { ClaudeAuthDialog } from './ClaudeAuthDialog'
 import { CodexAuthDialog } from './CodexAuthDialog'
 import { useProviderInstances } from './providers/useProviderInstances'
@@ -37,7 +37,6 @@ function testBadge(test: Props['test'], provider: string) {
 
 interface Props {
   draft: AppSettings
-  set: AppSet
   setDraft: React.Dispatch<React.SetStateAction<AppSettings | null>>
   test: Record<string, ProviderTestResult | 'pending'>
   runTest: (provider: string, model?: string) => void
@@ -135,7 +134,6 @@ function ProviderInstances() {
 
 export function ProvidersPanel({
   draft,
-  set,
   setDraft,
   test,
   runTest,
@@ -251,20 +249,6 @@ export function ProvidersPanel({
 
           <div className="flex flex-col gap-1">
             <span className="text-xs font-medium text-[var(--color-text-dim)]">
-              claude CLI yolu
-            </span>
-            <input
-              data-testid="provider-endpoint-input"
-              data-provider="claude-cli"
-              value={draft.claudeCliPath}
-              onChange={(e) => set('claudeCliPath', e.target.value)}
-              placeholder="otomatik (PATH)"
-              className={inputCls}
-            />
-          </div>
-
-          <div className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-[var(--color-text-dim)]">
               claude config dizini (bu workspace · salt-okunur)
             </span>
             <input
@@ -357,31 +341,19 @@ export function ProvidersPanel({
           </div>
 
           <div className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-[var(--color-text-dim)]">codex CLI yolu</span>
-            <input
-              data-testid="provider-endpoint-input"
-              data-provider="codex-cli"
-              value={draft.codexCliPath}
-              onChange={(e) => set('codexCliPath', e.target.value)}
-              placeholder="otomatik (PATH)"
-              className={inputCls}
-            />
-          </div>
-
-          <div className="flex flex-col gap-1">
             <span className="text-xs font-medium text-[var(--color-text-dim)]">
               codex config dizini (bu workspace · salt-okunur)
             </span>
             <input
-              value={workspaceCodexHome || draft.codexConfigDir}
+              value={workspaceCodexHome}
               readOnly
               placeholder="per-workspace: <workspace>/codex-home"
               className={`${inputCls} cursor-not-allowed opacity-60`}
             />
             <span className="text-[10px] text-[var(--color-text-dim)]">
-              {workspaceCodexHome
-                ? "Aktif workspace'in kendi CODEX_HOME yolu — login/config.toml bu workspace ile paylaşılır. Her workspace farklı bir yol kullanır; salt-okunur (workspace kökünden türetilir)."
-                : 'Uygulama-geneli fallback (workspace çözülemedi). Normalde her workspace kendi <workspace>/codex-home dizinini kullanır; salt-okunur.'}
+              Aktif workspace'in kendi CODEX_HOME yolu — login/config.toml bu workspace ile
+              paylaşılır. Her workspace farklı bir yol kullanır; salt-okunur (workspace kökünden
+              türetilir).
             </span>
           </div>
 

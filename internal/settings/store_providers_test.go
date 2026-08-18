@@ -249,6 +249,149 @@ func TestOpenProviderStore_RepairsDuplicateIDsOnLoad(t *testing.T) {
 	}
 }
 
+func TestOpenProviderStore_ClearsLegacyDefaultConfigDirOnLoad(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, providersFileName)
+
+	legacyClaudeHome := filepath.Join(dir, "claude-home")
+	legacyCodexHome := filepath.Join(dir, "codex-home")
+	files := []providerInstanceFile{
+		{ID: "claude-cli", KindID: "claude-cli", Label: "Claude CLI", Config: map[string]string{"cliPath": "", "configDir": legacyClaudeHome, "authKind": ""}, SecretsEnc: map[string]string{}, CreatedAt: time.Now()},
+		{ID: "codex-cli", KindID: "codex-cli", Label: "Codex CLI", Config: map[string]string{"cliPath": "", "configDir": legacyCodexHome}, SecretsEnc: map[string]string{}, CreatedAt: time.Now()},
+	}
+	data, err := json.MarshalIndent(files, "", "  ")
+	if err != nil {
+		t.Fatalf("MarshalIndent: %v", err)
+	}
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	s, err := OpenProviderStore(dir, testCipher{})
+	if err != nil {
+		t.Fatalf("OpenProviderStore: %v", err)
+	}
+
+	claude, ok := s.Get("claude-cli")
+	if !ok {
+		t.Fatal("expected claude-cli instance to survive repair")
+	}
+	if got := claude.Config["configDir"]; got != "" {
+		t.Fatalf("expected claude-cli configDir cleared, got %q", got)
+	}
+	codex, ok := s.Get("codex-cli")
+	if !ok {
+		t.Fatal("expected codex-cli instance to survive repair")
+	}
+	if got := codex.Config["configDir"]; got != "" {
+		t.Fatalf("expected codex-cli configDir cleared, got %q", got)
+	}
+
+	// The repair must be written back to disk...
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile after repair: %v", err)
+	}
+	var onDisk []providerInstanceFile
+	if err := json.Unmarshal(raw, &onDisk); err != nil {
+		t.Fatalf("Unmarshal repaired file: %v", err)
+	}
+	for _, f := range onDisk {
+		if got := f.Config["configDir"]; got != "" {
+			t.Fatalf("expected on-disk configDir cleared for %q, got %q", f.ID, got)
+		}
+	}
+}
+
+func TestOpenProviderStore_PreservesUserSetConfigDir(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, providersFileName)
+
+	customDir := filepath.Join(dir, "my-custom-claude-home")
+	files := []providerInstanceFile{
+		{ID: "claude-cli", KindID: "claude-cli", Label: "Claude CLI", Config: map[string]string{"configDir": customDir}, SecretsEnc: map[string]string{}, CreatedAt: time.Now()},
+	}
+	data, err := json.MarshalIndent(files, "", "  ")
+	if err != nil {
+		t.Fatalf("MarshalIndent: %v", err)
+	}
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	s, err := OpenProviderStore(dir, testCipher{})
+	if err != nil {
+		t.Fatalf("OpenProviderStore: %v", err)
+	}
+
+	claude, ok := s.Get("claude-cli")
+	if !ok {
+		t.Fatal("expected claude-cli instance to survive load")
+	}
+	if got := claude.Config["configDir"]; got != customDir {
+		t.Fatalf("expected user-set configDir preserved, got %q want %q", got, customDir)
+	}
+
+	// Untouched on disk too — no repair write should have happened.
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	var onDisk []providerInstanceFile
+	if err := json.Unmarshal(raw, &onDisk); err != nil {
+		t.Fatalf("Unmarshal: %v", err)
+	}
+	if onDisk[0].Config["configDir"] != customDir {
+		t.Fatalf("expected on-disk configDir preserved, got %q", onDisk[0].Config["configDir"])
+	}
+}
+
+func TestOpenProviderStore_LegacyConfigDirRepairIsIdempotent(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, providersFileName)
+
+	legacyClaudeHome := filepath.Join(dir, "claude-home")
+	files := []providerInstanceFile{
+		{ID: "claude-cli", KindID: "claude-cli", Label: "Claude CLI", Config: map[string]string{"configDir": legacyClaudeHome}, SecretsEnc: map[string]string{}, CreatedAt: time.Now()},
+	}
+	data, err := json.MarshalIndent(files, "", "  ")
+	if err != nil {
+		t.Fatalf("MarshalIndent: %v", err)
+	}
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	if _, err := OpenProviderStore(dir, testCipher{}); err != nil {
+		t.Fatalf("first OpenProviderStore: %v", err)
+	}
+	firstRun, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile after first open: %v", err)
+	}
+
+	// A second open must be a no-op: the field no longer matches the legacy
+	// default (it is now empty), so nothing should be rewritten.
+	reopened, err := OpenProviderStore(dir, testCipher{})
+	if err != nil {
+		t.Fatalf("second OpenProviderStore: %v", err)
+	}
+	secondRun, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile after second open: %v", err)
+	}
+	if string(firstRun) != string(secondRun) {
+		t.Fatalf("expected repair to be idempotent, file changed on second open:\nfirst:  %s\nsecond: %s", firstRun, secondRun)
+	}
+	claude, ok := reopened.Get("claude-cli")
+	if !ok {
+		t.Fatal("expected claude-cli instance to survive reopen")
+	}
+	if got := claude.Config["configDir"]; got != "" {
+		t.Fatalf("expected configDir to stay cleared, got %q", got)
+	}
+}
+
 func TestProviderStore_PersistRejectsDuplicateID(t *testing.T) {
 	s := openTestStore(t)
 	dup := []ProviderInstance{
