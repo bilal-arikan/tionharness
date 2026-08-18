@@ -92,6 +92,12 @@ graph LR
 1. **Workspace bul/oluştur:** `GET /api/workspaces` → bir `id` seç (veya `POST /api/workspaces`).
    Sonraki tüm çağrılarda `X-Workspace-Id` olarak gönder.
 2. **Ajan oluştur:** `POST /api/agents` (gövde: `name`, `provider`, `model`, …). Dönen `id`.
+   ⚠️ **Bilinmeyen alan artık 400 döner** (`POST`/`PUT /api/agents/{id}`, "sıkı" JSON
+   decode — bilinmeyen alanı sessizce yutmak yerine reddeder). En sık karışan alan
+   `workingDir`: bu bir **Session** alanıdır (agent'ta yok), oturum açarken
+   `POST /api/sessions` gövdesine koy — agent gövdesine koyarsan artık 400 +
+   "working directory is a session property…" mesajı alırsın, önceden sessizce
+   düşüyordu.
 3. **Oturum aç:** `POST /api/sessions` → `id`. Ardından `PUT /api/sessions/{id}/agent`
    `{ "agentId": "AGT.." }` ile oturumun ajanını sabitle.
 4. **Tur çalıştır:** `POST /api/chat/stream` (aşağıda) veya bloklamalı `POST /api/chat`.

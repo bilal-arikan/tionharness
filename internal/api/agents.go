@@ -115,7 +115,7 @@ type createAgentReq struct {
 }
 
 func (s *Server) handleCreateAgent(w http.ResponseWriter, r *http.Request) {
-	req, ok := bindJSON[createAgentReq](w, r)
+	req, ok := bindJSONStrict[createAgentReq](w, r)
 	if !ok {
 		return
 	}
@@ -311,7 +311,7 @@ type updateAgentReq struct {
 }
 
 func (s *Server) handleUpdateAgent(w http.ResponseWriter, r *http.Request) {
-	req, ok := bindJSON[updateAgentReq](w, r)
+	req, ok := bindJSONStrict[updateAgentReq](w, r)
 	if !ok {
 		return
 	}

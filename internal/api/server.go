@@ -913,6 +913,16 @@ func decodeJSON(r *http.Request, v any) error {
 	return json.NewDecoder(r.Body).Decode(v)
 }
 
+// decodeJSONStrict is decodeJSON with unknown JSON fields rejected instead of
+// silently dropped. See bindJSONStrict for why this is opt-in per endpoint
+// rather than the default.
+func decodeJSONStrict(r *http.Request, v any) error {
+	defer r.Body.Close()
+	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
+	return dec.Decode(v)
+}
+
 // withCORS allows the local frontend dev server to call the API.
 func withCORS(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
