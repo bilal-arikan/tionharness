@@ -18,8 +18,14 @@ import { clearAutoLiveEntry, performReseedLive } from './chatStreamAutoLive'
 import { makeHubHandlers } from './chatStreamHub'
 import { subscribeSessionStream, windowClientId } from '@/api/sessionStream'
 import { buildChatCommands, performHandoff, performSummarize } from './chatStreamCommands'
+import { readSessionOverride, writeSessionOverride } from './turnOverrideStore'
 
 export type { ChatStreamDeps } from './chatStreamTypes'
+
+// localStorage entry holding the per-session composer reasoning-level override.
+const THINKING_LEVEL_KEY = 'tionswarm.thinkingLevel.bySession'
+// Same, for the composer permission-mode override.
+const PERMISSION_MODE_KEY = 'tionswarm.permissionMode.bySession'
 
 export function useChatStream(deps: ChatStreamDeps) {
   const {
@@ -51,24 +57,40 @@ export function useChatStream(deps: ChatStreamDeps) {
   const liveBubblesRef = useRef<Map<string, Message>>(new Map())
 
   // Per-turn reasoning level picked in the composer ('' = use the agent's own
-  // setting). Persisted so the choice carries across messages and reloads.
-  const [thinkingLevel, setThinkingLevel] = useState(
-    () => localStorage.getItem('tionswarm.thinkingLevel') ?? '',
+  // setting). Persisted PER SESSION so the choice carries across messages and
+  // reloads of THAT session, while a new session (or another workspace) starts
+  // at the agent's own default instead of inheriting someone else's pick.
+  const [thinkingLevel, setThinkingLevel] = useState(() =>
+    readSessionOverride(THINKING_LEVEL_KEY, activeSessionId),
   )
-  const setThinkingLevelPersist = useCallback((v: string) => {
-    setThinkingLevel(v)
-    localStorage.setItem('tionswarm.thinkingLevel', v)
-  }, [])
+  useEffect(() => {
+    setThinkingLevel(readSessionOverride(THINKING_LEVEL_KEY, activeSessionId))
+  }, [activeSessionId])
+  const setThinkingLevelPersist = useCallback(
+    (v: string) => {
+      setThinkingLevel(v)
+      writeSessionOverride(THINKING_LEVEL_KEY, activeSessionId, v)
+    },
+    [activeSessionId],
+  )
 
   // Per-turn permission-mode override picked in the composer ('' = use the
-  // agent's own setting). Persisted across messages and reloads.
-  const [permissionMode, setPermissionMode] = useState(
-    () => localStorage.getItem('tionswarm.permissionMode') ?? '',
+  // agent's own setting). Scoped PER SESSION for the same reason as the
+  // reasoning level above: a pick here must not follow the user into another
+  // session or workspace, where a different agent's default applies.
+  const [permissionMode, setPermissionMode] = useState(() =>
+    readSessionOverride(PERMISSION_MODE_KEY, activeSessionId),
   )
-  const setPermissionModePersist = useCallback((v: string) => {
-    setPermissionMode(v)
-    localStorage.setItem('tionswarm.permissionMode', v)
-  }, [])
+  useEffect(() => {
+    setPermissionMode(readSessionOverride(PERMISSION_MODE_KEY, activeSessionId))
+  }, [activeSessionId])
+  const setPermissionModePersist = useCallback(
+    (v: string) => {
+      setPermissionMode(v)
+      writeSessionOverride(PERMISSION_MODE_KEY, activeSessionId, v)
+    },
+    [activeSessionId],
+  )
 
   // The ACTIVE session's WAITING backend queue (driven by queue_update hub
   // events) + its live viewer count (presence, Faz 4). Both are reset when the
