@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // testCipher is a trivial reversible Cipher for tests: no real crypto, just
@@ -183,6 +184,79 @@ func TestProviderStore_Delete(t *testing.T) {
 	}
 	if err := s.Delete("anthropic"); err == nil {
 		t.Fatal("expected error deleting an already-deleted instance")
+	}
+}
+
+func TestOpenProviderStore_RepairsDuplicateIDsOnLoad(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, providersFileName)
+
+	files := []providerInstanceFile{
+		{ID: "openrouter", KindID: "openrouter", Label: "OpenRouter", Config: map[string]string{"baseUrl": ""}, SecretsEnc: map[string]string{}, CreatedAt: time.Now()},
+		{ID: "openrouter", KindID: "openai-compat", Label: "My OpenRouter", Config: map[string]string{"baseUrl": "https://openrouter.ai/api/v1"}, SecretsEnc: map[string]string{"key": "enc:custom-key"}, CreatedAt: time.Now()},
+	}
+	data, err := json.MarshalIndent(files, "", "  ")
+	if err != nil {
+		t.Fatalf("MarshalIndent: %v", err)
+	}
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	s, err := OpenProviderStore(dir, testCipher{})
+	if err != nil {
+		t.Fatalf("OpenProviderStore: %v", err)
+	}
+
+	list := s.List()
+	if len(list) != 1 {
+		t.Fatalf("expected 1 instance after repair, got %d: %+v", len(list), list)
+	}
+	inst, ok := s.Get("openrouter")
+	if !ok {
+		t.Fatal("expected openrouter instance to survive repair")
+	}
+	// The repair must keep the LAST occurrence — matching providers.Registry's
+	// map-assignment order, i.e. the instance actually in effect at runtime
+	// before the repair ran.
+	if inst.KindID != "openai-compat" {
+		t.Fatalf("expected last-occurrence (custom) instance to win, got kindId %q", inst.KindID)
+	}
+	if inst.Config["baseUrl"] != "https://openrouter.ai/api/v1" {
+		t.Fatalf("expected last-occurrence baseUrl to win, got %+v", inst.Config)
+	}
+
+	// The repair must be written back to disk...
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile after repair: %v", err)
+	}
+	var onDisk []providerInstanceFile
+	if err := json.Unmarshal(raw, &onDisk); err != nil {
+		t.Fatalf("Unmarshal repaired file: %v", err)
+	}
+	if len(onDisk) != 1 {
+		t.Fatalf("expected repaired file to have 1 entry, got %d", len(onDisk))
+	}
+
+	// ...so a second open sees no further change.
+	reopened, err := OpenProviderStore(dir, testCipher{})
+	if err != nil {
+		t.Fatalf("reopen: %v", err)
+	}
+	if list := reopened.List(); len(list) != 1 {
+		t.Fatalf("expected 1 instance on reopen, got %d: %+v", len(list), list)
+	}
+}
+
+func TestProviderStore_PersistRejectsDuplicateID(t *testing.T) {
+	s := openTestStore(t)
+	dup := []ProviderInstance{
+		{ID: "anthropic", KindID: "anthropic", SecretsEnc: map[string]string{}, CreatedAt: time.Now()},
+		{ID: "anthropic", KindID: "anthropic-compat", SecretsEnc: map[string]string{}, CreatedAt: time.Now()},
+	}
+	if err := s.persist(dup); err == nil {
+		t.Fatal("expected persist to reject a list containing a duplicate id")
 	}
 }
 

@@ -22,6 +22,7 @@ func init() {
 			Order:            10,
 			Transport:        TransportAPI,
 			Multi:            true,
+			TemplateOnly:     true,
 			Fields: []FieldSpec{
 				{Key: FieldKeyAPIKey, Label: "API Anahtari", Type: "password", Required: true, Secret: true, Help: "Uc noktanin API anahtari."},
 				{Key: FieldKeyBaseURL, Label: "Taban URL", Type: "text", Required: true, Help: "Anthropic-uyumlu Messages uc noktasi (/messages eklenir)."},

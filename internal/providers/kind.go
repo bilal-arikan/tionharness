@@ -106,6 +106,15 @@ type Manifest struct {
 	// Multi reports whether more than one instance of this kind is meaningful
 	// (e.g. two Anthropic API keys for two accounts). Not yet enforced.
 	Multi bool
+	// TemplateOnly marks a kind that exists purely so a user CAN create an
+	// instance from it (openai-compat, anthropic-compat) rather than one a
+	// user picks directly — it ships with no default/migrated instance of its
+	// own. Catalog() still lists it (so /api/provider-kinds can offer it as a
+	// template to build a custom provider from), but the model-picker catalog
+	// (/api/catalog, providers.Catalog()+MergeCatalog) drops its per-kind
+	// entry when no instance of it exists, instead of showing a permanently
+	// unavailable, model-less placeholder.
+	TemplateOnly bool
 }
 
 // FieldByKey returns the field spec with the given Key, if the manifest

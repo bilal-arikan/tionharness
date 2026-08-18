@@ -3,6 +3,7 @@ package settings
 import (
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -72,9 +73,62 @@ func OpenProviderStore(dataDir string, cipher Cipher) (*ProviderStore, error) {
 	for i, f := range files {
 		instances[i] = f.toInstance()
 	}
+
+	deduped, dropped := dedupeInstancesLastWins(instances)
+	if len(dropped) > 0 {
+		// providers.json had duplicate ids on disk (a known migration bug,
+		// see MigrateFromSettings). The last entry per id wins on repair
+		// because that already matches live runtime behavior: providers.Registry
+		// builds its lookup map from this same list in order, so the last
+		// duplicate is the one every agent has actually been resolving
+		// against. Repairing to anything else would silently switch the
+		// provider agents use out from under them.
+		for _, id := range dropped {
+			slog.Warn("providers.json: dropped duplicate provider instance id on load, keeping last occurrence", "id", id)
+		}
+		if err := writeProviderInstanceFiles(s.path, deduped); err != nil {
+			return nil, fmt.Errorf("repair duplicate provider instance ids in %s: %w", providersFileName, err)
+		}
+		instances = deduped
+	}
+
 	s.cur = instances
 	s.fileExisted = true
 	return s, nil
+}
+
+// dedupeInstancesLastWins collapses duplicate-id entries in list, keeping the
+// LAST occurrence of each id (matching providers.Registry's map-assignment
+// order, so a repair never changes which instance is actually in effect at
+// runtime) and preserving the first-seen position for the surviving entry.
+// Returns the deduped list and the ids that had duplicates dropped.
+func dedupeInstancesLastWins(list []ProviderInstance) ([]ProviderInstance, []string) {
+	lastByID := make(map[string]ProviderInstance, len(list))
+	firstPos := make(map[string]int, len(list))
+	order := make([]string, 0, len(list))
+	seenDup := make(map[string]bool)
+	for i, p := range list {
+		if _, ok := firstPos[p.ID]; !ok {
+			firstPos[p.ID] = i
+			order = append(order, p.ID)
+		} else {
+			seenDup[p.ID] = true
+		}
+		lastByID[p.ID] = p
+	}
+	if len(seenDup) == 0 {
+		return list, nil
+	}
+	out := make([]ProviderInstance, 0, len(order))
+	for _, id := range order {
+		out = append(out, lastByID[id])
+	}
+	dropped := make([]string, 0, len(seenDup))
+	for id := range seenDup {
+		dropped = append(dropped, id)
+	}
+	sort.Strings(dropped)
+	return out, dropped
 }
 
 // Path returns the absolute path of providers.json on disk.
@@ -280,7 +334,27 @@ func (s *ProviderStore) nextID() string {
 // rename), mirroring Store.persist in store.go. A nil/empty list still writes
 // a valid empty JSON array so Open never has to special-case "file exists but
 // has no instances yet".
+//
+// It refuses to write a list containing a duplicate id: every write path
+// (Upsert, Delete, EnsureMigrated) builds `list` from s.cur plus at most one
+// changed/added entry, so a duplicate reaching here means a caller bug, not
+// a recoverable runtime condition — it must fail loudly rather than silently
+// writing the same ambiguity BUG-1 found on disk.
 func (s *ProviderStore) persist(list []ProviderInstance) error {
+	seen := make(map[string]bool, len(list))
+	for _, p := range list {
+		if seen[p.ID] {
+			return fmt.Errorf("providers.json: refusing to persist duplicate provider instance id %q", p.ID)
+		}
+		seen[p.ID] = true
+	}
+	return writeProviderInstanceFiles(s.path, list)
+}
+
+// writeProviderInstanceFiles is the atomic-write primitive shared by persist
+// (normal writes, duplicate-checked) and OpenProviderStore's on-load repair
+// (writing back an already-deduped list).
+func writeProviderInstanceFiles(path string, list []ProviderInstance) error {
 	files := make([]providerInstanceFile, len(list))
 	for i, p := range list {
 		files[i] = p.toFile()
@@ -292,11 +366,11 @@ func (s *ProviderStore) persist(list []ProviderInstance) error {
 	if err != nil {
 		return err
 	}
-	tmp := s.path + ".tmp"
+	tmp := path + ".tmp"
 	if err := os.WriteFile(tmp, data, 0o600); err != nil {
 		return err
 	}
-	return os.Rename(tmp, s.path)
+	return os.Rename(tmp, path)
 }
 
 // currentTime is a thin indirection over time.Now so tests can't be broken by

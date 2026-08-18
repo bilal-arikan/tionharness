@@ -131,7 +131,7 @@ func MigrateFromSettings(s Settings, decrypt func(enc string) string) []Provider
 		if c.Reasoning {
 			reasoning = "true"
 		}
-		out = append(out, ProviderInstance{
+		instance := ProviderInstance{
 			ID:           c.ID,
 			KindID:       kindID,
 			Label:        c.Label,
@@ -141,7 +141,26 @@ func MigrateFromSettings(s Settings, decrypt func(enc string) string) []Provider
 			Config:       map[string]string{"baseUrl": c.BaseURL, "reasoning": reasoning, "promptCache": c.PromptCache},
 			SecretsEnc:   secrets,
 			CreatedAt:    now,
-		})
+		}
+
+		// A custom provider whose id collides with one of the built-in
+		// instances migrated above (e.g. a legacy CustomProvider{ID:
+		// "openrouter", ...}) REPLACES that built-in in place instead of
+		// being appended as a second entry with the same id — the same
+		// "user config wins" precedence providers.MergeCatalog documents
+		// (internal/providers/merge.go), now enforced at migration time so
+		// providers.json itself never contains a duplicate id.
+		replaced := false
+		for i, existing := range out {
+			if existing.ID == c.ID {
+				out[i] = instance
+				replaced = true
+				break
+			}
+		}
+		if !replaced {
+			out = append(out, instance)
+		}
 	}
 
 	// _ silences decrypt-unused when no *Enc field above ever needed live

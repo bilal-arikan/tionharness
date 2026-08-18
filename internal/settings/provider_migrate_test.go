@@ -105,6 +105,42 @@ func TestMigrateFromSettings_FullyPopulated(t *testing.T) {
 	}
 }
 
+func TestMigrateFromSettings_CustomProviderReplacesBuiltinWithSameID(t *testing.T) {
+	s := Settings{
+		OpenRouterKeyEnc:  "enc:openrouter-key",
+		OpenRouterBaseURL: "https://openrouter.example/v1",
+		CustomProviders: []CustomProvider{
+			{ID: "openrouter", Label: "My OpenRouter", Kind: "openai", BaseURL: "https://openrouter.ai/api/v1", KeyEnc: "enc:custom-openrouter-key"},
+		},
+	}
+
+	instances := MigrateFromSettings(s, func(enc string) string { return enc })
+
+	count := 0
+	for _, inst := range instances {
+		if inst.ID == "openrouter" {
+			count++
+		}
+	}
+	if count != 1 {
+		t.Fatalf("expected exactly 1 instance with id %q, got %d: %+v", "openrouter", count, instances)
+	}
+
+	inst, ok := findInstance(instances, "openrouter")
+	if !ok {
+		t.Fatal("missing openrouter instance")
+	}
+	if inst.KindID != "openai-compat" {
+		t.Fatalf("expected custom provider to win with kindId openai-compat, got %q", inst.KindID)
+	}
+	if inst.Config["baseUrl"] != "https://openrouter.ai/api/v1" {
+		t.Fatalf("expected custom provider's baseUrl to win, got %+v", inst.Config)
+	}
+	if inst.SecretsEnc["key"] != "enc:custom-openrouter-key" {
+		t.Fatalf("expected custom provider's secret to win, got %+v", inst.SecretsEnc)
+	}
+}
+
 func TestMigrateFromSettings_EmptySettings(t *testing.T) {
 	instances := MigrateFromSettings(Settings{}, func(enc string) string { return enc })
 

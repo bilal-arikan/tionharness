@@ -20,6 +20,7 @@ func init() {
 			Order:            9,
 			Transport:        TransportAPI,
 			Multi:            true,
+			TemplateOnly:     true,
 			Fields: []FieldSpec{
 				{Key: FieldKeyAPIKey, Label: "API Anahtari", Type: "password", Required: true, Secret: true, Help: "Uc noktanin API anahtari."},
 				{Key: FieldKeyBaseURL, Label: "Taban URL", Type: "text", Required: true, Help: "OpenAI-uyumlu Chat Completions uc noktasi."},
