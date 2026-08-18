@@ -104,10 +104,30 @@ func (r *Runtime) codebaseMemoryCmd(ctx context.Context) string {
 	return codebaseMemoryCommand(servers)
 }
 
+// codebaseMemoryState reports what is actually known about the configured
+// codebase-memory server's connection. A config row alone proves nothing about
+// the live process, so the prompt block is graded by this instead: a dead
+// connection drops the block entirely, an unknown one (pool never dialed it —
+// e.g. the claude-cli provider runs the tool loop itself) keeps the block but
+// states the uncertainty.
+func (r *Runtime) codebaseMemoryState(server string) mcp.ServerState {
+	if r.mcpPool == nil {
+		return mcp.ServerUnknown
+	}
+	return r.mcpPool.ServerState(server)
+}
+
 var codebaseMemoryCapability = Capability{
 	ID: "codebase-memory-mcp",
 	Detect: func(ctx context.Context, r *Runtime) bool {
-		return r.codebaseMemoryCmd(ctx) != ""
+		if r.codebaseMemoryCmd(ctx) == "" {
+			return false
+		}
+		servers, err := r.db.ListEnabledMCPServers(ctx)
+		if err != nil {
+			return false
+		}
+		return r.codebaseMemoryState(codebaseMemoryServerName(servers)) != mcp.ServerDead
 	},
 	Context: func(ctx context.Context, r *Runtime, cwd string) string {
 		var b strings.Builder
@@ -116,7 +136,11 @@ var codebaseMemoryCapability = Capability{
 			r.logger.Warn("codebase-memory capability: server list failed", "error", err)
 			return ""
 		}
-		b.WriteString(codebaseMemoryGuidance(servers))
+		state := r.codebaseMemoryState(codebaseMemoryServerName(servers))
+		if state == mcp.ServerDead {
+			return ""
+		}
+		b.WriteString(codebaseMemoryGuidance(servers, state))
 		if p := projectIDForPath(cwd); p != "" {
 			b.WriteString("\nYour working directory maps to project id `" + p + "` (auto-indexed on first use). " +
 				"If a query reports the project is unknown, run list_projects to confirm the exact id.")
@@ -132,7 +156,12 @@ var codebaseMemoryCapability = Capability{
 // spells the full callable name so no guessing is possible. Returns "" when no
 // codebase-memory server row is present: a hint without a real namespace would
 // point the model at non-existent tools, which is worse than no hint at all.
-func codebaseMemoryGuidance(servers []db.MCPServer) string {
+//
+// state grades the opening sentence. Claiming "is connected" while the tools are
+// absent from the agent's tool list produced a direct contradiction with the
+// harness's own connection notices, and ordered the agent to prefer tools it
+// could not call — so an unverified connection now says so and names the fallback.
+func codebaseMemoryGuidance(servers []db.MCPServer, state mcp.ServerState) string {
 	server := codebaseMemoryServerName(servers)
 	if server == "" {
 		return ""
@@ -140,8 +169,15 @@ func codebaseMemoryGuidance(servers []db.MCPServer) string {
 	ns := func(tool string) string {
 		return mcp.NamespaceTool(server, tool)
 	}
+	opening := "A codebase-memory MCP server is connected."
+	if state != mcp.ServerAlive {
+		opening = "A codebase-memory MCP server is configured for this workspace; whether it is " +
+			"connected right now is not verified here. If its tools are missing from your tool " +
+			"list, or a call reports no such server, fall back to Glob/Grep for that query " +
+			"instead of retrying."
+	}
 	return "# Code knowledge-graph available\n" +
-		"A codebase-memory MCP server is connected. For ANY code search, navigation, or " +
+		opening + " For ANY code search, navigation, or " +
 		"structural understanding, use its tools FIRST: " + ns("search_code") + " (text/symbol), " +
 		ns("search_graph") + " + " + ns("get_code_snippet") + " (read a definition), " +
 		ns("query_graph") + " / " + ns("trace_path") + " (relationships), " +

@@ -312,6 +312,49 @@ type EntryStat struct {
 	IdleSec  int    `json:"idleSec"`  // seconds since last use (drives eviction)
 }
 
+// ServerState is what the pool can honestly say about one configured server's
+// LIVE connection, as opposed to its mere presence in the config.
+type ServerState int
+
+const (
+	// ServerUnknown: the pool has never opened a slot for this server, so it has
+	// no evidence either way. This is the normal state for a server whose tool
+	// loop runs OUTSIDE the pool (the claude-cli provider owns its own MCP
+	// clients) and for any server before its first use in the process.
+	ServerUnknown ServerState = iota
+	// ServerAlive: a pooled connection exists and its client reports connected.
+	ServerAlive
+	// ServerDead: a slot exists but the connection is gone (dial failed, process
+	// exited, read loop dead). The server is configured but NOT usable right now.
+	ServerDead
+)
+
+// ServerState reports the live connection state of the named server (the stored
+// server name; it is sanitized here the same way pool keys are). Scoped and
+// shared slots are both considered: any live slot makes the server alive.
+//
+// Callers use this to avoid asserting "the server is connected" in a prompt on
+// the strength of a config row alone. Note the deliberate tri-state: absence of
+// a slot is ServerUnknown, never ServerDead — the pool is lazy, and treating
+// "not dialed yet" as "broken" would suppress correct information.
+func (p *Pool) ServerState(server string) ServerState {
+	name, _, _ := SplitNamespaced(NamespaceTool(server, "x"))
+	if name == "" {
+		return ServerUnknown
+	}
+	state := ServerUnknown
+	for _, s := range p.Stats() {
+		if s.Server != name {
+			continue
+		}
+		if s.Alive {
+			return ServerAlive
+		}
+		state = ServerDead
+	}
+	return state
+}
+
 // Stats returns a snapshot of every pooled entry. Cheap and lock-safe; intended
 // for a status endpoint, not a hot path.
 func (p *Pool) Stats() []EntryStat {

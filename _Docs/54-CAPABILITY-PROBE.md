@@ -61,6 +61,20 @@ func (r *Runtime) CapabilityContext(ctx, cwd) string   // mevcut olanların blok
   `search_code`) **bilerek kullanılmaz** — model yanlış namespace tahmin edip
   (`codebase_memory__search_code`) "no server" hatası alıyordu; tam ad yazınca tahmin
   sıfırlanır. Sunucu satırı yoksa blok üretilmez.
+- **Canlılık derecelendirmesi (`mcp.Pool.ServerState`):** config satırı sunucunun
+  **bağlı olduğunu kanıtlamaz**. Blok artık üç durumla derecelendirilir:
+  - `ServerAlive` (havuzda canlı bağlantı) → eski kesin cümle: "…is connected."
+  - `ServerUnknown` (havuz bu sunucuya hiç bağlanmamış — normal durum: araç
+    döngüsünü **claude-cli sağlayıcısı** kendi koşturur, TionSwarm havuzu devrede
+    değildir) → blok kalır ama bağlantı iddia edilmez; "configured … not verified"
+    + araç listende yoksa `Glob`/`Grep`'e düş yönergesi.
+  - `ServerDead` (slot var, bağlantı ölü) → `Detect` false, blok **hiç basılmaz**.
+
+  Neden: `ServerUnknown`/ölü durumda blok "is connected" diyip "grep LAST resort"
+  emri veriyordu; harness'ın kendi "still connecting / disconnected" bildirimiyle
+  aynı turda çelişiyor ve ajanı çağıramadığı araca yönlendiriyordu. Havuz **tembel**
+  olduğu için "slot yok" bilerek `ServerDead` sayılmaz — yoksa doğru ipucu sessizce
+  silinirdi.
 - **`projectIDForPath`:** path→id kuralını codebase-memory ile birebir taklit eder
   (ayraç+`:` → `-`, `[A-Za-z0-9-]` dışı düşer). İki gerçek örnekle test edildi; ıskalarsa
   blok ajanı `list_projects`'e yönlendirir (hedge).

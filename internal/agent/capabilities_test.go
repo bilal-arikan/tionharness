@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/bilal-arikan/tionswarm/internal/db"
+	"github.com/bilal-arikan/tionswarm/internal/mcp"
 )
 
 func TestProjectIDForPath(t *testing.T) {
@@ -45,7 +46,7 @@ func TestCodebaseMemoryCommand(t *testing.T) {
 func TestCodebaseMemoryGuidance(t *testing.T) {
 	stdio := db.MCPServer{Name: "codebase-memory-mcp", Transport: db.MCPTransportStdio, Command: `C:\Progs\codebase-memory-mcp\codebase-memory-mcp.exe`}
 
-	g := codebaseMemoryGuidance([]db.MCPServer{stdio})
+	g := codebaseMemoryGuidance([]db.MCPServer{stdio}, mcp.ServerAlive)
 	for _, want := range []string{
 		"codebase-memory-mcp__search_code",
 		"codebase-memory-mcp__search_graph",
@@ -67,9 +68,37 @@ func TestCodebaseMemoryGuidance(t *testing.T) {
 		}
 	}
 
+	// A verified-live pool connection is the only case allowed to assert the
+	// connection outright.
+	if !strings.Contains(g, "MCP server is connected.") {
+		t.Errorf("alive state should assert the connection\n%s", g)
+	}
+
+	// Unverified (pool never dialed it — e.g. the claude-cli provider owns the
+	// tool loop): the hint stays, but it must not claim a connection and must
+	// name the fallback, so it cannot contradict the harness's own notices.
+	u := codebaseMemoryGuidance([]db.MCPServer{stdio}, mcp.ServerUnknown)
+	if strings.Contains(u, "MCP server is connected.") {
+		t.Errorf("unverified state must not assert the connection\n%s", u)
+	}
+	for _, want := range []string{"configured", "Glob/Grep", "codebase-memory-mcp__search_code"} {
+		if !strings.Contains(u, want) {
+			t.Errorf("unverified guidance missing %q\n%s", want, u)
+		}
+	}
+
 	// No server -> no hint at all (the capability block vanishes).
-	if got := codebaseMemoryGuidance(nil); got != "" {
+	if got := codebaseMemoryGuidance(nil, mcp.ServerAlive); got != "" {
 		t.Errorf("expected empty guidance when no codebase-memory server, got %q", got)
+	}
+}
+
+// TestCodebaseMemoryStateNilPool: a Runtime without a pool must report Unknown
+// (not panic, not Dead) — Dead would silently delete a correct hint.
+func TestCodebaseMemoryStateNilPool(t *testing.T) {
+	r := &Runtime{}
+	if got := r.codebaseMemoryState("codebase-memory-mcp"); got != mcp.ServerUnknown {
+		t.Errorf("nil pool should be ServerUnknown, got %v", got)
 	}
 }
 
