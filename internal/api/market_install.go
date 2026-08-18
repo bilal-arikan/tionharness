@@ -12,7 +12,6 @@ import (
 	"github.com/bilal-arikan/tionswarm/internal/ingest"
 	"github.com/bilal-arikan/tionswarm/internal/market"
 	"github.com/bilal-arikan/tionswarm/internal/orchestration"
-	"github.com/bilal-arikan/tionswarm/internal/settings"
 	"github.com/bilal-arikan/tionswarm/internal/workspace"
 )
 
@@ -86,7 +85,8 @@ func (s *Server) installSourceRefPack(w http.ResponseWriter, r *http.Request, ws
 // installing a native pack land in exactly the same place, per entity kind. Each
 // kind writes to its own store: skill → workspace skills dir (+catalog reload);
 // agent → db.CreateAgent (provenance cleared, unknown skills dropped); flow →
-// db.CreateFlow (empty agent slots auto-assigned); provider → UpsertCustomProvider;
+// db.CreateFlow (empty agent slots auto-assigned); provider → ProviderStore
+// (providers.json, via upsertProviderInstance's shared validation path);
 // mcp/workspace/memory likewise.
 func (s *Server) installPackInto(r *http.Request, wsp *workspace.Workspace, pack market.Pack, req installRequest) (market.InstallResult, error) {
 	switch pack.Kind {
@@ -356,32 +356,59 @@ func (s *Server) installFlowPack(r *http.Request, wsp *workspace.Workspace, pack
 
 // installProviderPack registers a custom provider from a pack payload and pushes
 // it live. The API key (never carried in a pack) is supplied by the user here;
-// an empty key still installs (the user can add it later in Settings).
+// an empty key still installs (AllowMissingRequiredSecrets — the user can add
+// it later in Settings). Writes through the same upsertProviderInstance
+// validation path handleUpsertProvider uses — an unknown pack kind or a
+// missing required plain field fails the install with a clear error rather
+// than silently landing a broken instance (_Docs/71 Faz 3 item 1).
 func (s *Server) installProviderPack(wsp *workspace.Workspace, pack market.Pack, apiKey string) (market.InstallResult, error) {
 	pp := pack.Payload.Provider
 	if pp == nil || pp.BaseURL == "" {
 		return market.InstallResult{}, httpErr{http.StatusBadRequest, "provider pack is missing its payload"}
 	}
 	id := providerIDFromPack(pack)
-	var keyPtr *string
-	if apiKey != "" {
-		keyPtr = &apiKey
+
+	// Legacy pack Kind is "openai" | "anthropic" (market.ProviderPayload); map it
+	// onto the registered instance kind ids the same way MigrateFromSettings does
+	// for a legacy CustomProvider (internal/settings/provider_migrate.go), so a
+	// pack installs into an actually-registered kind rather than a bare "openai"/
+	// "anthropic" string that providerKindByID would reject.
+	kindID := "openai-compat"
+	if pp.Kind == "anthropic" {
+		kindID = "anthropic-compat"
 	}
-	if _, err := s.settings.UpsertCustomProvider(settings.CustomProvider{
+
+	reasoning := ""
+	if pp.Reasoning {
+		reasoning = "true"
+	}
+	secrets := map[string]string{}
+	if apiKey != "" {
+		secrets["key"] = apiKey
+	}
+
+	inst, err := s.upsertProviderInstance(upsertProviderInstanceReq{
 		ID:           id,
+		KindID:       kindID,
 		Label:        pp.Label,
-		Kind:         pp.Kind,
-		BaseURL:      pp.BaseURL,
+		Enabled:      true,
 		DefaultModel: pp.DefaultModel,
 		Models:       pp.Models,
-		Reasoning:    pp.Reasoning,
-		PromptCache:  pp.PromptCache,
-	}, keyPtr); err != nil {
-		return market.InstallResult{}, httpErr{http.StatusBadRequest, err.Error()}
+		Config:       map[string]string{"baseUrl": pp.BaseURL},
+		Secrets:      secrets,
+	}, upsertProviderOpts{
+		ExtraConfig: map[string]string{
+			"reasoning":   reasoning,
+			"promptCache": pp.PromptCache,
+		},
+		AllowMissingRequiredSecrets: true,
+	})
+	if err != nil {
+		return market.InstallResult{}, err
 	}
 	s.applySettings() // push the new provider into the live registry
 	return market.InstallResult{
-		Kind: market.KindProvider, Ref: id,
+		Kind: market.KindProvider, Ref: inst.ID,
 		Message: "Provider \"" + pp.Label + "\" installed",
 	}, nil
 }

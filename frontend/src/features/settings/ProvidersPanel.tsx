@@ -1,52 +1,26 @@
 // Providers category: default provider/model picker, Anthropic + MiniMax +
-// OpenRouter keys, custom (user-added) providers and connection test. (Anthropic
-// beta toggles now live under the "Bağlam & Bellek" category.)
+// OpenRouter keys, provider instances (kind-driven, generic form) and
+// connection test. (Anthropic beta toggles now live under the "Bağlam &
+// Bellek" category.)
 //
 // Layout is deliberately table-like: the three built-in providers render as a
 // uniform grid of cards (status badge + aligned key/endpoint columns + test) so
-// the section reads as rows of the same shape, and custom providers render as a
-// real table.
-import { useEffect, useState } from 'react'
-import {
-  Sparkles,
-  Zap,
-  KeyRound,
-  Boxes,
-  Plus,
-  Trash2,
-  Network,
-  Terminal,
-  type LucideIcon,
-} from 'lucide-react'
+// the section reads as rows of the same shape, and provider instances render
+// as a real list (ProviderInstanceList).
+import { useState } from 'react'
+import { Sparkles, Zap, KeyRound, Boxes, Network, Terminal, type LucideIcon } from 'lucide-react'
 import { api } from '@/api'
 import { toast } from '@/shared/components'
 import type { AppSettings, ProviderTestResult, Secret } from '@/types'
-import type { CustomProvider, UpsertProviderInput, PriceTable } from '@/api/providers'
+import type { ProviderInstance } from '@/api/providers'
 import { useCatalog, resolveRuntimeBadge } from '@/shared/lib/catalog'
 import { modelDisplayName } from '@/shared/lib/modelLabel'
 import { inputCls, type AppSet } from './primitives'
 import { ClaudeAuthDialog } from './ClaudeAuthDialog'
 import { CodexAuthDialog } from './CodexAuthDialog'
-
-// fmtPrice formats a USD/1M-token figure compactly (e.g. "$0.30", "$15", "ücretsiz").
-function fmtPrice(n: number): string {
-  if (n === 0) return 'ücretsiz'
-  return '$' + (n < 1 ? n.toFixed(2).replace(/0+$/, '').replace(/\.$/, '') : String(n))
-}
-
-// cacheModeLabel describes a prompt-cache mode for the capability badge.
-function cacheModeLabel(mode?: string): string {
-  switch (mode) {
-    case 'native':
-      return 'Cache: ✅ cache_control'
-    case 'auto':
-      return 'Cache: ✅ otomatik'
-    case 'none':
-      return 'Cache: ❌ yok'
-    default:
-      return 'Cache: ? bilinmiyor'
-  }
-}
+import { useProviderInstances } from './providers/useProviderInstances'
+import { ProviderInstanceList } from './providers/ProviderInstanceList'
+import { ProviderInstanceForm } from './providers/ProviderInstanceForm'
 
 function testBadge(test: Props['test'], provider: string) {
   const r = test[provider]
@@ -307,399 +281,84 @@ function BuiltinProvider({
   )
 }
 
-// SecretSource lets the user fill the custom-provider key field from the
-// workspace secret vault (revealed and imported into the field, then saved
-// encrypted) and jump to the Secrets screen to manage entries.
-function SecretSource({
-  secrets,
-  onPick,
-  onManage,
-}: {
-  secrets: Secret[]
-  onPick: (name: string) => void
-  onManage: () => void
-}) {
-  return (
-    <div className="mt-1 flex items-center gap-2">
-      <select
-        defaultValue=""
-        onChange={(e) => {
-          const name = e.target.value
-          e.currentTarget.selectedIndex = 0
-          if (name) onPick(name)
-        }}
-        className={`${inputCls} flex-1 text-xs`}
-        disabled={secrets.length === 0}
-      >
-        <option value="">{secrets.length ? '🔑 Sırlardan içe aktar…' : 'Sır yok'}</option>
-        {secrets.map((s) => (
-          <option key={s.name} value={s.name}>
-            {s.name}
-          </option>
-        ))}
-      </select>
-      <button
-        onClick={onManage}
-        className="flex items-center gap-1 rounded border border-[var(--color-border)] px-2 py-1.5 text-xs hover:border-[var(--color-accent)]"
-      >
-        <KeyRound size={12} /> Sırları yönet →
-      </button>
-    </div>
-  )
-}
+// ProviderInstances lists every configured provider instance (kind-driven,
+// generic form) and hosts the add/edit form. Fetches and mutates via the
+// dedicated /api/providers + /api/provider-kinds endpoints, independent of
+// the main settings save flow.
+function ProviderInstances() {
+  const { kinds, instances, loading, error, upsert, remove } = useProviderInstances()
+  const [editing, setEditing] = useState<ProviderInstance | null>(null)
+  const [adding, setAdding] = useState(false)
 
-const EMPTY_PROVIDER: UpsertProviderInput = {
-  id: '',
-  label: '',
-  kind: 'openai',
-  baseUrl: '',
-  defaultModel: '',
-  models: '',
-  key: '',
-  reasoning: false,
-  promptCache: '',
-}
-
-// CustomProviders manages user-added OpenAI/Anthropic-compatible endpoints
-// (OpenRouter, Gemini, Kimi, Ollama, ...). It fetches and mutates the list via
-// the dedicated /api/providers endpoints, independent of the main settings save.
-// The list renders as a real table; the add/edit form sits below it.
-function CustomProviders({
-  secrets,
-  onImportSecret,
-  onManageSecrets,
-}: {
-  secrets: Secret[]
-  onImportSecret: (name: string) => Promise<string>
-  onManageSecrets: () => void
-}) {
-  const [list, setList] = useState<CustomProvider[]>([])
-  const [draft, setDraft] = useState<UpsertProviderInput>(EMPTY_PROVIDER)
-  const [editing, setEditing] = useState(false)
-  const [busy, setBusy] = useState(false)
-  const [err, setErr] = useState('')
-  // Ballpark list prices (provider id → model → price) for the per-provider cost hint.
-  const [prices, setPrices] = useState<PriceTable>({})
-
-  useEffect(() => {
-    api
-      .listCustomProviders()
-      .then(setList)
-      .catch(() => {})
-    api
-      .prices()
-      .then(setPrices)
-      .catch(() => {})
-  }, [])
-
-  const reset = () => {
-    setDraft(EMPTY_PROVIDER)
-    setEditing(false)
-    setErr('')
+  if (loading) {
+    return <p className="text-xs text-[var(--color-text-dim)]">Yükleniyor…</p>
   }
-  const upd = (patch: Partial<UpsertProviderInput>) => setDraft((d) => ({ ...d, ...patch }))
+  if (error) {
+    return <p className="text-xs text-[var(--color-danger)]">{error}</p>
+  }
 
-  const save = async () => {
-    setBusy(true)
-    setErr('')
-    try {
-      const payload: UpsertProviderInput = { ...draft }
-      // Blank key on save = keep the stored one (backend treats omitted as keep).
-      if (!payload.key) delete payload.key
-      setList(await api.upsertCustomProvider(payload))
-      reset()
-    } catch (e) {
-      setErr((e as Error).message)
-    } finally {
-      setBusy(false)
+  const startEdit = (inst: ProviderInstance) => {
+    setEditing(inst)
+    setAdding(false)
+  }
+  const startAdd = () => {
+    setEditing(null)
+    setAdding(true)
+  }
+  const cancel = () => {
+    setEditing(null)
+    setAdding(false)
+  }
+
+  const handleDelete = async (inst: ProviderInstance) => {
+    if (!confirm(`"${inst.label || inst.id}" sağlayıcı örneğini silmek istediğine emin misin?`)) {
+      return
     }
-  }
-
-  const edit = (p: CustomProvider) => {
-    setDraft({
-      id: p.id,
-      label: p.label,
-      kind: p.kind,
-      baseUrl: p.baseUrl,
-      defaultModel: p.defaultModel,
-      models: p.models,
-      key: '',
-      reasoning: !!p.reasoning,
-      promptCache: p.promptCache ?? '',
-    })
-    setEditing(true)
-    setErr('')
-  }
-  const remove = async (id: string) => {
     try {
-      setList(await api.deleteCustomProvider(id))
-      if (draft.id === id) reset()
-      toast.success('Sağlayıcı silindi')
+      const result = await remove(inst.id)
+      if (result.affectedAgents.length > 0) {
+        toast.error(
+          `Sağlayıcı silindi, ancak ${result.affectedAgents.length} ajan hâlâ bu örneğe bağlıydı. Bu ajanları yeniden yapılandır.`,
+        )
+      } else {
+        toast.success('Sağlayıcı örneği silindi')
+      }
+      if (editing?.id === inst.id) cancel()
     } catch (e) {
-      setErr((e as Error).message)
+      toast.error((e as Error).message)
     }
   }
 
   return (
     <div className="space-y-2">
-      {list.length > 0 && (
-        <div className="grid gap-2">
-          {list.map((p) => (
-            <div
-              key={p.id}
-              className="space-y-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3"
-            >
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex min-w-0 items-center gap-2">
-                  <Boxes size={15} className="shrink-0 text-[var(--color-accent)]" />
-                  <span className="truncate text-sm font-medium">{p.label || p.id}</span>
-                  <span className="shrink-0 text-[10px] uppercase tracking-wide text-[var(--color-text-dim)]">
-                    {p.kind === 'anthropic' ? 'Anthropic-uyumlu' : 'OpenAI-uyumlu'}
-                  </span>
-                </div>
-                <span
-                  className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${
-                    p.keySet
-                      ? 'bg-[var(--color-surface-2)] text-[var(--color-success)]'
-                      : 'bg-[var(--color-surface-2)] text-[var(--color-text-dim)]'
-                  }`}
-                >
-                  {p.keySet ? '✓ Anahtar kayıtlı' : 'Anahtar yok'}
-                </span>
-              </div>
+      <ProviderInstanceList
+        instances={instances}
+        kinds={kinds}
+        onEdit={startEdit}
+        onDelete={handleDelete}
+      />
 
-              <div className="grid gap-x-3 gap-y-1 text-xs sm:grid-cols-2">
-                <div className="min-w-0 truncate" title={p.id}>
-                  <span className="text-[var(--color-text-dim)]">id: </span>
-                  {p.id}
-                </div>
-                <div className="min-w-0 truncate" title={p.defaultModel}>
-                  <span className="text-[var(--color-text-dim)]">model: </span>
-                  {p.defaultModel || '—'}
-                  {(() => {
-                    const pr = prices[p.id]?.[p.defaultModel]
-                    return pr ? (
-                      <span
-                        className="ml-1 tabular-nums text-[var(--color-text-dim)]"
-                        title="giriş / çıkış — $/1M token"
-                      >
-                        ({fmtPrice(pr.inputPerMTok)} / {fmtPrice(pr.outputPerMTok)})
-                      </span>
-                    ) : null
-                  })()}
-                </div>
-                <div
-                  className="col-span-full min-w-0 truncate text-[var(--color-text-dim)]"
-                  title={p.baseUrl}
-                >
-                  {p.baseUrl}
-                </div>
-              </div>
-
-              <div className="flex flex-wrap gap-1.5">
-                <span
-                  className="rounded px-1.5 py-0.5 text-[10px]"
-                  style={{
-                    background: p.reasoning
-                      ? 'var(--color-success, #16a34a)22'
-                      : 'var(--color-surface-2)',
-                    color: p.reasoning ? 'var(--color-success, #16a34a)' : 'var(--color-text-dim)',
-                  }}
-                >
-                  {p.reasoning ? 'Düşünme: ✅' : 'Düşünme: —'}
-                </span>
-                <span
-                  className="rounded px-1.5 py-0.5 text-[10px]"
-                  style={{
-                    background:
-                      p.promptCache === 'native' || p.promptCache === 'auto'
-                        ? 'var(--color-success, #16a34a)22'
-                        : 'var(--color-surface-2)',
-                    color:
-                      p.promptCache === 'native' || p.promptCache === 'auto'
-                        ? 'var(--color-success, #16a34a)'
-                        : 'var(--color-text-dim)',
-                  }}
-                >
-                  {cacheModeLabel(p.promptCache)}
-                </span>
-              </div>
-
-              <div className="flex items-center justify-end gap-1.5">
-                <button
-                  data-testid="custom-provider-edit"
-                  data-provider-id={p.id}
-                  onClick={() => edit(p)}
-                  className="rounded border border-[var(--color-border)] px-2 py-1 text-xs hover:border-[var(--color-accent)]"
-                >
-                  Düzenle
-                </button>
-                <button
-                  data-testid="custom-provider-delete"
-                  data-provider-id={p.id}
-                  onClick={() => remove(p.id)}
-                  className="rounded border border-[var(--color-border)] p-1 text-[var(--color-danger)] hover:border-[var(--color-danger)]"
-                >
-                  <Trash2 size={13} />
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
+      {editing || adding ? (
+        <ProviderInstanceForm
+          kinds={kinds}
+          instances={instances}
+          editing={editing}
+          onCancel={cancel}
+          onSave={async (input) => {
+            await upsert(input)
+            toast.success(editing ? 'Sağlayıcı örneği güncellendi' : 'Sağlayıcı örneği eklendi')
+            cancel()
+          }}
+        />
+      ) : (
+        <button
+          data-testid="provider-instance-add"
+          onClick={startAdd}
+          className="rounded border border-dashed border-[var(--color-border)] px-3 py-1.5 text-xs hover:border-[var(--color-accent)]"
+        >
+          + Yeni sağlayıcı örneği
+        </button>
       )}
-
-      <div className="space-y-1.5 rounded-md border border-dashed border-[var(--color-border)] p-2">
-        <div className="text-xs font-medium">
-          {editing ? `Düzenle: ${draft.id}` : 'Yeni özel sağlayıcı'}
-        </div>
-        <div className="grid grid-cols-2 gap-1.5">
-          <input
-            data-testid="custom-provider-id-input"
-            placeholder="id (ör. openrouter)"
-            value={draft.id}
-            disabled={editing}
-            onChange={(e) => upd({ id: e.target.value })}
-            className={inputCls}
-          />
-          <input
-            data-testid="custom-provider-label-input"
-            placeholder="Etiket"
-            value={draft.label}
-            onChange={(e) => upd({ label: e.target.value })}
-            className={inputCls}
-          />
-          <select
-            data-testid="custom-provider-kind-select"
-            value={draft.kind}
-            onChange={(e) => upd({ kind: e.target.value })}
-            className={inputCls}
-          >
-            <option value="openai">OpenAI-uyumlu (tool-use)</option>
-            <option value="anthropic">Anthropic-uyumlu (tool-use + thinking)</option>
-          </select>
-          <input
-            data-testid="custom-provider-default-model-input"
-            placeholder="varsayılan model"
-            value={draft.defaultModel}
-            onChange={(e) => upd({ defaultModel: e.target.value })}
-            className={inputCls}
-          />
-        </div>
-        <input
-          data-testid="custom-provider-base-url-input"
-          placeholder="base URL (ör. https://openrouter.ai/api/v1)"
-          value={draft.baseUrl}
-          onChange={(e) => upd({ baseUrl: e.target.value })}
-          className={inputCls}
-        />
-        <input
-          data-testid="custom-provider-models-input"
-          placeholder="model id'leri — virgülle, opsiyonel"
-          value={draft.models}
-          onChange={(e) => upd({ models: e.target.value })}
-          className={inputCls}
-        />
-
-        {/* Capability flags: reasoning passthrough + prompt-cache mode. */}
-        <div className="grid grid-cols-2 items-center gap-1.5">
-          <label
-            className="flex items-center gap-1.5 text-xs"
-            title="Açıksa OpenAI-uyumlu uca reasoning_effort gönderilir (ajanın Düşünme seviyesinden). Anthropic-uyumlu uçlar thinking'i native destekler."
-          >
-            <input
-              data-testid="custom-provider-reasoning"
-              type="checkbox"
-              checked={!!draft.reasoning}
-              onChange={(e) => upd({ reasoning: e.target.checked })}
-            />
-            Düşünme (reasoning_effort)
-          </label>
-          <select
-            data-testid="custom-provider-cache-select"
-            value={draft.promptCache || ''}
-            onChange={(e) => upd({ promptCache: e.target.value })}
-            className={inputCls}
-            title="Prompt-cache davranışı: native = cache_control enjekte; auto = sunucu otomatik; none = yok."
-          >
-            <option value="">Cache: bilinmiyor</option>
-            <option value="native">Cache: native (cache_control)</option>
-            <option value="auto">Cache: otomatik</option>
-            <option value="none">Cache: yok</option>
-          </select>
-        </div>
-
-        {/* Per-model price view (read-only) — shown when prices are known for this id. */}
-        {editing &&
-          (() => {
-            const table = prices[draft.id]
-            const ids = draft.models
-              .split(/[\n,]/)
-              .map((s) => s.trim())
-              .filter(Boolean)
-            if (!table || ids.length === 0) return null
-            const priced = ids.filter((m) => table[m])
-            if (priced.length === 0) return null
-            return (
-              <div className="rounded bg-[var(--color-surface-2)] p-1.5">
-                <div className="mb-1 text-[10px] uppercase tracking-wide text-[var(--color-text-dim)]">
-                  Fiyatlar — $/1M token (giriş / çıkış)
-                </div>
-                <div className="max-h-40 overflow-y-auto">
-                  {priced.map((m) => {
-                    const pr = table[m]
-                    return (
-                      <div
-                        key={m}
-                        className="flex items-center justify-between gap-3 px-1 py-0.5 text-[11px]"
-                      >
-                        <span className="min-w-0 break-all font-mono">{m}</span>
-                        <span className="shrink-0 tabular-nums text-[var(--color-text-dim)]">
-                          {fmtPrice(pr.inputPerMTok)} / {fmtPrice(pr.outputPerMTok)}
-                        </span>
-                      </div>
-                    )
-                  })}
-                </div>
-                <p className="mt-1 text-[10px] text-[var(--color-text-dim)]">
-                  Yaklaşık liste fiyatı; bütçe ekranı bu değerlerle maliyet hesaplar.
-                </p>
-              </div>
-            )
-          })()}
-
-        <SecretSource
-          secrets={secrets}
-          onManage={onManageSecrets}
-          onPick={async (n) => upd({ key: await onImportSecret(n) })}
-        />
-        <div className="text-xs text-[var(--color-text-dim)]">
-          {draft.key
-            ? '✓ Anahtar sırdan seçildi'
-            : editing
-              ? 'Anahtar korunacak (değiştirmek için sırdan seç)'
-              : 'Anahtar: yalnızca sırdan seçilir (elle giriş kapalı)'}
-        </div>
-        {err && <div className="text-xs text-[var(--color-danger)]">{err}</div>}
-        <div className="flex gap-2">
-          <button
-            data-testid="custom-provider-save"
-            onClick={save}
-            disabled={busy || !draft.id || !draft.baseUrl}
-            className="flex items-center gap-1 rounded bg-[var(--color-accent)] px-3 py-1.5 text-xs font-medium text-white hover:opacity-90 disabled:opacity-30"
-          >
-            <Plus size={13} /> {editing ? 'Güncelle' : 'Ekle'}
-          </button>
-          {editing && (
-            <button
-              data-testid="custom-provider-cancel"
-              onClick={reset}
-              className="rounded border border-[var(--color-border)] px-3 py-1.5 text-xs"
-            >
-              İptal
-            </button>
-          )}
-        </div>
-      </div>
     </div>
   )
 }
@@ -1129,18 +788,14 @@ export function ProvidersPanel({
       </div>
 
       <div className="flex items-center gap-1.5 pt-2 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
-        <Boxes size={13} className="text-[var(--color-accent)]" /> Özel sağlayıcılar
+        <Boxes size={13} className="text-[var(--color-accent)]" /> Sağlayıcı örnekleri
       </div>
       <p className="-mt-1 text-xs text-[var(--color-text-dim)]">
-        OpenAI- veya Anthropic-uyumlu herhangi bir uç (OpenRouter, Gemini, Kimi, Ollama…). Eklenince
-        ajan oluştururken sağlayıcı olarak seçilebilir. Değişiklikler anında kaydedilir (üstteki
-        Kaydet'ten bağımsız).
+        Kayıtlı her taslaktan (kind) birden fazla örnek oluşturulabilir (farklı token/config taşıyan
+        aynı sağlayıcı, ör. iki ayrı Anthropic hesabı). Eklenince ajan oluştururken sağlayıcı olarak
+        seçilebilir. Değişiklikler anında kaydedilir (üstteki Kaydet'ten bağımsız).
       </p>
-      <CustomProviders
-        secrets={secrets}
-        onImportSecret={onImportSecret}
-        onManageSecrets={onManageSecrets}
-      />
+      <ProviderInstances />
     </>
   )
 }

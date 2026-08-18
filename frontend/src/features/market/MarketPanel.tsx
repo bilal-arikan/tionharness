@@ -81,7 +81,7 @@ export function MarketPanel({ onError, onManageSecrets, onInstalled }: Props) {
         api.listSkills(),
         api.listAgents(),
         api.listFlows(),
-        api.listCustomProviders(),
+        api.listProviders(),
         api.listWorkspaces(),
         api.listMCPServers(),
       ])

@@ -721,8 +721,11 @@ func (s *Server) registerSettingsRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/settings/test-provider", s.handleTestProvider)
 	mux.HandleFunc("GET /api/catalog", s.handleCatalog)
 	mux.HandleFunc("GET /api/prompts", s.handleListPrompts)
-	// Custom (user-added) OpenAI/Anthropic-compatible providers.
+	// Provider instances (providers.json, _Docs/71) — user-configured accounts
+	// bound to a registered provider kind.
+	mux.HandleFunc("GET /api/provider-kinds", s.handleListProviderKinds)
 	mux.HandleFunc("GET /api/providers", s.handleListProviders)
+	mux.HandleFunc("GET /api/providers/{id}", s.handleGetProvider)
 	mux.HandleFunc("PUT /api/providers", s.handleUpsertProvider)
 	mux.HandleFunc("DELETE /api/providers/{id}", s.handleDeleteProvider)
 	mux.HandleFunc("GET /api/prices", s.handlePrices)

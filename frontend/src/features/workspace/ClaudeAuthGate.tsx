@@ -39,13 +39,13 @@ interface Props {
 // no custom provider exists. (A claude-cli login living only in the workspace's
 // claude-home is caught separately by the login probe.)
 async function hasNoUsableProvider(): Promise<boolean> {
-  const [s, custom] = await Promise.all([api.getSettings(), api.listCustomProviders()])
+  const [s, instances] = await Promise.all([api.getSettings(), api.listProviders()])
   return (
     !s.anthropicKeySet &&
     !s.minimaxKeySet &&
     !s.openrouterKeySet &&
     !s.claudeCliAuthSet &&
-    custom.length === 0
+    instances.length === 0
   )
 }
 
