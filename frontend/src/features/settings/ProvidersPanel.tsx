@@ -944,12 +944,24 @@ export function ProvidersPanel({
             <div className="space-y-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] p-2.5">
               <span className="text-xs font-medium text-[var(--color-text-dim)]">Giriş yap</span>
               <p className="text-[11px] text-[var(--color-text-dim)]">
-                TionSwarm codex-cli için otomatik giriş akışı sunmaz. Yukarıdaki config dizinini
-                işaret ederek terminalde login komutunu çalıştır:
+                Her workspace açılışında, bu workspace'in codex-home'u henüz giriş yapılmamışsa
+                global ~/.codex (veya $CODEX_HOME) girişi otomatik olarak buraya kopyalanır. Bu
+                komut yalnızca hiçbir global girişin bulunmadığı durumda gerekir — PowerShell'de
+                çalıştır:
               </p>
-              <code className="block overflow-x-auto rounded bg-[var(--color-surface-2)] px-2 py-1 text-[11px]">
-                CODEX_HOME={workspaceCodexHome || '<workspace>/codex-home'} codex login
+              <code className="block overflow-x-auto whitespace-pre rounded bg-[var(--color-surface-2)] px-2 py-1 text-[11px]">
+                {`$env:CODEX_HOME = "${workspaceCodexHome || '<workspace>/codex-home'}"\ncodex login`}
               </code>
+              <p className="text-[11px] text-[var(--color-text-dim)]">
+                <code className="rounded bg-[var(--color-surface-2)] px-1 py-0.5">codex</code>{' '}
+                komutu PATH'te olmayabilir — resmi Windows kurulumu ikili dosyayı genellikle{' '}
+                <code className="rounded bg-[var(--color-surface-2)] px-1 py-0.5">
+                  %LOCALAPPDATA%\Programs\OpenAI\Codex\bin\codex.exe
+                </code>{' '}
+                konumuna kurar ve PATH'e eklemez.{' '}
+                <code className="rounded bg-[var(--color-surface-2)] px-1 py-0.5">codex</code>{' '}
+                bulunamıyorsa yukarıdaki komutta tam yolu kullan.
+              </p>
             </div>
           </div>
 

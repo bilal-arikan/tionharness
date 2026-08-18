@@ -193,6 +193,42 @@ karşılık, Codex'te **`OPENAI_API_KEY`** aynı işi görür. `--with-api-key` 
 kanalı, TionSwarm'ın "izole config evine anahtarsız login" akışını (workspace
 kurulumunda bir kez) mümkün kılar.
 
+### Boot-time seed: global `~/.codex` → workspace `codex-home` ✅
+
+Her `codex-home` izole olduğundan (yukarıdaki `CODEX_HOME` = `CLAUDE_CONFIG_DIR`
+bölümü), kullanıcı `codex login`'i global `~/.codex`'e yapmışsa bile YENİ bir
+workspace'in kendi `codex-home`'u başlangıçta girişsiz kalıyordu — claude-cli
+tarafında bunun karşılığı olan otomatik seed (`EnsureWorkspaceClaudeHome`,
+`51-CLAUDE-CONFIG-BIRLESIK.md`) codex tarafında **yoktu**. Bu artık giderildi:
+
+`agent.EnsureWorkspaceCodexHome(wsRoot)` (`internal/agent/codexhome.go`),
+`internal/workspace/manager.go`'da `EnsureWorkspaceClaudeHome`'un hemen yanında
+her workspace açılışında çağrılır. Davranışı:
+
+- `<workspace>/codex-home/auth.json` **zaten varsa dokunmaz** (idempotent,
+  workspace'in kendi login'i asla ezilmez).
+- Yoksa, `CODEX_HOME` env değişkeni (varsa) veya `~/.codex` (yoksa) — codex
+  ikilisinin kendi çözdüğü aynı kural — konumundaki global `auth.json`'u
+  kopyalar.
+- **Yalnızca `auth.json` kopyalanır — `config.toml` KASITLI olarak
+  kopyalanmaz.** TionSwarm bu dosyayı zaten her tur kendi üretiyor
+  (`writeCodexConfig`, `internal/providers/codexcli_config.go`); kullanıcının
+  global `config.toml`'unu kopyalamak en iyi ihtimalle bir sonraki turda
+  ezilir, en kötü ihtimalle çakışan/bayat ayarlar bırakır.
+- claude-cli'nin credential-liveness heal'inin (bkz. `claudehome.go`)
+  eşdeğeri **yok** — codex'in kendi OAuth refresh'inin claude gibi kendi
+  credential dosyasını sildiğine dair bilinen bir davranışı yok, dolayısıyla
+  iyileştirilecek bir "wipe" senaryosu da yok. Job sadece: eksik dosyayı
+  seed'lemek.
+- Best-effort: seed atlanır/başarısız olursa workspace açılışını engellemez,
+  yalnızca loglanır (neden atlandığı — global auth yok / kopyalama hatası —
+  net görünür şekilde).
+
+UI tarafında (`ProvidersPanel.tsx`, "Giriş yap" kutusu) manuel
+`$env:CODEX_HOME = "..."; codex login` komutu artık yalnızca **hiçbir global
+girişin bulunmadığı** durum için gerekli — PowerShell sözdizimiyle ve `codex`
+ikilisinin PATH'te olmayabileceği notuyla birlikte gösteriliyor.
+
 ### Auth hatası imzası (canlı gözlem)
 
 Login'siz koşuda alınan **gerçek** çıktı:

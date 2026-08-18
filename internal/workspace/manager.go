@@ -264,6 +264,10 @@ func (m *Manager) open(meta Meta) error {
 	// migrate any legacy <workspace>/skills into it. Must run BEFORE NewRuntime so
 	// the skill store scans the migrated (populated) tier. Idempotent.
 	agent.EnsureWorkspaceClaudeHome(dir)
+	// Same idea for the per-workspace codex-cli config home (<workspace>/codex-home):
+	// seed its auth.json from the global ~/.codex (or $CODEX_HOME) login, if any, so
+	// a fresh workspace doesn't need its own `codex login`. Idempotent.
+	agent.EnsureWorkspaceCodexHome(dir)
 
 	storeDir := filepath.Join(dir, "store")
 	storeOpenStart := time.Now()
