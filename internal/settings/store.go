@@ -246,6 +246,11 @@ func (s *Store) decrypt(enc string) string {
 	return plain
 }
 
+// Decrypt is the exported form of decrypt, for callers outside this package
+// that need to open a Settings *Enc field's plaintext (e.g. ProviderStore's
+// boot migration, _Docs/71 §3).
+func (s *Store) Decrypt(enc string) string { return s.decrypt(enc) }
+
 // Apply merges a patch into the current settings, persists, and returns the new
 // state. The write-only AnthropicKey field is encrypted (or cleared) here.
 // Invalid enum/format values are rejected up front (see Validate) so a bad

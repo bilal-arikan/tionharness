@@ -7,24 +7,53 @@ import (
 	"github.com/bilal-arikan/tionswarm/internal/settings"
 )
 
-// customProviderSpecs projects persisted custom providers into registry specs,
-// decrypting each key. Used by applySettings to push them into the registry.
-func (s *Server) customProviderSpecs(cur settings.Settings) []providers.CustomSpec {
-	out := make([]providers.CustomSpec, 0, len(cur.CustomProviders))
-	for _, c := range cur.CustomProviders {
-		out = append(out, providers.CustomSpec{
-			ID:           c.ID,
-			Label:        c.Label,
-			Kind:         c.Kind,
-			BaseURL:      c.BaseURL,
-			DefaultModel: c.DefaultModel,
-			Models:       c.Models,
-			Key:          s.settings.CustomProviderKey(c.ID),
-			Reasoning:    c.Reasoning,
-			PromptCache:  c.PromptCache,
+// registryInstances projects every persisted provider instance (providers.json,
+// _Docs/71 §2.4) into the registry's Instance view, decrypting each instance's
+// secrets through the SAME ProviderStore that owns them. Used by applySettings
+// to push the full instance set into the registry on every settings change —
+// the Faz 2 successor to customProviderSpecs (_Docs/71 §4.3).
+func (s *Server) registryInstances() []providers.Instance {
+	list := s.providerStore.List()
+	out := make([]providers.Instance, 0, len(list))
+	for _, inst := range list {
+		values := make(map[string]string, len(inst.Config)+len(inst.SecretsEnc))
+		for k, v := range inst.Config {
+			values[k] = v
+		}
+		for k := range inst.SecretsEnc {
+			values[k] = s.providerStore.Secret(inst.ID, k)
+		}
+		out = append(out, providers.Instance{
+			ID:           inst.ID,
+			KindID:       inst.KindID,
+			Label:        inst.Label,
+			Enabled:      inst.Enabled,
+			DefaultModel: inst.DefaultModel,
+			Models:       inst.Models,
+			Values:       values,
+			// Reasoning/PromptCache carry the legacy CustomProvider capability flags
+			// forward for a migrated openai-compat instance (_Docs/71 §3); config
+			// keys "reasoning"/"promptCache" are not standard FieldSpec keys so they
+			// are read directly off Config rather than through Values.
+			Reasoning:   inst.Config["reasoning"] == "true",
+			PromptCache: inst.Config["promptCache"],
 		})
 	}
 	return out
+}
+
+// instanceFieldValue returns the value of one FieldSpec key on the instance
+// with the given id, or "" if the instance is absent or the key is unset. Used
+// to keep the external-tools panel's binary-path override pointed at whatever
+// the default claude-cli/codex-cli instance actually resolves to (server.go
+// applySettings).
+func instanceFieldValue(instances []providers.Instance, id, key string) string {
+	for _, inst := range instances {
+		if inst.ID == id {
+			return inst.Values[key]
+		}
+	}
+	return ""
 }
 
 // upsertProviderReq is the create/update payload. Key is write-only: omitted

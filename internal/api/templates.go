@@ -181,13 +181,24 @@ func (s *Server) seedWorkspaceTeam(ctx context.Context, wsNew *workspace.Workspa
 			s.logger.Warn("seed template agent: unknown coordinator recipe, ignoring",
 				"workspace", wsNew.ID, "agent", ta.Name, "workflow", ta.CoordinatorWorkflow)
 		}
-		agent, err := wsNew.DB.CreateAgent(ctx, db.Agent{
+		// ap is a template's kind id, accepted as a provider INSTANCE id here too
+		// (default-instance-id-equals-kind-id convention, _Docs/71 §3/§5). A
+		// template referencing a kind that no longer exists is logged and
+		// skipped, same as any other seed failure for this agent — not a silent
+		// claude-cli fallback.
+		providerKind, providerInstanceID, perr := agent.SyncProviderFields(s.providers, ap)
+		if perr != nil {
+			s.logger.Warn("seed template agent: unresolvable provider, skipping", "workspace", wsNew.ID, "agent", ta.Name, "provider", ap, "error", perr)
+			continue
+		}
+		created, err := wsNew.DB.CreateAgent(ctx, db.Agent{
 			Name:                ta.Name,
 			Soul:                ta.Soul,
 			Identity:            ta.Identity,
 			Avatar:              ta.Avatar,
 			Color:               ta.Color,
-			Provider:            ap,
+			Provider:            providerKind,
+			ProviderInstanceID:  providerInstanceID,
 			Model:               am,
 			ThinkingLevel:       ta.ThinkingLevel,
 			PermissionMode:      ta.PermissionMode,
@@ -204,7 +215,7 @@ func (s *Server) seedWorkspaceTeam(ctx context.Context, wsNew *workspace.Workspa
 			s.logger.Warn("seed template agent failed", "workspace", wsNew.ID, "agent", ta.Name, "error", err)
 			continue
 		}
-		ids[ta.Key] = agent.ID
+		ids[ta.Key] = created.ID
 	}
 
 	// 3) Flows (linear or non-linear), each wired to the seeded agents. The

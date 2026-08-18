@@ -127,7 +127,7 @@ func newHarness(t *testing.T, provider *scriptedProvider) *harness {
 
 	tun := agent.NewTunables()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	rt := agent.NewRuntime(database, providers.NewRegistry(""), tun, workDir, nil, nil, "", "", nil, logger)
+	rt := agent.NewRuntime(database, providers.NewRegistry(), tun, workDir, nil, nil, "", "", nil, logger)
 
 	return &harness{
 		t:        t,
@@ -167,11 +167,11 @@ func (h *harness) newSession(a db.Agent) db.Session {
 
 // turnResult bundles what one chat turn produced for assertions.
 type turnResult struct {
-	resp     *providers.Response       // final provider response (text stitched)
-	steps    []agent.TurnStep          // full persisted activity trace
-	streamed []agent.TurnStep          // steps delivered live via the onStep sink
-	reply    db.Message                // persisted assistant message
-	prep     conversation.Prepared     // the budgeting result for this turn
+	resp     *providers.Response   // final provider response (text stitched)
+	steps    []agent.TurnStep      // full persisted activity trace
+	streamed []agent.TurnStep      // steps delivered live via the onStep sink
+	reply    db.Message            // persisted assistant message
+	prep     conversation.Prepared // the budgeting result for this turn
 }
 
 // send drives ONE full chat turn the way api/chat_stream does: persist the user

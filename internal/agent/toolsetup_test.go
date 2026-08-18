@@ -26,7 +26,12 @@ func newTestRuntime(t *testing.T, workDir string) (*Runtime, *Tunables) {
 	t.Cleanup(func() { _ = database.Close() })
 	tun := NewTunables()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	rt := NewRuntime(database, providers.NewRegistry(""), tun, workDir, nil, nil, "", "", nil, logger)
+	registry := providers.NewRegistry()
+	// Real boot always has at least the default claude-cli instance (it migrates
+	// unconditionally, _Docs/71 §3) — a bare NewRegistry() has none, so seed it
+	// here to match what every non-test Registry actually looks like.
+	registry.SetInstances([]providers.Instance{{ID: "claude-cli", KindID: "claude-cli"}})
+	rt := NewRuntime(database, registry, tun, workDir, nil, nil, "", "", nil, logger)
 	// Background turns (spawn / inbox delivery / wake) run detached and keep writing
 	// to the store after the test body returns. Wait for them to drain before
 	// t.TempDir()'s RemoveAll, or cleanup races a live write ("directory not empty")

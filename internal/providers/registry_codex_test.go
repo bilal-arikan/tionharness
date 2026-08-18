@@ -7,8 +7,9 @@ import "testing"
 // Get building the concrete provider, and an unconfigured path erroring out
 // rather than returning a provider that would fail later at spawn time.
 func TestCodexCLIRegistryWiring(t *testing.T) {
-	r := NewRegistry("")
+	r := NewRegistry()
 	r.codexCLIPath = "" // force-clear whatever PATH detection found on this host
+	r.SetInstances([]Instance{instanceOf("codex-cli", nil)})
 
 	if r.Available("codex-cli") {
 		t.Error("codex-cli reported available with no binary")
@@ -41,9 +42,9 @@ func TestCodexCLIRegistryWiring(t *testing.T) {
 // the setting would persist and display correctly while the subprocess silently
 // kept using the ambient ~/.codex.
 func TestCodexConfigDirReachesResolvedConfig(t *testing.T) {
-	r := NewRegistry("")
-	r.SetCodexConfigDir("/tmp/codex-home")
-	if got := r.resolve("codex-cli").CodexConfigDir; got != "/tmp/codex-home" {
+	r := NewRegistry()
+	r.SetInstances([]Instance{instanceOf("codex-cli", map[string]string{FieldKeyConfigDir: "/tmp/codex-home"})})
+	if got := r.resolve(instanceOf("codex-cli", map[string]string{FieldKeyConfigDir: "/tmp/codex-home"})).CodexConfigDir; got != "/tmp/codex-home" {
 		t.Errorf("resolve().CodexConfigDir = %q, want /tmp/codex-home", got)
 	}
 }
@@ -52,7 +53,7 @@ func TestCodexConfigDirReachesResolvedConfig(t *testing.T) {
 // the override must fall back to PATH lookup, not pin an empty path that would
 // make the provider permanently unavailable.
 func TestSetCodexCLIPathEmptyRestoresAutoDetect(t *testing.T) {
-	r := NewRegistry("")
+	r := NewRegistry()
 	autodetected := r.CodexCLIPath() // whatever this host resolves (may be "")
 
 	r.SetCodexCLIPath("/custom/codex")

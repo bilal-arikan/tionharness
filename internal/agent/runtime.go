@@ -744,13 +744,19 @@ func skillToolNameFor(provider string) string {
 	return skills.DefaultSkillTool
 }
 
-// isCLIProviderKind reports whether provider drives a locally-installed CLI
-// through the Interaction MCP bridge (claude-cli, codex-cli) rather than a
-// native API call — both dialects namespace bridged tool names the same way, so
-// every call site that branches on "is this a CLI turn" shares this one check.
-// The empty provider is the keyless claude-cli default.
+// isCLIProviderKind reports whether provider (a KIND id — Agent.Provider,
+// always a kind, never a provider instance id, _Docs/71 §2.5) drives a
+// locally-installed CLI through the Interaction MCP bridge (claude-cli,
+// codex-cli) rather than a native API call — both dialects namespace bridged
+// tool names the same way, so every call site that branches on "is this a CLI
+// turn" shares this one check. Driven by Manifest.Transport (_Docs/71 §4.2)
+// rather than a hard-coded id list, so a future CLI-transport kind is covered
+// automatically. The empty provider is the keyless claude-cli default.
 func isCLIProviderKind(provider string) bool {
-	return provider == "" || provider == "claude-cli" || provider == "codex-cli"
+	if provider == "" {
+		provider = "claude-cli"
+	}
+	return providers.TransportOf(provider) == providers.TransportCLI
 }
 
 // LoadSkillForAgent returns a skill's full body for the CLI path (the Interaction

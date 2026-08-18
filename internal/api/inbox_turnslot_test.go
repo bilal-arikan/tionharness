@@ -26,7 +26,7 @@ func newWorkspaceServer(t testing.TB) (*Server, *workspace.Workspace) {
 	t.Helper()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	dir := t.TempDir()
-	registry := providers.NewRegistry("")
+	registry := providers.NewRegistry()
 	tun := agent.NewTunables()
 	cipher, err := config.LoadSecret(dir)
 	if err != nil {
@@ -43,7 +43,14 @@ func newWorkspaceServer(t testing.TB) (*Server, *workspace.Workspace) {
 	if err != nil {
 		t.Fatalf("settings: %v", err)
 	}
-	s := NewServer(manager, registry, settingsStore, tun, logs, bus, logger)
+	providerStore, err := settings.OpenProviderStore(dir, cipher)
+	if err != nil {
+		t.Fatalf("provider store: %v", err)
+	}
+	if _, err := providerStore.EnsureMigrated(settingsStore.Get(), settingsStore.Decrypt); err != nil {
+		t.Fatalf("provider store migrate: %v", err)
+	}
+	s := NewServer(manager, registry, providerStore, settingsStore, tun, logs, bus, logger)
 	// A fresh tree has NO workspace (first-run onboarding owns creation), so make one.
 	wsp, err := manager.Create("test", "", "test")
 	if err != nil {

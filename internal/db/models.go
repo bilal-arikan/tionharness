@@ -1,13 +1,47 @@
 package db
 
+// backfillProviderInstance fills a zero-value ProviderInstanceID at READ time
+// (_Docs/71 §2.5/§3): an agent row written before this field existed carries
+// "" here, but its Provider already holds a kind id, and every migrated
+// default instance's id equals its kind id — so Provider resolves to the
+// right instance with no separate bulk-migration pass. A wholly empty
+// Provider (row predates even that field) falls back to the keyless
+// claude-cli default, matching Registry.Get's historical empty-provider
+// behaviour. Called on every read path (GetAgent, listAgents) rather than
+// once at load, per the plan's "no bulk write" requirement — the on-disk row
+// is left untouched until the agent is next explicitly saved.
+func (a Agent) backfillProviderInstance() Agent {
+	if a.ProviderInstanceID != "" {
+		return a
+	}
+	if a.Provider != "" {
+		a.ProviderInstanceID = a.Provider
+	} else {
+		a.ProviderInstanceID = "claude-cli"
+	}
+	return a
+}
+
 // Agent is an autonomous AI entity bound to a provider/model.
 type Agent struct {
 	ID       string `json:"id"`
 	Name     string `json:"name"`
 	Soul     string `json:"soul"`
 	Identity string `json:"identity"`
+	// Provider is now DERIVED: the KIND id of the provider instance this agent
+	// is bound to (ProviderInstanceID), kept in sync on every write via
+	// agent.SyncProviderFields (_Docs/71 §2.5, K3). Every kind-keyed reader
+	// (billing, context-window sizing, usage rollups — _Docs/71 §4.1) keeps
+	// consuming this field unchanged; only Registry.Get/Available take the
+	// instance id instead.
 	Provider string `json:"provider"`
-	Model    string `json:"model"`
+	// ProviderInstanceID is the single source of truth for which provider
+	// INSTANCE this agent uses (_Docs/71 §2.5, K3) — the id Registry.Get/
+	// Available resolve against. May be "" on an agent row written before this
+	// field existed; GetAgent/listAgents backfill it from Provider at read time
+	// (kind id == default instance id for every migrated instance, _Docs/71 §3).
+	ProviderInstanceID string `json:"providerInstanceId"`
+	Model              string `json:"model"`
 	// ThinkingLevel requests extended reasoning: "" / "off" | "low" | "medium" |
 	// "high". Applied on plain (non-tool) completions; anthropic provider only.
 	ThinkingLevel string `json:"thinkingLevel"`

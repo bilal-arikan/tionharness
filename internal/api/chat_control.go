@@ -140,7 +140,7 @@ func steerableForTurn(provider, mode string) bool {
 	if provider == "codex-cli" {
 		return false
 	}
-	if provider != "claude-cli" {
+	if providers.TransportOf(provider) != providers.TransportCLI {
 		return true
 	}
 	return mode == "ask" || mode == "read-only"

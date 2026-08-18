@@ -146,6 +146,18 @@ type ResolvedConfig struct {
 	ContextEditing   bool   // anthropic API-native context-editing beta (clear_tool_uses)
 	ServerCompaction bool   // anthropic API-native compaction beta (compact_20260112)
 	RefusalFallback  bool   // anthropic server-side refusal fallback (Fable-class requests)
+
+	// InstanceID/DefaultModel/Models/Values carry per-INSTANCE data for the
+	// generic openai-compat/anthropic-compat kinds (Faz 2, _Docs/71 §3): unlike
+	// every other field above (which mirrors an app-wide Registry setting),
+	// these vary per instance of the SAME kind (two "openai-compat" instances
+	// have different base URLs, models and reasoning/cache capability flags).
+	InstanceID   string            // the resolved provider instance's id (client "name")
+	DefaultModel string            // instance's configured default model, if any
+	Models       string            // instance's model-id suggestion list (comma/newline)
+	Reasoning    bool              // send reasoning_effort (openai-compat only)
+	PromptCache  string            // "native" | "auto" | "none" | "" (openai-compat only)
+	Values       map[string]string // raw resolved field values, keyed by FieldSpec.Key
 }
 
 // ProviderKind is one transport "plugin": it describes itself (Manifest),

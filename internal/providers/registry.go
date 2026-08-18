@@ -7,81 +7,81 @@ import (
 	"sync"
 )
 
-// CustomSpec is a user-configured OpenAI- or Anthropic-compatible provider, fed
-// to the registry from settings (Key is the decrypted plaintext). Its ID becomes
-// a selectable provider identifier alongside the built-in kinds.
-type CustomSpec struct {
+// Instance is the registry's view of one provider instance (Faz 2,
+// _Docs/71 §2.3): a kind id plus its resolved (decrypted) config/secret
+// values, keyed by the kind's declared FieldSpec.Key. It is a package-local
+// mirror of settings.ProviderInstance rather than a direct dependency on it,
+// keeping internal/providers free of an internal/settings import — the
+// caller (internal/api) projects settings.ProviderInstance + its decrypted
+// secrets into this shape via ToRegistryInstance.
+type Instance struct {
 	ID           string
+	KindID       string
 	Label        string
-	Kind         string // "openai" | "anthropic"
-	BaseURL      string
+	Enabled      bool
 	DefaultModel string
-	Models       string // optional model-id suggestions (comma/newline)
-	Key          string
-	// Reasoning: send reasoning_effort (openai kind) mapped from ThinkingBudget.
-	Reasoning bool
-	// PromptCache: "native" | "auto" | "none" | "" — "native" injects an
-	// Anthropic-style cache_control breakpoint on the system prefix (openai kind).
+	Models       string
+	// Values holds every field the instance's kind declares (Manifest.Fields),
+	// both open config and decrypted secrets, keyed by FieldSpec.Key.
+	Values map[string]string
+	// Reasoning/PromptCache are the openai-compat-only capability flags carried
+	// over from the legacy CustomSpec (_Docs/71 §3's openai-compat migration);
+	// not a standard FieldSpec key because no built-in kind uses them.
+	Reasoning   bool
 	PromptCache string
 }
 
-// Registry builds providers by name using configured credentials and
-// locally-available CLI tools. Its fields are mutable at runtime so the
-// Settings screen can update the Anthropic key or claude CLI path live.
+// Registry builds providers by instance id, resolving each instance's config
+// through its registered kind. Its fields are mutable at runtime so the
+// Settings screen can update instances or CLI paths live.
 type Registry struct {
-	mu              sync.RWMutex
-	anthropicKey    string
-	claudeCLIPath   string // resolved path to `claude` binary, or "" if absent
-	claudeConfigDir string // CLAUDE_CONFIG_DIR override for claude-cli, or "" to inherit ~/.claude
-	claudeAuthKind  string // claude-cli credential kind: "oauth" | "apikey" | ""
-	claudeAuthToken string // claude-cli credential value injected into the subprocess env
+	mu sync.RWMutex
 
-	codexCLIPath   string // resolved path to `codex` binary, or "" if absent
-	codexConfigDir string // CODEX_HOME override for codex-cli, or "" to inherit ~/.codex
+	claudeCLIPath string // autodetected `claude` binary path fallback, or "" if absent
+	codexCLIPath  string // autodetected `codex` binary path fallback, or "" if absent
 
 	betaExtendedCache    bool // anthropic extended prompt-cache TTL beta
 	betaContextEditing   bool // anthropic API-native context-editing beta (clear_tool_uses)
 	betaServerCompaction bool // anthropic API-native compaction beta (compact_20260112)
 	betaRefusalFallback  bool // anthropic server-side refusal fallback (Fable-class requests)
 
-	minimaxKey     string // MiniMax (OpenAI-compatible) API key
-	minimaxBaseURL string // MiniMax base URL ("" = public default)
-
-	openrouterKey     string // OpenRouter (OpenAI-compatible) API key
-	openrouterBaseURL string // OpenRouter base URL ("" = public default)
-
-	zaiKey     string // Z.ai GLM (Anthropic-compatible) API key
-	zaiBaseURL string // Z.ai base URL ("" = public Anthropic-mode default)
-
-	deepseekKey     string // DeepSeek (OpenAI-compatible) API key
-	deepseekBaseURL string // DeepSeek base URL ("" = public default)
-
-	custom      map[string]CustomSpec // user-added providers, keyed by id
-	customOrder []string              // ids in catalog order
+	instances map[string]Instance // provider instances, keyed by ID (Faz 2, _Docs/71 §2.3)
 }
 
 // NewRegistry creates a registry. It auto-detects the keyless CLI transports
-// (claude, codex) on PATH so they work out of the box; Settings can later
-// override paths and keys.
-func NewRegistry(anthropicKey string) *Registry {
+// (claude, codex) on PATH so they work out of the box as the fallback binary
+// path when an instance leaves its own cliPath field empty.
+func NewRegistry() *Registry {
 	claudePath, _ := exec.LookPath("claude")
 	codexPath := lookupCodexBinary()
 	return &Registry{
-		anthropicKey:  anthropicKey,
 		claudeCLIPath: claudePath,
 		codexCLIPath:  codexPath,
+		instances:     map[string]Instance{},
 	}
 }
 
-// SetAnthropicKey updates the API key used by the anthropic provider.
-func (r *Registry) SetAnthropicKey(key string) {
+// SetInstances replaces the full set of provider instances the registry
+// resolves against (Faz 2, _Docs/71 §2.3/§4.3). Called from applySettings
+// whenever settings or providers.json change. Unlike the old per-kind Set*
+// methods, there is exactly one entry point regardless of how many kinds or
+// instances exist.
+func (r *Registry) SetInstances(list []Instance) {
+	m := make(map[string]Instance, len(list))
+	for _, inst := range list {
+		if inst.ID == "" {
+			continue
+		}
+		m[inst.ID] = inst
+	}
 	r.mu.Lock()
-	r.anthropicKey = key
+	r.instances = m
 	r.mu.Unlock()
 }
 
-// SetClaudeCLIPath overrides the claude binary path. An empty value re-runs
-// PATH auto-detection so clearing the override restores default behaviour.
+// SetClaudeCLIPath overrides the autodetected claude binary path fallback used
+// when an instance's own cliPath field is empty. An empty value re-runs PATH
+// auto-detection so clearing the override restores default behaviour.
 func (r *Registry) SetClaudeCLIPath(path string) {
 	if path == "" {
 		path, _ = exec.LookPath("claude")
@@ -91,25 +91,8 @@ func (r *Registry) SetClaudeCLIPath(path string) {
 	r.mu.Unlock()
 }
 
-// SetClaudeConfigDir overrides CLAUDE_CONFIG_DIR for claude-cli subprocesses. An
-// empty value inherits the ambient ~/.claude (default behaviour).
-func (r *Registry) SetClaudeConfigDir(dir string) {
-	r.mu.Lock()
-	r.claudeConfigDir = dir
-	r.mu.Unlock()
-}
-
-// SetClaudeAuth sets the credential injected into claude-cli subprocesses. kind is
-// "oauth" (→ CLAUDE_CODE_OAUTH_TOKEN) or "apikey" (→ ANTHROPIC_API_KEY); an empty
-// token or kind injects nothing (the CLI falls back to its config-dir login).
-func (r *Registry) SetClaudeAuth(token, kind string) {
-	r.mu.Lock()
-	r.claudeAuthToken = token
-	r.claudeAuthKind = kind
-	r.mu.Unlock()
-}
-
-// SetCodexCLIPath overrides the codex binary path. An empty value re-runs PATH
+// SetCodexCLIPath overrides the autodetected codex binary path fallback used
+// when an instance's own cliPath field is empty. An empty value re-runs PATH
 // auto-detection so clearing the override restores default behaviour.
 func (r *Registry) SetCodexCLIPath(path string) {
 	if path == "" {
@@ -120,16 +103,9 @@ func (r *Registry) SetCodexCLIPath(path string) {
 	r.mu.Unlock()
 }
 
-// SetCodexConfigDir overrides CODEX_HOME for codex-cli subprocesses. An empty
-// value inherits the ambient ~/.codex (default behaviour).
-func (r *Registry) SetCodexConfigDir(dir string) {
-	r.mu.Lock()
-	r.codexConfigDir = dir
-	r.mu.Unlock()
-}
-
 // SetAnthropicBetas toggles the optional Anthropic beta capabilities applied to
-// anthropic provider instances.
+// anthropic provider instances. These stay app-wide (not per-instance): they
+// are experimental API behaviour switches, not credentials.
 func (r *Registry) SetAnthropicBetas(extendedCache, contextEditing, serverCompaction, refusalFallback bool) {
 	r.mu.Lock()
 	r.betaExtendedCache = extendedCache
@@ -139,91 +115,25 @@ func (r *Registry) SetAnthropicBetas(extendedCache, contextEditing, serverCompac
 	r.mu.Unlock()
 }
 
-// SetMinimax updates the MiniMax (OpenAI-compatible) API key and base URL.
-func (r *Registry) SetMinimax(key, baseURL string) {
-	r.mu.Lock()
-	r.minimaxKey = key
-	r.minimaxBaseURL = baseURL
-	r.mu.Unlock()
-}
-
-// SetOpenRouter updates the OpenRouter (OpenAI-compatible) API key and base URL.
-func (r *Registry) SetOpenRouter(key, baseURL string) {
-	r.mu.Lock()
-	r.openrouterKey = key
-	r.openrouterBaseURL = baseURL
-	r.mu.Unlock()
-}
-
-// OpenRouterConfigured reports whether an OpenRouter key is set.
-func (r *Registry) OpenRouterConfigured() bool {
+// InstanceCatalog returns catalog entries for every provider instance whose
+// kind is one of the two generic compat kinds (openai-compat, anthropic-compat)
+// — the Faz 2 successor to CustomCatalog, since those instances are the only
+// ones not already carried by Catalog()'s per-kind Models list. Availability is
+// layered on by the API handler.
+func (r *Registry) InstanceCatalog() []CatalogEntry {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	return r.openrouterKey != ""
-}
-
-// SetZAI updates the Z.ai GLM (Anthropic-compatible) API key and base URL.
-func (r *Registry) SetZAI(key, baseURL string) {
-	r.mu.Lock()
-	r.zaiKey = key
-	r.zaiBaseURL = baseURL
-	r.mu.Unlock()
-}
-
-// ZAIConfigured reports whether a Z.ai key is set.
-func (r *Registry) ZAIConfigured() bool {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	return r.zaiKey != ""
-}
-
-// SetDeepSeek updates the DeepSeek (OpenAI-compatible) API key and base URL.
-func (r *Registry) SetDeepSeek(key, baseURL string) {
-	r.mu.Lock()
-	r.deepseekKey = key
-	r.deepseekBaseURL = baseURL
-	r.mu.Unlock()
-}
-
-// DeepSeekConfigured reports whether a DeepSeek key is set.
-func (r *Registry) DeepSeekConfigured() bool {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	return r.deepseekKey != ""
-}
-
-// SetCustomProviders replaces the set of user-added providers (called from
-// applySettings whenever settings change).
-func (r *Registry) SetCustomProviders(list []CustomSpec) {
-	m := make(map[string]CustomSpec, len(list))
-	order := make([]string, 0, len(list))
-	for _, c := range list {
-		if c.ID == "" {
+	out := make([]CatalogEntry, 0)
+	for _, inst := range r.instances {
+		if inst.KindID != "openai-compat" && inst.KindID != "anthropic-compat" {
 			continue
 		}
-		m[c.ID] = c
-		order = append(order, c.ID)
-	}
-	r.mu.Lock()
-	r.custom = m
-	r.customOrder = order
-	r.mu.Unlock()
-}
-
-// CustomCatalog returns catalog entries for the user-added providers, in the
-// order they were registered. Availability is layered on by the API handler.
-func (r *Registry) CustomCatalog() []CatalogEntry {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	out := make([]CatalogEntry, 0, len(r.customOrder))
-	for _, id := range r.customOrder {
-		c := r.custom[id]
 		out = append(out, CatalogEntry{
-			ID:               c.ID,
-			Label:            c.Label,
+			ID:               inst.ID,
+			Label:            inst.Label,
 			NeedsKey:         true,
 			AllowCustomModel: true,
-			Models:           parseModelList(c.Models),
+			Models:           parseModelList(inst.Models),
 			AppliesToolHooks: true,
 		})
 	}
@@ -242,29 +152,6 @@ func parseModelList(s string) []ModelInfo {
 		}
 	}
 	return out
-}
-
-// buildCustom constructs a provider from a CustomSpec, choosing the transport
-// by Kind.
-func buildCustom(c CustomSpec) (Provider, error) {
-	if c.Key == "" {
-		return nil, fmt.Errorf("provider %q not configured (set an API key in Settings)", c.ID)
-	}
-	if c.Kind == "anthropic" {
-		endpoint := strings.TrimRight(strings.TrimSpace(c.BaseURL), "/") + "/messages"
-		// Anthropic-protocol endpoints support thinking + cache_control natively;
-		// no extra capability wiring needed here.
-		return NewAnthropic(c.Key).WithEndpoint(c.ID, endpoint, c.DefaultModel), nil
-	}
-	return NewOpenAICompat(c.ID, c.Key, c.BaseURL, c.DefaultModel).
-		WithCaps(c.Reasoning, c.PromptCache), nil
-}
-
-// MinimaxConfigured reports whether a MiniMax key is set.
-func (r *Registry) MinimaxConfigured() bool {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	return r.minimaxKey != ""
 }
 
 // ClaudeCLIAvailable reports whether the claude CLI was found.
@@ -299,96 +186,116 @@ func (r *Registry) CodexCLIPath() string {
 	return r.codexCLIPath
 }
 
-// AnthropicConfigured reports whether an Anthropic key is set.
-func (r *Registry) AnthropicConfigured() bool {
+// resolveInstance returns the registered instance for id and its kind (looked
+// up by the instance's KindID), or an error if either is missing. The empty
+// id maps to the keyless "claude-cli" default instance, matching the
+// historical Registry.Get behaviour for an unset Agent.Provider. Unlike the
+// pre-Faz-2 switch-on-id seam, an unknown/deleted instance is a hard error —
+// there is no silent claude-cli fallback for a real (non-empty) id
+// (_Docs/71 §4.3, K3 risk table: "silent orphaned agent").
+func (r *Registry) resolveInstance(id string) (Instance, ProviderKind, error) {
+	if id == "" {
+		id = "claude-cli"
+	}
 	r.mu.RLock()
-	defer r.mu.RUnlock()
-	return r.anthropicKey != ""
+	inst, ok := r.instances[id]
+	r.mu.RUnlock()
+	if !ok {
+		return Instance{}, nil, fmt.Errorf("unknown provider instance: %q", id)
+	}
+	k, ok := lookupKind(inst.KindID)
+	if !ok {
+		return Instance{}, nil, fmt.Errorf("provider instance %q has unregistered kind %q", id, inst.KindID)
+	}
+	return inst, k, nil
 }
 
-// resolve assembles the ResolvedConfig a kind needs from the registry's live
-// fields. This per-id mapping of credentials onto the common config is the one
-// remaining id-aware seam; the data-driven instance model (Faz 2) replaces the
-// typed key fields with a generic per-instance credential store and drops it.
-func (r *Registry) resolve(id string) ResolvedConfig {
+// KindOf returns the kind id of the provider instance identified by id, or ""
+// if the instance is not registered. Used to keep Agent.Provider synchronised
+// with Agent.ProviderInstanceID on every agent write (_Docs/71 §2.5, K3) and by
+// the API/UI to badge an instance with its kind — never by billing/context
+// callers, which key off Agent.Provider directly and must never see a raw
+// instance id (_Docs/71 §4.1).
+func (r *Registry) KindOf(id string) string {
+	if id == "" {
+		id = "claude-cli"
+	}
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	cfg := ResolvedConfig{
-		CLIPath:          r.claudeCLIPath,
-		CLIConfigDir:     r.claudeConfigDir,
-		CLIAuthKind:      r.claudeAuthKind,
-		CLIAuthToken:     r.claudeAuthToken,
-		CodexPath:        r.codexCLIPath,
-		CodexConfigDir:   r.codexConfigDir,
+	return r.instances[id].KindID
+}
+
+// resolve assembles the ResolvedConfig a kind needs from a resolved instance's
+// values plus the registry's app-wide fields (autodetected CLI path fallback,
+// Anthropic betas). Standard field keys (FieldKeyAPIKey, FieldKeyBaseURL, ...)
+// map onto ResolvedConfig's typed fields so every existing kind_*.go Build
+// function keeps working unchanged; Values carries the full raw map for kinds
+// that need more (openai-compat, anthropic-compat).
+func (r *Registry) resolve(inst Instance) ResolvedConfig {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	v := inst.Values
+	cliPath := v[FieldKeyCLIPath]
+	if cliPath == "" {
+		cliPath = r.claudeCLIPath
+	}
+	codexPath := v[FieldKeyCLIPath]
+	if codexPath == "" {
+		codexPath = r.codexCLIPath
+	}
+	return ResolvedConfig{
+		Key:              v[FieldKeyAPIKey],
+		BaseURL:          v[FieldKeyBaseURL],
+		CLIPath:          cliPath,
+		CLIConfigDir:     v[FieldKeyConfigDir],
+		CLIAuthKind:      v[FieldKeyAuthKind],
+		CLIAuthToken:     v[FieldKeyAuthToken],
+		CodexPath:        codexPath,
+		CodexConfigDir:   v[FieldKeyConfigDir],
 		ExtendedCache:    r.betaExtendedCache,
 		ContextEditing:   r.betaContextEditing,
 		ServerCompaction: r.betaServerCompaction,
 		RefusalFallback:  r.betaRefusalFallback,
+		InstanceID:       inst.ID,
+		DefaultModel:     inst.DefaultModel,
+		Models:           inst.Models,
+		Reasoning:        inst.Reasoning,
+		PromptCache:      inst.PromptCache,
+		Values:           v,
 	}
-	switch id {
-	case "anthropic":
-		cfg.Key = r.anthropicKey
-	case "minimax":
-		cfg.Key = r.minimaxKey
-		cfg.BaseURL = r.minimaxBaseURL
-	case "minimax-anthropic":
-		// Reuses the MiniMax key but the Anthropic-compatible endpoint; the kind
-		// supplies its own base URL (minimaxBaseURL is the OpenAI base, N/A here).
-		cfg.Key = r.minimaxKey
-	case "openrouter":
-		cfg.Key = r.openrouterKey
-		cfg.BaseURL = r.openrouterBaseURL
-	case "zai":
-		cfg.Key = r.zaiKey
-		cfg.BaseURL = r.zaiBaseURL
-	case "deepseek":
-		cfg.Key = r.deepseekKey
-		cfg.BaseURL = r.deepseekBaseURL
-	case "deepseek-anthropic":
-		// Reuses the DeepSeek key but the Anthropic-compatible endpoint; the kind
-		// supplies its own base URL (deepseekBaseURL is the OpenAI base, N/A here).
-		cfg.Key = r.deepseekKey
-	}
-	return cfg
 }
 
-// Available reports whether the provider id is registered and usable with the
-// current configuration (key set / CLI present). Used by the catalog handler.
+// Available reports whether the provider instance id is registered and usable
+// with its current configuration (key set / CLI present). Used by the catalog
+// handler. An unregistered id reports false rather than erroring — the
+// catalog only needs a yes/no badge.
 func (r *Registry) Available(id string) bool {
-	if k, ok := lookupKind(id); ok {
-		return k.Available(r.resolve(id))
+	inst, k, err := r.resolveInstance(id)
+	if err != nil {
+		return false
 	}
-	r.mu.RLock()
-	c, ok := r.custom[id]
-	r.mu.RUnlock()
-	return ok && c.Key != ""
+	return k.Available(r.resolve(inst))
 }
 
-// Get returns a provider for the given name, or an error if unsupported
-// or unconfigured. It dispatches through the registered provider kinds first,
-// then user-added custom providers; the empty name maps to the keyless
-// claude-cli default.
-func (r *Registry) Get(name string) (Provider, error) {
-	if k, ok := lookupKind(name); ok {
-		prov, err := k.Build(r.resolve(name))
-		if err != nil {
-			return nil, err
-		}
-		// Apply the kind's declared per-request budget override (0 = leave the
-		// model-class default). Threading it here keeps every kind's build function
-		// free of timeout plumbing; clients that support it implement the interface.
-		if secs := k.Manifest().RequestTimeoutSecs; secs > 0 {
-			if tc, ok := prov.(requestTimeoutConfigurable); ok {
-				tc.setRequestTimeout(secs)
-			}
-		}
-		return prov, nil
+// Get returns a provider for the given provider INSTANCE id, or an error if
+// the instance is unregistered or its kind is unconfigured. The empty id maps
+// to the keyless claude-cli default instance.
+func (r *Registry) Get(id string) (Provider, error) {
+	inst, k, err := r.resolveInstance(id)
+	if err != nil {
+		return nil, err
 	}
-	r.mu.RLock()
-	c, ok := r.custom[name]
-	r.mu.RUnlock()
-	if ok {
-		return buildCustom(c)
+	prov, err := k.Build(r.resolve(inst))
+	if err != nil {
+		return nil, err
 	}
-	return nil, fmt.Errorf("unknown provider: %q", name)
+	// Apply the kind's declared per-request budget override (0 = leave the
+	// model-class default). Threading it here keeps every kind's build function
+	// free of timeout plumbing; clients that support it implement the interface.
+	if secs := k.Manifest().RequestTimeoutSecs; secs > 0 {
+		if tc, ok := prov.(requestTimeoutConfigurable); ok {
+			tc.setRequestTimeout(secs)
+		}
+	}
+	return prov, nil
 }

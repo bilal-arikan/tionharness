@@ -163,15 +163,28 @@ func (t CreateAgentTool) Call(ctx context.Context, input json.RawMessage) (strin
 	// out of the box, and codex-cli is opt-in like every other provider.
 	in.Provider = strings.TrimSpace(in.Provider)
 	in.Model = strings.TrimSpace(in.Model)
+	// providerInstanceID mirrors in.Provider (_Docs/71 §2.5, K3): for every
+	// default (migrated) instance the id equals its kind id, so accepting
+	// in.Provider as an instance id here is byte-for-byte the historical
+	// behaviour. Inheriting from the creator carries ITS instance id too — not
+	// just its kind — so a creator bound to a non-default instance (e.g. a
+	// second "anthropic" instance with its own key) propagates correctly
+	// instead of silently falling back to the default instance of that kind.
+	providerInstanceID := in.Provider
 	if in.Provider == "" {
 		if creator, err := t.d.db.GetAgent(ctx, t.d.actorID); err == nil && creator.Provider != "" {
 			in.Provider = creator.Provider
+			providerInstanceID = creator.ProviderInstanceID
+			if providerInstanceID == "" {
+				providerInstanceID = creator.Provider
+			}
 			if in.Model == "" {
 				in.Model = creator.Model
 			}
 		}
 		if in.Provider == "" {
 			in.Provider = "claude-cli"
+			providerInstanceID = "claude-cli"
 		}
 	}
 
@@ -180,16 +193,17 @@ func (t CreateAgentTool) Call(ctx context.Context, input json.RawMessage) (strin
 	skills, skipped := t.resolveSkills(in.Skills)
 
 	created, err := t.d.db.CreateAgent(ctx, db.Agent{
-		Name:       in.Name,
-		Soul:       in.Soul,
-		Identity:   in.Identity,
-		Provider:   in.Provider,
-		Model:      in.Model,
-		Avatar:     in.Avatar,
-		Color:      in.Color,
-		Skills:     skills,
-		MCPEnabled: true,
-		CreatedBy:  t.d.actorID,
+		Name:               in.Name,
+		Soul:               in.Soul,
+		Identity:           in.Identity,
+		Provider:           in.Provider,
+		ProviderInstanceID: providerInstanceID,
+		Model:              in.Model,
+		Avatar:             in.Avatar,
+		Color:              in.Color,
+		Skills:             skills,
+		MCPEnabled:         true,
+		CreatedBy:          t.d.actorID,
 
 		CoordinatorPrompt: in.CoordinatorPrompt,
 	})
@@ -303,6 +317,15 @@ func (t UpdateAgentTool) Call(ctx context.Context, input json.RawMessage) (strin
 		Color:    in.Color,
 
 		CoordinatorPrompt: in.CoordinatorPrompt,
+	}
+	// in.Provider is accepted as a kind id here (this tool has no registry
+	// access to resolve an arbitrary instance id — agentDeps carries only db +
+	// actorID). ProviderInstanceID mirrors it 1:1, which is exactly right for
+	// every DEFAULT (migrated) instance, since its id equals its kind id
+	// (_Docs/71 §3, K3); a non-default instance is not selectable through this
+	// tool today.
+	if in.Provider != nil {
+		patch.ProviderInstanceID = in.Provider
 	}
 	updated, err := t.d.db.UpdateAgent(ctx, in.ID, patch)
 	if err != nil {

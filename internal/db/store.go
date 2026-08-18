@@ -43,7 +43,12 @@ func (d *DB) mutateAgentLocked(id string, fn func(*Agent)) (Agent, error) {
 	if err := d.persistAgentLocked(a); err != nil {
 		return Agent{}, err
 	}
-	return a, nil
+	// Backfill on the RETURNED value only (not before persistAgentLocked above):
+	// callers should see a populated ProviderInstanceID, but a mutation that
+	// didn't touch Provider/ProviderInstanceID must not silently widen the
+	// on-disk write beyond what the patch actually changed (_Docs/71 §3, "no
+	// bulk write").
+	return a.backfillProviderInstance(), nil
 }
 
 // CreateAgent inserts a new agent and returns the stored row.
@@ -74,6 +79,13 @@ func (d *DB) CreateAgent(ctx context.Context, a Agent) (Agent, error) {
 	// flipping false→true before calling CreateAgent — see the per-caller
 	// "default-on" comments next to each db.Agent literal. To turn tools off
 	// for an existing agent, call UpdateAgentTools (POST /api/agents/{id}/tools).
+
+	// Every creation path is expected to have already synced Provider/
+	// ProviderInstanceID (agent.SyncProviderFields, _Docs/71 §2.5), but this
+	// backfill is the last-resort invariant guard for a caller that forgot to —
+	// a brand-new row is exactly where filling it in is safe to persist
+	// (unlike an existing row, there is no "unrelated field" risk).
+	a = a.backfillProviderInstance()
 
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -180,7 +192,7 @@ func (d *DB) GetAgent(ctx context.Context, id string) (Agent, error) {
 	if !ok {
 		return Agent{}, ErrNotFound
 	}
-	return a, nil
+	return a.backfillProviderInstance(), nil
 }
 
 // ListAgents returns the live agents, newest first. Deleted agents are excluded:
@@ -207,7 +219,7 @@ func (d *DB) listAgents(includeDeleted bool) ([]Agent, error) {
 		if a.Deleted && !includeDeleted {
 			continue
 		}
-		out = append(out, a)
+		out = append(out, a.backfillProviderInstance())
 	}
 	sort.SliceStable(out, func(i, j int) bool { return out[i].CreatedAt > out[j].CreatedAt })
 	return out, nil
@@ -216,15 +228,19 @@ func (d *DB) listAgents(includeDeleted bool) ([]Agent, error) {
 // AgentProfilePatch carries the editable identity fields for UpdateAgent. A nil
 // pointer leaves that field untouched, so callers can do partial updates.
 type AgentProfilePatch struct {
-	Name           *string
-	Soul           *string
-	Identity       *string
-	Provider       *string
-	Model          *string
-	ThinkingLevel  *string
-	PermissionMode *string
-	Avatar         *string
-	Color          *string
+	Name     *string
+	Soul     *string
+	Identity *string
+	Provider *string
+	// ProviderInstanceID patches Agent.ProviderInstanceID directly. Most
+	// callers should go through agent.SyncProviderFields instead of setting
+	// this (or Provider) by hand — see its doc comment for why.
+	ProviderInstanceID *string
+	Model              *string
+	ThinkingLevel      *string
+	PermissionMode     *string
+	Avatar             *string
+	Color              *string
 	// Skills is the agent's ordered skill-slug selection. Non-nil replaces the
 	// whole list (an empty slice clears it).
 	Skills *[]string
@@ -255,6 +271,9 @@ func (d *DB) UpdateAgent(ctx context.Context, agentID string, p AgentProfilePatc
 		}
 		if p.Provider != nil {
 			a.Provider = *p.Provider
+		}
+		if p.ProviderInstanceID != nil {
+			a.ProviderInstanceID = *p.ProviderInstanceID
 		}
 		if p.Model != nil {
 			a.Model = *p.Model

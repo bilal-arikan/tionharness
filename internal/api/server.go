@@ -39,19 +39,20 @@ const workspaceCtxKey ctxKey = "workspace"
 
 // Server holds dependencies for HTTP handlers.
 type Server struct {
-	workspaces   *workspace.Manager
-	providers    *providers.Registry
-	convo        *conversation.Manager
-	settings     *settings.Store
-	tun          *agent.Tunables
-	logs         *logbuf.Buffer
-	bus          *events.Bus       // autonomous notifications streamed to the UI over SSE
-	hub          *sessionhub.Hub   // per-session ordered event log (cursor-based, all windows subscribe)
-	interactions *interactionStore // per-session resolve-once human-in-the-loop prompts (CAS)
-	inbox        *inboxStore       // per-session durable command queue (serial worker → turns)
-	runs         *chatRuns         // in-flight streaming turns (stop/steer control)
-	grants       *permGrantStore   // per-session "Always allow" permission grants
-	logger       *slog.Logger
+	workspaces    *workspace.Manager
+	providers     *providers.Registry
+	providerStore *settings.ProviderStore
+	convo         *conversation.Manager
+	settings      *settings.Store
+	tun           *agent.Tunables
+	logs          *logbuf.Buffer
+	bus           *events.Bus       // autonomous notifications streamed to the UI over SSE
+	hub           *sessionhub.Hub   // per-session ordered event log (cursor-based, all windows subscribe)
+	interactions  *interactionStore // per-session resolve-once human-in-the-loop prompts (CAS)
+	inbox         *inboxStore       // per-session durable command queue (serial worker → turns)
+	runs          *chatRuns         // in-flight streaming turns (stop/steer control)
+	grants        *permGrantStore   // per-session "Always allow" permission grants
+	logger        *slog.Logger
 
 	// market is a workspace-independent market store (bundled + global tiers),
 	// used by the workspace-template picker and create-from-template seeding so
@@ -84,15 +85,16 @@ type Server struct {
 // live subsystems (providers, compaction, autonomy). tun is the shared
 // process-wide tunables updated whenever settings change; bus is the
 // process-wide event bus exposed via the /api/events SSE feed.
-func NewServer(manager *workspace.Manager, registry *providers.Registry, store *settings.Store, tun *agent.Tunables, logs *logbuf.Buffer, bus *events.Bus, logger *slog.Logger) *Server {
+func NewServer(manager *workspace.Manager, registry *providers.Registry, providerStore *settings.ProviderStore, store *settings.Store, tun *agent.Tunables, logs *logbuf.Buffer, bus *events.Bus, logger *slog.Logger) *Server {
 	s := &Server{
-		workspaces: manager,
-		providers:  registry,
-		convo:      conversation.NewManager(),
-		settings:   store,
-		tun:        tun,
-		logs:       logs,
-		bus:        bus,
+		workspaces:    manager,
+		providers:     registry,
+		providerStore: providerStore,
+		convo:         conversation.NewManager(),
+		settings:      store,
+		tun:           tun,
+		logs:          logs,
+		bus:           bus,
 		// Per-session event hub: a fresh epoch each boot so a client presenting a
 		// cursor from a previous process is told to reset instead of trusting a
 		// stale (restarted-to-zero) seq. See _Docs/58-QUEUE-SENKRON.md.
@@ -234,24 +236,16 @@ func (s *Server) SetBaseURL(addr string) {
 // on boot and after each successful settings update.
 func (s *Server) applySettings() {
 	cur := s.settings.Get()
-	s.providers.SetAnthropicKey(s.settings.AnthropicKey())
-	s.providers.SetClaudeCLIPath(cur.ClaudeCLIPath)
-	// Keep the external-tools panel pointed at the SAME binary the provider runs;
-	// an empty setting clears the override and restores PATH lookup.
-	exttools.SetPathOverride(exttools.ClaudeToolName, cur.ClaudeCLIPath)
-	s.providers.SetClaudeConfigDir(cur.ClaudeConfigDir)
-	s.providers.SetClaudeAuth(s.settings.ClaudeCliAuthToken(), cur.ClaudeCliAuthKind)
-	s.providers.SetCodexCLIPath(cur.CodexCLIPath)
-	// Same reasoning as the claude-cli override two lines up: keep the external-
-	// tools panel pointed at the binary the provider actually runs.
-	exttools.SetPathOverride(exttools.CodexToolName, cur.CodexCLIPath)
-	s.providers.SetCodexConfigDir(cur.CodexConfigDir)
+	instances := s.registryInstances()
+	s.providers.SetInstances(instances)
+	// Keep the external-tools panel pointed at the SAME binary the resolved
+	// default instance runs; an empty value clears the override and restores
+	// PATH lookup. Faz 2 moves cliPath onto the per-instance config (K1), so this
+	// reads the "claude-cli"/"codex-cli" default instance's own field instead of
+	// the (now legacy, migration-only) top-level settings.
+	exttools.SetPathOverride(exttools.ClaudeToolName, instanceFieldValue(instances, "claude-cli", providers.FieldKeyCLIPath))
+	exttools.SetPathOverride(exttools.CodexToolName, instanceFieldValue(instances, "codex-cli", providers.FieldKeyCLIPath))
 	s.providers.SetAnthropicBetas(cur.ExtendedPromptCache, cur.AnthropicContextEditing, cur.AnthropicServerCompaction, cur.AnthropicRefusalFallback)
-	s.providers.SetMinimax(s.settings.MinimaxKey(), cur.MinimaxBaseURL)
-	s.providers.SetOpenRouter(s.settings.OpenRouterKey(), cur.OpenRouterBaseURL)
-	s.providers.SetZAI(s.settings.ZAIKey(), cur.ZAIBaseURL)
-	s.providers.SetDeepSeek(s.settings.DeepSeekKey(), cur.DeepSeekBaseURL)
-	s.providers.SetCustomProviders(s.customProviderSpecs(cur))
 	s.convo.SetLimits(cur.MaxContextTokens, cur.KeepRecentMsgs)
 	s.convo.SetBudgetShape(cur.ContextBudgetFraction, cur.ContextBudgetCeil) // model-aware budget knobs
 	s.tun.SetTitleModel(cur.TitleModel)

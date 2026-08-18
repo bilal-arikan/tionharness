@@ -124,6 +124,13 @@ func MigrateFromSettings(s Settings, decrypt func(enc string) string) []Provider
 		if c.KeyEnc != "" {
 			secrets["key"] = c.KeyEnc
 		}
+		// reasoning/promptCache are not standard FieldSpec keys (only openai-compat
+		// uses them), so they ride in Config rather than a kind-declared field —
+		// internal/api's registryInstances reads them back the same way.
+		reasoning := ""
+		if c.Reasoning {
+			reasoning = "true"
+		}
 		out = append(out, ProviderInstance{
 			ID:           c.ID,
 			KindID:       kindID,
@@ -131,7 +138,7 @@ func MigrateFromSettings(s Settings, decrypt func(enc string) string) []Provider
 			Enabled:      true,
 			DefaultModel: c.DefaultModel,
 			Models:       c.Models,
-			Config:       map[string]string{"baseUrl": c.BaseURL},
+			Config:       map[string]string{"baseUrl": c.BaseURL, "reasoning": reasoning, "promptCache": c.PromptCache},
 			SecretsEnc:   secrets,
 			CreatedAt:    now,
 		})

@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	agentpkg "github.com/bilal-arikan/tionswarm/internal/agent"
 	"github.com/bilal-arikan/tionswarm/internal/db"
 	"github.com/bilal-arikan/tionswarm/internal/events"
 	"github.com/bilal-arikan/tionswarm/internal/providers"
@@ -162,11 +163,22 @@ func (s *Server) handleCreateAgent(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	agent, err := ws(r).DB.CreateAgent(r.Context(), db.Agent{
+	// req.Provider is accepted as a provider INSTANCE id (_Docs/71 §5): for every
+	// default (migrated) instance the id equals its kind id, so this is
+	// byte-for-byte the historical request shape. SyncProviderFields resolves the
+	// kind and keeps Agent.Provider/ProviderInstanceID in lockstep (K3).
+	providerKind, providerInstanceID, err := agentpkg.SyncProviderFields(s.providers, req.Provider)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	newAgent, err := ws(r).DB.CreateAgent(r.Context(), db.Agent{
 		Name:                req.Name,
 		Soul:                req.Soul,
 		Identity:            req.Identity,
-		Provider:            req.Provider,
+		Provider:            providerKind,
+		ProviderInstanceID:  providerInstanceID,
 		Model:               req.Model,
 		ThinkingLevel:       req.ThinkingLevel,
 		PermissionMode:      req.PermissionMode,
@@ -180,17 +192,17 @@ func (s *Server) handleCreateAgent(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if req.Avatar != "" {
-		_, _ = ws(r).DB.UpdateAgent(r.Context(), agent.ID, db.AgentProfilePatch{Avatar: &req.Avatar})
-		agent.Avatar = req.Avatar
+		_, _ = ws(r).DB.UpdateAgent(r.Context(), newAgent.ID, db.AgentProfilePatch{Avatar: &req.Avatar})
+		newAgent.Avatar = req.Avatar
 	}
 	if req.Color != "" {
-		_, _ = ws(r).DB.UpdateAgent(r.Context(), agent.ID, db.AgentProfilePatch{Color: &req.Color})
-		agent.Color = req.Color
+		_, _ = ws(r).DB.UpdateAgent(r.Context(), newAgent.ID, db.AgentProfilePatch{Color: &req.Color})
+		newAgent.Color = req.Color
 	}
 
-	s.logger.Info("agent created", "agent", agent.Name, "id", agent.ID,
-		"provider", agent.Provider, "model", agent.Model)
-	writeJSON(w, http.StatusCreated, agent)
+	s.logger.Info("agent created", "agent", newAgent.Name, "id", newAgent.ID,
+		"provider", newAgent.Provider, "model", newAgent.Model)
+	writeJSON(w, http.StatusCreated, newAgent)
 }
 
 // handleDuplicateAgent creates a full copy of an existing agent: every profile
@@ -336,11 +348,10 @@ func (s *Server) handleUpdateAgent(w http.ResponseWriter, r *http.Request) {
 	// emit an event (P1.2). Harmless when the read fails — we skip the event.
 	prev, _ := wsp.DB.GetAgent(r.Context(), agentID)
 
-	agent, err := wsp.DB.UpdateAgent(r.Context(), agentID, db.AgentProfilePatch{
+	patch := db.AgentProfilePatch{
 		Name:                req.Name,
 		Soul:                req.Soul,
 		Identity:            req.Identity,
-		Provider:            req.Provider,
 		Model:               req.Model,
 		ThinkingLevel:       req.ThinkingLevel,
 		PermissionMode:      req.PermissionMode,
@@ -350,7 +361,20 @@ func (s *Server) handleUpdateAgent(w http.ResponseWriter, r *http.Request) {
 		CoordinatorMode:     req.CoordinatorMode,
 		CoordinatorWorkflow: req.CoordinatorWorkflow,
 		CoordinatorPrompt:   req.CoordinatorPrompt,
-	})
+	}
+	// req.Provider is accepted as a provider INSTANCE id (_Docs/71 §5); only sync
+	// when the request actually touches it (nil = "not in this patch").
+	if req.Provider != nil {
+		providerKind, providerInstanceID, err := agentpkg.SyncProviderFields(s.providers, *req.Provider)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		patch.Provider = &providerKind
+		patch.ProviderInstanceID = &providerInstanceID
+	}
+
+	agent, err := wsp.DB.UpdateAgent(r.Context(), agentID, patch)
 	if writeDBError(w, err, "agent not found") {
 		return
 	}

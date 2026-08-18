@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strings"
 
+	agentpkg "github.com/bilal-arikan/tionswarm/internal/agent"
 	"github.com/bilal-arikan/tionswarm/internal/db"
 	"github.com/bilal-arikan/tionswarm/internal/ingest"
 	"github.com/bilal-arikan/tionswarm/internal/market"
@@ -264,19 +265,30 @@ func (s *Server) installAgentPack(r *http.Request, wsp *workspace.Workspace, pac
 	if !mcpEnabled {
 		mcpEnabled = true
 	}
+	// ap.Provider is a market pack's kind id (_Docs/21-MARKET.md payload shape,
+	// predates instances); accepted as a provider INSTANCE id here too, per the
+	// same default-instance-id-equals-kind-id convention as the HTTP create path
+	// (_Docs/71 §3/§5). An unresolvable id (pack references a kind that no
+	// longer exists) fails the install instead of silently landing on
+	// claude-cli.
+	providerKind, providerInstanceID, err := agentpkg.SyncProviderFields(s.providers, ap.Provider)
+	if err != nil {
+		return market.InstallResult{}, httpErr{http.StatusBadRequest, err.Error()}
+	}
 	created, err := wsp.DB.CreateAgent(r.Context(), db.Agent{
-		Name:           ap.Name,
-		Soul:           ap.Soul,
-		Identity:       ap.Identity,
-		Provider:       ap.Provider,
-		Model:          ap.Model,
-		ThinkingLevel:  ap.ThinkingLevel,
-		PermissionMode: ap.PermissionMode,
-		Avatar:         ap.Avatar,
-		Color:          ap.Color,
-		MCPEnabled:     mcpEnabled,
-		AllowedTools:   ap.AllowedTools,
-		Skills:         known,
+		Name:               ap.Name,
+		Soul:               ap.Soul,
+		Identity:           ap.Identity,
+		Provider:           providerKind,
+		ProviderInstanceID: providerInstanceID,
+		Model:              ap.Model,
+		ThinkingLevel:      ap.ThinkingLevel,
+		PermissionMode:     ap.PermissionMode,
+		Avatar:             ap.Avatar,
+		Color:              ap.Color,
+		MCPEnabled:         mcpEnabled,
+		AllowedTools:       ap.AllowedTools,
+		Skills:             known,
 		// A published coordinator installs as a coordinator. The recipe slug is only
 		// kept when it resolves here — an agent pack carries no skills of its own, so
 		// a recipe it references may simply not exist in this workspace.

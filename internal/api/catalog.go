@@ -27,7 +27,7 @@ func (s *Server) handleCatalog(w http.ResponseWriter, r *http.Request) {
 	// Custom (user-added) providers override any built-in that shares their ID
 	// (a user configuring their own "openrouter" replaces the built-in default
 	// instead of producing a duplicate catalog entry — see MergeCatalog).
-	entries := providers.MergeCatalog(providers.Catalog(), s.providers.CustomCatalog())
+	entries := providers.MergeCatalog(providers.Catalog(), s.providers.InstanceCatalog())
 	out := make([]catalogEntryDTO, 0, len(entries))
 	wsp := ws(r)
 	for _, e := range entries {

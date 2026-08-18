@@ -17,7 +17,7 @@ import (
 // without needing a real codex on the test machine's PATH.
 func codexTestServer(t *testing.T, binPath string) *Server {
 	t.Helper()
-	reg := providers.NewRegistry("")
+	reg := providers.NewRegistry()
 	reg.SetCodexCLIPath(binPath)
 	return &Server{providers: reg}
 }

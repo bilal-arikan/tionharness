@@ -697,15 +697,22 @@ func (r *Runtime) resolveWorkerTarget(ctx context.Context, coordSessionID, baseA
 		return "", fmt.Errorf("cannot materialize worker profile %q: base agent unavailable: %w", prof.ID, err)
 	}
 	allow, _ := json.Marshal(prof.AllowedTools)
+	// ProviderInstanceID mirrors the base agent's — GetAgent backfills it from
+	// Provider at read time when the base's on-disk row predates this field
+	// (_Docs/71 §2.5), so it is always populated here. Cloning it (not just
+	// Provider) matters when the base is bound to a non-default instance of its
+	// kind (e.g. a second "anthropic" instance with its own key): the worker
+	// must reuse that SAME instance, not fall back to the kind's default one.
 	created, err := r.db.CreateAgent(ctx, db.Agent{
-		Name:           name,
-		Soul:           prof.SystemPrompt,
-		Provider:       base.Provider,
-		Model:          base.Model,
-		PermissionMode: base.PermissionMode,
-		MCPEnabled:     true,
-		AllowedTools:   string(allow),
-		CreatedBy:      baseAgentID,
+		Name:               name,
+		Soul:               prof.SystemPrompt,
+		Provider:           base.Provider,
+		ProviderInstanceID: base.ProviderInstanceID,
+		Model:              base.Model,
+		PermissionMode:     base.PermissionMode,
+		MCPEnabled:         true,
+		AllowedTools:       string(allow),
+		CreatedBy:          baseAgentID,
 	})
 	if err != nil {
 		return "", fmt.Errorf("cannot materialize worker profile %q: %w", prof.ID, err)

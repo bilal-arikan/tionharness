@@ -22,8 +22,11 @@ func TestLiveDeepSeek(t *testing.T) {
 		t.Skip("set DEEPSEEK_LIVE_KEY=sk-... to run the live DeepSeek test")
 	}
 
-	r := NewRegistry("")
-	r.SetDeepSeek(key, "")
+	r := NewRegistry()
+	r.SetInstances([]Instance{
+		instanceOf("deepseek", map[string]string{FieldKeyAPIKey: key}),
+		instanceOf("deepseek-anthropic", map[string]string{FieldKeyAPIKey: key}),
+	})
 
 	// Both kinds reuse the DeepSeek key: "deepseek" (OpenAI-compatible) and
 	// "deepseek-anthropic" (Anthropic Messages transport → native tool-use).
