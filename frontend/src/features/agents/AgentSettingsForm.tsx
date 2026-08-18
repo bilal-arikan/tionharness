@@ -339,6 +339,18 @@ export function AgentSettingsForm({
             setModel(m)
           }}
         />
+        {catalog.find((c) => c.id === provider)?.appliesToolHooks === false && (
+          <p
+            data-testid="agent-hooks-not-applied-warning"
+            className="-mt-2 rounded-md border border-[color-mix(in_srgb,var(--color-warning)_45%,transparent)] bg-[color-mix(in_srgb,var(--color-warning)_14%,var(--color-surface))] px-2 py-1.5 text-xs text-[var(--color-text-dim)]"
+          >
+            ⚠️ <strong>codex-cli</strong>'da PreToolUse/PostToolUse hook'ların hiçbiri çalışmaz — ne
+            codex'in kendi shell/apply_patch araçları ne de MCP köprüsüyle çağrılan TionSwarm
+            araçları için. Bu yüzden <code>sqz</code> gibi PostToolUse token-optimizer sıkıştırması
+            da bu ajanda devre dışıdır. Sebep: codex kendi araç döngüsünü ayrı bir alt süreçte
+            koşturur ve hook aktarımı sunmaz.
+          </p>
+        )}
 
         <Field label="Düşünme (thinking) seviyesi">
           <OptionPills

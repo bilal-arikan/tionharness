@@ -224,6 +224,7 @@ func (r *Registry) CustomCatalog() []CatalogEntry {
 			NeedsKey:         true,
 			AllowCustomModel: true,
 			Models:           parseModelList(c.Models),
+			AppliesToolHooks: true,
 		})
 	}
 	return out

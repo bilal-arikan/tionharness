@@ -10,6 +10,7 @@ func init() {
 	RegisterKind(NewBuiltinKind(
 		Manifest{
 			Kind:             "minimax",
+			AppliesToolHooks: true,
 			Label:            "MiniMax (OpenAI-uyumlu)",
 			NeedsKey:         true,
 			NeedsBaseURL:     true,

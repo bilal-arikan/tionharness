@@ -8,6 +8,7 @@ func init() {
 	RegisterKind(NewBuiltinKind(
 		Manifest{
 			Kind:             "anthropic",
+			AppliesToolHooks: true,
 			Label:            "Anthropic API",
 			NeedsKey:         true,
 			NeedsBaseURL:     true,

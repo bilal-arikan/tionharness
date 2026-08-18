@@ -23,6 +23,7 @@ func init() {
 	RegisterKind(NewBuiltinKind(
 		Manifest{
 			Kind:             "minimax-anthropic",
+			AppliesToolHooks: true,
 			Label:            "MiniMax (Anthropic modu · tool-use + thinking)",
 			NeedsKey:         true,
 			NeedsBaseURL:     true,

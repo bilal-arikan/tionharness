@@ -70,6 +70,28 @@ func TestRegistryAvailable(t *testing.T) {
 	}
 }
 
+// TestAppliesToolHooksSignal verifies the provider-capability signal used to
+// surface the codex-cli hook gap in the UI: codex-cli reports hooks as NOT
+// applied (its subprocess tool loop has no hook passthrough), while claude-cli
+// and a native HTTP kind report hooks as applied.
+func TestAppliesToolHooksSignal(t *testing.T) {
+	cat := Catalog()
+	byID := make(map[string]CatalogEntry, len(cat))
+	for _, e := range cat {
+		byID[e.ID] = e
+	}
+
+	if got := byID["codex-cli"].AppliesToolHooks; got {
+		t.Error("codex-cli.AppliesToolHooks = true, want false (no hook passthrough)")
+	}
+	if got := byID["claude-cli"].AppliesToolHooks; !got {
+		t.Error("claude-cli.AppliesToolHooks = false, want true (hooks forwarded via --settings)")
+	}
+	if got := byID["anthropic"].AppliesToolHooks; !got {
+		t.Error("anthropic.AppliesToolHooks = false, want true (native tool loop runs hooks)")
+	}
+}
+
 // TestGetUnconfiguredReturnsError preserves the historical "not configured"
 // errors from each kind's Build.
 func TestGetUnconfiguredReturnsError(t *testing.T) {

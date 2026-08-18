@@ -23,6 +23,7 @@ func init() {
 	RegisterKind(NewBuiltinKind(
 		Manifest{
 			Kind:             "zai",
+			AppliesToolHooks: true,
 			Label:            "Z.ai GLM (Anthropic modu · tool-use + thinking)",
 			NeedsKey:         true,
 			NeedsBaseURL:     true,

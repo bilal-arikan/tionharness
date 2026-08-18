@@ -27,6 +27,7 @@ func init() {
 	RegisterKind(NewBuiltinKind(
 		Manifest{
 			Kind:             "deepseek",
+			AppliesToolHooks: true,
 			Label:            "DeepSeek (OpenAI-uyumlu)",
 			NeedsKey:         true,
 			NeedsBaseURL:     true,

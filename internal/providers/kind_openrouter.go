@@ -21,6 +21,7 @@ func init() {
 	RegisterKind(NewBuiltinKind(
 		Manifest{
 			Kind:             "openrouter",
+			AppliesToolHooks: true,
 			Label:            "OpenRouter (OpenAI-uyumlu)",
 			NeedsKey:         true,
 			NeedsBaseURL:     true,

@@ -20,6 +20,7 @@ func init() {
 	RegisterKind(NewBuiltinKind(
 		Manifest{
 			Kind:             "deepseek-anthropic",
+			AppliesToolHooks: true,
 			Label:            "DeepSeek (Anthropic modu · tool-use + thinking)",
 			NeedsKey:         true,
 			NeedsBaseURL:     true,

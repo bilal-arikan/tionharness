@@ -43,6 +43,10 @@ type CatalogEntry struct {
 	NeedsKey         bool        `json:"needsKey"`
 	AllowCustomModel bool        `json:"allowCustomModel"`
 	Models           []ModelInfo `json:"models"`
+	// AppliesToolHooks mirrors Manifest.AppliesToolHooks — whether TionSwarm's
+	// PreToolUse/PostToolUse hooks (and hook-derived behaviour like sqz) fire
+	// for this kind's turns. False only for codex-cli today.
+	AppliesToolHooks bool `json:"appliesToolHooks"`
 }
 
 // Catalog returns the provider/model catalog, derived from the registered
@@ -79,6 +83,7 @@ func Catalog() []CatalogEntry {
 			NeedsKey:         m.NeedsKey,
 			AllowCustomModel: m.AllowCustomModel,
 			Models:           models,
+			AppliesToolHooks: m.AppliesToolHooks,
 		})
 	}
 	return out

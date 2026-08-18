@@ -26,6 +26,16 @@ type Manifest struct {
 	AllowCustomModel bool
 	// Order controls the catalog sort position (lower first).
 	Order int
+	// AppliesToolHooks reports whether TionSwarm's PreToolUse/PostToolUse hooks
+	// (and hook-derived behaviour like sqz/PostToolUse token-optimizer
+	// compression) actually fire for this kind's turns. True for the native
+	// tool loop and for claude-cli (which forwards hooks via --settings).
+	// False for a CLI transport that runs its own agentic loop in a subprocess
+	// with no hook passthrough of its own (codex-cli) — for those, neither the
+	// CLI's native tools nor TionSwarm tools reached over the MCP bridge run
+	// hooks. Surfaced to the UI via the catalog so this silent gap is visible
+	// instead of assumed.
+	AppliesToolHooks bool
 	// RequestTimeoutSecs overrides the per-request wall-clock budget (seconds) for
 	// every client this kind builds. 0 = model-class default (120s, or the long
 	// budget for reasoning/adaptive models — see LongRequestModel). Lets a slow

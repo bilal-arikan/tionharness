@@ -642,6 +642,42 @@ gerektirir — `writeCLISettings`'in codex karşılığı henüz **yazılmadı**
 planına eklenmeli; şu an için codex ajanları workspace hook'larından ve
 sqz/rtk optimizasyonundan **tamamen muaf**.
 
+#### UI'da görünürlük (2026-08-18 — uygulandı)
+
+Bu boşluk artık **sessiz değil**, ürün içinde açıkça görünüyor:
+
+- **Sağlayıcı-yeteneği sinyali:** `internal/providers/kind.go`'daki `Manifest`
+  yeni bir `AppliesToolHooks bool` alanı taşıyor — her `kind_*.go` kendi
+  değerini bildiriyor (`codex-cli` → `false`, geri kalan tüm dahili/özel
+  sağlayıcılar → `true`). `internal/providers/catalog.go` bunu `CatalogEntry`
+  üzerinden `/api/catalog` yanıtına (`appliesToolHooks` alanı) taşıyor —
+  frontend'de codex-cli'yi elle isimle eşleştiren bir kod yok, tek gerçek
+  kaynak bu Manifest alanı.
+- **Hooks ekranı** (`frontend/src/features/settings/HooksPanel.tsx`): mevcut
+  hook açıklaması kutusunun hemen altına, `color-warning` stiliyle
+  (`ClaudeAuthGate`/`HooksPanel` yerleşik davranışlar bölümüyle aynı görsel
+  dil) sabit bir uyarı eklendi — hook'ların codex-cli turlarında **hiç**
+  çalışmadığını, bunun hem codex'in kendi shell/apply_patch araçlarını hem MCP
+  köprüsü üzerinden çağrılan TionSwarm araçlarını kapsadığını ve sqz/
+  PostToolUse token-optimizer sıkıştırmasının da bu yüzden devre dışı
+  olduğunu açıkça belirtiyor.
+- **Ajan düzenleyici** (`frontend/src/features/agents/AgentSettingsForm.tsx`):
+  `ProviderModelSelect`'in hemen altında, seçili sağlayıcının kataloğundaki
+  `appliesToolHooks === false` olduğu durumda aynı stilde bir satır uyarı
+  çıkıyor — kullanıcı bir ajanı codex-cli'ye çevirdiği anda, o ajana hiç hook
+  uygulanmayacağını orada görüyor.
+- **`internal/api/hooks.go`** içindeki "CLI hook passthrough" yerleşik-davranış
+  açıklaması artık yalnız claude-cli'den bahsetmiyor; codex-cli'nin hiçbir
+  hook'u tetiklemediğini ve bunun `appliesToolHooks` bayrağıyla
+  ilişkilendiğini de söylüyor.
+- **Test:** `internal/providers/kind_test.go` →
+  `TestAppliesToolHooksSignal`, katalogda `codex-cli.AppliesToolHooks=false`,
+  `claude-cli.AppliesToolHooks=true` ve `anthropic.AppliesToolHooks=true`
+  olduğunu doğruluyor.
+
+Bu değişiklik hook **çalıştırma** davranışına dokunmuyor — yalnızca var olan
+sınırı görünür kılıyor.
+
 ### ❌ Boşluk-4: Lazy tool loading (extended tier gate) codex'te çalışmıyor
 
 TionSwarm'ın gateway modeli (Doc 52), extended tier'ı boş başlatıp modelin

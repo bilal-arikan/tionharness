@@ -9,6 +9,7 @@ func init() {
 	RegisterKind(NewBuiltinKind(
 		Manifest{
 			Kind:             "claude-cli",
+			AppliesToolHooks: true,
 			Label:            "Claude CLI (abonelik · anahtarsız)",
 			NeedsKey:         false,
 			NeedsBaseURL:     false,

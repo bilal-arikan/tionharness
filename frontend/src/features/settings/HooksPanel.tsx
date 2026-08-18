@@ -126,6 +126,23 @@ export function HooksPanel({ onError }: Props) {
         </p>
       </div>
 
+      <div
+        role="alert"
+        data-testid="hooks-codex-not-applied-notice"
+        className="rounded-lg border border-[color-mix(in_srgb,var(--color-warning)_45%,transparent)] bg-[color-mix(in_srgb,var(--color-warning)_14%,var(--color-surface))] p-4 text-sm text-[var(--color-text-dim)]"
+      >
+        <p className="font-medium text-[var(--color-text)]">
+          ⚠️ codex-cli ajanlarında hook&apos;lar çalışmaz
+        </p>
+        <p className="mt-1">
+          codex-cli kendi araç döngüsünü ayrı bir alt süreçte koşturur ve hook aktarımı sunmaz.
+          Yukarıdaki PreToolUse/PostToolUse hook&apos;ların hiçbiri bu ajanlarda tetiklenmez — ne
+          codex&apos;in kendi shell/apply_patch araçları için, ne de MCP köprüsü üzerinden çağrılan
+          TionSwarm araçları için. Sonuç olarak <code>sqz</code> gibi PostToolUse token-optimizer
+          sıkıştırması da codex-cli ajanlarında devre dışıdır.
+        </p>
+      </div>
+
       {loading ? (
         <LoadingState label="Yükleniyor…" />
       ) : (

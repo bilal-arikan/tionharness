@@ -270,6 +270,11 @@ export interface CatalogEntry {
   // other providers, and either may be absent when it cannot be read.
   cliVersion?: string
   subscription?: string
+  // Whether TionSwarm's PreToolUse/PostToolUse hooks (and hook-derived
+  // behaviour like sqz/PostToolUse token-optimizer compression) fire for this
+  // provider's turns. False only for codex-cli, whose subprocess tool loop has
+  // no hook passthrough.
+  appliesToolHooks: boolean
 }
 
 // Build / version metadata returned by GET /api/version.

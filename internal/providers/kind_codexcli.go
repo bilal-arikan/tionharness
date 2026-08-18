@@ -12,7 +12,12 @@ import "fmt"
 func init() {
 	RegisterKind(NewBuiltinKind(
 		Manifest{
-			Kind:             "codex-cli",
+			Kind: "codex-cli",
+			// codex exec runs its own agentic loop in a subprocess with no hook
+			// passthrough — neither its native shell/apply_patch tools nor
+			// TionSwarm tools called over the MCP bridge run PreToolUse/PostToolUse
+			// hooks (so sqz/token-optimizer PostToolUse compression is inactive too).
+			AppliesToolHooks: false,
 			Label:            "Codex CLI (abonelik · anahtarsız)",
 			NeedsKey:         false,
 			NeedsBaseURL:     false,

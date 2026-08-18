@@ -66,7 +66,7 @@ func (s *Server) handleListBuiltinHooks(w http.ResponseWriter, _ *http.Request) 
 			Event:       "PreToolUse / PostToolUse",
 			Setting:     "enableCliHooks",
 			Enabled:     cur.EnableCLIHooks,
-			Description: "Your PreToolUse/PostToolUse hooks below are forwarded to claude-cli agents via --settings, so the CLI's own tool loop fires the same hooks the native loop does.",
+			Description: "Your PreToolUse/PostToolUse hooks below are forwarded to claude-cli agents via --settings, so the CLI's own tool loop fires the same hooks the native loop does. codex-cli has no equivalent passthrough: its turns never fire your hooks (not for codex's own shell/apply_patch, nor for TionSwarm tools called over the MCP bridge), so sqz/PostToolUse token-optimizer compression is also inactive there — see the provider catalog's appliesToolHooks flag.",
 		},
 		{
 			Name:        "Permission deny-list (defense-in-depth)",
