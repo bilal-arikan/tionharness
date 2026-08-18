@@ -51,11 +51,15 @@ interface Props {
   waiting?: boolean
   // onCancelWait disarms the pending self-wake (the waiting-state Durdur button).
   onCancelWait?: () => void
-  onSend: (text: string, attachments: Attachment[]) => void
+  // Submitting a message is asynchronous: the composer awaits this and locks its
+  // input until it settles. Resolving to false means the send failed — the
+  // composer then keeps the text so the user can retry without retyping.
+  onSend: (text: string, attachments: Attachment[]) => void | Promise<boolean | void>
   onStop?: () => void
-  onInterrupt?: (text: string, attachments: Attachment[]) => void
-  onQueue?: (text: string, attachments: Attachment[]) => void
-  onSteer?: (text: string) => void
+  // Same contract as onSend: resolving to false keeps the draft in the composer.
+  onInterrupt?: (text: string, attachments: Attachment[]) => void | Promise<boolean | void>
+  onQueue?: (text: string, attachments: Attachment[]) => void | Promise<boolean | void>
+  onSteer?: (text: string) => void | Promise<boolean | void>
   // Fired on keystrokes to broadcast a cross-window "user is typing" signal.
   onTyping?: () => void
   // Per-turn reasoning level ('' = agent default). Picked from a small menu in
@@ -113,6 +117,10 @@ export function Composer({
   const [sel, setSel] = useState(0)
   const [pending, setPending] = useState<PendingAttachment[]>([])
   const [dragOver, setDragOver] = useState(false)
+  // A submit is in flight (the enqueue round-trip). The input is locked until it
+  // settles so the same draft cannot be submitted twice; on failure the text is
+  // kept (see `send`) and the lock is released for a retry.
+  const [sending, setSending] = useState(false)
   // Btw side chat: an off-transcript, tool-less question answered against the
   // session's context. Deliberately usable WHILE a turn streams (that is the
   // point: "ask without interrupting the main task"), so it is not gated on
@@ -348,8 +356,19 @@ export function Composer({
         // (handled in send()), instead of running immediately.
         setText('/' + item.cmd.name + ' ')
       } else {
-        item.cmd.run()
-        setText('') // a command consumes the input
+        // A command consumes the input — but only once it succeeded. Lock the
+        // composer while it runs so the menu selection cannot be fired twice.
+        const cmd = item.cmd
+        setSending(true)
+        void (async () => {
+          try {
+            const ok = await cmd.run()
+            if (ok !== false) setText('')
+          } finally {
+            setSending(false)
+            taRef.current?.focus()
+          }
+        })()
       }
     }
     closeMenu()
@@ -372,11 +391,12 @@ export function Composer({
     closeMenu()
   }
 
-  const send = () => {
+  const send = async () => {
     const t = text.trim()
     // Block while uploads are still in flight so attachments are never dropped,
     // and require a target agent (selection is mandatory; no "@mention").
-    if (disabled || anyUploading || !agentId || (!t && readyAttachments.length === 0)) return
+    if (disabled || sending || anyUploading || !agentId || (!t && readyAttachments.length === 0))
+      return
     // "/name args…" → run the matching slash command with the trailing text as
     // its input, instead of sending a literal message. Unknown "/foo" falls
     // through and is sent as plain text.
@@ -386,35 +406,69 @@ export function Composer({
       const rest = sp === -1 ? '' : t.slice(sp + 1)
       const cmd = commands.find((c) => c.name === name)
       if (cmd) {
-        cmd.run(rest, readyAttachments)
-        clearComposer()
+        setSending(true)
+        try {
+          const ok = await cmd.run(rest, readyAttachments)
+          if (ok !== false) clearComposer()
+        } finally {
+          setSending(false)
+          taRef.current?.focus()
+        }
         return
       }
     }
-    onSend(t, readyAttachments)
-    clearComposer()
+    // Async submit: lock the input until the send settles. Clear it only when the
+    // message was accepted — a failed send keeps the draft (and its attachments)
+    // in place so the user can retry without retyping.
+    setSending(true)
+    try {
+      const ok = await onSend(t, readyAttachments)
+      if (ok !== false) clearComposer()
+    } finally {
+      setSending(false)
+      // Disabling the textarea drops focus; give it back so typing continues.
+      taRef.current?.focus()
+    }
   }
 
   // Streaming-turn actions that carry the composer's payload (Sıraya / Kes): they
   // run as a full turn later, so the attachments must travel with the text —
   // clearing only the text would strand the uploaded files in the composer and
   // silently send an attachment-less turn.
-  const actWithAttachments = (fn?: (t: string, a: Attachment[]) => void) => {
-    if (!fn || anyUploading) return
+  // Like `send`, these are awaited and the composer stays locked-and-filled until
+  // the action is accepted: a failed queue/interrupt must not eat the draft.
+  const actWithAttachments = async (
+    fn?: (t: string, a: Attachment[]) => void | Promise<boolean | void>,
+  ) => {
+    if (!fn || sending || anyUploading) return
     const t = text.trim()
     if (!t && readyAttachments.length === 0) return
-    fn(t, readyAttachments)
-    clearComposer()
+    setSending(true)
+    try {
+      const ok = await fn(t, readyAttachments)
+      if (ok !== false) clearComposer()
+    } finally {
+      setSending(false)
+      taRef.current?.focus()
+    }
   }
 
   // Text-only streaming action (Yönlendir): live guidance is injected into the
   // running turn and cannot carry files, so pending attachments stay put.
-  const act = (fn?: (t: string) => void) => {
+  const act = async (fn?: (t: string) => void | Promise<boolean | void>) => {
     const t = text.trim()
-    if (!t || !fn) return
-    fn(t)
-    setText('')
-    closeMenu()
+    if (!t || !fn || sending) return
+    setSending(true)
+    try {
+      const ok = await fn(t)
+      if (ok !== false) {
+        setText('')
+        closeMenu()
+      }
+    } finally {
+      setSending(false)
+      taRef.current?.focus()
+    }
   }
 
   const onKeyDown = (e: React.KeyboardEvent) => {
@@ -454,9 +508,9 @@ export function Composer({
       // While streaming, Enter queues the typed message (safest default) rather
       // than interrupting the in-flight turn.
       if (streaming) {
-        if (hasContent) actWithAttachments(onQueue)
+        if (hasContent) void actWithAttachments(onQueue)
       } else {
-        send()
+        void send()
       }
     }
   }
@@ -534,6 +588,7 @@ export function Composer({
           onChange={onChange}
           onKeyDown={onKeyDown}
           onPaste={onPaste}
+          disabled={sending}
           data-testid="composer-input"
           aria-label="Mesaj yaz"
           rows={1}
@@ -654,13 +709,13 @@ export function Composer({
             hasText={hasText}
             hasContent={hasContent}
             anyUploading={anyUploading}
-            disabled={disabled || !agentId}
-            onSend={send}
+            disabled={disabled || sending || !agentId}
+            onSend={() => void send()}
             onStop={onStop}
             onCancelWait={onCancelWait}
-            onQueue={() => actWithAttachments(onQueue)}
-            onInterrupt={() => actWithAttachments(onInterrupt)}
-            onSteer={() => act(onSteer)}
+            onQueue={() => void actWithAttachments(onQueue)}
+            onInterrupt={() => void actWithAttachments(onInterrupt)}
+            onSteer={() => void act(onSteer)}
           />
         </div>
       </div>

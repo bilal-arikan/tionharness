@@ -7,20 +7,41 @@ import { X } from 'lucide-react'
 // tags of its own, only the in-progress input text.
 interface Props {
   tags: string[]
-  onChange: (tags: string[]) => void
+  // May persist asynchronously: the editor awaits it and keeps the typed draft
+  // when it resolves to false, so a failed save does not eat the tag.
+  onChange: (tags: string[]) => void | Promise<boolean | void>
   placeholder?: string
   disabled?: boolean
   className?: string
 }
 
-export function TagEditor({ tags, onChange, placeholder = 'Etiket ekle…', disabled, className = '' }: Props) {
+export function TagEditor({
+  tags,
+  onChange,
+  placeholder = 'Etiket ekle…',
+  disabled,
+  className = '',
+}: Props) {
   const [draft, setDraft] = useState('')
+  // A save is in flight: the input is locked so the same tag cannot be committed
+  // twice (Enter then blur), and the draft survives a failed save.
+  const [saving, setSaving] = useState(false)
 
-  const commit = () => {
+  const commit = async () => {
+    if (saving) return
     const t = draft.trim().replace(/,+$/, '').trim()
-    setDraft('')
-    if (!t || tags.includes(t)) return
-    onChange([...tags, t])
+    // Empty or duplicate: nothing to persist, just drop the draft.
+    if (!t || tags.includes(t)) {
+      setDraft('')
+      return
+    }
+    setSaving(true)
+    try {
+      const ok = await onChange([...tags, t])
+      if (ok !== false) setDraft('')
+    } finally {
+      setSaving(false)
+    }
   }
 
   const remove = (tag: string) => onChange(tags.filter((t) => t !== tag))
@@ -28,7 +49,7 @@ export function TagEditor({ tags, onChange, placeholder = 'Etiket ekle…', disa
   const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' || e.key === ',') {
       e.preventDefault()
-      commit()
+      void commit()
     } else if (e.key === 'Backspace' && draft === '' && tags.length > 0) {
       // Backspace on an empty box removes the last tag (fast correction).
       remove(tags[tags.length - 1])
@@ -62,7 +83,8 @@ export function TagEditor({ tags, onChange, placeholder = 'Etiket ekle…', disa
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={onKeyDown}
-          onBlur={commit}
+          onBlur={() => void commit()}
+          disabled={saving}
           placeholder={tags.length === 0 ? placeholder : ''}
           className="min-w-[80px] flex-1 bg-transparent text-[12px] text-[var(--color-text)] outline-none placeholder:text-[var(--color-text-dim)]"
         />

@@ -124,7 +124,10 @@ export interface SlashCommand {
   // run receives the text typed after the command name when takesInput is set
   // (e.g. "/myflow some topic" → run("some topic")), plus any attachments staged
   // in the composer; otherwise called with none.
-  run: (input?: string, attachments?: Attachment[]) => void
+  // A command may run asynchronously: the composer awaits the result and keeps
+  // the typed input when it resolves to false (the command failed), so the user
+  // can retry without retyping. Returning void/undefined clears as before.
+  run: (input?: string, attachments?: Attachment[]) => void | Promise<boolean | void>
   // takesInput: selecting from the menu inserts "/name " and waits for the user
   // to type an argument + Enter, rather than running immediately. Used by flows.
   takesInput?: boolean

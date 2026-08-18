@@ -96,6 +96,12 @@ export function useChatStream(deps: ChatStreamDeps) {
   // events) + its live viewer count (presence, Faz 4). Both are reset when the
   // subscription switches sessions.
   const [queued, setQueued] = useState<PendingItem[]>([])
+  // Live mirror so a failed cancel/clear can restore the tray it optimistically
+  // emptied (the server still holds those messages).
+  const queuedRef = useRef(queued)
+  useEffect(() => {
+    queuedRef.current = queued
+  }, [queued])
   const [presence, setPresence] = useState(1)
   // "another window is typing…" — driven by the hub (typing events from OTHER
   // windows), auto-cleared if the peer stops updating (e.g. it closed).
@@ -133,13 +139,18 @@ export function useChatStream(deps: ChatStreamDeps) {
   // auto-resume" banner + its Durdur (cancel) control show on the right session.
   // The turn that armed it has ENDED, so without this the session looks finished.
   const [wakeWaits, setWakeWaits] = useState<Record<string, WakeWait>>({})
+  // Live mirror so a failed cancel can restore the banner it optimistically hid.
+  const wakeWaitsRef = useRef(wakeWaits)
+  useEffect(() => {
+    wakeWaitsRef.current = wakeWaits
+  }, [wakeWaits])
 
   const sendMessage = useCallback(
     // `targetSid` lets a queued-message flush (or interrupt) send to a specific
     // session even if the user has since switched away; defaults to the active
     // session for normal sends. The turn itself runs in performSend.
     async (text: string, targetSid?: string, attachments: Attachment[] = []) => {
-      await performSend(
+      return await performSend(
         {
           activeSessionId,
           sessions,
@@ -247,14 +258,23 @@ export function useChatStream(deps: ChatStreamDeps) {
 
   // Interrupt: stop the active session's turn, then enqueue a new message to the
   // SAME session (it dispatches once the stopped turn unwinds).
+  // Resolves to true when the interrupt went through (turn stopped AND the new
+  // message enqueued); false lets the composer keep the draft for a retry. The
+  // stop is awaited on purpose: if it fails the turn is still running, so
+  // enqueuing here would silently turn an "interrupt" into a "queue behind it".
   const interruptTurn = useCallback(
-    (text: string, attachments?: Attachment[]) => {
+    async (text: string, attachments?: Attachment[]): Promise<boolean> => {
       const sid = activeSessionId
-      if (!sid) return
-      api.sessionControl(sid, 'stop').catch(() => {})
-      void sendMessage(text, sid, attachments)
+      if (!sid) return false
+      try {
+        await api.sessionControl(sid, 'stop')
+      } catch (e) {
+        setError((e as Error).message)
+        return false
+      }
+      return await sendMessage(text, sid, attachments)
     },
-    [activeSessionId, sendMessage],
+    [activeSessionId, sendMessage, setError],
   )
 
   // ---- post-reload recovery (detached turns still running server-side) ----
@@ -413,19 +433,24 @@ export function useChatStream(deps: ChatStreamDeps) {
 
   // Durdur: disarm the active session's pending self-wake. Optimistically clear
   // the banner, then POST; the server also emits phase=cancelled which clears it.
+  // The optimistic clear is rolled back when the POST fails: the wake is still
+  // armed server-side, so leaving the banner hidden would lie about the state.
   const cancelWake = useCallback(() => {
     const sid = activeSessionId
     if (!sid) return
+    const prev = wakeWaitsRef.current[sid]
     setWakeWaits((p) => withoutKey(p, sid))
-    api.cancelWake(sid).catch((e) => setError((e as Error).message))
+    api.cancelWake(sid).catch((e) => {
+      if (prev) setWakeWaits((p) => ({ ...p, [sid]: prev }))
+      setError((e as Error).message)
+    })
   }, [activeSessionId, setError])
 
   // Queue: with the backend serial queue, "queue" is just a normal send — the
   // server serialises it behind the running turn and shows it in the tray.
   const queueMessage = useCallback(
-    (text: string, attachments?: Attachment[]) => {
-      void sendMessage(text, undefined, attachments)
-    },
+    (text: string, attachments?: Attachment[]): Promise<boolean> =>
+      sendMessage(text, undefined, attachments),
     [sendMessage],
   )
 
@@ -438,43 +463,59 @@ export function useChatStream(deps: ChatStreamDeps) {
   // a steer cannot reach the turn — a claude-cli agent in "auto" mode (no permission-
   // prompt boundary), or an older backend — in which case we queue the message and
   // tell the user, instead of silently dropping their guidance.
+  // Resolves to true when the guidance was delivered (or, on "unsupported", was
+  // successfully queued as a normal turn instead) — the composer clears only then.
   const steerTurn = useCallback(
-    (text: string) => {
+    async (text: string): Promise<boolean> => {
       const sid = activeSessionId
-      if (!sid || !text.trim()) return
-      api
-        .sessionControl(sid, 'steer', text)
-        .then((r) => {
-          if (r?.result === 'unsupported') {
-            void sendMessage(text)
-            setError(
-              'Auto izin modunda canlı yönlendirme desteklenmiyor (claude-cli) — mesaj sıraya alındı. Canlı yönlendirme için ajanı "ask" moduna al.',
-            )
-          }
-        })
-        .catch((e) => setError((e as Error).message))
+      if (!sid || !text.trim()) return false
+      try {
+        const r = await api.sessionControl(sid, 'steer', text)
+        if (r?.result === 'unsupported') {
+          const queued = await sendMessage(text)
+          setError(
+            'Auto izin modunda canlı yönlendirme desteklenmiyor (claude-cli) — mesaj sıraya alındı. Canlı yönlendirme için ajanı "ask" moduna al.',
+          )
+          return queued
+        }
+        return true
+      } catch (e) {
+        setError((e as Error).message)
+        return false
+      }
     },
     [activeSessionId, setError, sendMessage],
   )
 
   // Remove a WAITING queued message before it is dispatched (backend cancel).
+  // The chip is removed optimistically; a failed cancel puts it back and reports
+  // the error — the message IS still queued server-side and will run.
   const removePending = useCallback(
     (id: string) => {
       const sid = activeSessionId
       if (!sid) return
-      setQueued((prev) => prev.filter((p) => p.id !== id))
-      api.cancelQueued(sid, id).catch(() => {})
+      const prev = queuedRef.current
+      setQueued(prev.filter((p) => p.id !== id))
+      api.cancelQueued(sid, id).catch((e) => {
+        setQueued(prev)
+        setError((e as Error).message)
+      })
     },
-    [activeSessionId],
+    [activeSessionId, setError],
   )
 
-  // Clear the whole waiting queue for the active session.
+  // Clear the whole waiting queue for the active session. Same rollback: on
+  // failure the tray is restored instead of pretending the queue is empty.
   const clearQueue = useCallback(() => {
     const sid = activeSessionId
     if (!sid) return
+    const prev = queuedRef.current
     setQueued([])
-    api.clearQueue(sid).catch(() => {})
-  }, [activeSessionId])
+    api.clearQueue(sid).catch((e) => {
+      setQueued(prev)
+      setError((e as Error).message)
+    })
+  }, [activeSessionId, setError])
 
   // Promote a waiting message so it dispatches next ("öne al").
   const sendQueuedNext = useCallback(

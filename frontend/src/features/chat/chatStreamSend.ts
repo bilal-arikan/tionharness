@@ -32,12 +32,15 @@ export interface SendContext {
 // nothing — no optimistic bubble: a queued message shows in the tray (queue_update)
 // and becomes a chat bubble when the worker runs it (user_message). `targetSid`
 // lets an interrupt target a specific session even if the user switched away.
+// Returns true when the enqueue was accepted by the backend, false when it
+// failed (or there was no session to send to). The composer uses this to decide
+// whether to clear its input: a failed send keeps the text so it can be retried.
 export async function performSend(
   ctx: SendContext,
   text: string,
   targetSid: string | undefined,
   attachments: Attachment[],
-): Promise<void> {
+): Promise<boolean> {
   const {
     activeSessionId,
     sessions,
@@ -49,7 +52,7 @@ export async function performSend(
     setError,
   } = ctx
   const sid = targetSid ?? activeSessionId
-  if (!sid) return
+  if (!sid) return false
   setError(null)
   // One agent per turn: the session's bound agent answers.
   const sessAgent = sessions.find((s) => s.id === sid)?.agentId
@@ -82,10 +85,12 @@ export async function performSend(
       permissionMode,
       clientMsgId,
     })
+    return true
   } catch (e) {
     setPendingSessions((p) => withRemoved(p, sid))
     setQueued((prev) => prev.filter((p) => p.id !== clientMsgId))
     setError((e as Error).message)
+    return false
   }
 }
 

@@ -34,7 +34,12 @@ export interface ChatStreamDeps {
 
 // Signature of the hook's sendMessage, used by modules that re-send through
 // the live sendMessageRef without re-binding callbacks.
-export type SendFn = (text: string, targetSid?: string, attachments?: Attachment[]) => Promise<void>
+// Resolves to true when the message reached the backend queue, false on failure.
+export type SendFn = (
+  text: string,
+  targetSid?: string,
+  attachments?: Attachment[],
+) => Promise<boolean>
 
 // Accumulator behind a session's ghost bubble (autonomous / other-window turns
 // grown from session_step bus frames).

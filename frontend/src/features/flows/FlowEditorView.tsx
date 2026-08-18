@@ -1,6 +1,14 @@
 import type { Dispatch, RefObject, SetStateAction } from 'react'
 import type { Edge, EdgeChange, NodeChange } from '@xyflow/react'
-import { Loader2, XCircle, ChevronDown, ChevronRight, PanelLeftClose, PanelLeftOpen, X } from 'lucide-react'
+import {
+  Loader2,
+  XCircle,
+  ChevronDown,
+  ChevronRight,
+  PanelLeftClose,
+  PanelLeftOpen,
+  X,
+} from 'lucide-react'
 import type { FlowNodeEvent } from '@/api/flows'
 import { Markdown } from '@/shared/components/markdown/Markdown'
 import { FlowCanvas, FLOW_NODE_DND_MIME, type EdgeStyle } from './FlowCanvas'
@@ -105,91 +113,90 @@ export function FlowEditorView({
           name/id + file actions + save now live in the top PaneHeader above. */}
       <div className="flex min-h-0 flex-1">
         {paletteVisible && (
-        <div className="w-40 flex-shrink-0 space-y-2 overflow-y-auto border-r border-[var(--color-border)] p-2 max-md:w-32">
-          <button
-            type="button"
-            onClick={togglePalette}
-            className="flex w-full items-center gap-1 px-1 text-xs font-semibold text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)]"
-            title={paletteOpen ? 'Node ekle bölümünü daralt' : 'Node ekle bölümünü genişlet'}
-            aria-expanded={paletteOpen}
-          >
-            {paletteOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
-            Node ekle
-          </button>
-          {/* Each palette entry pairs the add/drag button with an (ⓘ) popover
+          <div className="w-40 flex-shrink-0 space-y-2 overflow-y-auto border-r border-[var(--color-border)] p-2 max-md:w-32">
+            <button
+              type="button"
+              onClick={togglePalette}
+              className="flex w-full items-center gap-1 px-1 text-xs font-semibold text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)]"
+              title={paletteOpen ? 'Node ekle bölümünü daralt' : 'Node ekle bölümünü genişlet'}
+              aria-expanded={paletteOpen}
+            >
+              {paletteOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+              Node ekle
+            </button>
+            {/* Each palette entry pairs the add/drag button with an (ⓘ) popover
               explaining what that node type does. The popover renders in fixed
               coordinates because this column scrolls (and would clip it). */}
-          {paletteOpen && NODE_TYPES.map((t) => (
-            <div key={t.value} className="flex items-center gap-1">
-              <button
-                draggable
-                onDragStart={(e) => {
-                  e.dataTransfer.setData(FLOW_NODE_DND_MIME, t.value)
-                  e.dataTransfer.effectAllowed = 'move'
-                }}
-                onClick={() => addNode(t.value)}
-                className="flex min-w-0 flex-1 cursor-grab items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-2 py-2 text-left text-xs hover:border-[var(--color-accent)] active:cursor-grabbing"
-              >
-                <t.Icon size={15} className="shrink-0 text-[var(--color-text-dim)]" />
-                <span className="truncate">{t.label}</span>
-              </button>
-              <InfoPopover
-                fixed
-                text={NODE_TYPE_HELP[t.value]}
-                label={`${t.label} nedir?`}
-              />
-            </div>
-          ))}
+            {paletteOpen &&
+              NODE_TYPES.map((t) => (
+                <div key={t.value} className="flex items-center gap-1">
+                  <button
+                    draggable
+                    onDragStart={(e) => {
+                      e.dataTransfer.setData(FLOW_NODE_DND_MIME, t.value)
+                      e.dataTransfer.effectAllowed = 'move'
+                    }}
+                    onClick={() => addNode(t.value)}
+                    className="flex min-w-0 flex-1 cursor-grab items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-2 py-2 text-left text-xs hover:border-[var(--color-accent)] active:cursor-grabbing"
+                  >
+                    <t.Icon size={15} className="shrink-0 text-[var(--color-text-dim)]" />
+                    <span className="truncate">{t.label}</span>
+                  </button>
+                  <InfoPopover fixed text={NODE_TYPE_HELP[t.value]} label={`${t.label} nedir?`} />
+                </div>
+              ))}
 
-          {/* Flow-level presentation moved here from the meta toolbar. */}
-          <div className="space-y-2 border-t border-[var(--color-border)] pt-2">
-            <div className="px-1 text-xs font-semibold text-[var(--color-text-dim)]">
-              Görünüm
-            </div>
-            <div className="px-0.5">
-              <span className="mb-1 block px-0.5 text-[11px] text-[var(--color-text-dim)]">Etiket</span>
-              <TagEditor
-                tags={tags}
-                onChange={onTagsChange}
-                placeholder="Etiket…"
-                className="py-1"
-              />
-            </div>
-            <label className="block px-0.5">
-              <span className="mb-1 block px-0.5 text-[11px] text-[var(--color-text-dim)]">Kablo</span>
-              <select
-                value={edgeStyle}
-                onChange={(e) => changeEdgeStyle(e.target.value as EdgeStyle)}
-                className="w-full rounded bg-[var(--color-surface-2)] px-2 py-1.5 text-xs outline-none"
+            {/* Flow-level presentation moved here from the meta toolbar. */}
+            <div className="space-y-2 border-t border-[var(--color-border)] pt-2">
+              <div className="px-1 text-xs font-semibold text-[var(--color-text-dim)]">Görünüm</div>
+              <div className="px-0.5">
+                <span className="mb-1 block px-0.5 text-[11px] text-[var(--color-text-dim)]">
+                  Etiket
+                </span>
+                <TagEditor
+                  tags={tags}
+                  onChange={onTagsChange}
+                  placeholder="Etiket…"
+                  className="py-1"
+                />
+              </div>
+              <label className="block px-0.5">
+                <span className="mb-1 block px-0.5 text-[11px] text-[var(--color-text-dim)]">
+                  Kablo
+                </span>
+                <select
+                  value={edgeStyle}
+                  onChange={(e) => changeEdgeStyle(e.target.value as EdgeStyle)}
+                  className="w-full rounded bg-[var(--color-surface-2)] px-2 py-1.5 text-xs outline-none"
+                >
+                  {EDGE_STYLES.map((s) => (
+                    <option key={s.value} value={s.value}>
+                      {s.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="flex cursor-pointer items-center gap-1.5 px-0.5 text-xs text-[var(--color-text-dim)]">
+                <input
+                  type="checkbox"
+                  checked={animated}
+                  onChange={(e) => setAnimated(e.target.checked)}
+                />
+                Animasyon
+              </label>
+              <label
+                className="flex cursor-pointer items-center gap-1.5 px-0.5 text-xs text-[var(--color-text-dim)]"
+                title="Ardışık ajan node'ları büyüyen tek bir konuşmayı paylaşır → prompt-cache düğümler arası yeniden kullanılır"
               >
-                {EDGE_STYLES.map((s) => (
-                  <option key={s.value} value={s.value}>
-                    {s.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="flex cursor-pointer items-center gap-1.5 px-0.5 text-xs text-[var(--color-text-dim)]">
-              <input
-                type="checkbox"
-                checked={animated}
-                onChange={(e) => setAnimated(e.target.checked)}
-              />
-              Animasyon
-            </label>
-            <label
-              className="flex cursor-pointer items-center gap-1.5 px-0.5 text-xs text-[var(--color-text-dim)]"
-              title="Ardışık ajan node'ları büyüyen tek bir konuşmayı paylaşır → prompt-cache düğümler arası yeniden kullanılır"
-            >
-              <input
-                type="checkbox"
-                checked={accumulate}
-                onChange={(e) => setAccumulate(e.target.checked)}
-              />
-              Bağlamı biriktir (cache)
-            </label>
+                <input
+                  type="checkbox"
+                  checked={accumulate}
+                  onChange={(e) => setAccumulate(e.target.checked)}
+                />
+                Bağlamı biriktir (cache)
+              </label>
+            </div>
           </div>
-        </div>
         )}
         <div className="relative min-w-0 flex-1">
           {/* Floating top-left toggle to hide/show the whole left palette,
@@ -247,7 +254,7 @@ export function FlowEditorView({
                 allNodes={nodes.map((n) => n.data.node)}
                 flows={flows}
                 onPatch={patchSelected}
-                  onDuplicate={duplicateSelected}
+                onDuplicate={duplicateSelected}
                 onDelete={deleteSelected}
               />
             </div>
@@ -265,15 +272,14 @@ export function FlowEditorView({
             centered [ℹ️][input][Çalıştır] line. The run panel is bottom-anchored,
             so the input (and the area around it) grows upward as it gets taller. */}
         <div className="flex items-center gap-2">
-          <FlowVarsButton
-            context="seed"
-            nodeRefs={[]}
-            onInsert={(t) => setInput((v) => v + t)}
-          />
+          <FlowVarsButton context="seed" nodeRefs={[]} onInsert={(t) => setInput((v) => v + t)} />
           <textarea
             ref={runInputRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
+            // Locked while the run is in flight, like the Çalıştır button — the
+            // text is kept either way, so a failed run can be retried as-is.
+            disabled={running}
             placeholder="Girdi (akışa {{input}} olarak geçer)"
             rows={1}
             className="max-h-40 min-w-0 flex-1 resize-none overflow-y-auto rounded bg-[var(--color-surface-2)] px-3 py-2 text-sm outline-none"
@@ -289,7 +295,10 @@ export function FlowEditorView({
             <div className="mb-2 text-xs text-[var(--color-text-dim)]">Canlı ilerleme</div>
             <ol className="space-y-2">
               {liveNodes.map((n, i) => (
-                <li key={`${n.nodeId}-${i}`} className="rounded bg-[var(--color-surface-2)] p-2 text-sm">
+                <li
+                  key={`${n.nodeId}-${i}`}
+                  className="rounded bg-[var(--color-surface-2)] p-2 text-sm"
+                >
                   <div className="mb-1 flex items-center gap-1.5 text-xs text-[var(--color-text-dim)]">
                     {n.error !== undefined ? (
                       <XCircle size={12} className="text-[var(--color-danger)]" />
@@ -299,7 +308,9 @@ export function FlowEditorView({
                     {i + 1}. [{n.type}] {n.title}
                   </div>
                   {n.error !== undefined ? (
-                    <span className="text-xs whitespace-pre-wrap text-[var(--color-danger)]">⚠️ {n.error}</span>
+                    <span className="text-xs whitespace-pre-wrap text-[var(--color-danger)]">
+                      ⚠️ {n.error}
+                    </span>
                   ) : n.output === undefined ? (
                     <span className="text-xs italic text-[var(--color-text-dim)]">çalışıyor…</span>
                   ) : n.type === 'branch' ? (
@@ -317,7 +328,13 @@ export function FlowEditorView({
           <div className="mt-4 border-t border-[var(--color-border)] pt-3">
             <div className="mb-2 text-xs">
               Durum:{' '}
-              <span className={run.status === 'success' ? 'text-[var(--color-success)]' : 'text-[var(--color-danger)]'}>
+              <span
+                className={
+                  run.status === 'success'
+                    ? 'text-[var(--color-success)]'
+                    : 'text-[var(--color-danger)]'
+                }
+              >
                 {run.status}
               </span>
               {run.error && <span className="ml-2 text-[var(--color-danger)]">· {run.error}</span>}

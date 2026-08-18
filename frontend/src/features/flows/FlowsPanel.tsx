@@ -332,11 +332,22 @@ export function FlowsPanel({ agents, onError, openFlowId, tab: tabProp, onTabCha
 
   // Tag edits persist immediately (setFlowTags) and sync the list array so the
   // flow row's tag chips refresh live.
-  const handleTagsChange = (next: string[]) => {
+  // Resolves to false when the write failed — the optimistic chips are rolled
+  // back and TagEditor keeps the typed tag so it can be retried.
+  const handleTagsChange = async (next: string[]): Promise<boolean> => {
+    const prevTags = tags
     setTags(next)
-    if (!selectedId) return
+    if (!selectedId) return true
     setFlows((prev) => prev.map((x) => (x.id === selectedId ? { ...x, tags: next } : x)))
-    api.setFlowTags(selectedId, next).catch((e) => onError((e as Error).message))
+    try {
+      await api.setFlowTags(selectedId, next)
+      return true
+    } catch (e) {
+      setTags(prevTags)
+      setFlows((prev) => prev.map((x) => (x.id === selectedId ? { ...x, tags: prevTags } : x)))
+      onError((e as Error).message)
+      return false
+    }
   }
 
   // rerunRun re-executes an already-finished run's flow with the SAME input
