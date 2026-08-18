@@ -165,12 +165,18 @@ sorulabiliyor; cevap, thinking bloğu ve token sayıları doğru görünüyor.
 args := []string{"exec", "--json", "--skip-git-repo-check"}
 if model != "" { args = append(args, "--model", model) }
 args = append(args, sandboxArgs(req.PermissionMode)...)
-args = append(args, "--ignore-user-config")           // sadece bizim config.toml geçerli
 args = append(args, "-C", req.WorkDir)                // cwd
 // prompt stdin'den (Windows 32 KB limiti)
 cmd.Stdin = strings.NewReader(prompt)
-cmd.Env  = append(codexBaseEnv(), "CODEX_HOME="+configDir)
+cmd.Env  = append(codexBaseEnv(), "CODEX_HOME="+configDir) // izolasyon BURADAN gelir
 ```
+
+> ⚠️ **`--ignore-user-config` EKLEME.** Bu bayrak `CODEX_HOME/config.toml`'un
+> TA KENDİSİNİ atlar (codex-rs `config/src/loader/mod.rs:516`) — yani
+> `writeCodexConfig`'in MCP sunucularını ve `developer_instructions`'ı yazdığı
+> dosyanın ta kendisini. Üretimde eklenmişti, MCP köprüsünü tamamen kırdığı
+> canlı A/B ile doğrulanınca kaldırıldı (bkz. `69 §"Üretimde ne oldu"`).
+> İzolasyon zaten `CODEX_HOME` ortam değişkeniyle sağlanıyor.
 
 `sandboxArgs`:
 
@@ -218,11 +224,13 @@ url                 = "http://127.0.0.1:PORT/core"
 bearer_token_env_var = "TIONSWARM_MCP_TOKEN"     # token env'den, komut satırından değil
 startup_timeout_sec = 30
 tool_timeout_sec    = 600                         # uzun run_subagent için
+required            = true                        # ZORUNLU — bkz. §8.4
 
 [mcp_servers.tionswarm_extended]
 url                 = "http://127.0.0.1:PORT/extended"
 bearer_token_env_var = "TIONSWARM_MCP_TOKEN"
 tool_timeout_sec    = 600
+required            = true                        # ZORUNLU — bkz. §8.4
 
 # ... her etkin harici MCP sunucusu için bir blok
 ```
@@ -375,7 +383,6 @@ login yapıldıktan sonra bu adım production koşullarında tekrarlanabilir.
 
 ---
 
-
 ## İlgili dokümanlar
 
 - `69-CODEX-CLI-SAGLAYICI.md` — fizibilite + tam referans (bayraklar, olay şeması, parite matrisi)
@@ -477,3 +484,20 @@ gösteren yardım metni. Gerekçe: claude-cli'nin `ClaudeAuthDialog`'u
 env-var kimlik kanalı (`ANTHROPIC_API_KEY` eşdeğeri) yok ve bu turda backend
 login endpoint'i yazılmadı — sessizce hiçbir şey yapmayan bir buton koymak
 yerine gerçek komutu gösteren metin tercih edildi.
+
+### 8.8 🔴 `required = true` blocker'ı — optional sunucu, 1sn grace, sessiz araç kaybı
+
+§5.1'deki onay blocker'ından **ayrı ve sonraki bir sessiz kayıp noktası**
+bulundu (kaynak: `codex-rs/codex-mcp/src/connection_manager/tool_catalog.rs:35`
+ve `capture_binding_with_metadata`, satır 171-224; alan tanımı
+`config/src/mcp_types.rs:198,341`). Bir `[mcp_servers.*]` bloğunda
+`required = true` yoksa sunucu **optional** sayılır; codex, optional sunucu
+için handshake + `tools/list`'in tamamlanmasını beklemeden yalnızca
+`OPTIONAL_MCP_STARTUP_GRACE = 1 saniye` bekler. `codex exec` her turda taze
+süreç başlattığından ilk turda cache her zaman boştur — bu grace aşılırsa
+sunucunun araçları o tur için **hiç** sunulmaz (hata/log yok). Çözüm:
+`codexcli_config.go`'nun ürettiği HER `[mcp_servers.*]` bloğuna
+`required = true` sabit yazılıyor (stdio ve remote/http fark etmeksizin);
+kod içi yorum kaynak referansını taşıyor. Regresyon testi:
+`TestRenderCodexConfigMarksServersRequired`
+(`internal/providers/codexcli_config_test.go`).
