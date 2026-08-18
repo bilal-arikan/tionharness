@@ -15,6 +15,7 @@ import {
   Brain,
   FolderCog,
   Plug,
+  Scissors,
   Wrench,
   Zap,
   type LucideIcon,
@@ -231,6 +232,24 @@ export const RULES: Rule[] = [
         actionLabel: 'Aç',
         act: async () => {
           await api.updateWorkspaceSettings({ shellOutputCompression: 'on' })
+        },
+      }
+    },
+  },
+  {
+    meta: {
+      key: 'terse-mode',
+      icon: Scissors,
+      title: 'Terse Mode’u aç',
+      summary: 'Yanıt üslubunu sıkıştıran terse prompt’u bu workspace’te kapalıysa.',
+    },
+    detect: (ctx) => {
+      if (ctx.ws.terseMode) return null
+      return {
+        desc: 'Terse Mode kapalı. Açarsan ajanların yanıtlarındaki dolgu metin düşer, teknik içerik (kod, komut, dosya yolu, hata metni) birebir kalır — çıktı tokenı belirgin azalır.',
+        actionLabel: 'Aç',
+        act: async () => {
+          await api.updateWorkspaceSettings({ terseMode: true })
         },
       }
     },

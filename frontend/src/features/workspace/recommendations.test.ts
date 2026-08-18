@@ -28,7 +28,12 @@ function healthyCtx(over: Partial<RecContext> = {}): RecContext {
     tools: [{ name: 'rtk', found: true, path: 'C:/rtk.exe', wire: 'hook' }],
     servers: [{ command: 'some-other-mcp' }],
     hooks: [{ enabled: true, command: 'rtk hook claude' }],
-    ws: { defaultWorkingDir: 'C:/work', codebaseMemoryEnabled: true, shellOutputCompression: 'on' },
+    ws: {
+      defaultWorkingDir: 'C:/work',
+      codebaseMemoryEnabled: true,
+      shellOutputCompression: 'on',
+      terseMode: true,
+    },
     settings: { backupEnabled: true },
     agentsCount: 3,
     // No release check performed / nothing behind. Also the shape an OFFLINE
@@ -170,6 +175,33 @@ describe('shell-output compression rule', () => {
       } as unknown as Partial<RecContext>),
     )
     expect(keys).not.toContain('shell-compress')
+  })
+})
+
+describe('terse-mode rule', () => {
+  const wsWith = (terseMode: unknown) =>
+    healthyCtx({
+      ws: {
+        defaultWorkingDir: 'C:/work',
+        codebaseMemoryEnabled: true,
+        shellOutputCompression: 'on',
+        terseMode,
+      },
+    } as unknown as Partial<RecContext>)
+
+  it('offers to turn terse mode on when the workspace has it off', () => {
+    expect(keysOf(wsWith(false))).toContain('terse-mode')
+  })
+
+  it('stays quiet once terse mode is on', () => {
+    expect(keysOf(wsWith(true))).not.toContain('terse-mode')
+  })
+
+  it('flips only the terseMode flag when the card is clicked', async () => {
+    await runRules(wsWith(false))
+      .find((r) => r.key === 'terse-mode')
+      ?.act()
+    expect(updateWorkspaceSettings).toHaveBeenCalledWith({ terseMode: true })
   })
 })
 

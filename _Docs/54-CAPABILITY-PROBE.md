@@ -185,12 +185,15 @@ kurulur, her kural bir kez koşar ve null-olmayanlar kapatılabilir sağ-alt kar
 **Yeni öneri = tek `RULES` girdisi.** Kart varyantı `accent`|`warning`.
 
 Kurallar (sırayla — kartlar üstten alta yığılır):
-- **token-conflict** (⚠): rtk+sqz ikisi de enabled → "Harici araçlar"a yönlendir.
 - **no-agents**: 0 ajan → Ajanlar ekranı.
 - **workdir**: `defaultWorkingDir` boş → "Bu Workspace" (path native picker ister).
 - **cbm-add**: codebase-memory-mcp kurulu ama MCP yok → `createMCPServer(...)`.
 - **cbm-enable**: MCP ekli ama `codebaseMemoryEnabled=false` → `updateWorkspaceSettings`.
-- **token**: rtk (yoksa sqz) kurulu ama hiç token-hook yok → `createHook(...)`.
+- **token**: sqz kurulu ama sqz hook'u yok → `createHook(...)`. (rtk artık hook
+  olarak ÖNERİLMEZ; `shellCommandRewrite` ayarıyla bağlanır.)
+- **shell-compress**: sqz kurulu, hook yok ve `shellOutputCompression` auto →
+  `updateWorkspaceSettings({ shellOutputCompression: 'on' })`.
+- **terse-mode**: `terseMode=false` → `updateWorkspaceSettings({ terseMode: true })`.
 - **no-mcp**: hiç MCP yok (ve cbm bekleyen öneri değilse) → Market.
 - **backup-off**: `backupEnabled=false` → Yedekleme ayarları.
 - **tool-update** (⚠): kurulu bir aracın daha yeni sürümü yayımlanmış → Harici Araçlar.

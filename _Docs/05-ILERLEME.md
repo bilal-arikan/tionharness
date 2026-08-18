@@ -35,6 +35,20 @@ tamamlandıktan sonra kalan yüzey işi:
   uygun (config'li).
 - Detay ve plan-vs-gerçek farkları → `_Docs/70-CODEX-CLI-UYGULAMA-PLANI.md` §8.
 
+## `tionswarm-terse` skill'i kaldırıldı (2026-08-18) ✅
+
+- **Sorun:** Terse yanıt stili artık `WSSettings.TerseMode` + registry promptu
+  `terse` ile koşulsuz enjekte ediliyor. Gömülü `tionswarm-terse` skill'i aynı
+  metnin ikinci kopyasıydı ve her oturumda skill katalog listesinde bir satır
+  yer kaplıyordu — enjekte edilmiş bir stili "gerekirse yükle" diye ilan etmek.
+- **Yapılan:** `internal/skills/defaults/tionswarm-terse/` silindi (dizin
+  `//go:embed defaults` ile gömülüyordu, ayrı kayıt listesi yok) ve global
+  tier'a seed edilmiş kopya (`~/.tionswarm/skills/tionswarm-terse`) kaldırıldı.
+- **Tek kaynak:** stil metni yalnız `internal/prompts/defaults/terse.md`
+  (workspace override: `<workspace>/config/prompts/terse.md`).
+- **Not:** `delete_skill` gömülü/global tier'ı korur — yalnız workspace skill'ini
+  siler; gömülü bir default'u kaldırmak depodan silmeyi gerektirir.
+
 ## Store yüklemesi paralelleştirildi — boot 3–6× (2026-08-17) ✅
 
 Bir önceki maddede ölçülen "boot'un maliyeti parse değil, **soğuk dosya açma**
