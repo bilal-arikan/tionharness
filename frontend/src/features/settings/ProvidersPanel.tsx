@@ -26,6 +26,7 @@ import { useCatalog, resolveRuntimeBadge } from '@/shared/lib/catalog'
 import { modelDisplayName } from '@/shared/lib/modelLabel'
 import { inputCls, type AppSet } from './primitives'
 import { ClaudeAuthDialog } from './ClaudeAuthDialog'
+import { CodexAuthDialog } from './CodexAuthDialog'
 
 // fmtPrice formats a USD/1M-token figure compactly (e.g. "$0.30", "$15", "ücretsiz").
 function fmtPrice(n: number): string {
@@ -718,6 +719,7 @@ export function ProvidersPanel({
   workspaceCodexHome,
 }: Props) {
   const [authOpen, setAuthOpen] = useState(false)
+  const [codexAuthOpen, setCodexAuthOpen] = useState(false)
   const catalog = useCatalog()
   // Which Claude Code binary + plan actually backs the claude-cli card. Comes
   // from the catalog (the backend probes `claude --version` and reads the
@@ -740,6 +742,20 @@ export function ProvidersPanel({
       setWsAuth({ loggedIn: false, detail: (e as Error).message })
     }
   }
+  // Same pre-flight idea as wsAuth above, but for THIS workspace's codex-home
+  // (cheap filesystem check server-side, see codex_auth.go).
+  const [codexAuth, setCodexAuth] = useState<
+    'idle' | 'pending' | { loggedIn: boolean; detail?: string }
+  >('idle')
+  const checkCodexAuth = async () => {
+    setCodexAuth('pending')
+    try {
+      const r = await api.checkWorkspaceCodexAuth()
+      setCodexAuth({ loggedIn: r.loggedIn, detail: r.detail })
+    } catch (e) {
+      setCodexAuth({ loggedIn: false, detail: (e as Error).message })
+    }
+  }
   return (
     <>
       {authOpen && (
@@ -749,6 +765,13 @@ export function ProvidersPanel({
           isSet={draft.claudeCliAuthSet}
           onClose={() => setAuthOpen(false)}
           onSaved={(next) => setDraft(next)}
+        />
+      )}
+      {codexAuthOpen && (
+        <CodexAuthDialog
+          isLoggedIn={typeof codexAuth === 'object' && codexAuth.loggedIn}
+          onClose={() => setCodexAuthOpen(false)}
+          onLoggedIn={checkCodexAuth}
         />
       )}
       <div>
@@ -936,32 +959,69 @@ export function ProvidersPanel({
               </span>
             </div>
 
-            {/* codex-cli has no env-var credential channel like claude-cli's
-                CLAUDE_CODE_OAUTH_TOKEN/ANTHROPIC_API_KEY injection, and there is no
-                backend login endpoint for it (unlike ClaudeAuthDialog's target) —
-                so this is help text pointing at the CLI's own login command, not a
-                button that would silently do nothing. */}
-            <div className="space-y-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] p-2.5">
-              <span className="text-xs font-medium text-[var(--color-text-dim)]">Giriş yap</span>
-              <p className="text-[11px] text-[var(--color-text-dim)]">
-                Her workspace açılışında, bu workspace'in codex-home'u henüz giriş yapılmamışsa
-                global ~/.codex (veya $CODEX_HOME) girişi otomatik olarak buraya kopyalanır. Bu
-                komut yalnızca hiçbir global girişin bulunmadığı durumda gerekir — PowerShell'de
-                çalıştır:
-              </p>
-              <code className="block overflow-x-auto whitespace-pre rounded bg-[var(--color-surface-2)] px-2 py-1 text-[11px]">
-                {`$env:CODEX_HOME = "${workspaceCodexHome || '<workspace>/codex-home'}"\ncodex login`}
-              </code>
-              <p className="text-[11px] text-[var(--color-text-dim)]">
-                <code className="rounded bg-[var(--color-surface-2)] px-1 py-0.5">codex</code>{' '}
-                komutu PATH'te olmayabilir — resmi Windows kurulumu ikili dosyayı genellikle{' '}
-                <code className="rounded bg-[var(--color-surface-2)] px-1 py-0.5">
-                  %LOCALAPPDATA%\Programs\OpenAI\Codex\bin\codex.exe
-                </code>{' '}
-                konumuna kurar ve PATH'e eklemez.{' '}
-                <code className="rounded bg-[var(--color-surface-2)] px-1 py-0.5">codex</code>{' '}
-                bulunamıyorsa yukarıdaki komutta tam yolu kullan.
-              </p>
+            <div className="space-y-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] p-2.5">
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  data-testid="codex-auth-open"
+                  onClick={() => setCodexAuthOpen(true)}
+                  className="flex items-center gap-1.5 rounded-lg border border-[var(--color-border)] px-2.5 py-1.5 text-xs hover:border-[var(--color-accent)]"
+                >
+                  <KeyRound size={12} /> codex-cli kimlik (tarayıcı / API)
+                </button>
+                <span className="text-[11px] text-[var(--color-text-dim)]">
+                  Bu workspace'in izole codex-home'una giriş yap — terminal gerekmez.
+                </span>
+              </div>
+              {/* Pre-flight: verify THIS workspace's codex-home is logged in
+                  before an agent turn hits an auth wall. Cheap filesystem probe. */}
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  data-testid="workspace-codex-auth-check"
+                  onClick={checkCodexAuth}
+                  className="flex items-center gap-1.5 rounded-lg border border-[var(--color-border)] px-2.5 py-1.5 text-xs hover:border-[var(--color-accent)]"
+                >
+                  <KeyRound size={12} /> Bu workspace login doğrula
+                </button>
+                {codexAuth === 'pending' && (
+                  <span className="text-[11px] text-[var(--color-warning)]">kontrol ediliyor…</span>
+                )}
+                {typeof codexAuth === 'object' && codexAuth.loggedIn && (
+                  <span className="text-[11px] text-[var(--color-success)]">✓ giriş yapılmış</span>
+                )}
+                {typeof codexAuth === 'object' && !codexAuth.loggedIn && (
+                  <span className="text-[11px] text-[var(--color-error)]" title={codexAuth.detail}>
+                    ✕ giriş yok — {codexAuth.detail || 'codex girişi gerekli'}
+                  </span>
+                )}
+              </div>
+              {/* Manual PowerShell fallback — secondary now that the dialog above
+                  covers login. Kept for when global ~/.codex isn't seeded and the
+                  in-app device/API-key flow isn't preferred. */}
+              <details className="text-[11px] text-[var(--color-text-dim)]">
+                <summary className="cursor-pointer select-none hover:text-[var(--color-text)]">
+                  Gerekirse: elle PowerShell ile giriş
+                </summary>
+                <div className="mt-1.5 space-y-1">
+                  <p>
+                    Her workspace açılışında, bu workspace'in codex-home'u henüz giriş yapılmamışsa
+                    global ~/.codex (veya $CODEX_HOME) girişi otomatik olarak buraya kopyalanır. Bu
+                    komut yalnızca hiçbir global girişin bulunmadığı durumda gerekir:
+                  </p>
+                  <code className="block overflow-x-auto whitespace-pre rounded bg-[var(--color-surface-2)] px-2 py-1">
+                    {`$env:CODEX_HOME = "${workspaceCodexHome || '<workspace>/codex-home'}"\ncodex login`}
+                  </code>
+                  <p>
+                    <code className="rounded bg-[var(--color-surface-2)] px-1 py-0.5">codex</code>{' '}
+                    komutu PATH'te olmayabilir — resmi Windows kurulumu ikili dosyayı genellikle{' '}
+                    <code className="rounded bg-[var(--color-surface-2)] px-1 py-0.5">
+                      %LOCALAPPDATA%\Programs\OpenAI\Codex\bin\codex.exe
+                    </code>{' '}
+                    konumuna kurar ve PATH'e eklemez.{' '}
+                    <code className="rounded bg-[var(--color-surface-2)] px-1 py-0.5">codex</code>{' '}
+                    bulunamıyorsa yukarıdaki komutta tam yolu kullan.
+                  </p>
+                </div>
+              </details>
             </div>
           </div>
 
