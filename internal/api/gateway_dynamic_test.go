@@ -151,6 +151,83 @@ func TestGatewayHiddenActivatableAndToolSearch(t *testing.T) {
 	}
 }
 
+// TestFullTierBypassesGatewayGate locks the codex-cli variant of the gateway
+// request (tier suffixed "-full", see fullTierQueryParam in package interaction /
+// interactionServers in internal/agent/codexmcp.go): since codex-cli never
+// re-fetches tools/list on a tools/list_changed push, the lazy activate/deactivate
+// gate can never open for it, so a "-full" request must (a) advertise the COMPLETE
+// extended tier unconditionally — no activation needed — and (b) drop the gateway
+// meta-tools (activate_tools/deactivate_tools/active_tools/tool_search) from BOTH
+// the core and extended halves, since offering a mechanism codex can never
+// complete only invites a call→no-op→retry loop. The plain "core"/"extended"
+// request (claude-cli) must keep its EXACT existing behavior — gated extended
+// tier, meta-tools present on core, empty extended until activated.
+func TestFullTierBypassesGatewayGate(t *testing.T) {
+	tun := agent.NewTunables()
+	runs := newChatRuns()
+	b := &interactionBackend{runs: runs, tun: tun}
+	run := runs.register("r1", "s1", "ws1", func() {})
+	tok := runs.interactionToken("ws1", "s1", "a1")
+	runs.bindActive(tok, run)
+
+	// Bridge a hidden-classified tool too, so the full-tier assertion also covers
+	// the hidden→extended fold (§7-15) under bypass.
+	run.setBridge(
+		[]providers.ToolDef{{Name: "secret_ops", Description: "perform a secret hidden maintenance operation"}},
+		func(_ context.Context, name string, _ json.RawMessage) (string, error) { return "did:" + name, nil },
+	)
+	run.setTierVis(func(name string) string {
+		if name == "secret_ops" {
+			return tools.VisibilityHidden
+		}
+		return tools.VisibilityNameOnly
+	})
+
+	// --- claude-cli path (plain tier): behavior must be completely unchanged. ---
+	if ext := b.Tools(tok, "extended"); len(ext) != 0 {
+		t.Fatalf("plain extended tier must still start EMPTY (claude-cli path unchanged), got %v", specNames(ext))
+	}
+	core := b.Tools(tok, "core")
+	for _, meta := range []string{"activate_tools", "deactivate_tools", "active_tools", "tool_search"} {
+		if !specHasTool(core, meta) {
+			t.Fatalf("plain core tier must still advertise %s (claude-cli path unchanged), got %v", meta, specNames(core))
+		}
+	}
+	if specHasTool(b.Tools(tok, "extended"), "secret_ops") {
+		t.Fatal("plain extended tier must not advertise the hidden tool before activation")
+	}
+
+	// --- codex-cli path ("-full" tier): no gate, no meta-tools. ---
+	fullExt := b.Tools(tok, "extended-full")
+	if !specHasTool(fullExt, "notify") {
+		t.Fatalf("full extended tier must advertise a normal extended candidate (notify) unconditionally, got %v", specNames(fullExt))
+	}
+	if !specHasTool(fullExt, "secret_ops") {
+		t.Fatalf("full extended tier must also advertise the hidden tool unconditionally, got %v", specNames(fullExt))
+	}
+	for _, meta := range []string{"activate_tools", "deactivate_tools", "active_tools", "tool_search"} {
+		if specHasTool(fullExt, meta) {
+			t.Fatalf("full extended tier must NOT advertise the gateway meta-tool %s (codex can never complete the activation loop), got %v", meta, specNames(fullExt))
+		}
+	}
+
+	fullCore := b.Tools(tok, "core-full")
+	if !specHasTool(fullCore, "ask_user") {
+		t.Fatalf("full core tier must still advertise ordinary core tools, got %v", specNames(fullCore))
+	}
+	for _, meta := range []string{"activate_tools", "deactivate_tools", "active_tools", "tool_search"} {
+		if specHasTool(fullCore, meta) {
+			t.Fatalf("full core tier must NOT advertise the gateway meta-tool %s, got %v", meta, specNames(fullCore))
+		}
+	}
+
+	// The plain-tier request must STILL be gated after a full-tier call was made —
+	// the "-full" flag must not leak state across requests/tiers.
+	if ext := b.Tools(tok, "extended"); len(ext) != 0 {
+		t.Fatalf("a full-tier request must not mutate the plain tier's gate, got %v", specNames(ext))
+	}
+}
+
 // TestInteractionToolsHonorDisabled locks the claude-cli bridge to the agent's
 // effective tool filter: a tool the filter rejects (workspace DisabledTools or the
 // agent denylist) must NOT be advertised in tools/list, nor be activatable — matching

@@ -118,19 +118,33 @@ func (r *Runtime) codexMCPSpec(ctx context.Context, mcpEnabled bool, inter tools
 // eagerly. That is correct for codex: every configured server's tools are always
 // loaded, which is exactly what the core tier wants and merely less lazy than
 // the claude path for the extended tier.
+//
+// Both URLs additionally carry ?full=1 (see fullTierQueryParam in package
+// interaction): codex-cli receives tools/list_changed notifications but never
+// re-fetches tools/list in response (it only logs them — confirmed live: a turn
+// that called activate_tools never saw the tool on a later turn, and retried it
+// 3 more times before giving up). The lazy activation gate can therefore never
+// open for a codex turn, so ?full=1 tells the backend to (a) advertise the
+// COMPLETE extended tier unconditionally instead of the empty-until-activated
+// gateway set, and (b) drop the activate_tools/deactivate_tools/active_tools/
+// tool_search meta-tools from both tiers — showing codex a mechanism that can
+// never work only burns turns on a call→no-op→retry loop. This is a pure
+// ADDITION to the URL query string; it does not touch the /core, /extended path
+// segments the claude-cli path (climcp.go) also emits, so that path's request
+// (no query string) is unaffected byte-for-byte.
 func interactionServers(inter tools.InteractionEndpoint) map[string]providers.CLIMCPServer {
 	base := trimTrailingSlash(inter.URL)
 	authHeader := map[string]string{"Authorization": "Bearer " + inter.Token}
 	return map[string]providers.CLIMCPServer{
 		interactionCoreKey: {
 			Transport:  db.MCPTransportHTTP,
-			URL:        base + "/core",
+			URL:        base + "/core?full=1",
 			Headers:    authHeader,
 			AlwaysLoad: true,
 		},
 		interactionExtendedKey: {
 			Transport: db.MCPTransportHTTP,
-			URL:       base + "/extended",
+			URL:       base + "/extended?full=1",
 			Headers:   authHeader,
 		},
 	}

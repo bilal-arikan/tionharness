@@ -64,8 +64,8 @@ func TestCodexMCPSpecTwoTierInteraction(t *testing.T) {
 	if !ok {
 		t.Fatalf("core server entry missing: %v", spec.Servers)
 	}
-	if core.URL != "http://127.0.0.1:8090/mcp/interaction/core" {
-		t.Errorf("core URL = %q, want the /core tier without a doubled slash", core.URL)
+	if core.URL != "http://127.0.0.1:8090/mcp/interaction/core?full=1" {
+		t.Errorf("core URL = %q, want the /core tier (no doubled slash) with ?full=1 (codex never re-lists on tools/list_changed, so the gate must not be offered)", core.URL)
 	}
 	if core.Transport != db.MCPTransportHTTP {
 		t.Errorf("core transport = %q, want %q", core.Transport, db.MCPTransportHTTP)
@@ -81,8 +81,8 @@ func TestCodexMCPSpecTwoTierInteraction(t *testing.T) {
 	if !ok {
 		t.Fatalf("extended server entry missing: %v", spec.Servers)
 	}
-	if ext.URL != "http://127.0.0.1:8090/mcp/interaction/extended" {
-		t.Errorf("extended URL = %q, want the /extended tier", ext.URL)
+	if ext.URL != "http://127.0.0.1:8090/mcp/interaction/extended?full=1" {
+		t.Errorf("extended URL = %q, want the /extended tier with ?full=1", ext.URL)
 	}
 
 	// Tool ids must stay identical to the claude path so mcp.SplitNamespaced and

@@ -123,6 +123,57 @@ func TestInteraction_ToolsList(t *testing.T) {
 	}
 }
 
+// tierRecordingBackend captures the tier string Tools() was called with, so a test
+// can assert on it directly instead of inferring it from the returned tool set.
+type tierRecordingBackend struct {
+	validToken string
+	lastTier   string
+}
+
+func (f *tierRecordingBackend) Valid(token string) bool { return token == f.validToken }
+func (f *tierRecordingBackend) Tools(_, tier string) []ToolSpec {
+	f.lastTier = tier
+	return nil
+}
+func (f *tierRecordingBackend) Call(context.Context, string, string, json.RawMessage) (CallResult, error) {
+	return CallResult{}, nil
+}
+
+// TestRequestTier locks the codex-cli signal (?full=1, see fullTierQueryParam):
+// it must promote "core"/"extended" to "core-full"/"extended-full" while leaving
+// a plain request (no query string — the claude-cli shape) byte-for-byte as
+// today ("core" / "extended" / ""), so tools/list_changed re-list keying
+// (streamKey uses the bare tier) and the claude-cli path stay unaffected.
+func TestRequestTier(t *testing.T) {
+	cases := []struct {
+		name string
+		path string
+		want string
+	}{
+		{"core plain", "/mcp/interaction/core", "core"},
+		{"extended plain", "/mcp/interaction/extended", "extended"},
+		{"bare mount plain", "/mcp/interaction", ""},
+		{"core full", "/mcp/interaction/core?full=1", "core-full"},
+		{"extended full", "/mcp/interaction/extended?full=1", "extended-full"},
+		// A bare mount (no tier segment) has no "-full" variant: the flag is a
+		// no-op there, matching legacy "" (full set) behavior either way.
+		{"bare mount full", "/mcp/interaction?full=1", ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			b := &tierRecordingBackend{validToken: "good"}
+			h := Handler(b, nil)
+			req := httptest.NewRequest(http.MethodPost, tc.path,
+				strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"tools/list"}`))
+			req.Header.Set("Authorization", "Bearer good")
+			h.ServeHTTP(httptest.NewRecorder(), req)
+			if b.lastTier != tc.want {
+				t.Fatalf("requestTier(%q) = %q, want %q", tc.path, b.lastTier, tc.want)
+			}
+		})
+	}
+}
+
 func TestInteraction_ToolsCall(t *testing.T) {
 	b := &fakeBackend{validToken: "good"}
 	h := Handler(b, nil)

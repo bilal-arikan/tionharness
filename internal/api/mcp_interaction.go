@@ -187,11 +187,35 @@ func cliTier(name string, visOf func(string) string) string {
 // live per-agent registry to consult.
 func interactionTier(name string) string { return cliTier(name, nil) }
 
+// gatewayMetaTools are the lazy-activation meta-tools (Doc 52): they only do
+// something useful when the client watches tools/list_changed and re-lists on
+// push. codex-cli logs the notification and never re-fetches (see
+// _Docs/69-CODEX-CLI-SAGLAYICI.md, "lazy tool loading" gap) — advertising these
+// to it just invites a call→no-op→retry loop (measured live: 7+3 wasted calls
+// before the model gave up). The full-tier request (below) omits this set.
+var gatewayMetaTools = map[string]bool{
+	"activate_tools":   true,
+	"deactivate_tools": true,
+	"active_tools":     true,
+	"tool_search":      true,
+}
+
 // Tools implements interaction.Backend. The specs come from the single tool
 // definitions in the tools package — the schema is never re-declared here, so the
 // native and CLI paths advertise the identical contract. tier filters the result
 // so each CLI MCP server entry (alwaysLoad core / deferred extended) gets its own
 // subset; tier "" returns the full set.
+//
+// tier may carry a "-full" suffix ("core-full" / "extended-full"): this is the
+// codex-cli variant of the "core" / "extended" request (see fullTierQueryParam in
+// package interaction). codex-cli cannot use the lazy gateway model — its client
+// never re-lists on tools/list_changed — so for a "-full" request the extended
+// half returns EVERY extended tool unconditionally (bypassing the per-session
+// activated-set gate) and the gateway meta-tools (activate_tools/deactivate_tools/
+// active_tools/tool_search) are dropped from BOTH halves, since activating a tool
+// that is already fully advertised is a no-op the model would only waste calls
+// discovering. The claude-cli request never carries the suffix, so its behavior
+// (gated extended tier, meta-tools present) is byte-for-byte unchanged.
 func (b *interactionBackend) Tools(token, tier string) []interaction.ToolSpec {
 	// Resolve the run first so the advertised set matches the turn's mode: an
 	// autonomous turn drops the interactive (ask_user/request_confirmation) tools.
@@ -226,6 +250,13 @@ func (b *interactionBackend) Tools(token, tier string) []interaction.ToolSpec {
 	if tier == "" {
 		return specs
 	}
+	// Peel the "-full" suffix (codex-cli's no-gate request) off the base tier name
+	// so the switch below still matches "core"/"extended" as before; full tracks
+	// whether the meta-tools should be dropped and the extended gate bypassed.
+	full := strings.HasSuffix(tier, "-full")
+	if full {
+		tier = strings.TrimSuffix(tier, "-full")
+	}
 	// Classify with the run's per-agent visibility so tools/list agrees with the
 	// allowlist splitInteractionTiers produced (same cliTier + same visOf). Without
 	// a run (token unresolved) visOf is nil → the static split. A tool whose tier is
@@ -243,9 +274,18 @@ func (b *interactionBackend) Tools(token, tier string) []interaction.ToolSpec {
 	// — the CLI analogue of native hidden tools (§7-15). Core is unaffected (always eager).
 	filtered := make([]interaction.ToolSpec, 0, len(specs))
 	for _, s := range specs {
+		if full && gatewayMetaTools[s.Name] {
+			continue // codex can never activate anything, so hide the mechanism entirely
+		}
 		t := cliTier(s.Name, visOf)
 		if tier == "extended" {
-			if t == "core" || !b.isActivated(token, s.Name) {
+			if t == "core" {
+				continue
+			}
+			// full: every non-core (extended ∪ hidden) tool advertised unconditionally —
+			// codex has no activation round-trip to gate. Otherwise: gated by the
+			// session's activated set, as before.
+			if !full && !b.isActivated(token, s.Name) {
 				continue
 			}
 			filtered = append(filtered, s)

@@ -145,7 +145,7 @@ func (h *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// connection (one persistent CLI process). Tool-call responses do NOT ride it —
 	// they return inline on the POST below.
 	if r.Method == http.MethodGet {
-		h.serveStream(w, r, token, tierFromPath(r.URL.Path))
+		h.serveStream(w, r, token, requestTier(r))
 		return
 	}
 	if r.Method != http.MethodPost {
@@ -179,7 +179,7 @@ func (h *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case "notifications/initialized":
 		w.WriteHeader(http.StatusAccepted)
 	case "tools/list":
-		tier := tierFromPath(r.URL.Path)
+		tier := requestTier(r)
 		specs := h.backend.Tools(token, tier)
 		tools := make([]map[string]any, 0, len(specs))
 		for _, s := range specs {
@@ -418,6 +418,32 @@ func tierFromPath(p string) string {
 	default:
 		return ""
 	}
+}
+
+// fullTierQueryParam is the query-string signal a client can add to its extended
+// (or core) server URL to request the FULL tier variant ("core-full" /
+// "extended-full") instead of the gated one. It rides the query string rather than
+// the path so tierFromPath (path.Base) is untouched and every existing "/core" /
+// "/extended" URL — including the claude-cli path and its tests — keeps meaning
+// exactly what it always meant. Used by codex-cli (see codexMCPSpec/interactionServers
+// in internal/agent), whose client never watches tools/list_changed, so the lazy
+// activation gate (activate_tools et al.) can never open for it — see
+// _Docs/69-CODEX-CLI-SAGLAYICI.md.
+const fullTierQueryParam = "full"
+
+// requestTier resolves the wire tier for a request: the path segment
+// (core/extended/""), promoted to "<tier>-full" when the request carries
+// ?full=1. A bare "" path (no tier segment) ignores the flag — there is no
+// "-full" variant of the unscoped/legacy tier.
+func requestTier(r *http.Request) string {
+	tier := tierFromPath(r.URL.Path)
+	if tier == "" {
+		return tier
+	}
+	if r.URL.Query().Get(fullTierQueryParam) != "" {
+		return tier + "-full"
+	}
+	return tier
 }
 
 // bearer extracts the token from an "Authorization: Bearer <token>" header.
