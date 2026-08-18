@@ -394,6 +394,11 @@ func (s *Server) registerWorkspaceRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/workspace-settings/claude-auth/oauth/complete", s.handleClaudeOAuthComplete)
 	mux.HandleFunc("POST /api/workspace-settings/claude-auth/oauth/loopback/start", s.handleClaudeOAuthLoopbackStart)
 	mux.HandleFunc("GET /api/workspace-settings/claude-auth/oauth/loopback/status", s.handleClaudeOAuthLoopbackStatus)
+	mux.HandleFunc("GET /api/workspace-settings/codex-auth", s.handleWorkspaceCodexAuth)
+	mux.HandleFunc("POST /api/workspace-settings/codex-auth/device/start", s.handleCodexDeviceStart)
+	mux.HandleFunc("GET /api/workspace-settings/codex-auth/device/status", s.handleCodexDeviceStatus)
+	mux.HandleFunc("POST /api/workspace-settings/codex-auth/device/cancel", s.handleCodexDeviceCancel)
+	mux.HandleFunc("POST /api/workspace-settings/codex-auth/api-key", s.handleCodexAPIKeyLogin)
 
 	// Per-workspace editable config files (prompts/instructions/README under
 	// <workspace>/config/), editable by the user on disk or via the UI.
