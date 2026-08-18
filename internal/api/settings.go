@@ -87,7 +87,7 @@ func (s *Server) handleGetSettings(w http.ResponseWriter, _ *http.Request) {
 // handleUpdateSettings merges a partial patch, persists it, and re-applies the
 // settings to every live subsystem.
 func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
-	patch, ok := bindJSON[settings.Patch](w, r)
+	patch, ok := bindJSONStrict[settings.Patch](w, r)
 	if !ok {
 		return
 	}
@@ -127,7 +127,7 @@ type testProviderResp struct {
 // handleTestProvider performs a minimal live completion to verify a provider is
 // configured and reachable (e.g. claude-cli logged in, Anthropic key valid).
 func (s *Server) handleTestProvider(w http.ResponseWriter, r *http.Request) {
-	req, ok := bindJSON[testProviderReq](w, r)
+	req, ok := bindJSONStrict[testProviderReq](w, r)
 	if !ok {
 		return
 	}

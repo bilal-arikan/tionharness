@@ -5,7 +5,6 @@ import type {
   AppSettings,
   PromptInfo,
   ProviderTestResult,
-  Secret,
   SettingsPatch,
   SlashCommand,
 } from '@/types'
@@ -87,10 +86,7 @@ export function SettingsPanel({
   // App-global settings scope.
   const [draft, setDraft] = useState<AppSettings | null>(null)
   const [original, setOriginal] = useState<AppSettings | null>(null)
-  const [keyInput, setKeyInput] = useState('')
   const [test, setTest] = useState<Record<string, ProviderTestResult | 'pending'>>({})
-  // Workspace secret names, offered as an import source for the key fields.
-  const [secrets, setSecrets] = useState<Secret[]>([])
   // Active workspace's resolved claude-cli config home (<workspace>/claude-home),
   // shown read-only in the Providers panel. Per-workspace, unlike the app-global
   // claudeConfigDir fallback — fetched from the workspace-settings endpoint.
@@ -122,10 +118,6 @@ export function SettingsPanel({
         setPromptsDir(p.dir)
       })
       .catch(() => {})
-    api
-      .listSecrets()
-      .then(setSecrets)
-      .catch(() => {})
     // Active workspace's real claude-home path for the read-only Providers field.
     api
       .getWorkspaceSettings()
@@ -138,10 +130,8 @@ export function SettingsPanel({
   }, [])
 
   const dirtyApp = useMemo(
-    () =>
-      (draft && original && JSON.stringify(draft) !== JSON.stringify(original)) ||
-      keyInput.length > 0,
-    [draft, original, keyInput],
+    () => !!(draft && original && JSON.stringify(draft) !== JSON.stringify(original)),
+    [draft, original],
   )
   const dirty = dirtyApp
   // Surface unsaved settings on the nav "Ayarlar" item + workspace label.
@@ -248,11 +238,9 @@ export function SettingsPanel({
       backupRetain: draft.backupRetain,
       backupDir: draft.backupDir,
     }
-    if (keyInput) patch.anthropicKey = keyInput
     const updated = await api.updateSettings(patch)
     setDraft(updated)
     setOriginal(updated)
-    setKeyInput('')
     onSaved(updated)
   }
 
@@ -265,34 +253,6 @@ export function SettingsPanel({
       onError((e as Error).message)
     } finally {
       setSaving(false)
-    }
-  }
-
-  // keyPatch builds a write-only key patch for the named provider ("" = clear).
-  const keyPatch = (which: 'anthropic', value: string): SettingsPatch =>
-    which === 'anthropic' ? { anthropicKey: value } : {}
-
-  const clearKey = async (which: 'anthropic') => {
-    try {
-      const updated = await api.updateSettings(keyPatch(which, ''))
-      setDraft(updated)
-      setOriginal(updated)
-      setKeyInput('')
-    } catch (e) {
-      onError((e as Error).message)
-    }
-  }
-
-  // applyKey persists a provider key immediately (resolved from a vault secret).
-  // Provider keys are never typed — they are only selected from the secret store.
-  const applyKey = async (which: 'anthropic', value: string) => {
-    if (!value) return
-    try {
-      const updated = await api.updateSettings(keyPatch(which, value))
-      setDraft(updated)
-      setOriginal(updated)
-    } catch (e) {
-      onError((e as Error).message)
     }
   }
 
@@ -384,11 +344,6 @@ export function SettingsPanel({
                     setDraft={setDraft}
                     test={test}
                     runTest={runTest}
-                    clearKey={clearKey}
-                    applyKey={applyKey}
-                    secrets={secrets}
-                    onImportSecret={async (name) => (await api.revealSecret(name)).value}
-                    onManageSecrets={() => setCat('secrets')}
                     workspaceClaudeHome={wsClaudeHome}
                     workspaceCodexHome={wsCodexHome}
                   />

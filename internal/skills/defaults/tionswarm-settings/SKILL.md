@@ -54,20 +54,41 @@ update_settings → {"patch": {"autoTitleEnabled": false}}
   Per-*type* mute (task/flow/schedule/agent) stays device-local (localStorage).
 
 ### Providers & model
-- `defaultProvider` — `"claude-cli"` | `"anthropic"` (default `claude-cli`).
+Providers are **not** part of `settings.json` anymore — they moved to a
+separate instance model (kind → instance) with their own store and API.
+This section only covers what is still a plain `get_settings`/`update_settings`
+field; for provider CRUD see below.
+
 - `defaultModel` — model id; `""` = the provider's own default.
 - `claudeCliPath` — path to the `claude` binary; `""` = auto-detect on PATH.
 - `claudeConfigDir` — `CLAUDE_CONFIG_DIR` for claude-cli subprocesses. **Default: `~/.tionswarm/claude-home`** (a TionSwarm-managed isolated config home → clean skills/settings/commands/global `CLAUDE.md`/login, separate from the user's `~/.claude`). Authenticate it via `claudeCliAuthToken` below (no in-dir login needed) or run a one-time `claude` login there. Set `""` to inherit the shared `~/.claude` instead (keyless out-of-box, but picks up the user's installed skills/tools).
 - `claudeCliAuthKind` — claude-cli credential kind injected into the subprocess env: `"oauth"` → `CLAUDE_CODE_OAUTH_TOKEN` (Max/Pro subscription token from `claude setup-token`), `"apikey"` → `ANTHROPIC_API_KEY` (API billing), `""` → none. Lets an isolated `claudeConfigDir` authenticate without an interactive in-dir login.
 - `claudeCliAuthToken` — **write-only**; the credential value for `claudeCliAuthKind`. `""` clears. Read shows only `claudeCliAuthSet`. Set via the Settings → Providers → "claude-cli kimlik" popup (Max/Pro or API key).
-- `anthropicKey` — **write-only**; `""` clears. Read shows only `anthropicKeySet`.
-- `minimaxKey` (write-only), `minimaxBaseUrl` — MiniMax (OpenAI-compatible).
-- `openrouterKey` (write-only), `openrouterBaseUrl` — OpenRouter (OpenAI-compatible; one key, hundreds of models via `author/model-slug` ids).
-- `zaiKey` (write-only), `zaiBaseUrl` — Z.ai GLM (Anthropic-compatible; tool-use + thinking).
-- `deepseekKey` (write-only), `deepseekBaseUrl` — DeepSeek (OpenAI-compatible; V4 family, 1M context, very cheap). Models `deepseek-v4-flash`/`deepseek-v4-pro`. The `deepseek-anthropic` provider kind (Anthropic mode: tool-use + thinking) reuses this same key — no separate field.
 - `extendedPromptCache` — Anthropic extended (1h) prompt-cache beta (anthropic only). (The 1M-context beta was retired — 1M is GA since 2026-03, so there is no `oneMillionContext` setting anymore.)
 - `anthropicContextEditing` — Anthropic API-native context editing beta (anthropic only, default **off**). The server clears old tool_use/tool_result blocks from the cached prefix in place (`clear_tool_uses_20250919`, the microcompact analogue) once the prompt grows past ~100k input tokens, keeping the newest 3 tool uses. Complements TionSwarm's client-side compaction; does not replace it.
-- Custom providers are managed separately (Providers panel / market), not patched here.
+
+#### Provider instances (kind → instance model)
+
+Provider credentials/config live in a separate, app-wide, AES-GCM encrypted
+store (`providers.json`), not in `settings.json`. A **kind** (`claude-cli`,
+`anthropic`, `minimax`, `minimax-anthropic`, `openrouter`, `zai`, `deepseek`,
+`deepseek-anthropic`, `codex-cli`, `openai-compat`, `anthropic-compat`) is a
+built-in template that declares its own config form; an **instance** is a
+concrete, user-created provider (a kind + label + filled fields + encrypted
+secrets). The same kind can have multiple instances (e.g. two `anthropic`
+instances with different keys).
+
+- `GET /api/provider-kinds` — the kind catalog (form schema per kind).
+- `GET /api/providers`, `PUT /api/providers`, `DELETE /api/providers/{id}` —
+  instance CRUD. Secrets never leave the API; the DTO only exposes
+  `secretsSet: {"key": true}`.
+- An **agent** selects a provider instance (`providerInstanceId`); its
+  `provider` field is then a **derived** kind id, kept in sync automatically —
+  do not set `provider` directly when creating/updating an agent.
+- These are managed through the Providers panel / provider CRUD tools, **not**
+  through `get_settings`/`update_settings` — there is no `defaultProvider`,
+  `minimaxKey`, `openrouterKey`, `zaiKey`, `deepseekKey`, or `anthropicKey`
+  field on `settings.json` anymore.
 
 ### User profile (injected into CHAT turns so agents address the user correctly)
 - `userName`, `userTimezone`, `userCity`, `userCountry`, `userNotes` — rendered as an
