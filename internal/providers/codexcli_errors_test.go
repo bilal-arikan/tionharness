@@ -122,6 +122,23 @@ func TestCodexBuildArgsFlagOrder(t *testing.T) {
 	}
 }
 
+// TestCodexBuildArgsNeverIgnoresUserConfig guards against reintroducing
+// --ignore-user-config: that flag skips the "user" config layer, which is
+// CODEX_HOME/config.toml itself — the exact file writeCodexConfig renders MCP
+// servers and developer_instructions into. With the flag set, codex never sees
+// our MCP servers and every tool call fails with "not in tool registry" (live
+// A/B verified). Isolation from the invoking user's ambient ~/.codex is already
+// achieved via CODEX_HOME, so this flag is both redundant and destructive.
+func TestCodexBuildArgsNeverIgnoresUserConfig(t *testing.T) {
+	c := NewCodexCLI("codex", "", "")
+	args := c.buildArgs(Request{PermissionMode: "auto"}, "")
+	for _, a := range args {
+		if a == "--ignore-user-config" {
+			t.Fatalf("--ignore-user-config must not be emitted: it skips CODEX_HOME/config.toml, killing the MCP bridge: %v", args)
+		}
+	}
+}
+
 func TestCodexBuildArgsNoResumeWhenFresh(t *testing.T) {
 	c := NewCodexCLI("codex", "", "")
 	args := c.buildArgs(Request{PermissionMode: "auto"}, "")

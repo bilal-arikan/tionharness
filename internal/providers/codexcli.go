@@ -106,12 +106,23 @@ func (c *CodexCLI) buildArgs(req Request, model string) []string {
 		// The workspace sandbox is not necessarily a git repo; without this codex
 		// refuses to run outside one.
 		"--skip-git-repo-check",
-		// Ignore the ambient user config: the only config that applies is the one
-		// TionSwarm renders into this turn's CODEX_HOME. Auth is still read from
-		// CODEX_HOME, so this does not break login.
-		"--ignore-user-config",
+		// DO NOT add --ignore-user-config: isolation is already achieved via
+		// CODEX_HOME (the subprocess reads its own home, not the invoking user's
+		// ~/.codex). --ignore-user-config skips the "user" config LAYER, and that
+		// layer is CODEX_HOME/config.toml itself — the exact file writeCodexConfig
+		// renders MCP servers and developer_instructions into (codex-rs
+		// config/src/loader/mod.rs, load_user_instance around line 516: `if
+		// ignore_user_config { return None }` before that file is even read). With
+		// the flag set the CLI never sees our MCP servers, so every tool call fails
+		// with "not in tool registry" — verified live A/B: same config.toml, same
+		// prompt; flag present → tool lookup fails, flag absent → mcp_tool_call
+		// completes.
+		//
 		// Fail loudly on an unknown config key instead of silently dropping an
-		// override we believed we had applied.
+		// override we believed we had applied. Confirmed independent of
+		// ignore_user_config in the same loader (strict_config only affects unknown
+		// field handling, not which layers are read), and the config we render is
+		// schema-valid, so this does not reject it.
 		"--strict-config",
 	}
 	if model != "" {

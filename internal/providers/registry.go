@@ -36,6 +36,9 @@ type Registry struct {
 	claudeAuthKind  string // claude-cli credential kind: "oauth" | "apikey" | ""
 	claudeAuthToken string // claude-cli credential value injected into the subprocess env
 
+	codexCLIPath   string // resolved path to `codex` binary, or "" if absent
+	codexConfigDir string // CODEX_HOME override for codex-cli, or "" to inherit ~/.codex
+
 	betaExtendedCache    bool // anthropic extended prompt-cache TTL beta
 	betaContextEditing   bool // anthropic API-native context-editing beta (clear_tool_uses)
 	betaServerCompaction bool // anthropic API-native compaction beta (compact_20260112)
@@ -57,14 +60,16 @@ type Registry struct {
 	customOrder []string              // ids in catalog order
 }
 
-// NewRegistry creates a registry. It auto-detects the claude CLI on PATH so the
-// keyless claude-cli provider works out of the box; Settings can later override
-// paths and keys.
+// NewRegistry creates a registry. It auto-detects the keyless CLI transports
+// (claude, codex) on PATH so they work out of the box; Settings can later
+// override paths and keys.
 func NewRegistry(anthropicKey string) *Registry {
 	claudePath, _ := exec.LookPath("claude")
+	codexPath := lookupCodexBinary()
 	return &Registry{
 		anthropicKey:  anthropicKey,
 		claudeCLIPath: claudePath,
+		codexCLIPath:  codexPath,
 	}
 }
 
@@ -101,6 +106,25 @@ func (r *Registry) SetClaudeAuth(token, kind string) {
 	r.mu.Lock()
 	r.claudeAuthToken = token
 	r.claudeAuthKind = kind
+	r.mu.Unlock()
+}
+
+// SetCodexCLIPath overrides the codex binary path. An empty value re-runs PATH
+// auto-detection so clearing the override restores default behaviour.
+func (r *Registry) SetCodexCLIPath(path string) {
+	if path == "" {
+		path = lookupCodexBinary()
+	}
+	r.mu.Lock()
+	r.codexCLIPath = path
+	r.mu.Unlock()
+}
+
+// SetCodexConfigDir overrides CODEX_HOME for codex-cli subprocesses. An empty
+// value inherits the ambient ~/.codex (default behaviour).
+func (r *Registry) SetCodexConfigDir(dir string) {
+	r.mu.Lock()
+	r.codexConfigDir = dir
 	r.mu.Unlock()
 }
 
@@ -258,6 +282,22 @@ func (r *Registry) ClaudeCLIPath() string {
 	return r.claudeCLIPath
 }
 
+// CodexCLIAvailable reports whether the codex CLI was found.
+func (r *Registry) CodexCLIAvailable() bool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.codexCLIPath != ""
+}
+
+// CodexCLIPath returns the resolved path to the `codex` binary, or "" when it
+// was not found. Callers use it to probe the local install (version, login) —
+// building a provider is not needed just to ask about the binary.
+func (r *Registry) CodexCLIPath() string {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.codexCLIPath
+}
+
 // AnthropicConfigured reports whether an Anthropic key is set.
 func (r *Registry) AnthropicConfigured() bool {
 	r.mu.RLock()
@@ -277,6 +317,8 @@ func (r *Registry) resolve(id string) ResolvedConfig {
 		CLIConfigDir:     r.claudeConfigDir,
 		CLIAuthKind:      r.claudeAuthKind,
 		CLIAuthToken:     r.claudeAuthToken,
+		CodexPath:        r.codexCLIPath,
+		CodexConfigDir:   r.codexConfigDir,
 		ExtendedCache:    r.betaExtendedCache,
 		ContextEditing:   r.betaContextEditing,
 		ServerCompaction: r.betaServerCompaction,
