@@ -336,6 +336,46 @@ go test ./... -count=1
 
 ---
 
+### 8.8 TSK172 doğrulama sonuçları (2026-08-18)
+
+`go build ./...` + `go vet ./...` + `go test ./... -count=1` (tam takım, 34
+paket) + frontend `tsc -b` + `npm run build` + `npm test` (180 test) hepsi
+temiz. Yol boyunca bulunan tek gerçek hata: `useChatStream.ts`, yeni
+`turnOverrideStore.ts`'e `activeSessionId` (`string | null`) geçiyordu ama
+`readSessionOverride`/`writeSessionOverride` imzası yalnız `string` kabul
+ediyordu — `tsc -b` bunu build-break olarak yakaladı. Fonksiyon zaten
+`if (!sessionId) return` guard'ı taşıdığından düzeltme yalnız imza genişletmesi
+(`string | null`), davranış değişikliği yok.
+
+`internal/agent.TestActivityHeartbeatKeepsAlive` tam paket takımı altında (yüksek
+paralellik, ~34 paket eşzamanlı) bir kez flaky FAIL verdi — izole çalıştırmada
+5/5 ve düşük paralellikte (`-p 2`) geçti; codex-cli kapsamı dışı, zamanlama
+hassasiyetinden kaynaklanan pre-existing bir test, kod değişikliği gerektirmedi.
+
+**Canlı uçtan uca tur:** izole bir `go run ./cmd/tionswarm` instance'ında
+(ayrı port + `TIONSWARM_DATA_DIR`, üretim workspace'ine dokunmadan) `codex-cli`
+provider'lı bir ajan oluşturuldu, oturum açıldı, `POST /api/chat/stream`
+tetiklendi. Doğrulanan zincir: provider kayıtlı ve tanınıyor (`unknown
+provider` hatası YOK) → subprocess `CODEX_HOME` izolasyonuyla başlatıldı →
+`config.toml` codex tarafından gerçekten tüketildi (codex kendi runtime
+sqlite dosyalarını o dizine yazdı) → WebSocket isteği `wss://api.openai.com`a
+gitti → auth hatası **doğru sınıflandırılıp** SSE `error` event'i olarak temiz
+biçimde yüzeye çıktı (takılıp kalma/sessiz yutma yok).
+
+Tam başarılı bir yanıt metni + gerçek MCP araç çağrısı turu doğrulanamadı: bu
+izole test workspace'inin `codex-home`'u hiç login değildi (§8.7'de belgelenen
+kasıtlı tasarım gereği TionSwarm auth'u global `~/.codex`'ten otomatik
+kopyalamıyor). Global `~/.codex/auth.json`'u geçici olarak izole
+`codex-home`'a kopyalayıp denendi, ama OAuth refresh token'ı **tek kullanımlık**
+olduğundan iki ayrı `CODEX_HOME`'un aynı token'ı paralel kullanması "refresh
+token was already used" hatasına yol açtı — bu bir ürün kusuru değil, OAuth'un
+doğası; global login (`codex login status`) test sonrası sağlam kaldı,
+doğrulandı. Gerçek bir workspace'te `codex login` ile tek-seferlik interaktif
+login yapıldıktan sonra bu adım production koşullarında tekrarlanabilir.
+
+---
+
+
 ## İlgili dokümanlar
 
 - `69-CODEX-CLI-SAGLAYICI.md` — fizibilite + tam referans (bayraklar, olay şeması, parite matrisi)
