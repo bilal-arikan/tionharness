@@ -2,6 +2,56 @@ package providers
 
 import "sort"
 
+// Standard field keys. Kinds declare their instance form using these keys so
+// that a future ResolvedConfig (Faz 2) can map them 1:1 onto its typed fields
+// (Key, BaseURL, CLIPath, CLIConfigDir, CLIAuthKind, CLIAuthToken) without a
+// per-kind translation layer.
+const (
+	FieldKeyAPIKey    = "key"
+	FieldKeyBaseURL   = "baseUrl"
+	FieldKeyCLIPath   = "cliPath"
+	FieldKeyConfigDir = "configDir"
+	FieldKeyAuthKind  = "authKind"
+	FieldKeyAuthToken = "authToken"
+)
+
+// Transport identifies how a kind's Provider talks to the model: a direct API
+// call (native tool loop drives the request) or a local CLI subprocess (the
+// CLI runs its own agentic loop). See Manifest.Transport.
+const (
+	TransportAPI = "api"
+	TransportCLI = "cli"
+)
+
+// FieldSpec describes one field of a provider kind's instance form. A kind
+// declares its whole settings form as []FieldSpec instead of the settings UI
+// and API DTO hard-coding a bespoke form per kind (Faz 2/3 consume this to
+// render/validate generically).
+type FieldSpec struct {
+	// Key is the field's identifier within the kind's Config/Secrets map. Use
+	// the FieldKey* constants for the standard fields; a kind may also declare
+	// a kind-specific key not in that list.
+	Key string
+	// Label is the human-facing field name shown in the settings form.
+	Label string
+	// Type selects the form control and validation: "text" | "password" |
+	// "path" | "dir" | "select".
+	Type string
+	// Options is the choice list for Type=="select"; unused otherwise.
+	Options []string
+	// Required reports whether an instance must supply a non-empty value.
+	Required bool
+	// Default is the value assumed when the field is left empty.
+	Default string
+	// Placeholder is example/hint text shown in the empty field.
+	Placeholder string
+	// Help is longer explanatory text shown below the field.
+	Help string
+	// Secret reports whether the value is stored encrypted (AES-GCM) and
+	// masked in API responses. Every Secret field must use Type=="password".
+	Secret bool
+}
+
 // Manifest is a provider kind's self-description. It is the seam that makes
 // providers behave like plugins: the registry, the catalog and (later) the
 // settings UI all consume a kind purely through its Manifest, never through
@@ -44,6 +94,39 @@ type Manifest struct {
 	RequestTimeoutSecs int
 	// Models is the curated suggestion list for the picker.
 	Models []ModelInfo
+	// Transport is the behavioural switch consumed by call sites that today
+	// string-compare against "claude-cli" (skill-tool naming, lazy tool
+	// catalog form, hook-passthrough UI badges — see Faz 2 §4.2). "api" for a
+	// direct HTTP transport, "cli" for a local subprocess running its own
+	// agentic loop. Not yet consumed anywhere in this phase — declared only.
+	Transport string
+	// Fields is the kind's whole instance settings form, replacing the
+	// per-kind hard-coded forms in settings.go/ProvidersPanel.tsx (Faz 2/3).
+	Fields []FieldSpec
+	// Multi reports whether more than one instance of this kind is meaningful
+	// (e.g. two Anthropic API keys for two accounts). Not yet enforced.
+	Multi bool
+}
+
+// FieldByKey returns the field spec with the given Key, if the manifest
+// declares one.
+func (m Manifest) FieldByKey(key string) (FieldSpec, bool) {
+	for _, f := range m.Fields {
+		if f.Key == key {
+			return f, true
+		}
+	}
+	return FieldSpec{}, false
+}
+
+// TransportOf returns the registered kind's Manifest.Transport, or "" if
+// kindID is not a registered kind.
+func TransportOf(kindID string) string {
+	k, ok := kindRegistry[kindID]
+	if !ok {
+		return ""
+	}
+	return k.Manifest().Transport
 }
 
 // ResolvedConfig carries the credentials and options a kind needs to build a

@@ -26,6 +26,11 @@ func init() {
 			NeedsBaseURL:     true,
 			AllowCustomModel: true,
 			Order:            7,
+			Transport:        TransportAPI,
+			Multi:            true,
+			Fields: []FieldSpec{
+				{Key: FieldKeyAPIKey, Label: "API Anahtari", Type: "password", Required: true, Secret: true, Help: "DeepSeek hesap API anahtari (deepseek kind'iyla ayni anahtar)."},
+			},
 			Models: []ModelInfo{
 				{ID: "deepseek-v4-flash", Label: "DeepSeek V4 Flash — hızlı/ucuz", Description: "Anthropic modu: araç kullanımı ($0.22/$0.66 · 1M, peak saatlerde 2×)"},
 				{ID: "deepseek-v4-pro", Label: "DeepSeek V4 Pro — güçlü/akıl-yürütme", Description: "Anthropic modu: araç kullanımı + düşünme ($0.66/$1.98 · 1M, peak saatlerde 2×)"},

@@ -15,6 +15,14 @@ func init() {
 			NeedsBaseURL:     false,
 			AllowCustomModel: true,
 			Order:            0,
+			Transport:        TransportCLI,
+			Multi:            true,
+			Fields: []FieldSpec{
+				{Key: FieldKeyCLIPath, Label: "CLI Yolu", Type: "path", Placeholder: "otomatik (PATH'te ara)", Help: "Bos birakilirsa PATH'teki claude ikili dosyasi kullanilir."},
+				{Key: FieldKeyConfigDir, Label: "Config Dizini", Type: "dir", Help: "Bos birakilirsa workspace'in claude-home dizini kullanilir (mevcut davranis); doldurulursa bu ornege ozel, izole bir login evi kullanilir."},
+				{Key: FieldKeyAuthKind, Label: "Kimlik Dogrulama Turu", Type: "select", Options: []string{"", "oauth", "apikey"}, Help: "Bos = login'siz/varsayilan."},
+				{Key: FieldKeyAuthToken, Label: "Kimlik Dogrulama Bilgisi", Type: "password", Secret: true, Help: "authKind secildiyse ilgili token/anahtar."},
+			},
 			Models: []ModelInfo{
 				{ID: "", Label: "Varsayılan", Description: "claude oturumunun aktif modelini kullanır"},
 				{ID: "fable", Label: "Fable 5 — öncü", Description: "En yeni nesil; 1M bağlam, adaptif düşünme (daima açık)"},

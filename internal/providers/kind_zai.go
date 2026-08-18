@@ -29,6 +29,12 @@ func init() {
 			NeedsBaseURL:     true,
 			AllowCustomModel: true,
 			Order:            5,
+			Transport:        TransportAPI,
+			Multi:            true,
+			Fields: []FieldSpec{
+				{Key: FieldKeyAPIKey, Label: "API Anahtari", Type: "password", Required: true, Secret: true, Help: "Z.ai hesap API anahtari."},
+				{Key: FieldKeyBaseURL, Label: "Taban URL", Type: "text", Placeholder: zaiAnthropicMessagesURL, Help: "Bos birakilirsa Z.ai'nin Anthropic-uyumlu uc noktasi kullanilir."},
+			},
 			Models: []ModelInfo{
 				{ID: "glm-5.2", Label: "GLM-5.2 — güncel amiral", Description: "Anthropic modu: araç kullanımı + düşünme ($1.40/$4.40 · 1M)"},
 				{ID: "glm-5.1", Label: "GLM-5.1 — önceki nesil", Description: "Anthropic modu: araç kullanımı + düşünme ($0.97/$3.04 · 1M)"},

@@ -33,6 +33,12 @@ func init() {
 			NeedsBaseURL:     true,
 			AllowCustomModel: true,
 			Order:            6,
+			Transport:        TransportAPI,
+			Multi:            true,
+			Fields: []FieldSpec{
+				{Key: FieldKeyAPIKey, Label: "API Anahtari", Type: "password", Required: true, Secret: true, Help: "DeepSeek hesap API anahtari."},
+				{Key: FieldKeyBaseURL, Label: "Taban URL", Type: "text", Placeholder: deepseekBaseURL, Help: "Bos birakilirsa DeepSeek'in varsayilan API uc noktasi kullanilir."},
+			},
 			Models: []ModelInfo{
 				{ID: "deepseek-v4-flash", Label: "DeepSeek V4 Flash — hızlı/ucuz", Description: "1M bağlam, yüksek hacim; düşünmeyen mod ($0.22/$0.66 · 1M, cache-hit ~$0.007; peak saatlerde 2×)"},
 				{ID: "deepseek-v4-pro", Label: "DeepSeek V4 Pro — güçlü/akıl-yürütme", Description: "1M bağlam, düşünme ağırlıklı katman ($0.66/$1.98 · 1M, cache-hit ~$0.022; peak saatlerde 2×)"},

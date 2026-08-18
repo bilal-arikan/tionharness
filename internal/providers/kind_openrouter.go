@@ -27,6 +27,12 @@ func init() {
 			NeedsBaseURL:     true,
 			AllowCustomModel: true,
 			Order:            4,
+			Transport:        TransportAPI,
+			Multi:            true,
+			Fields: []FieldSpec{
+				{Key: FieldKeyAPIKey, Label: "API Anahtari", Type: "password", Required: true, Secret: true, Help: "OpenRouter hesap API anahtari."},
+				{Key: FieldKeyBaseURL, Label: "Taban URL", Type: "text", Placeholder: openrouterBaseURL, Help: "Bos birakilirsa OpenRouter'in varsayilan API uc noktasi kullanilir."},
+			},
 			// Curated suggestions: ~25 popular current models (June 2026), validated
 			// against OpenRouter's live /models catalog. IDs evolve and OpenRouter
 			// exposes hundreds more, so AllowCustomModel lets the user type any slug.

@@ -14,6 +14,11 @@ func init() {
 			NeedsBaseURL:     true,
 			AllowCustomModel: true,
 			Order:            1,
+			Transport:        TransportAPI,
+			Multi:            true,
+			Fields: []FieldSpec{
+				{Key: FieldKeyAPIKey, Label: "API Anahtari", Type: "password", Required: true, Secret: true, Placeholder: "sk-ant-...", Help: "Anthropic Console'dan alinan API anahtari."},
+			},
 			Models: []ModelInfo{
 				{ID: "claude-fable-5", Label: "Claude Fable 5 — öncü", Description: "En yeni nesil; 1M bağlam, adaptif düşünme (daima açık), ajan görevleri. Not: 30 günlük veri saklama gerektirir (ZDR organizasyonlarda çalışmaz); güvenlik sınıflandırıcıları reddi Opus 4.8 fallback'iyle karşılanır (Ayarlar)"},
 				{ID: "claude-opus-5", Label: "Claude Opus 5 — en yetenekli", Description: "En yeni Opus amiral (24 Tem 2026); 1M bağlam, öncü ajan/kodlama + computer-use, Opus fiyatı sabit ($5/$25)"},

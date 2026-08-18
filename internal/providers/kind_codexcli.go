@@ -27,7 +27,13 @@ func init() {
 			// order depend on map iteration — i.e. nondeterministic. Parked at the
 			// end until the shift of anthropic..deepseek-anthropic by one can be
 			// done in a single commit; only the picker position is affected.
-			Order: 8,
+			Order:     8,
+			Transport: TransportCLI,
+			Multi:     true,
+			Fields: []FieldSpec{
+				{Key: FieldKeyCLIPath, Label: "CLI Yolu", Type: "path", Placeholder: "otomatik (PATH'te ara)", Help: "Bos birakilirsa PATH'teki codex ikili dosyasi kullanilir."},
+				{Key: FieldKeyConfigDir, Label: "Config Dizini", Type: "dir", Help: "Bos birakilirsa workspace'in codex-home dizini kullanilir (mevcut davranis); doldurulursa bu ornege ozel, izole bir login evi kullanilir."},
+			},
 			Models: []ModelInfo{
 				{ID: "", Label: "Varsayılan", Description: "codex oturumunun aktif modelini kullanır"},
 				{ID: "gpt-5.6-sol", Label: "GPT-5.6 Sol", Description: "En yeni nesil; 272k bağlam"},

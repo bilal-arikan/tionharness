@@ -29,6 +29,11 @@ func init() {
 			NeedsBaseURL:     true,
 			AllowCustomModel: true,
 			Order:            3,
+			Transport:        TransportAPI,
+			Multi:            true,
+			Fields: []FieldSpec{
+				{Key: FieldKeyAPIKey, Label: "API Anahtari", Type: "password", Required: true, Secret: true, Help: "MiniMax hesap API anahtari (minimax kind'iyla ayni anahtar)."},
+			},
 			Models: []ModelInfo{
 				{ID: "MiniMax-M3", Label: "MiniMax M3 - guncel amiral", Description: "Anthropic modu: arac kullanimi + dusunme"},
 				{ID: "MiniMax-M2.7", Label: "MiniMax M2.7 - onceki nesil", Description: "Anthropic modu: onceki hosted akil-yurutme"},
