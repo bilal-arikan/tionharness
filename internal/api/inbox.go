@@ -609,15 +609,16 @@ func (s *Server) handleSessionControl(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		// Native providers drain the steer CHANNEL between tool-loop iterations
-		// (see agent/toolloop.go drainSteer). claude-cli runs its own subprocess
-		// loop with no such drain point, so instead stash the guidance on the run;
-		// it is delivered at the next tool boundary as the Interaction MCP permission
-		// tool's additionalContext (see callPermission). If the turn ends with no
-		// tool call, runChatTurn enqueues the leftover as the next message
-		// (steer_undelivered fallback).
-		if run.providerOf() == "claude-cli" {
+		// (see agent/toolloop.go drainSteer). CLI providers (claude-cli, codex-cli)
+		// run their own subprocess loop with no such drain point, so instead stash
+		// the guidance on the run; on claude-cli it is delivered at the next tool
+		// boundary as the Interaction MCP permission tool's additionalContext (see
+		// callPermission). If the turn ends with no tool call, runChatTurn enqueues
+		// the leftover as the next message (steer_undelivered fallback).
+		if run.providerOf() == "claude-cli" || run.providerOf() == "codex-cli" {
 			// In "auto" (bypass) mode the CLI never calls the permission-prompt tool,
-			// so there is no boundary to carry the steer — it would only surface at
+			// so there is no boundary to carry the steer. codex has NO such boundary in
+			// ANY mode (see steerableForTurn), so it always falls into this branch. — it would only surface at
 			// turn end as a re-queued message. Tell the client it's unsupported so it
 			// queues the message and shows a hint, instead of us pretending it landed.
 			if !run.steerableFor() {

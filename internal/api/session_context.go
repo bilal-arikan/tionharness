@@ -168,6 +168,11 @@ func (s *Server) computeCachePreview(provider string, session db.Session, msgCou
 		}
 		return c
 	case "claude-cli":
+		// Not extended to codex-cli: this preview mirrors resumeGateEnabled's
+		// sentCount-delta model (chat_resume.go), which does not apply to codex — its
+		// thread_id is stable, not rotating, so there is no "cached prefix = first N
+		// sent messages" preview to compute yet. codex falls to the default case
+		// below (Mode: "none") until a codex-specific preview is designed.
 		warm := set.ClaudeResume && session.CLISessionID != "" && session.CLISentMsgCount > 0
 		if !warm {
 			return cachePreview{Mode: "none", Note: ""}
@@ -472,6 +477,10 @@ func (s *Server) handleSessionContextPreview(w http.ResponseWriter, r *http.Requ
 // bridge. Returns a populated (overhead-0) preview with a "not measured yet" note
 // when the session has no recorded calls.
 func computeCLIOverhead(ctx context.Context, wsp *workspace.Workspace, provider, sessionID string, estimated, eagerTools int) *cliOverheadPreview {
+	// Not extended to codex-cli: conversation.PredictCLIOverhead below is a
+	// regression fit over MEASURED claude-cli harness overhead; applying it to
+	// codex would report a number with no empirical basis behind it. codex gets
+	// its own overhead model once real usage data exists to fit one.
 	if provider != "claude-cli" {
 		return nil
 	}

@@ -157,7 +157,10 @@ func (t CreateAgentTool) Call(ctx context.Context, input json.RawMessage) (strin
 	// inherited ONLY when the caller gave neither provider nor model, so an
 	// inherited model can never be paired with a mismatched caller-chosen provider.
 	// A missing/unknown creator (e.g. empty actor id on flow nodes) simply falls
-	// through to claude-cli, the keyless final fallback.
+	// through to claude-cli, the keyless final fallback. Not codex-cli: same
+	// reasoning as defaultProviderModel (api/templates.go) — the anonymous-creator
+	// fallback should land on the provider most likely to already be usable
+	// out of the box, and codex-cli is opt-in like every other provider.
 	in.Provider = strings.TrimSpace(in.Provider)
 	in.Model = strings.TrimSpace(in.Model)
 	if in.Provider == "" {

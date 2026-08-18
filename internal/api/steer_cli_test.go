@@ -9,7 +9,9 @@ import (
 
 // TestSteerableForTurn pins the rule that gates the "unsupported" steer response:
 // native providers steer in any mode; claude-cli only in "ask"/"read-only" (a
-// permission-prompt boundary exists there), never in "auto" (bypass).
+// permission-prompt boundary exists there), never in "auto" (bypass); codex-cli
+// NEVER (it has no permission-prompt-tool boundary in any mode — codex exec
+// rejects every approval request outright, see codexMCPSpec's doc comment).
 func TestSteerableForTurn(t *testing.T) {
 	cases := []struct {
 		provider, mode string
@@ -21,6 +23,9 @@ func TestSteerableForTurn(t *testing.T) {
 		{"claude-cli", "read-only", true},
 		{"anthropic", "auto", true},
 		{"minimax", "", true},
+		{"codex-cli", "auto", false},
+		{"codex-cli", "ask", false},
+		{"codex-cli", "read-only", false},
 	}
 	for _, c := range cases {
 		if got := steerableForTurn(c.provider, c.mode); got != c.want {

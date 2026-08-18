@@ -23,6 +23,10 @@ func TestResumeGateEnabled(t *testing.T) {
 		{"multi-agent turn blocks resume", true, false, 2, "claude-cli", false, false},
 		{"multi-participant session blocks resume", true, false, 1, "claude-cli", true, false},
 		{"non-cli provider blocks resume", true, false, 1, "anthropic", false, false},
+		// codex-cli's thread_id is stable (does not rotate), so the delta-tracking
+		// gate this function guards is claude-cli-only by design — see the
+		// resumeGateEnabled doc comment.
+		{"codex-cli blocks resume", true, false, 1, "codex-cli", false, false},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

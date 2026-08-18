@@ -66,6 +66,15 @@ func (s *Server) planClaudeResume(ctx context.Context, provider providers.Provid
 // session is shared by 2+ agents across turns — the per-turn agentCount==1 check
 // does not catch that, and resuming one agent's CLI session for another loses the
 // author-labeled history + continues the wrong persona.
+//
+// NOT extended to codex-cli: this whole mechanism exists to trim the transcript
+// to the unseen delta because claude-cli's --resume session id ROTATES and the
+// prior warm session becomes unreachable across a cold start, so TionSwarm must
+// track sentCount/deltaStart itself. codex's thread_id is STABLE across resumes
+// (verified — see the codex contract §1.6), so codex needs no delta-tracking gate
+// here at all; it resumes the same thread_id every turn regardless of this
+// function. Gating it through claudeResumeDecision's sentCount bookkeeping would
+// apply claude's rotation-driven logic to a provider that doesn't rotate.
 func resumeGateEnabled(claudeResume, persistentSession bool, agentCount int, providerName string, multiParticipant bool) bool {
 	return claudeResume && !persistentSession && agentCount == 1 && providerName == "claude-cli" && !multiParticipant
 }

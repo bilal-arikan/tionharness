@@ -24,6 +24,13 @@ export interface AppSettings {
   // var: "oauth" → CLAUDE_CODE_OAUTH_TOKEN, "apikey" → ANTHROPIC_API_KEY, "" → none.
   claudeCliAuthKind: string
   claudeCliAuthSet: boolean // whether a token is stored (the token itself is never returned)
+  // codex-cli, the second keyless CLI transport. codexCliPath resolves the binary
+  // ("" = auto-detect on PATH); codexConfigDir is its CODEX_HOME, holding the
+  // subscription login and the generated config.toml. Codex has no env-var
+  // credential channel, so there is no token counterpart to claudeCliAuthKind —
+  // authentication is always a `codex login` inside that home.
+  codexCliPath: string
+  codexConfigDir: string
   anthropicKeySet: boolean
   minimaxKeySet: boolean
   minimaxBaseUrl: string

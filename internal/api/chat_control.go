@@ -130,6 +130,16 @@ func (r *chatRun) takeSteer() string {
 // with --dangerously-skip-permissions and never calls that tool. Kept as a pure
 // function so the rule is unit-testable and lives next to the field it feeds.
 func steerableForTurn(provider, mode string) bool {
+	// codex-cli runs its own subprocess tool loop too, so it shares claude-cli's lack
+	// of a mid-turn steer drain point — but unlike claude it is NEVER steerable: codex
+	// exec has no permission-prompt-tool boundary in any mode (codexMCPSpec carries no
+	// PermissionPrompt; codex rejects every approval request outright, see the codex
+	// contract §1.2/§2.1), so there is no boundary a steer could ride even in
+	// ask/read-only. Always false here, not "mode == ask || read-only", so a steer on
+	// a codex turn is honestly reported unsupported instead of silently discarded.
+	if provider == "codex-cli" {
+		return false
+	}
 	if provider != "claude-cli" {
 		return true
 	}

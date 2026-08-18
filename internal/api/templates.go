@@ -460,6 +460,11 @@ func resolveTemplateFlowGraph(tf market.WorkspaceTemplateFlow, ids map[string]st
 // freshly-created workspace has no agents yet and there is no abstract default
 // provider/model, so seeded agents that omit both start on the keyless local
 // claude-cli with the provider's own default model (empty).
+//
+// Not switched to codex-cli: this is THE keyless final fallback every fresh
+// workspace lands on before the user picks anything, so it must be the provider
+// most likely to already be logged in / configured out of the box. claude-cli
+// stays that default; codex-cli is opt-in like every other provider.
 func (s *Server) defaultProviderModel(_ *workspace.Workspace) (provider, model string) {
 	return "claude-cli", ""
 }

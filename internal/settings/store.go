@@ -16,6 +16,7 @@ var reservedProviderIDs = map[string]bool{
 	"anthropic":          true,
 	"minimax":            true,
 	"claude-cli":         true,
+	"codex-cli":          true,
 	"minimax-anthropic":  true,
 	"openrouter":         true,
 	"zai":                true,
@@ -268,6 +269,8 @@ func (s *Store) Apply(p Patch) (Settings, error) {
 	applyString(&next.ClaudeCLIPath, p.ClaudeCLIPath)
 	applyString(&next.ClaudeConfigDir, p.ClaudeConfigDir)
 	applyString(&next.ClaudeCliAuthKind, p.ClaudeCliAuthKind)
+	applyString(&next.CodexCLIPath, p.CodexCLIPath)
+	applyString(&next.CodexConfigDir, p.CodexConfigDir)
 
 	applyBool(&next.ExtendedPromptCache, p.ExtendedPromptCache)
 	applyBool(&next.AnthropicContextEditing, p.AnthropicContextEditing)

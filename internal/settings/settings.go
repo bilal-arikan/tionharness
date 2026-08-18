@@ -23,6 +23,20 @@ func defaultClaudeConfigDir() string {
 	return filepath.Join(home, ".tionswarm", "claude-home")
 }
 
+// defaultCodexConfigDir is the baseline CODEX_HOME for codex-cli, the sibling of
+// defaultClaudeConfigDir: a TionSwarm-managed config home (~/.tionswarm/codex-home)
+// so the CLI runs against a config.toml and login we own rather than the user's
+// shared ~/.codex. Requires a one-time `codex login` in that directory. As with
+// the claude side, an unresolvable home dir yields "" — inheriting the ambient
+// ~/.codex is the correct fallback, not a swallowed error.
+func defaultCodexConfigDir() string {
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" {
+		return ""
+	}
+	return filepath.Join(home, ".tionswarm", "codex-home")
+}
+
 // Theme options for the UI.
 const (
 	ThemeDark   = "dark"
@@ -87,7 +101,16 @@ type Settings struct {
 	//   ""       → none injected (rely on the config dir's own login)
 	ClaudeCliAuthKind     string `json:"claudeCliAuthKind"`
 	ClaudeCliAuthTokenEnc string `json:"claudeCliAuthTokenEnc"` // AES-GCM, never exposed
-	AnthropicKeyEnc       string `json:"anthropicKeyEnc"`       // AES-GCM, never exposed
+	// codex-cli (the second keyless CLI transport). CodexCLIPath resolves the
+	// binary; CodexConfigDir is its CODEX_HOME — the exact analogue of
+	// CLAUDE_CONFIG_DIR, holding the subscription login (auth.json) and the
+	// generated config.toml. There is no token-injection counterpart: Codex has
+	// no env-var credential channel, so authentication is always the config
+	// home's own `codex login`.
+	CodexCLIPath   string `json:"codexCliPath"`   // "" = auto-detect on PATH
+	CodexConfigDir string `json:"codexConfigDir"` // CODEX_HOME for codex-cli; "" = inherit ~/.codex
+
+	AnthropicKeyEnc string `json:"anthropicKeyEnc"` // AES-GCM, never exposed
 
 	// MiniMax (OpenAI-compatible) provider.
 	MinimaxKeyEnc  string `json:"minimaxKeyEnc"` // AES-GCM, never exposed
@@ -383,6 +406,8 @@ func Default() Settings {
 		ClaudeCLIPath:         "",
 		ClaudeConfigDir:       defaultClaudeConfigDir(),
 		ClaudeCliAuthKind:     "",
+		CodexCLIPath:          "",
+		CodexConfigDir:        defaultCodexConfigDir(),
 
 		MaxContextTokens: 800000,
 		KeepRecentMsgs:   8,
@@ -531,6 +556,8 @@ type DTO struct {
 	ClaudeConfigDir       string `json:"claudeConfigDir"`
 	ClaudeCliAuthKind     string `json:"claudeCliAuthKind"`
 	ClaudeCliAuthSet      bool   `json:"claudeCliAuthSet"`
+	CodexCLIPath          string `json:"codexCliPath"`
+	CodexConfigDir        string `json:"codexConfigDir"`
 	AnthropicKeySet       bool   `json:"anthropicKeySet"`
 	MinimaxKeySet         bool   `json:"minimaxKeySet"`
 	MinimaxBaseURL        string `json:"minimaxBaseUrl"`
@@ -665,6 +692,8 @@ func (s Settings) ToDTO() DTO {
 		ClaudeConfigDir:       s.ClaudeConfigDir,
 		ClaudeCliAuthKind:     s.ClaudeCliAuthKind,
 		ClaudeCliAuthSet:      s.ClaudeCliAuthTokenEnc != "",
+		CodexCLIPath:          s.CodexCLIPath,
+		CodexConfigDir:        s.CodexConfigDir,
 		AnthropicKeySet:       s.AnthropicKeyEnc != "",
 		MinimaxKeySet:         s.MinimaxKeyEnc != "",
 		MinimaxBaseURL:        s.MinimaxBaseURL,
@@ -792,8 +821,10 @@ type Patch struct {
 	ClaudeConfigDir       *string `json:"claudeConfigDir"`
 	ClaudeCliAuthKind     *string `json:"claudeCliAuthKind"`
 	ClaudeCliAuthToken    *string `json:"claudeCliAuthToken"` // write-only
-	AnthropicKey          *string `json:"anthropicKey"`       // write-only
-	MinimaxKey            *string `json:"minimaxKey"`         // write-only
+	CodexCLIPath          *string `json:"codexCliPath"`
+	CodexConfigDir        *string `json:"codexConfigDir"`
+	AnthropicKey          *string `json:"anthropicKey"` // write-only
+	MinimaxKey            *string `json:"minimaxKey"`   // write-only
 	MinimaxBaseURL        *string `json:"minimaxBaseUrl"`
 	OpenRouterKey         *string `json:"openrouterKey"` // write-only
 	OpenRouterBaseURL     *string `json:"openrouterBaseUrl"`

@@ -98,6 +98,9 @@ export interface WorkspaceSettings {
   // used as CLAUDE_CONFIG_DIR. Read-only/derived (not in the patch); shown in the
   // Providers settings instead of the app-global fallback.
   claudeHomeDir: string
+  // This workspace's resolved codex-cli config home (<workspace>/codex-home),
+  // used as CODEX_HOME. Same read-only/derived reasoning as claudeHomeDir above.
+  codexHomeDir: string
   // Per-workspace appearance overrides (empty = inherit the app-global appearance).
   theme: string
   accent: string
