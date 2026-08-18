@@ -18,6 +18,7 @@ func TestSkillToolNameFor(t *testing.T) {
 	}{
 		{"", ns},           // empty → keyless claude-cli default
 		{"claude-cli", ns}, // bridged through Interaction MCP
+		{"codex-cli", ns},  // bridged through Interaction MCP, same as claude-cli
 		{"anthropic", skills.DefaultSkillTool},
 		{"minimax", skills.DefaultSkillTool},
 		{"openrouter", skills.DefaultSkillTool},
@@ -26,6 +27,30 @@ func TestSkillToolNameFor(t *testing.T) {
 	for _, c := range cases {
 		if got := skillToolNameFor(c.provider); got != c.want {
 			t.Errorf("skillToolNameFor(%q) = %q, want %q", c.provider, got, c.want)
+		}
+	}
+}
+
+// TestIsCLIProviderKind locks the shared "is this a locally-driven CLI turn"
+// check every bridge-naming call site (skillToolNameFor, LazyToolsCatalogBlock)
+// now shares, so claude-cli and codex-cli classify identically and native/custom
+// providers stay false.
+func TestIsCLIProviderKind(t *testing.T) {
+	cases := []struct {
+		provider string
+		want     bool
+	}{
+		{"", true},
+		{"claude-cli", true},
+		{"codex-cli", true},
+		{"anthropic", false},
+		{"minimax", false},
+		{"openrouter", false},
+		{"my-custom-openai", false},
+	}
+	for _, c := range cases {
+		if got := isCLIProviderKind(c.provider); got != c.want {
+			t.Errorf("isCLIProviderKind(%q) = %v, want %v", c.provider, got, c.want)
 		}
 	}
 }

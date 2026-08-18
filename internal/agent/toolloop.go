@@ -256,6 +256,23 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 			// after one small file read.
 			ensureClaudeHomeCredential(home)
 		}
+		// codex-cli's sibling of the block above. CODEX_HOME must point at an
+		// EXISTING directory or the subprocess errors out immediately (unlike
+		// claude-cli, which tolerates a missing home); there is no boot-time
+		// provisioning step for codex-home yet, so MkdirAll here is load-bearing,
+		// not defensive. No credential heal: codex's auth.json is not known to be
+		// wiped by a losing refresh race the way claude's credentials.json is, so
+		// mirroring ensureClaudeHomeCredential would be speculative until that
+		// failure mode is actually observed on this provider.
+		if cx, ok := provider.(*providers.CodexCLI); ok {
+			home := r.codexHomeDir()
+			if home != "" {
+				if err := os.MkdirAll(home, 0o755); err != nil {
+					r.logger.Warn("codex home dir create failed", "dir", home, "error", err)
+				}
+			}
+			cx.SetConfigDir(home)
+		}
 	}
 	inter := tools.InteractionFrom(ctx)
 	// CLI turns that arrive without an Interaction endpoint — autonomous ones
@@ -311,28 +328,42 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 	// external MCP servers (when enabled) plus the Interaction MCP server (when an
 	// endpoint is present) into a single generated --mcp-config.
 	if cliMCP {
-		path, allowed, disallowed, cleanup, err := r.writeCLIMCPConfig(ctx, agent.MCPEnabled, inter, agent.PermissionMode)
-		if err != nil {
-			r.logger.Warn("cli mcp config failed", "error", err)
-		} else if path != "" {
-			defer cleanup()
-			// Per-turn --settings: permission deny-list (mirrors disallowed) plus the
-			// workspace's PreToolUse/PostToolUse hooks, so the CLI's own loop honours
-			// the same blocks/hooks the native loop does. "" when there is nothing.
-			settingsPath, settingsCleanup, serr := r.writeCLISettings(ctx, disallowed, cliEffortLevel(agent.ThinkingLevel))
-			if serr != nil {
-				r.logger.Warn("cli settings write failed", "error", serr)
+		if _, ok := provider.(*providers.CodexCLI); ok {
+			// codex has no --mcp-config file or --settings file; its MCP delegation is
+			// expressed entirely through the CLIMCPSpec.Servers map, rendered straight
+			// into config.toml by ConfigureCLIMCP. Building that map is asymmetric
+			// enough from the claude path (see codexmcp.go's file comment) that it gets
+			// its own builder rather than reusing writeCLIMCPConfig/writeCLISettings.
+			spec, err := r.codexMCPSpec(ctx, agent.MCPEnabled, inter)
+			if err != nil {
+				r.logger.Warn("codex mcp spec failed", "error", err)
+			} else if len(spec.Servers) > 0 {
+				cli.ConfigureCLIMCP(spec)
 			}
-			defer settingsCleanup()
-			// In "ask" mode route risky CLI tools through the Interaction MCP
-			// permission-prompt tool (real per-tool approval) instead of acceptEdits.
-			cli.ConfigureCLIMCP(providers.CLIMCPSpec{
-				ConfigPath:       path,
-				AllowedTools:     allowed,
-				DisallowedTools:  disallowed,
-				PermissionPrompt: promptToolForMode(agent.PermissionMode, inter),
-				SettingsPath:     settingsPath,
-			})
+		} else {
+			path, allowed, disallowed, cleanup, err := r.writeCLIMCPConfig(ctx, agent.MCPEnabled, inter, agent.PermissionMode)
+			if err != nil {
+				r.logger.Warn("cli mcp config failed", "error", err)
+			} else if path != "" {
+				defer cleanup()
+				// Per-turn --settings: permission deny-list (mirrors disallowed) plus the
+				// workspace's PreToolUse/PostToolUse hooks, so the CLI's own loop honours
+				// the same blocks/hooks the native loop does. "" when there is nothing.
+				settingsPath, settingsCleanup, serr := r.writeCLISettings(ctx, disallowed, cliEffortLevel(agent.ThinkingLevel))
+				if serr != nil {
+					r.logger.Warn("cli settings write failed", "error", serr)
+				}
+				defer settingsCleanup()
+				// In "ask" mode route risky CLI tools through the Interaction MCP
+				// permission-prompt tool (real per-tool approval) instead of acceptEdits.
+				cli.ConfigureCLIMCP(providers.CLIMCPSpec{
+					ConfigPath:       path,
+					AllowedTools:     allowed,
+					DisallowedTools:  disallowed,
+					PermissionPrompt: promptToolForMode(agent.PermissionMode, inter),
+					SettingsPath:     settingsPath,
+				})
+			}
 		}
 		resp, err := r.recordedComplete(ctx, agent, provider, req)
 		if err != nil {

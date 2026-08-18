@@ -803,12 +803,13 @@ func (r *Runtime) ToolAllowedFunc(ctx context.Context, agent db.Agent) func(name
 func (r *Runtime) LazyToolsCatalogBlock(ctx context.Context, agent db.Agent) string {
 	reg := r.buildRegistry(ctx, agent)
 	filter := r.toolFilter(ctx, agent)
-	// A claude-cli agent reaches these deferred (extended) built-ins as MCP tools and
-	// loads them via TionSwarm's gateway activate_tools (Doc 52) — NOT the CLI's own
-	// ToolSearch, which cannot find a tool that is not advertised yet. Render the block
-	// in CLI form for it (namespaced names + activate_tools). The empty provider is the
-	// keyless claude-cli default; native API providers take false.
-	cli := agent.Provider == "" || agent.Provider == "claude-cli"
+	// A CLI-provider agent (claude-cli, codex-cli) reaches these deferred (extended)
+	// built-ins as MCP tools and loads them via TionSwarm's gateway activate_tools
+	// (Doc 52) — NOT the CLI's own tool search, which cannot find a tool that is not
+	// advertised yet. Render the block in CLI form for it (namespaced names +
+	// activate_tools). The empty provider is the keyless claude-cli default; native
+	// API providers take false.
+	cli := isCLIProviderKind(agent.Provider)
 	// Visible lazy tools are enumerated; the hidden self-management suite is folded
 	// into a single skill pointer (rendered when hiddenCount > 0).
 	return renderLazyToolCatalog(reg.VisibleLazyCatalog(filter), reg.HiddenLazyCount(filter), cli, reg.ServerDescriptions())

@@ -151,6 +151,11 @@ func (r *Runtime) guardedComplete(ctx context.Context, agent db.Agent, req provi
 // themselves, or they fall back to the global claude-home — which may not be
 // logged in even though the workspace is (authentication_failed). No-op for
 // non-claude-cli providers.
+//
+// The claude-cli concrete type is asserted deliberately: claudeHomeDir() is the
+// CLAUDE_CONFIG_DIR home specifically, so handing it to another CLI transport
+// (codex, whose home is a CODEX_HOME with a different layout) would point that
+// CLI at a config it cannot read. A codex-cli equivalent pins its own home.
 func (r *Runtime) PinClaudeHome(provider providers.Provider) {
 	if cli, ok := provider.(*providers.ClaudeCLI); ok {
 		cli.SetConfigDir(r.claudeHomeDir())

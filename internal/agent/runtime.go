@@ -733,15 +733,24 @@ func (r *Runtime) SkillsCatalogBlockForAgent(agent db.Agent) string {
 }
 
 // skillToolNameFor returns the identifier the use_skill tool carries for an agent
-// on the given provider: native (API) providers register the bare name, while
-// claude-cli reaches it namespaced through the Interaction MCP bridge. The empty
-// provider is the keyless claude-cli default. Custom providers are only ever
-// OpenAI/Anthropic-compatible (native), so they take the bare name.
+// on the given provider: native (API) providers register the bare name, while a
+// CLI provider reaches it namespaced through the Interaction MCP bridge. The
+// empty provider is the keyless claude-cli default. Custom providers are only
+// ever OpenAI/Anthropic-compatible (native), so they take the bare name.
 func skillToolNameFor(provider string) string {
-	if provider == "" || provider == "claude-cli" {
+	if isCLIProviderKind(provider) {
 		return interactionToolPrefix + skills.DefaultSkillTool
 	}
 	return skills.DefaultSkillTool
+}
+
+// isCLIProviderKind reports whether provider drives a locally-installed CLI
+// through the Interaction MCP bridge (claude-cli, codex-cli) rather than a
+// native API call — both dialects namespace bridged tool names the same way, so
+// every call site that branches on "is this a CLI turn" shares this one check.
+// The empty provider is the keyless claude-cli default.
+func isCLIProviderKind(provider string) bool {
+	return provider == "" || provider == "claude-cli" || provider == "codex-cli"
 }
 
 // LoadSkillForAgent returns a skill's full body for the CLI path (the Interaction
