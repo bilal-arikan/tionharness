@@ -379,6 +379,23 @@ disabled_tools = ["delete_workspace"]
 `MCP_TIMEOUT` / `MCP_TOOL_TIMEOUT` env'lerinin karşılığı. Uzun `run_subagent`
 çağrıları için **mutlaka yükseltilmeli** (varsayılan düşük).
 
+### codebase-memory-mcp prefill guard codex yolunda YOK (Q4 notu)
+
+Q4 doğrulaması (codebase-memory-mcp çağrılarının `project` argümanı eksikken
+bile çalışması) **PASS** geçti, ama bunun **neden** çalıştığı önemli: TionSwarm'ın
+kendi ajan döngüsü eksik `project` argümanını oturumun working directory'sinden
+otomatik dolduruyor ve düzeltilebilir kimlik hatalarını tekrar koşturarak
+onarıyor (`internal/agent/mcpargs.go`, `mcprepair.go`). **Bu koruma codex-cli
+yolunda devrede DEĞİL** — `internal/providers/codexcli.go` `internal/agent`
+paketine hiç referans vermiyor, yani `mcpargs.go`/`mcprepair.go`'daki prefill/
+repair mantığı codex'in tool-call döngüsüne hiç bağlanmıyor. Tıpkı
+`CLAUDE.md`'nin claude-cli için zaten söylediği gibi ("claude-cli sağlayıcısında
+bu koruma yoktur — araç döngüsünü CLI kendi koşturur"), **codex-cli için de
+aynı durum geçerli**: araç döngüsünü codex kendi koşturuyor, çağrılar
+TionSwarm'ın agent paketinden geçmiyor. Q4'ün PASS çıkması modelin argümanı
+doğru vermesinden kaynaklandı, TionSwarm'ın bir güvencesinden değil — bu ayrım
+gelecekteki bir regresyonu yanlış tanılamamak için önemli.
+
 ---
 
 ## 6. Sistem promptu enjeksiyonu
@@ -489,14 +506,20 @@ Prompt cache **ilk turda bile** çalışıyor (Codex kendi sistem promptunu cach
 | 21 | İzin modu: auto | `--dangerously-skip-permissions` | `--dangerously-bypass-approvals-and-sandbox` | ✅ tam |
 | 22 | İzin modu: **ask** (UI'da per-tool onay) | `--permission-prompt-tool` | ✗ **yok** | ❌ **boşluk-1** |
 | 23 | Native araç bastırma (shadowing) | `--disallowedTools` | ✗ genel bastırma yok | ❌ **boşluk-2** |
-| 24 | Hook geçişi (Pre/PostToolUse) | `--settings` hooks | `[hooks]` (config'te var) | ⚠️ şema farklı, ayrıca `--dangerously-bypass-hook-trust` gerekiyor |
+| 24 | Hook geçişi (Pre/PostToolUse) | `--settings` hooks → CLI'nin kendi tool loop'u tetikler | ❌ **hiç uygulanmıyor** — bkz. §9 Boşluk-3 |
 | 25 | Yapılandırılmış çıktı | — | `--output-schema` | ✅ **bonus** |
 | 26 | Yanlış-tur kurtarma / salvage | var | aynı desen uygulanabilir | ✅ port edilebilir |
 | 27 | Kalıcı (persistent) oturum havuzu | var | `codex app-server` daha uygun | ⚠️ farklı mimari |
+| 28 | Lazy tool loading (extended tier gate) | `activate_tools` + `tools/list_changed` re-list | ✗ bildirim loglanıyor, re-list **hiç yapılmıyor** | ❌ **boşluk-4** — bkz. §9 |
+| 29 | sqz/rtk token-optimizer çıktı sıkıştırma | `db.HookPostToolUse` komutu (24 numaralı satıra bağımlı) | hook yok → sqz de yok | ❌ 24 numaralı satırın türevi, ayrıca not düşüldü |
 
 ---
 
-## 9. İki gerçek boşluk ve telafileri
+## 9. Dört gerçek boşluk ve telafileri
+
+> Bu bölüm 2026-08-18'de sekiz sorulu bir canlı entegrasyon doğrulaması (Q1-Q8,
+> özet tablo `70-CODEX-CLI-UYGULAMA-PLANI.md` §8'de) ile genişletildi: Boşluk-1/2
+> keşif aşamasından; Boşluk-3/4 (hook/sqz, lazy tool loading) o doğrulamadan geldi.
 
 ### ❌ Boşluk-1: "ask" modunda per-tool onay yok
 
@@ -529,6 +552,15 @@ Yani `--permission-prompt-tool`'un karşılığı `codex exec`'te **yok**.
 > **Karar (önerilen):** Faz 1'de yol 1 + 2. TionSwarm UI'ında `ask` modunun
 > codex-cli ajanlarında **"sandbox ile sınırla"** anlamına geldiği açıkça
 > yazılmalı — sessizce `auto` gibi davranmamalı.
+
+> **Dürüstlük notu (Q6, 2026-08-18 doğrulaması):** canlı test yalnızca **PARTIAL**
+> geçti. `ask`/`read-only` modda gözlemlenen ret, modelin **kendi policy metnine**
+> göre (sistem promptundaki talimata uyarak) çekilmesiydi — gerçek bir **OS-sandbox
+> seviyesi** reddi (çekirdek/`-s read-only` bir yazma syscall'ını engellemesi)
+> **kanıtlanmadı**. Yani "OS sandbox garanti eder" iddiası (yukarıdaki 1. telafi
+> ve §10.1) mimari olarak doğru ama bu doğrulama turunda **gözlemlenmedi** —
+> ayrı, düşük maliyetli bir deney (sandbox'ı bilerek ihlal eden bir komut verip
+> modelin DEĞİL çekirdeğin reddettiğini görmek) hâlâ yapılmadı.
 
 ### ❌ Boşluk-2: native araçları bastıramıyoruz
 
@@ -574,6 +606,88 @@ Yani gerçek etkisi: **`todo_write` / `ask_user` / `WebSearch` köprüleri
 korunabiliyor (kapatılabilir), dosya-shell tarafı native kalıyor.**
 `climcp.go`'daki `suppressIfBridged` mantığının Codex karşılığı çok daha küçük
 bir liste olacak.
+
+### ❌ Boşluk-3: Hook'lar (Pre/PostToolUse) codex turunda HİÇ uygulanmıyor — ve sqz de onunla birlikte devre dışı
+
+**Önceki hal bu bölümde "şema farklı" diyordu — bu yanlıştı.** 2026-08-18
+doğrulamasında kanıtlandı: codex turunda hook'lar **hiç çalıştırılmıyor**, şema
+sorunu değil, çağrı yeri sorunu.
+
+Kanıt zinciri:
+
+- Hook'lar yalnız **native tool loop**'ta uygulanıyor:
+  `internal/agent/hooks.go` → `runPreToolHooks` / `runPostToolHooks`; çağrı
+  yerleri `internal/agent/toolloop.go:803` ve `:988`.
+- codex `cliMCP` dalı `recordedComplete` çağırıp `internal/agent/toolloop.go:376`'da
+  **erken return** ediyor — native tool loop'a hiç girmiyor, dolayısıyla
+  `runPreToolHooks`/`runPostToolHooks` çağrılarına hiç ulaşmıyor.
+- claude-cli bunu `internal/agent/climcp.go` → `writeCLISettings` ile telafi
+  ediyor: workspace hook'larını claude'un kendi `--settings` `hooks` sözleşmesine
+  çevirip yazıyor, CLI'nin **kendi** tool loop'u tetikliyor. **codex'te eşdeğer
+  bir `writeCodexSettings`/hook-çeviri yolu yok.**
+- MCP köprüsünden gelen `mcp__tionswarm_interaction__*` / `mcp__tionswarm_extended__*`
+  çağrıları da hook'suz: `internal/api` tarafındaki dispatch (`interactionBackend.Call`,
+  `mcp_interaction.go`) `internal/agent/hooks.go`'a hiç referans vermiyor.
+
+**sqz de bunun türevi, ayrı bir kayıp değil:** sqz katmanı `db.HookPostToolUse`
+komutu olarak tanımlı — bağımsız bir katman değil. Hook mekanizması codex
+turunda hiç tetiklenmediği için, workspace'te sqz kurulu olsa bile codex
+turlarında **sqz çıktı sıkıştırması da devre dışı**. Codex'in kendi shell/
+`apply_patch` araçlarının çıktısı ham döner.
+
+**Telafi:** Codex 0.147.0'ın kendi `[hooks]` config anahtarı var (§8 satır 24
+eski hali bunu işaret ediyordu) ama bu, TionSwarm'ın workspace hook store'unu
+(`db.ListEnabledHooksByEvent`) codex'in `config.toml`'una çeviren bir yazıcı
+gerektirir — `writeCLISettings`'in codex karşılığı henüz **yazılmadı**. Faz
+planına eklenmeli; şu an için codex ajanları workspace hook'larından ve
+sqz/rtk optimizasyonundan **tamamen muaf**.
+
+### ❌ Boşluk-4: Lazy tool loading (extended tier gate) codex'te çalışmıyor
+
+TionSwarm'ın gateway modeli (Doc 52), extended tier'ı boş başlatıp modelin
+`activate_tools` çağrısıyla büyütmesine, backend'in `tools/list_changed`
+push'lamasına ve CLI'nin bunu görüp `tools/list`'i **yeniden çekmesine**
+dayanır. claude-cli bunu 10-16ms içinde yapıyor (canlı ölçüldü,
+`probe_relist_test.go`). **codex-cli bu bildirimi asla işlemiyor:**
+
+- Kanıt: `C:\Users\user\Desktop\Progs\codex-src\codex-rs\rmcp-client\src\logging_client_handler.rs:86-88`
+  — `on_tool_list_changed` gövdesi tek satır `info!(...)`; hiçbir re-fetch
+  tetiklenmiyor.
+- "Sonraki turda görünür olur" hipotezi **canlı test edildi ve çürütüldü**: tur 1
+  aktive et / tur 2 çağır senaryosunda model tur 2'de aracı asla göremedi,
+  `activate_tools`'u 3 kez daha tekrarlayıp pes etti (toplam 7+3 boşuna deneme).
+
+**Sonuç:** codex turunda `activate_tools`/`deactivate_tools`/`active_tools`/
+`tool_search` mekanizmasının **hiçbiri işe yaramaz** — sadece model boşuna
+dener ve token yakar.
+
+**Çözüm (uygulandı, bu görevin A kısmı):** codex-cli isteği artık interaction
+endpoint URL'lerine `?full=1` sorgu parametresi ekliyor
+(`internal/agent/codexmcp.go` → `interactionServers`). Backend
+(`internal/api/mcp_interaction.go` → `Tools()`) bu işareti gördüğünde:
+
+1. Extended tier'ı **aktivasyon gate'i atlayarak** tam listeyle döndürür (gizli
+   katman dahil — hiçbiri artık "aktive edilmemiş" diye gizlenmez).
+2. `activate_tools`/`deactivate_tools`/`active_tools`/`tool_search`
+   meta-araçlarını **hem core hem extended** yüzeyden çıkarır — çalışmayan bir
+   mekanizmayı modele göstermenin tek etkisi döngüye sokmaktı.
+
+claude-cli isteği (query string'siz `/core`, `/extended`) davranışsal olarak
+**birebir aynı** kalır — bu, `?full=1` path'i değil query'yi kullandığı ve
+`tierFromPath` (path tabanlı ayrıştırma) hiç değişmediği için garanti
+edilir. Bkz. `internal/interaction/server.go` → `requestTier`/`fullTierQueryParam`.
+
+**Token maliyeti:** extended tier tam açıkken (self-management suite +
+interaction extended tools, meta-araçlar hariç) **71 bridged self-management
+tool + 5 interaction-extended tool = 76 araç**, yaklaşık **75-90 KB** ham
+şema+açıklama metni — kabaca **~19-23k token** (4 byte/token kaba tahmini;
+gerçek tokenizer'a göre değişir). Bu, `19-LAZY-TOOL-LOADING.md`'nin belirttiği
+eski ~49 araç / ~10-15k token tahmininden **yüksek** — self-management suite o
+zamandan beri büyümüş (create_automation, insight_*, handoff_session gibi
+tool'lar eklendi). Codex zaten her turda taze süreç başlattığı ve
+lazy-activation'ı kullanamadığı için, bu maliyet codex'in **her turunda**
+sabit olarak ödenir (claude-cli'de ise extended tier normalde boş başlar ve
+yalnız aktive edilen araçlar kadar büyür).
 
 ---
 

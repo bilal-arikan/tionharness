@@ -501,3 +501,25 @@ sunucunun araçları o tur için **hiç** sunulmaz (hata/log yok). Çözüm:
 kod içi yorum kaynak referansını taşıyor. Regresyon testi:
 `TestRenderCodexConfigMarksServersRequired`
 (`internal/providers/codexcli_config_test.go`).
+
+### 8.9 Entegrasyon doğrulaması — Q1-Q8 (2026-08-18)
+
+Faz 0-4 merge sonrası, çalışan entegrasyonun **canlı** bir codex-cli turunda
+sekiz soruluk bir doğrulama koşusu yapıldı. İki gerçek boşluk kanıtlandı
+(Q3, Q7 — detay `69-CODEX-CLI-SAGLAYICI.md` §9 Boşluk-3/4) ve bunlardan Q7
+(lazy tool loading) için bu turda **kod düzeltmesi** uygulandı.
+
+| # | Soru | Sonuç | Not |
+|---|------|-------|-----|
+| Q1 | codex-cli sağlayıcısı end-to-end çalışıyor mu (tur, MCP köprüsü, JSONL trace)? | ✅ PASS | önceki fazlarda zaten doğrulanmıştı |
+| Q2 | TionSwarm araçları (`mcp__tionswarm_interaction__*`) codex turunda çağrılabiliyor mu? | ✅ PASS | core tier (Bash/ask_user/todo_write/...) sorunsuz |
+| Q3 | Workspace hook'ları (Pre/PostToolUse) codex turunda tetikleniyor mu? | ❌ FAIL | hiç tetiklenmiyor — `toolloop.go:376`'da native loop'a hiç girilmiyor, bkz. 69 §9 Boşluk-3 |
+| Q4 | codebase-memory-mcp çağrıları `project` argümanı eksikken de doğru sonuç veriyor mu? | ✅ PASS (nitelikli) | model argümanı doğru verdiği için geçti — TionSwarm'ın prefill/repair güvencesi (`mcpargs.go`/`mcprepair.go`) codex yolunda **devrede değil** (agent paketine referans yok), bkz. 69 § "codebase-memory-mcp prefill guard" |
+| Q5 | sqz/rtk çıktı sıkıştırması codex'in shell çağrılarında uygulanıyor mu? | ❌ FAIL | Q3'ün türevi — sqz `db.HookPostToolUse` komutu, hook tetiklenmediği için sqz de yok |
+| Q6 | `ask`/`read-only` izin modu gerçekten OS-sandbox seviyesinde mi engelliyor, yoksa model kendi mi çekiliyor? | ⚠️ PARTIAL | gözlemlenen ret modelin kendi policy metnine uymasıydı; gerçek çekirdek-seviyesi sandbox reddi bu turda kanıtlanmadı, bkz. 69 §9 Boşluk-1 dürüstlük notu |
+| Q7 | `activate_tools` ile açılan lazy/extended araç bir sonraki çağrıda gerçekten kullanılabiliyor mu? | ❌ FAIL | codex `tools/list_changed`'i yalnız loglayıp asla re-list yapmıyor (`logging_client_handler.rs:86-88`); tur 1 aktive / tur 2 çağır senaryosu 7+3 boşuna deneme ile çürütüldü — bkz. 69 §9 Boşluk-4 |
+| Q8 | Q7'nin bulduğu boşluk için bir düzeltme mümkün mü? | ✅ ÇÖZÜLDÜ (bu tur) | codex isteği artık `?full=1` sorgu işaretiyle geliyor (`internal/agent/codexmcp.go`); backend (`internal/api/mcp_interaction.go Tools()`) bu işarette extended tier'ı gate'siz tam listeyle döner ve `activate_tools`/`deactivate_tools`/`active_tools`/`tool_search` meta-araçlarını hem core hem extended'dan düşürür. claude-cli yolu (query string'siz) davranışsal olarak değişmedi — regresyon testi `TestFullTierBypassesGatewayGate` (`internal/api/gateway_dynamic_test.go`) her iki yolu da kilitliyor. Token maliyeti: ~76 araç, ~19-23k token (ölçüm detayı 69 §9 Boşluk-4). |
+
+**Kapsam dışı bırakılan (bu turda düzeltilmedi):** Q3/Q5 (hook + sqz geçişi —
+codex için bir `writeCodexSettings`/hook-çeviri yazıcısı gerekir, ayrı bir
+görev), Q6 (gerçek OS-sandbox reddini kanıtlayan bir deney).
