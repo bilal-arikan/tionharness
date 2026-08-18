@@ -92,6 +92,14 @@ func (c *ClaudeCLI) ConfigureMCP(configPath string, allowedTools, disallowedTool
 	c.settingsPath = settingsPath
 }
 
+// ConfigureCLIMCP implements CLIProvider by forwarding the transport-agnostic
+// spec to ConfigureMCP. spec.Servers is deliberately not consumed here: on the
+// claude path the caller has already rendered the servers into the
+// --mcp-config file named by spec.ConfigPath, which is what the CLI reads.
+func (c *ClaudeCLI) ConfigureCLIMCP(spec CLIMCPSpec) {
+	c.ConfigureMCP(spec.ConfigPath, spec.AllowedTools, spec.DisallowedTools, spec.PermissionPrompt, spec.SettingsPath)
+}
+
 // SetConfigDir overrides the CLAUDE_CONFIG_DIR this provider exports into its
 // subprocess, replacing the value baked in at construction. TionSwarm calls this
 // per turn so each workspace drives the CLI against its OWN config home

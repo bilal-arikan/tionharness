@@ -352,3 +352,88 @@ func CanStream(p Provider) bool {
 	_, ok := p.(Streamer)
 	return ok
 }
+
+// CLIMCPServer describes one MCP server for a CLI transport, in a shape both
+// CLI dialects can render from: claude-cli writes an --mcp-config JSON file,
+// codex-cli writes an [mcp_servers.<key>] block into its config.toml. Only the
+// fields relevant to the chosen Transport are populated; the renderer on each
+// side decides what it can express.
+type CLIMCPServer struct {
+	// Command and Args launch a stdio server; Env is added to its environment.
+	Command string
+	Args    []string
+	Env     map[string]string
+	// Transport selects the wire: "" or "stdio" for a spawned process, "sse" or
+	// "http" for a remote endpoint described by URL/Headers.
+	Transport string
+	URL       string
+	Headers   map[string]string
+	// AlwaysLoad exempts the server from tool-search deferral on the claude
+	// path (its tools are loaded up front). codex-cli has no such mechanism and
+	// ignores this field.
+	AlwaysLoad bool
+}
+
+// CLIMCPSpec is one turn's MCP delegation, transport-agnostic. It is the union
+// of what the two CLI dialects need: the claude path consumes the pre-rendered
+// ConfigPath plus its tool/permission/settings knobs, while a config-file
+// dialect (codex) renders Servers itself. Fields a dialect cannot express are
+// simply unused by it — see each field's comment.
+type CLIMCPSpec struct {
+	// ConfigPath is the already-written claude --mcp-config file.
+	ConfigPath string
+	// Servers is the structured server set, for dialects that render their own
+	// config (codex). Unused on the claude path, which reads ConfigPath.
+	Servers map[string]CLIMCPServer
+	// AllowedTools / DisallowedTools / PermissionPrompt / SettingsPath are
+	// claude-cli knobs (--allowedTools, --disallowedTools,
+	// --permission-prompt-tool, --settings). codex-cli maps only a small subset.
+	AllowedTools     []string
+	DisallowedTools  []string
+	PermissionPrompt string
+	SettingsPath     string
+}
+
+// CLIProvider is implemented by providers that drive a locally-installed coding
+// CLI as a subprocess and run the agentic tool loop inside it, instead of
+// exposing a single-shot completion the native loop drives. The agent layer
+// wires per-turn state (config home, MCP delegation) through this interface
+// rather than asserting a concrete provider type, so adding a second CLI
+// transport needs no branching in the agent layer. Steps that are genuinely
+// specific to one CLI (claude-home credential healing, CLAUDE_CODE_EFFORT_LEVEL)
+// stay behind a narrow concrete assertion at their call site.
+type CLIProvider interface {
+	Provider
+	// SetConfigDir points the CLI at a config home for subsequent turns.
+	SetConfigDir(dir string)
+	// ConfigureCLIMCP installs one turn's MCP delegation.
+	ConfigureCLIMCP(spec CLIMCPSpec)
+	// Installed reports whether the CLI binary can be resolved. It says nothing
+	// about login state.
+	Installed() bool
+}
+
+// AuthProber is implemented by providers that can verify their credentials with
+// a cheap, side-effect-free pre-flight call — for the CLI transports, a minimal
+// tool-free invocation against the configured config home. It returns nil when
+// authenticated and a classified error otherwise, so an auth lapse surfaces in
+// Settings instead of failing the first real agent turn. Optional capability in
+// the Streamer/TokenCounter mould: call sites branch on the interface, never on
+// a concrete provider type.
+type AuthProber interface {
+	ProbeAuth(ctx context.Context) error
+}
+
+// Compile-time guard: the claude-cli transport is the capability's first
+// implementer and the Settings pre-flight probe branches on the interface, so a
+// signature drift here must fail the build rather than silently turn the probe
+// into a "cannot probe authentication" error at runtime.
+var _ AuthProber = (*ClaudeCLI)(nil)
+
+// AsCLI returns p as a CLIProvider when it drives a coding CLI subprocess.
+// Mirrors CanStream: it lets call sites branch on the capability without naming
+// a concrete provider type.
+func AsCLI(p Provider) (CLIProvider, bool) {
+	c, ok := p.(CLIProvider)
+	return c, ok
+}

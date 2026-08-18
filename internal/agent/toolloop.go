@@ -227,28 +227,35 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 	// The claude CLI runs its own tool loop. Route it through the keyless MCP
 	// delegation path when external MCP is enabled OR an Interaction MCP endpoint
 	// is wired for this turn (so ask_user/todo_write work even with MCP off).
-	cli, isCLI := provider.(*providers.ClaudeCLI)
+	cli, isCLI := providers.AsCLI(provider)
 	// Point the CLI at THIS workspace's config home (<workspace>/claude-home) so it
 	// reads the same skills/settings/login as the workspace instead of one global
 	// home. No-op when the workspace dir is unknown (keeps the provider's global
 	// default). This is the single per-turn seam every CLI turn passes through.
 	if isCLI {
-		// Carry the resolved effort into the provider so a "max" turn can be lifted
-		// via CLAUDE_CODE_EFFORT_LEVEL (the --settings file can't hold max). Lower
-		// levels ride the settings file and the provider ignores this field.
-		req.CLIEffortLevel = cliEffortLevel(agent.ThinkingLevel)
-		home := r.claudeHomeDir()
-		cli.SetConfigDir(home)
-		// Re-seed the login if this home lost it. The CLI can WIPE its own
-		// <home>/.credentials.json (accessToken:"", refreshToken:"", expiresAt:0) when
-		// an OAuth refresh fails — most easily when several of its processes race for
-		// the single-use refresh token, which a coordinator tree does by design. The
-		// boot-time heal (EnsureWorkspaceClaudeHome) never runs again after that, so
-		// EVERY remaining turn in the workspace failed "not logged in" until a
-		// restart. Healing at the per-turn seam bounds the damage to the turn that
-		// actually lost the race. Idempotent and cheap: a usable credential returns
-		// after one small file read.
-		ensureClaudeHomeCredential(home)
+		// The config home and the credential heal below are claude-specific: both
+		// name <workspace>/claude-home and the CLI's own .credentials.json. A second
+		// CLI transport must NOT inherit them, so they stay behind a narrow concrete
+		// assertion while the generic wiring (MCP delegation) goes through the
+		// interface.
+		if cc, ok := provider.(*providers.ClaudeCLI); ok {
+			// Carry the resolved effort into the provider so a "max" turn can be lifted
+			// via CLAUDE_CODE_EFFORT_LEVEL (the --settings file can't hold max). Lower
+			// levels ride the settings file and the provider ignores this field.
+			req.CLIEffortLevel = cliEffortLevel(agent.ThinkingLevel)
+			home := r.claudeHomeDir()
+			cc.SetConfigDir(home)
+			// Re-seed the login if this home lost it. The CLI can WIPE its own
+			// <home>/.credentials.json (accessToken:"", refreshToken:"", expiresAt:0) when
+			// an OAuth refresh fails — most easily when several of its processes race for
+			// the single-use refresh token, which a coordinator tree does by design. The
+			// boot-time heal (EnsureWorkspaceClaudeHome) never runs again after that, so
+			// EVERY remaining turn in the workspace failed "not logged in" until a
+			// restart. Healing at the per-turn seam bounds the damage to the turn that
+			// actually lost the race. Idempotent and cheap: a usable credential returns
+			// after one small file read.
+			ensureClaudeHomeCredential(home)
+		}
 	}
 	inter := tools.InteractionFrom(ctx)
 	// CLI turns that arrive without an Interaction endpoint — autonomous ones
@@ -319,7 +326,13 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 			defer settingsCleanup()
 			// In "ask" mode route risky CLI tools through the Interaction MCP
 			// permission-prompt tool (real per-tool approval) instead of acceptEdits.
-			cli.ConfigureMCP(path, allowed, disallowed, promptToolForMode(agent.PermissionMode, inter), settingsPath)
+			cli.ConfigureCLIMCP(providers.CLIMCPSpec{
+				ConfigPath:       path,
+				AllowedTools:     allowed,
+				DisallowedTools:  disallowed,
+				PermissionPrompt: promptToolForMode(agent.PermissionMode, inter),
+				SettingsPath:     settingsPath,
+			})
 		}
 		resp, err := r.recordedComplete(ctx, agent, provider, req)
 		if err != nil {
@@ -1165,6 +1178,10 @@ func (r *Runtime) recordedComplete(ctx context.Context, agent db.Agent, provider
 	// session keeps its OWN warm process (with its own system prompt) instead of
 	// thrashing one process cold on every agent switch. Any failure falls back to a
 	// one-shot Complete, so the feature can never wedge a turn.
+	// Deliberately a concrete claude assertion, not providers.AsCLI: r.cliSessions
+	// is a pool of warm claude-cli processes (stream-json protocol, claude session
+	// ids) and the setting gating it is claude-specific. Another CLI transport must
+	// fall through to the one-shot Complete below.
 	if cli, ok := provider.(*providers.ClaudeCLI); ok && r.cliSessions != nil && r.tun.ClaudePersistentSession() {
 		if sid := SessionIDFrom(ctx); sid != "" {
 			key := sid + "|" + agent.ID
