@@ -218,15 +218,16 @@ func NewServer(manager *workspace.Manager, registry *providers.Registry, store *
 // CLI subprocesses. Pass the listen address; a wildcard/empty host is normalised
 // to 127.0.0.1 so a same-machine subprocess can connect.
 func (s *Server) SetBaseURL(addr string) {
-	host, port, ok := strings.Cut(addr, ":")
-	if !ok {
-		// No colon: treat the whole thing as a host with the default port.
+	host, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		// No parseable "host:port" (e.g. a bare host or bare port): treat the
+		// whole thing as a host with the default port.
 		host, port = addr, "8080"
 	}
-	if host == "" || host == "0.0.0.0" || host == "[::]" || host == "::" {
+	if host == "" || host == "0.0.0.0" || host == "::" {
 		host = "127.0.0.1"
 	}
-	s.selfURL = "http://" + host + ":" + port
+	s.selfURL = "http://" + net.JoinHostPort(host, port)
 }
 
 // applySettings pushes the current settings into every live subsystem. Called
