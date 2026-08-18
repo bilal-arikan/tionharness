@@ -53,10 +53,13 @@
 >   ekranı bu sağlayıcılar için artık maliyet + cache tasarrufu gösterir. `cacheRead`
 >   çarpanı auto-cache uçlarda ~0.25, Anthropic uçlarda 0.10×.
 >
-> Capability zinciri: `market.ProviderPayload` → install → `settings.CustomProvider`
-> → `providers.CustomSpec` → `buildCustom` → `OpenAICompat.WithCaps()`. Metadata
-> hem MarketPanel önizlemesinde (cache/düşünme rozetleri) hem `CustomProviderDTO`'da
-> yüzeyleniyor.
+> Capability zinciri (Faz 5 güncel, _Docs/71): `market.ProviderPayload` → `installProviderPack`
+> → `upsertProviderInstance` (aynı doğrulama yolu `/api/providers` handler'ının kullandığı) →
+> `providers.json` (`settings.ProviderInstance`, kind = `openai-compat`/`anthropic-compat`) →
+> `Registry.resolve` → `OpenAICompat`/`Anthropic` build fonksiyonu. `reasoning`/`promptCache`
+> standart `FieldSpec` alanı değil — `ExtraConfig` ile instance `Config` map'ine yazılır,
+> `registryInstances` aynı anahtarlardan geri okur. Metadata hem MarketPanel önizlemesinde
+> (cache/düşünme rozetleri) hem `ProviderInstanceDTO`'da yüzeyleniyor.
 >
 > **Model listeleri + fiyat gösterimi (2026-06-25):** Her provider pack'i artık
 > **~8-13 güncel model** taşır (önceden 3-5). Önizlemede modeller **fiyatlarıyla**
@@ -107,7 +110,7 @@ TionSwarm'da yedi "paylaşılabilir varlık" var:
 |-----|--------|----------|----------------|
 | **skill** | `internal/skills` | `<dir>/<slug>/SKILL.md` (dosya) | workspace skills dizini |
 | **agent** | `db.Agent` | JSON entity | `db.CreateAgent` |
-| **provider** | `settings.CustomProvider` | şifreli settings.json | `settings.Upsert` |
+| **provider** | `settings.ProviderInstance` | şifreli `providers.json` (ayrı dosya, K2 — _Docs/71) | `upsertProviderInstance` (`installProviderPack`) |
 | **flow** | `db.Flow` (graph JSON) | JSON entity | `db.CreateFlow` |
 | **workspace** | `workspace.Manager` | workspace registry + ws-settings | `Manager.Create` + `UpdateSettings` (yeni workspace; opsiyonel kanban düzeni dahil) |
 | **mcp** | `db.MCPServer` | JSON entity | `db.CreateMCPServer` (enabled; sonraki turda yüklenir) |
@@ -332,10 +335,11 @@ paketini db/settings bağımlılığından uzak tutar (publish'in `BuildSkillPac
 - **flow** → `installFlowPack`: `db.CreateFlow`. Graph agent-agnostik (boş agentId);
   **hemen çalışsın diye** boş slotlar workspace'in ilk ajanına atanır (motor boş
   agentId'yi reddeder — `flowTemplates` `instantiateTemplate` kuralının aynısı).
-- **provider** → `installProviderPack`: `settings.UpsertCustomProvider` + `applySettings()`
-  (canlı registry push). Key (pakette **yok**) gövdedeki `apiKey`'den gelir, AES-GCM
-  şifrelenir; boşsa yine kurulur (kullanıcı sonra Ayarlar'dan girer). Provider id =
-  pack id'den (`provider.<slug>` → `<slug>`).
+- **provider** → `installProviderPack`: `upsertProviderInstance` (`providers.json`) +
+  `applySettings()` (canlı registry push). Key (pakette **yok**) gövdedeki `apiKey`'den
+  gelir, AES-GCM şifrelenir; boşsa yine kurulur (`AllowMissingRequiredSecrets` —
+  kullanıcı sonra Ayarlar'dan girer). Provider id = pack id'den (`provider.<slug>` →
+  `<slug>`); kind = `openai-compat` | `anthropic-compat`.
 
 - **workspace** → `installWorkspacePack`: şablondan **yeni workspace** yaratır ve
   ekosistemi seed eder (skills → agents → flows → schedules). Dedup workspace adına göre.

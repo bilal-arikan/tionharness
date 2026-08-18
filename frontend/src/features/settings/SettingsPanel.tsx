@@ -88,8 +88,6 @@ export function SettingsPanel({
   const [draft, setDraft] = useState<AppSettings | null>(null)
   const [original, setOriginal] = useState<AppSettings | null>(null)
   const [keyInput, setKeyInput] = useState('')
-  const [minimaxKeyInput, setMinimaxKeyInput] = useState('')
-  const [openrouterKeyInput, setOpenrouterKeyInput] = useState('')
   const [test, setTest] = useState<Record<string, ProviderTestResult | 'pending'>>({})
   // Workspace secret names, offered as an import source for the key fields.
   const [secrets, setSecrets] = useState<Secret[]>([])
@@ -142,10 +140,8 @@ export function SettingsPanel({
   const dirtyApp = useMemo(
     () =>
       (draft && original && JSON.stringify(draft) !== JSON.stringify(original)) ||
-      keyInput.length > 0 ||
-      minimaxKeyInput.length > 0 ||
-      openrouterKeyInput.length > 0,
-    [draft, original, keyInput, minimaxKeyInput, openrouterKeyInput],
+      keyInput.length > 0,
+    [draft, original, keyInput],
   )
   const dirty = dirtyApp
   // Surface unsaved settings on the nav "Ayarlar" item + workspace label.
@@ -180,10 +176,6 @@ export function SettingsPanel({
       defaultPermissionMode: draft.defaultPermissionMode,
       claudeCliPath: draft.claudeCliPath,
       claudeConfigDir: draft.claudeConfigDir,
-      minimaxBaseUrl: draft.minimaxBaseUrl,
-      openrouterBaseUrl: draft.openrouterBaseUrl,
-      zaiBaseUrl: draft.zaiBaseUrl,
-      deepseekBaseUrl: draft.deepseekBaseUrl,
       extendedPromptCache: draft.extendedPromptCache,
       anthropicContextEditing: draft.anthropicContextEditing,
       anthropicNativeToolSearch: draft.anthropicNativeToolSearch,
@@ -257,14 +249,10 @@ export function SettingsPanel({
       backupDir: draft.backupDir,
     }
     if (keyInput) patch.anthropicKey = keyInput
-    if (minimaxKeyInput) patch.minimaxKey = minimaxKeyInput
-    if (openrouterKeyInput) patch.openrouterKey = openrouterKeyInput
     const updated = await api.updateSettings(patch)
     setDraft(updated)
     setOriginal(updated)
     setKeyInput('')
-    setMinimaxKeyInput('')
-    setOpenrouterKeyInput('')
     onSaved(updated)
   }
 
@@ -281,28 +269,15 @@ export function SettingsPanel({
   }
 
   // keyPatch builds a write-only key patch for the named provider ("" = clear).
-  const keyPatch = (
-    which: 'anthropic' | 'minimax' | 'openrouter' | 'zai' | 'deepseek',
-    value: string,
-  ): SettingsPatch =>
-    which === 'anthropic'
-      ? { anthropicKey: value }
-      : which === 'minimax'
-        ? { minimaxKey: value }
-        : which === 'openrouter'
-          ? { openrouterKey: value }
-          : which === 'zai'
-            ? { zaiKey: value }
-            : { deepseekKey: value }
+  const keyPatch = (which: 'anthropic', value: string): SettingsPatch =>
+    which === 'anthropic' ? { anthropicKey: value } : {}
 
-  const clearKey = async (which: 'anthropic' | 'minimax' | 'openrouter' | 'zai' | 'deepseek') => {
+  const clearKey = async (which: 'anthropic') => {
     try {
       const updated = await api.updateSettings(keyPatch(which, ''))
       setDraft(updated)
       setOriginal(updated)
-      if (which === 'anthropic') setKeyInput('')
-      else if (which === 'minimax') setMinimaxKeyInput('')
-      else setOpenrouterKeyInput('')
+      setKeyInput('')
     } catch (e) {
       onError((e as Error).message)
     }
@@ -310,10 +285,7 @@ export function SettingsPanel({
 
   // applyKey persists a provider key immediately (resolved from a vault secret).
   // Provider keys are never typed — they are only selected from the secret store.
-  const applyKey = async (
-    which: 'anthropic' | 'minimax' | 'openrouter' | 'zai' | 'deepseek',
-    value: string,
-  ) => {
+  const applyKey = async (which: 'anthropic', value: string) => {
     if (!value) return
     try {
       const updated = await api.updateSettings(keyPatch(which, value))

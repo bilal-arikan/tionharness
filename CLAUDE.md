@@ -89,9 +89,11 @@ formatlar (frontend → prettier, `*.go` → gofmt) ve yeniden stage'ler. Klon b
 bir kez: `git config core.hooksPath .githooks`. Tek seferlik atlamak için
 `git commit --no-verify`.
 
-Depo tarihsel olarak elle formatlanmış: `format:check` şu an ~248 dosyada uyarı
-verir. Kasıtlı olarak toplu format ATILMADI — dokunulan dosya hook ile kendiliğinden
-dönüşür. Toplu geçiş yapılacaksa **temiz ağaçta, kendi commit'inde** (`npm run format`).
+`format:check` şu an (2026-08-18 itibarıyla) **temiz** — depo genelinde uyarı yok.
+Pre-commit hook stage'lenmiş dosyayı otomatik dönüştürüyor, bu yüzden tekil
+düzenlemeler için elle `npm run format` koşmaya gerek yok. Yine de büyük bir
+elle-düzenlenmiş dosya grubu eklenirse (ör. dışarıdan import edilen kod) kontrol
+etmeden varsayma — `cd frontend && npm run format:check` ile ölç.
 
 ## Test koşturma
 

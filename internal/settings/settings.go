@@ -61,19 +61,6 @@ type CustomProvider struct {
 	PromptCache string `json:"promptCache,omitempty"`
 }
 
-// CustomProviderDTO is the masked, client-facing view of a CustomProvider.
-type CustomProviderDTO struct {
-	ID           string `json:"id"`
-	Label        string `json:"label"`
-	Kind         string `json:"kind"`
-	BaseURL      string `json:"baseUrl"`
-	DefaultModel string `json:"defaultModel"`
-	Models       string `json:"models"`
-	KeySet       bool   `json:"keySet"`
-	Reasoning    bool   `json:"reasoning,omitempty"`
-	PromptCache  string `json:"promptCache,omitempty"`
-}
-
 // Settings is the full, persisted configuration document. The encrypted
 // Anthropic key lives in AnthropicKeyEnc and is never serialized to the API
 // (json tag "-"); clients see only AnthropicKeySet via the DTO.
@@ -558,17 +545,16 @@ type DTO struct {
 	ClaudeCliAuthSet      bool   `json:"claudeCliAuthSet"`
 	CodexCLIPath          string `json:"codexCliPath"`
 	CodexConfigDir        string `json:"codexConfigDir"`
-	AnthropicKeySet       bool   `json:"anthropicKeySet"`
-	MinimaxKeySet         bool   `json:"minimaxKeySet"`
-	MinimaxBaseURL        string `json:"minimaxBaseUrl"`
-	OpenRouterKeySet      bool   `json:"openrouterKeySet"`
-	OpenRouterBaseURL     string `json:"openrouterBaseUrl"`
-	ZAIKeySet             bool   `json:"zaiKeySet"`
-	ZAIBaseURL            string `json:"zaiBaseUrl"`
-	DeepSeekKeySet        bool   `json:"deepseekKeySet"`
-	DeepSeekBaseURL       string `json:"deepseekBaseUrl"`
-
-	CustomProviders []CustomProviderDTO `json:"customProviders"`
+	// AnthropicKeySet reflects AnthropicKeyEnc, which stays live: it seeds the
+	// default "anthropic" provider instance from ANTHROPIC_API_KEY at boot
+	// (internal/app/app.go) and from a manual key entry via Patch.AnthropicKey
+	// — the one built-in provider card ProvidersPanel.tsx still renders
+	// (_Docs/71 Faz 5). Every other legacy typed provider field (Minimax/
+	// OpenRouter/ZAI/DeepSeek/CustomProviders) was removed from the DTO/Patch:
+	// they have no live reader/writer left outside MigrateFromSettings, which
+	// reads the underlying Settings struct fields directly (kept for that
+	// one-time boot migration; never exposed to the API).
+	AnthropicKeySet bool `json:"anthropicKeySet"`
 
 	ExtendedPromptCache        bool `json:"extendedPromptCache"`
 	AnthropicContextEditing    bool `json:"anthropicContextEditing"`
@@ -695,15 +681,6 @@ func (s Settings) ToDTO() DTO {
 		CodexCLIPath:          s.CodexCLIPath,
 		CodexConfigDir:        s.CodexConfigDir,
 		AnthropicKeySet:       s.AnthropicKeyEnc != "",
-		MinimaxKeySet:         s.MinimaxKeyEnc != "",
-		MinimaxBaseURL:        s.MinimaxBaseURL,
-		OpenRouterKeySet:      s.OpenRouterKeyEnc != "",
-		OpenRouterBaseURL:     s.OpenRouterBaseURL,
-		ZAIKeySet:             s.ZAIKeyEnc != "",
-		ZAIBaseURL:            s.ZAIBaseURL,
-		DeepSeekKeySet:        s.DeepSeekKeyEnc != "",
-		DeepSeekBaseURL:       s.DeepSeekBaseURL,
-		CustomProviders:       customProvidersToDTO(s.CustomProviders),
 
 		ExtendedPromptCache:        s.ExtendedPromptCache,
 		AnthropicContextEditing:    s.AnthropicContextEditing,
@@ -824,14 +801,6 @@ type Patch struct {
 	CodexCLIPath          *string `json:"codexCliPath"`
 	CodexConfigDir        *string `json:"codexConfigDir"`
 	AnthropicKey          *string `json:"anthropicKey"` // write-only
-	MinimaxKey            *string `json:"minimaxKey"`   // write-only
-	MinimaxBaseURL        *string `json:"minimaxBaseUrl"`
-	OpenRouterKey         *string `json:"openrouterKey"` // write-only
-	OpenRouterBaseURL     *string `json:"openrouterBaseUrl"`
-	ZAIKey                *string `json:"zaiKey"` // write-only
-	ZAIBaseURL            *string `json:"zaiBaseUrl"`
-	DeepSeekKey           *string `json:"deepseekKey"` // write-only
-	DeepSeekBaseURL       *string `json:"deepseekBaseUrl"`
 
 	ExtendedPromptCache        *bool `json:"extendedPromptCache"`
 	AnthropicContextEditing    *bool `json:"anthropicContextEditing"`
@@ -932,23 +901,4 @@ type Patch struct {
 	BackupIntervalHours *int    `json:"backupIntervalHours"`
 	BackupRetain        *int    `json:"backupRetain"`
 	BackupDir           *string `json:"backupDir"`
-}
-
-// customProvidersToDTO masks the keys of a custom-provider list for the client.
-func customProvidersToDTO(in []CustomProvider) []CustomProviderDTO {
-	out := make([]CustomProviderDTO, 0, len(in))
-	for _, c := range in {
-		out = append(out, CustomProviderDTO{
-			ID:           c.ID,
-			Label:        c.Label,
-			Kind:         c.Kind,
-			BaseURL:      c.BaseURL,
-			DefaultModel: c.DefaultModel,
-			Models:       c.Models,
-			KeySet:       c.KeyEnc != "",
-			Reasoning:    c.Reasoning,
-			PromptCache:  c.PromptCache,
-		})
-	}
-	return out
 }

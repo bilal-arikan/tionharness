@@ -1,14 +1,16 @@
-// Providers category: default provider/model picker, Anthropic + MiniMax +
-// OpenRouter keys, provider instances (kind-driven, generic form) and
-// connection test. (Anthropic beta toggles now live under the "Bağlam &
-// Bellek" category.)
+// Providers category: claude-cli / codex-cli subscription login, the Anthropic
+// API key card, provider instances (kind-driven, generic form) and connection
+// test. (Anthropic beta toggles now live under the "Bağlam & Bellek" category.)
+// The legacy MiniMax/OpenRouter/Z.ai/DeepSeek built-in cards were removed
+// (_Docs/71 Faz 5) — those providers are configured as provider instances now,
+// same as any other kind.
 //
-// Layout is deliberately table-like: the three built-in providers render as a
-// uniform grid of cards (status badge + aligned key/endpoint columns + test) so
-// the section reads as rows of the same shape, and provider instances render
-// as a real list (ProviderInstanceList).
+// Layout is deliberately table-like: the built-in provider cards render as a
+// uniform grid (status badge + aligned key/endpoint columns + test) so the
+// section reads as rows of the same shape, and provider instances render as a
+// real list (ProviderInstanceList).
 import { useState } from 'react'
-import { Sparkles, Zap, KeyRound, Boxes, Network, Terminal, type LucideIcon } from 'lucide-react'
+import { Sparkles, KeyRound, Boxes, Terminal, type LucideIcon } from 'lucide-react'
 import { api } from '@/api'
 import { toast } from '@/shared/components'
 import type { AppSettings, ProviderTestResult, Secret } from '@/types'
@@ -43,13 +45,10 @@ interface Props {
   setDraft: React.Dispatch<React.SetStateAction<AppSettings | null>>
   test: Record<string, ProviderTestResult | 'pending'>
   runTest: (provider: string, model?: string) => void
-  clearKey: (which: 'anthropic' | 'minimax' | 'openrouter' | 'zai' | 'deepseek') => void
+  clearKey: (which: 'anthropic') => void
   // Apply a provider key immediately (resolved from a vault secret). Provider
   // keys are never typed — only selected from the secret store.
-  applyKey: (
-    which: 'anthropic' | 'minimax' | 'openrouter' | 'zai' | 'deepseek',
-    value: string,
-  ) => void | Promise<void>
+  applyKey: (which: 'anthropic', value: string) => void | Promise<void>
   // Secrets vault (this workspace), reveal a value to import as a key, and a
   // jump to the Secrets screen for managing them.
   secrets: Secret[]
@@ -703,86 +702,6 @@ export function ProvidersPanel({
             runTest={runTest}
             testProvider="anthropic"
             testDisabledHint="önce Anthropic API anahtarı ekle"
-          />
-          <BuiltinProvider
-            icon={Zap}
-            name="MiniMax"
-            kindLabel="OpenAI-uyumlu"
-            keyLabel="API anahtarı"
-            isSet={draft.minimaxKeySet}
-            requiredHint="MiniMax modelleri için gerekli."
-            secrets={secrets}
-            onPick={async (n) => applyKey('minimax', await onImportSecret(n))}
-            onClear={() => clearKey('minimax')}
-            endpointLabel="base URL"
-            endpointValue={draft.minimaxBaseUrl}
-            endpointPlaceholder="https://api.minimax.io/v1"
-            onEndpoint={(v) => set('minimaxBaseUrl', v)}
-            test={test}
-            runTest={runTest}
-            testProvider="minimax"
-            testModel="MiniMax-M3"
-            testDisabledHint="önce MiniMax anahtarı ekle"
-          />
-          <BuiltinProvider
-            icon={Network}
-            name="OpenRouter"
-            kindLabel="OpenAI-uyumlu"
-            keyLabel="API anahtarı"
-            isSet={draft.openrouterKeySet}
-            requiredHint="OpenRouter modelleri için gerekli (tek anahtar, yüzlerce model)."
-            secrets={secrets}
-            onPick={async (n) => applyKey('openrouter', await onImportSecret(n))}
-            onClear={() => clearKey('openrouter')}
-            endpointLabel="base URL"
-            endpointValue={draft.openrouterBaseUrl}
-            endpointPlaceholder="https://openrouter.ai/api/v1"
-            onEndpoint={(v) => set('openrouterBaseUrl', v)}
-            test={test}
-            runTest={runTest}
-            testProvider="openrouter"
-            testModel="anthropic/claude-sonnet-4.6"
-            testDisabledHint="önce OpenRouter anahtarı ekle"
-          />
-          <BuiltinProvider
-            icon={Network}
-            name="Z.ai GLM"
-            kindLabel="Anthropic-uyumlu"
-            keyLabel="API anahtarı"
-            isSet={draft.zaiKeySet}
-            requiredHint="GLM modelleri için gerekli (Anthropic modu: araç kullanımı + düşünme)."
-            secrets={secrets}
-            onPick={async (n) => applyKey('zai', await onImportSecret(n))}
-            onClear={() => clearKey('zai')}
-            endpointLabel="base URL"
-            endpointValue={draft.zaiBaseUrl}
-            endpointPlaceholder="https://api.z.ai/api/anthropic/v1/messages"
-            onEndpoint={(v) => set('zaiBaseUrl', v)}
-            test={test}
-            runTest={runTest}
-            testProvider="zai"
-            testModel="glm-5.2"
-            testDisabledHint="önce Z.ai anahtarı ekle"
-          />
-          <BuiltinProvider
-            icon={Zap}
-            name="DeepSeek"
-            kindLabel="OpenAI-uyumlu"
-            keyLabel="API anahtarı"
-            isSet={draft.deepseekKeySet}
-            requiredHint="DeepSeek V4 modelleri için gerekli (1M bağlam, çok ucuz)."
-            secrets={secrets}
-            onPick={async (n) => applyKey('deepseek', await onImportSecret(n))}
-            onClear={() => clearKey('deepseek')}
-            endpointLabel="base URL"
-            endpointValue={draft.deepseekBaseUrl}
-            endpointPlaceholder="https://api.deepseek.com"
-            onEndpoint={(v) => set('deepseekBaseUrl', v)}
-            test={test}
-            runTest={runTest}
-            testProvider="deepseek"
-            testModel="deepseek-v4-flash"
-            testDisabledHint="önce DeepSeek anahtarı ekle"
           />
         </div>
       </div>

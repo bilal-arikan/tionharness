@@ -31,15 +31,12 @@ export interface AppSettings {
   // authentication is always a `codex login` inside that home.
   codexCliPath: string
   codexConfigDir: string
+  // anthropicKeySet reflects the one legacy built-in provider key still live
+  // (the ANTHROPIC_API_KEY env boot-seed, see internal/app/app.go). The other
+  // legacy typed provider fields (MiniMax/OpenRouter/Z.ai/DeepSeek/custom
+  // providers) were removed — those are configured as provider instances now
+  // (GET /api/providers), same as any other kind (_Docs/71 Faz 5).
   anthropicKeySet: boolean
-  minimaxKeySet: boolean
-  minimaxBaseUrl: string
-  openrouterKeySet: boolean
-  openrouterBaseUrl: string
-  zaiKeySet: boolean
-  zaiBaseUrl: string
-  deepseekKeySet: boolean
-  deepseekBaseUrl: string
 
   extendedPromptCache: boolean
   anthropicContextEditing: boolean
@@ -166,22 +163,10 @@ export interface AppSettings {
   backupDir: string // "" → <dataDir>/backups
 }
 
-// Partial update. anthropicKey/minimaxKey/openrouterKey are write-only: "" clears, non-empty sets.
+// Partial update. anthropicKey is write-only: "" clears, non-empty sets.
 export type SettingsPatch = Partial<
-  Omit<
-    AppSettings,
-    | 'anthropicKeySet'
-    | 'minimaxKeySet'
-    | 'openrouterKeySet'
-    | 'zaiKeySet'
-    | 'deepseekKeySet'
-    | 'claudeCliAuthSet'
-  > & {
+  Omit<AppSettings, 'anthropicKeySet' | 'claudeCliAuthSet'> & {
     anthropicKey: string
-    minimaxKey: string
-    openrouterKey: string
-    zaiKey: string
-    deepseekKey: string
     claudeCliAuthToken: string // write-only: "" clears, non-empty stores
   }
 >

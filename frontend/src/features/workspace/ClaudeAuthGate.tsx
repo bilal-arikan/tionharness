@@ -35,18 +35,14 @@ interface Props {
 }
 
 // hasNoUsableProvider reports whether this workspace has no way to run a turn:
-// none of the built-in provider keys are set, no claude-cli token is stored, and
-// no custom provider exists. (A claude-cli login living only in the workspace's
-// claude-home is caught separately by the login probe.)
+// no Anthropic API key is set, no claude-cli token is stored, and no provider
+// instance is configured (GET /api/providers covers every other provider kind
+// now — MiniMax/OpenRouter/Z.ai/DeepSeek/custom, _Docs/71 Faz 5). A claude-cli
+// login living only in the workspace's claude-home is caught separately by the
+// login probe.
 async function hasNoUsableProvider(): Promise<boolean> {
   const [s, instances] = await Promise.all([api.getSettings(), api.listProviders()])
-  return (
-    !s.anthropicKeySet &&
-    !s.minimaxKeySet &&
-    !s.openrouterKeySet &&
-    !s.claudeCliAuthSet &&
-    instances.length === 0
-  )
+  return !s.anthropicKeySet && !s.claudeCliAuthSet && instances.length === 0
 }
 
 export function ClaudeAuthGate({

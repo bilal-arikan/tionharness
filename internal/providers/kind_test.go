@@ -137,6 +137,48 @@ func TestGetUnregisteredKindErrors(t *testing.T) {
 	}
 }
 
+// TestInstanceCatalogPerInstanceEntries verifies InstanceCatalog gives two
+// same-kind instances their own catalog entry (Faz 5, _Docs/71 §5 item 3),
+// skips a disabled instance and an instance whose kind is unregistered, and
+// carries the kind's manifest metadata (needsKey/models) onto the entry.
+func TestInstanceCatalogPerInstanceEntries(t *testing.T) {
+	r := NewRegistry()
+	r.SetInstances([]Instance{
+		{ID: "anthropic", KindID: "anthropic", Enabled: true, Label: "Anthropic — iş", Values: map[string]string{FieldKeyAPIKey: "sk-work"}},
+		{ID: "PRV1", KindID: "anthropic", Enabled: true, Label: "Anthropic — kişisel", Values: map[string]string{FieldKeyAPIKey: "sk-personal"}},
+		{ID: "PRV2", KindID: "anthropic", Enabled: false, Label: "Anthropic — devre dışı"},
+		{ID: "ghost", KindID: "does-not-exist-kind", Enabled: true},
+	})
+
+	cat := r.InstanceCatalog()
+	byID := make(map[string]CatalogEntry, len(cat))
+	for _, e := range cat {
+		byID[e.ID] = e
+	}
+
+	if _, ok := byID["anthropic"]; !ok {
+		t.Error("missing catalog entry for default anthropic instance")
+	}
+	if _, ok := byID["PRV1"]; !ok {
+		t.Error("missing catalog entry for second anthropic instance (PRV1)")
+	}
+	if byID["anthropic"].Label == byID["PRV1"].Label {
+		t.Error("two distinct instances of the same kind must not collapse into one catalog entry")
+	}
+	if _, ok := byID["PRV2"]; ok {
+		t.Error("disabled instance PRV2 must not appear in the catalog")
+	}
+	if _, ok := byID["ghost"]; ok {
+		t.Error("instance with an unregistered kind must not appear in the catalog")
+	}
+	if !byID["PRV1"].NeedsKey {
+		t.Error("PRV1 entry should inherit NeedsKey=true from the anthropic kind manifest")
+	}
+	if len(byID["PRV1"].Models) == 0 {
+		t.Error("PRV1 entry should inherit the anthropic kind's curated model list (no instance override set)")
+	}
+}
+
 // TestAppliesToolHooksSignal verifies the provider-capability signal used to
 // surface the codex-cli hook gap in the UI: codex-cli reports hooks as NOT
 // applied (its subprocess tool loop has no hook passthrough), while claude-cli

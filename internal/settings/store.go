@@ -2,30 +2,11 @@ package settings
 
 import (
 	"encoding/json"
-	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"sync"
 )
-
-// reservedProviderIDs are the built-in provider ids a custom provider must not
-// shadow.
-var reservedProviderIDs = map[string]bool{
-	"anthropic":          true,
-	"minimax":            true,
-	"claude-cli":         true,
-	"codex-cli":          true,
-	"minimax-anthropic":  true,
-	"openrouter":         true,
-	"zai":                true,
-	"deepseek":           true,
-	"deepseek-anthropic": true,
-}
-
-// providerIDRe constrains a custom provider id to a clean identifier.
-var providerIDRe = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_.-]*$`)
 
 // fileName is the settings document inside the data directory.
 const fileName = "settings.json"
@@ -102,136 +83,6 @@ func (s *Store) AnthropicKey() string {
 // API key, per ClaudeCliAuthKind), or "" if none/undecryptable.
 func (s *Store) ClaudeCliAuthToken() string {
 	return s.decrypt(s.Get().ClaudeCliAuthTokenEnc)
-}
-
-// MinimaxKey returns the decrypted MiniMax API key, or "" if none.
-func (s *Store) MinimaxKey() string {
-	return s.decrypt(s.Get().MinimaxKeyEnc)
-}
-
-// OpenRouterKey returns the decrypted OpenRouter API key, or "" if none.
-func (s *Store) OpenRouterKey() string {
-	return s.decrypt(s.Get().OpenRouterKeyEnc)
-}
-
-// ZAIKey returns the decrypted Z.ai GLM API key, or "" if none.
-func (s *Store) ZAIKey() string {
-	return s.decrypt(s.Get().ZAIKeyEnc)
-}
-
-// DeepSeekKey returns the decrypted DeepSeek API key, or "" if none.
-func (s *Store) DeepSeekKey() string {
-	return s.decrypt(s.Get().DeepSeekKeyEnc)
-}
-
-// CustomProviderKey returns the decrypted key for a custom provider id, or "".
-func (s *Store) CustomProviderKey(id string) string {
-	s.mu.RLock()
-	var enc string
-	for _, c := range s.cur.CustomProviders {
-		if c.ID == id {
-			enc = c.KeyEnc
-			break
-		}
-	}
-	s.mu.RUnlock()
-	return s.decrypt(enc)
-}
-
-// UpsertCustomProvider creates or updates a custom provider by id. The key is
-// plaintext and write-only: nil keeps the stored key, "" clears it, a non-empty
-// value is encrypted and replaces it. Returns the new settings on success.
-func (s *Store) UpsertCustomProvider(p CustomProvider, key *string) (Settings, error) {
-	id := strings.TrimSpace(p.ID)
-	if !providerIDRe.MatchString(id) {
-		return Settings{}, fmt.Errorf("invalid provider id (letters, digits, _, -, . — start with a letter)")
-	}
-	if reservedProviderIDs[id] {
-		return Settings{}, fmt.Errorf("provider id %q is reserved", id)
-	}
-	if p.Kind != "openai" && p.Kind != "anthropic" {
-		return Settings{}, fmt.Errorf("kind must be \"openai\" or \"anthropic\"")
-	}
-	if strings.TrimSpace(p.BaseURL) == "" {
-		return Settings{}, fmt.Errorf("base URL is required")
-	}
-
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	next := s.cur
-	list := make([]CustomProvider, len(next.CustomProviders))
-	copy(list, next.CustomProviders)
-	idx := -1
-	for i, c := range list {
-		if c.ID == id {
-			idx = i
-			break
-		}
-	}
-	entry := CustomProvider{
-		ID:           id,
-		Label:        strings.TrimSpace(p.Label),
-		Kind:         p.Kind,
-		BaseURL:      strings.TrimSpace(p.BaseURL),
-		DefaultModel: strings.TrimSpace(p.DefaultModel),
-		Models:       p.Models,
-		Reasoning:    p.Reasoning,
-		PromptCache:  strings.TrimSpace(p.PromptCache),
-	}
-	if entry.Label == "" {
-		entry.Label = id
-	}
-	if idx >= 0 {
-		entry.KeyEnc = list[idx].KeyEnc // preserve unless changed below
-	}
-	if key != nil {
-		if *key == "" {
-			entry.KeyEnc = ""
-		} else {
-			enc, err := s.cipher.Encrypt(*key)
-			if err != nil {
-				return Settings{}, err
-			}
-			entry.KeyEnc = enc
-		}
-	}
-	if idx >= 0 {
-		list[idx] = entry
-	} else {
-		list = append(list, entry)
-	}
-	next.CustomProviders = list
-	next = normalize(next)
-	if err := s.persist(next); err != nil {
-		return Settings{}, err
-	}
-	s.cur = next
-	return next, nil
-}
-
-// DeleteCustomProvider removes a custom provider by id.
-func (s *Store) DeleteCustomProvider(id string) (Settings, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	next := s.cur
-	list := make([]CustomProvider, 0, len(next.CustomProviders))
-	found := false
-	for _, c := range next.CustomProviders {
-		if c.ID == id {
-			found = true
-			continue
-		}
-		list = append(list, c)
-	}
-	if !found {
-		return Settings{}, fmt.Errorf("custom provider %q not found", id)
-	}
-	next.CustomProviders = list
-	if err := s.persist(next); err != nil {
-		return Settings{}, err
-	}
-	s.cur = next
-	return next, nil
 }
 
 // decrypt opens an encrypted value, returning "" on empty/failure.
@@ -399,11 +250,6 @@ func (s *Store) Apply(p Patch) (Settings, error) {
 		next.BackupDir = strings.TrimSpace(*p.BackupDir)
 	}
 
-	applyString(&next.MinimaxBaseURL, p.MinimaxBaseURL)
-	applyString(&next.OpenRouterBaseURL, p.OpenRouterBaseURL)
-	applyString(&next.ZAIBaseURL, p.ZAIBaseURL)
-	applyString(&next.DeepSeekBaseURL, p.DeepSeekBaseURL)
-
 	// Secrets: write-only. Empty string clears; non-empty encrypts and replaces.
 	if p.ClaudeCliAuthToken != nil {
 		if *p.ClaudeCliAuthToken == "" {
@@ -427,51 +273,6 @@ func (s *Store) Apply(p Patch) (Settings, error) {
 			next.AnthropicKeyEnc = enc
 		}
 	}
-	if p.MinimaxKey != nil {
-		if *p.MinimaxKey == "" {
-			next.MinimaxKeyEnc = ""
-		} else {
-			enc, err := s.cipher.Encrypt(*p.MinimaxKey)
-			if err != nil {
-				return Settings{}, err
-			}
-			next.MinimaxKeyEnc = enc
-		}
-	}
-	if p.OpenRouterKey != nil {
-		if *p.OpenRouterKey == "" {
-			next.OpenRouterKeyEnc = ""
-		} else {
-			enc, err := s.cipher.Encrypt(*p.OpenRouterKey)
-			if err != nil {
-				return Settings{}, err
-			}
-			next.OpenRouterKeyEnc = enc
-		}
-	}
-	if p.ZAIKey != nil {
-		if *p.ZAIKey == "" {
-			next.ZAIKeyEnc = ""
-		} else {
-			enc, err := s.cipher.Encrypt(*p.ZAIKey)
-			if err != nil {
-				return Settings{}, err
-			}
-			next.ZAIKeyEnc = enc
-		}
-	}
-	if p.DeepSeekKey != nil {
-		if *p.DeepSeekKey == "" {
-			next.DeepSeekKeyEnc = ""
-		} else {
-			enc, err := s.cipher.Encrypt(*p.DeepSeekKey)
-			if err != nil {
-				return Settings{}, err
-			}
-			next.DeepSeekKeyEnc = enc
-		}
-	}
-
 	next = normalize(next)
 	if err := s.persist(next); err != nil {
 		return Settings{}, err

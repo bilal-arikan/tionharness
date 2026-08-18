@@ -115,26 +115,45 @@ func (r *Registry) SetAnthropicBetas(extendedCache, contextEditing, serverCompac
 	r.mu.Unlock()
 }
 
-// InstanceCatalog returns catalog entries for every provider instance whose
-// kind is one of the two generic compat kinds (openai-compat, anthropic-compat)
-// — the Faz 2 successor to CustomCatalog, since those instances are the only
-// ones not already carried by Catalog()'s per-kind Models list. Availability is
-// layered on by the API handler.
+// InstanceCatalog returns one catalog entry per configured, enabled provider
+// instance, keyed by the INSTANCE id rather than its kind — so two instances
+// of the same kind (e.g. two Anthropic accounts) each get their own catalog
+// entry instead of collapsing into Catalog()'s single per-kind entry
+// (_Docs/71 Faz 5 item 3). Each entry inherits its kind's manifest metadata
+// (NeedsKey/AllowCustomModel/AppliesToolHooks/curated Models), with the
+// instance's own Models override taking precedence when set — mirroring
+// resolveInstance's kind lookup. An instance whose kind is no longer
+// registered is skipped rather than erroring: the catalog is a best-effort
+// picker aid, not the source of truth Registry.Get enforces.
+//
+// MergeCatalog (caller-applied) lets a same-ID instance entry override
+// Catalog()'s per-kind entry in place — the default migrated instance's ID
+// equals its kind ID (_Docs/71 §3), so a single, unconfigured-by-hand
+// "anthropic" instance still shows once, not twice.
 func (r *Registry) InstanceCatalog() []CatalogEntry {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	out := make([]CatalogEntry, 0)
+	out := make([]CatalogEntry, 0, len(r.instances))
 	for _, inst := range r.instances {
-		if inst.KindID != "openai-compat" && inst.KindID != "anthropic-compat" {
+		if !inst.Enabled {
 			continue
+		}
+		k, ok := lookupKind(inst.KindID)
+		if !ok {
+			continue
+		}
+		m := k.Manifest()
+		models := parseModelList(inst.Models)
+		if len(models) == 0 {
+			models = append([]ModelInfo(nil), m.Models...)
 		}
 		out = append(out, CatalogEntry{
 			ID:               inst.ID,
 			Label:            inst.Label,
-			NeedsKey:         true,
-			AllowCustomModel: true,
-			Models:           parseModelList(inst.Models),
-			AppliesToolHooks: true,
+			NeedsKey:         m.NeedsKey,
+			AllowCustomModel: m.AllowCustomModel,
+			Models:           models,
+			AppliesToolHooks: m.AppliesToolHooks,
 		})
 	}
 	return out

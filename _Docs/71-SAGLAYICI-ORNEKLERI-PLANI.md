@@ -1,14 +1,16 @@
 # 71 — Sağlayıcı Örnekleri (Provider Instances): Uygulama Planı
 
-> **Durum: PLAN (kod yok) — K1/K2/K3 kararları onaylandı (2026-08-18, bkz. §8).**
-> Kapsam: bugünkü "provider = sabit kind id" modelini
-> **taslak (kind) → örnek (instance)** modeline çevirmek. Hedef: aynı kind'dan
-> **birden fazla**, farklı token/config taşıyan sağlayıcı; sağlayıcı ayarları
-> **uygulama geneli**; ajan oluştururken bu örneklerden seçim; mevcut ajanların
-> bozulmadan taşınması.
+> **Durum: BİTTİ (Faz 0-5, 2026-08-18) — K1/K2/K3 kararları onaylandı, K4 kapsam dışı bırakıldı (bkz. §8).**
+> Bugünkü "provider = sabit kind id" modeli **taslak (kind) → örnek (instance)**
+> modeline çevrildi. Aynı kind'dan **birden fazla**, farklı token/config taşıyan
+> sağlayıcı; sağlayıcı ayarları **uygulama geneli**; ajan oluştururken bu
+> örneklerden seçim; mevcut ajanlar bozulmadan taşındı (sıfır veri migrasyonu).
+> Faz 5'te eski typed `settings.Settings` alanlarının DTO/Patch/Store yüzeyi
+> kaldırıldı ve dokümanlar güncellendi — plandan sapmalar §7 faz tablosunda ve
+> aşağıdaki notlarda işaretli.
 >
 > İlgili: `17-TOKEN-OPTIMIZASYON.md` (provider soyutlaması), `51-CLAUDE-CONFIG-BIRLESIK.md`,
-> `69/70` (codex-cli — **paralel yürüyen iş**, bkz. §7 Sıralama).
+> `69/70` (codex-cli — Faz 0 ön koşuluydu, merge edildi).
 
 ---
 
@@ -308,14 +310,14 @@ Yanıtta ikisi de döner.
 
 | Faz | İçerik | Çıktı ölçütü | Efor |
 |-----|--------|--------------|------|
-| **0** | Codex-cli'nin merge'ünü bekle; `CLIProvider` arayüz refactor'ı (Doc 70 §1.1) yerinde | `go build ./...` temiz, somut `*providers.ClaudeCLI` assertion'ı kalmadı | — |
-| **1** | `FieldSpec` + `Manifest.Fields/Transport`; her `kind_*.go` kendi alanlarını ilan eder; `ProviderInstance` modeli + `providers.json` store (**K2**) + **boot migrasyonu**. Registry hâlâ eski yoldan okur (ikili yazım) | Migrasyon testi: eski settings.json → beklenen örnek seti; davranış birebir aynı | ~1 gün |
-| **2** | `Registry` örnek-tabanlı: `SetInstances()`, `resolve()` örnekten, `KindOf()`; `Agent.ProviderInstanceID` alanı + `Provider` senkron aynası (**K3**); §4.2'deki 5 karşılaştırma `Transport`'a; `openai-compat`/`anthropic-compat` kind'ları → `CustomSpec` yolu düşer | Aynı kind'dan 2 örnek testi (2 anthropic, farklı key) yeşil; "`Provider` her zaman kind" invaryant testi yeşil | ~1 gün |
-| **3** | **BACKEND bitti** (2026-08-18): `/api/provider-kinds` (kind→form şeması), `/api/providers` CRUD (`GET`/`GET {id}`/`PUT`/`DELETE {id}`), `/api/settings/test-provider` zaten örnek id kabul ediyordu. Eski `settings.CustomProvider` API yazım yolu (`handleUpsertProvider`/`handleDeleteProvider`) kaldırıldı. `market_install.go`'daki `installProviderPack` de aynı `upsertProviderInstance` doğrulama yoluna taşındı (artık `providers.json`'a yazıyor, `applySettings()` sonrası registry'de gerçek etkisi var) — legacy `settings.UpsertCustomProvider` çağıran kalmadı, yalnız `internal/settings` içindeki tanım + `MigrateFromSettings`'in okuması (bir kerelik bootstrap) duruyor. **Kalan: `ProvidersPanel` generic form + CLI örnekleri için "kendi config evini oluştur" (K1) — frontend.** | Backend: `go build`/`go vet`/`go test ./...` yeşil, CRUD+schema+secret-sızmama+silme-etki+market-pack-kurulum testleri yeşil (`internal/api/providers_test.go`). Frontend adımı henüz yapılmadı. | ~1.5 gün |
-| **4** | **BİTTİ (2026-08-18):** Ajan formu (`AgentSettingsForm`, `AgentsView` oluşturma formu) yeni `ProviderInstanceModelSelect` bileşeniyle örnek listesinden (`/api/providers`) seçim yapıyor; kind rozeti optgroup ile gösteriliyor; model listesi seçilen örneğin kind manifest'i + örnek `models` override'ından türüyor. `internal/tools/builtin_agentmgmt.go` (`create_agent`/`update_agent` MCP araçları) artık `agentDeps.resolveProvider` üzerinden enjekte edilen `agent.SyncProviderFields`'i kullanıyor (döngüsel import'tan kaçınmak için dependency injection — `internal/tools` `internal/agent`'ı import edemiyor), bilinmeyen örnek id'si net hata döndürüyor. Silinmiş örneğe bağlı ajan formda kırmızı uyarı şeridiyle gösteriliyor, sessiz fallback yok. | Örnek silinince ilgili ajanlar formda uyarılıyor, sessiz fallback yok | ~0.5 gün |
-| **5** | `settings.Settings`'ten eski typed provider alanlarını **kaldır** (bir sürüm deprecated kaldıktan sonra); dokümanlar (`00`, `05`, `17`, `51`, `69/70`) + `tionswarm-project` skill'i güncellenir | `grep AnthropicKeyEnc` sıfır sonuç | ~0.5 gün |
+| **0** | ✅ Codex-cli'nin merge'ünü bekle; `CLIProvider` arayüz refactor'ı (Doc 70 §1.1) yerinde | `go build ./...` temiz, somut `*providers.ClaudeCLI` assertion'ı kalmadı | — |
+| **1** | ✅ `FieldSpec` + `Manifest.Fields/Transport`; her `kind_*.go` kendi alanlarını ilan eder; `ProviderInstance` modeli + `providers.json` store (**K2** — dosya `internal/settings/store_providers.go`, tip adı `ProviderStore`; plandaki "`internal/settings/provider_instance.go`" ismi kullanılmadı) + **boot migrasyonu** (`provider_migrate.go`) | Migrasyon testi: eski settings.json → beklenen örnek seti; davranış birebir aynı (`provider_migrate_test.go`) | ~1 gün |
+| **2** | ✅ `Registry` örnek-tabanlı: `SetInstances()`, `resolve()` örnekten, `KindOf()`; `Agent.ProviderInstanceID` alanı + `Provider` senkron aynası (**K3**); §4.2'deki 5 karşılaştırma `Transport`'a; `openai-compat`/`anthropic-compat` kind'ları → eski `CustomSpec` yolu düştü | Aynı kind'dan 2 örnek testi (2 anthropic, farklı key) yeşil; "`Provider` her zaman kind" invaryant testi yeşil | ~1 gün |
+| **3** | ✅ **BİTTİ** (2026-08-18): `/api/provider-kinds` (kind→form şeması), `/api/providers` CRUD (`GET`/`GET {id}`/`PUT`/`DELETE {id}`), `/api/settings/test-provider` örnek id kabul ediyor. Eski `settings.CustomProvider` API yazım yolu (`handleUpsertProvider`/`handleDeleteProvider`) kaldırıldı. `market_install.go`'daki `installProviderPack` aynı `upsertProviderInstance` doğrulama yoluna taşındı (`providers.json`'a yazıyor, `applySettings()` sonrası registry'de gerçek etkisi var) — `AllowMissingRequiredSecrets` (pack'in anahtarsız kurulabilmesi) ve `ExtraConfig` (legacy `reasoning`/`promptCache` bayraklarının standart olmayan `Config` anahtarları olarak taşınması) opsiyonları bu fazda eklendi. `ProvidersPanel` generic form (`ProviderInstanceList`/`ProviderInstanceForm`) — frontend | Backend+frontend: `go build`/`go vet`/`go test ./...` yeşil, CRUD+schema+secret-sızmama+silme-etki+market-pack-kurulum testleri yeşil (`internal/api/providers_test.go`) | ~1.5 gün |
+| **4** | ✅ **BİTTİ** (2026-08-18): Ajan formu (`AgentSettingsForm`, `AgentsView` oluşturma formu) `ProviderInstanceModelSelect` bileşeniyle örnek listesinden (`/api/providers`) seçim yapıyor; kind rozeti optgroup ile gösteriliyor; model listesi seçilen örneğin kind manifest'i + örnek `models` override'ından türüyor. `internal/tools/builtin_agentmgmt.go` (`create_agent`/`update_agent` MCP araçları) `agentDeps.resolveProvider` üzerinden enjekte edilen `agent.SyncProviderFields`'i kullanıyor (döngüsel import'tan kaçınmak için dependency injection), bilinmeyen örnek id'si net hata döndürüyor. Silinmiş örneğe bağlı ajan formda kırmızı uyarı şeridiyle gösteriliyor, sessiz fallback yok | Örnek silinince ilgili ajanlar formda uyarılıyor, sessiz fallback yok | ~0.5 gün |
+| **5** | ✅ **BİTTİ** (2026-08-18): eski typed `settings.Settings` **DTO/Patch/Store yüzeyi** (Minimax/OpenRouter/ZAI/DeepSeek/CustomProviders — `*KeySet`/`*BaseURL` DTO alanları, `*Key`/`*BaseURL` Patch alanları, `Store.MinimaxKey()`/`OpenRouterKey()`/`ZAIKey()`/`DeepSeekKey()`/`CustomProviderKey()`/`UpsertCustomProvider()`/`DeleteCustomProvider()`, `CustomProviderDTO`) kaldırıldı. Frontend: `ProvidersPanel.tsx`'ten 4 legacy kart (MiniMax/OpenRouter/Z.ai/DeepSeek) + dead `ProviderModelSelect.tsx` (Faz 4'ün `ProviderInstanceModelSelect`'i onun yerini almıştı, sıfır importer) kaldırıldı; `AppSettings`/`SettingsPatch`'ten karşılık gelen alanlar silindi. `InstanceCatalog()` örnek-bazlı hale getirildi (§7-sapma bkz. aşağı). Dokümanlar güncellendi. **Kapsam dışı / plandan sapma:** `AnthropicKeyEnc`/`Patch.AnthropicKey`/`DTO.AnthropicKeySet` **kaldırılmadı** — `internal/app/app.go`'da `ANTHROPIC_API_KEY` env değişkeninden `providers.json`'a bir kerelik boot-seed olarak hâlâ canlı okunuyor/yazılıyor (bu yüzden "Anthropic API" kartı da `ProvidersPanel.tsx`'te kaldı); dolayısıyla "`grep AnthropicKeyEnc` sıfır sonuç" ölçütü **geçerli değil** — bilinçli istisna | `go build`/`go vet`/`go test ./... -count=1` yeşil; `internal/settings` içinde yalnız `MigrateFromSettings`in okuduğu ölü `*Enc`/`CustomProvider` struct alanları kaldı (DTO/Patch/Store erişimi yok); frontend `tsc -b --force`/`npm test`/`format:check` yeşil (bilinen görev-dışı `modelLabel.test.ts` hatası hariç) | ~0.5 gün |
 
-**Toplam ≈ 4.5 gün** (codex işi hariç).
+**Toplam ≈ 4.5 gün** (codex işi hariç). Gerçekleşen: aynı gün içinde (2026-08-18), fazlar art arda.
 
 ---
 
@@ -330,14 +332,36 @@ Yanıtta ikisi de döner.
 - **K3 — `Agent.ProviderInstanceID` yeni alan.** `Provider` alanı korunur ama
   **türetilmiş kind id'si**ne dönüşür ve her yazımda senkronlanır. Detay §2.5.
 
-**Açık (Faz 2'de karara bağlanacak):**
+**Kapsam dışı bırakıldı (Faz 5, 2026-08-18):**
 
 - **K4 — Örnek başına maliyet kırılımı.** Usage satırlarının `provider` alanı
-  **kind** olarak kalıyor (fiyatlama ve geçmiş uyumu için). Örnek bazlı maliyet
-  isteniyorsa `db.Usage` / `db.SessionUsage` satırlarına opsiyonel
-  `providerInstanceId` alanı eklenir (boş = eski satır, kind ile aynı) ve Bütçe
-  ekranında ikinci bir kırılım açılır. Aksi hâlde iki Anthropic örneğinin
-  maliyeti tek satırda toplanır. Karar Faz 2'de, gerçek ihtiyaç görülünce.
+  **kind** olarak kalıyor (fiyatlama ve geçmiş uyumu için); `providerInstanceId`
+  alanı `db.Usage`/`db.SessionUsage`'a eklenmedi. Gerçek ihtiyaç görülene kadar
+  ertelendi — iki Anthropic örneğinin maliyeti bugün tek satırda toplanıyor.
+
+**Faz 5'te alınan ek kararlar:**
+
+- **Catalog örnek-bazlı genişletme (madde 3).** `providers.Catalog()` (kind
+  bazlı, `ID = kind`) **değiştirilmedi** — `resolveModelLabel`/
+  `thinkingInfoForModel`/`Composer.tsx` bunu `agent.Provider` (K3 gereği kind)
+  ile sorguluyor; kind bazlı entry'yi kaldırmak bu üç tüketiciyi kırardı.
+  Bunun yerine `Registry.InstanceCatalog()` genişletildi: artık **her etkin
+  örnek için** (yalnızca eski `openai-compat`/`anthropic-compat` değil) ayrı
+  bir `CatalogEntry` üretiyor, `ID = instance.ID`, `MergeCatalog` aynı ID'de
+  kind entry'sinin üzerine yazıyor. Sonuç: aynı kind'ın iki örneği
+  `GET /api/catalog`'da ayrı görünür (`internal/providers/kind_test.go`
+  `TestInstanceCatalogPerInstanceEntries`), varsayılan tek-örnekli kurulumlarda
+  davranış değişmez (id çakışması → override, ekstra satır yok).
+- **Korunan claude-cli-özel kontroller.** §4.2'nin `Transport`'a taşınması
+  planlanan 5 karşılaştırmadan `internal/agent/runtime.go` ve
+  `internal/agent/toolsetup.go` Faz 2'de `Transport == "cli"` genellemesine
+  taşındı. İki tanesi kasıtlı olarak **claude-cli'ye özgü** kaldı — bunlar
+  transport-genel değil, gerçekten yalnız claude-cli'nin yaptığı işler:
+  `internal/api/session_context.go:484` (`provider != "claude-cli"`, claude-cli
+  login/config-dizini kontrolü — codex-cli farklı bir doğrulama yolu kullanıyor)
+  ve `internal/api/catalog.go:39,46` (`e.ID == "claude-cli"`, CLI sürüm +
+  abonelik rozeti — codex-cli'nin kendi `e.ID == "codex-cli"` dalı ayrı satırda
+  zaten var, bkz. `catalog.go:57`).
 
 ## 9. Riskler
 
@@ -365,6 +389,41 @@ Yanıtta ikisi de döner.
 - `internal/billing`: mevcut fiyatlama davranışı **değişmemeli** (regresyon) —
   `model_change_poc_test.go` deseni.
 - Frontend `vitest`: örnek listesi → seçici dönüşümü, availability rozetleri.
+- `internal/providers` (Faz 5): `TestInstanceCatalogPerInstanceEntries` —
+  `InstanceCatalog()` iki aynı-kind örneğine ayrı entry veriyor, devre dışı
+  örneği ve kayıtsız kind'a sahip örneği atlıyor, kind manifest metadata'sını
+  (`NeedsKey`/`Models`) örnek override'ı yoksa devralıyor.
+
+---
+
+## 11. Yeni bir sağlayıcı kind'ı eklemek
+
+Yeni bir taşıma (transport) veya API-uyumlu uç eklemek **tek dosya** ile olur —
+kayıt, ayar formu, API DTO'su ve UI otomatik türer:
+
+1. `internal/providers/kind_<isim>.go` dosyası aç, `init()` içinde
+   `RegisterKind(NewBuiltinKind(Manifest{...}, available, build))` çağır.
+   Bkz. `kind_anthropic.go` (basit API-key kind'ı) veya
+   `kind_anthropic_compat.go` (generic, kullanıcı örnek başına base URL girer).
+2. `Manifest.Fields` ile örnek formunu ilan et — standart anahtarlar
+   (`FieldKeyAPIKey`/`FieldKeyBaseURL`/`FieldKeyCLIPath`/`FieldKeyConfigDir`/
+   `FieldKeyAuthKind`/`FieldKeyAuthToken`) `ResolvedConfig`'in typed alanlarına
+   otomatik eşlenir (`Registry.resolve`); kind'a özel bir alan da eklenebilir,
+   o zaman `cfg.Values[key]` ile build fonksiyonunda okunur.
+3. `Manifest.Transport` = `"api"` (native tool loop sürer) veya `"cli"` (kendi
+   ajan döngüsünü çalıştıran subprocess) — bu, hook-passthrough/skill-aracı-adı
+   gibi davranış anahtarlarını otomatik doğru tarafa yönlendirir (§4.2).
+4. `available`/`build` fonksiyonlarını yaz (bkz. mevcut `kind_*.go` dosyaları).
+   Yeni bir dosya + `RegisterKind` dışında **registry'de, API katmanında ne de
+   `ProvidersPanel.tsx`'te hiçbir değişiklik gerekmez** — `/api/provider-kinds`
+   `providers.Kinds()`'ı gezerek formu, `ProviderInstanceForm` da o formu
+   render eder.
+5. Fiyatlandırma göstermek istiyorsan `internal/providers/pricing.go`
+   `priceTable`'a kind slug'ı → model fiyatları ekle (opsiyonel; eksikse UI
+   "—" gösterir).
+6. Test: en az `Available`/`Build` için birim test + `Catalog()` sıralaması
+   bozulmadığını doğrulayan bir satır (bkz. `kind_test.go`
+   `TestCatalogDerivedFromKinds`'daki `wantOrder` listesini güncelle).
 
 ---
 
