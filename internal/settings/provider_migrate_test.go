@@ -45,15 +45,17 @@ func TestMigrateFromSettings_FullyPopulated(t *testing.T) {
 	instances := MigrateFromSettings(s, decrypt)
 
 	wantIDs := map[string]string{ // id -> kindId
-		"anthropic":  "anthropic",
-		"claude-cli": "claude-cli",
-		"codex-cli":  "codex-cli",
-		"minimax":    "minimax",
-		"openrouter": "openrouter",
-		"zai":        "zai",
-		"deepseek":   "deepseek",
-		"my-openai":  "openai-compat",
-		"my-claude":  "anthropic-compat",
+		"anthropic":          "anthropic",
+		"claude-cli":         "claude-cli",
+		"codex-cli":          "codex-cli",
+		"minimax":            "minimax",
+		"minimax-anthropic":  "minimax-anthropic",
+		"openrouter":         "openrouter",
+		"zai":                "zai",
+		"deepseek":           "deepseek",
+		"deepseek-anthropic": "deepseek-anthropic",
+		"my-openai":          "openai-compat",
+		"my-claude":          "anthropic-compat",
 	}
 	if len(instances) != len(wantIDs) {
 		t.Fatalf("expected %d instances, got %d: %+v", len(wantIDs), len(instances), instances)
@@ -89,6 +91,19 @@ func TestMigrateFromSettings_FullyPopulated(t *testing.T) {
 	minimax, _ := findInstance(instances, "minimax")
 	if minimax.Config["baseUrl"] != "https://minimax.example/v1" || minimax.SecretsEnc["key"] != "enc:minimax-key" {
 		t.Fatalf("minimax not migrated correctly: %+v", minimax)
+	}
+
+	// The Anthropic-mode variants share the base provider's key but NOT its base
+	// URL: the migrated baseUrl is the OpenAI-compatible endpoint, which the
+	// Anthropic transport cannot talk to. Empty means "use the kind's own default".
+	minimaxAnthropic, _ := findInstance(instances, "minimax-anthropic")
+	if minimaxAnthropic.SecretsEnc["key"] != "enc:minimax-key" || minimaxAnthropic.Config["baseUrl"] != "" {
+		t.Fatalf("minimax-anthropic not migrated correctly: %+v", minimaxAnthropic)
+	}
+
+	deepseekAnthropic, _ := findInstance(instances, "deepseek-anthropic")
+	if deepseekAnthropic.SecretsEnc["key"] != "enc:deepseek-key" || deepseekAnthropic.Config["baseUrl"] != "" {
+		t.Fatalf("deepseek-anthropic not migrated correctly: %+v", deepseekAnthropic)
 	}
 
 	customOpenAI, _ := findInstance(instances, "my-openai")

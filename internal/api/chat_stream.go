@@ -297,7 +297,7 @@ func (s *Server) runChatTurn(clientGone context.Context, wsp *workspace.Workspac
 			if req.PermissionMode != "" {
 				agentRow.PermissionMode = req.PermissionMode
 			}
-			provider, perr := s.providers.Get(agentRow.Provider)
+			provider, perr := s.providers.Get(agentRow.ProviderRef())
 			if perr != nil {
 				s.failTurn(ctx, wsp, sse, session.ID, agentRow.ID, clientMsgID, "provider_unavailable", perr.Error())
 				return

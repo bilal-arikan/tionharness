@@ -22,6 +22,24 @@ func (a Agent) backfillProviderInstance() Agent {
 	return a
 }
 
+// ProviderRef is the provider INSTANCE id this agent must be resolved against
+// (Registry.Get/Available take an instance id, NOT a kind id — _Docs/71 §2.5,
+// K3). Every runtime call site uses this instead of Agent.Provider: the two are
+// identical for a migrated default instance (id == kind id), but an agent bound
+// to a second instance of the same kind (e.g. a second Anthropic account, or a
+// separately-authenticated Claude CLI home) would otherwise silently resolve to
+// the DEFAULT instance of its kind and run on the wrong credentials/config home.
+//
+// The Provider fallback covers an Agent value built in memory (tests, imports)
+// that never passed through backfillProviderInstance; an unknown instance id
+// still errors at Registry.Get rather than falling back to a default.
+func (a Agent) ProviderRef() string {
+	if a.ProviderInstanceID != "" {
+		return a.ProviderInstanceID
+	}
+	return a.Provider
+}
+
 // Agent is an autonomous AI entity bound to a provider/model.
 type Agent struct {
 	ID       string `json:"id"`

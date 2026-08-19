@@ -150,7 +150,7 @@ func (r *Runtime) ResumeAsk(ctx context.Context, askID, answer string, onStep fu
 	if err != nil {
 		return nil, nil, fmt.Errorf("resume ask: agent gone: %w", err)
 	}
-	provider, err := r.providers.Get(agentRow.Provider)
+	provider, err := r.providers.Get(agentRow.ProviderRef())
 	if err != nil {
 		return nil, nil, err
 	}
@@ -170,7 +170,7 @@ func (r *Runtime) ResumeAskAndRecord(ctx context.Context, ask db.SessionAsk, ans
 	if err != nil {
 		return nil, nil, fmt.Errorf("resume ask: agent gone: %w", err)
 	}
-	provider, err := r.providers.Get(agentRow.Provider)
+	provider, err := r.providers.Get(agentRow.ProviderRef())
 	if err != nil {
 		return nil, nil, err
 	}

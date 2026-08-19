@@ -67,7 +67,7 @@ func (s *Server) handleChatBtw(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	provider, err := s.providers.Get(agentRow.Provider)
+	provider, err := s.providers.Get(agentRow.ProviderRef())
 	if err != nil {
 		writeError(w, http.StatusServiceUnavailable, err.Error())
 		return

@@ -41,7 +41,7 @@ func renderFlowTranscript(flowName string, fr db.FlowRun, setupErr error) string
 // persist a rich chat turn rather than a bare text reply. Used by the scheduler
 // so scheduled runs render like normal chat turns in the agent's schedule session.
 func (r *Runtime) invokeTraced(ctx context.Context, agent db.Agent, prompt string, autonomous bool) (string, []TurnStep, error) {
-	provider, err := r.providers.Get(agent.Provider)
+	provider, err := r.providers.Get(agent.ProviderRef())
 	if err != nil {
 		return "", nil, err
 	}
@@ -75,7 +75,7 @@ func (r *Runtime) invokeTraced(ctx context.Context, agent db.Agent, prompt strin
 // agentic tool loop when the agent has tools enabled. Used by the orchestration
 // flow runner (flow.go).
 func (r *Runtime) complete(ctx context.Context, agent db.Agent, system, systemDynamic, prompt, outputSchema string, autonomous bool) (string, error) {
-	provider, err := r.providers.Get(agent.Provider)
+	provider, err := r.providers.Get(agent.ProviderRef())
 	if err != nil {
 		return "", err
 	}
@@ -108,7 +108,7 @@ func (r *Runtime) complete(ctx context.Context, agent db.Agent, system, systemDy
 // prompt cache across sequential nodes. The provider already takes a message
 // slice, so this only widens the slice — no provider-side change.
 func (r *Runtime) completeThread(ctx context.Context, agent db.Agent, system, systemDynamic string, thread []orchestration.Msg, prompt, outputSchema string, autonomous bool) (string, error) {
-	provider, err := r.providers.Get(agent.Provider)
+	provider, err := r.providers.Get(agent.ProviderRef())
 	if err != nil {
 		return "", err
 	}

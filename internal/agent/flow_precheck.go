@@ -92,7 +92,7 @@ func (r *Runtime) checkFlowAgent(ctx context.Context, agentID string) error {
 	// unconfigured (missing API key) since the flow was authored. Registry.Get
 	// covers both — this is exactly the failure the engine would otherwise hit on
 	// the node's first completion call.
-	if _, err := r.providers.Get(agent.Provider); err != nil {
+	if _, err := r.providers.Get(agent.ProviderRef()); err != nil {
 		return fmt.Errorf("agent %q (%s) cannot run: %w", agent.Name, agentID, err)
 	}
 	return nil

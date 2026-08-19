@@ -430,7 +430,7 @@ func (s *Server) handleSessionContextPreview(w http.ResponseWriter, r *http.Requ
 	// HTTP call, no generation; skipped silently on providers without support.
 	accurateTok := 0
 	if ok, _ := strconv.ParseBool(r.URL.Query().Get("accurate")); ok {
-		if p, perr := s.providers.Get(agent.Provider); perr == nil {
+		if p, perr := s.providers.Get(agent.ProviderRef()); perr == nil {
 			if tc, isTC := p.(providers.TokenCounter); isTC {
 				countReq := req
 				countReq.Tools = defs

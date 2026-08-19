@@ -84,7 +84,7 @@ func (r *Runtime) HandoffSession(ctx context.Context, session db.Session, agent 
 		}
 	}
 
-	provider, err := r.providers.Get(agent.Provider)
+	provider, err := r.providers.Get(agent.ProviderRef())
 	if err != nil {
 		return HandoffResult{}, err
 	}

@@ -306,7 +306,7 @@ func (s *Server) compactSession(ctx context.Context, wsp *workspace.Workspace, s
 	if err != nil {
 		return "", err
 	}
-	provider, err := s.providers.Get(agentRow.Provider)
+	provider, err := s.providers.Get(agentRow.ProviderRef())
 	if err != nil {
 		return "", err
 	}

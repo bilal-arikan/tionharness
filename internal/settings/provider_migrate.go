@@ -79,6 +79,37 @@ func MigrateFromSettings(s Settings, decrypt func(enc string) string) []Provider
 		})
 	}
 
+	// The "-anthropic" kinds are separate provider kinds an agent could already be
+	// bound to (Agent.Provider == "minimax-anthropic"), but they never had their own
+	// legacy settings key — they reuse the base provider's credential. Migrating only
+	// the base kind therefore left every agent on the Anthropic-mode variant pointing
+	// at an instance that does not exist ("unknown provider instance"), which is a
+	// hard error at Registry.Get, i.e. a dead agent. Both variants migrate whenever
+	// the shared key is present, on the same id == kind id invariant as the rest.
+	if s.MinimaxKeyEnc != "" {
+		out = append(out, ProviderInstance{
+			ID:         "minimax-anthropic",
+			KindID:     "minimax-anthropic",
+			Label:      "MiniMax (Anthropic modu)",
+			Enabled:    true,
+			Config:     map[string]string{"baseUrl": ""},
+			SecretsEnc: map[string]string{"key": s.MinimaxKeyEnc},
+			CreatedAt:  now,
+		})
+	}
+
+	if s.DeepSeekKeyEnc != "" {
+		out = append(out, ProviderInstance{
+			ID:         "deepseek-anthropic",
+			KindID:     "deepseek-anthropic",
+			Label:      "DeepSeek (Anthropic modu)",
+			Enabled:    true,
+			Config:     map[string]string{"baseUrl": ""},
+			SecretsEnc: map[string]string{"key": s.DeepSeekKeyEnc},
+			CreatedAt:  now,
+		})
+	}
+
 	if s.OpenRouterKeyEnc != "" {
 		out = append(out, ProviderInstance{
 			ID:         "openrouter",

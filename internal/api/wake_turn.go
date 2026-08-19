@@ -30,7 +30,7 @@ func (s *Server) wakeTurnRunner(rt *agent.Runtime) agent.WakeTurnFunc {
 		if err != nil {
 			return "", nil, fmt.Errorf("wake turn: session lookup: %w", err)
 		}
-		provider, err := s.providers.Get(ag.Provider)
+		provider, err := s.providers.Get(ag.ProviderRef())
 		if err != nil {
 			return "", nil, fmt.Errorf("wake turn: provider: %w", err)
 		}

@@ -114,7 +114,7 @@ func (r *Runtime) guardedComplete(ctx context.Context, agent db.Agent, req provi
 			return nil, ErrAutonomyPaused
 		}
 	}
-	provider, err := r.providers.Get(agent.Provider)
+	provider, err := r.providers.Get(agent.ProviderRef())
 	if err != nil {
 		r.logger.Warn("provider resolve failed",
 			"agent", agent.ID, "provider", agent.Provider,
@@ -143,14 +143,15 @@ func (r *Runtime) guardedComplete(ctx context.Context, agent db.Agent, req provi
 	return resp, nil
 }
 
-// PinClaudeHome pins THIS workspace's claude-cli config home on a claude-cli
+// PinClaudeHome pins the app-global claude-cli config home on a claude-cli
 // provider before a Complete call, so the CLI reads skills/settings/login from
-// <workspace>/claude-home instead of the global default. guardedComplete applies
-// this for in-loop and autonomous aux calls; out-of-loop session commands that
-// call provider.Complete directly (manual /compact, /handoff) must call it
-// themselves, or they fall back to the global claude-home — which may not be
-// logged in even though the workspace is (authentication_failed). No-op for
-// non-claude-cli providers.
+// <dataDir>/claude-home instead of the ambient ~/.claude. An instance that
+// carries its own configDir (K1) already owns a home and is left untouched —
+// hence the ConfigDir()=="" guard. guardedComplete applies this for in-loop and
+// autonomous aux calls; out-of-loop session commands that call provider.Complete
+// directly (manual /compact, /handoff) must call it themselves, or they fall back
+// to the ambient ~/.claude — which may not be logged in even though TionSwarm's
+// own home is (authentication_failed). No-op for non-claude-cli providers.
 //
 // The claude-cli concrete type is asserted deliberately: claudeHomeDir() is the
 // CLAUDE_CONFIG_DIR home specifically, so handing it to another CLI transport
