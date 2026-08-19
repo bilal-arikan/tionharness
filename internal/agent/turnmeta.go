@@ -71,11 +71,13 @@ func (m *turnMeta) apply(msg *db.Message, durMs int64) {
 // assistant bubble matches what RecordUsage summed into the daily/session rollups.
 func sumUsage(a, b providers.Usage) providers.Usage {
 	return providers.Usage{
-		InputTokens:      a.InputTokens + b.InputTokens,
-		OutputTokens:     a.OutputTokens + b.OutputTokens,
-		CacheReadTokens:  a.CacheReadTokens + b.CacheReadTokens,
-		CacheWriteTokens: a.CacheWriteTokens + b.CacheWriteTokens,
-		ThinkingTokens:   a.ThinkingTokens + b.ThinkingTokens,
+		InputTokens:        a.InputTokens + b.InputTokens,
+		OutputTokens:       a.OutputTokens + b.OutputTokens,
+		CacheReadTokens:    a.CacheReadTokens + b.CacheReadTokens,
+		CacheWriteTokens:   a.CacheWriteTokens + b.CacheWriteTokens,
+		CacheWrite5mTokens: a.CacheWrite5mTokens + b.CacheWrite5mTokens,
+		CacheWrite1hTokens: a.CacheWrite1hTokens + b.CacheWrite1hTokens,
+		ThinkingTokens:     a.ThinkingTokens + b.ThinkingTokens,
 	}
 }
 
@@ -83,13 +85,16 @@ func sumUsage(a, b providers.Usage) providers.Usage {
 // nil when the turn reported no tokens (so a non-LLM turn carries no usage object).
 // The agent-package twin of api.messageUsage.
 func usageMsg(u providers.Usage) *db.MessageUsage {
-	if u.InputTokens == 0 && u.OutputTokens == 0 && u.CacheReadTokens == 0 && u.CacheWriteTokens == 0 {
+	if u.InputTokens == 0 && u.OutputTokens == 0 && u.CacheReadTokens == 0 && u.CacheWriteTokens == 0 &&
+		u.CacheWrite5mTokens == 0 && u.CacheWrite1hTokens == 0 {
 		return nil
 	}
 	return &db.MessageUsage{
-		InputTokens:      u.InputTokens,
-		OutputTokens:     u.OutputTokens,
-		CacheReadTokens:  u.CacheReadTokens,
-		CacheWriteTokens: u.CacheWriteTokens,
+		InputTokens:        u.InputTokens,
+		OutputTokens:       u.OutputTokens,
+		CacheReadTokens:    u.CacheReadTokens,
+		CacheWriteTokens:   u.CacheWriteTokens,
+		CacheWrite5mTokens: u.CacheWrite5mTokens,
+		CacheWrite1hTokens: u.CacheWrite1hTokens,
 	}
 }

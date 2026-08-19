@@ -20,7 +20,7 @@ func TestSessionUsage(t *testing.T) {
 	const sid = "SES1"
 	const agent = "AGT1"
 
-	if err := d.AddSessionUsageKind(ctx, sid, agent, UsageKindChat, "anthropic", "claude-opus-4-8", UsageDelta{Calls: 1, InputTokens: 100, OutputTokens: 30}); err != nil {
+	if err := d.AddSessionUsageKind(ctx, sid, agent, UsageKindChat, "anthropic", "claude-opus-4-8", UsageDelta{Calls: 1, InputTokens: 100, OutputTokens: 30, CacheWriteTokens: 120, CacheWrite5mTokens: 20, CacheWrite1hTokens: 100}); err != nil {
 		t.Fatal(err)
 	}
 	if err := d.AddSessionUsageKind(ctx, sid, agent, UsageKindCompact, "anthropic", "claude-haiku-4-5", UsageDelta{Calls: 1, InputTokens: 200, OutputTokens: 10, CacheReadTokens: 500}); err != nil {
@@ -41,6 +41,9 @@ func TestSessionUsage(t *testing.T) {
 	if u.AgentID != agent {
 		t.Errorf("agentID=%q, want %q", u.AgentID, agent)
 	}
+	if u.CacheWriteTokens != 120 || u.CacheWrite5mTokens != 20 || u.CacheWrite1hTokens != 100 {
+		t.Fatalf("cache write totals=%d/%d/%d, want 120/20/100", u.CacheWriteTokens, u.CacheWrite5mTokens, u.CacheWrite1hTokens)
+	}
 	if c := u.ByKind[UsageKindChat]; c.Calls != 1 || c.InputTokens != 100 {
 		t.Errorf("chat bucket=%+v, want 1/100/30", c)
 	}
@@ -57,7 +60,7 @@ func TestSessionUsage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if u2.Calls != 2 {
+	if u2.Calls != 2 || u2.CacheWrite5mTokens != 20 || u2.CacheWrite1hTokens != 100 {
 		t.Fatalf("after reload: %+v", u2)
 	}
 }
@@ -101,4 +104,3 @@ func TestSessionUsageProviderCalls(t *testing.T) {
 		t.Fatalf("per-call=%d, want %d", perCall, (210+90000+30000)/4)
 	}
 }
-

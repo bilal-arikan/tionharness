@@ -528,10 +528,12 @@ func SessionParticipants(s Session) []string {
 // message so the transcript carries its own per-turn cost (compact keys to keep
 // the JSONL line small). Mirrors providers.Usage but kept dependency-free here.
 type MessageUsage struct {
-	InputTokens      int `json:"in"`
-	OutputTokens     int `json:"out"`
-	CacheReadTokens  int `json:"cacheRead,omitempty"`
-	CacheWriteTokens int `json:"cacheWrite,omitempty"`
+	InputTokens        int `json:"in"`
+	OutputTokens       int `json:"out"`
+	CacheReadTokens    int `json:"cacheRead,omitempty"`
+	CacheWriteTokens   int `json:"cacheWrite,omitempty"`
+	CacheWrite5mTokens int `json:"cacheWrite5m,omitempty"`
+	CacheWrite1hTokens int `json:"cacheWrite1h,omitempty"`
 }
 
 // MessageFeedback is the user's rating of an assistant turn. Rating is +1 (up),

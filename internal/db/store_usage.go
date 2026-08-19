@@ -32,21 +32,25 @@ const (
 // Cache counters are tracked separately from InputTokens so cost can apply the
 // cheaper cache-read / pricier cache-write tiers.
 type KindStat struct {
-	Calls            int `json:"calls"`
-	InputTokens      int `json:"inputTokens"`
-	OutputTokens     int `json:"outputTokens"`
-	CacheReadTokens  int `json:"cacheReadTokens,omitempty"`
-	CacheWriteTokens int `json:"cacheWriteTokens,omitempty"`
+	Calls              int `json:"calls"`
+	InputTokens        int `json:"inputTokens"`
+	OutputTokens       int `json:"outputTokens"`
+	CacheReadTokens    int `json:"cacheReadTokens,omitempty"`
+	CacheWriteTokens   int `json:"cacheWriteTokens,omitempty"`
+	CacheWrite5mTokens int `json:"cacheWrite5mTokens,omitempty"`
+	CacheWrite1hTokens int `json:"cacheWrite1hTokens,omitempty"`
 }
 
 // UsageDelta is one call's consumption, recorded via AddUsageKind. Bundling the
 // counters keeps the recording signature stable as new token classes are added.
 type UsageDelta struct {
-	Calls            int
-	InputTokens      int
-	OutputTokens     int
-	CacheReadTokens  int
-	CacheWriteTokens int
+	Calls              int
+	InputTokens        int
+	OutputTokens       int
+	CacheReadTokens    int
+	CacheWriteTokens   int
+	CacheWrite5mTokens int
+	CacheWrite1hTokens int
 	// ProviderCalls is how many underlying model API round-trips this recorded call
 	// represents. 0 means "unknown" → folded as Calls (one round-trip). For claude-cli
 	// it is the CLI's internal tool-loop turn count (result num_turns), so the rollup
@@ -60,11 +64,13 @@ type UsageDelta struct {
 // are added. calls is normally 1.
 func DeltaFromUsage(calls int, u providers.Usage) UsageDelta {
 	return UsageDelta{
-		Calls:            calls,
-		InputTokens:      u.InputTokens,
-		OutputTokens:     u.OutputTokens,
-		CacheReadTokens:  u.CacheReadTokens,
-		CacheWriteTokens: u.CacheWriteTokens,
+		Calls:              calls,
+		InputTokens:        u.InputTokens,
+		OutputTokens:       u.OutputTokens,
+		CacheReadTokens:    u.CacheReadTokens,
+		CacheWriteTokens:   u.CacheWriteTokens,
+		CacheWrite5mTokens: u.CacheWrite5mTokens,
+		CacheWrite1hTokens: u.CacheWrite1hTokens,
 	}
 }
 
@@ -86,6 +92,8 @@ func (k *KindStat) add(d UsageDelta) {
 	k.OutputTokens += d.OutputTokens
 	k.CacheReadTokens += d.CacheReadTokens
 	k.CacheWriteTokens += d.CacheWriteTokens
+	k.CacheWrite5mTokens += d.CacheWrite5mTokens
+	k.CacheWrite1hTokens += d.CacheWrite1hTokens
 }
 
 // Usage is a per-day rollup of an agent's LLM consumption. The top-level
@@ -95,13 +103,15 @@ func (k *KindStat) add(d UsageDelta) {
 // what it would cost. ByModel is keyed by "<provider>|<model>" (model may be
 // empty, e.g. claude-cli's session default).
 type Usage struct {
-	AgentID          string `json:"agentId"`
-	Day              string `json:"day"`
-	Calls            int    `json:"calls"`
-	InputTokens      int    `json:"inputTokens"`
-	OutputTokens     int    `json:"outputTokens"`
-	CacheReadTokens  int    `json:"cacheReadTokens,omitempty"`
-	CacheWriteTokens int    `json:"cacheWriteTokens,omitempty"`
+	AgentID            string `json:"agentId"`
+	Day                string `json:"day"`
+	Calls              int    `json:"calls"`
+	InputTokens        int    `json:"inputTokens"`
+	OutputTokens       int    `json:"outputTokens"`
+	CacheReadTokens    int    `json:"cacheReadTokens,omitempty"`
+	CacheWriteTokens   int    `json:"cacheWriteTokens,omitempty"`
+	CacheWrite5mTokens int    `json:"cacheWrite5mTokens,omitempty"`
+	CacheWrite1hTokens int    `json:"cacheWrite1hTokens,omitempty"`
 	// ProviderCalls is the cumulative number of underlying model API round-trips
 	// behind Calls (for claude-cli a single TionSwarm turn is several internal calls,
 	// reported via result num_turns). Lets a consumer divide the cumulative token
@@ -181,6 +191,8 @@ func (d *DB) AddUsageKind(ctx context.Context, agentID, kind, provider, model st
 	u.OutputTokens += delta.OutputTokens
 	u.CacheReadTokens += delta.CacheReadTokens
 	u.CacheWriteTokens += delta.CacheWriteTokens
+	u.CacheWrite5mTokens += delta.CacheWrite5mTokens
+	u.CacheWrite1hTokens += delta.CacheWrite1hTokens
 	u.ProviderCalls += providerCallsOf(delta)
 	if u.ByKind == nil {
 		u.ByKind = map[string]KindStat{}

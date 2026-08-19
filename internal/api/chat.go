@@ -67,14 +67,17 @@ func (rec *inflightRecorder) interruptedTrace(detail, reason string) []agent.Tur
 // on the assistant turn, returning nil when the turn reported no tokens (so an
 // empty/non-LLM turn doesn't carry a zero usage object).
 func messageUsage(u providers.Usage) *db.MessageUsage {
-	if u.InputTokens == 0 && u.OutputTokens == 0 && u.CacheReadTokens == 0 && u.CacheWriteTokens == 0 {
+	if u.InputTokens == 0 && u.OutputTokens == 0 && u.CacheReadTokens == 0 && u.CacheWriteTokens == 0 &&
+		u.CacheWrite5mTokens == 0 && u.CacheWrite1hTokens == 0 {
 		return nil
 	}
 	return &db.MessageUsage{
-		InputTokens:      u.InputTokens,
-		OutputTokens:     u.OutputTokens,
-		CacheReadTokens:  u.CacheReadTokens,
-		CacheWriteTokens: u.CacheWriteTokens,
+		InputTokens:        u.InputTokens,
+		OutputTokens:       u.OutputTokens,
+		CacheReadTokens:    u.CacheReadTokens,
+		CacheWriteTokens:   u.CacheWriteTokens,
+		CacheWrite5mTokens: u.CacheWrite5mTokens,
+		CacheWrite1hTokens: u.CacheWrite1hTokens,
 	}
 }
 

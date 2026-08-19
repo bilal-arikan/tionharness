@@ -505,6 +505,10 @@ type anthropicResp struct {
 		OutputTokens             int `json:"output_tokens"`
 		CacheCreationInputTokens int `json:"cache_creation_input_tokens"`
 		CacheReadInputTokens     int `json:"cache_read_input_tokens"`
+		CacheCreation            struct {
+			Ephemeral5mInputTokens int `json:"ephemeral_5m_input_tokens"`
+			Ephemeral1hInputTokens int `json:"ephemeral_1h_input_tokens"`
+		} `json:"cache_creation"`
 	} `json:"usage"`
 	Error *struct {
 		Type    string `json:"type"`
@@ -671,10 +675,12 @@ func (a *Anthropic) Complete(ctx context.Context, req Request) (*Response, error
 		Model:       parsed.Model,
 		Trace:       trace,
 		Usage: Usage{
-			InputTokens:      parsed.Usage.InputTokens,
-			OutputTokens:     parsed.Usage.OutputTokens,
-			CacheWriteTokens: parsed.Usage.CacheCreationInputTokens,
-			CacheReadTokens:  parsed.Usage.CacheReadInputTokens,
+			InputTokens:        parsed.Usage.InputTokens,
+			OutputTokens:       parsed.Usage.OutputTokens,
+			CacheWriteTokens:   parsed.Usage.CacheCreationInputTokens,
+			CacheWrite5mTokens: parsed.Usage.CacheCreation.Ephemeral5mInputTokens,
+			CacheWrite1hTokens: parsed.Usage.CacheCreation.Ephemeral1hInputTokens,
+			CacheReadTokens:    parsed.Usage.CacheReadInputTokens,
 		},
 	}, nil
 }
@@ -786,14 +792,22 @@ func (a *Anthropic) Stream(ctx context.Context, req Request, onDelta func(Stream
 						InputTokens              int `json:"input_tokens"`
 						CacheCreationInputTokens int `json:"cache_creation_input_tokens"`
 						CacheReadInputTokens     int `json:"cache_read_input_tokens"`
+						CacheCreation            struct {
+							Ephemeral5mInputTokens int `json:"ephemeral_5m_input_tokens"`
+							Ephemeral1hInputTokens int `json:"ephemeral_1h_input_tokens"`
+						} `json:"cache_creation"`
 					} `json:"usage"`
 				} `json:"message"`
 			}
-			if json.Unmarshal(data, &ev) == nil {
-				out.Usage.InputTokens = ev.Message.Usage.InputTokens
-				out.Usage.CacheWriteTokens = ev.Message.Usage.CacheCreationInputTokens
-				out.Usage.CacheReadTokens = ev.Message.Usage.CacheReadInputTokens
+			if unmarshalErr := json.Unmarshal(data, &ev); unmarshalErr != nil {
+				parseErr = fmt.Errorf("anthropic message_start: %w", unmarshalErr)
+				return false
 			}
+			out.Usage.InputTokens = ev.Message.Usage.InputTokens
+			out.Usage.CacheWriteTokens = ev.Message.Usage.CacheCreationInputTokens
+			out.Usage.CacheWrite5mTokens = ev.Message.Usage.CacheCreation.Ephemeral5mInputTokens
+			out.Usage.CacheWrite1hTokens = ev.Message.Usage.CacheCreation.Ephemeral1hInputTokens
+			out.Usage.CacheReadTokens = ev.Message.Usage.CacheReadInputTokens
 		case "content_block_delta":
 			var ev struct {
 				Delta struct {

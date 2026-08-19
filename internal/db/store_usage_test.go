@@ -17,7 +17,7 @@ func TestAddUsageKind_BreaksDownByOrigin(t *testing.T) {
 	}
 	const agent = "agent-1"
 
-	if err := d.AddUsageKind(ctx, agent, UsageKindChat, "anthropic", "claude-opus-4-8", UsageDelta{Calls: 1, InputTokens: 100, OutputTokens: 30}); err != nil {
+	if err := d.AddUsageKind(ctx, agent, UsageKindChat, "anthropic", "claude-opus-4-8", UsageDelta{Calls: 1, InputTokens: 100, OutputTokens: 30, CacheWriteTokens: 120, CacheWrite5mTokens: 20, CacheWrite1hTokens: 100}); err != nil {
 		t.Fatal(err)
 	}
 	if err := d.AddUsageKind(ctx, agent, UsageKindCompact, "anthropic", "claude-haiku-4-5-20251001", UsageDelta{Calls: 1, InputTokens: 200, OutputTokens: 10}); err != nil {
@@ -38,6 +38,12 @@ func TestAddUsageKind_BreaksDownByOrigin(t *testing.T) {
 	// Grand totals = sum of every call.
 	if u.Calls != 4 || u.InputTokens != 355 || u.OutputTokens != 65 {
 		t.Fatalf("totals: calls=%d in=%d out=%d, want 4/355/65", u.Calls, u.InputTokens, u.OutputTokens)
+	}
+	if u.CacheWriteTokens != 120 || u.CacheWrite5mTokens != 20 || u.CacheWrite1hTokens != 100 {
+		t.Fatalf("cache write totals=%d/%d/%d, want 120/20/100", u.CacheWriteTokens, u.CacheWrite5mTokens, u.CacheWrite1hTokens)
+	}
+	if m := u.ByModel[ModelKey("anthropic", "claude-opus-4-8")]; m.CacheWrite5mTokens != 20 || m.CacheWrite1hTokens != 100 {
+		t.Fatalf("cache write model breakdown lost: %+v", m)
 	}
 	// Chat bucket aggregates its two calls.
 	if c := u.ByKind[UsageKindChat]; c.Calls != 2 || c.InputTokens != 150 || c.OutputTokens != 50 {
@@ -69,4 +75,3 @@ func TestAddUsageKind_BreaksDownByOrigin(t *testing.T) {
 		t.Errorf("sum of per-kind input=%d != total input=%d", sum, u.InputTokens)
 	}
 }
-

@@ -237,6 +237,11 @@ type Usage struct {
 	OutputTokens     int `json:"outputTokens"`
 	CacheReadTokens  int `json:"cacheReadTokens,omitempty"`  // prompt tokens served from cache (cheap)
 	CacheWriteTokens int `json:"cacheWriteTokens,omitempty"` // prompt tokens written to cache (premium)
+	// CacheWrite5mTokens and CacheWrite1hTokens are a BREAKDOWN of
+	// CacheWriteTokens, not additional usage. Billing must NOT add them again.
+	// Providers that do not report this breakdown leave both fields at 0.
+	CacheWrite5mTokens int `json:"cacheWrite5mTokens,omitempty"`
+	CacheWrite1hTokens int `json:"cacheWrite1hTokens,omitempty"`
 	// ThinkingTokens is the ESTIMATED share of OutputTokens spent on hidden
 	// extended reasoning. The API bills thinking inside OutputTokens without
 	// breaking it out, so this is derived (output − visible) in the agent layer

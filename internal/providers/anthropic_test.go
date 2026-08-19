@@ -1,10 +1,78 @@
 package providers
 
 import (
+	"context"
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 )
+
+func TestCompleteParsesCacheCreationTTLBreakdown(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{
+			"content":[{"type":"text","text":"ok"}],
+			"stop_reason":"end_turn",
+			"model":"claude-sonnet-4-6",
+			"usage":{
+				"input_tokens":17,
+				"output_tokens":3,
+				"cache_creation_input_tokens":123,
+				"cache_read_input_tokens":456,
+				"cache_creation":{
+					"ephemeral_5m_input_tokens":23,
+					"ephemeral_1h_input_tokens":100
+				}
+			}
+		}`))
+	}))
+	defer srv.Close()
+
+	a := NewAnthropic("test-key")
+	a.baseURL = srv.URL
+	resp, err := a.Complete(context.Background(), Request{
+		Messages: []Message{{Role: RoleUser, Text: "hello"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.Usage.CacheWrite5mTokens != 23 || resp.Usage.CacheWrite1hTokens != 100 {
+		t.Fatalf("cache creation breakdown = (%d, %d), want (23, 100)", resp.Usage.CacheWrite5mTokens, resp.Usage.CacheWrite1hTokens)
+	}
+	if resp.Usage.CacheWriteTokens != 123 {
+		t.Fatalf("CacheWriteTokens = %d, want unchanged aggregate 123", resp.Usage.CacheWriteTokens)
+	}
+}
+
+func TestStreamParsesCacheCreationTTLBreakdown(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = w.Write([]byte("event: message_start\n" +
+			`data: {"message":{"usage":{"input_tokens":17,"cache_creation_input_tokens":123,"cache_read_input_tokens":456,"cache_creation":{"ephemeral_5m_input_tokens":23,"ephemeral_1h_input_tokens":100}}}}` + "\n\n" +
+			"event: message_delta\n" +
+			`data: {"delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":3}}` + "\n\n" +
+			"event: message_stop\n" +
+			"data: {}\n\n"))
+	}))
+	defer srv.Close()
+
+	a := NewAnthropic("test-key")
+	a.baseURL = srv.URL
+	resp, err := a.Stream(context.Background(), Request{
+		Messages: []Message{{Role: RoleUser, Text: "hello"}},
+	}, func(StreamDelta) {})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.Usage.CacheWrite5mTokens != 23 || resp.Usage.CacheWrite1hTokens != 100 {
+		t.Fatalf("cache creation breakdown = (%d, %d), want (23, 100)", resp.Usage.CacheWrite5mTokens, resp.Usage.CacheWrite1hTokens)
+	}
+	if resp.Usage.CacheWriteTokens != 123 {
+		t.Fatalf("CacheWriteTokens = %d, want unchanged aggregate 123", resp.Usage.CacheWriteTokens)
+	}
+}
 
 // asBlocks marshals a systemField result back to []systemBlock for assertions.
 func asBlocks(t *testing.T, v any) []systemBlock {

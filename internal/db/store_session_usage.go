@@ -12,13 +12,15 @@ import (
 // single-agent). ByKind breaks the total down by call origin and ByModel by the
 // provider+model that served the call (for cost, including cache tiers).
 type SessionUsage struct {
-	SessionID        string `json:"sessionId"`
-	AgentID          string `json:"agentId"`
-	Calls            int    `json:"calls"`
-	InputTokens      int    `json:"inputTokens"`
-	OutputTokens     int    `json:"outputTokens"`
-	CacheReadTokens  int    `json:"cacheReadTokens,omitempty"`
-	CacheWriteTokens int    `json:"cacheWriteTokens,omitempty"`
+	SessionID          string `json:"sessionId"`
+	AgentID            string `json:"agentId"`
+	Calls              int    `json:"calls"`
+	InputTokens        int    `json:"inputTokens"`
+	OutputTokens       int    `json:"outputTokens"`
+	CacheReadTokens    int    `json:"cacheReadTokens,omitempty"`
+	CacheWriteTokens   int    `json:"cacheWriteTokens,omitempty"`
+	CacheWrite5mTokens int    `json:"cacheWrite5mTokens,omitempty"`
+	CacheWrite1hTokens int    `json:"cacheWrite1hTokens,omitempty"`
 	// ProviderCalls is the cumulative number of underlying model API round-trips
 	// behind Calls over this session's life (for claude-cli one TionSwarm turn is
 	// several internal calls — result num_turns). The CLI-overhead preview divides
@@ -81,6 +83,8 @@ func (d *DB) AddSessionUsageKind(ctx context.Context, sessionID, agentID, kind, 
 	u.OutputTokens += delta.OutputTokens
 	u.CacheReadTokens += delta.CacheReadTokens
 	u.CacheWriteTokens += delta.CacheWriteTokens
+	u.CacheWrite5mTokens += delta.CacheWrite5mTokens
+	u.CacheWrite1hTokens += delta.CacheWrite1hTokens
 	u.ProviderCalls += providerCallsOf(delta)
 	if u.ByKind == nil {
 		u.ByKind = map[string]KindStat{}
