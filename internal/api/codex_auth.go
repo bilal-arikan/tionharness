@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/bilal-arikan/tionswarm/internal/codexauth"
+	"github.com/bilal-arikan/tionswarm/internal/providers"
 )
 
 // codexAuthManager tracks in-flight device-auth flows across all workspaces,
@@ -34,10 +35,11 @@ type codexAuthDTO struct {
 }
 
 // handleWorkspaceCodexAuth reports whether this workspace's codex-home is
-// logged in. Unlike the claude probe this is a cheap filesystem check
-// (auth.json presence) rather than spawning the CLI, since codex has no
-// equivalent to claude's `-p` pre-flight and codexSubscriptionTier already
-// established that presence-only is the honest signal available here.
+// logged in. Two stages, cheapest first: the on-disk credential check rejects
+// an empty/absent auth.json without spawning anything, then a live probe turn
+// proves the credential actually works. The disk check alone reported "logged
+// in" for a codex-home whose token was expired or revoked — every real turn
+// then failed with 401, so presence is treated as necessary, not sufficient.
 func (s *Server) handleWorkspaceCodexAuth(w http.ResponseWriter, r *http.Request) {
 	home := codexHomeDirFor(r)
 	binPath := s.providers.CodexCLIPath()
@@ -50,6 +52,28 @@ func (s *Server) handleWorkspaceCodexAuth(w http.ResponseWriter, r *http.Request
 	if codexSubscriptionTier(home) == "" {
 		writeJSON(w, http.StatusOK, codexAuthDTO{Installed: true, CodexHomeDir: home,
 			Detail: "not logged in"})
+		return
+	}
+	p, err := s.providers.Get("codex-cli")
+	if err != nil {
+		writeJSON(w, http.StatusOK, codexAuthDTO{Installed: true, CodexHomeDir: home, Detail: err.Error()})
+		return
+	}
+	cli, ok := providers.AsCLI(p)
+	if !ok {
+		writeError(w, http.StatusInternalServerError, "codex-cli provider unavailable")
+		return
+	}
+	prober, ok := cli.(providers.AuthProber)
+	if !ok {
+		writeError(w, http.StatusInternalServerError, "codex-cli provider cannot probe authentication")
+		return
+	}
+	cli.SetConfigDir(home)
+	ctx, cancel := context.WithTimeout(r.Context(), 60*time.Second)
+	defer cancel()
+	if perr := prober.ProbeAuth(ctx); perr != nil {
+		writeJSON(w, http.StatusOK, codexAuthDTO{Installed: true, CodexHomeDir: home, Detail: perr.Error()})
 		return
 	}
 	writeJSON(w, http.StatusOK, codexAuthDTO{LoggedIn: true, Installed: true, CodexHomeDir: home})

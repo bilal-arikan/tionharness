@@ -79,7 +79,13 @@ export function CodexAuthDialog({ isLoggedIn, onClose, onLoggedIn }: Props) {
     // issued after `await` has lost the user-gesture context and is blocked by
     // the popup blocker. The blank tab is redirected once the URL arrives (and
     // closed again if the request failed).
-    const tab = window.open('about:blank', '_blank', 'noopener,noreferrer')
+    //
+    // 'noopener' MUST NOT be passed here: with it the browser returns null
+    // instead of a window handle, leaving an un-navigable blank tab behind. The
+    // opener link is severed on the handle instead, which gives the same
+    // isolation while keeping the handle we need to navigate.
+    const tab = window.open('about:blank', '_blank')
+    if (tab) tab.opener = null
     try {
       const r = await api.startCodexDeviceAuth()
       setVerifyUrl(r.verifyUrl)

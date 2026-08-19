@@ -247,6 +247,20 @@ func (c *CodexCLI) Complete(ctx context.Context, req Request) (*Response, error)
 	return nil, lastErr
 }
 
+// ProbeAuth implements AuthProber for the codex-cli transport: the cheapest
+// real turn that still exercises the login path, so an expired or revoked
+// credential is reported instead of being hidden behind a present-but-dead
+// auth.json. The reply is discarded; only the error matters. A 401 is
+// classified mid-stream and kills the subprocess early, so this returns in
+// seconds rather than waiting out codex's ten internal retries.
+func (c *CodexCLI) ProbeAuth(ctx context.Context) error {
+	_, err := c.Complete(ctx, Request{
+		System:   "You are a connectivity probe. Reply with exactly: OK",
+		Messages: []Message{{Role: RoleUser, Text: "ping"}},
+	})
+	return err
+}
+
 // codexStartupTimeout bounds the time-to-first-output for a codex turn. A
 // subprocess that emits nothing within this window is treated as a hung MCP
 // startup and killed. It guards ONLY startup: once the first line arrives the

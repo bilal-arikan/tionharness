@@ -71,11 +71,32 @@ func codexCLIVersion(ctx context.Context, path string) string {
 // intentionally reads no field beyond "does the file exist and hold something".
 const codexAuthFile = "auth.json"
 
-// codexSubscriptionTier reports "chatgpt" when a codex-home holds a readable
-// auth.json, or "" when there is none or it cannot be read. Codex's auth.json
-// (unlike Claude Code's) does not expose a plan tier ("max"/"pro") in a stable
-// field, so this can only report login presence, not a plan name — callers must
-// not assume parity with claudeSubscriptionTier's richer output.
+// codexAuthProbe is the subset of codex's auth.json this package reads. Codex
+// owns the file's full shape; only the fields that decide "is there a usable
+// credential here" are named, and nothing beyond them is interpreted.
+type codexAuthProbe struct {
+	AuthMode string `json:"auth_mode"`
+	APIKey   string `json:"OPENAI_API_KEY"`
+	Tokens   struct {
+		AccessToken  string `json:"access_token"`
+		RefreshToken string `json:"refresh_token"`
+	} `json:"tokens"`
+}
+
+// codexSubscriptionTier reports the credential kind held in a codex-home
+// ("chatgpt" for a ChatGPT/Codex login, "apikey" for a stored API key), or ""
+// when there is no usable credential. Codex's auth.json (unlike Claude Code's)
+// does not expose a plan tier ("max"/"pro") in a stable field, so this can only
+// report login KIND, not a plan name — callers must not assume parity with
+// claudeSubscriptionTier's richer output.
+//
+// Presence of the file is deliberately NOT enough: codex writes/leaves an
+// auth.json whose credential fields are empty or null (e.g. an aborted login,
+// or an API-key logout that keeps the envelope), and treating that as a login
+// reported "✓ giriş yapılmış" for a codex-home that fails every turn with 401.
+// A credential is only claimed when actual token or key material is present.
+// This still cannot prove the credential is *valid* — an expired or revoked one
+// looks identical on disk; only a live turn can prove that.
 func codexSubscriptionTier(homeDir string) string {
 	if homeDir == "" {
 		return ""
@@ -84,9 +105,15 @@ func codexSubscriptionTier(homeDir string) string {
 	if err != nil || len(data) == 0 {
 		return ""
 	}
-	var probe map[string]any
-	if err := json.Unmarshal(data, &probe); err != nil || len(probe) == 0 {
+	var probe codexAuthProbe
+	if err := json.Unmarshal(data, &probe); err != nil {
 		return ""
 	}
-	return "chatgpt"
+	if strings.TrimSpace(probe.APIKey) != "" {
+		return "apikey"
+	}
+	if strings.TrimSpace(probe.Tokens.AccessToken) != "" || strings.TrimSpace(probe.Tokens.RefreshToken) != "" {
+		return "chatgpt"
+	}
+	return ""
 }
