@@ -30,6 +30,12 @@ import (
 
 // codexUsage is the token accounting reported on turn.completed. All counters
 // are i64 on the wire.
+//
+// IMPORTANT: unlike Anthropic — whose input_tokens EXCLUDES the cached prefix —
+// codex reports InputTokens as the TOTAL prompt, with CachedInputTokens and
+// CacheWriteInputTokens as SUBSETS of it (codex-rs carries a non_cached_input()
+// helper for exactly this reason). Usage's fields are disjoint, so the mapping
+// must subtract; see freshInput.
 type codexUsage struct {
 	InputTokens           int `json:"input_tokens"`
 	CachedInputTokens     int `json:"cached_input_tokens"`
@@ -38,6 +44,16 @@ type codexUsage struct {
 	// ReasoningOutputTokens is MEASURED by Codex (not derived like the Anthropic
 	// path), so it maps straight onto Usage.ThinkingTokens.
 	ReasoningOutputTokens int `json:"reasoning_output_tokens"`
+}
+
+// freshInput is the prompt tokens actually billed at the full input rate: the
+// total minus the cached-read and cache-written subsets. Deliberately NOT
+// clamped at zero — a negative result means codex stopped nesting these counters
+// inside input_tokens, and a visibly wrong number (negative tokens, negative
+// cost) surfaces that immediately, where a silent clamp would hide it and quietly
+// restore the double-counting this method exists to prevent.
+func (u codexUsage) freshInput() int {
+	return u.InputTokens - u.CachedInputTokens - u.CacheWriteInputTokens
 }
 
 // codexError is the error payload of a turn.failed event and of a failed
@@ -205,7 +221,9 @@ func (p *codexStreamParser) feed(line string) {
 		p.sawTurn = true
 		p.sawComplete = true
 		if u := ev.Usage; u != nil {
-			p.resp.Usage.InputTokens = u.InputTokens
+			// freshInput, not InputTokens: codex nests the cache counters inside the
+			// total, and Usage's fields are disjoint (see codexUsage).
+			p.resp.Usage.InputTokens = u.freshInput()
 			p.resp.Usage.CacheReadTokens = u.CachedInputTokens
 			p.resp.Usage.CacheWriteTokens = u.CacheWriteInputTokens
 			p.resp.Usage.OutputTokens = u.OutputTokens

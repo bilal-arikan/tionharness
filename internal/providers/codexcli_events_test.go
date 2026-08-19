@@ -46,8 +46,11 @@ func TestCodexParserHappyTurn(t *testing.T) {
 		t.Errorf("Model = %q", resp.Model)
 	}
 	u := resp.Usage
-	if u.InputTokens != 21060 {
-		t.Errorf("InputTokens = %d, want 21060", u.InputTokens)
+	// Codex nests the cache counters inside input_tokens; Usage is disjoint, so
+	// the fresh input is 21060 - 14592 cached - 0 written. Reporting the raw
+	// 21060 alongside CacheReadTokens would bill the cached prefix twice.
+	if u.InputTokens != 6468 {
+		t.Errorf("InputTokens = %d, want 6468", u.InputTokens)
 	}
 	if u.CacheReadTokens != 14592 {
 		t.Errorf("CacheReadTokens = %d, want 14592", u.CacheReadTokens)
@@ -61,6 +64,26 @@ func TestCodexParserHappyTurn(t *testing.T) {
 	// Measured by Codex — must be carried through, not left for the agent layer.
 	if u.ThinkingTokens != 33 {
 		t.Errorf("ThinkingTokens = %d, want 33", u.ThinkingTokens)
+	}
+}
+
+// A turn that also WRITES cache: cache_write_input_tokens is a subset of
+// input_tokens too, so both cache counters come out of the fresh input.
+func TestCodexParserUsageCacheWriteIsSubsetOfInput(t *testing.T) {
+	const line = `{"type":"turn.completed","usage":{"input_tokens":30000,"cached_input_tokens":12000,"cache_write_input_tokens":8000,"output_tokens":100,"reasoning_output_tokens":10}}`
+	p := newCodexParser("gpt-5.5", nil)
+	feedAll(p, fxThreadStarted, fxTurnStarted, fxAgentMessage, line)
+	resp, err := p.finish()
+	if err != nil {
+		t.Fatalf("finish: %v", err)
+	}
+	u := resp.Usage
+	if u.InputTokens != 10000 || u.CacheReadTokens != 12000 || u.CacheWriteTokens != 8000 {
+		t.Errorf("in=%d read=%d write=%d, want 10000/12000/8000",
+			u.InputTokens, u.CacheReadTokens, u.CacheWriteTokens)
+	}
+	if got := u.InputTokens + u.CacheReadTokens + u.CacheWriteTokens; got != 30000 {
+		t.Errorf("disjoint parts sum to %d, want the reported total 30000", got)
 	}
 }
 

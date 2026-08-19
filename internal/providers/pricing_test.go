@@ -175,3 +175,26 @@ func TestEstimateFor_ClaudeCLI(t *testing.T) {
 		t.Errorf("claude-cli cache-read = %v, want 0.3", got)
 	}
 }
+
+func TestEstimateFor_CodexCLI(t *testing.T) {
+	p, ok := EstimateFor("codex-cli", "gpt-5.5")
+	if !ok {
+		t.Fatal("EstimateFor: codex-cli/gpt-5.5 should return a price")
+	}
+	if p.InputPerMTok != 5 || p.OutputPerMTok != 30 {
+		t.Errorf("unexpected gpt-5.5 price: in=%v out=%v", p.InputPerMTok, p.OutputPerMTok)
+	}
+	// OpenAI caches automatically and charges written tokens at the PLAIN input
+	// rate — no Anthropic-style write premium. 1M cache-write = $5, not $6.25
+	// (which is what the package default CacheWriteMult of 1.25× would invent).
+	if got := p.CostDetailed(0, 0, 0, 1_000_000); !approx(got, 5) {
+		t.Errorf("codex-cli cache-write = %v, want 5 (plain input rate, no 1.25× premium)", got)
+	}
+	// Reads stay at the 0.10× discount → 1M read = $0.50.
+	if got := p.CostDetailed(0, 0, 1_000_000, 0); !approx(got, 0.5) {
+		t.Errorf("codex-cli cache-read = %v, want 0.5", got)
+	}
+	if _, ok := EstimateFor("codex-cli", "unknown-model-xyz"); ok {
+		t.Error("EstimateFor: unknown codex model should return ok=false")
+	}
+}

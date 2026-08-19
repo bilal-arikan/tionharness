@@ -151,10 +151,11 @@ var priceTable = map[string]map[string]Price{
 	// against two independent sources (devtk.ai, cloudzero.com/apidog) that agree
 	// on GPT-5.5 and GPT-5.4-mini. All OpenAI cache reads are a flat 0.10× of
 	// input (verified per-model below); OpenAI has no separate cache-WRITE
-	// premium (caching is automatic, not opt-in like Anthropic's), so
-	// CacheWriteMultOverride is left unset (falls back to CacheWriteMult, which
-	// is never charged for codex-cli since it has no priceTable entry — this
-	// table exists only to feed EstimateFor).
+	// premium (caching is automatic, not opt-in like Anthropic's), so every model
+	// pins CacheWriteMultOverride to 1.0 — written tokens bill at the plain input
+	// rate. Leaving it unset would NOT mean "not charged": EstimateFor hands this
+	// Price straight to the codex-cli estimate, where a zero override falls back
+	// to CacheWriteMult (1.25×) and invents a 25% premium OpenAI never charges.
 	//
 	// gpt-5.4 and gpt-5.2 are deliberately OMITTED: gpt-5.4 has a published price
 	// but codex-cli's own catalog notes it "ChatGPT hesabıyla kullanılamaz" (see
@@ -163,11 +164,11 @@ var priceTable = map[string]map[string]Price{
 	// checked — guessing one is worse than omitting it (PriceFor/EstimateFor
 	// correctly report unpriced for anything absent here).
 	"openai": {
-		"gpt-5.6-sol":   {InputPerMTok: 5.00, OutputPerMTok: 30.00, CacheReadMultOverride: 0.10},
-		"gpt-5.6-terra": {InputPerMTok: 2.00, OutputPerMTok: 12.00, CacheReadMultOverride: 0.10},
-		"gpt-5.6-luna":  {InputPerMTok: 0.20, OutputPerMTok: 1.20, CacheReadMultOverride: 0.10},
-		"gpt-5.5":       {InputPerMTok: 5.00, OutputPerMTok: 30.00, CacheReadMultOverride: 0.10},
-		"gpt-5.4-mini":  {InputPerMTok: 0.75, OutputPerMTok: 4.50, CacheReadMultOverride: 0.10},
+		"gpt-5.6-sol":   {InputPerMTok: 5.00, OutputPerMTok: 30.00, CacheReadMultOverride: 0.10, CacheWriteMultOverride: 1.0},
+		"gpt-5.6-terra": {InputPerMTok: 2.00, OutputPerMTok: 12.00, CacheReadMultOverride: 0.10, CacheWriteMultOverride: 1.0},
+		"gpt-5.6-luna":  {InputPerMTok: 0.20, OutputPerMTok: 1.20, CacheReadMultOverride: 0.10, CacheWriteMultOverride: 1.0},
+		"gpt-5.5":       {InputPerMTok: 5.00, OutputPerMTok: 30.00, CacheReadMultOverride: 0.10, CacheWriteMultOverride: 1.0},
+		"gpt-5.4-mini":  {InputPerMTok: 0.75, OutputPerMTok: 4.50, CacheReadMultOverride: 0.10, CacheWriteMultOverride: 1.0},
 	},
 	"minimax": {
 		"MiniMax-M2.1":           {InputPerMTok: 0.30, OutputPerMTok: 1.20, CacheReadMultOverride: 0.25},
