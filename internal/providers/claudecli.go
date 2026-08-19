@@ -102,10 +102,10 @@ func (c *ClaudeCLI) ConfigureCLIMCP(spec CLIMCPSpec) {
 
 // SetConfigDir overrides the CLAUDE_CONFIG_DIR this provider exports into its
 // subprocess, replacing the value baked in at construction. TionSwarm calls this
-// per turn so each workspace drives the CLI against its OWN config home
-// (<workspace>/claude-home) — sharing skills/settings/login with that workspace
-// instead of one global home. Empty is ignored so the constructed default (the
-// global claudeConfigDir setting) survives when no workspace is derivable.
+// per turn (Runtime.PinClaudeHome) so the CLI runs against the app-global
+// <dataDir>/claude-home — one shared login/settings home — instead of the
+// ambient ~/.claude. Empty is ignored so an instance that configured its own
+// config home (K1) keeps it.
 func (c *ClaudeCLI) SetConfigDir(dir string) {
 	if dir == "" {
 		return
@@ -732,6 +732,21 @@ readLoop:
 			msg = "subscription usage window exhausted"
 		}
 		return nil, false, fmt.Errorf("claude CLI usage/rate limit reached: %s (exit: %v)", msg, runErr)
+	}
+	// Stale --resume target: the id names a conversation this config home does not
+	// have (typically because the CLI config home moved). The transcript will not
+	// reappear, so every retry rejects the same id — mark it NON-retryable and name
+	// the id + home, so the fix (drop the stored resume id, start cold) is obvious.
+	// The caller's pre-flight check (ClaudeCLI.CanResume) normally prevents this;
+	// reaching here means the home changed after that check.
+	if req.ResumeSessionID != "" && isMissingConversation(detail) {
+		home := c.configDir
+		if home == "" {
+			home = "the CLI's default config dir (~/.claude)"
+		}
+		return nil, false, fmt.Errorf(
+			"claude CLI cannot resume session %s: no such conversation under %s — the CLI config home no longer holds this transcript; the next turn must start cold (exit: %v)",
+			req.ResumeSessionID, home, runErr)
 	}
 	// Died right after init with zero model output (only system/hook/init events).
 	// This is the signature of a usage-limit rejection that emitted no rate_limit

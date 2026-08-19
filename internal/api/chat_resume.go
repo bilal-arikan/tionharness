@@ -33,6 +33,22 @@ func (s *Server) planClaudeResume(ctx context.Context, provider providers.Provid
 	multiParticipant := len(db.SessionParticipants(session)) > 1
 	enabled := resumeGateEnabled(set.ClaudeResume, set.ClaudePersistentSession, agentCount, provider.Name(), multiParticipant)
 	plan, resumeID, deltaStart := claudeResumeDecision(enabled, session.CLISessionID, session.CLISentMsgCount, len(rawHistory), compacted)
+	// The stored id may name a conversation this CLI config home no longer has —
+	// the app-global claude-home replacing the per-workspace ones left every
+	// session pointing at a transcript in the OLD home. Resuming it fails the turn
+	// ("No conversation found with session ID"), and the failure is retryable-
+	// looking, so the same dead id burns the retries too. Verify first and fall
+	// back to a cold start, which keeps the full prepared transcript (llmReq is
+	// left untouched) instead of the unseen delta.
+	if resumeID != "" {
+		if v, ok := provider.(providers.ResumeVerifier); ok && !v.CanResume(resumeID) {
+			if s.logger != nil {
+				s.logger.Info("cli resume reset: stored session id is not resumable from this config home",
+					"component", "conversation", "session", session.ID, "prev_cli_session", resumeID)
+			}
+			resumeID = ""
+		}
+	}
 	if resumeID != "" {
 		// Warm resume: send only the unseen delta and ask the CLI to --resume.
 		llmReq.ResumeSessionID = resumeID

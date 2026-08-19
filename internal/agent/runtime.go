@@ -561,10 +561,18 @@ func workspaceSkillsDir(workDir string) string {
 	return filepath.Join(filepath.Dir(workDir), "skills")
 }
 
-// claudeHomeDir is this workspace's per-workspace claude-cli config home
-// (<workspace>/claude-home), exported into the CLI subprocess as CLAUDE_CONFIG_DIR
-// so each workspace drives the CLI against its own skills/settings/login. Empty
-// when workDir is unknown (the provider then keeps its global-default config dir).
+// claudeHomeDir is the APP-GLOBAL claude-cli config home (<dataDir>/claude-home),
+// exported into the CLI subprocess as CLAUDE_CONFIG_DIR. It used to be
+// per-workspace (<workspace>/claude-home); the login is now shared across
+// workspaces so a single `claude /login` serves all of them, and an instance that
+// needs its own home sets configDir on the provider INSTANCE instead (K1) — which
+// PinClaudeHome then leaves alone. Empty when dataDir is unknown (the provider
+// then keeps its own configured dir).
+//
+// Note this home also holds the CLI's conversation transcripts
+// (projects/<cwd-slug>/<id>.jsonl), so a session's stored --resume id is only
+// valid for the home that was in force when it was written; see
+// ClaudeCLI.CanResume and cmd/repair-provider-migration.
 func (r *Runtime) claudeHomeDir() string {
 	if r.dataDir == "" {
 		return ""
