@@ -321,19 +321,18 @@ export function AgentsView({
                   }
                 />
               </button>
-              <button
-                onClick={() => onSetDefault(a.id)}
-                data-testid="agent-set-default"
-                data-agent-id={a.id}
-                title={defaultAgentId === a.id ? 'Varsayılan ajan' : 'Varsayılan yap'}
-                className={`ml-1 shrink-0 rounded p-1 transition ${
-                  defaultAgentId === a.id
-                    ? 'text-[var(--color-accent)]'
-                    : 'text-[var(--color-text-dim)] opacity-0 hover:text-[var(--color-accent)] group-hover:opacity-100'
-                }`}
-              >
-                {defaultAgentId === a.id ? '★' : '☆'}
-              </button>
+              {/* Indicator only: the default agent is changed from the agent's own
+                  settings, not by clicking around in the roster. */}
+              {defaultAgentId === a.id && (
+                <span
+                  data-testid="agent-default-indicator"
+                  data-agent-id={a.id}
+                  title="Varsayılan ajan (ajan ayarlarından değiştirilir)"
+                  className="ml-1 shrink-0 p-1 text-[var(--color-accent)]"
+                >
+                  ★
+                </span>
+              )}
             </div>
           ))}
           {agents.length === 0 && (

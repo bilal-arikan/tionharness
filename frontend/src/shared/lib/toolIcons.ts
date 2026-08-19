@@ -191,6 +191,7 @@ const TOOL_ICONS: Record<string, LucideIcon> = {
   // settings
   get_settings: Settings,
   update_settings: SlidersHorizontal,
+  list_providers: Plug,
 
   // skills
   use_skill: Sparkles,
