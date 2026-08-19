@@ -23,7 +23,7 @@
 | Kimlik/config | `settings.Settings` içinde **kind başına tekil, typed alan**: `AnthropicKeyEnc`, `MinimaxKeyEnc/BaseURL`, `OpenRouterKey…`, `ZAIKey…`, `DeepSeekKey…`, `ClaudeCLIPath/ConfigDir/AuthKind/AuthTokenEnc`, `CodexCLIPath/ConfigDir` |
 | Yarı-örnek | `settings.CustomProvider` (`id/label/kind("openai"\|"anthropic")/baseUrl/defaultModel/models/keyEnc`) — **instance modelinin %70'i zaten burada** |
 | Registry | `providers.Registry` — süreç başına **tek**, `internal/app/app.go:130`'da kurulur; alanları `Server.applySettings()` ile canlı güncellenir. `resolve(id)` bir **`switch id`** ile kimliği doğru typed alana eşler (`registry.go:310`+) |
-| Kapsam | Sağlayıcı ayarları **zaten uygulama geneli** (`<dataDir>/settings.json`). Workspace'e özel olan tek şey: `<workspace>/claude-home` (claude-cli login evi) |
+| Kapsam | Sağlayıcı örnekleri ve kimlik evleri **uygulama geneli**dir: örnekler `<dataDir>/providers.json`, otomatik oluşturulan CLI evleri `<dataDir>/provider-homes/<instance-id>` altındadır. Ajan yalnız örnek id'sini seçer; workspace CLI kimliğinin sahibi değildir. |
 
 Kodda zaten iki yerde "Faz 2 = data-driven instance model" notu duruyor
 (`kind.go:22`, `registry.go:310`). Bu doküman o fazın planıdır.
@@ -238,29 +238,20 @@ değişmez**. `Values` map'i yalnız yeni kind'ların ihtiyacı için.
 (`unknown provider: %q`) — sessiz claude-cli fallback'i **eklenmeyecek**.
 Silinmiş bir örneğe bağlı ajan, çalışma anında net hata vermeli.
 
-### 4.4 CLI config evi — **K1 kararı: geri uyumlu**
+### 4.4 CLI config evi — **örnek başına izolasyon**
 
-Bugün `CLAUDE_CONFIG_DIR = <workspace>/claude-home` (workspace/manager.go:266,
-`EnsureWorkspaceClaudeHome`) — yani login **workspace başına**.
-"Aynı kind'dan iki farklı token" isteği bunu doğrudan zorluyor.
+Yeni bir `claude-cli` veya `codex-cli` örneği boş `configDir` ile oluşturulursa
+`handleUpsertProvider`, örneği kaydettikten sonra otomatik olarak
+`<dataDir>/provider-homes/<instance-id>` dizinini `0700` izinleriyle oluşturur ve
+yolu örneğin `config["configDir"]` alanına kalıcılaştırır. Claude alt sürecine bu
+yol `CLAUDE_CONFIG_DIR`, Codex alt sürecine `CODEX_HOME` olarak verilir. Böylece
+aynı kind'ın iki örneği farklı login/config/oturum durumuna sahip olur ve herhangi
+bir workspace'teki ajan, seçtiği uygulama-geneli örneğin kimliğini kullanır.
 
-**Karar:**
-- Örneğin `config["configDir"]` **boşsa** → bugünkü davranış korunur
-  (`<workspace>/claude-home`, `EnsureWorkspaceClaudeHome`).
-- **Doluysa** → örneğin kendi evi kullanılır. UI "kendi config evini oluştur"
-  butonu ile `<dataDir>/provider-homes/<PRV…>/` yolunu üretip alana yazar
-  (kullanıcı elle de yol verebilir).
-
-Mevcut kurulumlar aynen çalışır; iki hesap isteyen kullanıcı ikinci örneğe ayrı
-bir ev verir. Aynısı `CODEX_HOME` için geçerli.
-
-⚠ Bu, "aynı workspace'te iki claude-cli örneği" senaryosunda **login'in
-workspace'ten örneğe kaydığı** tek yerdir: boş bırakılan örnek workspace evini
-paylaşmaya devam eder, dolu olan izole olur. UI'da bu ayrım açıkça yazılmalı
-(yoksa kullanıcı iki örnek yaratıp ikisinin de aynı login'i kullandığını
-göremez). Dolu `configDir` login'siz ise ilk turda `codexcli_errors.go:95`
-benzeri net bir "bu ev login'li değil" hatası dönmeli — sessiz ambient-home
-fallback'i **yok**.
+Kullanıcı elle dolu bir `configDir` verirse o yol korunur. Eski veya dışarıdan
+oluşturulmuş bir örnekte alan hâlâ boşsa çalışma/auth çözümü geri uyumluluk için
+`<workspace>/claude-home` ya da `<workspace>/codex-home` yoluna düşer. Bu yalnız
+legacy fallback'tir; normal yeni örnek yaratma yolunda alan otomatik dolar.
 
 **Uygulama durumu (2026-08-19): K1 artık CLI turlarının per-turn işlem
 noktasında (seam) da uygulanıyor.** Önceden `internal/agent/toolloop.go`'daki
@@ -295,6 +286,26 @@ yol asla dokunulmaz; onarım ikinci açılışta no-op'tur.
 | DELETE | `/api/providers/{id}` | Örnek sil — **önce** "N ajan kullanıyor" sayısını döndürür, `?force=1` ile siler |
 | POST | `/api/providers/{id}/test` | Canlı doğrulama: API kind'ları için minik `Complete`, CLI kind'ları için `--version` + login kontrolü |
 | GET | `/api/catalog` | **Korunur** — artık örnek başına entry (`id` = örnek id, `kindId` eklenir). Frontend model/provider seçicileri kırılmaz |
+
+### 5.1 CLI kimliği — örnek başına
+
+| Yöntem | Yol | İş |
+|--------|-----|-----|
+| GET | `/api/providers/{id}/auth` | Örneğin kind/install/login durumu ile kullandığı `homeDir`; Codex için varsa `tier` |
+| POST | `/api/providers/{id}/auth/oauth/start` | Claude OAuth kod akışını başlatır |
+| POST | `/api/providers/{id}/auth/oauth/complete` | Claude OAuth kod akışını tamamlar |
+| POST | `/api/providers/{id}/auth/oauth/loopback/start` | Claude loopback OAuth akışını başlatır |
+| GET | `/api/providers/{id}/auth/oauth/loopback/status` | Claude loopback OAuth durumunu okur |
+| POST | `/api/providers/{id}/auth/device/start` | Codex device-code login'ini başlatır |
+| GET | `/api/providers/{id}/auth/device/status` | Codex device-code durumunu okur |
+| POST | `/api/providers/{id}/auth/device/cancel` | Codex device-code akışını iptal eder |
+| POST | `/api/providers/{id}/auth/api-key` | Codex API anahtarını örneğin `CODEX_HOME`'una yazar |
+
+Auth handler'ları `{id}` ile örneği çözer, yalnız `claude-cli`/`codex-cli`
+kind'larını kabul eder ve akışı örneğin `configDir`/`cliPath` değerleriyle yürütür.
+`/api/workspace-settings/claude-auth...` ve
+`/api/workspace-settings/codex-auth...` yolları eski istemciler için korunur;
+yeni UI ve istemciler örnek-bazlı yolları kullanır.
 
 `GET /api/providers` bugün custom provider listesi döndürüyor; sözleşmesi
 genişliyor (ek alanlar), kırılmıyor.
@@ -346,8 +357,9 @@ Yanıtta ikisi de döner.
 
 **Onaylandı (2026-08-18):**
 
-- **K1 — CLI config evi: geri uyumlu.** Boş `configDir` → `<workspace>/claude-home`
-  (bugünkü davranış); dolu → örneğe özel ev. Detay + tuzaklar §4.4.
+- **K1 — CLI config evi: örnek başına.** Yeni CLI örneğinde boş `configDir`
+  otomatik `<dataDir>/provider-homes/<instance-id>` olur; yalnız legacy boş
+  örnekler workspace evine düşer. Detay §4.4.
 - **K2 — Depolama: ayrı `providers.json`** (`<dataDir>`, AES-GCM, `internal/settings`
   altında ikinci store). Detay §2.4.
 - **K3 — `Agent.ProviderInstanceID` yeni alan.** `Provider` alanı korunur ama

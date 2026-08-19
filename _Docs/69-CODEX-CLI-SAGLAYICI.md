@@ -124,17 +124,32 @@ Commands:  resume | review | help
   "output_tokens": 0, "reasoning_output_tokens": 0 }
 ```
 
-`providers.Usage` ile **tam örtüşüyor**:
+`providers.Usage` ile örtüşüyor — **ama input alanı bire bir DEĞİL**:
 
 | Codex | TionSwarm |
 |-------|-----------|
-| `input_tokens` | `InputTokens` |
+| `input_tokens` − `cached_input_tokens` − `cache_write_input_tokens` | `InputTokens` |
 | `cached_input_tokens` | `CacheReadTokens` |
 | `cache_write_input_tokens` | `CacheWriteTokens` |
 | `output_tokens` | `OutputTokens` |
 | `reasoning_output_tokens` | `ThinkingTokens` — **üstelik ölçülmüş** (claude-cli'de türetiliyor: `deriveThinkingTokens`) |
 
-> Bu, claude-cli yolundan **daha iyi**: thinking token'ı tahmin değil, ölçüm.
+> **Çıkarma zorunlu.** Anthropic'te `input_tokens` cache'lenen ön eki **dışlar**;
+> codex'te ise `input_tokens` **toplam** prompt'tur ve iki cache sayacı onun
+> **alt kümesidir** (codex-rs bu yüzden `non_cached_input()` yardımcısını
+> taşır). `providers.Usage` alanları ayrık olduğu için ham `input_tokens`'i
+> yazmak cache'lenen ön eki iki kez faturalandırır. Eşleme
+> `codexUsage.freshInput()` üzerinden yapılır; negatife düşerse **kırpılmaz** —
+> wire semantiği değişmişse bu görünür olsun diye.
+
+> Thinking tarafında claude-cli yolundan **daha iyi**: token tahmin değil, ölçüm.
+
+**Fiyatlama:** OpenAI cache'i otomatiktir, TTL seçimi (Anthropic'in 5m/1h
+`cache_control`'ü gibi) **yoktur** ve cache **yazımına prim uygulanmaz** —
+yazılan token düz input fiyatındadır. Bu yüzden `pricing.go`'daki `openai`
+tablosunun her satırı `CacheWriteMultOverride: 1.0` taşır; boş bırakılırsa
+paket varsayılanı `CacheWriteMult` (1.25×) devreye girip olmayan bir prim
+uydurur (`EstimateFor("codex-cli", …)` bu Price'ı doğrudan döndürür).
 
 ### `item` türleri — `item.details.type`
 
@@ -164,11 +179,10 @@ paralel çağrılar gruplanamaz. Kozmetik kayıp.
 ### `CODEX_HOME` = `CLAUDE_CONFIG_DIR`
 
 `codex-rs/utils/home-dir/src/lib.rs`: `CODEX_HOME` set edilmişse **var olan bir
-dizin olmalı**; değilse `~/.codex`. Yani TionSwarm'ın per-workspace config evi
-deseni (`51-CLAUDE-CONFIG-BIRLESIK.md`) **birebir** uygulanır:
+dizin olmalı**; değilse `~/.codex`. TionSwarm bunu sağlayıcı örneği başına izole eder:
 
 ```
-<workspace>/codex-home/       ← CODEX_HOME
+<dataDir>/provider-homes/<instance-id>/  ← CODEX_HOME
 ├── config.toml               ← TionSwarm üretir (veya -c ile override)
 ├── auth.json                 ← login durumu
 └── log/
@@ -193,41 +207,24 @@ karşılık, Codex'te **`OPENAI_API_KEY`** aynı işi görür. `--with-api-key` 
 kanalı, TionSwarm'ın "izole config evine anahtarsız login" akışını (workspace
 kurulumunda bir kez) mümkün kılar.
 
-### Boot-time seed: global `~/.codex` → workspace `codex-home` ✅
+### TionSwarm login akışı: örnek başına ✅
 
-Her `codex-home` izole olduğundan (yukarıdaki `CODEX_HOME` = `CLAUDE_CONFIG_DIR`
-bölümü), kullanıcı `codex login`'i global `~/.codex`'e yapmışsa bile YENİ bir
-workspace'in kendi `codex-home`'u başlangıçta girişsiz kalıyordu — claude-cli
-tarafında bunun karşılığı olan otomatik seed (`EnsureWorkspaceClaudeHome`,
-`51-CLAUDE-CONFIG-BIRLESIK.md`) codex tarafında **yoktu**. Bu artık giderildi:
+Yeni `codex-cli` örneği boş `configDir` ile oluşturulursa backend
+`<dataDir>/provider-homes/<instance-id>` dizinini oluşturup yolu örneğe kaydeder.
+Her örnek kendi `auth.json`, `config.toml` ve thread durumunu taşır; login bir
+workspace'e değil örneğe aittir. Ajanlar uygulama-geneli örneklerden birini seçer.
 
-`agent.EnsureWorkspaceCodexHome(wsRoot)` (`internal/agent/codexhome.go`),
-`internal/workspace/manager.go`'da `EnsureWorkspaceClaudeHome`'un hemen yanında
-her workspace açılışında çağrılır. Davranışı:
+UI'daki **Giriş yap / Durum** işlemleri seçili örnek id'siyle çalışır:
+`GET /api/providers/{id}/auth`, device-code için `POST .../device/start`,
+`GET .../device/status`, `POST .../device/cancel`; API anahtarı için
+`POST .../api-key`. Device ve API-key login doğrudan o örneğin `CODEX_HOME`una
+yazılır. Eski `/api/workspace-settings/codex-auth...` yolları geriye uyumluluk
+için durur; yeni istemciler örnek-bazlı yolları kullanır.
 
-- `<workspace>/codex-home/auth.json` **zaten varsa dokunmaz** (idempotent,
-  workspace'in kendi login'i asla ezilmez).
-- Yoksa, `CODEX_HOME` env değişkeni (varsa) veya `~/.codex` (yoksa) — codex
-  ikilisinin kendi çözdüğü aynı kural — konumundaki global `auth.json`'u
-  kopyalar.
-- **Yalnızca `auth.json` kopyalanır — `config.toml` KASITLI olarak
-  kopyalanmaz.** TionSwarm bu dosyayı zaten her tur kendi üretiyor
-  (`writeCodexConfig`, `internal/providers/codexcli_config.go`); kullanıcının
-  global `config.toml`'unu kopyalamak en iyi ihtimalle bir sonraki turda
-  ezilir, en kötü ihtimalle çakışan/bayat ayarlar bırakır.
-- claude-cli'nin credential-liveness heal'inin (bkz. `claudehome.go`)
-  eşdeğeri **yok** — codex'in kendi OAuth refresh'inin claude gibi kendi
-  credential dosyasını sildiğine dair bilinen bir davranışı yok, dolayısıyla
-  iyileştirilecek bir "wipe" senaryosu da yok. Job sadece: eksik dosyayı
-  seed'lemek.
-- Best-effort: seed atlanır/başarısız olursa workspace açılışını engellemez,
-  yalnızca loglanır (neden atlandığı — global auth yok / kopyalama hatası —
-  net görünür şekilde).
-
-UI tarafında (`ProvidersPanel.tsx`, "Giriş yap" kutusu) manuel
-`$env:CODEX_HOME = "..."; codex login` komutu artık yalnızca **hiçbir global
-girişin bulunmadığı** durum için gerekli — PowerShell sözdizimiyle ve `codex`
-ikilisinin PATH'te olmayabileceği notuyla birlikte gösteriliyor.
+Eski/dışarıdan oluşturulmuş örneğin `configDir` alanı boşsa auth/runtime çözümü
+legacy olarak `<workspace>/codex-home` yoluna düşebilir ve
+`EnsureWorkspaceCodexHome` tohumu geçerliliğini korur. Normal yeni örneklerde
+otomatik izole ev nedeniyle bu fallback kullanılmaz.
 
 ### Auth hatası imzası (canlı gözlem)
 

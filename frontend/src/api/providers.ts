@@ -70,6 +70,48 @@ export interface DeleteProviderResult {
   affectedAgents: string[]
 }
 
+export interface ProviderAuthStatus {
+  kind: 'claude-cli' | 'codex-cli'
+  loggedIn: boolean
+  installed: boolean
+  homeDir: string
+  tier?: string
+  detail?: string
+}
+
+export interface ClaudeOAuthStartResult {
+  flowId: string
+  authUrl: string
+}
+
+export interface ClaudeOAuthCompleteResult {
+  ok: boolean
+  claudeHomeDir: string
+  expiresAt: number
+  subscription?: string
+}
+
+export interface ClaudeOAuthLoopbackStartResult extends ClaudeOAuthStartResult {
+  port: number
+}
+
+export interface ClaudeOAuthLoopbackStatus {
+  status: 'pending' | 'ok' | 'error' | 'unknown'
+  detail?: string
+  claudeHomeDir?: string
+}
+
+export interface CodexDeviceStartResult {
+  verifyUrl: string
+  code: string
+  expiresInSec: number
+}
+
+export interface CodexDeviceStatus {
+  state: 'pending' | 'success' | 'failed' | 'expired' | 'cancelled'
+  error?: string
+}
+
 // ModelPrice is one model's approximate list price (USD per 1M tokens).
 export interface ModelPrice {
   inputPerMTok: number
@@ -90,5 +132,39 @@ export const providerApi = {
     req<ProviderInstance>('/api/providers', { method: 'PUT', body: JSON.stringify(input) }),
   deleteProvider: (id: string) =>
     req<DeleteProviderResult>(`/api/providers/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  getAuth: (id: string) => req<ProviderAuthStatus>(`/api/providers/${encodeURIComponent(id)}/auth`),
+  startClaudeOAuth: (id: string) =>
+    req<ClaudeOAuthStartResult>(`/api/providers/${encodeURIComponent(id)}/auth/oauth/start`, {
+      method: 'POST',
+    }),
+  completeClaudeOAuth: (id: string, flowId: string, code: string) =>
+    req<ClaudeOAuthCompleteResult>(`/api/providers/${encodeURIComponent(id)}/auth/oauth/complete`, {
+      method: 'POST',
+      body: JSON.stringify({ flowId, code }),
+    }),
+  startClaudeOAuthLoopback: (id: string) =>
+    req<ClaudeOAuthLoopbackStartResult>(
+      `/api/providers/${encodeURIComponent(id)}/auth/oauth/loopback/start`,
+      { method: 'POST' },
+    ),
+  claudeOAuthLoopbackStatus: (id: string, flowId: string) =>
+    req<ClaudeOAuthLoopbackStatus>(
+      `/api/providers/${encodeURIComponent(id)}/auth/oauth/loopback/status?flowId=${encodeURIComponent(flowId)}`,
+    ),
+  startCodexDeviceAuth: (id: string) =>
+    req<CodexDeviceStartResult>(`/api/providers/${encodeURIComponent(id)}/auth/device/start`, {
+      method: 'POST',
+    }),
+  codexDeviceAuthStatus: (id: string) =>
+    req<CodexDeviceStatus>(`/api/providers/${encodeURIComponent(id)}/auth/device/status`),
+  cancelCodexDeviceAuth: (id: string) =>
+    req<{ ok: boolean }>(`/api/providers/${encodeURIComponent(id)}/auth/device/cancel`, {
+      method: 'POST',
+    }),
+  codexAPIKeyLogin: (id: string, apiKey: string) =>
+    req<{ ok: boolean }>(`/api/providers/${encodeURIComponent(id)}/auth/api-key`, {
+      method: 'POST',
+      body: JSON.stringify({ apiKey }),
+    }),
   prices: () => req<PriceTable>('/api/prices'),
 }

@@ -13,6 +13,8 @@ import { inputCls } from './primitives'
 type Method = 'device' | 'apikey'
 
 interface Props {
+  providerId: string
+  providerLabel: string
   isLoggedIn: boolean
   onClose: () => void
   onLoggedIn: () => void
@@ -31,7 +33,13 @@ function codexDeviceErrorLabel(state: string, detail?: string): string {
   }
 }
 
-export function CodexAuthDialog({ isLoggedIn, onClose, onLoggedIn }: Props) {
+export function CodexAuthDialog({
+  providerId,
+  providerLabel,
+  isLoggedIn,
+  onClose,
+  onLoggedIn,
+}: Props) {
   const [method, setMethod] = useState<Method>('device')
 
   // Device-auth flow state.
@@ -57,7 +65,7 @@ export function CodexAuthDialog({ isLoggedIn, onClose, onLoggedIn }: Props) {
     stopPolling()
     pollRef.current = setInterval(async () => {
       try {
-        const r = await api.codexDeviceAuthStatus()
+        const r = await api.codexDeviceAuthStatus(providerId)
         if (r.state === 'success') {
           stopPolling()
           setDeviceDone(true)
@@ -87,7 +95,7 @@ export function CodexAuthDialog({ isLoggedIn, onClose, onLoggedIn }: Props) {
     const tab = window.open('about:blank', '_blank')
     if (tab) tab.opener = null
     try {
-      const r = await api.startCodexDeviceAuth()
+      const r = await api.startCodexDeviceAuth(providerId)
       setVerifyUrl(r.verifyUrl)
       setCode(r.code)
       if (tab && !tab.closed) tab.location.href = r.verifyUrl
@@ -111,7 +119,7 @@ export function CodexAuthDialog({ isLoggedIn, onClose, onLoggedIn }: Props) {
   const cancelDeviceLogin = async () => {
     stopPolling()
     try {
-      await api.cancelCodexDeviceAuth()
+      await api.cancelCodexDeviceAuth(providerId)
     } catch {
       /* best-effort */
     }
@@ -126,7 +134,7 @@ export function CodexAuthDialog({ isLoggedIn, onClose, onLoggedIn }: Props) {
     setCode('')
     // A previous flow may still be tracked server-side (409) — cancel first.
     try {
-      await api.cancelCodexDeviceAuth()
+      await api.cancelCodexDeviceAuth(providerId)
     } catch {
       /* best-effort */
     }
@@ -157,7 +165,7 @@ export function CodexAuthDialog({ isLoggedIn, onClose, onLoggedIn }: Props) {
     setApiBusy(true)
     setApiErr(null)
     try {
-      await api.codexAPIKeyLogin(k)
+      await api.codexAPIKeyLogin(providerId, k)
       toast.success('Giriş yapıldı')
       onLoggedIn()
       onClose()
@@ -196,7 +204,8 @@ export function CodexAuthDialog({ isLoggedIn, onClose, onLoggedIn }: Props) {
       >
         <h2 className="mb-1 text-base font-semibold">codex-cli kimlik doğrulama</h2>
         <p className="mb-4 text-xs text-[var(--color-text-dim)]">
-          Bu workspace'in izole codex-home'unu yetkilendir — terminal gerekmez.
+          <span className="font-medium text-[var(--color-text)]">{providerLabel}</span> örneğinin
+          izole codex-home'unu yetkilendir — terminal gerekmez.
           {isLoggedIn && (
             <span className="ml-1 text-[var(--color-success)]">✓ Şu an giriş yapılmış.</span>
           )}
@@ -219,7 +228,7 @@ export function CodexAuthDialog({ isLoggedIn, onClose, onLoggedIn }: Props) {
                 <Check size={28} className="text-[var(--color-success)]" />
                 <p className="text-sm font-medium text-[var(--color-text)]">Giriş başarılı</p>
                 <p className="text-xs text-[var(--color-text-dim)]">
-                  Bu workspace'in codex-home'una kimlik yazıldı.
+                  Bu sağlayıcı örneğinin codex-home'una kimlik yazıldı.
                 </p>
                 <Button
                   onClick={() => {
@@ -236,7 +245,8 @@ export function CodexAuthDialog({ isLoggedIn, onClose, onLoggedIn }: Props) {
               <>
                 <p className="text-xs text-[var(--color-text-dim)]">
                   ChatGPT hesabınla tarayıcıdan giriş yap. Bir doğrulama kodu üretilir; kodu
-                  tarayıcıda onaylayınca kimlik doğrudan bu workspace'in codex-home'una yazılır.
+                  tarayıcıda onaylayınca kimlik doğrudan bu sağlayıcı örneğinin codex-home'una
+                  yazılır.
                 </p>
                 <Button onClick={startDeviceLogin} size="lg" disabled={deviceBusy}>
                   {deviceBusy ? (
@@ -314,7 +324,7 @@ export function CodexAuthDialog({ isLoggedIn, onClose, onLoggedIn }: Props) {
         ) : (
           <div className="mb-2 space-y-2">
             <p className="text-xs text-[var(--color-text-dim)]">
-              platform.openai.com'dan bir API anahtarı yapıştır. Anahtar bu workspace'in
+              platform.openai.com'dan bir API anahtarı yapıştır. Anahtar bu sağlayıcı örneğinin
               codex-home'una yazılır, uygulamaya asla geri gösterilmez.
             </p>
             <label className="mb-1 block text-xs text-[var(--color-text-dim)]">API anahtarı</label>

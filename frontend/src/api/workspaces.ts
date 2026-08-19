@@ -91,36 +91,6 @@ export const workspaceApi = {
       `/api/workspace-settings/claude-auth/oauth/loopback/status?flowId=${encodeURIComponent(flowId)}`,
     ),
 
-  // Pre-flight: probe whether THIS workspace's codex-home is logged in. Cheap
-  // filesystem check (auth.json presence), no subprocess spawn — see codex_auth.go.
-  checkWorkspaceCodexAuth: () =>
-    req<{ loggedIn: boolean; installed: boolean; codexHomeDir: string; detail?: string }>(
-      '/api/workspace-settings/codex-auth',
-    ),
-  // Begin a `codex login --device-auth` flow against THIS workspace's codex-home:
-  // returns the verification URL + one-time code to show the user.
-  startCodexDeviceAuth: () =>
-    req<{ verifyUrl: string; code: string; expiresInSec: number }>(
-      '/api/workspace-settings/codex-auth/device/start',
-      { method: 'POST' },
-    ),
-  // Poll the in-flight (or just-finished) device-auth flow's state. 404 = no
-  // flow has been started for this codex-home since the process started.
-  codexDeviceAuthStatus: () =>
-    req<{ state: 'pending' | 'success' | 'failed' | 'expired' | 'cancelled'; error?: string }>(
-      '/api/workspace-settings/codex-auth/device/status',
-    ),
-  // Cancel the in-flight device-auth flow, if any. Idempotent.
-  cancelCodexDeviceAuth: () =>
-    req<{ ok: boolean }>('/api/workspace-settings/codex-auth/device/cancel', { method: 'POST' }),
-  // Log in with a raw API key instead (piped to `codex login --with-api-key`
-  // over stdin server-side — never sent as a query param or logged).
-  codexAPIKeyLogin: (apiKey: string) =>
-    req<{ ok: boolean }>('/api/workspace-settings/codex-auth/api-key', {
-      method: 'POST',
-      body: JSON.stringify({ apiKey }),
-    }),
-
   // Per-workspace editable config files (prompts/instructions/README).
   getWorkspaceConfig: () => req<WorkspaceConfig>('/api/workspace-config'),
   updateWorkspaceConfig: (patch: WorkspaceConfigPatch) =>

@@ -728,6 +728,15 @@ func (s *Server) registerSettingsRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/providers/{id}", s.handleGetProvider)
 	mux.HandleFunc("PUT /api/providers", s.handleUpsertProvider)
 	mux.HandleFunc("DELETE /api/providers/{id}", s.handleDeleteProvider)
+	mux.HandleFunc("GET /api/providers/{id}/auth", s.handleProviderAuth)
+	mux.HandleFunc("POST /api/providers/{id}/auth/oauth/start", s.handleProviderClaudeOAuthStart)
+	mux.HandleFunc("POST /api/providers/{id}/auth/oauth/complete", s.handleProviderClaudeOAuthComplete)
+	mux.HandleFunc("POST /api/providers/{id}/auth/oauth/loopback/start", s.handleProviderClaudeOAuthLoopbackStart)
+	mux.HandleFunc("GET /api/providers/{id}/auth/oauth/loopback/status", s.handleProviderClaudeOAuthLoopbackStatus)
+	mux.HandleFunc("POST /api/providers/{id}/auth/device/start", s.handleProviderCodexDeviceStart)
+	mux.HandleFunc("GET /api/providers/{id}/auth/device/status", s.handleProviderCodexDeviceStatus)
+	mux.HandleFunc("POST /api/providers/{id}/auth/device/cancel", s.handleProviderCodexDeviceCancel)
+	mux.HandleFunc("POST /api/providers/{id}/auth/api-key", s.handleProviderCodexAPIKeyLogin)
 	mux.HandleFunc("GET /api/prices", s.handlePrices)
 	// Workspace backups — status + on-demand run (the schedule itself is driven
 	// by the settings document, not these endpoints).

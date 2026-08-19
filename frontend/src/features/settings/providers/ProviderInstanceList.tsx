@@ -2,17 +2,28 @@
 // label, kind badge, transport, secret-set status, and edit/delete actions.
 // Deleting reports how many agents were still pointing at the instance (never
 // swallowed silently, _Docs/71 Faz 3).
-import { Boxes, Trash2 } from 'lucide-react'
-import type { ProviderInstance, ProviderKind } from '@/api/providers'
+import { Boxes, KeyRound, Trash2 } from 'lucide-react'
+import type { ProviderAuthStatus, ProviderInstance, ProviderKind } from '@/api/providers'
+
+export type ProviderAuthView = 'pending' | ProviderAuthStatus | { error: string }
 
 interface Props {
   instances: ProviderInstance[]
   kinds: ProviderKind[]
   onEdit: (instance: ProviderInstance) => void
   onDelete: (instance: ProviderInstance) => void
+  authById: Record<string, ProviderAuthView | undefined>
+  onAuthOpen: (instance: ProviderInstance) => void
 }
 
-export function ProviderInstanceList({ instances, kinds, onEdit, onDelete }: Props) {
+export function ProviderInstanceList({
+  instances,
+  kinds,
+  onEdit,
+  onDelete,
+  authById,
+  onAuthOpen,
+}: Props) {
   if (instances.length === 0) {
     return (
       <p className="text-xs text-[var(--color-text-dim)]">
@@ -27,6 +38,8 @@ export function ProviderInstanceList({ instances, kinds, onEdit, onDelete }: Pro
         const kind = kinds.find((k) => k.id === inst.kindId)
         const secretKeys = Object.keys(inst.secretsSet)
         const secretsOk = secretKeys.length === 0 || secretKeys.every((k) => inst.secretsSet[k])
+        const supportsAuth = inst.kindId === 'claude-cli' || inst.kindId === 'codex-cli'
+        const auth = authById[inst.id]
         return (
           <div
             key={inst.id}
@@ -68,6 +81,41 @@ export function ProviderInstanceList({ instances, kinds, onEdit, onDelete }: Pro
             </div>
 
             <div className="flex items-center justify-end gap-1.5">
+              {supportsAuth && (
+                <>
+                  <span
+                    className={`mr-auto text-[11px] ${
+                      auth === 'pending'
+                        ? 'text-[var(--color-warning)]'
+                        : auth && 'error' in auth
+                          ? 'text-[var(--color-danger)]'
+                          : auth?.loggedIn
+                            ? 'text-[var(--color-success)]'
+                            : 'text-[var(--color-text-dim)]'
+                    }`}
+                    title={
+                      auth && auth !== 'pending' && 'error' in auth ? auth.error : auth?.detail
+                    }
+                  >
+                    {auth === 'pending'
+                      ? 'durum kontrol ediliyor…'
+                      : auth && 'error' in auth
+                        ? `durum alınamadı: ${auth.error}`
+                        : auth?.loggedIn
+                          ? `✓ giriş yapılmış${auth.tier ? ` · ${auth.tier}` : ''}`
+                          : 'giriş yok'}
+                  </span>
+                  <button
+                    data-testid="provider-instance-auth"
+                    data-provider-id={inst.id}
+                    onClick={() => onAuthOpen(inst)}
+                    className="flex items-center gap-1 rounded border border-[var(--color-border)] px-2 py-1 text-xs hover:border-[var(--color-accent)]"
+                  >
+                    <KeyRound size={12} />{' '}
+                    {auth && auth !== 'pending' && auth.loggedIn ? 'Durum' : 'Giriş yap'}
+                  </button>
+                </>
+              )}
               <button
                 data-testid="provider-instance-edit"
                 data-provider-id={inst.id}

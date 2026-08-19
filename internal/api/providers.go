@@ -3,6 +3,8 @@ package api
 import (
 	"context"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/bilal-arikan/tionswarm/internal/providers"
@@ -267,6 +269,8 @@ func (s *Server) handleUpsertProvider(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	_, exists := s.providerStore.Get(req.ID)
+	creating := req.ID == "" || !exists
 	inst, err := s.upsertProviderInstance(req, upsertProviderOpts{})
 	if err != nil {
 		if he, ok := err.(httpErr); ok {
@@ -275,6 +279,25 @@ func (s *Server) handleUpsertProvider(w http.ResponseWriter, r *http.Request) {
 		}
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
+	}
+	if creating && (inst.KindID == "claude-cli" || inst.KindID == "codex-cli") && strings.TrimSpace(inst.Config[providers.FieldKeyConfigDir]) == "" {
+		home := filepath.Join(filepath.Dir(s.providerStore.Path()), "provider-homes", inst.ID)
+		if err := os.MkdirAll(home, 0o700); err != nil {
+			_ = s.providerStore.Delete(inst.ID)
+			writeError(w, http.StatusInternalServerError, "create provider home: "+err.Error())
+			return
+		}
+		req.ID = inst.ID
+		if req.Config == nil {
+			req.Config = map[string]string{}
+		}
+		req.Config[providers.FieldKeyConfigDir] = home
+		inst, err = s.upsertProviderInstance(req, upsertProviderOpts{})
+		if err != nil {
+			_ = s.providerStore.Delete(req.ID)
+			writeError(w, http.StatusInternalServerError, "persist provider home: "+err.Error())
+			return
+		}
 	}
 	s.applySettings()
 	s.logger.Info("provider instance upserted", "id", inst.ID, "kind", inst.KindID)

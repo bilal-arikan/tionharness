@@ -6,11 +6,14 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/bilal-arikan/tionswarm/internal/db"
 	"github.com/bilal-arikan/tionswarm/internal/market"
+	"github.com/bilal-arikan/tionswarm/internal/settings"
 )
 
 // doJSON issues an HTTP request against h with an optional JSON body and
@@ -37,6 +40,116 @@ func doJSON(t testing.TB, h http.Handler, method, path string, body any, out any
 		}
 	}
 	return rec
+}
+
+func TestProviders_CLIHomeIsolationOnCreateOnly(t *testing.T) {
+	for _, kind := range []string{"claude-cli", "codex-cli"} {
+		t.Run(kind, func(t *testing.T) {
+			s, _ := newWorkspaceServer(t)
+			h := s.Routes()
+			var created struct {
+				ID     string            `json:"id"`
+				Config map[string]string `json:"config"`
+			}
+			rec := doJSON(t, h, http.MethodPut, "/api/providers", upsertProviderInstanceReq{KindID: kind, Label: kind}, &created)
+			if rec.Code != http.StatusOK {
+				t.Fatalf("create status = %d, body = %s", rec.Code, rec.Body.String())
+			}
+			want := filepath.Join(filepath.Dir(s.providerStore.Path()), "provider-homes", created.ID)
+			if created.Config["configDir"] != want {
+				t.Fatalf("configDir = %q, want %q", created.Config["configDir"], want)
+			}
+			if info, err := os.Stat(want); err != nil || !info.IsDir() {
+				t.Fatalf("isolated home not created: %v", err)
+			}
+
+			legacy, err := s.providerStore.Upsert(settings.ProviderInstanceInput{ID: "legacy-" + kind, KindID: kind, Config: map[string]string{"configDir": ""}})
+			if err != nil {
+				t.Fatalf("seed legacy instance: %v", err)
+			}
+			rec = doJSON(t, h, http.MethodPut, "/api/providers", upsertProviderInstanceReq{ID: legacy.ID, KindID: kind, Label: "updated", Config: map[string]string{"configDir": ""}}, nil)
+			if rec.Code != http.StatusOK {
+				t.Fatalf("update status = %d, body = %s", rec.Code, rec.Body.String())
+			}
+			stored, ok := s.providerStore.Get(legacy.ID)
+			if !ok || stored.Config["configDir"] != "" {
+				t.Fatalf("legacy configDir was rewritten: %+v", stored.Config)
+			}
+		})
+	}
+}
+
+func TestProviderAuthRoutes(t *testing.T) {
+	tests := []struct {
+		name       string
+		kind       string
+		method     string
+		pathSuffix string
+		wantStatus int
+	}{
+		{name: "claude status", kind: "claude-cli", method: http.MethodGet, pathSuffix: "/auth", wantStatus: http.StatusOK},
+		{name: "codex status", kind: "codex-cli", method: http.MethodGet, pathSuffix: "/auth", wantStatus: http.StatusOK},
+		{name: "non CLI status", kind: "anthropic", method: http.MethodGet, pathSuffix: "/auth", wantStatus: http.StatusBadRequest},
+		{name: "claude route on codex", kind: "codex-cli", method: http.MethodPost, pathSuffix: "/auth/oauth/start", wantStatus: http.StatusBadRequest},
+		{name: "codex route on claude", kind: "claude-cli", method: http.MethodGet, pathSuffix: "/auth/device/status", wantStatus: http.StatusBadRequest},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s, wsp := newWorkspaceServer(t)
+			config := map[string]string{"configDir": filepath.Join(t.TempDir(), "auth-home")}
+			secrets := map[string]string(nil)
+			if tt.kind == "anthropic" {
+				secrets = map[string]string{"key": "test"}
+			}
+			inst, err := s.providerStore.Upsert(settings.ProviderInstanceInput{ID: "auth-test", KindID: tt.kind, Config: config, Secrets: secrets})
+			if err != nil {
+				t.Fatalf("seed provider: %v", err)
+			}
+			req := httptest.NewRequest(tt.method, "/api/providers/"+inst.ID+tt.pathSuffix, nil)
+			req.Header.Set("X-Workspace-Id", wsp.ID)
+			rec := httptest.NewRecorder()
+			s.Routes().ServeHTTP(rec, req)
+			if rec.Code != tt.wantStatus {
+				t.Fatalf("status = %d, want %d, body = %s", rec.Code, tt.wantStatus, rec.Body.String())
+			}
+			if tt.pathSuffix == "/auth" && tt.wantStatus == http.StatusOK {
+				var got providerAuthDTO
+				if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+					t.Fatalf("decode auth status: %v", err)
+				}
+				if got.Kind != tt.kind || got.HomeDir != config["configDir"] {
+					t.Fatalf("auth status = %+v", got)
+				}
+			}
+		})
+	}
+
+	registered := []struct {
+		method string
+		path   string
+	}{
+		{http.MethodGet, "/auth"},
+		{http.MethodPost, "/auth/oauth/start"},
+		{http.MethodPost, "/auth/oauth/complete"},
+		{http.MethodPost, "/auth/oauth/loopback/start"},
+		{http.MethodGet, "/auth/oauth/loopback/status"},
+		{http.MethodPost, "/auth/device/start"},
+		{http.MethodGet, "/auth/device/status"},
+		{http.MethodPost, "/auth/device/cancel"},
+		{http.MethodPost, "/auth/api-key"},
+	}
+	for _, route := range registered {
+		t.Run(route.method+" "+route.path, func(t *testing.T) {
+			s, wsp := newWorkspaceServer(t)
+			req := httptest.NewRequest(route.method, "/api/providers/missing"+route.path, nil)
+			req.Header.Set("X-Workspace-Id", wsp.ID)
+			rec := httptest.NewRecorder()
+			s.Routes().ServeHTTP(rec, req)
+			if rec.Code != http.StatusNotFound {
+				t.Fatalf("status = %d, want 404, body = %s", rec.Code, rec.Body.String())
+			}
+		})
+	}
 }
 
 // TestProviderKinds_SchemaCoversEveryRegisteredKind verifies GET

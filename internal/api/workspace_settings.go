@@ -185,41 +185,27 @@ type claudeAuthDTO struct {
 func (s *Server) handleWorkspaceClaudeAuth(w http.ResponseWriter, r *http.Request) {
 	wsp := ws(r)
 	home := filepath.Join(wsp.DataDir, "claude-home")
-	p, err := s.providers.Get("claude-cli")
-	if err != nil {
-		writeJSON(w, http.StatusOK, claudeAuthDTO{ClaudeHomeDir: home, Detail: err.Error()})
-		return
-	}
+	writeJSON(w, http.StatusOK, s.claudeAuthStatus(r, home, s.providers.ClaudeCLIPath()))
+}
+
+func (s *Server) claudeAuthStatus(r *http.Request, home, binPath string) claudeAuthDTO {
 	// Branch on the capabilities the probe actually needs (CLI transport + a
 	// pre-flight auth check) instead of on the concrete type, so a second CLI
 	// transport reuses this path unchanged.
-	cli, ok := providers.AsCLI(p)
-	if !ok {
-		writeError(w, http.StatusInternalServerError, "claude-cli provider unavailable")
-		return
-	}
-	prober, ok := cli.(providers.AuthProber)
-	if !ok {
-		writeError(w, http.StatusInternalServerError, "claude-cli provider cannot probe authentication")
-		return
-	}
+	cli := providers.NewClaudeCLI(binPath, "", home, "", "")
 	// The CLI binary must exist before a login probe makes sense. When it is
 	// missing there is nothing to authenticate — report Installed:false so the
 	// client can steer the user to set up a provider instead of showing a login
 	// popup for a CLI that cannot run.
 	if !cli.Installed() {
-		writeJSON(w, http.StatusOK, claudeAuthDTO{ClaudeHomeDir: home,
-			Detail: "claude CLI not found (set its path in Providers, or use an API-key provider)"})
-		return
+		return claudeAuthDTO{ClaudeHomeDir: home, Detail: "claude CLI not found (set its path in Providers, or use an API-key provider)"}
 	}
-	cli.SetConfigDir(home)
 	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 	defer cancel()
-	if perr := prober.ProbeAuth(ctx); perr != nil {
-		writeJSON(w, http.StatusOK, claudeAuthDTO{Installed: true, ClaudeHomeDir: home, Detail: perr.Error()})
-		return
+	if perr := cli.ProbeAuth(ctx); perr != nil {
+		return claudeAuthDTO{Installed: true, ClaudeHomeDir: home, Detail: perr.Error()}
 	}
-	writeJSON(w, http.StatusOK, claudeAuthDTO{LoggedIn: true, Installed: true, ClaudeHomeDir: home})
+	return claudeAuthDTO{LoggedIn: true, Installed: true, ClaudeHomeDir: home}
 }
 
 // handleUpdateWorkspaceSettings applies a partial update (including rename) to

@@ -60,10 +60,15 @@ This section only covers what is still a plain `get_settings`/`update_settings`
 field; for provider CRUD see below.
 
 - `defaultModel` — model id; `""` = the provider's own default.
-- `claudeCliPath` — path to the `claude` binary; `""` = auto-detect on PATH.
-- `claudeConfigDir` — `CLAUDE_CONFIG_DIR` for claude-cli subprocesses. **Default: `~/.tionswarm/claude-home`** (a TionSwarm-managed isolated config home → clean skills/settings/commands/global `CLAUDE.md`/login, separate from the user's `~/.claude`). Authenticate it via `claudeCliAuthToken` below (no in-dir login needed) or run a one-time `claude` login there. Set `""` to inherit the shared `~/.claude` instead (keyless out-of-box, but picks up the user's installed skills/tools).
-- `claudeCliAuthKind` — claude-cli credential kind injected into the subprocess env: `"oauth"` → `CLAUDE_CODE_OAUTH_TOKEN` (Max/Pro subscription token from `claude setup-token`), `"apikey"` → `ANTHROPIC_API_KEY` (API billing), `""` → none. Lets an isolated `claudeConfigDir` authenticate without an interactive in-dir login.
-- `claudeCliAuthToken` — **write-only**; the credential value for `claudeCliAuthKind`. `""` clears. Read shows only `claudeCliAuthSet`. Set via the Settings → Providers → "claude-cli kimlik" popup (Max/Pro or API key).
+- CLI path, config home, and authentication are provider-instance fields, not
+  application settings. A newly created `claude-cli` or `codex-cli` instance with
+  an empty `configDir` receives `<dataDir>/provider-homes/<instance-id>`
+  automatically. It is exported as `CLAUDE_CONFIG_DIR` or `CODEX_HOME`.
+- Authenticate the selected instance through `GET /api/providers/{id}/auth` and
+  the matching `/api/providers/{id}/auth/...` OAuth/device/API-key routes. The
+  Providers panel exposes these as **Giriş yap / Durum**. Legacy
+  `/api/workspace-settings/claude-auth...` and `codex-auth...` routes remain only
+  for backward compatibility.
 - `extendedPromptCache` — Anthropic extended (1h) prompt-cache beta (anthropic only). (The 1M-context beta was retired — 1M is GA since 2026-03, so there is no `oneMillionContext` setting anymore.)
 - `anthropicContextEditing` — Anthropic API-native context editing beta (anthropic only, default **off**). The server clears old tool_use/tool_result blocks from the cached prefix in place (`clear_tool_uses_20250919`, the microcompact analogue) once the prompt grows past ~100k input tokens, keeping the newest 3 tool uses. Complements TionSwarm's client-side compaction; does not replace it.
 

@@ -43,40 +43,24 @@ type codexAuthDTO struct {
 func (s *Server) handleWorkspaceCodexAuth(w http.ResponseWriter, r *http.Request) {
 	home := codexHomeDirFor(r)
 	binPath := s.providers.CodexCLIPath()
+	writeJSON(w, http.StatusOK, s.codexAuthStatus(r, home, binPath))
+}
+
+func (s *Server) codexAuthStatus(r *http.Request, home, binPath string) codexAuthDTO {
 	installed := binPath != ""
 	if !installed {
-		writeJSON(w, http.StatusOK, codexAuthDTO{CodexHomeDir: home,
-			Detail: "codex CLI not found (set its path in Providers, or use an API-key provider)"})
-		return
+		return codexAuthDTO{CodexHomeDir: home, Detail: "codex CLI not found (set its path in Providers, or use an API-key provider)"}
 	}
 	if codexSubscriptionTier(home) == "" {
-		writeJSON(w, http.StatusOK, codexAuthDTO{Installed: true, CodexHomeDir: home,
-			Detail: "not logged in"})
-		return
+		return codexAuthDTO{Installed: true, CodexHomeDir: home, Detail: "not logged in"}
 	}
-	p, err := s.providers.Get("codex-cli")
-	if err != nil {
-		writeJSON(w, http.StatusOK, codexAuthDTO{Installed: true, CodexHomeDir: home, Detail: err.Error()})
-		return
-	}
-	cli, ok := providers.AsCLI(p)
-	if !ok {
-		writeError(w, http.StatusInternalServerError, "codex-cli provider unavailable")
-		return
-	}
-	prober, ok := cli.(providers.AuthProber)
-	if !ok {
-		writeError(w, http.StatusInternalServerError, "codex-cli provider cannot probe authentication")
-		return
-	}
-	cli.SetConfigDir(home)
+	cli := providers.NewCodexCLI(binPath, "", home)
 	ctx, cancel := context.WithTimeout(r.Context(), 60*time.Second)
 	defer cancel()
-	if perr := prober.ProbeAuth(ctx); perr != nil {
-		writeJSON(w, http.StatusOK, codexAuthDTO{Installed: true, CodexHomeDir: home, Detail: perr.Error()})
-		return
+	if perr := cli.ProbeAuth(ctx); perr != nil {
+		return codexAuthDTO{Installed: true, CodexHomeDir: home, Detail: perr.Error()}
 	}
-	writeJSON(w, http.StatusOK, codexAuthDTO{LoggedIn: true, Installed: true, CodexHomeDir: home})
+	return codexAuthDTO{LoggedIn: true, Installed: true, CodexHomeDir: home}
 }
 
 type codexDeviceStartResp struct {
@@ -96,12 +80,14 @@ const codexDeviceExpirySec = 15 * 60
 // until the user approves in their browser, the code expires, or the flow is
 // cancelled.
 func (s *Server) handleCodexDeviceStart(w http.ResponseWriter, r *http.Request) {
-	binPath := s.providers.CodexCLIPath()
+	s.handleCodexDeviceStartFor(w, r, codexHomeDirFor(r), s.providers.CodexCLIPath())
+}
+
+func (s *Server) handleCodexDeviceStartFor(w http.ResponseWriter, r *http.Request, home, binPath string) {
 	if binPath == "" {
 		writeError(w, http.StatusBadRequest, "codex CLI not found (set its path in Providers)")
 		return
 	}
-	home := codexHomeDirFor(r)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 35*time.Second)
 	defer cancel()
@@ -126,7 +112,11 @@ type codexDeviceStatusResp struct {
 // in-flight (or just-finished) device-auth flow. 404 when no flow has been
 // started for this codex-home since the process started.
 func (s *Server) handleCodexDeviceStatus(w http.ResponseWriter, r *http.Request) {
-	home := codexHomeDirFor(r)
+	s.handleCodexDeviceStatusFor(w, r, codexHomeDirFor(r), s.providers.CodexCLIPath())
+}
+
+func (s *Server) handleCodexDeviceStatusFor(w http.ResponseWriter, r *http.Request, home, binPath string) {
+	_ = binPath
 	flow, ok := codexAuthManager.Flow(home)
 	if !ok {
 		writeError(w, http.StatusNotFound, "no device-auth flow found for this workspace")
@@ -140,7 +130,11 @@ func (s *Server) handleCodexDeviceStatus(w http.ResponseWriter, r *http.Request)
 // if any. Idempotent: cancelling an already-terminal or nonexistent flow is
 // not an error.
 func (s *Server) handleCodexDeviceCancel(w http.ResponseWriter, r *http.Request) {
-	home := codexHomeDirFor(r)
+	s.handleCodexDeviceCancelFor(w, r, codexHomeDirFor(r), s.providers.CodexCLIPath())
+}
+
+func (s *Server) handleCodexDeviceCancelFor(w http.ResponseWriter, r *http.Request, home, binPath string) {
+	_ = binPath
 	if flow, ok := codexAuthManager.Flow(home); ok {
 		flow.Cancel()
 	}
@@ -155,6 +149,10 @@ type codexAPIKeyReq struct {
 // workspace's codex-home, piping the key over stdin (never argv) so it never
 // appears in a process listing. The key is never echoed back in the response.
 func (s *Server) handleCodexAPIKeyLogin(w http.ResponseWriter, r *http.Request) {
+	s.handleCodexAPIKeyLoginFor(w, r, codexHomeDirFor(r), s.providers.CodexCLIPath())
+}
+
+func (s *Server) handleCodexAPIKeyLoginFor(w http.ResponseWriter, r *http.Request, home, binPath string) {
 	req, ok := bindJSON[codexAPIKeyReq](w, r)
 	if !ok {
 		return
@@ -163,12 +161,10 @@ func (s *Server) handleCodexAPIKeyLogin(w http.ResponseWriter, r *http.Request) 
 		writeError(w, http.StatusBadRequest, "apiKey is required")
 		return
 	}
-	binPath := s.providers.CodexCLIPath()
 	if binPath == "" {
 		writeError(w, http.StatusBadRequest, "codex CLI not found (set its path in Providers)")
 		return
 	}
-	home := codexHomeDirFor(r)
 	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 	defer cancel()
 	if err := codexauth.LoginWithAPIKey(ctx, binPath, home, req.APIKey); err != nil {

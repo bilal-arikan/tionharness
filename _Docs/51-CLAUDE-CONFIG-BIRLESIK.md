@@ -4,6 +4,15 @@
 > config evini **tek bir per-workspace dizinde** birleştirmek. Böylece hem TionSwarm
 > hem de driver ettiği `claude` CLI **aynı skill/settings/login** setini kullanır.
 
+> **Güncel durum (2026-08-19):** Bu belge per-workspace modelinin tarihsel
+> tasarımını anlatır. Sağlayıcı örnekleriyle birlikte yeni `claude-cli`
+> örneklerinin login/config evi artık **örnek başına**dır. Boş `configDir` ile
+> oluşturulan örneğe backend `<dataDir>/provider-homes/<instance-id>` yolunu
+> atar; bu uygulama-geneli örneği seçen bütün ajanlar aynı kimliği kullanır.
+> `<workspace>/claude-home`, yalnız `configDir` alanı boş kalmış legacy örnekler
+> ve eski `/api/workspace-settings/claude-auth...` rotaları için fallback'tir.
+> Güncel sözleşme: `71-SAGLAYICI-ORNEKLERI-PLANI.md` §4.4 ve §5.1.
+
 ## Sorun
 
 Önceden `claude-cli`'nin config evi **global tek bir ayardı**:

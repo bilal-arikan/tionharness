@@ -51,6 +51,12 @@ func pruneLoopback(now time.Time) {
 // to open. The credential is written by the local /callback handler when the browser
 // redirects back; the popup polls handleClaudeOAuthLoopbackStatus.
 func (s *Server) handleClaudeOAuthLoopbackStart(w http.ResponseWriter, r *http.Request) {
+	home := filepath.Join(ws(r).DataDir, "claude-home")
+	s.handleClaudeOAuthLoopbackStartFor(w, r, home, s.providers.ClaudeCLIPath())
+}
+
+func (s *Server) handleClaudeOAuthLoopbackStartFor(w http.ResponseWriter, r *http.Request, home, binPath string) {
+	_ = binPath
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "could not bind local callback port: "+err.Error())
@@ -63,7 +69,6 @@ func (s *Server) handleClaudeOAuthLoopbackStart(w http.ResponseWriter, r *http.R
 		writeError(w, http.StatusInternalServerError, "oauth begin failed: "+err.Error())
 		return
 	}
-	home := filepath.Join(ws(r).DataDir, "claude-home")
 	flowID := uuid.NewString()
 	fl := &loopbackFlow{status: "pending", home: home, createdAt: time.Now()}
 
@@ -116,11 +121,21 @@ func (s *Server) handleClaudeOAuthLoopbackStart(w http.ResponseWriter, r *http.R
 // handleClaudeOAuthLoopbackStatus reports the current state of a loopback flow so
 // the popup can poll until the browser callback completes it.
 func (s *Server) handleClaudeOAuthLoopbackStatus(w http.ResponseWriter, r *http.Request) {
+	home := filepath.Join(ws(r).DataDir, "claude-home")
+	s.handleClaudeOAuthLoopbackStatusFor(w, r, home, s.providers.ClaudeCLIPath())
+}
+
+func (s *Server) handleClaudeOAuthLoopbackStatusFor(w http.ResponseWriter, r *http.Request, home, binPath string) {
+	_, _ = home, binPath
 	id := r.URL.Query().Get("flowId")
 	loopbackFlows.mu.Lock()
 	fl := loopbackFlows.m[id]
 	loopbackFlows.mu.Unlock()
 	if fl == nil {
+		writeJSON(w, http.StatusOK, map[string]string{"status": "unknown"})
+		return
+	}
+	if fl.home != home {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "unknown"})
 		return
 	}

@@ -381,13 +381,21 @@ doğası; global login (`codex login status`) test sonrası sağlam kaldı,
 doğrulandı. Gerçek bir workspace'te `codex login` ile tek-seferlik interaktif
 login yapıldıktan sonra bu adım production koşullarında tekrarlanabilir.
 
+> **Güncel auth modeli (2026-08-19):** Yukarıdaki paragraf Faz 0'ın canlı test
+> koşulunu kaydeder. Yeni `codex-cli` örnekleri artık boş `configDir` ile
+> yaratıldığında `<dataDir>/provider-homes/<instance-id>` altında bağımsız bir
+> `CODEX_HOME` alır. Device-code ve API-key login seçili örnek id'siyle
+> `/api/providers/{id}/auth/...` rotalarında yürür; kimlik workspace'e değil
+> uygulama-geneli sağlayıcı örneğine aittir. Legacy workspace auth rotaları
+> geriye uyumluluk için korunur.
+
 ---
 
 ## İlgili dokümanlar
 
 - `69-CODEX-CLI-SAGLAYICI.md` — fizibilite + tam referans (bayraklar, olay şeması, parite matrisi)
 - `17-*` — sağlayıcı soyutlaması, prompt-cache muhasebesi
-- `51-CLAUDE-CONFIG-BIRLESIK.md` — per-workspace config evi (codex-home'un ablası)
+- `51-CLAUDE-CONFIG-BIRLESIK.md` — tarihsel per-workspace config evi ve legacy fallback
 - `52-MCP-GATEWAY.md` — iki-tier MCP köprüsü
 - `40-*` — izin/onay katmanı
 - `56-SELF-HEALING.md` — hata sınıflandırma ve retry politikası
