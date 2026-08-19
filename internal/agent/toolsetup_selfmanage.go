@@ -31,6 +31,10 @@ func (r *Runtime) selfManageBuiltins(agent db.Agent) []tools.Tool {
 		tools.NewUpdateAgentTool(r.db, agent.ID, r.resolveProviderInstance),
 		tools.NewDeleteAgentTool(r.db, agent.ID, r.reloadSchedules, r.AgentBusy),
 		tools.NewListAgentsTool(r.db, agent.ID),
+		// Providers are read-only for agents: they may SEE the configured
+		// instances (to pick one for create_agent/update_agent's `provider`),
+		// but creating/editing/deleting them stays in the Settings screen.
+		tools.NewListProvidersTool(r.providers.ListInstances),
 		// Note: agent→agent work is unified under run_subagent (above) — async
 		// background runs go through its wait:"async" mode (→ SpawnSession). The
 		// old call_agent / spawn_session / send_agent_message tools were removed.

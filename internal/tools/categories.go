@@ -85,7 +85,7 @@ var builtinCategory = map[string]string{
 	"list_config": CategoryConfig, "config_validate": CategoryConfig,
 	"list_workspaces": CategoryConfig, "create_workspace": CategoryConfig,
 	"rename_workspace": CategoryConfig, "delete_workspace": CategoryConfig,
-	"secret": CategoryConfig,
+	"secret": CategoryConfig, "list_providers": CategoryConfig,
 
 	// Diagnostics, validators, tool loading
 	"read_logs": CategoryDiagnostics, "read_session_debug": CategoryDiagnostics,

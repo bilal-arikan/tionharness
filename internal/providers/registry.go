@@ -3,6 +3,7 @@ package providers
 import (
 	"fmt"
 	"os/exec"
+	"sort"
 	"strings"
 	"sync"
 )
@@ -113,6 +114,48 @@ func (r *Registry) SetAnthropicBetas(extendedCache, contextEditing, serverCompac
 	r.betaServerCompaction = serverCompaction
 	r.betaRefusalFallback = refusalFallback
 	r.mu.Unlock()
+}
+
+// InstanceSummary is the credential-free view of one provider instance: the
+// fields an agent needs to PICK an instance (id, kind, label, whether it is
+// enabled, its models) and nothing that could leak a key. Instance.Values —
+// which holds decrypted secrets — is deliberately absent.
+type InstanceSummary struct {
+	ID           string `json:"id"`
+	KindID       string `json:"kindId"`
+	Label        string `json:"label"`
+	Enabled      bool   `json:"enabled"`
+	DefaultModel string `json:"defaultModel,omitempty"`
+	Models       string `json:"models,omitempty"`
+	// Available mirrors Registry.Available: whether the instance is actually
+	// usable right now (kind registered, required credentials/binaries present).
+	Available bool `json:"available"`
+}
+
+// ListInstances returns every configured provider instance — enabled or not —
+// as a credential-free summary, sorted by id for a stable listing. Unlike
+// InstanceCatalog it does not drop disabled instances: a caller listing
+// providers needs to see that an instance exists but is switched off.
+func (r *Registry) ListInstances() []InstanceSummary {
+	r.mu.RLock()
+	out := make([]InstanceSummary, 0, len(r.instances))
+	for _, inst := range r.instances {
+		out = append(out, InstanceSummary{
+			ID:           inst.ID,
+			KindID:       inst.KindID,
+			Label:        inst.Label,
+			Enabled:      inst.Enabled,
+			DefaultModel: inst.DefaultModel,
+			Models:       inst.Models,
+		})
+	}
+	r.mu.RUnlock()
+	// Available takes the lock itself, so it is resolved outside the section above.
+	for i := range out {
+		out[i].Available = r.Available(out[i].ID)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
+	return out
 }
 
 // InstanceCatalog returns one catalog entry per configured, enabled provider

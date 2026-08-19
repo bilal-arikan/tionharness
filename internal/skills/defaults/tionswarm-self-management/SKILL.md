@@ -181,6 +181,13 @@ the CLI's own native WebFetch is used.)
 the app-wide settings.json). These change config for the WHOLE application — see
 the `tionswarm-settings` skill for the full field reference and safety notes.
 
+**Providers** — `list_providers` (READ-ONLY). Lists the configured provider
+instances: id, kindId, label, enabled, defaultModel, models and whether the
+instance is currently usable. API keys are never returned. Use an `id` from here
+as the `provider` value of `create_agent` / `update_agent` to bind an agent to a
+specific instance. Provider instances are created/edited/deleted ONLY from the
+Settings → Providers screen — there is no tool for that, so don't look for one.
+
 ## Working principles
 
 - **Activate narrowly, up front.** One `activate_tools` call for the whole task
