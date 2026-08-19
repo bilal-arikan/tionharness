@@ -17,6 +17,7 @@ import {
   PinOff,
   Table2,
   Users,
+  PencilLine,
   type LucideIcon,
 } from 'lucide-react'
 import type { Agent, Session, SearchHit } from '@/types'
@@ -28,6 +29,7 @@ import { useOutsideClick } from '@/shared/hooks/useOutsideClick'
 import { useMultiSelect } from '@/shared/hooks/useMultiSelect'
 import { SelectionBar, SelectionBarButton, Skeleton } from '@/shared/components'
 import { useDelayedFlag } from '@/shared/hooks/useDelayedFlag'
+import { useDraftSessionIds } from '@/shared/hooks/useDraftSessionIds'
 import {
   FILTERS,
   kindMeta,
@@ -194,6 +196,27 @@ export function SessionsSidebar({
       workers: stat((s) => isWorkerSession(s) && s.state !== 'archived'),
       archived: stat((s) => s.state === 'archived'),
     }
+  }, [sessions, streamingSessionIds, runtimeById])
+
+  // Sessions holding an unsent composer draft (localStorage, active workspace).
+  const draftIds = useDraftSessionIds()
+
+  // coordinatorSessionId → how many of its DIRECT workers have a live turn. A
+  // coordinator usually sits idle while its branch works, so without this the row
+  // looks finished while the tree is still busy. Counting direct children only
+  // keeps the number meaningful ("2 worker çalışıyor"); a deep branch still shows
+  // up because every mid-level node is itself a worker of the node above it.
+  const liveWorkerCounts = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const s of sessions) {
+      const parent = s.coordinatorSessionId
+      if (!parent) continue
+      const live =
+        (streamingSessionIds?.has(s.id) ?? false) || (runtimeById?.get(s.id)?.running ?? false)
+      if (!live) continue
+      counts.set(parent, (counts.get(parent) ?? 0) + 1)
+    }
+    return counts
   }, [sessions, streamingSessionIds, runtimeById])
 
   // Group the (already newest-first) sessions into recency buckets, preserving
@@ -457,6 +480,9 @@ export function SessionsSidebar({
                 // autonomous task/flow/schedule turns this window never streamed).
                 const isStreaming =
                   (streamingSessionIds?.has(s.id) ?? false) || (runtime?.running ?? false)
+                // Its own turn is idle, but workers below it are running.
+                const liveWorkers = liveWorkerCounts.get(s.id) ?? 0
+                const hasDraft = draftIds.has(s.id)
                 const meta = kindMeta(s.kind)
                 const KindIcon = meta.icon
                 const isSelected = sel.isSelected(s.id)
@@ -510,6 +536,18 @@ export function SessionsSidebar({
                                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[var(--color-success)] opacity-75" />
                                 <span className="relative inline-flex h-2 w-2 rounded-full bg-[var(--color-success)]" />
                               </span>
+                            ) : liveWorkers > 0 ? (
+                              // Idle itself, but its branch is working: same pulse
+                              // in the coordination accent so a delegating row is
+                              // not read as finished. Takes precedence over the
+                              // unread dot for the same reason a live turn does.
+                              <span
+                                className="relative flex h-2 w-2 shrink-0"
+                                title={`${liveWorkers} worker çalışıyor`}
+                              >
+                                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[var(--color-warning)] opacity-75" />
+                                <span className="relative inline-flex h-2 w-2 rounded-full bg-[var(--color-warning)]" />
+                              </span>
                             ) : (
                               s.unread && (
                                 <span
@@ -517,6 +555,17 @@ export function SessionsSidebar({
                                   title="Okunmadı"
                                 />
                               )
+                            )}
+                            {/* Unsent composer text waiting in this session. Not a
+                              run state, so it rides alongside the dot above rather
+                              than replacing it. */}
+                            {hasDraft && (
+                              <span
+                                className="flex shrink-0 text-[var(--color-accent)]"
+                                title="Gönderilmemiş taslak mesaj var"
+                              >
+                                <PencilLine size={11} />
+                              </span>
                             )}
                             {s.pinned && (
                               <Pin
