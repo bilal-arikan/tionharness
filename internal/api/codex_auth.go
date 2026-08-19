@@ -3,7 +3,6 @@ package api
 import (
 	"context"
 	"net/http"
-	"path/filepath"
 	"time"
 
 	"github.com/bilal-arikan/tionswarm/internal/codexauth"
@@ -12,15 +11,10 @@ import (
 
 // codexAuthManager tracks in-flight device-auth flows across all workspaces,
 // keyed internally by CODEX_HOME (see codexauth.Manager) so at most one flow
-// runs per workspace's codex-home at a time. Process-wide, independent of any
+// runs per app-global codex-home at a time. Process-wide, independent of any
 // single request — a flow started by one request is polled/cancelled by
 // later ones.
 var codexAuthManager = codexauth.NewManager()
-
-// codexHomeDirFor resolves the legacy auth routes to the app-global home.
-func (s *Server) codexHomeDirFor() string {
-	return filepath.Join(s.dataDir, "codex-home")
-}
 
 type codexAuthDTO struct {
 	LoggedIn bool `json:"loggedIn"`
@@ -31,14 +25,17 @@ type codexAuthDTO struct {
 	Detail       string `json:"detail,omitempty"`
 }
 
-// handleWorkspaceCodexAuth reports whether this workspace's codex-home is
+// handleWorkspaceCodexAuth reports whether the app-global codex-home is
 // logged in. Two stages, cheapest first: the on-disk credential check rejects
 // an empty/absent auth.json without spawning anything, then a live probe turn
 // proves the credential actually works. The disk check alone reported "logged
 // in" for a codex-home whose token was expired or revoked — every real turn
 // then failed with 401, so presence is treated as necessary, not sufficient.
 func (s *Server) handleWorkspaceCodexAuth(w http.ResponseWriter, r *http.Request) {
-	home := s.codexHomeDirFor()
+	home, ok := s.resolveAppCLIHome(w, "codex-cli")
+	if !ok {
+		return
+	}
 	binPath := s.providers.CodexCLIPath()
 	writeJSON(w, http.StatusOK, s.codexAuthStatus(r, home, binPath))
 }
@@ -72,12 +69,16 @@ type codexDeviceStartResp struct {
 const codexDeviceExpirySec = 15 * 60
 
 // handleCodexDeviceStart begins a `codex login --device-auth` flow against
-// this workspace's codex-home and returns the verification URL + one-time
+// the app-global codex-home and returns the verification URL + one-time
 // code for the UI to display. The subprocess keeps running in the background
 // until the user approves in their browser, the code expires, or the flow is
 // cancelled.
 func (s *Server) handleCodexDeviceStart(w http.ResponseWriter, r *http.Request) {
-	s.handleCodexDeviceStartFor(w, r, s.codexHomeDirFor(), s.providers.CodexCLIPath())
+	home, ok := s.resolveAppCLIHome(w, "codex-cli")
+	if !ok {
+		return
+	}
+	s.handleCodexDeviceStartFor(w, r, home, s.providers.CodexCLIPath())
 }
 
 func (s *Server) handleCodexDeviceStartFor(w http.ResponseWriter, r *http.Request, home, binPath string) {
@@ -109,7 +110,11 @@ type codexDeviceStatusResp struct {
 // in-flight (or just-finished) device-auth flow. 404 when no flow has been
 // started for this codex-home since the process started.
 func (s *Server) handleCodexDeviceStatus(w http.ResponseWriter, r *http.Request) {
-	s.handleCodexDeviceStatusFor(w, r, s.codexHomeDirFor(), s.providers.CodexCLIPath())
+	home, ok := s.resolveAppCLIHome(w, "codex-cli")
+	if !ok {
+		return
+	}
+	s.handleCodexDeviceStatusFor(w, r, home, s.providers.CodexCLIPath())
 }
 
 func (s *Server) handleCodexDeviceStatusFor(w http.ResponseWriter, r *http.Request, home, binPath string) {
@@ -127,7 +132,11 @@ func (s *Server) handleCodexDeviceStatusFor(w http.ResponseWriter, r *http.Reque
 // if any. Idempotent: cancelling an already-terminal or nonexistent flow is
 // not an error.
 func (s *Server) handleCodexDeviceCancel(w http.ResponseWriter, r *http.Request) {
-	s.handleCodexDeviceCancelFor(w, r, s.codexHomeDirFor(), s.providers.CodexCLIPath())
+	home, ok := s.resolveAppCLIHome(w, "codex-cli")
+	if !ok {
+		return
+	}
+	s.handleCodexDeviceCancelFor(w, r, home, s.providers.CodexCLIPath())
 }
 
 func (s *Server) handleCodexDeviceCancelFor(w http.ResponseWriter, r *http.Request, home, binPath string) {
@@ -143,10 +152,14 @@ type codexAPIKeyReq struct {
 }
 
 // handleCodexAPIKeyLogin runs `codex login --with-api-key` against this
-// workspace's codex-home, piping the key over stdin (never argv) so it never
+// app-global codex-home, piping the key over stdin (never argv) so it never
 // appears in a process listing. The key is never echoed back in the response.
 func (s *Server) handleCodexAPIKeyLogin(w http.ResponseWriter, r *http.Request) {
-	s.handleCodexAPIKeyLoginFor(w, r, s.codexHomeDirFor(), s.providers.CodexCLIPath())
+	home, ok := s.resolveAppCLIHome(w, "codex-cli")
+	if !ok {
+		return
+	}
+	s.handleCodexAPIKeyLoginFor(w, r, home, s.providers.CodexCLIPath())
 }
 
 func (s *Server) handleCodexAPIKeyLoginFor(w http.ResponseWriter, r *http.Request, home, binPath string) {

@@ -3,7 +3,6 @@ package api
 import (
 	"context"
 	"net/http"
-	"path/filepath"
 	"time"
 
 	"github.com/bilal-arikan/tionswarm/internal/db"
@@ -156,7 +155,7 @@ func (s *Server) handleGetWorkspaceSettings(w http.ResponseWriter, r *http.Reque
 	writeJSON(w, http.StatusOK, toWorkspaceSettingsDTO(r.Context(), ws(r)))
 }
 
-// claudeAuthDTO reports whether THIS workspace's claude-home is authenticated,
+// claudeAuthDTO reports whether the app-global claude-home is authenticated,
 // as measured by a live pre-flight probe.
 type claudeAuthDTO struct {
 	LoggedIn bool `json:"loggedIn"`
@@ -170,12 +169,15 @@ type claudeAuthDTO struct {
 }
 
 // handleWorkspaceClaudeAuth runs a lightweight, tool-free pre-flight probe against
-// this workspace's claude-home and reports whether the claude-cli is logged in. It
+// the app-global claude-home and reports whether the claude-cli is logged in. It
 // spawns a minimal `claude -p` (a few hundred ms), so it is ON-DEMAND only — the
 // Settings screen calls it behind a "Verify login" action, never on every load — and
 // lets the user catch an auth lapse before an agent turn burns on it.
 func (s *Server) handleWorkspaceClaudeAuth(w http.ResponseWriter, r *http.Request) {
-	home := filepath.Join(s.dataDir, "claude-home")
+	home, ok := s.resolveAppCLIHome(w, "claude-cli")
+	if !ok {
+		return
+	}
 	writeJSON(w, http.StatusOK, s.claudeAuthStatus(r, home, s.providers.ClaudeCLIPath()))
 }
 

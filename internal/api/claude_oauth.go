@@ -2,7 +2,6 @@ package api
 
 import (
 	"net/http"
-	"path/filepath"
 	"sync"
 	"time"
 
@@ -45,7 +44,10 @@ type oauthStartResp struct {
 // fresh PKCE authorization URL, stashes the verifier server-side under a flow id and
 // returns the URL for the popup to open. No secrets reach the client.
 func (s *Server) handleClaudeOAuthStart(w http.ResponseWriter, r *http.Request) {
-	home := filepath.Join(s.dataDir, "claude-home")
+	home, ok := s.resolveAppCLIHome(w, "claude-cli")
+	if !ok {
+		return
+	}
 	s.handleClaudeOAuthStartFor(w, r, home, s.providers.ClaudeCLIPath())
 }
 
@@ -77,11 +79,14 @@ type oauthCompleteResp struct {
 }
 
 // handleClaudeOAuthComplete finishes the login: it exchanges the pasted code (with
-// the stashed PKCE verifier) for a credential and writes it into THIS workspace's
+// the stashed PKCE verifier) for a credential and writes it into the app-global
 // claude-home, so the claude-cli provider authenticates on its next turn. The
 // credential carries a refresh token, so the CLI keeps it fresh thereafter.
 func (s *Server) handleClaudeOAuthComplete(w http.ResponseWriter, r *http.Request) {
-	home := filepath.Join(s.dataDir, "claude-home")
+	home, ok := s.resolveAppCLIHome(w, "claude-cli")
+	if !ok {
+		return
+	}
 	s.handleClaudeOAuthCompleteFor(w, r, home, s.providers.ClaudeCLIPath())
 }
 

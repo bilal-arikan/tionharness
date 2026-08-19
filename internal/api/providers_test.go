@@ -152,6 +152,75 @@ func TestProviderAuthRoutes(t *testing.T) {
 	}
 }
 
+func TestProviderAuthHomeResolution(t *testing.T) {
+	for _, kind := range []string{"claude-cli", "codex-cli"} {
+		t.Run(kind+" app-global fallback", func(t *testing.T) {
+			s, wsp := newWorkspaceServer(t)
+			inst, err := s.providerStore.Upsert(settings.ProviderInstanceInput{
+				ID: kind + "-shared", KindID: kind, Config: map[string]string{"configDir": ""},
+			})
+			if err != nil {
+				t.Fatalf("seed provider: %v", err)
+			}
+			req := httptest.NewRequest(http.MethodGet, "/api/providers/"+inst.ID+"/auth", nil)
+			req.SetPathValue("id", inst.ID)
+			rec := httptest.NewRecorder()
+			target, ok := s.resolveProviderAuthTarget(rec, req, kind)
+			if !ok {
+				t.Fatalf("resolve failed: status=%d body=%s", rec.Code, rec.Body.String())
+			}
+			want := filepath.Join(s.dataDir, strings.TrimSuffix(kind, "-cli")+"-home")
+			if target.homeDir != want {
+				t.Fatalf("home = %q, want app-global %q", target.homeDir, want)
+			}
+			workspaceHome := filepath.Join(wsp.DataDir, strings.TrimSuffix(kind, "-cli")+"-home")
+			if target.homeDir == workspaceHome {
+				t.Fatalf("home unexpectedly resolved under workspace: %q", target.homeDir)
+			}
+		})
+	}
+
+	t.Run("explicit configDir unchanged", func(t *testing.T) {
+		s, _ := newWorkspaceServer(t)
+		explicit := filepath.Join(t.TempDir(), "dedicated-home")
+		inst, err := s.providerStore.Upsert(settings.ProviderInstanceInput{
+			ID: "claude-dedicated", KindID: "claude-cli", Config: map[string]string{"configDir": explicit},
+		})
+		if err != nil {
+			t.Fatalf("seed provider: %v", err)
+		}
+		req := httptest.NewRequest(http.MethodGet, "/api/providers/"+inst.ID+"/auth", nil)
+		req.SetPathValue("id", inst.ID)
+		target, ok := s.resolveProviderAuthTarget(httptest.NewRecorder(), req, "claude-cli")
+		if !ok {
+			t.Fatal("resolve failed")
+		}
+		if target.homeDir != explicit {
+			t.Fatalf("home = %q, want explicit %q", target.homeDir, explicit)
+		}
+	})
+
+	t.Run("missing app data dir returns error", func(t *testing.T) {
+		s, _ := newWorkspaceServer(t)
+		s.dataDir = ""
+		inst, err := s.providerStore.Upsert(settings.ProviderInstanceInput{
+			ID: "codex-no-data", KindID: "codex-cli", Config: map[string]string{"configDir": ""},
+		})
+		if err != nil {
+			t.Fatalf("seed provider: %v", err)
+		}
+		req := httptest.NewRequest(http.MethodGet, "/api/providers/"+inst.ID+"/auth", nil)
+		req.SetPathValue("id", inst.ID)
+		rec := httptest.NewRecorder()
+		if _, ok := s.resolveProviderAuthTarget(rec, req, "codex-cli"); ok {
+			t.Fatal("resolve unexpectedly succeeded")
+		}
+		if rec.Code != http.StatusInternalServerError {
+			t.Fatalf("status = %d, want %d", rec.Code, http.StatusInternalServerError)
+		}
+	})
+}
+
 // TestProviderKinds_SchemaCoversEveryRegisteredKind verifies GET
 // /api/provider-kinds walks the live kind registry rather than a hard-coded
 // list, and that every field the anthropic kind declares (a required secret

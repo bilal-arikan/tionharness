@@ -19,7 +19,7 @@ func codexTestServer(t *testing.T, binPath string) *Server {
 	t.Helper()
 	reg := providers.NewRegistry()
 	reg.SetCodexCLIPath(binPath)
-	return &Server{providers: reg}
+	return &Server{providers: reg, dataDir: t.TempDir()}
 }
 
 // withWorkspaceCtx attaches a minimal *workspace.Workspace (just DataDir, the
@@ -108,10 +108,14 @@ func TestHandleCodexAPIKeyLoginRequiresKey(t *testing.T) {
 // TestCodexHomeDirMatchesAgentResolution pins auth to the app-global data dir.
 func TestCodexHomeDirMatchesAgentResolution(t *testing.T) {
 	s := &Server{dataDir: `C:\data`}
-	got := s.codexHomeDirFor()
+	rec := httptest.NewRecorder()
+	got, ok := s.resolveAppCLIHome(rec, "codex-cli")
+	if !ok {
+		t.Fatalf("resolve failed: status=%d body=%s", rec.Code, rec.Body.String())
+	}
 	want := `C:\data\codex-home`
 	if got != want {
-		t.Fatalf("codexHomeDirFor() = %q, want %q", got, want)
+		t.Fatalf("resolved codex home = %q, want %q", got, want)
 	}
 }
 

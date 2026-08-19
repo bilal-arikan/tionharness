@@ -574,10 +574,7 @@ func workspaceSkillsDir(workDir string) string {
 // valid for the home that was in force when it was written; see
 // ClaudeCLI.CanResume and cmd/repair-provider-migration.
 func (r *Runtime) claudeHomeDir() string {
-	if r.dataDir == "" {
-		return ""
-	}
-	return filepath.Join(r.dataDir, "claude-home")
+	return appCLIHomeDir(r.dataDir, "claude-cli")
 }
 
 // ClaudeHomeDir exposes this workspace's claude-cli config home so out-of-loop

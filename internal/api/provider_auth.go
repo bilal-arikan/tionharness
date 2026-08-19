@@ -2,9 +2,9 @@ package api
 
 import (
 	"net/http"
-	"path/filepath"
 	"strings"
 
+	"github.com/bilal-arikan/tionswarm/internal/agent"
 	"github.com/bilal-arikan/tionswarm/internal/providers"
 )
 
@@ -23,6 +23,15 @@ type providerAuthDTO struct {
 	Detail    string `json:"detail,omitempty"`
 }
 
+func (s *Server) resolveAppCLIHome(w http.ResponseWriter, kindID string) (string, bool) {
+	home, err := agent.ResolveCLIHomeDir(s.dataDir, kindID, "")
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return "", false
+	}
+	return home, true
+}
+
 func (s *Server) resolveProviderAuthTarget(w http.ResponseWriter, r *http.Request, wantKind string) (providerAuthTarget, bool) {
 	inst, ok := s.providerStore.Get(r.PathValue("id"))
 	if !ok {
@@ -37,9 +46,10 @@ func (s *Server) resolveProviderAuthTarget(w http.ResponseWriter, r *http.Reques
 		writeError(w, http.StatusBadRequest, "provider auth route does not match instance kind")
 		return providerAuthTarget{}, false
 	}
-	home := strings.TrimSpace(inst.Config[providers.FieldKeyConfigDir])
-	if home == "" {
-		home = filepath.Join(ws(r).DataDir, strings.TrimSuffix(inst.KindID, "-cli")+"-home")
+	home, err := agent.ResolveCLIHomeDir(s.dataDir, inst.KindID, inst.Config[providers.FieldKeyConfigDir])
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return providerAuthTarget{}, false
 	}
 	binPath := strings.TrimSpace(inst.Config[providers.FieldKeyCLIPath])
 	if binPath == "" {

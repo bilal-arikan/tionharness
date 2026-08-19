@@ -251,9 +251,10 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 			req.CLIEffortLevel = cliEffortLevel(agent.ThinkingLevel)
 			home := cc.ConfigDir()
 			if home == "" {
-				home = r.claudeHomeDir()
-				if home == "" {
-					return nil, nil, fmt.Errorf("resolve app-global claude home: data dir is empty")
+				var err error
+				home, err = ResolveCLIHomeDir(r.dataDir, "claude-cli", "")
+				if err != nil {
+					return nil, nil, err
 				}
 				cc.SetConfigDir(home)
 			}
@@ -288,9 +289,10 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 		if cx, ok := provider.(*providers.CodexCLI); ok {
 			home := cx.ConfigDir()
 			if home == "" {
-				home = r.codexHomeDir()
-				if home == "" {
-					return nil, nil, fmt.Errorf("resolve app-global codex home: data dir is empty")
+				var err error
+				home, err = ResolveCLIHomeDir(r.dataDir, "codex-cli", "")
+				if err != nil {
+					return nil, nil, err
 				}
 				cx.SetConfigDir(home)
 			}
