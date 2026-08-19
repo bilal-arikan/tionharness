@@ -93,7 +93,7 @@ Testler: `codexcli_test.go`, `codexcli_events_test.go`, `codexcli_config_test.go
 
 | Dosya | Sorumluluk |
 |-------|-----------|
-| `codexhome.go` | `<workspace>/codex-home` üretimi/tohumlaması (`claudehome.go`'nun kardeşi) |
+| `codexhome.go` | Boş örnek `configDir` için uygulama-geneli `<dataDir>/codex-home` çözümü |
 | `codexmcp.go` | `climcp.go`'nun Codex karşılığı: `CLIMCPSpec` → `config.toml` gövdesi |
 
 ### 2.3 Değişecek dosyalar

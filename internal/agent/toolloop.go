@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"strconv"
 	"strings"
@@ -251,13 +252,20 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 			home := cc.ConfigDir()
 			if home == "" {
 				home = r.claudeHomeDir()
+				if home == "" {
+					return nil, nil, fmt.Errorf("resolve app-global claude home: data dir is empty")
+				}
 				cc.SetConfigDir(home)
 			}
+			if err := os.MkdirAll(home, 0o755); err != nil {
+				return nil, nil, fmt.Errorf("create claude home %s: %w", home, err)
+			}
+			ensureClaudeHomeEffortLevel(home)
 			// Re-seed the login if this home lost it. The CLI can WIPE its own
 			// <home>/.credentials.json (accessToken:"", refreshToken:"", expiresAt:0) when
 			// an OAuth refresh fails — most easily when several of its processes race for
 			// the single-use refresh token, which a coordinator tree does by design. The
-			// boot-time heal (EnsureWorkspaceClaudeHome) never runs again after that, so
+			// boot-time migration never runs again after that, so
 			// EVERY remaining turn in the workspace failed "not logged in" until a
 			// restart. Healing at the per-turn seam bounds the damage to the turn that
 			// actually lost the race. Idempotent and cheap: a usable credential returns
@@ -281,12 +289,13 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 			home := cx.ConfigDir()
 			if home == "" {
 				home = r.codexHomeDir()
+				if home == "" {
+					return nil, nil, fmt.Errorf("resolve app-global codex home: data dir is empty")
+				}
 				cx.SetConfigDir(home)
 			}
-			if home != "" {
-				if err := os.MkdirAll(home, 0o755); err != nil {
-					r.logger.Warn("codex home dir create failed", "dir", home, "error", err)
-				}
+			if err := os.MkdirAll(home, 0o755); err != nil {
+				return nil, nil, fmt.Errorf("create codex home %s: %w", home, err)
 			}
 		}
 	}

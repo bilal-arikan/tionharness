@@ -105,14 +105,11 @@ func TestHandleCodexAPIKeyLoginRequiresKey(t *testing.T) {
 	}
 }
 
-// TestCodexHomeDirMatchesAgentResolution pins codexHomeDirFor to the exact
-// same rule agent.workspaceCodexHomeDir uses (<workspace>/codex-home, a
-// sibling of <workspace>/workspace) so the UI never authenticates a
-// different home than the one a turn actually runs against.
+// TestCodexHomeDirMatchesAgentResolution pins auth to the app-global data dir.
 func TestCodexHomeDirMatchesAgentResolution(t *testing.T) {
-	r := withWorkspaceCtx(httptest.NewRequest(http.MethodGet, "/", nil), `C:\data\ws1`)
-	got := codexHomeDirFor(r)
-	want := `C:\data\ws1\codex-home`
+	s := &Server{dataDir: `C:\data`}
+	got := s.codexHomeDirFor()
+	want := `C:\data\codex-home`
 	if got != want {
 		t.Fatalf("codexHomeDirFor() = %q, want %q", got, want)
 	}

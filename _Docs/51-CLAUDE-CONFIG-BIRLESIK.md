@@ -9,8 +9,10 @@
 > örneklerinin login/config evi artık **örnek başına**dır. Boş `configDir` ile
 > oluşturulan örneğe backend `<dataDir>/provider-homes/<instance-id>` yolunu
 > atar; bu uygulama-geneli örneği seçen bütün ajanlar aynı kimliği kullanır.
-> `<workspace>/claude-home`, yalnız `configDir` alanı boş kalmış legacy örnekler
-> ve eski `/api/workspace-settings/claude-auth...` rotaları için fallback'tir.
+> Boş `configDir` fallback'i ve eski `/api/workspace-settings/claude-auth...`
+> rotaları artık uygulama-geneli `<dataDir>/claude-home` kullanır. Açık
+> `configDir` verilen örneklerin izole kimlikleri değişmez. Eski workspace home'u
+> yalnız tek login bulunduğunda global home'a bir kez kopyalanır; silinmez.
 > Güncel sözleşme: `71-SAGLAYICI-ORNEKLERI-PLANI.md` §4.4 ve §5.1.
 
 ## Sorun

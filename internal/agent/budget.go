@@ -157,7 +157,7 @@ func (r *Runtime) guardedComplete(ctx context.Context, agent db.Agent, req provi
 // (codex, whose home is a CODEX_HOME with a different layout) would point that
 // CLI at a config it cannot read. A codex-cli equivalent pins its own home.
 func (r *Runtime) PinClaudeHome(provider providers.Provider) {
-	if cli, ok := provider.(*providers.ClaudeCLI); ok {
+	if cli, ok := provider.(*providers.ClaudeCLI); ok && cli.ConfigDir() == "" {
 		cli.SetConfigDir(r.claudeHomeDir())
 	}
 }

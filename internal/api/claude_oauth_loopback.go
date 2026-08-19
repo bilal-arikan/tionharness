@@ -51,7 +51,7 @@ func pruneLoopback(now time.Time) {
 // to open. The credential is written by the local /callback handler when the browser
 // redirects back; the popup polls handleClaudeOAuthLoopbackStatus.
 func (s *Server) handleClaudeOAuthLoopbackStart(w http.ResponseWriter, r *http.Request) {
-	home := filepath.Join(ws(r).DataDir, "claude-home")
+	home := filepath.Join(s.dataDir, "claude-home")
 	s.handleClaudeOAuthLoopbackStartFor(w, r, home, s.providers.ClaudeCLIPath())
 }
 
@@ -121,7 +121,7 @@ func (s *Server) handleClaudeOAuthLoopbackStartFor(w http.ResponseWriter, r *htt
 // handleClaudeOAuthLoopbackStatus reports the current state of a loopback flow so
 // the popup can poll until the browser callback completes it.
 func (s *Server) handleClaudeOAuthLoopbackStatus(w http.ResponseWriter, r *http.Request) {
-	home := filepath.Join(ws(r).DataDir, "claude-home")
+	home := filepath.Join(s.dataDir, "claude-home")
 	s.handleClaudeOAuthLoopbackStatusFor(w, r, home, s.providers.ClaudeCLIPath())
 }
 

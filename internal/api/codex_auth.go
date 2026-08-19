@@ -17,12 +17,9 @@ import (
 // later ones.
 var codexAuthManager = codexauth.NewManager()
 
-// codexHomeDirFor mirrors agent.workspaceCodexHomeDir: <workspace>/codex-home,
-// a sibling of <workspace>/workspace. Reusing ws(r).DataDir (the same field
-// handleWorkspaceClaudeAuth uses for claude-home) keeps this the single
-// resolution rule instead of a second, possibly-drifting one.
-func codexHomeDirFor(r *http.Request) string {
-	return filepath.Join(ws(r).DataDir, "codex-home")
+// codexHomeDirFor resolves the legacy auth routes to the app-global home.
+func (s *Server) codexHomeDirFor() string {
+	return filepath.Join(s.dataDir, "codex-home")
 }
 
 type codexAuthDTO struct {
@@ -41,7 +38,7 @@ type codexAuthDTO struct {
 // in" for a codex-home whose token was expired or revoked — every real turn
 // then failed with 401, so presence is treated as necessary, not sufficient.
 func (s *Server) handleWorkspaceCodexAuth(w http.ResponseWriter, r *http.Request) {
-	home := codexHomeDirFor(r)
+	home := s.codexHomeDirFor()
 	binPath := s.providers.CodexCLIPath()
 	writeJSON(w, http.StatusOK, s.codexAuthStatus(r, home, binPath))
 }
@@ -80,7 +77,7 @@ const codexDeviceExpirySec = 15 * 60
 // until the user approves in their browser, the code expires, or the flow is
 // cancelled.
 func (s *Server) handleCodexDeviceStart(w http.ResponseWriter, r *http.Request) {
-	s.handleCodexDeviceStartFor(w, r, codexHomeDirFor(r), s.providers.CodexCLIPath())
+	s.handleCodexDeviceStartFor(w, r, s.codexHomeDirFor(), s.providers.CodexCLIPath())
 }
 
 func (s *Server) handleCodexDeviceStartFor(w http.ResponseWriter, r *http.Request, home, binPath string) {
@@ -112,7 +109,7 @@ type codexDeviceStatusResp struct {
 // in-flight (or just-finished) device-auth flow. 404 when no flow has been
 // started for this codex-home since the process started.
 func (s *Server) handleCodexDeviceStatus(w http.ResponseWriter, r *http.Request) {
-	s.handleCodexDeviceStatusFor(w, r, codexHomeDirFor(r), s.providers.CodexCLIPath())
+	s.handleCodexDeviceStatusFor(w, r, s.codexHomeDirFor(), s.providers.CodexCLIPath())
 }
 
 func (s *Server) handleCodexDeviceStatusFor(w http.ResponseWriter, r *http.Request, home, binPath string) {
@@ -130,7 +127,7 @@ func (s *Server) handleCodexDeviceStatusFor(w http.ResponseWriter, r *http.Reque
 // if any. Idempotent: cancelling an already-terminal or nonexistent flow is
 // not an error.
 func (s *Server) handleCodexDeviceCancel(w http.ResponseWriter, r *http.Request) {
-	s.handleCodexDeviceCancelFor(w, r, codexHomeDirFor(r), s.providers.CodexCLIPath())
+	s.handleCodexDeviceCancelFor(w, r, s.codexHomeDirFor(), s.providers.CodexCLIPath())
 }
 
 func (s *Server) handleCodexDeviceCancelFor(w http.ResponseWriter, r *http.Request, home, binPath string) {
@@ -149,7 +146,7 @@ type codexAPIKeyReq struct {
 // workspace's codex-home, piping the key over stdin (never argv) so it never
 // appears in a process listing. The key is never echoed back in the response.
 func (s *Server) handleCodexAPIKeyLogin(w http.ResponseWriter, r *http.Request) {
-	s.handleCodexAPIKeyLoginFor(w, r, codexHomeDirFor(r), s.providers.CodexCLIPath())
+	s.handleCodexAPIKeyLoginFor(w, r, s.codexHomeDirFor(), s.providers.CodexCLIPath())
 }
 
 func (s *Server) handleCodexAPIKeyLoginFor(w http.ResponseWriter, r *http.Request, home, binPath string) {

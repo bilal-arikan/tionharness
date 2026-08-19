@@ -39,6 +39,7 @@ type Runtime struct {
 	// workDir is this workspace's sandbox root for built-in filesystem/shell
 	// tools. Every fs/shell tool call is confined to it.
 	workDir string
+	dataDir string
 
 	// vault is this workspace's secret store, exposed to agents through the
 	// secret_list / secret_get built-in tools. May be nil (no secret tools).
@@ -436,7 +437,7 @@ func (r *Runtime) PromptEpochEnabled() bool { return r.promptEpochEnabled.Load()
 // bus + wsID/wsName let autonomous events be published with workspace context
 // (bus may be nil, in which case publishing is a no-op). vault is this
 // workspace's secret store handed to the secret_* tools (may be nil).
-func NewRuntime(database *db.DB, registry *providers.Registry, tun *Tunables, workDir string, vault *secrets.Vault, bus *events.Bus, wsID, wsName string, logs *logbuf.Buffer, logger *slog.Logger) *Runtime {
+func NewRuntime(database *db.DB, registry *providers.Registry, tun *Tunables, workDir, dataDir string, vault *secrets.Vault, bus *events.Bus, wsID, wsName string, logs *logbuf.Buffer, logger *slog.Logger) *Runtime {
 	// Seed the shipped default skills into the global dir (idempotent, never
 	// overwrites) so every workspace inherits the TionSwarm guide skills.
 	_ = skills.EnsureDefaults(globalSkillsDir())
@@ -456,6 +457,7 @@ func NewRuntime(database *db.DB, registry *providers.Registry, tun *Tunables, wo
 		providers:   registry,
 		tun:         tun,
 		workDir:     workDir,
+		dataDir:     dataDir,
 		vault:       vault,
 		bus:         bus,
 		wsID:        wsID,
@@ -563,7 +565,12 @@ func workspaceSkillsDir(workDir string) string {
 // (<workspace>/claude-home), exported into the CLI subprocess as CLAUDE_CONFIG_DIR
 // so each workspace drives the CLI against its own skills/settings/login. Empty
 // when workDir is unknown (the provider then keeps its global-default config dir).
-func (r *Runtime) claudeHomeDir() string { return workspaceClaudeHomeDir(r.workDir) }
+func (r *Runtime) claudeHomeDir() string {
+	if r.dataDir == "" {
+		return ""
+	}
+	return filepath.Join(r.dataDir, "claude-home")
+}
 
 // ClaudeHomeDir exposes this workspace's claude-cli config home so out-of-loop
 // fold paths (compaction/handoff) can carry it on the context via

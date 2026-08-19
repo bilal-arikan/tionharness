@@ -75,20 +75,16 @@ func (s *Server) handleCatalog(w http.ResponseWriter, r *http.Request) {
 			dto.CliVersion = claudeCLIVersion(r.Context(), s.providers.ClaudeCLIPath())
 			// The login lives in THIS workspace's claude-home, so the tier is
 			// per-workspace too (one workspace may be on Max, another on an API key).
-			if wsp != nil {
-				dto.Subscription = claudeSubscriptionTier(
-					filepath.Join(wsp.DataDir, "claude-home"),
-					s.settings.Get().ClaudeCliAuthKind,
-				)
-			}
+			dto.Subscription = claudeSubscriptionTier(
+				filepath.Join(s.dataDir, "claude-home"),
+				s.settings.Get().ClaudeCliAuthKind,
+			)
 		}
 		if e.ID == "codex-cli" && dto.Available {
 			dto.CliVersion = codexCLIVersion(r.Context(), s.providers.CodexCLIPath())
 			// Same per-workspace reasoning as claude-cli: the login lives in THIS
 			// workspace's codex-home, so it is checked there, not the global default.
-			if wsp != nil {
-				dto.Subscription = codexSubscriptionTier(filepath.Join(wsp.DataDir, "codex-home"))
-			}
+			dto.Subscription = codexSubscriptionTier(filepath.Join(s.dataDir, "codex-home"))
 		}
 		out = append(out, dto)
 	}

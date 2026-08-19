@@ -222,9 +222,9 @@ yazılır. Eski `/api/workspace-settings/codex-auth...` yolları geriye uyumlulu
 için durur; yeni istemciler örnek-bazlı yolları kullanır.
 
 Eski/dışarıdan oluşturulmuş örneğin `configDir` alanı boşsa auth/runtime çözümü
-legacy olarak `<workspace>/codex-home` yoluna düşebilir ve
-`EnsureWorkspaceCodexHome` tohumu geçerliliğini korur. Normal yeni örneklerde
-otomatik izole ev nedeniyle bu fallback kullanılmaz.
+uygulama-geneli `<dataDir>/codex-home` yoluna düşer. Workspace başına home
+tohumlama kaldırılmıştır. Tek login bulunan legacy workspace home'u global home'a
+bir kez kopyalanır; birden fazla login varsa uyarı loglanır ve seçim yapılmaz.
 
 ### Auth hatası imzası (canlı gözlem)
 

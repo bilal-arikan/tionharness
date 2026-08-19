@@ -39,6 +39,7 @@ const workspaceCtxKey ctxKey = "workspace"
 
 // Server holds dependencies for HTTP handlers.
 type Server struct {
+	dataDir       string
 	workspaces    *workspace.Manager
 	providers     *providers.Registry
 	providerStore *settings.ProviderStore
@@ -87,6 +88,7 @@ type Server struct {
 // process-wide event bus exposed via the /api/events SSE feed.
 func NewServer(manager *workspace.Manager, registry *providers.Registry, providerStore *settings.ProviderStore, store *settings.Store, tun *agent.Tunables, logs *logbuf.Buffer, bus *events.Bus, logger *slog.Logger) *Server {
 	s := &Server{
+		dataDir:       manager.DataDir(),
 		workspaces:    manager,
 		providers:     registry,
 		providerStore: providerStore,

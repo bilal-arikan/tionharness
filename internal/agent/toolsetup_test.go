@@ -31,7 +31,7 @@ func newTestRuntime(t *testing.T, workDir string) (*Runtime, *Tunables) {
 	// unconditionally, _Docs/71 §3) — a bare NewRegistry() has none, so seed it
 	// here to match what every non-test Registry actually looks like.
 	registry.SetInstances([]providers.Instance{{ID: "claude-cli", KindID: "claude-cli"}})
-	rt := NewRuntime(database, registry, tun, workDir, nil, nil, "", "", nil, logger)
+	rt := NewRuntime(database, registry, tun, workDir, filepath.Dir(workDir), nil, nil, "", "", nil, logger)
 	// Background turns (spawn / inbox delivery / wake) run detached and keep writing
 	// to the store after the test body returns. Wait for them to drain before
 	// t.TempDir()'s RemoveAll, or cleanup races a live write ("directory not empty")

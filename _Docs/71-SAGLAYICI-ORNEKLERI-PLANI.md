@@ -259,9 +259,10 @@ noktasında (seam) da uygulanıyor.** Önceden `internal/agent/toolloop.go`'daki
 workspace evini (`<workspace>/claude-home`, `r.codexHomeDir()`) dayatıyordu —
 alan yalnız kozmetikti. Artık `ClaudeCLI.ConfigDir()` /
 `CodexCLI.ConfigDir()` (kurulumda örneğin `config["configDir"]` değerinden
-set edilir) doluysa o ev korunur; yalnız boşsa workspace evine düşülür ve
+set edilir) doluysa o ev korunur; yalnız boşsa uygulama-geneli
+`<dataDir>/claude-home` veya `<dataDir>/codex-home` evine düşülür ve
 credential-heal (`ensureClaudeHomeCredential`) / `MkdirAll` (codex) fiilen
-kullanılan eve uygulanır — artık sabit workspace evine değil.
+kullanılan eve uygulanır. Workspace başına CLI home seed'i kaldırılmıştır.
 
 Ayrıca `internal/settings/store_providers.go`'ya (`OpenProviderStore`,
 `sanitizeLegacyConfigDirs`) idempotent bir yükleme-zamanı onarım eklendi:

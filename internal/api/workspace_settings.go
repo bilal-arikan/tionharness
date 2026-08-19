@@ -24,18 +24,11 @@ type workspaceSettingsDTO struct {
 	DefaultWorkingDir string `json:"defaultWorkingDir"`
 	CreatedAt         int64  `json:"createdAt"`
 
-	// ClaudeHomeDir is THIS workspace's resolved claude-cli config home
-	// (<workspace>/claude-home), exported into the CLI subprocess as
-	// CLAUDE_CONFIG_DIR. Read-only/informational: it is derived from the workspace
-	// root, not user-editable. Surfaced so the Settings screen can show the real
-	// per-workspace path instead of the app-global fallback (which is identical for
-	// every workspace). Mirrors agent.workspaceClaudeHomeDir / EnsureWorkspaceClaudeHome.
+	// ClaudeHomeDir is the app-global claude-cli config home exported as
+	// CLAUDE_CONFIG_DIR for provider instances without an explicit configDir.
 	ClaudeHomeDir string `json:"claudeHomeDir"`
 
-	// CodexHomeDir is THIS workspace's resolved codex-cli config home
-	// (<workspace>/codex-home), exported into the CLI subprocess as CODEX_HOME.
-	// Same read-only/informational reasoning as ClaudeHomeDir above — mirrors
-	// agent.workspaceCodexHomeDir (internal/agent/codexhome.go).
+	// CodexHomeDir is the corresponding app-global CODEX_HOME fallback.
 	CodexHomeDir string `json:"codexHomeDir"`
 
 	// Per-workspace appearance overrides (empty = inherit global).
@@ -122,10 +115,9 @@ func toWorkspaceSettingsDTO(ctx context.Context, w *workspace.Workspace) workspa
 		DefaultWorkingDir: s.DefaultWorkingDir,
 		CreatedAt:         w.CreatedAt,
 
-		// <workspace>/claude-home — DataDir is the workspace root (see workspace
-		// manager: EnsureWorkspaceClaudeHome(dir) with the same join).
-		ClaudeHomeDir: filepath.Join(w.DataDir, "claude-home"),
-		CodexHomeDir:  filepath.Join(w.DataDir, "codex-home"),
+		// Both paths are application-wide; every workspace reports the same fallback.
+		ClaudeHomeDir: w.Runtime.ClaudeHomeDir(),
+		CodexHomeDir:  w.Runtime.CodexHomeDir(),
 
 		Theme:       s.Theme,
 		Accent:      s.Accent,
@@ -183,8 +175,7 @@ type claudeAuthDTO struct {
 // Settings screen calls it behind a "Verify login" action, never on every load — and
 // lets the user catch an auth lapse before an agent turn burns on it.
 func (s *Server) handleWorkspaceClaudeAuth(w http.ResponseWriter, r *http.Request) {
-	wsp := ws(r)
-	home := filepath.Join(wsp.DataDir, "claude-home")
+	home := filepath.Join(s.dataDir, "claude-home")
 	writeJSON(w, http.StatusOK, s.claudeAuthStatus(r, home, s.providers.ClaudeCLIPath()))
 }
 

@@ -127,7 +127,7 @@ func newHarness(t *testing.T, provider *scriptedProvider) *harness {
 
 	tun := agent.NewTunables()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	rt := agent.NewRuntime(database, providers.NewRegistry(), tun, workDir, nil, nil, "", "", nil, logger)
+	rt := agent.NewRuntime(database, providers.NewRegistry(), tun, workDir, filepath.Dir(workDir), nil, nil, "", "", nil, logger)
 
 	return &harness{
 		t:        t,

@@ -109,6 +109,9 @@ type Manager struct {
 	wakeTurnFactory func(*agent.Runtime) agent.WakeTurnFunc
 }
 
+// DataDir returns the application-wide data root.
+func (m *Manager) DataDir() string { return m.rootDir }
+
 // SetAutonomousInteraction wires the headless Interaction MCP factory into every
 // existing workspace runtime and remembers it for workspaces opened later. The
 // api server calls this once at startup (it owns the run registry + endpoint).
@@ -192,6 +195,17 @@ func NewManager(rootDir string, registry *providers.Registry, tun *agent.Tunable
 	if err != nil {
 		return nil, err
 	}
+	roots := make([]string, 0, len(metas))
+	for _, meta := range metas {
+		dir := meta.Path
+		if dir == "" {
+			dir = filepath.Join(rootDir, "workspaces", meta.ID)
+		}
+		roots = append(roots, dir)
+	}
+	if err := agent.MigrateSharedCLIHomes(rootDir, roots, logger); err != nil {
+		return nil, err
+	}
 
 	// Restore the workspace id counter; guard against rewind by also taking the
 	// max of any "WS<n>" id already on disk (so a stale/missing counter file can
@@ -263,11 +277,9 @@ func (m *Manager) open(meta Meta) error {
 	// (<workspace>/claude-home): seed it from the global home on first open and
 	// migrate any legacy <workspace>/skills into it. Must run BEFORE NewRuntime so
 	// the skill store scans the migrated (populated) tier. Idempotent.
-	agent.EnsureWorkspaceClaudeHome(dir)
 	// Same idea for the per-workspace codex-cli config home (<workspace>/codex-home):
 	// seed its auth.json from the global ~/.codex (or $CODEX_HOME) login, if any, so
 	// a fresh workspace doesn't need its own `codex login`. Idempotent.
-	agent.EnsureWorkspaceCodexHome(dir)
 
 	storeDir := filepath.Join(dir, "store")
 	storeOpenStart := time.Now()
@@ -313,7 +325,7 @@ func (m *Manager) open(meta Meta) error {
 		return err
 	}
 
-	rt := agent.NewRuntime(database, m.registry, m.tun, filepath.Join(dir, "workspace"), vault, m.bus, meta.ID, meta.Name, m.logs, m.logger)
+	rt := agent.NewRuntime(database, m.registry, m.tun, filepath.Join(dir, "workspace"), m.rootDir, vault, m.bus, meta.ID, meta.Name, m.logs, m.logger)
 
 	// Apply the settings bridge if it has already been wired (workspaces created
 	// after startup); startup workspaces get it via SetSettingsBridge instead.

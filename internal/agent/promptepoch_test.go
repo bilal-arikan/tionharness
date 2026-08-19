@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -141,7 +142,7 @@ func TestEpochSidecarSurvivesRestart(t *testing.T) {
 	}
 
 	// "Restart": a fresh runtime over the same db files.
-	rt2 := NewRuntime(rt1.db, providers.NewRegistry(), NewTunables(), dir, nil, nil, "", "", nil, rt1.logger)
+	rt2 := NewRuntime(rt1.db, providers.NewRegistry(), NewTunables(), dir, filepath.Dir(dir), nil, nil, "", "", nil, rt1.logger)
 	rt2.SetPromptEpoch(true)
 	if got, stale := rt2.EpochStaticSystem(ctx, sid, epochAgent, false, false, "", func() string { return "LIVE-AFTER-RESTART" }); got != "FROZEN" || !stale {
 		t.Errorf("restart must serve the sidecar snapshot (stale live drift), got %q stale=%v", got, stale)

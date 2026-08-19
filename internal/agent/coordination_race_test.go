@@ -208,6 +208,6 @@ func runtimeOverStore(t *testing.T, storeDir, workDir string) *Runtime {
 		t.Fatalf("db open: %v", err)
 	}
 	t.Cleanup(func() { _ = database.Close() })
-	return NewRuntime(database, providers.NewRegistry(), NewTunables(), workDir, nil, nil, "", "",
+	return NewRuntime(database, providers.NewRegistry(), NewTunables(), workDir, filepath.Dir(workDir), nil, nil, "", "",
 		nil, slog.New(slog.NewTextHandler(io.Discard, nil)))
 }
