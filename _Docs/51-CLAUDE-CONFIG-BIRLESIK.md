@@ -15,6 +15,23 @@
 > yalnız tek login bulunduğunda global home'a bir kez kopyalanır; silinmez.
 > Güncel sözleşme: `71-SAGLAYICI-ORNEKLERI-PLANI.md` §4.4 ve §5.1.
 
+> **Config evi taşınmasının bedeli — `--resume` (2026-08-19):** claude-cli
+> konuşma transkriptleri config evinin **içinde** durur
+> (`<home>/projects/<cwd-slug>/<id>.jsonl`). Ev taşınınca oturumlardaki kayıtlı
+> `cliSessionId` eski evi işaret etmeye devam etti; CLI bunu
+> `No conversation found with session ID: …` + exit 1 ile reddetti, hata
+> "yeniden denenebilir" göründüğü için aynı ölü id ile 3 tur harcandı ve oturum
+> `stuck` etiketlendi. İki taraflı çözüm:
+>
+> - **Kod:** `ClaudeCLI.CanResume(id)` yeni evde transkript var mı diye bakar;
+>   `planClaudeResume` yoksa **soğuk** başlar (tam transkript korunur, delta
+>   gönderilmez). Yarış hâlinde CLI yine reddederse hata artık
+>   NON-retryable ve id + ev adını söyler.
+> - **Veri:** `cmd/repair-provider-migration` eski workspace evinde hâlâ bulunan
+>   transkriptleri yeni eve **taşır**, bulunamayanların resume kaydını temizler
+>   (geçmiş kaybolmaz — TionSwarm mesajları kendi store'unda tutar, CLI kopyası
+>   yalnız önbellektir) ve bu kesintinin bıraktığı `stuckTurns`/`stuck` izini siler.
+
 ## Sorun
 
 Önceden `claude-cli`'nin config evi **global tek bir ayardı**:

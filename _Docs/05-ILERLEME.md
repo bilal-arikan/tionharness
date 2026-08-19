@@ -1,6 +1,32 @@
 # TionSwarm — İlerleme Takibi
 
-> Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-08-18**
+> Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-08-19**
+
+## Sağlayıcı göçünün canlı-veri onarımı (2026-08-19) ✅
+
+Sağlayıcı örnekleri + paylaşılan CLI login evleri devreye alındıktan sonra
+mevcut kurulumda üç kırık ortaya çıktı; hepsi hem kodda hem diskte kapatıldı.
+
+- **Ölü `--resume` id'leri (bildirilen hata).** claude-cli transkriptleri config
+  evinin içinde durduğu için, ev `<workspace>/claude-home` → `<dataDir>/claude-home`
+  taşınınca oturumların `cliSessionId` alanı eski evi gösteriyordu: `No conversation
+  found with session ID: …` + exit 1, üstelik "yeniden denenebilir" göründüğü için
+  aynı ölü id ile 3 tur harcanıp oturum `stuck` etiketleniyordu.
+  → `ClaudeCLI.CanResume(id)` ön-kontrolü (`claudecli_resumecheck.go`) +
+  `planClaudeResume` bulunmayan id'de **soğuk** başlar (tam transkript korunur);
+  CLI yine reddederse hata artık NON-retryable ve id + ev adını söyler.
+- **Örnek id'si çalışma zamanında hiç kullanılmıyordu.** 13 çağrı yeri
+  `providers.Get(agent.Provider)` (kind id) diyordu → ikinci bir örneğe bağlı ajan
+  sessizce kind'ın varsayılan örneğine düşüyordu. → tek seam `db.Agent.ProviderRef()`.
+- **`minimax-anthropic` / `deepseek-anthropic` örneği hiç üretilmemişti** (kendi
+  legacy ayar anahtarları yok, temel sağlayıcının kimliğini paylaşıyorlar) → bu
+  kind'a bağlı 5 ajan "unknown provider instance" ile ölüydü.
+  → `MigrateFromSettings` iki varyantı da üretir (`baseUrl` boş = kind'ın kendi ucu).
+- **Onarım aracı:** `cmd/repair-provider-migration` (kuru çalışma varsayılan,
+  `-apply`, idempotent). Canlı sonuç: 2 örnek eklendi, 1 ajan yeniden bağlandı
+  (`PRV1` → `claude-cli`), 114 transkript yeni eve taşındı, 28 ölü resume kaydı
+  temizlendi, bu kesintinin bıraktığı `stuckTurns`/`stuck` izi silindi.
+- Detay → `71-SAGLAYICI-ORNEKLERI-PLANI.md` §3.1 ve `51-CLAUDE-CONFIG-BIRLESIK.md`.
 
 ## codex-cli sağlayıcısı: katalog + fiyatlandırma + frontend yüzeyi (2026-08-18) ✅
 

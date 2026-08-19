@@ -163,6 +163,34 @@ Sonuç:
 - **Yeni** örnekler `PRV<n>` prefix'li id alır (AGT/SES/WS konvansiyonu), böylece
   kind id'leriyle bir daha çakışma olmaz.
 
+### 3.1 Migrasyonun iki açığı ve onarımı (2026-08-19)
+
+Canlı veride iki kayıp bulundu; ikisi de **ajanın hiç çalışamaması** demekti
+(`Registry.Get` bilinmeyen örneği bilinçli olarak hata sayar, sessiz fallback yok):
+
+1. **`-anthropic` varyantları migrasyon dışı kalmıştı.** `minimax-anthropic` ve
+   `deepseek-anthropic` ayrı **kind**'lardır ama kendi legacy ayar anahtarları
+   yoktur (temel sağlayıcının kimliğini paylaşırlar), dolayısıyla tabloda
+   üretilmiyorlardı → bu kind'a bağlı her ajan yok olan bir örneği işaret
+   ediyordu. `MigrateFromSettings` artık temel anahtar varken iki varyantı da
+   üretir; `baseUrl` **boş** bırakılır (temel örneğin URL'i OpenAI-uyumlu uçtur,
+   Anthropic taşıması onunla konuşamaz — boş = kind'ın kendi varsayılanı).
+2. **Çalışma zamanı örnek id'sini hiç kullanmıyordu.** Tüm çağrı yerleri
+   `providers.Get(agent.Provider)` (yani **kind** id'si) diyordu; varsayılan
+   örnekte id == kind olduğu için bu fark edilmiyordu, ama ikinci bir örneğe
+   (`PRV1`, ikinci hesap, ayrı config evi) bağlı ajan sessizce kind'ın
+   **varsayılan** örneğine düşüyordu — §9'un "sessiz öksüz ajan" riski. Artık
+   tek seam var: `db.Agent.ProviderRef()` (→ `ProviderInstanceID`, boşsa
+   `Provider`) ve bütün `Registry.Get` çağrıları bunu kullanır. Kind-anahtarlı
+   okuyucular (§4.1) `Agent.Provider`'ı okumaya devam eder.
+
+Mevcut kurulumlar için `providers.json` bir daha migrate edilmez (dosya var),
+onları **`cmd/repair-provider-migration`** onarır (varsayılan kuru çalışma,
+`-apply` ile yazar, idempotent): eksik `-anthropic` örneklerini şifreli
+kimliği yeniden kullanarak ekler, örneği kaybolmuş ajanları kendi kind'ının
+varsayılan örneğine bağlar, ve config evi taşınmasından kalan claude-cli
+resume kayıtlarını düzeltir (bkz. `51-CLAUDE-CONFIG-BIRLESIK.md`).
+
 `openai-compat` / `anthropic-compat` iki **yeni generic kind**'dır: bugünkü
 `buildCustom()` fonksiyonunun (registry.go) kind'laştırılmış hâli. Bu ikisi
 gelince `Registry.custom`/`CustomSpec`/`CustomCatalog()` özel yolu tamamen düşer —
