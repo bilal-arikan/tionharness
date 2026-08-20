@@ -219,6 +219,16 @@ edilmez. `workerCtl` her denemede `setCancel` ile güncellendiğinden `stop_work
 daima uçuştaki denemeyi keser; koordinatör drain turunda resume drain/stall
 makinesine şeffaftır. `idleResumeMax=0` kapatır. Ayrıntı: `_Docs/56` Faz E.
 
+**CLI spawn preflight ve sahiplik (2026-08-20):** `claude-cli`/`codex-cli`
+worker oturumu oluşturulmadan önce seçili binary ve etkin config ile `--version`
+preflight'ından geçer. Başarılı kontrol binary+config içeriği karmasına göre
+önbelleklenir; config değişirse yeniden çalışır, hata olursa oturum yaratılmadan
+`spawn refused` döner. Worker'ın `CoordinatorSessionID` değeri aynı zamanda
+`ParentSessionID` olarak yazılır; genel oturum tüketicileri de gerçek sahibini
+görür. Terminal `runState`, son worker mesajının sayaçları kalıcılaştırıldıktan
+sonra yazılır; restart sonrası tamamlanmış worker canlı sanılmaz ve kalıcı
+`MessageCount`/`ToolCallCount` geriye düşmez.
+
 ### 3.4 Kilit yeni bileşen: `CoordinationEngine` + per-session tur kuyruğu
 
 Yeni dosya `internal/agent/coordination.go`:
@@ -288,6 +298,14 @@ Role                 string   // "coordinator" | "worker" | "" (normal)
 | Koordinatör oturumu kapanınca kaçak worker | Oturum silme/arşivde `stop_worker` hepsine (cascade cancel). |
 | Aynı oturumda çift tur | §3.4 per-session kuyruk. |
 | **Spawn halüsinasyonu / donma** (uzun bağlamda koordinatör spawn'ı **yazar ama `spawn_worker` ÇAĞIRMAZ** → hiç worker yaratılmaz, koordinatör hayalî worker'ları bekleyip donar — SES1 + WS17/SES101 vakaları) | **Yargıç-tabanlı koruma** (`coordination_stall.go`, 2026-08-03; eski prose-regex `coordSpawnClaimRe` sözlük-kaymasında —"kol açıldı"/"SES144 açıldı"— kaçırdığı için **kaldırıldı**). Deterministik kapı: tur koordinasyon aracı çağırmadı **ve** 0 çalışan worker → ucuz-model yargıcı (title-model, yoksa koordinatör modeli) son mesaja bakar; fantom spawn derse (`{"stalled":true}`) `<coordination-guard>` notu enjekte edilir. İki katman: **(1)** tur-sonu `guardCoordinatorStall` → `slot.pending` ile aynı batch'te bir tur zorlar (`CoordinatorStallMaxNudges` vars. 2 ile sınırlı, gerçek araç çağrısı streak'i sıfırlar, yargıç hatası → nudge YOK/fail-safe). **(2)** gecikme tarayıcısı `StartCoordinatorStallSweeper` (60 sn tick): `CoordinatorStallSweepMin` (vars. 5 dk) sessiz + 0 worker olan canlı slot'ları yargılar, `enqueueCoordinatorTurn` ile uyandırır → restart/kaçırma horizonu da kapanır. **(3) Sert-halt eskalasyonu** (`escalateCoordinatorStallHalt`, 2026-08-04): nudge bütçesi (1) veya (2) katmanında tükendiği hâlde yargıç stall'ı **hâlâ** doğruluyorsa `slot.stallHalted` set edilir — drain döngüsü koordinatörü otomatik-turlamayı bırakır (re-arm YOK, idle-reconcile turu YOK) ve **kullanıcıya tek-seferlik** `coordination` bildirimi (sebep + nasıl devam edileceği) yayınlanır; gerçek bir koordinasyon aracı çağrısı bayrağı temizler, tarayıcı backstop olarak açık kalır. **UI (kalıcı rozet/CTA):** halt durumu `session_info.coordinatorStallHalted` ve koordinatör-ağacı düğümlerinin `stallHalted` alanıyla sunulur; koordinasyon panelinde (`CoordinatorSection`) kırmızı **"Koordinatör durduruldu"** rozeti + **"Devam ettir"** butonu (POST `/api/sessions/{id}/coordinator/resume` → `ResumeCoordinatorFromStall`: halt+streak temizler, bir tur kickler) gösterilir; ağaç görünümünde de OctagonAlert işaretlenir. Rozet in-memory slot'tan okunur → süreç yeniden başlatıldığında sweeper penceresi içinde yeniden kurulur. Ek olarak: koordinatör soul/prompt'una "worker'dan bahsetmeden ÖNCE `spawn_worker` çağır; düz metinde 'worker başlattım' demek stall'a düşürür" kuralı eklendi, ve `spawn_worker`/`list_workers` **eager** (CLI `core`/alwaysLoad) tier'da doğrulandı (deferred değil). Ayar: `CoordinatorStallGuard` (master) / `CoordinatorStallSweepMin` (−1=tarayıcı kapalı) / `CoordinatorStallMaxNudges` — Ayarlar ▸ Araçlar. **Kalıcı sayaç (2026-08-17):** `injectStallNudge` her düzeltici notta `db.BumpSessionStallNudges` çağırır → `Session.StallNudges` (`session.json`, `stallNudges`). Bellekteki `slot.spawnHallucStreak` **ardışık** seridir (temiz koordinasyon çağrısında sıfırlanır, süreçle ölür); `StallNudges` ise **kümülatif** ve yeniden başlatmaya dayanıklıdır — `StuckTurns` ile aynı desen. **(4) Kümülatif sayaç kademesi (2026-08-17):** artık `StallNudges` sayacına bağlı ikinci bir halt tetikleyicisi var (`CoordinatorStallHaltTotal`, vars. **3** — `StuckTurnThreshold` ile aynı desen ve aynı sayı; `internal/agent/tunables.go`). Her düzeltici nottan **sonra** kalıcı sayaç okunur; eşiğe ulaşıldıysa **mevcut** `escalateCoordinatorStallHalt` yolu çağrılır (yeni kanal/bildirim açılmaz, aynı tek-seferlik rozet + "Devam ettir" akışı). Hem tur-sonu guard'ı hem de sweeper bu kademeyi uygular. **Neden iki sayaç:** `slot.spawnHallucStreak` **ardışık** ve bellektedir — temiz bir koordinasyon çağrısı sıfırlar, süreçle ölür; nudge bütçesini (`CoordinatorStallMaxNudges`) tek bir donma sürecinde sınırlar. `Session.StallNudges` ise **kümülatif** ve kalıcıdır. İkincisi olmadan **nüks deseni** yakalanamaz: stall → nudge → bir gerçek çağrı (streak sıfırlanır) → yeniden stall döngüsü, streak nudge tavanına hiç ulaşmadan sonsuza kadar sürer. Gerçekten koordinasyon aracı çağıran temiz bir tur **her iki sayacı da** sıfırlar (`db.SetSessionStallNudges(…, 0)`), dolayısıyla kademe "toplam ömür" değil **toparlanmadan nüks** ölçer; "Devam ettir" de ikisini birden temizler (yoksa buton bozuk görünürdü). Sayaç kalıcılaştırılamazsa `injectStallNudge` 0 döner → hiçbir eşik eşleşmez, store arızası halt üretemez. Eşik 0 = kademe kapalı (sayaç yine tutulur, yalnız adli sinyal olarak). Testler: `coordination_stall_haltcount_test.go`. |
+
+2026-08-20 düzeltmesi: en son gelen kullanıcı-kökenli mesaj taze bir
+`Origin="worker-note"` ise (`CoordinatorWorkerNoteGrace` penceresi), sıfır çalışan
+worker durumu stall yargıcına gönderilmez. Koordinatör sonucu sentezlerken yanlış
+halt böylece engellenir; daha yeni kullanıcı/runtime girdisi normal yargılamayı
+geri açar. Sert halt artık yalnız mevcut drain'i değil `enqueueCoordinatorTurn`
+girişini de kapatır: worker notu kalıcı yazılır fakat açıkça "durduruldu" görünen
+koordinatörü otomatik uyandırmaz; resume kuyruğu güvenle yeniden başlatır.
 
 ---
 

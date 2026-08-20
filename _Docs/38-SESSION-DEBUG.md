@@ -42,7 +42,7 @@ alanı taşır:
 ```jsonc
 {"ts":1719..., "type":"turn",       "durMs":4210, "stop":"end_turn"}
 {"ts":1719..., "type":"llm_call",   "model":"claude", "in":1200, "out":340, "think":180, "cacheRead":8000}
-{"ts":1719..., "type":"tool",       "name":"Bash", "durMs":120, "outBytes":4200}
+{"ts":1719..., "type":"tool",       "name":"Bash", "durMs":120, "outBytes":4200, "error":"exit status 1", "args":"{\"command\":\"go test ./...\"}"}
 {"ts":1719..., "type":"hook",       "name":"PreToolUse", "detail":"Bash:allow", "durMs":12}
 {"ts":1719..., "type":"error",      "detail":"provider_error: 429 rate limit", "err":true}
 {"ts":1719..., "type":"compaction", "detail":"context_overflow"}
@@ -61,6 +61,12 @@ Ek alanlar (2026-07-10): `HookID` — `type=hook` olayında ateşleyen hook'un i
 (rtk/sqz gibi token-optimizer hook aktivitesinin hook-başına atfı için);
 `Calls` — `llm_call`'ın temsil ettiği alt-tur sayısı (claude-cli kümülatif
 faturalamayı per-call bağlama bölmek için).
+
+Ek alanlar (2026-08-20): `Error` ve `Args` — yalnız başarısız `tool`
+olaylarında hata metninin ilk 500 karakterlik ve araç argümanlarının ilk 200
+karakterlik tek-satır özeti. Native araç döngüsü, CLI trace'i ve code-mode köprüsü
+aynı alanları yazar; başarılı çağrılarda alanlar boş bırakılır. Böylece hata
+ayıklama için tüm araç çıktısını saklamadan hangi çağrının neden kırıldığı görülür.
 
 Ek alan (2026-07-23): `Think` — `llm_call`'ın `out` token'ının **gizli akıl
 yürütmeye (extended thinking)** giden tahmini kısmı. API ayrı bir thinking alanı
