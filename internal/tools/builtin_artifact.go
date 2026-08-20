@@ -52,19 +52,21 @@ func NewCreateArtifactTool() CreateArtifactTool { return CreateArtifactTool{} }
 func (CreateArtifactTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name: "create_artifact",
+		// Eager tool: kept to the behavioral rules only — what deserves an artifact, and
+		// the media-file rule (sourcePath, never base64). The enum documents the kinds.
 		Description: "Save a substantial, self-contained piece of content as a versioned artifact the " +
 			"user can open in a dedicated viewer — documents, code, HTML, SVG or Mermaid diagrams worth " +
-			"keeping or revisiting, NOT short conversational replies. For an image/PDF/binary file already " +
-			"on disk (e.g. a screenshot), use kind=image|video|audio|file with sourcePath — do NOT " +
-			"base64-embed the bytes. Returns the artifact id; revise it later with update_artifact.",
+			"revisiting, NOT short conversational replies. For a file already on disk (screenshot, PDF, " +
+			"media) use a media kind + sourcePath — never base64-embed the bytes. Returns the artifact id; " +
+			"revise it later with update_artifact.",
 		InputSchema: json.RawMessage(`{
   "type": "object",
   "properties": {
     "title": { "type": "string", "description": "Short descriptive title." },
-    "kind": { "type": "string", "enum": ["markdown", "code", "html", "text", "svg", "mermaid", "image", "video", "audio", "file"], "description": "How the content should be rendered. Text kinds (markdown/code/html/text/svg/mermaid) use content; media kinds (image/video/audio/file) use sourcePath." },
-    "language": { "type": "string", "description": "Programming language for kind=code (e.g. \"go\", \"python\", \"typescript\")." },
-    "content": { "type": "string", "description": "The full artifact body for text kinds. For media kinds it is an optional caption." },
-    "sourcePath": { "type": "string", "description": "For media kinds (image/video/audio/file): the path to the file on disk (absolute, e.g. \"C:\\Users\\me\\shot.png\", or workspace-relative). Files outside the workspace are copied in so the artifact owns a stable copy." }
+    "kind": { "type": "string", "enum": ["markdown", "code", "html", "text", "svg", "mermaid", "image", "video", "audio", "file"], "description": "Text kinds (markdown/code/html/text/svg/mermaid) use content; media kinds (image/video/audio/file) use sourcePath." },
+    "language": { "type": "string", "description": "Programming language for kind=code (e.g. \"go\")." },
+    "content": { "type": "string", "description": "The full body for text kinds; an optional caption for media kinds." },
+    "sourcePath": { "type": "string", "description": "Media kinds: path to the file on disk (absolute or workspace-relative). Files outside the workspace are copied in." }
   },
   "required": ["title", "kind"],
   "additionalProperties": false

@@ -92,10 +92,14 @@ func NewRunSubagentTool() RunSubagentTool { return RunSubagentTool{} }
 func (RunSubagentTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name: "run_subagent",
-		// Kept tight — run_subagent ships EAGERLY every turn, so this def + schema
-		// are part of every request's fixed token cost.
-		Description: "Launch an isolated subagent for a self-contained task and get back ONLY its final " +
-			"result — its intermediate tool output never enters your context. `target` is a built-in " +
+		// The FIRST LINE is the delegation nudge: run_subagent is SUMMARY-tier (lazy),
+		// so the load-on-demand catalog shows exactly this line (lazyDescription takes
+		// the first non-empty line, capped at 200 chars). Keep it a complete sentence
+		// under that cap — it is the only thing reminding the model delegation exists.
+		// Everything after it ships only once the schema is activated.
+		Description: "Delegate a self-contained task to an isolated subagent and get back ONLY its final " +
+			"result — its intermediate tool output never enters your context.\n" +
+			"`target` is a built-in " +
 			"profile (\"explore\" read-only search, \"planner\" read-only planning, \"coder\" edits code, " +
 			"\"reviewer\" read-only review) " +
 			"or an existing agent's name/id. Defaults: sync + isolated context. Call several times in one " +

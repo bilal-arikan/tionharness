@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"unicode/utf8"
 )
 
 // tier pairs a directory with the source label skills loaded from it carry.
@@ -870,6 +871,33 @@ func (s *Store) AllowedFor(assigned []string) map[string]bool {
 	return allow
 }
 
+// Catalog line caps. A SKILL.md's frontmatter is USER-AUTHORED free text, but the
+// "# Available Skills" block rides every turn's cached prefix — so one verbose
+// description taxes every agent, every turn, forever. Cap each field the way the
+// tool catalog already caps a lazy tool's summary (tools.lazyCatalogDescMaxChars =
+// 200): keep the identifying first sentence, drop the essay. Nothing is lost —
+// skill_search returns the full frontmatter, and use_skill loads the real body.
+const (
+	catalogDescMaxChars = 200
+	catalogWhenMaxChars = 160
+)
+
+// catalogLine reduces a (possibly multi-paragraph) frontmatter field to a single
+// catalog line: the first non-empty line, hard-capped on a UTF-8 rune boundary.
+func catalogLine(s string, max int) string {
+	line := ""
+	for _, l := range strings.Split(s, "\n") {
+		if t := strings.TrimSpace(l); t != "" {
+			line = t
+			break
+		}
+	}
+	if utf8.RuneCountInString(line) <= max {
+		return line
+	}
+	return strings.TrimSpace(string([]rune(line)[:max])) + "…"
+}
+
 // renderCatalog builds the "# Available Skills" block from a resolved skill list
 // (already in the desired order). Lists only slug + description + when-to-use
 // (frontmatter), and instructs the model to call use_skill to load the body.
@@ -914,9 +942,9 @@ func renderCatalog(list []Skill, skillTool string) string {
 		}
 		// SummaryOnly skills show slug + description but NOT their when-to-use —
 		// the leaner "summary" tier between full and name-only.
-		fmt.Fprintf(&b, "- `%s` — %s", sk.Slug, sk.Description)
+		fmt.Fprintf(&b, "- `%s` — %s", sk.Slug, catalogLine(sk.Description, catalogDescMaxChars))
 		if sk.WhenToUse != "" && !sk.SummaryOnly {
-			fmt.Fprintf(&b, " (when: %s)", sk.WhenToUse)
+			fmt.Fprintf(&b, " (when: %s)", catalogLine(sk.WhenToUse, catalogWhenMaxChars))
 		}
 		b.WriteString("\n")
 	}

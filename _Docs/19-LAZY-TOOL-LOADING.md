@@ -225,8 +225,69 @@
     `Edit` eager kaldığı için normal düzenleme etkilenmez. Salt-okunur ajan dalındaki
     `MarkLazy("Write","Edit","apply_patch")` → `apply_patch` zaten yukarıda lazy
     olduğu için listeden çıkarıldı.
-    **Ölçüm (Audit, anthropic ajanı, shell kapalı):** eager 23→18 araç,
-    **~9031 → ~6720 token** (tur/ajan başına **~2311 token**, %26).
+    **Ölçüm (Audit, anthropic ajanı, shell kapalı, örnekler HARİÇ):** eager 23→18
+    araç, **~9031 → ~6720 token** (tur/ajan başına **~2311 token**, %26). Not: bu
+    baseline zaten insight sonrası alındı → insight'ın ~700'ü bu 2311'in dışında.
+- **`get_view` şema kısaltması (2026-08-20):** en pahalı eager araç ertelenmedi
+  (51 gerçek çağrı; alternatifi ham state okumak daha pahalı) — bunun yerine
+  **açıklaması sıkıştırıldı**: kind başına paragraf → tek satır, "sayılar hesaplanır"
+  paragrafı tek cümleye indi. Ayrıca `Examples` 7→4: örnekler `foldExamples` ile
+  **gönderilen şemaya** katıldığı için her biri tur maliyeti; kalan dördü şemanın
+  anlatamadığı tüm konvansiyonları (singleton id, `sub` drill-down, `level`/`lens`)
+  kapsıyor. `expand` referansı bilerek korundu (name-only `expand`'in tek keşif yolu).
+  **~1087 → ~858 token.**
+- **`run_subagent` → SUMMARY tier (2026-08-20, "Strateji B" kapandı):** 791 token'lık
+  şema tüm günlük geçmişinde 13 çağrı için her turda taşınıyordu. Name-only YAPILMADI:
+  delegasyon **davranışsal** — aracı göremeyen model işi kendisi yapar, özet satırının
+  düşmesi fan-out'u sessizce öldürürdü. Bunun yerine `MarkLazy` (özet tier) + açıklamanın
+  **ilk satırı tek cümlelik nudge** olacak şekilde yeniden yazıldı (`lazyDescription`
+  ilk satırı alır, 200 karakter cap). Katalogda artık şu satır duruyor:
+  `- run_subagent — Delegate a self-contained task to an isolated subagent and get back
+  ONLY its final result — its intermediate tool output never enters your context.`
+  claude-cli yolu etkilenmez: `run_subagent` `coreInteractionTools` üyesi → orada
+  görünürlükten bağımsız eager.
+- **Davranışsal eager araçlarda şema sıkıştırması (2026-08-20):** tier'ı değiştirmeden
+  üç araç daha inceldi — hepsi eager KALDI (davranışsal dürtü), yalnız ölü metin atıldı.
+  - `ask_user` **684 → 422**: şişkinliğin kaynağı açıklama değil, `options` içindeki
+    string/`{label}` `oneOf` bloğuydu — üstelik `questions[]` dalında **ikinci kez**
+    tekrarlanıyordu. `flexOptions` zaten string / `{label}`/`{value}`/`{text}` objesi /
+    karışık dizi / tek skaler hepsini çözdüğü için `oneOf` parser'ın kabul ettiğinden
+    fazlasını anlatmıyordu → `"items": {}` + tek cümlelik prose. Kabul edilen şekiller
+    aynı (claude-cli `AskUserQuestion` uyumu korundu).
+  - `transform_data` **528 → 412**: argv sözleşmesi, "çıktı dosyasını YAZMAK zorundasın"
+    kuralı ve "dosya editörü DEĞİL" guardrail'i korundu; gerisi kısaltıldı.
+  - `create_artifact` **497 → 422**: davranış kuralları (neyin artifact olduğu, medya
+    için `sourcePath` — asla base64) korundu, alan açıklamaları kısaldı.
+  - `todo_write` **533 → 471** (kuyruğun sonu, küçük kazanç): iki davranış kuralı
+    (`set`'i tercih et, aynı anda tek `in_progress`) ve `{"set":{"1":"completed"}}`
+    örneği korundu — string-anahtarlı 1-tabanlı indeks modellerin en sık yanlış
+    yaptığı şey. `category`/`steps` alanları SİLİNMEDİ (progress dosyasına kadar
+    taşınıyorlar, silmek sıkıştırma değil yetenek kesme olurdu), yalnız açıklamaları
+    kısaldı.
+- **Ölçüm (2026-08-20, shell AÇIK + örnekler dahil, `git worktree` ile HEAD baseline):**
+  eager **21 → 20** araç, **~8022 → ~6487 token**; katalog bloğu ~429 → ~485 (nudge
+  satırı). **Net tur/ajan başına ~1479 token (%17).** Kalan en pahalı eager araç
+  `get_view` (858); 500 token'ı aşan başka eager araç kalmadı.
+- **Blok taraması (2026-08-20): asıl şişkinlik araçlarda değil, SKILL kataloğundaydı.**
+  Statik prefix'in üç parçası gerçek veriyle ölçüldü (WS5): eager şemalar ~6487,
+  araç kataloğu ~485, **"# Available Skills" bloğu ~1399** — yani tek başına en
+  pahalı parça, hiçbir aracın yaklaşamadığı boyutta.
+  - **Sebep:** araç kataloğunda lazy özet 200 karaktere kırpılıyor
+    (`lazyCatalogDescMaxChars`), ama skill satırı **kırpılmıyordu**. `description` +
+    `when_to_use` frontmatter'ı kullanıcı-yazımı serbest metin olduğu için tek uzun
+    skill her ajanı, her turda, süresiz vergilendiriyordu (en pahalısı 240 token).
+  - **Düzeltme:** `renderCatalog` artık `catalogLine` ile kırpıyor —
+    `catalogDescMaxChars=200`, `catalogWhenMaxChars=160` (ilk boş-olmayan satır,
+    rune sınırında kesim + `…`). Kayıp yok: `skill_search` tam frontmatter'ı,
+    `use_skill` gerçek gövdeyi döner. Ölçüm: **WS5 1399→1026, WS1 1163→820,
+    WS17 1372→1029** (~%25–30); kırpma sonrası hiçbir skill satırı 110 token'ı geçmiyor.
+  - **Araç kataloğu prose'u** (blok'un ~%36'sı) sıkıştırıldı: giriş + self-management
+    işaretçisi paragrafları mekanizmayı koruyarak kısaldı ve işaretçideki **"memory"**
+    silindi — hafıza alt sistemi 2026-07-05'te kaldırılmıştı, blok var olmayan araçları
+    reklam ediyordu. **~485 → ~432.** Ölçüm yöntemi: geçici audit testi
+  `ShippedToolCatalog` + `LazyToolsCatalogBlock` üzerinden `conversation.EstimateText`.
+  Uyarı: `Examples` yalnız **eager** şemaya katılır (`foldExamples`) → lazy araçta
+  örnek maliyeti sıfırdır; eski (2026-08-15) ölçüm örnekleri saymadığı için düşük çıktı.
 
   **Eager kalanlar** (davranışsal dürtü veya yüksek frekans): `todo_write`,
   `ask_user`, `request_confirmation`, `create_artifact`/`update_artifact`,

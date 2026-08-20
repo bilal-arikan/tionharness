@@ -166,50 +166,40 @@ func NewAskUserTool() AskUserTool { return AskUserTool{} }
 func (AskUserTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name: "ask_user",
-		Description: "Ask the user one or more clarifying questions and wait for their " +
-			"answer(s). Use ONLY when you genuinely cannot proceed without input " +
-			"(ambiguous requirement, a risky choice, missing detail). For a single " +
-			"question set \"question\" (and optional \"options\"). To ask SEVERAL " +
-			"questions at once — shown together in one card and answered together — " +
-			"pass a \"questions\" array of {question, options} objects instead. Each " +
-			"question may offer suggested answers; the user may also type a free-text reply.",
+		Description: "Ask the user one or more clarifying questions and wait for their answer(s). Use ONLY " +
+			"when you genuinely cannot proceed without input (ambiguous requirement, a risky choice, missing " +
+			"detail). One question: set \"question\" (+ optional \"options\"). Several at once — one card, " +
+			"answered together: pass \"questions\" instead. Options are suggestions; the user may also type " +
+			"a free-text reply.",
 		// Schema mirrors claude-cli's native AskUserQuestion where it overlaps so a
 		// model trained on that tool calls this one without a shape mismatch: an
 		// option may be a plain string OR an object with a "label" (the native form).
 		// Extra native fields (header/multiSelect/description) are accepted and
 		// ignored; a native questions[] wrapper is tolerated too (see ParseAskInput).
+		//
+		// The option item is deliberately UNCONSTRAINED ("items": {}) with the accepted
+		// shapes stated in prose instead of a duplicated string/object oneOf: flexOptions
+		// decodes strings, {label}/{value}/{text}/{description} objects, mixes and bare
+		// scalars alike, so the long oneOf only documented what the parser already
+		// tolerates — and it was duplicated in the nested questions[] branch, making it
+		// the single fattest part of this EAGER schema.
 		InputSchema: json.RawMessage(`{
   "type": "object",
   "properties": {
     "question": { "type": "string", "description": "The question to ask the user." },
     "options": {
       "type": "array",
-      "description": "Optional suggested answers shown as clickable choices. Each item may be a plain string OR an object with a \"label\" (AskUserQuestion-compatible).",
-      "items": {
-        "oneOf": [
-          { "type": "string" },
-          {
-            "type": "object",
-            "properties": {
-              "label": { "type": "string", "description": "The choice text shown to the user." },
-              "description": { "type": "string", "description": "Optional longer explanation (ignored by TionSwarm)." }
-            }
-          }
-        ]
-      }
+      "description": "Optional suggested answers shown as clickable choices. Each item is a plain string, or an object with a \"label\" (AskUserQuestion-compatible).",
+      "items": {}
     },
     "questions": {
       "type": "array",
-      "description": "Ask SEVERAL questions at once (shown together in one card, answered together). Use this instead of \"question\" when you have multiple things to clarify. Each entry is its own question with optional suggested answers.",
+      "description": "Ask SEVERAL questions at once (one card, answered together) instead of \"question\".",
       "items": {
         "type": "object",
         "properties": {
           "question": { "type": "string", "description": "The question to ask the user." },
-          "options": {
-            "type": "array",
-            "description": "Optional suggested answers for this question (plain strings or {label} objects).",
-            "items": { "oneOf": [ { "type": "string" }, { "type": "object", "properties": { "label": { "type": "string" } } } ] }
-          }
+          "options": { "type": "array", "description": "Optional suggested answers for this question (same shapes as above).", "items": {} }
         },
         "required": ["question"]
       }

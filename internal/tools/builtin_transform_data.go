@@ -47,23 +47,24 @@ func NewTransformDataTool(sb Sandbox) TransformDataTool { return TransformDataTo
 func (TransformDataTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name: "transform_data",
+		// Eager tool: the description carries only what the model cannot infer from the
+		// schema — the argv contract, the must-write rule, and the "not a file editor"
+		// guardrail. Everything else was prose the call itself teaches.
 		Description: "Run a short script (python3, node or bun) in an isolated subprocess to transform data: " +
 			"it reads your input files and writes a structured JSON output file, which you then reference as a " +
-			"table/spreadsheet data source WITHOUT inlining the rows into your reply (saves context/tokens). " +
-			"The script receives file PATHS as command-line args: argv[1..N] are the input files in order, and " +
-			"the LAST arg is the output file to write (with no input files, argv[1] is the output file). The " +
-			"subprocess runs with a STRIPPED environment (no API keys/secrets), a 30s timeout; only its " +
-			"stdout/stderr (not the data) is returned, plus the output file's path, size and row count. " +
-			"This is NOT a file editor: your script MUST write the output file (the LAST argv), or the call " +
-			"fails even if it exited 0. To edit source files in place, use apply_patch or Edit instead — do " +
-			"NOT use transform_data to patch files.",
+			"table/spreadsheet data source instead of inlining the rows into your reply.\n" +
+			"argv: the input files in order, then the output file LAST (with no inputs, argv[1] IS the output). " +
+			"Your script MUST write that file or the call fails even on exit 0 — only stdout/stderr plus the " +
+			"output path, size and row count come back, never the data itself.\n" +
+			"Stripped environment (no API keys/secrets), 30s timeout. NOT a file editor — to change source " +
+			"files use Edit or apply_patch.",
 		InputSchema: json.RawMessage(`{
 			"type":"object",
 			"properties":{
-				"language":{"type":"string","enum":["python3","node","bun"],"description":"Interpreter to run the script with"},
-				"script":{"type":"string","description":"The script source. Reads input files and writes JSON to the output file (see argv contract)."},
-				"input_files":{"type":"array","items":{"type":"string"},"description":"Input file paths (relative to the working dir), passed as argv[1..N] in order"},
-				"output_file":{"type":"string","description":"Path to write the JSON output (relative to the working dir), passed as the LAST argv"}
+				"language":{"type":"string","enum":["python3","node","bun"]},
+				"script":{"type":"string","description":"Script source (see the argv contract)."},
+				"input_files":{"type":"array","items":{"type":"string"},"description":"Input paths, relative to the working dir, passed as argv[1..N] in order."},
+				"output_file":{"type":"string","description":"Path to write the JSON output, relative to the working dir, passed as the LAST argv."}
 			},
 			"required":["language","script","output_file"],
 			"additionalProperties":false

@@ -39,25 +39,28 @@ func NewTodoWriteTool() TodoWriteTool { return TodoWriteTool{} }
 func (TodoWriteTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name: "todo_write",
-		Description: "Publish or update your working checklist for the current task. " +
-			"Two forms — pass exactly one: `todos` REPLACES the whole list (use it to create " +
-			"the list or change item texts); `set` is a cheap status-only update mapping " +
-			"1-based item index to a new status, e.g. {\"set\":{\"1\":\"completed\",\"2\":\"in_progress\"}} " +
-			"— prefer it once the list exists instead of resending unchanged items. Keep " +
-			"exactly one item in_progress while you work on it, then completed when done.",
+		// Eager tool: the description keeps only the two behavioral rules a schema
+		// cannot state — prefer `set` once the list exists, and hold exactly one item
+		// in_progress. The `set` example stays: its string-keyed 1-based index shape is
+		// the one thing models get wrong.
+		Description: "Publish or update your working checklist for the current task. Pass exactly one form: " +
+			"`todos` REPLACES the whole list (creation, or when item texts change); `set` is a cheap " +
+			"status-only update keyed by 1-based index, e.g. {\"set\":{\"1\":\"completed\",\"2\":\"in_progress\"}} " +
+			"— prefer it once the list exists instead of resending unchanged items. Keep exactly one item " +
+			"in_progress while you work on it, then completed when done.",
 		InputSchema: json.RawMessage(`{
   "type": "object",
   "properties": {
     "todos": {
       "type": "array",
-      "description": "Full checklist (replaces the previous one). Use for creation or when item texts change.",
+      "description": "Full checklist, replacing the previous one.",
       "items": {
         "type": "object",
         "properties": {
-          "content": { "type": "string", "description": "Short imperative description of the step." },
+          "content": { "type": "string", "description": "Short imperative step." },
           "status": { "type": "string", "enum": ["pending", "in_progress", "completed"] },
-          "category": { "type": "string", "description": "Optional grouping label (e.g. 'functional', 'tests', 'docs')." },
-          "steps": { "type": "array", "items": { "type": "string" }, "description": "Optional verification sub-steps for this item." }
+          "category": { "type": "string", "description": "Optional grouping label (e.g. 'tests', 'docs')." },
+          "steps": { "type": "array", "items": { "type": "string" }, "description": "Optional verification sub-steps." }
         },
         "required": ["content", "status"],
         "additionalProperties": false
@@ -65,7 +68,7 @@ func (TodoWriteTool) Def() providers.ToolDef {
     },
     "set": {
       "type": "object",
-      "description": "Status-only update: 1-based item index (as a string key) to new status. Cheaper than resending the full list.",
+      "description": "Status-only update: string key = 1-based item index.",
       "additionalProperties": { "type": "string", "enum": ["pending", "in_progress", "completed"] }
     }
   },

@@ -71,7 +71,32 @@ progress dosyasına kadar taşınıyorlar; yalnız açıklamalar kısaldı).
 **Ölçüm (shell AÇIK, örnekler dahil, HEAD baseline `git worktree` ile alındı):**
 eager **21 → 20** araç, **~8022 → ~6487 token**, katalog ~429 → ~485 →
 **net ~1479 token/tur (%17).** Geriye 500 token'ı aşan tek eager araç `get_view`
-(858) kaldı → bu tarama kolu burada bitti. Düzeltme: 2026-08-15'teki "~2311 token" rakamı örnekleri
+(858) kaldı → bu tarama kolu burada bitti.
+
+## Statik prefix blok taraması: skill kataloğu kırpılıyor (2026-08-20) ✅
+
+Araçlardan sonra sıra prompt bloklarına geldi. WS5'te ölçüm: eager şemalar ~6487,
+araç kataloğu ~485, **"# Available Skills" ~1399**. Yani en pahalı tek parça
+araçlar değil, **skill kataloğuydu** — hiçbir aracın yaklaşamadığı boyutta.
+
+**Kök sebep.** Araç kataloğunda lazy özet 200 karakterde kırpılıyor
+(`lazyCatalogDescMaxChars`), skill satırı ise kırpılmıyordu. `description` +
+`when_to_use` kullanıcı-yazımı serbest metin → tek uzun skill her ajanı, her turda,
+süresiz vergilendiriyordu (en pahalı satır 240 token; ilk dört skill bloğun %54'ü).
+
+**Düzeltme.** `renderCatalog` artık `catalogLine` ile kırpıyor (`description` 200,
+`when_to_use` 160 karakter; ilk boş-olmayan satır, rune sınırında kesim + `…`).
+Bilgi kaybı yok — `skill_search` tam frontmatter'ı, `use_skill` gerçek gövdeyi verir;
+zaten blok'un altbilgisi modeli `skill_search`'e yönlendiriyor.
+**WS5 1399→1026, WS1 1163→820, WS17 1372→1029** (~%25–30). Kırpma sonrası hiçbir
+skill satırı 110 token'ı geçmiyor.
+
+**Araç kataloğu.** Zaten yalındı; yalnız iki prose paragrafı (blok'un ~%36'sı)
+mekanizmayı koruyarak sıkıştırıldı → **~485 → ~432**. Yan bulgu: self-management
+işaretçisi hâlâ "memory" diyordu — hafıza alt sistemi 2026-07-05'te kaldırılmıştı,
+yani blok var olmayan araçları reklam ediyordu; silindi.
+
+Detay: `_Docs/19`. Düzeltme: 2026-08-15'teki "~2311 token" rakamı örnekleri
 saymıyordu ve baseline'ı zaten insight sonrası alınmıştı (insight'ın ~700'ü o
 sayının dışında).
 

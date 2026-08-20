@@ -43,31 +43,28 @@ func (t GetViewTool) WithSources(wsName string, src ViewSources) GetViewTool {
 func (GetViewTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name: "get_view",
-		Description: "Get a COMPACT, deterministic summary of a large entity instead of reading it whole.\n\n" +
-			"  flowrun — a flow execution. A 40-node run collapses to a couple of lines that keep the " +
-			"shape of the graph: which nodes ran, how long each took, where the run is parked now, and " +
-			"what failed. sub=<nodeId> drills into one node.\n" +
-			"  session — a conversation. Cost, checklist progress, the last failure, stuck-turn count, a " +
-			"pending question, handoff lineage and coordinator role — WITHOUT reading the transcript.\n" +
-			"  workspace — the whole workspace: agent/session/card/run counts, today's token " +
-			"spend, and the signals worth acting on (stuck sessions, pending questions, failed " +
-			"runs, broken schedules, stale cards). Start here when asked \"what is going on?\". " +
-			"Use id='workspace'.\n" +
-			"  board   — the kanban. Column histogram plus the signals that matter: cards stuck in a " +
-			"working column, failed cards, dependency-blocked cards, overdue cards, recent movement. " +
-			"Use id='board'. sub=<cardId> drills into one card.\n" +
-			"  schedule — one cron schedule: armed/disabled, last-fire status and error, next run, and " +
-			"what it delivers (agent or flow). Use the schedule id.\n" +
+		// Description is deliberately terse: get_view is EAGER (its schema rides every
+		// turn's cached prefix), so per-kind prose is compressed to one line each. The
+		// projection itself is self-describing — the agent learns the detail by calling
+		// it, not by carrying a manual in every turn.
+		Description: "Get a COMPACT, deterministic summary of a large entity instead of reading it whole. " +
+			"Numbers are computed, never model-written; the view reports what it hid and hands back " +
+			"drill-down refs, so nothing is silently dropped.\n\n" +
+			"  workspace — \"what is going on?\": counts, today's spend, and the signals worth acting on " +
+			"(stuck sessions, pending questions, failed runs, broken schedules, stale cards). id='workspace'.\n" +
+			"  board    — the kanban: column histogram + stuck/failed/blocked/overdue cards. id='board'; " +
+			"sub=<cardId> drills into one card.\n" +
+			"  session  — a conversation WITHOUT its transcript: cost, checklist progress, last failure, " +
+			"stuck turns, pending question, handoff lineage, coordinator role.\n" +
+			"  flowrun  — a flow execution: which nodes ran, timings, where it is parked, what failed. " +
+			"sub=<nodeId> drills into one node.\n" +
+			"  schedule — one cron schedule: armed/disabled, last fire + error, next run, what it delivers.\n" +
 			"  agent | budget | tools | logs | artifact | automation | skill | insight | category — the " +
-			"remaining Workspace Explorer nodes, the same ones `expand` hands you refs for. Use the id " +
-			"expand returned ('budget'/'tools'/'logs' and a category id like 'sessions' are singletons).\n\n" +
-			"Numbers in a view are computed, never written by a model, so they can be trusted. The view " +
-			"always reports how many items it hid and offers drill-down handles for them — nothing is " +
-			"silently dropped.\n\n" +
-			"level: 'tiny' (one line) | 'card' (default) | 'full' (per-item detail).\n" +
-			"lens: 'health' (default) | 'stale' | 'recent' | 'errors' (failures only).\n\n" +
-			"Prefer this over list_tasks / get_flow_run + parsing raw state: it is a fraction of the " +
-			"tokens and it surfaces the warning signals directly.",
+			"remaining Workspace Explorer nodes, the ones `expand` hands you refs for (use the id expand " +
+			"returned; 'budget'/'tools'/'logs' and category ids like 'sessions' are singletons).\n\n" +
+			"level: 'tiny' | 'card' (default) | 'full'. lens: 'health' (default) | 'stale' | 'recent' | 'errors'.\n" +
+			"Prefer this over list_tasks / get_flow_run + parsing raw state: a fraction of the tokens, and " +
+			"it surfaces the warning signals directly.",
 		InputSchema: json.RawMessage(`{
   "type": "object",
   "properties": {
@@ -80,14 +77,14 @@ func (GetViewTool) Def() providers.ToolDef {
   "required": ["kind","id"],
   "additionalProperties": false
 }`),
+		// Four examples, not seven: they fold into the SHIPPED schema (foldExamples), so
+		// each one is per-turn cost. These four cover every convention the schema alone
+		// cannot express — singleton ids, sub drill-down, and level/lens placement.
 		Examples: []json.RawMessage{
-			json.RawMessage(`{"kind":"flowrun","id":"RUN7f2"}`),
 			json.RawMessage(`{"kind":"workspace","id":"workspace"}`),
-			json.RawMessage(`{"kind":"board","id":"board","lens":"stale"}`),
-			json.RawMessage(`{"kind":"session","id":"SES9a1","level":"full"}`),
-			json.RawMessage(`{"kind":"flowrun","id":"RUN7f2","sub":"fetch-b"}`),
 			json.RawMessage(`{"kind":"board","id":"board","sub":"T3"}`),
-			json.RawMessage(`{"kind":"schedule","id":"SCH1"}`),
+			json.RawMessage(`{"kind":"flowrun","id":"RUN7f2","sub":"fetch-b"}`),
+			json.RawMessage(`{"kind":"session","id":"SES9a1","level":"full"}`),
 		},
 	}
 }

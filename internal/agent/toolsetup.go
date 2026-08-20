@@ -478,6 +478,16 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 		// these (disjoint tiers, last mark wins).
 		"handoff_session", "send_message",
 	)
+	// SUMMARY tier (lazy, but NOT name-only): run_subagent. Its 700-token schema is
+	// the third-largest eager cost for ~13 calls across the whole journal history,
+	// but delegation is BEHAVIORAL — a model that cannot see the tool simply does
+	// the work itself, so name-only (which sheds the summary line) would quietly
+	// kill fan-out. Summary tier is the middle ground the tier model already has:
+	// the load-on-demand catalog keeps run_subagent's first description line as the
+	// nudge (~50 tokens, see lazyDescription's 200-char cap) and the schema is pulled
+	// on demand. The claude-cli path is unaffected — run_subagent is a
+	// coreInteractionTools member, i.e. eager on the CLI regardless of this mark.
+	reg.MarkLazy("run_subagent")
 	// Admin-rare tools fold into the HIDDEN self-management group (not enumerated
 	// per turn — surfaced via the tionswarm-self-management skill / tool_search). These
 	// are confined config edits and secret reads: used in a tiny fraction of turns,
@@ -903,10 +913,9 @@ func renderLazyToolCatalog(lazy []providers.ToolDef, hiddenCount int, cli bool, 
 			"callable immediately. Activate everything you expect to need in one call. (External MCP server tools " +
 			"named `mcp__<server>__…` load with the `ToolSearch` tool instead.)\n")
 	default:
-		b.WriteString("These tools are NOT loaded yet — only their names (and a short summary for some) are shown. " +
-			"Entries listed by name alone are deferred: use `tool_search` to discover what they do by keyword. " +
-			"To use any tool, first call `activate_tools` with its exact name(s); its full schema becomes " +
-			"available on your next step. Activate everything you expect to need for a task in one call.\n")
+		b.WriteString("These tools are NOT loaded yet: an entry with no summary is deferred — use `tool_search` " +
+			"to find what a name does. To call any of them, first `activate_tools` with its exact name(s); the " +
+			"schema arrives on your next step. Activate everything you expect to need in one call.\n")
 	}
 	for _, d := range builtin {
 		if name, ok := catalogDisplayName(d.Name, cli); ok {
@@ -965,11 +974,12 @@ func renderLazyToolCatalog(lazy []providers.ToolDef, hiddenCount int, cli bool, 
 			skillTool = interactionToolPrefix + "use_skill"
 			findHint, actHint = "ToolSearch", "load"
 		}
-		fmt.Fprintf(&b, "\n%d self-management tools (manage agents, flows, schedules, tasks, hooks, "+
-			"MCP servers, skills, workspaces, app settings, your own prompts/config, secrets, memory, logs) are available but "+
-			"not listed here to save context. Load the `tionswarm-self-management` skill (via `%s`) "+
-			"for the full catalog and how to use them, or find one directly with `%s` "+
-			"— then `%s` the names you need.\n", hiddenCount, skillTool, findHint, actHint)
+		// "memory" is deliberately absent from this list: the memory subsystem was
+		// removed on 2026-07-05 and naming it here advertised tools that do not exist.
+		fmt.Fprintf(&b, "\n%d self-management tools (agents, flows, schedules, tasks, hooks, MCP servers, "+
+			"skills, workspaces, app settings, your own prompts/config, secrets, logs) are not listed here "+
+			"to save context. Load the `tionswarm-self-management` skill (via `%s`) for the full catalog, "+
+			"or find one with `%s` — then `%s` the names you need.\n", hiddenCount, skillTool, findHint, actHint)
 	}
 	return strings.TrimSpace(b.String())
 }
