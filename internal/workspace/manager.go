@@ -273,13 +273,10 @@ func (m *Manager) open(meta Meta) error {
 		return err
 	}
 
-	// Provision this workspace's per-workspace claude-cli config home
-	// (<workspace>/claude-home): seed it from the global home on first open and
-	// migrate any legacy <workspace>/skills into it. Must run BEFORE NewRuntime so
-	// the skill store scans the migrated (populated) tier. Idempotent.
-	// Same idea for the per-workspace codex-cli config home (<workspace>/codex-home):
-	// seed its auth.json from the global ~/.codex (or $CODEX_HOME) login, if any, so
-	// a fresh workspace doesn't need its own `codex login`. Idempotent.
+	// No per-workspace CLI config home is provisioned any more: claude-cli and
+	// codex-cli run against the app-global homes (<dataDir>/claude-home,
+	// <dataDir>/codex-home) unless the provider INSTANCE names its own configDir.
+	// The legacy <workspace>/claude-home dirs are inert leftovers.
 
 	storeDir := filepath.Join(dir, "store")
 	storeOpenStart := time.Now()

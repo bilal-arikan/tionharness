@@ -26,6 +26,11 @@ mevcut kurulumda üç kırık ortaya çıktı; hepsi hem kodda hem diskte kapat�
   `-apply`, idempotent). Canlı sonuç: 2 örnek eklendi, 1 ajan yeniden bağlandı
   (`PRV1` → `claude-cli`), 114 transkript yeni eve taşındı, 28 ölü resume kaydı
   temizlendi, bu kesintinin bıraktığı `stuckTurns`/`stuck` izi silindi.
+- **Eski `<workspace>/claude-home` klasörleri silindi (2026-08-20):** 14 workspace,
+  1.16 GB. Önce onarım aracının kuru çalışması "0 taşınacak transkript" dediği
+  doğrulandı (hiçbir oturum artık eski eve bağlı değil), sonra silindi; ardından
+  soğuk + sıcak canlı tur yeşil. `workspace.Manager.open`'daki per-workspace ev
+  tohumlamasını anlatan ölü yorum da kaldırıldı (kod 65c58e9'da gitmişti).
 - Detay → `71-SAGLAYICI-ORNEKLERI-PLANI.md` §3.1 ve `51-CLAUDE-CONFIG-BIRLESIK.md`.
 
 ## codex-cli sağlayıcısı: katalog + fiyatlandırma + frontend yüzeyi (2026-08-18) ✅
@@ -8926,3 +8931,32 @@ CLI ise daha önce OAuth yönlendirmesi yüzünden bırakılmıştı.
 **Doğrulama:** `go build ./...` ✅, `go test ./internal/providers` ✅ (72 test).
 Not: OpenRouter üzerinden erişilen Gemini **modelleri** (pricing/context-window/katalog)
 bir CLI provider'ı değil — meşru model referansları olarak korundu.
+
+## Bağlam ölçeri: araç çağrısı/sonucu trafiği artık sayılıyor
+
+- **Ölçüm:** tool-yoğun bir oturumda (4 mesaj, 197 araç çağrısı) mesaj metinleri
+  4.689 karakter (~1.2k token) iken `db.Message.Steps` izleri 236.405 karakter
+  (~59k token) tutuyordu. Panel bu farkın hiçbirini göstermiyordu.
+- **Doğrulama (önce):** `Steps`'in tamamı sağlayıcıya **gönderilmiyor**.
+  `conversation.toProviderMessages` (`internal/conversation/manager.go:496-504`)
+  saklanan bir turu yalnız `Text` (+ ek dosyalar) olarak provider mesajına
+  çeviriyor; iz `providers.Request.Messages`'a hiç girmiyor. Bu yüzden
+  `EstimateTokens` **değiştirilmedi** — ham izi saymak, hiç harcanmamış tokenlar
+  için sıkıştırmayı erken tetiklerdi.
+- **Gerçekten gönderilen kısım:** `composeTurnRequest`
+  (`internal/api/chat_turn.go:65-67`) son asistan turlarının izlerinden üretilen
+  **sınırlı** `<recent_tool_activity>` özetini (`recentToolActivityBlock`, en fazla
+  4 tur × 10 araç × 240 rune çıktı) volatil dinamik ekte gönderiyor. Bu blok
+  hiçbir yerde sayılmıyordu — ne ölçerde ne de katlama eşiğinde.
+- **Çözüm:** `systemFillers` artık `history` alıyor ve bu özeti kendi kovası olarak
+  ekliyor: `role:"tool-activity"`, etiket **"Araç çağrıları ve sonuçları"**,
+  `Count` = özetteki araç satırı sayısı (`countToolRecapLines`). Frontend'de
+  `ROLE_COLORS['tool-activity']` (`#7c3aed`) ile kendi rengi var. `systemFillers`
+  aynı zamanda `contextOverheadTokens`'ın tabanı olduğundan katlama eşiği de artık
+  bu maliyeti görüyor — ölçer ile motor tek kaynakta kalmayı sürdürüyor.
+- **Kapsam notu:** ham `Steps` izi bu ölçerde görünmez ve görünmemeli; o yalnız
+  diskte/UI transkriptinde yaşar. Ölçerde çıkan tek şey modele giden özettir.
+- **Testler:** `conversation.TestStepsAreNotSentAndNotEstimated` (izin provider
+  mesajına sızmadığını ve tahmini şişirmediğini sabitler),
+  `api.TestToolActivityRecapIsCounted` + `TestCountToolRecapLinesIgnoresNonToolTurns`.
+  `go test ./internal/conversation/... ./internal/api/... -count=1` ✅
