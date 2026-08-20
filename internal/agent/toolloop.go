@@ -233,14 +233,13 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 	// K1 (_Docs/71-SAGLAYICI-ORNEKLERI-PLANI.md): an instance whose own configDir
 	// field is set (ConfigDir() already non-empty, baked in at construction from
 	// the provider instance's config) keeps that dedicated home untouched here —
-	// only an instance with NO configDir of its own falls back to THIS workspace's
-	// home (<workspace>/claude-home or <workspace>/codex-home), sharing its
-	// skills/settings/login with the workspace. No-op when the workspace dir is
-	// unknown (keeps the provider's global default). This is the single per-turn
-	// seam every CLI turn passes through.
+	// only an instance with NO configDir of its own falls back to the APP-GLOBAL
+	// home (<dataDir>/claude-home or <dataDir>/codex-home), so one login serves
+	// every workspace. No-op when the data dir is unknown (keeps the provider's
+	// own default). This is the single per-turn seam every CLI turn passes through.
 	if isCLI {
 		// The config home and the credential heal below are claude-specific: both
-		// name <workspace>/claude-home and the CLI's own .credentials.json. A second
+		// name a claude-home and the CLI's own .credentials.json. A second
 		// CLI transport must NOT inherit them, so they stay behind a narrow concrete
 		// assertion while the generic wiring (MCP delegation) goes through the
 		// interface.
@@ -271,8 +270,8 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 			// restart. Healing at the per-turn seam bounds the damage to the turn that
 			// actually lost the race. Idempotent and cheap: a usable credential returns
 			// after one small file read. Applied to whichever home this turn actually
-			// uses — the instance's own configDir when it has one, the workspace home
-			// otherwise — never hardcoded to the workspace home.
+			// uses — the instance's own configDir when it has one, the app-global home
+			// otherwise — never hardcoded to one of them.
 			ensureClaudeHomeCredential(home)
 		}
 		// codex-cli's sibling of the block above. CODEX_HOME must point at an

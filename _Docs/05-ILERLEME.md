@@ -1,6 +1,81 @@
 # TionSwarm — İlerleme Takibi
 
-> Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-08-19**
+> Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-08-20**
+
+## Piper kurulumu wheel'e göçtü + sürüm probu esnetildi (2026-08-20) ✅
+
+Harici araç turunda ortaya çıktı: **upstream Windows'a artık standalone piper
+arşivi yayınlamıyor.** `OHF-Voice/piper1-gpl` v1.7.0'ın Windows varlığı yalnız
+`piper_tts-1.7.0-cp39-abi3-win_amd64.whl`. Bu bir sürüm atlama değil, **çalışma
+zamanı göçü** — o yüzden sessizce yapılmadı, kullanıcıya sorulup onaylandı.
+
+**Kurulum.** `Progs\piper\.venv` (Python 3.13) + `pip install piper-tts==1.7.0`.
+Eski standalone kurulum (1.2.0, 37 MB) silindi; `voices\tr_TR-dfki-medium.onnx`
+yerinde bırakıldı — modeller pakete bağlı değil.
+
+**Kod (`internal/tts/tts.go`).** `piperExe()` aday listesinin **başına**
+`.venv/<Scripts|bin>/piper` eklendi; eski layout listede kaldı, dolayısıyla
+rhasspy-dönemi kurulumu olan bir host bozulmuyor. `voiceDirs()` iki seviye yukarıyı
+da tarıyor (binary `.venv/Scripts`'te ama modeller `<install>/voices`'ta; bir
+seviye yukarı yalnız `.venv/voices`'a ulaşırdı — oraya kimse yazmıyor).
+`Synthesize` **değişmedi**: piper1-gpl `--model`/`--output_file` alt-çizgili
+yazımları takma ad olarak koruyor, yani sürüm forku gerekmiyor.
+
+**Sürüm probu (`internal/exttools/versionprobe.go`, yeni).** Yeni CLI'da
+`--version` **yok** ve bilinmeyen bayrağı sürüm-şeklinde token içermeyen usage
+metniyle reddediyor → `LocalVersion` panelde kalıcı "sürüm okunamadı" bırakırdı.
+Yeni `Tool.VersionProbe(path)` prob hedefini çözüyor: venv console script'i ise
+o venv'in python'ına `importlib.metadata.version('piper-tts')` sorar, değilse
+aracın kendi `--version`'ına düşer. Mandal **`pyvenv.cfg`** — yalnız klasör adına
+bakmak `/usr/bin/piper`'ı venv sanıp yanındaki sistem python'ına sorardı ve
+kurulu olmayan bir dağıtım için hata döndürürdü. `internal/api/external_tools.go`
+iki çağrı yerinde de probu kullanıyor. Katalogdaki `VersionArgs` **korundu** —
+eski standalone kurulumun tek prob yolu o.
+
+**Update spec'i.** `manual` kaldı ama gerekçesi değişti: kilit sorunu yok (pip
+paketi), fakat çalıştırılacak interpreter host'a özel venv python'ı ve statik
+katalog mutlak yolunu bilemez. `Note` artık gerçek komutu gösteriyor.
+
+Doğrulama: `go build ./...` temiz, `internal/{tts,exttools,api}` 330 test + 4 yeni
+prob testi geçti, canlı uçtan uca sentez `.venv` piper'ıyla 245 KB WAV üretti.
+
+## Eager araç maliyeti: `get_view` kısaltıldı + `run_subagent` özet tier'a indi (2026-08-20) ✅
+
+2026-08-15 taramasının bilerek ertelenen iki maddesi kapandı.
+
+**`get_view` (en pahalı eager araç).** Ertelenmedi — 51 gerçek çağrısı var ve
+alternatifi (ham state okumak) daha pahalı. Bunun yerine açıklaması sıkıştırıldı
+(kind başına paragraf → tek satır) ve `Examples` 7→4'e indi; örnekler
+`foldExamples` ile **gönderilen şemaya** katıldığı için her biri tur maliyetidir.
+Kalan dört örnek şemanın anlatamadığı konvansiyonları (singleton id, `sub`
+drill-down, `level`/`lens`) kapsıyor. `expand` referansı korundu — name-only olan
+`expand`'in tek keşif yolu o cümle. **~1087 → ~858 token.**
+
+**`run_subagent` (Strateji B).** Name-only YAPILMADI: delegasyon davranışsal, aracı
+göremeyen model işi kendisi yapar. Onun yerine **özet tier** (`MarkLazy`) + açıklamanın
+ilk satırı tek cümlelik nudge olacak şekilde yeniden yazıldı (`lazyDescription` ilk
+satırı alıp 200 karakterde keser) → şema (791 tok) turdan kalktı, katalogda tek satır
+hatırlatma kaldı. claude-cli etkilenmez (`coreInteractionTools` üyesi → orada eager).
+
+**Üç davranışsal araçta şema sıkıştırması (tier değişmedi).** `ask_user`
+**684 → 422**: şişkinlik açıklamada değil, `options` içindeki string/`{label}`
+`oneOf` bloğundaydı — üstelik `questions[]` dalında ikinci kez tekrarlanıyordu.
+`flexOptions` zaten tüm bu şekilleri çözdüğü için `oneOf` parser'ın kabul
+ettiğinden fazlasını anlatmıyordu → `"items": {}` + tek cümle prose (claude-cli
+`AskUserQuestion` uyumu aynen duruyor). `transform_data` **528 → 412** (argv
+sözleşmesi + "çıktıyı yazmak zorundasın" + "dosya editörü değil" korundu),
+`create_artifact` **497 → 422** (davranış kuralları korundu, alan açıklamaları
+kısaldı), `todo_write` **533 → 471** (`category`/`steps` alanları silinmedi —
+progress dosyasına kadar taşınıyorlar; yalnız açıklamalar kısaldı).
+
+**Ölçüm (shell AÇIK, örnekler dahil, HEAD baseline `git worktree` ile alındı):**
+eager **21 → 20** araç, **~8022 → ~6487 token**, katalog ~429 → ~485 →
+**net ~1479 token/tur (%17).** Geriye 500 token'ı aşan tek eager araç `get_view`
+(858) kaldı → bu tarama kolu burada bitti. Düzeltme: 2026-08-15'teki "~2311 token" rakamı örnekleri
+saymıyordu ve baseline'ı zaten insight sonrası alınmıştı (insight'ın ~700'ü o
+sayının dışında).
+
+Detay: `_Docs/19`.
 
 ## Sağlayıcı göçünün canlı-veri onarımı (2026-08-19) ✅
 
@@ -26,11 +101,14 @@ mevcut kurulumda üç kırık ortaya çıktı; hepsi hem kodda hem diskte kapat�
   `-apply`, idempotent). Canlı sonuç: 2 örnek eklendi, 1 ajan yeniden bağlandı
   (`PRV1` → `claude-cli`), 114 transkript yeni eve taşındı, 28 ölü resume kaydı
   temizlendi, bu kesintinin bıraktığı `stuckTurns`/`stuck` izi silindi.
-- **Eski `<workspace>/claude-home` klasörleri silindi (2026-08-20):** 14 workspace,
-  1.16 GB. Önce onarım aracının kuru çalışması "0 taşınacak transkript" dediği
-  doğrulandı (hiçbir oturum artık eski eve bağlı değil), sonra silindi; ardından
-  soğuk + sıcak canlı tur yeşil. `workspace.Manager.open`'daki per-workspace ev
-  tohumlamasını anlatan ölü yorum da kaldırıldı (kod 65c58e9'da gitmişti).
+- **Eski per-workspace CLI evleri silindi (2026-08-20):** `claude-home` 14
+  workspace / 1.16 GB (önce onarım aracının kuru çalışması "0 taşınacak
+  transkript" dediği doğrulandı — hiçbir oturum artık eski eve bağlı değil) +
+  `codex-home` 14 workspace / 167 MB (codex thread'leri oturumlarda tutulmuyor,
+  `ResumeSessionID`'yi yalnız claude yolu yazıyor → bağımlılık yok). Ardından
+  canlı turlar yeşil: claude soğuk+sıcak, codex `gpt-5.6-sol`. Per-workspace ev
+  tohumlamasını anlatan ölü yorumlar (`workspace.Manager.open`, `toolloop`) da
+  kaldırıldı — kod 65c58e9'da gitmişti.
 - Detay → `71-SAGLAYICI-ORNEKLERI-PLANI.md` §3.1 ve `51-CLAUDE-CONFIG-BIRLESIK.md`.
 
 ## codex-cli sağlayıcısı: katalog + fiyatlandırma + frontend yüzeyi (2026-08-18) ✅
