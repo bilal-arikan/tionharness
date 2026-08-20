@@ -100,9 +100,10 @@ func (r *Runtime) selfManageBuiltins(agent db.Agent) []tools.Tool {
 		tools.NewUpdateTaskTool(r.db, agent.ID),
 		tools.NewMoveTaskTool(r.db, agent.ID),
 		tools.NewDeleteTaskTool(r.db, agent.ID),
-		// Hooks (PreToolUse/PostToolUse). List/create/delete on any hook.
+		// Hooks (PreToolUse/PostToolUse). List/create/update/delete on any hook.
 		tools.NewListHooksTool(r.db, agent.ID),
 		tools.NewCreateHookTool(r.db, agent.ID),
+		tools.NewUpdateHookTool(r.db, agent.ID),
 		tools.NewDeleteHookTool(r.db, agent.ID),
 		// MCP servers. List/create/toggle/delete on any server. New/enabled servers
 		// are picked up next turn.

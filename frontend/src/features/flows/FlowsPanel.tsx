@@ -27,6 +27,8 @@ import { useMultiSelect } from '@/shared/hooks/useMultiSelect'
 import { useCollapsibleList } from '@/shared/hooks/useCollapsibleList'
 import { useSessionState } from '@/shared/hooks/useSessionState'
 import { useVisiblePoll } from '@/shared/hooks/useVisiblePoll'
+import { useRefreshTrigger } from '@/shared/hooks/useRefreshTrigger'
+import { SIGNAL_FLOWS } from '@/app/eventToRefreshSignals'
 
 // Backstop refresh for the Koşular tab; run lifecycle also arrives over SSE.
 const RUNS_POLL_MS = 15000
@@ -49,6 +51,7 @@ interface Props {
 // (FlowEditorView) and the action factories (flowActions / flowGraphOps) render
 // and mutate it.
 export function FlowsPanel({ agents, onError, openFlowId, tab: tabProp, onTabChange }: Props) {
+  const flowsTick = useRefreshTrigger(SIGNAL_FLOWS)
   const [flows, setFlows] = useState<Flow[]>([])
   // Selection + active tab persist across screen switches within the session
   // (reset on app reload). The selected flow's editor state is re-loaded on mount
@@ -155,7 +158,7 @@ export function FlowsPanel({ agents, onError, openFlowId, tab: tabProp, onTabCha
       .finally(() => setFlowsLoading(false))
   }, [onError])
 
-  useEffect(() => loadFlows(), [loadFlows])
+  useEffect(() => loadFlows(), [loadFlows, flowsTick])
 
   // Resize the run input to fit its content (grows upward, capped at 160px).
   useEffect(() => {

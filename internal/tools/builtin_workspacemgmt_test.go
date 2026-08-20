@@ -12,12 +12,14 @@ import (
 type fakeWorkspaceBridge struct {
 	list    []WorkspaceInfo
 	deleted []string
+	options CreateWorkspaceOptions
 }
 
 func (f *fakeWorkspaceBridge) ListWorkspaces() []WorkspaceInfo { return f.list }
 
-func (f *fakeWorkspaceBridge) CreateWorkspace(name, parentPath, createdBy string) (WorkspaceInfo, error) {
-	info := WorkspaceInfo{ID: "ws-new", Name: name, Path: parentPath, CreatedByAgent: createdBy != ""}
+func (f *fakeWorkspaceBridge) CreateWorkspace(name string, options CreateWorkspaceOptions) (WorkspaceInfo, error) {
+	f.options = options
+	info := WorkspaceInfo{ID: "ws-new", Name: name, Path: options.ParentPath, CreatedByAgent: options.CreatedBy != ""}
 	f.list = append(f.list, info)
 	return info, nil
 }
@@ -58,6 +60,12 @@ func TestCreateWorkspaceStampsCreatedBy(t *testing.T) {
 	}
 	if len(b.list) != 1 || !b.list[0].CreatedByAgent {
 		t.Fatalf("workspace not stamped agent-created: %+v", b.list)
+	}
+	if _, err := create.Call(ctx, json.RawMessage(`{"name":"Configured","icon":"🚀","color":"#123456","workingDir":"C:/src","template":"starter"}`)); err != nil {
+		t.Fatalf("create configured workspace: %v", err)
+	}
+	if b.options.Icon != "🚀" || b.options.Color != "#123456" || b.options.WorkingDir != "C:/src" || b.options.Template != "starter" {
+		t.Fatalf("workspace options not forwarded: %+v", b.options)
 	}
 }
 

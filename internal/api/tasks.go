@@ -154,6 +154,18 @@ func (s *Server) handleCreateTask(w http.ResponseWriter, r *http.Request) {
 	}
 
 	wsp := ws(r)
+	if req.OwnerAgentID != "" {
+		if _, err := wsp.DB.GetAgent(ctx, req.OwnerAgentID); err != nil {
+			writeError(w, http.StatusBadRequest, "owner agent not found")
+			return
+		}
+	}
+	if req.FlowID != "" {
+		if _, err := wsp.DB.GetFlow(ctx, req.FlowID); err != nil {
+			writeError(w, http.StatusBadRequest, "flow not found")
+			return
+		}
+	}
 	task, err := wsp.DB.CreateTask(ctx, db.Task{
 		Title:        title,
 		Description:  req.Description,
@@ -264,9 +276,21 @@ func (s *Server) handleUpdateTask(w http.ResponseWriter, r *http.Request) {
 		task.Prompt = *req.Prompt
 	}
 	if req.OwnerAgentID != nil {
+		if *req.OwnerAgentID != "" {
+			if _, err := wsp.DB.GetAgent(r.Context(), *req.OwnerAgentID); err != nil {
+				writeError(w, http.StatusBadRequest, "owner agent not found")
+				return
+			}
+		}
 		task.OwnerAgentID = *req.OwnerAgentID
 	}
 	if req.FlowID != nil {
+		if *req.FlowID != "" {
+			if _, err := wsp.DB.GetFlow(r.Context(), *req.FlowID); err != nil {
+				writeError(w, http.StatusBadRequest, "flow not found")
+				return
+			}
+		}
 		task.FlowID = *req.FlowID
 	}
 	if req.BoardState != nil {

@@ -64,6 +64,17 @@ type skillInputReq struct {
 	Body        string `json:"body"`
 }
 
+type skillUpdateReq struct {
+	Name        *string `json:"name"`
+	Description *string `json:"description"`
+	WhenToUse   *string `json:"whenToUse"`
+	Icon        *string `json:"icon"`
+	Color       *string `json:"color"`
+	Group       *string `json:"group"`
+	Shared      *bool   `json:"shared"`
+	Body        *string `json:"body"`
+}
+
 func (req skillInputReq) input() skills.SkillInput {
 	return skills.SkillInput{
 		Name:        req.Name,
@@ -146,12 +157,48 @@ func (s *Server) handleImportSkill(w http.ResponseWriter, r *http.Request) {
 
 // handleUpdateSkill rewrites an existing skill's frontmatter + body in place.
 func (s *Server) handleUpdateSkill(w http.ResponseWriter, r *http.Request) {
-	req, ok := bindJSON[skillInputReq](w, r)
+	req, ok := bindJSON[skillUpdateReq](w, r)
 	if !ok {
 		return
 	}
 	store := ws(r).Runtime.Skills()
-	sk, err := store.Update(r.PathValue("slug"), req.input())
+	slug := r.PathValue("slug")
+	cur, found := store.Get(slug)
+	if !found {
+		writeError(w, http.StatusNotFound, "skill not found")
+		return
+	}
+	body, err := store.Body(slug)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	input := skills.SkillInput{Name: cur.Name, Description: cur.Description, WhenToUse: cur.WhenToUse, Icon: cur.Icon, Color: cur.Color, Group: cur.Group, Shared: cur.Shared, Body: body}
+	if req.Name != nil {
+		input.Name = *req.Name
+	}
+	if req.Description != nil {
+		input.Description = *req.Description
+	}
+	if req.WhenToUse != nil {
+		input.WhenToUse = *req.WhenToUse
+	}
+	if req.Icon != nil {
+		input.Icon = *req.Icon
+	}
+	if req.Color != nil {
+		input.Color = *req.Color
+	}
+	if req.Group != nil {
+		input.Group = *req.Group
+	}
+	if req.Shared != nil {
+		input.Shared = *req.Shared
+	}
+	if req.Body != nil {
+		input.Body = *req.Body
+	}
+	sk, err := store.Update(slug, input)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return

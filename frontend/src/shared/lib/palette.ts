@@ -43,6 +43,9 @@ export const ROLE_COLORS: Record<string, string> = {
   tools: '#a855f7', // purple — tool/MCP schemas (always-sent catalog)
   skills: '#0ea5e9', // sky — Available Skills catalog block
   'lazy-tools': '#c084fc', // light purple — load-on-demand tool catalog (names only)
+  // Recent-tool-activity recap: the bounded "- Tool(arg) → result" lines rendered
+  // from past turns' Steps traces and injected into the volatile suffix.
+  'tool-activity': '#7c3aed', // deep violet — kin to `tool`/`tools`, distinct hue
   artifacts: '#ec4899', // pink — session artifact context block
   system: '#64748b', // slate
 }

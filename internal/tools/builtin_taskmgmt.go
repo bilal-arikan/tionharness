@@ -252,6 +252,7 @@ func (t CreateTaskTool) Call(ctx context.Context, input json.RawMessage) (string
 	if err != nil {
 		return "", fmt.Errorf("create task: %w", err)
 	}
+	notifyBoardChanged(t.d.db, BoardChange{Title: "Görev oluşturuldu: " + created.Title, Body: created.BoardState, TaskID: created.ID, Op: "create"})
 	b, _ := json.Marshal(map[string]string{"id": created.ID, "boardState": created.BoardState, "action": "created"})
 	return string(b), nil
 }
@@ -324,6 +325,12 @@ func (t UpdateTaskTool) Call(ctx context.Context, input json.RawMessage) (string
 	if err != nil {
 		return "", fmt.Errorf("no task with id %q (use list_tasks)", in.ID)
 	}
+	oldBoard := cur.BoardState
+	oldTitle := cur.Title
+	oldOwner := cur.OwnerAgentID
+	oldFlowID := cur.FlowID
+	oldPriority := cur.Priority
+	oldTags := append([]string(nil), cur.Tags...)
 	if in.Title != nil {
 		cur.Title = *in.Title
 	}
@@ -373,6 +380,11 @@ func (t UpdateTaskTool) Call(ctx context.Context, input json.RawMessage) (string
 	if err := t.d.db.UpdateTask(ctx, cur); err != nil {
 		return "", fmt.Errorf("update task: %w", err)
 	}
+	if cur.BoardState != oldBoard {
+		notifyBoardChanged(t.d.db, BoardChange{Title: "Görev taşındı: " + cur.Title, Body: cur.BoardState, TaskID: cur.ID, Op: "move"})
+	} else if cur.Title != oldTitle || cur.OwnerAgentID != oldOwner || cur.FlowID != oldFlowID || cur.Priority != oldPriority || !sameStrings(cur.Tags, oldTags) {
+		notifyBoardChanged(t.d.db, BoardChange{Title: "Görev güncellendi: " + cur.Title, Body: cur.BoardState, TaskID: cur.ID, Op: "update"})
+	}
 	b, _ := json.Marshal(map[string]string{"id": in.ID, "action": "updated"})
 	return string(b), nil
 }
@@ -418,11 +430,30 @@ func (t MoveTaskTool) Call(ctx context.Context, input json.RawMessage) (string, 
 	if !db.IsValidBoardKey(in.BoardState) {
 		return "", enumErr("boardState", in.BoardState, "pbi", "todo", "in_progress", "review", "done", "failed", "or a workspace custom column key (lowercase letters/digits/underscores)")
 	}
+	cur, err := t.d.db.GetTask(ctx, in.ID)
+	if err != nil {
+		return "", fmt.Errorf("no task with id %q (use list_tasks)", in.ID)
+	}
 	if err := t.d.db.MoveTask(ctx, in.ID, in.BoardState); err != nil {
 		return "", fmt.Errorf("move task: %w", err)
 	}
+	if cur.BoardState != in.BoardState {
+		notifyBoardChanged(t.d.db, BoardChange{Title: "Görev taşındı: " + cur.Title, Body: in.BoardState, TaskID: cur.ID, Op: "move"})
+	}
 	b, _ := json.Marshal(map[string]string{"id": in.ID, "boardState": in.BoardState, "action": "moved"})
 	return string(b), nil
+}
+
+func sameStrings(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }
 
 // ---- delete_task ----
@@ -459,12 +490,14 @@ func (t DeleteTaskTool) Call(ctx context.Context, input json.RawMessage) (string
 	if in.ID == "" {
 		return "", fmt.Errorf("id is required")
 	}
-	if _, err := t.d.db.GetTask(ctx, in.ID); err != nil {
+	cur, err := t.d.db.GetTask(ctx, in.ID)
+	if err != nil {
 		return "", fmt.Errorf("no task with id %q (use list_tasks)", in.ID)
 	}
 	if err := t.d.db.DeleteTask(ctx, in.ID); err != nil {
 		return "", fmt.Errorf("delete task: %w", err)
 	}
+	notifyBoardChanged(t.d.db, BoardChange{Title: "Görev silindi: " + cur.Title, Body: cur.BoardState, TaskID: cur.ID, Op: "delete"})
 	b, _ := json.Marshal(map[string]string{"id": in.ID, "action": "deleted"})
 	return string(b), nil
 }

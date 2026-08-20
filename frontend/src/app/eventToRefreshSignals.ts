@@ -20,6 +20,7 @@ export const SIGNAL_EXECUTIONS = 'executions' // GET /api/executions consumers (
 export const SIGNAL_AGENTS = 'agents' // AgentsView
 export const SIGNAL_FLOWS = 'flows' // FlowsPanel
 export const SIGNAL_SCHEDULES = 'schedules' // SchedulesPanel
+export const SIGNAL_AUTOMATIONS = 'automations' // AutomationBoard
 export const SIGNAL_ARTIFACTS = 'artifacts' // Artifact views
 export const SIGNAL_WORKSPACE_ACTIVITY = 'workspace-activity' // cross-workspace live-run flags (switcher pulse)
 
@@ -58,6 +59,8 @@ export function signalsForEvent(e: AppEvent): string[] {
       return [SIGNAL_FLOWS, SIGNAL_NETWORK, SIGNAL_EXPLORER, SIGNAL_EXECUTIONS, SIGNAL_ACTIVITY]
     case 'schedule':
       return [SIGNAL_SCHEDULES, SIGNAL_NETWORK, SIGNAL_EXPLORER, SIGNAL_EXECUTIONS, SIGNAL_ACTIVITY]
+    case 'automation':
+      return [SIGNAL_AUTOMATIONS]
     case 'insight':
       // Scan started/finished: re-poll /api/activity (nav-rail İçgörü dot) and
       // /api/workspaces/activity (switcher pulse) so both update without lag.

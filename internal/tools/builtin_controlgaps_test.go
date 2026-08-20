@@ -33,6 +33,24 @@ func TestCreateHookStampsCreatedBy(t *testing.T) {
 	if _, err := create.Call(ctx, json.RawMessage(`{"event":"Nope","command":"x"}`)); err == nil {
 		t.Fatal("expected invalid event to be rejected")
 	}
+	if _, err := create.Call(ctx, json.RawMessage(`{"event":"SessionStart","command":"echo lifecycle"}`)); err != nil {
+		t.Fatalf("lifecycle event should be accepted: %v", err)
+	}
+}
+
+func TestUpdateHookMatchesRESTFields(t *testing.T) {
+	ctx := context.Background()
+	d := openTestDB(t)
+	h, _ := d.CreateHook(ctx, db.Hook{Event: db.HookPreToolUse, Command: "old", Enabled: true})
+	update := NewUpdateHookTool(d, "actor")
+	_, err := update.Call(ctx, json.RawMessage(`{"id":"`+h.ID+`","event":"SessionEnd","matcher":"cleanup","command":"new","timeoutSec":45,"enabled":false}`))
+	if err != nil {
+		t.Fatalf("update_hook: %v", err)
+	}
+	got, _ := d.GetHook(ctx, h.ID)
+	if got.Event != db.HookSessionEnd || got.Matcher != "cleanup" || got.Command != "new" || got.TimeoutSec != 45 || got.Enabled {
+		t.Fatalf("updated hook wrong: %+v", got)
+	}
 }
 
 // TestDeleteHook verifies any hook — user- or agent-created — can be deleted.
@@ -66,6 +84,9 @@ func TestCreateMCPServerValidation(t *testing.T) {
 	d := openTestDB(t)
 	const actor = "actor-1"
 	create := NewCreateMCPServerTool(d, actor)
+	if _, err := create.Call(ctx, json.RawMessage(`{"name":"legacy","transport":"sse","url":"https://example.test"}`)); err == nil {
+		t.Fatal("expected deprecated sse transport to be rejected")
+	}
 
 	// stdio without command is rejected.
 	if _, err := create.Call(ctx, json.RawMessage(`{"name":"x","transport":"stdio"}`)); err == nil {
@@ -85,6 +106,15 @@ func TestCreateMCPServerValidation(t *testing.T) {
 	got, _ := d.GetMCPServer(ctx, res.ID)
 	if got.CreatedBy != actor || !got.Enabled {
 		t.Fatalf("mcp server wrong: %+v", got)
+	}
+	if got.Args != "[]" || got.EnvConfig != "{}" {
+		t.Fatalf("empty args/env not normalized: args=%q env=%q", got.Args, got.EnvConfig)
+	}
+	if _, err := create.Call(ctx, json.RawMessage(`{"name":"bad-array","transport":"stdio","command":"x","args":"{}"}`)); err == nil {
+		t.Fatal("expected non-array args to be rejected")
+	}
+	if _, err := create.Call(ctx, json.RawMessage(`{"name":"bad-object","transport":"stdio","command":"x","env":"[]"}`)); err == nil {
+		t.Fatal("expected non-object env to be rejected")
 	}
 }
 

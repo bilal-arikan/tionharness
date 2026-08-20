@@ -360,14 +360,20 @@ var Catalog = []Tool{
 		},
 	},
 	{
-		Name:        "piper",
-		Desc:        "Piper — yerel/offline nöral TTS motoru (35+ dil, Türkçe dahil). TionSwarm sunucu-tarafı sesli okuma (TTS) için OTOMATİK kullanır → telefon dahil her cihazda aynı ses. Progs\\piper altına kurulur veya PATH'te bulunur; bir de .onnx ses modeli gerekir.",
-		URL:         "https://github.com/OHF-Voice/piper1-gpl",
-		Category:    "voice",
+		Name:     "piper",
+		Desc:     "Piper — yerel/offline nöral TTS motoru (35+ dil, Türkçe dahil). TionSwarm sunucu-tarafı sesli okuma (TTS) için OTOMATİK kullanır → telefon dahil her cihazda aynı ses. Progs\\piper\\.venv altına pip ile kurulur (eski standalone kurulum da tanınır) veya PATH'te bulunur; bir de .onnx ses modeli gerekir.",
+		URL:      "https://github.com/OHF-Voice/piper1-gpl",
+		Category: "voice",
+		// Kept for the LEGACY standalone binary, which still answers --version. The
+		// current wheel install does not have the flag at all and is probed through
+		// its venv interpreter instead — see Tool.VersionProbe.
 		VersionArgs: []string{"--version"},
 		Update: UpdateSpec{
 			Kind: UpdateManual,
-			Note: "Release arşivi binary + dll + espeak-ng verisi taşır; klasörün tamamı değişir. Yeni arşivi indirip mevcut piper klasörünün üzerine aç. Ses modelleri (.onnx) ayrıdır, yeniden indirmen gerekmez.",
+			// Deliberately NOT a `command` spec: the interpreter to run is the venv's
+			// own python, whose absolute path is host-specific and unknown to this
+			// static catalog. Handing the user their real command beats guessing one.
+			Note: "Upstream Windows için artık standalone arşiv YAYINLAMIYOR, yalnız Python wheel'i (`piper_tts-*.whl`) veriyor. Kurulum bir venv'dedir; güncellemek için o venv'in python'ıyla `python -m pip install --upgrade piper-tts` çalıştır (varsayılan konum: `Progs\\piper\\.venv\\Scripts\\python.exe`). Ses modelleri (.onnx) ayrıdır, `Progs\\piper\\voices` altında kalır, yeniden indirmen gerekmez.",
 		},
 	},
 	{

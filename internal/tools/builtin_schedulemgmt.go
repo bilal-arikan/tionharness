@@ -99,7 +99,7 @@ func NewCreateScheduleTool(database *db.DB, actorID string, reload func(context.
 func (CreateScheduleTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name:        "create_schedule",
-		Description: "Create a recurring schedule (routine) on a cron expression. It either delivers a prompt to an agent (agentId+prompt) OR runs an orchestration flow (flowId, with prompt as the flow input). Example cronExpr: \"0 9 * * *\" (every day at 09:00), \"*/30 * * * *\" (every 30 minutes). The schedule is tagged as created by you. Returns the new schedule id.",
+		Description: "Create a recurring schedule (routine) on a cron expression. It either delivers a prompt to an agent (agentId+prompt) OR runs an orchestration flow (flowId, with prompt as the flow input). New schedules default to disabled, matching REST. The schedule is tagged as created by you. Returns the new schedule id.",
 		InputSchema: json.RawMessage(`{
 				"type":"object",
 				"properties":{
@@ -108,7 +108,8 @@ func (CreateScheduleTool) Def() providers.ToolDef {
 					"flowId":{"type":"string","description":"Run this orchestration flow on each fire instead of delivering the prompt to an agent (see list_flows). prompt becomes the flow input."},
 					"cronExpr":{"type":"string","description":"Standard 5-field cron expression, e.g. \"0 9 * * *\""},
 					"prompt":{"type":"string","description":"The prompt delivered to the agent on each fire (or the flow input when flowId is set)"},
-					"enabled":{"type":"boolean","description":"Whether the schedule is active immediately (default true)"}
+					"enabled":{"type":"boolean","description":"Whether the schedule is active immediately (default false)"},
+					"expiresAt":{"type":"integer","description":"Optional end date (unix seconds); 0 means no end date"}
 				},
 				"required":["cronExpr"],
 				"additionalProperties":false
@@ -124,12 +125,13 @@ func (CreateScheduleTool) Def() providers.ToolDef {
 
 func (t CreateScheduleTool) Call(ctx context.Context, input json.RawMessage) (string, error) {
 	var in struct {
-		Name     string `json:"name"`
-		AgentID  string `json:"agentId"`
-		FlowID   string `json:"flowId"`
-		CronExpr string `json:"cronExpr"`
-		Prompt   string `json:"prompt"`
-		Enabled  *bool  `json:"enabled"`
+		Name      string `json:"name"`
+		AgentID   string `json:"agentId"`
+		FlowID    string `json:"flowId"`
+		CronExpr  string `json:"cronExpr"`
+		Prompt    string `json:"prompt"`
+		Enabled   *bool  `json:"enabled"`
+		ExpiresAt int64  `json:"expiresAt"`
 	}
 	if err := json.Unmarshal(input, &in); err != nil {
 		return "", argErr(err)
@@ -154,7 +156,7 @@ func (t CreateScheduleTool) Call(ctx context.Context, input json.RawMessage) (st
 			return "", fmt.Errorf("no agent with id %q (use list_agents)", in.AgentID)
 		}
 	}
-	enabled := true
+	enabled := false
 	if in.Enabled != nil {
 		enabled = *in.Enabled
 	}
@@ -165,6 +167,7 @@ func (t CreateScheduleTool) Call(ctx context.Context, input json.RawMessage) (st
 		CronExpr:  in.CronExpr,
 		Prompt:    in.Prompt,
 		Enabled:   enabled,
+		ExpiresAt: in.ExpiresAt,
 		CreatedBy: t.d.actorID,
 	})
 	if err != nil {
@@ -188,7 +191,7 @@ func NewUpdateScheduleTool(database *db.DB, actorID string, reload func(context.
 func (UpdateScheduleTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name:        "update_schedule",
-		Description: "Edit a schedule (user- or agent-created). Pass the schedule id and the fields to change (name, agentId, flowId, cronExpr, prompt, enabled, tags). Setting flowId makes it flow-backed (and clears the agent); setting agentId switches it back to prompt delivery.",
+		Description: "Edit a schedule (user- or agent-created). Pass the schedule id and the fields to change (name, agentId, flowId, cronExpr, prompt, enabled, tags, expiresAt). Setting flowId makes it flow-backed (and clears the agent); setting agentId switches it back to prompt delivery.",
 		InputSchema: json.RawMessage(`{
 				"type":"object",
 				"properties":{
@@ -199,6 +202,7 @@ func (UpdateScheduleTool) Def() providers.ToolDef {
 					"cronExpr":{"type":"string"},
 					"prompt":{"type":"string"},
 					"enabled":{"type":"boolean"},
+					"expiresAt":{"type":"integer","description":"Optional end date (unix seconds); 0 means no end date"},
 					"tags":{"type":"array","items":{"type":"string"},"description":"Replace the schedule's organizational tags with this exact set"}
 				},
 				"required":["id"],
@@ -215,14 +219,15 @@ func (UpdateScheduleTool) Def() providers.ToolDef {
 
 func (t UpdateScheduleTool) Call(ctx context.Context, input json.RawMessage) (string, error) {
 	var in struct {
-		ID       string    `json:"id"`
-		Name     *string   `json:"name"`
-		AgentID  *string   `json:"agentId"`
-		FlowID   *string   `json:"flowId"`
-		CronExpr *string   `json:"cronExpr"`
-		Prompt   *string   `json:"prompt"`
-		Enabled  *bool     `json:"enabled"`
-		Tags     *[]string `json:"tags"`
+		ID        string    `json:"id"`
+		Name      *string   `json:"name"`
+		AgentID   *string   `json:"agentId"`
+		FlowID    *string   `json:"flowId"`
+		CronExpr  *string   `json:"cronExpr"`
+		Prompt    *string   `json:"prompt"`
+		Enabled   *bool     `json:"enabled"`
+		ExpiresAt *int64    `json:"expiresAt"`
+		Tags      *[]string `json:"tags"`
 	}
 	if err := json.Unmarshal(input, &in); err != nil {
 		return "", argErr(err)
@@ -265,6 +270,9 @@ func (t UpdateScheduleTool) Call(ctx context.Context, input json.RawMessage) (st
 	}
 	if in.Prompt != nil {
 		cur.Prompt = *in.Prompt
+	}
+	if in.ExpiresAt != nil {
+		cur.ExpiresAt = *in.ExpiresAt
 	}
 	if err := t.d.db.UpdateSchedule(ctx, cur); err != nil {
 		return "", fmt.Errorf("update schedule: %w", err)
@@ -342,7 +350,7 @@ func NewListSchedulesTool(database *db.DB, actorID string) ListSchedulesTool {
 func (ListSchedulesTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name: "list_schedules",
-		Description: "List the schedules (routines) in this workspace (id, name, agent, flowId, cron, prompt, enabled, " +
+		Description: "List the schedules (routines) in this workspace (id, name, agent, flowId, cron, prompt, enabled, expiresAt, " +
 			"and whether each was created by an agent — provenance only; you can edit/delete any of them). " +
 			"One-shot schedule_wake entries are transient, not routines, so they are excluded (this also shapes total/hasMore). " +
 			"Results are PAGINATED: pass limit (default 20, max 100) and offset to page; the reply reports total " +
@@ -423,6 +431,7 @@ func (t ListSchedulesTool) Call(ctx context.Context, input json.RawMessage) (str
 		CronExpr       string `json:"cronExpr"`
 		Prompt         string `json:"prompt"`
 		Enabled        bool   `json:"enabled"`
+		ExpiresAt      int64  `json:"expiresAt,omitempty"`
 		CreatedByAgent bool   `json:"createdByAgent"`
 	}
 	out := make([]row, 0, len(page))
@@ -435,6 +444,7 @@ func (t ListSchedulesTool) Call(ctx context.Context, input json.RawMessage) (str
 			CronExpr:       sc.CronExpr,
 			Prompt:         sc.Prompt,
 			Enabled:        sc.Enabled,
+			ExpiresAt:      sc.ExpiresAt,
 			CreatedByAgent: sc.CreatedBy != "",
 		})
 	}

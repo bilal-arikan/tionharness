@@ -136,6 +136,7 @@ func (s *Server) handleCreateWorkspace(w http.ResponseWriter, r *http.Request) {
 			resp.GitInit = true
 		}
 	}
+	s.publishWorkspacesChanged("Yeni bir workspace oluşturuldu: " + wsNew.Name)
 	writeJSON(w, http.StatusCreated, resp)
 }
 
@@ -157,6 +158,7 @@ func (s *Server) handleAttachWorkspace(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	s.publishWorkspacesChanged("Bir workspace bağlandı: " + wsNew.Name)
 	writeJSON(w, http.StatusCreated, wsNew.Meta)
 }
 
@@ -199,5 +201,6 @@ func (s *Server) handleDeleteWorkspace(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	s.publishWorkspacesChanged("Bir workspace silindi.")
 	writeJSON(w, http.StatusOK, map[string]string{"deleted": id})
 }

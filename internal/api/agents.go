@@ -5,12 +5,9 @@ import (
 	"net/http"
 	"sort"
 	"strings"
-	"time"
 
 	agentpkg "github.com/bilal-arikan/tionswarm/internal/agent"
 	"github.com/bilal-arikan/tionswarm/internal/db"
-	"github.com/bilal-arikan/tionswarm/internal/events"
-	"github.com/bilal-arikan/tionswarm/internal/providers"
 	"github.com/bilal-arikan/tionswarm/internal/tools"
 	"github.com/bilal-arikan/tionswarm/internal/workspace"
 )
@@ -382,24 +379,14 @@ func (s *Server) handleUpdateAgent(w http.ResponseWriter, r *http.Request) {
 
 	// --- P1.2: model-change event ---
 	if req.Model != nil && *req.Model != prev.Model {
-		s.bus.Publish(events.Event{
-			Type:        "agent-model-changed",
-			Level:       "info",
-			WorkspaceID: wsp.ID,
-			Title:       "Model değişti: " + prev.Model + " → " + *req.Model,
-			Body:        agent.Name + " ajanının modeli güncellendi. Sonraki turdan itibaren geçerli; aktif konuşmanın prompt cache'i soğuyacak.",
-			Target:      map[string]string{"view": "agent", "agentId": agent.ID},
-			Time:        time.Now().UnixMilli(),
-		})
+		s.publishAgentModelChange(wsp, tools.AgentModelChange{AgentID: agent.ID, AgentName: agent.Name, OldModel: prev.Model, NewModel: *req.Model})
 	}
 
 	// --- P1.3: unknown model warning ---
 	resp := map[string]any{"agent": agent}
 	if req.Model != nil {
-		_, pricedOK := providers.PriceFor(agent.Provider, agent.Model)
-		_, estOK := providers.EstimateFor(agent.Provider, agent.Model)
-		if !pricedOK && !estOK {
-			resp["warning"] = "Bu model (" + agent.Model + ") fiyat tablosunda bulunamadı — bütçe kayıtları 'fiyatlandırılmamış' görünebilir."
+		if warning := tools.AgentModelChangeWarning(agent); warning != "" {
+			resp["warning"] = warning
 		}
 	}
 

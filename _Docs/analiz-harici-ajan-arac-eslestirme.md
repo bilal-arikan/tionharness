@@ -78,7 +78,7 @@ backend (Pi/Claude/Electron adaptörü).
 **Flow orkestrasyonu:** `create_flow`, `update_flow`, `delete_flow`, `list_flows`, `get_flow`, `run_flow`
 **Task / kanban:** `create_task`, `update_task`, `move_task`, `delete_task`, `list_tasks`
 **Zamanlama (schedule/routine):** `create_schedule`, `update_schedule`, `delete_schedule`, `list_schedules`, `run_schedule`, `schedule_wake`
-**Hook'lar:** `create_hook`, `delete_hook`, `list_hooks`
+**Hook'lar:** `create_hook`, `update_hook`, `delete_hook`, `list_hooks`
 **MCP sunucu yönetimi:** `create_mcp_server`, `toggle_mcp_server`, `delete_mcp_server`, `list_mcp_servers`
 **Skill yönetimi:** `create_skill`, `update_skill`, `delete_skill`, `use_skill`, `import_skill`, `skill_search`
 **Workspace yönetimi:** `create_workspace`, `rename_workspace`, `delete_workspace`, `list_workspaces`

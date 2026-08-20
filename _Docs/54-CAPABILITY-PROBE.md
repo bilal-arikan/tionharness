@@ -175,8 +175,15 @@ Tüm codebase-memory yeteneği bir workspace ayarıyla açılıp kapanır (**def
 ## Workspace oluşturma sonrası öneri kartları (2026-07-13)
 
 `WorkspaceRecommendations.tsx` — `ClaudeAuthGate` ile aynı desende, App'te ayrı bir
-`recsTrigger` sayacıyla **yalnız create/attach başarısında** tetiklenir (chat-open'da
+`recsTrigger` sayacıyla **create/attach başarısında** tetiklenir (chat-open'da
 DEĞİL → kullanıcı her sohbet açılışında rahatsız edilmez).
+
+**Ajanın oluşturduğu workspace'ler (2026-08-20):** bir ajan `create_workspace`
+aracıyla workspace açtığında bu create handler'ından geçilmez, dolayısıyla kartlar
+hiç gösterilmezdi. App artık aktif workspace değiştiğinde, o workspace için kartları
+**bu istemcide ilk kez** gösteriyorsa `recsTrigger`'ı bir kez artırır; gösterilenlerin
+id listesi `localStorage['ws-recs-offered']` içinde tutulur (istemci-yerel UI durumu).
+Hangi kartların görüneceğine yine sunucudaki `ignoredRecommendations` karar verir.
 
 **Mimari — kural motoru:** modül-seviyesi düz `RULES: Rule[]` dizisi; her kural saf bir
 `(ctx) => Rec | null` fonksiyonu. Tetikte tek bir probe (`external-tools` + `mcp-servers`
@@ -275,6 +282,17 @@ Update      UpdateSpec // Kind: "command" | "manual"
   **fail-open** → bayat cache `stale=true` ile döner; cache yoksa hata.
 - **`Compare`** ayrıştıramadığında **`unknown`** — tahmin yok. Yerel sürüm
   ileriyse `up-to-date` (dev build "eski" gösterilmez).
+- **`Tool.VersionProbe(path)`** (2026-08-20, `versionprobe.go`) — probun *neyi*
+  çalıştıracağını çözer; normalde `(path, VersionArgs)`. Tek istisna **piper**:
+  upstream Windows'a artık standalone arşiv değil wheel veriyor ve CLI'da
+  `--version` **yok** (bayrak usage metniyle reddediliyor, içinde sürüm-şeklinde
+  token olmadığı için panelde kalıcı "sürüm okunamadı" kalırdı). İkili bir venv
+  console script'iyse prob o venv'in python'ına döner:
+  `python -c "importlib.metadata.version('piper-tts')"`. Güvenlik mandalı
+  **`pyvenv.cfg`**'dir — yalnız klasör adına (`Scripts`/`bin`) bakmak
+  `/usr/bin/piper`'ı venv sanıp yanındaki sistem python'ına sorardı. Eski
+  standalone kurulum venv'de olmadığı için `--version` yoluna düşer; bu yüzden
+  katalogdaki `VersionArgs` **silinmedi**.
 
 ### Güncelleme neden sadece kısmen otomatik
 
@@ -282,6 +300,11 @@ Update      UpdateSpec // Kind: "command" | "manual"
 |------|---------|-------|
 | `command` | `mmdc` (npm), `ffmpeg` (winget), `git` (winget `Git.Git`), `bun` (winget `Oven-sh.Bun`), `npm` (`npm i -g npm@latest`) | Paket yöneticisi kurulum dizinini ve çalışan ikiliyi kendi yönetir |
 | `manual` | claude, rtk, sqz, codebase-memory-mcp, openpencil, piper, whisper-cli | İkiliyi/arşivi **yerinde değiştirmek** gerekir; Windows'ta çalışan alt-süreç (MCP stdio sunucusu kendi `.exe`'sini, süren bir claude-cli turu `claude`'u, açık `op` sunucusu `op.exe`'yi) dosyayı kilitler → yarım kalan kopya aracı geri dönüşsüz bozar |
+
+`piper` **başka bir sebeple** manual: artık pip paketi, yani kilit sorunu yok —
+ama çalıştırılacak interpreter o kuruluma ait venv'in python'ıdır ve mutlak yolu
+host'a göre değişir, statik katalog bilemez. Kullanıcıya tahmin edilmiş bir komut
+vermektense `Note` içinde gerçek komutu göstermek tercih edildi.
 
 `RunUpdate` komutu **katalogdan** alır, istekten değil → enjeksiyon yolu yok.
 5 dk timeout + `TreeKill`; `HardenedEnv` sayesinde soru soracak bir paket

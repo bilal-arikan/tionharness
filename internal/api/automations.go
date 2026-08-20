@@ -121,6 +121,13 @@ type automationReq struct {
 	ExpiresAt       *int64   `json:"expiresAt"`
 }
 
+type updateAutomationReq struct {
+	automationReq
+	Name        *string   `json:"name"`
+	SessionMode *string   `json:"sessionMode"`
+	SpawnTags   *[]string `json:"spawnTags"`
+}
+
 func (s *Server) handleCreateAutomation(w http.ResponseWriter, r *http.Request) {
 	req, ok := bindJSON[automationReq](w, r)
 	if !ok {
@@ -256,7 +263,7 @@ func (s *Server) handleCreateAutomation(w http.ResponseWriter, r *http.Request) 
 
 func (s *Server) handleUpdateAutomation(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	req, ok := bindJSON[automationReq](w, r)
+	req, ok := bindJSON[updateAutomationReq](w, r)
 	if !ok {
 		return
 	}
@@ -323,11 +330,15 @@ func (s *Server) handleUpdateAutomation(w http.ResponseWriter, r *http.Request) 
 	if req.PromptTemplate != "" {
 		cur.PromptTemplate = req.PromptTemplate
 	}
-	// Name, spawnTags and sessionMode are always taken from the request (they may be
-	// cleared; an empty sessionMode falls back to the per-kind default).
-	cur.Name = strings.TrimSpace(req.Name)
-	cur.SpawnTags = req.SpawnTags
-	cur.SessionMode = strings.TrimSpace(req.SessionMode)
+	if req.Name != nil {
+		cur.Name = strings.TrimSpace(*req.Name)
+	}
+	if req.SpawnTags != nil {
+		cur.SpawnTags = *req.SpawnTags
+	}
+	if req.SessionMode != nil {
+		cur.SessionMode = strings.TrimSpace(*req.SessionMode)
+	}
 	if req.MaxIterations != nil {
 		if err := db.ValidateMaxIterations(*req.MaxIterations); err != nil {
 			writeError(w, http.StatusBadRequest, err.Error())

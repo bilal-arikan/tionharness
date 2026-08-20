@@ -252,6 +252,8 @@ Ajan, hook'ları kendi de yönetebilir (self-management gated, lazy yüklenir;
   `createdByAgent` = silebilir mi).
 - `create_hook` — yeni PreToolUse/PostToolUse hook (komut Claude Code hook
   sözleşmesini konuşur); `CreatedBy = actorID` ile etkin oluşturulur.
+- `update_hook` — mevcut hook'un event, matcher, command, timeout ve enabled
+  alanlarını günceller.
 - `delete_hook` — **yalnız ajan-oluşturduğu** hook'u siler; `CreatedBy == ""`
   (kullanıcı tanımlı) ise reddedilir (provenance guard'ı).
 
@@ -265,7 +267,7 @@ Ajan, hook'ları kendi de yönetebilir (self-management gated, lazy yüklenir;
 | İz | `internal/agent/trace.go` (`StepHook`) |
 | Entegrasyon | `internal/agent/toolloop.go` (pre/post çağrıları) |
 | API | `internal/api/hooks.go` (+ `server.go` route) |
-| Ajan araçları | `internal/tools/builtin_hookmgmt.go` (`list/create/delete_hook`, self-manage gated) |
+| Ajan araçları | `internal/tools/builtin_hookmgmt.go` (`list/create/update/delete_hook`, self-manage gated) |
 | Test | `internal/db/store_hook_test.go`, `internal/agent/hooks_test.go` |
 | Frontend | `types/hook.ts`, `api/hooks.ts`, `components/settings/HooksPanel.tsx`, `components/chat/HookStep.tsx`, `lib/stepKinds.ts` |
 

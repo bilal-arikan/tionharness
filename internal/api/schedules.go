@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"sort"
+	"strings"
 
 	"github.com/bilal-arikan/tionswarm/internal/db"
 	"github.com/bilal-arikan/tionswarm/internal/tools"
@@ -132,15 +133,15 @@ func (s *Server) handleCreateSchedule(w http.ResponseWriter, r *http.Request) {
 }
 
 type updateScheduleReq struct {
-	Name     string `json:"name"`
-	AgentID  string `json:"agentId"`
-	CronExpr string `json:"cronExpr"`
-	Prompt   string `json:"prompt"`
+	Name     *string `json:"name"`
+	AgentID  *string `json:"agentId"`
+	CronExpr *string `json:"cronExpr"`
+	Prompt   *string `json:"prompt"`
 	// FlowID, when set, makes this a flow-backed schedule (empty string clears it
 	// back to agent-backed).
-	FlowID string `json:"flowId"`
+	FlowID *string `json:"flowId"`
 	// ExpiresAt is an optional end date (unix seconds); 0 = no end date.
-	ExpiresAt int64 `json:"expiresAt"`
+	ExpiresAt *int64 `json:"expiresAt"`
 }
 
 // handleUpdateSchedule edits a schedule's agent/flow/cron/prompt and reloads cron.
@@ -152,39 +153,49 @@ func (s *Server) handleUpdateSchedule(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if req.CronExpr == "" {
-		writeError(w, http.StatusBadRequest, "cronExpr is required")
+	cur, err := wsp.DB.GetSchedule(r.Context(), id)
+	if writeDBError(w, err, "schedule not found") {
 		return
 	}
-	if req.FlowID != "" {
-		if _, err := wsp.DB.GetFlow(r.Context(), req.FlowID); err != nil {
+	if req.Name != nil {
+		cur.Name = strings.TrimSpace(*req.Name)
+	}
+	if req.CronExpr != nil {
+		expr := strings.TrimSpace(*req.CronExpr)
+		if expr == "" {
+			writeError(w, http.StatusBadRequest, "cronExpr cannot be empty")
+			return
+		}
+		cur.CronExpr = expr
+	}
+	if req.FlowID != nil && strings.TrimSpace(*req.FlowID) != "" {
+		flowID := strings.TrimSpace(*req.FlowID)
+		if _, err := wsp.DB.GetFlow(r.Context(), flowID); err != nil {
 			writeError(w, http.StatusBadRequest, "unknown flow")
 			return
 		}
-	} else {
-		if req.AgentID == "" {
-			writeError(w, http.StatusBadRequest, "agentId or flowId is required")
-			return
-		}
-		if req.Prompt == "" {
-			writeError(w, http.StatusBadRequest, "prompt is required")
-			return
-		}
-		if _, err := wsp.DB.GetAgent(r.Context(), req.AgentID); err != nil {
+		cur.FlowID = flowID
+		cur.AgentID = ""
+	} else if req.AgentID != nil && strings.TrimSpace(*req.AgentID) != "" {
+		agentID := strings.TrimSpace(*req.AgentID)
+		if _, err := wsp.DB.GetAgent(r.Context(), agentID); err != nil {
 			writeError(w, http.StatusBadRequest, "unknown agent")
 			return
 		}
+		cur.AgentID = agentID
+		cur.FlowID = ""
 	}
-
-	err := wsp.DB.UpdateSchedule(r.Context(), db.Schedule{
-		ID:        id,
-		Name:      req.Name,
-		AgentID:   req.AgentID,
-		CronExpr:  req.CronExpr,
-		Prompt:    req.Prompt,
-		FlowID:    req.FlowID,
-		ExpiresAt: req.ExpiresAt,
-	})
+	if req.Prompt != nil {
+		cur.Prompt = *req.Prompt
+	}
+	if req.ExpiresAt != nil {
+		cur.ExpiresAt = *req.ExpiresAt
+	}
+	if cur.FlowID == "" && strings.TrimSpace(cur.Prompt) == "" {
+		writeError(w, http.StatusBadRequest, "prompt is required")
+		return
+	}
+	err = wsp.DB.UpdateSchedule(r.Context(), cur)
 	if writeDBError(w, err, "schedule not found") {
 		return
 	}
@@ -195,7 +206,7 @@ func (s *Server) handleUpdateSchedule(w http.ResponseWriter, r *http.Request) {
 	if writeDBError(w, err, "schedule not found") {
 		return
 	}
-	s.logger.Info("schedule updated", "id", id, "agent", req.AgentID, "cron", req.CronExpr)
+	s.logger.Info("schedule updated", "id", id, "agent", sc.AgentID, "cron", sc.CronExpr)
 	writeJSON(w, http.StatusOK, sc)
 }
 

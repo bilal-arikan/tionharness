@@ -18,7 +18,10 @@ type workspaceBridge struct{ srv *Server }
 
 // WorkspaceBridge returns this server's workspace bridge for injection into the
 // workspace runtimes (via Manager.SetWorkspaceBridge).
-func (s *Server) WorkspaceBridge() tools.WorkspaceBridge { return workspaceBridge{srv: s} }
+func (s *Server) WorkspaceBridge() tools.WorkspaceBridge {
+	tools.SetChangeNotifier(toolChangeNotifier{server: s})
+	return workspaceBridge{srv: s}
+}
 
 func toWorkspaceInfo(m workspace.Meta) tools.WorkspaceInfo {
 	return tools.WorkspaceInfo{
@@ -39,14 +42,31 @@ func (b workspaceBridge) ListWorkspaces() []tools.WorkspaceInfo {
 	return out
 }
 
-func (b workspaceBridge) CreateWorkspace(name, parentPath, createdBy string) (tools.WorkspaceInfo, error) {
-	wsNew, err := b.srv.workspaces.Create(name, parentPath, createdBy)
+func (b workspaceBridge) CreateWorkspace(name string, options tools.CreateWorkspaceOptions) (tools.WorkspaceInfo, error) {
+	wsNew, err := b.srv.workspaces.Create(name, options.ParentPath, options.CreatedBy)
 	if err != nil {
 		return tools.WorkspaceInfo{}, err
 	}
-	// Seed the blank template (default agent + config tree) so the new workspace
-	// is usable immediately, exactly like a UI-created one.
-	b.srv.seedWorkspaceFromTemplate(context.Background(), wsNew, blankTemplateID)
+	patch := workspace.WSSettingsPatch{}
+	if options.Icon != "" {
+		patch.Icon = &options.Icon
+	}
+	if options.Color != "" {
+		patch.Color = &options.Color
+	}
+	if options.WorkingDir != "" {
+		patch.DefaultWorkingDir = &options.WorkingDir
+	}
+	if patch.Icon != nil || patch.Color != nil || patch.DefaultWorkingDir != nil {
+		if _, err := b.srv.workspaces.UpdateSettings(wsNew.ID, patch); err != nil {
+			return tools.WorkspaceInfo{}, fmt.Errorf("apply workspace settings: %w", err)
+		}
+	}
+	templateID := options.Template
+	if templateID == "" {
+		templateID = blankTemplateID
+	}
+	b.srv.seedWorkspaceFromTemplate(context.Background(), wsNew, templateID)
 	b.srv.publishWorkspacesChanged(fmt.Sprintf("Bir ajan yeni bir workspace oluşturdu: %s", wsNew.Name))
 	return toWorkspaceInfo(wsNew.Meta), nil
 }

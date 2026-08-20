@@ -245,6 +245,26 @@ func TestScheduleCreateAndDelete(t *testing.T) {
 	if sc.CreatedBy != actor {
 		t.Fatalf("CreatedBy = %q, want %q", sc.CreatedBy, actor)
 	}
+	if sc.Enabled {
+		t.Fatal("omitted enabled should default false to match REST")
+	}
+	out, err = create.Call(ctx, json.RawMessage(`{"agentId":"`+ag.ID+`","cronExpr":"0 10 * * *","prompt":"later","enabled":true,"expiresAt":2000000000}`))
+	if err != nil {
+		t.Fatalf("create expiring schedule: %v", err)
+	}
+	_ = json.Unmarshal([]byte(out), &res)
+	expiring, _ := d.GetSchedule(ctx, res.ID)
+	if !expiring.Enabled || expiring.ExpiresAt != 2000000000 {
+		t.Fatalf("expiring schedule wrong: %+v", expiring)
+	}
+	update := NewUpdateScheduleTool(d, actor, reload)
+	if _, err := update.Call(ctx, json.RawMessage(`{"id":"`+expiring.ID+`","expiresAt":0}`)); err != nil {
+		t.Fatalf("clear schedule expiry: %v", err)
+	}
+	expiring, _ = d.GetSchedule(ctx, expiring.ID)
+	if expiring.ExpiresAt != 0 {
+		t.Fatalf("schedule expiry not cleared: %+v", expiring)
+	}
 
 	// A user-created schedule is now deletable by an agent (no provenance gate).
 	userSc, _ := d.CreateSchedule(ctx, db.Schedule{AgentID: ag.ID, CronExpr: "0 0 * * *", Prompt: "x"})

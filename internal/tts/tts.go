@@ -44,16 +44,35 @@ func fileExists(p string) bool {
 	return err == nil && !info.IsDir()
 }
 
+// venvScriptDir is the per-platform folder a Python venv puts console scripts in.
+func venvScriptDir() string {
+	if runtime.GOOS == "windows" {
+		return "Scripts"
+	}
+	return "bin"
+}
+
 // piperExe resolves the piper binary: the TIONSWARM_PIPER env override, then the
 // common Progs install layout, then PATH. Returns "" when not found.
+//
+// The venv candidate comes FIRST because it is the only shape upstream still
+// ships for Windows: piper1-gpl stopped publishing a standalone archive and
+// releases a Python wheel instead (piper_tts-*.whl), whose console script lands
+// in <venv>/Scripts. The legacy standalone layout stays in the list — an older
+// rhasspy/piper install keeps working — but a machine that has both should
+// report the one that is maintained. The CLI contract is unchanged across the
+// two: `--model` and `--output_file` are still accepted (piper1-gpl keeps the
+// underscore spellings as aliases), so Synthesize below needs no version fork.
 func piperExe() string {
 	if p := strings.TrimSpace(os.Getenv("TIONSWARM_PIPER")); p != "" && fileExists(p) {
 		return p
 	}
 	if home, err := os.UserHomeDir(); err == nil && home != "" {
+		progs := filepath.Join(home, "Desktop", "Progs", "piper")
 		for _, c := range []string{
-			filepath.Join(home, "Desktop", "Progs", "piper", "piper", exeName()),
-			filepath.Join(home, "Desktop", "Progs", "piper", exeName()),
+			filepath.Join(progs, ".venv", venvScriptDir(), exeName()),
+			filepath.Join(progs, "piper", exeName()),
+			filepath.Join(progs, exeName()),
 		} {
 			if fileExists(c) {
 				return c
@@ -75,7 +94,12 @@ func voiceDirs() []string {
 	}
 	if exe := piperExe(); exe != "" {
 		base := filepath.Dir(exe)
-		dirs = append(dirs, filepath.Join(base, "voices"), base, filepath.Join(filepath.Dir(base), "voices"))
+		up1 := filepath.Dir(base)
+		// Two levels up covers the venv layout, where the binary sits at
+		// <install>/.venv/Scripts and the models stay at <install>/voices — one
+		// level up would only reach <install>/.venv/voices, which nothing writes to.
+		dirs = append(dirs, filepath.Join(base, "voices"), base,
+			filepath.Join(up1, "voices"), filepath.Join(filepath.Dir(up1), "voices"))
 	}
 	if home, err := os.UserHomeDir(); err == nil && home != "" {
 		dirs = append(dirs, filepath.Join(home, "Desktop", "Progs", "piper", "voices"))

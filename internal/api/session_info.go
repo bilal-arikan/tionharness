@@ -229,7 +229,7 @@ func (s *Server) handleSessionInfo(w http.ResponseWriter, r *http.Request) {
 	// history-annotation note is prepended), so resolve it the way the real turn
 	// does; only the flag is used here, the labelled copy is the turn's business.
 	_, multiAgent := s.labelMultiAgentHistory(ctx, wsp.DB, session.AgentID, history)
-	extra := s.systemFillers(ctx, wsp, session, multiAgent)
+	extra := s.systemFillers(ctx, wsp, session, history, multiAgent)
 
 	// Context fillers: summary + per-role message buckets PLUS the non-message
 	// buckets (system/tools/artifacts), all sorted by token weight descending.
@@ -358,7 +358,12 @@ func buildFillers(summary string, pending []db.Message) []contextFiller {
 // uncounted. Deliberately buildStaticPrefix and NOT Runtime.EpochStaticSystem:
 // the latter MUTATES (freezes + persists an epoch, emits a debug event) and this
 // is a read-only panel; the live prefix is what the next adopt point ships anyway.
-func (s *Server) systemFillers(ctx context.Context, wsp *workspace.Workspace, session db.Session, multiAgent bool) []contextFiller {
+// history is the session's stored turns: needed for the recent-tool-activity
+// recap, which is rendered from the turns' Steps traces and shipped on the
+// volatile side by composeTurnRequest. The full Steps trace is NOT sent (see
+// conversation.toProviderMessages, which maps a turn to its Text only), so only
+// this bounded recap is counted — not the raw trace.
+func (s *Server) systemFillers(ctx context.Context, wsp *workspace.Workspace, session db.Session, history []db.Message, multiAgent bool) []contextFiller {
 	agentRow, err := wsp.DB.GetAgent(ctx, session.AgentID)
 	if err != nil {
 		return nil
@@ -411,6 +416,19 @@ func (s *Server) systemFillers(ctx context.Context, wsp *workspace.Workspace, se
 		out = append(out, contextFiller{Label: "Araçlar", Role: "tools", Tokens: estimateToolCatalog(cat), Count: len(cat)})
 	}
 
+	// Recent tool activity recap (dynamic suffix): the compact "- Tool(arg) → result"
+	// lines composeTurnRequest injects for the newest assistant turns. This is the
+	// ONLY part of the Steps traces that reaches the model, and it was previously
+	// uncounted — so the meter under-reported a tool-heavy session's real footprint.
+	if tr := recentToolActivityBlock(history); strings.TrimSpace(tr) != "" {
+		out = append(out, contextFiller{
+			Label:  "Araç çağrıları ve sonuçları",
+			Role:   "tool-activity",
+			Tokens: conversation.EstimateText(tr),
+			Count:  countToolRecapLines(tr),
+		})
+	}
+
 	// Session artifact context block (dynamic suffix).
 	if ab := artifactsContextBlock(ctx, wsp.DB, session.ID); strings.TrimSpace(ab) != "" {
 		out = append(out, contextFiller{Label: "Artifactlar", Role: "artifacts", Tokens: conversation.EstimateText(ab), Count: 1})
@@ -425,9 +443,9 @@ func (s *Server) systemFillers(ctx context.Context, wsp *workspace.Workspace, se
 // Fed into Prepare via conversation.WithContextOverhead so the budgeted fold gates
 // on the true footprint (messages + this), not on messages alone: reusing
 // systemFillers guarantees the meter and the fold engine agree on the overhead.
-func (s *Server) contextOverheadTokens(ctx context.Context, wsp *workspace.Workspace, session db.Session, multiAgent bool) int {
+func (s *Server) contextOverheadTokens(ctx context.Context, wsp *workspace.Workspace, session db.Session, history []db.Message, multiAgent bool) int {
 	total := 0
-	for _, f := range s.systemFillers(ctx, wsp, session, multiAgent) {
+	for _, f := range s.systemFillers(ctx, wsp, session, history, multiAgent) {
 		total += f.Tokens
 	}
 	return total
@@ -440,6 +458,19 @@ func countCatalogSkills(block string) int {
 	n := 0
 	for _, line := range strings.Split(block, "\n") {
 		if strings.HasPrefix(strings.TrimSpace(line), "- `") {
+			n++
+		}
+	}
+	return n
+}
+
+// countToolRecapLines counts the tool entries in a rendered
+// <recent_tool_activity> block. formatToolRecapLine writes exactly one "- " line
+// per recapped tool call, and the wrapper/label lines never use that prefix.
+func countToolRecapLines(block string) int {
+	n := 0
+	for _, line := range strings.Split(block, "\n") {
+		if strings.HasPrefix(line, "- ") {
 			n++
 		}
 	}

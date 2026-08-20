@@ -41,6 +41,15 @@ type WorkspaceInfo struct {
 	CreatedAt      int64  `json:"createdAt"`
 }
 
+type CreateWorkspaceOptions struct {
+	ParentPath string
+	Icon       string
+	Color      string
+	WorkingDir string
+	Template   string
+	CreatedBy  string
+}
+
 // WorkspaceBridge is the seam between the agent tools and the application's
 // workspace manager. It is implemented in the api layer (where the manager and
 // the template-seeding + UI-notify hooks live) and injected into every runtime.
@@ -51,7 +60,7 @@ type WorkspaceBridge interface {
 	// (the acting agent's id) and returns its info. parentPath, when non-empty,
 	// is a user-chosen folder under which the workspace's own data dir is made;
 	// empty uses the default location.
-	CreateWorkspace(name, parentPath, createdBy string) (WorkspaceInfo, error)
+	CreateWorkspace(name string, options CreateWorkspaceOptions) (WorkspaceInfo, error)
 	// RenameWorkspace changes a workspace's display name and returns its info.
 	RenameWorkspace(id, name string) (WorkspaceInfo, error)
 	// DeleteWorkspace removes a workspace and all its data. The manager forbids
@@ -170,12 +179,16 @@ func NewCreateWorkspaceTool(b WorkspaceBridge, actorID, currentWsID string) Crea
 func (CreateWorkspaceTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name:        "create_workspace",
-		Description: "Create a new, fully-isolated workspace (its own agents, sessions, flows, secrets and store). It is tagged as created by you, so you can later rename or delete it. Optionally pass a path: a parent folder on disk under which the workspace's own data directory is created (empty = default location). Returns the new workspace id. Note: the new workspace starts empty â€” switch to it (in the UI) or create agents in it to use it.",
+		Description: "Create a new, fully-isolated workspace. Optional icon, color, workingDir, and template match REST workspace creation. path remains an optional parent folder for the workspace data directory. It is tagged as created by you. Returns the new workspace id.",
 		InputSchema: json.RawMessage(`{
 			"type":"object",
 			"properties":{
 				"name":{"type":"string","description":"Display name for the workspace"},
-				"path":{"type":"string","description":"Optional parent folder for the workspace's data directory (absolute path). Empty uses the default location."}
+				"path":{"type":"string","description":"Optional parent folder for the workspace's data directory (absolute path). Empty uses the default location."},
+				"icon":{"type":"string","description":"Optional emoji identity."},
+				"color":{"type":"string","description":"Optional color accent."},
+				"workingDir":{"type":"string","description":"Default working directory for new sessions."},
+				"template":{"type":"string","description":"Workspace template id; defaults to blank."}
 			},
 			"required":["name"],
 			"additionalProperties":false
@@ -188,8 +201,12 @@ func (t CreateWorkspaceTool) Call(_ context.Context, input json.RawMessage) (str
 		return "", fmt.Errorf("workspace bridge not configured")
 	}
 	var in struct {
-		Name string `json:"name"`
-		Path string `json:"path"`
+		Name       string `json:"name"`
+		Path       string `json:"path"`
+		Icon       string `json:"icon"`
+		Color      string `json:"color"`
+		WorkingDir string `json:"workingDir"`
+		Template   string `json:"template"`
 	}
 	if err := json.Unmarshal(input, &in); err != nil {
 		return "", argErr(err)
@@ -198,7 +215,11 @@ func (t CreateWorkspaceTool) Call(_ context.Context, input json.RawMessage) (str
 	if in.Name == "" {
 		return "", fmt.Errorf("name is required")
 	}
-	created, err := t.d.bridge.CreateWorkspace(in.Name, strings.TrimSpace(in.Path), t.d.actorID)
+	created, err := t.d.bridge.CreateWorkspace(in.Name, CreateWorkspaceOptions{
+		ParentPath: strings.TrimSpace(in.Path), Icon: strings.TrimSpace(in.Icon),
+		Color: strings.TrimSpace(in.Color), WorkingDir: strings.TrimSpace(in.WorkingDir),
+		Template: strings.TrimSpace(in.Template), CreatedBy: t.d.actorID,
+	})
 	if err != nil {
 		return "", fmt.Errorf("create workspace: %w", err)
 	}

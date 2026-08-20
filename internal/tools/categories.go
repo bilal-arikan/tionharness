@@ -60,7 +60,7 @@ var builtinCategory = map[string]string{
 	"update_task": CategoryAutomation, "move_task": CategoryAutomation,
 	"delete_task": CategoryAutomation, "todo_write": CategoryAutomation,
 	"list_hooks": CategoryAutomation, "create_hook": CategoryAutomation,
-	"delete_hook": CategoryAutomation,
+	"update_hook": CategoryAutomation, "delete_hook": CategoryAutomation,
 
 	// Interaction
 	"ask_user": CategoryInteraction, "request_confirmation": CategoryInteraction,

@@ -24,6 +24,30 @@ type mcpDeps struct {
 	actorID string
 }
 
+func normalizeJSONArrayString(raw string) (string, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return "[]", nil
+	}
+	var value []json.RawMessage
+	if err := json.Unmarshal([]byte(raw), &value); err != nil || value == nil {
+		return "", fmt.Errorf("must be a JSON array string")
+	}
+	return raw, nil
+}
+
+func normalizeJSONObjectString(raw string) (string, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return "{}", nil
+	}
+	var value map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(raw), &value); err != nil || value == nil {
+		return "", fmt.Errorf("must be a JSON object string")
+	}
+	return raw, nil
+}
+
 // ---- list_mcp_servers ----
 
 // ListMCPServersTool returns the workspace MCP servers as a compact list.
@@ -141,16 +165,16 @@ func NewCreateMCPServerTool(database *db.DB, actorID string) CreateMCPServerTool
 func (CreateMCPServerTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name:        "create_mcp_server",
-		Description: "Add an MCP (Model Context Protocol) server to this workspace. For transport=stdio set command (executable) and optionally args (JSON array string) and env (JSON object string). For transport=sse or http set url. The server is enabled, given workspace-wide scope (shared — one connection visible to every agent), and tagged as created by you; its tools become available to agents on their next turn. Returns the new server id.",
+		Description: "Add an MCP (Model Context Protocol) server to this workspace. For transport=stdio set command (executable) and optionally args (JSON array string) and env (JSON object string). For transport=http set url. The deprecated sse transport is not supported. The server is enabled, given workspace-wide scope (shared — one connection visible to every agent), and tagged as created by you; its tools become available to agents on their next turn. Returns the new server id.",
 		InputSchema: json.RawMessage(`{
 			"type":"object",
 			"properties":{
 				"name":{"type":"string","description":"Display name"},
 				"description":{"type":"string","description":"Short one-liner about what this server is for and when to use it (rides the load-on-demand catalog's per-server summary, e.g. 'code knowledge graph; prefer over grep for code search')"},
-				"transport":{"type":"string","enum":["stdio","sse","http"]},
+				"transport":{"type":"string","enum":["stdio","http"]},
 				"command":{"type":"string","description":"Executable for transport=stdio"},
 				"args":{"type":"string","description":"JSON array of arguments, e.g. [\"-y\",\"@scope/pkg\"]"},
-				"url":{"type":"string","description":"Endpoint for transport=sse/http"},
+				"url":{"type":"string","description":"Endpoint for transport=http"},
 				"env":{"type":"string","description":"JSON object of environment variables, e.g. {\"API_KEY\":\"...\"}"}
 			},
 			"required":["name","transport"],
@@ -189,28 +213,31 @@ func (t CreateMCPServerTool) Call(ctx context.Context, input json.RawMessage) (s
 		if strings.TrimSpace(in.Command) == "" {
 			return "", fmt.Errorf("command is required for transport=stdio")
 		}
-	case db.MCPTransportSSE, db.MCPTransportHTTP:
+	case db.MCPTransportSSE:
+		return "", fmt.Errorf("sse transport is deprecated and not supported; use http")
+	case db.MCPTransportHTTP:
 		if strings.TrimSpace(in.URL) == "" {
 			return "", fmt.Errorf("url is required for transport=%s", in.Transport)
 		}
 	default:
-		return "", fmt.Errorf("invalid transport %q (stdio|sse|http)", in.Transport)
+		return "", fmt.Errorf("invalid transport %q (stdio|http)", in.Transport)
 	}
-	// Validate JSON-shaped fields up front so a bad value fails clearly here.
-	if s := strings.TrimSpace(in.Args); s != "" && !json.Valid([]byte(s)) {
-		return "", fmt.Errorf("args must be a JSON array string")
+	args, err := normalizeJSONArrayString(in.Args)
+	if err != nil {
+		return "", fmt.Errorf("args: %w", err)
 	}
-	if s := strings.TrimSpace(in.Env); s != "" && !json.Valid([]byte(s)) {
-		return "", fmt.Errorf("env must be a JSON object string")
+	env, err := normalizeJSONObjectString(in.Env)
+	if err != nil {
+		return "", fmt.Errorf("env: %w", err)
 	}
 	created, err := t.d.db.CreateMCPServer(ctx, db.MCPServer{
 		Name:        in.Name,
 		Description: strings.TrimSpace(in.Description),
 		Transport:   in.Transport,
 		Command:     in.Command,
-		Args:        in.Args,
+		Args:        args,
 		URL:         in.URL,
-		EnvConfig:   in.Env,
+		EnvConfig:   env,
 		Enabled:     true,
 		Scope:       "shared",
 		CreatedBy:   t.d.actorID,

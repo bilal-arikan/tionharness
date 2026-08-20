@@ -33,6 +33,9 @@ func (b settingsBridge) Apply(patchJSON string) (string, error) {
 	if err := json.Unmarshal([]byte(patchJSON), &patch); err != nil {
 		return "", err
 	}
+	if err := settings.Validate(patch); err != nil {
+		return "", err
+	}
 	if _, err := b.srv.settings.Apply(patch); err != nil {
 		return "", err
 	}

@@ -99,7 +99,7 @@ only ones you created (running is not destructive).
 `delete_task`. The board is passive (no run tool). Read/create/edit/move/delete
 ANY task (including user-created ones) — `delete_task` is irreversible.
 
-**Hooks** — `list_hooks`, `create_hook`, `delete_hook`. PreToolUse/PostToolUse
+**Hooks** — `list_hooks`, `create_hook`, `update_hook`, `delete_hook`. PreToolUse/PostToolUse
 external commands that intercept native tool calls (standard hook contract).
 Read/create any; delete only ones you created.
 

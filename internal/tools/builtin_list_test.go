@@ -332,7 +332,7 @@ type mockWorkspaceBridge struct {
 }
 
 func (m *mockWorkspaceBridge) ListWorkspaces() []WorkspaceInfo { return m.list }
-func (m *mockWorkspaceBridge) CreateWorkspace(name, _, _ string) (WorkspaceInfo, error) {
+func (m *mockWorkspaceBridge) CreateWorkspace(name string, _ CreateWorkspaceOptions) (WorkspaceInfo, error) {
 	return WorkspaceInfo{ID: fmt.Sprintf("WS%d", len(m.list)+1), Name: name, CreatedAt: 1}, nil
 }
 func (m *mockWorkspaceBridge) RenameWorkspace(id, name string) (WorkspaceInfo, error) {

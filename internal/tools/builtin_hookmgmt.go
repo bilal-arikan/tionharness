@@ -34,17 +34,17 @@ func NewListHooksTool(database *db.DB, actorID string) ListHooksTool {
 func (ListHooksTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name: "list_hooks",
-		Description: "List the PreToolUse/PostToolUse hooks in this workspace. Each hook runs an external command " +
+		Description: "List tool and lifecycle hooks in this workspace. Each hook runs an external command " +
 			"around a native tool call (matched by a tool-name glob; empty = all tools). Returns id, event, " +
 			"matcher, command, enabled, and whether you created it (and may therefore delete it). Results are " +
 			"PAGINATED: pass limit (default 20, max 100) and offset to page; the reply reports total and hasMore, " +
-			"and you reach the next page with offset += limit. Filter: event (PreToolUse|PostToolUse). Sort: " +
+			"and you reach the next page with offset += limit. Filter: event. Sort: " +
 			"updated_desc (default), updated_asc, created_desc, created_asc — hooks are immutable after creation, " +
 			"so updated_* sorts by creation time; they have no name field, so name_* is rejected with a clear error.",
 		InputSchema: json.RawMessage(`{
   "type": "object",
   "properties": {
-    "event": { "type": "string", "enum": ["PreToolUse", "PostToolUse"], "description": "Narrow to one hook event." },
+    "event": { "type": "string", "enum": ["PreToolUse", "PostToolUse", "UserPromptSubmit", "SessionStart", "Stop", "SubagentStop", "PreCompact", "Notification", "SessionEnd"], "description": "Narrow to one hook event." },
     "sort": { "type": "string", "enum": ["updated_desc", "updated_asc", "created_desc", "created_asc"], "description": "Result ordering (default updated_desc; updated maps to creation time — hooks are immutable)." },
     "limit": { "type": "integer", "description": "Max hooks per page (default 20, max 100)." },
     "offset": { "type": "integer", "description": "How many matching hooks to skip before this page (default 0)." }
@@ -132,11 +132,11 @@ func NewCreateHookTool(database *db.DB, actorID string) CreateHookTool {
 func (CreateHookTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name:        "create_hook",
-		Description: "Create a PreToolUse or PostToolUse hook: an external command run around matching native tool calls. The command speaks the Claude Code hook contract (JSON on stdin, JSON decision on stdout). event is PreToolUse or PostToolUse; matcher is a tool-name glob (empty = all tools). The hook is enabled and tagged as created by you. Returns the new hook id.",
+		Description: "Create a tool or lifecycle hook. The command speaks the Claude Code hook contract (JSON on stdin, JSON decision on stdout). matcher narrows the event where supported. The hook is enabled and tagged as created by you. Returns the new hook id.",
 		InputSchema: json.RawMessage(`{
 			"type":"object",
 			"properties":{
-				"event":{"type":"string","enum":["PreToolUse","PostToolUse"]},
+				"event":{"type":"string","enum":["PreToolUse","PostToolUse","UserPromptSubmit","SessionStart","Stop","SubagentStop","PreCompact","Notification","SessionEnd"]},
 				"matcher":{"type":"string","description":"Tool-name glob to match; empty = all tools"},
 				"command":{"type":"string","description":"Shell command to run (receives the call as JSON on stdin)"},
 				"timeoutSec":{"type":"integer","description":"Max seconds the command may run (0 = default)"}
@@ -163,8 +163,8 @@ func (t CreateHookTool) Call(ctx context.Context, input json.RawMessage) (string
 	if err := json.Unmarshal(input, &in); err != nil {
 		return "", argErr(err)
 	}
-	if in.Event != db.HookPreToolUse && in.Event != db.HookPostToolUse {
-		return "", fmt.Errorf("event must be PreToolUse or PostToolUse")
+	if !db.ValidHookEvent(in.Event) {
+		return "", fmt.Errorf("event must be one of: PreToolUse, PostToolUse, UserPromptSubmit, SessionStart, Stop, SubagentStop, PreCompact, Notification, SessionEnd")
 	}
 	if strings.TrimSpace(in.Command) == "" {
 		return "", fmt.Errorf("command is required")
@@ -182,6 +182,66 @@ func (t CreateHookTool) Call(ctx context.Context, input json.RawMessage) (string
 		return "", fmt.Errorf("create hook: %w", err)
 	}
 	b, _ := json.Marshal(map[string]string{"id": created.ID, "action": "created"})
+	return string(b), nil
+}
+
+// UpdateHookTool edits a hook's REST-equivalent mutable field set.
+type UpdateHookTool struct{ d hookDeps }
+
+// NewUpdateHookTool constructs update_hook.
+func NewUpdateHookTool(database *db.DB, actorID string) UpdateHookTool {
+	return UpdateHookTool{d: hookDeps{db: database, actorID: actorID}}
+}
+
+func (UpdateHookTool) Def() providers.ToolDef {
+	return providers.ToolDef{
+		Name:        "update_hook",
+		Description: "Replace the mutable fields of a hook: event, matcher, command, timeoutSec, and enabled. This matches the REST update operation.",
+		InputSchema: json.RawMessage(`{
+			"type":"object",
+			"properties":{
+				"id":{"type":"string","description":"The hook id (see list_hooks)"},
+				"event":{"type":"string","enum":["PreToolUse","PostToolUse","UserPromptSubmit","SessionStart","Stop","SubagentStop","PreCompact","Notification","SessionEnd"]},
+				"matcher":{"type":"string"},
+				"command":{"type":"string"},
+				"timeoutSec":{"type":"integer"},
+				"enabled":{"type":"boolean"}
+			},
+			"required":["id","event","command","enabled"],
+			"additionalProperties":false
+		}`),
+	}
+}
+
+func (t UpdateHookTool) Call(ctx context.Context, input json.RawMessage) (string, error) {
+	var in struct {
+		ID         string `json:"id"`
+		Event      string `json:"event"`
+		Matcher    string `json:"matcher"`
+		Command    string `json:"command"`
+		TimeoutSec int    `json:"timeoutSec"`
+		Enabled    bool   `json:"enabled"`
+	}
+	if err := json.Unmarshal(input, &in); err != nil {
+		return "", argErr(err)
+	}
+	in.ID = strings.TrimSpace(in.ID)
+	if in.ID == "" {
+		return "", fmt.Errorf("id is required")
+	}
+	if !db.ValidHookEvent(in.Event) {
+		return "", fmt.Errorf("event must be one of: PreToolUse, PostToolUse, UserPromptSubmit, SessionStart, Stop, SubagentStop, PreCompact, Notification, SessionEnd")
+	}
+	if strings.TrimSpace(in.Command) == "" {
+		return "", fmt.Errorf("command is required")
+	}
+	if _, err := t.d.db.GetHook(ctx, in.ID); err != nil {
+		return "", fmt.Errorf("no hook with id %q (use list_hooks)", in.ID)
+	}
+	if err := t.d.db.UpdateHook(ctx, db.Hook{ID: in.ID, Event: in.Event, Matcher: in.Matcher, Type: "command", Command: in.Command, TimeoutSec: in.TimeoutSec, Enabled: in.Enabled}); err != nil {
+		return "", fmt.Errorf("update hook: %w", err)
+	}
+	b, _ := json.Marshal(map[string]string{"id": in.ID, "action": "updated"})
 	return string(b), nil
 }
 

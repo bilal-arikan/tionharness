@@ -65,7 +65,10 @@ func (s *Server) handleExternalTools(w http.ResponseWriter, r *http.Request) {
 		found, p := exttools.Detect(t.Name)
 		st.Found, st.Path = found, p
 		out[i] = st
-		if !found || len(t.VersionArgs) == 0 {
+		// The probe is not always the tool itself — a wheel-installed CLI with no
+		// --version flag is asked via its venv interpreter instead (VersionProbe).
+		probe, args := t.VersionProbe(p)
+		if !found || len(args) == 0 {
 			continue
 		}
 		wg.Add(1)
@@ -77,7 +80,7 @@ func (s *Server) handleExternalTools(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			out[i].Version = v
-		}(i, p, t.VersionArgs)
+		}(i, probe, args)
 	}
 	wg.Wait()
 	writeJSON(w, http.StatusOK, out)
@@ -124,7 +127,8 @@ func (s *Server) handleExternalToolUpdates(w http.ResponseWriter, r *http.Reques
 			out[i].Latest, out[i].ReleaseURL = rel.Tag, rel.URL
 			out[i].PublishedAt, out[i].Stale = rel.PublishedAt, stale
 
-			local, verErr := exttools.LocalVersion(r.Context(), path, t.VersionArgs)
+			probe, args := t.VersionProbe(path)
+			local, verErr := exttools.LocalVersion(r.Context(), probe, args)
 			if verErr != nil {
 				out[i].Error = verErr.Error() // status stays "unknown"
 				return

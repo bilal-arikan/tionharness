@@ -322,7 +322,8 @@ func (t UpdateAgentTool) Call(ctx context.Context, input json.RawMessage) (strin
 	if in.ID == "" {
 		return "", fmt.Errorf("id is required")
 	}
-	if _, err := t.d.requireAgent(ctx, in.ID); err != nil {
+	previous, err := t.d.requireAgent(ctx, in.ID)
+	if err != nil {
 		return "", err
 	}
 	// Repair any UTF-8→Latin-1 mojibake from the CLI/MCP transport before saving.
@@ -357,7 +358,16 @@ func (t UpdateAgentTool) Call(ctx context.Context, input json.RawMessage) (strin
 	if err != nil {
 		return "", fmt.Errorf("update agent: %w", err)
 	}
-	b, _ := json.Marshal(map[string]string{"id": updated.ID, "name": updated.Name, "action": "updated"})
+	if in.Model != nil && *in.Model != previous.Model {
+		notifyAgentModelChanged(t.d.db, AgentModelChange{AgentID: updated.ID, AgentName: updated.Name, OldModel: previous.Model, NewModel: *in.Model})
+	}
+	result := map[string]string{"id": updated.ID, "name": updated.Name, "action": "updated"}
+	if in.Model != nil {
+		if warning := AgentModelChangeWarning(updated); warning != "" {
+			result["warning"] = warning
+		}
+	}
+	b, _ := json.Marshal(result)
 	return string(b), nil
 }
 

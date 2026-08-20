@@ -122,20 +122,30 @@ func (s *Server) handleCreateFlow(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleUpdateFlow(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	req, ok := bindJSON[flowReq](w, r)
-	if !ok {
+	var req struct {
+		Name  *string              `json:"name"`
+		Graph *orchestration.Graph `json:"graph"`
+	}
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
 		return
 	}
-	graph, err := marshalGraph(req.Graph)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "invalid graph: "+err.Error())
+	cur, err := ws(r).DB.GetFlow(r.Context(), id)
+	if writeDBError(w, err, "flow not found") {
 		return
 	}
-	if err := ws(r).DB.UpdateFlow(r.Context(), db.Flow{
-		ID:    id,
-		Name:  req.Name,
-		Graph: graph,
-	}); err != nil {
+	if req.Name != nil {
+		cur.Name = *req.Name
+	}
+	if req.Graph != nil {
+		graph, err := marshalGraph(req.Graph)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "invalid graph: "+err.Error())
+			return
+		}
+		cur.Graph = graph
+	}
+	if err := ws(r).DB.UpdateFlow(r.Context(), cur); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}

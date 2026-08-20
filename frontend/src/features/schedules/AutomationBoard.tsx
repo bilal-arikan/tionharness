@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Clock, Hash, LayoutGrid, Repeat, Zap } from 'lucide-react'
 import { api } from '@/api'
 import { useVisiblePoll } from '@/shared/hooks/useVisiblePoll'
+import { useRefreshTrigger } from '@/shared/hooks/useRefreshTrigger'
+import { SIGNAL_AUTOMATIONS, SIGNAL_SCHEDULES } from '@/app/eventToRefreshSignals'
 import type {
   Agent,
   Automation,
@@ -46,6 +48,8 @@ type Editor =
 // automations. Rules are read-only cards; creating and editing happen in a popup
 // (ScheduleModal / AutomationModal) so the lanes stay compact.
 export function AutomationBoard({ agents, focusId, onError }: Props) {
+  const schedulesTick = useRefreshTrigger(SIGNAL_SCHEDULES)
+  const automationsTick = useRefreshTrigger(SIGNAL_AUTOMATIONS)
   const [schedules, setSchedules] = useState<Schedule[]>([])
   const [automations, setAutomations] = useState<Automation[]>([])
   // Workspace flows, for flow-backed schedules/automations (target = a flow).
@@ -78,23 +82,27 @@ export function AutomationBoard({ agents, focusId, onError }: Props) {
   const [pauseAutonomy, setPauseAutonomy] = useState<boolean | null>(null)
   const [savingPause, setSavingPause] = useState(false)
 
-  const reloadSchedules = () =>
-    api
-      .listSchedules()
-      .then(setSchedules)
-      .catch((e) => onError((e as Error).message))
-      .finally(() => setLoadingSchedules(false))
+  const reloadSchedules = useCallback(
+    () =>
+      api
+        .listSchedules()
+        .then(setSchedules)
+        .catch((e) => onError((e as Error).message))
+        .finally(() => setLoadingSchedules(false)),
+    [onError],
+  )
 
-  const reloadAutomations = () =>
-    api
-      .listAutomations()
-      .then(setAutomations)
-      .catch((e) => onError((e as Error).message))
-      .finally(() => setLoadingAutomations(false))
+  const reloadAutomations = useCallback(
+    () =>
+      api
+        .listAutomations()
+        .then(setAutomations)
+        .catch((e) => onError((e as Error).message))
+        .finally(() => setLoadingAutomations(false)),
+    [onError],
+  )
 
   useEffect(() => {
-    reloadSchedules()
-    reloadAutomations()
     api
       .listFlows()
       .then(setFlows)
@@ -108,6 +116,10 @@ export function AutomationBoard({ agents, focusId, onError }: Props) {
       .catch((e) => onError((e as Error).message))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  useEffect(() => reloadSchedules(), [reloadSchedules, schedulesTick])
+
+  useEffect(() => reloadAutomations(), [reloadAutomations, automationsTick])
 
   // Live workspace metrics for the lane headers: fetch on mount, then refresh on
   // an interval while the screen is open AND this window is visible. Silent on

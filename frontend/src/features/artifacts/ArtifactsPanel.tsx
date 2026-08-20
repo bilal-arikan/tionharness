@@ -20,6 +20,8 @@ import {
   ArchiveRestore,
 } from 'lucide-react'
 import { api } from '@/api'
+import { useRefreshTrigger } from '@/shared/hooks/useRefreshTrigger'
+import { SIGNAL_ARTIFACTS } from '@/app/eventToRefreshSignals'
 import type { Agent, Artifact, ArtifactKind } from '@/types'
 import { ArtifactView } from './ArtifactView'
 import { CopyPathButton } from '@/shared/components/CopyPathButton'
@@ -104,6 +106,7 @@ interface Draft {
 // the left and a viewer/editor on the right with copy, manual editing (overwrites
 // in place) and delete. Artifacts are not versioned.
 export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: Props) {
+  const artifactsTick = useRefreshTrigger(SIGNAL_ARTIFACTS)
   const [list, setList] = useState<Artifact[]>([])
   // Selection persists across screen switches within the session (resets on app
   // reload). A deep-link `selectedId` still overrides via the effect below.
@@ -195,7 +198,7 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
       .finally(() => setLoadingMore(false))
   }, [fetchPage, loadingMore, hasMore, list.length, onError])
 
-  useEffect(() => reload(), [reload])
+  useEffect(() => reload(), [reload, artifactsTick])
 
   // Once nothing is archived any more (e.g. the last archived artifact was
   // restored), fall back to the active view so the archived view can't strand

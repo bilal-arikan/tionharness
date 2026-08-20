@@ -11,6 +11,8 @@ import type { View } from './NavRail'
 import type { Route } from './url'
 import { INITIAL_ROUTE } from './useAppNavigation'
 import { isWritableSessionKind } from './viewRegistry'
+import { useRefreshTrigger } from '@/shared/hooks/useRefreshTrigger'
+import { SIGNAL_AGENTS } from './eventToRefreshSignals'
 
 // Sidebar list page size (TSK68 load-more): the session list is fetched one
 // page at a time and appended via loadMoreSessions. Kept under the backend's
@@ -76,6 +78,8 @@ export function useSessionsController({
   // Whether this workspace's settings were actually READ. False both before the
   // fetch lands and when it fails, and it gates the self-heal write below.
   const [wsSettingsLoaded, setWsSettingsLoaded] = useState(false)
+  const agentsTick = useRefreshTrigger(SIGNAL_AGENTS)
+  const lastAgentsTickRef = useRef(agentsTick)
   // Live handle to the chat hook for effects declared ABOVE its definition (the
   // messages-load effect): the ref is read post-render when the binding is set,
   // sidestepping the temporal-dead-zone the const would hit in a deps array.
@@ -167,6 +171,18 @@ export function useSessionsController({
       cancelled = true
     }
   }, [activeWorkspaceId, setError])
+
+  // Agent CRUD events refresh only the roster. Re-running the workspace bootstrap
+  // would unnecessarily clear the active session and transcript.
+  useEffect(() => {
+    if (agentsTick === lastAgentsTickRef.current) return
+    lastAgentsTickRef.current = agentsTick
+    if (!activeWorkspaceId) return
+    api
+      .listAgents()
+      .then(setAllAgents)
+      .catch((e) => setError((e as Error).message))
+  }, [activeWorkspaceId, agentsTick, setError])
 
   // True when the stored default points at an agent that was DELETED — as
   // opposed to one that merely isn't in this workspace (the preference is
@@ -604,7 +620,10 @@ export function useSessionsController({
 
   const newSession = useCallback(async () => {
     const aid = defaultAgentId ?? agents[0]?.id
-    if (!aid) return
+    if (!aid) {
+      setError('Create an agent before starting a new session.')
+      return
+    }
     // Discard the previous new chat if it was left empty, before opening another.
     discardEmptyFresh(activeSessionIdRef.current)
     const s = await api.createSession(aid)
@@ -617,7 +636,7 @@ export function useSessionsController({
     // Mark this new chat as the one that should auto-focus the input (the composer
     // focuses only when the active session matches this id).
     setFocusSessionId(s.id)
-  }, [defaultAgentId, agents, discardEmptyFresh, activeSessionIdRef])
+  }, [defaultAgentId, agents, discardEmptyFresh, activeSessionIdRef, setError])
 
   // Regenerate a session's title from its conversation on demand.
   const regenerateSessionTitle = useCallback(

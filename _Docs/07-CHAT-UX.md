@@ -464,7 +464,14 @@ kırpıldı:
   **doğal Piper** sesi — böylece **telefon/thin client** da okur (sesi sunucu üretir,
   cihaz sadece çalar). Backend `internal/tts` (piper.exe tespiti: `TIONSWARM_PIPER` env
   › `Progs\piper` layout › PATH; `voices/*.onnx` tarar; `os/exec`+60s timeout, `--model`
-  + stdin metin → WAV) + `internal/api/tts.go` (`GET /api/tts/status`, `POST /api/tts`
+  + stdin metin → WAV). **Kurulum şekli değişti (2026-08-20):** upstream
+  (`OHF-Voice/piper1-gpl`) Windows'a standalone arşiv yayınlamayı bıraktı, yerine
+  Python wheel veriyor → kurulum artık `Progs\piper\.venv` ve aranan ilk aday
+  `.venv\Scripts\piper.exe` (eski standalone layout listede kaldı, bozulmaz).
+  CLI sözleşmesi **aynı**: piper1-gpl `--model`/`--output_file` alt-çizgili
+  yazımları takma ad olarak koruyor, bu yüzden `Synthesize` sürüme göre
+  dallanmıyor. Ses modelleri venv dışında (`Progs\piper\voices`) durduğu için
+  `voiceDirs` iki seviye yukarıyı da tarar + `internal/api/tts.go` (`GET /api/tts/status`, `POST /api/tts`
   → `audio/wav`). Frontend `api/tts.ts` + `shared/lib/tts.ts` motor katmanı: `resolveEngine`
   (`auto`/`browser`/`server`; auto Piper varsa onu), server yolunda `/api/tts` → paylaşımlı
   `<audio>`; hata/yoksa **browser speechSynthesis'e düşer**. **Mobil autoplay:** ilk

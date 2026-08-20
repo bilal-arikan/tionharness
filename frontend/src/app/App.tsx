@@ -58,6 +58,10 @@ import { copyToClipboard } from '@/shared/lib/clipboard'
 import { initServerTts, initTtsUnlock } from '@/shared/lib/tts'
 import { initServerStt } from '@/shared/lib/stt'
 
+// localStorage key holding the workspace ids this client has already offered the
+// post-create advisory cards for (see the first-visit effect in App).
+const RECS_SEEN_KEY = 'ws-recs-offered'
+
 export default function App() {
   // Error reporting funnels every `onError(msg)` sink into a toast. Kept under the
   // old `setError` name/signature so the ~20 `onError={setError}` call sites and
@@ -139,6 +143,26 @@ export default function App() {
   // Bumped ONLY on a successful create/attach — never on chat-open — so the user is
   // offered tool wiring once per new workspace, not nagged every time they open chat.
   const [recsTrigger, setRecsTrigger] = useState(0)
+  // A workspace can also come into existence WITHOUT passing through the create
+  // handler below: an agent calling the create_workspace tool makes one directly on
+  // the backend. Those workspaces would never get the advisory cards, so the first
+  // time this client sits on a workspace it has not offered them for, bump the
+  // trigger once. The "already offered" set is per-client UI state (localStorage);
+  // the server-side ignoredRecommendations still decides which cards are shown.
+  useEffect(() => {
+    if (wsLoading || !activeWorkspaceId) return
+    let seen: string[] = []
+    try {
+      const raw = localStorage.getItem(RECS_SEEN_KEY)
+      if (raw) seen = JSON.parse(raw) as string[]
+    } catch {
+      // A corrupt/unreadable entry just means "nothing offered yet" — rewritten below.
+      seen = []
+    }
+    if (seen.includes(activeWorkspaceId)) return
+    localStorage.setItem(RECS_SEEN_KEY, JSON.stringify([...seen, activeWorkspaceId]))
+    setRecsTrigger((n) => n + 1)
+  }, [activeWorkspaceId, wsLoading])
   const handleCreateWorkspace = useCallback(
     async (data: Parameters<typeof createWorkspace>[0]) => {
       const created = await createWorkspace(data)
