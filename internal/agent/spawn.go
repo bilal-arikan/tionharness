@@ -11,6 +11,7 @@ import (
 
 	"github.com/bilal-arikan/tionswarm/internal/db"
 	"github.com/bilal-arikan/tionswarm/internal/events"
+	"github.com/bilal-arikan/tionswarm/internal/providers"
 	"github.com/bilal-arikan/tionswarm/internal/turnqueue"
 )
 
@@ -123,6 +124,29 @@ func (r *Runtime) SpawnSession(ctx context.Context, agentRef, prompt string, opt
 	if m := strings.TrimSpace(opts.ModelOverride); m != "" {
 		agent.Model = m
 	}
+	if isCLIProviderKind(agent.Provider) {
+		provider, err := r.providers.Get(agent.ProviderRef())
+		if err != nil {
+			return SpawnResult{}, fmt.Errorf("spawn refused: CLI provider unavailable: %w", err)
+		}
+		cli, ok := providers.AsCLI(provider)
+		if !ok {
+			return SpawnResult{}, fmt.Errorf("spawn refused: provider %q is configured as CLI but does not implement CLI preflight", agent.Provider)
+		}
+		switch p := provider.(type) {
+		case *providers.ClaudeCLI:
+			if p.ConfigDir() == "" {
+				p.SetConfigDir(r.claudeHomeDir())
+			}
+		case *providers.CodexCLI:
+			if p.ConfigDir() == "" {
+				p.SetConfigDir(r.codexHomeDir())
+			}
+		}
+		if err := cli.Preflight(ctx); err != nil {
+			return SpawnResult{}, fmt.Errorf("spawn refused: %w", err)
+		}
+	}
 
 	// Concurrency guard: refuse once the cap of simultaneously-running spawns is
 	// reached. The slot is released when the background turn finishes. Depth-aware
@@ -158,6 +182,12 @@ func (r *Runtime) SpawnSession(ctx context.Context, agentRef, prompt string, opt
 	if coordID != "" {
 		kind = "worker"
 	}
+	parentID := strings.TrimSpace(opts.ParentSessionID)
+	if coordID != "" {
+		// CoordinatorSessionID drives report-back; ParentSessionID exposes the same
+		// owner to generic session/execution consumers.
+		parentID = coordID
+	}
 
 	// Each spawn is its own independent session — a fresh sourceID (not GetOrCreate)
 	// so two spawns never collapse into one thread.
@@ -166,7 +196,7 @@ func (r *Runtime) SpawnSession(ctx context.Context, agentRef, prompt string, opt
 		Kind:                     kind,
 		SourceID:                 "spawn:" + uuid.NewString(),
 		Title:                    title,
-		ParentSessionID:          strings.TrimSpace(opts.ParentSessionID),
+		ParentSessionID:          parentID,
 		WorkingDir:               cwd,
 		Tags:                     opts.Tags,
 		Role:                     strings.TrimSpace(opts.Role),

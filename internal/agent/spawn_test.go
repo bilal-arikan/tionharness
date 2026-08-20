@@ -2,12 +2,24 @@ package agent
 
 import (
 	"context"
+	"fmt"
+	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/bilal-arikan/tionswarm/internal/db"
+	"github.com/bilal-arikan/tionswarm/internal/providers"
 )
+
+func TestMain(m *testing.M) {
+	if os.Getenv("TIONSWARM_PREFLIGHT_HELPER") == "broken" {
+		fmt.Fprintln(os.Stderr, `error loading C:\Users\user\.codex\config.toml: unknown field features.rmcp_client at line 4`)
+		os.Exit(2)
+	}
+	os.Exit(m.Run())
+}
 
 // drainSpawns waits for all fire-and-forget spawn goroutines to finish so the
 // t.TempDir() cleanup does not race their background writes (Windows locks the
@@ -98,6 +110,48 @@ func TestSpawnSession_RejectsEmptyPrompt(t *testing.T) {
 	}
 	if _, err := rt.SpawnSession(ctx, "W", "   ", SpawnOptions{}); err == nil {
 		t.Fatal("expected an error for an empty prompt")
+	}
+}
+
+func TestSpawnSessionRefusesBrokenCLIWithoutCreatingSession(t *testing.T) {
+	rt, _ := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))
+	ctx := context.Background()
+	home := t.TempDir()
+	t.Setenv("TIONSWARM_PREFLIGHT_HELPER", "broken")
+	rt.providers.SetInstances([]providers.Instance{{
+		ID: "broken-codex", KindID: "codex-cli", Enabled: true,
+		Values: map[string]string{
+			providers.FieldKeyCLIPath:   os.Args[0],
+			providers.FieldKeyConfigDir: home,
+		},
+	}})
+	agent, err := rt.db.CreateAgent(ctx, db.Agent{
+		Name: "Broken CLI", Provider: "codex-cli", ProviderInstanceID: "broken-codex", Model: "m",
+	})
+	if err != nil {
+		t.Fatalf("create agent: %v", err)
+	}
+	before, err := rt.db.ListSessions(ctx, "")
+	if err != nil {
+		t.Fatalf("list sessions before spawn: %v", err)
+	}
+
+	_, err = rt.SpawnSession(ctx, agent.ID, "must not launch", SpawnOptions{})
+	if err == nil {
+		t.Fatal("expected broken CLI spawn to be refused")
+	}
+	msg := err.Error()
+	for _, want := range []string{"spawn refused: codex-cli CLI preflight failed", `C:\Users\user\.codex\config.toml`, "features.rmcp_client", "line 4"} {
+		if !strings.Contains(msg, want) {
+			t.Errorf("refusal missing %q: %s", want, msg)
+		}
+	}
+	after, err := rt.db.ListSessions(ctx, "")
+	if err != nil {
+		t.Fatalf("list sessions after spawn: %v", err)
+	}
+	if len(after) != len(before) {
+		t.Fatalf("refused spawn created a session: before=%d after=%d", len(before), len(after))
 	}
 }
 

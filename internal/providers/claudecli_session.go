@@ -115,7 +115,14 @@ func (s *CLISession) Turn(ctx context.Context, prompt string, onEvent func(Trace
 	}
 	s.turns++
 	s.lastUsed = time.Now()
-	return p.finish()
+	resp, err := p.finish()
+	if err != nil {
+		if detail := strings.TrimSpace(s.stderr.String()); detail != "" {
+			detail = strings.TrimPrefix(truncateCLIDiagnostic(detail, ""), ": ")
+			return nil, fmt.Errorf("%w; CLI stderr: %s", err, detail)
+		}
+	}
+	return resp, err
 }
 
 // Close terminates the process and removes its system-prompt temp file. Safe to

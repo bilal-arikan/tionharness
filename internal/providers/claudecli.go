@@ -77,6 +77,23 @@ func (c *ClaudeCLI) Installed() bool {
 	return err == nil
 }
 
+func (c *ClaudeCLI) Preflight(ctx context.Context) error {
+	env := cliBaseEnv("ENABLE_TOOL_SEARCH=auto")
+	if c.configDir != "" {
+		env = append(env, "CLAUDE_CONFIG_DIR="+c.configDir)
+	}
+	if c.authToken != "" {
+		switch c.authKind {
+		case "oauth":
+			env = append(env, "CLAUDE_CODE_OAUTH_TOKEN="+c.authToken)
+		case "apikey":
+			env = append(env, "ANTHROPIC_API_KEY="+c.authToken)
+		}
+	}
+	config := strings.Join([]string{c.model, c.authKind, c.authToken}, "\x00")
+	return runCLIPreflight(ctx, c.Name(), c.binPath, c.configDir, config, env, "settings.json")
+}
+
 // ConfigureMCP enables MCP tool delegation for subsequent Complete calls.
 // configPath points to a claude --mcp-config JSON file; allowedTools is the
 // list of tool identifiers the CLI may use (e.g. "mcp__filesystem");

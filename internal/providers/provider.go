@@ -409,6 +409,9 @@ type CLIMCPSpec struct {
 // stay behind a narrow concrete assertion at their call site.
 type CLIProvider interface {
 	Provider
+	// Preflight verifies that the CLI can start with its current binary and
+	// configuration. Implementations cache successful checks per configuration.
+	Preflight(ctx context.Context) error
 	// SetConfigDir points the CLI at a config home for subsequent turns.
 	SetConfigDir(dir string)
 	// ConfigureCLIMCP installs one turn's MCP delegation.

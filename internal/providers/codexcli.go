@@ -53,6 +53,14 @@ func (c *CodexCLI) Installed() bool {
 	return err == nil
 }
 
+func (c *CodexCLI) Preflight(ctx context.Context) error {
+	env := codexBaseEnv()
+	if c.configDir != "" {
+		env = append(env, "CODEX_HOME="+c.configDir)
+	}
+	return runCLIPreflight(ctx, c.Name(), c.binPath, c.configDir, c.model, env, "config.toml")
+}
+
 // SetConfigDir overrides the CODEX_HOME this provider exports into its
 // subprocess. TionSwarm calls this per turn so each workspace drives the CLI
 // against its OWN config home (<workspace>/codex-home). Empty is ignored so the
