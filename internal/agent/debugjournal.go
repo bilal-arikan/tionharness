@@ -2,9 +2,20 @@ package agent
 
 import (
 	"context"
+	"strings"
+	"unicode/utf8"
 
 	"github.com/bilal-arikan/tionswarm/internal/db"
 )
+
+func debugSummary(s string, max int) string {
+	s = strings.Join(strings.Fields(s), " ")
+	if utf8.RuneCountInString(s) <= max {
+		return s
+	}
+	r := []rune(s)
+	return string(r[:max-1]) + "…"
+}
 
 // emitDebug appends one structured observability event to the current session's
 // debug.jsonl (a parallel stream to session.jsonl). It is the single funnel every

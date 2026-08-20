@@ -77,14 +77,22 @@ func TestDurableAsk_SuspendAtCleanPoint(t *testing.T) {
 // finishes normally), exactly as before this feature.
 func TestDurableAsk_DisabledDoesNotSuspend(t *testing.T) {
 	rt := loopRuntime(t)
-	agent := db.Agent{ID: "a1", Model: "m", MCPEnabled: true}
+	ctx := context.Background()
+	agent, err := rt.db.CreateAgent(ctx, db.Agent{Name: "A", Provider: "anthropic", Model: "m", MCPEnabled: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	sess, err := rt.db.CreateSession(ctx, db.Session{AgentID: agent.ID, Title: "T"})
+	if err != nil {
+		t.Fatal(err)
+	}
 	fp := &toolFakeProvider{script: []scriptedToolResp{
 		{stop: providers.StopToolUse, toolCalls: askCall()},
 		{stop: providers.StopEndTurn, text: "done anyway"},
 	}}
 
 	req := providers.Request{Messages: []providers.Message{{Role: providers.RoleUser, Text: "should I?"}}}
-	resp, _, err := rt.CompleteWithToolsStream(context.Background(), agent, fp, req, false, nil)
+	resp, _, err := rt.CompleteWithToolsStream(WithSessionID(ctx, sess.ID), agent, fp, req, false, nil)
 	if err != nil {
 		t.Fatalf("no-suspend path should complete, got %v", err)
 	}
@@ -94,6 +102,16 @@ func TestDurableAsk_DisabledDoesNotSuspend(t *testing.T) {
 	}
 	if resp.Text != "done anyway" {
 		t.Errorf("final text = %q, want %q", resp.Text, "done anyway")
+	}
+	events, err := rt.db.ReadDebugEvents(ctx, sess.ID, db.DebugTool, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(events) != 1 || !events[0].Err || events[0].Error == "" {
+		t.Fatalf("failed tool debug event missing error text: %+v", events)
+	}
+	if !strings.Contains(events[0].Args, "Proceed?") {
+		t.Fatalf("failed tool debug event missing argument summary: %+v", events[0])
 	}
 }
 

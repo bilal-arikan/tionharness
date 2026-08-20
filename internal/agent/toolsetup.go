@@ -626,6 +626,8 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 					DurMs:    ob.DurMs,
 					OutBytes: ob.OutBytes,
 					Err:      ob.IsError,
+					Error:    debugSummary(ob.Error, 500),
+					Args:     debugToolArgs(ob.Args, ob.IsError),
 					Detail:   detail,
 				})
 				if sink := subStepSinkFrom(cctx); sink != nil {

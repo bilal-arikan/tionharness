@@ -78,6 +78,8 @@ type DebugEvent struct {
 	SavedBytes int    `json:"savedBytes,omitempty"` // compaction bytes trimmed
 	Stop       string `json:"stop,omitempty"`       // turn stop reason
 	Err        bool   `json:"err,omitempty"`        // tool/turn failed
+	Error      string `json:"error,omitempty"`      // truncated single-line tool error text
+	Args       string `json:"args,omitempty"`       // truncated single-line tool argument summary
 	Detail     string `json:"detail,omitempty"`     // free-form (error msg, reason, decision)
 	// WasteUSD is the avoidable cooling overpay for a cache_break attributed to
 	// TTL expiry / server eviction (a warm prefix a timely turn would have kept):

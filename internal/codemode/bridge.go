@@ -55,6 +55,7 @@ type CallObservation struct {
 	DurMs    int64           // dispatch latency (0 for denied calls — they never ran)
 	OutBytes int             // result text size
 	IsError  bool            // tool-level failure (includes denials)
+	Error    string          // tool error text (empty on success)
 	Denied   bool            // blocked by the permission gate before dispatch
 }
 
@@ -203,7 +204,7 @@ func (b *Bridge) handleCall(w http.ResponseWriter, r *http.Request) {
 	if b.cfg.Gate != nil {
 		if allowed, denial := b.cfg.Gate(gateName, req.Args); !allowed {
 			b.registerDenied()
-			b.observe(CallObservation{Tool: gateName, Args: req.Args, IsError: true, Denied: true})
+			b.observe(CallObservation{Tool: gateName, Args: req.Args, IsError: true, Error: denial, Denied: true})
 			w.Header().Set("Content-Type", "application/json")
 			_ = json.NewEncoder(w).Encode(callResponse{Text: denial, IsError: true})
 			return
@@ -230,9 +231,17 @@ func (b *Bridge) handleCall(w http.ResponseWriter, r *http.Request) {
 		DurMs:    time.Since(start).Milliseconds(),
 		OutBytes: len(resp.Text),
 		IsError:  resp.IsError,
+		Error:    errorText(resp.Text, resp.IsError),
 	})
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(resp)
+}
+
+func errorText(text string, isError bool) string {
+	if !isError {
+		return ""
+	}
+	return text
 }
 
 // observe forwards one per-call record to the Observe hook, if wired.

@@ -982,6 +982,8 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 				DurMs:    time.Since(toolStart).Milliseconds(),
 				OutBytes: len(res.Content),
 				Err:      res.IsError,
+				Error:    debugToolError(res.Content, res.IsError),
+				Args:     debugToolArgs(call.Input, res.IsError),
 			})
 			// Cancellation mid-tool (user stop / timeout): record it and end the
 			// turn cleanly instead of feeding a half-result back to the model.
@@ -1212,8 +1214,24 @@ func (r *Runtime) emitCLIToolDebug(ctx context.Context, agent db.Agent, trace []
 			DurMs:    st.DurMs,
 			OutBytes: len(st.Output),
 			Err:      st.IsError,
+			Error:    debugToolError(st.Output, st.IsError),
+			Args:     debugToolArgs(st.Input, st.IsError),
 		})
 	}
+}
+
+func debugToolError(output string, isError bool) string {
+	if !isError {
+		return ""
+	}
+	return debugSummary(output, 500)
+}
+
+func debugToolArgs(input []byte, isError bool) string {
+	if !isError {
+		return ""
+	}
+	return debugSummary(string(input), 200)
 }
 
 func (r *Runtime) recordedComplete(ctx context.Context, agent db.Agent, provider providers.Provider, req providers.Request) (*providers.Response, error) {
