@@ -1118,19 +1118,16 @@ func (r *Runtime) runWorker(agent db.Agent, workerSessionID, prompt, coordSessio
 		}
 	}
 
-	// Persist the outcome on the session itself. Placed after the branches above so
-	// it covers EVERY status — a run that died on a provider error or a cancelled
-	// context lands here with failed/killed/timeout, not just the happy path. The
-	// transcript message, the "worker" event and the tags are all in-flight signals;
-	// this is the one that survives a restart, so forensic tooling reading
-	// session.json can tell a finished worker from a live one.
-	if rsErr := r.db.SetSessionRunState(ctx, workerSessionID, status, time.Now().Unix()); rsErr != nil {
-		r.logger.Warn("worker: failed to persist run state", "session", workerSessionID, "status", status, "error", rsErr)
-	}
-
 	// replyText was pre-composed above (success output / failure / kill / empty note).
 	if addErr := r.recordAssistantMessage(ctx, workerSessionID, agent.ID, replyText, steps, meta, time.Since(turnStart).Milliseconds()); addErr != nil {
 		r.logger.Warn("worker: failed to record reply", "session", workerSessionID, "error", addErr)
+	}
+	// Persist the terminal outcome AFTER AddMessage updates the shared lifetime
+	// counters. mutateSessionLocked rewrites session.json, making the same
+	// MessageCount/ToolCallCount arithmetic used by chat durable for worker turns.
+	// The error is surfaced because a missing terminal write must stay observable.
+	if rsErr := r.db.SetSessionRunState(ctx, workerSessionID, status, time.Now().Unix()); rsErr != nil {
+		r.logger.Error("worker: failed to persist terminal session state", "session", workerSessionID, "status", status, "error", rsErr)
 	}
 	r.emitWorkerEvent(agent, workerSessionID, coordSessionID, status)
 
@@ -1340,6 +1337,14 @@ func (r *Runtime) emitInjectedUserNote(sessionID string, msg db.Message) {
 func (r *Runtime) enqueueCoordinatorTurn(coordSessionID string) {
 	slot := r.coordSlotFor(coordSessionID)
 	slot.mu.Lock()
+	// A hard stall halt must gate the wake entry point, not only a drain already in
+	// progress. Worker notes remain durably recorded, but cannot silently start a
+	// fresh automatic drain while the UI says auto-turns are stopped. Resume clears
+	// the flag and explicitly enqueues the next turn, preserving all queued notes.
+	if slot.stallHalted {
+		slot.mu.Unlock()
+		return
+	}
 	// A fresh notification (a worker just finished or continued) re-arms the
 	// idle-reconcile sweep: this batch is no longer "acknowledged idle".
 	slot.ackedIdle = false
@@ -1452,6 +1457,8 @@ func (r *Runtime) drainCoordinator(coordSessionID string, slot *coordSlot) {
 		}
 		slot.driving = false
 		slot.mu.Unlock()
+		// No worker and no queued notification can wake this coordinator now.
+		r.markCoordinatorBlocked(context.Background(), coordSessionID)
 		// This coordinator may itself be a worker that owes its own coordinator a
 		// result (a mid-level node). It has now had its reconcile turn with every
 		// worker finished; if it still has not called report_to_coordinator, the

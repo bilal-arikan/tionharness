@@ -33,6 +33,12 @@ const (
 // 0 disables this tier (the nudge-budget escalation still runs); <0 → this default.
 const DefaultCoordinatorStallHaltTotal = 3
 
+// DefaultCoordinatorWorkerNoteGrace is how long a freshly delivered worker result
+// exempts the coordinator from phantom-spawn judging. Five minutes covers several
+// ordinary digest/decision turns after a result batch without masking a genuinely
+// abandoned coordinator for long; the independent staleness sweeper remains active.
+const DefaultCoordinatorWorkerNoteGrace = 5 * time.Minute
+
 // Default spawn guards. They bound the fire-and-forget spawn_session surface so a
 // burst of spawns can neither pin unbounded goroutines nor fan a single turn out
 // into a spawn storm.
@@ -163,9 +169,10 @@ type Tunables struct {
 	// freeze). coordStallSweepMin bounds the staleness window; <0 disables the
 	// sweeper while leaving the turn-end guard on. coordStallMaxNudges caps the
 	// consecutive corrective nudges before deferring to the sweeper / turn cap.
-	coordStallGuard     bool // master switch (default on)
-	coordStallSweepMin  int  // 0 → DefaultCoordinatorStallSweepMin; <0 disables the sweeper
-	coordStallMaxNudges int  // 0 → DefaultCoordinatorStallMaxNudges
+	coordStallGuard      bool          // master switch (default on)
+	coordStallSweepMin   int           // 0 → DefaultCoordinatorStallSweepMin; <0 disables the sweeper
+	coordStallMaxNudges  int           // 0 → DefaultCoordinatorStallMaxNudges
+	coordWorkerNoteGrace time.Duration // 0 → DefaultCoordinatorWorkerNoteGrace
 	// coordStallHaltTotal is the CUMULATIVE (persisted) stall count that hard-halts a
 	// coordinator even when its in-memory streak keeps being reset. <0 →
 	// DefaultCoordinatorStallHaltTotal; 0 disables this tier.
@@ -748,6 +755,24 @@ func (t *Tunables) CoordinatorStallMaxNudges() int {
 		return DefaultCoordinatorStallMaxNudges
 	}
 	return t.coordStallMaxNudges
+}
+
+// SetCoordinatorWorkerNoteGrace configures the recent-worker-note exemption.
+// Zero selects DefaultCoordinatorWorkerNoteGrace.
+func (t *Tunables) SetCoordinatorWorkerNoteGrace(window time.Duration) {
+	t.mu.Lock()
+	t.coordWorkerNoteGrace = window
+	t.mu.Unlock()
+}
+
+// CoordinatorWorkerNoteGrace returns the recent-worker-note exemption window.
+func (t *Tunables) CoordinatorWorkerNoteGrace() time.Duration {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	if t.coordWorkerNoteGrace == 0 {
+		return DefaultCoordinatorWorkerNoteGrace
+	}
+	return t.coordWorkerNoteGrace
 }
 
 // SetCoordinatorStallHaltTotal configures the cumulative-count halt tier: the

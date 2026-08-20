@@ -109,6 +109,14 @@ func (r *Runtime) guardCoordinatorStall(coordSessionID, agentID string, agent db
 	if slot.workers.Load() > 0 {
 		return
 	}
+	// A just-delivered worker result legitimately leaves zero running workers while
+	// the coordinator digests the result and decides the next round. Judging that
+	// turn as a phantom spawn produced the WS24/SES34 false halt. Exempt only when
+	// the most recent inbound message is the fresh worker note; any newer user or
+	// runtime prompt supersedes it and restores normal judging.
+	if r.hasRecentWorkerNoteInbound(coordSessionID, time.Now()) {
+		return
+	}
 
 	// The judge fires on any idle, no-worker turn — including one whose nudge budget is
 	// already spent, because confirming the stall PERSISTS is what justifies the hard
@@ -144,6 +152,21 @@ func (r *Runtime) guardCoordinatorStall(coordSessionID, agentID string, agent db
 		r.escalateCoordinatorStallHalt(coordSessionID, agentID, agent, slot,
 			fmt.Sprintf("cumulative stall threshold reached (%d/%d)", total, limit))
 	}
+}
+
+func (r *Runtime) hasRecentWorkerNoteInbound(coordSessionID string, now time.Time) bool {
+	var inbound db.Message
+	err := r.db.StreamMessages(context.Background(), coordSessionID, func(msg db.Message) bool {
+		if msg.Role == "user" {
+			inbound = msg
+		}
+		return true
+	})
+	if err != nil || inbound.Origin != "worker-note" {
+		return false
+	}
+	age := now.Sub(time.Unix(inbound.CreatedAt, 0))
+	return age >= 0 && age <= r.tun.CoordinatorWorkerNoteGrace()
 }
 
 // escalateCoordinatorStallHalt is the hard-halt escalation (FND-99caeb31): once a
