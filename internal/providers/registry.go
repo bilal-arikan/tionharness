@@ -188,8 +188,11 @@ func (r *Registry) InstanceCatalog() []CatalogEntry {
 		m := k.Manifest()
 		models := parseModelList(inst.Models)
 		if len(models) == 0 {
-			models = append([]ModelInfo(nil), m.Models...)
+			models = m.Models
 		}
+		// Enrich by KIND, not by inst.ID: a custom instance id ("PRV1") resolves no
+		// family metadata, and custom model lists must be enriched too.
+		models = enrichModels(inst.KindID, models)
 		out = append(out, CatalogEntry{
 			ID:               inst.ID,
 			Label:            inst.Label,

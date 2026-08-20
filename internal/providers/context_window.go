@@ -20,6 +20,22 @@ const (
 	windowMiniMax          = 1_000_000 // MiniMax M-series (M3 ≈ 1,048,576, ≥512K guaranteed)
 	windowDeepSeek         = 1_000_000 // DeepSeek V4 family ("1M context")
 	windowGemini           = 1_000_000 // Gemini long-context family
+	// The OpenAI GPT-5.6 line is tiered too: Sol and Terra ship ~1.05M
+	// (1_048_576) while Luna stays at 400K. The frequently quoted 272K is NOT a
+	// context limit — it is the long-context *pricing* threshold for Sol/Terra and,
+	// separately, the Codex CLI's own fallback context_window for slugs it does not
+	// recognise. We reuse that fallback for every other gpt-5.x / codex slug: it is
+	// what the CLI itself assumes, so it can never over-promise.
+	windowGPTLarge = 1_048_576 // GPT-5.6 Sol / Terra
+	windowGPTLuna  = 400_000   // GPT-5.6 Luna
+	windowGPTOther = 272_000   // other gpt-5.x / codex slugs (CLI fallback)
+	// The GLM (Z.ai) line is tiered as well: glm-5.2 and glm-5.3 ship a 1M window
+	// while every other GLM slug (glm-5, glm-5.1, glm-5-turbo, glm-4.7, glm-4.6)
+	// stays at 200K. Expressed as 1_000_000 rather than 1_048_576 because docs.z.ai
+	// quotes a round "1M", exactly like the MiniMax/DeepSeek/Gemini entries above —
+	// only the GPT-5.6 large tier has a documented exact 1_048_576.
+	windowGLMLarge = 1_000_000 // glm-5.2 / glm-5.3
+	windowGLMOther = 200_000   // glm-5 / 5.1 / 5-turbo / 4.7 / 4.6
 )
 
 // Per-family generation caps (max output tokens), used to fill Request.MaxTokens
@@ -38,7 +54,44 @@ const (
 	maxOutMiniMax       = 32_768 // MiniMax M-series (M3 ceiling ≈ 512K)
 	maxOutDeepSeek      = 32_768 // DeepSeek V4 family (real ceiling 384K; kept well below)
 	maxOutGemini        = 8_192  // Gemini family (conservative)
+	// GPT-5.6's real ceiling is 128K output for every tier, so a single family
+	// value is enough; 32_768 keeps the same safety margin as the Claude-capable
+	// tier (≈1/4 of the ceiling) while staying far above the 4096 provider
+	// fallback that would otherwise truncate ordinary answers.
+	maxOutGPT = 32_768
+	// GLM's real ceiling is 128K output across the whole family (docs.z.ai), so a
+	// single family value suffices; 32_768 keeps the same ≈1/4-of-ceiling margin as
+	// the GPT and Claude-capable tiers while staying far above the 4096 provider
+	// fallback.
+	maxOutGLM = 32_768
 )
+
+// gptFamily reports whether the slug belongs to the OpenAI GPT-5.x / Codex family.
+// The gate is deliberately narrow: a bare "gpt" substring also matches gpt-4o,
+// gpt-4.1, gpt-4o-mini and friends, whose windows are much smaller (128K for
+// 4o-mini) than anything in the table below — claiming 272K for them is an
+// OVER-estimate, the dangerous direction, since compaction would then fire too
+// late. Only the slugs we actually verified are claimed; every other "gpt" model
+// falls through to the unknown branch (0), matching the file's philosophy of
+// filling only families we are confident about.
+// The tier keywords ("sol", "terra", "luna") are short and would collide with
+// unrelated names (e.g. "solar"), so tier matching is only ever done after this
+// gate passes.
+func gptFamily(m string) bool {
+	return strings.Contains(m, "gpt-5") || strings.Contains(m, "gpt5") || strings.Contains(m, "codex")
+}
+
+// glmFamily reports whether the slug belongs to the Z.ai GLM family.
+func glmFamily(m string) bool { return strings.Contains(m, "glm") }
+
+// glmLargeWindow reports whether the GLM slug is one of the 1M-window tiers.
+// Matching is on the full "glm-5.2"/"glm-5.3" token, never a "glm-5" prefix: the
+// prefix would swallow 5.2/5.3 into the 200K tier (or, checked the other way,
+// promote plain glm-5 / glm-5.1 to 1M). Both mistakes are silent, so this stays
+// an explicit two-value check.
+func glmLargeWindow(m string) bool {
+	return strings.Contains(m, "glm-5.2") || strings.Contains(m, "glm-5.3")
+}
 
 // MaxOutputFor returns the model-aware generation cap (max output tokens) for a
 // provider/model, or 0 when the family is unknown. It is the single source of
@@ -58,6 +111,10 @@ func MaxOutputFor(provider, model string) int {
 		return 0
 	}
 	switch {
+	case gptFamily(m):
+		return maxOutGPT
+	case glmFamily(m):
+		return maxOutGLM
 	case strings.Contains(m, "minimax"):
 		return maxOutMiniMax
 	case strings.Contains(m, "deepseek"):
@@ -88,6 +145,22 @@ func ContextWindowFor(provider, model string) int {
 		return 0
 	}
 	switch {
+	case gptFamily(m):
+		// Tier order matters: "gpt-5.6-sol" must hit the large tier, not the
+		// generic gpt fallback.
+		switch {
+		case strings.Contains(m, "sol"), strings.Contains(m, "terra"):
+			return windowGPTLarge
+		case strings.Contains(m, "luna"):
+			return windowGPTLuna
+		default:
+			return windowGPTOther
+		}
+	case glmFamily(m):
+		if glmLargeWindow(m) {
+			return windowGLMLarge
+		}
+		return windowGLMOther
 	case strings.Contains(m, "minimax"):
 		return windowMiniMax
 	case strings.Contains(m, "deepseek"):
@@ -124,6 +197,16 @@ func AdaptiveBudgetFraction(provider, model string) float64 {
 		return 0
 	}
 	switch {
+	case gptFamily(m):
+		// Same rationale as the MiniMax/DeepSeek/Gemini long-context families: the
+		// window is large but recall precision degrades over a big raw transcript,
+		// so keep the conservative 0.35 share and let retrieval carry the rest.
+		return 0.35
+	case glmFamily(m):
+		// Same rationale as the other long-context families: even the 1M tiers lose
+		// recall precision over a big raw transcript, and the 200K tiers are simply
+		// small — 0.35 fits both, with retrieval carrying the rest.
+		return 0.35
 	case strings.Contains(m, "minimax"):
 		return 0.35
 	case strings.Contains(m, "deepseek"):

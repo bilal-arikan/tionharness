@@ -22,7 +22,7 @@ func TestWithMaxOutput(t *testing.T) {
 	}
 
 	// Unknown family leaves the cap unset so the provider falls back to its default.
-	got = r.withMaxOutput("openrouter", providers.Request{Model: "openai/gpt-5.5"})
+	got = r.withMaxOutput("openrouter", providers.Request{Model: "some-unknown-model"})
 	if got.MaxTokens != 0 {
 		t.Errorf("unknown family = %d, want 0 (provider fallback)", got.MaxTokens)
 	}
@@ -39,7 +39,7 @@ func TestWithMaxOutputSettingsOverride(t *testing.T) {
 	}
 
 	// It even applies to an otherwise-unknown family (it's a global cap).
-	got = r.withMaxOutput("openrouter", providers.Request{Model: "openai/gpt-5.5"})
+	got = r.withMaxOutput("openrouter", providers.Request{Model: "some-unknown-model"})
 	if got.MaxTokens != 20000 {
 		t.Errorf("settings override unknown family = %d, want 20000", got.MaxTokens)
 	}

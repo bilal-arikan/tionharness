@@ -179,6 +179,42 @@ func TestInstanceCatalogPerInstanceEntries(t *testing.T) {
 	}
 }
 
+// TestInstanceCatalogEnrichesModels guards the regression where instance-derived
+// entries shipped raw manifest models — MergeCatalog lets them override the
+// enriched per-kind entry, so the UI lost every contextWindow/maxOutput.
+func TestInstanceCatalogEnrichesModels(t *testing.T) {
+	r := NewRegistry()
+	r.SetInstances([]Instance{
+		{ID: "anthropic", KindID: "anthropic", Enabled: true, Values: map[string]string{FieldKeyAPIKey: "sk-work"}},
+		{ID: "PRV1", KindID: "anthropic", Enabled: true, Models: "claude-opus-5", Values: map[string]string{FieldKeyAPIKey: "sk-personal"}},
+	})
+
+	byID := make(map[string]CatalogEntry)
+	for _, e := range r.InstanceCatalog() {
+		byID[e.ID] = e
+	}
+
+	for _, m := range byID["anthropic"].Models {
+		if m.ContextWindow == 0 {
+			t.Errorf("manifest model %q: ContextWindow = 0, want family value", m.ID)
+		}
+		if m.MaxOutput == 0 {
+			t.Errorf("manifest model %q: MaxOutput = 0, want family value", m.ID)
+		}
+	}
+
+	custom := byID["PRV1"].Models
+	if len(custom) != 1 || custom[0].ID != "claude-opus-5" {
+		t.Fatalf("PRV1 models = %+v, want the custom list", custom)
+	}
+	if custom[0].ContextWindow == 0 || custom[0].MaxOutput == 0 {
+		t.Errorf("custom model not enriched: %+v", custom[0])
+	}
+	if custom[0].ThinkingClass == "" || len(custom[0].ThinkingTiers) == 0 {
+		t.Errorf("custom model missing thinking metadata: %+v", custom[0])
+	}
+}
+
 // TestAppliesToolHooksSignal verifies the provider-capability signal used to
 // surface the codex-cli hook gap in the UI: codex-cli reports hooks as NOT
 // applied (its subprocess tool loop has no hook passthrough), while claude-cli

@@ -9,7 +9,7 @@ const c = defaultBudgetAutoCeil
 
 func TestEffectiveBudget(t *testing.T) {
 	// Unknown model window → configured value, unchanged (fraction irrelevant).
-	if got := EffectiveBudget("openrouter", "openai/gpt-5.5", 12000, 0.6, c); got != 12000 {
+	if got := EffectiveBudget("openrouter", "some-unknown-model", 12000, 0.6, c); got != 12000 {
 		t.Fatalf("unknown window: got %d, want 12000 (configured)", got)
 	}
 
@@ -55,7 +55,7 @@ func TestEffectiveBudgetAdaptive(t *testing.T) {
 
 	// Unknown family with auto fraction: window is unknown (0) → configured floor,
 	// the adaptive table never matters.
-	if got := EffectiveBudget("openrouter", "openai/gpt-5.5", 12000, 0, 0); got != 12000 {
+	if got := EffectiveBudget("openrouter", "some-unknown-model", 12000, 0, 0); got != 12000 {
 		t.Fatalf("unknown adaptive: got %d, want 12000 (configured)", got)
 	}
 }

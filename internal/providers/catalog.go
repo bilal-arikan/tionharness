@@ -49,6 +49,32 @@ type CatalogEntry struct {
 	AppliesToolHooks bool `json:"appliesToolHooks"`
 }
 
+// enrichModels returns a copy of models with the family-derived metadata filled
+// in from the central tables, keyed by the provider KIND (a custom instance id
+// like "PRV1" would resolve nothing). Fields already set by a manifest are left
+// alone, so a manifest can still override the family default for one model.
+// Shared by Catalog() and Registry.InstanceCatalog() so instance-derived entries
+// (including user-typed custom model ids) carry the same metadata.
+func enrichModels(kind string, models []ModelInfo) []ModelInfo {
+	out := make([]ModelInfo, len(models))
+	copy(out, models)
+	for i := range out {
+		if out[i].ContextWindow == 0 {
+			out[i].ContextWindow = ContextWindowFor(kind, out[i].ID)
+		}
+		if out[i].MaxOutput == 0 {
+			out[i].MaxOutput = MaxOutputFor(kind, out[i].ID)
+		}
+		if out[i].ThinkingTiers == nil {
+			out[i].ThinkingTiers = ThinkingTiersFor(out[i].ID)
+		}
+		if out[i].ThinkingClass == "" {
+			out[i].ThinkingClass = ThinkingClass(out[i].ID)
+		}
+	}
+	return out
+}
+
 // Catalog returns the provider/model catalog, derived from the registered
 // provider kinds (each kind self-describes via its Manifest). Availability
 // (whether a provider is actually configured) is layered on by the API handler.
@@ -59,24 +85,7 @@ func Catalog() []CatalogEntry {
 	out := make([]CatalogEntry, 0, len(kinds))
 	for _, k := range kinds {
 		m := k.Manifest()
-		// Fill each model's context window from the central family table (unless a
-		// manifest set an explicit value). Keeps churning numbers out of manifests.
-		models := make([]ModelInfo, len(m.Models))
-		copy(models, m.Models)
-		for i := range models {
-			if models[i].ContextWindow == 0 {
-				models[i].ContextWindow = ContextWindowFor(m.Kind, models[i].ID)
-			}
-			if models[i].MaxOutput == 0 {
-				models[i].MaxOutput = MaxOutputFor(m.Kind, models[i].ID)
-			}
-			if models[i].ThinkingTiers == nil {
-				models[i].ThinkingTiers = ThinkingTiersFor(models[i].ID)
-			}
-			if models[i].ThinkingClass == "" {
-				models[i].ThinkingClass = ThinkingClass(models[i].ID)
-			}
-		}
+		models := enrichModels(m.Kind, m.Models)
 		out = append(out, CatalogEntry{
 			ID:               m.Kind,
 			Label:            m.Label,

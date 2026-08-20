@@ -796,17 +796,71 @@ yalnız aktive edilen araçlar kadar büyür).
 
 | slug | Görünen ad | Bağlam |
 |------|-----------|--------|
-| `gpt-5.6-sol` | GPT-5.6-Sol | 272.000 |
-| `gpt-5.6-terra` | GPT-5.6-Terra | 272.000 |
-| `gpt-5.6-luna` | GPT-5.6-Luna | 272.000 |
+| `gpt-5.6-sol` | GPT-5.6-Sol | ~1.048.576 |
+| `gpt-5.6-terra` | GPT-5.6-Terra | ~1.048.576 |
+| `gpt-5.6-luna` | GPT-5.6-Luna | 400.000 |
 | `gpt-5.5` | GPT-5.5 (**varsayılan**) | 272.000 |
 | `gpt-5.4` | GPT-5.4 | 272.000 |
 | `gpt-5.4-mini` | GPT-5.4-Mini | 272.000 |
 | `gpt-5.2` | GPT-5.2 | 272.000 |
 | `codex-auto-review` | Codex Auto Review | 272.000 |
 
+> 272.000 bir baglam siniri DEGILDIR: Sol/Terra icin uzun-baglam fiyatlandirma
+> esigi, ayrica Codex CLI’in tanimadigi sluglar icin kullandigi muhafazakar
+> `context_window` varsayilanidir. Tabloda taninmayan tierlar icin bu varsayilan
+> gosterilir.
+
+> 272.000 bir bağlam sınırı DEĞİLDİR: Sol/Terra için uzun-bağlam
+> fiyatlandırma eşiği, ayrıca Codex CLI’ın tanımadığı slug’lar için kullandığı
+> muhafazakâr  varsayılanıdır. Yukarıdaki tabloda tanınmayan
+> tier’lar için bu varsayılan gösterilir.
+
 Reasoning effort değerleri: `none` \| `minimal` \| `low` \| `medium` (varsayılan)
 \| `high` \| `xhigh` \| `max` \| `ultra`.
+
+---
+
+## Proses ağacı yıkımı — torun proses stdout pipe'ı tutarsa (SES953)
+
+Codex kendi çocuklarını doğurur: MCP sunucuları ve turun shell'den başlattığı
+her şey. Bunların bir kısmı codex'ten **uzun yaşar** — en tipik örnek Gradle
+daemon'u: build biter, daemon kalır. Bu torunlar codex'in stdout pipe'ını miras
+alır, yani codex çıksa bile pipe'ın yazma ucu açık kalır ve okuyucu **hiç EOF
+görmez**.
+
+Yaşanan hata (SES953, 2026-08-20): codex turunu bitirdi, `task_complete` yazdı
+ve çıktı; ama Gradle daemon'u pipe'ı tuttuğu için `runAttempt`'in okuma döngüsü
+asıldı. Oturum "active" durumunda 1,5 saat takıldı, 5 dakikalık idle watchdog da
+kurtaramadı — iptal yalnız pipe kapanışı üzerinden gözlemlenebiliyordu.
+
+İki savunma birlikte gerekir:
+
+1. **`proc.TreeKill(cmd)`** — ctx iptalinde `taskkill /F /T` (Windows) veya
+   proses grubuna `SIGKILL` (POSIX) ile **tüm ağacı** reap eder, ayrıca
+   `WaitDelay` ile `cmd.Wait`'i sınırlar. Kendi elimizle öldürdüğümüz yerlerde
+   (terminal hata sınıflaması, startup hang, kalıcı oturumun `closeChecked`'i)
+   `cmd.Process.Kill()` değil **`proc.KillTree(cmd)`** çağrılır.
+2. **Okuma döngüsünde `case <-ctx.Done()`** — codex zaten çıkmışsa tree kill
+   ölü bir pid'i hedefler ve torunu yakalayamaz; döngü iptali kendi başına
+   görmelidir.
+
+Aynı düzeltme claude-cli yolunda da uygulanır (`claudecli.go` tek-atış ve
+`claudecli_session.go` kalıcı oturum), çünkü şekil birebir aynıdır.
+
+**Kural:** `proc.CommandContext` ile başlatılan her komut `proc.TreeKill(cmd)`
+almalıdır. Depoda artık istisna yok — hook kabuğu (`internal/agent/hooks.go`),
+git çağrıları (`internal/api/git.go`, `workdir_context.go`), CLI preflight
+(`cli_preflight.go`), kod/veri araçları (`builtin_runcode.go`,
+`builtin_transform_data.go`, `grep_rg.go`) ve codex login akışı
+(`internal/codexauth/device.go`) dahil hepsi kapsanır; shell araçları zaten
+`hardenShellCmd` üzerinden alıyordu.
+
+Regresyon testleri: `internal/proc/reap_pipe_test.go`
+(`TestTreeKillReapsGrandchildHoldingPipe`) ve
+`internal/providers/codexcli_hang_test.go`
+(`TestCodexRunAttemptReturnsOnCancelWhileGrandchildHoldsPipe`). İkisi de test
+binary'sini yeniden exec ederek gerçek bir torun proses kurar; düzeltme geri
+alındığında ikisi de düşer (doğrulandı).
 
 ---
 
