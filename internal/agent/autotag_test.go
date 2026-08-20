@@ -1,6 +1,9 @@
 package agent
 
-import "testing"
+import (
+	"context"
+	"testing"
+)
 
 func TestIsPermissionDenyError(t *testing.T) {
 	deny := []TurnStep{
@@ -54,5 +57,38 @@ func TestIsAuthErrorText(t *testing.T) {
 		if isAuthErrorText(s) {
 			t.Errorf("notAuth[%d] should NOT be an auth error: %q", i, s)
 		}
+	}
+}
+
+func TestAutoTagTurnToolErrorMaterialityAndRecovery(t *testing.T) {
+	rt, _ := newTestRuntime(t, t.TempDir())
+	ctx := context.Background()
+	sess := stuckSession(t, rt)
+
+	benign := []TurnStep{
+		{Kind: StepTool, Tool: "mcp__tionswarm_interaction__ask_user", IsError: true, Output: "no answer within the time limit; proceed on your own"},
+		{Kind: StepTool, Tool: "request_confirmation", IsError: true, Output: "the turn ended before the user answered; proceed without the answer"},
+	}
+	rt.AutoTagTurn(ctx, sess.ID, benign, "")
+	got, err := rt.db.GetSession(ctx, sess.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if containsTag(got.Tags, TagToolError) {
+		t.Fatalf("cancelled/expired prompts must not add %q: %v", TagToolError, got.Tags)
+	}
+
+	real := []TurnStep{{Kind: StepTool, Tool: "Bash", IsError: true, Output: "exit status 1"}}
+	rt.AutoTagTurn(ctx, sess.ID, real, "")
+	got, _ = rt.db.GetSession(ctx, sess.ID)
+	if !containsTag(got.Tags, TagToolError) {
+		t.Fatalf("genuine tool failure must add %q: %v", TagToolError, got.Tags)
+	}
+
+	// A later successful turn proves recovery and removes the stale signal.
+	rt.AutoTagTurn(ctx, sess.ID, nil, "")
+	got, _ = rt.db.GetSession(ctx, sess.ID)
+	if containsTag(got.Tags, TagToolError) {
+		t.Fatalf("successful later turn must clear %q: %v", TagToolError, got.Tags)
 	}
 }

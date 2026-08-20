@@ -11,8 +11,8 @@ import (
 // Auto-tag: derive well-known session tags from what happened during a turn +
 // the session's state, so an automation (or the user) can later scan for them —
 // the intended flow is a tag-triggered automation that finds "tool-error"/"error"
-// sessions and repairs them. Tagging is ADD-only here: a tag stays until a fixer
-// removes it (via set_session_tags / the API), which is exactly the repair signal.
+// sessions and repairs them. Error/state tags stay until a fixer removes them;
+// tool-error is reconciled each turn because a later clean turn proves recovery.
 //
 // These are the auto-assigned tag names (English, matching the code convention).
 const (
@@ -21,6 +21,7 @@ const (
 	TagAuthError = "auth-error" // the turn failed on authentication (login/token) — TERMINAL, not repairable
 	TagArchived  = "archived"   // session is archived
 	TagStuck     = "stuck"      // StuckTurns crossed the threshold — autonomous turns refused
+	TagBlocked   = "blocked"    // coordinator drain ended with no runnable work
 )
 
 // AutoTagTurn inspects a finished turn (its trace steps + an optional turn-level
@@ -75,13 +76,14 @@ func (r *Runtime) AutoTagTurn(ctx context.Context, sessionID string, steps []Tur
 		}
 	}
 
-	// Any REAL tool error → "tool-error". A claude-cli attempt at a disallowed tool
-	// comes back as an is_error tool result too, but that is a policy denial, not a
-	// tool failure — exclude it (the native path already models a denial as a
-	// StepError(permission_denied), not a StepTool, so it never counts here).
+	// A material tool error marks this turn. Expected interaction exits and policy
+	// denials are control flow, not repair signals. A later turn without a material
+	// tool error clears the tag so a recovered session does not stay falsely broken.
+	toolFailed := false
 	for _, st := range steps {
-		if st.Kind == StepTool && st.IsError && !isPermissionDenyError(st) {
+		if isMaterialToolError(st) {
 			add = append(add, TagToolError)
+			toolFailed = true
 			break
 		}
 	}
@@ -123,6 +125,9 @@ func (r *Runtime) AutoTagTurn(ctx context.Context, sessionID string, steps []Tur
 	}
 
 	r.addSessionTags(ctx, sess, add)
+	if !toolFailed {
+		r.RemoveSessionTags(ctx, sess.ID, []string{TagToolError})
+	}
 
 	// Repair-automation dispatch: a FAILED turn signals the failed-turn hooks
 	// (automation engine only) so an automation watching an error-class tag —
@@ -190,9 +195,9 @@ func (r *Runtime) AddSessionTag(ctx context.Context, sessionID, tag string) {
 
 // addSessionTags unions add into the session's existing tags and persists only
 // when something changed, then emits a "session" event for live UI refresh.
-func (r *Runtime) addSessionTags(ctx context.Context, sess db.Session, add []string) {
+func (r *Runtime) addSessionTags(ctx context.Context, sess db.Session, add []string) bool {
 	if len(add) == 0 {
-		return
+		return false
 	}
 	tags := sess.Tags
 	changed := false
@@ -203,16 +208,39 @@ func (r *Runtime) addSessionTags(ctx context.Context, sess db.Session, add []str
 		}
 	}
 	if !changed {
-		return
+		return false
 	}
 	if err := r.db.SetSessionTags(ctx, sess.ID, tags); err != nil {
 		r.logger.Warn("auto-tag: persist failed", "session", sess.ID, "error", err)
-		return
+		return false
 	}
 	r.publish(events.Event{
 		Type:   "session",
 		Level:  "info",
 		Target: map[string]string{"sessionId": sess.ID},
+	})
+	return true
+}
+
+// markCoordinatorBlocked tags and notifies once when a coordinator drain has no
+// live worker and no queued notification left. The persisted tag is the dedup key.
+func (r *Runtime) markCoordinatorBlocked(ctx context.Context, sessionID string) {
+	if !r.tun.AutoTagSessions() {
+		return
+	}
+	sess, err := r.db.GetSession(ctx, sessionID)
+	if err != nil || containsTag(sess.Tags, TagBlocked) {
+		return
+	}
+	if !r.addSessionTags(ctx, sess, []string{TagBlocked}) {
+		return
+	}
+	r.publish(events.Event{
+		Type:   events.TypeCoordination,
+		Level:  "warn",
+		Title:  "🧭 Koordinatör bloke oldu",
+		Body:   "Koordinatör turu worker çalışmadan ve bekleyen iş bırakmadan sona erdi. Devam etmek için oturumu inceleyin veya manuel mesaj gönderin.",
+		Target: map[string]string{"view": "executions", "sessionId": sessionID},
 	})
 }
 
@@ -329,4 +357,35 @@ func isPermissionDenyError(st TurnStep) bool {
 		}
 	}
 	return false
+}
+
+// isMaterialToolError excludes expected, non-fatal control-flow results. Prompt
+// validation failures still count: only explicit cancellation/expiry outcomes
+// from the interactive prompt family are benign.
+func isMaterialToolError(st TurnStep) bool {
+	if st.Kind != StepTool || !st.IsError || isPermissionDenyError(st) {
+		return false
+	}
+	tool := st.Tool
+	if i := strings.LastIndex(tool, "__"); i >= 0 {
+		tool = tool[i+2:]
+	}
+	if tool != "ask_user" && tool != "request_confirmation" {
+		return true
+	}
+	hay := strings.ToLower(st.Output + " " + st.Text)
+	for _, marker := range []string{
+		"no answer within the time limit",
+		"turn ended before the user answered",
+		"no interactive session is available",
+		"user cancelled",
+		"user canceled",
+		"request cancelled",
+		"request canceled",
+	} {
+		if strings.Contains(hay, marker) {
+			return false
+		}
+	}
+	return true
 }
