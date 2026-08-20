@@ -98,6 +98,17 @@ export interface AgentToolEntry {
   inputSchema?: unknown
 }
 
+// One bulk-override target: a functional category of built-in tools
+// ('group:files') or an MCP server's namespace pattern ('linear__*'). Both are
+// ordinary toolOverrides keys — a group row just writes one key instead of ten.
+export interface AgentToolGroup {
+  key: string
+  kind: 'builtin' | 'mcp'
+  label: string
+  count: number
+  tools: string[]
+}
+
 export interface AgentTools {
   mcpEnabled: boolean
   // Soft delete: the agent was removed but its conversations survive, so history
@@ -111,6 +122,9 @@ export interface AgentTools {
   // Derived 'blocked' slice of toolOverrides. Read-only compatibility field.
   blockedTools: string[]
   catalog: AgentToolEntry[]
+  // Bulk-override targets derived from the ACTIVE catalog. Absent on responses
+  // from an older backend, hence optional.
+  groups?: AgentToolGroup[]
 }
 
 // One tool row of the composer's read-only tool inspector (GET

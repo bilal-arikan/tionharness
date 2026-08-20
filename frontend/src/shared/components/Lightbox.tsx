@@ -49,6 +49,33 @@ export function Lightbox({ onClose, title, imageSrc, imageAlt, images, index, ch
   // `click` event (which fires after pointerup) can still tell a pan from a plain
   // click. A pan must not close the lightbox; a clean backdrop click must.
   const movedRef = useRef(false)
+  // Active pointers on the stage, by pointerId. Two simultaneous pointers turn
+  // the gesture into a pinch (zoom + two-finger pan); one is a plain drag-pan.
+  const pointers = useRef(new Map<number, { x: number; y: number }>())
+  // Baseline captured when the second finger lands: the pinch is applied
+  // relative to it, so the transform never accumulates rounding drift.
+  const pinch = useRef<{
+    dist: number
+    cx: number
+    cy: number
+    scale: number
+    tx: number
+    ty: number
+  } | null>(null)
+
+  // Pinch center/distance in stage coordinates (relative to the stage centre,
+  // which is the transform origin).
+  const pinchState = () => {
+    const [a, b] = Array.from(pointers.current.values())
+    const el = stageRef.current
+    if (!a || !b || !el) return null
+    const rect = el.getBoundingClientRect()
+    return {
+      dist: Math.hypot(a.x - b.x, a.y - b.y),
+      cx: (a.x + b.x) / 2 - (rect.left + rect.width / 2),
+      cy: (a.y + b.y) / 2 - (rect.top + rect.height / 2),
+    }
+  }
 
   const reset = useCallback(() => {
     setScale(1)
@@ -102,6 +129,19 @@ export function Lightbox({ onClose, title, imageSrc, imageAlt, images, index, ch
 
   const onPointerDown = (e: React.PointerEvent) => {
     if (e.button !== 0) return
+    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
+    if (pointers.current.size === 2) {
+      // Second finger: switch from pan to pinch. The pan is cancelled but the
+      // gesture still counts as "moved", so lifting off must not close.
+      const p = pinchState()
+      if (p) {
+        pinch.current = { ...p, scale, tx, ty }
+        drag.current = null
+        movedRef.current = true
+        setDragging(false)
+      }
+      return
+    }
     drag.current = { x: e.clientX, y: e.clientY, tx, ty }
     movedRef.current = false
     setDragging(true)
@@ -113,6 +153,21 @@ export function Lightbox({ onClose, title, imageSrc, imageAlt, images, index, ch
     }
   }
   const onPointerMove = (e: React.PointerEvent) => {
+    if (pointers.current.has(e.pointerId))
+      pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
+    const p0 = pinch.current
+    if (p0) {
+      const p = pinchState()
+      if (!p || p0.dist === 0) return
+      const next = clamp(p0.scale * (p.dist / p0.dist))
+      const ratio = next / p0.scale
+      // Keep the point under the pinch centre fixed, then follow the centre so
+      // two fingers can pan while zooming.
+      setScale(next)
+      setTx(p0.cx * (1 - ratio) + p0.tx * ratio + (p.cx - p0.cx))
+      setTy(p0.cy * (1 - ratio) + p0.ty * ratio + (p.cy - p0.cy))
+      return
+    }
     const d = drag.current
     if (!d) return
     const dx = e.clientX - d.x
@@ -121,7 +176,9 @@ export function Lightbox({ onClose, title, imageSrc, imageAlt, images, index, ch
     setTx(d.tx + dx)
     setTy(d.ty + dy)
   }
-  const onPointerUp = () => {
+  const onPointerUp = (e: React.PointerEvent) => {
+    pointers.current.delete(e.pointerId)
+    if (pointers.current.size < 2) pinch.current = null
     setDragging(false)
     drag.current = null
   }
@@ -171,6 +228,7 @@ export function Lightbox({ onClose, title, imageSrc, imageAlt, images, index, ch
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
+        onPointerCancel={onPointerUp}
         onClick={onStageClick}
         onDoubleClick={() => (scale === 1 ? zoomBy(2) : reset())}
       >

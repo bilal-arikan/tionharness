@@ -92,4 +92,8 @@ export interface InsightRun {
   prefiltered: number
   findings: number
   errors: number
+  // The read-only 'insight' session this run wrote its transcript into. Empty on
+  // legacy records written before per-run sessions existed, so callers must
+  // treat it as optional and skip the deep link when absent.
+  sessionId?: string
 }

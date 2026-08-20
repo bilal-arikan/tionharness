@@ -22,6 +22,21 @@ export function filterTools(tools: ToolAccessEntry[], query: string): ToolAccess
   )
 }
 
+// toolsForServer picks the tools a single MCP server contributes, in the order
+// the inspector shows them: eager tools first (their schema is in every turn),
+// then the load-on-demand ones, alphabetical by un-namespaced label inside each
+// bucket so the list is stable regardless of API ordering.
+export function toolsForServer(
+  tools: { eager: ToolAccessEntry[]; lazy: ToolAccessEntry[] },
+  serverName: string,
+): ToolAccessEntry[] {
+  const pick = (list: ToolAccessEntry[]) =>
+    list
+      .filter((t) => t.source === 'mcp' && t.server === serverName)
+      .sort((a, b) => a.label.localeCompare(b.label))
+  return [...pick(tools.eager), ...pick(tools.lazy)]
+}
+
 // groupTools buckets tools by functional category (built-ins) or by MCP server,
 // mirroring how the full Tools screen organises them. Built-in groups come first
 // in CATEGORY_ORDER, then MCP servers alphabetically.

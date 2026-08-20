@@ -1,11 +1,16 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
+	"sort"
 	"strings"
 
 	"github.com/bilal-arikan/tionswarm/internal/agent"
+	"github.com/bilal-arikan/tionswarm/internal/mcp"
+	"github.com/bilal-arikan/tionswarm/internal/tools"
+	"github.com/bilal-arikan/tionswarm/internal/workspace"
 )
 
 // matchesPattern reports whether name matches any pattern (suffix "*" = prefix
@@ -83,12 +88,97 @@ func (s *Server) handleAgentTools(w http.ResponseWriter, r *http.Request) {
 			blocked = append(blocked, name)
 		}
 	}
+	groups, err := agentToolGroups(r.Context(), ws(r), names)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"mcpEnabled":    ag.MCPEnabled,
 		"toolOverrides": overrides,
 		"blockedTools":  blocked, // derived; kept for older clients
 		"catalog":       out,
+		"groups":        groups,
 	})
+}
+
+// agentToolGroup is one bulk-override target: a functional category of built-in
+// tools ("group:files") or an MCP server's namespace pattern ("linear__*").
+// Both are ordinary override keys — the group block in the UI is just a faster
+// way to write one key instead of ten.
+type agentToolGroup struct {
+	Key   string   `json:"key"`
+	Kind  string   `json:"kind"` // "builtin" | "mcp"
+	Label string   `json:"label"`
+	Count int      `json:"count"`
+	Tools []string `json:"tools"`
+}
+
+// agentToolGroups derives the group rows from the ACTIVE catalog: only groups
+// that actually have tools right now are returned, so the UI never offers a key
+// that would match nothing. Built-in categories come first in their canonical
+// order, then MCP servers sorted by namespace.
+func agentToolGroups(ctx context.Context, wsp *workspace.Workspace, names []string) ([]agentToolGroup, error) {
+	byCategory := map[string][]string{}
+	byNS := map[string][]string{}
+	for _, name := range names {
+		if ns, _, ok := mcp.SplitNamespaced(name); ok {
+			byNS[ns] = append(byNS[ns], name)
+			continue
+		}
+		cat := tools.CategoryOf(name)
+		byCategory[cat] = append(byCategory[cat], name)
+	}
+
+	out := make([]agentToolGroup, 0, len(byCategory)+len(byNS))
+	for _, cat := range tools.Categories() {
+		members := byCategory[cat]
+		if len(members) == 0 {
+			continue
+		}
+		sort.Strings(members)
+		out = append(out, agentToolGroup{
+			Key:   tools.GroupPrefix + cat,
+			Kind:  "builtin",
+			Label: cat,
+			Count: len(members),
+			Tools: members,
+		})
+	}
+
+	// Namespace prefix → configured display name, so an MCP group reads as the
+	// server the user named rather than its sanitized prefix.
+	serverByNS := map[string]string{}
+	servers, err := wsp.DB.ListMCPServers(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for _, m := range servers {
+		if ns, _, ok := mcp.SplitNamespaced(mcp.NamespaceTool(m.Name, "x")); ok {
+			serverByNS[ns] = m.Name
+		}
+	}
+	nss := make([]string, 0, len(byNS))
+	for ns := range byNS {
+		nss = append(nss, ns)
+	}
+	sort.Strings(nss)
+	for _, ns := range nss {
+		members := byNS[ns]
+		sort.Strings(members)
+		label := ns
+		if name, found := serverByNS[ns]; found {
+			label = name
+		}
+		out = append(out, agentToolGroup{
+			Key:   ns + "__*",
+			Kind:  "mcp",
+			Label: label,
+			Count: len(members),
+			Tools: members,
+		})
+	}
+	return out, nil
 }
 
 // setAgentToolsReq carries the agent's master tool switch plus its override map.
@@ -111,6 +201,13 @@ func (s *Server) handleSetAgentTools(w http.ResponseWriter, r *http.Request) {
 	}
 	overrides := map[string]string{}
 	for name, tier := range req.ToolOverrides {
+		// A "group:" key must name a KNOWN category. Dropping an unknown one
+		// silently would leave the user believing a ban is in force when nothing
+		// matches it, so it is a hard 400.
+		if strings.HasPrefix(name, tools.GroupPrefix) && !tools.ValidGroupKey(name) {
+			writeError(w, http.StatusBadRequest, "unknown tool group: "+name)
+			return
+		}
 		if !agent.ValidAgentTier(tier) {
 			writeError(w, http.StatusBadRequest, "invalid tier for "+name+": "+tier)
 			return

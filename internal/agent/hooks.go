@@ -352,6 +352,10 @@ func (r *Runtime) execHook(ctx context.Context, h db.Hook, payload hookPayload) 
 	} else {
 		cmd = proc.CommandContext(runCtx, "/bin/sh", "-c", h.Command)
 	}
+	// A hook is a shell line: killing the shell alone on timeout orphans whatever
+	// it launched, and any survivor keeps the output pipes open so the run below
+	// never completes. Reap the whole tree.
+	proc.TreeKill(cmd)
 	if r.workDir != "" {
 		cmd.Dir = r.workDir
 	}

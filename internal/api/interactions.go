@@ -203,6 +203,9 @@ func (s *Server) handleInteractionAnswer(w http.ResponseWriter, r *http.Request)
 	if !ok {
 		return
 	}
+	if s.rejectImmutableSession(w, r, sessionID, "an interaction answer") {
+		return
+	}
 	answer := req.Answer
 	if req.AnswersJSON != "" {
 		answer = req.AnswersJSON

@@ -388,14 +388,15 @@ func instanceCount(m map[string][]string) int {
 // instanceRunLabel names the execution path behind an agent instance in Turkish
 // (the UI language) — what makes two copies of the same agent tell apart.
 var instanceRunLabel = map[string]string{
-	"chat":             "Sohbet",
-	"task":             "Görev",
-	"flow":             "Akış",
-	"flow-coordinator": "Akış koordinatörü",
-	"schedule":         "Zamanlama",
-	"spawned":          "Spawn",
-	"worker":           "Worker",
-	"inbox":            "Inbox",
+	"chat":                "Sohbet",
+	"task":                "Görev",
+	"flow":                "Akış",
+	"flow-coordinator":    "Akış koordinatörü",
+	"schedule":            "Zamanlama",
+	"spawned":             "Spawn",
+	"worker":              "Worker",
+	"inbox":               "Inbox",
+	db.SessionKindInsight: "İçgörü taraması",
 }
 
 // instanceSub builds an agent instance's subtitle: the run kind plus the

@@ -164,8 +164,11 @@ Yeni bağımlılıklar: `react-markdown`, `remark-gfm`, `highlight.js`.
   player). **Ardışık `![]()` otomatik gruplama:** `Markdown.tsx::groupMediaRuns` art
   arda gelen tam-satır medya satırlarını tek ```gallery'ye çevirir (fence-farkında;
   tek/satır-içi medya inline kalır).
-- `common/Lightbox.tsx` — **paylaşılan tam-ekran zoom+pan** önizleyici (2026-06-26):
-  tekerlek ile imlece-doğru zoom (translate düzeltmeli), sürükle-pan, toolbar
+- `shared/components/Lightbox.tsx` — **paylaşılan tam-ekran zoom+pan** önizleyici (2026-06-26):
+  tekerlek ile imlece-doğru zoom (translate düzeltmeli), sürükle-pan, **iki
+  parmakla pinch-zoom + iki-parmak pan** (dokunmatik; pointer olayları
+  `pointers` map'inde tutulur, ikinci parmak inince pinch temel çizgisi
+  alınır — 2026-08-20), toolbar
   (uzaklaştır/yüzde/yakınlaştır/sıfırla/kapat), çift-tık toggle, Escape + `0` (reset),
   temiz backdrop tıklamasıyla kapanır (pan'dan sonra kapanmaz). `imageSrc` (görsel) ya
   da `children` (mermaid SVG) **ya da `images[]` + `index` (galeri, ←/→ + ok
@@ -408,7 +411,12 @@ kırpıldı:
     Gizli tier) · `kapalı` (workspace'te devre dışı) · `ajanda MCP kapalı` ·
     `araç yok` (bağlanamamış / tümü yasaklı) — yanında aktif/katalog/gizli araç
     sayıları (gizli rozetin tooltip'inde kabaca kaç token tasarruf edildiği).
-    Araç satırlarında `inContext` alanı aynı ayrımı taşır. **Sözcük seçimi bilinçli:**
+    Araç satırlarında `inContext` alanı aynı ayrımı taşır. **Sunucu satırı açılır**
+    (`tool-access-server-toggle`): genişletilince o harici MCP'nin **alt araçları**
+    namespace'siz ad + tier rozeti + açıklama ile listelenir (önce eager, sonra lazy,
+    her kova alfabetik — saf yardımcı `toolsForServer`). Arama kutusu MCP sekmesinde de
+    çalışır. Hiç araç yoksa kutu boş bırakılmaz: sunucunun verdict tooltip'i (kapalı /
+    ajanda MCP kapalı / araç yok) satır olarak basılır. **Sözcük seçimi bilinçli:**
     Gizli tier "bağlam dışı" DEĞİL — promptta "N araç daha var, `tool_search` ile bul"
     işaretçisi durur; kaybolan tek şey isim listesi (detay `19`).
   - **Sesli girdi (`MicButton.tsx` + `useSpeechToText.ts` + `sttLanguages.ts`):**

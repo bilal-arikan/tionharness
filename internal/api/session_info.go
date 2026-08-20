@@ -17,10 +17,13 @@ import (
 // sessionInfoResp is the rich detail payload behind the session detail panel:
 // on-disk footprint, context composition and the agents that took part.
 type sessionInfoResp struct {
-	ID           string `json:"id"`
-	Title        string `json:"title"`
-	Kind         string `json:"kind"`
-	State        string `json:"state"`
+	ID    string `json:"id"`
+	Title string `json:"title"`
+	Kind  string `json:"kind"`
+	State string `json:"state"`
+	// Pinned floats the session to the top of the sidebar list; the info panel
+	// owns the toggle, so it needs the current value to label the button.
+	Pinned       bool   `json:"pinned"`
 	AgentID      string `json:"agentId"`
 	AgentName    string `json:"agentName"`
 	MessageCount int    `json:"messageCount"`
@@ -191,6 +194,7 @@ func (s *Server) handleSessionInfo(w http.ResponseWriter, r *http.Request) {
 		Title:                    session.Title,
 		Kind:                     session.Kind,
 		State:                    session.State,
+		Pinned:                   session.Pinned,
 		AgentID:                  session.AgentID,
 		MessageCount:             session.MessageCount,
 		Unread:                   session.Unread,

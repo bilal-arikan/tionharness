@@ -36,6 +36,9 @@ func runGit(dir string, args ...string) (string, error) {
 	defer cancel()
 	full := append([]string{"-C", dir}, args...)
 	cmd := proc.CommandContext(ctx, "git", full...)
+	// git spawns helpers (credential prompts, pagers, hooks); on timeout they must
+	// go too, or a survivor holds the output pipe and Output never returns.
+	proc.TreeKill(cmd)
 	out, err := cmd.Output()
 	return strings.TrimSpace(string(out)), err
 }

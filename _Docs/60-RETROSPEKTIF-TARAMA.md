@@ -269,7 +269,8 @@ toggle (Ayarlar ▸ Bağlam ile aynı `lessonReflect`) + kayıtlı dersler (`Les
   (senkron değil: tarama dakikalarca sürebilir + request-context iptali taramayı öldürürdü). Sonuç
   bulgu store'una + `🔍 İçgörü Taraması` session'ına düşer. Çakışma guard'ı: çalışırken ikinci tetik `409`. ✅
 - `GET  /api/insight/status` — `{ scanning }` — arka plan taraması sürüyor mu (panel canlı takip + otomatik yenileme). ✅
-- `GET  /api/insight/runs` — son tarama-run log'u (when/süre/sayılar; session değil). ✅
+- `GET  /api/insight/runs` — son tarama-run log'u (when/süre/sayılar) + her kaydın `id` ve
+  `sessionId` alanı (bkz. §9.1 salt-okunur run oturumu). ✅
 - `GET  /api/insight/fleet-findings` — tüm workspace'ler arası birleşik app-fix backlog'u (kanonik-imza dedup). ✅
 - `GET  /api/insight/lenses/{id}/raw` · `PUT /api/insight/lenses/{id}` (parse-doğrulamalı) · `POST /api/insight/lenses/{id}/toggle` — lens düzenleme/enable-disable. ✅
 - `GET  /api/insight/findings?lens=&channel=` — bulgu listesi ✅
@@ -296,8 +297,45 @@ toggle (Ayarlar ▸ Bağlam ile aynı `lessonReflect`) + kayıtlı dersler (`Les
   otomatik mutasyon yok). `tionswarm-insight` skill'i bu akışı öğretir. Otomasyon: aynı talimatı bir
   schedule'a koy (Scheduler zaten ajan-prompt tetikler).
 
-> **Not:** Normal taramalar **session olarak listelenmez** (bilinçli — gürültü olmasın). Sonuç
-> bulgu store'una + panele + sink dokümanlarına düşer; panel `GET /status`'u poll edip yeniler.
+> **Not:** Tarama oturumları sohbet listesinin **varsayılan görünümünde gizlidir** (bilinçli —
+> gürültü olmasın); bulgular ayrıca bulgu store'una + panele + sink dokümanlarına düşer, panel
+> `GET /status`'u poll edip yeniler.
+
+### 9.1 Salt-okunur run oturumu (`kind == "insight"`)
+
+Her tarama, bittiğinde **iki** kayıt bırakır:
+
+| Kayıt | Nerede | Ne için |
+|---|---|---|
+| Run oturumu | `Session{Kind:"insight", SourceID:<run id>}` | Okunabilir transkript: kapsam, sayaçlar, üretilen bulgular, hatalar (tek assistant mesajı, `insightsession.go`) |
+| Run log satırı | `insight/runs.jsonl` (`RunRecord`) | Sorgulanabilir kompakt rollup (ne zaman / ne kadar sürdü / kaç bulgu) |
+
+- İkisi **aynı run id**'yi taşır: `RunRecord.ID == Session.SourceID`, `RunRecord.SessionID ==
+  Session.ID`. Yani hangi kaydı elinde tutuyorsan diğerine geçebilirsin.
+- Transkript **LLM çağırmaz** — taramanın zaten ürettiği veriden render edilir.
+- **Salt okunur, katı anlamda:** `kind == "insight"` bir oturuma kullanıcı mesajı yazmak veya ajan
+  turu başlatmak API tarafında **`403 Forbidden`** ile reddedilir (sessizce yutulmaz).
+
+  Bu kural artık **iki sınıfa** ayrılmıştır ve tek kaynağı `internal/db/models.go`'dur:
+
+  | Sınıf | Kaynak (db) | Anlamı | HTTP guard (`internal/api/session_readonly.go`) | Kapsadığı giriş noktaları |
+  |---|---|---|---|---|
+  | **Yazılabilir değil** | `IsWritableSessionKind` (`""`/`chat`/`spawned` dışındaki her kind) | Yeni bir **kullanıcı turu** başlatılamaz; transkript orkestratöre aittir | `rejectNonWritableSession` | `POST /api/chat`, `POST /api/chat/stream`, `POST /api/sessions/{id}/messages` |
+  | **Değişmez (immutable)** | `IsImmutableSessionKind` = makine-transkript kümesi (`machineTranscriptKindList`, şimdilik yalnız `insight`) | Hiç tur koşmaz; transkript hiçbir şekilde değişmez | `rejectImmutableSession` | `POST /api/sessions/{id}/control`, `.../interactions/{iid}/answer`, `.../rewind` |
+
+  **Neden ayrık:** stop/steer, `ask_user` cevabı ve rewind **koşan bir turun** parçasıdır; bir
+  task/flow oturumunda bunlar meşrudur, kilitlenirse gerçek orkestrasyon akışı kırılır. `insight`
+  oturumu hiç tur koşturmadığı için zaten her iki guard'a da takılır.
+
+  **Kapsam:** guard'lar yalnız HTTP giriş noktalarındadır. Süreç-içi üreticiler (`send_message`
+  aracı — `internal/agent/agentmsg.go`, otomasyon teslimi, koordinatör→worker mesajı) doğrudan
+  store/runtime üzerinden yazar ve bilerek guard dışındadır: orada sistem kendi oturumunu sürer.
+
+  Frontend `isWritableSessionKind` (`frontend/src/app/viewRegistry.tsx`) 1. sınıfın **aynasıdır**;
+  iki taraf birlikte güncellenmelidir.
+- **Geriye uyumluluk:** oturum eşlemesinden önce yazılmış `runs.jsonl` satırlarında `id`/`sessionId`
+  yoktur; bu satırlar aynen okunmaya devam eder (alanlar `omitempty`), yalnızca eşlenmemiş görünürler.
+  Oturum açılamazsa tarama yine de run log satırını yazar (`sessionId` boş kalır) ve hata loglanır.
 
 ---
 

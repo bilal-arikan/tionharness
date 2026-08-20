@@ -1,9 +1,17 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Trash2, Archive, ArchiveRestore, ChevronDown, ChevronRight } from 'lucide-react'
+import {
+  Trash2,
+  Archive,
+  ArchiveRestore,
+  ChevronDown,
+  ChevronRight,
+  Pin,
+  PinOff,
+} from 'lucide-react'
 import { api } from '@/api'
 import type { SessionInfo, SessionUsageDetail } from '@/types'
 import { ViewPanel } from '@/features/view/ViewPanel'
-import { KeyValueRow as Row, TagEditor } from '@/shared/components'
+import { Badge, KeyValueRow as Row, TagEditor } from '@/shared/components'
 import { ResizeHandle } from '@/shared/components/SidebarChrome'
 import { useResizableSidebar } from '@/shared/hooks/useResizableSidebar'
 import { Section, ActionBtn } from './SessionDetailBits'
@@ -27,6 +35,9 @@ interface Props {
   onGenerateTitle: (id: string) => void | Promise<void>
   onRename: (id: string, title: string) => void | Promise<void>
   onDeleteSession: (id: string) => void
+  // Pin/unpin the session so the sidebar list reorders immediately. Optional so
+  // legacy/test usages still compile; the panel falls back to the raw API call.
+  onSetPinned?: (id: string, pinned: boolean) => void
   // Navigate to the Agents view and focus the given agent. Wired so a click on
   // a participant chip in the "Konuşmadaki ajanlar" section jumps to that
   // agent's page (matches the behaviour of clicking the agent in the Agents
@@ -50,6 +61,7 @@ export function SessionDetailPanel({
   onGenerateTitle,
   onRename,
   onDeleteSession,
+  onSetPinned,
   onSelectSession,
   onSelectAgent,
   onRerun,
@@ -73,6 +85,8 @@ export function SessionDetailPanel({
   const [titling, setTitling] = useState(false)
   // In-flight guard for the archive / unarchive toggle.
   const [archiving, setArchiving] = useState(false)
+  // In-flight guard for the pin / unpin toggle.
+  const [pinning, setPinning] = useState(false)
   // Manual rename: when editing, hold the draft text; saving persists verbatim.
   const [editingTitle, setEditingTitle] = useState(false)
   const [titleDraft, setTitleDraft] = useState('')
@@ -243,6 +257,23 @@ export function SessionDetailPanel({
     }
   }
 
+  // Pin / unpin from the title block. The parent handler keeps the sidebar list
+  // in sync; without one (legacy usages) hit the API directly.
+  const handlePinToggle = async () => {
+    if (pinning || !info) return
+    const next = !info.pinned
+    setPinning(true)
+    try {
+      if (onSetPinned) onSetPinned(sessionId, next)
+      else await api.setSessionPinned(sessionId, next)
+      setInfo((prev) => (prev ? { ...prev, pinned: next } : prev))
+    } catch (e) {
+      onError((e as Error).message)
+    } finally {
+      setPinning(false)
+    }
+  }
+
   // Open the inline title editor seeded with the current title.
   const startEditTitle = () => {
     setTitleDraft(info?.title ?? '')
@@ -289,9 +320,18 @@ export function SessionDetailPanel({
       <ResizeHandle onMouseDown={startDrag} side="left" />
       <div className="flex h-full flex-col overflow-y-auto">
         <div className="flex items-center justify-between border-b border-[var(--color-border)] px-4 py-3">
-          <span className="text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
-            Oturum bilgisi
-          </span>
+          <div className="flex min-w-0 items-center gap-1.5">
+            <span className="text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
+              Oturum bilgisi
+            </span>
+            {/* Insight scans are machine-written audit transcripts: no composer,
+                no new user turns (isWritableSessionKind excludes the kind). */}
+            {info?.kind === 'insight' && (
+              <Badge tone="muted" className="shrink-0">
+                Salt okunur
+              </Badge>
+            )}
+          </div>
           <div className="flex items-center gap-1">
             <button
               onClick={() => setLocalRefresh((n) => n + 1)}
@@ -441,6 +481,13 @@ export function SessionDetailPanel({
               control (SessionTitleBlock); "Bağlam" lives in the chat header. */}
             <Section title="Araçlar">
               <div className="flex flex-col gap-1.5">
+                <ActionBtn
+                  icon={info.pinned ? PinOff : Pin}
+                  label={pinning ? '…' : info.pinned ? 'Sabitlemeyi kaldır' : 'Üste sabitle'}
+                  onClick={handlePinToggle}
+                  disabled={pinning}
+                  busy={pinning}
+                />
                 <ActionBtn
                   icon={info.state === 'archived' ? ArchiveRestore : Archive}
                   label={

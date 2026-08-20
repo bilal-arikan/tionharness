@@ -146,6 +146,10 @@ func (s *CLISession) closeChecked() error {
 		_ = s.stdin.Close() // EOF lets the CLI exit cleanly
 	}
 	if s.cmd != nil && s.cmd.Process != nil {
+		// Reap the descendants (MCP servers, tool subprocesses) first: they inherit
+		// the session's pipes and would otherwise survive the kill and keep them
+		// open. Then kill the direct child and report a real failure.
+		proc.KillTree(s.cmd)
 		if err := s.cmd.Process.Kill(); err != nil && !errors.Is(err, os.ErrProcessDone) {
 			return err // leave closed=false + temp file intact so a retry can re-kill
 		}
@@ -200,6 +204,9 @@ func (c *ClaudeCLI) startPersistent(ctx context.Context, req Request) (*CLISessi
 	args = append(args, c.mcpArgs()...)
 
 	cmd := proc.CommandContext(ctx, c.binPath, args...)
+	// Persistent process: its MCP servers and tool subprocesses inherit the pipes,
+	// so tear the whole tree down on cancellation instead of orphaning them.
+	proc.TreeKill(cmd)
 	cmd.Env = cliBaseEnv("ENABLE_TOOL_SEARCH=auto")
 	// Thinking parity with the one-shot path: "Kapalı" disables thinking for the
 	// whole persistent process (MAX_THINKING_TOKENS=0; restores ≥2.1.203 parallel

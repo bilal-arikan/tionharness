@@ -420,6 +420,7 @@ func (c *ClaudeCLI) ProbeAuth(ctx context.Context) error {
 		args = append(args, "--model", c.model)
 	}
 	cmd := proc.CommandContext(ctx, c.binPath, args...)
+	proc.TreeKill(cmd)
 	cmd.Env = cliBaseEnv("ENABLE_TOOL_SEARCH=auto")
 	if c.configDir != "" {
 		cmd.Env = append(cmd.Env, "CLAUDE_CONFIG_DIR="+c.configDir)
@@ -537,6 +538,12 @@ const cliStartupTimeout = 90 * time.Second
 
 func (c *ClaudeCLI) runAttempt(ctx context.Context, args []string, prompt, model string, req Request) (resp *Response, retryable bool, err error) {
 	cmd := proc.CommandContext(ctx, c.binPath, args...)
+	// The CLI spawns its own children (MCP servers, and whatever a Bash tool call
+	// shells out to — a build daemon outlives the build that started it). They
+	// inherit this command's stdout pipe, so killing the CLI alone leaves the pipe
+	// open and cmd.Wait below never returns. TreeKill reaps the whole tree on
+	// cancellation and caps Wait with a WaitDelay backstop.
+	proc.TreeKill(cmd)
 	// Enable the CLI's threshold-based MCP tool search (claude-cli 2.1.x+): tool
 	// schemas that fit within 10% of the context window are inlined and only the
 	// overflow is deferred. Combined with the core interaction server's alwaysLoad
@@ -681,9 +688,14 @@ readLoop:
 			// startup hang. Kill the subprocess so the read unblocks; cmd.Wait then
 			// returns and we surface a clear, retryable failure below.
 			startupHang = true
-			if cmd.Process != nil {
-				_ = cmd.Process.Kill()
-			}
+			proc.KillTree(cmd)
+			break readLoop
+		case <-ctx.Done():
+			// Cancellation (idle watchdog, hard cap, human stop) must end the read
+			// loop on its own rather than waiting for the pipe to close: a surviving
+			// grandchild can keep it open indefinitely. TreeKill's cancel hook is
+			// already reaping the tree; leave the loop and let Wait's WaitDelay bound
+			// the rest.
 			break readLoop
 		}
 	}

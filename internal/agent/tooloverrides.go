@@ -89,27 +89,46 @@ func visibilityOverrides(overrides map[string]string) map[string]string {
 	return out
 }
 
-// applyVisibilityOverrides pins each override onto the registry. A key ending in
-// "*" is a PREFIX PATTERN: SetVisibility takes one exact name, so the pattern is
-// expanded across the catalog and applied to every matching tool. Exact keys are
-// applied directly (an unknown name is a harmless no-op, matching the workspace
-// override behaviour) so a tool that is not built for this agent — e.g. a gated
-// shell tool — can still carry a stored override for when it does appear.
+// applyVisibilityOverrides pins each override onto the registry. Three key kinds
+// are supported: an exact tool name, a "prefix*" PATTERN, and a
+// "group:<category>" GROUP key. SetVisibility takes one exact name, so both
+// pattern and group keys are expanded across the catalog and applied to every
+// matching tool. Exact keys are applied directly (an unknown name is a harmless
+// no-op, matching the workspace override behaviour) so a tool that is not built
+// for this agent — e.g. a gated shell tool — can still carry a stored override
+// for when it does appear.
 //
-// names is the registry's full catalog, needed only to expand patterns.
+// Specificity is enforced in TWO EXPLICIT PASSES, not by sort order: all broad
+// keys (patterns + groups) are applied first, then the exact names, so an exact
+// name ALWAYS wins over a group or pattern that also covers it. Within the broad
+// pass the keys are sorted so that two overlapping patterns (e.g. "mcp*" and
+// "mcp__linear*") resolve deterministically — sorting puts the more specific
+// (longer) pattern last, so it wins. Groups and patterns cannot overlap in
+// practice: a group only matches non-namespaced built-ins, but if a user writes
+// both, sort order still makes the outcome stable rather than random.
+//
+// names is the registry's full catalog, needed only to expand patterns/groups.
 func applyVisibilityOverrides(reg *tools.Registry, overrides map[string]string, names []string) {
-	// Deterministic order: two patterns can match the same tool (e.g. "mcp*" and
-	// "mcp__linear*"), and map iteration would make the winner random. Sorting
-	// puts the more specific (longer) pattern last, so it wins.
-	keys := make([]string, 0, len(overrides))
+	broad := make([]string, 0, len(overrides))
+	exact := make([]string, 0, len(overrides))
 	for k := range overrides {
-		keys = append(keys, k)
+		if tools.IsGroupKey(k) || strings.HasSuffix(k, "*") {
+			broad = append(broad, k)
+		} else {
+			exact = append(exact, k)
+		}
 	}
-	sort.Strings(keys)
-	for _, key := range keys {
+	sort.Strings(broad)
+	sort.Strings(exact)
+
+	for _, key := range broad {
 		tier := overrides[key]
-		if !strings.HasSuffix(key, "*") {
-			reg.SetVisibility(key, tier)
+		if tools.IsGroupKey(key) {
+			for _, name := range names {
+				if tools.MatchesGroup(name, key) {
+					reg.SetVisibility(name, tier)
+				}
+			}
 			continue
 		}
 		prefix := strings.TrimSuffix(key, "*")
@@ -118,5 +137,8 @@ func applyVisibilityOverrides(reg *tools.Registry, overrides map[string]string, 
 				reg.SetVisibility(name, tier)
 			}
 		}
+	}
+	for _, key := range exact {
+		reg.SetVisibility(key, overrides[key])
 	}
 }

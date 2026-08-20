@@ -226,6 +226,9 @@ func (t RunCodeTool) Call(ctx context.Context, input json.RawMessage) (string, e
 	defer cancel()
 
 	cmd := proc.CommandContext(runCtx, interp, scriptPath)
+	// The script may itself spawn processes; on timeout they must die with it,
+	// otherwise a survivor keeps the output pipes open and this call never ends.
+	proc.TreeKill(cmd)
 	cmd.Dir = t.sb.Root
 	// Stripped env (transform_data's allowlist) + the code-mode extras: the
 	// bindings dir on PYTHONPATH and the per-execution bridge address/token.

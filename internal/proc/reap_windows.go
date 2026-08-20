@@ -25,12 +25,23 @@ func TreeKill(cmd *exec.Cmd) {
 	}
 	cmd.WaitDelay = reapDelay
 	cmd.Cancel = func() error {
-		if cmd.Process == nil {
-			return nil
-		}
-		kill := exec.Command("taskkill", "/F", "/T", "/PID", strconv.Itoa(cmd.Process.Pid))
-		Hide(kill)
-		_ = kill.Run() // best-effort: the process may already be gone
-		return nil      // WaitDelay force-kills the direct child if it lingers
+		KillTree(cmd)
+		return nil // WaitDelay force-kills the direct child if it lingers
 	}
+}
+
+// KillTree force-kills a running command and its whole descendant tree right
+// now, without going through context cancellation. Callers that tear a process
+// down themselves (a CLI provider aborting on a terminal error or a startup
+// hang) must use this rather than cmd.Process.Kill: killing only the direct
+// child leaves grandchildren — a Gradle daemon, an MCP server — alive holding
+// the inherited stdout pipe, and cmd.Wait then blocks forever on a pipe that
+// never reaches EOF.
+func KillTree(cmd *exec.Cmd) {
+	if cmd == nil || cmd.Process == nil {
+		return
+	}
+	kill := exec.Command("taskkill", "/F", "/T", "/PID", strconv.Itoa(cmd.Process.Pid))
+	Hide(kill)
+	_ = kill.Run() // best-effort: the process may already be gone
 }

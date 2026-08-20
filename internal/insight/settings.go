@@ -37,6 +37,27 @@ type Settings struct {
 	// PruneDays: a DISMISSED/VERIFIED finding untouched for this many days is
 	// deleted during maintenance. 0 = default (45).
 	PruneDays int `json:"pruneDays,omitempty"`
+	// MaxRunSessions caps how many read-only scan sessions stay live: after a run,
+	// all but the newest N are ARCHIVED (never deleted — the transcript stays
+	// readable). 0 = default (DefaultMaxRunSessions); negative = keep all.
+	MaxRunSessions int `json:"maxRunSessions,omitempty"`
+}
+
+// DefaultMaxRunSessions bounds the live scan-session backlog when the setting is
+// unset. The run log keeps its own (larger) cap; sessions are heavier, so the
+// hourly cron gets a tighter one.
+const DefaultMaxRunSessions = 200
+
+// RunSessionRetention resolves MaxRunSessions: 0 → the default, negative → 0,
+// which the caller reads as "keep everything".
+func (s Settings) RunSessionRetention() int {
+	if s.MaxRunSessions == 0 {
+		return DefaultMaxRunSessions
+	}
+	if s.MaxRunSessions < 0 {
+		return 0
+	}
+	return s.MaxRunSessions
 }
 
 var settingsRelPath = filepath.Join("insight", "settings.json")

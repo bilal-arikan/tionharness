@@ -282,6 +282,8 @@ export interface SessionInfo {
   title: string
   kind: string
   state: string
+  // Pinned to the top of the sidebar list; toggled from the panel's tool buttons.
+  pinned?: boolean
   agentId: string
   agentName: string
   messageCount: number

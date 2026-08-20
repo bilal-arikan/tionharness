@@ -52,6 +52,9 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusServiceUnavailable, "session hub unavailable")
 		return
 	}
+	if s.rejectNonWritableSession(w, r, req.SessionID) {
+		return
+	}
 	wsp := ws(r)
 
 	clientMsgID := uuid.NewString()
@@ -149,6 +152,9 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 	// Fail fast with a normal 404 before enqueuing anything.
 	if _, err := database.GetSession(r.Context(), req.SessionID); err != nil {
 		writeError(w, http.StatusNotFound, "session not found")
+		return
+	}
+	if s.rejectNonWritableSession(w, r, req.SessionID) {
 		return
 	}
 

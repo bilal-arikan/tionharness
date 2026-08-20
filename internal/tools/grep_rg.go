@@ -72,6 +72,9 @@ func (t FSGrepTool) tryRG(ctx context.Context, args grepArgs) (string, bool) {
 	runCtx, cancel := context.WithTimeout(ctx, rgTimeout)
 	defer cancel()
 	cmd := proc.CommandContext(runCtx, exe, rgArgs...)
+	// rg has no children of its own, but cmd.Run copies from pipes: WaitDelay keeps
+	// a timed-out run bounded instead of blocking on a writer that never closes.
+	proc.TreeKill(cmd)
 	cmd.Dir = dir
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout

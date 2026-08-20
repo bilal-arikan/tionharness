@@ -1,10 +1,7 @@
 import { resolveAgent } from '@/shared/lib/agentLookup'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
-  Settings,
-  Pencil,
   Sparkles,
-  ClipboardCopy,
   Trash2,
   Search,
   X,
@@ -14,18 +11,15 @@ import {
   Archive,
   ArchiveRestore,
   Pin,
-  PinOff,
   Table2,
   Users,
   PencilLine,
-  type LucideIcon,
 } from 'lucide-react'
 import type { Agent, Session, SearchHit } from '@/types'
 import { api } from '@/api'
 import { AgentAvatar } from '@/shared/components/agents/AgentAvatar'
 import { relativeTime, bucketOf, BUCKET_LABELS, BUCKET_ORDER, type Bucket } from '@/shared/lib/time'
 import { modelDisplayName } from '@/shared/lib/modelLabel'
-import { useOutsideClick } from '@/shared/hooks/useOutsideClick'
 import { useMultiSelect } from '@/shared/hooks/useMultiSelect'
 import { SelectionBar, SelectionBarButton, Skeleton } from '@/shared/components'
 import { useDelayedFlag } from '@/shared/hooks/useDelayedFlag'
@@ -76,9 +70,7 @@ interface Props {
   onNewSession: () => void
   // Re-fetch the session list from the server (manual refresh button).
   onRefresh: () => void
-  onRenameSession: (id: string, title: string) => void
   onGenerateTitle: (id: string) => void
-  onCopyPath: (id: string) => void
   onDeleteSession: (id: string) => void
   // Archive (true) or restore (false) a session — drives the Active/Archived filter.
   onSetArchived: (id: string, archived: boolean) => void
@@ -89,7 +81,8 @@ interface Props {
 // SessionsSidebar is the unified sessions column: a flat, time-bucketed list of
 // every session (chat / task / flow / schedule / spawn, newest first), with a
 // per-kind badge + filter tabs, live-running pulse, run status pill, unread dots
-// and a settings menu (rename, AI title, copy path, open folder, delete).
+// and a multi-select bulk bar (AI title, pin, archive, delete). Per-row actions
+// live in the session inspector (title block + quick actions), not in the list.
 export function SessionsSidebar({
   sessions,
   agents,
@@ -109,14 +102,11 @@ export function SessionsSidebar({
   onSelectSession,
   onNewSession,
   onRefresh,
-  onRenameSession,
   onGenerateTitle,
-  onCopyPath,
   onDeleteSession,
   onSetArchived,
   onSetPinned,
 }: Props) {
-  const [menuId, setMenuId] = useState<string | null>(null)
   // Top-level view: Active (default), Archived, or Workers (coordinator-spawned
   // worker sessions). Archiving moves a session into the Archived view — it is
   // never deleted. Worker sessions live in their own view so they don't clutter
@@ -124,16 +114,12 @@ export function SessionsSidebar({
   // `view` + `kindFilter` are props (URL-owned), see Props.
   const showArchived = view === 'archived'
   const showWorkers = view === 'workers'
-  const [renamingId, setRenamingId] = useState<string | null>(null)
-  const [renameText, setRenameText] = useState('')
   const [query, setQuery] = useState('')
   // Cross-session message-content search (CG-16). The same box filters session
   // titles locally AND, when the query is long enough, full-text searches every
   // session's messages via the backend (debounced).
   const [hits, setHits] = useState<SearchHit[]>([])
   const [searching, setSearching] = useState(false)
-  // Close the open row menu on any outside click (detached while no menu is open).
-  const rootRef = useOutsideClick<HTMLDivElement>(() => setMenuId(null), !!menuId)
 
   // Draggable width (persisted), matching the old sidebar behaviour.
   const MIN = 200
@@ -313,17 +299,6 @@ export function SessionsSidebar({
     }
   }, [query])
 
-  const startRename = (s: Session) => {
-    setRenamingId(s.id)
-    setRenameText(s.title || '')
-    setMenuId(null)
-  }
-  const commitRename = (id: string) => {
-    const t = renameText.trim()
-    if (t) onRenameSession(id, t)
-    setRenamingId(null)
-  }
-
   // Delayed so a sub-100ms local load never flashes placeholder rows. While
   // `loading` holds but the delay has not elapsed, the list body renders nothing
   // — the "no sessions" copy stays suppressed either way.
@@ -331,7 +306,6 @@ export function SessionsSidebar({
 
   return (
     <aside
-      ref={rootRef}
       style={{ width }}
       className="relative flex h-full shrink-0 flex-col border-r border-[var(--color-border)] bg-[var(--color-surface)]"
     >
@@ -497,216 +471,126 @@ export function SessionsSidebar({
                           : 'text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)]'
                     }`}
                   >
-                    {renamingId === s.id ? (
-                      <input
-                        autoFocus
-                        value={renameText}
-                        onChange={(e) => setRenameText(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') commitRename(s.id)
-                          if (e.key === 'Escape') setRenamingId(null)
-                        }}
-                        onBlur={() => commitRename(s.id)}
-                        className="m-1 flex-1 rounded border border-[var(--color-accent)] bg-[var(--color-bg)] px-2 py-1 text-sm outline-none"
-                      />
-                    ) : (
-                      <button
-                        onClick={(e) => {
-                          // Ctrl/Cmd or Shift turns the click into a selection
-                          // gesture; a plain click opens the session as before.
-                          if (sel.handleClick(e, s.id, orderedIds, activeSessionId)) return
-                          onSelectSession(s.id)
-                        }}
-                        className="flex min-w-0 flex-1 items-center gap-2 px-3 py-2 text-left"
-                      >
-                        {owner ? (
-                          <AgentAvatar agent={owner} size={20} />
-                        ) : (
-                          <span className="h-5 w-5 shrink-0" />
-                        )}
-                        <span className="flex min-w-0 flex-1 flex-col">
-                          <span className="flex items-center gap-1.5">
-                            {isStreaming ? (
-                              // Live turn in progress: a pulsing dot takes precedence
-                              // over the unread dot.
+                    <button
+                      onClick={(e) => {
+                        // Ctrl/Cmd or Shift turns the click into a selection
+                        // gesture; a plain click opens the session as before.
+                        if (sel.handleClick(e, s.id, orderedIds, activeSessionId)) return
+                        onSelectSession(s.id)
+                      }}
+                      className="flex min-w-0 flex-1 items-center gap-2 px-3 py-2 text-left"
+                    >
+                      {owner ? (
+                        <AgentAvatar agent={owner} size={20} />
+                      ) : (
+                        <span className="h-5 w-5 shrink-0" />
+                      )}
+                      <span className="flex min-w-0 flex-1 flex-col">
+                        <span className="flex items-center gap-1.5">
+                          {isStreaming ? (
+                            // Live turn in progress: a pulsing dot takes precedence
+                            // over the unread dot.
+                            <span
+                              className="relative flex h-2 w-2 shrink-0"
+                              title="Yanıt üretiliyor"
+                            >
+                              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[var(--color-success)] opacity-75" />
+                              <span className="relative inline-flex h-2 w-2 rounded-full bg-[var(--color-success)]" />
+                            </span>
+                          ) : liveWorkers > 0 ? (
+                            // Idle itself, but its branch is working: same pulse
+                            // in the coordination accent so a delegating row is
+                            // not read as finished. Takes precedence over the
+                            // unread dot for the same reason a live turn does.
+                            <span
+                              className="relative flex h-2 w-2 shrink-0"
+                              title={`${liveWorkers} worker çalışıyor`}
+                            >
+                              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[var(--color-warning)] opacity-75" />
+                              <span className="relative inline-flex h-2 w-2 rounded-full bg-[var(--color-warning)]" />
+                            </span>
+                          ) : (
+                            s.unread && (
                               <span
-                                className="relative flex h-2 w-2 shrink-0"
-                                title="Yanıt üretiliyor"
-                              >
-                                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[var(--color-success)] opacity-75" />
-                                <span className="relative inline-flex h-2 w-2 rounded-full bg-[var(--color-success)]" />
-                              </span>
-                            ) : liveWorkers > 0 ? (
-                              // Idle itself, but its branch is working: same pulse
-                              // in the coordination accent so a delegating row is
-                              // not read as finished. Takes precedence over the
-                              // unread dot for the same reason a live turn does.
-                              <span
-                                className="relative flex h-2 w-2 shrink-0"
-                                title={`${liveWorkers} worker çalışıyor`}
-                              >
-                                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[var(--color-warning)] opacity-75" />
-                                <span className="relative inline-flex h-2 w-2 rounded-full bg-[var(--color-warning)]" />
-                              </span>
-                            ) : (
-                              s.unread && (
-                                <span
-                                  className="h-2 w-2 shrink-0 rounded-full bg-[var(--color-accent)]"
-                                  title="Okunmadı"
-                                />
-                              )
-                            )}
-                            {/* Unsent composer text waiting in this session. Not a
+                                className="h-2 w-2 shrink-0 rounded-full bg-[var(--color-accent)]"
+                                title="Okunmadı"
+                              />
+                            )
+                          )}
+                          {/* Unsent composer text waiting in this session. Not a
                               run state, so it rides alongside the dot above rather
                               than replacing it. */}
-                            {hasDraft && (
-                              <span
-                                className="flex shrink-0 text-[var(--color-accent)]"
-                                title="Gönderilmemiş taslak mesaj var"
-                              >
-                                <PencilLine size={11} />
-                              </span>
-                            )}
-                            {s.pinned && (
-                              <Pin
-                                size={11}
-                                className="shrink-0 -rotate-45 text-[var(--color-accent)]"
-                              />
-                            )}
+                          {hasDraft && (
                             <span
-                              className={`min-w-0 flex-1 truncate ${s.unread || isStreaming ? 'font-semibold text-[var(--color-text)]' : ''}`}
+                              className="flex shrink-0 text-[var(--color-accent)]"
+                              title="Gönderilmemiş taslak mesaj var"
                             >
-                              {s.title || 'Yeni sohbet'}
+                              <PencilLine size={11} />
                             </span>
-                            {s.kind === 'spawned' && (
-                              <span
-                                className="shrink-0 rounded-full bg-[var(--color-surface-2)] px-1.5 py-px text-[9px] text-[var(--color-text-dim)]"
-                                title={
-                                  s.parentSessionId
-                                    ? 'Bir devralma (handoff) ile oluşturuldu'
-                                    : 'Spawn ile oluşturuldu'
-                                }
-                              >
-                                {s.parentSessionId ? '↩ handoff' : '✦ spawn'}
-                              </span>
-                            )}
-                            {/* Finished task/flow runs carry a pass/fail pill. */}
-                            {!isStreaming && runtime?.lastStatus && (
-                              <StatusPill status={runtime.lastStatus} />
-                            )}
-                            {/* How the last BACKGROUND turn ended (worker/spawn/
+                          )}
+                          {s.pinned && (
+                            <Pin
+                              size={11}
+                              className="shrink-0 -rotate-45 text-[var(--color-accent)]"
+                            />
+                          )}
+                          <span
+                            className={`min-w-0 flex-1 truncate ${s.unread || isStreaming ? 'font-semibold text-[var(--color-text)]' : ''}`}
+                          >
+                            {s.title || 'Yeni sohbet'}
+                          </span>
+                          {s.kind === 'spawned' && (
+                            <span
+                              className="shrink-0 rounded-full bg-[var(--color-surface-2)] px-1.5 py-px text-[9px] text-[var(--color-text-dim)]"
+                              title={
+                                s.parentSessionId
+                                  ? 'Bir devralma (handoff) ile oluşturuldu'
+                                  : 'Spawn ile oluşturuldu'
+                              }
+                            >
+                              {s.parentSessionId ? '↩ handoff' : '✦ spawn'}
+                            </span>
+                          )}
+                          {/* Finished task/flow runs carry a pass/fail pill. */}
+                          {!isStreaming && runtime?.lastStatus && (
+                            <StatusPill status={runtime.lastStatus} />
+                          )}
+                          {/* How the last BACKGROUND turn ended (worker/spawn/
                               schedule runs). Independent of the archive filter:
                               this is the run outcome, `state` is visibility.
                               Hidden while a turn is live — the pulsing dot and
                               "yazıyor…" already say what is happening now, and a
                               stale outcome next to them reads as contradictory. */}
-                            {!isStreaming && <RunStateBadge runState={s.runState} />}
-                          </span>
-                          {/* Meta row: kind badge + status/time on the left, the
+                          {!isStreaming && <RunStateBadge runState={s.runState} />}
+                        </span>
+                        {/* Meta row: kind badge + status/time on the left, the
                             session ID on a row of its own below the title. */}
-                          <span className="flex items-center gap-1.5 text-[10px]">
-                            <KindIcon size={11} className="shrink-0 opacity-60" />
-                            <span className="shrink-0 opacity-60">{meta.label}</span>
-                            {s.model && (
-                              <span
-                                className="shrink-0 rounded bg-[var(--color-surface-2)] px-1 py-px font-mono text-[9px] text-[var(--color-text-dim)]"
-                                title={`Model: ${s.model}`}
-                              >
-                                {modelDisplayName(s.model)}
-                              </span>
-                            )}
-                            {isStreaming ? (
-                              <span className="truncate font-medium text-[var(--color-success)]">
-                                yazıyor…
-                              </span>
-                            ) : (
-                              <span className="truncate opacity-60">
-                                · {relativeTime(s.updatedAt)} · {s.messageCount} mesaj
-                              </span>
-                            )}
+                        <span className="flex items-center gap-1.5 text-[10px]">
+                          <KindIcon size={11} className="shrink-0 opacity-60" />
+                          <span className="shrink-0 opacity-60">{meta.label}</span>
+                          {s.model && (
                             <span
-                              className="ml-auto shrink-0 font-mono opacity-50"
-                              title="Oturum ID"
+                              className="shrink-0 rounded bg-[var(--color-surface-2)] px-1 py-px font-mono text-[9px] text-[var(--color-text-dim)]"
+                              title={`Model: ${s.model}`}
                             >
-                              {s.id}
+                              {modelDisplayName(s.model)}
                             </span>
+                          )}
+                          {isStreaming ? (
+                            <span className="truncate font-medium text-[var(--color-success)]">
+                              yazıyor…
+                            </span>
+                          ) : (
+                            <span className="truncate opacity-60">
+                              · {relativeTime(s.updatedAt)} · {s.messageCount} mesaj
+                            </span>
+                          )}
+                          <span className="ml-auto shrink-0 font-mono opacity-50" title="Oturum ID">
+                            {s.id}
                           </span>
                         </span>
-                      </button>
-                    )}
-
-                    <button
-                      onClick={() => setMenuId((v) => (v === s.id ? null : s.id))}
-                      title="Oturum ayarları"
-                      className="ml-1 shrink-0 rounded p-1 text-[var(--color-text-dim)] opacity-0 transition hover:text-[var(--color-accent)] group-hover:opacity-100"
-                    >
-                      <Settings size={16} />
+                      </span>
                     </button>
-
-                    {menuId === s.id && (
-                      <div className="absolute right-1 top-9 z-20 w-44 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-1 text-sm shadow-xl">
-                        <MenuItem
-                          icon={Pencil}
-                          label="Başlığı düzenle"
-                          onClick={() => startRename(s)}
-                        />
-                        <MenuItem
-                          icon={Sparkles}
-                          label="AI ile başlık"
-                          disabled={s.messageCount === 0}
-                          onClick={() => {
-                            onGenerateTitle(s.id)
-                            setMenuId(null)
-                          }}
-                        />
-                        <MenuItem
-                          icon={ClipboardCopy}
-                          label="Yolu kopyala"
-                          onClick={() => {
-                            onCopyPath(s.id)
-                            setMenuId(null)
-                          }}
-                        />
-                        <MenuItem
-                          icon={s.pinned ? PinOff : Pin}
-                          label={s.pinned ? 'Sabitlemeyi kaldır' : 'Üste sabitle'}
-                          onClick={() => {
-                            onSetPinned(s.id, !s.pinned)
-                            setMenuId(null)
-                          }}
-                        />
-                        {s.state === 'archived' ? (
-                          <MenuItem
-                            icon={ArchiveRestore}
-                            label="Arşivden çıkar"
-                            onClick={() => {
-                              onSetArchived(s.id, false)
-                              setMenuId(null)
-                            }}
-                          />
-                        ) : (
-                          <MenuItem
-                            icon={Archive}
-                            label="Arşivle"
-                            onClick={() => {
-                              onSetArchived(s.id, true)
-                              setMenuId(null)
-                            }}
-                          />
-                        )}
-                        <div className="my-1 border-t border-[var(--color-border)]" />
-                        <MenuItem
-                          icon={Trash2}
-                          label="Sil"
-                          danger
-                          onClick={() => {
-                            setMenuId(null)
-                            if (confirm(`"${s.title || 'Bu oturum'}" silinsin mi?`))
-                              onDeleteSession(s.id)
-                          }}
-                        />
-                      </div>
-                    )}
                   </div>
                 )
               })}
@@ -843,34 +727,5 @@ function TabActivity({ ongoing, completed }: { ongoing: number; completed: numbe
         </span>
       )}
     </span>
-  )
-}
-
-function MenuItem({
-  icon: Icon,
-  label,
-  onClick,
-  disabled,
-  danger,
-}: {
-  icon: LucideIcon
-  label: string
-  onClick: () => void
-  disabled?: boolean
-  danger?: boolean
-}) {
-  return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      className={`flex w-full items-center gap-2 rounded px-2.5 py-1.5 text-left transition disabled:opacity-30 ${
-        danger
-          ? 'text-[var(--color-danger)] hover:bg-[color-mix(in_srgb,var(--color-danger)_10%,transparent)]'
-          : 'text-[var(--color-text)] hover:bg-[var(--color-surface-2)]'
-      }`}
-    >
-      <Icon size={14} className="shrink-0" />
-      {label}
-    </button>
   )
 }

@@ -31,6 +31,9 @@ func gitBranch(dir string) string {
 	ctx, cancel := context.WithTimeout(context.Background(), gitBranchCtxTimeout)
 	defer cancel()
 	cmd := proc.CommandContext(ctx, "git", "-C", dir, "rev-parse", "--abbrev-ref", "HEAD")
+	// Same reason as runGit: a git helper that survives the timeout would keep the
+	// output pipe open and wedge this call.
+	proc.TreeKill(cmd)
 	out, err := cmd.Output()
 	if err != nil {
 		return ""

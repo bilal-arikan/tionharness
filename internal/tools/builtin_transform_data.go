@@ -139,6 +139,9 @@ func (t TransformDataTool) Call(ctx context.Context, input json.RawMessage) (str
 	defer cancel()
 
 	cmd := proc.CommandContext(runCtx, interp, cmdArgs...)
+	// The script may itself spawn processes; on timeout they must die with it,
+	// otherwise a survivor keeps the output pipes open and this call never ends.
+	proc.TreeKill(cmd)
 	cmd.Dir = t.sb.Root
 	cmd.Env = minimalScriptEnv()
 	var logBuf bytes.Buffer

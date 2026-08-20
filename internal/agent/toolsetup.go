@@ -52,15 +52,21 @@ func toServerConfig(m db.MCPServer) mcp.ServerConfig {
 }
 
 // patternPredicate compiles a list of tool-name patterns into a matcher. A
-// pattern ending in "*" matches by prefix; otherwise it matches exactly. An
-// empty list yields a nil predicate (caller treats nil as "no constraint").
+// "group:<category>" key matches every built-in tool in that functional
+// category; a pattern ending in "*" matches by prefix; otherwise it matches
+// exactly. An empty list yields a nil predicate (caller treats nil as "no
+// constraint").
 func patternPredicate(patterns []string) func(string) bool {
 	if len(patterns) == 0 {
 		return nil
 	}
 	return func(name string) bool {
 		for _, p := range patterns {
-			if strings.HasSuffix(p, "*") {
+			if tools.IsGroupKey(p) {
+				if tools.MatchesGroup(name, p) {
+					return true
+				}
+			} else if strings.HasSuffix(p, "*") {
 				if strings.HasPrefix(name, strings.TrimSuffix(p, "*")) {
 					return true
 				}
@@ -87,8 +93,32 @@ func allowFunc(agent db.Agent) func(string) bool {
 // override map (which folds in the legacy BlockedTools list), so the unified
 // 5-tier model and the old standalone denylist resolve to the same predicate.
 // Nothing blocked => nil predicate (caller treats nil as "no constraint").
+//
+// An EXACT non-blocked override beats a broad blocked key: banning
+// "group:files" while pinning "Read" to a visibility tier keeps Read usable.
+// The exemption is deliberately limited to exact names — the same specificity
+// rule applyVisibilityOverrides enforces.
 func blockFunc(agent db.Agent) func(string) bool {
-	return patternPredicate(blockedPatterns(ParseToolOverrides(agent)))
+	overrides := ParseToolOverrides(agent)
+	pred := patternPredicate(blockedPatterns(overrides))
+	if pred == nil {
+		return nil
+	}
+	exempt := map[string]bool{}
+	for key, tier := range overrides {
+		if tier != TierBlocked && !tools.IsGroupKey(key) && !strings.HasSuffix(key, "*") {
+			exempt[key] = true
+		}
+	}
+	if len(exempt) == 0 {
+		return pred
+	}
+	return func(name string) bool {
+		if exempt[name] {
+			return false
+		}
+		return pred(name)
+	}
 }
 
 // readTrackerFor returns the freshness read-tracker for a session, creating it on

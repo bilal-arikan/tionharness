@@ -282,6 +282,13 @@ const codexStartupTimeout = 90 * time.Second
 // tool.
 func (c *CodexCLI) runAttempt(ctx context.Context, args []string, prompt, model string, req Request) (resp *Response, retryable bool, err error) {
 	cmd := proc.CommandContext(ctx, c.binPath, args...)
+	// codex spawns its own children (MCP servers, and whatever the turn shells
+	// out to — a Gradle daemon outlives the build that started it). They inherit
+	// this command's stdout pipe, so killing codex alone leaves the pipe open and
+	// cmd.Wait below never returns: the turn wedges forever even though codex
+	// already finished. TreeKill reaps the whole tree on cancellation and caps
+	// Wait with a WaitDelay backstop.
+	proc.TreeKill(cmd)
 	cmd.Env = codexBaseEnv()
 	if c.configDir != "" {
 		// Appended last so it overrides any inherited CODEX_HOME. Codex errors out
@@ -368,9 +375,7 @@ readLoop:
 					if cls := classifyCodexError(p.errText); cls != codexFailureNone {
 						failClass = cls
 						killedEarly = true
-						if cmd.Process != nil {
-							_ = cmd.Process.Kill()
-						}
+						proc.KillTree(cmd)
 						break readLoop
 					}
 				}
@@ -380,9 +385,15 @@ readLoop:
 			}
 		case <-startup.C:
 			startupHang = true
-			if cmd.Process != nil {
-				_ = cmd.Process.Kill()
-			}
+			proc.KillTree(cmd)
+			break readLoop
+		case <-ctx.Done():
+			// Cancellation (idle watchdog, hard cap, human stop) must end the read
+			// loop on its own rather than waiting for the pipe to close: a surviving
+			// grandchild can keep it open indefinitely. TreeKill's cancel hook is
+			// already reaping the tree; leave the loop and let Wait's WaitDelay bound
+			// the rest.
+			killedEarly = true
 			break readLoop
 		}
 	}

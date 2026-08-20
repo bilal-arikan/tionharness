@@ -616,9 +616,7 @@ export default function App() {
                 setMobileListOpen(false)
               }}
               onRefresh={ctl.refreshSessions}
-              onRenameSession={ctl.renameSession}
               onGenerateTitle={ctl.regenerateSessionTitle}
-              onCopyPath={ctl.copySessionPath}
               onDeleteSession={ctl.deleteSession}
               onSetArchived={ctl.setSessionArchived}
               onSetPinned={ctl.setSessionPinned}
@@ -869,6 +867,7 @@ export default function App() {
               onGenerateTitle={ctl.regenerateSessionTitle}
               onRename={ctl.renameSession}
               onDeleteSession={ctl.deleteSession}
+              onSetPinned={ctl.setSessionPinned}
               onSelectSession={ctl.selectSession}
               onRerun={() => chat.rerunLast()}
             />

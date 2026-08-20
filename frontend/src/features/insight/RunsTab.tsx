@@ -1,8 +1,22 @@
 import { useCallback, useEffect, useState } from 'react'
-import { RefreshCw } from 'lucide-react'
+import { RefreshCw, MessageSquare } from 'lucide-react'
 import { api } from '@/api'
 import type { InsightRun } from '@/types'
 import { relativeTime } from '@/shared/lib/time'
+import { buildRoute, parseRoute } from '@/app/url'
+
+// openRunSession deep-links to the run's read-only transcript. The hash carries
+// ?kind=insight because insight sessions are hidden from the sidebar's default
+// "Tümü" list, so landing there without the chip would show an empty selection.
+function openRunSession(sessionId: string) {
+  const cur = parseRoute(window.location.hash)
+  window.location.hash = buildRoute({
+    workspaceId: cur.workspaceId,
+    view: 'chat',
+    id: sessionId,
+    query: { kind: 'insight' },
+  })
+}
 
 // RunsTab is the scan-run observability log (not sessions): when each scan ran,
 // how long it took, and what it covered/produced.
@@ -45,6 +59,7 @@ export function RunsTab({ onError }: { onError: (msg: string) => void }) {
               <th className="py-1 pr-3">Atlandı</th>
               <th className="py-1 pr-3">Bulgu</th>
               <th className="py-1 pr-3">Hata</th>
+              <th className="py-1 pr-3">Transkript</th>
             </tr>
           </thead>
           <tbody>
@@ -58,6 +73,19 @@ export function RunsTab({ onError }: { onError: (msg: string) => void }) {
                 <td className="py-1 pr-3">{r.findings}</td>
                 <td className={`py-1 pr-3 ${r.errors > 0 ? 'text-[var(--color-danger)]' : ''}`}>
                   {r.errors}
+                </td>
+                <td className="py-1 pr-3">
+                  {r.sessionId ? (
+                    <button
+                      onClick={() => openRunSession(r.sessionId!)}
+                      title="Bu taramanın salt okunur oturumunu aç"
+                      className="flex items-center gap-1 text-[var(--color-accent)] hover:underline"
+                    >
+                      <MessageSquare className="h-3.5 w-3.5" /> Aç
+                    </button>
+                  ) : (
+                    <span className="text-[var(--color-text-dim)]">—</span>
+                  )}
                 </td>
               </tr>
             ))}

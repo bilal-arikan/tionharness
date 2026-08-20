@@ -38,6 +38,32 @@ type ScanScope struct {
 	MaxAnalyzed     int      // 0 = no cap; hard ceiling on analyzer (LLM) calls this run (cost budget)
 	Concurrency     int      // 0 = default; how many analyzer calls run in parallel
 	SinceUnix       int64    // 0 = no age limit; skip sessions last active before this unix time
+
+	// ExcludeKinds lists Session.Kind values the scan must not look at. nil means
+	// the default exclusion — db.MachineTranscriptKinds(), the transcripts the
+	// system itself writes (today: the insight run session). Without it a scan
+	// analyses its OWN output: every run would spend LLM calls on the previous
+	// run's report, burn the MaxSessions budget on them, and feed findings back
+	// into findings. Pass an empty (non-nil) slice to scan everything.
+	//
+	// Modelled as a general kind filter rather than a hardcoded `kind ==
+	// "insight"` check so any future machine-written kind is excluded by adding
+	// it to the db set, in one place, together with the matching unread rule.
+	ExcludeKinds []string
+}
+
+// excludedKinds resolves the scope's kind exclusion set, applying the default
+// when the caller left it nil.
+func (s ScanScope) excludedKinds() map[string]bool {
+	kinds := s.ExcludeKinds
+	if kinds == nil {
+		kinds = db.MachineTranscriptKinds()
+	}
+	out := make(map[string]bool, len(kinds))
+	for _, k := range kinds {
+		out[k] = true
+	}
+	return out
 }
 
 // defaultScanConcurrency bounds how many analyzer (LLM) calls run at once when the
@@ -125,9 +151,15 @@ func (s *Scanner) Scan(ctx context.Context, scope ScanScope) (ScanResult, error)
 	}
 
 	// ---- Phase 1: enumerate + prefilter (serial) ----
+	excluded := scope.excludedKinds()
 	var tasks []analysisTask
 enumerate:
 	for _, sess := range sessions {
+		// Out of scope entirely — not counted in res.Sessions (which reports what
+		// the scan considered) and not counted as skipped either.
+		if excluded[sess.Kind] {
+			continue
+		}
 		if scope.MaxSessions > 0 && res.Sessions >= scope.MaxSessions {
 			break
 		}

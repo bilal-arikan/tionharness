@@ -708,6 +708,35 @@ varsayılanlarına karşı bir **diff**:
 - Alt picker: arama + "tıklayınca uygulanacak tier" seçici; çoklu seçim + `SelectionBar`
   ile 5 tier'ın hepsi toplu uygulanabilir.
 
+### Araç GRUPLARI (2026-08-21)
+
+Tek tek 10 araç yasaklamak yerine **grup anahtarı** yazılabilir. Override haritasının
+anahtarı artık üç biçimden biri olabilir:
+
+| Anahtar | Anlamı |
+|---------|--------|
+| `Read` | tam isim (en özel) |
+| `mcp__linear__*` / `<ns>__*` | prefix deseni (MCP sunucusu grubu buradan gelir) |
+| `group:files` | built-in **fonksiyonel kategori** (`internal/tools/categories.go`) |
+
+- `group:<kategori>` **yalnız namespace'siz built-in** araçlara uyar; MCP araçları
+  kategoriye değil sunucuya gruplanır (`<ns>__*`).
+- **Özgüllük kuralı açıkça uygulanır** (sıralamaya bırakılmaz): önce geniş anahtarlar
+  (grup + desen), sonra tam isimler → tam isim daima kazanır. Yasaklama tarafında da
+  aynısı: `group:files` yasaklıyken `Read` başka bir tier'a sabitlenmişse Read kullanılır
+  (`blockFunc` muafiyeti — muafiyet **yalnız tam isimlere** açıktır).
+- Geçersiz grup anahtarı (`group:yok`) API'de **400** ile reddedilir; sessizce düşürülmez.
+- `GET /api/agents/{id}/tools` yanıtı `groups` dizisi taşır: aktif katalogda gerçekten
+  aracı olan her kategori + her MCP sunucusu (`key`, `kind`, `label`, `count`, `tools`).
+  UI bunları "Gruplar" bloğunda tier seçicisiyle listeler (`AgentToolGroupRow.tsx`,
+  `data-testid="agent-tool-group-row"`).
+- Kod: `internal/tools/categories.go` (`GroupPrefix`/`Categories`/`IsGroupKey`/
+  `ValidGroupKey`/`MatchesGroup`), `agent/toolsetup.go` (`patternPredicate`, `blockFunc`),
+  `agent/tooloverrides.go` (`applyVisibilityOverrides`), `api/agent_tools.go`
+  (`agentToolGroups` + anahtar doğrulama).
+  Testler: `tools/categories_group_test.go`, `agent/toolgroups_test.go`,
+  `api/agent_tool_groups_test.go`.
+
 ### Kod + testler
 
 - `internal/agent/tooloverrides.go` (`ParseToolOverrides`/`ValidAgentTier`/

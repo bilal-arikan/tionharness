@@ -63,6 +63,15 @@ graph LR
 - Yalnız transcript geri alınır. `Bash` yan etkileri (`git push`, `npm install`, `rm`) ve
   dosya değişiklikleri geri **gelmez** — Claude Code ile aynı sınır.
 - Yerel-only (persist edilmemiş) anchor'da sunucu çağrısı atlanır (yalnız görünüm dilimlenir).
+- **Salt-okunur oturumlarda rewind yok.** Yazılabilir olmayan her kind (`task`, `flow`,
+  `schedule`, `automation`, `flow-coordinator`, `worker`, `insight`) orkestratörün yazdığı
+  bir çalışma günlüğüdür: composer gizli olduğu için checkpoint'ten devam etmenin yolu yok,
+  dolayısıyla rewind yalnızca kaydı bozar. API `POST /api/sessions/{id}/rewind`'i
+  `rejectReadOnlySession` ile **403** döndürür (`internal/api/session_readonly.go`),
+  UI de `ChatView`'de `onRewind`'i o oturumlarda hiç geçmez — böylece balon üstündeki
+  ⟲ butonu ve `RewindDialog` görünmez. Testler:
+  `internal/api/session_writable_test.go` (`TestRewindRejectedOnReadOnlySessions`,
+  `TestRewindAllowedOnWritableKinds`).
 
 ## Olası sonraki adımlar
 

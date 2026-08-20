@@ -520,6 +520,9 @@ func (s *Server) handleEnqueueMessage(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "sessionId and message (or attachments) are required")
 		return
 	}
+	if s.rejectNonWritableSession(w, r, req.SessionID) {
+		return
+	}
 	queued := s.enqueueMessage(ws(r).ID, req, req.ClientMsgID)
 	if queued {
 		// Instant feedback: name a still-untitled session from a snippet of this
@@ -575,6 +578,9 @@ func (s *Server) handleSessionControl(w http.ResponseWriter, r *http.Request) {
 	sessionID := r.PathValue("id")
 	req, ok := bindJSON[sessionControlReq](w, r)
 	if !ok {
+		return
+	}
+	if s.rejectImmutableSession(w, r, sessionID, "session control (stop/steer)") {
 		return
 	}
 	info, live := s.runs.sessionRunInfo(ws(r).ID, sessionID)

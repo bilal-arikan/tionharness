@@ -7,6 +7,7 @@ import {
   Sparkles,
   Compass,
   Zap,
+  Telescope,
   type LucideIcon,
 } from 'lucide-react'
 import { Badge } from '@/shared/components'
@@ -29,6 +30,9 @@ export const KIND_META: Record<string, { label: string; icon: LucideIcon }> = {
   // A flow's coordinator node opens one of these per run (see internal/agent/
   // flow_coordinator.go); its workers hang off it like any coordinator's.
   'flow-coordinator': { label: 'Akış Koordinatörü', icon: Compass },
+  // One read-only transcript per insight scan (see internal/agent/
+  // insightsession.go); SourceID is the insight run id.
+  insight: { label: 'İçgörü', icon: Telescope },
 }
 
 // Filter tabs (in display order). '' is "all".
@@ -42,6 +46,7 @@ export const FILTERS: { key: string; label: string }[] = [
   // both kinds under one "Otomasyon" chip (matching the management screen's
   // umbrella naming). The per-row icon still distinguishes them (Clock vs Zap).
   { key: 'automation', label: 'Otomasyon' },
+  { key: 'insight', label: 'İçgörü' },
 ]
 
 // Top-level sidebar tab (Aktif / Arşiv / Workers). 'active' is the default and
@@ -74,6 +79,11 @@ export function kindMeta(kind: string) {
 // A legacy session persisted before the `kind` field existed carries '' and is
 // treated as a plain chat, so it stays reachable under the "Sohbet" tab.
 export function matchesKindFilter(kind: string, filter: string): boolean {
+  // Insight scans open one machine-generated read-only session per run, which
+  // would flood the default "Tümü" list and bury the conversations the user
+  // actually came for (the old "chat listesini kirletme" problem). They are
+  // therefore opt-in: reachable only through their own "İçgörü" chip.
+  if (kind === 'insight') return filter === 'insight'
   if (!filter) return true
   if (filter === 'chat') return kind === '' || kind === 'chat'
   // The "Otomasyon" chip is an umbrella over both event-triggered automations

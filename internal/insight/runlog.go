@@ -7,10 +7,12 @@ import (
 	"path/filepath"
 )
 
-// Scan-run observability. Normal scans no longer create sessions (they were noise
-// in the chat list), but a scan should still be auditable: when it ran, how long
-// it took, what it covered and produced. This is a lightweight append-only log,
-// NOT a session — read via GET /api/insight/runs.
+// Scan-run observability. Every scan now ALSO opens a read-only session
+// (Kind=="insight", SourceID==RunRecord.ID) so the run reads like any other
+// transcript; this append-only log stays alongside it as the compact, queryable
+// rollup — when it ran, how long it took, what it covered and produced — read via
+// GET /api/insight/runs. The insight kind is hidden from the default sessions
+// view, so the old "noise in the chat list" problem does not come back.
 
 var runsRelPath = filepath.Join("insight", "runs.jsonl")
 
@@ -22,6 +24,13 @@ const maxRunRecords = 1000
 // RunRecord is one scan run's rollup, stamped with wall-clock time + duration by
 // the caller (the runtime, which owns the real clock).
 type RunRecord struct {
+	// ID is this run's stable identity, also carried as SourceID on the run's
+	// read-only session, so the two records point at each other. Empty on records
+	// written before the session pairing existed (backward compatible).
+	ID string `json:"id,omitempty"`
+	// SessionID is the run's read-only transcript session (Kind=="insight").
+	// Empty when the session could not be created, or on legacy records.
+	SessionID   string   `json:"sessionId,omitempty"`
 	At          int64    `json:"at"`         // unix seconds when the run finished
 	DurationMs  int64    `json:"durationMs"` // wall-clock duration
 	Trigger     string   `json:"trigger"`    // "manual" | "auto" | "agent" | ""

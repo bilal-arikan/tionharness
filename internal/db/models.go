@@ -188,6 +188,87 @@ const UserParticipantID = "user"
 // BroadcastRecipientID addresses every other participant in the thread at once.
 const BroadcastRecipientID = "*"
 
+// SessionKindInsight is the Session.Kind of a retrospective insight scan's
+// read-only transcript (SourceID == the insight run's id). It is read-only in the
+// strong sense: the API refuses user messages and agent turns for it.
+const SessionKindInsight = "insight"
+
+// machineTranscriptKinds is the set of Session.Kind values whose transcript is
+// WRITTEN BY the system as a record of an automated run, rather than driven by a
+// user or an agent turn. They are a distinct class from the execution kinds
+// (task/flow/schedule/...): those are real work the user cares to read and
+// re-enter, these are read-only reports.
+//
+// One set, one rule: retrospective scanning must not feed on its own output, and
+// such a session must not raise an unread badge the user cannot clear (it is
+// hidden from the default sessions view). Both call sites derive their behaviour
+// from IsMachineTranscriptKind so a future kind gets both properties at once,
+// instead of each site growing its own `kind == "insight"` special case.
+var machineTranscriptKindList = []string{SessionKindInsight}
+
+// IsMachineTranscriptKind reports whether a Session.Kind is a system-written
+// record of an automated run (see machineTranscriptKindList).
+func IsMachineTranscriptKind(kind string) bool {
+	for _, k := range machineTranscriptKindList {
+		if k == kind {
+			return true
+		}
+	}
+	return false
+}
+
+// MachineTranscriptKinds returns the machine-written session kinds, for callers
+// that need the set itself (e.g. a scan's default exclusion list).
+func MachineTranscriptKinds() []string {
+	out := make([]string, len(machineTranscriptKindList))
+	copy(out, machineTranscriptKindList)
+	return out
+}
+
+// writableSessionKindList is the set of Session.Kind values into which a NEW
+// USER TURN may be started. Manual chats ("" / "chat") plus "spawned" sessions
+// (spawn tool and handoff children) are linear transcripts a human is meant to
+// keep talking to. Every other kind — task, flow, schedule, automation,
+// flow-coordinator, worker, insight — is an orchestrator-owned transcript: a new
+// user turn there has no run to attach to.
+//
+// This list is the single source of truth for the whole product; the frontend's
+// isWritableSessionKind (frontend/src/app/viewRegistry.tsx) mirrors it and the
+// two must be changed together.
+var writableSessionKindList = []string{"", "chat", "spawned"}
+
+// IsWritableSessionKind reports whether a new user turn may be started in a
+// session of this kind (see writableSessionKindList).
+func IsWritableSessionKind(kind string) bool {
+	for _, k := range writableSessionKindList {
+		if k == kind {
+			return true
+		}
+	}
+	return false
+}
+
+// WritableSessionKinds returns the kinds that accept a new user turn.
+func WritableSessionKinds() []string {
+	out := make([]string, len(writableSessionKindList))
+	copy(out, writableSessionKindList)
+	return out
+}
+
+// IsImmutableSessionKind reports whether a session of this kind can never be
+// modified at all — no turn ever runs in it, so not even the control/answer/
+// rewind paths of a live turn are meaningful.
+//
+// This is deliberately the SAME set as the machine-written transcripts: a
+// system-written record of an automated run is exactly the thing that has no
+// live turn to steer. Rather than duplicating the list, immutability is defined
+// as a property of that class, so a future machine-transcript kind gets it for
+// free. Non-writable is the weaker rule (no NEW turn); immutable is the strong
+// one (nothing at all).
+func IsImmutableSessionKind(kind string) bool {
+	return IsMachineTranscriptKind(kind)
+}
+
 // AuthorKind classifies who wrote a message in the participant model: the human
 // principal, an agent, or the system.
 const (

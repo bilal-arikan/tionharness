@@ -53,6 +53,9 @@ type realCmdRunner struct{}
 
 func (realCmdRunner) Start(ctx context.Context, binPath string, env []string, args ...string) (io.ReadCloser, func() error, func(), error) {
 	cmd := proc.CommandContext(ctx, binPath, args...)
+	// codex login opens a browser and other helpers; a survivor of the kill below
+	// would keep writing into the pipe this flow reads.
+	proc.TreeKill(cmd)
 	cmd.Env = env
 	pr, pw := io.Pipe()
 	cmd.Stdout = pw
@@ -66,11 +69,7 @@ func (realCmdRunner) Start(ctx context.Context, binPath string, env []string, ar
 		pw.Close()
 		return err
 	}
-	kill := func() {
-		if cmd.Process != nil {
-			_ = cmd.Process.Kill()
-		}
-	}
+	kill := func() { proc.KillTree(cmd) }
 	return pr, wait, kill, nil
 }
 
@@ -317,6 +316,9 @@ func LoginWithAPIKey(ctx context.Context, binPath, homeDir, key string) error {
 		return fmt.Errorf("create codex home: %w", err)
 	}
 	cmd := proc.CommandContext(ctx, binPath, "login", "--with-api-key")
+	// CombinedOutput blocks until every writer closes the pipe; reap the tree so a
+	// helper codex spawned cannot hold it past cancellation.
+	proc.TreeKill(cmd)
 	cmd.Env = append(os.Environ(), "CODEX_HOME="+homeDir)
 	cmd.Stdin = strings.NewReader(key)
 	out, err := cmd.CombinedOutput()

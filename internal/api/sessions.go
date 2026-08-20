@@ -388,6 +388,9 @@ func (s *Server) handleRewindSession(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "messageId is required")
 		return
 	}
+	if s.rejectReadOnlySession(w, r, sessionID, "a transcript rewind") {
+		return
+	}
 	removed, err := wsp.DB.DeleteMessagesFrom(r.Context(), sessionID, msgID)
 	if writeDBError(w, err, "message not found") {
 		return

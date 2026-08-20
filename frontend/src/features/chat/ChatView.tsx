@@ -158,6 +158,12 @@ export function ChatView({
   // interactive chat deletes the failed pair first to keep history clean.
   const onRetry = readOnly ? chat.retryMessagePreserve : chat.retryMessage
 
+  // Rewind truncates the transcript at a checkpoint so the user can re-drive the
+  // conversation from there. A read-only run log has no composer to re-drive it
+  // with, so the rewind affordance would only destroy the record — the backend
+  // refuses it too (rejectReadOnlySession), this just keeps the UI honest.
+  const rewind = readOnly ? undefined : onRewind
+
   // Both flags gate a skeleton, so they go through the same delay: a local
   // backend answers in well under it, and a one-frame skeleton would only flicker.
   // Hooks must run before any early return (rules-of-hooks).
@@ -211,7 +217,7 @@ export function ChatView({
           onOpenFile={onOpenFile}
           onOpenArtifact={onOpenArtifact}
           onDeleteMessage={onDeleteMessage}
-          onRewind={onRewind}
+          onRewind={rewind}
           onRetry={onRetry}
           onFeedback={onFeedback}
           onOpenAgent={onOpenAgent}
@@ -399,8 +405,8 @@ export function ChatView({
           />
         </div>
       )}
-      {chat.rewindOpen && (
-        <RewindDialog messages={messages} onClose={chat.closeRewind} onRewind={onRewind} />
+      {chat.rewindOpen && rewind && (
+        <RewindDialog messages={messages} onClose={chat.closeRewind} onRewind={rewind} />
       )}
     </div>
   )

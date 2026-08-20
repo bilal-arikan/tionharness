@@ -1,5 +1,7 @@
 package tools
 
+import "strings"
+
 // Functional categories for built-in tools, used by the workspace tools screen to
 // group an otherwise-flat list (~85 built-ins) into navigable sections. The key is
 // a stable English identifier; the UI maps it to a localized label. MCP tools are
@@ -94,6 +96,67 @@ var builtinCategory = map[string]string{
 	"mermaid_validate": CategoryDiagnostics, "transform_data": CategoryDiagnostics,
 	"activate_tools": CategoryDiagnostics, "deactivate_tools": CategoryDiagnostics,
 	"tool_search": CategoryDiagnostics,
+}
+
+// GroupPrefix marks an override key as a GROUP key rather than a tool name:
+// "group:files" bans every built-in tool in the "files" category at once. It is
+// deliberately not a valid tool-name character sequence, so a group key can
+// never collide with a real tool or with a "prefix*" pattern.
+const GroupPrefix = "group:"
+
+// nsSep is the MCP namespace separator. A tool name containing it is namespaced
+// (an MCP tool) and therefore belongs to its SERVER group, not to a functional
+// category — mirrors mcp.SplitNamespaced without importing internal/mcp (which
+// would be an import cycle from the tools package).
+const nsSep = "__"
+
+// orderedCategories is the stable presentation order of the functional
+// categories: general-purpose work first, plumbing last. Callers rely on the
+// order being deterministic (API payloads, UI rows).
+var orderedCategories = []string{
+	CategoryFiles, CategorySearch, CategoryAgents, CategoryAutomation,
+	CategoryInteraction, CategoryArtifacts, CategorySkillsMCP, CategoryConfig,
+	CategoryDiagnostics, CategoryOther,
+}
+
+// Categories returns every functional category key in stable order.
+func Categories() []string {
+	out := make([]string, len(orderedCategories))
+	copy(out, orderedCategories)
+	return out
+}
+
+// IsGroupKey reports whether an override key is a group key.
+func IsGroupKey(key string) bool {
+	return len(key) > len(GroupPrefix) && key[:len(GroupPrefix)] == GroupPrefix
+}
+
+// ValidGroupKey reports whether key is a group key naming a KNOWN category. An
+// unknown category is rejected by callers rather than silently matching nothing.
+func ValidGroupKey(key string) bool {
+	if !IsGroupKey(key) {
+		return false
+	}
+	cat := key[len(GroupPrefix):]
+	for _, c := range orderedCategories {
+		if c == cat {
+			return true
+		}
+	}
+	return false
+}
+
+// MatchesGroup reports whether toolName belongs to the group named by groupKey.
+// Only non-namespaced BUILT-IN tools can match: MCP tools group by server and
+// are targeted with the existing "<ns>__*" prefix pattern instead.
+func MatchesGroup(toolName, groupKey string) bool {
+	if !ValidGroupKey(groupKey) {
+		return false
+	}
+	if strings.Contains(toolName, nsSep) {
+		return false
+	}
+	return CategoryOf(toolName) == groupKey[len(GroupPrefix):]
 }
 
 // CategoryOf returns the functional category key for a built-in tool name, or

@@ -928,7 +928,9 @@ func (d *DB) AddMessage(ctx context.Context, m Message) (Message, error) {
 	}
 	s.UpdatedAt = m.CreatedAt
 	// An agent reply marks the session unread; the UI clears it when opened.
-	if m.Role == "assistant" {
+	// A machine-written transcript is exempt: it is hidden from the default
+	// sessions view, so an unread badge raised there could never be cleared.
+	if m.Role == "assistant" && !IsMachineTranscriptKind(s.Kind) {
 		s.Unread = true
 	}
 	// Keep the participant roster in sync: any agent that authors a message or is

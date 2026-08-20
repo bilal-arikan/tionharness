@@ -154,12 +154,48 @@ func (r *Runtime) RunInsightScan(ctx context.Context, scope insight.ScanScope, a
 		r.logger.Warn("insight ledger compact failed", "error", cErr)
 	}
 
-	// Observability: record the run in an append-only log (NOT a session), so scans
-	// stay auditable (when/how long/what) without cluttering the chat list.
+	// Observability: every run gets BOTH a read-only session (the readable
+	// transcript, Kind=="insight", hidden from the default sessions view) and a
+	// row in the append-only run log (the compact rollup). They share runID, so
+	// either record resolves the other.
+	runID := newInsightRunID()
+	lensIDs := scope.LensIDs
+	if len(lensIDs) == 0 {
+		for _, l := range reg.Enabled() {
+			lensIDs = append(lensIDs, l.ID)
+		}
+	}
+	report := insightRunReport{
+		RunID:    runID,
+		LensIDs:  lensIDs,
+		AgentID:  analysisAgent.ID,
+		Duration: time.Since(start),
+		Result:   res,
+	}
+	// A run that did nothing gets the run-log row only — no empty transcript.
+	sessionID := ""
+	if insightRunSessionWorthy(report) {
+		var sErr error
+		sessionID, sErr = r.recordInsightSession(ctx, report)
+		if sErr != nil {
+			r.logger.Warn("insight run session failed", "error", sErr, "run", runID)
+		}
+		// Retention: the scan sessions are unbounded otherwise (the run log has its
+		// own cap). Archive, never delete.
+		if n, aErr := r.archiveOldInsightSessions(ctx, settings.RunSessionRetention()); aErr != nil {
+			r.logger.Warn("insight session retention failed", "error", aErr)
+		} else if n > 0 {
+			r.logger.Info("insight sessions archived", "count", n)
+		}
+	}
 	if rErr := insight.AppendRun(root, insight.RunRecord{
-		At:          time.Now().Unix(),
-		DurationMs:  time.Since(start).Milliseconds(),
-		LensIDs:     scope.LensIDs,
+		ID:         runID,
+		SessionID:  sessionID,
+		At:         time.Now().Unix(),
+		DurationMs: time.Since(start).Milliseconds(),
+		// The RESOLVED lens list, same one the session reports: an unscoped run
+		// leaves scope.LensIDs empty, which would log the run as lens-less.
+		LensIDs:     lensIDs,
 		Sessions:    res.Sessions,
 		Analyzed:    res.Analyzed,
 		Skipped:     res.Skipped,

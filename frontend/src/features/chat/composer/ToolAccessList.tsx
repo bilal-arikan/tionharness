@@ -1,8 +1,10 @@
 // Presentational lists for the composer's tool inspector: grouped tool rows and
 // the MCP server inventory. Read-only — nothing here mutates configuration.
+import { useState } from 'react'
+import { ChevronDown, ChevronRight } from 'lucide-react'
 import type { ToolAccessEntry, ToolAccessServer, ToolAccessServerStatus } from '@/types'
 import { visibilityMeta } from '@/features/tools/toolMeta'
-import { groupTools } from './toolAccessGroups'
+import { filterTools, groupTools, toolsForServer } from './toolAccessGroups'
 
 // TierBadge shows the tool's effective visibility tier (Tam / Özet / İsim / Gizli)
 // — i.e. how much of its schema reaches the model, which is the real cost driver.
@@ -105,9 +107,15 @@ export function ToolGroupList({ tools }: { tools: ToolAccessEntry[] }) {
 export function ServerList({
   servers,
   poolIdleSec,
+  tools,
+  query,
 }: {
   servers: ToolAccessServer[]
   poolIdleSec: number
+  // Every tool entry the panel already fetched, so an expanded server row can
+  // show its own tools without a second request.
+  tools: { eager: ToolAccessEntry[]; lazy: ToolAccessEntry[] }
+  query: string
 }) {
   if (servers.length === 0) {
     return (
@@ -118,64 +126,121 @@ export function ServerList({
   }
   return (
     <div className="flex flex-col gap-1">
-      {servers.map((s) => {
-        const st = STATUS_META[s.status]
-        return (
-          <div
-            key={s.id}
-            className="flex items-center gap-2 rounded-lg px-1 py-1.5 hover:bg-[var(--color-surface-2)]"
+      {servers.map((s) => (
+        <ServerRow
+          key={s.id}
+          server={s}
+          poolIdleSec={poolIdleSec}
+          tools={toolsForServer(tools, s.name)}
+          query={query}
+        />
+      ))}
+    </div>
+  )
+}
+
+// ServerRow renders one server line and, when expanded, that server's own tools.
+// Expansion is local state: the inspector is read-only and short-lived, so there
+// is nothing to persist.
+function ServerRow({
+  server: s,
+  poolIdleSec,
+  tools,
+  query,
+}: {
+  server: ToolAccessServer
+  poolIdleSec: number
+  tools: ToolAccessEntry[]
+  query: string
+}) {
+  const [open, setOpen] = useState(false)
+  const st = STATUS_META[s.status]
+  const shown = filterTools(tools, query)
+  return (
+    <div data-testid="tool-access-server-row" data-server={s.name}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        data-testid="tool-access-server-toggle"
+        className="flex w-full items-center gap-2 rounded-lg px-1 py-1.5 text-left hover:bg-[var(--color-surface-2)]"
+      >
+        {open ? (
+          <ChevronDown size={12} className="shrink-0 text-[var(--color-text-dim)]" />
+        ) : (
+          <ChevronRight size={12} className="shrink-0 text-[var(--color-text-dim)]" />
+        )}
+        <span title={st.hint} className="shrink-0" style={{ color: st.color }}>
+          ●
+        </span>
+        <span className="shrink-0 text-xs font-medium text-[var(--color-text)]">{s.name}</span>
+        <span
+          title={st.hint}
+          className="shrink-0 rounded-md border px-1 text-[10px] leading-4"
+          style={{ borderColor: st.color, color: st.color }}
+        >
+          {st.label}
+        </span>
+        <span className="shrink-0 text-[10px] text-[var(--color-text-dim)]">
+          {s.transport}
+          {s.scope === 'scoped' ? ' · oturum-özel' : ''}
+        </span>
+        <div className="flex-1" />
+        {s.live > 0 && (
+          <span
+            title={
+              s.scope === 'scoped' && poolIdleSec > 0
+                ? `${s.live}/${s.total} canlı bağlantı — ${poolIdleSec}sn boşta kalırsa kapanır`
+                : `${s.live}/${s.total} canlı bağlantı`
+            }
+            className="shrink-0 text-[10px] text-[var(--color-success)]"
           >
-            <span title={st.hint} className="shrink-0" style={{ color: st.color }}>
-              ●
-            </span>
-            <span className="shrink-0 text-xs font-medium text-[var(--color-text)]">{s.name}</span>
-            <span
-              title={st.hint}
-              className="shrink-0 rounded-md border px-1 text-[10px] leading-4"
-              style={{ borderColor: st.color, color: st.color }}
-            >
-              {st.label}
-            </span>
-            <span className="shrink-0 text-[10px] text-[var(--color-text-dim)]">
-              {s.transport}
-              {s.scope === 'scoped' ? ' · oturum-özel' : ''}
-            </span>
-            <div className="flex-1" />
-            {s.live > 0 && (
-              <span
-                title={
-                  s.scope === 'scoped' && poolIdleSec > 0
-                    ? `${s.live}/${s.total} canlı bağlantı — ${poolIdleSec}sn boşta kalırsa kapanır`
-                    : `${s.live}/${s.total} canlı bağlantı`
-                }
-                className="shrink-0 text-[10px] text-[var(--color-success)]"
+            🔗 {s.live}
+          </span>
+        )}
+        <span
+          title="Bu sunucudan her tur TAM şeması gönderilen araç sayısı"
+          className="shrink-0 text-[10px] text-[var(--color-text-dim)]"
+        >
+          aktif {s.eagerCount}
+        </span>
+        <span
+          title="Katalogda isim/özet olarak duran, activate_tools ile açılabilen araç sayısı"
+          className="shrink-0 text-[10px] text-[var(--color-text-dim)]"
+        >
+          katalog {s.lazyCount}
+        </span>
+        {s.hiddenCount > 0 && (
+          <span
+            title={hiddenHint(s.hiddenCount)}
+            className="shrink-0 text-[10px] text-[var(--color-text-dim)] opacity-70"
+          >
+            gizli {s.hiddenCount}
+          </span>
+        )}
+      </button>
+      {open && (
+        <div className="mb-1 ml-5 flex flex-col border-l border-[var(--color-border)] pl-2">
+          {shown.length === 0 ? (
+            <div className="px-1 py-1.5 text-[11px] leading-4 text-[var(--color-text-dim)]">
+              {tools.length === 0 ? st.hint : 'Aramayla eşleşen araç yok.'}
+            </div>
+          ) : (
+            shown.map((t) => (
+              <div
+                key={t.name}
+                className="flex items-start gap-2 rounded-lg px-1 py-1 hover:bg-[var(--color-surface-2)]"
               >
-                🔗 {s.live}
-              </span>
-            )}
-            <span
-              title="Bu sunucudan her tur TAM şeması gönderilen araç sayısı"
-              className="shrink-0 text-[10px] text-[var(--color-text-dim)]"
-            >
-              aktif {s.eagerCount}
-            </span>
-            <span
-              title="Katalogda isim/özet olarak duran, activate_tools ile açılabilen araç sayısı"
-              className="shrink-0 text-[10px] text-[var(--color-text-dim)]"
-            >
-              katalog {s.lazyCount}
-            </span>
-            {s.hiddenCount > 0 && (
-              <span
-                title={hiddenHint(s.hiddenCount)}
-                className="shrink-0 text-[10px] text-[var(--color-text-dim)] opacity-70"
-              >
-                gizli {s.hiddenCount}
-              </span>
-            )}
-          </div>
-        )
-      })}
+                <code className="shrink-0 text-xs text-[var(--color-text)]">{t.label}</code>
+                <TierBadge visibility={t.visibility} />
+                <span className="min-w-0 flex-1 truncate text-xs text-[var(--color-text-dim)]">
+                  {t.description}
+                </span>
+              </div>
+            ))
+          )}
+        </div>
+      )}
     </div>
   )
 }

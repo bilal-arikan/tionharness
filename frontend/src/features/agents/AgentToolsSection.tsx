@@ -7,6 +7,7 @@ import { SelectionBar, SelectionBarButton } from '@/shared/components'
 import { AGENT_TIERS } from '@/features/tools/toolMeta'
 import { AgentTierBadge, AgentTierSelector } from '@/features/tools/VisibilityControls'
 import { AgentToolOverrideRow } from './AgentToolOverrideRow'
+import { AgentToolGroupRow } from './AgentToolGroupRow'
 
 interface Props {
   agentId: string
@@ -45,6 +46,10 @@ export function AgentToolsSection({ agentId, onError }: Props) {
   const catalog = useMemo(() => data?.catalog ?? [], [data])
   const byName = useMemo(() => new Map(catalog.map((t) => [t.name, t])), [catalog])
   const overrides = useMemo(() => data?.toolOverrides ?? {}, [data])
+  // Bulk targets (built-in categories + MCP servers). An older backend omits the
+  // field; the block then simply does not render.
+  const groups = useMemo(() => data?.groups ?? [], [data])
+  const groupByKey = useMemo(() => new Map(groups.map((g) => [g.key, g])), [groups])
 
   const save = async (mcpEnabled: boolean, next: Record<string, AgentToolTier>) => {
     if (!data) return
@@ -110,10 +115,26 @@ export function AgentToolsSection({ agentId, onError }: Props) {
   const orphans = useMemo(
     () =>
       Object.keys(overrides)
-        .filter((n) => !byName.has(n))
+        .filter((n) => !byName.has(n) && !groupByKey.has(n))
         .sort(),
-    [overrides, byName],
+    [overrides, byName, groupByKey],
   )
+  // Group-keyed overrides: known bulk targets, so they get a readable label
+  // instead of dropping into the orphan bucket.
+  const groupOverridden = useMemo(
+    () =>
+      groups.filter((g) => g.key in overrides).map((g) => ({ group: g, tier: overrides[g.key] })),
+    [groups, overrides],
+  )
+
+  // setGroupTier writes the GROUP KEY into the override map — one entry for the
+  // whole group. Re-picking the active tier clears it, so the control toggles.
+  const setGroupTier = (key: string, tier: AgentToolTier) => {
+    const next = { ...overrides }
+    if (next[key] === tier) delete next[key]
+    else next[key] = tier
+    save(data?.mcpEnabled ?? true, next)
+  }
 
   // Tools with no override yet, filtered by the search box.
   const available = useMemo(() => {

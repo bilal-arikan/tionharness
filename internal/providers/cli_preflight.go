@@ -37,6 +37,9 @@ func runCLIPreflight(ctx context.Context, kind, binPath, configDir, providerConf
 	}
 
 	cmd := proc.CommandContext(ctx, binPath, "--version")
+	// The CLI shells out even for --version (node launcher, update check); reap the
+	// tree on cancellation so no survivor holds the output pipe.
+	proc.TreeKill(cmd)
 	cmd.Env = env
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr

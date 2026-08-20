@@ -131,16 +131,14 @@ export function ToolAccessPanel({ agentId, onClose }: Props) {
               </button>
             ))}
             <div className="flex-1" />
-            {tab !== 'servers' && (
-              <input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Ara…"
-                aria-label="Araç ara"
-                data-testid="tool-access-search"
-                className="w-28 rounded-lg border border-[var(--color-border)] bg-transparent px-2 py-1 text-xs outline-none focus:border-[var(--color-accent)] placeholder:text-[var(--color-text-dim)]"
-              />
-            )}
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Ara…"
+              aria-label="Araç ara"
+              data-testid="tool-access-search"
+              className="w-28 rounded-lg border border-[var(--color-border)] bg-transparent px-2 py-1 text-xs outline-none focus:border-[var(--color-accent)] placeholder:text-[var(--color-text-dim)]"
+            />
           </div>
 
           <p className="mb-2 text-[11px] leading-4 text-[var(--color-text-dim)]">
@@ -149,14 +147,19 @@ export function ToolAccessPanel({ agentId, onClose }: Props) {
             {tab === 'lazy' &&
               `Bu araçların şeması turda gönderilmez; ajan gerektiğinde tool_search / activate_tools ile yükler. ${hiddenCount} tanesi "Gizli" tier'da: katalogda tek tek listelenmez, bağlamda yalnız "bunlar da var, tool_search ile bul" notu durur — bilinmez değil, ucuzdur.`}
             {tab === 'servers' &&
-              'Workspace’teki (özel dâhil) tüm MCP sunucuları ve araçlarının bağlama girip girmediği: yeşil = promptta, sarı/gri = değil (sebebi rozetin üstünde). 🔗 = şu an açık canlı bağlantı. Ayarlar Araçlar ekranından değiştirilir.'}
+              'Workspace’teki (özel dâhil) tüm MCP sunucuları ve araçlarının bağlama girip girmediği: yeşil = promptta, sarı/gri = değil (sebebi rozetin üstünde). 🔗 = şu an açık canlı bağlantı. Satıra tıklayıp o sunucunun araçlarını açabilirsin; arama kutusu açık satırları süzer. Ayarlar Araçlar ekranından değiştirilir.'}
           </p>
 
           <div className="max-h-[22rem] overflow-y-auto pr-1">
             {tab === 'eager' && <ToolGroupList tools={filterTools(data.eager, query)} />}
             {tab === 'lazy' && <ToolGroupList tools={filterTools(data.lazy, query)} />}
             {tab === 'servers' && (
-              <ServerList servers={data.servers} poolIdleSec={data.poolIdleSec} />
+              <ServerList
+                servers={data.servers}
+                poolIdleSec={data.poolIdleSec}
+                tools={{ eager: data.eager, lazy: data.lazy }}
+                query={query}
+              />
             )}
           </div>
 
