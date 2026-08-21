@@ -55,9 +55,8 @@ const (
 	// StepSteer is live user guidance folded into a running turn (the steer
 	// control). Text is the guidance. Rendered distinctly from model narration.
 	StepSteer StepKind = "steer"
-	// StepToolDelta is an incremental chunk of a long tool's output, streamed
-	// live while the tool runs. Transient (live UI only, never persisted); chunks
-	// sharing an ID belong to the same tool invocation and are concatenated.
+	// StepToolDelta is legacy: only for previously persisted sessions. New live
+	// tool output uses StepTool frames with Append set instead.
 	StepToolDelta StepKind = "tool_delta"
 	// StepTombstone is a control signal (not rendered itself) telling the UI to
 	// remove a previously emitted live step: Ref names the target step's ID. Used
@@ -149,10 +148,11 @@ type TurnStep struct {
 	// Reason is the stable machine tag for a StepRecovery/StepError step (e.g.
 	// "max_tool_iterations", "provider_error", "budget_exceeded").
 	Reason string `json:"reason,omitempty"`
-	// ID optionally identifies a live step so a later StepTombstone (or
-	// StepToolDelta chunk) can reference it.
+	// ID identifies a live card. A later step with the same ID replaces it unless
+	// Append is set; a non-running replacement closes the card.
 	ID string `json:"id,omitempty"`
-	// Ref is the target step ID a StepTombstone retracts.
+	// Ref is the target live-card ID a StepTombstone retracts when no final card
+	// will arrive (for example, cancellation).
 	Ref string `json:"ref,omitempty"`
 	// StepDiff payload: the changed file path, its added/removed line counts, an
 	// optional unified patch, and whether the file was newly created.
@@ -164,10 +164,12 @@ type TurnStep struct {
 	// SubSteps carries the nested activity trace of a StepSubagent step — the
 	// subagent's own tool calls / thinking, captured in its isolated context.
 	SubSteps []TurnStep `json:"subSteps,omitempty"`
-	// Running marks a PARTIAL live card (currently only StepSubagent): the work is
-	// still in flight and a later step with the same ID replaces this one. Never
-	// set on a persisted step.
+	// Running marks a partial live card. A later step with the same ID replaces it.
+	// Never set on a persisted step.
 	Running bool `json:"running,omitempty"`
+	// Append adds Text/Output to the existing live card with the same ID instead
+	// of replacing it. Append frames are ephemeral and never persisted.
+	Append bool `json:"append,omitempty"`
 	// Batch groups tool steps born from ONE provider response that carried
 	// multiple parallel tool calls: all of them share the same 1-based group id
 	// (unique within the turn), so the UI can render them as one "N parallel

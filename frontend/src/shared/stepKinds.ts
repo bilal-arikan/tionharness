@@ -26,7 +26,7 @@ import {
 } from 'lucide-react'
 import type { StepKind } from '@/types'
 
-export type StepStatus = 'active' | 'infra'
+export type StepStatus = 'active' | 'infra' | 'legacy'
 
 export interface StepKindInfo {
   kind: StepKind
@@ -35,7 +35,7 @@ export interface StepKindInfo {
   Icon: LucideIcon
   /** Whether the step persists in the saved trace or is live-only. */
   persisted: boolean
-  /** "active" = a producer emits it today; "infra" = type/UI ready, producer pending. */
+  /** "active" = produced today; "infra" = producer pending; "legacy" = read-only compatibility. */
   status: StepStatus
   description: string
 }
@@ -141,9 +141,9 @@ export const STEP_KINDS: StepKindInfo[] = [
     label: 'Araç çıktı akışı',
     Icon: Terminal,
     persisted: false,
-    status: 'active',
+    status: 'legacy',
     description:
-      'Uzun bir aracın çıktısını çalışırken parça parça akıtır (aynı ID birleştirilir). shell aracı stdout/stderr’i canlı akıtır.',
+      'Yalnız eski kalıcı oturumları okumak için korunur. Yeni araç çıktı parçaları generic Append sözleşmesini kullanır.',
   },
   {
     kind: 'tombstone',
@@ -152,7 +152,7 @@ export const STEP_KINDS: StepKindInfo[] = [
     persisted: false,
     status: 'active',
     description:
-      'Daha önce yayılan canlı bir adımı UI’dan kaldıran kontrol sinyali (Ref hedef adım ID’si). Kendisi render edilmez. Akış bitince placeholder’ı geri çeker; iptalde de kullanılır.',
+      'İptal veya panic nedeniyle final kartı gelemeyecek canlı adımı UI’dan kaldırır (Ref hedef adım ID’si). Kendisi render edilmez.',
   },
   {
     kind: 'diff',

@@ -251,22 +251,17 @@ type SubagentProfile struct {
 
 ### Canlı kart (2026-08-21)
 
-Eskiden `run_subagent` çağrısı boyunca sohbette **hiçbir adım görünmüyordu**:
-`runAgent` alt-ajanı `onStep = nil` ile koşturuyor, iz yalnızca bitişte tek
-seferde `StepSubagent` kartına dönüşüyordu. Artık:
+Her araç gibi `run_subagent` da çağrı başında generic `liveCard` açar. Kartın
+`ID` değeri araç çağrısının `call.ID` değeridir ve `Running: true` taşır.
+`subStepSink`, alt-ajanın her adımında aynı kartı biriken `SubSteps` ile
+`liveCard.Update` üzerinden yeniler; paralel fan-out emitleri ortak serileştirilmiş
+kanaldan geçer.
 
-- `subStepSink` bir canlı yayıncıya bağlanabilir (`bindLive(callID, emit)`,
-  mutex korumalı — paralel fan-out'ta da güvenli).
-- `runAgent`, hedef ajan çözülür çözülmez **başlangıç kartını** yayınlar
-  (`Running: true`, `ID = call.ID`), sonra alt-ajanın her adımında kartı o ana
-  kadar birikmiş `SubSteps` ile yeniden yayınlar.
-- Bitişte nihai `StepSubagent` kartı **aynı `call.ID`** ile gider ve canlı kartın
-  yerini alır (`Running` yok). Alt adım üretmeden biten/hatalı bir çağrıda canlı
-  kart açık `StepTombstone` ile geri çekilir.
-- `TurnStep.Running` (`running,omitempty`) yalnız kısmi/canlı kartı işaretler;
-  kalıcılaşan adımlarda hiç set edilmez.
-- Frontend: `chatStreamHub.applyStep` `subagent` adımını `id` ile **yerine koyar**
-  (biriktirmez); `SubagentStep.tsx` `running` iken "çalışıyor…" göstergesi çizer.
+Bitişte nihai `StepSubagent` aynı ID ile yayınlanır, `Running`/`Append` taşımaz ve
+canlı kartı yerinde değiştirir. İptal veya panic nedeniyle final kartı gelemiyorsa
+`StepTombstone` kartı geri çeker. "çalışıyor…" rozeti subagent'a özel değildir;
+`TurnSteps` bütün `Running` adımlarına generic olarak uygular. Genel sözleşme için
+bkz. [07-CHAT-UX.md](07-CHAT-UX.md#canlı-adım-kartı-sözleşmesi-2026-08-21).
 
 ## Paralel fan-out
 

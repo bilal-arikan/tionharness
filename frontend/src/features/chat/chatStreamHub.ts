@@ -208,36 +208,32 @@ export function makeHubHandlers(ctx: HubApplyCtx): SessionStreamHandlers {
   }
 
   const applyStep = (st: TurnStep) => {
+    // Legacy: only for previously persisted sessions. New live frames use the
+    // generic ID + append/replace contract below.
     if (st.kind === 'tombstone') {
       steps = steps.filter((s) => s.id !== st.ref)
-    } else if (st.kind === 'thinking' && st.id) {
-      const idx = steps.findIndex((s) => s.kind === 'thinking' && s.id === st.id)
-      if (idx >= 0) {
-        const merged = { ...steps[idx], text: (steps[idx].text || '') + (st.text || '') }
-        steps = steps.map((s, k) => (k === idx ? merged : s))
-      } else steps = [...steps, st]
-    } else if (st.kind === 'subagent' && st.id) {
-      // A subagent publishes a live card (running=true) that is republished on
-      // every nested step and finally superseded by the completed one — all under
-      // the same call id, so replace in place instead of appending.
-      const idx = steps.findIndex((s) => s.kind === 'subagent' && s.id === st.id)
-      if (idx >= 0) {
-        steps = steps.map((s, k) => (k === idx ? st : s))
-      } else steps = [...steps, st]
     } else if (st.kind === 'tool_delta' && st.id) {
       const idx = steps.findIndex((s) => s.kind === 'tool_delta' && s.id === st.id)
       if (idx >= 0) {
         const merged = { ...steps[idx], output: (steps[idx].output || '') + (st.output || '') }
         steps = steps.map((s, k) => (k === idx ? merged : s))
       } else steps = [...steps, st]
-    } else {
-      // A final tool step replaces the matching streaming tool_delta placeholder
-      // if one was emitted earlier. The server publishes a tombstone for this
-      // (KindTombstone) and normally gets there first; this is the belt-and-
-      // braces path for a window that missed the ephemeral tombstone event.
-      if (st.kind === 'tool' && st.id) {
-        steps = steps.filter((s) => !(s.kind === 'tool_delta' && s.id === st.id))
+    } else if (st.id) {
+      const idx = steps.findIndex((s) => s.id === st.id)
+      if (idx < 0) {
+        steps = [...steps, st]
+      } else if (st.append) {
+        const merged = {
+          ...steps[idx],
+          ...st,
+          text: (steps[idx].text || '') + (st.text || ''),
+          output: (steps[idx].output || '') + (st.output || ''),
+        }
+        steps = steps.map((s, k) => (k === idx ? merged : s))
+      } else {
+        steps = steps.map((s, k) => (k === idx ? st : s))
       }
+    } else {
       steps = [...steps, st]
     }
     syncGhost()

@@ -54,9 +54,6 @@ export function SubagentStep({ step, onOpenFile, onOpenArtifact }: Props) {
         {task && (
           <span className="min-w-0 flex-1 truncate text-[var(--color-text-dim)]">{task}</span>
         )}
-        {running && (
-          <span className="shrink-0 animate-pulse text-[var(--color-text-dim)]">çalışıyor…</span>
-        )}
         {step.isError && <span className="shrink-0 text-[var(--color-danger)]">hata</span>}
         {sub.length > 0 && (
           <span className="shrink-0 text-[var(--color-text-dim)]">{sub.length} adım</span>

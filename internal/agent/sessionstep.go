@@ -11,16 +11,20 @@ import (
 // process-wide event bus for session-step subscribers (other windows viewing the
 // session, or an autonomous turn with no per-request SSE of its own).
 //
-// The high-frequency token/output chunks (delta / tool_delta) are dropped — they
-// would flood the shared bus and the full text/output lands on the persisted
-// message anyway. The interactive prompts (ask / permission / plan) are dropped
+// Ephemeral live frames (Running / Append) are dropped — they would either flood
+// the shared bus or persist a card that can never finish after session reload;
+// the final replacement lands on the persisted message. The interactive prompts
+// (ask / permission / plan) are dropped
 // too: only the window that OWNS the running turn holds the runId needed to
 // answer them, so surfacing them to a passive observer would be a dead card.
 // Everything else — thinking, tool calls/results, todos, diffs, recovery,
 // errors, subagents — is meaningful activity worth showing live.
-func busForwardable(k StepKind) bool {
-	switch k {
-	case StepDelta, StepToolDelta, StepAsk, StepPermission, StepPlan, StepTombstone:
+func busForwardable(st TurnStep) bool {
+	if st.Append || st.Running {
+		return false
+	}
+	switch st.Kind {
+	case StepDelta, StepAsk, StepPermission, StepPlan, StepTombstone:
 		return false
 	}
 	return true
@@ -33,7 +37,7 @@ func busForwardable(k StepKind) bool {
 // persisted on the finished assistant message, so a dropped step is only a
 // missed live frame, never lost history.
 func (r *Runtime) emitSessionStep(sessionID string, st TurnStep, origin string) {
-	if sessionID == "" || !busForwardable(st.Kind) {
+	if sessionID == "" || !busForwardable(st) {
 		return
 	}
 	target := map[string]string{"sessionId": sessionID}

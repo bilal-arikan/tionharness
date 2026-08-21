@@ -189,6 +189,47 @@ describe('tool_delta live output', () => {
   })
 })
 
+describe('generic live cards', () => {
+  beforeEach(() => vi.useFakeTimers())
+  afterEach(() => vi.useRealTimers())
+
+  it('merges append frames into the matching card', () => {
+    const { send, ghost } = harness()
+    send(HubKind.Step, { kind: 'tool', id: 'call-1', tool: 'Bash', running: true })
+    send(HubKind.Step, {
+      kind: 'tool',
+      id: 'call-1',
+      tool: 'Bash',
+      output: 'one',
+      running: true,
+      append: true,
+    })
+    send(HubKind.Step, {
+      kind: 'tool',
+      id: 'call-1',
+      tool: 'Bash',
+      output: 'two',
+      running: true,
+      append: true,
+    })
+    vi.advanceTimersByTime(50)
+
+    const steps = JSON.parse(ghost()?.steps ?? '[]')
+    expect(steps).toHaveLength(1)
+    expect(steps[0].output).toBe('onetwo')
+  })
+
+  it('replaces a matching id in place', () => {
+    const { send, ghost } = harness()
+    send(HubKind.Step, { kind: 'tool', id: 'call-1', tool: 'Bash', running: true })
+    send(HubKind.Step, { kind: 'diff', id: 'call-1', tool: 'Write', path: 'result.txt' })
+    vi.advanceTimersByTime(50)
+
+    const steps = JSON.parse(ghost()?.steps ?? '[]')
+    expect(steps).toEqual([{ kind: 'diff', id: 'call-1', tool: 'Write', path: 'result.txt' }])
+  })
+})
+
 describe('subagent live card', () => {
   beforeEach(() => vi.useFakeTimers())
   afterEach(() => vi.useRealTimers())

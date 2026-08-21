@@ -56,7 +56,7 @@ export interface TurnStep {
   todos?: TodoItem[]
   // Stable machine tag for a 'recovery'/'error' step (e.g. "max_tool_iterations").
   reason?: string
-  // Optional id of a live step, referenced by a 'tombstone' or 'tool_delta'.
+  // Optional live-card id. Matching ids replace unless append is set.
   id?: string
   // Target step id a 'tombstone' retracts.
   ref?: string
@@ -70,9 +70,10 @@ export interface TurnStep {
   // Nested activity trace of a 'subagent' step — the subagent's own tool calls /
   // thinking, captured in its isolated context.
   subSteps?: TurnStep[]
-  // Marks a PARTIAL live 'subagent' card: the delegation is still running and a
-  // later step with the same id replaces this one. Never set on a persisted step.
+  // Marks a partial live card. Never set on a persisted step.
   running?: boolean
+  // Appends text/output to the matching live card instead of replacing it.
+  append?: boolean
   // Parallel-batch group id (1-based, unique within the turn): steps born from
   // ONE provider response that carried multiple parallel tool calls share it, so
   // the UI clusters them. Absent/0 = lone call.

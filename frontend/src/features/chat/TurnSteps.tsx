@@ -96,6 +96,27 @@ function renderStep(
   return null
 }
 
+function renderLiveStep(
+  step: TurnStep,
+  key: string,
+  sessionId?: string,
+  onOpenFile?: (path: string) => void,
+  onOpenArtifact?: (id: string) => void,
+) {
+  const node = renderStep(step, `${key}-card`, sessionId, onOpenFile, onOpenArtifact)
+  if (!node) return null
+  return (
+    <div key={key} className="relative">
+      {node}
+      {step.running && (
+        <span className="pointer-events-none absolute right-7 top-1 animate-pulse text-[10px] text-[var(--color-text-dim)]">
+          çalışıyor…
+        </span>
+      )}
+    </div>
+  )
+}
+
 // TurnSteps renders an assistant turn's activity trace as compact, collapsible
 // cards: thinking blocks, intermediate narration and tool activity cards — all
 // single-line by default, expandable on click. Consecutive steps sharing a
@@ -123,7 +144,9 @@ export const TurnSteps = memo(function TurnSteps({
       while (j < steps.length && (steps[j].batch ?? 0) === b) j++
       const group = steps.slice(i, j)
       const rendered = group
-        .map((s, k) => renderStep(s, stableKey(s, i + k), sessionId, onOpenFile, onOpenArtifact))
+        .map((s, k) =>
+          renderLiveStep(s, stableKey(s, i + k), sessionId, onOpenFile, onOpenArtifact),
+        )
         .filter(Boolean)
       if (rendered.length > 1) {
         // Keyed by the batch id + first step's stable key so the group wrapper
@@ -148,7 +171,13 @@ export const TurnSteps = memo(function TurnSteps({
       i = j
       continue
     }
-    const node = renderStep(steps[i], stableKey(steps[i], i), sessionId, onOpenFile, onOpenArtifact)
+    const node = renderLiveStep(
+      steps[i],
+      stableKey(steps[i], i),
+      sessionId,
+      onOpenFile,
+      onOpenArtifact,
+    )
     if (node) out.push(node)
     i++
   }

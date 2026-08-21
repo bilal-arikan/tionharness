@@ -212,23 +212,24 @@ func TestDelegationContract(t *testing.T) {
 func TestSubStepSinkEmitsLiveCards(t *testing.T) {
 	var got []TurnStep
 	s := &subStepSink{}
-	s.bindLive("call-1", func(st TurnStep) { got = append(got, st) })
+	card := openLive(func(st TurnStep) { got = append(got, st) }, "call-1", TurnStep{Kind: StepTool})
+	s.bindLive(card)
 
 	s.emitLive(nil) // start card, before any nested step
 	s.addSteps(TurnStep{Kind: StepTool, Tool: "Read"})
 	s.emitLive(nil)
 
-	if len(got) != 2 {
-		t.Fatalf("want 2 live cards, got %d", len(got))
+	if len(got) != 3 {
+		t.Fatalf("want open card + 2 live updates, got %d", len(got))
 	}
-	for i, st := range got {
+	for i, st := range got[1:] {
 		if st.Kind != StepSubagent || st.ID != "call-1" || !st.Running {
 			t.Fatalf("card %d is not a running subagent card for call-1: %+v", i, st)
 		}
 	}
-	if len(got[0].SubSteps) != 0 || len(got[1].SubSteps) != 1 {
+	if len(got[1].SubSteps) != 0 || len(got[2].SubSteps) != 1 {
 		t.Fatalf("live cards must carry the steps gathered so far: %d then %d",
-			len(got[0].SubSteps), len(got[1].SubSteps))
+			len(got[1].SubSteps), len(got[2].SubSteps))
 	}
 	if len(s.collected()) != 1 {
 		t.Fatalf("sink must keep collecting for the final card, got %d", len(s.collected()))

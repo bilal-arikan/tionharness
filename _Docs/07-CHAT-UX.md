@@ -29,6 +29,26 @@ sohbet ekranı gibi.
     Böylece **API anahtarı olmadan** da tool kartları + ara adımlar görünür.
 
 ### Kalıcılık
+
+#### Canlı adım kartı sözleşmesi (2026-08-21)
+
+Araçlar ve düşünme akışı tek generic canlı kart mekanizmasını kullanır:
+
+- `ID`, canlı kartın kimliğidir; araç kartlarında araç çağrısının `call.ID`
+  değeridir.
+- `Running: true`, adımın kısmi olduğunu ve UI'da "çalışıyor…" gösterileceğini
+  belirtir.
+- `Append: true`, aynı ID'deki mevcut kartın `text`/`output` içeriğine parçayı
+  ekler. Araç stdout/stderr parçaları artık ayrı `tool_delta` üretmez.
+- Aynı ID ile gelen `Append` taşımayan adım mevcut kartı yerinde değiştirir.
+  Final adım `Running` ve `Append` taşımaz; kalıcı mesaja yalnız bu kapanmış biçim
+  girebilir.
+- `tombstone`, yalnız iptal veya panic nedeniyle final kartı gelemeyen canlı kartı
+  `Ref` ile geri çeker.
+
+`tool_delta` kind sabiti ve frontend okuma dalı yalnız daha önce kalıcılaştırılmış
+eski oturumlar için korunur; yeni üretim yolu değildir.
+
 - `Message.Steps` alanı (`session.jsonl` mesaj satırında JSON dizisi). Tur yeniden
   yüklemede yeniden çizilebilsin diye iz JSON olarak saklanır. (Depolama dosya-tabanlı;
   bkz. `_Docs/08-DEPOLAMA.md` — eski SQLite `0007_message_steps.sql` migration'ının yerini bu alan aldı.)

@@ -83,21 +83,19 @@ func SubagentProfiles() []SubagentProfile {
 // is not decorative: parallel fan-out runs several subagents concurrently and the
 // parent loop reads the collected steps from another goroutine.
 type subStepSink struct {
-	mu     sync.Mutex
-	steps  []TurnStep
-	live   func(TurnStep)
-	callID string
+	mu    sync.Mutex
+	steps []TurnStep
+	live  *liveCard
 }
 
 type subStepSinkKey struct{}
 
 // bindLive attaches the parent turn's step emitter and the run_subagent call id
 // this sink belongs to. Without it the sink only collects (legacy behaviour).
-func (s *subStepSink) bindLive(callID string, emit func(TurnStep)) {
+func (s *subStepSink) bindLive(card *liveCard) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.callID = callID
-	s.live = emit
+	s.live = card
 }
 
 // collected returns a copy of the nested steps gathered so far.
@@ -127,19 +125,17 @@ func (s *subStepSink) addSteps(steps ...TurnStep) {
 // the final step (same id) replaces it in the UI.
 func (s *subStepSink) emitLive(input json.RawMessage) {
 	s.mu.Lock()
-	live, id := s.live, s.callID
+	live := s.live
 	steps := append([]TurnStep(nil), s.steps...)
 	s.mu.Unlock()
 	if live == nil {
 		return
 	}
-	live(TurnStep{
-		Kind:     StepSubagent,
-		ID:       id,
-		Tool:     "run_subagent",
-		Input:    input,
-		SubSteps: steps,
-		Running:  true,
+	live.Update(func(st *TurnStep) {
+		st.Kind = StepSubagent
+		st.Tool = "run_subagent"
+		st.Input = input
+		st.SubSteps = steps
 	})
 }
 
@@ -368,6 +364,7 @@ type subFuture struct {
 	res   providers.ToolResult
 	steps []TurnStep
 	done  chan struct{}
+	card  *liveCard
 }
 
 // subagentCardInput renders the {target, task} payload the subagent card header
@@ -414,14 +411,21 @@ func (r *Runtime) launchParallelSubagents(ctx context.Context, reg *tools.Regist
 			continue
 		}
 		f := &subFuture{done: make(chan struct{})}
+		if emit != nil && call.ID != "" {
+			f.card = openLive(emit, call.ID, TurnStep{
+				Kind:  StepTool,
+				Tool:  call.Name,
+				Input: call.Input,
+			})
+		}
 		futures[call.ID] = f
 		wg.Add(1)
 		go func(call providers.ToolCall, f *subFuture) {
 			defer wg.Done()
 			defer close(f.done)
 			cctx, sink := withSubStepSink(ctx)
-			if emit != nil && call.ID != "" {
-				sink.bindLive(call.ID, emit)
+			if f.card != nil {
+				sink.bindLive(f.card)
 			}
 			f.res = reg.Call(cctx, call)
 			f.steps = sink.collected()

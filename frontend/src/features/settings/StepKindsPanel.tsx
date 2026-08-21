@@ -34,7 +34,11 @@ export function StepKindsPanel() {
                       : 'bg-[color-mix(in_srgb,var(--color-warning)_15%,transparent)] text-[var(--color-warning)]'
                   }`}
                 >
-                  {s.status === 'active' ? 'aktif' : 'altyapı hazır'}
+                  {s.status === 'active'
+                    ? 'aktif'
+                    : s.status === 'legacy'
+                      ? 'eski oturum uyumu'
+                      : 'altyapı hazır'}
                 </span>
                 <span className="rounded bg-[var(--color-surface-2)] px-1.5 py-0.5 text-[10px] text-[var(--color-text-dim)]">
                   {s.persisted ? 'kalıcı' : 'yalnız-canlı'}

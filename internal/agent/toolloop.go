@@ -7,13 +7,13 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/bilal-arikan/tionswarm/internal/conversation"
 	"github.com/bilal-arikan/tionswarm/internal/db"
 	"github.com/bilal-arikan/tionswarm/internal/providers"
 	"github.com/bilal-arikan/tionswarm/internal/tools"
+	"github.com/google/uuid"
 )
 
 // defaultMaxToolIters bounds the native agentic loop so a misbehaving model can't
@@ -505,11 +505,15 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 	// context subagent see the conversation as it stands when the tool fires.
 	ctx = r.withRunAgent(ctx, agent, &req, autonomous)
 
-	emit := func(s TurnStep) {
+	emit := serializeStepEmitter(func(s TurnStep) {
 		if onStep != nil {
 			onStep(s)
 		}
-	}
+	})
+	// Keep the current batch reachable by panic cleanup. Tool implementations and
+	// streaming callbacks may panic after several parallel cards have opened.
+	var activeLiveCards map[string]*liveCard
+	defer cancelLiveCardsOnPanic(&activeLiveCards)
 
 	var last *providers.Response
 	// turnUsage sums the token usage of EVERY provider call this turn makes (each
@@ -791,15 +795,20 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 		// Parallel fan-out: when this batch holds multiple run_subagent calls, start
 		// them concurrently up front; the loop below awaits each future in place
 		// (results stay in tool_use order). nil when there is nothing to parallelise.
-		// Live subagent cards are emitted from those worker goroutines, so the
-		// fan-out gets a serialized view of emit (the loop's own emit calls all
-		// happen on this goroutine, between the launch and the awaited futures).
-		var fanoutEmitMu sync.Mutex
-		subFutures := r.launchParallelSubagents(ctx, reg, resp.ToolCalls, func(s TurnStep) {
-			fanoutEmitMu.Lock()
-			defer fanoutEmitMu.Unlock()
-			emit(s)
-		})
+		// Live subagent cards are emitted from worker goroutines while the loop can
+		// emit post-tool steps. Every path in this batch must share one serialized
+		// emitter; wrapping either path again would risk double locking.
+		// emit is serialized once for the whole turn, so every synchronous loop
+		// step and every worker callback shares the same lock.
+		safeEmit := emit
+		subFutures := r.launchParallelSubagents(ctx, reg, resp.ToolCalls, safeEmit)
+		openCards := make(map[string]*liveCard, len(resp.ToolCalls))
+		activeLiveCards = openCards
+		for id, future := range subFutures {
+			if future.card != nil {
+				openCards[id] = future.card
+			}
+		}
 		results := make([]providers.ToolResult, 0, len(resp.ToolCalls))
 		// One multi-call response = one parallel batch: allocate its group id so
 		// every step below (tool cards, permission/guardrail errors) carries it.
@@ -838,7 +847,7 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 			pre := r.runPreToolHooks(ctx, "", call)
 			for _, st := range pre.steps {
 				steps = append(steps, st)
-				emit(st)
+				safeEmit(st)
 			}
 			if len(pre.input) > 0 {
 				call.Input = pre.input
@@ -872,7 +881,7 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 				results = append(results, providers.ToolResult{CallID: call.ID, Content: denyMsg, IsError: true})
 				st := TurnStep{Kind: StepError, Tool: call.Name, Reason: "permission_denied", Text: denyMsg, IsError: true, Batch: batch}
 				steps = append(steps, st)
-				emit(st)
+				safeEmit(st)
 				continue
 			}
 
@@ -886,7 +895,7 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 				results = append(results, providers.ToolResult{CallID: call.ID, Content: msg, IsError: true})
 				st := TurnStep{Kind: StepError, Tool: call.Name, Reason: "mcp_repair", Text: msg, IsError: true, Batch: batch}
 				steps = append(steps, st)
-				emit(st)
+				safeEmit(st)
 				continue
 			}
 
@@ -910,7 +919,7 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 					results = append(results, providers.ToolResult{CallID: call.ID, Content: msg, IsError: true})
 					st := TurnStep{Kind: StepError, Tool: call.Name, Reason: "mcp_args", Text: msg, IsError: true, Batch: batch}
 					steps = append(steps, st)
-					emit(st)
+					safeEmit(st)
 					continue
 				}
 			}
@@ -932,7 +941,7 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 				results = append(results, providers.ToolResult{CallID: call.ID, Content: denyMsg, IsError: true})
 				st := TurnStep{Kind: StepError, Tool: call.Name, Reason: "guardrail_" + name, Text: denyMsg, IsError: true, Batch: batch}
 				steps = append(steps, st)
-				emit(st)
+				safeEmit(st)
 				continue
 			}
 
@@ -940,23 +949,38 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 			// edit_file) can surface a structured diff for the UI card below. A
 			// per-call subagent sink lets run_subagent hand back its nested trace so
 			// the row is promoted to a collapsible StepSubagent.
+			var card *liveCard
+			if f := subFutures[call.ID]; f != nil && f.card != nil {
+				card = f.card
+				card.Update(func(st *TurnStep) {
+					st.Input = call.Input
+					st.Batch = batch
+				})
+			} else {
+				card = openLive(safeEmit, call.ID, TurnStep{
+					Kind:  StepTool,
+					Tool:  call.Name,
+					Input: call.Input,
+					Batch: batch,
+				})
+			}
+			openCards[call.ID] = card
 			callCtx, diffs := tools.WithDiffSink(ctx)
 			callCtx, subs := withSubStepSink(callCtx)
 			// Sequential run_subagent: stream the delegation's nested steps live under
 			// this call's id, so the card appears immediately and grows while it runs.
 			if call.Name == "run_subagent" && call.ID != "" && subFutures[call.ID] == nil {
-				subs.bindLive(call.ID, emit)
+				subs.bindLive(card)
 			}
 			// Per-call optimizer sink: a shell tool whose output was shrunk by sqz
 			// (or whose command was rtk-wrapped) reports it here, so the card can
 			// show what the model actually received.
 			callCtx, opts := tools.WithOptimizerSink(callCtx)
 
-			// Stream long-running tool output live as tool_delta chunks (keyed by
-			// the call id) when the tool and the live sink both support it.
+			// Stream long-running tool output into the already-open live card when
+			// the tool and live sink support it.
 			toolStart := time.Now()
 			var res providers.ToolResult
-			streamed := false
 			if f := subFutures[call.ID]; f != nil {
 				// Parallel run_subagent: the runner was launched before the loop; wait
 				// for it and adopt its result + nested trace (promoted to StepSubagent
@@ -968,11 +992,10 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 				res = f.res
 				subs.setSteps(f.steps)
 			} else if onStep != nil && call.ID != "" && reg.CanStream(call.Name) {
-				// Streaming tool: its tool_delta chunks touch the watchdog on every
+				// Streaming tool: its chunks touch the watchdog on every
 				// chunk, so a stall is still caught on idle — no heartbeat here.
 				res = reg.CallStream(callCtx, call, func(chunk string) {
-					streamed = true
-					emit(TurnStep{Kind: StepToolDelta, ID: call.ID, Tool: call.Name, Output: chunk})
+					card.Chunk(chunk)
 				})
 			} else {
 				// Non-streaming tool: a one-shot big write or a multi-minute shell
@@ -981,11 +1004,6 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 				stopHeartbeat := startActivityHeartbeat(callCtx)
 				res = reg.Call(callCtx, call)
 				stopHeartbeat()
-			}
-			// Retract the live streaming placeholder; the final card (or the
-			// cancellation error below) takes its place.
-			if streamed {
-				emit(TurnStep{Kind: StepTombstone, Ref: call.ID})
 			}
 			// Debug journal: record this tool's latency, output size and outcome
 			// (pre-compaction size, the true tool output) for optimisation.
@@ -1008,6 +1026,7 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 			// so the in-flight history never carries a dangling tool_use (which the
 			// provider rejects on any later replay / reactive compaction).
 			if ctx.Err() != nil {
+				cancelLiveCards(openCards)
 				results = fillCancelledResults(results, resp.ToolCalls)
 				req.Messages = append(req.Messages, providers.Message{
 					Role:        providers.RoleUser,
@@ -1030,7 +1049,7 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 			post := r.runPostToolHooks(ctx, "", call, res)
 			for _, st := range post.steps {
 				steps = append(steps, st)
-				emit(st)
+				safeEmit(st)
 			}
 			if post.output != nil {
 				res.Content = *post.output
@@ -1130,17 +1149,11 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 			if subSteps := subs.collected(); len(subSteps) > 0 && !res.IsError {
 				st.Kind = StepSubagent
 				st.SubSteps = subSteps
-				// Same id as the live cards emitted during the run, so this final
-				// (Running=false) card replaces them instead of stacking.
-				st.ID = call.ID
-			} else if call.Name == "run_subagent" && call.ID != "" {
-				// A live card may already be on screen but this run yielded no nested
-				// trace (errored or produced nothing), so the plain tool row below will
-				// not replace it — retract it explicitly.
-				emit(TurnStep{Kind: StepTombstone, Ref: call.ID})
 			}
+			st.ID = call.ID
 			steps = append(steps, st)
-			emit(st)
+			card.Close(st)
+			delete(openCards, call.ID)
 		}
 		// A programmatic batch (calls made from Claude's code) constrains the
 		// answering message to PURE tool_result blocks and defers steering until
@@ -1169,7 +1182,7 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 				Text:   "Araç döngüsü guardrail tarafından durduruldu: " + guardHaltReason,
 			}
 			steps = append(steps, rec)
-			emit(rec)
+			safeEmit(rec)
 			return last, steps, nil
 		}
 		// Phase 3: drop lazy tools activated but left unused for a while, so a long
@@ -1177,6 +1190,7 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 		if pruned := active.Prune(activeToolMaxIdle); len(pruned) > 0 {
 			r.logger.Info("pruned idle lazy tools", "agent", agent.ID, "tools", pruned)
 		}
+		activeLiveCards = nil
 	}
 	r.logger.Warn("tool loop hit iteration cap", "agent", agent.ID)
 	rec := TurnStep{
@@ -1308,11 +1322,6 @@ func (r *Runtime) recordedComplete(ctx context.Context, agent db.Agent, provider
 	return resp, nil
 }
 
-// liveThinkingID keys the live thinking chunks so the UI merges the streamed
-// reasoning deltas into a single growing thinking block (same pattern as
-// tool_delta merging) rather than rendering one card per chunk.
-const liveThinkingID = "thinking-stream"
-
 // recordedStream streams a completion, forwarding each chunk as a live step, and
 // records usage. Text chunks become transient StepDelta (live UI only; the full
 // text is on resp.Text); thinking chunks become a merged live StepThinking. The
@@ -1320,10 +1329,14 @@ const liveThinkingID = "thinking-stream"
 // caller persists so the reasoning block survives reload.
 func (r *Runtime) recordedStream(ctx context.Context, agent db.Agent, sm providers.Streamer, req providers.Request, onStep func(TurnStep)) (*providers.Response, error) {
 	req = r.withMaxOutput(agent.Provider, req)
+	var thinking *liveCard
 	resp, err := sm.Stream(ctx, req, func(d providers.StreamDelta) {
 		switch d.Kind {
 		case providers.DeltaThinking:
-			onStep(TurnStep{Kind: StepThinking, Text: d.Text, ID: liveThinkingID})
+			if thinking == nil {
+				thinking = openLive(onStep, "thinking-"+uuid.NewString(), TurnStep{Kind: StepThinking})
+			}
+			thinking.Chunk(d.Text)
 		default:
 			onStep(TurnStep{Kind: StepDelta, Text: d.Text})
 		}
