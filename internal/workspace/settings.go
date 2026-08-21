@@ -2,6 +2,7 @@ package workspace
 
 import (
 	"bytes"
+	"context"
 	_ "embed"
 	"encoding/json"
 	"errors"
@@ -314,6 +315,16 @@ func (m *Manager) UpdateSettings(id string, patch WSSettingsPatch) (*Workspace, 
 	}
 
 	ws.settings.mu.Lock()
+	// Captured before BoardColumns is overwritten below, so the rename/delete
+	// diff run after saveSettings has both the pre- and post-patch column set.
+	var oldBoardCols, newBoardCols []db.BoardColumnDef
+	if patch.BoardColumns != nil {
+		oldBoardCols = ws.settings.cur.BoardColumns
+		if len(oldBoardCols) == 0 {
+			oldBoardCols = db.DefaultBoardColumns()
+		}
+		newBoardCols = *patch.BoardColumns
+	}
 	if patch.Instructions != nil {
 		ws.settings.cur.Instructions = *patch.Instructions
 	}
@@ -382,6 +393,14 @@ func (m *Manager) UpdateSettings(id string, patch WSSettingsPatch) (*Workspace, 
 
 	if err := ws.saveSettings(); err != nil {
 		return nil, err
+	}
+	// A column rename or delete leaves tasks pointing at a BoardState the new
+	// column set no longer has, which would silently drop them off the board.
+	// Migrate them now that the new column set is durably saved.
+	if patch.BoardColumns != nil && ws.DB != nil {
+		if _, err := ws.DB.MigrateBoardColumns(context.Background(), oldBoardCols, newBoardCols); err != nil {
+			return nil, err
+		}
 	}
 	// Mirror an instructions change to config/instructions.md so the file and
 	// ws-settings.json stay in sync (the file is the source of truth on reload).

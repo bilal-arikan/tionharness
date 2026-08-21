@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"fmt"
+	"log/slog"
 )
 
 // BoardChangeEvent describes a single kanban card change. It is delivered to the
@@ -216,4 +217,90 @@ func (d *DB) DeleteTask(ctx context.Context, id string) error {
 		FromState: board, OwnerAgentID: owner, Tags: tags, Priority: prio,
 	})
 	return nil
+}
+
+// MigrateBoardColumns reconciles tasks' BoardState against a board-column
+// rename/delete. BoardColumnDef has no stable id — only Key — so a rename is
+// detected positionally: same index, different Key. Any old key absent from
+// newCols by either match (i.e. neither renamed nor still present verbatim)
+// is treated as deleted, and its tasks are moved to the first column of
+// newCols (falling back to BoardTodo if newCols is empty) so cards are never
+// silently dropped off the board. Persist + migration run under a single
+// write lock so a save can never land half-applied. Returns the number of
+// tasks whose BoardState changed.
+func (d *DB) MigrateBoardColumns(ctx context.Context, oldCols, newCols []BoardColumnDef) (moved int, err error) {
+	// Positional rename map: oldCols[i].Key -> newCols[i].Key when the key
+	// actually changed at that index. A column that just moved position without
+	// a key change is unaffected (its key still matches an entry in newCols).
+	renamed := make(map[string]string, len(oldCols))
+	for i := 0; i < len(oldCols) && i < len(newCols); i++ {
+		if oldCols[i].Key != newCols[i].Key {
+			renamed[oldCols[i].Key] = newCols[i].Key
+		}
+	}
+	stillPresent := make(map[string]bool, len(newCols))
+	for _, c := range newCols {
+		stillPresent[c.Key] = true
+	}
+	fallback := BoardTodo
+	if len(newCols) > 0 {
+		fallback = newCols[0].Key
+	}
+
+	// resolve maps an old key to where its tasks should land, or "" if the
+	// column is unchanged (still present verbatim, no migration needed).
+	resolve := func(oldKey string) string {
+		if stillPresent[oldKey] {
+			return ""
+		}
+		if newKey, ok := renamed[oldKey]; ok {
+			return newKey
+		}
+		// Old key no longer present and not a rename target: its column was
+		// deleted. Route orphaned tasks to the first remaining column rather
+		// than losing them.
+		return fallback
+	}
+
+	type migration struct {
+		fromState string
+		toState   string
+		ev        BoardChangeEvent
+	}
+	var toMigrate []migration
+
+	d.mu.Lock()
+	for _, t := range d.tasks {
+		to := resolve(t.BoardState)
+		if to == "" || to == t.BoardState {
+			continue
+		}
+		fromState := t.BoardState
+		t.BoardState = to
+		t.UpdatedAt = now()
+		if perr := d.persistTaskLocked(t); perr != nil {
+			d.mu.Unlock()
+			return moved, perr
+		}
+		d.tasks[t.ID] = t
+		toMigrate = append(toMigrate, migration{
+			fromState: fromState,
+			toState:   to,
+			ev: BoardChangeEvent{
+				TaskID: t.ID, Title: t.Title, Op: BoardOpMove,
+				FromState: fromState, ToState: to,
+				OwnerAgentID: t.OwnerAgentID, Tags: t.Tags, Priority: t.Priority,
+			},
+		})
+	}
+	moved = len(toMigrate)
+	d.mu.Unlock()
+
+	if moved > 0 {
+		slog.Info("board columns changed: migrated tasks", "moved", moved, "renamed", len(renamed))
+	}
+	for _, m := range toMigrate {
+		d.fireBoardHook(m.ev)
+	}
+	return moved, nil
 }
