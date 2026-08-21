@@ -522,13 +522,39 @@ Düzeltme (`internal/api/summary.go`): endpoint artık komutu **gerçek bir tur 
 olaylaştırır — işten **önce** user mesajını persist eder ve `KindUserMessage` +
 `KindAgentStart` + bir **durable** text step (busy etiketi) yayınlar → mid-op
 yenileyen bir abone in-flight tail'i replay edip komut balonu + canlı ghost'u
-görür; iş bitince `KindReply` + `KindTurnDone` + `Commit`. Hata durumunda
-`KindTurnError` + `Commit` ghost'u temizler, persist edilen `/kind` mesajı
-denendiğinin dürüst kaydı olarak kalır. `compact` fold sınırı komut mesajından
+görür; iş bitince `KindReply` + `KindTurnDone` + `Commit`. `compact` fold sınırı komut mesajından
 **önceki** history snapshot'ı üzerinden hesaplanır (komut + rapor daima en taze
 tail). Frontend `performSummarize` yalnız `tmp-` önekli optimistic user echo bırakır
 (hub `user_message` bunu düşürüp kalıcıyla değiştirir); asistan placeholder'ı hub
 ghost'u taşır.
+
+### Başarısız slash komutu da kalıcı iz bırakır (2026-08-21)
+
+Hata yolu başlangıçta yalnız `KindTurnError` + `Commit` yayınlıyordu: canlı
+pencerede ghost temizleniyordu ama **diskte hiçbir şey** yoktu — ne `debug.jsonl`
+kaydı ne de asistan mesajı. Gerçek vaka (WS24/SES34): codex CLI iki `/compact`
+denemesinde de `"Your access token could not be refreshed because your refresh
+token was revoked"` döndürdü; sayfa yenilenince transkriptte **cevapsız iki
+`/compact` balonu** kaldı, `debug.jsonl` boştu — hiç denenmemiş gibi görünüyordu.
+
+`recordSummaryFailure` (`internal/api/summary.go`) artık üçünü birden yapar:
+
+1. **Debug journal:** `type="error"`, `kind="command"`, `name="/<komut>"`,
+   `err=true`, `detail`/`error` sağlayıcı hatasını taşır → hata Session Debug
+   görünümünde ve `debug.jsonl`'de sıradan tur/araç hataları gibi görünür
+   (bkz. `_Docs/38-SESSION-DEBUG.md`).
+2. **Kalıcı asistan mesajı:** `⚠️ **/compact başarısız oldu** …` + sağlayıcı
+   hatası **birebir** (kod bloğu içinde, yumuşatılmadan) — transkript yenileme
+   sonrası da dürüst kalır, kullanıcı "refresh token was revoked" u görüp
+   aksiyon alabilir.
+3. **`KindTurnError`** olayı korunur, böylece canlı pencereler ghost'u anında
+   temizler; ardından `KindReply` + `Commit` + `emitSessionChange`.
+
+Kayıtlar `context.WithoutCancel` ile yazılır (hata çoğu kez istemci kopmasıdır;
+kalıcı iz tam da o anda gerekir) ve mesaj persist edilemezse hata **loglanır**,
+sessizce yutulmaz. Persist edilen `/kind` user mesajı da her hâlükârda
+denendiğinin kaydı olarak kalır. Regresyon testi:
+`internal/api/summary_failure_test.go`.
 
 **`/handoff` de aynı desende (2026-08-04):** `handleSessionHandoff` komutu ESKİ
 oturumun hub'ında olaylaştırır — user mesajı + "⏳ context reset" ghost'u işten

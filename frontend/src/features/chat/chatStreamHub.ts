@@ -216,6 +216,14 @@ export function makeHubHandlers(ctx: HubApplyCtx): SessionStreamHandlers {
         const merged = { ...steps[idx], text: (steps[idx].text || '') + (st.text || '') }
         steps = steps.map((s, k) => (k === idx ? merged : s))
       } else steps = [...steps, st]
+    } else if (st.kind === 'subagent' && st.id) {
+      // A subagent publishes a live card (running=true) that is republished on
+      // every nested step and finally superseded by the completed one — all under
+      // the same call id, so replace in place instead of appending.
+      const idx = steps.findIndex((s) => s.kind === 'subagent' && s.id === st.id)
+      if (idx >= 0) {
+        steps = steps.map((s, k) => (k === idx ? st : s))
+      } else steps = [...steps, st]
     } else if (st.kind === 'tool_delta' && st.id) {
       const idx = steps.findIndex((s) => s.kind === 'tool_delta' && s.id === st.id)
       if (idx >= 0) {

@@ -70,6 +70,9 @@ export interface TurnStep {
   // Nested activity trace of a 'subagent' step — the subagent's own tool calls /
   // thinking, captured in its isolated context.
   subSteps?: TurnStep[]
+  // Marks a PARTIAL live 'subagent' card: the delegation is still running and a
+  // later step with the same id replaces this one. Never set on a persisted step.
+  running?: boolean
   // Parallel-batch group id (1-based, unique within the turn): steps born from
   // ONE provider response that carried multiple parallel tool calls share it, so
   // the UI clusters them. Absent/0 = lone call.

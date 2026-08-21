@@ -77,12 +77,74 @@ func SubagentProfiles() []SubagentProfile {
 
 // subStepSink collects a subagent's nested activity trace so the parent tool loop
 // can promote the run_subagent tool row into a StepSubagent carrying SubSteps.
-type subStepSink struct{ steps []TurnStep }
+// When a live emitter is bound (bindLive), every nested step ALSO republishes a
+// partial StepSubagent card keyed by the parent call id, so the delegation is
+// visible in the chat while it runs instead of only after it returns. The mutex
+// is not decorative: parallel fan-out runs several subagents concurrently and the
+// parent loop reads the collected steps from another goroutine.
+type subStepSink struct {
+	mu     sync.Mutex
+	steps  []TurnStep
+	live   func(TurnStep)
+	callID string
+}
 
 type subStepSinkKey struct{}
 
+// bindLive attaches the parent turn's step emitter and the run_subagent call id
+// this sink belongs to. Without it the sink only collects (legacy behaviour).
+func (s *subStepSink) bindLive(callID string, emit func(TurnStep)) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.callID = callID
+	s.live = emit
+}
+
+// collected returns a copy of the nested steps gathered so far.
+func (s *subStepSink) collected() []TurnStep {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]TurnStep(nil), s.steps...)
+}
+
+// setSteps replaces the collected trace (used by the parallel path, which runs
+// the subagent under its own sink and hands the finished trace back).
+func (s *subStepSink) setSteps(steps []TurnStep) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.steps = steps
+}
+
+// addSteps appends to the collected trace.
+func (s *subStepSink) addSteps(steps ...TurnStep) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.steps = append(s.steps, steps...)
+}
+
+// emitLive publishes a partial StepSubagent card carrying everything gathered so
+// far. No-op when no live emitter is bound. The card reuses the parent call id so
+// the final step (same id) replaces it in the UI.
+func (s *subStepSink) emitLive(input json.RawMessage) {
+	s.mu.Lock()
+	live, id := s.live, s.callID
+	steps := append([]TurnStep(nil), s.steps...)
+	s.mu.Unlock()
+	if live == nil {
+		return
+	}
+	live(TurnStep{
+		Kind:     StepSubagent,
+		ID:       id,
+		Tool:     "run_subagent",
+		Input:    input,
+		SubSteps: steps,
+		Running:  true,
+	})
+}
+
 // withSubStepSink attaches a fresh sink to ctx and returns it; the parent loop
-// reads sink.steps after the run_subagent call to nest the subagent's trace.
+// reads sink.collected() after the run_subagent call to nest the subagent's trace.
 func withSubStepSink(ctx context.Context) (context.Context, *subStepSink) {
 	s := &subStepSink{}
 	return context.WithValue(ctx, subStepSinkKey{}, s), s
@@ -229,23 +291,39 @@ func (r *Runtime) runAgent(ctx context.Context, caller db.Agent, parentReq *prov
 		"from", caller.ID, "target", agent.Name, "ephemeral", ephemeral,
 		"depth", cur.depth+1, "context", orDefault(spec.Context, "isolated"))
 
+	// Live card: publish the delegation the moment the target is resolved (before
+	// the first token), then republish it on every nested step. Without this the
+	// chat shows nothing at all until the subagent's final reply lands. The card
+	// carries the resolved target + task so the header reads like the final one.
+	sink := subStepSinkFrom(ctx)
+	liveInput := subagentCardInput(agent.Name, task)
+	var onStep func(TurnStep)
+	if sink != nil {
+		sink.emitLive(liveInput)
+		onStep = func(st TurnStep) {
+			sink.addSteps(st)
+			sink.emitLive(liveInput)
+		}
+	}
+
 	// Run in an isolated trace. autonomous=true keeps it headless (interactive
 	// tools like ask_user no-op) and enforces the caller's daily budget.
-	resp, steps, err := r.completeTraced(WithCallKind(childCtx, KindSubagent), agent, provider, req, true, nil)
+	resp, steps, err := r.completeTraced(WithCallKind(childCtx, KindSubagent), agent, provider, req, true, onStep)
 	if err != nil {
 		return tools.RunAgentResult{}, fmt.Errorf("subagent %q failed: %w", agent.Name, err)
 	}
 	// Hand the subagent's nested trace to the parent loop (when a sink is wired) so
-	// it renders as a collapsible StepSubagent.
-	if sink := subStepSinkFrom(ctx); sink != nil {
-		sink.steps = steps
+	// it renders as a collapsible StepSubagent. The returned trace is authoritative
+	// and supersedes what the live emitter accumulated.
+	if sink != nil {
+		sink.setSteps(steps)
 	}
 	// SubagentStop lifecycle hook (Claude Code parity): a delegated subagent
 	// finished. Fire-and-forget audit; its injected context (if any) is folded
 	// onto the subagent's returned trace so the parent still sees it.
 	if sub := r.RunLifecycleHooks(ctx, "", db.HookSubagentStop, LifecycleExtras{}); len(sub.Steps) > 0 {
-		if sink := subStepSinkFrom(ctx); sink != nil {
-			sink.steps = append(sink.steps, sub.Steps...)
+		if sink != nil {
+			sink.addSteps(sub.Steps...)
 		}
 	}
 	return tools.RunAgentResult{AgentName: agent.Name, Reply: resp.Text}, nil
@@ -292,6 +370,23 @@ type subFuture struct {
 	done  chan struct{}
 }
 
+// subagentCardInput renders the {target, task} payload the subagent card header
+// parses. It mirrors the run_subagent call input so a live (partial) card and the
+// final one read identically; on the live path the target is already RESOLVED to
+// the agent's display name.
+func subagentCardInput(target, task string) json.RawMessage {
+	b, err := json.Marshal(struct {
+		Target string `json:"target"`
+		Task   string `json:"task"`
+	}{Target: target, Task: task})
+	if err != nil {
+		// Both fields are plain strings; a failure here means the encoder itself
+		// broke, which must not be swallowed into a silently blank card.
+		panic("subagent card input marshal: " + err.Error())
+	}
+	return b
+}
+
 // launchParallelSubagents starts every run_subagent call in a batch concurrently,
 // returning a map keyed by call id so the tool loop can await each in turn. It
 // returns nil when the batch has fewer than two run_subagent calls — there is no
@@ -299,7 +394,10 @@ type subFuture struct {
 // in its own context with a private trace sink; the shared per-turn budget guard
 // (atomic) bounds total fan-out. Hooks/permission still run sequentially in the
 // loop before the result is consumed (a blocked call simply discards its future).
-func (r *Runtime) launchParallelSubagents(ctx context.Context, reg *tools.Registry, calls []providers.ToolCall) map[string]*subFuture {
+// emit (may be nil) is the parent turn's step emitter: each call's sink is bound
+// to it under that call's id so every fanned-out subagent streams its own live
+// StepSubagent card while it runs.
+func (r *Runtime) launchParallelSubagents(ctx context.Context, reg *tools.Registry, calls []providers.ToolCall, emit func(TurnStep)) map[string]*subFuture {
 	n := 0
 	for _, c := range calls {
 		if c.Name == "run_subagent" {
@@ -322,8 +420,11 @@ func (r *Runtime) launchParallelSubagents(ctx context.Context, reg *tools.Regist
 			defer wg.Done()
 			defer close(f.done)
 			cctx, sink := withSubStepSink(ctx)
+			if emit != nil && call.ID != "" {
+				sink.bindLive(call.ID, emit)
+			}
 			f.res = reg.Call(cctx, call)
-			f.steps = sink.steps
+			f.steps = sink.collected()
 		}(call, f)
 	}
 	r.logger.Info("subagent parallel fan-out", "count", n)

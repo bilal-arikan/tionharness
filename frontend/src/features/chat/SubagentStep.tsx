@@ -30,7 +30,11 @@ function subInput(input: unknown): { target: string; task: string } {
 // activity trace (its tool calls / thinking, gathered in an isolated context)
 // plus its final reply. Mirrors the nested agent rows in External Agent chat.
 export function SubagentStep({ step, onOpenFile, onOpenArtifact }: Props) {
-  const [open, setOpen] = useState(false)
+  // A still-running delegation opens by default so its nested steps stream in
+  // view; once it completes the card keeps the normal collapsible behaviour
+  // (the user's own toggle always wins from then on).
+  const running = !!step.running
+  const [open, setOpen] = useState(running)
   const { target, task } = subInput(step.input)
   const sub = step.subSteps || []
   const reply = step.output || ''
@@ -49,6 +53,9 @@ export function SubagentStep({ step, onOpenFile, onOpenArtifact }: Props) {
         </span>
         {task && (
           <span className="min-w-0 flex-1 truncate text-[var(--color-text-dim)]">{task}</span>
+        )}
+        {running && (
+          <span className="shrink-0 animate-pulse text-[var(--color-text-dim)]">çalışıyor…</span>
         )}
         {step.isError && <span className="shrink-0 text-[var(--color-danger)]">hata</span>}
         {sub.length > 0 && (

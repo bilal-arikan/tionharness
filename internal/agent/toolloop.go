@@ -7,6 +7,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/bilal-arikan/tionswarm/internal/conversation"
@@ -790,7 +791,15 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 		// Parallel fan-out: when this batch holds multiple run_subagent calls, start
 		// them concurrently up front; the loop below awaits each future in place
 		// (results stay in tool_use order). nil when there is nothing to parallelise.
-		subFutures := r.launchParallelSubagents(ctx, reg, resp.ToolCalls)
+		// Live subagent cards are emitted from those worker goroutines, so the
+		// fan-out gets a serialized view of emit (the loop's own emit calls all
+		// happen on this goroutine, between the launch and the awaited futures).
+		var fanoutEmitMu sync.Mutex
+		subFutures := r.launchParallelSubagents(ctx, reg, resp.ToolCalls, func(s TurnStep) {
+			fanoutEmitMu.Lock()
+			defer fanoutEmitMu.Unlock()
+			emit(s)
+		})
 		results := make([]providers.ToolResult, 0, len(resp.ToolCalls))
 		// One multi-call response = one parallel batch: allocate its group id so
 		// every step below (tool cards, permission/guardrail errors) carries it.
@@ -933,6 +942,11 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 			// the row is promoted to a collapsible StepSubagent.
 			callCtx, diffs := tools.WithDiffSink(ctx)
 			callCtx, subs := withSubStepSink(callCtx)
+			// Sequential run_subagent: stream the delegation's nested steps live under
+			// this call's id, so the card appears immediately and grows while it runs.
+			if call.Name == "run_subagent" && call.ID != "" && subFutures[call.ID] == nil {
+				subs.bindLive(call.ID, emit)
+			}
 			// Per-call optimizer sink: a shell tool whose output was shrunk by sqz
 			// (or whose command was rtk-wrapped) reports it here, so the card can
 			// show what the model actually received.
@@ -952,7 +966,7 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 				<-f.done
 				stopHeartbeat()
 				res = f.res
-				subs.steps = f.steps
+				subs.setSteps(f.steps)
 			} else if onStep != nil && call.ID != "" && reg.CanStream(call.Name) {
 				// Streaming tool: its tool_delta chunks touch the watchdog on every
 				// chunk, so a stall is still caught on idle — no heartbeat here.
@@ -1113,9 +1127,17 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 			}
 			// A subagent run renders as a collapsible nested-agent card carrying the
 			// subagent's own trace (input=target+task, output=its final reply).
-			if len(subs.steps) > 0 && !res.IsError {
+			if subSteps := subs.collected(); len(subSteps) > 0 && !res.IsError {
 				st.Kind = StepSubagent
-				st.SubSteps = subs.steps
+				st.SubSteps = subSteps
+				// Same id as the live cards emitted during the run, so this final
+				// (Running=false) card replaces them instead of stacking.
+				st.ID = call.ID
+			} else if call.Name == "run_subagent" && call.ID != "" {
+				// A live card may already be on screen but this run yielded no nested
+				// trace (errored or produced nothing), so the plain tool row below will
+				// not replace it — retract it explicitly.
+				emit(TurnStep{Kind: StepTombstone, Ref: call.ID})
 			}
 			steps = append(steps, st)
 			emit(st)

@@ -205,3 +205,42 @@ func TestDelegationContract(t *testing.T) {
 		t.Fatalf("unset fields must be omitted, got %q", one)
 	}
 }
+
+// A bound sink publishes a partial, Running card on every nested step, so the
+// chat shows the delegation while it is still in flight instead of staying
+// empty until the subagent's final reply lands.
+func TestSubStepSinkEmitsLiveCards(t *testing.T) {
+	var got []TurnStep
+	s := &subStepSink{}
+	s.bindLive("call-1", func(st TurnStep) { got = append(got, st) })
+
+	s.emitLive(nil) // start card, before any nested step
+	s.addSteps(TurnStep{Kind: StepTool, Tool: "Read"})
+	s.emitLive(nil)
+
+	if len(got) != 2 {
+		t.Fatalf("want 2 live cards, got %d", len(got))
+	}
+	for i, st := range got {
+		if st.Kind != StepSubagent || st.ID != "call-1" || !st.Running {
+			t.Fatalf("card %d is not a running subagent card for call-1: %+v", i, st)
+		}
+	}
+	if len(got[0].SubSteps) != 0 || len(got[1].SubSteps) != 1 {
+		t.Fatalf("live cards must carry the steps gathered so far: %d then %d",
+			len(got[0].SubSteps), len(got[1].SubSteps))
+	}
+	if len(s.collected()) != 1 {
+		t.Fatalf("sink must keep collecting for the final card, got %d", len(s.collected()))
+	}
+}
+
+// An unbound sink keeps the legacy collect-only behaviour.
+func TestSubStepSinkWithoutLiveEmitterIsSilent(t *testing.T) {
+	s := &subStepSink{}
+	s.emitLive(nil) // must not panic
+	s.addSteps(TurnStep{Kind: StepTool, Tool: "Read"})
+	if len(s.collected()) != 1 {
+		t.Fatalf("want 1 collected step, got %d", len(s.collected()))
+	}
+}

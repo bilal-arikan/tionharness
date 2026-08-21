@@ -105,8 +105,7 @@ func (s *Server) handleSessionSummary(w http.ResponseWriter, r *http.Request) {
 	// record that the command was attempted.
 	body, err := s.runSummaryKind(ctx, wsp, session, kind, compactHistory)
 	if err != nil {
-		s.publishHub(wsp.ID, session.ID, sessionhub.KindTurnError, map[string]any{"error": err.Error(), "reason": "summary_failed"}, false)
-		s.hub.Commit(wsp.ID, session.ID)
+		s.recordSummaryFailure(ctx, wsp, session, kind, err)
 		s.logger.Warn("summary command failed", "session", session.ID, "kind", kind, "error", err)
 		writeError(w, http.StatusInternalServerError, kind+" failed: "+err.Error())
 		return
@@ -132,6 +131,69 @@ func (s *Server) handleSessionSummary(w http.ResponseWriter, r *http.Request) {
 	// still refresh their last-message metadata via the global bus.
 	emitSessionChange(wsp, session.ID, "summary")
 	writeJSON(w, http.StatusOK, map[string]any{"userMessage": userMsg, "replyMessage": msg})
+}
+
+// recordSummaryFailure leaves a DURABLE record of a failed slash command. The
+// live turn_error event alone is client-only: before this, a failing "/compact"
+// wrote nothing to debug.jsonl and persisted no reply, so a page refresh showed
+// a "/compact" user bubble with no answer at all — it looked like nothing had
+// happened. Three things now happen instead:
+//
+//  1. a debug-journal error record (same shape ordinary turn/tool failures write),
+//     so the failure shows up in the session debug view and in debug.jsonl;
+//  2. a persisted assistant message carrying the provider error VERBATIM, so the
+//     transcript stays honest across a refresh and the user can act on it;
+//  3. the existing turn_error event, so live windows still clear the "working"
+//     ghost immediately.
+//
+// The records are written on an uncancellable context: the failure is often a
+// client disconnect or an aborted request, and that is exactly when the durable
+// trace matters most.
+func (s *Server) recordSummaryFailure(ctx context.Context, wsp *workspace.Workspace, session db.Session, kind string, cause error) {
+	ctx = context.WithoutCancel(ctx)
+
+	if err := wsp.DB.AppendDebugEvent(session.ID, db.DebugEvent{
+		Type:    db.DebugError,
+		AgentID: session.AgentID,
+		Kind:    "command",
+		Name:    "/" + kind,
+		Err:     true,
+		Error:   cause.Error(),
+		Detail:  "slash command failed: /" + kind + ": " + cause.Error(),
+	}, 0); err != nil {
+		s.logger.Error("summary failure journal append failed", "session", session.ID, "kind", kind, "error", err)
+	}
+
+	// turn_error first: every open window drops the live "working" bubble before
+	// the persisted failure reply lands in its place.
+	s.publishHub(wsp.ID, session.ID, sessionhub.KindTurnError, map[string]any{"error": cause.Error(), "reason": "summary_failed"}, false)
+
+	msg, err := wsp.DB.AddMessage(ctx, db.Message{
+		SessionID: session.ID,
+		Role:      providers.RoleAssistant,
+		AgentID:   session.AgentID,
+		Text:      summaryFailureText(kind, cause),
+		Steps:     "[]",
+	})
+	if err != nil {
+		// Losing the durable record is the very bug this function exists to fix —
+		// it must never be swallowed.
+		s.logger.Error("persist summary failure message failed", "session", session.ID, "kind", kind, "error", err)
+		s.hub.Commit(wsp.ID, session.ID)
+		return
+	}
+	s.publishHub(wsp.ID, session.ID, sessionhub.KindReply, msg, false)
+	s.hub.Commit(wsp.ID, session.ID)
+	// Sibling windows (sessions list) refresh their last-message metadata.
+	emitSessionChange(wsp, session.ID, "summary_failed")
+}
+
+// summaryFailureText renders the in-thread failure notice for a slash command.
+// The underlying error is embedded verbatim and never softened: for the codex
+// CLI it is the only actionable thing the user gets (e.g. "Your access token
+// could not be refreshed because your refresh token was revoked").
+func summaryFailureText(kind string, cause error) string {
+	return "⚠️ **/" + kind + " başarısız oldu** — komut tamamlanamadı, oturumda hiçbir değişiklik yapılmadı.\n\n**Hata:**\n\n```\n" + cause.Error() + "\n```"
 }
 
 // summaryHeader resolves the self-explanatory chat header for a slash command,

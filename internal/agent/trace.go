@@ -164,6 +164,10 @@ type TurnStep struct {
 	// SubSteps carries the nested activity trace of a StepSubagent step — the
 	// subagent's own tool calls / thinking, captured in its isolated context.
 	SubSteps []TurnStep `json:"subSteps,omitempty"`
+	// Running marks a PARTIAL live card (currently only StepSubagent): the work is
+	// still in flight and a later step with the same ID replaces this one. Never
+	// set on a persisted step.
+	Running bool `json:"running,omitempty"`
 	// Batch groups tool steps born from ONE provider response that carried
 	// multiple parallel tool calls: all of them share the same 1-based group id
 	// (unique within the turn), so the UI can render them as one "N parallel

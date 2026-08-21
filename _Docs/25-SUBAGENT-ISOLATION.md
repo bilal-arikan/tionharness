@@ -249,6 +249,25 @@ type SubagentProfile struct {
   kartı (başlık = profil/ad + görev özeti; açılınca alt-adımlar). `lib/stepKinds.ts`
   + `lib/tools.ts` kaydı.
 
+### Canlı kart (2026-08-21)
+
+Eskiden `run_subagent` çağrısı boyunca sohbette **hiçbir adım görünmüyordu**:
+`runAgent` alt-ajanı `onStep = nil` ile koşturuyor, iz yalnızca bitişte tek
+seferde `StepSubagent` kartına dönüşüyordu. Artık:
+
+- `subStepSink` bir canlı yayıncıya bağlanabilir (`bindLive(callID, emit)`,
+  mutex korumalı — paralel fan-out'ta da güvenli).
+- `runAgent`, hedef ajan çözülür çözülmez **başlangıç kartını** yayınlar
+  (`Running: true`, `ID = call.ID`), sonra alt-ajanın her adımında kartı o ana
+  kadar birikmiş `SubSteps` ile yeniden yayınlar.
+- Bitişte nihai `StepSubagent` kartı **aynı `call.ID`** ile gider ve canlı kartın
+  yerini alır (`Running` yok). Alt adım üretmeden biten/hatalı bir çağrıda canlı
+  kart açık `StepTombstone` ile geri çekilir.
+- `TurnStep.Running` (`running,omitempty`) yalnız kısmi/canlı kartı işaretler;
+  kalıcılaşan adımlarda hiç set edilmez.
+- Frontend: `chatStreamHub.applyStep` `subagent` adımını `id` ile **yerine koyar**
+  (biriktirmez); `SubagentStep.tsx` `running` iken "çalışıyor…" göstergesi çizer.
+
 ## Paralel fan-out
 
 ```mermaid

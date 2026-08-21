@@ -188,3 +188,33 @@ describe('tool_delta live output', () => {
     expect(steps.map((s: { id: string }) => s.id)).toEqual(['a', 'b'])
   })
 })
+
+describe('subagent live card', () => {
+  beforeEach(() => vi.useFakeTimers())
+  afterEach(() => vi.useRealTimers())
+
+  it('replaces the running card with the final one by call id', () => {
+    const { send, ghost } = harness()
+    send(HubKind.Step, {
+      kind: 'subagent',
+      id: 'call-1',
+      tool: 'run_subagent',
+      running: true,
+      subSteps: [{ kind: 'tool', tool: 'Read' }],
+    })
+    send(HubKind.Step, {
+      kind: 'subagent',
+      id: 'call-1',
+      tool: 'run_subagent',
+      subSteps: [
+        { kind: 'tool', tool: 'Read' },
+        { kind: 'tool', tool: 'Edit' },
+      ],
+    })
+    vi.advanceTimersByTime(50)
+    const steps = JSON.parse(ghost()?.steps ?? '[]')
+    expect(steps).toHaveLength(1) // one card, grown in place
+    expect(steps[0].running).toBeUndefined()
+    expect(steps[0].subSteps).toHaveLength(2)
+  })
+})
