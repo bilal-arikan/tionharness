@@ -556,7 +556,13 @@ func (c *ClaudeCLI) runAttempt(ctx context.Context, args []string, prompt, model
 	// as "The operation timed out." Give MCP tool calls and server startup generous
 	// headroom so sync delegation completes in-band. Only fill defaults the parent
 	// env didn't already provide, so a user override still wins. Values are ms.
-	cmd.Env = ensureEnvDefault(cmd.Env, "MCP_TOOL_TIMEOUT", "600000")
+	//
+	// 10 minutes still timed out in practice — a delegated agent that edits several
+	// files, runs `go test ./...` and reports back routinely runs longer. There is
+	// no cost to a high ceiling: the caller's ctx (user stop, turn cancellation)
+	// still bounds the call, so this only decides when a LIVE call is killed for
+	// being slow. 30 minutes.
+	cmd.Env = ensureEnvDefault(cmd.Env, "MCP_TOOL_TIMEOUT", "1800000")
 	cmd.Env = ensureEnvDefault(cmd.Env, "MCP_TIMEOUT", "60000")
 	// Thinking parity: "Kapalı" turns extended thinking fully off in the CLI
 	// (MAX_THINKING_TOKENS=0). Also restores parallel tool batching on claude-code

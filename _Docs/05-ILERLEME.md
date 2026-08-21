@@ -8036,8 +8036,14 @@ Async+ephemeral reddi provider/bütçe işinden **önce** açıklayıcı mesajla
 **Kök neden 2 (timeout):** sync `run_subagent`'ta alt-ajanın tüm işi tool çağrısında
 koşuyor ve claude-cli'nin ~60 sn MCP araç-çağrısı timeout'unu aşıyor → CLI `The operation
 timed out.` verir (TionSwarm işi arka planda bitirir). **Fix:** `claudecli.go runAttempt`
-CLI process'ine `MCP_TOOL_TIMEOUT=600000` + `MCP_TIMEOUT=60000` ms enjekte eder (kullanıcı
+CLI process'ine `MCP_TOOL_TIMEOUT` + `MCP_TIMEOUT=60000` ms enjekte eder (kullanıcı
 override kazanır → `ensureEnvDefault`).
+
+**Güncelleme (2026-08-21):** 600000 ms (10 dk) de pratikte yetmedi — dosya düzenleyip
+`go test ./...` koşturan bir alt-ajan rutin olarak aşıyor. `MCP_TOOL_TIMEOUT` **1800000 ms
+(30 dk)**, codex tarafında `tool_timeout_sec` **1800 sn** yapıldı. Tavanı yükseltmenin
+maliyeti yok: çağrıyı zaten çağıranın ctx'i (kullanıcı durdurması, tur iptali) sınırlıyor;
+bu değer yalnız CANLI bir çağrının yavaşlık gerekçesiyle öldürüleceği anı belirler.
 
 **Dokunulan:** `internal/agent/subagent.go` (çözümleme sırası + Guard 4), `internal/
 providers/claudecli.go` (`ensureEnvDefault` + MCP timeout env), testler
