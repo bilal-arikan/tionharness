@@ -308,6 +308,10 @@ export function TaskBoard({ agents, onError }: Props) {
   // dependency on it would rebuild the callbacks on every hover tick and defeat
   // the memo for the whole board.
   const onCardDragStart = useStableCallback((taskId: string) => setDragId(taskId))!
+  // Drag can end without a drop (Esc, dropped outside any column) — always
+  // clear dragId so a stale id can't cause the next unrelated drop to move
+  // the wrong card.
+  const onCardDragEnd = useStableCallback(() => setDragId(null))!
   const onCardOpenOrSelect = useStableCallback((e: React.MouseEvent, taskId: string) => {
     if (sel.handleClick(e, taskId, orderedIds)) return
     setModal({ mode: 'edit', taskId })
@@ -547,7 +551,15 @@ export function TaskBoard({ agents, onError }: Props) {
               <div
                 key={col.key}
                 onDragOver={(e) => e.preventDefault()}
-                onDrop={() => {
+                onDrop={(e) => {
+                  // An OS file dropped on empty column space (not onto a card)
+                  // has no task to attach to — say so instead of silently
+                  // discarding it.
+                  if (Array.from(e.dataTransfer.types).includes('Files')) {
+                    showHint('Dosya eklemek için bir görev kartının üzerine bırakın')
+                    setDragId(null)
+                    return
+                  }
                   const t = tasks.find((x) => x.id === dragId)
                   if (t) handleDrop(t, col.key)
                   setDragId(null)
@@ -595,6 +607,7 @@ export function TaskBoard({ agents, onError }: Props) {
                         fileDropActive={fileDropId === t.id}
                         today={today}
                         onDragStart={onCardDragStart}
+                        onDragEnd={onCardDragEnd}
                         onOpenOrSelect={onCardOpenOrSelect}
                         onFileDragEnter={onCardFileDragEnter}
                         onFileDragLeave={onCardFileDragLeave}

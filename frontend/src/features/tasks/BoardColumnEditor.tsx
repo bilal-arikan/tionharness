@@ -31,6 +31,11 @@ function isValidKey(key: string): boolean {
   return /^[a-z0-9_]+$/.test(key)
 }
 
+// A draft column carries the key it was loaded with (undefined for newly
+// added columns) so task counts stay pinned to the saved column even while
+// the user edits the key field.
+type DraftColumn = BoardColumnDef & { originalKey?: string }
+
 interface Props {
   columns: BoardColumnDef[]
   taskCountByColumn: Record<string, number>
@@ -39,7 +44,9 @@ interface Props {
 }
 
 export function BoardColumnEditor({ columns, taskCountByColumn, onSave, onClose }: Props) {
-  const [draft, setDraft] = useState<BoardColumnDef[]>(() => columns.map((c) => ({ ...c })))
+  const [draft, setDraft] = useState<DraftColumn[]>(() =>
+    columns.map((c) => ({ ...c, originalKey: c.key })),
+  )
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   // Index of the column whose color picker is open (-1 = none).
@@ -116,7 +123,9 @@ export function BoardColumnEditor({ columns, taskCountByColumn, onSave, onClose 
     }
     setSaving(true)
     try {
-      await onSave(draft)
+      await onSave(
+        draft.map((col): BoardColumnDef => ({ key: col.key, label: col.label, color: col.color })),
+      )
     } catch (e) {
       setError((e as Error).message)
     } finally {
@@ -141,7 +150,9 @@ export function BoardColumnEditor({ columns, taskCountByColumn, onSave, onClose 
       {/* Column list */}
       <div className="flex-1 overflow-y-auto p-3 space-y-2">
         {draft.map((col, idx) => {
-          const taskCount = taskCountByColumn[col.key] ?? 0
+          // Count against the saved key, not the in-progress draft key, so
+          // editing the key field can't make a populated column look empty.
+          const taskCount = col.originalKey ? (taskCountByColumn[col.originalKey] ?? 0) : 0
           const canDelete = draft.length > 1 && taskCount === 0
           const isOpen = colorPickerIdx === idx
           return (

@@ -32,6 +32,7 @@ interface Props {
   /** Today in ISO, for the due-date chip. Passed in so every card agrees. */
   today: string
   onDragStart: (taskId: string) => void
+  onDragEnd: () => void
   onOpenOrSelect: (e: React.MouseEvent, taskId: string) => void
   onFileDragEnter: (taskId: string) => void
   onFileDragLeave: (taskId: string) => void
@@ -56,6 +57,7 @@ function TaskCardImpl({
   fileDropActive,
   today,
   onDragStart,
+  onDragEnd,
   onOpenOrSelect,
   onFileDragEnter,
   onFileDragLeave,
@@ -77,6 +79,7 @@ function TaskCardImpl({
         e.dataTransfer.setData('application/x-tionswarm-task', t.id)
         e.dataTransfer.effectAllowed = 'link'
       }}
+      onDragEnd={onDragEnd}
       onClick={(e) => {
         if (pending) return
         onOpenOrSelect(e, t.id)
