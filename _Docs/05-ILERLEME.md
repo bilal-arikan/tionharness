@@ -8040,8 +8040,8 @@ CLI process'ine `MCP_TOOL_TIMEOUT` + `MCP_TIMEOUT=60000` ms enjekte eder (kullan
 override kazanır → `ensureEnvDefault`).
 
 **Güncelleme (2026-08-21):** 600000 ms (10 dk) de pratikte yetmedi — dosya düzenleyip
-`go test ./...` koşturan bir alt-ajan rutin olarak aşıyor. `MCP_TOOL_TIMEOUT` **1800000 ms
-(30 dk)**, codex tarafında `tool_timeout_sec` **1800 sn** yapıldı. Tavanı yükseltmenin
+`go test ./...` koşturan bir alt-ajan rutin olarak aşıyor. `MCP_TOOL_TIMEOUT` **900000 ms
+(15 dk)**, codex tarafında `tool_timeout_sec` **900 sn** yapıldı. Tavanı yükseltmenin
 maliyeti yok: çağrıyı zaten çağıranın ctx'i (kullanıcı durdurması, tur iptali) sınırlıyor;
 bu değer yalnız CANLI bir çağrının yavaşlık gerekçesiyle öldürüleceği anı belirler.
 

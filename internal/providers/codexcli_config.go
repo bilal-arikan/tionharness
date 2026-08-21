@@ -18,11 +18,11 @@ import (
 // for a bridge that starts an in-process HTTP endpoint and can run long tools.
 // A long sync run_subagent call (a delegated agent that edits files, runs the
 // test suite and reports back) routinely outlives 10 minutes, so the tool
-// timeout matches claude-cli's 30 minutes. The caller's ctx still bounds the
+// timeout matches claude-cli's 15 minutes. The caller's ctx still bounds the
 // call, so a high ceiling only decides when a LIVE call is killed for slowness.
 const (
 	codexMCPStartupTimeoutSec = 30
-	codexMCPToolTimeoutSec    = 1800
+	codexMCPToolTimeoutSec    = 900
 )
 
 // codexConfig is one turn's rendered codex configuration.

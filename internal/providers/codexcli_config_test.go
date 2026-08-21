@@ -70,7 +70,7 @@ command = "node"
 args = ["probe.js", "--port", "9000"]
 env = { MODE = "test", TOKEN = "abc" }
 startup_timeout_sec = 30
-tool_timeout_sec = 1800
+tool_timeout_sec = 900
 default_tools_approval_mode = "approve"
 required = true
 
@@ -78,7 +78,7 @@ required = true
 url = "http://127.0.0.1:8731/core"
 http_headers = { Authorization = "Bearer tok-123", X-Session = "SES579" }
 startup_timeout_sec = 30
-tool_timeout_sec = 1800
+tool_timeout_sec = 900
 default_tools_approval_mode = "approve"
 required = true
 `

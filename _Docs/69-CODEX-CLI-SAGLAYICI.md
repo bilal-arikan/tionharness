@@ -411,8 +411,8 @@ disabled_tools = ["delete_workspace"]
 `startup_timeout_sec` ve `tool_timeout_sec` (sunucu başına). claude-cli'nin
 `MCP_TIMEOUT` / `MCP_TOOL_TIMEOUT` env'lerinin karşılığı. Uzun `run_subagent`
 çağrıları için **mutlaka yükseltilmeli** (varsayılan düşük). TionSwarm'ın yazdığı
-değerler: `startup_timeout_sec = 30`, `tool_timeout_sec = 1800` (30 dk, claude-cli
-tarafındaki `MCP_TOOL_TIMEOUT=1800000` ile aynı) — `codexcli_config.go`.
+değerler: `startup_timeout_sec = 30`, `tool_timeout_sec = 900` (15 dk, claude-cli
+tarafındaki `MCP_TOOL_TIMEOUT=900000` ile aynı) — `codexcli_config.go`.
 
 ### codebase-memory-mcp prefill guard codex yolunda YOK (Q4 notu)
 
