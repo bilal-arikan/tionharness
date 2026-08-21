@@ -46,7 +46,7 @@ export function DiffCard({ step, onOpenFile }: Props) {
   const hasPatch = !!patch.trim()
 
   return (
-    <div className="overflow-hidden rounded-lg bg-[var(--color-surface)] shadow-[var(--shadow-lg)]">
+    <div className="overflow-hidden rounded-lg bg-[var(--color-bg)] shadow-[var(--shadow-lg)]">
       <button
         onClick={() => setOpen((o) => (hasPatch ? !o : o))}
         className={`flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-left text-xs ${

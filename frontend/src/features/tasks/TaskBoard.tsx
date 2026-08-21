@@ -718,6 +718,7 @@ export function TaskBoard({ agents, onError }: Props) {
           onSaved={onSaved}
           onReplaceTemp={onReplaceTemp}
           onDeleted={onDeleted}
+          onArchived={onDeleted}
           onError={onError}
         />
       )}

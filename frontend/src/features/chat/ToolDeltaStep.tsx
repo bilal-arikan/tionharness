@@ -12,7 +12,7 @@ interface Props {
 // persisted trace arrives.
 export function ToolDeltaStep({ step }: Props) {
   return (
-    <div className="overflow-hidden rounded-md">
+    <div className="overflow-hidden rounded-md bg-[var(--color-bg)] shadow-[var(--shadow-lg)]">
       <div className="flex items-center gap-2 px-3 py-1 text-xs text-[var(--color-text-dim)]">
         <HeaderIcon size={14} className="shrink-0" />
         <span className="font-medium text-[var(--color-text)]">{step.tool || 'Araç'}</span>

@@ -45,10 +45,21 @@ var defaultSubagentProfiles = map[string]SubagentProfile{
 	"coder":    {ID: "coder", AllowedTools: []string{"Read", "LS", "Glob", "Grep", "Write", "Edit", "Bash"}},
 	"reviewer": {ID: "reviewer", AllowedTools: []string{"Read", "LS", "Glob", "Grep"}},
 	// "validator" proves another worker's change actually works: it may run the
-	// codebase (tests, typecheck, build, git) and drive a browser for e2e, but it
-	// does NOT edit source — its verdict must reflect the code as written, not a
-	// fix it quietly slipped in. Its prompt (subagent-validator) enforces a compact
-	// PASS/FAIL verdict so the coordinator reads a decision, not raw logs.
+	// codebase (tests, typecheck, build, git), but it does NOT edit source — its
+	// verdict must reflect the code as written, not a fix it quietly slipped in.
+	// Its prompt (subagent-validator) enforces a compact PASS/FAIL verdict so the
+	// coordinator reads a decision, not raw logs.
+	//
+	// It has NO browser: driving one needs the playwright MCP server, and no
+	// profile allowlist names an MCP tool (the codebase-memory graph is the one
+	// exemption — allowlistExemptServer — and it is not a browser), so e2e is
+	// out of scope here — the
+	// prompt says "(when available) a browser" and reports "e2e: n/a", which is
+	// the honest answer for every profile worker. This comment once claimed the
+	// opposite; on the native path that was never true, and on the CLI path it
+	// only appeared true while external MCP servers bypassed the agent's tool
+	// restriction entirely (fixed — see mcpservergate.go). Widening a profile to
+	// an MCP server is a deliberate policy change, not a comment edit.
 	"validator": {ID: "validator", AllowedTools: []string{"Read", "LS", "Glob", "Grep", "Bash"}},
 	"config":    {ID: "config", AllowedTools: []string{"list_config", "read_config", "write_config", "config_validate"}},
 }
@@ -237,7 +248,14 @@ func (r *Runtime) runAgent(ctx context.Context, caller db.Agent, parentReq *prov
 	// Async mode: detach into a persistent background session (fire-and-forget).
 	// Only real agents reach here (the ephemeral case was rejected by Guard 4).
 	if spec.Wait == "async" {
-		res, err := r.SpawnSession(ctx, agent.ID, strings.TrimSpace(spec.Task), SpawnOptions{ModelOverride: spec.Model, CreatedBy: caller.ID})
+		// The detached session inherits the caller's turn directory. A sync subagent
+		// already runs in it (it shares this context); an async one used to fall back
+		// to the workspace default and quietly work on the wrong repository.
+		res, err := r.SpawnSession(ctx, agent.ID, strings.TrimSpace(spec.Task), SpawnOptions{
+			ModelOverride: spec.Model,
+			CreatedBy:     caller.ID,
+			WorkingDir:    r.effectiveWorkDir(ctx),
+		})
 		if err != nil {
 			return tools.RunAgentResult{}, err
 		}

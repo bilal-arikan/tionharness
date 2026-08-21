@@ -62,6 +62,9 @@ explicitly authorizes a specific, safe action.
 
 ## Tips
 
+- Unscoped scans consider at most 10 sessions by default. Pass `maxSessions` or
+  change the workspace Insight setting when a different budget is required;
+  explicit `0` means unlimited.
 - Findings come **priority-ranked** (severity × recurrence). A `⚠REGRESSED` finding is a closed
   issue that came back — treat it as top priority.
 - When a scan surfaces many similar findings, list with `cluster:true` to collapse near-duplicates

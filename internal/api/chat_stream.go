@@ -476,7 +476,14 @@ func (s *Server) runChatTurn(clientGone context.Context, wsp *workspace.Workspac
 			// instance per turn resets the per-turn spawn budget.
 			run.setSpawnTool(tools.NewSpawnSessionTool(respondingID, s.tun.SpawnMaxPerTurn(),
 				func(sctx context.Context, target, prompt, modelOverride string) (tools.SpawnResult, error) {
-					res, err := wsp.Runtime.SpawnSession(sctx, target, prompt, agent.SpawnOptions{ModelOverride: modelOverride, CreatedBy: respondingID})
+					// Inherit this chat session's working directory, so a spawn from a
+					// session pinned to repo A does not silently open in the workspace
+					// default directory.
+					res, err := wsp.Runtime.SpawnSession(sctx, target, prompt, agent.SpawnOptions{
+						ModelOverride: modelOverride,
+						CreatedBy:     respondingID,
+						WorkingDir:    wsp.Runtime.SessionWorkdir(session.ID),
+					})
 					return tools.SpawnResult{SessionID: res.SessionID, AgentName: res.AgentName}, err
 				}))
 

@@ -81,3 +81,32 @@ func TestRecordAndTakeDiff(t *testing.T) {
 		t.Error("Take should clear the sink")
 	}
 }
+
+// TestRecordDiffMultiFile pins the apply_patch case: several files patched in
+// one call must all reach the frontend, aggregated into a single FileDiff
+// (counts summed, patches concatenated) instead of the earlier files being
+// silently overwritten by the last recordDiff call.
+func TestRecordDiffMultiFile(t *testing.T) {
+	ctx, sink := WithDiffSink(context.Background())
+	recordDiff(ctx, FileDiff{Path: "a.go", Added: 3, Removed: 1, Patch: "+ x"})
+	recordDiff(ctx, FileDiff{Path: "b.go", Added: 2, Removed: 0, Patch: "+ y", Created: true})
+	got := sink.Take()
+	if got == nil {
+		t.Fatal("expected an aggregated diff")
+	}
+	if got.Added != 5 || got.Removed != 1 {
+		t.Fatalf("got added=%d removed=%d, want added=5 removed=1", got.Added, got.Removed)
+	}
+	if !got.Created {
+		t.Error("Created should be true when any file was created")
+	}
+	if got.Path != "2 dosya" {
+		t.Errorf("got path %q, want \"2 dosya\"", got.Path)
+	}
+	if !strings.Contains(got.Patch, "@@ a.go @@") || !strings.Contains(got.Patch, "@@ b.go @@") {
+		t.Errorf("patch missing per-file separators:\n%s", got.Patch)
+	}
+	if sink.Take() != nil {
+		t.Error("Take should clear the sink")
+	}
+}

@@ -58,6 +58,11 @@ type WorkerSpawnSpec struct {
 	// Workflow pins a coordinator recipe on the sub-coordinator; only meaningful
 	// together with Coordinator.
 	Workflow string
+	// WorkingDir pins the worker session's cwd. Empty means "inherit the
+	// coordinator's own working directory" — a worker that silently landed in the
+	// workspace default while its task described another repository was the whole
+	// reason this field exists.
+	WorkingDir string
 }
 
 // WorkerRow is the structured view of one worker session, the row shape behind
@@ -133,6 +138,7 @@ type spawnWorkerInput struct {
 	ModelOverride string `json:"modelOverride"`
 	Coordinator   bool   `json:"coordinator"`
 	Workflow      string `json:"workflow"`
+	Cwd           string `json:"cwd"`
 }
 
 // SpawnWorkerTool launches an async background worker under the current
@@ -172,7 +178,8 @@ func (SpawnWorkerTool) Def() providers.ToolDef {
     "task": { "type": "string", "description": "A self-contained instruction. The worker starts fresh and sees only this — include file paths, line numbers, and what 'done' means." },
     "modelOverride": { "type": "string", "description": "Optional model id override (provider unchanged)." },
     "coordinator": { "type": "boolean", "description": "Make this worker a sub-coordinator that may spawn its own workers. Default false (a plain leaf worker). Only for tasks that genuinely decompose further." },
-    "workflow": { "type": "string", "description": "Optional coordinator recipe slug for the sub-coordinator (only with coordinator: true). Not inherited from you — set it deliberately or leave empty for free coordination." }
+    "workflow": { "type": "string", "description": "Optional coordinator recipe slug for the sub-coordinator (only with coordinator: true). Not inherited from you — set it deliberately or leave empty for free coordination." },
+    "cwd": { "type": "string", "description": "Absolute path the worker runs in. Defaults to YOUR working directory. Set it whenever the task targets a different repository — a path written in the task text is only prose, it does not move the worker." }
   },
   "required": ["agent", "task"],
   "additionalProperties": false
@@ -203,6 +210,7 @@ func (SpawnWorkerTool) Call(ctx context.Context, input json.RawMessage) (string,
 		ModelOverride: strings.TrimSpace(in.ModelOverride),
 		Coordinator:   in.Coordinator,
 		Workflow:      strings.TrimSpace(in.Workflow),
+		WorkingDir:    strings.TrimSpace(in.Cwd),
 	})
 	if err != nil {
 		return "", err

@@ -85,7 +85,13 @@ func (s *Server) autonomousInteraction(rt *agent.Runtime) agent.AutonomousIntera
 		// resets the per-turn spawn budget.
 		run.setSpawnTool(tools.NewSpawnSessionTool(ag.ID, s.tun.SpawnMaxPerTurn(),
 			func(sctx context.Context, target, prompt, modelOverride string) (tools.SpawnResult, error) {
-				res, err := rt.SpawnSession(sctx, target, prompt, agent.SpawnOptions{ModelOverride: modelOverride, CreatedBy: ag.ID})
+				// Inherit the caller's working directory: a session spawned from an
+				// agent working in repo A must not land in the workspace default.
+				res, err := rt.SpawnSession(sctx, target, prompt, agent.SpawnOptions{
+					ModelOverride: modelOverride,
+					CreatedBy:     ag.ID,
+					WorkingDir:    rt.SessionWorkdir(sessionID),
+				})
 				return tools.SpawnResult{SessionID: res.SessionID, AgentName: res.AgentName}, err
 			}))
 

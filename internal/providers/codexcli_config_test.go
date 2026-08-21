@@ -1,6 +1,7 @@
 package providers
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -281,7 +282,10 @@ func TestWriteCodexConfig(t *testing.T) {
 	dir := t.TempDir()
 	cfg := codexConfig{DeveloperInstructions: "hello", DisableUpdatePlan: true}
 
-	path, cleanup, err := writeCodexConfig(dir, cfg)
+	path, dropped, cleanup, err := writeCodexConfig(context.Background(), dir, cfg, nil)
+	if len(dropped) != 0 {
+		t.Fatalf("no servers configured, nothing can be dropped: %v", dropped)
+	}
 	if err != nil {
 		t.Fatalf("writeCodexConfig: %v", err)
 	}
@@ -304,14 +308,106 @@ func TestWriteCodexConfig(t *testing.T) {
 }
 
 func TestWriteCodexConfigEmptyDirErrors(t *testing.T) {
-	if _, _, err := writeCodexConfig("", codexConfig{}); err == nil {
+	if _, _, _, err := writeCodexConfig(context.Background(), "", codexConfig{}, nil); err == nil {
 		t.Fatal("expected an error for an empty config dir")
 	}
 }
 
 func TestWriteCodexConfigMissingDirErrors(t *testing.T) {
 	missing := filepath.Join(t.TempDir(), "no-such-dir")
-	if _, _, err := writeCodexConfig(missing, codexConfig{}); err == nil {
+	if _, _, _, err := writeCodexConfig(context.Background(), missing, codexConfig{}, nil); err == nil {
 		t.Fatal("expected an error when the config dir does not exist")
+	}
+}
+
+// A remote MCP server that is down must not take the whole session with it:
+// codex aborts with "required MCP servers failed to initialize" before any turn
+// output, so the unreachable server is omitted while the healthy one keeps
+// required = true.
+func TestWriteCodexConfigDropsUnreachableRemoteServers(t *testing.T) {
+	dir := t.TempDir()
+	cfg := codexConfig{Servers: map[string]CLIMCPServer{
+		"healthy": {Transport: "http", URL: "http://127.0.0.1:8731/core"},
+		"down":    {Transport: "http", URL: "http://127.0.0.1:8080/mcp"},
+	}}
+
+	path, dropped, _, err := writeCodexConfig(context.Background(), dir, cfg, func(_ context.Context, rawURL string) bool {
+		return rawURL != "http://127.0.0.1:8080/mcp"
+	})
+	if err != nil {
+		t.Fatalf("writeCodexConfig: %v", err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read back: %v", err)
+	}
+	got := string(data)
+	if strings.Contains(got, "[mcp_servers.down]") || strings.Contains(got, "8080") {
+		t.Fatalf("unreachable server must be omitted entirely:\n%s", got)
+	}
+	if !strings.Contains(got, "[mcp_servers.healthy]") {
+		t.Fatalf("reachable server must survive:\n%s", got)
+	}
+	// The surviving block keeps required = true — dropping is the fix, never
+	// downgrading a server to optional.
+	if n := strings.Count(got, "required = true"); n != 1 {
+		t.Fatalf("expected exactly one required = true, got %d:\n%s", n, got)
+	}
+	if len(dropped) != 1 || dropped[0] != "down" {
+		t.Fatalf("dropped = %v, want [down]", dropped)
+	}
+}
+
+// stdio servers are spawned by codex itself — there is nothing to connect to
+// before the turn starts, so they must never be probed or dropped.
+func TestWriteCodexConfigNeverProbesStdioServers(t *testing.T) {
+	dir := t.TempDir()
+	cfg := codexConfig{Servers: map[string]CLIMCPServer{
+		"stdio_server": {Command: "node", Args: []string{"probe.js"}},
+	}}
+
+	probed := 0
+	path, dropped, _, err := writeCodexConfig(context.Background(), dir, cfg, func(context.Context, string) bool {
+		probed++
+		return false
+	})
+	if err != nil {
+		t.Fatalf("writeCodexConfig: %v", err)
+	}
+	if probed != 0 {
+		t.Fatalf("stdio server was probed %d time(s)", probed)
+	}
+	if len(dropped) != 0 {
+		t.Fatalf("stdio server must never be dropped, got %v", dropped)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read back: %v", err)
+	}
+	if !strings.Contains(string(data), "[mcp_servers.stdio_server]") {
+		t.Fatalf("stdio server missing from config:\n%s", data)
+	}
+}
+
+// Every dropped key must be reported so the caller can make the capability loss
+// visible; a silent drop is the failure mode this whole path exists to avoid.
+func TestWriteCodexConfigReportsAllDroppedKeys(t *testing.T) {
+	dir := t.TempDir()
+	cfg := codexConfig{Servers: map[string]CLIMCPServer{
+		"alpha": {URL: "http://127.0.0.1:1/a"},
+		"zulu":  {Transport: "sse", URL: "http://127.0.0.1:2/z"},
+		"kept":  {URL: "http://127.0.0.1:3/k"},
+		"stdio": {Command: "node"},
+	}}
+
+	_, dropped, _, err := writeCodexConfig(context.Background(), dir, cfg, func(_ context.Context, rawURL string) bool {
+		return rawURL == "http://127.0.0.1:3/k"
+	})
+	if err != nil {
+		t.Fatalf("writeCodexConfig: %v", err)
+	}
+	// Sorted, so the report is deterministic across runs.
+	if strings.Join(dropped, ",") != "alpha,zulu" {
+		t.Fatalf("dropped = %v, want [alpha zulu]", dropped)
 	}
 }

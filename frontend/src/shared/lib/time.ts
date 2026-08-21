@@ -70,9 +70,12 @@ export function formatDurationMs(ms: number): string {
 }
 
 // Recency bucket ids, ordered newest → oldest.
-export type Bucket = 'today' | 'yesterday' | 'week' | 'month' | 'older'
+// 'pinned' is not a recency bucket — bucketOf never returns it. Callers that
+// float pinned rows to the top of a bucketed list assign it themselves.
+export type Bucket = 'pinned' | 'today' | 'yesterday' | 'week' | 'month' | 'older'
 
 export const BUCKET_LABELS: Record<Bucket, string> = {
+  pinned: 'Sabitlenen',
   today: 'Bugün',
   yesterday: 'Dün',
   week: 'Geçen hafta',
@@ -80,7 +83,7 @@ export const BUCKET_LABELS: Record<Bucket, string> = {
   older: 'Daha eski',
 }
 
-export const BUCKET_ORDER: Bucket[] = ['today', 'yesterday', 'week', 'month', 'older']
+export const BUCKET_ORDER: Bucket[] = ['pinned', 'today', 'yesterday', 'week', 'month', 'older']
 
 // bucketOf classifies a timestamp by calendar day relative to local "today",
 // so a chat from 23:30 yesterday lands in "Dün", not "today minus 24h".

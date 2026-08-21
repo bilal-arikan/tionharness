@@ -49,6 +49,7 @@ const catalog: CatalogEntry[] = [
     label: 'Claude CLI',
     needsKey: false,
     allowCustomModel: true,
+    appliesToolHooks: true,
     available: true,
     models: [
       { id: '', label: 'Varsayılan', resolvedModel: 'claude-opus-5' },

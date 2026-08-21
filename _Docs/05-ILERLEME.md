@@ -1,6 +1,43 @@
 # TionSwarm — İlerleme Takibi
 
-> Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-08-20**
+> Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-08-21**
+
+## claude-cli 2.1.238 result zarfı: auth/terminal_reason/izin reddi/hook (2026-08-21) ✅
+
+CLI 2.1.237 → 2.1.238 güncellemesi sonrası canlı `-p --output-format stream-json
+--verbose` çıktısı ölçüldü. Olay **tipleri** değişmemiş (`system`, `assistant`,
+`user`, `result`, `rate_limit_event`) ama `result` zarfı yeni alanlar taşıyor ve
+bir tanesi gerçek bir hata sınıflandırma boşluğu açığa çıkardı.
+
+**Gözlemlenen gerçek başarısızlık:** `{"subtype":"success","is_error":true,
+"stop_reason":"stop_sequence","terminal_reason":"api_error","result":"Failed to
+authenticate: OAuth session expired and could not be refreshed"}`. Yani `subtype`
+"success" derken `is_error` true — sınıflandırmanın `is_error`'a bakması şart,
+`subtype`'a asla. Parser zaten öyle yapıyordu; asıl kusur `isAuthErrorText`
+listesinde bu ifadenin olmamasıydı → oturum düşmesi jenerik hata sayılıp boşuna
+retry ediliyordu.
+
+**Değişiklikler (`internal/providers/claudecli.go`).**
+- `isAuthErrorText`: `failed to authenticate` ve `oauth session expired` eklendi
+  (eski girdiler korundu).
+- `cliEvent`: `stop_reason`, `terminal_reason`, `permission_denials` (yeni
+  `cliPermissionDenial{tool_name, tool_use_id}`) ve hook alanları
+  (`hook_name`, `hook_event`, `exit_code`, `outcome`, `stderr`) parse ediliyor.
+- `case "result"`: hata ne auth ne rate-limit ise metne `(terminal_reason: X)`
+  — yoksa `(stop_reason: X)` — ekleniyor; artık çıplak mesaj yerine sınıf görünür.
+- İzin reddi sessiz kalmıyor: `[permission] N permission denial(s): Bash, Write`
+  biçiminde bir **text** adımı yazılıyor. `TraceStep.Kind` yalnız
+  `text|thinking|tool` olduğu için sahte bir "tool" adımı üretmek yerine
+  `codexcli_events.go`'daki `[codex error] …` konvansiyonu izlendi.
+- Yeni `case "system"` + `subtype == "hook_response"`: `exit_code != 0` (ya da
+  fail/error/block/deny içeren `outcome`) olduğunda `[hook] …` uyarı adımı,
+  stderr 500 karakterde kırpılarak. Başarılı hook hiçbir iz bırakmıyor.
+
+Doğrulama: `gofmt -l` temiz, `go build ./...` temiz, `go test ./internal/providers/
+-count=1` → `ok … 6.4s`. Yeni testler `internal/providers/claudecli_result_test.go`.
+
+Sıradaki muhtemel adım: `permission_denials`'ı `Response`'a yapısal alan olarak
+taşıyıp frontend'de metin adımı yerine ayrı rozet göstermek.
 
 ## Piper kurulumu wheel'e göçtü + sürüm probu esnetildi (2026-08-20) ✅
 
@@ -9069,3 +9106,23 @@ bir CLI provider'ı değil — meşru model referansları olarak korundu.
   mesajına sızmadığını ve tahmini şişirmediğini sabitler),
   `api.TestToolActivityRecapIsCounted` + `TestCountToolRecapLinesIgnoresNonToolTurns`.
   `go test ./internal/conversation/... ./internal/api/... -count=1` ✅
+
+## CLI sağlayıcılarında MCP sunucu kapısı (2026-08-21)
+
+- **Sorun:** `claude-cli`/`codex-cli` ajanları, ajan araç kısıtına (`allowedTools`
+  / `blockedTools` / `toolOverrides`) bakılmaksızın **enabled olan her MCP
+  sunucusunu** kullanabiliyordu; UI ise aynı araçları "blocked" gösteriyordu.
+  Canlı örnek SES948 (Playwright + codebase-memory).
+- **Çözüm:** `internal/agent/mcpservergate.go` — önek tabanlı sunucu kapısı;
+  `writeCLIMCPConfig` ve `codexMCPSpec` artık `ag db.Agent` alıp sunucuyu mount
+  etmeden önce kapıya sorar. Ayrıntı ve sınırlar: `_Docs/52-MCP-GATEWAY.md`.
+- **Testler:** `internal/agent/mcpservergate_test.go`.
+  `go test ./internal/agent/ -count=1` ✅
+- **Politika (2026-08-21):** yerleşik worker profilleri built-in-only kalır;
+  28 mevcut `worker:*` ajanına migration yapılmadı. `validator`'ın yanlış
+  "browser for e2e" yorumu düzeltildi. Sözleşme testi:
+  `TestProfileAllowlistsNameNoMCPServer`.
+- **codebase-memory muafiyeti (2026-08-21):** kod grafı allowlist'ten muaf altyapı
+  sayıldı (`allowlistExemptServer`); worker'lar dahil her ajan erişir. Açık denylist
+  ve workspace anahtarı hâlâ geçerli. `Capability.Detect` ajan-farkında yapıldı —
+  ajanın çağıramadığı araç için prompt bloğu artık basılmıyor.

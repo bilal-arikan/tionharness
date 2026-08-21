@@ -22,7 +22,7 @@ func TestCodexMCPSpecLeavesConfigPathEmpty(t *testing.T) {
 		CoreToolNames: []string{"Bash", "ask_user"},
 	}
 
-	spec, err := rt.codexMCPSpec(context.Background(), false, inter)
+	spec, err := rt.codexMCPSpec(context.Background(), false, db.Agent{}, inter)
 	if err != nil {
 		t.Fatalf("codexMCPSpec: %v", err)
 	}
@@ -55,7 +55,7 @@ func TestCodexMCPSpecTwoTierInteraction(t *testing.T) {
 		ExtendedToolNames: []string{"update_session"},
 	}
 
-	spec, err := rt.codexMCPSpec(context.Background(), false, inter)
+	spec, err := rt.codexMCPSpec(context.Background(), false, db.Agent{}, inter)
 	if err != nil {
 		t.Fatalf("codexMCPSpec: %v", err)
 	}
@@ -127,7 +127,7 @@ func TestCodexMCPSpecExternalServers(t *testing.T) {
 		t.Fatalf("create http server: %v", err)
 	}
 
-	spec, err := rt.codexMCPSpec(ctx, true, tools.InteractionEndpoint{})
+	spec, err := rt.codexMCPSpec(ctx, true, db.Agent{}, tools.InteractionEndpoint{})
 	if err != nil {
 		t.Fatalf("codexMCPSpec: %v", err)
 	}
@@ -182,7 +182,7 @@ func TestCodexMCPSpecExternalServers(t *testing.T) {
 func TestCodexMCPSpecEmptyWhenNothingToWire(t *testing.T) {
 	rt, _ := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))
 
-	spec, err := rt.codexMCPSpec(context.Background(), false, tools.InteractionEndpoint{})
+	spec, err := rt.codexMCPSpec(context.Background(), false, db.Agent{}, tools.InteractionEndpoint{})
 	if err != nil {
 		t.Fatalf("codexMCPSpec: %v", err)
 	}
@@ -214,12 +214,12 @@ func TestCodexMCPSpecKeysMatchClaudePath(t *testing.T) {
 		CoreToolNames: []string{"Bash"},
 	}
 
-	spec, err := rt.codexMCPSpec(ctx, true, inter)
+	spec, err := rt.codexMCPSpec(ctx, true, db.Agent{}, inter)
 	if err != nil {
 		t.Fatalf("codexMCPSpec: %v", err)
 	}
 	claudeAllowed := func() []string {
-		_, allowed, _, cleanup, err := rt.writeCLIMCPConfig(ctx, true, inter, "auto")
+		_, allowed, _, cleanup, err := rt.writeCLIMCPConfig(ctx, true, db.Agent{}, inter, "auto")
 		if err != nil {
 			t.Fatalf("writeCLIMCPConfig: %v", err)
 		}

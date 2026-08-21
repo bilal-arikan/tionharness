@@ -577,6 +577,10 @@ func (r *Runtime) RunFlowRecorded(ctx context.Context, flowID, input string, aut
 		Kind:     "flow",
 		SourceID: flow.ID,
 		Title:    flow.Name,
+		// Inherit the launching turn's directory when there is one (run_flow from a
+		// session pinned to a repo); with no caller session this resolves to the
+		// workspace default, which is what a scheduled run wants.
+		WorkingDir: r.effectiveWorkDir(ctx),
 	}); serr == nil {
 		sessionID = sess.ID
 		// Own cancelable context for the whole recorded run so a human "Durdur"
@@ -730,7 +734,7 @@ func (r *Runtime) recordFlowSessionTurn(ctx context.Context, flow db.Flow, run d
 	if sessionID == "" {
 		// The up-front create failed (or a caller passed none) — make the per-run
 		// session now so the run is still recorded somewhere.
-		sess, err := r.db.CreateSession(ctx, db.Session{AgentID: owner, Kind: "flow", SourceID: flow.ID, Title: flow.Name})
+		sess, err := r.db.CreateSession(ctx, db.Session{AgentID: owner, Kind: "flow", SourceID: flow.ID, Title: flow.Name, WorkingDir: r.effectiveWorkDir(ctx)})
 		if err != nil {
 			r.logger.Warn("flow session create failed", "flow", flow.ID, "error", err)
 			return ""

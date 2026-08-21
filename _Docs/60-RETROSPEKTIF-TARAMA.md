@@ -372,7 +372,8 @@ Her tarama, bittiğinde **iki** kayıt bırakır:
       + `types/insight.ts`: lens seç + "Tara" + bulgu panosu + ayarlar (repo yolu + maxSessions).
 - [x] Ajan araçları `insight_scan` (tools→agent `InsightScanner` interface ile Runtime tetikler) +
       `insight_list_findings` (db-only, read-only); ikisi de toolsetup'a kayıtlı.
-- [x] Bütçe/guardrail: `MaxSessions` (scope + settings), archived default hariç (opt-in).
+- [x] Bütçe/guardrail: `MaxSessions` (scope + settings), workspace varsayılanı 10;
+      explicit `0` sınırsız, archived default hariç (opt-in).
 - [x] Lens seed: **lazy** — `GET /lenses` ve `RunInsightScan` `EnsureDefaults` çağırır (boot bağı gereksiz).
 
 **Faz 1 — TAMAM.** Tek ertelenen (opsiyonel, düşük değer):

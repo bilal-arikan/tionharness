@@ -18,6 +18,11 @@
 //     skewed browser clock.
 import { getActiveWorkspace } from './client'
 import { noteServerTime } from '@/shared/lib/serverClock'
+import { SESSION_STREAM_CLOSED_MESSAGE } from '@/shared/lib/expectedAbort'
+
+function abortSessionStream(controller: AbortController): void {
+  controller.abort(new DOMException(SESSION_STREAM_CLOSED_MESSAGE, 'AbortError'))
+}
 
 // A stable id for THIS browser window/tab, minted once. Used to tag outbound
 // signals (typing) so the window can ignore its own echo on the shared hub.
@@ -173,7 +178,7 @@ export function subscribeSessionStream(
         }
         handlers.onClose?.()
         try {
-          ac.abort()
+          abortSessionStream(ac)
         } catch {
           /* already aborting */
         }
@@ -195,7 +200,7 @@ export function subscribeSessionStream(
     closed = true
     if (ac) {
       try {
-        ac.abort()
+        abortSessionStream(ac)
       } catch {
         /* noop */
       }

@@ -150,7 +150,7 @@ export function AgentToolsSection({ agentId, onError }: Props) {
     return <p className="text-xs text-[var(--color-text-dim)]">Araçlar yükleniyor…</p>
   }
 
-  const overrideCount = overridden.length + orphans.length
+  const overrideCount = overridden.length + groupOverridden.length + orphans.length
 
   return (
     <div className="space-y-3">
@@ -231,6 +231,30 @@ export function AgentToolsSection({ agentId, onError }: Props) {
                 </li>
               ))}
             </ul>
+          )}
+
+          {groups.length > 0 && (
+            <div className="mb-3 border-t border-[var(--color-border)] pt-3">
+              <div className="mb-2">
+                <p className="text-xs font-medium text-[var(--color-text)]">Araç grupları</p>
+                <p className="text-[11px] text-[var(--color-text-dim)]">
+                  Bir kategorideki veya MCP sunucusundaki tüm araçların görünürlüğünü birlikte
+                  değiştir.
+                </p>
+              </div>
+              <ul className="space-y-1.5">
+                {groups.map((group) => (
+                  <AgentToolGroupRow
+                    key={group.key}
+                    group={group}
+                    tier={overrides[group.key]}
+                    busy={busy}
+                    onSelect={(t) => setGroupTier(group.key, t)}
+                    onClear={() => clearOverride(group.key)}
+                  />
+                ))}
+              </ul>
+            </div>
           )}
 
           {/* Add-an-override picker */}

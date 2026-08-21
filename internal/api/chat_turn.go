@@ -277,7 +277,7 @@ func (s *Server) buildStaticPrefix(ctx context.Context, wsp *workspace.Workspace
 	// this workspace so the agent reaches for them, with the cwd-derived project id.
 	// Presence is stable per workspace/session, so it rides the cached static prefix.
 	// Shares ONE source with the headless path (agent.autonomousSystemPrompt).
-	if cb := wsp.Runtime.CapabilityContext(ctx, strings.TrimSpace(session.WorkingDir)); cb != "" {
+	if cb := wsp.Runtime.CapabilityContext(ctx, agentRow, strings.TrimSpace(session.WorkingDir)); cb != "" {
 		system = strings.TrimSpace(system + "\n\n" + cb)
 	}
 	return system

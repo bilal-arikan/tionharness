@@ -3,11 +3,17 @@
 // rejection shows up in the in-app Logs screen instead of dying in the browser
 // console where nobody is watching.
 
+import { isExpectedSessionStreamAbort } from './expectedAbort'
+
 export interface ClientErrorReport {
   source: string
   message: string
   stack?: string
   level?: 'error' | 'warn' | 'info'
+}
+
+export function isExpectedUnhandledRejection(reason: unknown): boolean {
+  return isExpectedSessionStreamAbort(reason)
 }
 
 // Throttle: collapse identical messages within a short window so a render loop
@@ -69,6 +75,7 @@ export function installGlobalErrorHandlers(): void {
 
   window.addEventListener('unhandledrejection', (e: PromiseRejectionEvent) => {
     const reason = e.reason
+    if (isExpectedUnhandledRejection(reason)) return
     const message =
       reason instanceof Error
         ? reason.message

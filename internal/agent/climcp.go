@@ -67,13 +67,18 @@ func promptToolForMode(mode string, inter tools.InteractionEndpoint) string {
 // the path, the allowlist of tool identifiers, the list of CLI built-ins to
 // disallow, and a cleanup func.
 //
-//   - When mcpEnabled, every enabled external MCP server is included.
+//   - When mcpEnabled, every enabled external MCP server the AGENT may use is
+//     included. ag supplies the per-agent tool restriction: the CLI runs its own
+//     tool loop, so a server mounted here is reachable regardless of what
+//     TionSwarm advertises — mcpServerGate is the only place the agent's blocked
+//     /allowed patterns can still keep a whole server out (see mcpservergate.go).
+//     A zero db.Agent constrains nothing, which is the pre-gate behaviour.
 //   - When inter.URL is set, the in-process Interaction MCP server is added so the
 //     CLI can reach TionSwarm's human-in-the-loop tools (ask_user/todo_write), and
 //     the conflicting CLI built-ins (AskUserQuestion/TodoWrite) are disallowed.
 //
 // Returns an empty path when there is nothing to wire.
-func (r *Runtime) writeCLIMCPConfig(ctx context.Context, mcpEnabled bool, inter tools.InteractionEndpoint, mode string) (string, []string, []string, func(), error) {
+func (r *Runtime) writeCLIMCPConfig(ctx context.Context, mcpEnabled bool, ag db.Agent, inter tools.InteractionEndpoint, mode string) (string, []string, []string, func(), error) {
 	cfg := cliMCPConfig{MCPServers: map[string]cliMCPServer{}}
 	var allowed, disallowed []string
 
@@ -82,9 +87,15 @@ func (r *Runtime) writeCLIMCPConfig(ctx context.Context, mcpEnabled bool, inter 
 		if err != nil {
 			return "", nil, nil, nil, err
 		}
+		gate := mcpServerGate(ag, r.allowlistExemptServer(ctx))
 		for _, m := range servers {
 			sc := toServerConfig(m)
 			key, _, _ := mcp.SplitNamespaced(mcp.NamespaceTool(sc.Name, "x"))
+			if gate != nil && !gate(key) {
+				r.logger.Debug("cli mcp config: server withheld by agent tool restriction",
+					"server", key, "agent", ag.ID)
+				continue
+			}
 			entry := cliMCPServer{}
 			switch sc.Transport {
 			case db.MCPTransportSSE, db.MCPTransportHTTP:

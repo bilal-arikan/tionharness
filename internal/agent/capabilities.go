@@ -18,9 +18,16 @@ import (
 // tool plugs in by appending one Capability whose Detect may probe an MCP server,
 // an on-PATH binary (exec.LookPath), or a settings flag — the assembler code does
 // not change.
+// Detect receives the AGENT the block would be written for, not just the
+// workspace: a capability the workspace has but THIS agent cannot call must not
+// be advertised to it. Found live (SES948): a worker restricted to built-ins got
+// the full codebase-memory block — "use its tools FIRST... greps are the LAST
+// resort" — while the graph tools were absent from its tool list, so it followed
+// an instruction it could not obey and treated grep as a fallback it was told to
+// avoid. Presence is still workspace-wide; reachability is per-agent.
 type Capability struct {
 	ID      string
-	Detect  func(ctx context.Context, r *Runtime) bool
+	Detect  func(ctx context.Context, r *Runtime, agent db.Agent) bool
 	Context func(ctx context.Context, r *Runtime, cwd string) string
 }
 
@@ -33,10 +40,10 @@ var capabilities = []Capability{codebaseMemoryCapability, tokenOptimizerCapabili
 // that resolve a per-directory target (e.g. a repo project id). Returns "" when no
 // capability is present — a safe no-op for the prompt assembler. Cheap enough to
 // call per turn; the result is stable so it never disturbs the prompt cache.
-func (r *Runtime) CapabilityContext(ctx context.Context, cwd string) string {
+func (r *Runtime) CapabilityContext(ctx context.Context, agent db.Agent, cwd string) string {
 	var b strings.Builder
 	for _, c := range capabilities {
-		if !c.Detect(ctx, r) {
+		if !c.Detect(ctx, r, agent) {
 			continue
 		}
 		if blk := strings.TrimSpace(c.Context(ctx, r, cwd)); blk != "" {
@@ -119,7 +126,7 @@ func (r *Runtime) codebaseMemoryState(server string) mcp.ServerState {
 
 var codebaseMemoryCapability = Capability{
 	ID: "codebase-memory-mcp",
-	Detect: func(ctx context.Context, r *Runtime) bool {
+	Detect: func(ctx context.Context, r *Runtime, agent db.Agent) bool {
 		if r.codebaseMemoryCmd(ctx) == "" {
 			return false
 		}
@@ -127,7 +134,18 @@ var codebaseMemoryCapability = Capability{
 		if err != nil {
 			return false
 		}
-		return r.codebaseMemoryState(codebaseMemoryServerName(servers)) != mcp.ServerDead
+		server := codebaseMemoryServerName(servers)
+		if r.codebaseMemoryState(server) == mcp.ServerDead {
+			return false
+		}
+		// Reachability, not just presence: the block orders the agent to prefer these
+		// tools over grep, so it may only be written for an agent that can call them.
+		// The allowlist no longer withholds them (allowlistExemptServer), but an
+		// operator's EXPLICIT denylist still can — and then the block must go quiet.
+		if filter := r.toolFilter(ctx, agent); filter != nil && !filter(mcp.NamespaceTool(server, "search_code")) {
+			return false
+		}
+		return true
 	},
 	Context: func(ctx context.Context, r *Runtime, cwd string) string {
 		var b strings.Builder

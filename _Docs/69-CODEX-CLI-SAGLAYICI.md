@@ -389,6 +389,30 @@ required = true
 > `internal/providers/codexcli_config.go` → `renderCodexServer` içinde
 > kaynak referansıyla birlikte yorum var.
 
+#### Bedeli: ulaşılamayan bir remote sunucu tüm oturumu öldürür
+
+`required = true` olduğu için, yapılandırılmış **tek** bir uzak MCP sunucusu
+ayakta değilse Codex oturum kurulumunu tamamen iptal eder:
+`Failed to create session: required MCP servers failed to initialize` →
+`exit status 1`, hiç turn çıktısı üretmeden. TionSwarm bunu
+`provider error: codex CLI exited before producing any turn output` olarak
+raporlar.
+
+**Çözüm — preflight probe** (`internal/providers/codexcli_probe.go`): config
+yazılmadan önce yalnız **remote** sunucular (`transport: sse|http` ya da `url`
+dolu) `codexMCPProbeTimeout = 2s` ile yoklanır. HTTP/HTTPS'te GET atılır ve
+**herhangi bir HTTP durum kodu "ayakta" sayılır** — yalnızca taşıma katmanı
+hatası (bağlantı reddi, DNS, timeout) düşüş sebebidir. Diğer şemalarda TCP
+dial. Ulaşılamayan sunucu `config.toml`'a **hiç yazılmaz**; kalanlar
+`required = true` ile aynen kalır. stdio sunucular yoklanmaz.
+
+Düşen sunucular sessizce yutulmaz: `writeCodexConfig` `dropped []string`
+döner ve `codexcli.go` bunu `TraceStep{Kind:"text"}` olarak yayınlar
+(`req.OnEvent` + `resp.Trace`) — `[codex error]` notlarıyla aynı kanal.
+
+Probe test edilebilirlik için enjekte edilebilir (`codexcli.mcpProbe`,
+`nil` = gerçek probe).
+
 ### Araç adlandırma
 
 `codex-rs/core/src/tools/handlers/mcp.rs`: `mcp__<server>__<tool>` — claude-cli

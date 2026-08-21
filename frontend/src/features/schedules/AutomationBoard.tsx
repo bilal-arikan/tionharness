@@ -82,25 +82,21 @@ export function AutomationBoard({ agents, focusId, onError }: Props) {
   const [pauseAutonomy, setPauseAutonomy] = useState<boolean | null>(null)
   const [savingPause, setSavingPause] = useState(false)
 
-  const reloadSchedules = useCallback(
-    () =>
-      api
-        .listSchedules()
-        .then(setSchedules)
-        .catch((e) => onError((e as Error).message))
-        .finally(() => setLoadingSchedules(false)),
-    [onError],
-  )
+  const reloadSchedules = useCallback(() => {
+    void api
+      .listSchedules()
+      .then(setSchedules)
+      .catch((e) => onError((e as Error).message))
+      .finally(() => setLoadingSchedules(false))
+  }, [onError])
 
-  const reloadAutomations = useCallback(
-    () =>
-      api
-        .listAutomations()
-        .then(setAutomations)
-        .catch((e) => onError((e as Error).message))
-        .finally(() => setLoadingAutomations(false)),
-    [onError],
-  )
+  const reloadAutomations = useCallback(() => {
+    void api
+      .listAutomations()
+      .then(setAutomations)
+      .catch((e) => onError((e as Error).message))
+      .finally(() => setLoadingAutomations(false))
+  }, [onError])
 
   useEffect(() => {
     api

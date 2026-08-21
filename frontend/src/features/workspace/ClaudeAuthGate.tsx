@@ -15,7 +15,6 @@
 import { useEffect, useState } from 'react'
 import { KeyRound, X } from 'lucide-react'
 import { api } from '@/api'
-import type { AppSettings } from '@/types'
 import { ClaudeAuthDialog } from '@/features/settings/ClaudeAuthDialog'
 
 interface Props {
@@ -58,14 +57,14 @@ export function ClaudeAuthGate({
   const [notice, setNotice] = useState<{ detail?: string } | null>(null)
   // Non-null while the auth popup is open; holds the settings snapshot the dialog
   // needs (config dir + current credential kind/state). Fetched lazily on open.
-  const [dialogSettings, setDialogSettings] = useState<AppSettings | null>(null)
+  const [dialogOpen, setDialogOpen] = useState(false)
 
   useEffect(() => {
     if (trigger <= 0) return
     let alive = true
     // Clear any leftover UI from a previous workspace's gate before re-probing.
     setNotice(null)
-    setDialogSettings(null)
+    setDialogOpen(false)
     ;(async () => {
       try {
         // Chat-open reason: skip the expensive login probe entirely when the
@@ -97,20 +96,14 @@ export function ClaudeAuthGate({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [trigger])
 
-  // Fetch the current app settings, then open the auth popup with them.
-  const openDialog = async () => {
-    try {
-      const s = await api.getSettings()
-      setDialogSettings(s)
-      setNotice(null)
-    } catch (e) {
-      onError?.((e as Error).message)
-    }
+  const openDialog = () => {
+    setDialogOpen(true)
+    setNotice(null)
   }
 
   return (
     <>
-      {notice && !dialogSettings && (
+      {notice && !dialogOpen && (
         <div className="pointer-events-none fixed bottom-4 right-4 z-50 flex justify-end">
           <div
             role="alert"
@@ -148,15 +141,14 @@ export function ClaudeAuthGate({
         </div>
       )}
 
-      {dialogSettings && (
+      {dialogOpen && (
         <ClaudeAuthDialog
-          configDir={dialogSettings.claudeConfigDir}
-          currentKind={dialogSettings.claudeCliAuthKind}
-          isSet={dialogSettings.claudeCliAuthSet}
-          onClose={() => setDialogSettings(null)}
+          providerLabel="Workspace claude-cli"
+          isLoggedIn={false}
+          onClose={() => setDialogOpen(false)}
           // The saved credential is written server-side; drop the snapshot so the
           // dialog unmounts. A follow-up create re-probes fresh.
-          onSaved={() => setDialogSettings(null)}
+          onLoggedIn={() => setDialogOpen(false)}
         />
       )}
     </>

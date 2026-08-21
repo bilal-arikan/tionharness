@@ -225,7 +225,10 @@ export function SessionsSidebar({
       }
       if (!matchesKindFilter(s.kind, kindFilter)) continue
       if (q && !(s.title || 'Yeni sohbet').toLowerCase().includes(q)) continue
-      const b = bucketOf(s.updatedAt)
+      // Pinned rows leave the recency buckets entirely and form their own group,
+      // which BUCKET_ORDER renders first — otherwise an old pinned chat would sink
+      // into "Daha eski" even though the list itself floats it to the top.
+      const b: Bucket = s.pinned ? 'pinned' : bucketOf(s.updatedAt)
       const arr = map.get(b) ?? []
       arr.push(s)
       map.set(b, arr)

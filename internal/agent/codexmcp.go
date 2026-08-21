@@ -46,7 +46,7 @@ import (
 // approval request outright, so permission mode is expressed purely as the
 // sandbox flag the provider passes (-s read-only / -s workspace-write /
 // bypass), never as MCP wiring.
-func (r *Runtime) codexMCPSpec(ctx context.Context, mcpEnabled bool, inter tools.InteractionEndpoint) (providers.CLIMCPSpec, error) {
+func (r *Runtime) codexMCPSpec(ctx context.Context, mcpEnabled bool, ag db.Agent, inter tools.InteractionEndpoint) (providers.CLIMCPSpec, error) {
 	servers := map[string]providers.CLIMCPServer{}
 	var allowed, disallowed []string
 
@@ -55,9 +55,17 @@ func (r *Runtime) codexMCPSpec(ctx context.Context, mcpEnabled bool, inter tools
 		if err != nil {
 			return providers.CLIMCPSpec{}, err
 		}
+		// Codex has no --disallowedTools, so NOT mounting the server is the only
+		// enforceable per-agent restriction on this path (see mcpservergate.go).
+		gate := mcpServerGate(ag, r.allowlistExemptServer(ctx))
 		for _, m := range list {
 			sc := toServerConfig(m)
 			key, _, _ := mcp.SplitNamespaced(mcp.NamespaceTool(sc.Name, "x"))
+			if gate != nil && !gate(key) {
+				r.logger.Debug("codex mcp spec: server withheld by agent tool restriction",
+					"server", key, "agent", ag.ID)
+				continue
+			}
 			entry := providers.CLIMCPServer{}
 			switch sc.Transport {
 			case db.MCPTransportSSE, db.MCPTransportHTTP:

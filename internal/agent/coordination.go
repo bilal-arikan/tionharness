@@ -264,6 +264,7 @@ func (r *Runtime) workerSpecFor(spec tools.WorkerSpawnSpec) (WorkerSpec, error) 
 		ModelOverride: spec.ModelOverride,
 		Coordinator:   spec.Coordinator,
 		Workflow:      strings.TrimSpace(spec.Workflow),
+		WorkingDir:    strings.TrimSpace(spec.WorkingDir),
 	}
 	if out.Workflow != "" {
 		maxTurns, err := skills.ResolveCoordinatorWorkflow(r.Skills(), out.Workflow)
@@ -388,6 +389,10 @@ type WorkerSpec struct {
 	// WorkflowMaxTurns is the recipe-resolved notify-loop cap for the child (0 =
 	// workspace default). Resolved by the caller, which owns the skills store.
 	WorkflowMaxTurns int
+	// WorkingDir pins the worker's cwd. Empty inherits the COORDINATOR's cwd (see
+	// SpawnWorker), not the workspace default: a coordinator working in repo A must
+	// not fan out workers that land in repo B.
+	WorkingDir string
 }
 
 // SpawnWorker launches a background worker under a coordinator session. The
@@ -476,8 +481,17 @@ func (r *Runtime) SpawnWorker(ctx context.Context, coordSessionID, agentRef, tas
 		slot.workers.Add(-1)
 		return SpawnResult{}, fmt.Errorf("coordinator worker limit reached (%d active); wait for some to finish before spawning more", max)
 	}
+	// Pin the worker's cwd: an explicit request wins, otherwise inherit the
+	// coordinator's own directory. Falling through to the workspace default (what
+	// SpawnSession does on an empty value) silently dropped fan-out workers into an
+	// unrelated repository whenever the coordinator itself had been moved.
+	cwd := strings.TrimSpace(spec.WorkingDir)
+	if cwd == "" {
+		cwd = strings.TrimSpace(parent.WorkingDir)
+	}
 	res, err := r.SpawnSession(ctx, agentRef, task, SpawnOptions{
 		ModelOverride:            spec.ModelOverride,
+		WorkingDir:               cwd,
 		CreatedBy:                createdBy,
 		CoordinatorSessionID:     coordSessionID,
 		Role:                     db.SessionRoleWorker,
@@ -710,9 +724,15 @@ func (r *Runtime) resolveWorkerTarget(ctx context.Context, coordSessionID, baseA
 		ProviderInstanceID: base.ProviderInstanceID,
 		Model:              base.Model,
 		PermissionMode:     base.PermissionMode,
-		MCPEnabled:         true,
-		AllowedTools:       string(allow),
-		CreatedBy:          baseAgentID,
+		// MCPEnabled is the master switch, NOT a grant: the profile allowlist below
+		// names only built-ins, and no built-in pattern can match a namespaced
+		// "<server>__<tool>" MCP name, so a profile worker reaches no MCP server on
+		// either path (native: toolFilter; CLI: mcpServerGate). It stays true so an
+		// operator who deliberately widens this agent's allowlist in the UI gets MCP
+		// without also having to find this flag.
+		MCPEnabled:   true,
+		AllowedTools: string(allow),
+		CreatedBy:    baseAgentID,
 	})
 	if err != nil {
 		return "", fmt.Errorf("cannot materialize worker profile %q: %w", prof.ID, err)

@@ -29,6 +29,10 @@ type CodexCLI struct {
 	// MCP delegation: one turn's server set, rendered into
 	// <configDir>/config.toml before launch. Set by ConfigureCLIMCP.
 	mcpServers map[string]CLIMCPServer
+
+	// mcpProbe overrides the remote-MCP reachability probe. Nil means the real
+	// network probe; tests set it to stay offline.
+	mcpProbe codexMCPProbe
 }
 
 // NewCodexCLI creates a provider that invokes the given codex binary. configDir,
@@ -228,14 +232,32 @@ func (c *CodexCLI) Complete(ctx context.Context, req Request) (*Response, error)
 	// The config.toml is the ONLY channel for the system prompt and the MCP
 	// servers, so a write failure must fail the turn rather than silently run a
 	// tool-less, persona-less agent.
+	var droppedMCP []string
 	if c.configDir != "" {
-		if _, cleanup, err := writeCodexConfig(c.configDir, c.buildConfig(req)); err != nil {
+		_, dropped, cleanup, err := writeCodexConfig(ctx, c.configDir, c.buildConfig(req), c.mcpProbe)
+		if err != nil {
 			return nil, err
-		} else if cleanup != nil {
+		}
+		if cleanup != nil {
 			defer cleanup()
 		}
+		droppedMCP = dropped
 	} else if len(c.mcpServers) > 0 {
 		return nil, fmt.Errorf("codex CLI: MCP servers configured but no CODEX_HOME set — cannot write config.toml")
+	}
+
+	// Dropping a server costs the turn that server's tools, so it must not be
+	// silent. This rides the same channel the parser uses for "[codex error]"
+	// lines — a text trace step, streamed live when the caller listens and
+	// carried in the response trace either way — rather than a new mechanism.
+	var mcpNote *TraceStep
+	if len(droppedMCP) > 0 {
+		step := TraceStep{Kind: "text", Text: "[codex] unreachable MCP server(s) omitted from this turn: " +
+			strings.Join(droppedMCP, ", ") + " — their tools are unavailable until the server is back up."}
+		mcpNote = &step
+		if req.OnEvent != nil {
+			req.OnEvent(step)
+		}
 	}
 
 	// Mirror the claude path's single retry: a "clean crash" (died before any
@@ -245,6 +267,9 @@ func (c *CodexCLI) Complete(ctx context.Context, req Request) (*Response, error)
 	for attempt := 0; attempt < 2; attempt++ {
 		resp, retryable, err := c.runAttempt(ctx, args, prompt, model, req)
 		if err == nil {
+			if mcpNote != nil {
+				resp.Trace = append([]TraceStep{*mcpNote}, resp.Trace...)
+			}
 			return resp, nil
 		}
 		lastErr = err

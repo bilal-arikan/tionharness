@@ -78,6 +78,9 @@ func (r *Runtime) RunCoordinatorNode(ctx context.Context, spec orchestration.Coo
 	sess, err := r.db.CreateSession(ctx, db.Session{
 		AgentID: agent.ID,
 		Kind:    SessionKindFlowCoordinator,
+		// Same directory the flow run itself works in; its workers then inherit from
+		// here (SpawnWorker), so a whole coordinator tree stays in one repository.
+		WorkingDir: r.effectiveWorkDir(ctx),
 		// SourceID points at the owning flow run so the executions feed and the run
 		// viewer can resolve this session back to the run that produced it.
 		SourceID: flowRunIDFromContext(ctx),

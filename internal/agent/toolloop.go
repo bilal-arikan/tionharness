@@ -361,14 +361,14 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 			// into config.toml by ConfigureCLIMCP. Building that map is asymmetric
 			// enough from the claude path (see codexmcp.go's file comment) that it gets
 			// its own builder rather than reusing writeCLIMCPConfig/writeCLISettings.
-			spec, err := r.codexMCPSpec(ctx, agent.MCPEnabled, inter)
+			spec, err := r.codexMCPSpec(ctx, agent.MCPEnabled, agent, inter)
 			if err != nil {
 				r.logger.Warn("codex mcp spec failed", "error", err)
 			} else if len(spec.Servers) > 0 {
 				cli.ConfigureCLIMCP(spec)
 			}
 		} else {
-			path, allowed, disallowed, cleanup, err := r.writeCLIMCPConfig(ctx, agent.MCPEnabled, inter, agent.PermissionMode)
+			path, allowed, disallowed, cleanup, err := r.writeCLIMCPConfig(ctx, agent.MCPEnabled, agent, inter, agent.PermissionMode)
 			if err != nil {
 				r.logger.Warn("cli mcp config failed", "error", err)
 			} else if path != "" {
@@ -417,9 +417,28 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 	// registration on the runner's presence (so ordinary/worker sessions never see
 	// them). No-op on every other turn.
 	ctx = r.withCoordination(ctx, agent)
+	// Collect per-server MCP catalog failures during the build so the turn can
+	// report them once (mcpnotice.go); without this they are log-only and the
+	// missing tools look like they never existed.
+	ctx, mcpFailures := withMCPFailures(ctx)
 	reg := r.buildRegistry(ctx, agent)
+	// One card per turn (not per tool call) naming every MCP server that failed
+	// its catalog build, with the reason — so a missing tool reads as "the server
+	// is down" instead of "that tool does not exist".
+	var mcpNote *TurnStep
+	if note := formatMCPFailureNote(mcpFailures.list()); note != "" {
+		st := TurnStep{Kind: StepRecovery, Reason: mcpFailureReason, Text: note}
+		mcpNote = &st
+		r.emitDebug(ctx, db.DebugEvent{Type: db.DebugError, AgentID: agent.ID, Detail: note, Err: true})
+	}
 	if reg.Empty() {
 		resp, err := r.recordedComplete(ctx, agent, provider, req)
+		if mcpNote != nil {
+			if onStep != nil {
+				onStep(*mcpNote)
+			}
+			return resp, []TurnStep{*mcpNote}, err
+		}
 		return resp, nil, err
 	}
 	toolFilter := r.toolFilter(ctx, agent)
@@ -526,6 +545,12 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 	// reach here (one Complete; its usage is already the turn aggregate).
 	var turnUsage providers.Usage
 	var steps []TurnStep
+	// MCP catalog failures (collected during buildRegistry above) lead the trace:
+	// they explain a capability gap that applies to the whole turn.
+	if mcpNote != nil {
+		steps = append(steps, *mcpNote)
+		emit(*mcpNote)
+	}
 	// ls carries the single-shot recovery guards (A1) across iterations so a
 	// stuck model can never spin forever inside one turn; cfg/keepRecent are the
 	// resolved, settings-driven recovery policy for this turn.

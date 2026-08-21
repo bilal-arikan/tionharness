@@ -94,7 +94,7 @@ export const ActivityCard = memo(function ActivityCard({ step, onOpenFile }: Pro
   const progHint = programHint(step)
 
   return (
-    <div className="overflow-hidden rounded-md">
+    <div className="overflow-hidden rounded-md bg-[var(--color-bg)] shadow-[var(--shadow-lg)]">
       <button
         onClick={() => setOpen((o) => !o)}
         className="flex w-full items-center gap-2 rounded-md px-3 py-1 text-left text-xs hover:bg-[var(--color-surface-2)]"

@@ -1494,7 +1494,7 @@ func (r *Runtime) autonomousSystemPrompt(ctx context.Context, a db.Agent) string
 		// cwd-derived project id (ctx carries the session id on scheduler/spawn/flow
 		// paths). Presence is stable, so it rides the cached static prefix. Shares ONE
 		// source with the chat path (api.composeTurnRequest).
-		if cb := r.CapabilityContext(ctx, cwd); cb != "" {
+		if cb := r.CapabilityContext(ctx, a, cwd); cb != "" {
 			out = strings.TrimSpace(out + "\n\n" + cb)
 		}
 		// Boot/verification sequence (Anthropic long-running-agent harness discipline):

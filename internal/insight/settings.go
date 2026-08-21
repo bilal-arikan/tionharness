@@ -14,8 +14,8 @@ type Settings struct {
 	// still land in-app.
 	AppFixRepoPath string `json:"appFixRepoPath,omitempty"`
 	// MaxSessions caps how many sessions one scan run considers (budget guardrail).
-	// 0 = no cap.
-	MaxSessions int `json:"maxSessions,omitempty"`
+	// The default is DefaultMaxSessions; an explicit 0 removes the cap.
+	MaxSessions int `json:"maxSessions"`
 	// MaxAnalyzed caps how many analyzer (LLM) calls one scan makes — the real cost
 	// driver. 0 = no cap. Pairs beyond the cap are retried on the next scan.
 	MaxAnalyzed int `json:"maxAnalyzed,omitempty"`
@@ -48,6 +48,9 @@ type Settings struct {
 // hourly cron gets a tighter one.
 const DefaultMaxRunSessions = 200
 
+// DefaultMaxSessions bounds a scan unless the workspace explicitly overrides it.
+const DefaultMaxSessions = 10
+
 // RunSessionRetention resolves MaxRunSessions: 0 → the default, negative → 0,
 // which the caller reads as "keep everything".
 func (s Settings) RunSessionRetention() int {
@@ -62,17 +65,17 @@ func (s Settings) RunSessionRetention() int {
 
 var settingsRelPath = filepath.Join("insight", "settings.json")
 
-// LoadSettings reads the insight settings under a store root (db.Root()). A
-// missing file yields zero-value defaults (no error).
+// LoadSettings reads the insight settings under a store root (db.Root()). Missing
+// settings and legacy files without maxSessions receive DefaultMaxSessions.
 func LoadSettings(root string) (Settings, error) {
+	s := Settings{MaxSessions: DefaultMaxSessions}
 	b, err := os.ReadFile(filepath.Join(root, settingsRelPath))
 	if os.IsNotExist(err) {
-		return Settings{}, nil
+		return s, nil
 	}
 	if err != nil {
 		return Settings{}, err
 	}
-	var s Settings
 	if err := json.Unmarshal(b, &s); err != nil {
 		return Settings{}, err
 	}

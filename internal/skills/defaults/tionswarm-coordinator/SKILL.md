@@ -49,6 +49,7 @@ kullanılabilir.
 - **Sentezi SEN yap.** "Based on your findings" YASAK — bulguları oku, dosya:satır içeren net spec yaz.
 - **Yazma-ağır işleri sıraya koy.** Aynı dosya kümesine aynı anda iki worker yazmasın; araştırma paralel serbest.
 - **Worker görevleri self-contained olmalı** — worker senin konuşmanı görmez; dosya yolu, satır, hata mesajı, "bitti" tanımı ver.
+- **Çalışma dizini argümandır, prose değil.** Worker senin cwd'ini miras alır; başka bir depoda çalışması gerekiyorsa `spawn_worker(cwd: "C:\\...\\Repo")` ver. Görev metnine "Depo: C:\\..." yazmak worker'ı oraya taşımaz — yanlış dizinde `go build` "does not contain main module" ile patlar.
 - **Continue vs. spawn:** bağlam örtüşmesi yüksek → `send_to_worker`; düşük/temiz gerek → `spawn_worker`; doğrulama → her zaman taze `spawn_worker`.
 - **`send_to_worker` sırası:** worker boştaysa mesaj hemen teslim edilir. Worker hâlâ önceki turunu işliyorsa mesaj **tek-slotluk kuyruğa** alınır (`queued`) ve tur biter bitmez otomatik teslim edilir — kaybolmaz. Ama **worker başına yalnız bir bekleyen mesaj** tutulur; ikinci bir mesaj gönderirsen **reddedilir**. Meşgul diye `stop_worker` **çağırma** (çalışan işi çöpe atar). Paralellik istiyorsan **farklı worker'lara dağıt**, aynı worker'a mesaj yığma.
 - **Gerçek doğrulama:** özelliği açıp test et; "var" demek yetmez.

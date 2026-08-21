@@ -40,7 +40,7 @@ export function TodoCard({ step }: Props) {
   const done = todos.filter((t) => t.status === 'completed').length
 
   return (
-    <div className="overflow-hidden rounded-lg bg-[var(--color-surface)] shadow-[var(--shadow-lg)]">
+    <div className="overflow-hidden rounded-lg bg-[var(--color-bg)] shadow-[var(--shadow-lg)]">
       <button
         onClick={() => setOpen((o) => !o)}
         className="flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-left text-xs text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)]"

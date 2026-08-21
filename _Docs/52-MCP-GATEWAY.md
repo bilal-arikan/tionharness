@@ -811,3 +811,72 @@ active/tool_search/hidden). Tam app boot + canlı chat testi orantısız ağır/
   oturum bayat kök yerine yeniden dial eder. Çözülemezse (canlı oturumda) sessiz yutmaz — uyarı loglar.
   Çağrı `internal/agent/toolsetup.go` sunucu döngüsünde tek satır (`applyMCPScratchpadRoot`).
   Testler: `TestIsFileWritingMCP`, `TestEnsureOutputDirArg`.
+
+- ✅ **CLI sağlayıcılarında ajan araç kısıtı → MCP sunucu kapısı (2026-08-21):** `claude-cli` ve
+  `codex-cli` harici MCP sunucularını **CLI sürecine** mount eder; araç döngüsünü CLI kendi koşturduğu
+  için ne ilan edilen katalog ne de çağrı dispatch'i `toolFilter`'dan geçer. Canlı yakalandı (SES948):
+  allowlist'i `["Read","LS","Glob","Grep","Write","Edit","Bash"]` olan `worker:coder` ajanı bir tur
+  boyunca Playwright ve codebase-memory sunucularını sürdü — araçlar sistem promptunda **hiç geçmiyordu**
+  (yani TionSwarm filtresi doğru çalışmıştı), ama `writeCLIMCPConfig`/`codexMCPSpec` **enabled olan her
+  sunucuyu** mount edip `mcp__<key>` sunucu-düzeyi joker'i ile toptan izinliyordu. Ajan araç ekranı bu
+  süre boyunca aynı araçları "blocked" gösteriyordu. **Fix:** `internal/agent/mcpservergate.go`
+  (`mcpServerGate`) — ajanın blocked/allowed desenlerinden **önek tabanlı** bir sunucu kapısı üretir ve
+  iki CLI yolu da sunucuyu mount etmeden önce ona sorar (`ag db.Agent` parametresi eklendi).
+  - Neden önek tabanlı: CLI yolunda sunucuya bağlanmadan araç listesi yok; bağlanmak her stdio
+    sunucunun **ikinci** bir kopyasını TionSwarm sürecinde açardı. Namespaced araç adı daima
+    `<key>__<tool>` olduğundan sunucu kararı yalnız desenlerden verilebilir.
+  - Blocked: sunucunun tamamını kapsayan desen (`playwright*`, `playwright__*`, çıplak `playwright`)
+    sunucuyu düşürür; **tek bir aracı** bloklamak düşürmez (diğer araçlar meşru kalır).
+  - Allowlist (legacy, boş değilse): sunucu ancak bir desen onu hedeflerse hayatta kalır — tam ad
+    (`playwright__browser_click`), önek veya çıplak key. `group:<kategori>` anahtarları **built-in**
+    sınıflandırmasıdır, hiçbir MCP aracıyla eşleşmez → sadece built-in içeren allowlist tüm sunucuları
+    düşürür (native yolun davranışıyla birebir aynı).
+  - Sınır: sunucu içi **araç-başına** hassasiyet hâlâ CLI'ın kendi izin katmanındadır. codex'te
+    `--disallowedTools` karşılığı olmadığından **sunucuyu hiç mount etmemek oradaki tek yaptırımdır**.
+  - Testler: `internal/agent/mcpservergate_test.go` (SES948 regresyonu, allowlist'in adlandırdığı
+    sunucu kalır, blocked desen matrisi, kısıtsız ajan her şeyi mount eder, `group:` anahtarları
+    yok sayılır).
+
+  **Politika kararı (Bilal, 2026-08-21) — "sözleşmeyi kabul et":** yerleşik worker
+  profilleri (`explore`/`planner`/`coder`/`reviewer`/`validator`/`config`,
+  `internal/agent/subagent.go`) **built-in-only** kalır; hiçbirine MCP deseni
+  eklenmedi. Gerekçe: allowlist'ler kodda duran bir güvenlik sözleşmesidir ve
+  native yol bunu zaten yıllardır uyguluyordu — CLI yolundaki MCP erişimi kazaydı,
+  kabiliyet değil. Sonuçlar:
+  - Etkilenen mevcut ajanlar: 28 legacy allowlist'li `worker:*` (14 codex-cli,
+    12 claude-cli, 2 native). Hepsi `resolveWorkerTarget` tarafından otomatik
+    materyalize edilmiş; **hiçbiri elle düzenlenmemiş**, bu yüzden migration
+    yapılmadı — CLI olanlar artık native olanlarla aynı davranıyor.
+  - `subagent.go`'daki `validator` yorumu düzeltildi: "drive a browser for e2e"
+    iddiası kaldırıldı. Prompt katmanı zaten dürüsttü ("(when available) a
+    browser", `e2e: n/a`); yanlış olan yalnız kod yorumuydu.
+  - `coordination.go`'da profil worker'ının `MCPEnabled: true` değeri korundu ve
+    "grant değil, ana şalter" olduğu yorumlandı — operatör UI'dan allowlist'i
+    genişletirse MCP ayrıca bir bayrak aramadan açılır.
+  - Sözleşme teste bağlandı: `TestProfileAllowlistsNameNoMCPServer` — bir profile
+    MCP deseni eklenirse test kırılır, yani genişletme bilinçli bir politika
+    değişikliği olur.
+
+- ✅ **codebase-memory = allowlist'ten muaf altyapı (Bilal, 2026-08-21):** Yukarıdaki
+  "sözleşmeyi kabul et" kararının bilinçli ve TEK istisnası. Worker profilleri built-in-only
+  kaldığı için kod grafına da ulaşamıyordu; oysa statik prompt her ajana "graf araçlarını ÖNCE
+  kullan, grep son çare" diyor — yani araç olmadan prompt yalan söylüyordu.
+  **Fix:** `internal/agent/mcpservergate.go` → `allowlistExemptServer` + `isExemptTool`.
+  - Emsal: `toolFilter` zaten koordinasyon araçlarını allowlist'ten muaf tutuyor
+    ("allowlist personanın İŞ araçlarını tarif eder"). Kod grafı bir seviye aşağıda aynı şey:
+    ajanın repoyu OKUMA biçimi — `Read`/`Glob`/`Grep` ile aynı rol, ve onlar zaten her
+    profilin allowlist'inde. Grafı esirgemek kabiliyet kaybı değil, token israfı.
+  - Kapsam: yalnız **ALLOWLIST**. Workspace anahtarı ve ajanın **AÇIK** denylist'i hâlâ
+    kaldırır — operatör tek bir ajandan grafı bilerek alabilir ve bu karara saygı duyulur.
+  - Tek sunucuya kilitli: TionSwarm'ın altyapı saydığı tek MCP sunucusu bu (yetenek probu +
+    prompt bloğu yalnız onun için var). İkincisi açık bir karar gerektirir.
+  - Uygulanan iki yol: `toolFilter` (native, `isExemptTool`) ve `mcpServerGate(ag, exempt)`
+    (claude-cli + codex-cli mount'u).
+  - **Yan düzeltme — yetenek probu artık ajan-farkında.** `Capability.Detect` imzasına
+    `agent db.Agent` eklendi. Eskiden yalnız workspace'e bakıyordu: SES948'de built-in-only
+    worker'ın promptuna tam codebase-memory bloğu giriyor ("greps are the LAST resort"),
+    araçlar ise tool listesinde yok — ajan uyamayacağı bir emri izleyip kaçınması söylenen
+    grep'e düşüyordu. Artık blok, ajan araçları gerçekten çağırabiliyorsa basılır; açık
+    denylist ile kapatılmışsa susar.
+  - Testler: `TestCodebaseMemoryIsExemptFromAllowlist` (native + CLI, sızıntı yok),
+    `TestCodebaseMemoryExemptionYieldsToExplicitDenylist` (açık denylist kazanır, prompt susar).

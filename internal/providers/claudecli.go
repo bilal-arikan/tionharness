@@ -307,6 +307,51 @@ type cliEvent struct {
 	NumTurns       int                        `json:"num_turns"`       // result event: internal tool-loop API round-trips this turn
 	SessionID      string                     `json:"session_id"`      // emitted on system/init and result events
 	RateLimit      *cliRateLimit              `json:"rate_limit_info"` // emitted on rate_limit_event
+	// result envelope (CLI 2.1.238): stop_reason is the model's stop cause,
+	// terminal_reason why the CLI itself ended the turn ("api_error", ...).
+	// The result text alone can be a bare sentence, so terminal_reason is the
+	// only machine-readable hint about WHY the turn died — carry it through.
+	StopReason     string `json:"stop_reason"`
+	TerminalReason string `json:"terminal_reason"`
+	// Tools the permission layer refused during the turn. Non-empty means the
+	// answer was produced with less capability than requested — never silent.
+	PermissionDenials []cliPermissionDenial `json:"permission_denials"`
+	// system/init events: the MCP servers the CLI wired for this session, with
+	// their connection status, plus the servers that failed before a client
+	// existed. A server that is down here loses all of its tools for the turn
+	// WITHOUT aborting it, so this is the only signal that the capability is gone.
+	MCPServers       []cliMCPServer       `json:"mcp_servers"`
+	FailedMCPServers []cliFailedMCPServer `json:"failed_mcp_servers"`
+	// system/hook_response events (hook lifecycle).
+	HookName  string `json:"hook_name"`
+	HookEvent string `json:"hook_event"`
+	ExitCode  int    `json:"exit_code"`
+	Outcome   string `json:"outcome"`
+	Stderr    string `json:"stderr"`
+}
+
+// cliPermissionDenial mirrors one entry of the result envelope's
+// permission_denials array — a tool call the CLI's permission layer blocked.
+type cliPermissionDenial struct {
+	ToolName  string `json:"tool_name"`
+	ToolUseID string `json:"tool_use_id"`
+}
+
+// cliMCPServer mirrors one entry of the system/init mcp_servers array. Status
+// is the CLI's own connection state: "connected" is healthy, "pending" means
+// the client is still cached/warming, and anything else ("failed",
+// "needs-auth", ...) means the server's tools are not usable this turn.
+type cliMCPServer struct {
+	Name   string `json:"name"`
+	Status string `json:"status"`
+}
+
+// cliFailedMCPServer mirrors one entry of the system/init failed_mcp_servers
+// array — a server that never produced a client at all.
+type cliFailedMCPServer struct {
+	Name      string `json:"name"`
+	ErrorCode string `json:"errorCode"`
+	Error     string `json:"error"`
 }
 
 // cliRateLimit mirrors the rate_limit_info object the CLI emits on a
@@ -878,6 +923,7 @@ type cliStreamParser struct {
 	sawResult    bool
 	hadError     bool
 	errText      string
+	notedMCP     bool                 // the unusable-MCP-server note was already emitted for this turn
 	sawModelTurn bool                 // any assistant/tool/result content seen (vs. only system/init noise)
 	rateLimited  bool                 // the turn was rejected by a subscription usage / rate limit
 	rateLimitMsg string               // human-readable detail for the rate-limit failure
@@ -937,6 +983,121 @@ func (p *cliStreamParser) emit(i int) {
 	p.onEvent(p.resp.Trace[i])
 }
 
+// note appends an out-of-band parser note to the trace as a plain "text" step.
+// TraceStep has no dedicated warning kind (kinds are text|thinking|tool), so
+// this follows the existing convention of a bracket-prefixed text step (see the
+// codex parser's "[codex error] ..." steps) — visible in the activity view
+// without pretending to be a tool call.
+func (p *cliStreamParser) note(text string) {
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return
+	}
+	p.flushText()
+	p.resp.Trace = append(p.resp.Trace, TraceStep{Kind: "text", Text: text})
+	p.emit(len(p.resp.Trace) - 1)
+}
+
+// describePermissionDenials renders the result envelope's permission_denials
+// array as a one-line note, or "" when nothing was denied.
+func describePermissionDenials(ds []cliPermissionDenial) string {
+	if len(ds) == 0 {
+		return ""
+	}
+	names := make([]string, 0, len(ds))
+	for _, d := range ds {
+		if n := strings.TrimSpace(d.ToolName); n != "" {
+			names = append(names, n)
+		}
+	}
+	if len(names) == 0 {
+		names = append(names, "(unnamed tool)")
+	}
+	return fmt.Sprintf("[permission] %d permission denial(s): %s", len(ds), strings.Join(names, ", "))
+}
+
+// describeUnusableMCPServers renders the system/init MCP inventory as a
+// one-line note naming every server whose tools are NOT available this turn,
+// with the reason the CLI gave; "" when every server is usable. "connected"
+// and "pending" (a cached client still warming up) are usable; every other
+// status is not.
+func describeUnusableMCPServers(ev cliEvent) string {
+	var parts []string
+	for _, s := range ev.MCPServers {
+		status := strings.ToLower(strings.TrimSpace(s.Status))
+		if status == "connected" || status == "pending" || status == "" {
+			continue
+		}
+		parts = append(parts, mcpServerLabel(s.Name)+" ("+status+")")
+	}
+	for _, f := range ev.FailedMCPServers {
+		reason := strings.TrimSpace(f.Error)
+		if reason == "" {
+			reason = strings.TrimSpace(f.ErrorCode)
+		}
+		if reason == "" {
+			reason = "failed to start"
+		}
+		parts = append(parts, mcpServerLabel(f.Name)+" ("+trimOneLine(reason, 160)+")")
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return "[mcp] unavailable MCP server(s) in this turn: " + strings.Join(parts, ", ") +
+		" — their tools are missing from the tool catalog until the server is back up."
+}
+
+// mcpServerLabel keeps an unnamed server from rendering as an empty label.
+func mcpServerLabel(name string) string {
+	if n := strings.TrimSpace(name); n != "" {
+		return n
+	}
+	return "(unnamed server)"
+}
+
+// trimOneLine collapses s to a single line bounded by limit runes-ish bytes.
+func trimOneLine(s string, limit int) string {
+	s = strings.Join(strings.Fields(s), " ")
+	if limit > 0 && len(s) > limit {
+		return s[:limit] + "…"
+	}
+	return s
+}
+
+// hookWarningText renders a failed hook (non-zero exit, or an outcome that says
+// it failed/blocked) as a one-line note with a trimmed stderr; "" when the hook
+// succeeded, so successful hooks add no trace noise.
+func hookWarningText(ev cliEvent) string {
+	outcome := strings.ToLower(strings.TrimSpace(ev.Outcome))
+	failed := ev.ExitCode != 0 ||
+		strings.Contains(outcome, "fail") ||
+		strings.Contains(outcome, "error") ||
+		strings.Contains(outcome, "block") ||
+		strings.Contains(outcome, "deny")
+	if !failed {
+		return ""
+	}
+	name := strings.TrimSpace(ev.HookName)
+	if name == "" {
+		name = strings.TrimSpace(ev.HookEvent)
+	}
+	if name == "" {
+		name = "(unnamed hook)"
+	}
+	msg := fmt.Sprintf("[hook] %s failed (exit %d)", name, ev.ExitCode)
+	if outcome != "" {
+		msg += ", outcome " + strings.TrimSpace(ev.Outcome)
+	}
+	if errOut := strings.TrimSpace(ev.Stderr); errOut != "" {
+		const maxStderr = 500
+		if len(errOut) > maxStderr {
+			errOut = errOut[:maxStderr] + "…"
+		}
+		msg += ": " + errOut
+	}
+	return msg
+}
+
 func (p *cliStreamParser) flushText() {
 	t := strings.TrimSpace(p.pending.String())
 	p.pending.Reset()
@@ -973,6 +1134,25 @@ func (p *cliStreamParser) feed(line string) {
 	}
 
 	switch ev.Type {
+	case "system":
+		// hook_response reports how each configured hook ran. A hook that exits
+		// non-zero can silently strip a tool call or block an edit, and the turn
+		// still ends "successfully" — so make the failure visible. Successful
+		// hooks stay silent (they fire on every step; noting them would drown
+		// the trace).
+		if ev.Subtype == "hook_response" {
+			p.note(hookWarningText(ev))
+		}
+		// system/init lists every MCP server with its connection status. A server
+		// that is not connected costs the turn its tools without failing the turn,
+		// so it must be said once — same visibility contract as the native and
+		// codex paths.
+		if ev.Subtype == "init" && !p.notedMCP {
+			if t := describeUnusableMCPServers(ev); t != "" {
+				p.notedMCP = true
+				p.note(t)
+			}
+		}
 	case "rate_limit_event":
 		// The CLI reports the subscription rate-limit window on every turn. The
 		// "allowed" family lets the request proceed: "allowed" is the normal case and
@@ -1070,13 +1250,21 @@ func (p *cliStreamParser) feed(line string) {
 	case "result":
 		p.sawResult = true
 		p.sawModelTurn = true
+		// Blocked tool calls mean the turn ran with less capability than it asked
+		// for. Surface them on both the success and the error path — a silently
+		// degraded answer is the worst outcome.
+		if denials := describePermissionDenials(ev.PermissionDenials); denials != "" {
+			p.note(denials)
+		}
 		if ev.IsError {
 			p.hadError = true
 			p.errText = ev.Result
+			isRate := isRateLimitText(ev.APIErrorStatus) || isRateLimitText(ev.Result)
+			isAuth := isAuthErrorText(ev.APIErrorStatus) || isAuthErrorText(ev.Result)
 			// A usage/rate-limit rejection often surfaces here as the result error
 			// (api_error_status == "rate_limit" or wording in the result text) rather
 			// than a separate rate_limit_event — classify it either way.
-			if isRateLimitText(ev.APIErrorStatus) || isRateLimitText(ev.Result) {
+			if isRate {
 				p.rateLimited = true
 				if p.rateLimitMsg == "" {
 					p.rateLimitMsg = strings.TrimSpace(ev.APIErrorStatus + " " + ev.Result)
@@ -1085,10 +1273,21 @@ func (p *cliStreamParser) feed(line string) {
 			// A login lapse commonly surfaces here as result "Not logged in · Please
 			// run /login". Classify it so the caller fails fast with an actionable
 			// message instead of a bare "exit status 1" that gets retried in vain.
-			if isAuthErrorText(ev.APIErrorStatus) || isAuthErrorText(ev.Result) {
+			if isAuth {
 				p.notLoggedIn = true
 				if p.authMsg == "" {
 					p.authMsg = strings.TrimSpace(ev.Result)
+				}
+			}
+			// Neither auth nor rate limit: the result text is often a bare sentence
+			// (or empty) and terminal_reason/stop_reason carry the only machine
+			// readable cause. Fold them in so the caller sees e.g. "api_error"
+			// instead of an unattributable message.
+			if !isRate && !isAuth {
+				if reason := strings.TrimSpace(ev.TerminalReason); reason != "" {
+					p.errText = strings.TrimSpace(strings.TrimSpace(p.errText) + " (terminal_reason: " + reason + ")")
+				} else if reason := strings.TrimSpace(ev.StopReason); reason != "" {
+					p.errText = strings.TrimSpace(strings.TrimSpace(p.errText) + " (stop_reason: " + reason + ")")
 				}
 			}
 			return
@@ -1221,6 +1420,12 @@ func isAuthErrorText(s string) bool {
 		strings.Contains(s, "invalid api key") ||
 		strings.Contains(s, "invalid x-api-key") ||
 		strings.Contains(s, "oauth token has expired") ||
+		// CLI 2.1.238 wording, observed live: the result envelope reports
+		// subtype "success" with is_error=true and the text below. Without
+		// these two matches the turn is classified as a generic (retryable)
+		// failure and retried in vain against the same dead session.
+		strings.Contains(s, "failed to authenticate") ||
+		strings.Contains(s, "oauth session expired") ||
 		strings.Contains(s, "oauth authentication is currently not supported") ||
 		strings.Contains(s, "invalid bearer token")
 }

@@ -27,7 +27,11 @@ export function AgentToolGroupRow({
       data-testid="agent-tool-group-row"
       data-group-key={group.key}
       data-group-tier={tier ?? ''}
-      className="flex items-center gap-2 rounded border border-[var(--color-border)] px-2.5 py-1.5"
+      className={`flex flex-wrap items-center gap-x-2 gap-y-1.5 rounded-lg border px-2.5 py-2 ${
+        tier
+          ? 'border-[var(--color-accent)] bg-[var(--color-accent-soft)]'
+          : 'border-[var(--color-border)] bg-[var(--color-surface)]'
+      }`}
       title={group.tools.join(', ')}
     >
       <span className="text-xs font-medium">{group.label}</span>
@@ -47,7 +51,7 @@ export function AgentToolGroupRow({
           onClick={onClear}
           disabled={busy || !tier}
           title="Grup override'ını kaldır"
-          className="rounded p-1 text-[var(--color-text-dim)] hover:text-[var(--color-danger)] disabled:opacity-30"
+          className="rounded-md p-1 text-[var(--color-text-dim)] transition hover:bg-[color-mix(in_srgb,var(--color-danger)_12%,transparent)] hover:text-[var(--color-danger)] disabled:cursor-not-allowed disabled:opacity-30"
         >
           <X size={13} />
         </button>

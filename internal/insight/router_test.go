@@ -93,8 +93,8 @@ func TestAppendBacklogBlankRepoIsNoop(t *testing.T) {
 
 func TestSettingsRoundTrip(t *testing.T) {
 	root := t.TempDir()
-	if s, err := LoadSettings(root); err != nil || s.AppFixRepoPath != "" {
-		t.Fatalf("missing settings should be zero-value: %+v err=%v", s, err)
+	if s, err := LoadSettings(root); err != nil || s.MaxSessions != DefaultMaxSessions {
+		t.Fatalf("missing settings should use default scan limit: %+v err=%v", s, err)
 	}
 	want := Settings{AppFixRepoPath: `C:\repo\TionSwarm`, MaxSessions: 50}
 	if err := SaveSettings(root, want); err != nil {
@@ -103,5 +103,14 @@ func TestSettingsRoundTrip(t *testing.T) {
 	got, err := LoadSettings(root)
 	if err != nil || got != want {
 		t.Fatalf("round-trip mismatch: got %+v want %+v err=%v", got, want, err)
+	}
+
+	want.MaxSessions = 0
+	if err := SaveSettings(root, want); err != nil {
+		t.Fatal(err)
+	}
+	got, err = LoadSettings(root)
+	if err != nil || got != want {
+		t.Fatalf("explicit unlimited setting lost: got %+v want %+v err=%v", got, want, err)
 	}
 }

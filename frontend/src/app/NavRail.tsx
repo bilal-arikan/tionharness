@@ -276,7 +276,7 @@ export function NavRail({
       )}
 
       {/* View navigation */}
-      <div className="flex flex-1 flex-col gap-1 px-2 py-2">
+      <div className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto px-2 py-2">
         {NAV.map((item) => {
           const Icon = item.icon
           const isActive = view === item.key
@@ -307,7 +307,7 @@ export function NavRail({
       </div>
 
       {/* Workspace + Settings (pinned at the bottom, separate from primary nav) */}
-      <div className="flex flex-col gap-1 px-2 pb-1">
+      <div className="flex shrink-0 flex-col gap-1 px-2 pb-1">
         <button
           onClick={() => onSelectView('workspace')}
           data-testid="nav-workspace"

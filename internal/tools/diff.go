@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"fmt"
 	"strings"
 )
 
@@ -19,18 +20,41 @@ type FileDiff struct {
 	Created bool `json:"created,omitempty"`
 }
 
-// diffSink collects the diff produced by the current tool call. One sink is
-// attached per call, so it holds at most one diff.
-type diffSink struct{ last *FileDiff }
+// diffSink collects the diff(s) produced by the current tool call. One sink is
+// attached per call. Most tools (Edit/Write) mutate a single file, but
+// apply_patch can touch several in one call — every recordDiff call appends,
+// so none are lost to a later file overwriting an earlier one.
+type diffSink struct{ items []FileDiff }
 
-// Take returns the recorded diff (if any) and clears it.
+// Take returns the recorded diff (if any) and clears the sink. A single
+// recorded file returns as-is; several are aggregated into one summary
+// FileDiff (path becomes "N dosya", counts summed, patches concatenated with
+// an "@@ <path> @@" separator per file) so a multi-file apply_patch still
+// renders as one diff card instead of silently keeping only the last file.
 func (s *diffSink) Take() *FileDiff {
-	if s == nil {
+	if s == nil || len(s.items) == 0 {
 		return nil
 	}
-	d := s.last
-	s.last = nil
-	return d
+	items := s.items
+	s.items = nil
+	if len(items) == 1 {
+		d := items[0]
+		return &d
+	}
+	agg := FileDiff{Path: fmt.Sprintf("%d dosya", len(items))}
+	var patchParts []string
+	for _, it := range items {
+		agg.Added += it.Added
+		agg.Removed += it.Removed
+		if it.Created {
+			agg.Created = true
+		}
+		if it.Patch != "" {
+			patchParts = append(patchParts, fmt.Sprintf("@@ %s @@\n%s", it.Path, it.Patch))
+		}
+	}
+	agg.Patch = strings.Join(patchParts, "\n")
+	return &agg
 }
 
 type diffKey struct{}
@@ -44,10 +68,10 @@ func WithDiffSink(ctx context.Context) (context.Context, *diffSink) {
 	return context.WithValue(ctx, diffKey{}, s), s
 }
 
-// recordDiff stores a diff on the sink attached to ctx, if present.
+// recordDiff appends a diff to the sink attached to ctx, if present.
 func recordDiff(ctx context.Context, d FileDiff) {
 	if s, ok := ctx.Value(diffKey{}).(*diffSink); ok {
-		s.last = &d
+		s.items = append(s.items, d)
 	}
 }
 

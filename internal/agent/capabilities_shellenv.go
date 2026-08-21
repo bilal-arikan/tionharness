@@ -3,6 +3,8 @@ package agent
 import (
 	"context"
 
+	"github.com/bilal-arikan/tionswarm/internal/db"
+
 	"github.com/bilal-arikan/tionswarm/internal/tools"
 )
 
@@ -19,7 +21,7 @@ import (
 
 var shellEnvironmentCapability = Capability{
 	ID: "shell-environment",
-	Detect: func(ctx context.Context, r *Runtime) bool {
+	Detect: func(ctx context.Context, r *Runtime, _ db.Agent) bool {
 		// Only worth a prompt block when the agent can actually run shell commands
 		// AND the path spelling is ambiguous (Windows). A native Unix /bin/sh needs
 		// no explanation.

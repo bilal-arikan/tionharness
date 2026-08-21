@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Check, ExternalLink, Globe, Loader2 } from 'lucide-react'
 import { api } from '@/api'
+import { workspaceApi } from '@/api/workspaces'
 import { Button, ModalOverlay } from '@/shared/components'
 import { inputCls } from './primitives'
 
@@ -10,7 +11,7 @@ function isRemoteAccess(): boolean {
 }
 
 interface Props {
-  providerId: string
+  providerId?: string
   providerLabel: string
   isLoggedIn: boolean
   onClose: () => void
@@ -25,6 +26,14 @@ export function ClaudeAuthDialog({
   onLoggedIn,
 }: Props) {
   const remote = isRemoteAccess()
+  const startOAuth = () =>
+    providerId ? api.startClaudeOAuth(providerId) : workspaceApi.startClaudeOAuth()
+  const startOAuthLoopback = () =>
+    providerId ? api.startClaudeOAuthLoopback(providerId) : workspaceApi.startClaudeOAuthLoopback()
+  const completeOAuth = (flow: string, value: string) =>
+    providerId
+      ? api.completeClaudeOAuth(providerId, flow, value)
+      : workspaceApi.completeClaudeOAuth(flow, value)
   const [mode, setMode] = useState<'auto' | 'manual'>(remote ? 'manual' : 'auto')
   const [flowId, setFlowId] = useState('')
   const [authUrl, setAuthUrl] = useState('')
@@ -38,7 +47,9 @@ export function ClaudeAuthDialog({
     let active = true
     const timer = setInterval(async () => {
       try {
-        const result = await api.claudeOAuthLoopbackStatus(providerId, flowId)
+        const result = providerId
+          ? await api.claudeOAuthLoopbackStatus(providerId, flowId)
+          : await workspaceApi.claudeOAuthLoopbackStatus(flowId)
         if (!active) return
         if (result.status === 'ok') {
           setDone(true)
@@ -62,10 +73,7 @@ export function ClaudeAuthDialog({
     setBusy(true)
     setError(null)
     try {
-      const result =
-        mode === 'auto'
-          ? await api.startClaudeOAuthLoopback(providerId)
-          : await api.startClaudeOAuth(providerId)
+      const result = mode === 'auto' ? await startOAuthLoopback() : await startOAuth()
       setFlowId(result.flowId)
       setAuthUrl(result.authUrl)
       window.open(result.authUrl, '_blank', 'noopener,noreferrer')
@@ -85,7 +93,7 @@ export function ClaudeAuthDialog({
     setBusy(true)
     setError(null)
     try {
-      await api.completeClaudeOAuth(providerId, flowId, value)
+      await completeOAuth(flowId, value)
       setDone(true)
       onLoggedIn()
     } catch (caught) {

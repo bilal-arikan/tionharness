@@ -40,6 +40,7 @@ export function ProviderInstanceList({
         const secretsOk = secretKeys.length === 0 || secretKeys.every((k) => inst.secretsSet[k])
         const supportsAuth = inst.kindId === 'claude-cli' || inst.kindId === 'codex-cli'
         const auth = authById[inst.id]
+        const authStatus = auth && auth !== 'pending' && !('error' in auth) ? auth : undefined
         return (
           <div
             key={inst.id}
@@ -94,7 +95,9 @@ export function ProviderInstanceList({
                             : 'text-[var(--color-text-dim)]'
                     }`}
                     title={
-                      auth && auth !== 'pending' && 'error' in auth ? auth.error : auth?.detail
+                      auth && auth !== 'pending' && 'error' in auth
+                        ? auth.error
+                        : authStatus?.detail
                     }
                   >
                     {auth === 'pending'
@@ -111,8 +114,7 @@ export function ProviderInstanceList({
                     onClick={() => onAuthOpen(inst)}
                     className="flex items-center gap-1 rounded border border-[var(--color-border)] px-2 py-1 text-xs hover:border-[var(--color-accent)]"
                   >
-                    <KeyRound size={12} />{' '}
-                    {auth && auth !== 'pending' && auth.loggedIn ? 'Durum' : 'Giriş yap'}
+                    <KeyRound size={12} /> {authStatus?.loggedIn ? 'Durum' : 'Giriş yap'}
                   </button>
                 </>
               )}

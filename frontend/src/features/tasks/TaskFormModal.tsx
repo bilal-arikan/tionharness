@@ -1,5 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
-import { ChevronDown, ChevronRight, Copy, RefreshCw, X } from 'lucide-react'
+import {
+  Archive,
+  ArchiveRestore,
+  ChevronDown,
+  ChevronRight,
+  Copy,
+  RefreshCw,
+  X,
+} from 'lucide-react'
 import { api } from '@/api'
 import type { Agent, Task, Flow, BoardState, BoardColumnDef, TaskPriority, Artifact } from '@/types'
 import { AgentPicker } from '@/shared/components/agents/AgentPicker'
@@ -43,6 +51,7 @@ interface Props {
   // or removes it (real = null) when the create failed.
   onReplaceTemp?: (tempId: string, real: Task | null) => void
   onDeleted?: (id: string) => void
+  onArchived?: (id: string) => void
   onError: (msg: string) => void
 }
 
@@ -70,6 +79,7 @@ export function TaskFormModal({
   onSaved,
   onReplaceTemp,
   onDeleted,
+  onArchived,
   onError,
 }: Props) {
   const firstCol = defaultBoardState ?? columns[0]?.key ?? 'todo'
@@ -92,6 +102,7 @@ export function TaskFormModal({
   const [allArtifacts, setAllArtifacts] = useState<Artifact[]>([])
   const [saving, setSaving] = useState(false)
   const [retitling, setRetitling] = useState(false)
+  const [archiving, setArchiving] = useState(false)
   // Dependencies picker is collapsible; open by default only when the task
   // already has dependencies, so the section stays out of the way otherwise.
   const [depsOpen, setDepsOpen] = useState(depIds.length > 0)
@@ -217,6 +228,22 @@ export function TaskFormModal({
       onClose()
     } catch (e) {
       onError((e as Error).message)
+    }
+  }
+
+  const toggleArchived = async () => {
+    if (!task || !onArchived) return
+    const archived = !task.archived
+    setArchiving(true)
+    try {
+      await api.archiveTask(task.id, archived)
+      onArchived(task.id)
+      toast.success(archived ? 'Görev arşivlendi' : 'Görev arşivden geri alındı')
+      onClose()
+    } catch (e) {
+      onError((e as Error).message)
+    } finally {
+      setArchiving(false)
     }
   }
 
@@ -463,11 +490,22 @@ export function TaskFormModal({
           >
             İptal
           </button>
+          {mode === 'edit' && onArchived && (
+            <button
+              data-testid="task-detail-archive"
+              onClick={toggleArchived}
+              disabled={archiving}
+              className="ml-auto inline-flex items-center gap-1.5 rounded px-3 py-1.5 text-sm text-[var(--color-text-dim)] transition hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)] disabled:opacity-40"
+            >
+              {task?.archived ? <ArchiveRestore size={15} /> : <Archive size={15} />}
+              {archiving ? 'İşleniyor…' : task?.archived ? 'Arşivden geri al' : 'Arşivle'}
+            </button>
+          )}
           {mode === 'edit' && onDeleted && (
             <button
               data-testid="task-detail-delete"
               onClick={remove}
-              className="ml-auto rounded px-3 py-1.5 text-sm text-[var(--color-danger)] transition hover:bg-[color-mix(in_srgb,var(--color-danger)_10%,transparent)]"
+              className="rounded px-3 py-1.5 text-sm text-[var(--color-danger)] transition hover:bg-[color-mix(in_srgb,var(--color-danger)_10%,transparent)]"
             >
               🗑 Sil
             </button>

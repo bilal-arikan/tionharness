@@ -28,7 +28,7 @@ func TestWriteCLIMCPConfigTwoTierInteraction(t *testing.T) {
 	}
 
 	// mcpEnabled=false so the test doesn't depend on any stored MCP servers.
-	path, allowed, _, cleanup, err := rt.writeCLIMCPConfig(context.Background(), false, inter, "ask")
+	path, allowed, _, cleanup, err := rt.writeCLIMCPConfig(context.Background(), false, db.Agent{}, inter, "ask")
 	if err != nil {
 		t.Fatalf("writeCLIMCPConfig: %v", err)
 	}
@@ -134,7 +134,7 @@ func TestWriteCLIMCPConfigKeepsCodebaseMemoryEnv(t *testing.T) {
 		t.Fatalf("create other server: %v", err)
 	}
 
-	path, _, _, cleanup, err := rt.writeCLIMCPConfig(ctx, true, tools.InteractionEndpoint{}, "auto")
+	path, _, _, cleanup, err := rt.writeCLIMCPConfig(ctx, true, db.Agent{}, tools.InteractionEndpoint{}, "auto")
 	if err != nil {
 		t.Fatalf("writeCLIMCPConfig: %v", err)
 	}
@@ -181,7 +181,7 @@ func TestWriteCLIMCPConfigRequiredCoreInvariant(t *testing.T) {
 			Token:         "tok-A",
 			CoreToolNames: []string{"todo_write", "use_skill", "ask_user"},
 		}
-		_, _, disallowed, cleanup, err := rt.writeCLIMCPConfig(context.Background(), false, inter, "ask")
+		_, _, disallowed, cleanup, err := rt.writeCLIMCPConfig(context.Background(), false, db.Agent{}, inter, "ask")
 		if err != nil {
 			t.Fatalf("writeCLIMCPConfig: %v", err)
 		}
@@ -202,7 +202,7 @@ func TestWriteCLIMCPConfigRequiredCoreInvariant(t *testing.T) {
 			Token:         "tok-B",
 			CoreToolNames: []string{"ask_user", "permission_prompt"}, // no todo_write / use_skill
 		}
-		_, _, disallowed, cleanup, err := rt.writeCLIMCPConfig(context.Background(), false, inter, "ask")
+		_, _, disallowed, cleanup, err := rt.writeCLIMCPConfig(context.Background(), false, db.Agent{}, inter, "ask")
 		if err != nil {
 			t.Fatalf("writeCLIMCPConfig: %v", err)
 		}

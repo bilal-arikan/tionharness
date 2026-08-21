@@ -119,6 +119,18 @@ const RICH_TEMPLATES: Record<string, (o: Record<string, unknown>) => string | nu
   update_schedule: (o) => scheduleLine(o),
   create_hook: (o) => directed(o.event, o.command),
   create_mcp_server: (o) => directed(o.name, o.command ?? o.url),
+  apply_patch: (o) => patchSummary(o),
+}
+
+// "<path>" for a single-file patch, "<path> +N" for a multi-file one — parsed
+// from the unified diff's own `+++ b/<path>` headers, since apply_patch's
+// input carries only the raw patch text (no separate path field).
+function patchSummary(o: Record<string, unknown>): string | null {
+  const patch = typeof o.patch === 'string' ? o.patch : ''
+  if (!patch) return null
+  const paths = Array.from(patch.matchAll(/^\+\+\+ [ab]\/(.+?)(?:\t|$)/gm)).map((m) => m[1])
+  if (paths.length === 0) return null
+  return paths.length === 1 ? paths[0] : `${paths[0]} +${paths.length - 1}`
 }
 
 /** "title [column]" for board tasks; falls back to whichever part exists. */

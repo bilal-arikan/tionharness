@@ -579,8 +579,13 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 			cfgs = append(cfgs, cfg)
 		}
 		entries, cfgByServer, errs := r.mcpPool.Catalog(ctx, cfgs)
+		// A failed server silently loses ALL of its tools for the turn, so the log
+		// line is not enough: hand the failures to the turn's collector (when one is
+		// wired) so the tool loop can card them once. See mcpnotice.go.
+		failures := mcpFailuresFrom(ctx)
 		for name, e := range errs {
 			r.logger.Warn("mcp catalog build failed", "server", name, "error", e)
+			failures.record(name, e)
 		}
 		caller := func(cctx context.Context, namespaced string, args json.RawMessage) (mcp.CallToolResult, error) {
 			return r.mcpPool.Call(cctx, cfgByServer, namespaced, args)
@@ -775,6 +780,9 @@ func (r *Runtime) toolFilter(ctx context.Context, agent db.Agent) func(string) b
 	if disabled == nil && agentAllow == nil && agentBlock == nil {
 		return nil
 	}
+	// Resolved once per filter build, not per name: it reads the MCP server list.
+	// "" when the workspace has no enabled codebase-memory server (no exemption).
+	exemptServer := r.allowlistExemptServer(ctx)
 	return func(name string) bool {
 		if disabled[name] {
 			return false
@@ -784,6 +792,9 @@ func (r *Runtime) toolFilter(ctx context.Context, agent db.Agent) func(string) b
 		}
 		if tools.IsCoordinationTool(name) {
 			return true // session-gated, not allowlist-gated (see above)
+		}
+		if isExemptTool(name, exemptServer) {
+			return true // repository-reading infrastructure (see allowlistExemptServer)
 		}
 		return agentAllow == nil || agentAllow(name)
 	}

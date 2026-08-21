@@ -1,6 +1,7 @@
 package providers
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -136,20 +137,32 @@ func renderCodexServer(key string, s CLIMCPServer) string {
 }
 
 // writeCodexConfig renders cfg and writes it as `config.toml` inside dir, which
-// is the caller's CODEX_HOME. It returns the written path and a cleanup func.
+// is the caller's CODEX_HOME. It returns the written path, the keys of the
+// remote MCP servers omitted because their preflight probe found nothing
+// listening, and a cleanup func.
+//
+// Unreachable remote servers are dropped rather than rendered as optional: see
+// codexcli_probe.go for why omission is the only safe alternative to a session
+// that fails outright. The dropped keys are returned — not swallowed — so the
+// caller can make the capability loss visible in the session.
+//
+// probe may be nil, in which case the real network probe is used; tests inject
+// their own to stay offline.
 //
 // The cleanup is a no-op: config.toml is the CODEX_HOME's real config, not a
 // temp file, so removing it would delete state the next turn expects. The func
 // exists so callers can defer it uniformly alongside temp-file writers.
-func writeCodexConfig(dir string, cfg codexConfig) (string, func(), error) {
+func writeCodexConfig(ctx context.Context, dir string, cfg codexConfig, probe codexMCPProbe) (string, []string, func(), error) {
 	if dir == "" {
-		return "", nil, fmt.Errorf("codex config: empty config dir")
+		return "", nil, nil, fmt.Errorf("codex config: empty config dir")
 	}
+	kept, dropped := filterReachableCodexServers(ctx, cfg.Servers, probe)
+	cfg.Servers = kept
 	path := filepath.Join(dir, "config.toml")
 	if err := os.WriteFile(path, []byte(renderCodexConfig(cfg)), 0o644); err != nil {
-		return "", nil, fmt.Errorf("codex config: write %s: %w", path, err)
+		return "", nil, nil, fmt.Errorf("codex config: write %s: %w", path, err)
 	}
-	return path, func() {}, nil
+	return path, dropped, func() {}, nil
 }
 
 // tomlString renders s as a TOML basic string, escaping the characters the spec

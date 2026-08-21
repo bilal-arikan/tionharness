@@ -106,7 +106,7 @@ func (r *Runtime) effectiveTokenOptimizers(ctx context.Context) tokenOptimizerSt
 
 var tokenOptimizerCapability = Capability{
 	ID: "token-optimizers",
-	Detect: func(ctx context.Context, r *Runtime) bool {
+	Detect: func(ctx context.Context, r *Runtime, _ db.Agent) bool {
 		return r.effectiveTokenOptimizers(ctx).present()
 	},
 	Context: func(ctx context.Context, r *Runtime, cwd string) string {
