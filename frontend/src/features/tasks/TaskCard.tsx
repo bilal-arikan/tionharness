@@ -31,12 +31,19 @@ interface Props {
   fileDropActive: boolean
   /** Today in ISO, for the due-date chip. Passed in so every card agrees. */
   today: string
+  /** This card's position among the board's current columns, for the keyboard
+   *  move shortcut and its aria-label (e.g. "3 / 5"). */
+  columnIndex: number
+  columnCount: number
+  columnLabel: string
   onDragStart: (taskId: string) => void
   onDragEnd: () => void
   onOpenOrSelect: (e: React.MouseEvent, taskId: string) => void
   onFileDragEnter: (taskId: string) => void
   onFileDragLeave: (taskId: string) => void
   onFileDrop: (task: Task, files: File[]) => void
+  /** Keyboard equivalent of dragging the card to an adjacent column. */
+  onMoveColumn: (taskId: string, direction: -1 | 1) => void
   /** When provided (archived view), renders a "restore" button on the card. Must
    *  be a stable identity so the card's memo still holds. */
   onUnarchive?: (task: Task) => void
@@ -56,12 +63,16 @@ function TaskCardImpl({
   selected,
   fileDropActive,
   today,
+  columnIndex,
+  columnCount,
+  columnLabel,
   onDragStart,
   onDragEnd,
   onOpenOrSelect,
   onFileDragEnter,
   onFileDragLeave,
   onFileDrop,
+  onMoveColumn,
   onUnarchive,
 }: Props) {
   const { owner, flow, depIds, unmetDeps, unmetColColor } = meta
@@ -73,6 +84,27 @@ function TaskCardImpl({
       data-testid="task-card"
       data-task-id={t.id}
       draggable={!pending}
+      tabIndex={pending ? -1 : 0}
+      role="button"
+      aria-label={`${t.title}, ${columnLabel} sütunu, ${columnIndex + 1}/${columnCount}. Taşımak için sol veya sağ ok tuşunu kullanın.`}
+      onKeyDown={(e) => {
+        if (pending) return
+        // Ignore arrow keys while an input/textarea/select inside the card (if
+        // any is ever added) or a nested control has focus, so the shortcut
+        // never fights normal typing or page scroll.
+        const targetTag = (e.target as HTMLElement).tagName
+        if (targetTag === 'INPUT' || targetTag === 'TEXTAREA' || targetTag === 'SELECT') return
+        if (e.key === 'ArrowLeft') {
+          e.preventDefault()
+          onMoveColumn(t.id, -1)
+        } else if (e.key === 'ArrowRight') {
+          e.preventDefault()
+          onMoveColumn(t.id, 1)
+        } else if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          onOpenOrSelect(e as unknown as React.MouseEvent, t.id)
+        }
+      }}
       onDragStart={(e) => {
         if (pending) return
         onDragStart(t.id)
@@ -104,7 +136,7 @@ function TaskCardImpl({
         e.stopPropagation()
         onFileDrop(t, files)
       }}
-      className={`relative rounded-lg border bg-[var(--color-surface-2)] p-2 text-sm shadow-[var(--shadow-sm)] transition ${
+      className={`relative rounded-lg border bg-[var(--color-surface-2)] p-2 text-sm shadow-[var(--shadow-sm)] transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-1 ${
         fileDropActive ? 'ring-2 ring-[var(--color-accent)] ring-offset-1' : ''
       } ${
         pending

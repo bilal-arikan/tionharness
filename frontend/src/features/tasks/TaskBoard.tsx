@@ -332,7 +332,12 @@ export function TaskBoard({ agents, onError }: Props) {
   // Dropping a card onto a column writes whatever field the current axis names.
   // A refused drop (the 'due' axis cannot invent a date) says so instead of
   // silently doing nothing.
-  const handleDrop = (task: Task, columnKey: string) => {
+  //
+  // announce is skipped for mouse drag (the card lands in its new column,
+  // visibly) and passed for the keyboard shortcut, whose only feedback is
+  // otherwise a silent DOM reorder — a screen reader needs the aria-live hint
+  // to know the move happened at all.
+  const handleDrop = (task: Task, columnKey: string, announce?: string) => {
     const patch = dropPatch(groupBy, columnKey, task)
     if (!patch) {
       const reason = DROP_REFUSED_REASON[groupBy]
@@ -354,8 +359,26 @@ export function TaskBoard({ agents, onError }: Props) {
     ).some((t) => t.id === task.id)
     if (!stillVisible) {
       showHint(`"${task.title}" filtre dışında kaldı`, () => void applyPatch(task, before))
+    } else if (announce) {
+      showHint(announce)
     }
   }
+
+  // Keyboard equivalent of dragging a card onto an adjacent column, used by
+  // TaskCard's ArrowLeft/ArrowRight handler. Reuses handleDrop so the write and
+  // the "moved out of filter" safety net stay in one place.
+  const onCardMoveColumn = useStableCallback((taskId: string, direction: -1 | 1) => {
+    const task = tasks.find((x) => x.id === taskId)
+    if (!task) return
+    const keys = derivedColumns.map((c) => c.key)
+    const currentKey = columnKeysOf(task, groupBy, today)[0]
+    const idx = keys.indexOf(currentKey)
+    if (idx === -1) return
+    const nextIdx = idx + direction
+    if (nextIdx < 0 || nextIdx >= keys.length) return
+    const nextCol = derivedColumns[nextIdx]
+    handleDrop(task, nextCol.key, `"${task.title}", ${nextCol.label} sütununa taşındı`)
+  })!
 
   const bulkMove = async (boardState: string) => {
     if (!boardState) return
@@ -502,7 +525,11 @@ export function TaskBoard({ agents, onError }: Props) {
         />
 
         {hint && (
-          <div className="flex items-center gap-2 border-b border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-1.5 text-xs text-[var(--color-text-dim)]">
+          <div
+            role="status"
+            aria-live="polite"
+            className="flex items-center gap-2 border-b border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-1.5 text-xs text-[var(--color-text-dim)]"
+          >
             <span className="min-w-0 flex-1 truncate">{hint.text}</span>
             {hint.undo && (
               <button
@@ -544,7 +571,7 @@ export function TaskBoard({ agents, onError }: Props) {
               Bu filtreyle eşleşen görev yok.
             </div>
           )}
-          {derivedColumns.map((col) => {
+          {derivedColumns.map((col, colIdx) => {
             const colTasks = cardsByColumn.get(col.key) ?? []
 
             return (
@@ -567,6 +594,9 @@ export function TaskBoard({ agents, onError }: Props) {
                 className="flex w-64 flex-shrink-0 flex-col rounded-lg bg-[var(--color-surface)]"
               >
                 <div
+                  role="heading"
+                  aria-level={3}
+                  aria-label={`${col.label} sütunu, ${colTasks.length} görev`}
                   className="flex items-center justify-between rounded-t-lg px-3 py-2 text-xs font-medium uppercase tracking-wide"
                   style={
                     col.color
@@ -606,12 +636,16 @@ export function TaskBoard({ agents, onError }: Props) {
                         selected={sel.isSelected(t.id)}
                         fileDropActive={fileDropId === t.id}
                         today={today}
+                        columnIndex={colIdx}
+                        columnCount={derivedColumns.length}
+                        columnLabel={col.label}
                         onDragStart={onCardDragStart}
                         onDragEnd={onCardDragEnd}
                         onOpenOrSelect={onCardOpenOrSelect}
                         onFileDragEnter={onCardFileDragEnter}
                         onFileDragLeave={onCardFileDragLeave}
                         onFileDrop={onCardFileDrop}
+                        onMoveColumn={onCardMoveColumn}
                         onUnarchive={showArchived ? onCardUnarchive : undefined}
                       />
                     )
