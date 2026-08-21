@@ -21,7 +21,14 @@ workspaces never leaks content between them.
   session, so chats, task runs, flow runs and scheduled deliveries are all
   viewable as one streamable transcript. `Kind` tags the origin (chat / task /
   flow / schedule).
-- **Tasks** — a kanban board. Each task owns one run session.
+- **Tasks** — a kanban board. It is passive: there is no dispatcher and no run
+  tool, moving a card never executes anything on its own. Default columns are
+  `pbi`/`todo`/`in_progress`/`review`/`done`/`failed` (`db.DefaultBoardColumns()`;
+  a workspace may add custom column keys). A card carries intent (a `Prompt` or a
+  `FlowID`); a done card can be archived (reversible, hides it from the active
+  board and `get_view board` without deleting it). Read board state with
+  `get_view board` (or `list_tasks`) rather than assuming execution history — the
+  legacy `LastRun*` fields are read-only and no longer set by anything.
 - **Flows** — multi-step / multi-agent orchestration graphs (see the
   `tionswarm-flows` skill for details).
 - **Schedules (routines)** — cron-driven prompts delivered to an agent.

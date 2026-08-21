@@ -80,6 +80,11 @@ once, no chain). Board/token/counter rules never self-loop.
 - **Board drives execution:** `triggerKind:"board"`, `boardToState:"in_progress"`,
   `boardAction:"spawn"`, target = worker → moving a card starts an agent on it. Pair
   with a `boardToState:"done"`, `boardAction:"archive"` rule for cleanup.
+  **Note:** every workspace is seeded with exactly this pair of rules
+  (`board-run-in-progress` / `board-archive-done`) but **`Enabled:false` by
+  default** (`internal/agent/automation_defaults.go`) — board-driven execution is
+  opt-in, the user (or you) must explicitly enable them before moving a card does
+  anything.
 - **Per-conversation checkpoint:** `triggerKind:"counter"`, `counterMetric:"message"`,
   `counterInterval:20`, `sessionMode:"continue"` → every 20 messages the agent
   summarizes progress in the same thread.
