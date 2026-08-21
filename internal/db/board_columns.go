@@ -1,9 +1,8 @@
 package db
 
 // IsValidBoardKey reports whether s is safe to use as a kanban column key.
-// Accepts lowercase letters, digits and underscores. All five built-in Board*
+// Accepts lowercase letters, digits and underscores. All six built-in Board*
 // constants satisfy this rule; custom column keys must follow the same pattern.
-// Unlike ValidBoardState, this function is not restricted to the built-in set.
 func IsValidBoardKey(s string) bool {
 	if s == "" {
 		return false

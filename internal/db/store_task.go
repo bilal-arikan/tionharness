@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"fmt"
 )
 
 // BoardChangeEvent describes a single kanban card change. It is delivered to the
@@ -136,6 +137,9 @@ func (d *DB) UpdateTask(ctx context.Context, t Task) error {
 // MoveTask changes only a task's board state (kanban drag/drop). Fires the board
 // hook as a move when the column actually changed.
 func (d *DB) MoveTask(ctx context.Context, id, boardState string) error {
+	if !IsValidBoardKey(boardState) {
+		return fmt.Errorf("invalid board state %q", boardState)
+	}
 	d.mu.Lock()
 	t, ok := d.tasks[id]
 	if !ok {

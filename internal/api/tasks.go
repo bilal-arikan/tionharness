@@ -267,7 +267,12 @@ func (s *Server) handleUpdateTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if req.Title != nil {
-		task.Title = *req.Title
+		newTitle := strings.TrimSpace(*req.Title)
+		if newTitle == "" {
+			writeError(w, http.StatusBadRequest, "title cannot be empty")
+			return
+		}
+		task.Title = newTitle
 	}
 	if req.Description != nil {
 		task.Description = *req.Description
@@ -452,9 +457,12 @@ func (s *Server) handleGenerateTaskTitle(w http.ResponseWriter, r *http.Request)
 	if genErr != nil {
 		s.logger.Warn("task title generation degraded", "task", id, "error", genErr)
 	}
-	task.Title = title
-	if err := wsp.DB.UpdateTask(ctx, task); writeDBError(w, err, "task not found") {
-		return
+	newTitle := strings.TrimSpace(title)
+	if genErr == nil && newTitle != "" && newTitle != task.Title {
+		task.Title = newTitle
+		if err := wsp.DB.UpdateTask(ctx, task); writeDBError(w, err, "task not found") {
+			return
+		}
 	}
 	writeJSON(w, http.StatusOK, task)
 }

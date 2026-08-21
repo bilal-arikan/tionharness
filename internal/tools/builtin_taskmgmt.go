@@ -332,7 +332,11 @@ func (t UpdateTaskTool) Call(ctx context.Context, input json.RawMessage) (string
 	oldPriority := cur.Priority
 	oldTags := append([]string(nil), cur.Tags...)
 	if in.Title != nil {
-		cur.Title = *in.Title
+		newTitle := strings.TrimSpace(*in.Title)
+		if newTitle == "" {
+			return "", fmt.Errorf("title cannot be empty")
+		}
+		cur.Title = newTitle
 	}
 	if in.Prompt != nil {
 		cur.Prompt = *in.Prompt

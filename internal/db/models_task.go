@@ -31,16 +31,6 @@ func DefaultBoardColumns() []BoardColumnDef {
 	}
 }
 
-// ValidBoardState reports whether s is one of the six built-in board column keys.
-func ValidBoardState(s string) bool {
-	switch s {
-	case BoardPBI, BoardTodo, BoardInProgress, BoardReview, BoardDone, BoardFailed:
-		return true
-	default:
-		return false
-	}
-}
-
 // Task priority levels (obsidian-pm compatible). Empty string = unset.
 const (
 	PriorityCritical = "critical"
@@ -101,8 +91,9 @@ type Task struct {
 	LastRunStatus string `json:"lastRunStatus"`
 	LastRunAt     int64  `json:"lastRunAt"`
 	// CreatedBy is the ID of the agent that created this task via a
-	// self-management tool ("" = created by the user). Agents may only
-	// delete agent-created tasks (read/edit/move/run are allowed on any task).
+	// self-management tool ("" = created by the user), for provenance/display.
+	// It does not gate deletion: delete_task removes ANY task, including
+	// user-created ones (read/edit/move/delete are all allowed on any task).
 	CreatedBy string `json:"createdBy,omitempty"`
 	CreatedAt int64  `json:"createdAt"`
 	UpdatedAt int64  `json:"updatedAt"`
