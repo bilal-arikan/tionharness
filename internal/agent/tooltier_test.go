@@ -163,7 +163,13 @@ func TestLazyCatalogCLIFormNamespacesNames(t *testing.T) {
 	if !strings.Contains(out, "activate_tools") {
 		t.Errorf("CLI form must load deferred built-ins via activate_tools (gateway):\n%s", out)
 	}
-	if strings.Contains(out, "select:") {
+	// ToolSearch select: is for the EXTERNAL MCP entries only — it must appear in
+	// their separator line, and only after the deferred built-ins are listed.
+	sel := strings.Index(out, "select:")
+	if sel < 0 || !strings.Contains(out[sel-200:sel], "EXTERNAL MCP tools") {
+		t.Errorf("CLI form must mark the MCP entries as ToolSearch select:\n%s", out)
+	}
+	if sel < strings.Index(out, "mcp__tionswarm_extended__update_session") {
 		t.Errorf("CLI form must NOT instruct ToolSearch select for built-ins (gateway path):\n%s", out)
 	}
 	// Self-management pointer uses the namespaced use_skill on the CLI path.

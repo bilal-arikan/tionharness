@@ -970,6 +970,13 @@ func renderLazyToolCatalog(lazy []providers.ToolDef, hiddenCount int, cli bool, 
 	case len(mcpTools) == 0:
 		// nothing more to add
 	case len(mcpTools) <= lazyCatalogMCPListLimit:
+		// The entries below sit under the activate_tools sentence but do NOT load
+		// that way on the CLI path; without this separator agents call
+		// activate_tools on an mcp__… name, get rejected, and retry.
+		if cli {
+			b.WriteString("\nThe entries below are EXTERNAL MCP tools: load them with `ToolSearch` " +
+				"(`select:<name>,<name>`), not `activate_tools`.\n")
+		}
 		for _, d := range mcpTools {
 			if name, ok := catalogDisplayName(d.Name, cli); ok {
 				writeLazyToolLine(&b, name, d.Description)
