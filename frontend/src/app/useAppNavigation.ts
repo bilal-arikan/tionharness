@@ -4,12 +4,7 @@
 // focus_view navigation) back into app state.
 import { useCallback, type MutableRefObject } from 'react'
 import { setActiveWorkspace, getActiveWorkspace } from '@/api'
-import { parseRoute, routeIdForView, routeQueryForView, type Route } from './url'
-import {
-  normalizeKindFilter,
-  normalizeSessionListTab,
-  type SessionListTab,
-} from '@/features/sessions/sessionKindMeta'
+import { parseRoute, routeIdForView, type Route } from './url'
 import { useUrlSync } from './useUrlSync'
 import type { View } from './NavRail'
 
@@ -32,8 +27,6 @@ export interface AppNavigationParams {
   insightTab: string | null
   explorerNode: string | null
   flowsTab: string | null
-  sessionListTab: SessionListTab
-  sessionKindTab: string
   pendingRouteRef: MutableRefObject<Route | null>
   switchWorkspace: (id: string) => void
   selectSession: (id: string, messageId?: string) => void
@@ -45,8 +38,6 @@ export interface AppNavigationParams {
   setInsightTab: (id: string | null) => void
   setExplorerNode: (id: string | null) => void
   setFlowsTab: (id: string | null) => void
-  setSessionListTab: (t: SessionListTab) => void
-  setSessionKindTab: (k: string) => void
 }
 
 export function useAppNavigation(p: AppNavigationParams) {
@@ -63,8 +54,6 @@ export function useAppNavigation(p: AppNavigationParams) {
     setInsightTab,
     setExplorerNode,
     setFlowsTab,
-    setSessionListTab,
-    setSessionKindTab,
   } = p
 
   // Apply a Route (from back/forward, a manual URL edit, or a shared link) to
@@ -80,10 +69,6 @@ export function useAppNavigation(p: AppNavigationParams) {
         return
       }
       if (r.view === 'chat') {
-        // The URL is canonical for the sidebar tabs too — a link without ?list /
-        // ?kind means "the default list", not "keep whatever is on screen".
-        setSessionListTab(normalizeSessionListTab(r.query?.list))
-        setSessionKindTab(normalizeKindFilter(r.query?.kind))
         if (r.id) selectSession(r.id)
       } else if (r.view === 'agents') {
         if (r.id) focusAgent(r.id)
@@ -116,8 +101,6 @@ export function useAppNavigation(p: AppNavigationParams) {
       setInsightTab,
       setExplorerNode,
       setFlowsTab,
-      setSessionListTab,
-      setSessionKindTab,
     ],
   )
 
@@ -135,10 +118,6 @@ export function useAppNavigation(p: AppNavigationParams) {
       insightTab: p.insightTab,
       flowsTab: p.flowsTab,
       explorerNode: p.explorerNode,
-    }),
-    query: routeQueryForView(p.view, {
-      sessionListTab: p.sessionListTab,
-      sessionKindTab: p.sessionKindTab,
     }),
   }
   useUrlSync(route, !!p.activeWorkspaceId, applyRoute)

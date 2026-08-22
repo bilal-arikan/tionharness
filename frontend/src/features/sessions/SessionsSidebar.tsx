@@ -11,7 +11,6 @@ import {
   Archive,
   ArchiveRestore,
   Pin,
-  Table2,
   Users,
   PencilLine,
 } from 'lucide-react'
@@ -25,12 +24,16 @@ import { SelectionBar, SelectionBarButton, Skeleton } from '@/shared/components'
 import { useDelayedFlag } from '@/shared/hooks/useDelayedFlag'
 import { useDraftSessionIds } from '@/shared/hooks/useDraftSessionIds'
 import {
-  FILTERS,
+  ALL_SESSION_CHIPS,
+  ARCHIVED_CHIP,
   kindMeta,
-  matchesKindFilter,
+  normalizeChipsOff,
   RunStateBadge,
+  SESSION_CHIPS,
+  SESSION_CHIPS_OFF_KEY,
+  sessionMatchesChips,
   StatusPill,
-  type SessionListTab,
+  WORKER_CHIP,
 } from './sessionKindMeta'
 import type { ExecutionRuntime } from '@/app/useExecutionRuntime'
 import { isWorkerSession } from '@/shared/lib/coordination'
@@ -56,14 +59,6 @@ interface Props {
   totalSessions?: number
   hasMoreSessions?: boolean
   onLoadMore?: () => void
-  // Tab state is owned by the app so it can live in the URL (deep-linkable /
-  // back-forward aware): ?list=active|archived|workers and ?kind=<filter key>.
-  view: SessionListTab
-  onViewChange: (v: SessionListTab) => void
-  kindFilter: string
-  onKindFilterChange: (k: string) => void
-  // Open the bulk sessions table (searchable/sortable grid of every session).
-  onOpenOverview: () => void
   // messageId is set when the user clicks a message-content search result, so the
   // transcript can scroll to that exact turn.
   onSelectSession: (id: string, messageId?: string) => void
@@ -94,11 +89,6 @@ export function SessionsSidebar({
   totalSessions,
   hasMoreSessions,
   onLoadMore,
-  view,
-  onViewChange,
-  kindFilter,
-  onKindFilterChange,
-  onOpenOverview,
   onSelectSession,
   onNewSession,
   onRefresh,
@@ -107,13 +97,23 @@ export function SessionsSidebar({
   onSetArchived,
   onSetPinned,
 }: Props) {
-  // Top-level view: Active (default), Archived, or Workers (coordinator-spawned
-  // worker sessions). Archiving moves a session into the Archived view — it is
-  // never deleted. Worker sessions live in their own view so they don't clutter
-  // the active list. Derived booleans keep the downstream filter logic terse.
-  // `view` + `kindFilter` are props (URL-owned), see Props.
-  const showArchived = view === 'archived'
-  const showWorkers = view === 'workers'
+  // One flat list filtered by multi-select chips: the kind chips plus a Worker
+  // and an Arşiv chip. All chips start selected (everything visible) and the
+  // selection is persisted locally — it is view state, not a deep-link.
+  // Persisted as the UNTICKED set, so a chip introduced by a later build starts
+  // on instead of hiding rows for anyone with a saved selection.
+  const [chipsOff, setChipsOff] = useState<string[]>(() =>
+    normalizeChipsOff(localStorage.getItem(SESSION_CHIPS_OFF_KEY)),
+  )
+  useEffect(() => {
+    localStorage.setItem(SESSION_CHIPS_OFF_KEY, JSON.stringify(chipsOff))
+  }, [chipsOff])
+  const chipSet = useMemo(
+    () => new Set(ALL_SESSION_CHIPS.filter((k) => !chipsOff.includes(k))),
+    [chipsOff],
+  )
+  const toggleChip = (key: string) =>
+    setChipsOff((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]))
   const [query, setQuery] = useState('')
   // Cross-session message-content search (CG-16). The same box filters session
   // titles locally AND, when the query is long enough, full-text searches every
@@ -157,33 +157,6 @@ export function SessionsSidebar({
     document.body.style.cursor = 'col-resize'
   }
 
-  // Per-tab activity counts: for each view's scope, how many sessions are
-  // ongoing (a turn is streaming or an autonomous run is live) vs completed
-  // (idle/finished). Surfaced on every tab so live work is visible without
-  // opening it. `isLive` mirrors the per-row streaming check below.
-  // The Workers scope uses the lineage helper, not `role === 'worker'`: a
-  // mid-level node of a nested coordinator tree is a worker too, and counting
-  // only leaves would hide whole branches.
-  const tabStats = useMemo(() => {
-    const isLive = (s: Session) =>
-      (streamingSessionIds?.has(s.id) ?? false) || (runtimeById?.get(s.id)?.running ?? false)
-    const stat = (inScope: (s: Session) => boolean) => {
-      let ongoing = 0
-      let total = 0
-      for (const s of sessions) {
-        if (!inScope(s)) continue
-        total++
-        if (isLive(s)) ongoing++
-      }
-      return { total, ongoing, completed: total - ongoing }
-    }
-    return {
-      active: stat((s) => s.state !== 'archived' && !isWorkerSession(s)),
-      workers: stat((s) => isWorkerSession(s) && s.state !== 'archived'),
-      archived: stat((s) => s.state === 'archived'),
-    }
-  }, [sessions, streamingSessionIds, runtimeById])
-
   // Sessions holding an unsent composer draft (localStorage, active workspace).
   const draftIds = useDraftSessionIds()
 
@@ -206,24 +179,19 @@ export function SessionsSidebar({
   }, [sessions, streamingSessionIds, runtimeById])
 
   // Group the (already newest-first) sessions into recency buckets, preserving
-  // order. The view (Active/Archived/Workers) narrows first, then the kind tab,
-  // then a title search. Active EXCLUDES workers (they have their own tab) so the
-  // default list isn't buried under coordinator-spawned sessions.
+  // order. The chip selection narrows first, then a title search. The worker
+  // check uses the lineage helper, not `role === 'worker'`: a mid-level node of
+  // a nested coordinator tree is a worker too.
   const groups = useMemo(() => {
     const q = query.trim().toLowerCase()
     const map = new Map<Bucket, Session[]>()
     for (const s of sessions) {
-      const isArchived = s.state === 'archived'
-      const isWorker = isWorkerSession(s)
-      if (showWorkers) {
-        if (!isWorker || isArchived) continue
-      } else if (showArchived) {
-        if (!isArchived) continue
-      } else {
-        // Active view: hide archived AND worker sessions.
-        if (isArchived || isWorker) continue
+      const shape = {
+        kind: s.kind,
+        isWorker: isWorkerSession(s),
+        isArchived: s.state === 'archived',
       }
-      if (!matchesKindFilter(s.kind, kindFilter)) continue
+      if (!sessionMatchesChips(shape, chipSet)) continue
       if (q && !(s.title || 'Yeni sohbet').toLowerCase().includes(q)) continue
       // Pinned rows leave the recency buckets entirely and form their own group,
       // which BUCKET_ORDER renders first — otherwise an old pinned chat would sink
@@ -234,7 +202,7 @@ export function SessionsSidebar({
       map.set(b, arr)
     }
     return BUCKET_ORDER.filter((b) => map.has(b)).map((b) => ({ bucket: b, items: map.get(b)! }))
-  }, [sessions, query, showArchived, showWorkers, kindFilter])
+  }, [sessions, query, chipSet])
 
   // Multi-select (Ctrl/Cmd+Click, Shift-range). The ordered id list is the
   // flattened visible render order so Shift+Click can span recency buckets.
@@ -247,6 +215,11 @@ export function SessionsSidebar({
     [sel.selected, orderedIds],
   )
   const selectedIds = () => [...sel.selected]
+  // With one flat list a selection can mix archived and live rows; the bulk
+  // button only flips to "restore" when every selected session is archived.
+  const allSelectedArchived =
+    sel.count > 0 &&
+    [...sel.selected].every((id) => sessions.find((s) => s.id === id)?.state === 'archived')
   // Bulk actions reuse the existing per-id handlers in a loop (no new API).
   const bulkArchive = (archived: boolean) => {
     selectedIds().forEach((id) => onSetArchived(id, archived))
@@ -337,18 +310,6 @@ export function SessionsSidebar({
         </button>
       </div>
 
-      {/* Bulk sessions table (searchable/sortable grid of every session). */}
-      <div className="px-3 pb-1">
-        <button
-          onClick={onOpenOverview}
-          title="Tüm oturumları tablo olarak gör"
-          data-testid="sessions-overview-open"
-          className="flex w-full items-center justify-center gap-2 rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-xs font-medium text-[var(--color-text-dim)] transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
-        >
-          <Table2 size={14} /> Oturumlar
-        </button>
-      </div>
-
       {/* Title search */}
       <div className="relative px-3 pb-2 pt-1">
         <Search
@@ -372,65 +333,29 @@ export function SessionsSidebar({
         )}
       </div>
 
-      {/* Active / Workers / Archived filter. Each tab surfaces its live-vs-finished
-          counts (green pulse = ongoing, muted = completed) so activity is visible
-          without opening it. Archived is last (least-used). */}
-      <div className="flex gap-1 px-3 pb-2">
-        <button
-          onClick={() => onViewChange('active')}
-          className={`flex flex-1 items-center justify-center gap-1 rounded-md px-2 py-1 text-xs font-medium transition ${
-            view === 'active'
-              ? 'bg-[var(--color-surface-2)] text-[var(--color-text)]'
-              : 'text-[var(--color-text-dim)] hover:text-[var(--color-text)]'
-          }`}
-        >
-          Aktif
-          <TabActivity ongoing={tabStats.active.ongoing} completed={tabStats.active.completed} />
-        </button>
-        <button
-          onClick={() => onViewChange('workers')}
-          title="Koordinatör tarafından başlatılan worker oturumları"
-          className={`flex flex-1 items-center justify-center gap-1 rounded-md px-2 py-1 text-xs font-medium transition ${
-            view === 'workers'
-              ? 'bg-[var(--color-surface-2)] text-[var(--color-text)]'
-              : 'text-[var(--color-text-dim)] hover:text-[var(--color-text)]'
-          }`}
-        >
-          <Users size={12} /> Workers
-          <TabActivity ongoing={tabStats.workers.ongoing} completed={tabStats.workers.completed} />
-        </button>
-        <button
-          onClick={() => onViewChange('archived')}
-          className={`flex flex-1 items-center justify-center gap-1 rounded-md px-2 py-1 text-xs font-medium transition ${
-            view === 'archived'
-              ? 'bg-[var(--color-surface-2)] text-[var(--color-text)]'
-              : 'text-[var(--color-text-dim)] hover:text-[var(--color-text)]'
-          }`}
-        >
-          <Archive size={12} /> Arşiv
-          <TabActivity
-            ongoing={tabStats.archived.ongoing}
-            completed={tabStats.archived.completed}
-          />
-        </button>
-      </div>
-
-      {/* Kind filter tabs: the sidebar lists every session kind, so this is the
-          antidote to a crowded list. Defaults to "Tümü" and is persisted. */}
+      {/* Multi-select chips: every session kind plus the Worker and Arşiv scopes.
+          All start selected — unticking a chip hides that slice. */}
       <div className="flex flex-wrap gap-1 px-3 pb-2" data-testid="session-kind-filters">
-        {FILTERS.map((f) => (
-          <button
-            key={f.key}
-            onClick={() => onKindFilterChange(f.key)}
-            className={`rounded-full px-2.5 py-1 text-[11px] transition ${
-              kindFilter === f.key
-                ? 'bg-[var(--color-accent-soft)] font-medium text-[var(--color-accent)]'
-                : 'text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)]'
-            }`}
-          >
-            {f.label}
-          </button>
-        ))}
+        {SESSION_CHIPS.map((f) => {
+          const on = chipSet.has(f.key)
+          const Icon = f.key === WORKER_CHIP ? Users : f.key === ARCHIVED_CHIP ? Archive : null
+          return (
+            <button
+              key={f.key}
+              onClick={() => toggleChip(f.key)}
+              aria-pressed={on}
+              data-chip={f.key}
+              className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] transition ${
+                on
+                  ? 'bg-[var(--color-accent-soft)] font-medium text-[var(--color-accent)]'
+                  : 'text-[var(--color-text-dim)] opacity-60 hover:bg-[var(--color-surface-2)] hover:opacity-100'
+              }`}
+            >
+              {Icon && <Icon size={11} />}
+              {f.label}
+            </button>
+          )
+        })}
       </div>
 
       <div className="flex-1 overflow-y-auto px-2 pb-2">
@@ -601,13 +526,7 @@ export function SessionsSidebar({
           ))}
         {!loading && groups.length === 0 && query.trim().length < 2 && (
           <p className="px-3 py-2 text-xs text-[var(--color-text-dim)]">
-            {showWorkers
-              ? 'Worker oturumu yok. Koordinatör modunda spawn_worker ile başlatın.'
-              : showArchived
-                ? 'Arşivlenmiş oturum yok.'
-                : kindFilter
-                  ? 'Bu türde oturum yok.'
-                  : 'Oturum yok. + ile başlat.'}
+            {chipsOff.length === 0 ? 'Oturum yok. + ile başlat.' : 'Seçili çiplerde oturum yok.'}
           </p>
         )}
 
@@ -679,7 +598,7 @@ export function SessionsSidebar({
         <SelectionBarButton icon={<Pin size={13} />} onClick={() => bulkPin(true)}>
           Sabitle
         </SelectionBarButton>
-        {showArchived ? (
+        {allSelectedArchived ? (
           <SelectionBarButton
             icon={<ArchiveRestore size={13} />}
             onClick={() => bulkArchive(false)}
@@ -702,33 +621,5 @@ export function SessionsSidebar({
         className="absolute right-0 top-0 h-full w-1 cursor-col-resize bg-transparent transition hover:bg-[var(--color-accent)]"
       />
     </aside>
-  )
-}
-
-// Compact per-tab activity indicator: a green pulsing dot + count for ongoing
-// (live) sessions, and a muted count for completed (idle/finished) ones. Each
-// half hides when zero, so an empty tab shows nothing.
-function TabActivity({ ongoing, completed }: { ongoing: number; completed: number }) {
-  if (ongoing === 0 && completed === 0) return null
-  return (
-    <span className="flex items-center gap-1 text-[10px]">
-      {ongoing > 0 && (
-        <span
-          className="flex items-center gap-0.5 font-semibold text-[var(--color-success)]"
-          title={`${ongoing} devam eden`}
-        >
-          <span className="relative flex h-1.5 w-1.5">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[var(--color-success)] opacity-75" />
-            <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-[var(--color-success)]" />
-          </span>
-          {ongoing}
-        </span>
-      )}
-      {completed > 0 && (
-        <span className="opacity-60" title={`${completed} tamamlanan`}>
-          {completed}
-        </span>
-      )}
-    </span>
   )
 }

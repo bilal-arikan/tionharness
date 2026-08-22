@@ -240,18 +240,11 @@ Hash-tabanlı routing (`app/url.ts`): `#/w/{workspaceId}/{view}[/{entityId}][?k=
 View'lar: `chat · executions · agents · network · board · schedules · memory · flows ·
 artifacts · skills · market · budget · logs · workspace · settings`.
 
-**Hash query (alt-durum).** Tek `entityId` yuvası dolu olan ekranlarda alt-sekmeler
-query'de taşınır (`routeQueryForView`); varsayılan değerler URL'e yazılmaz, yani
-gündelik adres eskisiyle aynı kalır. Bugünkü tek müşteri sohbet listesi sekmeleridir:
-
-```
-#/w/WS1/chat?list=workers          → Workers sekmesi
-#/w/WS1/chat/SES42?kind=task       → Görev türü filtresi + açık oturum
-#/w/WS1/chat?list=archived&kind=flow
-```
-`list` ∈ `active`(vars.)·`archived`·`workers`, `kind` ∈ `''`(Tümü)·`chat`·`task`·`flow`·
-`spawned`·`schedule`. Bilinmeyen değer sessizce varsayılana düşer; URL otoritedir
-(query yoksa sekmeler varsayılana döner).
+**Hash query (alt-durum).** Şu an hiçbir view alt-durumunu hash query'sinde
+taşımıyor; adres yalnız `#/w/{workspaceId}/{view}/{entityId}` biçimindedir.
+(2026-08-21'e kadar sohbet listesinin `?list=`/`?kind=` sekmeleri buradaydı; liste
+tek düz akışa + çoklu seçilebilir çiplere dönüştüğü için kaldırıldı — çip seçimi
+yerel görünüm durumudur, deep-link değil.)
 
 Ajan herhangi bir ekrana doğrudan `browser_navigate` ile zıplayabilir — menü gezmeye gerek yok.
 

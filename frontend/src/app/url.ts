@@ -170,18 +170,3 @@ export function routeIdForView(
       return null
   }
 }
-
-// routeQueryForView returns the hash-query sub-state that belongs in the URL for
-// a given view. Only chat has any today: its entity slot is taken by the
-// sessionId, so the sidebar's list/kind tabs ride in the query instead. Default
-// tab values are omitted, keeping the everyday URL identical to before.
-export function routeQueryForView(
-  view: View,
-  state: { sessionListTab: string; sessionKindTab: string },
-): Record<string, string> {
-  if (view !== 'chat') return {}
-  const q: Record<string, string> = {}
-  if (state.sessionListTab && state.sessionListTab !== 'active') q.list = state.sessionListTab
-  if (state.sessionKindTab) q.kind = state.sessionKindTab
-  return q
-}

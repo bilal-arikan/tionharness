@@ -27,7 +27,6 @@ import { ChatView } from '@/features/chat/ChatView'
 import { useChatStream } from '@/features/chat/useChatStream'
 import { writeSessionDraft } from '@/features/chat/useSessionDraft'
 import { SessionsSidebar } from '@/features/sessions/SessionsSidebar'
-import { SessionsOverview } from '@/features/sessions/SessionsOverview'
 import { SessionDetailPanel } from '@/features/sessions/SessionDetailPanel'
 import { CoordinatorPanel } from '@/features/sessions/CoordinatorPanel'
 import { SessionContextModal } from '@/features/sessions/SessionContextModal'
@@ -283,12 +282,9 @@ export default function App() {
   useEffect(() => setSessionFlowOpen(false), [ctl.activeSessionId])
 
   // Live/last-run facts per session (GET /api/executions): the sidebar's pulse
-  // dot + status pill and the bulk overview table's rows. Same DB.ListSessions
-  // source as the session list, merely enriched with running/status.
-  const { executions, runtimeById } = useExecutionRuntime(activeWorkspaceId)
-  // Bulk sessions overview overlay (the searchable/sortable table of every
-  // session), opened from the sidebar's "Oturumlar" button.
-  const [overviewOpen, setOverviewOpen] = useState(false)
+  // dot + status pill. Same DB.ListSessions source as the session list, merely
+  // enriched with running/status.
+  const { runtimeById } = useExecutionRuntime(activeWorkspaceId)
 
   // Clicking a file path: open images inline (new tab via the file server),
   // copy other paths to the clipboard as a best-effort action.
@@ -525,8 +521,6 @@ export default function App() {
     insightTab: links.insightTab,
     explorerNode: links.explorerNode,
     flowsTab: links.flowsTab,
-    sessionListTab: links.sessionListTab,
-    sessionKindTab: links.sessionKindTab,
     pendingRouteRef: ctl.pendingRouteRef,
     switchWorkspace,
     selectSession: ctl.selectSession,
@@ -538,8 +532,6 @@ export default function App() {
     setInsightTab: links.setInsightTab,
     setExplorerNode: links.setExplorerNode,
     setFlowsTab: links.setFlowsTab,
-    setSessionListTab: links.setSessionListTab,
-    setSessionKindTab: links.setSessionKindTab,
   })
 
   // ---- First-run gating (must stay AFTER every hook above) ----
@@ -599,14 +591,9 @@ export default function App() {
               runtimeById={runtimeById}
               loading={ctl.bootstrapping}
               newDisabled={ctl.agents.length === 0}
-              view={links.sessionListTab}
-              onViewChange={links.setSessionListTab}
-              kindFilter={links.sessionKindTab}
-              onKindFilterChange={links.setSessionKindTab}
               totalSessions={ctl.sessionsTotal}
               hasMoreSessions={ctl.sessionsHasMore}
               onLoadMore={ctl.loadMoreSessions}
-              onOpenOverview={() => setOverviewOpen(true)}
               onSelectSession={(id, messageId) => {
                 ctl.selectSession(id, messageId)
                 setMobileListOpen(false)
@@ -884,21 +871,6 @@ export default function App() {
           onError={setError}
           onSelectSession={ctl.selectSession}
           onOpenSkill={openSkill}
-        />
-      )}
-
-      {/* Bulk sessions overview: a searchable/sortable table of every session in
-          the workspace, opened from the chat sidebar. Selecting a row jumps to
-          that transcript in the chat view. */}
-      {overviewOpen && (
-        <SessionsOverview
-          items={executions}
-          agents={ctl.agents}
-          onSelect={(sid) => {
-            setView('chat')
-            ctl.selectSession(sid)
-          }}
-          onClose={() => setOverviewOpen(false)}
         />
       )}
 

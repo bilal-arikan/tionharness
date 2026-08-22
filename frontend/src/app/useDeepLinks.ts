@@ -4,12 +4,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { View } from './NavRail'
 import { INITIAL_ROUTE } from './useAppNavigation'
-import {
-  KIND_FILTER_KEY,
-  normalizeKindFilter,
-  normalizeSessionListTab,
-  type SessionListTab,
-} from '@/features/sessions/sessionKindMeta'
 
 export function useDeepLinks(setView: (v: View) => void) {
   // Deep-link target for the schedules screen (highlights the routed schedule).
@@ -36,21 +30,6 @@ export function useDeepLinks(setView: (v: View) => void) {
   const [flowsTab, setFlowsTab] = useState<string | null>(
     INITIAL_ROUTE.view === 'flows' ? INITIAL_ROUTE.id : null,
   )
-  // Sessions sidebar tabs (deep-link aware): #/w/{ws}/chat/{sessionId}?list=…&kind=…
-  // They live here (not inside the sidebar) so the URL can address them; the chat
-  // view's single entity slot is already spent on the session id.
-  const [sessionListTab, setSessionListTab] = useState<SessionListTab>(() =>
-    normalizeSessionListTab(INITIAL_ROUTE.view === 'chat' ? INITIAL_ROUTE.query?.list : null),
-  )
-  // The kind filter is also persisted, so a plain "#/…/chat" load restores the
-  // last tab; an explicit ?kind= in the URL takes precedence over storage.
-  const [sessionKindTab, setSessionKindTab] = useState<string>(() => {
-    const fromUrl = INITIAL_ROUTE.view === 'chat' ? INITIAL_ROUTE.query?.kind : undefined
-    return normalizeKindFilter(fromUrl ?? localStorage.getItem(KIND_FILTER_KEY))
-  })
-  useEffect(() => {
-    localStorage.setItem(KIND_FILTER_KEY, sessionKindTab)
-  }, [sessionKindTab])
 
   // Artifact deep-link target: set when a chat artifact card is clicked, opening
   // the artifacts screen with that artifact pre-selected.
@@ -106,10 +85,6 @@ export function useDeepLinks(setView: (v: View) => void) {
     setExplorerNode,
     flowsTab,
     setFlowsTab,
-    sessionListTab,
-    setSessionListTab,
-    sessionKindTab,
-    setSessionKindTab,
     artifactTarget,
     setArtifactTarget,
     flowTarget,

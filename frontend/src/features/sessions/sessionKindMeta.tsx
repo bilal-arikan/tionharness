@@ -35,67 +35,83 @@ export const KIND_META: Record<string, { label: string; icon: LucideIcon }> = {
   insight: { label: 'İçgörü', icon: Telescope },
 }
 
-// Filter tabs (in display order). '' is "all".
-export const FILTERS: { key: string; label: string }[] = [
-  { key: '', label: 'Tümü' },
+// Sidebar chips (multi-select, display order). The kind chips cover EVERY
+// Session.Kind the backend can produce — including the ones the old filter tabs
+// left out (flow-coordinator, inbox) plus an "Diğer" catch-all for a kind this
+// build does not know — so nothing can be invisible in the list. The two
+// trailing scope chips widen the list instead of narrowing it by kind: worker
+// sessions (coordinator-spawned) and archived ones. Every chip is selected by
+// default, so the sidebar shows everything and the user unticks what they don't
+// want to see.
+export const WORKER_CHIP = 'worker'
+export const ARCHIVED_CHIP = 'archived'
+export const OTHER_CHIP = 'other'
+
+export const SESSION_CHIPS: { key: string; label: string }[] = [
   { key: 'chat', label: 'Sohbet' },
   { key: 'task', label: 'Görev' },
   { key: 'flow', label: 'Akış' },
   { key: 'spawned', label: 'Spawn' },
-  // Cron schedules are time-triggered automations, so the list filter unifies
-  // both kinds under one "Otomasyon" chip (matching the management screen's
-  // umbrella naming). The per-row icon still distinguishes them (Clock vs Zap).
+  // Cron schedules are time-triggered automations, so the chip unifies both
+  // kinds under one "Otomasyon" label (matching the management screen's umbrella
+  // naming). The per-row icon still distinguishes them (Clock vs Zap).
   { key: 'automation', label: 'Otomasyon' },
   { key: 'insight', label: 'İçgörü' },
+  { key: 'flow-coordinator', label: 'Akış Koord.' },
+  { key: 'inbox', label: 'Inbox' },
+  { key: OTHER_CHIP, label: 'Diğer' },
+  { key: WORKER_CHIP, label: 'Worker' },
+  { key: ARCHIVED_CHIP, label: 'Arşiv' },
 ]
 
-// Top-level sidebar tab (Aktif / Arşiv / Workers). 'active' is the default and
-// is therefore omitted from the URL.
-export type SessionListTab = 'active' | 'archived' | 'workers'
+export const ALL_SESSION_CHIPS: string[] = SESSION_CHIPS.map((c) => c.key)
 
-// Persisted kind filter — the sidebar lists every session kind, so the tab
-// choice is worth remembering across reloads (same rationale as the width). The
-// URL wins over this when it carries an explicit ?kind=.
-export const KIND_FILTER_KEY = 'tionswarm.sessionKindFilter'
+// Persisted chip state — the sidebar lists every session kind, so the choice is
+// worth remembering across reloads (same rationale as the width). Storage holds
+// the UNTICKED chips, not the ticked ones: that way a chip added by a later
+// build (a new session kind) starts visible instead of silently hiding rows for
+// everyone who already has a saved selection.
+export const SESSION_CHIPS_OFF_KEY = 'tionswarm.sessionChipsOff'
 
-// normalizeSessionListTab coerces an untrusted value (URL segment, storage) to a
-// live tab; anything unknown falls back to the default view.
-export function normalizeSessionListTab(v: string | null | undefined): SessionListTab {
-  return v === 'archived' || v === 'workers' ? v : 'active'
+// normalizeChipsOff coerces an untrusted value (storage) to a list of unticked
+// chip keys; anything unparseable means "nothing unticked" (all chips on).
+export function normalizeChipsOff(raw: string | null | undefined): string[] {
+  if (!raw) return []
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(raw)
+  } catch {
+    return []
+  }
+  if (!Array.isArray(parsed)) return []
+  return parsed.filter((k): k is string => typeof k === 'string' && ALL_SESSION_CHIPS.includes(k))
 }
 
-// normalizeKindFilter coerces an untrusted value to a known filter key ('' = all).
-export function normalizeKindFilter(v: string | null | undefined): string {
-  // A legacy ?kind=schedule deep-link now resolves to the unified automation chip.
-  if (v === 'schedule') return 'automation'
-  return v != null && FILTERS.some((f) => f.key === v) ? v : ''
+// kindChipKey maps a Session.Kind to the chip that owns it. Every kind lands on
+// a chip: an unrecognised one falls to the "Diğer" catch-all rather than
+// becoming unfilterable.
+export function kindChipKey(kind: string): string {
+  if (kind === '' || kind === 'chat') return 'chat'
+  // The "Otomasyon" chip is an umbrella over event-triggered automations and
+  // time-triggered cron schedules (two distinct Session.Kind values).
+  if (kind === 'automation' || kind === 'schedule') return 'automation'
+  return SESSION_CHIPS.some((c) => c.key === kind) ? kind : OTHER_CHIP
+}
+
+// sessionMatchesChips reports whether a session survives the sidebar's chip
+// selection: its kind chip must be on, and a worker/archived session also needs
+// its scope chip on.
+export function sessionMatchesChips(
+  s: { kind: string; isWorker: boolean; isArchived: boolean },
+  selected: ReadonlySet<string>,
+): boolean {
+  if (s.isArchived && !selected.has(ARCHIVED_CHIP)) return false
+  if (s.isWorker && !selected.has(WORKER_CHIP)) return false
+  return selected.has(kindChipKey(s.kind))
 }
 
 export function kindMeta(kind: string) {
   return KIND_META[kind] ?? { label: kind || 'Diğer', icon: Activity }
-}
-
-// matchesKindFilter reports whether a session kind belongs under a filter tab.
-// A legacy session persisted before the `kind` field existed carries '' and is
-// treated as a plain chat, so it stays reachable under the "Sohbet" tab.
-export function matchesKindFilter(kind: string, filter: string): boolean {
-  // Insight scans open one machine-generated read-only session per run, which
-  // would flood the default "Tümü" list and bury the conversations the user
-  // actually came for (the old "chat listesini kirletme" problem). They are
-  // therefore opt-in: reachable only through their own "İçgörü" chip.
-  if (kind === 'insight') return filter === 'insight'
-  if (!filter) return true
-  if (filter === 'chat') return kind === '' || kind === 'chat'
-  // The "Otomasyon" chip is an umbrella over both event-triggered automations
-  // and time-triggered cron schedules (two distinct Session.Kind values).
-  if (filter === 'automation') return kind === 'automation' || kind === 'schedule'
-  return kind === filter
-}
-
-// shortId trims a session id to a compact, recognisable suffix for list rows
-// (the full id is shown — and copyable — in the detail header).
-export function shortId(id: string) {
-  return id.length > 8 ? id.slice(-8) : id
 }
 
 // RunStateBadge renders a session's last run outcome, or nothing when the session

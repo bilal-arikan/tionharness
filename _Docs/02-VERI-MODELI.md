@@ -206,8 +206,8 @@ erDiagram
 > filtresinden tamamen bağımsızdır** — sidebar'ın `state` tabanlı sekme filtresine
 > dokunulmadı; canlı tur sırasında gizlenir (yanıp sönen nokta + "yazıyor…" zaten
 > o anki durumu söyler, bayat bir sonuç yanlarında çelişkili okunur). Test:
-> `runStateMeta.test.ts`. `Execution` tipi bu alanı taşımadığı için toplu
-> **genel bakış tablosunda** (`SessionsOverview`) henüz gösterilmiyor.
+> `runStateMeta.test.ts`. (`Execution` tipi bu alanı taşımaz; onu kullanan toplu
+> genel bakış tablosu 2026-08-21'de kaldırıldı.)
 >
 > **`stall_nudges`** koordinatör "hayalet spawn" sayacıdır (bkz. `_Docs/47`):
 > bellekteki ardışık seri (`slot.spawnHallucStreak`) temiz bir koordinasyon

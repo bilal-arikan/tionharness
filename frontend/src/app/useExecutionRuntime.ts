@@ -4,8 +4,7 @@
 //
 // Both endpoints are built on the same DB.ListSessions call; /api/executions
 // merely enriches each row. The sessions sidebar consumes this map to render the
-// live pulse dot + the pass/fail status pill for task and flow transcripts, and
-// hands the raw rows to the bulk SessionsOverview table.
+// live pulse dot + the pass/fail status pill for task and flow transcripts.
 //
 // The poll is backed up by the shared 'executions' refresh signal, which the SSE
 // dispatcher bumps on every chat / flow / schedule / spawn / worker / task /
@@ -26,8 +25,6 @@ export interface ExecutionRuntime {
 }
 
 export interface ExecutionRuntimeState {
-  // Every execution row, newest-updated first (the bulk overview table's input).
-  executions: Execution[]
   // sessionId → live/last-run facts. Sessions absent from the map are idle.
   runtimeById: Map<string, ExecutionRuntime>
 }
@@ -55,5 +52,5 @@ export function useExecutionRuntime(activeWorkspaceId: string | null): Execution
     return m
   }, [executions])
 
-  return { executions, runtimeById }
+  return { runtimeById }
 }
