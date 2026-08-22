@@ -378,10 +378,16 @@ func (m *Manager) open(meta Meta) error {
 	// Token-triggered automations: every recorded provider call signals cumulative
 	// spend so the engine can fire when a session/workspace crosses a threshold.
 	rt.AddUsageHook(autoEngine.OnUsageRecorded)
-	// Counter-triggered automations: every message append signals the session's new
-	// message/tool counters so the engine can fire when one crosses an interval.
-	// Dispatched on a detached goroutine so an append is never blocked.
+	// Every message append is session activity regardless of author (user, agent,
+	// worker, or system). Notify open clients so their session list picks up the
+	// UpdatedAt written by AddMessage instead of waiting for a turn-done event.
+	// Counter-triggered automations consume the same signal on a detached goroutine.
 	database.SetActivityHook(func(sig db.ActivitySignal) {
+		rt.Emit(events.Event{
+			Type:   events.TypeSession,
+			Level:  "info",
+			Target: map[string]string{"sessionId": sig.SessionID, "op": "message_activity"},
+		})
 		go autoEngine.OnActivityRecorded(context.Background(), agent.ActivityRecorded{
 			SessionID:    sig.SessionID,
 			MessageTotal: sig.MessageTotal,
