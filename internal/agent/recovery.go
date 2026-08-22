@@ -162,6 +162,34 @@ func recoveryText(r contReason) string {
 	}
 }
 
+// Stable reason tags for inline StepRecovery cards that are NOT produced by
+// decideRecovery (they come from the tool loop's own repair paths). Kept here
+// next to recoveryText so every recovery tag lives in one place.
+const (
+	reasonMCPRepairRetry = "mcp_repair_retry"
+	reasonMCPRepairIndex = "mcp_repair_index"
+)
+
+// mcpRepairStep builds the inline StepRecovery card for one MCP repair episode.
+// The loop emits exactly one per episode (the repair itself retries at most
+// once), so a repeatedly-broken call cannot flood the trace.
+func mcpRepairStep(reason, detail string, batch int) TurnStep {
+	return TurnStep{Kind: StepRecovery, Reason: reason, Text: mcpRepairText(reason, detail), Batch: batch}
+}
+
+// mcpRepairText is the human-readable (Turkish, UI-facing) explanation shown on
+// the StepRecovery card for an MCP argument-repair episode.
+func mcpRepairText(reason, detail string) string {
+	switch reason {
+	case reasonMCPRepairRetry:
+		return "MCP çağrısı hatalı argümanla döndü; argüman düzeltilip \"" + detail + "\" yeniden çağrıldı."
+	case reasonMCPRepairIndex:
+		return "MCP deposu indeksli değil; \"" + detail + "\" için arka planda indeksleme başlatıldı."
+	default:
+		return "MCP çağrısı onarım yoluna girdi."
+	}
+}
+
 // isContextOverflow reports whether a provider error signals the prompt exceeded
 // the model's context window (Anthropic: "prompt is too long: N tokens > …";
 // OpenAI-compatible: "context_length_exceeded"). Matched conservatively so an
