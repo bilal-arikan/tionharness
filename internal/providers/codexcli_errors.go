@@ -78,6 +78,13 @@ func isCodexAuthText(s string) bool {
 		strings.Contains(s, "please run `codex login`") ||
 		strings.Contains(s, "please run codex login") ||
 		strings.Contains(s, "invalid api key") ||
+		// A revoked/expired OAuth credential: "Your access token could not be
+		// refreshed because your refresh token was revoked. Please log out and
+		// sign in again." Both halves are matched so a reworded body (expired
+		// instead of revoked, access token instead of refresh token) still lands
+		// in the auth class and gets the actionable CODEX_HOME message.
+		strings.Contains(s, "refresh token") ||
+		strings.Contains(s, "could not be refreshed") ||
 		strings.Contains(s, "unauthorized")
 }
 

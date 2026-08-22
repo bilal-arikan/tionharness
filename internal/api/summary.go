@@ -372,10 +372,12 @@ func (s *Server) compactSession(ctx context.Context, wsp *workspace.Workspace, s
 	if err != nil {
 		return "", err
 	}
-	// Out-of-loop path: pin this workspace's claude-home before ForceCompact's
-	// direct provider.Complete, mirroring guardedComplete (else it falls back to
-	// the global home and can fail auth even when the workspace is logged in).
-	wsp.Runtime.PinClaudeHome(provider)
+	// Out-of-loop path: pin this app's CLI homes before ForceCompact's direct
+	// provider.Complete, mirroring guardedComplete (else the CLI falls back to the
+	// ambient home and can fail auth even when TionSwarm is logged in).
+	if err := wsp.Runtime.PinCLIHome(provider); err != nil {
+		return "", err
+	}
 	// history is the pre-command snapshot captured by the caller (before the
 	// "/compact" user message was appended), so the fold boundary matches the real
 	// conversation.

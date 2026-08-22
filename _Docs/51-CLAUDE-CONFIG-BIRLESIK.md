@@ -73,6 +73,16 @@ ile tutarlı):
   otonom, tüm çağrı noktaları) bu tek seam'den geçtiği için tur yolunda başka yeri
   değiştirmeye gerek yok. Aux çağrılar (title/summary/lesson) `guardedComplete`'te
   `PinClaudeHome` ile pinlenir.
+- **Tek giriş noktası `Runtime.PinCLIHome(provider)` (2026-08-22):** hem
+  claude-cli hem codex-cli evini pinler; diğer transport için no-op. Doğrudan
+  `provider.Complete` çağıran her yer (`guardedComplete`, `handoff.go`,
+  `api/summary.go` `/compact`, `api/chat_stream.go` ön-compaction) artık bunu
+  çağırır. Önceden bu yerler yalnız `PinClaudeHome` çağırıyordu → codex-cli
+  ajanında `CODEX_HOME` hiç export edilmiyor, alt süreç ambient `~/.codex`'i
+  okuyup çoğu kez `refresh token was revoked` veriyordu.
+- `PinClaudeHome` artık `(home string, err error)` döner ve pinlediği yerde
+  `MkdirAll` + credential heal'i de yapar (eskiden bunlar yalnız `toolloop.go`
+  içindeydi, yani döngü dışı çağrılar korumasızdı).
 - **İstisna — fold yolları (compaction/handoff):** `conversation.summarizeRendered`
   ve `BuildHandoff` tur döngüsünün ve `guardedComplete`'in DIŞINDA doğrudan
   `provider.Complete` çağırır → toolloop seam'inden geçmez. Pinlenmezse **global**

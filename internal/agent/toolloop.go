@@ -3,7 +3,6 @@ package agent
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"os"
 	"strconv"
 	"strings"
@@ -249,56 +248,16 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 			// via CLAUDE_CODE_EFFORT_LEVEL (the --settings file can't hold max). Lower
 			// levels ride the settings file and the provider ignores this field.
 			req.CLIEffortLevel = cliEffortLevel(agent.ThinkingLevel)
-			home := cc.ConfigDir()
-			if home == "" {
-				var err error
-				home, err = ResolveCLIHomeDir(r.dataDir, "claude-cli", "")
-				if err != nil {
-					return nil, nil, err
-				}
-				cc.SetConfigDir(home)
-			}
-			if err := os.MkdirAll(home, 0o755); err != nil {
-				return nil, nil, fmt.Errorf("create claude home %s: %w", home, err)
+			home, err := r.PinClaudeHome(cc)
+			if err != nil {
+				return nil, nil, err
 			}
 			ensureClaudeHomeEffortLevel(home)
-			// Re-seed the login if this home lost it. The CLI can WIPE its own
-			// <home>/.credentials.json (accessToken:"", refreshToken:"", expiresAt:0) when
-			// an OAuth refresh fails — most easily when several of its processes race for
-			// the single-use refresh token, which a coordinator tree does by design. The
-			// boot-time migration never runs again after that, so
-			// EVERY remaining turn in the workspace failed "not logged in" until a
-			// restart. Healing at the per-turn seam bounds the damage to the turn that
-			// actually lost the race. Idempotent and cheap: a usable credential returns
-			// after one small file read. Applied to whichever home this turn actually
-			// uses — the instance's own configDir when it has one, the app-global home
-			// otherwise — never hardcoded to one of them.
-			ensureClaudeHomeCredential(home)
 		}
-		// codex-cli's sibling of the block above. CODEX_HOME must point at an
-		// EXISTING directory or the subprocess errors out immediately (unlike
-		// claude-cli, which tolerates a missing home); there is no boot-time
-		// provisioning step for codex-home yet, so MkdirAll here is load-bearing,
-		// not defensive — including for an instance's OWN configDir, so a missing
-		// login surfaces as codex's own clear auth error rather than a confusing
-		// "CODEX_HOME is not an existing directory" one. No credential heal: codex's
-		// auth.json is not known to be wiped by a losing refresh race the way
-		// claude's credentials.json is, so mirroring ensureClaudeHomeCredential would
-		// be speculative until that failure mode is actually observed on this
-		// provider.
-		if cx, ok := provider.(*providers.CodexCLI); ok {
-			home := cx.ConfigDir()
-			if home == "" {
-				var err error
-				home, err = ResolveCLIHomeDir(r.dataDir, "codex-cli", "")
-				if err != nil {
-					return nil, nil, err
-				}
-				cx.SetConfigDir(home)
-			}
-			if err := os.MkdirAll(home, 0o755); err != nil {
-				return nil, nil, fmt.Errorf("create codex home %s: %w", home, err)
-			}
+		// codex-cli's sibling of the block above, shared with guardedComplete so
+		// both entry points pin the same home (see PinCodexHome / PinCLIHome).
+		if err := r.PinCodexHome(provider); err != nil {
+			return nil, nil, err
 		}
 	}
 	inter := tools.InteractionFrom(ctx)
@@ -1106,6 +1065,11 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 				case plan.Fixed != nil:
 					r.logger.Info("mcp call auto-repaired", "agent", agent.ID, "tool", call.Name, "project", callProjectArg(*plan.Fixed))
 					r.emitDebug(ctx, db.DebugEvent{Type: db.DebugGuardrail, AgentID: agent.ID, Name: "mcp_repair_retry", Detail: call.Name})
+					// Surface the otherwise-silent fix-up in the chat trace too,
+					// not only in the debug journal.
+					rec := mcpRepairStep(reasonMCPRepairRetry, call.Name, batch)
+					steps = append(steps, rec)
+					safeEmit(rec)
 					retryStart := time.Now()
 					res = reg.Call(callCtx, *plan.Fixed)
 					r.emitDebug(ctx, db.DebugEvent{
@@ -1133,6 +1097,9 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 					if plan.IndexPath != "" {
 						r.EnsureCodebaseIndexed(ctx, plan.IndexPath)
 						r.emitDebug(ctx, db.DebugEvent{Type: db.DebugGuardrail, AgentID: agent.ID, Name: "mcp_repair_index", Detail: plan.IndexPath})
+						rec := mcpRepairStep(reasonMCPRepairIndex, plan.IndexPath, batch)
+						steps = append(steps, rec)
+						safeEmit(rec)
 					}
 					r.emitDebug(ctx, db.DebugEvent{Type: db.DebugGuardrail, AgentID: agent.ID, Name: "mcp_repair", Detail: call.Name, Err: true})
 				}

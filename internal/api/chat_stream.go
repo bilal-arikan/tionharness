@@ -307,7 +307,10 @@ func (s *Server) runChatTurn(clientGone context.Context, wsp *workspace.Workspac
 			// bypasses guardedComplete. Without this the claude-cli provider falls
 			// back to the global claude-home and fails auth even when the workspace
 			// is logged in (mirrors the manual /compact path in summary.go).
-			wsp.Runtime.PinClaudeHome(provider)
+			if herr := wsp.Runtime.PinCLIHome(provider); herr != nil {
+				s.failTurn(ctx, wsp, sse, session.ID, agentRow.ID, clientMsgID, "provider_unavailable", herr.Error())
+				return
+			}
 
 			sse("agent", map[string]any{"agentId": agentRow.ID, "index": i})
 			// Mirror agent-start onto the hub so late-joining windows know which

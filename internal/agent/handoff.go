@@ -88,10 +88,12 @@ func (r *Runtime) HandoffSession(ctx context.Context, session db.Session, agent 
 	if err != nil {
 		return HandoffResult{}, err
 	}
-	// Out-of-loop path: pin this workspace's claude-home before BuildHandoff's
-	// direct provider.Complete, mirroring guardedComplete (else it falls back to
-	// the global home and can fail auth even when the workspace is logged in).
-	r.PinClaudeHome(provider)
+	// Out-of-loop path: pin this app's CLI homes before BuildHandoff's direct
+	// provider.Complete, mirroring guardedComplete (else the CLI falls back to the
+	// ambient home and can fail auth even when TionSwarm is logged in).
+	if err := r.PinCLIHome(provider); err != nil {
+		return HandoffResult{}, err
+	}
 	history, err := r.db.ListMessages(ctx, session.ID)
 	if err != nil {
 		return HandoffResult{}, err

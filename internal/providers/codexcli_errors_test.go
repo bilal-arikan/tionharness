@@ -20,6 +20,15 @@ func TestClassifyCodexError(t *testing.T) {
 			want: codexFailureAuth,
 		},
 		{name: "not logged in", msg: "Not logged in. Please run `codex login`.", want: codexFailureAuth},
+		{
+			// The exact body of a revoked OAuth credential, captured live. It carries
+			// no 401/bearer wording, so before the refresh-token signatures it fell
+			// through to codexFailureNone and the user never got the message naming
+			// which CODEX_HOME needs `codex login`.
+			name: "revoked refresh token",
+			msg:  "Your access token could not be refreshed because your refresh token was revoked. Please log out and sign in again.",
+			want: codexFailureAuth,
+		},
 		{name: "at capacity", msg: "Selected model is at capacity. Please try a different model.", want: codexFailureQuota},
 		{name: "rate limit", msg: "You have hit your rate limit for this hour", want: codexFailureQuota},
 		{name: "usage limit", msg: "weekly usage limit reached", want: codexFailureQuota},

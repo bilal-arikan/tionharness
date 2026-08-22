@@ -3,6 +3,8 @@ package agent
 import (
 	"context"
 	"errors"
+	"fmt"
+	"os"
 
 	"github.com/bilal-arikan/tionswarm/internal/conversation"
 	"github.com/bilal-arikan/tionswarm/internal/db"
@@ -121,9 +123,14 @@ func (r *Runtime) guardedComplete(ctx context.Context, agent db.Agent, req provi
 			"callKind", callKindFrom(ctx), "error", err)
 		return nil, err
 	}
-	// claude-cli auxiliary calls (title/summary/compaction/lesson reflection)
-	// must use THIS workspace's config home like tool-loop turns do.
-	r.PinClaudeHome(provider)
+	// CLI auxiliary calls (title/summary/compaction/lesson reflection) must use
+	// THIS app's config homes like tool-loop turns do — for both CLI transports.
+	if err := r.PinCLIHome(provider); err != nil {
+		r.logger.Warn("pin CLI home failed",
+			"agent", agent.ID, "provider", agent.Provider,
+			"callKind", callKindFrom(ctx), "error", err)
+		return nil, err
+	}
 	// Fill a model-aware output cap when the caller left MaxTokens unset; the
 	// explicit caps that compaction/summary/title set are respected untouched.
 	req = r.withMaxOutput(agent.Provider, req)
@@ -156,9 +163,41 @@ func (r *Runtime) guardedComplete(ctx context.Context, agent db.Agent, req provi
 // The claude-cli concrete type is asserted deliberately: claudeHomeDir() is the
 // CLAUDE_CONFIG_DIR home specifically, so handing it to another CLI transport
 // (codex, whose home is a CODEX_HOME with a different layout) would point that
-// CLI at a config it cannot read. A codex-cli equivalent pins its own home.
-func (r *Runtime) PinClaudeHome(provider providers.Provider) {
-	if cli, ok := provider.(*providers.ClaudeCLI); ok && cli.ConfigDir() == "" {
-		cli.SetConfigDir(r.claudeHomeDir())
+// CLI at a config it cannot read. PinCodexHome pins the codex home separately;
+// guardedComplete calls both.
+// It returns the home it pinned ("" for a non-claude provider, so callers can
+// skip claude-only follow-up work such as seeding the effort level).
+//
+// The MkdirAll and the credential heal used to live only in the tool loop, so an
+// out-of-loop Complete (manual /compact, /handoff) ran against a home that might
+// not exist yet or had had its login wiped. Both now happen wherever the home is
+// pinned. Re-seeding matters because the CLI can WIPE its own
+// <home>/.credentials.json (accessToken:"", refreshToken:"", expiresAt:0) when an
+// OAuth refresh fails — most easily when several of its processes race for the
+// single-use refresh token, which a coordinator tree does by design. The
+// boot-time migration never runs again after that, so every remaining turn in
+// the workspace failed "not logged in" until a restart. Healing at this seam
+// bounds the damage to the call that actually lost the race; it is idempotent and
+// cheap (a usable credential returns after one small file read) and applies to
+// whichever home is actually in use — the instance's own configDir when it has
+// one, the app-global home otherwise — never hardcoded to one of them.
+func (r *Runtime) PinClaudeHome(provider providers.Provider) (string, error) {
+	cli, ok := provider.(*providers.ClaudeCLI)
+	if !ok {
+		return "", nil
 	}
+	home := cli.ConfigDir()
+	if home == "" {
+		resolved, err := ResolveCLIHomeDir(r.dataDir, "claude-cli", "")
+		if err != nil {
+			return "", err
+		}
+		home = resolved
+		cli.SetConfigDir(home)
+	}
+	if err := os.MkdirAll(home, 0o755); err != nil {
+		return "", fmt.Errorf("create claude home %s: %w", home, err)
+	}
+	ensureClaudeHomeCredential(home)
+	return home, nil
 }

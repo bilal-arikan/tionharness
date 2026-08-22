@@ -331,7 +331,11 @@ func (c *CodexCLI) runAttempt(ctx context.Context, args []string, prompt, model 
 			cmd.Dir = req.WorkDir
 		}
 	}
-	cmd.Stdin = strings.NewReader(prompt) // prompt via stdin — see buildArgs
+	// prompt via stdin — see buildArgs. codex rejects the whole turn with
+	// "input is not valid UTF-8 (invalid byte at offset N)" if a single byte is
+	// malformed, which a rune-splitting truncation upstream can produce; replace
+	// those bytes rather than lose the turn.
+	cmd.Stdin = strings.NewReader(strings.ToValidUTF8(prompt, "�"))
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	stdout, serr := cmd.StdoutPipe()
