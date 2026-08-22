@@ -9,6 +9,7 @@ import (
 
 	"github.com/bilal-arikan/tionswarm/internal/db"
 	"github.com/bilal-arikan/tionswarm/internal/providers"
+	"github.com/bilal-arikan/tionswarm/internal/textutil"
 )
 
 // Task (kanban board) self-management tools let an agent read the board and
@@ -30,7 +31,7 @@ func truncateForTool(s string, max int) string {
 	if len(s) <= max {
 		return s
 	}
-	return s[:max] + "…(truncated)"
+	return textutil.TruncBytes(s, max) + "…(truncated)"
 }
 
 // ---- list_tasks ----

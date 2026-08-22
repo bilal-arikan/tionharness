@@ -26,6 +26,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"github.com/bilal-arikan/tionswarm/internal/textutil"
 	"io"
 	"net/http"
 	"net/url"
@@ -288,9 +289,4 @@ func splitCodeState(pasted string) (code, state string) {
 	return pasted, ""
 }
 
-func truncate(s string, n int) string {
-	if len(s) <= n {
-		return s
-	}
-	return s[:n] + "…"
-}
+func truncate(s string, n int) string { return textutil.TruncBytesEllipsis(s, n) }

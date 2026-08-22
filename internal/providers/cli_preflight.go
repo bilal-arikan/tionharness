@@ -11,6 +11,7 @@ import (
 	"sync"
 
 	"github.com/bilal-arikan/tionswarm/internal/proc"
+	"github.com/bilal-arikan/tionswarm/internal/textutil"
 )
 
 var cliPreflightSuccess sync.Map
@@ -61,7 +62,7 @@ func truncateCLIDiagnostic(stderr, stdout string) string {
 	}
 	const max = 4096
 	if len(detail) > max {
-		detail = "…" + detail[len(detail)-max:]
+		detail = "…" + textutil.TailBytes(detail, max)
 	}
 	return ": " + detail
 }

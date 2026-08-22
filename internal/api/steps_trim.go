@@ -2,9 +2,9 @@ package api
 
 import (
 	"encoding/json"
+	"github.com/bilal-arikan/tionswarm/internal/textutil"
 	"strconv"
 	"strings"
-	"unicode/utf8"
 )
 
 // A persisted assistant turn carries its whole activity trace (agent.TurnStep
@@ -143,12 +143,4 @@ func trimLeafStrings(v any) (any, bool) {
 
 // truncUTF8 cuts s to at most n bytes without splitting a rune — a half rune
 // would serialize as U+FFFD and corrupt the preview.
-func truncUTF8(s string, n int) string {
-	if len(s) <= n {
-		return s
-	}
-	for n > 0 && !utf8.RuneStart(s[n]) {
-		n--
-	}
-	return s[:n]
-}
+func truncUTF8(s string, n int) string { return textutil.TruncBytes(s, n) }

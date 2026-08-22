@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/bilal-arikan/tionswarm/internal/proc"
+	"github.com/bilal-arikan/tionswarm/internal/textutil"
 )
 
 // lookPath is exec.LookPath behind a var so tests can stub PATH resolution.
@@ -98,9 +99,5 @@ func ParseVersion(s string) (major, minor, patch int, ok bool) {
 }
 
 func truncate(s string, n int) string {
-	s = strings.Join(strings.Fields(s), " ")
-	if len(s) <= n {
-		return s
-	}
-	return s[:n] + "…"
+	return textutil.TruncBytesEllipsis(strings.Join(strings.Fields(s), " "), n)
 }
