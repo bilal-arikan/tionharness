@@ -9126,3 +9126,45 @@ bir CLI provider'ı değil — meşru model referansları olarak korundu.
   sayıldı (`allowlistExemptServer`); worker'lar dahil her ajan erişir. Açık denylist
   ve workspace anahtarı hâlâ geçerli. `Capability.Detect` ajan-farkında yapıldı —
   ajanın çağıramadığı araç için prompt bloğu artık basılmıyor.
+
+## Sohbet listesi: tek akış + çoklu çip filtresi (2026-08-21)
+
+- **Değişiklik:** Sidebar'daki `Aktif / Workers / Arşiv` sekmeleri ve "Tümü" çipi
+  kaldırıldı. Artık tek düz liste var; üstteki çipler **çoklu seçim** ve
+  **hepsi varsayılan olarak seçili**. Kind çiplerine ek olarak iki kapsam çipi
+  geldi: **Worker** (koordinatör tarafından spawn edilen oturumlar) ve **Arşiv**.
+  Bir çipi kapatmak o dilimi listeden gizler.
+- **Kapsam (tam):** çipler her `Session.Kind`'i kapsar — eski sekmelerin dışarıda
+  bıraktığı `flow-coordinator` ("Akış Koord.") ve `inbox` ("Inbox") için de çip
+  var; tanınmayan bir kind **"Diğer"** çipine düşer (`kindChipKey` artık null
+  dönmez), yani hiçbir oturum filtrelenemez durumda kalmaz.
+- **Kalıcılık:** localStorage `tionswarm.sessionChipsOff` **kapatılan** çipleri
+  tutar (seçilenleri değil). Sonraki bir sürümde eklenen çip böylece açık başlar;
+  kaydı olan kullanıcıda sessizce satır gizlemez.
+- **Nerede:** `sessionKindMeta.tsx` (`SESSION_CHIPS`, `ALL_SESSION_CHIPS`,
+  `normalizeChipsOff`, `kindChipKey`, `sessionMatchesChips`,
+  `SESSION_CHIPS_OFF_KEY`), `SessionsSidebar.tsx` (yerel + localStorage'a yazılan çip
+  durumu; `tabStats`/`TabActivity` silindi).
+- **URL:** `?list=`/`?kind=` query'leri ve `routeQueryForView` tamamen kaldırıldı
+  (`url.ts`, `useAppNavigation.ts`, `useDeepLinks.ts`, `App.tsx`). Çip seçimi
+  deep-link değil, yerel görünüm durumudur.
+- **Yan etki:** İçgörü oturumları artık varsayılan listede görünür (eski "sadece
+  kendi çipinde" opt-in davranışı sidebar'da geçerli değil); istenmiyorsa İçgörü
+  çipi kapatılır. Toplu "Arşivden çıkar" butonu, seçimin tamamı arşivliyse çıkar.
+- **Doğrulama:** `npx tsc --noEmit` ✅, `npm test` (18 dosya / 190 test) ✅,
+  `npm run format:check` ✅, canlı UI (5173) çipler basılı + worker/arşiv satırları
+  listede.
+
+## Toplu "Oturumlar" tablosu kaldırıldı (2026-08-21)
+
+- **Ne:** Sohbet sidebar'ındaki `Oturumlar` butonu ve açtığı toplu tablo overlay'i
+  tamamen kaldırıldı — çip filtreli tek liste ihtiyacı karşılıyor.
+- **Silinen:** `features/sessions/SessionsOverview.tsx`, `App.tsx`'teki
+  `overviewOpen` state + render bloğu, `SessionsSidebar` `onOpenOverview` prop'u ve
+  `data-testid="sessions-overview-open"` butonu. `useExecutionRuntime` artık
+  yalnız `runtimeById` döner (`executions` dizisi tablonun tek tüketicisiydi).
+  Ölü kalan `FILTERS`, `matchesKindFilter`, `shortId` de `sessionKindMeta.tsx`'ten
+  temizlendi; kind çipleri artık `SESSION_CHIPS` içinde doğrudan tanımlı.
+- **Not:** Ajan/E2E senaryolarında `sessions-overview-open` seçicisi artık yok.
+- **Doğrulama:** `npx tsc --noEmit` ✅, `npm test` 190/190 ✅, `format:check` ✅,
+  canlı UI'da buton yok, konsol temiz.
