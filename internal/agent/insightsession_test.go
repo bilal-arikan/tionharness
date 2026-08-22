@@ -42,40 +42,32 @@ func TestInsightRunSkipsEmptyScan(t *testing.T) {
 			t.Fatalf("empty scan opened an insight session: %s", s.ID)
 		}
 	}
-
-	// The predicate itself: any real work re-enables the transcript.
-	base := insightRunReport{RunID: "IRUN-x", LensIDs: []string{"tool-errors"}}
-	if insightRunSessionWorthy(base) {
-		t.Fatal("a no-work run must not be session-worthy")
-	}
-	if insightRunSessionWorthy(insightRunReport{RunID: "IRUN-x"}) {
-		t.Fatal("a run with no resolved lens must not be session-worthy")
-	}
-	base.Result.Analyzed = 1
-	if !insightRunSessionWorthy(base) {
-		t.Fatal("an analyzed pair must make the run session-worthy")
-	}
 }
 
-// TestRecordInsightSessionWritesReadOnlyTranscript: a worthy run's session is the
-// read-only kind, links back to the run id, carries the rendered report — and
-// raises no unread badge (it is hidden from the default sessions view).
-func TestRecordInsightSessionWritesReadOnlyTranscript(t *testing.T) {
+// TestInsightRunSessionIsReadOnlyTranscript: a run that analysed something opens
+// the read-only session kind, links back to the run id, carries the rendered
+// report — and raises no unread badge (it is hidden from the default view).
+func TestInsightRunSessionIsReadOnlyTranscript(t *testing.T) {
 	rt, _ := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))
 	ctx := context.Background()
 	a, err := rt.db.CreateAgent(ctx, db.Agent{Name: "A", Provider: "claude-cli"})
 	if err != nil {
 		t.Fatalf("create agent: %v", err)
 	}
-	rec := insight.RunRecord{ID: "IRUN-test"}
-	sessID, err := rt.recordInsightSession(ctx, insightRunReport{
-		RunID:   rec.ID,
+	rep := insightRunReport{
+		RunID:   "IRUN-test",
 		LensIDs: []string{"tool-errors"},
 		AgentID: a.ID,
 		Result:  insight.ScanResult{Sessions: 1, Analyzed: 1, Findings: 1},
-	})
-	if err != nil {
-		t.Fatalf("record session: %v", err)
+	}
+	rec := newInsightStepRecorder(rt, rep.RunID, rep.AgentID, insightRunTitle(1, 0))
+	rec.onAnalysis(insight.AnalysisEvent{LensID: "tool-errors", SessionID: "SES1", Findings: 1})
+	if err := rec.finish(ctx, rep); err != nil {
+		t.Fatalf("finish: %v", err)
+	}
+	sessID := rec.SessionID()
+	if sessID == "" {
+		t.Fatal("an analysed pair must open the run session")
 	}
 
 	sess, err := rt.db.GetSession(ctx, sessID)
@@ -88,8 +80,8 @@ func TestRecordInsightSessionWritesReadOnlyTranscript(t *testing.T) {
 	if sess.Kind != db.SessionKindInsight {
 		t.Fatalf("run session kind = %q, want %q", sess.Kind, db.SessionKindInsight)
 	}
-	if sess.SourceID != rec.ID {
-		t.Fatalf("session.SourceID = %q, want run id %q", sess.SourceID, rec.ID)
+	if sess.SourceID != rep.RunID {
+		t.Fatalf("session.SourceID = %q, want run id %q", sess.SourceID, rep.RunID)
 	}
 	// The transcript is written, not empty: the report turn must be there.
 	msgs, err := rt.db.ListMessages(ctx, sess.ID)

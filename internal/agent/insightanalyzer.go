@@ -21,6 +21,11 @@ type insightAnalyzer struct {
 	rt    *Runtime
 	agent db.Agent
 	model string
+	// steps, when set, receives the model's verbatim reply so the scan's live
+	// transcript can show it. It is fed HERE rather than through the
+	// insight.Analyzer interface: that interface returns parsed findings only, and
+	// widening it would force every fake analyzer to carry raw-response plumbing.
+	steps *insightStepRecorder
 }
 
 // The analyzer's system prompt lives in the central registry
@@ -85,6 +90,7 @@ func (a *insightAnalyzer) Analyze(ctx context.Context, req insight.AnalysisReque
 	if err != nil {
 		return nil, err
 	}
+	a.steps.captureRaw(req.Lens.ID, req.SessionID, resp.Text)
 	return a.parse(resp.Text, req.Lens), nil
 }
 

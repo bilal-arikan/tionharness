@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/bilal-arikan/tionswarm/internal/db"
+	"github.com/bilal-arikan/tionswarm/internal/textutil"
 	"github.com/bilal-arikan/tionswarm/internal/view"
 )
 
@@ -97,6 +98,8 @@ type Scanner struct {
 	analyzer Analyzer
 	now      func() int64
 	sliceCap int
+	// sink, when set, receives one event per completed analysis (see sink.go).
+	sink AnalysisSink
 }
 
 // NewScanner wires the pipeline. now is injectable for deterministic tests; when
@@ -228,8 +231,21 @@ enumerate:
 		go func(i int, t analysisTask) {
 			defer wg.Done()
 			defer func() { <-sem }()
+			started := time.Now()
 			found, aErr := s.analyzer.Analyze(ctx, AnalysisRequest{Lens: t.lens, SessionID: t.sess.ID, Transcript: t.transcript})
 			outcomes[i] = analysisOutcome{task: t, found: found, err: aErr}
+			// Live observability, in COMPLETION order (not task order): the caller
+			// renders each finished pair as its own card while the scan is still running.
+			if s.sink != nil {
+				s.sink(AnalysisEvent{
+					LensID:       t.lens.ID,
+					SessionID:    t.sess.ID,
+					SessionTitle: t.sess.Title,
+					Findings:     len(found),
+					Err:          aErr,
+					Duration:     time.Since(started),
+				})
+			}
 		}(i, t)
 	}
 	wg.Wait()
@@ -523,9 +539,6 @@ func oneLine(s string) string {
 	return strings.Join(strings.Fields(s), " ")
 }
 
-func truncate(s string, n int) string {
-	if len(s) <= n {
-		return s
-	}
-	return s[:n] + "…"
-}
+// truncate cuts s to at most n bytes on a rune boundary — see textutil for why
+// a raw byte slice is fatal on the codex prompt path.
+func truncate(s string, n int) string { return textutil.TruncBytesEllipsis(s, n) }

@@ -286,7 +286,7 @@ func (s *Server) bridgeBusToHub() {
 				continue
 			}
 			s.hub.Publish(wsID, sid, sessionhub.KindUserMessage, e.Msg, false)
-		case "chat", "spawned", "worker", "schedule", "flow", "automation":
+		case "chat", "spawned", "worker", "schedule", "flow", "automation", "insight":
 			// An AUTONOMOUS turn (scheduler/spawn/worker/flow) finished: it publishes
 			// no hub reply/turn_done of its own, so bridge a turn_done here — every
 			// window watching the session then reloads the persisted turn. Skip wake

@@ -43,12 +43,20 @@ func (r *Runtime) RunInsightScan(ctx context.Context, scope insight.ScanScope, a
 		Target: map[string]string{"scanning": "true"},
 	})
 	doneFindings := 0
+	doneSessionID := ""
 	defer func() {
 		r.insightScanActive.Store(false)
+		target := map[string]string{"scanning": "false", "findings": strconv.Itoa(doneFindings)}
+		// The scan's own session id, when it opened one: the hub bridge needs it to
+		// turn this finish event into that session's turn_done — without it the
+		// client's live "conversing" indicator stays armed forever.
+		if doneSessionID != "" {
+			target["sessionId"] = doneSessionID
+		}
 		r.publish(events.Event{
 			Type: "insight", Level: "success", Title: "İçgörü taraması tamamlandı",
 			Body:   fmt.Sprintf("%d bulgu", doneFindings),
-			Target: map[string]string{"scanning": "false", "findings": strconv.Itoa(doneFindings)},
+			Target: target,
 		})
 	}()
 	root := r.db.Root()
@@ -104,10 +112,26 @@ func (r *Runtime) RunInsightScan(ctx context.Context, scope insight.ScanScope, a
 	if agentID != "" && analysisAgent.Model != "" {
 		model = analysisAgent.Model
 	}
-	analyzer := &insightAnalyzer{rt: r, agent: analysisAgent, model: model}
+	// Identity first: the run session is opened lazily DURING the scan (on the first
+	// completed analysis) and stamps this id as its SourceID, so it must exist before
+	// Scan starts. The run-log row below shares it.
+	runID := newInsightRunID()
+	lensIDs := scope.LensIDs
+	if len(lensIDs) == 0 {
+		for _, l := range reg.Enabled() {
+			lensIDs = append(lensIDs, l.ID)
+		}
+	}
+
+	// The scan renders as a normal agent turn: the recorder opens the session on the
+	// first analysis, streams one card per analysed pair, and writes the whole trace
+	// as one assistant message at the end.
+	recorder := newInsightStepRecorder(r, runID, analysisAgent.ID, insightRunTitle(len(lensIDs), 0))
+	analyzer := &insightAnalyzer{rt: r, agent: analysisAgent, model: model, steps: recorder}
 
 	start := time.Now()
 	scanner := insight.NewScanner(r.db, reg, ledger, findings, analyzer, nil)
+	scanner.SetAnalysisSink(recorder.onAnalysis)
 	res, err := scanner.Scan(ctx, scope)
 	if err != nil {
 		return res, err
@@ -154,17 +178,10 @@ func (r *Runtime) RunInsightScan(ctx context.Context, scope insight.ScanScope, a
 		r.logger.Warn("insight ledger compact failed", "error", cErr)
 	}
 
-	// Observability: every run gets BOTH a read-only session (the readable
-	// transcript, Kind=="insight", hidden from the default sessions view) and a
-	// row in the append-only run log (the compact rollup). They share runID, so
-	// either record resolves the other.
-	runID := newInsightRunID()
-	lensIDs := scope.LensIDs
-	if len(lensIDs) == 0 {
-		for _, l := range reg.Enabled() {
-			lensIDs = append(lensIDs, l.ID)
-		}
-	}
+	// Observability: a run that analysed something has a read-only session (the
+	// readable transcript, Kind=="insight", hidden from the default sessions view),
+	// opened live by the recorder; every run gets a row in the append-only run log
+	// (the compact rollup). They share runID, so either record resolves the other.
 	report := insightRunReport{
 		RunID:    runID,
 		LensIDs:  lensIDs,
@@ -172,14 +189,14 @@ func (r *Runtime) RunInsightScan(ctx context.Context, scope insight.ScanScope, a
 		Duration: time.Since(start),
 		Result:   res,
 	}
-	// A run that did nothing gets the run-log row only — no empty transcript.
-	sessionID := ""
-	if insightRunSessionWorthy(report) {
-		var sErr error
-		sessionID, sErr = r.recordInsightSession(ctx, report)
-		if sErr != nil {
-			r.logger.Warn("insight run session failed", "error", sErr, "run", runID)
-		}
+	// A run that analysed nothing opened no session, so it gets the run-log row only
+	// — no empty transcript (the hourly cron fires whether or not there is work).
+	if fErr := recorder.finish(ctx, report); fErr != nil {
+		r.logger.Warn("insight run session failed", "error", fErr, "run", runID)
+	}
+	sessionID := recorder.SessionID()
+	doneSessionID = sessionID // the finish event addresses this session (see defer)
+	if sessionID != "" {
 		// Retention: the scan sessions are unbounded otherwise (the run log has its
 		// own cap). Archive, never delete.
 		if n, aErr := r.archiveOldInsightSessions(ctx, settings.RunSessionRetention()); aErr != nil {

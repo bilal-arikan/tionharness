@@ -28,22 +28,11 @@ type insightRunReport struct {
 	Result   insight.ScanResult
 }
 
-// insightRunSessionWorthy decides whether a run deserves its own transcript
-// session. The hourly cron fires whether or not there is anything to look at, so
-// a run that resolved no lens, or that did no work at all (nothing analysed,
-// nothing found, nothing failed), would otherwise pile up identical empty
-// transcripts. Such a run still gets its run-log row — that rollup is one cheap
-// line and keeps "the cron did fire" observable.
-//
-// Ledger-skipped and prefiltered pairs count as no work on purpose: they cost no
-// LLM call and produce nothing to read.
-func insightRunSessionWorthy(rep insightRunReport) bool {
-	if len(rep.LensIDs) == 0 {
-		return false
-	}
-	res := rep.Result
-	return res.Analyzed > 0 || res.Findings > 0 || len(res.Errors) > 0
-}
+// Whether a run deserves a transcript session is no longer a predicate evaluated
+// at the end: insightStepRecorder opens the session LAZILY, on the first
+// completed analysis. A run that analysed nothing (no lens resolved, or every
+// pair ledger-skipped / prefiltered) therefore never opens one and keeps only its
+// cheap run-log row — the same guarantee, enforced by construction.
 
 // insightRunTitle names a scan session the way the sessions list reads it.
 func insightRunTitle(lensCount, findings int) string {
@@ -94,35 +83,6 @@ func insightRunTranscript(rep insightRunReport) string {
 		}
 	}
 	return b.String()
-}
-
-// recordInsightSession opens the run's read-only transcript session and writes
-// the report into it. It returns the new session id. Errors are returned (never
-// swallowed) so the caller can log them and still write the run log.
-func (r *Runtime) recordInsightSession(ctx context.Context, rep insightRunReport) (string, error) {
-	if r == nil || r.db == nil {
-		return "", fmt.Errorf("insight: runtime not ready")
-	}
-	sess, err := r.db.CreateSession(ctx, db.Session{
-		AgentID:  rep.AgentID,
-		Kind:     db.SessionKindInsight,
-		SourceID: rep.RunID,
-		Title:    insightRunTitle(len(rep.LensIDs), rep.Result.Findings),
-	})
-	if err != nil {
-		return "", err
-	}
-	if _, err := r.db.AddMessage(ctx, db.Message{
-		SessionID:  sess.ID,
-		Role:       "assistant",
-		AgentID:    rep.AgentID,
-		AuthorKind: db.AuthorAgent,
-		AuthorID:   rep.AgentID,
-		Text:       insightRunTranscript(rep),
-	}); err != nil {
-		return sess.ID, err
-	}
-	return sess.ID, nil
 }
 
 // archiveOldInsightSessions keeps the newest `keep` scan sessions live and
