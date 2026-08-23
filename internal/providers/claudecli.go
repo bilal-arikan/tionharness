@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/bilal-arikan/tionswarm/internal/claudeauth"
 	"github.com/bilal-arikan/tionswarm/internal/proc"
@@ -914,22 +915,23 @@ func stdoutCrashTail(lines []string) string {
 // ready: thinking immediately, intermediate text on flush, a tool step once its
 // result arrives. The trailing text is the final answer (not emitted as a step).
 type cliStreamParser struct {
-	resp         *Response
-	onEvent      func(TraceStep)
-	toolIdx      map[string]int // tool_use id → index in resp.Trace
-	emitted      map[int]bool   // trace index → already delivered via onEvent
-	pending      strings.Builder
-	finalText    string
-	sawResult    bool
-	hadError     bool
-	errText      string
-	notedMCP     bool                 // the unusable-MCP-server note was already emitted for this turn
-	sawModelTurn bool                 // any assistant/tool/result content seen (vs. only system/init noise)
-	rateLimited  bool                 // the turn was rejected by a subscription usage / rate limit
-	rateLimitMsg string               // human-readable detail for the rate-limit failure
-	notLoggedIn  bool                 // the turn was rejected because this claude-home is not authenticated
-	authMsg      string               // human-readable detail for the auth failure ("Not logged in · ...")
-	toolStart    map[string]time.Time // tool_use id → time the event was seen (for per-tool latency)
+	resp           *Response
+	onEvent        func(TraceStep)
+	toolIdx        map[string]int // tool_use id → index in resp.Trace
+	emitted        map[int]bool   // trace index → already delivered via onEvent
+	pending        strings.Builder
+	finalText      string
+	sawResult      bool
+	hadError       bool
+	errText        string
+	notedMCP       bool                 // the unusable-MCP-server note was already emitted for this turn
+	notedParseDrop bool                 // malformed stream JSON was already reported for this turn
+	sawModelTurn   bool                 // any assistant/tool/result content seen (vs. only system/init noise)
+	rateLimited    bool                 // the turn was rejected by a subscription usage / rate limit
+	rateLimitMsg   string               // human-readable detail for the rate-limit failure
+	notLoggedIn    bool                 // the turn was rejected because this claude-home is not authenticated
+	authMsg        string               // human-readable detail for the auth failure ("Not logged in · ...")
+	toolStart      map[string]time.Time // tool_use id → time the event was seen (for per-tool latency)
 	// Parallel-batch grouping: the CLI splits ONE API assistant message (which may
 	// carry several parallel tool_use blocks) into several stream events sharing the
 	// same message id. Track the current message's tool trace indices so the 2nd+
@@ -996,6 +998,25 @@ func (p *cliStreamParser) note(text string) {
 	p.flushText()
 	p.resp.Trace = append(p.resp.Trace, TraceStep{Kind: "text", Text: text})
 	p.emit(len(p.resp.Trace) - 1)
+}
+
+// noteParseDrop reports the first malformed JSON event in a turn. The bounded
+// payload keeps a broken stream from flooding the activity trace while retaining
+// the line length and parser error needed to diagnose a lost tool call.
+func (p *cliStreamParser) noteParseDrop(line string, err error) {
+	if p.notedParseDrop {
+		return
+	}
+	p.notedParseDrop = true
+	const maxNoteBytes = 500
+	note := fmt.Sprintf("[claude-cli parse drop] line bytes=%d: %v; payload=%s", len(line), err, line)
+	if len(note) > maxNoteBytes {
+		note = note[:maxNoteBytes]
+		for !utf8.ValidString(note) {
+			note = note[:len(note)-1]
+		}
+	}
+	p.note(note)
 }
 
 // describePermissionDenials renders the result envelope's permission_denials
@@ -1114,7 +1135,8 @@ func (p *cliStreamParser) feed(line string) {
 		return
 	}
 	var ev cliEvent
-	if json.Unmarshal([]byte(line), &ev) != nil {
+	if err := json.Unmarshal([]byte(line), &ev); err != nil {
+		p.noteParseDrop(line, err)
 		return
 	}
 	// Capture the CLI session id wherever it appears (system/init first, result
