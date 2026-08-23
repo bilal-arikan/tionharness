@@ -4,9 +4,13 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -139,6 +143,110 @@ func TestPoolReusesConnectionAndRefreshesOnListChanged(t *testing.T) {
 	}
 	if e.client != c1 {
 		t.Fatal("refresh must reuse the same connection, not re-dial")
+	}
+}
+
+func TestHTTPPoolFreshCatalogSeesToolActivatedOnSameSession(t *testing.T) {
+	const sessionID = "dynamic-session"
+	var mu sync.Mutex
+	activated := false
+	initializeCount := 0
+	wrongSession := false
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			ID     *int   `json:"id"`
+			Method string `json:"method"`
+			Params struct {
+				Name string `json:"name"`
+			} `json:"params"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&req)
+
+		if req.Method == "initialize" {
+			mu.Lock()
+			initializeCount++
+			mu.Unlock()
+			w.Header().Set("Mcp-Session-Id", sessionID)
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"jsonrpc": "2.0", "id": *req.ID,
+				"result": map[string]any{"protocolVersion": protocolVersion},
+			})
+			return
+		}
+		if r.Header.Get("Mcp-Session-Id") != sessionID {
+			mu.Lock()
+			wrongSession = true
+			mu.Unlock()
+		}
+		if req.ID == nil {
+			w.WriteHeader(http.StatusAccepted)
+			return
+		}
+
+		writeResult := func(result any) {
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{"jsonrpc": "2.0", "id": *req.ID, "result": result})
+		}
+		switch req.Method {
+		case "tools/list":
+			mu.Lock()
+			on := activated
+			mu.Unlock()
+			list := []map[string]any{}
+			if on {
+				list = append(list, map[string]any{
+					"name": "dynamic_test", "description": "dynamic test tool",
+					"inputSchema": map[string]any{"type": "object"},
+				})
+			}
+			writeResult(map[string]any{"tools": list})
+		case "tools/call":
+			if req.Params.Name == "activate" {
+				mu.Lock()
+				activated = true
+				mu.Unlock()
+				w.Header().Set("Content-Type", "text/event-stream")
+				fmt.Fprint(w, "data: {\"jsonrpc\":\"2.0\",\"method\":\"notifications/tools/list_changed\"}\n\n")
+				fmt.Fprintf(w, "data: {\"jsonrpc\":\"2.0\",\"id\":%d,\"result\":{\"content\":[{\"type\":\"text\",\"text\":\"activated\"}]}}\n\n", *req.ID)
+				return
+			}
+			writeResult(map[string]any{"content": []map[string]any{{"type": "text", "text": "called:" + req.Params.Name}}})
+		default:
+			writeResult(map[string]any{})
+		}
+	}))
+	defer srv.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	p := NewPool()
+	defer p.Close()
+	cfg := ServerConfig{Name: "dynamic-http", Transport: MCPTransportHTTP, URL: srv.URL}
+
+	entries, cfgByServer, errs := p.Catalog(ctx, []ServerConfig{cfg})
+	if len(errs) != 0 || len(entries) != 0 {
+		t.Fatalf("initial catalog = %v, errs = %v; want no tools and no errors", entries, errs)
+	}
+	e := p.entry("dynamic-http")
+	client := e.client
+	if _, err := p.Call(ctx, cfgByServer, NamespaceTool(cfg.Name, "activate"), nil); err != nil {
+		t.Fatalf("activate: %v", err)
+	}
+
+	entries, freshConfig, errs := p.Catalog(ctx, []ServerConfig{cfg})
+	if len(errs) != 0 || len(entries) != 1 || entries[0].NamespacedName != "dynamic-http__dynamic_test" {
+		t.Fatalf("fresh catalog = %v, errs = %v; want dynamic-http__dynamic_test", entries, errs)
+	}
+	result, err := p.Call(ctx, freshConfig, entries[0].NamespacedName, nil)
+	if err != nil || result.Text != "called:dynamic_test" {
+		t.Fatalf("fresh catalog call = %+v, err = %v", result, err)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if e.client != client || initializeCount != 1 || wrongSession {
+		t.Fatalf("connection/session changed: sameClient=%v initializeCount=%d wrongSession=%v", e.client == client, initializeCount, wrongSession)
 	}
 }
 

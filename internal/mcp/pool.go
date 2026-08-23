@@ -289,6 +289,14 @@ func (p *Pool) Call(ctx context.Context, cfgByServer map[string]ServerConfig, na
 		}
 		res, err := client.CallTool(ctx, tool, args)
 		if err == nil {
+			// A successful tool call may change the server's dynamic tool surface.
+			// Mark the cached list stale before returning so an immediately rebuilt
+			// registry cannot race the asynchronous tools/list_changed callback and
+			// observe the pre-call catalog. The next Catalog refresh still reuses this
+			// connection and session; only tools/list is repeated.
+			e.mu.Lock()
+			e.listed = false
+			e.mu.Unlock()
 			return res, nil
 		}
 		// A dead connection (read loop gone) is worth one transparent re-dial;
