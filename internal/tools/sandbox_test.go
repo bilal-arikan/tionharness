@@ -2,8 +2,33 @@ package tools
 
 import (
 	"path/filepath"
+	"runtime"
 	"testing"
 )
+
+func TestSandboxRejectsSlashRootedWindowsPaths(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("Windows filepath semantics only")
+	}
+	sb := NewSandbox(t.TempDir())
+	for _, path := range []string{"/etc/passwd", "/mnt/c/x", `\tmp\x`} {
+		t.Run(path, func(t *testing.T) {
+			got, err := sb.Resolve(path)
+			if err == nil || got != "" {
+				t.Fatalf("Resolve(%q) = %q, %v; want empty path and explicit error", path, got, err)
+			}
+		})
+	}
+}
+
+func TestSandboxSlashRootedWindowsCheckExcludesUNC(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("Windows filepath semantics only")
+	}
+	if isSlashRooted(`\\server\share\x`) {
+		t.Fatal("UNC path was classified as slash-rooted without a drive")
+	}
+}
 
 // A confined sandbox must keep every path inside Root while no longer punishing an
 // agent for spelling an in-Root path absolutely: confinement guards against escape,

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -55,7 +56,12 @@ func TestSandboxNotReady(t *testing.T) {
 	if got, err := sb.Resolve("anything"); err != nil || !filepath.IsAbs(got) {
 		t.Fatalf("relative resolve without base: got %q err %v", got, err)
 	}
-	if got, err := sb.Resolve(filepath.Join(string(filepath.Separator), "tmp", "x")); err != nil || !filepath.IsAbs(got) {
+	got, err := sb.Resolve(filepath.Join(string(filepath.Separator), "tmp", "x"))
+	if runtime.GOOS == "windows" {
+		if err == nil || got != "" {
+			t.Fatalf("slash-rooted Windows path: got %q err %v, want explicit error", got, err)
+		}
+	} else if err != nil || !filepath.IsAbs(got) {
 		t.Fatalf("absolute resolve without base: got %q err %v", got, err)
 	}
 }

@@ -3,6 +3,7 @@ package tools
 import (
 	"fmt"
 	"path/filepath"
+	"runtime"
 	"strings"
 )
 
@@ -51,6 +52,19 @@ func cleanRoot(dir string) string {
 	return filepath.Clean(abs)
 }
 
+// isSlashRooted reports a Windows path written with a root slash but no drive.
+// filepath.IsAbs rejects this spelling on Windows; without an explicit check it
+// would be silently joined to Root. UNC paths remain valid absolute paths.
+func isSlashRooted(path string) bool {
+	if runtime.GOOS != "windows" || len(path) == 0 || (path[0] != '/' && path[0] != '\\') {
+		return false
+	}
+	if len(path) >= 2 && (path[1] == '/' || path[1] == '\\') {
+		return false
+	}
+	return !filepath.IsAbs(path)
+}
+
 // Ready reports whether the sandbox has a configured base directory.
 func (s Sandbox) Ready() bool { return s.Root != "" }
 
@@ -65,6 +79,9 @@ func (s Sandbox) Ready() bool { return s.Root != "" }
 // resolves inside Root is honoured. The empty path resolves to Root.
 func (s Sandbox) Resolve(rel string) (string, error) {
 	rel = strings.TrimSpace(rel)
+	if isSlashRooted(rel) {
+		return "", fmt.Errorf("path %q is not a valid absolute path on this platform: use a drive-qualified path (C:\\...) or a path relative to the working directory; it was NOT resolved against the working root", rel)
+	}
 
 	if s.Confined {
 		if !s.Ready() {
