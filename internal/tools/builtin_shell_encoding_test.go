@@ -2,7 +2,9 @@ package tools
 
 import (
 	"runtime"
+	"strings"
 	"testing"
+	"unicode/utf8"
 )
 
 func TestIsWindowsPowerShell(t *testing.T) {
@@ -43,6 +45,43 @@ func TestApplyWinPSUTF8(t *testing.T) {
 	// pwsh 7+: already UTF-8, command must be returned unchanged (no prelude noise).
 	if got := applyWinPSUTF8("pwsh.exe", "echo hi"); got != "echo hi" {
 		t.Errorf("pwsh command must be unchanged, got: %q", got)
+	}
+}
+
+func TestApplyWinBashUTF8(t *testing.T) {
+	command := "printf 'Türkçe'"
+	got := applyWinBashUTF8(command)
+	if runtime.GOOS == "windows" {
+		if !strings.HasPrefix(got, winBashUTF8Prelude) || !strings.HasSuffix(got, command) {
+			t.Fatalf("Windows Bash command lacks UTF-8 prelude or changed payload: %q", got)
+		}
+		return
+	}
+	if got != command {
+		t.Fatalf("non-Windows Bash command changed: %q", got)
+	}
+}
+
+func TestSanitizeShellOutputReplacesInvalidUTF8(t *testing.T) {
+	got := sanitizeShellOutput(string([]byte{'o', 'k', 0xfd}))
+	if !utf8.ValidString(got) {
+		t.Fatalf("sanitized output is invalid UTF-8: %q", got)
+	}
+	if !strings.Contains(got, "\uFFFD") {
+		t.Fatalf("sanitized output did not replace invalid byte: %q", got)
+	}
+}
+
+func TestShellStreamWriterTruncatesAtRuneBoundary(t *testing.T) {
+	w := &shellStreamWriter{max: 4}
+	if _, err := w.Write([]byte("abc€")); err != nil {
+		t.Fatal(err)
+	}
+	if !w.truncated {
+		t.Fatal("writer did not report truncation")
+	}
+	if got := w.buf.String(); got != "abc" || !utf8.ValidString(got) {
+		t.Fatalf("truncated buffer = %q, want valid UTF-8 %q", got, "abc")
 	}
 }
 

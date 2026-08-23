@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/bilal-arikan/tionswarm/internal/proc"
 	"github.com/bilal-arikan/tionswarm/internal/providers"
@@ -193,6 +194,7 @@ func (t ShellTool) CallStream(ctx context.Context, input json.RawMessage, onChun
 		return "", err
 	}
 	build := func(runCtx context.Context, command string) *exec.Cmd {
+		command = applyWinBashUTF8(command)
 		argv := append(append([]string{}, t.preArgs...), "-c", command)
 		return hardenShellCmd(proc.CommandContext(runCtx, t.exe, argv...), t.sb.Confined)
 	}
@@ -436,7 +438,7 @@ func runShell(ctx context.Context, sb Sandbox, args shellArgs, onChunk func(stri
 	if runErr != nil && runCtx.Err() != context.DeadlineExceeded {
 		fmt.Fprintf(&b, "\n[exit error: %v]", runErr)
 	}
-	result := strings.TrimSpace(b.String())
+	result := sanitizeShellOutput(strings.TrimSpace(b.String()))
 	if result == "" {
 		result = "(no output)"
 	}
@@ -482,6 +484,10 @@ func runShell(ctx context.Context, sb Sandbox, args shellArgs, onChunk func(stri
 		result += rtkDegradedNote
 	}
 	return result, nil
+}
+
+func sanitizeShellOutput(output string) string {
+	return strings.ToValidUTF8(output, "\uFFFD")
 }
 
 // isRTKWrapped reports whether the command runs through the `rtk` token-proxy —
@@ -548,6 +554,13 @@ func (w *shellStreamWriter) Write(p []byte) (int, error) {
 			w.buf.Write(p)
 		} else {
 			w.buf.Write(p[:room])
+			for w.buf.Len() > 0 {
+				r, size := utf8.DecodeLastRune(w.buf.Bytes())
+				if r != utf8.RuneError || size != 1 {
+					break
+				}
+				w.buf.Truncate(w.buf.Len() - 1)
+			}
 			w.truncated = true
 		}
 	} else {

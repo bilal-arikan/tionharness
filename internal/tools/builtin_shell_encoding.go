@@ -2,8 +2,14 @@ package tools
 
 import (
 	"path/filepath"
+	"runtime"
 	"strings"
 )
+
+// winBashUTF8Prelude forces UTF-8 for a POSIX shell launched on Windows. The
+// chcp guard keeps shells without the Windows console helper unaffected.
+const winBashUTF8Prelude = "export LC_ALL=C.UTF-8 LANG=C.UTF-8; " +
+	"command -v chcp.com >/dev/null 2>&1 && chcp.com 65001 >/dev/null 2>&1; "
 
 // winPSUTF8Prelude makes Windows PowerShell 5.1 emit and read UTF-8 so non-ASCII
 // content (e.g. Turkish text in settings files or agent souls) survives the
@@ -40,4 +46,11 @@ func applyWinPSUTF8(exe, command string) string {
 		return command
 	}
 	return winPSUTF8Prelude + "\n" + command
+}
+
+func applyWinBashUTF8(command string) string {
+	if runtime.GOOS != "windows" {
+		return command
+	}
+	return winBashUTF8Prelude + command
 }
