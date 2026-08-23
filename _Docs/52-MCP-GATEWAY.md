@@ -775,6 +775,12 @@ active/tool_search/hidden). Tam app boot + canlı chat testi orantısız ağır/
   namespaced çıktıyı da assert ediyor. İlgili: `PowerShell`/`list_agents` çıplak-ad reddi artık
   `tool-error` almıyor (`internal/agent/autotag.go` `permissionDenyMarkers`, bkz. _Docs/46).
 
+- 🩹 **Ad-alanı öneki idempotent (2026-08-24):** Gateway/CLI katalog adları tek
+  kaynak olan `mcp.NamespaceTool` ile üretilir. Girdi istenen `<server>__` veya
+  CLI'ın `mcp__` önekini zaten taşıyorsa fonksiyon adı değiştirmeden döndürür;
+  yeniden işleme çift `mcp__` öneki oluşturmaz. Ayrı
+  `NamespaceToolIdempotent` yardımcı fonksiyonu kaldırılmıştır.
+
 - 🩹 **recent_tool_activity recap tam (namespaced) adı gösteriyor (2026-07-06):** Bilal'in tespiti —
   bare-name alışkanlığının asıl kaynağı buymuş. `traceStepToTurnStep` (`internal/agent/trace.go`)
   CLI tool adından namespace'i soyup **bare** saklıyor (UI'da temiz kart için doğru). Ama bu bare ad

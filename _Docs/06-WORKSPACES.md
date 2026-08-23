@@ -348,6 +348,11 @@ kuralı stili ezebilsin diye). Kapalıyken tek bayt gönderilmez.
   okuyup yazabilir ve her yerde komut çalıştırabilir. `Sandbox.Root` yalnızca göreli
   yolların tabanı (varsayılan çalışma dizini) — bir sınır değil. Güvenlik halkası
   artık tek başına **izin modu** (salt-okunur / sor / otomatik). Tek istisna:
+  Windows'ta `/foo` ve `/mnt/c/x` gibi sürücüsüz, slash-rooted girdiler geçerli
+  mutlak yol sayılmaz ve `Root` altına sessizce birleştirilmek yerine açıkça
+  reddedilir; UNC (`//server/share` veya `\\server\share`) yolları istisnadır.
+  Mutlak Windows yolu sürücü niteleyicisiyle (`C:\...`) verilmelidir.
+  Diğer istisna:
   **config araçları** (`read_config`/`write_config`/`list_config`) hâlâ
   `<workspace>/config/` içine **kilitli** (`Sandbox.Confined=true`, the external agent project benzeri
   ayrım). Kod: `internal/tools/sandbox.go` (`NewSandbox` kilitsiz / `NewConfinedSandbox`

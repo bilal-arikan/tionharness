@@ -121,7 +121,11 @@ Sohbet artık **her adım bittikçe** UI'a akıtılır (tüm tur bitince değil)
 1. **claude-cli (trace tabanlı):** `providers.Request.OnEvent func(TraceStep)` —
    `claudecli.go` stream-json'u **satır satır** (`bufio`) okuyup olayları anında
    yayınlar: thinking hemen, ara metin flush'ta, tool adımı sonucu gelince.
-   `cliStreamParser` (feed/finish) artımlı durumu tutar.
+   `cliStreamParser` (feed/finish) artımlı durumu tutar. JSON ayrıştırması bozulan
+   olaylar sessizce kaybolmaz: tur başına yalnız ilk hata, `len(line)` ve ayrıştırma
+   hatasıyla birlikte en fazla 500 baytlık `[claude-cli parse drop]` notu olarak
+   ize eklenir. Girdi satırına boyut sınırı uygulanmaz; 1 MiB üzerindeki satırlar da
+   taranır.
 2. **Native token streaming (`providers.Streamer`):** `anthropic` ve `minimax`
    artık birinci sınıf token akışı yapar — `Stream(ctx, req, onDelta)` SSE'yi
    ayrıştırıp her metin parçasını `onDelta`'ya verir. `toolloop.go` araçsız turda

@@ -303,6 +303,12 @@
   verirse (`mcp__foo__bar`), son `__`-segmenti katalogda **tekil** eşleşiyorsa o araca
   çözülür; belirsiz ad `unknown` kalır (asla yanlış yönlendirmez). Test:
   `builtin_activate_ns_test.go`.
+  **Önek üretimi idempotent (2026-08-24):** ad-alanı üretiminin tek kaynağı
+  `mcp.NamespaceTool`'dur. Araç adı istenen `<server>__` önekini veya CLI'ın
+  `mcp__` önekini zaten taşıyorsa ad değişmeden döner; böylece katalog uyarlaması
+  `mcp__mcp__...` gibi çift önek üretemez. Ayrı bir
+  `NamespaceToolIdempotent` sembolü yoktur. Testler:
+  `manager_namespace_test.go`, `toolsetup_prefix_test.go`.
   **Arama semantiği: terim-skorlama (OR + sıralama) (2026-08-04):** `tool_search`
   eskiden sorgu terimlerini **AND**'liyordu — model tek sorguya birden çok tam araç
   adı verince (`list_tasks move_task create_task`) hiçbir araç hepsini içermediği için

@@ -78,8 +78,11 @@ graph TD
   `internal/tools/builtin_fs.go` (workspace-scoped kök, path-traversal koruması →
   `internal/tools/sandbox.go`). (İsimler 2026-06-22'de claude-cli ile hizalandı;
   eski `read_file`/`write_file`/… adları.)
-- [x] `Bash` (Windows'ta PowerShell, diğerinde `/bin/sh`; eski ad `shell`) → `internal/tools/builtin_shell.go`
-  (timeout + sandbox cwd + 64KB çıktı cap). **Varsayılan KAPALI** (`Tunables.shellEnabled`);
+- [x] `Bash` (Windows'ta Git Bash, diğerinde `/bin/sh`; eski ad `shell`) → `internal/tools/builtin_shell.go`
+  (timeout + sandbox cwd + 64KB çıktı cap). Windows Bash komutuna
+  `LC_ALL=C.UTF-8`/`LANG=C.UTF-8` ve mevcutsa korumalı `chcp.com 65001` öneki
+  eklenir; çıktı `strings.ToValidUTF8` ile geçerli UTF-8'e çevrilir ve 64KB kesimi
+  rune sınırında yapılır. **Varsayılan KAPALI** (`Tunables.shellEnabled`);
   `TIONSWARM_ENABLE_SHELL=1` ile açılır. Permission katmanı (P3) gelene dek opt-in kalır.
 - [x] `WebFetch` (2026-06-22) — `http_get` zengin fetch'e yükseltildi: HTML→Markdown (stdlib-only converter `htmltomarkdown.go`, script/style/nav ayıklama, göreli link çözümleme), metinsel içerik verbatim, ikili içerik özet; SSRF guard korunur. `builtin_http.go` (`WebFetchTool`).
 
