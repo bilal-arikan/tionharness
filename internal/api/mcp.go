@@ -324,11 +324,15 @@ func (s *Server) handleTestMCPServer(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 	defer cancel()
 
-	tools, err := mcp.ListServerTools(ctx, cfg)
-	if err != nil {
-		s.logger.Warn("mcp server test failed", "server", server.Name, "error", err)
-		writeJSON(w, http.StatusOK, map[string]any{"ok": false, "error": err.Error()})
+	entries, _, errs := ws(r).Runtime.MCPPool().Catalog(ctx, []mcp.ServerConfig{cfg})
+	if errText := errs[server.Name]; errText != "" {
+		s.logger.Warn("mcp server test failed", "server", server.Name, "error", errText)
+		writeJSON(w, http.StatusOK, map[string]any{"ok": false, "error": errText})
 		return
+	}
+	tools := make([]mcp.Tool, 0, len(entries))
+	for _, entry := range entries {
+		tools = append(tools, entry.Tool)
 	}
 	s.logger.Info("mcp server tested", "server", server.Name, "tools", len(tools))
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "toolCount": len(tools), "tools": tools})
