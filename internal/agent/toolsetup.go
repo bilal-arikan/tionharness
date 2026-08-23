@@ -904,7 +904,7 @@ func catalogDisplayName(name string, cli bool) (string, bool) {
 		return name, true
 	}
 	if _, _, ok := mcp.SplitNamespaced(name); ok {
-		return "mcp__" + name, true // server__tool → mcp__server__tool
+		return mcp.NamespaceTool("mcp", name), true // server__tool → mcp__server__tool
 	}
 	if cliLazyBridgeExcluded[name] {
 		return "", false // not bridged to the CLI (CLI-native)

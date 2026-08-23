@@ -85,9 +85,14 @@ func (c ServerConfig) dial(ctx context.Context) (Client, error) {
 // never collide and the origin is recoverable.
 const nsSep = "__"
 
-// NamespaceTool builds the namespaced tool name.
+// NamespaceTool builds the namespaced tool name. Names already carrying either
+// the requested server prefix or the CLI's mcp__ prefix are left unchanged.
 func NamespaceTool(server, tool string) string {
-	return sanitize(server) + nsSep + tool
+	prefix := sanitize(server) + nsSep
+	if strings.HasPrefix(tool, prefix) || strings.HasPrefix(tool, "mcp__") {
+		return tool
+	}
+	return prefix + tool
 }
 
 // SplitNamespaced recovers (server, tool) from a namespaced name.
