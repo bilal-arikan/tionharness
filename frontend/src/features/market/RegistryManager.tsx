@@ -13,7 +13,7 @@ interface Props {
 
 // RegistryManager is the "Kaynaklar" modal: list configured remote registries,
 // add a new one by URL, remove one, or refresh all. A registry serves a
-// swarmregistry/v1 index (registry.json) listing downloadable packs.
+// harnessregistry/v1 index (registry.json) listing downloadable packs.
 export function RegistryManager({ onClose, onChanged }: Props) {
   const [registries, setRegistries] = useState<Registry[]>([])
   const [connectors, setConnectors] = useState<ConnectorInfo[]>([])
@@ -112,7 +112,7 @@ export function RegistryManager({ onClose, onChanged }: Props) {
             <h2 className="text-sm font-semibold text-[var(--color-text)]">Market Kaynakları</h2>
             <p className="text-xs text-[var(--color-text-dim)]">
               Uzak registry'lerden paket çek. Her kaynak bir <code>registry.json</code>{' '}
-              (swarmregistry/v1) sunar.
+              (harnessregistry/v1) sunar.
             </p>
           </div>
           <button

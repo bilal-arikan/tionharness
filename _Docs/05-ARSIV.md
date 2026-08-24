@@ -1451,7 +1451,7 @@ Dizin-sitelerini market'e bağlama (`_Docs\38`) Faz A+B uygulandı:
   döner; `loadRemoteCache` URL'siz ama Source'lu entry kabul eder.
 - **Faz B — skillsmp connector:** `market/connectors.go` skillsmp.com `/api/skills`
   cevabını **source-ref entry'lerine** çevirir (her skill'in `githubUrl`'i). `Registry`
-  artık `Connector` taşır; `RefreshRemote` connector dalı site API'sini swarmregistry
+  artık `Connector` taşır; `RefreshRemote` connector dalı site API'sini harnessregistry
   index'i gibi cache'ler. API `GET /api/market/connectors` + `POST .../connectors/add`;
   UI `RegistryManager`'da "Hazır kaynaklar" quick-add (skillsmp tek tıkla eklenir).
 - **Canlı:** skillsmp 12 source-ref entry. **478 test**, vet/tsc/prod build temiz.
@@ -2123,7 +2123,7 @@ Süreç-geneli tek `backup.Manager` (workspace'ten bağımsız), ayarlardan canl
 
 Market harici sunuculardan paket çekebilen 4. tier'a kavuştu (Faz 1-4, doğrulama opsiyonel).
 
-- **Index formatı `swarmregistry/v1`:** uzak sunucu tek `registry.json` sunar (manifest + payload `url` + opsiyonel `sha256` + `minAppVersion`). Payload kurulum anında `url`'den lazy indirilir; sha256 verildiyse doğrulanır, yoksa atlanır.
+- **Index formatı `harnessregistry/v1`:** uzak sunucu tek `registry.json` sunar (manifest + payload `url` + opsiyonel `sha256` + `minAppVersion`). Payload kurulum anında `url`'den lazy indirilir; sha256 verildiyse doğrulanır, yoksa atlanır.
 - **Backend:** `internal/market/remote.go` (fetchIndex/fetchPayload, http(s)-only, boyut limiti 8/4 MiB, 20sn timeout, `compareVersions` semver-lite), `registry_store.go` (kaynak config `registries.json` global + index cache `.remote-cache/` restart-safe + per-workspace install ledger `installed.json`), `store.go` List/Get yerel+uzak birleştirir (`Source=remote`, id çakışmasında yerel gölgeler), `New` artık globalDir saklar. Pack'e `RegistryName`/`InstalledVersion` (+ transient `remoteURL`/`remoteSHA`).
 - **API:** `GET/POST /api/market/registries`, `POST .../delete`, `POST .../refresh`; `GET /api/market` her pack'i ledger'dan `installedVersion` ile dekore eder; install başarısında `statusCaptureWriter` ile ledger'a `version` yazılır (tüm türler için tek nokta).
 - **UI:** `RegistryManager.tsx` modal (kaynak ekle/sil/yenile, `market-registries-modal`); `MarketPanel.tsx`'e "Kaynaklar" butonu, kaynak rozeti (Yerel/registry adı), **"Güncelle (vX→vY)"** rozeti + detay popup'ında güncelleme butonu (overwrite). "Yenile" artık önce uzak index'leri çeker. Ayrıca **detay paneli yan-panelden ortada popup'a** çevrildi (`market-detail-modal`).

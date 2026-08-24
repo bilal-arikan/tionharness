@@ -50,10 +50,20 @@ metin değil, disk/tel formatı: `SchemaV1 = "harnesspack/v1"`, `packFileSuffix 
 alanı; yedek `market-backup-swarmpack-20260824/`) — aksi halde `scanDir` eski soneki
 bulamayıp market'i boş gösterirdi. Uyumluluk şimi yok: eski `.swarmpack.json` artık okunmaz.
 
-**`swarmregistry/v1` DEĞİŞMEDİ** — o, market paketi değil **uzak index protokolü**
-(`RegistrySchemaV1`, `21-MARKET.md` §7.1). Yapılandırılmış registry'ler (SkillsMP,
-CrossAITools) connector-tabanlı olduğu için bu şemayı kullanmıyor, ama üçüncü taraf bir
-sunucu yayınlarsa sözleşme kırılır. Ad artık markayla tutarsız → ayrı karar.
+**`swarmregistry/v1` → `harnessregistry/v1` (2026-08-24):** uzak index protokolü
+(`RegistrySchemaV1`, `21-MARKET.md` §7.1). Ayrı bir karardı çünkü paket zarfı değil bir
+**tel formatı**; ama bu şemayı üreten tek şey bizim connector adaptörlerimiz (SkillsMP,
+CrossAITools site API'lerini bu şekle çeviriyor), dışarıda yayınlayan sunucu yok →
+kırılacak sözleşme yok. `<dataDir>/market/.remote-cache/` altındaki iki önbellek de
+göç ettirildi, aksi halde eski şemayla reddedilirlerdi.
+
+**Bayat cbm indeksleri silindi (2026-08-24):** `<dataDir>/workspaces/*/cbm-store/`
+altında, artık var olmayan yolları indeksleyen **153 MB** ölü veritabanı vardı
+(silinen `Projects\TionSwarm` ×3, yeniden adlandırılan `Progs\bench-tionswarm-bare`).
+Yol yeniden kurma sezgisel olduğu için (klasör adındaki tire ile yol ayracı ayırt
+edilemiyor — `Desktop-city-cleaner` önce yanlışlıkla ölü sanıldı) her aday tek tek
+`Test-Path` ile doğrulandı; yalnız kesin ölü olanlar silindi. Ortak store'daki
+`...-TionSwarm` projesi de `delete_project` ile kaldırıldı.
 
 **Depo dışı yüzeyler de çevrildi (2026-08-24):**
 - **Craft workspace:** 5 skill `tionharness-*`, source slug'ı `tionharness`, görünen ad

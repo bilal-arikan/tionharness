@@ -14,7 +14,7 @@ import (
 )
 
 // RegistrySchemaV1 is the schema tag of a remote registry index document.
-const RegistrySchemaV1 = "swarmregistry/v1"
+const RegistrySchemaV1 = "harnessregistry/v1"
 
 // Download size ceilings — a registry index and an individual pack are both small
 // JSON documents; these guard against a hostile or misbehaving server.
@@ -35,7 +35,7 @@ type Registry struct {
 	AddedAt int64  `json:"addedAt"`
 	// Connector, when set, names a built-in directory-site connector (e.g. "skillsmp")
 	// whose refresh queries a site API and transforms its listing into source-ref
-	// entries, instead of fetching a swarmregistry/v1 index from URL.
+	// entries, instead of fetching a harnessregistry/v1 index from URL.
 	Connector string `json:"connector,omitempty"`
 }
 

@@ -8,7 +8,7 @@
 > **Bayatlık tazelemesi 2026-07-28 → §8** (hook UI'ı, MCP scope/headers, node ikonları,
 > şablon sürümleri).
 > **Uzak kayıt defteri (remote registry) — 2026-06-25:** market artık harici
-> sunuculardan paket çekebilir (`swarmregistry/v1` index). Kaynak ekle/çıkar/yenile,
+> sunuculardan paket çekebilir (`harnessregistry/v1` index). Kaynak ekle/çıkar/yenile,
 > uzak paketleri listele+kur (lazy indirme, opsiyonel sha256), ve **sürüm bazlı
 > "Güncelle"** algısı (install ledger). Detay §7.
 > Yayınlama (publish) şimdilik yalnız skill için; diğer türlerin publish + import/export UI sonraki dilim.
@@ -496,13 +496,13 @@ Playwright UI smoke, uzak registry (§7).
 Market artık uzak sunuculardan paket çekebilir — yerel tek tier (**global**) uzak
 paketleri **id çakışmasında gölgeler** (yerel kazanır).
 
-### 7.1 Index formatı — `swarmregistry/v1`
+### 7.1 Index formatı — `harnessregistry/v1`
 
 Bir registry, tek bir `registry.json` sunar (HTTP/HTTPS):
 
 ```jsonc
 {
-  "schema": "swarmregistry/v1",
+  "schema": "harnessregistry/v1",
   "name": "Test Registry",
   "updatedAt": 1750000000,
   "packs": [

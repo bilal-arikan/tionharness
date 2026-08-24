@@ -168,7 +168,7 @@ func (s *Store) RefreshRemote(ctx context.Context) error {
 		if !r.Enabled || r.Connector != "" {
 			continue // connectors are search-only (queried live), never bulk-cached
 		}
-		idx, err := fetchIndex(ctx, r.URL) // swarmregistry/v1 index
+		idx, err := fetchIndex(ctx, r.URL) // harnessregistry/v1 index
 		if err != nil {
 			errs = append(errs, fmt.Sprintf("%s: %v", r.Name, err))
 			continue

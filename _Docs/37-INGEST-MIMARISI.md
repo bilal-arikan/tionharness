@@ -153,6 +153,6 @@ import" ile "registry'den install" aynı yere düşer.
 
 ## 10. Sırada (opsiyonel)
 
-- **Dizin-sitesi adaptörü:** crossaitools/skillsmp/claudeskillsmarket'i `swarmregistry/v1`
+- **Dizin-sitesi adaptörü:** crossaitools/skillsmp/claudeskillsmarket'i `harnessregistry/v1`
   uzak registry olarak köprülemek (bkz. `39-DIZIN-SITE-REGISTRY.md`).
 - CC `model` → TionHarness provider/model eşleme tablosu (agent adapter).
