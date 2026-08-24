@@ -15,11 +15,23 @@ Proje `Desktop\Projects\TionSwarm`'dan **`Desktop\Projects\TionHarness`**'e kopy
 - Gömülü 13 skill klasörü `tionswarm-*` → `tionharness-*`.
 - Deploy birimi `deploy/tionharness.service`; başlatıcı `TionHarness-Baslat.cmd`.
 
-**Göç şimi YOK — kasten.** Ayrı klasör + ayrı veri dizini olduğu için TionSwarm ve
-TionHarness yan yana çalışabilir; eski durum okunmaya çalışılmaz. Mevcut 15 workspace'i
-taşımak istersen `~/.tionswarm`'ı `~/.tionharness`'e elle kopyala (claude-cli transkriptleri
-ev değiştiği için `--resume` id'leri geçersizleşir, `CanResume` soğuk başlar) ya da
-`TIONHARNESS_DATA_DIR` ile eski dizini göster.
+**Göç şimi YOK — kasten.** Kodda `TIONSWARM_*` fallback'i veya otomatik dizin göçü yok;
+temiz kesim yapıldı. Bunun yerine canlı veri dizini **elle taşındı** (aşağı bak).
+
+**Canlı veri dizini taşındı (2026-08-24):** `~/.tionswarm` → **`~/.tionharness`**
+(~2.4 GB, 19k dosya, 14 workspace). Dizin adı değişiminin yanında:
+- İçerideki 260 yol yeniden adlandırıldı — `skills/tionswarm-*`, çalışma-dizini durum
+  klasörleri `.tionswarm/`, `logs/tionswarm.log`, `claude-home/projects/C--…--tionswarm-workspaces-*`.
+- 1105 metin dosyasında (json/md/py/ps1/txt/toml/html) referanslar düzeltildi; `.jsonl`
+  transkriptleri (6559 dosya) **bilerek dokunulmadan bırakıldı** — append-only tarihsel kayıt.
+- Dokunulmayan korumalı desenler: `bench-tionswarm` (diskte duran harici repo),
+  `C--Users-user-Desktop-Projects-TionSwarm` (claude-home proje dizini — eski proje
+  klasörü hâlâ var, resume'u kırmamak için), cbm-store index adları, transkriptlerden
+  referanslı `mcp-tionswarm_interaction-*.txt` tool-result dosyaları.
+- Doğrulama: 5111 JSON parse edildi, **0 bozulma**; backend taze dizinle açıldı,
+  14 workspace yüklendi, log'da 0 ERROR/WARN.
+- Geri dönüş: `~/.tionswarm-config-backup-20260824\` (kök configler + `credential-secret`)
+  ve `~/.tionharness-textfiles-backup-20260824.tgz` (düzenlenen 1105 dosyanın öncesi).
 
 **Kasten dokunulmayanlar:** market markası `SwarmPack`/`swarmregistry`, gitea deposu
 `swarmgo` ve VPS yolu `/home/user/projects/tionharness`, Claude Code'un kendi `swarm/teammate`
