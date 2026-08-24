@@ -9,7 +9,7 @@ auto_summary: false
 ---
 # Koordinatör Modu — Çoklu-Ajan Koordinasyonu
 
-Bu skill, TionHarness'daki **koordinatör/worker** desenini (M2) ve onunla birlikte
+Bu skill, TionHarness'teki **koordinatör/worker** desenini (M2) ve onunla birlikte
 kullanılabilen diğer koordinasyon yöntemlerini öğretir. Ayrıntılı tasarım:
 `_Docs/47-KOORDINATOR-COKLU-AJAN.md`.
 

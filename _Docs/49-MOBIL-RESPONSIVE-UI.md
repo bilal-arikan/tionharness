@@ -18,7 +18,7 @@
 
 ## 1. Motivasyon
 
-`48-VPS-REMOTE-CLIENT` telefondan (PWA/WebView) uzak TionHarness'ya bağlanmayı
+`48-VPS-REMOTE-CLIENT` telefondan (PWA/WebView) uzak TionHarness'e bağlanmayı
 tarifliyor. Ama mevcut UI **yatay masaüstü düzeni** varsayıyor: soldan sağa
 `NavRail → Sidebar → main → DetailPanel` diye 3-4 sütun yan yana diziliyor.
 360-420px genişlikteki bir telefonda bu düzen ezilir, sütunlar okunamaz hale

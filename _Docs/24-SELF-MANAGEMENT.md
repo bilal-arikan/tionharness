@@ -1,6 +1,6 @@
 # 24 — Self-Management + Ayarlar Alt Sistemi
 
-Bir ajanın **TionHarness'nun kendisini** araçlarla yönetmesini sağlayan tool ailesi ve
+Bir ajanın **TionHarness'in kendisini** araçlarla yönetmesini sağlayan tool ailesi ve
 uygulama-geneli ayarların canlı okunup yazıldığı ayarlar köprüsü.
 
 > İlgili: araç-use döngüsü için `_Docs/01-MIMARI.md`, lazy yükleme için

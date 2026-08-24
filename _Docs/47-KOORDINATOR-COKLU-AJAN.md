@@ -19,7 +19,7 @@
 > M3 scratchpad + efemeral worker hedefi — bkz. §9 Uygulama Durumu). §1–§8 orijinal
 > tasarım metnidir. **LLM-in-the-loop görsel deneme ✅ canlı doğrulandı (2026-07-03,
 > bkz. §10)** — deneme sırasında bulunan non-stream CLI köprü boşluğu da düzeltildi.
-> **Amaç:** TionHarness'ya Claude Code'un "koordinatör modu"na denk bir çok-ajan
+> **Amaç:** TionHarness'e Claude Code'un "koordinatör modu"na denk bir çok-ajan
 > koordinasyon katmanı eklemek — bir üst ajan (koordinatör) birden çok işçiyi
 > (worker) paralel yönetir; ayrıca **birden fazla koordinasyon yöntemi**
 > (parallel fan-out / koordinatör-işçi / takım-karatahta / flow) tek bir çatı
@@ -71,7 +71,7 @@ uygular:
 TionHarness bugün bu döngünün **çoğu parçasına sahip** ama "async işçi → koordinatöre
 geri bildirim → koordinatör devam eder" halkası eksik.
 
-### 1.1 TionHarness'da bugün ne var (yeniden kullanılacak)
+### 1.1 TionHarness'te bugün ne var (yeniden kullanılacak)
 
 | Yetenek | Kod | Not |
 |--------|-----|-----|
@@ -532,7 +532,7 @@ Görseller + API çıktısı: `_Docs/gorseller/coord-02-before-ses104.png` (önc
 
 ### Bulunan ve düzeltilen boşluk: non-stream CLI turunda köprü yok
 
-İlk deneme `POST /api/chat` (non-stream) ile yapılmıştı ve koordinatör TionHarness'nun
+İlk deneme `POST /api/chat` (non-stream) ile yapılmıştı ve koordinatör TionHarness'in
 `spawn_worker`'ı yerine **claude-cli'nin kendi `Agent` aracını** kullandı: worker
 roster hiç dolmadı, log `cli mcp config written … interaction=false` gösterdi.
 

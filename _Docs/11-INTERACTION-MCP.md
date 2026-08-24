@@ -151,7 +151,7 @@ claude: `type:"http"`; Vibe v2.0: MCP). Tek HTTP server hepsini karşılar.
 - **Hata modeli:** JSON-RPC `error{code,message}`; tool seviyesi hatalar
   `tools/call` sonucunda `isError:true` + `content[]` ile döner (model devam edebilsin).
 
-> Not: TionHarness'da MCP **client** (`internal/mcp`) zaten var; bu plan MCP **server**
+> Not: TionHarness'te MCP **client** (`internal/mcp`) zaten var; bu plan MCP **server**
 > tarafını ekler. **Mesaj tipleri (`Request`/`Response`/`Error`) `internal/mcp`'ten
 > yeniden kullanılır**, kopyalanmaz.
 
@@ -583,7 +583,7 @@ artifact dispatch, todo no-emit).
 
 **Sorun:** Bir claude-cli ajanı (özellikle scheduled koşuda) TionHarness skill'ini
 yükleyemiyor ("Unknown skill") ve `ConvertFrom-Json` gibi PowerShell sözdizimini
-POSIX bash'e verince hata alıyordu. Kök neden: CLI ajanı TionHarness'nun köprülenen
+POSIX bash'e verince hata alıyordu. Kök neden: CLI ajanı TionHarness'in köprülenen
 `use_skill`/`shell` araçları yerine **kendi native `Skill`/`Bash`** araçlarını
 seçiyordu; ayrıca `shell` hiç köprülenmiyordu (eager olduğu için bridge dışı).
 
@@ -592,14 +592,14 @@ seçiyordu; ayrıca `shell` hiç köprülenmiyordu (eager olduğu için bridge d
   `ShellEnabled` iken — native shell gate'iyle aynı). `chatRun`'a per-agent
   **shell runner** (`setShellRunner`/`shellRunnerFor`) eklendi; chat_stream her
   ajan turunda `Runtime.NewShellRunner()` ile workspace-sandbox'lı, **PowerShell**
-  (Windows) shell'i kurar. Backend dispatch: `callShell` → TionHarness'nun
+  (Windows) shell'i kurar. Backend dispatch: `callShell` → TionHarness'in
   `ShellTool`'u (sandbox + timeout + permission_prompt ask modunda). Tek kaynak:
   `interactionToolSpecs`.
 - **Native araç bastırma (`climcp.go`):** interaction mevcutken `disallowed`
   listesine `Skill` **her zaman** (köprülenen `use_skill` doğru yol), `Bash` ise
   **yalnız `ShellEnabled` iken** (köprülenen `shell` yerini aldığı için) eklendi.
   Shell kapalıysa Bash'e dokunulmaz (yoksa ajan kabuğu tamamen kaybeder).
-  - **Tam gölgeleme seti (genişletildi):** TionHarness'a-özel köprülü bir aracı
+  - **Tam gölgeleme seti (genişletildi):** TionHarness'e-özel köprülü bir aracı
     **farklı isimle** taklit eden CLI-native araçlar bastırılır:
     `Skill` (↔`use_skill`), `TodoWrite`+`Task`/`TaskCreate`/`TaskUpdate`/`TaskList`/`TaskGet` (↔`todo_write`),
     `Task`/`Agent` (↔`run_subagent`/`spawn_*`), **`SendMessage` (↔`send_message`,
@@ -658,7 +658,7 @@ disallow'u da bu turlarda etkin (endpoint mevcut olduğundan).
   yola sızmasın). `toolloop.go` cliMCP bloğu settings'i yazıp geçirir + cleanup.
 
 **Uyarı:** CLI hook'ları CLI'nin kendi hook runner/shell'inde koşar; bu,
-TionHarness'nun `execHook`'undan (Windows'ta PowerShell) farklı olabilir — TionHarness
+TionHarness'in `execHook`'undan (Windows'ta PowerShell) farklı olabilir — TionHarness
 shell'i için yazılmış bir hook komutu burada uyarlama gerektirebilir.
 
 **Test:** `go build`/`vet`/`go test ./...` yeşil; yeni test:
@@ -939,7 +939,7 @@ Doküman kuralı ayrıca kök `CLAUDE.md` → "codebase-memory-mcp kullanımı" 
 ### Düzeltme: guard hiç tetiklenmiyordu + otomatik onarım (2026-08-11)
 
 Yukarıdaki guard **yazıldığı günden beri ölüydü**. `mcpToolPrefix = "mcp__"`
-sabitini arıyordu; oysa TionHarness'ın kendi ajan döngüsünde araç adları
+sabitini arıyordu; oysa TionHarness'in kendi ajan döngüsünde araç adları
 `mcp.NamespaceTool` (`internal/mcp/manager.go:89`) ile `<server>__<tool>`
 biçiminde üretiliyor — `mcp__` öneki **yok**. `precheck` ve `repair`, ilk
 `HasPrefix` kontrolünde her çağrıyı eliyordu. Testler yeşildi çünkü araç adını

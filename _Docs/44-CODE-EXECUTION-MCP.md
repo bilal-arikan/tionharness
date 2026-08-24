@@ -25,7 +25,7 @@ yanlış çözüm seçtirir:
 - **Prompt cache** → *cost*'u düşürür (cache-read ucuzdur) ama pencere **doluluğunu**
   ve attention yükünü **düşürmez**. Şema hâlâ pencerede, hâlâ modelin ilgi alanını
   n² ilişkiyle yoruyor.
-- **Deferral / tier occupancy** (TionHarness'nun mevcut 4-tier'i) → tier doluluğunu
+- **Deferral / tier occupancy** (TionHarness'in mevcut 4-tier'i) → tier doluluğunu
   düşürür ama araç *gerektiğinde* tam şemayla pencereye girer.
 - **Code execution with MCP** → araçları modele **hiç şema olarak vermez**. Araçları
   bir kod API'si gibi sunar; ara sonuçlar execution ortamında kalır, pencereye
@@ -79,7 +79,7 @@ print(f"{len(urgent)} urgent issue işlendi")        # SADECE bu döner
    modülün tanımını *on-demand* okur (bir `search_tools` / dosya okuma adımıyla).
    Kullanılmayan 60 aracın şeması pencereye hiç girmez.
 2. **Ara sonuçlar bağlamda kalmaz** — 500 satırlık `list_issues` çıktısı sandbox
-   değişkeninde durur; modele yalnız `print` ile döndürülen özet girer. (TionHarness'da
+   değişkeninde durur; modele yalnız `print` ile döndürülen özet girer. (TionHarness'te
    `transform_data`'nın "data dosyada kalır, sadece log döner" davranışının aynısı.)
 3. **Kontrol akışı kod tarafında** — döngü/filtre/koşul model turlarına değil,
    tek bir kod yürütmesine iner. Tur sayısı ve dolayısıyla tekrarlanan şema maliyeti
@@ -87,9 +87,9 @@ print(f"{len(urgent)} urgent issue işlendi")        # SADECE bu döner
 
 ---
 
-## 3. TionHarness'ya Oturma Senaryoları
+## 3. TionHarness'e Oturma Senaryoları
 
-TionHarness'nun iki yürütme yolu var; her biri için ayrı bir tasarım seçeneği ele
+TionHarness'in iki yürütme yolu var; her biri için ayrı bir tasarım seçeneği ele
 alınmalı. **İyi haber:** TionHarness bu deseni kurmak için gereken parçaların
 **çoğuna zaten sahip** — kod yürütme sandbox'ı (`transform_data`), fs araçları,
 namespace'li MCP çağrı yolu, ve kod-dışı çağrı için `mcp.CallNamespaced`.
@@ -130,7 +130,7 @@ graph LR
 
 1. Tur başında TionHarness, etkin MCP sunucularının araçlarını tarayıp sandbox
    çalışma dizinine bir **binding ağacı** yazar: `./servers/<server>/<tool>.py`
-   (veya tek `servers.py`). Her binding, TionHarness'da açılan bir **loopback köprüye**
+   (veya tek `servers.py`). Her binding, TionHarness'te açılan bir **loopback köprüye**
    (kısa ömürlü localhost HTTP ya da named-pipe) çağrı yapan ince bir fonksiyon.
 2. Köprü, gelen `(server, tool, args)` çağrısını `mcp.CallNamespaced` ile kalıcı
    havuz üzerinden gerçek MCP sunucusuna iletir; sonucu script'e döndürür.
@@ -177,7 +177,7 @@ desenin tam kazancına daha uygun; CLI yolu için gerçekçi hedef B1'i olgunla�
 
 ## 4. Güvenlik / Sandbox
 
-Kod yürütme = keyfi host kodu. TionHarness'nun mevcut sınırları ve boşlukları:
+Kod yürütme = keyfi host kodu. TionHarness'in mevcut sınırları ve boşlukları:
 
 | Katman | Mevcut durum | Kod-execution için not |
 |--------|--------------|------------------------|
@@ -326,7 +326,7 @@ graph TB
 
 ## 9. Özet & Önerilen İlk Faz
 
-**Özet:** Code execution with MCP, TionHarness'nun *occupancy* sorununu (mevcut tier
+**Özet:** Code execution with MCP, TionHarness'in *occupancy* sorununu (mevcut tier
 sistemi *deferral*'ı çözüyor ama şema gerektiğinde hâlâ pencereye giriyor) kökten
 çözen tek yaklaşım. En büyük avantaj: TionHarness, deseni kurmak için gereken parçaların
 çoğuna **zaten sahip** — `transform_data`'nın izole-subprocess + secret-allowlist +
@@ -548,7 +548,7 @@ Def açıklaması "ACCURACY:" paragrafı — B1 hatasını sistemik önler).
 İlk PoC yalnız **MCP** kataloğunu binding'e döküyordu; `run_code` MCP sunucusu
 yoksa hiç açılmıyordu (`len(entries)==0`→hata). Bu faz built-in araçları da açar:
 kod-modunun asıl kaldıracı — çok-araçlı iş akışını (list→filter→act) **tek** çağrıda
-kod yazarak yapmak — artık TionHarness'nun kendi araçlarını da kapsar.
+kod yazarak yapmak — artık TionHarness'in kendi araçlarını da kapsar.
 
 - **Binding üretimi** (`codemode.WriteBindings(dir, entries, builtins, allow)`): MCP
   sunucu modüllerinin yanına tek **`tionharness`** modülü yazılır (`from tionharness import <tool>`),

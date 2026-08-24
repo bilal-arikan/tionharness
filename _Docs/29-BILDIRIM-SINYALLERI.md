@@ -134,7 +134,7 @@ kullanıcı uygulamaya bakmıyorken haber vermesi gereken durumlar ("uzun iş bi
 
 Masaüstü OS-toast'larını kesen **ana anahtar** iki kaynaktan çözülür: uygulama-genel
 varsayılan (`AppSettings.DesktopNotifications`) + **aktif workspace'in override'ı**.
-Bu, TionHarness'ın fiziksel workspace izolasyonuyla tutarlı — kullanıcı arka planda
+Bu, TionHarness'in fiziksel workspace izolasyonuyla tutarlı — kullanıcı arka planda
 koşan bir "otonom" workspace'i susturup üzerinde çalıştığını açık tutabilir (ya da
 tersi).
 

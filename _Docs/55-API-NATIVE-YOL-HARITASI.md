@@ -1,6 +1,6 @@
 # 55 — API-Native Özellikler Yol Haritası
 
-> Anthropic Messages API'nin sunucu-tarafı yeteneklerinin TionHarness'a kademeli entegrasyonu.
+> Anthropic Messages API'nin sunucu-tarafı yeteneklerinin TionHarness'e kademeli entegrasyonu.
 > Amaç: istemci tarafında elle kurduğumuz mekanizmaları, model bunlara göre eğitildiği için
 > daha iyi çalışan API-native muadilleriyle tamamlamak/değiştirmek. Tümü yalnız **birinci-parti
 > anthropic** sağlayıcıyı hedefler (`provider.Name() == "anthropic"` kapısı); claude-cli kendi
@@ -31,7 +31,7 @@ Oluşturma: 2026-07-07 · Durum: **P0–P4, P6, P7 (batch hariç) tamam; P5 (mem
 
 ## 0. Mevcut durum (tamamlananlar)
 
-| Özellik | API yüzeyi | TionHarness'daki hâli | UI karşılığı |
+| Özellik | API yüzeyi | TionHarness'teki hâli | UI karşılığı |
 |---|---|---|---|
 | Uzatılmış prompt cache (1h) | `cache_control` + `extended-cache-ttl` beta | 3 breakpoint (tools→system→rolling history), dinamik sonek breakpoint arkasında; **varsayılan açık** | Ayarlar → Bağlam toggle; oturum bağlam önizlemesi cache katmanlarını gösterir |
 | Adaptive thinking + effort | `thinking:{adaptive}` + `output_config.effort` | Model-sınıf farkındalı `thinkingFor`; ThinkingLevel→effort eşlemesi; `display:summarized` | Ajan kartındaki thinking seviyesi; sohbette düşünme blokları |

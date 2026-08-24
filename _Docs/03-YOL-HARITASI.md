@@ -126,7 +126,7 @@ graph LR
 > - **Önce Wails'in yerleşik tray API'sine bak** — varsa ayrı bağımlılığa gerek yok.
 > - **B planı:** [`gogpu/systray`](https://github.com/gogpu/systray) — **saf Go, CGO'suz** tray
 >   kütüphanesi (Win `Shell_NotifyIconW` · macOS `NSStatusBar` · Linux D-Bus
->   StatusNotifierItem). TionHarness'nun "tek binary, çapraz-derleme, minimal bağımlılık"
+>   StatusNotifierItem). TionHarness'in "tek binary, çapraz-derleme, minimal bağımlılık"
 >   felsefesiyle birebir uyumlu. **Uyarılar:** (1) v0.1.0 — çok genç, üretime erken; (2) Wails'in
 >   kendi event loop'u ile systray message-pump'ı çakışabilir (özellikle macOS main-thread →
 >   deadlock riski), entegrasyonda test şart. Yalnız native masaüstü modunda anlamlı; web
@@ -244,15 +244,15 @@ ilişki grafiği, CLI araç köprüsü, prefix'li ID'ler ve tek-binary dağıtı
 > Kaynak: [nousresearch/external-context-agent](https://github.com/nousresearch/external-context-agent) ("seninle büyüyen ajan")
 > ile TionHarness karşılaştırması. the external agent mesajlaşma-merkezli, kendini-geliştiren bir kişisel asistan;
 > TionHarness web-UI merkezli, tek-binary self-hosted orkestrasyon. İki alanda the external agent açık ara önde ve
-> TionHarness'ya değer katacak. **Plan — uygulanmadı; ileride eklenebilecek featureler.**
+> TionHarness'e değer katacak. **Plan — uygulanmadı; ileride eklenebilecek featureler.**
 
 - [ ] **HA-1 — Gelişmiş hafıza: tam-metin arama + LLM özet + kullanıcı modelleme** *(yüksek değer)*:
-  the external agent hafızası üç katman taşıyor — (a) **FTS5 tam-metin arama** oturumlar üzerinde (TionHarness'da
+  the external agent hafızası üç katman taşıyor — (a) **FTS5 tam-metin arama** oturumlar üzerinde (TionHarness'te
   mevcut **CG-16** ile örtüşür; Go tarafında ripgrep veya bleve/saf-Go ters-indeks ile, DB-siz
-  felsefeye uygun), (b) **LLM-destekli özetleme** ile çapraz-oturum recall (TionHarness'da `Reflect`
+  felsefeye uygun), (b) **LLM-destekli özetleme** ile çapraz-oturum recall (TionHarness'te `Reflect`
   dream-cycle + rolling summary kısmen var; oturumlar-arası kalıcı özet indeksine genişletilir),
   (c) **Honcho-benzeri kullanıcı modelleme** — etkileşimlerden kalıcı kullanıcı profili çıkarma
-  (tercihler/bağlam/davranış). TionHarness'nun mevcut lexical-cosine recall'ı (Faz 6) bunun altyapısı;
+  (tercihler/bağlam/davranış). TionHarness'in mevcut lexical-cosine recall'ı (Faz 6) bunun altyapısı;
   üzerine kalıcı kullanıcı-profili entity'si + oto-güncelleme eklenir. İlişkili: **CG-16**, **C3** (memory_write).
   > ✅ **(c) kullanıcı modelleme TAMAMLANDI (2026-06-23):** `human` çekirdek bloğu dream-cycle'a
   > piggyback eden bir geçişle journal'dan otomatik doldurulur (C6 / `31-MEMGPT-CORE-MEMORY.md` Parça 4b).
@@ -260,7 +260,7 @@ ilişki grafiği, CLI araç köprüsü, prefix'li ID'ler ve tek-binary dağıtı
 - [ ] **HA-2 — Kendini-geliştiren prosedürel skill + skill hub** *(yüksek değer — ayırt edici)*:
   harici ajanin en özgün yanı: ajan zor bir görevi tamamladıktan sonra **kendi prosedürel skill'ini
   otonom yazar** ve tekrar kullanımla **iyileştirir** (procedural memory); skill'ler
-  [agentskills.io](https://agentskills.io) merkezi hub'ında paylaşılır. TionHarness'da skill sistemi
+  [agentskills.io](https://agentskills.io) merkezi hub'ında paylaşılır. TionHarness'te skill sistemi
   (dosya-tabanlı, global/workspace tier, `create_skill`/`delete_skill`) + market (SwarmPack v1)
   **zaten var** — eksik olan **otonom skill üretimi** (görev sonrası ajanın deneyimden skill
   damıtması) ve **skill'in zamanla iyileşmesi** (kullanım geri-bildirimiyle revizyon). Mevcut
@@ -268,7 +268,7 @@ ilişki grafiği, CLI araç köprüsü, prefix'li ID'ler ve tek-binary dağıtı
   "görev-sonrası skill-damıtma" hook'u + agentskills.io uyumlu içe/dışa aktarım eklenir.
   İlişkili: market (`_Docs/21-MARKET.md`), self-management (`_Docs/24-SELF-MANAGEMENT.md`).
 
-> **Not:** İkisi de TionHarness'nun mevcut alt sistemlerinin (Faz 6 hafıza, skill sistemi, market,
+> **Not:** İkisi de TionHarness'in mevcut alt sistemlerinin (Faz 6 hafıza, skill sistemi, market,
 > `Reflect`) **üzerine** kurulabilir; sıfırdan değil. harici ajanin diğer güçlü yanları (mesajlaşma
 > gateway → **CG-21**; çoklu çalıştırma backend'i Docker/SSH/Modal → kapsam dışı/D3) ayrı maddelerde.
 
@@ -309,7 +309,7 @@ ilişki grafiği, CLI araç köprüsü, prefix'li ID'ler ve tek-binary dağıtı
     - [x] **SK-1 ✅ (2026-06-23) — Çok-dosyalı skill (bundled resources):** skill bir KLASÖR olabilsin; SKILL.md gövdesinin
       atıf yaptığı ek dosyalar (reference.md, şablon, script) on-demand `fs` ile okunsun. Bugün skill tek-dosya
       → birçok CC skill'i tam portlanamaz. **CC deseni:** `createSkillCommand` `baseDir` taşır + gövdede
-      `${CLAUDE_SKILL_DIR}`/`${CLAUDE_SESSION_ID}` ikamesi → gömülü dosyalara/scriptlere atıf. TionHarness'da
+      `${CLAUDE_SKILL_DIR}`/`${CLAUDE_SESSION_ID}` ikamesi → gömülü dosyalara/scriptlere atıf. TionHarness'te
       `Store.Body`'ye `${SKILL_DIR}` ikamesi + ajanın sibling dosyaları `fs` ile okuması. **Porter için ön-şart.**
     - [x] **SK-2 ✅ (2026-06-23) — Ölçeklenebilir keşif (`skill_search` + koşullu `paths:`):**
       Uygulandı: `paths:` taşıyan skill auto-advertise'dan çıkar + `Store.Search` + `skill_search`
@@ -319,14 +319,14 @@ ilişki grafiği, CLI araç köprüsü, prefix'li ID'ler ve tek-binary dağıtı
       shared özetleri her tura enjekte etmek prompt'u şişirir. **CC iki mekanizma kullanıyor (örnek al):**
       (a) `paths:` frontmatter ile **koşullu skill** — skill yalnız eşleşen dosyaya dokunulunca aktive olur
       (`activateConditionalSkillsForPaths`, gitignore-tarzı eşleşme); (b) dosya yolundan yukarı yürüyüp
-      `.claude/skills` keşfi. TionHarness'da: `paths:` koşullu aktivasyon (PostToolUse/fs-touch ile) + `skill_search`
+      `.claude/skills` keşfi. TionHarness'te: `paths:` koşullu aktivasyon (PostToolUse/fs-touch ile) + `skill_search`
       aracı (`tool_search` ikizi) + `estimateSkillFrontmatterTokens` benzeri özet-token ölçümü. **Ölçek ön-şartı.**
     - [x] **SK-3 ✅ (2026-06-23) — `allowed_tools` enforcement:** `AlwaysAllow` bugün yalnız UI'da, **uygulanmıyor**. **CC deseni:**
       skill çalışırken `allowedTools` → `alwaysAllowRules.command`'a enjekte edilir (skill kapsamında auto-allow).
-      TionHarness'da skill yüklenince ilan ettiği araçları oturum/skill kapsamında scope/auto-allow et.
+      TionHarness'te skill yüklenince ilan ettiği araçları oturum/skill kapsamında scope/auto-allow et.
     - [x] **SK-4 ✅ (2026-06-23) — Zengin frontmatter passthrough:** CC `version`/`disable-model-invocation`/`user-invocable`/
       `context: fork`/`agent`/`model`/`effort`/`hooks`/`paths` taşıyor. En azından `version`/`source_url`/`license`
-      (provenance) + `user-invocable` TionHarness'ya eklensin; gerisi degrade-gracefully korunur (parser zaten bilinmeyen
+      (provenance) + `user-invocable` TionHarness'e eklensin; gerisi degrade-gracefully korunur (parser zaten bilinmeyen
       anahtarı tutuyor).
     - [ ] **SK-5 — Kategori/etiket + onay-guard + dedup:** etiketli filtreli katalog; `disable-model-invocation`
       muadili "yan-etkili skill, otomatik tetikleme yok" guard'ı; **realpath ile dedup** (CC `getFileIdentity` —
@@ -343,14 +343,14 @@ ilişki grafiği, CLI araç köprüsü, prefix'li ID'ler ve tek-binary dağıtı
 > Kaynak: bir dev-oturumunun (`260617-gentle-coyote`) analizi. Oturumda agent'ın
 > **kendi muhakemesiyle** çözdüğü üç sürtünme (paralel-commit yarışı, port çakışması,
 > elle temizlik) ve bir yanlış karar (varlık-kontrolü yapmadan "özellik yok" demek)
-> TionHarness'nun da yaşayacağı gerçek mimari boşluklara birebir oturuyor — çünkü ürün de
+> TionHarness'in da yaşayacağı gerçek mimari boşluklara birebir oturuyor — çünkü ürün de
 > birden çok ajanı **aynı workspace'te** shell/fs/git araçlarıyla eşzamanlı koşturuyor.
 > Amaç: bu davranışları muhakemeden **mekanizmaya** taşımak. Önceliklendirme: 1. dalga
 > RG-6 + RG-1 + RG-4; 2. dalga RG-2 + RG-3 + RG-5.
 
 - [ ] **RG-1 — Entity versioning + CAS** *(1. dalga, S-M, yüksek değer)*: `db` entity'lerine `Version int`; her `mutate*Locked` bump'lar; yazım araç/API'sinde opsiyonel `If-Match` → bayat sürüm reddedilir. Belgelenmiş **"son yazan kazanır"** veri-kaybını kapatır. Temel: atomik `*.tmp`→`rename` + `store.go mutateSessionLocked` deseni (zaten var).
 - [ ] **RG-2 — Workspace git-lock + provenance-scoped staging** *(2. dalga, M, yüksek değer)*: workspace başına tek-yazar git kilidi + ajan yalnız dokunduğu/`created_by` path'leri stage eder (oturumda elle Python ile yapılanın ürünleşmiş hali). Temel: `created_by` provenance (`_Docs/24-SELF-MANAGEMENT.md`) + `builtin_shell.go` git çağrıları.
-- [ ] **RG-3 — Kaynak kira (lease) registry** *(2. dalga, M, orta değer)*: ajan port/temp-dir ister, runtime boş olanı verir, `stop`'ta otomatik bırakır. `:8090` çakışması bir daha olmaz; TionHarness'nun kendi açılış preflight'ı için de kullanılır. Yer: `agent/runtime.go` yaşam döngüsü.
+- [ ] **RG-3 — Kaynak kira (lease) registry** *(2. dalga, M, orta değer)*: ajan port/temp-dir ister, runtime boş olanı verir, `stop`'ta otomatik bırakır. `:8090` çakışması bir daha olmaz; TionHarness'in kendi açılış preflight'ı için de kullanılır. Yer: `agent/runtime.go` yaşam döngüsü.
 - [ ] **RG-4 — Tur yan-etki defteri → otomatik teardown** *(1. dalga, M, yüksek değer)*: tur başına spawn edilen PID / geçici workspace / temp dosya kaydı; tur biter veya çökerse otomatik teardown. Agent'ın elle yaptığı "test ws sil, sunucu durdur" işini garantiye alır. Temel: `agent/recovery.go` (A1) + `db/inflight.go` sidecar deseni.
 - [ ] **RG-5 — Boot orphan reconcile genişletmesi** *(2. dalga, S-M, orta değer)*: açılışta takılı child süreç + sahipsiz temp workspace temizliği. Şu an yalnız tur (`inflight.go`) ve flow (`ResumeRunningFlows`, `flow.go`) resume ediliyor; aynı boot yoluna süreç/kaynak reconcile eklenir.
 - [x] **RG-6 — Implement-öncesi keşif guard'ı** ✅ (2026-06-22) *(1. dalga, XS, yüksek değer — KOD YOK)*: agent'a "uygulamadan önce ilgili dosyaları okuyup özelliğin zaten var olup olmadığını doğrula" adımını zorunlu kıldık. `tionharness-guide` SKILL.md'ye **"Before you build: discover first"** bölümü (search→read→confirm→extend; "X yok" demeden önce ne aradığını söyle, sıfırdan yazmak yerine genişlet) + `tionharness-self-management` "Prefer reading first" maddesi güçlendirildi (entity oluşturmadan önce mevcudu kontrol et). Var olan özelliği "yok" sanıp yeniden yazma riskini önler. Skill düzeyi → tüm ajanlara uygulanır.

@@ -19,7 +19,7 @@
 > TASLAK/PLANLAMA'dır — henüz koda dönüşmemiştir. Önceki oturumun
 > `gateway-integration-brief.md`'i + bu oturumda `codebase-memory-mcp` ile TionHarness
 > kaynak doğrulaması + `mcp-server` (TS `gateway-manager v3`) incelemesine dayanır.
-> Amaç: gateway desenini TionHarness'a katmanın **faz-faz uygulama planı** + Bilal'in
+> Amaç: gateway desenini TionHarness'e katmanın **faz-faz uygulama planı** + Bilal'in
 > onaylayacağı **açık kararlar**. İlgili: `11-INTERACTION-MCP.md`, `19-LAZY-TOOL-LOADING.md`.
 
 ---
@@ -189,7 +189,7 @@ GET SSE akışını açık tutuyor, `spike_grow` çağrılınca `spike_secret`'i
 | **Q1** — mid-turn list_changed + AYNI turda çağrı | ✅ **EVET** | Tek turda: `spike_grow` → server push (`pushed list_changed`, `flushed`) → claude `spike_secret`'i çağırıp **`SECRET=GATEWAY_OK_42`** aldı. |
 | **Q2** — wildcard allowlist sonradan gelen aracı kapsıyor | ✅ **EVET** | Allowlist spawn'da `mcp__spike` sabit; `spike_secret` yalnız grow'dan SONRA belirdi, yine de restart'sız çağrılabildi. |
 | **Q3** — mid-turn list_changed cache prefix'i siliyor mu | ✅ **HAYIR (marjinal)** | list_changed sonrası model çağrıları `cacheRead≈29360–29570`, yalnız `cacheCreate 56–210` delta. Tam prefix rebuild YOK. Final: cacheRead 79456 > cacheCreate 63778. |
-| **Q0** — persistent+MCP config kararsızlığı (§3-D) | ⚠️ **KOD-DOĞRULANDI, ampirik bekliyor** | `writeCLIMCPConfig` temp yol churn'ü + `defer cleanup` + fingerprint(mcpConfigPath) kesin. Ampirik teyit TionHarness'ı çalıştırmayı gerektirir; düzeltme unit-testlenebilir (içerik-hash fingerprint). |
+| **Q0** — persistent+MCP config kararsızlığı (§3-D) | ⚠️ **KOD-DOĞRULANDI, ampirik bekliyor** | `writeCLIMCPConfig` temp yol churn'ü + `defer cleanup` + fingerprint(mcpConfigPath) kesin. Ampirik teyit TionHarness'i çalıştırmayı gerektirir; düzeltme unit-testlenebilir (içerik-hash fingerprint). |
 
 **Beklenmedik + kritik gözlem — ToolSearch aracılığı.** claude, spike araçlarını **inline
 ETMEDİ**; her birini çağırmadan önce `ToolSearch select:mcp__spike__<tool>` ile şemasını
@@ -220,7 +220,7 @@ ikinci pool israf; harici sunum ayrı ROI kararı (§7-madde17).
 
 ### Brief'in 4 numaralı içgörüsünün düzeltmesi
 Brief "activate server → o server'ın tüm araçları; per-tool granülariteyi KORU" diyor.
-Doğru — ama TionHarness'ın gerçek gateway'i **backend MCP sunucuları** değil, **Interaction
+Doğru — ama TionHarness'in gerçek gateway'i **backend MCP sunucuları** değil, **Interaction
 MCP extended tier'ıdır**. Yani "server" burada `tionharness_extended` (tek sunucu); "araçlar"
 onun built-in + bridged self-management + NameOnly araçları. Gateway aktivasyonu =
 "extended sunucusunun tools/list'ini boştan → istenen alt kümeye büyüt". Dış backend MCP'ler
@@ -435,7 +435,7 @@ olduğu için çapraz-agent token karışması yapısal olarak imkânsız.
   ayrı tetiklenir.
 
 **✅ Göç aracı (2026-07-06): `_spikes/52-gateway/migrate-vps.py`.** TS `config.json`'ı
-TionHarness'ın **mevcut** `POST /api/mcp-servers/import` endpoint'inin kabul ettiği standart
+TionHarness'in **mevcut** `POST /api/mcp-servers/import` endpoint'inin kabul ettiği standart
 `{"mcpServers":{...}}` formatına dönüştürür (yeni endpoint gerekmedi). Dönüşümler:
 `transportType`/`url` → `type:"http"`; `${VAR}` placeholder'ları `secrets.json`/env'den çözer;
 `options.disabled` işaretlenir (entry yine yazılır, UI'dan kapatılır); gateway-only alanlar
@@ -739,7 +739,7 @@ active/tool_search/hidden). Tam app boot + canlı chat testi orantısız ağır/
   binary silindi. Sonraki masaüstü açılışında WS1/5/8/9'da 23 server hazır. Araçlar:
   `_spikes/52-gateway/migrate-vps.py` + `apply-migration.py`.
   > **Ek düzeltme (2026-07-06):** Import her server'ı **enabled** oluşturduğundan (import
-  > endpoint'i `disabled` alanı taşımıyor), TS'de disabled olan 13 server TionHarness'da açık
+  > endpoint'i `disabled` alanı taşımıyor), TS'de disabled olan 13 server TionHarness'te açık
   > geldi → app açılışta backend'i çalışmayanlara eager dial → `dial failed`/`context canceled`
   > log spam'i. Çözüm: `migrate-vps.py` artık çıktıya `_disabled: [...]` ekler; `apply-migration.py`
   > import sonrası bunları `toggle {enabled:false}` ile kapatır. Canlıda 4 workspace'te 13'er
@@ -747,8 +747,8 @@ active/tool_search/hidden). Tam app boot + canlı chat testi orantısız ağır/
   > (mcp-chrome/unity/mcp-alpha/vps-*) çalışmadıkça hâlâ warn verebilir — bu TS'nin enabled setiyle aynı.
 
 - ⛔ **VPS göçü GERİ ALINDI (2026-07-06):** Bilal netleştirdi — asıl istek dış `mcp-server`
-  gateway'inin server'larını TionHarness'a **import etmek değildi**; istek, TionHarness'ın *kendi*
-  built-in tool'larını + kullanıcının TionHarness'a **kendi eklediği** harici MCP'leri gateway-benzeri
+  gateway'inin server'larını TionHarness'e **import etmek değildi**; istek, TionHarness'in *kendi*
+  built-in tool'larını + kullanıcının TionHarness'e **kendi eklediği** harici MCP'leri gateway-benzeri
   yüzeyle yönetmesiydi (bu zaten `internal/gateway` + iki-katmanlı interaction ile mevcut).
   Dolayısıyla göç bir yanlış-anlama ürünüydü. **Temizlik:** VPS gateway'e (`<vps-host>:9090`,
   yani `mcp-server`) işaret eden **tüm `vps-*` server'lar** 4 workspace'ten silindi (WS1:1, WS5/8/9:7'şer
@@ -874,7 +874,7 @@ active/tool_search/hidden). Tam app boot + canlı chat testi orantısız ağır/
     profilin allowlist'inde. Grafı esirgemek kabiliyet kaybı değil, token israfı.
   - Kapsam: yalnız **ALLOWLIST**. Workspace anahtarı ve ajanın **AÇIK** denylist'i hâlâ
     kaldırır — operatör tek bir ajandan grafı bilerek alabilir ve bu karara saygı duyulur.
-  - Tek sunucuya kilitli: TionHarness'ın altyapı saydığı tek MCP sunucusu bu (yetenek probu +
+  - Tek sunucuya kilitli: TionHarness'in altyapı saydığı tek MCP sunucusu bu (yetenek probu +
     prompt bloğu yalnız onun için var). İkincisi açık bir karar gerektirir.
   - Uygulanan iki yol: `toolFilter` (native, `isExemptTool`) ve `mcpServerGate(ag, exempt)`
     (claude-cli + codex-cli mount'u).

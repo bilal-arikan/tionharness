@@ -39,7 +39,7 @@
 >
 > **Roadmap maddesi:** `03-YOL-HARITASI.md` → **C6**.
 > **Karar:** Letta'yı doğrudan koşmak yerine (Docker + Postgres + Python sidecar →
-> TionHarness'nun "tek binary, sunucusuz, dosya-tabanlı, offline" kimliğini bozar)
+> TionHarness'in "tek binary, sunucusuz, dosya-tabanlı, offline" kimliğini bozar)
 > Letta'nın *fikirlerini* native Go'da yeniden uyguluyoruz. Bu **Mod C**'dir.
 > İnceleme: `letta-ai/letta` ([repo](https://github.com/letta-ai/letta)), 2026-06-22.
 
@@ -47,7 +47,7 @@
 
 Letta artık bir kütüphane değil, kalıcı bir **sunucu servisi**: Docker'da kalkar
 (`:8283/v1` REST), arka planda **PostgreSQL + pgvector zorunlu**, ~800MB taban
-ayak izi + ajan başına ~50–200 MB/ay DB büyümesi. Doğrudan entegrasyon TionHarness'nun
+ayak izi + ajan başına ~50–200 MB/ay DB büyümesi. Doğrudan entegrasyon TionHarness'in
 üç temel tasarım kararını birden kırar:
 
 | TionHarness kararı | Letta doğrudan kullanımıyla |

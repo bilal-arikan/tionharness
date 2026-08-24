@@ -561,7 +561,7 @@ kırık:
 | `hidden` yok sayılıyor | statik araç hidden → hâlâ CORE/EXTENDED ilan ediliyor | advertisement görünürlüğe bakmıyor |
 | `full` self-mgmt aracını **siliyor** | `create_agent` full → ABSENT | `BridgeableDefs` yalnız *lazy* araçları köprüler; full=non-lazy=köprülenmez |
 
-**Çözüm.** CLI core/extended ayrımı, TionHarness'ın 4-tier modelini claude-cli'nın
+**Çözüm.** CLI core/extended ayrımı, TionHarness'in 4-tier modelini claude-cli'nın
 kendi **iki durumlu** modeline (alwaysLoad eager vs ToolSearch deferred) iz düşüren
 görünürlük-farkında bir sınıflandırıcıya (`api.cliTier`) bağlandı:
 

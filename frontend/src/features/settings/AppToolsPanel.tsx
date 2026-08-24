@@ -55,7 +55,7 @@ export function ToolsPanel({ draft, set }: PanelProps) {
           {
             value: 'persistent',
             label: 'Kalıcı süreç',
-            hint: "Oturum başına TEK uzun-ömürlü claude süreci canlı tutulur; turlar stdin'den beslenir (her tur yeni süreç açılmaz), sıcak turda yalnız yeni mesaj gider. En düşük cache-write + ~%6–7 daha hızlı warm tur (ölçüm: _Docs/50). Cache ısınması TTL'e bağlı. TionHarness'a özgü — External Agent'ta yoktur.",
+            hint: "Oturum başına TEK uzun-ömürlü claude süreci canlı tutulur; turlar stdin'den beslenir (her tur yeni süreç açılmaz), sıcak turda yalnız yeni mesaj gider. En düşük cache-write + ~%6–7 daha hızlı warm tur (ölçüm: _Docs/50). Cache ısınması TTL'e bağlı. TionHarness'e özgü — External Agent'ta yoktur.",
           },
           {
             value: 'resume',

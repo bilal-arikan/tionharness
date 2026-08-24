@@ -1,6 +1,6 @@
 # 51 — Per-Workspace Claude Config Home (Birleşik Config)
 
-> **Amaç:** TionHarness'ın workspace klasör yapısı ile claude-cli'nin `CLAUDE_CONFIG_DIR`
+> **Amaç:** TionHarness'in workspace klasör yapısı ile claude-cli'nin `CLAUDE_CONFIG_DIR`
 > config evini **tek bir per-workspace dizinde** birleştirmek. Böylece hem TionHarness
 > hem de driver ettiği `claude` CLI **aynı skill/settings/login** setini kullanır.
 
@@ -41,7 +41,7 @@
 - Değer paylaşılan `providers.Registry` üzerinde tutuluyordu (`SetClaudeConfigDir`);
   tüm workspace'ler **aynı** `claude-home`'u kullanıyordu.
 - Sonuç: CLI'nin native `Skill` aracı yalnızca `<CLAUDE_CONFIG_DIR>/skills`'i okuduğu
-  için TionHarness'ın workspace skill'lerini **hiç göremiyordu** → native `Skill`
+  için TionHarness'in workspace skill'lerini **hiç göremiyordu** → native `Skill`
   aracı `climcp.go`'da devre dışı bırakılmıştı ("Unknown skill" hatası).
 
 ## Çözüm: config evi = `<workspace>/claude-home`
@@ -174,7 +174,7 @@ tohumlanır (claude-home yoksa) **veya** enjekte edilen auth env'ine (`claudeCli
 dayanır. Test: `backup/backup_test.go TestZipExcludesClaudeCredentials`.
 
 Alternatif (uygulanmadı): saf env-enjeksiyon — token'ı hiç kopyalamayıp yalnız
-TionHarness'ın AES-GCM sır kasasında tutup her tur env ile enjekte etmek. Daha sıkı ama
+TionHarness'in AES-GCM sır kasasında tutup her tur env ile enjekte etmek. Daha sıkı ama
 `claudeCliAuthKind` set olmasını zorunlu kılar.
 
 ### Sürüm + plan rozeti (2026-08-01)

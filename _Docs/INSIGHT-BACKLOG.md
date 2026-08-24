@@ -478,7 +478,7 @@ stable `insight-sig` marker so re-scans never duplicate it.
 - **Evidence sessions:** SES182
 - **File:** `internal/api/autonomous_interaction.go`
 
-**Root cause:** TionHarness'ın interaction MCP aracı olan ask_user, kullanıcıdan yanıt gelene kadar bloklanıyor. Otonom/gözetimsiz çalışan bir oturumda soruyu yanıtlayacak bir kullanıcı olmadığında istek varsayılan zaman aşımına kadar bekliyor ve ardından 'operation timed out' ile düşüyor. Bu bir kullanıcı/ortam hatası değil; aracın yanıtsız durumu zarifçe ele alacak bir guardrail (otomatik iptal, varsayılan cevap veya turu devam ettiren fallback) içermemesinden kaynaklanan uygulama seviyesinde bir eksiklik.
+**Root cause:** TionHarness'in interaction MCP aracı olan ask_user, kullanıcıdan yanıt gelene kadar bloklanıyor. Otonom/gözetimsiz çalışan bir oturumda soruyu yanıtlayacak bir kullanıcı olmadığında istek varsayılan zaman aşımına kadar bekliyor ve ardından 'operation timed out' ile düşüyor. Bu bir kullanıcı/ortam hatası değil; aracın yanıtsız durumu zarifçe ele alacak bir guardrail (otomatik iptal, varsayılan cevap veya turu devam ettiren fallback) içermemesinden kaynaklanan uygulama seviyesinde bir eksiklik.
 
 **Proposed fix:** autonomous_interaction akışında ask_user için açık bir zaman aşımı + fallback guardrail'i ekle: süre dolduğunda istegi iptal edip ajana yapılandırılmış bir 'no_response' sonucu döndür (hata fırlatmak yerine), böylece tur bloklanmadan devam etsin. Otonom modda ask_user'ı ya devre dışı bırak ya da varsayılan/timeout-safe bir yanıtla besle.
 

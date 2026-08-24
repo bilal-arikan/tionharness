@@ -101,7 +101,7 @@ Eskiden her workspace'e `<workspace-container>/cbm-store` verilip `CBM_CACHE_DIR
 enjekte ediliyordu (`CBMStoreDir` + `applyCBMStore`). **codebase-memory-mcp 0.10**
 "hesap başına TEK cache root" kuralını getirdi: farklı bir root talep eden ikinci
 istemci `active account daemon uses a different cache directory` ile reddediliyor.
-Per-workspace store bu kuralla bağdaşmıyordu — TionHarness'ın iki workspace'i bile
+Per-workspace store bu kuralla bağdaşmıyordu — TionHarness'in iki workspace'i bile
 birbirini (ve dışarıdaki her CBM istemcisini: CLI, watcher, External Agent) kilitliyordu.
 
 Bugün: **TionHarness hiçbir yerde `CBM_CACHE_DIR` enjekte etmez.** Sunucu kendi

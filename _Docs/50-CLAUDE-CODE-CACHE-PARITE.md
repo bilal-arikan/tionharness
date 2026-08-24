@@ -1,6 +1,6 @@
 # 50 — Claude Code Cache/Context Paritesi Planı
 
-> **Amaç:** TionHarness'nun **native sağlayıcı** (anthropic / OpenAI-compat) context "paketini",
+> **Amaç:** TionHarness'in **native sağlayıcı** (anthropic / OpenAI-compat) context "paketini",
 > Claude Code'un prompt-cache + compaction mekaniğine yaklaştırmak — **SDK'ya bağımlı
 > olmadan** (çok-sağlayıcı, anahtarsız claude-cli, dosya-tabanlı felsefe korunur).
 >

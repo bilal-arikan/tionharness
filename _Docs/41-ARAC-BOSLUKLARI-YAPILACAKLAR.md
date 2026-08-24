@@ -7,7 +7,7 @@
 > Kaynak analiz: [`analiz-craftagent-arac-eslestirme.md`](./analiz-craftagent-arac-eslestirme.md)
 > (envanter eşleştirmesi). Bu doküman onun **aksiyon (backlog) karşılığıdır.**
 >
-> **Güncel not:** Analiz dosyasında "TionHarness'da yok" denen `config_validate`, `skill_validate`,
+> **Güncel not:** Analiz dosyasında "TionHarness'te yok" denen `config_validate`, `skill_validate`,
 > `mermaid_validate` araçları **bu tarihten sonra eklenmiştir** (`builtin_configvalidate.go`,
 > `builtin_skillvalidate.go`, `builtin_mermaidvalidate.go`) → o boşluklar **KAPANDI**, aşağıda yer
 > almazlar. Liste yalnızca **hâlâ açık** olan boşlukları içerir.
@@ -98,7 +98,7 @@
 
 - **Durum:** ~~Yok.~~ **Uygulandı** (`transform_data` adıyla). `script_sandbox` ayrı bir araç olarak
   uygulanmadı — `transform_data` zaten striplenmiş-env + timeout + yapısal çıktı sözleşmesini karşılıyor.
-- **Neden önemli:** TionHarness'nun **token optimizasyon** felsefesiyle (`_Docs/17`) birebir uyumlu: büyük
+- **Neden önemli:** TionHarness'in **token optimizasyon** felsefesiyle (`_Docs/17`) birebir uyumlu: büyük
   veri setini izole script ile işleyip **dosyaya yazmak** ve ana bağlama sadece özet/yol döndürmek
   cached-prefix'i ve token'ı düşürür.
 - **Uygulanan yaklaşım:**
@@ -211,7 +211,7 @@
   bekleme yok.
 - **Neden önemli:** Dış süreç/CI/uzak kuyruk gibi harness'in bildiremeyeceği durumları beklemek için.
 - **Yaklaşım:** Periyodik kontrol + timeout'lu bir bekleme aracı; otonom turlarda bütçe-dostu aralık.
-  TionHarness'nun scheduler'ı zaten var → üstüne ince bir "until-condition" sarmalayıcı.
+  TionHarness'in scheduler'ı zaten var → üstüne ince bir "until-condition" sarmalayıcı.
 - **Dosyalar:** yeni `builtin_monitor.go` (+ test), scheduler entegrasyonu.
 - **Risk sınıfı:** `RiskRead`.
 
@@ -273,7 +273,7 @@
 
 ## E. Mevcut araçların EKSİK ÖZELLİKLERİ (yeni araç değil, per-tool feature farkı)
 
-> Bölüm A "eksik araçları" listeler; bu bölüm **TionHarness'da VAR OLAN** araçların
+> Bölüm A "eksik araçları" listeler; bu bölüm **TionHarness'te VAR OLAN** araçların
 > Claude Code muadilinde bulunup bizde olmayan **özelliklerini** toplar. (İlk kayıt:
 > 2026-07-03, `observed-behavior` `src/tools/*` incelemesinden.)
 
@@ -307,7 +307,7 @@ kök+iç-içe `.gitignore` (lazy) + daima `.git`; dizin eşleşince `SkipDir`. `
 
 ## C. Bilinçli kapsam-dışı (eklenmeyecek)
 
-the external agent project'ta olup TionHarness'nun **kapsam/felsefe farkı** nedeniyle eklenmeyenler:
+the external agent project'ta olup TionHarness'in **kapsam/felsefe farkı** nedeniyle eklenmeyenler:
 
 - `source_oauth_trigger` ve Google/Slack/Microsoft OAuth varyantları → TionHarness source modeli MCP-sunucu +
   secret-vault tabanlı; OAuth akışı kapsam dışı.

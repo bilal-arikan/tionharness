@@ -2,7 +2,7 @@
 
 ## Neden gerekti?
 
-TionHarness'nun `claude-cli` sağlayıcısı `claude -p --output-format stream-json` ile çalışır — her tur bir **tek-seferlik alt süreç**; tamamlanınca ölür. Claude Code'un yerleşik `ScheduleWakeup` aracı yalnızca `claude /loop` harness bağlamında anlamlıdır; bu harness TionHarness'da yoktur. Sonuç: ajan "bekliyorum, 5 dakika sonra devam edeceğim" deyip `ScheduleWakeup` çağırıyordu, fakat hiçbir şey olmuyor, sohbet orada bitiyordu.
+TionHarness'in `claude-cli` sağlayıcısı `claude -p --output-format stream-json` ile çalışır — her tur bir **tek-seferlik alt süreç**; tamamlanınca ölür. Claude Code'un yerleşik `ScheduleWakeup` aracı yalnızca `claude /loop` harness bağlamında anlamlıdır; bu harness TionHarness'te yoktur. Sonuç: ajan "bekliyorum, 5 dakika sonra devam edeceğim" deyip `ScheduleWakeup` çağırıyordu, fakat hiçbir şey olmuyor, sohbet orada bitiyordu.
 
 ## Mimari
 
@@ -38,7 +38,7 @@ Ajan turunda (native veya CLI)
 | `internal/api/chat_control.go` | `chatRun.wake` alanı + getter/setter |
 | `internal/api/mcp_interaction.go` | `schedule_wake` araç tanımı + `callWake` dispatch |
 | `internal/api/mcp_interaction.go` | `schedule_wake`, `interactionToolSpecs`'e eklenir (extended tier); allowlist `inter.Core/ExtendedToolNames`'ten otomatik türer (tek kaynak). CLI'da `mcp__tionharness_extended__schedule_wake` |
-| `internal/agent/climcp.go` | `"ScheduleWakeup"` (CLI native) → disallowed (TionHarness'nun schedule_wake'i yerine geçer) |
+| `internal/agent/climcp.go` | `"ScheduleWakeup"` (CLI native) → disallowed (TionHarness'in schedule_wake'i yerine geçer) |
 | `internal/api/schedules.go` | One-shot satırları liste filtresi |
 | `internal/tools/builtin_schedulemgmt.go` | One-shot satırları `list_schedules` filtresi |
 | `frontend/src/App.tsx` | `chat` event: `phase=start` → `markPending`, `phase=done` → `clearPending` |

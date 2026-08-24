@@ -1,7 +1,7 @@
 # Karar — Claude Agent SDK ve "SDK Paritesi" Yol Haritası
 
 > Bu doküman bir **karar kaydı** (ADR) + **yol haritası**dır. Soru şuydu:
-> *"TionHarness'yu Claude Agent SDK'ya geçirmenin artıları ne olur?"*
+> *"TionHarness'i Claude Agent SDK'ya geçirmenin artıları ne olur?"*
 > Cevap: TionHarness bir **Go** projesi ve Claude Agent SDK'nın **resmi Go desteği yok**
 > (yalnız Python + TypeScript). Bu yüzden "geçiş" temiz bir `import` değil; üç
 > yoldan birini seçmek demek. Aşağıda yetenek karşılaştırması, yolların gerçek
@@ -19,7 +19,7 @@
 - **Native (anthropic) yolda eksik SDK özellikleri Go'da seçerek eklenir:**
   built-in araç seti → permission katmanı → hooks. "Geçiş" değil, **parite**.
 
-## SDK'nın Sağladıkları vs. TionHarness'nun Mevcut Durumu
+## SDK'nın Sağladıkları vs. TionHarness'in Mevcut Durumu
 
 | Yetenek | Agent SDK | TionHarness (bugün) | Boşluk |
 |---|---|---|---|

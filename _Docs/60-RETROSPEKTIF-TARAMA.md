@@ -214,7 +214,7 @@ stateDiagram-v2
 
 - **Kanal A — App Fix:** kök neden uygulamada. Çıktı = App Fix Raporu (kök neden + kanıt
   session'lar + önerilen düzeltme + dosya işaretçisi). **Asla oto-apply / asla coder-spawn.**
-  Kullanıcı bu raporları sonradan TionHarness'ı geliştirmekte kullanır. **İki sink (varsayılan):**
+  Kullanıcı bu raporları sonradan TionHarness'i geliştirmekte kullanır. **İki sink (varsayılan):**
   1. **In-app detaylı rapor** — `findings.jsonl` + render artifact, Insight panosunda görünür (her zaman).
   2. **Repo `_Docs` backlog** — hedef git reposu **UI'dan seçilir** (`InsightSettings.AppFixRepoPath`);
      seçilen reponun `_Docs/INSIGHT-BACKLOG.md`'sine append-only yazılır (kodu değil dokümanı

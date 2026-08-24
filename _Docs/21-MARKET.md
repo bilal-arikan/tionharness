@@ -39,7 +39,7 @@
 > `sessions/.../data/gen_providers.py`. Model listeleri kurulumda düzenlenebilir.
 >
 > **Sistem entegrasyonu (2026-06-25):** Provider pack'leri artık **capability metadata**
-> taşır ve TionHarness'nun token/maliyet/cache/düşünme sistemlerine bağlanır:
+> taşır ve TionHarness'in token/maliyet/cache/düşünme sistemlerine bağlanır:
 > - **`payload.provider.reasoning`** (bool) — `true` ise OpenAI-uyumlu uç için
 >   `reasoning_effort` (ajanın ThinkingLevel'ından `low/medium/high`) gönderilir
 >   (`OpenAICompat`, gated; bilinmeyen alan 400'ünü önlemek için varsayılan kapalı).
@@ -104,7 +104,7 @@
 
 ## 1. Amaç ve kapsam
 
-TionHarness'da yedi "paylaşılabilir varlık" var:
+TionHarness'te yedi "paylaşılabilir varlık" var:
 
 | Tür | Kaynak | Depolama | Kurulum hedefi |
 |-----|--------|----------|----------------|

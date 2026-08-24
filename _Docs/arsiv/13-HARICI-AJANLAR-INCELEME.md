@@ -30,7 +30,7 @@ Her madde TionHarness kaynak koduna karşı kontrol edildi. **Durum** = şu anki
 |---|------|--------|----------------|-------|
 | 6 | **Ajanlar-arası mesajlaşma** | v0.8.8 `send_agent_message` | ✅ **FIXED (2026-06-17)** — `tools/builtin_agentmsg.go` `send_agent_message` (self-manage gate'li): hedef ajanın `agent-inbox` oturumuna user-mesaj append + `Runtime.Wake` (fire-and-forget; `call_agent` senkron delegasyonun async tamamlayıcısı). `agent.SendAgentMessage` çözer/teslim eder. `agentmsg_test.go`. | ~~Built-in tool ekle.~~ Tamamlandı. Native (anthropic/minimax) yolunda; claude-cli kendi döngüsünü sürer (SDK-parite). |
 | 7 | **Oturum öz-yönetim araçları** | v0.8.3 | ⚠️ **Kısmî** — `list_sessions` built-in tool'u **var** (`tools/builtin_sessions.go`, cross-session farkındalık, commit `54ab736`); `set_session_*`/`get_session_info` yok | Kalan: `set_session_labels` / `set_session_status` / `get_session_info` built-in tool'ları → kendini-kapatan otomasyon akışları (görev bitince status=done → trigger). |
-| 8 | **Hooks / koşullu otomasyon** | v0.4.3, v0.7.7, v0.7.5 | ⚠️ `events` bus + `scheduler` var; hook/condition/webhook yok | (a) Command + prompt hook'ları (olay → shell/prompt enjeksiyonu), rate limiter + zorla-sonlandırma. (b) Otomasyon koşulları (time/state/label gate). (c) Webhook action (exponential backoff retry). TionHarness'nun schedule sistemiyle birebir örtüşür. |
+| 8 | **Hooks / koşullu otomasyon** | v0.4.3, v0.7.7, v0.7.5 | ⚠️ `events` bus + `scheduler` var; hook/condition/webhook yok | (a) Command + prompt hook'ları (olay → shell/prompt enjeksiyonu), rate limiter + zorla-sonlandırma. (b) Otomasyon koşulları (time/state/label gate). (c) Webhook action (exponential backoff retry). TionHarness'in schedule sistemiyle birebir örtüşür. |
 | 9 | **Otomasyon geçmişi cap + compaction** | v0.7.8 | ⚠️ `flow_runs` var, sınır belirsiz | Çalıştırma geçmişini sınırla (örn. 20/otomasyon, 1000 global) + periyodik compaction → disk şişmesini önle. |
 
 ### 🟡 P2 — Sağlamlaştırma & doğrulama (file-based depolamaya özgü)
@@ -56,7 +56,7 @@ Her madde TionHarness kaynak koduna karşı kontrol edildi. **Durum** = şu anki
 ### 🔵 P4 — UI/UX ve ekosistem (opsiyonel zenginleştirme)
 
 - **Cross-session full-text arama** (v0.3.1): ripgrep/Go ile tüm oturumlarda arama — güçlü UX.
-- **Render blokları**: Mermaid native (v0.3.0), HTML/PDF/image/markdown preview (v0.4.6, v0.9.6), datatable/spreadsheet + `transform_data` (v0.4.2). TionHarness'nun artifact sistemine eklenebilir.
+- **Render blokları**: Mermaid native (v0.3.0), HTML/PDF/image/markdown preview (v0.4.6, v0.9.6), datatable/spreadsheet + `transform_data` (v0.4.2). TionHarness'in artifact sistemine eklenebilir.
 - **Doküman araçları** (v0.6.0): `markitdown`/`pdf-tool`/`xlsx-tool`/`docx-tool` — attachment işleme için.
 - **In-app browser tool** (v0.6.0) + yüksek-riskli aksiyon onayı.
 - **Session labels + auto-label** (v0.2.27), **batch işlemler** (v0.4.6), **workflow state badge** (v0.2.31).
@@ -64,7 +64,7 @@ Her madde TionHarness kaynak koduna karşı kontrol edildi. **Durum** = şu anki
 - **Session branching/fork** (v0.6.0).
 - **Messaging gateway** (v0.8.10+): Telegram/WhatsApp/Lark — response mode enum (`progress`/`streaming`/`final_only`) + subprocess izolasyon + **erişim kontrol** (v0.9.1, güvenlik kritik).
 - **i18n** (v0.8.5): erken kurulursa migration ucuz.
-- **Model çeşitliliği**: OpenAI-uyumlu generic custom endpoint (v0.7.4) — TionHarness'nun minimax provider'ı genelleştirilebilir; Gemini/Bedrock/DeepSeek/external CLI agent opsiyonel. **Not (2026-06-19):** `openrouter` kind (`internal/providers/kind_openrouter.go`) eklendi; OpenRouter üzerinden yüzlerce modele tek key ile erişim sağlanıyor. Bu, SC-1 önerisinin (preset katalog) ilk somut adımıdır.
+- **Model çeşitliliği**: OpenAI-uyumlu generic custom endpoint (v0.7.4) — TionHarness'in minimax provider'ı genelleştirilebilir; Gemini/Bedrock/DeepSeek/external CLI agent opsiyonel. **Not (2026-06-19):** `openrouter` kind (`internal/providers/kind_openrouter.go`) eklendi; OpenRouter üzerinden yüzlerce modele tek key ile erişim sağlanıyor. Bu, SC-1 önerisinin (preset katalog) ilk somut adımıdır.
 
 ---
 
@@ -159,4 +159,4 @@ Her madde TionHarness kaynak koduna karşı kontrol edildi. **Durum** = şu anki
 
 ## Sonuç
 
-external-agent-oss'un yolculuğu TionHarness için bir **yol haritası önizlemesi**: tek-provider → multi-provider olgunlaşma, Electron IPC → WebSocket RPC + headless server, ve giderek artan **otomasyon/messaging/orkestrasyon** katmanları. TionHarness'nun mevcut mimarisi (file-based store, iki-parçalı sistem prompt, provider soyutlaması, events bus, scheduler) bu yörüngeyle **uyumlu**; en yüksek getirili adımlar P0–P1 tablolarındaki doğrulanmış boşluklar.
+external-agent-oss'un yolculuğu TionHarness için bir **yol haritası önizlemesi**: tek-provider → multi-provider olgunlaşma, Electron IPC → WebSocket RPC + headless server, ve giderek artan **otomasyon/messaging/orkestrasyon** katmanları. TionHarness'in mevcut mimarisi (file-based store, iki-parçalı sistem prompt, provider soyutlaması, events bus, scheduler) bu yörüngeyle **uyumlu**; en yüksek getirili adımlar P0–P1 tablolarındaki doğrulanmış boşluklar.

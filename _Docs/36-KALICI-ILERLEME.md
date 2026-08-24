@@ -98,7 +98,7 @@ kopyası), böylece `todo_write` aracı bağımlılık-hafif kalır:
   (scheduler/spawn/flow) tarafından run'a kurulur.
 - **Native araç gölgeleme (2026-06-25, fix):** claude-cli kendi built-in checklist
   aracını sunar; eski sürümlerde `TodoWrite`, yenilerde **`TaskCreate`/`TaskUpdate`/
-  `TaskList`/`TaskGet`** ailesi. Bu native araç TionHarness'nun bridged `todo_write`'ını
+  `TaskList`/`TaskGet`** ailesi. Bu native araç TionHarness'in bridged `todo_write`'ını
   **gölgeler** → model native'i çağırır, sink'e hiçbir şey gitmez, progress kartı boş
   kalır. `climcp.go::writeCLIMCPConfig` artık `--disallowedTools` ile her iki ad
   ailesini de bastırır (CLI'da olmayan adı disallow etmek zararsız) ve

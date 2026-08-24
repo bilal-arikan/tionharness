@@ -1,7 +1,7 @@
 # TionHarness — Depolama Katmanı (Dosya Sistemi)
 
 > Son güncelleme: **2026-06-19**
-> TionHarness'nun kalıcılık katmanı **SQLite'tan tamamen dosya sistemine** taşındı.
+> TionHarness'in kalıcılık katmanı **SQLite'tan tamamen dosya sistemine** taşındı.
 > SQLite (`modernc.org/sqlite`), migration runner ve `.sql` dosyaları kaldırıldı.
 
 ## Neden dosya sistemi?
@@ -226,7 +226,7 @@ metadata düzenlemesi transkripti yeniden yazmasın diye):
 | Artımlı persist | Her olay sınırında (`text_complete`/`tool_*`/`error`) **tüm oturumu** debounce'lı (500ms) yeniden yazar (`SessionPersistenceQueue`) | Final mesaj O(1) append; tur-içi durum ayrı **sidecar**'a snapshot |
 | Stream'lenen kısmi metin | ❌ Yalnız bellekte (`streamingText`), `text_complete`'e dek diske yazılmaz | ✅ `delta`'lar sidecar'a birikir (biraz daha granüler) |
 | Kurtarma yeri | Ağırlıklı **istemci** (reconnect replay + stale-watchdog + sunucudan tazele) | **Sunucu boot** (`recoverInflight`) |
-| Kullanıcı mesajı | ack öncesi senkron `flushSession` (regression eb81086e) | Stream öncesi senkron append (bu açık TionHarness'da hiç yoktu) |
+| Kullanıcı mesajı | ack öncesi senkron `flushSession` (regression eb81086e) | Stream öncesi senkron append (bu açık TionHarness'te hiç yoktu) |
 
 Neden farklı: external-agent sunucusu oturumları RAM'de tutar → asıl risk istemci↔sunucu
 desenkronu; TionHarness tek binary → asıl risk sürecin tamamen ölmesi (boot recovery mantıklı).
@@ -235,7 +235,7 @@ desenkronu; TionHarness tek binary → asıl risk sürecin tamamen ölmesi (boot
 
 1. **Stale-session watchdog** — backend ölmeden tek bir SSE olayı düşerse frontend
    "düşünüyor…"da takılabilir. external-agent'taki `useStaleSessionRecovery` gibi
-   periyodik "X sn'dir olay yok → sunucudan tazele" güvenlik ağı TionHarness'da yok.
+   periyodik "X sn'dir olay yok → sunucudan tazele" güvenlik ağı TionHarness'te yok.
 2. **`preserved_stale_messages` kuralı** — oturum yeniden yüklenirken sunucu listesi
    istemcidekinden kısa olsa bile istemcideki mesajları **silmeme** garantisi.
 

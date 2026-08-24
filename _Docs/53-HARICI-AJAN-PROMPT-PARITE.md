@@ -1,6 +1,6 @@
 # 53 — the external agent project Sistem-Promptu Paritesi (karşılaştırma notu)
 
-the external agent project'ın (`external-agent-oss`) tam sistem promptu referans alınarak TionHarness'ın
+the external agent project'ın (`external-agent-oss`) tam sistem promptu referans alınarak TionHarness'in
 kendi prompt kurgusuyla kısa karşılaştırması: neyi aldık, neyi bilinçli almadık, neyi
 farklı çözdük. İlgili: [50-CLAUDE-CODE-CACHE-PARITE.md](50-CLAUDE-CODE-CACHE-PARITE.md)
 (statik/dinamik cache bölünmesi), [analiz-craftagent-arac-eslestirme.md](analiz-craftagent-arac-eslestirme.md)
@@ -10,7 +10,7 @@ farklı çözdük. İlgili: [50-CLAUDE-CODE-CACHE-PARITE.md](50-CLAUDE-CODE-CACH
 
 the external agent project "her şeyi prompta göm" (~28K karakter statik + dinamik bloklar). TionHarness
 **lean prefix → skill'e devret** (`default-instructions.md` ~166 satır). Bu yüzden parite
-= körü körüne kopyalama değil; **gerçek boşluk + TionHarness'da destekli + prefix'i
+= körü körüne kopyalama değil; **gerçek boşluk + TionHarness'te destekli + prefix'i
 şişirmeyen** olanı almak. `internal/workspace/defaults_test.go` guard'ı desteklenmeyen
 the external agent project-ism'lerin (datatable/html-preview/call_llm/render_template/_displayName) geri
 sızmasını aktif engeller.
@@ -42,7 +42,7 @@ suffix'ine (cache breakpoint'ten sonra). İkisi de cache'li prefix'i sabit tutar
 | Workspace Capabilities | **YOK** | Runtime içi bilgi; düşük değer |
 | Recovery Context (`<recovery_context>`) | **GEREKSİZ** | Aşağıya bakınız |
 
-### TionHarness'a özel ek dinamik bloklar (the external agent project'ta yok)
+### TionHarness'e özel ek dinamik bloklar (the external agent project'ta yok)
 Goal · Coordination scratchpad (M2) · Artifacts listesi · Todo/progress (kalıcı, resume) ·
 Cross-session özeti · Lifecycle-hook context · Memory-pressure uyarısı.
 *(Core memory + recall vardı → hafıza alt sistemi kaldırılınca gitti — `7849daf`.)*

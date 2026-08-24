@@ -1,6 +1,6 @@
-# 33 — Dış Ajan Otomasyonu (TionHarness'yu Dışarıdan Sürmek)
+# 33 — Dış Ajan Otomasyonu (TionHarness'i Dışarıdan Sürmek)
 
-> TionHarness'yu **harici bir ajanın** (chrome-mcp, playwright-mcp veya düz HTTP istemcisi)
+> TionHarness'i **harici bir ajanın** (chrome-mcp, playwright-mcp veya düz HTTP istemcisi)
 > baştan sona kontrol etmesi için referans. İki yol vardır; çoğu senaryoda **API yolu**
 > tercih edilir, UI yolu yalnızca gerçek tarayıcı/oturum gerektiğinde kullanılır.
 
@@ -43,7 +43,7 @@ gözünden" doğrulama veya tarayıcı-bağımlı senaryolar için.
 
 ### A.1.1 UTF-8 Gövde — Türkçe Karakter Tuzağı (önemli)
 
-TionHarness'nun depolama/bellek/conversation yolu **uçtan uca UTF-8 temizdir** (Go string'leri
+TionHarness'in depolama/bellek/conversation yolu **uçtan uca UTF-8 temizdir** (Go string'leri
 UTF-8; `encoding/json` + atomik bayt yazımı; hiçbir yerde charset decode yok — doğrulandı:
 asistan cevapları `×`/`÷`/`−` gibi çok-baytlı Unicode'u kusursuz saklar). Türkçe metin
 bozulması (mojibake, ör. `Kısaca`→`KÄ±saca`, `kaç`→`kaÃ§`) **yalnızca isteği gönderen

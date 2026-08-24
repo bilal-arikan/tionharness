@@ -57,7 +57,7 @@ export function OnboardingScreen({ onCreate, onAttach }: Props) {
         <div className="flex flex-col gap-2">
           <h1 className="flex items-center justify-center gap-2 text-xl font-semibold">
             <Sparkles size={18} className="text-[var(--color-accent)]" />
-            TionHarness'ya hoş geldin
+            TionHarness'e hoş geldin
           </h1>
           <p className="text-sm text-[var(--color-text-dim)]">
             Başlamak için bir workspace oluştur ya da daha önce kullandığın bir workspace klasörünü

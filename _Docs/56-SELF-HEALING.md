@@ -2,7 +2,7 @@
 
 > Durum: **Tamamlandı** (2026-07-07). İlham: external-context-agent projesinin
 > `error_classifier` / `tool_guardrails` / `message_sanitization` / stuck-loop
-> desenleri, TionHarness'ın mevcut saf-`decideRecovery` mimarisine uyarlandı.
+> desenleri, TionHarness'in mevcut saf-`decideRecovery` mimarisine uyarlandı.
 > Kapsam: **native tool-use döngüsü** (anthropic/minimax). claude-cli kendi
 > döngüsünü sürer — Faz A/B/C ona uygulanmaz; Faz D (oturum-seviyesi) her iki
 > yol için geçerlidir.

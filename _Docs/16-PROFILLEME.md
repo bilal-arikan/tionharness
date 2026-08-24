@@ -93,7 +93,7 @@ Web arayüzü (tarayıcıda interaktif flame graph):
 go tool pprof -http=127.0.0.1:8000 http://127.0.0.1:6060/debug/pprof/heap
 ```
 
-## TionHarness'da öncelikli bakılacak sıcak yollar
+## TionHarness'te öncelikli bakılacak sıcak yollar
 
 Profil alırken şu adaylara dikkat et (mimariden türetilmiş hipotezler):
 

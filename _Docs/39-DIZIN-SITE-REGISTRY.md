@@ -69,7 +69,7 @@ yayınlar. Kullanıcı bu URL'yi uzak kaynak olarak ekler.
 - ❌ Ayrı barındırma + güncelleme pipeline'ı; gerçek-zamanlı değil (snapshot)
 
 ### B. Uygulama-içi connector (in-app catalog connector)
-TionHarness'ya **connector** kavramı eklenir: her site için bir connector site API'sini
+TionHarness'e **connector** kavramı eklenir: her site için bir connector site API'sini
 **canlı** çeker, kayıtları katalogda gösterir; kurulumda ilgili GitHub URL'ini `ingest`'e
 verir.
 - ✅ Gerçek-zamanlı, tek üründe; arama/sayfalama app'te

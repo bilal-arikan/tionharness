@@ -1,7 +1,7 @@
 # Çalışma Dizini (Working Directory) — Oturum-Başına cwd
 
 > Eklendi: **2026-06-22**. the external agent project (external-agent-oss) "working directory"
-> mekaniğinin TionHarness'ya uyarlaması.
+> mekaniğinin TionHarness'e uyarlaması.
 
 ## Amaç
 
@@ -101,7 +101,7 @@ tek `.git` deposu paylaşılır, her worktree'nin kendi çalışma dizini + dal�
 
 - **Eşit:** oturum-başına cwd, klasör rozeti, cwd değiştirme, git branch göstergesi,
   CLAUDE.md farkındalığı, makine geneli erişim.
-- **TionHarness'ya özgü:** otonom turlar (scheduler/flow/spawn) için confine freni —
+- **TionHarness'e özgü:** otonom turlar (scheduler/flow/spawn) için confine freni —
   the external agent project interaktif olduğu için buna ihtiyaç duymaz.
 
 ## Workspace varsayılan çalışma dizini (2026-06-22)
@@ -143,7 +143,7 @@ Sol alt-navbar (Settings/Logs benzeri) üç sekme:
 
 Git endpoint'leri (`internal/api/git.go`): `GET /api/fs/gitinfo?path=`,
 `POST /api/git/init`, `POST /api/git/config` (origin remote + commit kimliği).
-TionHarness'ın kendi başlattığı her depoya (`prepareGitRepo`) gömülü bir **başlangıç
+TionHarness'in kendi başlattığı her depoya (`prepareGitRepo`) gömülü bir **başlangıç
 `.gitignore`** yazılır (`internal/api/defaults/gitignore.txt`): sırlar (`.env`),
 bağımlılıklar (`node_modules/`, `.venv/`), build çıktısı, loglar, editör/OS artıkları
 ve `.tionharness/`. **Var olan `.gitignore` asla ezilmez**; zaten repo olan klasöre

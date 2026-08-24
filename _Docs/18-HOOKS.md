@@ -98,8 +98,8 @@ enjekte ettiği veya turu gözlemlediği için **hem native hem claude-cli** yol
 çalışır (üstteki tabloya bak).
 
 > sqz'i claude-cli ajanlarında kullanmak için: `sqz init --global` (sqz kendini
-> Claude Code'un PreToolUse hook'u olarak kurar; TionHarness'da bir şey gerekmez).
-> Native ajanlarda kullanmak için: TionHarness'da bir PostToolUse hook olarak `sqz`
+> Claude Code'un PreToolUse hook'u olarak kurar; TionHarness'te bir şey gerekmez).
+> Native ajanlarda kullanmak için: TionHarness'te bir PostToolUse hook olarak `sqz`
 > komutunu tanımlayın.
 
 ## Sözleşme (Claude Code paritesi)
@@ -161,7 +161,7 @@ kapsaması için gerekir — Windows'ta ajan `PowerShell` aracını kullanır, y
 matcher'ı **hiç eşleşmezdi**. Birden çok eşleşen hook **oluşturma sırasına göre**
 zincirlenir; ilk `block` kazanır.
 
-> **claude-cli köprüsü (2026-07-13):** Virgül-glob **TionHarness'ın native** sözdizimidir.
+> **claude-cli köprüsü (2026-07-13):** Virgül-glob **TionHarness'in native** sözdizimidir.
 > Claude Code matcher'ı **REGEX** sayar (alternation `|`, virgül literal), o yüzden
 > `writeCLISettings` matcher'ı `cliMatcherRegex` ile çevirir: virgül→`|`, glob→regex
 > (`*`→`.*`), `^…$` ankraj (`climcp_matcher.go`). **Önceden verbatim yazılıyordu → virgüllü

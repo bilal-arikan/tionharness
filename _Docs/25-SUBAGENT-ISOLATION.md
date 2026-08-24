@@ -153,7 +153,7 @@ Bu yüzden `run_subagent` şemasına **üç opsiyonel alan** eklendi:
 
 - **Yalnız dolu alanlar** satır olur; **hiçbiri yoksa blok boştur** → eski düz-`task`
   davranışı bayt-bazında korunur (geriye-uyumlu).
-- **Tool/source guidance** (4. alan) için yeni alan eklenmedi; TionHarness'da profil
+- **Tool/source guidance** (4. alan) için yeni alan eklenmedi; TionHarness'te profil
   allowlist'leri (explore/coder/reviewer) + `task` bunu zaten karşılıyor.
 - **Profil etkileşimi:** persona (kim olduğun) **kalır**, sözleşme (bu çağrıda ne/nasıl)
   altına eklenir — `explore` yine read-only davranır ama bu çağrının objective/format/
@@ -162,7 +162,7 @@ Bu yüzden `run_subagent` şemasına **üç opsiyonel alan** eklendi:
   noktada enjeksiyon her iki yürütmeyi kapsar.
 - **Native launcher gölgeleme (2026-06-25, fix):** claude-cli'ın kendi delegasyon
   aracı (eski sürüm `Task`, yeni sürüm `Agent`) çocuğu **tamamen CLI süreci içinde**
-  başlatır → TionHarness'ya görünmez, bridged `run_subagent`'ı baypas eder (`subagent`
+  başlatır → TionHarness'e görünmez, bridged `run_subagent`'ı baypas eder (`subagent`
   trace yok, TionHarness ajan/profil hedefi yok, bütçe muhasebesi yok). `climcp.go::
   writeCLIMCPConfig` artık `--disallowedTools` ile `Task` + `Agent`'ı bastırır
   (`run_subagent` daima kurulu muadildir — 2026-07-02'den beri gate yok, görünürlük

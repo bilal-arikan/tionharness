@@ -7,7 +7,7 @@
 # (transform, LLM'siz) → schedule "run now" (otonom teslim) → flow branch routing
 # (contains/equals/regex) → branch default arm → parallel fan-out+join (LLM) →
 # kalıcılık → temizlik.
-# Bir dış ajanın TionHarness'yu API ile sürebildiğini kanıtlar ve regresyonları yakalar.
+# Bir dış ajanın TionHarness'i API ile sürebildiğini kanıtlar ve regresyonları yakalar.
 #
 # Önkoşul: TionHarness sunucusu çalışıyor olmalı (varsayılan dev portu :8090).
 #

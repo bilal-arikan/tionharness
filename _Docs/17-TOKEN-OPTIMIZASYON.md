@@ -23,7 +23,7 @@
 
 ## Neden harici?
 
-TionHarness'nun native agentic döngüsünde (`agent/toolloop.go`) her araç çağrısının çıktısı bir
+TionHarness'in native agentic döngüsünde (`agent/toolloop.go`) her araç çağrısının çıktısı bir
 `ToolResult` olarak konuşmaya eklenir ve sonraki model çağrısında **girdi token'ı** olarak ücretlenir.
 `Bash` gibi araçlar 64 KB'ye kadar ham çıktı döndürebilir. `git status`, test runner, `ls -R`, `grep`
 gibi komutlar context'i hızla şişirir. Bu baskıyı azaltmak artık **built-in bir katman değil**, harici
@@ -305,7 +305,7 @@ verir.
 
 ### Araçların kendi ayarları (TionHarness dışı)
 
-Her ikisinin de kendi yapılandırması var; TionHarness'ın ayarlarıyla **karışmaz**, alt katmanda
+Her ikisinin de kendi yapılandırması var; TionHarness'in ayarlarıyla **karışmaz**, alt katmanda
 durur:
 
 | Araç | Yapılandırma | İşe yarayan anahtarlar |
@@ -314,7 +314,7 @@ durur:
 | sqz | `sqz init` ile kurulan preset'ler | `sqz reset --cache-only` (bayat `§ref:` token'ları) · `sqz expand` (ref → tam içerik) · `sqz tee list/get` · `sqz status`/`gain`/`stats` |
 
 > **Neden beyaz listeyi rtk'nın `exclude_commands`'ine devretmiyoruz:** o dosya makineye
-> özel ve sürüm kontrolünde değil. Kararı oraya taşımak, TionHarness'ın davranışını
+> özel ve sürüm kontrolünde değil. Kararı oraya taşımak, TionHarness'in davranışını
 > **makineden makineye değiştirir** ve testle kilitlenemez hale getirir. Kod tarafındaki
 > `rtkWrapperPrograms` gerekçesiyle birlikte repoda duruyor ve testi var.
 
@@ -522,7 +522,7 @@ PreToolUse:mcp__tionharness_interaction__Bash hook error:
 Ajan pes edip PowerShell'e geçti. rtk hiç çalışmadı; **shell de çalışmadı.**
 
 **Kök neden:** Ayarlar ▸ Harici Araçlar'daki "rtk'yi bağla" butonu gövdesi **PowerShell
-tek satırlığı** olan bir PreToolUse hook'u yaratıyordu. TionHarness'ın kendi hook runner'ı
+tek satırlığı** olan bir PreToolUse hook'u yaratıyordu. TionHarness'in kendi hook runner'ı
 Windows'ta PowerShell olduğu için native yolda çalışıyordu — ama `writeCLISettings` bu
 hook'u claude-cli'ye devrettiğinde **CLI onu bash ile** çalıştırıyor ve ilk `|`'da ölüyor.
 Başarısız bir PreToolUse hook'u **araç çağrısını bloke ettiği** için sonuç: o workspace'te
@@ -655,7 +655,7 @@ token araçlarıyla sınırlı değil; **kategorilere** ayrılır:
   ikisi de hook'tan geçmiş haliyle gösterilir → tutarlılık korunur).
 - Komut-özel akıllı kısaltma (git/test/grep'e özgü) built-in tarafta yok; bu iş harici `rtk`/`sqz`
   araçlarının komut-aile kurallarına bırakıldı.
-- claude-cli delegasyon yolu kapsam dışıdır (çıktıları TionHarness'nun `ToolResult` katmanından geçmez).
+- claude-cli delegasyon yolu kapsam dışıdır (çıktıları TionHarness'in `ToolResult` katmanından geçmez).
 
 ### Tool dizisi prompt-cache breakpoint'i (2026-07-02)
 
@@ -734,7 +734,7 @@ edilir; bu arada ajan dinamik tarafta "snapshot eski" notu görür. Workspace ay
 ## the external agent project'tan Aktarılan Fikirler
 
 > Kaynak: `external-agent-oss` ([repo](https://github.com/external-agent-project/external-agent-oss)) bağlam-yönetimi
-> incelemesi (2026-06-22). the external agent project çoğu bağlam işini Claude Agent SDK'ye devreder; TionHarness'nun açık
+> incelemesi (2026-06-22). the external agent project çoğu bağlam işini Claude Agent SDK'ye devreder; TionHarness'in açık
 > motoru genel olarak daha kontrollü. Aşağıda **sırada bekleyen** dokunuşlar (TODO) + **tamamlananların**
 > tek-satır özeti (tam tarihçe → [05-ILERLEME.md](05-ILERLEME.md)).
 
@@ -817,7 +817,7 @@ Tasarrufun tersi: geç gelen bir tur sıcak prompt-cache öneğini soğuttuğund
 Bütçe / oturum-bilgisi / sohbet-debug / debug popup'larının hesap tutarlılık denetiminde bulunup düzeltilen dört nokta (hepsi ortak `billing.PriceStat` + fiyat tablosu + `session_info` filler yolunda → tek noktadan dört ekranı da düzeltir):
 
 - **claude-cli tahmini cache tasarrufu artık sıfır değil** (`billing.PriceStat`): estimated (abonelik) dalı maliyeti eşdeğer-API ile tahmin ediyor ama tasarrufu `0` döndürüyordu. Anahtarsız varsayılan sağlayıcı olan claude-cli'de bu, tahmini bir maliyet gösterilirken **Tasarruf Merkezi / "Prompt-cache" / oturum kazancı / mesaj-debug "Cache tasarrufu"** satırlarının hepsinin `$0` görünmesine yol açıyordu. Artık `ep.CacheSavings(cacheRead)` da tahmin ediliyor (`priced=false` korunur → UI iki figürü de "~" ile işaretler). Regresyon: `billing_test.go`.
-- **claude-cli cache-write primi doğru tier'a çekildi** (`providers.EstimateFor`): anthropic tablosundaki `claude-opus-4-8` vb. `CacheWrite1hMult` (2×) primini taşır — bu **yalnız TionHarness'un native anthropic client'ına** özgü (o hep `ttl:"1h"` ister). claude-cli (Claude Code) kendi `cache_control`'unu **5 dakikalık TTL (1.25×)** ile yönetir, dolayısıyla EstimateFor artık override'ı sıfırlıyor → cache-write %60 fazla fiyatlanmıyor. Regresyon: `pricing_test.go`.
+- **claude-cli cache-write primi doğru tier'a çekildi** (`providers.EstimateFor`): anthropic tablosundaki `claude-opus-4-8` vb. `CacheWrite1hMult` (2×) primini taşır — bu **yalnız TionHarness'in native anthropic client'ına** özgü (o hep `ttl:"1h"` ister). claude-cli (Claude Code) kendi `cache_control`'unu **5 dakikalık TTL (1.25×)** ile yönetir, dolayısıyla EstimateFor artık override'ı sıfırlıyor → cache-write %60 fazla fiyatlanmıyor. Regresyon: `pricing_test.go`.
 - **Bağlam penceresi çubuğu segment↔toplam tutarsızlığı** (`session_info.go`): "kullanılan" başlığı `EstimateTokens` (mesaj başına `+MsgOverhead=4`) ile hesaplanırken filler segmentleri bu framing'i saymıyordu → çubuk rapor edilen yüzdeye tam ulaşmıyordu. `buildFillers` artık mesaj başına `conversation.MsgOverhead` ekliyor **ve** `ContextTokens` doğrudan filler toplamından türetiliyor → başlık = görünür segmentler toplamı (birebir). `MsgOverhead` `conversation` paketinden dışa açıldı.
 - **"Tasarrufsuz maliyet" tam-doğru baseline'a çevrildi** (`providers.Price.CostNoCaching` + `billing.NoCacheCost` + `Rollup.NoCacheCostUSD` → `cumulative.noCacheCostUSD`): kart eskiden `cost + savings` gösteriyordu; bu, cacheRead'i tam fiyatlıyor ama cache-write primini (1.25×/2×) içeride bırakıp "caching olmasaydı" senaryosunu `(writeMult−1)×cacheWrite×inP` kadar şişiriyordu. Yeni baseline, cacheRead **ve** cacheWrite tokenlarının tümünü taban girdi fiyatından (indirim/prim yok) + input + output ile hesaplar → gerçek "caching yokmuş" tutarı. (Not: 1s-TTL 2× primi nedeniyle tek soğuk yazma, o yazma için tasarrufsuz baseline'ı bile aşabilir — caching kazancı tekrar-okumada realize olur.) Regresyon: `billing_test.go` + `pricing_test.go`.
 
@@ -861,15 +861,15 @@ retrieval and long-range reasoning"*) — model uzun bağlamda hâlâ yetkin ama
 Ham pencereye alternatifler: compaction · structured note-taking · just-in-time retrieval · sub-agent
 izolasyonu.
 
-**TionHarness'nun önceki bahsi (§7, 2026-06-23).** `EffectiveBudget` `fraction=0.6 / ceil=512K`'ye
+**TionHarness'in önceki bahsi (§7, 2026-06-23).** `EffectiveBudget` `fraction=0.6 / ceil=512K`'ye
 çıkarılmıştı ("1M pencerede her şeyi ham tut" → Claude Code/External Agent davranışına yaklaşmak). Bu,
 **bilinçli olarak rot ile takastı**: ham pencere büyüdükçe `n²` yüzeyi ve recall hassasiyeti kaybı
-büyür. Ayrıca Claude Code o davranışı **prompt-cache + fork**'la ucuzlatır; TionHarness'nun birincil yolu
+büyür. Ayrıca Claude Code o davranışı **prompt-cache + fork**'la ucuzlatır; TionHarness'in birincil yolu
 (`claude-cli`, anahtarsız) bu paylaşımı CC gibi kontrol edemez → büyük ham pencerenin getiri/maliyet
-oranı TionHarness'da daha zayıf.
+oranı TionHarness'te daha zayıf.
 
 **Kritik içgörü — dayanıklılık ≠ ham pencere boyutu.** Bir detayın kaybolmaması için 512K ham
-transkript *gerekmez*. TionHarness'nun dayanıklılığı zaten **retrieval katmanında**: `conversation_search`
+transkript *gerekmez*. TionHarness'in dayanıklılığı zaten **retrieval katmanında**: `conversation_search`
 (`full=true`/`context=N` ile **birebir** kurtarma, §10) · post-compact kurtarma notu ("tahmin etme;
 ara ya da yeniden oku", §9). Katlanan detay **birebir geri
 alınabilir** → ham pencereyi küçültmek retrieval'i **kaybettirmez**, sadece dayanıklılığı "büyük pencere"den
@@ -930,7 +930,7 @@ bağlam yönetimi CLI'a geçer → bu bütçe o oturumda baypas edilir (bilinen 
 
 ## claude-cli Prompt-Cache Sıcaklığı (2026-06-29)
 
-claude-cli sağlayıcısında modele giden gerçek girdi, TionHarness'nun kendi enjekte
+claude-cli sağlayıcısında modele giden gerçek girdi, TionHarness'in kendi enjekte
 ettiği katmandan daha büyüktür (CLI kendi sistem promptu + araç şemaları + MCP
 köprüsünü ekler; context-preview'daki `cliOverhead` bunu **num_turns ile bölünmüş
 çağrı-başı** gerçek girdiyle gösterir). Bu yükün her tur yeniden **yazılması**
@@ -988,7 +988,7 @@ Yalnız **eager** (always-load) araçlar tam şema taşır; deferred/lazy araçl
 kabul edilebilir). Doğrulama: SES104'te Tahmin 29.573 → Gerçek 88.425 (Δ 58.852), bu
 referansla (17K sys + 9K dahili + ~19–33K köprü araçları) ~%15 içinde örtüşür.
 
-Rakamlar ±~15% (CLI, MCP şemalarını TionHarness'nun ~3 karakter/token sezgisinden daha
+Rakamlar ±~15% (CLI, MCP şemalarını TionHarness'in ~3 karakter/token sezgisinden daha
 ayrıntılı serileştirir + tokenizer farkı). **claude-cli major sürümü değişince
 ölçümü yenile** (taban sistem promptu sürümler arası büyür). `cliOverheadPreview`
 artık `predictedOverhead` alanı taşır → UI ilk turdan önce de uyarabilir.
@@ -1052,7 +1052,7 @@ tahmine katılmaz.
 > `{persistent:true}`, resume → `{persistent:false, resume:true}`, off → ikisi de false),
 > böylece "ikisi de açık" belirsiz durumu UI'dan **artık erişilemez** (eski uyarı banner'ı
 > kaldırıldı). Not: **--resume (delta)**, External Agent'ın kullandığı modun ta kendisidir
-> (her tur respawn + `resume: sessionId`); kalıcı süreç TionHarness'a özgüdür.
+> (her tur respawn + `resume: sessionId`); kalıcı süreç TionHarness'e özgüdür.
 
 ### Canlı ölçüm (2026-07-02) — resume vs persistent vs "hiçbiri"
 
@@ -1084,7 +1084,7 @@ turdan tura değiştiği için maliyeti tam normalize etme.
 
 ### Optimizasyon zinciri — uçtan uca vaka çalışması (2026-07-06)
 
-Aynı 3-turluk sohbet (opus-4-8) hem TionHarness'da (AGT1/AGT9, claude-cli) hem Craft
+Aynı 3-turluk sohbet (opus-4-8) hem TionHarness'te (AGT1/AGT9, claude-cli) hem Craft
 Agent'ta (native Anthropic API) çalıştırılıp `usage-detail` + `info` + ham `claude -p`
 `usage` ile karşılaştırıldı. Amaç: TionHarness claude-cli yolundaki her ek yükü ölçüp
 teker teker kırmak. **Referans farkı:** aynı iş Craft native-API'de ~\$0.31 iken
@@ -1104,7 +1104,7 @@ TionHarness claude-cli klasik başlangıçta ~\$2.59 (~8.4x) idi.
 **Kök neden (Adım 3) — devasa dosya `--append-system-prompt`'a sızmıştı:** 41.265
 karakterlik bir `the external agent projectInstructions.md` yanlışlıkla statik sistem promptuna
 ekleniyordu → `systemTokens` 10.317, prefix'e ~14k. Kaldırınca `systemTokens`
-**10.317→913** (system 41.265→3.715 char), prefix 66.6k→52.6k. TionHarness'ın kendi
+**10.317→913** (system 41.265→3.715 char), prefix 66.6k→52.6k. TionHarness'in kendi
 sistem-promptu katkısı artık ~%3.
 
 **Prefix dekompozisyon YÖNTEMİ (tekrar üretilebilir):** ham `claude -p`'yi izole

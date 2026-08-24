@@ -13,7 +13,7 @@ LLM'in **aynı markalı HTML'i her seferinde yeniden üretmemesi**. Layout sabit
 veri değişiyorsa: motor şablonu doldurur, araç modele **sadece dosya yolu** döndürür
 (HTML değil → token tasarrufu), sohbette **inline** izole iframe'de gösterilir.
 
-the external agent project'ta şablon bir "source"a aitti. TionHarness'da **source kavramı yok** → şablonlar
+the external agent project'ta şablon bir "source"a aitti. TionHarness'te **source kavramı yok** → şablonlar
 **skill'e bundle** edilir (`tionharness-templates`). Yeni bir "template store" alt-sistemi
 KURULMADI (over-engineering); mevcut `${SKILL_DIR}` + bundled-files mekanizması yeterli.
 

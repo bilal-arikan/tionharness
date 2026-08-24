@@ -14,7 +14,7 @@ ajanın temiz pencerede devralabileceği yeterli state taşıyan bir **handoff
 artifact** bırak. Compaction "süreklilik" verir ama "temiz sayfa" vermez; reset
 ikisini ayırır.
 
-TionHarness'da önceden **yalnız** in-place rolling-summary vardı
+TionHarness'te önceden **yalnız** in-place rolling-summary vardı
 (`internal/conversation/manager.go`). Bu özellik, onun **tamamlayıcısı** olarak
 reset modunu ekler — mevcut compaction'ı değiştirmeden.
 
@@ -105,7 +105,7 @@ eğilimi kırılır. `HandoffEnv` (WorkingDir/GitBranch/GitStatus/Todos/Artifact
 
 ## Otomatik tetik mekaniği
 
-TionHarness'da otonom turlar (scheduler/spawn) **tek-prompt + tool-loop**'tur; turlar
+TionHarness'te otonom turlar (scheduler/spawn) **tek-prompt + tool-loop**'tur; turlar
 arası geçmiş modele gönderilmez. Bu yüzden basınç **tur içinde** birikir ve
 reactive compaction (`toolloop.go` → `CompactInFlightMessages`) ile karşılanır.
 "Limite yaklaşma" sinyali = **bu turun reactive compaction tetiklemesi**.

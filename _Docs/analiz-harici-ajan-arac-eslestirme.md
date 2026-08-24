@@ -8,7 +8,7 @@
 > **GÜNCELLEME:** Aksiyon (yapılacaklar) karşılığı artık ayrı dosyada:
 > [`41-ARAC-BOSLUKLARI-YAPILACAKLAR.md`](./41-ARAC-BOSLUKLARI-YAPILACAKLAR.md).
 > Bu analizden sonra `config_validate`, `skill_validate`, `mermaid_validate` araçları **eklendi**
-> (artık TionHarness'da mevcut) → §4a'daki ilgili maddeler **KAPANDI**; güncel açık boşluk listesi için
+> (artık TionHarness'te mevcut) → §4a'daki ilgili maddeler **KAPANDI**; güncel açık boşluk listesi için
 > 41 numaralı dokümana bakın.
 
 ## Özet
@@ -98,44 +98,44 @@ _(**Bellek:** `memory_add`/`memory_recall`/`core_memory_*` — memory alt sistem
 
 ## 3. Eşleştirme Tablosu (External Agent → TionHarness)
 
-Durum: `birebir` / `kısmi` / `TionHarness'da yok`.
+Durum: `birebir` / `kısmi` / `TionHarness'te yok`.
 
 | External Agent aracı | TionHarness karşılığı | Durum | Not |
 |-------------------|--------------------|-------|-----|
-| `SubmitPlan` | claude-cli plan modu (`ExitPlanMode` köprüsü) | kısmi | TionHarness'da bağımsız bir builtin plan aracı yok; plan onayı CLI'nin `ExitPlanMode`'una bağlanmış (son commit: "claude-cli plan modu"). |
+| `SubmitPlan` | claude-cli plan modu (`ExitPlanMode` köprüsü) | kısmi | TionHarness'te bağımsız bir builtin plan aracı yok; plan onayı CLI'nin `ExitPlanMode`'una bağlanmış (son commit: "claude-cli plan modu"). |
 | `config_validate` | `read_config` / `write_config` / `list_config` | kısmi | Config dosyalarını okuma/yazma var; **doğrulama (schema validation) yok**. |
 | `skill_validate` | `create_skill` / `update_skill` | kısmi | Skill CRUD var ama ayrı `validate` adımı yok. |
-| `mermaid_validate` | — | TionHarness'da yok | Diyagram doğrulama aracı yok. |
+| `mermaid_validate` | — | TionHarness'te yok | Diyagram doğrulama aracı yok. |
 | `source_test` | `create_mcp_server` / `toggle_mcp_server` / `list_mcp_servers` | kısmi | MCP sunucu yönetimi var; "doğrula + bağlantı testi + otomatik aktive et" tek-adımı yok. TionHarness source ≈ MCP sunucu kavramı. |
-| `source_oauth_trigger` | — | TionHarness'da yok | OAuth-tabanlı source akışı yok (kimlik bilgileri vault'tan). |
-| `source_google_oauth_trigger` | — | TionHarness'da yok | — |
-| `source_slack_oauth_trigger` | — | TionHarness'da yok | — |
-| `source_microsoft_oauth_trigger` | — | TionHarness'da yok | — |
+| `source_oauth_trigger` | — | TionHarness'te yok | OAuth-tabanlı source akışı yok (kimlik bilgileri vault'tan). |
+| `source_google_oauth_trigger` | — | TionHarness'te yok | — |
+| `source_slack_oauth_trigger` | — | TionHarness'te yok | — |
+| `source_microsoft_oauth_trigger` | — | TionHarness'te yok | — |
 | `source_credential_prompt` | `secret_set` (+ `ask_user`) | kısmi | Secret vault var ama "güvenli credential giriş UI'ı" yok; ajan secret'ı kendisi yazar. |
 | `update_user_preferences` | `update_user_preferences` (builtin) | kısmi | Yapısal tercih alanları var; önceki serbest-metin core-memory yolu (memory alt sistemi) 2026-07-05'te kaldırıldı. |
 | `transform_data` | `Bash`/`Shell` + `Write` | kısmi | İzole subprocess + yapısal çıktı sözleşmesi yok; aynı sonuç shell ile elde edilebilir. |
 | `script_sandbox` | `Bash` (sandbox'lı PowerShell shell) | kısmi | Sandbox'lı shell var; ağ-izolasyonlu satır-içi script tanılama aracı ayrı değil. |
-| `render_template` | — | TionHarness'da yok | Mustache/HTML şablon render aracı yok. |
-| `send_developer_feedback` | — | TionHarness'da yok | Geliştiriciye geri bildirim kanalı yok. |
+| `render_template` | — | TionHarness'te yok | Mustache/HTML şablon render aracı yok. |
+| `send_developer_feedback` | — | TionHarness'te yok | Geliştiriciye geri bildirim kanalı yok. |
 | `call_llm` | `run_subagent` (sync, izole) | kısmi | `run_subagent` araçlı tam bir ajan (daha ağır); `call_llm` tek-completion/ucuz. En yakın karşılık. |
 | `spawn_session` | `spawn_session` | birebir | Her ikisi de bağımsız yeni oturum başlatır (fire-and-forget). |
-| `browser_tool` | — (MCP: playwright / mcp-chrome) | TionHarness'da yok | Natif tarayıcı aracı yok; tarayıcı MCP sunucuları üzerinden kullanılır. |
-| `set_session_labels` | — (`move_task` kanban kolonları) | TionHarness'da yok | Oturum-seviyesi etiket kavramı yok; benzer "durum" mantığı kanban task'larında. |
+| `browser_tool` | — (MCP: playwright / mcp-chrome) | TionHarness'te yok | Natif tarayıcı aracı yok; tarayıcı MCP sunucuları üzerinden kullanılır. |
+| `set_session_labels` | — (`move_task` kanban kolonları) | TionHarness'te yok | Oturum-seviyesi etiket kavramı yok; benzer "durum" mantığı kanban task'larında. |
 | `set_session_status` | `archive_session` / `complete_goal` / `move_task` | kısmi | Oturum için done≈`archive_session`; durum-makinesi task board'unda (`move_task`). |
 | `get_session_info` | `list_sessions` | kısmi | Tekil oturum metadata'sını dönen ayrı araç yok; `list_sessions` durumsal farkındalık verir. |
 | `list_sessions` | `list_sessions` | birebir | Her ikisi de workspace oturumlarını listeler. |
 | `send_agent_message` | `send_message` | kısmi | TionHarness başka **ajana** DM yollar; Craft başka **oturuma**. Amaç aynı (sürmekte olan koordinasyon). |
-| `list_messaging_channels` | — | TionHarness'da yok | Telegram/WhatsApp gateway entegrasyonu yok. |
-| `unbind_messaging_channel` | — | TionHarness'da yok | — |
+| `list_messaging_channels` | — | TionHarness'te yok | Telegram/WhatsApp gateway entegrasyonu yok. |
+| `unbind_messaging_channel` | — | TionHarness'te yok | — |
 
 > Çekirdek araç eşi (envanter-dışı, her iki tarafta var): `Read/Write/Edit/Bash/Glob/Grep/WebFetch`
-> TionHarness'da builtin, External Agent'ta SDK-natif. `mermaid_validate` hariç bu çekirdek küme örtüşür.
+> TionHarness'te builtin, External Agent'ta SDK-natif. `mermaid_validate` hariç bu çekirdek küme örtüşür.
 
 ---
 
 ## 4. Boşluk Analizi
 
-### 4a. External Agent'ta var, TionHarness'da yok (eklenmesi mantıklı olanlar)
+### 4a. External Agent'ta var, TionHarness'te yok (eklenmesi mantıklı olanlar)
 
 | Craft aracı | Öneri (1 cümle) |
 |-------------|------------------|
@@ -148,9 +148,9 @@ Durum: `birebir` / `kısmi` / `TionHarness'da yok`.
 | `source_credential_prompt` | Kullanıcıya güvenli credential giriş UI'ı açan bir araç, ajanların secret'ı kendilerinin yazmasına (veya tahmin etmesine) gerek bırakmaz. |
 | `call_llm` | `run_subagent`'ten ayrı, araçsız tek-completion bir `call_llm`, ucuz özet/sınıflandırma alt görevleri için ağır subagent yerine doğru maliyet katmanını verir. |
 
-### 4b. TionHarness'da var, External Agent'ta yok (TionHarness'nun platform üstünlüğü)
+### 4b. TionHarness'te var, External Agent'ta yok (TionHarness'in platform üstünlüğü)
 
-Bunlar TionHarness'nun multi-agent platform doğasından gelir ve External Agent'ın oturum-kapsamlı modelinde
+Bunlar TionHarness'in multi-agent platform doğasından gelir ve External Agent'ın oturum-kapsamlı modelinde
 karşılığı yoktur (eksiklik değil, kapsam farkı):
 
 - **Tam CRUD aileleri:** ajan (`create/update/delete/list_agent`), flow (`create/.../run_flow`),
@@ -175,6 +175,6 @@ karşılığı yoktur (eksiklik değil, kapsam farkı):
 
 İki araç seti, **oturum-yardımcısı** (External Agent) ve **multi-agent platform yönetimi** (TionHarness) olarak
 ayrışır. Örtüşme delegasyon (`spawn_session`), oturum farkındalığı (`list_sessions`) ve oturumlar-arası
-mesajlaşmada yoğunlaşır. TionHarness'ya en yüksek değerli adaylar: doğrulama araçları
+mesajlaşmada yoğunlaşır. TionHarness'e en yüksek değerli adaylar: doğrulama araçları
 (`config_validate`, `skill_validate`, `mermaid_validate`), `transform_data`/`render_template` çıktı
 katmanı ve ucuz `call_llm` katmanı.

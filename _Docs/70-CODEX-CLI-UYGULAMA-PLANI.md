@@ -337,7 +337,7 @@ go test ./... -count=1
   bırakır ve güvenlik zaten OS sandbox'ında (`69 §9`).
 - `model_instructions_file` ile built-in talimatları ezmek — kaynak kodda
   "STRONGLY DISCOURAGED", model performansını düşürür.
-- Codex'i TionHarness'a **MCP sunucusu** olarak takmak (`codex mcp-server`) —
+- Codex'i TionHarness'e **MCP sunucusu** olarak takmak (`codex mcp-server`) —
   ayrı ve bağımsız bir özellik; bu planın parçası değil.
 - claude-cli yolunu Codex'e benzetmek için değiştirmek — mevcut davranış
   korunur; yalnız somut tip → arayüz refactor'ı yapılır.
@@ -522,7 +522,7 @@ sekiz soruluk bir doğrulama koşusu yapıldı. İki gerçek boşluk kanıtland�
 | Q1 | codex-cli sağlayıcısı end-to-end çalışıyor mu (tur, MCP köprüsü, JSONL trace)? | ✅ PASS | önceki fazlarda zaten doğrulanmıştı |
 | Q2 | TionHarness araçları (`mcp__tionharness_interaction__*`) codex turunda çağrılabiliyor mu? | ✅ PASS | core tier (Bash/ask_user/todo_write/...) sorunsuz |
 | Q3 | Workspace hook'ları (Pre/PostToolUse) codex turunda tetikleniyor mu? | ❌ FAIL | hiç tetiklenmiyor — `toolloop.go:376`'da native loop'a hiç girilmiyor, bkz. 69 §9 Boşluk-3 |
-| Q4 | codebase-memory-mcp çağrıları `project` argümanı eksikken de doğru sonuç veriyor mu? | ✅ PASS (nitelikli) | model argümanı doğru verdiği için geçti — TionHarness'ın prefill/repair güvencesi (`mcpargs.go`/`mcprepair.go`) codex yolunda **devrede değil** (agent paketine referans yok), bkz. 69 § "codebase-memory-mcp prefill guard" |
+| Q4 | codebase-memory-mcp çağrıları `project` argümanı eksikken de doğru sonuç veriyor mu? | ✅ PASS (nitelikli) | model argümanı doğru verdiği için geçti — TionHarness'in prefill/repair güvencesi (`mcpargs.go`/`mcprepair.go`) codex yolunda **devrede değil** (agent paketine referans yok), bkz. 69 § "codebase-memory-mcp prefill guard" |
 | Q5 | sqz/rtk çıktı sıkıştırması codex'in shell çağrılarında uygulanıyor mu? | ❌ FAIL | Q3'ün türevi — sqz `db.HookPostToolUse` komutu, hook tetiklenmediği için sqz de yok |
 | Q6 | `ask`/`read-only` izin modu gerçekten OS-sandbox seviyesinde mi engelliyor, yoksa model kendi mi çekiliyor? | ⚠️ PARTIAL | gözlemlenen ret modelin kendi policy metnine uymasıydı; gerçek çekirdek-seviyesi sandbox reddi bu turda kanıtlanmadı, bkz. 69 §9 Boşluk-1 dürüstlük notu |
 | Q7 | `activate_tools` ile açılan lazy/extended araç bir sonraki çağrıda gerçekten kullanılabiliyor mu? | ❌ FAIL | codex `tools/list_changed`'i yalnız loglayıp asla re-list yapmıyor (`logging_client_handler.rs:86-88`); tur 1 aktive / tur 2 çağır senaryosu 7+3 boşuna deneme ile çürütüldü — bkz. 69 §9 Boşluk-4 |

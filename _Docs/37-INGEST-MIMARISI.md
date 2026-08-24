@@ -13,7 +13,7 @@
 | **Edinme (acquisition)** | Byte'ları nereden al (GitHub tarball, local ağaç) | `skills` + `market-remote`'ta çift kod |
 | **Çeviri (adapter)** | Yabancı format → native entity | Yalnız `mapCCSkill` (skill) |
 
-Ayrıca **market** = TionHarness'nun **kendi formatındaki** paketleri dağıtır (publish↔install,
+Ayrıca **market** = TionHarness'in **kendi formatındaki** paketleri dağıtır (publish↔install,
 sürümlü, registry; 7 entity türü kurar). **Import** = **yabancı formatı** (Claude Code
 skill/agent/command, MCP config) alıp native entity'ye çevirir. Bunlar farklı işlerdir.
 

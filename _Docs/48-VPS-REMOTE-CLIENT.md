@@ -19,7 +19,7 @@ yol. Neden reddedildiği §2'de; özeti: Android'de subprocess yasağı claude-c
 
 ## 1. Motivasyon
 
-Kullanıcı TionHarness'ya telefondan erişmek istiyor. İki mimari değerlendirildi:
+Kullanıcı TionHarness'e telefondan erişmek istiyor. İki mimari değerlendirildi:
 
 1. **On-device (telefonda Go server):** Android'in `execve` (W^X) kısıtı yüzünden
    rastgele subprocess spawn yasak → claude-cli (Node), `Bash`/`PowerShell`,
@@ -29,7 +29,7 @@ Kullanıcı TionHarness'ya telefondan erişmek istiyor. İki mimari değerlendir
    **değişmeden** çalışır; telefon HTTPS/SSE ile bağlanan bir kabuk. Subprocess
    sorunu yok, otonomi 7/24 gerçekten çalışır, workspace depolaması normal FS.
 
-Karar: **VPS modeli.** Çekirdek TionHarness'ya neredeyse dokunmadan, asıl iş
+Karar: **VPS modeli.** Çekirdek TionHarness'e neredeyse dokunmadan, asıl iş
 **güvenlik + ince istemci + mobil UI cilası**.
 
 ### 1.1 Mimari
@@ -47,7 +47,7 @@ Karar: **VPS modeli.** Çekirdek TionHarness'ya neredeyse dokunmadan, asıl iş
                                    └──────────────────────────────┘
 ```
 
-`workspaceler ve temel dosyalar VPS'te durur` = TionHarness'nun bugünkü **dosya-tabanlı
+`workspaceler ve temel dosyalar VPS'te durur` = TionHarness'in bugünkü **dosya-tabanlı
 depolaması** (`08-DEPOLAMA`) VPS diskinde. Ekstra "bağlama/link/mount" mekanizması
 YOK — dosyalar zaten orada yaşar, ajanlar bugünkü gibi fs araçlarıyla editler.
 
@@ -84,7 +84,7 @@ herkes ajanları sürer, API token'larını (parayı) yakar, dosyaları okur/sil
 
 - VPS'i özel bir ağa (Tailscale tailnet ya da WireGuard) koy; telefon da o ağda.
 - TionHarness yine **`127.0.0.1` ya da tailnet arayüzüne** bind eder → **public'e hiç
-  çıkmaz.** "auth-yok/CORS-wildcard" felsefesi olduğu gibi korunur, **TionHarness'ya
+  çıkmaz.** "auth-yok/CORS-wildcard" felsefesi olduğu gibi korunur, **TionHarness'e
   auth kodu eklemeye gerek kalmaz.**
 - Tek kullanıcı + kişisel kullanım için en pratik, en az efor.
 - Bind adresi: `TIONHARNESS_ADDR=<tailscale-ip>:8080` (veya `127.0.0.1` + Tailscale
@@ -92,7 +92,7 @@ herkes ajanları sürer, API token'larını (parayı) yakar, dosyaları okur/sil
 
 ### 3.2 Reddedilen (bu kapsamda): reverse proxy + auth
 
-- nginx/caddy ile TLS + token/mTLS auth, `0.0.0.0` bind arkada. TionHarness'ya bir
+- nginx/caddy ile TLS + token/mTLS auth, `0.0.0.0` bind arkada. TionHarness'e bir
   **auth katmanı** eklemeyi gerektirir (bugün yok) — orta çaplı iş.
 - Yalnızca **çok-cihaz paylaşımı / gerçek public erişim** gerekince mantıklı.
   Tek kullanıcıda gereksiz karmaşa → **ertelendi** (bkz. §7 Gelecek).

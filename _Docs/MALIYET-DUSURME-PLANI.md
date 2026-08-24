@@ -21,7 +21,7 @@ the external agent project'taki eşdeğer oturum: **$0.177**.
 ## Kök Nedenler (kod kanıtlı)
 
 1. **Oturum claude-cli sarmalayıcı yolunda koştu** (provider=`claude-cli`, model `claude-cli|claude-opus-4-8`). `toolloop.go:193-270` her turda **tek seferlik yeni bir `claude -p` alt süreci** başlatıyor ve `--mcp-config`'i yeniden üretiyor (`claudePersistentSession=false`) → prefix her turda değişiyor, cache kırılıyor.
-2. **Araç şişkinliği CLI yolunda**: 140 aracın çoğu Claude Code yerleşikleri + playwright (~21) + mcp-chrome (~25-30). `climcp.go:85-103` harici MCP sunucularını **toptan** geçiriyor; kullanıcının 23 playwright aracına koyduğu "hidden" işaretleri ve `DisabledTools` listesi bu yolda **hiç okunmuyor**. TionHarness'ın kendi 24 çekirdek aracı sadece ~6k token.
+2. **Araç şişkinliği CLI yolunda**: 140 aracın çoğu Claude Code yerleşikleri + playwright (~21) + mcp-chrome (~25-30). `climcp.go:85-103` harici MCP sunucularını **toptan** geçiriyor; kullanıcının 23 playwright aracına koyduğu "hidden" işaretleri ve `DisabledTools` listesi bu yolda **hiç okunmuyor**. TionHarness'in kendi 24 çekirdek aracı sadece ~6k token.
 3. **Native (anthropic) yolda gizli cache hataları** (ajan bu yola geçince patlayacak):
    - Lazy-tool aktivasyon seti **her turda sıfırlanıyor** ve tur ortasında budanıyor (`toolloop.go:279/347-348/592`) → tools bloğu değişince Anthropic'in tools→system→messages hiyerarşisi gereği TÜM prefix geçersiz.
    - `ExtendedPromptCache` varsayılan **kapalı** (`settings.go` `Default()` içinde yok) → taze kurulum hiç `cache_control` göndermiyor VE sistem promptuna **saniye hassasiyetli timestamp** ekleniyor (`chat_turn.go:85,182-185`).

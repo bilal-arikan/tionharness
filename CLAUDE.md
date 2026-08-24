@@ -40,12 +40,12 @@ kullanma.
   `available_projects` döndürür. Bu hata geldiğinde **aynı çağrıyı tekrarlama**;
   `available_projects`'ten doğru kimliği kopyala.
 - Hedef repo listede **yoksa** bu MCP'yi kullanma; o repo için `Glob`/`Grep`'e düş.
-- TionHarness'ın **kendi** ajan döngüsü bunları büyük ölçüde otomatik halleder:
+- TionHarness'in **kendi** ajan döngüsü bunları büyük ölçüde otomatik halleder:
   eksik `project` gönderilmeden önce oturumun working directory'sinden doldurulur,
   düzeltilebilir bir kimlik hatası çağrı tekrar koşturularak onarılır, oturumun
   reposu indeksli değilse arka planda indeksleme tetiklenir
   (`internal/agent/mcpargs.go`, `mcprepair.go`). **claude-cli sağlayıcısında bu
-  koruma yoktur** — araç döngüsünü CLI kendi koşturur, çağrılar TionHarness'dan
+  koruma yoktur** — araç döngüsünü CLI kendi koşturur, çağrılar TionHarness'ten
   geçmez; orada yukarıdaki kuralları elle uygula.
 - Bu depoda sorgular için `project` = `C-Users-user-Desktop-Projects-TionHarness`.
 
