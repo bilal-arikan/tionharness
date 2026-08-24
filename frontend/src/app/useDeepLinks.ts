@@ -1,7 +1,7 @@
 // useDeepLinks owns the per-view deep-link targets (the entity a routed screen
 // should pre-select) plus the cross-view "open X" helpers that set a target and
 // switch the view in one step.
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useState } from 'react'
 import type { View } from './NavRail'
 import { INITIAL_ROUTE } from './useAppNavigation'
 

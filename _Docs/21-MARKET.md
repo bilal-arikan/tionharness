@@ -18,7 +18,7 @@
 >
 > **Katman sadeleştirme (2026-06-25) + kısmi geri alma:** workspace pack tier'ı
 > **kaldırıldı**; **bundled tier daha sonra geri geldi** — `//go:embed defaults` +
-> `internal/market/defaults/*.swarmpack.json` yalnız **gömülü workspace şablonlarını**
+> `internal/market/defaults/*.harnesspack.json` yalnız **gömülü workspace şablonlarını**
 > taşır (taze kurulumda market ve "workspace oluştur" seçicisi boş kalmasın diye).
 > Diğer tüm paketler global dizinde (`<DataDir>/market`, ~/.tionharness/market) ve uzak
 > registry'lerde yaşar; workspace'te market klasörü yok. Mevcut başlangıç
@@ -125,14 +125,14 @@ TionHarness'te yedi "paylaşılabilir varlık" var:
 binary'e derilidir, dosya-tabanlı değildir. Markete "araç eklemenin" karşılığı **mcp**
 türüdür (harici MCP sunucu config'i).
 
-Market, bu türleri **tek bir paket formatı (SwarmPack)** altında toplar; bir
+Market, bu türleri **tek bir paket formatı (HarnessPack)** altında toplar; bir
 varlığı dışa paketler (publish), bir kayıt defterinde (registry) listeler ve bir
 workspace'e geri kurar (install). Mimari, mevcut `skills.Store`'un birebir
 kardeşidir: çok-katmanlı (tier), tembel (lazy) dosya-tabanlı bir mağaza.
 
 **Tasarım ilkeleri:**
 
-1. **Bağımlılıksız & dosya-tabanlı** — registry, `*.swarmpack.json` dosyalarından
+1. **Bağımlılıksız & dosya-tabanlı** — registry, `*.harnesspack.json` dosyalarından
    oluşan bir dizin. DB yok, ağ zorunluluğu yok (uzak registry ileride additive).
 2. **Sır sızdırmaz** — provider paketi **asla** `keyEnc` taşımaz; agent paketi
    ID/CreatedBy/secret taşımaz. Kurulumda kullanıcı kendi anahtarını girer.
@@ -143,14 +143,14 @@ kardeşidir: çok-katmanlı (tier), tembel (lazy) dosya-tabanlı bir mağaza.
 
 ---
 
-## 2. Paket formatı — SwarmPack v1
+## 2. Paket formatı — HarnessPack v1
 
 Her paket bir **manifest zarfı + tür-özel payload**'tan oluşur. Tek dosya:
-`<id>.swarmpack.json`.
+`<id>.harnesspack.json`.
 
 ```jsonc
 {
-  "schema": "swarmpack/v1",
+  "schema": "harnesspack/v1",
   "id": "skill.web-research",        // kararlı paket kimliği (kind.slug)
   "kind": "skill",                   // skill|agent|provider|flow|workspace|mcp|hook
   "name": "Web Research",
@@ -283,19 +283,19 @@ lifecycle/tool hook'u:
 
 ```
 internal/market/
-├── pack.go            # SwarmPack + payload tipleri, schema sabitleri
+├── pack.go            # HarnessPack + payload tipleri, schema sabitleri
 ├── store.go           # Store: global tier tarama + lazy payload + remote birleştirme
 ├── remote.go          # uzak registry çekme (fetchIndex/fetchPayload) + semver
 ├── registry_store.go  # kaynak config + remote cache + install ledger
 ├── install.go         # InstallSkill (dosya); diğerleri API handler'ında
-├── publish.go         # var olan varlık → SwarmPack paketleme (sanitize)
+├── publish.go         # var olan varlık → HarnessPack paketleme (sanitize)
 └── *_test.go
 ```
 
 ### 3.1 Registry katmanları (tier)
 
 2026-06-25'te bundled/workspace tier'ları kaldırılmıştı; **bundled tier daha sonra geri
-geldi** (gömülü workspace şablonları, `embed.go` + `defaults/*.swarmpack.json`) — taze
+geldi** (gömülü workspace şablonları, `embed.go` + `defaults/*.harnesspack.json`) — taze
 kurulumda market ve "workspace oluştur" seçicisi boş kalmasın diye. Workspace tier'ı
 gerçekten yok. Öncelik: **global > bundled**, ikisi de uzak paketleri gölgeler.
 
@@ -375,7 +375,7 @@ ile global dizine yazar. Sanitize = secret/ID/CreatedBy temizliği (§1.2).
 | POST | `/api/market/{id}/install` | workspace'e kur (gövde: `{overwrite?, apiKey?, ...}`) |
 | POST | `/api/market/publish` | gövde: `{kind, sourceId}` → yerel registry'e paketle |
 | POST | `/api/market/reload` | yeniden tara |
-| POST | `/api/market/import` | gövde: ham SwarmPack JSON → registry'e ekle |
+| POST | `/api/market/import` | gövde: ham HarnessPack JSON → registry'e ekle |
 | GET | `/api/market/{id}/export` | paket JSON'unu indir (dosya paylaşımı) |
 
 `Runtime`'a `Market() *market.Store` accessor'ı (Skills() aynası); dizinler
@@ -510,7 +510,7 @@ Bir registry, tek bir `registry.json` sunar (HTTP/HTTPS):
       "id": "skill.web-research", "kind": "skill", "name": "...",
       "description": "...", "version": "2.0.0", "author": "...",
       "icon": "🔎", "tags": ["research"],
-      "url": "https://.../skill.web-research.swarmpack.json", // payload (lazy indirilir)
+      "url": "https://.../skill.web-research.harnesspack.json", // payload (lazy indirilir)
       "sha256": "abc…",          // OPSİYONEL bütünlük (boşsa atlanır)
       "minAppVersion": "0.9.0"   // taşınır; şimdilik zorlayıcı değil
     }

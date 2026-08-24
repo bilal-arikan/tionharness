@@ -1,5 +1,5 @@
 {
-  "schema": "swarmpack/v1",
+  "schema": "harnesspack/v1",
   "id": "workspace-blank",
   "kind": "workspace",
   "name": "Boş",

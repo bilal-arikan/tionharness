@@ -8,7 +8,7 @@ import "embed"
 // picker, even before any remote registry is added. Higher tiers (global, remote)
 // override a bundled pack of the same id.
 //
-//go:embed defaults/*.swarmpack.json
+//go:embed defaults/*.harnesspack.json
 var bundledFS embed.FS
 
 // bundledDir is the directory inside bundledFS holding the pack files.

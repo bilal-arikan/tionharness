@@ -9,7 +9,7 @@ import (
 )
 
 // skillAdapter detects Claude Code skills (SKILL.md marker folders) in a tree and
-// converts each into a skill SwarmPack, preserving nested bundled resources.
+// converts each into a skill HarnessPack, preserving nested bundled resources.
 type skillAdapter struct{}
 
 func (skillAdapter) Kind() string { return market.KindSkill }

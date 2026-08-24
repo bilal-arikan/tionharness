@@ -38,7 +38,19 @@ için ~380 yerde uyum bozuldu (`Harness` ince ve sessiz-sert biter). Hepsi düze
 `'in` · `'e` · `'te` · `'ten` · `'i` · `'teki`. İngilizce iyelik `TionHarness's` (121 yer,
 Go/TS yorumları) bilerek korundu.
 
-**Kasten dokunulmayanlar:** market markası `SwarmPack`/`swarmregistry`, gitea deposu
+**Market markası da değişti (2026-08-24):** `SwarmPack` → **`HarnessPack`**. Bu yalnız
+metin değil, disk/tel formatı: `SchemaV1 = "harnesspack/v1"`, `packFileSuffix =
+".harnesspack.json"`, gömülü 6 default paket dosyası ve `go:embed` deseni. Kullanıcının
+`<dataDir>/market/` klasöründeki **54 kurulu paket** de göç ettirildi (dosya adı + `schema`
+alanı; yedek `market-backup-swarmpack-20260824/`) — aksi halde `scanDir` eski soneki
+bulamayıp market'i boş gösterirdi. Uyumluluk şimi yok: eski `.swarmpack.json` artık okunmaz.
+
+**`swarmregistry/v1` DEĞİŞMEDİ** — o, market paketi değil **uzak index protokolü**
+(`RegistrySchemaV1`, `21-MARKET.md` §7.1). Yapılandırılmış registry'ler (SkillsMP,
+CrossAITools) connector-tabanlı olduğu için bu şemayı kullanmıyor, ama üçüncü taraf bir
+sunucu yayınlarsa sözleşme kırılır. Ad artık markayla tutarsız → ayrı karar.
+
+**Kasten dokunulmayanlar:** gitea deposu
 `swarmgo` ve VPS yolu `/home/user/projects/tionharness`, Claude Code'un kendi `swarm/teammate`
 alt sistemine yapılan doküman atıfları, tarihsel `_Docs/05-ARSIV.md` anlatıları.
 
@@ -797,7 +809,7 @@ en fazla 2 onarım turu, PASS'siz commit yok.
 kapatıyor: onlar workspace açılışında, yani şablon ajanları var olmadan önce tohumlanır
 → `TargetAgentID` boş kalır.
 
-**Yeni gömülü şablon.** `workspace.productteam.swarmpack.json` — PM + CTO, ikisi de
+**Yeni gömülü şablon.** `workspace.productteam.harnesspack.json` — PM + CTO, ikisi de
 koordinatör; `product-team-charter` skill'i; pano sütunları; CTO'ya bağlı
 `boardExclusive` bir "kart → geliştiriliyor" kuralı (gömülü default'u bastırır, kapalı
 gelir). Zincir: `kullanıcı → PM → CTO → özellik koordinatörü → planner/coder/validator`.
@@ -3831,7 +3843,7 @@ Backend `go build` + `internal/providers` 107 test yeşil.
 (opsiyonel terminal; `Template` çıktıyı şekillendirir, `OutputSchema` nihai çıktıyı JSON-Schema'ya
 karşı doğrular → uymuyorsa `failure` = **çıktı sözleşmesi**). Temiz kurulum: geri uyumluluk yok,
 eski flow'lar `MigrateAddStart` + `MigrateFlowsStartEnd` ile workspace açılışında migrate edildi;
-default flow + gallery/swarmpack templates + frontend `ensureStartNode` yeni formatta. Detay:
+default flow + gallery/harnesspack templates + frontend `ensureStartNode` yeni formatta. Detay:
 [15-FLOW-CANVAS.md](15-FLOW-CANVAS.md). Backend 1004 test yeşil; canlı: start→agent→end +
 eski FLW15 migrate doğrulandı.
 
@@ -6018,7 +6030,7 @@ frontend `tsc` temiz.
   çıktısına taşındı), `run_subagent` açıklama+şema sadeleşti, `Grep` şemasındaki bayrak
   açıklamaları kaldırıldı (anlamları tanımda tek yerde). Tur başına ~1.5-2K token kazanç.
 - **Tekilleştirme/temizlik:** `agent.BuildSystemPrompt` tek persona kaynağı (api kopyası
-  delegasyona döndü); ölü `default-instructions_old.md` (~40KB) silindi; software swarmpack
+  delegasyona döndü); ölü `default-instructions_old.md` (~40KB) silindi; software harnesspack
   akışının Execute node'u artık `{{input}}` + `{{node.search}}` bulgularını da alıyor.
 
 ✅ `go build`/`vet` temiz; `go test ./...` 720 test / 35 paket yeşil.
@@ -7395,14 +7407,14 @@ vite build` temiz.
 - **Agent araçları (`builtin_flowmgmt.go`):** `create_flow`/`update_flow` şemalarından
   `description` prop'u; `list_flows`/`get_flow` çıktılarından `description` alanı; ilgili
   tool açıklama metinleri temizlendi.
-- **Market/şablon (tam temizlik — 2026-07-04):** SwarmPack format tiplerinden
+- **Market/şablon (tam temizlik — 2026-07-04):** HarnessPack format tiplerinden
   `FlowPayload.Description` ve `WorkspaceTemplateFlow.Description` alanları **da silindi**
   (Go `market/pack.go` + frontend `types/market.ts`); install/publish/seed zaten db.Flow
   ile bağ kurmuyordu. `MarketPanel` flow açıklaması render'ı kaldırıldı. `gen_examples.py`
   `flow_pack` artık flow'a description koymaz (pack-seviye `description` korunur).
-  **Gömülü paketler temizlendi:** `internal/market/defaults/workspace.*.swarmpack.json`
+  **Gömülü paketler temizlendi:** `internal/market/defaults/workspace.*.harnesspack.json`
   içindeki 5 flow-description anahtarı silindi (4 dosya; `blank`'te yoktu). Ev dizininde
-  başka `.swarmpack` yok. Not: çalışan workspace store'larındaki `FLW*.json` dosyalarında
+  başka `.harnesspack` yok. Not: çalışan workspace store'larındaki `FLW*.json` dosyalarında
   kalan eski `description` anahtarları zararsız (yükte yok sayılır, ilk kayıtta düşer);
   uygulama çalışırken canlı store'a dokunulmadı.
 - **Frontend:** `types/flow.ts` + `api/flows.ts` (createFlow/updateFlow imzaları)

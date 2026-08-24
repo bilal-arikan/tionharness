@@ -1,11 +1,11 @@
 // Package market implements an in-app marketplace: a lightweight, file-based
 // registry of shareable "packs". A pack bundles one of the shareable entity
 // kinds — skill, agent, provider, flow, workspace, mcp, hook — into a single
-// portable JSON envelope (a SwarmPack) that can be browsed, installed into a
+// portable JSON envelope (a HarnessPack) that can be browsed, installed into a
 // workspace, and produced (published) from an existing entity.
 //
 // The design mirrors internal/skills: a multi-tier (bundled → global →
-// workspace) store that scans only the manifest of each *.swarmpack.json on
+// workspace) store that scans only the manifest of each *.harnesspack.json on
 // load and reads the (heavier) payload lazily on demand, so the catalog stays
 // cheap. A fourth tier, remote, is layered on top from configured registry
 // indexes (see remote.go) and downloads its payload at install time.
@@ -14,10 +14,10 @@ package market
 import "io/fs"
 
 // SchemaV1 is the current pack envelope schema tag.
-const SchemaV1 = "swarmpack/v1"
+const SchemaV1 = "harnesspack/v1"
 
 // Pack kinds — the shareable entity types. The first four are the original
-// SwarmPack v1 kinds; workspace/mcp were added so the market can share
+// HarnessPack v1 kinds; workspace/mcp were added so the market can share
 // workspace templates and MCP tool servers.
 const (
 	KindSkill     = "skill"
@@ -76,7 +76,7 @@ type Pack struct {
 
 	// Source is the tier this pack was resolved from (not persisted in files).
 	Source Source `json:"source,omitempty"`
-	// Path is the absolute path of the backing .swarmpack.json (not serialised).
+	// Path is the absolute path of the backing .harnesspack.json (not serialised).
 	Path string `json:"-"`
 
 	// RegistryName is the display name of the remote registry a remote pack came
@@ -84,7 +84,7 @@ type Pack struct {
 	RegistryName string `json:"registryName,omitempty"`
 	// SourceRef, when set, marks this pack as an INGEST source (a GitHub repo/tree)
 	// rather than a downloadable payload: install runs the ingest pipeline instead of
-	// fetching a .swarmpack.json. Set for catalog entries from directory-site bridges.
+	// fetching a .harnesspack.json. Set for catalog entries from directory-site bridges.
 	SourceRef *SourceRef `json:"sourceRef,omitempty"`
 
 	// InstalledVersion is decorated by the API from the per-workspace install

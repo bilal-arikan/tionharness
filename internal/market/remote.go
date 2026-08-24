@@ -40,7 +40,7 @@ type Registry struct {
 }
 
 // SourceRef marks a registry entry (or catalog pack) as an INGEST source rather
-// than a prebuilt pack: instead of downloading a .swarmpack.json, install runs the
+// than a prebuilt pack: instead of downloading a .harnesspack.json, install runs the
 // ingest pipeline against URL (a GitHub repo/tree). This is what bridges directory
 // sites (crossaitools/skillsmp/…) — whose listings point at GitHub — into the market.
 type SourceRef struct {
@@ -61,7 +61,7 @@ type RegistryEntry struct {
 	Icon          string     `json:"icon,omitempty"`
 	Color         string     `json:"color,omitempty"`
 	Tags          []string   `json:"tags,omitempty"`
-	URL           string     `json:"url,omitempty"`    // payload (.swarmpack.json) download URL
+	URL           string     `json:"url,omitempty"`    // payload (.harnesspack.json) download URL
 	SHA256        string     `json:"sha256,omitempty"` // optional integrity hash (hex)
 	Source        *SourceRef `json:"source,omitempty"` // ingest source (alternative to URL)
 	MinAppVersion string     `json:"minAppVersion,omitempty"`

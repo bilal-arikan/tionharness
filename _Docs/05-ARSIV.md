@@ -1065,7 +1065,7 @@ listesinden çıkarılıp **gömülü market paketlerine** taşındı.
   taşıyor (`WorkspaceTemplateAgent/Step/Flow/Schedule`). Önceden yalnız identity+instructions+columns
   vardı → zengin template'leri temsil edemiyordu. (`internal/market/pack.go`)
 - **Bundled tier geri geldi (sadece template'ler için):** `internal/market/embed.go` `//go:embed
-  defaults/*.swarmpack.json` → `SourceBundled` (en düşük öncelik, global/remote override eder).
+  defaults/*.harnesspack.json` → `SourceBundled` (en düşük öncelik, global/remote override eder).
   `store.go`: `tier.fsys` + `scanDir`/`Get` embed-FS okuma. 5 paket `internal/market/defaults/`.
 - **Picker kaynağı market:** `/api/workspace-templates`'in JSON şekli **aynı kaldı** (frontend modal
   değişmedi) ama kaynağı Server-seviyesi workspace-bağımsız market store (`s.market = market.New(
@@ -3338,7 +3338,7 @@ App Settings'teydi.
 yerde okunmuyordu (yalnız `store.go`'da `"[]"` default'lanıp market install'da
 yazılıyordu, geri-publish yolu yok). 3 nokta: `models.go` alan, `store.go` default
 bloğu, `api/market.go` atama. Ardından pack formatı
-`market.AgentPayload.Capabilities` (SwarmPack v1) alanı da kaldırıldı — `omitempty`
+`market.AgentPayload.Capabilities` (HarnessPack v1) alanı da kaldırıldı — `omitempty`
 olduğu için eski pack JSON'ları sorunsuz parse olur (alan varsa yok sayılır). Eski
 agent JSON'larında migrasyon gerekmez. `go build` (db/api/market) temiz, db testleri
 20/20, market testi geçti.
@@ -4333,15 +4333,15 @@ Provider kurulumunda API anahtarı artık **serbest metin değil**, Ayarlar→Sa
 
 **İstek:** Uygulama içi bir market sistemi: Skiller, Agentlar, Providerlar ve Flow taslakları paylaşılıp kurulabilsin. Büyük özellik → önce kapsamlı tasarım, sonra MVP'nin ilk dikey dilimi (yerel skill listeleme/içe aktarma).
 
-**Tasarım dokümanı:** `_Docs/21-MARKET.md` — paket formatı (**SwarmPack v1**: manifest zarfı + tür-özel payload), çok-katmanlı (bundled→global→workspace) dosya-tabanlı registry (`skills.Store` kardeşi), tür-başına install/publish/sanitize akışı, API yüzeyi, UI sekmeleri, MVP kapsamı ve sonraki adımlar.
+**Tasarım dokümanı:** `_Docs/21-MARKET.md` — paket formatı (**HarnessPack v1**: manifest zarfı + tür-özel payload), çok-katmanlı (bundled→global→workspace) dosya-tabanlı registry (`skills.Store` kardeşi), tür-başına install/publish/sanitize akışı, API yüzeyi, UI sekmeleri, MVP kapsamı ve sonraki adımlar.
 
 **Mimari kararlar:**
-- **Dosya-tabanlı, bağımlılıksız registry** — `*.swarmpack.json` dosyaları; manifest ucuz taranır, payload yalnız detay/kurulum anında lazy okunur (skills body-lazy kalıbı).
+- **Dosya-tabanlı, bağımlılıksız registry** — `*.harnesspack.json` dosyaları; manifest ucuz taranır, payload yalnız detay/kurulum anında lazy okunur (skills body-lazy kalıbı).
 - **Sır sızdırmaz** — provider paketi `keyEnc` taşımaz (kurulumda kullanıcı kendi anahtarını girer); agent paketi ID/CreatedBy/secret taşımaz; flow/agent paketleri agent-agnostik.
 - **Üç katman** — bundled (`//go:embed defaults`) → global (`<DataDir>/market`) → workspace (`<workspace>/market`); workspace > global > bundled çakışmada kazanır. Publish workspace tier'a yazar.
 
 **MVP dikey dilim (skill türü uçtan uca):**
-- **Backend `internal/market` (yeni):** `pack.go` (SwarmPack + 4 tür payload tipi, schema sabitleri), `store.go` (tier tarama + lazy `Get` + `Publish`/`Import` + `ListKind`), `install.go` (`InstallSkill`: SKILL.md'yi workspace skills dizinine yazar, overwrite guard), `publish.go` (`BuildSkillPack`), `defaults.go` (`//go:embed defaults` + `EnsureDefaults`, skills aynası), `defaults/` (2 gömülü başlangıç paketi: web-research, code-review), `store_test.go` (defaults→list→get→install→conflict→overwrite→publish E2E).
+- **Backend `internal/market` (yeni):** `pack.go` (HarnessPack + 4 tür payload tipi, schema sabitleri), `store.go` (tier tarama + lazy `Get` + `Publish`/`Import` + `ListKind`), `install.go` (`InstallSkill`: SKILL.md'yi workspace skills dizinine yazar, overwrite guard), `publish.go` (`BuildSkillPack`), `defaults.go` (`//go:embed defaults` + `EnsureDefaults`, skills aynası), `defaults/` (2 gömülü başlangıç paketi: web-research, code-review), `store_test.go` (defaults→list→get→install→conflict→overwrite→publish E2E).
 - **`agent/runtime.go`:** `market *market.Store` alanı + `Market()`/`WorkspaceSkillsDir()` accessor'ları + `marketGlobalDir()`/`workspaceMarketDir()` dizin yardımcıları + boot'ta `market.EnsureDefaults`.
 - **API `internal/api/market.go` (yeni):** `GET /api/market` (`?kind=` filtresi, manifestler), `GET /api/market/{id}` (payload dâhil), `POST /api/market/{id}/install` (skill → workspace + skills.Reload; diğer türler 501), `POST /api/market/publish` (skill slug → ham SKILL.md kayıpsız paketlenir), `POST /api/market/import` (ham JSON), `POST /api/market/reload`.
 - **Frontend:** `types/market.ts` (Pack/Payload/InstallResult), `api/market.ts` (`marketApi`, barrel'a eklendi), NavRail `market` görünümü (Store ikonu), `components/panels/MarketPanel.tsx` (tür sekmeleri Tümü/Beceri/Ajan/Sağlayıcı/Akış + kart ızgarası + detay çekmecesi: skill body markdown önizleme + "Bu workspace'e kur"; diğer türler "yakında" rozetli), `App.tsx` wiring.

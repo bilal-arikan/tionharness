@@ -10,7 +10,7 @@ import (
 )
 
 // mcpAdapter detects Model Context Protocol server configs (.mcp.json / mcp.json with
-// an mcpServers map) and converts each server entry into an MCP SwarmPack. Secrets in
+// an mcpServers map) and converts each server entry into an MCP HarnessPack. Secrets in
 // env are the publisher's responsibility to omit (carried verbatim).
 type mcpAdapter struct{}
 

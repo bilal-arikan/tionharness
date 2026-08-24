@@ -420,7 +420,7 @@ func collectSkillFiles(dir string) map[string][]byte {
 	return files
 }
 
-// handleImportMarket stores a raw pasted SwarmPack JSON into the registry.
+// handleImportMarket stores a raw pasted HarnessPack JSON into the registry.
 func (s *Server) handleImportMarket(w http.ResponseWriter, r *http.Request) {
 	raw, err := io.ReadAll(io.LimitReader(r.Body, 4<<20))
 	if err != nil {

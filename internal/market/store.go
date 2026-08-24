@@ -13,7 +13,7 @@ import (
 )
 
 // packFileSuffix is the extension every pack file carries.
-const packFileSuffix = ".swarmpack.json"
+const packFileSuffix = ".harnesspack.json"
 
 // tier pairs a directory with the source label its packs carry. A tier with a
 // non-nil fsys is read from an embedded FS (bundled); otherwise from the OS dir.
@@ -110,7 +110,7 @@ func (s *Store) Reload() {
 	s.mu.Unlock()
 }
 
-// scanDir reads every <dir>/*.swarmpack.json and parses its manifest. Malformed
+// scanDir reads every <dir>/*.harnesspack.json and parses its manifest. Malformed
 // or mis-tagged files are skipped silently (a bad file never breaks the catalog).
 // A tier with a non-nil fsys is read from that embedded FS; otherwise from the OS.
 func scanDir(t tier) []Pack {
@@ -251,7 +251,7 @@ func (s *Store) Get(id string) (Pack, bool) {
 }
 
 // Publish writes a pack to the global market dir and reloads the catalog. The
-// file is named <id>.swarmpack.json; an existing pack with the same id is
+// file is named <id>.harnesspack.json; an existing pack with the same id is
 // overwritten (re-publish updates in place).
 func (s *Store) Publish(p Pack) (Pack, error) {
 	if s.globalDir == "" {

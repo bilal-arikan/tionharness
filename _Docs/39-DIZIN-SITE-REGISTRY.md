@@ -35,13 +35,13 @@
 ## 1. Problem
 
 Bu siteler **HTML/JSON katalog**; her kayıt nihayetinde bir **GitHub repo/klasörüne**
-işaret eder (önceden-derlenmiş `.swarmpack.json` DEĞİL). Mevcut uzak registry ise
+işaret eder (önceden-derlenmiş `.harnesspack.json` DEĞİL). Mevcut uzak registry ise
 `swarmregistry/v1` index'i bekler ve her `RegistryEntry.URL` bir **pack indirme**
 adresidir. Yani **empedans uyumsuzluğu** var:
 
 | | swarmregistry/v1 | Dizin siteleri |
 |---|---|---|
-| İçerik | native `.swarmpack.json` | GitHub repo/klasör pointer'ı |
+| İçerik | native `.harnesspack.json` | GitHub repo/klasör pointer'ı |
 | Kurulum | indir + decode | **ingest** (tarball → adapter → pack) |
 
 **Köprü = bir kayıt "kaynak referansı" (GitHub URL) ise, kurulumda `ingest` çalıştır.**

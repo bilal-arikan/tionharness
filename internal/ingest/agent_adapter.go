@@ -10,7 +10,7 @@ import (
 )
 
 // agentAdapter detects Claude Code subagents (Markdown files under an agents/ dir
-// with a `name` frontmatter) and converts each into an agent SwarmPack. The body
+// with a `name` frontmatter) and converts each into an agent HarnessPack. The body
 // becomes the agent's soul (system prompt); tools map to allowed_tools. The CC model
 // is NOT mapped (provider/model differ) — a warning prompts the user to set it.
 type agentAdapter struct{}

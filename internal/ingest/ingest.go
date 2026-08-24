@@ -1,7 +1,7 @@
 // Package ingest is the generic IMPORT pipeline: it acquires a foreign source tree
 // (via internal/fetch), runs a set of ADAPTERS over it to detect artifacts (Claude
 // Code skills, subagents, slash commands, MCP configs…), and translates each into a
-// native SwarmPack (internal/market). The packs are then handed to the single
+// native HarnessPack (internal/market). The packs are then handed to the single
 // install authority in the API layer — ingest itself never writes entities, it only
 // fetches, detects and converts. Adding a new importable feature = one Adapter.
 //
@@ -32,7 +32,7 @@ type Options struct {
 }
 
 // Discovered is one artifact found in a source tree: preview metadata plus a
-// closure that builds its SwarmPack on demand (capturing the raw artifact data).
+// closure that builds its HarnessPack on demand (capturing the raw artifact data).
 // The closure is not serialised; the API re-scans to rebuild it for install.
 type Discovered struct {
 	Key         string   `json:"key"`         // unique selection key (kind:relPath)

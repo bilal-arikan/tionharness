@@ -672,7 +672,7 @@ gözetilmedi, eski flow'lar migrate edildi).
 - **Migration:** `orchestration.MigrateAddStart` (idempotent) — start node'u olmayan grafa bir tane
   prepend eder (`Next`=eski giriş). `agent.MigrateFlowsStartEnd` her workspace açılışında tüm
   flow'ları migrate eder (`manager.open`); default flow (`flow_defaults.go`) + gallery templates
-  (`flowTemplates.ts` `default-starter`) + swarmpack template builder (`resolveTemplateFlowGraph`) +
+  (`flowTemplates.ts` `default-starter`) + harnesspack template builder (`resolveTemplateFlowGraph`) +
   frontend `ensureStartNode` (instantiate/preview) yeni formatta. Yeni flow oluşturma start node
   ile tohumlanır.
 - **UI:** palet'te "Başlangıç" (yeşil `Play`) + "Bitiş" (mavi `Square`); `StartNode`/`EndNode`

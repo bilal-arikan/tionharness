@@ -3,7 +3,7 @@
 Run from the TionHarness repo root:
     python internal/market/gen_examples.py
 
-Writes <kind>.<slug>.swarmpack.json files into internal/market/defaults/.
+Writes <kind>.<slug>.harnesspack.json files into internal/market/defaults/.
 This is a one-off authoring helper kept in-tree for reproducibility; the JSON
 files it emits are the source of truth (embedded via //go:embed).
 """
@@ -30,7 +30,7 @@ def skill_md(name, desc, when, icon, color, body):
 
 def pack(kind, slug, name, desc, icon, color, tags, payload, version="1.0.0", author="tionharness"):
     return {
-        "schema": "swarmpack/v1",
+        "schema": "harnesspack/v1",
         "id": f"{kind}.{slug}",
         "kind": kind,
         "name": name,
@@ -260,7 +260,7 @@ PACKS.append(flow_pack(
 # ---------------------------------------------------------------- write
 written = []
 for p in PACKS:
-    fn = f"{p['id']}.swarmpack.json"
+    fn = f"{p['id']}.harnesspack.json"
     with open(os.path.join(OUT, fn), "w", encoding="utf-8") as f:
         json.dump(p, f, ensure_ascii=False, indent=2)
     written.append(fn)

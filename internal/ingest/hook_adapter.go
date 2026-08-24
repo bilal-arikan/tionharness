@@ -15,7 +15,7 @@ import (
 
 // hookAdapter detects Claude Code plugin HOOK definitions (a `hooks` block in a
 // plugin.json, a standalone hooks.json, or a settings.json) and converts each
-// individual hook command into a native KindHook SwarmPack. The referenced hook
+// individual hook command into a native KindHook HarnessPack. The referenced hook
 // scripts (${CLAUDE_PLUGIN_ROOT}/...) are bundled into Pack.Files so the install
 // authority can materialise them locally and rewrite the placeholder. This is
 // what lets a caveman-style package install its lifecycle hooks (SessionStart /

@@ -261,7 +261,7 @@ ilişki grafiği, CLI araç köprüsü, prefix'li ID'ler ve tek-binary dağıtı
   harici ajanin en özgün yanı: ajan zor bir görevi tamamladıktan sonra **kendi prosedürel skill'ini
   otonom yazar** ve tekrar kullanımla **iyileştirir** (procedural memory); skill'ler
   [agentskills.io](https://agentskills.io) merkezi hub'ında paylaşılır. TionHarness'te skill sistemi
-  (dosya-tabanlı, global/workspace tier, `create_skill`/`delete_skill`) + market (SwarmPack v1)
+  (dosya-tabanlı, global/workspace tier, `create_skill`/`delete_skill`) + market (HarnessPack v1)
   **zaten var** — eksik olan **otonom skill üretimi** (görev sonrası ajanın deneyimden skill
   damıtması) ve **skill'in zamanla iyileşmesi** (kullanım geri-bildirimiyle revizyon). Mevcut
   self-management skill araçları + `Reflect` döngüsü bunun temelini oluşturuyor; üzerine
@@ -298,7 +298,7 @@ ilişki grafiği, CLI araç köprüsü, prefix'li ID'ler ve tek-binary dağıtı
   toggle) → sonuçta slug + kopyalanan dosyalar + uyarılar gösterilir, liste yenilenip skill seçilir
   (`SkillImportDialog.tsx`, `skillApi.importSkill`). agentskills.io açık standardını hedefler. İlişkili:
   **HA-2**, `21-MARKET.md`.
-  - **(eski hedef tanımı)** Market (SwarmPack) içine "Claude Code skill
+  - **(eski hedef tanımı)** Market (HarnessPack) içine "Claude Code skill
   içe aktar" akışı — GitHub URL / yerel klasör → backend çeker, frontmatter eşler (name/description→aynı;
   `allowed-tools`→`always_allow`; `disable-model-invocation`→`access`; version/license/source passthrough),
   uyumsuzu (`context:fork`, `hooks:`, slash-komut, bundled script) ayıklayıp **rapor eder**, `skill_validate`

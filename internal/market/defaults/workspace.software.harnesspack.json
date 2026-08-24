@@ -1,5 +1,5 @@
 {
-  "schema": "swarmpack/v1",
+  "schema": "harnesspack/v1",
   "id": "workspace-software",
   "kind": "workspace",
   "name": "Yazılım Geliştirme",
