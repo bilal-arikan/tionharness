@@ -289,11 +289,11 @@ export const systemApi = {
     }),
 
   // Token-optimizer MAINTENANCE (rtk / sqz). These are actions, not settings —
-  // the tools' own config is machine-global while TionSwarm settings are
+  // the tools' own config is machine-global while TionHarness settings are
   // per-workspace, so their keys are deliberately NOT mirrored into a workspace
   // setting. See internal/api/external_tools_maint.go.
   //
-  // The report is each tool's OWN `gain` output, verbatim: TionSwarm does not
+  // The report is each tool's OWN `gain` output, verbatim: TionHarness does not
   // recompute the numbers, so they cannot drift from the tools' accounting.
   tokenToolReport: () => req<TokenToolReport>('/api/external-tools/token-report'),
   // Clears sqz's dedup cache — what sqz's own help prescribes when stale

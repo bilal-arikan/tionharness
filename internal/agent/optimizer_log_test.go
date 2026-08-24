@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bilal-arikan/tionswarm/internal/tools"
+	"github.com/bilal-arikan/tionharness/internal/tools"
 )
 
 // TestOptimizerLog_RoundTrip covers the claude-cli seam: the shell runner records

@@ -8,8 +8,8 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/bilal-arikan/tionswarm/internal/db"
-	"github.com/bilal-arikan/tionswarm/internal/providers"
+	"github.com/bilal-arikan/tionharness/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/providers"
 )
 
 // repairMojibake undoes the classic corruption where UTF-8 bytes were mis-decoded
@@ -97,7 +97,7 @@ func (d agentDeps) requireAgent(ctx context.Context, id string) (db.Agent, error
 type CreateAgentTool struct {
 	d agentDeps
 	// defaultSkills is the baseline skill-slug set every new agent is seeded with
-	// when the caller doesn't provide its own (the shipped TionSwarm defaults).
+	// when the caller doesn't provide its own (the shipped TionHarness defaults).
 	defaultSkills []string
 	// skillExists reports whether a skill slug is known (global/workspace), so
 	// caller-provided slugs are validated and unknown ones skipped (no dangling
@@ -117,7 +117,7 @@ func NewCreateAgentTool(database *db.DB, actorID string, defaultSkills []string,
 func (CreateAgentTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name:        "create_agent",
-		Description: "Create a new AI agent in this workspace. Provide a name and optionally a soul (personality/system prompt), identity, provider, model and skills. The new agent is tagged as created by you, so you can later edit or delete it. If you omit \"skills\", the agent is seeded with the default TionSwarm skill set. Returns the new agent's id.",
+		Description: "Create a new AI agent in this workspace. Provide a name and optionally a soul (personality/system prompt), identity, provider, model and skills. The new agent is tagged as created by you, so you can later edit or delete it. If you omit \"skills\", the agent is seeded with the default TionHarness skill set. Returns the new agent's id.",
 		InputSchema: json.RawMessage(`{
 			"type":"object",
 			"properties":{
@@ -128,7 +128,7 @@ func (CreateAgentTool) Def() providers.ToolDef {
 				"model":{"type":"string","description":"Model id for the chosen provider. If both provider and model are omitted, both are inherited from the creating agent."},
 				"avatar":{"type":"string","description":"Optional emoji shown in the roster avatar"},
 				"color":{"type":"string","description":"Optional hex accent color, e.g. #7c3aed"},
-				"skills":{"type":"array","items":{"type":"string"},"description":"Skill slugs to enable for the agent (use_skill). Omit to seed the default TionSwarm skill set; unknown slugs are skipped."},
+				"skills":{"type":"array","items":{"type":"string"},"description":"Skill slugs to enable for the agent (use_skill). Omit to seed the default TionHarness skill set; unknown slugs are skipped."},
 				"coordinatorPrompt":{"type":"string","description":"Orchestration guidance injected ONLY while the agent's session is in coordinator mode (right after the shared coordinator manual). Put delegation direction here instead of in the soul, so it costs nothing when the agent is not coordinating."}
 			},
 			"required":["name"],
@@ -211,7 +211,7 @@ func (t CreateAgentTool) Call(ctx context.Context, input json.RawMessage) (strin
 	in.Provider = providerKind
 
 	// Resolve the skill set: caller-provided (validated) or, when none given, the
-	// default TionSwarm set. Unknown caller slugs are dropped and reported.
+	// default TionHarness set. Unknown caller slugs are dropped and reported.
 	skills, skipped := t.resolveSkills(in.Skills)
 
 	created, err := t.d.db.CreateAgent(ctx, db.Agent{

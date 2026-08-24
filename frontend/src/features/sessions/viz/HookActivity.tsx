@@ -6,7 +6,7 @@ import type { Hook, SessionDebugEvent } from '@/types'
 // purpose is to make token-optimizer activity visible: rtk / sqz are wired as
 // PreToolUse hooks that rewrite commands, so "how often did rtk/sqz actually run,
 // and on which tool" is the honest signal available WITHOUT a savings measurement
-// (TionSwarm never sees the pre-compression size — see _Docs/17). Byte/token
+// (TionHarness never sees the pre-compression size — see _Docs/17). Byte/token
 // savings are intentionally NOT shown; this is activity, not savings.
 //
 // Coverage caveat: hook debug events are emitted by the NATIVE tool loop. On
@@ -122,7 +122,7 @@ export function HookActivity({ events, hooks }: { events: SessionDebugEvent[]; h
       </ul>
       <p className="mt-1.5 text-[10px] text-[var(--color-text-dim)]">
         {hasOptimizer
-          ? 'rtk/sqz komutu yeniden yazarak çıktıyı küçültür; TionSwarm sıkışmamış boyutu görmediği için burada byte tasarrufu değil, yalnız aktivite gösterilir.'
+          ? 'rtk/sqz komutu yeniden yazarak çıktıyı küçültür; TionHarness sıkışmamış boyutu görmediği için burada byte tasarrufu değil, yalnız aktivite gösterilir.'
           : "Token-optimizer (rtk/sqz) hook'u bu oturumda ateşlenmedi."}{' '}
         Yalnız native turlar sayılır (claude-cli turları CLI içinde çalışır).
       </p>

@@ -6,9 +6,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/bilal-arikan/tionswarm/internal/db"
-	"github.com/bilal-arikan/tionswarm/internal/skills"
-	"github.com/bilal-arikan/tionswarm/internal/workspace"
+	"github.com/bilal-arikan/tionharness/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/skills"
+	"github.com/bilal-arikan/tionharness/internal/workspace"
 )
 
 // coordinatorLeadBlock composes the system-prompt lead that ONLY a coordinator
@@ -157,7 +157,7 @@ func coordinatorSubordinateBlock(session db.Session) string {
 // The coordinator operating manual (M2, _Docs/47) lives in the central prompt
 // registry (internal/prompts, key "coordinator"); buildStaticPrefix resolves it
 // per workspace via agent.WorkspacePrompt. Adapted from Claude Code's
-// coordinator mode, rewritten for TionSwarm's real tool surface: workers are
+// coordinator mode, rewritten for TionHarness's real tool surface: workers are
 // async background sessions launched with spawn_worker, continued with
 // send_to_worker, stopped with stop_worker, and inspected with list_workers;
 // their results arrive as <task-notification> user messages that auto-trigger

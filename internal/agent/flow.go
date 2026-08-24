@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bilal-arikan/tionswarm/internal/db"
-	"github.com/bilal-arikan/tionswarm/internal/events"
-	"github.com/bilal-arikan/tionswarm/internal/orchestration"
+	"github.com/bilal-arikan/tionharness/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/events"
+	"github.com/bilal-arikan/tionharness/internal/orchestration"
 )
 
 // flowRunner adapts the Runtime to orchestration.AgentRunner. Each node runs

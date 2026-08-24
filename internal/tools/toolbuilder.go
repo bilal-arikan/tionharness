@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 
-	"github.com/bilal-arikan/tionswarm/internal/providers"
+	"github.com/bilal-arikan/tionharness/internal/providers"
 )
 
 // parseInput unmarshals a tool's raw JSON arguments into a fresh T, wrapping any

@@ -23,9 +23,9 @@ import { readSessionOverride, writeSessionOverride } from './turnOverrideStore'
 export type { ChatStreamDeps } from './chatStreamTypes'
 
 // localStorage entry holding the per-session composer reasoning-level override.
-const THINKING_LEVEL_KEY = 'tionswarm.thinkingLevel.bySession'
+const THINKING_LEVEL_KEY = 'tionharness.thinkingLevel.bySession'
 // Same, for the composer permission-mode override.
-const PERMISSION_MODE_KEY = 'tionswarm.permissionMode.bySession'
+const PERMISSION_MODE_KEY = 'tionharness.permissionMode.bySession'
 
 export function useChatStream(deps: ChatStreamDeps) {
   const {

@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-// TionSwarm ships to Linux servers as well as Windows desktops. These tests pin
+// TionHarness ships to Linux servers as well as Windows desktops. These tests pin
 // the platform-dependent halves of the catalog so a Windows-only assumption
 // cannot silently reach a Ubuntu box, where the tool that would run it does not
 // exist. They deliberately call the *goos-parameterised* constructors rather

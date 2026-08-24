@@ -22,7 +22,7 @@ export interface InsightLens {
   scope?: string[]
   prefilter: LensPrefilter
   path: string
-  // How this file compares to the lens TionSwarm ships (see SeedDefaultState).
+  // How this file compares to the lens TionHarness ships (see SeedDefaultState).
   // Absent = user-authored, so there is no default to badge against or restore.
   defaultState?: SeedDefaultState
 }

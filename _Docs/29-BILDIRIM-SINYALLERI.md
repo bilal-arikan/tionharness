@@ -108,18 +108,18 @@ satırında: yeşil nabız = çalışıyor, accent dolu nokta = tamamlandı/gör
 
 Toplam **görülmemiş** öğe sayısı pencere dışına da taşınır:
 
-- **Tab başlığı**: pencere **odakta değilken** `(N) TionSwarm`, odaktayken sade
-  `TionSwarm`. (`hooks/useUnreadBadge.ts` — `focus`/`blur`/`visibilitychange`.)
+- **Tab başlığı**: pencere **odakta değilken** `(N) TionHarness`, odaktayken sade
+  `TionHarness`. (`hooks/useUnreadBadge.ts` — `focus`/`blur`/`visibilitychange`.)
 - **Taskbar/dock rozeti**: `navigator.setAppBadge(N)` (Chromium Badging API).
   Edge/WebView2'de çalıştığı için **native masaüstü penceresi taskbar rozetini
-  bedavaya** alır. Opsiyonel `window.tionswarmSetBadge(N)` host köprüsü de çağrılır
+  bedavaya** alır. Opsiyonel `window.tionharnessSetBadge(N)` host köprüsü de çağrılır
   (kabuk sağlarsa; yoksa no-op). `lib/appBadge.ts`.
 
 `unreadTotal` = okunmamış sohbet oturumları (aktif ws) + etkinlik olan diğer
 workspace'ler + chat-dışı view rozetleri (`App.tsx`). Hesap chat'i iki kez saymaz.
 
-> Not: native ITaskbarList3 overlay ikonu istenirse `tionswarmSetBadge` köprüsü
-> `cmd/tionswarm-desktop` tarafında uygulanabilir; Badging API çoğu durumu kapsar.
+> Not: native ITaskbarList3 overlay ikonu istenirse `tionharnessSetBadge` köprüsü
+> `cmd/tionharness-desktop` tarafında uygulanabilir; Badging API çoğu durumu kapsar.
 
 ## Ajan güdümlü bildirim: `notify` aracı
 
@@ -134,7 +134,7 @@ kullanıcı uygulamaya bakmıyorken haber vermesi gereken durumlar ("uzun iş bi
 
 Masaüstü OS-toast'larını kesen **ana anahtar** iki kaynaktan çözülür: uygulama-genel
 varsayılan (`AppSettings.DesktopNotifications`) + **aktif workspace'in override'ı**.
-Bu, TionSwarm'ın fiziksel workspace izolasyonuyla tutarlı — kullanıcı arka planda
+Bu, TionHarness'ın fiziksel workspace izolasyonuyla tutarlı — kullanıcı arka planda
 koşan bir "otonom" workspace'i susturup üzerinde çalıştığını açık tutabilir (ya da
 tersi).
 

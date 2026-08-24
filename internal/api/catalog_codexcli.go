@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/bilal-arikan/tionswarm/internal/exttools"
+	"github.com/bilal-arikan/tionharness/internal/exttools"
 )
 
 // The codex-cli provider is the second keyless CLI transport (the sibling of
@@ -67,7 +67,7 @@ func codexCLIVersion(ctx context.Context, path string) string {
 
 // codexAuthFile is the credential file codex-cli writes inside CODEX_HOME on a
 // successful `codex login` (see _Docs/69 §4). Only its presence is checked here
-// — the JSON shape is Codex's own and not part of TionSwarm's contract, so this
+// — the JSON shape is Codex's own and not part of TionHarness's contract, so this
 // intentionally reads no field beyond "does the file exist and hold something".
 const codexAuthFile = "auth.json"
 

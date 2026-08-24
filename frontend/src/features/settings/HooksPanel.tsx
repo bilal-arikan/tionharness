@@ -138,7 +138,7 @@ export function HooksPanel({ onError }: Props) {
           codex-cli kendi araç döngüsünü ayrı bir alt süreçte koşturur ve hook aktarımı sunmaz.
           Yukarıdaki PreToolUse/PostToolUse hook&apos;ların hiçbiri bu ajanlarda tetiklenmez — ne
           codex&apos;in kendi shell/apply_patch araçları için, ne de MCP köprüsü üzerinden çağrılan
-          TionSwarm araçları için. Sonuç olarak <code>sqz</code> gibi PostToolUse token-optimizer
+          TionHarness araçları için. Sonuç olarak <code>sqz</code> gibi PostToolUse token-optimizer
           sıkıştırması da codex-cli ajanlarında devre dışıdır.
         </p>
       </div>
@@ -297,7 +297,7 @@ export function HooksPanel({ onError }: Props) {
             <Lock size={14} /> Yerleşik davranışlar (salt-okunur)
           </p>
           <p className="text-[11px] text-[var(--color-text-dim)]">
-            TionSwarm'nun araç döngüsünün etrafına otomatik enjekte ettiği kancalar.
+            TionHarness'nun araç döngüsünün etrafına otomatik enjekte ettiği kancalar.
             Düzenlenemezler; bazıları Ayarlar'daki ilgili anahtarla açılıp kapatılır.
           </p>
           {builtins.map((b) => (

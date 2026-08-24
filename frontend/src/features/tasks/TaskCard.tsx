@@ -108,7 +108,7 @@ function TaskCardImpl({
       onDragStart={(e) => {
         if (pending) return
         onDragStart(t.id)
-        e.dataTransfer.setData('application/x-tionswarm-task', t.id)
+        e.dataTransfer.setData('application/x-tionharness-task', t.id)
         e.dataTransfer.effectAllowed = 'link'
       }}
       onDragEnd={onDragEnd}

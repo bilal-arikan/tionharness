@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/bilal-arikan/tionswarm/internal/db"
-	"github.com/bilal-arikan/tionswarm/internal/market"
+	"github.com/bilal-arikan/tionharness/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/market"
 )
 
 // TestCoordinatorPromptSurvivesPackaging pins the publish → pack → install

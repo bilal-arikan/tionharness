@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/bilal-arikan/tionswarm/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/db"
 )
 
 // dashboardTroubleFixture seeds one of every attention-worthy entity so the

@@ -9,17 +9,17 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bilal-arikan/tionswarm/internal/codemode"
-	"github.com/bilal-arikan/tionswarm/internal/mcp"
-	"github.com/bilal-arikan/tionswarm/internal/proc"
-	"github.com/bilal-arikan/tionswarm/internal/providers"
+	"github.com/bilal-arikan/tionharness/internal/codemode"
+	"github.com/bilal-arikan/tionharness/internal/mcp"
+	"github.com/bilal-arikan/tionharness/internal/proc"
+	"github.com/bilal-arikan/tionharness/internal/providers"
 )
 
 const (
 	// runCodeBindingsDir is where the generated Python MCP bindings live, under
-	// the turn's working directory — a sibling of .tionswarm/progress.json and
+	// the turn's working directory — a sibling of .tionharness/progress.json and
 	// handoff.md. Regenerated (from scratch) on every run_code call.
-	runCodeBindingsDir = ".tionswarm/mcp"
+	runCodeBindingsDir = ".tionharness/mcp"
 	// runCodeDefaultTimeout / runCodeMaxTimeout bound a script's wall-clock
 	// runtime. Wider than transform_data's fixed 30s because a script may chain
 	// several (slow) MCP calls.
@@ -33,7 +33,7 @@ const (
 
 // RunCodeTool is the code-execution-with-MCP entry point (_Docs/44): instead of
 // shipping every MCP tool's schema to the model, the enabled MCP catalog is
-// rendered as a generated Python module tree under .tionswarm/mcp/ and the model
+// rendered as a generated Python module tree under .tionharness/mcp/ and the model
 // CALLS tools by writing code. Intermediate results stay in the script's
 // variables/files; only stdout/stderr (capped) plus a per-execution MCP call
 // summary return to the conversation.
@@ -54,7 +54,7 @@ type RunCodeTool struct {
 	sb       Sandbox
 	entries  []mcp.CatalogEntry
 	caller   MCPCaller
-	builtins []codemode.BuiltinDef // TionSwarm built-in tools exposed as the `tionswarm` module
+	builtins []codemode.BuiltinDef // TionHarness built-in tools exposed as the `tionharness` module
 	callBI   MCPCaller             // dispatches a built-in by bare name (nil = built-ins off)
 	allow    func(string) bool     // agent tool filter (nil = allow all)
 	gate     RunCodeGate           // per-call permission (nil = allow all)
@@ -72,7 +72,7 @@ type RunCodeObserver func(ctx context.Context, ob codemode.CallObservation)
 
 // NewRunCodeTool binds the tool to the turn's working-dir sandbox, the MCP
 // catalog to expose, the pool-backed MCP dispatcher, the built-in tools to expose
-// (as the `tionswarm` module) with their dispatcher, the agent's tool filter and the
+// (as the `tionharness` module) with their dispatcher, the agent's tool filter and the
 // per-call permission/observability hooks. entries/caller may be empty (built-ins
 // only); builtins/callBI may be nil (MCP only); gate/observe may be nil.
 func NewRunCodeTool(sb Sandbox, entries []mcp.CatalogEntry, caller MCPCaller, builtins []codemode.BuiltinDef, callBI MCPCaller, allow func(string) bool, gate RunCodeGate, observe RunCodeObserver) RunCodeTool {
@@ -157,7 +157,7 @@ func (t RunCodeTool) Call(ctx context.Context, input json.RawMessage) (string, e
 		return "", fmt.Errorf("bindings dir: %w", err)
 	}
 	// Stateless regeneration on every call: the bindings always mirror the
-	// current catalog (MCP servers + the `tionswarm` built-ins module), so a
+	// current catalog (MCP servers + the `tionharness` built-ins module), so a
 	// changed/removed tool can never serve stale stubs.
 	modules, err := codemode.WriteBindings(bindDir, t.entries, t.builtins, t.allow)
 	if err != nil {
@@ -236,8 +236,8 @@ func (t RunCodeTool) Call(ctx context.Context, input json.RawMessage) (string, e
 	// execution's bridge, and dies with it.
 	cmd.Env = append(minimalScriptEnv(),
 		"PYTHONPATH="+bindDir,
-		"TIONSWARM_MCP_BRIDGE_URL="+bridge.URL(),
-		"TIONSWARM_MCP_BRIDGE_TOKEN="+bridge.Token(),
+		"TIONHARNESS_MCP_BRIDGE_URL="+bridge.URL(),
+		"TIONHARNESS_MCP_BRIDGE_TOKEN="+bridge.Token(),
 	)
 	var logBuf bytes.Buffer
 	w := &capWriter{buf: &logBuf, max: runCodeMaxLogBytes}
@@ -285,7 +285,7 @@ func renderBindingListing(modules map[string][]string) string {
 
 	var b strings.Builder
 	fmt.Fprintf(&b, "Tool bindings regenerated under %s/ (on PYTHONPATH for run_code scripts).\n"+
-		"Modules: one per MCP server, plus `tionswarm` for TionSwarm's built-in tools.\nModules:\n", runCodeBindingsDir)
+		"Modules: one per MCP server, plus `tionharness` for TionHarness's built-in tools.\nModules:\n", runCodeBindingsDir)
 	for _, m := range names {
 		fmt.Fprintf(&b, "- %s: %s\n", m, strings.Join(modules[m], ", "))
 	}

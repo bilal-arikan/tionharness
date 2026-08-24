@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/bilal-arikan/tionswarm/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/db"
 )
 
 // TestCreateHookStampsCreatedBy verifies create_hook tags the new hook with the

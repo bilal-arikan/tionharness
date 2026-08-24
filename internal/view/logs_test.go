@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bilal-arikan/tionswarm/internal/logbuf"
+	"github.com/bilal-arikan/tionharness/internal/logbuf"
 )
 
 // logFixture builds a small stream: an info heartbeat, a warn, and two errors

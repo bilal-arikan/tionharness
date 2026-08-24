@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bilal-arikan/tionswarm/internal/mcp"
+	"github.com/bilal-arikan/tionharness/internal/mcp"
 )
 
 // post sends a /call request to the bridge with the given token and body.

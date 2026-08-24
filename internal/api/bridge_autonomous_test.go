@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bilal-arikan/tionswarm/internal/events"
-	"github.com/bilal-arikan/tionswarm/internal/sessionhub"
+	"github.com/bilal-arikan/tionharness/internal/events"
+	"github.com/bilal-arikan/tionharness/internal/sessionhub"
 )
 
 // waitForStep publishes a session_step bus event repeatedly (tolerating the

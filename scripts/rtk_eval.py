@@ -1,4 +1,4 @@
-"""Measure whether rtk earns a place in TionSwarm's rewrite allowlist, per command.
+"""Measure whether rtk earns a place in TionHarness's rewrite allowlist, per command.
 
 For each command it runs the ORIGINAL and the rtk-REWRITTEN form, then counts
 tokens with tiktoken (o200k_base) — a real tokenizer, applied identically to every
@@ -46,7 +46,7 @@ CHILD_ENV = dict(os.environ, PATH=";".join(TOOLCHAINS) + ";" + os.environ.get("P
 # git-bash. That is a different OS: Windows toolchains are not on its PATH, drives
 # live under /mnt/c, and it double-expands `-c` payloads (a `$PATH` in the command
 # was substituted by the outer shell before bash ever saw it, producing a syntax
-# error). TionSwarm refuses this binary for the same reasons — see
+# error). TionHarness refuses this binary for the same reasons — see
 # isWSLBashLauncher in internal/tools/builtin_shell_posix.go. Resolve git-bash the
 # way the product does, so the measurements run in the shell the agent gets.
 def _git_bash() -> str:

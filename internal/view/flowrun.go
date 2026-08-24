@@ -5,8 +5,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bilal-arikan/tionswarm/internal/db"
-	"github.com/bilal-arikan/tionswarm/internal/orchestration"
+	"github.com/bilal-arikan/tionharness/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/orchestration"
 )
 
 // FlowRunInput is everything the flow-run projection reads. The caller loads it

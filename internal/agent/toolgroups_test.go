@@ -3,8 +3,8 @@ package agent
 import (
 	"testing"
 
-	"github.com/bilal-arikan/tionswarm/internal/db"
-	"github.com/bilal-arikan/tionswarm/internal/tools"
+	"github.com/bilal-arikan/tionharness/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/tools"
 )
 
 // A "group:" override at the blocked tier bans every built-in of that category,

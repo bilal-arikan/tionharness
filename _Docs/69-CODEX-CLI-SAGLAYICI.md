@@ -1,6 +1,6 @@
 # 69 — Codex CLI Sağlayıcı: Fizibilite ve Referans
 
-> **Soru:** TionSwarm bugün `claude-cli`'yi arka planda sürerek çalışıyor. Aynı
+> **Soru:** TionHarness bugün `claude-cli`'yi arka planda sürerek çalışıyor. Aynı
 > yaklaşımı OpenAI **Codex CLI** için de kurabilir miyiz?
 >
 > **Cevap: Evet — ana akış (headless tur + MCP köprüsü + JSONL trace + resume +
@@ -52,7 +52,7 @@ kritik bir blocker** bulundu → §5.1.
 | Ayrıca | — | Codex kendisi **MCP sunucusu** olabilir (`codex mcp-server`) ve **app-server** (JSON-RPC daemon) sunar |
 
 En önemli kavramsal fark: **Codex'te dosya okuma/yazma ayrı araç değil.** Model
-`shell` ile okur, `apply_patch` ile yazar. TionSwarm'ın aktivite izinde
+`shell` ile okur, `apply_patch` ile yazar. TionHarness'ın aktivite izinde
 `Read`/`Edit` kartları yerine `command_execution` + `file_change` kartları
 görülecek. Bu bir kayıp değil, **eşleme farkı** — UI tarafında ayrı map gerekir.
 
@@ -67,14 +67,14 @@ codex exec [OPTIONS] <COMMAND> [ARGS]
 Commands:  resume | review | help
 ```
 
-| Bayrak | Anlamı | TionSwarm karşılığı |
+| Bayrak | Anlamı | TionHarness karşılığı |
 |--------|--------|---------------------|
 | `--json` | stdout'a JSONL olay akışı | `--output-format stream-json --verbose` |
 | `-o, --output-last-message <FILE>` | son mesajı dosyaya yaz | (claude'da yok — bonus) |
 | `--output-schema <FILE>` | yapılandırılmış çıktı (JSON Schema) | `Request.OutputSchema` |
 | `-m, --model <MODEL>` | model seçimi | `Request.Model` |
 | `-c, --config <key=value>` | **TOML değerli config override, tekrarlanabilir** | `--settings` + `--mcp-config` yerine geçen tek kanal |
-| `--ignore-user-config` | `$CODEX_HOME/config.toml`'u **atlar** (auth yine `CODEX_HOME`'dan okunur, ayrı katman) | ⚠️ TionSwarm KULLANMIYOR — bkz. §"Üretimde ne oldu" |
+| `--ignore-user-config` | `$CODEX_HOME/config.toml`'u **atlar** (auth yine `CODEX_HOME`'dan okunur, ayrı katman) | ⚠️ TionHarness KULLANMIYOR — bkz. §"Üretimde ne oldu" |
 | `-s, --sandbox <MODE>` | `read-only` \| `workspace-write` \| `danger-full-access` | `Request.PermissionMode` |
 | `--dangerously-bypass-approvals-and-sandbox` | tam serbest | `--dangerously-skip-permissions` |
 | `--approve-for-me` | onayları **otomatik gözden geçirici modele** yönlendir (+ workspace-write) | (yakın karşılık: `--permission-prompt-tool`) |
@@ -94,7 +94,7 @@ Commands:  resume | review | help
 - Pozisyonel argüman **veya** stdin.
 - **Hem** pozisyonel prompt **hem** boru ile stdin verilirse, stdin ayrıca
   `<stdin>` bloğu olarak **eklenir** (üzerine yazmaz).
-- Windows ~32 KB komut satırı limiti nedeniyle TionSwarm prompt'u **stdin'den**
+- Windows ~32 KB komut satırı limiti nedeniyle TionHarness prompt'u **stdin'den**
   geçirmeli (claude-cli'de olduğu gibi). Doğrulandı: stdin yolu çalışıyor.
 
 ---
@@ -106,7 +106,7 @@ Commands:  resume | review | help
 
 ### Üst düzey olaylar — `{"type": ...}`
 
-| `type` | Payload | TionSwarm eşlemesi |
+| `type` | Payload | TionHarness eşlemesi |
 |--------|---------|--------------------|
 | `thread.started` | `{thread_id}` | `Response.SessionID` (resume anahtarı) |
 | `turn.started` | `{}` | — |
@@ -126,7 +126,7 @@ Commands:  resume | review | help
 
 `providers.Usage` ile örtüşüyor — **ama input alanı bire bir DEĞİL**:
 
-| Codex | TionSwarm |
+| Codex | TionHarness |
 |-------|-----------|
 | `input_tokens` − `cached_input_tokens` − `cache_write_input_tokens` | `InputTokens` |
 | `cached_input_tokens` | `CacheReadTokens` |
@@ -159,7 +159,7 @@ uydurur (`EstimateFor("codex-cli", …)` bu Price'ı doğrudan döndürür).
 | `reasoning` | `text` | `TraceStep{Kind:"thinking"}` |
 | `command_execution` | `command`, `aggregated_output`, `exit_code`, `status` | `TraceStep{Kind:"tool", Tool:"shell"}` |
 | `file_change` | `changes:[{path,kind:add\|delete\|update}]`, `status` | diff kartı |
-| `mcp_tool_call` | `server`, `tool`, `arguments`, `result`, `error`, `status` | **bridged araç adımı** — TionSwarm araçları buradan gelir |
+| `mcp_tool_call` | `server`, `tool`, `arguments`, `result`, `error`, `status` | **bridged araç adımı** — TionHarness araçları buradan gelir |
 | `collab_tool_call` | `tool`, `sender_thread_id`, `receiver_thread_ids`, `agents_states`, `status` | Codex'in kendi çok-ajan aracı (bastırılmalı, bkz. §5) |
 | `web_search` | `id`, `query`, `action` | arama adımı |
 | `todo_list` | `items:[{text,completed}]` | (bastırılmalı — `todo_write` köprüsü var) |
@@ -194,11 +194,11 @@ paralel çağrılar gruplanamaz. Kozmetik kayıp.
 ### `CODEX_HOME` = `CLAUDE_CONFIG_DIR`
 
 `codex-rs/utils/home-dir/src/lib.rs`: `CODEX_HOME` set edilmişse **var olan bir
-dizin olmalı**; değilse `~/.codex`. TionSwarm bunu sağlayıcı örneği başına izole eder:
+dizin olmalı**; değilse `~/.codex`. TionHarness bunu sağlayıcı örneği başına izole eder:
 
 ```
 <dataDir>/provider-homes/<instance-id>/  ← CODEX_HOME
-├── config.toml               ← TionSwarm üretir (veya -c ile override)
+├── config.toml               ← TionHarness üretir (veya -c ile override)
 ├── auth.json                 ← login durumu
 └── log/
 ```
@@ -219,10 +219,10 @@ Canlı doğrulandı: boş bir `CODEX_HOME` verildiğinde CLI onu kullandı ve
 
 claude-cli'nin `CLAUDE_CODE_OAUTH_TOKEN` / `ANTHROPIC_API_KEY` env enjeksiyonuna
 karşılık, Codex'te **`OPENAI_API_KEY`** aynı işi görür. `--with-api-key` stdin
-kanalı, TionSwarm'ın "izole config evine anahtarsız login" akışını (workspace
+kanalı, TionHarness'ın "izole config evine anahtarsız login" akışını (workspace
 kurulumunda bir kez) mümkün kılar.
 
-### TionSwarm login akışı: örnek başına ✅
+### TionHarness login akışı: örnek başına ✅
 
 Yeni `codex-cli` örneği boş `configDir` ile oluşturulursa backend
 `<dataDir>/provider-homes/<instance-id>` dizinini oluşturup yolu örneğe kaydeder.
@@ -257,14 +257,14 @@ Login'siz koşuda alınan **gerçek** çıktı:
 
 ⚠️ **Önemli davranış:** Codex 401'i geçici hata sanıp **önce WebSocket transportunda
 5 kez, sonra HTTPS transportunda 5 kez** yeniden denedi — toplam ~35 saniye
-boşa akış. TionSwarm tarafında `401 Unauthorized` / `Missing bearer` görülür
+boşa akış. TionHarness tarafında `401 Unauthorized` / `Missing bearer` görülür
 görülmez **turu erken kesip non-retryable auth hatası** olarak sınıflandırmalıyız
 (claude-cli'deki `isAuthErrorText` deseninin Codex karşılığı). Aksi halde her
 login lapse'i 35 saniye yiyor.
 
 ---
 
-## 5. MCP köprüsü — TionSwarm araçlarını Codex'e taşımak
+## 5. MCP köprüsü — TionHarness araçlarını Codex'e taşımak
 
 Bu, entegrasyonun **kalbi**. Cevap: **çalışır.**
 
@@ -279,13 +279,13 @@ command = "node"
 args    = ["server.js"]
 env     = { KEY = "val" }
 
-# Streamable HTTP  ← TionSwarm Interaction bridge bunu kullanır
-[mcp_servers.tionswarm_interaction]
+# Streamable HTTP  ← TionHarness Interaction bridge bunu kullanır
+[mcp_servers.tionharness_interaction]
 url          = "http://127.0.0.1:PORT/core"
 http_headers = { Authorization = "Bearer <token>" }
 ```
 
-TionSwarm'ın in-process Interaction MCP sunucusu **Streamable HTTP + Bearer**
+TionHarness'ın in-process Interaction MCP sunucusu **Streamable HTTP + Bearer**
 kullanıyor (`climcp.go`). Codex'in `StreamableHttp` varyantı **literal
 `http_headers`** kabul ediyor → köprü **olduğu gibi** takılıyor. Ek olarak
 `bearer_token_env_var` ile token'ı komut satırından tamamen gizlemek de mümkün
@@ -297,8 +297,8 @@ claude-cli'de `--mcp-config <dosya> --strict-mcp-config` var. Codex'te eşdeğer
 
 ```bash
 codex exec --json \
-  -c 'mcp_servers.tionswarm_interaction={url="http://127.0.0.1:9x/core", http_headers={Authorization="Bearer ..."}}' \
-  -c 'mcp_servers.tionswarm_extended={url="http://127.0.0.1:9x/extended", ...}' \
+  -c 'mcp_servers.tionharness_interaction={url="http://127.0.0.1:9x/core", http_headers={Authorization="Bearer ..."}}' \
+  -c 'mcp_servers.tionharness_extended={url="http://127.0.0.1:9x/extended", ...}' \
   ...
 ```
 
@@ -316,7 +316,7 @@ Keşif aşamasında `--ignore-user-config`'in "yalnız `-c` ile verilen dünya
 geçerli olur" şeklinde izolasyon sağlayacağı varsayılmıştı. **Bu yanlıştı.**
 Codex kaynağında (`codex-rs/config/src/loader/mod.rs:516`,
 `load_user_instance`) bu bayrak `CODEX_HOME/config.toml`'un TA KENDİSİNİ atlar
-— ve TionSwarm'ın MCP sunucularını, `developer_instructions`'ı yazdığı dosya
+— ve TionHarness'ın MCP sunucularını, `developer_instructions`'ı yazdığı dosya
 tam olarak budur (`writeCodexConfig`, bkz. `internal/providers/codexcli.go`).
 Bayrak açıkken canlı turlarda MCP köprüsü hiç yüklenmiyordu; model araçları
 "tool registry'de yok" diye reddediyordu. İzolasyon zaten `CODEX_HOME` ortam
@@ -367,7 +367,7 @@ default_tools_approval_mode = "approve"
 ✅ Doğrulandı: `-s read-only` ve `-s workspace-write` **her ikisinde de** araç
 çağrısı başarıyla çalıştı ve sonuç modele döndü.
 
-> Bu satır TionSwarm'ın ürettiği her Codex MCP bloğunda bulunmak **zorunda**.
+> Bu satır TionHarness'ın ürettiği her Codex MCP bloğunda bulunmak **zorunda**.
 > "Gereksiz görünüyor" diye temizlenirse köprü tamamen ölür — kod içine bu
 > gerekçeyi yazan bir yorum konuldu.
 
@@ -398,7 +398,7 @@ Canlı gözlem bunu doğruladı: MCP süreci spawn oluyor ama
 required = true
 ```
 
-> Bu satır da `default_tools_approval_mode = "approve"` gibi TionSwarm'ın
+> Bu satır da `default_tools_approval_mode = "approve"` gibi TionHarness'ın
 > ürettiği her Codex MCP bloğunda bulunmak **zorunda**. Kaldırılırsa köprü
 > yavaş başlayan/uzak sunucularda ilk turda sessizce araçsız kalır.
 > `internal/providers/codexcli_config.go` → `renderCodexServer` içinde
@@ -409,7 +409,7 @@ required = true
 `required = true` olduğu için, yapılandırılmış **tek** bir uzak MCP sunucusu
 ayakta değilse Codex oturum kurulumunu tamamen iptal eder:
 `Failed to create session: required MCP servers failed to initialize` →
-`exit status 1`, hiç turn çıktısı üretmeden. TionSwarm bunu
+`exit status 1`, hiç turn çıktısı üretmeden. TionHarness bunu
 `provider error: codex CLI exited before producing any turn output` olarak
 raporlar.
 
@@ -440,7 +440,7 @@ sağlıklı sayar ve Codex turu yine öldürür. Bu yüzden kurtarma **tepkisel*
    initialize` / `handshaking` / `handshake`).
 2. `codexNamedMCPServers` hatada adı geçen sunucu anahtarlarını çıkarır; hata
    kimseyi adlandırmıyorsa `codexRemoteServerKeys` tüm **remote** sunuculara
-   düşer (stdio köprüsü asla düşürülmez — ajanın TionSwarm araçları oradadır).
+   düşer (stdio köprüsü asla düşürülmez — ajanın TionHarness araçları oradadır).
 3. `config.toml` o sunucular olmadan yeniden yazılır ve tur **bir kez** daha
    koşturulur (`completeWithArgs` içindeki döngü; fallback turda yalnız bir
    defa kullanılır).
@@ -454,7 +454,7 @@ tur yine tam sunucu kümesiyle başlar. Regresyon: `codexcli_mcpfallback_test.go
 ### Araç adlandırma
 
 `codex-rs/core/src/tools/handlers/mcp.rs`: `mcp__<server>__<tool>` — claude-cli
-ile **aynı** namespace deseni. TionSwarm'ın mevcut isim ayrıştırması
+ile **aynı** namespace deseni. TionHarness'ın mevcut isim ayrıştırması
 (`mcp.SplitNamespaced`, trace strip'leme) değişmeden çalışır.
 
 ### Sunucu bazlı araç filtresi
@@ -463,7 +463,7 @@ ile **aynı** namespace deseni. TionSwarm'ın mevcut isim ayrıştırması
 başına** ayarlanabilir. `--allowedTools` kadar esnek değil ama gerekeni verir:
 
 ```toml
-[mcp_servers.tionswarm_extended]
+[mcp_servers.tionharness_extended]
 url = "..."
 disabled_tools = ["delete_workspace"]
 ```
@@ -472,14 +472,14 @@ disabled_tools = ["delete_workspace"]
 
 `startup_timeout_sec` ve `tool_timeout_sec` (sunucu başına). claude-cli'nin
 `MCP_TIMEOUT` / `MCP_TOOL_TIMEOUT` env'lerinin karşılığı. Uzun `run_subagent`
-çağrıları için **mutlaka yükseltilmeli** (varsayılan düşük). TionSwarm'ın yazdığı
+çağrıları için **mutlaka yükseltilmeli** (varsayılan düşük). TionHarness'ın yazdığı
 değerler: `startup_timeout_sec = 30`, `tool_timeout_sec = 900` (15 dk, claude-cli
 tarafındaki `MCP_TOOL_TIMEOUT=900000` ile aynı) — `codexcli_config.go`.
 
 ### codebase-memory-mcp prefill guard codex yolunda YOK (Q4 notu)
 
 Q4 doğrulaması (codebase-memory-mcp çağrılarının `project` argümanı eksikken
-bile çalışması) **PASS** geçti, ama bunun **neden** çalıştığı önemli: TionSwarm'ın
+bile çalışması) **PASS** geçti, ama bunun **neden** çalıştığı önemli: TionHarness'ın
 kendi ajan döngüsü eksik `project` argümanını oturumun working directory'sinden
 otomatik dolduruyor ve düzeltilebilir kimlik hatalarını tekrar koşturarak
 onarıyor (`internal/agent/mcpargs.go`, `mcprepair.go`). **Bu koruma codex-cli
@@ -489,8 +489,8 @@ repair mantığı codex'in tool-call döngüsüne hiç bağlanmıyor. Tıpkı
 `CLAUDE.md`'nin claude-cli için zaten söylediği gibi ("claude-cli sağlayıcısında
 bu koruma yoktur — araç döngüsünü CLI kendi koşturur"), **codex-cli için de
 aynı durum geçerli**: araç döngüsünü codex kendi koşturuyor, çağrılar
-TionSwarm'ın agent paketinden geçmiyor. Q4'ün PASS çıkması modelin argümanı
-doğru vermesinden kaynaklandı, TionSwarm'ın bir güvencesinden değil — bu ayrım
+TionHarness'ın agent paketinden geçmiyor. Q4'ün PASS çıkması modelin argümanı
+doğru vermesinden kaynaklandı, TionHarness'ın bir güvencesinden değil — bu ayrım
 gelecekteki bir regresyonu yanlış tanılamamak için önemli.
 
 ---
@@ -508,7 +508,7 @@ Codex'te **üç** kanal var (`codex-rs/config/src/config_toml.rs`):
 | `model_instructions_file` | config (dosya yolu) | built-in talimatları **EZER** | ❌ kaynak kodda "STRONGLY DISCOURAGED" |
 | `AGENTS.md` | proje dosyası | cwd hiyerarşisinden toplanır | ikincil (repo bağlamı için doğal) |
 
-Yani TionSwarm'ın statik system prefix'i → `developer_instructions`,
+Yani TionHarness'ın statik system prefix'i → `developer_instructions`,
 volatil `[Context]` bloğu → prompt'un başına (claude-cli'deki `buildSystemAndPrompt`
 ayrımı **aynen** korunur).
 
@@ -576,9 +576,9 @@ Prompt cache **ilk turda bile** çalışıyor (Codex kendi sistem promptunu cach
 
 ---
 
-## 8. Parite matrisi — TionSwarm'ın claude-cli'de kullandığı **her** mekanizma
+## 8. Parite matrisi — TionHarness'ın claude-cli'de kullandığı **her** mekanizma
 
-| # | TionSwarm mekanizması | claude-cli | codex-cli | Durum |
+| # | TionHarness mekanizması | claude-cli | codex-cli | Durum |
 |---|----------------------|-----------|-----------|-------|
 | 1 | Başsız tek-tur | `claude -p` | `codex exec` | ✅ tam |
 | 2 | Yapılandırılmış akış | `stream-json --verbose` | `--json` | ✅ tam |
@@ -646,7 +646,7 @@ Yani `--permission-prompt-tool`'un karşılığı `codex exec`'te **yok**.
    **cevaplanabilir**, yani gerçek per-tool onay UI'ı mümkün. Ama app-server
    `[experimental]` işaretli. → Faz 4 (opsiyonel), `70` dosyasında.
 
-> **Karar (önerilen):** Faz 1'de yol 1 + 2. TionSwarm UI'ında `ask` modunun
+> **Karar (önerilen):** Faz 1'de yol 1 + 2. TionHarness UI'ında `ask` modunun
 > codex-cli ajanlarında **"sandbox ile sınırla"** anlamına geldiği açıkça
 > yazılmalı — sessizce `auto` gibi davranmamalı.
 
@@ -683,7 +683,7 @@ Codex'in native araç seti (`codex-rs/core/src/tools/handlers/`):
 
 **Gölgeleme riski analizi:**
 
-| TionSwarm köprüsü | Codex native gölgesi | Kapatılabilir mi? |
+| TionHarness köprüsü | Codex native gölgesi | Kapatılabilir mi? |
 |---|---|---|
 | `todo_write` | `update_plan` (`todo_list` item) | ✅ `[tools] update_plan = false` |
 | `ask_user` | `request_user_input` | ✅ `experimental_request_user_input.enabled = false` (üstelik exec'te zaten çalışmıyor) |
@@ -695,7 +695,7 @@ Codex'in native araç seti (`codex-rs/core/src/tools/handlers/`):
 
 **Kritik gözlem:** Boşluk-2 aslında iyi haber. Codex'te native dosya/shell
 araçlarını **bastırmak istemiyoruz** — Codex modeli `shell` + `apply_patch`
-etrafında eğitildi, onları alırsak ajan işe yaramaz hale gelir. TionSwarm'ın
+etrafında eğitildi, onları alırsak ajan işe yaramaz hale gelir. TionHarness'ın
 claude-cli'de `Bash`'i bastırma gerekçesi ("kendi sandbox'ımızdan geçsin"),
 Codex'te **Codex'in kendi OS sandbox'ı** tarafından zaten karşılanıyor.
 
@@ -722,7 +722,7 @@ Kanıt zinciri:
   ediyor: workspace hook'larını claude'un kendi `--settings` `hooks` sözleşmesine
   çevirip yazıyor, CLI'nin **kendi** tool loop'u tetikliyor. **codex'te eşdeğer
   bir `writeCodexSettings`/hook-çeviri yolu yok.**
-- MCP köprüsünden gelen `mcp__tionswarm_interaction__*` / `mcp__tionswarm_extended__*`
+- MCP köprüsünden gelen `mcp__tionharness_interaction__*` / `mcp__tionharness_extended__*`
   çağrıları da hook'suz: `internal/api` tarafındaki dispatch (`interactionBackend.Call`,
   `mcp_interaction.go`) `internal/agent/hooks.go`'a hiç referans vermiyor.
 
@@ -733,7 +733,7 @@ turlarında **sqz çıktı sıkıştırması da devre dışı**. Codex'in kendi 
 `apply_patch` araçlarının çıktısı ham döner.
 
 **Telafi:** Codex 0.147.0'ın kendi `[hooks]` config anahtarı var (§8 satır 24
-eski hali bunu işaret ediyordu) ama bu, TionSwarm'ın workspace hook store'unu
+eski hali bunu işaret ediyordu) ama bu, TionHarness'ın workspace hook store'unu
 (`db.ListEnabledHooksByEvent`) codex'in `config.toml`'una çeviren bir yazıcı
 gerektirir — `writeCLISettings`'in codex karşılığı henüz **yazılmadı**. Faz
 planına eklenmeli; şu an için codex ajanları workspace hook'larından ve
@@ -755,7 +755,7 @@ Bu boşluk artık **sessiz değil**, ürün içinde açıkça görünüyor:
   (`ClaudeAuthGate`/`HooksPanel` yerleşik davranışlar bölümüyle aynı görsel
   dil) sabit bir uyarı eklendi — hook'ların codex-cli turlarında **hiç**
   çalışmadığını, bunun hem codex'in kendi shell/apply_patch araçlarını hem MCP
-  köprüsü üzerinden çağrılan TionSwarm araçlarını kapsadığını ve sqz/
+  köprüsü üzerinden çağrılan TionHarness araçlarını kapsadığını ve sqz/
   PostToolUse token-optimizer sıkıştırmasının da bu yüzden devre dışı
   olduğunu açıkça belirtiyor.
 - **Ajan düzenleyici** (`frontend/src/features/agents/AgentSettingsForm.tsx`):
@@ -777,7 +777,7 @@ sınırı görünür kılıyor.
 
 ### ❌ Boşluk-4: Lazy tool loading (extended tier gate) codex'te çalışmıyor
 
-TionSwarm'ın gateway modeli (Doc 52), extended tier'ı boş başlatıp modelin
+TionHarness'ın gateway modeli (Doc 52), extended tier'ı boş başlatıp modelin
 `activate_tools` çağrısıyla büyütmesine, backend'in `tools/list_changed`
 push'lamasına ve CLI'nin bunu görüp `tools/list`'i **yeniden çekmesine**
 dayanır. claude-cli bunu 10-16ms içinde yapıyor (canlı ölçüldü,
@@ -828,13 +828,13 @@ yalnız aktive edilen araçlar kadar büyür).
 
 1. **OS düzeyi sandbox** — Linux'ta seccomp/landlock, macOS'ta Seatbelt,
    Windows'ta `windows-sandbox-rs`. `read-only` modu prompt'a değil çekirdeğe
-   dayanıyor. TionSwarm'ın `read-only` izin modu için **gerçek** bir garanti.
+   dayanıyor. TionHarness'ın `read-only` izin modu için **gerçek** bir garanti.
 2. **`--output-schema`** — `Request.OutputSchema` CLI yolunda da desteklenebilir
    (claude-cli'de yok).
 3. **Sabit `thread_id`** — resume anahtarı dönmüyor; `chat_resume.go`'daki
    rotasyon takibi Codex için gereksiz (daha basit).
 4. **Ölçülmüş reasoning token** — `deriveThinkingTokens` tahmini yerine gerçek sayı.
-5. **`codex mcp-server`** — Codex'in kendisi TionSwarm'a MCP sunucusu olarak
+5. **`codex mcp-server`** — Codex'in kendisi TionHarness'a MCP sunucusu olarak
    takılabilir (ajan → ajan delegasyonu için alternatif desen).
 6. **`-o/--output-last-message`** — final cevabı dosyaya alma; akış parse
    başarısız olsa bile kurtarma yolu.

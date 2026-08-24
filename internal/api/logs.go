@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/bilal-arikan/tionswarm/internal/logbuf"
+	"github.com/bilal-arikan/tionharness/internal/logbuf"
 )
 
 // handleListLogs returns recent captured log entries (application + all

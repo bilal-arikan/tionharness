@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bilal-arikan/tionswarm/internal/providers"
-	"github.com/bilal-arikan/tionswarm/internal/secrets"
+	"github.com/bilal-arikan/tionharness/internal/providers"
+	"github.com/bilal-arikan/tionharness/internal/secrets"
 )
 
 // webSearchMaxOutBytes caps the result list fed back to the model (context).

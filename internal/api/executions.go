@@ -5,9 +5,9 @@ import (
 	"net/http"
 	"sort"
 
-	"github.com/bilal-arikan/tionswarm/internal/db"
-	"github.com/bilal-arikan/tionswarm/internal/tools"
-	"github.com/bilal-arikan/tionswarm/internal/workspace"
+	"github.com/bilal-arikan/tionharness/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/tools"
+	"github.com/bilal-arikan/tionharness/internal/workspace"
 )
 
 // executionItem is one row of the unified executions feed: a session-backed

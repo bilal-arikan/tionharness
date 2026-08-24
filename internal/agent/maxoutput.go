@@ -4,17 +4,17 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/bilal-arikan/tionswarm/internal/providers"
+	"github.com/bilal-arikan/tionharness/internal/providers"
 )
 
 // maxOutputOverride, when > 0, forces the generation cap (max output tokens) for
 // every runtime provider call regardless of model family. Set via
-// TIONSWARM_MAX_OUTPUT_TOKENS; 0/unset defers to the per-family default. Mirrors the
-// TIONSWARM_MAX_TOOL_ITERS / TIONSWARM_MAX_CONTEXT_TOKENS escape hatches.
+// TIONHARNESS_MAX_OUTPUT_TOKENS; 0/unset defers to the per-family default. Mirrors the
+// TIONHARNESS_MAX_TOOL_ITERS / TIONHARNESS_MAX_CONTEXT_TOKENS escape hatches.
 var maxOutputOverride = envMaxOutputOverride()
 
 func envMaxOutputOverride() int {
-	if v, err := strconv.Atoi(os.Getenv("TIONSWARM_MAX_OUTPUT_TOKENS")); err == nil && v > 0 {
+	if v, err := strconv.Atoi(os.Getenv("TIONHARNESS_MAX_OUTPUT_TOKENS")); err == nil && v > 0 {
 		return v
 	}
 	return 0
@@ -30,7 +30,7 @@ func envMaxOutputOverride() int {
 //
 // Precedence when MaxTokens is unset: the Settings override (Tunables.
 // MaxOutputTokens, surfaced in Settings ▸ Context) wins; then the
-// TIONSWARM_MAX_OUTPUT_TOKENS env; then the per-model family default. When none
+// TIONHARNESS_MAX_OUTPUT_TOKENS env; then the per-model family default. When none
 // applies the request is left unset and the provider falls back to its own
 // default.
 func (r *Runtime) withMaxOutput(provider string, req providers.Request) providers.Request {

@@ -16,7 +16,7 @@ import (
 // Maintenance actions for the optional token-optimizer CLIs (rtk / sqz).
 //
 // These are ACTIONS, not settings. The tools' own configuration files are
-// MACHINE-GLOBAL while TionSwarm settings are per-workspace, so mirroring
+// MACHINE-GLOBAL while TionHarness settings are per-workspace, so mirroring
 // config.toml keys into the settings screen would quietly promise a scope the
 // setting cannot honour — changing it in one workspace would change every other.
 // Instead the panel exposes: the report both tools already produce, the one reset
@@ -92,7 +92,7 @@ func rtkConfigPath() string {
 }
 
 // handleTokenToolReport returns each installed optimizer's own savings report.
-// TionSwarm does not compute these numbers — it shows what the tools report, so
+// TionHarness does not compute these numbers — it shows what the tools report, so
 // the figures cannot drift from the tools' own accounting.
 func (s *Server) handleTokenToolReport(w http.ResponseWriter, r *http.Request) {
 	rep := tokenToolReport{RtkConfigPath: rtkConfigPath()}

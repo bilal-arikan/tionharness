@@ -141,7 +141,7 @@ export interface FileGroup {
  * Group changes by target file, preserving first-touch order.
  *
  * The per-file totals are a SUM of the individual edits, not a merged patch:
- * TionSwarm stores each edit's own diff, never the file's before/after content,
+ * TionHarness stores each edit's own diff, never the file's before/after content,
  * so a real union cannot be computed. Six edits to one file therefore read as
  * "6 sequential changes", which is what the UI must say.
  */

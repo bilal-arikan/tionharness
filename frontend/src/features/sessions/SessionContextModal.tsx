@@ -512,7 +512,7 @@ export function SessionContextModal({ sessionId, title, updatedAt, onClose }: Pr
               >
                 {data.cliOverhead ? (
                   <HintNote>
-                    claude-cli: bu araçlar TionSwarm'nun kendi isteğinde şema olarak DEĞİL,{' '}
+                    claude-cli: bu araçlar TionHarness'nun kendi isteğinde şema olarak DEĞİL,{' '}
                     <strong>CLI'nin built-in araçları + MCP köprüsüyle</strong> iletilir; aşağıdaki
                     token sayısı yaklaşıktır (gerçek yük CLI'nin kendi temsiline göre değişir — bkz.
                     yukarıdaki “CLI ek yükü”).

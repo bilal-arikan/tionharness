@@ -1,41 +1,41 @@
-# external-agent-oss Release İncelemesi → TionSwarm Çıkarımları
+# external-agent-oss Release İncelemesi → TionHarness Çıkarımları
 
 > Kaynak: [external-agent-project/external-agent-oss](https://github.com/external-agent-project/external-agent-oss)
 > İncelenen sürümler: **v0.2.19 → v0.10.3** (71 release, 2026-01-19 → 2026-06-09)
-> Tarih: 2026-06-17 · Yöntem: tüm release gövdeleri çekildi, paralel LLM ile feature/fix çıkarımı, ardından TionSwarm kod tabanına karşı doğrulama.
+> Tarih: 2026-06-17 · Yöntem: tüm release gövdeleri çekildi, paralel LLM ile feature/fix çıkarımı, ardından TionHarness kod tabanına karşı doğrulama.
 
 Bu doküman iki bölümden oluşur:
-1. **TionSwarm için önceliklendirilmiş eylem listesi** — kod tabanına karşı doğrulanmış (EXISTS/MISSING).
+1. **TionHarness için önceliklendirilmiş eylem listesi** — kod tabanına karşı doğrulanmış (EXISTS/MISSING).
 2. **Sürüm-sürüm tam fix & feature listesi** (referans/appendix).
 
 ---
 
-## 1. TionSwarm İçin Önceliklendirilmiş Eylem Listesi
+## 1. TionHarness İçin Önceliklendirilmiş Eylem Listesi
 
-Her madde TionSwarm kaynak koduna karşı kontrol edildi. **Durum** = şu anki TionSwarm durumu.
+Her madde TionHarness kaynak koduna karşı kontrol edildi. **Durum** = şu anki TionHarness durumu.
 
 ### 🔴 P0 — Doğrulanmış gerçek boşluklar (yüksek etki)
 
-| # | Konu | external-agent kaynağı | TionSwarm durumu | Öneri |
+| # | Konu | external-agent kaynağı | TionHarness durumu | Öneri |
 |---|------|----------------------|----------------|-------|
 | 1 | **Fable 5 / adaptive-thinking** | v0.10.3 | ✅ **FIXED (2026-06-17)** — `providers.RequiresAdaptiveThinking(model)` + `agent.resolveThinkingBudget(model,level)`; Fable/Mythos 5'te "off"/"low" → min adaptive bütçe (`MinAdaptiveThinkingBudget=1024`), Opus/Sonnet/Haiku değişmez. `thinking_test.go`+`agentmsg_test.go`. | ~~Model registry'ye `requiresAdaptiveThinking` bayrağı ekle.~~ Tamamlandı. (Native tool-path thinking'i echo edemediğinden hâlâ kapalı — yalnız plain path resolver model-farkında.) |
 | 2 | **Tool çıktısı boyut sınırı** | v0.4.4 (100K/200K cap), v0.9.3 | ✅ **FIXED (2026-06-17)** — `tools/registry.go` `capToolOutput()` (100K bayt, UTF-8 sınırında trunc + `…[truncated N bytes]`) `Registry.Call`/`CallStream`'de built-in + MCP tüm başarılı çıktılara uygulanır. `registry_cap_test.go`. | ~~Persistence/gönderim öncesi cap uygula.~~ Tamamlandı. |
 | 3 | **http_get SSRF koruması** | v0.3.2, v0.5.0 | ✅ **FIXED (2026-06-17)** — `builtin_http.go` özel `net.Dialer.Control` guard'ı çözülen IP'yi her dial'da denetler (loopback/unspecified/link-local/private/ULA/CGNAT + 169.254.169.254 metadata reddedilir); redirect/DNS-rebind kapsanır + http/https şema kontrolü. `builtin_http_test.go`. | ~~SSRF koruması ekle.~~ Tamamlandı. |
 | 4 | **MCP şema sağlamlığı** | v0.7.3, v0.7.5, v0.7.12 | ✅ **FIXED (2026-06-17)** — `mcp.NormalizeSchema()` `Registry.Defs`'te her MCP şemasına uygulanır: `$schema`/`$id`/`$ref`/`$defs`/`definitions` recursive strip, kök object garanti; `additionalProperties`/`required`/`oneOf`/`anyOf`/`allOf` korunur. `normalize_test.go`. | ~~Dış şemaları normalize et.~~ Tamamlandı. |
-| 5 | **MCP tool metadata sızıntısı** | v0.7.7, v0.8.13 | ⚠️ Şu an TionSwarm iç metadata enjekte etmiyor (temiz) — ama Craft tool çağrı kuralı `_displayName`/`_intent` zorunlu kılıyor | Eğer ileride UI için tool şemasına meta alan eklenirse, provider'a göndermeden **boundary'de strip et**. Şimdilik not; tasarımı bozma. |
+| 5 | **MCP tool metadata sızıntısı** | v0.7.7, v0.8.13 | ⚠️ Şu an TionHarness iç metadata enjekte etmiyor (temiz) — ama Craft tool çağrı kuralı `_displayName`/`_intent` zorunlu kılıyor | Eğer ileride UI için tool şemasına meta alan eklenirse, provider'a göndermeden **boundary'de strip et**. Şimdilik not; tasarımı bozma. |
 
 ### 🟠 P1 — Çok-ajan mimarisine doğrudan uyan eksikler
 
-| # | Konu | Kaynak | TionSwarm durumu | Öneri |
+| # | Konu | Kaynak | TionHarness durumu | Öneri |
 |---|------|--------|----------------|-------|
 | 6 | **Ajanlar-arası mesajlaşma** | v0.8.8 `send_agent_message` | ✅ **FIXED (2026-06-17)** — `tools/builtin_agentmsg.go` `send_agent_message` (self-manage gate'li): hedef ajanın `agent-inbox` oturumuna user-mesaj append + `Runtime.Wake` (fire-and-forget; `call_agent` senkron delegasyonun async tamamlayıcısı). `agent.SendAgentMessage` çözer/teslim eder. `agentmsg_test.go`. | ~~Built-in tool ekle.~~ Tamamlandı. Native (anthropic/minimax) yolunda; claude-cli kendi döngüsünü sürer (SDK-parite). |
 | 7 | **Oturum öz-yönetim araçları** | v0.8.3 | ⚠️ **Kısmî** — `list_sessions` built-in tool'u **var** (`tools/builtin_sessions.go`, cross-session farkındalık, commit `54ab736`); `set_session_*`/`get_session_info` yok | Kalan: `set_session_labels` / `set_session_status` / `get_session_info` built-in tool'ları → kendini-kapatan otomasyon akışları (görev bitince status=done → trigger). |
-| 8 | **Hooks / koşullu otomasyon** | v0.4.3, v0.7.7, v0.7.5 | ⚠️ `events` bus + `scheduler` var; hook/condition/webhook yok | (a) Command + prompt hook'ları (olay → shell/prompt enjeksiyonu), rate limiter + zorla-sonlandırma. (b) Otomasyon koşulları (time/state/label gate). (c) Webhook action (exponential backoff retry). TionSwarm'nun schedule sistemiyle birebir örtüşür. |
+| 8 | **Hooks / koşullu otomasyon** | v0.4.3, v0.7.7, v0.7.5 | ⚠️ `events` bus + `scheduler` var; hook/condition/webhook yok | (a) Command + prompt hook'ları (olay → shell/prompt enjeksiyonu), rate limiter + zorla-sonlandırma. (b) Otomasyon koşulları (time/state/label gate). (c) Webhook action (exponential backoff retry). TionHarness'nun schedule sistemiyle birebir örtüşür. |
 | 9 | **Otomasyon geçmişi cap + compaction** | v0.7.8 | ⚠️ `flow_runs` var, sınır belirsiz | Çalıştırma geçmişini sınırla (örn. 20/otomasyon, 1000 global) + periyodik compaction → disk şişmesini önle. |
 
 ### 🟡 P2 — Sağlamlaştırma & doğrulama (file-based depolamaya özgü)
 
-| # | Konu | Kaynak | TionSwarm durumu | Öneri |
+| # | Konu | Kaynak | TionHarness durumu | Öneri |
 |---|------|--------|----------------|-------|
 | 10 | **Density-aware token tahmini** | v0.9.3 | ⚠️ Sabit `chars/4` (`tokens.go:8`) | base64/yoğun içerik için `chars/1.5` kullan; aksi halde tool result token sayımı ~%25 eksik → bağlam zehirlenmesi. Tool-result eşiğini context window'a göre dinamik yap (v0.9.1: floor 2K, ceil 15K, `ctx*0.10`). |
 | 11 | **Ara mesajları JSONL'e yaz** | v0.8.8 | ✅ Büyük ölçüde var (`Message.Steps` iz tutuyor) — doğrula | Tool result / sistem event'lerinin reload sonrası boşluk bırakmadığını test et. |
@@ -47,16 +47,16 @@ Her madde TionSwarm kaynak koduna karşı kontrol edildi. **Durum** = şu anki T
 ### 🟢 P3 — Güvenlik sıkılaştırma (web UI / remote açılırsa)
 
 - **URL şeması blocklist** (v0.8.12, v0.9.6): `Markdown.tsx:58` http/https/mailto/# dışını `<a href>`'e geçiriyor → `javascript:`/`file:`/`data:` engellenmeli (allowlist yerine blocklist + DOM href sanitization, middle/cmd-click kaçışını da kapat). **MISSING.**
-- **Shell sandbox escape** (v0.5.0): `find -exec` ve benzeri escape vector'lerini engelle (TionSwarm shell varsayılan kapalı ama açıkken geçerli).
+- **Shell sandbox escape** (v0.5.0): `find -exec` ve benzeri escape vector'lerini engelle (TionHarness shell varsayılan kapalı ama açıkken geçerli).
 - **Web UI auth** (v0.8.2): headless/remote sunulursa argon2id + JWT (`jose`) + rate limiter.
 - **Remote WebSocket TLS zorunlu** (v0.7.0): plaintext `ws://` reddet, `wss://` + self-signed kabul (intranet).
-- **Path traversal** (v0.3.2): `sessionId`/`rel` ile attachment/upload yazımında — TionSwarm `sandbox.go` Resolve koruması **VAR**; upload/artifact yollarında da aynı sanitize uygulandığını doğrula.
+- **Path traversal** (v0.3.2): `sessionId`/`rel` ile attachment/upload yazımında — TionHarness `sandbox.go` Resolve koruması **VAR**; upload/artifact yollarında da aynı sanitize uygulandığını doğrula.
 - **Supply chain** (v0.8.0): CI'da `go mod verify` + `go.sum` doğrulaması.
 
 ### 🔵 P4 — UI/UX ve ekosistem (opsiyonel zenginleştirme)
 
 - **Cross-session full-text arama** (v0.3.1): ripgrep/Go ile tüm oturumlarda arama — güçlü UX.
-- **Render blokları**: Mermaid native (v0.3.0), HTML/PDF/image/markdown preview (v0.4.6, v0.9.6), datatable/spreadsheet + `transform_data` (v0.4.2). TionSwarm'nun artifact sistemine eklenebilir.
+- **Render blokları**: Mermaid native (v0.3.0), HTML/PDF/image/markdown preview (v0.4.6, v0.9.6), datatable/spreadsheet + `transform_data` (v0.4.2). TionHarness'nun artifact sistemine eklenebilir.
 - **Doküman araçları** (v0.6.0): `markitdown`/`pdf-tool`/`xlsx-tool`/`docx-tool` — attachment işleme için.
 - **In-app browser tool** (v0.6.0) + yüksek-riskli aksiyon onayı.
 - **Session labels + auto-label** (v0.2.27), **batch işlemler** (v0.4.6), **workflow state badge** (v0.2.31).
@@ -64,7 +64,7 @@ Her madde TionSwarm kaynak koduna karşı kontrol edildi. **Durum** = şu anki T
 - **Session branching/fork** (v0.6.0).
 - **Messaging gateway** (v0.8.10+): Telegram/WhatsApp/Lark — response mode enum (`progress`/`streaming`/`final_only`) + subprocess izolasyon + **erişim kontrol** (v0.9.1, güvenlik kritik).
 - **i18n** (v0.8.5): erken kurulursa migration ucuz.
-- **Model çeşitliliği**: OpenAI-uyumlu generic custom endpoint (v0.7.4) — TionSwarm'nun minimax provider'ı genelleştirilebilir; Gemini/Bedrock/DeepSeek/external CLI agent opsiyonel. **Not (2026-06-19):** `openrouter` kind (`internal/providers/kind_openrouter.go`) eklendi; OpenRouter üzerinden yüzlerce modele tek key ile erişim sağlanıyor. Bu, SC-1 önerisinin (preset katalog) ilk somut adımıdır.
+- **Model çeşitliliği**: OpenAI-uyumlu generic custom endpoint (v0.7.4) — TionHarness'nun minimax provider'ı genelleştirilebilir; Gemini/Bedrock/DeepSeek/external CLI agent opsiyonel. **Not (2026-06-19):** `openrouter` kind (`internal/providers/kind_openrouter.go`) eklendi; OpenRouter üzerinden yüzlerce modele tek key ile erişim sağlanıyor. Bu, SC-1 önerisinin (preset katalog) ilk somut adımıdır.
 
 ---
 
@@ -159,4 +159,4 @@ Her madde TionSwarm kaynak koduna karşı kontrol edildi. **Durum** = şu anki T
 
 ## Sonuç
 
-external-agent-oss'un yolculuğu TionSwarm için bir **yol haritası önizlemesi**: tek-provider → multi-provider olgunlaşma, Electron IPC → WebSocket RPC + headless server, ve giderek artan **otomasyon/messaging/orkestrasyon** katmanları. TionSwarm'nun mevcut mimarisi (file-based store, iki-parçalı sistem prompt, provider soyutlaması, events bus, scheduler) bu yörüngeyle **uyumlu**; en yüksek getirili adımlar P0–P1 tablolarındaki doğrulanmış boşluklar.
+external-agent-oss'un yolculuğu TionHarness için bir **yol haritası önizlemesi**: tek-provider → multi-provider olgunlaşma, Electron IPC → WebSocket RPC + headless server, ve giderek artan **otomasyon/messaging/orkestrasyon** katmanları. TionHarness'nun mevcut mimarisi (file-based store, iki-parçalı sistem prompt, provider soyutlaması, events bus, scheduler) bu yörüngeyle **uyumlu**; en yüksek getirili adımlar P0–P1 tablolarındaki doğrulanmış boşluklar.

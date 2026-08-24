@@ -3,8 +3,8 @@ package api
 import (
 	"testing"
 
-	"github.com/bilal-arikan/tionswarm/internal/providers"
-	"github.com/bilal-arikan/tionswarm/internal/tools"
+	"github.com/bilal-arikan/tionharness/internal/providers"
+	"github.com/bilal-arikan/tionharness/internal/tools"
 )
 
 // TestCLITierProjectsVisibility verifies the 4-tier visibility model projects onto

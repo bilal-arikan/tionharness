@@ -6,7 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/bilal-arikan/tionswarm/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/db"
 )
 
 // defaultBoardAutomation describes a built-in board automation shipped into every

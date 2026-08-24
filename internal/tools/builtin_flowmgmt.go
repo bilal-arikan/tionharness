@@ -7,9 +7,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/bilal-arikan/tionswarm/internal/db"
-	"github.com/bilal-arikan/tionswarm/internal/orchestration"
-	"github.com/bilal-arikan/tionswarm/internal/providers"
+	"github.com/bilal-arikan/tionharness/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/orchestration"
+	"github.com/bilal-arikan/tionharness/internal/providers"
 )
 
 // Flow self-management tools let an agent create, edit, delete and list

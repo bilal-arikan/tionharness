@@ -17,13 +17,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/bilal-arikan/tionswarm/internal/agent"
-	"github.com/bilal-arikan/tionswarm/internal/db"
-	"github.com/bilal-arikan/tionswarm/internal/events"
-	"github.com/bilal-arikan/tionswarm/internal/logbuf"
-	"github.com/bilal-arikan/tionswarm/internal/providers"
-	"github.com/bilal-arikan/tionswarm/internal/secrets"
-	"github.com/bilal-arikan/tionswarm/internal/tools"
+	"github.com/bilal-arikan/tionharness/internal/agent"
+	"github.com/bilal-arikan/tionharness/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/events"
+	"github.com/bilal-arikan/tionharness/internal/logbuf"
+	"github.com/bilal-arikan/tionharness/internal/providers"
+	"github.com/bilal-arikan/tionharness/internal/secrets"
+	"github.com/bilal-arikan/tionharness/internal/tools"
 )
 
 // Meta is the persisted descriptor of a workspace (no live handles). Path, when
@@ -495,7 +495,7 @@ func (m *Manager) Create(name, parentPath, createdBy string) (*Workspace, error)
 	}
 	meta := Meta{ID: m.nextWorkspaceID(), Name: name, CreatedAt: time.Now().Unix(), CreatedBy: createdBy}
 	if parentPath != "" {
-		meta.Path = filepath.Join(parentPath, "tionswarm-"+meta.ID)
+		meta.Path = filepath.Join(parentPath, "tionharness-"+meta.ID)
 	}
 	if err := m.open(meta); err != nil {
 		return nil, err
@@ -507,7 +507,7 @@ func (m *Manager) Create(name, parentPath, createdBy string) (*Workspace, error)
 }
 
 // ErrNotAWorkspace is returned by Attach when the chosen folder does not look
-// like a TionSwarm workspace data directory (it lacks a store/ subfolder).
+// like a TionHarness workspace data directory (it lacks a store/ subfolder).
 var ErrNotAWorkspace = errors.New("seçilen klasör geçerli bir workspace değil (içinde store/ klasörü yok)")
 
 // Attach registers an EXISTING on-disk workspace data directory as a workspace
@@ -552,7 +552,7 @@ func (m *Manager) Attach(path string) (*Workspace, error) {
 	return m.Get(meta.ID)
 }
 
-// isWorkspaceDir reports whether dir is a plausible TionSwarm workspace data
+// isWorkspaceDir reports whether dir is a plausible TionHarness workspace data
 // directory: it exists and contains a store/ subdirectory (the file-based DB
 // every workspace owns). This is the single validity signal the onboarding
 // "select existing workspace" flow relies on.
@@ -562,11 +562,11 @@ func isWorkspaceDir(dir string) bool {
 }
 
 // workspaceNameFromDir derives a display name from a workspace folder path,
-// stripping the "tionswarm-" prefix Create() adds so an attached folder reads
+// stripping the "tionharness-" prefix Create() adds so an attached folder reads
 // back with a sensible label. The original name is not stored inside the folder
 // (it lived in the source install's registry), so the user may rename afterward.
 func workspaceNameFromDir(dir string) string {
-	base := strings.TrimPrefix(filepath.Base(dir), "tionswarm-")
+	base := strings.TrimPrefix(filepath.Base(dir), "tionharness-")
 	if strings.TrimSpace(base) == "" {
 		return "Eklenen Workspace"
 	}

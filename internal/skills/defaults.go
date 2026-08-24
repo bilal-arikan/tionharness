@@ -6,10 +6,10 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/bilal-arikan/tionswarm/internal/seed"
+	"github.com/bilal-arikan/tionharness/internal/seed"
 )
 
-// defaultsFS holds the built-in skills shipped with TionSwarm. They are seeded
+// defaultsFS holds the built-in skills shipped with TionHarness. They are seeded
 // into the global skills dir on startup so every workspace inherits them.
 //
 //go:embed defaults
@@ -17,7 +17,7 @@ var defaultsFS embed.FS
 
 // DefaultSkillSlugs returns the slugs of the shipped default skills (the
 // subdirectories under defaults/), so callers can seed new agents with the
-// baseline TionSwarm skill set. Sorted for a stable order. Single source of truth:
+// baseline TionHarness skill set. Sorted for a stable order. Single source of truth:
 // the embedded defaults tree.
 func DefaultSkillSlugs() []string {
 	entries, err := fs.ReadDir(defaultsFS, "defaults")

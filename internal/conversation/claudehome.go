@@ -3,7 +3,7 @@ package conversation
 import (
 	"context"
 
-	"github.com/bilal-arikan/tionswarm/internal/providers"
+	"github.com/bilal-arikan/tionharness/internal/providers"
 )
 
 // claudeHomeKey carries THIS workspace's claude-cli config home on the fold

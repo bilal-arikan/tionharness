@@ -1,4 +1,4 @@
-# TionSwarm — Profilleme (pprof) Rehberi
+# TionHarness — Profilleme (pprof) Rehberi
 
 > Performans darboğazlarını **tahmin etmeden** bulmak için. Önce profil, sonra optimize.
 
@@ -16,10 +16,10 @@ Uçlar `http.DefaultServeMux` üzerinde yayınlanır; ana API sunucusu kendi mux
 PowerShell:
 
 ```powershell
-$env:TIONSWARM_PPROF = "1"          # profiler'ı aç (varsayılan kapalı)
+$env:TIONHARNESS_PPROF = "1"          # profiler'ı aç (varsayılan kapalı)
 # opsiyonel: bind adresini değiştir (varsayılan 127.0.0.1:6060)
-$env:TIONSWARM_PPROF_ADDR = "127.0.0.1:6060"
-.\tionswarm.exe
+$env:TIONHARNESS_PPROF_ADDR = "127.0.0.1:6060"
+.\tionharness.exe
 ```
 
 Açıldığında loglarda şu satır görünür:
@@ -61,7 +61,7 @@ curl http://127.0.0.1:6060/debug/pprof/goroutine?debug=2
 
 ### Mutex / block (kilit çekişmesi)
 
-`TIONSWARM_PPROF=1` ayrıca `runtime.SetMutexProfileFraction(5)` +
+`TIONHARNESS_PPROF=1` ayrıca `runtime.SetMutexProfileFraction(5)` +
 `runtime.SetBlockProfileRate(1ms)` çağırır. **Bunlar olmadan uçlar var ama profil
 boş döner** — örnekleme kapalıdır. Kapı kapalıyken hiçbir maliyet oluşmaz.
 
@@ -93,7 +93,7 @@ Web arayüzü (tarayıcıda interaktif flame graph):
 go tool pprof -http=127.0.0.1:8000 http://127.0.0.1:6060/debug/pprof/heap
 ```
 
-## TionSwarm'da öncelikli bakılacak sıcak yollar
+## TionHarness'da öncelikli bakılacak sıcak yollar
 
 Profil alırken şu adaylara dikkat et (mimariden türetilmiş hipotezler):
 
@@ -169,7 +169,7 @@ go test ./internal/api -run '^$' -bench WorkspaceRunning -benchmem
 Süreç düzeyinde önce/sonra:
 
 ```powershell
-$p = Get-Process tionswarm-dev
+$p = Get-Process tionharness-dev
 $t0 = $p.TotalProcessorTime; Start-Sleep -Seconds 300; $p.Refresh()
 $sec = ($p.TotalProcessorTime - $t0).TotalSeconds
 "CPU: {0:N2} s / 300 s = %{1:N2} (tek çekirdek)" -f $sec, ($sec/300*100)
@@ -260,7 +260,7 @@ gerçekçi bant **3–6×**.
    (oturum başına `session.json` + `messages.jsonl`) ve `recoverInflight`
    (oturum başına sidecar sondası). Disk formatı, lazy yükleme veya cache
    politikası gerekmedi.
-2. **Defender istisnası** (`~/.tionswarm`) kod dışı ama muhtemelen en büyük tek
+2. **Defender istisnası** (`~/.tionharness`) kod dışı ama muhtemelen en büyük tek
    kazanç — 15 ms/dosya doğrudan buradan geliyor. Paralelleştirme bu maliyeti
    gizler, **ortadan kaldırmaz**.
 3. **Mesaj lazy-load'u boot için ikincil**: oturum başına ~4 dosyanın yalnız
@@ -277,4 +277,4 @@ karşılaştırma ya makine yeniden başlatıldıktan sonra ya da yukarıdaki gi
 
 - Profiler dinleyicisi graceful shutdown'a bağlı değildir; süreç bitince kapanır
   (loopback-only ve teşhis amaçlı olduğundan kabul edilebilir).
-- Wiring: `cmd/tionswarm/pprof.go` (`startPprof`), `cmd/tionswarm/main.go` (config sonrası çağrı).
+- Wiring: `cmd/tionharness/pprof.go` (`startPprof`), `cmd/tionharness/main.go` (config sonrası çağrı).

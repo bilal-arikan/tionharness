@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/bilal-arikan/tionswarm/internal/db"
-	"github.com/bilal-arikan/tionswarm/internal/insight"
+	"github.com/bilal-arikan/tionharness/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/insight"
 )
 
 // insightAnalysisTool is the card name a live analysis step renders under. It is

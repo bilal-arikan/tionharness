@@ -10,11 +10,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bilal-arikan/tionswarm/internal/codemode"
-	"github.com/bilal-arikan/tionswarm/internal/conversation"
-	"github.com/bilal-arikan/tionswarm/internal/mcp"
-	"github.com/bilal-arikan/tionswarm/internal/providers"
-	"github.com/bilal-arikan/tionswarm/internal/tools"
+	"github.com/bilal-arikan/tionharness/internal/codemode"
+	"github.com/bilal-arikan/tionharness/internal/conversation"
+	"github.com/bilal-arikan/tionharness/internal/mcp"
+	"github.com/bilal-arikan/tionharness/internal/providers"
+	"github.com/bilal-arikan/tionharness/internal/tools"
 )
 
 // lazyCatalogMCPListLimit mirrors internal/agent's constant of the same name:
@@ -74,7 +74,7 @@ func report(cfgs []mcp.ServerConfig, timeout time.Duration) {
 		Name: runCodeDef.Name, Description: runCodeDef.Description, InputSchema: runCodeDef.InputSchema,
 	})
 
-	bindDir, err := os.MkdirTemp("", "tionswarm-measure-*")
+	bindDir, err := os.MkdirTemp("", "tionharness-measure-*")
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "temp dir:", err)
 		os.Exit(1)
@@ -91,7 +91,7 @@ func report(cfgs []mcp.ServerConfig, timeout time.Duration) {
 	fmt.Printf("\n== Per-turn context occupancy (%d tools across %d reachable servers) ==\n",
 		len(all), reachable(results))
 	fmt.Printf("  1. eager-full (industry baseline) : %7d bytes ≈ %6d tokens EVERY turn\n", eagerBytes, eagerTokens)
-	fmt.Printf("  2. tier-lazy (TionSwarm today)      : %s ≈ %6d tokens/turn (+~%d tokens per activated tool)\n",
+	fmt.Printf("  2. tier-lazy (TionHarness today)      : %s ≈ %6d tokens/turn (+~%d tokens per activated tool)\n",
 		tierDesc, tierTokens, avgSchema)
 	fmt.Printf("  3. code-mode (run_code)           : 1 schema ≈ %6d tokens/turn\n", runCodeTokens)
 	fmt.Printf("       bindings on DISK (0 context) : %7d bytes across %d modules\n", bindBytes, len(modules))
@@ -125,7 +125,7 @@ func defTokens(d providers.ToolDef) int {
 	return conversation.EstimateText(string(raw))
 }
 
-// tierLazyCost estimates the per-turn cost of TionSwarm's current default for MCP
+// tierLazyCost estimates the per-turn cost of TionHarness's current default for MCP
 // tools: name-only lines in the load-on-demand catalog block while under the
 // list limit, otherwise one "server — N tools" summary line per server (plus
 // the pointer sentence), mirroring renderLazyToolCatalog in internal/agent.
@@ -164,7 +164,7 @@ func discoveryListing(modules map[string][]string) string {
 	}
 	sort.Strings(names)
 	var b strings.Builder
-	b.WriteString("MCP bindings regenerated under .tionswarm/mcp/ (on PYTHONPATH for run_code scripts).\nModules:\n")
+	b.WriteString("MCP bindings regenerated under .tionharness/mcp/ (on PYTHONPATH for run_code scripts).\nModules:\n")
 	for _, m := range names {
 		fmt.Fprintf(&b, "- %s: %s\n", m, strings.Join(modules[m], ", "))
 	}

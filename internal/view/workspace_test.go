@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bilal-arikan/tionswarm/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/db"
 )
 
 // workspaceFixture builds a workspace with one instance of each condition the

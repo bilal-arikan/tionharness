@@ -2,7 +2,7 @@
   - navigation [ref=e11]:
     - generic [ref=e12]:
       - generic [ref=e13]: TS
-      - generic [ref=e14]: TionSwarm
+      - generic [ref=e14]: TionHarness
     - generic [ref=e16]:
       - 'button "Workspace: MINIMAX" [ref=e17]':
         - generic [ref=e18]:

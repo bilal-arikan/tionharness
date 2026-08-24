@@ -9,7 +9,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/bilal-arikan/tionswarm/internal/providers"
+	"github.com/bilal-arikan/tionharness/internal/providers"
 )
 
 // codebaseSearch defaults: the per-project result cap and the fan-out breadth.

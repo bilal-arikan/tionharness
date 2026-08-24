@@ -10,12 +10,12 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/bilal-arikan/tionswarm/internal/agent"
-	"github.com/bilal-arikan/tionswarm/internal/db"
-	"github.com/bilal-arikan/tionswarm/internal/market"
-	"github.com/bilal-arikan/tionswarm/internal/orchestration"
-	"github.com/bilal-arikan/tionswarm/internal/skills"
-	"github.com/bilal-arikan/tionswarm/internal/workspace"
+	"github.com/bilal-arikan/tionharness/internal/agent"
+	"github.com/bilal-arikan/tionharness/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/market"
+	"github.com/bilal-arikan/tionharness/internal/orchestration"
+	"github.com/bilal-arikan/tionharness/internal/skills"
+	"github.com/bilal-arikan/tionharness/internal/workspace"
 )
 
 // handlePublishMarket packages an existing entity into the workspace tier of the

@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/bilal-arikan/tionswarm/internal/providers"
+	"github.com/bilal-arikan/tionharness/internal/providers"
 )
 
 // UpdateUserPreferencesTool lets the agent persist durable facts about the USER

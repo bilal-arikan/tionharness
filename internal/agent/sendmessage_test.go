@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bilal-arikan/tionswarm/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/db"
 )
 
 // TestFormatAgentMessage checks the sender-identity tag, with and without summary.

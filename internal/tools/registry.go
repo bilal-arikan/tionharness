@@ -13,8 +13,8 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/bilal-arikan/tionswarm/internal/mcp"
-	"github.com/bilal-arikan/tionswarm/internal/providers"
+	"github.com/bilal-arikan/tionharness/internal/mcp"
+	"github.com/bilal-arikan/tionharness/internal/providers"
 )
 
 // maxToolOutputBytes bounds a tool's output before it is fed back to the model
@@ -71,7 +71,7 @@ type Registry struct {
 	// hidden is the subset of lazy tools kept OUT of the rendered "Available Tools
 	// (load on demand)" prompt block — activatable and searchable, but not
 	// enumerated in the cached static prefix. The self-management suite lives here:
-	// its catalog is documented in the `tionswarm-self-management` skill instead, so
+	// its catalog is documented in the `tionharness-self-management` skill instead, so
 	// dozens of summaries don't ride in every turn's prompt. hidden ⊆ lazy.
 	hidden map[string]bool
 	// nameOnly is the subset of lazy tools rendered in the load-on-demand catalog
@@ -272,7 +272,7 @@ func (r *Registry) IsHidden(name string) bool { return r.hidden[name] }
 // loaded on demand rather than shipped every turn, and their (often multi-
 // paragraph) descriptions are suppressed in the load-on-demand catalog — the model
 // sees only the namespaced name and discovers the rest via tool_search/ToolSearch.
-// This mirrors TionSwarm's own deferred (tionswarm_extended) tools: no deferred tool
+// This mirrors TionHarness's own deferred (tionharness_extended) tools: no deferred tool
 // carries a full description in the per-turn prompt.
 func (r *Registry) AttachMCP(entries []mcp.CatalogEntry, cfgByServer map[string]mcp.ServerConfig, caller MCPCaller) {
 	r.mcpEntries = entries
@@ -425,7 +425,7 @@ func (r *Registry) ActiveDefs(allow func(name string) bool, active map[string]bo
 //
 // Unlike ActiveDefs, the returned set is IDENTICAL every iteration (activation
 // aside), so the request's tools block stays byte-stable across the loop — the
-// cache-friendliest shape. TionSwarm's own activate_tools/tool_search builtins
+// cache-friendliest shape. TionHarness's own activate_tools/tool_search builtins
 // remain in the set and keep working; native search is an additional, round-trip
 // -free discovery path on top.
 func (r *Registry) DeferredDefs(allow func(name string) bool, active map[string]bool) []providers.ToolDef {

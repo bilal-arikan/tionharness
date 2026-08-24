@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bilal-arikan/tionswarm/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/db"
 )
 
 // TestBoardCardSubProjectsOneCard pins the single-card drill-down: a sub id

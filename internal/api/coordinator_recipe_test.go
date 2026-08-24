@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/bilal-arikan/tionswarm/internal/skills"
+	"github.com/bilal-arikan/tionharness/internal/skills"
 )
 
 // writeRecipe drops a SKILL.md under <dir>/<slug>/ for the resolver test.

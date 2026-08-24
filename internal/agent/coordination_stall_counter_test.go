@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bilal-arikan/tionswarm/internal/conversation"
-	"github.com/bilal-arikan/tionswarm/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/conversation"
+	"github.com/bilal-arikan/tionharness/internal/db"
 )
 
 // TestStallNudgeReachesNextTurnContextAndCounts verifies the first escalation tier:

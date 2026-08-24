@@ -1,4 +1,4 @@
-// Command migrate-ids rewrites a TionSwarm data directory's legacy UUID entity ids
+// Command migrate-ids rewrites a TionHarness data directory's legacy UUID entity ids
 // to the human-readable prefixed scheme (AGT3, SES42, TSK17, ...) and, optionally,
 // workspace ids to WS1/WS2/.... It is a one-time, idempotent migration.
 //
@@ -16,7 +16,7 @@
 //
 // Usage:
 //
-//	go run ./cmd/migrate-ids                 # dry run against ~/.tionswarm
+//	go run ./cmd/migrate-ids                 # dry run against ~/.tionharness
 //	go run ./cmd/migrate-ids -apply          # apply (backs up first)
 //	go run ./cmd/migrate-ids -data D:\sg -apply -workspaces=false
 package main
@@ -30,7 +30,7 @@ import (
 
 func main() {
 	var (
-		dataDir    = flag.String("data", defaultDataDir(), "TionSwarm data directory (contains workspaces.json + workspaces/)")
+		dataDir    = flag.String("data", defaultDataDir(), "TionHarness data directory (contains workspaces.json + workspaces/)")
 		apply      = flag.Bool("apply", false, "perform the migration (default: dry run, no changes)")
 		backup     = flag.Bool("backup", true, "with -apply, copy the whole data dir to a timestamped backup first")
 		doWS       = flag.Bool("workspaces", true, "also migrate workspace ids to the WS<n> scheme")
@@ -48,7 +48,7 @@ func run(dataDir string, apply, backup, doWS bool, backupSuffix string) error {
 	if _, err := os.Stat(dataDir); err != nil {
 		return fmt.Errorf("data dir %q not accessible: %w", dataDir, err)
 	}
-	fmt.Printf("TionSwarm id migration\n  data dir : %s\n  mode     : %s\n\n", dataDir, modeLabel(apply))
+	fmt.Printf("TionHarness id migration\n  data dir : %s\n  mode     : %s\n\n", dataDir, modeLabel(apply))
 
 	metas, err := loadWorkspaceMetas(dataDir)
 	if err != nil {
@@ -110,14 +110,14 @@ func doneVerb(apply bool) string {
 	return "would be migrated"
 }
 
-// defaultDataDir mirrors internal/config: $TIONSWARM_DATA_DIR or ~/.tionswarm.
+// defaultDataDir mirrors internal/config: $TIONHARNESS_DATA_DIR or ~/.tionharness.
 func defaultDataDir() string {
-	if v := os.Getenv("TIONSWARM_DATA_DIR"); v != "" {
+	if v := os.Getenv("TIONHARNESS_DATA_DIR"); v != "" {
 		return v
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
-		return ".tionswarm"
+		return ".tionharness"
 	}
-	return filepath.Join(home, ".tionswarm")
+	return filepath.Join(home, ".tionharness")
 }

@@ -273,7 +273,7 @@ func EstimateFor(provider, model string) (Price, bool) {
 		// claude-cli runs via OAuth/subscription; reuse the Anthropic list price for
 		// the same model id as an informational estimate. BUT the 1-hour extended
 		// cache-write premium (CacheWrite1hMult, 2×) the anthropic table carries is
-		// specific to TionSwarm's OWN native anthropic client, which always requests
+		// specific to TionHarness's OWN native anthropic client, which always requests
 		// ttl:"1h". Claude Code CLI manages its own cache_control at the default
 		// 5-minute TTL (1.25×), so clear the override here → the estimate uses the
 		// standard write tier. Cache-read (0.10×) is unchanged. Without this a

@@ -261,7 +261,7 @@ func backupPath(dataDir, suffix string) string {
 
 // copyTree recursively copies src to dst (used for the pre-apply backup). It
 // never follows reparse points (junctions/symlinks): those point outside the
-// TionSwarm data tree (e.g. a workspace whose content dir is junctioned to a real
+// TionHarness data tree (e.g. a workspace whose content dir is junctioned to a real
 // project) and are not ours to back up — each is skipped with a warning.
 func copyTree(src, dst string) error {
 	if _, err := os.Stat(dst); err == nil {

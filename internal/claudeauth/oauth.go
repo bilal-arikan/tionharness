@@ -1,5 +1,5 @@
 // Package claudeauth implements the Claude Code subscription (Max/Pro) OAuth
-// authorization-code + PKCE flow directly, so TionSwarm can log a workspace's
+// authorization-code + PKCE flow directly, so TionHarness can log a workspace's
 // isolated claude-home in from an in-app popup — without shelling out to the
 // interactive `claude setup-token` / `claude auth login` TUI.
 //
@@ -26,7 +26,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"github.com/bilal-arikan/tionswarm/internal/textutil"
+	"github.com/bilal-arikan/tionharness/internal/textutil"
 	"io"
 	"net/http"
 	"net/url"

@@ -5,8 +5,8 @@ import (
 	"sort"
 	"time"
 
-	"github.com/bilal-arikan/tionswarm/internal/billing"
-	"github.com/bilal-arikan/tionswarm/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/billing"
+	"github.com/bilal-arikan/tionharness/internal/db"
 )
 
 // AgentInput is everything the agent projection reads: the agent record, the

@@ -1,11 +1,11 @@
 // Command measure-codemode is the Faz 0 measurement harness for the
 // code-execution-with-MCP plan (_Docs/44 §5/§6): it connects to the MCP servers
-// configured in a TionSwarm data dir, pulls their REAL tool catalogs, and reports
+// configured in a TionHarness data dir, pulls their REAL tool catalogs, and reports
 // the per-turn context-occupancy cost of three scenarios:
 //
 //  1. eager-full  — every MCP tool's full schema shipped per turn (the industry
 //     baseline Anthropic's "7 servers ≈ 67.3K tokens" number describes);
-//  2. tier-lazy   — TionSwarm's current default (MCP tools lazy + name-only:
+//  2. tier-lazy   — TionHarness's current default (MCP tools lazy + name-only:
 //     catalog lines per turn, full schema only when activated);
 //  3. code-mode   — the run_code tool alone (bindings live on disk, not in
 //     context; the discovery listing is a one-time cost when requested).
@@ -16,7 +16,7 @@
 //
 // Usage:
 //
-//	go run ./cmd/measure-codemode [-data ~/.tionswarm] [-timeout 30s]
+//	go run ./cmd/measure-codemode [-data ~/.tionharness] [-timeout 30s]
 package main
 
 import (
@@ -30,9 +30,9 @@ import (
 func main() {
 	defaultData := ""
 	if home, err := os.UserHomeDir(); err == nil {
-		defaultData = filepath.Join(home, ".tionswarm")
+		defaultData = filepath.Join(home, ".tionharness")
 	}
-	dataDir := flag.String("data", defaultData, "TionSwarm data dir (workspaces are scanned for MCP server configs)")
+	dataDir := flag.String("data", defaultData, "TionHarness data dir (workspaces are scanned for MCP server configs)")
 	timeout := flag.Duration("timeout", 30*time.Second, "per-server connect+list timeout")
 	flag.Parse()
 

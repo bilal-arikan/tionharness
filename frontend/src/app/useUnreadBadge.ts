@@ -1,11 +1,11 @@
 // useUnreadBadge surfaces the total unread count outside the app window: the tab
-// title shows "(N) TionSwarm" while the window is UNFOCUSED (so a background window
+// title shows "(N) TionHarness" while the window is UNFOCUSED (so a background window
 // signals pending attention), and the OS taskbar/dock icon gets a numeric badge
 // via the Badging API regardless of focus. Returns nothing — it is a side effect.
 import { useEffect } from 'react'
 import { setAppBadge } from './appBadge'
 
-const BASE_TITLE = 'TionSwarm'
+const BASE_TITLE = 'TionHarness'
 
 export function useUnreadBadge(count: number) {
   // Tab title: only prefix the count while the window is not focused — a focused

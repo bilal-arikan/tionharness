@@ -61,7 +61,7 @@ export interface Skill {
   // SKILL.md last-modified time (Unix seconds). Surfaced in the Skills screen as
   // a "last edited" label; skills are sorted within each group newest-first by it.
   modifiedAt?: number
-  // How this file compares to the skill TionSwarm ships. Set only for global-tier
+  // How this file compares to the skill TionHarness ships. Set only for global-tier
   // shipped skills; absent means there is no default to compare with or restore.
   defaultState?: SeedDefaultState
 }

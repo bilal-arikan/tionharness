@@ -26,7 +26,7 @@ export function SessionFlowViz({
   agentNames: Record<string, string>
   refreshKey?: number
 }) {
-  const [open, setOpen] = useState(() => localStorage.getItem('tionswarm.flowVizOpen') === '1')
+  const [open, setOpen] = useState(() => localStorage.getItem('tionharness.flowVizOpen') === '1')
   const [events, setEvents] = useState<SessionDebugEvent[] | null>(null)
   const [hooks, setHooks] = useState<Hook[]>([])
   const [loading, setLoading] = useState(false)
@@ -34,7 +34,7 @@ export function SessionFlowViz({
   const toggle = () =>
     setOpen((v) => {
       const next = !v
-      localStorage.setItem('tionswarm.flowVizOpen', next ? '1' : '0')
+      localStorage.setItem('tionharness.flowVizOpen', next ? '1' : '0')
       return next
     })
 

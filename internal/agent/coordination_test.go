@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bilal-arikan/tionswarm/internal/db"
-	"github.com/bilal-arikan/tionswarm/internal/turnqueue"
+	"github.com/bilal-arikan/tionharness/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/turnqueue"
 )
 
 // TestFormatTaskNotification checks the coordinator-facing XML carries the

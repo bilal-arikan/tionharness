@@ -39,7 +39,7 @@
 >
 > **Roadmap maddesi:** `03-YOL-HARITASI.md` → **C6**.
 > **Karar:** Letta'yı doğrudan koşmak yerine (Docker + Postgres + Python sidecar →
-> TionSwarm'nun "tek binary, sunucusuz, dosya-tabanlı, offline" kimliğini bozar)
+> TionHarness'nun "tek binary, sunucusuz, dosya-tabanlı, offline" kimliğini bozar)
 > Letta'nın *fikirlerini* native Go'da yeniden uyguluyoruz. Bu **Mod C**'dir.
 > İnceleme: `letta-ai/letta` ([repo](https://github.com/letta-ai/letta)), 2026-06-22.
 
@@ -47,22 +47,22 @@
 
 Letta artık bir kütüphane değil, kalıcı bir **sunucu servisi**: Docker'da kalkar
 (`:8283/v1` REST), arka planda **PostgreSQL + pgvector zorunlu**, ~800MB taban
-ayak izi + ajan başına ~50–200 MB/ay DB büyümesi. Doğrudan entegrasyon TionSwarm'nun
+ayak izi + ajan başına ~50–200 MB/ay DB büyümesi. Doğrudan entegrasyon TionHarness'nun
 üç temel tasarım kararını birden kırar:
 
-| TionSwarm kararı | Letta doğrudan kullanımıyla |
+| TionHarness kararı | Letta doğrudan kullanımıyla |
 |---|---|
 | Tek Go binary, DB-sunucusuz, dosya-tabanlı (`internal/db`) | ❌ Postgres+pgvector zorunlu |
 | Offline / anahtarsız çalışabilme (lexical cosine recall) | ❌ Python servisi + embedding bağımlılığı |
 | 5 sağlayıcı kendi `toolloop`'umuzla | ❌ ajan döngüsü Letta'ya devredilir |
 
-TionSwarm zaten Letta'nın **okuma** tarafını yapıyor (tiered kinds + recall +
+TionHarness zaten Letta'nın **okuma** tarafını yapıyor (tiered kinds + recall +
 `SystemDynamic` injection). Eksik olan iki küçük parça: **ajana bağlam-basıncı
 sinyali** ve **ajanın in-place düzenleyebildiği kalıcı core memory bloğu**.
 
 ## Mevcut durum — eşleştirme
 
-| Letta/MemGPT mekanizması | TionSwarm karşılığı (bugün) | Durum |
+| Letta/MemGPT mekanizması | TionHarness karşılığı (bugün) | Durum |
 |---|---|---|
 | Tiered memory (core/recall/archival) | `db.Memory{Document,Journal,Reflection}` + `memory.Store` | 🔶 core yok |
 | Recall (similarity) | `Store.Recall` (lexical cosine) → `ContextBlock` | ✅ |
@@ -387,7 +387,7 @@ Ayrıca blok başına **karakter limiti**: blok tanımında `CharLimit` (0 →
 ## Doğrulama
 
 ```powershell
-cd C:\Users\user\Desktop\Projects\TionSwarm
+cd C:\Users\user\Desktop\Projects\TionHarness
 go build ./...
 go test ./internal/conversation/... ./internal/memory/... ./internal/tools/... ./internal/api/...
 ```
@@ -434,7 +434,7 @@ Parça 1–3 sevk edildi. Plandan sapmalar:
 ## Sırada ne var — sonraki adımlar
 
 Parça 1–3 sevk edildi; aşağıdakiler bunun **üstüne** kurulabilecek doğal devamlar.
-Letta sadakati + TionSwarm felsefesi (tek binary, dosya-tabanlı, offline) korunarak
+Letta sadakati + TionHarness felsefesi (tek binary, dosya-tabanlı, offline) korunarak
 seçildi. Öncelik: yakın = düşük efor/yüksek değer, sonraki için zemin hazır.
 
 ### 🟢 Yakın (küçük, bağımsız sevk edilebilir)

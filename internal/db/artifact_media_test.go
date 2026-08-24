@@ -87,7 +87,7 @@ func TestImportMediaSource_AbsoluteNotAccessibleHint(t *testing.T) {
 		t.Fatalf("open: %v", err)
 	}
 	_, err = d.ImportMediaSource("SES1", filepath.Join(root, "container", "nope.png"))
-	if err == nil || !strings.Contains(err.Error(), "not accessible from TionSwarm") {
+	if err == nil || !strings.Contains(err.Error(), "not accessible from TionHarness") {
 		t.Fatalf("absolute missing path should hint at MCP/container filesystem: %v", err)
 	}
 }

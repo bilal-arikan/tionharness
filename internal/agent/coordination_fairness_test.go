@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bilal-arikan/tionswarm/internal/turnqueue"
+	"github.com/bilal-arikan/tionharness/internal/turnqueue"
 )
 
 // waitForTurnWaiters blocks until the session's admission queue has n queued turns.

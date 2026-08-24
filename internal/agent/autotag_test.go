@@ -12,7 +12,7 @@ func TestIsPermissionDenyError(t *testing.T) {
 		{Kind: StepTool, Tool: "Write", IsError: true, Text: "This tool is not allowed in the current mode."},
 		{Kind: StepTool, Tool: "Task", IsError: true, Output: "Tool 'Task' is disallowed."},
 		// Bare-name mis-address: the model called the shell as `PowerShell` instead of
-		// the namespaced mcp__tionswarm_interaction__PowerShell; the CLI rejects it and
+		// the namespaced mcp__tionharness_interaction__PowerShell; the CLI rejects it and
 		// the model retries. Self-recovered, not a repairable failure → not tool-error.
 		{Kind: StepTool, Tool: "PowerShell", IsError: true, Output: "<tool_use_error>Error: No such tool available: PowerShell. PowerShell exists but is not enabled in this context. Use one of the available tools instead.</tool_use_error>"},
 	}
@@ -66,7 +66,7 @@ func TestAutoTagTurnToolErrorMaterialityAndRecovery(t *testing.T) {
 	sess := stuckSession(t, rt)
 
 	benign := []TurnStep{
-		{Kind: StepTool, Tool: "mcp__tionswarm_interaction__ask_user", IsError: true, Output: "no answer within the time limit; proceed on your own"},
+		{Kind: StepTool, Tool: "mcp__tionharness_interaction__ask_user", IsError: true, Output: "no answer within the time limit; proceed on your own"},
 		{Kind: StepTool, Tool: "request_confirmation", IsError: true, Output: "the turn ended before the user answered; proceed without the answer"},
 	}
 	rt.AutoTagTurn(ctx, sess.ID, benign, "")

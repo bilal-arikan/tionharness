@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/bilal-arikan/tionswarm/internal/providers"
-	"github.com/bilal-arikan/tionswarm/internal/tools"
+	"github.com/bilal-arikan/tionharness/internal/providers"
+	"github.com/bilal-arikan/tionharness/internal/tools"
 )
 
 // permLogKey carries an optional logger into permGate so approvals and standing

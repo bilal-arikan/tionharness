@@ -96,7 +96,7 @@ func TestSettingsRoundTrip(t *testing.T) {
 	if s, err := LoadSettings(root); err != nil || s.MaxSessions != DefaultMaxSessions {
 		t.Fatalf("missing settings should use default scan limit: %+v err=%v", s, err)
 	}
-	want := Settings{AppFixRepoPath: `C:\repo\TionSwarm`, MaxSessions: 50}
+	want := Settings{AppFixRepoPath: `C:\repo\TionHarness`, MaxSessions: 50}
 	if err := SaveSettings(root, want); err != nil {
 		t.Fatal(err)
 	}

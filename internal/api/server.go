@@ -1,4 +1,4 @@
-// Package api exposes the TionSwarm HTTP/JSON interface.
+// Package api exposes the TionHarness HTTP/JSON interface.
 package api
 
 import (
@@ -13,23 +13,23 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/bilal-arikan/tionswarm/internal/agent"
-	"github.com/bilal-arikan/tionswarm/internal/backup"
-	"github.com/bilal-arikan/tionswarm/internal/conversation"
-	"github.com/bilal-arikan/tionswarm/internal/db"
-	"github.com/bilal-arikan/tionswarm/internal/events"
-	"github.com/bilal-arikan/tionswarm/internal/exttools"
-	"github.com/bilal-arikan/tionswarm/internal/gateway"
-	"github.com/bilal-arikan/tionswarm/internal/interaction"
-	"github.com/bilal-arikan/tionswarm/internal/logbuf"
-	"github.com/bilal-arikan/tionswarm/internal/market"
-	"github.com/bilal-arikan/tionswarm/internal/mcp"
-	"github.com/bilal-arikan/tionswarm/internal/providers"
-	"github.com/bilal-arikan/tionswarm/internal/sessionhub"
-	"github.com/bilal-arikan/tionswarm/internal/settings"
-	"github.com/bilal-arikan/tionswarm/internal/tools"
-	"github.com/bilal-arikan/tionswarm/internal/web"
-	"github.com/bilal-arikan/tionswarm/internal/workspace"
+	"github.com/bilal-arikan/tionharness/internal/agent"
+	"github.com/bilal-arikan/tionharness/internal/backup"
+	"github.com/bilal-arikan/tionharness/internal/conversation"
+	"github.com/bilal-arikan/tionharness/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/events"
+	"github.com/bilal-arikan/tionharness/internal/exttools"
+	"github.com/bilal-arikan/tionharness/internal/gateway"
+	"github.com/bilal-arikan/tionharness/internal/interaction"
+	"github.com/bilal-arikan/tionharness/internal/logbuf"
+	"github.com/bilal-arikan/tionharness/internal/market"
+	"github.com/bilal-arikan/tionharness/internal/mcp"
+	"github.com/bilal-arikan/tionharness/internal/providers"
+	"github.com/bilal-arikan/tionharness/internal/sessionhub"
+	"github.com/bilal-arikan/tionharness/internal/settings"
+	"github.com/bilal-arikan/tionharness/internal/tools"
+	"github.com/bilal-arikan/tionharness/internal/web"
+	"github.com/bilal-arikan/tionharness/internal/workspace"
 )
 
 // ctxKey is the private type for request-context values.
@@ -71,7 +71,7 @@ type Server struct {
 	interactionSrv *interaction.Server
 	// gatewaySrv is the EXTERNAL MCP gateway (Doc 52 Faz 3), exposing the default
 	// workspace's SHARED MCP pool to outside clients at /mcp/gateway. nil unless opted in
-	// at boot (TIONSWARM_GATEWAY_EXTERNAL). It borrows the workspace pool (#11), so there
+	// at boot (TIONHARNESS_GATEWAY_EXTERNAL). It borrows the workspace pool (#11), so there
 	// is nothing pool-related to own or close here.
 	gatewaySrv *gateway.Server
 	// gatewayRequireLoopback is true when no auth token is configured: the endpoint is
@@ -111,7 +111,7 @@ func NewServer(manager *workspace.Manager, registry *providers.Registry, provide
 		// onboarding. No ledger dir: install-status tracking is per-workspace.
 		market: market.New(agent.MarketGlobalDir(), ""),
 	}
-	// Interaction MCP: lets CLI agents (claude-cli, ...) reach TionSwarm's
+	// Interaction MCP: lets CLI agents (claude-cli, ...) reach TionHarness's
 	// human-in-the-loop tools over in-process HTTP. See _Docs/11-INTERACTION-MCP.md.
 	interBackend := &interactionBackend{runs: s.runs, tun: tun, apiSrv: s}
 	s.interactionSrv = interaction.NewServer(interBackend, logger)
@@ -121,10 +121,10 @@ func NewServer(manager *workspace.Manager, registry *providers.Registry, provide
 	// External MCP gateway (Doc 52 Faz 3): opt-in at boot. Exposes the default
 	// workspace's enabled MCP servers to OUTSIDE clients at /mcp/gateway, gateway-style
 	// (meta-tools + activate + tools/list_changed). Security: a token
-	// (TIONSWARM_GATEWAY_AUTH_TOKEN) is required to reach it over the network; without a
+	// (TIONHARNESS_GATEWAY_AUTH_TOKEN) is required to reach it over the network; without a
 	// token it is loopback-only. Default OFF — external exposure must be explicit.
-	if envTruthy(os.Getenv("TIONSWARM_GATEWAY_EXTERNAL")) {
-		token := strings.TrimSpace(os.Getenv("TIONSWARM_GATEWAY_AUTH_TOKEN"))
+	if envTruthy(os.Getenv("TIONHARNESS_GATEWAY_EXTERNAL")) {
+		token := strings.TrimSpace(os.Getenv("TIONHARNESS_GATEWAY_AUTH_TOKEN"))
 		// Per-workspace routing: a client picks its workspace via the X-Workspace-Id
 		// header (captured at initialize); "" or unknown falls back to the default. Each
 		// workspace's own persistent MCP pool is SHARED (#11) — no dedicated pool.
@@ -166,9 +166,9 @@ func NewServer(manager *workspace.Manager, registry *providers.Registry, provide
 		s.gatewaySrv = gateway.NewServer(gb, authFn, logger)
 		gb.SetServer(s.gatewaySrv)
 		// Audit parity: log each proxied backend tool call to a JSONL file (TS gateway's
-		// gateway-audit.jsonl equivalent). Opt-in via TIONSWARM_GATEWAY_AUDIT_LOG=<path>;
+		// gateway-audit.jsonl equivalent). Opt-in via TIONHARNESS_GATEWAY_AUDIT_LOG=<path>;
 		// fire-and-forget so a write error never breaks a tool call.
-		if p := strings.TrimSpace(os.Getenv("TIONSWARM_GATEWAY_AUDIT_LOG")); p != "" && !strings.EqualFold(p, "off") {
+		if p := strings.TrimSpace(os.Getenv("TIONHARNESS_GATEWAY_AUDIT_LOG")); p != "" && !strings.EqualFold(p, "off") {
 			gb.SetAudit(func(e gateway.AuditEntry) {
 				line, err := json.Marshal(e)
 				if err != nil {
@@ -185,7 +185,7 @@ func NewServer(manager *workspace.Manager, registry *providers.Registry, provide
 		}
 		s.gatewayRequireLoopback = token == ""
 		if token == "" {
-			logger.Warn("external MCP gateway ENABLED at /mcp/gateway — loopback-only (no TIONSWARM_GATEWAY_AUTH_TOKEN set)")
+			logger.Warn("external MCP gateway ENABLED at /mcp/gateway — loopback-only (no TIONHARNESS_GATEWAY_AUTH_TOKEN set)")
 		} else {
 			logger.Warn("external MCP gateway ENABLED at /mcp/gateway — token auth required")
 		}
@@ -498,7 +498,7 @@ func envTruthy(v string) bool {
 func (s *Server) loopbackGuard(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if s.gatewayRequireLoopback && !isLoopbackAddr(r.RemoteAddr) {
-			http.Error(w, "external gateway is loopback-only (set TIONSWARM_GATEWAY_AUTH_TOKEN to expose it)", http.StatusForbidden)
+			http.Error(w, "external gateway is loopback-only (set TIONHARNESS_GATEWAY_AUTH_TOKEN to expose it)", http.StatusForbidden)
 			return
 		}
 		next.ServeHTTP(w, r)
@@ -529,7 +529,7 @@ func (s *Server) registerChatRoutes(mux *http.ServeMux) {
 	// Disarm a pending one-shot self-wake (schedule_wake) for a session — the
 	// user pressed "Durdur" on the waiting banner before the wake fired.
 	mux.HandleFunc("POST /api/chat/wake/cancel", s.handleCancelWake)
-	// Interaction MCP endpoint: CLI agents (claude-cli, ...) call TionSwarm's
+	// Interaction MCP endpoint: CLI agents (claude-cli, ...) call TionHarness's
 	// human-in-the-loop tools (ask_user/todo_write) here over MCP-over-HTTP.
 	// Bound to all methods; the handler does its own bearer auth + method switch.
 	// Guarded so a bare &Server{} (route-registration test) doesn't panic on a
@@ -786,7 +786,7 @@ func (s *Server) registerMiscRoutes(mux *http.ServeMux) {
 	// rest answer 409 with manual instructions.
 	mux.HandleFunc("POST /api/external-tools/{name}/update", s.handleExternalToolUpdate)
 	// Maintenance ACTIONS for the token optimizers (not settings — their config is
-	// machine-global while TionSwarm settings are per-workspace; see
+	// machine-global while TionHarness settings are per-workspace; see
 	// external_tools_maint.go). Fixed-argv commands, no request parameters.
 	mux.HandleFunc("GET /api/external-tools/token-report", s.handleTokenToolReport)
 	mux.HandleFunc("POST /api/external-tools/sqz-reset-cache", s.handleSqzResetCache)
@@ -953,7 +953,7 @@ func withCORS(next http.Handler) http.Handler {
 func (s *Server) handleHealth(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"status":     "ok",
-		"service":    "tionswarm",
+		"service":    "tionharness",
 		"version":    "0.0.1",
 		"workspaces": len(s.workspaces.List()),
 	})

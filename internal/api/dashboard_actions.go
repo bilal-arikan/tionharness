@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bilal-arikan/tionswarm/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/db"
 )
 
 // dashActionStaleDays mirrors the board projection's staleness threshold: a card

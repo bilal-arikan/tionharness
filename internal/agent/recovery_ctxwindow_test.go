@@ -3,7 +3,7 @@ package agent
 import (
 	"testing"
 
-	"github.com/bilal-arikan/tionswarm/internal/providers"
+	"github.com/bilal-arikan/tionharness/internal/providers"
 )
 
 // TestDecideRecovery_ContextWindowStop: Claude 4.5+ reports a context-window

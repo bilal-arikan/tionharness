@@ -1,8 +1,8 @@
-# TionSwarm — Ajanlar-Arası Peer Mesajlaşma Planı (SendMessage / Mailbox)
+# TionHarness — Ajanlar-Arası Peer Mesajlaşma Planı (SendMessage / Mailbox)
 
 > **Durum:** **Faz 1 UYGULANDI (2026-06-23).** Claude Code `swarm/teammate`
 > incelemesinden (`observed-behavior`) çıkarılan **adresli mailbox** deseninin
-> TionSwarm'ya uyarlanması. Kavramsal arka plan: [[10-KAVRAMSAL-TASARIM-NOTLARI]] §10.
+> TionHarness'ya uyarlanması. Kavramsal arka plan: [[10-KAVRAMSAL-TASARIM-NOTLARI]] §10.
 >
 > **Faz 1–2 + Faz 3-broadcast (tamam):** `send_message({to, message, summary?})`
 > built-in (self-manage gated); teslim = alıcının kalıcı **inbox** oturumuna
@@ -18,7 +18,7 @@
 
 Çok-ajanlı "kim ne dedi" sorunu (SES29) iki yolla çözülebilir:
 
-- **Paylaşılan-thread + etiketleme** (TionSwarm'nun seçtiği yol): birden çok ajan tek
+- **Paylaşılan-thread + etiketleme** (TionHarness'nun seçtiği yol): birden çok ajan tek
   sohbete yazar; geçmişte her tur yazarıyla etiketlenir (`chat_authors.go`) ve ardışık
   aynı-rol turlar birleştirilir (`providers/coalesce.go`). ✅ Yapıldı.
 - **İzole bağlam + adresli mailbox** (Claude Code'un yolu): her ajan kendi
@@ -26,7 +26,7 @@
   inbox'ına `from` kimliğiyle düşer. Plain çıktı diğer ajana görünmez. Kimlik doğuştan
   vardır → ne etiketleme ne rol-çakışması sorunu olur.
 
-**Bugünkü TionSwarm durumu:** Eski `send_agent_message` / `call_agent` / `spawn_session`
+**Bugünkü TionHarness durumu:** Eski `send_agent_message` / `call_agent` / `spawn_session`
 araçları kaldırılıp **`run_subagent`** altında birleştirildi (`toolsetup.go`).
 `run_subagent` = *izole görev delege et + sonucu al* (sync) veya *arka plana detach et*
 (async → `SpawnSession`). **Boşluk:** bir ajanın başka bir **bağımsız** ajana

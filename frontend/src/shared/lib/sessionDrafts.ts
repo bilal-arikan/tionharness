@@ -17,7 +17,7 @@
 
 import { getActiveWorkspace } from '@/api'
 
-const PREFIX = 'tionswarm:draft:'
+const PREFIX = 'tionharness:draft:'
 
 // draftKey scopes a session's draft to the ACTIVE workspace. Read at call time
 // (not captured): the composer remounts on a workspace switch, so each mount

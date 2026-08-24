@@ -1,4 +1,4 @@
-// Thin API client for the TionSwarm backend.
+// Thin API client for the TionHarness backend.
 //
 // This is a barrel: the endpoints live in domain modules under ./api/* (mirroring
 // the backend's internal/api/ split) and are composed into the single `api`

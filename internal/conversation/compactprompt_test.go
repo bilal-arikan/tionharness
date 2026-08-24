@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/bilal-arikan/tionswarm/internal/prompts"
+	"github.com/bilal-arikan/tionharness/internal/prompts"
 )
 
 // TestCompactPromptFromCtx covers the safety net around the editable compaction

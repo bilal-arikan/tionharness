@@ -4,7 +4,7 @@
 // and applied instantly. Best-effort: any AudioContext failure (autoplay policy,
 // unsupported) is swallowed so a missing cue never blocks the triggering action.
 
-const PREF_KEY = 'tionswarm.soundEffects'
+const PREF_KEY = 'tionharness.soundEffects'
 
 // Sounds default ON; the stored value only records an explicit opt-out ('0').
 export function soundEffectsEnabled(): boolean {

@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bilal-arikan/tionswarm/internal/tools"
+	"github.com/bilal-arikan/tionharness/internal/tools"
 )
 
 // rtkRewriteTimeout bounds the `rtk rewrite` probe. It is a pure string
@@ -21,8 +21,8 @@ const rtkRewriteTimeout = 5 * time.Second
 // # Why in-process, like sqz
 //
 // rtk ships a PreToolUse hook that prefixes `rtk ` onto shell commands, but that
-// hook matches the tool NAME "Bash". Every TionSwarm shell runs through the
-// bridged `mcp__tionswarm_interaction__Bash`, which the hook does not recognize —
+// hook matches the tool NAME "Bash". Every TionHarness shell runs through the
+// bridged `mcp__tionharness_interaction__Bash`, which the hook does not recognize —
 // the same blind spot that made sqz's hook never fire. Measured across two real
 // worker sessions (SES14, SES15): 0 of 81 shell calls went through rtk. Doing the
 // rewrite here covers bridged AND native shells, Bash AND PowerShell.

@@ -75,7 +75,7 @@ export function SettingsTab({ settings, setSettings, onError, onReset }: Props) 
             type="text"
             value={settings.appFixRepoPath ?? ''}
             onChange={(e) => setSettings({ ...settings, appFixRepoPath: e.target.value })}
-            placeholder="C:/Users/.../TionSwarm"
+            placeholder="C:/Users/.../TionHarness"
             className={`${inputCls} w-full`}
           />
         </label>

@@ -1,6 +1,6 @@
 package api
 
-import "github.com/bilal-arikan/tionswarm/internal/workspace"
+import "github.com/bilal-arikan/tionharness/internal/workspace"
 
 // runningSessionIDs is the SINGLE answer to "which sessions of this workspace are
 // working right now?". Every caller that used to merge the two registries by hand

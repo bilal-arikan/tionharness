@@ -10,7 +10,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/bilal-arikan/tionswarm/internal/claudeauth"
+	"github.com/bilal-arikan/tionharness/internal/claudeauth"
 )
 
 // Loopback (paste-less) OAuth: instead of the user copying a code from the callback
@@ -190,10 +190,10 @@ func firstNonEmpty(a, b string) string {
 }
 
 // writeLoopbackPage renders the tiny HTML the browser shows after the redirect, so
-// the user knows to return to TionSwarm.
+// the user knows to return to TionHarness.
 func writeLoopbackPage(w http.ResponseWriter, ok bool, detail string) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	title, body, color := "Giriş başarılı ✓", "TionSwarm'a geri dönebilirsin — bu sekmeyi kapat.", "#16a34a"
+	title, body, color := "Giriş başarılı ✓", "TionHarness'a geri dönebilirsin — bu sekmeyi kapat.", "#16a34a"
 	if !ok {
 		title, body, color = "Giriş başarısız", escHTML(detail), "#dc2626"
 	}

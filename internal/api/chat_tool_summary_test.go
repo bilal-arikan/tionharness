@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bilal-arikan/tionswarm/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/db"
 )
 
 // TestToolRecapLines renders tool steps compactly and skips non-tool steps.
@@ -32,14 +32,14 @@ func TestToolRecapLines(t *testing.T) {
 
 // TestToolRecapLinesUseCallName shows the exact (namespaced) callable name in the
 // recap when a step carries CallName — so a claude-cli agent re-reading its history
-// calls mcp__tionswarm_extended__list_tasks, not the bare list_tasks the CLI rejects.
+// calls mcp__tionharness_extended__list_tasks, not the bare list_tasks the CLI rejects.
 func TestToolRecapLinesUseCallName(t *testing.T) {
 	steps := `[
-		{"kind":"tool","tool":"list_tasks","callName":"mcp__tionswarm_extended__list_tasks","input":{},"output":"[]"},
+		{"kind":"tool","tool":"list_tasks","callName":"mcp__tionharness_extended__list_tasks","input":{},"output":"[]"},
 		{"kind":"tool","tool":"Grep","input":{"pattern":"foo"},"output":"hit"}
 	]`
 	block := strings.Join(toolRecapLines(steps), "\n")
-	if !strings.Contains(block, "mcp__tionswarm_extended__list_tasks") {
+	if !strings.Contains(block, "mcp__tionharness_extended__list_tasks") {
 		t.Errorf("recap must show the namespaced callable name: %q", block)
 	}
 	// A bridged tool's bare name must NOT be what the model sees to re-call.

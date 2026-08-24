@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bilal-arikan/tionswarm/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/db"
 )
 
 // ToolsInput is everything the tools projection reads: the configured MCP server

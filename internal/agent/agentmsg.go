@@ -6,10 +6,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bilal-arikan/tionswarm/internal/db"
-	"github.com/bilal-arikan/tionswarm/internal/events"
-	"github.com/bilal-arikan/tionswarm/internal/tools"
-	"github.com/bilal-arikan/tionswarm/internal/turnqueue"
+	"github.com/bilal-arikan/tionharness/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/events"
+	"github.com/bilal-arikan/tionharness/internal/tools"
+	"github.com/bilal-arikan/tionharness/internal/turnqueue"
 )
 
 // inboxSessionKind is the persistent per-agent session that accumulates direct

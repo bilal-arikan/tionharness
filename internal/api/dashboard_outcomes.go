@@ -8,7 +8,7 @@ package api
 import (
 	"time"
 
-	"github.com/bilal-arikan/tionswarm/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/db"
 )
 
 // outcomeBlock is the completion-side summary shown next to the volume trends.

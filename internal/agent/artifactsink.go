@@ -3,9 +3,9 @@ package agent
 import (
 	"context"
 
-	"github.com/bilal-arikan/tionswarm/internal/db"
-	"github.com/bilal-arikan/tionswarm/internal/events"
-	"github.com/bilal-arikan/tionswarm/internal/tools"
+	"github.com/bilal-arikan/tionharness/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/events"
+	"github.com/bilal-arikan/tionharness/internal/tools"
 )
 
 // artifactSink is a DB-backed tools.ArtifactSink that also publishes an artifact

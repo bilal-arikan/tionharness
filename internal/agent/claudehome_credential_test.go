@@ -106,13 +106,13 @@ func TestCredentialRankPrefersLiveAccessOverFutureRefreshStamp(t *testing.T) {
 }
 
 // TestEnsureCredentialPrefersFreshest is the regression guard for the live failure:
-// the TionSwarm global home held a credential that had expired weeks earlier, and
+// the TionHarness global home held a credential that had expired weeks earlier, and
 // because the heal took the FIRST usable candidate it beat the user's live
 // ~/.claude. The CLI then failed to refresh, wiped the workspace credential, and the
 // heal copied the same dead file back on every turn.
 func TestEnsureCredentialPrefersFreshest(t *testing.T) {
 	root := t.TempDir()
-	stale := filepath.Join(root, "global")   // stands in for ~/.tionswarm/claude-home
+	stale := filepath.Join(root, "global")   // stands in for ~/.tionharness/claude-home
 	live := filepath.Join(root, "userhome")  // stands in for ~/.claude
 	dstHome := filepath.Join(root, "wshome") // the workspace claude-home
 
@@ -165,7 +165,7 @@ func TestEnsureCredentialSeedsWhenNothingFresher(t *testing.T) {
 
 // pickFreshest exercises the same selection ensureClaudeHomeCredential performs,
 // with explicit candidate dirs. ensureClaudeHomeCredential itself reads the real
-// ~/.tionswarm and ~/.claude, which a test must not depend on.
+// ~/.tionharness and ~/.claude, which a test must not depend on.
 func pickFreshest(t *testing.T, dstHome string, candidateDirs ...string) {
 	t.Helper()
 	dst := filepath.Join(dstHome, ".credentials.json")

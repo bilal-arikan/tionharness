@@ -134,12 +134,12 @@ export function Composer({
   // are collapsed behind a toggle to keep the toolbar from wrapping; they are
   // always shown from `md:` up. Preference persists across sessions/reloads.
   const [showControls, setShowControls] = useState(
-    () => localStorage.getItem('tionswarm.composerControlsOpen') === '1',
+    () => localStorage.getItem('tionharness.composerControlsOpen') === '1',
   )
   const toggleControls = () =>
     setShowControls((v) => {
       const next = !v
-      localStorage.setItem('tionswarm.composerControlsOpen', next ? '1' : '0')
+      localStorage.setItem('tionharness.composerControlsOpen', next ? '1' : '0')
       return next
     })
   const taRef = useRef<HTMLTextAreaElement>(null)

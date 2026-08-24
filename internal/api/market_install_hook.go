@@ -6,9 +6,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/bilal-arikan/tionswarm/internal/db"
-	"github.com/bilal-arikan/tionswarm/internal/market"
-	"github.com/bilal-arikan/tionswarm/internal/workspace"
+	"github.com/bilal-arikan/tionharness/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/market"
+	"github.com/bilal-arikan/tionharness/internal/workspace"
 )
 
 // installHookPack registers a lifecycle/tool hook imported from a foreign plugin

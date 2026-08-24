@@ -1,4 +1,4 @@
-# TionSwarm — Ilerleme Arsivi (2026-06-19 ve oncesi)
+# TionHarness — Ilerleme Arsivi (2026-06-19 ve oncesi)
 
 > Bu dosya [05-ILERLEME.md](05-ILERLEME.md) ana ilerleme gunlugunden arsivlenen, tamamlanmis faz/is kayitlaridir.
 > Canli/guncel durum icin ana dosyaya bakin. Buradaki en yeni kayit 2026-06-19 tarihlidir.
@@ -16,14 +16,14 @@ kalksın; loglar zaten Logs ekranına gidiyor, oradan filtrelenebiliyor.
 - `mcpGatewayUrl` ("MCP & Araçlar"): tüm repoda yalnız kaydedilip yükleniyor, runtime
   hiç **tüketmiyor**. Gerçek MCP sunucu yönetimi ayrı "Araçlar & MCP" (`mcptools`)
   kategorisinde → alt-bölüm gereksiz.
-- `logLevel` ("Tanılama"): `cmd/tionswarm`'da hiç okunmuyor → logger'a **uygulanmıyor**.
+- `logLevel` ("Tanılama"): `cmd/tionharness`'da hiç okunmuyor → logger'a **uygulanmıyor**.
   Ayrıca `LogsPanel.tsx` zaten seviye filtresi + metin araması sunuyor → gereksiz.
 
 **Yapılan (frontend):** `SettingsPanel.tsx`'ten iki `AdvSection` (MCP & Araçlar,
 Tanılama) + `McpPanel`/`DiagnosticsPanel` import'ları + kullanılmayan `Plug`/`Activity`
 ikonları kaldırıldı; `settings/appPanels.tsx`'ten `McpPanel` ve `DiagnosticsPanel`
 fonksiyonları silindi. Backend alanları (`mcpGatewayUrl`/`logLevel`) geriye-uyum için
-settings.json'da kalır (zararsız). `tionswarm-settings` skill'inde ikisi deprecated/unused
+settings.json'da kalır (zararsız). `tionharness-settings` skill'inde ikisi deprecated/unused
 not edildi. `tsc --noEmit` temiz.
 
 ## Bütçe/limit UI kaldırıldı — ajanlar daima sınırsız ✅ (2026-06-30)
@@ -51,15 +51,15 @@ düzenlenemez → yeni ajanlar daima sınırsız. Enforcement (budget.go) 0'da n
 `kaç`→`kaÃ§`); uyarı `internal/memory` (journal) + `conversation/db` JSONL byte
 handling'i işaret ediyordu.
 
-**Teşhis (ampirik, kapatıldı):** Kök neden TionSwarm'da **DEĞİL**. Kanıtlar:
+**Teşhis (ampirik, kapatıldı):** Kök neden TionHarness'da **DEĞİL**. Kanıtlar:
 (1) Go I/O uçtan uca UTF-8 — `internal/db/store.go` (JSONL) `encoding/json` + atomik
 bayt yazımı, `internal/memory` + `agent/reflector.go` (journal=`"Q: "+req.Message+...`)
 saf Go string; tüm `internal`'da **tek `DecodeString` base64**, hiçbir charset decoder
-(`x/text/charmap`/CP125x) yok. (2) `claude-cli` provider'ı TionSwarm'nun bire-bir byte
+(`x/text/charmap`/CP125x) yok. (2) `claude-cli` provider'ı TionHarness'nun bire-bir byte
 yoluyla (stdin raw UTF-8 / stdout raw) Türkçe'yi **doğru** round-trip eder (probe ile
 doğrulandı). (3) Diskteki yer-gerçeği: asistan cevapları `×`/`÷`/`−` çok-baytlı Unicode'u
 **kusursuz** saklamış; yalnız **user mesajları** bozuk → bozulma `req.Message`
-TionSwarm'ya gelmeden, **gönderen istemcide** (double-encode: UTF-8 bayt CP1254 çözülüp
+TionHarness'ya gelmeden, **gönderen istemcide** (double-encode: UTF-8 bayt CP1254 çözülüp
 tekrar UTF-8). Klasik **Windows PowerShell 5.1** `Invoke-RestMethod` string-gövde /
 BOM'suz-UTF-8-dosya-ANSI-okuma hatası (`dev.ps1` ASCII-only kuralının aynısı).
 
@@ -78,7 +78,7 @@ kalıntı, 0 geçersiz JSON. (2) `scripts\e2e-smoke.ps1` `Api-Post`/`Api-Put` se
 
 ## claude-cli kimlik popup'ı (Max OAuth / API token) ✅ (2026-06-30)
 
-**Hedef:** İzole config dizini için **TionSwarm UI'ından** login akışı — bir popup'ta
+**Hedef:** İzole config dizini için **TionHarness UI'ından** login akışı — bir popup'ta
 ya Max/Pro hesabı ya API anahtarı eklenebilsin; dizinde ayrı `claude login` gerekmesin.
 
 **Mekanik:** Claude CLI auth-precedence'ı token'ı env'den kabul ediyor
@@ -119,15 +119,15 @@ dizininde**.
 env olarak enjekte edilir. Boş = ortak `~/.claude`; bir yol verilince CLI
 skill/ayar/komut/global CLAUDE.md/login'i o izole dizinden okur.
 
-**Default (2026-06-30):** Artık **izole-by-default** → `~/.tionswarm/claude-home`
+**Default (2026-06-30):** Artık **izole-by-default** → `~/.tionharness/claude-home`
 (`settings.defaultClaudeConfigDir()`, home çözülemezse `""`=ortak `~/.claude` fallback).
 Yani claude-cli kutudan çıktığı gibi temiz bir config evinden çalışır; **tek seferlik
 `claude` login** o dizinde gerekir. Anahtarsız-mevcut-login davranışı istenirse alan
-boşaltılır (UI placeholder `otomatik (~/.claude)`). Bilinçli ürün kararı: TionSwarm runtime'ı
-kullanıcının kişisel `~/.claude` skill/tool kirliliğinden ayrışır. (TionSwarm zaten
+boşaltılır (UI placeholder `otomatik (~/.claude)`). Bilinçli ürün kararı: TionHarness runtime'ı
+kullanıcının kişisel `~/.claude` skill/tool kirliliğinden ayrışır. (TionHarness zaten
 `--strict-mcp-config` ile MCP'leri izole ediyordu; bu, eksik olan skill/ayar/CLAUDE.md
 katmanını da kapatır.) CLI bu env'e saygı duyar (doğrulandı: Claude Code env-vars docs +
-issue #25762); TionSwarm CLI'ı doğrudan subprocess çağırdığı için VS Code eklentisindeki
+issue #25762); TionHarness CLI'ı doğrudan subprocess çağırdığı için VS Code eklentisindeki
 bug yolu etkilemiyor.
 
 **Dokunulan katmanlar (mevcut `claudeCliPath` aynalandı):** `settings.go`
@@ -137,12 +137,12 @@ bug yolu etkilemiyor.
 (`NewClaudeCLI` 3. param), `claudecli.go` (`configDir` alanı + `runAttempt`'ta
 `cmd.Env` enjeksiyonu), `api/server.go applySettings` (canlı uygula), frontend
 (`settings.ts` tip, `SettingsPanel` save, `ProvidersPanel` Anthropic kartında opsiyonel
-2. endpoint alanı "claude config dizini"). Default skill `tionswarm-settings` belgelendi.
+2. endpoint alanı "claude config dizini"). Default skill `tionharness-settings` belgelendi.
 `go build`/`go vet`/`tsc` ✅.
 
 ## Token/bütçe muhasebesi denetimi + CLI ek-yükü düzeltmesi ✅ (2026-06-30)
 
-**Hedef:** Token ve bütçe hesaplamalarında yanlışlık var mı? (TionSwarm↔the external agent project
+**Hedef:** Token ve bütçe hesaplamalarında yanlışlık var mı? (TionHarness↔the external agent project
 token kıyası oturumunun ardından). **Denetim sonucu:** Çekirdek muhasebe **doğru** —
 OpenAI-uyumlu yol `prompt_tokens`'tan `cached`'i çıkarıyor (çift-sayım yok,
 `minimax.go toUsage`), Anthropic native ayrık sayaçlar, fiyat kademeleri
@@ -155,7 +155,7 @@ adımlarının KÜMÜLATİF** toplamıdır (tek-geçiş bağlamını kat kat aş
 çağrısı cache'ten yazılandan fazlasını okuyamaz; kanıt: SES5 tur 2 `cacheRead=269485`
 iken yazılan ≤ ~86K → ~5 iç çağrının toplamı). **Maliyet için doğru** ama **bağlam
 boyutu değil**. Eski kod bunu "çağrı başına gerçek girdi" sayıp `In+CacheRead+
-CacheWrite` ile sahte ~5–7× ek-yük üretiyordu (kıyas oturumunda TionSwarm'yu olduğundan
+CacheWrite` ile sahte ~5–7× ek-yük üretiyordu (kıyas oturumunda TionHarness'yu olduğundan
 ağır gösteren rakam buydu).
 
 **Değişiklik:** `computeCLIOverhead` artık cacheRead katkısını çağrı başına bağlam
@@ -232,7 +232,7 @@ M3'ün gerçek sınırı ~512K).
   clamp 256–512000) → `Tunables.SetMaxOutputTokens`/`MaxOutputTokens()` →
   `api/server.go applySettings`. UI: "Çıktı token tavanı" alanı (recovery grid'i,
   `appPanels.tsx` + `types/settings.ts` + `SettingsPanel.tsx`). **Öncelik (MaxTokens
-  boşken):** Settings override (>0) → env `TIONSWARM_MAX_OUTPUT_TOKENS` (>0) → aile
+  boşken):** Settings override (>0) → env `TIONHARNESS_MAX_OUTPUT_TOKENS` (>0) → aile
   tablosu → sağlayıcı fallback (4096).
 - Testler: `providers/maxoutput_test.go` (aile + katalog), `agent/maxoutput_test.go`
   (fill/explicit-korunur/override). Doğrulama: `go build ./...` ✅, `go test` 166 ✅.
@@ -267,13 +267,13 @@ M3'ün gerçek sınırı ~512K).
 ## Zengin görev alanları + PM-benzeri kart modalı + Obsidian-pm köprüsü ✅ (2026-06-29)
 
 **Hedef:** Board kartlarını obsidian-pm (Obsidian "Project Manager" eklentisi)
-deneyimine yaklaştırmak; TionSwarm board'unu Obsidian'da Kanban/Tablo/Gantt olarak
+deneyimine yaklaştırmak; TionHarness board'unu Obsidian'da Kanban/Tablo/Gantt olarak
 görüp **çift yön** senkronlamak.
 
 > **Güncelleme (2026-06-30):** `type` (task/subtask/milestone) ve `parentId`
-> TionSwarm'dan kaldırıldı (ihtiyaç yok) — `Task` modeli, API, araçlar ve modal
+> TionHarness'dan kaldırıldı (ihtiyaç yok) — `Task` modeli, API, araçlar ve modal
 > Tür alanı temizlendi. Subtask hiyerarşisi yalnız Obsidian (PM) tarafında yaşar;
-> köprü onu PM-only tutar. TionSwarm'da kalan zengin alanlar: **priority + tags**.
+> köprü onu PM-only tutar. TionHarness'da kalan zengin alanlar: **priority + tags**.
 
 **Zengin görev modeli (backend):**
 - `db.Task` yeni opsiyonel alanlar: `priority` (critical/high/medium/low),
@@ -293,8 +293,8 @@ görüp **çift yön** senkronlamak.
   modalden çıkarıldı; backend alanları omitempty olarak duruyor.)
 - `types/task.ts`/`api/tasks.ts` yeni alanlarla genişledi.
 
-**Obsidian-pm köprüsü (harici, `Desktop\Progs\tionswarm-obsidian-sync`, Python):**
-- TionSwarm REST API (`/api/tasks`) ↔ obsidian-pm projesi (düz Markdown: `<proje>.md`
+**Obsidian-pm köprüsü (harici, `Desktop\Progs\tionharness-obsidian-sync`, Python):**
+- TionHarness REST API (`/api/tasks`) ↔ obsidian-pm projesi (düz Markdown: `<proje>.md`
   + `<proje>_tasks/*.md`, `pm-project`/`pm-task` frontmatter). Sunucu/DB yok.
 - **Tam çift-yön:** başlık/açıklama/durum/owner/deps + **priority/tags/type/parentId**
   + subtask hiyerarşisi (subtask'lar proje `taskIds`/gövdeden hariç, parent `subtaskIds`
@@ -303,7 +303,7 @@ görüp **çift yön** senkronlamak.
   orijinal** zaman damgalarıyla — çekirdek push'un PM dosyasını yeniden yazıp updatedAt
   bumplaması kaynaklı yanlış-yön hatası bu şekilde giderildi). İdempotent.
 - Durum eşlemesi: TS `failed`↔PM `blocked`, `review`↔`review`, gerisi birebir.
-  Bağ + son-senkron anlık görüntüsü sidecar `state/<proje>.json`'da; `tionswarmId`
+  Bağ + son-senkron anlık görüntüsü sidecar `state/<proje>.json`'da; `tionharnessId`
   PM frontmatter'ına gömülü (sidecar kaybolsa bağ kurtarılır).
 - **`watch` modu:** periyodik otomatik senkron; Progs altında arka plan servisi olarak
   Windows zamanlanmış görevle (logon'da) çalışır.
@@ -313,14 +313,14 @@ görüp **çift yön** senkronlamak.
 
 **Hedef:** Kanban kontrolünü tek bir platforma (obsidian-pm) sabitlemek yerine
 **değiştirilebilir provider** arkasına almak; ileride Trello/Asana/WeKan'a yalnız
-yeni bir dosya yazarak geçebilmek (`mermaid-cli` benzeri soyutlama). TionSwarm task
+yeni bir dosya yazarak geçebilmek (`mermaid-cli` benzeri soyutlama). TionHarness task
 store'u **canonical kaynak** olarak kalır (ajan orkestrasyonu onun üstünde).
 
 - **Faz 1 — soyutlama (davranış değişmedi):** `sgsync/providers/` paketi eklendi.
-  `base.py` provider sözleşmesi (`Card` canonical model — status'u TionSwarm board
+  `base.py` provider sözleşmesi (`Card` canonical model — status'u TionHarness board
   sözlüğünde; `ProjectInfo`; `Caps` yetenek bayrakları; `KanbanProvider` ~5 metot).
   Tüm obsidian-pm mantığı engine'den `providers/obsidian.py`'ye taşındı
-  (status/hiyerarşi map, `tionswarmId` gömme, `subtaskIds` roll-up). `engine.py` artık
+  (status/hiyerarşi map, `tionharnessId` gömme, `subtaskIds` roll-up). `engine.py` artık
   **provider-bağımsız** — yalnız `Card` + `KanbanProvider` konuşur; çakışma çözümü,
   kimlik eşleme, çoklu-workspace fan-out, watch kilidi aynen korundu.
 - **Capability modeli:** provider tutamadığı alanı bildirir (`Caps`); engine zorla
@@ -340,7 +340,7 @@ store'u **canonical kaynak** olarak kalır (ajan orkestrasyonu onun üstünde).
 ### Köprü sadeleştirme: Trello provider kaldırıldı + dosyalar workspace içine (2026-06-30)
 
 **Hedef:** Generic board yönetim sistemini korumak ama Trello provider'ını sökmek;
-obsidian-pm dosyalarını harici tek vault yerine **her TionSwarm workspace'inin kendi
+obsidian-pm dosyalarını harici tek vault yerine **her TionHarness workspace'inin kendi
 klasörüne** taşımak (Obsidian kullanıcısı o klasörü manuel vault olarak açar).
 
 - **Trello kaldırıldı:** `providers/trello.py` silindi, registry'den çıkarıldı,
@@ -348,12 +348,12 @@ klasörüne** taşımak (Obsidian kullanıcısı o klasörü manuel vault olarak
   seam (`base.py`/`obsidian.py`/factory) **aynen duruyor** — registry'de tek slug
   (`obsidian`); yeni provider eklemek hâlâ tek dosya + tek satır.
 - **Workspace-içi yerleşim:** yol artık mapping'in `workspace_id`'sinden türüyor →
-  `<tionswarm.data_dir>/workspaces/<WS_ID>/<obsidian.subdir>/`. `_resolve_projects_dir`
+  `<tionharness.data_dir>/workspaces/<WS_ID>/<obsidian.subdir>/`. `_resolve_projects_dir`
   önceliği: `obsidian_dir` override → `data_dir`+workspace → eski `projects_dir`
   (geriye uyumlu). `data_dir` var ama `workspace_id` yoksa **sessizce yanlış yere
   yazmaz, hata fırlatır.** Backend değişikliği gerekmedi (yol bridge tarafında türetiliyor).
-- **Veri göçü:** mevcut 3 proje (`TionSwarm`/`DenemeBilimsel`/`TionSwarmRepo` ↔ WS1/WS2/WS5)
-  eski vault'tan `…/.tionswarm/workspaces/<WS>/obsidian/`'e taşındı; state link'leri
+- **Veri göçü:** mevcut 3 proje (`TionHarness`/`DenemeBilimsel`/`TionHarnessRepo` ↔ WS1/WS2/WS5)
+  eski vault'tan `…/.tionharness/workspaces/<WS>/obsidian/`'e taşındı; state link'leri
   pm_id bazlı olduğundan korundu (`pull` yeni konumdan aynı kartları/id'leri okudu).
   `ikariam` örnek projesi (mapping'siz) eski vault'ta bırakıldı.
 - **Doğrulama:** `tests/test_providers.py` (yol çözümü + factory + board-bağımsızlık)
@@ -439,14 +439,14 @@ tıklayınca o ajanın ayar sayfasına (Ajanlar görünümü, ajan seçili) gidi
 
 **Faz 4 — Kalıcı claude-cli süreci (opsiyonel, deneysel, default off).** `providers.CLISession` + `CLISessionPool` (`claudecli_session.go`): session başına uzun-ömürlü `claude --input-format stream-json` süreci; soğuk başta tam transkript, sıcakta yalnız son kullanıcı mesajı (süreç gerisini hatırlar). `Runtime.cliSessions` pool'u (CloseMCP'de kapanır, 30dk idle eviction), tek-huni `recordedComplete`'te session-id ile devreye girer (hata → tek-atış fallback); `ClaudePersistentSession` açıkken `planClaudeResume` trim'i devre dışı. Ayar tüm sitelere bağlandı (Settings/DTO/Patch/Apply/tunable/server apply). **Canlı:** context korunuyor (ZEBRA-9) + cache ısındı (turn 2 cache_read=87.672); warmth TTL'e bağlı, default off. Live test `TestLivePersistentSession`.
 
-Doğrulama: `go build ./...` + `go vet` + paket testleri temiz; `TIONSWARM_LIVE_CLI=1` ile iki live test PASS.
+Doğrulama: `go build ./...` + `go vet` + paket testleri temiz; `TIONHARNESS_LIVE_CLI=1` ile iki live test PASS.
 
 ## Context-preview "CLI ek yükü" satırı ✅ (2026-06-29)
 
 **Sorun:** `GET /api/sessions/{id}/context-preview` çıktısı (`systemTokens`/
-`toolTokens`/`totalTokens`) yalnızca TionSwarm'nun **kendi** enjekte ettiği katmanı
+`toolTokens`/`totalTokens`) yalnızca TionHarness'nun **kendi** enjekte ettiği katmanı
 sayar. `claude-cli` sağlayıcısında alttaki CLI **kendi sistem
-promptu + araç şemaları + MCP köprüsünü** modele ekler — TionSwarm bunu hiç
+promptu + araç şemaları + MCP köprüsünü** modele ekler — TionHarness bunu hiç
 görmediği için `totalTokens` gerçek faturalanan girdiyi ciddi şekilde **az
 raporlar**. Canlı ölçüm (AGT1 Coder, opus, SES75, 3 çağrı ort.): tahmin **6.832**
 → gerçek **49.844** token (~**7,3×**, +43.012 ek yük).
@@ -548,7 +548,7 @@ garanti değil; araç/prompt değişimi prefix'i bozabiliyor.
 the external agent project'taki gibi silinen/eklenen satırların görüldüğü belirgin bir diff paneli
 açılsın. Sorun: native tool-loop düzenlemeleri zaten `diff` adımı → güzel **DiffCard**
 veriyordu; ama asıl provider olan **claude-cli** düzenlemeyi kendi uyguladığı için
-TionSwarm `recordDiff` çağrılmıyor → düzenleme generic `tool` adımı olarak **ActivityCard**
+TionHarness `recordDiff` çağrılmıyor → düzenleme generic `tool` adımı olarak **ActivityCard**
 ile (yalnızca açınca, sönük) gösteriliyordu → iki yol arasında tutarsızlık.
 
 **Yapılanlar (frontend-only; Go değişmedi):**
@@ -641,20 +641,20 @@ Tam suite **524 test** yeşil.
 
 **Sorun (SES73):** claude-cli modeli köprülü `ask_user`'ı native `AskUserQuestion`
 şemasıyla çağırdı — `options`'ı **obje dizisi** (`[{"content":"..."}]`) olarak yolladı;
-TionSwarm ise `[]string` bekliyordu → `json: cannot unmarshal array into ... askInput.options
+TionHarness ise `[]string` bekliyordu → `json: cannot unmarshal array into ... askInput.options
 of type string` → 3 ardışık `ask_user` hatası, model 4. turda options'ı bırakıp düz metinle sordu.
 
 **Çözüm:** `ask_user` şeması native ile uyumlu hale getirildi (`internal/tools/builtin_ask.go`):
 - `options` öğesi artık **string VEYA obje** olabilir (`{label|content|value|text|description}`
   → görünen metne normalize; `askOption` + `flexOptions`).
-- Native **`questions[]` wrapper** da tolere edilir (ilki kullanılır — TionSwarm tek soru sorar).
+- Native **`questions[]` wrapper** da tolere edilir (ilki kullanılır — TionHarness tek soru sorar).
 - Ortak `tools.ParseAskInput` hem native tool yolunda hem claude-cli Interaction MCP köprüsünde
   (`callAsk`) kullanılır → iki yol birebir aynı çözümler. Şema `oneOf` (string|object), ekstra
   native alanlar (header/multiSelect) yok sayılır. Test: `TestParseAskInput` (7 şekil) geçti.
 
 ## Doğrulama araçları (skill/config/mermaid) + interaction köprü konsolidasyonu ✅ (2026-06-29)
 
-External Agent `session-tools-core` ↔ TionSwarm araç eşleştirmesindeki boşluk analizinden
+External Agent `session-tools-core` ↔ TionHarness araç eşleştirmesindeki boşluk analizinden
 (bkz. `_Docs/analiz-craftagent-arac-eslestirme.md`) çıkan üç **salt-okuma doğrulama
 aracı** eklendi:
 
@@ -662,13 +662,13 @@ aracı** eklendi:
   `name`/`description`, boş gövde). Mantık tek kaynak: `skills.Store.ValidateSkill`
   (`internal/skills/validate.go`); tool `internal/tools/builtin_skillvalidate.go`
   (`SkillValidator` arayüzü, agent tarafı `agentSkillWriter.ValidateSkill` adaptörü).
-- **`config_validate`** — TionSwarm JSON config dosyalarını doğrular (geçerli JSON +
+- **`config_validate`** — TionHarness JSON config dosyalarını doğrular (geçerli JSON +
   tanınan şekiller için beklenen alanlar: settings.json / tools-config.json / agent /
   mcp-server). `internal/tools/builtin_configvalidate.go`, çalışma dizini sandbox'ı.
 - **`mermaid_validate`** — saf-Go hafif lint (tanınan diyagram tipi + denge kontrolü;
   tam parser DEĞİL, sınır belgelendi). `internal/tools/builtin_mermaidvalidate.go`.
 
-Üçü de native builtin + **NameOnly (lazy)** → claude-cli'da `tionswarm_extended`
+Üçü de native builtin + **NameOnly (lazy)** → claude-cli'da `tionharness_extended`
 köprüsünden `BridgeableDefs` ile otomatik gelir. Kayıt: `toolsetup.go` (mermaid base,
 skill_validate `r.skills!=nil`, config_validate `sb.Ready()`; üçü NameOnly tier'a eklendi).
 
@@ -676,12 +676,12 @@ skill_validate `r.skills!=nil`, config_validate `sb.Ready()`; üçü NameOnly ti
 (todo/artifact/notify/focus/goal/sessionEdit) tek tablo-güdümlü `sinkToolTable` +
 `callViaSink` yardımcısına indirildi — davranış birebir korundu, ~120 satır boilerplate
 kalktı. (Not: bu, "tek Context, çok-backend" refactor taslağının düşük-riskli/kozmetik
-parçası; büyük `ToolContext` arayüzü gereksiz bulunup uygulanmadı — TionSwarm deseni zaten
+parçası; büyük `ToolContext` arayüzü gereksiz bulunup uygulanmadı — TionHarness deseni zaten
 ctx-value injection ile gerçekliyor.)
 
 **Test:** `builtin_validate_test.go` (mermaid/config/skill_validate), `skills/validate_test.go`
 (ValidateSkill) + tüm suite **510 test** yeşil. Doküman/skill: `_Docs/19` (NameOnly seti),
-`tionswarm-self-management` (skill_validate notu), `tionswarm-guide` (mermaid_validate notu).
+`tionharness-self-management` (skill_validate notu), `tionharness-guide` (mermaid_validate notu).
 
 ## Plan modu bağlandı + ölü `planningMode` alanı kaldırıldı ✅ (2026-06-28)
 
@@ -832,18 +832,18 @@ Test `db/session_meta_test.go` (round-trip + clear). Build+vet+test + frontend
 ## claude-cli 2.1.x+ iki-tier araç köprüsü: eager-core + lazy-extended ✅ (2026-06-26)
 
 **Sorun:** claude-cli ajanlarında (ör. WS5/AGT4) `Bash` ilk turda `No such tool
-available` veriyordu. Kök neden: TionSwarm tüm bridged araçları (eager + tüm
-self-management suite) **tek** `tionswarm_interaction` MCP sunucusuna full-şema koyuyor;
+available` veriyordu. Kök neden: TionHarness tüm bridged araçları (eager + tüm
+self-management suite) **tek** `tionharness_interaction` MCP sunucusuna full-şema koyuyor;
 toplam şema bağlam penceresinin %10'unu aşınca claude-cli 2.1.x **hepsini erteliyordu**
 (Bash dahil). UI'daki "her tur şema gönderilen · 19" metriği **native** yola aitti;
 CLI yolunda lazy-loading kazanımı gerçekleşmiyordu.
 
 **Çözüm:** Interaction MCP'yi **iki sunucuya** böldük (claude-cli'ın native Tool
 Search mekanizmasını doğru kullanarak):
-- `tionswarm_interaction` (CORE, `alwaysLoad: true`) → eager tier, tool-search'ten muaf
+- `tionharness_interaction` (CORE, `alwaysLoad: true`) → eager tier, tool-search'ten muaf
   → Bash/ask_user/use_skill ilk turdan hazır. Eski anahtar korundu (namespaced
   referanslar bozulmadı).
-- `tionswarm_extended` (EXTENDED) → self-management + NameOnly oturum araçları;
+- `tionharness_extended` (EXTENDED) → self-management + NameOnly oturum araçları;
   `ENABLE_TOOL_SEARCH=auto` (CLI env) ile lazy keşfedilir.
 
 **Dosyalar:** `internal/tools/interaction.go` (Core/ExtendedToolNames), `internal/
@@ -858,7 +858,7 @@ claudecli.go` (`ENABLE_TOOL_SEARCH=auto` env), `internal/api/server.go` (subtree
 **Test:** `TestWriteCLIMCPConfigTwoTierInteraction`, `TestInteractionTierSplit`,
 `TestLazyCatalogCLIFormNamespacesNames` + tüm suite (504 test) yeşil. Canlı doğrulandı
 (WS5/AGT4, Playwright): `Bash` tek adımda (ToolSearch'süz), `list_agents` ise
-`mcp__tionswarm_extended__` namespace'inden ToolSearch ile lazy yüklendi. Detay: `_Docs/19`.
+`mcp__tionharness_extended__` namespace'inden ToolSearch ile lazy yüklendi. Detay: `_Docs/19`.
 
 ## Oturum bilgisi panelinden "Ajanın bugünkü harcaması" kaldırıldı ✅ (2026-06-26)
 
@@ -965,7 +965,7 @@ Market item'ına tıklayınca açılan detay popup'ı genişletildi (`max-w-lg`�
   + **Zamanlamalar** (cron + agent-key + prompt) + **Gömülü skill'ler** (frontmatter'dan ad/açıklama) +
   board kolonları + yönergeler. Frontend tipleri (`types/market.ts`) yeni payload alanlarıyla genişletildi.
 - **Doğrulama:** `tsc` + `vite build` yeşil. Canlı (8090, tarayıcı): Market ▸ Workspaces ▸ "Yazılım
-  Geliştirme" → geniş popup; meta (Gömülü·TionSwarm + #template #workspace), stat (4 ajan/2 akış/0 zam/1 skill),
+  Geliştirme" → geniş popup; meta (Gömülü·TionHarness + #template #workspace), stat (4 ajan/2 akış/0 zam/1 skill),
   ajan kartları (read-only/auto + thinking + sw-conventions çipleri), akış zincirleri render edildi.
 
 ## Workspace'i şablon olarak publish (seeding'in tersi) ✅ (2026-06-26)
@@ -1045,7 +1045,7 @@ nameOnly ikisi de "NameOnly" görünüyordu):
 
 - **eager** → chip yok (her tur tam şema)
 - **NameOnly** (amber) → lazy + isimle listelenir (örn. set_session_goal, notify)
-- **Self-mgmt** (gri) → hidden tier: katalogda ismi bile yok, `tionswarm-self-management`
+- **Self-mgmt** (gri) → hidden tier: katalogda ismi bile yok, `tionharness-self-management`
   skill pointer'a katlanır, tool_search ile keşfedilir (örn. create_agent… + Part A'da
   taşınan read/write/list_config, secret_list/get)
 
@@ -1088,7 +1088,7 @@ Pointer metnine "your own prompts/config" eklendi.
 
 - **Karar (Part B = HAYIR):** self-management ailesinin tamamını (46) name-only enumerate
   ETMEDİK. Patlamalı/nadir admin araçları; her tur 46 satır (CLI'de ~600 token) düşük
-  getiri. Kategori-pointer + `tionswarm-self-management` skill + tool_search zaten keşfi
+  getiri. Kategori-pointer + `tionharness-self-management` skill + tool_search zaten keşfi
   sağlıyor. **Kural:** NameOnly = "var olduğunu bil, ara sıra kullan"; hidden = "toplu/
   nadir admin, per-turn ödeme yok".
 - **Kod:** `toolsetup.go` — config+secret-read'ler `MarkNameOnly`'den `MarkHidden`'a.
@@ -1102,12 +1102,12 @@ Pointer metnine "your own prompts/config" eklendi.
 SES12 (WS2, claude-cli ajan) incelemesinde fark edildi: "# Available Tools (load on
 demand)" bloğu built-in araçları **bare adlarla** (`set_session_goal`, `notify`…) +
 native `activate_tools` yönergesiyle listeliyordu. Ama claude-cli bu araçları MCP aracı
-olarak (`mcp__tionswarm_interaction__*`) görür ve kendi ToolSearch'üyle yükler — yani blok
+olarak (`mcp__tionharness_interaction__*`) görür ve kendi ToolSearch'üyle yükler — yani blok
 yanıltıcıydı (skills bloğu zaten doğru namespaced biçimi kullanıyordu, tools bloğu değil).
 Default-NameOnly değişikliği 10 built-in'i daha bu bloğa eklediği için fark belirginleşti.
 
 - **Düzeltme:** `LazyToolsCatalogBlock` artık ajanın `provider`'ına göre dallanır.
-  claude-cli formunda: built-in → `mcp__tionswarm_interaction__<ad>`, MCP → `mcp__<server>__<tool>`,
+  claude-cli formunda: built-in → `mcp__tionharness_interaction__<ad>`, MCP → `mcp__<server>__<tool>`,
   yönerge `ToolSearch` (native `activate_tools` değil), CLI-native built-in'ler (WebFetch)
   düşürülür. Native (anthropic/minimax) form **değişmedi** (bare ad + activate_tools).
 - **Kod:** `catalogDisplayName` ad eşlemesi + `renderLazyToolCatalog(..., cli bool)` +
@@ -1134,7 +1134,7 @@ boş karşılama ekranında bekler.
 - **Frontend gate:** `useWorkspaces` artık `loading` bayrağı taşır (ilk liste çözülene
   kadar `true`). `App.tsx` tüm hook'lardan SONRA gate'ler:
   `loading && !hadSetupAtBoot` → `SplashScreen`; `!loading && workspaces.length===0` →
-  `OnboardingScreen`. `tionswarm.hasSetup` localStorage bayrağı bir workspace var olunca
+  `OnboardingScreen`. `tionharness.hasSetup` localStorage bayrağı bir workspace var olunca
   set edilir → splash yalnız **taze kurulumda** (kurulum yapılmamışken) görünür, dönen
   kullanıcı doğrudan uygulamaya girer.
 - **Yeni bileşenler:** `components/SplashScreen.tsx` (self-contained, tema-değişkenli),
@@ -1142,7 +1142,7 @@ boş karşılama ekranında bekler.
   `WorkspaceCreateModal`'ı açar; popup başta açık, kapatılırsa kurulum yapılmaz).
 - **Splash marka + min-süre (2026-06-26):** Splash gerçek logoyu (`/favicon.svg` — mor gradyan
   swarm markası, hem Vite dev hem embed binary'de servis ediliyor) dönen aksan halkası +
-  "TionSwarm" wordmark + "Yükleniyor…" ile gösterir (logoda pulse + ekran fade-in keyframe'leri
+  "TionHarness" wordmark + "Yükleniyor…" ile gösterir (logoda pulse + ekran fade-in keyframe'leri
   bileşene gömülü). **Minimum görünme süresi** `SPLASH_MIN_MS=1100` (App.tsx): liste anında
   çözülse bile splash en az bu kadar kalır → tek-kare flaş olmaz. Gate:
   `!hadSetupAtBoot && (wsLoading || !minSplashElapsed)`; dönen kullanıcı min-süreyi de atlar.
@@ -1156,14 +1156,14 @@ boş karşılama ekranında bekler.
   `activeWorkspaceId=null` → App gate `workspaces.length===0` ile **canlı (reload'suz)**
   onboarding'e döner. Son workspace için onay metni farklı: "… son workspace — silinince ilk
   kurulum ekranına dönersin."
-- **Doğrulama:** `go build ./...` + frontend `tsc --noEmit` yeşil. Taze `TIONSWARM_DATA_DIR`
+- **Doğrulama:** `go build ./...` + frontend `tsc --noEmit` yeşil. Taze `TIONHARNESS_DATA_DIR`
   ile canlı test (8091): `GET /api/workspaces` → `count=0` + `workspaces.json` yok (otomatik
   oluşturma gerçekten kalktı), ardından `POST /api/workspaces` → WS1 oluştu, `count=1`.
 - **Canlı UI smoke testi (2026-06-26, tek-binary 8091 + Playwright):** taze örnekte tarayıcı
   `http://127.0.0.1:8091` → **onboarding + create popup** render edildi (snapshot doğrulandı);
   ad girip **Oluştur** → URL `#/w/WS1/chat`, uygulama yüklendi; Workspace ▸ "Workspace'i sil"
   → yeni "son workspace" onay metni çıktı → kabul → **onboarding canlı geri döndü** (popup
-  yeniden açıldı), `GET /api/workspaces` → `[]`. Gerçek veri (`~/.tionswarm`, 4 ws) izole tutuldu.
+  yeniden açıldı), `GET /api/workspaces` → `[]`. Gerçek veri (`~/.tionharness`, 4 ws) izole tutuldu.
 
 ## Skill NameOnly: skill'ler için slug-only katman ✅ (2026-06-26)
 
@@ -1182,7 +1182,7 @@ görür, detayı `skill_search` ile keşfeder, `use_skill` ile yükler. "Tam öz
   `PUT /api/skills/{slug}/name-only` (`handleSetSkillNameOnly`).
 - **Frontend:** `Skill.nameOnly` tipi, `api.setSkillNameOnly`, SkillsPanel "NameOnly"
   badge + toggle butonu (liste + detay).
-- **Etki (canlı ölçüm, WS5):** `tionswarm-autonomous-ops` NameOnly → satır **839→26
+- **Etki (canlı ölçüm, WS5):** `tionharness-autonomous-ops` NameOnly → satır **839→26
   karakter**, Available Skills bloğu **3376→2563** (~813 karakter ≈ ~200 token, tek skill).
 - Test: `TestNameOnlySkillRendersSlugOnly`. Go build+test ✅, `tsc` ✅. Canlı
   toggle on/off doğrulandı, config geri alındı. Detay: `_Docs\19-LAZY-TOOL-LOADING.md`.
@@ -1267,7 +1267,7 @@ Backend `go build`/`vet` + agent/db/api testleri (185) + frontend `tsc --noEmit`
 
 Kullanıcı geri bildirimiyle 4 iyileştirme:
 1. **Kalıcı ilerleme artık oturum-başına.** Eskiden proje dizini olmayan oturumlar
-   workspace-default `<cwd>/.tionswarm/progress.json`'u paylaşıyordu → detay-panelde
+   workspace-default `<cwd>/.tionharness/progress.json`'u paylaşıyordu → detay-panelde
    "ajan-bazlı" görünüyordu. Tek resolver **`Runtime.ProgressDir(sessionID)`**:
    explicit proje dizini varsa onu (cross-session paylaşım korunur), yoksa
    per-session fallback `<store>/progress/<sessionID>`. Yaz (NewTodoSink, artık
@@ -1317,7 +1317,7 @@ kayıtlıydı; **claude-cli ajanı interaction köprüsünde göremiyordu** (kö
 - Araç hidden-lazy self-manage tier'ından **çıkarılıp** core/her-zaman-açık yapıldı
   (toolsetup, `conversation_search` yanında, `DebugJournalEnabled` gated) → native
   yolda da eager.
-- **Canlı sonuç:** ajan `mcp__tionswarm_interaction__read_session_debug`'i araç
+- **Canlı sonuç:** ajan `mcp__tionharness_interaction__read_session_debug`'i araç
   listesinde gördü, çağırdı ve `turns=2, llmCalls=2, anomalies=0` raporladı; API
   ground-truth tur bitince `turns=3` (fark beklenen: araç tur-içinde çağrıldı).
   Özet/seri/cache muhasebesi (read 41956 / write 67146) gerçek veriyle doğrulandı.
@@ -1352,7 +1352,7 @@ Oturum debug günlüğünün üstüne üç yetenek:
   ≤5 oturumunun dedup'lı anomalilerini reflect prompt'una "Performance observations"
   olarak ekler → kalıcı reflection belleğine ders olarak yedirilir (gated, best-effort).
 - UI: kartta anomaliler (warn=kırmızı/info=gri) + sparkline'lar; tool `read_session_debug`
-  ve API özeti otomatik içerir. Skill `tionswarm-self-debug` + `_Docs\38` güncellendi.
+  ve API özeti otomatik içerir. Skill `tionharness-self-debug` + `_Docs\38` güncellendi.
 - Test: `db/debug_journal_test.go` +2 (`AnomaliesAndSeries`, `NoAnomaliesOnHealthy`).
   Build + vet + frontend `tsc` temiz.
 
@@ -1380,7 +1380,7 @@ geliştirmesi** (kendi metriklerini okuyup davranış ayarı).
   modele göre token + tembel ham olay log'u), oturum detayında harcama kartından sonra.
 - **Ayar:** `debugJournalEnabled` (vars. açık) + `debugJournalCap` (vars. 5000);
   `Tunables.SetDebugJournal`, `applySettings` canlı uygular; UI Ayarlar ▸ Uygulama.
-- **Default skill** `tionswarm-self-debug` (ajana metriklerini optimize için nasıl
+- **Default skill** `tionharness-self-debug` (ajana metriklerini optimize için nasıl
   okuyacağını öğretir). **Test** `db/debug_journal_test.go` (round-trip + cap budama).
 - Detay: `_Docs\38-SESSION-DEBUG.md`. Build + `go vet` + 311 test (5 paket) + frontend `tsc` temiz.
 
@@ -1394,7 +1394,7 @@ medya/satır-içi medya inline kalır). (2) **Video desteği** — `lib/paths.ts
 `<video controls>` olur, galeri item'ı video ise thumbnail `<video>` + **play ikonu**
 ve Lightbox'ta `<video autoPlay controls>` (kendi kontrolleri pan'ı çalmaz). `Lightbox`
 `LightboxImage.type` ('image'|'video'), `Gallery` ext'ten tip türetir. Guidance +
-`tionswarm-guide` güncellendi. Playwright doğrulaması: 2 görsel+1 video ardışık → tek
+`tionharness-guide` güncellendi. Playwright doğrulaması: 2 görsel+1 video ardışık → tek
 galeri (1 video thumbnail), tek video satırı → inline player, metinle ayrılmış tek
 görsel → gruplanmadı. Binary :8090 restart.
 
@@ -1407,7 +1407,7 @@ gövde JSON `{"title","images":[{"src","alt"}]}` veya düz satır/virgül-ayrık
 listesi → **thumbnail grid**, tık→**Lightbox o index'te** açılır, ←/→ + ok butonları +
 "n / N" sayaç ile gezinilir. `Lightbox` `images[]`+`index` desteğiyle genişletildi
 (`go(delta)` sarmalı navigasyon, ArrowLeft/Right). `CodeBlock` `gallery`/`image-preview`/
-`images` → `Gallery`. Ajan guidance'ı (`artifactDeliverableGuidance` + `tionswarm-guide`
+`images` → `Gallery`. Ajan guidance'ı (`artifactDeliverableGuidance` + `tionharness-guide`
 Rich replies) inline görsel + galeri bloğunu öğretecek şekilde güncellendi. Playwright
 ile grid + index'li açılış + ileri-geri navigasyon doğrulandı; binary :8090 restart.
 
@@ -1460,7 +1460,7 @@ Dizin-sitelerini market'e bağlama (`_Docs\38`) Faz A+B uygulandı:
 
 ## Ingest: CC model eşleme + dizin-sitesi köprü planı (2026-06-25)
 
-- **CC model → TionSwarm provider/model eşleme** ✅: `agentAdapter` artık CC subagent
+- **CC model → TionHarness provider/model eşleme** ✅: `agentAdapter` artık CC subagent
   `model:` değerini eşliyor (`mapCCModel`): aile anahtar kelimesi → keysiz `claude-cli`
   provider + kanonik model id (`opus`→`claude-opus-4-8`, `sonnet`→`claude-sonnet-4-6`,
   `haiku`→`claude-haiku-4-5-20251001`, `fable`→`claude-fable-5`). `inherit`/boş → workspace
@@ -1512,7 +1512,7 @@ aynı alanı düzenliyor). Daha önce ajan hedefi `goalContextBlock` ile **gör�
 - **Concrete sink (`agent/goalsink.go`):** `Runtime.NewGoalSink` → `db.GetSession`/`SetSessionGoal`
   (`artifactsink.go` deseni). chat_stream + autonomous_interaction `setGoal`; CLI köprüsü
   `mcp_interaction.go` `callGoal`. Native registry'ye iki eager built-in.
-- **Skill:** `tionswarm-progress` north-star satırı + `tionswarm-guide` interaction bölümü güncellendi.
+- **Skill:** `tionharness-progress` north-star satırı + `tionharness-guide` interaction bölümü güncellendi.
 - **Test:** 7 yeni birim test; tools/agent/api `build`/`vet`/`test` yeşil. Detay: `_Docs\11` §19.
 - **Not:** Goal kartı canlı-refresh event'i bu fazda yok (panel yeniden açılınca tazelenir;
   kalıcılık+context enjeksiyonu anında). Faz 3 kalan: `set_session_title`/cwd/archive.
@@ -1628,28 +1628,28 @@ etiketli `OptionPills` (radiogroup) ile değiştirildi; ikon dili composer ile
 ortak (`components/agents/agentOptions.ts`). Düşünme "Kapalı" = boş string
 (depolama korunur).
 
-## Default skill: `tionswarm-doc-improver` (6-ölçütlü doküman denetimi) ✅ (2026-06-25)
+## Default skill: `tionharness-doc-improver` (6-ölçütlü doküman denetimi) ✅ (2026-06-25)
 
-**Ne:** Yeni gömülü default skill — TionSwarm'nun kendi bağlam dokümanlarını (skill'ler,
+**Ne:** Yeni gömülü default skill — TionHarness'nun kendi bağlam dokümanlarını (skill'ler,
 workspace CLAUDE.md/AGENTS.md kuralları, `_Docs`) denetleyip iyileştiren tekrarlanabilir
-iş akışı. Anthropic'in resmi `claude-md-improver` skill'inden ilham; TionSwarm'nun daha
+iş akışı. Anthropic'in resmi `claude-md-improver` skill'inden ilham; TionHarness'nun daha
 geniş doküman yüzeyine genelleştirildi.
 
 **İçerik:** 6 ölçüt (komutlar / mimari açıklığı / açık-olmayan gotcha'lar / kısalık /
-güncellik / uygulanabilirlik, her biri /5) + puanlı rapor formatı. TionSwarm'ya özgü
-çekirdek içgörü: **changelog-leak anti-pattern** — referans dokümanların (`tionswarm-project`,
+güncellik / uygulanabilirlik, her biri /5) + puanlı rapor formatı. TionHarness'ya özgü
+çekirdek içgörü: **changelog-leak anti-pattern** — referans dokümanların (`tionharness-project`,
 `_Docs` mekanik bölümleri) tarih damgalı geçmişi biriktirmesi; çözüm "1 cümle güncel durum
 + → `_Docs/NN`" kalıbı. **Doc-type kalibrasyonu:** referans/her-tur-yüklenen dokümanda
 kısalık sert, on-demand action skill gövdesinde işlevsel yoğunluk normal → sağlıklı
 dokümanı zorla kesme.
 
 **Gömme:** Go değişikliği **gerekmedi** — `internal/skills/defaults.go` `//go:embed defaults`
-tüm ağacı gömer ve slug'ları alt-dizinlerden türetir; yalnız `defaults/tionswarm-doc-improver/SKILL.md`
+tüm ağacı gömer ve slug'ları alt-dizinlerden türetir; yalnız `defaults/tionharness-doc-improver/SKILL.md`
 eklendi. Build + 29 test yeşil.
 
-**Yan iş (aynı oturum, davranışsız doküman temizliği):** `tionswarm-project` referans skill'i
+**Yan iş (aynı oturum, davranışsız doküman temizliği):** `tionharness-project` referans skill'i
 ~%11 kısaltıldı (changelog-leak temizlendi + PowerShell çalıştırma komut bloğu eklendi);
-`tionswarm-guide` Memory maddesi okunabilirlik için alt-maddelere bölündü; default-skill listesi
+`tionharness-guide` Memory maddesi okunabilirlik için alt-maddelere bölündü; default-skill listesi
 güncellendi (progress/gan-loop/doc-improver eklendi).
 
 ## Agent avatar mojibake onarımı + model adı gösterimi ✅ (2026-06-25)
@@ -1700,7 +1700,7 @@ olarak çizilir (akış/sıra/durum/sınıf/ER/gantt vb.). `diff` bloklarının
 - **Test (Playwright, 2026-06-25):** geçici harness ile flowchart/sequence/state
   render, dark+light tema geçişinde yeniden renklenme ve geçersiz blok → kaynak
   fallback (crash yok, bomba leak yok) gerçek tarayıcıda doğrulandı.
-- **Ajan farkındalığı:** `tionswarm-guide` default skill'ine "Rich replies"
+- **Ajan farkındalığı:** `tionharness-guide` default skill'ine "Rich replies"
   bölümü eklendi (mermaid/diff/kod render edildiğini ajana öğretir).
 - **Davranış fix'i (2026-06-26):** Ajan "diyagram çiz" deyince mermaid'i mesaja
   gömmek yerine `create_artifact(kind=mermaid)` yapıyordu (ART11/ART12). Kök neden:
@@ -1712,7 +1712,7 @@ olarak çizilir (akış/sıra/durum/sınıf/ER/gantt vb.). `diff` bloklarının
   Ayrıca default skill'ler diske bir kez **seed** edildiğinden (`skills.EnsureDefaults`,
   "existing files never overwritten") disk kopyası eski kalıyordu → disk kopyası elle
   güncellendi (skill gövdesi her `use_skill`'de diskten okunur → anında geçerli).
-  Binary yeniden derlenip :8090'da restart edildi (eski binary `tionswarm.bak.exe`).
+  Binary yeniden derlenip :8090'da restart edildi (eski binary `tionharness.bak.exe`).
 - Detay: `_Docs\07-CHAT-UX.md`.
 
 ## Workspace'e özel görünüm/tema + Dil → Profil ✅ (2026-06-25)
@@ -1794,7 +1794,7 @@ mevcut node tipleriyle, döngünün (cycle) bilinçli kullanımıyla kuruldu.
 
 - **Motor teyidi:** `orchestration.Validate()` acyclicity kontrol **etmiyor**, engine döngüye
   izin verip `maxSteps=50` ile sınırlıyor → `evaluate → decide → generate` geri-kenarı
-  doğrudan kurulabiliyor. (Eski `tionswarm-flows` skill'i "must be acyclic" diyordu — **yanlıştı**,
+  doğrudan kurulabiliyor. (Eski `tionharness-flows` skill'i "must be acyclic" diyordu — **yanlıştı**,
   düzeltildi.)
 - **Kısıt → karar:** branch yalnız string eşler (sayısal eşik yok) → skor→pivot kararı
   **keyword verdict** (`VERDICT: SHIP|REFINE|PIVOT`, `decide` `matchMode:regex` son satıra
@@ -1803,18 +1803,18 @@ mevcut node tipleriyle, döngünün (cycle) bilinçli kullanımıyla kuruldu.
 - **Dağıtım:** gömülü gallery şablonu `gan-loop` (`frontend/src/lib/flowTemplates.ts`) +
   market paketleri `flow.gan-generator-evaluator` / `agent.skeptical-evaluator` /
   `mcp.playwright` (global market dizinine yazıldı) + yeni default skill
-  `tionswarm-gan-loop`. Şablon agent-bağımsız → kurulumdan sonra **iki ayrı ajan** atanır.
+  `tionharness-gan-loop`. Şablon agent-bağımsız → kurulumdan sonra **iki ayrı ajan** atanır.
 - **Test:** `engine_test.go` — `TestValidate_AllowsCyclicGraph`, `TestRun_GANLoop_RefinesThenShips`
   (2× REFINE → SHIP → finalize), `TestRun_GANLoop_StepCapBackstop` (hiç ship etmeyen →
   `step cap` hatası). `go build`/`vet`/`test ./internal/orchestration` ✅; `tsc -b`/`vite build` ✅.
 - Detay: [`15-FLOW-CANVAS.md`](15-FLOW-CANVAS.md) §Generator↔Evaluator döngü şablonu;
-  kullanım kılavuzu: `tionswarm-gan-loop` skill.
+  kullanım kılavuzu: `tionharness-gan-loop` skill.
 
 ## Yapılandırılmış subagent görev sözleşmesi ✅ (2026-06-25)
 
 Anthropic *"Multi-agent research system"* rehberi: her subagent'a **objective +
 output format + tool/source guidance + boundaries** verilmezse iş tekrarı/boşluk
-oluşur. TionSwarm'da `run_subagent` yalnız serbest-metin `task` alıyordu; bu 4 alanı
+oluşur. TionHarness'da `run_subagent` yalnız serbest-metin `task` alıyordu; bu 4 alanı
 yapısal teşvik etmiyordu.
 
 - **Şema:** `run_subagent` input'una **üç opsiyonel alan** eklendi — `objective`,
@@ -1836,13 +1836,13 @@ yapısal teşvik etmiyordu.
 
 Anthropic *"Effective harnesses for long-running agents"* + *"Effective context
 engineering"* makalelerindeki **kalıcı not dosyası** (`claude-progress.txt` +
-`feature_list.json` `passes` boolean) konvansiyonu TionSwarm'ya getirildi. `todo_write`
+`feature_list.json` `passes` boolean) konvansiyonu TionHarness'ya getirildi. `todo_write`
 listesi artık **diske kalıcı**: oturumlar arası kaybolmuyor, yeni oturum devralıyor.
 
 - **Sorun:** `todo_write` stateless'tı; liste yalnız oturum-içi (mesaj trace'inden
   `todoContextBlock` ile yeniden inşa) yaşıyordu. Oturum restart/yeni oturum/ajan
   değişiminde kayboluyordu. Core memory (serbest persona/human) bunu karşılamıyor.
-- **Çözüm:** Liste, çalışma dizinine bağlı **`<cwd>/.tionswarm/progress.json`**'a
+- **Çözüm:** Liste, çalışma dizinine bağlı **`<cwd>/.tionharness/progress.json`**'a
   yazılır (cwd yoksa `<store>/progress/<agentID>/`); fresh oturum açılışında
   geri yüklenip "Resumed progress" bloğu olarak `SystemDynamic`'e enjekte edilir.
   `completed` ≡ Anthropic `passes:true`. Rolling `log` = `claude-progress.txt`.
@@ -1864,8 +1864,8 @@ listesi artık **diske kalıcı**: oturumlar arası kaybolmuyor, yeni oturum dev
 - **`feature_list` zenginliği:** `todo_write` öğelerine opsiyonel `category` +
   `steps` (Anthropic feature_list paritesi); şema + `TodoSinkItem` +
   `progress.TodoItem` + sink mapping uçtan uca taşır (`omitempty`).
-- **`tionswarm-progress` default skill'i:** ajana otomatik progress.json + insan-okunur
-  `PROGRESS.md` konvansiyonunu öğretir (`internal/skills/defaults/tionswarm-progress/`;
+- **`tionharness-progress` default skill'i:** ajana otomatik progress.json + insan-okunur
+  `PROGRESS.md` konvansiyonunu öğretir (`internal/skills/defaults/tionharness-progress/`;
   `//go:embed` ile otomatik, baseline skill setine girer).
 - **UI görüntüleyici:** `GET /api/sessions/{id}/progress` (`api/progress.go`) +
   `SessionDetailPanel` "Kalıcı ilerleme" salt-okunur kartı (`ProgressCard` — statü
@@ -1876,12 +1876,12 @@ listesi artık **diske kalıcı**: oturumlar arası kaybolmuyor, yeni oturum dev
 
 Anthropic *"Effective harnesses for long-running agents"* makalesindeki **standart
 oturum açılış sırası** (yönelim → hatırlama → tek görev seç → temel testi doğrula →
-işi yap → döngüyü kapat) TionSwarm'nun otonom turlarına getirildi. Kayıp bağlamı telafi
+işi yap → döngüyü kapat) TionHarness'nun otonom turlarına getirildi. Kayıp bağlamı telafi
 eden, düşük-riskli, çoğunlukla skill+doküman değişikliği.
 
-- **Skill reçetesi (ana iş):** `tionswarm-autonomous-ops/SKILL.md` → yeni **§10 "The
+- **Skill reçetesi (ana iş):** `tionharness-autonomous-ops/SKILL.md` → yeni **§10 "The
   autonomous boot sequence"** (Step 0 Orient → Step 5 Close); referans setup'a `0.` adımı
-  ve Pitfalls'a "Skipping the boot sequence" maddesi. Reçete `.tionswarm/progress.json`
+  ve Pitfalls'a "Skipping the boot sequence" maddesi. Reçete `.tionharness/progress.json`
   (progressPersist) + `list_tasks` (append-only board) + git log'u "hafıza" olarak
   okur; kapanışta git commit + append-only not. One-task-per-run + append-only kullanıcı
   tercihiyle hizalı.
@@ -1902,20 +1902,20 @@ eden, düşük-riskli, çoğunlukla skill+doküman değişikliği.
 
 ## Context-rot farkındalığı + adaptif bütçe stratejisi ✅ (2026-06-25)
 
-Anthropic *Effective context engineering* makalesi: token arttıkça recall hassasiyeti düşer ("context rot", `n²` dikkat ilişkisi → **performans gradyanı**, uçurum değil). TionSwarm'nun önceki "her şeyi ham tut" bahsi (512K/0.6) bu rot ile bilinçli bir takastı. Dayanıklılığın aslında **retrieval katmanında** (memory/`conversation_search`/core blocks) olduğu, ham pencere boyutunda olmadığı tespit edildi → ham pencere küçültülebilir, recall kaybetmeden.
+Anthropic *Effective context engineering* makalesi: token arttıkça recall hassasiyeti düşer ("context rot", `n²` dikkat ilişkisi → **performans gradyanı**, uçurum değil). TionHarness'nun önceki "her şeyi ham tut" bahsi (512K/0.6) bu rot ile bilinçli bir takastı. Dayanıklılığın aslında **retrieval katmanında** (memory/`conversation_search`/core blocks) olduğu, ham pencere boyutunda olmadığı tespit edildi → ham pencere küçültülebilir, recall kaybetmeden.
 
 - **Adaptif fraction:** `providers.AdaptiveBudgetFraction(provider, model)` — `ContextWindowFor`'un aile sınıflamasını yeniden kullanır; Opus/Sonnet 0.45, Haiku/Fable 0.40, MiniMax/DeepSeek/Gemini 0.35, bilinmeyen 0 (caller fallback).
 - **Yeni semantik:** `ContextBudgetFraction = 0` → **otomatik/adaptif** (pozitif = manuel sabit). `EffectiveBudget` `fraction<=0`'da adaptif tabloyu kullanır; `Manager.SetBudgetShape` artık 0'ı (auto) saklar; `store.go` validate 0'ı korur (negatif → 0).
 - **Yeni varsayılanlar:** `ContextBudgetCeil` 512K→**256K** (`262144`), `ContextBudgetFraction` 0.6→**0 (auto)**, `memoryPressureWarn` 0.75→**0.70** (`settings.go`+`tunables.go`). Eski `0.6` persisted değer manuel sabit olarak yaşar; yeni kurulum adaptif başlar.
 - **Frontend:** Ayarlar▸Bağlam "Pencere oranı"/"Bütçe tavanı" hint'leri auto+rot açıklamasıyla güncellendi (`appPanels.tsx`).
 - **Test:** `budget_test.go` (`TestEffectiveBudgetAdaptive`) + `context_window_test.go` (`TestAdaptiveBudgetFraction`); `go build ./...` + `go test ./internal/conversation ./internal/providers ./internal/settings` yeşil (83 test).
-- **Doküman:** `_Docs\17` yeni **§12** (takas analizi + strateji + tablolar + mermaid) + §7 çapraz-referans; `tionswarm-settings` skill + `tionswarm-project` skill güncellendi.
+- **Doküman:** `_Docs\17` yeni **§12** (takas analizi + strateji + tablolar + mermaid) + §7 çapraz-referans; `tionharness-settings` skill + `tionharness-project` skill güncellendi.
 
 ## Context Reset + Handoff Artifact ✅ (2026-06-25)
 
-Anthropic "harness design for long-running apps" bulgusu: in-place compaction tek başına **"context anxiety"**yi (model limite yaklaşınca erken toparlama) çözmez. Çözüm = **context reset** + **handoff artifact**: pencereyi özetlemek yerine, devamı taşıyan bir handoff dosyası yazıp **temiz bir oturumda** sürdür. TionSwarm'da önceden yalnız in-place rolling-summary vardı; bu, onun opt-in tamamlayıcısı.
+Anthropic "harness design for long-running apps" bulgusu: in-place compaction tek başına **"context anxiety"**yi (model limite yaklaşınca erken toparlama) çözmez. Çözüm = **context reset** + **handoff artifact**: pencereyi özetlemek yerine, devamı taşıyan bir handoff dosyası yazıp **temiz bir oturumda** sürdür. TionHarness'da önceden yalnız in-place rolling-summary vardı; bu, onun opt-in tamamlayıcısı.
 
-- **Çekirdek:** `internal/conversation/handoff.go` (`handoffPrompt` 10-bölüm + DONE/TODO + Next Step, `HandoffEnv`, `BuildHandoff` — compaction çekirdeğini `KindCompact` ile yeniden kullanır) + `internal/agent/handoff.go` (`HandoffSession`: üret→artifact yaz→(ops.) `<workdir>/.tionswarm/handoff.md`→`SpawnSession(ParentSessionID)` ile taze oturum→tombstone; `maybeAutoHandoff`/`handoffChainDepth`/`handoffEnv`/`buildContinuationPrompt`).
+- **Çekirdek:** `internal/conversation/handoff.go` (`handoffPrompt` 10-bölüm + DONE/TODO + Next Step, `HandoffEnv`, `BuildHandoff` — compaction çekirdeğini `KindCompact` ile yeniden kullanır) + `internal/agent/handoff.go` (`HandoffSession`: üret→artifact yaz→(ops.) `<workdir>/.tionharness/handoff.md`→`SpawnSession(ParentSessionID)` ile taze oturum→tombstone; `maybeAutoHandoff`/`handoffChainDepth`/`handoffEnv`/`buildContinuationPrompt`).
 - **Üç tetik:** manuel `/handoff` (`POST /api/sessions/{id}/handoff` → `summary.go handleSessionHandoff`); ajan aracı `handoff_session` (`tools/builtin_handoff.go`, self-manage gated, `toolsetup.go` kapanışı); **otomatik** (yalnız otonom tur — `runSpawn`/`deliverPrompt` tur-sonu; overflow sinyali `callkind.go withOverflowFlag`/`markContextOverflow`, tetik `toolloop.go` reactive compaction'da).
 - **Ayarlar:** `HandoffAuto` (vars. **kapalı**) / `HandoffPressure` (0.90) / `HandoffMaxChain` (20) / `HandoffWriteFile` (kapalı) — `settings.go`+`store.go` clamp + `server.go applySettings → tun.SetHandoff`; UI Ayarlar▸Bağlam "Context reset (handoff)" bölümü. Tunables `DefaultHandoffPressure`/`DefaultHandoffMaxChain`.
 - **Soyağacı:** `db.Session.ParentSessionID`/`HandoffArtifactID` (+`SetSessionHandoffArtifact`); `GET .../info` döner; UI `SessionDetailPanel` "↩ Devraldığı oturum" tıklanır link + `useChatStream` `/handoff` komutu yeni oturuma geçer.
@@ -1928,7 +1928,7 @@ Market pack katmanları üçten (bundled/global/workspace) **bir yerele** (globa
 
 - **Kaldırılanlar:** `internal/market/defaults.go` (`//go:embed defaults`) + `internal/market/defaults/` klasörü + `EnsureDefaults` çağrısı (runtime.go) + workspace pack tier'ı. Binary artık market item taşımaz, workspace'te `market/` klasörü oluşmaz.
 - **`market.New(globalDir, ledgerDir)`:** tek yerel tier = global; `Publish` global dizine yazar; install ledger (`installed.json`) per-workspace **kökte** (eski `<workspace>/market/` yerine; `workspaceLedgerDir`). Store'da `writeDir` → `globalDir`+`ledgerDir` ayrımı.
-- **Mevcut paketler korundu:** 28 başlangıç paketi zaten global dizinde (`~/.tionswarm/market`); silinmedi. Yeni kurulumlarda market boş başlar → global'e elle paket konur veya uzak registry eklenir.
+- **Mevcut paketler korundu:** 28 başlangıç paketi zaten global dizinde (`~/.tionharness/market`); silinmedi. Yeni kurulumlarda market boş başlar → global'e elle paket konur veya uzak registry eklenir.
 - **Test:** `store_test.go` `EnsureDefaults`'tan arındırıldı (global'e elle pack yazıp test eder) + ledger/semver testleri eklendi; `go build ./...` + `go test` (145, market/api/agent) yeşil. Çalışan instance global'den 28 paket (`source=global`) döndürüyor.
 - Detay: `_Docs\21-MARKET.md` §3.1.
 
@@ -1948,7 +1948,7 @@ kozmetik — çözümleme/reklam/yükleme davranışını etkilemez.
   güncellendi (partial update'te `cur.Group` korunur, aksi halde silinirdi). Mock + test güncellendi.
 - **UI (`SkillsPanel.tsx`):** `groupSkills()` listeyi gruba göre kovalar (adlandırılmış gruplar
   alfabetik, "Grupsuz" en sonda); her grup `ChevronDown/Right`'lı, sayaç rozetli katlanabilir
-  başlık. Katlı gruplar `localStorage` (`tionswarm.skillsCollapsedGroups`) ile kalıcı. `SkillEditor`
+  başlık. Katlı gruplar `localStorage` (`tionharness.skillsCollapsedGroups`) ile kalıcı. `SkillEditor`
   grup input'u + mevcut gruplardan `datalist` önerisi; detay başlığında grup rozeti.
 - **Build/test:** `go build ./...` + `go test ./internal/skills ./internal/tools` ✅, frontend `tsc` ✅.
 
@@ -1961,7 +1961,7 @@ kozmetik — çözümleme/reklam/yükleme davranışını etkilemez.
   butonu — tüm grupları tek tıkla katlar/açar (`toggleAll`, `allCollapsed` türetimi).
 - **Market:** skill paketi zaten tam `SKILL.md` gövdesini (`SkillPayload.Body`) taşıdığından
   `group` install/publish ile **kendiliğinden korunuyor** — değişiklik gerekmedi.
-- **Git hijyeni:** `.gitignore`'a `*.log.err`/`*.err`; sızan `vite-run.log.err`/`tionswarm-run.log.err`
+- **Git hijyeni:** `.gitignore`'a `*.log.err`/`*.err`; sızan `vite-run.log.err`/`tionharness-run.log.err`
   izlemeden çıkarıldı (`git rm --cached`).
 
 ## Bütçe refactor faz 3 — RollupOf birleştirmesi (costOf+modelRowsFor → billing) ✅ (2026-06-25)
@@ -2257,7 +2257,7 @@ SK-IMP'in son parçası: importer artık UI'dan kullanılıyor (SK-IMP tamamen t
 Seviye 2 importer'ın ilk iki increment'i. Önkoşullar SK-1..SK-4 hazırdı.
 
 - **Çekirdek (`internal/skills/import.go`):** `mapCCSkill(raw, sourceURL, shared)` CC frontmatter'ını
-  TionSwarm'ya eşler — name/description/when_to_use→aynı, `allowed-tools`→`always_allow`, `paths`→koşullu,
+  TionHarness'ya eşler — name/description/when_to_use→aynı, `allowed-tools`→`always_allow`, `paths`→koşullu,
   version/license→aynı, source_url=import kaynağı (provenance), `disable-model-invocation:true`→shared
   değil, `user-invocable`→`user_invocable`. Uyumsuzu (`context:fork`, `hooks`, `model`/`agent`/`effort`,
   slash-arg `$ARGUMENTS`/`$1`, inline-shell `` !` ``) ayıklayıp **warning** döndürür. `Store.ImportCCSkill`
@@ -2363,7 +2363,7 @@ Belirti flow'larda ardıl `node "<X>" (agent): context canceled` olarak da gör�
 
 ## "Gizli" çip artık gerçek context durumunu yansıtıyor + self-management'ı kapsıyor ✅ (2026-06-23)
 
-Sorun: self-management araçları (ajanın TionSwarm'yu kontrol eden tool'ları) kodda
+Sorun: self-management araçları (ajanın TionHarness'yu kontrol eden tool'ları) kodda
 zorla `MarkHidden` olduğu için context'te görünmüyordu, ama Araçlar ekranındaki
 "Gizli" çip yalnızca kullanıcının `HiddenTools` listesini yansıtıyordu → bu araçlar
 çipsiz "normal" görünüyordu (yanıltıcı) ve kullanıcı bunları context'e alamıyordu.
@@ -2451,12 +2451,12 @@ skill düzenlenebilir (global/bundled korunur). Mimari:
   değerleri okuyup merge eder, tier guard (`Source==workspace`), `store.Update` çağırır.
 - `toolsetup.go`: create/delete arasına eklendi → self-management aralığında olduğu için
   otomatik **hidden-lazy** (cached prefix'i şişirmez; `tool_search`/`activate_tools` ile erişilir).
-- Doc: `tionswarm-self-management` SKILL.md güncellendi. Test: `builtin_skillmgmt_test.go`
+- Doc: `tionharness-self-management` SKILL.md güncellendi. Test: `builtin_skillmgmt_test.go`
   (partial forwarding + validation). Toplam testler yeşil.
 
 ## Dış-ajan otomasyon dostluğu — UI seçicileri + API rehberi ✅ (2026-06-23)
 
-Soru: "TionSwarm'yu dışarıdan ajanlar (chrome-mcp/playwright-mcp) baştan sona kullanabilir mi,
+Soru: "TionHarness'yu dışarıdan ajanlar (chrome-mcp/playwright-mcp) baştan sona kullanabilir mi,
 eksik/iyileştirilecek yer var mı?" İki yol değerlendirildi:
 
 - **HTTP API yolu zaten eksiksiz (9/10):** 138+ endpoint tüm alt sistemleri kapsıyor, **auth yok**
@@ -2530,12 +2530,12 @@ compact/`: `prompt.ts` 9-bölümlü + `<analysis>` scratchpad, `compact.ts`, `au
   → uzun özet anthropic 4096 default'unda kesilmiyor.
 - `go build ./...` + `internal/conversation` testleri yeşil. Detay: `_Docs/17` §8.
 
-**Bilinçli ertelendi:** fork/cache (TionSwarm özetleyiciye yalnız katlanan dilimi yollar →
+**Bilinçli ertelendi:** fork/cache (TionHarness özetleyiciye yalnız katlanan dilimi yollar →
 çağrı zaten ucuz, fork'un çözeceği pahalılık yok; claude-cli cache paylaşımını kontrol edemez).
 
 ## Post-compact kurtarma işaretçisi — Claude Code parite 2. faz ✅ (2026-06-23)
 
-CC compact sonrası transcript pointer + son okunan dosya re-injection yapar. TionSwarm'ya
+CC compact sonrası transcript pointer + son okunan dosya re-injection yapar. TionHarness'ya
 **birebir port mimariye ters:** turlar arası yalnız `role+text` taşınır (`toProviderMessages`)
 → tool sonuçları/dosya okumaları zaten cross-turn context'te değil; ajan serbest fs ile
 istediğinde yeniden okur. Kalıcı durum (artifacts/todos/core-memory/goal/summary) zaten her
@@ -2575,7 +2575,7 @@ geçiliyor; çöküş bu kırılgan yolda. Tam başarısız bileşen crash-tail'
    `provider=""` ile kaydedilmişti (örtük fallback'e bağımlı, teşhisi zor); artık
    boşsa `claude-cli`'a default'lanır.
 
-> Sıradaki kesin adım: TionSwarm'yu yeniden derleyip flow'u tekrar çalıştır →
+> Sıradaki kesin adım: TionHarness'yu yeniden derleyip flow'u tekrar çalıştır →
 > geliştirilen crash-tail tam başarısız bileşeni (hangi MCP/permission) yazacak.
 
 ## Self-correcting tool hataları (yayma) + claude-cli çöküş teşhisi ✅ (2026-06-23)
@@ -2606,7 +2606,7 @@ argErr/enumErr) ve `claudecli_crashtail_test.go`. Toplam 120 test geçer.
 **Sorun (WS2/SES2):** Bir agent paralel flow kurarken `parallel` node'unu yanlış
 şemayla (`branches:["id"]` + `next`) kurdu → ham Go hatası
 `cannot unmarshal string into ... Node.nodes.branches of type orchestration.Branch`.
-Hata "ne yapmalı" demediği ve `tionswarm-flows` skill'i node JSON şemasını hiç
+Hata "ne yapmalı" demediği ve `tionharness-flows` skill'i node JSON şemasını hiç
 belgelemediği (sadece soyut "steps/edges" anlatıyordu) + `create_flow` örneklerinde
 paralel örnek olmadığı için agent doğru şemayı bulamadı, sıralı flow'a düştü.
 
@@ -2615,8 +2615,8 @@ hatasına kısa, eyleme dönük bir ipucu ekliyor (`graphSchemaHint` + `nodeSche
 hatadaki imzaya göre ("Node.nodes.branches", "has no children", "must be an agent
 node" vb.) doğru alanı 5-6 kelimeyle söyler — ör. *"parallel fan-out uses
 parallel:[...],joinNext — not branches/next"*. Ayrıca `create_flow`'a paralel
-fan-out+join örneği ve `tionswarm-flows` skill'ine node-tipi/alan tablosu + paralel
-örnek eklendi. (`builtin_flowmgmt.go`, `skills/defaults/tionswarm-flows/SKILL.md`.)
+fan-out+join örneği ve `tionharness-flows` skill'ine node-tipi/alan tablosu + paralel
+örnek eklendi. (`builtin_flowmgmt.go`, `skills/defaults/tionharness-flows/SKILL.md`.)
 Doğru paralel şema: `{type:"parallel","parallel":["a","b"],"joinNext":"merge"}`
 (çocuklar agent node id'leri; `branches`/`next` DEĞİL).
 
@@ -2629,7 +2629,7 @@ Doğru paralel şema: `{type:"parallel","parallel":["a","b"],"joinNext":"merge"}
 Üç kullanıcı isteği tek turda:
 
 **1) `create_agent` artık skill atayabiliyor.** Yeni opsiyonel `skills` (slug dizisi)
-parametresi; verilmezse yeni agent **default TionSwarm skill seti** ile tohumlanır
+parametresi; verilmezse yeni agent **default TionHarness skill seti** ile tohumlanır
 (`skills.DefaultSkillSlugs()` — embed'deki `defaults/` alt-dizinlerinden türetilir).
 Sağlanan slug'lar skill store'a karşı doğrulanır (`r.skillExists`); bilinmeyenler atlanır
 ve sonuçta `skippedUnknownSkills` olarak raporlanır. (`builtin_agentmgmt.go`,
@@ -2655,7 +2655,7 @@ Wiring: `Runtime.runSched` + `SetScheduleRunner` (manager `sched.RunNow` bağlar
 
 Test: `tools` (create_agent skills + run_schedule), `agent` (NewArtifactSink persist),
 mevcutlar uyarlandı. **`tools`+`agent`+`skills`+`api`+`workspace` 221 test yeşil**,
-build+vet+gofmt temiz. Skill `tionswarm-self-management` güncellendi (+ on-disk senkron).
+build+vet+gofmt temiz. Skill `tionharness-self-management` güncellendi (+ on-disk senkron).
 
 ---
 
@@ -2664,7 +2664,7 @@ build+vet+gofmt temiz. Skill `tionswarm-self-management` güncellendi (+ on-disk
 **Sorun:** Self-management araçları zaten lazy'di (şema yok), ama ~40+ aracın **isim+özet
 satırı** her turun "Available Tools (load on demand)" bloğunda (cached prefix) yer alıyordu —
 gereksiz token. **Çözüm:** lazy araçlara **hidden** alt-katmanı eklendi; self-management suite
-artık blokta **listelenmez**, yerine `tionswarm-self-management` skill'ine yönlendiren tek satır
+artık blokta **listelenmez**, yerine `tionharness-self-management` skill'ine yönlendiren tek satır
 durur. Araçlar aktive-edilebilir ve aranabilir kalır.
 
 - **`internal/tools/registry.go`:** yeni `hidden map[string]bool` (hidden ⊆ lazy) +
@@ -2674,9 +2674,9 @@ durur. Araçlar aktive-edilebilir ve aranabilir kalır.
 - **`internal/agent/toolsetup.go`:** self-management suite (`builtins[selfManageStart:]`)
   `MarkLazy` yerine **`MarkHidden`**. `LazyToolsCatalogBlock` artık `VisibleLazyCatalog` +
   `HiddenLazyCount` kullanır; `renderLazyToolCatalog(visible, hiddenCount)` hiddenCount>0 ise
-  "**N self-management tools … not listed here … load the `tionswarm-self-management` skill … or
+  "**N self-management tools … not listed here … load the `tionharness-self-management` skill … or
   `tool_search`**" pointer satırını basar.
-- **Keşif yolu:** Available Skills bloğu `tionswarm-self-management` skill'ini zaten ilan ediyor
+- **Keşif yolu:** Available Skills bloğu `tionharness-self-management` skill'ini zaten ilan ediyor
   (giriş noktası). Skill **kataloğun kendisi** oldu; metni güncellendi ("bu skill araçların
   listesidir; isimleri buradan/`tool_search`'ten al, `activate_tools` et"). On-disk seed kopya
   da güncel kaynakla senkronlandı (EnsureDefaults üzerine yazmadığı için).
@@ -2702,7 +2702,7 @@ workspace etiketine yukarı toplanır.
   (`useSyncExternalStore` modül store + `useRegisterDirty`). `NavRail` `NavDots`
   ile 3 durumu çizer; `WorkspaceSwitcher`/collapsed ikon aktif workspace'i toplar.
 - **Kayıtlı dirty ekranlar**: Settings, WorkspaceView, FlowsPanel.
-- **Pencere dışı**: tab başlığı `(N) TionSwarm` (odak dışıyken) + taskbar/dock
+- **Pencere dışı**: tab başlığı `(N) TionHarness` (odak dışıyken) + taskbar/dock
   rozeti (`navigator.setAppBadge`, Edge/WebView2'de native taskbar). Toplam
   görülmemiş sayısı `App.tsx` `unreadTotal`. `lib/appBadge.ts`,
   `hooks/useUnreadBadge.ts`.
@@ -2737,7 +2737,7 @@ Ajan ekranındaki "ID + klasörü aç/kopyala" deseni diğer ekranlara da yayıl
    **zamanlama ID'si**.
 4. **Loglar (LogsPanel)** — kontrol çubuğunda **log dosyası yolunu kopyala** +
    **klasörü aç**. Loglar artık disk dosyasına da yazılıyor: `SetupLogging`
-   stdout + `io.MultiWriter` ile `<dataDir>/logs/tionswarm.log` (append, best-effort).
+   stdout + `io.MultiWriter` ile `<dataDir>/logs/tionharness.log` (append, best-effort).
    Yeni: `config.DefaultDataDir()`, `config.LogFilePath()`, `GET /api/logs/path`,
    `POST /api/logs/reveal` (`api/logs_path.go`).
 
@@ -2760,7 +2760,7 @@ ayar korundu. API: `api/flows.ts`, `api/system.ts`. Build + tsc yeşil.
    ve **Faz 4** (yapısal protokol) ertelendi.
 
 Testler: `sendmessage_test.go` (+broadcast), `chat_tool_summary_test.go`. Build +
-131 test yeşil (cmd/tionswarm-desktop WIP hariç). Detay: `_Docs\07-CHAT-UX.md`,
+131 test yeşil (cmd/tionharness-desktop WIP hariç). Detay: `_Docs\07-CHAT-UX.md`,
 `_Docs\28-PEER-MESAJLASMA-PLANI.md`.
 
 ## Medya/binary artifact desteği (create_artifact sourcePath + auto-capture) ✅ (2026-06-23)
@@ -2821,7 +2821,7 @@ Build + tüm api/db/tools testleri yeşil.
    (`api/chat_tool_summary.go`). Wake/inbox turları da dahil.
 
 Testler: `sendmessage_test.go`, `chat_tool_summary_test.go` (+ mevcutlar). Build +
-241 test yeşil (cmd/tionswarm-desktop'taki ilgisiz WIP hariç). Detay:
+241 test yeşil (cmd/tionharness-desktop'taki ilgisiz WIP hariç). Detay:
 `_Docs\07-CHAT-UX.md`, `_Docs\28-PEER-MESAJLASMA-PLANI.md`.
 
 ## MCP kalıcı bağlantı havuzu (persistent pool) ✅ (2026-06-23)
@@ -2844,7 +2844,7 @@ Yeni API: `SetOnToolsChanged`, `Alive`. (`proc.Command` süreç-grubu kill korun
   **sonraki çağrıda da yaşar** → dinamik araç ekleme artık çalışır (tur-ötesi).
 - **listChanged → invalidate:** sunucu araç listesi değişince entry stale işaretlenir,
   sonraki `Catalog` aynı canlı oturumda yeniden listeler. Ek emniyet: TTL
-  (`TIONSWARM_MCP_POOL_TTL_SEC`, vars. 60sn) — listChanged göndermeyen sunucular için.
+  (`TIONHARNESS_MCP_POOL_TTL_SEC`, vars. 60sn) — listChanged göndermeyen sunucular için.
 - Config (command/args/url/env fingerprint) değişiminde veya bağlantı ölümünde şeffaf
   re-dial; çağrı ölü bağlantıda bir kez retry eder.
 
@@ -2874,7 +2874,7 @@ temiz (ilgisiz `internal/e2e` MemGPT WIP build hatası hariç).
   kimliğiyle `<teammate_message teammate_id>` etiketiyle düşer; plain çıktı diğer ajana
   görünmez. Kimlik **doğuştan**; ardışık-rol çakışması hiç oluşmaz.
 
-TionSwarm iki modeli birden taşıyor: paylaşılan-thread (etiketleme+coalesce ile sağlamlaştırıldı)
+TionHarness iki modeli birden taşıyor: paylaşılan-thread (etiketleme+coalesce ile sağlamlaştırıldı)
 ve izole `run_subagent`. Eksik olan "akran ajana adresli DM" için **uyarlama planı** yazıldı:
 `_Docs\28-PEER-MESAJLASMA-PLANI.md` (mevcut `GetOrCreateKindSession` inbox + `SpawnSession`
 üzerine). Kavramsal not: `_Docs\10-KAVRAMSAL-TASARIM-NOTLARI.md` §10. **Uygulama kullanıcı
@@ -2919,18 +2919,18 @@ uyardı: *"Your client did not advertise tools.listChanged support… reconnect 
 **Kök neden — iki birleşen mimari gerçek:**
 1. **`tools.listChanged` yok:** istemci `initialize`'da `capabilities:{}` gönderir
    (`internal/mcp/client.go`), yani sunucu "araç listem değişti" bildirimini gönderse bile
-   TionSwarm `tools/list`'i yeniden çağırmaz.
+   TionHarness `tools/list`'i yeniden çağırmaz.
 2. **Dial-per-operation (havuzsuz):** `BuildCatalog`/`CallNamespaced` her işlemde **yeni
    session** açıp kapatır. Gateway'in `activate_tools`'u **oturum-kapsamlıdır** → araçları
    o anlık session'a ekler, session `Close()` ile kapanınca kaybolur. Eklenen araçlar
-   TionSwarm'nun kataloğuna hiç girmez → çağrılamaz.
+   TionHarness'nun kataloğuna hiç girmez → çağrılamaz.
 
-→ Sonuç: **runtime'da araç ekleyen/çıkaran MCP sunucularıyla TionSwarm uyumsuz.**
+→ Sonuç: **runtime'da araç ekleyen/çıkaran MCP sunucularıyla TionHarness uyumsuz.**
 
 **Geçici çözüm (uygulandı):** İstenen araçlar sunucunun bağlantı URL'indeki **preset'e**
 konur; preset her taze session'da başlangıçta yüklendiği için dial-per-operation modeliyle
-sorunsuz çalışır. MCP Gateway `tionswarm` preset'ine `mcp-chrome` eklendi
-(`mcp-server/config.json`: `tionswarm: [<remote-service>, mcp-chrome]`); `?preset=tionswarm` artık
+sorunsuz çalışır. MCP Gateway `tionharness` preset'ine `mcp-chrome` eklendi
+(`mcp-server/config.json`: `tionharness: [<remote-service>, mcp-chrome]`); `?preset=tionharness` artık
 47→**76 araç** döndürüyor. Doğrulandı.
 
 **Kalıcı çözüm (Sırada / öneri):** ya (a) `initialize`'da `tools.listChanged` ilan edip
@@ -2992,7 +2992,7 @@ ajanın istediği etikette tanımlayabildiği **dinamik bloklar**a genelleşti; 
 
 1. **Oturum-başına taslak.** Yeni `useSessionDraft` hook'u (`hooks/useSessionDraft.ts`):
    composer'a yazılıp **gönderilmeyen** metin `localStorage`'da oturum-id ile saklanır
-   (`tionswarm:draft:<sessionId>`). Oturum değiştirip dönünce ve sayfa yenilenince korunur;
+   (`tionharness:draft:<sessionId>`). Oturum değiştirip dönünce ve sayfa yenilenince korunur;
    gönderme/temizleme taslağı siler (boş taslak saklanmaz). Composer `useState('')` yerine
    bu hook'u kullanır — tüm mevcut `setText` çağrıları otomatik kalıcı. **Yan fayda:** eskiden
    metin oturumlar arası sızıyordu (Composer `key`'siz, monte kalıyor); artık her oturum kendi taslağını taşır.
@@ -3025,7 +3025,7 @@ bağlamını dizer, akışlı araç döngüsünü koşar, yanıtı kalıcılaşt
 - **Çok-ajanlı tur:** tek kullanıcı mesajı, iki ajan sırayla yanıtlar; ikinci ajan birincinin cevabını geçmişte görür (`multiagent_e2e_test.go`).
 
 Harness genişletildi: `decorate` ctx-kancası (prompter/grants/wake enjeksiyonu) + `sendMulti` (çok-ajanlı tur sürücüsü).
-İzolasyon: `TIONSWARM_DATA_DIR` temp'e yönlendirilir → gerçek `~/.tionswarm` skill/market seed'ine dokunulmaz.
+İzolasyon: `TIONHARNESS_DATA_DIR` temp'e yönlendirilir → gerçek `~/.tionharness` skill/market seed'ine dokunulmaz.
 ✅ `go test ./internal/e2e/` 16/16 yeşil, `go vet` temiz.
 
 ## Native pencere — konsol penceresi yanıp sönmesi düzeltildi ✅ (2026-06-23)
@@ -3044,7 +3044,7 @@ WebView2 penceresinin native başlık çubuğu (caption + küçült/büyüt/kapa
 artık uygulama temasına boyanıyor — beyaz Windows frame'i koyu temayla çelişmiyor. **DWM** ile
 (`dwmapi.dll` `DwmSetWindowAttribute`, salt `syscall`, yeni bağımlılık yok): `DWMWA_USE_IMMERSIVE_DARK_MODE`
 (Win10 1809+) + `DWMWA_CAPTION_COLOR`/`TEXT_COLOR`/`BORDER_COLOR` (Win11 22000+). `app.App.Appearance()`
-çözülen `ThemePreset`/`Theme`/`Accent`'i verir; `cmd/tionswarm-desktop/titlebar_windows.go` 8 curated paletin
+çözülen `ThemePreset`/`Theme`/`Accent`'i verir; `cmd/tionharness-desktop/titlebar_windows.go` 8 curated paletin
 bg/text/border'ını (`themePresets.ts` ile elle senkron) COLORREF'e (`0x00BBGGRR`) çevirir. Bilinmeyen
 preset → yalnız dark/light frame (caption rengi atlanır); eski Windows'ta desteklenmeyen attribute'lar
 sessizce yok sayılır (pencere yine çalışır). **Canlı güncelleme:** `watchTitleBar` 1.5sn poll ile tema
@@ -3054,18 +3054,18 @@ panik/hata yok). Detay: [32-NATIVE-PENCERE.md](32-NATIVE-PENCERE.md).
 
 ## Native masaüstü penceresi — WebView2 (CGO'suz) ✅ (2026-06-22)
 
-TionSwarm artık tarayıcı yerine **kendi masaüstü penceresinde** açılabiliyor. Plan:
+TionHarness artık tarayıcı yerine **kendi masaüstü penceresinde** açılabiliyor. Plan:
 [32-NATIVE-PENCERE.md](32-NATIVE-PENCERE.md). **Ön koşul refactor (davranış-korumalı):**
-`cmd/tionswarm/main.go`'nun boot dizisi yeni **`internal/app`** paketine taşındı
+`cmd/tionharness/main.go`'nun boot dizisi yeni **`internal/app`** paketine taşındı
 (`SetupLogging` + `Bootstrap`/`Serve`/`Shutdown`/`Addr`/`URL`); `Bootstrap` artık listener'ı
 önden açar (`net.Listen`, `:0` boş port desteği) ve `SetBaseURL`'i çözülen adresle çağırır.
-`main.go` ~130→~50 satır. **Yeni giriş noktası** `cmd/tionswarm-desktop` (`//go:build windows`,
+`main.go` ~130→~50 satır. **Yeni giriş noktası** `cmd/tionharness-desktop` (`//go:build windows`,
 [`jchv/go-webview2`](https://github.com/jchv/go-webview2) — **saf Go, CGO yok**; Win11'de
 yerleşik WebView2 runtime): sunucuyu `127.0.0.1:0`'da başlatır, `waitForHealth` ile hazır olunca
 1280×800 WebView2 penceresi açar, pencere kapanınca graceful `Shutdown`. WebView2 yoksa →
 varsayılan tarayıcıya fallback (`rundll32 url.dll`). `!windows` stub mevcut. `scripts/build.ps1`
 `-Desktop` bayrağı (`-H windowsgui` → konsolsuz). Bağımlılık: `go-webview2` (direct) +
-`go-winloader`/`x/sys` (indirect) — yalnız desktop hedefinde derlenir; **başsız `tionswarm`
+`go-winloader`/`x/sys` (indirect) — yalnız desktop hedefinde derlenir; **başsız `tionharness`
 hâlâ saf-Go/çapraz-derlenebilir**. ✅ `go build ./...`/`vet` yeşil; başsız smoke (refactor sonrası
 `/`+`/health` 200, boot logları aynı); desktop canlı (rastgele port 60385'te boot, `/health`+`/`
 200, pencere açıldı); `-H windowsgui` build 12 MB. README "Native Masaüstü Uygulaması" eklendi.
@@ -3106,7 +3106,7 @@ hata zamanlayıcıda değil, uydurmadaydı.)
 
 ## MCP katalog önbelleği — gateway'de session birikmesi düzeltildi ✅ (2026-06-22)
 
-**Sorun:** Yerel MCP Gateway'de saniyeler içinde 4 ayrı `tionswarm` session açılıyordu
+**Sorun:** Yerel MCP Gateway'de saniyeler içinde 4 ayrı `tionharness` session açılıyordu
 (her biri `requestCount:3`). Kök neden: native MCP istemcisi **havuzsuz** (`manager.go`
 dial-per-operation) ve `buildRegistry` tek bir sohbet turunda birden çok kez çağrılıyor
 (tur girişi `runtime.go`, native döngü `toolloop.go`, UI/araç önizleme endpoint'leri).
@@ -3120,7 +3120,7 @@ istemci HTTP `DELETE` göndermediğinden gateway session'ları idle olarak birik
 - **Fingerprint-tabanlı geçersizleme:** anahtar = enabled server config'lerinin
   SHA-256 fingerprint'i (sıra-bağımsız). Server toggle/ekle/sil/düzenle → fingerprint
   değişir → otomatik rebuild. **Ayrı invalidation hook'u gerekmez.**
-- **TTL:** varsayılan **60 sn** (`TIONSWARM_MCP_CATALOG_TTL_SEC` ile override; `0` =
+- **TTL:** varsayılan **60 sn** (`TIONHARNESS_MCP_CATALOG_TTL_SEC` ile override; `0` =
   önbellek kapalı, eski davranış). Config'in göremediği dış değişiklikleri (server
   farklı tool sunması) sınırlar.
 - Sadece pahalı dial sonucu (entries) önbelleklenir; ucuz dispatch haritası
@@ -3206,8 +3206,8 @@ native eşleniği, son web-parite boşluğu kapandı. Build+vet temiz, **300 tes
 
 - **Kök neden (yarış değil, isim uyuşmazlığı):** "# Available Skills" prompt bloğu modele
   **çıplak** `use_skill` adını söylüyordu (`skills/store.go renderCatalog`). Native
-  ajanlarda araç gerçekten `use_skill`; ama **claude-cli** ajanlarında TionSwarm built-in'leri
-  Interaction MCP köprüsünden **namespaced** geliyor: `mcp__tionswarm_interaction__use_skill`.
+  ajanlarda araç gerçekten `use_skill`; ama **claude-cli** ajanlarında TionHarness built-in'leri
+  Interaction MCP köprüsünden **namespaced** geliyor: `mcp__tionharness_interaction__use_skill`.
   Model prompt'u harfiyen izleyip çıplak adı deniyor → CLI reddediyor. (`trace.go` namespace'i
   soyduğu için başarılı 2. çağrı izde yine `use_skill` görünüyor — kafa karıştırıcı.)
 - **Çözüm:** Katalog bloğu artık aracı **ajanın göreceği adla** yazıyor. `renderCatalog`
@@ -3279,7 +3279,7 @@ tokenLimitFor zemini). Kullanıcı isteği.
   > 4.8 ve Sonnet 4.6 aslında **1M**, sadece Haiku 200K. Per-tier eşlemeyle düzeltildi.
 - **Test:** `context_window_test.go` (aile eşleme + Catalog dolduruyor mu) — providers
   paketi **43 test** yeşil, `go vet` temiz. `api`'ye dokunulmadı (JSON tag otomatik akar).
-- **Phase 2 (tokenLimitFor) bilinçle ertelendi:** model penceresine ölçekleme TionSwarm'nun
+- **Phase 2 (tokenLimitFor) bilinçle ertelendi:** model penceresine ölçekleme TionHarness'nun
   12K transcript bütçesiyle çelişir (bir tool sonucu tüm bütçeyi aşar); doğru hamle
   "modele göre akıllı varsayılan bütçe". Detay: `17-TOKEN-OPTIMIZASYON.md` §6.
 
@@ -3288,7 +3288,7 @@ tokenLimitFor zemini). Kullanıcı isteği.
 ## CG-9 ikinci yarı — bütçe-orantılı tool eşikleri ✅ (2026-06-22)
 
 **Hedef:** the external agent project'ın `tokenLimitFor` (tool-result eşiği context window'a göre)
-deseninin TionSwarm karşılığı. Model context-window metadata'sı yok (`ModelInfo`
+deseninin TionHarness karşılığı. Model context-window metadata'sı yok (`ModelInfo`
 sadece ID/Label), o yüzden mevcut **transcript bütçesine** (`MaxContextTokens`)
 orantıladım — kullanıcının zaten modeline göre ayarladığı knob.
 
@@ -3323,7 +3323,7 @@ orantıladım — kullanıcının zaten modeline göre ayarladığı knob.
   server canlı uygulama) ve skill dokümanında vardı ama frontend `AppSettings`
   tipinde, UI'da ve patch'te **yoktu**. Tipe eklendi, Tools paneline kontrol
   (1–128 / 1–64) eklendi, patch'e eklendi → uçtan uca bağlandı.
-- **Doğrulama:** `tsc --noEmit` temiz. Skill `tionswarm-settings` zaten tüm alanları
+- **Doğrulama:** `tsc --noEmit` temiz. Skill `tionharness-settings` zaten tüm alanları
   doğru belgeliyordu (değişiklik gerekmedi).
 
 **Diğer düzenleme ekranlarının denetimi (aynı tur):** Workspace (`WorkspaceView`),
@@ -3437,12 +3437,12 @@ büyük yanlış kararın mekanizma karşılığı; kod değil, skill/system-pro
 
 Yapılan:
 
-- **`tionswarm-guide` SKILL.md → "Before you build: discover first" bölümü:** uygulamadan
+- **`tionharness-guide` SKILL.md → "Before you build: discover first" bölümü:** uygulamadan
   ya da "bu yok" demeden önce **search → read → confirm → extend** disiplini;
   absence iddiası ancak gerçekten arandıktan sonra ("Y ve Z için grepledim, bulamadım"),
   ve sıfırdan yazmak yerine mevcudu genişletme kuralı. Kod/konfig/agent/flow/skill/
   memory — hepsine uygulanır.
-- **`tionswarm-self-management` → "Prefer reading first" güçlendirildi:** entity
+- **`tionharness-self-management` → "Prefer reading first" güçlendirildi:** entity
   (agent/flow/skill/schedule/hook/MCP) oluşturmadan önce mevcudu kontrol et,
   duplicate yerine genişlet; guide bölümüne çapraz-referans.
 - **Doğrulama:** `go build ./...` ✅ + `go test ./internal/skills/...` (14 test) yeşil.
@@ -3522,10 +3522,10 @@ Yapılan (4 adım uçtan uca):
   `WorkspaceDefaultDir`; `effectiveWorkDir` artık oturum → workspace-default →
   fiziksel workDir sırasıyla çözüyor. Ayarlar ▸ Bu Workspace ▸ "Varsayılan çalışma
   dizini" alanı (`WorkspacePanel.tsx`, `workspace_settings.go` DTO/patch).
-- **Canlı duman testi (8088):** `GET /api/fs/browse` ✓; bir oturuma TionSwarm deposu
+- **Canlı duman testi (8088):** `GET /api/fs/browse` ✓; bir oturuma TionHarness deposu
   set edildi → `{exists:true,isGitRepo:true,branch:"main"}` ✓ (git branch tespiti),
   sonra sıfırlandı. **Not:** varsayılan 8080 portu mcp-for-unity backend'iyle
-  çakıştığı için bu örnek `TIONSWARM_ADDR=127.0.0.1:8088` ile çalışıyor.
+  çakıştığı için bu örnek `TIONHARNESS_ADDR=127.0.0.1:8088` ile çalışıyor.
 
 ## fs/shell sandbox kilidi kaldırıldı (kilitsiz dosya/komut erişimi) ✅ (2026-06-22)
 
@@ -3626,7 +3626,7 @@ Durdur/Sıraya al/Steer gibi komutlar gözükse iyi olur. Ayrıca agent `ask_use
    işaretlenir; bu araçlar artık "proceed without asking" yerine modele **"sorunu yanıtın olarak
    yaz, turu bitir; kullanıcı sohbette yanıtlar"** der. Headless koşular eski davranışı korur.
    (`tools/ask.go` `WithAsyncChat`/`IsAsyncChat`, `builtin_ask.go`, `builtin_confirm.go`, `scheduler.go`.)
-3. **Araç döngüsü limiti 8 → 24** (3 kat) — `toolloop.go` `maxToolIters`; `TIONSWARM_MAX_TOOL_ITERS`
+3. **Araç döngüsü limiti 8 → 24** (3 kat) — `toolloop.go` `maxToolIters`; `TIONHARNESS_MAX_TOOL_ITERS`
    env ile override edilebilir.
 
 Detay: `_Docs\20-SCHEDULE-WAKE.md`.
@@ -3664,9 +3664,9 @@ Detay: `_Docs\20-SCHEDULE-WAKE.md`.
   (opak string lookup). Araç istendiğinde tek seferde tümünü yeni şemaya çevirir.
 - **UI/URL:** frontend ID formatı varsayımı **yok** (ID'ler opak) → kısa kodlar
   otomatik görünür; ekstra değişiklik gerekmedi.
-- **Gerçek veride uygulandı (2026-06-19):** `~/.tionswarm` (4 workspace) migrate edildi
-  → `WS1:MINIMAX`, `WS2:DenemeBilimsel`, `WS3:TionSwarm`, `WS4:OtonomOps`; toplam
-  130 entity. Yedek: `~/.tionswarm-idbackup` (junction içeriği hariç). **Bulgu:**
+- **Gerçek veride uygulandı (2026-06-19):** `~/.tionharness` (4 workspace) migrate edildi
+  → `WS1:MINIMAX`, `WS2:DenemeBilimsel`, `WS3:TionHarness`, `WS4:OtonomOps`; toplam
+  130 entity. Yedek: `~/.tionharness-idbackup` (junction içeriği hariç). **Bulgu:**
   `OtonomOps` workspace'inin `workspace/` dizini `Desktop\Projects\url-shortener`'a
   bir **junction**'dı → araç junction-güvenli yapıldı (yedek atlar, rewrite yalnız
   `store/`). Çalıştırma için **uygulama kapatıldı**, sonra tek-binary build başlatıldı.
@@ -3705,22 +3705,22 @@ korur. Build bundle edilmemişse (`dist` yalnız `.gitkeep`) `Handler` `ok=false
 binary yine derlenir, UI sunulmaz, log "frontend not bundled" der (dev/Vite-proxy akışı
 bozulmaz). Vite `outDir` → `../internal/web/dist` + `emptyOutDir:true`; `.gitignore`
 `/internal/web/dist/*` (placeholder hariç). Yeni `scripts/build.ps1`: UI build + UI gömülü
-`go build -trimpath -ldflags "-s -w"` → `tionswarm.exe` (~12 MB), build sonrası `.gitkeep`
+`go build -trimpath -ldflags "-s -w"` → `tionharness.exe` (~12 MB), build sonrası `.gitkeep`
 geri konur. ✅ `go build`/`vet` yeşil; **canlı smoke** (izole instance, port 8097):
 `/`→HTML 200, `/health`→JSON 200, `/api/version`→200, `/agents`→index.html fallback 200,
 `/favicon.svg`→200. README "Tek Binary (üretim)" bölümü eklendi.
 
 **Repo temizliği (aynı oturum):** kök + frontend'deki ~43 MB yerel artefakt
-(eski `tionswarm*.exe`, `*.log`, `_agentid.txt`, vite logları) silindi — tamamı zaten
+(eski `tionharness*.exe`, `*.log`, `_agentid.txt`, vite logları) silindi — tamamı zaten
 `.gitignore`'da, git'te izlenmiyordu. Kök artık yalnız kaynak + `_Docs` içerir.
 
 ## Otonom Ops skill'i + Link Kısaltma workspace template'i ✅ (2026-06-19)
 
-**İstek:** Uzman "vibe coding" otomasyon sistemini (video altyazısı) TionSwarm'ya uyarlayan detaylı bir skill; ve bu skill'i somutlaştıran, basit bir uygulama (URL kısaltma sitesi) üzerinde çalışmaya hazır bir workspace.
+**İstek:** Uzman "vibe coding" otomasyon sistemini (video altyazısı) TionHarness'ya uyarlayan detaylı bir skill; ve bu skill'i somutlaştıran, basit bir uygulama (URL kısaltma sitesi) üzerinde çalışmaya hazır bir workspace.
 
 **Yapılan:**
-- **Yeni default skill** — `internal/skills/defaults/tionswarm-autonomous-ops/SKILL.md` (`♻️ TionSwarm Autonomous Ops`, `access: shared`). Videodaki uzman desenlerini TionSwarm primitiflerine eşler: agent/provider çok-modelliği, kurallar (workspace config), skills, automations (**Schedules** = zaman trigger + **Hooks** = olay trigger), loops (otonom heartbeat runtime + Flows), paralellik (`spawn_session` + workspace izolasyonu), quality gates (izin katmanı + hooks) ve test/döküman/log "flywheel"ı. Worktree/git-merge sınırları dürüstçe belirtildi. `//go:embed defaults` ile otomatik seed olur (kod değişikliği gerekmez).
-- **Yeni workspace template** — `internal/api/templates.go` → `linkshortener` ("Link Kısaltma (Otonom Ops)", 🔗). 4 ajan (Mimar/Plan, Geliştirici/Write, İnceleyici/Review, Bakım/Ops), **Plan → Yaz → İncele** çok-modelli flow'u, ve 3 **disabled** starter schedule (gece 01:00 docs sweep, 02:00 test coverage, 03:00 production error sweep). Ajan ruhları `tionswarm-autonomous-ops` skill'ini yüklemeye yönlendirir.
+- **Yeni default skill** — `internal/skills/defaults/tionharness-autonomous-ops/SKILL.md` (`♻️ TionHarness Autonomous Ops`, `access: shared`). Videodaki uzman desenlerini TionHarness primitiflerine eşler: agent/provider çok-modelliği, kurallar (workspace config), skills, automations (**Schedules** = zaman trigger + **Hooks** = olay trigger), loops (otonom heartbeat runtime + Flows), paralellik (`spawn_session` + workspace izolasyonu), quality gates (izin katmanı + hooks) ve test/döküman/log "flywheel"ı. Worktree/git-merge sınırları dürüstçe belirtildi. `//go:embed defaults` ile otomatik seed olur (kod değişikliği gerekmez).
+- **Yeni workspace template** — `internal/api/templates.go` → `linkshortener` ("Link Kısaltma (Otonom Ops)", 🔗). 4 ajan (Mimar/Plan, Geliştirici/Write, İnceleyici/Review, Bakım/Ops), **Plan → Yaz → İncele** çok-modelli flow'u, ve 3 **disabled** starter schedule (gece 01:00 docs sweep, 02:00 test coverage, 03:00 production error sweep). Ajan ruhları `tionharness-autonomous-ops` skill'ini yüklemeye yönlendirir.
 - **Doğrulama:** `go build ./...` + `go vet ./internal/api ./internal/skills` yeşil.
 - **Not:** Template ajanları aynı default provider/model ile seed olur (`tmplAgent`'ta per-agent model alanı yok); gerçek çok-modelli pipeline için kullanıcı ajanlara UI'dan farklı model pinler.
 
@@ -3820,7 +3820,7 @@ hiç yok. OpenRouter'ı ekle (~25 güncel popüler model yeterli).
   otomatik görünür.
 - **Testler:** `kind_test.go` (4→5 entry + sıra), `customprovider_test.go` (id
   çakışması: `openrouter`→`myrouter`) güncellendi.
-- **Doküman:** `tionswarm-settings` skill (yeni alanlar), `tionswarm-project` referans
+- **Doküman:** `tionharness-settings` skill (yeni alanlar), `tionharness-project` referans
   skill (sağlayıcı satırı).
 
 ## Ajan kontrol-yüzeyi — workspace CRUD araçları ✅ (2026-06-19)
@@ -3845,7 +3845,7 @@ düzenlemeleri eksikti**; onları da ekle.
 - **Testler (yeni):** `builtin_workspacemgmt_test.go` — provenance stamp + delete
   guard'ları (current/user/unknown/agent-created).
 - **Doküman:** `24-SELF-MANAGEMENT.md` (workspace satırı + köprü wiring + guard notu),
-  `tionswarm-self-management` skill kataloğu, `tionswarm-project` referans skill güncellendi.
+  `tionharness-self-management` skill kataloğu, `tionharness-project` referans skill güncellendi.
 
 ## Ağ — Canlı mod: çalışan-run (Session) bağı + glow ✅ (2026-06-19)
 
@@ -3880,7 +3880,7 @@ düzenlemeleri eksikti**; onları da ekle.
 
 ## Ajan kontrol-yüzeyi genişletme — hooks/mcp/secret-write/skill araçları ✅ (2026-06-19)
 
-**Hedef:** "Ajanlar TionSwarm'yu her şekilde kontrol edebilsin." Ajanların araçla
+**Hedef:** "Ajanlar TionHarness'yu her şekilde kontrol edebilsin." Ajanların araçla
 dokunamadığı kontrol yüzeyleri kapatıldı (insan API/UI'da yapılabilen ama ajan
 tool'u olmayanlar). `builtin_taskmgmt.go` desenini (provenance + `SelfManageEnabled`
 gating + lazy) tekrarlayan 11 yeni araç:
@@ -3900,8 +3900,8 @@ gating + lazy) tekrarlayan 11 yeni araç:
 Hepsi `toolsetup.go` self-manage bloğuna eklendi (lazy işaretli). Testler
 `builtin_controlgaps_test.go` (hook/mcp create + provenance + validation). Canlı
 doğrulama: self-manage açık sunucuda ajan oluşturup `/api/agents/{id}/tools`
-kataloğunda 11 aracın hepsi göründü. Default skill `tionswarm-self-management` +
-`tionswarm-guide` ve `SKILL.md` (proje skill'i) güncellendi.
+kataloğunda 11 aracın hepsi göründü. Default skill `tionharness-self-management` +
+`tionharness-guide` ve `SKILL.md` (proje skill'i) güncellendi.
 
 **Kalan boşluklar (bilinçli):** workspace CRUD (tools paketi `workspace.Manager`'a
 erişmiyor — köprü gerek), market install (tür-özel install switch'i tool'a
@@ -4014,11 +4014,11 @@ allowlist'ini dışa açar), `chat_control.go` (`chatRun.skill` + `setSkillLoade
 `mcp_interaction.go` (`Tools()` ilanı + `callUseSkill` dispatch, çıktı native
 `UseSkillTool.Call` ile birebir), `climcp.go` (`interactionToolNames` allowlist).
 Erişim kontrolü, sub-skill footer'ı, lazy disk okuma native yolla tam parite;
-tek kaynak TionSwarm skill store'u (dosya kopyası/symlink yok). Build + `go test`
+tek kaynak TionHarness skill store'u (dosya kopyası/symlink yok). Build + `go test`
 (api/agent/skills) yeşil. Detay: `11-INTERACTION-MCP.md §8`.
 
 > Sıradaki köprü adayları (native'de var, CLI'de yok): `memory_recall`/`memory_add`
-> (TionSwarm hafızası — CLI tamamen kör), `secret_list`/`secret_get` (kasa),
+> (TionHarness hafızası — CLI tamamen kör), `secret_list`/`secret_get` (kasa),
 > `list_sessions`, `call_agent` (delegation açıkken) ve self-manage ailesinin
 > tamamı (yalnız `spawn_session` köprülü). FS/shell/http→WebFetch CLI'de native
 > karşılığı olduğu için köprü gerektirmez.
@@ -4165,7 +4165,7 @@ aynı hesap.
 
 ## Backlog: Faz R — çok-ajan yarış & kurtarma guard'ları (2026-06-19)
 
-**İstek:** Bir dev-oturumu (`260617-gentle-coyote`) analizinden çıkan sürtünme noktaları (paralel-commit yarışı, port çakışması, elle temizlik, varlık-kontrolsüz "özellik yok" kararı) TionSwarm task'ı olarak dokümanlara işlensin.
+**İstek:** Bir dev-oturumu (`260617-gentle-coyote`) analizinden çıkan sürtünme noktaları (paralel-commit yarışı, port çakışması, elle temizlik, varlık-kontrolsüz "özellik yok" kararı) TionHarness task'ı olarak dokümanlara işlensin.
 
 **Yapılan:** `_Docs/03-YOL-HARITASI.md`'ye yeni **Faz R** bölümü eklendi — 6 aday task (RG-1..RG-6) gerçek dosya dayanaklarıyla:
 - **RG-1** entity versioning + CAS (data-loss kapatır), **RG-2** workspace git-lock + provenance-scoped staging, **RG-3** kaynak kira registry, **RG-4** tur yan-etki defteri → auto-teardown, **RG-5** boot orphan reconcile, **RG-6** implement-öncesi keşif guard'ı (skill, kod yok).
@@ -4183,8 +4183,8 @@ aynı hesap.
 - **`_Docs/03-YOL-HARITASI.md`** — CG-7 `[ ]`→`[~]` (komut hook'ları Faz P4 ile yapıldı); Tamamlananlar listesine self-management genişlemesi + ayarlar canlı-uygulama + İlişki Grafiği eklendi.
 - **Numara çakışması düzeltildi:** iki `18-` önekli dosya vardı → `18-SPAWN-SESSION.md` boş `22` slotuna taşındı (`22-SPAWN-SESSION.md`), başlık + tek çapraz-referans güncellendi. `_Docs/` artık 00–24 kesintisiz.
 - **İçerik doğruluğu:** `05` grafik yerleşim özeti (Fizik/Küme) ile koda göre düzeltildi.
-- **`.gitignore`** — build artıfaktı `*.exe~` + scratch manuel test `frontend/tionswarm_title_test.mjs` ignore'a eklendi.
-- **Workspace referans skill'i** (`tionswarm-project/SKILL.md`) — doküman aralığı 00–24'e genişletildi, İlişki Grafiği yeteneği + 24 referansı eklendi.
+- **`.gitignore`** — build artıfaktı `*.exe~` + scratch manuel test `frontend/tionharness_title_test.mjs` ignore'a eklendi.
+- **Workspace referans skill'i** (`tionharness-project/SKILL.md`) — doküman aralığı 00–24'e genişletildi, İlişki Grafiği yeteneği + 24 referansı eklendi.
 
 ## "Araçlar" NavRail görünümü → Ayarlar kategorisine taşındı ✅ (2026-06-19)
 
@@ -4213,7 +4213,7 @@ aynı hesap.
 
 ## İlişki Grafiği — Workspace Ağı + Hafıza Bilgi Grafiği ✅ (2026-06-19)
 
-**İstek:** Agent-MCP'deki "Multi-Agent Collaboration Network" tarzı ilişki görselleştirmesini TionSwarm'da kullan.
+**İstek:** Agent-MCP'deki "Multi-Agent Collaboration Network" tarzı ilişki görselleştirmesini TionHarness'da kullan.
 
 **Yapılan:** Mevcut React Flow altyapısını yeniden kullanan iki salt-okunur ağ görünümü eklendi.
 - **Workspace Ağı** (NavRail → "Ağ", `Share2` ikonu): ajanlar hub, görevler ışın, akışlar çok-ajanlı bağlayıcı. Kenar türleri: `owns`/`created`/`runs`/`uses` (renk+lejant). İki deterministik yerleşim modu (toolbar geçişi): **Fizik** (varsayılan, `forcePositions` — Fruchterman–Reingold eşit dağılım) ve **Küme** (`clusterPositions` — hub-and-spoke).
@@ -4227,10 +4227,10 @@ aynı hesap.
 
 ## Ayarlar skill'i + canlı ayar tool'ları (`get_settings`/`update_settings`) ✅ (2026-06-19)
 
-**İstek:** TionSwarm'ya, uygulamanın tüm ayarlarını bilen bir **default skill** eklensin; ayarları/configleri dosya yolundan değiştirip **aktifleştiren** bir **tool** da eklensin; skill tool'a referans versin.
+**İstek:** TionHarness'ya, uygulamanın tüm ayarlarını bilen bir **default skill** eklensin; ayarları/configleri dosya yolundan değiştirip **aktifleştiren** bir **tool** da eklensin; skill tool'a referans versin.
 
 **Yapılan:**
-- **Default skill `tionswarm-settings`** (`internal/skills/defaults/tionswarm-settings/SKILL.md`, `access: shared`): `settings.json` içindeki tüm uygulama ayarlarını gruplandırılmış olarak belgeler (görünüm, sağlayıcılar/model, kullanıcı profili, bağlam & hafıza, tur kurtarma, araç-çıktısı sıkıştırma, bütçe & otonomi, MCP + gated yetenekler, tanılama) — her alanın anlamı + geçerli aralık/varsayılan. `tionswarm-guide`'a subskill olarak eklendi. Gömülü defaults `EnsureDefaults` ile her workspace'e seed'lenir.
+- **Default skill `tionharness-settings`** (`internal/skills/defaults/tionharness-settings/SKILL.md`, `access: shared`): `settings.json` içindeki tüm uygulama ayarlarını gruplandırılmış olarak belgeler (görünüm, sağlayıcılar/model, kullanıcı profili, bağlam & hafıza, tur kurtarma, araç-çıktısı sıkıştırma, bütçe & otonomi, MCP + gated yetenekler, tanılama) — her alanın anlamı + geçerli aralık/varsayılan. `tionharness-guide`'a subskill olarak eklendi. Gömülü defaults `EnsureDefaults` ile her workspace'e seed'lenir.
 - **İki built-in tool** (`internal/tools/builtin_settings.go`, self-management gated, lazy):
   - `get_settings` → `settings.json` dosya yolu + güncel ayarları **maskeli** JSON döner (secret key'ler yalnız "set mi" olarak görünür).
   - `update_settings` → yalnızca değişen alanları içeren bir `patch` alır, diske yazar **ve canlı uygular** (restart yok); sayısal alanlar clamp'lenir.
@@ -4241,7 +4241,7 @@ aynı hesap.
 - **Validation (`internal/settings/validate.go`):** `Validate(Patch)` enum/format alanlarını denetler (theme, language, defaultProvider, defaultPermissionMode, logLevel, accent hex) ve geçersizleri **açık hata mesajıyla reddeder** — `Apply` en başta çağırır, yani hatalı değişiklik canlı alt sistemlere hiç ulaşmaz. Sayısal alanlar reddedilmez, `normalize` tarafından güvenli aralığa **clamp** edilir. `normalize`'a ek güvenlik ağı: `accent` (geçersiz hex → varsayılan) + `defaultPermissionMode` (bilinmeyen → `auto`) coercion'ı — elle bozulmuş bir `settings.json` bile yüklendiğinde uygulama çökmez. HTTP `PUT /api/settings` artık validation hatasında **400** döner (encryption hatası 500 kalır). Test: `internal/settings/validate_test.go` (kötü enum reddi, geçersiz patch state'i değiştirmez, bozuk değer coercion'ı, sayısal clamp).
 - **Frontend canlı yenileme:** bir ajan `update_settings` ile ayar değiştirince `api.settingsBridge.Apply` `/api/events` üzerinden bir **`settings`** SSE event'i yayınlar (app-global → workspace rozeti/toast yok). `App.tsx` `onEvent`'te bu event: client-side prefs'i (tema/accent/bildirim) **canlı uygular** (`applyClientPrefs`) + `settingsNonce`'u artırır. `SettingsPanel` yeni `reloadNonce` prop'u ile — **yalnız kaydedilmemiş düzenleme yoksa** (dirty değilse) formu yeniden yükler, böylece eşzamanlı ajan değişikliği kullanıcının yazdığını ezmez. `tsc -b` + `vite build` yeşil.
 - **Not (ilgisiz düzeltme):** `vite build`'i tıkayan, devam eden market/hooks WIP'ine ait iki TS hatası giderildi — `App.tsx` `VIEW_TITLE` haritasına `market: 'Market'` eklendi; `HooksPanel.tsx` `displayPath(t.path ?? '')`.
-- **Default skill `tionswarm-self-management` (2026-06-19):** öz-yönetim tool ailesini (agents/flows/schedules/tasks/automations CRUD + `spawn_session`/`send_agent_message`/`run_flow` + artifact/memory/log + `get_settings`/`update_settings`) kataloglayan ve **lazy tool'ları `activate_tools` ile kendi-aktivasyon** akışını öğreten gömülü skill (`access: shared`). Ajan, "Available Tools (load on demand)" listesinden gerekeni `activate_tools`/`find_tools` ile kendisi yükler. `tionswarm-guide`'a subskill + body referansı; provenance/guard notları (silme yalnız ajan-oluşturduğu entity). `internal/skills/defaults/tionswarm-self-management/SKILL.md`. `go build/test ./internal/skills/` yeşil.
+- **Default skill `tionharness-self-management` (2026-06-19):** öz-yönetim tool ailesini (agents/flows/schedules/tasks/automations CRUD + `spawn_session`/`send_agent_message`/`run_flow` + artifact/memory/log + `get_settings`/`update_settings`) kataloglayan ve **lazy tool'ları `activate_tools` ile kendi-aktivasyon** akışını öğreten gömülü skill (`access: shared`). Ajan, "Available Tools (load on demand)" listesinden gerekeni `activate_tools`/`find_tools` ile kendisi yükler. `tionharness-guide`'a subskill + body referansı; provenance/guard notları (silme yalnız ajan-oluşturduğu entity). `internal/skills/defaults/tionharness-self-management/SKILL.md`. `go build/test ./internal/skills/` yeşil.
 - **Çok-pencere senkronu (2026-06-19):** `settings` SSE event'i artık **UI'dan yapılan değişikliklerde de** yayılıyor — `handleUpdateSettings` (HTTP `PUT /api/settings`) ortak `Server.publishSettingsChanged` helper'ını çağırır (bridge de aynı helper'ı kullanır → tekrar yok). Böylece bir pencerede (veya ajan tarafından) yapılan ayar değişikliği **diğer tüm açık pencerelerde** canlı yansır (tema + form, dirty değilse). `go build/vet/test ./...` + `vite build` yeşil.
 
 ## Zamanlamalara opsiyonel son tarih (`expiresAt`) ✅ (2026-06-19)
@@ -4262,7 +4262,7 @@ aynı hesap.
 
 **Durum:** `go build/vet` + `go test ./internal/market/... ./internal/api/...` + frontend `tsc` yeşil. **Canlı API E2E** (port 8090, gerçek workspace): agent→CreateAgent (UUID döndü), flow→CreateFlow (2 düğüm, ilk-ajan otomatik atandı), provider→Upsert (`keySet:true` AES-GCM key ile), skill→workspace+reload — dördü de 200. Test sırasında kullanıcının workspace'ine eklenen örnekler sonrasında temizlendi (market kataloğundaki 23 paket kalıcı). **Boot notu:** ilk seed-boot'unda EnsureDefaults dosyaları yazarken katalog tek seferlik 2 paket önbellekleyebilir; `reload`/yeniden başlatma çözer (skills sistemiyle aynı kalıp, diskte kalıcı).
 
-**Zombi süreç temizliği:** 8090'ı tutan eski `tionswarm-dev.exe` (başka oturumdan) ve takılı `go run`/`vite` süreçleri sonlandırıldı; taze `tionswarm.exe` (8090) + tek `vite` (5173) çalışır durumda.
+**Zombi süreç temizliği:** 8090'ı tutan eski `tionharness-dev.exe` (başka oturumdan) ve takılı `go run`/`vite` süreçleri sonlandırıldı; taze `tionharness.exe` (8090) + tek `vite` (5173) çalışır durumda.
 
 ### Market — provider API anahtarı secret vault'tan seçim (commit `6e96e87`)
 Provider kurulumunda API anahtarı artık **serbest metin değil**, Ayarlar→Sağlayıcılar paneliyle aynı politikayla **secret kasasından seçilir**: `MarketPanel` provider detayında `listSecrets` dropdown'u gösterir, seçilince `revealSecret(name)` ile değer çözülüp install gövdesine `apiKey` olarak gider (UI'da plaintext tutulmaz). "Sırlar →" butonu (`onManageSecrets` prop'u, App `setView('secrets')`) Sırlar ekranına atlar; sır yoksa anahtarsız kurulur. Playwright ile doğrulandı (Groq → `GROQ_API_KEY` seç → kur → `keySet:true`).
@@ -4399,7 +4399,7 @@ Claude `/goal` **checker yakınsaması**: hedef tamamlanınca metni korunur ama 
 - `WorkspacePanel.tsx`: sağlayıcı/model → `ProviderModelSelect allowInherit`; ikon → `EmojiField`.
 - `WorkspaceCreateModal.tsx`: sabit ikon satırı → `EmojiField`.
 
-**Durum:** `tsc -b` benim dosyalarımda temiz (kalan tek hata paralel oturumun ilgisiz `HooksPanel` WIP'inde). Commit `e29d725` (7 dosya). Push yok. Not: oturumda paralel başka bir TionSwarm session'ı aktif (session-goals + market WIP) — yalnız bu özelliğin dosyaları seçilerek commit edildi; canlı E2E, çoklu vite instance + 110+ sekme ortam gürültüsü nedeniyle yapılmadı.
+**Durum:** `tsc -b` benim dosyalarımda temiz (kalan tek hata paralel oturumun ilgisiz `HooksPanel` WIP'inde). Commit `e29d725` (7 dosya). Push yok. Not: oturumda paralel başka bir TionHarness session'ı aktif (session-goals + market WIP) — yalnız bu özelliğin dosyaları seçilerek commit edildi; canlı E2E, çoklu vite instance + 110+ sekme ortam gürültüsü nedeniyle yapılmadı.
 
 **Konsolidasyon — tek merkezi ikon seçici (2026-06-18, sonradan):** `AgentSettingsForm` hâlâ `EmojiPicker`'ı doğrudan sarıp kendi tetik butonu + `emojiPickerOpen` state'ini elle yazıyordu (workspace picker'larının kullandığı `EmojiField`'ı çoğaltarak). Ajan avatarı da `EmojiField`'a geçirildi → **tüm ikon-seçimi yerleri tek kontrolden geçer** (`AgentSettingsForm` + `WorkspaceCreateModal` + `WorkspacePanel` → `EmojiField` → `EmojiPicker`). `EmojiField` opsiyonel `label` prop'u kazandı (`string | (value) => string`) — ajan formu açıklayıcı tetik metnini korur ("Emoji seç (varsayılan: baş harf)" / "Emojiyi değiştir"), workspace picker'ları kompakt `Smile` ikonunda kalır. `EmojiPicker` artık yalnız `EmojiField`'ın iç popover'ı. **Doğrulama:** `tsc -b` benim dosyalarımda temiz (kalan App.tsx `market` + `HooksPanel` hataları paralel oturum WIP'i); **Playwright canlı test** (5173→8090): ajan formunda `EmojiField` tetiği + paylaşılan picker (arama/sekme/ızgara) açılışı doğrulandı; daha önce uçtan uca seç→kaydet→`avatar` kalıcılığı da doğrulanmıştı. Commit `2dd73f4` (AgentSettingsForm + EmojiField). Ayrıca dev-ortam fix'i: `vite.config.ts` proxy `:8080`→`:8090` (8080 unity-mcp ile çakışıp tüm `/api`'yi 404'lıyordu) — commit `56d3c20`. Push yok.
 
@@ -4427,10 +4427,10 @@ Claude `/goal` **checker yakınsaması**: hedef tamamlanınca metni korunur ama 
 **İstek:** Detay panelinde checkbox listesi yerine, kartı sürükleyip detay paneline bırakarak bağımlılık eklenebilsin.
 
 **Değişiklikler:**
-- `frontend/src/components/panels/TaskBoard.tsx`: `onDragStart` handler'a `e.dataTransfer.setData('application/x-tionswarm-task', t.id)` + `effectAllowed = 'link'` eklendi — kartlar artık task ID'lerini taşır.
+- `frontend/src/components/panels/TaskBoard.tsx`: `onDragStart` handler'a `e.dataTransfer.setData('application/x-tionharness-task', t.id)` + `effectAllowed = 'link'` eklendi — kartlar artık task ID'lerini taşır.
 - `frontend/src/components/panels/TaskDetailPanel.tsx`:
   - `DependencyPicker` (checkbox liste) kaldırıldı; yerine kesik-çizgili **drag-drop zone** eklendi (`🔗 Kartı buraya sürükle`).
-  - Drop sırasında `dataTransfer.getData('application/x-tionswarm-task')` okunup `depIds`'e ekleniyor (self-dep, duplicate ve geçersiz ID koruması mevcut).
+  - Drop sırasında `dataTransfer.getData('application/x-tionharness-task')` okunup `depIds`'e ekleniyor (self-dep, duplicate ve geçersiz ID koruması mevcut).
   - `onDragEnter`/`onDragLeave` (currentTarget.contains guard ile) → accent rengi hover feedback.
   - Dependency chip'lerine `×` kaldırma butonu eklendi — tıklama hâlâ navigate ediyor, × kaldırıyor.
 
@@ -4489,9 +4489,9 @@ Claude `/goal` **checker yakınsaması**: hedef tamamlanınca metni korunur ama 
 
 ## `schedule_wake` — Ajanın kendi sohbetine geri dönmesi ✅ (2026-06-18)
 
-**Sorun:** claude-cli sağlayıcısı `claude -p` (one-shot print mode) ile çalışır; alt süreç her turda ölür. Claude Code'un yerleşik `ScheduleWakeup` aracı yalnızca `/loop` harness içinde anlamlıdır — TionSwarm'da harness olmadığından ajan "bekliyorum" diyip hiçbir şey gelmeden askıda kalıyordu.
+**Sorun:** claude-cli sağlayıcısı `claude -p` (one-shot print mode) ile çalışır; alt süreç her turda ölür. Claude Code'un yerleşik `ScheduleWakeup` aracı yalnızca `/loop` harness içinde anlamlıdır — TionHarness'da harness olmadığından ajan "bekliyorum" diyip hiçbir şey gelmeden askıda kalıyordu.
 
-**Çözüm — TionSwarm'ya özel `schedule_wake`:**
+**Çözüm — TionHarness'ya özel `schedule_wake`:**
 - **`internal/db/models_task.go`:** `Schedule` struct'ına `OneShot`, `FireAt`, `SessionID`, `Reason` alanları eklendi.
 - **`internal/agent/scheduler.go`:** `wakeTimers map[string]*time.Timer` alanı; `rebuildLocked` one-shot satırları cron tablosuna eklemiyor, bunun yerine `armWakeLocked` ile zamanlıyor; `fireWake` → `deliverWake` → orijinal sohbet oturumuna prompt enjeksiyonu; `emitWakeEvent` → frontend'e `phase=start/done` gönderir; `Stop()` timer'ları iptal eder. `maxWakeDelay = 1 saat`.
 - **`internal/agent/runtime.go`:** `ScheduleWake(ctx, sessionID, agentID, prompt, reason string, delaySeconds int)` — one-shot schedule satırı oluşturur, `reloadSchedules`'ı tetikler, 5–3600s sıkıştırır.
@@ -4505,9 +4505,9 @@ Claude `/goal` **checker yakınsaması**: hedef tamamlanınca metni korunur ama 
 - **Test:** `internal/agent/wake_test.go` — 3 test: `TestScheduleWake_ArmsOneShot` (DB satırı + delay sıkıştırma), `TestDeliverWake_TargetsOriginalSession` (wake orijinal sohbet oturumuna enjekte edilir), `TestScheduler_StartSkipsOneShotCron` (cron tablosuna eklenmez, timer kurulur).
 
 **Canlı doğrulama (Playwright, 2026-06-18):**
-1. TionSwarm arayüzünde yeni oturum açıldı.
+1. TionHarness arayüzünde yeni oturum açıldı.
 2. Ajana "10 saniyede `schedule_wake` kullan" mesajı gönderildi.
-3. Agent `mcp__tionswarm_interaction__schedule_wake` çağırdı, "kurdum, bekliyorum" yanıtı verdi.
+3. Agent `mcp__tionharness_interaction__schedule_wake` çağırdı, "kurdum, bekliyorum" yanıtı verdi.
 4. **10 saniye sonra** wake prompt (`Wake up! Say hello...`) **aynı sohbet oturumuna** otomatik enjekte edildi.
 5. Agent yeniden yanıt verdi — sohbet akışı ekranda görünür şekilde devam etti. ✅
 
@@ -4565,7 +4565,7 @@ Pano artık bir **çalıştırma yüzeyi değil**, pasif bir durum/bilgi panosu.
 
 ## Ara özellik — Tur-içi crash kurtarma (inflight sidecar) (2026-06-18)
 
-**İstek:** "bu sessionda network-error hatası verdi … büyük ihtimalle TionSwarm yeniden başladı, ve ekranı yenileyince agentın yarım konuşması kayboldu" → **restart-dayanıklılığını çöz.**
+**İstek:** "bu sessionda network-error hatası verdi … büyük ihtimalle TionHarness yeniden başladı, ve ekranı yenileyince agentın yarım konuşması kayboldu" → **restart-dayanıklılığını çöz.**
 
 **Teşhis:** Asistan yanıtı `session.jsonl`'e yalnızca stream **bitince** (`chat_stream.go` AddMessage) persist ediliyordu. Süreç tam stream sırasında ölünce (dev rebuild/OOM) yanıt hiç yazılmamış oluyor → yenilemede tur kayboluyordu. Mevcut "detach from client" koruması yalnız **sayfa yenilemesini** kurtarıyordu, **süreç restart'ını değil**.
 
@@ -4575,7 +4575,7 @@ Pano artık bir **çalıştırma yüzeyi değil**, pasif bir durum/bilgi panosu.
 - **Frontend:** `types/message.ts` `interrupted?`, `chat/MessageList.tsx` ⚠ "Bu yanıt yarıda kesildi" banner'ı.
 - **Test:** `db/inflight_test.go` (materialize + idempotent + already-persisted skip) ✅.
 
-✅ `go build/vet` + `go test ./internal/db ./internal/api` + frontend `tsc --noEmit` yeşil. **Canlı E2E** (izole instance, gerçek binary + HTTP API, port 18099): session oluştur → diske `inflight.json` yaz (crash simülasyonu) → süreç öldür → restart → `GET messages` `interrupted:true` kurtarılmış mesajı döndü + sidecar temizlendi. Detay: **`_Docs/08-DEPOLAMA.md`** (Tur-içi crash kurtarma + external-agent-oss karşılaştırması). **Kalan (ops.):** (1) gerçek sağlayıcılı canlı turda stream sırasında crash + UI banner'ının görsel (Playwright) doğrulaması; (2) external-agent'tan devşirilebilecek **stale-session watchdog** (olay düşünce "düşünüyor…"da takılan oturumu sunucudan tazele) ve **`preserved_stale_messages`** kuralı (yeniden yükleme istemcideki mesajları silmesin) — şu an TionSwarm'da yok.
+✅ `go build/vet` + `go test ./internal/db ./internal/api` + frontend `tsc --noEmit` yeşil. **Canlı E2E** (izole instance, gerçek binary + HTTP API, port 18099): session oluştur → diske `inflight.json` yaz (crash simülasyonu) → süreç öldür → restart → `GET messages` `interrupted:true` kurtarılmış mesajı döndü + sidecar temizlendi. Detay: **`_Docs/08-DEPOLAMA.md`** (Tur-içi crash kurtarma + external-agent-oss karşılaştırması). **Kalan (ops.):** (1) gerçek sağlayıcılı canlı turda stream sırasında crash + UI banner'ının görsel (Playwright) doğrulaması; (2) external-agent'tan devşirilebilecek **stale-session watchdog** (olay düşünce "düşünüyor…"da takılan oturumu sunucudan tazele) ve **`preserved_stale_messages`** kuralı (yeniden yükleme istemcideki mesajları silmesin) — şu an TionHarness'da yok.
 
 ## Faz P4 — Hooks (PreToolUse / PostToolUse) (2026-06-18)
 
@@ -4585,7 +4585,7 @@ Kullanıcı-tanımlı dış komutların **native (anthropic/minimax) araç döng
 
 - **PreToolUse:** araç öncesi — girdiyi yeniden yazar (`updatedInput`), otomatik onaylar (izin kapısını atlar) veya engeller.
 - **PostToolUse:** araç + token sıkıştırması sonrası — çıktıyı dönüştürür (`updatedOutput`, dış sıkıştırma), bağlam ekler (`additionalContext`) veya engeller.
-- **Kapsam:** yalnız native yol. claude-cli kendi `~/.claude/settings.json` hook'larını okur (P3 CLI-vs-native deseni). **sqz cevabı:** sqz'in kendisi bir PreToolUse hook'tur; claude-cli ajanlarında `sqz init --global` yeterli (TionSwarm'da bir şey gerekmez), native ajanlarda TionSwarm PostToolUse hook'u olarak `sqz` tanımlanır.
+- **Kapsam:** yalnız native yol. claude-cli kendi `~/.claude/settings.json` hook'larını okur (P3 CLI-vs-native deseni). **sqz cevabı:** sqz'in kendisi bir PreToolUse hook'tur; claude-cli ajanlarında `sqz init --global` yeterli (TionHarness'da bir şey gerekmez), native ajanlarda TionHarness PostToolUse hook'u olarak `sqz` tanımlanır.
 - **Veri:** `db.Hook` (`models_hook.go`/`store_hook.go`, per-ws `store/hooks/*.json`, `ListEnabledHooksByEvent`).
 - **Motor:** `agent/hooks.go` — `runPreToolHooks`/`runPostToolHooks`/`execHook` (subprocess timeout 30s clamp 1–120 + 64KB çıktı cap + **fail-open**; matcher=araç-adı glob, boş=hepsi; oluşturma sırası zincir, ilk block kazanır).
 - **Entegrasyon:** `toolloop.go` → Pre (permGate öncesi) + Post (compactToolResult sonrası); iz kartı `StepHook` (`trace.go`).
@@ -4712,11 +4712,11 @@ iki eksik güvenlik ağı eklendi (detay: `_Docs/12-LOGLAMA.md`):
 
 ## Profilleme altyapısı — pprof (env-gate'li, loopback-only) (2026-06-18)
 
-`net/http/pprof` ile profilleme eklendi: **varsayılan kapalı**, `TIONSWARM_PPROF=1` ile
-açılır, yalnız loopback dinler (`TIONSWARM_PPROF_ADDR`, vars. `127.0.0.1:6060`). Uçlar
+`net/http/pprof` ile profilleme eklendi: **varsayılan kapalı**, `TIONHARNESS_PPROF=1` ile
+açılır, yalnız loopback dinler (`TIONHARNESS_PPROF_ADDR`, vars. `127.0.0.1:6060`). Uçlar
 `http.DefaultServeMux`'ta yayınlanır; ana sunucu kendi mux'ını (`server.Routes()`)
 kullandığından profiler uygulama rotalarından **tamamen izole**. Wiring: yeni
-`cmd/tionswarm/pprof.go` (`startPprof`) + `main.go`'da config sonrası çağrı.
+`cmd/tionharness/pprof.go` (`startPprof`) + `main.go`'da config sonrası çağrı.
 ✅ `go build`/`vet` yeşil; **canlı smoke** (izole veri dizini, port 6061): `/debug/pprof/`
 ve `/debug/pprof/heap` HTTP 200, log "pprof profiling server enabled" doğrulandı.
 Kullanım rehberi (heap/CPU/goroutine toplama, `go tool pprof` komutları, sıcak-yol
@@ -4728,7 +4728,7 @@ Go performans araştırması (Go 1.26 GC, JSON kütüphaneleri, RWMutex vs sync.
 allocation) sonrası **davranış-korumalı** 4 düzeltme uygulandı (commit `ad36ee9` —
 not: bir auto-commit, bu hunk'ları eşzamanlı flows WIP'iyle aynı commit'e topladı):
 
-1. **HTTP `IdleTimeout: 120s`** (`cmd/tionswarm/main.go`) — boşta keep-alive bağlantıları
+1. **HTTP `IdleTimeout: 120s`** (`cmd/tionharness/main.go`) — boşta keep-alive bağlantıları
    reap edilir. `WriteTimeout` **bilerek** koyulmadı (SSE akışlarını keserdi).
 2. **`estimateText` → `utf8.RuneCountInString`** (`conversation/tokens.go`) ve
    **`tokenize` uzunluk kontrolü** (`memory/vector.go`) — niyet netliği + ufak hız
@@ -4745,7 +4745,7 @@ not: bir auto-commit, bu hunk'ları eşzamanlı flows WIP'iyle aynı commit'e to
 her event'te `Flush()` + `X-Accel-Buffering: no` + ping ticker ile doğru kurulmuş.
 ✅ `go build`/`vet` + `go test ./internal/...` yeşil. **Sıradaki (opsiyonel):** recall
 vektör+norm bellek cache'i (`unmarshalVector` JSON parse'ı her recall'da tekrar ediyor);
-pprof'u `TIONSWARM_PPROF=1` env-gate ile ekleyip gerçek yük altında baseline profil.
+pprof'u `TIONHARNESS_PPROF=1` env-gate ile ekleyip gerçek yük altında baseline profil.
 
 ## Provider mimarisi incelemesi → gelecek plan (2026-06-18)
 
@@ -4753,7 +4753,7 @@ pprof'u `TIONSWARM_PPROF=1` env-gate ile ekleyip gerçek yük altında baseline 
 nasıl düşük eforla eklediği incelendi: **"metadata'yı protokolden ayır"** deseni — ~25
 OpenAI-uyumlu API tek `streamOpenAiChat` handler'ını paylaşıyor (fark sadece baseURL),
 ~30 CLI 4'lü diziden üretilip tek `streamGenericCliChat`'i kullanıyor, yalnız ~10 yapısal
-CLI bespoke parser alıyor. Tam analiz + TionSwarm çıkarımları yeni dokümanda:
+CLI bespoke parser alıyor. Tam analiz + TionHarness çıkarımları yeni dokümanda:
 [14-PROVIDER-MIMARISI-INCELEME.md](arsiv/14-PROVIDER-MIMARISI-INCELEME.md). Yol haritasına iki
 plan maddesi eklendi: **SC-1** (built-in API preset kataloğu — düşük efor) ve **SC-2**
 (generic CLI factory — CLI fazı). **Yalnız plan; uygulamaya geçilmedi.**
@@ -4792,7 +4792,7 @@ hatalar" için tarandı (Explore ajanı + elle inceleme). İki sınıf ele alın
   `ParseGraph` ve state-restore hataları** (öncesi: hiç log yok, sessizce flow'u
   failed işaretliyor veya sıfırdan başlatıyordu).
 
-**2) Panic güvenliği (yeni):** Bir node panic ederse tüm TionSwarm süreci (tüm
+**2) Panic güvenliği (yeni):** Bir node panic ederse tüm TionHarness süreci (tüm
 workspace'ler) çöküyor ve yalnız stderr'e Go stack trace düşüyordu — uygulama-içi
 loglara/logbuf'a yansımıyordu. Goroutine köklerine recover + log eklendi:
 - `orchestration/engine.go` — paralel child panic'i normal flow hatasına çevrilir
@@ -5248,7 +5248,7 @@ chat-only). **Canlı doğrulama** (izole instance, port 8099): varsayılan açı
 ## Faz S1 — Skill sistemi (dosya-tabanlı, 2 katman, lazy, subskills, varsayılan seeding) ✅ (2026-06-17 → 2026-06-18)
 
 Ajanlara **yeniden kullanılabilir talimat setleri** (skill) eklendi — Claude Code /
-external-agent-oss desenleri incelenip TionSwarm'ya uyarlandı. **flat skill + 2 katman +
+external-agent-oss desenleri incelenip TionHarness'ya uyarlandı. **flat skill + 2 katman +
 lazy gövde + subskills (aşamalı yükleme) + varsayılan skill seeding** ile tamamlandı.
 
 **Format:** klasör-başına `<slug>/SKILL.md` (YAML-ish frontmatter + markdown gövde).
@@ -5257,7 +5257,7 @@ Frontmatter alanları: `name`, `description`, `when_to_use`, `icon`, `color`,
 parser (`internal/skills/frontmatter.go`) — go.mod minimal kalsın diye yaml lib yok.
 
 **2 katman (öncelik: workspace > global):**
-- global: `~/.tionswarm/skills/` (TionSwarm'nun kendi data dizini — `TIONSWARM_DATA_DIR` onurlandırır)
+- global: `~/.tionharness/skills/` (TionHarness'nun kendi data dizini — `TIONHARNESS_DATA_DIR` onurlandırır)
 - workspace: `<workspace>/skills/` (store/·config/·workspace/ kardeşi)
 Aynı slug workspace'te override eder (`internal/skills/store.go`, `New`+`Reload`+`List`).
 
@@ -5288,10 +5288,10 @@ skill'in `alwaysAllow`/`requiredSources` alanlarının runtime'da enforce edilme
 Yukarıdaki ilk sürüm üzerine yapılan değişiklikler (skill sistemi son hali):
 
 - **Global tier izole edildi:** cross-tool `~/.agents/skills` yerine **`<DataDir>/skills`**
-  (varsayılan `~/.tionswarm/skills`, `TIONSWARM_DATA_DIR`'a saygılı). Sebep: ilk sürümde global
+  (varsayılan `~/.tionharness/skills`, `TIONHARNESS_DATA_DIR`'a saygılı). Sebep: ilk sürümde global
   skill'ler External Agent gibi `~/.agents/skills` okuyan diğer araçlara **sızıyordu**. `globalSkillsDir`
-  artık TionSwarm'nun kendi data dizinine bakar.
-- **Proje katmanı KALDIRILDI → 2 katman (workspace > global):** TionSwarm'da `workDir` zaten
+  artık TionHarness'nun kendi data dizinine bakar.
+- **Proje katmanı KALDIRILDI → 2 katman (workspace > global):** TionHarness'da `workDir` zaten
   workspace'e ait tek sandbox olduğundan `<workDir>/.agents/skills` "proje" tier'ı workspace
   tier'la örtüşüyordu. `SourceProject` + `projectSkillsDir` silindi; `skills.New(global, workspace)`.
   Frontend `SkillSource` → `'global' | 'workspace'`; rozetler/label/boş-durum güncellendi.
@@ -5308,17 +5308,17 @@ Yukarıdaki ilk sürüm üzerine yapılan değişiklikler (skill sistemi son hal
   **sürükle-genişlet** (localStorage'da kalıcı genişlik).
 - **Sağlamlaştırma:** dosya dışarıdan silinince `Body`/`SetAccess` katalogu **self-heal** reload edip
   net hata döner (kriptik OS hatası yerine).
-- **Örnek skill'ler (son):** `commit` (global), `tionswarm-project` + `web-research` (workspace;
+- **Örnek skill'ler (son):** `commit` (global), `tionharness-project` + `web-research` (workspace;
   `web-research` `access: shared`). Eski `~/.agents/skills` ve proje-tier demo'ları temizlendi.
 - **`subskills:` frontmatter alanı (aşamalı yükleme):** Skill `subskills: [slug1, slug2]` ile daha
   ayrıntılı alt-skill'lere işaret edebilir. `use_skill` çağrıldığında gövde sonuna "## Related skills"
   footer'ı eklenir — ajan bilgi derinleştirme yolu olarak `use_skill` ile alt-skill'i yükleyebilir.
   `internal/skills/store.go` → `UseSkillBody` + `subskillFooter`. Frontend `SkillsPanel.tsx` detail
   header'ında alt-skill chip'leri (bilinene tıklanabilir, bilinmeyene strikethrough).
-- **Varsayılan skill seeding (`EnsureDefaults`):** Her `NewRuntime` başlangıcında TionSwarm'nun kendi
-  kılavuz skill'leri `~/.tionswarm/skills`'e **idempotent** olarak kopyalanır (mevcut olanı asla ezmez).
-  `internal/skills/defaults.go` (`//go:embed defaults`); seeded skill'ler: `tionswarm-guide` (genel
-  bakış, `access: shared`) + `tionswarm-flows` (orkestrasyon detayı, `access: shared`, `tionswarm-guide`
+- **Varsayılan skill seeding (`EnsureDefaults`):** Her `NewRuntime` başlangıcında TionHarness'nun kendi
+  kılavuz skill'leri `~/.tionharness/skills`'e **idempotent** olarak kopyalanır (mevcut olanı asla ezmez).
+  `internal/skills/defaults.go` (`//go:embed defaults`); seeded skill'ler: `tionharness-guide` (genel
+  bakış, `access: shared`) + `tionharness-flows` (orkestrasyon detayı, `access: shared`, `tionharness-guide`
   subskill'i olarak işaret eder).
 - ✅ build/vet/test + tsc/vite yeşil; **canlı :8090 restart** ile uçtan uca doğrulandı.
 
@@ -5413,7 +5413,7 @@ açılabiliyordu; **Ayarlar ekranından** yönetilebilsin.
   okur.
 - **`api/server.go` `applySettings`:** `SetShellEnabled`/`SetSelfManageEnabled`/
   `SetDelegationEnabled`/`SetDelegationLimits` canlı push (boot + her kayıtta).
-- **`main.go`:** `TIONSWARM_ENABLE_*` env değişkenleri artık **tek seferlik boot seed**'i —
+- **`main.go`:** `TIONHARNESS_ENABLE_*` env değişkenleri artık **tek seferlik boot seed**'i —
   truthy ise ilgili yeteneği settings'e **açar** (asla kapatmaz), sonra Ayarlar tek doğruluk
   kaynağı. Eski dev akışları çalışmaya devam eder.
 - **Frontend:** `types/settings.ts` (5 alan), yeni **"Yetenekler (Araçlar)"** kategorisi
@@ -5452,14 +5452,14 @@ güvenli) ama mesaj akışında bozuk görüntü oluşturmadan.
   persona/model/araçlarıyla **tam bir tur** koşar (`completeTraced` özyinelemesi).
 - **Wiring:** `toolloop.go` native döngüde `ctx = r.withDelegation(...)`; `toolsetup.go`
   tool'u **gated** ekler (`r.tun.DelegationEnabled()`); `tunables.go` `DelegationEnabled`;
-  `main.go` `TIONSWARM_ENABLE_DELEGATION` env bayrağı (varsayılan kapalı — her çağrı tam bir
+  `main.go` `TIONHARNESS_ENABLE_DELEGATION` env bayrağı (varsayılan kapalı — her çağrı tam bir
   ajan turu = token maliyeti).
 - **Mesaj akışı:** Delegasyon, çağıranın izinde standart bir **tool kartı** olarak görünür
   (input=`{agent, task}`, output=alt-ajanın cevabı). Frontend `lib/tools.ts`'e `call_agent`
   ikonu (🤝) + özet anahtarı eklendi. Akış bozulmaz.
 
 **Kapsam notu:** `call_agent` yalnızca **native tool yolu** (anthropic) için çalışır;
-claude-cli MCP delegasyon yolunda built-in tool'lar TionSwarm tarafından koşulmaz.
+claude-cli MCP delegasyon yolunda built-in tool'lar TionHarness tarafından koşulmaz.
 
 **Test:** `internal/agent/delegate_test.go` — gate (açık/kapalı, gerçek registry yolu),
 3 korumanın da reddi (cycle/self, depth, budget), bilinmeyen ajan, `inheritedMessages`
@@ -5497,7 +5497,7 @@ reason:"provider_unavailable"}]`. `go build`/`vet` + frontend `tsc`/`vite build`
 
 ## Faz SM — Ajan Self-Management Araçları ✅ (2026-06-17)
 
-**İstek:** Ajan, sohbet esnasında TionSwarm'nun kendisini yönetebilsin — yeni ajan/flow/
+**İstek:** Ajan, sohbet esnasında TionHarness'nun kendisini yönetebilsin — yeni ajan/flow/
 schedule/artifact oluştur-sil-düzenle, hafızaya ekle, logları oku. (Built-in in-process
 tool olarak; MCP/REST katmanı **değil** — tek binary felsefesi + bedava workspace izolasyonu.)
 
@@ -5532,7 +5532,7 @@ oluşturulmuş** kaynakları silebilir/düzenleyebilir; kullanıcının elle yap
 `sched.Reload`'u bağlar) eklendi. `NewRuntime`/`NewManager` imzaları + `main.go` güncellendi.
 
 **Gate:** Self-management paketi native kataloğu **19 → 37**'ye çıkarır (~+2000 tok/tur), ve
-ajanın workspace'i değiştirmesine izin verir → **varsayılan KAPALI**, `TIONSWARM_ENABLE_SELFMANAGE=1`
+ajanın workspace'i değiştirmesine izin verir → **varsayılan KAPALI**, `TIONHARNESS_ENABLE_SELFMANAGE=1`
 ile açılır (shell gate deseni; `Tunables.SelfManageEnabled`). Per-agent allowlist + workspace
 denylist yine geçerli.
 
@@ -5747,7 +5747,7 @@ katlanabilir bir panelde gösterilir.
   da yeni liste) en-son-kazanır mantığıyla panel otomatik güncellenir.
 
 ✅ tsc + vite build temiz (döngü yok). **Playwright canlı E2E** (claude-cli
-`mcp__tionswarm_interaction__todo_write` yolu): 3 maddelik liste oluşturuldu →
+`mcp__tionharness_interaction__todo_write` yolu): 3 maddelik liste oluşturuldu →
 panel composer üstünde **0/3** ile belirdi (önceki 4 maddelik listeyi geçersiz
 kıldı = en-son-kazanır); ardından "1=completed, 2=in_progress" güncellemesi →
 panel **1/3**, madde-1 ✓ üstü-çizili yeşil, madde-2 ◐ accent olarak **canlı
@@ -5898,7 +5898,7 @@ Header'daki kırmızı hata pill'i (sol-üst) artık çıplak **"HTTP 502"** yer
 **502/503/504** Vite dev-proxy'den gelir (Go backend ulaşılamıyor) ve gövde
 JSON olmadığından çıplak `HTTP <status>` kalıyordu. **Çözüm:** `client.ts`'e
 `describeHttpError(status)` (status→Türkçe açıklama; 502/503/504 → "Sunucuya
-ulaşılamıyor… `go run ./cmd/tionswarm` çalışıyor mu", 500/404/401/403/400/408/429
+ulaşılamıyor… `go run ./cmd/tionharness` çalışıyor mu", 500/404/401/403/400/408/429
 özel) + `errorFromResponse(res)` (backend `{error}` öncelikli, yoksa status
 açıklaması) yardımcıları eklendi; `req()` ayrıca **fetch reddini** (sunucu hiç
 yanıt vermiyor) yakalayıp "Sunucuya bağlanılamadı…" döndürür. `chat.ts` aynı
@@ -5975,7 +5975,7 @@ Liste + toggle (aktif/pasif) + sil zaten vardı (`components/panels/Schedules.ts
 ## Faz P3 — İzin/onay katmanı (Aşama 1: claude-cli izin modu, 2026-06-16)
 
 **Sorun (kök neden):** claude-cli ajanları **hiçbir dosya editleme işlemini yapamıyordu.**
-TionSwarm `claude -p` (headless) ile shell-out yapıyor ama `--permission-mode` /
+TionHarness `claude -p` (headless) ile shell-out yapıyor ama `--permission-mode` /
 `--dangerously-skip-permissions` bayraklarını **hiç geçmiyordu**. Headless modda
 varsayılan izin modu Edit/Write/Bash için onay ister; soracak arayüz olmadığından bu
 araçlar **sessizce reddediliyordu**. (external-agent-oss'un 3-modlu izin sistemine bakıldı.)
@@ -6098,13 +6098,13 @@ Faz 1 üstüne araç seti genişletildi ve CLI iz paritesi sağlandı. Detay: [1
 
 1. **`request_confirmation`** (yeni `internal/tools/builtin_confirm.go`): riskli/geri-dönülemez eylem öncesi evet/hayır onayı; cevap `confirmed`/`denied` normalize (`NormalizeConfirmation`, TR+EN). Native registry'ye de eklendi (`toolsetup.go`); `ask_user` bloklama deseni (ortak `blockForAnswer`).
 2. **`create_artifact`/`update_artifact` CLI yolunda:** `chatRun`'a per-agent **artifact sink** (`setArtifacts`, chat_stream her ajan turunda kurar); interaction backend sink'i context'e koyup mevcut tool'u çağırır (tek-kaynak).
-3. **CLI iz paritesi (`agent/trace.go`):** `traceStepToTurnStep` interaction namespace'ini (`mcp__tionswarm_interaction__`) **soyar** (kartlar bare adla eşleşir) + `todo_write`'ı **`StepTodo`** kartına yükseltir → CLI yolunda da TodoCard/ArtifactCard kalıcı izde doğru render (çift kart yok, canlı emit yerine izden).
+3. **CLI iz paritesi (`agent/trace.go`):** `traceStepToTurnStep` interaction namespace'ini (`mcp__tionharness_interaction__`) **soyar** (kartlar bare adla eşleşir) + `todo_write`'ı **`StepTodo`** kartına yükseltir → CLI yolunda da TodoCard/ArtifactCard kalıcı izde doğru render (çift kart yok, canlı emit yerine izden).
 4. **Wiring:** `climcp.go` interaction allow-listesi 5 araca (`interactionToolNames`); `Tools()` + backend dispatch eşitlendi. **Keep-alive gereksiz çıktı:** claude `MCP_TOOL_TIMEOUT` varsayılanı ~28 saat → bloklayan araç pratikte timeout olmaz (+15 dk sunucu backstop).
 
 > Doğrulama: `go build`/`vet`/`test` yeşil (yeni: confirm normalize, artifact dispatch, todo no-emit). **Canlı claude-cli testi:** todo_write→request_confirmation→(onay "Onayla")→create_artifact promptu → SSE'de TodoCard `[in_progress,pending]`, ASK `[Onayla,İptal]` → `request_confirmation→confirmed` → `create_artifact→{id}` → TodoCard `[completed,completed]` → "DONE"; `GET /api/artifacts` → `('Faz2 Test','markdown',1)` kalıcı; tool adları izde namespace'siz. **Sıradaki: Faz 3** (notify) + **Faz 4** (Codex/Gemini/Mistral Vibe adaptör — ilgili CLI'lar kurulmalı). **Not:** eşzamanlı frontend (PendingTray) + `withRequestLog` başka oturumda; commit yalnız backend Faz 2 dosyaları.
 
 ### Interaction MCP — Faz 1 (ask_user + todo_write claude-cli'ye) ✅ (2026-06-16)
-Kendi agentic döngüsünü süren CLI ajanlarının (ilk hedef claude-cli) TionSwarm'nun insan-etkileşimli araçlarını kullanıp TionSwarm UI'ında yüzeyleyebilmesi için **in-process MCP-over-HTTP** sunucusu eklendi. Önceden claude-cli `-p` modunda kendi `AskUserQuestion`'ını cevaplayamıyordu → "soru penceresi hiç çıkmıyordu". Tasarım+detay: [11-INTERACTION-MCP.md](11-INTERACTION-MCP.md) (§15).
+Kendi agentic döngüsünü süren CLI ajanlarının (ilk hedef claude-cli) TionHarness'nun insan-etkileşimli araçlarını kullanıp TionHarness UI'ında yüzeyleyebilmesi için **in-process MCP-over-HTTP** sunucusu eklendi. Önceden claude-cli `-p` modunda kendi `AskUserQuestion`'ını cevaplayamıyordu → "soru penceresi hiç çıkmıyordu". Tasarım+detay: [11-INTERACTION-MCP.md](11-INTERACTION-MCP.md) (§15).
 
 1. **Yeni `internal/interaction`** (saf protokol): MCP-over-HTTP server (`initialize`/`tools/list`/`tools/call`), bearer auth, protokol `2025-06-18`; `Backend` arayüzü token→run çözer. Birim testli.
 2. **`internal/tools/interaction.go`:** `WithInteractionEndpoint`/`InteractionFrom` context köprüsü (WithAsker deseni).
@@ -6266,7 +6266,7 @@ geneli aktivasyon + ajan-bazlı seçim.
 - [x] `types.ts`/`api.ts`: `WorkspaceTool`/`WorkspaceTools` + `workspaceTools()`/`setWorkspaceTools()`.
 
 **CANLI TEST (API + unit):**
-- [x] `GET /api/workspace-tools`: 14 araç (shell dahil, `TIONSWARM_ENABLE_SHELL=1`); `PUT` ile shell+http_get
+- [x] `GET /api/workspace-tools`: 14 araç (shell dahil, `TIONHARNESS_ENABLE_SHELL=1`); `PUT` ile shell+http_get
   deaktif → re-fetch `enabled` bayrakları doğru; `store/tools-config.json` diske yazıldı.
 - [x] Ajan kataloğu workspace-aktif **12 araç** döndü (deaktif shell/http_get hariç); alt küme allowlist
   (`read_file,grep,get_current_time`) kaydedildi.
@@ -6343,7 +6343,7 @@ Sol-üst workspace seçici elden geçirildi (Playwright ile canlı test edildi):
 
 1. **Dışarı tıkla-kapat** (`WorkspaceSwitcher.tsx`): `mousedown` dinleyicisi + `rootRef`; panel dışına tıklayınca kapanır.
 2. **Boş-isim sağlamlığı**: ad `||` ile gösterilir (önceki `??` boş string'i geçiriyordu); listede fallback "İsimsiz".
-3. **Popup ile oluşturma** (`WorkspaceCreateModal.tsx`): ad + emoji simge paleti + opsiyonel **veri klasörü**. Klasör: `POST /api/pick-folder` (Windows native FolderBrowserDialog) "Gözat" butonu **veya** elle yol. Backend `Manager.Create(name, parentPath)` + `Meta.Path` (boş=varsayılan; özel yolda `{path}/tionswarm-{id}` alt klasörü → silme komşu içeriği bozmaz).
+3. **Popup ile oluşturma** (`WorkspaceCreateModal.tsx`): ad + emoji simge paleti + opsiyonel **veri klasörü**. Klasör: `POST /api/pick-folder` (Windows native FolderBrowserDialog) "Gözat" butonu **veya** elle yol. Backend `Manager.Create(name, parentPath)` + `Meta.Path` (boş=varsayılan; özel yolda `{path}/tionharness-{id}` alt klasörü → silme komşu içeriği bozmaz).
 4. **Varsayılan ajan**: `handleCreateWorkspace`→`seedDefaultAgent` yeni workspace'e "Asistan" ajanı ekler (provider önceliği ws→app→claude-cli).
 5. **Çapraz-workspace etkinlik rozeti**: aktif olmayan workspace'te olay (görev/zamanlama/heartbeat **+ sohbet tamamlanma**) olunca switcher'da nokta belirir. `chat_stream` `done`'da `Runtime.Emit` (yeni exported) `chat` olayı yayar (yalnız rozet). `App.tsx` `unreadWs` Set olay feed'inden dolar, geçince temizlenir; `NavRail` collapsed + switcher tetik/satır nokta.
 6. **Sağlamlık fix**: `withWorkspace` bilinmeyen `X-Workspace-Id`'de 400 yerine Varsayılan'a düşer (silinmiş id uygulamayı kilitlemez).
@@ -6401,13 +6401,13 @@ Native (anthropic/minimax) tool-use yolundaki ajanlara **yerleşik dosya sistemi
 
 - [x] **Sandbox** (`internal/tools/sandbox.go`): `Sandbox{Root}` + `Resolve` — mutlak yol reddi, `..` kaçış reddi, kök-altı doğrulaması; `Rel` (görüntüleme için).
 - [x] **FS araçları** (`internal/tools/builtin_fs.go`): `read_file` (256KB cap), `write_file` (dizin oluşturur), `edit_file` (tam string değişimi; tekil/`replace_all`), `list_dir` (dizinler önce), `glob` (`**`/`*`/`?` → RE2; 500 cap), `grep` (RE2 + opsiyonel glob filtre; ikili dosya atlama; 200 cap).
-- [x] **Shell aracı** (`internal/tools/builtin_shell.go`): Windows'ta `powershell.exe -NoProfile -NonInteractive`, diğerinde `/bin/sh -c`; cwd = sandbox kökü; timeout (varsayılan 30s, max 120s); çıktı 64KB cap. **Yüksek riskli → varsayılan kapalı**, `TIONSWARM_ENABLE_SHELL=1` ile açılır (permission katmanı P3 gelene dek opt-in).
+- [x] **Shell aracı** (`internal/tools/builtin_shell.go`): Windows'ta `powershell.exe -NoProfile -NonInteractive`, diğerinde `/bin/sh -c`; cwd = sandbox kökü; timeout (varsayılan 30s, max 120s); çıktı 64KB cap. **Yüksek riskli → varsayılan kapalı**, `TIONHARNESS_ENABLE_SHELL=1` ile açılır (permission katmanı P3 gelene dek opt-in).
 - [x] **Wiring**: `Runtime.workDir` alanı (`NewRuntime` parametresi); `workspace.Manager.open` her workspace için `filepath.Join(dir,"workspace")` geçirir; `Tunables.shellEnabled` (+ `SetShellEnabled`/`ShellEnabled`); `main.go` env'den okur; `agent/toolsetup.go buildRegistry` sandbox hazırsa fs araçlarını, gate açıksa shell'i kaydeder.
 - [x] **Test** (`internal/tools/builtin_fs_test.go`): sandbox resolve (in-bounds/escape/absolute/not-ready), write→read→edit round-trip, non-unique edit reddi, list/glob/grep, glob-restricted grep, `globToRegexp` tablo testi.
 
 **CANLI TEST (build + unit + API):**
 - [x] `go build/vet ./...` + `go test ./...` tamamı temiz (yeni fs testleri dahil).
-- [x] API: ajan oluştur → `mcpEnabled=true` → `GET /api/agents/{id}/tools` kataloğu **10 araç** döndü (3 built-in + 6 fs + shell, `TIONSWARM_ENABLE_SHELL=1` ile).
+- [x] API: ajan oluştur → `mcpEnabled=true` → `GET /api/agents/{id}/tools` kataloğu **10 araç** döndü (3 built-in + 6 fs + shell, `TIONHARNESS_ENABLE_SHELL=1` ile).
 - [x] Shell gate doğrulandı: env olmadan katalogda `shell` yok.
 
 > Mimari not: Bu araçlar **native** tool-use döngüsünde (`agent/toolloop.go`) çalışır. **claude-cli** yolu kendi döngüsünü `--mcp-config` ile sürdüğünden (ve kendi Read/Write/Bash araçları olduğundan) bu built-in'leri kullanmaz — SDK parite tasarımıyla bilinçli uyum. Gerçek LLM-tetikli yürütme anthropic/minimax anahtarı gerektirir.
@@ -6542,7 +6542,7 @@ Detay: **`_Docs/08-DEPOLAMA.md`**.
   (`agent`/`api`/`conversation`/`memory`/`workspace`) **değişmedi**.
 - [x] Disk yapısı: `{wsID}/store/` altında entity-başına JSON + `sessions/{id}/session.jsonl`
   (satır 1 header, satır 2+ mesajlar). Embedding base64 gömülü; usage gün-bazlı dosya.
-- [x] `tionswarm.db` yolu → `store/` dizini (`workspace/manager.go`); ölü `Config.DBPath()` silindi.
+- [x] `tionharness.db` yolu → `store/` dizini (`workspace/manager.go`); ölü `Config.DBPath()` silindi.
 - [x] `go.mod` temizlendi: yalnız `google/uuid` + `robfig/cron/v3` kaldı (sqlite + ~8 dolaylı dep gitti).
 - [x] `internal/db/filestore_test.go` round-trip testi (create→reopen→reload + UTF-8/HTML/embedding/cascade) **PASS**.
 
@@ -6589,7 +6589,7 @@ Hassas Anthropic API anahtarı AES-GCM ile şifreli saklanır, istemciye asla d�
 - [x] `api/server.go`: `settings` alanı + `NewServer` imzası + `applySettings()` (boot + her güncellemede push).
 - [x] `api/agents.go`: yeni ajanlarda varsayılan provider/model + günlük bütçe ayarlardan.
 - [x] `api/chat.go`: auto-title `autoTitleEnabled` ayarına bağlı.
-- [x] `cmd/tionswarm/main.go`: settings store + env `ANTHROPIC_API_KEY`'i tek seferlik şifreli store'a migrate.
+- [x] `cmd/tionharness/main.go`: settings store + env `ANTHROPIC_API_KEY`'i tek seferlik şifreli store'a migrate.
 
 **Frontend**
 - [x] `types.ts`/`api.ts`: `AppSettings`/`SettingsPatch`/`ProviderTestResult` + `getSettings/updateSettings/testProvider`.
@@ -6649,7 +6649,7 @@ Detaylı doküman: [07-CHAT-UX.md](07-CHAT-UX.md).
 - [x] Inline görsel: markdown `![](C:\…\hero.png)` → `src=/api/files?path=…`; uç **HTTP 200 image/png 13KB** döndürdü.
 - [x] `go build ./...` + `tsc --noEmit` temiz.
 
-**Anahtarsız adım izi (güncelleme):** `providers/claudecli.go` `--output-format stream-json --verbose`'a geçirildi; CLI'ın kendi olay akışı (`tool_use`/`tool_result`/`thinking`/`text`) ayrıştırılıp `Response.Trace` → `traceToSteps` ile `[]TurnStep`'e çevrilir. Böylece **API anahtarı olmadan** da tool kartları + ara adımlar görünür. Canlı test: claude-cli ajanı "Bash ile `echo hello-from-tionswarm`" → yanıt `steps`=[text, tool(Bash, output=hello-from-tionswarm)]; Chrome DOM'da ▶️ Bash kartı GIRDI/ÇIKTI ile render oldu. Native (anthropic) yol da kendi izini üretmeye devam eder.
+**Anahtarsız adım izi (güncelleme):** `providers/claudecli.go` `--output-format stream-json --verbose`'a geçirildi; CLI'ın kendi olay akışı (`tool_use`/`tool_result`/`thinking`/`text`) ayrıştırılıp `Response.Trace` → `traceToSteps` ile `[]TurnStep`'e çevrilir. Böylece **API anahtarı olmadan** da tool kartları + ara adımlar görünür. Canlı test: claude-cli ajanı "Bash ile `echo hello-from-tionharness`" → yanıt `steps`=[text, tool(Bash, output=hello-from-tionharness)]; Chrome DOM'da ▶️ Bash kartı GIRDI/ÇIKTI ile render oldu. Native (anthropic) yol da kendi izini üretmeye devam eder.
 
 ---
 
@@ -6722,7 +6722,7 @@ Desen: built-in + MCP tek katalogda, ajan başına atanır. İki yol birlikte ku
 **CANLI TEST (Go test + API + Chrome):**
 - [x] `internal/mcp` live test: gerçek `@modelcontextprotocol/server-filesystem` (npx) → 14 araç, `list_directory` → `[FILE] note.txt`
 - [x] API: MCP oluştur → `/test` ok=true 14 araç; ajan tools aç → katalog **17 araç** (14 MCP + 3 built-in)
-- [x] API: claude-cli delegasyonu — "note.txt oku" → araçla okudu, **"hello from tionswarm"** (BOM + CRLF dahil → gerçekten araçla, tahmin değil)
+- [x] API: claude-cli delegasyonu — "note.txt oku" → araçla okudu, **"hello from tionharness"** (BOM + CRLF dahil → gerçekten araçla, tahmin değil)
 - [x] Chrome (DOM): "🔌 Araçlar" sekmesi; 17 araç tam açıklamayla; filesystem MCP sunucusu Test/Kapat/Sil; ekleme formu render
 
 > Not: `chrome_screenshot` odaktaki başka sekmeyi yakaladı (bilinen mcp-chrome sorunu); doğrulama DOM (`chrome_get_web_content`) ile yapıldı.
@@ -6777,7 +6777,7 @@ Kıyaslamada öne çıkan iki kritik açık kapatıldı: **bağlam (context) yö
 - [x] `manager.go`: `Manager.Prepare` — pending geçmiş bütçeyi aşınca eski turları **rolling summary**'ye katlar (compaction), sadece özet + son N tur gönderilir
 - [x] Migration `0004`: `sessions.summary` + `summary_msg_count`; `db.SetSessionSummary`
 - [x] `api/chat.go`: her turda Prepare çağrılır; özet sistem promptuna enjekte edilir; yanıt `contextTokens` + `compacted` döner
-- [x] Env: `TIONSWARM_MAX_CONTEXT_TOKENS` (varsayılan 12000), `TIONSWARM_KEEP_RECENT_MSGS` (8)
+- [x] Env: `TIONHARNESS_MAX_CONTEXT_TOKENS` (varsayılan 12000), `TIONHARNESS_KEEP_RECENT_MSGS` (8)
 - [x] **Önceki bug:** chat her turda TÜM geçmişi gönderiyordu → uzun oturumda context taşması + artan maliyet. Artık sınırlı.
 
 **2) Maliyet / bütçe guardrail'i (otonom döngü)**
@@ -6895,7 +6895,7 @@ Detaylı tasarım: [06-WORKSPACES.md](06-WORKSPACES.md)
 - [x] **CANLI TEST (API + Chrome):** WS1=Ajan-A, WS2=Ajan-B; her workspace yalnızca kendi verisini görüyor; UI switcher ile geçiş çalışıyor; ayrı .db dosyaları ✅
 
 ### Mimari karar
-Tek DB + workspace_id kolonu yerine **fiziksel ayrım** (workspace başına ayrı tionswarm.db) → sıfır sızıntı riski.
+Tek DB + workspace_id kolonu yerine **fiziksel ayrım** (workspace başına ayrı tionharness.db) → sıfır sızıntı riski.
 
 ---
 
@@ -6947,7 +6947,7 @@ Tek DB + workspace_id kolonu yerine **fiziksel ayrım** (workspace başına ayr�
 ### Çalıştırma (geliştirme)
 ```powershell
 # Terminal 1 - backend
-$env:TIONSWARM_ADDR=":8090"; go run ./cmd/tionswarm
+$env:TIONHARNESS_ADDR=":8090"; go run ./cmd/tionharness
 # Terminal 2 - frontend
 cd frontend; npm run dev   # http://localhost:5173
 ```
@@ -7030,10 +7030,10 @@ kullanıcının OAuth/abonelik girişiyle çalışır — **API anahtarı gerekm
 ### Tamamlananlar ✅
 - [x] Go 1.26.4 kuruldu ve doğrulandı
 - [x] Node.js v24 + npm 11 mevcut (frontend için hazır)
-- [x] Proje klasör yapısı oluşturuldu (`C:\Users\user\Desktop\Projects\TionSwarm`)
-- [x] `go mod init github.com/bilal/tionswarm`
+- [x] Proje klasör yapısı oluşturuldu (`C:\Users\user\Desktop\Projects\TionHarness`)
+- [x] `go mod init github.com/bilal/tionharness`
 - [x] `_Docs` plan dokümanları yazıldı (00-05)
-- [x] `cmd/tionswarm/main.go`: HTTP sunucu + `/health` ucu (graceful shutdown, slog)
+- [x] `cmd/tionharness/main.go`: HTTP sunucu + `/health` ucu (graceful shutdown, slog)
 - [x] `go build` + `go vet` temiz
 - [x] Çalıştırma testi: `/health` → `{"status":"ok"}` ✅
 - [x] Kök `README.md` (Türkçe)
@@ -7071,10 +7071,10 @@ Araç şemalarına skill `subskills` deseninin araç karşılığı uygulandı (
 ### 2026-06-18 — Skill `subskills` (progressive disclosure) + default app-flow skiller
 Skill sistemine üç ekleme yapıldı:
 - **`subskills:` frontmatter alanı** (`skill.go` `SubSkills`, `store.go` `scanDir` parse). Bir skill, daha detaylı alt skill'lerin slug'larını listeleyebiliyor. `use_skill` ile gövde yüklenince sonuna **"Related skills"** footer'ı ekleniyor (`Store.UseSkillBody` + `subskillFooter`): bilinmeyen/öz-referans/izinsiz slug'lar elenir, model gerektiğinde alt skill'i ayrıca `use_skill` ile yükler. Ham detay görünümü (`Body`) değişmeden kaldı; footer yalnızca araç yolunda. `agentSkillLib.Body` artık `UseSkillBody(slug, allow)` çağırıyor.
-- **Default skill seeding** (`defaults.go` + `//go:embed defaults`): TionSwarm ile gelen baseline skill'ler global dizine (`~/.tionswarm/skills`) açılışta yazılıyor — `EnsureDefaults` idempotent, mevcut dosyayı **ezmez** (kullanıcı düzenlemesi ve access toggle korunur; silinen default bir sonraki başlangıçta geri gelir). `NewRuntime` içinde çağrılıyor → her workspace miras alır.
-- **İki built-in skill**: `tionswarm-guide` (tüm uygulama akışı — agents/sessions/tasks/flows/schedules/skills/memory/MCP/secrets; `access: shared`, `subskills: [tionswarm-flows]`) ve `tionswarm-flows` (orkestrasyon detayları, shared). Progressive disclosure örneği: önce genel rehber, gerektiğinde flows detayı.
+- **Default skill seeding** (`defaults.go` + `//go:embed defaults`): TionHarness ile gelen baseline skill'ler global dizine (`~/.tionharness/skills`) açılışta yazılıyor — `EnsureDefaults` idempotent, mevcut dosyayı **ezmez** (kullanıcı düzenlemesi ve access toggle korunur; silinen default bir sonraki başlangıçta geri gelir). `NewRuntime` içinde çağrılıyor → her workspace miras alır.
+- **İki built-in skill**: `tionharness-guide` (tüm uygulama akışı — agents/sessions/tasks/flows/schedules/skills/memory/MCP/secrets; `access: shared`, `subskills: [tionharness-flows]`) ve `tionharness-flows` (orkestrasyon detayları, shared). Progressive disclosure örneği: önce genel rehber, gerektiğinde flows detayı.
 - Frontend `skill.ts`'e `subSkills?: string[]` eklendi.
-- Testler: `TestUseSkillBodySubskillFooter`, `TestEnsureDefaultsSeeds` (ezme-yok + idempotent). `go build ./...` + `go test ./internal/skills/...` temiz; :8090 yeniden derlenip başlatıldı, `/api/skills` doğrulandı (guide: `shared=true`, `subSkills=[tionswarm-flows]`).
+- Testler: `TestUseSkillBodySubskillFooter`, `TestEnsureDefaultsSeeds` (ezme-yok + idempotent). `go build ./...` + `go test ./internal/skills/...` temiz; :8090 yeniden derlenip başlatıldı, `/api/skills` doğrulandı (guide: `shared=true`, `subSkills=[tionharness-flows]`).
 - **Plan**: built-in/MCP araçları için lazy yükleme tasarımı `19-LAZY-TOOL-LOADING.md`'ye yazıldı (skill progressive-disclosure deseninin araç karşılığı: hafif katalog + `activate_tools`).
 
 ### 2026-06-17 — Ekran yüksekliği/scroll fix (panel kökleri)

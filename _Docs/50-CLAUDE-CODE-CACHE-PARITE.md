@@ -1,6 +1,6 @@
 # 50 — Claude Code Cache/Context Paritesi Planı
 
-> **Amaç:** TionSwarm'nun **native sağlayıcı** (anthropic / OpenAI-compat) context "paketini",
+> **Amaç:** TionHarness'nun **native sağlayıcı** (anthropic / OpenAI-compat) context "paketini",
 > Claude Code'un prompt-cache + compaction mekaniğine yaklaştırmak — **SDK'ya bağımlı
 > olmadan** (çok-sağlayıcı, anahtarsız claude-cli, dosya-tabanlı felsefe korunur).
 >
@@ -115,7 +115,7 @@ graph LR
 > ContextEditing` + `Registry.betaContextEditing` + `SetAnthropicBetas(...)`. Ayar
 > `AnthropicContextEditing` (settings.go/store.go, **vars. kapalı**), `api/server.go` canlı
 > uygular. Frontend: ContextPanel'de yeni toggle + `AppSettings.anthropicContextEditing`.
-> Default skill `tionswarm-settings` belgeler. Testler: `TestContextEditing_Off/On`
+> Default skill `tionharness-settings` belgeler. Testler: `TestContextEditing_Off/On`
 > (contextMgmt + betaHeader + body serileştirme). Client-side fold'a **ek**, alternatif değil.
 
 - Anthropic `context_management` beta: `clear_tool_uses_20250919` (trigger `input_tokens`,
@@ -164,9 +164,9 @@ graph LR
 > kullanıcı ayarı değişince olur (beklenen; P4 detektörü yakalar).
 
 - Claude Code 1h eligibility'yi **oturum-stabil latch**'liyor (mid-session flip cache bozar).
-  TionSwarm tüm breakpoint'lerde sabit 1h TTL kullanıyor → doğrula: hiçbir ayar mid-session
+  TionHarness tüm breakpoint'lerde sabit 1h TTL kullanıyor → doğrula: hiçbir ayar mid-session
   TTL/scope flip'i yapmıyor.
-- "Tek mesaj-seviyesi marker" ilkesi: TionSwarm 3 breakpoint (limit 4) — history breakpoint P1
+- "Tek mesaj-seviyesi marker" ilkesi: TionHarness 3 breakpoint (limit 4) — history breakpoint P1
   sonrası **son stabil mesajda** (volatile ekte değil) olmalı.
 
 ### P6 — Önizleme cache haritasını gerçeğe hizala ✅ UYGULANDI (2026-07-04)
@@ -233,10 +233,10 @@ cache'ini de eklemek**; ardından **P2** ile özeti cache'li mesaja çevirmek.
 
 > Bağlam: claude-cli yolunda cache YERLEŞİM disiplini `external-agent-oss` ile aynı (statik
 > system + volatil mesaj-kuyruğu). Tek gerçek fark **süreç sıcaklık modeli**: Craft her tur
-> subprocess'i **respawn+`--resume`** eder; TionSwarm buna ek olarak **kalıcı süreç havuzu**
+> subprocess'i **respawn+`--resume`** eder; TionHarness buna ek olarak **kalıcı süreç havuzu**
 > (`claudecli_session.go`) sunar. Bu ikisini aynı statik system + aynı volatil saatle, aynı 3
 > turda kafa-kafaya ölçen benchmark: `providers.TestLiveCacheCompareModes`
-> (`claudecli_cachebench_test.go`, `TIONSWARM_LIVE_CLI=1` ile).
+> (`claudecli_cachebench_test.go`, `TIONHARNESS_LIVE_CLI=1` ile).
 
 ### İlk koşu (3 tur, n=2 warm) — GÜRÜLTÜLÜ, aşağıda düzeltildi
 warm-tur ort. persistent 4851 ms vs respawn 7143 ms → görünüşte ~%32. Ama n=2, bir 8446 ms

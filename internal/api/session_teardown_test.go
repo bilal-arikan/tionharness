@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bilal-arikan/tionswarm/internal/workspace"
+	"github.com/bilal-arikan/tionharness/internal/workspace"
 )
 
 // testWS is the minimal workspace a teardown needs: an id (everything per-session

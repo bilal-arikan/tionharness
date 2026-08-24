@@ -19,7 +19,7 @@ jobs:
     timeout-minutes: 20
     env:
       # Without this the shell-tool tests skip instead of running.
-      TIONSWARM_ENABLE_SHELL: '1'
+      TIONHARNESS_ENABLE_SHELL: '1'
     steps:
       - name: Checkout
         uses: actions/checkout@v4

@@ -71,7 +71,7 @@ export const ALL_SESSION_CHIPS: string[] = SESSION_CHIPS.map((c) => c.key)
 // the UNTICKED chips, not the ticked ones: that way a chip added by a later
 // build (a new session kind) starts visible instead of silently hiding rows for
 // everyone who already has a saved selection.
-export const SESSION_CHIPS_OFF_KEY = 'tionswarm.sessionChipsOff'
+export const SESSION_CHIPS_OFF_KEY = 'tionharness.sessionChipsOff'
 
 // normalizeChipsOff coerces an untrusted value (storage) to a list of unticked
 // chip keys; anything unparseable means "nothing unticked" (all chips on).

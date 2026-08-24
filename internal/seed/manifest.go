@@ -1,5 +1,5 @@
 // Package seed implements the shipped-defaults refresh shared by every embedded
-// default tree in TionSwarm (skills, insight lenses, …).
+// default tree in TionHarness (skills, insight lenses, …).
 //
 // The problem it solves: a default file is seeded into a workspace once and then
 // becomes a plain editable file. A naive "write it only if missing" seed protects

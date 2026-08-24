@@ -1,4 +1,4 @@
-# TionSwarm - serve over your Tailscale network with automatic HTTPS.
+# TionHarness - serve over your Tailscale network with automatic HTTPS.
 #
 # Runs like dev.ps1: a FOREGROUND long-running process. Backend output streams to
 # this terminal; pressing Ctrl+C (or the backend exiting on its own) tears the
@@ -8,7 +8,7 @@
 # WHY HTTPS: browsers only allow the microphone (getUserMedia / Web Speech) in a
 # "secure context". Tailscale Serve gives your <machine>.<tailnet>.ts.net name a
 # real Let's Encrypt certificate and reverse-proxies it to the local port, so
-# phones on the tailnet reach TionSwarm over https:// and the mic works. Traffic
+# phones on the tailnet reach TionHarness over https:// and the mic works. Traffic
 # stays INSIDE the tailnet (this is `serve`, NOT `funnel`) -> the no-auth backend
 # is never public.
 #
@@ -40,7 +40,7 @@ Set-Location $root
 
 $tailscale = "C:\Program Files\Tailscale\tailscale.exe"
 if (-not (Test-Path $tailscale)) { $tailscale = "tailscale" }
-$exe = Join-Path $root "bin\tionswarm.exe"
+$exe = Join-Path $root "bin\tionharness.exe"
 
 if ($Reset) {
     & $tailscale serve reset
@@ -88,8 +88,8 @@ if (-not $j.CertDomains -or @($j.CertDomains).Count -eq 0) {
 
 # Build the single binary if missing or when -Build is passed.
 if ($Build -or -not (Test-Path $exe)) {
-    Write-Host "==> Binary derleniyor: go build -o bin\tionswarm.exe ./cmd/tionswarm" -ForegroundColor Cyan
-    & go build -o $exe ./cmd/tionswarm
+    Write-Host "==> Binary derleniyor: go build -o bin\tionharness.exe ./cmd/tionharness" -ForegroundColor Cyan
+    & go build -o $exe ./cmd/tionharness
     if ($LASTEXITCODE -ne 0) { throw "go build basarisiz" }
 }
 
@@ -97,10 +97,10 @@ $backend = $null
 try {
     Free-Port $Port "Backend"
 
-    Write-Host "==> Backend baslatiliyor: bin\tionswarm.exe  (127.0.0.1:$Port)" -ForegroundColor Cyan
-    $env:TIONSWARM_ADDR = "127.0.0.1:$Port"
+    Write-Host "==> Backend baslatiliyor: bin\tionharness.exe  (127.0.0.1:$Port)" -ForegroundColor Cyan
+    $env:TIONHARNESS_ADDR = "127.0.0.1:$Port"
     # Match dev.ps1: enable the built-in shell tool (agents run commands).
-    $env:TIONSWARM_ENABLE_SHELL = "1"
+    $env:TIONHARNESS_ENABLE_SHELL = "1"
     $backend = Start-Process -FilePath $exe -NoNewWindow -PassThru
     Start-Sleep -Milliseconds 300
     if ($backend.HasExited) { throw "backend aninda sonlandi (exit $($backend.ExitCode))" }

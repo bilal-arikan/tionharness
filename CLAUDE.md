@@ -1,12 +1,12 @@
-# TionSwarm — Ajan Rehberi
+# TionHarness — Ajan Rehberi
 
-Bu dosya, TionSwarm deposunda çalışan ajanlar için tekrar eden friction'dan
+Bu dosya, TionHarness deposunda çalışan ajanlar için tekrar eden friction'dan
 türetilmiş kısa kurallar içerir. Terminal: PowerShell veya Git-Bash.
 
 ## Playwright MCP
 
 `browser_take_screenshot` / PDF çıktıları **yalnızca MCP'nin izinli kökü**
-altına yazılabilir. TionSwarm bu kökü otomatik olarak **aktif oturumun
+altına yazılabilir. TionHarness bu kökü otomatik olarak **aktif oturumun
 scratchpad'ine** (`<store>/sessions/<SID>/scratchpad`) ayarlar; oturum
 scratchpad'ine **doğrudan mutlak yol vererek yazmaya çalışma** — dosyayı izinli
 köke (varsayılan olarak orası) kaydet, gerekiyorsa `Read` ile geri oku. Kök
@@ -40,14 +40,14 @@ kullanma.
   `available_projects` döndürür. Bu hata geldiğinde **aynı çağrıyı tekrarlama**;
   `available_projects`'ten doğru kimliği kopyala.
 - Hedef repo listede **yoksa** bu MCP'yi kullanma; o repo için `Glob`/`Grep`'e düş.
-- TionSwarm'ın **kendi** ajan döngüsü bunları büyük ölçüde otomatik halleder:
+- TionHarness'ın **kendi** ajan döngüsü bunları büyük ölçüde otomatik halleder:
   eksik `project` gönderilmeden önce oturumun working directory'sinden doldurulur,
   düzeltilebilir bir kimlik hatası çağrı tekrar koşturularak onarılır, oturumun
   reposu indeksli değilse arka planda indeksleme tetiklenir
   (`internal/agent/mcpargs.go`, `mcprepair.go`). **claude-cli sağlayıcısında bu
-  koruma yoktur** — araç döngüsünü CLI kendi koşturur, çağrılar TionSwarm'dan
+  koruma yoktur** — araç döngüsünü CLI kendi koşturur, çağrılar TionHarness'dan
   geçmez; orada yukarıdaki kuralları elle uygula.
-- Bu depoda sorgular için `project` = `C-Users-user-Desktop-Projects-TionSwarm`.
+- Bu depoda sorgular için `project` = `C-Users-user-Desktop-Projects-TionHarness`.
 
 ## Grep/ripgrep kullanımı
 
@@ -98,7 +98,7 @@ etmeden varsayma — `cd frontend && npm run format:check` ile ölç.
 ## Test koşturma
 
 ```powershell
-$env:TIONSWARM_ENABLE_SHELL='1'   # yoksa shell aracı testleri skip'e düşer
+$env:TIONHARNESS_ENABLE_SHELL='1'   # yoksa shell aracı testleri skip'e düşer
 go test ./... -count=1            # tüm backend (~90sn)
 cd frontend; npm test             # vitest (pure-logic modüller)
 ```

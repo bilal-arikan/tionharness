@@ -3,7 +3,7 @@ package api
 import (
 	"net/http"
 
-	"github.com/bilal-arikan/tionswarm/internal/agent"
+	"github.com/bilal-arikan/tionharness/internal/agent"
 )
 
 type promptsResp struct {

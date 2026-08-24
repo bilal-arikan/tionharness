@@ -1,8 +1,8 @@
-// Package interaction implements the TionSwarm Interaction MCP server: a minimal
+// Package interaction implements the TionHarness Interaction MCP server: a minimal
 // MCP-over-HTTP (Streamable HTTP) endpoint that lets agent CLIs which run their
-// own agentic loop (claude-cli first; Codex/Vibe later) call TionSwarm's
+// own agentic loop (claude-cli first; Codex/Vibe later) call TionHarness's
 // human-in-the-loop tools (ask_user, todo_write, ...) and have them surface in
-// the TionSwarm UI — the same behaviour the native (anthropic/minimax) tool path
+// the TionHarness UI — the same behaviour the native (anthropic/minimax) tool path
 // already provides via a context bridge. See _Docs/11-INTERACTION-MCP.md.
 //
 // It is also the substrate for the Go-native MCP gateway (Doc 52): the server is
@@ -90,7 +90,7 @@ type rpcError struct {
 	Message string `json:"message"`
 }
 
-// Server implements the Streamable HTTP MCP subset TionSwarm needs: initialize,
+// Server implements the Streamable HTTP MCP subset TionHarness needs: initialize,
 // notifications/initialized, tools/list, tools/call (POST) plus a long-lived
 // server->client SSE stream (GET) carrying tools/list_changed notifications.
 type Server struct {
@@ -171,7 +171,7 @@ func (h *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Mcp-Session-Id", token)
 		h.writeRPC(w, req.ID, map[string]any{
 			"protocolVersion": ProtocolVersion,
-			"serverInfo":      map[string]string{"name": "tionswarm-interaction", "version": "0.0.1"},
+			"serverInfo":      map[string]string{"name": "tionharness-interaction", "version": "0.0.1"},
 			// Advertise tools.listChanged so the client watches the GET stream and
 			// re-fetches tools/list when the surface grows (gateway pattern, Doc 52).
 			"capabilities": map[string]any{"tools": map[string]any{"listChanged": true}},

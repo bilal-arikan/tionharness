@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bilal-arikan/tionswarm/internal/prompts"
+	"github.com/bilal-arikan/tionharness/internal/prompts"
 )
 
 func TestWorkspaceConfig_SeedAndReadPrompt(t *testing.T) {

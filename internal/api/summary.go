@@ -7,12 +7,12 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/bilal-arikan/tionswarm/internal/agent"
-	"github.com/bilal-arikan/tionswarm/internal/conversation"
-	"github.com/bilal-arikan/tionswarm/internal/db"
-	"github.com/bilal-arikan/tionswarm/internal/providers"
-	"github.com/bilal-arikan/tionswarm/internal/sessionhub"
-	"github.com/bilal-arikan/tionswarm/internal/workspace"
+	"github.com/bilal-arikan/tionharness/internal/agent"
+	"github.com/bilal-arikan/tionharness/internal/conversation"
+	"github.com/bilal-arikan/tionharness/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/providers"
+	"github.com/bilal-arikan/tionharness/internal/sessionhub"
+	"github.com/bilal-arikan/tionharness/internal/workspace"
 )
 
 type summaryReq struct {
@@ -374,7 +374,7 @@ func (s *Server) compactSession(ctx context.Context, wsp *workspace.Workspace, s
 	}
 	// Out-of-loop path: pin this app's CLI homes before ForceCompact's direct
 	// provider.Complete, mirroring guardedComplete (else the CLI falls back to the
-	// ambient home and can fail auth even when TionSwarm is logged in).
+	// ambient home and can fail auth even when TionHarness is logged in).
 	if err := wsp.Runtime.PinCLIHome(provider); err != nil {
 		return "", err
 	}

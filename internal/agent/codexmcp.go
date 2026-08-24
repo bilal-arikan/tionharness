@@ -3,10 +3,10 @@ package agent
 import (
 	"context"
 
-	"github.com/bilal-arikan/tionswarm/internal/db"
-	"github.com/bilal-arikan/tionswarm/internal/mcp"
-	"github.com/bilal-arikan/tionswarm/internal/providers"
-	"github.com/bilal-arikan/tionswarm/internal/tools"
+	"github.com/bilal-arikan/tionharness/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/mcp"
+	"github.com/bilal-arikan/tionharness/internal/providers"
+	"github.com/bilal-arikan/tionharness/internal/tools"
 )
 
 // This file is the codex-cli counterpart of climcp.go: it builds one turn's MCP
@@ -30,7 +30,7 @@ import (
 
 // codexMCPSpec builds the CLIMCPSpec for one codex turn.
 //
-// It wires exactly the same TionSwarm bridge climcp.go wires:
+// It wires exactly the same TionHarness bridge climcp.go wires:
 //   - every enabled external MCP server (when mcpEnabled), keyed by its
 //     namespaced name so mcp__<key>__<tool> ids match the native path;
 //   - the in-process Interaction MCP server as TWO entries at the same endpoint
@@ -85,7 +85,7 @@ func (r *Runtime) codexMCPSpec(ctx context.Context, mcpEnabled bool, ag db.Agent
 		}
 	}
 
-	// The Interaction bridge carries TionSwarm built-ins. A restricted profile
+	// The Interaction bridge carries TionHarness built-ins. A restricted profile
 	// may intentionally allow only Codex-native read/shell tools plus an external
 	// MCP server (validator is the first such profile). Mounting Interaction in
 	// that case leaks a server-shaped catalog entry even when its tools/list is
@@ -180,7 +180,7 @@ func interactionServers(inter tools.InteractionEndpoint) map[string]providers.CL
 }
 
 // codexNativeSuppressions lists the codex built-ins that would SHADOW a bridged
-// TionSwarm tool. Codex has no --disallowedTools flag, so this list is advisory
+// TionHarness tool. Codex has no --disallowedTools flag, so this list is advisory
 // for now: it rides DisallowedTools so the suppression intent is recorded in one
 // place, and the codex config renderer disables the real overlaps structurally
 // instead ([tools] update_plan / experimental_request_user_input / web_search).
@@ -189,7 +189,7 @@ func interactionServers(inter tools.InteractionEndpoint) map[string]providers.CL
 // not ship most of those natives (no Task/Agent launcher, no Skill tool, no
 // native TodoWrite family beyond update_plan). Only the genuine overlaps are
 // named, so a reader can tell suppression from absence.
-// web_search is left out on purpose: it only shadows a bridge when TionSwarm's
+// web_search is left out on purpose: it only shadows a bridge when TionHarness's
 // own WebSearch is enabled for the turn, which the config renderer decides via
 // its DisableWebSearch flag.
 func codexNativeSuppressions() []string {

@@ -1,7 +1,7 @@
 # 51 — Per-Workspace Claude Config Home (Birleşik Config)
 
-> **Amaç:** TionSwarm'ın workspace klasör yapısı ile claude-cli'nin `CLAUDE_CONFIG_DIR`
-> config evini **tek bir per-workspace dizinde** birleştirmek. Böylece hem TionSwarm
+> **Amaç:** TionHarness'ın workspace klasör yapısı ile claude-cli'nin `CLAUDE_CONFIG_DIR`
+> config evini **tek bir per-workspace dizinde** birleştirmek. Böylece hem TionHarness
 > hem de driver ettiği `claude` CLI **aynı skill/settings/login** setini kullanır.
 
 > **Güncel durum (2026-08-19):** Bu belge per-workspace modelinin tarihsel
@@ -29,19 +29,19 @@
 >   NON-retryable ve id + ev adını söyler.
 > - **Veri:** `cmd/repair-provider-migration` eski workspace evinde hâlâ bulunan
 >   transkriptleri yeni eve **taşır**, bulunamayanların resume kaydını temizler
->   (geçmiş kaybolmaz — TionSwarm mesajları kendi store'unda tutar, CLI kopyası
+>   (geçmiş kaybolmaz — TionHarness mesajları kendi store'unda tutar, CLI kopyası
 >   yalnız önbellektir) ve bu kesintinin bıraktığı `stuckTurns`/`stuck` izini siler.
 
 ## Sorun
 
 Önceden `claude-cli`'nin config evi **global tek bir ayardı**:
 
-- `settings.json` → `claudeConfigDir`, varsayılan `~/.tionswarm/claude-home`
+- `settings.json` → `claudeConfigDir`, varsayılan `~/.tionharness/claude-home`
   (`settings.defaultClaudeConfigDir`)
 - Değer paylaşılan `providers.Registry` üzerinde tutuluyordu (`SetClaudeConfigDir`);
   tüm workspace'ler **aynı** `claude-home`'u kullanıyordu.
 - Sonuç: CLI'nin native `Skill` aracı yalnızca `<CLAUDE_CONFIG_DIR>/skills`'i okuduğu
-  için TionSwarm'ın workspace skill'lerini **hiç göremiyordu** → native `Skill`
+  için TionHarness'ın workspace skill'lerini **hiç göremiyordu** → native `Skill`
   aracı `climcp.go`'da devre dışı bırakılmıştı ("Unknown skill" hatası).
 
 ## Çözüm: config evi = `<workspace>/claude-home`
@@ -95,14 +95,14 @@ ile tutarlı):
   eklendiğinde pinlemeyi unutsa bile çekirdek korur.
 - **Migration/kopyalama:** `agent.EnsureWorkspaceClaudeHome(wsRoot)` — workspace
   açılışında (`workspace/manager.go open()`) çağrılır. İlk açılışta
-  `~/.tionswarm/claude-home` (global) içeriğini per-workspace eve **tohumlar**
+  `~/.tionharness/claude-home` (global) içeriğini per-workspace eve **tohumlar**
   (login dahil; `projects/`, `sessions/`, `cache/` gibi çalışma-anı/büyük dizinler
   atlanır). Idempotent. **Skill taşımaz** — claude-home yalnız login/settings tutar.
 - **Credential self-heal (`ensureClaudeHomeCredential`):** her açılışta **ve her CLI
   turunda** (`toolloop.go` per-turn dikişi) çalışır. Global tohum home'un
   `.credentials.json`'ı **boş/token'sız** olabilir (accessToken="", refreshToken="",
   expiresAt=0 scaffold) — bu durumda tohumlanan her yeni workspace CLI login popup'ı
-  verirdi. Guard: adaylar (**global `~/.tionswarm/claude-home` + gerçek `~/.claude`**)
+  verirdi. Guard: adaylar (**global `~/.tionharness/claude-home` + gerçek `~/.claude`**)
   `credentialRank` ile **sıralanır** ve en iyisi kopyalanır; workspace'in kendi
   credential'ı daha iyi sıralanıyorsa asla ezilmez.
 
@@ -119,7 +119,7 @@ ile tutarlı):
   bir saat içinde başarıyla kimlik doğruladığının kanıtıdır ve taklit edilemez.
 
 - **Refresh serileştirme (`claudeauth/refreshgate.go`):** OAuth refresh token'ları
-  **tek kullanımlıktır**; TionSwarm ise tek bir claude-home'a karşı çok sayıda
+  **tek kullanımlıktır**; TionHarness ise tek bir claude-home'a karşı çok sayıda
   eşzamanlı CLI süreci koşturur (koordinatör ağacı bunu tasarım gereği yapar).
   Hepsi aynı anda yenilemeye kalkarsa kaybedenler `invalid_grant` alır ve CLI
   credential'ı siler. `SerializeRefresh` yalnız **yenilemenin gerçekten gerekli
@@ -145,7 +145,7 @@ tier'ı artık orada olmadığı için native yol "Unknown skill" verir → tek 
 | Tier | Konum | `use_skill` köprüsü | native `Skill` |
 |------|-------|:---:|:---:|
 | Workspace | `<workspace>/skills` | ✅ | ❌ (kapalı) |
-| Global | `~/.tionswarm/skills` | ✅ | ❌ (kapalı) |
+| Global | `~/.tionharness/skills` | ✅ | ❌ (kapalı) |
 
 Her iki tier de `skills.New(globalSkillsDir, workspaceSkillsDir)` ile yüklenir ve
 yalnız `use_skill` üzerinden sunulur. claude-home skill İÇERMEZ.
@@ -174,7 +174,7 @@ tohumlanır (claude-home yoksa) **veya** enjekte edilen auth env'ine (`claudeCli
 dayanır. Test: `backup/backup_test.go TestZipExcludesClaudeCredentials`.
 
 Alternatif (uygulanmadı): saf env-enjeksiyon — token'ı hiç kopyalamayıp yalnız
-TionSwarm'ın AES-GCM sır kasasında tutup her tur env ile enjekte etmek. Daha sıkı ama
+TionHarness'ın AES-GCM sır kasasında tutup her tur env ile enjekte etmek. Daha sıkı ama
 `claudeCliAuthKind` set olmasını zorunlu kılar.
 
 ### Sürüm + plan rozeti (2026-08-01)

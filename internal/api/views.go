@@ -14,8 +14,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/bilal-arikan/tionswarm/internal/tools"
-	"github.com/bilal-arikan/tionswarm/internal/view"
+	"github.com/bilal-arikan/tionharness/internal/tools"
+	"github.com/bilal-arikan/tionharness/internal/view"
 )
 
 // viewProjector builds the projection resolver for the current request. The

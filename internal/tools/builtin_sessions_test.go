@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bilal-arikan/tionswarm/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/db"
 )
 
 // TestListSessionsTool checks the pull tool: active-only by default across ALL

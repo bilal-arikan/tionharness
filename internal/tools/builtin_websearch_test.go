@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bilal-arikan/tionswarm/internal/secrets"
+	"github.com/bilal-arikan/tionharness/internal/secrets"
 )
 
 // stubCipher is a no-op cipher so tests can build a real vault without keys.

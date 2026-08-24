@@ -14,7 +14,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/bilal-arikan/tionswarm/internal/seed"
+	"github.com/bilal-arikan/tionharness/internal/seed"
 )
 
 // Visibility tiers describe how much of a skill rides in the per-turn "# Available
@@ -103,7 +103,7 @@ func ResolveCoordinatorWorkflow(store *Store, slug string) (maxTurns int, err er
 type Source string
 
 const (
-	// SourceGlobal is TionSwarm's data-dir global skills dir (<DataDir>/skills).
+	// SourceGlobal is TionHarness's data-dir global skills dir (<DataDir>/skills).
 	SourceGlobal Source = "global"
 	// SourceWorkspace is this workspace's skills dir (<workspace>/skills).
 	SourceWorkspace Source = "workspace"
@@ -160,7 +160,7 @@ type Skill struct {
 	SourceURL string `json:"sourceUrl,omitempty"`
 	License   string `json:"license,omitempty"`
 	// UserInvocable mirrors Claude Code's `user-invocable` (default true): a
-	// background-knowledge skill sets it false. Informational in TionSwarm today
+	// background-knowledge skill sets it false. Informational in TionHarness today
 	// (skills load via use_skill, not slash commands); carried for import fidelity.
 	UserInvocable bool `json:"userInvocable"`
 	// AlwaysAllow lists tool-name patterns a skill expects to be auto-allowed.
@@ -206,7 +206,7 @@ type Skill struct {
 	// so the Skills screen can show a "last edited" date and sort skills within a
 	// group newest-first. 0 when the file could not be stat'd. Set in scanDir.
 	ModifiedAt int64 `json:"modifiedAt,omitempty"`
-	// DefaultState says how this file compares to the skill TionSwarm ships:
+	// DefaultState says how this file compares to the skill TionHarness ships:
 	// "" = not a shipped default (user-authored, imported, or a workspace-tier
 	// override), "default" = untouched, "tuned" = only frontmatter differs (the
 	// app's own visibility/group edits — still auto-refreshes), "edited" = the body

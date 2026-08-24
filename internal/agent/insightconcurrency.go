@@ -3,8 +3,8 @@ package agent
 import (
 	"strings"
 
-	"github.com/bilal-arikan/tionswarm/internal/db"
-	"github.com/bilal-arikan/tionswarm/internal/insight"
+	"github.com/bilal-arikan/tionharness/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/insight"
 )
 
 // providerKindCodexCLI is the single spelling of the codex CLI provider kind

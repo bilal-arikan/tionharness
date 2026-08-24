@@ -1,6 +1,6 @@
 # 39 — Plan Modu (ExitPlanMode köprüsü)
 
-> Durum: **Tamamlandı (2026-06-28).** claude-cli'nin yerleşik plan modunu TionSwarm'nun
+> Durum: **Tamamlandı (2026-06-28).** claude-cli'nin yerleşik plan modunu TionHarness'nun
 > izin/onay katmanına bağlar. Ayrıca eski ölü `planningMode` alanı tamamen kaldırıldı.
 
 ## Sorun
@@ -28,7 +28,7 @@
 ### 2. `ExitPlanMode` plan-onay köprüsü
 
 claude-cli'nin native `ExitPlanMode` çağrısı `--permission-prompt-tool` üzerinden
-TionSwarm'nun Interaction MCP `permission_prompt` handler'ına düşer. Orada özel ele
+TionHarness'nun Interaction MCP `permission_prompt` handler'ına düşer. Orada özel ele
 alınır (`api/mcp_interaction.go callExitPlan`):
 
 - Plan markdown'ı `input.plan`'den çıkarılır.

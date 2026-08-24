@@ -26,8 +26,8 @@ const HTTPTimeout = 30 * time.Second
 // request for the whole repo — far friendlier to GitHub's anonymous rate limit
 // than walking the contents API folder-by-folder.
 const (
-	MaxTreeTotal   = 64 << 20 // 64 MB total kept in memory
-	MaxFileBytes   = 4 << 20  // 4 MB per extracted file
+	MaxTreeTotal = 64 << 20 // 64 MB total kept in memory
+	MaxFileBytes = 4 << 20  // 4 MB per extracted file
 )
 
 // Tree is a flat map of forward-slashed relative paths to file contents.
@@ -194,7 +194,7 @@ func downloadTarball(u string) (Tree, []string, error) {
 		return nil, nil, fmt.Errorf("refusing non-GitHub host %q", pu.Host)
 	}
 	req, _ := http.NewRequest(http.MethodGet, u, nil)
-	req.Header.Set("User-Agent", "TionSwarm-skill-importer")
+	req.Header.Set("User-Agent", "TionHarness-skill-importer")
 	resp, err := (&http.Client{Timeout: HTTPTimeout}).Do(req)
 	if err != nil {
 		return nil, nil, err

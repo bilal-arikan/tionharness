@@ -12,7 +12,7 @@
 @import '@fontsource-variable/jetbrains-mono';
 @import 'highlight.js/styles/github-dark.css';
 
-/* TionSwarm theme — dark, neutral near-black canvas with a violet accent
+/* TionHarness theme — dark, neutral near-black canvas with a violet accent
    (External Agents inspired). The default token set mirrors the "midnight-violet"
    preset; curated presets override these inline at runtime (see lib/theme.ts). */
 @theme {

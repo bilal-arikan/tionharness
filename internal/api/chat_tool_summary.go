@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/bilal-arikan/tionswarm/internal/db"
-	"github.com/bilal-arikan/tionswarm/internal/providers"
+	"github.com/bilal-arikan/tionharness/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/providers"
 )
 
 // Bounds for the recent-tool-activity recap injected into the volatile dynamic
@@ -28,7 +28,7 @@ type histToolStep struct {
 	Tool string `json:"tool"`
 	// CallName is the exact (namespaced) name the provider used on the claude-cli
 	// path; empty for native/bare tools. Preferred over Tool in the recap so the
-	// model sees the real callable name (mcp__tionswarm_extended__list_tasks) and
+	// model sees the real callable name (mcp__tionharness_extended__list_tasks) and
 	// does not re-call the bare form (which the CLI rejects). See agent.TurnStep.
 	CallName string          `json:"callName"`
 	Input    json.RawMessage `json:"input"`

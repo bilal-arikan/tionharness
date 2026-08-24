@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Apply the normalized import.json to TionSwarm workspaces (Doc 52 Faz 3 live migration).
+"""Apply the normalized import.json to TionHarness workspaces (Doc 52 Faz 3 live migration).
 
 For each target workspace: OVERWRITE mode = delete any existing MCP server whose name
 collides with an import entry, then bulk-import all entries. Uses only urllib (no deps).

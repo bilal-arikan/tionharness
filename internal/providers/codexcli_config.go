@@ -10,7 +10,7 @@ import (
 )
 
 // This file renders the `config.toml` codex-cli reads from its CODEX_HOME. The
-// surface TionSwarm needs is small and fully known (see the codex provider
+// surface TionHarness needs is small and fully known (see the codex provider
 // contract), so it is hand-rendered rather than pulled in through a TOML
 // dependency: correct escaping of prompt text and Windows paths matters far
 // more here than generality.
@@ -122,7 +122,7 @@ func renderCodexServer(key string, s CLIMCPServer) string {
 	fmt.Fprintf(&b, "startup_timeout_sec = %d\n", codexMCPStartupTimeoutSec)
 	fmt.Fprintf(&b, "tool_timeout_sec = %d\n", codexMCPToolTimeoutSec)
 	// MANDATORY on every server block. Without it EVERY MCP tool call fails with
-	// "user cancelled MCP tool call" and the whole TionSwarm bridge is dead.
+	// "user cancelled MCP tool call" and the whole TionHarness bridge is dead.
 	// "auto" is NOT sufficient — codex only auto-approves unconditionally for
 	// AppToolApproval::Approve. Do not remove this as a "default".
 	b.WriteString("default_tools_approval_mode = \"approve\"\n")

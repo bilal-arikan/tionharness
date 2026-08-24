@@ -1,4 +1,4 @@
-// Package agent implements TionSwarm's multi-agent ("swarm") runtime: it owns each
+// Package agent implements TionHarness's multi-agent ("swarm") runtime: it owns each
 // agent's provider calls, tool loop, delegation, cron scheduler and the headless
 // autonomous entry points (schedule/spawn/flow).
 package agent
@@ -17,16 +17,16 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/bilal-arikan/tionswarm/internal/db"
-	"github.com/bilal-arikan/tionswarm/internal/events"
-	"github.com/bilal-arikan/tionswarm/internal/logbuf"
-	"github.com/bilal-arikan/tionswarm/internal/market"
-	"github.com/bilal-arikan/tionswarm/internal/mcp"
-	"github.com/bilal-arikan/tionswarm/internal/providers"
-	"github.com/bilal-arikan/tionswarm/internal/secrets"
-	"github.com/bilal-arikan/tionswarm/internal/skills"
-	"github.com/bilal-arikan/tionswarm/internal/tools"
-	"github.com/bilal-arikan/tionswarm/internal/turnqueue"
+	"github.com/bilal-arikan/tionharness/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/events"
+	"github.com/bilal-arikan/tionharness/internal/logbuf"
+	"github.com/bilal-arikan/tionharness/internal/market"
+	"github.com/bilal-arikan/tionharness/internal/mcp"
+	"github.com/bilal-arikan/tionharness/internal/providers"
+	"github.com/bilal-arikan/tionharness/internal/secrets"
+	"github.com/bilal-arikan/tionharness/internal/skills"
+	"github.com/bilal-arikan/tionharness/internal/tools"
+	"github.com/bilal-arikan/tionharness/internal/turnqueue"
 )
 
 // Runtime owns the lifecycle of all autonomous agent workers.
@@ -439,7 +439,7 @@ func (r *Runtime) PromptEpochEnabled() bool { return r.promptEpochEnabled.Load()
 // workspace's secret store handed to the secret_* tools (may be nil).
 func NewRuntime(database *db.DB, registry *providers.Registry, tun *Tunables, workDir, dataDir string, vault *secrets.Vault, bus *events.Bus, wsID, wsName string, logs *logbuf.Buffer, logger *slog.Logger) *Runtime {
 	// Seed the shipped default skills into the global dir (idempotent, never
-	// overwrites) so every workspace inherits the TionSwarm guide skills.
+	// overwrites) so every workspace inherits the TionHarness guide skills.
 	_ = skills.EnsureDefaults(globalSkillsDir())
 	// Tag every record from this runtime with its source so the Logs screen can
 	// filter by component and workspace. The keys are promoted to first-class
@@ -532,25 +532,25 @@ func (r *Runtime) DropWarmCLISessionChecked(sessionID string) (int, error) {
 	return r.cliSessions.DropSessionChecked(sessionID)
 }
 
-// globalSkillsDir is TionSwarm's data-dir-level global skills directory
-// (<DataDir>/skills, default ~/.tionswarm/skills). Deliberately under TionSwarm's
-// OWN data dir — not the cross-tool ~/.agents/skills convention — so TionSwarm's
+// globalSkillsDir is TionHarness's data-dir-level global skills directory
+// (<DataDir>/skills, default ~/.tionharness/skills). Deliberately under TionHarness's
+// OWN data dir — not the cross-tool ~/.agents/skills convention — so TionHarness's
 // global skills stay isolated from other agent tools that share that directory.
-// Honors TIONSWARM_DATA_DIR so a custom data dir is respected (mirrors config).
+// Honors TIONHARNESS_DATA_DIR so a custom data dir is respected (mirrors config).
 func globalSkillsDir() string {
-	if d := os.Getenv("TIONSWARM_DATA_DIR"); d != "" {
+	if d := os.Getenv("TIONHARNESS_DATA_DIR"); d != "" {
 		return filepath.Join(d, "skills")
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return ""
 	}
-	return filepath.Join(home, ".tionswarm", "skills")
+	return filepath.Join(home, ".tionharness", "skills")
 }
 
 // workspaceSkillsDir is this workspace's skills directory (<workspace>/skills),
 // a sibling of store/, config/ and workspace/. Empty when workDir is unknown.
-// This is the workspace skill tier for TionSwarm's use_skill bridge. It is
+// This is the workspace skill tier for TionHarness's use_skill bridge. It is
 // deliberately NOT the claude CLI's native skills dir (<CLAUDE_CONFIG_DIR>/skills):
 // the native Skill tool stays disabled (see climcp.go) so use_skill is the single
 // skill path serving both this tier and the global tier.
@@ -647,7 +647,7 @@ func (r *Runtime) WorkspaceID() string { return r.wsID }
 
 // NewShellRunner returns a closure that runs a shell command through a
 // workspace-sandboxed shell tool for the claude-cli Interaction MCP bridge — so a
-// CLI agent runs commands through TionSwarm's own shell (sandboxed, bounded,
+// CLI agent runs commands through TionHarness's own shell (sandboxed, bounded,
 // permission/hook-gated) instead of the CLI's native POSIX Bash. The toolName
 // argument selects the interpreter: "PowerShell" routes to the PowerShell host,
 // anything else (including "Bash") routes to the POSIX shell — falling back to
@@ -703,17 +703,17 @@ func (r *Runtime) NewShellRunner() func(ctx context.Context, toolName string, ar
 // template picker, which must work even with zero workspaces during onboarding).
 func MarketGlobalDir() string { return marketGlobalDir() }
 
-// marketGlobalDir is TionSwarm's data-dir-level global market directory
-// (<DataDir>/market, default ~/.tionswarm/market). Mirrors globalSkillsDir.
+// marketGlobalDir is TionHarness's data-dir-level global market directory
+// (<DataDir>/market, default ~/.tionharness/market). Mirrors globalSkillsDir.
 func marketGlobalDir() string {
-	if d := os.Getenv("TIONSWARM_DATA_DIR"); d != "" {
+	if d := os.Getenv("TIONHARNESS_DATA_DIR"); d != "" {
 		return filepath.Join(d, "market")
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return ""
 	}
-	return filepath.Join(home, ".tionswarm", "market")
+	return filepath.Join(home, ".tionharness", "market")
 }
 
 // workspaceLedgerDir is the workspace root where the market install ledger
@@ -736,8 +736,8 @@ func (r *Runtime) SkillsCatalogBlockForAgent(agent db.Agent) string {
 		return ""
 	}
 	// Name the use_skill tool exactly as THIS agent will see it. A claude-cli agent
-	// reaches TionSwarm's built-ins through the Interaction MCP bridge, where they are
-	// namespaced (mcp__tionswarm_interaction__use_skill). Advertising the bare name to
+	// reaches TionHarness's built-ins through the Interaction MCP bridge, where they are
+	// namespaced (mcp__tionharness_interaction__use_skill). Advertising the bare name to
 	// it makes the model emit an unqualified `use_skill` call the CLI rejects with
 	// "No such tool available: use_skill" on the first turn (it recovers on retry by
 	// finding the namespaced tool, but the wasted round-trip + error is avoidable).
@@ -1501,7 +1501,7 @@ func (r *Runtime) autonomousSystemPrompt(ctx context.Context, a db.Agent) string
 		// a headless turn starts with a fresh context, so nudge it through the fixed
 		// orient → recall → select-one → verify-baseline → work → close-the-loop routine
 		// before acting. We inject only a pointer to keep the cached prefix small; the
-		// full recipe lives in the tionswarm-autonomous-ops skill.
+		// full recipe lives in the tionharness-autonomous-ops skill.
 		if r.tun.AutonomousBootSeq() {
 			out = strings.TrimSpace(out + "\n\n" + autonomousBootReminder)
 		}
@@ -1637,7 +1637,7 @@ func (r *Runtime) workdirConfineBlock(ctx context.Context, confined bool) string
 // is watching, act instead of asking or ending on a plan; (2) grounded progress
 // — claims must be backed by a tool result from this session; (3) durable
 // closure — record what changed so the next fresh context can pick it up. The
-// detailed recipe stays in the tionswarm-autonomous-ops skill.
+// detailed recipe stays in the tionharness-autonomous-ops skill.
 const autonomousBootReminder = "# Autonomous operation\n" +
 	"This is a headless turn with a fresh context; no user is watching and none can answer questions, " +
 	"so do not ask permission and do not end the turn with a plan or a promise — for reversible actions " +
@@ -1647,4 +1647,4 @@ const autonomousBootReminder = "# Autonomous operation\n" +
 	"Before reporting progress, check each claim against a tool result from this session — report only what you can " +
 	"point to evidence for, and say explicitly when something is not yet verified. Close the loop when finished: " +
 	"commit/record what changed and append a progress note (never overwrite a prior note). " +
-	"Playbook when needed: use_skill \"tionswarm-autonomous-ops\"."
+	"Playbook when needed: use_skill \"tionharness-autonomous-ops\"."

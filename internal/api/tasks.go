@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bilal-arikan/tionswarm/internal/db"
-	"github.com/bilal-arikan/tionswarm/internal/tools"
+	"github.com/bilal-arikan/tionharness/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/tools"
 )
 
 func (s *Server) handleListTasks(w http.ResponseWriter, r *http.Request) {

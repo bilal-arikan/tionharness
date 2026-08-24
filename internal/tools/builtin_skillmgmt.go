@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/bilal-arikan/tionswarm/internal/providers"
+	"github.com/bilal-arikan/tionharness/internal/providers"
 )
 
 // SkillWriter is the minimal write view of the skill store the skill-management
@@ -211,7 +211,7 @@ func (t DeleteSkillTool) Call(_ context.Context, input json.RawMessage) (string,
 
 // ImportSkillTool imports a Claude Code skill (from a local directory or a GitHub
 // URL) into the workspace, mapping its frontmatter and copying bundled files so
-// the rich CC skill ecosystem can be reused inside TionSwarm. (SK-IMP)
+// the rich CC skill ecosystem can be reused inside TionHarness. (SK-IMP)
 type ImportSkillTool struct{ w SkillWriter }
 
 // NewImportSkillTool constructs import_skill over a skill writer.

@@ -40,7 +40,7 @@ const (
 	// SourceBundled is the set of packs shipped embedded in the binary
 	// (workspace templates); lowest priority.
 	SourceBundled Source = "bundled"
-	// SourceGlobal is TionSwarm's data-dir market dir (<DataDir>/market) — the
+	// SourceGlobal is TionHarness's data-dir market dir (<DataDir>/market) — the
 	// only writable local tier (publish/import land here).
 	SourceGlobal Source = "global"
 	// SourceRemote is a pack resolved from a remote registry index (downloaded
@@ -121,7 +121,7 @@ type Payload struct {
 // HookPayload is a single lifecycle/tool hook imported from a foreign plugin.
 // Command may contain the ${CLAUDE_PLUGIN_ROOT} placeholder; the installer
 // rewrites it to the directory where the pack's bundled scripts (Pack.Files) are
-// materialised. Matcher/Event follow TionSwarm's db.Hook semantics.
+// materialised. Matcher/Event follow TionHarness's db.Hook semantics.
 type HookPayload struct {
 	Event      string `json:"event"`             // PreToolUse | PostToolUse | UserPromptSubmit | SessionStart | Stop | SubagentStop | PreCompact | Notification | SessionEnd
 	Matcher    string `json:"matcher,omitempty"` // tool-name glob (tool events) or source/trigger selector (some lifecycle events)

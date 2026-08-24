@@ -3,9 +3,9 @@ package agent
 import (
 	"context"
 
-	"github.com/bilal-arikan/tionswarm/internal/db"
-	"github.com/bilal-arikan/tionswarm/internal/events"
-	"github.com/bilal-arikan/tionswarm/internal/tools"
+	"github.com/bilal-arikan/tionharness/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/events"
+	"github.com/bilal-arikan/tionharness/internal/tools"
 )
 
 // sessionSink is a DB-backed tools.SessionSink bound to one session. It reads and

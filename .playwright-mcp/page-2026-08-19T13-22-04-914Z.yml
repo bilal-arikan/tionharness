@@ -2,7 +2,7 @@
   - navigation [ref=e11]:
     - generic [ref=e12]:
       - generic [ref=e13]: TS
-      - generic [ref=e14]: TionSwarm
+      - generic [ref=e14]: TionHarness
     - generic [ref=e16]:
       - 'button "Workspace: MINIMAX" [ref=e17]':
         - generic [ref=e18]:
@@ -74,7 +74,7 @@
                   - textbox "otomatik (PATH)" [ref=e8917]
                 - generic [ref=e8918]:
                   - generic [ref=e8919]: claude config dizini (bu workspace · salt-okunur)
-                  - 'textbox "per-workspace: <workspace>/claude-home" [ref=e8920]': C:\Users\user\.tionswarm\workspaces\WS1\claude-home
+                  - 'textbox "per-workspace: <workspace>/claude-home" [ref=e8920]': C:\Users\user\.tionharness\workspaces\WS1\claude-home
                   - generic [ref=e8921]: Aktif workspace'in kendi CLAUDE_CONFIG_DIR yolu — skill/ayar/login bu workspace ile paylaşılır. Her workspace farklı bir yol kullanır; salt-okunur (workspace kökünden türetilir).
                 - generic [ref=e8922]:
                   - generic [ref=e8923]:
@@ -92,7 +92,7 @@
                   - textbox "otomatik (PATH)" [ref=e8949]
                 - generic [ref=e8950]:
                   - generic [ref=e8951]: codex config dizini (bu workspace · salt-okunur)
-                  - 'textbox "per-workspace: <workspace>/codex-home" [ref=e8952]': C:\Users\user\.tionswarm\workspaces\WS1\codex-home
+                  - 'textbox "per-workspace: <workspace>/codex-home" [ref=e8952]': C:\Users\user\.tionharness\workspaces\WS1\codex-home
                   - generic [ref=e8953]: Aktif workspace'in kendi CODEX_HOME yolu — login/config.toml bu workspace ile paylaşılır. Her workspace farklı bir yol kullanır; salt-okunur (workspace kökünden türetilir).
                 - generic [ref=e8954]:
                   - generic [ref=e8955]:

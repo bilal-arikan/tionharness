@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/bilal-arikan/tionswarm/internal/tts"
+	"github.com/bilal-arikan/tionharness/internal/tts"
 )
 
 // registerTTSRoutes wires the optional server-side text-to-speech engine (Piper

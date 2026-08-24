@@ -1,7 +1,7 @@
 # 48 — VPS Uzak Sunucu + Mobil İnce İstemci
 
 > **Durum:** FİZİBİLİTE / TASARIM 📐 (2026-07-04). Henüz uygulanmadı.
-> **Amaç:** TionSwarm backend'ini bir VPS'te (7/24 Linux) çalıştırıp, telefondan
+> **Amaç:** TionHarness backend'ini bir VPS'te (7/24 Linux) çalıştırıp, telefondan
 > **ince bir istemci** (WebView APK / PWA) ile erişmek. Workspaceler ve tüm
 > dosyalar VPS diskinde yaşar; telefon yalnızca uzak bir kullanıcı arayüzüdür.
 > **Kapsam kararı (bu doküman):** tek kullanıcı · güvenlik = **VPN (Tailscale/WireGuard)** ·
@@ -19,7 +19,7 @@ yol. Neden reddedildiği §2'de; özeti: Android'de subprocess yasağı claude-c
 
 ## 1. Motivasyon
 
-Kullanıcı TionSwarm'ya telefondan erişmek istiyor. İki mimari değerlendirildi:
+Kullanıcı TionHarness'ya telefondan erişmek istiyor. İki mimari değerlendirildi:
 
 1. **On-device (telefonda Go server):** Android'in `execve` (W^X) kısıtı yüzünden
    rastgele subprocess spawn yasak → claude-cli (Node), `Bash`/`PowerShell`,
@@ -29,7 +29,7 @@ Kullanıcı TionSwarm'ya telefondan erişmek istiyor. İki mimari değerlendiril
    **değişmeden** çalışır; telefon HTTPS/SSE ile bağlanan bir kabuk. Subprocess
    sorunu yok, otonomi 7/24 gerçekten çalışır, workspace depolaması normal FS.
 
-Karar: **VPS modeli.** Çekirdek TionSwarm'ya neredeyse dokunmadan, asıl iş
+Karar: **VPS modeli.** Çekirdek TionHarness'ya neredeyse dokunmadan, asıl iş
 **güvenlik + ince istemci + mobil UI cilası**.
 
 ### 1.1 Mimari
@@ -37,7 +37,7 @@ Karar: **VPS modeli.** Çekirdek TionSwarm'ya neredeyse dokunmadan, asıl iş
 ```
   Telefon (ince APK / PWA)          VPS (Linux, 7/24)
   ┌───────────────────────┐        ┌──────────────────────────────┐
-  │ WebView → https://vps │══VPN══▶│ TionSwarm binary (DEĞİŞMEDEN)   │
+  │ WebView → https://vps │══VPN══▶│ TionHarness binary (DEĞİŞMEDEN)   │
   │ (Tailscale ağında)    │  SSE   │  ├─ API 138+ endpoint         │
   └───────────────────────┘        │  ├─ claude-cli / Bash / py    │
   Masaüstü tarayıcı ──── aynı VPS ─│  ├─ stdio + HTTP MCP          │
@@ -47,7 +47,7 @@ Karar: **VPS modeli.** Çekirdek TionSwarm'ya neredeyse dokunmadan, asıl iş
                                    └──────────────────────────────┘
 ```
 
-`workspaceler ve temel dosyalar VPS'te durur` = TionSwarm'nun bugünkü **dosya-tabanlı
+`workspaceler ve temel dosyalar VPS'te durur` = TionHarness'nun bugünkü **dosya-tabanlı
 depolaması** (`08-DEPOLAMA`) VPS diskinde. Ekstra "bağlama/link/mount" mekanizması
 YOK — dosyalar zaten orada yaşar, ajanlar bugünkü gibi fs araçlarıyla editler.
 
@@ -83,21 +83,21 @@ herkes ajanları sürer, API token'larını (parayı) yakar, dosyaları okur/sil
 ### 3.1 Seçilen: VPN (Tailscale / WireGuard) — kod yazmadan güvenli
 
 - VPS'i özel bir ağa (Tailscale tailnet ya da WireGuard) koy; telefon da o ağda.
-- TionSwarm yine **`127.0.0.1` ya da tailnet arayüzüne** bind eder → **public'e hiç
-  çıkmaz.** "auth-yok/CORS-wildcard" felsefesi olduğu gibi korunur, **TionSwarm'ya
+- TionHarness yine **`127.0.0.1` ya da tailnet arayüzüne** bind eder → **public'e hiç
+  çıkmaz.** "auth-yok/CORS-wildcard" felsefesi olduğu gibi korunur, **TionHarness'ya
   auth kodu eklemeye gerek kalmaz.**
 - Tek kullanıcı + kişisel kullanım için en pratik, en az efor.
-- Bind adresi: `TIONSWARM_ADDR=<tailscale-ip>:8080` (veya `127.0.0.1` + Tailscale
+- Bind adresi: `TIONHARNESS_ADDR=<tailscale-ip>:8080` (veya `127.0.0.1` + Tailscale
   Serve ile TLS terminasyonu). Tailscale zaten uçtan-uca şifreli → ek TLS opsiyonel.
 
 ### 3.2 Reddedilen (bu kapsamda): reverse proxy + auth
 
-- nginx/caddy ile TLS + token/mTLS auth, `0.0.0.0` bind arkada. TionSwarm'ya bir
+- nginx/caddy ile TLS + token/mTLS auth, `0.0.0.0` bind arkada. TionHarness'ya bir
   **auth katmanı** eklemeyi gerektirir (bugün yok) — orta çaplı iş.
 - Yalnızca **çok-cihaz paylaşımı / gerçek public erişim** gerekince mantıklı.
   Tek kullanıcıda gereksiz karmaşa → **ertelendi** (bkz. §7 Gelecek).
 
-> **Not:** VPN seçimi, TionSwarm kodunda auth değişikliği gerektirmeyen tek yol.
+> **Not:** VPN seçimi, TionHarness kodunda auth değişikliği gerektirmeyen tek yol.
 > Bu, bu projeyi "backend'e dokunmadan" hedefine kilitliyor.
 
 ---
@@ -172,7 +172,7 @@ kanalına maplenebilir (gelecek iş).
 
 | Faz | İş | Çekirdek dokunuşu |
 |-----|-----|-------------------|
-| **F0** | VPS'e TionSwarm kur (`go build` linux/amd64) + claude-cli login (izole config home) + Tailscale kur, tailnet bind | Yok (deploy) |
+| **F0** | VPS'e TionHarness kur (`go build` linux/amd64) + claude-cli login (izole config home) + Tailscale kur, tailnet bind | Yok (deploy) |
 | **F1** | PWA: `manifest.json` + service worker; telefondan tailnet URL'ini aç, uçtan uca sohbet doğrula | Frontend |
 | **F2** | Dosya indirme endpoint'i (`/api/files/download`, path guard) + mobil önizleme ekranı (text/md/image/pdf/diff) | Küçük backend + frontend |
 | **F3** | Mobil-dostu editör: `PromptEditor` mobil düzeni + dosya Read→Write akışı (freshness guard) | Frontend |

@@ -6,7 +6,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/bilal-arikan/tionswarm/internal/sessionhub"
+	"github.com/bilal-arikan/tionharness/internal/sessionhub"
 )
 
 // Concurrent answers to one interaction must resolve exactly once (first-writer-

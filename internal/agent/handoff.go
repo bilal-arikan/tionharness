@@ -9,12 +9,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bilal-arikan/tionswarm/internal/conversation"
-	"github.com/bilal-arikan/tionswarm/internal/db"
-	"github.com/bilal-arikan/tionswarm/internal/events"
-	"github.com/bilal-arikan/tionswarm/internal/prompts"
-	"github.com/bilal-arikan/tionswarm/internal/tools"
-	"github.com/bilal-arikan/tionswarm/internal/view"
+	"github.com/bilal-arikan/tionharness/internal/conversation"
+	"github.com/bilal-arikan/tionharness/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/events"
+	"github.com/bilal-arikan/tionharness/internal/prompts"
+	"github.com/bilal-arikan/tionharness/internal/tools"
+	"github.com/bilal-arikan/tionharness/internal/view"
 )
 
 // handoffGitTimeout bounds the git calls used to snapshot the working tree for a
@@ -90,7 +90,7 @@ func (r *Runtime) HandoffSession(ctx context.Context, session db.Session, agent 
 	}
 	// Out-of-loop path: pin this app's CLI homes before BuildHandoff's direct
 	// provider.Complete, mirroring guardedComplete (else the CLI falls back to the
-	// ambient home and can fail auth even when TionSwarm is logged in).
+	// ambient home and can fail auth even when TionHarness is logged in).
 	if err := r.PinCLIHome(provider); err != nil {
 		return HandoffResult{}, err
 	}
@@ -266,14 +266,14 @@ func (r *Runtime) handoffEnv(ctx context.Context, session db.Session, history []
 	return env
 }
 
-// writeHandoffFile optionally persists the handoff to <workdir>/.tionswarm/handoff.md
+// writeHandoffFile optionally persists the handoff to <workdir>/.tionharness/handoff.md
 // when HandoffWriteFile is on. Returns the written path, or "" when disabled or on
 // any error (the reset never depends on the file succeeding).
 func (r *Runtime) writeHandoffFile(dir, content string) string {
 	if !r.tun.HandoffWriteFile() || strings.TrimSpace(dir) == "" {
 		return ""
 	}
-	outDir := filepath.Join(dir, ".tionswarm")
+	outDir := filepath.Join(dir, ".tionharness")
 	if err := os.MkdirAll(outDir, 0o755); err != nil {
 		r.logger.Warn("handoff: mkdir failed", "dir", outDir, "error", err)
 		return ""

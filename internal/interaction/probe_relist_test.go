@@ -33,8 +33,8 @@ type probeBackend struct {
 	holdMs int
 
 	mu     sync.Mutex
-	active map[string]bool  // extended tools turned on via activate_tools
-	waiter chan time.Time   // non-nil only during an activate hold; signalled by Tools(extended)
+	active map[string]bool // extended tools turned on via activate_tools
+	waiter chan time.Time  // non-nil only during an activate hold; signalled by Tools(extended)
 	log    func(string)
 }
 
@@ -130,26 +130,26 @@ func (b *probeBackend) Call(_ context.Context, token, name string, args json.Raw
 // the blocking PushToolsChangedAndWait fix. It runs the real CLI N times (each a
 // fresh process forced to activate-then-call) and tallies A (concurrent re-list,
 // fix is safe+effective) vs B (serialized, fix would only add latency). Spends
-// tokens + needs a logged-in claude-home; gated behind TIONSWARM_LIVE_CLI=1.
+// tokens + needs a logged-in claude-home; gated behind TIONHARNESS_LIVE_CLI=1.
 //
-//	TIONSWARM_LIVE_CLI=1 go test ./internal/interaction/ -run TestProbeRelistOrdering -v -timeout 20m
+//	TIONHARNESS_LIVE_CLI=1 go test ./internal/interaction/ -run TestProbeRelistOrdering -v -timeout 20m
 //
-// Tunables: TIONSWARM_PROBE_ITERS (default 5), TIONSWARM_PROBE_HOLD_MS (default 1500),
-// TIONSWARM_CLAUDE_BIN, TIONSWARM_CLAUDE_MODEL (default claude-fable-5).
+// Tunables: TIONHARNESS_PROBE_ITERS (default 5), TIONHARNESS_PROBE_HOLD_MS (default 1500),
+// TIONHARNESS_CLAUDE_BIN, TIONHARNESS_CLAUDE_MODEL (default claude-fable-5).
 func TestProbeRelistOrdering(t *testing.T) {
-	if os.Getenv("TIONSWARM_LIVE_CLI") != "1" {
-		t.Skip("set TIONSWARM_LIVE_CLI=1 to run the live re-list ordering probe")
+	if os.Getenv("TIONHARNESS_LIVE_CLI") != "1" {
+		t.Skip("set TIONHARNESS_LIVE_CLI=1 to run the live re-list ordering probe")
 	}
 	bin := "claude"
-	if p := os.Getenv("TIONSWARM_CLAUDE_BIN"); p != "" {
+	if p := os.Getenv("TIONHARNESS_CLAUDE_BIN"); p != "" {
 		bin = p
 	}
 	model := "claude-fable-5"
-	if m := os.Getenv("TIONSWARM_CLAUDE_MODEL"); m != "" {
+	if m := os.Getenv("TIONHARNESS_CLAUDE_MODEL"); m != "" {
 		model = m
 	}
-	iters := envInt("TIONSWARM_PROBE_ITERS", 5)
-	holdMs := envInt("TIONSWARM_PROBE_HOLD_MS", 1500)
+	iters := envInt("TIONHARNESS_PROBE_ITERS", 5)
+	holdMs := envInt("TIONHARNESS_PROBE_HOLD_MS", 1500)
 
 	const token = "probe-tok"
 	var aCount, bCount, noStream, raceSeen int

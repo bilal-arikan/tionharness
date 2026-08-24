@@ -202,7 +202,7 @@ export default function App() {
   // moment a workspace exists, so the splash never reappears after setup.
   const [hadSetupAtBoot] = useState(() => {
     try {
-      return localStorage.getItem('tionswarm.hasSetup') === '1'
+      return localStorage.getItem('tionharness.hasSetup') === '1'
     } catch {
       return false
     }
@@ -210,7 +210,7 @@ export default function App() {
   useEffect(() => {
     if (workspaces.length > 0) {
       try {
-        localStorage.setItem('tionswarm.hasSetup', '1')
+        localStorage.setItem('tionharness.hasSetup', '1')
       } catch {
         /* storage unavailable — non-fatal, splash logic just falls back to load timing */
       }
@@ -238,8 +238,8 @@ export default function App() {
 
   // App-headed list screens (workspace / settings) own their category-rail
   // collapse here so the app header's toggle button and the panel share one flag.
-  const workspaceNav = useCollapsibleList('tionswarm.workspaceNavOpen')
-  const settingsNav = useCollapsibleList('tionswarm.settingsNavOpen')
+  const workspaceNav = useCollapsibleList('tionharness.workspaceNavOpen')
+  const settingsNav = useCollapsibleList('tionharness.settingsNavOpen')
 
   // Next-turn context preview modal (opens straight from the chat header).
   const [ctxPreviewOpen, setCtxPreviewOpen] = useState(false)
@@ -251,12 +251,12 @@ export default function App() {
   const [sessionFlowOpen, setSessionFlowOpen] = useState(false)
   // Right-hand session detail panel visibility (persisted).
   const [detailOpen, setDetailOpen] = useState(
-    () => localStorage.getItem('tionswarm.detailOpen') === '1',
+    () => localStorage.getItem('tionharness.detailOpen') === '1',
   )
   const toggleDetail = useCallback(() => {
     setDetailOpen((v) => {
       const next = !v
-      localStorage.setItem('tionswarm.detailOpen', next ? '1' : '0')
+      localStorage.setItem('tionharness.detailOpen', next ? '1' : '0')
       return next
     })
   }, [])

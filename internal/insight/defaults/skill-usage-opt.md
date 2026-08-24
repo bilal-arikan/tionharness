@@ -24,7 +24,7 @@ For each, produce a workspace-opt finding:
 
 - **title** — the optimization in one line.
 - **rootCause** — what about the current skill setup caused the inefficiency.
-- **signature** — a stable dedupe key: the skill slug + issue kind (e.g. `tionswarm-flows:loaded-unused`).
+- **signature** — a stable dedupe key: the skill slug + issue kind (e.g. `tionharness-flows:loaded-unused`).
 - **proposedFix** — the concrete workspace change (trim skill body, mark name-only, remove from
   agent, add a new skill) — actionable by the user, not code in the app.
 - **severity** — low | med | high.

@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bilal-arikan/tionswarm/internal/proc"
-	"github.com/bilal-arikan/tionswarm/internal/textutil"
+	"github.com/bilal-arikan/tionharness/internal/proc"
+	"github.com/bilal-arikan/tionharness/internal/textutil"
 )
 
 // lookPath is exec.LookPath behind a var so tests can stub PATH resolution.

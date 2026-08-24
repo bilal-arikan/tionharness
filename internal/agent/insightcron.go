@@ -8,7 +8,7 @@ import (
 
 	"github.com/robfig/cron/v3"
 
-	"github.com/bilal-arikan/tionswarm/internal/insight"
+	"github.com/bilal-arikan/tionharness/internal/insight"
 )
 
 // InsightCron drives automatic retrospective scans (_Docs/60, Faz 3) on a cron

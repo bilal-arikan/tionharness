@@ -88,7 +88,7 @@ export function WorkspacePanel({ ws, setWsField, onDeleteWorkspace }: Props) {
       </div>
       <Field
         label="Büyük shell çıktısını sqz ile sıkıştır"
-        hint="Ajanın shell (Bash/PowerShell) komut çıktısı, modele dönmeden önce yerel 'sqz compress' ile in-process kısaltılır (kayıpsız n-gram; canlı UI ham kalır, yalnız modele giden sonuç küçülür). sqz'in PreToolUse hook'u yalnız native 'Bash' adını tanıdığı ve TionSwarm shell'i bridged araçla koşturduğu için hook yolu çalışmaz — bu ayar onun yerine geçer. Otomatik = sqz hook bağlıysa açık; Açık = hook olmasa da açık (sqz binary gerekir); Kapalı = devre dışı."
+        hint="Ajanın shell (Bash/PowerShell) komut çıktısı, modele dönmeden önce yerel 'sqz compress' ile in-process kısaltılır (kayıpsız n-gram; canlı UI ham kalır, yalnız modele giden sonuç küçülür). sqz'in PreToolUse hook'u yalnız native 'Bash' adını tanıdığı ve TionHarness shell'i bridged araçla koşturduğu için hook yolu çalışmaz — bu ayar onun yerine geçer. Otomatik = sqz hook bağlıysa açık; Açık = hook olmasa da açık (sqz binary gerekir); Kapalı = devre dışı."
       >
         <select
           value={ws.shellOutputCompression || ''}

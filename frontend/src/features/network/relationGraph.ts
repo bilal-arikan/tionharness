@@ -1,4 +1,4 @@
-// Maps TionSwarm's workspace collaboration network into vis-network node/edge
+// Maps TionHarness's workspace collaboration network into vis-network node/edge
 // data — the same library Agent-MCP's dashboard uses, so layout/physics are
 // handled by its engine (see components/graph/VisNetworkGraph).
 import type { Node, Edge } from 'vis-network'

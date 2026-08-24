@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bilal-arikan/tionswarm/internal/db"
-	"github.com/bilal-arikan/tionswarm/internal/mcp"
+	"github.com/bilal-arikan/tionharness/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/mcp"
 )
 
 func (s *Server) handleListMCPServers(w http.ResponseWriter, r *http.Request) {

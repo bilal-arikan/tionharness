@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/bilal-arikan/tionswarm/internal/conversation"
-	"github.com/bilal-arikan/tionswarm/internal/db"
-	"github.com/bilal-arikan/tionswarm/internal/providers"
+	"github.com/bilal-arikan/tionharness/internal/conversation"
+	"github.com/bilal-arikan/tionharness/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/providers"
 )
 
 // deriveThinkingTokens estimates the hidden-reasoning share of a native
@@ -157,7 +157,7 @@ func (r *Runtime) guardedComplete(ctx context.Context, agent db.Agent, req provi
 // hence the ConfigDir()=="" guard. guardedComplete applies this for in-loop and
 // autonomous aux calls; out-of-loop session commands that call provider.Complete
 // directly (manual /compact, /handoff) must call it themselves, or they fall back
-// to the ambient ~/.claude — which may not be logged in even though TionSwarm's
+// to the ambient ~/.claude — which may not be logged in even though TionHarness's
 // own home is (authentication_failed). No-op for non-claude-cli providers.
 //
 // The claude-cli concrete type is asserted deliberately: claudeHomeDir() is the

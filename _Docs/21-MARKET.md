@@ -20,7 +20,7 @@
 > **kaldırıldı**; **bundled tier daha sonra geri geldi** — `//go:embed defaults` +
 > `internal/market/defaults/*.swarmpack.json` yalnız **gömülü workspace şablonlarını**
 > taşır (taze kurulumda market ve "workspace oluştur" seçicisi boş kalmasın diye).
-> Diğer tüm paketler global dizinde (`<DataDir>/market`, ~/.tionswarm/market) ve uzak
+> Diğer tüm paketler global dizinde (`<DataDir>/market`, ~/.tionharness/market) ve uzak
 > registry'lerde yaşar; workspace'te market klasörü yok. Mevcut başlangıç
 > paketleri (52 adet; 2026-06-25'te **GAN üçlüsü** eklendi — `flow.gan-generator-evaluator`
 > + `agent.skeptical-evaluator` + `mcp.playwright`, generator↔evaluator döngüsü için, bkz.
@@ -39,7 +39,7 @@
 > `sessions/.../data/gen_providers.py`. Model listeleri kurulumda düzenlenebilir.
 >
 > **Sistem entegrasyonu (2026-06-25):** Provider pack'leri artık **capability metadata**
-> taşır ve TionSwarm'nun token/maliyet/cache/düşünme sistemlerine bağlanır:
+> taşır ve TionHarness'nun token/maliyet/cache/düşünme sistemlerine bağlanır:
 > - **`payload.provider.reasoning`** (bool) — `true` ise OpenAI-uyumlu uç için
 >   `reasoning_effort` (ajanın ThinkingLevel'ından `low/medium/high`) gönderilir
 >   (`OpenAICompat`, gated; bilinmeyen alan 400'ünü önlemek için varsayılan kapalı).
@@ -104,7 +104,7 @@
 
 ## 1. Amaç ve kapsam
 
-TionSwarm'da yedi "paylaşılabilir varlık" var:
+TionHarness'da yedi "paylaşılabilir varlık" var:
 
 | Tür | Kaynak | Depolama | Kurulum hedefi |
 |-----|--------|----------|----------------|

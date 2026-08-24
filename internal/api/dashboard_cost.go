@@ -9,8 +9,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/bilal-arikan/tionswarm/internal/billing"
-	"github.com/bilal-arikan/tionswarm/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/billing"
+	"github.com/bilal-arikan/tionharness/internal/db"
 )
 
 // dayCostPoint is one bucket of a daily USD series — the float sibling of

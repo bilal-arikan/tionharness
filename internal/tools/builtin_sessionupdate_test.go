@@ -17,12 +17,15 @@ type fakeSessionSink struct {
 	refreshed  bool
 }
 
-func (s *fakeSessionSink) SetTitle(_ context.Context, title string) error { s.title = title; return nil }
+func (s *fakeSessionSink) SetTitle(_ context.Context, title string) error {
+	s.title = title
+	return nil
+}
 func (s *fakeSessionSink) SetWorkingDir(_ context.Context, dir string) error {
 	s.workingDir = dir
 	return nil
 }
-func (s *fakeSessionSink) Archive(_ context.Context) error { s.archived = true; return nil }
+func (s *fakeSessionSink) Archive(_ context.Context) error          { s.archived = true; return nil }
 func (s *fakeSessionSink) Tags(_ context.Context) ([]string, error) { return s.tags, nil }
 func (s *fakeSessionSink) SetTags(_ context.Context, tags []string) error {
 	s.tags = tags
@@ -51,7 +54,7 @@ func TestUpdateSessionEmptyTitleRejected(t *testing.T) {
 
 func TestUpdateSessionWorkingDirValidates(t *testing.T) {
 	ctx := WithSession(context.Background(), &fakeSessionSink{})
-	if _, err := NewUpdateSessionTool().Call(ctx, json.RawMessage(`{"working_dir":"/no/such/dir/tionswarm-xyz"}`)); err == nil {
+	if _, err := NewUpdateSessionTool().Call(ctx, json.RawMessage(`{"working_dir":"/no/such/dir/tionharness-xyz"}`)); err == nil {
 		t.Fatal("expected error for non-existent path")
 	}
 }

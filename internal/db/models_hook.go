@@ -1,7 +1,7 @@
 package db
 
 // Hook event names. These mirror Claude Code's hook contract so the same
-// external hook scripts work against TionSwarm's native tool loop AND its turn
+// external hook scripts work against TionHarness's native tool loop AND its turn
 // lifecycle. The first two fire AROUND a tool call (native path only, since
 // claude-cli runs its own tool loop); the rest fire at TURN / SESSION lifecycle
 // points and — because they only inject context or observe, never intercept a

@@ -23,7 +23,7 @@ import (
 //   - transcript still in the workspace's legacy home → COPY it into the new
 //     home under the same project subdir, so the session keeps resuming warm;
 //   - neither → clear the resume bookkeeping so the next turn starts cold with
-//     the full transcript from TionSwarm's own store (no history is lost — the
+//     the full transcript from TionHarness's own store (no history is lost — the
 //     CLI's copy is a cache, not the record).
 //
 // stuckTurns / the `stuck` tag are cleared only on sessions this pass actually

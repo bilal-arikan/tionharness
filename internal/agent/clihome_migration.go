@@ -19,7 +19,7 @@ import (
 // failing with "claude-home is not logged in" (the exact state this found in the
 // wild). "Best" means a live access token first, then the latest expiry
 // (credentialLiveness), which is the same ranking the per-turn credential heal
-// uses; for codex, whose auth.json carries no expiry TionSwarm can read, it means
+// uses; for codex, whose auth.json carries no expiry TionHarness can read, it means
 // the most recently written file.
 //
 // Only the credential file is copied into a home that already exists: the rest

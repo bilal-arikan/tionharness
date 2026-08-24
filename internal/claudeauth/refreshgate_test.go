@@ -136,7 +136,7 @@ func TestSerializeRefreshEmptyHome(t *testing.T) {
 // TestExpiryOfUnreadable: a missing file reads as 0 rather than panicking, so the
 // watcher treats "cannot read" as "no change observed yet".
 func TestExpiryOfUnreadable(t *testing.T) {
-	if got := expiryOf(filepath.Join(os.TempDir(), "tionswarm-no-such-home")); got != 0 {
+	if got := expiryOf(filepath.Join(os.TempDir(), "tionharness-no-such-home")); got != 0 {
 		t.Errorf("expiryOf(missing) = %d, want 0", got)
 	}
 }

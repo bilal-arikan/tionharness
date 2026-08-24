@@ -25,15 +25,15 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 
-	dataDir := envOr("TIONSWARM_DATA_DIR", filepath.Join(home, ".tionswarm"))
-	workspaceDir := envOr("TIONSWARM_WORKSPACE_DIR", filepath.Join(dataDir, "workspace"))
+	dataDir := envOr("TIONHARNESS_DATA_DIR", filepath.Join(home, ".tionharness"))
+	workspaceDir := envOr("TIONHARNESS_WORKSPACE_DIR", filepath.Join(dataDir, "workspace"))
 
 	cfg := &Config{
 		// Loopback-only by default: the desktop app and dev frontend reach the
 		// API over localhost, and binding to 127.0.0.1 avoids the Windows
 		// Firewall "allow inbound" prompt that a 0.0.0.0 bind triggers on every
-		// rebuild. Set TIONSWARM_ADDR (e.g. ":8090" or "0.0.0.0:8090") to expose it.
-		Addr:            envOr("TIONSWARM_ADDR", "127.0.0.1:8080"),
+		// rebuild. Set TIONHARNESS_ADDR (e.g. ":8090" or "0.0.0.0:8090") to expose it.
+		Addr:            envOr("TIONHARNESS_ADDR", "127.0.0.1:8080"),
 		DataDir:         dataDir,
 		WorkspaceDir:    workspaceDir,
 		AccessKey:       os.Getenv("ACCESS_KEY"),
@@ -51,20 +51,20 @@ func Load() (*Config, error) {
 }
 
 // DefaultDataDir resolves the persistent state directory using the same rule as
-// Load ($TIONSWARM_DATA_DIR or ~/.tionswarm), without creating it. Exposed so the
+// Load ($TIONHARNESS_DATA_DIR or ~/.tionharness), without creating it. Exposed so the
 // logging setup can locate the on-disk log file before a full config load.
 func DefaultDataDir() string {
 	home, err := os.UserHomeDir()
 	if err != nil {
-		return ".tionswarm"
+		return ".tionharness"
 	}
-	return envOr("TIONSWARM_DATA_DIR", filepath.Join(home, ".tionswarm"))
+	return envOr("TIONHARNESS_DATA_DIR", filepath.Join(home, ".tionharness"))
 }
 
 // LogFilePath is the on-disk log file (under the data dir's logs/ folder) that
 // the in-app Logs screen can reveal in the OS file manager and copy.
 func LogFilePath() string {
-	return filepath.Join(DefaultDataDir(), "logs", "tionswarm.log")
+	return filepath.Join(DefaultDataDir(), "logs", "tionharness.log")
 }
 
 func envOr(key, fallback string) string {

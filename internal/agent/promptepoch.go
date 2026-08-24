@@ -7,8 +7,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/bilal-arikan/tionswarm/internal/db"
-	"github.com/bilal-arikan/tionswarm/internal/providers"
+	"github.com/bilal-arikan/tionharness/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/providers"
 )
 
 // Prompt epoch — a frozen snapshot of a session's cacheable prompt prefix.
@@ -196,10 +196,10 @@ func (r *Runtime) EpochStaticSystem(ctx context.Context, sessionID string, a db.
 	}
 	if reason != "" {
 		fresh := &promptEpochEntry{
-			Model:      a.Model,
-			WorkDir:    workDir,
-			MultiAgent: multiAgent,
-			System:     build(),
+			Model:        a.Model,
+			WorkDir:      workDir,
+			MultiAgent:   multiAgent,
+			System:       build(),
 			CreatedAt:    now.UnixMilli(),
 			LastUsedAt:   now.UnixMilli(),
 			persistedUse: now.UnixMilli(),

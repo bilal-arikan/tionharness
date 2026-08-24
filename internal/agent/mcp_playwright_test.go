@@ -4,7 +4,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/bilal-arikan/tionswarm/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/db"
 )
 
 func TestIsFileWritingMCP(t *testing.T) {

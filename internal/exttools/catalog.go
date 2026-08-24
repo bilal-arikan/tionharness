@@ -1,9 +1,9 @@
-// Package exttools knows about the OPTIONAL third-party CLIs TionSwarm can work
+// Package exttools knows about the OPTIONAL third-party CLIs TionHarness can work
 // alongside: which ones exist, where they live on this host, what version is
 // installed, what the latest published version is, and — where it is safe — how
 // to update them.
 //
-// Nothing here is bundled with TionSwarm. Detection resolves a path; a version
+// Nothing here is bundled with TionHarness. Detection resolves a path; a version
 // probe runs the tool with its version flag (side-effect free); an update runs a
 // package manager the user already has. Tools whose upgrade means replacing a
 // binary or unpacking a multi-file archive are deliberately declared "manual" —
@@ -17,9 +17,9 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/bilal-arikan/tionswarm/internal/proc"
-	"github.com/bilal-arikan/tionswarm/internal/stt"
-	"github.com/bilal-arikan/tionswarm/internal/tts"
+	"github.com/bilal-arikan/tionharness/internal/proc"
+	"github.com/bilal-arikan/tionharness/internal/stt"
+	"github.com/bilal-arikan/tionharness/internal/tts"
 )
 
 // ClaudeToolName is the catalog key for the Claude Code CLI. Named after the
@@ -42,12 +42,12 @@ const OpenPencilToolName = "openpencil"
 
 // UpdateKind classifies how a tool is upgraded.
 const (
-	// UpdateCommand: a single idempotent package-manager command TionSwarm may run
+	// UpdateCommand: a single idempotent package-manager command TionHarness may run
 	// for the user (npm/winget/…). Safe because the manager owns the install dir
 	// and handles a running binary itself.
 	UpdateCommand = "command"
 	// UpdateManual: the upgrade replaces a binary or unpacks an archive in place.
-	// TionSwarm refuses to do this: on Windows a running child (an MCP stdio server
+	// TionHarness refuses to do this: on Windows a running child (an MCP stdio server
 	// holding its own .exe, a piper synth in flight) locks the file, and a half-
 	// applied update leaves the tool broken. The UI shows Note + the release link.
 	UpdateManual = "manual"
@@ -72,7 +72,7 @@ type UpdateSpec struct {
 //   - "mcp"     → wired as an MCP server (UI shows an info badge → Settings ▸ MCP)
 //   - "cli"     → a plain CLI the agent calls directly via Bash (UI shows a "CLI" badge)
 //   - "provider" → drives an LLM provider (UI shows a badge → Settings ▸ Providers)
-//   - ""        → used automatically by a TionSwarm subsystem (voice)
+//   - ""        → used automatically by a TionHarness subsystem (voice)
 //
 // VersionArgs is the flag that makes the tool print its version; empty means the
 // tool cannot report one and the UI shows no version chip.
@@ -94,7 +94,7 @@ type Tool struct {
 }
 
 // wingetSpec builds a winget one-click update for the given package id — but ONLY
-// on Windows. TionSwarm also runs on Linux servers, where winget does not exist.
+// on Windows. TionHarness also runs on Linux servers, where winget does not exist.
 //
 // Getting this wrong is not merely a dead button. RunUpdate would fail with a
 // clear error, but the panel ALSO renders a copy-to-clipboard chip for every
@@ -126,19 +126,19 @@ func bunUpdateSpec(goos string) UpdateSpec {
 	return UpdateSpec{Kind: UpdateCommand, Command: "bun", Args: []string{"upgrade"}}
 }
 
-// nodeUpdateSpec / pythonUpdateSpec stay `manual` on every platform — TionSwarm
+// nodeUpdateSpec / pythonUpdateSpec stay `manual` on every platform — TionHarness
 // cannot know which tool owns the install (nvm, a distro package, pyenv, brew,
 // conda, an installer) and picking wrong fights the real owner. Only the NOTE is
 // platform-specific, because a note is an instruction the user will actually
 // follow: telling a Ubuntu admin to run winget is how a panel loses its
 // credibility.
 func nodeUpdateSpec(goos string) UpdateSpec {
-	note := "Node'u hangi aracın kurduğunu TionSwarm bilemez, o yüzden karışmaz: nvm kullanıyorsan `nvm install --lts && nvm alias default lts/*`, aksi halde dağıtımının paketi yerine **NodeSource** deposu önerilir (`apt`'taki node genelde çok eskidir). Sunucuda **LTS** hattında kal."
+	note := "Node'u hangi aracın kurduğunu TionHarness bilemez, o yüzden karışmaz: nvm kullanıyorsan `nvm install --lts && nvm alias default lts/*`, aksi halde dağıtımının paketi yerine **NodeSource** deposu önerilir (`apt`'taki node genelde çok eskidir). Sunucuda **LTS** hattında kal."
 	switch goos {
 	case "windows":
-		note = "Node'u hangi aracın kurduğunu TionSwarm bilemez, o yüzden karışmaz: nvm kullanıyorsan `nvm install --lts && nvm alias default lts/*` (winget/installer nvm'in kurulumuyla çakışır), aksi halde nodejs.org installer'ı veya `winget upgrade --id OpenJS.NodeJS.LTS`. Sunucuda **LTS** hattında kal."
+		note = "Node'u hangi aracın kurduğunu TionHarness bilemez, o yüzden karışmaz: nvm kullanıyorsan `nvm install --lts && nvm alias default lts/*` (winget/installer nvm'in kurulumuyla çakışır), aksi halde nodejs.org installer'ı veya `winget upgrade --id OpenJS.NodeJS.LTS`. Sunucuda **LTS** hattında kal."
 	case "darwin":
-		note = "Node'u hangi aracın kurduğunu TionSwarm bilemez, o yüzden karışmaz: nvm kullanıyorsan `nvm install --lts && nvm alias default lts/*`, Homebrew ile kurduysan `brew upgrade node`. **LTS** hattında kal."
+		note = "Node'u hangi aracın kurduğunu TionHarness bilemez, o yüzden karışmaz: nvm kullanıyorsan `nvm install --lts && nvm alias default lts/*`, Homebrew ile kurduysan `brew upgrade node`. **LTS** hattında kal."
 	}
 	return UpdateSpec{Kind: UpdateManual, Note: note}
 }
@@ -147,12 +147,12 @@ func pythonUpdateSpec(goos string) UpdateSpec {
 	// The Linux warning is the important one: on Debian/Ubuntu the system
 	// interpreter is what apt's own tooling runs, so "upgrading python3" in place
 	// is a known way to brick a server. pyenv/venv is the safe answer there.
-	note := "Python'u hangi aracın kurduğunu TionSwarm bilemez, o yüzden karışmaz. **Dikkat:** Debian/Ubuntu'da sistem `python3`'ü apt'ın kendi araçları tarafından kullanılır — yerinde yükseltmek sunucuyu bozabilir. Yeni sürüm gerekiyorsa `deadsnakes` PPA'sından yan yana kur veya **pyenv** kullan; proje bağımlılıklarını `venv` içinde tut."
+	note := "Python'u hangi aracın kurduğunu TionHarness bilemez, o yüzden karışmaz. **Dikkat:** Debian/Ubuntu'da sistem `python3`'ü apt'ın kendi araçları tarafından kullanılır — yerinde yükseltmek sunucuyu bozabilir. Yeni sürüm gerekiyorsa `deadsnakes` PPA'sından yan yana kur veya **pyenv** kullan; proje bağımlılıklarını `venv` içinde tut."
 	switch goos {
 	case "windows":
-		note = "Python'u hangi aracın kurduğunu TionSwarm bilemez (python.org installer'ı, winget, pyenv-win, conda…), o yüzden karışmaz. python.org'dan yeni sürümü kurabilir veya `winget upgrade --id Python.Python.3.13` diyebilirsin. Minör sürüm atlarken (3.13 → 3.14) `pip` paketlerinin yeniden kurulması gerekir."
+		note = "Python'u hangi aracın kurduğunu TionHarness bilemez (python.org installer'ı, winget, pyenv-win, conda…), o yüzden karışmaz. python.org'dan yeni sürümü kurabilir veya `winget upgrade --id Python.Python.3.13` diyebilirsin. Minör sürüm atlarken (3.13 → 3.14) `pip` paketlerinin yeniden kurulması gerekir."
 	case "darwin":
-		note = "Python'u hangi aracın kurduğunu TionSwarm bilemez (Homebrew, pyenv, conda, python.org installer'ı…), o yüzden karışmaz. Homebrew ile kurduysan `brew upgrade python@3.13`; macOS'un kendi sistem python'una dokunma. Minör sürüm atlarken `pip` paketleri yeniden kurulmalıdır."
+		note = "Python'u hangi aracın kurduğunu TionHarness bilemez (Homebrew, pyenv, conda, python.org installer'ı…), o yüzden karışmaz. Homebrew ile kurduysan `brew upgrade python@3.13`; macOS'un kendi sistem python'una dokunma. Minör sürüm atlarken `pip` paketleri yeniden kurulmalıdır."
 	}
 	return UpdateSpec{Kind: UpdateManual, Note: note}
 }
@@ -175,7 +175,7 @@ var gitProjectURL = func() string {
 
 // Catalog is the ordered set of known external tools.
 var Catalog = []Tool{
-	// The Claude Code CLI is the only catalog entry TionSwarm depends on for a
+	// The Claude Code CLI is the only catalog entry TionHarness depends on for a
 	// CORE feature rather than an optional nicety: the keyless `claude-cli`
 	// provider is this binary. It is listed here anyway (and not only in the
 	// provider settings) because the questions this panel answers — where is it,
@@ -183,30 +183,30 @@ var Catalog = []Tool{
 	// agent misbehaves, and the answer used to be split across two screens.
 	{
 		Name:        ClaudeToolName,
-		Desc:        "Claude Code CLI — anahtarsız `claude-cli` sağlayıcısının çalıştırdığı ikili (Max/Pro aboneliğiyle). TionSwarm bunu OTOMATİK kullanır; yolu Ayarlar ▸ Sağlayıcılar'dan geçersiz kılınabilir, boşsa PATH'ten bulunur.",
+		Desc:        "Claude Code CLI — anahtarsız `claude-cli` sağlayıcısının çalıştırdığı ikili (Max/Pro aboneliğiyle). TionHarness bunu OTOMATİK kullanır; yolu Ayarlar ▸ Sağlayıcılar'dan geçersiz kılınabilir, boşsa PATH'ten bulunur.",
 		URL:         "https://github.com/anthropics/claude-code",
 		Category:    "provider",
 		Wire:        "provider",
 		VersionArgs: []string{"--version"},
 		Update: UpdateSpec{
 			Kind: UpdateManual,
-			Note: "Claude Code kendini arka planda günceller — çoğu zaman bir şey yapman gerekmez. Elle güncellemek için terminalde `claude update` (native kurulum) veya `npm install -g @anthropic-ai/claude-code` (npm kurulumu) çalıştır. TionSwarm bunu kendisi koşturmaz: çalışan bir claude-cli turu ikiliyi kilitler ve yarım kalan güncelleme tüm claude-cli ajanlarını durdurur.",
+			Note: "Claude Code kendini arka planda günceller — çoğu zaman bir şey yapman gerekmez. Elle güncellemek için terminalde `claude update` (native kurulum) veya `npm install -g @anthropic-ai/claude-code` (npm kurulumu) çalıştır. TionHarness bunu kendisi koşturmaz: çalışan bir claude-cli turu ikiliyi kilitler ve yarım kalan güncelleme tüm claude-cli ajanlarını durdurur.",
 		},
 	},
-	// codex is claude's sibling: the second CLI transport TionSwarm can drive as
+	// codex is claude's sibling: the second CLI transport TionHarness can drive as
 	// a subprocess, this time the keyless `codex-cli` provider on a ChatGPT/Codex
 	// subscription. Same reasoning as the entry above for why it is listed here
 	// as well as in provider settings.
 	{
 		Name:        CodexToolName,
-		Desc:        "Codex CLI — anahtarsız `codex-cli` sağlayıcısının çalıştırdığı ikili (ChatGPT/Codex aboneliğiyle). TionSwarm bunu OTOMATİK kullanır; yolu Ayarlar ▸ Sağlayıcılar'dan geçersiz kılınabilir, boşsa PATH'ten bulunur.",
+		Desc:        "Codex CLI — anahtarsız `codex-cli` sağlayıcısının çalıştırdığı ikili (ChatGPT/Codex aboneliğiyle). TionHarness bunu OTOMATİK kullanır; yolu Ayarlar ▸ Sağlayıcılar'dan geçersiz kılınabilir, boşsa PATH'ten bulunur.",
 		URL:         "https://github.com/openai/codex",
 		Category:    "provider",
 		Wire:        "provider",
 		VersionArgs: []string{"--version"},
 		Update: UpdateSpec{
 			Kind: UpdateManual,
-			Note: "Terminalde `npm install -g @openai/codex` çalıştır (npm kurulumu). TionSwarm bunu kendisi koşturmaz: çalışan bir codex-cli turu ikiliyi kilitler ve yarım kalan güncelleme tüm codex-cli ajanlarını durdurur.",
+			Note: "Terminalde `npm install -g @openai/codex` çalıştır (npm kurulumu). TionHarness bunu kendisi koşturmaz: çalışan bir codex-cli turu ikiliyi kilitler ve yarım kalan güncelleme tüm codex-cli ajanlarını durdurur.",
 		},
 	},
 	// rtk is wired by the ShellCommandRewrite SETTING, not a hook. It used to ship a
@@ -227,7 +227,7 @@ var Catalog = []Tool{
 		VersionArgs: []string{"--version"},
 		Update: UpdateSpec{
 			Kind: UpdateManual,
-			Note: "Release sayfasından yeni binary'yi indirip mevcut rtk.exe'nin üzerine kopyala. TionSwarm bunu kendisi yapmaz: çalışan bir shell turu ikiliyi kilitleyebilir ve yarım kalan kopya aracı bozar.",
+			Note: "Release sayfasından yeni binary'yi indirip mevcut rtk.exe'nin üzerine kopyala. TionHarness bunu kendisi yapmaz: çalışan bir shell turu ikiliyi kilitleyebilir ve yarım kalan kopya aracı bozar.",
 		},
 	},
 	{
@@ -257,7 +257,7 @@ var Catalog = []Tool{
 	},
 	{
 		Name:        "git",
-		Desc:        "Git — TionSwarm oturum bağlamına çalışma dizininin branch'ini enjekte eder, `scripts\\worktree.ps1` yardımcısı ve ajanın kendi shell komutları buna dayanır. Alt-süreçler non-interactive git env alır (`GIT_EDITOR=true` → editör/pinentry asılması yok).",
+		Desc:        "Git — TionHarness oturum bağlamına çalışma dizininin branch'ini enjekte eder, `scripts\\worktree.ps1` yardımcısı ve ajanın kendi shell komutları buna dayanır. Alt-süreçler non-interactive git env alır (`GIT_EDITOR=true` → editör/pinentry asılması yok).",
 		URL:         gitProjectURL,
 		Category:    "dev",
 		Wire:        "cli",
@@ -285,7 +285,7 @@ var Catalog = []Tool{
 	// someone debugging "why did mmdc break" needs to see.
 	{
 		Name:        "node",
-		Desc:        "Node.js — npm tabanlı araçların (ör. mmdc) çalışma zamanı. TionSwarm doğrudan kullanmaz; ajan geliştirmede Bash ile çağırır. Sürüm karşılaştırması bilerek yapılmaz: GitHub'ın `releases/latest`'i LTS'i değil Current'ı verir.",
+		Desc:        "Node.js — npm tabanlı araçların (ör. mmdc) çalışma zamanı. TionHarness doğrudan kullanmaz; ajan geliştirmede Bash ile çağırır. Sürüm karşılaştırması bilerek yapılmaz: GitHub'ın `releases/latest`'i LTS'i değil Current'ı verir.",
 		URL:         "https://nodejs.org",
 		Category:    "dev",
 		Wire:        "cli",
@@ -307,7 +307,7 @@ var Catalog = []Tool{
 	},
 	{
 		Name:        "npm",
-		Desc:        "npm — Node paket yöneticisi. TionSwarm bunu `mmdc` güncellemesini çalıştırmak için arar (Ayarlar ▸ Harici Araçlar ▸ Güncelle); yoksa o güncelleme başarısız olur.",
+		Desc:        "npm — Node paket yöneticisi. TionHarness bunu `mmdc` güncellemesini çalıştırmak için arar (Ayarlar ▸ Harici Araçlar ▸ Güncelle); yoksa o güncelleme başarısız olur.",
 		URL:         "https://www.npmjs.com",
 		Category:    "dev",
 		Wire:        "cli",
@@ -326,7 +326,7 @@ var Catalog = []Tool{
 	// than assumed, 2026-08-02.
 	{
 		Name:        "python",
-		Desc:        "Python — `run_code` ve `transform_data` araçlarını çalıştıran yorumlayıcı, code-mode'un ürettiği binding'ler de buna koşar. TionSwarm OTOMATİK kullanır. Windows'ta `python3.exe` genelde Microsoft Store kısayolu olduğu için önce `python` denenir.",
+		Desc:        "Python — `run_code` ve `transform_data` araçlarını çalıştıran yorumlayıcı, code-mode'un ürettiği binding'ler de buna koşar. TionHarness OTOMATİK kullanır. Windows'ta `python3.exe` genelde Microsoft Store kısayolu olduğu için önce `python` denenir.",
 		URL:         "https://www.python.org",
 		Category:    "dev",
 		VersionArgs: []string{"--version"},
@@ -356,12 +356,12 @@ var Catalog = []Tool{
 		PreRelease: true,
 		Update: UpdateSpec{
 			Kind: UpdateManual,
-			Note: "Release iki ayrı arşiv taşır (`op-cli-*` + `openpencil-desktop-*`) ve ikisi de aynı sürümde olmalı; TionSwarm bunu kendisi yapmaz. Önce **`op stop`** ile çalışan sunucuyu kapat — açık MCP sunucusu `op.exe`'yi kilitler. Sonra release'ten yeni zip'leri indirip mevcut `openpencil` klasörünün üzerine aç (checksum'lar `SHA256SUMS.txt`'te). Paket yöneticisiyle kurduysan `scoop update openpencil` (Windows) ya da `brew upgrade --cask openpencil` (macOS).",
+			Note: "Release iki ayrı arşiv taşır (`op-cli-*` + `openpencil-desktop-*`) ve ikisi de aynı sürümde olmalı; TionHarness bunu kendisi yapmaz. Önce **`op stop`** ile çalışan sunucuyu kapat — açık MCP sunucusu `op.exe`'yi kilitler. Sonra release'ten yeni zip'leri indirip mevcut `openpencil` klasörünün üzerine aç (checksum'lar `SHA256SUMS.txt`'te). Paket yöneticisiyle kurduysan `scoop update openpencil` (Windows) ya da `brew upgrade --cask openpencil` (macOS).",
 		},
 	},
 	{
 		Name:     "piper",
-		Desc:     "Piper — yerel/offline nöral TTS motoru (35+ dil, Türkçe dahil). TionSwarm sunucu-tarafı sesli okuma (TTS) için OTOMATİK kullanır → telefon dahil her cihazda aynı ses. Progs\\piper\\.venv altına pip ile kurulur (eski standalone kurulum da tanınır) veya PATH'te bulunur; bir de .onnx ses modeli gerekir.",
+		Desc:     "Piper — yerel/offline nöral TTS motoru (35+ dil, Türkçe dahil). TionHarness sunucu-tarafı sesli okuma (TTS) için OTOMATİK kullanır → telefon dahil her cihazda aynı ses. Progs\\piper\\.venv altına pip ile kurulur (eski standalone kurulum da tanınır) veya PATH'te bulunur; bir de .onnx ses modeli gerekir.",
 		URL:      "https://github.com/OHF-Voice/piper1-gpl",
 		Category: "voice",
 		// Kept for the LEGACY standalone binary, which still answers --version. The
@@ -378,7 +378,7 @@ var Catalog = []Tool{
 	},
 	{
 		Name:        "whisper-cli",
-		Desc:        "whisper.cpp — yerel/offline STT (ses→metin, 100+ dil, Türkçe dahil). TionSwarm sunucu-tarafı sesle yazma (dikte) için kullanır; ffmpeg + bir ggml-*.bin model gerekir. Progs\\whisper altına kurulur veya PATH'te bulunur.",
+		Desc:        "whisper.cpp — yerel/offline STT (ses→metin, 100+ dil, Türkçe dahil). TionHarness sunucu-tarafı sesle yazma (dikte) için kullanır; ffmpeg + bir ggml-*.bin model gerekir. Progs\\whisper altına kurulur veya PATH'te bulunur.",
 		URL:         "https://github.com/ggml-org/whisper.cpp",
 		Category:    "voice",
 		VersionArgs: []string{"--version"},
@@ -433,7 +433,7 @@ var pathOverrides = struct {
 	m map[string]string
 }{m: map[string]string{}}
 
-// SetPathOverride records the path the rest of TionSwarm will actually run for a
+// SetPathOverride records the path the rest of TionHarness will actually run for a
 // tool, so this package reports on the same binary. An empty path clears the
 // override and restores normal resolution.
 //
@@ -466,7 +466,7 @@ func pathOverride(name string) string {
 // on. Detection never runs the tool.
 func Detect(name string) (bool, string) {
 	// An explicit override wins and does NOT fall back to PATH: the override is
-	// what TionSwarm executes, so if it points at nothing the honest answer is
+	// what TionHarness executes, so if it points at nothing the honest answer is
 	// "not installed", not the version of some other binary that happens to be
 	// on PATH and will never be used.
 	if p := pathOverride(name); p != "" {
@@ -525,9 +525,9 @@ func openPencilExeName() string {
 // ZSeven-W/openpencil's releases, and tell the user their design tool is years
 // out of date — the same "confident and meaningless verdict" the node/npm entries
 // above refuse to produce. Package-manager installs (scoop apps\openpencil\…,
-// brew Cellar/openpencil/…) still match; anything else needs TIONSWARM_OPENPENCIL.
+// brew Cellar/openpencil/…) still match; anything else needs TIONHARNESS_OPENPENCIL.
 func openPencilExe() string {
-	if p := strings.TrimSpace(os.Getenv("TIONSWARM_OPENPENCIL")); p != "" {
+	if p := strings.TrimSpace(os.Getenv("TIONHARNESS_OPENPENCIL")); p != "" {
 		if st, err := os.Stat(p); err == nil && !st.IsDir() {
 			return p
 		}

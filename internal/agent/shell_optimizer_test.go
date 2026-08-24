@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bilal-arikan/tionswarm/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/db"
 )
 
 // TestSqzShellFilter_Gate locks the opt-in gate: no filter without an sqz hook, and

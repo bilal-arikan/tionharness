@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/bilal-arikan/tionswarm/internal/providers"
+	"github.com/bilal-arikan/tionharness/internal/providers"
 )
 
 // TestConversation_MultiTurnHistory drives a two-turn conversation end to end and

@@ -4,7 +4,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/bilal-arikan/tionswarm/internal/agent"
+	"github.com/bilal-arikan/tionharness/internal/agent"
 )
 
 // syncConfigFiles seeds the workspace's editable config/ tree (prompts,

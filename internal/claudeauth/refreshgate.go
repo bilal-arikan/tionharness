@@ -10,7 +10,7 @@ import (
 // OAuth token in a shared claude-home.
 //
 // The problem it solves is specific and was observed live (a 3-level coordinator
-// tree, _Docs/47): TionSwarm runs many `claude` subprocesses concurrently against
+// tree, _Docs/47): TionHarness runs many `claude` subprocesses concurrently against
 // ONE per-workspace claude-home. OAuth refresh tokens are single-use, so when
 // several processes find the access token expired at the same moment they all
 // refresh with the same refresh token — the first wins, the rest get

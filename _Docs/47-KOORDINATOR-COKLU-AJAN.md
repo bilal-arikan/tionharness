@@ -19,7 +19,7 @@
 > M3 scratchpad + efemeral worker hedefi — bkz. §9 Uygulama Durumu). §1–§8 orijinal
 > tasarım metnidir. **LLM-in-the-loop görsel deneme ✅ canlı doğrulandı (2026-07-03,
 > bkz. §10)** — deneme sırasında bulunan non-stream CLI köprü boşluğu da düzeltildi.
-> **Amaç:** TionSwarm'ya Claude Code'un "koordinatör modu"na denk bir çok-ajan
+> **Amaç:** TionHarness'ya Claude Code'un "koordinatör modu"na denk bir çok-ajan
 > koordinasyon katmanı eklemek — bir üst ajan (koordinatör) birden çok işçiyi
 > (worker) paralel yönetir; ayrıca **birden fazla koordinasyon yöntemi**
 > (parallel fan-out / koordinatör-işçi / takım-karatahta / flow) tek bir çatı
@@ -68,10 +68,10 @@ uygular:
 4. Fazlar: Araştırma (paralel işçiler) → Sentez (koordinatör) → Uygulama →
    Doğrulama.
 
-TionSwarm bugün bu döngünün **çoğu parçasına sahip** ama "async işçi → koordinatöre
+TionHarness bugün bu döngünün **çoğu parçasına sahip** ama "async işçi → koordinatöre
 geri bildirim → koordinatör devam eder" halkası eksik.
 
-### 1.1 TionSwarm'da bugün ne var (yeniden kullanılacak)
+### 1.1 TionHarness'da bugün ne var (yeniden kullanılacak)
 
 | Yetenek | Kod | Not |
 |--------|-----|-----|
@@ -311,7 +311,7 @@ koordinatörü otomatik uyandırmaz; resume kuyruğu güvenle yeniden başlatır
 
 ## 4. Koordinatör Sistem Promptu / Skill
 
-Yeni gömülü skill `tionswarm-coordinator` (`internal/skills/defaults/`), Claude
+Yeni gömülü skill `tionharness-coordinator` (`internal/skills/defaults/`), Claude
 Code'un `getCoordinatorSystemPrompt()`'undan uyarlanır (Türkçe doküman / İngilizce
 prompt kuralına göre prompt İngilizce):
 
@@ -350,10 +350,10 @@ gerçek workspace ajanı adı verir.
 
 | Faz | Kapsam | Dosyalar |
 |-----|--------|----------|
-| **F0** | Bu tasarım dokümanı + koordinatör skill taslağı | `_Docs/47`, `skills/defaults/tionswarm-coordinator` |
+| **F0** | Bu tasarım dokümanı + koordinatör skill taslağı | `_Docs/47`, `skills/defaults/tionharness-coordinator` |
 | **F1** | Çekirdek backend: session alanları + `NotifyCoordinator` + per-session tur kuyruğu + `CoordinationEngine.OnWorkerFinished` (workspace manager'a `SetTurnHook` zincirine ekle) | `db/models.go`, `agent/coordination.go`, `agent/runtime.go`, `workspace/manager.go` |
 | **F2** | Araçlar: `spawn_worker`/`send_to_worker`/`stop_worker`/`list_workers` + worker araç kısıtı + guard'lar (`CoordinatorMaxWorkers`/`MaxTurns`) | `tools/builtin_coordination.go`, `agent/subagent.go`, `agent/tunables.go` |
-| **F3** | Koordinatör sistem promptu (koşullu enjeksiyon) + `tionswarm-coordinator` skill | `agent/prompts*`, `api/*compose*`, `skills/defaults/` |
+| **F3** | Koordinatör sistem promptu (koşullu enjeksiyon) + `tionharness-coordinator` skill | `agent/prompts*`, `api/*compose*`, `skills/defaults/` |
 | **F4** | UI: koordinasyon paneli + yöntem seçici + `worker` SSE event | `frontend/src/components/`, `agent/coordination.go` (emit) |
 | **F5** | M3 ortak scratchpad + M1/M4 birleşik "yöntem" belgeleme + testler + doküman güncelleme | `_Docs/28`,`15`,`47`, `*_test.go`, `SKILL.md` |
 
@@ -420,7 +420,7 @@ keyed-lock+flag; M3 scratchpad ertelendi.
   engeli). Wiring: `toolloop.go withCoordination` + `toolsetup.go` koşullu kayıt.
 - **Prompt/skill** (F3): `api/coordinator_prompt.go` (`composeTurnRequest`'te
   `Role=="coordinator"` iken enjekte → wake yolunu da kapsar) + gömülü default
-  skill `tionswarm-coordinator`.
+  skill `tionharness-coordinator`.
 - **Guard'lar** (`agent/tunables.go`): `CoordinatorMaxWorkers` (8) +
   `CoordinatorMaxTurns` (50) + `SetCoordinatorLimits`.
 - **API** (F4): `session_info`'ya `role`+`coordinatorSessionId`; yeni
@@ -532,7 +532,7 @@ Görseller + API çıktısı: `_Docs/gorseller/coord-02-before-ses104.png` (önc
 
 ### Bulunan ve düzeltilen boşluk: non-stream CLI turunda köprü yok
 
-İlk deneme `POST /api/chat` (non-stream) ile yapılmıştı ve koordinatör TionSwarm'nun
+İlk deneme `POST /api/chat` (non-stream) ile yapılmıştı ve koordinatör TionHarness'nun
 `spawn_worker`'ı yerine **claude-cli'nin kendi `Agent` aracını** kullandı: worker
 roster hiç dolmadı, log `cli mcp config written … interaction=false` gösterdi.
 
@@ -719,7 +719,7 @@ bekleyen mesaj kökten de görünür.
 
 Anthropic'in "dynamic workflows" altı orkestrasyon deseni (Fanout-And-Synthesize,
 Adversarial Verification, Loop Until Done, Classify-And-Act, Generate-And-Filter,
-Tournament) `tionswarm-coordinator` skill'ine **§4 "Workflow desenleri"** olarak
+Tournament) `tionharness-coordinator` skill'ine **§4 "Workflow desenleri"** olarak
 eklendi. Bunlar yeni araç değil, M1–M4 mekanikleri üstünde koşan **stratejiler**:
 
 - **Doğrudan M2 eşleşmesi (✅ mekanik):** Fanout-And-Synthesize (`spawn_worker`×N →
@@ -1062,7 +1062,7 @@ ortasında turlar `authentication_failed` vermeye başladı ve workspace'in
 `claude-home/.credentials.json`'ı **sıfırlandı** (token'lar boş, `expiresAt=0`;
 `.bak-empty` yedeğini CLI'nin kendisi yazıyor). Zincir:
 
-1. `~/.tionswarm/claude-home` (self-heal'in 1. tercihi) **19 gün önce süresi
+1. `~/.tionharness/claude-home` (self-heal'in 1. tercihi) **19 gün önce süresi
    dolmuş** bir credential tutuyordu; `credentialUsable` yalnız "token boş mu"
    baktığı için bunu geçerli saydı.
 2. CLI ölü refresh token ile yenilemeye çalıştı → `invalid_grant` → credential'ı
@@ -1110,7 +1110,7 @@ yüzden "check-then-act" desenleri burada teorik değil. Denetim sonucu:
 **Bilinçli kapsam dışı (bilinmesi gerekenler):**
 
 - **`claudeauth.SerializeRefresh` süreç-içidir.** Aynı claude-home'a karşı **iki
-  TionSwarm süreci** koşarsa (ör. masaüstü uygulaması + dev sunucu) kapı işlemez.
+  TionHarness süreci** koşarsa (ör. masaüstü uygulaması + dev sunucu) kapı işlemez.
   Süreçler-arası koruma için dosya kilidi gerekir; şu an yok.
 - **Yarış dedektörü çalıştırılamadı** — bu makinede `-race` cgo (gcc) istiyor,
   kurulu değil. Eşzamanlılık testleri gerçek goroutine'lerle koşuyor ve mantık

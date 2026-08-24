@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bilal-arikan/tionswarm/internal/providers"
+	"github.com/bilal-arikan/tionharness/internal/providers"
 )
 
 func TestListProvidersReturnsSummaries(t *testing.T) {

@@ -119,7 +119,7 @@ export function ServerManagement(props: {
         <button
           data-testid="mcp-importable-open"
           onClick={openImportable}
-          title="TionSwarm'daki diğer workspace'lerde tanımlı, buraya eklenmemiş MCP sunucularını gör ve tek tıkla ekle."
+          title="TionHarness'daki diğer workspace'lerde tanımlı, buraya eklenmemiş MCP sunucularını gör ve tek tıkla ekle."
           className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-1.5 text-xs font-medium hover:opacity-90"
         >
           Diğer MCP’ler

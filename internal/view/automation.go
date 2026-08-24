@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bilal-arikan/tionswarm/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/db"
 )
 
 // AutomationInput is one automation rule. The projection renders trigger,

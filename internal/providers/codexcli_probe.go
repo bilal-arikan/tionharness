@@ -12,7 +12,7 @@ import (
 // for why that must not be relaxed). The cost of that correctness is that a
 // single unreachable remote server aborts session creation: codex exits 1 with
 // "required MCP servers failed to initialize" before emitting any turn output,
-// which TionSwarm can only report as "codex CLI exited before producing any turn
+// which TionHarness can only report as "codex CLI exited before producing any turn
 // output". Probing reachability up front lets a dead server be OMITTED from the
 // config instead — the turn loses that server's tools, loudly and once, rather
 // than losing the whole session.

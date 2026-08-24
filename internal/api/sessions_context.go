@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bilal-arikan/tionswarm/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/db"
 )
 
 // sessionsContextBlock builds a short, system-prompt section giving an agent

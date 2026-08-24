@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bilal-arikan/tionswarm/internal/settings"
+	"github.com/bilal-arikan/tionharness/internal/settings"
 )
 
 // TestUpdateSettings_UnknownFieldRejected verifies PUT /api/settings rejects a

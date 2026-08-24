@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/bilal-arikan/tionswarm/internal/db"
-	"github.com/bilal-arikan/tionswarm/internal/workspace"
+	"github.com/bilal-arikan/tionharness/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/workspace"
 )
 
 // agentDeleteFixture builds a workspace-shaped harness with a real store and the

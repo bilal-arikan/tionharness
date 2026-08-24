@@ -494,7 +494,7 @@ doğrulaması (login/token süresi/geçersiz anahtar) yüzünden başarısız ol
 **ek olarak** `auth-error` atanır (`isAuthErrorText` bir `StepError` metniyle eşleşir).
 Auto-repair, login'i düzeltemez — `error` tarayan bir onarım otomasyonu `auth-error`
 etiketli oturumları **dışlamalı** (aksi halde MaxIterations/Cooldown'a kadar boşuna
-döner). Çözüm: ilgili workspace'te `claude /login` (bkz. `tionswarm-session-debug`
+döner). Çözüm: ilgili workspace'te `claude /login` (bkz. `tionharness-session-debug`
 skill "I) authentication_failed") ya da ajanı API-key sağlayıcıya al.
 
 **"disallowed tool" istisnası:** claude-cli izin verilmeyen bir tool'u denerse
@@ -505,7 +505,7 @@ işaretleriyle (`permission_denied`, "requested permissions", "haven't granted",
 "not allowed", "disallowed" …) hariç tutar (`permissionDenyMarkers`).
 
 **Bare-name mis-address istisnası (2026-07-06):** Model bir köprülü tool'u **çıplak
-adıyla** çağırırsa (ör. `PowerShell`, allowlist'teki `mcp__tionswarm_interaction__PowerShell`
+adıyla** çağırırsa (ör. `PowerShell`, allowlist'teki `mcp__tionharness_interaction__PowerShell`
 yerine) claude-cli `"No such tool available: PowerShell. PowerShell exists but is not
 enabled in this context."` ile reddeder ve model **hemen doğru adla yeniden dener**. Bu
 kendi kendine toparlanan bir yanlış-adresleme, onarılabilir bir hata değil — bu yüzden
@@ -629,5 +629,5 @@ gate + hatalı input'ta kırmızı kenarlık.
 ## Sıradaki
 - Canlı loop doğrulaması (gerçek sağlayıcıyla uçtan uca; token maliyeti nedeniyle
   unit testlerle ayrıldı).
-- Opsiyonel: `tionswarm-autonomous-ops` skill'ine "etiketle döngü kur" reçetesi;
+- Opsiyonel: `tionharness-autonomous-ops` skill'ine "etiketle döngü kur" reçetesi;
   flow/schedule etiketlerini de tetikleyiciye açma (şimdilik yalnız session).

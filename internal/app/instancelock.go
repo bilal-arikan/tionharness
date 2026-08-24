@@ -9,7 +9,7 @@ import (
 
 // errInstanceLocked is returned when another process already holds the data-dir
 // lock. Bootstrap wraps it with a user-facing message.
-var errInstanceLocked = errors.New("data directory is locked by another TionSwarm instance")
+var errInstanceLocked = errors.New("data directory is locked by another TionHarness instance")
 
 // lockDataDir takes an exclusive, process-lifetime advisory lock on the data
 // directory so a SECOND server process can never serve the same file store

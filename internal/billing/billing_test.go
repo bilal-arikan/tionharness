@@ -4,7 +4,7 @@ import (
 	"math"
 	"testing"
 
-	"github.com/bilal-arikan/tionswarm/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/db"
 )
 
 func approxUSD(a, b float64) bool { return math.Abs(a-b) < 1e-9 }

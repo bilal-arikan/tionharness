@@ -33,7 +33,7 @@ func TestAnsiEscapeStripped(t *testing.T) {
 // NORMAL state the panel renders as "not installed". Reporting it as an error
 // would surface a red toast every time someone without rtk opens Settings.
 func TestRunToolCmd_MissingBinaryIsNotAnError(t *testing.T) {
-	out, found := runToolCmd(context.Background(), "tionswarm-no-such-binary-xyz")
+	out, found := runToolCmd(context.Background(), "tionharness-no-such-binary-xyz")
 	if found {
 		t.Fatal("a nonexistent binary must report found=false")
 	}

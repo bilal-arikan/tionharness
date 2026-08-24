@@ -20,10 +20,10 @@ func TestPersistentFingerprintHashesConfigContent(t *testing.T) {
 		return p
 	}
 
-	const cfg = `{"mcpServers":{"tionswarm_extended":{"type":"http","url":"http://x/extended"}}}`
-	pathA := write("tionswarm-mcp-A.json", cfg)
-	pathB := write("tionswarm-mcp-B.json", cfg)     // same content, different path (per-turn churn)
-	pathC := write("tionswarm-mcp-C.json", cfg+" ") // different content
+	const cfg = `{"mcpServers":{"tionharness_extended":{"type":"http","url":"http://x/extended"}}}`
+	pathA := write("tionharness-mcp-A.json", cfg)
+	pathB := write("tionharness-mcp-B.json", cfg)     // same content, different path (per-turn churn)
+	pathC := write("tionharness-mcp-C.json", cfg+" ") // different content
 
 	req := Request{Model: "claude-fable-5", PermissionMode: "ask"}
 	sys := "system prefix"

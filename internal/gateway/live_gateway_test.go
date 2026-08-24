@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bilal-arikan/tionswarm/internal/mcp"
+	"github.com/bilal-arikan/tionharness/internal/mcp"
 )
 
 // secretMCP is a fake backend MCP server exposing get_secret, which returns a marker so
@@ -59,23 +59,23 @@ func (secretMCP) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 // TestLiveExternalGateway is a REAL end-to-end validation of Doc 52 Faz 3: a live
-// claude-cli client connects to TionSwarm's external /mcp/gateway (the real gateway.Server
+// claude-cli client connects to TionHarness's external /mcp/gateway (the real gateway.Server
 // over a real mcp.Pool) with a bearer token, and in ONE turn calls activate_tools -> the
 // gateway connects the backend + pushes tools/list_changed -> claude re-lists -> calls the
 // proxied backend tool -> reports the secret. Proves the full chain
-// claude -> gateway -> pool -> backend MCP. Spends tokens; gated behind TIONSWARM_LIVE_CLI=1.
+// claude -> gateway -> pool -> backend MCP. Spends tokens; gated behind TIONHARNESS_LIVE_CLI=1.
 //
-//	TIONSWARM_LIVE_CLI=1 go test ./internal/gateway/ -run TestLiveExternalGateway -v
+//	TIONHARNESS_LIVE_CLI=1 go test ./internal/gateway/ -run TestLiveExternalGateway -v
 func TestLiveExternalGateway(t *testing.T) {
-	if os.Getenv("TIONSWARM_LIVE_CLI") != "1" {
-		t.Skip("set TIONSWARM_LIVE_CLI=1 to run the live external-gateway validation")
+	if os.Getenv("TIONHARNESS_LIVE_CLI") != "1" {
+		t.Skip("set TIONHARNESS_LIVE_CLI=1 to run the live external-gateway validation")
 	}
 	bin := "claude"
-	if p := os.Getenv("TIONSWARM_CLAUDE_BIN"); p != "" {
+	if p := os.Getenv("TIONHARNESS_CLAUDE_BIN"); p != "" {
 		bin = p
 	}
 	model := "claude-fable-5"
-	if m := os.Getenv("TIONSWARM_CLAUDE_MODEL"); m != "" {
+	if m := os.Getenv("TIONHARNESS_CLAUDE_MODEL"); m != "" {
 		model = m
 	}
 

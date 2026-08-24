@@ -1,6 +1,6 @@
-# TionSwarm — Genel Bakış
+# TionHarness — Genel Bakış
 
-> **TionSwarm**, Go diliyle, kendi UI/UX tasarımıyla sıfırdan yazılmış çok-ajanlı AI runtime'ıdır.
+> **TionHarness**, Go diliyle, kendi UI/UX tasarımıyla sıfırdan yazılmış çok-ajanlı AI runtime'ıdır.
 
 ## Amaç
 
@@ -17,10 +17,10 @@ Açık kaynaklı, kendi sunucunda barındırılan (self-hosted) bir **çoklu-aja
 
 ## Teknoloji Özeti
 
-| Bileşen | TionSwarm |
+| Bileşen | TionHarness |
 |---------|---------|
 | Dil | Go 1.26+ |
-| Masaüstü kabuk | Native WebView2 penceresi (`cmd/tionswarm-desktop`, CGO'suz — Wails gereksizleşti; bkz. `32-NATIVE-PENCERE.md`) |
+| Masaüstü kabuk | Native WebView2 penceresi (`cmd/tionharness-desktop`, CGO'suz — Wails gereksizleşti; bkz. `32-NATIVE-PENCERE.md`) |
 | Web framework | Bağımsız frontend + Go API; `dist/` binary'e `go:embed` ile gömülü |
 | Depolama | Dosya sistemi — JSON/JSONL, DB yok (bkz. `08-DEPOLAMA.md`) |
 | Orkestrasyon | Kendi state-machine + goroutine/channel |
@@ -49,7 +49,7 @@ Açık kaynaklı, kendi sunucunda barındırılan (self-hosted) bir **çoklu-aja
 | [07-CHAT-UX.md](07-CHAT-UX.md) | Zengin sohbet arayüzü + SSE adım-adım akış |
 | [08-DEPOLAMA.md](08-DEPOLAMA.md) | Dosya-tabanlı depolama tasarımı (JSON/JSONL, DB yok) |
 | [09-CLAUDE-AGENT-SDK.md](09-CLAUDE-AGENT-SDK.md) | Karar kaydı (ADR): Claude Agent SDK paritesi + claude-cli'yi köprü olarak benimseme |
-| [10-KAVRAMSAL-TASARIM-NOTLARI.md](10-KAVRAMSAL-TASARIM-NOTLARI.md) | Kavramsal tasarım notları kataloğu (ClaudeCode mimarisi → TionSwarm, taslak/yol haritası) |
+| [10-KAVRAMSAL-TASARIM-NOTLARI.md](10-KAVRAMSAL-TASARIM-NOTLARI.md) | Kavramsal tasarım notları kataloğu (ClaudeCode mimarisi → TionHarness, taslak/yol haritası) |
 | [11-INTERACTION-MCP.md](11-INTERACTION-MCP.md) | Interaction MCP: CLI ajanlara insan-etkileşimli araçlar (ask_user/todo_write/onay) |
 | [12-LOGLAMA.md](12-LOGLAMA.md) | Loglama sistemi: slog ring buffer, /api/logs, access + iş logları, dış erişim |
 | [15-FLOW-CANVAS.md](15-FLOW-CANVAS.md) | Görsel Flow Builder (React Flow canvas) |
@@ -70,7 +70,7 @@ Açık kaynaklı, kendi sunucunda barındırılan (self-hosted) bir **çoklu-aja
 | [30-COKLU-PENCERE.md](30-COKLU-PENCERE.md) | Masaüstünde çoklu pencere (N süreç / N pencere) |
 | [arsiv/31-MEMGPT-CORE-MEMORY.md](arsiv/31-MEMGPT-CORE-MEMORY.md) | ~~MemGPT/Letta tarzı self-editing çekirdek bellek~~ (**KALDIRILDI 2026-07-05**; 2026-07-27'de `arsiv/`'e taşındı — tarihsel referans, **31 numarası artık boş**) |
 | [32-NATIVE-PENCERE.md](32-NATIVE-PENCERE.md) | Native masaüstü penceresi (WebView2, CGO'suz) |
-| [33-DIS-AJAN-OTOMASYONU.md](33-DIS-AJAN-OTOMASYONU.md) | TionSwarm'yu dışarıdan (API/UI) sürme dostluğu |
+| [33-DIS-AJAN-OTOMASYONU.md](33-DIS-AJAN-OTOMASYONU.md) | TionHarness'yu dışarıdan (API/UI) sürme dostluğu |
 | [34-YEDEKLEME.md](34-YEDEKLEME.md) | Workspace periyodik zip yedekleme + geri yükleme |
 | [35-CONTEXT-RESET-HANDOFF.md](35-CONTEXT-RESET-HANDOFF.md) | Otonom turda context-reset / handoff |
 | [36-KALICI-ILERLEME.md](36-KALICI-ILERLEME.md) | Kalıcı todo/PROGRESS dosyası (oturumlar-arası devralma) |
@@ -78,7 +78,7 @@ Açık kaynaklı, kendi sunucunda barındırılan (self-hosted) bir **çoklu-aja
 | [38-SESSION-DEBUG.md](38-SESSION-DEBUG.md) | Oturum debug günlüğü (`debug.jsonl`) — paralel gözlemlenebilirlik + anomali tespiti |
 | [39-DIZIN-SITE-REGISTRY.md](39-DIZIN-SITE-REGISTRY.md) | Dizin-sitesi köprüsü (search connector) — skill dizin sitelerinden markete arama/önizleme |
 | [40-PLAN-MODE.md](40-PLAN-MODE.md) | Plan modu — claude-cli `ExitPlanMode` köprüsü + plan onay kartı |
-| [41-ARAC-BOSLUKLARI-YAPILACAKLAR.md](41-ARAC-BOSLUKLARI-YAPILACAKLAR.md) | Araç boşlukları backlog'u (the external agent project↔TionSwarm karşılaştırması) |
+| [41-ARAC-BOSLUKLARI-YAPILACAKLAR.md](41-ARAC-BOSLUKLARI-YAPILACAKLAR.md) | Araç boşlukları backlog'u (the external agent project↔TionHarness karşılaştırması) |
 | [42-REFAKTOR-MODULERLIK.md](42-REFAKTOR-MODULERLIK.md) | Refaktör/modülerlik — generic db/api/tools helper'ları + God-dosya bölmeleri |
 | [43-REWIND.md](43-REWIND.md) | `/rewind` — sohbet checkpoint geri sarma (yalnız-sohbet MVP) |
 | [44-CODE-EXECUTION-MCP.md](44-CODE-EXECUTION-MCP.md) | Code Execution with MCP — occupancy'yi kökten düşürme fizibilite + faz planı |
@@ -101,7 +101,7 @@ Açık kaynaklı, kendi sunucunda barındırılan (self-hosted) bir **çoklu-aja
 | [61-MERKEZI-PROMPT-REGISTRY.md](61-MERKEZI-PROMPT-REGISTRY.md) | Merkezi prompt registry (`internal/prompts`) — 15 gömülü prompt tek kayıt defterinde: embed edilmiş .md default'lar, workspace override + `{{yerTutucu}}` doğrulaması + default'a fallback, epoch rozeti, debug.jsonl prompt izi (promptKey/promptHash), drift-guard testi |
 | [62-BIRLESIK-RUN-AWAIT.md](62-BIRLESIK-RUN-AWAIT.md) | Birleşik Run (C+D) — `await-input` keystone (flow durable suspend/resume: `State.WaitingAt` + `FlowWaiting` statüsü + CAS resume + input delivery API/UI); `LaunchRun` fresh-launch launcher seam'i (Faz 3); peer-bridge (`list_flow_runs`/`deliver_flow_input`); await timeout/GC sweeper; `subflow` node (senkron flow kompozisyonu). Flow motoru accumulate/loop/paralel-fold + session↔flow reify: [15-FLOW-CANVAS.md](15-FLOW-CANVAS.md) |
 | [63-SOURCE-TEMPLATES-RENDER.md](63-SOURCE-TEMPLATES-RENDER.md) | Source template render (`render_template`) — kaynak-başına HTML şablonlarıyla tutarlı veri sunumu *(eski numara: 53)* |
-| [64-GITHUB-COPILOT-CHRONICLE.md](64-GITHUB-COPILOT-CHRONICLE.md) | an external CLI agent `/chronicle` oturum-içgörü ailesi (tips/improve/standup/cost-tips/search) + yerel SQLite session store; TionSwarm muadilleriyle kıyas (salt referans, doküman-only) *(eski numara: 59)* |
+| [64-GITHUB-COPILOT-CHRONICLE.md](64-GITHUB-COPILOT-CHRONICLE.md) | an external CLI agent `/chronicle` oturum-içgörü ailesi (tips/improve/standup/cost-tips/search) + yerel SQLite session store; TionHarness muadilleriyle kıyas (salt referans, doküman-only) *(eski numara: 59)* |
 | [65-DURABLE-ASK.md](65-DURABLE-ASK.md) | Durable Ask — native `ask_user` ve permission onayı temiz suspend noktasında diske park edilir (`SessionAsk` + CAS claim), cevap gelince tur kalıcı state'ten devam eder; `WithDurableAsk` gate'li, restart/crash'e dayanıklı |
 | [66-VIEW-KATMANI.md](66-VIEW-KATMANI.md) | **Faz 1-4 + 6 canlı** — View (projeksiyon) katmanı: flow run / session / board durumunun bağlam-ucuz özeti (deterministik L0+L1, LLM yok). `tiny/card/full` bütçe tier'ları + 4 lens, birimli `Elided` (sessiz kesme yok), `get_view` aracı (pull kanalı) ve **ajanla aynı ham DSL'i gösteren `◱ Özet` paneli**; `workspace` roll-up'ı + grafiklerle **Panel (dashboard) ekranı** (`GET /api/dashboard`). Faz 5 (L2 incremental fold) tasarım |
 | [67-BOARD-GORUNUMLERI.md](67-BOARD-GORUNUMLERI.md) | Board görünüm katmanı — facet filtre çubuğu (AND/OR semantiği, Türkçe I/ı arama katlaması), gruplama ekseni (durum/ajan/öncelik/etiket/tarih — sürükleme eksenin alanını yazar) ve workspace başına kayıtlı görünümler; aktif seçim pencere-yerel (localStorage) |
@@ -111,9 +111,9 @@ Açık kaynaklı, kendi sunucunda barındırılan (self-hosted) bir **çoklu-aja
 | [71-SAGLAYICI-ORNEKLERI-PLANI.md](71-SAGLAYICI-ORNEKLERI-PLANI.md) | **Faz 0-5 BİTTİ (2026-08-18)** — Sağlayıcı taslak→örnek modeli; uygulama-geneli `providers.json`; ajanların örnek seçimi; yeni CLI örneklerinde otomatik `<dataDir>/provider-homes/<instance-id>` izolasyonu ve örnek-bazlı auth rotaları; legacy workspace auth fallback'i; `InstanceCatalog()` ile aynı kind'ın örneklerini ayrı gösterme |
 | [MALIYET-DUSURME-PLANI.md](MALIYET-DUSURME-PLANI.md) | Maliyet düşürme planı — claude-cli batching/serial maliyet analizi ve aksiyonları |
 | [INSIGHT-BACKLOG.md](INSIGHT-BACKLOG.md) | **Otomatik üretilir** — Insight taramasının "app-fix" kanalı; uygulama-tarafı bulgu birikimi (elle düzenlenmez; bkz. [60](60-RETROSPEKTIF-TARAMA.md)) |
-| [analiz-craftagent-arac-eslestirme.md](analiz-craftagent-arac-eslestirme.md) | the external agent project↔TionSwarm araç eşleştirme analizi |
+| [analiz-craftagent-arac-eslestirme.md](analiz-craftagent-arac-eslestirme.md) | the external agent project↔TionHarness araç eşleştirme analizi |
 | **arsiv/** | Tarihsel inceleme dokümanları (referans/appendix) |
-| [arsiv/13-CRAFT-AGENTS-INCELEME.md](arsiv/13-CRAFT-AGENTS-INCELEME.md) | external-agent-oss release incelemesi → TionSwarm çıkarımları |
+| [arsiv/13-CRAFT-AGENTS-INCELEME.md](arsiv/13-CRAFT-AGENTS-INCELEME.md) | external-agent-oss release incelemesi → TionHarness çıkarımları |
 | [arsiv/14-PROVIDER-MIMARISI-INCELEME.md](arsiv/14-PROVIDER-MIMARISI-INCELEME.md) | Çoklu-provider mimarisi incelemesi (gelecek plan) |
 
 > **Numara notu:** 13–14 tarihsel inceleme dokümanları `arsiv/` altına taşındı (ana dizinde
@@ -136,8 +136,8 @@ Açık kaynaklı, kendi sunucunda barındırılan (self-hosted) bir **çoklu-aja
 
 | Script | Ne yapar | Detay |
 |---|---|---|
-| `dev.ps1` | Tek komutla dev: backend 8090 + frontend 5173 (Ctrl+C ikisini de indirir). `-Loopback` / `-BackendOnly` / `-FrontendOnly`. Backend **derlenip** (`bin\tionswarm-dev.exe`) doğrudan çalıştırılır — `go run` sarmalayıcısı yok, öksüz sunucu yok, gerçek exit kodu görünür. Crash tanısı `_devlogs/`: backend stderr yakalaması (Go fatal/panic) + koşular arası `lifecycle.log` (kim neyi öldürdü); kendi kendine ölümde port süpürülür + uygulama logunun sonu ekrana basılır. Kendiliğinden çıkış satırları `reason=` ile **çözümlenmiş** exit kodu taşır (NTSTATUS/DBG); Vite `NODE_OPTIONS=--max-old-space-size=4096` ile koşar (uzun uptime'da heap sürüklenmesi) | [33](33-DIS-AJAN-OTOMASYONU.md) · [05](05-ILERLEME.md) |
-| `build.ps1` | UI build + tek binary. `-Desktop` → `tionswarm-desktop.exe` (`-H windowsgui`) | [32](32-NATIVE-PENCERE.md) |
+| `dev.ps1` | Tek komutla dev: backend 8090 + frontend 5173 (Ctrl+C ikisini de indirir). `-Loopback` / `-BackendOnly` / `-FrontendOnly`. Backend **derlenip** (`bin\tionharness-dev.exe`) doğrudan çalıştırılır — `go run` sarmalayıcısı yok, öksüz sunucu yok, gerçek exit kodu görünür. Crash tanısı `_devlogs/`: backend stderr yakalaması (Go fatal/panic) + koşular arası `lifecycle.log` (kim neyi öldürdü); kendi kendine ölümde port süpürülür + uygulama logunun sonu ekrana basılır. Kendiliğinden çıkış satırları `reason=` ile **çözümlenmiş** exit kodu taşır (NTSTATUS/DBG); Vite `NODE_OPTIONS=--max-old-space-size=4096` ile koşar (uzun uptime'da heap sürüklenmesi) | [33](33-DIS-AJAN-OTOMASYONU.md) · [05](05-ILERLEME.md) |
+| `build.ps1` | UI build + tek binary. `-Desktop` → `tionharness-desktop.exe` (`-H windowsgui`) | [32](32-NATIVE-PENCERE.md) |
 | `serve.ps1` | Temiz build + tek binary'yi koşar (yalnız backend, Vite yok; gömülü SPA'yı sunar). `go run`'ın bayat link cache'i sorununu aşmak için açık `go build` yapar | — |
 | `tailscale-serve.ps1` | Tailnet üzerinden **otomatik HTTPS** ile sunar (telefonda mikrofon/STT için güvenli bağlam). Ön planda koşar, çıkışta serve config'i söker | [48](48-VPS-REMOTE-CLIENT.md) |
 | `worktree.ps1` | Geliştirici git worktree yardımcısı (`add`/`list`/`remove`/`prune`); node_modules junction'lar | [26](26-CALISMA-DIZINI.md) |

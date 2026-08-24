@@ -11,9 +11,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bilal-arikan/tionswarm/internal/db"
-	"github.com/bilal-arikan/tionswarm/internal/market"
-	"github.com/bilal-arikan/tionswarm/internal/settings"
+	"github.com/bilal-arikan/tionharness/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/market"
+	"github.com/bilal-arikan/tionharness/internal/settings"
 )
 
 // doJSON issues an HTTP request against h with an optional JSON body and

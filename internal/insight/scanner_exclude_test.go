@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/bilal-arikan/tionswarm/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/db"
 )
 
 // TestScanExcludesMachineTranscripts: a scan must not feed on its own output —

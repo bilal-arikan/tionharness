@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/bilal-arikan/tionswarm/internal/db"
-	"github.com/bilal-arikan/tionswarm/internal/tools"
+	"github.com/bilal-arikan/tionharness/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/tools"
 )
 
 // seedGateServers registers the two servers the SES948 regression is about.
@@ -189,7 +189,7 @@ func TestProfileAllowlistsReachOnlyValidatorUnityMCP(t *testing.T) {
 			t.Errorf("profile %q has an empty allowlist — it constrains nothing", id)
 			continue
 		}
-		for _, server := range []string{"playwright", "codebase-memory-mcp", "tionswarm_extended", "unity-mcp"} {
+		for _, server := range []string{"playwright", "codebase-memory-mcp", "tionharness_extended", "unity-mcp"} {
 			want := id == "validator" && server == "unity-mcp"
 			if got := gate(server); got != want {
 				t.Errorf("profile %q reaches MCP server %q; widening a profile is a policy change — update subagent.go's doc comment and _Docs/52 with it", id, server)
@@ -249,7 +249,7 @@ func TestCodexValidatorFreshTurnMountsOnlyUnityMCP(t *testing.T) {
 		t.Fatalf("resolve validator: ephemeral=%v err=%v", ephemeral, err)
 	}
 	// This mirrors autonomousInteraction after profile filtering: validator has
-	// no bridged TionSwarm built-ins, so both tier name lists are empty.
+	// no bridged TionHarness built-ins, so both tier name lists are empty.
 	inter := tools.InteractionEndpoint{URL: "http://127.0.0.1:9999", Token: "token"}
 	spec, err := rt.codexMCPSpec(ctx, validator.MCPEnabled, validator, inter)
 	if err != nil {

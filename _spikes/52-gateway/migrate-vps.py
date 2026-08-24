@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Migrate the TS gateway-manager config.json into TionSwarm MCP servers (Doc 52 Faz 3).
+"""Migrate the TS gateway-manager config.json into TionHarness MCP servers (Doc 52 Faz 3).
 
 Reads mcp-server/config.json (+ optional secrets.json) and emits a normalized
-{"mcpServers": {...}} document in the shape TionSwarm's POST /api/mcp-servers/import
+{"mcpServers": {...}} document in the shape TionHarness's POST /api/mcp-servers/import
 accepts (the standard Claude Code / .mcp.json form). Then the whole 18+7-server gateway
 config lands in a workspace, and an external client points at /mcp/gateway instead of the
 TS gateway — the TS gateway-manager can be retired.
@@ -12,7 +12,7 @@ Transforms applied:
   - ${VAR} placeholders in env/headers               -> resolved from secrets.json / the environment
   - options.disabled                                 -> tracked (reported), entry still emitted so
                                                         the operator can toggle it off in the UI
-  - options (and other gateway-only keys)            -> dropped (TionSwarm has no equivalent)
+  - options (and other gateway-only keys)            -> dropped (TionHarness has no equivalent)
 
 Usage:
   python migrate-vps.py <config.json> [--secrets secrets.json] [--enabled-only] > import.json
@@ -50,9 +50,9 @@ def normalize(name, spec, secrets):
     url = spec.get("url")
     transport = spec.get("transportType")
     if url or transport:
-        out["type"] = "http"  # TionSwarm infers http from url; sse is not supported
+        out["type"] = "http"  # TionHarness infers http from url; sse is not supported
         if transport == "sse":
-            warnings.append("sse transport downgraded to http (TionSwarm import rejects sse)")
+            warnings.append("sse transport downgraded to http (TionHarness import rejects sse)")
         if url:
             out["url"] = url
         if spec.get("headers"):

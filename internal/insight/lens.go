@@ -8,8 +8,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/bilal-arikan/tionswarm/internal/seed"
-	"github.com/bilal-arikan/tionswarm/internal/skills"
+	"github.com/bilal-arikan/tionharness/internal/seed"
+	"github.com/bilal-arikan/tionharness/internal/skills"
 )
 
 // Lens (a.k.a. scan intent) is a user-editable file describing one scan purpose.
@@ -33,7 +33,7 @@ type Lens struct {
 	Prefilter   Prefilter `json:"prefilter"`
 	Prompt      string    `json:"-"`    // markdown body = analysis instruction (LLM prompt)
 	Path        string    `json:"path"` // source file, for editing
-	// DefaultState says how this file compares to the lens TionSwarm ships:
+	// DefaultState says how this file compares to the lens TionHarness ships:
 	// "" = not a shipped lens, "default" = untouched, "tuned" = only enabled/model
 	// differ (still auto-refreshes), "edited" = the analysis body was changed, so
 	// shipped improvements no longer reach it. Derived (not parsed from the file)

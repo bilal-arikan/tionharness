@@ -65,7 +65,7 @@ func (r *Runtime) CapabilityContext(ctx, cwd) string   // mevcut olanların blok
   **bağlı olduğunu kanıtlamaz**. Blok artık üç durumla derecelendirilir:
   - `ServerAlive` (havuzda canlı bağlantı) → eski kesin cümle: "…is connected."
   - `ServerUnknown` (havuz bu sunucuya hiç bağlanmamış — normal durum: araç
-    döngüsünü **claude-cli sağlayıcısı** kendi koşturur, TionSwarm havuzu devrede
+    döngüsünü **claude-cli sağlayıcısı** kendi koşturur, TionHarness havuzu devrede
     değildir) → blok kalır ama bağlantı iddia edilmez; "configured … not verified"
     + araç listende yoksa `Glob`/`Grep`'e düş yönergesi.
   - `ServerDead` (slot var, bağlantı ölü) → `Detect` false, blok **hiç basılmaz**.
@@ -101,10 +101,10 @@ Eskiden her workspace'e `<workspace-container>/cbm-store` verilip `CBM_CACHE_DIR
 enjekte ediliyordu (`CBMStoreDir` + `applyCBMStore`). **codebase-memory-mcp 0.10**
 "hesap başına TEK cache root" kuralını getirdi: farklı bir root talep eden ikinci
 istemci `active account daemon uses a different cache directory` ile reddediliyor.
-Per-workspace store bu kuralla bağdaşmıyordu — TionSwarm'ın iki workspace'i bile
+Per-workspace store bu kuralla bağdaşmıyordu — TionHarness'ın iki workspace'i bile
 birbirini (ve dışarıdaki her CBM istemcisini: CLI, watcher, External Agent) kilitliyordu.
 
-Bugün: **TionSwarm hiçbir yerde `CBM_CACHE_DIR` enjekte etmez.** Sunucu kendi
+Bugün: **TionHarness hiçbir yerde `CBM_CACHE_DIR` enjekte etmez.** Sunucu kendi
 store'unu (default `~/.cache/codebase-memory-mcp`) kullanır; operatör isterse MCP
 sunucu satırının `envConfig`'ine elle yazar ve o değer aynen taşınır. Kalkan:
 `TestWriteCLIMCPConfigKeepsCodebaseMemoryEnv`.
@@ -230,9 +230,9 @@ seviyesinde her view'da mount olduğu için workspace ekranında da görünür.
 ## Canlı duman testi (2026-07-07)
 
 - **CLI kontratı:** izole temp store → `index_repository` (10056 node) → `list_projects`
-  (yalnız TionSwarm → izolasyon ✓) → `search_code` fan-out (sonuç döndü). `EnsureCodebaseIndexed`
+  (yalnız TionHarness → izolasyon ✓) → `search_code` fan-out (sonuç döndü). `EnsureCodebaseIndexed`
   + `CodebaseWorkspaceSearchTool`'un dayandığı JSON kontratı doğrulandı.
-- **Uygulama boot:** binary izole `TIONSWARM_DATA_DIR` + loopback portta panic'siz boot etti.
+- **Uygulama boot:** binary izole `TIONHARNESS_DATA_DIR` + loopback portta panic'siz boot etti.
 - **Toggle round-trip (canlı API):** default `true` → PUT `false` → re-GET `false` (kalıcı) →
   PUT `true`. DTO düzeltmesi bu testte ortaya çıktı ve giderildi.
 
@@ -356,7 +356,7 @@ skill'i üzerinden shell ile sürer. İki tuzağı var ve ikisi de "cevapsızlı
 
 **1. İkilinin adı `op` — 1Password CLI de aynı adı kullanıyor.** Bu yüzden katalog
 anahtarı `exttools.OpenPencilToolName = "openpencil"` (ikilinin adı DEĞİL) ve
-`openPencilExe()` çözümlemesi şu sırayla çalışır: `TIONSWARM_OPENPENCIL` env →
+`openPencilExe()` çözümlemesi şu sırayla çalışır: `TIONHARNESS_OPENPENCIL` env →
 `~\Desktop\Progs\openpencil\cli\op` → PATH — ama **PATH sonucu ancak yolunda
 "openpencil" geçiyorsa kabul edilir**. Aksi halde panel 1Password'ün sürümünü okur,
 onu OpenPencil'in release akışıyla karşılaştırır ve kullanıcıya tasarım aracının
@@ -377,7 +377,7 @@ Sürüm probu: `op --version` düz semver değil **JSON** basar (`{"version":"0.
 
 ### `git` katalog girdisi — release akışı neden git-for-windows (2026-08-01)
 
-`git` de katalogda (kategori `dev`, `Wire: "cli"`). TionSwarm git'e üç yerde
+`git` de katalogda (kategori `dev`, `Wire: "cli"`). TionHarness git'e üç yerde
 dayanır: oturum bağlamına **branch enjeksiyonu**, `scripts\worktree.ps1`, ve
 `internal/proc`'un non-interactive git env'i — ayrıca ajanın kendi shell komutları.
 
@@ -436,7 +436,7 @@ bilinemez, winget nvm'in üstüne kurarsa çakışır. `npm` ise `command`
 
 ### `python` — tespit neden `lookPath` DEĞİL (2026-08-02)
 
-`python` katalogda (kategori `dev`, `Wire: ""` → voice araçları gibi "bir TionSwarm
+`python` katalogda (kategori `dev`, `Wire: ""` → voice araçları gibi "bir TionHarness
 alt sistemi otomatik kullanır"). Opsiyonel bir güzellik değil **gerçek bağımlılık**:
 `run_code` + `transform_data` ona shell eder, code-mode'un ürettiği binding'ler
 onda koşar.
@@ -487,7 +487,7 @@ Backend ayrıca ikinci kapıdır: `POST /api/external-tools/{name}/update` yaln�
 
 ### Linux/sunucu davranışı — `winget` artık GOOS'a bağlı (2026-08-03)
 
-TionSwarm Windows masaüstünde de Ubuntu sunucuda da koşar. Katalogun **tespit +
+TionHarness Windows masaüstünde de Ubuntu sunucuda da koşar. Katalogun **tespit +
 sürüm** katmanı zaten çapraz-platformdu:
 
 - `exec.LookPath` Linux PATH'ini doğal olarak kullanır; `--version` probe'ları aynı.
@@ -514,7 +514,7 @@ talimatsızlıktan kötüdür.
 yalnız çip yanıltıyordu.
 
 **`node` / `python` — Kind değil, NOT platforma bağlı.** İkisi her platformda
-`manual` kalır (TionSwarm kurulumun sahibini bilemez: nvm, dağıtım paketi, pyenv,
+`manual` kalır (TionHarness kurulumun sahibini bilemez: nvm, dağıtım paketi, pyenv,
 brew, conda, installer — yanlış seçmek gerçek sahiple kavga eder). Değişen yalnız
 **not metnidir**, çünkü not kullanıcının gerçekten uygulayacağı talimattır:
 
@@ -557,5 +557,5 @@ Test: `recommendations.test.ts` (outdated/up-to-date/unknown/offline + tek-tık 
 
 - `codebase_workspace_search` fan-out'unu paralelleştir (şu an sıralı; project sayısı
   arttıkça hızlanır).
-- Mevcut default-store'daki eski TionSwarm kopyasının temizliği (çok-workspace geçişte).
+- Mevcut default-store'daki eski TionHarness kopyasının temizliği (çok-workspace geçişte).
 - Fan-out'u CLI-shell yerine canlı MCP pool üzerinden (process/SQLite contention'ı azaltır).

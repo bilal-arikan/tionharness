@@ -1,7 +1,7 @@
 ---
 id: tool-errors
 name: "Tool Errors"
-description: "Find recurring tool failures whose root cause is in TionSwarm and report them as app-fix findings."
+description: "Find recurring tool failures whose root cause is in TionHarness and report them as app-fix findings."
 channel: app-fix
 enabled: true
 model: claude-cli
@@ -12,9 +12,9 @@ prefilter:
 
 # Analysis Instruction
 
-You are given one TionSwarm session's error steps and debug events (tool failures,
+You are given one TionHarness session's error steps and debug events (tool failures,
 repairs, guardrail halts). Your job: identify tool failures whose **root cause is
-in the TionSwarm application itself** (a bug, a wrong tool schema, a missing
+in the TionHarness application itself** (a bug, a wrong tool schema, a missing
 guardrail, a hung subprocess) — NOT transient or user-caused errors.
 
 For each genuine app-level failure, produce a finding with:
@@ -24,7 +24,7 @@ For each genuine app-level failure, produce a finding with:
 - **signature** — a stable dedupe key: the tool name plus the normalized error
   shape (strip volatile ids/paths/timestamps) so the same failure across sessions
   collapses into one finding.
-- **proposedFix** — the concrete change to TionSwarm that would prevent it.
+- **proposedFix** — the concrete change to TionHarness that would prevent it.
 - **filePointer** — the most likely source file (e.g. `internal/providers/claudecli.go`).
 - **severity** — low | med | high.
 

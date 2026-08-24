@@ -1,21 +1,21 @@
-# Analiz: External Agent `session-tools-core` Araç Envanteri ve TionSwarm Eşleştirmesi
+# Analiz: External Agent `session-tools-core` Araç Envanteri ve TionHarness Eşleştirmesi
 
 > Kaynaklar: External Agent OSS (`external-agent-project/external-agent-oss`, `main`) — tek kaynak dosyası
-> `packages/session-tools-core/src/tool-defs.ts` (`SESSION_TOOL_DEFS`). TionSwarm (yerel) —
+> `packages/session-tools-core/src/tool-defs.ts` (`SESSION_TOOL_DEFS`). TionHarness (yerel) —
 > `internal/tools/builtin_*.go` ve interaction köprüsü (`internal/api/mcp_interaction.go`).
-> Analiz salt-okuma yapılmıştır; TionSwarm kodu değiştirilmemiştir.
+> Analiz salt-okuma yapılmıştır; TionHarness kodu değiştirilmemiştir.
 >
 > **GÜNCELLEME:** Aksiyon (yapılacaklar) karşılığı artık ayrı dosyada:
 > [`41-ARAC-BOSLUKLARI-YAPILACAKLAR.md`](./41-ARAC-BOSLUKLARI-YAPILACAKLAR.md).
 > Bu analizden sonra `config_validate`, `skill_validate`, `mermaid_validate` araçları **eklendi**
-> (artık TionSwarm'da mevcut) → §4a'daki ilgili maddeler **KAPANDI**; güncel açık boşluk listesi için
+> (artık TionHarness'da mevcut) → §4a'daki ilgili maddeler **KAPANDI**; güncel açık boşluk listesi için
 > 41 numaralı dokümana bakın.
 
 ## Özet
 
 - **External Agent session araçları:** **25 araç** (`SESSION_TOOL_DEFS` dizisi, `getToolDefsAsJsonSchema()`
   ile MCP/Codex tarafına da aynen sunuluyor — `session-mcp-server` ile envanter birebir doğrulandı).
-- **TionSwarm araçları:** **~80 builtin araç** (`builtin_*.go` içindeki `Def()` kayıtları) + interaction
+- **TionHarness araçları:** **~80 builtin araç** (`builtin_*.go` içindeki `Def()` kayıtları) + interaction
   köprüsünden gelen `run_subagent`. Bu doküman özellikle self-management + session/spawn/subagent
   ailesine odaklanır, ancak tüm builtin envanteri de gruplanmıştır.
 
@@ -25,7 +25,7 @@
   şablon/veri dönüştürme, oturumlar-arası mesajlaşma) üzerine kurulu; çekirdek dosya/şüt araçlarını
   (Read/Write/Bash...) Claude/Codex SDK'sından **natif** alır, bu yüzden `session-tools-core` içinde
   yer almazlar.
-- **TionSwarm**, bir multi-agent platformudur: ajan/flow/task/schedule/hook/workspace CRUD'u, kalıcı
+- **TionHarness**, bir multi-agent platformudur: ajan/flow/task/schedule/hook/workspace CRUD'u, kalıcı
   bellek (core + long-term), secret vault, artifact ve skill yönetimi gibi **platform yönetim
   araçlarını** kendi builtin'leri olarak taşır. Dosya/şal araçları da builtin'dir.
 
@@ -66,11 +66,11 @@ backend (Pi/Claude/Electron adaptörü).
 
 > Not: Çekirdek dosya/şal araçları (Read, Write, Edit, Bash, Glob, Grep, WebFetch vb.) External Agent'ta
 > **Claude/Codex SDK'sından natif** gelir; `session-tools-core` envanterine dahil değildir. Bu yüzden
-> yukarıdaki 25'lik listede yer almazlar — ama TionSwarm karşılaştırması için aşağıda dikkate alınmıştır.
+> yukarıdaki 25'lik listede yer almazlar — ama TionHarness karşılaştırması için aşağıda dikkate alınmıştır.
 
 ---
 
-## 2. TionSwarm Araç Envanteri (gruplanmış)
+## 2. TionHarness Araç Envanteri (gruplanmış)
 
 `builtin_*.go` içindeki `Def()` kayıtları + interaction köprüsü. Toplam ~80 builtin + 1 köprülü araç.
 
@@ -96,50 +96,50 @@ _(**Bellek:** `memory_add`/`memory_recall`/`core_memory_*` — memory alt sistem
 
 ---
 
-## 3. Eşleştirme Tablosu (External Agent → TionSwarm)
+## 3. Eşleştirme Tablosu (External Agent → TionHarness)
 
-Durum: `birebir` / `kısmi` / `TionSwarm'da yok`.
+Durum: `birebir` / `kısmi` / `TionHarness'da yok`.
 
-| External Agent aracı | TionSwarm karşılığı | Durum | Not |
+| External Agent aracı | TionHarness karşılığı | Durum | Not |
 |-------------------|--------------------|-------|-----|
-| `SubmitPlan` | claude-cli plan modu (`ExitPlanMode` köprüsü) | kısmi | TionSwarm'da bağımsız bir builtin plan aracı yok; plan onayı CLI'nin `ExitPlanMode`'una bağlanmış (son commit: "claude-cli plan modu"). |
+| `SubmitPlan` | claude-cli plan modu (`ExitPlanMode` köprüsü) | kısmi | TionHarness'da bağımsız bir builtin plan aracı yok; plan onayı CLI'nin `ExitPlanMode`'una bağlanmış (son commit: "claude-cli plan modu"). |
 | `config_validate` | `read_config` / `write_config` / `list_config` | kısmi | Config dosyalarını okuma/yazma var; **doğrulama (schema validation) yok**. |
 | `skill_validate` | `create_skill` / `update_skill` | kısmi | Skill CRUD var ama ayrı `validate` adımı yok. |
-| `mermaid_validate` | — | TionSwarm'da yok | Diyagram doğrulama aracı yok. |
-| `source_test` | `create_mcp_server` / `toggle_mcp_server` / `list_mcp_servers` | kısmi | MCP sunucu yönetimi var; "doğrula + bağlantı testi + otomatik aktive et" tek-adımı yok. TionSwarm source ≈ MCP sunucu kavramı. |
-| `source_oauth_trigger` | — | TionSwarm'da yok | OAuth-tabanlı source akışı yok (kimlik bilgileri vault'tan). |
-| `source_google_oauth_trigger` | — | TionSwarm'da yok | — |
-| `source_slack_oauth_trigger` | — | TionSwarm'da yok | — |
-| `source_microsoft_oauth_trigger` | — | TionSwarm'da yok | — |
+| `mermaid_validate` | — | TionHarness'da yok | Diyagram doğrulama aracı yok. |
+| `source_test` | `create_mcp_server` / `toggle_mcp_server` / `list_mcp_servers` | kısmi | MCP sunucu yönetimi var; "doğrula + bağlantı testi + otomatik aktive et" tek-adımı yok. TionHarness source ≈ MCP sunucu kavramı. |
+| `source_oauth_trigger` | — | TionHarness'da yok | OAuth-tabanlı source akışı yok (kimlik bilgileri vault'tan). |
+| `source_google_oauth_trigger` | — | TionHarness'da yok | — |
+| `source_slack_oauth_trigger` | — | TionHarness'da yok | — |
+| `source_microsoft_oauth_trigger` | — | TionHarness'da yok | — |
 | `source_credential_prompt` | `secret_set` (+ `ask_user`) | kısmi | Secret vault var ama "güvenli credential giriş UI'ı" yok; ajan secret'ı kendisi yazar. |
 | `update_user_preferences` | `update_user_preferences` (builtin) | kısmi | Yapısal tercih alanları var; önceki serbest-metin core-memory yolu (memory alt sistemi) 2026-07-05'te kaldırıldı. |
 | `transform_data` | `Bash`/`Shell` + `Write` | kısmi | İzole subprocess + yapısal çıktı sözleşmesi yok; aynı sonuç shell ile elde edilebilir. |
 | `script_sandbox` | `Bash` (sandbox'lı PowerShell shell) | kısmi | Sandbox'lı shell var; ağ-izolasyonlu satır-içi script tanılama aracı ayrı değil. |
-| `render_template` | — | TionSwarm'da yok | Mustache/HTML şablon render aracı yok. |
-| `send_developer_feedback` | — | TionSwarm'da yok | Geliştiriciye geri bildirim kanalı yok. |
+| `render_template` | — | TionHarness'da yok | Mustache/HTML şablon render aracı yok. |
+| `send_developer_feedback` | — | TionHarness'da yok | Geliştiriciye geri bildirim kanalı yok. |
 | `call_llm` | `run_subagent` (sync, izole) | kısmi | `run_subagent` araçlı tam bir ajan (daha ağır); `call_llm` tek-completion/ucuz. En yakın karşılık. |
 | `spawn_session` | `spawn_session` | birebir | Her ikisi de bağımsız yeni oturum başlatır (fire-and-forget). |
-| `browser_tool` | — (MCP: playwright / mcp-chrome) | TionSwarm'da yok | Natif tarayıcı aracı yok; tarayıcı MCP sunucuları üzerinden kullanılır. |
-| `set_session_labels` | — (`move_task` kanban kolonları) | TionSwarm'da yok | Oturum-seviyesi etiket kavramı yok; benzer "durum" mantığı kanban task'larında. |
+| `browser_tool` | — (MCP: playwright / mcp-chrome) | TionHarness'da yok | Natif tarayıcı aracı yok; tarayıcı MCP sunucuları üzerinden kullanılır. |
+| `set_session_labels` | — (`move_task` kanban kolonları) | TionHarness'da yok | Oturum-seviyesi etiket kavramı yok; benzer "durum" mantığı kanban task'larında. |
 | `set_session_status` | `archive_session` / `complete_goal` / `move_task` | kısmi | Oturum için done≈`archive_session`; durum-makinesi task board'unda (`move_task`). |
 | `get_session_info` | `list_sessions` | kısmi | Tekil oturum metadata'sını dönen ayrı araç yok; `list_sessions` durumsal farkındalık verir. |
 | `list_sessions` | `list_sessions` | birebir | Her ikisi de workspace oturumlarını listeler. |
-| `send_agent_message` | `send_message` | kısmi | TionSwarm başka **ajana** DM yollar; Craft başka **oturuma**. Amaç aynı (sürmekte olan koordinasyon). |
-| `list_messaging_channels` | — | TionSwarm'da yok | Telegram/WhatsApp gateway entegrasyonu yok. |
-| `unbind_messaging_channel` | — | TionSwarm'da yok | — |
+| `send_agent_message` | `send_message` | kısmi | TionHarness başka **ajana** DM yollar; Craft başka **oturuma**. Amaç aynı (sürmekte olan koordinasyon). |
+| `list_messaging_channels` | — | TionHarness'da yok | Telegram/WhatsApp gateway entegrasyonu yok. |
+| `unbind_messaging_channel` | — | TionHarness'da yok | — |
 
 > Çekirdek araç eşi (envanter-dışı, her iki tarafta var): `Read/Write/Edit/Bash/Glob/Grep/WebFetch`
-> TionSwarm'da builtin, External Agent'ta SDK-natif. `mermaid_validate` hariç bu çekirdek küme örtüşür.
+> TionHarness'da builtin, External Agent'ta SDK-natif. `mermaid_validate` hariç bu çekirdek küme örtüşür.
 
 ---
 
 ## 4. Boşluk Analizi
 
-### 4a. External Agent'ta var, TionSwarm'da yok (eklenmesi mantıklı olanlar)
+### 4a. External Agent'ta var, TionHarness'da yok (eklenmesi mantıklı olanlar)
 
 | Craft aracı | Öneri (1 cümle) |
 |-------------|------------------|
-| `config_validate` | TionSwarm config/settings dosyaları için bir `config_validate` builtin'i, `write_config`/`update_settings` öncesi schema doğrulaması yaparak hatalı yapılandırmaları erken yakalar. |
+| `config_validate` | TionHarness config/settings dosyaları için bir `config_validate` builtin'i, `write_config`/`update_settings` öncesi schema doğrulaması yaparak hatalı yapılandırmaları erken yakalar. |
 | `skill_validate` | `create_skill`/`update_skill` akışına bir `skill_validate` aracı eklemek, frontmatter/slug/gövde tutarlılığını yayınlamadan önce garanti eder. |
 | `transform_data` | İzole subprocess'te yapısal JSON/datatable üreten bir `transform_data` builtin'i, büyük veri setlerini token-verimli işlemeyi standardize eder (şu an ad-hoc shell). |
 | `render_template` | Source/artifact verisini Mustache HTML şablonuyla render eden bir araç, rapor/önizleme çıktılarını tutarlı ve markalı hale getirir. |
@@ -148,9 +148,9 @@ Durum: `birebir` / `kısmi` / `TionSwarm'da yok`.
 | `source_credential_prompt` | Kullanıcıya güvenli credential giriş UI'ı açan bir araç, ajanların secret'ı kendilerinin yazmasına (veya tahmin etmesine) gerek bırakmaz. |
 | `call_llm` | `run_subagent`'ten ayrı, araçsız tek-completion bir `call_llm`, ucuz özet/sınıflandırma alt görevleri için ağır subagent yerine doğru maliyet katmanını verir. |
 
-### 4b. TionSwarm'da var, External Agent'ta yok (TionSwarm'nun platform üstünlüğü)
+### 4b. TionHarness'da var, External Agent'ta yok (TionHarness'nun platform üstünlüğü)
 
-Bunlar TionSwarm'nun multi-agent platform doğasından gelir ve External Agent'ın oturum-kapsamlı modelinde
+Bunlar TionHarness'nun multi-agent platform doğasından gelir ve External Agent'ın oturum-kapsamlı modelinde
 karşılığı yoktur (eksiklik değil, kapsam farkı):
 
 - **Tam CRUD aileleri:** ajan (`create/update/delete/list_agent`), flow (`create/.../run_flow`),
@@ -173,8 +173,8 @@ karşılığı yoktur (eksiklik değil, kapsam farkı):
 
 ## Sonuç
 
-İki araç seti, **oturum-yardımcısı** (External Agent) ve **multi-agent platform yönetimi** (TionSwarm) olarak
+İki araç seti, **oturum-yardımcısı** (External Agent) ve **multi-agent platform yönetimi** (TionHarness) olarak
 ayrışır. Örtüşme delegasyon (`spawn_session`), oturum farkındalığı (`list_sessions`) ve oturumlar-arası
-mesajlaşmada yoğunlaşır. TionSwarm'ya en yüksek değerli adaylar: doğrulama araçları
+mesajlaşmada yoğunlaşır. TionHarness'ya en yüksek değerli adaylar: doğrulama araçları
 (`config_validate`, `skill_validate`, `mermaid_validate`), `transform_data`/`render_template` çıktı
 katmanı ve ucuz `call_llm` katmanı.

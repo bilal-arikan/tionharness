@@ -1,4 +1,4 @@
-# TionSwarm — Insight App-Fix Backlog
+# TionHarness — Insight App-Fix Backlog
 
 Auto-appended by the retrospective scanner (_Docs/60). Each entry carries a
 stable `insight-sig` marker so re-scans never duplicate it.
@@ -23,7 +23,7 @@ stable `insight-sig` marker so re-scans never duplicate it.
 - **Evidence sessions:** SES158
 - **File:** `internal/tools/registry.go`
 
-**Root cause:** The agent attempted to call `get_flow` both as a bare tool name and as `mcp__tionswarm_extended__get_flow`, but neither is registered in the tool registry — indicates either a missing tool registration/export in the MCP extended toolset or a stale tool name surfaced to the model (e.g. in a prompt/schema hint) that doesn't match what's actually wired up in internal/tools/registry.go.
+**Root cause:** The agent attempted to call `get_flow` both as a bare tool name and as `mcp__tionharness_extended__get_flow`, but neither is registered in the tool registry — indicates either a missing tool registration/export in the MCP extended toolset or a stale tool name surfaced to the model (e.g. in a prompt/schema hint) that doesn't match what's actually wired up in internal/tools/registry.go.
 
 **Proposed fix:** Either register a `get_flow` tool in the MCP extended server (if one was intended to exist) or remove/rename any reference to it in prompts, tool descriptions, or schema docs so the model never attempts to call a tool that isn't registered.
 
@@ -127,7 +127,7 @@ stable `insight-sig` marker so re-scans never duplicate it.
 - **Evidence sessions:** SES50, SES40
 - **File:** `internal/providers/claudecli.go`
 
-**Root cause:** TionSwarm advertised or allowed the model to attempt the Bash tool while the session's actual enabled tool set for this context did not include it, so every Bash invocation is rejected by the runtime with 'not enabled in this context'. This is a provisioning mismatch: the tool allowlist / capability set handed to the agent for this session kind is inconsistent with what the model believes it can call. It repeated (2x), so the model has no working shell fallback and burns steps retrying the same unavailable tool.
+**Root cause:** TionHarness advertised or allowed the model to attempt the Bash tool while the session's actual enabled tool set for this context did not include it, so every Bash invocation is rejected by the runtime with 'not enabled in this context'. This is a provisioning mismatch: the tool allowlist / capability set handed to the agent for this session kind is inconsistent with what the model believes it can call. It repeated (2x), so the model has no working shell fallback and burns steps retrying the same unavailable tool.
 
 **Proposed fix:** Make the enabled tool set authoritative: either register/enable Bash for session kinds that need shell access, or strip Bash from the model's advertised toolset for contexts where it is intentionally disabled so it is never offered. On a 'tool not enabled' rejection, surface a guardrail that redirects the model to the equivalent available tool instead of letting it retry the same disabled tool.
 
@@ -140,7 +140,7 @@ stable `insight-sig` marker so re-scans never duplicate it.
 - **Evidence sessions:** SES33, SES32
 - **File:** `internal/tools/registry.go`
 
-**Root cause:** The on-demand tool catalog exposed to activate_tools does not contain every tool name the model is led to believe is activatable. The agent requested `create_skill` and `skill_validate`; both were reported as "unknown (not in the on-demand catalog)", so the call was a complete no-op. This is a registry/prompt mismatch inside TionSwarm: either those tools are registered under different names (or only in a different scope/session kind) while the prompt or an earlier hint still advertises them, or they were removed from the deferred catalog without updating the catalog description the model sees. The failure is silent-ish — activate_tools returns success-shaped text ("no new tools activated") rather than an error, so the loop can proceed without the capability it just asked for.
+**Root cause:** The on-demand tool catalog exposed to activate_tools does not contain every tool name the model is led to believe is activatable. The agent requested `create_skill` and `skill_validate`; both were reported as "unknown (not in the on-demand catalog)", so the call was a complete no-op. This is a registry/prompt mismatch inside TionHarness: either those tools are registered under different names (or only in a different scope/session kind) while the prompt or an earlier hint still advertises them, or they were removed from the deferred catalog without updating the catalog description the model sees. The failure is silent-ish — activate_tools returns success-shaped text ("no new tools activated") rather than an error, so the loop can proceed without the capability it just asked for.
 
 **Proposed fix:** Make the on-demand catalog the single source of truth: generate the activatable-tool list handed to the model directly from the registry's deferred set (so an unregistered name can never be advertised), and have activate_tools return a hard error — not a benign "no new tools activated" line — when *every* requested name is unknown, including a nearest-match suggestion list from the catalog. Additionally, alias or register skill-authoring tools (create_skill / skill_validate) if they are intended to be activatable in this session kind.
 
@@ -205,7 +205,7 @@ stable `insight-sig` marker so re-scans never duplicate it.
 - **Evidence sessions:** SES45
 - **File:** `internal/mcp/transport.go` ⚠️ (not found in repo — pointer unverified)
 
-**Root cause:** The mcp-alpha MCP server transport dropped during an in-flight mcp-alpha_unity_wait_until call and the runtime lost the response with no reconnect/retry, leaving the tool call unresolved. This is an app-side transport/session-management gap in how TionSwarm holds the MCP connection for long-running wait calls.
+**Root cause:** The mcp-alpha MCP server transport dropped during an in-flight mcp-alpha_unity_wait_until call and the runtime lost the response with no reconnect/retry, leaving the tool call unresolved. This is an app-side transport/session-management gap in how TionHarness holds the MCP connection for long-running wait calls.
 
 **Proposed fix:** Add transport keepalive/reconnect and idempotent in-flight call re-issue (or surface a retryable error) for long-running mcp-alpha calls so a dropped transport does not silently lose the response.
 
@@ -244,7 +244,7 @@ stable `insight-sig` marker so re-scans never duplicate it.
 - **Evidence sessions:** SES8
 - **File:** `internal/agent/toolsetup.go`
 
-**Root cause:** TionSwarm scopes the tool set per session kind (the Board Planner session runs without shell access), but the model still emits a Bash tool call. The advertised toolset / system prompt the runtime hands to the provider is not consistent with the tools actually enabled for that session kind, so the provider rejects the call with 'Bash exists but is not enabled in this context'. The agent burns a turn on a call that the runtime could have known was impossible.
+**Root cause:** TionHarness scopes the tool set per session kind (the Board Planner session runs without shell access), but the model still emits a Bash tool call. The advertised toolset / system prompt the runtime hands to the provider is not consistent with the tools actually enabled for that session kind, so the provider rejects the call with 'Bash exists but is not enabled in this context'. The agent burns a turn on a call that the runtime could have known was impossible.
 
 **Proposed fix:** Make the enabled tool list the single source of truth: build the provider tool schema and the system-prompt tool description from the same scoped registry used for session kind, and drop any mention of disabled tools. Additionally, intercept calls to known-but-disabled tools in the tool loop and return a short, actionable message naming the allowed alternatives instead of surfacing the raw provider rejection.
 
@@ -328,14 +328,14 @@ stable `insight-sig` marker so re-scans never duplicate it.
 
 <!-- insight-sig:activate_tools|no_new_tools_activated|unknown_not_in_on_demand_catalog -->
 
-## Model calls Bash, which exists in the provider but is not enabled in the TionSwarm tool context
+## Model calls Bash, which exists in the provider but is not enabled in the TionHarness tool context
 
 - **Severity:** med
 - **Occurrences:** 1
 - **Evidence sessions:** SES29
 - **File:** `internal/agent/toolsetup.go`
 
-**Root cause:** The provider-side tool allowlist for this session excludes Bash while the model's context still leads it to believe Bash is callable — the harness returns 'Bash exists but is not enabled in this context'. TionSwarm's tool setup builds the enabled set without ensuring the model-visible tool list matches it, so the model wastes a turn on a tool that was never wired in. This is a wiring/guardrail gap in tool setup, not a transient error.
+**Root cause:** The provider-side tool allowlist for this session excludes Bash while the model's context still leads it to believe Bash is callable — the harness returns 'Bash exists but is not enabled in this context'. TionHarness's tool setup builds the enabled set without ensuring the model-visible tool list matches it, so the model wastes a turn on a tool that was never wired in. This is a wiring/guardrail gap in tool setup, not a transient error.
 
 **Proposed fix:** Make the enabled tool set the only thing the model sees: when constructing the session, filter the advertised tool list to exactly the allowlisted set, and when a disabled-but-existing tool is called, surface a repair message naming the enabled equivalent (e.g. the shell/exec tool actually wired in) instead of a bare 'not enabled'. Log a warning at setup when the advertised list and the enabled list diverge.
 
@@ -348,7 +348,7 @@ stable `insight-sig` marker so re-scans never duplicate it.
 - **Evidence sessions:** SES36
 - **File:** `internal/agent/toolsetup.go`
 
-**Root cause:** The toolset assembled for the session (program/workspace-scoped, e.g. the Unity 'CityCleaner' program) excludes Bash, but the model still emits a Bash tool_use — meaning the prompt/tool advertisement and the actually-enabled tool list are built from different sources. TionSwarm's tool registry knows Bash exists and answers the call with 'exists but is not enabled in this context' instead of either (a) never advertising it, or (b) transparently mapping it to the enabled shell tool. The result is a wasted turn and a hard error step for a tool the app itself half-offers.
+**Root cause:** The toolset assembled for the session (program/workspace-scoped, e.g. the Unity 'CityCleaner' program) excludes Bash, but the model still emits a Bash tool_use — meaning the prompt/tool advertisement and the actually-enabled tool list are built from different sources. TionHarness's tool registry knows Bash exists and answers the call with 'exists but is not enabled in this context' instead of either (a) never advertising it, or (b) transparently mapping it to the enabled shell tool. The result is a wasted turn and a hard error step for a tool the app itself half-offers.
 
 **Proposed fix:** Make the enabled-tool set the single source of truth: build the model-facing tool schema list in `toolsetup.go` from the same filtered registry that `toolloop.go` dispatches against, so a disabled tool is never nameable. Additionally, in the registry's unknown/disabled-tool path, return a repairable error that names the enabled equivalent (e.g. 'use PowerShell/Shell instead of Bash') rather than a generic not-enabled message, so the model self-corrects in one hop instead of erroring out.
 
@@ -361,7 +361,7 @@ stable `insight-sig` marker so re-scans never duplicate it.
 - **Evidence sessions:** SES33
 - **File:** `internal/agent/toolloop.go`
 
-**Root cause:** TionSwarm surfaces the ripgrep timeout as a plain tool error and lets the model re-issue the identical Glob call. There is no app-side guardrail that (a) scopes searches away from vendor/build directories (Unity `Library/`, `Temp/`, `obj/`) or (b) blocks/rewrites a repeat of an already-timed-out pattern. The `cli_warn: Glob` guardrail fires but is advisory only, so the loop burns 5 identical failures before the agent gives up.
+**Root cause:** TionHarness surfaces the ripgrep timeout as a plain tool error and lets the model re-issue the identical Glob call. There is no app-side guardrail that (a) scopes searches away from vendor/build directories (Unity `Library/`, `Temp/`, `obj/`) or (b) blocks/rewrites a repeat of an already-timed-out pattern. The `cli_warn: Glob` guardrail fires but is advisory only, so the loop burns 5 identical failures before the agent gives up.
 
 **Proposed fix:** In the tool loop, track (tool, normalized args) for timed-out searches and fail-fast on an exact repeat with a directive error ("this pattern already timed out; narrow the path or use a more specific glob"). Additionally inject default ignore globs for known heavy build/vendor dirs when the workspace root looks like a Unity/node/Go project, and make the ripgrep timeout configurable per workspace instead of a hard 20s.
 
@@ -374,7 +374,7 @@ stable `insight-sig` marker so re-scans never duplicate it.
 - **Evidence sessions:** SES37
 - **File:** `internal/agent/toolsetup.go`
 
-**Root cause:** TionSwarm builds the provider tool allowlist (toolsetup) independently of the system prompt / agent instructions handed to the model. When a workspace profile (here a Unity project session) is created without Bash in its enabled tool set, the prompt still describes shell usage, so the model calls `Bash` and the CLI rejects it with "exists but is not enabled in this context". The wasted turn is an app-side contract mismatch, not a model or user error.
+**Root cause:** TionHarness builds the provider tool allowlist (toolsetup) independently of the system prompt / agent instructions handed to the model. When a workspace profile (here a Unity project session) is created without Bash in its enabled tool set, the prompt still describes shell usage, so the model calls `Bash` and the CLI rejects it with "exists but is not enabled in this context". The wasted turn is an app-side contract mismatch, not a model or user error.
 
 **Proposed fix:** Derive the tool documentation in the system prompt from the same enabled-tool registry that is passed to the provider, so a disabled tool is never advertised. Additionally, when a tool call names a tool that exists in the registry but is disabled for the session, intercept it in the tool loop and return a deterministic 'tool disabled, use X instead' repair message listing the actually-enabled alternatives, rather than letting the provider-level error consume a step.
 
@@ -387,7 +387,7 @@ stable `insight-sig` marker so re-scans never duplicate it.
 - **Evidence sessions:** SES45
 - **File:** `internal/agent/toolsetup.go`
 
-**Root cause:** The tool registry/system-prompt assembly advertises a tool name to the model that the runtime's active toolset for this session kind does not actually expose. The model calls `Bash`, and the loop rejects it with "Bash exists but is not enabled in this context." This is a registry/prompt mismatch in TionSwarm's tool setup, not a model mistake — the only reason the model knows the name is that the app leaked it.
+**Root cause:** The tool registry/system-prompt assembly advertises a tool name to the model that the runtime's active toolset for this session kind does not actually expose. The model calls `Bash`, and the loop rejects it with "Bash exists but is not enabled in this context." This is a registry/prompt mismatch in TionHarness's tool setup, not a model mistake — the only reason the model knows the name is that the app leaked it.
 
 **Proposed fix:** Make the advertised tool list and the executable tool list derive from a single source of truth in tool setup: filter the prompt/tool-schema list by the same context predicate used at dispatch time. If a disabled tool must remain mentioned, the rejection should name the enabled equivalent explicitly instead of the generic "use one of the available tools".
 
@@ -413,7 +413,7 @@ stable `insight-sig` marker so re-scans never duplicate it.
 - **Evidence sessions:** SES45
 - **File:** `internal/agent/toolloop.go`
 
-**Root cause:** TionSwarm passes MCP resource links (`mcp-alpha://resource/<id>`) through to the model as opaque handles and only dereferences them when the model later calls `*_retrieve`. Since the producing server may expire or evict the artifact between turns, the retrieve fails with ARTIFACT.NOT_FOUND (`retryable: false`) and the step is unrecoverable — the app has no cached copy and no way to regenerate the handle.
+**Root cause:** TionHarness passes MCP resource links (`mcp-alpha://resource/<id>`) through to the model as opaque handles and only dereferences them when the model later calls `*_retrieve`. Since the producing server may expire or evict the artifact between turns, the retrieve fails with ARTIFACT.NOT_FOUND (`retryable: false`) and the step is unrecoverable — the app has no cached copy and no way to regenerate the handle.
 
 **Proposed fix:** When an MCP tool result contains a resource link, resolve and cache the artifact bytes (or a workspace-local copy) at result-ingest time and rewrite the handle to point at the local copy. Fall back to a clear, actionable error ("artifact expired — re-run the producing tool") that the toolloop can turn into a repair step, rather than surfacing the raw NOT_FOUND.
 
@@ -426,7 +426,7 @@ stable `insight-sig` marker so re-scans never duplicate it.
 - **Evidence sessions:** SES40
 - **File:** `internal/agent/toolsetup.go`
 
-**Root cause:** The tool set handed to the provider for this session does not include Bash, but nothing tells the model that. The model still emits a Bash tool_use (it is a well-known default tool name), and the provider rejects it with "No such tool available: Bash. Bash exists but is not enabled in this context." The call is wasted twice in a row, which means the rejection is fed back as a plain tool error with no corrective steering — TionSwarm neither filters the disallowed call before dispatch nor injects an explicit "available tools" statement into the system prompt when the enabled set is a restricted subset. This is a tool-registry/prompt mismatch inside TionSwarm, not a transient or user error.
+**Root cause:** The tool set handed to the provider for this session does not include Bash, but nothing tells the model that. The model still emits a Bash tool_use (it is a well-known default tool name), and the provider rejects it with "No such tool available: Bash. Bash exists but is not enabled in this context." The call is wasted twice in a row, which means the rejection is fed back as a plain tool error with no corrective steering — TionHarness neither filters the disallowed call before dispatch nor injects an explicit "available tools" statement into the system prompt when the enabled set is a restricted subset. This is a tool-registry/prompt mismatch inside TionHarness, not a transient or user error.
 
 **Proposed fix:** In the tool setup path, (1) render the actual enabled tool names into the system prompt when the session runs with a restricted tool set, so the model does not guess at defaults like Bash/Write; and (2) in the tool loop, intercept a tool_use whose name is not in the enabled registry and return a structured repair message that names the closest enabled alternative (e.g. PowerShell/Shell) instead of forwarding the provider's generic rejection. Optionally alias well-known names (Bash → the enabled shell tool) rather than hard-failing.
 
@@ -452,9 +452,9 @@ stable `insight-sig` marker so re-scans never duplicate it.
 - **Evidence sessions:** SES9
 - **File:** `internal/tools/registry.go`
 
-**Root cause:** The Edit tool enforces a read-before-write freshness check against a cached mtime/content snapshot. Any out-of-band write between the Read and the Edit — including writes made by TionSwarm's own formatter/linter hooks or by a concurrent agent in the same workspace — invalidates the snapshot and the edit is rejected, forcing the agent to re-Read and re-emit the identical edit. The guardrail does not distinguish "the file changed in a way that affects my `old_string` anchor" from "the file changed elsewhere", so benign concurrent edits produce failures.
+**Root cause:** The Edit tool enforces a read-before-write freshness check against a cached mtime/content snapshot. Any out-of-band write between the Read and the Edit — including writes made by TionHarness's own formatter/linter hooks or by a concurrent agent in the same workspace — invalidates the snapshot and the edit is rejected, forcing the agent to re-Read and re-emit the identical edit. The guardrail does not distinguish "the file changed in a way that affects my `old_string` anchor" from "the file changed elsewhere", so benign concurrent edits produce failures.
 
-**Proposed fix:** Downgrade the check from mtime/snapshot equality to anchor validity: on a stale snapshot, re-read the file and retry the edit automatically if `old_string` still matches exactly once; only fail if the anchor is now missing or ambiguous. Also exclude TionSwarm's own post-edit hook writes from invalidating the snapshot by refreshing the cached content after the hook runs.
+**Proposed fix:** Downgrade the check from mtime/snapshot equality to anchor validity: on a stale snapshot, re-read the file and retry the edit automatically if `old_string` still matches exactly once; only fail if the anchor is now missing or ambiguous. Also exclude TionHarness's own post-edit hook writes from invalidating the snapshot by refreshing the cached content after the hook runs.
 
 <!-- insight-sig:Edit:file_modified_since_read -->
 
@@ -478,7 +478,7 @@ stable `insight-sig` marker so re-scans never duplicate it.
 - **Evidence sessions:** SES182
 - **File:** `internal/api/autonomous_interaction.go`
 
-**Root cause:** TionSwarm'ın interaction MCP aracı olan ask_user, kullanıcıdan yanıt gelene kadar bloklanıyor. Otonom/gözetimsiz çalışan bir oturumda soruyu yanıtlayacak bir kullanıcı olmadığında istek varsayılan zaman aşımına kadar bekliyor ve ardından 'operation timed out' ile düşüyor. Bu bir kullanıcı/ortam hatası değil; aracın yanıtsız durumu zarifçe ele alacak bir guardrail (otomatik iptal, varsayılan cevap veya turu devam ettiren fallback) içermemesinden kaynaklanan uygulama seviyesinde bir eksiklik.
+**Root cause:** TionHarness'ın interaction MCP aracı olan ask_user, kullanıcıdan yanıt gelene kadar bloklanıyor. Otonom/gözetimsiz çalışan bir oturumda soruyu yanıtlayacak bir kullanıcı olmadığında istek varsayılan zaman aşımına kadar bekliyor ve ardından 'operation timed out' ile düşüyor. Bu bir kullanıcı/ortam hatası değil; aracın yanıtsız durumu zarifçe ele alacak bir guardrail (otomatik iptal, varsayılan cevap veya turu devam ettiren fallback) içermemesinden kaynaklanan uygulama seviyesinde bir eksiklik.
 
 **Proposed fix:** autonomous_interaction akışında ask_user için açık bir zaman aşımı + fallback guardrail'i ekle: süre dolduğunda istegi iptal edip ajana yapılandırılmış bir 'no_response' sonucu döndür (hata fırlatmak yerine), böylece tur bloklanmadan devam etsin. Otonom modda ask_user'ı ya devre dışı bırak ya da varsayılan/timeout-safe bir yanıtla besle.
 

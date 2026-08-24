@@ -1,13 +1,13 @@
 # Commands the rtk allowlist decisions rest on (_Docs/17-TOKEN-OPTIMIZASYON.md).
 # Format: <label>	<cwd>	<command>   —  cwd paths are THIS machine's; edit before reuse.
 # Run: python scripts/rtk_eval.py scripts/rtk_eval.spec.tsv
-pytest	C:\Users\user\Desktop\Projects\TionSwarm\.localdata\evalprojs\pytest_demo	pytest
-pytest -v	C:\Users\user\Desktop\Projects\TionSwarm\.localdata\evalprojs\pytest_demo	pytest -v
-npx tsc --noEmit (180 hata)	C:\Users\user\Desktop\Projects\TionSwarm\.localdata\evalprojs\tsc_demo	npx tsc --noEmit
+pytest	C:\Users\user\Desktop\Projects\TionHarness\.localdata\evalprojs\pytest_demo	pytest
+pytest -v	C:\Users\user\Desktop\Projects\TionHarness\.localdata\evalprojs\pytest_demo	pytest -v
+npx tsc --noEmit (180 hata)	C:\Users\user\Desktop\Projects\TionHarness\.localdata\evalprojs\tsc_demo	npx tsc --noEmit
 cargo test	C:\Users\user\Desktop\Projects\SampleProject\sample-rs	cargo test -p sample-rules
 cargo build	C:\Users\user\Desktop\Projects\SampleProject\sample-rs	cargo build -p sample-rules
-npm run build	C:\Users\user\Desktop\Projects\TionSwarm\frontend	npm run build
-go build ./...	C:\Users\user\Desktop\Projects\TionSwarm	go build ./...
-go vet ./internal/agent	C:\Users\user\Desktop\Projects\TionSwarm	go vet ./internal/agent/
-vitest run	C:\Users\user\Desktop\Projects\TionSwarm\frontend	npx vitest run
-eslint .	C:\Users\user\Desktop\Projects\TionSwarm\frontend	npx eslint src --max-warnings 999
+npm run build	C:\Users\user\Desktop\Projects\TionHarness\frontend	npm run build
+go build ./...	C:\Users\user\Desktop\Projects\TionHarness	go build ./...
+go vet ./internal/agent	C:\Users\user\Desktop\Projects\TionHarness	go vet ./internal/agent/
+vitest run	C:\Users\user\Desktop\Projects\TionHarness\frontend	npx vitest run
+eslint .	C:\Users\user\Desktop\Projects\TionHarness\frontend	npx eslint src --max-warnings 999

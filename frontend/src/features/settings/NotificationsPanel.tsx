@@ -30,7 +30,7 @@ const WS_NOTIFY_OPTIONS: { value: DesktopNotificationsMode; label: string; hint?
 // The master toggle (draft.desktopNotifications) is the app-global default; the
 // per-workspace override below (three-state) lets a user force notifications on or
 // off for the active workspace regardless of the global toggle, consistent with
-// TionSwarm's physical workspace isolation. The override is self-contained (own
+// TionHarness's physical workspace isolation. The override is self-contained (own
 // load/save via the workspace-settings endpoint), like AppearancePanel.
 export function NotificationsPanel({ draft, set, onError, onWorkspaceNotifySaved }: Props) {
   // Per-type toast preferences are device-local (localStorage), so they apply

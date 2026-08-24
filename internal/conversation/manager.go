@@ -13,9 +13,9 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/bilal-arikan/tionswarm/internal/db"
-	"github.com/bilal-arikan/tionswarm/internal/prompts"
-	"github.com/bilal-arikan/tionswarm/internal/providers"
+	"github.com/bilal-arikan/tionharness/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/prompts"
+	"github.com/bilal-arikan/tionharness/internal/providers"
 )
 
 // Defaults are conservative; override via env for larger-context models.
@@ -167,15 +167,15 @@ func (m *Manager) log(level slog.Level, msg string, args ...any) {
 	}
 }
 
-// NewManager builds a manager, reading TIONSWARM_MAX_CONTEXT_TOKENS,
-// TIONSWARM_KEEP_RECENT_MSGS, TIONSWARM_CONTEXT_BUDGET_FRACTION and
-// TIONSWARM_CONTEXT_BUDGET_CEIL when set.
+// NewManager builds a manager, reading TIONHARNESS_MAX_CONTEXT_TOKENS,
+// TIONHARNESS_KEEP_RECENT_MSGS, TIONHARNESS_CONTEXT_BUDGET_FRACTION and
+// TIONHARNESS_CONTEXT_BUDGET_CEIL when set.
 func NewManager() *Manager {
 	return &Manager{
-		maxTokens:      envInt("TIONSWARM_MAX_CONTEXT_TOKENS", defaultMaxTokens),
-		keepRecent:     envInt("TIONSWARM_KEEP_RECENT_MSGS", defaultKeepRecent),
-		budgetFraction: envFloat("TIONSWARM_CONTEXT_BUDGET_FRACTION", 0), // 0 = auto (per-family adaptive)
-		budgetCeil:     envInt("TIONSWARM_CONTEXT_BUDGET_CEIL", defaultBudgetAutoCeil),
+		maxTokens:      envInt("TIONHARNESS_MAX_CONTEXT_TOKENS", defaultMaxTokens),
+		keepRecent:     envInt("TIONHARNESS_KEEP_RECENT_MSGS", defaultKeepRecent),
+		budgetFraction: envFloat("TIONHARNESS_CONTEXT_BUDGET_FRACTION", 0), // 0 = auto (per-family adaptive)
+		budgetCeil:     envInt("TIONHARNESS_CONTEXT_BUDGET_CEIL", defaultBudgetAutoCeil),
 	}
 }
 

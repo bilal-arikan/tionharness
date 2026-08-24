@@ -1,7 +1,7 @@
 # Çalışma Dizini (Working Directory) — Oturum-Başına cwd
 
 > Eklendi: **2026-06-22**. the external agent project (external-agent-oss) "working directory"
-> mekaniğinin TionSwarm'ya uyarlaması.
+> mekaniğinin TionHarness'ya uyarlaması.
 
 ## Amaç
 
@@ -84,7 +84,7 @@ için bir fren var (Ayarlar ▸ MCP & Araçlar):
 .\scripts\worktree.ps1 prune
 ```
 
-Worktree'ler reponun **kardeşi** olarak açılır (ör. `...\Projects\TionSwarm-feat-login`);
+Worktree'ler reponun **kardeşi** olarak açılır (ör. `...\Projects\TionHarness-feat-login`);
 tek `.git` deposu paylaşılır, her worktree'nin kendi çalışma dizini + dalı olur.
 `add` sırasında `frontend/node_modules` ana repodan **junction** ile bağlanır (sıfırdan
 `npm install` beklemezsin); `-NoLink` verirsen bunun yerine `npm install` koşar.
@@ -101,7 +101,7 @@ tek `.git` deposu paylaşılır, her worktree'nin kendi çalışma dizini + dal�
 
 - **Eşit:** oturum-başına cwd, klasör rozeti, cwd değiştirme, git branch göstergesi,
   CLAUDE.md farkındalığı, makine geneli erişim.
-- **TionSwarm'ya özgü:** otonom turlar (scheduler/flow/spawn) için confine freni —
+- **TionHarness'ya özgü:** otonom turlar (scheduler/flow/spawn) için confine freni —
   the external agent project interaktif olduğu için buna ihtiyaç duymaz.
 
 ## Workspace varsayılan çalışma dizini (2026-06-22)
@@ -143,10 +143,10 @@ Sol alt-navbar (Settings/Logs benzeri) üç sekme:
 
 Git endpoint'leri (`internal/api/git.go`): `GET /api/fs/gitinfo?path=`,
 `POST /api/git/init`, `POST /api/git/config` (origin remote + commit kimliği).
-TionSwarm'ın kendi başlattığı her depoya (`prepareGitRepo`) gömülü bir **başlangıç
+TionHarness'ın kendi başlattığı her depoya (`prepareGitRepo`) gömülü bir **başlangıç
 `.gitignore`** yazılır (`internal/api/defaults/gitignore.txt`): sırlar (`.env`),
 bağımlılıklar (`node_modules/`, `.venv/`), build çıktısı, loglar, editör/OS artıkları
-ve `.tionswarm/`. **Var olan `.gitignore` asla ezilmez**; zaten repo olan klasöre
+ve `.tionharness/`. **Var olan `.gitignore` asla ezilmez**; zaten repo olan klasöre
 hiç dokunulmaz. Dosya kullanıcının deposunda düz metindir, serbestçe düzenlenebilir.
 
 Yanıttaki `gitInstalled` alanı makinede git binary'si olup olmadığını söyler

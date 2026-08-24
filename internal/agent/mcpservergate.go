@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"strings"
 
-	"github.com/bilal-arikan/tionswarm/internal/db"
-	"github.com/bilal-arikan/tionswarm/internal/tools"
+	"github.com/bilal-arikan/tionharness/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/tools"
 )
 
 // mcpServerGate answers, for a namespaced MCP server key, whether ANY tool that
@@ -128,7 +128,7 @@ func patternTargetsServer(pattern, serverKey string) bool {
 // agent's EXPLICIT denylist still remove it — so an operator can still take the
 // graph away from one agent, deliberately, and that decision is honoured.
 //
-// Scoped to this one server on purpose: it is the only MCP server TionSwarm
+// Scoped to this one server on purpose: it is the only MCP server TionHarness
 // treats as infrastructure (it ships a capability probe and a prompt block for
 // it, and nothing else). A second such server would be an explicit decision
 // here, not an accident.

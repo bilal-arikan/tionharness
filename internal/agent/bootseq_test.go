@@ -34,7 +34,7 @@ func TestAutonomousBootReminderContent(t *testing.T) {
 		"do not ask permission",
 		"verify the baseline",
 		"tool result from this session",
-		`use_skill "tionswarm-autonomous-ops"`,
+		`use_skill "tionharness-autonomous-ops"`,
 	} {
 		if !strings.Contains(autonomousBootReminder, want) {
 			t.Errorf("autonomousBootReminder missing %q:\n%s", want, autonomousBootReminder)

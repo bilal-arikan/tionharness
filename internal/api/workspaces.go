@@ -6,9 +6,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/bilal-arikan/tionswarm/internal/proc"
-	"github.com/bilal-arikan/tionswarm/internal/tools"
-	"github.com/bilal-arikan/tionswarm/internal/workspace"
+	"github.com/bilal-arikan/tionharness/internal/proc"
+	"github.com/bilal-arikan/tionharness/internal/tools"
+	"github.com/bilal-arikan/tionharness/internal/workspace"
 )
 
 // workspaceListItem is the switcher-facing view: registry metadata plus the
@@ -175,7 +175,7 @@ type pickFolderResp struct {
 func (s *Server) handlePickFolder(w http.ResponseWriter, r *http.Request) {
 	const script = `Add-Type -AssemblyName System.Windows.Forms | Out-Null
 $d = New-Object System.Windows.Forms.FolderBrowserDialog
-$d.Description = 'TionSwarm workspace klasörü seç'
+$d.Description = 'TionHarness workspace klasörü seç'
 $d.ShowNewFolderButton = $true
 $top = New-Object System.Windows.Forms.Form
 $top.TopMost = $true

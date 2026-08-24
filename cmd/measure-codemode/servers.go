@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"sort"
 
-	"github.com/bilal-arikan/tionswarm/internal/mcp"
+	"github.com/bilal-arikan/tionharness/internal/mcp"
 )
 
 // storedServer mirrors the on-disk db.MCPServer JSON (store/mcp-servers/*.json)

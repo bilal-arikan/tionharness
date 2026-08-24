@@ -2,7 +2,7 @@
 // (_Docs/44): MCP tools are exposed to the agent as a generated Python module
 // tree instead of per-turn tool schemas, and the agent calls them by writing
 // code. The two pieces are the per-execution loopback Bridge (this file) that
-// dispatches a script's MCP calls into TionSwarm's connection pool, and the
+// dispatches a script's MCP calls into TionHarness's connection pool, and the
 // binding generator (bindings.go) that renders the Python modules.
 package codemode
 
@@ -20,7 +20,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/bilal-arikan/tionswarm/internal/mcp"
+	"github.com/bilal-arikan/tionharness/internal/mcp"
 )
 
 const (
@@ -66,9 +66,9 @@ type ObserveFunc func(CallObservation)
 // Config wires a Bridge: the MCP dispatcher is required, everything else optional.
 type Config struct {
 	Call CallFunc // dispatches allowed MCP calls (required)
-	// Builtin dispatches an allowed TionSwarm built-in call by its BARE name (the
-	// tool arrives namespaced as "tionswarm__<tool>" and is stripped first). Nil ⇒
-	// built-in bindings are disabled (a tionswarm__ call comes back as a loud error).
+	// Builtin dispatches an allowed TionHarness built-in call by its BARE name (the
+	// tool arrives namespaced as "tionharness__<tool>" and is stripped first). Nil ⇒
+	// built-in bindings are disabled (a tionharness__ call comes back as a loud error).
 	Builtin CallFunc
 	Allow   func(string) bool // agent tool filter (nil = allow all); checked on the BARE name
 	Gate    GateFunc          // per-call permission (nil = allow all); checked on the BARE name

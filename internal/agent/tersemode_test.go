@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bilal-arikan/tionswarm/internal/db"
-	"github.com/bilal-arikan/tionswarm/internal/prompts"
+	"github.com/bilal-arikan/tionharness/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/prompts"
 )
 
 // TestTerseModeBlockFollowsToggle verifies the whole point of the feature: the

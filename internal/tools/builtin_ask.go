@@ -6,12 +6,12 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/bilal-arikan/tionswarm/internal/providers"
+	"github.com/bilal-arikan/tionharness/internal/providers"
 )
 
 // askOption deserialises one suggested answer that may arrive either as a plain
 // string OR as a claude-cli AskUserQuestion-style object ({label|content|value|
-// text|description}). It normalises to the display string TionSwarm shows as a
+// text|description}). It normalises to the display string TionHarness shows as a
 // clickable choice — models trained on the native tool emit the object form, and
 // without this the strict []string decode failed (the SES73 ask_user errors).
 type askOption string
@@ -75,9 +75,9 @@ func (f *flexOptions) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// askInput is the ask shape for the ask_user tool. It accepts TionSwarm's native
+// askInput is the ask shape for the ask_user tool. It accepts TionHarness's native
 // {question, options} form AND claude-cli's AskUserQuestion {questions:[...]}
-// wrapper (only the first question is used — TionSwarm asks one question per call).
+// wrapper (only the first question is used — TionHarness asks one question per call).
 type askInput struct {
 	Question  string      `json:"question"`
 	Options   flexOptions `json:"options"`
@@ -88,7 +88,7 @@ type askInput struct {
 }
 
 // ParseAskInput tolerantly decodes an ask_user payload, normalising every shape
-// the model might send (TionSwarm's {question, options} and claude-cli's native
+// the model might send (TionHarness's {question, options} and claude-cli's native
 // AskUserQuestion: option objects and/or a questions[] wrapper) into a single
 // question string + clean []string options. Shared by the native tool path and
 // the claude-cli Interaction MCP bridge so both decode identically. When several
@@ -105,7 +105,7 @@ func ParseAskInput(raw json.RawMessage) (string, []string, error) {
 }
 
 // ParseAskInputMulti decodes an ask_user payload into ALL of its questions,
-// tolerating every shape the model might send: TionSwarm's single {question,
+// tolerating every shape the model might send: TionHarness's single {question,
 // options}, and claude-cli's AskUserQuestion {questions:[{question, options}...]}
 // wrapper (option objects or plain strings). Blank questions are dropped. A single
 // top-level {question, options} contributes one entry; when both a top-level

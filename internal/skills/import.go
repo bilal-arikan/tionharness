@@ -7,12 +7,12 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/bilal-arikan/tionswarm/internal/fetch"
+	"github.com/bilal-arikan/tionharness/internal/fetch"
 )
 
 // ImportResult reports the outcome of importing a Claude Code skill: the resulting
-// TionSwarm slug, which fields were carried over, the bundled files copied, and any
-// warnings about CC features that do not map onto TionSwarm (stripped on import).
+// TionHarness slug, which fields were carried over, the bundled files copied, and any
+// warnings about CC features that do not map onto TionHarness (stripped on import).
 // (SK-IMP)
 type ImportResult struct {
 	Slug         string   `json:"slug"`
@@ -22,7 +22,7 @@ type ImportResult struct {
 	Warnings     []string `json:"warnings"`
 }
 
-// mapCCSkill parses a Claude Code SKILL.md and renders the equivalent TionSwarm
+// mapCCSkill parses a Claude Code SKILL.md and renders the equivalent TionHarness
 // SKILL.md, mapping the frontmatter and collecting warnings for unsupported CC
 // features. It does not touch disk. sourceURL is recorded as provenance.
 //
@@ -91,7 +91,7 @@ func mapCCSkill(raw, sourceURL string, shared bool, group string) (content strin
 	b.WriteString(strings.TrimSpace(body))
 	b.WriteString("\n")
 
-	// Warn about CC features that do not map onto TionSwarm skills.
+	// Warn about CC features that do not map onto TionHarness skills.
 	if strings.EqualFold(strings.TrimSpace(fm.scalar("context")), "fork") {
 		warn("`context: fork` (isolated subagent) is not supported — the skill loads inline; use run_subagent for isolation.")
 	}
@@ -100,7 +100,7 @@ func mapCCSkill(raw, sourceURL string, shared bool, group string) (content strin
 	}
 	for _, k := range []string{"hooks", "agent", "model", "effort"} {
 		if fm.scalar(k) != "" || len(fm.list(k)) > 0 {
-			warn("`" + k + ":` frontmatter is not supported on TionSwarm skills — dropped.")
+			warn("`" + k + ":` frontmatter is not supported on TionHarness skills — dropped.")
 		}
 	}
 	if fm.scalar("argument-hint") != "" || len(fm.list("arguments")) > 0 ||
@@ -108,12 +108,12 @@ func mapCCSkill(raw, sourceURL string, shared bool, group string) (content strin
 		warn("slash-command arguments ($ARGUMENTS / $1…) won't be substituted — the skill loads as instructions, not a /command.")
 	}
 	if strings.Contains(body, "!`") || strings.Contains(body, "```!") {
-		warn("inline shell injection (!`…`) in the body is NOT executed by TionSwarm — convert to explicit Bash tool steps.")
+		warn("inline shell injection (!`…`) in the body is NOT executed by TionHarness — convert to explicit Bash tool steps.")
 	}
 	return b.String(), res
 }
 
-// RenderImportedSkill maps a Claude Code SKILL.md to the equivalent TionSwarm
+// RenderImportedSkill maps a Claude Code SKILL.md to the equivalent TionHarness
 // SKILL.md (frontmatter remapped, unsupported features stripped with warnings) and
 // returns the rendered content plus the mapping result. Exposed for the ingest
 // pipeline, which packages the rendered body into a market pack. group namespaces
@@ -203,7 +203,7 @@ func readLocalSkillDir(dir string) (raw string, files map[string][]byte, err err
 	return string(data), files, nil
 }
 
-// ImportCCSkill maps a Claude Code SKILL.md to a TionSwarm skill and writes it (plus
+// ImportCCSkill maps a Claude Code SKILL.md to a TionHarness skill and writes it (plus
 // its bundled resource files) into the workspace tier, then reloads the catalog.
 // slug defaults to the skill name when empty. Fails if the slug already exists.
 // (SK-IMP)

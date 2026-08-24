@@ -19,7 +19,7 @@ func joinNonEmpty(blocks ...string) string {
 // prependSummaryMessage inserts the rolling compaction summary as a synthetic
 // head user message so it becomes part of the cached prompt prefix — BEFORE the
 // rolling history breakpoint the native providers place on the last message.
-// This is TionSwarm's take on Claude Code's "compact boundary message": the
+// This is TionHarness's take on Claude Code's "compact boundary message": the
 // summary is stable between two folds, so once it sits in the cached prefix it is
 // a cache READ every turn until the next fold rewrites it, instead of being
 // re-shipped as fresh input tokens each turn.

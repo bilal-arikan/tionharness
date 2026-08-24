@@ -9,8 +9,8 @@ import (
 	"time"
 )
 
-// globalClaudeHomeDir mirrors settings.defaultClaudeConfigDir: the TionSwarm-managed
-// global claude-cli config home (~/.tionswarm/claude-home) that holds the shared
+// globalClaudeHomeDir mirrors settings.defaultClaudeConfigDir: the TionHarness-managed
+// global claude-cli config home (~/.tionharness/claude-home) that holds the shared
 // login/settings before per-workspace homes existed. It is the seed source copied
 // into a fresh per-workspace home so the workspace CLI starts already authenticated.
 // Empty when the user home cannot be resolved (no seed → the CLI relies on the
@@ -20,7 +20,7 @@ func globalClaudeHomeDir() string {
 	if err != nil || home == "" {
 		return ""
 	}
-	return filepath.Join(home, ".tionswarm", "claude-home")
+	return filepath.Join(home, ".tionharness", "claude-home")
 }
 
 // oauthCredential is the token-bearing part of the on-disk .credentials.json Claude
@@ -83,7 +83,7 @@ func (r credentialRank) betterThan(o credentialRank) bool {
 //
 // Ordering by "a live access token first" is not arbitrary — it is the only signal
 // on disk that actually predicted the live failure this fixes. The heal used to
-// take the FIRST usable candidate, so a TionSwarm global home whose access token
+// take the FIRST usable candidate, so a TionHarness global home whose access token
 // had expired 19 days earlier beat the user's live ~/.claude. Its refresh token had
 // long since been consumed (they are single-use), so the CLI got invalid_grant,
 // CLEARED the workspace credential, and the heal copied the same dead file back on
@@ -121,8 +121,8 @@ func credentialLiveness(path string) credentialRank {
 // ensureClaudeHomeCredential makes sure a workspace claude-home is logged in. The
 // home's OWN credential wins whenever nothing available ranks better — a
 // per-workspace login stays in control and is never clobbered. Otherwise the
-// best-ranked usable credential is copied in from the TionSwarm global home
-// (~/.tionswarm/claude-home) or the user's real ~/.claude. Falling back to ~/.claude
+// best-ranked usable credential is copied in from the TionHarness global home
+// (~/.tionharness/claude-home) or the user's real ~/.claude. Falling back to ~/.claude
 // matches the keyless claude-cli design (it runs against the user's local login).
 //
 // Ranked, not first-match: see credentialLiveness for why fixed candidate order was
@@ -186,7 +186,7 @@ func lockCredentialHeal(home string) func() {
 // calls when effortLevel is unset (default adaptive effort) — each Write becomes
 // its own API call, multiplying prompt-cache re-reads and cost (the AlgoBench
 // v2/v3 regression: workspace homes seeded minimal settings while the user's own
-// ~/.claude carried "high", so only TionSwarm turns degraded). The value is
+// ~/.claude carried "high", so only TionHarness turns degraded). The value is
 // copied ONCE from the user's real ~/.claude/settings.json when set there, else
 // defaults to "high" (pre-2.1.203 batching parity). An existing explicit
 // effortLevel is never overwritten, so the user stays in control per workspace.

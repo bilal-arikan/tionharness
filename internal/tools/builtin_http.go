@@ -12,7 +12,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/bilal-arikan/tionswarm/internal/providers"
+	"github.com/bilal-arikan/tionharness/internal/providers"
 )
 
 const (
@@ -116,7 +116,7 @@ func (t WebFetchTool) Call(ctx context.Context, input json.RawMessage) (string, 
 	if err != nil {
 		return "", err
 	}
-	req.Header.Set("User-Agent", "tionswarm/0.0.1")
+	req.Header.Set("User-Agent", "tionharness/0.0.1")
 	req.Header.Set("Accept", "text/html,application/xhtml+xml,text/markdown,text/plain,application/json;q=0.9,*/*;q=0.5")
 
 	resp, err := t.client.Do(req)

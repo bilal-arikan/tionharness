@@ -43,10 +43,10 @@ func fileExists(p string) bool {
 	return err == nil && !info.IsDir()
 }
 
-// whisperExe resolves the whisper-cli binary: TIONSWARM_WHISPER env, then the
+// whisperExe resolves the whisper-cli binary: TIONHARNESS_WHISPER env, then the
 // common Progs install layout, then PATH (whisper-cli or the legacy main).
 func whisperExe() string {
-	if p := strings.TrimSpace(os.Getenv("TIONSWARM_WHISPER")); p != "" && fileExists(p) {
+	if p := strings.TrimSpace(os.Getenv("TIONHARNESS_WHISPER")); p != "" && fileExists(p) {
 		return p
 	}
 	if home, err := os.UserHomeDir(); err == nil && home != "" {
@@ -69,7 +69,7 @@ func whisperExe() string {
 
 // ffmpegExe resolves ffmpeg (needed to transcode browser audio → 16 kHz mono WAV).
 func ffmpegExe() string {
-	if p := strings.TrimSpace(os.Getenv("TIONSWARM_FFMPEG")); p != "" && fileExists(p) {
+	if p := strings.TrimSpace(os.Getenv("TIONHARNESS_FFMPEG")); p != "" && fileExists(p) {
 		return p
 	}
 	if p, err := exec.LookPath("ffmpeg"); err == nil {
@@ -81,7 +81,7 @@ func ffmpegExe() string {
 // modelDirs are scanned for ggml-*.bin models.
 func modelDirs() []string {
 	var dirs []string
-	if v := strings.TrimSpace(os.Getenv("TIONSWARM_WHISPER_MODELS")); v != "" {
+	if v := strings.TrimSpace(os.Getenv("TIONHARNESS_WHISPER_MODELS")); v != "" {
 		dirs = append(dirs, v)
 	}
 	if exe := whisperExe(); exe != "" {

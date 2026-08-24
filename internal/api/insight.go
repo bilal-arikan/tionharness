@@ -10,8 +10,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/bilal-arikan/tionswarm/internal/agent"
-	"github.com/bilal-arikan/tionswarm/internal/insight"
+	"github.com/bilal-arikan/tionharness/internal/agent"
+	"github.com/bilal-arikan/tionharness/internal/insight"
 )
 
 // lensByID loads the lens registry and returns the lens with id (and its file
@@ -199,7 +199,7 @@ func (s *Server) handleInsightRuns(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleInsightFleetFindings aggregates app-fix findings across ALL workspaces
-// into one deduplicated, fleet-wide backlog — the same TionSwarm bug surfacing in
+// into one deduplicated, fleet-wide backlog — the same TionHarness bug surfacing in
 // several workspaces collapses to one row carrying combined weight + which
 // workspaces hit it. Read-only; each workspace's own store is untouched.
 func (s *Server) handleInsightFleetFindings(w http.ResponseWriter, r *http.Request) {

@@ -56,10 +56,10 @@ export interface AppSettings {
   // Context reset / handoff (Anthropic "harness design").
   handoffAuto: boolean // auto-reset an autonomous turn that hit the context limit into a fresh session
   handoffMaxChain: number // max consecutive resets before falling back to plain compaction (0 = default 20)
-  handoffWriteFile: boolean // also write the handoff to <workdir>/.tionswarm/handoff.md
+  handoffWriteFile: boolean // also write the handoff to <workdir>/.tionharness/handoff.md
 
   // Persistent progress (Anthropic claude-progress convention).
-  progressPersist: boolean // persist the todo_write checklist to <cwd>/.tionswarm/progress.json
+  progressPersist: boolean // persist the todo_write checklist to <cwd>/.tionharness/progress.json
   progressResume: boolean // inject a resumed-progress block into a fresh session at start
 
   // Event-driven session auto-tagging (tool-error/error/goal/goal-done/archived).
@@ -247,7 +247,7 @@ export interface CatalogEntry {
   // other providers, and either may be absent when it cannot be read.
   cliVersion?: string
   subscription?: string
-  // Whether TionSwarm's PreToolUse/PostToolUse hooks (and hook-derived
+  // Whether TionHarness's PreToolUse/PostToolUse hooks (and hook-derived
   // behaviour like sqz/PostToolUse token-optimizer compression) fire for this
   // provider's turns. False only for codex-cli, whose subprocess tool loop has
   // no hook passthrough.
@@ -286,9 +286,9 @@ export interface ExternalToolStatus {
   /** Why `version` is empty — shown instead of silently omitting the chip. */
   versionError?: string
   /**
-   * How this tool is upgraded. 'command' → TionSwarm can run `updateCommand` for
+   * How this tool is upgraded. 'command' → TionHarness can run `updateCommand` for
    * the user (a package manager already on the machine). 'manual' → the upgrade
-   * replaces a binary or unpacks an archive, which TionSwarm refuses to do
+   * replaces a binary or unpacks an archive, which TionHarness refuses to do
    * because a running child locks the file on Windows; `updateNote` says what to
    * do instead.
    */
@@ -321,7 +321,7 @@ export interface ExternalToolUpdateResult {
 }
 
 // Token-optimizer maintenance payload: each installed tool's OWN `gain` report
-// (verbatim — TionSwarm does not recompute the figures) plus rtk's config
+// (verbatim — TionHarness does not recompute the figures) plus rtk's config
 // location. `rtkConfigExists` is false until `rtk config --create` is run, which
 // is normal: rtk runs on built-in defaults until then.
 export interface TokenToolReport {

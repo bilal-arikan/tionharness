@@ -18,9 +18,9 @@ const (
 	fxThreadStarted = `{"type":"thread.started","thread_id":"01a01457-0c11-71d0-b495-615d96b8b913"}`
 	fxTurnStarted   = `{"type":"turn.started"}`
 	fxAgentMessage  = `{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"OK"}}`
-	fxMCPStarted    = `{"type":"item.started","item":{"id":"item_1","type":"mcp_tool_call","server":"tionprobe","tool":"tion_ping","arguments":{"who":"tionswarm"},"result":null,"error":null,"status":"in_progress"}}`
-	fxMCPCompleted  = `{"type":"item.completed","item":{"id":"item_1","type":"mcp_tool_call","server":"tionprobe","tool":"tion_ping","arguments":{"who":"tionswarm"},"result":{"content":[{"type":"text","text":"SECRET-IS-BANANA-FOR-tionswarm"}],"structured_content":null},"error":null,"status":"completed"}}`
-	fxMCPCancelled  = `{"type":"item.completed","item":{"id":"item_1","type":"mcp_tool_call","server":"tionprobe","tool":"tion_ping","arguments":{"who":"tionswarm"},"result":null,"error":{"message":"user cancelled MCP tool call"},"status":"failed"}}`
+	fxMCPStarted    = `{"type":"item.started","item":{"id":"item_1","type":"mcp_tool_call","server":"tionprobe","tool":"tion_ping","arguments":{"who":"tionharness"},"result":null,"error":null,"status":"in_progress"}}`
+	fxMCPCompleted  = `{"type":"item.completed","item":{"id":"item_1","type":"mcp_tool_call","server":"tionprobe","tool":"tion_ping","arguments":{"who":"tionharness"},"result":{"content":[{"type":"text","text":"SECRET-IS-BANANA-FOR-tionharness"}],"structured_content":null},"error":null,"status":"completed"}}`
+	fxMCPCancelled  = `{"type":"item.completed","item":{"id":"item_1","type":"mcp_tool_call","server":"tionprobe","tool":"tion_ping","arguments":{"who":"tionharness"},"result":null,"error":{"message":"user cancelled MCP tool call"},"status":"failed"}}`
 	fxCmdStarted    = `{"type":"item.started","item":{"id":"item_6","type":"command_execution","command":"\"C:\\\\Windows\\\\System32\\\\WindowsPowerShell\\\\v1.0\\\\powershell.exe\" -Command 'echo hello-from-shell'","aggregated_output":"","exit_code":null,"status":"in_progress"}}`
 	fxCmdCompleted  = `{"type":"item.completed","item":{"id":"item_6","type":"command_execution","command":"...","aggregated_output":"hello-from-shell\r\n","exit_code":0,"status":"completed"}}`
 	fxTurnCompleted = `{"type":"turn.completed","usage":{"input_tokens":21060,"cached_input_tokens":14592,"cache_write_input_tokens":0,"output_tokens":52,"reasoning_output_tokens":33}}`
@@ -125,13 +125,13 @@ func TestCodexParserMCPToolCall(t *testing.T) {
 	if step.Tool != "mcp__tionprobe__tion_ping" {
 		t.Errorf("Tool = %q, want mcp__tionprobe__tion_ping", step.Tool)
 	}
-	if step.Output != "SECRET-IS-BANANA-FOR-tionswarm" {
+	if step.Output != "SECRET-IS-BANANA-FOR-tionharness" {
 		t.Errorf("Output = %q", step.Output)
 	}
 	if step.IsError {
 		t.Error("IsError = true, want false")
 	}
-	if !strings.Contains(string(step.Input), "tionswarm") {
+	if !strings.Contains(string(step.Input), "tionharness") {
 		t.Errorf("Input = %q, want the arguments object", step.Input)
 	}
 	// Batch grouping is unavailable on this transport (no assistant-message id).

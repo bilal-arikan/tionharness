@@ -6,8 +6,8 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/bilal-arikan/tionswarm/internal/providers"
-	"github.com/bilal-arikan/tionswarm/internal/tools"
+	"github.com/bilal-arikan/tionharness/internal/providers"
+	"github.com/bilal-arikan/tionharness/internal/tools"
 )
 
 func call(name string) providers.ToolCall { return providers.ToolCall{ID: "1", Name: name} }

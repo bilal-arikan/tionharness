@@ -6,7 +6,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/bilal-arikan/tionswarm/internal/tools"
+	"github.com/bilal-arikan/tionharness/internal/tools"
 )
 
 // optimizerLogSize bounds the recent-optimization ring. A turn rarely runs more

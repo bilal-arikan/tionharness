@@ -193,7 +193,7 @@ export interface SynthDiff {
 
 // synthDiffData builds the full diff-card payload for a file-edit tool STEP that
 // arrived without a precomputed patch (the claude-cli path: the CLI applies the
-// edit itself, so TionSwarm never recorded a server-side FileDiff). It synthesizes
+// edit itself, so TionHarness never recorded a server-side FileDiff). It synthesizes
 // the unified patch from the tool input (old_string/new_string, content or a
 // multiedit edits[]), counts the +/- lines and extracts the target path. Returns
 // null when the input is not a recognizable edit/write shape.

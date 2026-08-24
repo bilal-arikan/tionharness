@@ -8,9 +8,9 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/bilal-arikan/tionswarm/internal/db"
-	"github.com/bilal-arikan/tionswarm/internal/sessionhub"
-	"github.com/bilal-arikan/tionswarm/internal/workspace"
+	"github.com/bilal-arikan/tionharness/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/sessionhub"
+	"github.com/bilal-arikan/tionharness/internal/workspace"
 )
 
 // handleSessionStream is the single server-authoritative event stream every

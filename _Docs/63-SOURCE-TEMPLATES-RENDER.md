@@ -4,7 +4,7 @@
 > (53, the external agent project prompt paritesi dokümanıyla çakışıyordu).*
 
 > Durum: ✅ **Uygulandı** (2026-07-06). the external agent project'ın "Source Templates / `render_template`"
-> özelliğinin TionSwarm-native karşılığı.
+> özelliğinin TionHarness-native karşılığı.
 > İlgili: `_Docs/41-ARAC-BOSLUKLARI-YAPILACAKLAR.md` §8, `_Docs/07-CHAT-UX.md`.
 
 ## 0. Amaç
@@ -13,8 +13,8 @@ LLM'in **aynı markalı HTML'i her seferinde yeniden üretmemesi**. Layout sabit
 veri değişiyorsa: motor şablonu doldurur, araç modele **sadece dosya yolu** döndürür
 (HTML değil → token tasarrufu), sohbette **inline** izole iframe'de gösterilir.
 
-the external agent project'ta şablon bir "source"a aitti. TionSwarm'da **source kavramı yok** → şablonlar
-**skill'e bundle** edilir (`tionswarm-templates`). Yeni bir "template store" alt-sistemi
+the external agent project'ta şablon bir "source"a aitti. TionHarness'da **source kavramı yok** → şablonlar
+**skill'e bundle** edilir (`tionharness-templates`). Yeni bir "template store" alt-sistemi
 KURULMADI (over-engineering); mevcut `${SKILL_DIR}` + bundled-files mekanizması yeterli.
 
 ## 1. Uçtan uca akış
@@ -61,7 +61,7 @@ sequenceDiagram
 
 ## 4. Depolama + çıktı konumu
 
-- **Şablonlar:** skill-bundled → `internal/skills/defaults/tionswarm-templates/templates/*.html`
+- **Şablonlar:** skill-bundled → `internal/skills/defaults/tionharness-templates/templates/*.html`
   (+ `*.meta.json`). `${SKILL_DIR}` `use_skill` anında mutlak dizine genişler; araç genişlemiş yolu alır.
 - **Render çıktısı:** `SessionRenderDir(sid)` = `<db.Root>/render/<sid>/` — `progress/`'in kardeşi.
   Yol tek kaynak: `db.RenderDir(sid)` (yazan runtime + temizleyenler paylaşır). Session yoksa boş
@@ -86,13 +86,13 @@ sequenceDiagram
 | Inline UI | `frontend/src/components/markdown/HtmlPreview.tsx` | ```html-preview``` → sandbox iframe (tab desteği) |
 | Dispatch | `frontend/src/components/markdown/CodeBlock.tsx` | `lang==='html-preview'` → `HtmlPreview` |
 | URL helper | `frontend/src/lib/attachments.tsx` | `fileTextURL` (`?as=text&ws=`) |
-| Skill | `internal/skills/defaults/tionswarm-templates/**` | SKILL.md + report/email şablonları + meta |
+| Skill | `internal/skills/defaults/tionharness-templates/**` | SKILL.md + report/email şablonları + meta |
 | Prompt | `internal/workspace/defaults/default-instructions.md` | "## Rendering"e `html-preview` + `render_template` |
 | Guard | `internal/workspace/defaults_test.go` | `html-preview`/`render_template` yasak listesinden çıktı (artık native) |
 
 ## 6. Kullanım (ajan akışı)
 
-1. `use_skill tionswarm-templates` → footer + tablo şablonları ve alanları listeler.
+1. `use_skill tionharness-templates` → footer + tablo şablonları ve alanları listeler.
 2. `render_template({ "template": "<abs>/templates/report.html", "data": {...} })` → `{path, warnings}`.
 3. Yanıta ```` ```html-preview {"src":"<path>"} ```` bloğu koy → inline izole render.
    Çoklu dosya: `{"items":[{"src","label"}]}` → sekmeler.

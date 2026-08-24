@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/bilal-arikan/tionswarm/internal/agent"
-	"github.com/bilal-arikan/tionswarm/internal/db"
-	"github.com/bilal-arikan/tionswarm/internal/progress"
-	"github.com/bilal-arikan/tionswarm/internal/view"
+	"github.com/bilal-arikan/tionharness/internal/agent"
+	"github.com/bilal-arikan/tionharness/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/progress"
+	"github.com/bilal-arikan/tionharness/internal/view"
 )
 
 // todoTailWindow is how many trailing messages the checklist lookup reads before

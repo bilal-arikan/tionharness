@@ -2,15 +2,15 @@
   - navigation [ref=f1e4]:
     - generic [ref=f1e5]:
       - generic [ref=f1e6]: TS
-      - generic [ref=f1e7]: TionSwarm
+      - generic [ref=f1e7]: TionHarness
     - generic [ref=f1e9]:
-      - 'button "Workspace: TionSwarmRepo" [ref=f1e10]':
+      - 'button "Workspace: TionHarnessRepo" [ref=f1e10]':
         - generic [ref=f1e11]:
           - generic [ref=f1e12]:
             - text: 📦
             - generic "Başka workspace’te yeni etkinlik" [ref=f1e13]
           - generic "İşlem sürüyor" [ref=f1e719]
-          - generic [ref=f1e14]: TionSwarmRepo
+          - generic [ref=f1e14]: TionHarnessRepo
         - generic [ref=f1e15]: ▾
       - button "Navbarı daralt" [ref=f1e16]
     - generic [ref=f1e19]:

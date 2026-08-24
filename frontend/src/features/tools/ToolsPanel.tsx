@@ -89,7 +89,7 @@ export function ToolsPanel({ onError }: Props) {
       <ListPane
         open={listOpen}
         onToggle={toggleList}
-        widthKey="tionswarm.toolsListWidth"
+        widthKey="tionharness.toolsListWidth"
         defaultWidth={288}
         label="Araçlar"
         testId="tools-list-toggle"

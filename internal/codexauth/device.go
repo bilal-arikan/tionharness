@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/bilal-arikan/tionswarm/internal/proc"
+	"github.com/bilal-arikan/tionharness/internal/proc"
 )
 
 // State is the lifecycle of a device-auth attempt.

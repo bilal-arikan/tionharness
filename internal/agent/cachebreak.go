@@ -4,8 +4,8 @@ import (
 	"context"
 	"hash/fnv"
 
-	"github.com/bilal-arikan/tionswarm/internal/db"
-	"github.com/bilal-arikan/tionswarm/internal/providers"
+	"github.com/bilal-arikan/tionharness/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/providers"
 )
 
 // cacheProbe is a session's last-known prompt-cache state, held in
@@ -93,7 +93,7 @@ func isConversationKind(k CallKind) bool {
 // noteCacheOutcome inspects one provider call's usage against the session's last
 // cache state and, when the warm prefix was lost (a large cold re-write with zero
 // reads AFTER the cache had been warm), emits a `cache_break` debug event with an
-// attributed reason. This is TionSwarm's analogue of Claude Code's
+// attributed reason. This is TionHarness's analogue of Claude Code's
 // promptCacheBreakDetection: the token data already exists (Usage.Cache*) — this
 // only adds attribution so P1/P2's cache HITs (or their absence) are observable.
 //

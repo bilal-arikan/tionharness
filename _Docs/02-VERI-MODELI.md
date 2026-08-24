@@ -1,4 +1,4 @@
-# TionSwarm — Veri Modeli
+# TionHarness — Veri Modeli
 
 > ⚠️ **GÜNCEL (2026-06-15):** Depolama SQLite'tan **dosya sistemine** taşındı. Aşağıdaki
 > entity'ler ve ilişkiler **kavramsal olarak geçerli**, ancak artık SQL tabloları değil
@@ -171,7 +171,7 @@ erDiagram
 | `mcp_servers` | İsim, taşıma (stdio; SSE/HTTP henüz yok), `command`/`args`/`url`, env config, `enabled`, `scope` (workspace). **`created_by`** = sunucuyu ekleyen ajan ("" = kullanıcı tanımlı; yalnız köken/görüntü, silme kapısı değil) |
 | `flows` | Akış tanımı: `graph` (JSON `orchestration.Graph` — agent/branch/parallel node). **`created_by`** = akışı oluşturan ajan ("" = kullanıcı) |
 | `flow_runs` | Akış yürütmesi: durum, girdi/çıktı, **restart-safe** `state` (her node sonrası persist), hata |
-| `artifacts` | Ajanın ürettiği kalıcı içerik. **Sürümlenmez** — `update` içeriği yerinde ezer (revizyon geçmişi yok). `kind` ∈ metin kindleri (`markdown`/`code`/`html`/`text`/`svg`/`mermaid`) **veya** medya/dosya kindleri (`image`/`video`/`audio`/`file`) + `language` (kod için). Metin kindlerinde gövde diskte `artifacts/<session>/<id><ext>` altında tutulur, JSON `content_file` ile referanslar (yükte `content`'e okunur). Medya/dosya kindlerinde bytes diskte yaşar, `source_path` (workspace-göreli) ile referanslanır — `create_artifact sourcePath` ile verilen workspace-dışı dosyalar `artifacts/`'a kopyalanır. `origin` ∈ `chat`/`manual`/`tool` (+ tarihsel `agent` — otomatik yakalama kaldırıldı, yeni artifact üretmez); köken `session_id`/`agent_id`. **Otomatik yakalama YOK:** artifact yalnız araçla (`create_artifact`/`update_artifact`) veya API/UI ile bilerek oluşturulur; dosya yazmak artifact üretmez. Workspace-scoped — TionSwarm'nun Claude.ai artifact karşılığı |
+| `artifacts` | Ajanın ürettiği kalıcı içerik. **Sürümlenmez** — `update` içeriği yerinde ezer (revizyon geçmişi yok). `kind` ∈ metin kindleri (`markdown`/`code`/`html`/`text`/`svg`/`mermaid`) **veya** medya/dosya kindleri (`image`/`video`/`audio`/`file`) + `language` (kod için). Metin kindlerinde gövde diskte `artifacts/<session>/<id><ext>` altında tutulur, JSON `content_file` ile referanslar (yükte `content`'e okunur). Medya/dosya kindlerinde bytes diskte yaşar, `source_path` (workspace-göreli) ile referanslanır — `create_artifact sourcePath` ile verilen workspace-dışı dosyalar `artifacts/`'a kopyalanır. `origin` ∈ `chat`/`manual`/`tool` (+ tarihsel `agent` — otomatik yakalama kaldırıldı, yeni artifact üretmez); köken `session_id`/`agent_id`. **Otomatik yakalama YOK:** artifact yalnız araçla (`create_artifact`/`update_artifact`) veya API/UI ile bilerek oluşturulur; dosya yazmak artifact üretmez. Workspace-scoped — TionHarness'nun Claude.ai artifact karşılığı |
 
 > **`state` (görünürlük) ve `run_state` (koşu sonucu) AYRI alanlardır.**
 >
@@ -243,11 +243,11 @@ erDiagram
 
 | Değişken | Açıklama |
 |----------|----------|
-| `TIONSWARM_ADDR` | HTTP dinleme adresi (varsayılan loopback `127.0.0.1:8080`; geliştirmede `127.0.0.1:8090`; ağa açmak için `0.0.0.0:8090`). Loopback, Windows Güvenlik Duvarı'nın izin sormasını önler |
-| `TIONSWARM_DATA_DIR` | Kalıcı durum dizini (varsayılan `~/.tionswarm`) |
-| `TIONSWARM_WORKSPACE_DIR` | Görev workspace kökü |
-| `TIONSWARM_MAX_CONTEXT_TOKENS` | Bağlam sıkıştırma eşiği (varsayılan 12000) |
-| `TIONSWARM_KEEP_RECENT_MSGS` | Sıkıştırmada korunan son mesaj sayısı (varsayılan 8) |
+| `TIONHARNESS_ADDR` | HTTP dinleme adresi (varsayılan loopback `127.0.0.1:8080`; geliştirmede `127.0.0.1:8090`; ağa açmak için `0.0.0.0:8090`). Loopback, Windows Güvenlik Duvarı'nın izin sormasını önler |
+| `TIONHARNESS_DATA_DIR` | Kalıcı durum dizini (varsayılan `~/.tionharness`) |
+| `TIONHARNESS_WORKSPACE_DIR` | Görev workspace kökü |
+| `TIONHARNESS_MAX_CONTEXT_TOKENS` | Bağlam sıkıştırma eşiği (varsayılan 12000) |
+| `TIONHARNESS_KEEP_RECENT_MSGS` | Sıkıştırmada korunan son mesaj sayısı (varsayılan 8) |
 | `CREDENTIAL_SECRET` | Şifreleme anahtarı |
 | `ACCESS_KEY` | Dashboard auth token (hosted dağıtım) |
 | `ANTHROPIC_API_KEY` | `anthropic` sağlayıcı anahtarı (claude-cli'da gerekmez) |

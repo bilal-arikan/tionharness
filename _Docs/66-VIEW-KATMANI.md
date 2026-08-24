@@ -127,7 +127,7 @@ Her sorguda baştan özetlemek sistemi öldürür. Bunun yerine:
 digest(n) = fold(digest(n-1), events[lastSeq..n])
 ```
 
-TionSwarm bu mekanik için hazır: `session.jsonl` append-only ([08](08-DEPOLAMA.md)),
+TionHarness bu mekanik için hazır: `session.jsonl` append-only ([08](08-DEPOLAMA.md)),
 `FlowRun` state'i restart-safe ([15](15-FLOW-CANVAS.md)), board mutasyonları `BoardHook`
 event'li ([46](46-ETIKET-OTOMASYON.md)). Yani **checkpoint + delta** doğal olarak var.
 
@@ -371,7 +371,7 @@ hesap değil**. İkisi çelişirse bu, kullanıcının görebildiği bir bug'dı
 > **Bu iddia iki kere yanlıştı; 2026-08-10'da kapatıldı ve teste bağlandı.**
 >
 > 1. **Baytlar aynı değildi.** `dashboard.go` projektörü `WithName`/`WithSources`
->    olmadan kuruyordu: Panel `WORKSPACE`, ViewPanel `WORKSPACE "TionSwarmRepo"`
+>    olmadan kuruyordu: Panel `WORKSPACE`, ViewPanel `WORKSPACE "TionHarnessRepo"`
 >    basıyordu. Artık ikisi de `s.viewProjector(r)` üzerinden geçiyor.
 > 2. **Stat kutuları ikinci bir sayımdı.** `dashboardCounters` aynı
 >    oturum/kart/koşu dilimlerini kendi döngüsüyle sayıyordu — projeksiyonu

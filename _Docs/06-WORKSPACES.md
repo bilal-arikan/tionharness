@@ -1,4 +1,4 @@
-# TionSwarm — Workspace İzolasyonu
+# TionHarness — Workspace İzolasyonu
 
 > Her workspace **tamamen bağımsızdır**: kendi dosya-tabanlı `store/` dizini + kendi agent runtime'ı. Bir workspace'in içeriği asla diğerine sızmaz.
 > Depolama biçimi (JSON/JSONL) için: **`_Docs/08-DEPOLAMA.md`**.
@@ -9,7 +9,7 @@ Workspace switcher dropdown'ında her satırda bir **yıldız** ile bir workspac
 "başlangıç favorisi" olarak işaretlenebilir. Soğuk açılışta (URL'de açık bir
 workspace deep-link'i yokken) favori workspace açılır; deep-link verildiğinde
 route makinesi onu sonradan uygular, yani açık linkler favoriyi ezer. Cihaz-yerel
-saklanır (`localStorage: tionswarm.favoriteWs`), aktif-workspace işaretçisiyle aynı
+saklanır (`localStorage: tionharness.favoriteWs`), aktif-workspace işaretçisiyle aynı
 desen. Seçim sırası: `(işaretçi yoksa) favori → son-aktif → favori → ilk`.
 Kod: `hooks/useWorkspaces.ts`, `WorkspaceSwitcher.tsx`.
 
@@ -174,9 +174,9 @@ Geçersiz klasör veya **zaten ekli** bir klasör 400 + Türkçe mesajla reddedi
 mesaj onboarding ekranında satır-içi gösterilir (`data-testid="onboarding-error"`).
 
 - **Backend:** `Manager.Attach(path)` (`internal/workspace/manager.go`) — yeni `WS<n>`
-  id verir, `Meta.Path`'i **doğrudan seçilen klasöre** ayarlar (Create'in `tionswarm-<id>`
+  id verir, `Meta.Path`'i **doğrudan seçilen klasöre** ayarlar (Create'in `tionharness-<id>`
   alt klasörü açmasının aksine), `open()` mevcut `store/config/workspace` içeriğini
-  yerinde yeniden kullanır, `persist()` eder. Ad, klasör adından türetilir (`tionswarm-`
+  yerinde yeniden kullanır, `persist()` eder. Ad, klasör adından türetilir (`tionharness-`
   öneki soyulur) — özgün ad klasörde saklanmadığından kullanıcı sonradan yeniden
   adlandırabilir. İkon/renk `ws-settings.json`'dan otomatik gelir. Aynı klasörün iki
   kez eklenmesi `sameDir` (Windows'ta büyük/küçük harf duyarsız) ile engellenir.
@@ -228,7 +228,7 @@ penceresinde/sekmesinde eşzamanlı açılabilir** (paylaşılan localStorage'a 
 ### Çapraz-pencere "okunmadı" rozet senkronu
 
 Workspace etkinlik rozetleri (`unreadWs`) **tüm pencereler arasında paylaşılır**
-(`localStorage` anahtarı `tionswarm.unreadWs` + `storage` event). TionSwarm tek-kullanıcılı
+(`localStorage` anahtarı `tionharness.unreadWs` + `storage` event). TionHarness tek-kullanıcılı
 olduğundan ilke: **"herhangi bir pencerede görüldü = her yerde okundu"**.
 
 - `hooks/useWorkspaces.ts` paylaşılan ham seti `localStorage`'da tutar; her yazımda

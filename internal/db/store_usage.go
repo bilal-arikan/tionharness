@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/bilal-arikan/tionswarm/internal/providers"
+	"github.com/bilal-arikan/tionharness/internal/providers"
 )
 
 // Usage kinds tag every LLM call by its origin so spend can be attributed
@@ -113,7 +113,7 @@ type Usage struct {
 	CacheWrite5mTokens int    `json:"cacheWrite5mTokens,omitempty"`
 	CacheWrite1hTokens int    `json:"cacheWrite1hTokens,omitempty"`
 	// ProviderCalls is the cumulative number of underlying model API round-trips
-	// behind Calls (for claude-cli a single TionSwarm turn is several internal calls,
+	// behind Calls (for claude-cli a single TionHarness turn is several internal calls,
 	// reported via result num_turns). Lets a consumer divide the cumulative token
 	// totals by it to recover per-call figures.
 	ProviderCalls int                 `json:"providerCalls,omitempty"`

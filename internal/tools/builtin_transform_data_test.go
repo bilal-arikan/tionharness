@@ -122,11 +122,11 @@ func TestTransformDataEnvStripped(t *testing.T) {
 		t.Skip("python not available")
 	}
 	// A secret in the PARENT env must NOT be visible to the script.
-	t.Setenv("TIONSWARM_SECRET_TEST", "leaked-value")
+	t.Setenv("TIONHARNESS_SECRET_TEST", "leaked-value")
 	dir := t.TempDir()
 	tool := NewTransformDataTool(NewSandbox(dir))
 	script := "import os,sys,json\n" +
-		"json.dump({'seen':os.environ.get('TIONSWARM_SECRET_TEST','ABSENT')},open(sys.argv[1],'w'))\n"
+		"json.dump({'seen':os.environ.get('TIONHARNESS_SECRET_TEST','ABSENT')},open(sys.argv[1],'w'))\n"
 	args, _ := json.Marshal(map[string]any{
 		"language":    "python3",
 		"script":      script,
@@ -148,11 +148,11 @@ func TestTransformDataEnvStripped(t *testing.T) {
 }
 
 func TestMinimalScriptEnvDropsSecrets(t *testing.T) {
-	t.Setenv("TIONSWARM_SECRET_UNIT", "leak")
+	t.Setenv("TIONHARNESS_SECRET_UNIT", "leak")
 	env := minimalScriptEnv()
 	var hasPath bool
 	for _, kv := range env {
-		if strings.HasPrefix(kv, "TIONSWARM_SECRET_UNIT=") {
+		if strings.HasPrefix(kv, "TIONHARNESS_SECRET_UNIT=") {
 			t.Errorf("allowlisted env must not include the secret: %q", kv)
 		}
 		if strings.HasPrefix(kv, "PATH=") || strings.HasPrefix(kv, "Path=") {

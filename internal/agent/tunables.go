@@ -231,10 +231,10 @@ type Tunables struct {
 	// fill-ratio threshold — see maybeAutoHandoff in handoff.go.
 	handoffAuto      bool // auto-reset after an autonomous turn that hit the context limit (default off)
 	handoffMaxChain  int  // max reset-chain depth before falling back to plain compaction (0 → DefaultHandoffMaxChain)
-	handoffWriteFile bool // also write the handoff to <workdir>/.tionswarm/handoff.md (default off)
+	handoffWriteFile bool // also write the handoff to <workdir>/.tionharness/handoff.md (default off)
 
 	// Persistent progress (Anthropic claude-progress convention). When on, the
-	// todo_write checklist is persisted to <cwd>/.tionswarm/progress.json so it
+	// todo_write checklist is persisted to <cwd>/.tionharness/progress.json so it
 	// survives across sessions; a fresh session reads it back at start.
 	progressPersist bool // persist the checklist to disk (default on)
 	progressResume  bool // inject a resumed-progress block on a fresh session (default on)
@@ -271,7 +271,7 @@ type Tunables struct {
 	// catalog is additionally exposed as generated Python bindings behind the
 	// run_code tool (code execution with MCP: schemas stay out of context,
 	// intermediate data stays in the execution environment). Settings-driven
-	// (enableCodeMode, default off); TIONSWARM_CODE_MODE=1 seeds the setting at
+	// (enableCodeMode, default off); TIONHARNESS_CODE_MODE=1 seeds the setting at
 	// boot. See codemode_tunable.go.
 	codeMode bool
 
@@ -289,7 +289,7 @@ type Tunables struct {
 	// tool-search tool: the model discovers tools by regex without an
 	// activate_tools round-trip, discovered schemas are APPENDED (cache-safe),
 	// and the shipped tools block is byte-stable across loop iterations.
-	// TionSwarm's own activation builtins keep working alongside. Off by default.
+	// TionHarness's own activation builtins keep working alongside. Off by default.
 	nativeToolSearch bool
 
 	// programmaticTools — when true, native anthropic tool turns add the
@@ -427,7 +427,7 @@ func (t *Tunables) ShellEnabled() bool {
 
 // SetCLIHooksEnabled toggles whether the workspace's PreToolUse/PostToolUse hooks
 // are passed to claude-cli agents (via the generated --settings file). On by
-// default; turn off to keep hooks native-only when a hook authored for TionSwarm's
+// default; turn off to keep hooks native-only when a hook authored for TionHarness's
 // shell misbehaves under the CLI's own hook runner.
 func (t *Tunables) SetCLIHooksEnabled(enabled bool) {
 	t.mu.Lock()

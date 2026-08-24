@@ -55,7 +55,7 @@ func codexNamedMCPServers(msg string, servers map[string]CLIMCPServer) []string 
 // codexRemoteServerKeys returns the sorted keys of the remote (HTTP/SSE)
 // servers. It is the fallback set when the error names no server: a remote
 // endpoint is what fails a handshake mid-flight, while the stdio servers are
-// spawned by codex itself and carry the TionSwarm bridge the agent needs.
+// spawned by codex itself and carry the TionHarness bridge the agent needs.
 func codexRemoteServerKeys(servers map[string]CLIMCPServer) []string {
 	var keys []string
 	for key, s := range servers {

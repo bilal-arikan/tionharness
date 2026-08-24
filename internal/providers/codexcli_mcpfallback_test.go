@@ -38,7 +38,7 @@ func TestCodexMCPStartupFailureRecognisesLiveWording(t *testing.T) {
 func TestCodexNamedMCPServersNarrowsToTheFailingServer(t *testing.T) {
 	servers := map[string]CLIMCPServer{
 		"unity-mcp":   {Transport: "http", URL: "http://127.0.0.1:8080/mcp"},
-		"interaction": {Command: "tionswarm", Args: []string{"mcp"}},
+		"interaction": {Command: "tionharness", Args: []string{"mcp"}},
 	}
 	got := codexNamedMCPServers("unity-mcp: handshaking with MCP server failed", servers)
 	if want := []string{"unity-mcp"}; !reflect.DeepEqual(got, want) {
@@ -56,7 +56,7 @@ func TestCodexNamedMCPServersNarrowsToTheFailingServer(t *testing.T) {
 func TestCodexServersWithoutLeavesTheOriginalIntact(t *testing.T) {
 	servers := map[string]CLIMCPServer{
 		"unity-mcp":   {Transport: "http", URL: "http://127.0.0.1:8080/mcp"},
-		"interaction": {Command: "tionswarm"},
+		"interaction": {Command: "tionharness"},
 	}
 	out := codexServersWithout(servers, []string{"unity-mcp"})
 	if _, ok := out["unity-mcp"]; ok {

@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/bilal-arikan/tionswarm/internal/db"
-	"github.com/bilal-arikan/tionswarm/internal/skills"
+	"github.com/bilal-arikan/tionharness/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/skills"
 )
 
 // Children returns the STRUCTURAL child handles of ref: the edges the Explorer

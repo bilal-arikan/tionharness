@@ -32,16 +32,16 @@ interface Props {
 // Open a workspace in a fresh window scoped to it (#/w/{id}/chat), without
 // disturbing this window's selection. In the native desktop app (WebView2),
 // window.open would leak to the system browser, so we call the host bridge
-// (tionswarmOpenWindow) to spawn a real TionSwarm window instead; in a browser we
+// (tionharnessOpenWindow) to spawn a real TionHarness window instead; in a browser we
 // keep the standard new-window behaviour.
 function openInNewWindow(id: string) {
   const route = buildRoute({ workspaceId: id, view: 'chat', id: null })
   const w = window as unknown as {
     chrome?: { webview?: unknown }
-    tionswarmOpenWindow?: (route: string) => void
+    tionharnessOpenWindow?: (route: string) => void
   }
-  if (w.chrome?.webview && typeof w.tionswarmOpenWindow === 'function') {
-    w.tionswarmOpenWindow(route)
+  if (w.chrome?.webview && typeof w.tionharnessOpenWindow === 'function') {
+    w.tionharnessOpenWindow(route)
     return
   }
   window.open(`${window.location.origin}${window.location.pathname}#${route}`, '_blank', 'noopener')

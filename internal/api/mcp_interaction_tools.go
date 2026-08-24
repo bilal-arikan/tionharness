@@ -5,14 +5,14 @@ import (
 	"encoding/json"
 	"strings"
 
-	"github.com/bilal-arikan/tionswarm/internal/interaction"
-	"github.com/bilal-arikan/tionswarm/internal/tools"
+	"github.com/bilal-arikan/tionharness/internal/interaction"
+	"github.com/bilal-arikan/tionharness/internal/tools"
 )
 
 // callAsk emits a transient ask step and blocks until the user answers (via
 // POST /api/chat/control {action:"answer"}), the turn ends, or the timeout fires.
 func (b *interactionBackend) callAsk(ctx context.Context, run *chatRun, args json.RawMessage) (interaction.CallResult, error) {
-	// Shared tolerant parser: accepts TionSwarm's {question, options} and claude-cli's
+	// Shared tolerant parser: accepts TionHarness's {question, options} and claude-cli's
 	// native AskUserQuestion shapes (option objects + questions[] wrapper) so a model
 	// trained on the native tool no longer errors with a schema mismatch (SES73).
 	questions, err := tools.ParseAskInputMulti(args)
@@ -104,7 +104,7 @@ func (b *interactionBackend) callPermission(ctx context.Context, run *chatRun, a
 		return b.callExitPlan(ctx, run, in.Input)
 	}
 	// Strip the Interaction MCP namespace so a bridged/activated tool is classified by
-	// its REAL bare name (mcp__tionswarm_extended__create_agent -> create_agent). Without
+	// its REAL bare name (mcp__tionharness_extended__create_agent -> create_agent). Without
 	// this, a namespaced name misses the risk table and defaults to RiskWrite — safe
 	// (never wrongly auto-allows) but it would needlessly prompt for a read-only tool and
 	// skip matching standing grants. Gateway-activated extended tools (Doc 52 Faz 1-b)
@@ -382,7 +382,7 @@ func (b *interactionBackend) callSkillSearch(run *chatRun, args json.RawMessage)
 }
 
 // callShell runs a shell command through the run's per-agent shell runner (CLI
-// path), which is bound to the workspace sandbox and uses TionSwarm's own shell.
+// path), which is bound to the workspace sandbox and uses TionHarness's own shell.
 // toolName ("Bash" / "PowerShell") selects the interpreter so a Bash-first agent
 // and a PowerShell call both dispatch correctly. Returns a graceful error result
 // when shell is not available for this turn (disabled or no sandbox).

@@ -77,7 +77,9 @@ export function AgentsView({
   const catalog = useCatalog()
 
   // Left roster collapse (standard list pane) — toggled from the PaneHeader.
-  const { open: rosterOpen, toggle: toggleRoster } = useCollapsibleList('tionswarm.agentsListOpen')
+  const { open: rosterOpen, toggle: toggleRoster } = useCollapsibleList(
+    'tionharness.agentsListOpen',
+  )
 
   // Right-hand activity panel visibility (persisted) — mirrors the chat
   // SessionDetailPanel open/close affordance so the middle settings area can use
@@ -85,12 +87,12 @@ export function AgentsView({
   // Default CLOSED on the Agents screen (the settings area gets the full width);
   // only reopen if the user explicitly left it open before ('1').
   const [activityOpen, setActivityOpen] = useState(
-    () => localStorage.getItem('tionswarm.agentActivityOpen') === '1',
+    () => localStorage.getItem('tionharness.agentActivityOpen') === '1',
   )
   const toggleActivity = () =>
     setActivityOpen((v) => {
       const next = !v
-      localStorage.setItem('tionswarm.agentActivityOpen', next ? '1' : '0')
+      localStorage.setItem('tionharness.agentActivityOpen', next ? '1' : '0')
       return next
     })
 
@@ -171,7 +173,7 @@ export function AgentsView({
       <ListPane
         open={rosterOpen}
         onToggle={toggleRoster}
-        widthKey="tionswarm.agentsListWidth"
+        widthKey="tionharness.agentsListWidth"
         defaultWidth={256}
         label="Ajanlar"
         testId="agents-list-toggle"

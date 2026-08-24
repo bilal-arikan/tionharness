@@ -6,8 +6,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/bilal-arikan/tionswarm/internal/claudeauth"
-	"github.com/bilal-arikan/tionswarm/internal/exttools"
+	"github.com/bilal-arikan/tionharness/internal/claudeauth"
+	"github.com/bilal-arikan/tionharness/internal/exttools"
 )
 
 // The claude-cli provider is the odd one out in the catalog: its models are bare

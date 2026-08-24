@@ -127,7 +127,7 @@ onClick={(e) => {
   başlıkları alfabetik (tr), "Grupsuz" en üstte. Detay artifact başlığında grup rozeti
   gösterilir. `Artifact.Group` first-class JSON alanı (skill'lerden farklı olarak
   frontmatter değil, entity alanı — artifact'lar dosya-tabanlı JSON entity'dir).
-  Collapse durumu `tionswarm.artifactsCollapsedGroups` localStorage'da kalıcı.
+  Collapse durumu `tionharness.artifactsCollapsedGroups` localStorage'da kalıcı.
 - **Tekil grup düzenleme (TSK44):** Toplu (bulk) ve sürükle-bırak'a ek olarak, tek
   bir artifact açıkken **detay editöründe** grubu doğrudan değiştirilebilir. Düzenle
   moduna girince başlık/kind/dil'in yanında bir grup input'u belirir

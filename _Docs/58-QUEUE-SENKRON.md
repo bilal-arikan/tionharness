@@ -1,4 +1,4 @@
-# TionSwarm — Sohbet Kuyruğu + Çoklu-Ekran Senkronizasyonu (Event-Sourcing Refactor)
+# TionHarness — Sohbet Kuyruğu + Çoklu-Ekran Senkronizasyonu (Event-Sourcing Refactor)
 
 > Durum: **Faz 1–4 TAMAMEN UYGULANDI ✅** (2026-07-10). Tam otoriter cutover +
 > interaction CAS + durable send-queue + presence. Backend uçtan uca yeşil
@@ -745,7 +745,7 @@ Yan düzeltmeler (aynı sınıf hata):
   kalemine o store'un workspace id'sini yeniden damgalar — paylaşılan girdi
   yüzünden yabancı `workspaceId` taşıyan eski bir sidecar, boot'ta yanlış
   workspace'e dispatch edilmez.
-- **Frontend:** composer taslakları `tionswarm:draft:<ws>:<session>` ile
+- **Frontend:** composer taslakları `tionharness:draft:<ws>:<session>` ile
   anahtarlanır (eskiden bir workspace'in gönderilmemiş taslağı diğerinin
   composer'ında çıkıyordu); hub aboneliği artık `activeWorkspaceId`'ye de bağlı,
   yani aynı id'li oturuma geçilse bile akış yeniden açılır.

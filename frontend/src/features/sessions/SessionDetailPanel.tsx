@@ -69,7 +69,7 @@ export function SessionDetailPanel({
   // Persisted, drag-resizable width. The panel sits on the RIGHT, so its handle
   // is on the LEFT edge and the drag direction is inverted (drag left = wider).
   const { width, startDrag } = useResizableSidebar({
-    storageKey: 'tionswarm.sessionInfoWidth',
+    storageKey: 'tionharness.sessionInfoWidth',
     defaultWidth: 320,
     min: 280,
     max: 640,
@@ -97,12 +97,12 @@ export function SessionDetailPanel({
   // "Özet" (session projection) collapse — persisted, defaults open. The DSL block
   // can get tall, so let it fold away like the coordinator section used to.
   const [summaryOpen, setSummaryOpen] = useState(
-    () => localStorage.getItem('tionswarm.sessionSummaryOpen') !== '0',
+    () => localStorage.getItem('tionharness.sessionSummaryOpen') !== '0',
   )
   const toggleSummary = () =>
     setSummaryOpen((v) => {
       const next = !v
-      localStorage.setItem('tionswarm.sessionSummaryOpen', next ? '1' : '0')
+      localStorage.setItem('tionharness.sessionSummaryOpen', next ? '1' : '0')
       return next
     })
 

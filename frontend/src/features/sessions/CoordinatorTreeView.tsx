@@ -43,12 +43,12 @@ function formatUSD(v: number): string {
 export function CoordinatorTreeView({ sessionId, refreshKey, onSelectSession }: Props) {
   const [tree, setTree] = useState<CoordinatorTree | null>(null)
   const [loading, setLoading] = useState(false)
-  const [open, setOpen] = useState(() => localStorage.getItem('tionswarm.coordTreeOpen') === '1')
+  const [open, setOpen] = useState(() => localStorage.getItem('tionharness.coordTreeOpen') === '1')
 
   const toggle = () =>
     setOpen((v) => {
       const next = !v
-      localStorage.setItem('tionswarm.coordTreeOpen', next ? '1' : '0')
+      localStorage.setItem('tionharness.coordTreeOpen', next ? '1' : '0')
       return next
     })
 

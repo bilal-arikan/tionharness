@@ -6,10 +6,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bilal-arikan/tionswarm/internal/agent"
-	"github.com/bilal-arikan/tionswarm/internal/interaction"
-	"github.com/bilal-arikan/tionswarm/internal/providers"
-	"github.com/bilal-arikan/tionswarm/internal/tools"
+	"github.com/bilal-arikan/tionharness/internal/agent"
+	"github.com/bilal-arikan/tionharness/internal/interaction"
+	"github.com/bilal-arikan/tionharness/internal/providers"
+	"github.com/bilal-arikan/tionharness/internal/tools"
 )
 
 func specNames(specs []interaction.ToolSpec) []string {
@@ -84,7 +84,7 @@ func TestGatewayDynamicExtendedSurface(t *testing.T) {
 }
 
 // TestGatewayActivateAcceptsNamespacedName verifies activate_tools accepts the
-// namespaced name the catalog shows (mcp__tionswarm_extended__notify), not just the
+// namespaced name the catalog shows (mcp__tionharness_extended__notify), not just the
 // bare form — the model may echo either.
 func TestGatewayActivateAcceptsNamespacedName(t *testing.T) {
 	tun := agent.NewTunables()
@@ -94,7 +94,7 @@ func TestGatewayActivateAcceptsNamespacedName(t *testing.T) {
 	tok := runs.interactionToken("ws1", "s1", "a1")
 	runs.bindActive(tok, run)
 
-	res, _ := b.callActivate(tok, run, json.RawMessage(`{"tools":["mcp__tionswarm_extended__notify"]}`), true)
+	res, _ := b.callActivate(tok, run, json.RawMessage(`{"tools":["mcp__tionharness_extended__notify"]}`), true)
 	if res.IsError {
 		t.Fatalf("namespaced activate should succeed, got %q", res.Text)
 	}

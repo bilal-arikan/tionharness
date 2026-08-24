@@ -1300,7 +1300,7 @@ func toAnthropicTools(tools []ToolDef, extendedCache bool, opts serverToolOpts) 
 
 // Native (server-side) tool search: the model discovers deferred tool defs by
 // regex search; discovered schemas are appended without invalidating the cached
-// prefix. Distinct from TionSwarm's own builtin `tool_search` (the client-side
+// prefix. Distinct from TionHarness's own builtin `tool_search` (the client-side
 // catalog search), which stays available alongside.
 const (
 	nativeToolSearchType = "tool_search_tool_regex_20251119"

@@ -6,7 +6,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/bilal-arikan/tionswarm/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/db"
 )
 
 // --- token-optimizer capability (rtk / sqz) ---------------------------------

@@ -5,7 +5,7 @@ import { useCallback, useMemo, useRef, useState } from 'react'
 // they only react to our own list cards — and, just as importantly, an OS file
 // drag (which carries 'Files' instead) still reaches the Artifacts screen's
 // upload drop zone untouched.
-export const GROUP_ITEM_MIME = 'application/x-tionswarm-group-item'
+export const GROUP_ITEM_MIME = 'application/x-tionharness-group-item'
 
 export interface UseGroupDnDOptions<T> {
   // Every item that may take part in a drag — the UNFILTERED list, since a

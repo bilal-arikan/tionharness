@@ -80,7 +80,7 @@ export function FlowsListPane({
     <ListPane
       open={flowsListOpen}
       onToggle={toggleFlowsList}
-      widthKey="tionswarm.flowsListWidth"
+      widthKey="tionharness.flowsListWidth"
       defaultWidth={224}
       minWidth={180}
       label="Akışlar"

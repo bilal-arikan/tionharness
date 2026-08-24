@@ -6,9 +6,9 @@ import (
 	"encoding/hex"
 	"fmt"
 
-	"github.com/bilal-arikan/tionswarm/internal/db"
-	"github.com/bilal-arikan/tionswarm/internal/providers"
-	"github.com/bilal-arikan/tionswarm/internal/tools"
+	"github.com/bilal-arikan/tionharness/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/providers"
+	"github.com/bilal-arikan/tionharness/internal/tools"
 )
 
 // Default tool-loop guardrail thresholds (external-context-agent tool_guardrails parity).
@@ -153,7 +153,7 @@ func (r *Runtime) analyzeCLIGuardrail(ctx context.Context, agent db.Agent, trace
 	}
 	gew, geb, gsw, gsh, gnw, gnb := r.tun.ToolGuardThresholds()
 	g := newToolGuard(toolGuardConfig{
-		warnings: true, // hardStop deliberately off: analysis, not enforcement
+		warnings:  true, // hardStop deliberately off: analysis, not enforcement
 		exactWarn: gew, exactBlock: geb, sameToolWarn: gsw, sameToolHalt: gsh,
 		noProgressWarn: gnw, noProgressBlck: gnb,
 	})

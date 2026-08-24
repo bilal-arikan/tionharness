@@ -1,7 +1,7 @@
 // Package insight is the retrospective session-scanning subsystem (_Docs/60).
 // It scans past sessions through pluggable "lenses", skips sessions it has
 // already scanned (incremental ledger), and routes findings to one of two
-// channels: app-fix (bugs in TionSwarm itself) or workspace-opt (changes the
+// channels: app-fix (bugs in TionHarness itself) or workspace-opt (changes the
 // user can apply inside the workspace).
 //
 // This file holds the canonical Finding model and its file-backed, signature-
@@ -25,9 +25,9 @@ import (
 type Channel string
 
 const (
-	// ChannelAppFix marks a finding whose root cause is in the TionSwarm
+	// ChannelAppFix marks a finding whose root cause is in the TionHarness
 	// application itself. It is reported (never auto-applied, never coder-spawned)
-	// so the user can use it to develop TionSwarm.
+	// so the user can use it to develop TionHarness.
 	ChannelAppFix Channel = "app-fix"
 	// ChannelWorkspaceOpt marks a finding fixable inside the workspace without
 	// touching app code (skill pruning, blocked tools, context tuning, ...).
@@ -63,15 +63,15 @@ func ValidStatus(s FindingStatus) bool {
 // Occurrences and records the new evidence session, so a recurring pattern
 // accumulates weight rather than fragmenting into duplicate rows.
 type Finding struct {
-	ID          string        `json:"id"`
-	LensID      string        `json:"lensId"`
-	Channel     Channel       `json:"channel"`
-	Signature   string        `json:"sig"` // dedupe key (lens-defined shape)
-	Title       string        `json:"title"`
-	RootCause   string        `json:"rootCause,omitempty"`
-	ProposedFix string        `json:"proposedFix,omitempty"`
-	FilePointer string        `json:"filePointer,omitempty"` // e.g. internal/providers/claudecli.go
-	Severity    string        `json:"severity,omitempty"`    // low|med|high
+	ID          string  `json:"id"`
+	LensID      string  `json:"lensId"`
+	Channel     Channel `json:"channel"`
+	Signature   string  `json:"sig"` // dedupe key (lens-defined shape)
+	Title       string  `json:"title"`
+	RootCause   string  `json:"rootCause,omitempty"`
+	ProposedFix string  `json:"proposedFix,omitempty"`
+	FilePointer string  `json:"filePointer,omitempty"` // e.g. internal/providers/claudecli.go
+	Severity    string  `json:"severity,omitempty"`    // low|med|high
 	// EvidenceSessionIDs are the sessions this finding was observed in (dedup-merged).
 	EvidenceSessionIDs []string      `json:"evidenceSessionIds,omitempty"`
 	Occurrences        int           `json:"occurrences"`

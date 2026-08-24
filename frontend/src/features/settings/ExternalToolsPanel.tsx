@@ -1,7 +1,7 @@
 // External tools settings panel. Detects optional CLI tools used alongside
-// TionSwarm (token optimisation, dev, render — e.g. `sqz`, `mmdc`, `piper`),
+// TionHarness (token optimisation, dev, render — e.g. `sqz`, `mmdc`, `piper`),
 // reports the version each one has installed, checks that against the latest
-// published release, and lets the user wire the hook-based ones into TionSwarm
+// published release, and lets the user wire the hook-based ones into TionHarness
 // with one click. Self-contained (own load), exempt from the global Save bar —
 // like the Hooks panel. Split out of HooksPanel into its own settings category.
 //
@@ -33,14 +33,14 @@ interface Props {
   onError: (msg: string) => void
 }
 
-// One-click hook templates that wire a detected external tool into TionSwarm as a
+// One-click hook templates that wire a detected external tool into TionHarness as a
 // PreToolUse/PostToolUse hook. Only tools whose `wire` is 'hook' (from
 // /api/external-tools) need an entry here; 'mcp'/'cli' tools render an info badge
 // instead of a toggle (driven by ExternalToolStatus.wire, not this map).
 // NOTE — there is deliberately NO `rtk` entry here any more.
 //
 // It used to ship a PreToolUse hook whose body was a PowerShell one-liner
-// (`$j=[Console]::In.ReadToEnd()|ConvertFrom-Json; …`). TionSwarm's own hook runner
+// (`$j=[Console]::In.ReadToEnd()|ConvertFrom-Json; …`). TionHarness's own hook runner
 // is PowerShell on Windows, so it worked on the native path — but claude-cli runs
 // hooks through BASH, which died on the first `|` with
 // `syntax error near unexpected token '|'`. A failing PreToolUse hook BLOCKS the
@@ -249,7 +249,7 @@ export function ExternalToolsPanel({ onError }: Props) {
   const canOfferUpdate = (t: ExternalToolStatus): boolean =>
     t.found && t.updateKind === 'command' && updates[t.name]?.status === 'outdated'
 
-  // The hook (if any) currently wiring a given external tool into TionSwarm,
+  // The hook (if any) currently wiring a given external tool into TionHarness,
   // matched by the tool name appearing in the hook command.
   const wiredHook = (toolName: string): Hook | undefined =>
     hooks.find((h) => h.command.includes(toolName))
@@ -342,7 +342,7 @@ export function ExternalToolsPanel({ onError }: Props) {
   return (
     <div className="space-y-3">
       <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-xs leading-relaxed text-[var(--color-text-dim)]">
-        TionSwarm ile birlikte kullanılabilecek isteğe bağlı CLI araçlarının (token optimizasyonu,
+        TionHarness ile birlikte kullanılabilecek isteğe bağlı CLI araçlarının (token optimizasyonu,
         geliştirme, render — ör. <code>sqz</code>, <code>mmdc</code>, <code>piper</code>) bu cihazda{' '}
         <span className="font-medium text-[var(--color-text)]">kurulu olup olmadığını</span> kontrol
         eder. Önce Ayarlar'daki yol geçersiz kılması (varsa), yoksa PATH aranır — araçlar{' '}
@@ -487,8 +487,8 @@ export function ExternalToolsPanel({ onError }: Props) {
                               }`}
                               title={
                                 wiredHook(t.name)
-                                  ? 'TionSwarm hook bağlantısını aç/kapat'
-                                  : 'Bu araç için TionSwarm hook’u oluştur ve etkinleştir'
+                                  ? 'TionHarness hook bağlantısını aç/kapat'
+                                  : 'Bu araç için TionHarness hook’u oluştur ve etkinleştir'
                               }
                             >
                               {toolBusy === t.name
@@ -572,7 +572,7 @@ export function ExternalToolsPanel({ onError }: Props) {
                         </div>
                       </div>
                       {/* Manual upgrade instructions, shown only once an update is
-                        actually available. TionSwarm will not overwrite these
+                        actually available. TionHarness will not overwrite these
                         binaries itself: on Windows a running child (an MCP stdio
                         server holding its own .exe, a piper synth mid-render)
                         locks the file, and a half-applied copy leaves a broken
@@ -639,7 +639,7 @@ export function ExternalToolsPanel({ onError }: Props) {
                           <span className="font-medium text-[var(--color-text)]">
                             🧠 codebase-memory entegrasyonu:
                           </span>{' '}
-                          Bir <code>codebase-memory-mcp</code> sunucusu eklendiğinde, TionSwarm
+                          Bir <code>codebase-memory-mcp</code> sunucusu eklendiğinde, TionHarness
                           otomatik olarak ajanın bağlamına{' '}
                           <span className="font-medium text-[var(--color-text)]">
                             "kod bilgi-grafiği mevcut"
@@ -702,7 +702,7 @@ export function ExternalToolsPanel({ onError }: Props) {
                       ⚡ Token optimizasyonu entegrasyonu:
                     </span>{' '}
                     Bir <code>rtk</code> / <code>sqz</code> aracı hook olarak bağlandığında,
-                    TionSwarm ajanın bağlamına{' '}
+                    TionHarness ajanın bağlamına{' '}
                     <span className="font-medium text-[var(--color-text)]">
                       "token optimizasyonu aktif"
                     </span>{' '}
@@ -777,8 +777,8 @@ export function ExternalToolsPanel({ onError }: Props) {
                     <p className="mt-1">
                       Aşağıdaki rakamlar{' '}
                       <span className="font-medium text-[var(--color-text)]">araçların kendi</span>{' '}
-                      <code>gain</code> çıktısıdır — TionSwarm yeniden hesaplamaz, böylece araçların
-                      muhasebesinden sapamaz.
+                      <code>gain</code> çıktısıdır — TionHarness yeniden hesaplamaz, böylece
+                      araçların muhasebesinden sapamaz.
                     </p>
                     {(['rtk', 'sqz'] as const).map((name) => {
                       const found = name === 'rtk' ? report.rtkFound : report.sqzFound

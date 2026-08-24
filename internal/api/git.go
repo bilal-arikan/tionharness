@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bilal-arikan/tionswarm/internal/proc"
+	"github.com/bilal-arikan/tionharness/internal/proc"
 )
 
 // gitCmdTimeout bounds each git invocation so a slow/hung repo can't stall a

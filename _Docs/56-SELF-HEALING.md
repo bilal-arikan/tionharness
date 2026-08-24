@@ -2,7 +2,7 @@
 
 > Durum: **Tamamlandı** (2026-07-07). İlham: external-context-agent projesinin
 > `error_classifier` / `tool_guardrails` / `message_sanitization` / stuck-loop
-> desenleri, TionSwarm'ın mevcut saf-`decideRecovery` mimarisine uyarlandı.
+> desenleri, TionHarness'ın mevcut saf-`decideRecovery` mimarisine uyarlandı.
 > Kapsam: **native tool-use döngüsü** (anthropic/minimax). claude-cli kendi
 > döngüsünü sürer — Faz A/B/C ona uygulanmaz; Faz D (oturum-seviyesi) her iki
 > yol için geçerlidir.
@@ -127,7 +127,7 @@
   `guardrail_halt`. UI mevcut StepRecovery/StepError kartlarıyla gösterir.
 
 ### Faz F — Hata→ders döngüsü (lesson reflect, 2026-07-07)
-external-context-agent `background_review`'un TionSwarm uyarlaması (memory alt sistemi
+external-context-agent `background_review`'un TionHarness uyarlaması (memory alt sistemi
 kaldırıldığı için hedef store dar-kapsamlı yeni bir sidecar):
 
 - **Reflector** `internal/agent/lessons.go`: kötü biten her tur

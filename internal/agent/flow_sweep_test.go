@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/bilal-arikan/tionswarm/internal/db"
-	"github.com/bilal-arikan/tionswarm/internal/orchestration"
+	"github.com/bilal-arikan/tionharness/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/orchestration"
 )
 
 // TestSweepWaitingFlows_FailsTimedOut verifies the await-input timeout sweeper:

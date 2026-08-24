@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/bilal-arikan/tionswarm/internal/orchestration"
-	"github.com/bilal-arikan/tionswarm/internal/skills"
+	"github.com/bilal-arikan/tionharness/internal/orchestration"
+	"github.com/bilal-arikan/tionharness/internal/skills"
 )
 
 // validateFlowPreconditions is the semantic (DB- and registry-backed) half of

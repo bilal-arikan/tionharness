@@ -12,7 +12,7 @@ export function SeedDefaultBadge({ state }: { state?: SeedDefaultState }) {
   if (state !== 'edited') return null
   return (
     <span
-      title="Bu dosya varsayılandan farklı — TionSwarm güncellemeleri buraya artık otomatik gelmez. 'Varsayılan' ile geri döndürebilirsin (yerel değişiklikler silinir)."
+      title="Bu dosya varsayılandan farklı — TionHarness güncellemeleri buraya artık otomatik gelmez. 'Varsayılan' ile geri döndürebilirsin (yerel değişiklikler silinir)."
       className="inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium text-[var(--color-warning)] ring-1 ring-inset ring-[color-mix(in_srgb,var(--color-warning)_35%,transparent)]"
     >
       <Lock className="h-3 w-3" />
@@ -31,7 +31,7 @@ interface RestoreProps {
   onError: (msg: string) => void
 }
 
-// RestoreDefaultButton overwrites a shipped file with the version TionSwarm ships.
+// RestoreDefaultButton overwrites a shipped file with the version TionHarness ships.
 // Destructive (local changes are gone), so it arms first — inline, turning into a
 // yes/cancel pair rather than blocking on a window.confirm, which reads as a bug
 // report popup in an app that otherwise never uses one.
@@ -79,7 +79,7 @@ export function RestoreDefaultButton({ label, onRestore, onDone, onError }: Rest
   return (
     <button
       onClick={() => setArmed(true)}
-      title="TionSwarm ile gelen varsayılan içeriğe döndür (yerel düzenlemeler silinir). Döndürülen dosya yeniden otomatik güncellenmeye başlar."
+      title="TionHarness ile gelen varsayılan içeriğe döndür (yerel düzenlemeler silinir). Döndürülen dosya yeniden otomatik güncellenmeye başlar."
       className="flex shrink-0 items-center gap-1 rounded px-2 py-1 text-xs hover:bg-[var(--color-surface-2)]"
     >
       <RotateCcw className="h-3.5 w-3.5" /> Varsayılan

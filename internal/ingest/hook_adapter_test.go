@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bilal-arikan/tionswarm/internal/market"
+	"github.com/bilal-arikan/tionharness/internal/market"
 )
 
 // TestHookAdapterScansPluginHooks verifies the hook adapter discovers a Claude

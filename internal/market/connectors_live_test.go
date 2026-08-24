@@ -7,10 +7,10 @@ import (
 )
 
 // TestLiveSkillsMPSearch hits the real skillsmp.com search API. Network-gated:
-// TIONSWARM_LIVE_TEST=1 go test -run TestLiveSkillsMPSearch ./internal/market/
+// TIONHARNESS_LIVE_TEST=1 go test -run TestLiveSkillsMPSearch ./internal/market/
 func TestLiveSkillsMPSearch(t *testing.T) {
-	if os.Getenv("TIONSWARM_LIVE_TEST") != "1" {
-		t.Skip("set TIONSWARM_LIVE_TEST=1 to run the live skillsmp search")
+	if os.Getenv("TIONHARNESS_LIVE_TEST") != "1" {
+		t.Skip("set TIONHARNESS_LIVE_TEST=1 to run the live skillsmp search")
 	}
 	entries, err := searchSkillsMP(context.Background(), "seo", 10)
 	if err != nil {
@@ -28,8 +28,8 @@ func TestLiveSkillsMPSearch(t *testing.T) {
 // TestLiveCrossAIToolsSearch fetches+caches the real (~12 MB) crossaitools listing
 // and searches it locally. Network-gated.
 func TestLiveCrossAIToolsSearch(t *testing.T) {
-	if os.Getenv("TIONSWARM_LIVE_TEST") != "1" {
-		t.Skip("set TIONSWARM_LIVE_TEST=1 to run the live crossaitools search")
+	if os.Getenv("TIONHARNESS_LIVE_TEST") != "1" {
+		t.Skip("set TIONHARNESS_LIVE_TEST=1 to run the live crossaitools search")
 	}
 	s := New(t.TempDir(), t.TempDir())
 	entries, err := s.searchCrossAITools(context.Background(), "commit", 10)

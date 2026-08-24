@@ -1,4 +1,4 @@
-# TionSwarm — Mimari
+# TionHarness — Mimari
 
 ## Yüksek Seviye Mimari
 
@@ -16,7 +16,7 @@ graph TD
     RT --> DB
     ORC --> DB
     EMBED[internal/web<br/>go:embed all:dist] -.SPA binary icinde.-> UI
-    DESK[Native WebView2 Penceresi<br/>cmd/tionswarm-desktop] -.sarar.-> UI
+    DESK[Native WebView2 Penceresi<br/>cmd/tionharness-desktop] -.sarar.-> UI
 ```
 
 > **Not:** `Task Board` ayrı bir paket değildir (bkz. §7); diyagramda mantıksal
@@ -28,7 +28,7 @@ graph TD
 - Bağımsız geliştirilen web UI (React + Vite + TS + Tailwind v4, kendi bileşenlerimiz).
 - Backend ile yalnızca **JSON API + SSE** üzerinden konuşur.
 - Frontend `dist/` çıktısı `go:embed all:dist` ile Go binary'sine gömülür (`internal/web/embed.go`) → tek çalıştırılabilir dosya, ayrı statik sunucu gerekmez.
-- Native masaüstü kabuğu: `cmd/tionswarm-desktop` (WebView2, CGO'suz). Wails planı iptal edildi — bkz. `32-NATIVE-PENCERE.md`.
+- Native masaüstü kabuğu: `cmd/tionharness-desktop` (WebView2, CGO'suz). Wails planı iptal edildi — bkz. `32-NATIVE-PENCERE.md`.
 - UI/UX tamamen kendi tasarım dilimizdir.
 
 ### 2. API Katmanı (`internal/api`)
@@ -93,11 +93,11 @@ Tarihsel tasarım: [`arsiv/31-MEMGPT-CORE-MEMORY.md`](arsiv/31-MEMGPT-CORE-MEMOR
 > Yukarıdaki yüksek seviye diyagram **hedef** mimaridir. Aşağıdaki yapı **gerçekte mevcut** olandır (Faz 0–8). `orchestration`, `mcp`, `tools` artık mevcut. Ayrı bir `tasks` paketi yerine görev mantığı `db` + `api` + `agent/executor.go` içinde yaşar.
 
 ```
-TionSwarm/
+TionHarness/
 ├── _Docs/                       # Plan ve tasarim dokumanlari (Turkce)
 ├── cmd/
-│   ├── tionswarm/main.go          # Bassiz giris (internal/app.Bootstrap)
-│   ├── tionswarm-desktop/       # Native WebView2 masaustu penceresi (_Docs/32)
+│   ├── tionharness/main.go          # Bassiz giris (internal/app.Bootstrap)
+│   ├── tionharness-desktop/       # Native WebView2 masaustu penceresi (_Docs/32)
 │   └── migrate-ids/             # Tek-seferlik WS/AGT/SES prefix'li ID migrasyon araci
 ├── internal/
 │   ├── config/                  # env + AES-GCM secret
@@ -110,7 +110,7 @@ TionSwarm/
 │   ├── orchestration/           # akış graf motoru (model.go, engine.go)
 │   ├── mcp/                     # SDK'sız JSON-RPC istemci: stdio + Streamable HTTP (client.go, manager.go, pool.go)
 │   ├── tools/                   # built-in (fs/shell akan + todo_write/ask_user + artifact + lazy-load meta) + MCP birleşik registry (registry.go, builtin_*.go, activetools.go, builtin_activate.go)
-│   ├── skills/                  # dosya-tabanlı skill sistemi (2 katman: global ~/.tionswarm/skills + workspace/skills); frontmatter-only katalog, lazy body; subskills; koşullu paths:+skill_search (SK-2); ${SKILL_DIR}+bundled files (SK-1); allowed_tools auto-grant (SK-3); provenance (SK-4); varsayılan seeding (defaults/) — internal/seed ile sürüm-farkında tazelenir + "Varsayılan"a döndürme
+│   ├── skills/                  # dosya-tabanlı skill sistemi (2 katman: global ~/.tionharness/skills + workspace/skills); frontmatter-only katalog, lazy body; subskills; koşullu paths:+skill_search (SK-2); ${SKILL_DIR}+bundled files (SK-1); allowed_tools auto-grant (SK-3); provenance (SK-4); varsayılan seeding (defaults/) — internal/seed ile sürüm-farkında tazelenir + "Varsayılan"a döndürme
 │   ├── seed/                    # gömülü default ağaçlarının SÜRÜM-FARKINDA tazelenmesi (seed.go, manifest.go): .shipped-versions.json hash ledger'ı ile "kullanıcı düzenledi mi?" tahmin edilmez, kanıtlanır → dokunulmamış dosyalar yeni sürümü alır, düzenlenmişler korunur. Tüketiciler: skills, insight (bkz. _Docs\60 Faz 6.4)
 │   │                            # DİKKAT (SKILL.md): tazeleme yalnız GÖVDEYİ yayar; frontmatter kullanıcı config'i sayılır ve korunur (defaults.go::seedConfig Merge). Yani bir shipped skill'in `description`/`when_to_use` alanını repo default'unda düzeltmek KURULU kopyaya geçmez — kurulu SKILL.md'leri elle güncelle ya da "Varsayılan'a döndür" (RestoreDefault) kullan.
 │   ├── settings/                # uygulama-geneli ayarlar (settings.go, store.go — şifreli settings.json)
@@ -123,7 +123,7 @@ TionSwarm/
 ```
 
 > Not: Canlı akış WebSocket değil **SSE** ile yapılır (bilinçli seçim). Wails planı iptal
-> edildi → native pencere `cmd/tionswarm-desktop` (WebView2). Yukarıdaki ağaç kısaltılmıştır;
+> edildi → native pencere `cmd/tionharness-desktop` (WebView2). Yukarıdaki ağaç kısaltılmıştır;
 > güncel tam liste için `internal/` dizinine bakın.
 
 ## Tasarım İlkeleri

@@ -4,8 +4,8 @@ import (
 	"context"
 	"sync/atomic"
 
-	"github.com/bilal-arikan/tionswarm/internal/db"
-	"github.com/bilal-arikan/tionswarm/internal/tools"
+	"github.com/bilal-arikan/tionharness/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/tools"
 )
 
 // CallKind tags a provider call by its origin so usage can be attributed across
@@ -92,7 +92,7 @@ type overflowKey struct{}
 // withOverflowFlag attaches a context-overflow flag to the context and returns
 // it alongside the flag. An autonomous caller installs it before a turn so that,
 // after the turn, it can tell whether the tool loop had to reactively compact its
-// in-flight history (the TionSwarm signal that the turn ran up against the context
+// in-flight history (the TionHarness signal that the turn ran up against the context
 // limit) — the trigger for an automatic context-reset handoff.
 func withOverflowFlag(ctx context.Context) (context.Context, *atomic.Bool) {
 	var flag atomic.Bool

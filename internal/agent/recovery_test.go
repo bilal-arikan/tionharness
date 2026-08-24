@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/bilal-arikan/tionswarm/internal/providers"
+	"github.com/bilal-arikan/tionharness/internal/providers"
 )
 
 func TestDecideRecovery(t *testing.T) {

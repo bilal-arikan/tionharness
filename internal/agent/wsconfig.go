@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/bilal-arikan/tionswarm/internal/prompts"
+	"github.com/bilal-arikan/tionharness/internal/prompts"
 )
 
 // Per-workspace, editable configuration lives in <workspace>/config/, a sibling

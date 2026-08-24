@@ -9,10 +9,10 @@ import (
 
 // resetCacheForTest points the on-disk cache at a temp data dir and clears the
 // in-memory copy, so each test starts from a cold cache without touching the
-// developer's real ~/.tionswarm.
+// developer's real ~/.tionharness.
 func resetCacheForTest(t *testing.T) {
 	t.Helper()
-	t.Setenv("TIONSWARM_DATA_DIR", t.TempDir())
+	t.Setenv("TIONHARNESS_DATA_DIR", t.TempDir())
 	releaseCache.Lock()
 	releaseCache.loaded = true // skip loading the (empty) temp file
 	releaseCache.entries = map[string]Release{}

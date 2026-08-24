@@ -3,7 +3,7 @@
 > **Durum (2026-06-25): UYGULANDI.** Anthropic'in *"Effective harnesses for
 > long-running agents"* + *"Effective context engineering for AI agents"*
 > makalelerindeki **kalıcı not dosyası** (`claude-progress.txt` + `feature_list.json`
-> / `NOTES.md`) konvansiyonunun TionSwarm karşılığı.
+> / `NOTES.md`) konvansiyonunun TionHarness karşılığı.
 >
 > İlişkili: [`arsiv/31-MEMGPT-CORE-MEMORY.md`](arsiv/31-MEMGPT-CORE-MEMORY.md) (core memory — KALDIRILDI),
 > [`17-TOKEN-OPTIMIZASYON.md`](17-TOKEN-OPTIMIZASYON.md) (compaction),
@@ -44,7 +44,7 @@ güncellemelerinde değişmeyen içerikleri yeniden göndermemek (~400 → ~40 c
 
 - **Konum (2026-07-11'den beri OTURUMA ÖZEL):** `<store>/progress/<sessionID>/…`
   — **her zaman** oturum-başına, çalışma dizininden bağımsız. Session'ın working
-  dir'i olsa bile progress oraya YAZILMAZ (eski `<cwd>/.tionswarm/progress.json`
+  dir'i olsa bile progress oraya YAZILMAZ (eski `<cwd>/.tionharness/progress.json`
   dizin-paylaşımlı davranışı kaldırıldı: aynı projedeki farklı oturumlar
   birbirinin checklist'ini eziyordu; kullanıcı isteğiyle oturuma özel yapıldı).
   Tek resolver: `Runtime.ProgressDir(sessionID)` (yaz=NewTodoSink + oku=resume
@@ -60,7 +60,7 @@ güncellemelerinde değişmeyen içerikleri yeniden göndermemek (~400 → ~40 c
 graph TD
     AGENT["Ajan: todo_write"] --> TOOL["TodoWriteTool.Call"]
     TOOL -->|"ctx'te sink varsa"| SINK["TodoSink.SaveTodos"]
-    SINK --> DISK["progress.Save<br/>&lt;cwd&gt;/.tionswarm/progress.json"]
+    SINK --> DISK["progress.Save<br/>&lt;cwd&gt;/.tionharness/progress.json"]
     TOOL --> STEP["StepTodo trace<br/>(session.jsonl)"]
     FRESH["Yeni/restart oturum"] --> CB["todoContextBlock"]
     CB -->|"oturum trace'i boş"| LOAD["progress.Load"]
@@ -98,7 +98,7 @@ kopyası), böylece `todo_write` aracı bağımlılık-hafif kalır:
   (scheduler/spawn/flow) tarafından run'a kurulur.
 - **Native araç gölgeleme (2026-06-25, fix):** claude-cli kendi built-in checklist
   aracını sunar; eski sürümlerde `TodoWrite`, yenilerde **`TaskCreate`/`TaskUpdate`/
-  `TaskList`/`TaskGet`** ailesi. Bu native araç TionSwarm'nun bridged `todo_write`'ını
+  `TaskList`/`TaskGet`** ailesi. Bu native araç TionHarness'nun bridged `todo_write`'ını
   **gölgeler** → model native'i çağırır, sink'e hiçbir şey gitmez, progress kartı boş
   kalır. `climcp.go::writeCLIMCPConfig` artık `--disallowedTools` ile her iki ad
   ailesini de bastırır (CLI'da olmayan adı disallow etmek zararsız) ve
@@ -147,7 +147,7 @@ taşır: `category` (gruplama etiketi, ör. `functional`/`tests`/`docs`) ve `ste
 
 ## PROGRESS.md konvansiyon skill'i
 
-Yeni default skill **`tionswarm-progress`** (`internal/skills/defaults/tionswarm-progress/
+Yeni default skill **`tionharness-progress`** (`internal/skills/defaults/tionharness-progress/
 SKILL.md`, `access: shared`): ajana hem **otomatik** progress.json katmanını (her
 `todo_write` diske yazılır, fresh oturum geri yükler) hem de **insan-okunur**
 `PROGRESS.md` konvansiyonunu (mevcut kilitsiz `Read`/`Write`/`Edit` ile proje
@@ -173,7 +173,7 @@ davranışı: katla/aç toggle + statü işaretçisi + son 3 log; dizin-scope uy
 
 - **Yeni:** `internal/progress/progress.go` (+test), `internal/tools/todosink.go`,
   `internal/tools/builtin_todo_test.go`, `internal/agent/todosink.go` (+test),
-  `internal/api/progress.go`, `internal/skills/defaults/tionswarm-progress/SKILL.md`.
+  `internal/api/progress.go`, `internal/skills/defaults/tionharness-progress/SKILL.md`.
 - **Değişen:** `internal/tools/builtin_todo.go` (sink kancası + category/steps),
   `internal/agent/toolloop.go` (native fallback), `internal/agent/tunables.go` (knob),
   `internal/agent/workdir_ctx.go` (`SessionWorkdir`), `internal/db/db.go` (`Root()`),
@@ -191,7 +191,7 @@ davranışı: katla/aç toggle + statü işaretçisi + son 3 log; dizin-scope uy
 ## Doğrulama
 
 ```powershell
-cd C:\Users\user\Desktop\Projects\TionSwarm
+cd C:\Users\user\Desktop\Projects\TionHarness
 go build ./...
 go test ./internal/progress/... ./internal/agent/... ./internal/tools/... ./internal/api/... ./internal/settings/...
 cd frontend; npm run build

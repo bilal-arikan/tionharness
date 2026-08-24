@@ -1,4 +1,4 @@
-# TionSwarm — Oturum Debug Günlüğü (Paralel Gözlemlenebilirlik Akışı)
+# TionHarness — Oturum Debug Günlüğü (Paralel Gözlemlenebilirlik Akışı)
 
 > Son güncelleme: **2026-07-10**
 > Her oturum için `session.jsonl`'in **yanına** yapılandırılmış, append-only bir
@@ -115,7 +115,7 @@ etkinse; `conversation_search`'ün gözlemlenebilirlik kardeşi) — hidden-lazy
 self-manage tier'ında **değil**, böylece kutudan çıkar çıkmaz çalışır. **claude-cli
 köprüsü:** `Runtime.BridgeTools` aracı `extra` listesine ekler (yalnız `r.db`
 gerektiren eager builtin, `conversation_search` gibi) → varsayılan keyless
-claude-cli ajanı da `mcp__tionswarm_interaction__read_session_debug` olarak görür ve
+claude-cli ajanı da `mcp__tionharness_interaction__read_session_debug` olarak görür ve
 çağırır. Köprü çağrı closure'ı build ctx'inden yakalanan oturum id'yi enjekte eder
 (interaction server request ctx'inde olmadığından). Varsayılan **özet** döndürür;
 `summary=false` ile ham olay listesi (`type` filtresi + `limit`). `session_id`
@@ -158,7 +158,7 @@ faturaya işleniyordu; bu kalem yalnız **önlenebilir** kısmı izole eder). Te
 
 ## Ayarlar
 
-`settings.json` (default skill `tionswarm-settings`'te de belgeli):
+`settings.json` (default skill `tionharness-settings`'te de belgeli):
 
 | Alan | Vars. | Açıklama |
 |------|-------|----------|
@@ -169,9 +169,9 @@ Tunables: `Tunables.SetDebugJournal/DebugJournalEnabled/DebugJournalCap`;
 `api/server.go applySettings` canlı uygular. UI: Ayarlar ▸ Uygulama ▸ (kalıcı
 ilerleme bölümünün altında) "Debug günlüğü".
 
-## Default skill — `tionswarm-self-debug`
+## Default skill — `tionharness-self-debug`
 
-`internal/skills/defaults/tionswarm-self-debug/SKILL.md`. Ajana `read_session_debug`
+`internal/skills/defaults/tionharness-self-debug/SKILL.md`. Ajana `read_session_debug`
 ile kendi metriklerini okuyup (token/gecikme/araç/hata) davranışını nasıl
 optimize edeceğini öğretir. `read_logs` (kaba, süreç-geneli) ile per-session
 budget (para) arasındaki yeri netleştirir.
@@ -256,7 +256,7 @@ veri hazırlığı `flowVizData.ts`):
   `\brtk\b`/`\bsqz\b` (backend probe aynası) ile rtk/sqz/other sınıflanır;
   hook başına ateşleme sayısı + araç dağılımı + hata sayısı. **Byte tasarrufu
   DEĞİL, aktivite göstergesi** — rtk/sqz PreToolUse komut-rewrite olduğundan
-  TionSwarm sıkışmamış baseline'ı hiç görmez; ayrıca yalnız **native** turlar
+  TionHarness sıkışmamış baseline'ı hiç görmez; ayrıca yalnız **native** turlar
   sayılır (claude-cli turlarında hook'lar CLI içinde çalışır, journal'a düşmez).
 
 ## Anomali → bildirim ✅ (2026-07-24)

@@ -1,4 +1,4 @@
-# Created by TionSwarm on `git init`. Adjust it for your stack — this is only a
+# Created by TionHarness on `git init`. Adjust it for your stack — this is only a
 # language-agnostic starting point covering secrets, build output and local noise.
 
 # Secrets / local environment
@@ -40,5 +40,5 @@ tmp/
 Thumbs.db
 .DS_Store
 
-# Agent runtime working-dir state (TionSwarm session progress)
-.tionswarm/
+# Agent runtime working-dir state (TionHarness session progress)
+.tionharness/

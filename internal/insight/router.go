@@ -27,7 +27,7 @@ var workspaceActionsRelPath = filepath.Join("insight", "WORKSPACE-ACTIONS.md")
 // the output is deterministic and testable.
 func RenderAppFixReport(findings []Finding, generatedAt string) string {
 	var b strings.Builder
-	b.WriteString("# TionSwarm — App Fix Findings\n\n")
+	b.WriteString("# TionHarness — App Fix Findings\n\n")
 	fmt.Fprintf(&b, "_Generated: %s_\n\n", generatedAt)
 	if len(findings) == 0 {
 		b.WriteString("No app-fix findings.\n")
@@ -80,7 +80,7 @@ func AppendBacklog(repoDir string, findings []Finding) (int, error) {
 	if strings.TrimSpace(repoDir) == "" {
 		return 0, nil
 	}
-	header := "# TionSwarm — Insight App-Fix Backlog\n\n" +
+	header := "# TionHarness — Insight App-Fix Backlog\n\n" +
 		"Auto-appended by the retrospective scanner (_Docs/60). Each entry carries a\n" +
 		"stable `insight-sig` marker so re-scans never duplicate it.\n\n"
 	return appendFindingsFile(filepath.Join(repoDir, backlogRelPath), header, findings, repoDir)
@@ -95,7 +95,7 @@ func AppendWorkspaceActions(storeRoot string, findings []Finding) (int, error) {
 	if strings.TrimSpace(storeRoot) == "" {
 		return 0, nil
 	}
-	header := "# TionSwarm — Workspace Optimization Actions\n\n" +
+	header := "# TionHarness — Workspace Optimization Actions\n\n" +
 		"Auto-appended by the retrospective scanner (_Docs/60, Channel B). Each entry is a\n" +
 		"proposed workspace optimization for you (or an agent) to review and apply — nothing\n" +
 		"here is applied automatically. A stable `insight-sig` marker keeps re-scans idempotent.\n\n"

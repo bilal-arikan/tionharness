@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/bilal-arikan/tionswarm/internal/providers"
+	"github.com/bilal-arikan/tionharness/internal/providers"
 )
 
 // ResolveCLIHomeDir returns an instance's explicit config home, or the shared
@@ -55,7 +55,7 @@ func (r *Runtime) CodexHomeDir() string { return r.codexHomeDir() }
 // only claude (manual /compact, /handoff, the streaming pre-turn compaction)
 // left CODEX_HOME unexported, so a codex-cli agent silently ran against the
 // ambient ~/.codex — a different, frequently revoked login than the one
-// TionSwarm created. Call this instead of the two Pin*Home helpers.
+// TionHarness created. Call this instead of the two Pin*Home helpers.
 func (r *Runtime) PinCLIHome(provider providers.Provider) error {
 	if _, err := r.PinClaudeHome(provider); err != nil {
 		return err
@@ -67,7 +67,7 @@ func (r *Runtime) PinCLIHome(provider providers.Provider) error {
 // the CODEX_HOME of a turn is decided. An instance that carries its own
 // configDir already owns a home and keeps it (the ConfigDir()=="" guard);
 // otherwise the app-global <dataDir>/codex-home is pinned, so the subprocess
-// reads the login TionSwarm actually created instead of the ambient ~/.codex —
+// reads the login TionHarness actually created instead of the ambient ~/.codex —
 // which is frequently a different, stale or revoked credential.
 //
 // The MkdirAll is load-bearing, not defensive: CODEX_HOME must point at an

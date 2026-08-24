@@ -124,7 +124,7 @@ describe('isDrillable', () => {
     for (const ref of [
       { kind: 'artifact', id: 'ART1' },
       { kind: 'automation', id: 'AUT1' },
-      { kind: 'skill', id: 'tionswarm-build' },
+      { kind: 'skill', id: 'tionharness-build' },
       { kind: 'insight', id: 'FND1' },
       { kind: 'logs', id: 'logs' },
     ] as ViewRef[]) {

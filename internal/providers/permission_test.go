@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-// TestPermissionModeArgs locks the mapping from TionSwarm permission modes to the
+// TestPermissionModeArgs locks the mapping from TionHarness permission modes to the
 // claude CLI's permission flags. Headless mode must always carry an explicit
 // mode, otherwise the CLI refuses Edit/Write/Bash.
 func TestPermissionModeArgs(t *testing.T) {

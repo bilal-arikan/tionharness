@@ -10,17 +10,17 @@ import (
 	"path/filepath"
 	"sync"
 
-	"github.com/bilal-arikan/tionswarm/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/db"
 )
 
 // wsSettingsFile is the per-workspace settings document inside the workspace dir.
 const wsSettingsFile = "ws-settings.json"
 
 // defaultInstructions is the seed workspace prompt (workspace-specific system
-// prompt addendum) a fresh workspace starts with. TionSwarm has no monolithic
+// prompt addendum) a fresh workspace starts with. TionHarness has no monolithic
 // system prompt of its own — the workspace prompt IS the standing guidance every
 // agent in the workspace carries — so this default gives new workspaces a full,
-// TionSwarm-specific baseline instead of an empty prompt. A workspace whose
+// TionHarness-specific baseline instead of an empty prompt. A workspace whose
 // ws-settings.json sets its own `instructions` overrides this seed.
 //
 //go:embed defaults/default-instructions.md
@@ -123,7 +123,7 @@ type WSSettings struct {
 	// force notifications on/off for this workspace regardless of the global
 	// toggle. This lets a user silence a background "autonomous" workspace while
 	// keeping notifications on for the one they actively work in (or vice versa),
-	// consistent with TionSwarm's physical workspace isolation. Purely a client-side
+	// consistent with TionHarness's physical workspace isolation. Purely a client-side
 	// OS-toast gate — no backend runtime effect.
 	DesktopNotifications *bool `json:"desktopNotifications,omitempty"`
 }

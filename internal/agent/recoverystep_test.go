@@ -26,9 +26,9 @@ func TestMCPRepairStep(t *testing.T) {
 		{
 			name:       "background index started",
 			reason:     reasonMCPRepairIndex,
-			detail:     tionswarmCwd,
+			detail:     tionharnessCwd,
 			batch:      0,
-			wantSubstr: tionswarmCwd,
+			wantSubstr: tionharnessCwd,
 		},
 	}
 	for _, tc := range cases {

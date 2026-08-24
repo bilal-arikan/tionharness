@@ -5,16 +5,16 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bilal-arikan/tionswarm/internal/db"
-	"github.com/bilal-arikan/tionswarm/internal/mcp"
+	"github.com/bilal-arikan/tionharness/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/mcp"
 )
 
 func TestProjectIDForPath(t *testing.T) {
 	cases := map[string]string{
 		"":    "",
 		"   ": "",
-		`C:/Users/user/Desktop/Projects/TionSwarm`:                  "C-Users-user-Desktop-Projects-TionSwarm",
-		`C:\Users\user\Desktop\Projects\TionSwarm`:                  "C-Users-user-Desktop-Projects-TionSwarm",
+		`C:/Users/user/Desktop/Projects/TionHarness`:                "C-Users-user-Desktop-Projects-TionHarness",
+		`C:\Users\user\Desktop\Projects\TionHarness`:                "C-Users-user-Desktop-Projects-TionHarness",
 		`C:\Users\user\AppData\Local\Programs\@external-agentelectron`: "C-Users-user-AppData-Local-Programs-external-agentelectron",
 		`/home/user/my-repo`:                                         "home-user-my-repo",
 	}

@@ -125,7 +125,7 @@ export function SessionsSidebar({
   const MIN = 200
   const MAX = 560
   const [width, setWidth] = useState(() => {
-    const saved = Number(localStorage.getItem('tionswarm.sidebarWidth'))
+    const saved = Number(localStorage.getItem('tionharness.sidebarWidth'))
     return saved >= MIN && saved <= MAX ? saved : 264
   })
   const drag = useRef<{ startX: number; startW: number } | null>(null)
@@ -141,7 +141,7 @@ export function SessionsSidebar({
       drag.current = null
       document.body.style.userSelect = ''
       document.body.style.cursor = ''
-      localStorage.setItem('tionswarm.sidebarWidth', String(width))
+      localStorage.setItem('tionharness.sidebarWidth', String(width))
     }
     window.addEventListener('mousemove', onMove)
     window.addEventListener('mouseup', onUp)

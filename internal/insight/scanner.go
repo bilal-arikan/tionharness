@@ -7,9 +7,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/bilal-arikan/tionswarm/internal/db"
-	"github.com/bilal-arikan/tionswarm/internal/textutil"
-	"github.com/bilal-arikan/tionswarm/internal/view"
+	"github.com/bilal-arikan/tionharness/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/textutil"
+	"github.com/bilal-arikan/tionharness/internal/view"
 )
 
 // Analyzer turns a prepared per-session analysis request into findings. The

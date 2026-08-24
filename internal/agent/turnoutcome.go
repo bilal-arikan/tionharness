@@ -106,7 +106,7 @@ func classifyTurnSteps(steps []TurnStep) (turnOutcome, bool) {
 				Note: fmt.Sprintf(
 					"🛑 ARAÇ LİMİTİ — tur tek turda izin verilen %d araç iterasyonunu tüketti ve orada sonlandırıldı. "+
 						"İş BİTMİŞ DEĞİL: model bir sonraki adımı çağıramadan kesildi. "+
-						"Kalan işi daha küçük parçalara böl ya da limiti yükselt (TIONSWARM_MAX_TOOL_ITERS).",
+						"Kalan işi daha küçük parçalara böl ya da limiti yükselt (TIONHARNESS_MAX_TOOL_ITERS).",
 					maxToolIters),
 			}, true
 		case termGuardrailHalt:

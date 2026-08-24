@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/bilal-arikan/tionswarm/internal/workspace"
+	"github.com/bilal-arikan/tionharness/internal/workspace"
 )
 
 // sessionTeardownGrace bounds how long delete waits for an in-flight turn to actually

@@ -7,7 +7,7 @@ package api
 import (
 	"net/http"
 
-	"github.com/bilal-arikan/tionswarm/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/db"
 )
 
 func (s *Server) handleListLessons(w http.ResponseWriter, r *http.Request) {

@@ -13,8 +13,8 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/bilal-arikan/tionswarm/internal/claudeauth"
-	"github.com/bilal-arikan/tionswarm/internal/proc"
+	"github.com/bilal-arikan/tionharness/internal/claudeauth"
+	"github.com/bilal-arikan/tionharness/internal/proc"
 )
 
 // ClaudeCLI drives the locally-installed `claude` (Claude Code) CLI in
@@ -28,7 +28,7 @@ type ClaudeCLI struct {
 	// configDir, when set, is exported as CLAUDE_CONFIG_DIR into the subprocess so
 	// the CLI reads its config home (skills, settings, slash commands, global
 	// CLAUDE.md, login) from an isolated directory instead of the shared ~/.claude.
-	// Empty → inherit the ambient ~/.claude (default behaviour). This lets TionSwarm
+	// Empty → inherit the ambient ~/.claude (default behaviour). This lets TionHarness
 	// drive a "clean" CLI without touching the user's existing installation.
 	configDir string
 	// authKind/authToken inject a credential into the subprocess env so an isolated
@@ -50,7 +50,7 @@ type ClaudeCLI struct {
 	// CLI routes tools needing approval through that MCP tool (used in "ask" mode
 	// instead of acceptEdits). Empty → fall back to the --permission-mode flag.
 	permissionPromptTool string
-	// settingsPath, when set, is handed to --settings so the CLI loads a TionSwarm-
+	// settingsPath, when set, is handed to --settings so the CLI loads a TionHarness-
 	// generated settings.json (permission deny-list + PreToolUse/PostToolUse hooks)
 	// for this turn. Lifecycle mirrors mcpConfigPath: set fresh by ConfigureMCP each
 	// MCP turn (possibly "") and only emitted on the MCP path.
@@ -99,7 +99,7 @@ func (c *ClaudeCLI) Preflight(ctx context.Context) error {
 // configPath points to a claude --mcp-config JSON file; allowedTools is the
 // list of tool identifiers the CLI may use (e.g. "mcp__filesystem");
 // disallowedTools suppresses conflicting CLI built-ins (e.g. AskUserQuestion,
-// TodoWrite) so the TionSwarm Interaction MCP equivalents are used instead.
+// TodoWrite) so the TionHarness Interaction MCP equivalents are used instead.
 // settingsPath points to a --settings file (permission deny-list + hooks); pass
 // "" for none. Its lifecycle is tied to configPath so it is reset every MCP turn.
 func (c *ClaudeCLI) ConfigureMCP(configPath string, allowedTools, disallowedTools []string, permissionPromptTool, settingsPath string) {
@@ -119,7 +119,7 @@ func (c *ClaudeCLI) ConfigureCLIMCP(spec CLIMCPSpec) {
 }
 
 // SetConfigDir overrides the CLAUDE_CONFIG_DIR this provider exports into its
-// subprocess, replacing the value baked in at construction. TionSwarm calls this
+// subprocess, replacing the value baked in at construction. TionHarness calls this
 // per turn (Runtime.PinClaudeHome) so the CLI runs against the app-global
 // <dataDir>/claude-home — one shared login/settings home — instead of the
 // ambient ~/.claude. Empty is ignored so an instance that configured its own
@@ -141,7 +141,7 @@ func (c *ClaudeCLI) ConfigDir() string { return c.configDir }
 // Name implements Provider.
 func (c *ClaudeCLI) Name() string { return "claude-cli" }
 
-// permissionModeArgs maps TionSwarm's permission mode onto the claude CLI's
+// permissionModeArgs maps TionHarness's permission mode onto the claude CLI's
 // permission flags. In headless (-p) mode the default mode cannot prompt for
 // approval, so Edit/Write/Bash are refused unless an explicit mode is set:
 //   - "read-only" → --permission-mode plan       (no mutations)
@@ -158,21 +158,21 @@ func permissionModeArgs(mode string) []string {
 	}
 }
 
-// interactionSystemNote tells the CLI to use the TionSwarm Interaction MCP tools
-// (which surface in the TionSwarm UI) instead of its own built-ins, which can't be
+// interactionSystemNote tells the CLI to use the TionHarness Interaction MCP tools
+// (which surface in the TionHarness UI) instead of its own built-ins, which can't be
 // answered in non-interactive print mode.
 const interactionSystemNote = "To ask the user a clarifying question, call the ask_user tool and wait for the reply. " +
 	"To create, show, or update a task checklist, ALWAYS call the todo_write tool — it persists to the session's progress file. " +
-	"Do NOT use any built-in checklist or task tool (AskUserQuestion, TodoWrite, TaskCreate, TaskUpdate, TaskList, TaskGet): they do not reach TionSwarm and the progress view stays empty. " +
-	"To delegate a focused sub-task to another agent, use the run_subagent tool when it is available; never use the built-in Task or Agent subagent launcher, which runs invisibly to TionSwarm."
+	"Do NOT use any built-in checklist or task tool (AskUserQuestion, TodoWrite, TaskCreate, TaskUpdate, TaskList, TaskGet): they do not reach TionHarness and the progress view stays empty. " +
+	"To delegate a focused sub-task to another agent, use the run_subagent tool when it is available; never use the built-in Task or Agent subagent launcher, which runs invisibly to TionHarness."
 
-// usesInteractionTools reports whether the TionSwarm Interaction MCP tools are in
+// usesInteractionTools reports whether the TionHarness Interaction MCP tools are in
 // the allowlist for this call.
 func (c *ClaudeCLI) usesInteractionTools() bool {
 	for _, t := range c.allowedTools {
-		// Matches both interaction tiers: mcp__tionswarm_interaction__* (core) and
-		// mcp__tionswarm_extended__* (extended).
-		if strings.Contains(t, "tionswarm_interaction") || strings.Contains(t, "tionswarm_extended") {
+		// Matches both interaction tiers: mcp__tionharness_interaction__* (core) and
+		// mcp__tionharness_extended__* (extended).
+		if strings.Contains(t, "tionharness_interaction") || strings.Contains(t, "tionharness_extended") {
 			return true
 		}
 	}
@@ -182,14 +182,14 @@ func (c *ClaudeCLI) usesInteractionTools() bool {
 // permissionArgs maps the request's permission mode onto the claude CLI flags.
 // In "ask" mode with a permission-prompt tool wired, route tools needing approval
 // through it (CLI default mode + --permission-prompt-tool → real per-tool approval
-// in the TionSwarm UI). Otherwise map the mode to a CLI permission flag (plan /
+// in the TionHarness UI). Otherwise map the mode to a CLI permission flag (plan /
 // acceptEdits / bypass) so headless edits aren't silently refused. Shared by the
 // one-shot Complete path and the persistent-session launcher.
 func (c *ClaudeCLI) permissionArgs(req Request) []string {
 	if c.permissionPromptTool != "" {
 		args := []string{"--permission-prompt-tool", c.permissionPromptTool}
 		// read-only ALSO runs in plan mode: the CLI blocks every mutation itself, so
-		// the only call that reaches the prompt tool is ExitPlanMode — where TionSwarm
+		// the only call that reaches the prompt tool is ExitPlanMode — where TionHarness
 		// renders the plan for approval. "ask" keeps the CLI's default mode so each
 		// write/exec tool is gated individually through the prompt.
 		if req.PermissionMode == "read-only" {
@@ -407,7 +407,7 @@ func (c *ClaudeCLI) Complete(ctx context.Context, req Request) (*Response, error
 	//     temp file is removed once both retry attempts finish.
 	if sys != "" {
 		if req.SysPromptFile {
-			f, ferr := os.CreateTemp("", "tionswarm-sysprompt-*.txt")
+			f, ferr := os.CreateTemp("", "tionharness-sysprompt-*.txt")
 			if ferr != nil {
 				return nil, fmt.Errorf("write system prompt file: %w", ferr)
 			}
@@ -524,12 +524,12 @@ func (c *ClaudeCLI) ProbeAuth(ctx context.Context) error {
 // no final result, salvaged no content, AND executed no tool — so re-running has
 // no duplicate side effects.
 // cliBaseEnv returns the parent environment with the variables that make a
-// nested claude-cli misbehave stripped out. When TionSwarm is itself launched from
+// nested claude-cli misbehave stripped out. When TionHarness is itself launched from
 // inside another Claude Code (agent SDK / CLI), the parent exports CLAUDECODE=1,
 // CLAUDE_CODE_* and ANTHROPIC_DEFAULT_*_MODEL. Inheriting these makes the child
 // claude believe it is a nested sub-agent and silently fall back to the small/fast
 // (haiku) model, IGNORING --model opus. Strip them so the child always runs as a
-// clean top-level CLI. TionSwarm re-adds what it actually needs (CLAUDE_CONFIG_DIR,
+// clean top-level CLI. TionHarness re-adds what it actually needs (CLAUDE_CONFIG_DIR,
 // auth) after this. CLAUDE_CODE_GIT_BASH_PATH is preserved — the CLI needs it to
 // locate bash on Windows.
 func cliBaseEnv(extra ...string) []string {
@@ -850,7 +850,7 @@ readLoop:
 // after SessionStart hooks) is still fully recoverable for diagnosis. Returns
 // the log path, or "" on any error (best-effort — never blocks the failure path).
 func dumpCLIFailure(bin string, args []string, workDir string, runErr error, stdout, stderr []byte) string {
-	name := fmt.Sprintf("tionswarm-cli-fail-%d-%d.log", time.Now().UnixNano(), os.Getpid())
+	name := fmt.Sprintf("tionharness-cli-fail-%d-%d.log", time.Now().UnixNano(), os.Getpid())
 	path := filepath.Join(os.TempDir(), name)
 	var b bytes.Buffer
 	fmt.Fprintf(&b, "claude-cli failure\n")

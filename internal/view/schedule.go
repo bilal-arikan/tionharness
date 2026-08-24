@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/bilal-arikan/tionswarm/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/db"
 )
 
 // ScheduleInput is everything the schedule projection reads — just the schedule

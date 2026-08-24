@@ -7,22 +7,22 @@ import type { Message } from '@/types'
 import { api } from '@/api'
 import type { TtsStatus } from '@/api/tts'
 
-const AUTO_KEY = 'tionswarm.tts.autoRead'
-const LANG_KEY = 'tionswarm.tts.lang'
-const VOICE_KEY = 'tionswarm.tts.voiceURI'
-const RATE_KEY = 'tionswarm.tts.rate'
-const PITCH_KEY = 'tionswarm.tts.pitch'
-const VOLUME_KEY = 'tionswarm.tts.volume'
+const AUTO_KEY = 'tionharness.tts.autoRead'
+const LANG_KEY = 'tionharness.tts.lang'
+const VOICE_KEY = 'tionharness.tts.voiceURI'
+const RATE_KEY = 'tionharness.tts.rate'
+const PITCH_KEY = 'tionharness.tts.pitch'
+const VOLUME_KEY = 'tionharness.tts.volume'
 // Broadcast name for live volume sync: every mounted volume slider (per-bubble +
 // Settings) updates when any one of them changes the single global value.
-const VOLUME_EVENT = 'tionswarm:tts-volume'
+const VOLUME_EVENT = 'tionharness:tts-volume'
 // Engine selection ('auto' | 'browser' | 'server') and the chosen server (Piper)
 // voice id. Auto prefers the server engine when the host has Piper installed.
-const ENGINE_KEY = 'tionswarm.tts.engine'
-const SERVER_VOICE_KEY = 'tionswarm.tts.serverVoice'
+const ENGINE_KEY = 'tionharness.tts.engine'
+const SERVER_VOICE_KEY = 'tionharness.tts.serverVoice'
 // Fallback voice language: the dictation language the user already picked in the
 // composer (kept as a plain string to avoid a features→shared import edge).
-const STT_LANG_KEY = 'tionswarm.stt.lang'
+const STT_LANG_KEY = 'tionharness.stt.lang'
 
 // Rate/pitch bounds (SpeechSynthesisUtterance accepts rate 0.1–10, pitch 0–2; we
 // expose a sane, musical subset). Defaults are the neutral 1.0.

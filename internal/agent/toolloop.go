@@ -8,10 +8,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bilal-arikan/tionswarm/internal/conversation"
-	"github.com/bilal-arikan/tionswarm/internal/db"
-	"github.com/bilal-arikan/tionswarm/internal/providers"
-	"github.com/bilal-arikan/tionswarm/internal/tools"
+	"github.com/bilal-arikan/tionharness/internal/conversation"
+	"github.com/bilal-arikan/tionharness/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/providers"
+	"github.com/bilal-arikan/tionharness/internal/tools"
 	"github.com/google/uuid"
 )
 
@@ -21,7 +21,7 @@ import (
 const defaultMaxToolIters = 500
 
 // maxToolIters is the loop bound, defaulting to defaultMaxToolIters and overridable
-// ONLY via TIONSWARM_MAX_TOOL_ITERS (positive integer) for power users who want
+// ONLY via TIONHARNESS_MAX_TOOL_ITERS (positive integer) for power users who want
 // longer or shorter native tool loops without a rebuild. It is resolved once at
 // package init: there is deliberately no Settings field for it, so it does not
 // change mid-process. (A Tunables setter/getter pair used to exist here, claiming
@@ -31,7 +31,7 @@ var maxToolIters = resolveMaxToolIters()
 // resolveMaxToolIters reads the env override once at package init, falling back to
 // the default for an unset, empty, non-numeric or non-positive value.
 func resolveMaxToolIters() int {
-	if v := os.Getenv("TIONSWARM_MAX_TOOL_ITERS"); v != "" {
+	if v := os.Getenv("TIONHARNESS_MAX_TOOL_ITERS"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
 			return n
 		}
@@ -80,7 +80,7 @@ func resolveThinkingBudget(model, level string) int {
 //   - MCP disabled            → a single plain completion.
 //   - claude-cli + MCP        → delegate: the CLI runs the tool loop itself
 //     using a generated --mcp-config (keyless path).
-//   - other provider + MCP    → TionSwarm's own agentic loop drives the tools via
+//   - other provider + MCP    → TionHarness's own agentic loop drives the tools via
 //     the unified registry (built-ins + MCP).
 //
 // The agent is passed by value — the turn captures its model at the start. If
@@ -884,7 +884,7 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 			}
 
 			// MCP schema gate (pre-execution): a call that omits a required argument
-			// is either completed from context TionSwarm already holds (the `project`
+			// is either completed from context TionHarness already holds (the `project`
 			// of a codebase-memory tool is the session's own repo) or refused here
 			// with an accurate message. Letting it through means the model reads the
 			// server's inference about an incomplete call, which for this server

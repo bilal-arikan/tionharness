@@ -7,11 +7,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bilal-arikan/tionswarm/internal/billing"
-	"github.com/bilal-arikan/tionswarm/internal/db"
-	"github.com/bilal-arikan/tionswarm/internal/logbuf"
-	"github.com/bilal-arikan/tionswarm/internal/orchestration"
-	"github.com/bilal-arikan/tionswarm/internal/skills"
+	"github.com/bilal-arikan/tionharness/internal/billing"
+	"github.com/bilal-arikan/tionharness/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/logbuf"
+	"github.com/bilal-arikan/tionharness/internal/orchestration"
+	"github.com/bilal-arikan/tionharness/internal/skills"
 )
 
 // decodeState parses a persisted orchestration state snapshot.
@@ -146,7 +146,7 @@ func (p *Projector) WithSources(src Sources) *Projector {
 }
 
 // WithName sets the workspace display name, so the workspace header can show
-// "WORKSPACE "TionSwarmRepo"" instead of just "WORKSPACE". Callers that only
+// "WORKSPACE "TionHarnessRepo"" instead of just "WORKSPACE". Callers that only
 // have a store (the agent tool paths) omit it — the header falls back to the
 // generic label.
 func (p *Projector) WithName(name string) *Projector {

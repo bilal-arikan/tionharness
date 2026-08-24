@@ -5,7 +5,7 @@
 > **Amaç:** Geçmiş session'ları **farklı amaçlarla (lens)** tarayan; taradığını tekrar
 > taramayan (session değiştiyse yeniden tarayan); bulguları **iki kanala** yönlendiren
 > generic motor:
-> - **Kanal A — App Fix:** kök nedeni TionSwarm uygulamasında olan bulgular → düzeltme raporu.
+> - **Kanal A — App Fix:** kök nedeni TionHarness uygulamasında olan bulgular → düzeltme raporu.
 > - **Kanal B — Workspace Opt:** workspace içinde koda dokunmadan çözülebilen optimizasyonlar.
 >
 > Hem **manuel (UI)** hem **otomatik (cron/automation)** tetiklenebilir. Paket `internal/insight`.
@@ -52,7 +52,7 @@ prefilter:
 # Analiz Talimatı (LLM prompt gövdesi)
 
 Sana bir session'ın hata adımları ve debug olayları verildi. Her tool hatasının
-kök nedenini belirle. Kök neden TionSwarm uygulamasındaysa `app-fix` bulgusu üret:
+kök nedenini belirle. Kök neden TionHarness uygulamasındaysa `app-fix` bulgusu üret:
 başlık, kök neden, kanıt (satır/olay), önerilen düzeltme ve ilgili dosya işaretçisi.
 Geçici/kullanıcı-kaynaklı hataları ELE.
 ```
@@ -214,7 +214,7 @@ stateDiagram-v2
 
 - **Kanal A — App Fix:** kök neden uygulamada. Çıktı = App Fix Raporu (kök neden + kanıt
   session'lar + önerilen düzeltme + dosya işaretçisi). **Asla oto-apply / asla coder-spawn.**
-  Kullanıcı bu raporları sonradan TionSwarm'ı geliştirmekte kullanır. **İki sink (varsayılan):**
+  Kullanıcı bu raporları sonradan TionHarness'ı geliştirmekte kullanır. **İki sink (varsayılan):**
   1. **In-app detaylı rapor** — `findings.jsonl` + render artifact, Insight panosunda görünür (her zaman).
   2. **Repo `_Docs` backlog** — hedef git reposu **UI'dan seçilir** (`InsightSettings.AppFixRepoPath`);
      seçilen reponun `_Docs/INSIGHT-BACKLOG.md`'sine append-only yazılır (kodu değil dokümanı
@@ -246,7 +246,7 @@ stateDiagram-v2
 | `internal/agent/insightcron.go` | `InsightCron` — ayar-güdümlü otomatik tarama (`AutoScanCron`) | ✅ Faz 3 |
 | `frontend/src/features/insight/` | UI (pano + triage + auto-scan cron alanı) | ✅ Faz 1–3 |
 | `internal/tools/builtin_insight.go` | ajan araçları `insight_scan` + `insight_list_findings` (id+status çıktı/filtre) + `insight_apply_finding`; `insight_list_findings` varsayılanı **tek satırlık özet** (id görünür, `cause`/`fix`/`file` yalnız `verbose:true` ile), `insight_scan` hata özeti tekilleştirilip sayılır (`… (×53)`, fazlası `+N more`); `maxSessions` = workspace ayarını (varsayılan 10) **ezme** değeri, 0 sınırsız değil; **varsayılan görünürlük NAME-ONLY** (2026-08-15, `_Docs/19`) — katalogda yalnız adla, şema `tool_search`/`activate_tools` ile | ✅ Faz 1–2 |
-| `internal/skills/defaults/tionswarm-insight/` | Ajana tarama→sun→(kullanıcı kararı)→triage akışını öğreten skill | ✅ |
+| `internal/skills/defaults/tionharness-insight/` | Ajana tarama→sun→(kullanıcı kararı)→triage akışını öğreten skill | ✅ |
 
 **Yeniden kullanım:** `db.ListSessions` (+`UpdatedAt`), debug journal reader
 (`read_session_debug`), `call_llm`/`run_subagent`, `internal/skills` seed deseni,
@@ -294,7 +294,7 @@ toggle (Ayarlar ▸ Bağlam ile aynı `lessonReflect`) + kayıtlı dersler (`Les
 - **Ajan-güdümlü (✅):** Bir ajana talimatla ("içgörü taraması yap ve özetle") → ajan `insight_scan`
   ile tarar, `insight_list_findings` ile okur (satır başında **finding id**), kanala göre sunar ve
   **DURUR** — kullanıcı ne yapılacağını söyler, ajan `insight_apply_finding` ile triage eder (advisory,
-  otomatik mutasyon yok). `tionswarm-insight` skill'i bu akışı öğretir. Otomasyon: aynı talimatı bir
+  otomatik mutasyon yok). `tionharness-insight` skill'i bu akışı öğretir. Otomasyon: aynı talimatı bir
   schedule'a koy (Scheduler zaten ajan-prompt tetikler).
 
 > **Not:** Tarama oturumları sohbet listesinin **varsayılan görünümünde gizlidir** (bilinçli —
@@ -580,7 +580,7 @@ Panel "düz liste"den triage kokpitine dönüştü; `features/insight/` alt bile
 
 **Kararlaştırıldı (2026-07-13):**
 - **Kanal A sink:** in-app detaylı rapor **+** UI'dan seçilen git reposunun `_Docs` backlog'u.
-  Coder-spawn ve GitHub issue kapsam dışı. Kullanıcı raporları sonradan TionSwarm geliştirmede kullanır.
+  Coder-spawn ve GitHub issue kapsam dışı. Kullanıcı raporları sonradan TionHarness geliştirmede kullanır.
 - **Prefilter:** yapısal predikat struct (parser yok). Faz 1 = yalnız `requiresAny`.
 
 **Açık:**

@@ -17,7 +17,7 @@ func TestNamespaceTool(t *testing.T) {
 	}{
 		{"bare tool", "server", "search", "server__search"},
 		{"already namespaced", "server", "server__search", "server__search"},
-		{"CLI namespaced", "server", "mcp__tionswarm_interaction__activate_tools", "mcp__tionswarm_interaction__activate_tools"},
+		{"CLI namespaced", "server", "mcp__tionharness_interaction__activate_tools", "mcp__tionharness_interaction__activate_tools"},
 		{"sanitized server", "server name", "server_name__search", "server_name__search"},
 		{"different server", "server", "other__search", "server__other__search"},
 	}
@@ -44,7 +44,7 @@ func TestBuildCatalogKeepsCLINamespaceIdempotent(t *testing.T) {
 		result := map[string]any{"protocolVersion": protocolVersion}
 		if req.Method == "tools/list" {
 			result = map[string]any{"tools": []map[string]any{{
-				"name":        "mcp__tionswarm_interaction__activate_tools",
+				"name":        "mcp__tionharness_interaction__activate_tools",
 				"description": "activate tools",
 				"inputSchema": map[string]any{"type": "object"},
 			}}}
@@ -57,7 +57,7 @@ func TestBuildCatalogKeepsCLINamespaceIdempotent(t *testing.T) {
 	defer srv.Close()
 
 	entries, errs := BuildCatalog(context.Background(), []ServerConfig{{
-		Name:      "tionswarm_interaction",
+		Name:      "tionharness_interaction",
 		Transport: MCPTransportHTTP,
 		URL:       srv.URL,
 	}})
@@ -67,7 +67,7 @@ func TestBuildCatalogKeepsCLINamespaceIdempotent(t *testing.T) {
 	if len(entries) != 1 {
 		t.Fatalf("BuildCatalog entries = %d, want 1", len(entries))
 	}
-	const want = "mcp__tionswarm_interaction__activate_tools"
+	const want = "mcp__tionharness_interaction__activate_tools"
 	if got := entries[0].NamespacedName; got != want {
 		t.Fatalf("NamespacedName = %q, want %q", got, want)
 	}

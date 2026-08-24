@@ -5,7 +5,7 @@
 > geneli tek paylaşımlı bağlantı; `scope="scoped"` her `(session,agent)` için ayrı canlı
 > bağlantı (havuz anahtarı `ServerConfig.ScopeKey`, `toolsetup.go` `SessionIDFrom(ctx)+"|"+agent.ID`
 > ile damgalar; session yoksa shared'e düşer). Boşta kalan scoped bağlantılar `pool.go`
-> reaper'ıyla kapatılır (`TIONSWARM_MCP_SCOPED_IDLE_SEC`, vars. 300s; 0=kapalı); shared
+> reaper'ıyla kapatılır (`TIONHARNESS_MCP_SCOPED_IDLE_SEC`, vars. 300s; 0=kapalı); shared
 > bağlantılar hiç reap edilmez. `ScopeKey` dial-fingerprint'ten hariç. Create API + Araçlar
 > formunda "Bağlantı kapsamı" seçici. Ayrıca sunucu **düzenleme** (`PATCH /api/mcp-servers/{id}`,
 > `DB.UpdateMCPServer` — kimlik/enabled korunur, spec değişince re-dial) ve canlı havuz
@@ -17,22 +17,22 @@
 > **Durum: KISMİ.** Yukarıdaki hibrit kapsam bölümü **uygulanmıştır** (kod: `internal/mcp/pool.go`,
 > `manager.go`, `internal/agent/toolsetup.go`). Bu satırın **altındaki** faz planı ise hâlâ
 > TASLAK/PLANLAMA'dır — henüz koda dönüşmemiştir. Önceki oturumun
-> `gateway-integration-brief.md`'i + bu oturumda `codebase-memory-mcp` ile TionSwarm
+> `gateway-integration-brief.md`'i + bu oturumda `codebase-memory-mcp` ile TionHarness
 > kaynak doğrulaması + `mcp-server` (TS `gateway-manager v3`) incelemesine dayanır.
-> Amaç: gateway desenini TionSwarm'a katmanın **faz-faz uygulama planı** + Bilal'in
+> Amaç: gateway desenini TionHarness'a katmanın **faz-faz uygulama planı** + Bilal'in
 > onaylayacağı **açık kararlar**. İlgili: `11-INTERACTION-MCP.md`, `19-LAZY-TOOL-LOADING.md`.
 
 ---
 
 ## 0. Yönetici özeti (TL;DR)
 
-Brief'in tezi — *"TionSwarm zaten %70 gateway, eksik olan tek şey `tools/list_changed`"* —
+Brief'in tezi — *"TionHarness zaten %70 gateway, eksik olan tek şey `tools/list_changed`"* —
 **yarı doğru**. Doğrulama şunu gösterdi:
 
-- ✅ **Backend'e bakan yön** (TionSwarm = MCP **client**) `tools/list_changed`'i tam
+- ✅ **Backend'e bakan yön** (TionHarness = MCP **client**) `tools/list_changed`'i tam
   destekliyor: `internal/mcp/client.go` + `http.go` `listChanged:true` ilan ediyor,
   bildirim gelince `pool.go` cache'i geçersiz kılıyor. Test kapsamı var.
-- ❌ **Gateway için gereken yön** (TionSwarm = MCP **server**, claude-cli'ye doğru)
+- ❌ **Gateway için gereken yön** (TionHarness = MCP **server**, claude-cli'ye doğru)
   **hiç yok**. `internal/interaction/server.go` **stateless, yalnız-POST** bir endpoint:
   GET (server→client SSE akışı) **405** dönüyor, `initialize` `capabilities.tools:{}`
   ilan ediyor (**`listChanged` yok**), oturum durumu tutmuyor, bildirim gönderecek
@@ -49,7 +49,7 @@ MCP birlikte açıkken her tur cold-restart oluyor** (config temp yolu her tur d
 düzeltilmeden **imkânsız**. Bu, Faz 0'ın list_changed'den bile önce çözmesi gereken
 gerçek bloklayıcı.
 
-**Öneri:** **Seçenek 2** (gateway desenini TionSwarm içine kat), **Faz 3 (harici sunum)
+**Öneri:** **Seçenek 2** (gateway desenini TionHarness içine kat), **Faz 3 (harici sunum)
 opsiyonel**. Ama önce **Faz 0 spike'ı 3 bağımsız bilinmeyeni ölçmeli** (aşağıda). Faz 0
 kırmızı dönerse iş buraya kadar — mevcut "sonraki-tur re-allowlist" (hidden tier) zaten
 gateway'in tur-ötesi faydasını sağlıyor; tur-içi fayda spike'a bağlı.
@@ -65,7 +65,7 @@ graph LR
     subgraph CLI["claude-cli çocuğu (persistent process)"]
       A[agent loop]
     end
-    subgraph TS["TionSwarm (Go)"]
+    subgraph TS["TionHarness (Go)"]
       IS["interaction/server.go<br/>POST-only, 405 on GET<br/>listChanged YOK"]
       MC["internal/mcp client/pool<br/>listChanged VAR (tüketici)"]
     end
@@ -92,11 +92,11 @@ graph LR
 
 ### 1.3 CLI köprü config'i (`internal/agent/climcp.go`)
 
-- `tionswarm_interaction` (**core, `alwaysLoad:true`**) → CLI ToolSearch'ten muaf, eager.
-- `tionswarm_extended` (**extended**) → `ENABLE_TOOL_SEARCH=auto` ile deferral CLI'a bırakılır.
+- `tionharness_interaction` (**core, `alwaysLoad:true`**) → CLI ToolSearch'ten muaf, eager.
+- `tionharness_extended` (**extended**) → `ENABLE_TOOL_SEARCH=auto` ile deferral CLI'a bırakılır.
 - Allowlist:
   - Dış MCP'ler için **sunucu-seviyesi wildcard**: `allowed += "mcp__"+key` (satır 102).
-  - Interaction extended için **per-tool**: `allowed += "mcp__tionswarm_extended__"+t`
+  - Interaction extended için **per-tool**: `allowed += "mcp__tionharness_extended__"+t`
     (satır 133-134). → **Buradaki fark linchpin** (bkz. §4).
 - `--strict-mcp-config` set ediliyor → yalnız config'teki sunucular kullanılır.
 
@@ -146,8 +146,8 @@ yok (mevcut hidden-tier zaten tur-ötesini sağlıyor).
   çağırmasını iste. Aynı-tur çağrı çalışıyor mu, yoksa sonraki tur mu?
 
 ### Q2 — Sunucu-seviyesi wildcard allowlist, sonradan gelen aracı kapsıyor mu (restart'sız)?
-- `--allowedTools mcp__tionswarm_extended` (spawn'da sabit), list_changed ile **sonradan**
-  eklenen `mcp__tionswarm_extended__foo`'yu izinli sayıyor mu? `--strict-mcp-config` +
+- `--allowedTools mcp__tionharness_extended` (spawn'da sabit), list_changed ile **sonradan**
+  eklenen `mcp__tionharness_extended__foo`'yu izinli sayıyor mu? `--strict-mcp-config` +
   permission katmanı kabul ediyor mu?
 - Doğruysa: allowlist değişmez → fingerprint değişmez → **restart yok** → cache korunur.
   (Dış MCP'lerde wildcard zaten kullanılıyor; extended'e taşımak yeterli olabilir.)
@@ -162,7 +162,7 @@ yok (mevcut hidden-tier zaten tur-ötesini sağlıyor).
 
 ### 3-D. YENİ BULGU — persistent+MCP bugün her tur cold-restart oluyor
 
-`toolloop.go:253` her tur `writeCLIMCPConfig` çağırır → `os.CreateTemp(... "tionswarm-mcp-*.json")`
+`toolloop.go:253` her tur `writeCLIMCPConfig` çağırır → `os.CreateTemp(... "tionharness-mcp-*.json")`
 **her tur YENİ yol** üretir, `defer cleanup()` **tur sonunda siler**. Sonra
 `ConfigureMCP(path,...)` → `c.mcpConfigPath = <yeni yol>`. `persistentFingerprint` bu yolu
 içerdiğinden → **her tur fingerprint değişir → cold restart**. Ek olarak persistent process
@@ -189,7 +189,7 @@ GET SSE akışını açık tutuyor, `spike_grow` çağrılınca `spike_secret`'i
 | **Q1** — mid-turn list_changed + AYNI turda çağrı | ✅ **EVET** | Tek turda: `spike_grow` → server push (`pushed list_changed`, `flushed`) → claude `spike_secret`'i çağırıp **`SECRET=GATEWAY_OK_42`** aldı. |
 | **Q2** — wildcard allowlist sonradan gelen aracı kapsıyor | ✅ **EVET** | Allowlist spawn'da `mcp__spike` sabit; `spike_secret` yalnız grow'dan SONRA belirdi, yine de restart'sız çağrılabildi. |
 | **Q3** — mid-turn list_changed cache prefix'i siliyor mu | ✅ **HAYIR (marjinal)** | list_changed sonrası model çağrıları `cacheRead≈29360–29570`, yalnız `cacheCreate 56–210` delta. Tam prefix rebuild YOK. Final: cacheRead 79456 > cacheCreate 63778. |
-| **Q0** — persistent+MCP config kararsızlığı (§3-D) | ⚠️ **KOD-DOĞRULANDI, ampirik bekliyor** | `writeCLIMCPConfig` temp yol churn'ü + `defer cleanup` + fingerprint(mcpConfigPath) kesin. Ampirik teyit TionSwarm'ı çalıştırmayı gerektirir; düzeltme unit-testlenebilir (içerik-hash fingerprint). |
+| **Q0** — persistent+MCP config kararsızlığı (§3-D) | ⚠️ **KOD-DOĞRULANDI, ampirik bekliyor** | `writeCLIMCPConfig` temp yol churn'ü + `defer cleanup` + fingerprint(mcpConfigPath) kesin. Ampirik teyit TionHarness'ı çalıştırmayı gerektirir; düzeltme unit-testlenebilir (içerik-hash fingerprint). |
 
 **Beklenmedik + kritik gözlem — ToolSearch aracılığı.** claude, spike araçlarını **inline
 ETMEDİ**; her birini çağırmadan önce `ToolSearch select:mcp__spike__<tool>` ile şemasını
@@ -208,7 +208,7 @@ gerçek tasarruf budur.**
 
 ### Seçenek karşılaştırması
 
-| | S1: Ayrı Go binary | **S2: TionSwarm içine kat (ÖNERİLEN)** | S3: Hibrit (S2 + sonra harici) |
+| | S1: Ayrı Go binary | **S2: TionHarness içine kat (ÖNERİLEN)** | S3: Hibrit (S2 + sonra harici) |
 |---|---|---|---|
 | Backend pool | 2. havuzu kopyalar | mevcut `mcpPool` yeniden kullanılır | mevcut |
 | CLI köprü fix'i | çözmez (ayrı servis) | **doğrudan çözer** | çözer |
@@ -220,8 +220,8 @@ ikinci pool israf; harici sunum ayrı ROI kararı (§7-madde17).
 
 ### Brief'in 4 numaralı içgörüsünün düzeltmesi
 Brief "activate server → o server'ın tüm araçları; per-tool granülariteyi KORU" diyor.
-Doğru — ama TionSwarm'ın gerçek gateway'i **backend MCP sunucuları** değil, **Interaction
-MCP extended tier'ıdır**. Yani "server" burada `tionswarm_extended` (tek sunucu); "araçlar"
+Doğru — ama TionHarness'ın gerçek gateway'i **backend MCP sunucuları** değil, **Interaction
+MCP extended tier'ıdır**. Yani "server" burada `tionharness_extended` (tek sunucu); "araçlar"
 onun built-in + bridged self-management + NameOnly araçları. Gateway aktivasyonu =
 "extended sunucusunun tools/list'ini boştan → istenen alt kümeye büyüt". Dış backend MCP'ler
 (docker vb.) **ayrı** ve zaten `mcp__<key>` wildcard'la per-server ilan ediliyor.
@@ -234,7 +234,7 @@ onun built-in + bridged self-management + NameOnly araçları. Gateway aktivasyo
 1. `52`'ye Q0-Q3 harness'i + sonuç tablosu.
 2. **Config kararlılığı düzeltmesi (prototip):** session-ömürlü mcp-config yolu (temp
    churn yok, tur sonunda silme yok), session-ömürlü interaction token, extended tier
-   allowlist'i **wildcard `mcp__tionswarm_extended`**'e çevir. Fingerprint'ten `mcpConfigPath`
+   allowlist'i **wildcard `mcp__tionharness_extended`**'e çevir. Fingerprint'ten `mcpConfigPath`
    yerine **config içeriği hash'i** kullan (yol değişse de içerik aynıysa warm kalsın).
 3. Küçük stateful list_changed MCP ile Q1/Q2/Q3 ölç. **Kırmızıysa dur, S2'yi yeniden değerlendir.**
 
@@ -268,7 +268,7 @@ onun built-in + bridged self-management + NameOnly araçları. Gateway aktivasyo
 |---|---|
 | `internal/interaction/server.go` | **Ana iş.** Stateful session, GET SSE akışı, `listChanged:true`, list_changed push, pub/sub. |
 | `internal/interaction/*_test.go` | list_changed push + stateful session testleri. |
-| `internal/agent/climcp.go` | extended tier allowlist → wildcard `mcp__tionswarm_extended`; config yolu kararlılığı. |
+| `internal/agent/climcp.go` | extended tier allowlist → wildcard `mcp__tionharness_extended`; config yolu kararlılığı. |
 | `internal/providers/claudecli_session.go` | `persistentFingerprint` → yol yerine içerik-hash; config dosyası ömrü. |
 | `internal/providers/claudecli.go` | `ConfigureMCP` çağrı ömrü / token kararlılığı. |
 | `internal/agent/toolloop.go` | `writeCLIMCPConfig` çağrı yeri: session-ömürlü config, `defer cleanup` kaldır/koşullandır. |
@@ -284,13 +284,13 @@ onun built-in + bridged self-management + NameOnly araçları. Gateway aktivasyo
 | # | Konu | Bu oturumun sonucu |
 |---|---|---|
 | 1 | Kalıcı-session ↔ list_changed sinerjisi | **Ön koşul doğru + daha derin:** kalıcı-session şart AMA bugün MCP'yle her tur soğuk (§3-D). Önce config kararlılığı, sonra list_changed. Fresh-process modunda desen çalışmaz → fallback "sonraki tur re-allowlist" (zaten var). |
-| 2 | Persistent'te allowlist dinamik mi | **Hayır (spawn'da sabit).** Çözüm netleşti: **wildcard `mcp__tionswarm_extended`** (dış MCP'lerde zaten kullanılan desen) → sonradan gelen araç otomatik izinli, restart yok. Q2'de doğrula. |
+| 2 | Persistent'te allowlist dinamik mi | **Hayır (spawn'da sabit).** Çözüm netleşti: **wildcard `mcp__tionharness_extended`** (dış MCP'lerde zaten kullanılan desen) → sonradan gelen araç otomatik izinli, restart yok. Q2'de doğrula. |
 | 3 | İki activate_tools çakışması | **Tek semantik:** native activate = kaynak-of-truth; extended sunucusu list_changed'i onunla lockstep push eder. Model tek `activate_tools` görür. |
-| 4 | Per-tool vs per-server granülerlik | TionSwarm per-tool granülerliği KORUNUR; "activate server" = şeker sözdizimi. Gerçek "gateway server" = `tionswarm_extended` (tek), dış MCP'ler `mcp__<key>` wildcard ile ayrı. |
+| 4 | Per-tool vs per-server granülerlik | TionHarness per-tool granülerliği KORUNUR; "activate server" = şeker sözdizimi. Gerçek "gateway server" = `tionharness_extended` (tek), dış MCP'ler `mcp__<key>` wildcard ile ayrı. |
 | 5 | Reactive/otonom auto-activate | tool_search bulamayınca otomatik activate+list_changed → ara-bul-kullan. **Q1'e bağlı** (aynı-tur çağrı). Q1 hayırsa "bul → sonraki tur kullan". |
 | 6 | Built-in'ler de deferse girsin mi | Davranışsal-core (`coreInteractionTools`: permission_prompt, shell, ask_user, todo/artifact/skill) **daima eager**. Gerisi extended'e girebilir. Sınır korunur. |
 | 7 | Harici sunum = TS gateway emekli | Faz 3. Göç yükü: config format + VPS zincir + Tailscale + auth. ROI ayrı karar. |
-| 8 | Uzak gateway zincirleme | TionSwarm zaten streamable-http backend destekliyor → vps-* URL'li kaynak. Gateway-of-gateways ucuz. |
+| 8 | Uzak gateway zincirleme | TionHarness zaten streamable-http backend destekliyor → vps-* URL'li kaynak. Gateway-of-gateways ucuz. |
 | 9 | Güvenlik | Harici sunumda: loopback default + `GATEWAY_AUTH_TOKEN` muadili ŞART. Interaction endpoint'in Bearer auth'u yeniden kullanılabilir (bkz. YENİ-F). |
 | 10 | Audit/observability | Proxied çağrılar zaten debug.jsonl + logbuf'a gidiyor. Harici sunumda gateway-audit.jsonl paritesi kur. |
 | 11 | Ref-count & yaşam döngüsü | Backend pool workspace-ömürlü; dış+iç paylaşımda kapatma politikası Faz 3'te (ref-count). |
@@ -319,7 +319,7 @@ onun built-in + bridged self-management + NameOnly araçları. Gateway aktivasyo
   GET akışında döner. Model aynı asistan mesajında activate + yeni-araç-çağrısını arka arkaya
   yazarsa re-list henüz olmamış olabilir. Native'de sorun yok (in-process). Çözüm: activate
   **yalnız notification flush edildikten sonra** dönsün, ya da "çağrı bir sonraki adımda" belgelensin.
-- **YENİ-E — wildcard vs güvenlik:** `mcp__tionswarm_extended` wildcard'ı, o sunucudaki
+- **YENİ-E — wildcard vs güvenlik:** `mcp__tionharness_extended` wildcard'ı, o sunucudaki
   **her** aracı (self-management dahil) allowlist'e sokar. Görünürlük hâlâ tools/list'i
   kontrol eder (araç ilan edilmezse çağrılamaz), ama allowlist artık "ilan edilirse izinli"
   demek. Permission katmanı (ask modu) gerçek kapı olarak kalmalı. Sınırı belgele.
@@ -344,7 +344,7 @@ onun built-in + bridged self-management + NameOnly araçları. Gateway aktivasyo
 
 ## 9. Ölçüm planı
 
-1. Harness: izole backend (`TIONSWARM_DATA_DIR` ayrı, ayrı port) + gerçek `claude-fable-5`
+1. Harness: izole backend (`TIONHARNESS_DATA_DIR` ayrı, ayrı port) + gerçek `claude-fable-5`
    turları + `claude.exe` cmdline yakalama (CIM) + debug.jsonl token.
 2. Senaryolar: (a) bugün extended-full, (b) bugün name-only/summary (brief: kazanç yok),
    (c) gateway boş-extended + on-demand list_changed. Taze input / cacheWrite / cacheRead karşılaştır.
@@ -356,14 +356,14 @@ onun built-in + bridged self-management + NameOnly araçları. Gateway aktivasyo
 
 ## 10. Bilal'in onaylayacağı AÇIK KARARLAR
 
-1. **Mimari:** S2 (TionSwarm içine kat) — onay? Faz 3 (harici `/mcp/gateway`, TS gateway
+1. **Mimari:** S2 (TionHarness içine kat) — onay? Faz 3 (harici `/mcp/gateway`, TS gateway
    emekli) **opsiyonel/sonraki** kalsın mı, yoksa baştan kapsama mı?
 2. **Faz 0 önce:** Kod yazımından önce Q0-Q3 spike'ı çalıştırılsın mı (öneri: EVET, çünkü
    Q1 kırmızıysa kapsam küçülür)?
 3. **§3-D düzeltmesi:** persistent+MCP cold-restart bulgusu — bunu **gateway'den bağımsız
    bir bugfix** olarak hemen ayrı ele alalım mı, yoksa Faz 0'ın parçası mı? (Öneri: Faz 0
    içinde, çünkü gateway ön koşulu.)
-4. **Wildcard allowlist:** extended tier `mcp__tionswarm_extended` wildcard'ına geçsin mi
+4. **Wildcard allowlist:** extended tier `mcp__tionharness_extended` wildcard'ına geçsin mi
    (YENİ-E güvenlik notuyla)? Onay?
 5. **Tier modeli birleştirme (§7-15):** Gateway gelince CLI'da summary/name-only'yi
    emekliye ayırıp CLI projeksiyonunu **2-durum** (core / gateway-managed) yapalım mı;
@@ -380,11 +380,11 @@ onun built-in + bridged self-management + NameOnly araçları. Gateway aktivasyo
 
 ## 11. ONAYLANAN KARARLAR (Bilal, 2026-07-06)
 
-1. ✅ **Mimari: S2** (gateway desenini TionSwarm içine kat). Faz 3 opsiyonel/sonraki.
+1. ✅ **Mimari: S2** (gateway desenini TionHarness içine kat). Faz 3 opsiyonel/sonraki.
 2. ✅ **Kod yazımından önce Q0-Q3 spike** çalıştırıldı → §3-E: **YEŞİL**.
 3. ✅ **§3-D düzeltmesi öneri gibi uygulanacak:** session-ömürlü kararlı config yolu,
    içerik-hash fingerprint, session-ömürlü token, wildcard allowlist.
-4. ✅ **Extended tier → `mcp__tionswarm_extended` wildcard** allowlist'ine geçecek.
+4. ✅ **Extended tier → `mcp__tionharness_extended` wildcard** allowlist'ine geçecek.
 5. ✅ **summary/name-only emekliye ayrılacak** — CLI projeksiyonu 2-durum (core /
    gateway-managed), native 4-tier korunur (bkz. §7-15).
 6. ✅ **Interaction token → per-(session,agent)** (aşağıda detaylı sonuçlar).
@@ -412,7 +412,7 @@ olduğu için çapraz-agent token karışması yapısal olarak imkânsız.
 **Kapsam onaylandı** ama **opsiyonel/sonraki faz** (S2 iç-fix'ten bağımsız değer).
 
 **Auth (loopback + token).**
-- TionSwarm API'sinde bugün **auth YOK + CORS wildcard** (§7-9). `/mcp/gateway` dış
+- TionHarness API'sinde bugün **auth YOK + CORS wildcard** (§7-9). `/mcp/gateway` dış
   client'a açılırsa bu kabul edilemez.
 - Model: gateway'in `SISTEM.md` kuralı — **default `127.0.0.1` (loopback)**; ağa/Tailscale'e
   açmak için explicit `0.0.0.0` + **`GATEWAY_AUTH_TOKEN` muadili ŞART**. Token setliyse
@@ -422,20 +422,20 @@ olduğu için çapraz-agent token karışması yapısal olarak imkânsız.
 
 **VPS zincir göçü (gateway-of-gateways).**
 - TS gateway bugün `vps-*` sunucuları streamable-http URL'li backend olarak zincirliyor
-  (Tailscale `<vps-host>:9090/servers/{name}/mcp`). TionSwarm `internal/mcp` **zaten
+  (Tailscale `<vps-host>:9090/servers/{name}/mcp`). TionHarness `internal/mcp` **zaten
   streamable-http backend destekliyor** → `vps-*` sadece URL'li MCP kaynağı olarak eklenir
   (§7-8). Zincirleme neredeyse bedava.
-- Göç adımları: (a) TS `config.json`'daki 18 server + 7 vps girişini TionSwarm MCP-server
-  kayıtlarına aktar (transport/headers/env korunarak), (b) `autoActivate`/preset ↔ TionSwarm
+- Göç adımları: (a) TS `config.json`'daki 18 server + 7 vps girişini TionHarness MCP-server
+  kayıtlarına aktar (transport/headers/env korunarak), (b) `autoActivate`/preset ↔ TionHarness
   tier/görünürlük eşle, (c) auth token + loopback default, (d) audit paritesi (gateway-audit.jsonl
-  ↔ debug.jsonl), (e) uçtan uca doğrula (Craft/harici Claude Code → TionSwarm `/mcp/gateway`
+  ↔ debug.jsonl), (e) uçtan uca doğrula (Craft/harici Claude Code → TionHarness `/mcp/gateway`
   → vps zincir → backend).
 - **ROI notu:** TS gateway çalışıyor; göç faydası = tek Go binary + tek pool + TS runtime
   (Bun) bağımlılığının kalkması. İç CLI-fix (Faz 0-2) bundan **bağımsız** değerli; Faz 3
   ayrı tetiklenir.
 
 **✅ Göç aracı (2026-07-06): `_spikes/52-gateway/migrate-vps.py`.** TS `config.json`'ı
-TionSwarm'ın **mevcut** `POST /api/mcp-servers/import` endpoint'inin kabul ettiği standart
+TionHarness'ın **mevcut** `POST /api/mcp-servers/import` endpoint'inin kabul ettiği standart
 `{"mcpServers":{...}}` formatına dönüştürür (yeni endpoint gerekmedi). Dönüşümler:
 `transportType`/`url` → `type:"http"`; `${VAR}` placeholder'ları `secrets.json`/env'den çözer;
 `options.disabled` işaretlenir (entry yine yazılır, UI'dan kapatılır); gateway-only alanlar
@@ -450,8 +450,8 @@ python _spikes/52-gateway/migrate-vps.py \
 # 2) default workspace'e toplu import et
 curl -X POST http://127.0.0.1:8090/api/mcp-servers/import \
   -H "X-Workspace-Id: <default-ws-id>" --data-binary @import.json
-# 3) TS'de disabled olanları TionSwarm UI'dan kapat (özet import.json summary'sinde işaretli)
-# 4) harici client'ı TionSwarm /mcp/gateway + TIONSWARM_GATEWAY_AUTH_TOKEN'a yönelt
+# 3) TS'de disabled olanları TionHarness UI'dan kapat (özet import.json summary'sinde işaretli)
+# 4) harici client'ı TionHarness /mcp/gateway + TIONHARNESS_GATEWAY_AUTH_TOKEN'a yönelt
 # 5) TS gateway-manager'ı durdur (emekli). vps-* URL'li girişler zaten çalışır (ServersFunc canlı okur).
 ```
 > **Not:** vps-* girişleri gerçek `config.json`'da (template'te değil); script onları `url`
@@ -467,8 +467,8 @@ curl -X POST http://127.0.0.1:8090/api/mcp-servers/import \
 §3-D'nin üç kaynağı da kapatıldı; `go test ./...` **693 passed**. Değişiklikler:
 
 1. **Extended tier wildcard allowlist** — `internal/agent/climcp.go`: extended tier artık
-   per-tool (`mcp__tionswarm_extended__<tool>` × N) yerine **tek sunucu-seviyesi wildcard
-   `mcp__tionswarm_extended`** (dış MCP'lerin `mcp__<key>` deseniyle aynı). Sonradan
+   per-tool (`mcp__tionharness_extended__<tool>` × N) yerine **tek sunucu-seviyesi wildcard
+   `mcp__tionharness_extended`** (dış MCP'lerin `mcp__<key>` deseniyle aynı). Sonradan
    list_changed ile gelen araç zaten izinli + allowlist turn-arası sabit. Core tier
    per-tool kaldı (küçük/stabil). Test: `climcp_test.go` güncellendi.
 2. **İçerik-hash fingerprint** — `internal/providers/claudecli_session.go`:
@@ -483,7 +483,7 @@ curl -X POST http://127.0.0.1:8090/api/mcp-servers/import \
 
 **Birlikte etki:** wildcard (allowlist sabit) + stable token (config içeriği sabit) +
 içerik-hash (yol churn'ü önemsiz) → persistent+MCP artık turn-arası **warm** kalır.
-Ampirik warm-reuse oranı ölçümü Faz 4'e bırakıldı (çalışan TionSwarm gerektirir).
+Ampirik warm-reuse oranı ölçümü Faz 4'e bırakıldı (çalışan TionHarness gerektirir).
 
 > **Kalan minör:** `writeCLIMCPConfig` hâlâ her tur temp dosya yazıp `defer cleanup` ile
 > siliyor (israf, correctness değil — claude config'i yalnız spawn'da okur). Faz 1'de
@@ -513,7 +513,7 @@ turda çağırır (spike Q1/Q2 mekaniği). `go test ./...` **701 passed**, flag 
 
 **Uygulanan parçalar:**
 1. **Feature-flag `GatewayDynamicExtended`** (`gateway_tunable.go`, `tunables.go` alanı,
-   default OFF) + boot env seed `TIONSWARM_GATEWAY_DYNAMIC_EXTENDED` (`app.go`).
+   default OFF) + boot env seed `TIONHARNESS_GATEWAY_DYNAMIC_EXTENDED` (`app.go`).
 2. **Per-token aktif-extended durumu** — `interactionBackend.activated map[token]map[string]bool`
    + mutex; `Tools(token,"extended")` flag ON iken bunu filtreler (`isActivated`).
 3. **Core meta-tools `activate_tools`/`deactivate_tools`** — yalnız flag ON iken ilan edilir
@@ -534,7 +534,7 @@ bilinmeyen ad, namespaced ad, flag-OFF tam yüzey), `tooltier_test.go`
 ### ✅ Faz 1-b canlı validation (2026-07-06, gerçek claude-cli 2.1.201 + claude-fable-5)
 
 Harness: `internal/interaction/live_gateway_test.go` (`TestLiveGatewayActivate`, gate
-`TIONSWARM_LIVE_CLI=1`). **GERÇEK `interaction.Server`** (fake dinamik backend) +
+`TIONHARNESS_LIVE_CLI=1`). **GERÇEK `interaction.Server`** (fake dinamik backend) +
 `writeCLIMCPConfig` birebir yapısı (core=alwaysLoad `/core`, extended `/extended`, extended
 **wildcard `mcp__gwext`** allowlist) + gerçek `claude -p` turu.
 
@@ -560,9 +560,9 @@ Model bunu doğruladı: "aktive edilen araç `activate_tools`'un olduğu `gwcore
 
 ### ✅ Faz 2 — meta-araç konsolidasyonu + CLI 2-durum projeksiyonu (UYGULANDI, 2026-07-06)
 
-**Birleşik meta-araç seti (gateway ↔ TionSwarm eşlemesi):**
+**Birleşik meta-araç seti (gateway ↔ TionHarness eşlemesi):**
 
-| Gateway (TS) | TionSwarm karşılığı | Seviye | Nerede |
+| Gateway (TS) | TionHarness karşılığı | Seviye | Nerede |
 |---|---|---|---|
 | `activate_tools` | `activate_tools` | session | core interaction (Faz 1-b, flag) |
 | `deactivate_tools` | `deactivate_tools` | session | core interaction (Faz 1-b, flag) |
@@ -595,7 +595,7 @@ gateway default-on kararıyla (Faz 4) birlikte ele alınmalı.
 ### ✅ Faz 4 — token ölçümü (2026-07-06, gerçek claude-cli 2.1.201 + claude-fable-5)
 
 Harness: `internal/interaction/measure_gateway_test.go` (`TestMeasureGatewaySavings`,
-gate `TIONSWARM_LIVE_CLI=1`). Gerçek `interaction.Server` + fake backend, extended tier
+gate `TIONHARNESS_LIVE_CLI=1`). Gerçek `interaction.Server` + fake backend, extended tier
 **30 gerçekçi self-management-tarzı araç** (ad+özet+küçük şema). Trivial, araç-gerektirmeyen
 prompt (`"reply DONE"`) → tek fark: extended kaç araç ilan ediyor. Her senaryo benzersiz
 marker ile (cache paylaşımı yok, `cacheRead=0` → temiz soğuk ölçüm).
@@ -635,9 +635,9 @@ sınıflandırma-partisyonuna güncellendi. `go test ./...` **705 passed**.
 
 ### ✅ Faz 3 — harici `/mcp/gateway` endpoint (UYGULANDI, 2026-07-06)
 
-TionSwarm artık MCP havuzunu **dış client'lara** (harici Claude Code / External Agent) tek
+TionHarness artık MCP havuzunu **dış client'lara** (harici Claude Code / External Agent) tek
 endpoint arkasında sunabiliyor — TS `gateway-manager`'ın Go-native muadili. **Opt-in**
-(`TIONSWARM_GATEWAY_EXTERNAL=1`), `go test ./...` **706 passed**.
+(`TIONHARNESS_GATEWAY_EXTERNAL=1`), `go test ./...` **706 passed**.
 
 **Yeni paket `internal/gateway`** (interaction'dan AYRI — auth ve session modeli farklı):
 - `server.go` — streaming MCP-over-HTTP: `initialize`'da **session id MİNTLER** (bearer'dan
@@ -654,12 +654,12 @@ workspace'in enabled MCP server'ları (`workspaces.Default().DB.ListEnabledMCPSe
 
 **Güvenlik (§7-9, §11-B):**
 - **Token yoksa → loopback-only** (`loopbackGuard`: non-loopback RemoteAddr → 403). Ağa
-  açmak için **`TIONSWARM_GATEWAY_AUTH_TOKEN` ŞART** (set edilince bearer zorunlu, guard pass-through).
+  açmak için **`TIONHARNESS_GATEWAY_AUTH_TOKEN` ŞART** (set edilince bearer zorunlu, guard pass-through).
 - Default **KAPALI** — harici sunum explicit tercih.
 - Test: `TestLoopbackGuard`, `TestIsLoopbackAddr` (IPv4+IPv6 loopback), `TestGatewayAuth`
   (401 token yok/yanlış, 200+session-id doğru).
 
-**VPS zincir göçü (§11-B):** TionSwarm `internal/mcp` zaten streamable-http backend
+**VPS zincir göçü (§11-B):** TionHarness `internal/mcp` zaten streamable-http backend
 destekliyor → `vps-*` sunucular yalnız **URL'li MCP server satırları** (transport `http`,
 `headers` ile auth). Göç = TS `config.json`'daki 18+7 server'ı default workspace'e MCP
 server olarak ekle (`create_mcp_server`/UI/API) → dış client'ı `/mcp/gateway` + token'a
@@ -671,7 +671,7 @@ gateway-of-gateways (yerel → VPS zincir) neredeyse bedava.
 `echo` round-trip → deactivate), `TestGatewayAuth`.
 
 **✅ Canlı dış-client validation (2026-07-06):** `internal/gateway/live_gateway_test.go`
-(`TestLiveExternalGateway`, gate `TIONSWARM_LIVE_CLI=1`). Gerçek claude-cli, token'lı
+(`TestLiveExternalGateway`, gate `TIONHARNESS_LIVE_CLI=1`). Gerçek claude-cli, token'lı
 `/mcp/gateway`'e (gerçek `gateway.Server` + gerçek `mcp.Pool` + fake backend MCP) bağlandı;
 **tek turda** `activate_tools(servers=["fake"])` → gateway pool ile backend'e bağlandı +
 `list_changed` push → claude re-list → proxied `get_secret` → **`SECRET=GW_EXT_OK_88`**.
@@ -706,9 +706,9 @@ Prosedür §11-B'de. Masked template'te doğrulandı (18 server). Canlı import 
 (gerçek `gateway.Server`+pool+claude), `TestMeasureGatewaySavings` (token), ve `interactionBackend`
 mantığı gerçek `chatRun`'larla unit-testli (`gateway_dynamic_test.go`: activate/deactivate/
 active/tool_search/hidden). Tam app boot + canlı chat testi orantısız ağır/kırılgan olacağından
-(her CI'da token harcar) yazılmadı; onun yerine **manuel QA checklist** (Bilal, canlı TionSwarm):
+(her CI'da token harcar) yazılmadı; onun yerine **manuel QA checklist** (Bilal, canlı TionHarness):
 
-1. Boot: izole `TIONSWARM_DATA_DIR` + ayrı port ile `tionswarm` başlat; claude-cli agent oluştur
+1. Boot: izole `TIONHARNESS_DATA_DIR` + ayrı port ile `tionharness` başlat; claude-cli agent oluştur
    (`MCPEnabled`, persistent session açık), birkaç extended/hidden görünürlüklü araç ayarla.
 2. Bir chat turu at: modelden bir extended aracı (ör. `notify`) veya hidden aracı **kullanmasını**
    iste. Beklenen: model `activate_tools` (ya da hidden için önce `tool_search`) çağırır → araç
@@ -728,18 +728,18 @@ active/tool_search/hidden). Tam app boot + canlı chat testi orantısız ağır/
   workspace'e bağlar; `ServersFunc`/`PoolFunc` artık `workspaceID` alır (boş/bilinmeyen →
   default). Böylece tek gateway çok workspace sunar. Test: `TestGatewayPerWorkspaceRouting`.
 - ✅ **Audit paritesi:** proxied backend tool çağrıları `AuditEntry{ts,server,tool,ok,error}`
-  ile kaydedilir (TS `gateway-audit.jsonl` muadili). Opt-in `TIONSWARM_GATEWAY_AUDIT_LOG=<path>`
+  ile kaydedilir (TS `gateway-audit.jsonl` muadili). Opt-in `TIONHARNESS_GATEWAY_AUDIT_LOG=<path>`
   (JSONL append, fire-and-forget; meta-araçlar denetlenmez). Test: `TestGatewayAuditRecordsProxiedCalls`.
 - ✅ **Canlı VPS göç uygulaması — YAPILDI (2026-07-06):** kullanıcı onayıyla (tüm workspace'ler,
-  23 server, çakışanların üstüne). Masaüstü app kapalıyken `cmd/tionswarm` geçici olarak
-  gerçek data-dir'e (`~/.tionswarm`) karşı `:8095`'te başlatıldı; `apply-migration.py`
+  23 server, çakışanların üstüne). Masaüstü app kapalıyken `cmd/tionharness` geçici olarak
+  gerçek data-dir'e (`~/.tionharness`) karşı `:8095`'te başlatıldı; `apply-migration.py`
   (delete-colliding + import) 4 workspace'e uygulandı → **WS1: 2 overwrite +23, WS5: 1
   overwrite +23 (non-colliding `codebase-memory` korundu → 24), WS8: +23, WS9: +23**;
   0 hata, **dupe yok** (doğrulandı). Geçici server durduruldu, secret'lı `import.json` +
   binary silindi. Sonraki masaüstü açılışında WS1/5/8/9'da 23 server hazır. Araçlar:
   `_spikes/52-gateway/migrate-vps.py` + `apply-migration.py`.
   > **Ek düzeltme (2026-07-06):** Import her server'ı **enabled** oluşturduğundan (import
-  > endpoint'i `disabled` alanı taşımıyor), TS'de disabled olan 13 server TionSwarm'da açık
+  > endpoint'i `disabled` alanı taşımıyor), TS'de disabled olan 13 server TionHarness'da açık
   > geldi → app açılışta backend'i çalışmayanlara eager dial → `dial failed`/`context canceled`
   > log spam'i. Çözüm: `migrate-vps.py` artık çıktıya `_disabled: [...]` ekler; `apply-migration.py`
   > import sonrası bunları `toggle {enabled:false}` ile kapatır. Canlıda 4 workspace'te 13'er
@@ -747,8 +747,8 @@ active/tool_search/hidden). Tam app boot + canlı chat testi orantısız ağır/
   > (mcp-chrome/unity/mcp-alpha/vps-*) çalışmadıkça hâlâ warn verebilir — bu TS'nin enabled setiyle aynı.
 
 - ⛔ **VPS göçü GERİ ALINDI (2026-07-06):** Bilal netleştirdi — asıl istek dış `mcp-server`
-  gateway'inin server'larını TionSwarm'a **import etmek değildi**; istek, TionSwarm'ın *kendi*
-  built-in tool'larını + kullanıcının TionSwarm'a **kendi eklediği** harici MCP'leri gateway-benzeri
+  gateway'inin server'larını TionHarness'a **import etmek değildi**; istek, TionHarness'ın *kendi*
+  built-in tool'larını + kullanıcının TionHarness'a **kendi eklediği** harici MCP'leri gateway-benzeri
   yüzeyle yönetmesiydi (bu zaten `internal/gateway` + iki-katmanlı interaction ile mevcut).
   Dolayısıyla göç bir yanlış-anlama ürünüydü. **Temizlik:** VPS gateway'e (`<vps-host>:9090`,
   yani `mcp-server`) işaret eden **tüm `vps-*` server'lar** 4 workspace'ten silindi (WS1:1, WS5/8/9:7'şer
@@ -767,7 +767,7 @@ active/tool_search/hidden). Tam app boot + canlı chat testi orantısız ağır/
 - 🩹 **activate_tools/active_tools çıktısı namespaced ad döndürüyor (2026-07-06):** Semptom
   (SES125): ajan `activate_tools({tools:['list_agents']})` çağırıyor, çıktı **bare** `"activated:
   list_agents"` diyor; ama claude-cli'de deferred tool YALNIZ namespaced adla çağrılabilir
-  (`mcp__tionswarm_extended__list_agents`). Model çıplak `list_agents` çağırıp `"No such tool
+  (`mcp__tionharness_extended__list_agents`). Model çıplak `list_agents` çağırıp `"No such tool
   available: list_agents"` alıyor, sonra doğru adla yeniden deneyip başarıyor — boş round-trip
   (+ autotag fix'inden önce sahte `tool-error`). Fix (`mcp_interaction.go`): `callActivate` +
   `callActiveTools` artık **namespaced çağrılabilir adı** raporluyor (`extendedNSPrefix` sabiti) +
@@ -793,7 +793,7 @@ active/tool_search/hidden). Tam app boot + canlı chat testi orantısız ağır/
   `activate_tools` sonrası CLI `tools/list`'i henüz yenilememişse "No such tool available" gelir.
 
 - ✅ **activate→call race ÇÖZÜLDÜ — `PushToolsChangedAndWait` (2026-07-08):** Önce canlı ölçtük
-  (`internal/interaction/probe_relist_test.go`, `TIONSWARM_LIVE_CLI=1`): activate cevabı tutulurken
+  (`internal/interaction/probe_relist_test.go`, `TIONHARNESS_LIVE_CLI=1`): activate cevabı tutulurken
   CLI'nin `tools/list(extended)` yeniden-çekmesi gelip gelmediğini gözledik. Sonuç claude-cli 2.1.203
   / fable-5'te **2/2 "A"** — CLI bildirimi **eşzamanlı** işliyor, activate PENDING iken ~10-16ms'de
   re-list ediyor (hold sırasında race hiç tetiklenmedi, 0/2). Yani bloklama güvenli+etkili.
@@ -805,7 +805,7 @@ active/tool_search/hidden). Tam app boot + canlı chat testi orantısız ağır/
 
 - ✅ **Dosya-yazan MCP → oturum scratchpad izinli kökü (Playwright, 2026-08-04):** Playwright MCP
   (`browser_take_screenshot` / PDF), dosya yazımını **izinli köklerine** — bu client hiç MCP root
-  ilan etmediği için de yalnız **cwd**'sine — kısıtlar. TionSwarm ise ajana çıktı yolu olarak oturum
+  ilan etmediği için de yalnız **cwd**'sine — kısıtlar. TionHarness ise ajana çıktı yolu olarak oturum
   scratchpad'ini (`<store>/sessions/<SID>/scratchpad`) veriyordu; iki küme kesişmediği için her
   dosya-yazan çağrı `File access denied: outside allowed roots` ile reddediliyordu (ek olarak paylaşılan
   havuz bağlantısı bayat bir oturum kimliğine çözülüyordu — SES4'te SES1 scratchpad'i). **Fix:**
@@ -823,13 +823,13 @@ active/tool_search/hidden). Tam app boot + canlı chat testi orantısız ağır/
   için ne ilan edilen katalog ne de çağrı dispatch'i `toolFilter`'dan geçer. Canlı yakalandı (SES948):
   allowlist'i `["Read","LS","Glob","Grep","Write","Edit","Bash"]` olan `worker:coder` ajanı bir tur
   boyunca Playwright ve codebase-memory sunucularını sürdü — araçlar sistem promptunda **hiç geçmiyordu**
-  (yani TionSwarm filtresi doğru çalışmıştı), ama `writeCLIMCPConfig`/`codexMCPSpec` **enabled olan her
+  (yani TionHarness filtresi doğru çalışmıştı), ama `writeCLIMCPConfig`/`codexMCPSpec` **enabled olan her
   sunucuyu** mount edip `mcp__<key>` sunucu-düzeyi joker'i ile toptan izinliyordu. Ajan araç ekranı bu
   süre boyunca aynı araçları "blocked" gösteriyordu. **Fix:** `internal/agent/mcpservergate.go`
   (`mcpServerGate`) — ajanın blocked/allowed desenlerinden **önek tabanlı** bir sunucu kapısı üretir ve
   iki CLI yolu da sunucuyu mount etmeden önce ona sorar (`ag db.Agent` parametresi eklendi).
   - Neden önek tabanlı: CLI yolunda sunucuya bağlanmadan araç listesi yok; bağlanmak her stdio
-    sunucunun **ikinci** bir kopyasını TionSwarm sürecinde açardı. Namespaced araç adı daima
+    sunucunun **ikinci** bir kopyasını TionHarness sürecinde açardı. Namespaced araç adı daima
     `<key>__<tool>` olduğundan sunucu kararı yalnız desenlerden verilebilir.
   - Blocked: sunucunun tamamını kapsayan desen (`playwright*`, `playwright__*`, çıplak `playwright`)
     sunucuyu düşürür; **tek bir aracı** bloklamak düşürmez (diğer araçlar meşru kalır).
@@ -874,7 +874,7 @@ active/tool_search/hidden). Tam app boot + canlı chat testi orantısız ağır/
     profilin allowlist'inde. Grafı esirgemek kabiliyet kaybı değil, token israfı.
   - Kapsam: yalnız **ALLOWLIST**. Workspace anahtarı ve ajanın **AÇIK** denylist'i hâlâ
     kaldırır — operatör tek bir ajandan grafı bilerek alabilir ve bu karara saygı duyulur.
-  - Tek sunucuya kilitli: TionSwarm'ın altyapı saydığı tek MCP sunucusu bu (yetenek probu +
+  - Tek sunucuya kilitli: TionHarness'ın altyapı saydığı tek MCP sunucusu bu (yetenek probu +
     prompt bloğu yalnız onun için var). İkincisi açık bir karar gerektirir.
   - Uygulanan iki yol: `toolFilter` (native, `isExemptTool`) ve `mcpServerGate(ag, exempt)`
     (claude-cli + codex-cli mount'u).

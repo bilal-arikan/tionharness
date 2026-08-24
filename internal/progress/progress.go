@@ -1,10 +1,10 @@
 // Package progress persists an agent's working checklist (the todo_write list)
 // to a durable, human-readable JSON file so it survives across sessions — the
-// TionSwarm equivalent of Claude Code's claude-progress.txt + feature_list.json
+// TionHarness equivalent of Claude Code's claude-progress.txt + feature_list.json
 // convention for long-running agents. A fresh session reads it back at start to
 // "get up to speed on what was recently worked on".
 //
-// The file lives at <dir>/.tionswarm/progress.json, where <dir> is the session's
+// The file lives at <dir>/.tionharness/progress.json, where <dir> is the session's
 // working directory (the project) when set — so it is git-committable and tied to
 // the project, not the ephemeral session. It is intentionally free of any
 // internal/db dependency so both internal/agent and internal/api can use it.
@@ -24,7 +24,7 @@ const maxLog = 50
 
 // subDir + fileName form the on-disk location under a project directory.
 const (
-	subDir   = ".tionswarm"
+	subDir   = ".tionharness"
 	fileName = "progress.json"
 )
 
@@ -82,7 +82,7 @@ func Load(dir string) (Record, bool, error) {
 }
 
 // Save writes the record to dir atomically (tmp file + rename), creating the
-// .tionswarm directory as needed. The log is trimmed to the most recent maxLog
+// .tionharness directory as needed. The log is trimmed to the most recent maxLog
 // entries. Version is stamped automatically.
 func Save(dir string, r Record) error {
 	if dir == "" {

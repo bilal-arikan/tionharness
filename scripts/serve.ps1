@@ -1,9 +1,9 @@
 # serve.ps1 -- Clean build + run of the single binary (backend only, no Vite).
 #
-# Why not just `go run`? `go run ./cmd/tionswarm` can reuse a STALE cached link
+# Why not just `go run`? `go run ./cmd/tionharness` can reuse a STALE cached link
 # artifact and launch a binary that PREDATES your latest source edits (observed
 # 2026-07-12: a fix compiled fine via `go build` but `go run` kept serving an old
-# exe). This script does an explicit `go build -o bin\tionswarm.exe` -- which
+# exe). This script does an explicit `go build -o bin\tionharness.exe` -- which
 # forces a fresh link that always picks up current source -- then runs THAT binary
 # directly, so what you run is guaranteed current.
 #
@@ -31,7 +31,7 @@ $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
 
 $bindHost = if ($Loopback) { "127.0.0.1" } else { "0.0.0.0" }
-$bin = Join-Path $root "bin\tionswarm.exe"
+$bin = Join-Path $root "bin\tionharness.exe"
 
 # Free-Port clears a leftover listener on $pt (an orphaned prior run holding the
 # port) so the new backend can bind. With -NoKillPort we abort with a clear message.
@@ -58,16 +58,16 @@ if ($Clean) {
     & go clean -cache
 }
 New-Item -ItemType Directory -Force -Path (Join-Path $root "bin") | Out-Null
-Write-Host "==> Building: go build -o bin\tionswarm.exe ./cmd/tionswarm" -ForegroundColor Cyan
-& go build -o $bin ./cmd/tionswarm
+Write-Host "==> Building: go build -o bin\tionharness.exe ./cmd/tionharness" -ForegroundColor Cyan
+& go build -o $bin ./cmd/tionharness
 if ($LASTEXITCODE -ne 0) { throw "build failed (exit $LASTEXITCODE)" }
 $mb = [math]::Round((Get-Item $bin).Length / 1MB, 1)
 Write-Host "==> Build OK: $bin ($mb MB)" -ForegroundColor Green
 
 # 2) Free the port and set env (gated feature matches dev.ps1).
 Free-Port $Port "Backend"
-$env:TIONSWARM_ADDR = "${bindHost}:$Port"
-$env:TIONSWARM_ENABLE_SHELL = "1"
+$env:TIONHARNESS_ADDR = "${bindHost}:$Port"
+$env:TIONHARNESS_ENABLE_SHELL = "1"
 
 # 3) Run in the foreground -- Ctrl+C stops it (single binary, no children to reap).
 Write-Host "==> Running: $bin  (${bindHost}:$Port)  -- Ctrl+C to stop" -ForegroundColor Cyan

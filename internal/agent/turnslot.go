@@ -3,8 +3,8 @@ package agent
 import (
 	"context"
 
-	"github.com/bilal-arikan/tionswarm/internal/events"
-	"github.com/bilal-arikan/tionswarm/internal/turnqueue"
+	"github.com/bilal-arikan/tionharness/internal/events"
+	"github.com/bilal-arikan/tionharness/internal/turnqueue"
 )
 
 // turnslot.go is the runtime's face onto the per-session turn admission queue

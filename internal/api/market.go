@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/bilal-arikan/tionswarm/internal/market"
+	"github.com/bilal-arikan/tionharness/internal/market"
 )
 
 // registerMarketRoutes registers the in-app marketplace: a file-based registry

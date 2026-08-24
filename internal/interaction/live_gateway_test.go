@@ -21,8 +21,8 @@ type gwFakeBackend struct {
 	token string
 	srv   *Server
 
-	mu     sync.Mutex
-	active bool
+	mu          sync.Mutex
+	active      bool
 	sawActivate bool
 	sawSecret   bool
 }
@@ -85,19 +85,19 @@ func (b *gwFakeBackend) Call(_ context.Context, _, name string, args json.RawMes
 // SERVER-LEVEL wildcard). It proves the model can, in ONE turn: call activate_tools →
 // the server pushes tools/list_changed on the extended connection → the CLI re-lists →
 // calls the newly-appeared gizmo_secret (permitted by the wildcard) → reports the secret.
-// Spends tokens; gated behind TIONSWARM_LIVE_CLI=1.
+// Spends tokens; gated behind TIONHARNESS_LIVE_CLI=1.
 //
-//	TIONSWARM_LIVE_CLI=1 go test ./internal/interaction/ -run TestLiveGatewayActivate -v
+//	TIONHARNESS_LIVE_CLI=1 go test ./internal/interaction/ -run TestLiveGatewayActivate -v
 func TestLiveGatewayActivate(t *testing.T) {
-	if os.Getenv("TIONSWARM_LIVE_CLI") != "1" {
-		t.Skip("set TIONSWARM_LIVE_CLI=1 to run the live gateway activate validation")
+	if os.Getenv("TIONHARNESS_LIVE_CLI") != "1" {
+		t.Skip("set TIONHARNESS_LIVE_CLI=1 to run the live gateway activate validation")
 	}
 	bin := "claude"
-	if p := os.Getenv("TIONSWARM_CLAUDE_BIN"); p != "" {
+	if p := os.Getenv("TIONHARNESS_CLAUDE_BIN"); p != "" {
 		bin = p
 	}
 	model := "claude-fable-5"
-	if m := os.Getenv("TIONSWARM_CLAUDE_MODEL"); m != "" {
+	if m := os.Getenv("TIONHARNESS_CLAUDE_MODEL"); m != "" {
 		model = m
 	}
 

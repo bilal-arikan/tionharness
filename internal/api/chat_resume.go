@@ -2,9 +2,9 @@ package api
 
 import (
 	"context"
-	"github.com/bilal-arikan/tionswarm/internal/conversation"
-	"github.com/bilal-arikan/tionswarm/internal/db"
-	"github.com/bilal-arikan/tionswarm/internal/providers"
+	"github.com/bilal-arikan/tionharness/internal/conversation"
+	"github.com/bilal-arikan/tionharness/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/providers"
 )
 
 // claudeResumePlan captures the claude-cli resume decision for one turn so the
@@ -56,7 +56,7 @@ func (s *Server) planClaudeResume(ctx context.Context, provider providers.Provid
 	}
 	// On a fold (compacted → cold), llmReq.Messages is left untouched: it stays the
 	// compacted tail (summary + keepRecent) that Prepare produced, which a FRESH CLI
-	// session now receives — the point at which TionSwarm compaction actually reaches
+	// session now receives — the point at which TionHarness compaction actually reaches
 	// the claude-cli window (a warm --resume would keep the stale full history and
 	// only stack the summary on top). plan.sentCount stays rawLen so the next turn's
 	// delta continues from the compacted baseline, exactly like a warm turn.
@@ -85,7 +85,7 @@ func (s *Server) planClaudeResume(ctx context.Context, provider providers.Provid
 //
 // NOT extended to codex-cli: this whole mechanism exists to trim the transcript
 // to the unseen delta because claude-cli's --resume session id ROTATES and the
-// prior warm session becomes unreachable across a cold start, so TionSwarm must
+// prior warm session becomes unreachable across a cold start, so TionHarness must
 // track sentCount/deltaStart itself. codex's thread_id is STABLE across resumes
 // (verified — see the codex contract §1.6), so codex needs no delta-tracking gate
 // here at all; it resumes the same thread_id every turn regardless of this
@@ -113,7 +113,7 @@ func claudeResumeDecision(enabled bool, cliSessionID string, sentCount, rawLen i
 	// stack the fresh summary on top — the fold would never actually shrink the CLI's
 	// window (it would even grow it by the summary's size). Force a COLD start so this
 	// turn ships the compacted tail (summary + keepRecent) to a FRESH CLI session: the
-	// only point where TionSwarm compaction reaches the claude-cli. plan.sentCount
+	// only point where TionHarness compaction reaches the claude-cli. plan.sentCount
 	// stays rawLen, so subsequent turns resume from this compacted baseline normally.
 	if compacted {
 		return plan, "", 0

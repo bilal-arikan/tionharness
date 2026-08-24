@@ -6,7 +6,7 @@
 
 Bir tur kodu/akışı bozunca ajanla tartışıp bağlamı (context) kirletmek yerine, **hatadan
 önceki temiz checkpoint'e** dönüp yeniden denemek. Claude Code'un `/rewind` (Esc-Esc)
-özelliğinin sohbet ayağının TionSwarm karşılığı.
+özelliğinin sohbet ayağının TionHarness karşılığı.
 
 **Tek cümle:** `/rewind` = seçilen prompt ve sonrasındaki tüm mesajları silip sohbeti o
 ana geri sarar; silinen prompt, düzenleyip yeniden göndermen için mesaj kutusuna geri konur.

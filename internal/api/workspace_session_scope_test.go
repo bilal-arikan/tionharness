@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/bilal-arikan/tionswarm/internal/sessionhub"
+	"github.com/bilal-arikan/tionharness/internal/sessionhub"
 )
 
 // Session ids are allocated per workspace store, so "SES1" is the first session of

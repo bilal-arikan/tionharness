@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bilal-arikan/tionswarm/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/db"
 )
 
 // queueTestFixture spins up a runtime with a coordinator + one worker (backed by a

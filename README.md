@@ -1,4 +1,4 @@
-# TionSwarm
+# TionHarness
 
 > **Go** ile, kendi UI/UX tasarımıyla yazılmış çok-ajanlı AI runtime'ı.
 
@@ -26,7 +26,7 @@ Açık kaynaklı, kendi sunucunda barındırılan **çoklu-ajan (multi-agent) AI
 ```powershell
 # Terminal 1 — backend (127.0.0.1:8090 — :8080 unity-mcp ile çakışır)
 # Loopback adresi Windows Güvenlik Duvarı'nın her derlemede "izin ver" sormasını önler.
-$env:TIONSWARM_ADDR="127.0.0.1:8090"; go run ./cmd/tionswarm
+$env:TIONHARNESS_ADDR="127.0.0.1:8090"; go run ./cmd/tionharness
 
 # Terminal 2 — frontend
 cd frontend; npm install; npm run dev   # http://localhost:5173 (vite proxy → :8090)
@@ -43,22 +43,22 @@ Duvarı sormaz). ⚠ Backend'de auth yok + CORS wildcard — yalnız güvenilir 
 
 ## Tek Binary (üretim)
 
-Frontend, `//go:embed` ile binary'ye gömülür → tek `tionswarm.exe` hem API'yi hem UI'yı
+Frontend, `//go:embed` ile binary'ye gömülür → tek `tionharness.exe` hem API'yi hem UI'yı
 aynı porttan sunar (ayrı Vite sunucusu gerekmez).
 
 ```powershell
 # Hepsi bir arada: UI build (vite → internal/web/dist) + UI gömülü go build
-.\scripts\build.ps1            # → tionswarm.exe (~12 MB)
+.\scripts\build.ps1            # → tionharness.exe (~12 MB)
 
 # Çalıştır
-$env:TIONSWARM_ADDR="127.0.0.1:8095"; .\tionswarm.exe   # → http://127.0.0.1:8095 (UI + API)
+$env:TIONHARNESS_ADDR="127.0.0.1:8095"; .\tionharness.exe   # → http://127.0.0.1:8095 (UI + API)
 ```
 
 Manuel (script'siz):
 
 ```powershell
 cd frontend; npm run build; cd ..          # internal/web/dist'e üretir
-go build -trimpath -ldflags "-s -w" -o tionswarm.exe ./cmd/tionswarm
+go build -trimpath -ldflags "-s -w" -o tionharness.exe ./cmd/tionharness
 ```
 
 > Frontend build edilmemişse (`internal/web/dist` yalnız placeholder içerir) binary yine
@@ -72,22 +72,22 @@ Tarayıcı yerine **kendi penceresinde** açılan sürüm. WebView2 (Windows 11'
 kullanır; saf Go, CGO yok. Boş bir loopback portunda sunucuyu başlatır, UI'yı pencerede gösterir.
 
 ```powershell
-.\scripts\build.ps1 -Desktop   # → tionswarm-desktop.exe (~12 MB)
-.\tionswarm-desktop.exe          # çift tıkla → kendi penceresinde açılır, tarayıcı gerekmez
+.\scripts\build.ps1 -Desktop   # → tionharness-desktop.exe (~12 MB)
+.\tionharness-desktop.exe          # çift tıkla → kendi penceresinde açılır, tarayıcı gerekmez
 ```
 
 Detay ve tasarım: [_Docs/32-NATIVE-PENCERE.md](_Docs/32-NATIVE-PENCERE.md). WebView2 runtime
-yoksa (nadir, eski Win10) otomatik olarak varsayılan tarayıcıya düşer. Başsız `tionswarm.exe`
+yoksa (nadir, eski Win10) otomatik olarak varsayılan tarayıcıya düşer. Başsız `tionharness.exe`
 sürümü değişmeden durur; iki dağıtım yan yana kullanılabilir.
 
 ## Ortam Değişkenleri
 
 | Değişken | Açıklama | Varsayılan |
 |----------|----------|-----------|
-| `TIONSWARM_ADDR` | HTTP dinleme adresi (loopback varsayılan; ağa açmak için `0.0.0.0:8090`) | `127.0.0.1:8080` |
-| `TIONSWARM_DATA_DIR` | Kalıcı durum dizini | `~/.tionswarm` |
-| `TIONSWARM_MAX_CONTEXT_TOKENS` | Bağlam sıkıştırma eşiği | `12000` |
-| `TIONSWARM_KEEP_RECENT_MSGS` | Sıkıştırmada korunan son mesaj sayısı | `8` |
+| `TIONHARNESS_ADDR` | HTTP dinleme adresi (loopback varsayılan; ağa açmak için `0.0.0.0:8090`) | `127.0.0.1:8080` |
+| `TIONHARNESS_DATA_DIR` | Kalıcı durum dizini | `~/.tionharness` |
+| `TIONHARNESS_MAX_CONTEXT_TOKENS` | Bağlam sıkıştırma eşiği | `12000` |
+| `TIONHARNESS_KEEP_RECENT_MSGS` | Sıkıştırmada korunan son mesaj sayısı | `8` |
 | `CREDENTIAL_SECRET` | AES-GCM şifreleme anahtarı | otomatik üretim |
 | `ANTHROPIC_API_KEY` | `anthropic` sağlayıcı için (claude-cli'da gerekmez) | — |
 
@@ -114,9 +114,9 @@ Tüm plan ve tasarım dokümanları [`_Docs/`](_Docs/) klasöründedir:
 ## Proje Yapısı
 
 ```
-TionSwarm/
+TionHarness/
 ├── _Docs/                  # Plan ve tasarım dokümanları (Türkçe)
-├── cmd/tionswarm/            # Giriş noktası (Manager + API server + graceful shutdown)
+├── cmd/tionharness/            # Giriş noktası (Manager + API server + graceful shutdown)
 ├── internal/
 │   ├── config/             # env + AES-GCM secret
 │   ├── db/                 # Dosya-tabanlı store (JSON/JSONL, DB yok) — bellek-içi + atomik diske yazma

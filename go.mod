@@ -1,4 +1,4 @@
-module github.com/bilal-arikan/tionswarm
+module github.com/bilal-arikan/tionharness
 
 go 1.26.4
 

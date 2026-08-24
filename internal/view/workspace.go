@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bilal-arikan/tionswarm/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/db"
 )
 
 // WorkspaceInput is everything the workspace projection reads. Each slice is the
@@ -27,7 +27,7 @@ type WorkspaceInput struct {
 	// than a real list price — the header then prefixes "~".
 	CostToday     float64
 	CostEstimated bool
-	// Name is the workspace display name (e.g. "TionSwarmRepo"). When empty, the
+	// Name is the workspace display name (e.g. "TionHarnessRepo"). When empty, the
 	// header falls back to "WORKSPACE"; this happens in agent tool call paths where
 	// the projector lacks the workspace-wide identity.
 	Name string

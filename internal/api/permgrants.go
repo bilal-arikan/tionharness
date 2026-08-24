@@ -3,7 +3,7 @@ package api
 import (
 	"sync"
 
-	"github.com/bilal-arikan/tionswarm/internal/tools"
+	"github.com/bilal-arikan/tionharness/internal/tools"
 )
 
 // permGrantStore holds per-session permission grants ("Always allow" choices) so

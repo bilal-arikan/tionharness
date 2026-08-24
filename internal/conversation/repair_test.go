@@ -3,7 +3,7 @@ package conversation
 import (
 	"testing"
 
-	"github.com/bilal-arikan/tionswarm/internal/providers"
+	"github.com/bilal-arikan/tionharness/internal/providers"
 )
 
 func call(id, name string) providers.ToolCall {

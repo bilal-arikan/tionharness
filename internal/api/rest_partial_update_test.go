@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/bilal-arikan/tionswarm/internal/db"
-	"github.com/bilal-arikan/tionswarm/internal/skills"
+	"github.com/bilal-arikan/tionharness/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/skills"
 )
 
 func TestFlowPartialUpdatePreservesName(t *testing.T) {

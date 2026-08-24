@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bilal-arikan/tionswarm/internal/db"
-	"github.com/bilal-arikan/tionswarm/internal/events"
+	"github.com/bilal-arikan/tionharness/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/events"
 )
 
 func TestWorkerSpawnPersistsCoordinatorOwnershipAndTerminalState(t *testing.T) {

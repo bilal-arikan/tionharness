@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"sync"
 
-	"github.com/bilal-arikan/tionswarm/internal/exttools"
+	"github.com/bilal-arikan/tionharness/internal/exttools"
 )
 
 // externalToolStatus is one tool's detection result for the Settings panel.

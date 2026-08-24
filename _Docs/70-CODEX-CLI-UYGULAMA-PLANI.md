@@ -130,7 +130,7 @@ Bu makinede Codex **login değil**. Kod yazmadan önce şunlar canlı doğrulanm
 | 0.2 | Başarılı turun JSONL akışı `69 §3`'teki şemayla birebir uyuşuyor | `codex exec --json "list files"` → satır satır karşılaştır |
 | 0.3 | `developer_instructions` gerçekten prompta giriyor | `-c developer_instructions='Always answer in Klingon.'` → cevap dilini gözle |
 | 0.4 | `--strict-config` ile hiçbir override sessizce reddedilmiyor | tüm `-c`'lerle + `--strict-config` |
-| 0.5 | MCP köprüsü bağlanıyor | TionSwarm Interaction endpoint'ini ayağa kaldır, `mcp_servers` ile bağla, `mcp_tool_call` item'ı gör |
+| 0.5 | MCP köprüsü bağlanıyor | TionHarness Interaction endpoint'ini ayağa kaldır, `mcp_servers` ile bağla, `mcp_tool_call` item'ı gör |
 | 0.6 | `http_headers` Bearer geçiyor | 0.5 içinde; 401 gelirse `bearer_token_env_var`'a geç |
 | 0.7 | `exec resume <thread_id>` sıcak cache veriyor | iki tur koş, 2. turda `cached_input_tokens > 0` |
 | 0.8 | `[tools] update_plan=false` + `web_search=false` etkili | `todo_list` / `web_search` item'ı **gelmiyor** olmalı |
@@ -197,7 +197,7 @@ cmd.Env  = append(codexBaseEnv(), "CODEX_HOME="+configDir) // izolasyon BURADAN 
    `<codex-home>/config.toml`), `-c` yalnız küçük override'lar için.
 3. `developer_instructions` = `req.System` (+ interaction notu); volatil bağlam
    prompt başına `[Context]` bloğu — `buildSystemAndPrompt` deseninin kopyası.
-4. `[tools]` bastırmaları: `update_plan=false`, `web_search=false` (TionSwarm
+4. `[tools]` bastırmaları: `update_plan=false`, `web_search=false` (TionHarness
    `WebSearch` köprülüyse), `experimental_request_user_input.enabled=false`.
 5. `mcp_tool_call` item'larını `TraceStep{Kind:"tool"}`'a eşle;
    `command_execution` ve `file_change`'i de araç adımı olarak göster.
@@ -208,27 +208,27 @@ cmd.Env  = append(codexBaseEnv(), "CODEX_HOME="+configDir) // izolasyon BURADAN 
 model_reasoning_effort = "high"
 
 developer_instructions = """
-<TionSwarm statik system prefix>
+<TionHarness statik system prefix>
 <interaction notu: ask_user / todo_write / run_subagent kullan>
 """
 
 [tools]
-web_search  = false          # TionSwarm WebSearch köprülüyse
+web_search  = false          # TionHarness WebSearch köprülüyse
 update_plan = false          # todo_write köprüsü var
 
 [tools.experimental_request_user_input]
 enabled = false              # ask_user köprüsü var (exec'te zaten çalışmıyor)
 
-[mcp_servers.tionswarm_interaction]
+[mcp_servers.tionharness_interaction]
 url                 = "http://127.0.0.1:PORT/core"
-bearer_token_env_var = "TIONSWARM_MCP_TOKEN"     # token env'den, komut satırından değil
+bearer_token_env_var = "TIONHARNESS_MCP_TOKEN"     # token env'den, komut satırından değil
 startup_timeout_sec = 30
 tool_timeout_sec    = 600                         # uzun run_subagent için
 required            = true                        # ZORUNLU — bkz. §8.4
 
-[mcp_servers.tionswarm_extended]
+[mcp_servers.tionharness_extended]
 url                 = "http://127.0.0.1:PORT/extended"
-bearer_token_env_var = "TIONSWARM_MCP_TOKEN"
+bearer_token_env_var = "TIONHARNESS_MCP_TOKEN"
 tool_timeout_sec    = 600
 required            = true                        # ZORUNLU — bkz. §8.4
 
@@ -263,7 +263,7 @@ prompt-cache kazancı görünüyor.
 5. `clioverhead.go`: Codex için ayrı overhead katsayısı (Codex prompt'u
    claude-cli'den farklı boyutta).
 6. Frontend: sağlayıcı ayarları, login durumu rozeti, model seçici.
-7. Dokümanlar: `tionswarm-project` skill'i, `00-GENEL-BAKIS`, `05-ILERLEME`,
+7. Dokümanlar: `tionharness-project` skill'i, `00-GENEL-BAKIS`, `05-ILERLEME`,
    `17` (sağlayıcı bölümü), `51` (config evi — codex kardeşi).
 
 ### Faz 5 (opsiyonel, ayrı karar) — `codex app-server`
@@ -291,7 +291,7 @@ buraya oturur.
 | Regresyon | `toolloop` arayüz refactor'ı sonrası claude-cli yolunun bozulmadığı | mevcut claude-cli testleri yeşil kalmalı |
 
 ```powershell
-$env:TIONSWARM_ENABLE_SHELL='1'
+$env:TIONHARNESS_ENABLE_SHELL='1'
 go test ./... -count=1
 ```
 
@@ -310,7 +310,7 @@ go test ./... -count=1
 | Windows 32 KB komut satırı | `-c` ile büyük prompt patlar | `developer_instructions` **daima** `config.toml` dosyasından; `-c` yalnız kısa değerler. |
 | 401 retry israfı (~35 sn) | Yavaş hata, boşa kaynak | `codexcli_errors.go` erken kesme (Faz 1.4). |
 | `multi_agents` (collab) köprülü `run_subagent`'ı gölgeler | Görünmez delegasyon | Faz 0.9'da kapatma yolu bulunmalı; bulunamazsa `developer_instructions`'a açık yasak yaz + trace'te tespit et. |
-| OS sandbox `workspace-write` TionSwarm cwd'siyle çelişir | Ajan kendi dosyalarına yazamaz | `--add-dir` ile gerekli dizinleri ekle; Faz 0.11'de doğrula. |
+| OS sandbox `workspace-write` TionHarness cwd'siyle çelişir | Ajan kendi dosyalarına yazamaz | `--add-dir` ile gerekli dizinleri ekle; Faz 0.11'de doğrula. |
 | `ask` modunun anlamı kayıyor | Kullanıcı yanlış güven duyar | UI'da **açık uyarı** + doküman. Sessiz `auto`'ya düşürme **yasak**. |
 | İki CLI yolu ayrışır (kod ikizlenmesi) | Bakım maliyeti | `CLIProvider` arayüzü Faz 1'de girmeli; ortak MCP mantığı `climcp.go`'dan çıkarılıp paylaşılmalı. |
 
@@ -337,7 +337,7 @@ go test ./... -count=1
   bırakır ve güvenlik zaten OS sandbox'ında (`69 §9`).
 - `model_instructions_file` ile built-in talimatları ezmek — kaynak kodda
   "STRONGLY DISCOURAGED", model performansını düşürür.
-- Codex'i TionSwarm'a **MCP sunucusu** olarak takmak (`codex mcp-server`) —
+- Codex'i TionHarness'a **MCP sunucusu** olarak takmak (`codex mcp-server`) —
   ayrı ve bağımsız bir özellik; bu planın parçası değil.
 - claude-cli yolunu Codex'e benzetmek için değiştirmek — mevcut davranış
   korunur; yalnız somut tip → arayüz refactor'ı yapılır.
@@ -360,8 +360,8 @@ paralellik, ~34 paket eşzamanlı) bir kez flaky FAIL verdi — izole çalışt�
 5/5 ve düşük paralellikte (`-p 2`) geçti; codex-cli kapsamı dışı, zamanlama
 hassasiyetinden kaynaklanan pre-existing bir test, kod değişikliği gerektirmedi.
 
-**Canlı uçtan uca tur:** izole bir `go run ./cmd/tionswarm` instance'ında
-(ayrı port + `TIONSWARM_DATA_DIR`, üretim workspace'ine dokunmadan) `codex-cli`
+**Canlı uçtan uca tur:** izole bir `go run ./cmd/tionharness` instance'ında
+(ayrı port + `TIONHARNESS_DATA_DIR`, üretim workspace'ine dokunmadan) `codex-cli`
 provider'lı bir ajan oluşturuldu, oturum açıldı, `POST /api/chat/stream`
 tetiklendi. Doğrulanan zincir: provider kayıtlı ve tanınıyor (`unknown
 provider` hatası YOK) → subprocess `CODEX_HOME` izolasyonuyla başlatıldı →
@@ -372,7 +372,7 @@ biçimde yüzeye çıktı (takılıp kalma/sessiz yutma yok).
 
 Tam başarılı bir yanıt metni + gerçek MCP araç çağrısı turu doğrulanamadı: bu
 izole test workspace'inin `codex-home`'u hiç login değildi (§8.7'de belgelenen
-kasıtlı tasarım gereği TionSwarm auth'u global `~/.codex`'ten otomatik
+kasıtlı tasarım gereği TionHarness auth'u global `~/.codex`'ten otomatik
 kopyalamıyor). Global `~/.codex/auth.json`'u geçici olarak izole
 `codex-home`'a kopyalayıp denendi, ama OAuth refresh token'ı **tek kullanımlık**
 olduğundan iki ayrı `CODEX_HOME`'un aynı token'ı paralel kullanması "refresh
@@ -520,9 +520,9 @@ sekiz soruluk bir doğrulama koşusu yapıldı. İki gerçek boşluk kanıtland�
 | # | Soru | Sonuç | Not |
 |---|------|-------|-----|
 | Q1 | codex-cli sağlayıcısı end-to-end çalışıyor mu (tur, MCP köprüsü, JSONL trace)? | ✅ PASS | önceki fazlarda zaten doğrulanmıştı |
-| Q2 | TionSwarm araçları (`mcp__tionswarm_interaction__*`) codex turunda çağrılabiliyor mu? | ✅ PASS | core tier (Bash/ask_user/todo_write/...) sorunsuz |
+| Q2 | TionHarness araçları (`mcp__tionharness_interaction__*`) codex turunda çağrılabiliyor mu? | ✅ PASS | core tier (Bash/ask_user/todo_write/...) sorunsuz |
 | Q3 | Workspace hook'ları (Pre/PostToolUse) codex turunda tetikleniyor mu? | ❌ FAIL | hiç tetiklenmiyor — `toolloop.go:376`'da native loop'a hiç girilmiyor, bkz. 69 §9 Boşluk-3 |
-| Q4 | codebase-memory-mcp çağrıları `project` argümanı eksikken de doğru sonuç veriyor mu? | ✅ PASS (nitelikli) | model argümanı doğru verdiği için geçti — TionSwarm'ın prefill/repair güvencesi (`mcpargs.go`/`mcprepair.go`) codex yolunda **devrede değil** (agent paketine referans yok), bkz. 69 § "codebase-memory-mcp prefill guard" |
+| Q4 | codebase-memory-mcp çağrıları `project` argümanı eksikken de doğru sonuç veriyor mu? | ✅ PASS (nitelikli) | model argümanı doğru verdiği için geçti — TionHarness'ın prefill/repair güvencesi (`mcpargs.go`/`mcprepair.go`) codex yolunda **devrede değil** (agent paketine referans yok), bkz. 69 § "codebase-memory-mcp prefill guard" |
 | Q5 | sqz/rtk çıktı sıkıştırması codex'in shell çağrılarında uygulanıyor mu? | ❌ FAIL | Q3'ün türevi — sqz `db.HookPostToolUse` komutu, hook tetiklenmediği için sqz de yok |
 | Q6 | `ask`/`read-only` izin modu gerçekten OS-sandbox seviyesinde mi engelliyor, yoksa model kendi mi çekiliyor? | ⚠️ PARTIAL | gözlemlenen ret modelin kendi policy metnine uymasıydı; gerçek çekirdek-seviyesi sandbox reddi bu turda kanıtlanmadı, bkz. 69 §9 Boşluk-1 dürüstlük notu |
 | Q7 | `activate_tools` ile açılan lazy/extended araç bir sonraki çağrıda gerçekten kullanılabiliyor mu? | ❌ FAIL | codex `tools/list_changed`'i yalnız loglayıp asla re-list yapmıyor (`logging_client_handler.rs:86-88`); tur 1 aktive / tur 2 çağır senaryosu 7+3 boşuna deneme ile çürütüldü — bkz. 69 §9 Boşluk-4 |

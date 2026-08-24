@@ -5,13 +5,13 @@ import (
 	"strings"
 )
 
-// cliHookCommand adapts a TionSwarm hook command to the interpreter Claude Code
+// cliHookCommand adapts a TionHarness hook command to the interpreter Claude Code
 // will actually spawn it with.
 //
 // The two engines disagree about the shell, exactly the way cliMatcherRegex's two
 // engines disagree about the matcher dialect:
 //
-//   - TionSwarm's own execHook runs a hook through powershell.exe on Windows and
+//   - TionHarness's own execHook runs a hook through powershell.exe on Windows and
 //     /bin/sh elsewhere, so a Windows workspace's hooks are authored in PowerShell.
 //   - Claude Code runs every hook command through a POSIX shell (/usr/bin/bash),
 //     on Windows too.

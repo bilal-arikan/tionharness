@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/bilal-arikan/tionswarm/internal/logbuf"
+	"github.com/bilal-arikan/tionharness/internal/logbuf"
 )
 
 // LogsInput is the recent process log tail. The projection renders the last

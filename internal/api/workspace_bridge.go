@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/bilal-arikan/tionswarm/internal/tools"
-	"github.com/bilal-arikan/tionswarm/internal/workspace"
+	"github.com/bilal-arikan/tionharness/internal/tools"
+	"github.com/bilal-arikan/tionharness/internal/workspace"
 )
 
 // workspaceBridge adapts the workspace manager to the tools.WorkspaceBridge

@@ -100,20 +100,20 @@
   satırı `- \`ad\`` (özetsiz) basar (`writeLazyToolLine`). `Unlazy` ("Göster")
   `nameOnly` işaretini de temizler. Native yolda token kazandırır; **claude-cli
   yolunda NameOnly tek başına etkisiz** (bridge tam şema ilan eder) — ama bu artık
-  aşağıdaki **iki-tier köprü** ile çözüldü: lazy/NameOnly araçlar `tionswarm_extended`
+  aşağıdaki **iki-tier köprü** ile çözüldü: lazy/NameOnly araçlar `tionharness_extended`
   sunucusuna gidip CLI'ın kendi ToolSearch deferral'ına tabi olur.
   Test: `TestMarkNameOnlyKeepsNameDropsSummary`.
 - **claude-cli 2.1.x+ iki-tier köprü (`alwaysLoad` + `ENABLE_TOOL_SEARCH`, 2026-06-26):**
   CLI'da eager/lazy ayrımı artık gerçekten uygulanıyor. `writeCLIMCPConfig` Interaction
   MCP'yi **iki sunucu anahtarına** böler (aynı in-process endpoint'e farklı path
   son-ek'leriyle bağlanır):
-  - **`tionswarm_interaction`** (CORE, `alwaysLoad: true`) → eager tier
+  - **`tionharness_interaction`** (CORE, `alwaysLoad: true`) → eager tier
     (`coreInteractionTools`: `Bash`, `ask_user`, `request_confirmation`, `todo_write`,
     `create_artifact`/`update_artifact`, `use_skill`, `skill_search`, `run_subagent`,
     `permission_prompt`). CLI tool-search'ten **muaf**
     → ilk turda `ToolSearch` gerekmeden hazır. Eski anahtar adı korundu → mevcut
     namespaced referanslar (`use_skill`, trace stripping) bozulmaz.
-  - **`tionswarm_extended`** (EXTENDED) → self-management suite + NameOnly oturum
+  - **`tionharness_extended`** (EXTENDED) → self-management suite + NameOnly oturum
     araçları (`notify`, `focus_view`, `set_session_goal`/`complete_goal`,
     `set_session_title`/`set_working_dir`/`archive_session`, `schedule_wake`,
     `spawn_session`, `conversation_search`, `read_session_debug`, …). `alwaysLoad`
@@ -133,7 +133,7 @@
 - **Dış MCP araçları da NameOnly (2026-07-01):** `AttachMCP` artık her MCP aracını
   `lazy` **VE** `nameOnly` işaretliyor (önceden yalnız `lazy`). Sebep: katalog
   bloğunda dış MCP araçları (ör. `mcp__mcp-chrome__*`, ~30 araç) ≤ `lazyCatalogMCPListLimit`
-  iken **tam açıklamalarıyla** dökülüyordu — `tionswarm_extended` (NameOnly) araçların
+  iken **tam açıklamalarıyla** dökülüyordu — `tionharness_extended` (NameOnly) araçların
   yalnız-ad davranışıyla çelişiyor ve kullanıcı o aracı kullanmasa bile her tur
   ~800–1200 ölü token harcıyordu. Artık tutarlı: **hiçbir deferred araç katalogda
   tam açıklama taşımaz.** Mekanizma tekrar kullanıldı (yeni render yolu yok):
@@ -174,7 +174,7 @@
   - **Self-management daima açık:** `enableSelfManage` master toggle'ı (ayar UI +
     `toolsetup` gate) kaldırıldı; paket **daima kurulur**, varsayılan tier `hidden`
     (token davranışı aynı). **Tam sökme (2026-07-01):** `settings.EnableSelfManage`
-    alanı (+ Snapshot/Patch/applyBool), `TIONSWARM_ENABLE_SELFMANAGE` env seed'i,
+    alanı (+ Snapshot/Patch/applyBool), `TIONHARNESS_ENABLE_SELFMANAGE` env seed'i,
     `Tunables.selfManage` + `Set/SelfManageEnabled` metodları ve tüm çağrı yerleri
     (`chat_stream`/`autonomous_interaction`/`mcp_interaction` artık spawn_session'ı
     koşulsuz ilan eder) **silindi**. `SelfManageEnabled` gate'i kalmadı.
@@ -209,7 +209,7 @@
   - **Web** (önceden lazy+özet): `WebFetch`
   - **Doğrulama araçları (2026-06-29)**: `skill_validate`, `config_validate`,
     `mermaid_validate` — salt-okuma, yalnız authoring/diyagram anlarında kullanılır.
-    Native builtin + NameOnly → lazy olduğundan claude-cli'da `tionswarm_extended`
+    Native builtin + NameOnly → lazy olduğundan claude-cli'da `tionharness_extended`
     köprüsünden ToolSearch ile gelir (BridgeableDefs otomatik kapsar).
   - **Insight araçları (2026-08-15)**: `insight_scan`, `insight_list_findings`,
     `insight_apply_finding` (önceden eager) — adları kendini açıklar, turların çok
@@ -379,12 +379,12 @@ Skill sisteminde bunu zaten çözdük: katalogta yalnızca **özet** durur, tam 
 > olduğunu bil, ara sıra kullan"; hidden = "toplu/nadir admin, per-turn ödeme yok".
 > Self-management ailesinin tamamını (46) name-only enumerate ETMEME kararı: patlamalı/
 > nadir admin; CLI'de satır başına ~15 token (namespaced) → ~600 token/tur düşük getiri;
-> kategori-pointer + `tionswarm-self-management` skill + tool_search zaten keşfi sağlıyor.
+> kategori-pointer + `tionharness-self-management` skill + tool_search zaten keşfi sağlıyor.
 
 > **CLI-uyumlu Tools kataloğu (2026-06-26):** "# Available Tools (load on demand)"
 > bloğu artık **claude-cli için doğru namespaced adları** basıyor — skills bloğunun
 > (`CatalogBlockForAgentTool`) zaten yaptığını araç tarafına da taşıdık. claude-cli
-> tüm bu araçları MCP aracı olarak görür: built-in'ler `mcp__tionswarm_interaction__<ad>`,
+> tüm bu araçları MCP aracı olarak görür: built-in'ler `mcp__tionharness_interaction__<ad>`,
 > MCP araçları `mcp__<server>__<tool>` olarak listelenir; yönerge native
 > `activate_tools` yerine **`ToolSearch`** (CLI'nin kendi deferred-tool mekanizması);
 > CLI-native built-in'ler (WebFetch) CLI formundan düşürülür. Native (anthropic/minimax)
@@ -406,7 +406,7 @@ Skill sisteminde bunu zaten çözdük: katalogta yalnızca **özet** durur, tam 
 > `skill_search`'e yönlendirir. Toggle: `Store.SetNameOnly` + `PUT /api/skills/{slug}/name-only`,
 > UI'da SkillsPanel "NameOnly" çipi/butonu. `isNameOnly`/`setFrontmatterNameOnly`
 > `auto_summary` desenini yansıtır. Etki (ölçüm, WS5): tek bir verbose skill
-> (`tionswarm-autonomous-ops`) NameOnly olunca satırı **839→26 karakter**, blok
+> (`tionharness-autonomous-ops`) NameOnly olunca satırı **839→26 karakter**, blok
 > **3376→2563** (~813 karakter ≈ ~200 token). Test: `TestNameOnlySkillRendersSlugOnly`.
 
 > **Skill 4-tier görünürlük (tek seçici, 2026-07-01):** skiller artık araçlarla
@@ -519,7 +519,7 @@ bırakır.
 **POC.** Hidden tier (self-management suite, onlarca araç) CLI'ya **hiç
 köprülenmezse** o şemalar o tur CLI sürecine hiç gitmez. Araçlar tur-içi
 çağrılamaz; "aktive" muadili **bir sonraki tur** yeniden-allowlist olur (model/
-kullanıcı isteyince TionSwarm yeniden ilan eder).
+kullanıcı isteyince TionHarness yeniden ilan eder).
 
 **Kod (izole, geri-alınır):**
 - `internal/tools/bridge_filter.go` — `BridgeableDefsFiltered(allow, skipHidden)`
@@ -529,10 +529,10 @@ kullanıcı isteyince TionSwarm yeniden ilan eder).
   `SetCLIBridgeSkipHidden`/`CLIBridgeSkipHidden` accessor'ları (**default true**).
 - `internal/agent/runtime.go` `BridgeTools` — gate'i okur, `skipHidden` iken
   atlanan hidden araç sayısını Logs'a yazar (ölçüm).
-- `internal/app/app.go` — boot'ta `TIONSWARM_CLI_BRIDGE_SKIP_HIDDEN` env'iyle seed.
+- `internal/app/app.go` — boot'ta `TIONHARNESS_CLI_BRIDGE_SKIP_HIDDEN` env'iyle seed.
 
 **Default:** **AÇIK** (2026-07-01, `NewTunables`) — hidden araçlar CLI'ya
-köprülenmez. `TIONSWARM_CLI_BRIDGE_SKIP_HIDDEN` env'i iki yönlü override:
+köprülenmez. `TIONHARNESS_CLI_BRIDGE_SKIP_HIDDEN` env'i iki yönlü override:
 `0/false/off` → kapatır (eski davranış: hidden köprülenir), `1/true/on` → açar.
 Test: `TestBridgeableDefsFilteredSkipsHidden`.
 
@@ -546,7 +546,7 @@ self-management araçlarına erişimin tur-ötesine kaymasının ajan davranış
 ## Görünürlük tier'ının claude-cli teline HİZALANMASI (2026-07-05)
 
 > **Durum: UYGULANDI + gerçek claude-cli turlarıyla doğrulandı.** İzole backend
-> (`TIONSWARM_DATA_DIR` ayrı, port 8099) + 4 gerçek tur, çalışan `claude.exe`'nin
+> (`TIONHARNESS_DATA_DIR` ayrı, port 8099) + 4 gerçek tur, çalışan `claude.exe`'nin
 > komut satırı (`--mcp-config` / `--allowedTools`) CIM ile yakalanarak ölçüldü.
 
 **Sorun (ampirik).** 4-tier görünürlük (`full/summary/name-only/hidden`) **native
@@ -561,7 +561,7 @@ kırık:
 | `hidden` yok sayılıyor | statik araç hidden → hâlâ CORE/EXTENDED ilan ediliyor | advertisement görünürlüğe bakmıyor |
 | `full` self-mgmt aracını **siliyor** | `create_agent` full → ABSENT | `BridgeableDefs` yalnız *lazy* araçları köprüler; full=non-lazy=köprülenmez |
 
-**Çözüm.** CLI core/extended ayrımı, TionSwarm'ın 4-tier modelini claude-cli'nın
+**Çözüm.** CLI core/extended ayrımı, TionHarness'ın 4-tier modelini claude-cli'nın
 kendi **iki durumlu** modeline (alwaysLoad eager vs ToolSearch deferred) iz düşüren
 görünürlük-farkında bir sınıflandırıcıya (`api.cliTier`) bağlandı:
 
@@ -618,8 +618,8 @@ yüzden kaynak model 4 tier kalır. claude-cli inherently 2 durumludur → 4 tie
 > allowlist'i **per-tool → sunucu-seviyesi wildcard**'a geçti; ayrıca persistent
 > claude-cli oturumunun her tur cold-restart olmasına yol açan config kararsızlığı düzeltildi.
 
-- **`mcp__tionswarm_extended` wildcard** (`climcp.go`): extended araçlar artık tek tek
-  (`mcp__tionswarm_extended__<tool>`) değil, dış MCP'lerin `mcp__<key>` deseniyle aynı
+- **`mcp__tionharness_extended` wildcard** (`climcp.go`): extended araçlar artık tek tek
+  (`mcp__tionharness_extended__<tool>`) değil, dış MCP'lerin `mcp__<key>` deseniyle aynı
   **tek wildcard** ile allowlist'lenir. Sonuç: (a) `tools/list_changed` ile sonradan
   gelen araç zaten izinli (gateway ön koşulu, Doc 52 Q2 doğruladı), (b) allowlist
   turn-arası **sabit** → persistent launch fingerprint churn'ü kalkar. Core tier per-tool
@@ -802,7 +802,7 @@ böylece kullanıcı boş listeyi kovalamak yerine doğru düğmeye gider. Saya�
 `hidden` tier'ın maliyeti sıfır değil, **~40 token**: `renderLazyToolCatalog`
 bloğun sonuna tek paragraflık bir işaretçi yazar — "N self-management tools
 (manage agents, flows, schedules, …) are available but not listed here to save
-context. Load the `tionswarm-self-management` skill via `use_skill`, or find one
+context. Load the `tionharness-self-management` skill via `use_skill`, or find one
 with `tool_search` — then `activate_tools`." Yani ajan **varlıklarını bilir**;
 kaybolan tek şey isim listesidir, onu da `tool_search` çözer.
 

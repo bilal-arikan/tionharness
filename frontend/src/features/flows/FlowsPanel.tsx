@@ -88,23 +88,23 @@ export function FlowsPanel({ agents, onError, openFlowId, tab: tabProp, onTabCha
   const [tagFilter, setTagFilter] = useState<string[]>([])
   // "Node ekle" palette section: vertically collapsible (persisted).
   const [paletteOpen, setPaletteOpen] = useState(
-    () => localStorage.getItem('tionswarm.flowPaletteOpen') !== '0',
+    () => localStorage.getItem('tionharness.flowPaletteOpen') !== '0',
   )
   const togglePalette = () =>
     setPaletteOpen((o) => {
       const next = !o
-      localStorage.setItem('tionswarm.flowPaletteOpen', next ? '1' : '0')
+      localStorage.setItem('tionharness.flowPaletteOpen', next ? '1' : '0')
       return next
     })
   // Whole left palette column (Node ekle + Görünüm) show/hide, toggled from the
   // top bar. Persisted; hidden gives the canvas full width.
   const [paletteVisible, setPaletteVisible] = useState(
-    () => localStorage.getItem('tionswarm.flowPaletteVisible') !== '0',
+    () => localStorage.getItem('tionharness.flowPaletteVisible') !== '0',
   )
   const togglePaletteVisible = () =>
     setPaletteVisible((v) => {
       const next = !v
-      localStorage.setItem('tionswarm.flowPaletteVisible', next ? '1' : '0')
+      localStorage.setItem('tionharness.flowPaletteVisible', next ? '1' : '0')
       return next
     })
   // Auto-grow the run input upward: the run panel is bottom-anchored (below the
@@ -126,7 +126,7 @@ export function FlowsPanel({ agents, onError, openFlowId, tab: tabProp, onTabCha
   // Edge presentation (cosmetic). Stored per-flow in the graph; localStorage
   // holds the last-used edge style as the default for flows that have none.
   const [edgeStyle, setEdgeStyle] = useState<EdgeStyle>(
-    () => (localStorage.getItem('tionswarm.flowEdgeStyle') as EdgeStyle) || 'default',
+    () => (localStorage.getItem('tionharness.flowEdgeStyle') as EdgeStyle) || 'default',
   )
   const [animated, setAnimated] = useState(false)
   // Accumulate mode: sequential agent nodes share a growing conversation thread
@@ -135,7 +135,7 @@ export function FlowsPanel({ agents, onError, openFlowId, tab: tabProp, onTabCha
   const [accumulate, setAccumulate] = useState(true)
   const changeEdgeStyle = (s: EdgeStyle) => {
     setEdgeStyle(s)
-    localStorage.setItem('tionswarm.flowEdgeStyle', s)
+    localStorage.setItem('tionharness.flowEdgeStyle', s)
   }
 
   // Run state.
@@ -237,7 +237,7 @@ export function FlowsPanel({ agents, onError, openFlowId, tab: tabProp, onTabCha
         setStart(g.start ?? '')
         setEdgeStyle(
           (g.edgeStyle as EdgeStyle) ||
-            (localStorage.getItem('tionswarm.flowEdgeStyle') as EdgeStyle) ||
+            (localStorage.getItem('tionharness.flowEdgeStyle') as EdgeStyle) ||
             'default',
         )
         setAnimated(!!g.animated)
@@ -275,7 +275,7 @@ export function FlowsPanel({ agents, onError, openFlowId, tab: tabProp, onTabCha
     open: flowsListOpen,
     toggle: toggleFlowsList,
     setOpen: setFlowsListOpen,
-  } = useCollapsibleList('tionswarm.flowsListOpen')
+  } = useCollapsibleList('tionharness.flowsListOpen')
   // Landing on the screen with no flow selected: open the list drawer so a narrow
   // screen shows the pickable flow list instead of an empty canvas. Runs once on
   // mount; on md+ the list is always visible so this is a no-op there.

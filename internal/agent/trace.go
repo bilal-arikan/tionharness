@@ -4,19 +4,19 @@ import (
 	"encoding/json"
 	"strings"
 
-	"github.com/bilal-arikan/tionswarm/internal/providers"
-	"github.com/bilal-arikan/tionswarm/internal/tools"
+	"github.com/bilal-arikan/tionharness/internal/providers"
+	"github.com/bilal-arikan/tionharness/internal/tools"
 )
 
 // interactionToolPrefix / extendedToolPrefix are the two MCP namespaces the
 // Interaction MCP server uses (core eager tier vs extended deferred tier). The CLI
-// reports its tools namespaced (mcp__tionswarm_interaction__ask_user,
-// mcp__tionswarm_extended__create_agent); we strip either so the persisted trace shows
+// reports its tools namespaced (mcp__tionharness_interaction__ask_user,
+// mcp__tionharness_extended__create_agent); we strip either so the persisted trace shows
 // the bare tool name and renders with the same cards as the native tool path (todo
 // checklist, artifact card, ask).
 const (
-	interactionToolPrefix = "mcp__tionswarm_interaction__"
-	extendedToolPrefix    = "mcp__tionswarm_extended__"
+	interactionToolPrefix = "mcp__tionharness_interaction__"
+	extendedToolPrefix    = "mcp__tionharness_extended__"
 )
 
 // StepKind tags the kind of activity captured in a turn trace.
@@ -126,7 +126,7 @@ type TurnStep struct {
 	Text string `json:"text,omitempty"`
 	// Tool payload. Tool is the BARE name (namespace stripped) so the UI renders the
 	// same clean cards as the native path. CallName is the EXACT name the provider
-	// used — namespaced on the claude-cli path (mcp__tionswarm_extended__list_tasks) —
+	// used — namespaced on the claude-cli path (mcp__tionharness_extended__list_tasks) —
 	// set only when it differs from Tool. The recent-tool-activity recap fed back to
 	// the model uses CallName so the model sees the real callable name and does not
 	// re-call the bare form (which the CLI rejects with "No such tool available").

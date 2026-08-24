@@ -5,19 +5,19 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bilal-arikan/tionswarm/internal/mcp"
-	"github.com/bilal-arikan/tionswarm/internal/providers"
+	"github.com/bilal-arikan/tionharness/internal/mcp"
+	"github.com/bilal-arikan/tionharness/internal/providers"
 )
 
-const notIndexedBody = `{"error":"project not found or not indexed","hint":"Use list_projects to see all indexed projects, then pass it as the \"project\" argument.","available_projects":["C-Users-user-Desktop-Projects-external-context-agent","C-Users-user-Desktop-Projects-TionSwarm"],"count":2}`
+const notIndexedBody = `{"error":"project not found or not indexed","hint":"Use list_projects to see all indexed projects, then pass it as the \"project\" argument.","available_projects":["C-Users-user-Desktop-Projects-external-context-agent","C-Users-user-Desktop-Projects-TionHarness"],"count":2}`
 
 // oneProjectBody is the shape the server returns when a single repo is indexed —
 // the case where a missing `project` has exactly one defensible answer.
 const oneProjectBody = `{"error":"project not found or not indexed","available_projects":["C-Users-user-Desktop-Projects-SampleRepo"],"count":1}`
 
-// tionswarmCwd is a session working directory whose derived project id is
+// tionharnessCwd is a session working directory whose derived project id is
 // present in notIndexedBody's available_projects.
-const tionswarmCwd = `C:\Users\user\Desktop\Projects\TionSwarm`
+const tionharnessCwd = `C:\Users\user\Desktop\Projects\TionHarness`
 
 // searchTool is built through the SAME helper the registry uses, so a change to
 // the namespace format breaks these tests instead of silently disabling the
@@ -50,14 +50,14 @@ func TestMCPRepair_AutoCorrectsMissingProjectFromSessionCwd(t *testing.T) {
 	m := newMCPRepair()
 	call := mcpCall(searchTool, map[string]any{"pattern": "queryToValues"})
 
-	plan, ok := m.repair(call, errResult(notIndexedBody), tionswarmCwd)
+	plan, ok := m.repair(call, errResult(notIndexedBody), tionharnessCwd)
 	if !ok {
 		t.Fatal("expected repair to fire")
 	}
 	if plan.Fixed == nil {
 		t.Fatalf("expected an auto-corrected call, got hint-only: %q", plan.Hint)
 	}
-	if got := callProjectArg(*plan.Fixed); got != "C-Users-user-Desktop-Projects-TionSwarm" {
+	if got := callProjectArg(*plan.Fixed); got != "C-Users-user-Desktop-Projects-TionHarness" {
 		t.Errorf("project = %q, want the session repo's id", got)
 	}
 	// Every other argument survives the rewrite.
@@ -90,11 +90,11 @@ func TestMCPRepair_AutoCorrectsSingleIndexedProject(t *testing.T) {
 func TestMCPRepair_AutoCorrectsBareRepoName(t *testing.T) {
 	m := newMCPRepair()
 	// The model named the repo instead of the project id.
-	plan, ok := m.repair(mcpCall(searchTool, map[string]any{"project": "TionSwarm"}), errResult(notIndexedBody), "")
+	plan, ok := m.repair(mcpCall(searchTool, map[string]any{"project": "TionHarness"}), errResult(notIndexedBody), "")
 	if !ok || plan.Fixed == nil {
 		t.Fatalf("expected a bare repo name to resolve; plan=%+v", plan)
 	}
-	if got := callProjectArg(*plan.Fixed); got != "C-Users-user-Desktop-Projects-TionSwarm" {
+	if got := callProjectArg(*plan.Fixed); got != "C-Users-user-Desktop-Projects-TionHarness" {
 		t.Errorf("project = %q", got)
 	}
 }
@@ -141,13 +141,13 @@ func TestMCPRepair_RewritesOnlyOncePerCall(t *testing.T) {
 	m := newMCPRepair()
 	call := mcpCall(searchTool, map[string]any{"pattern": "x"})
 
-	plan, _ := m.repair(call, errResult(notIndexedBody), tionswarmCwd)
+	plan, _ := m.repair(call, errResult(notIndexedBody), tionharnessCwd)
 	if plan.Fixed == nil {
 		t.Fatal("setup: expected the first attempt to auto-correct")
 	}
 	// The corrected call failed too: the second pass must fall back to guidance
 	// instead of rewriting again (which would ping-pong with the server).
-	plan2, ok := m.repair(call, errResult(notIndexedBody), tionswarmCwd)
+	plan2, ok := m.repair(call, errResult(notIndexedBody), tionharnessCwd)
 	if !ok {
 		t.Fatal("expected repair to fire on the retry failure")
 	}
@@ -181,7 +181,7 @@ func TestMCPRepair_NoIndexWhenSessionRepoAlreadyIndexed(t *testing.T) {
 	// Two indexed repos, cwd is one of them, argument names neither → hint only.
 	// Re-indexing an already-indexed repo here would be busywork.
 	m.repaired[callKey(mcpCall(searchTool, map[string]any{"project": "zzz"}))] = true
-	plan, ok := m.repair(mcpCall(searchTool, map[string]any{"project": "zzz"}), errResult(notIndexedBody), tionswarmCwd)
+	plan, ok := m.repair(mcpCall(searchTool, map[string]any{"project": "zzz"}), errResult(notIndexedBody), tionharnessCwd)
 	if !ok {
 		t.Fatal("expected repair to fire")
 	}
@@ -219,18 +219,18 @@ func TestMCPRepair_DifferentArgsNotBlocked(t *testing.T) {
 		t.Fatal("setup: expected repair to fire")
 	}
 	// Same tool, corrected argument → must be allowed through (not the poisoned key).
-	fixed := mcpCall(searchTool, map[string]any{"project": "C-Users-user-Desktop-Projects-TionSwarm"})
+	fixed := mcpCall(searchTool, map[string]any{"project": "C-Users-user-Desktop-Projects-TionHarness"})
 	if blocked, _ := m.precheck(fixed); blocked {
 		t.Error("a call with corrected arguments must not be blocked")
 	}
 }
 
 func TestMCPRepairInstruction_NamesSiblingTool(t *testing.T) {
-	hint := mcpRepairInstruction(searchTool, "bad", []string{"C-Users-user-Desktop-Projects-TionSwarm"})
+	hint := mcpRepairInstruction(searchTool, "bad", []string{"C-Users-user-Desktop-Projects-TionHarness"})
 	if !strings.Contains(hint, mcp.NamespaceTool("codebase-memory-mcp", "list_projects")) {
 		t.Errorf("hint should name the list_projects sibling tool; got %q", hint)
 	}
-	if !strings.Contains(hint, "C-Users-user-Desktop-Projects-TionSwarm") {
+	if !strings.Contains(hint, "C-Users-user-Desktop-Projects-TionHarness") {
 		t.Errorf("hint should list available projects; got %q", hint)
 	}
 	if !strings.Contains(hint, "Glob/Grep") {
@@ -239,7 +239,7 @@ func TestMCPRepairInstruction_NamesSiblingTool(t *testing.T) {
 }
 
 func TestResolveProjectID(t *testing.T) {
-	two := []string{"C-Users-user-Desktop-Projects-external-context-agent", "C-Users-user-Desktop-Projects-TionSwarm"}
+	two := []string{"C-Users-user-Desktop-Projects-external-context-agent", "C-Users-user-Desktop-Projects-TionHarness"}
 	cases := []struct {
 		name      string
 		want      string
@@ -247,14 +247,14 @@ func TestResolveProjectID(t *testing.T) {
 		available []string
 		expect    string
 	}{
-		{"no projects indexed", "", "C-Users-user-Desktop-Projects-TionSwarm", nil, ""},
-		{"already correct", "C-Users-user-Desktop-Projects-TionSwarm", "", two, ""},
-		{"missing, preferred indexed", "", "C-Users-user-Desktop-Projects-TionSwarm", two, "C-Users-user-Desktop-Projects-TionSwarm"},
+		{"no projects indexed", "", "C-Users-user-Desktop-Projects-TionHarness", nil, ""},
+		{"already correct", "C-Users-user-Desktop-Projects-TionHarness", "", two, ""},
+		{"missing, preferred indexed", "", "C-Users-user-Desktop-Projects-TionHarness", two, "C-Users-user-Desktop-Projects-TionHarness"},
 		{"missing, preferred absent, two candidates", "", "C-Users-user-Desktop-Projects-other", two, ""},
 		{"bare repo name", "external-context-agent", "", two, "C-Users-user-Desktop-Projects-external-context-agent"},
-		{"case-insensitive full id", "c-users-bilal-desktop-projects-tionswarm", "", two, "C-Users-user-Desktop-Projects-TionSwarm"},
-		{"absolute path", `C:\Users\user\Desktop\Projects\TionSwarm`, "", two, "C-Users-user-Desktop-Projects-TionSwarm"},
-		{"unknown, falls back to preferred", "nope", "C-Users-user-Desktop-Projects-TionSwarm", two, "C-Users-user-Desktop-Projects-TionSwarm"},
+		{"case-insensitive full id", "c-users-bilal-desktop-projects-tionharness", "", two, "C-Users-user-Desktop-Projects-TionHarness"},
+		{"absolute path", `C:\Users\user\Desktop\Projects\TionHarness`, "", two, "C-Users-user-Desktop-Projects-TionHarness"},
+		{"unknown, falls back to preferred", "nope", "C-Users-user-Desktop-Projects-TionHarness", two, "C-Users-user-Desktop-Projects-TionHarness"},
 		{"unknown, single index", "nope", "", []string{"C-Users-user-Desktop-Projects-SampleRepo"}, "C-Users-user-Desktop-Projects-SampleRepo"},
 		{"unknown, no anchor", "nope", "", two, ""},
 	}
@@ -284,7 +284,7 @@ func TestWithProjectArg_RejectsNonObjectInput(t *testing.T) {
 
 func TestParseAvailableProjects(t *testing.T) {
 	got := parseAvailableProjects(notIndexedBody)
-	want := []string{"C-Users-user-Desktop-Projects-external-context-agent", "C-Users-user-Desktop-Projects-TionSwarm"}
+	want := []string{"C-Users-user-Desktop-Projects-external-context-agent", "C-Users-user-Desktop-Projects-TionHarness"}
 	if len(got) != len(want) {
 		t.Fatalf("got %d projects, want %d (%v)", len(got), len(want), got)
 	}

@@ -3,7 +3,7 @@ package api
 import (
 	"net/http"
 
-	"github.com/bilal-arikan/tionswarm/internal/progress"
+	"github.com/bilal-arikan/tionharness/internal/progress"
 )
 
 // progressView is the client view of a session's persistent progress file: the

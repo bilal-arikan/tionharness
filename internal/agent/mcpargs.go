@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/bilal-arikan/tionswarm/internal/providers"
+	"github.com/bilal-arikan/tionharness/internal/providers"
 )
 
 // This file is the PRE-execution half of the MCP argument guard; mcprepair.go is
@@ -66,14 +66,14 @@ func argSupplied(raw json.RawMessage) bool {
 	return true
 }
 
-// prefillMCPArgs fills arguments TionSwarm can derive itself when the model left
+// prefillMCPArgs fills arguments TionHarness can derive itself when the model left
 // them out. Today that is exactly one: `project` on a codebase-memory tool, which
 // is derivable from the session's working directory via the server's own
 // path→id rule. Returns the rewritten call and true when something was filled.
 //
 // It is deliberately narrow. Inventing values for arbitrary required arguments
 // would paper over real model mistakes; this one is a pure restatement of
-// context TionSwarm already knows and the model has no reason to get right.
+// context TionHarness already knows and the model has no reason to get right.
 func prefillMCPArgs(call providers.ToolCall, missing []string, sessionCwd string) (providers.ToolCall, bool) {
 	id := projectIDForPath(sessionCwd)
 	if id == "" {

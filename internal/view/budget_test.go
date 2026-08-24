@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bilal-arikan/tionswarm/internal/billing"
-	"github.com/bilal-arikan/tionswarm/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/billing"
+	"github.com/bilal-arikan/tionharness/internal/db"
 )
 
 // budgetFixture hand-builds a priced rollup so the projection is tested without

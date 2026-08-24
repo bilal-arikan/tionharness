@@ -1,4 +1,4 @@
-# TionSwarm Maliyet Düşürme Planı
+# TionHarness Maliyet Düşürme Planı
 
 Tarih: 2026-07-05 · Kaynak: 21 ajanlık ultracode incelemesi (kod + oturum logu + Anthropic dokümanları), tüm bulgular koda karşı adversarial olarak doğrulandı.
 
@@ -21,7 +21,7 @@ the external agent project'taki eşdeğer oturum: **$0.177**.
 ## Kök Nedenler (kod kanıtlı)
 
 1. **Oturum claude-cli sarmalayıcı yolunda koştu** (provider=`claude-cli`, model `claude-cli|claude-opus-4-8`). `toolloop.go:193-270` her turda **tek seferlik yeni bir `claude -p` alt süreci** başlatıyor ve `--mcp-config`'i yeniden üretiyor (`claudePersistentSession=false`) → prefix her turda değişiyor, cache kırılıyor.
-2. **Araç şişkinliği CLI yolunda**: 140 aracın çoğu Claude Code yerleşikleri + playwright (~21) + mcp-chrome (~25-30). `climcp.go:85-103` harici MCP sunucularını **toptan** geçiriyor; kullanıcının 23 playwright aracına koyduğu "hidden" işaretleri ve `DisabledTools` listesi bu yolda **hiç okunmuyor**. TionSwarm'ın kendi 24 çekirdek aracı sadece ~6k token.
+2. **Araç şişkinliği CLI yolunda**: 140 aracın çoğu Claude Code yerleşikleri + playwright (~21) + mcp-chrome (~25-30). `climcp.go:85-103` harici MCP sunucularını **toptan** geçiriyor; kullanıcının 23 playwright aracına koyduğu "hidden" işaretleri ve `DisabledTools` listesi bu yolda **hiç okunmuyor**. TionHarness'ın kendi 24 çekirdek aracı sadece ~6k token.
 3. **Native (anthropic) yolda gizli cache hataları** (ajan bu yola geçince patlayacak):
    - Lazy-tool aktivasyon seti **her turda sıfırlanıyor** ve tur ortasında budanıyor (`toolloop.go:279/347-348/592`) → tools bloğu değişince Anthropic'in tools→system→messages hiyerarşisi gereği TÜM prefix geçersiz.
    - `ExtendedPromptCache` varsayılan **kapalı** (`settings.go` `Default()` içinde yok) → taze kurulum hiç `cache_control` göndermiyor VE sistem promptuna **saniye hassasiyetli timestamp** ekleniyor (`chat_turn.go:85,182-185`).
@@ -32,7 +32,7 @@ the external agent project'taki eşdeğer oturum: **$0.177**.
 
 | # | Ne | Nerede | Beklenen kazanç | Efor |
 |---|-----|--------|-----------------|------|
-| 1 | `claudePersistentSession=true` yap (tek uzun ömürlü claude süreci) **veya** Coder ajanını (AGT1) native `anthropic` provider'a geçir | `~\.tionswarm\settings.json`; `internal/providers/claudecli.go:392-400` | Oturumun ~%36'sı ($0.93); tur-2 sınıfı miss'ler biter | Küçük |
+| 1 | `claudePersistentSession=true` yap (tek uzun ömürlü claude süreci) **veya** Coder ajanını (AGT1) native `anthropic` provider'a geçir | `~\.tionharness\settings.json`; `internal/providers/claudecli.go:392-400` | Oturumun ~%36'sı ($0.93); tur-2 sınıfı miss'ler biter | Küçük |
 | 2 | Kodlama ajanları için playwright + mcp-chrome sunucu satırlarını kapat; `writeCLIMCPConfig`'i per-tool visibility/DisabledTools'a saygılı hale getir | `internal/agent/climcp.go:76-135`; `internal/agent/toolsetup.go:573-599` | ~45-55 şema = 10-15k token/çağrı; 3 turluk oturum ~$0.60-0.75'e iner | Orta |
 | 3 | `ExtendedPromptCache`'i varsayılan **açık** yap; timestamp'i sistem promptundan çıkarıp rolling breakpoint sonrası kullanıcı-mesajı kuyruğuna taşı | `internal/settings/settings.go:106,293-425`; `internal/providers/anthropic.go:499-517`; `internal/api/chat_turn.go:85,182-185` | Taze kurulumda sıcak çağrılar 1× tam fiyattan 0.1× cache-read'e (prefix'te ~%85-90) | Küçük |
 | 4 | Lazy-tool aktivasyonunu **oturum bazında** kalıcı yap (append-only), tur-ortası Prune'u kaldır; uzun vadede API-native Tool Search (`tool_search_tool_regex_20251119` + `defer_loading:true`) | `internal/agent/toolloop.go:279,292,347-348,592`; `internal/tools/registry.go:289-313` | Araç aktivasyonu sonrası her turda ~65k token 2× fiyatlı yeniden yazımı önler | Orta |

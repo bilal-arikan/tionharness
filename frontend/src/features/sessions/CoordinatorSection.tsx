@@ -84,32 +84,32 @@ export function CoordinatorSection({
   const [workers, setWorkers] = useState<WorkerInfo[]>([])
   // Worker roster collapse (persisted) — the list can get long, so let it fold.
   const [workersOpen, setWorkersOpen] = useState(
-    () => localStorage.getItem('tionswarm.coordWorkersOpen') !== '0',
+    () => localStorage.getItem('tionharness.coordWorkersOpen') !== '0',
   )
   // Workflow (recipe) picker collapse (persisted) — once a recipe is chosen the
   // full radio list is just noise, so let it fold away like the roster.
   const [workflowOpen, setWorkflowOpen] = useState(
-    () => localStorage.getItem('tionswarm.coordWorkflowOpen') !== '0',
+    () => localStorage.getItem('tionharness.coordWorkflowOpen') !== '0',
   )
   const toggleWorkflow = () =>
     setWorkflowOpen((v) => {
       const next = !v
-      localStorage.setItem('tionswarm.coordWorkflowOpen', next ? '1' : '0')
+      localStorage.setItem('tionharness.coordWorkflowOpen', next ? '1' : '0')
       return next
     })
   // Which worker bucket is shown: running vs finished (persisted).
   const [workerTab, setWorkerTab] = useState<'running' | 'done'>(() =>
-    localStorage.getItem('tionswarm.coordWorkerTab') === 'done' ? 'done' : 'running',
+    localStorage.getItem('tionharness.coordWorkerTab') === 'done' ? 'done' : 'running',
   )
   const toggleWorkers = () =>
     setWorkersOpen((v) => {
       const next = !v
-      localStorage.setItem('tionswarm.coordWorkersOpen', next ? '1' : '0')
+      localStorage.setItem('tionharness.coordWorkersOpen', next ? '1' : '0')
       return next
     })
   const selectTab = (tab: 'running' | 'done') => {
     setWorkerTab(tab)
-    localStorage.setItem('tionswarm.coordWorkerTab', tab)
+    localStorage.setItem('tionharness.coordWorkerTab', tab)
   }
 
   const runningWorkers = workers.filter((w) => w.running)

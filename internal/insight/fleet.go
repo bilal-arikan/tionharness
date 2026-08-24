@@ -2,7 +2,7 @@ package insight
 
 import "sort"
 
-// Fleet-level rollup. app-fix findings describe bugs in TionSwarm ITSELF, so the
+// Fleet-level rollup. app-fix findings describe bugs in TionHarness ITSELF, so the
 // same bug legitimately surfaces in several workspaces (each scanning its own
 // sessions) — with slightly different signatures. Per-workspace stores can't see
 // each other, so RollupAppFix merges them into one fleet-wide backlog: dedup by
@@ -18,7 +18,7 @@ type FleetFinding struct {
 // RollupAppFix merges per-workspace app-fix findings into a deduplicated fleet
 // backlog. byWorkspace maps a workspace label → its findings (any channel; only
 // app-fix are considered). Dedup is by canonical signature across everything, so
-// the same TionSwarm bug reported four ways collapses to one row carrying the
+// the same TionHarness bug reported four ways collapses to one row carrying the
 // combined occurrences, evidence and originating workspaces. Sorted by priority.
 func RollupAppFix(byWorkspace map[string][]Finding) []FleetFinding {
 	merged := map[string]*FleetFinding{}

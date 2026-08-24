@@ -10,12 +10,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bilal-arikan/tionswarm/internal/proc"
+	"github.com/bilal-arikan/tionharness/internal/proc"
 )
 
 // CodexCLI drives the locally-installed `codex` CLI in non-interactive exec
 // mode (`codex exec --json`). Like ClaudeCLI it is a CLI TRANSPORT: the CLI runs
-// its own agentic loop and TionSwarm's tools reach it over the MCP bridge, so
+// its own agentic loop and TionHarness's tools reach it over the MCP bridge, so
 // the native tool loop is not involved. Authentication is keyless — the user's
 // existing ChatGPT/Codex login inside CODEX_HOME.
 type CodexCLI struct {
@@ -66,7 +66,7 @@ func (c *CodexCLI) Preflight(ctx context.Context) error {
 }
 
 // SetConfigDir overrides the CODEX_HOME this provider exports into its
-// subprocess. TionSwarm calls this per turn so each workspace drives the CLI
+// subprocess. TionHarness calls this per turn so each workspace drives the CLI
 // against its OWN config home (<workspace>/codex-home). Empty is ignored so the
 // value baked in at construction survives when no workspace is derivable.
 func (c *CodexCLI) SetConfigDir(dir string) {
@@ -93,7 +93,7 @@ func (c *CodexCLI) ConfigureCLIMCP(spec CLIMCPSpec) {
 	c.mcpServers = spec.Servers
 }
 
-// codexSandboxArgs maps TionSwarm's permission mode onto codex's sandbox flags.
+// codexSandboxArgs maps TionHarness's permission mode onto codex's sandbox flags.
 //
 // WARNING — "ask" is NOT per-tool approval here. `codex exec` REJECTS every
 // approval request ("approval is not supported in exec mode"), so the closest
@@ -171,8 +171,8 @@ func (c *CodexCLI) buildConfig(req Request) codexConfig {
 	return codexConfig{
 		DeveloperInstructions: strings.TrimSpace(joinNonEmpty(req.System, interactionSystemNote)),
 		ReasoningEffort:       codexReasoningEffort(req),
-		// TionSwarm supplies its own equivalents through the MCP bridge, and the
-		// codex built-ins are invisible in the TionSwarm UI: update_plan would
+		// TionHarness supplies its own equivalents through the MCP bridge, and the
+		// codex built-ins are invisible in the TionHarness UI: update_plan would
 		// shadow todo_write, and experimental_request_user_input would block the
 		// turn on a prompt no one can answer in exec mode.
 		DisableUpdatePlan:       true,

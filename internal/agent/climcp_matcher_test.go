@@ -7,13 +7,13 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bilal-arikan/tionswarm/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/db"
 )
 
 // bBash / bPS are the bridged shell tool names cliMatcherRegex auto-adds.
 const (
-	bBash = "mcp__tionswarm_interaction__Bash"
-	bPS   = "mcp__tionswarm_interaction__PowerShell"
+	bBash = "mcp__tionharness_interaction__Bash"
+	bPS   = "mcp__tionharness_interaction__PowerShell"
 )
 
 func TestCliMatcherRegex(t *testing.T) {
@@ -23,14 +23,14 @@ func TestCliMatcherRegex(t *testing.T) {
 	}{
 		{"", ""},
 		{"  ", ""},
-		// Shell names auto-expand to their bridged (mcp__tionswarm_interaction__*) forms.
+		// Shell names auto-expand to their bridged (mcp__tionharness_interaction__*) forms.
 		{"Bash", "^(Bash|" + bBash + ")$"},
 		{"Bash,PowerShell", "^(Bash|" + bBash + "|PowerShell|" + bPS + ")$"},
 		{" Bash , PowerShell ", "^(Bash|" + bBash + "|PowerShell|" + bPS + ")$"}, // whitespace tolerant
 		{"Bash,,PowerShell", "^(Bash|" + bBash + "|PowerShell|" + bPS + ")$"},    // empty alt dropped
 		// The real WS10 sqz matcher — plain + bridged already listed; must dedup.
 		{
-			"Bash,PowerShell,mcp__tionswarm_interaction__PowerShell,mcp__tionswarm_interaction__Bash",
+			"Bash,PowerShell,mcp__tionharness_interaction__PowerShell,mcp__tionharness_interaction__Bash",
 			"^(Bash|" + bBash + "|PowerShell|" + bPS + ")$",
 		},
 		// Non-shell names are not expanded.
@@ -57,7 +57,7 @@ func TestCliMatcherRegexFires(t *testing.T) {
 			t.Errorf("plain Bash,PowerShell matcher must fire on %q", tool)
 		}
 	}
-	for _, tool := range []string{"BashOutput", "PowerShellX", "Write", "mcp__tionswarm_extended__list_agents"} {
+	for _, tool := range []string{"BashOutput", "PowerShellX", "Write", "mcp__tionharness_extended__list_agents"} {
 		if re.MatchString(tool) {
 			t.Errorf("matcher must NOT match superset/foreign tool %q", tool)
 		}
@@ -65,7 +65,7 @@ func TestCliMatcherRegexFires(t *testing.T) {
 
 	// The pre-fix bug reproduction: the verbatim comma list is a regex that matches
 	// nothing real, proving why the hook was silent in the CLI path.
-	verbatim := regexp.MustCompile(regexp.QuoteMeta("Bash,PowerShell,mcp__tionswarm_interaction__PowerShell"))
+	verbatim := regexp.MustCompile(regexp.QuoteMeta("Bash,PowerShell,mcp__tionharness_interaction__PowerShell"))
 	if verbatim.MatchString(bPS) {
 		t.Errorf("sanity: verbatim comma matcher should not match a single tool name")
 	}

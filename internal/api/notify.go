@@ -1,8 +1,8 @@
 package api
 
 import (
-	"github.com/bilal-arikan/tionswarm/internal/events"
-	"github.com/bilal-arikan/tionswarm/internal/workspace"
+	"github.com/bilal-arikan/tionharness/internal/events"
+	"github.com/bilal-arikan/tionharness/internal/workspace"
 )
 
 // publishEntityChange emits a generic workspace-scoped change event for a nav

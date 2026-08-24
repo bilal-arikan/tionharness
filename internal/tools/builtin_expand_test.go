@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bilal-arikan/tionswarm/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/db"
 )
 
 // expandDB opens a scratch store with a two-column board for the drill-down tests.

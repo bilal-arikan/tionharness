@@ -1,7 +1,7 @@
 // Board view state: which view is selected, the live (possibly edited) filter,
 // and persistence of user-created views into workspace settings.
 //
-// The SELECTION lives in localStorage, not in workspace settings: TionSwarm
+// The SELECTION lives in localStorage, not in workspace settings: TionHarness
 // supports multiple windows on one workspace (see _Docs/30-COKLU-PENCERE.md),
 // and two windows sitting on different views must not overwrite each other. The
 // view DEFINITIONS are shared and do live in workspace settings.
@@ -23,7 +23,7 @@ import {
   type ResolvedView,
 } from './boardViewTypes'
 
-const SELECTION_KEY = 'tionswarm.board.viewId'
+const SELECTION_KEY = 'tionharness.board.viewId'
 
 function loadSelection(): string {
   return localStorage.getItem(SELECTION_KEY) ?? BUILTIN_VIEWS[0].id

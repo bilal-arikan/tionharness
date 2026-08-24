@@ -10,7 +10,7 @@ export function SplashScreen() {
     <div
       data-testid="splash-screen"
       className="flex h-full w-full flex-col items-center justify-center gap-6 bg-[var(--color-bg)] text-[var(--color-text)]"
-      style={{ animation: 'tionswarm-splash-fade 280ms ease-out' }}
+      style={{ animation: 'tionharness-splash-fade 280ms ease-out' }}
     >
       {/* Brand logo with a spinning accent ring around it. */}
       <div className="relative flex h-24 w-24 items-center justify-center">
@@ -20,25 +20,25 @@ export function SplashScreen() {
         />
         <img
           src="/favicon.svg"
-          alt="TionSwarm"
+          alt="TionHarness"
           className="h-12 w-12"
-          style={{ animation: 'tionswarm-splash-pulse 1600ms ease-in-out infinite' }}
+          style={{ animation: 'tionharness-splash-pulse 1600ms ease-in-out infinite' }}
         />
       </div>
 
       <div className="flex flex-col items-center gap-1">
-        <span className="text-lg font-semibold tracking-wide">TionSwarm</span>
+        <span className="text-lg font-semibold tracking-wide">TionHarness</span>
         <span className="text-xs text-[var(--color-text-dim)]">Yükleniyor…</span>
       </div>
 
       {/* Keyframes are scoped here so the splash stays fully self-contained (no
           dependency on global CSS being loaded yet on a cold first paint). */}
       <style>{`
-        @keyframes tionswarm-splash-fade {
+        @keyframes tionharness-splash-fade {
           from { opacity: 0; }
           to { opacity: 1; }
         }
-        @keyframes tionswarm-splash-pulse {
+        @keyframes tionharness-splash-pulse {
           0%, 100% { transform: scale(1); opacity: 1; }
           50% { transform: scale(1.08); opacity: 0.85; }
         }

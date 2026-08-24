@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bilal-arikan/tionswarm/internal/mcp"
+	"github.com/bilal-arikan/tionharness/internal/mcp"
 )
 
 // fakeMCP is a minimal Streamable HTTP MCP backend exposing one tool, "echo".

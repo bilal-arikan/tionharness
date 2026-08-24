@@ -2,10 +2,10 @@ package agent
 
 import "strings"
 
-// cliMatcherRegex translates a TionSwarm hook matcher into the regex Claude Code
+// cliMatcherRegex translates a TionHarness hook matcher into the regex Claude Code
 // expects in its settings hooks block.
 //
-// TionSwarm's NATIVE matcher (hookMatches) is a COMMA-separated list of
+// TionHarness's NATIVE matcher (hookMatches) is a COMMA-separated list of
 // filepath.Match GLOBS, full-matched against the tool name ("Bash,PowerShell" or
 // "http_*"). Claude Code instead treats a matcher as a REGEX (alternation is `|`,
 // not `,`, and it is unanchored). Passing the comma list verbatim therefore makes
@@ -22,7 +22,7 @@ import "strings"
 //
 // Bridged-shell expansion: when the built-in shell is on, the CLI does NOT see a
 // plain "Bash"/"PowerShell" tool — it sees the interaction-server-namespaced
-// mcp__tionswarm_interaction__Bash / __PowerShell. So a matcher naming the plain
+// mcp__tionharness_interaction__Bash / __PowerShell. So a matcher naming the plain
 // shell tool would still miss every shell call on a claude-cli turn. We therefore
 // auto-add the bridged form for those two names, deduped — a plain "Bash,PowerShell"
 // matcher now fires across every workspace with no per-workspace data edit. Native

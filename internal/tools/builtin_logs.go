@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"strings"
 
-	"github.com/bilal-arikan/tionswarm/internal/logbuf"
-	"github.com/bilal-arikan/tionswarm/internal/providers"
+	"github.com/bilal-arikan/tionharness/internal/logbuf"
+	"github.com/bilal-arikan/tionharness/internal/providers"
 )
 
 // ReadLogsTool lets an agent read the recent application + workspace log stream

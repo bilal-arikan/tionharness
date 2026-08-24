@@ -9,7 +9,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/bilal-arikan/tionswarm/internal/sessionhub"
+	"github.com/bilal-arikan/tionharness/internal/sessionhub"
 )
 
 // inboxItem is one queued user turn awaiting dispatch. The whole chatReq is

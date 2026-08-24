@@ -1,5 +1,5 @@
 // Package codexauth drives the `codex login --device-auth` subprocess so
-// TionSwarm can offer an in-app login for the codex-cli provider, mirroring
+// TionHarness can offer an in-app login for the codex-cli provider, mirroring
 // what internal/claudeauth does for claude-cli. Unlike claudeauth, this
 // package does NOT reimplement OpenAI's OAuth: codex already performs the
 // device-code dance itself and writes <CODEX_HOME>/auth.json on success. This

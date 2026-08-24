@@ -6,11 +6,11 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/bilal-arikan/tionswarm/internal/agent"
-	"github.com/bilal-arikan/tionswarm/internal/conversation"
-	"github.com/bilal-arikan/tionswarm/internal/db"
-	"github.com/bilal-arikan/tionswarm/internal/providers"
-	"github.com/bilal-arikan/tionswarm/internal/workspace"
+	"github.com/bilal-arikan/tionharness/internal/agent"
+	"github.com/bilal-arikan/tionharness/internal/conversation"
+	"github.com/bilal-arikan/tionharness/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/providers"
+	"github.com/bilal-arikan/tionharness/internal/workspace"
 )
 
 // isFirstUntitledTurn reports whether this is the opening message of a fresh chat
@@ -319,8 +319,8 @@ func sessionStateBlock(session db.Session, agentRow db.Agent, wsID, wsName, wsPa
 // recover exact pre-compaction detail when it actually needs it rather than
 // guessing from the digest: full-text search the past messages (conversation_search)
 // or simply re-open the relevant files (the fs tools are unlocked). This is
-// TionSwarm's equivalent of Claude Code's post-compaction transcript pointer,
-// adapted to the recovery tools TionSwarm already ships — no readFileState tracker
+// TionHarness's equivalent of Claude Code's post-compaction transcript pointer,
+// adapted to the recovery tools TionHarness already ships — no readFileState tracker
 // is needed because file contents are never cross-turn context here anyway, so a
 // re-read on demand fully restores them. Returns "" for an empty summary so the
 // caller can append it unconditionally.

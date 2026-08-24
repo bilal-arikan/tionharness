@@ -1,7 +1,7 @@
 package agent
 
 import (
-	"github.com/bilal-arikan/tionswarm/internal/prompts"
+	"github.com/bilal-arikan/tionharness/internal/prompts"
 )
 
 // PromptInfo describes one registered runtime prompt for read-only display in

@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 )
 
-// defaultGitignore is the starter ignore file written into a repository TionSwarm
+// defaultGitignore is the starter ignore file written into a repository TionHarness
 // itself initialises. A fresh `git init` with no .gitignore is the single easiest
 // way to commit a .env or a 200 MB build folder on the first commit, so the repo
 // gets a language-agnostic baseline instead of nothing. It is a starting point,

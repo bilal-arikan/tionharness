@@ -9,7 +9,7 @@
 export { NOTIFY_TYPES } from './notifyTypes'
 export type { NotifyType } from './notifyTypes'
 
-const KEY = 'tionswarm.notifyMutedTypes'
+const KEY = 'tionharness.notifyMutedTypes'
 
 // We persist the MUTED set (not the enabled set), so a newly added event type
 // defaults to enabled without a migration.

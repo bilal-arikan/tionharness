@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/bilal-arikan/tionswarm/internal/codexauth"
-	"github.com/bilal-arikan/tionswarm/internal/providers"
+	"github.com/bilal-arikan/tionharness/internal/codexauth"
+	"github.com/bilal-arikan/tionharness/internal/providers"
 )
 
 // codexAuthManager tracks in-flight device-auth flows across all workspaces,

@@ -76,11 +76,11 @@ func TestAppendChangesPreservesRawStep(t *testing.T) {
 
 func TestToolBaseName(t *testing.T) {
 	for in, want := range map[string]string{
-		"Edit":                 "edit",
-		"mcp__server__Write":   "write",
-		"tionswarm__multiedit": "multiedit",
-		"":                     "",
-		"WebFetch":             "webfetch",
+		"Edit":                   "edit",
+		"mcp__server__Write":     "write",
+		"tionharness__multiedit": "multiedit",
+		"":                       "",
+		"WebFetch":               "webfetch",
 	} {
 		if got := toolBaseName(in); got != want {
 			t.Errorf("toolBaseName(%q) = %q, want %q", in, got, want)

@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bilal-arikan/tionswarm/internal/providers"
+	"github.com/bilal-arikan/tionharness/internal/providers"
 )
 
 // snippetSchema mirrors codebase-memory-mcp's get_code_snippet contract, the tool
@@ -65,11 +65,11 @@ func TestMissingRequiredArgs_NoContractNoOpinion(t *testing.T) {
 
 func TestPrefillMCPArgs_FillsProjectFromSessionCwd(t *testing.T) {
 	call := mcpCall(searchTool, map[string]any{"qualified_name": "pkg.Fn"})
-	fixed, ok := prefillMCPArgs(call, []string{"project"}, tionswarmCwd)
+	fixed, ok := prefillMCPArgs(call, []string{"project"}, tionharnessCwd)
 	if !ok {
 		t.Fatal("expected the project argument to be filled from the session cwd")
 	}
-	if got := callProjectArg(fixed); got != "C-Users-user-Desktop-Projects-TionSwarm" {
+	if got := callProjectArg(fixed); got != "C-Users-user-Desktop-Projects-TionHarness" {
 		t.Errorf("project = %q", got)
 	}
 	// The gate is satisfied after the prefill — that is the whole point.
@@ -80,8 +80,8 @@ func TestPrefillMCPArgs_FillsProjectFromSessionCwd(t *testing.T) {
 
 func TestPrefillMCPArgs_DeclinesWhatItCannotKnow(t *testing.T) {
 	call := mcpCall(searchTool, map[string]any{"project": "P"})
-	// qualified_name is model intent, not context TionSwarm holds — never invented.
-	if _, ok := prefillMCPArgs(call, []string{"qualified_name"}, tionswarmCwd); ok {
+	// qualified_name is model intent, not context TionHarness holds — never invented.
+	if _, ok := prefillMCPArgs(call, []string{"qualified_name"}, tionharnessCwd); ok {
 		t.Error("only `project` may be prefilled")
 	}
 	// Without a session cwd there is nothing to derive.

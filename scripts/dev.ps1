@@ -1,13 +1,13 @@
-# TionSwarm - development run (backend + frontend together).
+# TionHarness - development run (backend + frontend together).
 #
-# Builds the Go backend to bin\tionswarm-dev.exe, runs it (127.0.0.1:8090) and
+# Builds the Go backend to bin\tionharness-dev.exe, runs it (127.0.0.1:8090) and
 # starts the Vite dev server (npm run dev on :5173, proxies /api to 8090) beside
 # it. Closing this window or pressing Ctrl+C kills BOTH process trees so no
 # orphan node/go server is left listening.
 #
 # WHY build-then-run instead of `go run` (changed 2026-08-11): `go run` inserts a
 # go.exe WRAPPER between this script and the real server. On 2026-08-11 17:29 the
-# wrapper was force-killed from outside while tionswarm.exe kept serving: the
+# wrapper was force-killed from outside while tionharness.exe kept serving: the
 # script saw "backend exited", tore down Vite, and the orphaned server held :8090
 # for another 20s. `go run` also swallows the child's death into a bare "exit
 # status 1", which hid the cause of FIVE such deaths (2026-08-02..08-11). Running
@@ -29,8 +29,8 @@
 #   ones (the exe path is stable now, but the port rules are simpler anyway).
 #   Fix (elevated shell):
 #     Set-NetConnectionProfile -InterfaceAlias 'Wi-Fi' -NetworkCategory Private
-#     New-NetFirewallRule -DisplayName 'TionSwarm Dev 5173' -Direction Inbound -LocalPort 5173 -Protocol TCP -Action Allow -Profile Private
-#     New-NetFirewallRule -DisplayName 'TionSwarm Dev 8090' -Direction Inbound -LocalPort 8090 -Protocol TCP -Action Allow -Profile Private
+#     New-NetFirewallRule -DisplayName 'TionHarness Dev 5173' -Direction Inbound -LocalPort 5173 -Protocol TCP -Action Allow -Profile Private
+#     New-NetFirewallRule -DisplayName 'TionHarness Dev 8090' -Direction Inbound -LocalPort 8090 -Protocol TCP -Action Allow -Profile Private
 #   Port-based rules survive recompiles; the phone hits Vite (:5173, node), which
 #   proxies /api to the backend (:8090).
 #
@@ -53,7 +53,7 @@
 # Diagnostics: _devlogs\lifecycle.log records every launch/kill across runs, and
 # _devlogs\backend-stderr-<stamp>.log captures the backend's STDERR (Go runtime
 # fatals / panic traces; STDOUT stays live on the console AND is mirrored by the
-# app itself to ~/.tionswarm/logs/tionswarm.log). Empty captures are deleted on
+# app itself to ~/.tionharness/logs/tionharness.log). Empty captures are deleted on
 # exit, so a surviving stderr file always means something went wrong. On teardown
 # the tail of that app log is printed too -- an externally killed process writes
 # nothing to stderr, so its last log lines are the only context left.
@@ -84,7 +84,7 @@ Set-Location $root
 
 # Dev-run diagnostics (_devlogs/, gitignored via *.log).
 #
-# WHY: the Go backend writes slog to STDOUT (mirrored to ~/.tionswarm/logs), but
+# WHY: the Go backend writes slog to STDOUT (mirrored to ~/.tionharness/logs), but
 # Go runtime fatals -- "fatal error: out of memory", panic traces -- go to STDERR,
 # which used to be unredirected and therefore died with the console window. On
 # 2026-08-01 a backend death at 05:26:55 left NO evidence anywhere: no graceful
@@ -108,14 +108,14 @@ $lifecycleLog = Join-Path $logDir "lifecycle.log"
 
 # Dev binary (bin/ is gitignored). Rebuilt on every run; the previous run's copy
 # is already dead by then, so the file is never locked.
-$backendExe = Join-Path $root "bin\tionswarm-dev.exe"
+$backendExe = Join-Path $root "bin\tionharness-dev.exe"
 
 # The app's own stdout mirror -- tailed on teardown because an externally killed
-# process leaves nothing in the stderr capture. TIONSWARM_DATA_DIR wins if set.
-$appLog = if ($env:TIONSWARM_DATA_DIR) {
-    Join-Path $env:TIONSWARM_DATA_DIR "logs\tionswarm.log"
+# process leaves nothing in the stderr capture. TIONHARNESS_DATA_DIR wins if set.
+$appLog = if ($env:TIONHARNESS_DATA_DIR) {
+    Join-Path $env:TIONHARNESS_DATA_DIR "logs\tionharness.log"
 } else {
-    Join-Path $HOME ".tionswarm\logs\tionswarm.log"
+    Join-Path $HOME ".tionharness\logs\tionharness.log"
 }
 
 # Set by Stop-Tree when the backend was already dead at teardown: its (possible)
@@ -252,20 +252,20 @@ try {
         # file): no go.exe wrapper means no orphaned server and no "exit status 1"
         # masking the real exit code. A compile error also surfaces here, before
         # Vite starts, instead of as a mysterious early child exit.
-        Write-Host "==> Backend derleniyor: go build -o bin\tionswarm-dev.exe ./cmd/tionswarm" -ForegroundColor Cyan
-        & go build -o $backendExe ./cmd/tionswarm
+        Write-Host "==> Backend derleniyor: go build -o bin\tionharness-dev.exe ./cmd/tionharness" -ForegroundColor Cyan
+        & go build -o $backendExe ./cmd/tionharness
         if ($LASTEXITCODE -ne 0) {
             Write-Lifecycle "backend build FAILED (exit=$LASTEXITCODE)"
             throw "backend derlenemedi (go build exit $LASTEXITCODE)"
         }
-        Write-Host "==> Backend baslatiliyor: bin\tionswarm-dev.exe  (${bindHost}:$Port)" -ForegroundColor Cyan
-        $env:TIONSWARM_ADDR = "${bindHost}:$Port"
+        Write-Host "==> Backend baslatiliyor: bin\tionharness-dev.exe  (${bindHost}:$Port)" -ForegroundColor Cyan
+        $env:TIONHARNESS_ADDR = "${bindHost}:$Port"
         # Gated feature (see SKILL.md / Ortam Notlari): the built-in shell.
         # (Self-management is ALWAYS installed since 2026-07-01 -- no env gate.)
-        $env:TIONSWARM_ENABLE_SHELL = "1"
+        $env:TIONHARNESS_ENABLE_SHELL = "1"
         # -RedirectStandardError: keeps Go runtime fatals (OOM, panic traces) on
         # disk. STDOUT is intentionally NOT redirected -- slog keeps streaming to
-        # this console live, and the app mirrors it to ~/.tionswarm/logs anyway.
+        # this console live, and the app mirrors it to ~/.tionharness/logs anyway.
         $backend = Start-Process -FilePath $backendExe `
             -WorkingDirectory $root -NoNewWindow -PassThru `
             -RedirectStandardError $backendErrLog

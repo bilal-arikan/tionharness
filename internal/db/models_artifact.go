@@ -20,7 +20,7 @@ const (
 
 // Artifact is a substantial, self-contained piece of content an agent produced
 // (a document, code file, HTML page, diagram) worth saving and viewing apart
-// from the chat stream — TionSwarm's take on Claude.ai artifacts. Workspace-scoped.
+// from the chat stream — TionHarness's take on Claude.ai artifacts. Workspace-scoped.
 // SessionID/AgentID record where it originated so the chat UI can link back.
 //
 // Artifacts are NOT versioned: an update overwrites the content in place.

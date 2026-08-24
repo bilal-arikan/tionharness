@@ -205,7 +205,7 @@ export function SkillsPanel({ onError }: Props) {
   const [editor, setEditor] = useState<{ mode: 'create' | 'edit'; initial?: SkillDetail } | null>(
     null,
   )
-  const { open: listOpen, toggle: toggleList } = useCollapsibleList('tionswarm.skillsListOpen')
+  const { open: listOpen, toggle: toggleList } = useCollapsibleList('tionharness.skillsListOpen')
 
   // Skills sorted newest-edited first. Since useGroupedList preserves incoming
   // order within each bucket, feeding it this pre-sorted list makes every group
@@ -226,7 +226,7 @@ export function SkillsPanel({ onError }: Props) {
   } = useGroupedList(sortedList, {
     keyOf: skillGroupKey,
     sortGroups: sortSkillGroups,
-    persistKey: 'tionswarm.skillsCollapsedGroups',
+    persistKey: 'tionharness.skillsCollapsedGroups',
   })
   // Distinct existing group names, offered as editor autocomplete suggestions.
   const groupNames = useMemo(
@@ -499,7 +499,7 @@ export function SkillsPanel({ onError }: Props) {
       <ListPane
         open={listOpen}
         onToggle={toggleList}
-        widthKey="tionswarm.skillsListWidth"
+        widthKey="tionharness.skillsListWidth"
         defaultWidth={288}
         label="Skills"
         testId="skills-list-toggle"
@@ -542,7 +542,7 @@ export function SkillsPanel({ onError }: Props) {
               <Sparkles size={28} className="opacity-40" />
               <p>
                 Henüz beceri yok. <code>SKILL.md</code> içeren bir klasörü{' '}
-                <code>~/.tionswarm/skills/</code> (global) ya da workspace <code>skills/</code>{' '}
+                <code>~/.tionharness/skills/</code> (global) ya da workspace <code>skills/</code>{' '}
                 altına koyup <strong>Tara</strong>'ya bas.
               </p>
             </div>

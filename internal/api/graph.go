@@ -3,9 +3,9 @@ package api
 import (
 	"net/http"
 
-	"github.com/bilal-arikan/tionswarm/internal/agent"
-	"github.com/bilal-arikan/tionswarm/internal/db"
-	"github.com/bilal-arikan/tionswarm/internal/orchestration"
+	"github.com/bilal-arikan/tionharness/internal/agent"
+	"github.com/bilal-arikan/tionharness/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/orchestration"
 )
 
 // graphNode is one entity in the workspace collaboration network. ID is
@@ -222,7 +222,7 @@ func (s *Server) handleWorkspaceGraph(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// MCP servers: one node per enabled server; an agent→server edge for every
-	// MCP-enabled agent (coarse access signal — TionSwarm gates tools per agent via
+	// MCP-enabled agent (coarse access signal — TionHarness gates tools per agent via
 	// an allowlist, not per server, so this shows "which agents can reach MCP").
 	// Only agents with a live instance are wired up, and a server with no live
 	// consumer is left out entirely rather than floating unconnected.

@@ -3,7 +3,7 @@ package proc
 import "os"
 
 // nonInteractiveGuards are environment overrides that keep child processes — git
-// above all — from blocking on an interactive prompt inside TionSwarm's
+// above all — from blocking on an interactive prompt inside TionHarness's
 // windowless, stdin-less subprocesses. Without them an agent-run `git commit`
 // can launch the configured GUI editor (e.g. core.editor=notepad) or a
 // credential/pager prompt and hang forever, burning a whole turn and orphaning
@@ -30,7 +30,7 @@ func nonInteractiveGuards() []string {
 // gate this on the confined/autonomous flag.
 //
 // Assumes the ambient environment carries no GIT_CONFIG_* injection of its own
-// (true for TionSwarm's process); appended last, these win via os/exec dedup.
+// (true for TionHarness's process); appended last, these win via os/exec dedup.
 func DisableGitSigningEnv() []string {
 	return []string{
 		"GIT_CONFIG_COUNT=2",

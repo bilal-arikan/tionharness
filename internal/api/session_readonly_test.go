@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bilal-arikan/tionswarm/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/db"
 )
 
 // TestEnqueueMessageRejectsInsightSession: an insight scan session is a record,

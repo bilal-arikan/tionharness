@@ -313,7 +313,7 @@ kırpıldı:
     şey **girdi** olduğu için satır sayıları da eksik kalır — bu yüzden
     `inputTruncated` de "kırpılmış" sayılır.
   - **Aynı dosyaya çoklu edit** grup içinde sıralı listelenir, **birleştirilmiş
-    yama üretilmez**: TionSwarm dosyanın öncesi/sonrası içeriğini saklamaz, tek
+    yama üretilmez**: TionHarness dosyanın öncesi/sonrası içeriğini saklamaz, tek
     tek edit farklarını saklar → gerçek birleşim hesaplanamaz, uydurmak yerine
     "sıralı değişiklikler" denir.
   - Yama başına `Kopyala` / `.patch indir` / `dosyayı aç`; altta sabit not:
@@ -499,7 +499,7 @@ kırpıldı:
   canlı güncellenir).
 - **Sunucu TTS motoru (Piper, harici CLI):** tarayıcı sesleri yerine sunucuda üretilen
   **doğal Piper** sesi — böylece **telefon/thin client** da okur (sesi sunucu üretir,
-  cihaz sadece çalar). Backend `internal/tts` (piper.exe tespiti: `TIONSWARM_PIPER` env
+  cihaz sadece çalar). Backend `internal/tts` (piper.exe tespiti: `TIONHARNESS_PIPER` env
   › `Progs\piper` layout › PATH; `voices/*.onnx` tarar; `os/exec`+60s timeout, `--model`
   + stdin metin → WAV). **Kurulum şekli değişti (2026-08-20):** upstream
   (`OHF-Voice/piper1-gpl`) Windows'a standalone arşiv yayınlamayı bıraktı, yerine
@@ -591,7 +591,7 @@ kırpıldı:
 - **Düşünme seviyesi seçici (`ThinkingPicker`):** textarea'nın solunda `🧠` butonu +
   üstte açılan menü (**Oto**=ajan ayarı / **Kapalı** / **Düşük** / **Orta** / **Yüksek**,
   dışarı-tıkla-kapat). Seçim `App.tsx` `thinkingLevel` state'inde + `localStorage`
-  (`tionswarm.thinkingLevel`) ile kalıcı; `chatStream` gövdesine `thinkingLevel` olarak gider
+  (`tionharness.thinkingLevel`) ile kalıcı; `chatStream` gövdesine `thinkingLevel` olarak gider
   ve o turun reasoning bütçesini **ajan ayarından bağımsız** belirler (bkz. Notlar).
 
 ### Session-bazlı sohbet (varsayılan ajan + çok-katılımcılı thread)
@@ -812,7 +812,7 @@ best-effort — hiçbir hata enqueue/reply akışını bozmaz. Frontend'e dokunu
 ### Yerleşim
 - Sohbet **tam genişlik** kullanır (`MessageList`/`Composer`'daki `max-w-3xl` kaldırıldı).
 - `Sidebar` (Ajanlar + Oturumlar) **sürüklenerek yeniden boyutlandırılır**: sağ kenardaki
-  tutamak (200–560px), genişlik `localStorage` (`tionswarm.sidebarWidth`).
+  tutamak (200–560px), genişlik `localStorage` (`tionharness.sidebarWidth`).
 - Bir turdaki üç adım türü de **tek-satır açılır-kapanır kart**: 💭 Düşünme (`thinking`),
   💬 Düşünce (ara `text` — `TextStep`), 🛠️ Tool (`tool` — `ActivityCard`). Nihai
   cevap tam görünür kalır.
@@ -939,11 +939,11 @@ Kritik ayrımlar:
 
 ## Doğrulama (anahtarsız claude-cli, uçtan uca)
 
-- Ajan: `StepTest` (claude-cli, anahtarsız). Mesaj: "Bash aracıyla `echo hello-from-tionswarm`
+- Ajan: `StepTest` (claude-cli, anahtarsız). Mesaj: "Bash aracıyla `echo hello-from-tionharness`
   çalıştır, sonra çıktıyı tek cümlede söyle."
 - Yanıt `steps`: `[{kind:text,"Komutu çalıştırıyorum."}, {kind:tool, tool:"Bash",
-  input:{command,description}, output:"hello-from-tionswarm"}]` — dosya deposuna kalıcı yazıldı.
-- Chrome DOM: ara metin → **▶️ Bash** tool kartı (açınca GIRDI/ÇIKTI: `hello-from-tionswarm`)
+  input:{command,description}, output:"hello-from-tionharness"}]` — dosya deposuna kalıcı yazıldı.
+- Chrome DOM: ara metin → **▶️ Bash** tool kartı (açınca GIRDI/ÇIKTI: `hello-from-tionharness`)
   → markdown cevap. **API anahtarı kullanılmadı.**
 
 ## Notlar / Sıradaki

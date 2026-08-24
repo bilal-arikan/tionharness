@@ -140,7 +140,7 @@ func scanDir(t tier) []Skill {
 		if info, statErr := os.Stat(path); statErr == nil {
 			sk.ModifiedAt = info.ModTime().Unix()
 		}
-		// How this file compares to the skill TionSwarm ships — only meaningful in
+		// How this file compares to the skill TionHarness ships — only meaningful in
 		// the GLOBAL tier, where the defaults are seeded. A workspace-tier skill of
 		// the same slug is a deliberate override living in a different file, so it
 		// has no shipped default to be measured against or restored from.
@@ -911,7 +911,7 @@ func renderCatalog(list []Skill, skillTool string) string {
 	}
 	// Sibling skill_search tool name + deferred-activation guidance. A claude-cli
 	// agent reaches these through the Interaction MCP bridge, where the names are
-	// namespaced (mcp__tionswarm_interaction__use_skill) AND may be DEFERRED by the CLI
+	// namespaced (mcp__tionharness_interaction__use_skill) AND may be DEFERRED by the CLI
 	// when many MCP tools are present (e.g. a large gateway). When the tool is
 	// namespaced, point the model at ToolSearch up front so it does not waste its
 	// first call on a rejected/unloaded name. We deliberately keep this to a single

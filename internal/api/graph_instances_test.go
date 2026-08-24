@@ -3,7 +3,7 @@ package api
 import (
 	"testing"
 
-	"github.com/bilal-arikan/tionswarm/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/db"
 )
 
 // TestBuildAgentInstancesOnlyRunning verifies the network's core rule: an agent

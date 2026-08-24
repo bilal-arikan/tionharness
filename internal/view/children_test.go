@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bilal-arikan/tionswarm/internal/db"
-	"github.com/bilal-arikan/tionswarm/internal/skills"
+	"github.com/bilal-arikan/tionharness/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/skills"
 )
 
 // fakeStore is a hand-built Store for exercising the Projector's structural
@@ -351,8 +351,8 @@ func TestChildrenSkillsAndInsightsNeedSources(t *testing.T) {
 	p := NewProjector(&fakeStore{})
 	p.WithSources(Sources{
 		Skills: fakeSkillsSource{catalog: []skills.Skill{
-			{Slug: "tionswarm-build", Name: "Build"},
-			{Slug: "tionswarm-guide", Name: "Guide"},
+			{Slug: "tionharness-build", Name: "Build"},
+			{Slug: "tionharness-guide", Name: "Guide"},
 		}},
 		Findings: fakeFindingsSource{findings: []InsightFinding{
 			{ID: "FND1", Title: "provider 429", Status: "new"},

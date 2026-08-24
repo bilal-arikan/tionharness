@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bilal-arikan/tionswarm/internal/providers"
+	"github.com/bilal-arikan/tionharness/internal/providers"
 )
 
 // TestActivateToleratesNamespaceConfusion: the model naming a tool with an
@@ -19,7 +19,7 @@ func TestActivateToleratesNamespaceConfusion(t *testing.T) {
 	tool := NewActivateToolsTool(NewActiveTools(), catalog, nil)
 
 	out, err := tool.Call(context.Background(), mustJSON(t, map[string]any{
-		"names": []string{"mcp__tionswarm_extended__get_flow"},
+		"names": []string{"mcp__tionharness_extended__get_flow"},
 	}))
 	if err != nil {
 		t.Fatal(err)

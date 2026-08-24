@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bilal-arikan/tionswarm/internal/insight"
+	"github.com/bilal-arikan/tionharness/internal/insight"
 )
 
 // TestAnalysisUserPromptLanguage: the language directive is appended only when a

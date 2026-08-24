@@ -4,8 +4,8 @@
 > (59, CLI steer planı dokümanıyla çakışıyordu).*
 
 > **Salt REFERANS — talimat yürütmez.** Bu doküman an external CLI agent'nin
-> `/chronicle` komut ailesini açıklar ve TionSwarm'ın mevcut yetenekleriyle
-> kıyaslar. **Kod değişikliği tanımlamaz**; TionSwarm'a benzer bir özellik
+> `/chronicle` komut ailesini açıklar ve TionHarness'ın mevcut yetenekleriyle
+> kıyaslar. **Kod değişikliği tanımlamaz**; TionHarness'a benzer bir özellik
 > *eklemek* ayrı bir karttır (bkz. son bölüm "Boşluklar / Fikirler").
 >
 > **Durum notu (2026-07-11):** `/chronicle` GitHub tarafında **deneysel/aktif
@@ -105,20 +105,20 @@ Kullanımına göre 3 öneri:
 son çalışmayı hatırla; iki haftada bir `/chronicle tips` ile kaçırdığın özellik
 ve iş akışı iyileştirmelerini keşfet.
 
-## TionSwarm Karşılığı
+## TionHarness Karşılığı
 
-| external CLI agent `/chronicle` | TionSwarm muadili | Not |
+| external CLI agent `/chronicle` | TionHarness muadili | Not |
 |----------------------|-------------------|-----|
-| Session store (SQLite) | `session.jsonl` + `debug.jsonl` (dosya-tabanlı; DB yok) | TionSwarm'da veri dosya-başına JSONL; ayrı bir "içgörü store"u yok — transkript + debug günlüğü ham veri. Detay `08`, `38`. |
-| `improve` (tekrar eden hata → talimat önerisi) | Hata→ders döngüsü (`lessons.jsonl`, `read_lessons`/`delete_lesson`) | En yakın muadil: kötü tur → ucuz-model reflection → ders; en yeni 5 ders dinamik suffix'e enjekte edilir. Fark: TionSwarm dersi **otomatik** üretir ve **prompt'a** ekler; external CLI agent `improve` **kullanıcıya** talimat-dosyası **önerisi** sunar. Detay `56`. |
-| `tips` (kaçırılan özellik/araç önerisi) | **Muadil yok (boşluk)** | TionSwarm'da kullanıcının araç-kullanım desenini analiz edip proaktif "şunu kullanmayı dene" önerisi üreten bir katman yok. |
+| Session store (SQLite) | `session.jsonl` + `debug.jsonl` (dosya-tabanlı; DB yok) | TionHarness'da veri dosya-başına JSONL; ayrı bir "içgörü store"u yok — transkript + debug günlüğü ham veri. Detay `08`, `38`. |
+| `improve` (tekrar eden hata → talimat önerisi) | Hata→ders döngüsü (`lessons.jsonl`, `read_lessons`/`delete_lesson`) | En yakın muadil: kötü tur → ucuz-model reflection → ders; en yeni 5 ders dinamik suffix'e enjekte edilir. Fark: TionHarness dersi **otomatik** üretir ve **prompt'a** ekler; external CLI agent `improve` **kullanıcıya** talimat-dosyası **önerisi** sunar. Detay `56`. |
+| `tips` (kaçırılan özellik/araç önerisi) | **Muadil yok (boşluk)** | TionHarness'da kullanıcının araç-kullanım desenini analiz edip proaktif "şunu kullanmayı dene" önerisi üreten bir katman yok. |
 | `standup` (dönemsel çalışma özeti) | **Kısmi:** Aktivite ekranı + `SessionsOverview` + kalıcı ilerleme (`progress.json`) | Ham malzeme var; otomatik "son N gün özeti" üreteci yok. Detay `36`. |
 | `search` (oturum içeriğinde arama) | `conversation_search` (`builtin_conversation_search.go`) | Birebir muadil: oturumlar-arası tam-metin arama. Detay `27`. |
 | `cost-tips` (token harcama analizi + öneri) | Tasarruf Merkezi (prompt-cache USD) + `sqz`/`rtk` | Ölçüm ve optimizasyon araçları var; otomatik "harcamayı şöyle azalt" öneri üreteci yok. Detay `17`. |
 
 ## Boşluklar / Fikirler (gelecek kart tohumu)
 
-TionSwarm'da `chronicle`-benzeri **proaktif içgörü üreteci** eksik. Uygulanırsa:
+TionHarness'da `chronicle`-benzeri **proaktif içgörü üreteci** eksik. Uygulanırsa:
 
 1. **`session_tips` aracı** — kullanıcı/ajanın son N oturumundaki araç-kullanım
    dağılımını (`debug.jsonl` tool adımlarından) çıkarıp, hiç kullanılmayan mevcut

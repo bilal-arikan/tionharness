@@ -1,6 +1,6 @@
-# TionSwarm — UTF-8-as-CP1254 mojibake onarim araci (one-shot).
+# TionHarness — UTF-8-as-CP1254 mojibake onarim araci (one-shot).
 #
-# KOK NEDEN: TionSwarm'nun depolama/Go I/O yolu UTF-8 temizdir. Bozulma, govdeyi
+# KOK NEDEN: TionHarness'nun depolama/Go I/O yolu UTF-8 temizdir. Bozulma, govdeyi
 # double-encode eden bir ISTEMCI'den girer (Windows PowerShell 5.1 Invoke-RestMethod
 # Turkce/ANSI govdeyi CP1254 olarak gonderir). Sonuc: dogru UTF-8 baytlar (orn "i"
 # = C4 B1) CP1254 olarak cozulup tekrar UTF-8 kaydedilir ("Ä±" = C3 84 C2 B1).
@@ -12,12 +12,12 @@
 #
 # Kullanim:
 #   .\scripts\repair-encoding.ps1                      # DRY-RUN: tum workspace'leri tarar, sadece raporlar
-#   .\scripts\repair-encoding.ps1 -StoreRoot 'C:\Users\user\.tionswarm\workspaces'
+#   .\scripts\repair-encoding.ps1 -StoreRoot 'C:\Users\user\.tionharness\workspaces'
 #   .\scripts\repair-encoding.ps1 -Apply               # gercekten yazar (once .bak-encfix yedegi alir)
 #   .\scripts\repair-encoding.ps1 -Workspace WS5 -Apply
 
 param(
-    [string]$StoreRoot = "$env:USERPROFILE\.tionswarm\workspaces",
+    [string]$StoreRoot = "$env:USERPROFILE\.tionharness\workspaces",
     [string]$Workspace = "",          # bos -> tum workspace'ler
     [switch]$Apply
 )

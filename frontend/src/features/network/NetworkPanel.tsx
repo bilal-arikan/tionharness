@@ -105,8 +105,8 @@ export function NetworkPanel({ onError, onOpenSession }: Props) {
     const handler = () => {
       load()
     }
-    window.addEventListener('tionswarm:board-columns-changed', handler)
-    return () => window.removeEventListener('tionswarm:board-columns-changed', handler)
+    window.addEventListener('tionharness:board-columns-changed', handler)
+    return () => window.removeEventListener('tionharness:board-columns-changed', handler)
   }, [load])
 
   // Cross-window live sync: App.tsx's central SSE handler bumps the 'network'

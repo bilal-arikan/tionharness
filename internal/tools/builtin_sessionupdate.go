@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/bilal-arikan/tionswarm/internal/providers"
+	"github.com/bilal-arikan/tionharness/internal/providers"
 )
 
 // maxSessionTitleLen bounds a session title so it stays a label, not a document.
@@ -57,7 +57,7 @@ func (UpdateSessionTool) Def() providers.ToolDef {
 		Examples: []json.RawMessage{
 			json.RawMessage(`{"title":"Refactor tool registry"}`),
 			json.RawMessage(`{"add":["loop"]}`),
-			json.RawMessage(`{"working_dir":"C:\\Users\\user\\Desktop\\Projects\\TionSwarm"}`),
+			json.RawMessage(`{"working_dir":"C:\\Users\\user\\Desktop\\Projects\\TionHarness"}`),
 			json.RawMessage(`{"archive":true}`),
 		},
 	}

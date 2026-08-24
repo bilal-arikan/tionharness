@@ -5,8 +5,8 @@
 import { api } from '@/api'
 import type { SttStatus } from '@/api/stt'
 
-const ENGINE_KEY = 'tionswarm.stt.engine'
-const MODEL_KEY = 'tionswarm.stt.model'
+const ENGINE_KEY = 'tionharness.stt.engine'
+const MODEL_KEY = 'tionharness.stt.model'
 
 export type SttEngine = 'auto' | 'browser' | 'server'
 

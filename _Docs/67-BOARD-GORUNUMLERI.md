@@ -108,7 +108,7 @@ Tümü · Bugün · Bloke · Ajansız · Gecikmiş. Bir hazır görünümü düz
 Çoklu pencere ([30-COKLU-PENCERE](30-COKLU-PENCERE.md)) destekleniyor. Aktif
 görünüm ayarlarda saklansaydı iki pencere birbirinin seçimini ezerdi. Tanım
 paylaşılır (`ws-settings.json`), **seçim pencereye özeldir**
-(`localStorage: tionswarm.board.viewId`).
+(`localStorage: tionharness.board.viewId`).
 
 Başka pencerede silinen bir görünüm bu pencereyi boşluğa bakar durumda bırakır;
 bu durumda seçim sessizce "Tümü"ye düşer — türetilmiş, effect'siz.

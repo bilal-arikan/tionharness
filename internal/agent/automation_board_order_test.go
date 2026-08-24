@@ -3,7 +3,7 @@ package agent
 import (
 	"testing"
 
-	"github.com/bilal-arikan/tionswarm/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/db"
 )
 
 // boardRule is a shorthand for an enabled board automation watching move→to.

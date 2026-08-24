@@ -3,7 +3,7 @@ package api
 import (
 	"net/http"
 
-	"github.com/bilal-arikan/tionswarm/internal/config"
+	"github.com/bilal-arikan/tionharness/internal/config"
 )
 
 // handleLogsPath returns the absolute on-disk log file path the Logs screen can

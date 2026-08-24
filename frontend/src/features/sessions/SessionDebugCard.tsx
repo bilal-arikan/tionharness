@@ -31,12 +31,12 @@ export function SessionDebugCard({
   // Whole-card fold (collapsed by default — debug is secondary; the header line
   // still shows a one-glance summary). Persisted so the choice sticks.
   const [open, setOpen] = useState(
-    () => alwaysOpen || localStorage.getItem('tionswarm.debugCardOpen') === '1',
+    () => alwaysOpen || localStorage.getItem('tionharness.debugCardOpen') === '1',
   )
   const toggleOpen = () =>
     setOpen((v) => {
       const next = !v
-      localStorage.setItem('tionswarm.debugCardOpen', next ? '1' : '0')
+      localStorage.setItem('tionharness.debugCardOpen', next ? '1' : '0')
       return next
     })
   const [expanded, setExpanded] = useState(false)

@@ -208,7 +208,7 @@ export function ChangesModal({
 }
 
 // FileDetail renders every change made to one file, in order. Each is its own
-// patch: TionSwarm records per-edit diffs and never the file's before/after
+// patch: TionHarness records per-edit diffs and never the file's before/after
 // content, so a merged patch cannot be computed — showing them stacked and
 // labelled is the honest form.
 function FileDetail({ group, onOpenFile }: { group: FileGroup; onOpenFile?: (p: string) => void }) {

@@ -1,6 +1,6 @@
 // Command repair-provider-migration fixes the on-disk fallout of the provider
 // rework (kind-keyed providers → provider INSTANCES, per-workspace CLI homes →
-// one app-global home). It is a one-time, idempotent repair over a TionSwarm
+// one app-global home). It is a one-time, idempotent repair over a TionHarness
 // data directory, in three passes:
 //
 //  1. providers.json — recreate the instances the settings→instances migration
@@ -26,7 +26,7 @@
 //
 // Usage:
 //
-//	go run ./cmd/repair-provider-migration            # dry run against ~/.tionswarm
+//	go run ./cmd/repair-provider-migration            # dry run against ~/.tionharness
 //	go run ./cmd/repair-provider-migration -apply
 //	go run ./cmd/repair-provider-migration -data D:\ts -apply
 package main
@@ -40,7 +40,7 @@ import (
 
 func main() {
 	var (
-		dataDir = flag.String("data", defaultDataDir(), "TionSwarm data directory (contains providers.json + workspaces/)")
+		dataDir = flag.String("data", defaultDataDir(), "TionHarness data directory (contains providers.json + workspaces/)")
 		apply   = flag.Bool("apply", false, "write the repairs (default: dry run, no changes)")
 	)
 	flag.Parse()
@@ -56,7 +56,7 @@ func run(dataDir string, apply bool) error {
 		return fmt.Errorf("data directory is required")
 	}
 	if _, err := os.Stat(filepath.Join(dataDir, "providers.json")); err != nil {
-		return fmt.Errorf("not a TionSwarm data directory (%s): %w", dataDir, err)
+		return fmt.Errorf("not a TionHarness data directory (%s): %w", dataDir, err)
 	}
 	mode := "DRY RUN (no changes; pass -apply to write)"
 	if apply {
@@ -80,13 +80,13 @@ func run(dataDir string, apply bool) error {
 	return nil
 }
 
-// defaultDataDir is ~/.tionswarm, matching internal/config's default.
+// defaultDataDir is ~/.tionharness, matching internal/config's default.
 func defaultDataDir() string {
 	home, err := os.UserHomeDir()
 	if err != nil || home == "" {
 		return ""
 	}
-	return filepath.Join(home, ".tionswarm")
+	return filepath.Join(home, ".tionharness")
 }
 
 // workspaceDirs lists the per-workspace roots under <dataDir>/workspaces.

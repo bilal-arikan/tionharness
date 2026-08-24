@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bilal-arikan/tionswarm/internal/skills"
+	"github.com/bilal-arikan/tionharness/internal/skills"
 )
 
 // SkillInput is one skill catalog entry. The projection renders the catalog

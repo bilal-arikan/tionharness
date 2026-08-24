@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bilal-arikan/tionswarm/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/db"
 )
 
 // buildSlice used to assemble the whole transcript and then slice it to a byte

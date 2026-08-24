@@ -9,8 +9,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/bilal-arikan/tionswarm/internal/providers"
-	"github.com/bilal-arikan/tionswarm/internal/tools"
+	"github.com/bilal-arikan/tionharness/internal/providers"
+	"github.com/bilal-arikan/tionharness/internal/tools"
 )
 
 // chatRun is the live control handle for one in-flight streaming chat turn.
@@ -292,7 +292,7 @@ func (r *chatRun) skillAllowedFor() skillAllowedFunc {
 
 // shellRunner runs a shell command for the responding agent (CLI path), bound to
 // the workspace sandbox. Mirrors the native shell built-in over the Interaction
-// MCP bridge so a claude-cli agent runs commands through TionSwarm's own shell
+// MCP bridge so a claude-cli agent runs commands through TionHarness's own shell
 // (sandboxed + bounded) instead of the CLI's POSIX Bash. toolName selects the
 // interpreter ("Bash" / "PowerShell"); the runner resolves the backing shell and
 // falls back to PowerShell on Windows when no bash.exe is present.

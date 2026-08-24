@@ -92,9 +92,9 @@ func migrateWorkspaceIDs(dataDir string, metas []wsMeta, apply bool) error {
 		oldDir := workspaceDir(dataDir, metas[i])
 		newDir := oldDir
 		if metas[i].Path != "" {
-			// Custom location: dir is "<parent>/tionswarm-<id>".
+			// Custom location: dir is "<parent>/tionharness-<id>".
 			parent := filepath.Dir(metas[i].Path)
-			newDir = filepath.Join(parent, "tionswarm-"+newID)
+			newDir = filepath.Join(parent, "tionharness-"+newID)
 			metas[i].Path = newDir
 		} else {
 			newDir = filepath.Join(dataDir, "workspaces", newID)

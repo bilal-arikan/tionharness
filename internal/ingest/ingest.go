@@ -5,7 +5,7 @@
 // install authority in the API layer — ingest itself never writes entities, it only
 // fetches, detects and converts. Adding a new importable feature = one Adapter.
 //
-// Boundary: ingest depends on fetch (acquisition), skills (the CC→TionSwarm skill
+// Boundary: ingest depends on fetch (acquisition), skills (the CC→TionHarness skill
 // mapping helpers) and market (the pack envelope). Nothing depends on ingest except
 // the API layer, so there are no import cycles. (SK-IMP3)
 package ingest
@@ -15,8 +15,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/bilal-arikan/tionswarm/internal/fetch"
-	"github.com/bilal-arikan/tionswarm/internal/market"
+	"github.com/bilal-arikan/tionharness/internal/fetch"
+	"github.com/bilal-arikan/tionharness/internal/market"
 )
 
 // Options control how discovered artifacts become packs at install time.

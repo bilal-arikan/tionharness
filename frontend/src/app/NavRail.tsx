@@ -89,7 +89,7 @@ export const NAV: { key: View; label: string; icon: LucideIcon }[] = [
   { key: 'insights', label: 'İçgörü', icon: Lightbulb },
 ]
 
-const COLLAPSE_KEY = 'tionswarm.navCollapsed'
+const COLLAPSE_KEY = 'tionharness.navCollapsed'
 
 // navItemClass renders the shared look for a nav button. The active state is a
 // soft accent tint with an accent left indicator (instead of a heavy solid
@@ -209,7 +209,7 @@ export function NavRail({
         <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-[var(--color-accent)] to-[color-mix(in_srgb,var(--color-accent)_60%,#000)] text-sm font-bold text-white shadow-[var(--shadow-sm)]">
           TS
         </div>
-        {!collapsed && <span className="text-lg font-semibold tracking-tight">TionSwarm</span>}
+        {!collapsed && <span className="text-lg font-semibold tracking-tight">TionHarness</span>}
       </div>
 
       {/* Workspace */}

@@ -3,7 +3,7 @@ package tools
 import (
 	"os/exec"
 
-	"github.com/bilal-arikan/tionswarm/internal/proc"
+	"github.com/bilal-arikan/tionharness/internal/proc"
 )
 
 // hardenShellCmd applies the two non-interactive safeguards shared by every shell

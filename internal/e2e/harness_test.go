@@ -11,10 +11,10 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/bilal-arikan/tionswarm/internal/agent"
-	"github.com/bilal-arikan/tionswarm/internal/conversation"
-	"github.com/bilal-arikan/tionswarm/internal/db"
-	"github.com/bilal-arikan/tionswarm/internal/providers"
+	"github.com/bilal-arikan/tionharness/internal/agent"
+	"github.com/bilal-arikan/tionharness/internal/conversation"
+	"github.com/bilal-arikan/tionharness/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/providers"
 )
 
 // scriptedProvider is a deterministic, network-free stand-in for an LLM. Each
@@ -92,9 +92,9 @@ func tc(id, name string, args map[string]any) providers.ToolCall {
 
 // --- harness -----------------------------------------------------------------
 
-// harness wires a real runtime over throwaway storage. TIONSWARM_DATA_DIR is
+// harness wires a real runtime over throwaway storage. TIONHARNESS_DATA_DIR is
 // redirected to a temp dir so the global skills/market seed never touches the
-// real ~/.tionswarm.
+// real ~/.tionharness.
 type harness struct {
 	t        *testing.T
 	rt       *agent.Runtime
@@ -112,7 +112,7 @@ type harness struct {
 
 func newHarness(t *testing.T, provider *scriptedProvider) *harness {
 	t.Helper()
-	t.Setenv("TIONSWARM_DATA_DIR", t.TempDir())
+	t.Setenv("TIONHARNESS_DATA_DIR", t.TempDir())
 
 	root := t.TempDir()
 	workDir := filepath.Join(root, "workspace")
@@ -141,7 +141,7 @@ func newHarness(t *testing.T, provider *scriptedProvider) *harness {
 }
 
 // newAgent creates a native, tool-enabled agent (provider "anthropic" keeps it on
-// TionSwarm's own agentic loop rather than the claude-cli delegation path). Pass
+// TionHarness's own agentic loop rather than the claude-cli delegation path). Pass
 // mutators to tweak fields (e.g. assigned Skills) before persisting.
 func (h *harness) newAgent(name string, mut ...func(*db.Agent)) db.Agent {
 	h.t.Helper()

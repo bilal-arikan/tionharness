@@ -2,15 +2,15 @@
   - navigation [ref=f2e4]:
     - generic [ref=f2e5]:
       - generic [ref=f2e6]: TS
-      - generic [ref=f2e7]: TionSwarm
+      - generic [ref=f2e7]: TionHarness
     - generic [ref=f2e9]:
-      - 'button "Workspace: TionSwarmRepo" [ref=f2e10]':
+      - 'button "Workspace: TionHarnessRepo" [ref=f2e10]':
         - generic [ref=f2e11]:
           - generic [ref=f2e12]:
             - text: 📦
             - generic "Başka workspace’te yeni etkinlik" [ref=f2e13]
           - generic "İşlem sürüyor" [ref=f2e15]
-          - generic [ref=f2e16]: TionSwarmRepo
+          - generic [ref=f2e16]: TionHarnessRepo
         - generic [ref=f2e17]: ▾
       - button "Navbarı daralt" [ref=f2e18]
     - generic [ref=f2e21]:
@@ -193,7 +193,7 @@
                   - generic "PRV1" [ref=f2e483]: "id: PRV1"
                   - generic [ref=f2e484]: "model: —"
                 - generic [ref=f2e485]:
-                  - 'generic "claude CLI not logged in (authentication_failed): run `claude /login` with CLAUDE_CONFIG_DIR=C:\\Users\\user\\.tionswarm\\provider-homes\\PRV1, or switch this agent to an API-key provider" [ref=f2e526]': giriş yok
+                  - 'generic "claude CLI not logged in (authentication_failed): run `claude /login` with CLAUDE_CONFIG_DIR=C:\\Users\\user\\.tionharness\\provider-homes\\PRV1, or switch this agent to an API-key provider" [ref=f2e526]': giriş yok
                   - button "Giriş yap" [active] [ref=f2e487]
                   - button "Düzenle" [ref=f2e491]
                   - button [ref=f2e492]
@@ -207,7 +207,7 @@
                   - generic "PRV2" [ref=f2e513]: "id: PRV2"
                   - generic [ref=f2e514]: "model: —"
                 - generic [ref=f2e515]:
-                  - 'generic "claude CLI not logged in (authentication_failed): run `claude /login` with CLAUDE_CONFIG_DIR=C:\\Users\\user\\.tionswarm\\provider-homes\\PRV2, or switch this agent to an API-key provider" [ref=f2e541]': giriş yok
+                  - 'generic "claude CLI not logged in (authentication_failed): run `claude /login` with CLAUDE_CONFIG_DIR=C:\\Users\\user\\.tionharness\\provider-homes\\PRV2, or switch this agent to an API-key provider" [ref=f2e541]': giriş yok
                   - button "Giriş yap" [ref=f2e517]
                   - button "Düzenle" [ref=f2e521]
                   - button [ref=f2e522]

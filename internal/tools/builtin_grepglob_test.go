@@ -25,7 +25,7 @@ func setupTree(t *testing.T) Sandbox {
 }
 
 func TestGrepOutputModes(t *testing.T) {
-	t.Setenv("TIONSWARM_GREP_NO_RG", "1") // pin the deterministic Go engine
+	t.Setenv("TIONHARNESS_GREP_NO_RG", "1") // pin the deterministic Go engine
 	sb := setupTree(t)
 	ctx := context.Background()
 	g := NewFSGrepTool(sb)
@@ -71,7 +71,7 @@ func TestGrepOutputModes(t *testing.T) {
 // TestGrepMultiPath: a comma-joined path list scans every listed file instead of
 // failing as one nonexistent path (the reported bug). Files outside the list stay out.
 func TestGrepMultiPath(t *testing.T) {
-	t.Setenv("TIONSWARM_GREP_NO_RG", "1") // pin the deterministic Go engine
+	t.Setenv("TIONHARNESS_GREP_NO_RG", "1") // pin the deterministic Go engine
 	sb := setupTree(t)
 	g := NewFSGrepTool(sb)
 
@@ -92,7 +92,7 @@ func TestGrepMultiPath(t *testing.T) {
 // TestGrepMultiPathMissing: an invalid entry names exactly the bad path and offers a
 // way out — it must not echo the whole joined blob or read as "no matches".
 func TestGrepMultiPathMissing(t *testing.T) {
-	t.Setenv("TIONSWARM_GREP_NO_RG", "1")
+	t.Setenv("TIONHARNESS_GREP_NO_RG", "1")
 	sb := setupTree(t)
 	g := NewFSGrepTool(sb)
 
@@ -120,7 +120,7 @@ func TestGrepMultiPathRGParity(t *testing.T) {
 	arg := map[string]any{"pattern": "todo", "-i": true, "path": "src/main.go,src/util.go"}
 
 	rgOut, _ := NewFSGrepTool(sb).Call(context.Background(), mustJSON(t, arg))
-	t.Setenv("TIONSWARM_GREP_NO_RG", "1")
+	t.Setenv("TIONHARNESS_GREP_NO_RG", "1")
 	goOut, _ := NewFSGrepTool(sb).Call(context.Background(), mustJSON(t, arg))
 	if rgOut != goOut {
 		t.Fatalf("multi-path parity mismatch\nrg:\n%q\ngo:\n%q", rgOut, goOut)
@@ -131,7 +131,7 @@ func TestGrepMultiPathRGParity(t *testing.T) {
 }
 
 func TestGrepContext(t *testing.T) {
-	t.Setenv("TIONSWARM_GREP_NO_RG", "1")
+	t.Setenv("TIONHARNESS_GREP_NO_RG", "1")
 	sb := setupTree(t)
 	g := NewFSGrepTool(sb)
 	// -B 1 includes the line before the match with a '-' separator.
@@ -144,7 +144,7 @@ func TestGrepContext(t *testing.T) {
 }
 
 func TestGrepOnlyMatching(t *testing.T) {
-	t.Setenv("TIONSWARM_GREP_NO_RG", "1")
+	t.Setenv("TIONHARNESS_GREP_NO_RG", "1")
 	sb := setupTree(t)
 	g := NewFSGrepTool(sb)
 	out, _ := g.Call(context.Background(), mustJSON(t, map[string]any{
@@ -241,9 +241,9 @@ func TestGrepRGGoParity(t *testing.T) {
 	}
 	for i, c := range cases {
 		rgOut, _ := NewFSGrepTool(sb).Call(context.Background(), mustJSON(t, c))
-		t.Setenv("TIONSWARM_GREP_NO_RG", "1")
+		t.Setenv("TIONHARNESS_GREP_NO_RG", "1")
 		goOut, _ := NewFSGrepTool(sb).Call(context.Background(), mustJSON(t, c))
-		os.Unsetenv("TIONSWARM_GREP_NO_RG")
+		os.Unsetenv("TIONHARNESS_GREP_NO_RG")
 		if rgOut != goOut {
 			t.Errorf("case %d (%v) parity mismatch\nrg:\n%q\ngo:\n%q", i, c, rgOut, goOut)
 		}

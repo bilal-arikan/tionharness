@@ -126,7 +126,7 @@ export function TaskBoard({ agents, onError }: Props) {
     setEditorOpen(false)
     // Tell the Network screen so its live-mode column anchors can refresh
     // immediately (without waiting for an autonomous task event).
-    window.dispatchEvent(new CustomEvent('tionswarm:board-columns-changed'))
+    window.dispatchEvent(new CustomEvent('tionharness:board-columns-changed'))
   }
 
   // showHint displays a transient message under the filter bar (auto-clearing),

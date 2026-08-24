@@ -83,7 +83,7 @@ func TestTurnCalledCoordinationTool(t *testing.T) {
 	if !turnCalledCoordinationTool([]TurnStep{{Kind: StepTool, Tool: "spawn_worker"}}) {
 		t.Error("bare spawn_worker not detected")
 	}
-	if !turnCalledCoordinationTool([]TurnStep{{Kind: StepTool, CallName: "mcp__tionswarm_interaction__list_workers"}}) {
+	if !turnCalledCoordinationTool([]TurnStep{{Kind: StepTool, CallName: "mcp__tionharness_interaction__list_workers"}}) {
 		t.Error("namespaced list_workers not detected")
 	}
 	nested := []TurnStep{{Kind: StepText, Text: "delegating"}, {Kind: StepTool, Tool: "run_subagent", SubSteps: []TurnStep{{Kind: StepTool, Tool: "send_to_worker"}}}}

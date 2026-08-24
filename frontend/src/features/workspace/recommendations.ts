@@ -309,8 +309,8 @@ export const RULES: Rule[] = [
         desc:
           `${names} yayımlanmış. ` +
           (oneClick > 0
-            ? `${oneClick} tanesi tek tıkla güncellenebilir; kalanlar elle (çalışan alt-süreç ikiliyi kilitlediği için TionSwarm üzerine yazmaz).`
-            : 'Bu araçlar elle güncellenir — çalışan bir alt-süreç ikiliyi kilitlediği için TionSwarm üzerine yazmaz; ekranda adım adım talimat var.'),
+            ? `${oneClick} tanesi tek tıkla güncellenebilir; kalanlar elle (çalışan alt-süreç ikiliyi kilitlediği için TionHarness üzerine yazmaz).`
+            : 'Bu araçlar elle güncellenir — çalışan bir alt-süreç ikiliyi kilitlediği için TionHarness üzerine yazmaz; ekranda adım adım talimat var.'),
         actionLabel: 'Harici araçlar',
         variant: 'warning',
         act: () => ctx.nav.settings('exttools'),

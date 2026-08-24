@@ -2,7 +2,7 @@ package tools
 
 import "context"
 
-// InteractionEndpoint locates the TionSwarm Interaction MCP server for the current
+// InteractionEndpoint locates the TionHarness Interaction MCP server for the current
 // turn: the loopback URL a CLI subprocess (claude-cli, ...) should call, plus the
 // per-run Bearer token that correlates its calls back to this turn. It is empty
 // in autonomous runs and whenever no interaction server is wired.

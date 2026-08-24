@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bilal-arikan/tionswarm/internal/db"
-	"github.com/bilal-arikan/tionswarm/internal/providers"
+	"github.com/bilal-arikan/tionharness/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/providers"
 )
 
 // hasTool reports whether a tool name is present in a catalog.
@@ -114,14 +114,14 @@ func TestLazyCatalogSummarisesManyMCPTools(t *testing.T) {
 
 // TestLazyCatalogHidesSelfManageBehindSkillPointer verifies the rendered block
 // does NOT enumerate hidden self-management tools but emits a single pointer to
-// the tionswarm-self-management skill (and still names the visible lazy tools).
+// the tionharness-self-management skill (and still names the visible lazy tools).
 func TestLazyCatalogHidesSelfManageBehindSkillPointer(t *testing.T) {
 	visible := []providers.ToolDef{{Name: "WebFetch", Description: "fetch a page"}}
 	out := renderLazyToolCatalog(visible, 12, false, nil)
 	if !strings.Contains(out, "WebFetch") {
 		t.Error("visible lazy tools must still be listed")
 	}
-	if !strings.Contains(out, "tionswarm-self-management") {
+	if !strings.Contains(out, "tionharness-self-management") {
 		t.Error("hidden suite must be replaced by a pointer to the self-management skill")
 	}
 	if !strings.Contains(out, "12 self-management tools") {
@@ -129,7 +129,7 @@ func TestLazyCatalogHidesSelfManageBehindSkillPointer(t *testing.T) {
 	}
 	// With no hidden tools, no pointer line.
 	out = renderLazyToolCatalog(visible, 0, false, nil)
-	if strings.Contains(out, "tionswarm-self-management") {
+	if strings.Contains(out, "tionharness-self-management") {
 		t.Error("no pointer when there are no hidden tools")
 	}
 	// Empty + no hidden → empty block.
@@ -151,7 +151,7 @@ func TestLazyCatalogCLIFormNamespacesNames(t *testing.T) {
 	}
 	out := renderLazyToolCatalog(lazy, 3, true, nil)
 
-	if !strings.Contains(out, "mcp__tionswarm_extended__update_session") {
+	if !strings.Contains(out, "mcp__tionharness_extended__update_session") {
 		t.Errorf("CLI form must namespace lazy built-ins under the extended tier:\n%s", out)
 	}
 	if !strings.Contains(out, "mcp__srvA__alpha") {
@@ -169,11 +169,11 @@ func TestLazyCatalogCLIFormNamespacesNames(t *testing.T) {
 	if sel < 0 || !strings.Contains(out[sel-200:sel], "EXTERNAL MCP tools") {
 		t.Errorf("CLI form must mark the MCP entries as ToolSearch select:\n%s", out)
 	}
-	if sel < strings.Index(out, "mcp__tionswarm_extended__update_session") {
+	if sel < strings.Index(out, "mcp__tionharness_extended__update_session") {
 		t.Errorf("CLI form must NOT instruct ToolSearch select for built-ins (gateway path):\n%s", out)
 	}
 	// Self-management pointer uses the namespaced use_skill on the CLI path.
-	if !strings.Contains(out, "mcp__tionswarm_interaction__use_skill") {
+	if !strings.Contains(out, "mcp__tionharness_interaction__use_skill") {
 		t.Errorf("CLI self-management pointer must namespace use_skill:\n%s", out)
 	}
 

@@ -6,10 +6,10 @@ import (
 	"sort"
 	"strings"
 
-	agentpkg "github.com/bilal-arikan/tionswarm/internal/agent"
-	"github.com/bilal-arikan/tionswarm/internal/db"
-	"github.com/bilal-arikan/tionswarm/internal/tools"
-	"github.com/bilal-arikan/tionswarm/internal/workspace"
+	agentpkg "github.com/bilal-arikan/tionharness/internal/agent"
+	"github.com/bilal-arikan/tionharness/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/tools"
+	"github.com/bilal-arikan/tionharness/internal/workspace"
 )
 
 // handleAgentPath returns the absolute path of an agent's on-disk JSON file.

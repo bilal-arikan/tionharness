@@ -40,7 +40,7 @@ credential-secret
 /.flowids.json
 /.testids.json
 /.mcptest/
-/frontend/tionswarm_title_test.mjs
+/frontend/tionharness_title_test.mjs
 
 # Dependencies
 /frontend/node_modules/
@@ -58,4 +58,4 @@ Thumbs.db
 .DS_Store
 
 # Agent runtime working-dir state (persistent progress)
-.tionswarm/
+.tionharness/

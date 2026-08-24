@@ -9,12 +9,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bilal-arikan/tionswarm/internal/db"
-	"github.com/bilal-arikan/tionswarm/internal/providers"
+	"github.com/bilal-arikan/tionharness/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/providers"
 )
 
 func TestMain(m *testing.M) {
-	if os.Getenv("TIONSWARM_PREFLIGHT_HELPER") == "broken" {
+	if os.Getenv("TIONHARNESS_PREFLIGHT_HELPER") == "broken" {
 		fmt.Fprintln(os.Stderr, `error loading C:\Users\user\.codex\config.toml: unknown field features.rmcp_client at line 4`)
 		os.Exit(2)
 	}
@@ -117,7 +117,7 @@ func TestSpawnSessionRefusesBrokenCLIWithoutCreatingSession(t *testing.T) {
 	rt, _ := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))
 	ctx := context.Background()
 	home := t.TempDir()
-	t.Setenv("TIONSWARM_PREFLIGHT_HELPER", "broken")
+	t.Setenv("TIONHARNESS_PREFLIGHT_HELPER", "broken")
 	rt.providers.SetInstances([]providers.Instance{{
 		ID: "broken-codex", KindID: "codex-cli", Enabled: true,
 		Values: map[string]string{

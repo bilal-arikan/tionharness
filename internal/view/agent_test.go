@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bilal-arikan/tionswarm/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/db"
 )
 
 // agentFixture builds an agent with a mix of session conditions: active, idle,

@@ -28,7 +28,7 @@ export interface Hook {
   createdAt: number
 }
 
-// BuiltinHook is one of TionSwarm's automatic, non-editable tool behaviours
+// BuiltinHook is one of TionHarness's automatic, non-editable tool behaviours
 // (freshness guard, CLI native-tool bridging, hook passthrough, ...) surfaced
 // read-only in the Hooks screen. Mirrors api.builtinHook.
 export interface BuiltinHook {

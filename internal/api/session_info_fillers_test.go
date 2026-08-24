@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bilal-arikan/tionswarm/internal/skills"
+	"github.com/bilal-arikan/tionharness/internal/skills"
 )
 
 // writeTestSkill drops a minimal SKILL.md into a skills tier directory.

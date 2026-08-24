@@ -4,7 +4,7 @@ import (
 	"context"
 	"strings"
 
-	"github.com/bilal-arikan/tionswarm/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/db"
 )
 
 // This file holds the shared reply/error recording for session-reuse continuation

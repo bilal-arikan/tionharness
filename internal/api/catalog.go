@@ -3,7 +3,7 @@ package api
 import (
 	"net/http"
 
-	"github.com/bilal-arikan/tionswarm/internal/providers"
+	"github.com/bilal-arikan/tionharness/internal/providers"
 )
 
 // catalogEntryDTO is a catalog entry plus whether the provider is configured

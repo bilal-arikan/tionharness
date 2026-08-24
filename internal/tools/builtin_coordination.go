@@ -7,7 +7,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/bilal-arikan/tionswarm/internal/providers"
+	"github.com/bilal-arikan/tionharness/internal/providers"
 )
 
 // builtin_coordination.go exposes the M2 coordinator/worker tools (see _Docs/47).

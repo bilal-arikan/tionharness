@@ -77,7 +77,7 @@ type ToolDef struct {
 	// folded into the shipped InputSchema as a JSON Schema "examples" array at
 	// request-assembly time (see registry foldExamples), so they travel only with
 	// the FULL schema — never with the lightweight lazy catalog (name+desc only).
-	// This is the TionSwarm analogue of the Anthropic "input_examples" tool field.
+	// This is the TionHarness analogue of the Anthropic "input_examples" tool field.
 	Examples []json.RawMessage `json:"-"`
 }
 

@@ -3,7 +3,7 @@
 > Ajan araç çıktılarının (shell, dosya, MCP) LLM context'ine girmeden önce küçültülmesi.
 >
 > **Not (2026-07-10): built-in araç-çıktısı sıkıştırması TAMAMEN KALDIRILDI.**
-> TionSwarm artık hiçbir built-in (deterministik veya LLM tabanlı) araç-çıktısı
+> TionHarness artık hiçbir built-in (deterministik veya LLM tabanlı) araç-çıktısı
 > sıkıştırması **içermez**. Eskiden var olan iki sistem — "Sistem A" (deterministik,
 > kural tabanlı, `internal/tools/compact`) ve daha eski "Sistem B" (ucuz-model LLM
 > özeti) — ilgili ayarlar (`compactToolOutput` / `compactMaxLines` / `compactMaxBytes`),
@@ -23,7 +23,7 @@
 
 ## Neden harici?
 
-TionSwarm'nun native agentic döngüsünde (`agent/toolloop.go`) her araç çağrısının çıktısı bir
+TionHarness'nun native agentic döngüsünde (`agent/toolloop.go`) her araç çağrısının çıktısı bir
 `ToolResult` olarak konuşmaya eklenir ve sonraki model çağrısında **girdi token'ı** olarak ücretlenir.
 `Bash` gibi araçlar 64 KB'ye kadar ham çıktı döndürebilir. `git status`, test runner, `ls -R`, `grep`
 gibi komutlar context'i hızla şişirir. Bu baskıyı azaltmak artık **built-in bir katman değil**, harici
@@ -35,8 +35,8 @@ her zaman olduğu gibi **hiç dokunulmadan** modele gider.
 
 ## Bridged shell için in-process `sqz` (2026-07-25)
 
-**Sorun:** `sqz hook claude` yalnız **native `Bash`** tool adını rewrite ediyor. TionSwarm
-tüm shell'i bridged `mcp__tionswarm_interaction__Bash` (ve `…__PowerShell`) üzerinden
+**Sorun:** `sqz hook claude` yalnız **native `Bash`** tool adını rewrite ediyor. TionHarness
+tüm shell'i bridged `mcp__tionharness_interaction__Bash` (ve `…__PowerShell`) üzerinden
 koşturduğu için sqz PostToolUse/PreToolUse hook'u bu araçları **tanımıyor** → hiç sıkıştırma
 olmuyordu (doğrulandı: aynı `cat` komutu native adla rewrite edilir, bridged adla passthrough).
 
@@ -102,7 +102,7 @@ tam olarak budur.**
 
 **Sorun:** rtk hiç çalışmıyordu. SES14 + SES15'te **81 shell çağrısının 0'ı** rtk'dan
 geçmiş. Sebep sqz'de çözdüğümüzün aynısı: rtk'nın PreToolUse hook'u araç **adı** olarak
-`Bash`'i eşliyor, TionSwarm ise her şeyi bridged `mcp__tionswarm_interaction__Bash` ile
+`Bash`'i eşliyor, TionHarness ise her şeyi bridged `mcp__tionharness_interaction__Bash` ile
 koşturuyor → hook hiç ateşlenmiyor. Manuel sarmalama da olmuyor (talimat yetmiyor).
 
 **Çözüm:** sqz'nin çıktı filtresinin kardeşi olarak bir **komut** filtresi:
@@ -303,9 +303,9 @@ Bunun yerine **dürüst uyarı**: yeniden yazılmış bir komut başarısız olu
 talimatı kısaltılmadan ulaşsın. Tek çalıştırma, sıfır tahmin, kararı bilgiye en yakın olan
 verir.
 
-### Araçların kendi ayarları (TionSwarm dışı)
+### Araçların kendi ayarları (TionHarness dışı)
 
-Her ikisinin de kendi yapılandırması var; TionSwarm'ın ayarlarıyla **karışmaz**, alt katmanda
+Her ikisinin de kendi yapılandırması var; TionHarness'ın ayarlarıyla **karışmaz**, alt katmanda
 durur:
 
 | Araç | Yapılandırma | İşe yarayan anahtarlar |
@@ -314,21 +314,21 @@ durur:
 | sqz | `sqz init` ile kurulan preset'ler | `sqz reset --cache-only` (bayat `§ref:` token'ları) · `sqz expand` (ref → tam içerik) · `sqz tee list/get` · `sqz status`/`gain`/`stats` |
 
 > **Neden beyaz listeyi rtk'nın `exclude_commands`'ine devretmiyoruz:** o dosya makineye
-> özel ve sürüm kontrolünde değil. Kararı oraya taşımak, TionSwarm'ın davranışını
+> özel ve sürüm kontrolünde değil. Kararı oraya taşımak, TionHarness'ın davranışını
 > **makineden makineye değiştirir** ve testle kilitlenemez hale getirir. Kod tarafındaki
 > `rtkWrapperPrograms` gerekçesiyle birlikte repoda duruyor ve testi var.
 
 #### Bakım paneli — Ayarlar ▸ Harici Araçlar (2026-07-28)
 
 Aynı gerekçeyle bu araçların config **anahtarları** ayar olarak yansıtılmadı: onların
-yapılandırması makine geneli, TionSwarm ayarları workspace başına — anahtarı buraya koymak,
+yapılandırması makine geneli, TionHarness ayarları workspace başına — anahtarı buraya koymak,
 ayarın tutamayacağı bir kapsam sözü vermek olurdu. Bunun yerine iki **eylem**
 (rtk config'i Explorer'da açan üçüncü eylem 2026-08-12'de kaldırıldı; config yolu
 panelde hâlâ metin olarak gösterilir):
 
 | Eylem | Uç nokta | Ne yapar |
 |---|---|---|
-| Tasarruf raporu | `GET /api/external-tools/token-report` | `rtk gain` + `sqz gain` çıktısını **birebir** gösterir; TionSwarm yeniden hesaplamaz, böylece araçların muhasebesinden sapamaz |
+| Tasarruf raporu | `GET /api/external-tools/token-report` | `rtk gain` + `sqz gain` çıktısını **birebir** gösterir; TionHarness yeniden hesaplamaz, böylece araçların muhasebesinden sapamaz |
 | sqz dedup önbelleğini temizle | `POST /api/external-tools/sqz-reset-cache` | `sqz reset --cache-only` — bayat `§ref:…§` işaretçileri ajanı şaşırttığında sqz'nin kendi önerdiği işlem. İstatistikler korunur |
 
 Güvenlik: iki uç nokta da **parametre almaz**; komutlar sabit argv. Kabuğa ulaşan hiçbir
@@ -514,7 +514,7 @@ yönlendirmenin hâlâ reddedildiği.
 **Belirti:** WS10/SES63'te ajanın **hiçbir Bash çağrısı** çalışmadı. İki denemede de:
 
 ```
-PreToolUse:mcp__tionswarm_interaction__Bash hook error:
+PreToolUse:mcp__tionharness_interaction__Bash hook error:
   [$j=[Console]::In.ReadToEnd()|ConvertFrom-Json; ...]:
   /usr/bin/bash: -c: line 1: syntax error near unexpected token `|'
 ```
@@ -522,14 +522,14 @@ PreToolUse:mcp__tionswarm_interaction__Bash hook error:
 Ajan pes edip PowerShell'e geçti. rtk hiç çalışmadı; **shell de çalışmadı.**
 
 **Kök neden:** Ayarlar ▸ Harici Araçlar'daki "rtk'yi bağla" butonu gövdesi **PowerShell
-tek satırlığı** olan bir PreToolUse hook'u yaratıyordu. TionSwarm'ın kendi hook runner'ı
+tek satırlığı** olan bir PreToolUse hook'u yaratıyordu. TionHarness'ın kendi hook runner'ı
 Windows'ta PowerShell olduğu için native yolda çalışıyordu — ama `writeCLISettings` bu
 hook'u claude-cli'ye devrettiğinde **CLI onu bash ile** çalıştırıyor ve ilk `|`'da ölüyor.
 Başarısız bir PreToolUse hook'u **araç çağrısını bloke ettiği** için sonuç: o workspace'te
 Bash tamamen kullanılamaz hale geliyor.
 
 Risk `climcp.go:280`'de zaten yazılıydı: *"CLI hooks run under the CLI's own hook
-runner/shell, which may differ from TionSwarm's execHook (PowerShell on Windows)."*
+runner/shell, which may differ from TionHarness's execHook (PowerShell on Windows)."*
 Şablon bu uyarıyı ihlal ediyordu. HOK4 (sqz) aynı workspace'te sorunsuz çalışıyor çünkü
 doğru deseni kullanıyor: `powershell -NoProfile -ExecutionPolicy Bypass -File "...ps1"` —
 hem bash hem PowerShell için geçerli bir komut satırı.
@@ -549,7 +549,7 @@ Yapılanlar:
 | `recommendations.test.ts` | `never offers an rtk HOOK…` + şablonun imzası (`ReadToEnd`) geri gelirse kırılan assert |
 | WS10 (canlı) | HOK3 silindi; `shellCommandRewrite="on"`, `shellOutputCompression="on"` |
 
-> **Ders:** iki farklı hook runner (TionSwarm=PowerShell, claude-cli=bash) varken hook
+> **Ders:** iki farklı hook runner (TionHarness=PowerShell, claude-cli=bash) varken hook
 > gövdesi **ikisinde de geçerli** olmalı. Tek satırlık PowerShell yerine
 > `powershell -NoProfile -File <script.ps1>` deseni kullanılmalı — sqz'nin yaptığı gibi.
 
@@ -597,7 +597,7 @@ no_compress: true to get the byte-exact output.]
 > **Turun ortaya çıkardığı ayrı bir sorun:** `cargo` bridged shell'in PATH'inde yok —
 > SES14/SES15'te üç çağrı harcatan israfın aynısı. git-bash normal bir kabuktan
 > çağrıldığında `/c/Users/user/.cargo/bin/cargo`'yu görüyor, yani sorun git-bash'te
-> değil: **TionSwarm süreci dar bir PATH ile başlatılmış** ve tüm alt kabukları onu
+> değil: **TionHarness süreci dar bir PATH ile başlatılmış** ve tüm alt kabukları onu
 > miras alıyor. Bu, token optimizasyonundan bağımsız bir dağıtım/başlatma konusu;
 > `_Docs/17`'nin kapsamı dışında ama worker'ların Rust derleyememesine yol açıyor.
 
@@ -633,7 +633,7 @@ token araçlarıyla sınırlı değil; **kategorilere** ayrılır:
   (yalnız `wire="hook"` ise frontend `TOOL_HOOK_TEMPLATES`'e ek şablon gerekir).
 - Frontend: `systemApi.externalTools()` + `HooksPanel`; araçlar `category`'ye göre gruplanır, `wire`'a
   göre rozet/buton gösterilir (`hook`→Bağla/Aktif toggle, `mcp`→MCP rozeti, `cli`→CLI rozeti) + repo linki.
-- Bu yalnızca **bilgilendirme + opsiyonel wire-up**'tır; TionSwarm bu araçları kendiliğinden çalıştırmaz.
+- Bu yalnızca **bilgilendirme + opsiyonel wire-up**'tır; TionHarness bu araçları kendiliğinden çalıştırmaz.
   Araç-çıktısı sıkıştırması **artık yalnız bu harici yoldadır** (built-in `compact` alt sistemi
   kaldırıldı): `sqz` PostToolUse hook'u olarak bağlanır, `rtk` agent tarafından Bash ile çağrılır.
   `cli` araçları (`mmdc`) ajan tarafından geliştirme sırasında Bash ile kullanılır.
@@ -643,7 +643,7 @@ token araçlarıyla sınırlı değil; **kategorilere** ayrılır:
 - `sqz` `token` kategorisinde, `wire="hook"` olarak listelenir → Ayarlar → **Hooks** ekranında
   tek tıkla **PostToolUse** hook'u olarak bağlanabilir (frontend `TOOL_HOOK_TEMPLATES`).
 - PostToolUse zincirinde araç çıktısı, modele/transkripte dönmeden önce `sqz`'e verilir; hook
-  kısaltılmış çıktıyı geri döndürür. TionSwarm bu kazanımı **ölçmez** (Claude Code hook sözleşmesi
+  kısaltılmış çıktıyı geri döndürür. TionHarness bu kazanımı **ölçmez** (Claude Code hook sözleşmesi
   tasarruf sayacı sunmaz) — kazanç dolaylı olarak input-token düşüşünde görünür.
 - `rtk` için ayrı bir hook şablonu gerekmez; agent gürültülü komutları doğrudan `rtk <cmd>` ile
   sarmalar (kullanıcı `CLAUDE.md`'sindeki manuel fallback listesi).
@@ -655,7 +655,7 @@ token araçlarıyla sınırlı değil; **kategorilere** ayrılır:
   ikisi de hook'tan geçmiş haliyle gösterilir → tutarlılık korunur).
 - Komut-özel akıllı kısaltma (git/test/grep'e özgü) built-in tarafta yok; bu iş harici `rtk`/`sqz`
   araçlarının komut-aile kurallarına bırakıldı.
-- claude-cli delegasyon yolu kapsam dışıdır (çıktıları TionSwarm'nun `ToolResult` katmanından geçmez).
+- claude-cli delegasyon yolu kapsam dışıdır (çıktıları TionHarness'nun `ToolResult` katmanından geçmez).
 
 ### Tool dizisi prompt-cache breakpoint'i (2026-07-02)
 
@@ -734,7 +734,7 @@ edilir; bu arada ajan dinamik tarafta "snapshot eski" notu görür. Workspace ay
 ## the external agent project'tan Aktarılan Fikirler
 
 > Kaynak: `external-agent-oss` ([repo](https://github.com/external-agent-project/external-agent-oss)) bağlam-yönetimi
-> incelemesi (2026-06-22). the external agent project çoğu bağlam işini Claude Agent SDK'ye devreder; TionSwarm'nun açık
+> incelemesi (2026-06-22). the external agent project çoğu bağlam işini Claude Agent SDK'ye devreder; TionHarness'nun açık
 > motoru genel olarak daha kontrollü. Aşağıda **sırada bekleyen** dokunuşlar (TODO) + **tamamlananların**
 > tek-satır özeti (tam tarihçe → [05-ILERLEME.md](05-ILERLEME.md)).
 
@@ -745,7 +745,7 @@ edilir; bu arada ajan dinamik tarafta "snapshot eski" notu görür. Workspace ay
 > built-in `compact`/özet alt sistemine dayanıyordu. Komut-aile-özel akıllı kısaltma
 > ihtiyacı artık **harici araçlarla** (`rtk`/`sqz`) karşılanır; bu araçlar zaten
 > `git diff`/`ls -R`/test-runner/`grep` gibi komutlar için komut-ailesine özel kurallar
-> içerir. TionSwarm tarafında yapılacak tek iş varsa o da `sqz` hook şablonlarını /
+> içerir. TionHarness tarafında yapılacak tek iş varsa o da `sqz` hook şablonlarını /
 > `rtk` sarmalama kılavuzunu güncel tutmaktır.
 
 ### Tamamlanan iyileştirmeler (özet)
@@ -817,7 +817,7 @@ Tasarrufun tersi: geç gelen bir tur sıcak prompt-cache öneğini soğuttuğund
 Bütçe / oturum-bilgisi / sohbet-debug / debug popup'larının hesap tutarlılık denetiminde bulunup düzeltilen dört nokta (hepsi ortak `billing.PriceStat` + fiyat tablosu + `session_info` filler yolunda → tek noktadan dört ekranı da düzeltir):
 
 - **claude-cli tahmini cache tasarrufu artık sıfır değil** (`billing.PriceStat`): estimated (abonelik) dalı maliyeti eşdeğer-API ile tahmin ediyor ama tasarrufu `0` döndürüyordu. Anahtarsız varsayılan sağlayıcı olan claude-cli'de bu, tahmini bir maliyet gösterilirken **Tasarruf Merkezi / "Prompt-cache" / oturum kazancı / mesaj-debug "Cache tasarrufu"** satırlarının hepsinin `$0` görünmesine yol açıyordu. Artık `ep.CacheSavings(cacheRead)` da tahmin ediliyor (`priced=false` korunur → UI iki figürü de "~" ile işaretler). Regresyon: `billing_test.go`.
-- **claude-cli cache-write primi doğru tier'a çekildi** (`providers.EstimateFor`): anthropic tablosundaki `claude-opus-4-8` vb. `CacheWrite1hMult` (2×) primini taşır — bu **yalnız TionSwarm'un native anthropic client'ına** özgü (o hep `ttl:"1h"` ister). claude-cli (Claude Code) kendi `cache_control`'unu **5 dakikalık TTL (1.25×)** ile yönetir, dolayısıyla EstimateFor artık override'ı sıfırlıyor → cache-write %60 fazla fiyatlanmıyor. Regresyon: `pricing_test.go`.
+- **claude-cli cache-write primi doğru tier'a çekildi** (`providers.EstimateFor`): anthropic tablosundaki `claude-opus-4-8` vb. `CacheWrite1hMult` (2×) primini taşır — bu **yalnız TionHarness'un native anthropic client'ına** özgü (o hep `ttl:"1h"` ister). claude-cli (Claude Code) kendi `cache_control`'unu **5 dakikalık TTL (1.25×)** ile yönetir, dolayısıyla EstimateFor artık override'ı sıfırlıyor → cache-write %60 fazla fiyatlanmıyor. Regresyon: `pricing_test.go`.
 - **Bağlam penceresi çubuğu segment↔toplam tutarsızlığı** (`session_info.go`): "kullanılan" başlığı `EstimateTokens` (mesaj başına `+MsgOverhead=4`) ile hesaplanırken filler segmentleri bu framing'i saymıyordu → çubuk rapor edilen yüzdeye tam ulaşmıyordu. `buildFillers` artık mesaj başına `conversation.MsgOverhead` ekliyor **ve** `ContextTokens` doğrudan filler toplamından türetiliyor → başlık = görünür segmentler toplamı (birebir). `MsgOverhead` `conversation` paketinden dışa açıldı.
 - **"Tasarrufsuz maliyet" tam-doğru baseline'a çevrildi** (`providers.Price.CostNoCaching` + `billing.NoCacheCost` + `Rollup.NoCacheCostUSD` → `cumulative.noCacheCostUSD`): kart eskiden `cost + savings` gösteriyordu; bu, cacheRead'i tam fiyatlıyor ama cache-write primini (1.25×/2×) içeride bırakıp "caching olmasaydı" senaryosunu `(writeMult−1)×cacheWrite×inP` kadar şişiriyordu. Yeni baseline, cacheRead **ve** cacheWrite tokenlarının tümünü taban girdi fiyatından (indirim/prim yok) + input + output ile hesaplar → gerçek "caching yokmuş" tutarı. (Not: 1s-TTL 2× primi nedeniyle tek soğuk yazma, o yazma için tasarrufsuz baseline'ı bile aşabilir — caching kazancı tekrar-okumada realize olur.) Regresyon: `billing_test.go` + `pricing_test.go`.
 
@@ -861,15 +861,15 @@ retrieval and long-range reasoning"*) — model uzun bağlamda hâlâ yetkin ama
 Ham pencereye alternatifler: compaction · structured note-taking · just-in-time retrieval · sub-agent
 izolasyonu.
 
-**TionSwarm'nun önceki bahsi (§7, 2026-06-23).** `EffectiveBudget` `fraction=0.6 / ceil=512K`'ye
+**TionHarness'nun önceki bahsi (§7, 2026-06-23).** `EffectiveBudget` `fraction=0.6 / ceil=512K`'ye
 çıkarılmıştı ("1M pencerede her şeyi ham tut" → Claude Code/External Agent davranışına yaklaşmak). Bu,
 **bilinçli olarak rot ile takastı**: ham pencere büyüdükçe `n²` yüzeyi ve recall hassasiyeti kaybı
-büyür. Ayrıca Claude Code o davranışı **prompt-cache + fork**'la ucuzlatır; TionSwarm'nun birincil yolu
+büyür. Ayrıca Claude Code o davranışı **prompt-cache + fork**'la ucuzlatır; TionHarness'nun birincil yolu
 (`claude-cli`, anahtarsız) bu paylaşımı CC gibi kontrol edemez → büyük ham pencerenin getiri/maliyet
-oranı TionSwarm'da daha zayıf.
+oranı TionHarness'da daha zayıf.
 
 **Kritik içgörü — dayanıklılık ≠ ham pencere boyutu.** Bir detayın kaybolmaması için 512K ham
-transkript *gerekmez*. TionSwarm'nun dayanıklılığı zaten **retrieval katmanında**: `conversation_search`
+transkript *gerekmez*. TionHarness'nun dayanıklılığı zaten **retrieval katmanında**: `conversation_search`
 (`full=true`/`context=N` ile **birebir** kurtarma, §10) · post-compact kurtarma notu ("tahmin etme;
 ara ya da yeniden oku", §9). Katlanan detay **birebir geri
 alınabilir** → ham pencereyi küçültmek retrieval'i **kaybettirmez**, sadece dayanıklılığı "büyük pencere"den
@@ -930,7 +930,7 @@ bağlam yönetimi CLI'a geçer → bu bütçe o oturumda baypas edilir (bilinen 
 
 ## claude-cli Prompt-Cache Sıcaklığı (2026-06-29)
 
-claude-cli sağlayıcısında modele giden gerçek girdi, TionSwarm'nun kendi enjekte
+claude-cli sağlayıcısında modele giden gerçek girdi, TionHarness'nun kendi enjekte
 ettiği katmandan daha büyüktür (CLI kendi sistem promptu + araç şemaları + MCP
 köprüsünü ekler; context-preview'daki `cliOverhead` bunu **num_turns ile bölünmüş
 çağrı-başı** gerçek girdiyle gösterir). Bu yükün her tur yeniden **yazılması**
@@ -977,7 +977,7 @@ toplam girdi = usage.input_tokens + cache_creation_input_tokens + cache_read_inp
 | Saf sistem promptu (0 araç, tüm built-in disallow) | 17.067 | `CLIBaseSystemTokens` (17000) |
 | + Claude Code dahili araç şemaları (~15 tool) | 26.265 → +9.198 | `CLIBuiltinToolsTokens` (9200) |
 | **Taban zemin** (sistem + dahili araçlar) | ~26.200 | `CLIBaseTokens` |
-| Köprülü TionSwarm aracı başına ort. şema (name+desc+inputSchema+`mcp__…__` ns) | ~215 (42–710) | `CLIAvgBridgedToolTokens` |
+| Köprülü TionHarness aracı başına ort. şema (name+desc+inputSchema+`mcp__…__` ns) | ~215 (42–710) | `CLIAvgBridgedToolTokens` |
 
 **Formül** (`conversation.PredictCLIOverhead(loadedTools)`):
 
@@ -988,7 +988,7 @@ Yalnız **eager** (always-load) araçlar tam şema taşır; deferred/lazy araçl
 kabul edilebilir). Doğrulama: SES104'te Tahmin 29.573 → Gerçek 88.425 (Δ 58.852), bu
 referansla (17K sys + 9K dahili + ~19–33K köprü araçları) ~%15 içinde örtüşür.
 
-Rakamlar ±~15% (CLI, MCP şemalarını TionSwarm'nun ~3 karakter/token sezgisinden daha
+Rakamlar ±~15% (CLI, MCP şemalarını TionHarness'nun ~3 karakter/token sezgisinden daha
 ayrıntılı serileştirir + tokenizer farkı). **claude-cli major sürümü değişince
 ölçümü yenile** (taban sistem promptu sürümler arası büyür). `cliOverheadPreview`
 artık `predictedOverhead` alanı taşır → UI ilk turdan önce de uyarabilir.
@@ -1052,7 +1052,7 @@ tahmine katılmaz.
 > `{persistent:true}`, resume → `{persistent:false, resume:true}`, off → ikisi de false),
 > böylece "ikisi de açık" belirsiz durumu UI'dan **artık erişilemez** (eski uyarı banner'ı
 > kaldırıldı). Not: **--resume (delta)**, External Agent'ın kullandığı modun ta kendisidir
-> (her tur respawn + `resume: sessionId`); kalıcı süreç TionSwarm'a özgüdür.
+> (her tur respawn + `resume: sessionId`); kalıcı süreç TionHarness'a özgüdür.
 
 ### Canlı ölçüm (2026-07-02) — resume vs persistent vs "hiçbiri"
 
@@ -1084,11 +1084,11 @@ turdan tura değiştiği için maliyeti tam normalize etme.
 
 ### Optimizasyon zinciri — uçtan uca vaka çalışması (2026-07-06)
 
-Aynı 3-turluk sohbet (opus-4-8) hem TionSwarm'da (AGT1/AGT9, claude-cli) hem Craft
+Aynı 3-turluk sohbet (opus-4-8) hem TionHarness'da (AGT1/AGT9, claude-cli) hem Craft
 Agent'ta (native Anthropic API) çalıştırılıp `usage-detail` + `info` + ham `claude -p`
-`usage` ile karşılaştırıldı. Amaç: TionSwarm claude-cli yolundaki her ek yükü ölçüp
+`usage` ile karşılaştırıldı. Amaç: TionHarness claude-cli yolundaki her ek yükü ölçüp
 teker teker kırmak. **Referans farkı:** aynı iş Craft native-API'de ~\$0.31 iken
-TionSwarm claude-cli klasik başlangıçta ~\$2.59 (~8.4x) idi.
+TionHarness claude-cli klasik başlangıçta ~\$2.59 (~8.4x) idi.
 
 **Kaldıraç kaldıraç ölçülen kazanç (AGT9, tur-1 `cache_creation` prefix'i — deterministik):**
 
@@ -1104,7 +1104,7 @@ TionSwarm claude-cli klasik başlangıçta ~\$2.59 (~8.4x) idi.
 **Kök neden (Adım 3) — devasa dosya `--append-system-prompt`'a sızmıştı:** 41.265
 karakterlik bir `the external agent projectInstructions.md` yanlışlıkla statik sistem promptuna
 ekleniyordu → `systemTokens` 10.317, prefix'e ~14k. Kaldırınca `systemTokens`
-**10.317→913** (system 41.265→3.715 char), prefix 66.6k→52.6k. TionSwarm'ın kendi
+**10.317→913** (system 41.265→3.715 char), prefix 66.6k→52.6k. TionHarness'ın kendi
 sistem-promptu katkısı artık ~%3.
 
 **Prefix dekompozisyon YÖNTEMİ (tekrar üretilebilir):** ham `claude -p`'yi izole
@@ -1112,10 +1112,10 @@ sistem-promptu katkısı artık ~%3.
 olayındaki `usage`'ı (input + cache_creation + cache_read) topla, farkı al:
 
 ```bash
-export CLAUDE_CONFIG_DIR=~/.tionswarm/claude-home
+export CLAUDE_CONFIG_DIR=~/.tionharness/claude-home
 echo "ok" | claude -p --output-format stream-json --verbose --model opus [EK]
 # A: EK yok           → ~26.3k  (CLI harness: default sistem promptu + built-in tool docs)
-# B: + --append-system-prompt-file <agent_sys>  → +~15.9k (TionSwarm sys+skills) — instr fix'ten ÖNCE
+# B: + --append-system-prompt-file <agent_sys>  → +~15.9k (TionHarness sys+skills) — instr fix'ten ÖNCE
 # gerçek: canlı turun T1 cache_creation (usage-detail) → toplam prefix
 # MCP payı = gerçek − A − B  (çıkarma)
 ```
@@ -1123,7 +1123,7 @@ echo "ok" | claude -p --output-format stream-json --verbose --model opus [EK]
 Bu ölçüm `clioverhead.go` sabitlerini (`CLIBaseTokens`~26.2k) canlı doğruladı.
 
 **Gateway sonrası dekompozisyon (~34.6k):** CLI harness ~26.3k (%76, **sabit**) +
-TionSwarm sys+skills ~1.8k + MCP araçlar ~6.5k. Yani claude-cli yolunda **pratik
+TionHarness sys+skills ~1.8k + MCP araçlar ~6.5k. Yani claude-cli yolunda **pratik
 tabana** ulaşıldı; kalan tek büyük kalem CLI'nin kendi harness'ı.
 
 **Kapsam sınırları (deneyle doğrulandı):**

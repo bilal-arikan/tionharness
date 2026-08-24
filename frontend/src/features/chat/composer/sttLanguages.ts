@@ -20,12 +20,12 @@ export const STT_LANGUAGES: PickerOption[] = [
 export const DEFAULT_STT_LANG = 'tr-TR'
 
 // The chosen dictation language persists across sessions/reloads.
-export const STT_LANG_STORAGE_KEY = 'tionswarm.stt.lang'
+export const STT_LANG_STORAGE_KEY = 'tionharness.stt.lang'
 
 // Same-window change signal: the language is now set from the Settings screen but
 // consumed by the composer's mic button, so a custom event syncs them live (the
 // native 'storage' event only fires across windows, not within one).
-const STT_LANG_EVENT = 'tionswarm:stt-lang'
+const STT_LANG_EVENT = 'tionharness:stt-lang'
 
 // sttLang returns the persisted dictation language, validated against the list
 // (falls back to the default for an unknown/absent value).

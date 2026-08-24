@@ -3,7 +3,7 @@ package agent
 import (
 	"sort"
 
-	"github.com/bilal-arikan/tionswarm/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/db"
 )
 
 // selectBoardAutomations decides WHICH board automations fire for one card

@@ -1,7 +1,7 @@
 # Çoklu Provider Mimarisi İncelemesi (gelecek plan)
 
 > Kaynak: bir TypeScript / Next.js / Electron referans projesi. İnceleme tarihi: **2026-06-18**.
-> Amaç: o projenin ~70 provider'ı nasıl düşük eforla eklediğini anlamak ve TionSwarm'ya
+> Amaç: o projenin ~70 provider'ı nasıl düşük eforla eklediğini anlamak ve TionHarness'ya
 > taşınabilir desenleri çıkarmak.
 > **Durum: yalnız plan — uygulamaya geçilmedi.**
 
@@ -66,9 +66,9 @@ birleşiyor; UI, model-discovery, health-check, kimlik bilgisi eşleme aynı `id
 
 ---
 
-## TionSwarm için çıkarımlar (gelecek plan)
+## TionHarness için çıkarımlar (gelecek plan)
 
-> TionSwarm zaten aynı mimaride: `kind_*.go` + generic `OpenAICompat` + data-instance
+> TionHarness zaten aynı mimaride: `kind_*.go` + generic `OpenAICompat` + data-instance
 > custom providers (CG-19, 2026-06-18 tamamlandı). Aşağıdakiler **opsiyonel genişletmeler**.
 
 ### SC-1 — Built-in API provider preset kataloğu (CLI değil)
@@ -80,7 +80,7 @@ birleşiyor; UI, model-discovery, health-check, kimlik bilgisi eşleme aynı `id
 
 **Fikir:** `OpenAICompat` handler'ı zaten hazır. Referans projenin `PROVIDERS` map'indeki
 OpenAI-uyumlu girişleri (DeepSeek, Groq, Together, xAI, Fireworks, Nebius, DeepInfra,
-OpenRouter, Mistral, Google-compat…) TionSwarm'da **önceden-tanımlı preset katalog** girişi
+OpenRouter, Mistral, Google-compat…) TionHarness'da **önceden-tanımlı preset katalog** girişi
 olarak eklemek = yalnız `{id, label, baseURL, defaultModel, models}` verisi, **sıfır yeni
 protokol kodu**. Kullanıcı yalnız anahtarını (sır kasası) seçer.
 
@@ -91,7 +91,7 @@ protokol kodu**. Kullanıcı yalnız anahtarını (sır kasası) seçer.
 
 ### SC-2 — Generic CLI factory (CLI ailesi)
 
-**Fikir:** Şu an TionSwarm'da yalnız `claude-cli` var. Referans projenin `streamGenericCliChat`
+**Fikir:** Şu an TionHarness'da yalnız `claude-cli` var. Referans projenin `streamGenericCliChat`
 deseni (binary spawn + stdout satır-stream, JSON parse yok) ile yapısal çıktısı olmayan
 onlarca coding-CLI'yi **tek handler + veri listesiyle** eklenebilir hale getirmek.
 

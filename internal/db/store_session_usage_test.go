@@ -77,7 +77,7 @@ func TestSessionUsageProviderCalls(t *testing.T) {
 	}
 	const sid, agent = "SES1", "AGT1"
 
-	// claude-cli turn: one TionSwarm call (Calls=1) = 3 internal round-trips.
+	// claude-cli turn: one TionHarness call (Calls=1) = 3 internal round-trips.
 	if err := d.AddSessionUsageKind(ctx, sid, agent, UsageKindChat, "claude-cli", "claude-opus-4-8",
 		UsageDelta{Calls: 1, InputTokens: 10, CacheReadTokens: 90000, CacheWriteTokens: 30000, ProviderCalls: 3}); err != nil {
 		t.Fatal(err)
@@ -93,7 +93,7 @@ func TestSessionUsageProviderCalls(t *testing.T) {
 		t.Fatal(err)
 	}
 	if u.Calls != 2 {
-		t.Fatalf("Calls=%d, want 2 (TionSwarm turns)", u.Calls)
+		t.Fatalf("Calls=%d, want 2 (TionHarness turns)", u.Calls)
 	}
 	if u.ProviderCalls != 4 { // 3 (cli) + 1 (floored)
 		t.Fatalf("ProviderCalls=%d, want 4 (3 + floored 1)", u.ProviderCalls)

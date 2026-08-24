@@ -49,7 +49,7 @@ açıklama); görev açıklaması backend'de `graphNode.Desc` (`Task.Description
   - `skill` (sarı) — ajan → kullandığı beceri (`Agent.Skills`); paylaşılan beceriler
     hangi ajanların örtüştüğünü gösterir
   - `mcp` (teal) — MCP-enabled ajan → etkin MCP sunucusu (kaba erişim sinyali;
-    TionSwarm araçları ajan başına allowlist ile geçer, sunucu başına değil)
+    TionHarness araçları ajan başına allowlist ile geçer, sunucu başına değil)
 - **Katman chip'leri (toolbar):** Görevler / Akışlar / Beceriler / MCP / Geçmiş — her düğüm
   türü açılıp kapatılabilir (ajanlar her zaman görünür); gizli düğüme değen kenarlar
   da düşer. Varsayılan açık: Görevler + Akışlar + Geçmiş; Beceriler/MCP kapalı (sade

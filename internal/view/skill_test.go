@@ -4,13 +4,13 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bilal-arikan/tionswarm/internal/skills"
+	"github.com/bilal-arikan/tionharness/internal/skills"
 )
 
 func TestProjectSkillRendersCatalogEntry(t *testing.T) {
 	v, err := ProjectSkill(SkillInput{
 		Skill: skills.Skill{
-			Slug: "tionswarm-build", Name: "Build", Description: "Derler ve test eder.",
+			Slug: "tionharness-build", Name: "Build", Description: "Derler ve test eder.",
 			Shared: true, Group: "araçlar", Icon: "hammer",
 		},
 	}, LevelCard, LensHealth)
@@ -20,7 +20,7 @@ func TestProjectSkillRendersCatalogEntry(t *testing.T) {
 
 	txt := v.Text()
 	for _, want := range []string{
-		"SKILL · tionswarm-build", "Build", "Derler ve test eder.",
+		"SKILL · tionharness-build", "Build", "Derler ve test eder.",
 		"erişim: shared", "grup: araçlar", "ikon: hammer",
 	} {
 		if !strings.Contains(txt, want) {

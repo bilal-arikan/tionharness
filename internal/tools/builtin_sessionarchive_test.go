@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bilal-arikan/tionswarm/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/db"
 )
 
 // mkSession is a tiny helper that creates a session and returns its assigned id.

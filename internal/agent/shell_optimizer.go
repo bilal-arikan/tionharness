@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bilal-arikan/tionswarm/internal/tools"
+	"github.com/bilal-arikan/tionharness/internal/tools"
 )
 
 // sqzCompressTimeout bounds the optimizer subprocess so a hung sqz never blocks a
@@ -41,7 +41,7 @@ var sqzDedupRe = regexp.MustCompile(`\[sqz\]\s+dedup hit`)
 // for this workspace (no sqz hook opt-in) or the binary is not on PATH.
 //
 // Why in-process: sqz's PreToolUse hook only rewrites the native "Bash" tool name;
-// every TionSwarm shell runs through the bridged `mcp__tionswarm_interaction__Bash`,
+// every TionHarness shell runs through the bridged `mcp__tionharness_interaction__Bash`,
 // which sqz does not recognize — so the hook never fires (verified: same command is
 // rewritten under "Bash" but passed through under the bridged name). Invoking
 // `sqz compress` here (raw output on stdin) applies the same compression to bridged

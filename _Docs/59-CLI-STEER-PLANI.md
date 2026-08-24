@@ -1,4 +1,4 @@
-# TionSwarm — claude-cli Canlı Steer (Yönlendirme) Planı
+# TionHarness — claude-cli Canlı Steer (Yönlendirme) Planı
 
 > ## ⚠️ Güncelleme (2026-07-13): "auto" modda steer YAPISAL OLARAK ÇALIŞMAZ
 > claude-cli steer teslimi **tamamen** `callPermission` (permission-prompt tool)
@@ -47,7 +47,7 @@
 ## Arka plan
 
 Steer (Yönlendir) = tur çalışırken kullanıcı yeni bir mesaj yazınca, turu
-**durdurmadan** ajanın gidişatını değiştirme. Bugün TionSwarm'da:
+**durdurmadan** ajanın gidişatını değiştirme. Bugün TionHarness'da:
 
 - **Native yol** (anthropic/minimax): ÇALIŞIR. `agent/toolloop.go` `drainSteer` ile
   her iterasyon başında `run.steer` kanalını boşaltıp mesajı `req.Messages`'a
@@ -77,10 +77,10 @@ Steer (Yönlendir) = tur çalışırken kullanıcı yeni bir mesaj yazınca, tur
 
 **Ana fikir:** claude-cli'ın bir "steer primitive"i yok; external-agent
 **permission/PreToolUse kanalının `additionalContext`'ini** steer teslim kanalı
-olarak kullanıyor. Bu kanal TionSwarm'da da var (Interaction MCP permission-prompt
+olarak kullanıyor. Bu kanal TionHarness'da da var (Interaction MCP permission-prompt
 + 9-olay PreToolUse hook paritesi).
 
-## Hedef mimari (TionSwarm)
+## Hedef mimari (TionHarness)
 
 ```mermaid
 graph LR
@@ -93,7 +93,7 @@ graph LR
 
 ## Enjeksiyon kanalı — kritik incelik
 
-external-agent'in `canUseTool`'u **HER** tool'da fire eder. TionSwarm'ın CLI
+external-agent'in `canUseTool`'u **HER** tool'da fire eder. TionHarness'ın CLI
 permission-prompt'u (`callPermission`) ise **yalnız gated (write/exec) tool'larda**
 fire eder — **RiskRead auto-allow** olduğu için okuma tool'larında enjeksiyon
 noktası YOK. İki seçenek:
@@ -104,7 +104,7 @@ noktası YOK. İki seçenek:
   enjeksiyon noktası olur. En yakın external-agent muadili.
 - **(B) CLI PreToolUse hook kanalı:** claude-cli PreToolUse hook çıktısı
   `hookSpecificOutput.additionalContext` destekler ve her tool'da fire eder.
-  TionSwarm'ın CLI hook runner'ı bu alanı dinamik doldurabilecek şekilde
+  TionHarness'ın CLI hook runner'ı bu alanı dinamik doldurabilecek şekilde
   genişletilir. (Doğrulama gerektirir: mevcut CLI sürümü permission-prompt
   cevabında `additionalContext` kabul ediyor mu, yoksa yalnız hook çıktısında mı.)
 

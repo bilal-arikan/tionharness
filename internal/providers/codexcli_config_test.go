@@ -41,7 +41,7 @@ func TestCodexConfigFull(t *testing.T) {
 		DisableRequestUserInput: true,
 		Servers: map[string]CLIMCPServer{
 			// Deliberately declared out of order: output must still be sorted.
-			"tionswarm_interaction": {
+			"tionharness_interaction": {
 				Transport: "http",
 				URL:       "http://127.0.0.1:8731/core",
 				Headers: map[string]string{
@@ -75,7 +75,7 @@ tool_timeout_sec = 900
 default_tools_approval_mode = "approve"
 required = true
 
-[mcp_servers.tionswarm_interaction]
+[mcp_servers.tionharness_interaction]
 url = "http://127.0.0.1:8731/core"
 http_headers = { Authorization = "Bearer tok-123", X-Session = "SES579" }
 startup_timeout_sec = 30

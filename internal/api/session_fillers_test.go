@@ -2,7 +2,7 @@ package api
 
 import "testing"
 
-import "github.com/bilal-arikan/tionswarm/internal/db"
+import "github.com/bilal-arikan/tionharness/internal/db"
 
 // TestBuildFillersSplitsUserBucketByOrigin is the point of the split: in a
 // coordinator session almost every "user" message is machine-injected worker

@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/bilal-arikan/tionswarm/internal/fetch"
+	"github.com/bilal-arikan/tionharness/internal/fetch"
 )
 
 // A Claude Code repo may declare itself a plugin "marketplace" via

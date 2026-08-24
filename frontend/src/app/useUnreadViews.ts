@@ -5,7 +5,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { View } from './NavRail'
 
-const keyFor = (wsId: string) => `tionswarm.unreadViews.${wsId}`
+const keyFor = (wsId: string) => `tionharness.unreadViews.${wsId}`
 
 function read(wsId: string | null): Set<View> {
   if (!wsId) return new Set()

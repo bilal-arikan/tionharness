@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bilal-arikan/tionswarm/internal/providers"
+	"github.com/bilal-arikan/tionharness/internal/providers"
 )
 
 func TestCLIHomeFallbacksAreAppGlobal(t *testing.T) {

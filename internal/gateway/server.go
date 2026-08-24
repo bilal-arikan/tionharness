@@ -1,5 +1,5 @@
-// Package gateway implements TionSwarm's EXTERNAL MCP gateway (Doc 52 Faz 3): a
-// streaming MCP-over-HTTP endpoint that exposes TionSwarm's backend MCP pool to
+// Package gateway implements TionHarness's EXTERNAL MCP gateway (Doc 52 Faz 3): a
+// streaming MCP-over-HTTP endpoint that exposes TionHarness's backend MCP pool to
 // OUTSIDE clients (e.g. another Claude Code / External Agent) behind a single URL, the
 // gateway pattern the TS gateway-manager provided. It starts each session with a small
 // meta-tool surface (list_servers / activate_tools / deactivate_tools / active_tools);
@@ -157,7 +157,7 @@ func (s *Server) servePost(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Mcp-Session-Id", sid)
 		s.writeResult(w, req.ID, map[string]any{
 			"protocolVersion": ProtocolVersion,
-			"serverInfo":      map[string]string{"name": "tionswarm-gateway", "version": "0.0.1"},
+			"serverInfo":      map[string]string{"name": "tionharness-gateway", "version": "0.0.1"},
 			"capabilities":    map[string]any{"tools": map[string]any{"listChanged": true}},
 		})
 	case "notifications/initialized":

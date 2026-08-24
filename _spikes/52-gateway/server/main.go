@@ -1,7 +1,7 @@
 // Spike MCP server for _Docs/52 gateway plan — Q1/Q2/Q3 validation.
 //
 // A minimal STATEFUL streamable-HTTP MCP server that mirrors what the real
-// TionSwarm Interaction MCP server must become (Faz 1): it holds a per-session
+// TionHarness Interaction MCP server must become (Faz 1): it holds a per-session
 // server->client SSE stream open (GET) and can PUSH notifications/tools/list_changed
 // mid-turn. It starts by advertising a small tool surface (spike_ping, spike_grow)
 // and only registers spike_secret AFTER spike_grow is called — pushing list_changed

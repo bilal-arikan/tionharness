@@ -4,9 +4,9 @@ import (
 	"path"
 	"strings"
 
-	"github.com/bilal-arikan/tionswarm/internal/fetch"
-	"github.com/bilal-arikan/tionswarm/internal/market"
-	"github.com/bilal-arikan/tionswarm/internal/skills"
+	"github.com/bilal-arikan/tionharness/internal/fetch"
+	"github.com/bilal-arikan/tionharness/internal/market"
+	"github.com/bilal-arikan/tionharness/internal/skills"
 )
 
 // agentAdapter detects Claude Code subagents (Markdown files under an agents/ dir
@@ -17,9 +17,9 @@ type agentAdapter struct{}
 
 func (agentAdapter) Kind() string { return market.KindAgent }
 
-// mapCCModel translates a Claude Code subagent `model:` value into a TionSwarm
+// mapCCModel translates a Claude Code subagent `model:` value into a TionHarness
 // (provider, model) pair. CC subagents name a model family (haiku/sonnet/opus) or
-// "inherit"; TionSwarm needs a concrete provider+model. It targets the keyless
+// "inherit"; TionHarness needs a concrete provider+model. It targets the keyless
 // `claude-cli` provider (works out of the box, no API key) with the canonical model
 // id for that family. An empty/"inherit" value leaves both blank (agent uses the
 // workspace default). An unrecognised value (a non-Anthropic model, or a dated id we

@@ -4,7 +4,7 @@ import (
 	"context"
 	"strings"
 
-	"github.com/bilal-arikan/tionswarm/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/db"
 )
 
 // labelMultiAgentHistory projects a multi-participant thread onto the transcript

@@ -50,7 +50,7 @@ func TestOpenPencilEnvOverride(t *testing.T) {
 	if err := os.WriteFile(exe, []byte("x"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("TIONSWARM_OPENPENCIL", exe)
+	t.Setenv("TIONHARNESS_OPENPENCIL", exe)
 
 	if got := openPencilExe(); got != exe {
 		t.Errorf("env override kullanılmadı: %q", got)
@@ -65,7 +65,7 @@ func TestOpenPencilEnvOverride(t *testing.T) {
 // here would run a binary the user did not configure — and on most machines that
 // binary is 1Password's.
 func TestOpenPencilBrokenOverrideDoesNotFallBack(t *testing.T) {
-	t.Setenv("TIONSWARM_OPENPENCIL", filepath.Join(t.TempDir(), "yok", openPencilExeName()))
+	t.Setenv("TIONHARNESS_OPENPENCIL", filepath.Join(t.TempDir(), "yok", openPencilExeName()))
 	if got := openPencilExe(); got != "" {
 		t.Errorf("kırık override PATH'e düşmemeli, alınan %q", got)
 	}
@@ -84,7 +84,7 @@ func isolateHome(t *testing.T) {
 
 // The core guard: a PATH `op` is accepted only when its path names openpencil.
 func TestOpenPencilPathFallbackRejects1Password(t *testing.T) {
-	t.Setenv("TIONSWARM_OPENPENCIL", "")
+	t.Setenv("TIONHARNESS_OPENPENCIL", "")
 	isolateHome(t)
 	orig := lookPath
 	defer func() { lookPath = orig }()

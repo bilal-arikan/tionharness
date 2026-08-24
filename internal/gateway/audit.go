@@ -3,7 +3,7 @@ package gateway
 import (
 	"time"
 
-	"github.com/bilal-arikan/tionswarm/internal/mcp"
+	"github.com/bilal-arikan/tionharness/internal/mcp"
 )
 
 // AuditEntry is one proxied backend tool call, the gateway-audit parity record with the

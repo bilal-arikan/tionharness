@@ -258,7 +258,7 @@ export function LogsPanel({ onError }: Props) {
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `tionswarm-logs-${new Date().toISOString().replace(/[:.]/g, '-')}.json`
+    a.download = `tionharness-logs-${new Date().toISOString().replace(/[:.]/g, '-')}.json`
     a.click()
     URL.revokeObjectURL(url)
   }, [logs])

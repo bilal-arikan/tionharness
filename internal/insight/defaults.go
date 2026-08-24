@@ -6,11 +6,11 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/bilal-arikan/tionswarm/internal/seed"
-	"github.com/bilal-arikan/tionswarm/internal/skills"
+	"github.com/bilal-arikan/tionharness/internal/seed"
+	"github.com/bilal-arikan/tionharness/internal/skills"
 )
 
-// defaultsFS holds the built-in lenses shipped with TionSwarm. They are seeded
+// defaultsFS holds the built-in lenses shipped with TionHarness. They are seeded
 // into a workspace's lens dir on startup so every workspace inherits the baseline
 // scan intents — and, via the shared shipped-hash ledger, keeps inheriting later
 // improvements to them.

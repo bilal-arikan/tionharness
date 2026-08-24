@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bilal-arikan/tionswarm/internal/db"
-	"github.com/bilal-arikan/tionswarm/internal/events"
+	"github.com/bilal-arikan/tionharness/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/events"
 )
 
 // TurnFinished is the signal a completed agent turn delivers to the automation
@@ -436,7 +436,7 @@ func (e *AutomationEngine) guardsPass(ctx context.Context, a db.Automation) bool
 	// The threshold sits ABOVE the hard cap on purpose: this is a last resort for
 	// data nobody chose, so it must not stop a working board automation sooner than
 	// an explicit maximum would have. It is a warn, not an info: unlike a normal cap
-	// this is TionSwarm ending something the user never bounded.
+	// this is TionHarness ending something the user never bounded.
 	if a.MaxIterations <= 0 && a.IterationCount >= db.AbsoluteIterationBackstop {
 		e.logger.Warn("automation: absolute iteration backstop reached (stored maxIterations<=0); auto-disabling",
 			"automation", a.ID, "trigger", automationTrigger(a),

@@ -15,7 +15,7 @@ const (
 // tools (ask_user, todo_write, artifacts) are RiskRead: they have no host side
 // effects, so Explore (read-only) agents can still use them.
 var toolRisk = map[string]Risk{
-	// TionSwarm-specific built-ins (no claude-cli analog).
+	// TionHarness-specific built-ins (no claude-cli analog).
 	"ask_user":             RiskRead,
 	"request_confirmation": RiskRead,
 	"todo_write":           RiskRead,
@@ -65,7 +65,7 @@ var toolRisk = map[string]Risk{
 }
 
 // Classify returns the risk tier for a tool name. Unknown tools — including
-// namespaced MCP tools whose behaviour TionSwarm cannot inspect — default to
+// namespaced MCP tools whose behaviour TionHarness cannot inspect — default to
 // RiskWrite, so they require approval in "ask" mode and are blocked in
 // "read-only".
 func Classify(name string) Risk {

@@ -25,7 +25,7 @@ export function AboutPanel() {
           S
         </div>
         <div>
-          <div className="text-base font-semibold text-[var(--color-text)]">TionSwarm</div>
+          <div className="text-base font-semibold text-[var(--color-text)]">TionHarness</div>
           <div className="text-[var(--color-text-dim)]">Çok-ajanlı AI runtime</div>
         </div>
       </div>

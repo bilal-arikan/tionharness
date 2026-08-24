@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bilal-arikan/tionswarm/internal/db"
-	"github.com/bilal-arikan/tionswarm/internal/logbuf"
+	"github.com/bilal-arikan/tionharness/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/logbuf"
 )
 
 // viewFixture stores a flow plus one run of it that has executed two nodes and is

@@ -1,6 +1,6 @@
 package agent
 
-import "github.com/bilal-arikan/tionswarm/internal/providers"
+import "github.com/bilal-arikan/tionharness/internal/providers"
 
 // SyncProviderFields resolves the kind id for a provider instance id and
 // returns the (provider, providerInstanceID) pair every agent-writing call

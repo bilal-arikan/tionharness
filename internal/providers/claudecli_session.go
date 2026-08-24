@@ -16,7 +16,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/bilal-arikan/tionswarm/internal/proc"
+	"github.com/bilal-arikan/tionharness/internal/proc"
 )
 
 // --- Persistent claude-cli session (Phase 4) ---
@@ -182,7 +182,7 @@ func (c *ClaudeCLI) startPersistent(ctx context.Context, req Request) (*CLISessi
 	var sysPath string
 	if sys != "" {
 		if req.SysPromptFile {
-			f, ferr := os.CreateTemp("", "tionswarm-sysprompt-persist-*.txt")
+			f, ferr := os.CreateTemp("", "tionharness-sysprompt-persist-*.txt")
 			if ferr != nil {
 				return nil, fmt.Errorf("write system prompt file: %w", ferr)
 			}

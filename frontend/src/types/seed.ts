@@ -1,4 +1,4 @@
-// How a shipped default file on disk compares to the version TionSwarm ships
+// How a shipped default file on disk compares to the version TionHarness ships
 // (mirrors Go seed.State). It exists to make ONE thing legible: which files have
 // stopped receiving shipped improvements.
 //   'default' — untouched; refreshes automatically on upgrade.

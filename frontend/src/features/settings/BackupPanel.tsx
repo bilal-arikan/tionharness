@@ -148,7 +148,7 @@ export function BackupPanel({ draft, set }: PanelProps) {
       </div>
       <Field
         label="Yedek klasörü"
-        hint="Boş bırakılırsa veri dizinindeki backups/ kullanılır. Mutlak yol verebilirsin (ör. D:\\Backups\\TionSwarm)."
+        hint="Boş bırakılırsa veri dizinindeki backups/ kullanılır. Mutlak yol verebilirsin (ör. D:\\Backups\\TionHarness)."
       >
         <input
           value={draft.backupDir}

@@ -44,7 +44,7 @@ func (b *measBackend) Call(_ context.Context, _, name string, _ json.RawMessage)
 }
 
 // measExtendedTools builds n plausible self-management-style tool specs, each with a
-// short description and a small object schema — representative of TionSwarm's real
+// short description and a small object schema — representative of TionHarness's real
 // extended tier (session lifecycle, config, secrets, cross-session, ...).
 func measExtendedTools(n int) []ToolSpec {
 	if n == 0 {
@@ -78,19 +78,19 @@ type measUsage struct {
 // (N advertised tools, historical) vs EMPTY (gateway dynamic surface). A trivial,
 // tool-free prompt isolates the schema/catalog cost: the only difference between the two
 // runs is how many extended tools the server advertises. Spends tokens; gated behind
-// TIONSWARM_LIVE_CLI=1.
+// TIONHARNESS_LIVE_CLI=1.
 //
-//	TIONSWARM_LIVE_CLI=1 go test ./internal/interaction/ -run TestMeasureGatewaySavings -v
+//	TIONHARNESS_LIVE_CLI=1 go test ./internal/interaction/ -run TestMeasureGatewaySavings -v
 func TestMeasureGatewaySavings(t *testing.T) {
-	if os.Getenv("TIONSWARM_LIVE_CLI") != "1" {
-		t.Skip("set TIONSWARM_LIVE_CLI=1 to run the gateway token measurement")
+	if os.Getenv("TIONHARNESS_LIVE_CLI") != "1" {
+		t.Skip("set TIONHARNESS_LIVE_CLI=1 to run the gateway token measurement")
 	}
 	bin := "claude"
-	if p := os.Getenv("TIONSWARM_CLAUDE_BIN"); p != "" {
+	if p := os.Getenv("TIONHARNESS_CLAUDE_BIN"); p != "" {
 		bin = p
 	}
 	model := "claude-fable-5"
-	if m := os.Getenv("TIONSWARM_CLAUDE_MODEL"); m != "" {
+	if m := os.Getenv("TIONHARNESS_CLAUDE_MODEL"); m != "" {
 		model = m
 	}
 	extN := 30 // representative extended surface size

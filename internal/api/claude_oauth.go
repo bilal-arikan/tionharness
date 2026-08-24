@@ -7,7 +7,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/bilal-arikan/tionswarm/internal/claudeauth"
+	"github.com/bilal-arikan/tionharness/internal/claudeauth"
 )
 
 // pendingLogins holds in-flight OAuth attempts between /start and /complete,

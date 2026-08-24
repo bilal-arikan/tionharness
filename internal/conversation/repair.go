@@ -3,7 +3,7 @@ package conversation
 import (
 	"fmt"
 
-	"github.com/bilal-arikan/tionswarm/internal/providers"
+	"github.com/bilal-arikan/tionharness/internal/providers"
 )
 
 // RepairNote records one applied sequence repair, for the debug journal and

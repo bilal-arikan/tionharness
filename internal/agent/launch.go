@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/bilal-arikan/tionswarm/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/db"
 )
 
 // RunTrigger names what initiated a run (attribution/telemetry). The cross-cutting

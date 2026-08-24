@@ -4,8 +4,8 @@ import (
 	"context"
 	"strings"
 
-	"github.com/bilal-arikan/tionswarm/internal/db"
-	"github.com/bilal-arikan/tionswarm/internal/events"
+	"github.com/bilal-arikan/tionharness/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/events"
 )
 
 // Auto-tag: derive well-known session tags from what happened during a turn +
@@ -309,7 +309,7 @@ var permissionDenyMarkers = []string{
 	"disallowed",
 	// claude-cli rejection when the model calls a bridged tool by its BARE name
 	// (e.g. `PowerShell`) instead of the allowlisted namespaced form
-	// (`mcp__tionswarm_interaction__PowerShell`): "No such tool available: X. X
+	// (`mcp__tionharness_interaction__PowerShell`): "No such tool available: X. X
 	// exists but is not enabled in this context." The model immediately retries with
 	// the correct name — a self-recovered mis-address, not a repairable failure, so
 	// it must not get the "tool-error" tag / spawn an auto-repair.

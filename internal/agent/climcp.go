@@ -7,9 +7,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/bilal-arikan/tionswarm/internal/db"
-	"github.com/bilal-arikan/tionswarm/internal/mcp"
-	"github.com/bilal-arikan/tionswarm/internal/tools"
+	"github.com/bilal-arikan/tionharness/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/mcp"
+	"github.com/bilal-arikan/tionharness/internal/tools"
 )
 
 // cliMCPConfig is the on-disk shape claude --mcp-config expects.
@@ -32,18 +32,18 @@ type cliMCPServer struct {
 }
 
 // interactionCoreKey / interactionExtendedKey are the two mcp-config keys for the
-// in-process Interaction MCP server. Core keeps the historical "tionswarm_interaction"
+// in-process Interaction MCP server. Core keeps the historical "tionharness_interaction"
 // key so existing namespaced references (use_skill, trace stripping)
 // stay valid; Extended is a separate key whose tools the CLI defers via ToolSearch
 // (claude-cli 2.1.x+). The CLI namespaces tools as mcp__<key>__<tool>.
 const (
-	interactionCoreKey     = "tionswarm_interaction"
-	interactionExtendedKey = "tionswarm_extended"
+	interactionCoreKey     = "tionharness_interaction"
+	interactionExtendedKey = "tionharness_extended"
 )
 
 // permissionPromptToolID is the namespaced Interaction MCP tool the claude CLI is
 // pointed at via --permission-prompt-tool (only in "ask" mode) so risky tools are
-// gated through TionSwarm's approval UI instead of auto-approved. It lives on the core
+// gated through TionHarness's approval UI instead of auto-approved. It lives on the core
 // (always-loaded) server so the permission round-trip never waits on tool search.
 const permissionPromptToolID = "mcp__" + interactionCoreKey + "__permission_prompt"
 
@@ -53,7 +53,7 @@ const permissionPromptToolID = "mcp__" + interactionCoreKey + "__permission_prom
 //   - "ask":       every write/exec tool is gated through the prompt for approval.
 //   - "read-only": the CLI also runs in --permission-mode plan (mutations blocked
 //     outright); the ONLY call that reaches the prompt is ExitPlanMode, which
-//     TionSwarm renders as a plan-approval card.
+//     TionHarness renders as a plan-approval card.
 //
 // "auto" uses bypass and needs no prompt.
 func promptToolForMode(mode string, inter tools.InteractionEndpoint) string {
@@ -70,11 +70,11 @@ func promptToolForMode(mode string, inter tools.InteractionEndpoint) string {
 //   - When mcpEnabled, every enabled external MCP server the AGENT may use is
 //     included. ag supplies the per-agent tool restriction: the CLI runs its own
 //     tool loop, so a server mounted here is reachable regardless of what
-//     TionSwarm advertises — mcpServerGate is the only place the agent's blocked
+//     TionHarness advertises — mcpServerGate is the only place the agent's blocked
 //     /allowed patterns can still keep a whole server out (see mcpservergate.go).
 //     A zero db.Agent constrains nothing, which is the pre-gate behaviour.
 //   - When inter.URL is set, the in-process Interaction MCP server is added so the
-//     CLI can reach TionSwarm's human-in-the-loop tools (ask_user/todo_write), and
+//     CLI can reach TionHarness's human-in-the-loop tools (ask_user/todo_write), and
 //     the conflicting CLI built-ins (AskUserQuestion/TodoWrite) are disallowed.
 //
 // Returns an empty path when there is nothing to wire.
@@ -139,7 +139,7 @@ func (r *Runtime) writeCLIMCPConfig(ctx context.Context, mcpEnabled bool, ag db.
 		for _, t := range inter.CoreToolNames {
 			allowed = append(allowed, "mcp__"+interactionCoreKey+"__"+t)
 		}
-		// Extended tier uses a SERVER-LEVEL wildcard (`mcp__tionswarm_extended`, no tool
+		// Extended tier uses a SERVER-LEVEL wildcard (`mcp__tionharness_extended`, no tool
 		// suffix) instead of enumerating each tool — the same shape external MCP servers
 		// already use above (`mcp__`+key). Two reasons (Doc 52 §3-D / §11-decision 4):
 		//   - Gateway pattern: a tool added mid-session via tools/list_changed is already
@@ -191,7 +191,7 @@ func (r *Runtime) writeCLIMCPConfig(ctx context.Context, mcpEnabled bool, ag db.
 		disallowed = append(disallowed, "AskUserQuestion", "ScheduleWakeup")
 		// The checklist family is the subtle one: newer Claude Code CLIs renamed the
 		// old TodoWrite into a TaskCreate/TaskUpdate/TaskList/TaskGet family. Whichever
-		// the CLI version exposes, it SHADOWS TionSwarm's bridged todo_write — the model
+		// the CLI version exposes, it SHADOWS TionHarness's bridged todo_write — the model
 		// reaches for the native tool, so nothing reaches the progress sink and the
 		// progress card stays empty. Suppress the whole family (disallowing a tool the
 		// CLI doesn't have is harmless) so todo_write is the only checklist path — but
@@ -199,16 +199,16 @@ func (r *Runtime) writeCLIMCPConfig(ctx context.Context, mcpEnabled bool, ag db.
 		suppressIfBridged("todo_write",
 			"TodoWrite", "TaskCreate", "TaskUpdate", "TaskList", "TaskGet")
 		// Skill: the CLI's native skill tool only sees its own <CLAUDE_CONFIG_DIR>/skills
-		// dir, never TionSwarm's workspace tier (<workspace>/skills) or global tier
-		// (~/.tionswarm/skills) — so a weak model reaching for it fails with "Unknown
+		// dir, never TionHarness's workspace tier (<workspace>/skills) or global tier
+		// (~/.tionharness/skills) — so a weak model reaching for it fails with "Unknown
 		// skill". The bridged use_skill (above) is the single correct path (it serves
 		// both tiers), so suppress the native one to force it — but only while use_skill
 		// is advertised, else the native Skill stays as the (CLI-native-only) fallback.
 		suppressIfBridged("use_skill", "Skill")
 		// Subagent launcher: the CLI's native delegation tool (older CLIs call it
 		// `Task`, newer ones `Agent`) spawns a child entirely inside the CLI process —
-		// invisible to TionSwarm, so it bypasses the bridged run_subagent (no `subagent`
-		// trace, no TionSwarm agent/profile target, no budget accounting). When
+		// invisible to TionHarness, so it bypasses the bridged run_subagent (no `subagent`
+		// trace, no TionHarness agent/profile target, no budget accounting). When
 		// delegation is enabled run_subagent is the gated replacement; when it is
 		// disabled the agent should not delegate at all. Either way the native launcher
 		// must be suppressed — same shadowing class as TodoWrite/Skill above.
@@ -218,22 +218,22 @@ func (r *Runtime) writeCLIMCPConfig(ctx context.Context, mcpEnabled bool, ag db.
 		disallowed = append(disallowed, "Task", "Agent", "AgentOutputTool")
 		// Peer messaging: claude-cli 2.x ships a native `SendMessage` tool (sibling of
 		// Task/Agent) that talks to the CLI's OWN in-process subagents — it knows
-		// nothing about TionSwarm agents, so it fails with "agent not found" even for a
-		// valid TionSwarm id. It SHADOWS the bridged send_message (DeliverAgentMessage);
+		// nothing about TionHarness agents, so it fails with "agent not found" even for a
+		// valid TionHarness id. It SHADOWS the bridged send_message (DeliverAgentMessage);
 		// a model that discovers the native one via ToolSearch reaches for it and every
 		// delivery fails. Suppress it so bridged send_message is the only peer-DM path.
 		disallowed = append(disallowed, "SendMessage")
-		// Bash: only suppress the CLI's native POSIX Bash when TionSwarm's own shell is
+		// Bash: only suppress the CLI's native POSIX Bash when TionHarness's own shell is
 		// bridged (shell enabled) as its replacement — otherwise the agent would lose
-		// shell entirely (TionSwarm's shell is not bridged when disabled). With the
-		// bridge present, all commands route through TionSwarm's own sandboxed shells
+		// shell entirely (TionHarness's shell is not bridged when disabled). With the
+		// bridge present, all commands route through TionHarness's own sandboxed shells
 		// (bridged Bash-preferred, plus PowerShell for Windows-native tasks).
 		if r.tun.ShellEnabled() {
 			// Also suppress the native background-shell siblings (BashOutput/KillShell,
 			// renamed TaskOutput/TaskStop in newer CLIs): they only operate on shells the
 			// native Bash spawned, which is now gone, so they are inert — but suppressing
 			// them keeps the whole native shell family off the menu so a model never
-			// reaches for them instead of TionSwarm's bridged run_in_background +
+			// reaches for them instead of TionHarness's bridged run_in_background +
 			// shell_manage. Both old and new names are listed because a CLI upgrade could
 			// swap the exposed name; disallowing an absent tool is a no-op, so covering
 			// both is safe across CLI versions. These stay INSIDE the ShellEnabled guard
@@ -243,7 +243,7 @@ func (r *Runtime) writeCLIMCPConfig(ctx context.Context, mcpEnabled bool, ag db.
 				"Bash", "BashOutput", "KillShell", "TaskOutput", "TaskStop")
 		}
 		// Plan mode: claude-cli's EnterPlanMode/ExitPlanMode only complete when their
-		// exit approval can be answered. TionSwarm answers it via the permission-prompt
+		// exit approval can be answered. TionHarness answers it via the permission-prompt
 		// tool, which is wired only in "ask" and "read-only" modes (see
 		// promptToolForMode). In "auto" (bypass) there is no approver, so a voluntary
 		// plan-mode entry would hang on the headless "Exit plan mode?" prompt and the
@@ -261,7 +261,7 @@ func (r *Runtime) writeCLIMCPConfig(ctx context.Context, mcpEnabled bool, ag db.
 	if err != nil {
 		return "", nil, nil, nil, err
 	}
-	f, err := os.CreateTemp("", "tionswarm-mcp-*.json")
+	f, err := os.CreateTemp("", "tionharness-mcp-*.json")
 	if err != nil {
 		return "", nil, nil, nil, err
 	}
@@ -279,7 +279,7 @@ func (r *Runtime) writeCLIMCPConfig(ctx context.Context, mcpEnabled bool, ag db.
 	return path, allowed, disallowed, cleanup, nil
 }
 
-// cliSettings is the subset of the claude CLI's settings.json TionSwarm generates
+// cliSettings is the subset of the claude CLI's settings.json TionHarness generates
 // per turn: a permission deny-list (defense-in-depth alongside --disallowedTools,
 // with pattern support), the workspace's PreToolUse/PostToolUse hooks so the
 // CLI's own tool loop fires the same hooks the native loop does (CLI-path hooks),
@@ -317,7 +317,7 @@ type cliHookSpec struct {
 // the caller passes --settings only when it carries something.
 //
 // CLI hooks run under the CLI's own hook runner, which uses a POSIX shell on every
-// platform — unlike TionSwarm's execHook, which uses PowerShell on Windows. The
+// platform — unlike TionHarness's execHook, which uses PowerShell on Windows. The
 // command is therefore translated by cliHookCommand so a hook authored in the
 // workspace's native dialect runs identically on both paths.
 //
@@ -355,7 +355,7 @@ func (r *Runtime) writeCLISettings(ctx context.Context, deny []string, effort st
 				continue // only command hooks map to the CLI contract
 			}
 			hooks[event] = append(hooks[event], cliHookRule{
-				// Translate TionSwarm's comma-glob matcher to Claude Code regex — a
+				// Translate TionHarness's comma-glob matcher to Claude Code regex — a
 				// verbatim comma list never matches in the CLI (see cliMatcherRegex).
 				Matcher: cliMatcherRegex(h.Matcher),
 				// Translate the command to the interpreter the CLI actually spawns
@@ -377,7 +377,7 @@ func (r *Runtime) writeCLISettings(ctx context.Context, deny []string, effort st
 	if err != nil {
 		return "", func() {}, err
 	}
-	f, err := os.CreateTemp("", "tionswarm-settings-*.json")
+	f, err := os.CreateTemp("", "tionharness-settings-*.json")
 	if err != nil {
 		return "", func() {}, err
 	}

@@ -8,10 +8,10 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/bilal-arikan/tionswarm/internal/db"
-	"github.com/bilal-arikan/tionswarm/internal/events"
-	"github.com/bilal-arikan/tionswarm/internal/tools"
-	"github.com/bilal-arikan/tionswarm/internal/workspace"
+	"github.com/bilal-arikan/tionharness/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/events"
+	"github.com/bilal-arikan/tionharness/internal/tools"
+	"github.com/bilal-arikan/tionharness/internal/workspace"
 )
 
 // artifactDeliverableGuidance is the always-on instruction (kept in the static
@@ -20,12 +20,12 @@ import (
 // itself, so ordinary edits to project source files stay out of the Artifacts
 // screen. Only the short rule of thumb lives here to keep the cached prefix small;
 // the full rules (binary files, inline media, galleries) live in the
-// `tionswarm-deliverables` skill so they cost attention/tokens only when a
+// `tionharness-deliverables` skill so they cost attention/tokens only when a
 // deliverable is actually in play.
 const artifactDeliverableGuidance = "# Deliverables → Artifacts\n" +
 	"Writing a file does NOT create an artifact. When you produce a deliverable the user should keep (a document/dataset/report/standalone code file), register it DELIBERATELY by calling create_artifact (or the artifacts API) — do not assume a plain file write will surface it. Ordinary edits to project source files stay out of the Artifacts screen. " +
 	"Content meant to be SEEN (a diagram, an image/video, a gallery) goes INLINE in your reply (markdown ![alt](path), a ```mermaid block). " +
-	"For the full rules (binary files via sourcePath, inline media, galleries, updating by id), load the `tionswarm-deliverables` skill before producing the deliverable."
+	"For the full rules (binary files via sourcePath, inline media, galleries, updating by id), load the `tionharness-deliverables` skill before producing the deliverable."
 
 // artifactsContextBlock builds a system-prompt section listing the artifacts a
 // session already has, so the agent can revise them with update_artifact (by id)
@@ -132,7 +132,7 @@ func (s artifactSink) UpdateArtifact(ctx context.Context, id, content string) (t
 }
 
 // AppendPlanArtifact records an approved plan (ExitPlanMode) in this session's
-// single rolling plan artifact. It is a TionSwarm-specific capability used by the
+// single rolling plan artifact. It is a TionHarness-specific capability used by the
 // plan-approval bridge (callExitPlan), kept off the generic tools.ArtifactSink
 // interface and reached there via a duck-typed assertion. Best-effort.
 func (s artifactSink) AppendPlanArtifact(ctx context.Context, planMarkdown string) (tools.ArtifactRef, error) {

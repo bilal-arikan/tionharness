@@ -24,7 +24,7 @@ interface Props {
 
 export function MarketPanel({ onError, onManageSecrets, onInstalled }: Props) {
   const [packs, setPacks] = useState<Pack[]>([])
-  const { open: listOpen, toggle: toggleList } = useCollapsibleList('tionswarm.marketListOpen')
+  const { open: listOpen, toggle: toggleList } = useCollapsibleList('tionharness.marketListOpen')
   const [tab, setTab] = useState<PackKind>(KIND_NAV[0].key)
   const [selected, setSelected] = useState<Pack | null>(null)
   const [busy, setBusy] = useState(false)
@@ -253,7 +253,7 @@ export function MarketPanel({ onError, onManageSecrets, onInstalled }: Props) {
       <ListPane
         open={listOpen}
         onToggle={toggleList}
-        widthKey="tionswarm.marketListWidth"
+        widthKey="tionharness.marketListWidth"
         defaultWidth={200}
         minWidth={160}
         label="Kategoriler"

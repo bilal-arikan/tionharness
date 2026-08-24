@@ -60,11 +60,11 @@ export function AgentActivityPanel({ agentId, onError, onOpenExecution, onClose 
   // Resizable width (persisted, clamped). 320px == the old w-80. Drag the handle
   // on the panel's LEFT edge: moving it left widens the panel.
   const [width, setWidth] = useState(() => {
-    const v = Number(localStorage.getItem('tionswarm.agentActivityWidth'))
+    const v = Number(localStorage.getItem('tionharness.agentActivityWidth'))
     return v >= 240 && v <= 720 ? v : 320
   })
   useEffect(() => {
-    localStorage.setItem('tionswarm.agentActivityWidth', String(width))
+    localStorage.setItem('tionharness.agentActivityWidth', String(width))
   }, [width])
 
   const startResize = useCallback(

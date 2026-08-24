@@ -13,7 +13,7 @@ import (
 // benchStaticBody is a deliberately non-trivial STATIC system prompt so there is a
 // real cacheable prefix to measure. Cache reads only pay off when the warm prefix is
 // large enough to matter; a one-line persona would make cache_read noise.
-const benchStaticBody = `You are TionSwarm's benchmark assistant. Follow these standing rules on every turn:
+const benchStaticBody = `You are TionHarness's benchmark assistant. Follow these standing rules on every turn:
 - Be extremely terse. Never explain. Never add pleasantries.
 - Treat any fact the user asks you to remember as durable session context.
 - When asked to reply with a single word or token, output ONLY that token.
@@ -59,15 +59,15 @@ func (m turnMetric) row(mode string) string {
 //
 // Both use the SAME static system prompt and the SAME volatile per-turn SystemDynamic
 // (a changing clock), so the appended prefix is byte-identical and the only difference
-// is the process-warmth model. Gated behind TIONSWARM_LIVE_CLI=1 (spends real tokens).
+// is the process-warmth model. Gated behind TIONHARNESS_LIVE_CLI=1 (spends real tokens).
 //
-//	TIONSWARM_LIVE_CLI=1 go test ./internal/providers/ -run TestLiveCacheCompareModes -v -timeout 15m
+//	TIONHARNESS_LIVE_CLI=1 go test ./internal/providers/ -run TestLiveCacheCompareModes -v -timeout 15m
 func TestLiveCacheCompareModes(t *testing.T) {
-	if os.Getenv("TIONSWARM_LIVE_CLI") != "1" {
-		t.Skip("set TIONSWARM_LIVE_CLI=1 to run the live cache/latency comparison")
+	if os.Getenv("TIONHARNESS_LIVE_CLI") != "1" {
+		t.Skip("set TIONHARNESS_LIVE_CLI=1 to run the live cache/latency comparison")
 	}
 	bin := "claude"
-	if p := os.Getenv("TIONSWARM_CLAUDE_BIN"); p != "" {
+	if p := os.Getenv("TIONHARNESS_CLAUDE_BIN"); p != "" {
 		bin = p
 	}
 

@@ -9,7 +9,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/bilal-arikan/tionswarm/internal/mcp"
+	"github.com/bilal-arikan/tionharness/internal/mcp"
 )
 
 // ServersFunc returns the enabled MCP servers of a WORKSPACE the gateway may expose
@@ -27,7 +27,7 @@ type PoolFunc func(workspaceID string) *mcp.Pool
 // gateway's gateway-audit.jsonl). Fire-and-forget; nil disables auditing.
 type AuditFunc func(AuditEntry)
 
-// mcpBackend implements Backend over TionSwarm's mcp.Pool: it starts each session with
+// mcpBackend implements Backend over TionHarness's mcp.Pool: it starts each session with
 // meta-tools only and grows the surface when the client activates a backend server.
 type mcpBackend struct {
 	poolFn  PoolFunc

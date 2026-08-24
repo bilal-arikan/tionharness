@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bilal-arikan/tionswarm/internal/orchestration"
+	"github.com/bilal-arikan/tionharness/internal/orchestration"
 )
 
 // The exact unmarshal error SES2 produced when a parallel node used

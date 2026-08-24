@@ -9,8 +9,8 @@ import (
 	"net/url"
 	"testing"
 
-	"github.com/bilal-arikan/tionswarm/internal/db"
-	"github.com/bilal-arikan/tionswarm/internal/workspace"
+	"github.com/bilal-arikan/tionharness/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/workspace"
 )
 
 // listparams_test.go — TSK68 API surface: the list endpoints accept the same

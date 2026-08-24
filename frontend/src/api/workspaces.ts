@@ -35,7 +35,7 @@ export const workspaceApi = {
       method: 'POST',
       body: JSON.stringify(data),
     }),
-  // Adopt an existing workspace data folder (previously created by TionSwarm)
+  // Adopt an existing workspace data folder (previously created by TionHarness)
   // by absolute path, registering it without recreating its content. Rejects
   // (throws the backend message) when the folder is not a valid workspace.
   attachWorkspace: (path: string) =>

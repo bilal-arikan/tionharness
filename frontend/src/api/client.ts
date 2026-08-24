@@ -2,7 +2,7 @@
 // and the active-workspace header that scopes each request to its isolated
 // backend database.
 
-const WS_KEY = 'tionswarm.workspaceId'
+const WS_KEY = 'tionharness.workspaceId'
 let activeWorkspaceId: string | null = localStorage.getItem(WS_KEY)
 
 export function setActiveWorkspace(id: string) {
@@ -39,7 +39,7 @@ export function describeHttpError(status: number): string {
     case 502:
     case 503:
     case 504:
-      return `Sunucuya ulaşılamıyor (HTTP ${status}). TionSwarm backend yanıt vermiyor — geliştirme sunucusunun (go run ./cmd/tionswarm, 127.0.0.1:8090) çalıştığından emin ol.`
+      return `Sunucuya ulaşılamıyor (HTTP ${status}). TionHarness backend yanıt vermiyor — geliştirme sunucusunun (go run ./cmd/tionharness, 127.0.0.1:8090) çalıştığından emin ol.`
     case 500:
       return 'Sunucu hatası (HTTP 500). İşlem sırasında bir şeyler ters gitti; ayrıntı için Loglar ekranına bak.'
     case 408:

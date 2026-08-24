@@ -3,7 +3,7 @@
 // Package proc holds OS-specific helpers for launching child processes. On
 // Windows, console child processes (git, powershell, the claude CLI, MCP stdio
 // servers) would each pop up a console window when the parent is a windowless
-// GUI app (tionswarm-desktop, built with -H windowsgui). Hide suppresses that
+// GUI app (tionharness-desktop, built with -H windowsgui). Hide suppresses that
 // flashing window.
 package proc
 

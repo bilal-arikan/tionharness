@@ -18,7 +18,7 @@ import (
 // poolTTL bounds how long a pooled server's cached tool list is reused before a
 // refresh, as a safety net for servers that do not emit tools/list_changed. The
 // refresh runs on the EXISTING persistent connection (cheap — no re-dial).
-// Overridable via TIONSWARM_MCP_POOL_TTL_SEC (0 disables the timer; listChanged
+// Overridable via TIONHARNESS_MCP_POOL_TTL_SEC (0 disables the timer; listChanged
 // still refreshes).
 const poolTTL = 60 * time.Second
 
@@ -26,7 +26,7 @@ const poolTTL = 60 * time.Second
 // idle before the reaper closes it, so a session that walked away does not pin an
 // stdio subprocess forever. Shared (workspace-wide) connections are never reaped —
 // they live for the workspace, as before. Overridable via
-// TIONSWARM_MCP_SCOPED_IDLE_SEC (0 disables idle eviction).
+// TIONHARNESS_MCP_SCOPED_IDLE_SEC (0 disables idle eviction).
 const scopedIdleTTL = 300 * time.Second
 
 // scopeSep joins a caller ScopeKey to a server name to form a scoped pool-entry
@@ -47,7 +47,7 @@ func scopedEntryKey(scopeKey, server string) string {
 
 // Pool maintains one persistent stdio client per MCP server (keyed by sanitized
 // server name). Persistent connections — as opposed to the old dial-per-
-// operation model — give three properties TionSwarm needs:
+// operation model — give three properties TionHarness needs:
 //
 //   - The repeated per-turn catalog builds reuse a live session instead of
 //     opening (and leaking) a fresh one every time — no session churn on
@@ -434,7 +434,7 @@ func configFingerprint(cfg ServerConfig) string {
 }
 
 func poolTTLFromEnv() time.Duration {
-	if v := os.Getenv("TIONSWARM_MCP_POOL_TTL_SEC"); v != "" {
+	if v := os.Getenv("TIONHARNESS_MCP_POOL_TTL_SEC"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n >= 0 {
 			return time.Duration(n) * time.Second
 		}
@@ -443,7 +443,7 @@ func poolTTLFromEnv() time.Duration {
 }
 
 func scopedIdleFromEnv() time.Duration {
-	if v := os.Getenv("TIONSWARM_MCP_SCOPED_IDLE_SEC"); v != "" {
+	if v := os.Getenv("TIONHARNESS_MCP_SCOPED_IDLE_SEC"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n >= 0 {
 			return time.Duration(n) * time.Second
 		}

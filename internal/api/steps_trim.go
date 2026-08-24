@@ -2,7 +2,7 @@ package api
 
 import (
 	"encoding/json"
-	"github.com/bilal-arikan/tionswarm/internal/textutil"
+	"github.com/bilal-arikan/tionharness/internal/textutil"
 	"strconv"
 	"strings"
 )

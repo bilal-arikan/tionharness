@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"strings"
 
-	"github.com/bilal-arikan/tionswarm/internal/providers"
+	"github.com/bilal-arikan/tionharness/internal/providers"
 )
 
 // mcpNotIndexedMarker is the exact substring codebase-memory-mcp (and any MCP
@@ -21,7 +21,7 @@ const mcpNotIndexedMarker = "project not found or not indexed"
 //   - native-loop form: <server>__<tool>  (mcp.NamespaceTool, manager.go)
 //
 // Matching only the "mcp__" prefix silently disabled the whole guard on
-// TionSwarm's own agentic loop — the only loop it can actually run in — because
+// TionHarness's own agentic loop — the only loop it can actually run in — because
 // the registry never produces that prefix. Built-in tool names carry no "__",
 // so this separator is an unambiguous MCP marker.
 const mcpNamespaceSep = "__"

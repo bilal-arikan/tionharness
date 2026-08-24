@@ -11,8 +11,8 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/bilal-arikan/tionswarm/internal/proc"
-	"github.com/bilal-arikan/tionswarm/internal/providers"
+	"github.com/bilal-arikan/tionharness/internal/proc"
+	"github.com/bilal-arikan/tionharness/internal/providers"
 )
 
 const shellMaxOutputBytes = 64 * 1024 // cap combined stdout+stderr
@@ -131,7 +131,7 @@ func (t ShellTool) WithManager(m *ShellManager) ShellTool { t.mgr = m; return t 
 // WithOutputFilter returns a copy whose combined output is post-processed by f
 // before being returned to the model (nil = passthrough). Used to route shell
 // output through an external token-optimizer (sqz) in-process, since the CLI hook
-// path cannot reach TionSwarm's bridged shell tool name.
+// path cannot reach TionHarness's bridged shell tool name.
 func (t ShellTool) WithOutputFilter(f ShellOutputFilter) ShellTool {
 	t.outFilter = f
 	return t
@@ -140,7 +140,7 @@ func (t ShellTool) WithOutputFilter(f ShellOutputFilter) ShellTool {
 // WithCommandFilter returns a copy whose command is rewritten by f before it runs
 // (nil = as-typed). Used to route shell commands through an external command-layer
 // optimizer (rtk) in-process, for the same reason WithOutputFilter exists: the CLI
-// hook path cannot reach TionSwarm's bridged shell tool name.
+// hook path cannot reach TionHarness's bridged shell tool name.
 func (t ShellTool) WithCommandFilter(f ShellCommandFilter) ShellTool {
 	t.cmdFilter = f
 	return t

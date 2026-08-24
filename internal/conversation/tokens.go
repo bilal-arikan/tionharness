@@ -1,7 +1,7 @@
 package conversation
 
 import (
-	"github.com/bilal-arikan/tionswarm/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/db"
 )
 
 // charsPerToken is a rough heuristic: ~3 characters per token for this project's

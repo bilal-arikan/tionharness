@@ -8,7 +8,7 @@ import (
 
 // BuildVersion, BuildDate, and BuildCommit are injected at build time via
 //
-//	go build -ldflags "-X github.com/bilal-arikan/tionswarm/internal/api.BuildVersion=v1.2.3 ..."
+//	go build -ldflags "-X github.com/bilal-arikan/tionharness/internal/api.BuildVersion=v1.2.3 ..."
 //
 // When building without ldflags (dev mode) all three default to "dev".
 var (
@@ -30,7 +30,7 @@ func (s *Server) handleVersion(w http.ResponseWriter, r *http.Request) {
 
 	// ReadBuildInfo fills in the module path and, when built with ldflags, VCS
 	// metadata. We extract the module name so the UI can link to the source.
-	module := "github.com/bilal-arikan/tionswarm"
+	module := "github.com/bilal-arikan/tionharness"
 	if info, ok := debug.ReadBuildInfo(); ok {
 		if info.Main.Path != "" {
 			module = info.Main.Path

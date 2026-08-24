@@ -4,7 +4,7 @@ import { api } from '@/api'
 import type { FleetFinding } from '@/types'
 import { SeverityBadge, RegressedBadge } from './insightBadges'
 
-// FleetTab shows the fleet-wide app-fix backlog: the same TionSwarm bug surfacing
+// FleetTab shows the fleet-wide app-fix backlog: the same TionHarness bug surfacing
 // across workspaces, deduped into one row with combined weight + origins.
 export function FleetTab({ onError }: { onError: (msg: string) => void }) {
   const [rows, setRows] = useState<FleetFinding[]>([])

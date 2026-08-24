@@ -3,7 +3,7 @@ package api
 import (
 	"testing"
 
-	"github.com/bilal-arikan/tionswarm/internal/providers"
+	"github.com/bilal-arikan/tionharness/internal/providers"
 )
 
 // TestEstimateToolCatalog verifies the tool-catalog token estimate accounts for

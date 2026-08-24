@@ -3,7 +3,7 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 
-// During dev, proxy API calls to the Go backend on :8090 (TIONSWARM_ADDR default
+// During dev, proxy API calls to the Go backend on :8090 (TIONHARNESS_ADDR default
 // in the run docs — :8080 collides with unity-mcp's HTTP backend).
 export default defineConfig({
   plugins: [react(), tailwindcss()],

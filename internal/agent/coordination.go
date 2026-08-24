@@ -12,13 +12,13 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/bilal-arikan/tionswarm/internal/db"
-	"github.com/bilal-arikan/tionswarm/internal/events"
-	"github.com/bilal-arikan/tionswarm/internal/providers"
-	"github.com/bilal-arikan/tionswarm/internal/skills"
-	"github.com/bilal-arikan/tionswarm/internal/tools"
-	"github.com/bilal-arikan/tionswarm/internal/turnqueue"
-	"github.com/bilal-arikan/tionswarm/internal/view"
+	"github.com/bilal-arikan/tionharness/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/events"
+	"github.com/bilal-arikan/tionharness/internal/providers"
+	"github.com/bilal-arikan/tionharness/internal/skills"
+	"github.com/bilal-arikan/tionharness/internal/tools"
+	"github.com/bilal-arikan/tionharness/internal/turnqueue"
+	"github.com/bilal-arikan/tionharness/internal/view"
 )
 
 // coordination.go implements the M2 coordinator/worker method (see _Docs/47).
@@ -1717,7 +1717,7 @@ func (r *Runtime) runCoordinatorTurn(coordSessionID string) {
 
 // turnCalledCoordinationTool reports whether any (possibly nested) step in a turn
 // invoked a coordination tool. Matches the bare Tool name and the namespaced CallName
-// alike (mcp__tionswarm_interaction__spawn_worker on the claude-cli path).
+// alike (mcp__tionharness_interaction__spawn_worker on the claude-cli path).
 func turnCalledCoordinationTool(steps []TurnStep) bool {
 	for _, s := range steps {
 		if s.Kind == StepTool {

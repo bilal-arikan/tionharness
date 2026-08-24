@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/bilal-arikan/tionswarm/internal/sessionhub"
+	"github.com/bilal-arikan/tionharness/internal/sessionhub"
 )
 
 // TestPayloadClientMsgID extracts the correlation id a terminal hub event carries,

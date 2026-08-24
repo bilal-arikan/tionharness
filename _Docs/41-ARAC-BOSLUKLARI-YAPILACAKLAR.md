@@ -1,13 +1,13 @@
-# 41 — Araç Boşlukları ve Yapılacaklar (the external agent project ↔ TionSwarm)
+# 41 — Araç Boşlukları ve Yapılacaklar (the external agent project ↔ TionHarness)
 
-> **Amaç:** the external agent project (Claude Code tabanlı) araç envanteri ile TionSwarm builtin araçlarının
+> **Amaç:** the external agent project (Claude Code tabanlı) araç envanteri ile TionHarness builtin araçlarının
 > karşılaştırmasından çıkan **eksik araçları** ve **mevcut araç iyileştirmelerini** açıklamalarıyla
 > birlikte tek bir yapılacaklar listesinde toplamak.
 >
 > Kaynak analiz: [`analiz-craftagent-arac-eslestirme.md`](./analiz-craftagent-arac-eslestirme.md)
 > (envanter eşleştirmesi). Bu doküman onun **aksiyon (backlog) karşılığıdır.**
 >
-> **Güncel not:** Analiz dosyasında "TionSwarm'da yok" denen `config_validate`, `skill_validate`,
+> **Güncel not:** Analiz dosyasında "TionHarness'da yok" denen `config_validate`, `skill_validate`,
 > `mermaid_validate` araçları **bu tarihten sonra eklenmiştir** (`builtin_configvalidate.go`,
 > `builtin_skillvalidate.go`, `builtin_mermaidvalidate.go`) → o boşluklar **KAPANDI**, aşağıda yer
 > almazlar. Liste yalnızca **hâlâ açık** olan boşlukları içerir.
@@ -50,7 +50,7 @@
     "the backend is unreachable — is the service running at that address?" ipucu eklenir. Bu, durmuş
     bir SearXNG konteynerinin ajanı tümüyle aramasız bırakmasını engeller (SES286 vakası).
   - **claude-cli hariç:** Araç `WebFetch` gibi **koşulsuz** kaydedilir (workspace tools ekranında görünür),
-    ama claude-cli'ye **bridge'lenmez** — TionSwarm built-in'leri CLI'ye yalnızca elle küratörlenen
+    ama claude-cli'ye **bridge'lenmez** — TionHarness built-in'leri CLI'ye yalnızca elle küratörlenen
     `interactionToolSpecs` listesiyle ulaşır, WebSearch o listede yok → CLI kendi native'ini kullanır.
     Savunma amaçlı `cliLazyBridgeExcluded`'a da eklendi (WebFetch ile birebir).
   - **SSRF yok:** URL operatör-tanımlı güvenilir backend (yalnızca query model'den gelir), bu yüzden
@@ -98,7 +98,7 @@
 
 - **Durum:** ~~Yok.~~ **Uygulandı** (`transform_data` adıyla). `script_sandbox` ayrı bir araç olarak
   uygulanmadı — `transform_data` zaten striplenmiş-env + timeout + yapısal çıktı sözleşmesini karşılıyor.
-- **Neden önemli:** TionSwarm'nun **token optimizasyon** felsefesiyle (`_Docs/17`) birebir uyumlu: büyük
+- **Neden önemli:** TionHarness'nun **token optimizasyon** felsefesiyle (`_Docs/17`) birebir uyumlu: büyük
   veri setini izole script ile işleyip **dosyaya yazmak** ve ana bağlama sadece özet/yol döndürmek
   cached-prefix'i ve token'ı düşürür.
 - **Uygulanan yaklaşım:**
@@ -113,7 +113,7 @@
     aksi halde striplenmiş env'le 9009 "Python bulunamadı" hatası oluyordu.
 - **Gating + risk:** Host'ta keyfi kod çalıştırdığından `RiskExec` ve **shell gate'i** (`ShellEnabled`)
   arkasına kaydedildi — shell ile aynı yürütme kapısı. Gerçek güvenlik sandbox'ı değil; secret-izolasyonu +
-  kaynak-sınırlama sarmalayıcısı. (Not: the external agent project bunu Explore'da da sunar; TionSwarm dürüst risk modeli
+  kaynak-sınırlama sarmalayıcısı. (Not: the external agent project bunu Explore'da da sunar; TionHarness dürüst risk modeli
   gereği read-only'de bloklar. İleride gerçek sandbox ile `RiskRead`'e indirilebilir / ayrı tunable.)
 - **Eklenen dosyalar:** `internal/tools/builtin_transform_data.go`, `transform_data_env.go`,
   `builtin_transform_data_test.go` (8 test). `classify.go` + `toolsetup.go` kaydı.
@@ -154,7 +154,7 @@
 
 - **Gerekçe:** Etiket tarafını **`set_session_tags`** (2026-07-02, `_Docs/46-ETIKET-OTOMASYON.md`)
   zaten karşılıyor — UI ile paylaşımlı `Session.Tags` + etiket-tetikleyicili otomasyonlar, yani
-  the external agent project'ın "label → automation → kendi-kapanan iş akışı" deseninin TionSwarm karşılığı kurulu.
+  the external agent project'ın "label → automation → kendi-kapanan iş akışı" deseninin TionHarness karşılığı kurulu.
   Durum tarafında da oturum `State` + `archive_session` + Kanban task'ları (`move_task`) mevcut
   akışları karşılıyor; ayrı bir `set_session_status` aracı eklenmeyecek (bkz. Bölüm C mantığı).
 
@@ -186,12 +186,12 @@
   - Inline gösterim: yeni ```` ```html-preview ```` bloğu (`HtmlPreview.tsx`) — izole sandbox iframe
     (`allow-scripts`, `allow-same-origin` YOK → opaque origin). Backend `GET /api/files?...&as=text`
     yalnız render kökü altını `text/plain` ile servis eder.
-  - Depolama: **skill-bundled** (`tionswarm-templates` skill; `${SKILL_DIR}/templates/*.html`), yeni
+  - Depolama: **skill-bundled** (`tionharness-templates` skill; `${SKILL_DIR}/templates/*.html`), yeni
     "Sources/template store" alt-sistemi kurulmadı.
 - **Dosyalar:** `internal/tools/{render_template.go, builtin_render_template.go, *_test.go}`,
   `internal/agent/renderdir.go` + `toolsetup.go`, `internal/api/files.go`,
   `frontend/src/components/markdown/{HtmlPreview.tsx, CodeBlock.tsx}`, `frontend/src/lib/attachments.tsx`,
-  `internal/skills/defaults/tionswarm-templates/**`, prompt + guard güncellendi.
+  `internal/skills/defaults/tionharness-templates/**`, prompt + guard güncellendi.
 - **Risk sınıfı:** `RiskWrite` (kontrollü: yalnız render dir'e yazar, çıktı adı basename'e indirgenir).
 
 ### 9. `source_credential_prompt` benzeri güvenli credential giriş UI — **P3**
@@ -211,7 +211,7 @@
   bekleme yok.
 - **Neden önemli:** Dış süreç/CI/uzak kuyruk gibi harness'in bildiremeyeceği durumları beklemek için.
 - **Yaklaşım:** Periyodik kontrol + timeout'lu bir bekleme aracı; otonom turlarda bütçe-dostu aralık.
-  TionSwarm'nun scheduler'ı zaten var → üstüne ince bir "until-condition" sarmalayıcı.
+  TionHarness'nun scheduler'ı zaten var → üstüne ince bir "until-condition" sarmalayıcı.
 - **Dosyalar:** yeni `builtin_monitor.go` (+ test), scheduler entegrasyonu.
 - **Risk sınıfı:** `RiskRead`.
 
@@ -273,7 +273,7 @@
 
 ## E. Mevcut araçların EKSİK ÖZELLİKLERİ (yeni araç değil, per-tool feature farkı)
 
-> Bölüm A "eksik araçları" listeler; bu bölüm **TionSwarm'da VAR OLAN** araçların
+> Bölüm A "eksik araçları" listeler; bu bölüm **TionHarness'da VAR OLAN** araçların
 > Claude Code muadilinde bulunup bizde olmayan **özelliklerini** toplar. (İlk kayıt:
 > 2026-07-03, `observed-behavior` `src/tools/*` incelemesinden.)
 
@@ -307,9 +307,9 @@ kök+iç-içe `.gitignore` (lazy) + daima `.git`; dizin eşleşince `SkipDir`. `
 
 ## C. Bilinçli kapsam-dışı (eklenmeyecek)
 
-the external agent project'ta olup TionSwarm'nun **kapsam/felsefe farkı** nedeniyle eklenmeyenler:
+the external agent project'ta olup TionHarness'nun **kapsam/felsefe farkı** nedeniyle eklenmeyenler:
 
-- `source_oauth_trigger` ve Google/Slack/Microsoft OAuth varyantları → TionSwarm source modeli MCP-sunucu +
+- `source_oauth_trigger` ve Google/Slack/Microsoft OAuth varyantları → TionHarness source modeli MCP-sunucu +
   secret-vault tabanlı; OAuth akışı kapsam dışı.
 - `list_messaging_channels` / `unbind_messaging_channel` → Telegram/WhatsApp gateway entegrasyonu yok
   (Connectors fazı 2026-06-16'da kapsamdan çıkarıldı).

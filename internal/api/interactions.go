@@ -9,7 +9,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/bilal-arikan/tionswarm/internal/sessionhub"
+	"github.com/bilal-arikan/tionharness/internal/sessionhub"
 )
 
 // pendingInteraction is one outstanding human-in-the-loop prompt (ask_user /

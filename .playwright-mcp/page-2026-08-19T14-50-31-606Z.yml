@@ -2,14 +2,14 @@
   - navigation [ref=f1e4]:
     - generic [ref=f1e5]:
       - generic [ref=f1e6]: TS
-      - generic [ref=f1e7]: TionSwarm
+      - generic [ref=f1e7]: TionHarness
     - generic [ref=f1e9]:
-      - 'button "Workspace: TionSwarmRepo" [ref=f1e10]':
+      - 'button "Workspace: TionHarnessRepo" [ref=f1e10]':
         - generic [ref=f1e11]:
           - generic [ref=f1e12]:
             - text: 📦
             - generic "Başka workspace’te yeni etkinlik" [ref=f1e13]
-          - generic [ref=f1e14]: TionSwarmRepo
+          - generic [ref=f1e14]: TionHarnessRepo
         - generic [ref=f1e15]: ▾
       - button "Navbarı daralt" [ref=f1e16]
     - generic [ref=f1e19]:
@@ -70,10 +70,10 @@
                 - generic "Oturum ID" [ref=f1e181]: SES804
           - button "Oturum ayarları" [ref=f1e182]
         - generic [ref=f1e186]:
-          - button "C:\\Users\\user\\.tionswarm\\workspaces\\WS5\\store\\s… Sohbet Opus · 1 sa · 2 mesaj SES816" [ref=f1e187]:
+          - button "C:\\Users\\user\\.tionharness\\workspaces\\WS5\\store\\s… Sohbet Opus · 1 sa · 2 mesaj SES816" [ref=f1e187]:
             - generic [ref=f1e188]: WO
             - generic [ref=f1e189]:
-              - generic [ref=f1e190]: C:\Users\user\.tionswarm\workspaces\WS5\store\s…
+              - generic [ref=f1e190]: C:\Users\user\.tionharness\workspaces\WS5\store\s…
               - generic [ref=f1e192]:
                 - generic [ref=f1e195]: Sohbet
                 - 'generic "Model: opus" [ref=f1e196]': Opus
@@ -92,10 +92,10 @@
                 - generic "Oturum ID" [ref=f1e215]: SES803
           - button "Oturum ayarları" [ref=f1e216]
         - generic [ref=f1e220]:
-          - button "tionswarm da agentlar provderları editleyip düze… Sohbet Opus 5 · 2 sa · 4 mesaj SES802" [ref=f1e221]:
+          - button "tionharness da agentlar provderları editleyip düze… Sohbet Opus 5 · 2 sa · 4 mesaj SES802" [ref=f1e221]:
             - generic [ref=f1e222]: 👻
             - generic [ref=f1e223]:
-              - generic [ref=f1e224]: tionswarm da agentlar provderları editleyip düze…
+              - generic [ref=f1e224]: tionharness da agentlar provderları editleyip düze…
               - generic [ref=f1e226]:
                 - generic [ref=f1e229]: Sohbet
                 - 'generic "Model: claude-opus-5" [ref=f1e230]': Opus 5
@@ -263,10 +263,10 @@
                 - generic "Oturum ID" [ref=f1e474]: SES509
           - button "Oturum ayarları" [ref=f1e475]
         - generic [ref=f1e479]:
-          - button "C:\\Users\\user\\.tionswarm\\workspaces\\WS1\\store\\s… Sohbet Opus 5 · 2 gün · 14 mesaj SES505" [ref=f1e480]:
+          - button "C:\\Users\\user\\.tionharness\\workspaces\\WS1\\store\\s… Sohbet Opus 5 · 2 gün · 14 mesaj SES505" [ref=f1e480]:
             - generic [ref=f1e481]: 👻
             - generic [ref=f1e482]:
-              - generic [ref=f1e483]: C:\Users\user\.tionswarm\workspaces\WS1\store\s…
+              - generic [ref=f1e483]: C:\Users\user\.tionharness\workspaces\WS1\store\s…
               - generic [ref=f1e485]:
                 - generic [ref=f1e488]: Sohbet
                 - 'generic "Model: claude-opus-5" [ref=f1e489]': Opus 5

@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bilal-arikan/tionswarm/internal/proc"
-	"github.com/bilal-arikan/tionswarm/internal/providers"
+	"github.com/bilal-arikan/tionharness/internal/proc"
+	"github.com/bilal-arikan/tionharness/internal/providers"
 )
 
 const (
@@ -209,7 +209,7 @@ var lookInterpreter = proc.LookInterpreter
 // its path plus a cleanup func. Running from a real file (vs. -c/-e) gives correct
 // line numbers in tracebacks and sidesteps command-line length limits.
 func writeTempScript(src, ext string) (path string, cleanup func(), err error) {
-	f, err := os.CreateTemp("", "tionswarm-transform-*"+ext)
+	f, err := os.CreateTemp("", "tionharness-transform-*"+ext)
 	if err != nil {
 		return "", nil, fmt.Errorf("create temp script: %w", err)
 	}

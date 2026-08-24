@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bilal-arikan/tionswarm/internal/db"
-	"github.com/bilal-arikan/tionswarm/internal/providers"
+	"github.com/bilal-arikan/tionharness/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/providers"
 )
 
 // newTestRuntime builds a Runtime backed by a real file store and a workspace
@@ -133,8 +133,8 @@ func TestShellToolGate(t *testing.T) {
 
 	// Enabled → present and actually executes.
 	tun.SetShellEnabled(true)
-	res := callTool(t, rt, agent, "Bash", map[string]any{"command": "echo tionswarm-shell-ok"})
-	if res.IsError || !strings.Contains(res.Content, "tionswarm-shell-ok") {
+	res := callTool(t, rt, agent, "Bash", map[string]any{"command": "echo tionharness-shell-ok"})
+	if res.IsError || !strings.Contains(res.Content, "tionharness-shell-ok") {
 		t.Fatalf("shell run got %q (err=%v)", res.Content, res.IsError)
 	}
 }

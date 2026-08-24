@@ -262,7 +262,7 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
 
   // Multi-select (Ctrl/Cmd+Click, Shift-range) for bulk artifact deletion.
   const sel = useMultiSelect()
-  const { open: listOpen, toggle: toggleList } = useCollapsibleList('tionswarm.artifactsListOpen')
+  const { open: listOpen, toggle: toggleList } = useCollapsibleList('tionharness.artifactsListOpen')
   // Draft group name + busy flag for the bulk "set group" action on the selection.
   const [bulkGroup, setBulkGroup] = useState('')
   const [bulkGroupBusy, setBulkGroupBusy] = useState(false)
@@ -282,7 +282,7 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
   } = useGroupedList(filtered, {
     keyOf: artifactGroupKey,
     sortGroups: sortArtifactGroups,
-    persistKey: 'tionswarm.artifactsCollapsedGroups',
+    persistKey: 'tionharness.artifactsCollapsedGroups',
   })
   // Distinct existing group names (across the full list, not just the filtered
   // view), offered as bulk-group autocomplete suggestions.
@@ -590,7 +590,7 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
       <ListPane
         open={listOpen}
         onToggle={toggleList}
-        widthKey="tionswarm.artifactsListWidth"
+        widthKey="tionharness.artifactsListWidth"
         defaultWidth={288}
         label="Artifactlar"
         testId="artifacts-list-toggle"

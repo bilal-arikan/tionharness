@@ -22,8 +22,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/bilal-arikan/tionswarm/internal/db"
-	"github.com/bilal-arikan/tionswarm/internal/view"
+	"github.com/bilal-arikan/tionharness/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/view"
 )
 
 // dashboardMaxDays bounds the trend window. 90 days matches /api/usage so the

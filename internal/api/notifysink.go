@@ -3,8 +3,8 @@ package api
 import (
 	"context"
 
-	"github.com/bilal-arikan/tionswarm/internal/events"
-	"github.com/bilal-arikan/tionswarm/internal/tools"
+	"github.com/bilal-arikan/tionharness/internal/events"
+	"github.com/bilal-arikan/tionharness/internal/tools"
 )
 
 // notifySink adapts the workspace event bus into a tools.NotifySink AND a

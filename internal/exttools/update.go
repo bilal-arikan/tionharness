@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bilal-arikan/tionswarm/internal/proc"
+	"github.com/bilal-arikan/tionharness/internal/proc"
 )
 
 // updateTimeout caps one update run. Package-manager installs pull from the
@@ -17,7 +17,7 @@ const updateTimeout = 5 * time.Minute
 
 // ErrManualUpdate is returned when an update is requested for a tool whose spec
 // is UpdateManual. The UI already hides the button for those; this is the second
-// gate, so a direct API call cannot make TionSwarm overwrite a binary.
+// gate, so a direct API call cannot make TionHarness overwrite a binary.
 var ErrManualUpdate = fmt.Errorf("bu araç otomatik güncellenmez")
 
 // RunUpdate executes a tool's update command and returns its combined output.

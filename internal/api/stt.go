@@ -4,7 +4,7 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/bilal-arikan/tionswarm/internal/stt"
+	"github.com/bilal-arikan/tionharness/internal/stt"
 )
 
 // sttMaxAudioBytes caps an uploaded clip (~25 MB ≈ minutes of Opus) so a bad

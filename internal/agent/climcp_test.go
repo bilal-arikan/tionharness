@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bilal-arikan/tionswarm/internal/db"
-	"github.com/bilal-arikan/tionswarm/internal/tools"
+	"github.com/bilal-arikan/tionharness/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/tools"
 )
 
 // TestWriteCLIMCPConfigTwoTierInteraction locks the claude-cli 2.1.x+ two-tier
@@ -52,7 +52,7 @@ func TestWriteCLIMCPConfigTwoTierInteraction(t *testing.T) {
 		t.Fatalf("unmarshal config: %v\n%s", err, data)
 	}
 
-	core, ok := cfg.MCPServers["tionswarm_interaction"]
+	core, ok := cfg.MCPServers["tionharness_interaction"]
 	if !ok {
 		t.Fatalf("core server entry missing:\n%s", data)
 	}
@@ -63,7 +63,7 @@ func TestWriteCLIMCPConfigTwoTierInteraction(t *testing.T) {
 		t.Errorf("core URL must target the /core tier, got %q", core.URL)
 	}
 
-	ext, ok := cfg.MCPServers["tionswarm_extended"]
+	ext, ok := cfg.MCPServers["tionharness_extended"]
 	if !ok {
 		t.Fatalf("extended server entry missing:\n%s", data)
 	}
@@ -79,10 +79,10 @@ func TestWriteCLIMCPConfigTwoTierInteraction(t *testing.T) {
 	// tools/list_changed are already permitted and the persistent-session fingerprint
 	// stays stable (Doc 52 §3-D).
 	want := map[string]bool{
-		"mcp__tionswarm_interaction__Bash":              true,
-		"mcp__tionswarm_interaction__ask_user":          true,
-		"mcp__tionswarm_interaction__permission_prompt": true,
-		"mcp__tionswarm_extended":                       true, // wildcard covers update_session, create_agent, and any list_changed additions
+		"mcp__tionharness_interaction__Bash":              true,
+		"mcp__tionharness_interaction__ask_user":          true,
+		"mcp__tionharness_interaction__permission_prompt": true,
+		"mcp__tionharness_extended":                       true, // wildcard covers update_session, create_agent, and any list_changed additions
 	}
 	got := map[string]bool{}
 	for _, a := range allowed {
@@ -96,7 +96,7 @@ func TestWriteCLIMCPConfigTwoTierInteraction(t *testing.T) {
 	// The extended tier must NOT be enumerated per-tool any more (that per-tool churn is
 	// exactly what the wildcard replaces).
 	for _, a := range allowed {
-		if strings.HasPrefix(a, "mcp__tionswarm_extended__") {
+		if strings.HasPrefix(a, "mcp__tionharness_extended__") {
 			t.Errorf("extended tier should use a server-level wildcard, not per-tool entry %q", a)
 		}
 	}

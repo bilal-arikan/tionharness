@@ -16,12 +16,12 @@ func TestMigrateFromSettings_FullyPopulated(t *testing.T) {
 		AnthropicKeyEnc: "enc:anthropic-key",
 
 		ClaudeCLIPath:         "/usr/bin/claude",
-		ClaudeConfigDir:       "/home/u/.tionswarm/claude-home",
+		ClaudeConfigDir:       "/home/u/.tionharness/claude-home",
 		ClaudeCliAuthKind:     "oauth",
 		ClaudeCliAuthTokenEnc: "enc:claude-token",
 
 		CodexCLIPath:   "/usr/bin/codex",
-		CodexConfigDir: "/home/u/.tionswarm/codex-home",
+		CodexConfigDir: "/home/u/.tionharness/codex-home",
 
 		MinimaxKeyEnc:  "enc:minimax-key",
 		MinimaxBaseURL: "https://minimax.example/v1",
@@ -76,7 +76,7 @@ func TestMigrateFromSettings_FullyPopulated(t *testing.T) {
 	}
 
 	cli, _ := findInstance(instances, "claude-cli")
-	if cli.Config["cliPath"] != "/usr/bin/claude" || cli.Config["configDir"] != "/home/u/.tionswarm/claude-home" || cli.Config["authKind"] != "oauth" {
+	if cli.Config["cliPath"] != "/usr/bin/claude" || cli.Config["configDir"] != "/home/u/.tionharness/claude-home" || cli.Config["authKind"] != "oauth" {
 		t.Fatalf("claude-cli config not migrated: %+v", cli.Config)
 	}
 	if cli.SecretsEnc["authToken"] != "enc:claude-token" {
@@ -84,7 +84,7 @@ func TestMigrateFromSettings_FullyPopulated(t *testing.T) {
 	}
 
 	codex, _ := findInstance(instances, "codex-cli")
-	if codex.Config["cliPath"] != "/usr/bin/codex" || codex.Config["configDir"] != "/home/u/.tionswarm/codex-home" {
+	if codex.Config["cliPath"] != "/usr/bin/codex" || codex.Config["configDir"] != "/home/u/.tionharness/codex-home" {
 		t.Fatalf("codex-cli config not migrated: %+v", codex.Config)
 	}
 

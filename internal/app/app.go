@@ -1,8 +1,8 @@
-// Package app holds the shared TionSwarm bootstrap sequence so multiple entry
-// points (the headless server in cmd/tionswarm and the native desktop window in
-// cmd/tionswarm-desktop) wire up the exact same subsystems without duplicating
+// Package app holds the shared TionHarness bootstrap sequence so multiple entry
+// points (the headless server in cmd/tionharness and the native desktop window in
+// cmd/tionharness-desktop) wire up the exact same subsystems without duplicating
 // the boot logic. Bootstrap is behaviour-preserving: it is the former
-// cmd/tionswarm/main.go body, lifted verbatim.
+// cmd/tionharness/main.go body, lifted verbatim.
 package app
 
 import (
@@ -17,18 +17,18 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bilal-arikan/tionswarm/internal/agent"
-	"github.com/bilal-arikan/tionswarm/internal/api"
-	"github.com/bilal-arikan/tionswarm/internal/backup"
-	"github.com/bilal-arikan/tionswarm/internal/config"
-	"github.com/bilal-arikan/tionswarm/internal/events"
-	"github.com/bilal-arikan/tionswarm/internal/logbuf"
-	"github.com/bilal-arikan/tionswarm/internal/providers"
-	"github.com/bilal-arikan/tionswarm/internal/settings"
-	"github.com/bilal-arikan/tionswarm/internal/workspace"
+	"github.com/bilal-arikan/tionharness/internal/agent"
+	"github.com/bilal-arikan/tionharness/internal/api"
+	"github.com/bilal-arikan/tionharness/internal/backup"
+	"github.com/bilal-arikan/tionharness/internal/config"
+	"github.com/bilal-arikan/tionharness/internal/events"
+	"github.com/bilal-arikan/tionharness/internal/logbuf"
+	"github.com/bilal-arikan/tionharness/internal/providers"
+	"github.com/bilal-arikan/tionharness/internal/settings"
+	"github.com/bilal-arikan/tionharness/internal/workspace"
 )
 
-// App is a fully wired, ready-to-serve TionSwarm instance.
+// App is a fully wired, ready-to-serve TionHarness instance.
 type App struct {
 	logger   *slog.Logger
 	manager  *workspace.Manager
@@ -157,7 +157,7 @@ func Bootstrap(cfg *config.Config, logs *logbuf.Buffer, logger *slog.Logger) (*A
 	tun := agent.NewTunables()
 	// The gated tool capabilities (shell / self-management / agent delegation) are
 	// off by default and now live in the Settings screen (persisted settings.json,
-	// pushed live via applySettings). The legacy TIONSWARM_ENABLE_* env vars act as a
+	// pushed live via applySettings). The legacy TIONHARNESS_ENABLE_* env vars act as a
 	// one-time boot seed: when set truthy they ENABLE the matching capability in
 	// settings (they never disable), so existing dev workflows keep working while
 	// the Settings toggle is the source of truth thereafter.
@@ -168,14 +168,14 @@ func Bootstrap(cfg *config.Config, logs *logbuf.Buffer, logger *slog.Logger) (*A
 		}
 		return nil
 	}
-	// TIONSWARM_ENABLE_SELFMANAGE was removed 2026-07-01 and TIONSWARM_ENABLE_DELEGATION
+	// TIONHARNESS_ENABLE_SELFMANAGE was removed 2026-07-01 and TIONHARNESS_ENABLE_DELEGATION
 	// on 2026-07-02 (both are always installed now; visibility is per-tool from the
 	// Tools screen). Env-seedable capabilities: the shell, and code-execution mode
-	// (TIONSWARM_CODE_MODE — run_code + generated MCP python bindings, _Docs/44;
+	// (TIONHARNESS_CODE_MODE — run_code + generated MCP python bindings, _Docs/44;
 	// also requires the shell capability to take effect).
 	seed := settings.Patch{
-		EnableShell:    envOn("TIONSWARM_ENABLE_SHELL"),
-		EnableCodeMode: envOn("TIONSWARM_CODE_MODE"),
+		EnableShell:    envOn("TIONHARNESS_ENABLE_SHELL"),
+		EnableCodeMode: envOn("TIONHARNESS_CODE_MODE"),
 	}
 	if seed.EnableShell != nil || seed.EnableCodeMode != nil {
 		if _, err := settingsStore.Apply(seed); err != nil {
@@ -280,7 +280,7 @@ func (a *App) URL() string {
 // Serve blocks serving HTTP until Shutdown is called (then returns nil) or the
 // server fails.
 func (a *App) Serve() error {
-	a.logger.Info("TionSwarm starting", "addr", a.Addr())
+	a.logger.Info("TionHarness starting", "addr", a.Addr())
 	if err := a.httpSrv.Serve(a.listener); err != nil && err != http.ErrServerClosed {
 		return err
 	}

@@ -10,11 +10,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/bilal-arikan/tionswarm/internal/config"
+	"github.com/bilal-arikan/tionharness/internal/config"
 )
 
 // releaseTTL is how long a fetched release stays fresh. GitHub's unauthenticated
-// API allows 60 requests/hour per IP and TionSwarm has no token: with seven tools
+// API allows 60 requests/hour per IP and TionHarness has no token: with seven tools
 // a user clicking "check" a few times would exhaust it in minutes. Six hours is
 // far shorter than any tool's release cadence and keeps the budget untouched.
 const releaseTTL = 6 * time.Hour
@@ -67,7 +67,7 @@ func loadCacheLocked() {
 }
 
 // saveCacheLocked persists the cache atomically (tmp + rename), matching the
-// write-through pattern the rest of TionSwarm's file storage uses. A write
+// write-through pattern the rest of TionHarness's file storage uses. A write
 // failure is returned so the caller can log it; the in-memory cache still holds.
 func saveCacheLocked() error {
 	p := cachePath()
@@ -191,7 +191,7 @@ func fetchLatest(ctx context.Context, repo string) (Release, error) {
 		return Release{}, err
 	}
 	req.Header.Set("Accept", "application/vnd.github+json")
-	req.Header.Set("User-Agent", "TionSwarm")
+	req.Header.Set("User-Agent", "TionHarness")
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -243,7 +243,7 @@ func fetchNewestIncludingPre(ctx context.Context, repo string) (Release, error) 
 		return Release{}, err
 	}
 	req.Header.Set("Accept", "application/vnd.github+json")
-	req.Header.Set("User-Agent", "TionSwarm")
+	req.Header.Set("User-Agent", "TionHarness")
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {

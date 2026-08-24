@@ -15,11 +15,11 @@ import (
 	"time"
 )
 
-// TestMain doubles as a fake stdio MCP server when TIONSWARM_MCP_TEST_SERVER=1, so
+// TestMain doubles as a fake stdio MCP server when TIONHARNESS_MCP_TEST_SERVER=1, so
 // pool tests can exercise a real subprocess + JSON-RPC handshake without any
 // external dependency. Otherwise it runs the package tests normally.
 func TestMain(m *testing.M) {
-	if os.Getenv("TIONSWARM_MCP_TEST_SERVER") == "1" {
+	if os.Getenv("TIONHARNESS_MCP_TEST_SERVER") == "1" {
 		runFakeServer()
 		return
 	}
@@ -86,7 +86,7 @@ func fakeCfg() ServerConfig {
 		Name:      "fake",
 		Transport: MCPTransportStdio,
 		Command:   os.Args[0],
-		Env:       map[string]string{"TIONSWARM_MCP_TEST_SERVER": "1"},
+		Env:       map[string]string{"TIONHARNESS_MCP_TEST_SERVER": "1"},
 	}
 }
 

@@ -1,6 +1,6 @@
 # 24 — Self-Management + Ayarlar Alt Sistemi
 
-Bir ajanın **TionSwarm'nun kendisini** araçlarla yönetmesini sağlayan tool ailesi ve
+Bir ajanın **TionHarness'nun kendisini** araçlarla yönetmesini sağlayan tool ailesi ve
 uygulama-geneli ayarların canlı okunup yazıldığı ayarlar köprüsü.
 
 > İlgili: araç-use döngüsü için `_Docs/01-MIMARI.md`, lazy yükleme için
@@ -11,7 +11,7 @@ uygulama-geneli ayarların canlı okunup yazıldığı ayarlar köprüsü.
 ## Gating + lazy yükleme
 
 - **Tek anahtar:** tüm öz-yönetim araçları yalnız `SelfManageEnabled()` true ise
-  kaydedilir (env `TIONSWARM_ENABLE_SELFMANAGE=1`). Kapalıyken hiç eklenmez (~+2000
+  kaydedilir (env `TIONHARNESS_ENABLE_SELFMANAGE=1`). Kapalıyken hiç eklenmez (~+2000
   tok/tur tasarrufu).
 - **Hepsi lazy:** aile geniş ve turların azında kullanıldığı için şemalar her tura
   basılmaz; ajan "Available Tools (load on demand)" listesinden gerekeni
@@ -20,8 +20,8 @@ uygulama-geneli ayarların canlı okunup yazıldığı ayarlar köprüsü.
 - **Koşullu alt-aileler:** secret yazımı yalnız vault varsa; skill yazımı yalnız
   skill store varsa; ayar araçları yalnız `settingsBridge` bağlıysa eklenir.
 
-Öğretici default skill: **`tionswarm-self-management`** (`access: shared`,
-`tionswarm-guide`'a subskill) — aileyi kataloglar ve self-aktivasyon akışını öğretir.
+Öğretici default skill: **`tionharness-self-management`** (`access: shared`,
+`tionharness-guide`'a subskill) — aileyi kataloglar ve self-aktivasyon akışını öğretir.
 
 **claude-cli yolu (CLI-3):** CLI'nin native `activate_tools` döngüsü olmadığından
 bu lazy aile, Interaction MCP **köprüsü** ile CLI ajanlarına önden advertise edilip
@@ -111,8 +111,8 @@ alanlarıyla). Ajan bunu canlı okuyup yazabilir; değişiklik **restart olmadan
   yazar **ve canlı uygular**. Sayısal alanlar güvenli aralığa **clamp**'lenir;
   write-only secret alanları (`anthropicKey`/`minimaxKey`, "" = temizle) kabul edilir.
 
-Alanların tam referansı: default skill **`tionswarm-settings`** (`access: shared`,
-`tionswarm-guide`'a subskill).
+Alanların tam referansı: default skill **`tionharness-settings`** (`access: shared`,
+`tionharness-guide`'a subskill).
 
 ### Validation + normalize (`internal/settings/validate.go`)
 

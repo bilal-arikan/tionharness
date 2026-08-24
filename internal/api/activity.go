@@ -3,7 +3,7 @@ package api
 import (
 	"net/http"
 
-	"github.com/bilal-arikan/tionswarm/internal/workspace"
+	"github.com/bilal-arikan/tionharness/internal/workspace"
 )
 
 // activityState reports which nav views currently have work in progress, so the

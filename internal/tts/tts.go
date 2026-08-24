@@ -52,7 +52,7 @@ func venvScriptDir() string {
 	return "bin"
 }
 
-// piperExe resolves the piper binary: the TIONSWARM_PIPER env override, then the
+// piperExe resolves the piper binary: the TIONHARNESS_PIPER env override, then the
 // common Progs install layout, then PATH. Returns "" when not found.
 //
 // The venv candidate comes FIRST because it is the only shape upstream still
@@ -64,7 +64,7 @@ func venvScriptDir() string {
 // two: `--model` and `--output_file` are still accepted (piper1-gpl keeps the
 // underscore spellings as aliases), so Synthesize below needs no version fork.
 func piperExe() string {
-	if p := strings.TrimSpace(os.Getenv("TIONSWARM_PIPER")); p != "" && fileExists(p) {
+	if p := strings.TrimSpace(os.Getenv("TIONHARNESS_PIPER")); p != "" && fileExists(p) {
 		return p
 	}
 	if home, err := os.UserHomeDir(); err == nil && home != "" {
@@ -89,7 +89,7 @@ func piperExe() string {
 // binary, and the Progs voices folder.
 func voiceDirs() []string {
 	var dirs []string
-	if v := strings.TrimSpace(os.Getenv("TIONSWARM_PIPER_VOICES")); v != "" {
+	if v := strings.TrimSpace(os.Getenv("TIONHARNESS_PIPER_VOICES")); v != "" {
 		dirs = append(dirs, v)
 	}
 	if exe := piperExe(); exe != "" {

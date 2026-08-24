@@ -10,10 +10,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/bilal-arikan/tionswarm/internal/agent"
-	"github.com/bilal-arikan/tionswarm/internal/interaction"
-	"github.com/bilal-arikan/tionswarm/internal/providers"
-	"github.com/bilal-arikan/tionswarm/internal/tools"
+	"github.com/bilal-arikan/tionharness/internal/agent"
+	"github.com/bilal-arikan/tionharness/internal/interaction"
+	"github.com/bilal-arikan/tionharness/internal/providers"
+	"github.com/bilal-arikan/tionharness/internal/tools"
 )
 
 // askTimeout bounds a blocking ask_user call so a never-answering user can't pin
@@ -119,12 +119,12 @@ func (b *interactionBackend) Valid(token string) bool {
 }
 
 // coreInteractionTools is the eager tier of Interaction MCP tools: the ones the
-// CLI MCP-config advertises on the alwaysLoad `tionswarm_interaction` server so they
+// CLI MCP-config advertises on the alwaysLoad `tionharness_interaction` server so they
 // are NEVER deferred by the CLI's tool search (Bash, ask_user, the artifact/skill
 // path, working-memory edits, permission_prompt). Everything else (notify,
 // focus_view, the session-lifecycle setters, schedule_wake, spawn_session) plus the
 // entire bridged self-management suite is the EXTENDED tier → a separate
-// `tionswarm_extended` server subject to ToolSearch deferral. This mirrors the native
+// `tionharness_extended` server subject to ToolSearch deferral. This mirrors the native
 // registry's eager-vs-lazy split (see _Docs/19) and is the single source for both
 // the tier filter below and the per-tier CLI allowlist.
 var coreInteractionTools = map[string]bool{
@@ -149,11 +149,11 @@ var coreInteractionTools = map[string]bool{
 }
 
 // cliTier classifies a bare tool name into the claude-cli wire tier: "core"
-// (eager — advertised on the alwaysLoad tionswarm_interaction server, never deferred),
-// "extended" (deferred — the tionswarm_extended server, discovered via the CLI's
+// (eager — advertised on the alwaysLoad tionharness_interaction server, never deferred),
+// "extended" (deferred — the tionharness_extended server, discovered via the CLI's
 // ToolSearch), or "hidden" (advertised on NEITHER server this turn).
 //
-// This is the projection of TionSwarm's 4-tier visibility model onto claude-cli's
+// This is the projection of TionHarness's 4-tier visibility model onto claude-cli's
 // own two-state model (alwaysLoad vs tool-search). visOf reports a tool's effective
 // visibility (from the per-agent registry); nil reproduces the historical static
 // split (core set eager, everything else deferred, nothing hidden):
@@ -456,11 +456,11 @@ func interactionToolSpecs(tun *agent.Tunables, autonomous bool) []interaction.To
 		// db.Session fields the user edits. Non-blocking; advertised on autonomous
 		// turns too (a scheduled run can rename or retag itself).
 		tools.NewUpdateSessionTool().Def(),
-		// schedule_wake replaces the CLI's native ScheduleWakeup (which TionSwarm
+		// schedule_wake replaces the CLI's native ScheduleWakeup (which TionHarness
 		// disallows): the CLI runs one-shot, so its built-in wake never fires —
-		// ours arms a real TionSwarm timer that re-delivers into this session.
+		// ours arms a real TionHarness timer that re-delivers into this session.
 		tools.NewScheduleWakeTool().Def(),
-		// use_skill loads a TionSwarm skill body on demand. The CLI sees the skill
+		// use_skill loads a TionHarness skill body on demand. The CLI sees the skill
 		// catalog in its appended system prompt but has no native way to load a
 		// body; this bridge gives it the same lazy-load path native agents use.
 		tools.NewUseSkillTool(nil).Def(),
@@ -630,9 +630,9 @@ func (b *interactionBackend) callViaSink(ctx context.Context, run *chatRun, st s
 
 // extendedNSPrefix is the claude-cli namespace every deferred (extended-tier) tool
 // is reachable under: the CLI advertises MCP tools as mcp__<server>__<tool>, so a
-// tool activated via activate_tools is callable ONLY as mcp__tionswarm_extended__<name>,
+// tool activated via activate_tools is callable ONLY as mcp__tionharness_extended__<name>,
 // never by its bare name. Used to report the exact callable name back to the model.
-const extendedNSPrefix = "mcp__tionswarm_extended__"
+const extendedNSPrefix = "mcp__tionharness_extended__"
 
 // activateRelistTimeout bounds how long callActivate waits for the CLI to re-fetch
 // tools/list after an activate push (PushToolsChangedAndWait). The live probe saw
@@ -642,10 +642,10 @@ const extendedNSPrefix = "mcp__tionswarm_extended__"
 const activateRelistTimeout = 1 * time.Second
 
 // bareToolName strips the Interaction MCP namespace so dispatch matches whether
-// the CLI sends a namespaced name (core: mcp__tionswarm_interaction__ask_user,
-// extended: mcp__tionswarm_extended__create_agent) or the bare name.
+// the CLI sends a namespaced name (core: mcp__tionharness_interaction__ask_user,
+// extended: mcp__tionharness_extended__create_agent) or the bare name.
 func bareToolName(name string) string {
-	if s := strings.TrimPrefix(name, "mcp__tionswarm_interaction__"); s != name {
+	if s := strings.TrimPrefix(name, "mcp__tionharness_interaction__"); s != name {
 		return s
 	}
 	return strings.TrimPrefix(name, extendedNSPrefix)
@@ -726,7 +726,7 @@ func (b *interactionBackend) callActivate(token string, run *chatRun, args json.
 		return interaction.CallResult{Text: "no tool names given", IsError: true}, nil
 	}
 	// Accept either the bare name ("notify") or the namespaced form the catalog shows
-	// ("mcp__tionswarm_extended__notify") — the model may echo either. Normalise to bare.
+	// ("mcp__tionharness_extended__notify") — the model may echo either. Normalise to bare.
 	for i, n := range in.Tools {
 		in.Tools[i] = bareToolName(n)
 	}
@@ -747,7 +747,7 @@ func (b *interactionBackend) callActivate(token string, run *chatRun, args json.
 		// Push list_changed AND wait for the CLI to re-fetch tools/list before returning,
 		// so the just-activated tools are already in the CLI's registry by the time the
 		// model reads this result and calls one. This closes the activate→call race that
-		// otherwise surfaced as "No such tool available: mcp__tionswarm_extended__<name>"
+		// otherwise surfaced as "No such tool available: mcp__tionharness_extended__<name>"
 		// on a same-turn call (SES125). A live probe (probe_relist_test) measured claude-cli
 		// re-listing concurrently in ~10-16ms while activate is pending, so this returns
 		// almost immediately; the bounded timeout means a client that fails to re-list can
@@ -756,7 +756,7 @@ func (b *interactionBackend) callActivate(token string, run *chatRun, args json.
 		if len(added) > 0 && b.srv != nil {
 			pushed = b.srv.PushToolsChangedAndWait(token, activateRelistTimeout)
 		}
-		// Report the NAMESPACED callable names (mcp__tionswarm_extended__<name>), not
+		// Report the NAMESPACED callable names (mcp__tionharness_extended__<name>), not
 		// the bare ones: in the claude-cli path a deferred tool is reachable ONLY under
 		// its namespaced name, so echoing the bare name led the model to call e.g.
 		// `list_agents` and hit "No such tool available: list_agents" before retrying
@@ -800,7 +800,7 @@ func (b *interactionBackend) callActiveTools(token string) interaction.CallResul
 	if len(active) == 0 {
 		return interaction.CallResult{Text: "No on-demand tools activated. Use activate_tools to load one from the 'Available Tools' catalog."}
 	}
-	// Namespaced callable names (mcp__tionswarm_extended__<name>): these are the exact
+	// Namespaced callable names (mcp__tionharness_extended__<name>): these are the exact
 	// forms the model must call — the bare name is not a valid tool in the CLI path
 	// (see extendedNSPrefix / the activate_tools note).
 	callable := make([]string, len(active))

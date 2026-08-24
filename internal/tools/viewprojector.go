@@ -12,11 +12,11 @@ package tools
 // cannot do it itself: insight imports view, so the reverse edge would cycle.
 
 import (
-	"github.com/bilal-arikan/tionswarm/internal/db"
-	"github.com/bilal-arikan/tionswarm/internal/insight"
-	"github.com/bilal-arikan/tionswarm/internal/logbuf"
-	"github.com/bilal-arikan/tionswarm/internal/skills"
-	"github.com/bilal-arikan/tionswarm/internal/view"
+	"github.com/bilal-arikan/tionharness/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/insight"
+	"github.com/bilal-arikan/tionharness/internal/logbuf"
+	"github.com/bilal-arikan/tionharness/internal/skills"
+	"github.com/bilal-arikan/tionharness/internal/view"
 )
 
 // ViewSources are the optional, non-store inputs a fully-wired projector needs.

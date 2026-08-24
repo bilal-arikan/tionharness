@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bilal-arikan/tionswarm/internal/db"
-	"github.com/bilal-arikan/tionswarm/internal/insight"
-	"github.com/bilal-arikan/tionswarm/internal/providers"
+	"github.com/bilal-arikan/tionharness/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/insight"
+	"github.com/bilal-arikan/tionharness/internal/providers"
 )
 
 // InsightApplyFindingTool lets an agent triage an insight finding by setting its
@@ -90,7 +90,7 @@ func (InsightScanTool) Def() providers.ToolDef {
 	return providers.ToolDef{
 		Name: "insight_scan",
 		Description: "Run a retrospective scan over this workspace's past sessions through the Insight " +
-			"lenses (_Docs/60), producing findings routed to app-fix (bugs in TionSwarm itself) or " +
+			"lenses (_Docs/60), producing findings routed to app-fix (bugs in TionHarness itself) or " +
 			"workspace-opt (things to optimize here). Incremental: a session already scanned by a lens is " +
 			"skipped unless it changed, so re-running is cheap. Returns a summary; read the findings with " +
 			"insight_list_findings. Omit lensIds to run all enabled lenses.",
@@ -192,7 +192,7 @@ func summarizeScanErrors(errs []string) string {
 
 // InsightFindingsTool exposes the retrospective scanner's findings store
 // (_Docs/60) to an agent, so it can review what past-session scans surfaced —
-// app-fix findings (bugs in TionSwarm itself) and workspace-opt findings — and
+// app-fix findings (bugs in TionHarness itself) and workspace-opt findings — and
 // act on them. Read-only; scans are triggered via the API / the insight panel.
 type InsightFindingsTool struct{ db *db.DB }
 
@@ -206,7 +206,7 @@ func (InsightFindingsTool) Def() providers.ToolDef {
 		Name: "insight_list_findings",
 		Description: "List findings produced by the retrospective session scanner (Insight), ranked by " +
 			"priority (severity × recurrence, REGRESSED first). Each finding is a recurring issue distilled " +
-			"from past sessions and routed to a channel: \"app-fix\" (a bug/gap in TionSwarm itself, to feed " +
+			"from past sessions and routed to a channel: \"app-fix\" (a bug/gap in TionHarness itself, to feed " +
 			"development) or \"workspace-opt\" (something you can optimize inside this workspace). Each line " +
 			"starts with the finding id — pass it to insight_apply_finding to triage. Optionally filter by " +
 			"lens, channel or status. Set cluster:true to collapse near-duplicate findings into one " +

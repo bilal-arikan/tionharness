@@ -5,20 +5,20 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/bilal-arikan/tionswarm/internal/seed"
+	"github.com/bilal-arikan/tionharness/internal/seed"
 	"strings"
 	"testing"
 )
 
 // seedAndSplitGuide seeds the defaults into a temp dir and returns the dir plus
-// the embedded tionswarm-guide frontmatter and body.
+// the embedded tionharness-guide frontmatter and body.
 func seedAndSplitGuide(t *testing.T) (dir, guidePath, embedFM, embedBody string) {
 	t.Helper()
 	dir = t.TempDir()
 	if err := EnsureDefaults(dir); err != nil {
 		t.Fatal(err)
 	}
-	guidePath = filepath.Join(dir, "tionswarm-guide", "SKILL.md")
+	guidePath = filepath.Join(dir, "tionharness-guide", "SKILL.md")
 	raw, err := os.ReadFile(guidePath)
 	if err != nil {
 		t.Fatal(err)
@@ -38,13 +38,13 @@ func seedAndSplitGuide(t *testing.T) (dir, guidePath, embedFM, embedBody string)
 func TestEnsureDefaultsBodyRefreshUnderUserFrontmatter(t *testing.T) {
 	dir, guide, embedFM, embedBody := seedAndSplitGuide(t)
 
-	userFM := embedFM + "\naccess: shared\ngroup: TionSwarm"
+	userFM := embedFM + "\naccess: shared\ngroup: TionHarness"
 	oldBody := "OLD SHIPPED BODY under a user-tuned frontmatter"
 	if err := os.WriteFile(guide, rebuildSkillFile(userFM, oldBody), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	m := seed.LoadManifest(dir)
-	m.Bodies["tionswarm-guide/SKILL.md"] = seed.SHA256Hex([]byte(oldBody))
+	m.Bodies["tionharness-guide/SKILL.md"] = seed.SHA256Hex([]byte(oldBody))
 	if err := seed.SaveManifest(dir, m); err != nil {
 		t.Fatal(err)
 	}
@@ -60,7 +60,7 @@ func TestEnsureDefaultsBodyRefreshUnderUserFrontmatter(t *testing.T) {
 	if gotBody != embedBody {
 		t.Errorf("pristine shipped body was NOT refreshed to the embedded body")
 	}
-	if seed.LoadManifest(dir).Bodies["tionswarm-guide/SKILL.md"] != seed.SHA256Hex([]byte(embedBody)) {
+	if seed.LoadManifest(dir).Bodies["tionharness-guide/SKILL.md"] != seed.SHA256Hex([]byte(embedBody)) {
 		t.Errorf("manifest body hash not updated after refresh")
 	}
 }
@@ -101,7 +101,7 @@ func TestEnsureDefaultsTracksBodyWhenOnlyFrontmatterTuned(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Legacy manifest: flat map with a stale whole-file hash (an old ship).
-	legacy := map[string]string{"tionswarm-guide/SKILL.md": seed.SHA256Hex([]byte("some old whole-file ship"))}
+	legacy := map[string]string{"tionharness-guide/SKILL.md": seed.SHA256Hex([]byte("some old whole-file ship"))}
 	data, _ := json.Marshal(legacy)
 	if err := os.WriteFile(filepath.Join(dir, seed.ManifestName), data, 0o644); err != nil {
 		t.Fatal(err)
@@ -114,7 +114,7 @@ func TestEnsureDefaultsTracksBodyWhenOnlyFrontmatterTuned(t *testing.T) {
 	if string(got) != string(content) {
 		t.Errorf("frontmatter-tuned file with current body must be left untouched")
 	}
-	if seed.LoadManifest(dir).Bodies["tionswarm-guide/SKILL.md"] != seed.SHA256Hex([]byte(embedBody)) {
+	if seed.LoadManifest(dir).Bodies["tionharness-guide/SKILL.md"] != seed.SHA256Hex([]byte(embedBody)) {
 		t.Errorf("current body under tuned frontmatter was not recorded as pristine")
 	}
 }
@@ -156,7 +156,7 @@ func TestRebuildSkillFileRoundTrip(t *testing.T) {
 func TestSkillDefaultStateAndRestore(t *testing.T) {
 	dir, guide, embedFM, embedBody := seedAndSplitGuide(t)
 
-	if got := DefaultState(dir, "tionswarm-guide"); got != seed.StateDefault {
+	if got := DefaultState(dir, "tionharness-guide"); got != seed.StateDefault {
 		t.Errorf("freshly seeded skill = %q, want default", got)
 	}
 	// The app's own frontmatter edits (visibility/group) must NOT read as "edited":
@@ -164,21 +164,21 @@ func TestSkillDefaultStateAndRestore(t *testing.T) {
 	if err := os.WriteFile(guide, rebuildSkillFile(embedFM+"\naccess: shared", embedBody), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if got := DefaultState(dir, "tionswarm-guide"); got != seed.StateTuned {
+	if got := DefaultState(dir, "tionharness-guide"); got != seed.StateTuned {
 		t.Errorf("frontmatter-only change = %q, want tuned", got)
 	}
 	// A body edit is the case worth surfacing: this file stops receiving updates.
 	if err := os.WriteFile(guide, rebuildSkillFile(embedFM, "MY OWN BODY"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if got := DefaultState(dir, "tionswarm-guide"); got != seed.StateEdited {
+	if got := DefaultState(dir, "tionharness-guide"); got != seed.StateEdited {
 		t.Errorf("body edit = %q, want edited", got)
 	}
 
-	if err := RestoreDefault(dir, "tionswarm-guide"); err != nil {
+	if err := RestoreDefault(dir, "tionharness-guide"); err != nil {
 		t.Fatal(err)
 	}
-	if got := DefaultState(dir, "tionswarm-guide"); got != seed.StateDefault {
+	if got := DefaultState(dir, "tionharness-guide"); got != seed.StateDefault {
 		t.Errorf("after restore = %q, want default", got)
 	}
 	if _, gotBody := splitFrontmatter(string(mustRead(t, guide))); gotBody != embedBody {
@@ -193,7 +193,7 @@ func TestSkillHasDefaultAndRestoreGuards(t *testing.T) {
 	if err := EnsureDefaults(dir); err != nil {
 		t.Fatal(err)
 	}
-	if !HasDefault("tionswarm-guide") {
+	if !HasDefault("tionharness-guide") {
 		t.Error("a shipped skill must report a default")
 	}
 	for _, slug := range []string{"", "my-own-skill", "../escape", "a/b"} {
