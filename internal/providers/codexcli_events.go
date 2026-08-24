@@ -82,10 +82,15 @@ type codexMCPContent struct {
 	Text string `json:"text"`
 }
 
-// codexMCPResult is the successful payload of an mcp_tool_call item.
+// codexMCPResult is the payload of an mcp_tool_call item.
 type codexMCPResult struct {
 	Content           []codexMCPContent `json:"content"`
 	StructuredContent json.RawMessage   `json:"structured_content"`
+	// IsError is the MCP protocol's own tool-level failure flag
+	// (CallToolResult.isError). Codex reports such a call as a transport success
+	// — status "completed", error null — so without this flag a tool that
+	// answered "you called me wrong" would render as a green step.
+	IsError bool `json:"is_error"`
 }
 
 // codexItem is a ThreadItem: the "id"/"type" envelope plus the flattened union
@@ -286,7 +291,7 @@ func (p *codexStreamParser) feedItem(evType string, it *codexItem) {
 			Tool:    "mcp__" + it.Server + "__" + it.Tool,
 			Input:   it.Arguments,
 			Output:  mcpToolOutput(it),
-			IsError: it.Error != nil || it.Status == "failed",
+			IsError: it.Error != nil || it.Status == "failed" || (it.Result != nil && it.Result.IsError),
 		})
 	case "web_search":
 		p.setStep(it, final, TraceStep{Kind: "tool", Tool: "web_search", Output: it.Query})
@@ -305,8 +310,18 @@ func (p *codexStreamParser) feedItem(evType string, it *codexItem) {
 		// does complete normally afterwards.
 		p.setStep(it, final, TraceStep{Kind: "text", Text: "[codex error] " + strings.TrimSpace(it.Message)})
 	default:
-		// Unknown item kind: skip silently. The parser has no logger, and a future
-		// Codex release adding a kind must not break an otherwise healthy turn.
+		// Unknown item kind: skip silently while it is healthy — the parser has no
+		// logger, and a future Codex release adding a kind must not break an
+		// otherwise healthy turn. A failed one is surfaced as a generic error step
+		// instead, so a new tool kind cannot fail invisibly.
+		if it.Status == "failed" {
+			p.setStep(it, final, TraceStep{
+				Kind:    "tool",
+				Tool:    it.Type,
+				Output:  strings.TrimSpace(it.Message),
+				IsError: true,
+			})
+		}
 	}
 }
 

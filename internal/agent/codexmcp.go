@@ -85,8 +85,18 @@ func (r *Runtime) codexMCPSpec(ctx context.Context, mcpEnabled bool, ag db.Agent
 		}
 	}
 
+	// The Interaction bridge carries TionSwarm built-ins. A restricted profile
+	// may intentionally allow only Codex-native read/shell tools plus an external
+	// MCP server (validator is the first such profile). Mounting Interaction in
+	// that case leaks a server-shaped catalog entry even when its tools/list is
+	// empty, and older codex clients may retain the previous full catalog on a
+	// resumed process. Only mount a tier when this turn's already-filtered endpoint
+	// says it has at least one tool. Unrestricted agents still receive both tiers.
 	if inter.URL != "" {
 		for key, entry := range interactionServers(inter) {
+			if !interactionTierEnabled(key, inter) {
+				continue
+			}
 			servers[key] = entry
 		}
 		for _, t := range inter.CoreToolNames {
@@ -114,6 +124,17 @@ func (r *Runtime) codexMCPSpec(ctx context.Context, mcpEnabled bool, ag db.Agent
 		AllowedTools:    allowed,
 		DisallowedTools: disallowed,
 	}, nil
+}
+
+func interactionTierEnabled(key string, inter tools.InteractionEndpoint) bool {
+	switch key {
+	case interactionCoreKey:
+		return len(inter.CoreToolNames) > 0
+	case interactionExtendedKey:
+		return len(inter.ExtendedToolNames) > 0
+	default:
+		return false
+	}
 }
 
 // interactionServers renders the Interaction MCP endpoint as the two tier

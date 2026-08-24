@@ -11,8 +11,12 @@
 // screen from drifting out of sync with what the app actually notifies.
 
 // Which sound cue a type plays. `done` = the rising "reply ready" chime;
-// `ask` = the attention cue for a turn blocked on the user; null = silent toast.
-export type NotifyCue = 'done' | 'ask' | null
+// `ask` = the attention cue for a turn blocked on the user; `permission` = the
+// distinct cue for a tool-approval prompt specifically (see notifyBus.playCue's
+// cue override — the 'prompt' type's default cue stays 'ask', 'permission' is
+// selected per-event by the caller, not looked up from this table); null =
+// silent toast.
+export type NotifyCue = 'done' | 'ask' | 'permission' | null
 
 export interface NotifyType {
   // Event type key (matches events.Event.type) or the frontend-only kind 'prompt'.

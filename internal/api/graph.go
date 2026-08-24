@@ -114,13 +114,7 @@ func (s *Server) handleWorkspaceGraph(w http.ResponseWriter, r *http.Request) {
 
 	// Which sessions are in flight right now, derived from the process-wide
 	// running session set joined to this workspace's sessions.
-	running := map[string]bool{}
-	for _, id := range s.runs.activeSessionIDs(wsp.ID) {
-		running[id] = true // chat-streaming turns
-	}
-	for _, id := range wsp.Runtime.ActiveSessionIDs() {
-		running[id] = true // autonomous + flow/task runs (schedule/spawn/flow)
-	}
+	running := s.runningSessionIDs(wsp)
 	// Session list backs both the agent instance nodes and the completed
 	// run-history nodes built later.
 	sessions, _ := wsp.DB.ListSessions(ctx, "")

@@ -378,6 +378,37 @@ func TestSpawnWorkerMaterializesProfile(t *testing.T) {
 	}
 }
 
+func TestResolveWorkerTargetSyncsLegacyValidatorWithoutOverwritingCustomization(t *testing.T) {
+	rt, _ := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))
+	ctx := context.Background()
+	legacy := `["Read","LS","Glob","Grep","Bash"]`
+	a, err := rt.db.CreateAgent(ctx, db.Agent{Name: "worker:validator", Provider: "anthropic", AllowedTools: legacy, ToolOverrides: `{"Write":"blocked"}`})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := rt.resolveWorkerTarget(ctx, "", "", "validator"); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := rt.db.GetAgent(ctx, a.ID)
+	if got.AllowedTools != mustJSON(t, defaultSubagentProfiles["validator"].AllowedTools) {
+		t.Fatalf("legacy allowlist not synced: %s", got.AllowedTools)
+	}
+	if got.ToolOverrides != `{"Write":"blocked"}` {
+		t.Fatalf("custom overrides overwritten: %s", got.ToolOverrides)
+	}
+	custom, err := rt.db.CreateAgent(ctx, db.Agent{Name: "worker:validator-custom", Provider: "anthropic", AllowedTools: `["Read"]`})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := rt.syncValidatorProfileAllowlist(ctx, custom, defaultSubagentProfiles["validator"]); err != nil {
+		t.Fatal(err)
+	}
+	got, _ = rt.db.GetAgent(ctx, custom.ID)
+	if got.AllowedTools != `["Read"]` {
+		t.Fatalf("custom allowlist overwritten: %s", got.AllowedTools)
+	}
+}
+
 // TestSpawnWorkerSetsCoordinatorLink confirms a worker spawn creates a worker-kind
 // session linked back to its coordinator.
 func TestSpawnWorkerSetsCoordinatorLink(t *testing.T) {

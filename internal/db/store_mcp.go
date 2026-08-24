@@ -155,3 +155,16 @@ func (d *DB) UpdateAgentTools(ctx context.Context, agentID string, mcpEnabled bo
 	})
 	return err
 }
+
+// UpdateAgentAllowedTools updates only a profile-managed legacy allowlist.
+// Callers must first prove the stored value matches a known profile contract.
+func (d *DB) UpdateAgentAllowedTools(ctx context.Context, agentID, allowedTools string) error {
+	var allowed []string
+	if err := json.Unmarshal([]byte(allowedTools), &allowed); err != nil {
+		return fmt.Errorf("allowed tools must be a JSON array: %w", err)
+	}
+	_, err := d.mutateAgentLocked(agentID, func(a *Agent) {
+		a.AllowedTools = allowedTools
+	})
+	return err
+}

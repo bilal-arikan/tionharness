@@ -62,6 +62,31 @@ graph TD
   collapsed workspace ikonu, aktif workspace'in toplu sinyalini gösterir; diğer
   workspace'ler mevcut unread rozetinden gelir.
 
+## `busy` sinyalinin kaynakları (merkezî: turn kuyruğu)
+
+`handleActivity` / `workspaceRunning` (`internal/api/activity.go`) şu kaynakların
+birleşimini alır:
+
+| Kaynak | Kapsam |
+|--------|--------|
+| `chatRuns` (`s.runs`, server-wide → workspace'e scope'lanır) | Akan (streamed) sohbet turu |
+| `Runtime.ActiveSessionIDs()` | Otonom invoke: schedule wake, spawn, inbox teslimi, flow ajan düğümü |
+| **`Runtime.BusyTurnSessionIDs()`** (`internal/turnqueue` → `Queue.BusySessionIDs`) | **Slotu tutan HER tur** — merkezî kaynak |
+| `DB.HasRunningFlowRuns()`, `Runtime.InsightScanActive()` | Flow run / içgörü taraması |
+
+Bu birleşim tek yerde yapılır: **`Server.runningSessionIDs(wsp)`**
+(`internal/api/running_sessions.go`). `handleActivity`, `/api/executions`,
+ağ grafiği (`graph.go`) ve `/api/sessions/active` hepsi ondan okur — yeni bir
+koşu kaynağı eklenince dört ayrı yer değil, tek fonksiyon güncellenir.
+
+Turn kuyruğu merkezî kaynaktır çünkü süreçteki **her** tur giriş yolu
+(`BeginSessionUserTurn`, `ClaimSessionCommandTurn`, `claimSessionTurnSlot`)
+oturumun admission slotunu alır. Bu eklenmeden önce slash komutları
+(`/compact`, `/handoff`) HTTP goroutine'inde koşuyor, hub'a canlı "working"
+balonu yayınlıyor ama iki registry'de de yer almadığı için `/api/activity`
+"boşta" diyordu → nav rail noktası hiç yanmıyordu. Yeni bir tur yolu eklerken
+aktivite tarafında ek bir kayıt yapmak **gerekmez**; slotu almak yeterli.
+
 ## Çapraz-workspace "çalışıyor" (workspace listesi)
 
 `busy` sinyali per-view olarak yalnız **aktif** workspace'i kapsar (`/api/activity`
@@ -70,7 +95,7 @@ workspace'lerde de canlı koşuyu göstermek için ayrı bir çapraz-workspace s
 
 | Parça | Görev |
 |-------|-------|
-| **Backend** `GET /api/workspaces/activity` (`api/activity.go` → `handleWorkspacesActivity` + `workspaceRunning`) | Her workspace için tek `running` bayrağı: aktif oturum (server-wide `chatRuns` + runtime), çalışan task/flow run. Global route (aktif workspace gerektirmez). |
+| **Backend** `GET /api/workspaces/activity` (`api/activity.go` → `handleWorkspacesActivity` + `workspaceRunning`) | Her workspace için tek `running` bayrağı: aktif oturum (server-wide `chatRuns` + runtime + turn kuyruğu), çalışan task/flow run. Global route (aktif workspace gerektirmez). |
 | **Hook** `app/useWorkspaceActivity.ts` | 4sn poll + **iki** refresh sinyali → `busyWorkspaceIds: Set<string>`. `executions` (aktif ws'in kendi başlat/bitir) + `workspace-activity` (herhangi bir ws'te run-lifecycle olayı; aktif olmayan ws'ler için anlık). |
 | **SSE anlık tazeleme** `useAppEvents` | Çapraz-workspace dalında (`markWorkspaceUnread` yanında) `bumpWorkspaceActivityForEvent(e)` → run-lifecycle tipleri (`chat/flow/schedule/spawned/worker/task`) `workspace-activity` sinyalini bumlar. Aktif-scoped `executions`/`activity` sinyalleri çapraz-ws'te **bilerek bumlanmaz** (boşuna refetch olmasın). |
 | **UI** | `WorkspaceSwitcher` / `MobileWorkspaceButton` açılır listede her satırda **açık metin etiketi**: yeşil nabız + **"çalışıyor"** (`--color-success`) ya da accent nokta + **"tamamlandı"** (`--color-accent`). `running` `unread`'in **önüne** geçer. Aktif olmayan bir workspace çalışıyorsa switcher trigger'ı + collapsed rail ikonu accent noktayı **pulse** eder (`anyOtherBusy`). Aktif workspace'in kendi "tamamlandı"sı listede filtrelenir (`unreadWs` aktif ws'i çıkarır) çünkü zaten oturum listesinde `StatusPill` ile zengin gösterilir. |

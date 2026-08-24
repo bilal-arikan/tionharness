@@ -112,6 +112,10 @@ func (r *Runtime) RunInsightScan(ctx context.Context, scope insight.ScanScope, a
 	if agentID != "" && analysisAgent.Model != "" {
 		model = analysisAgent.Model
 	}
+	// Provider policy: a codex-cli analysis agent runs the scan serially (see
+	// applyInsightScanConcurrency) unless the caller pinned a concurrency itself.
+	r.applyInsightScanConcurrency(&scope, analysisAgent)
+
 	// Identity first: the run session is opened lazily DURING the scan (on the first
 	// completed analysis) and stamps this id as its SourceID, so it must exist before
 	// Scan starts. The run-log row below shares it.

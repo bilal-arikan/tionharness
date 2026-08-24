@@ -132,6 +132,24 @@ func TestResolveSubagentAgentBeatsProfile(t *testing.T) {
 	}
 }
 
+func TestResolveSubagentExactProfileBeatsSameNamedAgent(t *testing.T) {
+	rt, _ := newTestRuntime(t, t.TempDir())
+	ctx := context.Background()
+	caller, _ := rt.db.CreateAgent(ctx, db.Agent{Name: "Caller", Provider: "codex-cli"})
+	_, _ = rt.db.CreateAgent(ctx, db.Agent{Name: "validator", Provider: "codex-cli", AllowedTools: `[]`})
+
+	got, ephemeral, err := rt.resolveSubagentTarget(ctx, caller, "validator")
+	if err != nil {
+		t.Fatalf("resolve: %v", err)
+	}
+	if !ephemeral || got.Name != "subagent:validator" {
+		t.Fatalf("exact profile id was shadowed by persisted agent: ephemeral=%v agent=%+v", ephemeral, got)
+	}
+	if got.AllowedTools != mustJSON(t, defaultSubagentProfiles["validator"].AllowedTools) {
+		t.Fatalf("validator profile grants not applied: %s", got.AllowedTools)
+	}
+}
+
 // TestResolveSubagentConfigProfile verifies the config mini-agent profile resolves
 // to an ephemeral worker whose allowlist is restricted to the config tools, so it
 // can only touch config/ and never wanders the filesystem.

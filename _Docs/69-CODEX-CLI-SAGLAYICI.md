@@ -167,6 +167,21 @@ uydurur (`EstimateFor("codex-cli", …)` bu Price'ı doğrudan döndürür).
 
 Durum alanları: `in_progress` → `completed` \| `failed` \| `declined`.
 
+**Araç hatasının adıma yansıması (`TraceStep.IsError`).** Codex bir aracı
+taşıma düzeyinde başarılı saydığında bile araç kendisi hata dönmüş olabilir;
+parser üç kaynağı birden okur:
+
+- `item.status == "failed"` (her kind) ve `mcp_tool_call` için `item.error`,
+- `command_execution` için sıfırdan farklı `exit_code` (`commandFailed`),
+- `mcp_tool_call` için **`result.is_error`** — MCP protokolünün kendi araç
+  düzeyi hata bayrağı. Bu durumda Codex `status:"completed"`, `error:null`
+  gönderir; bayrak okunmazsa "sen beni yanlış çağırdın" diyen bir araç yeşil
+  adım olarak görünürdü.
+
+Parser'ın tanımadığı bir item kind'ı sağlıklıyken sessizce atlanır, ama
+`status:"failed"` ise `Tool: <item.type>` ile jenerik hata adımı olarak
+yüzeye çıkarılır — yeni bir Codex aracı görünmez şekilde patlayamaz.
+
 **Sonuç:** `climcp` + `cliStreamParser`'ın ürettiği `TraceStep` modelinin
 tamamı Codex akışından üretilebilir. Tek eksik: **`Batch`** (paralel araç
 gruplaması) — Codex akışında bir "assistant message id" yok, dolayısıyla
@@ -412,6 +427,29 @@ döner ve `codexcli.go` bunu `TraceStep{Kind:"text"}` olarak yayınlar
 
 Probe test edilebilirlik için enjekte edilebilir (`codexcli.mcpProbe`,
 `nil` = gerçek probe).
+
+#### Probe yetmediğinde: handshake sonrası kurtarma
+
+Probe yalnız **taşıma** sorusunu yanıtlar. Port cevap verip MCP `initialize`
+el sıkışması sonradan koparsa (canlı örnek: `unity-mcp: handshaking with MCP
+server failed` → `required MCP servers failed to initialize`) probe sunucuyu
+sağlıklı sayar ve Codex turu yine öldürür. Bu yüzden kurtarma **tepkisel**dir
+(`internal/providers/codexcli_mcpfallback.go`):
+
+1. `codexMCPStartupFailure` hata metnini tanır (`mcp` + `failed to
+   initialize` / `handshaking` / `handshake`).
+2. `codexNamedMCPServers` hatada adı geçen sunucu anahtarlarını çıkarır; hata
+   kimseyi adlandırmıyorsa `codexRemoteServerKeys` tüm **remote** sunuculara
+   düşer (stdio köprüsü asla düşürülmez — ajanın TionSwarm araçları oradadır).
+3. `config.toml` o sunucular olmadan yeniden yazılır ve tur **bir kez** daha
+   koşturulur (`completeWithArgs` içindeki döngü; fallback turda yalnız bir
+   defa kullanılır).
+4. Devre dışı bırakılan sunucu `TraceStep` olarak bildirilir — yetenek kaybı
+   sessiz değildir.
+
+Sağlayıcının `mcpServers` haritası değiştirilmez; düşürme tur-yereldir, sonraki
+tur yine tam sunucu kümesiyle başlar. Regresyon: `codexcli_mcpfallback_test.go`
+(sahte codex ikilisi, config'te `unity-mcp` varken hata verir, çıkınca başarılı).
 
 ### Araç adlandırma
 

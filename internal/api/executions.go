@@ -43,14 +43,9 @@ func (s *Server) handleListExecutions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Merge chat streaming sessions and autonomous (schedule) sessions.
-	running := map[string]bool{}
-	for _, id := range s.runs.activeSessionIDs(wsp.ID) {
-		running[id] = true
-	}
-	for _, id := range wsp.Runtime.ActiveSessionIDs() {
-		running[id] = true
-	}
+	// Every session working right now (chat stream, autonomous invoke, or any turn
+	// holding the admission slot — slash commands included).
+	running := s.runningSessionIDs(wsp)
 
 	// Cache agent names so a large feed doesn't re-fetch the same agent.
 	names := map[string]string{}

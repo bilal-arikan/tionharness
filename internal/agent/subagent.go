@@ -29,7 +29,9 @@ type SubagentProfile struct {
 // registry (internal/prompts, key "subagent-<id>") — resolve one through
 // Runtime.subagentProfile so a workspace override is honored. Allowlists stay
 // in code (they are a safety contract, not prose) and intersect with the
-// caller's own effective tools.
+// caller's own effective tools. An exact lower-case profile id always selects
+// this contract; use a differently-cased workspace-agent name when an agent and
+// profile intentionally share a name.
 //
 // The "config" profile is the mini-agent analog (the external agent project
 // getMiniAgentSystemPrompt): a cheap, tightly-scoped editor for a workspace's
@@ -51,7 +53,7 @@ var defaultSubagentProfiles = map[string]SubagentProfile{
 	// coordinator reads a decision, not raw logs.
 	//
 	// It has NO browser: driving one needs the playwright MCP server, and no
-	// profile allowlist names an MCP tool (the codebase-memory graph is the one
+	// profile allowlist names a browser tool (the codebase-memory graph is the one
 	// exemption — allowlistExemptServer — and it is not a browser), so e2e is
 	// out of scope here — the
 	// prompt says "(when available) a browser" and reports "e2e: n/a", which is
@@ -60,7 +62,7 @@ var defaultSubagentProfiles = map[string]SubagentProfile{
 	// only appeared true while external MCP servers bypassed the agent's tool
 	// restriction entirely (fixed — see mcpservergate.go). Widening a profile to
 	// an MCP server is a deliberate policy change, not a comment edit.
-	"validator": {ID: "validator", AllowedTools: []string{"Read", "LS", "Glob", "Grep", "Bash"}},
+	"validator": {ID: "validator", AllowedTools: []string{"Read", "LS", "Glob", "Grep", "Bash", "unity-mcp__*"}},
 	"config":    {ID: "config", AllowedTools: []string{"list_config", "read_config", "write_config", "config_validate"}},
 }
 
@@ -343,37 +345,49 @@ func (r *Runtime) runAgent(ctx context.Context, caller db.Agent, parentReq *prov
 	return tools.RunAgentResult{AgentName: agent.Name, Reply: resp.Text}, nil
 }
 
-// resolveSubagentTarget maps a run_subagent target to a runnable agent. An
-// existing workspace agent is preferred FIRST: an explicit user agent must win
-// over a built-in profile of the same name (e.g. a real "Reviewer" agent must
-// not be shadowed by the built-in `reviewer` profile — that shadowing also broke
-// async delegation, since profiles are ephemeral and async needs a persistent
-// target). Only when no real agent matches does a target matching a built-in
-// profile id yield an EPHEMERAL agent cloned from the caller (inheriting
+// resolveSubagentTarget maps a run_subagent target to a runnable agent. An exact
+// lower-case built-in profile id yields an EPHEMERAL agent cloned from the caller
+// and cannot be shadowed by persisted state. Otherwise an existing workspace
+// agent is preferred (e.g. "Reviewer" selects a real agent while `reviewer`
+// selects the profile). If no real agent matches, case-insensitive profile
+// resolution remains as a compatibility fallback. Ephemeral profiles inherit
 // provider, model, daily limits and permission mode, usage attributed to the
 // caller) but reshaped with the profile's system prompt and tool allowlist.
 func (r *Runtime) resolveSubagentTarget(ctx context.Context, caller db.Agent, target string) (db.Agent, bool, error) {
+	// An exact lower-case profile id is an explicit request for the built-in
+	// contract. Do not let a persisted agent with the same display name shadow it:
+	// that bypasses the profile allowlist on fresh run_subagent calls. A differently
+	// cased name (for example "Reviewer") remains an explicit workspace-agent
+	// reference for backwards compatibility and async delegation.
+	if target == strings.ToLower(strings.TrimSpace(target)) {
+		if p, ok := r.subagentProfile(target); ok {
+			return r.ephemeralSubagent(caller, p), true, nil
+		}
+	}
 	// Prefer an existing agent so a user-named agent wins over a same-named profile.
 	if a, err := r.resolveAgent(ctx, target); err == nil {
 		return a, false, nil
 	}
 	if p, ok := r.subagentProfile(target); ok {
-		eph := caller // clone limits/provider/model/permission from the caller
-		eph.Name = "subagent:" + p.ID
-		eph.Soul = p.SystemPrompt
-		eph.Identity = ""
-		eph.Skills = nil
-		eph.MCPEnabled = true
-		allow := p.AllowedTools
-		if len(allow) == 0 {
-			eph.AllowedTools = caller.AllowedTools
-		} else {
-			b, _ := json.Marshal(allow)
-			eph.AllowedTools = string(b)
-		}
-		return eph, true, nil
+		return r.ephemeralSubagent(caller, p), true, nil
 	}
 	return db.Agent{}, false, fmt.Errorf("unknown subagent target %q: not an existing agent and not a built-in profile (explore|coder|reviewer|validator|config)", target)
+}
+
+func (r *Runtime) ephemeralSubagent(caller db.Agent, p SubagentProfile) db.Agent {
+	eph := caller // clone limits/provider/model/permission from the caller
+	eph.Name = "subagent:" + p.ID
+	eph.Soul = p.SystemPrompt
+	eph.Identity = ""
+	eph.Skills = nil
+	eph.MCPEnabled = true
+	if len(p.AllowedTools) == 0 {
+		eph.AllowedTools = caller.AllowedTools
+	} else {
+		b, _ := json.Marshal(p.AllowedTools)
+		eph.AllowedTools = string(b)
+	}
+	return eph
 }
 
 // subFuture is the pending result of a run_subagent call started concurrently by

@@ -40,20 +40,9 @@ func (s *Server) handleActivity(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	var st activityState
 
-	// Every session with a turn in flight: streamed chat turns AND autonomous
-	// runtime invokes (schedule wake, spawned agent sessions, inbox delivery,
-	// flow agent nodes). Deduped so a session counted by both registries lights
-	// the view once. ANY entry lights the unified executions ("Aktivite") view.
-	// s.runs is a SERVER-WIDE registry (shared across all workspaces), so both
-	// sources are scoped to THIS workspace — otherwise an in-flight turn in the
-	// workspace we just left would light an idle workspace's "busy" indicators.
-	active := map[string]struct{}{}
-	for _, sid := range s.runs.activeSessionIDs(wsp.ID) {
-		active[sid] = struct{}{}
-	}
-	for _, sid := range wsp.Runtime.ActiveSessionIDs() {
-		active[sid] = struct{}{}
-	}
+	// Every session working right now — see runningSessionIDs for the sources and
+	// why each is scoped. ANY entry lights the unified executions ("Aktivite") view.
+	active := s.runningSessionIDs(wsp)
 	for sid := range active {
 		sess, err := wsp.DB.GetSession(ctx, sid)
 		if err != nil {
@@ -99,6 +88,7 @@ func (s *Server) handleActivity(w http.ResponseWriter, r *http.Request) {
 func (s *Server) workspaceRunning(wsp *workspace.Workspace) bool {
 	return s.runs.hasActive(wsp.ID) || // streamed chat turn in this workspace
 		wsp.Runtime.HasActiveSessions() || // autonomous invoke
+		wsp.Runtime.HasBusyTurns() || // any turn holding a session slot (slash commands included)
 		wsp.DB.HasRunningFlowRuns() || // flow run in progress
 		wsp.Runtime.InsightScanActive() // retrospective scan
 }

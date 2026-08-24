@@ -38,7 +38,7 @@ export function SoundPanel() {
         <SubHead icon={Volume2}>Ses efektleri</SubHead>
         <Toggle
           label="Ses efektleri"
-          hint="Ajan yanıtı bitince çalınan bitiş sesi ile mikrofon başlat/durdur seslerini açar/kapatır."
+          hint="Ajan yanıtı bitince çalınan bitiş sesi, mikrofon başlat/durdur sesleri ve ajanın soru/onay/izin istediğinde çalan uyarı seslerini açar/kapatır."
           checked={sounds}
           onChange={toggleSounds}
         />

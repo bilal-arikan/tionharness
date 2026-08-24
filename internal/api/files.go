@@ -49,6 +49,8 @@ var textServableExt = map[string]bool{
 	".md": true, ".markdown": true,
 	".json": true, ".txt": true, ".csv": true, ".log": true,
 	".xml": true, ".yaml": true, ".yml": true, ".svg": true,
+	".toml": true, ".ts": true, ".tsx": true, ".js": true,
+	".go": true, ".py": true, ".sh": true, ".sql": true,
 }
 
 // handleServeFile streams a local image file referenced by chat content so the
@@ -63,6 +65,10 @@ func (s *Server) handleServeFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var path string
+	// fromRel marks the sandbox-confined branch: those paths may additionally be
+	// served as text/plain (file artifacts such as .md reports), which is not
+	// allowed for arbitrary absolute paths.
+	fromRel := false
 	// `rel` resolves a workspace-relative path (e.g. an uploaded attachment under
 	// "uploads/...") against the active workspace sandbox root. `path` is an
 	// absolute/file:// path (e.g. a screenshot a tool produced). rel wins.
@@ -79,6 +85,7 @@ func (s *Server) handleServeFile(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		path = filepath.Join(wsp.SandboxRoot(), clean)
+		fromRel = true
 	} else {
 		raw := r.URL.Query().Get("path")
 		if raw == "" {
@@ -94,8 +101,15 @@ func (s *Server) handleServeFile(w http.ResponseWriter, r *http.Request) {
 	ext := strings.ToLower(filepath.Ext(path))
 	mime, ok := servableExt[ext]
 	if !ok {
-		writeError(w, http.StatusUnsupportedMediaType, "unsupported file type: "+ext)
-		return
+		// Text-like files stored inside the workspace sandbox (e.g. a `file`
+		// artifact's .md report) are served as text/plain — never text/html — so
+		// the artifacts screen can preview and download them.
+		if !fromRel || !textServableExt[ext] {
+			writeError(w, http.StatusUnsupportedMediaType, "unsupported file type: "+ext)
+			return
+		}
+		mime = "text/plain; charset=utf-8"
+		w.Header().Set("X-Content-Type-Options", "nosniff")
 	}
 
 	info, err := os.Stat(path)

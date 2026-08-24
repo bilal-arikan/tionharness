@@ -94,3 +94,17 @@ export function playAskPrompt() {
   tone(1175, 130, 120, 0.17) // D6
   tone(880, 190, 260, 0.15) // back to A5 — "still waiting on you"
 }
+
+// Attention cue specifically for a tool-execution PERMISSION request — the agent
+// wants to run something and needs a yes/no before it can act. Deliberately
+// distinct from both playTurnDone (resolves upward, done) and playAskPrompt
+// (rises then falls, an open question): this one alternates two notes sharply
+// (a "buzz") so an approval gate reads differently at a glance from a plain
+// question or a completed reply.
+export function playPermissionPrompt() {
+  if (!soundEffectsEnabled()) return
+  tone(700, 90, 0, 0.18)
+  tone(1000, 90, 100, 0.18)
+  tone(700, 90, 200, 0.18)
+  tone(1000, 140, 300, 0.18)
+}

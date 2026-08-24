@@ -226,54 +226,94 @@ func (c *CodexCLI) Complete(ctx context.Context, req Request) (*Response, error)
 	if model == "" {
 		model = c.model
 	}
-	args := c.buildArgs(req, model)
-	prompt := c.buildPrompt(req)
+	return c.completeWithArgs(ctx, c.buildArgs(req, model), c.buildPrompt(req), model, req)
+}
+
+// completeWithArgs writes the turn's config.toml and runs the codex subprocess,
+// retrying once on a clean crash and once more after disabling an MCP server
+// that refused to start. args and prompt are parameters rather than derived
+// here so tests can drive the whole recovery path with a fake codex binary.
+func (c *CodexCLI) completeWithArgs(ctx context.Context, args []string, prompt, model string, req Request) (*Response, error) {
+	// Dropping a server costs the turn that server's tools, so it must not be
+	// silent. These notes ride the same channel the parser uses for
+	// "[codex error]" lines — text trace steps, streamed live when the caller
+	// listens and carried in the response trace either way.
+	var mcpNotes []TraceStep
+	note := func(text string) {
+		step := TraceStep{Kind: "text", Text: text}
+		mcpNotes = append(mcpNotes, step)
+		if req.OnEvent != nil {
+			req.OnEvent(step)
+		}
+	}
 
 	// The config.toml is the ONLY channel for the system prompt and the MCP
 	// servers, so a write failure must fail the turn rather than silently run a
 	// tool-less, persona-less agent.
-	var droppedMCP []string
-	if c.configDir != "" {
-		_, dropped, cleanup, err := writeCodexConfig(ctx, c.configDir, c.buildConfig(req), c.mcpProbe)
+	cfg := c.buildConfig(req)
+	writeConfig := func() ([]string, error) {
+		_, dropped, cleanup, err := writeCodexConfig(ctx, c.configDir, cfg, c.mcpProbe)
 		if err != nil {
 			return nil, err
 		}
 		if cleanup != nil {
 			defer cleanup()
 		}
-		droppedMCP = dropped
+		return dropped, nil
+	}
+	if c.configDir != "" {
+		dropped, err := writeConfig()
+		if err != nil {
+			return nil, err
+		}
+		if len(dropped) > 0 {
+			note("[codex] unreachable MCP server(s) omitted from this turn: " +
+				strings.Join(dropped, ", ") + " — their tools are unavailable until the server is back up.")
+		}
 	} else if len(c.mcpServers) > 0 {
 		return nil, fmt.Errorf("codex CLI: MCP servers configured but no CODEX_HOME set — cannot write config.toml")
-	}
-
-	// Dropping a server costs the turn that server's tools, so it must not be
-	// silent. This rides the same channel the parser uses for "[codex error]"
-	// lines — a text trace step, streamed live when the caller listens and
-	// carried in the response trace either way — rather than a new mechanism.
-	var mcpNote *TraceStep
-	if len(droppedMCP) > 0 {
-		step := TraceStep{Kind: "text", Text: "[codex] unreachable MCP server(s) omitted from this turn: " +
-			strings.Join(droppedMCP, ", ") + " — their tools are unavailable until the server is back up."}
-		mcpNote = &step
-		if req.OnEvent != nil {
-			req.OnEvent(step)
-		}
 	}
 
 	// Mirror the claude path's single retry: a "clean crash" (died before any
 	// turn/item event, ran no tool) has no side effects and is safe to re-run.
 	// Everything classified — auth, quota, model — is terminal and returns at once.
+	// The extra attempt is the MCP fallback below, which only runs once.
 	var lastErr error
-	for attempt := 0; attempt < 2; attempt++ {
+	mcpFallbackUsed := false
+	for attempt := 0; attempt < 3; attempt++ {
 		resp, retryable, err := c.runAttempt(ctx, args, prompt, model, req)
 		if err == nil {
-			if mcpNote != nil {
-				resp.Trace = append([]TraceStep{*mcpNote}, resp.Trace...)
+			if len(mcpNotes) > 0 {
+				resp.Trace = append(append([]TraceStep{}, mcpNotes...), resp.Trace...)
 			}
 			return resp, nil
 		}
 		lastErr = err
-		if !retryable || ctx.Err() != nil {
+		if ctx.Err() != nil {
+			return nil, err
+		}
+		// Codex treats every configured MCP server as required: one broken
+		// handshake aborts the whole session, even when the turn never needed
+		// that server's tools. The preflight probe cannot see this — the port
+		// answers, the protocol handshake is what fails — so recover here by
+		// dropping the offending server(s) and running the turn once more.
+		if !mcpFallbackUsed && c.configDir != "" && codexMCPStartupFailure(err.Error()) {
+			drop := codexNamedMCPServers(err.Error(), cfg.Servers)
+			if len(drop) == 0 {
+				drop = codexRemoteServerKeys(cfg.Servers)
+			}
+			if len(drop) > 0 {
+				mcpFallbackUsed = true
+				cfg.Servers = codexServersWithout(cfg.Servers, drop)
+				if _, werr := writeConfig(); werr != nil {
+					return nil, werr
+				}
+				note("[codex] MCP server(s) failed to start and were disabled for this turn: " +
+					strings.Join(drop, ", ") + " — retrying without their tools.")
+				continue
+			}
+		}
+		if !retryable {
 			return nil, err
 		}
 	}

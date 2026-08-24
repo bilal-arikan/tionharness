@@ -296,26 +296,20 @@ func (s *Server) handleMessageSteps(w http.ResponseWriter, r *http.Request) {
 // handleActiveSessions returns the session ids that currently have an in-flight
 // turn. Turns are detached from the client connection, so after a page reload the
 // frontend queries this to restore the "thinking" indicator for any turn still
-// running server-side. It unions the two authoritative registries — streamed chat
-// turns (s.runs) AND autonomous runtime invokes (spawn / worker / schedule / flow
-// / inbox), so a spawned session running purely in the runtime (never registered
-// in s.runs) also restores its indicator. Scoped to the active workspace so a
-// foreign workspace's in-flight turns are not leaked to (nor restored by) this one.
+// running server-side. The set comes from runningSessionIDs — streamed chat turns,
+// autonomous runtime invokes (spawn / worker / schedule / flow / inbox) and any
+// turn holding the session's admission slot — so a spawned session running purely
+// in the runtime (never registered in s.runs) also restores its indicator. Scoped
+// to the active workspace so a foreign workspace's in-flight turns are not leaked
+// to (nor restored by) this one. Sorted for a stable reply.
 func (s *Server) handleActiveSessions(w http.ResponseWriter, r *http.Request) {
 	wsp := ws(r)
-	seen := map[string]struct{}{}
-	ids := []string{}
-	add := func(list []string) {
-		for _, id := range list {
-			if _, ok := seen[id]; ok {
-				continue
-			}
-			seen[id] = struct{}{}
-			ids = append(ids, id)
-		}
+	running := s.runningSessionIDs(wsp)
+	ids := make([]string, 0, len(running))
+	for id := range running {
+		ids = append(ids, id)
 	}
-	add(s.runs.activeSessionIDs(wsp.ID))
-	add(wsp.Runtime.ActiveSessionIDs())
+	sort.Strings(ids)
 	writeJSON(w, http.StatusOK, map[string][]string{"sessionIds": ids})
 }
 

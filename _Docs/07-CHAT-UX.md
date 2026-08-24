@@ -113,6 +113,11 @@ eski oturumlar için korunur; yeni üretim yolu değildir.
 - `internal/api/files.go` — `GET /api/files?path=<yol>`: sohbet içeriğinde
   referans verilen yerel görselleri inline göstermek için salt-okunur akış.
   Yalnızca görsel uzantıları allowlist'te (png/jpg/gif/webp/svg/bmp/ico/avif).
+  `rel=<workspace-göreli yol>` biçimi ayrıca **sandbox içindeki metin dosyalarını**
+  (`.md`, `.txt`, `.log`, `.json`, `.ts`, `.go`, … — `textServableExt`)
+  `text/plain; charset=utf-8` + `nosniff` ile sunar; `file` türü artifact'ların
+  önizlenip indirilebilmesi buna dayanır. Mutlak `path=` biçiminde bu geçerli
+  değildir — orada yalnız medya allowlist'i çalışır.
 
 ### Adım-adım akış (SSE streaming)
 Sohbet artık **her adım bittikçe** UI'a akıtılır (tüm tur bitince değil).

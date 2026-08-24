@@ -171,3 +171,29 @@ func getActivity(t *testing.T, s *Server, wsp *workspace.Workspace) activityStat
 	}
 	return st
 }
+
+// TestCommandTurnLightsActivity: a slash command (/compact, /handoff) runs on the
+// HTTP goroutine and owns neither the chat-run registry nor an autonomous invoke,
+// so it published a live "working" bubble while /api/activity reported idle and
+// the nav rail stayed dark. Activity now derives from the turn-admission queue,
+// which EVERY turn entry path claims.
+func TestCommandTurnLightsActivity(t *testing.T) {
+	s, wsp := newWorkspaceServer(t)
+	if s.workspaceRunning(wsp) {
+		t.Fatal("idle workspace reported running")
+	}
+	release, err := wsp.Runtime.ClaimSessionCommandTurn(context.Background(), "SES1", "/compact")
+	if err != nil {
+		t.Fatalf("claim command turn: %v", err)
+	}
+	if !s.workspaceRunning(wsp) {
+		t.Fatal("running slash command did not light the workspace")
+	}
+	if ids := wsp.Runtime.BusyTurnSessionIDs(); len(ids) != 1 || ids[0] != "SES1" {
+		t.Fatalf("BusyTurnSessionIDs = %v, want [SES1]", ids)
+	}
+	release()
+	if s.workspaceRunning(wsp) {
+		t.Fatal("workspace still running after the command released its slot")
+	}
+}

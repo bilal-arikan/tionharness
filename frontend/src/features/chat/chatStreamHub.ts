@@ -272,6 +272,9 @@ export function makeHubHandlers(ctx: HubApplyCtx): SessionStreamHandlers {
       title,
       body,
       tag: `ask:${sid}:${id ?? ''}`,
+      // A tool-approval prompt gets its own cue so it's audibly distinct from a
+      // plain question or a plan approval; both keep the type's default 'ask' cue.
+      cue: ask.kind === 'permission' ? 'permission' : undefined,
     })
   }
 

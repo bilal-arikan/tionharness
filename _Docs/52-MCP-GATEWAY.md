@@ -886,3 +886,10 @@ active/tool_search/hidden). Tam app boot + canlı chat testi orantısız ağır/
     denylist ile kapatılmışsa susar.
   - Testler: `TestCodebaseMemoryIsExemptFromAllowlist` (native + CLI, sızıntı yok),
     `TestCodebaseMemoryExemptionYieldsToExplicitDenylist` (açık denylist kazanır, prompt susar).
+# Validator Unity MCP sözleşmesi (2026-08-23, TSK101)
+
+`validator` profili `unity-mcp` sunucu anahtarını allowlist'inde taşır. Native,
+Claude CLI ve Codex CLI yolları yalnız bu dış MCP sunucusunu açar; `Write`, `Edit`
+ve Playwright dahil diğer MCP sunucuları kapalı kalır. `worker:validator` reuse
+yolu yalnız eski profil allowlist'iyle birebir eşleşen materialized ajanı yeni
+sözleşmeye taşır. Kullanıcı değiştirmiş allowlist ve `ToolOverrides` ezilmez.

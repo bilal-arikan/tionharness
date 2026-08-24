@@ -15,8 +15,8 @@
 // change applies without resubscribing.
 import { notify } from './clientPrefs'
 import { isTypeEnabled } from './notifyPrefs'
-import { cueForType } from './notifyTypes'
-import { playTurnDone, playAskPrompt } from './sounds'
+import { cueForType, type NotifyCue } from './notifyTypes'
+import { playTurnDone, playAskPrompt, playPermissionPrompt } from './sounds'
 
 export interface ToastRequest {
   // The notify type (drives the sound cue + the per-type mute). See notifyTypes.ts.
@@ -29,18 +29,29 @@ export interface ToastRequest {
   tag?: string
   // Runs when the user clicks the toast (after the window is focused).
   onClick?: () => void
+  // Overrides the type's default cue (notifyTypes.cueForType) for this one call.
+  // The 'prompt' notify type covers ask/permission/plan interactions alike so the
+  // OS-toast mute stays a single "Onay / soru" toggle; the caller picks the
+  // per-event sound (e.g. 'permission' for a tool-approval prompt) without
+  // splitting that toggle into more notify types.
+  cue?: NotifyCue
 }
 
-// playCue fires the type's sound cue (if any). Gated only by the sound-effects
-// pref (inside sounds.ts); independent of the toast gates so a focused window
-// still hears "done"/"ask" even though no OS toast shows.
-export function playCue(type: string) {
-  switch (cueForType(type)) {
+// playCue fires a sound cue (if any). Gated only by the sound-effects pref
+// (inside sounds.ts); independent of the toast gates so a focused window still
+// hears "done"/"ask"/"permission" even though no OS toast shows. Pass
+// cueOverride to play a specific cue regardless of the type's configured
+// default (see ToastRequest.cue).
+export function playCue(type: string, cueOverride?: NotifyCue) {
+  switch (cueOverride ?? cueForType(type)) {
     case 'done':
       playTurnDone()
       break
     case 'ask':
       playAskPrompt()
+      break
+    case 'permission':
+      playPermissionPrompt()
       break
   }
 }
@@ -48,7 +59,7 @@ export function playCue(type: string) {
 // emitToast plays the cue then raises the OS toast subject to the per-type mute and
 // the master gate. Best-effort; safe to fire-and-forget.
 export function emitToast(req: ToastRequest) {
-  playCue(req.type)
+  playCue(req.type, req.cue)
   if (!isTypeEnabled(req.type)) return
   notify(req.enabled, req.title, req.body ?? '', req.onClick, req.tag)
 }

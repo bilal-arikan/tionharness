@@ -261,3 +261,32 @@ func (q *Queue) Forget(sessionID string) {
 	}
 	delete(q.sessions, sessionID)
 }
+
+// BusySessionIDs lists every session whose slot is currently held. It is the
+// single central answer to "what is running in this workspace?": every turn
+// entry path in the process goes through Acquire, so a new one is reported here
+// without touching the activity plumbing.
+func (q *Queue) BusySessionIDs() []string {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	ids := make([]string, 0, len(q.sessions))
+	for id, s := range q.sessions {
+		if s.running != nil {
+			ids = append(ids, id)
+		}
+	}
+	return ids
+}
+
+// HasBusy reports whether ANY session's slot is held, stopping at the first hit
+// and allocating nothing — the activity poll only asks this yes/no question.
+func (q *Queue) HasBusy() bool {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	for _, s := range q.sessions {
+		if s.running != nil {
+			return true
+		}
+	}
+	return false
+}

@@ -20,10 +20,18 @@ describe('NOTIFY_TYPES registry', () => {
     expect(new Set(types).size).toBe(types.length)
   })
 
-  it('uses only the three known cue values', () => {
+  it('uses only the known cue values', () => {
     for (const t of NOTIFY_TYPES) {
-      expect(['done', 'ask', null]).toContain(t.cue)
+      expect(['done', 'ask', 'permission', null]).toContain(t.cue)
     }
+  })
+
+  // 'permission' is a per-event cue override (see notifyBus.playCue), not a
+  // table-driven default — no NOTIFY_TYPES entry should declare it, or the
+  // 'prompt' type's toast mute would stop covering permission prompts too.
+  it('keeps prompt on the default `ask` cue — permission is an override, not a table entry', () => {
+    expect(cueForType('prompt')).toBe('ask')
+    expect(NOTIFY_TYPES.some((t) => t.cue === 'permission')).toBe(false)
   })
 })
 

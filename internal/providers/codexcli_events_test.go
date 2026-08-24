@@ -353,3 +353,48 @@ func TestCodexParserWebSearchAndTodoList(t *testing.T) {
 		t.Errorf("step 1 = %+v", resp.Trace[1])
 	}
 }
+
+// An MCP tool that answers with the protocol's own failure flag is reported by
+// codex as a transport success (status "completed", error null); only
+// result.is_error marks it as a failure.
+func TestCodexParserMCPToolCallResultIsError(t *testing.T) {
+	failed := `{"type":"item.completed","item":{"id":"item_9","type":"mcp_tool_call","server":"tionprobe","tool":"tion_ping","arguments":"{}","result":{"content":[{"type":"text","text":"missing required argument: name"}],"is_error":true},"status":"completed"}}`
+	p := newCodexParser("", nil)
+	feedAll(p, fxThreadStarted, fxTurnStarted, failed, fxTurnCompleted)
+
+	resp, err := p.finish()
+	if err != nil {
+		t.Fatalf("finish: %v", err)
+	}
+	if len(resp.Trace) != 1 {
+		t.Fatalf("Trace = %+v, want exactly one step", resp.Trace)
+	}
+	step := resp.Trace[0]
+	if !step.IsError {
+		t.Error("IsError = false, want true for an MCP result carrying is_error")
+	}
+	if step.Output != "missing required argument: name" {
+		t.Errorf("Output = %q, want the tool's error text", step.Output)
+	}
+}
+
+// A kind the parser does not know is skipped while healthy, but a failed one
+// still reaches the trace so a new tool kind cannot fail invisibly.
+func TestCodexParserUnknownItemKind(t *testing.T) {
+	ok := `{"type":"item.completed","item":{"id":"item_10","type":"future_tool","status":"completed"}}`
+	bad := `{"type":"item.completed","item":{"id":"item_11","type":"future_tool","message":"future_tool exploded","status":"failed"}}`
+	p := newCodexParser("", nil)
+	feedAll(p, fxThreadStarted, fxTurnStarted, ok, bad, fxTurnCompleted)
+
+	resp, err := p.finish()
+	if err != nil {
+		t.Fatalf("finish: %v", err)
+	}
+	if len(resp.Trace) != 1 {
+		t.Fatalf("Trace = %+v, want only the failed item", resp.Trace)
+	}
+	step := resp.Trace[0]
+	if step.Tool != "future_tool" || !step.IsError || step.Output != "future_tool exploded" {
+		t.Errorf("step = %+v", step)
+	}
+}

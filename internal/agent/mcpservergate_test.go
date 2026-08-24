@@ -182,17 +182,94 @@ func TestMCPServerGateIgnoresGroupKeys(t *testing.T) {
 // what the agent can ultimately call. codebase-memory is exempt from the allowlist
 // (allowlistExemptServer), so a profile worker DOES reach the code graph — see
 // TestCodebaseMemoryIsExemptFromAllowlist. Everything else still needs a pattern.
-func TestProfileAllowlistsNameNoMCPServer(t *testing.T) {
+func TestProfileAllowlistsReachOnlyValidatorUnityMCP(t *testing.T) {
 	for id, prof := range defaultSubagentProfiles {
 		gate := mcpServerGate(db.Agent{AllowedTools: mustJSON(t, prof.AllowedTools)}, "")
 		if gate == nil {
 			t.Errorf("profile %q has an empty allowlist — it constrains nothing", id)
 			continue
 		}
-		for _, server := range []string{"playwright", "codebase-memory-mcp", "tionswarm_extended"} {
-			if gate(server) {
+		for _, server := range []string{"playwright", "codebase-memory-mcp", "tionswarm_extended", "unity-mcp"} {
+			want := id == "validator" && server == "unity-mcp"
+			if got := gate(server); got != want {
 				t.Errorf("profile %q reaches MCP server %q; widening a profile is a policy change — update subagent.go's doc comment and _Docs/52 with it", id, server)
 			}
+		}
+	}
+}
+
+func TestValidatorUnityMCPGateAcrossNativeClaudeAndCodex(t *testing.T) {
+	rt, _ := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))
+	ctx := context.Background()
+	for _, name := range []string{"unity-mcp", "playwright"} {
+		if _, err := rt.db.CreateMCPServer(ctx, db.MCPServer{Name: name, Transport: db.MCPTransportStdio, Command: "tool", Enabled: true}); err != nil {
+			t.Fatalf("create %s: %v", name, err)
+		}
+	}
+	ag := db.Agent{ID: "validator", MCPEnabled: true, AllowedTools: mustJSON(t, defaultSubagentProfiles["validator"].AllowedTools)}
+	filter := rt.toolFilter(ctx, ag)
+	if !filter("unity-mcp__read_console") || filter("playwright__browser_click") || filter("Write") || filter("Edit") {
+		t.Fatal("native validator gate did not isolate Unity MCP validation access")
+	}
+	path, _, _, cleanup, err := rt.writeCLIMCPConfig(ctx, true, ag, tools.InteractionEndpoint{}, "auto")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+	cfg := readCLIConfig(t, path)
+	if _, ok := cfg.MCPServers["unity-mcp"]; !ok {
+		t.Fatal("claude CLI omitted unity-mcp")
+	}
+	if _, ok := cfg.MCPServers["playwright"]; ok {
+		t.Fatal("claude CLI mounted unrelated MCP server")
+	}
+	spec, err := rt.codexMCPSpec(ctx, true, ag, tools.InteractionEndpoint{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := spec.Servers["unity-mcp"]; !ok {
+		t.Fatal("codex CLI omitted unity-mcp")
+	}
+	if _, ok := spec.Servers["playwright"]; ok {
+		t.Fatal("codex CLI mounted unrelated MCP server")
+	}
+}
+
+func TestCodexValidatorFreshTurnMountsOnlyUnityMCP(t *testing.T) {
+	rt, _ := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))
+	ctx := context.Background()
+	for _, name := range []string{"unity-mcp", "playwright", "codebase-memory-mcp"} {
+		if _, err := rt.db.CreateMCPServer(ctx, db.MCPServer{Name: name, Transport: db.MCPTransportStdio, Command: "tool", Enabled: true}); err != nil {
+			t.Fatalf("create %s: %v", name, err)
+		}
+	}
+	caller := db.Agent{ID: "caller", Provider: "codex-cli", MCPEnabled: true}
+	validator, ephemeral, err := rt.resolveSubagentTarget(ctx, caller, "validator")
+	if err != nil || !ephemeral {
+		t.Fatalf("resolve validator: ephemeral=%v err=%v", ephemeral, err)
+	}
+	// This mirrors autonomousInteraction after profile filtering: validator has
+	// no bridged TionSwarm built-ins, so both tier name lists are empty.
+	inter := tools.InteractionEndpoint{URL: "http://127.0.0.1:9999", Token: "token"}
+	spec, err := rt.codexMCPSpec(ctx, validator.MCPEnabled, validator, inter)
+	if err != nil {
+		t.Fatalf("codexMCPSpec: %v", err)
+	}
+	if len(spec.Servers) != 1 {
+		t.Fatalf("fresh validator mounted %d servers, want only unity-mcp: %v", len(spec.Servers), spec.Servers)
+	}
+	if _, ok := spec.Servers["unity-mcp"]; !ok {
+		t.Fatalf("unity-mcp missing: %v", spec.Servers)
+	}
+	for _, forbidden := range []string{"playwright", "codebase-memory-mcp", interactionCoreKey, interactionExtendedKey} {
+		if _, ok := spec.Servers[forbidden]; ok {
+			t.Fatalf("forbidden server %q mounted: %v", forbidden, spec.Servers)
+		}
+	}
+	filter := rt.toolFilter(ctx, validator)
+	for _, forbidden := range []string{"Write", "Edit", "apply_patch"} {
+		if filter == nil || filter(forbidden) {
+			t.Fatalf("filesystem mutation tool %q allowed", forbidden)
 		}
 	}
 }

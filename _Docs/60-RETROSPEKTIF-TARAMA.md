@@ -504,6 +504,13 @@ Canlı taramalarda gözlenen zayıflıklara yönelik olgunlaştırma (üretim ta
 - [x] **Semantik dedup** iki katman: ingest'te kanonik-imza birleştirme (`dedup.go` `canonSig`) +
       görüntüleme-zamanı lexical kümeleme (`cluster.go` token-Jaccard, `insight_list_findings cluster:true`).
 - [x] **Analyzer eşzamanlılık** (`scanner.go`): 3-faz (serial enum → paralel analyze bounded-pool → serial apply); 17dk → dakikalar.
+- [x] **codex-cli taramada serileştirilir** (`internal/agent/insightconcurrency.go`): analiz ajanının sağlayıcı türü
+      `codex-cli` ise `ScanScope.Concurrency = 1` yapılır. Neden: her `codex exec` çağrısı `CODEX_HOME/auth.json`'daki
+      **tek kullanımlık** refresh token'ı okuyup döndürür; `PinCodexHome` tüm codex turlarını app-global
+      `<dataDir>/codex-home`'a sabitlediğinden 4 paralel analiz aynı dosyada yarışır ve kaybedenler
+      "refresh token was revoked" alır (claude tarafının karşılığı `toolloop.go:265-276`). Çağıran `Concurrency`'yi
+      açıkça verdiyse o değer korunur (explicit wins — `MaxSessions` ile aynı sözleşme); karar `insight scan serialized`
+      log satırıyla görünür kılınır. Codex sağlayıcısına kilit/heal eklenmesi ayrı iş.
 - [x] **MaxAnalyzed bütçesi**: taramada sert LLM-çağrı tavanı (`ScanScope`/`Settings`); aşan çiftler sonraki taramaya kalır.
 - [x] **FilePointer doğrulama** (`CheckFilePointer`): app-fix backlog'da repo'da olmayan LLM-tahmini yolları "⚠ unverified" işaretler.
 - [x] **Fleet rollup** (`fleet.go` + `GET /api/insight/fleet-findings`): tüm workspace'lerin app-fix bulgularını kanonik-imzayla birleştirir.

@@ -17,7 +17,12 @@ vi.hoisted(() => {
   })
 })
 
+vi.mock('@/shared/lib/notifyBus', () => ({
+  emitToast: vi.fn(),
+}))
+
 import { HubKind } from '@/api/sessionStream'
+import { emitToast } from '@/shared/lib/notifyBus'
 import { makeHubHandlers, type HubApplyCtx } from './chatStreamHub'
 
 const SID = 'SES1'
@@ -227,6 +232,45 @@ describe('generic live cards', () => {
 
     const steps = JSON.parse(ghost()?.steps ?? '[]')
     expect(steps).toEqual([{ kind: 'diff', id: 'call-1', tool: 'Write', path: 'result.txt' }])
+  })
+})
+
+describe('interaction_open notification cue', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.mocked(emitToast).mockClear()
+  })
+  afterEach(() => vi.useRealTimers())
+
+  it('overrides the cue to permission for a tool-approval prompt', () => {
+    const { send } = harness()
+    send(HubKind.InteractionOpen, { id: 'INT1', kind: 'permission', tool: 'Bash', text: 'ls' })
+    expect(emitToast).toHaveBeenCalledOnce()
+    expect(vi.mocked(emitToast).mock.calls[0][0]).toMatchObject({
+      type: 'prompt',
+      cue: 'permission',
+    })
+  })
+
+  it('leaves the cue at the type default for a plain question', () => {
+    const { send } = harness()
+    send(HubKind.InteractionOpen, { id: 'INT2', kind: 'ask', question: 'Devam edeyim mi?' })
+    expect(emitToast).toHaveBeenCalledOnce()
+    expect(vi.mocked(emitToast).mock.calls[0][0]).toMatchObject({ type: 'prompt', cue: undefined })
+  })
+
+  it('leaves the cue at the type default for a plan approval', () => {
+    const { send } = harness()
+    send(HubKind.InteractionOpen, { id: 'INT3', kind: 'plan', question: 'Plani onayla' })
+    expect(emitToast).toHaveBeenCalledOnce()
+    expect(vi.mocked(emitToast).mock.calls[0][0]).toMatchObject({ type: 'prompt', cue: undefined })
+  })
+
+  it('does not cue twice for the same interaction id replayed', () => {
+    const { send } = harness()
+    send(HubKind.InteractionOpen, { id: 'INT4', kind: 'permission', tool: 'Bash', text: 'ls' })
+    send(HubKind.InteractionOpen, { id: 'INT4', kind: 'permission', tool: 'Bash', text: 'ls' })
+    expect(emitToast).toHaveBeenCalledOnce()
   })
 })
 

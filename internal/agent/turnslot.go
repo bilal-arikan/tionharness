@@ -96,3 +96,13 @@ func (r *Runtime) publishTurnQueue(sessionID string) {
 		Target: map[string]string{"view": "chat", "sessionId": sessionID},
 	})
 }
+
+// BusyTurnSessionIDs lists the sessions that currently hold their admission slot.
+// The activity endpoints use it as the CENTRAL busy source: because every turn
+// entry path above claims the slot, a new one shows up in the nav rail's busy
+// dots with no extra bookkeeping (a slash command used to publish a live "working"
+// bubble yet report idle, precisely because it had none).
+func (r *Runtime) BusyTurnSessionIDs() []string { return r.turns.BusySessionIDs() }
+
+// HasBusyTurns is the allocation-free yes/no form of BusyTurnSessionIDs.
+func (r *Runtime) HasBusyTurns() bool { return r.turns.HasBusy() }

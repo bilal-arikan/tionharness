@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -697,6 +698,11 @@ func (r *Runtime) resolveWorkerTarget(ctx context.Context, coordSessionID, baseA
 	defer r.profileWorkerMu.Unlock()
 	// Already materialized? Reuse it.
 	if a, err := r.resolveAgent(ctx, name); err == nil {
+		if prof.ID == "validator" {
+			if err := r.syncValidatorProfileAllowlist(ctx, a, prof); err != nil {
+				return "", err
+			}
+		}
 		return a.ID, nil
 	}
 	// Clone provider/model/permission from the base agent (coordinator's agent), or
@@ -739,6 +745,26 @@ func (r *Runtime) resolveWorkerTarget(ctx context.Context, coordSessionID, baseA
 	}
 	r.logger.Info("coordination: materialized profile worker", "profile", prof.ID, "agent", created.ID)
 	return created.ID, nil
+}
+
+// syncValidatorProfileAllowlist migrates only a materialized validator that
+// still has the exact pre-Unity profile contract. Any operator customization is
+// left untouched; the profile name alone is not authority to overwrite it.
+func (r *Runtime) syncValidatorProfileAllowlist(ctx context.Context, a db.Agent, prof SubagentProfile) error {
+	legacy := []string{"Read", "LS", "Glob", "Grep", "Bash"}
+	var current []string
+	if err := json.Unmarshal([]byte(a.AllowedTools), &current); err != nil || !slices.Equal(current, legacy) {
+		return nil
+	}
+	allow, err := json.Marshal(prof.AllowedTools)
+	if err != nil {
+		return fmt.Errorf("cannot sync worker profile %q allowlist: %w", prof.ID, err)
+	}
+	if err := r.db.UpdateAgentAllowedTools(ctx, a.ID, string(allow)); err != nil {
+		return fmt.Errorf("cannot sync worker profile %q allowlist: %w", prof.ID, err)
+	}
+	r.logger.Info("coordination: synced profile worker allowlist", "profile", prof.ID, "agent", a.ID)
+	return nil
 }
 
 // SendToWorker appends a follow-up message to an existing worker session and runs
