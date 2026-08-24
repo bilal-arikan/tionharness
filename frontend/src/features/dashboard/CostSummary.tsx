@@ -1,5 +1,6 @@
 import type { CostBlock, DeltaStat } from '@/types'
-import { DeltaBadge, fmtUsd } from './charts'
+import { DeltaBadge } from './charts'
+import { fmtUsd } from './chartFormat'
 
 // CostSummary is the money row a CEO reads first: what today cost, month-to-date,
 // the daily burn rate (with its period delta) and a naive month-end projection.

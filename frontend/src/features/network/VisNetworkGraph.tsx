@@ -128,15 +128,19 @@ export function VisNetworkGraph({
   const modeRef = useRef(mode)
   const densityRef = useRef(density)
   const liteRef = useRef(lite)
-  liteRef.current = lite
   const populatedRef = useRef(false)
   const onSelectRef = useRef(onSelect)
-  onSelectRef.current = onSelect
   // Original edge colors, kept so blurNode can restore exactly what the mapper
   // set (per-edge opacity/width) after a hover dim.
   const baseEdgeColorRef = useRef<Map<string, Edge['color']>>(new Map())
   const highlightRef = useRef(highlightNeighbors)
-  highlightRef.current = highlightNeighbors
+  // Post-commit assignment: these refs exist so the vis-network callbacks (bound
+  // once, outside React) always see the latest props. Handlers fire after commit.
+  useEffect(() => {
+    liteRef.current = lite
+    onSelectRef.current = onSelect
+    highlightRef.current = highlightNeighbors
+  })
 
   // Create the network once.
   useEffect(() => {

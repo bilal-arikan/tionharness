@@ -59,7 +59,6 @@ export function useGroupedList<T>(list: T[], opts: UseGroupedListOptions<T>): Gr
     const entries = [...buckets.entries()]
     if (sortGroups) entries.sort(([a], [b]) => sortGroups(a, b))
     return entries
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [list, keyOf, sortGroups])
 
   const groupNames = useMemo(() => groups.map(([name]) => name), [groups])

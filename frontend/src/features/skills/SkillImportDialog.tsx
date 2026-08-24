@@ -38,7 +38,7 @@ const KIND_LABEL: Record<IngestKind, string> = {
 function deriveGroup(location: string): string {
   const raw = location.trim().replace(/\/+$/, '')
   if (!raw) return ''
-  let segs = raw.split(/[\\/]/).filter(Boolean)
+  const segs = raw.split(/[\\/]/).filter(Boolean)
   // For a github.com/owner/repo/tree/branch/... URL, the repo is the 2nd path segment
   // after the host; otherwise fall back to the last path segment.
   const host = segs.findIndex((s) => s.includes('github.com'))

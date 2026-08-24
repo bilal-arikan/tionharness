@@ -3,7 +3,7 @@
 // list, with updated statuses); the most recent one is the live list. Steps are
 // persisted on messages, so this survives a page reload.
 import type { Message, TodoItem, TurnStep } from '@/types'
-import { parseSteps } from './TurnSteps'
+import { parseSteps } from './turnStepUtils'
 
 // readStepTodos pulls checklist items from a 'todo' step (or a legacy
 // 'todo_write' tool step whose JSON input still carries them).

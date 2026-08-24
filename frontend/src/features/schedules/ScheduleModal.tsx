@@ -9,7 +9,8 @@ import { PRESET_GROUPS } from './cronPresets'
 import { FormModal } from './FormModal'
 import { Field, FlowPicker, TargetModeToggle, inputCls } from './pickers'
 import { localInputToUnix, unixToLocalInput } from './timeUtils'
-import { FieldError, useFieldErrors } from './useFieldErrors'
+import { FieldError } from './FieldError'
+import { useFieldErrors } from './useFieldErrors'
 
 interface Props {
   agents: Agent[]

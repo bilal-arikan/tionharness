@@ -9,7 +9,7 @@ import {
 import { Columns2, Copy, Eye, Maximize2, Minimize2, Pencil } from 'lucide-react'
 import { Markdown } from './markdown/Markdown'
 import { copyToClipboard } from '@/shared/lib/clipboard'
-import { toast } from './Toast'
+import { toast } from './toastStore'
 
 // Textarea attributes we forward verbatim (placeholder, rows, maxLength,
 // onKeyDown, autoFocus, data-testid, …). value/onChange are typed explicitly.

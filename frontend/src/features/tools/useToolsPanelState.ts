@@ -280,7 +280,7 @@ export function useToolsPanelState(onError: (msg: string) => void) {
     setArgsText(parseArgs(s.args).join(' '))
     setUrl(s.url)
     // Render the stored headers JSON back into "Key: Value" lines for the textarea.
-    let headerLines = ''
+    let headerLines: string
     try {
       const h = JSON.parse(s.headersConfig || '{}') as Record<string, string>
       headerLines = Object.entries(h)

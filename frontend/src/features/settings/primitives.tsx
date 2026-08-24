@@ -1,24 +1,7 @@
 // Shared building blocks for the settings screen: field primitives, the category
 // rail button, the read-only prompt viewer and the category taxonomy.
-import { type ReactNode } from 'react'
-import {
-  User,
-  KeyRound,
-  Brain,
-  Shield,
-  Command,
-  Blocks,
-  Info,
-  Boxes,
-  FileText,
-  Wrench,
-  SlidersHorizontal,
-  Webhook,
-  Archive,
-  ScanSearch,
-  Volume2,
-  type LucideIcon,
-} from 'lucide-react'
+import type { ReactNode } from 'react'
+import type { LucideIcon } from 'lucide-react'
 import type { AppSettings, PromptInfo, WorkspaceSettings } from '@/types'
 import { CopyPathButton } from '@/shared/components/CopyPathButton'
 
@@ -47,31 +30,6 @@ export interface CatMeta {
   icon: LucideIcon
 }
 
-export const APP_CATS: CatMeta[] = [
-  { key: 'profile', label: 'Profil', icon: User },
-  { key: 'providers', label: 'Sağlayıcılar', icon: KeyRound },
-  { key: 'secrets', label: 'Sırlar', icon: Shield },
-  { key: 'context', label: 'Bağlam & Bellek', icon: Brain },
-  { key: 'tools', label: 'Yetenekler (Araçlar)', icon: Wrench },
-  { key: 'hooks', label: 'Hooks', icon: Webhook },
-  { key: 'exttools', label: 'Harici Araçlar', icon: ScanSearch },
-  // Dedicated audio page: sound effects, speech input (STT) + output (TTS).
-  { key: 'sound', label: 'Ses', icon: Volume2 },
-  // Combined screen: notifications, autonomy, auto-title, MCP, diagnostics.
-  { key: 'advanced', label: 'Gelişmiş', icon: SlidersHorizontal },
-  // Dedicated page: backup schedule + archive list / restore.
-  { key: 'backup', label: 'Yedekleme', icon: Archive },
-  { key: 'commands', label: 'Komutlar', icon: Command },
-  { key: 'stepkinds', label: 'Adım Türleri', icon: Blocks },
-  { key: 'about', label: 'Hakkında', icon: Info },
-]
-
-export const WS_CATS: CatMeta[] = [
-  { key: 'workspace', label: 'Genel', icon: Boxes },
-  { key: 'wsfiles', label: 'Promptlar & Dosyalar', icon: FileText },
-]
-
-// Setters threaded into the per-category panels.
 export type AppSet = <K extends keyof AppSettings>(key: K, val: AppSettings[K]) => void
 export type WsSet = <K extends keyof WorkspaceSettings>(key: K, val: WorkspaceSettings[K]) => void
 

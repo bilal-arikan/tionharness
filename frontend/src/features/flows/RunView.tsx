@@ -11,6 +11,7 @@ import { ViewButton } from '@/features/view/ViewButton'
 import { FlowCanvas } from './FlowCanvas'
 import { RunNodeInspector } from './RunNodeInspector'
 import type { ChildProgress } from './runTree'
+import { STATUS_LABEL, statusColor } from './runStatus'
 
 interface Props {
   run: FlowRun
@@ -38,20 +39,6 @@ interface Props {
   // Descend into the child run a subflow/spawn node launched (double-click).
   // Absent = no nesting; the double-click is then inert.
   onDescend?: (nodeId: string) => void
-}
-
-export const STATUS_LABEL: Record<string, string> = {
-  running: '▶ devam ediyor',
-  success: '✓ başarılı',
-  failure: '✕ hata',
-  waiting: '⏳ girdi bekleniyor',
-}
-
-export function statusColor(status: string): string {
-  if (status === 'success') return 'text-[var(--color-success)]'
-  if (status === 'failure') return 'text-[var(--color-danger)]'
-  if (status === 'waiting') return 'text-[var(--color-warning)]'
-  return 'text-[var(--color-accent)]'
 }
 
 function safeParseState(s: string): FlowState | null {

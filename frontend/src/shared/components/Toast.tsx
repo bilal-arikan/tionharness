@@ -1,58 +1,7 @@
 import { useEffect, useState } from 'react'
 import { AlertTriangle, CheckCircle2, Info, X, type LucideIcon } from 'lucide-react'
+import { subscribe, dismiss, type ToastItem, type ToastTone } from './toastStore'
 
-// Toast — the app-wide transient-message surface. Generalises the former
-// error-only ErrorToast into a tone-aware stack (error / success / info).
-//
-// The store is module-level (not a React context) so `toast.*` is callable from
-// anywhere — event handlers, api catch blocks, plain helpers — without threading
-// a provider. A single <Toaster/> mounted at the app root subscribes and renders
-// the stack pinned bottom-right; every existing `onError(msg)` sink now routes
-// through `toast.error`, so error reporting stays backward-compatible.
-
-export type ToastTone = 'error' | 'success' | 'info'
-
-export interface ToastItem {
-  id: number
-  message: string
-  tone: ToastTone
-  ttl: number
-}
-
-type Listener = (items: ToastItem[]) => void
-
-let items: ToastItem[] = []
-let seq = 0
-const listeners = new Set<Listener>()
-
-function emit() {
-  for (const l of listeners) l(items)
-}
-
-function push(message: string, tone: ToastTone, ttl: number): number | undefined {
-  if (!message) return undefined
-  const id = ++seq
-  items = [...items, { id, message, tone, ttl }]
-  emit()
-  return id
-}
-
-function dismiss(id: number) {
-  items = items.filter((t) => t.id !== id)
-  emit()
-}
-
-// Public API. Errors linger longer (8s) than positive/neutral notices (4s).
-export const toast = {
-  error: (message: string, ttl = 8000) => push(message, 'error', ttl),
-  success: (message: string, ttl = 4000) => push(message, 'success', ttl),
-  info: (message: string, ttl = 4000) => push(message, 'info', ttl),
-  dismiss,
-}
-
-// Per-tone icon + full (JIT-safe literal) className strings. The colours are
-// mixed from the theme's semantic tokens, so they re-theme with presets and the
-// light theme automatically.
 const TONE: Record<
   ToastTone,
   { icon: LucideIcon; role: 'alert' | 'status'; box: string; btn: string }
@@ -107,14 +56,8 @@ function ToastRow({ item }: { item: ToastItem }) {
 // Toaster — mount once at the app root. Subscribes to the module store and
 // renders the current stack. Newest toasts appear at the bottom of the stack.
 export function Toaster() {
-  const [list, setList] = useState<ToastItem[]>(items)
-  useEffect(() => {
-    listeners.add(setList)
-    setList(items)
-    return () => {
-      listeners.delete(setList)
-    }
-  }, [])
+  const [list, setList] = useState<ToastItem[]>([])
+  useEffect(() => subscribe(setList), [])
 
   if (!list.length) return null
   return (

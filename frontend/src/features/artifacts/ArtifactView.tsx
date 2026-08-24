@@ -5,7 +5,8 @@ import { Markdown } from '@/shared/components/markdown/Markdown'
 import { CodeBlock } from '@/shared/components/markdown/CodeBlock'
 import { Lightbox } from '@/shared/components'
 import { fileURL } from '@/shared/lib/attachments'
-import { TextFileArtifact, textFileLang } from './TextFileArtifact'
+import { TextFileArtifact } from './TextFileArtifact'
+import { textFileLang } from './textFileLang'
 
 // ImageArtifact renders an image artifact with click-to-zoom into the shared
 // Lightbox (zoom + pan). Kept as its own component so the hook is valid even

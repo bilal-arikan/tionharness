@@ -49,14 +49,8 @@ import {
   SELECTED_ITEM_CLS,
   SELECTED_ITEM_RING,
 } from '@/shared/components/SidebarChrome'
-import {
-  KIND_ICON,
-  KIND_LABEL,
-  OriginBadge,
-  KINDS,
-  isMediaKind,
-  artifactKindForUpload,
-} from './artifactMeta'
+import { KIND_ICON, KIND_LABEL, KINDS, isMediaKind, artifactKindForUpload } from './artifactMeta'
+import { OriginBadge } from './OriginBadge'
 
 interface Props {
   onError: (msg: string) => void

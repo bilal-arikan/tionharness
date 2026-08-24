@@ -187,23 +187,3 @@ export const TurnSteps = memo(function TurnSteps({
 // stepTruncated reports whether the server cut any of this step's payloads (or
 // a nested subagent step's) on the transcript read path — i.e. showing it in
 // full needs a refetch via sessionApi.getMessageSteps.
-export function stepTruncated(s: TurnStep): boolean {
-  return (
-    !!s.outputTruncated ||
-    !!s.textTruncated ||
-    !!s.patchTruncated ||
-    !!s.inputTruncated ||
-    !!s.subSteps?.some(stepTruncated)
-  )
-}
-
-// parseSteps safely decodes the JSON `steps` string persisted on a message.
-export function parseSteps(json?: string): TurnStep[] {
-  if (!json || json === '[]') return []
-  try {
-    const v = JSON.parse(json)
-    return Array.isArray(v) ? (v as TurnStep[]) : []
-  } catch {
-    return []
-  }
-}

@@ -24,7 +24,3 @@ export function useFieldErrors<K extends string>(errors: Record<K, string>) {
 // FieldError renders a single inline validation message under a form field, or
 // nothing when there is no error. Kept next to the hook so both modals render
 // their errors identically.
-export function FieldError({ message }: { message?: string }) {
-  if (!message) return null
-  return <p className="mt-1 text-xs text-[var(--color-danger)]">{message}</p>
-}

@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import { Lightbox } from '@/shared/components'
 import { copyToClipboard } from '@/shared/lib/clipboard'
-import { toast } from '../Toast'
+import { toast } from '../toastStore'
 import { Copy } from 'lucide-react'
 
 interface Props {

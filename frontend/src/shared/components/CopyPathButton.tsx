@@ -1,7 +1,7 @@
 import { Copy } from 'lucide-react'
 import { displayPath } from '@/shared/lib/paths'
 import { copyToClipboard } from '@/shared/lib/clipboard'
-import { toast } from './Toast'
+import { toast } from './toastStore'
 
 // Shared visual language for the path actions used across the app so they
 // always look identical: a compact bordered icon-only button that dims to

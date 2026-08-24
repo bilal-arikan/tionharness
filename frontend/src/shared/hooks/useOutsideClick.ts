@@ -8,7 +8,11 @@ import { useEffect, useRef } from 'react'
 export function useOutsideClick<T extends HTMLElement>(onOutside: () => void, active = true) {
   const ref = useRef<T>(null)
   const cb = useRef(onOutside)
-  cb.current = onOutside
+  // Assigned after commit (not during render) so the ref stays a side effect.
+  // The listener only reads it from an event handler, so post-commit is soon enough.
+  useEffect(() => {
+    cb.current = onOutside
+  })
   useEffect(() => {
     if (!active) return
     const onDown = (e: MouseEvent) => {

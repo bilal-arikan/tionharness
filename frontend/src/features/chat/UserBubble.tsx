@@ -9,6 +9,10 @@ import { imageURL } from '@/shared/lib/attachments'
 // "@" then non-space, non-"@" characters. A mention is a plain reference to an
 // agent by name (highlighted as a chip) — it does NOT route the turn.
 const MENTION_RE = /@[^\s@]+/g
+// Stateless twin of MENTION_RE for boolean checks. A /g regex carries lastIndex,
+// so calling .test() on the shared instance during render both mutates module
+// state and makes the result depend on the previous caller.
+const MENTION_TEST = /@[^\s@]+/
 
 const norm = (s: string) => s.toLowerCase().replace(/\s+/g, '')
 
@@ -96,8 +100,7 @@ export function UserBubble({
   // A quote-wrapped command is an explicit escape → render the inner text as a
   // plain bubble (no command style).
   const quotedCmd = quotedCommand(text)
-  const hasMention = MENTION_RE.test(text)
-  MENTION_RE.lastIndex = 0
+  const hasMention = MENTION_TEST.test(text)
   const isCommand = !quotedCmd && /^\/\S/.test(text.trim())
 
   // Every chat attachment is captured server-side as a session artifact (origin

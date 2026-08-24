@@ -7,7 +7,7 @@ import { useEffect, useRef, type Dispatch, type MutableRefObject, type SetStateA
 import { api, getActiveWorkspace } from '@/api'
 import type { AppEvent, Message, TurnStep } from '@/types'
 import { emitToast } from '@/shared/lib/notifyBus'
-import { toast } from '@/shared/components/Toast'
+import { toast } from '@/shared/components/toastStore'
 import { speakLatestReply } from '@/shared/lib/tts'
 import type { useChatStream } from '@/features/chat/useChatStream'
 import type { View } from './NavRail'

@@ -28,13 +28,12 @@ import {
   ARCHIVED_CHIP,
   kindMeta,
   normalizeChipsOff,
-  RunStateBadge,
   SESSION_CHIPS,
   SESSION_CHIPS_OFF_KEY,
   sessionMatchesChips,
-  StatusPill,
   WORKER_CHIP,
 } from './sessionKindMeta'
+import { RunStateBadge, StatusPill } from './sessionKindBadges'
 import type { ExecutionRuntime } from '@/app/useExecutionRuntime'
 import { isWorkerSession } from '@/shared/lib/coordination'
 

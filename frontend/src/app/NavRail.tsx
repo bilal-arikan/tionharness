@@ -1,28 +1,9 @@
 import { useEffect, useState } from 'react'
-import {
-  MessageSquare,
-  Users,
-  Share2,
-  Map as MapIcon,
-  LayoutGrid,
-  Clock,
-  GitBranch,
-  FileCode,
-  ScrollText,
-  Lightbulb,
-  Sparkles,
-  Store,
-  Wallet,
-  Boxes,
-  Plug,
-  Settings,
-  ChevronLeft,
-  type LucideIcon,
-  LayoutDashboard,
-} from 'lucide-react'
+import { Settings, ChevronLeft, Boxes } from 'lucide-react'
 import type { Workspace } from '@/types'
 import { WorkspaceSwitcher } from '@/features/workspace/WorkspaceSwitcher'
 import type { NewWorkspaceData } from '@/features/workspace/WorkspaceCreateModal'
+import { NAV } from './navItems'
 
 export type View =
   | 'dashboard'
@@ -71,24 +52,6 @@ interface Props {
 
 // NAV is the primary view list. Exported so the mobile bottom bar renders the
 // same set from a single source of truth.
-export const NAV: { key: View; label: string; icon: LucideIcon }[] = [
-  { key: 'dashboard', label: 'Panel', icon: LayoutDashboard },
-  { key: 'chat', label: 'Sohbet', icon: MessageSquare },
-  { key: 'agents', label: 'Ajanlar', icon: Users },
-  { key: 'network', label: 'Ağ', icon: Share2 },
-  { key: 'explorer', label: 'Harita', icon: MapIcon },
-  { key: 'board', label: 'Görevler', icon: LayoutGrid },
-  { key: 'schedules', label: 'Otomasyon', icon: Clock },
-  { key: 'flows', label: 'Akışlar', icon: GitBranch },
-  { key: 'artifacts', label: 'Artifactlar', icon: FileCode },
-  { key: 'skills', label: 'Skills', icon: Sparkles },
-  { key: 'tools', label: 'Araçlar & MCP', icon: Plug },
-  { key: 'market', label: 'Market', icon: Store },
-  { key: 'budget', label: 'Bütçe', icon: Wallet },
-  { key: 'logs', label: 'Loglar', icon: ScrollText },
-  { key: 'insights', label: 'İçgörü', icon: Lightbulb },
-]
-
 const COLLAPSE_KEY = 'tionharness.navCollapsed'
 
 // navItemClass renders the shared look for a nav button. The active state is a

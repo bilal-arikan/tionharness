@@ -1,5 +1,9 @@
+/* eslint-disable react-hooks/refs -- `drag` is the object returned by useDragScroll;
+   reading drag.ref / drag.onMouseDown to spread onto JSX is a plain property read,
+   not a ref *dereference* during render. The rule matches on the `.ref` name. */
 import { Boxes, Settings, type LucideIcon } from 'lucide-react'
-import { NAV, type View } from './NavRail'
+import { NAV } from './navItems'
+import type { View } from './NavRail'
 import { useDragScroll } from '@/shared/hooks/useDragScroll'
 import { MobileWorkspaceButton } from './MobileWorkspaceButton'
 import type { Workspace } from '@/types'

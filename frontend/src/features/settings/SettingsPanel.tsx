@@ -9,7 +9,8 @@ import type {
   SlashCommand,
 } from '@/types'
 import { LoadingState, toast } from '@/shared/components'
-import { APP_CATS, CatButton, type Cat } from './primitives'
+import { CatButton, type Cat } from './primitives'
+import { APP_CATS } from './settingsCats'
 import {
   ProfilePanel,
   NotificationsPanel,

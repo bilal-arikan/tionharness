@@ -75,7 +75,9 @@ export function useAsync<T>(
         if (!aliveRef.current || runIdRef.current !== myId) return
         setLoading(false)
       })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // useAsync takes its dependency list as a parameter, so this can never be an
+    // array literal at this call site — that is the hook's whole contract.
+    // eslint-disable-next-line react-hooks/exhaustive-deps, react-hooks/use-memo
   }, deps)
 
   useEffect(() => {

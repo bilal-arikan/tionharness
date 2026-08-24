@@ -7,7 +7,8 @@ import { StatTiles } from './StatTiles'
 import { CostSummary } from './CostSummary'
 import { ActionQueue } from './ActionQueue'
 import { OutcomeSummary } from './OutcomeSummary'
-import { CostRankBars, DayBars, StackedBar, RankBars, fmtUsd } from './charts'
+import { CostRankBars, DayBars, StackedBar, RankBars } from './charts'
+import { fmtUsd } from './chartFormat'
 import { ViewButton } from '@/features/view/ViewButton'
 
 const RANGES = [7, 14, 30, 90]

@@ -61,11 +61,14 @@ export function WorkspaceFilesPanel({ onError, onState }: Props) {
   // Latest values for the stable save handler (so the parent-held save closure
   // never goes stale as the draft changes).
   const draftRef = useRef(draft)
-  draftRef.current = draft
   const originalRef = useRef(original)
-  originalRef.current = original
   const configRef = useRef(config)
-  configRef.current = config
+  // Post-commit assignment: the save closure reads these, never render.
+  useEffect(() => {
+    draftRef.current = draft
+    originalRef.current = original
+    configRef.current = config
+  })
 
   const save = useCallback(async () => {
     const d = draftRef.current

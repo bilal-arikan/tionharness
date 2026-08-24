@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import type { ToolVisibility, WorkspaceTool } from '@/types'
 import { toolSource, toolServer, toolLabel, visibilityMeta, type ParamRow } from './toolMeta'
 import { toolIcon } from '@/shared/lib/toolIcons'
@@ -19,13 +20,18 @@ export function ToolDetail({
   onToggle: () => void
   onSetVisibility: (tier: ToolVisibility) => void
 }) {
-  const ToolIcon = toolIcon(tool.name)
+  // Memoised so the icon component identity is stable across renders; a fresh
+  // identity every render would remount the icon subtree.
+  const ToolIcon = useMemo(() => toolIcon(tool.name), [tool.name])
   const examples = (tool.examples ?? []) as unknown[]
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
+            {/* toolIcon() looks an existing Lucide component up in a table — it does
+                not create one. The memo above keeps the identity stable. */}
+            {/* eslint-disable-next-line react-hooks/static-components */}
             <ToolIcon size={18} className="flex-shrink-0 text-[var(--color-accent)]" />
             <h2 className="truncate text-lg font-semibold">{toolLabel(tool)}</h2>
           </div>

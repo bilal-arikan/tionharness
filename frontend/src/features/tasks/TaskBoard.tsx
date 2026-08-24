@@ -326,9 +326,6 @@ export function TaskBoard({ agents, onError }: Props) {
     setFileDropId(null)
     void attachFilesToTask(task, files)
   })!
-  // Stable so TaskCard's memo holds. Only wired into cards in the archived view.
-  const onCardUnarchive = useStableCallback((task: Task) => void setArchived(task, false))!
-
   // Dropping a card onto a column writes whatever field the current axis names.
   // A refused drop (the 'due' axis cannot invent a date) says so instead of
   // silently doing nothing.
@@ -433,6 +430,10 @@ export function TaskBoard({ agents, onError }: Props) {
       reload()
     }
   }
+
+  // Stable so TaskCard's memo holds. Only wired into cards in the archived view.
+  // Declared after setArchived so the closure never reads it from its TDZ.
+  const onCardUnarchive = useStableCallback((task: Task) => void setArchived(task, false))!
 
   const bulkArchive = async (archived: boolean) => {
     const ids = [...sel.selected]

@@ -4,7 +4,8 @@ import { api } from '@/api'
 import type { Artifact } from '@/types'
 import { ModalOverlay } from '@/shared/components'
 import { ArtifactView } from './ArtifactView'
-import { KIND_ICON, KIND_LABEL, OriginBadge } from './artifactMeta'
+import { KIND_ICON, KIND_LABEL } from './artifactMeta'
+import { OriginBadge } from './OriginBadge'
 
 interface Props {
   artifactId: string

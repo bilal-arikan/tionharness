@@ -1,7 +1,7 @@
 import type { Flow, FlowRun } from '@/types'
 import { normalizeAvatar } from '@/shared/lib/avatar'
 import { buildRunTreeRows } from './runTree'
-import { STATUS_LABEL, statusColor } from './RunView'
+import { STATUS_LABEL, statusColor } from './runStatus'
 
 interface Props {
   // The tree's members in backend order (root first, parent before children).

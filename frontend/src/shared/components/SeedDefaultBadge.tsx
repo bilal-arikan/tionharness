@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Lock, RotateCcw } from 'lucide-react'
 import type { SeedDefaultState } from '@/types'
-import { toast } from './Toast'
+import { toast } from './toastStore'
 
 // SeedDefaultBadge marks a shipped file the user has edited — and ONLY that case.
 // 'default' and 'tuned' both keep auto-updating (the refresh compares bodies

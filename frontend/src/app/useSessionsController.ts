@@ -48,7 +48,10 @@ export function useSessionsController({
   // re-creating the callback on every append.
   const sessionsLimitRef = useRef(SESSIONS_PAGE_SIZE)
   const sessionsRef = useRef<Session[]>([])
-  sessionsRef.current = sessions
+  // Post-commit assignment: only read from callbacks/effects, never during render.
+  useEffect(() => {
+    sessionsRef.current = sessions
+  })
   const [messages, setMessages] = useState<Message[]>([])
   const [activeAgentId, setActiveAgentId] = useState<string | null>(null)
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null)
@@ -96,7 +99,10 @@ export function useSessionsController({
   // current messages (to find the user prompt behind a failed turn) without
   // re-binding its callbacks on every message update.
   const messagesRef = useRef<Message[]>(messages)
-  messagesRef.current = messages
+  // Post-commit assignment: only the chat hook's retry callback reads this.
+  useEffect(() => {
+    messagesRef.current = messages
+  })
 
   // Load agents + ALL sessions whenever the active workspace changes (the chat
   // is session-based: sessions are listed flat, not nested under an agent).

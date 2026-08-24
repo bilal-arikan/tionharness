@@ -1,27 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { ChevronRight } from 'lucide-react'
-
-// BulkToggle lets a parent broadcast an "expand all" / "collapse all" command to a
-// group of CollapsibleSections. Bump `nonce` (with the desired `all` state) to snap
-// every subscribing section open/closed; the user can still fold them individually
-// afterwards. `useBulkToggle` returns the signal plus the two commands.
-export interface BulkToggle {
-  all: boolean
-  nonce: number
-}
-
-export function useBulkToggle(initial = true): {
-  bulk: BulkToggle
-  expandAll: () => void
-  collapseAll: () => void
-} {
-  const [bulk, setBulk] = useState<BulkToggle>({ all: initial, nonce: 0 })
-  return {
-    bulk,
-    expandAll: () => setBulk((b) => ({ all: true, nonce: b.nonce + 1 })),
-    collapseAll: () => setBulk((b) => ({ all: false, nonce: b.nonce + 1 })),
-  }
-}
+import type { BulkToggle } from './useBulkToggle'
 
 // CollapsibleSection — a fold in/out wrapper for a titled block. The chevron +
 // title toggle the body; an optional `right` node (cache tag, count, mode

@@ -33,7 +33,8 @@ import {
   PromptVarsField,
   TokenTriggerFields,
 } from './AutomationFields'
-import { FieldError, useFieldErrors } from './useFieldErrors'
+import { FieldError } from './FieldError'
+import { useFieldErrors } from './useFieldErrors'
 import { FormModal } from './FormModal'
 import { Field, FlowPicker, TargetModeToggle, inputCls } from './pickers'
 import { localInputToUnix, unixToLocalInput } from './timeUtils'

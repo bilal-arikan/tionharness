@@ -14,7 +14,10 @@ import { buildRoute, parseRoute, type Route } from './url'
 
 export function useUrlSync(route: Route, ready: boolean, onRoute: (r: Route) => void) {
   const onRouteRef = useRef(onRoute)
-  onRouteRef.current = onRoute
+  // Post-commit assignment: the ref is only read from the popstate handler.
+  useEffect(() => {
+    onRouteRef.current = onRoute
+  })
   const firstWrite = useRef(true)
   // The canonical hash for this state. Serialising up-front also gives the effect
   // a single primitive dependency that covers the query sub-state.

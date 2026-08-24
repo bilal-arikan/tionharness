@@ -6,7 +6,7 @@ import { Gallery } from './Gallery'
 import { HtmlPreview } from './HtmlPreview'
 import { looksLikeDiff } from '@/shared/lib/diff'
 import { copyToClipboard } from '@/shared/lib/clipboard'
-import { toast } from '../Toast'
+import { toast } from '../toastStore'
 import { Copy } from 'lucide-react'
 
 interface Props {
