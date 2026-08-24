@@ -30,8 +30,13 @@ temiz kesim yapıldı. Bunun yerine canlı veri dizini **elle taşındı** (aşa
   referanslı `mcp-tionswarm_interaction-*.txt` tool-result dosyaları.
 - Doğrulama: 5111 JSON parse edildi, **0 bozulma**; backend taze dizinle açıldı,
   14 workspace yüklendi, log'da 0 ERROR/WARN.
-- Geri dönüş: `~/.tionswarm-config-backup-20260824\` (kök configler + `credential-secret`)
-  ve `~/.tionharness-textfiles-backup-20260824.tgz` (düzenlenen 1105 dosyanın öncesi).
+- **İkinci geçiş gerekti:** ilk sed 239 dosyayı atlamıştı (`xargs` toplu iş kaybı — aynı
+  hata depoda da yaşandı, orada da tekrar koşarak çözüldü). Kalan `prompt_epoch.json`
+  (87 adet, donmuş sistem promptu + araç şemaları) ve insight raporları düzeltildi.
+  Ders: bu tür süpürmelerde **sıfıra kadar tekrar tara**, tek geçişe güvenme.
+- Geri dönüş: `~/.tionswarm-config-backup-20260824\` (kök configler + `credential-secret`),
+  `~/.tionharness-textfiles-backup-20260824.tgz` (1105 dosya) ve
+  `~/.tionharness-textfiles-backup2-20260824.tgz` (ikinci geçişin 239 dosyası).
 
 **Türkçe ek uyumu:** düz sed `TionSwarm'ın`/`'da`/`'a` gibi ekleri olduğu gibi bıraktığı
 için ~380 yerde uyum bozuldu (`Harness` ince ve sessiz-sert biter). Hepsi düzeltildi:
@@ -49,6 +54,22 @@ bulamayıp market'i boş gösterirdi. Uyumluluk şimi yok: eski `.swarmpack.json
 (`RegistrySchemaV1`, `21-MARKET.md` §7.1). Yapılandırılmış registry'ler (SkillsMP,
 CrossAITools) connector-tabanlı olduğu için bu şemayı kullanmıyor, ama üçüncü taraf bir
 sunucu yayınlarsa sözleşme kırılır. Ad artık markayla tutarsız → ayrı karar.
+
+**Depo dışı yüzeyler de çevrildi (2026-08-24):**
+- **Craft workspace:** 5 skill `tionharness-*`, source slug'ı `tionharness`, görünen ad
+  ve `workingDirectory`. Workspace klasörü/slug'ı (`ws_tionswarm`) uygulama açıkken
+  taşınamaz → bekliyor.
+- **`Progs\tionharness-obsidian-sync`** (eski `tionswarm-obsidian-sync`): veri dizini
+  taşınınca **bozulmuştu** — `config.json`'daki `data_dir` hâlâ `~/.tionswarm`'ı,
+  `project_name` alanları da yeniden adlandırılmış workspace/vault adlarını göstermiyordu.
+  Klasör, `sgsync/tionharness.py`, `TionHarnessClient`, `state/*.json` ve config anahtarları
+  (`tionharness_to_pm`/`pm_to_tionharness`) çevrildi; üç eşleme de doğrulandı.
+- **Windows Startup:** `CodebaseMemory-Watch-TionHarness.vbs` ve
+  `TionHarness-Obsidian-Sync.vbs` — ikisi de yeni yollara çevrildi ve yeniden başlatıldı.
+  Artık kod indeksleme TionHarness'i takip ediyor.
+- **`Progs\bench-tionharness{,-bare}`, `Progs\tionharness-dev`** çevrildi. Not: bench
+  klasörleri aslında genel algoritma benchmark'ı (AlgoBench), ürünle ilgisi yok — yalnız
+  adı öyleydi. Yol değiştiği için eski cbm indeksleri öksüz kaldı (yeniden üretilebilir).
 
 **Kasten dokunulmayanlar:** gitea deposu
 `swarmgo` ve VPS yolu `/home/user/projects/tionharness`, Claude Code'un kendi `swarm/teammate`
