@@ -56,17 +56,30 @@ kullanma.
   varsayılan yapma. Yalnız registry/cmdlet gibi Windows-native bir işlem gerçekten
   gerekirse Bash içinden `powershell -NoProfile -Command "..."` çağır.
 - Ortamı tahmin etme: önce `printf 'shell=%s\n' "$SHELL"`, ardından
-  `command -v go` ve `command -v gofmt` çalıştır. PATH'teki araçlar bulunursa onları
-  kullan. Bulunmazsa bu makinede doğrulanmış yollar
-  `'/c/Program Files/Go/bin/go.exe'` ve
-  `'/c/Program Files/Go/bin/gofmt.exe'`'dir; kullanmadan önce `test -x` ile doğrula.
-  Araç yoksa biçimlendirme/test yapılmış gibi raporlama.
+  `command -v go`, `command -v gofmt`, `where.exe go` ve `where.exe gofmt`
+  çalıştır. `command -v` sonuç verirse bulunan Bash çağrısını kullan. Yalnız
+  `where.exe` Windows yolu bulursa bu yolu `/c/...` biçimine çevirip çalışacağını
+  varsayma; etkin Bash bunu desteklemeyebilir. `command -v powershell.exe` ile
+  Windows köprüsünü doğrula, sonra gereken alt komutu Bash içinden açıkça ver:
+
+  ```bash
+  powershell.exe -NoProfile -Command '& (Get-Command go).Source version'
+  powershell.exe -NoProfile -Command '& (Get-Command gofmt).Source -h' >/dev/null
+  ```
+
+  `Get-Command` da aracı bulamazsa bilinen Windows kurulumlarını salt-okunur kontrol
+  et ve yalnız gerçekten çalışan çağrıyı kullan. Var olmayan veya bu kabukta
+  çalışmayan sabit yolu fallback diye belgeleme. Araç yoksa biçimlendirme/test
+  yapılmış gibi raporlama.
 - `GOROOT` değerini sabit yazma ve `GOROOT`'u komut gibi çağırma. Etkin Go komutunu
   seçtikten sonra `go env GOROOT` eşdeğerini çalıştır; gerekiyorsa çıktıyı
-  `go_root="$("$go_bin" env GOROOT)"` biçiminde güvenli değişkene ata.
+  `powershell.exe -NoProfile -Command '& (Get-Command go).Source env GOROOT'`
+  eşdeğerini kullan. PATH'te doğrudan Go bulunduysa `go env GOROOT` çağır.
 - Go dosyası değişince hedef dosyalarda `gofmt -w` çalıştır; bu kullanılmayan
   importları da görünür kılar. Ardından ilgili testleri ve Windows'a özel kod için
-  `GOOS=windows "$go_bin" test ./...` doğrulamasını çalıştır. Git Bash'te ortam
+  `GOOS=windows powershell.exe -NoProfile -Command '& (Get-Command go).Source test ./...'`
+  doğrulamasını çalıştır (PATH'te doğrudan Go bulunduysa `GOOS=windows go test ./...`
+  kullan). Git Bash'te ortam
   atamasını komutun önüne koy; PowerShell `$env:` sözdizimi kullanma.
 
 ## Grep/ripgrep kullanımı
