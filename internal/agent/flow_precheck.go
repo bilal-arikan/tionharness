@@ -86,7 +86,7 @@ func (r *Runtime) validateFlowPreconditions(ctx context.Context, g orchestration
 func (r *Runtime) checkFlowAgent(ctx context.Context, agentID string) error {
 	agent, err := r.db.GetAgent(ctx, agentID)
 	if err != nil {
-		return fmt.Errorf("references agent %q which no longer exists: %w", agentID, err)
+		return fmt.Errorf("agentId %q must be an existing agent ID (not a node id or agent name): %w", agentID, err)
 	}
 	// The agent exists but its provider may have been deleted or left
 	// unconfigured (missing API key) since the flow was authored. Registry.Get

@@ -89,6 +89,38 @@ func TestFlowPrecheckMissingAgent(t *testing.T) {
 	}
 }
 
+func TestFlowPrecheckRequiresExactAgentID(t *testing.T) {
+	rt, _ := newTestRuntime(t, t.TempDir())
+	a := newFlowAgent(t, rt, "reviewer")
+
+	tests := []struct {
+		name    string
+		nodeID  string
+		agentID string
+	}{
+		{name: "agent name", nodeID: "review", agentID: a.Name},
+		{name: "node id", nodeID: "review", agentID: "review"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			g := orchestration.Graph{
+				Start: tt.nodeID,
+				Nodes: []orchestration.Node{{
+					ID: tt.nodeID, Type: orchestration.NodeAgent, AgentID: tt.agentID, Prompt: "hi",
+				}},
+			}
+			err := rt.validateFlowPreconditions(context.Background(), g)
+			if err == nil {
+				t.Fatalf("expected agentId %q to be rejected", tt.agentID)
+			}
+			if !strings.Contains(err.Error(), "existing agent ID") {
+				t.Fatalf("error should require an existing agent ID, got: %v", err)
+			}
+		})
+	}
+}
+
 // TestFlowPrecheckUnconfiguredProvider rejects an agent whose provider cannot be
 // built (deleted or missing its API key), instead of failing on the node's first
 // completion call.
@@ -182,5 +214,40 @@ func TestRunFlowRejectsBeforeCreatingRun(t *testing.T) {
 	}
 	if len(runs) != 0 {
 		t.Fatalf("expected no FlowRun row for a rejected flow, got %d", len(runs))
+	}
+}
+
+func TestRunFlowRejectsNonIDAgentReferencesBeforeCreatingRun(t *testing.T) {
+	tests := []struct {
+		name string
+		ref  func(db.Agent) string
+	}{
+		{name: "agent name", ref: func(a db.Agent) string { return a.Name }},
+		{name: "node id", ref: func(db.Agent) string { return "review" }},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rt, _ := newTestRuntime(t, t.TempDir())
+			ctx := context.Background()
+			a := newFlowAgent(t, rt, "reviewer")
+			flowID := createFlow(t, rt, orchestration.Graph{
+				Start: "review",
+				Nodes: []orchestration.Node{{
+					ID: "review", Type: orchestration.NodeAgent, AgentID: tt.ref(a), Prompt: "hi",
+				}},
+			})
+
+			if _, err := rt.RunFlow(ctx, flowID, "input", false, nil); err == nil {
+				t.Fatalf("expected RunFlow to reject agentId %q", tt.ref(a))
+			}
+			runs, err := rt.db.ListFlowRuns(ctx, flowID)
+			if err != nil {
+				t.Fatalf("list flow runs: %v", err)
+			}
+			if len(runs) != 0 {
+				t.Fatalf("expected no FlowRun row for rejected agentId %q, got %d", tt.ref(a), len(runs))
+			}
+		})
 	}
 }

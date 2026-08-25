@@ -12,6 +12,8 @@ func TestDetectUnbackedSpawnClaim(t *testing.T) {
 	}{
 		{name: "real incident worker started", text: "Uygulama worker’ı başladı. Kapsam: taslak koruma.", coordinatorMode: true, want: true},
 		{name: "real incident worker was started", text: "Uygulama worker’ı başlatıldı. Sonuç gelince validator çalışacak.", coordinatorMode: true, want: true},
+		{name: "ASCII apostrophe Turkish suffix", text: "Uygulama worker'ı başlattım.", coordinatorMode: true, want: true},
+		{name: "curly apostrophe stacked Turkish suffix", text: "Uygulama validator’ımızı başlattık.", coordinatorMode: true, want: true},
 		{name: "real incident validator started", text: "Validator başladı. Test sonucu gelince kart kapatılacak.", coordinatorMode: true, want: true},
 		{name: "real incident named validator", text: "Bağımsız validator gerçekten başladı: `/root/validator`.", coordinatorMode: true, want: true},
 		{name: "english spawned", text: "Spawned two workers for the review.", coordinatorMode: true, want: true},
@@ -42,6 +44,29 @@ func TestDetectUnbackedSpawnClaim(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := DetectUnbackedSpawnClaim(tt.text, tt.toolNames, tt.coordinatorMode); got != tt.want {
 				t.Fatalf("DetectUnbackedSpawnClaim(%q, %v, %v) = %v, want %v", tt.text, tt.toolNames, tt.coordinatorMode, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestNormalizeSpawnClaimTurkishRoles(t *testing.T) {
+	tests := []struct {
+		name string
+		text string
+		want string
+	}{
+		{name: "ASCII apostrophe accusative", text: "worker'ı başlattım", want: "worker başlattım"},
+		{name: "curly apostrophe accusative", text: "validator’ı başlattım", want: "validator başlattım"},
+		{name: "stacked Turkish suffix", text: "worker’ımızı başlattık", want: "worker başlattık"},
+		{name: "unrelated apostrophe unchanged", text: "repo’nun worker durumu", want: "repo’nun worker durumu"},
+		{name: "English possessive unchanged", text: "worker's report", want: "worker's report"},
+		{name: "role prefix unchanged", text: "workership validator", want: "workership validator"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := normalizeSpawnClaimTurkishRoles(tt.text); got != tt.want {
+				t.Fatalf("normalizeSpawnClaimTurkishRoles(%q) = %q, want %q", tt.text, got, tt.want)
 			}
 		})
 	}

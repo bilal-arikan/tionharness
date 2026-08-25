@@ -7,6 +7,12 @@ import (
 
 var spawnClaimSentencePattern = regexp.MustCompile(`[^.!?\n]+[.!?]?`)
 
+// Turkish suffixes are commonly attached to English role names with either an
+// ASCII or curly apostrophe (worker'ı, validator’ı). Strip only those suffixes;
+// broad punctuation or Unicode normalization would also rewrite quoted content
+// and unrelated words.
+var spawnClaimTurkishRoleSuffix = regexp.MustCompile(`\b(worker|validator)['’][ıiuüae][a-zçğıöşü]*`)
+
 var spawnClaimPatterns = []*regexp.Regexp{
 	regexp.MustCompile(`\bworker\b.*(?:başladı|başlat\p{L}*|spawn)`),
 	regexp.MustCompile(`\bvalidator\b.*(?:başladı|başlat\p{L}*|spawn)`),
@@ -41,7 +47,7 @@ func DetectUnbackedSpawnClaim(text string, toolNames []string, coordinatorMode b
 		return false
 	}
 
-	lower := strings.ToLower(stripSpawnClaimMarkdown(text))
+	lower := normalizeSpawnClaimTurkishRoles(strings.ToLower(stripSpawnClaimMarkdown(text)))
 	for _, sentence := range spawnClaimSentencePattern.FindAllString(lower, -1) {
 		sentence = strings.TrimSpace(sentence)
 		if sentence == "" || strings.HasSuffix(sentence, "?") || hasSpawnClaimFuture(sentence) || hasSpawnClaimNegative(sentence) {
@@ -54,6 +60,10 @@ func DetectUnbackedSpawnClaim(text string, toolNames []string, coordinatorMode b
 		}
 	}
 	return false
+}
+
+func normalizeSpawnClaimTurkishRoles(text string) string {
+	return spawnClaimTurkishRoleSuffix.ReplaceAllString(text, "$1")
 }
 
 func hasSpawnToolCall(toolNames []string) bool {
