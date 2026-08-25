@@ -40,7 +40,7 @@ func TestCodexRunAttemptReturnsOnCancelWhileGrandchildHoldsPipe(t *testing.T) {
 
 	done := make(chan struct{})
 	go func() {
-		_, _, _ = c.runAttempt(ctx, args, "prompt", "gpt-test", Request{})
+		_, _, _ = c.runAttempt(ctx, args, "prompt", "gpt-test", Request{}, "")
 		close(done)
 	}()
 

@@ -121,7 +121,7 @@ func codexSandboxArgs(mode string) []string {
 // The prompt is NOT an argument — it goes on stdin, because Windows caps a
 // process command line at ~32 KB and a full turn prompt overflows that.
 func (c *CodexCLI) buildArgs(req Request, model string) []string {
-	args := []string{"exec", "--json",
+	args := []string{"exec", "--json", "--ephemeral",
 		// The workspace sandbox is not necessarily a git repo; without this codex
 		// refuses to run outside one.
 		"--skip-git-repo-check",
@@ -234,6 +234,12 @@ func (c *CodexCLI) Complete(ctx context.Context, req Request) (*Response, error)
 // that refused to start. args and prompt are parameters rather than derived
 // here so tests can drive the whole recovery path with a fake codex binary.
 func (c *CodexCLI) completeWithArgs(ctx context.Context, args []string, prompt, model string, req Request) (*Response, error) {
+	home, cleanupHome, err := prepareShadowHome(c.configDir)
+	if err != nil {
+		return nil, fmt.Errorf("codex CLI: prepare shadow CODEX_HOME: %w", err)
+	}
+	defer cleanupHome()
+
 	// Dropping a server costs the turn that server's tools, so it must not be
 	// silent. These notes ride the same channel the parser uses for
 	// "[codex error]" lines — text trace steps, streamed live when the caller
@@ -252,7 +258,7 @@ func (c *CodexCLI) completeWithArgs(ctx context.Context, args []string, prompt, 
 	// tool-less, persona-less agent.
 	cfg := c.buildConfig(req)
 	writeConfig := func() ([]string, error) {
-		_, dropped, cleanup, err := writeCodexConfig(ctx, c.configDir, cfg, c.mcpProbe)
+		_, dropped, cleanup, err := writeCodexConfig(ctx, home, cfg, c.mcpProbe)
 		if err != nil {
 			return nil, err
 		}
@@ -261,7 +267,7 @@ func (c *CodexCLI) completeWithArgs(ctx context.Context, args []string, prompt, 
 		}
 		return dropped, nil
 	}
-	if c.configDir != "" {
+	if home != "" {
 		dropped, err := writeConfig()
 		if err != nil {
 			return nil, err
@@ -281,7 +287,7 @@ func (c *CodexCLI) completeWithArgs(ctx context.Context, args []string, prompt, 
 	var lastErr error
 	mcpFallbackUsed := false
 	for attempt := 0; attempt < 3; attempt++ {
-		resp, retryable, err := c.runAttempt(ctx, args, prompt, model, req)
+		resp, retryable, err := c.runAttempt(ctx, args, prompt, model, req, home)
 		if err == nil {
 			if len(mcpNotes) > 0 {
 				resp.Trace = append(append([]TraceStep{}, mcpNotes...), resp.Trace...)
@@ -297,7 +303,7 @@ func (c *CodexCLI) completeWithArgs(ctx context.Context, args []string, prompt, 
 		// that server's tools. The preflight probe cannot see this — the port
 		// answers, the protocol handshake is what fails — so recover here by
 		// dropping the offending server(s) and running the turn once more.
-		if !mcpFallbackUsed && c.configDir != "" && codexMCPStartupFailure(err.Error()) {
+		if !mcpFallbackUsed && home != "" && codexMCPStartupFailure(err.Error()) {
 			drop := codexNamedMCPServers(err.Error(), cfg.Servers)
 			if len(drop) == 0 {
 				drop = codexRemoteServerKeys(cfg.Servers)
@@ -345,7 +351,7 @@ const codexStartupTimeout = 90 * time.Second
 // true only when re-running is free of duplicate side effects: the process
 // produced no terminal-classified failure, no salvageable content, and ran no
 // tool.
-func (c *CodexCLI) runAttempt(ctx context.Context, args []string, prompt, model string, req Request) (resp *Response, retryable bool, err error) {
+func (c *CodexCLI) runAttempt(ctx context.Context, args []string, prompt, model string, req Request, home string) (resp *Response, retryable bool, err error) {
 	cmd := proc.CommandContext(ctx, c.binPath, args...)
 	// codex spawns its own children (MCP servers, and whatever the turn shells
 	// out to — a Gradle daemon outlives the build that started it). They inherit
@@ -355,14 +361,14 @@ func (c *CodexCLI) runAttempt(ctx context.Context, args []string, prompt, model 
 	// Wait with a WaitDelay backstop.
 	proc.TreeKill(cmd)
 	cmd.Env = codexBaseEnv()
-	if c.configDir != "" {
+	if home != "" {
 		// Appended last so it overrides any inherited CODEX_HOME. Codex errors out
 		// when this points at a missing directory, so surface that here rather than
 		// as an opaque subprocess exit.
-		if fi, statErr := os.Stat(c.configDir); statErr != nil || !fi.IsDir() {
-			return nil, false, fmt.Errorf("codex CLI: CODEX_HOME %q is not an existing directory: %v", c.configDir, statErr)
+		if fi, statErr := os.Stat(home); statErr != nil || !fi.IsDir() {
+			return nil, false, fmt.Errorf("codex CLI: CODEX_HOME %q is not an existing directory: %v", home, statErr)
 		}
-		cmd.Env = append(cmd.Env, "CODEX_HOME="+c.configDir)
+		cmd.Env = append(cmd.Env, "CODEX_HOME="+home)
 	}
 	// -C already tells codex which directory to work in; setting the process cwd
 	// too keeps relative paths in attachments resolving inside the sandbox.
@@ -471,7 +477,7 @@ readLoop:
 	// A terminal failure detected mid-stream short-circuits everything below: the
 	// classification, not the exit code, is the real diagnosis.
 	if failClass != codexFailureNone {
-		return nil, false, fmt.Errorf("%s", describeCodexFailure(failClass, strings.TrimSpace(p.errText), c.configDir))
+		return nil, false, fmt.Errorf("%s", describeCodexFailure(failClass, strings.TrimSpace(p.errText), home))
 	}
 
 	out, parseErr := p.finish()
@@ -483,7 +489,7 @@ readLoop:
 	// it here too so a late 401 is still non-retryable and actionable.
 	if p.hadError {
 		if cls := classifyCodexError(p.errText); cls != codexFailureNone {
-			return nil, false, fmt.Errorf("%s", describeCodexFailure(cls, strings.TrimSpace(p.errText), c.configDir))
+			return nil, false, fmt.Errorf("%s", describeCodexFailure(cls, strings.TrimSpace(p.errText), home))
 		}
 		// An unclassified reported error: real and terminal as far as we can tell,
 		// but the turn may already have run tools, so never retry it blindly.

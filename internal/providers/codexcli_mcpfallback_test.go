@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestCodexMCPStartupFailureRecognisesLiveWording(t *testing.T) {
@@ -86,6 +87,7 @@ func TestCodexCompleteRetriesWithoutTheFailingMCPServer(t *testing.T) {
 	}
 
 	home := t.TempDir()
+	t.Setenv("CODEX_TEST_HELPER_CONFIG", "enabled")
 	c := &CodexCLI{
 		binPath:   self,
 		configDir: home,
@@ -97,10 +99,11 @@ func TestCodexCompleteRetriesWithoutTheFailingMCPServer(t *testing.T) {
 		// the case where the probe passes and the handshake still fails.
 		mcpProbe: func(context.Context, string) bool { return true },
 	}
-	t.Setenv("CODEX_TEST_HELPER_CONFIG", filepath.Join(home, "config.toml"))
-
 	args := []string{"-test.run=TestCodexHelperFailsWhileUnityMCPConfigured", "-test.v=false"}
-	resp, _, runErr := c.runAttempt(context.Background(), args, "prompt", "gpt-test", Request{})
+	if _, _, _, err := writeCodexConfig(context.Background(), home, c.buildConfig(Request{}), c.mcpProbe); err != nil {
+		t.Fatalf("write initial config: %v", err)
+	}
+	resp, _, runErr := c.runAttempt(context.Background(), args, "prompt", "gpt-test", Request{}, home)
 	if runErr == nil {
 		t.Fatal("helper did not fail while unity-mcp was configured; the fixture no longer reproduces the bug")
 	}
@@ -115,13 +118,6 @@ func TestCodexCompleteRetriesWithoutTheFailingMCPServer(t *testing.T) {
 	}
 	if !strings.Contains(got.Text, "OK") {
 		t.Fatalf("recovered turn text = %q, want the helper's answer", got.Text)
-	}
-	cfg, rerr := os.ReadFile(filepath.Join(home, "config.toml"))
-	if rerr != nil {
-		t.Fatalf("read config: %v", rerr)
-	}
-	if strings.Contains(string(cfg), "unity-mcp") {
-		t.Fatal("config.toml still configures the server that failed to initialize")
 	}
 	var noted bool
 	for _, s := range got.Trace {
@@ -139,9 +135,17 @@ func TestCodexCompleteRetriesWithoutTheFailingMCPServer(t *testing.T) {
 // while the broken server is still in config.toml, and produces a normal turn
 // once it is gone.
 func TestCodexHelperFailsWhileUnityMCPConfigured(t *testing.T) {
-	path := os.Getenv("CODEX_TEST_HELPER_CONFIG")
-	if path == "" {
+	if os.Getenv("CODEX_TEST_HELPER_CONFIG") == "" {
 		t.Skip("helper: only runs under the re-exec in TestCodexCompleteRetriesWithoutTheFailingMCPServer")
+	}
+	home := os.Getenv("CODEX_HOME")
+	path := filepath.Join(home, "config.toml")
+	// The real codex reads config.toml some way into its startup, which is what
+	// gives a concurrent turn time to overwrite the file. The concurrency
+	// regression sets this to widen that window deterministically; the
+	// single-turn test leaves it unset and pays nothing.
+	if d, err := time.ParseDuration(os.Getenv("CODEX_TEST_HELPER_DELAY")); err == nil && d > 0 {
+		time.Sleep(d)
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {

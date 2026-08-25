@@ -39,6 +39,12 @@ func (r *Runtime) agentProviderKind(agent db.Agent) string {
 // toolloop.go:265-276; codex has no lock/heal yet, so the scan side avoids the
 // race by never issuing two codex analyses at once.
 //
+// providers.acquireCodexHome now serializes codex turns per CODEX_HOME, so the
+// race is already closed one layer down. This stays because it closes it a
+// layer EARLIER: without it the scanner spawns 4 goroutines that immediately
+// queue on that lock, holding their request payloads in memory for no gain in
+// throughput.
+//
 // Explicit wins: a caller that set Concurrency itself keeps its value (same
 // contract as MaxSessions/MaxAnalyzed).
 func (r *Runtime) applyInsightScanConcurrency(scope *insight.ScanScope, agent db.Agent) {
