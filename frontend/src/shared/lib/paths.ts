@@ -55,10 +55,15 @@ export function splitPaths(text: string): PathSegment[] {
 /** Replace the current user's home directory prefix with ~ for display. */
 const WIN_HOME_RE = /^[A-Za-z]:\\Users\\[^\\]+\\/i
 const POSIX_HOME_RE = /^\/(?:home|Users)\/[^/]+\//
+// Git Bash mounts Windows drives at /c/... (no \Users\ literal), so a shown
+// Bash command path like /c/Users/bilal/Desktop/... needs its own pattern —
+// it would not match WIN_HOME_RE (backslashes) or POSIX_HOME_RE (/home|/Users).
+const GITBASH_HOME_RE = /^\/[a-z]\/Users\/[^/]+\//i
 
 export function displayPath(p: string): string {
   if (WIN_HOME_RE.test(p)) return '~\\' + p.replace(WIN_HOME_RE, '')
   if (POSIX_HOME_RE.test(p)) return '~/' + p.replace(POSIX_HOME_RE, '')
+  if (GITBASH_HOME_RE.test(p)) return '~/' + p.replace(GITBASH_HOME_RE, '')
   return p
 }
 
