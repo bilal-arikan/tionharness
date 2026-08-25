@@ -3,6 +3,7 @@ package settings
 import (
 	"fmt"
 	"regexp"
+	"strings"
 )
 
 // hexColorRe matches a CSS hex color: #RGB, #RGBA, #RRGGBB or #RRGGBBAA.
@@ -28,8 +29,15 @@ func Validate(p Patch) error {
 			return fmt.Errorf("theme must be one of: dark, light, system (got %q)", *p.Theme)
 		}
 	}
-	if p.Language != nil && *p.Language != "tr" && *p.Language != "en" {
-		return fmt.Errorf("language must be \"tr\" or \"en\" (got %q)", *p.Language)
+	if p.Language != nil && !isSupportedLanguage(*p.Language) {
+		return fmt.Errorf("language must be one of: %s (got %q)",
+			strings.Join(SupportedLanguages, ", "), *p.Language)
+	}
+	// UILanguage additionally accepts "" — the explicit "follow the agent reply
+	// language" state, which is how every pre-i18n installation starts out.
+	if p.UILanguage != nil && *p.UILanguage != "" && !isSupportedLanguage(*p.UILanguage) {
+		return fmt.Errorf("uiLanguage must be empty or one of: %s (got %q)",
+			strings.Join(SupportedLanguages, ", "), *p.UILanguage)
 	}
 	if p.DefaultPermissionMode != nil {
 		switch *p.DefaultPermissionMode {

@@ -73,7 +73,7 @@ func TestTestProvider_UnknownFieldRejected(t *testing.T) {
 // carry exactly the same field set. If this test breaks after you add/remove
 // a Patch field, update this list AND the frontend type in the same change.
 var settingsPatchGoldenFields = []string{
-	"theme", "accent", "themePreset", "language",
+	"theme", "accent", "themePreset", "language", "uiLanguage",
 	"defaultPermissionMode", "claudeConfigDir", "claudeCliAuthKind",
 	"claudeCliAuthToken", "anthropicKey",
 	"extendedPromptCache", "anthropicContextEditing", "anthropicNativeToolSearch",

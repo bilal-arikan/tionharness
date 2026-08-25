@@ -23,6 +23,7 @@ import { toast } from '@/shared/components'
 import { useMultiSelect } from '@/shared/hooks/useMultiSelect'
 import { useCollapsibleList } from '@/shared/hooks/useCollapsibleList'
 import { useVisiblePoll } from '@/shared/hooks/useVisiblePoll'
+import { compareText } from '@/shared/lib/intl'
 
 // The MCP pool snapshot has no SSE signal, so this interval IS the update path —
 // but it only drives an indicator, so it stays coarse and visibility-gated.
@@ -407,12 +408,12 @@ export function useToolsPanelState(onError: (msg: string) => void) {
     }
     for (const cat of CATEGORY_ORDER) emit(cat)
     for (const cat of [...byCategory.keys()].sort((a, b) =>
-      (CATEGORY_LABELS[a] ?? a).localeCompare(CATEGORY_LABELS[b] ?? b),
+      compareText(CATEGORY_LABELS[a] ?? a, CATEGORY_LABELS[b] ?? b),
     )) {
       emit(cat)
     }
     // MCP servers after built-ins, alphabetical.
-    for (const [server, list] of [...byServer.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
+    for (const [server, list] of [...byServer.entries()].sort((a, b) => compareText(a[0], b[0]))) {
       out.push({ label: server, tools: list })
     }
     return out

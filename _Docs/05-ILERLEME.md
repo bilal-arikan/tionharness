@@ -1,6 +1,82 @@
 # TionHarness — İlerleme Takibi
 
-> Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-08-24**
+> Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-08-25**
+
+## UI lokalizasyon altyapısı eklendi (2026-08-25) ✅
+
+Arayüz dili artık birinci-sınıf bir ayar. Detay: [73](73-LOKALIZASYON.md).
+
+**Eksen ayrımı (en kritik karar):** `Settings.Language` = **ajan yanıt dili** (anlamı
+değişmedi), yeni `Settings.UILanguage` = **arayüz dili**; `""` → arayüz ajan dilini izler,
+yani mevcut kurulumların gördüğü dil değişmedi. Ayrı olmalarının nedeni kozmetik değil:
+`Language` değişimi prompt epoch'unu yeniden dondurup cache'i soğutuyor, arayüz dili ise
+hiçbir prompt'a dokunmuyor. Ayarlar → Profil'de ikisi yan yana duruyor.
+
+**Frontend:** `i18next` + `react-i18next`; kataloglar `src/i18n/locales/<dil>/<namespace>.json`
+(namespace = feature klasörü), `import.meta.glob` ile eager toplanıyor. Dil değişimi
+`I18nRoot` ile ağacı yeniden bağlıyor — çünkü metnin büyük kısmı `useTranslation` dışından
+(formatter'lar, comparator'lar, `useMemo`) üretiliyor ve aksi hâlde ekran yarı çevrili kalıyor.
+Backend ayarı SSE `settings` olayıyla geldiği için diğer pencereler de canlı geçiyor;
+ilk kareyi boyamak için `localStorage` aynası var.
+
+**Gerçek locale işi (kelime çevirisi değil):** 60+ hardcoded `'tr-TR'` / `localeCompare(…,'tr')`
+çağrısı `shared/lib/intl.ts` üzerinden Intl'e taşındı (denetlenebilir codemod +
+`SKIP` listesi: URL parametre sırası ve BCP-47 kod sıralaması bilerek locale-bağımsız kaldı).
+`format.ts` (`usd`/`count`/`decimal`/`percent`) ve `time.ts` (göreli zaman, süre, kova
+başlıkları) locale-duyarlı hâle geldi.
+
+**Yol boyunca düzelen hatalar:** (1) `<html lang>` yazılmadığı için CSS `text-transform:
+uppercase` Türkçe i/İ kuralını uygulamıyordu (59 dosya etkileniyordu) — artık doğru.
+(2) Modül seviyesindeki `BUCKET_LABELS` sabiti ilk yüklemedeki dilde donuyordu → fonksiyona
+çevrildi. (3) i18next'te `count` geçilen anahtar `_one`/`_other` ile aranıyor; eksik ek
+tip kontrolünden ve parite testinden geçip çalışma anında ham anahtar basıyordu —
+`time.test.ts` artık render çıktısını doğruluyor.
+
+**Guard'lar:** katalog parite/boşluk/placeholder testi, render-seviyesi çözümleme testi,
+migre klasörler için ESLint `i18next/no-literal-string` allowlist kapısı (feature bittikçe
+büyür), `uiLanguage` için backend↔frontend altın liste testi. `npm run i18n:extract`
+eksik anahtarları boş değerle çıkarıyor; parite testi boşluğa kırmızı veriyor.
+
+**Kalan:** ~2.2k Türkçe literal (450+ dosya) feature-feature taşınacak; backend hata
+mesajları `code` tabanlı olacak; LLM'e giden `internal/view/*` projeksiyonları İngilizce'ye
+sabitlenecek (bu bir maliyet işi — Türkçe token ~2 kat pahalı).
+
+## Statik tanıtım sitesi eklendi (2026-08-25) ✅
+
+Açık kaynak kullanıcıya yönelik tek-sayfa tanıtım sitesi `website/` altında kuruldu —
+**Astro 5 + Tailwind v4**, İngilizce, statik çıktı (`npm run build` → `website/dist/`).
+Go tarafı etkilenmedi (modül dışı, `go:embed` ağacına girmiyor). Detay: [72](72-TANITIM-SITESI.md).
+
+**Placeholder politikası omurga:** repo/release/docs/lisans/sürüm henüz yok. Hepsi tek
+dosyada (`website/src/site.config.ts`) toplandı ve `null` = "henüz yok" anlamına geliyor;
+`CTAButton` pasif + "Coming soon" rozeti, `SmartLink` "(soon)", `Screenshot` build anında
+`public/` altını kontrol edip placeholder çerçeve çiziyor. Site bugün **ölü link üretmeden**
+eksiksiz görünüyor; repo açılınca tek dosya düzenlenip canlıya geçecek.
+
+**Bölümler:** Hero (screenshot'suz çalışan CSS koordinatör paneli) · sayılar şeridi ·
+"No Docker" karşılaştırması · 9 kartlık özellik grid'i · 3 derin-dalış şeridi ·
+canlı tema showcase'i (6 renk × açık/koyu) · sekmeli quickstart · "bu ne DEĞİLDİR"
+bölümü · footer. Son bölüm **auth yokluğunu + wildcard CORS'u açıkça yazıyor** —
+pazarlama değil güvenlik gereği (aksi hâlde kullanıcı `0.0.0.0`'a açıyor).
+
+**Screenshot hattı:** `scripts\shots.ps1` (ASCII-only) → `website/scripts/shots.mjs`
+(Playwright). Çalışan örneğe bağlanıp `#/w/{ws}/{view}` rotalarını 2560×1440 koyu temada
+çekiyor. Playwright bilerek `package.json`'a konmadı (Chromium ~150 MB), `-InstallDeps`
+ile talep üzerine kuruluyor. Görseller gitignore'da — üretilen çıktı, kaynak değil.
+
+**Doğrulama:** `npm run build` temiz (2 sayfa, 33 KB CSS), `npm run check` **0 hata**.
+Görsel doğrulama yapılmadı (tarayıcı MCP kaynakları pasif).
+
+**Doküman ayak izi:** `72-TANITIM-SITESI.md` (yeni) · `00-GENEL-BAKIS.md` doküman dizini +
+script tablosu (`shots.ps1`) · kök `README.md` proje yapısı + "Tanıtım Sitesi" bölümü +
+doküman listesi · `CLAUDE.md`'ye "website/ — tanıtım sitesi (frontend/ ile karıştırma)"
+bölümü (iki ayrı npm projesi, prettier kapsamı yalnız `frontend/`, placeholder kuralı,
+elle senkronlanan iki tema dosyası) · `website/README.md`.
+
+**Yan bulgu — kök `README.md` bayat:** kaldırılmış Hafıza alt sistemini (2026-07-05)
+hâlâ özellik olarak sayıyor, provider listesi 3 diyor (gerçekte 7 kind), tema sayısını
+8 sanıyor (gerçekte 6 renk × 2 mod). Site metni bu yüzden README'den değil
+`00-GENEL-BAKIS.md` + skill'den yazıldı. **README tazeleme açık iş olarak kaldı.**
 
 ## Proje yeniden adlandırıldı: TionSwarm → TionHarness (2026-08-24) ✅
 

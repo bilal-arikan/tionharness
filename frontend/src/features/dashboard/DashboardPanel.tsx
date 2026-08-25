@@ -10,6 +10,7 @@ import { OutcomeSummary } from './OutcomeSummary'
 import { CostRankBars, DayBars, StackedBar, RankBars } from './charts'
 import { fmtUsd } from './chartFormat'
 import { ViewButton } from '@/features/view/ViewButton'
+import { formatTime } from '@/shared/lib/intl'
 
 const RANGES = [7, 14, 30, 90]
 
@@ -141,7 +142,8 @@ export function DashboardPanel({
                   className="ml-auto text-[11px] text-[var(--color-text-dim)]"
                   title="Yaklaşık token maliyeti (karakter/4)"
                 >
-                  ~{data.summary.tokens} tok · asOf {new Date(data.asOf).toLocaleTimeString()}
+                  ~{data.summary.tokens} tok · asOf{' '}
+                  {formatTime(new Date(data.asOf), { timeStyle: 'medium' })}
                 </span>
               </div>
               <pre className="whitespace-pre-wrap break-words font-mono text-xs leading-relaxed">

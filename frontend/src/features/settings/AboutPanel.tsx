@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import type { VersionInfo } from '@/types'
 import { api } from '@/api'
+import { formatDate } from '@/shared/lib/intl'
 
 export function AboutPanel() {
   const [info, setInfo] = useState<VersionInfo | null>(null)
@@ -54,9 +55,7 @@ export function AboutPanel() {
 
         {info && info.buildDate !== 'dev' && (
           <AboutRow label="Build tarihi">
-            <span>
-              {new Date(info.buildDate).toLocaleDateString('tr-TR', { dateStyle: 'medium' })}
-            </span>
+            <span>{formatDate(new Date(info.buildDate), { dateStyle: 'medium' })}</span>
           </AboutRow>
         )}
 

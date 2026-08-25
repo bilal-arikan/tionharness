@@ -69,7 +69,11 @@ type Settings struct {
 	Theme       string `json:"theme"`
 	Accent      string `json:"accent"`      // hex color, e.g. "#4f8cff"
 	ThemePreset string `json:"themePreset"` // theme color + variant id, e.g. "violet-dark" ("" = default)
-	Language    string `json:"language"`    // "tr" | "en"
+	// Language is the AGENT reply language (system-prompt level). UILanguage is
+	// the interface language; "" means it follows Language. See language.go for
+	// why the two axes are deliberately separate.
+	Language   string `json:"language"`   // see SupportedLanguages
+	UILanguage string `json:"uiLanguage"` // see SupportedLanguages; "" = follow Language
 
 	// Providers. There is no abstract app-global "default provider/model": a new
 	// agent inherits the first existing agent's concrete provider/model, falling
@@ -390,7 +394,8 @@ func Default() Settings {
 		Theme:       ThemeDark,
 		Accent:      "#8b5cf6",
 		ThemePreset: "violet-dark",
-		Language:    "tr",
+		Language:    DefaultLanguage,
+		UILanguage:  "", // follow Language until the user picks an interface language
 
 		DefaultPermissionMode: "auto",
 		ClaudeCLIPath:         "",
@@ -540,6 +545,7 @@ type DTO struct {
 	Accent      string `json:"accent"`
 	ThemePreset string `json:"themePreset"`
 	Language    string `json:"language"`
+	UILanguage  string `json:"uiLanguage"`
 
 	DefaultPermissionMode string `json:"defaultPermissionMode"`
 	ClaudeConfigDir       string `json:"claudeConfigDir"`
@@ -673,6 +679,7 @@ func (s Settings) ToDTO() DTO {
 		Accent:      s.Accent,
 		ThemePreset: s.ThemePreset,
 		Language:    s.Language,
+		UILanguage:  s.UILanguage,
 
 		DefaultPermissionMode: s.DefaultPermissionMode,
 		ClaudeConfigDir:       s.ClaudeConfigDir,
@@ -790,6 +797,7 @@ type Patch struct {
 	Accent      *string `json:"accent"`
 	ThemePreset *string `json:"themePreset"`
 	Language    *string `json:"language"`
+	UILanguage  *string `json:"uiLanguage"`
 
 	DefaultPermissionMode *string `json:"defaultPermissionMode"`
 	ClaudeConfigDir       *string `json:"claudeConfigDir"`

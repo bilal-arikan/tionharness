@@ -13,6 +13,7 @@ import {
   type FileChange,
   type FileGroup,
 } from '@/shared/lib/fileChanges'
+import { count } from '@/shared/lib/format'
 
 type Scope = 'turn' | 'session'
 
@@ -272,7 +273,7 @@ function ChangeBlock({
         <div className="flex flex-wrap items-center gap-1.5 text-[10px] text-[var(--color-text-dim)]">
           {total > 1 && <span>#{index + 1}</span>}
           <span className="font-mono">{change.tool}</span>
-          {change.created && <Pill>yeni dosya · {lineCount.toLocaleString('tr-TR')} satır</Pill>}
+          {change.created && <Pill>yeni dosya · {count(lineCount)} satır</Pill>}
           {change.synthesized && (
             <Pill title="Bu farkı çevre bağlamı olmadan araç girdisinden ürettik (claude-cli düzenlemeyi kendisi uyguladı).">
               sentezlendi
@@ -292,7 +293,7 @@ function ChangeBlock({
           onClick={() => setOpen(true)}
           className="rounded-lg border border-[var(--color-border)] px-3 py-2 text-left text-xs text-[var(--color-text-dim)] transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
         >
-          Yeni dosya · {lineCount.toLocaleString('tr-TR')} satır — içeriği göster
+          Yeni dosya · {count(lineCount)} satır — içeriği göster
         </button>
       )}
     </div>

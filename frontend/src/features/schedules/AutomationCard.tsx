@@ -6,6 +6,7 @@ import { normalizeAvatar } from '@/shared/lib/avatar'
 import { CardAction } from './pickers'
 import { COLUMN_ACCENT, boardOpLabel, counterMetricLabel } from './automationMeta'
 import { fmtTime, isPast } from './timeUtils'
+import { count } from '@/shared/lib/format'
 
 interface Props {
   automation: Automation
@@ -144,7 +145,7 @@ export function AutomationCard({
               >
                 <Zap size={11} />
                 {a.tokenScope === 'workspace' ? 'workspace' : 'oturum'} · her{' '}
-                {(a.tokenThreshold ?? 0).toLocaleString()} token
+                {count(a.tokenThreshold ?? 0)} token
               </span>
             ) : isCounterKind ? (
               <span

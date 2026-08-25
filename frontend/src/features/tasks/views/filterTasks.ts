@@ -6,6 +6,7 @@
 
 import type { BoardFilter, BoardSort, Task } from '@/types'
 import { PRIORITY_ORDER } from './boardViewTypes'
+import { compareText } from '@/shared/lib/intl'
 
 // todayISO returns the local date as YYYY-MM-DD, matching the format tasks store
 // in startDate/dueDate. Deliberately local (not UTC): "due today" must mean the
@@ -178,7 +179,7 @@ export function sortTasks(
         break
       }
       case 'title': {
-        const d = a.title.localeCompare(b.title, 'tr')
+        const d = compareText(a.title, b.title)
         if (d !== 0) return d
         break
       }

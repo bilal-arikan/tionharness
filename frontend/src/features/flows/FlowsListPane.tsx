@@ -11,6 +11,7 @@ import {
   SELECTED_ITEM_RING,
 } from '@/shared/components/SidebarChrome'
 import type { MultiSelect } from '@/shared/hooks/useMultiSelect'
+import { formatDateTime } from '@/shared/lib/intl'
 
 interface Props {
   flowsListOpen: boolean
@@ -188,7 +189,10 @@ export function FlowsListPane({
                           {fname}
                         </span>
                         <span className="mt-0.5 block truncate text-xs text-[var(--color-text-dim)]">
-                          {new Date(rn.createdAt * 1000).toLocaleString()}
+                          {formatDateTime(new Date(rn.createdAt * 1000), {
+                            dateStyle: 'short',
+                            timeStyle: 'medium',
+                          })}
                         </span>
                       </span>
                     </button>

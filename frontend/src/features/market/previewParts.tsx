@@ -5,6 +5,7 @@ import type { PriceTable } from '@/api/providers'
 import type { PreviewItem } from '@/api/ingest'
 import { Markdown } from '@/shared/components/markdown/Markdown'
 import { fmtPrice, KIND_LABEL, SOURCE_LABEL, stripFrontmatter } from './marketHelpers'
+import { formatDate } from '@/shared/lib/intl'
 
 // Row is a small labelled key/value line used in the agent/provider preview.
 export function Row({ k, v }: { k: string; v?: string }) {
@@ -164,7 +165,7 @@ export function MiniChip({ children, title }: { children: ReactNode; title?: str
 // date, tags) shown under the description for every pack kind.
 export function PackMeta({ pack }: { pack: Pack }) {
   const created = pack.createdAt
-    ? new Date(pack.createdAt * 1000).toLocaleDateString('tr-TR')
+    ? formatDate(new Date(pack.createdAt * 1000), { dateStyle: 'short' })
     : null
   const src = pack.source ? (SOURCE_LABEL[pack.source] ?? pack.source) : null
   if (!src && !created && !pack.installedVersion && !(pack.tags && pack.tags.length)) return null

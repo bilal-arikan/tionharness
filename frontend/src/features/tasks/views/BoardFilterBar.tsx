@@ -21,6 +21,7 @@ import {
   isBuiltinId,
 } from './boardViewTypes'
 import type { BoardViewState } from './useBoardView'
+import { compareText } from '@/shared/lib/intl'
 
 interface Props {
   view: BoardViewState
@@ -84,7 +85,7 @@ export function BoardFilterBar({ view, tasks, visibleCount, agents, boardColumns
   const tagOptions: FacetOption[] = useMemo(
     () =>
       [...tagCounts.keys()]
-        .sort((a, b) => a.localeCompare(b, 'tr'))
+        .sort((a, b) => compareText(a, b))
         .map((tag) => ({ value: tag, label: `#${tag}`, count: tagCounts.get(tag) })),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [tasks],

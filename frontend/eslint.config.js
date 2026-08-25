@@ -3,7 +3,18 @@ import globals from 'globals'
 import reactHooks from 'eslint-plugin-react-hooks'
 import reactRefresh from 'eslint-plugin-react-refresh'
 import tseslint from 'typescript-eslint'
+import i18next from 'eslint-plugin-i18next'
 import { defineConfig, globalIgnores } from 'eslint/config'
+
+// Directories whose user-visible strings have already been moved into the i18n
+// catalogs (see _Docs/73). Inside these, a literal string in JSX is an error, so
+// migrated screens cannot silently regress. The list GROWS as the migration
+// proceeds — adding a path here is the last step of migrating that feature.
+//
+// It is an allowlist rather than a global rule because the other ~450 files still
+// hold ~2.2k Turkish literals; turning the rule on everywhere at once would bury
+// real violations under known debt.
+const I18N_MIGRATED = ['src/i18n/**/*.{ts,tsx}', 'src/shared/lib/{time,format,intl}.ts']
 
 export default defineConfig([
   globalIgnores(['dist']),
@@ -43,6 +54,20 @@ export default defineConfig([
           caughtErrorsIgnorePattern: '^_',
           destructuredArrayIgnorePattern: '^_',
           ignoreRestSiblings: true,
+        },
+      ],
+    },
+  },
+  {
+    files: I18N_MIGRATED,
+    plugins: { i18next },
+    rules: {
+      'i18next/no-literal-string': [
+        'error',
+        {
+          // Only JSX text and human-facing attributes are checked. Object keys,
+          // imports, className strings and the like are machine data, not copy.
+          mode: 'jsx-text-only',
         },
       ],
     },

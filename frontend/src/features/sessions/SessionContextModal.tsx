@@ -16,6 +16,7 @@ import {
 import { CacheWarmthBadge } from './CacheWarmthBadge'
 import { cacheRemaining } from './sessionDetailFormat'
 import { serverNow } from '@/shared/lib/serverClock'
+import { count } from '@/shared/lib/format'
 
 // FLOOR_NOTE clarifies that the predicted CLI overhead is a per-turn FLOOR (base
 // system + built-ins + eager tools only), so a measured turn can exceed it: the
@@ -170,11 +171,10 @@ export function SessionContextModal({ sessionId, title, updatedAt, onClose }: Pr
               />
               <span className="font-medium">Token özeti</span>
               <span className="text-[var(--color-text-dim)]">
-                · Toplam {data.totalTokens.toLocaleString()}{' '}
-                <span className="opacity-70">(~tahmini)</span>
+                · Toplam {count(data.totalTokens)} <span className="opacity-70">(~tahmini)</span>
                 {!!data.accurateTokens && (
                   <span className="ml-1 font-medium text-[var(--color-accent)]">
-                    · Gerçek {data.accurateTokens.toLocaleString()}
+                    · Gerçek {count(data.accurateTokens)}
                     <span className="opacity-70">
                       {' '}
                       (
@@ -250,11 +250,9 @@ export function SessionContextModal({ sessionId, title, updatedAt, onClose }: Pr
                       </span>
                       {data.cliOverhead.measuredTokens > 0 ? (
                         <span className="text-[var(--color-text-dim)]">
-                          Tahmin{' '}
-                          <strong>{data.cliOverhead.estimatedTokens.toLocaleString()}</strong> →
-                          gerçek <strong>{data.cliOverhead.measuredTokens.toLocaleString()}</strong>{' '}
-                          (+<strong>{data.cliOverhead.overheadTokens.toLocaleString()}</strong> ek
-                          yük
+                          Tahmin <strong>{count(data.cliOverhead.estimatedTokens)}</strong> → gerçek{' '}
+                          <strong>{count(data.cliOverhead.measuredTokens)}</strong> (+
+                          <strong>{count(data.cliOverhead.overheadTokens)}</strong> ek yük
                           {data.cliOverhead.estimatedTokens > 0 &&
                             `, ~${(data.cliOverhead.measuredTokens / data.cliOverhead.estimatedTokens).toFixed(1)}×`}
                           {`, ${data.cliOverhead.calls} çağrı ort.`})
@@ -264,10 +262,10 @@ export function SessionContextModal({ sessionId, title, updatedAt, onClose }: Pr
                             <>
                               {' · '}beklenen taban ~
                               <strong>
-                                {(
+                                {count(
                                   data.cliOverhead.estimatedTokens +
-                                  data.cliOverhead.predictedOverhead
-                                ).toLocaleString()}
+                                    data.cliOverhead.predictedOverhead,
+                                )}
                               </strong>{' '}
                               (fark = birikmiş sıcak bağlam)
                             </>
@@ -275,16 +273,15 @@ export function SessionContextModal({ sessionId, title, updatedAt, onClose }: Pr
                         </span>
                       ) : data.cliOverhead.predictedOverhead > 0 ? (
                         <span className="text-[var(--color-text-dim)]">
-                          Tahmin{' '}
-                          <strong>{data.cliOverhead.estimatedTokens.toLocaleString()}</strong> →
+                          Tahmin <strong>{count(data.cliOverhead.estimatedTokens)}</strong> →
                           beklenen taban ~
                           <strong>
-                            {(
-                              data.cliOverhead.estimatedTokens + data.cliOverhead.predictedOverhead
-                            ).toLocaleString()}
+                            {count(
+                              data.cliOverhead.estimatedTokens + data.cliOverhead.predictedOverhead,
+                            )}
                           </strong>{' '}
-                          (+<strong>{data.cliOverhead.predictedOverhead.toLocaleString()}</strong>{' '}
-                          taban ek yük, henüz ölçülmedi)
+                          (+<strong>{count(data.cliOverhead.predictedOverhead)}</strong> taban ek
+                          yük, henüz ölçülmedi)
                         </span>
                       ) : (
                         <span className="text-[var(--color-text-dim)]">henüz ölçülmedi</span>
@@ -800,7 +797,7 @@ function Stat({
         label
       ) : (
         <>
-          {label}: <strong>{value.toLocaleString()}</strong>
+          {label}: <strong>{count(value)}</strong>
         </>
       )}
     </span>

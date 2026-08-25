@@ -9,6 +9,7 @@ import type { FlowTemplate } from './flowTemplates'
 import type { FlowsTab } from './flowsPanelShared'
 import type { Flow, FlowRun } from '@/types'
 import { Button, PaneHeader } from '@/shared/components'
+import { formatDateTime } from '@/shared/lib/intl'
 
 interface Props {
   flowsListOpen: boolean
@@ -104,7 +105,10 @@ export function FlowsHeader({
               {STATUS_LABEL[selectedRun.status] ?? selectedRun.status}
             </span>
             <span className="flex-shrink-0 text-xs text-[var(--color-text-dim)]">
-              {new Date(selectedRun.createdAt * 1000).toLocaleString()}
+              {formatDateTime(new Date(selectedRun.createdAt * 1000), {
+                dateStyle: 'short',
+                timeStyle: 'medium',
+              })}
             </span>
           </span>
         ) : undefined

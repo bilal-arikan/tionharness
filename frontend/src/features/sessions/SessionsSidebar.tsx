@@ -17,7 +17,7 @@ import {
 import type { Agent, Session, SearchHit } from '@/types'
 import { api } from '@/api'
 import { AgentAvatar } from '@/shared/components/agents/AgentAvatar'
-import { relativeTime, bucketOf, BUCKET_LABELS, BUCKET_ORDER, type Bucket } from '@/shared/lib/time'
+import { relativeTime, bucketOf, bucketLabel, BUCKET_ORDER, type Bucket } from '@/shared/lib/time'
 import { modelDisplayName } from '@/shared/lib/modelLabel'
 import { useMultiSelect } from '@/shared/hooks/useMultiSelect'
 import { SelectionBar, SelectionBarButton, Skeleton } from '@/shared/components'
@@ -368,7 +368,7 @@ export function SessionsSidebar({
           groups.map(({ bucket, items }) => (
             <div key={bucket} className="mb-1">
               <div className="px-3 pt-3 pb-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-dim)] opacity-70">
-                {BUCKET_LABELS[bucket]}
+                {bucketLabel(bucket)}
               </div>
               {items.map((s) => {
                 // Sessions outlive their agent, so resolve rather than find:

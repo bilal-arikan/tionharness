@@ -19,6 +19,7 @@ import { BoardColumn } from './BoardColumn'
 import { COLUMN_ACCENT, DEFAULT_COLUMNS } from './automationMeta'
 import { ScheduleCard } from './ScheduleCard'
 import { ScheduleModal } from './ScheduleModal'
+import { count } from '@/shared/lib/format'
 
 // Backstop refresh for the lane-header metrics; visibility-gated.
 const LIVE_STATS_POLL_MS = 15000
@@ -322,7 +323,7 @@ export function AutomationBoard({ agents, focusId, onError }: Props) {
     if (kind === 'counter' && byKind('counter').some((a) => a.counterScope === 'workspace')) {
       return (
         <span>
-          {liveStats.messages.toLocaleString()} mesaj · {liveStats.tools.toLocaleString()} tool
+          {count(liveStats.messages)} mesaj · {count(liveStats.tools)} tool
         </span>
       )
     }

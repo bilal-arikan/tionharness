@@ -16,6 +16,7 @@ import {
   isNetworkFilterActive,
   type NetworkFilter,
 } from './networkFilter'
+import { compareText } from '@/shared/lib/intl'
 
 interface Props {
   filter: NetworkFilter
@@ -107,11 +108,11 @@ export function NetworkFilters({
         color: meta.color,
         count: agentCount.get(id),
       }))
-      .sort((a, b) => a.label.localeCompare(b.label, 'tr'))
+      .sort((a, b) => compareText(a.label, b.label))
     if (unassigned > 0) agentOptions.push({ value: '-', label: 'Atanmamış', count: unassigned })
 
     const kindOptions: FacetOption[] = [...kindCount.keys()]
-      .sort((a, b) => (KIND_LABEL[a] ?? a).localeCompare(KIND_LABEL[b] ?? b, 'tr'))
+      .sort((a, b) => compareText(KIND_LABEL[a] ?? a, KIND_LABEL[b] ?? b))
       .map((k) => ({ value: k, label: KIND_LABEL[k] ?? k, count: kindCount.get(k) }))
 
     // Status options follow the workspace's Kanban columns (for label + color +
@@ -130,7 +131,7 @@ export function NetworkFilters({
     }
 
     const tagOptions: FacetOption[] = [...tagCount.keys()]
-      .sort((a, b) => a.localeCompare(b, 'tr'))
+      .sort((a, b) => compareText(a, b))
       .map((t) => ({ value: t, label: `#${t}`, count: tagCount.get(t) }))
 
     return { agentOptions, kindOptions, statusOptions, tagOptions }

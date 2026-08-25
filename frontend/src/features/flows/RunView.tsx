@@ -12,6 +12,7 @@ import { FlowCanvas } from './FlowCanvas'
 import { RunNodeInspector } from './RunNodeInspector'
 import type { ChildProgress } from './runTree'
 import { STATUS_LABEL, statusColor } from './runStatus'
+import { formatDateTime } from '@/shared/lib/intl'
 
 interface Props {
   run: FlowRun
@@ -295,7 +296,10 @@ export function RunView({
                 {STATUS_LABEL[run.status] ?? run.status}
               </span>
               <span className="ml-auto text-xs text-[var(--color-text-dim)]">
-                {new Date(run.createdAt * 1000).toLocaleString()}
+                {formatDateTime(new Date(run.createdAt * 1000), {
+                  dateStyle: 'short',
+                  timeStyle: 'medium',
+                })}
               </span>
               {/* Descended child runs get their own projection: the header
                   button above belongs to the entry run only. */}

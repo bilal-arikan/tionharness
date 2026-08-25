@@ -1,4 +1,5 @@
 import { roleColor } from '@/shared/lib/palette'
+import { formatDateTime } from '@/shared/lib/intl'
 
 // ---- formatting ----
 
@@ -62,7 +63,7 @@ export const fillerColor = roleColor
 
 export function formatDate(unixSec: number): string {
   if (!unixSec) return '—'
-  return new Date(unixSec * 1000).toLocaleString('tr-TR', {
+  return formatDateTime(new Date(unixSec * 1000), {
     day: '2-digit',
     month: 'short',
     year: 'numeric',

@@ -5,6 +5,7 @@ import type { SessionDebugSummary, SessionDebugEvent } from '@/types'
 import { modelDisplayName } from '@/shared/lib/modelLabel'
 import { SessionFlowViz } from './viz/SessionFlowViz'
 import { toolDisplayName } from './viz/flowVizData'
+import { formatTime } from '@/shared/lib/intl'
 
 // SessionDebugCard renders the per-session DEBUG journal (parallel observability
 // stream): turn timings, token spend by model, per-tool latency/size/errors,
@@ -482,7 +483,7 @@ function fmtBytes(b: number): string {
 function fmtTime(ms: number): string {
   try {
     const d = new Date(ms)
-    return d.toLocaleTimeString('tr-TR', { hour12: false })
+    return formatTime(d, { hour12: false })
   } catch {
     return ''
   }

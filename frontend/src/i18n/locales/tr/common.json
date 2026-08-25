@@ -1,0 +1,38 @@
+{
+  "language": {
+    "agentHint": "Ajanların varsayılan olarak yanıt verdiği dil. Değiştirmek promptu yeniden dondurur ve prompt cache'ini soğutur.",
+    "agentLabel": "Ajan yanıt dili",
+    "followAgent": "Ajan dilini izle ({{language}})",
+    "uiHint": "Uygulamanın kendi düğme, etiket ve mesajlarının dili. Ajanın yanıt dilinden bağımsızdır.",
+    "uiLabel": "Arayüz dili"
+  },
+  "time": {
+    "bucket": {
+      "month": "Geçen ay",
+      "older": "Daha eski",
+      "pinned": "Sabitlenen",
+      "today": "Bugün",
+      "week": "Geçen hafta",
+      "yesterday": "Dün"
+    },
+    "daysShort_one": "{{count}} gün",
+    "daysShort_other": "{{count}} gün",
+    "duration": {
+      "hours_one": "{{count}} sa",
+      "hours_other": "{{count}} sa",
+      "hoursMinutes": "{{hours}} sa {{minutes}} dk",
+      "minutes_one": "{{count}} dk",
+      "minutes_other": "{{count}} dk",
+      "minutesSeconds": "{{minutes}} dk {{seconds}} sn",
+      "seconds_one": "{{count}} sn",
+      "seconds_other": "{{count}} sn",
+      "secondsDecimal": "{{value}} sn"
+    },
+    "hoursShort_one": "{{count}} sa",
+    "hoursShort_other": "{{count}} sa",
+    "justNow": "az önce",
+    "minutesShort_one": "{{count}} dk",
+    "minutesShort_other": "{{count}} dk",
+    "yesterday": "Dün"
+  }
+}

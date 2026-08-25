@@ -38,6 +38,7 @@ import {
 } from '@/shared/components/SidebarChrome'
 import { useCollapsibleList } from '@/shared/hooks/useCollapsibleList'
 import { relativeTime, fullDateTime } from '@/shared/lib/time'
+import { compareText } from '@/shared/lib/intl'
 
 // Advisory shown after any mutation to a GLOBAL-tier skill: its SKILL.md lives in
 // the shared global dir, so the change reaches every workspace that does not
@@ -73,7 +74,7 @@ function skillId(sk: Skill): string {
 function sortSkillGroups(a: string, b: string): number {
   if (a === UNGROUPED) return 1
   if (b === UNGROUPED) return -1
-  return a.localeCompare(b, 'tr')
+  return compareText(a, b)
 }
 
 function SourceBadge({ source }: { source: SkillSource }) {

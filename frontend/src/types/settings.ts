@@ -1,5 +1,7 @@
 // Application (global) settings, provider/model catalog and read-only prompts.
 
+import type { Locale } from '@/i18n/locales'
+
 // Mirrors settings.DTO — the Anthropic key is never returned; anthropicKeySet
 // reports whether one is stored.
 export type Theme = 'dark' | 'light' | 'system'
@@ -10,7 +12,11 @@ export interface AppSettings {
   // Curated palette id (see lib/themePresets). When set, it overrides the full
   // token set; "" falls back to legacy theme + accent behaviour.
   themePreset: string
-  language: 'tr' | 'en'
+  // Two independent language axes — see internal/settings/language.go and
+  // _Docs/73. `language` is what the AGENT replies in (system-prompt level);
+  // `uiLanguage` is the interface chrome, and "" means it follows `language`.
+  language: Locale
+  uiLanguage: Locale | ''
 
   defaultPermissionMode: string
   // CLAUDE_CONFIG_DIR for claude-cli subprocesses. Now a FALLBACK only: each turn

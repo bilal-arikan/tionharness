@@ -1,0 +1,38 @@
+{
+  "language": {
+    "agentHint": "The language agents answer in by default. Changing it re-freezes the prompt and cools the prompt cache.",
+    "agentLabel": "Agent reply language",
+    "followAgent": "Follow the agent language ({{language}})",
+    "uiHint": "Language of the app's own buttons, labels and messages. Independent of the agent's reply language.",
+    "uiLabel": "Interface language"
+  },
+  "time": {
+    "bucket": {
+      "month": "Last month",
+      "older": "Older",
+      "pinned": "Pinned",
+      "today": "Today",
+      "week": "Last week",
+      "yesterday": "Yesterday"
+    },
+    "daysShort_one": "{{count}} day",
+    "daysShort_other": "{{count}} days",
+    "duration": {
+      "hours_one": "{{count}}h",
+      "hours_other": "{{count}}h",
+      "hoursMinutes": "{{hours}}h {{minutes}}m",
+      "minutes_one": "{{count}}m",
+      "minutes_other": "{{count}}m",
+      "minutesSeconds": "{{minutes}}m {{seconds}}s",
+      "seconds_one": "{{count}}s",
+      "seconds_other": "{{count}}s",
+      "secondsDecimal": "{{value}}s"
+    },
+    "hoursShort_one": "{{count}} h",
+    "hoursShort_other": "{{count}} h",
+    "justNow": "just now",
+    "minutesShort_one": "{{count}} min",
+    "minutesShort_other": "{{count}} min",
+    "yesterday": "Yesterday"
+  }
+}

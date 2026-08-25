@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import type { SessionDebugEvent } from '@/types'
 import { buildConcurrencyTimeline, type TimelineModel } from './flowVizData'
+import { formatTime } from '@/shared/lib/intl'
 
 // Layout constants (SVG user units; the chart scales responsively via viewBox).
 const W = 620
@@ -13,7 +14,7 @@ const AXIS_H = 18
 
 function clock(ms: number): string {
   try {
-    return new Date(ms).toLocaleTimeString('tr-TR', { hour12: false })
+    return formatTime(new Date(ms), { hour12: false })
   } catch {
     return ''
   }

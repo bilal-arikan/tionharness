@@ -1,9 +1,10 @@
+import { formatDateTime } from '@/shared/lib/intl'
 // Shared unix-seconds <-> UI time helpers for the automation board (schedules,
 // tag automations and board automations all use the same expiry input).
 
 export function fmtTime(unix?: number): string {
   if (!unix) return '—'
-  return new Date(unix * 1000).toLocaleString('tr-TR')
+  return formatDateTime(new Date(unix * 1000), { dateStyle: 'short', timeStyle: 'medium' })
 }
 
 // Convert a unix-seconds timestamp to the "YYYY-MM-DDTHH:mm" string a

@@ -2,6 +2,7 @@
 // no state — kept out of ToolAccessPanel so that file stays layout-only.
 import type { ToolAccessEntry } from '@/types'
 import { CATEGORY_LABELS, CATEGORY_ORDER } from '@/features/tools/toolMeta'
+import { compareText } from '@/shared/lib/intl'
 
 export interface ToolGroup {
   // Stable key: "cat:<category>" for built-ins, "mcp:<server>" for MCP tools.
@@ -33,7 +34,7 @@ export function toolsForServer(
   const pick = (list: ToolAccessEntry[]) =>
     list
       .filter((t) => t.source === 'mcp' && t.server === serverName)
-      .sort((a, b) => a.label.localeCompare(b.label))
+      .sort((a, b) => compareText(a.label, b.label))
   return [...pick(tools.eager), ...pick(tools.lazy)]
 }
 
@@ -64,5 +65,5 @@ export function groupTools(tools: ToolAccessEntry[]): ToolGroup[] {
     const i = CATEGORY_ORDER.indexOf(g.key.slice('cat:'.length))
     return i === -1 ? CATEGORY_ORDER.length : i
   }
-  return [...groups.values()].sort((a, b) => rank(a) - rank(b) || a.label.localeCompare(b.label))
+  return [...groups.values()].sort((a, b) => rank(a) - rank(b) || compareText(a.label, b.label))
 }

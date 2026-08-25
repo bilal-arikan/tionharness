@@ -29,6 +29,7 @@ import { useSessionState } from '@/shared/hooks/useSessionState'
 import { useVisiblePoll } from '@/shared/hooks/useVisiblePoll'
 import { useRefreshTrigger } from '@/shared/hooks/useRefreshTrigger'
 import { SIGNAL_FLOWS } from '@/app/eventToRefreshSignals'
+import { compareText } from '@/shared/lib/intl'
 
 // Backstop refresh for the Koşular tab; run lifecycle also arrives over SSE.
 const RUNS_POLL_MS = 15000
@@ -416,7 +417,7 @@ export function FlowsPanel({ agents, onError, openFlowId, tab: tabProp, onTabCha
   const allTags = useMemo(() => {
     const set = new Set<string>()
     flows.forEach((f) => f.tags?.forEach((t) => set.add(t)))
-    return [...set].sort((a, b) => a.localeCompare(b))
+    return [...set].sort((a, b) => compareText(a, b))
   }, [flows])
   const toggleTagFilter = (t: string) =>
     setTagFilter((prev) => (prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]))

@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import type { SessionDebugEvent } from '@/types'
 import { buildPromptCacheSummary } from './flowVizData'
+import { formatTime } from '@/shared/lib/intl'
 
 const KIND_META: Record<string, { label: string; cls: string }> = {
   // Every hue maps onto a theme token (accent/warning/success/danger/info) so the
@@ -66,7 +67,7 @@ export function PromptCacheEvents({ events }: { events: SessionDebugEvent[] }) {
               {KIND_META[it.kind].label}
             </span>
             <span className="text-[var(--color-text-dim)]">
-              {new Date(it.ts).toLocaleTimeString('tr-TR')}
+              {formatTime(new Date(it.ts), { timeStyle: 'medium' })}
             </span>
             <span
               className={`min-w-0 break-words ${it.err ? 'text-[var(--color-danger)]' : 'text-[var(--color-text)]'}`}

@@ -12,6 +12,7 @@ import {
   toast,
   useBulkToggle,
 } from '@/shared/components'
+import { count } from '@/shared/lib/format'
 
 // LAZY_VIS_CHIP labels a lazy tool's visibility tier next to its name so the
 // load-on-demand list reflects the same Tam/Özet/İsim/Gizli chips set in the tools
@@ -124,8 +125,7 @@ export function AgentContextModal({ agentId, agentName, onClose }: Props) {
               />
               <span className="font-medium">Token özeti</span>
               <span className="text-[var(--color-text-dim)]">
-                · Toplam {data.totalTokens.toLocaleString()}{' '}
-                <span className="opacity-70">(~tahmini)</span>
+                · Toplam {count(data.totalTokens)} <span className="opacity-70">(~tahmini)</span>
               </span>
               {data.cliOverhead && data.cliOverhead.predictedOverhead > 0 && (
                 <span className="rounded bg-[color-mix(in_srgb,var(--color-warning)_18%,transparent)] px-1.5 py-0.5 font-medium text-[var(--color-warning)]">
@@ -168,13 +168,11 @@ export function AgentContextModal({ agentId, agentName, onClose }: Props) {
                         />
                       </span>
                       <span className="text-[var(--color-text-dim)]">
-                        Tahmin <strong>{data.totalTokens.toLocaleString()}</strong> → beklenen taban
-                        ~
+                        Tahmin <strong>{count(data.totalTokens)}</strong> → beklenen taban ~
                         <strong>
-                          {(data.totalTokens + data.cliOverhead.predictedOverhead).toLocaleString()}
+                          {count(data.totalTokens + data.cliOverhead.predictedOverhead)}
                         </strong>{' '}
-                        (+<strong>{data.cliOverhead.predictedOverhead.toLocaleString()}</strong>{' '}
-                        taban ek yük)
+                        (+<strong>{count(data.cliOverhead.predictedOverhead)}</strong> taban ek yük)
                       </span>
                     </div>
                   </div>
@@ -380,7 +378,7 @@ function Stat({
         label
       ) : (
         <>
-          {label}: <strong>{value.toLocaleString()}</strong>
+          {label}: <strong>{count(value)}</strong>
         </>
       )}
     </span>

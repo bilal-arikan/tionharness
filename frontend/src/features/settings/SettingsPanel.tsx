@@ -164,6 +164,7 @@ export function SettingsPanel({
       accent: draft.accent,
       themePreset: draft.themePreset,
       language: draft.language,
+      uiLanguage: draft.uiLanguage,
       defaultPermissionMode: draft.defaultPermissionMode,
       claudeConfigDir: draft.claudeConfigDir,
       extendedPromptCache: draft.extendedPromptCache,

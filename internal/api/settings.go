@@ -37,16 +37,9 @@ func (s *Server) publishWorkspacesChanged(body string) {
 }
 
 // languageName maps a settings language code to a human name for the reply-language
-// directive. Empty for an unknown code (so no directive is emitted).
-func languageName(code string) string {
-	switch code {
-	case "tr":
-		return "Turkish (Türkçe)"
-	case "en":
-		return "English"
-	}
-	return ""
-}
+// directive. Empty for an unknown code (so no directive is emitted). The table
+// itself lives in internal/settings so adding a locale is a one-file change.
+func languageName(code string) string { return settings.LanguageDisplayName(code) }
 
 // userContextBlock renders the user-profile settings AND the configured reply
 // language into a system-prompt block so agents address the user correctly and

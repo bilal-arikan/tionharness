@@ -5,6 +5,7 @@ import { api, getActiveWorkspace } from '@/api'
 import { Field, Toggle, inputCls } from './primitives'
 import { SubHead } from './settingsPanelShared'
 import type { PanelProps } from './settingsPanelShared'
+import { formatDateTime } from '@/shared/lib/intl'
 
 // formatBytes renders a byte count as a compact human-readable size.
 function formatBytes(n: number): string {
@@ -98,7 +99,7 @@ export function BackupPanel({ draft, set }: PanelProps) {
   }
 
   const lastRunLabel = status?.lastRun
-    ? new Date(status.lastRun * 1000).toLocaleString('tr-TR')
+    ? formatDateTime(new Date(status.lastRun * 1000), { dateStyle: 'short', timeStyle: 'medium' })
     : 'henüz yok'
 
   const totalArchives = archives.reduce((n, w) => n + w.archives.length, 0)
@@ -238,8 +239,11 @@ export function BackupPanel({ draft, set }: PanelProps) {
                             {a.name}
                           </div>
                           <div className="text-[10px] text-[var(--color-text-dim)]">
-                            {new Date(a.modified * 1000).toLocaleString('tr-TR')} ·{' '}
-                            {formatBytes(a.bytes)}
+                            {formatDateTime(new Date(a.modified * 1000), {
+                              dateStyle: 'short',
+                              timeStyle: 'medium',
+                            })}{' '}
+                            · {formatBytes(a.bytes)}
                           </div>
                         </div>
                         {confirmingRestore ? (

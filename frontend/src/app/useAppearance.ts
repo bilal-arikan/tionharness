@@ -9,12 +9,18 @@ import { api } from '@/api'
 import { applyAppearance, resolveAppearance, type Appearance } from '@/shared/lib/theme'
 import { applyKeepAwake, ensureNotificationPermission } from '@/shared/lib/clientPrefs'
 import { resolveDesktopNotifications } from '@/shared/lib/desktopNotifications'
+import { resolveUILocale, setLocale } from '@/i18n'
 import type { DesktopNotificationsMode } from '@/types/workspace'
 
 export interface ClientPrefs {
   themePreset?: string
   keepAwake: boolean
   desktopNotifications: boolean
+  // UI language, plus the agent reply language it falls back to when unset. Both
+  // are app-global (not per-workspace): a single interface should not change
+  // language as the user switches workspaces.
+  uiLanguage: string
+  language: string
 }
 
 export function useAppearance(activeWorkspaceId: string | null, setError: (msg: string) => void) {
@@ -42,6 +48,10 @@ export function useAppearance(activeWorkspaceId: string | null, setError: (msg: 
     (s: ClientPrefs) => {
       globalAppearanceRef.current = { themePreset: s.themePreset ?? '' }
       applyResolvedTheme()
+      // Language is applied from the same settings payload that already syncs
+      // theme across windows, so an agent's update_settings or another window's
+      // save switches the interface language live via the `settings` SSE event.
+      void setLocale(resolveUILocale(s.uiLanguage ?? '', s.language ?? ''))
       applyKeepAwake(s.keepAwake)
       globalNotifyRef.current = s.desktopNotifications
       applyResolvedNotify()

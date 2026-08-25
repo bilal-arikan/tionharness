@@ -3,6 +3,7 @@ import { RefreshCw, Trash2 } from 'lucide-react'
 import { api } from '@/api'
 import { toast } from '@/shared/components'
 import type { Lesson } from '@/types'
+import { formatDateTime } from '@/shared/lib/intl'
 
 // LessonsList shows the workspace's auto-collected failure lessons (read-only
 // store written by the lesson reflector) with a per-row prune button. fetches on
@@ -79,7 +80,12 @@ export function LessonsList({ fill = false }: { fill?: boolean } = {}) {
                     </span>
                   )}
                   {l.count > 1 && <span>{l.count}× görüldü</span>}
-                  <span>{new Date(l.ts * 1000).toLocaleString('tr-TR')}</span>
+                  <span>
+                    {formatDateTime(new Date(l.ts * 1000), {
+                      dateStyle: 'short',
+                      timeStyle: 'medium',
+                    })}
+                  </span>
                 </div>
                 <p className="mt-0.5 text-xs leading-snug text-[var(--color-text)]">{l.text}</p>
               </div>

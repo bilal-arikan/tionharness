@@ -1,5 +1,7 @@
 import { useMemo } from 'react'
 import type { SessionDebugEvent } from '@/types'
+import { formatTime } from '@/shared/lib/intl'
+import { count } from '@/shared/lib/format'
 
 // ThinkingShareChart plots the hidden-reasoning share of each llm_call's output
 // over the session, from the debug journal's `think`/`out` fields. The API bills
@@ -38,7 +40,7 @@ export function ThinkingShareChart({ events }: { events: SessionDebugEvent[] }) 
           Ortalama düşünme: %{Math.round(model.share * 100)}
         </span>
         <span className="text-[var(--color-text-dim)]">
-          {model.totalThink.toLocaleString('tr-TR')} tok gizli akıl yürütme
+          {count(model.totalThink)} tok gizli akıl yürütme
         </span>
       </div>
       {/* Per-call bars: height ∝ thinking share of that call's output. */}
@@ -46,7 +48,7 @@ export function ThinkingShareChart({ events }: { events: SessionDebugEvent[] }) 
         {model.bars.map((b, i) => (
           <div
             key={i}
-            title={`${new Date(b.ts).toLocaleTimeString('tr-TR')} · %${Math.round(b.share * 100)} · ${b.think}/${b.out} tok`}
+            title={`${formatTime(new Date(b.ts), { timeStyle: 'medium' })} · %${Math.round(b.share * 100)} · ${b.think}/${b.out} tok`}
             className="w-1.5 shrink-0 rounded-sm bg-[color-mix(in_srgb,var(--color-accent)_60%,transparent)]"
             style={{ height: `${Math.max(2, Math.round(b.share * 100))}%` }}
           />

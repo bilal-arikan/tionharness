@@ -4,6 +4,7 @@
 import type { WorkspaceSettings } from '@/types'
 import { Field, Toggle, inputCls, type WsSet } from './primitives'
 import { EmojiField } from '@/shared/components/EmojiField'
+import { formatDate } from '@/shared/lib/intl'
 
 interface Props {
   ws: WorkspaceSettings
@@ -26,7 +27,10 @@ export function WorkspacePanel({ ws, setWsField, onDeleteWorkspace }: Props) {
           { label: 'Ajan', value: ws.agentCount },
           { label: 'Oturum', value: ws.sessionCount },
           { label: 'Görev', value: ws.taskCount },
-          { label: 'Oluşturma', value: new Date(ws.createdAt * 1000).toLocaleDateString('tr-TR') },
+          {
+            label: 'Oluşturma',
+            value: formatDate(new Date(ws.createdAt * 1000), { dateStyle: 'short' }),
+          },
         ].map((s) => (
           <div
             key={s.label}

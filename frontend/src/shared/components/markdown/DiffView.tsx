@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from 'react'
 import { parseDiff, foldableRanges, diffRows } from '@/shared/lib/diff'
 import { useVirtualRows } from '@/shared/hooks/useVirtualRows'
+import { count } from '@/shared/lib/format'
 
 interface Props {
   text: string
@@ -88,7 +89,7 @@ function DiffInline({
       extra={
         capped ? (
           <span className="ml-auto font-mono text-[10px] text-[var(--color-text-dim)]">
-            {lines.length.toLocaleString('tr-TR')} satır
+            {count(lines.length)} satır
           </span>
         ) : undefined
       }
@@ -110,9 +111,9 @@ function DiffInline({
           onClick={() => setUncapped(true)}
           className="shrink-0 border-t border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-left text-[11px] text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)]"
         >
-          İlk {INLINE_PREVIEW.toLocaleString('tr-TR')} satır gösteriliyor ·{' '}
+          İlk {count(INLINE_PREVIEW)} satır gösteriliyor ·{' '}
           <span className="font-medium">
-            kalan {(lines.length - INLINE_PREVIEW).toLocaleString('tr-TR')} satırı da yükle
+            kalan {count(lines.length - INLINE_PREVIEW)} satırı da yükle
           </span>
         </button>
       )}
@@ -183,7 +184,7 @@ function DiffPanel({
       removed={removed}
       extra={
         <span className="ml-auto font-mono text-[10px] text-[var(--color-text-dim)]">
-          {lines.length.toLocaleString('tr-TR')} satır
+          {count(lines.length)} satır
         </span>
       }
     >
@@ -207,7 +208,7 @@ function DiffPanel({
                     style={{ height: ROW_H }}
                     className="flex w-full items-center px-3 text-left text-[11px] leading-none text-[var(--color-text-dim)] transition hover:bg-[var(--color-surface-2)] hover:text-[var(--color-accent)]"
                   >
-                    ⋯ {row.count.toLocaleString('tr-TR')} değişmeyen satır — göster
+                    ⋯ {count(row.count)} değişmeyen satır — göster
                   </button>
                 )
               }
@@ -233,9 +234,9 @@ function DiffPanel({
           onClick={() => setUncapped(true)}
           className="shrink-0 border-t border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-left text-[11px] text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)]"
         >
-          İlk {CAP_PREVIEW.toLocaleString('tr-TR')} satır gösteriliyor ·{' '}
+          İlk {count(CAP_PREVIEW)} satır gösteriliyor ·{' '}
           <span className="font-medium">
-            kalan {(lines.length - CAP_PREVIEW).toLocaleString('tr-TR')} satırı da yükle
+            kalan {count(lines.length - CAP_PREVIEW)} satırı da yükle
           </span>
         </button>
       )}

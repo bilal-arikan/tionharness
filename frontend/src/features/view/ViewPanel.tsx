@@ -4,6 +4,7 @@ import { api } from '@/api'
 import { toast } from '@/shared/components'
 import { VIEW_LENS_LABEL, refToString } from '@/types'
 import type { ViewLens, ViewLevel, ViewRef, ViewResult } from '@/types'
+import { formatTime } from '@/shared/lib/intl'
 
 const LEVELS: ViewLevel[] = ['tiny', 'card', 'full']
 const LENSES: ViewLens[] = ['health', 'stale', 'recent', 'errors']
@@ -102,9 +103,9 @@ export function ViewPanel({ target, onClose, onSend, embedded, lens: hostLens }:
       const combined = blocks
         .map(
           (b) =>
-            `[${b.names.join(' = ')} — ~${b.r.tokens} tok · asOf ${new Date(
-              b.r.asOf,
-            ).toLocaleTimeString()}]\n${b.r.text}`,
+            `[${b.names.join(' = ')} — ~${b.r.tokens} tok · asOf ${formatTime(new Date(b.r.asOf), {
+              timeStyle: 'medium',
+            })}]\n${b.r.text}`,
         )
         .join('\n\n')
       await navigator.clipboard.writeText(combined)
@@ -202,7 +203,7 @@ export function ViewPanel({ target, onClose, onSend, embedded, lens: hostLens }:
         {result && (
           <span className="ml-auto flex items-center gap-2 text-[var(--color-text-dim)]">
             <span title={`Kaynak sürüm: ${result.source}`}>
-              asOf {new Date(result.asOf).toLocaleTimeString()}
+              asOf {formatTime(new Date(result.asOf), { timeStyle: 'medium' })}
             </span>
             <span title="Yaklaşık token maliyeti (karakter/4)">~{result.tokens} tok</span>
           </span>

@@ -120,6 +120,7 @@ func (s *Store) Apply(p Patch) (Settings, error) {
 	applyString(&next.Accent, p.Accent)
 	applyString(&next.ThemePreset, p.ThemePreset)
 	applyString(&next.Language, p.Language)
+	applyString(&next.UILanguage, p.UILanguage)
 
 	applyString(&next.DefaultPermissionMode, p.DefaultPermissionMode)
 	applyString(&next.ClaudeConfigDir, p.ClaudeConfigDir)
@@ -301,8 +302,13 @@ func normalize(v Settings) Settings {
 	if !isHexColor(v.Accent) {
 		v.Accent = "#8b5cf6"
 	}
-	if v.Language != "en" {
-		v.Language = "tr"
+	if !isSupportedLanguage(v.Language) {
+		v.Language = DefaultLanguage
+	}
+	// UILanguage keeps "" (= follow Language); only an unknown non-empty code is
+	// coerced away, so a hand-edited file can never wedge the UI on a missing catalog.
+	if v.UILanguage != "" && !isSupportedLanguage(v.UILanguage) {
+		v.UILanguage = ""
 	}
 	// Permission mode seeds new agents; an unknown value falls back to "auto".
 	switch v.DefaultPermissionMode {

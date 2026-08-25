@@ -8,6 +8,7 @@
 import type { Agent, BoardColumnDef, BoardGroupBy, BoardDueFilter, Task, TaskPatch } from '@/types'
 import { DUE_LABELS, DUE_ORDER, PRIORITY_LABELS, PRIORITY_ORDER } from './boardViewTypes'
 import { todayISO } from './filterTasks'
+import { compareText } from '@/shared/lib/intl'
 
 // Column key used for "this card has no value on the current axis".
 export const NONE_KEY = '__none__'
@@ -132,7 +133,7 @@ export function deriveColumns(
         for (const tag of t.tags ?? []) counts.set(tag, (counts.get(tag) ?? 0) + 1)
       }
       const cols: DerivedColumn[] = [...counts.keys()]
-        .sort((a, b) => a.localeCompare(b, 'tr'))
+        .sort((a, b) => compareText(a, b))
         .map((tag) => ({ key: tag, label: `#${tag}`, color: '' }))
       if (needsNone) cols.push(noneCol('Etiketsiz'))
       return cols

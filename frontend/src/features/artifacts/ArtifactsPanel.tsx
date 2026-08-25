@@ -51,6 +51,7 @@ import {
 } from '@/shared/components/SidebarChrome'
 import { KIND_ICON, KIND_LABEL, KINDS, isMediaKind, artifactKindForUpload } from './artifactMeta'
 import { OriginBadge } from './OriginBadge'
+import { compareText } from '@/shared/lib/intl'
 
 interface Props {
   onError: (msg: string) => void
@@ -82,7 +83,7 @@ function artifactId(a: Artifact): string {
 function sortArtifactGroups(a: string, b: string): number {
   if (a === UNGROUPED) return -1
   if (b === UNGROUPED) return 1
-  return a.localeCompare(b, 'tr')
+  return compareText(a, b)
 }
 
 // Draft holds the editable fields while creating or editing an artifact.
@@ -283,7 +284,7 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
   const groupNames = useMemo(
     () =>
       [...new Set(list.map((a) => a.group?.trim()).filter((g): g is string => !!g))].sort((a, b) =>
-        a.localeCompare(b, 'tr'),
+        compareText(a, b),
       ),
     [list],
   )

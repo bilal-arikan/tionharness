@@ -1,9 +1,12 @@
+import { useTranslation } from 'react-i18next'
 import type { AppSettings } from '@/types'
 import { Field, inputCls } from './primitives'
 import { PromptEditor } from '@/shared/components'
+import { LOCALES, localeMeta } from '@/i18n'
 import type { PanelProps } from './settingsPanelShared'
 
 export function ProfilePanel({ draft, set }: PanelProps) {
+  const { t } = useTranslation('common')
   return (
     <>
       <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-xs text-[var(--color-text-dim)]">
@@ -51,17 +54,36 @@ export function ProfilePanel({ draft, set }: PanelProps) {
           placeholder="Ajanların bilmesi gereken tercihlerin…"
         />
       </Field>
-      <Field
-        label="Dil"
-        hint="UI dili tercihi — tüm workspace'ler için geçerli (tam çeviri kademeli ekleniyor)."
-      >
+      {/* Two independent language axes, deliberately adjacent so the difference is
+          visible at a glance: the interface can be English while the agent still
+          answers in Turkish, or the reverse. See _Docs/73. */}
+      <Field label={t('language.uiLabel')} hint={t('language.uiHint')}>
+        <select
+          value={draft.uiLanguage}
+          onChange={(e) => set('uiLanguage', e.target.value as AppSettings['uiLanguage'])}
+          className={inputCls}
+        >
+          <option value="">
+            {t('language.followAgent', { language: localeMeta(draft.language).label })}
+          </option>
+          {LOCALES.map((l) => (
+            <option key={l.code} value={l.code}>
+              {l.label}
+            </option>
+          ))}
+        </select>
+      </Field>
+      <Field label={t('language.agentLabel')} hint={t('language.agentHint')}>
         <select
           value={draft.language}
           onChange={(e) => set('language', e.target.value as AppSettings['language'])}
           className={inputCls}
         >
-          <option value="tr">Türkçe</option>
-          <option value="en">English</option>
+          {LOCALES.map((l) => (
+            <option key={l.code} value={l.code}>
+              {l.label}
+            </option>
+          ))}
         </select>
       </Field>
     </>
