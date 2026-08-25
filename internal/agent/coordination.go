@@ -1049,12 +1049,14 @@ func (r *Runtime) workerInfoFor(ctx context.Context, s db.Session) WorkerInfo {
 // It mirrors runSpawn but is coordinator-aware and notifies on EVERY outcome
 // (completed / failed / killed), unlike a plain spawn.
 func (r *Runtime) runWorker(agent db.Agent, workerSessionID, prompt, coordSessionID string) {
-	// Registered FIRST so it runs LAST — after every slot release, workerCancels
-	// delete, and untrackSession below. Only then is the worker idle enough for a
-	// parked follow-up (send_to_worker while this turn was busy) to be delivered as
-	// the next turn. No-op when nothing was queued.
-	defer r.drainWorkerQueue(agent, workerSessionID, coordSessionID)
+	// Registered first so the global lifecycle slot is released last. Test/runtime
+	// shutdown uses spawnActive as the definitive drain barrier; dropping it before
+	// queue finalization lets cleanup race the goroutine's final store access.
 	defer r.releaseSpawnSlot()
+	// Drain after every per-turn slot/cancel/tracking cleanup but before releasing
+	// the global lifecycle slot. A parked follow-up can then start from an idle
+	// worker while shutdown still sees this goroutine as active. No-op when empty.
+	defer r.drainWorkerQueue(agent, workerSessionID, coordSessionID)
 	if slot := r.coordSlotFor(coordSessionID); slot != nil {
 		defer slot.workers.Add(-1)
 	}

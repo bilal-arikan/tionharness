@@ -285,17 +285,23 @@ func TestSpawnWorkerRespectsWorkerCap(t *testing.T) {
 	}
 }
 
-// waitWorkersSettled blocks until no worker turn under coordID is still running.
+// waitWorkersSettled blocks until no worker turn or notification drain under
+// coordID is still running.
 // Spawns are fire-and-forget, so without this a test can return while a detached
-// runWorker goroutine is still writing into the session store — which then fails
-// the t.TempDir cleanup with "directory not empty" rather than in the assertion.
+// runWorker/drainCoordinator goroutine is still writing into the session store —
+// which then fails the t.TempDir cleanup with "directory not empty" rather than
+// in the assertion.
 func waitWorkersSettled(t *testing.T, rt *Runtime, coordIDs ...string) {
 	t.Helper()
 	deadline := time.After(5 * time.Second)
 	for {
 		busy := false
 		for _, id := range coordIDs {
-			if rt.coordSlotFor(id).workers.Load() > 0 {
+			slot := rt.coordSlotFor(id)
+			slot.mu.Lock()
+			driving := slot.driving
+			slot.mu.Unlock()
+			if slot.workers.Load() > 0 || driving {
 				busy = true
 			}
 		}

@@ -82,17 +82,18 @@ func TestParseSqzStats(t *testing.T) {
 // mount prefix. Getting it backwards is worse than saying nothing: the agent
 // would confidently use a path that cannot exist.
 func TestShellEnvironmentGuidance(t *testing.T) {
-	gitbash := shellEnvironmentGuidance("gitbash")
-	if !strings.Contains(gitbash, "/c/") || !strings.Contains(gitbash, "NO `/mnt/c`") {
-		t.Errorf("git-bash block must point at /c/ and rule out /mnt/c, got:\n%s", gitbash)
+	gitbash := shellEnvironmentGuidance("gitbash", `C:\Program Files\Git\bin\bash.exe`)
+	if !strings.Contains(gitbash, "/c/") || !strings.Contains(gitbash, "NO `/mnt/c`") ||
+		!strings.Contains(gitbash, `C:\Program Files\Git\bin\bash.exe`) || !strings.Contains(gitbash, "Windows PATH") {
+		t.Errorf("git-bash block must name its executable, /c/ mount, and PATH semantics, got:\n%s", gitbash)
 	}
-	wsl := shellEnvironmentGuidance("wsl")
+	wsl := shellEnvironmentGuidance("wsl", `C:\Windows\System32\wsl.exe`)
 	if !strings.Contains(wsl, "/mnt/c/") {
 		t.Errorf("WSL block must point at /mnt/c/, got:\n%s", wsl)
 	}
 	// Native Unix needs no block — the model already assumes that layout, so an
 	// extra section would be pure token cost on every turn.
-	if shellEnvironmentGuidance("unix") != "" || shellEnvironmentGuidance("") != "" {
+	if shellEnvironmentGuidance("unix", "/bin/sh") != "" || shellEnvironmentGuidance("", "") != "" {
 		t.Error("native unix / no-shell must produce no prompt block")
 	}
 }
