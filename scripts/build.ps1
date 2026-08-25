@@ -15,6 +15,9 @@ param(
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
+$buildCommit = (git rev-parse --short HEAD).Trim()
+$buildTime = [DateTime]::UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ")
+$versionFlags = "-X github.com/bilal-arikan/tionharness/internal/api.BuildCommit=$buildCommit -X github.com/bilal-arikan/tionharness/internal/api.BuildDate=$buildTime"
 
 if (-not $SkipUI) {
     Write-Host "==> Frontend derleniyor (npm run build)..." -ForegroundColor Cyan
@@ -38,12 +41,12 @@ if ($Desktop) {
     if (-not $Output) { $Output = "tionharness-desktop.exe" }
     Write-Host "==> Native masaüstü uygulaması derleniyor (WebView2 penceresi, UI gömülü)..." -ForegroundColor Cyan
     # -H windowsgui: çift tıkla → konsol penceresi açılmaz, yalnız uygulama penceresi.
-    go build -trimpath -ldflags "-H windowsgui -s -w" -o $Output ./cmd/tionharness-desktop
+    go build -trimpath -ldflags "-H windowsgui -s -w $versionFlags" -o $Output ./cmd/tionharness-desktop
     $hint = "Çift tıkla → kendi penceresinde açılır (tarayıcı gerekmez)."
 } else {
     if (-not $Output) { $Output = "tionharness.exe" }
     Write-Host "==> Başsız sunucu derleniyor (UI gömülü tek binary)..." -ForegroundColor Cyan
-    go build -trimpath -ldflags "-s -w" -o $Output ./cmd/tionharness
+    go build -trimpath -ldflags "-s -w $versionFlags" -o $Output ./cmd/tionharness
     $hint = "Çalıştır:  `$env:TIONHARNESS_ADDR='127.0.0.1:8095'; .\$Output   → http://127.0.0.1:8095"
 }
 

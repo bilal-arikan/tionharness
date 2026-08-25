@@ -38,7 +38,10 @@ jobs:
         run: go vet ./...
 
       - name: Build
-        run: go build ./...
+        run: |
+          COMMIT=$(git rev-parse --short HEAD)
+          BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          go build -ldflags "-X github.com/bilal-arikan/tionharness/internal/api.BuildCommit=$COMMIT -X github.com/bilal-arikan/tionharness/internal/api.BuildDate=$BUILD_TIME" ./...
 
       # The whole suite — do NOT narrow this to a package subset. A reduced gate
       # silently stopped covering the packages that actually change

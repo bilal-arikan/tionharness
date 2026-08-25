@@ -8,6 +8,7 @@ import (
 	"os"
 	"sort"
 	"strconv"
+	"sync"
 	"time"
 )
 
@@ -41,7 +42,36 @@ const (
 	DebugGuardrail  = "guardrail"   // tool-loop guardrail decision (warn/block/halt in Name, tool in Detail)
 	DebugLesson     = "lesson"      // a failure lesson was distilled and stored (tool in Name, lesson in Detail)
 	DebugEpoch      = "epoch"       // prompt-epoch lifecycle: created/adopted/stale/refreshed (reason in Name/Detail)
+	DebugBuild      = "build"       // backend build running when the session journal was created
 )
+
+var debugBuildInfo struct {
+	sync.RWMutex
+	commit    string
+	buildTime string
+}
+
+// SetDebugBuildInfo configures the process build recorded as the first event in
+// every newly-created session debug journal. Empty values disable the event.
+func SetDebugBuildInfo(commit, buildTime string) {
+	debugBuildInfo.Lock()
+	debugBuildInfo.commit = commit
+	debugBuildInfo.buildTime = buildTime
+	debugBuildInfo.Unlock()
+}
+
+func currentDebugBuildEvent() (DebugEvent, bool) {
+	debugBuildInfo.RLock()
+	defer debugBuildInfo.RUnlock()
+	if debugBuildInfo.commit == "" && debugBuildInfo.buildTime == "" {
+		return DebugEvent{}, false
+	}
+	return DebugEvent{
+		Type:   DebugBuild,
+		Name:   debugBuildInfo.commit,
+		Detail: debugBuildInfo.buildTime,
+	}, true
+}
 
 // DebugEvent is one structured observability record. Fields are sparse
 // (omitempty) so each event only carries what is relevant to its type; the db
@@ -114,13 +144,6 @@ func (d *DB) AppendDebugEvent(sessionID string, ev DebugEvent, cap int) error {
 		cap = DefaultDebugJournalCap
 	}
 
-	var buf bytes.Buffer
-	enc := json.NewEncoder(&buf)
-	enc.SetEscapeHTML(false)
-	if err := enc.Encode(ev); err != nil {
-		return err
-	}
-
 	d.debugMu.Lock()
 	defer d.debugMu.Unlock()
 
@@ -129,6 +152,24 @@ func (d *DB) AppendDebugEvent(sessionID string, ev DebugEvent, cap int) error {
 	// so the cap is enforced even across restarts.
 	if _, known := d.debugCount[sessionID]; !known {
 		d.debugCount[sessionID] = countFileLines(path)
+	}
+
+	events := []DebugEvent{ev}
+	if d.debugCount[sessionID] == 0 {
+		if build, ok := currentDebugBuildEvent(); ok {
+			build.Time = ev.Time
+			build.SessionID = sessionID
+			events = append([]DebugEvent{build}, events...)
+		}
+	}
+
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+	for _, event := range events {
+		if err := enc.Encode(event); err != nil {
+			return err
+		}
 	}
 
 	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
@@ -142,7 +183,7 @@ func (d *DB) AppendDebugEvent(sessionID string, ev DebugEvent, cap int) error {
 	if err := f.Close(); err != nil {
 		return err
 	}
-	d.debugCount[sessionID]++
+	d.debugCount[sessionID] += len(events)
 
 	// Prune lazily: rewrite keeping only the newest cap events once we drift past
 	// cap + cap/4, so the rewrite cost is amortised over many appends.

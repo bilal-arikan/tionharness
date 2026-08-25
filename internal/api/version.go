@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"runtime"
 	"runtime/debug"
+	"sync"
 )
 
 // BuildVersion, BuildDate, and BuildCommit are injected at build time via
@@ -12,10 +13,31 @@ import (
 //
 // When building without ldflags (dev mode) all three default to "dev".
 var (
-	BuildVersion = "dev"
-	BuildDate    = "dev"
-	BuildCommit  = "dev"
+	BuildVersion  = "dev"
+	BuildDate     = "dev"
+	BuildCommit   = "dev"
+	buildInfoOnce sync.Once
 )
+
+// ResolveBuildInfo fills missing ldflags values from Go's embedded VCS metadata.
+func ResolveBuildInfo() {
+	buildInfoOnce.Do(func() {
+		if info, ok := debug.ReadBuildInfo(); ok {
+			for _, setting := range info.Settings {
+				switch setting.Key {
+				case "vcs.revision":
+					if BuildCommit == "dev" && len(setting.Value) >= 7 {
+						BuildCommit = setting.Value[:7]
+					}
+				case "vcs.time":
+					if BuildDate == "dev" {
+						BuildDate = setting.Value
+					}
+				}
+			}
+		}
+	})
+}
 
 type versionResponse struct {
 	Version   string `json:"version"`
@@ -26,6 +48,7 @@ type versionResponse struct {
 }
 
 func (s *Server) handleVersion(w http.ResponseWriter, r *http.Request) {
+	ResolveBuildInfo()
 	goVer := runtime.Version()
 
 	// ReadBuildInfo fills in the module path and, when built with ldflags, VCS
@@ -34,22 +57,6 @@ func (s *Server) handleVersion(w http.ResponseWriter, r *http.Request) {
 	if info, ok := debug.ReadBuildInfo(); ok {
 		if info.Main.Path != "" {
 			module = info.Main.Path
-		}
-		// If version/commit were not injected via ldflags, try VCS settings from
-		// the build info (populated by `go build` inside a git working tree).
-		if BuildVersion == "dev" {
-			for _, s := range info.Settings {
-				switch s.Key {
-				case "vcs.revision":
-					if len(s.Value) >= 7 {
-						BuildCommit = s.Value[:7]
-					}
-				case "vcs.time":
-					if BuildDate == "dev" {
-						BuildDate = s.Value
-					}
-				}
-			}
 		}
 	}
 

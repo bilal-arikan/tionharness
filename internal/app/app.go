@@ -21,6 +21,7 @@ import (
 	"github.com/bilal-arikan/tionharness/internal/api"
 	"github.com/bilal-arikan/tionharness/internal/backup"
 	"github.com/bilal-arikan/tionharness/internal/config"
+	"github.com/bilal-arikan/tionharness/internal/db"
 	"github.com/bilal-arikan/tionharness/internal/events"
 	"github.com/bilal-arikan/tionharness/internal/logbuf"
 	"github.com/bilal-arikan/tionharness/internal/providers"
@@ -83,6 +84,9 @@ func openLogFile() (*os.File, error) {
 // cfg.Addr = "127.0.0.1:0" makes the OS pick a free port; Addr() then reports
 // the resolved address. It does not begin serving — call Serve for that.
 func Bootstrap(cfg *config.Config, logs *logbuf.Buffer, logger *slog.Logger) (*App, error) {
+	api.ResolveBuildInfo()
+	logger.Info("backend build", "commit", api.BuildCommit, "build_time", api.BuildDate)
+	db.SetDebugBuildInfo(api.BuildCommit, api.BuildDate)
 	// Take the single-instance data-dir lock FIRST, before touching the store: two
 	// server processes over one file store corrupt it (two in-memory hubs / inbox
 	// workers / schedulers — see lockDataDir + _Docs/58). Fail fast with a clear

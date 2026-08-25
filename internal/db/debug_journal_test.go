@@ -77,6 +77,42 @@ func TestDebugJournalRoundTrip(t *testing.T) {
 	}
 }
 
+func TestDebugJournalStartsWithBuildInfoOnce(t *testing.T) {
+	SetDebugBuildInfo("abc1234", "2026-08-25T20:00:00Z")
+	defer SetDebugBuildInfo("", "")
+
+	d, err := Open(filepath.Join(t.TempDir(), "store"))
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	ctx := context.Background()
+	agent, err := d.CreateAgent(ctx, Agent{Name: "A", Provider: "anthropic"})
+	if err != nil {
+		t.Fatalf("create agent: %v", err)
+	}
+	session, err := d.CreateSession(ctx, Session{AgentID: agent.ID, Title: "T"})
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+	if err := d.AppendDebugEvent(session.ID, DebugEvent{Type: DebugTurn}, 0); err != nil {
+		t.Fatalf("append first event: %v", err)
+	}
+	if err := d.AppendDebugEvent(session.ID, DebugEvent{Type: DebugTool}, 0); err != nil {
+		t.Fatalf("append second event: %v", err)
+	}
+
+	events, err := d.ReadDebugEvents(ctx, session.ID, "", 0)
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if len(events) != 3 {
+		t.Fatalf("event count = %d, want 3", len(events))
+	}
+	if events[0].Type != DebugBuild || events[0].Name != "abc1234" || events[0].Detail != "2026-08-25T20:00:00Z" {
+		t.Fatalf("first event = %+v, want build info", events[0])
+	}
+}
+
 // TestDebugSummaryAnomaliesAndSeries verifies the Faz-3 derived fields: the
 // per-turn / per-call time series and the heuristic anomaly findings.
 func TestDebugSummaryAnomaliesAndSeries(t *testing.T) {
