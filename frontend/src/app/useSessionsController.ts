@@ -13,8 +13,9 @@ import { INITIAL_ROUTE } from './useAppNavigation'
 import { isWritableSessionKind } from './viewRegistry'
 import { useRefreshTrigger } from '@/shared/hooks/useRefreshTrigger'
 import { SIGNAL_AGENTS } from './eventToRefreshSignals'
-import { readSessionDraftState } from '@/shared/lib/sessionDrafts'
+import { draftSessionIds, readSessionDraftState } from '@/shared/lib/sessionDrafts'
 import { shouldDiscardFreshSession } from './freshSessionCleanup'
+import { pickInitialSession } from './pickInitialSession'
 
 // Sidebar list page size (TSK68 load-more): the session list is fetched one
 // page at a time and appended via loadMoreSessions. Kept under the backend's
@@ -150,22 +151,20 @@ export function useSessionsController({
         // lists every kind, but landing a returning user on a read-only flow or
         // schedule log (with no composer) would be a worse default than the last
         // conversation they can actually continue.
-        const firstChat = ss.find((s) => isWritableSessionKind(s.kind))
-        let sid = firstChat ? firstChat.id : null
-        let aid = firstChat ? firstChat.agentId : null
         // Honor a pending deep link (initial load or cross-workspace nav) once.
         // A legacy '#executions/<sessionId>' link has already been rewritten to
         // the chat view by parseRoute, so it lands here as an ordinary session id.
         const want = pendingRouteRef.current
         pendingRouteRef.current = null
-        if (want) {
-          if (want.view === 'chat' && want.id && ss.some((s) => s.id === want.id)) {
-            sid = want.id
-            aid = ss.find((s) => s.id === want.id)?.agentId ?? aid
-          } else if (want.view === 'agents' && want.id && ag.some((a) => a.id === want.id)) {
-            aid = want.id
-          }
-        }
+        // Default selection: the most recent writable session, unless a session
+        // holds an unsent draft (a returning user should land back on the chat
+        // they were mid-typing) or an explicit deep link overrides both.
+        const { sessionId: sid, agentId: aid } = pickInitialSession({
+          sessions: ss,
+          wantRoute: want,
+          draftedSessionIds: draftSessionIds(),
+          agentExists: (id) => ag.some((a) => a.id === id),
+        })
         setActiveSessionId(sid)
         setActiveAgentId(aid)
       })
