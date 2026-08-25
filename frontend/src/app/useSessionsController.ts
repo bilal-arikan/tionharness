@@ -13,6 +13,8 @@ import { INITIAL_ROUTE } from './useAppNavigation'
 import { isWritableSessionKind } from './viewRegistry'
 import { useRefreshTrigger } from '@/shared/hooks/useRefreshTrigger'
 import { SIGNAL_AGENTS } from './eventToRefreshSignals'
+import { readSessionDraftState } from '@/shared/lib/sessionDrafts'
+import { shouldDiscardFreshSession } from './freshSessionCleanup'
 
 // Sidebar list page size (TSK68 load-more): the session list is fetched one
 // page at a time and appended via loadMoreSessions. Kept under the backend's
@@ -344,15 +346,22 @@ export function useSessionsController({
   const freshEmptyRef = useRef<string | null>(null)
 
   // discardEmptyFresh deletes the tracked fresh session when it is the one being
-  // left AND nothing was ever sent in it (its live transcript is empty). leavingId
-  // is the session being navigated away from.
+  // left AND neither its transcript nor its active-workspace draft has content.
+  // leavingId is the session being navigated away from.
   const discardEmptyFresh = useCallback(
     (leavingId: string | null) => {
       const id = freshEmptyRef.current
       if (!id || id !== leavingId) return
       freshEmptyRef.current = null
-      // A message was sent → it's a real conversation, keep it.
-      if ((messagesRef.current ?? []).length > 0) return
+      if (
+        !shouldDiscardFreshSession({
+          freshSessionId: id,
+          leavingSessionId: leavingId,
+          messageCount: messagesRef.current.length,
+          draft: readSessionDraftState(id),
+        })
+      )
+        return
       api.deleteSession(id).catch(() => {})
       setSessions((prev) => prev.filter((s) => s.id !== id))
     },

@@ -30,12 +30,19 @@ function draftKey(sessionId?: string): string | null {
 }
 
 export function readSessionDraft(sessionId?: string): string {
+  const state = readSessionDraftState(sessionId)
+  return state.ok ? state.value : ''
+}
+
+export type SessionDraftReadState = { ok: true; value: string } | { ok: false; value: '' }
+
+export function readSessionDraftState(sessionId?: string): SessionDraftReadState {
   const key = draftKey(sessionId)
-  if (!key) return ''
+  if (!key) return { ok: true, value: '' }
   try {
-    return localStorage.getItem(key) ?? ''
+    return { ok: true, value: localStorage.getItem(key) ?? '' }
   } catch {
-    return ''
+    return { ok: false, value: '' }
   }
 }
 
