@@ -1,7 +1,7 @@
 # TionHarness — Ajan Rehberi
 
 Bu dosya, TionHarness deposunda çalışan ajanlar için tekrar eden friction'dan
-türetilmiş kısa kurallar içerir. Terminal: PowerShell veya Git-Bash.
+türetilmiş kısa kurallar içerir. Terminal: zorunlu Git Bash.
 
 ## Playwright MCP
 
@@ -49,6 +49,26 @@ kullanma.
   geçmez; orada yukarıdaki kuralları elle uygula.
 - Bu depoda sorgular için `project` = `C-Users-user-Desktop-Projects-TionHarness`.
 
+## Shell ve Go araç zinciri
+
+- Bu Windows çalışma alanının zorunlu komut kabuğu **Git Bash**'tir. Komutları POSIX
+  sözdizimiyle yaz; Windows yollarını Bash'te `/c/...` biçiminde kullan. PowerShell'i
+  varsayılan yapma. Yalnız registry/cmdlet gibi Windows-native bir işlem gerçekten
+  gerekirse Bash içinden `powershell -NoProfile -Command "..."` çağır.
+- Ortamı tahmin etme: önce `printf 'shell=%s\n' "$SHELL"`, ardından
+  `command -v go` ve `command -v gofmt` çalıştır. PATH'teki araçlar bulunursa onları
+  kullan. Bulunmazsa bu makinede doğrulanmış yollar
+  `'/c/Program Files/Go/bin/go.exe'` ve
+  `'/c/Program Files/Go/bin/gofmt.exe'`'dir; kullanmadan önce `test -x` ile doğrula.
+  Araç yoksa biçimlendirme/test yapılmış gibi raporlama.
+- `GOROOT` değerini sabit yazma ve `GOROOT`'u komut gibi çağırma. Etkin Go komutunu
+  seçtikten sonra `go env GOROOT` eşdeğerini çalıştır; gerekiyorsa çıktıyı
+  `go_root="$("$go_bin" env GOROOT)"` biçiminde güvenli değişkene ata.
+- Go dosyası değişince hedef dosyalarda `gofmt -w` çalıştır; bu kullanılmayan
+  importları da görünür kılar. Ardından ilgili testleri ve Windows'a özel kod için
+  `GOOS=windows "$go_bin" test ./...` doğrulamasını çalıştır. Git Bash'te ortam
+  atamasını komutun önüne koy; PowerShell `$env:` sözdizimi kullanma.
+
 ## Grep/ripgrep kullanımı
 
 Buradaki yerleşik `Grep` aracı **ripgrep** sözdizimi kullanır (POSIX `grep`
@@ -57,10 +77,17 @@ değil). Gerçek yaşanan hatalardan çıkarılmış kurallar:
 - **Literal süslü/parantez karakterlerini kaçır.** Regex meta karakteri olan
   `{}` `()` `[]` işaretlerini düz metin ararken ters bölü ile kaçır.
   Örnek: bir Go interface aramak için `interface\{\}` yaz, `interface{}` değil.
+  Bilinçli regex'te açılan her `(`, `[` ve `{` grubunu kapat; uzun deseni geniş
+  aramaya vermeden önce küçük bir `rg -- "$pattern" CLAUDE.md` çağrısıyla doğrula.
 
 - **Alternation için düz `|` kullan.** Shell alışkanlığıyla `a\|b` yazma —
   ripgrep bunu "regex parse error" olarak reddeder. Grep aracına `pattern`
   değerini `error|warning|fatal` biçiminde, kaçırılmamış boru ile ver.
+
+- Shell'de dosya listesi için önce `rg --files` kullan. Literal kullanıcı girdisini
+  `rg -F -- "$text"`, bilinçli regex'i `rg -- "$pattern"` ile ara. Tireyle
+  başlayabilecek desenlerde `--` ayırıcısını koru; boş değişken veya geniş,
+  doğrulanmamış glob ile arama başlatma.
 
 - **`output_mode` yalnızca şu üç değeri kabul eder:** `content` |
   `files_with_matches` | `count`. Başka bir değer (ör. `text`, `lines`) geçersiz
@@ -78,7 +105,7 @@ Frontend **Prettier** ile formatlanır — ayarlar `frontend/.prettierrc.json`
 "prettier'i varsayılan ayarlarla çalıştırmak" YASAK: config'siz koşarsan dosyayı
 çift tırnak + noktalı virgüle çevirir ve devasa sahte diff üretir.
 
-```powershell
+```bash
 cd frontend
 npm run format         # yaz (src/**/*.{ts,tsx,css})
 npm run format:check   # sadece kontrol
@@ -95,12 +122,45 @@ düzenlemeler için elle `npm run format` koşmaya gerek yok. Yine de büyük bi
 elle-düzenlenmiş dosya grubu eklenirse (ör. dışarıdan import edilen kod) kontrol
 etmeden varsayma — `cd frontend && npm run format:check` ile ölç.
 
+## Teslim whitespace kapısı
+
+- Markdown (`*.md`) ve YAML (`*.yml`, `*.yaml`) satırlarında trailing whitespace
+  yasaktır. Üretilen veya düzenlenen dosyaları teslimden önce kontrol et; boşluk
+  hatasını sonraki ajana bırakma.
+- Her değişiklikten sonra depo kökünde `git diff --check` çalıştır. Çıktı varsa
+  teslim **FAIL**'dir; tüm `trailing whitespace` ve `space before tab` hatalarını
+  düzeltip komutu sıfır çıkış koduyla yeniden çalıştır.
+- Pre-commit hook yalnız stage'lenmiş dosyalara baktığından commit yapılmayan
+  görevlerde whitespace kanıtı yerine geçmez. Bu görevlerde de `git diff --check`
+  zorunludur.
+
+## website/ — tanıtım sitesi (frontend/ ile karıştırma)
+
+Depoda **iki ayrı npm projesi** vardır. `frontend/` uygulamanın arayüzüdür ve binary'ye
+gömülür; `website/` ise statik tanıtım sitesidir (Astro), Go modülünün dışındadır ve
+hiçbir şeye gömülmez. Kendi `package.json`/`node_modules`'ü vardır — komutları
+`cd website` içinden koştur. `frontend/.prettierrc.json` ve pre-commit prettier adımı
+**yalnız `frontend/`** içindir; `website/` dosyalarını oraya sokma.
+
+- Doğrulama: `cd website; npm run build` + `npm run check` (0 hata beklenir).
+- **Placeholder kuralı:** projede henüz olmayan her şey (repo/release/docs/lisans/sürüm)
+  `website/src/site.config.ts`'te `null` olarak durur ve bileşenler bunu ölü link yerine
+  "Coming soon" olarak render eder. Yeni bir "henüz yok" alanı **bileşenin içine değil**
+  bu dosyaya eklenir.
+- **İki dosya uygulamadan elle senkronlanır**, uygulamada tema değişirse ikisi de
+  güncellenmelidir: `website/src/styles/theme.css` ← `frontend/src/index.css`,
+  `website/src/content/themes.ts` ← `frontend/src/shared/lib/themePresets.ts`.
+- Site metni yazarken **kök `README.md`'yi kaynak alma** — bayat. Kaynak:
+  `_Docs\00-GENEL-BAKIS.md` + `_Docs\05-ILERLEME.md`.
+
+Detay: `_Docs\72-TANITIM-SITESI.md`.
+
 ## Test koşturma
 
-```powershell
-$env:TIONHARNESS_ENABLE_SHELL='1'   # yoksa shell aracı testleri skip'e düşer
-go test ./... -count=1            # tüm backend (~90sn)
-cd frontend; npm test             # vitest (pure-logic modüller)
+```bash
+export TIONHARNESS_ENABLE_SHELL=1  # yoksa shell aracı testleri skip'e düşer
+go test ./... -count=1             # tüm backend (~90sn)
+cd frontend && npm test            # vitest (pure-logic modüller)
 ```
 
 CI `.gitea/workflows/ci.yml`'dedir — **repo'nun tek remote'u Gitea'dır, GitHub değil**
