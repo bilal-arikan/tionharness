@@ -5,6 +5,10 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"runtime"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 )
@@ -25,6 +29,35 @@ func TestCodexRunAttemptReturnsOnCancelWhileGrandchildHoldsPipe(t *testing.T) {
 		t.Skipf("no test binary path: %v", err)
 	}
 	t.Setenv("CODEX_TEST_SELF", self)
+	grandchildPIDFile := filepath.Join(t.TempDir(), "grandchild.pid")
+	t.Setenv("CODEX_TEST_GRANDCHILD_PID_FILE", grandchildPIDFile)
+	t.Cleanup(func() {
+		data, err := os.ReadFile(grandchildPIDFile)
+		if err != nil {
+			t.Errorf("read grandchild PID for cleanup: %v", err)
+			return
+		}
+		pid, err := strconv.Atoi(strings.TrimSpace(string(data)))
+		if err != nil {
+			t.Errorf("parse grandchild PID for cleanup: %v", err)
+			return
+		}
+		if runtime.GOOS == "windows" {
+			cleanup := exec.Command("taskkill", "/F", "/T", "/PID", strconv.Itoa(pid))
+			if output, err := cleanup.CombinedOutput(); err != nil {
+				t.Errorf("kill leaked test grandchild %d: %v: %s", pid, err, strings.TrimSpace(string(output)))
+			}
+			return
+		}
+		process, err := os.FindProcess(pid)
+		if err != nil {
+			t.Errorf("find leaked test grandchild %d: %v", pid, err)
+			return
+		}
+		if err := process.Kill(); err != nil {
+			t.Errorf("kill leaked test grandchild %d: %v", pid, err)
+		}
+	})
 
 	c := &CodexCLI{binPath: self}
 	args := []string{"-test.run=TestCodexHelperExitsLeavingChild", "-test.v=false"}
@@ -67,6 +100,14 @@ func TestCodexHelperExitsLeavingChild(t *testing.T) {
 	child.Stdout = os.Stdout // inherit the pipe — this is what wedges the reader
 	if err := child.Start(); err != nil {
 		t.Fatalf("helper: start grandchild: %v", err)
+	}
+	pidFile := os.Getenv("CODEX_TEST_GRANDCHILD_PID_FILE")
+	if pidFile == "" {
+		t.Fatal("helper: CODEX_TEST_GRANDCHILD_PID_FILE is empty")
+	}
+	if err := os.WriteFile(pidFile, []byte(strconv.Itoa(child.Process.Pid)), 0o600); err != nil {
+		_ = child.Process.Kill()
+		t.Fatalf("helper: write grandchild PID: %v", err)
 	}
 	fmt.Println(`{"type":"thread.started"}`)
 	// Deliberately no Wait: the grandchild outlives this process.

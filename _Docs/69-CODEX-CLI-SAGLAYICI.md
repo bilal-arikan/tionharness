@@ -194,14 +194,25 @@ paralel çağrılar gruplanamaz. Kozmetik kayıp.
 ### `CODEX_HOME` = `CLAUDE_CONFIG_DIR`
 
 `codex-rs/utils/home-dir/src/lib.rs`: `CODEX_HOME` set edilmişse **var olan bir
-dizin olmalı**; değilse `~/.codex`. TionHarness bunu sağlayıcı örneği başına izole eder:
+dizin olmalı**; değilse `~/.codex`. TionHarness kalıcı kimlik bilgisini sağlayıcı
+örneğinin base home'unda, tura özel config'i ise benzersiz shadow home'da tutar:
 
 ```
-<dataDir>/provider-homes/<instance-id>/  ← CODEX_HOME
-├── config.toml               ← TionHarness üretir (veya -c ile override)
-├── auth.json                 ← login durumu
-└── log/
+<dataDir>/provider-homes/<instance-id>/       ← base home
+├── auth.json                              ← kalıcı login durumu
+└── .shadow/turn-<benzersiz>/              ← tur boyunca CODEX_HOME
+    ├── auth.json                          ← base home'dan hardlink/kopya
+    └── config.toml                        ← yalnız bu turun config'i
 ```
+
+`prepareShadowHome` (`internal/providers/codexcli_shadowhome.go`) her normal tur
+için `os.MkdirTemp` ile benzersiz dizin üretir. Base home'daki `auth.json` önce
+hardlink edilir; dosya sistemi hardlink'i reddederse içerik kopyalanır. Auth
+dosyası yoksa bu bilinçli bir no-op'tur ve Codex normal "login yok" hatasını
+üretir. Tur sonunda yalnız shadow dizin silinir; base home ve login durumu
+korunur. `codex exec` aynı nedenle oturum dosyası da bırakmamak üzere
+`--json --ephemeral` ile çağrılır (`internal/providers/codexcli.go:123-145,
+237-241,363-372`).
 
 Canlı doğrulandı: boş bir `CODEX_HOME` verildiğinde CLI onu kullandı ve
 "login yok" hatasına düştü (global `~/.codex`'e sızmadı).
@@ -226,8 +237,9 @@ kurulumunda bir kez) mümkün kılar.
 
 Yeni `codex-cli` örneği boş `configDir` ile oluşturulursa backend
 `<dataDir>/provider-homes/<instance-id>` dizinini oluşturup yolu örneğe kaydeder.
-Her örnek kendi `auth.json`, `config.toml` ve thread durumunu taşır; login bir
-workspace'e değil örneğe aittir. Ajanlar uygulama-geneli örneklerden birini seçer.
+Her örnek kendi kalıcı `auth.json` dosyasını taşır; tura özel `config.toml` ve
+geçici runtime durumu shadow home'da kalır. Login bir workspace'e değil örneğe
+aittir. Ajanlar uygulama-geneli örneklerden birini seçer.
 
 UI'daki **Giriş yap / Durum** işlemleri seçili örnek id'siyle çalışır:
 `GET /api/providers/{id}/auth`, device-code için `POST .../device/start`,
@@ -324,6 +336,37 @@ değişkeniyle sağlanıyor (alt süreç kendi home'unu okur, çağıran kullan�
 `~/.codex`'ini değil) — bayrak hem gereksizdi hem de yıkıcıydı. Düzeltme:
 bayrak `buildArgs`'tan tamamen kaldırıldı, `--strict-config` (bağımsız bir
 kontrol, katman atlamıyor) korundu.
+
+### Paylaşımlı `CODEX_HOME` yarışı ve shadow home çözümü ✅
+
+`config.toml` bir "tura özel geçici dosya" DEĞİLDİR: home'un gerçek config'idir
+(`writeCodexConfig`'in `cleanup`'ı bilerek no-op). `PinCodexHome`
+(`internal/agent/codexhome.go`) ise **her** codex ajanını tek bir app-global
+`<dataDir>/codex-home`'a pinler. Bu ikisi birlikte, eşzamanlı iki turun aynı
+dosyaya yazması demektir — kaybeden tur, karşı turun config'ini okur.
+
+**Canlı gözlem (SES431).** unity-mcp ölüyken MCP fallback'i devreye girdi,
+`config.toml`'u o sunucu olmadan yeniden yazdı, kullanıcıya "retrying without
+their tools" dedi — ve tur yine **aynı** unity-mcp hatasıyla öldü. Sebep: araya
+giren ikinci bir codex çağrısı (ders damıtıcı) dosyayı tam sunucu setiyle geri
+yazmıştı. Aynı home'daki `auth.json` da benzer şekilde yarışır; oradaki OAuth
+refresh token'ı **tek kullanımlıktır ve yenilemede döner**.
+
+**Güncel çözüm:** normal turlar base home'a doğrudan yazmaz. Her tur
+`prepareShadowHome` ile kendi `CODEX_HOME` dizinini alır; `writeCodexConfig`
+yalnız bu dizindeki `config.toml`'u değiştirir ve alt süreç aynı dizini okur.
+Böylece aynı sağlayıcı örneğini kullanan Codex turları config'i birbirinin
+altından değiştirmeden **paralel koşabilir**.
+
+`acquireCodexHome` ve `codexcli_homelock.go` kaldırılmadı. Kilit, base
+`CODEX_HOME`'a doğrudan yazan legacy/bakım yollarının tüm yazma + alt süreç
+penceresini korumaya devam eder; normal shadow-home tur yolu bu ortak kilide
+girmez. Login akışı da (`internal/api/codex_auth.go`) kalıcı kimlik bilgisini
+base home'da oluşturur ve günceller, shadow home'da değil.
+
+Regresyonlar `codexcli_homelock_test.go` ve shadow-home/eşzamanlı tur testlerinde
+hardlink-kopya fallback'ini, temizlik sınırını ve iki turun gerçekten üst üste
+çalışabildiğini doğrular.
 
 ### 5.1 🔴 KRİTİK — `default_tools_approval_mode = "approve"` zorunlu
 

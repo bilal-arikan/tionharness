@@ -139,6 +139,29 @@ func TestCodexHelperFailsWhileUnityMCPConfigured(t *testing.T) {
 		t.Skip("helper: only runs under the re-exec in TestCodexCompleteRetriesWithoutTheFailingMCPServer")
 	}
 	home := os.Getenv("CODEX_HOME")
+	if barrier := os.Getenv("CODEX_TEST_HELPER_BARRIER"); barrier != "" {
+		marker := filepath.Join(barrier, filepath.Base(home))
+		if err := os.WriteFile(marker, []byte(home), 0o600); err != nil {
+			fmt.Fprintf(os.Stderr, "helper: create concurrency barrier marker: %v\n", err)
+			os.Exit(1)
+		}
+		deadline := time.Now().Add(3 * time.Second)
+		for {
+			entries, err := os.ReadDir(barrier)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "helper: read concurrency barrier: %v\n", err)
+				os.Exit(1)
+			}
+			if len(entries) >= 2 {
+				break
+			}
+			if time.Now().After(deadline) {
+				fmt.Fprintln(os.Stderr, "helper: concurrency barrier timeout: two codex turns did not overlap")
+				os.Exit(1)
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+	}
 	path := filepath.Join(home, "config.toml")
 	// The real codex reads config.toml some way into its startup, which is what
 	// gives a concurrent turn time to overwrite the file. The concurrency
