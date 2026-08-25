@@ -200,20 +200,35 @@ dizin olmalı**; değilse `~/.codex`. TionHarness kalıcı kimlik bilgisini sağ
 ```
 <dataDir>/provider-homes/<instance-id>/       ← base home
 ├── auth.json                              ← kalıcı login durumu
+├── models_cache.json                      ← model kataloğu cache'i
+├── installation_id                        ← kararlı kurulum kimliği
 └── .shadow/turn-<benzersiz>/              ← tur boyunca CODEX_HOME
-    ├── auth.json                          ← base home'dan atomik snapshot kopyası
+    ├── .owner                             ← sahip PID + süreç başlangıç zamanı
+    ├── auth.json                          ← base home'dan atomik snapshot
+    ├── models_cache.json                  ← base home'dan atomik snapshot
+    ├── installation_id                    ← base home'dan atomik snapshot
     └── config.toml                        ← yalnız bu turun config'i
 ```
 
 `prepareShadowHome` (`internal/providers/codexcli_shadowhome.go`) her normal tur
-için `os.MkdirTemp` ile benzersiz dizin üretir. Base home'daki `auth.json`
-geçici dosyaya kopyalanıp atomik olarak yerine taşınır; her tur bağımsız bir
-snapshot kullanır. Auth dosyası yoksa bu bilinçli bir no-op'tur ve Codex normal
-"login yok" hatasını
-üretir. Tur sonunda yalnız shadow dizin silinir; base home ve login durumu
-korunur. `codex exec` aynı nedenle oturum dosyası da bırakmamak üzere
+için `os.MkdirTemp` ile benzersiz dizin üretir. Base home'daki `auth.json`,
+`models_cache.json` ve `installation_id` geçici dosyaya yazılıp `sync` edildikten
+sonra atomik olarak yerine taşınır; her tur bağımsız bir snapshot kullanır.
+`auth.json` login durumunu taşırken son iki dosya Codex'in model kataloğunu ve
+kurulum kimliğini yeniden edinmek için cold-start ağ turu yapmasını önler. Bu
+dosyalardan biri yoksa kopyalama bilinçli bir no-op'tur; özellikle auth yokluğunda
+Codex normal "login yok" hatasını üretir. Tur sonunda yalnız shadow dizin silinir;
+base home ve kalıcı durum korunur. `codex exec` aynı nedenle oturum dosyası da
+bırakmamak üzere
 `--json --ephemeral` ile çağrılır (`internal/providers/codexcli.go:123-145,
 237-241,363-372`).
+
+Normal cleanup çalışmazsa sonraki tur, bir saatten eski `turn-*` dizinlerini
+orphan adayı olarak tarar. Her shadow home oluşturulurken `.owner` dosyasına sahip
+sürecin PID'si ve gerçek başlangıç zamanı yazılır. Süpürücü dizini yalnız süreç
+ölüyse veya aynı PID artık farklı başlangıç zamanına aitse siler; karşılaştırma
+±2 saniye toleranslıdır. Süreç başlangıç zamanı alınamazsa canlı turu silme
+riskine karşı dizin fail-safe olarak korunur.
 
 Canlı doğrulandı: boş bir `CODEX_HOME` verildiğinde CLI onu kullandı ve
 "login yok" hatasına düştü (global `~/.codex`'e sızmadı).
@@ -364,8 +379,9 @@ shadow home kullanıyor ve base home'a doğrudan config yazan bir çağrı kalma
 Login akışı (`internal/api/codex_auth.go`) kalıcı kimlik bilgisini base home'da
 oluşturup günceller; normal sağlayıcı turlarının config izolasyonundan ayrıdır.
 
-Shadow-home regresyon testleri auth snapshot bağımsızlığını, temizlik sınırını ve
-iki turun farklı home'larla gerçekten üst üste çalışabildiğini doğrular.
+Shadow-home regresyon testleri üç snapshot dosyasının devrini, auth snapshot
+bağımsızlığını, orphan sahiplik/canlılık kontrolünü, temizlik sınırını ve iki
+turun farklı home'larla gerçekten üst üste çalışabildiğini doğrular.
 
 ### 5.1 🔴 KRİTİK — `default_tools_approval_mode = "approve"` zorunlu
 
