@@ -972,6 +972,16 @@ alındığında ikisi de düşer (doğrulandı).
 
 ## İlgili dokümanlar
 
+### Koordinatör spawn iddiası guard'ı
+
+Codex CLI kendi araç döngüsünü çalıştırdığı için TionHarness'in MCP onarım katmanı
+bu yolda devreye girmez. Koordinatör turu hiç araç adımı üretmeden worker veya
+validator başlattığını/delege ettiğini iddia ederse `internal/agent` içindeki
+deterministik guard mesajın sonuna görünür İngilizce uyarı ekler ve
+`debug.jsonl` dosyasına `type:"guard"`, `name:"unbacked_spawn_claim"` kaydı
+yazar. Soru ve gelecek-zaman planları iddia sayılmaz; turdaki herhangi bir araç
+çağrısı guard'ı kapatır.
+
 - `70-CODEX-CLI-UYGULAMA-PLANI.md` — faz faz uygulama planı
 - `17-*` — sağlayıcı soyutlaması, prompt-cache muhasebesi
 - `51-CLAUDE-CONFIG-BIRLESIK.md` — per-workspace config evi deseni

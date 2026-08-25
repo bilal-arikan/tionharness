@@ -1684,6 +1684,16 @@ func (r *Runtime) runCoordinatorTurn(coordSessionID string) {
 	} else if strings.TrimSpace(text) == "" {
 		text = "ℹ️ Koordinatör bu tur için boş yanıt döndürdü."
 	}
+	if DetectUnbackedSpawnClaim(text, countToolSteps(steps), sess.IsCoordinator()) {
+		const warning = "⚠️ No worker was actually spawned this turn (no tool call was made)."
+		text = strings.TrimRight(text, "\n") + "\n\n" + warning
+		r.emitDebug(ctx, db.DebugEvent{
+			Type:    "guard",
+			AgentID: agent.ID,
+			Name:    "unbacked_spawn_claim",
+			Detail:  "coordinator claimed worker delegation without a tool call",
+		})
+	}
 	// text was pre-composed above (success output / failure / stop / empty note).
 	if addErr := r.recordAssistantMessage(ctx, coordSessionID, agent.ID, text, steps, meta, time.Since(turnStart).Milliseconds()); addErr != nil {
 		r.logger.Warn("coordination: failed to record coordinator reply", "coordinator", coordSessionID, "error", addErr)
