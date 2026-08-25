@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -160,6 +161,74 @@ func TestBundledTemplatePacksIntegrity(t *testing.T) {
 
 	if !sawBlank {
 		t.Fatalf("expected a bundled %q template", blankTemplateID)
+	}
+}
+
+func TestBlankTemplateSeedsCEOAndPMControlLoop(t *testing.T) {
+	store := market.New("", "")
+	pack, ok := store.Get(blankTemplateID)
+	if !ok {
+		t.Fatal("bundled blank template pack not found")
+	}
+	wp := pack.Payload.Workspace
+	if wp == nil {
+		t.Fatal("blank template pack has no workspace payload")
+	}
+
+	agents := make(map[string]market.WorkspaceTemplateAgent, len(wp.Agents))
+	for _, a := range wp.Agents {
+		agents[a.Key] = a
+	}
+	ceo, ok := agents["ceo"]
+	if !ok {
+		t.Fatal("blank template has no CEO agent")
+	}
+	if _, ok := agents["pm"]; !ok {
+		t.Fatal("blank template has no PM agent")
+	}
+	var allowed []string
+	if err := json.Unmarshal([]byte(ceo.AllowedTools), &allowed); err != nil {
+		t.Fatalf("CEO allowedTools is invalid: %v", err)
+	}
+	allowedSet := make(map[string]bool, len(allowed))
+	for _, name := range allowed {
+		allowedSet[name] = true
+	}
+	for _, forbidden := range []string{"Bash", "Write", "Edit", "create_task", "update_task", "move_task"} {
+		if allowedSet[forbidden] {
+			t.Errorf("CEO must not be allowed to use %q", forbidden)
+		}
+	}
+	for _, required := range []string{"get_view", "list_tasks", "list_sessions", "send_message", "spawn_session"} {
+		if !allowedSet[required] {
+			t.Errorf("CEO allowedTools is missing %q", required)
+		}
+	}
+
+	if len(wp.Schedules) != 1 {
+		t.Fatalf("blank template schedules = %d, want 1", len(wp.Schedules))
+	}
+	schedule := wp.Schedules[0]
+	if schedule.AgentKey != "ceo" || schedule.CronExpr != "*/20 * * * *" || !schedule.Enabled {
+		t.Errorf("unexpected CEO schedule: %+v", schedule)
+	}
+
+	wantStates := map[string]bool{"failed": false, "review": false}
+	for _, automation := range wp.Automations {
+		if _, wanted := wantStates[automation.BoardToState]; !wanted {
+			continue
+		}
+		if automation.TriggerKind != db.TriggerBoard || automation.BoardOp != db.BoardOpMove ||
+			automation.AgentKey != "pm" || automation.SessionMode != db.SessionModeContinue || !automation.Enabled {
+			t.Errorf("unexpected PM automation: %+v", automation)
+			continue
+		}
+		wantStates[automation.BoardToState] = true
+	}
+	for state, found := range wantStates {
+		if !found {
+			t.Errorf("blank template has no enabled PM automation for %q", state)
+		}
 	}
 }
 

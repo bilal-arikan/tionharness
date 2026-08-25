@@ -227,7 +227,8 @@ func (s *Server) seedWorkspaceTeam(ctx context.Context, wsNew *workspace.Workspa
 		}
 	}
 
-	// 4) Starter schedules (always disabled).
+	// 4) Starter schedules. Templates remain disabled by default unless they
+	// explicitly opt in, preserving the historical no-surprise behavior.
 	for _, ts := range wp.Schedules {
 		agentID, ok := ids[ts.AgentKey]
 		if !ok {
@@ -238,13 +239,13 @@ func (s *Server) seedWorkspaceTeam(ctx context.Context, wsNew *workspace.Workspa
 			AgentID:  agentID,
 			CronExpr: ts.CronExpr,
 			Prompt:   ts.Prompt,
-			Enabled:  false,
+			Enabled:  ts.Enabled,
 		}); err != nil {
 			s.logger.Warn("seed template schedule failed", "workspace", wsNew.ID, "error", err)
 		}
 	}
 
-	// 5) Starter automations (always disabled), wired to the seeded team.
+	// 5) Starter automations, wired to the seeded team.
 	s.seedTemplateAutomations(ctx, wsNew, wp.Automations, ids, flowIDs)
 
 	// 6) Editable config files: non-default runtime prompts + README.
@@ -259,8 +260,8 @@ func (s *Server) seedWorkspaceTeam(ctx context.Context, wsNew *workspace.Workspa
 // seeded at workspace-open time, before any template agents exist — cannot serve a
 // template team: their target is empty by construction.)
 //
-// Every rule is seeded DISABLED, matching starter schedules and the built-in board
-// defaults: the wiring ships, the spending does not.
+// Rules are disabled by default. Templates may explicitly enable rules that are
+// required for their advertised runtime behavior.
 func (s *Server) seedTemplateAutomations(ctx context.Context, wsNew *workspace.Workspace, autos []market.WorkspaceTemplateAutomation, agentIDs, flowIDs map[string]string) {
 	for _, ta := range autos {
 		agentID, flowID := "", ""
@@ -315,7 +316,7 @@ func (s *Server) seedTemplateAutomations(ctx context.Context, wsNew *workspace.W
 			SpawnTags:       ta.SpawnTags,
 			MaxIterations:   maxIter,
 			CooldownSec:     ta.CooldownSec,
-			Enabled:         false,
+			Enabled:         ta.Enabled,
 		}); err != nil {
 			s.logger.Warn("seed template automation failed", "workspace", wsNew.ID, "automation", ta.Name, "error", err)
 		}

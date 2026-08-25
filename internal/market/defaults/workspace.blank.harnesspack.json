@@ -3,7 +3,7 @@
   "id": "workspace-blank",
   "kind": "workspace",
   "name": "Boş",
-  "description": "Tek bir genel asistan ile başla. Kendi ajanlarını ve akışlarını sıfırdan kur.",
+  "description": "CEO gözetimi ve PM yürütmesiyle çalışmaya hazır bir ekip ile başla.",
   "version": "1.0.0",
   "author": "TionHarness",
   "icon": "⬡",
@@ -17,16 +17,46 @@
       "icon": "⬡",
       "agents": [
         {
-          "key": "assistant",
-          "name": "Asistan",
-          "soul": "You are a helpful assistant."
+          "key": "ceo",
+          "name": "CEO",
+          "soul": "You are the workspace's trigger and observer. Never perform implementation work yourself: do not write code, edit files, run shell commands, or directly change workspace resources. Observe workspace flow and read the board with get_view{kind:\"board\"}. If any card is failed, stuck, blocked, or overdue, if the PM is idle, or if no work is progressing, message the PM and prompt them to act. Delegate insight scans and prompt, skill, automation, and flow optimization to the PM or another suitable agent. Use only read, messaging, and delegation tools; make no changes yourself.",
+          "allowedTools": "[\"Read\",\"LS\",\"Glob\",\"Grep\",\"WebFetch\",\"get_view\",\"list_tasks\",\"list_sessions\",\"list_automations\",\"list_schedules\",\"list_flows\",\"list_agents\",\"send_message\",\"spawn_session\",\"run_subagent\"]",
+          "coordinatorMode": true
+        },
+        {
+          "key": "pm",
+          "name": "PM",
+          "soul": "You are the workspace's execution lead. Keep the project moving by managing board cards with create_task, update_task, and move_task; delegate focused work to specialist agents; launch insight scans; and run prompt, skill, automation, and flow optimization. Follow work through verification and completion. You have full tool access and should act directly whenever execution is needed.",
+          "coordinatorMode": true
         }
       ],
       "schedules": [
         {
-          "agentKey": "assistant",
-          "cronExpr": "0 * * * *",
-          "prompt": "Review the task board for unfinished or stuck tasks and send a notification summarizing them."
+          "name": "CEO board heartbeat",
+          "agentKey": "ceo",
+          "cronExpr": "*/20 * * * *",
+          "prompt": "Read the board with get_view{kind:\"board\"}. If any card is failed, stuck, blocked, or overdue, if the PM is idle, or if no work is progressing, message the PM and prompt them to take the next concrete action. Do not perform the work yourself.",
+          "enabled": true
+        }
+      ],
+      "automations": [
+        {
+          "name": "PM handles failed cards",
+          "triggerKind": "board",
+          "boardOp": "move",
+          "boardToState": "failed",
+          "agentKey": "pm",
+          "sessionMode": "continue",
+          "enabled": true
+        },
+        {
+          "name": "PM handles review cards",
+          "triggerKind": "board",
+          "boardOp": "move",
+          "boardToState": "review",
+          "agentKey": "pm",
+          "sessionMode": "continue",
+          "enabled": true
         }
       ]
     }

@@ -269,13 +269,14 @@ type WorkspaceTemplateFlow struct {
 	Graph string                  `json:"graph,omitempty"` // orchestration.Graph JSON; agentId = "tmpl:<key>"
 }
 
-// WorkspaceTemplateSchedule is a starter cron schedule. It is always seeded
-// DISABLED so it never fires until the user opts in via the Schedules screen.
+// WorkspaceTemplateSchedule is a starter cron schedule. It is disabled by
+// default; a template may explicitly enable schedules intended to run at once.
 type WorkspaceTemplateSchedule struct {
 	Name     string `json:"name,omitempty"`
 	AgentKey string `json:"agentKey"`
 	CronExpr string `json:"cronExpr"`
 	Prompt   string `json:"prompt"`
+	Enabled  bool   `json:"enabled,omitempty"`
 }
 
 // WorkspaceTemplateAutomation is a starter automation rule. Like a template flow
@@ -284,11 +285,9 @@ type WorkspaceTemplateSchedule struct {
 // against the freshly seeded team at install time and a rule whose reference does
 // not resolve is skipped rather than seeded broken.
 //
-// It is always seeded DISABLED, exactly like WorkspaceTemplateSchedule and the
-// built-in board automations: installing a template must never silently start
-// spending money on every card move. The value it carries is the WIRING — right
-// trigger, right column, right agent, right prompt — so turning the behaviour on
-// is one toggle instead of a form.
+// It is disabled by default, exactly like WorkspaceTemplateSchedule and the
+// built-in board automations. A template may explicitly enable rules that are
+// part of its advertised runtime behavior.
 //
 // Mirrors the portable subset of db.Automation. Runtime bookkeeping (iteration
 // count, last fired…) and ExpiresAt (an absolute timestamp, meaningless once
@@ -326,6 +325,7 @@ type WorkspaceTemplateAutomation struct {
 	SpawnTags      []string `json:"spawnTags,omitempty"`
 	MaxIterations  int      `json:"maxIterations,omitempty"` // 0 → seeded at the hard cap
 	CooldownSec    int      `json:"cooldownSec,omitempty"`
+	Enabled        bool     `json:"enabled,omitempty"`
 }
 
 // WorkspacePayload is a workspace template: visual identity + instructions, an
