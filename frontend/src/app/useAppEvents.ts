@@ -36,6 +36,37 @@ export interface AppEventDeps {
   markViewUnread: (v: View) => void
 }
 
+export function handleAutonomousCompletion(
+  d: Pick<AppEventDeps, 'chat' | 'activeSessionId' | 'setMessages'>,
+  e: AppEvent,
+) {
+  const sid = e.target?.sessionId
+  if (
+    (e.type !== 'spawned' &&
+      e.type !== 'worker' &&
+      e.type !== 'schedule' &&
+      e.type !== 'flow' &&
+      e.type !== 'automation' &&
+      e.type !== 'insight') ||
+    !sid ||
+    (e.type === 'worker' && e.target?.phase === 'start')
+  ) {
+    return
+  }
+
+  d.chat.clearPending(sid)
+  if (sid === d.activeSessionId) {
+    d.chat.clearAutoLive(sid)
+    api
+      .listMessages(sid)
+      .then(d.setMessages)
+      .catch(() => {})
+  }
+  // Same turn-end fan-out as the chat branch (see below): unconditional so a
+  // transcript view showing this session hears it even off the chat screen.
+  publishTurnEnd(sid)
+}
+
 // Autonomous-event handler: raise a desktop notification whose click deep-links
 // to the event's target (chat session, board, or logs). Reads the deps snapshot
 // refreshed each render, so it always sees current closures/state.
@@ -192,38 +223,18 @@ function onEvent(d: AppEventDeps, e: AppEvent) {
       }
     }
     // Autonomous turn completion (spawn / coordinator worker / scheduled run /
-    // flow run / automation fire): like the chat branch, drop the live ghost
-    // bubble and reload the transcript so the authoritative persisted turn (with
-    // its full trace) replaces it. These types carry no wake-phase logic — a
-    // plain reload is enough. flow/automation are included because the chat
-    // screen is now the unified transcript view: their sessions are selectable in
-    // the sidebar, so a running one must land its finished turn without a manual
-    // reselect. (Board task runs surface as 'spawned'/'chat' sessions; there is
-    // no distinct 'task' run event.)
+    // flow run / automation fire / insight scan): like the chat branch, drop the
+    // live ghost bubble and reload the transcript so the authoritative persisted
+    // turn (with its full trace) replaces it. These types carry no wake-phase
+    // logic — a plain reload is enough. flow/automation/insight are included
+    // because the chat screen is now the unified transcript view: their sessions
+    // are selectable in the sidebar, so a running one must land its finished turn
+    // without a manual reselect. (Board task runs surface as 'spawned'/'chat'
+    // sessions; there is no distinct 'task' run event.)
     // A worker event with phase='start' is the OPPOSITE of a completion: the turn
     // is just beginning, so it must not clear the ghost bubble, reload the
     // transcript or fan out a turn-end. It only feeds the coordination bus below.
-    if (
-      (e.type === 'spawned' ||
-        e.type === 'worker' ||
-        e.type === 'schedule' ||
-        e.type === 'flow' ||
-        e.type === 'automation') &&
-      sid &&
-      !(e.type === 'worker' && e.target?.phase === 'start')
-    ) {
-      d.chat.clearPending(sid)
-      if (sid === d.activeSessionId) {
-        d.chat.clearAutoLive(sid)
-        api
-          .listMessages(sid)
-          .then(d.setMessages)
-          .catch(() => {})
-      }
-      // Same turn-end fan-out as the chat branch (see above): unconditional so a
-      // transcript view showing this session hears it even off the chat screen.
-      publishTurnEnd(sid)
-    }
+    handleAutonomousCompletion(d, e)
     // Coordination: every worker transition (start AND completion) tells the
     // coordinator's running-worker banner to refetch its roster, which is what
     // replaces polling for it.
