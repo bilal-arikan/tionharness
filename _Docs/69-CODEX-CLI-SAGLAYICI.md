@@ -358,15 +358,13 @@ yalnız bu dizindeki `config.toml`'u değiştirir ve alt süreç aynı dizini ok
 Böylece aynı sağlayıcı örneğini kullanan Codex turları config'i birbirinin
 altından değiştirmeden **paralel koşabilir**.
 
-`acquireCodexHome` ve `codexcli_homelock.go` kaldırılmadı. Kilit, base
-`CODEX_HOME`'a doğrudan yazan legacy/bakım yollarının tüm yazma + alt süreç
-penceresini korumaya devam eder; normal shadow-home tur yolu bu ortak kilide
-girmez. Login akışı da (`internal/api/codex_auth.go`) kalıcı kimlik bilgisini
-base home'da oluşturur ve günceller, shadow home'da değil.
+Eski `acquireCodexHome` kilidi kaldırıldı: üretim tur yolu yalnız tura özel
+shadow home kullanıyor ve base home'a doğrudan config yazan bir çağrı kalmadı.
+Login akışı (`internal/api/codex_auth.go`) kalıcı kimlik bilgisini base home'da
+oluşturup günceller; normal sağlayıcı turlarının config izolasyonundan ayrıdır.
 
-Regresyonlar `codexcli_homelock_test.go` ve shadow-home/eşzamanlı tur testlerinde
-hardlink-kopya fallback'ini, temizlik sınırını ve iki turun gerçekten üst üste
-çalışabildiğini doğrular.
+Shadow-home regresyon testleri hardlink-kopya fallback'ini, temizlik sınırını ve
+iki turun farklı home'larla gerçekten üst üste çalışabildiğini doğrular.
 
 ### 5.1 🔴 KRİTİK — `default_tools_approval_mode = "approve"` zorunlu
 
