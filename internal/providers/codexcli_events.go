@@ -66,6 +66,7 @@ type codexError struct {
 type codexFileChange struct {
 	Path string `json:"path"`
 	Kind string `json:"kind"` // add | delete | update
+	Diff string `json:"diff"`
 }
 
 // codexTodoItem is one entry of a todo_list item's "items" array.
@@ -277,9 +278,19 @@ func (p *codexStreamParser) feedItem(evType string, it *codexItem) {
 			IsError: commandFailed(it),
 		})
 	case "file_change":
+		var input json.RawMessage
+		if patch := fileChangesPatch(it.Changes); patch != "" {
+			encoded, err := json.Marshal(struct {
+				Patch string `json:"patch"`
+			}{Patch: patch})
+			if err == nil {
+				input = encoded
+			}
+		}
 		p.setStep(it, final, TraceStep{
 			Kind:    "tool",
 			Tool:    "apply_patch",
+			Input:   input,
 			Output:  summarizeFileChanges(it.Changes),
 			IsError: it.Status == "failed",
 		})
@@ -478,6 +489,33 @@ func summarizeFileChanges(changes []codexFileChange) string {
 		parts = append(parts, c.Kind+" "+c.Path)
 	}
 	return strings.Join(parts, "\n")
+}
+
+// fileChangesPatch joins the diffs carried by a file_change item. Codex may
+// omit unified-diff file headers, so add them to keep the target path available
+// to diff renderers.
+func fileChangesPatch(changes []codexFileChange) string {
+	patches := make([]string, 0, len(changes))
+	for _, change := range changes {
+		if change.Diff == "" {
+			continue
+		}
+		diff := change.Diff
+		if !hasUnifiedDiffFileHeader(diff) {
+			diff = "--- a/" + change.Path + "\n+++ b/" + change.Path + "\n" + diff
+		}
+		patches = append(patches, diff)
+	}
+	return strings.Join(patches, "\n")
+}
+
+func hasUnifiedDiffFileHeader(diff string) bool {
+	for line := range strings.SplitSeq(diff, "\n") {
+		if strings.HasPrefix(line, "--- ") || strings.HasPrefix(line, "+++ ") {
+			return true
+		}
+	}
+	return false
 }
 
 // summarizeTodoList renders a todo_list item as checkbox lines.

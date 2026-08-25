@@ -1,6 +1,7 @@
 package providers
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 )
@@ -330,6 +331,30 @@ func TestCodexParserReasoningAndFileChange(t *testing.T) {
 	}
 	if resp.Trace[1].Output != "update a.go\nadd b.go" {
 		t.Errorf("step 1 Output = %q", resp.Trace[1].Output)
+	}
+}
+
+func TestCodexParserFileChangeDiffInput(t *testing.T) {
+	fileChange := `{"type":"item.completed","item":{"id":"item_5","type":"file_change","changes":[{"path":"a.go","kind":"update","diff":"@@ -1 +1 @@\n-old\n+new"}],"status":"completed"}}`
+	p := newCodexParser("", nil)
+	feedAll(p, fxThreadStarted, fxTurnStarted, fileChange, fxAgentMessage, fxTurnCompleted)
+
+	resp, err := p.finish()
+	if err != nil {
+		t.Fatalf("finish: %v", err)
+	}
+	if len(resp.Trace) != 1 {
+		t.Fatalf("Trace = %+v, want one step", resp.Trace)
+	}
+	var input struct {
+		Patch string `json:"patch"`
+	}
+	if err := json.Unmarshal(resp.Trace[0].Input, &input); err != nil {
+		t.Fatalf("unmarshal Input: %v", err)
+	}
+	want := "--- a/a.go\n+++ b/a.go\n@@ -1 +1 @@\n-old\n+new"
+	if input.Patch != want {
+		t.Errorf("Input patch = %q, want %q", input.Patch, want)
 	}
 }
 
