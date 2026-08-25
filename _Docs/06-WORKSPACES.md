@@ -13,6 +13,22 @@ saklanır (`localStorage: tionharness.favoriteWs`), aktif-workspace işaretçisi
 desen. Seçim sırası: `(işaretçi yoksa) favori → son-aktif → favori → ilk`.
 Kod: `hooks/useWorkspaces.ts`, `WorkspaceSwitcher.tsx`.
 
+## Yeni Workspace Başlangıç Ekibi
+
+Workspace oluşturma ekranında varsayılan seçilen `workspace-blank` şablonu artık
+"boş" adını yalnız içerik özgürlüğü anlamında taşır; tek genel **Asistan** ile değil,
+hazır bir **CEO + PM** kontrol döngüsüyle açılır. CEO salt-okuma, mesajlaşma ve
+delegasyon araçlarıyla board'u gözler; etkin 20 dakikalık cron schedule kalıcı
+`kind="schedule"` oturumunu uyandırır. CEO iş yapmaz, duran/başarısız/ilerlemeyen
+işte PM'i harekete geçirir. PM tam araç erişimli yürütücüdür; kartları yönetir,
+uzman işi ve insight/prompt/skill/otomasyon/akış optimizasyonunu delege eder.
+
+Şablon ayrıca kart `failed` veya `review` durumuna taşındığında PM'in aynı kalıcı
+otomasyon oturumunu (`sessionMode="continue"`) tetikleyen iki etkin pano kuralı
+tohumlar. Böylece yeni workspace açılır açılmaz gözetim ve yürütme döngüsü hazırdır.
+Paket ayrıntısı: `_Docs/21-MARKET.md`; otomasyon davranışı:
+`_Docs/46-ETIKET-OTOMASYON.md`.
+
 ## Workspace'e Özel Görünüm/Tema (2026-06-25)
 
 Görünüm ayarları artık **uygulama-geneli Ayarlar'da değil**, NavRail ▸ **Workspace**
@@ -53,7 +69,8 @@ detaylandırıldı. Panel: `frontend/src/components/workspace/WorkspaceExportPan
   ajanlarda ≥1 zorunlu. Dosya kategorileri (Talimatlar / Promptlar & README / Pano
   sütunları) toggle olarak kalır.
 - **Otomasyonlar (2026-08-11):** kural, ajana `agentKey` / akışa `flowName` ile referans
-  verir ve kurulumda **pasif** gelir. Hedefi hariç bırakılmış olanlar (orphan) atılır —
+  verir. `enabled` verilmezse kurulumda **pasif** gelir; şablon açıkça `true` verirse
+  etkin kurulur. Hedefi hariç bırakılmış olanlar (orphan) atılır —
   panel bunu bağımlılık uyarısı ve canlı önizleme sayacıyla gösterir. Gömülü pano
   varsayılanları (`Seed != ""`) dışa aktarılmaz: her workspace açılışta kendi kopyasını
   üretir, taşımak çift kural veya kullanıcının sildiği kuralın dirilmesi demek olurdu.

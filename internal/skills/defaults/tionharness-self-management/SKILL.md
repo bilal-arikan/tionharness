@@ -116,8 +116,10 @@ list individually.
 `delete_workspace`. Manage the fully-isolated workspaces (each its own
 agents/sessions/flows/secrets) the switcher hops between. List/create/rename any;
 **delete only workspaces you created** — never a user-made one, never the one
-you're running in, never the last remaining one. A new workspace starts empty
-(seeded with the blank template); switch to it in the UI to use it.
+you're running in, never the last remaining one. A new workspace uses the bundled
+blank template: it starts with a read-only trigger/observer **CEO**, an execution
+lead **PM**, a 20-minute CEO board heartbeat, and enabled PM rules for cards entering
+`failed` or `review`. Switch to it in the UI to use it.
 
 **Skills** — `create_skill`, `update_skill`, `delete_skill`, `import_skill`. Author a reusable
 workspace skill (markdown instructions other agents load with `use_skill`);

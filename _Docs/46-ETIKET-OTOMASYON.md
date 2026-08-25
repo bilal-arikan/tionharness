@@ -169,6 +169,13 @@ Board zaten bir kart değişiminde iş **başlatabiliyordu** (`fireBoard`); iki 
    backfill olur. **`Enabled:false` tohumlanır** (opt-in): board yürütmenin kaynağı olsun diye
    Otomasyonlar ekranından tek toggle ile açılır — düz sohbet workspace'inde sürpriz maliyet yok.
 
+Bu generic çift, workspace açılış backfill'idir. Gömülü `workspace-blank` şablonu
+buna ek olarak PM hedefli iki **etkin** pano otomasyonu kurar: kart `failed` veya
+`review` durumuna taşınınca (`move`) PM'in `sessionMode="continue"` kalıcı oturumunu
+uyandırır. Template `enabled` alanı yoksa kural yine pasif kurulur; yalnız açıkça
+`true` veren paketler bu varsayılanı aşar. Blank paketindeki CEO cron gözetimi ve
+PM yürütmesi için `_Docs/21-MARKET.md` bölümüne bakın.
+
 `BoardAction` create/update yolları: REST (`api/automations.go`) + agent aracı
 (`create_automation`/`update_automation`) `ValidBoardAction` doğrular; `archive` kuralı hedef
 ajan/akış **istemez**. UI: Otomasyon popup'ında pano tetikleyicisine "Aksiyon" seçici

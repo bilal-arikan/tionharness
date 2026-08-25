@@ -1,6 +1,33 @@
 # TionHarness — İlerleme Takibi
 
-> Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-08-25**
+> Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-08-26**
+
+## Blank workspace CEO + PM kontrol döngüsüyle açılıyor (2026-08-26) ✅
+
+`workspace-blank` artık tek genel "Asistan" yerine iki ajan tohumluyor: salt-okuma,
+mesajlaşma ve delegasyon araçlarıyla sınırlı **CEO** yalnız tetikleyici/gözlemci;
+tam araç erişimli **PM** ise kart yönetimi, delegasyon, insight taraması ve
+prompt/skill/otomasyon/akış optimizasyonunun yürütücüsü. CEO'nun etkin `*/20 * * * *`
+zamanlaması kalıcı `kind="schedule"` oturumunda board'u denetleyip duran, başarısız
+veya ilerlemeyen işte PM'i dürtüyor; işi kendisi yapmıyor. Kart `failed` ya da
+`review` durumuna taşındığında etkin iki pano otomasyonu PM'in kalıcı
+`sessionMode="continue"` oturumunu tetikliyor.
+
+Workspace schedule/automation şablonlarına geriye uyumlu `enabled` alanı eklendi:
+alan verilmezse eski pasif varsayılan korunuyor, açıkça `true` veren paket davranışı
+hemen çalıştırabiliyor. Kurulum bu değeri DB'ye aktarıyor; `agentKey`/`flowName`
+referansları seed edilen gerçek kimliklere çözülüyor. `templates_test.go`, blank
+paketin CEO araç sınırını, PM'i, 20 dakikalık etkin schedule'ı ve iki etkin pano
+otomasyonunu regresyon testiyle kilitliyor. Detay: [06](06-WORKSPACES.md),
+[21](21-MARKET.md), [46](46-ETIKET-OTOMASYON.md).
+
+## Stuck schedule tekrar döngüsü engellendi (2026-08-25) ✅
+
+Prompt tabanlı scheduler, ortak `schedule` oturumu stuck eşiğine ulaşmışsa yeni
+prompt yazmadan ilgili zamanlamayı otomatik pasifleştiriyor ve cron tablosundan
+düşürüyor. Böylece aynı guard reddi, bildirim ve transkript kaydı her tick'te
+tekrarlanmıyor; `StuckTurns` sabit kalıyor. Regresyon testi transcriptin büyümediğini,
+sayacın değişmediğini ve schedule'ın pasifleştiğini doğruluyor. Detay: [20](20-SCHEDULE-WAKE.md).
 
 ## UI lokalizasyon altyapısı eklendi (2026-08-25) ✅
 
@@ -9330,3 +9357,17 @@ bir CLI provider'ı değil — meşru model referansları olarak korundu.
 - **Not:** Ajan/E2E senaryolarında `sessions-overview-open` seçicisi artık yok.
 - **Doğrulama:** `npx tsc --noEmit` ✅, `npm test` 190/190 ✅, `format:check` ✅,
   canlı UI'da buton yok, konsol temiz.
+
+## Debug butonu chat header'dan "Oturum bilgisi" paneline taşındı (2026-08-25)
+
+- **Ne:** Sohbet başlığındaki `Bug` ikonlu "Debug" butonu kaldırıldı; aynı
+  `SessionDebugModal`'ı açan aksiyon artık "Oturum bilgisi" panelinin en altındaki
+  **Araçlar** bloğunda, "Debug / gözlemlenebilirlik" etiketiyle duruyor (sabitle /
+  arşivle / sil butonlarının üstünde).
+- **Değişen:** `AppHeader.tsx` — buton, `onOpenDebug` prop'u ve `Bug` importu
+  silindi. `SessionDetailPanel.tsx` — opsiyonel `onOpenDebug` prop'u + `ActionBtn`
+  eklendi. `App.tsx` — `onOpenDebug={() => setDebugOpen(true)}` artık
+  `SessionDetailPanel`'e geçiliyor; `debugOpen` state ve modal render'ı aynen kaldı.
+- **Not:** Panel gizliyken (Detay kapalı) Debug'a erişim de kapanır — modalın
+  kendisi bağımsız render edildiği için açıkken panel kapatılsa bile çalışır.
+- **Doğrulama:** `npx tsc --noEmit` ✅, `format:check` ✅.

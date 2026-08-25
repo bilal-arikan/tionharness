@@ -227,16 +227,20 @@ payload yalnız detay/kurulum anında okunur (skills'teki body-lazy kalıbı).
                 "coordinatorPrompt": "Önce planla, sonra iki worker aç.", // koordinatör-özel prompt
                 "skills": ["..."] }],
   "flows":   [{ "name": "...", "steps": [...] }],   // veya "graph": "{...}" (agentId = "tmpl:<key>")
-  "schedules": [{ "agentKey": "...", "cronExpr": "0 8 * * *", "prompt": "..." }],
+  "schedules": [{ "agentKey": "...", "cronExpr": "0 8 * * *", "prompt": "...",
+                  "enabled": true }],
   "automations": [{ "name": "...", "triggerKind": "board", "boardOp": "move",
                     "boardToState": "in_progress", "boardAction": "spawn",
                     "boardExclusive": true,
                     "agentKey": "cto",                 // veya "flowName": "..."
-                    "promptTemplate": "..." }]
+                    "promptTemplate": "...", "enabled": true }]
 }}
 ```
-> Seed sırası: skills → agents → flows → schedules → automations. Zamanlamalar **ve**
-> otomasyonlar **pasif** kurulur — kablolama gelir, harcama gelmez.
+> Seed sırası: skills → agents → flows → schedules → automations. Zamanlama ve
+> otomasyonlarda `enabled` geriye uyumludur: alan yoksa `false` ve eski pasif kurulum
+> davranışı korunur; paket açıkça `true` verirse kayıt etkin kurulur. Böylece sıradan
+> şablonlarda kablolama harcama başlatmazken ilan ettiği kontrol döngüsü olan bir paket
+> gerekli schedule/kuralı açılışta çalıştırabilir.
 >
 > **Referanslar isimledir, id'yle değil:** otomasyon ajana `agentKey`, akışa `flowName`
 > ile bağlanır; çözülmeyen referans **atlanır** (hedefi boş bir pano kuralı her kart
@@ -248,6 +252,21 @@ payload yalnız detay/kurulum anında okunur (skills'teki body-lazy kalıbı).
 > ajan serbest koordinasyonla çalışır, kurulum patlamaz. `coordinatorPrompt` serbest
 > metindir, çözülecek bir referansı yoktur: **olduğu gibi** taşınır ve kurulur; boşsa
 > hiç yazılmaz (`omitempty`). Aynı üç alan **agent** paketinde de taşınır.
+
+### Blank workspace başlangıç kontrol döngüsü
+
+Gömülü `workspace-blank` paketi tek `Asistan` yerine iki ajan kurar: yalnız gözlem,
+mesajlaşma ve delegasyon yapan **CEO** ile tam araç erişimli yürütücü **PM**. CEO'nun
+etkin `*/20 * * * *` schedule'ı kalıcı `kind="schedule"` oturumunda board'u okur;
+duran, başarısız veya ilerlemeyen işte PM'i dürter ve kendisi uygulama işi yapmaz.
+`failed` ve `review` durumlarına kart taşıma olaylarını izleyen iki etkin pano
+otomasyonu da PM'i `sessionMode="continue"` ile aynı kalıcı otomasyon oturumunda
+uyandırır.
+
+Kurulumda schedule/automation `agentKey` değerleri önce seed edilen gerçek ajan
+ID'lerine, varsa `flowName` gerçek akış ID'sine çözülür; çözülemeyen hedef atlanır.
+`internal/api/templates_test.go::TestBlankTemplateSeedsCEOAndPMControlLoop`, ajan
+rolleri ve CEO araç sınırıyla birlikte bu etkin kontrol döngüsünü kilitler.
 
 **mcp** — MCP araç sunucusu:
 ```jsonc
@@ -587,6 +606,6 @@ kalmıştı. Yapılan düzeltmeler:
 **Doğrulama:** `go build ./...` + `go vet` + `go test ./internal/market/... ./internal/ingest/...`
 (19 test) yeşil; frontend `tsc --noEmit` temiz.
 
-**Kalan (içerik kararı):** gömülü şablonlar hâlâ yalnız agents + lineer flow + schedule
-kullanıyor — automations (etiket/pano) payload'da alanı bile yok; koordinatör rolü,
-`await-input`/`subflow`/`spawn-join` düğümleri ve insight lens'leri şablonla taşınamıyor.
+**Kalan (içerik kararı):** workspace şablonları agents + flow + schedule + automation
+taşıyor; `await-input`/`subflow`/`spawn-join` düğümlerini kullanan gömülü örnekler ve
+insight lens'lerinin şablonla taşınması hâlâ eksik.
