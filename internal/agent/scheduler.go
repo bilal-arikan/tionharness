@@ -328,6 +328,23 @@ func (s *Scheduler) run(ctx context.Context, scheduleID, trigger string) error {
 		return err
 	}
 
+	// Common pre-dispatch guard: the workspace autonomy pause must stop a fire
+	// before any session, message, or flow run is created. deliverFlow is also
+	// gated deeper (LaunchRun/launchGate), but deliverPrompt manages its own
+	// session directly and has no such gate — without this check a paused
+	// prompt-backed schedule would still open/reuse its session and record the
+	// prompt as a new message before eventually failing inside the tool loop.
+	if s.rt.Paused() {
+		s.logger.Info("schedule fire: skipped (autonomy paused)",
+			"schedule", scheduleID, "trigger", trigger, "agent", sc.AgentID)
+		next := s.nextRun(scheduleID)
+		if derr := s.db.SetScheduleDelivery(ctx, scheduleID, "failure", ErrAutonomyPaused.Error(), next); derr != nil {
+			s.logger.Warn("schedule fire: persist delivery failed",
+				"schedule", scheduleID, "trigger", trigger, "error", derr)
+		}
+		return ErrAutonomyPaused
+	}
+
 	// Log the start of every fire so a run is traceable even if it later hangs
 	// or the process dies mid-flight — the previous code only logged on success.
 	s.logger.Info("schedule fire: begin",

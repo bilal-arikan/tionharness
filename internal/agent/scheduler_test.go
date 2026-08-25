@@ -146,6 +146,57 @@ func TestRun_LogsFailureAtErrorLevel(t *testing.T) {
 	}
 }
 
+// TestRun_SkipsWhenAutonomyPaused verifies the workspace autonomy pause stops a
+// prompt-backed schedule before it opens/reuses its session or records the
+// prompt as a message — the deeper guardedComplete gate only trips after
+// deliverPrompt has already grown the transcript, which is too late.
+func TestRun_SkipsWhenAutonomyPaused(t *testing.T) {
+	rt, _ := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))
+	sched := NewScheduler(rt.db, rt, slog.New(slog.NewTextHandler(discardWriter{}, nil)))
+	ctx := context.Background()
+
+	agent, err := rt.db.CreateAgent(ctx, db.Agent{Name: "Özetçi", Provider: "anthropic", Model: "m"})
+	if err != nil {
+		t.Fatalf("create agent: %v", err)
+	}
+	sc, err := rt.db.CreateSchedule(ctx, db.Schedule{AgentID: agent.ID, Prompt: "Günlük özet ver", CronExpr: "0 * * * *", Enabled: true})
+	if err != nil {
+		t.Fatalf("create schedule: %v", err)
+	}
+
+	rt.SetPaused(true)
+	if err := sched.run(ctx, sc.ID, "manual"); err != ErrAutonomyPaused {
+		t.Fatalf("run() error = %v, want %v", err, ErrAutonomyPaused)
+	}
+
+	if _, err := rt.db.GetOrCreateKindSession(ctx, agent.ID, "schedule", "⏰ Schedule"); err != nil {
+		t.Fatalf("create schedule session for assertion: %v", err)
+	}
+	session, err := rt.db.GetOrCreateKindSession(ctx, agent.ID, "schedule", "⏰ Schedule")
+	if err != nil {
+		t.Fatalf("get schedule session: %v", err)
+	}
+	msgs, err := rt.db.ListMessages(ctx, session.ID)
+	if err != nil {
+		t.Fatalf("list messages: %v", err)
+	}
+	if len(msgs) != 0 {
+		t.Fatalf("paused fire must not write to the schedule session, got %d messages: %+v", len(msgs), msgs)
+	}
+
+	gotSchedule, err := rt.db.GetSchedule(ctx, sc.ID)
+	if err != nil {
+		t.Fatalf("get schedule: %v", err)
+	}
+	if !gotSchedule.Enabled {
+		t.Error("a pause-skip must not disable the schedule (unlike the stuck-guard path)")
+	}
+	if gotSchedule.LastDeliveryStatus != "failure" || gotSchedule.LastDeliveryError != ErrAutonomyPaused.Error() {
+		t.Errorf("delivery record = status=%q error=%q, want failure/%q",
+			gotSchedule.LastDeliveryStatus, gotSchedule.LastDeliveryError, ErrAutonomyPaused.Error())
+	}
+}
+
 // capturingHandler is a minimal slog.Handler that retains every record, so tests
 // can assert on what was logged (level + message).
 type capturingHandler struct {
