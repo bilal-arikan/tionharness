@@ -223,6 +223,11 @@ func TestBlankTemplateSeedsCEOAndPMControlLoop(t *testing.T) {
 			t.Errorf("unexpected PM automation: %+v", automation)
 			continue
 		}
+		if strings.TrimSpace(automation.PromptTemplate) == "" ||
+			!strings.Contains(automation.PromptTemplate, "{{taskId}}") ||
+			!strings.Contains(automation.PromptTemplate, "{{title}}") {
+			t.Errorf("PM automation for %q has invalid promptTemplate %q", automation.BoardToState, automation.PromptTemplate)
+		}
 		wantStates[automation.BoardToState] = true
 	}
 	for state, found := range wantStates {

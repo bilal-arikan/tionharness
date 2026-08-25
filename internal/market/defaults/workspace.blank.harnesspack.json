@@ -47,6 +47,7 @@
           "boardToState": "failed",
           "agentKey": "pm",
           "sessionMode": "continue",
+          "promptTemplate": "Card {{taskId}} \"{{title}}\" moved to {{toLabel}} from {{fromLabel}} (priority: {{priority}}, owner: {{owner}}, tags: {{tags}}). Diagnose the failure, choose the next concrete action, and either resolve it directly or delegate it to a specialist agent. Update the card state after the work is verified.",
           "enabled": true
         },
         {
@@ -56,6 +57,7 @@
           "boardToState": "review",
           "agentKey": "pm",
           "sessionMode": "continue",
+          "promptTemplate": "Card {{taskId}} \"{{title}}\" moved to {{toLabel}} from {{fromLabel}} (priority: {{priority}}, owner: {{owner}}, tags: {{tags}}). Verify the completed work against its requirements, resolve or delegate any remaining issues, and approve it only when the evidence is sufficient. Update the card state to reflect the review outcome.",
           "enabled": true
         }
       ]
