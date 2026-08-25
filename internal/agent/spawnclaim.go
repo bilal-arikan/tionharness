@@ -8,10 +8,9 @@ import (
 var spawnClaimSentencePattern = regexp.MustCompile(`[^.!?\n]+[.!?]?`)
 
 var spawnClaimPatterns = []*regexp.Regexp{
-	regexp.MustCompile(`\bworker\b.*(?:başladı|başlat(?:tım|tık|tı|ıldı|ılmış|ıldı)|spawn)`),
-	regexp.MustCompile(`\bvalidator\b.*(?:başladı|başlat(?:tım|tık|tı|ıldı|ılmış|ıldı)|spawn)`),
-	regexp.MustCompile(`\bspawned\b`),
-	regexp.MustCompile(`\bspawning\b`),
+	regexp.MustCompile(`\bworker\b.*(?:başladı|başlat\p{L}*|spawn)`),
+	regexp.MustCompile(`\bvalidator\b.*(?:başladı|başlat\p{L}*|spawn)`),
+	regexp.MustCompile(`\bspawn(?:ed|ing)?\b`),
 	regexp.MustCompile(`\bstarted\s+(?:a\s+)?(?:worker|validator)\b`),
 	regexp.MustCompile(`\bdelege\b`),
 }
