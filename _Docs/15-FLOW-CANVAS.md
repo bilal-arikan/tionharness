@@ -699,7 +699,8 @@ destekli ikinci bir katman: `internal/agent/flow_precheck.go` →
 `(*Runtime).validateFlowPreconditions(ctx, g)`.
 
 Kontroller:
-- **Agent node** → `db.GetAgent(agentID)`: ajan silinmişse hata. Ajan varsa
+- **Agent node** → `agentId` yalnız DB'de bulunan gerçek ajan ID'si olabilir; node `id`'si
+  veya ajan adı kabul edilmez. `db.GetAgent(agentID)`: ajan silinmişse hata. Ajan varsa
   `providers.Registry.Get(agent.Provider)`: sağlayıcı bilinmiyorsa veya yapılandırılmamışsa
   (ör. anahtarsız `anthropic`) hata. Ajan id'leri **distinct** olarak bir kez sorgulanır — aynı
   ajana çok node'dan referans veren fan-out graflarında tekrar okuma yok.

@@ -36,7 +36,7 @@ Each node's fields depend on its `type` — use the exact field names below
 | `end` | (optional) `template` (shape output), `outputSchema` (JSON Schema the final output must satisfy, else the run fails) | terminal — no `next` |
 | `spawn` | `spawnFlows` (child flow ids launched ASYNC/non-blocking), `template` (input) | `next` |
 | `join` | (optional) `spawnRef` (which spawn node to await; "" = all), `joinTimeoutSec` (0 = forever), `joinPartial` (drop failed/suspended/timed-out children instead of failing) — barrier that block-waits the spawned runs, joins outputs into `{{last}}` | `next` |
-| `agent` | `agentId`, `prompt` | `next` (node id; `""` = end) |
+| `agent` | `agentId` (an existing agent's exact ID, such as `AGT6`; never a node id or agent name), `prompt` | `next` (node id; `""` = end) |
 | `parallel` | `parallel`: **array of child agent node ids** | `joinNext` (node after the join) |
 | `branch` | `branches`: array of `{contains, next}` rules | per-arm `next` |
 | `delay` | `delayMs` | `next` |
@@ -88,8 +88,9 @@ These tools require self-management to be enabled for the workspace:
 3. **Wire dependencies** so a step only starts once its inputs exist. Cycles are
    allowed for iteration loops (a `branch` routing back to an earlier node); the
    engine caps total steps so a runaway loop always terminates.
-4. **Validate** before running — fix any cycle or dangling-dependency error the
-   graph validator reports.
+4. **Validate** before running — every `agentId` must be an existing agent's exact
+   ID, not its display name or the node's `id`; fix any cycle or dangling-dependency
+   error the graph validator reports.
 5. **Run** via `run_flow`, then review the recorded run session.
 
 ## Tips
