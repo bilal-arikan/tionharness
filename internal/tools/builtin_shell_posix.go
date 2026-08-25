@@ -37,6 +37,17 @@ func POSIXShellFlavor() string {
 	return POSIXShellGitBash
 }
 
+// POSIXShellExecutable returns the resolved executable backing the Bash tool.
+// It is exposed for environment guidance so prompts can name the interpreter
+// agents actually invoke instead of repeating a stale /bin/bash assumption.
+func POSIXShellExecutable() string {
+	exe, _, ok := resolvePOSIXShell()
+	if !ok {
+		return ""
+	}
+	return exe
+}
+
 // resolvePOSIXShell finds the POSIX shell backing the Bash tool and the args that
 // must precede "-c <command>". On Unix it is plain /bin/sh. On Windows it prefers
 // a real git-bash and deliberately avoids C:\Windows\System32\bash.exe — see
