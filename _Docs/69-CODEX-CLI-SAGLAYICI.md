@@ -201,14 +201,15 @@ dizin olmalı**; değilse `~/.codex`. TionHarness kalıcı kimlik bilgisini sağ
 <dataDir>/provider-homes/<instance-id>/       ← base home
 ├── auth.json                              ← kalıcı login durumu
 └── .shadow/turn-<benzersiz>/              ← tur boyunca CODEX_HOME
-    ├── auth.json                          ← base home'dan hardlink/kopya
+    ├── auth.json                          ← base home'dan atomik snapshot kopyası
     └── config.toml                        ← yalnız bu turun config'i
 ```
 
 `prepareShadowHome` (`internal/providers/codexcli_shadowhome.go`) her normal tur
-için `os.MkdirTemp` ile benzersiz dizin üretir. Base home'daki `auth.json` önce
-hardlink edilir; dosya sistemi hardlink'i reddederse içerik kopyalanır. Auth
-dosyası yoksa bu bilinçli bir no-op'tur ve Codex normal "login yok" hatasını
+için `os.MkdirTemp` ile benzersiz dizin üretir. Base home'daki `auth.json`
+geçici dosyaya kopyalanıp atomik olarak yerine taşınır; her tur bağımsız bir
+snapshot kullanır. Auth dosyası yoksa bu bilinçli bir no-op'tur ve Codex normal
+"login yok" hatasını
 üretir. Tur sonunda yalnız shadow dizin silinir; base home ve login durumu
 korunur. `codex exec` aynı nedenle oturum dosyası da bırakmamak üzere
 `--json --ephemeral` ile çağrılır (`internal/providers/codexcli.go:123-145,
@@ -363,7 +364,7 @@ shadow home kullanıyor ve base home'a doğrudan config yazan bir çağrı kalma
 Login akışı (`internal/api/codex_auth.go`) kalıcı kimlik bilgisini base home'da
 oluşturup günceller; normal sağlayıcı turlarının config izolasyonundan ayrıdır.
 
-Shadow-home regresyon testleri hardlink-kopya fallback'ini, temizlik sınırını ve
+Shadow-home regresyon testleri auth snapshot bağımsızlığını, temizlik sınırını ve
 iki turun farklı home'larla gerçekten üst üste çalışabildiğini doğrular.
 
 ### 5.1 🔴 KRİTİK — `default_tools_approval_mode = "approve"` zorunlu
