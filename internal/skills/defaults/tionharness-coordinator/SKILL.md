@@ -54,6 +54,15 @@ kullanılabilir.
 - **`send_to_worker` sırası:** worker boştaysa mesaj hemen teslim edilir. Worker hâlâ önceki turunu işliyorsa mesaj **tek-slotluk kuyruğa** alınır (`queued`) ve tur biter bitmez otomatik teslim edilir — kaybolmaz. Ama **worker başına yalnız bir bekleyen mesaj** tutulur; ikinci bir mesaj gönderirsen **reddedilir**. Meşgul diye `stop_worker` **çağırma** (çalışan işi çöpe atar). Paralellik istiyorsan **farklı worker'lara dağıt**, aynı worker'a mesaj yığma.
 - **Gerçek doğrulama:** özelliği açıp test et; "var" demek yetmez.
 
+### Kapsam dışı bulguyu karta çıkar
+
+Bir kartı yürütürken kapsam dışında eksik veya hatalı bir şey görürsen mevcut işi
+durdurma. Önce `list_tasks` ile aynı konuyu taşıyan açık kart var mı kontrol et;
+yoksa `boardState: "pbi"` ve `tags: ["scope-out", "parent:<buKartınId>"]` ile ayrı
+kart aç. Soy bağı için `dependencies` kullanma: bu alan kartı bağımlı olduğu kart
+bitene kadar bloke eder; çoğu spin-off bağımsız çalışabilir. `dependencies` yalnız
+gerçek blokaj varsa kullanılır. Ana kartın işini bitirmeden yan bulgunun peşine düşme.
+
 ## 4. Workflow desenleri — göreve göre seç ve **kombinle**
 
 Aşağıdaki altı desen, yukarıdaki M1–M4 mekanikleri üstünde koştuğun **stratejilerdir**
