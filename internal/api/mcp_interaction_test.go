@@ -219,8 +219,8 @@ func contains(ss []string, want string) bool {
 }
 
 // TestInteractionBridge covers CLI-3: a run with bridged self-management tools
-// installed advertises them in Tools(token) and dispatches them via Call's
-// default case through the run's bridge dispatcher.
+// installed advertises them in Tools(token) and, once activated, dispatches them
+// via Call's default case through the run's bridge dispatcher.
 func TestInteractionBridge(t *testing.T) {
 	runs := newChatRuns()
 	run := runs.register("rb", "s-rb", "ws1", func() {})
@@ -247,8 +247,10 @@ func TestInteractionBridge(t *testing.T) {
 		t.Fatal("bridged tool must not leak to a different token")
 	}
 
-	// Dispatched through the bridge (namespaced name is stripped before dispatch).
-	res, err := b.Call(context.Background(), run.token, "mcp__tionharness_interaction__create_agent", json.RawMessage(`{"name":"x"}`))
+	// Activated tools dispatch through the bridge (the extended namespace is stripped
+	// before dispatch).
+	b.activateExtended(run.token, []string{"create_agent"})
+	res, err := b.Call(context.Background(), run.token, extendedNSPrefix+"create_agent", json.RawMessage(`{"name":"x"}`))
 	if err != nil {
 		t.Fatalf("call: %v", err)
 	}
@@ -257,6 +259,46 @@ func TestInteractionBridge(t *testing.T) {
 	}
 	if gotName != "create_agent" || gotArgs != `{"name":"x"}` {
 		t.Fatalf("bridge dispatch got name=%q args=%q", gotName, gotArgs)
+	}
+}
+
+func TestGatewayToolCallErrorsAreActionable(t *testing.T) {
+	runs := newChatRuns()
+	b := &interactionBackend{runs: runs}
+	run := runs.register("r1", "s1", "ws1", func() {})
+	tok := runs.interactionToken("ws1", "s1", "a1")
+	runs.bindActive(tok, run)
+	run.setBridge(
+		[]providers.ToolDef{{Name: "list_agents", Description: "list agents"}},
+		func(_ context.Context, name string, _ json.RawMessage) (string, error) { return "called:" + name, nil },
+	)
+
+	for _, name := range []string{"list_agents", extendedNSPrefix + "list_agents"} {
+		res, err := b.Call(context.Background(), tok, name, nil)
+		if err != nil || !res.IsError {
+			t.Fatalf("inactive %q must return a tool error, got res=%+v err=%v", name, res, err)
+		}
+		for _, want := range []string{
+			extendedNSPrefix + "list_agents",
+			`activate_tools({"tools":["mcp__tionharness_extended__list_agents"]})`,
+			"next turn, not the current turn",
+		} {
+			if !strings.Contains(res.Text, want) {
+				t.Errorf("inactive error %q must contain %q", res.Text, want)
+			}
+		}
+	}
+
+	run.setToolAllowed(func(name string) bool { return name != "list_agents" })
+	blocked, _ := b.Call(context.Background(), tok, "list_agents", nil)
+	if !blocked.IsError || !strings.Contains(blocked.Text, "blocked") || strings.Contains(blocked.Text, "Activate it") {
+		t.Fatalf("policy-blocked tool must not recommend activation, got %q", blocked.Text)
+	}
+
+	unknown, _ := b.Call(context.Background(), tok, "list_agent", nil)
+	if !unknown.IsError || !strings.Contains(unknown.Text, "No such tool available: list_agent") ||
+		!strings.Contains(unknown.Text, extendedNSPrefix+"list_agents") || !strings.Contains(unknown.Text, "tool_search") {
+		t.Fatalf("unknown tool error must suggest a close name and tool_search, got %q", unknown.Text)
 	}
 }
 

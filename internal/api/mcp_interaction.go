@@ -651,6 +651,82 @@ func bareToolName(name string) string {
 	return strings.TrimPrefix(name, extendedNSPrefix)
 }
 
+// toolCallError distinguishes an unloaded on-demand tool from a policy-blocked or
+// genuinely unknown name before dispatch. Claude can submit either a bare or MCP-
+// namespaced name, but activation guidance always reports the exact extended name.
+func (b *interactionBackend) toolCallError(token, name string, run *chatRun) string {
+	bare := bareToolName(name)
+	defs := interactionToolSpecs(b.tun, run != nil && run.autonomous)
+	var visOf func(string) string
+	if run != nil {
+		visOf = run.tierVisFor()
+	}
+	known := make(map[string]bool, len(defs))
+	for _, def := range defs {
+		known[def.Name] = true
+	}
+	if run != nil {
+		for _, def := range run.bridgeDefsFor() {
+			known[def.Name] = true
+		}
+	}
+
+	if known[bare] {
+		if allow := run.toolAllowedFor(); allow != nil && !allow(bare) {
+			return fmt.Sprintf("Tool %s exists but is blocked by the current workspace or agent policy; it cannot be activated in this context.", callableToolName(bare, visOf))
+		}
+		if cliTier(bare, visOf) != "core" && !b.isActivated(token, bare) {
+			callable := extendedNSPrefix + bare
+			return fmt.Sprintf("Tool %s exists in the on-demand catalog but is not activated. Activate it with activate_tools({\"tools\":[%q]}). It will become visible on the next turn, not the current turn.", callable, callable)
+		}
+		return ""
+	}
+
+	msg := "No such tool available: " + name
+	if suggestion := closestToolName(bare, known); suggestion != "" {
+		msg += ". Did you mean " + callableToolName(suggestion, visOf) + "?"
+	}
+	return msg + ". Use tool_search({\"query\":\"<keywords>\"}) to find an on-demand tool."
+}
+
+func callableToolName(name string, visOf func(string) string) string {
+	if cliTier(name, visOf) == "core" {
+		return "mcp__tionharness_interaction__" + name
+	}
+	return extendedNSPrefix + name
+}
+
+func closestToolName(want string, known map[string]bool) string {
+	best, bestDistance := "", len(want)/3+1
+	for name := range known {
+		distance := toolNameDistance(want, name)
+		if distance < bestDistance || distance == bestDistance && (best == "" || name < best) {
+			best, bestDistance = name, distance
+		}
+	}
+	return best
+}
+
+func toolNameDistance(a, b string) int {
+	previous := make([]int, len(b)+1)
+	for j := range previous {
+		previous[j] = j
+	}
+	for i := 1; i <= len(a); i++ {
+		current := make([]int, len(b)+1)
+		current[0] = i
+		for j := 1; j <= len(b); j++ {
+			cost := 0
+			if a[i-1] != b[j-1] {
+				cost = 1
+			}
+			current[j] = min(current[j-1]+1, previous[j]+1, previous[j-1]+cost)
+		}
+		previous = current
+	}
+	return previous[len(b)]
+}
+
 // Call implements interaction.Backend.
 func (b *interactionBackend) Call(ctx context.Context, token, name string, args json.RawMessage) (interaction.CallResult, error) {
 	run := b.runs.byToken(token)
@@ -658,6 +734,9 @@ func (b *interactionBackend) Call(ctx context.Context, token, name string, args 
 		return interaction.CallResult{}, errors.New("no live turn for token")
 	}
 	bare := bareToolName(name)
+	if text := b.toolCallError(token, name, run); text != "" {
+		return interaction.CallResult{Text: text, IsError: true}, nil
+	}
 	// Sink-bound tools (todo/artifact/notify/focus/session-edit) all share one
 	// shape: pull the per-run sink, inject it as a context value, call the shared
 	// builtin handler. Dispatched through a single table+helper instead of one
