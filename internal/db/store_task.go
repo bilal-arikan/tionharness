@@ -230,11 +230,15 @@ func (d *DB) DeleteTask(ctx context.Context, id string) error {
 // tasks whose BoardState changed.
 func (d *DB) MigrateBoardColumns(ctx context.Context, oldCols, newCols []BoardColumnDef) (moved int, err error) {
 	// Positional rename map: oldCols[i].Key -> newCols[i].Key when the key
-	// actually changed at that index. A column that just moved position without
-	// a key change is unaffected (its key still matches an entry in newCols).
+	// actually changed at that index and the replacement key is new. Existing
+	// keys can shift into the same index after a deletion and are not renames.
+	oldKeys := make(map[string]bool, len(oldCols))
+	for _, c := range oldCols {
+		oldKeys[c.Key] = true
+	}
 	renamed := make(map[string]string, len(oldCols))
 	for i := 0; i < len(oldCols) && i < len(newCols); i++ {
-		if oldCols[i].Key != newCols[i].Key {
+		if oldCols[i].Key != newCols[i].Key && !oldKeys[newCols[i].Key] {
 			renamed[oldCols[i].Key] = newCols[i].Key
 		}
 	}

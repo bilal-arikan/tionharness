@@ -8,6 +8,7 @@ const (
 	BoardReview     = "review"
 	BoardDone       = "done"
 	BoardFailed     = "failed"
+	BoardCancelled  = "iptal"
 )
 
 // BoardColumnDef defines a kanban column with a display label and optional
@@ -28,6 +29,7 @@ func DefaultBoardColumns() []BoardColumnDef {
 		{Key: BoardReview, Label: "İnceleme", Color: ""},
 		{Key: BoardDone, Label: "Bitti", Color: ""},
 		{Key: BoardFailed, Label: "Başarısız", Color: ""},
+		{Key: BoardCancelled, Label: "İptal", Color: ""},
 	}
 }
 
