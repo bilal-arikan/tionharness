@@ -187,6 +187,16 @@ gönderiyordu (`Messages: [{user, prompt}]`) — uyanan ajan sürdürmesi gereke
 - Sohbet oturumu `ListSchedules` ve `list_schedules` aracından filtrelenir — yalnız aktif (henüz tetiklenmemiş) wake satırları gözükür ve bunlar da UI'da gösterilmez.
 - Çok uzun gecikmeler (1h+) clamp edilir; kullanıcıya araç çağrısı yanıtında belirtilir.
 
+## Stuck oturumlarda tekrarlayan zamanlama freni
+
+Prompt tabanlı tekrarlayan zamanlama, ortak `schedule` oturumunun `StuckTurns`
+sayacı ayarlardaki eşiğe ulaştığında yeni kullanıcı mesajını yazmadan durur.
+Scheduler ilgili zamanlamayı otomatik pasifleştirir ve cron tablosunu yeniden
+kurar. Böylece her cron tick'inde aynı guard hatası, bildirim ve transkript kaydı
+üretilmez; guard reddi sayacı da artırmaz. Devam etmek için sorun giderilir,
+oturumun `stuck` etiketi kaldırılarak sayaç sıfırlanır ve zamanlama kullanıcı
+tarafından yeniden etkinleştirilir.
+
 ---
 
 # Tekrarlayan Zamanlamalarda Son Tarih (`expires_at`)

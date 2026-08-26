@@ -479,6 +479,21 @@ func (s *Scheduler) deliverPrompt(ctx context.Context, sc db.Schedule) (string, 
 			"schedule", sc.ID, "agent", sc.AgentID, "error", err)
 		return "", err
 	}
+	// Do not append another scheduled prompt to a session already suspended by
+	// the stuck guard. Disable the recurring schedule at the source so later cron
+	// ticks cannot keep producing the same refusal, notification, and transcript
+	// growth. A user can repair the session, remove its stuck tag (which resets the
+	// counter), then explicitly re-enable the schedule.
+	gateCtx := WithSessionID(WithCallKind(ctx, KindSchedule), session.ID)
+	if err := s.rt.stuckGate(gateCtx); err != nil {
+		if disableErr := s.db.SetScheduleEnabled(ctx, sc.ID, false); disableErr != nil {
+			return session.ID, fmt.Errorf("%w; disable stuck schedule %s: %v", err, sc.ID, disableErr)
+		}
+		s.logger.Warn("schedule disabled: session suspended by stuck guard",
+			"schedule", sc.ID, "agent", sc.AgentID, "session", session.ID, "error", err)
+		go func() { _ = s.Reload(context.Background()) }()
+		return session.ID, err
+	}
 	// Serialize this scheduled turn with any concurrent turn on the same session
 	// (user chat / inbox worker / wake) — and, for a coordinator, its auto turns —
 	// via the single per-session turn slot.

@@ -112,6 +112,64 @@ func TestDeliverPrompt_RecordsErrorReply(t *testing.T) {
 	}
 }
 
+// TestDeliverPrompt_DisablesScheduleBeforeWritingToStuckSession guards against
+// recurring cron ticks endlessly appending the same prompt and stuck-guard
+// refusal. The scheduler must stop at the source, leave the transcript and
+// counter untouched, and require an explicit repair + re-enable.
+func TestDeliverPrompt_DisablesScheduleBeforeWritingToStuckSession(t *testing.T) {
+	rt, tun := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))
+	tun.SetStuckTurnThreshold(3)
+	sched := NewScheduler(rt.db, rt, slog.New(slog.NewTextHandler(discardWriter{}, nil)))
+	ctx := context.Background()
+
+	agent, err := rt.db.CreateAgent(ctx, db.Agent{Name: "Takılmış", Provider: "anthropic", Model: "m"})
+	if err != nil {
+		t.Fatalf("create agent: %v", err)
+	}
+	sc, err := rt.db.CreateSchedule(ctx, db.Schedule{
+		AgentID: agent.ID, Prompt: "Tekrar çalışma", CronExpr: "0 * * * *", Enabled: true,
+	})
+	if err != nil {
+		t.Fatalf("create schedule: %v", err)
+	}
+	session, err := rt.db.GetOrCreateKindSession(ctx, agent.ID, "schedule", "⏰ Schedule")
+	if err != nil {
+		t.Fatalf("create schedule session: %v", err)
+	}
+	if err := rt.db.SetSessionStuckTurns(ctx, session.ID, 3); err != nil {
+		t.Fatalf("seed stuck counter: %v", err)
+	}
+
+	sessionID, fireErr := sched.deliverPrompt(ctx, sc)
+	if fireErr == nil || !strings.Contains(fireErr.Error(), stuckGuardMarker) {
+		t.Fatalf("deliverPrompt error = %v, want stuck-guard refusal", fireErr)
+	}
+	if sessionID != session.ID {
+		t.Fatalf("session id = %q, want %q", sessionID, session.ID)
+	}
+	msgs, err := rt.db.ListMessages(ctx, session.ID)
+	if err != nil {
+		t.Fatalf("list messages: %v", err)
+	}
+	if len(msgs) != 0 {
+		t.Fatalf("stuck session transcript grew by %d messages: %+v", len(msgs), msgs)
+	}
+	gotSession, err := rt.db.GetSession(ctx, session.ID)
+	if err != nil {
+		t.Fatalf("get session: %v", err)
+	}
+	if gotSession.StuckTurns != 3 {
+		t.Fatalf("stuck turns = %d, want unchanged 3", gotSession.StuckTurns)
+	}
+	gotSchedule, err := rt.db.GetSchedule(ctx, sc.ID)
+	if err != nil {
+		t.Fatalf("get schedule: %v", err)
+	}
+	if gotSchedule.Enabled {
+		t.Fatal("schedule should be auto-disabled after stuck-guard refusal")
+	}
+}
+
 // TestRun_LogsFailureAtErrorLevel guards the "error notification shows but the
 // logs view is empty" report: a failed scheduled fire must emit an Error-level
 // log record carrying the failure reason, not just a notification + inline reply.
