@@ -96,29 +96,30 @@ func (s *Server) handleListAutomations(w http.ResponseWriter, r *http.Request) {
 }
 
 type automationReq struct {
-	Name            string   `json:"name"`
-	TriggerKind     string   `json:"triggerKind"`
-	TriggerTag      string   `json:"triggerTag"`
-	BoardOp         string   `json:"boardOp"`
-	BoardFromState  string   `json:"boardFromState"`
-	BoardToState    string   `json:"boardToState"`
-	BoardPriority   *int     `json:"boardPriority"`
-	BoardExclusive  *bool    `json:"boardExclusive"`
-	BoardAction     string   `json:"boardAction"`
-	TokenScope      string   `json:"tokenScope"`
-	TokenThreshold  *int     `json:"tokenThreshold"`
-	CounterMetric   string   `json:"counterMetric"`
-	CounterScope    string   `json:"counterScope"`
-	CounterInterval *int     `json:"counterInterval"`
-	SessionMode     string   `json:"sessionMode"`
-	TargetAgentID   string   `json:"targetAgentId"`
-	FlowID          string   `json:"flowId"`
-	PromptTemplate  string   `json:"promptTemplate"`
-	SpawnTags       []string `json:"spawnTags"`
-	Enabled         *bool    `json:"enabled"`
-	MaxIterations   *int     `json:"maxIterations"`
-	CooldownSec     *int     `json:"cooldownSec"`
-	ExpiresAt       *int64   `json:"expiresAt"`
+	Name             string   `json:"name"`
+	TriggerKind      string   `json:"triggerKind"`
+	TriggerTag       string   `json:"triggerTag"`
+	BoardOp          string   `json:"boardOp"`
+	BoardFromState   string   `json:"boardFromState"`
+	BoardToState     string   `json:"boardToState"`
+	BoardPriority    *int     `json:"boardPriority"`
+	BoardExclusive   *bool    `json:"boardExclusive"`
+	BoardAction      string   `json:"boardAction"`
+	BoardMoveToState string   `json:"boardMoveToState"`
+	TokenScope       string   `json:"tokenScope"`
+	TokenThreshold   *int     `json:"tokenThreshold"`
+	CounterMetric    string   `json:"counterMetric"`
+	CounterScope     string   `json:"counterScope"`
+	CounterInterval  *int     `json:"counterInterval"`
+	SessionMode      string   `json:"sessionMode"`
+	TargetAgentID    string   `json:"targetAgentId"`
+	FlowID           string   `json:"flowId"`
+	PromptTemplate   string   `json:"promptTemplate"`
+	SpawnTags        []string `json:"spawnTags"`
+	Enabled          *bool    `json:"enabled"`
+	MaxIterations    *int     `json:"maxIterations"`
+	CooldownSec      *int     `json:"cooldownSec"`
+	ExpiresAt        *int64   `json:"expiresAt"`
 }
 
 type updateAutomationReq struct {
@@ -139,21 +140,18 @@ func (s *Server) handleCreateAutomation(w http.ResponseWriter, r *http.Request) 
 	req.BoardFromState = strings.TrimSpace(req.BoardFromState)
 	req.BoardToState = strings.TrimSpace(req.BoardToState)
 	req.BoardAction = strings.TrimSpace(req.BoardAction)
+	req.BoardMoveToState = strings.TrimSpace(req.BoardMoveToState)
 	req.TokenScope = strings.TrimSpace(req.TokenScope)
 	req.CounterMetric = strings.TrimSpace(req.CounterMetric)
 	req.CounterScope = strings.TrimSpace(req.CounterScope)
 	req.SessionMode = strings.TrimSpace(req.SessionMode)
 	req.TargetAgentID = strings.TrimSpace(req.TargetAgentID)
 	req.FlowID = strings.TrimSpace(req.FlowID)
-	if strings.TrimSpace(req.PromptTemplate) == "" {
-		writeError(w, http.StatusBadRequest, "promptTemplate is required")
-		return
-	}
 	// Pointer→value extraction for the interval fields, and the one check the shape
 	// validator cannot express: "you omitted a required interval" (an absent field
 	// reads as 0, which db.ValidateAutomationShape would otherwise report as a range
 	// error). Every other per-kind rule — boardOp/action, scope, threshold/interval
-	// bounds, tag presence, target presence — is enforced ONCE by ValidateAutomationShape
+	// bounds, tag/prompt presence, target presence — is enforced ONCE by ValidateAutomationShape
 	// below, so it cannot drift from the agent-tool path.
 	tokenThreshold := 0
 	if req.TriggerKind == db.TriggerToken {
@@ -175,8 +173,8 @@ func (s *Server) handleCreateAutomation(w http.ResponseWriter, r *http.Request) 
 	// A board automation whose action is "archive" performs bookkeeping with no
 	// LLM call, so it needs no target. Every other automation targets EITHER a flow
 	// or a single agent.
-	archiveAction := req.TriggerKind == db.TriggerBoard && req.BoardAction == db.BoardActionArchive
-	if archiveAction {
+	targetlessAction := req.TriggerKind == db.TriggerBoard && (req.BoardAction == db.BoardActionArchive || req.BoardAction == db.BoardActionMove)
+	if targetlessAction {
 		// no target required; ignore any flow/agent sent
 	} else if req.FlowID != "" {
 		if _, err := ws(r).DB.GetFlow(ctx, req.FlowID); err != nil {
@@ -224,29 +222,30 @@ func (s *Server) handleCreateAutomation(w http.ResponseWriter, r *http.Request) 
 		boardExclusive = *req.BoardExclusive
 	}
 	auto := db.Automation{
-		Name:            strings.TrimSpace(req.Name),
-		TriggerKind:     req.TriggerKind,
-		TriggerTag:      req.TriggerTag,
-		BoardOp:         req.BoardOp,
-		BoardFromState:  req.BoardFromState,
-		BoardToState:    req.BoardToState,
-		BoardPriority:   boardPriority,
-		BoardExclusive:  boardExclusive,
-		BoardAction:     req.BoardAction,
-		TokenScope:      req.TokenScope,
-		TokenThreshold:  tokenThreshold,
-		CounterMetric:   req.CounterMetric,
-		CounterScope:    req.CounterScope,
-		CounterInterval: counterInterval,
-		SessionMode:     req.SessionMode,
-		TargetAgentID:   req.TargetAgentID,
-		FlowID:          req.FlowID,
-		PromptTemplate:  req.PromptTemplate,
-		SpawnTags:       req.SpawnTags,
-		Enabled:         enabled,
-		MaxIterations:   maxIter,
-		CooldownSec:     cooldown,
-		ExpiresAt:       expiresAt,
+		Name:             strings.TrimSpace(req.Name),
+		TriggerKind:      req.TriggerKind,
+		TriggerTag:       req.TriggerTag,
+		BoardOp:          req.BoardOp,
+		BoardFromState:   req.BoardFromState,
+		BoardToState:     req.BoardToState,
+		BoardPriority:    boardPriority,
+		BoardExclusive:   boardExclusive,
+		BoardAction:      req.BoardAction,
+		BoardMoveToState: req.BoardMoveToState,
+		TokenScope:       req.TokenScope,
+		TokenThreshold:   tokenThreshold,
+		CounterMetric:    req.CounterMetric,
+		CounterScope:     req.CounterScope,
+		CounterInterval:  counterInterval,
+		SessionMode:      req.SessionMode,
+		TargetAgentID:    req.TargetAgentID,
+		FlowID:           req.FlowID,
+		PromptTemplate:   req.PromptTemplate,
+		SpawnTags:        req.SpawnTags,
+		Enabled:          enabled,
+		MaxIterations:    maxIter,
+		CooldownSec:      cooldown,
+		ExpiresAt:        expiresAt,
 	}
 	// Shared shape backstop: same contract as the agent tool + update paths.
 	if err := db.ValidateAutomationShape(auto); err != nil {
@@ -292,6 +291,7 @@ func (s *Server) handleUpdateAutomation(w http.ResponseWriter, r *http.Request) 
 		cur.BoardToState = strings.TrimSpace(req.BoardToState)
 		if k == db.TriggerBoard {
 			cur.BoardAction = strings.TrimSpace(req.BoardAction)
+			cur.BoardMoveToState = strings.TrimSpace(req.BoardMoveToState)
 		}
 		if k == db.TriggerToken {
 			cur.TokenScope = strings.TrimSpace(req.TokenScope)

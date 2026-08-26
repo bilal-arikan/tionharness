@@ -183,18 +183,19 @@ func TestValidateAutomationShape(t *testing.T) {
 	agent := "AGT1"
 
 	valid := []Automation{
-		{TriggerKind: TriggerTag, TriggerTag: "loop", TargetAgentID: agent},
-		{TriggerKind: "", TriggerTag: "loop", FlowID: "FL1"},               // "" == tag
-		{TriggerKind: TriggerBoard, BoardAction: BoardActionArchive},       // archive needs no target
-		{TriggerKind: TriggerBoard, BoardAction: "", TargetAgentID: agent}, // "" == spawn
-		{TriggerKind: TriggerBoard, BoardAction: BoardActionSpawn, FlowID: "FL1"},
-		{TriggerKind: TriggerToken, TokenThreshold: MinTokenThreshold, TargetAgentID: agent},
-		{TriggerKind: TriggerToken, TokenScope: TokenScopeWorkspace, TokenThreshold: 100_000, FlowID: "FL1"},
-		{TriggerKind: TriggerCounter, CounterInterval: MinCounterInterval, TargetAgentID: agent},
-		{TriggerKind: TriggerCounter, CounterMetric: CounterMetricTool, CounterInterval: 10, FlowID: "FL1"},
-		{TriggerKind: TriggerCounter, CounterMetric: CounterMetricTool, CounterScope: CounterScopeWorkspace, CounterInterval: 150, TargetAgentID: agent},
-		{TriggerKind: TriggerTag, TriggerTag: "loop", SessionMode: SessionModeContinue, TargetAgentID: agent},
-		{TriggerKind: TriggerToken, TokenThreshold: MinTokenThreshold, SessionMode: SessionModeSpawn, TargetAgentID: agent},
+		{TriggerKind: TriggerTag, TriggerTag: "loop", TargetAgentID: agent, PromptTemplate: "run"},
+		{TriggerKind: "", TriggerTag: "loop", FlowID: "FL1", PromptTemplate: "run"}, // "" == tag
+		{TriggerKind: TriggerBoard, BoardAction: BoardActionArchive},                // archive needs no target
+		{TriggerKind: TriggerBoard, BoardAction: BoardActionMove, BoardToState: "review", BoardMoveToState: "done"},
+		{TriggerKind: TriggerBoard, BoardAction: "", TargetAgentID: agent, PromptTemplate: "run"}, // "" == spawn
+		{TriggerKind: TriggerBoard, BoardAction: BoardActionSpawn, FlowID: "FL1", PromptTemplate: "run"},
+		{TriggerKind: TriggerToken, TokenThreshold: MinTokenThreshold, TargetAgentID: agent, PromptTemplate: "run"},
+		{TriggerKind: TriggerToken, TokenScope: TokenScopeWorkspace, TokenThreshold: 100_000, FlowID: "FL1", PromptTemplate: "run"},
+		{TriggerKind: TriggerCounter, CounterInterval: MinCounterInterval, TargetAgentID: agent, PromptTemplate: "run"},
+		{TriggerKind: TriggerCounter, CounterMetric: CounterMetricTool, CounterInterval: 10, FlowID: "FL1", PromptTemplate: "run"},
+		{TriggerKind: TriggerCounter, CounterMetric: CounterMetricTool, CounterScope: CounterScopeWorkspace, CounterInterval: 150, TargetAgentID: agent, PromptTemplate: "run"},
+		{TriggerKind: TriggerTag, TriggerTag: "loop", SessionMode: SessionModeContinue, TargetAgentID: agent, PromptTemplate: "run"},
+		{TriggerKind: TriggerToken, TokenThreshold: MinTokenThreshold, SessionMode: SessionModeSpawn, TargetAgentID: agent, PromptTemplate: "run"},
 	}
 	for i, a := range valid {
 		if err := ValidateAutomationShape(a); err != nil {
@@ -210,6 +211,13 @@ func TestValidateAutomationShape(t *testing.T) {
 		{"legacy empty-kind without triggerTag", Automation{TriggerKind: "", TargetAgentID: agent}},
 		{"tag with tag but no target", Automation{TriggerKind: TriggerTag, TriggerTag: "loop"}},
 		{"board spawn without target", Automation{TriggerKind: TriggerBoard, BoardAction: BoardActionSpawn}},
+		{"board spawn without prompt", Automation{TriggerKind: TriggerBoard, BoardAction: BoardActionSpawn, TargetAgentID: agent}},
+		{"tag without prompt", Automation{TriggerKind: TriggerTag, TriggerTag: "loop", TargetAgentID: agent}},
+		{"token without prompt", Automation{TriggerKind: TriggerToken, TokenThreshold: MinTokenThreshold, TargetAgentID: agent}},
+		{"counter without prompt", Automation{TriggerKind: TriggerCounter, CounterInterval: MinCounterInterval, TargetAgentID: agent}},
+		{"board move without destination", Automation{TriggerKind: TriggerBoard, BoardAction: BoardActionMove}},
+		{"board move with wildcard destination filter self-triggers", Automation{TriggerKind: TriggerBoard, BoardAction: BoardActionMove, BoardMoveToState: "done"}},
+		{"board move to matched destination self-triggers", Automation{TriggerKind: TriggerBoard, BoardAction: BoardActionMove, BoardToState: "done", BoardMoveToState: "done"}},
 		{"board bad action", Automation{TriggerKind: TriggerBoard, BoardAction: "bogus", TargetAgentID: agent}},
 		{"token without threshold", Automation{TriggerKind: TriggerToken, TargetAgentID: agent}},
 		{"token bad scope", Automation{TriggerKind: TriggerToken, TokenScope: "daily", TokenThreshold: 100_000, TargetAgentID: agent}},
@@ -223,6 +231,24 @@ func TestValidateAutomationShape(t *testing.T) {
 	for _, tc := range rejected {
 		if err := ValidateAutomationShape(tc.a); err == nil {
 			t.Errorf("%q must be rejected", tc.name)
+		}
+	}
+}
+
+func TestValidateAutomationShapePromptRequirements(t *testing.T) {
+	tests := []Automation{
+		{TriggerKind: TriggerBoard, BoardAction: BoardActionSpawn, TargetAgentID: "AGT1"},
+		{TriggerKind: TriggerTag, TriggerTag: "loop", TargetAgentID: "AGT1"},
+		{TriggerKind: TriggerToken, TokenThreshold: MinTokenThreshold, TargetAgentID: "AGT1"},
+		{TriggerKind: TriggerCounter, CounterInterval: MinCounterInterval, TargetAgentID: "AGT1"},
+	}
+	for _, automation := range tests {
+		err := ValidateAutomationShape(automation)
+		if !errors.Is(err, ErrAutomationShape) {
+			t.Fatalf("ValidateAutomationShape(%+v) error = %v, want ErrAutomationShape", automation, err)
+		}
+		if !strings.Contains(err.Error(), "promptTemplate is required") {
+			t.Fatalf("ValidateAutomationShape(%+v) error = %q", automation, err)
 		}
 	}
 }

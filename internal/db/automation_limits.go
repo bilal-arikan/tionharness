@@ -3,6 +3,7 @@ package db
 import (
 	"errors"
 	"fmt"
+	"strings"
 )
 
 // Automation iteration limits.
@@ -118,10 +119,22 @@ func ValidateAutomationShape(a Automation) error {
 			return fmt.Errorf("%w: invalid boardOp %q (any|move|create|update|delete)", ErrAutomationShape, a.BoardOp)
 		}
 		if !ValidBoardAction(a.BoardAction) {
-			return fmt.Errorf("%w: invalid boardAction %q (spawn|archive)", ErrAutomationShape, a.BoardAction)
+			return fmt.Errorf("%w: invalid boardAction %q (spawn|archive|move)", ErrAutomationShape, a.BoardAction)
 		}
-		// An archive action does bookkeeping with no LLM call, so it needs no target.
+		// Archive and move actions do bookkeeping with no LLM call, so they need no target.
 		if a.BoardAction == BoardActionArchive {
+			return nil
+		}
+		if a.BoardAction == BoardActionMove {
+			if a.BoardMoveToState == "" {
+				return fmt.Errorf("%w: boardMoveToState is required for move board actions", ErrAutomationShape)
+			}
+			if a.BoardToState == "" {
+				return fmt.Errorf("%w: boardToState is required for move board actions and must differ from boardMoveToState to prevent self-triggering", ErrAutomationShape)
+			}
+			if a.BoardMoveToState == a.BoardToState {
+				return fmt.Errorf("%w: boardMoveToState must differ from boardToState to prevent self-triggering", ErrAutomationShape)
+			}
 			return nil
 		}
 	case TriggerToken:
@@ -146,12 +159,15 @@ func ValidateAutomationShape(a Automation) error {
 			return fmt.Errorf("%w: triggerTag is required for tag automations (an empty tag never fires)", ErrAutomationShape)
 		}
 	}
+	if strings.TrimSpace(a.PromptTemplate) == "" {
+		return fmt.Errorf("%w: promptTemplate is required", ErrAutomationShape)
+	}
 	// Session mode is a free choice across kinds, but the value must be known.
 	if !ValidSessionMode(a.SessionMode) {
 		return fmt.Errorf("%w: invalid sessionMode %q (spawn|continue)", ErrAutomationShape, a.SessionMode)
 	}
 	// Every automation that reaches here spawns a session or runs a flow, so it
-	// needs exactly one runnable target. (Board 'archive' returned above.)
+	// needs exactly one runnable target. (Board 'archive' and 'move' returned above.)
 	if a.FlowID == "" && a.TargetAgentID == "" {
 		return fmt.Errorf("%w: targetAgentId or flowId is required", ErrAutomationShape)
 	}

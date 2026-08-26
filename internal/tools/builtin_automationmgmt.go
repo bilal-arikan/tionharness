@@ -63,7 +63,7 @@ func (CreateAutomationTool) Def() providers.ToolDef {
 			"triggerTag by default (a self-continuing loop bounded by maxIterations); board and token automations do not self-loop. " +
 			"A board automation's boardAction='spawn' (default) makes the board drive EXECUTION (a card entering a column starts " +
 			"an agent/flow); boardAction='archive' instead archives the card with NO LLM call (the cheap 'done → archive' cleanup, " +
-			"no target needed).",
+			"no target needed); boardAction='move' moves it to the explicit boardMoveToState with no LLM call.",
 		InputSchema: json.RawMessage(`{
 			"type":"object",
 			"properties":{
@@ -75,7 +75,8 @@ func (CreateAutomationTool) Def() providers.ToolDef {
 				"boardToState":{"type":"string","description":"[board kind] Only fire when a card ENTERS this column (empty = any target)"},
 				"boardPriority":{"type":"integer","description":"[board kind] Fire order among automations matching the SAME card change; lower runs first (default 0). Use it to sequence two rules on one column instead of letting them race."},
 				"boardExclusive":{"type":"boolean","description":"[board kind] Claim sole ownership of a matching card change: only this automation fires and every other match is suppressed (default false). Among several exclusive matches the lowest boardPriority wins."},
-				"boardAction":{"type":"string","enum":["spawn","archive"],"description":"[board kind] What firing does: 'spawn' (default) runs the target agent/flow — the board drives execution; 'archive' archives the card with no LLM call (needs no target). Use 'archive' for a 'done → archive' cleanup rule."},
+			"boardAction":{"type":"string","enum":["spawn","archive","move"],"description":"[board kind] What firing does: 'spawn' runs the target; 'archive' archives the card; 'move' moves it without an LLM call."},
+			"boardMoveToState":{"type":"string","description":"[board move action] Explicit destination column key. Required when boardAction='move'."},
 				"tokenScope":{"type":"string","enum":["session","workspace"],"description":"[token kind] What to watch: 'session' (default; one session's lifetime tokens) or 'workspace' (whole workspace's tokens today)"},
 				"tokenThreshold":{"type":"integer","description":"[token kind] Token INTERVAL; fires each time cumulative spend crosses another multiple (e.g. 100000 → at 100k, 200k…). Min 1000. Tokens = input+output+cache."},
 				"counterMetric":{"type":"string","enum":["message","tool"],"description":"[counter kind] Which counter to watch: 'message' (default; every user/assistant message) or 'tool' (executed tool calls)"},
@@ -84,14 +85,13 @@ func (CreateAutomationTool) Def() providers.ToolDef {
 				"sessionMode":{"type":"string","enum":["spawn","continue"],"description":"[agent-backed] Session strategy per fire: 'spawn' (fresh session each time — tag/board default) or 'continue' (one persistent per-automation thread that carries prior turns forward, history-aware — token/counter default). Omit to use the per-kind default. Ignored for flow-backed rules."},
 				"targetAgentId":{"type":"string","description":"The agent that runs the spawned session (see list_agents). Omit when flowId is set."},
 				"flowId":{"type":"string","description":"Run this orchestration flow with the rendered prompt as its input instead of spawning an agent session (see list_flows)."},
-				"promptTemplate":{"type":"string","description":"Prompt for the spawned session (or flow input). Tag placeholders: {{result}}, {{title}}, {{tag}}, {{sessionId}}, {{prevPrompt}}, {{agent}}. Board placeholders: {{taskId}}, {{title}}, {{op}}, {{from}}, {{to}}, {{fromLabel}}, {{toLabel}}, {{board}}, {{tags}}, {{owner}}, {{priority}}. Token placeholders: {{tokens}}, {{threshold}}, {{scope}}, {{sessionId}}. Counter placeholders: {{count}}, {{interval}}, {{metric}}, {{scope}}, {{sessionId}}. Common: {{iteration}}, {{maxIterations}}, {{automation}}, {{date}}, {{time}}, {{datetime}}"},
+				"promptTemplate":{"type":"string","description":"Prompt for the spawned session (or flow input). Optional for board archive/move actions, which never call an LLM. Tag placeholders: {{result}}, {{title}}, {{tag}}, {{sessionId}}, {{prevPrompt}}, {{agent}}. Board placeholders: {{taskId}}, {{title}}, {{op}}, {{from}}, {{to}}, {{fromLabel}}, {{toLabel}}, {{board}}, {{tags}}, {{owner}}, {{priority}}. Token placeholders: {{tokens}}, {{threshold}}, {{scope}}, {{sessionId}}. Counter placeholders: {{count}}, {{interval}}, {{metric}}, {{scope}}, {{sessionId}}. Common: {{iteration}}, {{maxIterations}}, {{automation}}, {{date}}, {{time}}, {{datetime}}"},
 				"spawnTags":{"type":"array","items":{"type":"string"},"description":"Tags applied to the spawned session (tag kind default: [triggerTag] → self-continuing loop). To stop the loop, set a DIFFERENT tag that no automation triggers on — an empty [] does NOT break the loop (it is re-defaulted to [triggerTag]). Ignored for flow-backed and board automations."},
 				"maxIterations":{"type":"integer","description":"Max total fires before auto-disabling. Range 1-500; 0/unlimited is REJECTED (infinite-loop risk). Omit for the default 50."},
 				"cooldownSec":{"type":"integer","description":"Minimum seconds between fires (default 0)"},
 				"expiresAt":{"type":"integer","description":"Optional end date (unix seconds); after it the automation auto-disables. 0 = no end date"},
 				"enabled":{"type":"boolean","description":"Active immediately (default true)"}
 			},
-			"required":["promptTemplate"],
 			"additionalProperties":false
 		}`),
 		Examples: []json.RawMessage{
@@ -102,29 +102,30 @@ func (CreateAutomationTool) Def() providers.ToolDef {
 
 func (t CreateAutomationTool) Call(ctx context.Context, input json.RawMessage) (string, error) {
 	var in struct {
-		Name            string   `json:"name"`
-		TriggerKind     string   `json:"triggerKind"`
-		TriggerTag      string   `json:"triggerTag"`
-		BoardOp         string   `json:"boardOp"`
-		BoardFromState  string   `json:"boardFromState"`
-		BoardToState    string   `json:"boardToState"`
-		BoardPriority   *int     `json:"boardPriority"`
-		BoardExclusive  *bool    `json:"boardExclusive"`
-		BoardAction     string   `json:"boardAction"`
-		TokenScope      string   `json:"tokenScope"`
-		TokenThreshold  *int     `json:"tokenThreshold"`
-		CounterMetric   string   `json:"counterMetric"`
-		CounterScope    string   `json:"counterScope"`
-		CounterInterval *int     `json:"counterInterval"`
-		SessionMode     string   `json:"sessionMode"`
-		TargetAgentID   string   `json:"targetAgentId"`
-		FlowID          string   `json:"flowId"`
-		PromptTemplate  string   `json:"promptTemplate"`
-		SpawnTags       []string `json:"spawnTags"`
-		MaxIterations   *int     `json:"maxIterations"`
-		CooldownSec     *int     `json:"cooldownSec"`
-		ExpiresAt       *int64   `json:"expiresAt"`
-		Enabled         *bool    `json:"enabled"`
+		Name             string   `json:"name"`
+		TriggerKind      string   `json:"triggerKind"`
+		TriggerTag       string   `json:"triggerTag"`
+		BoardOp          string   `json:"boardOp"`
+		BoardFromState   string   `json:"boardFromState"`
+		BoardToState     string   `json:"boardToState"`
+		BoardPriority    *int     `json:"boardPriority"`
+		BoardExclusive   *bool    `json:"boardExclusive"`
+		BoardAction      string   `json:"boardAction"`
+		BoardMoveToState string   `json:"boardMoveToState"`
+		TokenScope       string   `json:"tokenScope"`
+		TokenThreshold   *int     `json:"tokenThreshold"`
+		CounterMetric    string   `json:"counterMetric"`
+		CounterScope     string   `json:"counterScope"`
+		CounterInterval  *int     `json:"counterInterval"`
+		SessionMode      string   `json:"sessionMode"`
+		TargetAgentID    string   `json:"targetAgentId"`
+		FlowID           string   `json:"flowId"`
+		PromptTemplate   string   `json:"promptTemplate"`
+		SpawnTags        []string `json:"spawnTags"`
+		MaxIterations    *int     `json:"maxIterations"`
+		CooldownSec      *int     `json:"cooldownSec"`
+		ExpiresAt        *int64   `json:"expiresAt"`
+		Enabled          *bool    `json:"enabled"`
 	}
 	if err := json.Unmarshal(input, &in); err != nil {
 		return "", argErr(err)
@@ -138,12 +139,10 @@ func (t CreateAutomationTool) Call(ctx context.Context, input json.RawMessage) (
 	in.BoardFromState = strings.TrimSpace(in.BoardFromState)
 	in.BoardToState = strings.TrimSpace(in.BoardToState)
 	in.BoardAction = strings.TrimSpace(in.BoardAction)
+	in.BoardMoveToState = strings.TrimSpace(in.BoardMoveToState)
 	in.TokenScope = strings.TrimSpace(in.TokenScope)
 	in.TargetAgentID = strings.TrimSpace(in.TargetAgentID)
 	in.FlowID = strings.TrimSpace(in.FlowID)
-	if strings.TrimSpace(in.PromptTemplate) == "" {
-		return "", fmt.Errorf("promptTemplate is required")
-	}
 	// Pointer→value extraction for the interval fields + the one check the shape
 	// validator cannot express ("required interval omitted"). Every other per-kind
 	// rule is enforced once by db.ValidateAutomationShape below — the SAME validator
@@ -164,8 +163,8 @@ func (t CreateAutomationTool) Call(ctx context.Context, input json.RawMessage) (
 	}
 	// A board 'archive' automation needs no target (no LLM call). Otherwise either
 	// a flow (flowId) or an agent (targetAgentId) is the target.
-	archiveAction := in.TriggerKind == db.TriggerBoard && in.BoardAction == db.BoardActionArchive
-	if archiveAction {
+	targetlessAction := in.TriggerKind == db.TriggerBoard && (in.BoardAction == db.BoardActionArchive || in.BoardAction == db.BoardActionMove)
+	if targetlessAction {
 		// no target required
 	} else if in.FlowID != "" {
 		if _, err := t.d.db.GetFlow(ctx, in.FlowID); err != nil {
@@ -211,30 +210,31 @@ func (t CreateAutomationTool) Call(ctx context.Context, input json.RawMessage) (
 		boardExclusive = *in.BoardExclusive
 	}
 	auto := db.Automation{
-		Name:            strings.TrimSpace(in.Name),
-		TriggerKind:     in.TriggerKind,
-		TriggerTag:      in.TriggerTag,
-		BoardOp:         in.BoardOp,
-		BoardFromState:  in.BoardFromState,
-		BoardToState:    in.BoardToState,
-		BoardPriority:   boardPriority,
-		BoardExclusive:  boardExclusive,
-		BoardAction:     in.BoardAction,
-		TokenScope:      in.TokenScope,
-		TokenThreshold:  tokenThreshold,
-		CounterMetric:   in.CounterMetric,
-		CounterScope:    in.CounterScope,
-		CounterInterval: counterInterval,
-		SessionMode:     in.SessionMode,
-		TargetAgentID:   in.TargetAgentID,
-		FlowID:          in.FlowID,
-		PromptTemplate:  in.PromptTemplate,
-		SpawnTags:       in.SpawnTags,
-		MaxIterations:   maxIter,
-		CooldownSec:     cooldown,
-		ExpiresAt:       expiresAt,
-		Enabled:         enabled,
-		CreatedBy:       t.d.actorID,
+		Name:             strings.TrimSpace(in.Name),
+		TriggerKind:      in.TriggerKind,
+		TriggerTag:       in.TriggerTag,
+		BoardOp:          in.BoardOp,
+		BoardFromState:   in.BoardFromState,
+		BoardToState:     in.BoardToState,
+		BoardPriority:    boardPriority,
+		BoardExclusive:   boardExclusive,
+		BoardAction:      in.BoardAction,
+		BoardMoveToState: in.BoardMoveToState,
+		TokenScope:       in.TokenScope,
+		TokenThreshold:   tokenThreshold,
+		CounterMetric:    in.CounterMetric,
+		CounterScope:     in.CounterScope,
+		CounterInterval:  counterInterval,
+		SessionMode:      in.SessionMode,
+		TargetAgentID:    in.TargetAgentID,
+		FlowID:           in.FlowID,
+		PromptTemplate:   in.PromptTemplate,
+		SpawnTags:        in.SpawnTags,
+		MaxIterations:    maxIter,
+		CooldownSec:      cooldown,
+		ExpiresAt:        expiresAt,
+		Enabled:          enabled,
+		CreatedBy:        t.d.actorID,
 	}
 	// Shared shape backstop (see db.ValidateAutomationShape) so create and update
 	// enforce the same trigger/target contract.
@@ -273,7 +273,8 @@ func (UpdateAutomationTool) Def() providers.ToolDef {
 				"boardToState":{"type":"string","description":"[board kind] target-column filter (empty = any)"},
 				"boardPriority":{"type":"integer","description":"[board kind] fire order among automations matching the same card change; lower runs first"},
 				"boardExclusive":{"type":"boolean","description":"[board kind] only this automation fires for a matching change; all other matches are suppressed"},
-				"boardAction":{"type":"string","enum":["spawn","archive"],"description":"[board kind] 'spawn' runs the target (board drives execution); 'archive' archives the card with no LLM call"},
+			"boardAction":{"type":"string","enum":["spawn","archive","move"],"description":"[board kind] 'spawn' runs the target; 'archive' archives the card; 'move' moves it without an LLM call"},
+			"boardMoveToState":{"type":"string","description":"[board move action] Explicit destination column key. Required when boardAction='move'."},
 				"tokenScope":{"type":"string","enum":["session","workspace"],"description":"[token kind] watch one session ('session') or the whole workspace/day ('workspace')"},
 				"tokenThreshold":{"type":"integer","description":"[token kind] token interval; fires each time cumulative spend crosses another multiple (min 1000)"},
 				"counterMetric":{"type":"string","enum":["message","tool"],"description":"[counter kind] watch 'message' count or 'tool' calls"},
@@ -297,30 +298,31 @@ func (UpdateAutomationTool) Def() providers.ToolDef {
 
 func (t UpdateAutomationTool) Call(ctx context.Context, input json.RawMessage) (string, error) {
 	var in struct {
-		ID              string    `json:"id"`
-		Name            *string   `json:"name"`
-		TriggerKind     *string   `json:"triggerKind"`
-		TriggerTag      *string   `json:"triggerTag"`
-		BoardOp         *string   `json:"boardOp"`
-		BoardFromState  *string   `json:"boardFromState"`
-		BoardToState    *string   `json:"boardToState"`
-		BoardPriority   *int      `json:"boardPriority"`
-		BoardExclusive  *bool     `json:"boardExclusive"`
-		BoardAction     *string   `json:"boardAction"`
-		TokenScope      *string   `json:"tokenScope"`
-		TokenThreshold  *int      `json:"tokenThreshold"`
-		CounterMetric   *string   `json:"counterMetric"`
-		CounterScope    *string   `json:"counterScope"`
-		CounterInterval *int      `json:"counterInterval"`
-		SessionMode     *string   `json:"sessionMode"`
-		TargetAgentID   *string   `json:"targetAgentId"`
-		FlowID          *string   `json:"flowId"`
-		PromptTemplate  *string   `json:"promptTemplate"`
-		SpawnTags       *[]string `json:"spawnTags"`
-		MaxIterations   *int      `json:"maxIterations"`
-		CooldownSec     *int      `json:"cooldownSec"`
-		ExpiresAt       *int64    `json:"expiresAt"`
-		Enabled         *bool     `json:"enabled"`
+		ID               string    `json:"id"`
+		Name             *string   `json:"name"`
+		TriggerKind      *string   `json:"triggerKind"`
+		TriggerTag       *string   `json:"triggerTag"`
+		BoardOp          *string   `json:"boardOp"`
+		BoardFromState   *string   `json:"boardFromState"`
+		BoardToState     *string   `json:"boardToState"`
+		BoardPriority    *int      `json:"boardPriority"`
+		BoardExclusive   *bool     `json:"boardExclusive"`
+		BoardAction      *string   `json:"boardAction"`
+		BoardMoveToState *string   `json:"boardMoveToState"`
+		TokenScope       *string   `json:"tokenScope"`
+		TokenThreshold   *int      `json:"tokenThreshold"`
+		CounterMetric    *string   `json:"counterMetric"`
+		CounterScope     *string   `json:"counterScope"`
+		CounterInterval  *int      `json:"counterInterval"`
+		SessionMode      *string   `json:"sessionMode"`
+		TargetAgentID    *string   `json:"targetAgentId"`
+		FlowID           *string   `json:"flowId"`
+		PromptTemplate   *string   `json:"promptTemplate"`
+		SpawnTags        *[]string `json:"spawnTags"`
+		MaxIterations    *int      `json:"maxIterations"`
+		CooldownSec      *int      `json:"cooldownSec"`
+		ExpiresAt        *int64    `json:"expiresAt"`
+		Enabled          *bool     `json:"enabled"`
 	}
 	if err := json.Unmarshal(input, &in); err != nil {
 		return "", argErr(err)
@@ -362,6 +364,9 @@ func (t UpdateAutomationTool) Call(ctx context.Context, input json.RawMessage) (
 	}
 	if in.BoardAction != nil {
 		cur.BoardAction = strings.TrimSpace(*in.BoardAction)
+	}
+	if in.BoardMoveToState != nil {
+		cur.BoardMoveToState = strings.TrimSpace(*in.BoardMoveToState)
 	}
 	if in.TokenScope != nil {
 		cur.TokenScope = strings.TrimSpace(*in.TokenScope)
@@ -572,26 +577,27 @@ func (t ListAutomationsTool) Call(ctx context.Context, input json.RawMessage) (s
 
 	page, total := SlicePage(matches, offset, limit)
 	type row struct {
-		ID              string `json:"id"`
-		Name            string `json:"name"`
-		TriggerKind     string `json:"triggerKind"`
-		TriggerTag      string `json:"triggerTag,omitempty"`
-		BoardOp         string `json:"boardOp,omitempty"`
-		BoardToState    string `json:"boardToState,omitempty"`
-		BoardPriority   int    `json:"boardPriority,omitempty"`
-		BoardExclusive  bool   `json:"boardExclusive,omitempty"`
-		BoardAction     string `json:"boardAction,omitempty"`
-		TokenScope      string `json:"tokenScope,omitempty"`
-		TokenThreshold  int    `json:"tokenThreshold,omitempty"`
-		CounterMetric   string `json:"counterMetric,omitempty"`
-		CounterScope    string `json:"counterScope,omitempty"`
-		CounterInterval int    `json:"counterInterval,omitempty"`
-		TargetAgentID   string `json:"targetAgentId"`
-		FlowID          string `json:"flowId,omitempty"`
-		Enabled         bool   `json:"enabled"`
-		IterationCount  int    `json:"iterationCount"`
-		MaxIterations   int    `json:"maxIterations"`
-		CreatedByAgent  bool   `json:"createdByAgent"`
+		ID               string `json:"id"`
+		Name             string `json:"name"`
+		TriggerKind      string `json:"triggerKind"`
+		TriggerTag       string `json:"triggerTag,omitempty"`
+		BoardOp          string `json:"boardOp,omitempty"`
+		BoardToState     string `json:"boardToState,omitempty"`
+		BoardPriority    int    `json:"boardPriority,omitempty"`
+		BoardExclusive   bool   `json:"boardExclusive,omitempty"`
+		BoardAction      string `json:"boardAction,omitempty"`
+		BoardMoveToState string `json:"boardMoveToState,omitempty"`
+		TokenScope       string `json:"tokenScope,omitempty"`
+		TokenThreshold   int    `json:"tokenThreshold,omitempty"`
+		CounterMetric    string `json:"counterMetric,omitempty"`
+		CounterScope     string `json:"counterScope,omitempty"`
+		CounterInterval  int    `json:"counterInterval,omitempty"`
+		TargetAgentID    string `json:"targetAgentId"`
+		FlowID           string `json:"flowId,omitempty"`
+		Enabled          bool   `json:"enabled"`
+		IterationCount   int    `json:"iterationCount"`
+		MaxIterations    int    `json:"maxIterations"`
+		CreatedByAgent   bool   `json:"createdByAgent"`
 	}
 	out := make([]row, 0, len(page))
 	for _, a := range page {
@@ -600,26 +606,27 @@ func (t ListAutomationsTool) Call(ctx context.Context, input json.RawMessage) (s
 			kind = db.TriggerTag
 		}
 		out = append(out, row{
-			ID:              a.ID,
-			Name:            a.Name,
-			TriggerKind:     kind,
-			TriggerTag:      a.TriggerTag,
-			BoardOp:         a.BoardOp,
-			BoardToState:    a.BoardToState,
-			BoardPriority:   a.BoardPriority,
-			BoardExclusive:  a.BoardExclusive,
-			BoardAction:     a.BoardAction,
-			TokenScope:      a.TokenScope,
-			TokenThreshold:  a.TokenThreshold,
-			CounterMetric:   a.CounterMetric,
-			CounterScope:    a.CounterScope,
-			CounterInterval: a.CounterInterval,
-			TargetAgentID:   a.TargetAgentID,
-			FlowID:          a.FlowID,
-			Enabled:         a.Enabled,
-			IterationCount:  a.IterationCount,
-			MaxIterations:   a.MaxIterations,
-			CreatedByAgent:  a.CreatedBy != "",
+			ID:               a.ID,
+			Name:             a.Name,
+			TriggerKind:      kind,
+			TriggerTag:       a.TriggerTag,
+			BoardOp:          a.BoardOp,
+			BoardToState:     a.BoardToState,
+			BoardPriority:    a.BoardPriority,
+			BoardExclusive:   a.BoardExclusive,
+			BoardAction:      a.BoardAction,
+			BoardMoveToState: a.BoardMoveToState,
+			TokenScope:       a.TokenScope,
+			TokenThreshold:   a.TokenThreshold,
+			CounterMetric:    a.CounterMetric,
+			CounterScope:     a.CounterScope,
+			CounterInterval:  a.CounterInterval,
+			TargetAgentID:    a.TargetAgentID,
+			FlowID:           a.FlowID,
+			Enabled:          a.Enabled,
+			IterationCount:   a.IterationCount,
+			MaxIterations:    a.MaxIterations,
+			CreatedByAgent:   a.CreatedBy != "",
 		})
 	}
 	return pageResult(out, total, offset, limit)
