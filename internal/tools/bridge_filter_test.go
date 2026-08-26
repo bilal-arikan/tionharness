@@ -13,7 +13,7 @@ func TestBridgeableDefsFilteredSkipsHidden(t *testing.T) {
 		stubTool{name: "nameonly_tool", desc: "lazy name-only tier"},
 		stubTool{name: "hidden_tool", desc: "hidden self-mgmt tier"},
 	)
-	reg.MarkLazy("summary_tool")     // summary tier (lazy, not hidden/nameOnly)
+	reg.MarkLazy("summary_tool")      // summary tier (lazy, not hidden/nameOnly)
 	reg.MarkNameOnly("nameonly_tool") // name-only tier
 	reg.MarkHidden("hidden_tool")     // hidden tier
 
@@ -54,8 +54,8 @@ func TestBridgeableDefsIncludesFullSelfManaged(t *testing.T) {
 		stubTool{name: "create_agent", desc: "self-mgmt"},
 		stubTool{name: "todo_write", desc: "eager behavioral"},
 	)
-	reg.MarkSelfManaged("create_agent") // stable membership
-	reg.MarkHidden("create_agent")      // default hidden tier
+	reg.MarkSelfManaged("create_agent")               // stable membership
+	reg.MarkHidden("create_agent")                    // default hidden tier
 	reg.SetVisibility("create_agent", VisibilityFull) // user promotes to full (clears lazy)
 
 	got := names(reg.BridgeableDefsFiltered(nil, true))
@@ -66,6 +66,18 @@ func TestBridgeableDefsIncludesFullSelfManaged(t *testing.T) {
 	// the static specs or the CLI's own equivalent).
 	if contains2(got, "todo_write") {
 		t.Errorf("non-self-managed eager tool must not leak into the bridge: %v", got)
+	}
+}
+
+func TestBridgeableDefsIncludesGetViewEagerExtra(t *testing.T) {
+	reg := NewRegistry(
+		stubTool{name: "get_view", desc: "read projections"},
+		stubTool{name: "todo_write", desc: "eager behavioral"},
+	)
+
+	got := names(reg.BridgeableDefsFiltered(nil, false))
+	if !eq(got, []string{"get_view"}) {
+		t.Fatalf("eager bridge extras = %v, want [get_view]", got)
 	}
 }
 

@@ -1,13 +1,18 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
+	"io"
+	"log/slog"
 	"strings"
 	"testing"
 
+	"github.com/bilal-arikan/tionharness/internal/agent"
 	"github.com/bilal-arikan/tionharness/internal/db"
 	"github.com/bilal-arikan/tionharness/internal/market"
 	"github.com/bilal-arikan/tionharness/internal/orchestration"
+	"github.com/bilal-arikan/tionharness/internal/providers"
 )
 
 // TestResolveTemplateFlowGraph covers the agent-key resolution for both the
@@ -194,14 +199,48 @@ func TestBlankTemplateSeedsCEOAndPMControlLoop(t *testing.T) {
 	for _, name := range allowed {
 		allowedSet[name] = true
 	}
-	for _, forbidden := range []string{"Bash", "Write", "Edit", "create_task", "update_task", "move_task"} {
-		if allowedSet[forbidden] {
-			t.Errorf("CEO must not be allowed to use %q", forbidden)
+	var blocked []string
+	if err := json.Unmarshal([]byte(ceo.BlockedTools), &blocked); err != nil {
+		t.Fatalf("CEO blockedTools is invalid: %v", err)
+	}
+	blockedSet := make(map[string]bool, len(blocked))
+	for _, name := range blocked {
+		blockedSet[name] = true
+	}
+	for _, forbidden := range []string{
+		"Write", "Edit", "Bash", "PowerShell",
+		"create_task", "update_task", "delete_task", "move_task",
+		"create_agent", "update_agent", "delete_agent",
+		"create_flow", "update_flow", "delete_flow",
+		"create_schedule", "update_schedule", "delete_schedule",
+		"create_automation", "update_automation", "delete_automation",
+		"toggle_mcp_server",
+	} {
+		if !blockedSet[forbidden] {
+			t.Errorf("CEO blockedTools is missing %q", forbidden)
 		}
 	}
-	for _, required := range []string{"get_view", "list_tasks", "list_sessions", "send_message", "spawn_session"} {
+	for _, required := range []string{"get_view", "list_tasks", "list_agents", "list_sessions", "send_message", "run_subagent"} {
 		if !allowedSet[required] {
 			t.Errorf("CEO allowedTools is missing %q", required)
+		}
+	}
+
+	database, err := db.Open(t.TempDir())
+	if err != nil {
+		t.Fatalf("open registry database: %v", err)
+	}
+	defer database.Close()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	runtime := agent.NewRuntime(database, providers.NewRegistry(), agent.NewTunables(), t.TempDir(), t.TempDir(), nil, nil, "WS1", "Test", nil, logger)
+	defer runtime.CloseMCP()
+	registered := make(map[string]bool)
+	for _, def := range runtime.WorkspaceToolCatalog(context.Background()) {
+		registered[def.Name] = true
+	}
+	for _, name := range allowed {
+		if !registered[name] {
+			t.Errorf("CEO allowedTools contains unregistered tool %q", name)
 		}
 	}
 

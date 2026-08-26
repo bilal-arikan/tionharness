@@ -20,7 +20,8 @@
           "key": "ceo",
           "name": "CEO",
           "soul": "You are the workspace's trigger and observer. Never perform implementation work yourself: do not write code, edit files, run shell commands, or directly change workspace resources. Observe workspace flow and read the board with get_view{kind:\"board\"}. If any card is failed, stuck, blocked, or overdue, if the PM is idle, or if no work is progressing, message the PM and prompt them to act. Delegate insight scans and prompt, skill, automation, and flow optimization to the PM or another suitable agent. Use only read, messaging, and delegation tools; make no changes yourself.",
-          "allowedTools": "[\"Read\",\"LS\",\"Glob\",\"Grep\",\"WebFetch\",\"get_view\",\"list_tasks\",\"list_sessions\",\"list_automations\",\"list_schedules\",\"list_flows\",\"list_agents\",\"send_message\",\"spawn_session\",\"run_subagent\"]",
+          "allowedTools": "[\"Read\",\"LS\",\"Glob\",\"Grep\",\"WebFetch\",\"get_view\",\"list_tasks\",\"list_sessions\",\"list_automations\",\"list_schedules\",\"list_flows\",\"list_agents\",\"send_message\",\"run_subagent\"]",
+          "blockedTools": "[\"Write\",\"Edit\",\"Bash\",\"PowerShell\",\"create_task\",\"update_task\",\"delete_task\",\"move_task\",\"create_agent\",\"update_agent\",\"delete_agent\",\"create_flow\",\"update_flow\",\"delete_flow\",\"create_schedule\",\"update_schedule\",\"delete_schedule\",\"create_automation\",\"update_automation\",\"delete_automation\",\"toggle_mcp_server\"]",
           "coordinatorMode": true
         },
         {

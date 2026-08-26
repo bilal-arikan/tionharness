@@ -6,6 +6,12 @@ import (
 	"github.com/bilal-arikan/tionharness/internal/providers"
 )
 
+// bridgeEager names eager built-ins that claude-cli does not provide natively
+// and therefore must be advertised through the Interaction MCP bridge.
+var bridgeEager = map[string]bool{
+	"get_view": true,
+}
+
 // bridge_filter.go — POC: optional hidden-tier exclusion for the claude-cli
 // Interaction MCP bridge.
 //
@@ -42,7 +48,7 @@ func (r *Registry) BridgeableDefsFiltered(allow func(name string) bool, skipHidd
 		// bridged by neither this list nor the eager path → it would vanish from the CLI
 		// agent entirely. Eager non-self-managed built-ins (Read/Write/todo_write/...)
 		// stay excluded: the CLI has its own or they ride the static interaction specs.
-		if (!r.lazy[name] && !r.selfManaged[name]) || bridgeExcluded[name] {
+		if (!r.lazy[name] && !r.selfManaged[name] && !bridgeEager[name]) || bridgeExcluded[name] {
 			continue
 		}
 		if skipHidden && r.hidden[name] {
