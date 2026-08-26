@@ -118,7 +118,7 @@ değeridir (`internal/agent/systemsession.go:10-21`).
 Sistem ajanı çağrıları usage sınırında
 `system:<SystemKey>:<call-kind>` bileşik kind'ına çevrilir. Örneğin titler'ın başlık
 çağrısı `system:titler:title`, compactor'ın sıkıştırma çağrısı
-`system:compactor:compact` olarak kaydedilir (`internal/agent/callkind.go:114-126`,
+`system:compactor:summary` olarak kaydedilir (`internal/agent/callkind.go:114-126`,
 `internal/db/store_usage.go:46-60`). Tek bileşik değer hem aktörü hem yapılan işi
 korur; ayrı kind kayıtları üretmediği için `ByKind` toplamlarını çift saymaz. Boş veya
 `:` içeren bir `SystemKey` hata verir; registry'de olmayan anahtar provider çağrısından
