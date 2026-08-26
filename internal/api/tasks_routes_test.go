@@ -32,7 +32,7 @@ func TestTaskUnknownSubpathsReturnNotFound(t *testing.T) {
 		t.Fatalf("create task: %v", err)
 	}
 
-	for _, subpath := range []string{"unarchive", "bogus-subpath"} {
+	for _, subpath := range []string{"bogus-subpath"} {
 		t.Run(subpath, func(t *testing.T) {
 			rec := doJSON(t, handler, http.MethodPost, "/api/tasks/"+task.ID+"/"+subpath, nil, nil)
 			if rec.Code != http.StatusNotFound {
@@ -42,6 +42,37 @@ func TestTaskUnknownSubpathsReturnNotFound(t *testing.T) {
 				t.Fatalf("body = %q", got)
 			}
 		})
+	}
+}
+
+func TestTaskUnarchiveRouteRestoresArchivedTask(t *testing.T) {
+	handler, wsp := taskRoutesFixture(t)
+	task, err := wsp.DB.CreateTask(context.Background(), db.Task{Title: "task", BoardState: db.BoardDone})
+	if err != nil {
+		t.Fatalf("create task: %v", err)
+	}
+	if err := wsp.DB.SetTaskArchived(context.Background(), task.ID, true); err != nil {
+		t.Fatalf("archive task: %v", err)
+	}
+
+	rec := doJSON(t, handler, http.MethodPost, "/api/tasks/"+task.ID+"/unarchive", nil, nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d: %s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	got, err := wsp.DB.GetTask(context.Background(), task.ID)
+	if err != nil {
+		t.Fatalf("get task: %v", err)
+	}
+	if got.Archived {
+		t.Fatal("task remained archived after successful unarchive response")
+	}
+}
+
+func TestTaskUnarchiveRouteRejectsMissingTask(t *testing.T) {
+	handler, _ := taskRoutesFixture(t)
+	rec := doJSON(t, handler, http.MethodPost, "/api/tasks/TSK404/unarchive", nil, nil)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want %d: %s", rec.Code, http.StatusNotFound, rec.Body.String())
 	}
 }
 

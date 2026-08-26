@@ -386,30 +386,39 @@ func (s *Server) handleUnknownTaskSubpath(w http.ResponseWriter, r *http.Request
 // drops the card off the active board without deleting it; unarchiving restores it.
 // This is the manual counterpart to the "done → archive" board automation.
 func (s *Server) handleArchiveTask(w http.ResponseWriter, r *http.Request) {
-	wsp := ws(r)
-	ctx := r.Context()
-	id := r.PathValue("id")
 	req, ok := bindJSON[archiveTaskReq](w, r)
 	if !ok {
 		return
 	}
+	s.setTaskArchived(w, r, req.Archived)
+}
+
+// handleUnarchiveTask is the body-free inverse of the archive endpoint.
+func (s *Server) handleUnarchiveTask(w http.ResponseWriter, r *http.Request) {
+	s.setTaskArchived(w, r, false)
+}
+
+func (s *Server) setTaskArchived(w http.ResponseWriter, r *http.Request, archived bool) {
+	wsp := ws(r)
+	ctx := r.Context()
+	id := r.PathValue("id")
 	task, err := wsp.DB.GetTask(ctx, id)
 	if writeDBError(w, err, "task not found") {
 		return
 	}
-	if err := wsp.DB.SetTaskArchived(ctx, id, req.Archived); writeDBError(w, err, "task not found") {
+	if err := wsp.DB.SetTaskArchived(ctx, id, archived); writeDBError(w, err, "task not found") {
 		return
 	}
 	verb := "arşivlendi"
 	op := "archive"
-	if !req.Archived {
+	if !archived {
 		verb = "arşivden çıkarıldı"
 		op = "unarchive"
 	}
-	s.logger.Info("task archive toggled", "task", id, "archived", req.Archived)
+	s.logger.Info("task archive toggled", "task", id, "archived", archived)
 	publishEntityChange(wsp, "board", "Görev "+verb+": "+task.Title, task.BoardState,
 		map[string]string{"view": "board", "taskId": id, "op": op})
-	writeJSON(w, http.StatusOK, map[string]any{"id": id, "archived": req.Archived})
+	writeJSON(w, http.StatusOK, map[string]any{"id": id, "archived": archived})
 }
 
 func (s *Server) handleDeleteTask(w http.ResponseWriter, r *http.Request) {

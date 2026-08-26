@@ -67,6 +67,32 @@ func TestFireBoardMoveMovesTask(t *testing.T) {
 	}
 }
 
+func TestFireBoardArchiveRejectsStaleDoneEvent(t *testing.T) {
+	e := backstopEngine(t)
+	ctx := context.Background()
+	task, err := e.db.CreateTask(ctx, db.Task{Title: "Review me", BoardState: db.BoardReview})
+	if err != nil {
+		t.Fatalf("create task: %v", err)
+	}
+	a := seedAutomation(t, e, db.Automation{
+		TriggerKind:   db.TriggerBoard,
+		BoardAction:   db.BoardActionArchive,
+		MaxIterations: 3,
+	})
+
+	// Simulate a queued done event that arrives after the card has already moved
+	// to review. Archive decisions must use current persisted state, not stale event data.
+	e.fireBoard(ctx, a, db.BoardChangeEvent{TaskID: task.ID, Title: task.Title, Op: db.BoardOpMove, ToState: db.BoardDone})
+
+	got, err := e.db.GetTask(ctx, task.ID)
+	if err != nil {
+		t.Fatalf("get task: %v", err)
+	}
+	if got.Archived {
+		t.Fatal("review task was archived by stale done event")
+	}
+}
+
 func TestBoardMoveReentrancyStopsAtMaxIterations(t *testing.T) {
 	e := backstopEngine(t)
 	ctx := context.Background()

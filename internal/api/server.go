@@ -559,6 +559,7 @@ func (s *Server) registerTaskRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("PUT /api/tasks/{id}", s.handleUpdateTask)
 	mux.HandleFunc("DELETE /api/tasks/{id}", s.handleDeleteTask)
 	mux.HandleFunc("POST /api/tasks/{id}/archive", s.handleArchiveTask)
+	mux.HandleFunc("POST /api/tasks/{id}/unarchive", s.handleUnarchiveTask)
 	mux.HandleFunc("POST /api/tasks/{id}/title", s.handleGenerateTaskTitle)
 	mux.HandleFunc("POST /api/tasks/{id}/{subpath...}", s.handleUnknownTaskSubpath)
 }

@@ -355,6 +355,16 @@ func (e *AutomationEngine) fireBoard(ctx context.Context, a db.Automation, ev db
 		if ev.Op == db.BoardOpDelete || ev.TaskID == "" {
 			return
 		}
+		// Board events are dispatched asynchronously. The card may have left done
+		// while this event was queued, so authorize cleanup against current state.
+		current, err := e.db.GetTask(ctx, ev.TaskID)
+		if err != nil {
+			e.recordFailure(ctx, a, err.Error())
+			return
+		}
+		if current.BoardState != db.BoardDone {
+			return
+		}
 		if err := e.db.SetTaskArchived(ctx, ev.TaskID, true); err != nil {
 			e.recordFailure(ctx, a, err.Error())
 			return
