@@ -266,3 +266,43 @@ func TestInteractionToolsHonorDisabled(t *testing.T) {
 		t.Fatal("a filter-rejected tool must not be activatable")
 	}
 }
+
+// TestFullTierProviderCallsExtendedWithoutActivation locks the call-time half of
+// the "-full" contract (SES540): codex-cli is shown the COMPLETE extended tier and
+// is deliberately NOT given the activate_tools meta-tools, so its session's
+// activated set stays empty forever. The dispatch gate must therefore skip the
+// activation check for such a run — otherwise every advertised extended tool
+// answers "is not activated" and the model has no way to fix it. claude-cli, which
+// does get the meta-tools, must keep the gate.
+func TestFullTierProviderCallsExtendedWithoutActivation(t *testing.T) {
+	tun := agent.NewTunables()
+	runs := newChatRuns()
+	b := &interactionBackend{runs: runs, tun: tun}
+	run := runs.register("r1", "s1", "ws1", func() {})
+	tok := runs.interactionToken("ws1", "s1", "a1")
+	runs.bindActive(tok, run)
+	run.setBridge(
+		[]providers.ToolDef{{Name: "move_task", Description: "move a board card"}},
+		func(_ context.Context, name string, _ json.RawMessage) (string, error) { return "did:" + name, nil },
+	)
+
+	// claude-cli: the gate stands — the model can (and must) activate first.
+	run.setProvider("claude-cli")
+	res, err := b.Call(context.Background(), tok, extendedNSPrefix+"move_task", json.RawMessage(`{}`))
+	if err != nil {
+		t.Fatalf("claude-cli call: %v", err)
+	}
+	if !res.IsError || !strings.Contains(res.Text, "is not activated") {
+		t.Fatalf("claude-cli must still be gated, got (%q, error=%v)", res.Text, res.IsError)
+	}
+
+	// codex-cli: no meta-tools, so no gate — the call dispatches.
+	run.setProvider("codex-cli")
+	res, err = b.Call(context.Background(), tok, extendedNSPrefix+"move_task", json.RawMessage(`{}`))
+	if err != nil {
+		t.Fatalf("codex-cli call: %v", err)
+	}
+	if res.IsError || res.Text != "did:move_task" {
+		t.Fatalf("codex-cli must dispatch without activation, got (%q, error=%v)", res.Text, res.IsError)
+	}
+}

@@ -863,6 +863,14 @@ endpoint URL'lerine `?full=1` sorgu parametresi ekliyor
    meta-araçlarını **hem core hem extended** yüzeyden çıkarır — çalışmayan bir
    mekanizmayı modele göstermenin tek etkisi döngüye sokmaktı.
 
+3. Çağrı anında da aktivasyon kapısını uygular **değil**: `toolCallError`
+   içindeki gate `fullTierProvider(run.providerOf())` ile atlanır. Bu satır
+   eksikken (SES540, 2026-08-26) codex turu tam extended listeyi görüyor ama
+   çağırdığı her araç `... is not activated. Activate it with activate_tools`
+   hatası dönüyordu — üstelik `activate_tools` o yüzeyde hiç sunulmadığı için
+   modelin kapıyı açma imkânı da yoktu. Regresyon testi:
+   `TestFullTierProviderCallsExtendedWithoutActivation`.
+
 claude-cli isteği (query string'siz `/core`, `/extended`) davranışsal olarak
 **birebir aynı** kalır — bu, `?full=1` path'i değil query'yi kullandığı ve
 `tierFromPath` (path tabanlı ayrıştırma) hiç değişmediği için garanti

@@ -651,6 +651,15 @@ func bareToolName(name string) string {
 	return strings.TrimPrefix(name, extendedNSPrefix)
 }
 
+// fullTierProvider reports whether a provider mounts the Interaction MCP with the
+// "-full" tier variant (?full=1, see fullTierQueryParam): codex-cli never re-lists
+// tools on tools/list_changed, so its extended tier is advertised in full and the
+// activate_tools meta-tools are hidden from it (see Tools and interactionServers).
+// Such a run can never populate the session's activated set, so the call-time
+// activation gate must not apply to it either — otherwise every extended tool it
+// was shown answers "is not activated" with no way to fix it.
+func fullTierProvider(provider string) bool { return provider == "codex-cli" }
+
 // toolCallError distinguishes an unloaded on-demand tool from a policy-blocked or
 // genuinely unknown name before dispatch. Claude can submit either a bare or MCP-
 // namespaced name, but activation guidance always reports the exact extended name.
@@ -675,7 +684,7 @@ func (b *interactionBackend) toolCallError(token, name string, run *chatRun) str
 		if allow := run.toolAllowedFor(); allow != nil && !allow(bare) {
 			return fmt.Sprintf("Tool %s exists but is blocked by the current workspace or agent policy; it cannot be activated in this context.", callableToolName(bare, visOf))
 		}
-		if cliTier(bare, visOf) != "core" && !b.isActivated(token, bare) {
+		if cliTier(bare, visOf) != "core" && !fullTierProvider(run.providerOf()) && !b.isActivated(token, bare) {
 			callable := extendedNSPrefix + bare
 			return fmt.Sprintf("Tool %s exists in the on-demand catalog but is not activated. Activate it with activate_tools({\"tools\":[%q]}). It will become visible on the next turn, not the current turn.", callable, callable)
 		}
