@@ -74,7 +74,7 @@ func (r *Runtime) resolveCompactorConfig(agent db.Agent) (db.Agent, string) {
 		return agent, r.readPrompt("summary")
 	}
 
-	agent.Model = compactor.Model
+	agent.Model = adoptSystemAgentModel(r.logger, "compactor", agent.Provider, agent.Model, compactor.Model)
 	agent.System = true
 	agent.SystemKey = compactor.SystemKey
 	return agent, compactor.Soul

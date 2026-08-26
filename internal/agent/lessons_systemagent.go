@@ -23,7 +23,7 @@ func (r *Runtime) resolveAnalysisSystemAgent(key string, agent db.Agent) (db.Age
 
 	// Keep provider credentials and the billing agent ID on the calling agent.
 	// Only model, prompt, and usage actor identity come from the system agent.
-	agent.Model = systemAgent.Model
+	agent.Model = adoptSystemAgentModel(r.logger, key, agent.Provider, agent.Model, systemAgent.Model)
 	agent.System = true
 	agent.SystemKey = systemAgent.SystemKey
 	return agent, systemAgent.Soul, nil

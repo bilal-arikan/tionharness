@@ -5,7 +5,9 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"strings"
+	"sync"
 
 	"github.com/bilal-arikan/tionharness/internal/db"
 	"github.com/bilal-arikan/tionharness/internal/insight"
@@ -25,7 +27,9 @@ type insightAnalyzer struct {
 	// transcript can show it. It is fed HERE rather than through the
 	// insight.Analyzer interface: that interface returns parsed findings only, and
 	// widening it would force every fake analyzer to carry raw-response plumbing.
-	steps *insightStepRecorder
+	steps        *insightStepRecorder
+	mu           sync.Mutex
+	permanentErr error
 }
 
 // The analyzer's fallback system prompt lives in the central prompt registry
@@ -74,6 +78,12 @@ func analysisUserPrompt(req insight.AnalysisRequest, lang string) string {
 }
 
 func (a *insightAnalyzer) Analyze(ctx context.Context, req insight.AnalysisRequest) ([]insight.Finding, error) {
+	a.mu.Lock()
+	terminalErr := a.permanentErr
+	a.mu.Unlock()
+	if terminalErr != nil {
+		return nil, terminalErr
+	}
 	lang := ""
 	if a.rt != nil && a.rt.tun != nil {
 		lang = a.rt.tun.Language()
@@ -86,10 +96,24 @@ func (a *insightAnalyzer) Analyze(ctx context.Context, req insight.AnalysisReque
 		Messages:     []providers.Message{{Role: providers.RoleUser, Text: analysisUserPrompt(req, lang)}},
 	}, false)
 	if err != nil {
+		if errors.Is(err, providers.ErrPermanentProviderFailure) {
+			a.mu.Lock()
+			if a.permanentErr == nil {
+				a.permanentErr = err
+			}
+			err = a.permanentErr
+			a.mu.Unlock()
+		}
 		return nil, err
 	}
 	a.steps.captureRaw(req.Lens.ID, req.SessionID, resp.Text)
 	return a.parse(resp.Text, req.Lens), nil
+}
+
+func (a *insightAnalyzer) permanentError() error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.permanentErr
 }
 
 // parse maps the model reply into findings, filling channel-independent fields;

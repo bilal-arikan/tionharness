@@ -113,8 +113,8 @@ func TestSummarizeDisabledCompactorRunsEmbeddedFallback(t *testing.T) {
 	if provider.request.System != embeddedSummaryPrompt {
 		t.Fatalf("fallback prompt = %q, want fixed embedded prompt", provider.request.System)
 	}
-	if provider.request.Model != "haiku" {
-		t.Fatalf("fallback model = %q, want %q", provider.request.Model, "haiku")
+	if provider.request.Model != "session-model" {
+		t.Fatalf("fallback model = %q, want %q", provider.request.Model, "session-model")
 	}
 }
 

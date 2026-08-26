@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"testing"
 
@@ -17,14 +18,20 @@ const embeddedInsightPrompt = "You are a retrospective analyst for the TionHarne
 type analysisTestProvider struct {
 	mu      sync.Mutex
 	request providers.Request
+	err     error
+	calls   int
 }
 
 func (*analysisTestProvider) Name() string { return "analysis-test" }
 
 func (p *analysisTestProvider) Complete(_ context.Context, req providers.Request) (*providers.Response, error) {
 	p.mu.Lock()
+	defer p.mu.Unlock()
 	p.request = req
-	p.mu.Unlock()
+	p.calls++
+	if p.err != nil {
+		return nil, p.err
+	}
 	return &providers.Response{Text: `{"findings":[]}`}, nil
 }
 
@@ -32,6 +39,53 @@ func (p *analysisTestProvider) captured() providers.Request {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	return p.request
+}
+
+func TestResolveInsightConfigKeepsCallerModelForIncompatibleProvider(t *testing.T) {
+	rt := newSystemAgentResolveRuntime(t)
+	got, _, err := rt.resolveInsightConfig(db.Agent{Provider: "codex-cli", Model: "gpt-5"})
+	if err != nil {
+		t.Fatalf("resolve insight config: %v", err)
+	}
+	if got.Model != "gpt-5" {
+		t.Fatalf("resolved model = %q, want caller model %q", got.Model, "gpt-5")
+	}
+}
+
+func TestInsightScanStopsAfterPermanentProviderFailure(t *testing.T) {
+	rt := newSystemAgentResolveRuntime(t)
+	provider := configureAnalysisTestProvider(rt)
+	provider.err = providers.ErrPermanentProviderFailure
+	ctx := context.Background()
+	agent, err := rt.db.CreateAgent(ctx, db.Agent{
+		Name: "Permanent failure caller", Provider: "analysis-test", ProviderInstanceID: "analysis-test-instance", Model: "caller-model",
+	})
+	if err != nil {
+		t.Fatalf("create caller: %v", err)
+	}
+	for i := 0; i < 2; i++ {
+		session, createErr := rt.db.CreateSession(ctx, db.Session{AgentID: agent.ID, Title: "Failure evidence"})
+		if createErr != nil {
+			t.Fatalf("create session: %v", createErr)
+		}
+		if _, addErr := rt.db.AddMessage(ctx, db.Message{
+			SessionID: session.ID, Role: "assistant", Text: "failed",
+			Steps: `[{"kind":"error","reason":"provider_error","text":"boom"}]`,
+		}); addErr != nil {
+			t.Fatalf("add evidence: %v", addErr)
+		}
+	}
+
+	_, err = rt.RunInsightScan(ctx, insight.ScanScope{LensIDs: []string{"tool-errors"}, Concurrency: 1}, agent.ID)
+	if !errors.Is(err, providers.ErrPermanentProviderFailure) {
+		t.Fatalf("RunInsightScan error = %v, want permanent provider failure", err)
+	}
+	provider.mu.Lock()
+	calls := provider.calls
+	provider.mu.Unlock()
+	if calls != 1 {
+		t.Fatalf("provider calls = %d, want 1", calls)
+	}
 }
 
 var (
@@ -239,7 +293,7 @@ func TestDisabledLessonExtractorRunsProductionFallback(t *testing.T) {
 	if req.System == "" || req.Model == "" {
 		t.Fatalf("fallback prompt/model must be non-empty: %q/%q", req.System, req.Model)
 	}
-	if req.System != embeddedLessonPrompt || req.Model != "haiku" {
+	if req.System != embeddedLessonPrompt || req.Model != "caller-model" {
 		t.Fatalf("fallback prompt/model = %q/%q", req.System, req.Model)
 	}
 }
@@ -270,7 +324,7 @@ func TestDisabledInsightRunsProductionFallback(t *testing.T) {
 	if req.System == "" || req.Model == "" {
 		t.Fatalf("fallback prompt/model must be non-empty: %q/%q", req.System, req.Model)
 	}
-	if req.System != embeddedInsightPrompt || req.Model != "haiku" {
+	if req.System != embeddedInsightPrompt || req.Model != "caller-model" {
 		t.Fatalf("fallback prompt/model = %q/%q", req.System, req.Model)
 	}
 }

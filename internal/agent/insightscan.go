@@ -147,6 +147,9 @@ func (r *Runtime) RunInsightScan(ctx context.Context, scope insight.ScanScope, a
 	if err != nil {
 		return res, err
 	}
+	if terminalErr := analyzer.permanentError(); terminalErr != nil {
+		return res, fmt.Errorf("insight scan stopped: %w", terminalErr)
+	}
 
 	// Route app-fix findings to the configured repo backlog (idempotent append).
 	if settings.AppFixRepoPath != "" {
