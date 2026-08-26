@@ -41,6 +41,10 @@ credential-secret
 /.testids.json
 /.mcptest/
 /frontend/tionharness_title_test.mjs
+# Playwright MCP page snapshots — regenerated on every UI test run.
+/.playwright-mcp/
+# Vite's pre-bundled dependency cache.
+/.vite/
 
 # Dependencies
 /frontend/node_modules/
