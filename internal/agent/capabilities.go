@@ -5,7 +5,9 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
+	"sync"
 
 	"github.com/bilal-arikan/tionharness/internal/db"
 	"github.com/bilal-arikan/tionharness/internal/mcp"
@@ -61,6 +63,15 @@ func (r *Runtime) CapabilityContext(ctx context.Context, agent db.Agent, cwd str
 // codebaseMemoryCommandMarker identifies the codebase-memory-mcp executable in a
 // stored MCP server's Command path (the server has no slug field).
 const codebaseMemoryCommandMarker = "codebase-memory-mcp"
+
+var (
+	codebaseIndexRunning sync.Map
+	runIndexRepository   = func(command, repoPath string) ([]byte, error) {
+		cmd := exec.Command(command, "cli", "index_repository", "--repo-path", repoPath)
+		cmd.Env = os.Environ()
+		return cmd.CombinedOutput()
+	}
+)
 
 // codebaseMemoryCommand returns the configured codebase-memory-mcp executable path
 // when an enabled stdio MCP server points at it, or "" when absent. One scan backs
@@ -264,10 +275,19 @@ func (r *Runtime) EnsureCodebaseIndexed(ctx context.Context, cwd string) {
 		return
 	}
 	go func() {
+		repoPath := filepath.ToSlash(cwd)
+		runningKey := repoPath
+		if runtime.GOOS == "windows" {
+			runningKey = strings.ToLower(runningKey)
+		}
+		if _, running := codebaseIndexRunning.LoadOrStore(runningKey, true); running {
+			r.logger.Info("index already running for " + repoPath + ", skipping")
+			return
+		}
+		defer codebaseIndexRunning.Delete(runningKey)
+
 		// Flag form: codebase-memory-mcp 0.10 deprecated raw-JSON CLI args.
-		cmd := exec.Command(command, "cli", "index_repository", "--repo-path", filepath.ToSlash(cwd))
-		cmd.Env = os.Environ()
-		if out, runErr := cmd.CombinedOutput(); runErr != nil {
+		if out, runErr := runIndexRepository(command, repoPath); runErr != nil {
 			r.logger.Warn("codebase-memory auto-index failed",
 				"cwd", cwd, "error", runErr, "output", strings.TrimSpace(string(out)))
 			r.cbmIndexed.Delete(key) // allow a later turn to retry

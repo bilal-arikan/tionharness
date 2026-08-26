@@ -1,9 +1,13 @@
 package agent
 
 import (
+	"context"
 	"path/filepath"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/bilal-arikan/tionharness/internal/db"
 	"github.com/bilal-arikan/tionharness/internal/mcp"
@@ -108,4 +112,87 @@ func cbmRuntime(t *testing.T) *Runtime {
 	r := &Runtime{workDir: filepath.Join(t.TempDir(), "workspace")}
 	r.codebaseMemoryEnabled.Store(true)
 	return r
+}
+
+func TestEnsureCodebaseIndexedSkipsConcurrentSamePath(t *testing.T) {
+	r1, _ := newTestRuntime(t, t.TempDir())
+	r2, _ := newTestRuntime(t, t.TempDir())
+	for _, r := range []*Runtime{r1, r2} {
+		if _, err := r.db.CreateMCPServer(context.Background(), db.MCPServer{
+			Name: "codebase-memory-mcp", Transport: db.MCPTransportStdio,
+			Command: "codebase-memory-mcp", Enabled: true,
+		}); err != nil {
+			t.Fatalf("create MCP server: %v", err)
+		}
+	}
+
+	original := runIndexRepository
+	t.Cleanup(func() { runIndexRepository = original })
+	started := make(chan struct{})
+	release := make(chan struct{})
+	finished := make(chan struct{})
+	var calls atomic.Int32
+	runIndexRepository = func(_, _ string) ([]byte, error) {
+		defer close(finished)
+		calls.Add(1)
+		close(started)
+		<-release
+		return nil, nil
+	}
+
+	repo := filepath.Join(t.TempDir(), "repo")
+	r1.EnsureCodebaseIndexed(context.Background(), repo)
+	select {
+	case <-started:
+	case <-time.After(time.Second):
+		t.Fatal("first index did not start")
+	}
+	r2.EnsureCodebaseIndexed(context.Background(), repo)
+	time.Sleep(50 * time.Millisecond)
+	if got := calls.Load(); got != 1 {
+		t.Fatalf("index executions = %d, want 1", got)
+	}
+	close(release)
+	<-finished
+}
+
+func TestEnsureCodebaseIndexedRunsDifferentPathsConcurrently(t *testing.T) {
+	r, _ := newTestRuntime(t, t.TempDir())
+	if _, err := r.db.CreateMCPServer(context.Background(), db.MCPServer{
+		Name: "codebase-memory-mcp", Transport: db.MCPTransportStdio,
+		Command: "codebase-memory-mcp", Enabled: true,
+	}); err != nil {
+		t.Fatalf("create MCP server: %v", err)
+	}
+
+	original := runIndexRepository
+	t.Cleanup(func() { runIndexRepository = original })
+	started := make(chan struct{}, 2)
+	release := make(chan struct{})
+	var calls atomic.Int32
+	var finished sync.WaitGroup
+	finished.Add(2)
+	runIndexRepository = func(_, _ string) ([]byte, error) {
+		defer finished.Done()
+		calls.Add(1)
+		started <- struct{}{}
+		<-release
+		return nil, nil
+	}
+
+	root := t.TempDir()
+	r.EnsureCodebaseIndexed(context.Background(), filepath.Join(root, "repo-a"))
+	r.EnsureCodebaseIndexed(context.Background(), filepath.Join(root, "repo-b"))
+	for i := 0; i < 2; i++ {
+		select {
+		case <-started:
+		case <-time.After(time.Second):
+			t.Fatalf("only %d different-path indexes started", i)
+		}
+	}
+	if got := calls.Load(); got != 2 {
+		t.Fatalf("index executions = %d, want 2", got)
+	}
+	close(release)
+	finished.Wait()
 }
