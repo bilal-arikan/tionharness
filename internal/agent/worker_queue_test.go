@@ -51,7 +51,7 @@ func queueTestFixture(t *testing.T) (rt *Runtime, coordID, workerID string, deli
 }
 
 // TestSendToWorkerQueuesWhenBusy: a follow-up to a worker mid-turn is parked in the
-// single-slot queue and reported as queued (not rejected, not delivered yet).
+// bounded queue and reported as queued (not rejected, not delivered yet).
 func TestSendToWorkerQueuesWhenBusy(t *testing.T) {
 	rt, coordID, workerID, delivered := queueTestFixture(t)
 	ctx := context.Background()
@@ -75,7 +75,7 @@ func TestSendToWorkerQueuesWhenBusy(t *testing.T) {
 	rt.workerQueueMu.Lock()
 	parked := rt.workerQueue[workerID]
 	rt.workerQueueMu.Unlock()
-	if parked != "second task" {
+	if len(parked) != 1 || parked[0] != "second task" {
 		t.Fatalf("message not parked in queue, got %q", parked)
 	}
 	if _, ok := delivered(); ok {
@@ -83,27 +83,32 @@ func TestSendToWorkerQueuesWhenBusy(t *testing.T) {
 	}
 }
 
-// TestSendToWorkerRefusesSecondQueuedMessage: the queue is single-slot — a second
-// pending message while the worker is busy is refused, and the first stays put.
-func TestSendToWorkerRefusesSecondQueuedMessage(t *testing.T) {
+// TestSendToWorkerAcceptsMultipleMessagesUpToLimit verifies that additional
+// messages are queued while busy and only a message beyond the cap is refused.
+func TestSendToWorkerAcceptsMultipleMessagesUpToLimit(t *testing.T) {
 	rt, coordID, workerID, _ := queueTestFixture(t)
 	ctx := context.Background()
 
 	rt.trackSession(workerID, func() {})
 
-	if _, err := rt.SendToWorker(ctx, coordID, workerID, "first"); err != nil {
-		t.Fatalf("first queue should succeed: %v", err)
+	for i, message := range []string{"first", "second", "third", "fourth"} {
+		res, err := rt.SendToWorker(ctx, coordID, workerID, message)
+		if err != nil {
+			t.Fatalf("queued message %d should succeed: %v", i+1, err)
+		}
+		if !res.Queued || res.Delivered {
+			t.Fatalf("queued message %d: want Queued, got %+v", i+1, res)
+		}
 	}
-	res, err := rt.SendToWorker(ctx, coordID, workerID, "second")
+	res, err := rt.SendToWorker(ctx, coordID, workerID, "fifth")
 	if err == nil {
-		t.Fatalf("second queued message must be refused, got %+v", res)
+		t.Fatalf("fifth queued message must be refused, got %+v", res)
 	}
-	// The first message is untouched.
 	rt.workerQueueMu.Lock()
 	parked := rt.workerQueue[workerID]
 	rt.workerQueueMu.Unlock()
-	if parked != "first" {
-		t.Fatalf("first queued message must survive the refusal, got %q", parked)
+	if len(parked) != maxWorkerQueueDepth || parked[0] != "first" || parked[1] != "second" || parked[2] != "third" || parked[3] != "fourth" {
+		t.Fatalf("queued messages must survive the refusal in FIFO order, got %q", parked)
 	}
 }
 
@@ -118,8 +123,10 @@ func TestDrainWorkerQueueDeliversOnTurnEnd(t *testing.T) {
 
 	// Park a message while the worker is busy.
 	rt.trackSession(workerID, func() {})
-	if _, err := rt.SendToWorker(ctx, coordID, workerID, "queued task"); err != nil {
-		t.Fatalf("queue: %v", err)
+	for _, message := range []string{"first task", "second task", "third task"} {
+		if _, err := rt.SendToWorker(ctx, coordID, workerID, message); err != nil {
+			t.Fatalf("queue %q: %v", message, err)
+		}
 	}
 
 	// Turn ends: isSessionActive flips false (untrackSession), then the drain runs.
@@ -127,8 +134,9 @@ func TestDrainWorkerQueueDeliversOnTurnEnd(t *testing.T) {
 	rt.drainWorkerQueue(wa, workerID, coordID)
 
 	msg, ok := delivered()
-	if !ok || msg != "queued task" {
-		t.Fatalf("drain should deliver the queued message to the worker, got (%q, %v)", msg, ok)
+	want := "first task\n\n---\n\nsecond task\n\n---\n\nthird task"
+	if !ok || msg != want {
+		t.Fatalf("drain should deliver queued messages in FIFO order, got (%q, %v)", msg, ok)
 	}
 	// Slot is empty again — a fresh follow-up could be queued next turn.
 	rt.workerQueueMu.Lock()

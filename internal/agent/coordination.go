@@ -21,6 +21,10 @@ import (
 	"github.com/bilal-arikan/tionharness/internal/view"
 )
 
+// Keep the queue bounded: an uncontrolled coordinator loop could otherwise keep
+// a worker running follow-up turns forever.
+const maxWorkerQueueDepth = 4
+
 // coordination.go implements the M2 coordinator/worker method (see _Docs/47).
 //
 // A coordinator session spawns WORKER sessions (spawn_worker) that run detached,
@@ -803,12 +807,13 @@ func (r *Runtime) SendToWorker(ctx context.Context, coordSessionID, workerSessio
 	// here (active == true) is guaranteed to be seen by the drain — no lost update.
 	r.workerQueueMu.Lock()
 	if r.isSessionActive(workerSessionID) {
-		if _, exists := r.workerQueue[workerSessionID]; exists {
+		queue := r.workerQueue[workerSessionID]
+		if len(queue) >= maxWorkerQueueDepth {
 			r.workerQueueMu.Unlock()
-			return tools.SendResult{}, fmt.Errorf("worker %s already has a queued message waiting for its current turn to finish; "+
-				"wait for that to be delivered before sending another (only one may be queued per worker)", workerSessionID)
+			return tools.SendResult{}, fmt.Errorf("worker %s already has %d queued messages (max %d); wait for them to be delivered before sending another",
+				workerSessionID, len(queue), maxWorkerQueueDepth)
 		}
-		r.workerQueue[workerSessionID] = message
+		r.workerQueue[workerSessionID] = append(queue, message)
 		r.workerQueueMu.Unlock()
 		return tools.SendResult{Queued: true, RunningForSeconds: r.workerRunningForSeconds(workerSessionID)}, nil
 	}
@@ -862,13 +867,13 @@ func (r *Runtime) workerRunningForSeconds(workerSessionID string) int64 {
 	return 0
 }
 
-// hasQueuedMessage reports whether a follow-up is parked in the worker's
-// single-slot queue (surfaced to the coordination UI as a "queued" badge).
+// hasQueuedMessage reports whether a follow-up is parked in the worker's queue
+// (surfaced to the coordination UI as a "queued" badge).
 func (r *Runtime) hasQueuedMessage(workerSessionID string) bool {
 	r.workerQueueMu.Lock()
-	_, ok := r.workerQueue[workerSessionID]
+	queue := r.workerQueue[workerSessionID]
 	r.workerQueueMu.Unlock()
-	return ok
+	return len(queue) > 0
 }
 
 // drainWorkerQueue delivers a follow-up parked while the worker was mid-turn. It
@@ -880,7 +885,7 @@ func (r *Runtime) hasQueuedMessage(workerSessionID string) bool {
 // the worker turn's ctx is cancelled by now.
 func (r *Runtime) drainWorkerQueue(agent db.Agent, workerSessionID, coordSessionID string) {
 	r.workerQueueMu.Lock()
-	message, ok := r.workerQueue[workerSessionID]
+	messages, ok := r.workerQueue[workerSessionID]
 	if ok {
 		delete(r.workerQueue, workerSessionID)
 	}
@@ -888,6 +893,7 @@ func (r *Runtime) drainWorkerQueue(agent db.Agent, workerSessionID, coordSession
 	if !ok {
 		return
 	}
+	message := strings.Join(messages, "\n\n---\n\n")
 	ctx := context.Background()
 	depth := 0
 	if ws, err := r.db.GetSession(ctx, workerSessionID); err == nil {

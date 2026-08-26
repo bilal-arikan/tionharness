@@ -152,14 +152,14 @@ type Runtime struct {
 	// without a live provider. Nil in production (the real turn runs).
 	coordRunFn func(coordSessionID string)
 
-	// workerQueueMu guards workerQueue, the per-worker single-slot backpressure queue
+	// workerQueueMu guards workerQueue, the bounded per-worker backpressure queue
 	// behind send_to_worker: when a worker is mid-turn a follow-up is parked here
 	// instead of being rejected, and delivered the moment its turn ends (see
-	// SendToWorker + drainWorkerQueue in coordination.go). One pending message per
-	// worker; a second one is refused. The mutex covers the whole busy-check +
-	// store so it stays atomic against the drain that pops on turn end.
+	// SendToWorker + drainWorkerQueue in coordination.go). The mutex covers the
+	// whole busy-check + store so it stays atomic against the drain that pops on
+	// turn end.
 	workerQueueMu sync.Mutex
-	workerQueue   map[string]string // worker session id -> queued follow-up message
+	workerQueue   map[string][]string // worker session id -> queued follow-up messages
 
 	// workerRunFn, when non-nil, replaces the `go r.runWorker(...)` launch in
 	// dispatchWorkerTurn — a test seam so the queue's accept/refuse/deliver logic
@@ -473,7 +473,7 @@ func NewRuntime(database *db.DB, registry *providers.Registry, tun *Tunables, wo
 		market:      market.New(marketGlobalDir(), workspaceLedgerDir(workDir)),
 		mcpPool:     mcp.NewPool(),
 		cliSessions: providers.NewCLISessionPool(),
-		workerQueue: make(map[string]string),
+		workerQueue: make(map[string][]string),
 		spawnWake:   make(chan struct{}, 1),
 		spawnStop:   make(chan struct{}),
 		spawnDone:   make(chan struct{}),
