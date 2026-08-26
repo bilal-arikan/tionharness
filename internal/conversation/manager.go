@@ -90,7 +90,8 @@ func compactPromptFromCtx(ctx context.Context) string {
 type preCompactCtxKey struct{}
 
 // WithPreCompact returns a context carrying a callback invoked once, right before
-// a budgeted compaction runs, with the trigger ("auto" for the routine fold).
+// a compaction runs, with the trigger ("auto" for the routine fold, "manual" for
+// an explicit /compact).
 // nil is a no-op.
 func WithPreCompact(ctx context.Context, fn func(trigger string)) context.Context {
 	if fn == nil {
@@ -324,6 +325,7 @@ func (m *Manager) ForceCompact(ctx context.Context, database *db.DB, provider pr
 	if !ok {
 		return 0, summary, nil // not enough to compact
 	}
+	firePreCompact(ctx, "manual")
 	beforeTokens := EstimateTokens(summary, history[start:])
 	newSummary, err := m.summarize(ctx, database, provider, agent, summary, fold)
 	if err != nil {

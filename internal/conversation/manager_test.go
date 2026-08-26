@@ -204,6 +204,46 @@ func TestPrepareJournalsCompaction(t *testing.T) {
 	}
 }
 
+// TestForceCompactFiresManualPreCompact verifies an explicit /compact invokes
+// the lifecycle seam only after a real fold is known to be possible.
+func TestForceCompactFiresManualPreCompact(t *testing.T) {
+	ctx := context.Background()
+	d, err := db.Open(filepath.Join(t.TempDir(), "store"))
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	agent, err := d.CreateAgent(ctx, db.Agent{Name: "A", Provider: "anthropic"})
+	if err != nil {
+		t.Fatalf("create agent: %v", err)
+	}
+	sess, err := d.CreateSession(ctx, db.Session{AgentID: agent.ID, Title: "T"})
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+
+	m := NewManager()
+	m.SetLimits(1000, 2)
+	history := []db.Message{
+		{Role: providers.RoleUser, Text: "u1"}, {Role: providers.RoleAssistant, Text: "a1"},
+		{Role: providers.RoleUser, Text: "u2"}, {Role: providers.RoleAssistant, Text: "a2"},
+	}
+	var triggers []string
+	ctx = WithPreCompact(ctx, func(trigger string) {
+		triggers = append(triggers, trigger)
+	})
+
+	folded, _, err := m.ForceCompact(ctx, d, stubProvider{summary: "ROLLED UP"}, sess, agent, history)
+	if err != nil {
+		t.Fatalf("force compact: %v", err)
+	}
+	if folded != 2 {
+		t.Fatalf("folded = %d, want 2", folded)
+	}
+	if len(triggers) != 1 || triggers[0] != "manual" {
+		t.Fatalf("triggers = %v, want [manual]", triggers)
+	}
+}
+
 // TestPrepareZeroPressureWhenBudgetDisabled ensures a non-positive budget yields
 // Pressure 0 (the feature is off) rather than a divide-by-zero.
 func TestPrepareZeroPressureWhenBudgetDisabled(t *testing.T) {

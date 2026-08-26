@@ -51,6 +51,17 @@ func (s *Server) wakeTurnRunner(rt *agent.Runtime) agent.WakeTurnFunc {
 		// direct provider.Complete — without the pin an autonomous wake on a large
 		// session fails compaction against the global claude-home.
 		ctx = conversation.WithClaudeHome(ctx, wsp.Runtime.ClaudeHomeDir())
+		// Autonomous turns have no request SSE, so publish hook steps through the
+		// session emitter while still isolating hook failures in RunLifecycleHooks.
+		emit := wsp.Runtime.SessionStepEmitter(ctx)
+		ctx = conversation.WithPreCompact(ctx, func(trigger string) {
+			pc := wsp.Runtime.RunLifecycleHooks(ctx, session.ID, db.HookPreCompact, agent.LifecycleExtras{Trigger: trigger})
+			if emit != nil {
+				for _, st := range pc.Steps {
+					emit(st)
+				}
+			}
+		})
 		// Budget the fold against the true per-turn footprint (messages + the static
 		// prefix / tool schemas / artifacts shipped every turn), not messages alone —
 		// otherwise a large static prefix (e.g. a claude-cli coordinator draining
@@ -68,7 +79,6 @@ func (s *Server) wakeTurnRunner(rt *agent.Runtime) agent.WakeTurnFunc {
 		// session-step emitter streams this turn's activity to the bus so a window
 		// viewing the session sees the woken/worker/coordinator turn unfold live,
 		// just like an interactive chat turn (nil when the ctx carries no session id).
-		emit := wsp.Runtime.SessionStepEmitter(ctx)
 		// Auto-compaction visibility on autonomous turns (schedule_wake / worker /
 		// coordinator): Prepare may have folded older history silently. Surface it as a
 		// head-of-turn step on the SAME feed the turn's own steps use — emitted live for
