@@ -135,6 +135,16 @@ func (r *Runtime) RunInsightScan(ctx context.Context, scope insight.ScanScope, a
 
 	start := time.Now()
 	scanner := insight.NewScanner(r.db, reg, ledger, findings, analyzer, nil)
+	scanner.SetSessionFilter(func(ctx context.Context, session db.Session) (bool, error) {
+		system, err := r.isSystemAgentSession(ctx, session)
+		if err != nil {
+			return false, err
+		}
+		if system {
+			r.logger.Info("insight scan skipped system-agent session", "session", session.ID, "agent", session.AgentID)
+		}
+		return system, nil
+	})
 	scanner.SetAnalysisSink(recorder.onAnalysis)
 	res, err := scanner.Scan(ctx, scope)
 	if err != nil {

@@ -114,6 +114,29 @@ func TestMaybeReflectLessons_GatesAndSkips(t *testing.T) {
 	}
 }
 
+func TestReflectLessonsSkipsSystemAgentSession(t *testing.T) {
+	rt, _ := newTestRuntime(t, t.TempDir())
+	ctx := context.Background()
+	agent, err := rt.db.CreateAgent(ctx, db.Agent{Name: "lesson extractor", System: true, SystemKey: "lesson-extractor"})
+	if err != nil {
+		t.Fatalf("create system agent: %v", err)
+	}
+	sess, err := rt.db.CreateSession(ctx, db.Session{Kind: "chat", AgentID: agent.ID})
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+
+	rt.reflectLessons(ctx, sess.ID, []lessonEvidence{{tool: "Read", errs: "boom"}}, "")
+
+	lessons, err := rt.db.ListLessons(0)
+	if err != nil {
+		t.Fatalf("list lessons: %v", err)
+	}
+	if len(lessons) != 0 {
+		t.Fatalf("system-agent session produced lessons: %+v", lessons)
+	}
+}
+
 func TestLessonsContextBlock(t *testing.T) {
 	rt, tun := newTestRuntime(t, t.TempDir())
 	ctx := context.Background()

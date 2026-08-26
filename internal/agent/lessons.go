@@ -107,10 +107,21 @@ func collectLessonEvidence(steps []TurnStep, turnErr string) (evidence []lessonE
 func (r *Runtime) reflectLessons(ctx context.Context, sessionID string, evidence []lessonEvidence, turnLevel string) {
 	sess, err := r.db.GetSession(ctx, sessionID)
 	if err != nil {
+		r.logger.Warn("lesson session resolve failed", "session", sessionID, "error", err)
+		return
+	}
+	system, err := r.isSystemAgentSession(ctx, sess)
+	if err != nil {
+		r.logger.Warn("lesson agent resolve failed", "session", sessionID, "error", err)
+		return
+	}
+	if system {
+		r.logger.Info("lesson reflection skipped for system-agent session", "session", sessionID, "agent", sess.AgentID)
 		return
 	}
 	agent, err := r.db.GetAgent(ctx, sess.AgentID)
 	if err != nil {
+		r.logger.Warn("lesson agent load failed", "session", sessionID, "error", err)
 		return
 	}
 
