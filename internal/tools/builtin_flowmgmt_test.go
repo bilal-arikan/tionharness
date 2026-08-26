@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -81,5 +82,75 @@ func TestDeliverFlowInput_UsesResumeBridge(t *testing.T) {
 	// Unwired bridge → clear error.
 	if _, err := NewDeliverFlowInputTool(d, "agent", nil).Call(ctx, json.RawMessage(`{"runId":"x"}`)); err == nil {
 		t.Error("expected an error when the resume bridge is not wired")
+	}
+}
+
+// TestCreateFlow_RejectsMissingAgent is the save-time regression guard for the
+// TSK254 bug: create_flow used to accept a graph referencing an agentId that
+// does not exist in the workspace, and the failure only surfaced once the flow
+// was run. It must now be rejected up front, naming the offending node.
+func TestCreateFlow_RejectsMissingAgent(t *testing.T) {
+	d, err := db.Open(filepath.Join(t.TempDir(), "store"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	ctx := context.Background()
+
+	graph := `{"start":"start","nodes":[{"id":"start","type":"start","next":"n1"},{"id":"n1","type":"agent","agentId":"AGT-gone","prompt":"hi"}]}`
+	tool := NewCreateFlowTool(d, "agent")
+	_, err = tool.Call(ctx, json.RawMessage(`{"name":"broken","graph":`+strconv.Quote(graph)+`}`))
+	if err == nil {
+		t.Fatal("expected create_flow to reject an agentId that does not exist")
+	}
+	if !strings.Contains(err.Error(), "AGT-gone") || !strings.Contains(err.Error(), "n1") {
+		t.Fatalf("error should name the node and the missing agent, got: %v", err)
+	}
+}
+
+// TestUpdateFlow_RejectsMissingAgent mirrors TestCreateFlow_RejectsMissingAgent
+// for the update path — editing a flow's graph to point at a non-existent agent
+// must also be rejected at save time.
+func TestUpdateFlow_RejectsMissingAgent(t *testing.T) {
+	d, err := db.Open(filepath.Join(t.TempDir(), "store"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	ctx := context.Background()
+
+	f, err := d.CreateFlow(ctx, db.Flow{Name: "draft"})
+	if err != nil {
+		t.Fatalf("create flow: %v", err)
+	}
+
+	graph := `{"start":"start","nodes":[{"id":"start","type":"start","next":"n1"},{"id":"n1","type":"agent","agentId":"AGT-gone","prompt":"hi"}]}`
+	tool := NewUpdateFlowTool(d, "agent")
+	body := `{"id":"` + f.ID + `","graph":` + strconv.Quote(graph) + `}`
+	if _, err := tool.Call(ctx, json.RawMessage(body)); err == nil {
+		t.Fatal("expected update_flow to reject an agentId that does not exist")
+	}
+}
+
+// TestCreateFlow_AllowsExistingAgent is the regression guard: a graph whose
+// agentId resolves to a real agent must still save cleanly.
+func TestCreateFlow_AllowsExistingAgent(t *testing.T) {
+	d, err := db.Open(filepath.Join(t.TempDir(), "store"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	ctx := context.Background()
+
+	a, err := d.CreateAgent(ctx, db.Agent{Name: "worker"})
+	if err != nil {
+		t.Fatalf("create agent: %v", err)
+	}
+
+	graph := `{"start":"start","nodes":[{"id":"start","type":"start","next":"n1"},{"id":"n1","type":"agent","agentId":"` + a.ID + `","prompt":"hi"}]}`
+	tool := NewCreateFlowTool(d, "agent")
+	out, err := tool.Call(ctx, json.RawMessage(`{"name":"ok","graph":`+strconv.Quote(graph)+`}`))
+	if err != nil {
+		t.Fatalf("expected create_flow to accept an existing agentId, got: %v", err)
+	}
+	if !strings.Contains(out, `"action":"created"`) {
+		t.Errorf("unexpected result: %s", out)
 	}
 }

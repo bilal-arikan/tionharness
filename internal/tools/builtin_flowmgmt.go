@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -45,13 +46,16 @@ func (d flowDeps) requireFlow(ctx context.Context, id string) (db.Flow, error) {
 	return f, nil
 }
 
-// validGraphJSON ensures the supplied graph string is a structurally valid
-// orchestration graph: it parses into an orchestration.Graph AND passes the
-// engine's Validate (start node present, unique ids, resolvable references,
-// agent nodes assigned). This rejects broken graphs at create/update time
-// instead of letting them fail only when run. An empty string is allowed and
-// defaults to an empty graph.
-func validGraphJSON(graph string) error {
+// validGraphJSON ensures the supplied graph string is a structurally AND
+// semantically valid orchestration graph: it parses into an orchestration.Graph,
+// passes the engine's Validate (start node present, unique ids, resolvable
+// references, agent nodes assigned), and every agent/coordinator node's agentId
+// resolves to an agent that actually exists in this workspace. This rejects
+// broken graphs at create/update time instead of letting them fail only when
+// run (previously agentId existence was only checked at run time, in
+// validateFlowPreconditions). An empty string is allowed and defaults to an
+// empty graph.
+func validGraphJSON(ctx context.Context, database *db.DB, graph string) error {
 	graph = strings.TrimSpace(graph)
 	if graph == "" {
 		return nil
@@ -63,7 +67,35 @@ func validGraphJSON(graph string) error {
 	if err := g.Validate(); err != nil {
 		return fmt.Errorf("invalid graph: %w. %s", err, graphSchemaHint(err.Error()))
 	}
+	if err := checkGraphAgentsExist(ctx, database, g); err != nil {
+		return fmt.Errorf("invalid graph: %w", err)
+	}
 	return nil
+}
+
+// checkGraphAgentsExist verifies every agent/coordinator node's agentId
+// resolves to an agent that exists in this workspace. Agent ids are looked up
+// once per distinct id, since a graph may reference the same agent from many
+// nodes. Every offending node is reported, not just the first, so the caller
+// fixes the flow in one pass.
+func checkGraphAgentsExist(ctx context.Context, database *db.DB, g orchestration.Graph) error {
+	var problems []error
+	checked := map[string]bool{} // agentId -> exists
+	for _, n := range g.Nodes {
+		if n.Type != orchestration.NodeAgent && n.Type != orchestration.NodeCoordinator {
+			continue
+		}
+		exists, done := checked[n.AgentID]
+		if !done {
+			_, err := database.GetAgent(ctx, n.AgentID)
+			exists = err == nil
+			checked[n.AgentID] = exists
+		}
+		if !exists {
+			problems = append(problems, fmt.Errorf("node %q: agentId %q must be an existing agent ID (not a node id or agent name)", n.ID, n.AgentID))
+		}
+	}
+	return errors.Join(problems...)
 }
 
 // nodeSchemaCheat is a compact one-line reminder of the node field names that
@@ -139,7 +171,7 @@ func (t CreateFlowTool) Call(ctx context.Context, input json.RawMessage) (string
 	if in.Name == "" {
 		return "", fmt.Errorf("name is required")
 	}
-	if err := validGraphJSON(in.Graph); err != nil {
+	if err := validGraphJSON(ctx, t.d.db, in.Graph); err != nil {
 		return "", err
 	}
 	created, err := t.d.db.CreateFlow(ctx, db.Flow{
@@ -211,7 +243,7 @@ func (t UpdateFlowTool) Call(ctx context.Context, input json.RawMessage) (string
 		cur.Name = strings.TrimSpace(*in.Name)
 	}
 	if in.Graph != nil {
-		if err := validGraphJSON(*in.Graph); err != nil {
+		if err := validGraphJSON(ctx, t.d.db, *in.Graph); err != nil {
 			return "", err
 		}
 		cur.Graph = strings.TrimSpace(*in.Graph)

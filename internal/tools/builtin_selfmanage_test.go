@@ -294,7 +294,16 @@ func TestFlowCreateValidatesGraph(t *testing.T) {
 	if _, err := create.Call(ctx, json.RawMessage(`{"name":"Empty","graph":"{\"nodes\":[]}"}`)); err == nil {
 		t.Fatal("expected structurally-invalid graph (no start node) to be rejected")
 	}
-	const validGraph = `{\"start\":\"start\",\"nodes\":[{\"id\":\"start\",\"type\":\"start\",\"next\":\"n1\"},{\"id\":\"n1\",\"type\":\"agent\",\"agentId\":\"a1\"}]}`
+	// The agent node's agentId must resolve to a real agent — "a1" does not exist,
+	// so this must be rejected at create time too (TSK254), not only once run.
+	if _, err := create.Call(ctx, json.RawMessage(`{"name":"BadAgent","graph":"{\"start\":\"start\",\"nodes\":[{\"id\":\"start\",\"type\":\"start\",\"next\":\"n1\"},{\"id\":\"n1\",\"type\":\"agent\",\"agentId\":\"a1\"}]}"}`)); err == nil {
+		t.Fatal("expected an agentId that does not exist to be rejected")
+	}
+	ag, err := d.CreateAgent(ctx, db.Agent{Name: "worker"})
+	if err != nil {
+		t.Fatalf("create agent: %v", err)
+	}
+	validGraph := `{\"start\":\"start\",\"nodes\":[{\"id\":\"start\",\"type\":\"start\",\"next\":\"n1\"},{\"id\":\"n1\",\"type\":\"agent\",\"agentId\":\"` + ag.ID + `\"}]}`
 	out, err := create.Call(ctx, json.RawMessage(`{"name":"Good","graph":"`+validGraph+`"}`))
 	if err != nil {
 		t.Fatalf("create_flow: %v", err)

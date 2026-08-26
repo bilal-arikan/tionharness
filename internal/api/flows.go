@@ -94,6 +94,20 @@ func marshalGraph(g *orchestration.Graph) (string, error) {
 	return string(data), nil
 }
 
+// validateFlowGraphAgents runs the semantic (agent-existence + provider-ready)
+// check on top of marshalGraph's structural check, so a graph referencing a
+// missing or unrunnable agent is rejected at save time instead of only
+// surfacing when the flow is run. Mirrors marshalGraph's draft-save allowance:
+// a nil graph or one with no start node yet is not checked. rt is nil in the
+// (rare) case a workspace's runtime has not finished booting; skip rather than
+// panic — RunFlow re-checks preconditions right before executing anyway.
+func validateFlowGraphAgents(ctx context.Context, rt *agent.Runtime, g *orchestration.Graph) error {
+	if rt == nil || g == nil || g.Start == "" {
+		return nil
+	}
+	return rt.ValidateFlowGraph(ctx, *g)
+}
+
 func (s *Server) handleCreateFlow(w http.ResponseWriter, r *http.Request) {
 	req, ok := bindJSON[flowReq](w, r)
 	if !ok {
@@ -105,6 +119,10 @@ func (s *Server) handleCreateFlow(w http.ResponseWriter, r *http.Request) {
 	}
 	graph, err := marshalGraph(req.Graph)
 	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid graph: "+err.Error())
+		return
+	}
+	if err := validateFlowGraphAgents(r.Context(), ws(r).Runtime, req.Graph); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid graph: "+err.Error())
 		return
 	}
@@ -140,6 +158,10 @@ func (s *Server) handleUpdateFlow(w http.ResponseWriter, r *http.Request) {
 	if req.Graph != nil {
 		graph, err := marshalGraph(req.Graph)
 		if err != nil {
+			writeError(w, http.StatusBadRequest, "invalid graph: "+err.Error())
+			return
+		}
+		if err := validateFlowGraphAgents(r.Context(), ws(r).Runtime, req.Graph); err != nil {
 			writeError(w, http.StatusBadRequest, "invalid graph: "+err.Error())
 			return
 		}
