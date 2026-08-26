@@ -78,6 +78,25 @@ func (d *DB) GetTask(ctx context.Context, id string) (Task, error) {
 	return dbGet(d, d.tasks, id)
 }
 
+// SetTaskWorktree records card lifecycle metadata without firing a board event.
+// Git work is deliberately completed before this method is called, so no DB
+// lock is held while an external process runs.
+func (d *DB) SetTaskWorktree(ctx context.Context, id, branch, path, baseRef, state, lastError string) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	t, ok := d.tasks[id]
+	if !ok {
+		return ErrNotFound
+	}
+	t.WorktreeBranch = branch
+	t.WorktreePath = path
+	t.WorktreeBaseRef = baseRef
+	t.WorktreeState = state
+	t.WorktreeLastError = lastError
+	t.UpdatedAt = now()
+	return d.persistTaskLocked(t)
+}
+
 // ListTasks returns all tasks (including archived), newest first.
 func (d *DB) ListTasks(ctx context.Context) ([]Task, error) {
 	return dbList(d, d.tasks, func(a, b Task) bool { return a.CreatedAt > b.CreatedAt }), nil

@@ -374,6 +374,33 @@ func (e *AutomationEngine) fireBoard(ctx context.Context, a db.Automation, ev db
 		return
 	}
 
+	// Move action: a lightweight, no-LLM bookkeeping fire. The destination is
+	// explicit on the automation; MoveTask validates its key and emits the next
+	// board event so chained rules can run under the same guardrails.
+	if a.BoardAction == db.BoardActionMove {
+		if ev.Op == db.BoardOpDelete || ev.TaskID == "" {
+			return
+		}
+		if err := e.db.MoveTask(ctx, ev.TaskID, a.BoardMoveToState); err != nil {
+			e.recordFailure(ctx, a, err.Error())
+			return
+		}
+		if err := e.db.RecordAutomationFire(ctx, a.ID, "", ""); err != nil {
+			e.logger.Warn("automation: record fire failed", "automation", a.ID, "error", err)
+		}
+		e.logger.Info("automation: fired (board·move)",
+			"automation", a.ID, "op", ev.Op, "task", ev.TaskID,
+			"to", a.BoardMoveToState, "iteration", a.IterationCount+1)
+		e.rt.publish(events.Event{
+			Type:   events.TypeAutomation,
+			Level:  "success",
+			Title:  "Otomasyon: kart taşındı — " + automationLabel(a),
+			Body:   ev.Title,
+			Target: map[string]string{"view": "tasks"},
+		})
+		return
+	}
+
 	prompt := renderAutomationPrompt(a.PromptTemplate, e.boardVars(ctx, a, ev))
 	if strings.TrimSpace(prompt) == "" {
 		e.recordFailure(ctx, a, "rendered prompt is empty")

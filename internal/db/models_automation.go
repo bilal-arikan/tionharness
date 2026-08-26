@@ -164,13 +164,14 @@ func ValidBoardOp(op string) bool {
 const (
 	BoardActionSpawn   = "spawn"
 	BoardActionArchive = "archive"
+	BoardActionMove    = "move"
 )
 
 // ValidBoardAction reports whether action is empty (defaults to spawn) or a known
 // board action.
 func ValidBoardAction(action string) bool {
 	switch action {
-	case "", BoardActionSpawn, BoardActionArchive:
+	case "", BoardActionSpawn, BoardActionArchive, BoardActionMove:
 		return true
 	default:
 		return false
@@ -260,6 +261,9 @@ type Automation struct {
 	// the board drives execution; BoardActionArchive archives the card with no LLM
 	// call (the cheap "done → archive" cleanup). Ignored for non-board triggers.
 	BoardAction string `json:"boardAction,omitempty"`
+	// BoardMoveToState is the explicit destination column for BoardActionMove.
+	// It is not inferred from workspace column order.
+	BoardMoveToState string `json:"boardMoveToState,omitempty"`
 	// TargetAgentID is the agent that runs the spawned session. Optional when
 	// FlowID is set (a flow-backed automation runs a flow instead of one agent).
 	TargetAgentID string `json:"targetAgentId"`

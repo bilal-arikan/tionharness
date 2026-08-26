@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/bilal-arikan/tionharness/internal/db"
 )
@@ -32,6 +33,85 @@ func TestRenderAutomationPrompt(t *testing.T) {
 	if got != "Just do X." {
 		t.Fatalf("unexpected mutation: %q", got)
 	}
+}
+
+func TestFireBoardMoveMovesTask(t *testing.T) {
+	e := backstopEngine(t)
+	ctx := context.Background()
+	task, err := e.db.CreateTask(ctx, db.Task{Title: "Move me", BoardState: db.BoardTodo})
+	if err != nil {
+		t.Fatalf("create task: %v", err)
+	}
+	a := seedAutomation(t, e, db.Automation{
+		TriggerKind:      db.TriggerBoard,
+		BoardAction:      db.BoardActionMove,
+		BoardMoveToState: db.BoardReview,
+		MaxIterations:    3,
+	})
+
+	e.fireBoard(ctx, a, db.BoardChangeEvent{TaskID: task.ID, Title: task.Title, Op: db.BoardOpCreate, ToState: db.BoardTodo})
+
+	got, err := e.db.GetTask(ctx, task.ID)
+	if err != nil {
+		t.Fatalf("get task: %v", err)
+	}
+	if got.BoardState != db.BoardReview {
+		t.Fatalf("board state = %q, want %q", got.BoardState, db.BoardReview)
+	}
+	fired, err := e.db.GetAutomation(ctx, a.ID)
+	if err != nil {
+		t.Fatalf("get automation: %v", err)
+	}
+	if fired.IterationCount != 1 {
+		t.Fatalf("iteration count = %d, want 1", fired.IterationCount)
+	}
+}
+
+func TestBoardMoveReentrancyStopsAtMaxIterations(t *testing.T) {
+	e := backstopEngine(t)
+	ctx := context.Background()
+	task, err := e.db.CreateTask(ctx, db.Task{Title: "Bounded chain", BoardState: db.BoardTodo})
+	if err != nil {
+		t.Fatalf("create task: %v", err)
+	}
+	toReview := seedAutomation(t, e, db.Automation{
+		TriggerKind: db.TriggerBoard, BoardOp: db.BoardOpMove, BoardToState: db.BoardTodo,
+		BoardAction: db.BoardActionMove, BoardMoveToState: db.BoardReview, MaxIterations: 1,
+	})
+	toTodo := seedAutomation(t, e, db.Automation{
+		TriggerKind: db.TriggerBoard, BoardOp: db.BoardOpMove, BoardToState: db.BoardReview,
+		BoardAction: db.BoardActionMove, BoardMoveToState: db.BoardTodo, MaxIterations: 1,
+	})
+	e.db.SetBoardHook(func(ev db.BoardChangeEvent) {
+		go e.OnBoardChange(context.Background(), ev)
+	})
+
+	if err := e.db.MoveTask(ctx, task.ID, db.BoardReview); err != nil {
+		t.Fatalf("initial move: %v", err)
+	}
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		a, _ := e.db.GetAutomation(ctx, toReview.ID)
+		b, _ := e.db.GetAutomation(ctx, toTodo.ID)
+		if a.IterationCount == 1 && b.IterationCount == 1 {
+			time.Sleep(50 * time.Millisecond)
+			final, err := e.db.GetTask(ctx, task.ID)
+			if err != nil {
+				t.Fatalf("get task: %v", err)
+			}
+			a, _ = e.db.GetAutomation(ctx, toReview.ID)
+			b, _ = e.db.GetAutomation(ctx, toTodo.ID)
+			if a.IterationCount != 1 || b.IterationCount != 1 {
+				t.Fatalf("reentrant chain exceeded maxIterations: todo=%d review=%d", a.IterationCount, b.IterationCount)
+			}
+			if final.BoardState != db.BoardReview {
+				t.Fatalf("final board state = %q, want %q", final.BoardState, db.BoardReview)
+			}
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatal("reentrant move chain did not complete")
 }
 
 func TestBoardMatches(t *testing.T) {

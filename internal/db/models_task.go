@@ -11,6 +11,14 @@ const (
 	BoardCancelled  = "iptal"
 )
 
+const (
+	WorktreeNone        = "none"
+	WorktreeProvisioned = "provisioned"
+	WorktreeMerged      = "merged"
+	WorktreeDiscarded   = "discarded"
+	WorktreeConflict    = "conflict"
+)
+
 // BoardColumnDef defines a kanban column with a display label and optional
 // accent color. Key is the persistent string stored on tasks (boardState).
 type BoardColumnDef struct {
@@ -79,6 +87,14 @@ type Task struct {
 	Progress    int      `json:"progress,omitempty"`  // 0..100
 	StartDate   string   `json:"startDate,omitempty"` // YYYY-MM-DD
 	DueDate     string   `json:"dueDate,omitempty"`   // YYYY-MM-DD
+	// Worktree* fields are owned exclusively by the card lifecycle manager. The
+	// removed session-level worktree feature must integrate with that manager if
+	// it is ever restored; it must not create a second lifecycle owner.
+	WorktreeBranch    string `json:"worktreeBranch,omitempty"`
+	WorktreePath      string `json:"worktreePath,omitempty"`
+	WorktreeBaseRef   string `json:"worktreeBaseRef,omitempty"`
+	WorktreeState     string `json:"worktreeState,omitempty"` // none|provisioned|merged|discarded|conflict
+	WorktreeLastError string `json:"worktreeLastError,omitempty"`
 	// Archived hides a finished card from the active board without deleting it
 	// (reversible, unlike DeleteTask). Set by SetTaskArchived — typically by the
 	// "done → archive" board automation — and excluded by default from the board

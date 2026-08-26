@@ -44,7 +44,13 @@ var defaultBoardAutomations = []defaultBoardAutomation{
 				PromptTemplate: "Bu pano kartı üzerinde çalış ve bitir.\n\n" +
 					"Kart: {{title}} ({{taskId}})\n\n" +
 					"Kartın açıklaması/prompt'u kaynaktır — oku, işi yap, ilgili testleri/kontrolleri çalıştır, " +
-					"sonra sonucu özetle. İş bitince kartı 'İnceleme' (review) sütununa taşı.",
+					"sonra sonucu özetle. İş bitince kartı 'İnceleme' (review) sütununa taşı.\n\n" +
+					"Kart kapsamı dışında eksik veya hatalı bir şey görürsen mevcut işi durdurma. Önce list_tasks ile " +
+					"aynı konuyu taşıyan açık bir kart olup olmadığını kontrol et. Yoksa bulgu için ayrı bir kart aç: " +
+					"boardState: \"pbi\" ve tags: [\"scope-out\", \"parent:{{taskId}}\"]. Soy bağını dependencies ile " +
+					"kurma; dependencies alanı kartı bağımlı olduğu kart bitene kadar bloke eder, çoğu kapsam dışı bulgu " +
+					"ise bağımsız çalışabilir. Soy bağı için yalnız parent:{{taskId}} etiketini kullan. Bu kartın kendi işini " +
+					"bitirmeden yan bulgunun peşine düşme.",
 				Enabled:       false,
 				MaxIterations: db.MaxIterationsHardCap,
 				CooldownSec:   2,
