@@ -74,6 +74,8 @@ frozen baytlar/sıra aynen korunur. Pasif katalog drift'i ise donmuş kalır.
 | Katılımcı değişimi | `entry.MultiAgent != multiAgent` (`participants-changed`) |
 | TTL soğuması | `LastUsedAt` > 1h (`promptEpochAdoptAfter`; providers `cacheTTL` hizalı) — yenileme bedava (`ttl-cold`) |
 | Açık istek | `/refresh-context` chat komutu · `update_session {refresh_context:true}` (`SessionSink.RefreshContext`) → `RefreshPromptEpoch` (`refreshed`) |
+| Eşikli emniyet ağı | Snapshot 3 ardışık tur stale kalırsa sonraki tur başında aynı refresh yolu otomatik çalışır; sayaç refresh veya drift'in geri alınmasıyla sıfırlanır |
+| Yeni spawn | `spawn_session` / `spawn_worker` her zaman yeni session ID üretir; oluşturma anında epoch refresh edilerek parent'ın stale snapshot'ı miras alınmaz |
 
 Adopt tüm entry'yi düşürür → hem system hem tools birlikte yeniden donar
 (system compose turdaki ilk adım olduğundan sıra tutarlı).

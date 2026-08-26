@@ -101,6 +101,28 @@ func TestSpawnSession_ResolvesByNameAndIsIndependent(t *testing.T) {
 	drainSpawns(t, rt)
 }
 
+func TestSpawnSessionStartsWithFreshPromptEpoch(t *testing.T) {
+	rt, _ := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))
+	rt.SetPromptEpoch(true)
+	ctx := context.Background()
+	agent, err := rt.db.CreateAgent(ctx, db.Agent{Name: "Fresh Worker", Provider: "anthropic", Model: "m"})
+	if err != nil {
+		t.Fatalf("create agent: %v", err)
+	}
+	parentID := "SES_stale_parent"
+	rt.EpochStaticSystem(ctx, parentID, agent, false, false, "", func() string { return "PARENT OLD" })
+	rt.EpochStaticSystem(ctx, parentID, agent, false, false, "", func() string { return "PARENT NEW" })
+
+	res, err := rt.SpawnSession(ctx, agent.ID, "fresh task", SpawnOptions{ParentSessionID: parentID})
+	if err != nil {
+		t.Fatalf("spawn: %v", err)
+	}
+	if rt.PromptEpochStale(res.SessionID, agent.ID) {
+		t.Fatal("spawned session must not inherit the parent's stale prompt epoch")
+	}
+	drainSpawns(t, rt)
+}
+
 // TestSpawnSession_RejectsEmptyPrompt guards the precondition.
 func TestSpawnSession_RejectsEmptyPrompt(t *testing.T) {
 	rt, _ := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))

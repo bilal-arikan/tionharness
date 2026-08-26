@@ -108,6 +108,42 @@ func TestEpochAdoptTTLCold(t *testing.T) {
 	}
 }
 
+func TestEpochAutoRefreshAfterMaxStaleTurns(t *testing.T) {
+	rt, _ := newTestRuntime(t, t.TempDir())
+	rt.SetPromptEpoch(true)
+	ctx := context.Background()
+	sid := "SES_auto_stale"
+
+	rt.EpochStaticSystem(ctx, sid, epochAgent, false, false, "", func() string { return "OLD" })
+	for turn := 1; turn <= maxStaleTurns; turn++ {
+		got, stale := rt.EpochStaticSystem(ctx, sid, epochAgent, false, false, "", func() string { return "NEW" })
+		if got != "OLD" || !stale {
+			t.Fatalf("stale turn %d: got %q stale=%v, want OLD/true", turn, got, stale)
+		}
+	}
+	got, stale := rt.EpochStaticSystem(ctx, sid, epochAgent, false, false, "", func() string { return "NEW" })
+	if got != "NEW" || stale {
+		t.Fatalf("turn after threshold must auto-refresh, got %q stale=%v", got, stale)
+	}
+	if turns := rt.epochCache[sid][epochAgent.ID].StaleTurns; turns != 0 {
+		t.Fatalf("auto-refresh must reset stale counter, got %d", turns)
+	}
+}
+
+func TestEpochStaleTurnCounterResetsWhenDriftReverts(t *testing.T) {
+	rt, _ := newTestRuntime(t, t.TempDir())
+	rt.SetPromptEpoch(true)
+	ctx := context.Background()
+	sid := "SES_stale_reset"
+
+	rt.EpochStaticSystem(ctx, sid, epochAgent, false, false, "", func() string { return "OLD" })
+	rt.EpochStaticSystem(ctx, sid, epochAgent, false, false, "", func() string { return "NEW" })
+	rt.EpochStaticSystem(ctx, sid, epochAgent, false, false, "", func() string { return "OLD" })
+	if turns := rt.epochCache[sid][epochAgent.ID].StaleTurns; turns != 0 {
+		t.Fatalf("reverted drift must reset stale counter, got %d", turns)
+	}
+}
+
 // TestEpochDisabledPassThrough: with the workspace toggle off, every turn is
 // live composition — no snapshot, no stale flag.
 func TestEpochDisabledPassThrough(t *testing.T) {

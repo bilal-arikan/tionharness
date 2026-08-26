@@ -233,6 +233,10 @@ func (r *Runtime) launchSpawn(ctx context.Context, agent db.Agent, prompt string
 		r.releaseSpawnSlot()
 		return SpawnResult{}, err
 	}
+	// A spawn is a new prompt-cache lineage. Clear any accidental in-memory or
+	// sidecar entry for the newly allocated id through the normal refresh path so
+	// a parent session's stale snapshot can never be inherited by a child.
+	r.RefreshPromptEpoch(ctx, session.ID)
 
 	// Record the spawn prompt as the opening user turn so the thread reads as a
 	// real conversation in the activity feed — and bridge it to the hub so a window

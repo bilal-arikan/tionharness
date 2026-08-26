@@ -53,6 +53,11 @@ const promptEpochVersion = 1
 // extra invalidation.
 const promptEpochAdoptAfter = time.Hour
 
+// maxStaleTurns bounds how long a session may keep serving a stale snapshot.
+// After this many consecutive stale turns, the next turn uses the same refresh
+// path as /refresh-context and freezes the live prompt again.
+const maxStaleTurns = 3
+
 // PromptEpochStaleNote is the one-line notice injected into the VOLATILE dynamic
 // suffix while the frozen snapshot lags live state (hermes' "the tool response
 // shows live state" trade-off, made explicit to the agent). Shared by the chat,
@@ -73,11 +78,13 @@ type promptEpochEntry struct {
 	Tools      []providers.ToolDef `json:"tools,omitempty"`
 	CreatedAt  int64               `json:"createdAt"`
 	LastUsedAt int64               `json:"lastUsedAt"`
+	StaleTurns int                 `json:"staleTurns,omitempty"`
 
 	systemStale   bool  // live static prefix drifted from the frozen one
 	toolsStale    bool  // live tool defs drifted from the frozen ones
 	staleNotified bool  // "stale" debug event already emitted for this drift
 	persistedUse  int64 // LastUsedAt value last flushed to the sidecar (write throttle)
+	staleCounted  bool  // this turn already contributed to StaleTurns
 
 	// systemChange / toolsChange are the computed diffs (frozen ↔ live) for the
 	// current drift episode, recomputed each stale turn. They feed both the
@@ -178,6 +185,11 @@ func (r *Runtime) EpochStaticSystem(ctx context.Context, sessionID string, a db.
 	defer r.epochMu.Unlock()
 	entries := r.epochEntriesLocked(sessionID)
 	e := entries[a.ID]
+	if e != nil && e.StaleTurns >= maxStaleTurns {
+		r.refreshPromptEpochLocked(ctx, sessionID, "auto-stale", "snapshot stale for 3 consecutive turns; next turn recomposes the prefix from live state")
+		entries = r.epochEntriesLocked(sessionID)
+		e = entries[a.ID]
+	}
 
 	reason := ""
 	switch {
@@ -214,6 +226,7 @@ func (r *Runtime) EpochStaticSystem(ctx context.Context, sessionID string, a db.
 
 	// Serving the frozen snapshot: detect (but do not adopt) live drift, and
 	// compute the paragraph-level diff so the note/step can show WHAT changed.
+	previousStaleTurns := e.StaleTurns
 	live := build()
 	e.systemStale = live != e.System
 	if e.systemStale {
@@ -221,8 +234,18 @@ func (r *Runtime) EpochStaticSystem(ctx context.Context, sessionID string, a db.
 	} else {
 		e.systemChange = nil
 	}
+	e.staleCounted = false
+	if e.systemStale || e.toolsStale {
+		e.StaleTurns++
+		e.staleCounted = true
+	} else {
+		e.StaleTurns = 0
+	}
 	r.noteEpochStaleLocked(ctx, sessionID, a.ID, e)
 	e.LastUsedAt = now.UnixMilli()
+	if e.StaleTurns != previousStaleTurns {
+		r.persistEpochLocked(sessionID)
+	}
 	if e.LastUsedAt-e.persistedUse > epochUsePersistEvery.Milliseconds() {
 		e.persistedUse = e.LastUsedAt
 		r.persistEpochLocked(sessionID)
@@ -264,6 +287,11 @@ func (r *Runtime) EpochToolDefs(ctx context.Context, sessionID string, a db.Agen
 		e.toolsChange = nil
 	}
 	r.noteEpochStaleLocked(ctx, sessionID, a.ID, e)
+	if (e.systemStale || e.toolsStale) && !e.staleCounted {
+		e.StaleTurns++
+		e.staleCounted = true
+		r.persistEpochLocked(sessionID)
+	}
 	return e.Tools, e.systemStale || e.toolsStale
 }
 
@@ -287,11 +315,17 @@ func (r *Runtime) RefreshPromptEpoch(ctx context.Context, sessionID string) {
 	}
 	r.epochMu.Lock()
 	defer r.epochMu.Unlock()
+	r.refreshPromptEpochLocked(ctx, sessionID, "refreshed", "snapshot cleared; next turn recomposes the prefix from live state")
+}
+
+// refreshPromptEpochLocked is the shared implementation for explicit and
+// threshold-triggered refreshes. Caller must hold epochMu.
+func (r *Runtime) refreshPromptEpochLocked(ctx context.Context, sessionID, reason, detail string) {
 	if r.epochCache != nil {
 		delete(r.epochCache, sessionID)
 	}
 	_ = r.db.ClearPromptEpoch(sessionID)
-	r.emitDebug(WithSessionID(ctx, sessionID), db.DebugEvent{Type: db.DebugEpoch, Name: "refreshed", Detail: "snapshot cleared; next turn recomposes the prefix from live state"})
+	r.emitDebug(WithSessionID(ctx, sessionID), db.DebugEvent{Type: db.DebugEpoch, Name: reason, Detail: detail})
 }
 
 // PromptEpochStale reports whether the frozen snapshot for (session, agent) is
