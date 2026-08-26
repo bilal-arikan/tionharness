@@ -89,6 +89,99 @@ func TestFlowPrecheckMissingAgent(t *testing.T) {
 	}
 }
 
+// TestValidateFlowGraph_RejectsMissingAgent is the save-time counterpart of
+// TestFlowPrecheckMissingAgent: ValidateFlowGraph is what the flow API/tool
+// save paths call before persisting a graph, so a flow referencing a
+// never-existed or deleted agent must be rejected before it can be saved, not
+// only once it is run.
+func TestValidateFlowGraph_RejectsMissingAgent(t *testing.T) {
+	rt, _ := newTestRuntime(t, t.TempDir())
+
+	g := orchestration.Graph{
+		Start: "start",
+		Nodes: []orchestration.Node{
+			{ID: "start", Type: orchestration.NodeStart, Next: "n1"},
+			{ID: "n1", Type: orchestration.NodeAgent, AgentID: "AGT-gone", Prompt: "hi"},
+		},
+	}
+	err := rt.ValidateFlowGraph(context.Background(), g)
+	if err == nil {
+		t.Fatal("expected an error for a missing agent, got nil")
+	}
+	if !strings.Contains(err.Error(), "AGT-gone") || !strings.Contains(err.Error(), "n1") {
+		t.Fatalf("error should name the node and the missing agent, got: %v", err)
+	}
+}
+
+// TestValidateFlowGraph_RejectsStructuralError proves ValidateFlowGraph also
+// surfaces plain structural faults (Graph.Validate), not just agent-existence
+// ones — it is the single entry point flow-save callers use instead of calling
+// Validate and validateFlowPreconditions separately.
+func TestValidateFlowGraph_RejectsStructuralError(t *testing.T) {
+	rt, _ := newTestRuntime(t, t.TempDir())
+
+	g := orchestration.Graph{
+		Start: "missing",
+		Nodes: []orchestration.Node{{ID: "n1", Type: orchestration.NodeStart}},
+	}
+	if err := rt.ValidateFlowGraph(context.Background(), g); err == nil {
+		t.Fatal("expected a structural rejection for an unresolved start node")
+	}
+}
+
+func TestValidateFlowGraphRejectsDanglingNextReference(t *testing.T) {
+	rt, _ := newTestRuntime(t, t.TempDir())
+	g := orchestration.Graph{
+		Start: "start",
+		Nodes: []orchestration.Node{{ID: "start", Type: orchestration.NodeStart, Next: "thanks"}},
+	}
+
+	err := rt.ValidateFlowGraph(context.Background(), g)
+	if err == nil {
+		t.Fatal("expected dangling next reference to be rejected")
+	}
+	if !strings.Contains(err.Error(), `node "start" field next references unknown node "thanks"`) {
+		t.Fatalf("error should name node, field, and dangling target, got: %v", err)
+	}
+}
+
+func TestValidateFlowGraphReportsAllDanglingReferences(t *testing.T) {
+	rt, _ := newTestRuntime(t, t.TempDir())
+	g := orchestration.Graph{
+		Start: "start",
+		Nodes: []orchestration.Node{
+			{ID: "start", Type: orchestration.NodeStart, Next: "missing-next"},
+			{ID: "branch", Type: orchestration.NodeBranch, Branches: []orchestration.Branch{{Next: "missing-branch"}}},
+		},
+	}
+
+	err := rt.ValidateFlowGraph(context.Background(), g)
+	if err == nil {
+		t.Fatal("expected dangling references to be rejected")
+	}
+	for _, want := range []string{"missing-next", "missing-branch"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("error should report dangling target %q, got: %v", want, err)
+		}
+	}
+}
+
+func TestValidateFlowGraphValidReferencesPass(t *testing.T) {
+	rt, _ := newTestRuntime(t, t.TempDir())
+	g := orchestration.Graph{
+		Start: "start",
+		Nodes: []orchestration.Node{
+			{ID: "start", Type: orchestration.NodeStart, Next: "transform"},
+			{ID: "transform", Type: orchestration.NodeTransform, Template: "{{last}}", Next: "end"},
+			{ID: "end", Type: orchestration.NodeEnd},
+		},
+	}
+
+	if err := rt.ValidateFlowGraph(context.Background(), g); err != nil {
+		t.Fatalf("expected valid graph to pass unchanged, got: %v", err)
+	}
+}
+
 func TestFlowPrecheckRequiresExactAgentID(t *testing.T) {
 	rt, _ := newTestRuntime(t, t.TempDir())
 	a := newFlowAgent(t, rt, "reviewer")

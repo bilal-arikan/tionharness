@@ -28,6 +28,69 @@ import (
 // Every problem in the graph is reported, not just the first: joined into one
 // error so the user fixes the flow in a single pass instead of rediscovering the
 // next fault on every retry.
+// ValidateFlowGraph runs the full structural + semantic check (Graph.Validate
+// followed by validateFlowPreconditions) on a graph without creating a FlowRun.
+// Flow save paths (API create/update handlers) call this so a graph that
+// references a missing or unrunnable agent is rejected at save time instead of
+// only surfacing once the flow is run.
+func (r *Runtime) ValidateFlowGraph(ctx context.Context, g orchestration.Graph) error {
+	if err := validateFlowReferences(g); err != nil {
+		return err
+	}
+	if err := g.Validate(); err != nil {
+		return err
+	}
+	return r.validateFlowPreconditions(ctx, g)
+}
+
+// validateFlowReferences collects graph identity and node-reference faults before
+// Graph.Validate's broader, first-error structural validation. Keeping this pass
+// first also prevents provider builds for a graph that cannot be executed.
+func validateFlowReferences(g orchestration.Graph) error {
+	var problems []error
+	nodes := make(map[string]struct{}, len(g.Nodes))
+	for _, n := range g.Nodes {
+		if n.ID == "" {
+			problems = append(problems, fmt.Errorf("node has an empty id"))
+			continue
+		}
+		if _, exists := nodes[n.ID]; exists {
+			problems = append(problems, fmt.Errorf("duplicate node id %q", n.ID))
+		}
+		nodes[n.ID] = struct{}{}
+	}
+
+	check := func(nodeID, field, target string) {
+		if target == "" {
+			return // Empty optional transitions mean end; required fields are checked by Graph.Validate.
+		}
+		if _, exists := nodes[target]; !exists {
+			problems = append(problems, fmt.Errorf("node %q field %s references unknown node %q", nodeID, field, target))
+		}
+	}
+
+	if g.Start == "" {
+		problems = append(problems, fmt.Errorf("graph has no start node"))
+	} else {
+		check("graph", "start", g.Start)
+	}
+	for _, n := range g.Nodes {
+		check(n.ID, "next", n.Next)
+		check(n.ID, "joinNext", n.JoinNext)
+		check(n.ID, "body", n.Body)
+		check(n.ID, "loopNext", n.LoopNext)
+		check(n.ID, "spawnRef", n.SpawnRef)
+		for i, target := range n.Parallel {
+			check(n.ID, fmt.Sprintf("parallel[%d]", i), target)
+		}
+		for i, branch := range n.Branches {
+			check(n.ID, fmt.Sprintf("branches[%d].next", i), branch.Next)
+		}
+	}
+
+	return errors.Join(problems...)
+}
+
 func (r *Runtime) validateFlowPreconditions(ctx context.Context, g orchestration.Graph) error {
 	var problems []error
 
