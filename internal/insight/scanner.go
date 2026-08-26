@@ -100,6 +100,14 @@ type Scanner struct {
 	sliceCap int
 	// sink, when set, receives one event per completed analysis (see sink.go).
 	sink AnalysisSink
+	// sessionFilter returns true for sessions that should be excluded before
+	// scan budgets, transcript loading, and analyzer calls are consumed.
+	sessionFilter func(context.Context, db.Session) (bool, error)
+}
+
+// SetSessionFilter installs a caller-owned session exclusion policy.
+func (s *Scanner) SetSessionFilter(filter func(context.Context, db.Session) (bool, error)) {
+	s.sessionFilter = filter
 }
 
 // NewScanner wires the pipeline. now is injectable for deterministic tests; when
@@ -111,6 +119,13 @@ func NewScanner(database *db.DB, reg *Registry, ledger *Ledger, findings *Findin
 	return &Scanner{
 		db: database, reg: reg, ledger: ledger, findings: findings,
 		analyzer: analyzer, now: now, sliceCap: 8000,
+		sessionFilter: func(ctx context.Context, session db.Session) (bool, error) {
+			agent, err := database.GetAgent(ctx, session.AgentID)
+			if err != nil {
+				return false, err
+			}
+			return agent.System, nil
+		},
 	}
 }
 
@@ -162,6 +177,15 @@ enumerate:
 		// the scan considered) and not counted as skipped either.
 		if excluded[sess.Kind] {
 			continue
+		}
+		if s.sessionFilter != nil {
+			exclude, filterErr := s.sessionFilter(ctx, sess)
+			if filterErr != nil {
+				return res, filterErr
+			}
+			if exclude {
+				continue
+			}
 		}
 		if scope.MaxSessions > 0 && res.Sessions >= scope.MaxSessions {
 			break
