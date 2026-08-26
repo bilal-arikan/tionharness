@@ -66,10 +66,12 @@ için bir fren var (Ayarlar ▸ MCP & Araçlar):
 - `git push` engeli `builtin_shell.go isNetworkMutatingGit` ile (best-effort substring;
   gerçek sınır confine'ın kendisidir).
 
-> **Not (2026-07-28):** Otonom oturuma per-session git worktree veren
-> `gitWorktreeIsolation` **çalışma-zamanı** özelliği kaldırıldı (ayar + `agent/worktree.go`
-> + oturum-silme temizliği). İleride kapsamlı biçimde yeniden eklenecek. Aşağıdaki
-> **geliştirici** worktree scripti bundan ayrıdır ve durmaktadır.
+> **Not (2026-08-26):** Eski per-session `gitWorktreeIsolation` özelliği kaldırılmış
+> kalır. Yerine kart yaşam döngüsünün tek sahibi olan `internal/worktree` geldi:
+> `todo` worktree açar, `done` base dala merge eder, `iptal`/`failed` güvenli temizlik
+> yapar. Dirty veya base'e ulaşmamış commit varsa silmez; merge çatışmasında worktree'yi
+> korur. Base ref ve worktree kökü workspace ayarlarıdır. Aşağıdaki **geliştirici**
+> worktree scripti bundan ayrıdır ve durmaktadır.
 
 ### Geliştirici worktree'leri (`scripts\worktree.ps1`) — ajan izolasyonundan AYRI
 

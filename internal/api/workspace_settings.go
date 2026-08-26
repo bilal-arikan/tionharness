@@ -21,6 +21,8 @@ type workspaceSettingsDTO struct {
 	PauseAutonomy     bool   `json:"pauseAutonomy"`
 	DefaultAgentId    string `json:"defaultAgentId"`
 	DefaultWorkingDir string `json:"defaultWorkingDir"`
+	WorktreeBaseRef   string `json:"worktreeBaseRef"`
+	WorktreeRootDir   string `json:"worktreeRootDir"`
 	CreatedAt         int64  `json:"createdAt"`
 
 	// ClaudeHomeDir is the app-global claude-cli config home exported as
@@ -112,6 +114,8 @@ func toWorkspaceSettingsDTO(ctx context.Context, w *workspace.Workspace) workspa
 		PauseAutonomy:     s.PauseAutonomy,
 		DefaultAgentId:    s.DefaultAgentId,
 		DefaultWorkingDir: s.DefaultWorkingDir,
+		WorktreeBaseRef:   s.WorktreeBaseRef,
+		WorktreeRootDir:   s.WorktreeRootDir,
 		CreatedAt:         w.CreatedAt,
 
 		// Both paths are application-wide; every workspace reports the same fallback.

@@ -56,6 +56,11 @@ type WSSettings struct {
 	// workspace dir. A session's own WorkingDir overrides it. the external agent project parity.
 	DefaultWorkingDir string `json:"defaultWorkingDir"`
 
+	// Card worktree lifecycle settings. Empty values use main and a sibling
+	// .tionharness-worktrees/<workspace-id> directory respectively.
+	WorktreeBaseRef string `json:"worktreeBaseRef,omitempty"`
+	WorktreeRootDir string `json:"worktreeRootDir,omitempty"`
+
 	// Cross-session awareness (workspace-specific) is always on: a short summary of
 	// this workspace's recent past chat sessions is injected into an agent's context
 	// on the session's first turn, and the list_sessions / archive_sessions /
@@ -149,6 +154,8 @@ type WSSettingsPatch struct {
 	PauseAutonomy     *bool   `json:"pauseAutonomy"`
 	DefaultAgentId    *string `json:"defaultAgentId"`
 	DefaultWorkingDir *string `json:"defaultWorkingDir"`
+	WorktreeBaseRef   *string `json:"worktreeBaseRef"`
+	WorktreeRootDir   *string `json:"worktreeRootDir"`
 
 	Theme       *string `json:"theme"`
 	Accent      *string `json:"accent"`
@@ -345,6 +352,12 @@ func (m *Manager) UpdateSettings(id string, patch WSSettingsPatch) (*Workspace, 
 	}
 	if patch.DefaultWorkingDir != nil {
 		ws.settings.cur.DefaultWorkingDir = *patch.DefaultWorkingDir
+	}
+	if patch.WorktreeBaseRef != nil {
+		ws.settings.cur.WorktreeBaseRef = *patch.WorktreeBaseRef
+	}
+	if patch.WorktreeRootDir != nil {
+		ws.settings.cur.WorktreeRootDir = *patch.WorktreeRootDir
 	}
 	if patch.Theme != nil {
 		ws.settings.cur.Theme = *patch.Theme
