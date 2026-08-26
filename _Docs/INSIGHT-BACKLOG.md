@@ -510,3 +510,211 @@ stable `insight-sig` marker so re-scans never duplicate it.
 
 <!-- insight-sig:flow_run:node_ref_not_found -->
 
+## Windows oturumunda shell aracı yanlışlıkla `/bin/bash` çalıştırıyor
+
+- **Severity:** high
+- **Occurrences:** 1
+- **Evidence sessions:** SES1110
+- **File:** `internal/tools/shell.go` ⚠️ (not found in repo — pointer unverified)
+
+**Root cause:** TionHarness, Windows çalışma alanı ve Windows biçimli Go yolu mevcut olmasına rağmen `shell` komutlarını Bash ortamına yönlendiriyor. Bu sağlayıcı/işletim sistemi uyumsuzluğu PATH üzerindeki Windows araçlarını görünmez kılıyor ve `C:\Program Files\...` yollarının Bash tarafından komut olarak yanlış ayrıştırılmasına neden oluyor.
+
+**Proposed fix:** Shell yürütücüsünde işletim sistemini algılayıp Windows için varsayılan olarak PowerShell kullanın; komut, PATH ve boşluk içeren executable yollarını seçilen shell'e uygun biçimde oluşturup alıntılayın. Bash yalnızca açıkça seçildiğinde veya doğrulanmış bir WSL ortamında kullanılmalı.
+
+<!-- insight-sig:shell:/bin/bash on Windows causes command not found for host executable -->
+
+## Windows derlemesi tanımsız syscall sabiti nedeniyle başarısız oluyor
+
+- **Severity:** high
+- **Occurrences:** 1
+- **Evidence sessions:** SES1108
+- **File:** `internal/providers/process_alive_windows.go`
+
+**Root cause:** `internal/providers/process_alive_windows.go`, Go'nun `syscall` paketinde bulunmayan `syscall.ERROR_INVALID_PARAMETER` tanımlayıcısına başvuruyor; bu nedenle TionHarness Windows hedefinde derlenemiyor.
+
+**Proposed fix:** Windows hata kodunu desteklenen `golang.org/x/sys/windows` sabitiyle kullanın veya yerel bir `syscall.Errno(87)` sabiti tanımlayın; ardından Windows hedefli derleme testi ekleyin.
+
+<!-- insight-sig:shell: go-build undefined: syscall.ERROR_INVALID_PARAMETER -->
+
+## Windows oturumundaki shell komutları yanlışlıkla Bash ile çalıştırılıyor
+
+- **Severity:** high
+- **Occurrences:** 1
+- **Evidence sessions:** SES1306
+- **File:** `internal/tools/shell.go` ⚠️ (not found in repo — pointer unverified)
+
+**Root cause:** TionHarness shell yürütücüsü, Windows çalışma ortamı ve Windows biçimli çalıştırılabilir yollarına rağmen komutları `/bin/bash` üzerinden başlatıyor. Bu sağlayıcı-kabuk uyuşmazlığı geçerli `C:\Program Files\...` yollarının ve PowerShell sözdiziminin Bash tarafından yanlış yorumlanmasına neden oluyor.
+
+**Proposed fix:** Shell yürütücüsünde işletim sistemi ve oturum kabuğunu açıkça belirleyip Windows'ta varsayılan olarak PowerShell çalıştırın; komut oluşturma ve yol alıntılama mantığını seçilen kabuğa göre uygulayın. Windows bağlamında `/bin/bash` seçilmesini engelleyen bir guardrail ve platformlar arası yürütme testleri ekleyin.
+
+<!-- insight-sig:shell:/bin/bash executes Windows command and cannot resolve Windows executable paths -->
+
+## Ertelenmiş orkestrasyon araçları şemaları yüklenmeden çağrılabilir olarak sunuluyor
+
+- **Severity:** high
+- **Occurrences:** 1
+- **Evidence sessions:** SES1269
+- **File:** `internal/tools/registry.go`
+
+**Root cause:** TionHarness araç kayıt/çağrı katmanı, deferred durumundaki araç adlarını modele açıyor ancak çağrıdan önce şema çözümlemesini tamamlamıyor. Bu nedenle akış, ajan ve görev yönetimi araçları kalıcı biçimde çağrılamıyor.
+
+**Proposed fix:** Deferred araç çağrılarını yürütmeden önce şemayı otomatik yükleyip doğrulayan bir çözümleme adımı ekleyin; şema yüklenene kadar aracı çağrılabilir araç listesine dahil etmeyin ve eşzamanlı yüklemeleri tekilleştirin.
+
+<!-- insight-sig:deferred_tool_call:tool "<tool>" is deferred and cannot be called before its schema is available -->
+
+## Deferred araçlar şeması yüklenmeden autonomous modda çağrılıyor
+
+- **Severity:** high
+- **Occurrences:** 1
+- **Evidence sessions:** SES1269
+- **File:** `internal/providers/claudecli.go or internal/agent/ (tool dispatch/autonomous runner)` ⚠️ (not found in repo — pointer unverified)
+
+**Root cause:** TionHarness autonomous ajanlar için deferred araçların şemalarını otomatik olarak ToolSearch ile yüklemeyen bir mekanizmaya sahip değildir. Ajon deferred araçları doğrudan çağırmaya çalışınca sistem çağrıyı reddediyor ama ajanı ToolSearch çağırması için yeniden yönlendiremediğinden, başarısız çağrı döngüsüne giriyor.
+
+**Proposed fix:** Autonomous agent runner, çağrılan araç deferred ise ToolSearch ile şemayı yüklemeli veya ilk deferred araç çağrısında tüm bilinen deferred araçları proaktif olarak yüklemelidir. Alternatif: deferred araç çağrı hatasını ajanın ToolSearch çağırması için uyarı veren özel bir hata tipi haline getirip ajanı durdurmayı (ask_user hatası gibi) önlemeli.
+
+<!-- insight-sig:deferred_tool_called_without_schema -->
+
+## Ertelenmiş MCP araçları şema yüklenmeden çağrılabiliyor
+
+- **Severity:** med
+- **Occurrences:** 1
+- **Evidence sessions:** SES1307
+- **File:** `internal/tools/ veya internal/api/ (araçların listelendiği ve sunulduğu yerler) ve MCP şema yükleme mantığı` ⚠️ (not found in repo — pointer unverified)
+
+**Root cause:** TionHarness, create_task ve list_tasks gibi MCP araçlarını şema yüklenmeden aracı listesinde sunmakta, bu da ajanın bunları çağırabilmesine ve başarısız olmasına izin vermektedir. Hata mesajı sorunun ne olduğunu tanımlasa da, çözüme (ToolSearch çağrısı) doğru yönlendirmemekte ve tekrarlanan çağrılara karşı koruma bulunmamaktadır.
+
+**Proposed fix:** Seçenek 1: Şeması yüklenmemiş araçları aracı listesinden hariç tutarak ToolSearch tarafından açıkça yüklendikten sonra kullanılabilir hale getirmek. Seçenek 2: Deferred araç çağrıldığında otomatik ToolSearch çağrısı yapıp şemayı yükleyerek işlemi yeniden denemek. Seçenek 3: Hata mesajını 'ToolSearch({"query": "select:create_task,list_tasks"}) ile şemayı yükleyin' şeklinde yönlendirici yaparak ajan rehberliği sağlamak.
+
+<!-- insight-sig:deferred_mcp_tool_invocable_without_schema -->
+
+## Task output tracking hardcodes Unix /tmp/ path, fails on Windows
+
+- **Severity:** med
+- **Occurrences:** 1
+- **Evidence sessions:** SES1440
+- **File:** `internal/tools/builtin_selfmanage.go` ⚠️ (not found in repo — pointer unverified)
+
+**Root cause:** Task tracking sistemi geçici dosyaları `/tmp/tskN.out` olarak hardcode ediyor. Windows'ta Git Bash ortamında bu dosyalara erişilemiyor; sed komutları başarısız oluyor (TSK261, TSK265, TSK266, TSK267, TSK99999).
+
+**Proposed fix:** Geçici dosya yolları dinamik olarak belirlenmelidir. Go kodunda `os.TempDir()` kullanılmalı veya shell betiklerinde platform-agnostic yöntem (`$(mktemp)` vb.) uygulanmalıdır.
+
+<!-- insight-sig:task_tracking_unix_temp_windows_failure -->
+
+## MCP araç adı öneki çiftleme hatası
+
+- **Severity:** med
+- **Occurrences:** 1
+- **Evidence sessions:** SES1410
+- **File:** `internal/providers/mcp.go ya da tool resolution middleware` ⚠️ (not found in repo — pointer unverified)
+
+**Root cause:** MCP araç adını çözerken `mcp__tionharness_interaction__` ön eki iki kez uygulanıyor. Kullanıcı `mcp__tionharness_interaction__list_workers` istediğinde araç çözümleyicisi `mcp__tionharness_interaction__mcp__tionharness_interaction__list_workers` biçiminde arar ve bulamaz.
+
+**Proposed fix:** MCP araç adı çözümleme kodunda ön ek yapıştırmasını kontrol et. Araç adının zaten MCP ön ekini içerip içermediğini kontrol ederek veya ön eki yalnız bir kez ekleyerek çiftlemeyi engelle.
+
+<!-- insight-sig:mcp_tool_name_prefix_duplication -->
+
+## System agent fallback model selection returns wrong model
+
+- **Severity:** med
+- **Occurrences:** 1
+- **Evidence sessions:** SES1411
+- **File:** `internal/agent/scheduler.go`
+
+**Root cause:** Compactor system agent's embedded fallback model logic selects 'session-model' instead of the expected 'haiku' model when the system agent provider is incompatible
+
+**Proposed fix:** Verify the fallback model resolution logic in the compactor system agent coordinator (internal/agent/scheduler.go or related system agent handler). Ensure that when a provider is incompatible, the fallback correctly routes to 'haiku' rather than 'session-model'.
+
+<!-- insight-sig:systemagent_fallback_model_mismatch:compactor_haiku -->
+
+## Lesson extractor system agent fallback prompt/model incorrect
+
+- **Severity:** med
+- **Occurrences:** 1
+- **Evidence sessions:** SES1411
+- **File:** `internal/agent/lessons_systemagent.go`
+
+**Root cause:** The lesson extraction system agent's disabled-provider fallback is not returning the expected prompt or model type, likely due to incorrect fallback configuration in the system agent coordinator
+
+**Proposed fix:** Review the fallback prompt and model selection in the lesson extractor system agent handler (internal/agent/ or internal/tools/). Ensure that when the production provider is unavailable, the fallback prompt and model are correctly configured and selected.
+
+<!-- insight-sig:systemagent_fallback_logic_mismatch:lessonextractor_prompt_model -->
+
+## MCP codebase-memory index operations fail with concurrency conflict
+
+- **Severity:** med
+- **Occurrences:** 1
+- **Evidence sessions:** SES1411
+- **File:** `internal/agent/agent.go` ⚠️ (not found in repo — pointer unverified)
+
+**Root cause:** Agent dispatch may be spawning multiple concurrent `index_repository` calls for the same project without serialization, causing the MCP server to reject subsequent calls with 'another index operation for this project is active with different options'
+
+**Proposed fix:** Add serialization or queueing logic in the MCP tool orchestration layer (likely in agent.go or tool call coordinator) to ensure index_repository operations for the same project are not executed concurrently. Either queue them or use a per-project lock.
+
+<!-- insight-sig:mcp_codebase_memory_concurrent_index_conflict -->
+
+## ask_user interactive olmayan oturum (autonomous run) içinde çağrılamıyor
+
+- **Severity:** med
+- **Occurrences:** 1
+- **Evidence sessions:** SES1269
+- **File:** `internal/providers/ or internal/agent/ (tool handler for ask_user in autonomous mode)` ⚠️ (not found in repo — pointer unverified)
+
+**Root cause:** Ajan autonomous modda ask_user çağrısı yaptığında sistem 'no interactive session is available' hatası veriyor ve ajanı durduruyor. Bu, deferred araçların yüklenme hatası sırasında yaşananlar gibi, autonomous ajanların karar vermesi gereken noktalarda ajanı kilitliyor.
+
+**Proposed fix:** ask_user autonomous modda çağrıldığında sistem "siz karar verin, devam edin" (proceed on your own) mesajını göstermek yerine, bu mesajı ajan prompt'una koymalı ve ajanın kendi başına karar vermesine izin vermelidir. Şimdiki davranış ajanı stopla, daha iyisi: ajanı kendiliğinden ileriye yönlendir.
+
+<!-- insight-sig:ask_user_autonomous_no_fallback -->
+
+## Proje zorunluluğuna karşın PowerShell'de bash sözdizimi komut başarısızlığı
+
+- **Severity:** med
+- **Occurrences:** 1
+- **Evidence sessions:** SES1412
+- **File:** `internal/providers/ (shell komut yönlendirme sistemi veya CLAUDE.md okuma mantığı)` ⚠️ (not found in repo — pointer unverified)
+
+**Root cause:** Proje CLAUDE.md dosyasında 'Terminal: zorunlu Git Bash' belirtilmesine rağmen, TionHarness bash sözdizimi kullanan komutları (&&, ||, vs.) PowerShell 5.1 ortamında yürütmüştür. PowerShell 5.1 bu operatörleri deyim ayırıcısı olarak tanımadığından komut 'The token && is not a valid statement separator' hatası ile başarısız olmuştur.
+
+**Proposed fix:** TionHarness, proje kökünde CLAUDE.md'deki 'Terminal: zorunlu Git Bash' gereksinimini okumalı ve shell komutlarını Git Bash ortamına yönlendirmelidir. Alternatif olarak, bash sözdizimi kullanan komutları otomatik olarak Bash tool'una yönlendirmeli veya PowerShell'de çalıştırılmaktan önce sözdizimini dönüştürmelidir.
+
+<!-- insight-sig:shell_bash_syntax_in_powershell_5_1 -->
+
+## Sistem ajanı kullanım çağrı türü yanlış biçimlendirildi
+
+- **Severity:** med
+- **Occurrences:** 1
+- **Evidence sessions:** SES1382
+- **File:** `internal/db/store_usage.go veya callkind_usage_test.go komşusu` ⚠️ (not found in repo — pointer unverified)
+
+**Root cause:** usageCallKind() işlevi sistem ajanlarının anahtarlarını system:<provider>:<title> yerine sadece <title> veya system:fixed:<title> olarak oluşturuyor; sistem ajanı sağlayıcısı türü kayıt sırasında kaybolıyor veya yanlış sabitleniyor
+
+**Proposed fix:** usageCallKind() işlevini inceleyip düzelt: sistem ajanı çağrılarında sağlayıcı ve başlık doğru şekilde ayrıştırılmalı, system:<provider>:<title> biçimi tutarlı şekilde üretilmeli; test başarıyla 'system:titler:title' formatını doğrulaması sağlanmalı
+
+<!-- insight-sig:usageCallKind/system-agent-key-format-mismatch -->
+
+## Üretilen kabuk betikleri geçersiz exit deyimi içeriyor
+
+- **Severity:** med
+- **Occurrences:** 1
+- **Evidence sessions:** SES1382
+- **File:** `internal/providers/claudecli.go veya internal/tools/builtin_spawn.go` ⚠️ (not found in repo — pointer unverified)
+
+**Root cause:** Kabuk komutu oluşturma kodu, exit komutuna boş veya eksik sayısal argüman ile betikler oluşturuyor (örneğin 'exit' sonra hiçbir şey yerine 'exit 0'); bash bunu 'numeric argument required' hatasıyla reddediyor
+
+**Proposed fix:** Exit komut oluşturma kodunu tüm kabuk betiği oluşturucularında doğrula: exit'in ardından her zaman sayısal bir çıkış kodu (0, 1 vb.) sağlanmalı; boş argüman üretimini önlemek için kabuk oluşturma koduna doğrulama ekle
+
+<!-- insight-sig:shell-generation/exit-empty-argument -->
+
+## Windows'ta geçici dizin temizliği unlinkat hatasıyla başarısız oluyor
+
+- **Severity:** low
+- **Occurrences:** 1
+- **Evidence sessions:** SES1382
+- **File:** `internal/api/spawn.go ve ilgili test dosyaları` ⚠️ (not found in repo — pointer unverified)
+
+**Root cause:** TestSpawnWorkerInheritsCoordinatorCwd'de spawn/worker başlatma sırasında oluşturulan geçici dosyalar veya dizinler, test temizliği bunları silmeye çalışmadan önce düzgün şekilde kapatılmıyor veya serbest bırakılmıyor; Windows'ta dosyalar hala kullanımda olduğundan unlinkat başarısız oluyor
+
+**Proposed fix:** Spawn/worker başlatma kodunda test temizliğinde tüm dosya tutamaçlarının düzgün şekilde kapatıldığından emin ol; test bırakma sırası geçici dizinlerde RemoveAll çağrılmadan önce tüm kaynakları kapatmalı; özellikle Windows'ta dosya kilidi sorunlarına karşı kontrol et
+
+<!-- insight-sig:windows-cleanup/spawn-test-tempdir-locked -->
+
