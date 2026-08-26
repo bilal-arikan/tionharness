@@ -131,11 +131,13 @@ sayısı + `lastError`, compaction/recovery sayıları.
 - `?summary=1` (varsayılan) → `{ summary: DebugSummary }`
 - `?summary=0&type=tool&limit=200` → `{ events: []DebugEvent }`
 
-### 3) UI — Debug modalı (chat header "Debug" butonu)
+### 3) UI — Debug modalı ("Oturum bilgisi" panelindeki "Debug" butonu)
 
 `frontend/src/features/sessions/SessionDebugCard.tsx` (ayrı, self-contained
-bileşen). **2026-07-08'den beri "Oturum bilgisi" panelinde DEĞİL** — chat
-header'daki "Debug" butonuyla açılan ayrı `SessionDebugModal` içinde
+bileşen). İçerik hâlâ panele gömülü değil: **2026-08-25'ten beri** "Oturum
+bilgisi" panelinin en altındaki **Araçlar** blokunda yer alan
+"Debug / gözlemlenebilirlik" butonuyla (önceden chat header'daki "Debug"
+butonu) açılan ayrı `SessionDebugModal` içinde
 `SessionDebugCard alwaysOpen` olarak render edilir. Metrik
 ızgarası + sağlık rozetleri (hata/compaction/recovery/süre) + en yavaş araçlar +
 modele göre token + tembel yüklenen **ham olay** log'u (tip filtreli).

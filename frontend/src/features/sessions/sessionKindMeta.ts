@@ -85,6 +85,25 @@ export function normalizeChipsOff(raw: string | null | undefined): string[] {
   return parsed.filter((k): k is string => typeof k === 'string' && ALL_SESSION_CHIPS.includes(k))
 }
 
+// Modifier held while clicking a chip. 'toggle' is the plain click (flip just
+// this chip), 'solo' (Ctrl) leaves only the clicked chip on, 'invert' (Shift)
+// flips every OTHER chip and leaves the clicked one as it was.
+export type ChipClickMode = 'toggle' | 'solo' | 'invert'
+
+// nextChipsOff computes the new unticked-chip list for a click. Pure so the
+// modifier semantics can be tested without a DOM.
+export function nextChipsOff(chipsOff: string[], key: string, mode: ChipClickMode): string[] {
+  const off = new Set(chipsOff)
+  switch (mode) {
+    case 'solo':
+      return ALL_SESSION_CHIPS.filter((k) => k !== key)
+    case 'invert':
+      return ALL_SESSION_CHIPS.filter((k) => (k === key ? off.has(k) : !off.has(k)))
+    default:
+      return off.has(key) ? chipsOff.filter((k) => k !== key) : [...chipsOff, key]
+  }
+}
+
 // kindChipKey maps a Session.Kind to the chip that owns it. Every kind lands on
 // a chip: an unrecognised one falls to the "Diğer" catch-all rather than
 // becoming unfilterable.

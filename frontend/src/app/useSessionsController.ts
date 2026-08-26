@@ -16,6 +16,7 @@ import { SIGNAL_AGENTS } from './eventToRefreshSignals'
 import { draftSessionIds, readSessionDraftState } from '@/shared/lib/sessionDrafts'
 import { shouldDiscardFreshSession } from './freshSessionCleanup'
 import { pickInitialSession } from './pickInitialSession'
+import { saveDefaultAgent } from './defaultAgentSave'
 
 // Sidebar list page size (TSK68 load-more): the session list is fetched one
 // page at a time and appended via loadMoreSessions. Kept under the backend's
@@ -81,6 +82,15 @@ export function useSessionsController({
   // on the backend so switching workspaces does not silently overwrite another
   // workspace's choice. Unmentioned turns in a session use the session's own agent.
   const [defaultAgentId, setDefaultAgentId] = useState<string | null>(null)
+  const defaultAgentIdRef = useRef<string | null>(null)
+  const defaultAgentSaveInFlightRef = useRef(false)
+  const [defaultAgentSaveState, setDefaultAgentSaveState] = useState<'idle' | 'saving' | 'saved'>(
+    'idle',
+  )
+  const setCurrentDefaultAgent = useCallback((id: string | null) => {
+    defaultAgentIdRef.current = id
+    setDefaultAgentId(id)
+  }, [])
   // Whether this workspace's settings were actually READ. False both before the
   // fetch lands and when it fails, and it gates the self-heal write below.
   const [wsSettingsLoaded, setWsSettingsLoaded] = useState(false)
@@ -118,7 +128,8 @@ export function useSessionsController({
     setActiveSessionId(null)
     // The default agent is per-workspace, so the outgoing workspace's pick must
     // not linger while the new one's settings are in flight.
-    setDefaultAgentId(null)
+    setCurrentDefaultAgent(null)
+    setDefaultAgentSaveState('idle')
     setWsSettingsLoaded(false)
     setBootstrapping(true)
     let cancelled = false
@@ -144,7 +155,7 @@ export function useSessionsController({
         // user's real pick with agents[0] — turning a transient read error into a
         // permanent write.
         if (ws?.defaultAgentId && ag.some((a) => a.id === ws.defaultAgentId)) {
-          setDefaultAgentId(ws.defaultAgentId)
+          setCurrentDefaultAgent(ws.defaultAgentId)
         }
         setWsSettingsLoaded(ws !== null)
         // Default selection: the most recent WRITABLE session. The sidebar now
@@ -177,7 +188,7 @@ export function useSessionsController({
     return () => {
       cancelled = true
     }
-  }, [activeWorkspaceId, setError])
+  }, [activeWorkspaceId, setCurrentDefaultAgent, setError])
 
   // Agent CRUD events refresh only the roster. Re-running the workspace bootstrap
   // would unnecessarily clear the active session and transcript.
@@ -199,6 +210,25 @@ export function useSessionsController({
     [allAgents, defaultAgentId],
   )
 
+  const persistDefaultAgent = useCallback(
+    async (id: string) => {
+      if (defaultAgentSaveInFlightRef.current || defaultAgentIdRef.current === id) return
+      const previousId = defaultAgentIdRef.current
+      defaultAgentSaveInFlightRef.current = true
+      setDefaultAgentSaveState('saving')
+      const saved = await saveDefaultAgent({
+        nextId: id,
+        previousId,
+        setCurrent: setCurrentDefaultAgent,
+        persist: (nextId) => api.updateWorkspaceSettings({ defaultAgentId: nextId }),
+        reportError: setError,
+      })
+      defaultAgentSaveInFlightRef.current = false
+      setDefaultAgentSaveState(saved ? 'saved' : 'idle')
+    },
+    [setCurrentDefaultAgent, setError],
+  )
+
   // Keep the default agent (for new sessions) valid. When the stored default is
   // absent or deleted from this workspace, self-heal to the first live agent and
   // persist the correction to the backend. A DELETED agent is left in place so the
@@ -208,10 +238,9 @@ export function useSessionsController({
     if (!wsSettingsLoaded || agents.length === 0 || defaultAgentDeleted) return
     if (!defaultAgentId || !agents.some((a) => a.id === defaultAgentId)) {
       const fallback = agents[0].id
-      setDefaultAgentId(fallback)
-      api.updateWorkspaceSettings({ defaultAgentId: fallback }).catch(() => {})
+      void persistDefaultAgent(fallback)
     }
-  }, [agents, defaultAgentId, defaultAgentDeleted, wsSettingsLoaded])
+  }, [agents, defaultAgentId, defaultAgentDeleted, persistDefaultAgent, wsSettingsLoaded])
 
   // Bumped on every transcript load so only the newest one is allowed to commit:
   // a fast A → B → A switch would otherwise let B's late response overwrite A's
@@ -511,10 +540,7 @@ export function useSessionsController({
   // Pick the default agent for NEW sessions (from the roster). Persists to
   // the backend per-workspace so it survives reloads and never leaks across
   // workspaces. The local state updates immediately for instant UI feedback.
-  const pickDefaultAgent = useCallback((id: string) => {
-    setDefaultAgentId(id)
-    api.updateWorkspaceSettings({ defaultAgentId: id }).catch(() => {})
-  }, [])
+  const pickDefaultAgent = persistDefaultAgent
 
   // Roster click: set it as the default agent (for new chats) and as the active
   // agent (so the Tools panel, which is agent-scoped, follows along).
@@ -696,6 +722,7 @@ export function useSessionsController({
     activeSessionWritable,
     sessionArtifacts,
     defaultAgentId,
+    defaultAgentSaveState,
     defaultAgentDeleted,
     composerKey,
     setComposerKey,

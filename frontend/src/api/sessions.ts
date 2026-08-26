@@ -88,13 +88,16 @@ export const sessionApi = {
       body: JSON.stringify({ agentId, title }),
     }),
   // Spawn a new independent session and run the agent's turn in the background
-  // (fire-and-forget). Returns the new session id, which surfaces live in the
-  // executions feed. modelOverride swaps only the model (provider unchanged).
+  // (fire-and-forget). Capacity may queue it before a session id exists.
+  // modelOverride swaps only the model (provider unchanged).
   spawnSession: (agentId: string, prompt: string, modelOverride = '') =>
-    req<{ sessionId: string; agentName: string }>('/api/sessions/spawn', {
-      method: 'POST',
-      body: JSON.stringify({ agentId, prompt, modelOverride }),
-    }),
+    req<{ sessionId: string; agentName: string; queued: boolean; queuePosition?: number }>(
+      '/api/sessions/spawn',
+      {
+        method: 'POST',
+        body: JSON.stringify({ agentId, prompt, modelOverride }),
+      },
+    ),
   listMessages: (sessionId: string) => req<Message[]>(`/api/sessions/${sessionId}/messages`),
   // One turn's activity trace, UNTRIMMED. listMessages ships tool payloads cut
   // to a server-side cap (marked with the step's `*Truncated` flags) so opening

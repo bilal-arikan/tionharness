@@ -2,7 +2,7 @@
 // in-pane header (see HEADERLESS_VIEWS). On chat it shows the session title and
 // the folder/context/debug/detail shortcuts; on workspace/settings it hosts the
 // mobile category-rail toggle.
-import { Bug, Menu, Network, PanelRight, ScanEye, Workflow } from 'lucide-react'
+import { Menu, Network, PanelRight, ScanEye, Workflow } from 'lucide-react'
 import { api } from '@/api'
 import type { Agent, Session } from '@/types'
 import { CopyPathButton } from '@/shared/components/CopyPathButton'
@@ -22,7 +22,6 @@ export interface AppHeaderProps {
   onToggleNav: () => void
   onOpenContextPreview: () => void
   onOpenCoord: () => void
-  onOpenDebug: () => void
   onOpenSessionFlow: () => void
   sessionFlowActive: boolean
   onToggleDetail: () => void
@@ -41,7 +40,6 @@ export function AppHeader({
   onToggleNav,
   onOpenContextPreview,
   onOpenCoord,
-  onOpenDebug,
   onOpenSessionFlow,
   sessionFlowActive,
   onToggleDetail,
@@ -114,15 +112,8 @@ export function AppHeader({
               <ScanEye size={15} className="shrink-0" />
               <span className="hidden sm:inline">Bağlam</span>
             </button>
-            {/* Debug / observability panel (moved out of the detail inspector). */}
-            <button
-              onClick={onOpenDebug}
-              title="Debug / gözlemlenebilirlik panelini aç"
-              className="flex items-center gap-1.5 rounded-lg border border-[var(--color-border)] px-2.5 py-1 text-xs text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)]"
-            >
-              <Bug size={15} className="shrink-0" />
-              <span className="hidden sm:inline">Debug</span>
-            </button>
+            {/* Debug / observability lives in the "Oturum bilgisi" detail panel's
+                action list (SessionDetailPanel), not in this header. */}
             {/* Toggle this session's transcript as an inline, completed flow run. */}
             <button
               onClick={onOpenSessionFlow}

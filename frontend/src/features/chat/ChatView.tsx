@@ -235,15 +235,6 @@ export function ChatView({
           ref={bottomStackRef}
           className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex flex-col gap-1 px-4 pb-2 [&>*]:pointer-events-auto"
         >
-          {/* The read-only notice sits at the TOP of the stack (above every status
-              panel) so it always reads as the header for this run log, rather than
-              getting pushed off-screen under a tall todo/ask panel. */}
-          <div className="flex justify-center">
-            <div className="rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-1.5 text-xs text-[var(--color-text-dim)] shadow-[var(--shadow-sm)]">
-              Bu oturum salt-okunurdur (görev / akış / zamanlama günlüğü). Hatayla biten turlar hata
-              kartındaki “Yeniden dene” ile sürdürülebilir.
-            </div>
-          </div>
           {/* Prompt-cache warmth also matters in a read-only log: a worker parked
               on an ask/permission (below) is answered as a suspend-point resolve,
               and that reply reads the still-warm prefix — so the countdown is

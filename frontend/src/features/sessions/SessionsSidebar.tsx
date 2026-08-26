@@ -1,5 +1,5 @@
 import { resolveAgent } from '@/shared/lib/agentLookup'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react'
 import {
   Sparkles,
   Trash2,
@@ -27,7 +27,9 @@ import {
   ALL_SESSION_CHIPS,
   ARCHIVED_CHIP,
   kindMeta,
+  nextChipsOff,
   normalizeChipsOff,
+  type ChipClickMode,
   SESSION_CHIPS,
   SESSION_CHIPS_OFF_KEY,
   sessionMatchesChips,
@@ -36,6 +38,7 @@ import {
 import { RunStateBadge, StatusPill } from './sessionKindBadges'
 import type { ExecutionRuntime } from '@/app/useExecutionRuntime'
 import { isWorkerSession } from '@/shared/lib/coordination'
+import { shouldShowSessionsLoadMore } from './sessionsLoadMore'
 
 interface Props {
   sessions: Session[]
@@ -111,8 +114,12 @@ export function SessionsSidebar({
     () => new Set(ALL_SESSION_CHIPS.filter((k) => !chipsOff.includes(k))),
     [chipsOff],
   )
-  const toggleChip = (key: string) =>
-    setChipsOff((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]))
+  // Plain click toggles one chip; Ctrl/Cmd-click solos it (everything else off),
+  // Shift-click inverts every other chip.
+  const clickChip = (key: string, e: ReactMouseEvent) => {
+    const mode: ChipClickMode = e.ctrlKey || e.metaKey ? 'solo' : e.shiftKey ? 'invert' : 'toggle'
+    setChipsOff((prev) => nextChipsOff(prev, key, mode))
+  }
   const [query, setQuery] = useState('')
   // Cross-session message-content search (CG-16). The same box filters session
   // titles locally AND, when the query is long enough, full-text searches every
@@ -341,7 +348,8 @@ export function SessionsSidebar({
           return (
             <button
               key={f.key}
-              onClick={() => toggleChip(f.key)}
+              onClick={(e) => clickChip(f.key, e)}
+              title={`${f.label} — Ctrl: yalnız bunu seç, Shift: diğerlerini tersle`}
               aria-pressed={on}
               data-chip={f.key}
               className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] transition ${
@@ -532,11 +540,13 @@ export function SessionsSidebar({
         {/* TSK68 load-more: the list is paged; append the next page instead of
             fetching every session up front. Hidden while searching (message hits
             are their own section) or when the full list is already loaded. */}
-        {!loading &&
-          hasMoreSessions &&
-          onLoadMore &&
-          query.trim().length < 2 &&
-          groups.length > 0 && (
+        {shouldShowSessionsLoadMore({
+          loading,
+          hasMoreSessions: hasMoreSessions ?? false,
+          canLoadMore: Boolean(onLoadMore),
+          query,
+        }) &&
+          onLoadMore && (
             <button
               onClick={onLoadMore}
               data-testid="sessions-load-more"
