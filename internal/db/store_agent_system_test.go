@@ -55,19 +55,62 @@ func TestEnsureSystemAgentsBackfillsMissingDefinition(t *testing.T) {
 	}
 	defs := []SystemAgentDefinition{
 		{SystemKey: "titler", Name: "Titler", SystemPrompt: "title prompt"},
-		{SystemKey: "compactor", Name: "Compactor", SystemPrompt: "summary prompt"},
+		{SystemKey: "compaction", Name: "Compactor", SystemPrompt: "compact prompt"},
 	}
 	if err := d.EnsureSystemAgents(ctx, defs[0]); err != nil {
 		t.Fatal(err)
 	}
-	if _, ok := d.FindAgentBySystemKey("compactor"); ok {
-		t.Fatal("compactor unexpectedly present before backfill")
+	if _, ok := d.FindAgentBySystemKey("compaction"); ok {
+		t.Fatal("compaction unexpectedly present before backfill")
 	}
 	if err := d.EnsureSystemAgents(ctx, defs...); err != nil {
 		t.Fatal(err)
 	}
-	if _, ok := d.FindAgentBySystemKey("compactor"); !ok {
-		t.Fatal("missing compactor was not backfilled")
+	if _, ok := d.FindAgentBySystemKey("compaction"); !ok {
+		t.Fatal("missing compaction agent was not backfilled")
+	}
+}
+
+func TestEnsureSystemAgentsMigratesCustomizedCompactorInPlace(t *testing.T) {
+	ctx := context.Background()
+	d, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacy, err := d.CreateAgent(ctx, Agent{
+		Name: "Customized Legacy Name", Soul: "custom overview prompt", Model: "custom-model",
+		System: true, SystemKey: "compactor", Disabled: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defs := []SystemAgentDefinition{
+		{SystemKey: "overview-summarizer", Name: "Overview Summarizer", SystemPrompt: "default overview", SuggestedModel: "haiku"},
+		{SystemKey: "compaction", Name: "Compactor", SystemPrompt: "default compact", SuggestedModel: "haiku"},
+	}
+
+	if err := d.EnsureSystemAgents(ctx, defs...); err != nil {
+		t.Fatal(err)
+	}
+	migrated, ok := d.FindAgentBySystemKey("overview-summarizer")
+	if !ok {
+		t.Fatal("overview-summarizer missing after migration")
+	}
+	if migrated.ID != legacy.ID {
+		t.Fatalf("migrated ID = %q, want preserved %q", migrated.ID, legacy.ID)
+	}
+	if migrated.Name != legacy.Name || migrated.Soul != legacy.Soul || migrated.Model != legacy.Model || migrated.Disabled != legacy.Disabled {
+		t.Fatalf("customized fields changed during migration: got %+v, want %+v", *migrated, legacy)
+	}
+	if _, ok := d.FindAgentBySystemKey("compactor"); ok {
+		t.Fatal("legacy compactor key remains after migration")
+	}
+	agents, err := d.ListAgents(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(agents) != 2 {
+		t.Fatalf("agent count = %d, want 2 without duplicate overview row", len(agents))
 	}
 }
 

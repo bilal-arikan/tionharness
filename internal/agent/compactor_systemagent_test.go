@@ -59,7 +59,7 @@ func TestResolveCompactorConfigDefaultPathUnchanged(t *testing.T) {
 func TestResolveCompactorConfigUsesEnabledWorkspaceAgent(t *testing.T) {
 	rt := newSystemAgentResolveRuntime(t)
 	if _, err := rt.db.CreateAgent(context.Background(), db.Agent{
-		Name: "Custom Compactor", System: true, SystemKey: "compactor",
+		Name: "Custom Overview Summarizer", System: true, SystemKey: "overview-summarizer",
 		Soul: "custom summary prompt", Model: "custom-summary-model",
 	}); err != nil {
 		t.Fatalf("create system agent: %v", err)
@@ -88,7 +88,7 @@ func TestSummarizeDisabledCompactorRunsEmbeddedFallback(t *testing.T) {
 		t.Fatalf("create calling agent: %v", err)
 	}
 	if _, err := rt.db.CreateAgent(context.Background(), db.Agent{
-		Name: "Disabled Compactor", System: true, SystemKey: "compactor",
+		Name: "Disabled Overview Summarizer", System: true, SystemKey: "overview-summarizer",
 		Soul: "disabled summary prompt", Model: "disabled-summary-model", Disabled: true,
 	}); err != nil {
 		t.Fatalf("create system agent: %v", err)
@@ -122,7 +122,7 @@ func TestSummarizeCompactorResolveErrorRunsEmbeddedFallback(t *testing.T) {
 	originalDefaults := systemAgentDefaults
 	withoutCompactor := make([]SystemAgentDefinition, 0, len(originalDefaults)-1)
 	for _, def := range originalDefaults {
-		if def.SystemKey != "compactor" {
+		if def.SystemKey != "overview-summarizer" {
 			withoutCompactor = append(withoutCompactor, def)
 		}
 	}

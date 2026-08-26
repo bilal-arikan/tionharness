@@ -16,15 +16,17 @@ Derlenmiş kayıt defteri dört rol tanımlar:
 | `SystemKey` | Varsayılan durum | Prompt anahtarı | Görev |
 |---|---|---|---|
 | `titler` | Etkin | `title` | İstek ve konuşmalar için kısa başlık üretir (`internal/agent/systemagents.go:13-18`, `internal/agent/titler.go:83-95`). |
-| `compactor` | Etkin | `summary` | Yapılandırılmış workspace verisini özetler (`internal/agent/systemagents.go:21-26`, `internal/agent/summarizer.go:65-80`). |
+| `overview-summarizer` | Etkin | `summary` | İstek üzerine board ve flow genel bakışlarını özetler (`internal/agent/systemagents.go`, `internal/agent/summarizer.go`). |
+| `compaction` | Etkin | `compact` | Bağlam sınırında konuşma geçmişini yapılandırılmış özete sıkıştırır (`internal/agent/systemagents.go`, `internal/agent/wsconfig.go`). |
 | `lesson-extractor` | Etkin | `lesson` | Başarısız ajan turlarından yeniden kullanılabilir dersler çıkarır (`internal/agent/systemagents.go:29-34`, `internal/agent/lessons_systemagent.go:5-7`). |
 | `insight` | **Devre dışı** | `insight-analyzer` | Oturum kanıtlarında tekrarlanan, eyleme dönük bulguları analiz eder (`internal/agent/systemagents.go:37-43`, `internal/agent/lessons_systemagent.go:9-10`). |
 
 Kayıt defteri promptları `prompts.Default(<anahtar>)` ile alır. Rol çözümlemesi
 başarısız olduğunda kullanılan `readPrompt(<anahtar>)` aynı anahtara gider; böylece
 özelleştirme yokken yerleşik ve eski gömülü davranış aynı promptu kullanır. Örneğin
-compactor için iki yol da `summary` anahtarındadır
-(`internal/agent/systemagents.go:21-24`, `internal/agent/summarizer.go:65-80`).
+`overview-summarizer` için iki yol da `summary` anahtarındadır. `compaction` ajanının
+özelleştirilmiş promptu `{{summary}}` ve `{{messages}}` yer tutucularını korumazsa
+çalışma zamanı doğrulaması promptu güvenli `compact` varsayılanına düşürür.
 
 ## Çözümleme ve koşulsuz fallback
 
@@ -40,7 +42,7 @@ Frontend bunu devre dışı sistem ajanında **“yerleşik tanım etkin”** ro
 Bilinmeyen bir `SystemKey` sessizce kabul edilmez; kayıt defterinde karşılığı yoksa
 `unknown system agent key` hatası döner (`internal/agent/systemagent_resolve.go:16-19`).
 
-Çağrı yerleri (`titler`, `compactor`, `lesson-extractor`, `insight`) önce bu
+Çağrı yerleri (`titler`, `overview-summarizer`, `compaction`, `lesson-extractor`, `insight`) önce bu
 çözümleyiciyi kullanır. Çözümleyici hata döndürürse her çağrı yeri kendi eski gömülü
 prompt/model davranışına geri döner; registry ve gömülü yollar aynı merkezi prompt
 anahtarlarını kullandığı için varsayılan prompt içeriği değişmez
@@ -92,12 +94,13 @@ ajanında **yerleşik tanım etkin** rozeti görünür
 
 ## Workspace seed
 
-Workspace manager'ın ortak `open()` yolu dört derlenmiş tanımı `EnsureSystemAgents`
+Workspace manager'ın ortak `open()` yolu beş derlenmiş tanımı `EnsureSystemAgents`
 ile seed eder (`internal/workspace/manager.go:263-293`). Aynı yol yeni workspace
 oluşturulurken ve kayıtlı workspace'ler boot sırasında açılırken çalıştığından eski
 workspace'ler de açılışta backfill edilir (`internal/workspace/manager.go:523-537`).
-Seed idempotenttir: aynı `SystemKey` için canlı kayıt varsa alanlarına dokunmaz, yalnız
-eksik kaydı oluşturur. Böylece yeniden açılış kullanıcı özelleştirmelerini ezmez;
+Seed idempotenttir. Eski `compactor` kaydı `overview-summarizer` anahtarına aynı ID ile
+yerinde taşınır; soul, model ve disabled dahil kullanıcı özelleştirmeleri korunur.
+Aynı `SystemKey` için canlı kayıt varsa alanlarına dokunulmaz, yalnız eksik kayıt oluşturulur;
 yeni kayda `System`, `SystemKey` ve varsayılan `Disabled` değeri dahil tüm tanım yazılır
 (`internal/db/store_agent_system.go:38-58`).
 
@@ -117,8 +120,8 @@ değeridir (`internal/agent/systemsession.go:10-21`).
 
 Sistem ajanı çağrıları usage sınırında
 `system:<SystemKey>:<call-kind>` bileşik kind'ına çevrilir. Örneğin titler'ın başlık
-çağrısı `system:titler:title`, compactor'ın sıkıştırma çağrısı
-`system:compactor:summary` olarak kaydedilir (`internal/agent/callkind.go:114-126`,
+çağrısı `system:titler:title`, genel bakış özeti
+`system:overview-summarizer:summary` olarak kaydedilir (`internal/agent/callkind.go:114-126`,
 `internal/db/store_usage.go:46-60`). Tek bileşik değer hem aktörü hem yapılan işi
 korur; ayrı kind kayıtları üretmediği için `ByKind` toplamlarını çift saymaz. Boş veya
 `:` içeren bir `SystemKey` hata verir; registry'de olmayan anahtar provider çağrısından

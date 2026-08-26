@@ -285,9 +285,8 @@ func (m *Manager) open(meta Meta) error {
 	if err != nil {
 		return err
 	}
-	// Seed the small core system-agent set for new workspaces and backfill older
-	// workspaces when opened. EnsureSystemAgents is idempotent and never replaces
-	// user-customised fields on an existing system agent.
+	// Seed the small core system-agent set for new workspaces, migrate renamed
+	// roles, and backfill older workspaces. Existing customisations are preserved.
 	if err := database.EnsureSystemAgents(context.Background(), agent.SystemAgentDefaults()...); err != nil {
 		return fmt.Errorf("seed system agents: %w", err)
 	}

@@ -41,10 +41,10 @@ func TestCreateSeedsCoreSystemAgents(t *testing.T) {
 	if err != nil {
 		t.Fatalf("list agents: %v", err)
 	}
-	if len(agents) != 4 {
-		t.Fatalf("agent count = %d, want 4", len(agents))
+	if len(agents) != 5 {
+		t.Fatalf("agent count = %d, want 5", len(agents))
 	}
-	for _, key := range []string{"titler", "compactor", "lesson-extractor", "insight"} {
+	for _, key := range []string{"titler", "overview-summarizer", "compaction", "lesson-extractor", "insight"} {
 		seeded, ok := wsp.DB.FindAgentBySystemKey(key)
 		if !ok {
 			t.Errorf("system agent %q not seeded", key)

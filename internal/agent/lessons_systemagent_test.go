@@ -185,7 +185,7 @@ func TestSystemAgentProductionCallsRecordSystemKeyUsageKinds(t *testing.T) {
 	}
 	for _, kind := range []string{
 		"system:titler:title",
-		"system:compactor:summary",
+		"system:overview-summarizer:summary",
 		"system:lesson-extractor:reflect",
 		"system:insight:reflect",
 	} {

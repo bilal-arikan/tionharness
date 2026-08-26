@@ -38,6 +38,13 @@ func (d *DB) FindAgentBySystemKey(key string) (*Agent, bool) {
 // EnsureSystemAgents creates missing built-in agents and leaves existing rows
 // untouched so user customisations survive repeated seeding.
 func (d *DB) EnsureSystemAgents(ctx context.Context, defs ...SystemAgentDefinition) error {
+	if legacy, ok := d.FindAgentBySystemKey("compactor"); ok {
+		if _, err := d.mutateAgentLocked(legacy.ID, func(a *Agent) {
+			a.SystemKey = "overview-summarizer"
+		}); err != nil {
+			return err
+		}
+	}
 	for _, def := range defs {
 		if _, ok := d.FindAgentBySystemKey(def.SystemKey); ok {
 			continue

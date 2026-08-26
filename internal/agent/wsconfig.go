@@ -40,7 +40,16 @@ func PromptDefault(key string) string { return prompts.Default(key) }
 // so the shared Manager honors the workspace's edit. Exported (vs readPrompt) so
 // the api package can reach it without the local `agent` variable shadowing the
 // package name at those call sites.
-func (r *Runtime) CompactPromptTemplate() string { return r.readPrompt("compact") }
+func (r *Runtime) CompactPromptTemplate() string {
+	compactor, _, err := r.ResolveSystemAgent("compaction")
+	if err != nil {
+		return r.readPrompt("compact")
+	}
+	if prompts.Validate("compact", compactor.Soul) != nil {
+		return prompts.Default("compact")
+	}
+	return compactor.Soul
+}
 
 // WorkspaceConfigDir returns the config directory for a workspace data dir.
 func WorkspaceConfigDir(wsDir string) string { return filepath.Join(wsDir, "config") }

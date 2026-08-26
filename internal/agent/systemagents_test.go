@@ -12,7 +12,8 @@ func TestSystemAgentDefaults(t *testing.T) {
 		promptKey string
 	}{
 		{key: "titler", promptKey: "title"},
-		{key: "compactor", promptKey: "summary"},
+		{key: "overview-summarizer", promptKey: "summary"},
+		{key: "compaction", promptKey: "compact"},
 		{key: "lesson-extractor", promptKey: "lesson"},
 		{key: "insight", promptKey: "insight-analyzer"},
 	}

@@ -1,13 +1,67 @@
 package agent
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/bilal-arikan/tionharness/internal/db"
 	"github.com/bilal-arikan/tionharness/internal/prompts"
 )
+
+func TestCompactPromptTemplateUsesValidSystemAgentPrompt(t *testing.T) {
+	r := newSystemAgentResolveRuntime(t)
+	custom := "Current: {{summary}}\nNew: {{messages}}"
+	if _, err := r.db.CreateAgent(context.Background(), db.Agent{
+		Name: "Custom Compactor", System: true, SystemKey: "compaction", Soul: custom,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if got := r.CompactPromptTemplate(); got != custom {
+		t.Fatalf("CompactPromptTemplate = %q, want custom prompt", got)
+	}
+}
+
+func TestCompactPromptTemplateRejectsMissingPlaceholder(t *testing.T) {
+	r := newSystemAgentResolveRuntime(t)
+	if _, err := r.db.CreateAgent(context.Background(), db.Agent{
+		Name: "Broken Compactor", System: true, SystemKey: "compaction", Soul: "Only {{summary}} remains",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if got := r.CompactPromptTemplate(); got != prompts.Default("compact") {
+		t.Fatalf("CompactPromptTemplate = %q, want validated default", got)
+	}
+}
+
+func TestCompactPromptTemplateResolveErrorFallsBackToCompactPrompt(t *testing.T) {
+	originalDefaults := systemAgentDefaults
+	withoutCompaction := make([]SystemAgentDefinition, 0, len(originalDefaults)-1)
+	for _, def := range originalDefaults {
+		if def.SystemKey != "compaction" {
+			withoutCompaction = append(withoutCompaction, def)
+		}
+	}
+	systemAgentDefaults = withoutCompaction
+	t.Cleanup(func() { systemAgentDefaults = originalDefaults })
+
+	r := newSystemAgentResolveRuntime(t)
+	wsDir := t.TempDir()
+	r.workDir = filepath.Join(wsDir, "workspace")
+	if err := os.MkdirAll(filepath.Dir(PromptFilePath(wsDir, "compact")), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	custom := "Fallback summary: {{summary}}\nFallback messages: {{messages}}"
+	if err := os.WriteFile(PromptFilePath(wsDir, "compact"), []byte(custom), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if got := r.CompactPromptTemplate(); got != custom {
+		t.Fatalf("CompactPromptTemplate = %q, want workspace compact fallback %q", got, custom)
+	}
+}
 
 func TestWorkspaceConfig_SeedAndReadPrompt(t *testing.T) {
 	wsDir := t.TempDir()

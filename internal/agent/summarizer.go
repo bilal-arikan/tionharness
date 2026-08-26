@@ -63,7 +63,7 @@ func (r *Runtime) Summarize(ctx context.Context, agentID, kind string) (string, 
 }
 
 func (r *Runtime) resolveCompactorConfig(agent db.Agent) (db.Agent, string) {
-	compactor, _, err := r.ResolveSystemAgent("compactor")
+	compactor, _, err := r.ResolveSystemAgent("overview-summarizer")
 	if err != nil {
 		r.logger.Warn("system compactor resolution failed; using embedded summary behavior", "error", err)
 		model := agent.Model
@@ -74,7 +74,7 @@ func (r *Runtime) resolveCompactorConfig(agent db.Agent) (db.Agent, string) {
 		return agent, r.readPrompt("summary")
 	}
 
-	agent.Model = adoptSystemAgentModel(r.logger, "compactor", agent.Provider, agent.Model, compactor.Model)
+	agent.Model = adoptSystemAgentModel(r.logger, "overview-summarizer", agent.Provider, agent.Model, compactor.Model)
 	agent.System = true
 	agent.SystemKey = compactor.SystemKey
 	return agent, compactor.Soul
