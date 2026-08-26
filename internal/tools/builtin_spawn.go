@@ -13,8 +13,10 @@ import (
 // SpawnResult is the outcome of a spawn: the new independent session's id and the
 // resolved target agent's name.
 type SpawnResult struct {
-	SessionID string
-	AgentName string
+	SessionID     string
+	AgentName     string
+	Queued        bool
+	QueuePosition int
 	// TreeBudgetUsed / TreeBudgetTotal carry the coordinator tree's LIVE-worker
 	// occupancy after a spawn_worker call so the tool can surface remaining quota
 	// (and 75%/90% warnings) to the coordinator. Total 0 means no ceiling / not a
@@ -111,6 +113,9 @@ func (t *SpawnSessionTool) Call(ctx context.Context, input json.RawMessage) (str
 			atomic.AddInt32(t.launched, -1) // refund a failed spawn
 		}
 		return "", err
+	}
+	if res.Queued {
+		return fmt.Sprintf("Spawn for agent %q queued at position %d. No session exists yet; work will start automatically when a slot opens.", res.AgentName, res.QueuePosition), nil
 	}
 	return fmt.Sprintf("Spawned a new session for agent %q (session %s). It is running in the background; you do not need to wait for it.", res.AgentName, res.SessionID), nil
 }

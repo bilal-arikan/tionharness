@@ -48,7 +48,11 @@ type SpawnOptions struct {
     CreatedBy       string // provenance: ajan id (otonom spawn) ya da "" (kullanıcı/API)
     ParentSessionID string // context-reset soyağacı (handoff); "" → bağsız spawn
 }
-type SpawnResult struct { SessionID, AgentName string }
+type SpawnResult struct {
+    SessionID, AgentName string
+    Queued bool
+    QueuePosition int
+}
 ```
 
 > **Context reset motoru (2026-06-25):** `SpawnOptions.ParentSessionID` eklendi.
@@ -62,8 +66,11 @@ Akış:
 2. `opts.ModelOverride` doluysa `agent.Model` üzerine bin (ajan-başına provider
    korunur — sadece model değişir).
 3. **Eşzamanlılık guard'ı:** `acquireSpawnSlot()` — atomik sayaç, üst sınır
-   `Tunables.SpawnMaxConcurrent` (vars. 16). Dolu ise hata döner (spawn-storm
-   freni). Slot, arka plan goroutine bitince `releaseSpawnSlot()` ile bırakılır.
+   `Tunables.SpawnMaxConcurrent` (vars. 16). Doluysa iş, shallow/deep önceliğini
+   koruyan in-memory kuyruğa girer ve `Queued=true`, `SessionID=""` döner. Kuyruk
+   `SpawnQueueMax` (vars. 16) sınırına da ulaşırsa hata döner. Slot bırakıldığında
+   tek tüketici kuyruğu otomatik ilerletir. Workspace shutdown sırasında bekleyen
+   işler başlatılmaz; düşürülür ve koordinatör işi ise başarısızlık bildirimi yazılır.
 4. **Bağımsız oturum:** `db.CreateSession{Kind:"spawned", SourceID:uuid, …}` —
    her spawn taze bir `sourceID` ile **ayrı** bir session (GetOrCreate **değil**;
    dedup istemiyoruz). Başlık `✨ <kısa prompt>`.
@@ -87,7 +94,8 @@ Akış:
 ### 2. Yüzeyler
 
 **a) HTTP — `POST /api/sessions/spawn`** (`internal/api/spawn.go`)
-- Body: `{agentId, prompt, modelOverride?}` → `{sessionId, agentName}`.
+- Body: `{agentId, prompt, modelOverride?}` →
+  `{sessionId, agentName, queued, queuePosition?}`.
 - `registerSessionRoutes`'a eklenir. UI "Yeni oturum başlat" butonu bunu çağırır.
 
 **b) Ajan aracı — (kaldırıldı)**
@@ -108,6 +116,7 @@ Akış:
 | Guard | Değer | Nerede |
 |-------|-------|--------|
 | Eşzamanlı spawned-session üst sınırı | `SpawnMaxConcurrent` (16) | `SpawnSession` atomik slot |
+| Bekleyen spawn üst sınırı | `SpawnQueueMax` (16) | `spawnQueue` shallow/deep kuyrukları |
 | Tur başına spawn sayısı | `SpawnMaxPerTurn` (4) | `spawn_session` tool örneği |
 | Workspace içinde kal | — | `resolveAgent` zaten workspace-scoped; çapraz-ws yok |
 | Otonomi bütçesi | günlük bütçe | `invokeTraced(autonomous=true)` → `guardedComplete` |
@@ -117,10 +126,11 @@ Akış:
 
 - `internal/agent/spawn.go` — `SpawnSession`/`runSpawn`/`SpawnOptions`/`SpawnResult`,
   slot sayacı, `KindSpawn`.
+- `internal/agent/spawnqueue.go` — sınırlı in-memory shallow/deep kuyruk ve shutdown drop.
 - `internal/api/spawn.go` — `handleSpawnSession` + route.
 - `internal/tools/builtin_spawn.go` — `SpawnSessionTool` + `SpawnResult`.
-- `internal/agent/tunables.go` — `spawnMaxConcurrent`/`spawnMaxPerTurn` + `SetSpawnLimits`.
-- `internal/settings/settings.go` — `SpawnMaxConcurrent`/`SpawnMaxPerTurn` (DTO+Patch+defaults).
+- `internal/agent/tunables.go` — `spawnMaxConcurrent`/`spawnQueueMax`/`spawnMaxPerTurn` + `SetSpawnLimits`.
+- `internal/settings/settings.go` — `SpawnMaxConcurrent`/`SpawnQueueMax`/`SpawnMaxPerTurn` (DTO+Patch+defaults).
 - `internal/api/server.go::applySettings` — `tun.SetSpawnLimits(...)`.
 - `internal/agent/toolsetup.go` — self-manage bloğunda `spawn_session` kaydı.
 - Frontend: `api/sessions.ts` (spawnSession), `components/panels/ExecutionsPanel.tsx`

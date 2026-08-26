@@ -35,12 +35,14 @@ func (s *Server) handleSpawnSession(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	s.logger.Info("session spawned", "session", res.SessionID, "agent", req.AgentID)
+	s.logger.Info("session spawn accepted", "session", res.SessionID, "agent", req.AgentID, "queued", res.Queued)
 	// Cross-window sync: Runtime.SpawnSession itself emits the "session" event
 	// (so the agent-initiated spawn_session tool path gets the same refresh), so
 	// the handler does NOT publish a duplicate here.
-	writeJSON(w, http.StatusCreated, map[string]string{
-		"sessionId": res.SessionID,
-		"agentName": res.AgentName,
-	})
+	writeJSON(w, http.StatusCreated, struct {
+		SessionID     string `json:"sessionId"`
+		AgentName     string `json:"agentName"`
+		Queued        bool   `json:"queued"`
+		QueuePosition int    `json:"queuePosition,omitempty"`
+	}{res.SessionID, res.AgentName, res.Queued, res.QueuePosition})
 }

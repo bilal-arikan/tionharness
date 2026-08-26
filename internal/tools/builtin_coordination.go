@@ -219,6 +219,11 @@ func (SpawnWorkerTool) Call(ctx context.Context, input json.RawMessage) (string,
 	if in.Coordinator {
 		kind = "SUB-COORDINATOR (it may spawn its own workers, and reports back only when its whole branch is done)"
 	}
+	if res.Queued {
+		msg := fmt.Sprintf("Queued %s %q at spawn queue position %d. No session exists yet; it will start automatically when a slot opens, then report with a <task-notification>. Do not wait for it — end your turn.", kind, res.AgentName, res.QueuePosition)
+		msg += treeBudgetLine(res.TreeBudgetUsed, res.TreeBudgetTotal)
+		return msg, nil
+	}
 	msg := fmt.Sprintf("Spawned %s %q (session %s). It runs in the background; you will get a <task-notification> when it finishes. Do not wait for it — end your turn.", kind, res.AgentName, res.SessionID)
 	msg += treeBudgetLine(res.TreeBudgetUsed, res.TreeBudgetTotal)
 	return msg, nil

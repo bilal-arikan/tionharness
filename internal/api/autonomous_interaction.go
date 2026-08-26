@@ -92,7 +92,7 @@ func (s *Server) autonomousInteraction(rt *agent.Runtime) agent.AutonomousIntera
 					CreatedBy:     ag.ID,
 					WorkingDir:    rt.SessionWorkdir(sessionID),
 				})
-				return tools.SpawnResult{SessionID: res.SessionID, AgentName: res.AgentName}, err
+				return tools.SpawnResult{SessionID: res.SessionID, AgentName: res.AgentName, Queued: res.Queued, QueuePosition: res.QueuePosition}, err
 			}))
 
 		// run_subagent (CLI path): synchronous delegation — hand a sub-task to another

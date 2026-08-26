@@ -195,7 +195,8 @@ instances with different keys).
   installed (the `enableDelegation` master toggle was removed 2026-07-02); enable/
   disable it per-agent from the Tools screen. `delegationMaxDepth` (1–10, default 3)
   and `delegationMaxCalls` (1–100, default 8) remain as per-turn safety guards.
-- `spawnMaxConcurrent` (1–128, default 16), `spawnMaxPerTurn` (1–64, default 4).
+- `spawnMaxConcurrent` (1–128, default 16), `spawnQueueMax` (1–128, default 16),
+  `spawnMaxPerTurn` (1–64, default 4).
 
 ### Working-directory guards
 The built-in fs/shell tools are UNCONFINED (they may read, write and run on any
