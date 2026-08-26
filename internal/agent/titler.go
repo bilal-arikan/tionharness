@@ -24,10 +24,10 @@ var titleOutputSchema = json.RawMessage(`{
 	"additionalProperties": false
 }`)
 
-// The title system prompt lives in the central registry (internal/prompts,
-// key "title"); readPrompt resolves the workspace override. The wording is
-// deliberately strict so providers that like to add preamble or quotes stay
-// terse.
+// The title system prompt comes from the resolved "titler" system agent. Its
+// compiled fallback is the byte-identical central prompt registry entry. The
+// wording is deliberately strict so providers that like to add preamble or
+// quotes stay terse.
 
 // maxTitleSourceRunes caps how much input text we feed the titler; the opening
 // of a request is more than enough to summarize and keeps the call cheap.
@@ -46,9 +46,10 @@ func (r *Runtime) GenerateTitle(ctx context.Context, agent db.Agent, source stri
 	userPrompt := "Below is a request or conversation. Reply with ONLY a concise title of 3 to 6 words that summarizes it — no quotes, no trailing punctuation, no preamble, max 60 characters, same language as the content.\n\n---\n" +
 		truncateRunes(source, maxTitleSourceRunes) + "\n---\n\nTitle:"
 
-	// A settings override lets titles use a different provider+model than the
-	// agent normally uses; empty fields fall back to the agent's own.
-	agentCfg := agent
+	// The system titler supplies the prompt and model while the calling agent
+	// continues to supply provider credentials. Resolution errors deliberately
+	// retain the embedded legacy path so title generation never fails closed.
+	agentCfg, titlePrompt := r.resolveTitleConfig(agent)
 	if override := r.tun.TitleProviderID(); override != "" {
 		agentCfg.Provider = override
 	}
@@ -56,7 +57,6 @@ func (r *Runtime) GenerateTitle(ctx context.Context, agent db.Agent, source stri
 		agentCfg.Model = override
 	}
 
-	titlePrompt := r.readPrompt("title")
 	resp, err := r.guardedComplete(WithPromptTrace(WithCallKind(ctx, KindTitle), "title", titlePrompt), agentCfg, providers.Request{
 		Model:        agentCfg.Model,
 		System:       titlePrompt,
@@ -78,6 +78,21 @@ func (r *Runtime) GenerateTitle(ctx context.Context, agent db.Agent, source stri
 		return SanitizeTitle(structured.Title), nil
 	}
 	return SanitizeTitle(resp.Text), nil
+}
+
+func (r *Runtime) resolveTitleConfig(agent db.Agent) (db.Agent, string) {
+	titler, _, err := r.ResolveSystemAgent("titler")
+	if err != nil {
+		r.logger.Warn("system titler resolution failed; using embedded title behavior", "error", err)
+		return agent, r.readPrompt("title")
+	}
+
+	agent.Model = titler.Model
+	// Keep billing on the calling agent ID/provider credentials, but carry the
+	// resolved actor identity into RecordUsage so KindTitle becomes system:title.
+	agent.System = true
+	agent.SystemKey = titler.SystemKey
+	return agent, titler.Soul
 }
 
 // TitleFor resolves a titling agent (the preferred one if given, otherwise the

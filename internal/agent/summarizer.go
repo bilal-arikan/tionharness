@@ -48,15 +48,9 @@ func (r *Runtime) Summarize(ctx context.Context, agentID, kind string) (string, 
 		return "_(boş — özetlenecek " + label + " yok)_", nil
 	}
 
-	// A cheaper/faster model is preferable for these utility summaries; the
-	// title-model override is reused, falling back to the agent's own model.
-	model := agent.Model
-	if override := r.tun.TitleModel(); override != "" {
-		model = override
-	}
-	summaryPrompt := r.readPrompt("summary")
-	resp, err := r.guardedComplete(WithPromptTrace(WithCallKind(ctx, KindSummary), "summary", summaryPrompt), agent, providers.Request{
-		Model:  model,
+	agentCfg, summaryPrompt := r.resolveCompactorConfig(agent)
+	resp, err := r.guardedComplete(WithPromptTrace(WithCallKind(ctx, KindSummary), "summary", summaryPrompt), agentCfg, providers.Request{
+		Model:  agentCfg.Model,
 		System: summaryPrompt,
 		Messages: []providers.Message{
 			{Role: providers.RoleUser, Text: fmt.Sprintf("Summarize the following %s for the user:\n\n%s", label, data)},
@@ -66,6 +60,24 @@ func (r *Runtime) Summarize(ctx context.Context, agentID, kind string) (string, 
 		return "", err
 	}
 	return strings.TrimSpace(resp.Text), nil
+}
+
+func (r *Runtime) resolveCompactorConfig(agent db.Agent) (db.Agent, string) {
+	compactor, _, err := r.ResolveSystemAgent("compactor")
+	if err != nil {
+		r.logger.Warn("system compactor resolution failed; using embedded summary behavior", "error", err)
+		model := agent.Model
+		if override := r.tun.TitleModel(); override != "" {
+			model = override
+		}
+		agent.Model = model
+		return agent, r.readPrompt("summary")
+	}
+
+	agent.Model = compactor.Model
+	agent.System = true
+	agent.SystemKey = compactor.SystemKey
+	return agent, compactor.Soul
 }
 
 // gatherSummaryData collects up to maxSummaryItems rows of the requested kind and

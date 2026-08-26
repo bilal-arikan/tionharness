@@ -105,12 +105,9 @@ func (r *Runtime) RunInsightScan(ctx context.Context, scope insight.ScanScope, a
 	if err != nil {
 		return insight.ScanResult{}, err
 	}
-	// An EXPLICITLY chosen agent runs on its own provider+model — that is the whole
-	// point of selecting it. Only the implicit default (no agent picked) falls back
-	// to the cheap title-model override.
-	model := r.insightModel(analysisAgent)
-	if agentID != "" && analysisAgent.Model != "" {
-		model = analysisAgent.Model
+	analysisCfg, insightPrompt, err := r.resolveInsightConfig(analysisAgent)
+	if err != nil {
+		return insight.ScanResult{}, err
 	}
 	// Provider policy: a codex-cli analysis agent runs the scan serially (see
 	// applyInsightScanConcurrency) unless the caller pinned a concurrency itself.
@@ -131,7 +128,7 @@ func (r *Runtime) RunInsightScan(ctx context.Context, scope insight.ScanScope, a
 	// first analysis, streams one card per analysed pair, and writes the whole trace
 	// as one assistant message at the end.
 	recorder := newInsightStepRecorder(r, runID, analysisAgent.ID, insightRunTitle(len(lensIDs), 0))
-	analyzer := &insightAnalyzer{rt: r, agent: analysisAgent, model: model, steps: recorder}
+	analyzer := &insightAnalyzer{rt: r, agent: analysisCfg, system: insightPrompt, steps: recorder}
 
 	start := time.Now()
 	scanner := insight.NewScanner(r.db, reg, ledger, findings, analyzer, nil)
@@ -284,14 +281,4 @@ func (r *Runtime) pickInsightAgent(ctx context.Context, agentID string) (db.Agen
 		return db.Agent{}, errors.New("insight: no agent available to run analysis")
 	}
 	return agents[0], nil
-}
-
-// insightModel prefers the configured title-model override (cheap/fast, same
-// policy as lesson reflection + utility summaries) and falls back to the agent's
-// own model.
-func (r *Runtime) insightModel(agent db.Agent) string {
-	if override := r.tun.TitleModel(); override != "" {
-		return override
-	}
-	return agent.Model
 }

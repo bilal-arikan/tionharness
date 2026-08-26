@@ -25,6 +25,17 @@ import (
 // context (a few high-signal lines, not a log dump).
 const lessonsInjectCount = 5
 
+// Lesson trust is derived at selection time; it is deliberately not persisted.
+// Recurring reflector lessons lose trust, while insight lessons keep Count
+// neutral because their Count measures repeated lens findings, not failed advice.
+const (
+	lessonTrustBase              = 1.0
+	lessonTrustRepeatPenalty     = 0.10
+	lessonTrustFreshBonus        = 0.05
+	lessonTrustFreshAge          = 6 * time.Hour
+	lessonInsightSignaturePrefix = "lesson:"
+)
+
 // lessonEvidenceMax bounds how many failing steps feed one reflection prompt.
 const lessonEvidenceMax = 3
 
@@ -134,15 +145,13 @@ func (r *Runtime) reflectLessons(ctx context.Context, sessionID string, evidence
 		fmt.Fprintf(&b, "\n- turn-level error: %s\n", turnLevel)
 	}
 
-	// A cheaper/faster model is preferable (same policy as utility summaries):
-	// the title-model override when configured, else the agent's own model.
-	model := agent.Model
-	if override := r.tun.TitleModel(); override != "" {
-		model = override
+	agentCfg, lessonPrompt, err := r.resolveLessonConfig(agent)
+	if err != nil {
+		r.logger.Warn("lesson system agent resolution failed", "session", sessionID, "error", err)
+		return
 	}
-	lessonPrompt := r.readPrompt("lesson")
-	resp, err := r.guardedComplete(WithPromptTrace(WithCallKind(ctx, KindReflect), "lesson", lessonPrompt), agent, providers.Request{
-		Model:     model,
+	resp, err := r.guardedComplete(WithPromptTrace(WithCallKind(ctx, KindReflect), "lesson", lessonPrompt), agentCfg, providers.Request{
+		Model:     agentCfg.Model,
 		System:    lessonPrompt,
 		MaxTokens: 300,
 		Messages: []providers.Message{
@@ -240,8 +249,9 @@ var digitRunRe = regexp.MustCompile(`\d+`)
 // LessonsContextBlock renders the newest stored lessons as a dynamic-context
 // block for chat + headless turns ("" when there are none or the feature is
 // off). Lessons learned by THIS agent rank first (its own failure history is
-// the most relevant), then the rest of the workspace's, newest first within
-// each group. agentID may be "" (no prioritization). Volatile by nature
+// the most relevant), then the rest of the workspace's. Within each group,
+// derived trust ranks lessons first and recency breaks equal scores. agentID
+// may be "" (no prioritization). Volatile by nature
 // (lessons accrue over time), so it must ride SystemDynamic — never the
 // cached static prefix.
 func (r *Runtime) LessonsContextBlock(ctx context.Context, agentID string) string {
@@ -254,23 +264,25 @@ func (r *Runtime) LessonsContextBlock(ctx context.Context, agentID string) strin
 	if err != nil || len(all) == 0 {
 		return ""
 	}
-	lessons := make([]db.Lesson, 0, lessonsInjectCount)
+	matching := make([]db.Lesson, 0, len(all))
+	remaining := make([]db.Lesson, 0, len(all))
 	if agentID != "" {
 		for _, l := range all {
-			if l.AgentID == agentID && len(lessons) < lessonsInjectCount {
-				lessons = append(lessons, l)
+			if l.AgentID == agentID {
+				matching = append(matching, l)
+			} else {
+				remaining = append(remaining, l)
 			}
 		}
+	} else {
+		remaining = append(remaining, all...)
 	}
-	for _, l := range all {
-		if len(lessons) >= lessonsInjectCount {
-			break
-		}
-		if agentID != "" && l.AgentID == agentID {
-			continue // already taken in the first pass
-		}
-		lessons = append(lessons, l)
-	}
+	now := time.Now().Unix()
+	sortLessonsByTrust(matching, now)
+	sortLessonsByTrust(remaining, now)
+	lessons := make([]db.Lesson, 0, lessonsInjectCount)
+	lessons = appendLessonsUpTo(lessons, matching, lessonsInjectCount)
+	lessons = appendLessonsUpTo(lessons, remaining, lessonsInjectCount)
 	var b strings.Builder
 	b.WriteString("## Lessons from past failures (auto-collected)\n")
 	b.WriteString("Earlier turns failed in these ways; apply the lessons instead of repeating them:\n")
@@ -287,4 +299,36 @@ func (r *Runtime) LessonsContextBlock(ctx context.Context, agentID string) strin
 		b.WriteString("\n")
 	}
 	return strings.TrimSpace(b.String())
+}
+
+func lessonTrust(l db.Lesson, now int64) float64 {
+	score := lessonTrustBase
+	if !strings.HasPrefix(l.Signature, lessonInsightSignaturePrefix) && l.Count > 1 {
+		score -= float64(l.Count-1) * lessonTrustRepeatPenalty
+	}
+	if age := now - l.Time; age >= 0 && age <= int64(lessonTrustFreshAge/time.Second) {
+		score += lessonTrustFreshBonus
+	}
+	return score
+}
+
+// sortLessonsByTrust is stable, preserving ListLessons' recency order when
+// scores tie. The candidate set is bounded by the small overfetch above.
+func sortLessonsByTrust(lessons []db.Lesson, now int64) {
+	for i := 1; i < len(lessons); i++ {
+		for j := i; j > 0 && lessonTrust(lessons[j], now) > lessonTrust(lessons[j-1], now); j-- {
+			lessons[j], lessons[j-1] = lessons[j-1], lessons[j]
+		}
+	}
+}
+
+func appendLessonsUpTo(dst, src []db.Lesson, limit int) []db.Lesson {
+	remaining := limit - len(dst)
+	if remaining <= 0 {
+		return dst
+	}
+	if len(src) > remaining {
+		src = src[:remaining]
+	}
+	return append(dst, src...)
 }

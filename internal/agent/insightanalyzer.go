@@ -18,9 +18,9 @@ import (
 // structured output; models without structured-output support return free text,
 // so the reply is parsed with a fallback (unparseable → no findings, logged).
 type insightAnalyzer struct {
-	rt    *Runtime
-	agent db.Agent
-	model string
+	rt     *Runtime
+	agent  db.Agent
+	system string
 	// steps, when set, receives the model's verbatim reply so the scan's live
 	// transcript can show it. It is fed HERE rather than through the
 	// insight.Analyzer interface: that interface returns parsed findings only, and
@@ -28,9 +28,8 @@ type insightAnalyzer struct {
 	steps *insightStepRecorder
 }
 
-// The analyzer's system prompt lives in the central registry
-// (internal/prompts, key "insight-analyzer"); readPrompt resolves the
-// workspace override.
+// The analyzer's fallback system prompt lives in the central prompt registry
+// under "insight-analyzer". The configured insight system agent may override it.
 
 // insightFindingsSchema constrains the reply to a findings array (structured
 // output on capable models; ignored elsewhere).
@@ -79,10 +78,9 @@ func (a *insightAnalyzer) Analyze(ctx context.Context, req insight.AnalysisReque
 	if a.rt != nil && a.rt.tun != nil {
 		lang = a.rt.tun.Language()
 	}
-	system := a.rt.readPrompt("insight-analyzer")
-	resp, err := a.rt.guardedComplete(WithPromptTrace(WithCallKind(ctx, KindReflect), "insight-analyzer", system), a.agent, providers.Request{
-		Model:        a.model,
-		System:       system,
+	resp, err := a.rt.guardedComplete(WithPromptTrace(WithCallKind(ctx, KindReflect), "insight-analyzer", a.system), a.agent, providers.Request{
+		Model:        a.agent.Model,
+		System:       a.system,
 		MaxTokens:    1500,
 		OutputSchema: insightFindingsSchema,
 		Messages:     []providers.Message{{Role: providers.RoleUser, Text: analysisUserPrompt(req, lang)}},
