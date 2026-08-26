@@ -33,6 +33,24 @@ compaction'ı (transcript bütçesi) ve prompt-cache bu harici katmanı tamamlar
 Built-in tarafında geriye kalan tek koruma tool'ların kendi 64 KB hard-cap'idir; hata/boş sonuçlar
 her zaman olduğu gibi **hiç dokunulmadan** modele gider.
 
+## CLI sağlayıcılarında trace çıktı cap'i (2026-08-27)
+
+**Sorun:** `claude-cli` ve `codex-cli` araç döngüsünü kendileri koşturur; shell çağrısı
+`internal/tools/builtin_shell.go`'dan geçmez, dolayısıyla oradaki 64 KB cap **ve** sqz/rtk
+hook'ları hiç uygulanmaz. CLI ne bastıysa `TraceStep.Output`'a birebir yazılır ve transkripte
+kalıcı olarak kaydedilir. Gerçek vaka (WS24/SES576): store'un `.jsonl` dosyaları üzerinde
+koşan tek bir `rg -n` çağrısı **20 satırda 1 MB** döndürdü (her satır tam bir mesaj JSON'u) ve
+tek asistan mesajını 1,88 MB'a çıkardı.
+
+**Çözüm:** `internal/providers/traceoutput.go` → `CapToolOutput`. İki bağımsız limit:
+
+- `traceOutputMaxLineBytes` = 4 KB — "az satır, her biri devasa" vakası (satır başına tam kayıt).
+- `traceOutputMaxBytes` = 64 KB — "çok sayıda normal satır" vakası.
+
+Kesme her zaman **görünürdür** (`…[line truncated at 4KB]`, `[output truncated at 64KB]`) ve
+UTF-8 rune sınırını bölmez. Bağlandığı noktalar: `codexcli_events.go` → `setStep` (her adım tek
+bir noktadan geçer), `claudecli.go` → `tool_result` atama.
+
 ## Bridged shell için in-process `sqz` (2026-07-25)
 
 **Sorun:** `sqz hook claude` yalnız **native `Bash`** tool adını rewrite ediyor. TionHarness

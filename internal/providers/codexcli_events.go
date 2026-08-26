@@ -342,6 +342,9 @@ func (p *codexStreamParser) feedItem(evType string, it *codexItem) {
 // UI's parallel-batch grouping is unavailable on this transport. Known,
 // accepted gap.
 func (p *codexStreamParser) setStep(it *codexItem, final bool, step TraceStep) {
+	// Codex runs the tool loop itself, so the harness shell cap never saw this
+	// output. Bound it here — the single choke point every step passes through.
+	step.Output = CapToolOutput(step.Output)
 	idx, ok := p.itemIdx[it.ID]
 	if !ok || it.ID == "" {
 		idx = p.appendStep(it.ID, step)

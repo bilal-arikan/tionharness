@@ -60,6 +60,22 @@ Drill into raw events only when a number looks wrong:
 Pass `session_id` to inspect a different session (e.g. a subagent's). With no
 `session_id` it reads the session you are running in.
 
+## Never grep the store raw
+
+The session store (`<workspace>/store/sessions/**`) is JSONL where **one line is
+one whole message**, `steps` payload included — routinely tens or hundreds of KB
+per line. `rg -n` prints the entire matching line, so a two-word search over the
+store can return a megabyte from twenty matches, and that megabyte lands in your
+context. This has really happened.
+
+- Search conversations with the **`conversation_search`** tool, not `rg`.
+- If you must touch the files, never print whole lines: use `rg -o`, add
+  `--max-columns 200`, or parse fields with `python -c`.
+- Exclude the store explicitly when searching a workspace directory
+  (`--glob '!store/sessions/**'`) — and write the command in **Git Bash**, since
+  PowerShell quoting silently mangles `--glob` patterns and the exclusion is then
+  never applied.
+
 ## Turning numbers into action
 
 - **High `cacheRead` is good** — prompt cache is working. **Low cache + high

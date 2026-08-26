@@ -1260,7 +1260,7 @@ func (p *cliStreamParser) feed(line string) {
 				continue
 			}
 			if i, ok := p.toolIdx[b.ToolUseID]; ok {
-				p.resp.Trace[i].Output = toolResultText(b.Content)
+				p.resp.Trace[i].Output = CapToolOutput(toolResultText(b.Content))
 				p.resp.Trace[i].IsError = b.IsError
 				if start, ok := p.toolStart[b.ToolUseID]; ok {
 					p.resp.Trace[i].DurMs = time.Since(start).Milliseconds()
