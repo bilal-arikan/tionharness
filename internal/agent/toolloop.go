@@ -401,6 +401,7 @@ func (r *Runtime) completeTracedInner(ctx context.Context, agent db.Agent, provi
 		return resp, nil, err
 	}
 	toolFilter := r.toolFilter(ctx, agent)
+	reg.ConfigureAutoActivation(active, toolFilter)
 	// Native (server-side) tool search — first-party anthropic only: the full
 	// catalog ships with lazy tools marked defer_loading + the search server
 	// tool, so discovery needs no activate_tools round-trip and the tools block

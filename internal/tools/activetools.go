@@ -9,16 +9,36 @@ import "sync"
 //
 // It is safe for concurrent use: tools mutate it from Call while the loop reads.
 type ActiveTools struct {
-	mu      sync.Mutex
-	set     map[string]bool
-	addedAt map[string]int // iteration the tool was activated
-	usedAt  map[string]int // last iteration the tool was actually called
-	iter    int            // current loop iteration (set by the loop)
+	mu            sync.Mutex
+	set           map[string]bool
+	addedAt       map[string]int  // iteration the tool was activated
+	usedAt        map[string]int  // last iteration the tool was actually called
+	autoActivated map[string]bool // tools already recovered by automatic activation
+	iter          int             // current loop iteration (set by the loop)
 }
 
 // NewActiveTools returns an empty active set.
 func NewActiveTools() *ActiveTools {
-	return &ActiveTools{set: map[string]bool{}, addedAt: map[string]int{}, usedAt: map[string]int{}}
+	return &ActiveTools{set: map[string]bool{}, addedAt: map[string]int{}, usedAt: map[string]int{}, autoActivated: map[string]bool{}}
+}
+
+// AutoActivate activates name and reports whether this is its first automatic
+// activation attempt this turn. A repeated attempt is rejected to prevent a
+// model from looping on the same schema-less call.
+func (a *ActiveTools) AutoActivate(name string) bool {
+	if a == nil {
+		return false
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.autoActivated[name] {
+		return false
+	}
+	a.autoActivated[name] = true
+	a.set[name] = true
+	a.addedAt[name] = a.iter
+	a.usedAt[name] = a.iter
+	return true
 }
 
 // SetIter records the loop's current iteration, used for age-based pruning.

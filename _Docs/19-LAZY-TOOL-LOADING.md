@@ -459,6 +459,42 @@ Yeni built-in (eager): `activate_tools(names: []string)`.
 - Bir sonraki tur isteğinde bu araçların tam şeması provider'a gönderilir.
 - Opsiyonel `deactivate_tools` ile geri çıkarılır (uzun oturumda şişmeyi tutmak için).
 
+#### Deferred çağrıda otomatik aktivasyon
+
+Native araç döngüsünde model, henüz aktive edilmemiş fakat izinli bir deferred veya
+NameOnly aracı doğrudan çağırırsa `Registry.Call` artık hemen `unknown tool`
+döndürmez. Katalog adı tekil olarak çözülebiliyorsa araç otomatik aktive edilir.
+
+İlk çağrı **kasıtlı olarak çalıştırılmaz**: model tam şemayı görmeden argüman üretmiş
+olabilir. Bunun yerine hata işaretli tool-result, aracın aktive edildiğini ve şema
+göründükten sonra aynı çağrının yeniden üretilmesi gerektiğini bildirir. Otomatik
+aktivasyon aynı araç için tur başına yalnız bir kez denenir; böylece şemasız aynı
+çağrı bir döngüye dönüşmez. Araç artık aktif olduğundan sonraki doğrudan çağrı normal
+çalışır.
+
+Şema ayrıca elle taşınmaz. Native araç döngüsü her provider isteğinden önce
+`req.Tools` listesini eager araçlar ile o ana dek aktive edilmiş araçlardan yeniden
+kurar. Bu nedenle otomatik aktive edilen aracın tam şeması aynı turun bir sonraki
+LLM adımında bağlama girer.
+
+Çözümleme ve izin sınırları:
+
+- `hidden` veya ajan/workspace politikasıyla `disallowed` olan araç otomatik aktive
+  edilmez. Sonuç, aracın var olduğunu fakat devre dışı ya da izinsiz olduğunu açıkça
+  söyleyen permission hatasıdır; `unknown tool` değildir.
+- Namespace'siz bare ad birden fazla araca eşleşirse seçim yapılmaz. Sonuç
+  `unknown tool` olur ve mümkünse yakın araç adlarını önerir; model tam adı
+  `tool_search` ile bulmalıdır.
+- Bu koruma yalnız TionHarness'in **native araç döngüsünde** geçerlidir.
+  `claude-cli` ve `codex-cli` sağlayıcılarında araç döngüsünü CLI yürütür; çağrı
+  `Registry.Call` yoluna ulaşmaz. Bu sağlayıcılarda aktive edilmemiş araç
+  `No such tool available: ...` ile reddedilir ve otomatik aktivasyon yapılmaz.
+
+İlgili uygulama noktaları: `internal/tools/registry.go` (`Registry.Call`, katalog
+adı çözümleme ve yakın-ad önerileri), `internal/tools/activetools.go`
+(`ActiveTools.AutoActivate`), `internal/agent/toolloop.go` (`req.Tools` yeniden
+kurulumu) ve CLI sınırı için `internal/api/mcp_interaction.go`.
+
 ### 4. Oturum-kapsamlı aktif set
 Aktif edilen araçlar **oturum/tur durumu** olarak tutulur (ör. worker veya turn
 context üzerinde `activeTools map[string]bool`). `composeTurnRequest`/registry

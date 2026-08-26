@@ -89,6 +89,8 @@ type Registry struct {
 	// self-management tool would vanish from the CLI entirely (BridgeableDefs bridges
 	// lazy built-ins only). See BridgeableDefsFiltered.
 	selfManaged map[string]bool
+	active      *ActiveTools
+	allow       func(string) bool
 
 	mcpEntries     []mcp.CatalogEntry
 	mcpCfgByServer map[string]mcp.ServerConfig
@@ -97,6 +99,13 @@ type Registry struct {
 	// server's session state (e.g. the gateway's activate_tools) survives across
 	// calls. Nil falls back to dial-per-call (used by lightweight tests).
 	mcpCaller MCPCaller
+}
+
+// ConfigureAutoActivation wires the per-turn activation state and effective
+// permission filter used to recover direct calls to deferred tools.
+func (r *Registry) ConfigureAutoActivation(active *ActiveTools, allow func(string) bool) {
+	r.active = active
+	r.allow = allow
 }
 
 // MCPCaller invokes a namespaced MCP tool and returns its flattened result.
@@ -618,6 +627,30 @@ func (r *Registry) Empty() bool { return len(r.builtins) == 0 && len(r.mcpEntrie
 // can hand the failure to the model rather than aborting.
 func (r *Registry) Call(ctx context.Context, call providers.ToolCall) providers.ToolResult {
 	res := providers.ToolResult{CallID: call.ID}
+	name := r.resolveCatalogName(call.Name)
+	if name != "" && r.allow != nil && !r.allow(name) {
+		res.Content = fmt.Sprintf("tool %q exists but is disabled or not permitted in this workspace", name)
+		res.IsError = true
+		return res
+	}
+	if name != "" && r.lazy[name] && (r.active == nil || !r.active.Has(name)) {
+		if r.hidden[name] {
+			res.Content = fmt.Sprintf("tool %q exists but is disabled or not permitted in this workspace", name)
+			res.IsError = true
+			return res
+		}
+		if r.active != nil && r.active.AutoActivate(name) {
+			res.Content = fmt.Sprintf("Tool %q was activated automatically. Its schema is now available; reissue the same call using the schema on your next step.", name)
+			res.IsError = true
+			return res
+		}
+		res.Content = fmt.Sprintf("tool %q is deferred and cannot be called before its schema is available", name)
+		res.IsError = true
+		return res
+	}
+	if name != "" {
+		call.Name = name
+	}
 
 	if t, ok := r.builtins[call.Name]; ok {
 		out, err := t.Call(ctx, call.Input)
@@ -630,7 +663,7 @@ func (r *Registry) Call(ctx context.Context, call providers.ToolCall) providers.
 		return res
 	}
 
-	if _, _, ok := mcp.SplitNamespaced(call.Name); ok {
+	if _, _, ok := mcp.SplitNamespaced(call.Name); ok && r.Has(call.Name) {
 		var out mcp.CallToolResult
 		var err error
 		if r.mcpCaller != nil {
@@ -651,9 +684,71 @@ func (r *Registry) Call(ctx context.Context, call providers.ToolCall) providers.
 		return res
 	}
 
-	res.Content = fmt.Sprintf("unknown tool %q", call.Name)
+	res.Content = r.unknownToolMessage(call.Name)
 	res.IsError = true
 	return res
+}
+
+func (r *Registry) resolveCatalogName(name string) string {
+	if r.Has(name) {
+		return name
+	}
+	bare := name
+	if i := strings.LastIndex(name, "__"); i >= 0 {
+		bare = name[i+2:]
+	}
+	var match string
+	for _, d := range r.Defs(nil) {
+		candidate := d.Name
+		if i := strings.LastIndex(candidate, "__"); i >= 0 {
+			candidate = candidate[i+2:]
+		}
+		if candidate != bare {
+			continue
+		}
+		if match != "" {
+			return ""
+		}
+		match = d.Name
+	}
+	return match
+}
+
+func (r *Registry) unknownToolMessage(name string) string {
+	needle := strings.ToLower(name)
+	var nearby []string
+	for _, d := range r.Defs(nil) {
+		candidate := strings.ToLower(d.Name)
+		if strings.Contains(candidate, needle) || strings.Contains(needle, candidate) || toolNameDistance(candidate, needle) <= 3 {
+			nearby = append(nearby, d.Name)
+		}
+	}
+	sort.Strings(nearby)
+	msg := fmt.Sprintf("unknown tool %q; use tool_search to find the exact tool name", name)
+	if len(nearby) > 0 {
+		msg += "; nearby tools: " + strings.Join(nearby, ", ")
+	}
+	return msg
+}
+
+func toolNameDistance(a, b string) int {
+	previous := make([]int, len(b)+1)
+	for j := range previous {
+		previous[j] = j
+	}
+	for i := 1; i <= len(a); i++ {
+		current := make([]int, len(b)+1)
+		current[0] = i
+		for j := 1; j <= len(b); j++ {
+			cost := 0
+			if a[i-1] != b[j-1] {
+				cost = 1
+			}
+			current[j] = min(current[j-1]+1, previous[j]+1, previous[j-1]+cost)
+		}
+		previous = current
+	}
+	return previous[len(b)]
 }
 
 // CanStream reports whether the named built-in tool streams its output.
