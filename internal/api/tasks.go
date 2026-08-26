@@ -378,6 +378,10 @@ type archiveTaskReq struct {
 	Archived bool `json:"archived"`
 }
 
+func (s *Server) handleUnknownTaskSubpath(w http.ResponseWriter, r *http.Request) {
+	writeError(w, http.StatusNotFound, "task subpath not found")
+}
+
 // handleArchiveTask flips a task's Archived flag (reversible soft-hide). Archiving
 // drops the card off the active board without deleting it; unarchiving restores it.
 // This is the manual counterpart to the "done → archive" board automation.
