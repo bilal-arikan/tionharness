@@ -44,6 +44,7 @@ func (r *Runtime) RunInsightScan(ctx context.Context, scope insight.ScanScope, a
 	})
 	doneFindings := 0
 	doneSessionID := ""
+	doneError := ""
 	defer func() {
 		r.insightScanActive.Store(false)
 		target := map[string]string{"scanning": "false", "findings": strconv.Itoa(doneFindings)}
@@ -53,11 +54,11 @@ func (r *Runtime) RunInsightScan(ctx context.Context, scope insight.ScanScope, a
 		if doneSessionID != "" {
 			target["sessionId"] = doneSessionID
 		}
-		r.publish(events.Event{
-			Type: "insight", Level: "success", Title: "İçgörü taraması tamamlandı",
-			Body:   fmt.Sprintf("%d bulgu", doneFindings),
-			Target: target,
-		})
+		level, title, body := "success", "İçgörü taraması tamamlandı", fmt.Sprintf("%d bulgu", doneFindings)
+		if doneError != "" {
+			level, title, body = "error", "İçgörü taraması başarısız", doneError
+		}
+		r.publish(events.Event{Type: "insight", Level: level, Title: title, Body: body, Target: target})
 	}()
 	root := r.db.Root()
 
@@ -148,7 +149,17 @@ func (r *Runtime) RunInsightScan(ctx context.Context, scope insight.ScanScope, a
 		return res, err
 	}
 	if terminalErr := analyzer.permanentError(); terminalErr != nil {
-		return res, fmt.Errorf("insight scan stopped: %w", terminalErr)
+		scanErr := fmt.Errorf("insight scan stopped: %w", terminalErr)
+		doneError = scanErr.Error()
+		report := insightRunReport{
+			RunID: runID, LensIDs: lensIDs, AgentID: analysisAgent.ID,
+			Duration: time.Since(start), Result: res, Failure: scanErr,
+		}
+		if finishErr := recorder.finish(ctx, report); finishErr != nil {
+			return res, errors.Join(scanErr, fmt.Errorf("persist failed insight scan: %w", finishErr))
+		}
+		doneSessionID = recorder.SessionID()
+		return res, scanErr
 	}
 
 	// Route app-fix findings to the configured repo backlog (idempotent append).

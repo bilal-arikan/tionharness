@@ -501,7 +501,7 @@ readLoop:
 	// A terminal failure detected mid-stream short-circuits everything below: the
 	// classification, not the exit code, is the real diagnosis.
 	if failClass != codexFailureNone {
-		return nil, false, fmt.Errorf("%s", describeCodexFailure(failClass, strings.TrimSpace(p.errText), home))
+		return nil, false, newCodexFailureError(failClass, strings.TrimSpace(p.errText), home)
 	}
 
 	out, parseErr := p.finish()
@@ -513,7 +513,7 @@ readLoop:
 	// it here too so a late 401 is still non-retryable and actionable.
 	if p.hadError {
 		if cls := classifyCodexError(p.errText); cls != codexFailureNone {
-			return nil, false, fmt.Errorf("%s", describeCodexFailure(cls, strings.TrimSpace(p.errText), home))
+			return nil, false, newCodexFailureError(cls, strings.TrimSpace(p.errText), home)
 		}
 		// An unclassified reported error: real and terminal as far as we can tell,
 		// but the turn may already have run tools, so never retry it blindly.

@@ -1,6 +1,26 @@
 package providers
 
-import "strings"
+import (
+	"errors"
+	"strings"
+)
+
+// ErrPermanentProviderFailure marks a provider rejection that cannot succeed
+// when immediately retried with the same credentials and model.
+var ErrPermanentProviderFailure = errors.New("permanent provider failure")
+
+type permanentProviderError struct{ message string }
+
+func (e *permanentProviderError) Error() string { return e.message }
+func (e *permanentProviderError) Unwrap() error { return ErrPermanentProviderFailure }
+
+func newCodexFailureError(class codexFailureClass, msg, configDir string) error {
+	described := describeCodexFailure(class, msg, configDir)
+	if class == codexFailureAuth || class == codexFailureModel {
+		return &permanentProviderError{message: described}
+	}
+	return errors.New(described)
+}
 
 // Failure classification for the codex-cli transport.
 //

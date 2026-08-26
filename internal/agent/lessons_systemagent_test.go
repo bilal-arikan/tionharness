@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"errors"
+	"strings"
 	"sync"
 	"testing"
 
@@ -85,6 +86,33 @@ func TestInsightScanStopsAfterPermanentProviderFailure(t *testing.T) {
 	provider.mu.Unlock()
 	if calls != 1 {
 		t.Fatalf("provider calls = %d, want 1", calls)
+	}
+	sessions, listErr := rt.db.ListSessions(ctx, agent.ID)
+	if listErr != nil {
+		t.Fatalf("list sessions: %v", listErr)
+	}
+	var failed db.Session
+	for _, session := range sessions {
+		if session.Kind == db.SessionKindInsight {
+			failed = session
+			break
+		}
+	}
+	if failed.ID == "" {
+		t.Fatal("permanent provider failure did not create an insight session")
+	}
+	if !strings.Contains(failed.Title, "başarısız") || !strings.Contains(failed.Title, providers.ErrPermanentProviderFailure.Error()) {
+		t.Fatalf("failed scan title = %q, want failure and provider error", failed.Title)
+	}
+	if failed.RunState != turnStatusFailed {
+		t.Fatalf("failed scan RunState = %q, want %q", failed.RunState, turnStatusFailed)
+	}
+	messages, messageErr := rt.db.ListMessages(ctx, failed.ID)
+	if messageErr != nil {
+		t.Fatalf("list failed scan messages: %v", messageErr)
+	}
+	if len(messages) != 1 || !strings.Contains(messages[0].Text, providers.ErrPermanentProviderFailure.Error()) {
+		t.Fatalf("failed scan transcript = %#v, want provider error", messages)
 	}
 }
 

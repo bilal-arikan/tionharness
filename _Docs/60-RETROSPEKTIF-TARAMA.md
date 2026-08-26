@@ -245,7 +245,7 @@ stateDiagram-v2
 | `internal/insight/router.go` Kanal B | `AppendWorkspaceActions` → `insight/WORKSPACE-ACTIONS.md` (idempotent) | ✅ Faz 2.5 |
 | `internal/agent/insightcron.go` | `InsightCron` — ayar-güdümlü otomatik tarama (`AutoScanCron`) | ✅ Faz 3 |
 | `frontend/src/features/insight/` | UI (pano + triage + auto-scan cron alanı) | ✅ Faz 1–3 |
-| `internal/tools/builtin_insight.go` | ajan araçları `insight_scan` + `insight_list_findings` (id+status çıktı/filtre) + `insight_apply_finding`; `insight_list_findings` varsayılanı **tek satırlık özet** (id görünür, `cause`/`fix`/`file` yalnız `verbose:true` ile), `insight_scan` hata özeti tekilleştirilip sayılır (`… (×53)`, fazlası `+N more`); `maxSessions` = workspace ayarını (varsayılan 10) **ezme** değeri, 0 sınırsız değil; **varsayılan görünürlük NAME-ONLY** (2026-08-15, `_Docs/19`) — katalogda yalnız adla, şema `tool_search`/`activate_tools` ile | ✅ Faz 1–2 |
+| `internal/tools/builtin_insight.go` | ajan araçları `insight_scan` + `insight_list_findings` (id+status çıktı/filtre) + `insight_apply_finding`; `insight_list_findings` varsayılanı **tek satırlık özet** (id görünür, `cause`/`fix`/`file` yalnız `verbose:true` ile), `insight_scan` hata özeti tekilleştirilip sayılır (`… (×53)`, fazlası `+N more`); `maxSessions` = workspace ayarını (varsayılan 20) **ezme** değeri, 0 sınırsız değil; **varsayılan görünürlük NAME-ONLY** (2026-08-15, `_Docs/19`) — katalogda yalnız adla, şema `tool_search`/`activate_tools` ile | ✅ Faz 1–2 |
 | `internal/skills/defaults/tionharness-insight/` | Ajana tarama→sun→(kullanıcı kararı)→triage akışını öğreten skill | ✅ |
 
 **Yeniden kullanım:** `db.ListSessions` (+`UpdatedAt`), debug journal reader
@@ -372,7 +372,7 @@ Her tarama, bittiğinde **iki** kayıt bırakır:
       + `types/insight.ts`: lens seç + "Tara" + bulgu panosu + ayarlar (repo yolu + maxSessions).
 - [x] Ajan araçları `insight_scan` (tools→agent `InsightScanner` interface ile Runtime tetikler) +
       `insight_list_findings` (db-only, read-only); ikisi de toolsetup'a kayıtlı.
-- [x] Bütçe/guardrail: `MaxSessions` (scope + settings), workspace varsayılanı 10;
+- [x] Bütçe/guardrail: `MaxSessions` (scope + settings), workspace varsayılanı 20;
       explicit `0` sınırsız, archived default hariç (opt-in).
 - [x] Lens seed: **lazy** — `GET /lenses` ve `RunInsightScan` `EnsureDefaults` çağırır (boot bağı gereksiz).
 

@@ -49,7 +49,7 @@ type Settings struct {
 const DefaultMaxRunSessions = 200
 
 // DefaultMaxSessions bounds a scan unless the workspace explicitly overrides it.
-const DefaultMaxSessions = 10
+const DefaultMaxSessions = 20
 
 // RunSessionRetention resolves MaxRunSessions: 0 → the default, negative → 0,
 // which the caller reads as "keep everything".

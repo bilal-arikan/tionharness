@@ -1,9 +1,21 @@
 package providers
 
 import (
+	"errors"
 	"strings"
 	"testing"
 )
+
+func TestCodexAuthAndModelFailuresArePermanent(t *testing.T) {
+	for _, class := range []codexFailureClass{codexFailureAuth, codexFailureModel} {
+		if err := newCodexFailureError(class, "rejected", "home"); !errors.Is(err, ErrPermanentProviderFailure) {
+			t.Fatalf("class %v error = %v, want permanent marker", class, err)
+		}
+	}
+	if err := newCodexFailureError(codexFailureQuota, "limited", "home"); errors.Is(err, ErrPermanentProviderFailure) {
+		t.Fatalf("quota error unexpectedly permanent: %v", err)
+	}
+}
 
 func TestClassifyCodexError(t *testing.T) {
 	cases := []struct {

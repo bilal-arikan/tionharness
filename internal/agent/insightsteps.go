@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/bilal-arikan/tionharness/internal/db"
 	"github.com/bilal-arikan/tionharness/internal/insight"
@@ -153,6 +154,9 @@ func insightAnalysisSteps(ev insight.AnalysisEvent, raw string) []TurnStep {
 // write the run-log row.
 func (rec *insightStepRecorder) finish(ctx context.Context, rep insightRunReport) error {
 	rec.mu.Lock()
+	if rep.Failure != nil {
+		rec.openSessionLocked()
+	}
 	sid, steps := rec.sessionID, rec.steps
 	rec.mu.Unlock()
 	if sid == "" {
@@ -170,7 +174,16 @@ func (rec *insightStepRecorder) finish(ctx context.Context, rep insightRunReport
 		return err
 	}
 	title := insightRunTitle(len(rep.LensIDs), rep.Result.Findings)
-	return rec.rt.db.SetSessionTitle(ctx, sid, title)
+	if rep.Failure != nil {
+		title = insightRunFailureTitle(rep.Failure)
+	}
+	if err := rec.rt.db.SetSessionTitle(ctx, sid, title); err != nil {
+		return err
+	}
+	if rep.Failure != nil {
+		return rec.rt.db.SetSessionRunState(ctx, sid, turnStatusFailed, time.Now().Unix())
+	}
+	return nil
 }
 
 // openInsightSession creates the read-only transcript session for a scan run.

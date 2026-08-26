@@ -26,6 +26,11 @@ type insightRunReport struct {
 	AgentID  string   // analysis agent that served the run
 	Duration time.Duration
 	Result   insight.ScanResult
+	Failure  error
+}
+
+func insightRunFailureTitle(err error) string {
+	return fmt.Sprintf("İçgörü taraması başarısız — %v", err)
 }
 
 // Whether a run deserves a transcript session is no longer a predicate evaluated
@@ -51,6 +56,9 @@ func insightRunTranscript(rep insightRunReport) string {
 		fmt.Fprintf(&b, "- **Tetikleyici:** %s\n", rep.Trigger)
 	}
 	fmt.Fprintf(&b, "- **Süre:** %.1fs\n", rep.Duration.Seconds())
+	if rep.Failure != nil {
+		fmt.Fprintf(&b, "- **Durum:** Başarısız — %v\n", rep.Failure)
+	}
 	if len(rep.LensIDs) > 0 {
 		fmt.Fprintf(&b, "- **Lensler (%d):** %s\n", len(rep.LensIDs), strings.Join(rep.LensIDs, ", "))
 	} else {
