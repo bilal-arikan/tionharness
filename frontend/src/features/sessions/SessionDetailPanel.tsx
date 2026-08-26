@@ -3,6 +3,7 @@ import {
   Trash2,
   Archive,
   ArchiveRestore,
+  Bug,
   ChevronDown,
   ChevronRight,
   Pin,
@@ -49,6 +50,10 @@ interface Props {
   // Wired to the chat hook's rerunLast so it reuses the one true turn path. Optional
   // so legacy/test usages still compile; the button hides when absent.
   onRerun?: (id: string) => void | Promise<void>
+  // Open the Debug / observability panel (SessionDebugModal). Lives here in the
+  // action list rather than in the chat header. Optional so legacy/test usages
+  // still compile; the button hides when absent.
+  onOpenDebug?: () => void
 }
 
 // SessionDetailPanel is the right-hand inspector for the active chat session:
@@ -65,6 +70,7 @@ export function SessionDetailPanel({
   onSelectSession,
   onSelectAgent,
   onRerun,
+  onOpenDebug,
 }: Props) {
   // Persisted, drag-resizable width. The panel sits on the RIGHT, so its handle
   // is on the LEFT edge and the drag direction is inverted (drag left = wider).
@@ -474,13 +480,16 @@ export function SessionDetailPanel({
               <SessionUsageCard sessionUsage={sessionUsage} />
             )}
 
-            {/* Debug / observability moved to its own panel — opened from the chat
-              header's "Debug" button (SessionDebugModal). */}
+            {/* Debug / observability lives in its own panel (SessionDebugModal),
+              opened from the "Debug" action at the bottom of this panel. */}
 
             {/* Actions / tools. AI title generation moved next to the title's edit
               control (SessionTitleBlock); "Bağlam" lives in the chat header. */}
             <Section title="Araçlar">
               <div className="flex flex-col gap-1.5">
+                {onOpenDebug && (
+                  <ActionBtn icon={Bug} label="Debug / gözlemlenebilirlik" onClick={onOpenDebug} />
+                )}
                 <ActionBtn
                   icon={info.pinned ? PinOff : Pin}
                   label={pinning ? '…' : info.pinned ? 'Sabitlemeyi kaldır' : 'Üste sabitle'}
