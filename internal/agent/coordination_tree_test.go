@@ -419,7 +419,7 @@ func TestCoordinatorSettleGraceIsConfigurable(t *testing.T) {
 // actually waiting on — never starves behind its own descendants.
 func TestDeepSpawnLeavesHeadroomForShallowWork(t *testing.T) {
 	rt, _ := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))
-	rt.tun.SetSpawnLimits(8, 0) // pool of 8 → deep spawns capped at 6
+	rt.tun.SetSpawnLimits(8, 0, 0) // pool of 8 → deep spawns capped at 6
 	defer func() {
 		// Release everything this test reserved so a later test sees a clean pool.
 		for rt.spawnActive.Load() > 0 {

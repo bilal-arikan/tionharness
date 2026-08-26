@@ -84,6 +84,11 @@ type SpawnOptions struct {
 	// fanout) would otherwise repeat itself all the way down the tree.
 	CoordinatorWorkflow string
 	CoordinatorMaxTurns int
+
+	// NoQueue preserves callers that require an immediate SessionID.
+	NoQueue bool
+	// onDrop releases caller-owned reservations if shutdown discards this spawn.
+	onDrop func(error)
 }
 
 // SpawnResult is what a spawn returns to its caller immediately — the new
@@ -91,6 +96,9 @@ type SpawnOptions struct {
 type SpawnResult struct {
 	SessionID string
 	AgentName string
+	Queued    bool
+	// QueuePosition is one-based across both priority queues at enqueue time.
+	QueuePosition int
 	// TreeBudgetUsed / TreeBudgetTotal report the coordinator TREE's LIVE-worker
 	// occupancy right after this spawn (Used counts the just-spawned worker). Total
 	// is the ceiling; 0 means no ceiling is configured (or this was not a worker
@@ -153,8 +161,20 @@ func (r *Runtime) SpawnSession(ctx context.Context, agentRef, prompt string, opt
 	// so a deep coordinator branch cannot drain the pool that shallower work — and
 	// any unrelated chat/schedule spawn — depends on.
 	if !r.acquireSpawnSlotAtDepth(opts.CoordinatorDepth) {
-		return SpawnResult{}, fmt.Errorf("spawn limit reached (%d concurrent spawned sessions); try again once some finish", r.tun.SpawnMaxConcurrent())
+		if opts.NoQueue {
+			return SpawnResult{}, fmt.Errorf("spawn limit reached (%d concurrent spawned sessions); try again once some finish", r.tun.SpawnMaxConcurrent())
+		}
+		position, enqueueErr := r.enqueueSpawn(spawnQueueItem{agent: agent, prompt: prompt, opts: opts, enqueuedAt: time.Now()})
+		if enqueueErr != nil {
+			return SpawnResult{}, enqueueErr
+		}
+		return SpawnResult{AgentName: agent.Name, Queued: true, QueuePosition: position}, nil
 	}
+	return r.launchSpawn(ctx, agent, prompt, opts)
+}
+
+// launchSpawn creates and starts a spawn after its concurrency slot is reserved.
+func (r *Runtime) launchSpawn(ctx context.Context, agent db.Agent, prompt string, opts SpawnOptions) (SpawnResult, error) {
 
 	title := strings.TrimSpace(opts.Title)
 	if title == "" {
@@ -462,7 +482,10 @@ func (r *Runtime) acquireSpawnSlotAtDepth(depth int) bool {
 }
 
 // releaseSpawnSlot frees a concurrency slot taken by acquireSpawnSlot.
-func (r *Runtime) releaseSpawnSlot() { r.spawnActive.Add(-1) }
+func (r *Runtime) releaseSpawnSlot() {
+	r.spawnActive.Add(-1)
+	r.signalSpawnQueue()
+}
 
 // spawnTitle derives a short, single-line title from a spawn prompt (rune-capped,
 // so Turkish characters never get split). The auto-titler can refine it later.

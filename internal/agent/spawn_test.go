@@ -27,7 +27,7 @@ func TestMain(m *testing.M) {
 func drainSpawns(t *testing.T, rt *Runtime) {
 	t.Helper()
 	deadline := time.Now().Add(5 * time.Second)
-	for rt.spawnActive.Load() > 0 && time.Now().Before(deadline) {
+	for (rt.spawnActive.Load() > 0 || rt.spawnQueueLen() > 0) && time.Now().Before(deadline) {
 		time.Sleep(20 * time.Millisecond)
 	}
 }
@@ -160,7 +160,7 @@ func TestSpawnSessionRefusesBrokenCLIWithoutCreatingSession(t *testing.T) {
 // a slot again.
 func TestSpawnConcurrencyCap(t *testing.T) {
 	rt, _ := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))
-	rt.tun.SetSpawnLimits(2, 0)
+	rt.tun.SetSpawnLimits(2, 0, 0)
 
 	if !rt.acquireSpawnSlot() || !rt.acquireSpawnSlot() {
 		t.Fatal("first two slots should be available")

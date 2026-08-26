@@ -84,6 +84,7 @@ func (r *Runtime) LaunchRun(ctx context.Context, spec RunSpec) (LaunchResult, er
 	if _, err := r.db.GetAgent(ctx, spec.AgentID); err != nil {
 		return LaunchResult{Driver: "session"}, fmt.Errorf("target agent gone: %w", err)
 	}
+	spec.Spawn.NoQueue = true
 	res, err := r.SpawnSession(ctx, spec.AgentID, spec.Input, spec.Spawn)
 	if err != nil {
 		return LaunchResult{Driver: "session"}, fmt.Errorf("spawn failed: %w", err)

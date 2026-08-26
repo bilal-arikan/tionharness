@@ -188,6 +188,8 @@ func (r *Runtime) coordinationFuncsFor(sess db.Session, callerID string) *tools.
 			return tools.SpawnResult{
 				SessionID:       res.SessionID,
 				AgentName:       res.AgentName,
+				Queued:          res.Queued,
+				QueuePosition:   res.QueuePosition,
 				TreeBudgetUsed:  res.TreeBudgetUsed,
 				TreeBudgetTotal: res.TreeBudgetTotal,
 			}, nil
@@ -501,6 +503,9 @@ func (r *Runtime) SpawnWorker(ctx context.Context, coordSessionID, agentRef, tas
 		CoordinatorMode:          coordinator,
 		CoordinatorWorkflow:      workflow,
 		CoordinatorMaxTurns:      maxTurns,
+		onDrop: func(error) {
+			slot.workers.Add(-1)
+		},
 	})
 	if err != nil {
 		// SpawnSession never launched runWorker, so release the reservation here.

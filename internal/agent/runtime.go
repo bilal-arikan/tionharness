@@ -249,6 +249,11 @@ type Runtime struct {
 	// spawnActive counts the spawned sessions currently running their background
 	// turn — the fire-and-forget concurrency guard (capped by SpawnMaxConcurrent).
 	spawnActive atomic.Int64
+	spawnQueue  spawnQueue
+	spawnWake   chan struct{}
+	spawnStop   chan struct{}
+	spawnDone   chan struct{}
+	spawnClose  sync.Once
 
 	// mcpPool holds this workspace's persistent MCP connections (one live session
 	// per enabled server). It replaces dial-per-operation: the per-turn catalog
@@ -469,8 +474,12 @@ func NewRuntime(database *db.DB, registry *providers.Registry, tun *Tunables, wo
 		mcpPool:     mcp.NewPool(),
 		cliSessions: providers.NewCLISessionPool(),
 		workerQueue: make(map[string]string),
+		spawnWake:   make(chan struct{}, 1),
+		spawnStop:   make(chan struct{}),
+		spawnDone:   make(chan struct{}),
 		turns:       turnqueue.New(func() int64 { return time.Now().Unix() }),
 	}
+	go r.runSpawnQueue()
 	// The codebase-memory capability defaults ON; workspace settings (loadSettings)
 	// override it at boot. Seeded here so bare runtimes (before settings apply) still
 	// behave as "on" rather than silently off.
@@ -499,6 +508,7 @@ func (r *Runtime) MCPPool() *mcp.Pool { return r.mcpPool }
 // CloseMCP terminates this workspace's persistent MCP connections. Called when
 // the workspace is deleted or the manager shuts down.
 func (r *Runtime) CloseMCP() {
+	r.stopSpawnQueue()
 	if r.mcpPool != nil {
 		r.mcpPool.Close()
 	}

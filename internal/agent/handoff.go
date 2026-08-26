@@ -140,7 +140,9 @@ func (r *Runtime) HandoffSession(ctx context.Context, session db.Session, agent 
 	// continues from the "Next Concrete Step". The continuation prompt embeds the
 	// handoff inline (no tool round-trip needed) plus recovery pointers.
 	cont := buildContinuationPrompt(r.readPrompt("continuation"), session.ID, ref.ID, filePath, handoffText)
-	spawn, err := r.SpawnSession(ctx, agent.ID, cont, handoffContinuationSpawnOpts(session, opts))
+	spawnOpts := handoffContinuationSpawnOpts(session, opts)
+	spawnOpts.NoQueue = true
+	spawn, err := r.SpawnSession(ctx, agent.ID, cont, spawnOpts)
 	if err != nil {
 		return HandoffResult{}, fmt.Errorf("spawn continuation session: %w", err)
 	}

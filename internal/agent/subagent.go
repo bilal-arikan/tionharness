@@ -257,6 +257,7 @@ func (r *Runtime) runAgent(ctx context.Context, caller db.Agent, parentReq *prov
 			ModelOverride: spec.Model,
 			CreatedBy:     caller.ID,
 			WorkingDir:    r.effectiveWorkDir(ctx),
+			NoQueue:       true,
 		})
 		if err != nil {
 			return tools.RunAgentResult{}, err
