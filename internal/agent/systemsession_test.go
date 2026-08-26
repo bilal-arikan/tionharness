@@ -2,6 +2,9 @@ package agent
 
 import (
 	"context"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -107,6 +110,7 @@ func TestNormalAgentSessionProducesLesson(t *testing.T) {
 }
 
 func TestInsightScanSkipsSystemAgentSession(t *testing.T) {
+	assertRunInsightScanOwnsSystemSessionFilter(t)
 	rt, provider, session := createSystemSessionTestFixture(t, true)
 	addInsightEvidence(t, rt, session.ID)
 	result, err := rt.RunInsightScan(context.Background(), insight.ScanScope{LensIDs: []string{"tool-errors"}}, session.AgentID)
@@ -115,6 +119,57 @@ func TestInsightScanSkipsSystemAgentSession(t *testing.T) {
 	}
 	if result.Sessions != 0 || result.Analyzed != 0 || provider.callCount() != 0 {
 		t.Fatalf("system session scanned: sessions=%d analyzed=%d calls=%d", result.Sessions, result.Analyzed, provider.callCount())
+	}
+}
+
+// assertRunInsightScanOwnsSystemSessionFilter keeps this test specific to the
+// agent layer. NewScanner has its own defense-in-depth default, so the runtime
+// counters alone would remain green if RunInsightScan stopped installing its
+// caller-owned policy. Verify that production wiring independently of that
+// downstream default, then exercise the real runtime path below.
+func assertRunInsightScanOwnsSystemSessionFilter(t *testing.T) {
+	t.Helper()
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, "insightscan.go", nil, 0)
+	if err != nil {
+		t.Fatalf("parse insightscan.go: %v", err)
+	}
+	var run *ast.FuncDecl
+	for _, decl := range file.Decls {
+		if fn, ok := decl.(*ast.FuncDecl); ok && fn.Name.Name == "RunInsightScan" {
+			run = fn
+			break
+		}
+	}
+	if run == nil {
+		t.Fatal("RunInsightScan not found in insightscan.go")
+	}
+	found := false
+	ast.Inspect(run.Body, func(node ast.Node) bool {
+		call, ok := node.(*ast.CallExpr)
+		if !ok {
+			return true
+		}
+		sel, ok := call.Fun.(*ast.SelectorExpr)
+		if !ok || sel.Sel.Name != "SetSessionFilter" || len(call.Args) != 1 {
+			return true
+		}
+		ast.Inspect(call.Args[0], func(argNode ast.Node) bool {
+			inner, ok := argNode.(*ast.CallExpr)
+			if !ok {
+				return true
+			}
+			innerSel, ok := inner.Fun.(*ast.SelectorExpr)
+			if ok && innerSel.Sel.Name == "isSystemAgentSession" {
+				found = true
+				return false
+			}
+			return true
+		})
+		return !found
+	})
+	if !found {
+		t.Fatal("RunInsightScan does not install its own isSystemAgentSession filter")
 	}
 }
 

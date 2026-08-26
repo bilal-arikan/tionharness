@@ -39,7 +39,7 @@ func newTestRuntime(t *testing.T, workDir string) (*Runtime, *Tunables) {
 	// LIFO drains the turns first, then closes the db, then removes the temp dir.
 	t.Cleanup(func() {
 		deadline := time.Now().Add(5 * time.Second)
-		for rt.spawnActive.Load() > 0 && time.Now().Before(deadline) {
+		for (rt.spawnActive.Load() > 0 || rt.spawnQueueLen() > 0) && time.Now().Before(deadline) {
 			time.Sleep(5 * time.Millisecond)
 		}
 	})

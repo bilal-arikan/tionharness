@@ -464,15 +464,16 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 	// present in this agent's builtins is a harmless no-op, so gated tools
 	// (vault/config/session-context off) need no extra guarding here.
 	//
-	// Deliberately kept EAGER (behavioral nudges or high-frequency): todo_write,
-	// ask_user, request_confirmation, create_artifact/update_artifact,
-	// use_skill/skill_search, run_subagent, Read/Write/Edit/list_dir/
+	// Deliberately kept EAGER (behavioral nudges, context-bound, or high-frequency):
+	// todo_write, ask_user, request_confirmation, schedule_wake,
+	// create_artifact/update_artifact, use_skill/skill_search, run_subagent,
+	// Read/Write/Edit/list_dir/
 	// Glob/Grep, shell. The self-management suite stays MarkHidden (dropped from the
 	// catalog entirely — more aggressive than name-only).
 	reg.MarkNameOnly(
 		// Session lifecycle & navigation — names say it all; rarely the turn's point.
 		"update_session",
-		"notify", "focus_view", "schedule_wake",
+		"notify", "focus_view",
 		// Cross-session & self-diagnostics — occasional, discoverable by name.
 		"list_sessions", "conversation_search", "read_session_debug",
 		"get_session_info", "update_user_preferences",
@@ -508,16 +509,10 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 		// these (disjoint tiers, last mark wins).
 		"handoff_session", "send_message",
 	)
-	// SUMMARY tier (lazy, but NOT name-only): run_subagent. Its 700-token schema is
-	// the third-largest eager cost for ~13 calls across the whole journal history,
-	// but delegation is BEHAVIORAL — a model that cannot see the tool simply does
-	// the work itself, so name-only (which sheds the summary line) would quietly
-	// kill fan-out. Summary tier is the middle ground the tier model already has:
-	// the load-on-demand catalog keeps run_subagent's first description line as the
-	// nudge (~50 tokens, see lazyDescription's 200-char cap) and the schema is pulled
-	// on demand. The claude-cli path is unaffected — run_subagent is a
-	// coreInteractionTools member, i.e. eager on the CLI regardless of this mark.
-	reg.MarkLazy("run_subagent")
+	// Keep context-bound/behavioral tools eager. Their first call must reach the
+	// runner: schedule_wake may arm the current chat turn, while run_subagent must
+	// surface target-resolution errors. An auto-activation result in place of either
+	// call loses the one-shot action and masks the runner's real error until a retry.
 	// Admin-rare tools fold into the HIDDEN self-management group (not enumerated
 	// per turn — surfaced via the tionharness-self-management skill / tool_search). These
 	// are confined config edits and secret reads: used in a tiny fraction of turns,
