@@ -12,6 +12,10 @@ describe('stripShellHost', () => {
     ['cmd.exe /c npm run build --silent', 'npm run build --silent'],
     ['bash -lc "echo \\"hi there\\""', 'echo "hi there"'],
     ['powershell -Command "Write-Host \\"a b\\""', 'Write-Host "a b"'],
+    [
+      '"C:\\\\Windows\\\\System32\\\\WindowsPowerShell\\\\v1.0\\\\powershell.exe" -NoProfile -Command \'Get-Content -LiteralPath CLAUDE.md\'',
+      'Get-Content -LiteralPath CLAUDE.md',
+    ],
     ['git status', 'git status'],
     ['bash', 'bash'],
   ])('strips shell host from %s', (command, expected) => {

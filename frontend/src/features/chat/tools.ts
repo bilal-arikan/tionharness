@@ -158,7 +158,7 @@ function scheduleLine(o: Record<string, unknown>): string | null {
  *  per-tool template (RICH_TEMPLATES) is preferred when one matches the base. */
 function summarize(base: string, input: unknown): string {
   if (!input || typeof input !== 'object') {
-    return typeof input === 'string' ? input : ''
+    return typeof input === 'string' ? stripShellHost(input) : ''
   }
   if (Array.isArray(input)) return summarizeArray(input)
   const o = input as Record<string, unknown>

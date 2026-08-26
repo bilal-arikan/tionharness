@@ -22,12 +22,15 @@ interface Props {
 // Else null.
 function programHint(step: TurnStep): string | null {
   const base = toolBase(step.tool || '')
-  const input = step.input as { command?: unknown; language?: unknown } | null
+  const input = step.input
+  const objectInput =
+    input && typeof input === 'object' ? (input as { command?: unknown; language?: unknown }) : null
   if (base === 'bash' || base === 'powershell') {
-    return typeof input?.command === 'string' ? stripShellHost(input.command) : null
+    const command = typeof input === 'string' ? input : objectInput?.command
+    return typeof command === 'string' ? stripShellHost(command) : null
   }
   if (base === 'transform_data' || base === 'run_code') {
-    return typeof input?.language === 'string' ? input.language : null
+    return typeof objectInput?.language === 'string' ? objectInput.language : null
   }
   return null
 }
