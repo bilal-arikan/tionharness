@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"fmt"
 	"sync/atomic"
 
 	"github.com/bilal-arikan/tionharness/internal/db"
@@ -114,4 +115,17 @@ func callKindFrom(ctx context.Context) CallKind {
 		return k
 	}
 	return KindChat
+}
+
+// usageCallKind combines the system actor key and operation only at the usage
+// boundary. Recording one qualified kind avoids double-counting ByKind totals.
+func usageCallKind(ctx context.Context, agent db.Agent) (string, error) {
+	kind := string(callKindFrom(ctx))
+	if agent.System {
+		if _, ok := SystemAgentDefault(agent.SystemKey); !ok {
+			return "", fmt.Errorf("unknown system agent key %q", agent.SystemKey)
+		}
+		return db.SystemAgentUsageKind(agent.SystemKey, kind)
+	}
+	return kind, nil
 }

@@ -75,3 +75,66 @@ func TestAddUsageKind_BreaksDownByOrigin(t *testing.T) {
 		t.Errorf("sum of per-kind input=%d != total input=%d", sum, u.InputTokens)
 	}
 }
+
+func TestAddUsageKind_SystemAndOperationKindsDoNotDoubleCount(t *testing.T) {
+	ctx := context.Background()
+	d, err := Open(filepath.Join(t.TempDir(), "store"))
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	const agent = "agent-1"
+
+	if got := SystemUsageKind("system:title"); got != "system:title" {
+		t.Fatalf("SystemUsageKind(system:title) = %q, want %q", got, "system:title")
+	}
+
+	systemDelta := UsageDelta{Calls: 1, InputTokens: 120}
+	if err := d.AddUsageKind(ctx, agent, "system:title", "anthropic", "system-model", systemDelta); err != nil {
+		t.Fatalf("add system usage: %v", err)
+	}
+	assertUsageKindTotals(t, d, ctx, agent, map[string]UsageDelta{
+		"system:title": systemDelta,
+	}, "title")
+
+	titleDelta := UsageDelta{Calls: 2, InputTokens: 80}
+	if err := d.AddUsageKind(ctx, agent, UsageKindTitle, "anthropic", "regular-model", titleDelta); err != nil {
+		t.Fatalf("add regular usage: %v", err)
+	}
+	assertUsageKindTotals(t, d, ctx, agent, map[string]UsageDelta{
+		"system:title": systemDelta,
+		UsageKindTitle: titleDelta,
+	})
+}
+
+func assertUsageKindTotals(t *testing.T, d *DB, ctx context.Context, agent string, expected map[string]UsageDelta, absentKinds ...string) {
+	t.Helper()
+	u, err := d.GetUsageToday(ctx, agent)
+	if err != nil {
+		t.Fatalf("get usage: %v", err)
+	}
+	for kind, want := range expected {
+		got, ok := u.ByKind[kind]
+		if !ok {
+			t.Fatalf("ByKind[%q] missing", kind)
+		}
+		if got.Calls != want.Calls || got.InputTokens != want.InputTokens {
+			t.Fatalf("ByKind[%q] calls/input = %d/%d, want %d/%d", kind, got.Calls, got.InputTokens, want.Calls, want.InputTokens)
+		}
+	}
+	for _, kind := range absentKinds {
+		if _, ok := u.ByKind[kind]; ok {
+			t.Fatalf("ByKind[%q] unexpectedly present", kind)
+		}
+	}
+	var calls, inputTokens int
+	for _, stat := range u.ByKind {
+		calls += stat.Calls
+		inputTokens += stat.InputTokens
+	}
+	if calls != u.Calls {
+		t.Fatalf("ByKind calls sum = %d, usage calls = %d", calls, u.Calls)
+	}
+	if inputTokens != u.InputTokens {
+		t.Fatalf("ByKind input token sum = %d, usage input tokens = %d", inputTokens, u.InputTokens)
+	}
+}

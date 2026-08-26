@@ -86,11 +86,16 @@ const KIND_LABELS: Record<string, string> = {
   summary: 'Özet',
   reflect: 'Yansıma',
   compact: 'Sıkıştırma',
+  system: 'System agent',
   other: 'Diğer',
 }
 
 function kindMeta(kind: string) {
-  return { label: KIND_LABELS[kind] ?? kind, color: kindColor(kind) }
+  const [prefix, operation] = kind.split(':', 2)
+  const label = operation
+    ? `${KIND_LABELS[prefix] ?? prefix} · ${KIND_LABELS[operation] ?? operation}`
+    : (KIND_LABELS[kind] ?? kind)
+  return { label, color: kindColor(kind) }
 }
 
 function tokensOf(s: KindStat): number {

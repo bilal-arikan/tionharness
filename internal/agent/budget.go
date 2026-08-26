@@ -48,7 +48,11 @@ func (r *Runtime) RecordUsage(ctx context.Context, agent db.Agent, model string,
 	}
 	delta := db.DeltaFromUsage(1, u)
 	delta.ProviderCalls = providerCalls // CLI internal round-trips (num_turns); 0 → counted as 1 in the rollup
-	kind := string(callKindFrom(ctx))
+	kind, err := usageCallKind(ctx, agent)
+	if err != nil {
+		r.logger.Warn("record usage rejected", "agent", agent.ID, "error", err)
+		return
+	}
 	if err := r.db.AddUsageKind(ctx, agent.ID, kind, agent.Provider, model, delta); err != nil {
 		r.logger.Warn("record usage failed", "agent", agent.ID, "error", err)
 	}
@@ -111,6 +115,9 @@ func (r *Runtime) noteResolvedModel(ctx context.Context, agent db.Agent, request
 // When autonomous, it honors the global autonomy brake first; it always records
 // usage afterward so the meter reflects every call.
 func (r *Runtime) guardedComplete(ctx context.Context, agent db.Agent, req providers.Request, autonomous bool) (*providers.Response, error) {
+	if _, err := usageCallKind(ctx, agent); err != nil {
+		return nil, err
+	}
 	if autonomous {
 		if r.Paused() {
 			return nil, ErrAutonomyPaused

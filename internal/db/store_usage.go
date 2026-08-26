@@ -2,6 +2,8 @@ package db
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/bilal-arikan/tionharness/internal/providers"
@@ -25,8 +27,38 @@ const (
 	UsageKindReflect  = "reflect"
 	UsageKindCompact  = "compact"
 	UsageKindBtw      = "btw"
+	UsageKindSystem   = "system"
 	UsageKindOther    = "other"
 )
+
+// SystemUsageKind keeps its legacy operation-only system qualification.
+func SystemUsageKind(kind string) string {
+	kind = strings.TrimSpace(kind)
+	if kind == "" {
+		kind = UsageKindOther
+	}
+	if kind == UsageKindSystem || strings.HasPrefix(kind, UsageKindSystem+":") {
+		return kind
+	}
+	return UsageKindSystem + ":" + kind
+}
+
+// SystemAgentUsageKind qualifies an operation with the exact system-agent key.
+// Consumers can roll up all system calls by "system:" or one actor by its key.
+func SystemAgentUsageKind(systemKey, kind string) (string, error) {
+	systemKey = strings.TrimSpace(systemKey)
+	if systemKey == "" {
+		return "", fmt.Errorf("system usage kind: empty system key")
+	}
+	if strings.Contains(systemKey, ":") {
+		return "", fmt.Errorf("system usage kind: invalid system key %q", systemKey)
+	}
+	kind = strings.TrimSpace(kind)
+	if kind == "" {
+		kind = UsageKindOther
+	}
+	return UsageKindSystem + ":" + systemKey + ":" + kind, nil
+}
 
 // KindStat is the per-kind/per-model slice of an agent's daily consumption.
 // Cache counters are tracked separately from InputTokens so cost can apply the
