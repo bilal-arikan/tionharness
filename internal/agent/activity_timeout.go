@@ -36,6 +36,14 @@ func activityTouchFrom(ctx context.Context) func() {
 	return fn
 }
 
+// TouchActivity resets the inactivity window attached to ctx, when present.
+// Callers must invoke it only for real model/tool-loop TurnStep activity.
+func TouchActivity(ctx context.Context) {
+	if touch := activityTouchFrom(ctx); touch != nil {
+		touch()
+	}
+}
+
 // activityIntervalKey keys the heartbeat cadence (see startActivityHeartbeat) on a
 // turn context, alongside the touch func.
 type activityIntervalKey struct{}
@@ -121,11 +129,31 @@ func startActivityHeartbeat(ctx context.Context) func() {
 // idle <= 0 disables the inactivity window (hard ceiling only). The returned stop
 // MUST be called (defer it) to release both timers and the context.
 func withActivityTimeout(parent context.Context, hard, idle time.Duration) (context.Context, func()) {
+	ctx, stop := WithActivityTimeout(parent, hard, idle)
+	if idle > 0 {
+		ctx = withActivityInterval(ctx, heartbeatInterval(idle))
+	}
+	return ctx, stop
+}
+
+// WithActivityTimeout bounds a turn by an optional absolute ceiling and an
+// optional inactivity window. Unlike the background-turn wrapper, it installs no
+// heartbeat: only explicit TouchActivity calls extend the idle window. A duration
+// of zero disables the corresponding timeout.
+func WithActivityTimeout(parent context.Context, hard, idle time.Duration) (context.Context, func()) {
 	ctx, cancel := context.WithCancelCause(parent)
-	hardTimer := time.AfterFunc(hard, func() { cancel(ErrTurnHardTimeout) })
+	var hardTimer *time.Timer
+	if hard > 0 {
+		hardTimer = time.AfterFunc(hard, func() { cancel(ErrTurnHardTimeout) })
+	}
 
 	if idle <= 0 {
-		return ctx, func() { hardTimer.Stop(); cancel(context.Canceled) }
+		return ctx, func() {
+			if hardTimer != nil {
+				hardTimer.Stop()
+			}
+			cancel(context.Canceled)
+		}
 	}
 
 	idleTimer := time.AfterFunc(idle, func() { cancel(ErrTurnIdleTimeout) })
@@ -141,12 +169,10 @@ func withActivityTimeout(parent context.Context, hard, idle time.Duration) (cont
 		mu.Unlock()
 	}
 	ctx = WithActivityTouch(ctx, touch)
-	// Cadence for the in-flight heartbeat (startActivityHeartbeat): a step-less but
-	// productive operation (non-streaming completion, one-shot big write) touches on
-	// this interval so it is not misread as hung. Only meaningful while idle > 0.
-	ctx = withActivityInterval(ctx, heartbeatInterval(idle))
 	return ctx, func() {
-		hardTimer.Stop()
+		if hardTimer != nil {
+			hardTimer.Stop()
+		}
 		idleTimer.Stop()
 		cancel(context.Canceled)
 	}

@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"time"
 
@@ -45,8 +46,10 @@ func (s *Server) runChatTurn(clientGone context.Context, wsp *workspace.Workspac
 	clientMsgID := req.ClientMsgID
 	// Detach the turn from the client connection so a page refresh/navigation never
 	// cancels generation; only an explicit "stop" control cancels it.
-	ctx, cancel := context.WithCancel(context.WithoutCancel(clientGone))
+	runCtx, cancel := context.WithCancel(context.WithoutCancel(clientGone))
 	defer cancel()
+	ctx, stopTimeout := agent.WithActivityTimeout(runCtx, s.tun.ChatTurnTimeout(), s.tun.ChatTurnIdleTimeout())
+	defer stopTimeout()
 	run := s.runs.register(runID, req.SessionID, wsp.ID, cancel)
 	defer s.runs.unregister(runID)
 	// steer_undelivered fallback (Doc 59): a claude-cli steer is delivered at the
@@ -487,7 +490,7 @@ func (s *Server) runChatTurn(clientGone context.Context, wsp *workspace.Workspac
 						CreatedBy:     respondingID,
 						WorkingDir:    wsp.Runtime.SessionWorkdir(session.ID),
 					})
-					return tools.SpawnResult{SessionID: res.SessionID, AgentName: res.AgentName}, err
+					return tools.SpawnResult{SessionID: res.SessionID, AgentName: res.AgentName, Queued: res.Queued, QueuePosition: res.QueuePosition}, err
 				}))
 
 			// run_subagent (CLI path): mirror the native delegation built-in so a
@@ -561,6 +564,7 @@ func (s *Server) runChatTurn(clientGone context.Context, wsp *workspace.Workspac
 			}
 			resp, steps, cerr := wsp.Runtime.CompleteWithToolsStream(turnCtx, agentRow, provider, llmReq, false,
 				func(st agent.TurnStep) {
+					agent.TouchActivity(turnCtx)
 					sse("step", st)
 					// Mirror the step onto the process-wide bus so OTHER windows viewing
 					// this session render it live too. The originating window ignores the
@@ -601,7 +605,7 @@ func (s *Server) runChatTurn(clientGone context.Context, wsp *workspace.Workspac
 			// open a durable card keyed to the ask id, clear the crash sidecar (the wait
 			// is now durable, not a mid-turn orphan), and return the goroutine cleanly.
 			// The answer endpoint re-drives the turn via ResumeAsk.
-			if cerr != nil {
+			if cerr != nil && !errors.Is(context.Cause(ctx), agent.ErrTurnHardTimeout) && !errors.Is(context.Cause(ctx), agent.ErrTurnIdleTimeout) {
 				snapSteps := append(append([]agent.TurnStep{}, leadSteps...), steps...)
 				if ask, suspended, perr := wsp.Runtime.SuspendAskFromError(context.WithoutCancel(ctx), agentRow, session.ID, llmReq, snapSteps, cerr); suspended {
 					if perr != nil {
@@ -621,10 +625,19 @@ func (s *Server) runChatTurn(clientGone context.Context, wsp *workspace.Workspac
 				// provider failure. Either way, PRESERVE the partial trace accumulated so
 				// far (kept) so the tools/text the agent already produced stay visible
 				// instead of vanishing — append an error/stopped step at the end.
-				stopped := ctx.Err() != nil
+				cause := context.Cause(ctx)
+				stopped := errors.Is(cause, context.Canceled)
 				detail := "provider error: " + cerr.Error()
 				reason := "provider_error"
-				if stopped {
+				if errors.Is(cause, agent.ErrTurnHardTimeout) {
+					detail = "Sohbet turu mutlak süre sınırına ulaştı. O ana kadarki yanıt korundu."
+					reason = "turn_hard_timeout"
+					s.logger.Info("chat turn hit hard timeout", "session", session.ID, "agent", agentRow.ID)
+				} else if errors.Is(cause, agent.ErrTurnIdleTimeout) {
+					detail = "Sohbet turu etkinlik zaman aşımına uğradı. O ana kadarki yanıt korundu."
+					reason = "turn_idle_timeout"
+					s.logger.Info("chat turn hit idle timeout", "session", session.ID, "agent", agentRow.ID)
+				} else if stopped {
 					detail = "Tur manuel olarak durduruldu. O ana kadarki adımlar korundu."
 					reason = "stopped"
 					s.logger.Info("chat turn stopped by user", "session", session.ID, "agent", agentRow.ID)

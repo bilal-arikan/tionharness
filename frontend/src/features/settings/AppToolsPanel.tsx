@@ -130,6 +130,19 @@ export function ToolsPanel({ draft, set }: PanelProps) {
           />
         </Field>
         <Field
+          label="Maks. bekleyen spawn"
+          hint="Kapasite doluyken kuyrukta bekleyebilecek spawn sayısı (1–128)."
+        >
+          <input
+            type="number"
+            min={1}
+            max={128}
+            value={draft.spawnQueueMax}
+            onChange={(e) => set('spawnQueueMax', Number(e.target.value))}
+            className={inputCls}
+          />
+        </Field>
+        <Field
           label="Tur başına maks. spawn"
           hint="Tek ajan turunda başlatılabilecek spawn sayısı (1–64)."
         >
@@ -165,6 +178,32 @@ export function ToolsPanel({ draft, set }: PanelProps) {
             max={1440}
             value={draft.spawnIdleTimeoutMin}
             onChange={(e) => set('spawnIdleTimeoutMin', Number(e.target.value))}
+            className={inputCls}
+          />
+        </Field>
+        <Field
+          label="Sohbet turu üst sınırı (dk)"
+          hint="İnteraktif sohbet turunun tüm hazırlık, model ve araç döngüsünü kapsayan mutlak süre tavanı (varsayılan 120; 0 = kapalı)."
+        >
+          <input
+            type="number"
+            min={0}
+            max={1440}
+            value={draft.chatTurnTimeoutMin}
+            onChange={(e) => set('chatTurnTimeoutMin', Number(e.target.value))}
+            className={inputCls}
+          />
+        </Field>
+        <Field
+          label="Sohbet turu boşta süresi (dk)"
+          hint="İnteraktif sohbet turu bu kadar süre gerçek bir adım üretmezse iptal edilir. HTTP/SSE pingleri etkinlik sayılmaz (varsayılan 20; 0 = kapalı)."
+        >
+          <input
+            type="number"
+            min={0}
+            max={1440}
+            value={draft.chatTurnIdleTimeoutMin}
+            onChange={(e) => set('chatTurnIdleTimeoutMin', Number(e.target.value))}
             className={inputCls}
           />
         </Field>

@@ -219,9 +219,12 @@ func (s *Store) Apply(p Patch) (Settings, error) {
 	applyInt(&next.DelegationMaxDepth, p.DelegationMaxDepth)
 	applyInt(&next.DelegationMaxCalls, p.DelegationMaxCalls)
 	applyInt(&next.SpawnMaxConcurrent, p.SpawnMaxConcurrent)
+	applyInt(&next.SpawnQueueMax, p.SpawnQueueMax)
 	applyInt(&next.SpawnMaxPerTurn, p.SpawnMaxPerTurn)
 	applyInt(&next.SpawnTimeoutMin, p.SpawnTimeoutMin)
 	applyInt(&next.SpawnIdleTimeoutMin, p.SpawnIdleTimeoutMin)
+	applyInt(&next.ChatTurnTimeoutMin, p.ChatTurnTimeoutMin)
+	applyInt(&next.ChatTurnIdleTimeoutMin, p.ChatTurnIdleTimeoutMin)
 	applyInt(&next.IdleResumeMax, p.IdleResumeMax)
 	applyInt(&next.ScheduleTimeoutMin, p.ScheduleTimeoutMin)
 	applyInt(&next.TurnWatchdogMin, p.TurnWatchdogMin)
@@ -426,6 +429,12 @@ func normalize(v Settings) Settings {
 	if v.SpawnMaxConcurrent > 128 {
 		v.SpawnMaxConcurrent = 128
 	}
+	if v.SpawnQueueMax < 1 {
+		v.SpawnQueueMax = 1
+	}
+	if v.SpawnQueueMax > 128 {
+		v.SpawnQueueMax = 128
+	}
 	if v.SpawnMaxPerTurn < 1 {
 		v.SpawnMaxPerTurn = 1
 	}
@@ -446,6 +455,22 @@ func normalize(v Settings) Settings {
 	}
 	if v.SpawnIdleTimeoutMin > v.SpawnTimeoutMin {
 		v.SpawnIdleTimeoutMin = v.SpawnTimeoutMin
+	}
+	// Interactive chat timeouts use 0 as an explicit disabled value.
+	if v.ChatTurnTimeoutMin < 0 {
+		v.ChatTurnTimeoutMin = Default().ChatTurnTimeoutMin
+	}
+	if v.ChatTurnTimeoutMin > 1440 {
+		v.ChatTurnTimeoutMin = 1440
+	}
+	if v.ChatTurnIdleTimeoutMin < 0 {
+		v.ChatTurnIdleTimeoutMin = Default().ChatTurnIdleTimeoutMin
+	}
+	if v.ChatTurnIdleTimeoutMin > 1440 {
+		v.ChatTurnIdleTimeoutMin = 1440
+	}
+	if v.ChatTurnTimeoutMin > 0 && v.ChatTurnIdleTimeoutMin > v.ChatTurnTimeoutMin {
+		v.ChatTurnIdleTimeoutMin = v.ChatTurnTimeoutMin
 	}
 	// Idle-resume budget: 0 disables it, cap at 5 so a persistently-idle turn cannot
 	// chew through many full idle windows before it is finally reported unfinished.

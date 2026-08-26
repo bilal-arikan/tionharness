@@ -324,12 +324,15 @@ type Settings struct {
 
 	// Spawn guards — the detached background surface: run_subagent wait:"async"
 	// (native) and the bridged spawn_session (claude-cli) + the UI spawn button.
-	SpawnMaxConcurrent  int `json:"spawnMaxConcurrent"`  // max concurrent spawned sessions (0 = default 16)
-	SpawnMaxPerTurn     int `json:"spawnMaxPerTurn"`     // max spawns per agent turn (0 = default 4)
-	SpawnTimeoutMin     int `json:"spawnTimeoutMin"`     // spawn work-turn deadline in minutes (0 = default 20); also budgets its auto-continue continuations
-	SpawnIdleTimeoutMin int `json:"spawnIdleTimeoutMin"` // spawn/worker inactivity watchdog in minutes (0 = default 5); cancels a turn that emits no step for this long
-	IdleResumeMax       int `json:"idleResumeMax"`       // single-shot auto-restarts for an idle-cut background turn (default 1; 0 = disabled)
-	ScheduleTimeoutMin  int `json:"scheduleTimeoutMin"`  // scheduled-fire (cron task/prompt + wake, and the manual "Run now") deadline in minutes (0 = default 60)
+	SpawnMaxConcurrent     int `json:"spawnMaxConcurrent"`     // max concurrent spawned sessions (0 = default 16)
+	SpawnQueueMax          int `json:"spawnQueueMax"`          // max queued spawned sessions (0 = default 16)
+	SpawnMaxPerTurn        int `json:"spawnMaxPerTurn"`        // max spawns per agent turn (0 = default 4)
+	SpawnTimeoutMin        int `json:"spawnTimeoutMin"`        // spawn work-turn deadline in minutes (0 = default 20); also budgets its auto-continue continuations
+	SpawnIdleTimeoutMin    int `json:"spawnIdleTimeoutMin"`    // spawn/worker inactivity watchdog in minutes (0 = default 5); cancels a turn that emits no step for this long
+	ChatTurnTimeoutMin     int `json:"chatTurnTimeoutMin"`     // interactive chat wall-clock ceiling in minutes (0 = disabled)
+	ChatTurnIdleTimeoutMin int `json:"chatTurnIdleTimeoutMin"` // interactive chat inactivity window in minutes (0 = disabled)
+	IdleResumeMax          int `json:"idleResumeMax"`          // single-shot auto-restarts for an idle-cut background turn (default 1; 0 = disabled)
+	ScheduleTimeoutMin     int `json:"scheduleTimeoutMin"`     // scheduled-fire (cron task/prompt + wake, and the manual "Run now") deadline in minutes (0 = default 60)
 	// TurnWatchdogMin bounds a single QUEUED turn (chat, coordinator, worker, wake…)
 	// before the serial per-session worker force-cancels it. A wedge breaker, not a
 	// work budget — it is floored at the spawn/schedule ceilings so it can never cut
@@ -504,14 +507,17 @@ func Default() Settings {
 		DelegationMaxDepth: 3,
 		DelegationMaxCalls: 8,
 
-		SpawnMaxConcurrent:  16,
-		SpawnMaxPerTurn:     4,
-		SpawnTimeoutMin:     20,
-		SpawnIdleTimeoutMin: 5,
-		IdleResumeMax:       1,
-		ScheduleTimeoutMin:  60,
-		TurnWatchdogMin:     120,
-		TurnIdleWatchdogMin: 20,
+		SpawnMaxConcurrent:     16,
+		SpawnQueueMax:          16,
+		SpawnMaxPerTurn:        4,
+		SpawnTimeoutMin:        20,
+		SpawnIdleTimeoutMin:    5,
+		ChatTurnTimeoutMin:     120,
+		ChatTurnIdleTimeoutMin: 20,
+		IdleResumeMax:          1,
+		ScheduleTimeoutMin:     60,
+		TurnWatchdogMin:        120,
+		TurnIdleWatchdogMin:    20,
 
 		ShellDefaultTimeoutSec: 30,
 		ShellMaxTimeoutSec:     120,
@@ -641,14 +647,17 @@ type DTO struct {
 	DelegationMaxDepth  int  `json:"delegationMaxDepth"`
 	DelegationMaxCalls  int  `json:"delegationMaxCalls"`
 
-	SpawnMaxConcurrent  int `json:"spawnMaxConcurrent"`
-	SpawnMaxPerTurn     int `json:"spawnMaxPerTurn"`
-	SpawnTimeoutMin     int `json:"spawnTimeoutMin"`
-	SpawnIdleTimeoutMin int `json:"spawnIdleTimeoutMin"`
-	IdleResumeMax       int `json:"idleResumeMax"`
-	ScheduleTimeoutMin  int `json:"scheduleTimeoutMin"`
-	TurnWatchdogMin     int `json:"turnWatchdogMin"`
-	TurnIdleWatchdogMin int `json:"turnIdleWatchdogMin"`
+	SpawnMaxConcurrent     int `json:"spawnMaxConcurrent"`
+	SpawnQueueMax          int `json:"spawnQueueMax"`
+	SpawnMaxPerTurn        int `json:"spawnMaxPerTurn"`
+	SpawnTimeoutMin        int `json:"spawnTimeoutMin"`
+	SpawnIdleTimeoutMin    int `json:"spawnIdleTimeoutMin"`
+	ChatTurnTimeoutMin     int `json:"chatTurnTimeoutMin"`
+	ChatTurnIdleTimeoutMin int `json:"chatTurnIdleTimeoutMin"`
+	IdleResumeMax          int `json:"idleResumeMax"`
+	ScheduleTimeoutMin     int `json:"scheduleTimeoutMin"`
+	TurnWatchdogMin        int `json:"turnWatchdogMin"`
+	TurnIdleWatchdogMin    int `json:"turnIdleWatchdogMin"`
 
 	ShellDefaultTimeoutSec int `json:"shellDefaultTimeoutSec"`
 	ShellMaxTimeoutSec     int `json:"shellMaxTimeoutSec"`
@@ -757,14 +766,17 @@ func (s Settings) ToDTO() DTO {
 		DelegationMaxDepth:      s.DelegationMaxDepth,
 		DelegationMaxCalls:      s.DelegationMaxCalls,
 
-		SpawnMaxConcurrent:  s.SpawnMaxConcurrent,
-		SpawnMaxPerTurn:     s.SpawnMaxPerTurn,
-		SpawnTimeoutMin:     s.SpawnTimeoutMin,
-		SpawnIdleTimeoutMin: s.SpawnIdleTimeoutMin,
-		IdleResumeMax:       s.IdleResumeMax,
-		ScheduleTimeoutMin:  s.ScheduleTimeoutMin,
-		TurnWatchdogMin:     s.TurnWatchdogMin,
-		TurnIdleWatchdogMin: s.TurnIdleWatchdogMin,
+		SpawnMaxConcurrent:     s.SpawnMaxConcurrent,
+		SpawnQueueMax:          s.SpawnQueueMax,
+		SpawnMaxPerTurn:        s.SpawnMaxPerTurn,
+		SpawnTimeoutMin:        s.SpawnTimeoutMin,
+		SpawnIdleTimeoutMin:    s.SpawnIdleTimeoutMin,
+		ChatTurnTimeoutMin:     s.ChatTurnTimeoutMin,
+		ChatTurnIdleTimeoutMin: s.ChatTurnIdleTimeoutMin,
+		IdleResumeMax:          s.IdleResumeMax,
+		ScheduleTimeoutMin:     s.ScheduleTimeoutMin,
+		TurnWatchdogMin:        s.TurnWatchdogMin,
+		TurnIdleWatchdogMin:    s.TurnIdleWatchdogMin,
 
 		ShellDefaultTimeoutSec: s.ShellDefaultTimeoutSec,
 		ShellMaxTimeoutSec:     s.ShellMaxTimeoutSec,
@@ -875,14 +887,17 @@ type Patch struct {
 	DelegationMaxDepth      *int  `json:"delegationMaxDepth"`
 	DelegationMaxCalls      *int  `json:"delegationMaxCalls"`
 
-	SpawnMaxConcurrent  *int `json:"spawnMaxConcurrent"`
-	SpawnMaxPerTurn     *int `json:"spawnMaxPerTurn"`
-	SpawnTimeoutMin     *int `json:"spawnTimeoutMin"`
-	SpawnIdleTimeoutMin *int `json:"spawnIdleTimeoutMin"`
-	IdleResumeMax       *int `json:"idleResumeMax"`
-	ScheduleTimeoutMin  *int `json:"scheduleTimeoutMin"`
-	TurnWatchdogMin     *int `json:"turnWatchdogMin"`
-	TurnIdleWatchdogMin *int `json:"turnIdleWatchdogMin"`
+	SpawnMaxConcurrent     *int `json:"spawnMaxConcurrent"`
+	SpawnQueueMax          *int `json:"spawnQueueMax"`
+	SpawnMaxPerTurn        *int `json:"spawnMaxPerTurn"`
+	SpawnTimeoutMin        *int `json:"spawnTimeoutMin"`
+	SpawnIdleTimeoutMin    *int `json:"spawnIdleTimeoutMin"`
+	ChatTurnTimeoutMin     *int `json:"chatTurnTimeoutMin"`
+	ChatTurnIdleTimeoutMin *int `json:"chatTurnIdleTimeoutMin"`
+	IdleResumeMax          *int `json:"idleResumeMax"`
+	ScheduleTimeoutMin     *int `json:"scheduleTimeoutMin"`
+	TurnWatchdogMin        *int `json:"turnWatchdogMin"`
+	TurnIdleWatchdogMin    *int `json:"turnIdleWatchdogMin"`
 
 	ShellDefaultTimeoutSec *int `json:"shellDefaultTimeoutSec"`
 	ShellMaxTimeoutSec     *int `json:"shellMaxTimeoutSec"`

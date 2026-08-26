@@ -44,6 +44,7 @@ const DefaultCoordinatorWorkerNoteGrace = 5 * time.Minute
 // into a spawn storm.
 const (
 	DefaultSpawnMaxConcurrent = 16 // max simultaneously-running spawned sessions
+	DefaultSpawnQueueMax      = 16 // max waiting spawned sessions
 	DefaultSpawnMaxPerTurn    = 4  // max spawns one agent turn may launch
 )
 
@@ -59,6 +60,11 @@ const DefaultSpawnTimeoutMinutes = 20
 // SpawnTimeout ceiling. Settings-driven (SpawnIdleTimeoutMin) via applySettings;
 // 0 selects this default.
 const DefaultSpawnIdleTimeoutMinutes = 5
+
+const (
+	DefaultChatTurnTimeoutMinutes     = 120
+	DefaultChatTurnIdleTimeoutMinutes = 20
+)
 
 // DefaultIdleResumeMax is the single-shot budget for the OUT-OF-LOOP idle-timeout
 // resume (see runTurnWithIdleResume in turnoutcome.go): a background turn cut
@@ -150,9 +156,12 @@ type Tunables struct {
 	delegMaxCalls    int  // 0 → DefaultMaxDelegationCalls
 
 	spawnMaxConcurrent  int // 0 → DefaultSpawnMaxConcurrent
+	spawnQueueMax       int // 0 → DefaultSpawnQueueMax
 	spawnMaxPerTurn     int // 0 → DefaultSpawnMaxPerTurn
 	spawnTimeoutMin     int // 0 → DefaultSpawnTimeoutMinutes (spawn work-turn deadline, in minutes)
 	spawnIdleTimeoutMin int // 0 → DefaultSpawnIdleTimeoutMinutes (spawn/worker inactivity watchdog, in minutes)
+	chatTurnTimeoutMin  int // 0 = disabled (interactive chat turn wall-clock ceiling, in minutes)
+	chatTurnIdleMin     int // 0 = disabled (interactive chat turn inactivity window, in minutes)
 	idleResumeMax       int // <0 → DefaultIdleResumeMax; 0 = disabled; N = N single-shot idle-timeout resumes
 	schedTimeoutMin     int // 0 → DefaultScheduleTimeoutMinutes (scheduled-fire deadline, in minutes)
 	turnWatchdogMin     int // 0 → DefaultTurnWatchdogMinutes (queued-turn wedge breaker, in minutes)
@@ -334,6 +343,8 @@ func NewTunables() *Tunables {
 		reactiveKeepRecent: DefaultReactiveKeepRecent,
 		providerRetryMax:   DefaultProviderRetryMax,
 		idleResumeMax:      DefaultIdleResumeMax,
+		chatTurnTimeoutMin: DefaultChatTurnTimeoutMinutes,
+		chatTurnIdleMin:    DefaultChatTurnIdleTimeoutMinutes,
 		// Guardrail warnings on by default (gentle nudge appended to failing
 		// results); the hard stop stays opt-in from settings.
 		toolGuardWarnings:  true,
@@ -508,11 +519,22 @@ func (t *Tunables) DelegationMaxCalls() int {
 // SetSpawnLimits sets the fire-and-forget spawn guards: the max number of
 // simultaneously-running spawned sessions and the max spawns a single agent turn
 // may launch. A value of 0 selects the built-in default.
-func (t *Tunables) SetSpawnLimits(maxConcurrent, maxPerTurn int) {
+func (t *Tunables) SetSpawnLimits(maxConcurrent, queueMax, maxPerTurn int) {
 	t.mu.Lock()
 	t.spawnMaxConcurrent = maxConcurrent
+	t.spawnQueueMax = queueMax
 	t.spawnMaxPerTurn = maxPerTurn
 	t.mu.Unlock()
+}
+
+// SpawnQueueMax returns the cap on queued spawned sessions (default when unset).
+func (t *Tunables) SpawnQueueMax() int {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	if t.spawnQueueMax <= 0 {
+		return DefaultSpawnQueueMax
+	}
+	return t.spawnQueueMax
 }
 
 // SpawnMaxConcurrent returns the cap on simultaneously-running spawned sessions
@@ -577,6 +599,30 @@ func (t *Tunables) SpawnIdleTimeout() time.Duration {
 		m = DefaultSpawnIdleTimeoutMinutes
 	}
 	return time.Duration(m) * time.Minute
+}
+
+func (t *Tunables) SetChatTurnTimeoutMinutes(minutes int) {
+	t.mu.Lock()
+	t.chatTurnTimeoutMin = minutes
+	t.mu.Unlock()
+}
+
+func (t *Tunables) ChatTurnTimeout() time.Duration {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	return time.Duration(t.chatTurnTimeoutMin) * time.Minute
+}
+
+func (t *Tunables) SetChatTurnIdleTimeoutMinutes(minutes int) {
+	t.mu.Lock()
+	t.chatTurnIdleMin = minutes
+	t.mu.Unlock()
+}
+
+func (t *Tunables) ChatTurnIdleTimeout() time.Duration {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	return time.Duration(t.chatTurnIdleMin) * time.Minute
 }
 
 // SetIdleResumeMax configures how many times an idle-cut background turn is

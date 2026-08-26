@@ -117,9 +117,12 @@ export interface AppSettings {
 
   // Spawn guards — the detached background surface (run_subagent async + spawn).
   spawnMaxConcurrent: number
+  spawnQueueMax: number
   spawnMaxPerTurn: number
   spawnTimeoutMin: number
   spawnIdleTimeoutMin: number
+  chatTurnTimeoutMin: number
+  chatTurnIdleTimeoutMin: number
   idleResumeMax: number
   scheduleTimeoutMin: number
   turnWatchdogMin: number
