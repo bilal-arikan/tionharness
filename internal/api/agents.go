@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"sort"
 	"strings"
@@ -285,7 +286,12 @@ func (s *Server) handleDeleteAgent(w http.ResponseWriter, r *http.Request) {
 			"Ajan şu anda çalışıyor ("+where+"). Önce turu durdurun, sonra silin.")
 		return
 	}
-	if err := wsp.DB.DeleteAgent(r.Context(), id); writeDBError(w, err, "agent not found") {
+	err := wsp.DB.DeleteAgent(r.Context(), id)
+	if errors.Is(err, db.ErrSystemAgentDelete) {
+		writeError(w, http.StatusConflict, "system agent cannot be deleted; disable it instead")
+		return
+	}
+	if writeDBError(w, err, "agent not found") {
 		return
 	}
 	// DeleteAgent also drops the agent's schedules; reload so their cron jobs
@@ -295,6 +301,37 @@ func (s *Server) handleDeleteAgent(w http.ResponseWriter, r *http.Request) {
 	}
 	s.logger.Info("agent deleted", "id", id)
 	writeJSON(w, http.StatusOK, map[string]string{"deleted": id})
+}
+
+// handleRestoreSystemAgent replaces user-editable system-agent fields with the
+// compiled defaults for its stable SystemKey. Disabled is intentionally left
+// unchanged; enabling and disabling are separate, explicit operations.
+func (s *Server) handleRestoreSystemAgent(w http.ResponseWriter, r *http.Request) {
+	wsp := ws(r)
+	current, err := wsp.DB.GetAgent(r.Context(), r.PathValue("id"))
+	if writeDBError(w, err, "agent not found") {
+		return
+	}
+	def, ok := agentpkg.SystemAgentDefault(current.SystemKey)
+	if !current.System || current.SystemKey == "" || !ok {
+		writeError(w, http.StatusNotFound, "system agent default not found")
+		return
+	}
+
+	if err := wsp.DB.UpdateAgentAllowedTools(r.Context(), current.ID, def.AllowedTools); writeDBError(w, err, "agent not found") {
+		return
+	}
+	restored, err := wsp.DB.UpdateAgent(r.Context(), current.ID, db.AgentProfilePatch{
+		Name:     &def.Name,
+		Soul:     &def.SystemPrompt,
+		Identity: &def.Description,
+		Model:    &def.SuggestedModel,
+	})
+	if writeDBError(w, err, "agent not found") {
+		return
+	}
+	restored.AllowedTools = def.AllowedTools
+	writeJSON(w, http.StatusOK, restored)
 }
 
 type updateAgentReq struct {
@@ -308,6 +345,9 @@ type updateAgentReq struct {
 	Avatar         *string   `json:"avatar"`
 	Color          *string   `json:"color"`
 	Skills         *[]string `json:"skills"`
+	Disabled       *bool     `json:"disabled"`
+	System         *bool     `json:"system"`
+	SystemKey      *string   `json:"systemKey"`
 	// Coordinator defaults for NEW sessions of this agent. Pointers so omitting
 	// them leaves the current setting alone and an explicit false turns it off.
 	// Existing sessions keep whatever mode they are already in — the toggle is a
@@ -341,9 +381,20 @@ func (s *Server) handleUpdateAgent(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Snapshot the agent before the update so we can detect a model change and
-	// emit an event (P1.2). Harmless when the read fails — we skip the event.
-	prev, _ := wsp.DB.GetAgent(r.Context(), agentID)
+	// Read first so immutable system identity is validated explicitly and model
+	// changes can be reported against the stored value.
+	prev, err := wsp.DB.GetAgent(r.Context(), agentID)
+	if writeDBError(w, err, "agent not found") {
+		return
+	}
+	if req.System != nil && *req.System != prev.System {
+		writeError(w, http.StatusBadRequest, "system cannot be changed")
+		return
+	}
+	if req.SystemKey != nil && *req.SystemKey != prev.SystemKey {
+		writeError(w, http.StatusBadRequest, "systemKey cannot be changed")
+		return
+	}
 
 	patch := db.AgentProfilePatch{
 		Name:                req.Name,
@@ -355,6 +406,7 @@ func (s *Server) handleUpdateAgent(w http.ResponseWriter, r *http.Request) {
 		Avatar:              req.Avatar,
 		Color:               req.Color,
 		Skills:              req.Skills,
+		Disabled:            req.Disabled,
 		CoordinatorMode:     req.CoordinatorMode,
 		CoordinatorWorkflow: req.CoordinatorWorkflow,
 		CoordinatorPrompt:   req.CoordinatorPrompt,

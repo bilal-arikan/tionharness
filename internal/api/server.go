@@ -264,9 +264,11 @@ func (s *Server) applySettings() {
 	s.tun.SetClaudePersistentSession(cur.ClaudePersistentSession)
 	s.tun.SetClaudeSysPromptFile(cur.ClaudeSysPromptFile)
 	s.tun.SetDelegationLimits(cur.DelegationMaxDepth, cur.DelegationMaxCalls)
-	s.tun.SetSpawnLimits(cur.SpawnMaxConcurrent, cur.SpawnMaxPerTurn)
+	s.tun.SetSpawnLimits(cur.SpawnMaxConcurrent, cur.SpawnQueueMax, cur.SpawnMaxPerTurn)
 	s.tun.SetSpawnTimeoutMinutes(cur.SpawnTimeoutMin)
 	s.tun.SetSpawnIdleTimeoutMinutes(cur.SpawnIdleTimeoutMin)
+	s.tun.SetChatTurnTimeoutMinutes(cur.ChatTurnTimeoutMin)
+	s.tun.SetChatTurnIdleTimeoutMinutes(cur.ChatTurnIdleTimeoutMin)
 	s.tun.SetIdleResumeMax(cur.IdleResumeMax)
 	s.tun.SetScheduleTimeoutMinutes(cur.ScheduleTimeoutMin)
 	s.tun.SetTurnWatchdogMinutes(cur.TurnWatchdogMin)
@@ -408,6 +410,7 @@ func (s *Server) registerAgentRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/agents", s.handleCreateAgent)
 	mux.HandleFunc("PUT /api/agents/{id}", s.handleUpdateAgent)
 	mux.HandleFunc("DELETE /api/agents/{id}", s.handleDeleteAgent)
+	mux.HandleFunc("POST /api/agents/{id}/restore-default", s.handleRestoreSystemAgent)
 	// Clone an existing agent (full profile + tool config) into a new "(kopya)".
 	mux.HandleFunc("POST /api/agents/{id}/duplicate", s.handleDuplicateAgent)
 	// Fresh-start context preview (assembled system prompt + tool catalog).
@@ -557,6 +560,7 @@ func (s *Server) registerTaskRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("DELETE /api/tasks/{id}", s.handleDeleteTask)
 	mux.HandleFunc("POST /api/tasks/{id}/archive", s.handleArchiveTask)
 	mux.HandleFunc("POST /api/tasks/{id}/title", s.handleGenerateTaskTitle)
+	mux.HandleFunc("POST /api/tasks/{id}/{subpath...}", s.handleUnknownTaskSubpath)
 }
 
 // registerScheduleRoutes registers cron schedules.
