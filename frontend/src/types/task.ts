@@ -110,7 +110,7 @@ export type CounterScope = 'session' | 'workspace'
 // What a board automation does when it fires: 'spawn' (default, '' is treated the
 // same) runs the target agent/flow — the board drives execution; 'archive'
 // archives the card with no LLM call (the 'done → archive' cleanup).
-export type BoardAction = 'spawn' | 'archive'
+export type BoardAction = 'spawn' | 'archive' | 'move'
 
 export interface Automation {
   id: string
@@ -131,6 +131,8 @@ export interface Automation {
   // What firing does: 'spawn' (default) runs the target — the board drives
   // execution; 'archive' archives the card with no LLM call (needs no target).
   boardAction?: BoardAction
+  // Explicit destination for a targetless move action.
+  boardMoveToState?: string
   // Token-trigger fields (only meaningful when triggerKind === 'token').
   tokenScope?: TokenScope // default 'session'
   // Token interval: fires each time cumulative spend crosses another multiple

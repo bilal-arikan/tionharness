@@ -78,6 +78,7 @@ export function AutomationModal({
   const [boardPriority, setBoardPriority] = useState(editing?.boardPriority ?? 0)
   const [boardExclusive, setBoardExclusive] = useState(editing?.boardExclusive ?? false)
   const [boardAction, setBoardAction] = useState<BoardAction>(editing?.boardAction ?? 'spawn')
+  const [boardMoveToState, setBoardMoveToState] = useState(editing?.boardMoveToState ?? '')
   const [tokenScope, setTokenScope] = useState<TokenScope>(editing?.tokenScope ?? 'session')
   const [tokenThreshold, setTokenThreshold] = useState(
     editing?.tokenThreshold ?? DEFAULT_TOKEN_THRESHOLD,
@@ -110,8 +111,8 @@ export function AutomationModal({
   const [spawnTagsOverride, setSpawnTagsOverride] = useState<string[] | null>(null)
   const [generatingTitle, setGeneratingTitle] = useState(false)
 
-  const isArchive = isBoardKind && boardAction === 'archive'
-  const missingTarget = !isArchive && (targetMode === 'flow' ? !flowId : !targetAgentId)
+  const isTargetlessAction = isBoardKind && (boardAction === 'archive' || boardAction === 'move')
+  const missingTarget = !isTargetlessAction && (targetMode === 'flow' ? !flowId : !targetAgentId)
   // Required-field errors, mirroring db.ValidateAutomationShape. Record order is
   // the blocking priority; useFieldErrors gates each behind a submit attempt.
   const { markAttempted, firstError, errorFor } = useFieldErrors({
@@ -126,6 +127,10 @@ export function AutomationModal({
     counter:
       isCounterKind && counterInterval < MIN_COUNTER_INTERVAL
         ? `Sayaç aralığı en az ${MIN_COUNTER_INTERVAL} olmalı`
+        : '',
+    moveTarget:
+      isBoardKind && boardAction === 'move' && !boardMoveToState
+        ? 'Taşıma hedef sütunu zorunlu'
         : '',
     target: missingTarget
       ? targetMode === 'flow'
@@ -146,7 +151,7 @@ export function AutomationModal({
   const submit = async () => {
     markAttempted()
     // Prompt is required for every rule except an archive board rule (no LLM call).
-    if (!isArchive && !promptTemplate.trim()) {
+    if (!isTargetlessAction && !promptTemplate.trim()) {
       onError('Prompt şablonu zorunlu')
       return
     }
@@ -162,7 +167,15 @@ export function AutomationModal({
       return
     }
     const trigger = isBoardKind
-      ? { boardOp, boardFromState, boardToState, boardPriority, boardExclusive, boardAction }
+      ? {
+          boardOp,
+          boardFromState,
+          boardToState,
+          boardPriority,
+          boardExclusive,
+          boardAction,
+          boardMoveToState,
+        }
       : isTokenKind
         ? { tokenScope, tokenThreshold }
         : isCounterKind
@@ -170,7 +183,7 @@ export function AutomationModal({
           : { triggerTag: triggerTag.trim() }
     // An archive rule carries no target; a spawn rule (and every non-board kind)
     // carries either an agent or a flow.
-    const target = isArchive
+    const target = isTargetlessAction
       ? { targetAgentId: '', flowId: '' }
       : targetMode === 'flow'
         ? { flowId, targetAgentId: '' }
@@ -183,7 +196,7 @@ export function AutomationModal({
       ...trigger,
       ...target,
       // Session mode only matters for an agent target; a flow always runs per-trigger.
-      ...(targetMode === 'agent' && !isArchive ? { sessionMode } : {}),
+      ...(targetMode === 'agent' && !isTargetlessAction ? { sessionMode } : {}),
       promptTemplate: promptTemplate.trim(),
       // NOT `|| 0`: an empty or non-numeric field used to submit 0, which the
       // runtime reads as UNLIMITED — the very value this form forbids. Fall back
@@ -327,10 +340,28 @@ export function AutomationModal({
         <FieldError message={errorFor('counter')} />
       </Field>
 
-      {isBoardKind && boardAction === 'archive' ? (
+      {isTargetlessAction ? (
         <div className="rounded border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-xs text-[var(--color-text-dim)]">
-          Arşiv aksiyonu kartı panodan gizler — hedef ajan/akış ya da prompt gerekmez, LLM çağrısı
-          yapılmaz.
+          {boardAction === 'archive' ? (
+            <>Arşiv aksiyonu kartı panodan gizler — hedef ajan/akış ya da prompt gerekmez.</>
+          ) : (
+            <label className="flex items-center gap-2">
+              Hedef sütun
+              <select
+                value={boardMoveToState}
+                onChange={(e) => setBoardMoveToState(e.target.value)}
+                className={inputCls}
+              >
+                <option value="">Seçin</option>
+                {columns.map((column) => (
+                  <option key={column.key} value={column.key}>
+                    {column.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          <FieldError message={errorFor('moveTarget')} />
         </div>
       ) : (
         <>

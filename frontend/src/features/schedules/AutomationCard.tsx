@@ -1,4 +1,13 @@
-import { RotateCcw, Pencil, Workflow, LayoutGrid, Zap, Hash, Archive } from 'lucide-react'
+import {
+  RotateCcw,
+  Pencil,
+  Workflow,
+  LayoutGrid,
+  Zap,
+  Hash,
+  Archive,
+  MoveRight,
+} from 'lucide-react'
 import type { Agent, Automation, BoardColumnDef, Flow } from '@/types'
 import { AgentAvatar } from '@/shared/components/agents/AgentAvatar'
 import { TagEditor } from '@/shared/components'
@@ -47,13 +56,13 @@ export function AutomationCard({
   const maxed = a.maxIterations > 0 && a.iterationCount >= a.maxIterations
   const expired = isPast(a.expiresAt)
   const opLabel = boardOpLabel(a.boardOp)
-  const isArchiveRule = isBoardKind && a.boardAction === 'archive'
+  const isTargetlessRule = isBoardKind && (a.boardAction === 'archive' || a.boardAction === 'move')
   // Effective session mode (agent-backed only): explicit value wins, else the
   // per-kind default (token/counter → continue). Flow-backed rules ignore it.
   const kind = a.triggerKind ?? 'tag'
   const effectiveMode =
     a.sessionMode ?? (kind === 'token' || kind === 'counter' ? 'continue' : 'spawn')
-  const showContinue = !a.flowId && !isArchiveRule && effectiveMode === 'continue'
+  const showContinue = !a.flowId && !isTargetlessRule && effectiveMode === 'continue'
 
   return (
     <div
@@ -87,12 +96,12 @@ export function AutomationCard({
               className={`block h-4 w-4 rounded-full bg-white transition ${a.enabled ? 'translate-x-4' : ''}`}
             />
           </button>
-          {isArchiveRule ? (
+          {isTargetlessRule ? (
             <span
               className="flex h-7 w-7 items-center justify-center rounded-full bg-[var(--color-surface-2)] text-[var(--color-text-dim)]"
-              title="Arşiv aksiyonu — hedef yok, LLM çağrısı yapılmaz"
+              title="Hedefsiz pano aksiyonu — LLM çağrısı yapılmaz"
             >
-              <Archive size={15} />
+              {a.boardAction === 'archive' ? <Archive size={15} /> : <MoveRight size={15} />}
             </span>
           ) : a.flowId ? (
             <span
@@ -129,12 +138,20 @@ export function AutomationCard({
                     {a.boardToState ? colLabel(a.boardToState) : '∗'})
                   </span>
                 )}
-                {isArchiveRule && (
+                {a.boardAction === 'archive' && (
                   <span
                     className="flex items-center gap-0.5 opacity-80"
                     title="Kartı arşivler (LLM yok)"
                   >
                     <Archive size={10} /> arşiv
+                  </span>
+                )}
+                {a.boardAction === 'move' && (
+                  <span
+                    className="flex items-center gap-0.5 opacity-80"
+                    title="Kartı hedef sütuna taşır (LLM yok)"
+                  >
+                    <MoveRight size={10} /> {colLabel(a.boardMoveToState)}
                   </span>
                 )}
               </span>

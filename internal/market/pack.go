@@ -304,7 +304,7 @@ type WorkspaceTemplateAutomation struct {
 	BoardToState   string `json:"boardToState,omitempty"`
 	BoardPriority  int    `json:"boardPriority,omitempty"`
 	BoardExclusive bool   `json:"boardExclusive,omitempty"`
-	BoardAction    string `json:"boardAction,omitempty"` // "spawn" | "archive"
+	BoardAction    string `json:"boardAction,omitempty"` // "spawn" | "archive" | "move"
 
 	// Token trigger (TriggerKind == "token").
 	TokenScope     string `json:"tokenScope,omitempty"`

@@ -16,6 +16,7 @@ export const DEFAULT_COLUMNS: BoardColumnDef[] = [
   { key: 'review', label: 'İnceleme', color: '' },
   { key: 'done', label: 'Bitti', color: '' },
   { key: 'failed', label: 'Başarısız', color: '' },
+  { key: 'iptal', label: 'İptal', color: '' },
 ]
 
 // Board-trigger operation options (label = Turkish UI text).
@@ -36,6 +37,7 @@ export function boardOpLabel(op?: BoardOp): string {
 export const BOARD_ACTIONS: { value: BoardAction; label: string }[] = [
   { value: 'spawn', label: 'Ajanı/akışı başlat (yürütme)' },
   { value: 'archive', label: 'Kartı arşivle (LLM yok)' },
+  { value: 'move', label: 'Kartı sütuna taşı (LLM yok)' },
 ]
 
 // Token-trigger scope options (label = Turkish UI text).

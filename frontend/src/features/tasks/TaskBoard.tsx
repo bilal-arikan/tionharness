@@ -31,6 +31,7 @@ const DEFAULT_COLUMNS: BoardColumnDef[] = [
   { key: 'review', label: 'İnceleme', color: '' },
   { key: 'done', label: 'Bitti', color: '' },
   { key: 'failed', label: 'Başarısız', color: '' },
+  { key: 'iptal', label: 'İptal', color: '' },
 ]
 
 // Current unix time in seconds, matching the backend's task timestamps — used
