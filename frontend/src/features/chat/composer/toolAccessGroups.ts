@@ -1,15 +1,24 @@
 // Pure grouping/filtering helpers for the composer's tool inspector. No React,
 // no state — kept out of ToolAccessPanel so that file stays layout-only.
 import type { ToolAccessEntry } from '@/types'
-import { CATEGORY_LABELS, CATEGORY_ORDER } from '@/features/tools/toolMeta'
 import { compareText } from '@/shared/lib/intl'
 
-export interface ToolGroup {
-  // Stable key: "cat:<category>" for built-ins, "mcp:<server>" for MCP tools.
-  key: string
+// A tool's context state: whether its schema rides in the prompt right now
+// ('in-context', always true for the eager tab) or only sits in the
+// load-on-demand catalog until activated ('optional', the lazy tab's
+// catalogued entries — 'hidden' tier tools also land here since they remain
+// callable via tool_search/activate_tools, just uncatalogued).
+export type ToolContextState = 'in-context' | 'optional'
+
+export interface ToolContextGroup {
+  key: ToolContextState
   label: string
-  source: 'builtin' | 'mcp'
   tools: ToolAccessEntry[]
+}
+
+const CONTEXT_GROUP_LABELS: Record<ToolContextState, string> = {
+  'in-context': 'Bağlamda',
+  optional: 'İsteğe bağlı',
 }
 
 // filterTools narrows a list by a free-text query matched against the tool name,
@@ -38,32 +47,24 @@ export function toolsForServer(
   return [...pick(tools.eager), ...pick(tools.lazy)]
 }
 
-// groupTools buckets tools by functional category (built-ins) or by MCP server,
-// mirroring how the full Tools screen organises them. Built-in groups come first
-// in CATEGORY_ORDER, then MCP servers alphabetically.
-export function groupTools(tools: ToolAccessEntry[]): ToolGroup[] {
-  const groups = new Map<string, ToolGroup>()
+// groupToolsByContext buckets tools by whether they occupy prompt context right
+// now, NOT by where they come from — a built-in and an MCP tool with the same
+// state land in the same group. 'in-context' always sorts first; empty buckets
+// are dropped so an all-eager or all-optional list renders a single group.
+export function groupToolsByContext(tools: ToolAccessEntry[]): ToolContextGroup[] {
+  const buckets: Record<ToolContextState, ToolAccessEntry[]> = {
+    'in-context': [],
+    optional: [],
+  }
   for (const t of tools) {
-    const isMCP = t.source === 'mcp'
-    const key = isMCP ? `mcp:${t.server}` : `cat:${t.category || 'other'}`
-    let g = groups.get(key)
-    if (!g) {
-      g = {
-        key,
-        label: isMCP
-          ? t.server || 'MCP'
-          : CATEGORY_LABELS[t.category || 'other'] || t.category || 'other',
-        source: isMCP ? 'mcp' : 'builtin',
-        tools: [],
-      }
-      groups.set(key, g)
-    }
-    g.tools.push(t)
+    buckets[t.inContext ? 'in-context' : 'optional'].push(t)
   }
-  const rank = (g: ToolGroup) => {
-    if (g.source === 'mcp') return CATEGORY_ORDER.length + 1
-    const i = CATEGORY_ORDER.indexOf(g.key.slice('cat:'.length))
-    return i === -1 ? CATEGORY_ORDER.length : i
-  }
-  return [...groups.values()].sort((a, b) => rank(a) - rank(b) || compareText(a.label, b.label))
+  const order: ToolContextState[] = ['in-context', 'optional']
+  return order
+    .filter((key) => buckets[key].length > 0)
+    .map((key) => ({
+      key,
+      label: CONTEXT_GROUP_LABELS[key],
+      tools: [...buckets[key]].sort((a, b) => compareText(a.label, b.label)),
+    }))
 }
