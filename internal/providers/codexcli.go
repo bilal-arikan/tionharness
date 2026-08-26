@@ -347,6 +347,13 @@ func (c *CodexCLI) ProbeAuth(ctx context.Context) error {
 // bounded by tool_timeout_sec and the caller's ctx.
 const codexStartupTimeout = 90 * time.Second
 
+// codexIdleOutputTimeout generously bounds the gap between output lines. A
+// surviving grandchild can hold the stdout pipe open after codex itself exits;
+// 15 minutes still permits a legitimately slow, silent 10-minute tool call.
+const codexIdleOutputTimeout = 15 * time.Minute
+
+var codexIdleOutputTimeoutDuration = codexIdleOutputTimeout
+
 // runAttempt runs the codex subprocess once and parses its stream. retryable is
 // true only when re-running is free of duplicate side effects: the process
 // produced no terminal-classified failure, no salvageable content, and ran no
@@ -420,8 +427,14 @@ func (c *CodexCLI) runAttempt(ctx context.Context, args []string, prompt, model 
 
 	startup := time.NewTimer(codexStartupTimeout)
 	defer startup.Stop()
+	idle := time.NewTimer(codexIdleOutputTimeoutDuration)
+	if !idle.Stop() {
+		<-idle.C
+	}
+	defer idle.Stop()
 	sawOutput := false
 	startupHang := false
+	idleHang := false
 	// killedEarly records that we tore the process down ourselves on a terminal
 	// error, so the resulting non-zero exit is expected rather than diagnostic.
 	killedEarly := false
@@ -435,6 +448,13 @@ readLoop:
 					sawOutput = true
 					startup.Stop()
 				}
+				if !idle.Stop() {
+					select {
+					case <-idle.C:
+					default:
+					}
+				}
+				idle.Reset(codexIdleOutputTimeoutDuration)
 				p.feed(it.line)
 				if s := strings.TrimSpace(it.line); s != "" {
 					tail = append(tail, s)
@@ -460,6 +480,10 @@ readLoop:
 			}
 		case <-startup.C:
 			startupHang = true
+			proc.KillTree(cmd)
+			break readLoop
+		case <-idle.C:
+			idleHang = true
 			proc.KillTree(cmd)
 			break readLoop
 		case <-ctx.Done():
@@ -495,15 +519,7 @@ readLoop:
 		// but the turn may already have run tools, so never retry it blindly.
 		return nil, false, parseErr
 	}
-	if runErr == nil {
-		// The process exited cleanly yet produced no turn.completed — a truncated
-		// or empty stream. Salvage whatever content arrived before reporting.
-		if partial := p.salvage(); partial != nil {
-			return partial, false, nil
-		}
-		return nil, false, parseErr
-	}
-	// Non-zero exit with usable content: salvage rather than fail the whole turn.
+	// Preserve any content parsed before either a normal exit or watchdog kill.
 	if partial := p.salvage(); partial != nil {
 		return partial, false, nil
 	}
@@ -511,6 +527,16 @@ readLoop:
 		return nil, true, fmt.Errorf(
 			"codex CLI produced no output within %s and was killed as a likely MCP startup hang (retryable) — check the interaction MCP bridge (exit: %v)",
 			codexStartupTimeout, runErr)
+	}
+	if idleHang {
+		return nil, false, fmt.Errorf(
+			"codex CLI produced no output for %s and was killed after the idle output timeout (non-retryable) (exit: %v) %s",
+			codexIdleOutputTimeout, runErr, stdoutCrashTail(tail))
+	}
+	if runErr == nil {
+		// The process exited cleanly yet produced no turn.completed — a truncated
+		// or empty stream.
+		return nil, false, parseErr
 	}
 	detail := strings.TrimSpace(stderr.String())
 	if detail == "" {

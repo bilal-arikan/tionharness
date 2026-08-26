@@ -84,6 +84,64 @@ func TestCodexRunAttemptReturnsOnCancelWhileGrandchildHoldsPipe(t *testing.T) {
 	}
 }
 
+func TestCodexRunAttemptIdleOutputTimeoutWhileGrandchildHoldsPipe(t *testing.T) {
+	if os.Getenv("CODEX_TEST_HELPER") != "" {
+		return
+	}
+
+	self, err := os.Executable()
+	if err != nil {
+		t.Skipf("no test binary path: %v", err)
+	}
+	t.Setenv("CODEX_TEST_SELF", self)
+	grandchildPIDFile := filepath.Join(t.TempDir(), "grandchild.pid")
+	t.Setenv("CODEX_TEST_GRANDCHILD_PID_FILE", grandchildPIDFile)
+	t.Cleanup(func() {
+		data, err := os.ReadFile(grandchildPIDFile)
+		if err != nil {
+			t.Errorf("read grandchild PID for cleanup: %v", err)
+			return
+		}
+		pid, err := strconv.Atoi(strings.TrimSpace(string(data)))
+		if err != nil {
+			t.Errorf("parse grandchild PID for cleanup: %v", err)
+			return
+		}
+		if runtime.GOOS == "windows" {
+			cleanup := exec.Command("taskkill", "/F", "/T", "/PID", strconv.Itoa(pid))
+			if output, err := cleanup.CombinedOutput(); err != nil {
+				t.Errorf("kill leaked test grandchild %d: %v: %s", pid, err, strings.TrimSpace(string(output)))
+			}
+			return
+		}
+		process, err := os.FindProcess(pid)
+		if err != nil {
+			t.Errorf("find leaked test grandchild %d: %v", pid, err)
+			return
+		}
+		if err := process.Kill(); err != nil {
+			t.Errorf("kill leaked test grandchild %d: %v", pid, err)
+		}
+	})
+
+	originalTimeout := codexIdleOutputTimeoutDuration
+	codexIdleOutputTimeoutDuration = 100 * time.Millisecond
+	t.Cleanup(func() { codexIdleOutputTimeoutDuration = originalTimeout })
+
+	c := &CodexCLI{binPath: self}
+	args := []string{"-test.run=TestCodexHelperExitsLeavingChild", "-test.v=false"}
+	_, retryable, err := c.runAttempt(context.Background(), args, "prompt", "gpt-test", Request{}, "")
+	if err == nil {
+		t.Fatal("runAttempt returned no idle timeout error")
+	}
+	if retryable {
+		t.Fatal("idle timeout error was retryable")
+	}
+	if message := err.Error(); !strings.Contains(message, codexIdleOutputTimeout.String()) || !strings.Contains(message, "idle-test-output") {
+		t.Fatalf("idle timeout error lacks timeout or output tail: %v", err)
+	}
+}
+
 // TestCodexHelperExitsLeavingChild is not a real test: it is the fake codex
 // binary the regression above runs. It emits one line so the startup guard is
 // satisfied, hands stdout to a grandchild that keeps running, then exits.
@@ -109,7 +167,7 @@ func TestCodexHelperExitsLeavingChild(t *testing.T) {
 		_ = child.Process.Kill()
 		t.Fatalf("helper: write grandchild PID: %v", err)
 	}
-	fmt.Println(`{"type":"thread.started"}`)
+	fmt.Println("idle-test-output")
 	// Deliberately no Wait: the grandchild outlives this process.
 }
 
