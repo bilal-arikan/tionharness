@@ -182,6 +182,136 @@ func TestValidateFlowGraphValidReferencesPass(t *testing.T) {
 	}
 }
 
+func TestValidateFlowGraphRejectsEveryDanglingNodeReferenceField(t *testing.T) {
+	tests := []struct {
+		name       string
+		graph      orchestration.Graph
+		danglingID string
+	}{
+		{
+			name: "graph start",
+			graph: orchestration.Graph{
+				Start: "missing-start",
+				Nodes: []orchestration.Node{{ID: "start", Type: orchestration.NodeStart}},
+			},
+			danglingID: "missing-start",
+		},
+		{
+			name: "parallel child at non-zero index",
+			graph: orchestration.Graph{
+				Start: "start",
+				Nodes: []orchestration.Node{
+					{ID: "start", Type: orchestration.NodeStart, Next: "parallel"},
+					{ID: "parallel", Type: orchestration.NodeParallel, Parallel: []string{"worker", "missing-parallel"}},
+					{ID: "worker", Type: orchestration.NodeAgent, AgentID: "AGT-worker", Prompt: "work"},
+				},
+			},
+			danglingID: "missing-parallel",
+		},
+		{
+			name: "parallel join next",
+			graph: orchestration.Graph{
+				Start: "start",
+				Nodes: []orchestration.Node{
+					{ID: "start", Type: orchestration.NodeStart, Next: "parallel"},
+					{ID: "parallel", Type: orchestration.NodeParallel, Parallel: []string{"worker"}, JoinNext: "missing-join"},
+					{ID: "worker", Type: orchestration.NodeAgent, AgentID: "AGT-worker", Prompt: "work"},
+				},
+			},
+			danglingID: "missing-join",
+		},
+		{
+			name: "loop body",
+			graph: orchestration.Graph{
+				Start: "start",
+				Nodes: []orchestration.Node{
+					{ID: "start", Type: orchestration.NodeStart, Next: "loop"},
+					{ID: "loop", Type: orchestration.NodeLoop, Body: "missing-body", MaxIters: 1},
+				},
+			},
+			danglingID: "missing-body",
+		},
+		{
+			name: "loop next",
+			graph: orchestration.Graph{
+				Start: "start",
+				Nodes: []orchestration.Node{
+					{ID: "start", Type: orchestration.NodeStart, Next: "loop"},
+					{ID: "loop", Type: orchestration.NodeLoop, Body: "body", LoopNext: "missing-loop-next", MaxIters: 1},
+					{ID: "body", Type: orchestration.NodeTransform, Template: "{{last}}"},
+				},
+			},
+			danglingID: "missing-loop-next",
+		},
+		{
+			name: "join spawn reference",
+			graph: orchestration.Graph{
+				Start: "start",
+				Nodes: []orchestration.Node{
+					{ID: "start", Type: orchestration.NodeStart, Next: "join"},
+					{ID: "join", Type: orchestration.NodeJoin, SpawnRef: "missing-spawn"},
+				},
+			},
+			danglingID: "missing-spawn",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateFlowReferences(tt.graph)
+			if err == nil {
+				t.Fatalf("expected dangling reference %q to be rejected", tt.danglingID)
+			}
+			if !strings.Contains(err.Error(), tt.danglingID) {
+				t.Fatalf("error should report dangling target %q, got: %v", tt.danglingID, err)
+			}
+		})
+	}
+}
+
+func TestValidateFlowGraphAllNodeReferenceFieldsPass(t *testing.T) {
+	g := orchestration.Graph{
+		Start: "start",
+		Nodes: []orchestration.Node{
+			{ID: "start", Type: orchestration.NodeStart, Next: "parallel"},
+			{ID: "parallel", Type: orchestration.NodeParallel, Parallel: []string{"worker-a", "worker-b"}, JoinNext: "loop"},
+			{ID: "worker-a", Type: orchestration.NodeAgent, AgentID: "AGT-a", Prompt: "work"},
+			{ID: "worker-b", Type: orchestration.NodeAgent, AgentID: "AGT-b", Prompt: "work"},
+			{ID: "loop", Type: orchestration.NodeLoop, Body: "body", LoopNext: "spawn", MaxIters: 1},
+			{ID: "body", Type: orchestration.NodeTransform, Template: "{{last}}"},
+			{ID: "spawn", Type: orchestration.NodeSpawn, SpawnFlows: []string{"FLW-child"}, Next: "join"},
+			{ID: "join", Type: orchestration.NodeJoin, SpawnRef: "spawn", Next: "end"},
+			{ID: "end", Type: orchestration.NodeEnd},
+		},
+	}
+
+	if err := g.Validate(); err != nil {
+		t.Fatalf("fixture should be a structurally valid flow graph, got: %v", err)
+	}
+	if err := validateFlowReferences(g); err != nil {
+		t.Fatalf("expected all valid node reference fields to pass, got: %v", err)
+	}
+}
+
+func TestValidateFlowGraphExternalFlowReferencesAreNotNodeReferences(t *testing.T) {
+	g := orchestration.Graph{
+		Start: "start",
+		Nodes: []orchestration.Node{
+			{ID: "start", Type: orchestration.NodeStart, Next: "subflow"},
+			{ID: "subflow", Type: orchestration.NodeSubflow, FlowRef: "FLW-not-a-node", Next: "spawn"},
+			{ID: "spawn", Type: orchestration.NodeSpawn, SpawnFlows: []string{"FLW-child-a", "FLW-child-b"}, Next: "end"},
+			{ID: "end", Type: orchestration.NodeEnd},
+		},
+	}
+
+	if err := g.Validate(); err != nil {
+		t.Fatalf("fixture should be a structurally valid flow graph, got: %v", err)
+	}
+	if err := validateFlowReferences(g); err != nil {
+		t.Fatalf("external flow IDs must not be validated as node references, got: %v", err)
+	}
+}
+
 func TestFlowPrecheckRequiresExactAgentID(t *testing.T) {
 	rt, _ := newTestRuntime(t, t.TempDir())
 	a := newFlowAgent(t, rt, "reviewer")
