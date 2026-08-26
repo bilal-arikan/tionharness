@@ -46,6 +46,11 @@ type Agent struct {
 	Name     string `json:"name"`
 	Soul     string `json:"soul"`
 	Identity string `json:"identity"`
+	// System agents back built-in AI jobs. Their stable SystemKey identifies the
+	// role across workspaces; they may be edited or disabled, but not deleted.
+	System    bool   `json:"system,omitempty"`
+	SystemKey string `json:"systemKey,omitempty"`
+	Disabled  bool   `json:"disabled,omitempty"`
 	// Provider is now DERIVED: the KIND id of the provider instance this agent
 	// is bound to (ProviderInstanceID), kept in sync on every write via
 	// agent.SyncProviderFields (_Docs/71 §2.5, K3). Every kind-keyed reader

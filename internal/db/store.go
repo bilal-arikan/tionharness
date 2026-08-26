@@ -115,6 +115,9 @@ func (d *DB) DeleteAgent(ctx context.Context, id string) error {
 	if !ok {
 		return ErrNotFound
 	}
+	if a.System {
+		return ErrSystemAgentDelete
+	}
 	a.Deleted = true
 	a.DeletedAt = now()
 	a.UpdatedAt = a.DeletedAt
@@ -243,7 +246,8 @@ type AgentProfilePatch struct {
 	Color              *string
 	// Skills is the agent's ordered skill-slug selection. Non-nil replaces the
 	// whole list (an empty slice clears it).
-	Skills *[]string
+	Skills   *[]string
+	Disabled *bool
 	// CoordinatorMode / CoordinatorWorkflow are the agent's coordinator DEFAULTS
 	// for the sessions it opens (see Agent.CoordinatorMode). Pointers so an
 	// explicit false is distinguishable from "not in this patch"; changing them
@@ -292,6 +296,9 @@ func (d *DB) UpdateAgent(ctx context.Context, agentID string, p AgentProfilePatc
 		}
 		if p.Skills != nil {
 			a.Skills = *p.Skills
+		}
+		if p.Disabled != nil {
+			a.Disabled = *p.Disabled
 		}
 		if p.CoordinatorMode != nil {
 			a.CoordinatorMode = *p.CoordinatorMode
