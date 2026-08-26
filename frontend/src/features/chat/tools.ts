@@ -3,6 +3,7 @@
 // extracted from its JSON input — mirroring how the External Agent chat renders
 // tool steps.
 import type { LucideIcon } from 'lucide-react'
+import { stripShellHost } from '@/shared/lib/commandProgram'
 import { toolIcon } from '@/shared/lib/toolIcons'
 
 export interface ToolMeta {
@@ -165,7 +166,7 @@ function summarize(base: string, input: unknown): string {
   if (rich) return rich
   // Prefer a genuine content value over structural keys.
   const first =
-    o.command ??
+    (typeof o.command === 'string' ? stripShellHost(o.command) : o.command) ??
     o.query ??
     o.url ??
     o.path ??

@@ -4,6 +4,7 @@ import { ChevronDown, ChevronRight } from 'lucide-react'
 import type { TurnStep } from '@/types'
 import { toolMeta, isReadTool, isShellTool, toolBase } from './tools'
 import { parseDiff, looksLikeDiff, synthDiff } from '@/shared/lib/diff'
+import { stripShellHost } from '@/shared/lib/commandProgram'
 import { DiffView } from '@/shared/components/markdown/DiffView'
 import { Markdown } from '@/shared/components/markdown/Markdown'
 import { PathText } from './PathText'
@@ -23,7 +24,7 @@ function programHint(step: TurnStep): string | null {
   const base = toolBase(step.tool || '')
   const input = step.input as { command?: unknown; language?: unknown } | null
   if (base === 'bash' || base === 'powershell') {
-    return typeof input?.command === 'string' ? input.command : null
+    return typeof input?.command === 'string' ? stripShellHost(input.command) : null
   }
   if (base === 'transform_data' || base === 'run_code') {
     return typeof input?.language === 'string' ? input.language : null

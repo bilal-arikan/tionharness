@@ -26,7 +26,9 @@ const PREFIX_COMMANDS = new Set([
 ])
 
 // Shell hosts whose `-c`/`-Command` argument carries the REAL command to inspect.
-const SHELL_HOSTS = new Set(['bash', 'zsh', 'sh', 'dash', 'ksh', 'pwsh', 'powershell'])
+const SHELL_HOSTS = new Set(['bash', 'zsh', 'sh', 'dash', 'ksh', 'pwsh', 'powershell', 'cmd'])
+
+const SHELL_COMMAND_FLAG = /^-(-?c(ommand)?|lc|l?c)$/i
 
 // isEnvAssignment reports whether a token is a leading `NAME=value` env prefix.
 function isEnvAssignment(token: string): boolean {
@@ -50,7 +52,10 @@ function tokenize(s: string): string[] {
   for (let i = 0; i < s.length; i++) {
     const c = s[i]
     if (quote) {
-      if (c === quote) quote = null
+      if (quote === '"' && (c === '\\' || c === '`') && s[i + 1] === quote) {
+        cur += quote
+        i++
+      } else if (c === quote) quote = null
       else cur += c
       continue
     }
@@ -70,6 +75,29 @@ function tokenize(s: string): string[] {
   }
   if (cur || had) tokens.push(cur)
   return tokens
+}
+
+// stripShellHost removes up to three nested shell host wrappers while preserving
+// the original input unless each level has a clear command flag and payload.
+export function stripShellHost(commandStr: string): string {
+  let command = commandStr
+  for (let depth = 0; depth < 3; depth++) {
+    const tokens = tokenize(command)
+    if (!tokens.length) break
+    const host = baseName(tokens[0]!).toLowerCase()
+    if (!SHELL_HOSTS.has(host)) break
+    const isCommandFlag =
+      host === 'cmd'
+        ? (token: string) => /^\/[ck]$/i.test(token)
+        : (token: string) =>
+            SHELL_COMMAND_FLAG.test(token) || (token.startsWith('-') && /c/i.test(token))
+    const flagIdx = tokens.slice(1).findIndex(isCommandFlag)
+    const payload = flagIdx === -1 ? [] : tokens.slice(flagIdx + 2)
+    const inner = host === 'cmd' ? payload.join(' ') : payload[0]
+    if (!inner) break
+    command = inner
+  }
+  return command
 }
 
 // splitCommands splits a command string on &&, ||, ;, | (and PowerShell's ;),
@@ -139,7 +167,7 @@ export function extractCommandName(subCommand: string): string | undefined {
     if (SHELL_HOSTS.has(cmdName)) {
       const rest = tokens.slice(idx + 1)
       const cIdx = rest.findIndex(
-        (t) => /^-(-?c(ommand)?|lc|l?c)$/i.test(t) || (t.startsWith('-') && /c/i.test(t)),
+        (t) => SHELL_COMMAND_FLAG.test(t) || (t.startsWith('-') && /c/i.test(t)),
       )
       if (cIdx !== -1 && cIdx + 1 < rest.length) {
         const inner = rest[cIdx + 1]
