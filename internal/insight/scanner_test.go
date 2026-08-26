@@ -74,12 +74,16 @@ func newScanFixture(t *testing.T, analyzer Analyzer) (*Scanner, *db.DB, *Finding
 		t.Fatal(err)
 	}
 	ctx := context.Background()
+	agent, err := database.CreateAgent(ctx, db.Agent{Name: "fixture agent"})
+	if err != nil {
+		t.Fatal(err)
+	}
 
-	s1, _ := database.CreateSession(ctx, db.Session{AgentID: "AGT1", Title: "with error"})
+	s1, _ := database.CreateSession(ctx, db.Session{AgentID: agent.ID, Title: "with error"})
 	if _, err := database.AddMessage(ctx, db.Message{SessionID: s1.ID, Role: "assistant", Text: "x", Steps: stepsJSON("error")}); err != nil {
 		t.Fatal(err)
 	}
-	s2, _ := database.CreateSession(ctx, db.Session{AgentID: "AGT1", Title: "clean"})
+	s2, _ := database.CreateSession(ctx, db.Session{AgentID: agent.ID, Title: "clean"})
 	if _, err := database.AddMessage(ctx, db.Message{SessionID: s2.ID, Role: "assistant", Text: "y", Steps: stepsJSON("text")}); err != nil {
 		t.Fatal(err)
 	}
@@ -133,6 +137,35 @@ func TestScanPrefiltersAndProducesFindings(t *testing.T) {
 	}
 }
 
+func TestScanSkipsSystemAgentSession(t *testing.T) {
+	fa := &fakeAnalyzer{emit: func(req AnalysisRequest) []Finding {
+		return []Finding{{Signature: "finding-" + req.SessionID, Title: "finding"}}
+	}}
+	sc, database, findings := newScanFixture(t, fa)
+	ctx := context.Background()
+	systemAgent, err := database.CreateAgent(ctx, db.Agent{Name: "insight scanner", System: true, SystemKey: "insight-scanner"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	sess, err := database.CreateSession(ctx, db.Session{AgentID: systemAgent.ID, Title: "system error"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := database.AddMessage(ctx, db.Message{SessionID: sess.ID, Role: "assistant", Steps: stepsJSON("error")}); err != nil {
+		t.Fatal(err)
+	}
+	res, err := sc.Scan(ctx, ScanScope{LensIDs: []string{"tool-errors"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Sessions != 2 || res.Analyzed != 1 || fa.calls() != 1 {
+		t.Fatalf("system session was considered: sessions=%d analyzed=%d calls=%d", res.Sessions, res.Analyzed, fa.calls())
+	}
+	if got := findings.List("", ""); len(got) != 1 || got[0].Signature == "finding-"+sess.ID {
+		t.Fatalf("system-agent session produced finding: %+v", got)
+	}
+}
+
 func TestScanIsIncremental(t *testing.T) {
 	fa := &fakeAnalyzer{emit: func(req AnalysisRequest) []Finding {
 		return []Finding{{Signature: "boom", Title: "Boom"}}
@@ -162,7 +195,7 @@ func TestScanIsIncremental(t *testing.T) {
 
 	// Mutate SES1 (new message → fingerprint + UpdatedAt change) → it re-scans;
 	// the same signature dedupes into the existing finding (Occurrences=2).
-	sessions, _ := database.ListSessions(ctx, "AGT1")
+	sessions, _ := database.ListSessions(ctx, "")
 	var ses1 string
 	for _, s := range sessions {
 		if s.Title == "with error" {
@@ -216,9 +249,13 @@ func TestScanMaxAnalyzedCaps(t *testing.T) {
 		t.Fatal(err)
 	}
 	ctx := context.Background()
+	agent, err := database.CreateAgent(ctx, db.Agent{Name: "fixture agent"})
+	if err != nil {
+		t.Fatal(err)
+	}
 	// Five sessions that all trip the tool-errors prefilter.
 	for i := 0; i < 5; i++ {
-		s, _ := database.CreateSession(ctx, db.Session{AgentID: "AGT1", Title: "err"})
+		s, _ := database.CreateSession(ctx, db.Session{AgentID: agent.ID, Title: "err"})
 		if _, err := database.AddMessage(ctx, db.Message{SessionID: s.ID, Role: "assistant", Steps: stepsJSON("error")}); err != nil {
 			t.Fatal(err)
 		}

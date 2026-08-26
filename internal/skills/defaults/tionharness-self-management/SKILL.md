@@ -49,6 +49,9 @@ Provenance enforced: you can delete only agents you created, never the user's an
 never yourself. Deleting an agent cascades: it also removes the agent's sessions,
 the schedules bound to it, and the tasks it owns (with their runs) — so delete
 deliberately, it is not reversible.
+System agents cannot be deleted (`delete_agent` returns HTTP 409). Disable one to
+use its built-in fallback, or use restore-default to replace its editable profile
+fields with the compiled defaults.
 
 **Agent delegation & messaging** —
 - `run_subagent` — launch an isolated worker (a built-in profile or an existing

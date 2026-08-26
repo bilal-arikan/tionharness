@@ -17,6 +17,10 @@ workspaces never leaks content between them.
 
 - **Agents** — autonomous entities bound to a provider/model. Each has a soul
   (persona), identity, tool access and per-agent skill selection.
+  A workspace also contains system agents for internal LLM jobs: titling,
+  compaction, lesson extraction and insight analysis. They are editable but cannot
+  be deleted; disabling one activates its built-in fallback, and restore-default
+  replaces its editable profile fields with the compiled definition.
 - **Sessions** — conversation threads. Every execution path funnels into a
   session, so chats, task runs, flow runs and scheduled deliveries are all
   viewable as one streamable transcript. `Kind` tags the origin (chat / task /

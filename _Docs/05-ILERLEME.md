@@ -1,6 +1,15 @@
 # TionHarness — İlerleme Takibi
 
-> Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-08-26**
+> Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-08-27**
+
+## Sohbet listesi kategori çiplerinde Ctrl/Shift tıklama (2026-08-27) ✅
+
+Sidebar'daki oturum türü çipleri artık modifier tuşlarını anlıyor: düz tıklama tek
+çipi açıp kapatıyor, **Ctrl/Cmd + tıklama** yalnız tıklanan çipi seçili bırakıyor
+(solo), **Shift + tıklama** ise tıklanan çipi olduğu gibi bırakıp diğerlerinin
+seçimini tersine çeviriyor. Mantık `sessionKindMeta.ts` içindeki saf
+`nextChipsOff(chipsOff, key, mode)` fonksiyonunda; seçim yine `chipsOff` olarak
+localStorage'da saklanıyor. Testler: `sessionChipClick.test.ts`.
 
 ## Blank workspace CEO + PM kontrol döngüsüyle açılıyor (2026-08-26) ✅
 
@@ -9371,3 +9380,23 @@ bir CLI provider'ı değil — meşru model referansları olarak korundu.
 - **Not:** Panel gizliyken (Detay kapalı) Debug'a erişim de kapanır — modalın
   kendisi bağımsız render edildiği için açıkken panel kapatılsa bile çalışır.
 - **Doğrulama:** `npx tsc --noEmit` ✅, `format:check` ✅.
+
+## TSK270 — Sistem ajanları dokümantasyonu (2026-08-27)
+
+- **Ne:** TSK260–TSK269 ve TSK271 ile uygulama içi LLM işleri için dört kararlı
+  sistem ajanı (`titler`, `compactor`, `lesson-extractor`, `insight`) eklendi;
+  workspace özelleştirmesi, yerleşik fallback, yönetim UI'ı ve usage ayrımı tek
+  zincirde tamamlandı.
+- **Değişen:** Derlenmiş registry ve idempotent workspace seed; etkin workspace
+  profili/yerleşik tanım çözümlemesi; silme için HTTP 409 koruması; profil alanlarını
+  derlenmiş değerlere döndüren restore-default endpoint'i; sistem oturumlarını ders
+  ve içgörü adaylığından çıkaran özyineleme koruması;
+  `system:<SystemKey>:<call-kind>` usage
+  taksonomisi; frontend'de ayrı sistem ajanları bölümü, fallback rozeti, disable ve
+  restore kontrolleri. Ayrıntı: `_Docs/74-SISTEM-AJANLARI.md`.
+- **Not:** `insight` varsayılan olarak devre dışıdır. Sistem ajanını disable etmek
+  işi durdurmaz veya kaydı silmez; derlenmiş fallback'i etkinleştirir. Doğruluk
+  kaynağı `Agent.System`/`SystemKey` alanlarıdır; `Session` modeline alan eklenmedi.
+- **Doküman:** Kavram, resolver/fallback, restore/disable, API, UI, seed,
+  özyineleme koruması, usage taksonomisi ve kaynak dosya haritası
+  `_Docs/74-SISTEM-AJANLARI.md` içinde toplandı; doküman dizinine eklendi.
