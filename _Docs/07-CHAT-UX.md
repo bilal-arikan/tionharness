@@ -159,7 +159,9 @@ Yeni bağımlılıklar: `react-markdown`, `remark-gfm`, `highlight.js`.
   `onOpenFile`, http → yeni sekme), görseller (yerel yol → `/api/files`).
   `urlTransform` kimlik fonksiyonuyla devre dışı (aksi halde `C:` bir protokol
   sanılıp yerel yollar düşürülür); Windows ters-bölü yolları parse öncesi `/`'e
-  normalize edilir.
+  normalize edilir. Görsel yolu **göreli** de olabilir (`![a](output/images/a.png)`):
+  backend `/api/files?path=` parametresi mutlak değilse yolu aktif workspace
+  sandbox köküne göre çözer (`internal/api/files.go`); `..` ile kaçış 400 döner.
 - `CodeBlock.tsx` — dil etiketi + kopyala düğmesi + `highlight.js` vurgusu;
   `diff` blokları `DiffView`'e, `mermaid` blokları `MermaidDiagram`'a, `gallery`/
   `image-preview` `Gallery`'ye, `html-preview` `HtmlPreview`'e gider.

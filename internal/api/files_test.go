@@ -85,3 +85,41 @@ func TestServeFileRelUnknownExtRejected(t *testing.T) {
 		t.Fatalf("status = %d, want 415, body = %s", rec.Code, rec.Body.String())
 	}
 }
+
+// TestServeFileRelativePathParam: a chat reply may embed a workspace-relative
+// image path (![shot](output/images/a.png)). The markdown renderer turns that
+// into /api/files?path=output/images/a.png, so a relative `path` must resolve
+// against the workspace sandbox instead of the server's working directory.
+func TestServeFileRelativePathParam(t *testing.T) {
+	s, wsp := newWorkspaceServer(t)
+	abs := filepath.Join(wsp.SandboxRoot(), "output", "images", "a.png")
+	if err := os.MkdirAll(filepath.Dir(abs), 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(abs, []byte("\x89PNG\r\n"), 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	req := httptest.NewRequest(http.MethodGet, "/api/files?path="+url.QueryEscape("output/images/a.png"), nil)
+	req.Header.Set("X-Workspace-Id", wsp.ID)
+	rec := httptest.NewRecorder()
+	s.Routes().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200, body = %s", rec.Code, rec.Body.String())
+	}
+	if ct := rec.Header().Get("Content-Type"); ct != "image/png" {
+		t.Fatalf("content-type = %q, want image/png", ct)
+	}
+}
+
+// TestServeFileRelativeTraversalRejected: the relative-path fallback must not
+// become an escape hatch out of the sandbox.
+func TestServeFileRelativeTraversalRejected(t *testing.T) {
+	s, wsp := newWorkspaceServer(t)
+	req := httptest.NewRequest(http.MethodGet, "/api/files?path="+url.QueryEscape("../../secret.png"), nil)
+	req.Header.Set("X-Workspace-Id", wsp.ID)
+	rec := httptest.NewRecorder()
+	s.Routes().ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400, body = %s", rec.Code, rec.Body.String())
+	}
+}

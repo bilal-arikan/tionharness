@@ -95,7 +95,23 @@ func (s *Server) handleServeFile(w http.ResponseWriter, r *http.Request) {
 		// Accept file:// URLs as well as bare paths.
 		raw = strings.TrimPrefix(raw, "file://")
 		raw = strings.TrimPrefix(raw, "/") // file:///C:/... → C:/...
-		path = filepath.Clean(raw)
+		path = filepath.Clean(filepath.FromSlash(raw))
+		// A chat reply may reference a file it produced with a workspace-relative
+		// path (![shot](output/images/a.png)). Resolve those against the active
+		// workspace sandbox instead of the server process' working directory,
+		// which would 404 and render as a broken image.
+		if !filepath.IsAbs(path) {
+			wsp := ws(r)
+			if wsp == nil {
+				writeError(w, http.StatusBadRequest, "no workspace")
+				return
+			}
+			if path == ".." || strings.HasPrefix(path, ".."+string(filepath.Separator)) {
+				writeError(w, http.StatusBadRequest, "invalid path")
+				return
+			}
+			path = filepath.Join(wsp.SandboxRoot(), path)
+		}
 	}
 
 	ext := strings.ToLower(filepath.Ext(path))
