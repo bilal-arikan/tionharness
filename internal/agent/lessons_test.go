@@ -186,4 +186,71 @@ func TestLessonsContextBlock_AgentPriority(t *testing.T) {
 	}
 }
 
+func TestLessonsContextBlock_InsightCountIsTrustNeutral(t *testing.T) {
+	rt, tun := newTestRuntime(t, t.TempDir())
+	tun.SetLessonReflect(true)
+	base := time.Now().Unix()
+	addLessonForTest(t, rt, db.Lesson{Time: base - 60, Signature: "lesson:repeated-finding", Text: "insight lesson", Count: 9})
+	addLessonForTest(t, rt, db.Lesson{Time: base - 60, Signature: "Bash:repeated-error", Text: "tool lesson", Count: 9})
+
+	block := rt.LessonsContextBlock(context.Background(), "")
+	assertLessonBefore(t, block, "insight lesson", "tool lesson")
+}
+
+func TestLessonsContextBlock_RecurringToolLessonRanksLater(t *testing.T) {
+	rt, tun := newTestRuntime(t, t.TempDir())
+	tun.SetLessonReflect(true)
+	base := time.Now().Unix()
+	addLessonForTest(t, rt, db.Lesson{Time: base - 60, Signature: "Bash:high-count", Text: "high count lesson", Count: 8})
+	addLessonForTest(t, rt, db.Lesson{Time: base - 60, Signature: "Bash:low-count", Text: "low count lesson", Count: 1})
+
+	block := rt.LessonsContextBlock(context.Background(), "")
+	assertLessonBefore(t, block, "low count lesson", "high count lesson")
+}
+
+func TestLessonsContextBlock_LowTrustLessonsAreNotFiltered(t *testing.T) {
+	rt, tun := newTestRuntime(t, t.TempDir())
+	tun.SetLessonReflect(true)
+	base := time.Now().Unix()
+	for i := 0; i < lessonsInjectCount; i++ {
+		addLessonForTest(t, rt, db.Lesson{
+			Time:      base - int64(i),
+			Signature: sig("low", i),
+			Text:      "low trust lesson " + string(rune('a'+i)),
+			Count:     20,
+		})
+	}
+
+	block := rt.LessonsContextBlock(context.Background(), "")
+	if got := strings.Count(block, "\n- "); got != lessonsInjectCount {
+		t.Fatalf("injected lesson count = %d, want %d:\n%s", got, lessonsInjectCount, block)
+	}
+}
+
+func TestLessonsContextBlock_AgentPriorityOutranksTrust(t *testing.T) {
+	rt, tun := newTestRuntime(t, t.TempDir())
+	tun.SetLessonReflect(true)
+	base := time.Now().Unix()
+	addLessonForTest(t, rt, db.Lesson{Time: base - 60, AgentID: "AGT1", Signature: "Bash:mine", Text: "lower trust matching lesson", Count: 20})
+	addLessonForTest(t, rt, db.Lesson{Time: base - 60, AgentID: "OTHER", Signature: "Bash:other", Text: "higher trust other lesson", Count: 1})
+
+	block := rt.LessonsContextBlock(context.Background(), "AGT1")
+	assertLessonBefore(t, block, "lower trust matching lesson", "higher trust other lesson")
+}
+
+func addLessonForTest(t *testing.T, rt *Runtime, lesson db.Lesson) {
+	t.Helper()
+	if _, err := rt.db.AddLesson(lesson); err != nil {
+		t.Fatalf("add lesson: %v", err)
+	}
+}
+
+func assertLessonBefore(t *testing.T, block, first, second string) {
+	t.Helper()
+	firstAt, secondAt := strings.Index(block, first), strings.Index(block, second)
+	if firstAt < 0 || secondAt < 0 || firstAt >= secondAt {
+		t.Fatalf("%q must appear before %q:\n%s", first, second, block)
+	}
+}
+
 func sig(p string, i int) string { return p + string(rune('a'+i)) }
