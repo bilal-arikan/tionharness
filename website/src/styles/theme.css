@@ -1,0 +1,36 @@
+/* Tailwind is imported in three parts instead of the usual `@import 'tailwindcss'`
+   so utilities land OUTSIDE a cascade layer. Same reason as the app shell
+   (frontend/src/index.css): Chrome 150 mis-orders declarations nested inside
+   `@media` when they sit in a large `@layer` block, which breaks every
+   `hidden md:flex` pattern. Keep the two files in sync. */
+@import 'tailwindcss/theme.css' layer(theme);
+@import 'tailwindcss/preflight.css' layer(base);
+@import 'tailwindcss/utilities.css';
+@import '@fontsource-variable/inter';
+@import '@fontsource-variable/jetbrains-mono';
+
+/* Brand tokens mirror the app's default "midnight-violet" preset so the site and
+   the product look like the same thing. Source: frontend/src/index.css. */
+@theme {
+  --color-bg: #0e0e10;
+  --color-surface: #17171a;
+  --color-surface-2: #202024;
+  --color-border: #2b2b30;
+  --color-accent: #8b5cf6;
+  --color-accent-soft: #2c2545;
+  --color-text: #e7e7ea;
+  --color-text-dim: #9a9aa6;
+
+  --color-success: #34d399;
+  --color-warning: #fbbf24;
+  --color-danger: #f87171;
+  --color-info: #38bdf8;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --shadow-md: 0 4px 16px -2px rgba(0, 0, 0, 0.45);
+  --shadow-lg: 0 12px 40px -8px rgba(0, 0, 0, 0.55);
+  --radius: 0.625rem;
+
+  --font-sans: 'Inter Variable', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono Variable', ui-monospace, monospace;
+}

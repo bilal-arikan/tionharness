@@ -1,0 +1,75 @@
+---
+import Section from './Section.astro'
+import Icon from './Icon.astro'
+
+// Deliberately concrete: the left column is what a typical agent platform asks
+// for on day one, the right column is the whole of TionHarness.
+const theirs = `services:
+  api:
+    image: platform/api:latest
+    depends_on: [db, redis, vector]
+  worker:
+    image: platform/worker:latest
+  db:
+    image: postgres:16
+    volumes: [pgdata:/var/lib/postgresql/data]
+  redis:
+    image: redis:7
+  vector:
+    image: qdrant/qdrant
+volumes:
+  pgdata:
+# ... then migrations, then .env, then keys`
+
+const ours = `.\\tionharness.exe`
+---
+
+<Section
+  eyebrow="Installation"
+  title="No compose file. No migration step."
+  lead="Storage is the filesystem: entities are JSON, sessions are append-only JSONL. Backing up means copying a folder."
+>
+  <div class="grid items-stretch gap-6 lg:grid-cols-2">
+    <div
+      class="flex flex-col rounded-[var(--radius)] border border-[var(--color-border)] bg-[var(--color-surface)] opacity-70"
+    >
+      <div
+        class="flex items-center gap-2 border-b border-[var(--color-border)] px-4 py-2.5 text-sm text-[var(--color-text-dim)]"
+      >
+        <Icon name="cross" class="size-4 text-[var(--color-danger)]" />
+        The usual agent platform
+      </div>
+      <pre
+        class="flex-1 overflow-x-auto p-4 font-mono text-[12px] leading-relaxed text-[var(--color-text-dim)]"><code>{theirs}</code></pre>
+    </div>
+
+    <div
+      class="flex flex-col rounded-[var(--radius)] border border-[var(--color-accent)]/40 bg-[var(--color-surface)] shadow-[var(--shadow-md)]"
+    >
+      <div
+        class="flex items-center gap-2 border-b border-[var(--color-border)] px-4 py-2.5 text-sm text-[var(--color-text)]"
+      >
+        <Icon name="check" class="size-4 text-[var(--color-success)]" />
+        TionHarness
+      </div>
+      <div class="flex flex-1 flex-col justify-center gap-4 p-6">
+        <pre
+          class="font-mono text-lg text-[var(--color-accent)]"><code>{ours}</code></pre>
+        <ul class="space-y-2 text-sm text-[var(--color-text-dim)]">
+          <li class="flex gap-2">
+            <Icon name="check" class="mt-0.5 size-4 shrink-0 text-[var(--color-success)]" />
+            The React UI is embedded in the binary with go:embed
+          </li>
+          <li class="flex gap-2">
+            <Icon name="check" class="mt-0.5 size-4 shrink-0 text-[var(--color-success)]" />
+            State lives in one data folder you can zip, diff or version
+          </li>
+          <li class="flex gap-2">
+            <Icon name="check" class="mt-0.5 size-4 shrink-0 text-[var(--color-success)]" />
+            A desktop build opens in its own WebView2 window, no browser needed
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</Section>

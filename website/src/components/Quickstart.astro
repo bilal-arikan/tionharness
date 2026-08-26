@@ -1,0 +1,64 @@
+---
+import Section from './Section.astro'
+import CodeBlock from './CodeBlock.astro'
+import { quickstartTabs, devModeSnippet } from '../content/quickstart'
+import { site, isPending } from '../site.config'
+
+const first = quickstartTabs[0]!
+const releasesPending = isPending(site.releasesUrl)
+---
+
+<Section
+  id="quickstart"
+  eyebrow="Quickstart"
+  title="Clone, build, run"
+  lead={
+    releasesPending
+      ? 'Prebuilt binaries are not published yet, so the path below builds one from source. It takes about a minute.'
+      : 'Grab a binary from the releases page, or build one from source with the commands below.'
+  }
+>
+  <div class="mx-auto max-w-3xl">
+    <div class="mb-4 flex gap-1 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] p-1">
+      {
+        quickstartTabs.map((t) => (
+          <button
+            type="button"
+            class="qs-tab flex-1 rounded-full px-4 py-1.5 text-sm text-[var(--color-text-dim)] transition aria-selected:bg-[var(--color-accent-soft)] aria-selected:text-[var(--color-accent)]"
+            aria-selected={t.id === first.id}
+            data-target={t.id}
+          >
+            {t.label}
+          </button>
+        ))
+      }
+    </div>
+
+    {
+      quickstartTabs.map((t) => (
+        <div class="qs-panel" data-panel={t.id} hidden={t.id !== first.id}>
+          <CodeBlock code={t.code} label={t.id === 'windows' ? 'powershell' : 'bash'} />
+        </div>
+      ))
+    }
+
+    <p class="mt-10 mb-3 text-sm text-[var(--color-text-dim)]">
+      Working on TionHarness itself? One script starts the backend and Vite together:
+    </p>
+    <CodeBlock code={devModeSnippet} label="powershell" />
+  </div>
+</Section>
+
+<script>
+  const tabs = document.querySelectorAll<HTMLButtonElement>('.qs-tab')
+  const panels = document.querySelectorAll<HTMLElement>('.qs-panel')
+
+  tabs.forEach((tab) => {
+    tab.addEventListener('click', () => {
+      tabs.forEach((t) => t.setAttribute('aria-selected', String(t === tab)))
+      panels.forEach((p) => {
+        p.hidden = p.dataset.panel !== tab.dataset.target
+      })
+    })
+  })
+</script>

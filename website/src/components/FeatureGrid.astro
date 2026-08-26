@@ -1,0 +1,26 @@
+---
+import Section from './Section.astro'
+import Icon from './Icon.astro'
+import { features } from '../content/features'
+---
+
+<Section
+  id="features"
+  eyebrow="Capabilities"
+  title="Everything an agent needs to keep working without you"
+  lead="Not a chat wrapper. A runtime with scheduling, orchestration, permissions and its own management API."
+>
+  <div class="grid gap-px overflow-hidden rounded-[var(--radius)] border border-[var(--color-border)] bg-[var(--color-border)] sm:grid-cols-2 lg:grid-cols-3">
+    {
+      features.map((f) => (
+        <article class="group bg-[var(--color-surface)] p-6 transition hover:bg-[var(--color-surface-2)]">
+          <span class="mb-4 grid size-10 place-items-center rounded-[var(--radius)] border border-[var(--color-border)] bg-[var(--color-accent-soft)] text-[var(--color-accent)]">
+            <Icon name={f.icon} />
+          </span>
+          <h3 class="text-base font-semibold">{f.title}</h3>
+          <p class="mt-2 text-sm text-pretty text-[var(--color-text-dim)]">{f.body}</p>
+        </article>
+      ))
+    }
+  </div>
+</Section>

@@ -1,0 +1,39 @@
+---
+import Icon from './Icon.astro'
+import Screenshot from './Screenshot.astro'
+import { deepDives } from '../content/deepdives'
+
+// Anchors let the nav's "How it works" jump straight to the first stripe.
+const anchors = ['coordinator', 'flows', 'board']
+---
+
+<div class="border-t border-[var(--color-border)]">
+  {
+    deepDives.map((d, i) => (
+      <section
+        id={anchors[i]}
+        class={`border-b border-[var(--color-border)] ${i % 2 === 1 ? 'bg-[var(--color-surface)]' : ''}`}
+      >
+        <div class="mx-auto grid w-full max-w-6xl items-center gap-12 px-6 py-20 lg:grid-cols-2 sm:py-24">
+          <div class={i % 2 === 1 ? 'lg:order-2' : ''}>
+            <p class="mb-3 text-xs font-semibold tracking-[0.18em] text-[var(--color-accent)] uppercase">
+              {d.eyebrow}
+            </p>
+            <h2 class="text-2xl font-semibold tracking-tight text-balance sm:text-3xl">{d.title}</h2>
+            <p class="mt-4 text-pretty text-[var(--color-text-dim)]">{d.body}</p>
+            <ul class="mt-6 space-y-3">
+              {d.bullets.map((b) => (
+                <li class="flex gap-3 text-sm text-[var(--color-text-dim)]">
+                  <Icon name="check" class="mt-0.5 size-4 shrink-0 text-[var(--color-accent)]" />
+                  <span class="text-pretty">{b}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <Screenshot src={d.shot} alt={d.shotAlt} class={i % 2 === 1 ? 'lg:order-1' : ''} />
+        </div>
+      </section>
+    ))
+  }
+</div>

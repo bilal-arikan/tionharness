@@ -1,0 +1,75 @@
+---
+// A stylised coordinator/worker panel drawn in CSS. Deliberately not a
+// screenshot: it carries the hero before scripts\shots.ps1 has ever been run,
+// and it never goes stale when the UI moves.
+const workers = [
+  { id: 'SES104', profile: 'explore', task: 'map the auth surface', state: 'done' },
+  { id: 'SES105', profile: 'edit', task: 'rewrite token refresh', state: 'running' },
+  { id: 'SES106', profile: 'validator', task: 'typecheck + e2e', state: 'queued' },
+]
+
+const stateStyles: Record<string, string> = {
+  done: 'text-[var(--color-success)] border-[var(--color-success)]/30 bg-[var(--color-success)]/10',
+  running: 'text-[var(--color-accent)] border-[var(--color-accent)]/40 bg-[var(--color-accent)]/10',
+  queued: 'text-[var(--color-text-dim)] border-[var(--color-border)] bg-[var(--color-surface-2)]',
+}
+---
+
+<div
+  class="w-full rounded-[var(--radius)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 shadow-[var(--shadow-lg)] sm:p-5"
+>
+  <div class="mb-4 flex items-center gap-2 border-b border-[var(--color-border)] pb-3">
+    <span class="size-2 animate-pulse rounded-full bg-[var(--color-accent)]"></span>
+    <span class="font-mono text-xs text-[var(--color-text-dim)]">SES103 &middot; coordinator</span>
+    <span
+      class="ml-auto rounded-full border border-[var(--color-border)] px-2 py-0.5 font-mono text-[10px] text-[var(--color-text-dim)]"
+    >
+      depth 1 / 5
+    </span>
+  </div>
+
+  <ul class="space-y-2">
+    {
+      workers.map((w, i) => (
+        <li
+          class="worker-row flex items-center gap-3 rounded-md border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2.5"
+          style={`animation-delay: ${i * 220}ms`}
+        >
+          <span class="font-mono text-[11px] text-[var(--color-text-dim)]">{w.id}</span>
+          <span class="truncate text-sm text-[var(--color-text)]">{w.task}</span>
+          <span class="ml-auto flex shrink-0 items-center gap-2">
+            <span class="hidden font-mono text-[10px] text-[var(--color-text-dim)] sm:inline">
+              {w.profile}
+            </span>
+            <span
+              class={`rounded-full border px-2 py-0.5 font-mono text-[10px] ${stateStyles[w.state]}`}
+            >
+              {w.state}
+            </span>
+          </span>
+        </li>
+      ))
+    }
+  </ul>
+
+  <p class="mt-4 border-t border-[var(--color-border)] pt-3 font-mono text-[11px] text-[var(--color-text-dim)]">
+    &lt;task-notification&gt; SES104 returned &middot; 2 workers still running
+  </p>
+</div>
+
+<style>
+  .worker-row {
+    animation: worker-in 0.5s ease-out backwards;
+  }
+
+  @keyframes worker-in {
+    from {
+      opacity: 0;
+      transform: translateY(6px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+</style>

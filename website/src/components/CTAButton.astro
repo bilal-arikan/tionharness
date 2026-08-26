@@ -1,0 +1,58 @@
+---
+import { isPending, type Maybe } from '../site.config'
+import Icon from './Icon.astro'
+
+/**
+ * The placeholder policy lives here. A null href never becomes a dead anchor --
+ * it renders as a disabled control carrying a "Coming soon" badge, so the page
+ * stays honest while the repo and release artifacts do not exist yet.
+ */
+interface Props {
+  href: Maybe<string>
+  variant?: 'primary' | 'ghost'
+  icon?: string
+  /** Explains what will live here once the link exists. Shown as a tooltip. */
+  pendingHint?: string
+  class?: string
+}
+
+const {
+  href,
+  variant = 'primary',
+  icon,
+  pendingHint = 'Not published yet',
+  class: className = '',
+} = Astro.props
+
+const base =
+  'inline-flex items-center justify-center gap-2 rounded-[var(--radius)] px-5 py-2.5 text-sm font-medium transition'
+
+const styles = {
+  primary: 'bg-[var(--color-accent)] text-white hover:brightness-110 shadow-[var(--shadow-md)]',
+  ghost:
+    'border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text)] hover:border-[var(--color-accent)]',
+}
+
+const pending = isPending(href)
+---
+
+{
+  pending ? (
+    <span
+      class={`${base} ${styles[variant]} cursor-not-allowed opacity-45 grayscale`}
+      aria-disabled="true"
+      title={pendingHint}
+    >
+      {icon && <Icon name={icon} class="size-4" />}
+      <slot />
+      <span class="rounded-full border border-current/40 px-2 py-0.5 text-[10px] font-semibold tracking-wide uppercase">
+        Coming soon
+      </span>
+    </span>
+  ) : (
+    <a href={href} class={`${base} ${styles[variant]} ${className}`}>
+      {icon && <Icon name={icon} class="size-4" />}
+      <slot />
+    </a>
+  )
+}

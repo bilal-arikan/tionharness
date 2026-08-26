@@ -1,0 +1,33 @@
+---
+import Section from './Section.astro'
+import Icon from './Icon.astro'
+import { notThis, securityNote } from '../content/scope'
+---
+
+<Section
+  id="scope"
+  eyebrow="Read this first"
+  title="What TionHarness is not"
+  lead="It is easier to trust a tool that tells you where its edges are."
+>
+  <div
+    class="mb-10 flex items-start gap-4 rounded-[var(--radius)] border border-[var(--color-warning)]/35 bg-[var(--color-warning)]/8 p-5"
+  >
+    <Icon name="warn" class="mt-0.5 size-5 shrink-0 text-[var(--color-warning)]" />
+    <p class="text-sm text-pretty text-[var(--color-text)]">{securityNote}</p>
+  </div>
+
+  <div class="grid gap-6 sm:grid-cols-2">
+    {
+      notThis.map((item) => (
+        <article class="rounded-[var(--radius)] border border-[var(--color-border)] bg-[var(--color-surface)] p-6">
+          <h3 class="flex items-center gap-2 text-base font-semibold">
+            <Icon name="cross" class="size-4 text-[var(--color-danger)]" />
+            {item.title}
+          </h3>
+          <p class="mt-2 text-sm text-pretty text-[var(--color-text-dim)]">{item.body}</p>
+        </article>
+      ))
+    }
+  </div>
+</Section>

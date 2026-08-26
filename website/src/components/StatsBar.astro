@@ -1,0 +1,21 @@
+---
+import { stats } from '../content/stats'
+---
+
+<div class="border-y border-[var(--color-border)] bg-[var(--color-surface)]">
+  <dl class="mx-auto grid w-full max-w-6xl grid-cols-2 gap-px bg-[var(--color-border)] lg:grid-cols-4">
+    {
+      stats.map((s) => (
+        <div class="bg-[var(--color-surface)] px-6 py-8">
+          <dt class="flex items-baseline gap-2">
+            <span class="font-mono text-3xl font-semibold text-[var(--color-accent)]">
+              {s.value}
+            </span>
+            <span class="text-sm text-[var(--color-text-dim)]">{s.label}</span>
+          </dt>
+          <dd class="mt-2 text-sm text-pretty text-[var(--color-text-dim)]">{s.note}</dd>
+        </div>
+      ))
+    }
+  </dl>
+</div>

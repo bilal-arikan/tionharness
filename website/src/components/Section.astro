@@ -1,0 +1,32 @@
+---
+interface Props {
+  id?: string
+  eyebrow?: string
+  title?: string
+  lead?: string
+  class?: string
+  /** Centres the heading block. Off for asymmetric sections like deep dives. */
+  centered?: boolean
+}
+
+const { id, eyebrow, title, lead, class: className = '', centered = true } = Astro.props
+---
+
+<section id={id} class={`mx-auto w-full max-w-6xl px-6 py-20 sm:py-28 ${className}`}>
+  {
+    (eyebrow || title || lead) && (
+      <header class={`mb-12 max-w-2xl ${centered ? 'mx-auto text-center' : ''}`}>
+        {eyebrow && (
+          <p class="mb-3 text-xs font-semibold tracking-[0.18em] text-[var(--color-accent)] uppercase">
+            {eyebrow}
+          </p>
+        )}
+        {title && (
+          <h2 class="text-3xl font-semibold tracking-tight text-balance sm:text-4xl">{title}</h2>
+        )}
+        {lead && <p class="mt-4 text-lg text-pretty text-[var(--color-text-dim)]">{lead}</p>}
+      </header>
+    )
+  }
+  <slot />
+</section>

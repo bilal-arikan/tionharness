@@ -1,0 +1,50 @@
+---
+import { site } from '../site.config'
+import AgentTreeGraphic from './AgentTreeGraphic.astro'
+import CTAButton from './CTAButton.astro'
+
+// The download CTA points at the first available platform artifact; while every
+// entry is null it degrades to the disabled "Coming soon" state on its own.
+const primaryDownload = site.downloads.windows ?? site.downloads.linux ?? site.downloads.macos
+---
+
+<header class="relative overflow-hidden">
+  <div class="glow-radial pointer-events-none absolute inset-0 -z-10"></div>
+  <div class="grid-backdrop pointer-events-none absolute inset-0 -z-20 opacity-40"></div>
+
+  <div class="mx-auto grid w-full max-w-6xl items-center gap-14 px-6 pt-20 pb-24 lg:grid-cols-2 lg:pt-28">
+    <div>
+      <p
+        class="mb-5 inline-flex items-center gap-2 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1 text-xs text-[var(--color-text-dim)]"
+      >
+        <span class="size-1.5 rounded-full bg-[var(--color-accent)]"></span>
+        Open source &middot; self-hosted &middot; written in Go
+      </p>
+
+      <h1 class="text-4xl font-semibold tracking-tight text-balance sm:text-5xl lg:text-6xl">
+        A multi-agent AI runtime that runs on
+        <span class="text-[var(--color-accent)]">your own machine</span>.
+      </h1>
+
+      <p class="mt-6 max-w-xl text-lg text-pretty text-[var(--color-text-dim)]">
+        One binary. No database, no container, no API key. TionHarness gives a team of autonomous
+        agents a workspace, a board, a scheduler and a permission model &mdash; then gets out of the
+        way.
+      </p>
+
+      <div class="mt-9 flex flex-wrap items-center gap-3">
+        <CTAButton href={primaryDownload} icon="download" pendingHint="No release artifacts published yet">
+          Download
+        </CTAButton>
+        <CTAButton href="#quickstart" variant="ghost" icon="code">Build from source</CTAButton>
+      </div>
+
+      <p class="mt-4 font-mono text-xs text-[var(--color-text-dim)]">
+        {site.version ? `v${site.version}` : 'unreleased'} &middot; Windows, Linux, macOS &middot;
+        {site.binarySizeMb} MB
+      </p>
+    </div>
+
+    <AgentTreeGraphic />
+  </div>
+</header>

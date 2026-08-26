@@ -1,0 +1,49 @@
+---
+import { site } from '../site.config'
+import SmartLink from './SmartLink.astro'
+import CTAButton from './CTAButton.astro'
+
+const links = [
+  { href: '#features', label: 'Features' },
+  { href: '#coordinator', label: 'How it works' },
+  { href: '#quickstart', label: 'Quickstart' },
+  { href: '#scope', label: 'Scope' },
+]
+---
+
+<nav
+  class="sticky top-0 z-50 border-b border-[var(--color-border)] bg-[var(--color-bg)]/80 backdrop-blur"
+>
+  <div class="mx-auto flex w-full max-w-6xl items-center gap-6 px-6 py-3.5">
+    <a href="/" class="flex items-center gap-2 font-semibold tracking-tight">
+      <span
+        class="grid size-7 place-items-center rounded-md bg-[var(--color-accent)] font-mono text-sm text-white"
+        >T</span
+      >
+      {site.name}
+    </a>
+
+    <div class="ml-auto hidden items-center gap-6 text-sm md:flex">
+      {
+        links.map((l) => (
+          <a
+            href={l.href}
+            class="text-[var(--color-text-dim)] transition hover:text-[var(--color-text)]"
+          >
+            {l.label}
+          </a>
+        ))
+      }
+      <SmartLink href={site.docsUrl}>Docs</SmartLink>
+    </div>
+
+    <CTAButton
+      href={site.repoUrl}
+      variant="ghost"
+      class="ml-auto md:ml-0"
+      pendingHint="The public repository is not open yet"
+    >
+      Source
+    </CTAButton>
+  </div>
+</nav>

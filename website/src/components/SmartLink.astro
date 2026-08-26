@@ -1,0 +1,30 @@
+---
+import { isPending, type Maybe } from '../site.config'
+
+/** Inline text equivalent of CTAButton: a null href degrades to dimmed text. */
+interface Props {
+  href: Maybe<string>
+  class?: string
+}
+
+const { href, class: className = '' } = Astro.props
+const pending = isPending(href)
+---
+
+{
+  pending ? (
+    <span
+      class={`cursor-not-allowed text-[var(--color-text-dim)] opacity-60 ${className}`}
+      title="Not published yet"
+    >
+      <slot /> <span class="text-[10px] tracking-wide uppercase">(soon)</span>
+    </span>
+  ) : (
+    <a
+      href={href}
+      class={`text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)] ${className}`}
+    >
+      <slot />
+    </a>
+  )
+}

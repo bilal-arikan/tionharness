@@ -1,0 +1,128 @@
+---
+import Section from './Section.astro'
+import { themeColors, DARK_NEUTRALS, LIGHT_NEUTRALS } from '../content/themes'
+
+// Every swatch carries its full token set as data attributes; the script only
+// writes CSS custom properties on the preview container, exactly like the app
+// does on <html>. That keeps the demo honest and the JS trivial.
+const variants = themeColors.flatMap((c) => [
+  {
+    id: `${c.id}-dark`,
+    label: c.label,
+    mode: 'dark',
+    accent: c.darkAccent,
+    tokens: { ...DARK_NEUTRALS, accent: c.darkAccent, accentSoft: c.darkSoft },
+  },
+  {
+    id: `${c.id}-light`,
+    label: c.label,
+    mode: 'light',
+    accent: c.lightAccent,
+    tokens: { ...LIGHT_NEUTRALS, accent: c.lightAccent, accentSoft: c.lightSoft },
+  },
+])
+
+const initial = variants[0]!
+
+const styleFor = (t: Record<string, string>) =>
+  [
+    `--color-bg:${t.bg}`,
+    `--color-surface:${t.surface}`,
+    `--color-surface-2:${t.surface2}`,
+    `--color-border:${t.border}`,
+    `--color-accent:${t.accent}`,
+    `--color-accent-soft:${t.accentSoft}`,
+    `--color-text:${t.text}`,
+    `--color-text-dim:${t.textDim}`,
+  ].join(';')
+---
+
+<Section
+  eyebrow="Appearance"
+  title="Six palettes, light and dark, applied live"
+  lead="Themes are pure CSS custom properties, so a workspace can carry its own look and switching one repaints the whole app instantly."
+>
+  <div class="mx-auto mb-8 flex max-w-3xl flex-wrap justify-center gap-2">
+    {
+      variants.map((v) => (
+        <button
+          type="button"
+          class="theme-swatch flex items-center gap-2 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1.5 text-xs text-[var(--color-text-dim)] transition hover:border-[var(--color-accent)] aria-pressed:border-[var(--color-accent)] aria-pressed:text-[var(--color-text)]"
+          aria-pressed={v.id === initial.id}
+          data-style={styleFor(v.tokens)}
+        >
+          <span
+            class="size-3 rounded-full ring-1 ring-white/15"
+            style={`background:${v.accent}`}
+          />
+          {v.label}
+          <span class="opacity-60">{v.mode}</span>
+        </button>
+      ))
+    }
+  </div>
+
+  <div
+    id="theme-preview"
+    style={styleFor(initial.tokens)}
+    class="overflow-hidden rounded-[var(--radius)] border border-[var(--color-border)] bg-[var(--color-bg)] shadow-[var(--shadow-lg)] transition-colors duration-300"
+  >
+    <div class="flex">
+      <aside
+        class="hidden w-44 shrink-0 border-r border-[var(--color-border)] bg-[var(--color-surface)] p-3 sm:block"
+      >
+        {
+          ['Chat', 'Tasks', 'Flows', 'Agents', 'Insight'].map((item, i) => (
+            <div
+              class={`mb-1 rounded-md px-3 py-2 text-sm ${
+                i === 0
+                  ? 'bg-[var(--color-accent-soft)] text-[var(--color-accent)]'
+                  : 'text-[var(--color-text-dim)]'
+              }`}
+            >
+              {item}
+            </div>
+          ))
+        }
+      </aside>
+
+      <div class="flex-1 p-5">
+        <div class="mb-4 flex items-center gap-2">
+          <span class="size-2 rounded-full bg-[var(--color-accent)]"></span>
+          <span class="text-sm font-medium text-[var(--color-text)]">Research agent</span>
+          <span class="font-mono text-xs text-[var(--color-text-dim)]">claude-cli</span>
+        </div>
+
+        <div
+          class="mb-3 rounded-[var(--radius)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-sm text-[var(--color-text)]"
+        >
+          Indexed 412 files and found three call sites that bypass the token refresh.
+        </div>
+        <div
+          class="mb-3 ml-auto max-w-md rounded-[var(--radius)] bg-[var(--color-accent-soft)] p-4 text-sm text-[var(--color-text)]"
+        >
+          Fix them and run the validator.
+        </div>
+        <div
+          class="flex items-center gap-2 rounded-[var(--radius)] border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 font-mono text-xs text-[var(--color-text-dim)]"
+        >
+          <span class="text-[var(--color-accent)]">&#9889;</span> 3 parallel tool calls
+        </div>
+      </div>
+    </div>
+  </div>
+</Section>
+
+<script>
+  const preview = document.getElementById('theme-preview')
+  const swatches = document.querySelectorAll<HTMLButtonElement>('.theme-swatch')
+
+  swatches.forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const style = btn.dataset.style
+      if (!style || !preview) return
+      preview.setAttribute('style', style)
+      swatches.forEach((b) => b.setAttribute('aria-pressed', String(b === btn)))
+    })
+  })
+</script>

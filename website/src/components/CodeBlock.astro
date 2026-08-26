@@ -1,0 +1,45 @@
+---
+interface Props {
+  code: string
+  /** Shown in the title bar; usually a shell name. */
+  label?: string
+  class?: string
+}
+
+const { code, label, class: className = '' } = Astro.props
+---
+
+<div
+  class={`group relative overflow-hidden rounded-[var(--radius)] border border-[var(--color-border)] bg-[var(--color-surface)] ${className}`}
+>
+  <div
+    class="flex items-center justify-between border-b border-[var(--color-border)] bg-[var(--color-surface-2)] px-4 py-2"
+  >
+    <span class="font-mono text-xs text-[var(--color-text-dim)]">{label ?? 'shell'}</span>
+    <button
+      type="button"
+      class="copy-btn rounded px-2 py-1 text-xs text-[var(--color-text-dim)] transition hover:bg-[var(--color-accent-soft)] hover:text-[var(--color-text)]"
+      data-code={code}
+    >
+      Copy
+    </button>
+  </div>
+  <pre
+    class="overflow-x-auto p-4 font-mono text-[13px] leading-relaxed text-[var(--color-text)]"><code>{code}</code></pre>
+</div>
+
+<script>
+  // Progressive enhancement: without JS the block is still readable and selectable.
+  document.querySelectorAll<HTMLButtonElement>('.copy-btn').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const code = btn.dataset.code
+      if (!code) return
+      await navigator.clipboard.writeText(code)
+      const previous = btn.textContent
+      btn.textContent = 'Copied'
+      setTimeout(() => {
+        btn.textContent = previous
+      }, 1400)
+    })
+  })
+</script>

@@ -53,6 +53,14 @@ credential-secret
 /internal/web/dist/*
 !/internal/web/dist/.gitkeep
 
+# Promo site (_Docs/72). Static output + Astro's generated type cache.
+/website/node_modules/
+/website/dist/
+/website/.astro/
+# Captured product screenshots (regenerate with scripts\shots.ps1); keep placeholder.
+/website/public/shots/*
+!/website/public/shots/.gitkeep
+
 # Env
 .env
 .env.local

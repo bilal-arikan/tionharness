@@ -1,0 +1,34 @@
+---
+import { site } from '../site.config'
+import SmartLink from './SmartLink.astro'
+---
+
+<footer class="border-t border-[var(--color-border)] bg-[var(--color-surface)]">
+  <div
+    class="mx-auto flex w-full max-w-6xl flex-col gap-6 px-6 py-10 sm:flex-row sm:items-center sm:justify-between"
+  >
+    <div>
+      <p class="flex items-center gap-2 font-semibold">
+        <span
+          class="grid size-6 place-items-center rounded-md bg-[var(--color-accent)] font-mono text-xs text-white"
+          >T</span
+        >
+        {site.name}
+      </p>
+      <p class="mt-2 max-w-sm text-sm text-[var(--color-text-dim)]">{site.description}</p>
+    </div>
+
+    <nav class="flex flex-wrap gap-x-6 gap-y-2 text-sm">
+      <SmartLink href={site.repoUrl}>Source</SmartLink>
+      <SmartLink href={site.releasesUrl}>Releases</SmartLink>
+      <SmartLink href={site.docsUrl}>Docs</SmartLink>
+      <SmartLink href={site.issuesUrl}>Issues</SmartLink>
+    </nav>
+  </div>
+
+  <div
+    class="border-t border-[var(--color-border)] px-6 py-4 text-center font-mono text-xs text-[var(--color-text-dim)]"
+  >
+    {site.license ? `${site.license} licensed` : 'License to be announced'}
+  </div>
+</footer>

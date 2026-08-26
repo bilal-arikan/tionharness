@@ -110,6 +110,7 @@ Tüm plan ve tasarım dokümanları [`_Docs/`](_Docs/) klasöründedir:
 - [Kavramsal Tasarım Notları](_Docs/10-KAVRAMSAL-TASARIM-NOTLARI.md)
 - [Interaction MCP](_Docs/11-INTERACTION-MCP.md)
 - [Loglama Sistemi](_Docs/12-LOGLAMA.md)
+- [Tanıtım Sitesi](_Docs/72-TANITIM-SITESI.md)
 
 ## Proje Yapısı
 
@@ -130,9 +131,36 @@ TionHarness/
 │   ├── settings/           # uygulama-geneli ayarlar (şifreli settings.json deposu)
 │   ├── workspace/          # workspace başına DB + runtime + scheduler
 │   └── api/                # HTTP handler'ları (stdlib ServeMux)
-├── frontend/               # Vite + React + TS + Tailwind v4
+├── frontend/               # Vite + React + TS + Tailwind v4 (uygulama arayüzü)
+├── website/                # Statik tanıtım sitesi (Astro) — Go modülü dışı
 └── go.mod
 ```
+
+## Tanıtım Sitesi (`website/`)
+
+Projeyi anlatan statik tek-sayfa site: **Astro 5 + Tailwind v4**, İngilizce, sıfır runtime
+framework. Uygulamayla hiçbir bağı yoktur — Go modülünün dışındadır, `go:embed` ağacına
+girmez, binary'yi büyütmez.
+
+```powershell
+cd website
+npm install
+npm run dev      # http://localhost:4321
+npm run build    # -> website/dist/ (statik çıktı)
+```
+
+Public repo, release binary'leri, docs sitesi ve lisans henüz yok; bunların tamamı
+`website/src/site.config.ts` içinde `null` olarak durur ve site bunları **ölü link yerine**
+"Coming soon" olarak gösterir. Repo yayına alınınca yalnız o dosya doldurulur.
+
+Ürün ekran görüntüleri repoda tutulmaz, çalışan bir örnekten üretilir:
+
+```powershell
+.\scripts\dev.ps1                    # önce uygulamayı başlat
+.\scripts\shots.ps1 -InstallDeps     # Playwright ile website/public/shots/'a çeker
+```
+
+Detay: [Tanıtım Sitesi](_Docs/72-TANITIM-SITESI.md) · [website/README.md](website/README.md)
 
 ## Geliştirme İlkeleri
 

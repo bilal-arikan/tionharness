@@ -1,0 +1,46 @@
+---
+import { existsSync } from 'node:fs'
+import Icon from './Icon.astro'
+
+/**
+ * Renders a product screenshot, or a labelled placeholder frame when the file
+ * has not been captured yet. Existence is resolved at build time against
+ * public/, so running scripts/shots.ps1 is all it takes to fill these in.
+ */
+interface Props {
+  /** Site-absolute path, e.g. "/shots/coordinator.png". */
+  src: string
+  alt: string
+  class?: string
+}
+
+const { src, alt, class: className = '' } = Astro.props
+
+const publicPath = new URL(`../../public${src}`, import.meta.url)
+const available = existsSync(publicPath)
+---
+
+<figure
+  class={`overflow-hidden rounded-[var(--radius)] border border-[var(--color-border)] bg-[var(--color-surface)] shadow-[var(--shadow-lg)] ${className}`}
+>
+  <div
+    class="flex items-center gap-1.5 border-b border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2"
+  >
+    <span class="size-2.5 rounded-full bg-[var(--color-danger)]/60"></span>
+    <span class="size-2.5 rounded-full bg-[var(--color-warning)]/60"></span>
+    <span class="size-2.5 rounded-full bg-[var(--color-success)]/60"></span>
+  </div>
+  {
+    available ? (
+      <img src={src} alt={alt} loading="lazy" decoding="async" class="block w-full" />
+    ) : (
+      <div class="grid-backdrop flex aspect-[16/10] flex-col items-center justify-center gap-3 px-6 text-center">
+        <Icon name="search" class="size-7 text-[var(--color-text-dim)]" />
+        <p class="text-sm text-[var(--color-text-dim)]">{alt}</p>
+        <p class="font-mono text-[11px] text-[var(--color-text-dim)] opacity-60">
+          {src} &mdash; run scripts\shots.ps1
+        </p>
+      </div>
+    )
+  }
+</figure>
