@@ -633,7 +633,11 @@ func (r *Registry) Call(ctx context.Context, call providers.ToolCall) providers.
 		res.IsError = true
 		return res
 	}
-	if name != "" && r.lazy[name] && (r.active == nil || !r.active.Has(name)) {
+	// A nil active set means this registry does not track activation at all (the
+	// claude-cli bridge registry built by Runtime.BridgeTools). There the gate lives
+	// in the Interaction layer (isActivated), so applying a second gate here would
+	// make every bridged on-demand tool permanently uncallable.
+	if name != "" && r.lazy[name] && r.active != nil && !r.active.Has(name) {
 		if r.hidden[name] {
 			res.Content = fmt.Sprintf("tool %q exists but is disabled or not permitted in this workspace", name)
 			res.IsError = true

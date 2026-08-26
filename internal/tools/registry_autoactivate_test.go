@@ -56,6 +56,23 @@ func TestRegistryCallDeferredAutoActivation(t *testing.T) {
 		})
 	}
 
+	// A registry with NO activation state (the claude-cli bridge registry from
+	// Runtime.BridgeTools) must run a lazy tool directly: activation is gated in the
+	// Interaction layer there, so a second gate here made every bridged on-demand
+	// tool permanently uncallable ("is deferred and cannot be called").
+	t.Run("nil active set runs lazy tool", func(t *testing.T) {
+		stub := &autoActivateStub{}
+		reg := NewRegistry(stub)
+		reg.MarkNameOnly("server__deferred")
+		res := reg.Call(context.Background(), providers.ToolCall{Name: "server__deferred"})
+		if res.IsError || res.Content != "ran" {
+			t.Fatalf("result = (%q, error=%v), want (\"ran\", false)", res.Content, res.IsError)
+		}
+		if stub.calls != 1 {
+			t.Fatalf("tool calls = %d, want 1", stub.calls)
+		}
+	})
+
 	for i := 0; i < 3; i++ {
 		reg := NewRegistry()
 		reg.ConfigureAutoActivation(NewActiveTools(), nil)
