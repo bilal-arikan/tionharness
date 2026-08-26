@@ -3,6 +3,8 @@ package tools
 import (
 	"bytes"
 	"context"
+	"encoding/json"
+	"fmt"
 	"log/slog"
 	"os"
 	"os/exec"
@@ -19,10 +21,19 @@ import (
 // the in-process Go engine.
 const rgTimeout = 60 * time.Second
 
+const timedOutSearchTTL = 5 * time.Minute
+
 var (
-	rgOnce sync.Once
-	rgBin  string // resolved "rg" path, "" if absent or disabled
+	rgOnce             sync.Once
+	rgBin              string // resolved "rg" path, "" if absent or disabled
+	timedOutSearchesMu sync.Mutex
+	timedOutSearches   = make(map[string]time.Time)
+	heavySearchDirs    = []string{"node_modules", ".git", "vendor", ".venv", "__pycache__", ".next", ".gradle"}
+	runRGCommand       = runRipgrepCommand
+	nowFn              = time.Now
 )
+
+const repeatedSearchTimeoutMessage = "this exact search already timed out; narrow the path (e.g. pass a `path` under the subdirectory you care about) or use a more specific pattern instead of retrying it unchanged"
 
 // rgExe resolves the ripgrep binary. It returns "" (fast path disabled) when rg is
 // not on PATH or TIONHARNESS_GREP_NO_RG is set — in which case Grep uses its built-in Go
@@ -50,15 +61,16 @@ func rgExe() string {
 // rg flags and returning rg's output normalised to the same shape as the Go engine
 // (forward-slash paths, no leading "./", head-limited). It returns handled=false on
 // any condition it does not confidently support (rg absent, unknown mode/type, rg
-// internal error, timeout), so the caller transparently falls back to the Go engine.
-func (t FSGrepTool) tryRG(ctx context.Context, args grepArgs) (string, bool) {
+// internal error), so the caller transparently falls back to the Go engine. A timeout
+// is returned as an error and recorded so an identical repeat can fail immediately.
+func (t FSGrepTool) tryRG(ctx context.Context, args grepArgs) (string, bool, error) {
 	exe := rgExe()
 	if exe == "" {
-		return "", false
+		return "", false, nil
 	}
 	dir, targets, ok := t.rgTarget(args)
 	if !ok {
-		return "", false
+		return "", false, nil
 	}
 	mode := args.OutputMode
 	if mode == "" {
@@ -66,12 +78,35 @@ func (t FSGrepTool) tryRG(ctx context.Context, args grepArgs) (string, bool) {
 	}
 	rgArgs, ok := buildRGArgs(args, mode, targets)
 	if !ok {
-		return "", false
+		return "", false, nil
+	}
+	searchKey := normalizedSearchKey("Grep", args)
+	if searchAlreadyTimedOut(searchKey) {
+		return "", true, fmt.Errorf("%s", repeatedSearchTimeoutMessage)
 	}
 
 	runCtx, cancel := context.WithTimeout(ctx, rgTimeout)
 	defer cancel()
-	cmd := proc.CommandContext(runCtx, exe, rgArgs...)
+	stdout, err := runRGCommand(runCtx, exe, rgArgs, dir)
+	if runCtx.Err() == context.DeadlineExceeded {
+		recordTimedOutSearch(searchKey)
+		return "", true, fmt.Errorf("ripgrep search timed out after %s", rgTimeout)
+	}
+	if err != nil {
+		if ee, isExit := err.(*exec.ExitError); isExit && ee.ExitCode() == 1 {
+			return "No matches.", true, nil
+		}
+		return "", false, nil
+	}
+	out := normalizeRGOutput(stdout, args.HeadLimit)
+	if out == "" {
+		return "No matches.", true, nil
+	}
+	return out, true, nil
+}
+
+func runRipgrepCommand(ctx context.Context, exe string, args []string, dir string) (string, error) {
+	cmd := proc.CommandContext(ctx, exe, args...)
 	// rg has no children of its own, but cmd.Run copies from pipes: WaitDelay keeps
 	// a timed-out run bounded instead of blocking on a writer that never closes.
 	proc.TreeKill(cmd)
@@ -80,19 +115,57 @@ func (t FSGrepTool) tryRG(ctx context.Context, args grepArgs) (string, bool) {
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	err := cmd.Run()
+	return stdout.String(), err
+}
+
+func normalizedSearchKey(tool string, args any) string {
+	b, err := json.Marshal(args)
 	if err != nil {
-		// Exit 1 = no matches (a normal result); anything else (2 = error, or a
-		// start/timeout failure) hands back to the Go engine.
-		if ee, isExit := err.(*exec.ExitError); isExit && ee.ExitCode() == 1 {
-			return "No matches.", true
+		panic(err)
+	}
+	return tool + "\x00" + string(b)
+}
+
+func searchAlreadyTimedOut(key string) bool {
+	timedOutSearchesMu.Lock()
+	defer timedOutSearchesMu.Unlock()
+	timedOutAt, found := timedOutSearches[key]
+	if !found {
+		return false
+	}
+	if nowFn().Sub(timedOutAt) >= timedOutSearchTTL {
+		delete(timedOutSearches, key)
+		return false
+	}
+	return true
+}
+
+func recordTimedOutSearch(key string) {
+	timedOutSearchesMu.Lock()
+	timedOutSearches[key] = nowFn()
+	timedOutSearchesMu.Unlock()
+}
+
+func explicitlyReferencesDir(dir string, values ...string) bool {
+	for _, value := range values {
+		for _, part := range strings.FieldsFunc(filepath.ToSlash(value), func(r rune) bool {
+			return r == '/' || r == ',' || r == ';'
+		}) {
+			if strings.EqualFold(strings.TrimSpace(part), dir) {
+				return true
+			}
 		}
-		return "", false
 	}
-	out := normalizeRGOutput(stdout.String(), args.HeadLimit)
-	if out == "" {
-		return "No matches.", true
+	return false
+}
+
+func shouldIgnoreHeavyDir(name string, explicitValues ...string) bool {
+	for _, dir := range heavySearchDirs {
+		if strings.EqualFold(name, dir) && !explicitlyReferencesDir(dir, explicitValues...) {
+			return true
+		}
 	}
-	return out, true
+	return false
 }
 
 // rgTarget resolves the directory rg runs in and the positional targets (a file
@@ -184,6 +257,11 @@ func buildRGArgs(args grepArgs, mode string, targets []string) ([]string, bool) 
 	}
 	if args.NoIgnore {
 		out = append(out, "--no-ignore")
+	}
+	for _, dir := range heavySearchDirs {
+		if !explicitlyReferencesDir(dir, args.Path, args.Glob) {
+			out = append(out, "--glob", "!"+dir+"/")
+		}
 	}
 	if g := strings.TrimSpace(args.Glob); g != "" {
 		out = append(out, "--glob", g)

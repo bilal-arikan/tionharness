@@ -61,10 +61,10 @@ func TestGrepOutputModes(t *testing.T) {
 		t.Fatalf("type=go should exclude readme:\n%s", out)
 	}
 
-	// no_ignore surfaces the gitignored hits.
+	// no_ignore surfaces ordinary gitignored hits, but default heavy dirs stay out.
 	out, _ = g.Call(ctx, mustJSON(t, map[string]any{"pattern": "TODO", "no_ignore": true}))
-	if !strings.Contains(out, "node_modules") {
-		t.Fatalf("no_ignore should include node_modules:\n%s", out)
+	if !strings.Contains(out, "debug.log") || strings.Contains(out, "node_modules") {
+		t.Fatalf("no_ignore should include debug.log but retain heavy-dir exclusion:\n%s", out)
 	}
 }
 
@@ -210,10 +210,176 @@ func TestGrepRGFastPath(t *testing.T) {
 		t.Fatalf("rg count wrong:\n%s", out)
 	}
 
-	// no_ignore surfaces the ignored hits.
+	// no_ignore surfaces ordinary ignored hits, but default heavy dirs stay out.
 	out, _ = g.Call(ctx, mustJSON(t, map[string]any{"pattern": "TODO", "no_ignore": true}))
-	if !strings.Contains(out, "node_modules") {
-		t.Fatalf("rg no_ignore should include node_modules:\n%s", out)
+	if !strings.Contains(out, "debug.log") || strings.Contains(out, "node_modules") {
+		t.Fatalf("rg no_ignore should include debug.log but retain heavy-dir exclusion:\n%s", out)
+	}
+}
+
+func TestGrepGlobExcludeHeavyDirsByDefault(t *testing.T) {
+	if rgExe() == "" {
+		t.Skip("ripgrep (rg) not on PATH")
+	}
+	sb := NewSandbox(t.TempDir())
+	for _, dir := range heavySearchDirs {
+		if err := os.MkdirAll(filepath.Join(sb.Root, dir), 0o755); err != nil {
+			t.Fatalf("mkdir %s: %v", dir, err)
+		}
+		if err := os.WriteFile(filepath.Join(sb.Root, dir, "heavy.txt"), []byte("heavy needle\n"), 0o644); err != nil {
+			t.Fatalf("seed %s: %v", dir, err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(sb.Root, "visible.txt"), []byte("visible needle\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	grepOut, err := NewFSGrepTool(sb).Call(context.Background(), mustJSON(t, map[string]any{"pattern": "needle"}))
+	if err != nil {
+		t.Fatalf("grep: %v", err)
+	}
+	if !strings.Contains(grepOut, "visible.txt") {
+		t.Fatalf("grep missed visible file:\n%s", grepOut)
+	}
+	globOut, err := NewFSGlobTool(sb).Call(context.Background(), mustJSON(t, map[string]any{"pattern": "**/*.txt"}))
+	if err != nil {
+		t.Fatalf("glob: %v", err)
+	}
+	for _, dir := range heavySearchDirs {
+		if strings.Contains(grepOut, dir+"/") || strings.Contains(globOut, dir+"/") {
+			t.Fatalf("default search included heavy directory %q\ngrep:\n%s\nglob:\n%s", dir, grepOut, globOut)
+		}
+	}
+}
+
+func TestGrepGlobKeepsGenericSourceDirsByDefault(t *testing.T) {
+	if rgExe() == "" {
+		t.Skip("ripgrep (rg) not on PATH")
+	}
+	sb := NewSandbox(t.TempDir())
+	for _, dir := range []string{"Library", "Temp", "obj", "bin", "dist", "build", "target"} {
+		if err := os.MkdirAll(filepath.Join(sb.Root, dir), 0o755); err != nil {
+			t.Fatalf("mkdir %s: %v", dir, err)
+		}
+		if err := os.WriteFile(filepath.Join(sb.Root, dir, "source.txt"), []byte("source needle\n"), 0o644); err != nil {
+			t.Fatalf("seed %s: %v", dir, err)
+		}
+	}
+
+	grepOut, err := NewFSGrepTool(sb).Call(context.Background(), mustJSON(t, map[string]any{"pattern": "needle"}))
+	if err != nil {
+		t.Fatalf("grep: %v", err)
+	}
+	globOut, err := NewFSGlobTool(sb).Call(context.Background(), mustJSON(t, map[string]any{"pattern": "**/*.txt"}))
+	if err != nil {
+		t.Fatalf("glob: %v", err)
+	}
+	for _, dir := range []string{"Library", "Temp", "obj", "bin", "dist", "build", "target"} {
+		if !strings.Contains(grepOut, dir+"/") || !strings.Contains(globOut, dir+"/") {
+			t.Fatalf("default search excluded generic source directory %q\ngrep:\n%s\nglob:\n%s", dir, grepOut, globOut)
+		}
+	}
+}
+
+func TestGrepGlobExplicitHeavyDirStillSearches(t *testing.T) {
+	if rgExe() == "" {
+		t.Skip("ripgrep (rg) not on PATH")
+	}
+	sb := NewSandbox(t.TempDir())
+	if err := os.MkdirAll(filepath.Join(sb.Root, "node_modules"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(sb.Root, "node_modules", "asset.txt"), []byte("explicit needle\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	grepOut, err := NewFSGrepTool(sb).Call(context.Background(), mustJSON(t, map[string]any{
+		"pattern": "needle", "path": "node_modules",
+	}))
+	if err != nil || !strings.Contains(grepOut, "asset.txt") {
+		t.Fatalf("explicit grep must search node_modules: out=%q err=%v", grepOut, err)
+	}
+	globOut, err := NewFSGlobTool(sb).Call(context.Background(), mustJSON(t, map[string]any{
+		"pattern": "node_modules/**",
+	}))
+	if err != nil || !strings.Contains(globOut, "node_modules/asset.txt") {
+		t.Fatalf("explicit glob must search node_modules: out=%q err=%v", globOut, err)
+	}
+}
+
+func TestGrepTimedOutSearchTTL(t *testing.T) {
+	if rgExe() == "" {
+		t.Skip("ripgrep (rg) not on PATH")
+	}
+	sb := setupTree(t)
+	args := grepArgs{Pattern: "TTL needle"}
+	key := normalizedSearchKey("Grep", args)
+	currentTime := time.Date(2026, time.August, 27, 0, 0, 0, 0, time.UTC)
+	originalNow := nowFn
+	nowFn = func() time.Time { return currentTime }
+	recordTimedOutSearch(key)
+
+	originalRun := runRGCommand
+	spawned := 0
+	runRGCommand = func(context.Context, string, []string, string) (string, error) {
+		spawned++
+		return "", nil
+	}
+	t.Cleanup(func() {
+		nowFn = originalNow
+		runRGCommand = originalRun
+		timedOutSearchesMu.Lock()
+		delete(timedOutSearches, key)
+		timedOutSearchesMu.Unlock()
+	})
+
+	currentTime = currentTime.Add(timedOutSearchTTL - time.Second)
+	_, err := NewFSGrepTool(sb).Call(context.Background(), mustJSON(t, map[string]any{"pattern": "TTL needle"}))
+	if err == nil || !strings.Contains(err.Error(), repeatedSearchTimeoutMessage) {
+		t.Fatalf("unexpired timeout must fail fast: %v", err)
+	}
+	if spawned != 0 {
+		t.Fatalf("unexpired timeout spawned ripgrep %d times, want 0", spawned)
+	}
+
+	currentTime = currentTime.Add(time.Second)
+	_, err = NewFSGrepTool(sb).Call(context.Background(), mustJSON(t, map[string]any{"pattern": "TTL needle"}))
+	if err != nil {
+		t.Fatalf("expired timeout must retry: %v", err)
+	}
+	if spawned != 1 {
+		t.Fatalf("expired timeout spawned ripgrep %d times, want 1", spawned)
+	}
+}
+
+func TestGrepIdenticalTimedOutSearchFailsFast(t *testing.T) {
+	if rgExe() == "" {
+		t.Skip("ripgrep (rg) not on PATH")
+	}
+	sb := setupTree(t)
+	args := grepArgs{Pattern: "TODO"}
+	key := normalizedSearchKey("Grep", args)
+	recordTimedOutSearch(key)
+	t.Cleanup(func() {
+		timedOutSearchesMu.Lock()
+		delete(timedOutSearches, key)
+		timedOutSearchesMu.Unlock()
+	})
+
+	originalRun := runRGCommand
+	spawned := 0
+	runRGCommand = func(context.Context, string, []string, string) (string, error) {
+		spawned++
+		return "", nil
+	}
+	t.Cleanup(func() { runRGCommand = originalRun })
+
+	_, err := NewFSGrepTool(sb).Call(context.Background(), mustJSON(t, map[string]any{"pattern": "TODO"}))
+	if err == nil || !strings.Contains(err.Error(), repeatedSearchTimeoutMessage) {
+		t.Fatalf("repeat must fail with directive message: %v", err)
+	}
+	if spawned != 0 {
+		t.Fatalf("repeat spawned ripgrep %d times, want 0", spawned)
 	}
 }
 

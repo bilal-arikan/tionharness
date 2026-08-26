@@ -74,6 +74,9 @@ func (t FSGlobTool) Call(_ context.Context, input json.RawMessage) (string, erro
 			if rel == "" || rel == "." {
 				return nil
 			}
+			if shouldIgnoreHeavyDir(d.Name(), args.Path, args.Pattern) {
+				return filepath.SkipDir
+			}
 			ign.LoadDir(rel)
 			if ign.Ignored(rel, true) {
 				return filepath.SkipDir

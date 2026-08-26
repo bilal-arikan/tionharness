@@ -83,10 +83,10 @@ func (t FSGrepTool) Call(ctx context.Context, input json.RawMessage) (string, er
 		return "", fmt.Errorf("pattern is required")
 	}
 	// Fast path: delegate to the ripgrep binary when available (faster + native
-	// .gitignore/type handling). Any unsupported case or rg error falls through to
-	// the in-process Go engine below, so behaviour is identical either way.
-	if out, ok := t.tryRG(ctx, args); ok {
-		return out, nil
+	// .gitignore/type handling). Unsupported cases and non-timeout rg errors fall
+	// through to the in-process Go engine; timeouts stay visible and are recorded.
+	if out, ok, err := t.tryRG(ctx, args); ok {
+		return out, err
 	}
 	re, err := compileGrepRegexp(args)
 	if err != nil {
@@ -345,6 +345,9 @@ func walkGrepFiles(root string, args grepArgs, want func(string) bool) ([]string
 		if d.IsDir() {
 			if rel == "" {
 				return nil
+			}
+			if shouldIgnoreHeavyDir(d.Name(), args.Path, args.Glob) {
+				return filepath.SkipDir
 			}
 			ign.LoadDir(rel)
 			if ign.Ignored(rel, true) {
