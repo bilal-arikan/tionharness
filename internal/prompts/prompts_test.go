@@ -46,6 +46,29 @@ func TestRegistryConsistency(t *testing.T) {
 	}
 }
 
+func TestSystemAgentOwnership(t *testing.T) {
+	want := map[string]string{
+		"title":            "titler",
+		"summary":          "overview-summarizer",
+		"compact":          "compaction",
+		"lesson":           "lesson-extractor",
+		"insight-analyzer": "insight",
+	}
+	for _, s := range Specs() {
+		if got, owned := want[s.Key]; owned {
+			if s.OwnedBySystemKey != got {
+				t.Errorf("prompt %q ownedBySystemKey = %q, want %q", s.Key, s.OwnedBySystemKey, got)
+			}
+			delete(want, s.Key)
+		} else if s.OwnedBySystemKey != "" {
+			t.Errorf("prompt %q unexpectedly owned by system agent %q", s.Key, s.OwnedBySystemKey)
+		}
+	}
+	for key := range want {
+		t.Errorf("owned prompt %q is not registered", key)
+	}
+}
+
 func TestRender(t *testing.T) {
 	got := Render("a {{x}} b {{y}} c {{x}}", map[string]string{"x": "1", "y": "2"})
 	if got != "a 1 b 2 c 1" {

@@ -29,31 +29,35 @@ var defaultsFS embed.FS
 // Spec describes one registered prompt: identity, UI metadata, and the named
 // placeholders a workspace override must keep for the runtime to fill.
 type Spec struct {
-	Key            string   `json:"key"`
-	Label          string   `json:"label"`          // Turkish UI label
-	Hint           string   `json:"hint"`           // Turkish UI hint (where it is used, what to preserve)
-	Placeholders   []string `json:"placeholders"`   // required {{name}} slots; empty = free-form text
-	EpochAffecting bool     `json:"epochAffecting"` // true → enters the cached static prefix; edits apply to NEW sessions/epochs
+	Key              string   `json:"key"`
+	Label            string   `json:"label"`                      // Turkish UI label
+	Hint             string   `json:"hint"`                       // Turkish UI hint (where it is used, what to preserve)
+	Placeholders     []string `json:"placeholders"`               // required {{name}} slots; empty = free-form text
+	EpochAffecting   bool     `json:"epochAffecting"`             // true → enters the cached static prefix; edits apply to NEW sessions/epochs
+	OwnedBySystemKey string   `json:"ownedBySystemKey,omitempty"` // system agent whose Soul supplies the effective prompt when resolution succeeds
 }
 
 // specs is the registry, in display order. Adding a prompt = one entry here +
 // one defaults/<key>.md file; prompts_test.go enforces they stay in sync.
 var specs = []Spec{
 	{
-		Key:   "summary",
-		Label: "Genel bakış promptu",
-		Hint:  "Yalnızca /board · /flows komutlarının anlık genel-bakış sistem promptu (kısa liste özeti). Konuşma özetlemesi (compaction) DEĞİL.",
+		Key:              "summary",
+		Label:            "Genel bakış promptu",
+		Hint:             "Yalnızca /board · /flows komutlarının anlık genel-bakış sistem promptu (kısa liste özeti). Konuşma özetlemesi (compaction) DEĞİL.",
+		OwnedBySystemKey: "overview-summarizer",
 	},
 	{
-		Key:   "title",
-		Label: "Başlık promptu",
-		Hint:  "Otomatik başlık üretimi sistem promptu (sohbet ilk turu + görev oluşturma).",
+		Key:              "title",
+		Label:            "Başlık promptu",
+		Hint:             "Otomatik başlık üretimi sistem promptu (sohbet ilk turu + görev oluşturma).",
+		OwnedBySystemKey: "titler",
 	},
 	{
-		Key:          "compact",
-		Label:        "Compaction promptu",
-		Hint:         "Bağlam sınırına yaklaşınca geçmişi tek bir yapılandırılmış özete katlayan prompt. {{summary}} (mevcut özet) ve {{messages}} (yeni mesajlar) yer tutucuları KORUNMALI — bozarsan gömülü varsayılana düşer.",
-		Placeholders: []string{"summary", "messages"},
+		Key:              "compact",
+		Label:            "Compaction promptu",
+		Hint:             "Bağlam sınırına yaklaşınca geçmişi tek bir yapılandırılmış özete katlayan prompt. {{summary}} (mevcut özet) ve {{messages}} (yeni mesajlar) yer tutucuları KORUNMALI — bozarsan gömülü varsayılana düşer.",
+		Placeholders:     []string{"summary", "messages"},
+		OwnedBySystemKey: "compaction",
 	},
 	{
 		Key:          "handoff",
@@ -78,14 +82,16 @@ var specs = []Spec{
 		Hint:  "Yan sorunun kullanıcı mesajının başına eklenen sözleşme tekrarı (agentic CLI sağlayıcıları için).",
 	},
 	{
-		Key:   "lesson",
-		Label: "Ders çıkarma (reflection) promptu",
-		Hint:  "Kötü biten turdan tek, genellenebilir ders damıtan arka plan reflection çağrısının sistem promptu.",
+		Key:              "lesson",
+		Label:            "Ders çıkarma (reflection) promptu",
+		Hint:             "Kötü biten turdan tek, genellenebilir ders damıtan arka plan reflection çağrısının sistem promptu.",
+		OwnedBySystemKey: "lesson-extractor",
 	},
 	{
-		Key:   "insight-analyzer",
-		Label: "İçgörü analiz promptu",
-		Hint:  "Retrospektif taramada bir lens talimatını oturum kanıtına uygulayan analizörün sistem promptu.",
+		Key:              "insight-analyzer",
+		Label:            "İçgörü analiz promptu",
+		Hint:             "Retrospektif taramada bir lens talimatını oturum kanıtına uygulayan analizörün sistem promptu.",
+		OwnedBySystemKey: "insight",
 	},
 	{
 		Key:   "auto-continue",

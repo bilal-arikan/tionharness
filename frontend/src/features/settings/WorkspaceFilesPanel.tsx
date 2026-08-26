@@ -9,6 +9,7 @@ import { Field } from './primitives'
 import { PromptEditor, LoadingState, toast } from '@/shared/components'
 import { CopyPathButton } from '@/shared/components/CopyPathButton'
 import { displayPath } from '@/shared/lib/paths'
+import { changedEditablePrompts, isSystemOwnedPrompt } from '@/shared/lib/workspacePrompts'
 
 // FilesSaveState lets the parent (WorkspaceView) render the Save button + status
 // in its top header instead of this panel showing its own.
@@ -20,6 +21,7 @@ export interface FilesSaveState {
 
 interface Props {
   onError: (msg: string) => void
+  onGoToAgents: () => void
   // Report dirty/saving + a stable save handler to the parent header. Optional so
   // the panel still works standalone.
   onState?: (s: FilesSaveState | null) => void
@@ -35,7 +37,7 @@ function toDraft(c: WorkspaceConfig): Draft {
   return { prompts: { ...c.prompts }, instructions: c.instructions, readme: c.readme }
 }
 
-export function WorkspaceFilesPanel({ onError, onState }: Props) {
+export function WorkspaceFilesPanel({ onError, onGoToAgents, onState }: Props) {
   const [config, setConfig] = useState<WorkspaceConfig | null>(null)
   const [draft, setDraft] = useState<Draft | null>(null)
   const [original, setOriginal] = useState<Draft | null>(null)
@@ -76,10 +78,12 @@ export function WorkspaceFilesPanel({ onError, onState }: Props) {
     const c = configRef.current
     if (!d || !o || !c) return
     const patch: WorkspaceConfigPatch = {}
-    const changedPrompts: Record<string, string> = {}
-    for (const key of c.promptKeys) {
-      if (d.prompts[key] !== o.prompts[key]) changedPrompts[key] = d.prompts[key]
-    }
+    const changedPrompts = changedEditablePrompts(
+      c.promptKeys,
+      d.prompts,
+      o.prompts,
+      c.promptMeta ?? {},
+    )
     if (Object.keys(changedPrompts).length) patch.prompts = changedPrompts
     if (d.instructions !== o.instructions) patch.instructions = d.instructions
     if (d.readme !== o.readme) patch.readme = d.readme
@@ -148,6 +152,8 @@ export function WorkspaceFilesPanel({ onError, onState }: Props) {
         const meta = config.promptMeta?.[key] ?? { ...FALLBACK_META, label: key }
         const isDefault = draft.prompts[key].trim() === (config.defaults[key] ?? '').trim()
         const placeholders = meta.placeholders ?? []
+        const ownedBySystemKey = meta.ownedBySystemKey
+        const readOnly = isSystemOwnedPrompt(key, config.promptMeta ?? {})
         const missing = placeholders.filter((p) => !draft.prompts[key].includes(`{{${p}}}`))
         let hint = meta.hint
         if (placeholders.length) {
@@ -159,19 +165,35 @@ export function WorkspaceFilesPanel({ onError, onState }: Props) {
             <PromptEditor
               value={draft.prompts[key]}
               onChange={(v) => setPrompt(key, v)}
+              readOnly={readOnly}
               rows={4}
               mono
               autoSize
               textareaClassName="text-xs"
             />
             <div className="mt-1 flex flex-wrap items-center gap-2">
-              <button
-                onClick={() => setPrompt(key, config.defaults[key] ?? '')}
-                disabled={isDefault}
-                className="rounded border border-[var(--color-border)] px-2 py-0.5 text-[11px] hover:border-[var(--color-accent)] disabled:opacity-30"
-              >
-                Varsayılana dön
-              </button>
+              {!ownedBySystemKey && (
+                <button
+                  onClick={() => setPrompt(key, config.defaults[key] ?? '')}
+                  disabled={isDefault}
+                  className="rounded border border-[var(--color-border)] px-2 py-0.5 text-[11px] hover:border-[var(--color-accent)] disabled:opacity-30"
+                >
+                  Varsayılana dön
+                </button>
+              )}
+              {ownedBySystemKey && (
+                <span className="text-[11px] text-[var(--color-text-dim)]">
+                  Etkin prompt <code>{ownedBySystemKey}</code> sistem ajanından gelir. Workspace
+                  override yalnızca sistem ajanı çözümlemesi başarısız olursa kullanılır.
+                  <button
+                    type="button"
+                    onClick={onGoToAgents}
+                    className="ml-1 text-[var(--color-accent)] underline underline-offset-2"
+                  >
+                    Ajanlar ekranında düzenle
+                  </button>
+                </span>
+              )}
               {isDefault ? (
                 <span className="text-[11px] text-[var(--color-text-dim)]">varsayılan</span>
               ) : (

@@ -636,7 +636,6 @@ export default function App() {
             onToggleNav={view === 'workspace' ? workspaceNav.toggle : settingsNav.toggle}
             onOpenContextPreview={() => setCtxPreviewOpen(true)}
             onOpenCoord={() => setCoordOpen(true)}
-            onOpenDebug={() => setDebugOpen(true)}
             onOpenSessionFlow={() => setSessionFlowOpen((v) => !v)}
             sessionFlowActive={sessionFlowOpen}
             onToggleDetail={toggleDetail}
@@ -694,6 +693,7 @@ export default function App() {
           <AgentsView
             agents={ctl.agents}
             defaultAgentId={ctl.defaultAgentId}
+            defaultAgentSaveState={ctl.defaultAgentSaveState}
             selectedId={ctl.activeAgentId}
             onSelectAgent={ctl.focusAgent}
             onSetDefault={ctl.pickAgent}
@@ -817,6 +817,7 @@ export default function App() {
             onDeleteWorkspace={deleteActiveWorkspace}
             onAppearanceSaved={onAppearanceSaved}
             onShowRecommendations={() => setRecsTrigger((n) => n + 1)}
+            onGoToAgents={() => selectView('agents')}
             tab={links.workspaceTab}
             onTabChange={links.setWorkspaceTab}
             navOpen={workspaceNav.open}
@@ -857,6 +858,7 @@ export default function App() {
               onSetPinned={ctl.setSessionPinned}
               onSelectSession={ctl.selectSession}
               onRerun={() => chat.rerunLast()}
+              onOpenDebug={() => setDebugOpen(true)}
             />
           </div>
         </>
@@ -901,8 +903,8 @@ export default function App() {
         />
       )}
 
-      {/* Debug / observability panel: opened from the chat header's "Debug" button
-          (independent of the detail inspector). */}
+      {/* Debug / observability panel: opened from the "Debug" action at the bottom
+          of the session detail inspector ("Oturum bilgisi"). */}
       {debugOpen && ctl.activeSessionId && (
         <SessionDebugModal
           sessionId={ctl.activeSessionId}

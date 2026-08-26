@@ -35,6 +35,7 @@ interface Props {
   // Re-trigger the post-create recommendation toast on demand (bumps recsTrigger in
   // App) — used by the Öneriler tab's "show cards" button.
   onShowRecommendations?: () => void
+  onGoToAgents: () => void
   // Active sub-tab, URL-synced by the parent (#/w/{ws}/workspace/{tab}).
   tab?: string | null
   onTabChange?: (t: string) => void
@@ -63,6 +64,7 @@ export function WorkspaceView({
   onDeleteWorkspace,
   onAppearanceSaved,
   onShowRecommendations,
+  onGoToAgents,
   tab: tabProp,
   onTabChange,
   navOpen,
@@ -235,7 +237,11 @@ export function WorkspaceView({
           ) : tab === 'recommendations' ? (
             <RecommendationsPanel onError={onError} onShowCards={onShowRecommendations} />
           ) : (
-            <WorkspaceFilesPanel onError={onError} onState={setFilesState} />
+            <WorkspaceFilesPanel
+              onError={onError}
+              onGoToAgents={onGoToAgents}
+              onState={setFilesState}
+            />
           )}
         </div>
       </div>

@@ -94,6 +94,8 @@ export interface WorkspaceSettings {
   // Default agent pre-selected for new sessions in this workspace.
   defaultAgentId: string
   defaultWorkingDir: string
+  worktreeBaseRef?: string
+  worktreeRootDir?: string
   // This workspace's resolved claude-cli config home (<workspace>/claude-home),
   // used as CLAUDE_CONFIG_DIR. Read-only/derived (not in the patch); shown in the
   // Providers settings instead of the app-global fallback.
@@ -143,6 +145,8 @@ export type WorkspaceSettingsPatch = Partial<
     | 'pauseAutonomy'
     | 'defaultAgentId'
     | 'defaultWorkingDir'
+    | 'worktreeBaseRef'
+    | 'worktreeRootDir'
     | 'theme'
     | 'accent'
     | 'themePreset'
@@ -178,6 +182,7 @@ export interface WorkspacePromptMeta {
   hint: string
   placeholders?: string[]
   epochAffecting?: boolean
+  ownedBySystemKey?: string
 }
 
 // Partial update; omitted fields unchanged. A prompt written as "" clears the

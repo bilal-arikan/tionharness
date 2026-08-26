@@ -28,10 +28,11 @@ type wsConfigDTO struct {
 // hint, required placeholders and whether an edit only lands on NEW
 // sessions/epochs (the prompt rides the cached static prefix).
 type promptMetaTO struct {
-	Label          string   `json:"label"`
-	Hint           string   `json:"hint"`
-	Placeholders   []string `json:"placeholders,omitempty"`
-	EpochAffecting bool     `json:"epochAffecting,omitempty"`
+	Label            string   `json:"label"`
+	Hint             string   `json:"hint"`
+	Placeholders     []string `json:"placeholders,omitempty"`
+	EpochAffecting   bool     `json:"epochAffecting,omitempty"`
+	OwnedBySystemKey string   `json:"ownedBySystemKey,omitempty"`
 }
 
 // wsConfigPatch is a partial update; omitted fields are left unchanged. A prompt
@@ -51,7 +52,8 @@ func readFileOr(path, fallback string) string {
 }
 
 // buildWSConfigDTO reads the active workspace's config files into a DTO.
-func buildWSConfigDTO(wsDir string) wsConfigDTO {
+func buildWSConfigDTO(wsp *workspace.Workspace) wsConfigDTO {
+	wsDir := wsp.DataDir
 	dto := wsConfigDTO{
 		Dir:          agent.WorkspaceConfigDir(wsDir),
 		Prompts:      map[string]string{},
@@ -66,11 +68,17 @@ func buildWSConfigDTO(wsDir string) wsConfigDTO {
 		def := agent.PromptDefault(key)
 		dto.Defaults[key] = def
 		dto.Prompts[key] = readFileOr(agent.PromptFilePath(wsDir, key), def)
+		if spec.OwnedBySystemKey != "" {
+			if systemAgent, _, err := wsp.Runtime.ResolveSystemAgent(spec.OwnedBySystemKey); err == nil {
+				dto.Prompts[key] = systemAgent.Soul
+			}
+		}
 		dto.PromptMeta[key] = promptMetaTO{
-			Label:          spec.Label,
-			Hint:           spec.Hint,
-			Placeholders:   spec.Placeholders,
-			EpochAffecting: spec.EpochAffecting,
+			Label:            spec.Label,
+			Hint:             spec.Hint,
+			Placeholders:     spec.Placeholders,
+			EpochAffecting:   spec.EpochAffecting,
+			OwnedBySystemKey: spec.OwnedBySystemKey,
 		}
 	}
 	return dto
@@ -78,7 +86,7 @@ func buildWSConfigDTO(wsDir string) wsConfigDTO {
 
 // handleGetWorkspaceConfig returns the active workspace's editable config files.
 func (s *Server) handleGetWorkspaceConfig(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, buildWSConfigDTO(ws(r).DataDir))
+	writeJSON(w, http.StatusOK, buildWSConfigDTO(ws(r)))
 }
 
 // handleUpdateWorkspaceConfig writes the changed config files. Prompts and the
@@ -131,5 +139,5 @@ func (s *Server) handleUpdateWorkspaceConfig(w http.ResponseWriter, r *http.Requ
 		}
 	}
 
-	writeJSON(w, http.StatusOK, buildWSConfigDTO(wsDir))
+	writeJSON(w, http.StatusOK, buildWSConfigDTO(ws(r)))
 }

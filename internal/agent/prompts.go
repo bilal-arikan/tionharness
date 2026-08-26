@@ -8,12 +8,13 @@ import (
 // the settings UI. Derived from the central registry (internal/prompts) — this
 // is purely a viewer payload; editing goes through the workspace config API.
 type PromptInfo struct {
-	Key    string `json:"key"`
-	Label  string `json:"label"`
-	File   string `json:"file"`   // embedded default source (defaults/<key>.md)
-	System string `json:"system"` // the embedded default text
-	User   string `json:"user"`   // user-turn template (placeholders shown literally)
-	Note   string `json:"note"`   // short usage note
+	Key              string `json:"key"`
+	Label            string `json:"label"`
+	File             string `json:"file"`   // embedded default source (defaults/<key>.md)
+	System           string `json:"system"` // the embedded default text
+	User             string `json:"user"`   // user-turn template (placeholders shown literally)
+	Note             string `json:"note"`   // short usage note
+	OwnedBySystemKey string `json:"ownedBySystemKey,omitempty"`
 }
 
 // PromptsDir returns the absolute directory holding the embedded prompt default
@@ -27,11 +28,12 @@ func Prompts() []PromptInfo {
 	out := make([]PromptInfo, 0, len(specs))
 	for _, s := range specs {
 		out = append(out, PromptInfo{
-			Key:    s.Key,
-			Label:  s.Label,
-			File:   s.Key + ".md",
-			System: prompts.Default(s.Key),
-			Note:   s.Hint,
+			Key:              s.Key,
+			Label:            s.Label,
+			File:             s.Key + ".md",
+			System:           prompts.Default(s.Key),
+			Note:             s.Hint,
+			OwnedBySystemKey: s.OwnedBySystemKey,
 		})
 	}
 	return out

@@ -351,6 +351,7 @@ export interface PromptInfo {
   system: string
   user: string
   note: string
+  ownedBySystemKey?: string
 }
 
 export interface PromptsResponse {
