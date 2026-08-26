@@ -24,6 +24,7 @@ import (
 	"github.com/bilal-arikan/tionharness/internal/providers"
 	"github.com/bilal-arikan/tionharness/internal/secrets"
 	"github.com/bilal-arikan/tionharness/internal/tools"
+	"github.com/bilal-arikan/tionharness/internal/worktree"
 )
 
 // Meta is the persisted descriptor of a workspace (no live handles). Path, when
@@ -284,6 +285,12 @@ func (m *Manager) open(meta Meta) error {
 	if err != nil {
 		return err
 	}
+	// Seed the small core system-agent set for new workspaces and backfill older
+	// workspaces when opened. EnsureSystemAgents is idempotent and never replaces
+	// user-customised fields on an existing system agent.
+	if err := database.EnsureSystemAgents(context.Background(), agent.SystemAgentDefaults()...); err != nil {
+		return fmt.Errorf("seed system agents: %w", err)
+	}
 	// Boot cost of THIS workspace's store, attributed per workspace so a slow
 	// startup points at the workspace responsible instead of a single total. It is
 	// the regression metric for the message lazy-loading work: db.Open parses every
@@ -370,11 +377,6 @@ func (m *Manager) open(meta Meta) error {
 	// on the failing turn itself — a stuck session gets no more autonomous
 	// successes to fire from.
 	rt.AddFailedTurnHook(autoEngine.OnTurnFinished)
-	// Board-triggered automations: a kanban card change (create/move/update/delete)
-	// fires the engine on a detached goroutine so the mutation is never blocked.
-	database.SetBoardHook(func(ev db.BoardChangeEvent) {
-		go autoEngine.OnBoardChange(context.Background(), ev)
-	})
 	// Token-triggered automations: every recorded provider call signals cumulative
 	// spend so the engine can fire when a session/workspace crosses a threshold.
 	rt.AddUsageHook(autoEngine.OnUsageRecorded)
@@ -411,6 +413,35 @@ func (m *Manager) open(meta Meta) error {
 	ws := &Workspace{Meta: meta, DB: database, Runtime: rt, Scheduler: sched, InsightCron: insightCron, Secrets: vault, DataDir: dir}
 	ws.loadSettings()    // apply persisted per-workspace overrides (e.g. autonomy pause)
 	ws.syncConfigFiles() // seed config/ tree + adopt instructions.md (file is authoritative)
+
+	// One board dispatcher fans out to automation and the card-owned worktree
+	// lifecycle. Both consumers run detached; SetBoardHook remains a single hook.
+	worktreeSettings := ws.Settings()
+	repoRoot := worktreeSettings.DefaultWorkingDir
+	if repoRoot == "" {
+		repoRoot = ws.SandboxRoot()
+	}
+	worktreeRoot := worktreeSettings.WorktreeRootDir
+	if worktreeRoot == "" {
+		worktreeRoot = filepath.Join(filepath.Dir(repoRoot), ".tionharness-worktrees", meta.ID)
+	}
+	cardWorktrees := &worktree.Lifecycle{
+		Store: database,
+		Git: worktree.Git{
+			RepoRoot: repoRoot,
+			Runner:   worktree.ExecRunner{},
+		},
+		BaseRef:      worktreeSettings.WorktreeBaseRef,
+		WorktreeRoot: worktreeRoot,
+	}
+	database.SetBoardHook(func(ev db.BoardChangeEvent) {
+		go autoEngine.OnBoardChange(context.Background(), ev)
+		go func() {
+			if err := cardWorktrees.Handle(context.Background(), ev); err != nil {
+				m.logger.Error("card worktree lifecycle failed", "workspace", meta.ID, "task", ev.TaskID, "error", err)
+			}
+		}()
+	})
 
 	m.mu.Lock()
 	m.workspaces[meta.ID] = ws
