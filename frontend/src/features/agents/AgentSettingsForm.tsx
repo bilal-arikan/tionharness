@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Eye, Trash2, Star, Copy } from 'lucide-react'
+import { Eye, Trash2, Star, Copy, RotateCcw, Power } from 'lucide-react'
 import { useRegisterDirty } from '@/shared/lib/dirtySignals'
 import type { View } from '@/app/NavRail'
 import type { Agent, AgentPatch } from '@/types'
@@ -15,6 +15,7 @@ import { OptionPills } from '@/shared/components/OptionPills'
 import { CoordinatorWorkflowPicker } from '@/shared/components/CoordinatorWorkflowPicker'
 import { useCatalog, thinkingInfoForModel, thinkingTierDisabledReason } from '@/shared/lib/catalog'
 import { THINKING_OPTIONS, PERMISSION_OPTIONS } from './agentOptions'
+import { SystemAgentStatusBadge } from './SystemAgentStatusBadge'
 
 interface Props {
   agent: Agent
@@ -26,6 +27,9 @@ interface Props {
   cancelLabel?: string
   /** Danger action: when set, a "Sil" button is shown at the footer-left. */
   onDelete?: () => void
+  onRestoreDefault?: () => void
+  onToggleDisabled?: () => void
+  systemActionPending?: boolean
   /** Clone the agent: when set, a "Klonla" button is shown in the header. The
    * clone carries over every setting (profile + provider/model + tools + skills).
    * Resolves once the clone exists (the parent then selects it). */
@@ -33,6 +37,7 @@ interface Props {
   /** Whether this agent is the default for new chats. Drives the header star
    * toggle's filled/active state. */
   isDefault?: boolean
+  defaultSaveState?: 'idle' | 'saving' | 'saved'
   /** Make this agent the default for new chats. When set, a star toggle is shown
    * in the header (mirrors the roster's ★/☆ button). Takes effect immediately —
    * independent of the form's Save. */
@@ -54,8 +59,12 @@ export function AgentSettingsForm({
   onCancel,
   cancelLabel = 'İptal',
   onDelete,
+  onRestoreDefault,
+  onToggleDisabled,
+  systemActionPending = false,
   onDuplicate,
   isDefault,
+  defaultSaveState = 'idle',
   onSetDefault,
   dirtyView,
 }: Props) {
@@ -218,6 +227,7 @@ export function AgentSettingsForm({
             >
               {agent.id}
             </span>
+            <SystemAgentStatusBadge agent={agent} />
           </div>
           <p className="text-xs text-[var(--color-text-dim)]">Ajan ayarları</p>
         </div>
@@ -231,7 +241,7 @@ export function AgentSettingsForm({
               onClick={() => {
                 if (!isDefault) onSetDefault()
               }}
-              disabled={isDefault}
+              disabled={isDefault || defaultSaveState === 'saving'}
               title={
                 isDefault
                   ? 'Bu ajan yeni sohbetler için varsayılan'
@@ -244,7 +254,13 @@ export function AgentSettingsForm({
               }`}
             >
               <Star size={14} className={isDefault ? 'fill-current' : ''} />
-              {isDefault ? 'Varsayılan' : 'Varsayılan yap'}
+              {defaultSaveState === 'saving'
+                ? 'Kaydediliyor…'
+                : isDefault
+                  ? defaultSaveState === 'saved'
+                    ? 'Kaydedildi ✓'
+                    : 'Varsayılan'
+                  : 'Varsayılan yap'}
             </button>
           )}
           <button
@@ -282,6 +298,26 @@ export function AgentSettingsForm({
               className="flex items-center gap-1.5 rounded px-3 py-1.5 text-sm text-[var(--color-danger)] hover:bg-[color-mix(in_srgb,var(--color-danger)_10%,transparent)]"
             >
               <Trash2 size={14} /> Sil
+            </button>
+          )}
+          {onRestoreDefault && (
+            <button
+              data-testid="agent-restore-default"
+              onClick={onRestoreDefault}
+              disabled={systemActionPending}
+              className="flex items-center gap-1.5 rounded px-3 py-1.5 text-sm text-[var(--color-danger)] hover:bg-[color-mix(in_srgb,var(--color-danger)_10%,transparent)] disabled:opacity-50"
+            >
+              <RotateCcw size={14} /> Varsayılana dön
+            </button>
+          )}
+          {onToggleDisabled && (
+            <button
+              data-testid="agent-toggle-disabled"
+              onClick={onToggleDisabled}
+              disabled={systemActionPending}
+              className="flex items-center gap-1.5 rounded px-3 py-1.5 text-sm text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)] disabled:opacity-50"
+            >
+              <Power size={14} /> {agent.disabled ? 'Etkinleştir' : 'Devre dışı bırak'}
             </button>
           )}
           <Button data-testid="agent-save" onClick={save} disabled={saving}>

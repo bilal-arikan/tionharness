@@ -8,6 +8,9 @@ export interface Agent {
   name: string
   soul: string
   identity: string
+  system?: boolean
+  systemKey?: string
+  disabled?: boolean
   provider: string
   // The provider INSTANCE this agent is bound to (_Docs/71 §2.5). The single
   // source of truth for provider resolution; `provider` is derived from it
@@ -67,6 +70,7 @@ export interface AgentPatch {
   avatar?: string
   color?: string
   skills?: string[]
+  disabled?: boolean
   coordinatorMode?: boolean
   coordinatorWorkflow?: string
   coordinatorPrompt?: string

@@ -6,6 +6,7 @@ import { ProviderInstanceModelSelect } from '@/shared/components/agents/Provider
 import { useCatalog, resolveModelLabel } from '@/shared/lib/catalog'
 import { AgentSettingsForm } from './AgentSettingsForm'
 import { AgentActivityPanel } from './AgentActivityPanel'
+import { SystemAgentStatusBadge } from './SystemAgentStatusBadge'
 import { api } from '@/api'
 import { CopyPathButton } from '@/shared/components/CopyPathButton'
 import { CoordinatorWorkflowPicker } from '@/shared/components/CoordinatorWorkflowPicker'
@@ -29,6 +30,7 @@ import { useCollapsibleList } from '@/shared/hooks/useCollapsibleList'
 interface Props {
   agents: Agent[]
   defaultAgentId: string | null
+  defaultAgentSaveState: 'idle' | 'saving' | 'saved'
   /** Controlled selection (deep-link aware); falls back to internal state. */
   selectedId?: string | null
   onSelectAgent?: (id: string) => void
@@ -60,6 +62,7 @@ interface Props {
 export function AgentsView({
   agents,
   defaultAgentId,
+  defaultAgentSaveState,
   selectedId: controlledId,
   onSelectAgent,
   onSetDefault,
@@ -74,6 +77,7 @@ export function AgentsView({
   const [internalId, setInternalId] = useState<string | null>(null)
   const [showForm, setShowForm] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
+  const [systemActionPending, setSystemActionPending] = useState(false)
   const catalog = useCatalog()
 
   // Left roster collapse (standard list pane) — toggled from the PaneHeader.
@@ -138,9 +142,11 @@ export function AgentsView({
 
   // Multi-select for bulk roster actions (Ctrl/Cmd+Click, Shift-range).
   const sel = useMultiSelect()
-  const orderedIds = useMemo(() => agents.map((a) => a.id), [agents])
+  const regularAgents = useMemo(() => agents.filter((a) => !a.system), [agents])
+  const systemAgents = useMemo(() => agents.filter((a) => a.system), [agents])
+  const orderedIds = useMemo(() => regularAgents.map((a) => a.id), [regularAgents])
   const bulkDelete = async () => {
-    const ids = [...sel.selected]
+    const ids = [...sel.selected].filter((id) => regularAgents.some((a) => a.id === id))
     if (ids.length === 0) return
     if (
       !confirm(
@@ -166,6 +172,107 @@ export function AgentsView({
     setCoordinatorPrompt('')
     setShowForm(false)
   }
+
+  const restoreDefault = async (agent: Agent) => {
+    if (
+      !confirm(
+        `"${agent.name}" sistem ajanı derlenmiş varsayılan ayarlarına döndürülsün mü? Mevcut profil değişiklikleri silinir ve bu işlem geri alınamaz.`,
+      )
+    )
+      return
+    setSystemActionPending(true)
+    try {
+      await api.restoreDefaultAgent(agent.id)
+      await onRefresh?.()
+    } catch (e) {
+      onError?.((e as Error).message)
+    } finally {
+      setSystemActionPending(false)
+    }
+  }
+
+  const toggleDisabled = async (agent: Agent) => {
+    setSystemActionPending(true)
+    try {
+      await onUpdateAgent(agent.id, { disabled: !agent.disabled })
+    } catch (e) {
+      onError?.((e as Error).message)
+    } finally {
+      setSystemActionPending(false)
+    }
+  }
+
+  const rosterItem = (a: Agent) => (
+    <div
+      key={a.id}
+      data-testid="agent-roster-item"
+      data-agent-id={a.id}
+      className={`group mb-1 flex w-full items-center rounded-lg pr-1 text-sm transition ${
+        a.disabled ? 'opacity-50' : ''
+      } ${
+        sel.isSelected(a.id)
+          ? `${SELECTED_ITEM_CLS} ${SELECTED_ITEM_RING}`
+          : selectedId === a.id
+            ? SELECTED_ITEM_CLS
+            : 'text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)]'
+      }`}
+    >
+      <button
+        onClick={(e) => {
+          if (!a.system && sel.handleClick(e, a.id, orderedIds, selectedId)) return
+          select(a.id)
+        }}
+        data-testid="agent-roster-select"
+        data-agent-id={a.id}
+        className="flex min-w-0 flex-1 items-center gap-2.5 px-2.5 py-2 text-left"
+      >
+        <AgentIdentity
+          agent={a}
+          size="md"
+          active={defaultAgentId === a.id}
+          nameSuffix={
+            <>
+              {a.disabled && !a.system && (
+                <span className="ml-1.5 shrink-0 rounded bg-[var(--color-surface-2)] px-1.5 py-0.5 text-[10px]">
+                  devre dışı
+                </span>
+              )}
+              <SystemAgentStatusBadge agent={a} />
+              {a.coordinatorMode && (
+                <span
+                  data-testid="agent-coordinator-badge"
+                  className="ml-1.5 shrink-0 text-[11px]"
+                  title="Koordinatör: açtığı yeni oturumlar worker yönetebilir"
+                >
+                  🕸
+                </span>
+              )}
+              <span
+                className="ml-1.5 shrink-0 font-mono text-[10px] opacity-60"
+                title="Ajan ID (klasör adı)"
+              >
+                {a.id}
+              </span>
+            </>
+          }
+          subtitle={
+            resolveModelLabel(catalog, a.provider, a.model) +
+            (defaultAgentId === a.id ? ' · varsayılan' : '')
+          }
+        />
+      </button>
+      {defaultAgentId === a.id && (
+        <span
+          data-testid="agent-default-indicator"
+          data-agent-id={a.id}
+          title="Varsayılan ajan (ajan ayarlarından değiştirilir)"
+          className="ml-1 shrink-0 p-1 text-[var(--color-accent)]"
+        >
+          ★
+        </span>
+      )}
+    </div>
+  )
 
   return (
     <div className="flex h-full min-h-0 flex-1">
@@ -269,74 +376,15 @@ export function AgentsView({
         )}
 
         <div className="flex-1 overflow-y-auto px-2 pb-2">
-          {agents.map((a) => (
-            <div
-              key={a.id}
-              data-testid="agent-roster-item"
-              data-agent-id={a.id}
-              className={`group mb-1 flex w-full items-center rounded-lg pr-1 text-sm transition ${
-                sel.isSelected(a.id)
-                  ? `${SELECTED_ITEM_CLS} ${SELECTED_ITEM_RING}`
-                  : selectedId === a.id
-                    ? SELECTED_ITEM_CLS
-                    : 'text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)]'
-              }`}
-            >
-              <button
-                onClick={(e) => {
-                  if (sel.handleClick(e, a.id, orderedIds, selectedId)) return
-                  select(a.id)
-                }}
-                data-testid="agent-roster-select"
-                data-agent-id={a.id}
-                className="flex min-w-0 flex-1 items-center gap-2.5 px-2.5 py-2 text-left"
-              >
-                <AgentIdentity
-                  agent={a}
-                  size="md"
-                  active={defaultAgentId === a.id}
-                  nameSuffix={
-                    <>
-                      {/* Which agents orchestrate is otherwise invisible until you open
-                          each one — and in a delegation workspace that is the first
-                          thing you need to see. */}
-                      {a.coordinatorMode && (
-                        <span
-                          data-testid="agent-coordinator-badge"
-                          className="ml-1.5 shrink-0 text-[11px]"
-                          title="Koordinatör: açtığı yeni oturumlar worker yönetebilir"
-                        >
-                          🕸
-                        </span>
-                      )}
-                      <span
-                        className="ml-1.5 shrink-0 font-mono text-[10px] opacity-60"
-                        title="Ajan ID (klasör adı)"
-                      >
-                        {a.id}
-                      </span>
-                    </>
-                  }
-                  subtitle={
-                    resolveModelLabel(catalog, a.provider, a.model) +
-                    (defaultAgentId === a.id ? ' · varsayılan' : '')
-                  }
-                />
-              </button>
-              {/* Indicator only: the default agent is changed from the agent's own
-                  settings, not by clicking around in the roster. */}
-              {defaultAgentId === a.id && (
-                <span
-                  data-testid="agent-default-indicator"
-                  data-agent-id={a.id}
-                  title="Varsayılan ajan (ajan ayarlarından değiştirilir)"
-                  className="ml-1 shrink-0 p-1 text-[var(--color-accent)]"
-                >
-                  ★
-                </span>
-              )}
-            </div>
-          ))}
+          {regularAgents.map(rosterItem)}
+          {systemAgents.length > 0 && (
+            <>
+              <h3 className="mb-1 mt-4 px-2.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
+                Sistem ajanları
+              </h3>
+              {systemAgents.map(rosterItem)}
+            </>
+          )}
           {agents.length === 0 && (
             <p className="px-3 py-2 text-xs text-[var(--color-text-dim)]">
               Henüz ajan yok. + ile oluştur.
@@ -401,19 +449,27 @@ export function AgentsView({
                 agent={selected}
                 dirtyView="agents"
                 isDefault={defaultAgentId === selected.id}
+                defaultSaveState={defaultAgentSaveState}
                 onSetDefault={() => onSetDefault(selected.id)}
                 onSave={(p) => onUpdateAgent(selected.id, p)}
                 onDuplicate={() => onDuplicateAgent(selected.id)}
-                onDelete={async () => {
-                  if (
-                    confirm(
-                      `"${selected.name}" ajanı silinsin mi?\n\nSohbet geçmişi KORUNUR — ajan orada "silinmiş" olarak görünür. Zamanlamaları ve sahip olduğu görevler kalıcı olarak silinir. Çalışan bir ajan silinemez.`,
-                    )
-                  ) {
-                    await onDeleteAgent(selected.id)
-                    if (!onSelectAgent) setInternalId(null)
-                  }
-                }}
+                onDelete={
+                  selected.system
+                    ? undefined
+                    : async () => {
+                        if (
+                          confirm(
+                            `"${selected.name}" ajanı silinsin mi?\n\nSohbet geçmişi KORUNUR — ajan orada "silinmiş" olarak görünür. Zamanlamaları ve sahip olduğu görevler kalıcı olarak silinir. Çalışan bir ajan silinemez.`,
+                          )
+                        ) {
+                          await onDeleteAgent(selected.id)
+                          if (!onSelectAgent) setInternalId(null)
+                        }
+                      }
+                }
+                onRestoreDefault={selected.system ? () => restoreDefault(selected) : undefined}
+                onToggleDisabled={selected.system ? () => toggleDisabled(selected) : undefined}
+                systemActionPending={systemActionPending}
               />
             ) : (
               <div className="flex h-full items-center justify-center text-sm text-[var(--color-text-dim)]">

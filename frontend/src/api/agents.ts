@@ -44,7 +44,24 @@ export const agentApi = {
     }),
   // Soft-delete an agent: its schedules and owned tasks go, its SESSIONS stay
   // (history renders it as deleted). Rejects with 409 while a turn is in flight.
-  deleteAgent: (id: string) => req<{ deleted: string }>(`/api/agents/${id}`, { method: 'DELETE' }),
+  deleteAgent: async (id: string) => {
+    try {
+      return await req<{ deleted: string }>(`/api/agents/${id}`, { method: 'DELETE' })
+    } catch (error) {
+      if (
+        error instanceof Error &&
+        error.message === 'system agent cannot be deleted; disable it instead'
+      ) {
+        throw new Error('Sistem ajanı silinemez. Bunun yerine ajanı devre dışı bırakın.')
+      }
+      throw error
+    }
+  },
+
+  // Restore the editable profile fields of a built-in system agent. Its enabled
+  // state is intentionally preserved by the backend.
+  restoreDefaultAgent: (id: string) =>
+    req<Agent>(`/api/agents/${id}/restore-default`, { method: 'POST' }),
 
   // Full-copy an agent (profile + provider/model + tool config + skills) into a
   // new "(kopya)" with a fresh id. Returns the created clone.
