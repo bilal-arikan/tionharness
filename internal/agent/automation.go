@@ -607,8 +607,17 @@ func (e *AutomationEngine) boardVars(ctx context.Context, a db.Automation, ev db
 	v["toLabel"] = boardLabel(ev.ToState)
 	v["board"] = ev.ToState // convenience alias for the current column
 	v["tags"] = strings.Join(ev.Tags, ", ")
-	v["owner"] = owner          // card owner agent's name ("" = unassigned)
-	v["priority"] = ev.Priority // critical/high/medium/low ("" = unset)
+	if v["tags"] == "" {
+		v["tags"] = "none"
+	}
+	if owner == "" {
+		owner = "unassigned"
+	}
+	v["owner"] = owner
+	v["priority"] = ev.Priority // critical/high/medium/low
+	if v["priority"] == "" {
+		v["priority"] = "unset"
+	}
 	return v
 }
 

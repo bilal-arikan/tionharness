@@ -61,19 +61,47 @@ func TestBoardMatches(t *testing.T) {
 }
 
 func TestBoardVarsSubstitution(t *testing.T) {
-	e := &AutomationEngine{}
-	a := db.Automation{TriggerKind: db.TriggerBoard, MaxIterations: 5}
-	ev := db.BoardChangeEvent{TaskID: "tsk_1", Title: "Ship it", Op: db.BoardOpMove, FromState: "todo", ToState: "done",
-		Tags: []string{"urgent", "backend"}, Priority: "high"}
-	vars := e.boardVars(context.Background(), a, ev)
-	got := renderAutomationPrompt("[{{op}}] {{title}} {{from}}→{{to}} ({{toLabel}})", vars)
-	want := "[move] Ship it todo→done (Bitti)"
-	if got != want {
-		t.Fatalf("got %q want %q", got, want)
+	database, err := db.Open(t.TempDir())
+	if err != nil {
+		t.Fatalf("open database: %v", err)
 	}
-	// tags / priority render; owner is empty (unassigned) with no db lookup.
-	if v := renderAutomationPrompt("{{tags}}|{{priority}}|{{owner}}", vars); v != "urgent, backend|high|" {
-		t.Fatalf("tags/priority/owner render = %q", v)
+	defer database.Close()
+	ctx := context.Background()
+	owner, err := database.CreateAgent(ctx, db.Agent{Name: "Alice", Provider: "anthropic"})
+	if err != nil {
+		t.Fatalf("create owner: %v", err)
+	}
+	e := &AutomationEngine{db: database}
+	a := db.Automation{TriggerKind: db.TriggerBoard, MaxIterations: 5}
+	tests := []struct {
+		name string
+		ev   db.BoardChangeEvent
+		want string
+	}{
+		{
+			name: "populated optional fields",
+			ev: db.BoardChangeEvent{
+				TaskID: "tsk_1", Title: "Ship it", Op: db.BoardOpMove, FromState: "todo", ToState: "done",
+				Tags: []string{"urgent", "backend"}, Priority: "high", OwnerAgentID: owner.ID,
+			},
+			want: "Card tsk_1 Ship it todo→done (priority: high, owner: Alice, tags: urgent, backend)",
+		},
+		{
+			name: "empty optional fields",
+			ev: db.BoardChangeEvent{
+				TaskID: "tsk_2", Title: "Triage", Op: db.BoardOpMove, FromState: "todo", ToState: "failed",
+			},
+			want: "Card tsk_2 Triage todo→failed (priority: unset, owner: unassigned, tags: none)",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			vars := e.boardVars(ctx, a, tt.ev)
+			got := renderAutomationPrompt("Card {{taskId}} {{title}} {{from}}→{{to}} (priority: {{priority}}, owner: {{owner}}, tags: {{tags}})", vars)
+			if got != tt.want {
+				t.Fatalf("got %q want %q", got, tt.want)
+			}
+		})
 	}
 }
 

@@ -248,7 +248,7 @@ func TestBlankTemplateSeedsCEOAndPMControlLoop(t *testing.T) {
 		t.Fatalf("blank template schedules = %d, want 1", len(wp.Schedules))
 	}
 	schedule := wp.Schedules[0]
-	if schedule.AgentKey != "ceo" || schedule.CronExpr != "*/20 * * * *" || !schedule.Enabled {
+	if schedule.AgentKey != "ceo" || schedule.CronExpr != "7 * * * *" || !schedule.Enabled {
 		t.Errorf("unexpected CEO schedule: %+v", schedule)
 	}
 

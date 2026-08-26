@@ -35,7 +35,7 @@
         {
           "name": "CEO board heartbeat",
           "agentKey": "ceo",
-          "cronExpr": "*/20 * * * *",
+          "cronExpr": "7 * * * *",
           "prompt": "Read the board with get_view{kind:\"board\"}. If any card is failed, stuck, blocked, or overdue, if the PM is idle, or if no work is progressing, message the PM and prompt them to take the next concrete action. Do not perform the work yourself.",
           "enabled": true
         }
