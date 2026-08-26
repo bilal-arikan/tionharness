@@ -966,8 +966,24 @@ kurtaramadı — iptal yalnız pipe kapanışı üzerinden gözlemlenebiliyordu.
    ölü bir pid'i hedefler ve torunu yakalayamaz; döngü iptali kendi başına
    görmelidir.
 
-Aynı düzeltme claude-cli yolunda da uygulanır (`claudecli.go` tek-atış ve
+İlk iki savunma claude-cli yolunda da uygulanır (`claudecli.go` tek-atış ve
 `claudecli_session.go` kalıcı oturum), çünkü şekil birebir aynıdır.
+
+Codex turunun kendi zaman aşımı katmanı bunlara ek bir savunma sağlar:
+
+- `codexStartupTimeout` (90 saniye) yalnız **ilk stdout satırına kadar** işler;
+  hiç çıktı üretmeyen MCP başlangıç takılmasını retryable hata olarak keser.
+- `codexIdleOutputTimeout` (15 dakika), ilk çıktıdan sonra ardışık iki stdout
+  satırı arasındaki sessizliği ölçer. Her satır timer'ı sıfırlar; timer yaşam
+  döngüsü `defer idle.Stop()` ile kapatılır.
+- Idle süresi dolunca `proc.KillTree` tüm proses ağacını öldürür. Hata
+  **non-retryable** döner ve o ana kadarki stdout tail'ini taşır; böylece kısmi
+  içerik kurtarma korunurken aynı yan etkili turun yeniden çalışması engellenir.
+
+Bu watchdog, codex'in başlattığı `adb` daemon'u gibi bir torunun stdout pipe'ını
+miras alıp codex öldükten sonra da açık tuttuğu gerçek yetim inflight turunu
+sonlandırır. Genel oturum idle watchdog'undan bağımsızdır: ilerlemeyi doğrudan
+codex JSONL stdout satırları üzerinden ölçer.
 
 **Kural:** `proc.CommandContext` ile başlatılan her komut `proc.TreeKill(cmd)`
 almalıdır. Depoda artık istisna yok — hook kabuğu (`internal/agent/hooks.go`),
@@ -980,9 +996,11 @@ git çağrıları (`internal/api/git.go`, `workdir_context.go`), CLI preflight
 Regresyon testleri: `internal/proc/reap_pipe_test.go`
 (`TestTreeKillReapsGrandchildHoldingPipe`) ve
 `internal/providers/codexcli_hang_test.go`
-(`TestCodexRunAttemptReturnsOnCancelWhileGrandchildHoldsPipe`). İkisi de test
-binary'sini yeniden exec ederek gerçek bir torun proses kurar; düzeltme geri
-alındığında ikisi de düşer (doğrulandı).
+(`TestCodexRunAttemptReturnsOnCancelWhileGrandchildHoldsPipe` ve
+`TestCodexRunAttemptIdleOutputTimeoutWhileGrandchildHoldsPipe`). İkinci test
+kısa süre enjekte eder; ikisi de test binary'sini yeniden exec ederek stdout
+pipe'ını açık tutan gerçek bir torun proses kurar. Düzeltme geri alındığında
+düşerler (doğrulandı).
 
 ---
 
