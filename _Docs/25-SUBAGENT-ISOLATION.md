@@ -233,6 +233,16 @@ type SubagentProfile struct {
 | `coder` | Kod yazma/düzenleme | + Write, Edit, Bash |
 | `reviewer` | Bağımsız inceleme | Read, Glob, Grep (yazma yok) |
 
+**Allowlist'ten muaf iki yüzey.** Profilin `AllowedTools` listesi yalnız **iş**
+araçlarını tarif eder. `toolFilter` iki grubu allowlist'e bakmadan geçirir:
+koordinasyon araçları (`tools.IsCoordinationTool` — oturum-kapılı) ve skill-keşif
+araçları (`tools.IsSkillTool` = `use_skill`, `skill_search`). Skill muafiyetinin
+sebebi, sistem promptunun "# Available Skills" bloğunu her ajana basıp skill
+yüklemesini söylemesi; allowlist'li bir profil aracı göremeyince skill'i sessizce
+atlıyordu. Muafiyet yalnız allowlist'i atlar — workspace düzeyinde kapatılmış veya
+ajanın denylist'inde olan bir skill aracı hâlâ engellidir. Katman sırası ve gerekçe:
+`_Docs/47-KOORDINATOR-COKLU-AJAN.md` §15.5–15.7.
+
 ## Guard'lar (yeniden kullanım)
 
 `agent/delegate.go`'daki guard'lar ortak helper'a çıkarılıp tüm modlarca paylaşılır:

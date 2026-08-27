@@ -804,6 +804,16 @@ func (r *Runtime) toolFilter(ctx context.Context, agent db.Agent) func(string) b
 		if tools.IsCoordinationTool(name) {
 			return true // session-gated, not allowlist-gated (see above)
 		}
+		if tools.IsSkillTool(name) {
+			// Same class of prompt/permission mismatch as the coordination surface:
+			// the system prompt renders "# Available Skills" for EVERY agent and tells
+			// it to load a matching skill (and to discover hidden ones with
+			// skill_search) before acting, while no profile allowlist names those
+			// tools — so an allowlist-only worker is instructed to call a tool it
+			// cannot see and silently skips skills instead. Loading a skill is
+			// read-only, hence safe for every profile including the read-only ones.
+			return true
+		}
 		if isExemptTool(name, exemptServer) {
 			return true // repository-reading infrastructure (see allowlistExemptServer)
 		}

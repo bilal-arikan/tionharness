@@ -1244,6 +1244,42 @@ ağaç-içi dokunulmazlık, `SpawnWorker` OR kuralı, derinlik tavanında düş�
 `toolfilter_coordination_test.go`: allowlist muafiyeti (+ iş araçlarının hâlâ
 kısıtlı kalması), denylist'in hâlâ kazanması, ad listesi ↔ köprü tutarlılığı.
 
+### 15.7 Skill araçları da allowlist'ten muaf (2026-08-27)
+
+**Belirti.** Sistem promptu **her** ajana "# Available Skills" bloğunu ve "eşleşen
+bir skill varsa davranmadan önce `use_skill` ile yükle, gizli olanları
+`skill_search` ile bul" yönergesini basıyordu. Ama hiçbir profil allowlist'i
+(`explore`, `coder`, `reviewer` ...) bu iki aracı listelemiyor; `toolFilter` de
+onları süzüyordu. Sonuç, §15.5'teki koordinasyon hatasının aynı sınıfı:
+worker'a var olmayan bir aracı çağırması söyleniyor, worker aracı bulamayıp
+skill'i **sessizce atlıyor** — hiçbir çağrı hata vermediği için de fark edilmiyor.
+
+**Düzeltme.** `tools.IsSkillTool` (yeni `internal/tools/skilltools.go`,
+`SkillToolNames = ["use_skill", "skill_search"]`) skill-keşif yüzeyini tek
+kaynaktan tanımlar; ad hem çıplak biçimde hem de CLI köprüsünün gördüğü
+namespace'li biçimde (`...__use_skill` son eki) eşleşir. `toolFilter` bu araçları
+koordinasyon araçları gibi **yalnız allowlist'ten** muaf tutar. Skill okumak
+salt-okunur bir iştir, dolayısıyla muafiyet salt-okunur profiller için de güvenli.
+
+**Katman sırası (`Runtime.toolFilter`, `internal/agent/toolsetup.go`).** Sıra
+anlamlıdır — muafiyetler yalnız en alttaki allowlist'i atlar, üstündeki bilinçli
+kapatmaları değil:
+
+1. **workspace disabled** — araç workspace düzeyinde kapalıysa hiç kimse göremez.
+2. **agent block (denylist)** — "bu ajanda bu aracı kapat" bilinçli bir karardır.
+3. **koordinasyon muafiyeti** (`tools.IsCoordinationTool`) — oturum-kapılı, §15.5.
+4. **skill muafiyeti** (`tools.IsSkillTool`) — prompt her ajana skill yüklemesini
+   söylediği için (bu bölüm).
+5. **allowlist** — profilin iş araçları yüzeyi; muaf olmayan her ad buradan geçer.
+
+Yani skill araçları workspace'te kapatılırsa veya ajanın denylist'inde ise **hâlâ
+engellidir**; muafiyet sadece "allowlist'i olan profil bunları listelemiyor"
+durumunu kapatır. Tek noktada düzeltildiği için hem native hem CLI köprüsü
+kapsanır (`BridgeTools` da aynı `toolFilter`'ı kullanır).
+
+**Test.** `internal/agent/toolfilter_skill_test.go`: allowlist'li profilde
+muafiyet, workspace-disabled'ın hâlâ kazanması, ajan denylist'inin hâlâ kazanması.
+
 ## 16. Ajana özel koordinatör promptu (2026-08-17)
 
 **Sorun.** Manager tipi ajanların soul'una "işi böl, worker aç, delege et" yazılıyordu.
