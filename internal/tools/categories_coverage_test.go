@@ -12,6 +12,12 @@ import (
 	"testing"
 )
 
+// indirectDefReceivers lists the receiver types whose Def() legitimately returns
+// a definition built elsewhere instead of an inline providers.ToolDef literal.
+// Every other Def() must yield a name, so a definition the scan cannot read is
+// reported rather than skipped.
+var indirectDefReceivers = map[string]bool{"funcTool": true}
+
 // declaredToolNames parses THIS package's sources and returns the Name of every
 // built-in tool definition — i.e. the string literal in the providers.ToolDef
 // composite literal each Tool's Def() method returns.
@@ -21,6 +27,12 @@ import (
 // the moment its Def() exists, whether or not anyone remembered the map. It is
 // also independent of Runtime.buildRegistry's per-session gating (shell, vault,
 // coordination, skills), which would otherwise hide whole families of tools.
+//
+// The scan is fail-loud by construction: a Def() whose name it cannot extract
+// (a constant, a variable, a definition assembled at runtime) aborts the test
+// instead of dropping the tool from the contract, and the number of names must
+// account for every Def() method seen — so a broken scan cannot pass by finding
+// "enough" tools.
 func declaredToolNames(t *testing.T) map[string]string {
 	t.Helper()
 	entries, err := os.ReadDir(".")
@@ -29,6 +41,9 @@ func declaredToolNames(t *testing.T) map[string]string {
 	}
 	fset := token.NewFileSet()
 	names := map[string]string{} // tool name -> file it is declared in
+	defs := 0                    // Def() methods seen
+	indirect := 0                // of those, allow-listed indirect ones
+	var unreadable []string
 	for _, e := range entries {
 		name := e.Name()
 		if e.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
@@ -43,23 +58,54 @@ func declaredToolNames(t *testing.T) map[string]string {
 			if !ok || fn.Recv == nil || fn.Name.Name != "Def" || fn.Body == nil {
 				continue
 			}
-			if n := toolDefName(fn.Body); n != "" {
-				if prev, dup := names[n]; dup {
-					t.Fatalf("tool name %q declared twice (%s and %s)", n, prev, name)
-				}
-				names[n] = filepath.Base(name)
+			defs++
+			recv := receiverTypeName(fn)
+			if indirectDefReceivers[recv] {
+				indirect++
+				continue
 			}
+			n := toolDefName(fn.Body)
+			if n == "" {
+				unreadable = append(unreadable, filepath.Base(name)+": ("+recv+").Def()")
+				continue
+			}
+			if prev, dup := names[n]; dup {
+				t.Fatalf("tool name %q declared twice (%s and %s)", n, prev, name)
+			}
+			names[n] = filepath.Base(name)
 		}
 	}
-	if len(names) < 50 {
-		t.Fatalf("only %d tool definitions found; the AST scan is broken", len(names))
+	sort.Strings(unreadable)
+	if len(unreadable) > 0 {
+		t.Fatalf("%d Def() method(s) whose tool name the AST scan could not read — give Name a plain string literal, or add the receiver to indirectDefReceivers:\n  %s",
+			len(unreadable), strings.Join(unreadable, "\n  "))
+	}
+	if want := defs - indirect; len(names) != want {
+		t.Fatalf("scan extracted %d tool name(s) from %d Def() method(s) (%d allow-listed as indirect); expected %d — the AST scan is broken",
+			len(names), defs, indirect, want)
 	}
 	return names
 }
 
+// receiverTypeName returns the bare type name of a method's receiver, so a Def()
+// the scan cannot read can be named in the failure message.
+func receiverTypeName(fn *ast.FuncDecl) string {
+	if fn.Recv == nil || len(fn.Recv.List) == 0 {
+		return "?"
+	}
+	expr := fn.Recv.List[0].Type
+	if star, ok := expr.(*ast.StarExpr); ok {
+		expr = star.X
+	}
+	if id, ok := expr.(*ast.Ident); ok {
+		return id.Name
+	}
+	return "?"
+}
+
 // toolDefName extracts the Name field of the providers.ToolDef literal returned
-// by a Def() body. Returns "" when the body returns something else (e.g.
-// funcTool, whose definition is supplied by its caller).
+// by a Def() body. Returns "" when the body has no such literal, or when its
+// Name is not a plain string literal — both are reported by the caller.
 func toolDefName(body *ast.BlockStmt) string {
 	var found string
 	ast.Inspect(body, func(n ast.Node) bool {
