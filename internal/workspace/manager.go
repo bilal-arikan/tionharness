@@ -410,7 +410,9 @@ func (m *Manager) open(meta Meta) error {
 	rt.StartCoordinatorStallSweeper(context.Background())
 
 	ws := &Workspace{Meta: meta, DB: database, Runtime: rt, Scheduler: sched, InsightCron: insightCron, Secrets: vault, DataDir: dir}
-	ws.loadSettings()    // apply persisted per-workspace overrides (e.g. autonomy pause)
+	ws.loadSettings() // apply persisted per-workspace overrides (e.g. autonomy pause)
+	// Self-heal a defaultAgentId written before system agents were barred from it.
+	ws.sanitizeDefaultAgent(m.logger)
 	ws.syncConfigFiles() // seed config/ tree + adopt instructions.md (file is authoritative)
 
 	// One board dispatcher fans out to automation and the card-owned worktree

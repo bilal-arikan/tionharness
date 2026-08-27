@@ -6,6 +6,7 @@ import (
 	_ "embed"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"sync"
@@ -220,6 +221,53 @@ func (p *WSSettingsPatch) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// ErrDefaultAgentSystem rejects making a built-in (system) agent the default
+// agent for new sessions. System agents exist to serve the runtime — titling,
+// compaction, worker profiles — and are not conversation partners, so they must
+// never be pre-selected for a fresh chat. Their own runtime duties are
+// unaffected. Callers may use errors.Is to map it to an API 400.
+var ErrDefaultAgentSystem = errors.New("system agent cannot be the default agent for new sessions")
+
+// checkDefaultAgent rejects a defaultAgentId pointing at a system agent. An id
+// that resolves to nothing is left to the caller: a stale/unknown id is a
+// separate concern (the client falls back to the first agent), and failing it
+// here would break workspaces created before their agents exist.
+func (w *Workspace) checkDefaultAgent(id string) error {
+	if id == "" || w.DB == nil {
+		return nil
+	}
+	agent, err := w.DB.GetAgent(context.Background(), id)
+	if err != nil {
+		return nil
+	}
+	if agent.System {
+		return ErrDefaultAgentSystem
+	}
+	return nil
+}
+
+// sanitizeDefaultAgent repairs a persisted DefaultAgentId that points at a
+// system agent — a value written before the write-path gate existed. It clears
+// the setting (new sessions fall back to the first roster agent) and persists.
+func (w *Workspace) sanitizeDefaultAgent(logger *slog.Logger) {
+	w.settings.mu.RLock()
+	id := w.settings.cur.DefaultAgentId
+	w.settings.mu.RUnlock()
+	if err := w.checkDefaultAgent(id); err == nil {
+		return
+	}
+	w.settings.mu.Lock()
+	w.settings.cur.DefaultAgentId = ""
+	w.settings.mu.Unlock()
+	if logger != nil {
+		logger.Warn("cleared workspace default agent pointing at a system agent",
+			"workspace", w.ID, "agent", id)
+	}
+	if err := w.saveSettings(); err != nil && logger != nil {
+		logger.Warn("persist cleared default agent failed", "workspace", w.ID, "error", err)
+	}
+}
+
 // settingsHolder is embedded in Workspace to guard concurrent settings access.
 type settingsHolder struct {
 	mu  sync.RWMutex
@@ -311,6 +359,16 @@ func (m *Manager) UpdateSettings(id string, patch WSSettingsPatch) (*Workspace, 
 	// so a bad view cannot land half a settings update on disk.
 	if patch.BoardViews != nil {
 		if err := db.ValidateBoardViews(*patch.BoardViews); err != nil {
+			return nil, err
+		}
+	}
+
+	// Same rule: reject before anything is applied, so a system agent cannot land
+	// half a settings update on disk. This is the single write path for
+	// DefaultAgentId, so the gate covers the HTTP handler and every internal
+	// caller (template/market install, workspace bridge) alike.
+	if patch.DefaultAgentId != nil {
+		if err := ws.checkDefaultAgent(*patch.DefaultAgentId); err != nil {
 			return nil, err
 		}
 	}

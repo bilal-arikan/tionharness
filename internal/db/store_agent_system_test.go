@@ -238,3 +238,60 @@ func TestDeleteSystemAgentGuard(t *testing.T) {
 		t.Fatal("guarded agent no longer available")
 	}
 }
+
+// TestEnsureSystemAgentsSeedsVisualIdentity covers the "seed, never re-impose"
+// rule for Avatar/Color: a row that predates the visual identity is backfilled
+// on the next boot, while a value the user picked survives re-seeding.
+func TestEnsureSystemAgentsSeedsVisualIdentity(t *testing.T) {
+	ctx := context.Background()
+	d, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A pre-existing row without any visual identity, as every workspace seeded
+	// before this field existed looks on disk.
+	legacy, err := d.CreateAgent(ctx, Agent{Name: "Titler", System: true, SystemKey: "titler"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.CreateAgent(ctx, Agent{Name: "Compactor", System: true, SystemKey: "compaction", Avatar: "🙂", Color: "#123456"}); err != nil {
+		t.Fatal(err)
+	}
+	defs := []SystemAgentDefinition{
+		{SystemKey: "titler", Name: "Titler", AllowedTools: "[]", Avatar: "🔖", Color: "#7C6BE8"},
+		{SystemKey: "compaction", Name: "Compactor", AllowedTools: "[]", Avatar: "📦", Color: "#6B5FA8"},
+		{SystemKey: "insight", Name: "Insight", AllowedTools: "[]", Avatar: "🔮", Color: "#5C6480"},
+	}
+	if err := d.EnsureSystemAgents(ctx, defs...); err != nil {
+		t.Fatal(err)
+	}
+
+	titler, ok := d.FindAgentBySystemKey("titler")
+	if !ok {
+		t.Fatal("titler missing")
+	}
+	if titler.ID != legacy.ID {
+		t.Fatalf("titler row replaced: got %s, want %s", titler.ID, legacy.ID)
+	}
+	if titler.Avatar != "🔖" || titler.Color != "#7C6BE8" {
+		t.Fatalf("empty visual identity not backfilled: avatar=%q color=%q", titler.Avatar, titler.Color)
+	}
+
+	// A user-chosen avatar/color must survive every subsequent boot.
+	compaction, ok := d.FindAgentBySystemKey("compaction")
+	if !ok {
+		t.Fatal("compaction missing")
+	}
+	if compaction.Avatar != "🙂" || compaction.Color != "#123456" {
+		t.Fatalf("user visual identity clobbered: avatar=%q color=%q", compaction.Avatar, compaction.Color)
+	}
+
+	// A freshly created system agent carries the canonical identity immediately.
+	insight, ok := d.FindAgentBySystemKey("insight")
+	if !ok {
+		t.Fatal("insight missing")
+	}
+	if insight.Avatar != "🔮" || insight.Color != "#5C6480" {
+		t.Fatalf("new system agent visual identity = (%q, %q)", insight.Avatar, insight.Color)
+	}
+}

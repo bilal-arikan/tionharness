@@ -326,6 +326,8 @@ func (s *Server) handleRestoreSystemAgent(w http.ResponseWriter, r *http.Request
 		Soul:     &def.SystemPrompt,
 		Identity: &def.Description,
 		Model:    &def.SuggestedModel,
+		Avatar:   &def.Avatar,
+		Color:    &def.Color,
 	})
 	if writeDBError(w, err, "agent not found") {
 		return

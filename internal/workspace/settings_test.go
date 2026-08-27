@@ -2,9 +2,15 @@ package workspace
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
+	"io"
+	"log/slog"
 	"os"
 	"testing"
+
+	"github.com/bilal-arikan/tionharness/internal/db"
 )
 
 // TestDefaultWSSettings pins the always-on defaults (cross-session awareness is
@@ -101,5 +107,67 @@ func TestWSSettingsPatchDesktopNotifications(t *testing.T) {
 	var bad WSSettingsPatch
 	if err := json.Unmarshal([]byte(`{"desktopNotifications":"maybe"}`), &bad); err == nil {
 		t.Error("an unrecognised desktopNotifications value should error")
+	}
+}
+
+// TestCheckDefaultAgentRejectsSystemAgent pins the gate every DefaultAgentId
+// write goes through: a system agent is refused, a normal agent accepted, and an
+// unknown id left to the caller's own fallback.
+func TestCheckDefaultAgentRejectsSystemAgent(t *testing.T) {
+	ctx := context.Background()
+	store, err := db.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	sysAgent, err := store.CreateAgent(ctx, db.Agent{Name: "Titler", System: true, SystemKey: "titler"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	normal, err := store.CreateAgent(ctx, db.Agent{Name: "PM"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	w := &Workspace{DataDir: t.TempDir(), DB: store}
+
+	if err := w.checkDefaultAgent(sysAgent.ID); !errors.Is(err, ErrDefaultAgentSystem) {
+		t.Fatalf("system agent accepted as default: %v", err)
+	}
+	if err := w.checkDefaultAgent(normal.ID); err != nil {
+		t.Fatalf("normal agent rejected: %v", err)
+	}
+	for _, id := range []string{"", "AGT-does-not-exist"} {
+		if err := w.checkDefaultAgent(id); err != nil {
+			t.Fatalf("checkDefaultAgent(%q) = %v, want nil", id, err)
+		}
+	}
+}
+
+// TestSanitizeDefaultAgentClearsSystemAgent covers the boot self-heal for a
+// ws-settings.json written before the gate existed.
+func TestSanitizeDefaultAgentClearsSystemAgent(t *testing.T) {
+	ctx := context.Background()
+	store, err := db.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	sysAgent, err := store.CreateAgent(ctx, db.Agent{Name: "Titler", System: true, SystemKey: "titler"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	w := &Workspace{DataDir: t.TempDir(), DB: store}
+	w.settings.cur = defaultWSSettings()
+	w.settings.cur.DefaultAgentId = sysAgent.ID
+
+	w.sanitizeDefaultAgent(slog.New(slog.NewTextHandler(io.Discard, nil)))
+
+	if got := w.Settings().DefaultAgentId; got != "" {
+		t.Fatalf("defaultAgentId = %q, want cleared", got)
+	}
+	data, err := os.ReadFile(w.settingsPath())
+	if err != nil {
+		t.Fatalf("settings not persisted: %v", err)
+	}
+	if !bytes.Contains(data, []byte(`"defaultAgentId": ""`)) {
+		t.Fatalf("cleared defaultAgentId not persisted: %s", data)
 	}
 }

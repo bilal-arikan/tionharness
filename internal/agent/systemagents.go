@@ -13,6 +13,48 @@ type SystemAgentDefinition = db.SystemAgentDefinition
 
 var systemAgentDefaults = buildSystemAgentDefaults()
 
+// systemAgentVisuals is the SINGLE source of truth for the canonical look of
+// every built-in agent, keyed by SystemKey. Colors are grouped by role so the
+// roster reads at a glance:
+//
+//	analysis agents      violet / slate  (they only summarise and observe)
+//	worker, read-only    teal / blue     (explore, planner, reviewer, validator)
+//	worker, writing      amber / rust    (coder, config — the ones that mutate)
+var systemAgentVisuals = map[string]struct{ Avatar, Color string }{
+	// Analysis family.
+	"titler":              {"🔖", "#7C6BE8"},
+	"overview-summarizer": {"📋", "#9C6BD8"},
+	"compaction":          {"📦", "#6B5FA8"},
+	"lesson-extractor":    {"🎓", "#B07AD0"},
+	"insight":             {"🔮", "#5C6480"},
+
+	// Worker profiles — read-only.
+	"subagent-explore":   {"🔍", "#17A2A2"},
+	"subagent-planner":   {"🧭", "#2E86D8"},
+	"subagent-reviewer":  {"🧐", "#4FBF8B"},
+	"subagent-validator": {"🧪", "#3FB8D8"},
+
+	// Worker profiles — allowed to write.
+	"subagent-coder":  {"💻", "#E08A2E"},
+	"subagent-config": {"🔧", "#D2683C"},
+}
+
+// applySystemAgentVisuals stamps the canonical avatar/color onto every
+// definition. A key missing from the table is a programming error: a built-in
+// agent with no visual identity is exactly the "random default look" this table
+// exists to remove.
+func applySystemAgentVisuals(defs []SystemAgentDefinition) []SystemAgentDefinition {
+	for i := range defs {
+		v, ok := systemAgentVisuals[defs[i].SystemKey]
+		if !ok {
+			panic("no visual identity for system agent " + defs[i].SystemKey)
+		}
+		defs[i].Avatar = v.Avatar
+		defs[i].Color = v.Color
+	}
+	return defs
+}
+
 func buildSystemAgentDefaults() []SystemAgentDefinition {
 	defs := []SystemAgentDefinition{
 		{
@@ -78,7 +120,7 @@ func buildSystemAgentDefaults() []SystemAgentDefinition {
 			AllowedTools: string(allowedTools),
 		})
 	}
-	return defs
+	return applySystemAgentVisuals(defs)
 }
 
 // SystemAgentDefault returns the canonical definition for key.

@@ -54,6 +54,39 @@ başarısız olduğunda kullanılan `readPrompt(<anahtar>)` aynı anahtara gider
 özelleştirilmiş promptu `{{summary}}` ve `{{messages}}` yer tutucularını korumazsa
 çalışma zamanı doğrulaması promptu güvenli `compact` varsayılanına düşürür.
 
+## Görsel kimlik (avatar + renk)
+
+Her yerleşik ajanın avatarı (tek emoji) ve rengi (hex) kanoniktir: aynı sistem ajanı
+her workspace'te aynı görünür. Tek kaynak `systemAgentVisuals` tablosudur
+(`internal/agent/systemagents.go`); tablo `SystemKey` ile anahtarlanır ve
+`applySystemAgentVisuals` her tanıma damgalar. Tabloda karşılığı olmayan bir
+`SystemKey` panik üretir — görsel kimliksiz yerleşik ajan, bu tablonun ortadan
+kaldırdığı "rastgele varsayılan görünüm" durumudur.
+
+Renkler role göre ailelere ayrılır: analiz ajanları mor/kurşuni, salt-okunur worker
+profilleri turkuaz/mavi, yazma yetkisi olan worker profilleri kehribar/kiremit.
+
+| SystemKey | Avatar | Renk | Aile |
+|-----------|--------|------|------|
+| `titler` | 🔖 | `#7C6BE8` | analiz |
+| `overview-summarizer` | 📋 | `#9C6BD8` | analiz |
+| `compaction` | 📦 | `#6B5FA8` | analiz |
+| `lesson-extractor` | 🎓 | `#B07AD0` | analiz |
+| `insight` | 🔮 | `#5C6480` | analiz |
+| `subagent-explore` | 🔍 | `#17A2A2` | worker, salt-okunur |
+| `subagent-planner` | 🧭 | `#2E86D8` | worker, salt-okunur |
+| `subagent-reviewer` | 🧐 | `#4FBF8B` | worker, salt-okunur |
+| `subagent-validator` | 🧪 | `#3FB8D8` | worker, salt-okunur |
+| `subagent-coder` | 💻 | `#E08A2E` | worker, yazan |
+| `subagent-config` | 🔧 | `#D2683C` | worker, yazan |
+
+`Name`/`Soul`/`Model`'den farklı olarak avatar ve renk **yalnız seed edilir, her
+boot'ta yeniden dayatılmaz**: `EnsureSystemAgents` mevcut kayıtta alan BOŞSA kanonik
+değeri yazar (görsel kimlik eklenmeden önce oluşmuş workspace'ler böylece düzelir),
+kullanıcının seçtiği bir değer varsa dokunmaz — aksi hâlde alan kalıcı olarak
+düzenlenemez olurdu. **Varsayılana dön** (`POST /api/agents/{id}/restore-default`)
+avatar ve rengi de tanımdan geri yükler.
+
 ## Çözümleme ve koşulsuz fallback
 
 `ResolveSystemAgent`, yalnız workspace'te bulunan **ve etkin** sistem ajanını
@@ -118,6 +151,27 @@ bırak** eylemleri sunulur (`frontend/src/features/agents/AgentsView.tsx:145-175
 ajanında **yerleşik tanım etkin** rozeti görünür
 (`frontend/src/features/agents/SystemAgentStatusBadge.tsx:7-17`).
 
+## Sistem ajanı varsayılan ajan olamaz
+
+Workspace'in `defaultAgentId` ayarı (yeni sohbetlerde önseçili ajan) bir sistem
+ajanını gösteremez. Sistem ajanı çalışma zamanına hizmet eder (başlıklandırma,
+compaction, worker profilleri) ve sohbet muhatabı değildir.
+
+- **Backend kapısı:** `Manager.UpdateSettings` yamayı uygulamadan önce hedefi
+  çözer ve sistem ajanıysa `ErrDefaultAgentSystem` döndürür
+  (`internal/workspace/settings.go`). `defaultAgentId` için tek yazma yolu burasıdır,
+  dolayısıyla HTTP handler'ı, şablon/market kurulumu ve workspace bridge aynı kapıdan
+  geçer. HTTP tarafında bu hata 400'e eşlenir
+  (`internal/api/workspace_settings.go`).
+- **Boot onarımı:** workspace açılışında `sanitizeDefaultAgent` kapı eklenmeden önce
+  yazılmış bir değeri temizler ve `Warn` loglar (`internal/workspace/manager.go`).
+  Değer temizlenince yeni sohbetler roster'daki ilk ajana düşer.
+- **UI:** sistem ajanının ayar formunda **Varsayılan yap** düğmesi hiç render
+  edilmez (`frontend/src/features/agents/AgentSettingsForm.tsx`).
+
+Kısıt yalnız "yeni sohbetlerin varsayılan ajanı" içindir; sistem ajanının kendi
+işlevi (titler/compaction/worker olarak çağrılması) etkilenmez.
+
 ## Workspace seed
 
 Workspace manager'ın ortak `open()` yolu beş derlenmiş tanımı `EnsureSystemAgents`
@@ -126,7 +180,9 @@ oluşturulurken ve kayıtlı workspace'ler boot sırasında açılırken çalı�
 workspace'ler de açılışta backfill edilir (`internal/workspace/manager.go:523-537`).
 Seed idempotenttir. Eski `compactor` kaydı `overview-summarizer` anahtarına aynı ID ile
 yerinde taşınır; soul, model ve disabled dahil kullanıcı özelleştirmeleri korunur.
-Aynı `SystemKey` için canlı kayıt varsa alanlarına dokunulmaz, yalnız eksik kayıt oluşturulur;
+Aynı `SystemKey` için canlı kayıt varsa alanlarına dokunulmaz — tek istisna boş
+`Avatar`/`Color` alanlarının kanonik değerle doldurulmasıdır (bkz. "Görsel kimlik") —,
+yalnız eksik kayıt oluşturulur;
 yeni kayda `System`, `SystemKey` ve varsayılan `Disabled` değeri dahil tüm tanım yazılır
 (`internal/db/store_agent_system.go:38-58`).
 

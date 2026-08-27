@@ -21,6 +21,14 @@ type SystemAgentDefinition struct {
 	SuggestedModel string
 	AllowedTools   string
 	Disabled       bool
+
+	// Avatar (single emoji/glyph) and Color (hex) are the canonical visual
+	// identity of a built-in agent, so the same system agent looks the same in
+	// every workspace. Unlike Name/Soul/Model they are only SEEDED, never
+	// re-imposed on an existing row that already carries a value — see
+	// EnsureSystemAgents.
+	Avatar string
+	Color  string
 }
 
 // FindAgentBySystemKey returns the live system agent for key, if present.
@@ -69,7 +77,24 @@ func (d *DB) EnsureSystemAgents(ctx context.Context, defs ...SystemAgentDefiniti
 				}
 			}
 		}
-		if _, ok := d.FindAgentBySystemKey(def.SystemKey); ok {
+		if existing, ok := d.FindAgentBySystemKey(def.SystemKey); ok {
+			// Seed-only backfill: a row written before the definitions carried a
+			// visual identity has an empty Avatar/Color and gets the canonical one,
+			// which is what makes existing workspaces converge. A value the user
+			// picked is left alone — this runs on every boot, so overwriting here
+			// would make the field permanently uneditable.
+			if (existing.Avatar == "" && def.Avatar != "") || (existing.Color == "" && def.Color != "") {
+				if _, err := d.mutateAgentLocked(existing.ID, func(a *Agent) {
+					if a.Avatar == "" {
+						a.Avatar = def.Avatar
+					}
+					if a.Color == "" {
+						a.Color = def.Color
+					}
+				}); err != nil {
+					return err
+				}
+			}
 			continue
 		}
 		if _, err := d.CreateAgent(ctx, Agent{
@@ -78,6 +103,8 @@ func (d *DB) EnsureSystemAgents(ctx context.Context, defs ...SystemAgentDefiniti
 			Identity:     def.Description,
 			Model:        def.SuggestedModel,
 			AllowedTools: def.AllowedTools,
+			Avatar:       def.Avatar,
+			Color:        def.Color,
 			System:       true,
 			SystemKey:    def.SystemKey,
 			Disabled:     def.Disabled,

@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"time"
 
@@ -223,6 +224,11 @@ func (s *Server) handleUpdateWorkspaceSettings(w http.ResponseWriter, r *http.Re
 		}
 	}
 	updated, err := s.workspaces.UpdateSettings(wsp.ID, patch)
+	if errors.Is(err, workspace.ErrDefaultAgentSystem) {
+		writeError(w, http.StatusBadRequest,
+			"Sistem ajanı yeni sohbetler için varsayılan ajan yapılamaz.")
+		return
+	}
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return

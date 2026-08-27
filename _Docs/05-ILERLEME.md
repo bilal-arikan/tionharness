@@ -2,6 +2,25 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-08-27**
 
+## Sistem ajanlarına kanonik görsel kimlik + varsayılan ajan kısıtı (2026-08-27) ✅
+
+11 yerleşik ajanın avatarı ve rengi 14 workspace'in hepsinde boştu, yani roster'da
+varsayılan/rastgele görünüyorlardı. Artık `internal/agent/systemagents.go` içindeki
+tek `systemAgentVisuals` tablosu her `SystemKey` için kanonik emoji + hex taşıyor
+(analiz ajanları mor/kurşuni, salt-okunur worker'lar turkuaz/mavi, yazan worker'lar
+kehribar/kiremit) ve `SystemAgentDefinition` bunları `Avatar`/`Color` alanlarıyla
+persistence katmanına aktarıyor. `EnsureSystemAgents` bu iki alanı **yalnız boşsa**
+dolduruyor — mevcut workspace'ler boot'ta düzeliyor, kullanıcının seçtiği değer
+ezilmiyor. `POST /api/agents/{id}/restore-default` avatar/rengi de geri yüklüyor.
+
+İkinci kural: sistem ajanı artık workspace'in `defaultAgentId` değeri olamıyor.
+Kapı `Manager.UpdateSettings` içinde (tek yazma yolu, HTTP dahil her çağıranı
+kapsar), HTTP tarafında 400'e eşleniyor; boot'ta `sanitizeDefaultAgent` eski bozuk
+bir değeri temizleyip `Warn` logluyor (tarama sonucu: 14 workspace'in hiçbirinde
+böyle bir değer yoktu). UI'da sistem ajanı için "Varsayılan yap" düğmesi hiç render
+edilmiyor. Sistem ajanının kendi işlevi (titler/compaction/worker) etkilenmiyor.
+Detay: `_Docs/74-SISTEM-AJANLARI.md`.
+
 ## MCP sunucu stderr'i artık yutulmuyor (2026-08-27) ✅
 
 `DialStdio` çocuk sürecin stderr'ini `io.Discard`'a veriyordu ("chatty server pipe'ı

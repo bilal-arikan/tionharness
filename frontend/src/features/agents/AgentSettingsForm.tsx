@@ -235,7 +235,11 @@ export function AgentSettingsForm({
           {savedAt > 0 && !saving && (
             <span className="text-xs text-[var(--color-text-dim)]">Kaydedildi ✓</span>
           )}
-          {onSetDefault && (
+          {/* A system agent serves the runtime (titling, compaction, workers) and
+              is never a conversation partner, so it cannot be the default agent
+              for new sessions — the backend rejects it. Hide the action entirely
+              rather than offering a button that can only fail. */}
+          {onSetDefault && !agent.system && (
             <button
               data-testid="agent-set-default-detail"
               onClick={() => {
