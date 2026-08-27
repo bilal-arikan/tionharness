@@ -25,7 +25,7 @@ import (
 //     coordinator receives a compact head plus a handle (artifact id + worker
 //     session id). Nothing is lost; the coordinator pulls the detail on demand
 //     (open the artifact, or send_to_worker to ask the worker to elaborate)
-//     instead of paying for it on every subsequent turn. This is the mcp-alpha
+//     instead of paying for it on every subsequent turn. This is the
 //     "preview envelope + artifact handle" pattern applied to worker reports.
 const coordinatorResultCapChars = 6000
 

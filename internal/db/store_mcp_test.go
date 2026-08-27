@@ -27,7 +27,7 @@ func TestUpdateMCPServerPreservesIdentity(t *testing.T) {
 	}
 
 	updated, err := d.UpdateMCPServer(ctx, created.ID, MCPServer{
-		Name:      "mcp-alpha-2",
+		Name:      "mcp-beta",
 		Transport: MCPTransportHTTP,
 		URL:       "http://127.0.0.1:2/mcp",
 		Scope:     "scoped",
@@ -50,7 +50,7 @@ func TestUpdateMCPServerPreservesIdentity(t *testing.T) {
 		t.Error("Enabled should be preserved (true)")
 	}
 	// Editable fields applied.
-	if updated.Name != "mcp-alpha-2" || updated.URL != "http://127.0.0.1:2/mcp" || updated.Scope != "scoped" {
+	if updated.Name != "mcp-beta" || updated.URL != "http://127.0.0.1:2/mcp" || updated.Scope != "scoped" {
 		t.Errorf("fields not applied: %+v", updated)
 	}
 
@@ -59,7 +59,7 @@ func TestUpdateMCPServerPreservesIdentity(t *testing.T) {
 	if err != nil {
 		t.Fatalf("get: %v", err)
 	}
-	if got.Scope != "scoped" || got.Name != "mcp-alpha-2" {
+	if got.Scope != "scoped" || got.Name != "mcp-beta" {
 		t.Errorf("update not persisted: %+v", got)
 	}
 }
