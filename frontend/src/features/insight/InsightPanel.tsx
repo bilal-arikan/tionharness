@@ -140,7 +140,7 @@ export function InsightPanel({ onError, onOpenSession, tab: tabProp, onTabChange
   }
 
   return (
-    <div className="flex min-h-0 flex-1">
+    <div className="flex h-full min-h-0 flex-1 overflow-hidden">
       {/* Left: scan actions on top + sub-page rail below (Settings-style). */}
       <aside className="flex h-full w-52 flex-shrink-0 flex-col overflow-y-auto border-r border-[var(--color-border)] bg-[var(--color-surface)]">
         {/* Header: label + refresh — same look/arrangement as the chat session list. */}
@@ -192,7 +192,11 @@ export function InsightPanel({ onError, onOpenSession, tab: tabProp, onTabChange
       </aside>
 
       {/* Right: active sub-page content. */}
-      <div className="min-w-0 flex-1 overflow-auto p-4">
+      <div
+        className={`min-w-0 flex-1 p-4 ${
+          tab === 'findings' ? 'flex min-h-0 flex-col overflow-hidden' : 'overflow-auto'
+        }`}
+      >
         {(scanNote || scanning) && (
           <div className="mb-3 flex items-center gap-2 rounded-md border border-[var(--color-border)] bg-[var(--color-surface-2)] p-3 text-sm">
             {scanning && <RefreshCw className="h-4 w-4 animate-spin" />}

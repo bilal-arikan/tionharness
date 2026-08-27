@@ -24,12 +24,24 @@ export function LensList({ lenses, scanning, onToggle, onScanLens, onSaved, onEr
           key={l.id}
           className="flex items-center gap-3 rounded-md border border-[var(--color-border)] p-2"
         >
-          <input
-            type="checkbox"
-            checked={l.enabled}
-            onChange={(e) => onToggle(l.id, e.target.checked)}
-            title={l.enabled ? 'Aktif' : 'Kapalı'}
-          />
+          <button
+            type="button"
+            role="switch"
+            aria-checked={l.enabled}
+            aria-label={`${l.name} lensini ${l.enabled ? 'kapat' : 'aç'}`}
+            title={l.enabled ? 'Lensi kapat' : 'Lensi aç'}
+            onClick={() => onToggle(l.id, !l.enabled)}
+            className={`flex h-4 w-8 shrink-0 items-center rounded-full p-0.5 transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-accent)] ${
+              l.enabled ? 'bg-[var(--color-accent)]' : 'bg-[var(--color-surface-2)]'
+            }`}
+          >
+            <span
+              aria-hidden="true"
+              className={`h-3 w-3 rounded-full bg-[var(--color-surface)] transition-transform ${
+                l.enabled ? 'translate-x-4' : 'translate-x-0'
+              }`}
+            />
+          </button>
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
               <span className="font-medium">{l.name}</span>

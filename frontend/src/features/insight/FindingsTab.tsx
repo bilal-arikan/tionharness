@@ -147,7 +147,7 @@ export function FindingsTab({ findings, lenses, reload, onOpenSession, onError, 
       </div>
 
       {/* Kanban */}
-      <div className="flex flex-1 gap-3 overflow-x-auto pb-2">
+      <div className="flex min-h-0 flex-1 gap-3 overflow-x-auto pb-2">
         {COLUMNS.map((col) => {
           const cards = byColumn[col.key]
           return (
@@ -158,13 +158,13 @@ export function FindingsTab({ findings, lenses, reload, onOpenSession, onError, 
                 if (dragId) void setStatus(dragId, col.key)
                 setDragId(null)
               }}
-              className="flex w-64 flex-shrink-0 flex-col rounded-lg bg-[var(--color-surface)]"
+              className="flex min-h-0 w-64 flex-shrink-0 flex-col rounded-lg bg-[var(--color-surface)]"
             >
               <div className="flex items-center justify-between rounded-t-lg px-3 py-2 text-xs font-medium uppercase tracking-wide text-[var(--color-text-dim)]">
                 <span>{col.label}</span>
                 <span className="rounded bg-[var(--color-surface-2)] px-1.5">{cards.length}</span>
               </div>
-              <div className="flex-1 space-y-2 overflow-y-auto px-2 pb-2 pt-1">
+              <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-2 pb-2 pt-1">
                 {cards.map((f) => (
                   <div
                     key={f.id}
