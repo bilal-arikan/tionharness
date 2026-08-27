@@ -317,6 +317,48 @@ olduğu gibi kalıcı yazılmaya devam eder; arşivden çıkınca bir sonraki bi
 işler. Slot'a hiç dokunulmadığı için arşivden çıkan oturum `driving` takılı kalmaz.
 Regresyon: `coordination_archived_test.go`.
 
+### 2026-08-28: taze worker notu artık muafiyet değil, yalnız halt bastırması
+
+**Belirti.** WS19/SES427 koordinatör oturumu dondu (`session.json` `tags:["blocked"]`).
+Worker sonucu (`<task-notification>`) geldikten **hemen sonraki** turda model
+"TSK103 bağımsız validator'a verildi: `/root/validate_tsk103_retry`" yazdı ama
+`messages.jsonl` o turda `toolCalls: []` — hiçbir `spawn_worker` çağrısı yok.
+Guard **hiç koşmadı**: 2026-08-20 düzeltmesindeki `hasRecentWorkerNoteInbound`
+muafiyeti yargıcı da nudge'ı da komple atlıyordu. Yani hayalet-spawn'ın **en sık
+görüldüğü** tur, korumanın tam kör noktasıydı. Bağlam şişmesi sebep değil (o
+turlarda prompt yalnız 31–46k token).
+
+**Yeni katman ayrımı.** Muafiyet erken `return` olmaktan çıktı; artık
+`freshWorkerNote` bool'u:
+
+| Katman | Taze worker notu varken |
+|--------|--------------------------|
+| Yargıç (`judgeCoordinatorStalled`) | **Her zaman koşar** |
+| Düzeltici not + re-arm (`injectStallNudge`) | **Her zaman uygulanır** (nudge sayacı normal işler) |
+| Sert halt (`escalateCoordinatorStallHalt`) | **Bastırılır** — ne ardışık nudge tavanı ne kümülatif eşik halt üretir |
+
+Böylece WS24/SES34 false-halt regresyonu korunur (taze worker notundan sonra
+**asla** halt yok), ama hayalet-spawn yakalanıp düzeltilir. Not grace penceresinden
+(`CoordinatorWorkerNoteGrace`) çıkınca hâlâ stall eden koordinatör normal yargılanır
+ve halt edilir.
+
+İki ek incelik:
+
+- **Guard kendi notunu saymaz.** `hasRecentWorkerNoteInbound` en son inbound'u
+  ararken `Origin="coordination-guard"` mesajlarını atlar; yoksa ilk nudge kendi
+  önkoşulunu geçersizler ve ikinci stall'da halt açılırdı.
+- **`<coordination-status>` muafiyet SAĞLAMAZ.** O not `appendCoordinationStatus`
+  içinde aynı `worker-note` origin'i ile yazılır ama bir worker *sonucu* değil,
+  "harekete geç" **talimatıdır**; içerik kontrolüyle ayrıldı. Onu düz metinle
+  yanıtlayan tur diğerleri gibi yargılanır ve halt edilebilir.
+
+Test seam: `Runtime.stallJudgeFn` (üretimde nil) — yargıç sonrası kademeler canlı
+sağlayıcı olmadan sürülebiliyor. Testler: `coordination_stall_worker_note_test.go`
+(`TestCoordinatorStallGuardJudgesAfterWorkerNote`,
+`TestCoordinatorStallGuardNudgesPhantomSpawnAfterWorkerNote`,
+`TestCoordinatorStallGuardNeverHaltsWhileWorkerNoteFresh`,
+`TestCoordinationStatusNoteIsNotAWorkerResult`).
+
 ---
 
 ## 4. Koordinatör Sistem Promptu / Skill

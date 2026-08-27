@@ -156,6 +156,11 @@ type Runtime struct {
 	// without a live provider. Nil in production (the real turn runs).
 	coordRunFn func(coordSessionID string)
 
+	// stallJudgeFn, when non-nil, replaces judgeCoordinatorStalled — a test seam so
+	// the tiers acting on a verdict (nudge, re-arm, hard halt) can be exercised
+	// without a live provider. Nil in production (the real judge call runs).
+	stallJudgeFn func(ctx context.Context, agent db.Agent, text string) (bool, error)
+
 	// workerQueueMu guards workerQueue, the bounded per-worker backpressure queue
 	// behind send_to_worker: when a worker is mid-turn a follow-up is parked here
 	// instead of being rejected, and delivered the moment its turn ends (see

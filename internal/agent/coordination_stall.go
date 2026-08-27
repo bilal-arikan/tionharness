@@ -43,6 +43,11 @@ import (
 //     cap and would loop forever. The persisted tally also survives a restart, which
 //     the streak does not. Any turn that genuinely calls a coordination tool clears
 //     BOTH, so the cumulative tier measures relapses-without-recovery.
+//
+// The layers are gated asymmetrically around a freshly delivered worker result: the
+// judge and the corrective nudge ALWAYS run (the turn right after a worker note is
+// where phantom spawns concentrate — WS19/SES427), while the hard halt is suppressed
+// for as long as the note is fresh (halting there was the WS24/SES34 false halt).
 
 const (
 	// DefaultCoordinatorStallSweepMin is the staleness window (minutes): the sweeper
@@ -110,13 +115,16 @@ func (r *Runtime) guardCoordinatorStall(coordSessionID, agentID string, agent db
 		return
 	}
 	// A just-delivered worker result legitimately leaves zero running workers while
-	// the coordinator digests the result and decides the next round. Judging that
-	// turn as a phantom spawn produced the WS24/SES34 false halt. Exempt only when
-	// the most recent inbound message is the fresh worker note; any newer user or
-	// runtime prompt supersedes it and restores normal judging.
-	if r.hasRecentWorkerNoteInbound(coordSessionID, time.Now()) {
-		return
-	}
+	// the coordinator digests the result and decides the next round. HALTING that turn
+	// produced the WS24/SES34 false halt, so a fresh worker note still suppresses the
+	// hard halt below. It must NOT suppress the judge: WS19/SES427 froze on exactly
+	// this turn — right after a <task-notification>, the coordinator wrote "TSK103
+	// handed to an independent validator" with an empty toolCalls list, and the blanket
+	// exemption meant the guard never even looked. The turn that most often phantom-spawns
+	// was the guard's blind spot. Judge + nudge now always run; only the escalation is
+	// held back while the note is fresh. Fresh means the most recent inbound message is
+	// that worker note; any newer user or runtime prompt supersedes it.
+	freshWorkerNote := r.hasRecentWorkerNoteInbound(coordSessionID, time.Now())
 
 	// The judge fires on any idle, no-worker turn — including one whose nudge budget is
 	// already spent, because confirming the stall PERSISTS is what justifies the hard
@@ -138,7 +146,7 @@ func (r *Runtime) guardCoordinatorStall(coordSessionID, agentID string, agent db
 	slot.mu.Lock()
 	spent := slot.spawnHallucStreak >= r.tun.CoordinatorStallMaxNudges()
 	slot.mu.Unlock()
-	if spent {
+	if spent && !freshWorkerNote {
 		r.escalateCoordinatorStallHalt(coordSessionID, agentID, agent, slot, "nudge budget spent")
 		return
 	}
@@ -148,21 +156,43 @@ func (r *Runtime) guardCoordinatorStall(coordSessionID, agentID string, agent db
 	// stalls, gets nudged into one real call (zeroing the streak), then stalls again
 	// would loop forever with the streak never reaching the nudge cap.
 	total := r.injectStallNudge(coordSessionID, agentID, slot, true /* re-arm this batch */)
+	// Neither halt tier may fire while a worker note is fresh (WS24/SES34): the nudge is
+	// the whole correction here, and the coordinator keeps its turn to act on it. Once
+	// the note ages out of the grace window a still-stalling coordinator is judged —
+	// and halted — normally.
+	if freshWorkerNote {
+		return
+	}
 	if limit := r.tun.CoordinatorStallHaltTotal(); limit > 0 && total >= limit {
 		r.escalateCoordinatorStallHalt(coordSessionID, agentID, agent, slot,
 			fmt.Sprintf("cumulative stall threshold reached (%d/%d)", total, limit))
 	}
 }
 
+// hasRecentWorkerNoteInbound reports whether the most recent inbound message is a
+// worker RESULT delivered inside the grace window — the state in which a coordinator
+// with no running worker is legitimately digesting rather than frozen.
+//
+// The <coordination-status> note ("all workers have finished — act, spawn, or
+// conclude") shares the same "worker-note" origin but is deliberately NOT a result:
+// it is a runtime instruction to act, and the turn that answers it with prose about
+// delegation is a phantom spawn like any other. Excluded here so it grants no
+// leniency at all.
 func (r *Runtime) hasRecentWorkerNoteInbound(coordSessionID string, now time.Time) bool {
 	var inbound db.Message
 	err := r.db.StreamMessages(context.Background(), coordSessionID, func(msg db.Message) bool {
-		if msg.Role == "user" {
+		// The guard's own corrective note is skipped: it is injected BECAUSE of the
+		// state being measured here, so letting it count as the newest inbound would
+		// make the first nudge silently cancel the halt suppression it just earned.
+		if msg.Role == "user" && msg.Origin != "coordination-guard" {
 			inbound = msg
 		}
 		return true
 	})
 	if err != nil || inbound.Origin != "worker-note" {
+		return false
+	}
+	if strings.Contains(inbound.Text, "<coordination-status>") {
 		return false
 	}
 	age := now.Sub(time.Unix(inbound.CreatedAt, 0))
@@ -321,6 +351,9 @@ func (r *Runtime) injectStallNudge(coordSessionID, agentID string, slot *coordSl
 // model is preferred, same policy as lessons/summaries: the title-model override when
 // configured, else the coordinator's own model.
 func (r *Runtime) judgeCoordinatorStalled(ctx context.Context, agent db.Agent, text string) (bool, error) {
+	if r.stallJudgeFn != nil {
+		return r.stallJudgeFn(ctx, agent, text)
+	}
 	text = strings.TrimSpace(text)
 	if text == "" {
 		return false, nil
