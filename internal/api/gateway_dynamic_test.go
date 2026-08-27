@@ -306,3 +306,36 @@ func TestFullTierProviderCallsExtendedWithoutActivation(t *testing.T) {
 		t.Fatalf("codex-cli must dispatch without activation, got (%q, error=%v)", res.Text, res.IsError)
 	}
 }
+
+// TestUnlabeledRunKeepsActivationGate locks the other half of the same contract:
+// the full-tier exemption keys off the run's recorded provider, so an autonomous
+// (spawn/scheduler/flow) run that never calls setProvider looks like a gated
+// provider and deadlocks a codex-cli agent — it is shown the extended tier but
+// told to activate with meta-tools it was never given. Autonomous turns must
+// label the run, so an empty provider stays gated here on purpose.
+func TestUnlabeledRunKeepsActivationGate(t *testing.T) {
+	tun := agent.NewTunables()
+	runs := newChatRuns()
+	b := &interactionBackend{runs: runs, tun: tun}
+	run := runs.register("r1", "s1", "ws1", func() {})
+	run.autonomous = true
+	tok := runs.interactionToken("ws1", "s1", "a1")
+	runs.bindActive(tok, run)
+	run.setBridge(
+		[]providers.ToolDef{{Name: "update_task", Description: "update a board card"}},
+		func(_ context.Context, name string, _ json.RawMessage) (string, error) { return "did:" + name, nil },
+	)
+
+	for _, provider := range []string{"", "claude-cli"} {
+		run.setProvider(provider)
+		msg := b.toolCallError(tok, extendedNSPrefix+"update_task", run)
+		if !strings.Contains(msg, "is not activated") {
+			t.Fatalf("provider %q must stay gated, got %q", provider, msg)
+		}
+	}
+
+	run.setProvider("codex-cli")
+	if msg := b.toolCallError(tok, extendedNSPrefix+"update_task", run); msg != "" {
+		t.Fatalf("codex-cli must pass the gate, got %q", msg)
+	}
+}

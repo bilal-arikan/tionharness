@@ -871,6 +871,16 @@ endpoint URL'lerine `?full=1` sorgu parametresi ekliyor
    modelin kapıyı açma imkânı da yoktu. Regresyon testi:
    `TestFullTierProviderCallsExtendedWithoutActivation`.
 
+`fullTierProvider(run.providerOf())` yalnız tur çalıştırıcısı provider'ı
+etiketlediyse doğru cevap verir. Otonom turlar (spawn edilen subagent,
+scheduler, flow adımı) `internal/api/autonomous_interaction.go` içinde
+`run.setProvider(ag.Provider)` ile aynı etiketi koyar, dolayısıyla full-tier
+geçidi **otonom turlarda da** uygulanır. Etiket eksikken codex-cli worker'ları
+`?full=1` sayesinde extended listeyi görüyor ama `update_task`/`move_task` gibi
+her çağrı "is not activated" ile reddediliyordu ve `activate_tools` da o
+yüzeyde sunulmadığı için tur kilitleniyordu. Etiketsiz turların kapıyı
+korumaya devam ettiğini `TestUnlabeledRunKeepsActivationGate` doğrular.
+
 claude-cli isteği (query string'siz `/core`, `/extended`) davranışsal olarak
 **birebir aynı** kalır — bu, `?full=1` path'i değil query'yi kullandığı ve
 `tierFromPath` (path tabanlı ayrıştırma) hiç değişmediği için garanti

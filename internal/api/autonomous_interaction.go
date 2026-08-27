@@ -37,6 +37,12 @@ func (s *Server) autonomousInteraction(rt *agent.Runtime) agent.AutonomousIntera
 		ctx, cancel := context.WithCancel(ctx)
 		run := s.runs.register(runID, sessionID, rt.WorkspaceID(), cancel)
 		run.autonomous = true
+		// Label the run with the agent's provider on autonomous turns too. The chat
+		// path does this for the Session Info panel, but the call-time activation gate
+		// also reads it: a full-tier provider (codex-cli) is shown the complete
+		// extended tier without the activate_tools meta-tools, so leaving the provider
+		// empty here made every extended call answer "is not activated" with no fix.
+		run.setProvider(ag.Provider)
 
 		// Artifacts (CLI path): bind a session-scoped artifact sink so create_artifact
 		// / update_artifact work on autonomous CLI turns too (otherwise the bridge
