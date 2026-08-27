@@ -606,7 +606,7 @@ export function SessionContextModal({ sessionId, title, updatedAt, onClose }: Pr
                             {t.name}
                           </code>
                           {t.visibility && LAZY_VIS_CHIP[t.visibility] && (
-                            <span className="rounded bg-[var(--color-surface-3)] px-1 py-0.5 text-[9px] font-medium uppercase tracking-wide text-[var(--color-text-dim)]">
+                            <span className="rounded bg-[var(--color-surface-2)] px-1 py-0.5 text-[9px] font-medium uppercase tracking-wide text-[var(--color-text-dim)]">
                               {LAZY_VIS_CHIP[t.visibility]}
                             </span>
                           )}

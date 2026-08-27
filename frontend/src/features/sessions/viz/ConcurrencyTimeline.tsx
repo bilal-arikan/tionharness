@@ -120,7 +120,7 @@ function TimelineSVG({ model }: { model: TimelineModel }) {
               width={w}
               height={BAR_H}
               rx={2}
-              fill={b.err ? 'var(--color-error)' : 'var(--color-accent)'}
+              fill={b.err ? 'var(--color-danger)' : 'var(--color-accent)'}
               fillOpacity={0.85}
             >
               <title>{`${clock(b.startMs)} → ${clock(b.endMs)}\n${b.detail}`}</title>

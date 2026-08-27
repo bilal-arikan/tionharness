@@ -272,8 +272,8 @@ export function CoordinatorSection({
               toast). Shown until the coordinator recovers (a real spawn_worker call) or
               the user resumes it here. */}
           {stallHalted && (
-            <div className="space-y-1.5 rounded-lg border border-[var(--color-error)] bg-[var(--color-error)]/5 px-2.5 py-2">
-              <div className="flex items-center gap-1.5 text-[11px] font-semibold text-[var(--color-error)]">
+            <div className="space-y-1.5 rounded-lg border border-[var(--color-danger)] bg-[var(--color-danger)]/5 px-2.5 py-2">
+              <div className="flex items-center gap-1.5 text-[11px] font-semibold text-[var(--color-danger)]">
                 <OctagonAlert size={13} className="shrink-0" /> Koordinatör durduruldu
               </div>
               <p className="text-[10px] leading-relaxed text-[var(--color-text-dim)]">
@@ -285,7 +285,7 @@ export function CoordinatorSection({
               <button
                 onClick={resumeCoordinator}
                 disabled={resuming}
-                className="flex items-center gap-1.5 rounded-md border border-[var(--color-error)] px-2 py-1 text-[10px] font-medium text-[var(--color-error)] transition hover:bg-[var(--color-error)]/10 disabled:opacity-50"
+                className="flex items-center gap-1.5 rounded-md border border-[var(--color-danger)] px-2 py-1 text-[10px] font-medium text-[var(--color-danger)] transition hover:bg-[var(--color-danger)]/10 disabled:opacity-50"
               >
                 {resuming ? (
                   <Loader2 size={12} className="shrink-0 animate-spin" />

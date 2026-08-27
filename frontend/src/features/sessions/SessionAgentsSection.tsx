@@ -41,7 +41,7 @@ export function SessionAgentsSection({ info, onSelectAgent }: Props) {
               type="button"
               onClick={() => onSelectAgent(a.agentId)}
               title={`${a.name} sayfasına git`}
-              className="group flex w-full items-center justify-between rounded-md border border-transparent px-2 py-1.5 text-left transition hover:border-[var(--color-border)] hover:bg-[var(--color-surface-hover)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]"
+              className="group flex w-full items-center justify-between rounded-md border border-transparent px-2 py-1.5 text-left transition hover:border-[var(--color-border)] hover:bg-[var(--color-surface-2)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]"
             >
               <span className="min-w-0 flex-1">{row}</span>
               <ChevronRight

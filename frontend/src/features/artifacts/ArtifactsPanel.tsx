@@ -775,7 +775,7 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
                 data-testid="artifacts-load-more"
                 onClick={loadMore}
                 disabled={loadingMore}
-                className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-surface-2)] py-1.5 text-xs font-medium text-[var(--color-text-dim)] hover:bg-[var(--color-surface-1)] hover:text-[var(--color-text)] disabled:opacity-50"
+                className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-surface-2)] py-1.5 text-xs font-medium text-[var(--color-text-dim)] hover:bg-[var(--color-surface)] hover:text-[var(--color-text)] disabled:opacity-50"
               >
                 {loadingMore ? 'Yükleniyor…' : `Daha fazla yükle (${list.length}/${total})`}
               </button>

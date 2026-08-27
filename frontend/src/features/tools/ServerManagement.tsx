@@ -164,7 +164,7 @@ export function ServerManagement(props: {
                       return (
                         <span
                           data-testid="mcp-server-live-badge"
-                          className="rounded bg-[var(--color-surface-2)] px-1.5 py-0.5 text-xs text-[var(--color-text-secondary)]"
+                          className="rounded bg-[var(--color-surface-2)] px-1.5 py-0.5 text-xs text-[var(--color-text-dim)]"
                           title={
                             st.scoped
                               ? `${st.live} canlı bağlantı (${st.total} slot). Boşta ${idleMin} dk sonra kapanır (reaper).`
@@ -338,7 +338,7 @@ export function ServerManagement(props: {
               />
             </>
           )}
-          <label className="col-span-2 flex items-center gap-2 text-xs text-[var(--color-text-secondary)]">
+          <label className="col-span-2 flex items-center gap-2 text-xs text-[var(--color-text-dim)]">
             <span className="shrink-0">Bağlantı kapsamı</span>
             <select
               data-testid="mcp-server-scope-select"

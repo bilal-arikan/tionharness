@@ -105,7 +105,7 @@ export function CoordinatorTreeView({ sessionId, refreshKey, onSelectSession }: 
         {unhealthy.length > 0 && (
           <span
             title={`${unhealthy.length} oturumda hata/takılma`}
-            className="flex items-center gap-0.5 rounded px-1 text-[var(--color-error)] normal-case tracking-normal"
+            className="flex items-center gap-0.5 rounded px-1 text-[var(--color-danger)] normal-case tracking-normal"
           >
             <AlertTriangle size={11} className="shrink-0" /> {unhealthy.length}
           </span>
@@ -180,7 +180,7 @@ function TreeRow({
   // not by reading each row's trailing icons.
   const nameColor =
     stuck || errored || halted
-      ? 'text-[var(--color-error)]'
+      ? 'text-[var(--color-danger)]'
       : isSelf
         ? 'text-[var(--color-accent)]'
         : 'text-[var(--color-text)]'
@@ -202,10 +202,10 @@ function TreeRow({
         {node.agentName}
       </span>
       {(stuck || halted) && (
-        <OctagonAlert size={11} className="shrink-0 text-[var(--color-error)]" />
+        <OctagonAlert size={11} className="shrink-0 text-[var(--color-danger)]" />
       )}
       {errored && !stuck && !halted && (
-        <AlertTriangle size={11} className="shrink-0 text-[var(--color-error)]" />
+        <AlertTriangle size={11} className="shrink-0 text-[var(--color-danger)]" />
       )}
       {/* A node that owes its coordinator a report is not broken, but it IS what
           holds the branch above it — worth its own marker, not an error colour. */}
@@ -244,7 +244,7 @@ function TreeRow({
           onClick={() => onSelectSession!(node.sessionId)}
           title={title}
           className={`flex w-full items-center rounded px-1 py-0.5 text-left transition hover:bg-[var(--color-surface-2)] ${
-            stuck || errored || halted ? 'bg-[var(--color-error)]/5' : ''
+            stuck || errored || halted ? 'bg-[var(--color-danger)]/5' : ''
           }`}
         >
           {body}
@@ -253,7 +253,7 @@ function TreeRow({
         <div
           title={title}
           className={`flex w-full items-center rounded px-1 py-0.5 ${
-            stuck || errored || halted ? 'bg-[var(--color-error)]/5' : ''
+            stuck || errored || halted ? 'bg-[var(--color-danger)]/5' : ''
           }`}
         >
           {body}

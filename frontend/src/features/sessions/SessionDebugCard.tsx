@@ -108,7 +108,7 @@ export function SessionDebugCard({
             <span className="ml-auto flex items-center gap-1.5 normal-case tracking-normal">
               <span>{sum.turns} tur</span>
               {warnCount > 0 && (
-                <span className="text-[var(--color-error)]">· {warnCount} uyarı</span>
+                <span className="text-[var(--color-danger)]">· {warnCount} uyarı</span>
               )}
             </span>
           )}
@@ -177,7 +177,7 @@ export function SessionDebugCard({
             <div className="mt-2 flex flex-col gap-1">
               {sum.anomalies.map((a, i) => {
                 const warn = a.severity === 'warn'
-                const col = warn ? 'var(--color-error)' : 'var(--color-text-dim)'
+                const col = warn ? 'var(--color-danger)' : 'var(--color-text-dim)'
                 return (
                   <div
                     key={i}
@@ -214,7 +214,7 @@ export function SessionDebugCard({
           )}
 
           {sum.lastError && !sum.anomalies?.some((a) => a.code === 'error_burst') && (
-            <div className="mt-1.5 flex items-start gap-1.5 rounded-lg border border-[color-mix(in_srgb,var(--color-error)_40%,transparent)] bg-[color-mix(in_srgb,var(--color-error)_8%,transparent)] px-2 py-1.5 text-[11px] text-[var(--color-error)]">
+            <div className="mt-1.5 flex items-start gap-1.5 rounded-lg border border-[color-mix(in_srgb,var(--color-danger)_40%,transparent)] bg-[color-mix(in_srgb,var(--color-danger)_8%,transparent)] px-2 py-1.5 text-[11px] text-[var(--color-danger)]">
               <AlertTriangle size={12} className="mt-0.5 shrink-0" />
               <span className="break-words">{sum.lastError}</span>
             </div>
@@ -235,7 +235,7 @@ export function SessionDebugCard({
                     >
                       {toolDisplayName(name)}
                       {stat && stat.errors > 0 && (
-                        <span className="ml-1 text-[var(--color-error)]">·{stat.errors} hata</span>
+                        <span className="ml-1 text-[var(--color-danger)]">·{stat.errors} hata</span>
                       )}
                     </span>
                     <span className="ml-2 shrink-0 text-[var(--color-text)]">
@@ -322,7 +322,7 @@ export function SessionDebugCard({
                       <div
                         key={i}
                         className={`flex items-center gap-1.5 border-b border-[var(--color-border)] px-2 py-1 last:border-b-0 ${
-                          e.err ? 'text-[var(--color-error)]' : 'text-[var(--color-text-dim)]'
+                          e.err ? 'text-[var(--color-danger)]' : 'text-[var(--color-text-dim)]'
                         }`}
                       >
                         <span className="w-16 shrink-0 opacity-60">{fmtTime(e.ts)}</span>
@@ -412,7 +412,7 @@ function Pill({
   tone: 'error' | 'dim'
   raw?: boolean
 }) {
-  const color = tone === 'error' ? 'var(--color-error)' : 'var(--color-text-dim)'
+  const color = tone === 'error' ? 'var(--color-danger)' : 'var(--color-text-dim)'
   return (
     <span
       className="rounded-md border border-[var(--color-border)] px-1.5 py-0.5 text-[10px]"
