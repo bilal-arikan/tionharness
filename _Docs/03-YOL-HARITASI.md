@@ -304,7 +304,7 @@ ilişki grafiği, CLI araç köprüsü, prefix'li ID'ler ve tek-binary dağıtı
   uyumsuzu (`context:fork`, `hooks:`, slash-komut, bundled script) ayıklayıp **rapor eder**, `skill_validate`
   ile doğrular, workspace tier'a kurar. agentskills.io açık standardını hedefler. İlişkili: **HA-2**, `21-MARKET.md`.
   - **Önkoşul iyileştirmeler (entegrasyondan ÖNCE — kendi skill sistemimizde).**
-    > Kanıtlı desen kaynağı: `C:\Users\user\Desktop\Projects\observed-behavior` (CC'nin gerçek
+    > Kanıtlı desen kaynağı: `C:\Users\<user>\Desktop\Projects\observed-behavior` (CC'nin gerçek
     > skill loader'ı `src/skills/loadSkillsDir.ts` — birebir örnek alınabilir).
     - [x] **SK-1 ✅ (2026-06-23) — Çok-dosyalı skill (bundled resources):** skill bir KLASÖR olabilsin; SKILL.md gövdesinin
       atıf yaptığı ek dosyalar (reference.md, şablon, script) on-demand `fs` ile okunsun. Bugün skill tek-dosya

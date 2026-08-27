@@ -614,7 +614,7 @@ no_compress: true to get the byte-exact output.]
 
 > **Turun ortaya çıkardığı ayrı bir sorun:** `cargo` bridged shell'in PATH'inde yok —
 > SES14/SES15'te üç çağrı harcatan israfın aynısı. git-bash normal bir kabuktan
-> çağrıldığında `/c/Users/user/.cargo/bin/cargo`'yu görüyor, yani sorun git-bash'te
+> çağrıldığında `/c/Users/<user>/.cargo/bin/cargo`'yu görüyor, yani sorun git-bash'te
 > değil: **TionHarness süreci dar bir PATH ile başlatılmış** ve tüm alt kabukları onu
 > miras alıyor. Bu, token optimizasyonundan bağımsız bir dağıtım/başlatma konusu;
 > `_Docs/17`'nin kapsamı dışında ama worker'ların Rust derleyememesine yol açıyor.

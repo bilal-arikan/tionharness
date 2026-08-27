@@ -20,7 +20,7 @@ yok:
 | Kaynak | Konum |
 |--------|-------|
 | Codex CLI (kurulu) | `codex-cli 0.147.0` — `npm i -g @openai/codex` |
-| Codex kaynak kodu | `C:\Users\user\Desktop\Progs\codex-src` (`openai/codex`, `main`, sığ klon) |
+| Codex kaynak kodu | `C:\Users\<user>\Desktop\Progs\codex-src` (`openai/codex`, `main`, sığ klon) |
 
 Canlı doğrulanan komutlar: `codex exec --help`, `codex login --help`,
 `codex mcp --help`, `codex mcp-server --help`, `codex app-server --help` ve
@@ -841,7 +841,7 @@ push'lamasına ve CLI'nin bunu görüp `tools/list`'i **yeniden çekmesine**
 dayanır. claude-cli bunu 10-16ms içinde yapıyor (canlı ölçüldü,
 `probe_relist_test.go`). **codex-cli bu bildirimi asla işlemiyor:**
 
-- Kanıt: `C:\Users\user\Desktop\Progs\codex-src\codex-rs\rmcp-client\src\logging_client_handler.rs:86-88`
+- Kanıt: `C:\Users\<user>\Desktop\Progs\codex-src\codex-rs\rmcp-client\src\logging_client_handler.rs:86-88`
   — `on_tool_list_changed` gövdesi tek satır `info!(...)`; hiçbir re-fetch
   tetiklenmiyor.
 - "Sonraki turda görünür olur" hipotezi **canlı test edildi ve çürütüldü**: tur 1

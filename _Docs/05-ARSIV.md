@@ -7030,7 +7030,7 @@ kullanıcının OAuth/abonelik girişiyle çalışır — **API anahtarı gerekm
 ### Tamamlananlar ✅
 - [x] Go 1.26.4 kuruldu ve doğrulandı
 - [x] Node.js v24 + npm 11 mevcut (frontend için hazır)
-- [x] Proje klasör yapısı oluşturuldu (`C:\Users\user\Desktop\Projects\TionHarness`)
+- [x] Proje klasör yapısı oluşturuldu (`C:\Users\<user>\Desktop\Projects\TionHarness`)
 - [x] `go mod init github.com/bilal/tionharness`
 - [x] `_Docs` plan dokümanları yazıldı (00-05)
 - [x] `cmd/tionharness/main.go`: HTTP sunucu + `/health` ucu (graceful shutdown, slog)

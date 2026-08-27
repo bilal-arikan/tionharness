@@ -445,8 +445,8 @@ düşürülür. Masked template üzerinde doğrulandı (18 server: stdio/http do
 ```bash
 # 1) TS config'i normalize et (gerçek config.json + secrets.json ile)
 python _spikes/52-gateway/migrate-vps.py \
-  C:/Users/user/Desktop/Projects/mcp-server/config.json \
-  --secrets C:/Users/user/Desktop/Projects/mcp-server/secrets.json > import.json
+  C:/Users/<user>/Desktop/Projects/mcp-server/config.json \
+  --secrets C:/Users/<user>/Desktop/Projects/mcp-server/secrets.json > import.json
 # 2) default workspace'e toplu import et
 curl -X POST http://127.0.0.1:8090/api/mcp-servers/import \
   -H "X-Workspace-Id: <default-ws-id>" --data-binary @import.json

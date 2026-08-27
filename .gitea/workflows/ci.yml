@@ -1,11 +1,10 @@
 name: CI
 
-# Test gate for the repo. Runs on every push/PR to main and — via the
-# `needs: test` in deploy.yml — blocks a deploy whose tests do not pass.
+# Test gate for the repo. Runs on every push/PR to main and is repeated by
+# release.yml, which cannot `needs:` a job in another workflow file.
 #
 # Native toolchains, no container-in-container indirection: the runner is
-# already an isolated Linux box, and deploy.yml proves setup-go/setup-node work
-# on this infrastructure.
+# already an isolated Linux box.
 
 on:
   push:

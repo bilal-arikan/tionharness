@@ -20,7 +20,7 @@ func TestProjectIDForPath(t *testing.T) {
 		`C:/Users/user/Desktop/Projects/TionHarness`:                "C-Users-user-Desktop-Projects-TionHarness",
 		`C:\Users\user\Desktop\Projects\TionHarness`:                "C-Users-user-Desktop-Projects-TionHarness",
 		`C:\Users\user\AppData\Local\Programs\@external-agentelectron`: "C-Users-user-AppData-Local-Programs-external-agentelectron",
-		`/home/user/my-repo`:                                         "home-user-my-repo",
+		`/home/user/my-repo`:                                        "home-user-my-repo",
 	}
 	for in, want := range cases {
 		if got := projectIDForPath(in); got != want {

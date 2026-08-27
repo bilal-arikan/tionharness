@@ -36,9 +36,9 @@ _PROBE_N = 0
 # broken PATH. Passing env= sidesteps command-line quoting entirely.
 TOOLCHAINS = [
     r"C:\Python313", r"C:\Python313\Scripts",
-    r"C:\Users\user\.cargo\bin",
+    r"C:\Users\<user>\.cargo\bin",
     r"C:\Program Files\nodejs",
-    r"C:\Users\user\AppData\Local\Programs\@external-agentelectron\resources\app\resources\bin\win32-x64",
+    r"C:\Users\<user>\AppData\Local\Programs\@external-agentelectron\resources\app\resources\bin\win32-x64",
 ]
 CHILD_ENV = dict(os.environ, PATH=";".join(TOOLCHAINS) + ";" + os.environ.get("PATH", ""))
 

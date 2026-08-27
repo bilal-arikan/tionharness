@@ -304,7 +304,7 @@ edilemiyor — `Desktop-city-cleaner` önce yanlışlıkla ölü sanıldı) her 
   adı öyleydi. Yol değiştiği için eski cbm indeksleri öksüz kaldı (yeniden üretilebilir).
 
 **Kasten dokunulmayanlar:** gitea deposu
-`swarmgo` ve VPS yolu `/home/user/projects/tionharness`, Claude Code'un kendi `swarm/teammate`
+`swarmgo` ve VPS yolu `/home/<user>/projects/tionharness`, Claude Code'un kendi `swarm/teammate`
 alt sistemine yapılan doküman atıfları, tarihsel `_Docs/05-ARSIV.md` anlatıları.
 
 **Not:** ad değişimi, kaynak projedeki `f544edf2` (tool-approval ses ipucu) commit'i ve
@@ -8209,7 +8209,7 @@ External Sources+`guide.md` modeli), **gerçek** yüzeyi (run_subagent, use_skil
 set_session_goal, flows/self-management/handoff/plan modu, gerçek render seti) hiç
 anlatmıyordu. Ayrıca ajana talimat olmayan the external agent project iç dokümantasyonu (Dynamic
 context / Complete user message / SDK config bölümleri + mini-agent promptu) ve
-makineye özel sızıntı (gömülü Bilal tercihleri + sabit `C:/Users/user/...` yolları)
+makineye özel sızıntı (gömülü Bilal tercihleri + sabit `C:/Users/<user>/...` yolları)
 içeriyordu.
 
 **Yapılan:** dosya sıfırdan TionHarness-native olarak yeniden yazıldı (~750 → ~150
@@ -9106,7 +9106,7 @@ alt-panele taşınsın (feature detaylandırılacak); export alırken **neyin da
 (`internal/api/external_tools.go`) yeni entry: **codebase-memory-mcp** (DeusData) — kod tabanını
 kalıcı bilgi grafiğine indeksleyen stdio MCP sunucusu (158 dil, sub-ms sorgu, ~%99 daha az token).
 `category=dev`, `wire=mcp` (Market'te "Codebase Memory MCP" paketiyle kurulur). Tespit PATH'te
-`exec.LookPath` ile; program `C:\Users\user\Desktop\Progs\codebase-memory-mcp\` altında ve PATH'te
+`exec.LookPath` ile; program `C:\Users\<user>\Desktop\Progs\codebase-memory-mcp\` altında ve PATH'te
 olduğundan ekran **Found** gösteriyor. `go build ./internal/api` ✅. Not: yeni entry PATH'e o dizini
 içeren bir süreçten görünür — backend yeni PATH ile yeniden başlatıldı.
 

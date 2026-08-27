@@ -387,7 +387,7 @@ Ayrıca blok başına **karakter limiti**: blok tanımında `CharLimit` (0 →
 ## Doğrulama
 
 ```powershell
-cd C:\Users\user\Desktop\Projects\TionHarness
+cd C:\Users\<user>\Desktop\Projects\TionHarness
 go build ./...
 go test ./internal/conversation/... ./internal/memory/... ./internal/tools/... ./internal/api/...
 ```

@@ -14,7 +14,7 @@
 #   .\scripts\worktree.ps1 prune
 #
 # Layout: worktrees are created as siblings of the repo, e.g.
-#   C:\Users\user\Desktop\Projects\TionHarness-feat-login
+#   C:\Users\<user>\Desktop\Projects\TionHarness-feat-login
 #
 # On "add" it also links frontend/node_modules from the main repo (junction) so
 # you skip a fresh npm install; pass -NoLink to run npm install instead.

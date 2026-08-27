@@ -12,7 +12,7 @@
 #
 # Kullanim:
 #   .\scripts\repair-encoding.ps1                      # DRY-RUN: tum workspace'leri tarar, sadece raporlar
-#   .\scripts\repair-encoding.ps1 -StoreRoot 'C:\Users\user\.tionharness\workspaces'
+#   .\scripts\repair-encoding.ps1 -StoreRoot 'C:\Users\<user>\.tionharness\workspaces'
 #   .\scripts\repair-encoding.ps1 -Apply               # gercekten yazar (once .bak-encfix yedegi alir)
 #   .\scripts\repair-encoding.ps1 -Workspace WS5 -Apply
 

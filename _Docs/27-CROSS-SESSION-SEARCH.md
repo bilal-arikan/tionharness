@@ -215,7 +215,7 @@ ortak temelidir; Adım 2 en düşük eforla en görünür ajan-değerini verir (
 ## Doğrulama
 
 ```powershell
-cd C:\Users\user\Desktop\Projects\TionHarness
+cd C:\Users\<user>\Desktop\Projects\TionHarness
 go build ./...
 go test ./internal/db/... ./internal/tools/... ./internal/api/...
 ```

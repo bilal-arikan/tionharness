@@ -176,9 +176,10 @@ go test ./... -count=1             # tüm backend (~90sn)
 cd frontend && npm test            # vitest (pure-logic modüller)
 ```
 
-CI `.gitea/workflows/ci.yml`'dedir — **repo'nun tek remote'u Gitea'dır, GitHub değil**
-(`git remote -v`), yani `.github/workflows` altına konan hiçbir şey çalışmaz. `ci.yml`
-tam olarak yukarıdakini koşar (`-race` ile) ve `deploy.yml` `needs: test` ile ona bağlıdır.
+CI iki yerdedir: `.github/workflows/` (yayın hattının sahibi — release + Pages) ve
+`.gitea/workflows/ci.yml` + `release.yml` (yalnız doğrulama, hiçbir şey yayınlamaz).
+Hangi remote'ların bağlı olduğunu `git remote -v` ile doğrula. `ci.yml` tam olarak
+yukarıdaki test setini koşar (`-race` ile). VPS deploy hattı kaldırılmıştır.
 
 **Paket alt-kümesi geçidi kurma** — daha önce 4 pakete daralmış ve tam da en çok değişen
 paketleri (`agent`/`api`/`tools`) kapsamaz hale gelmişti.
