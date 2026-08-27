@@ -247,7 +247,7 @@ func MachineTranscriptKinds() []string {
 // which serializes them instead of letting them interleave.
 //
 // This list is the single source of truth for the whole product; the frontend's
-// isWritableSessionKind (frontend/src/app/viewRegistry.tsx) mirrors it and the
+// isWritableSessionKind (frontend/src/shared/lib/sessionKind.ts) mirrors it and the
 // two must be changed together.
 var writableSessionKindList = []string{"", "chat", "spawned", "schedule"}
 

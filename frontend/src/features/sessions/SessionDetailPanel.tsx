@@ -24,6 +24,7 @@ import { SessionUsageCard } from './SessionUsageCard'
 import { CacheWarmthBadge } from './CacheWarmthBadge'
 import { formatBytes, formatDate, cacheRemaining } from './sessionDetailFormat'
 import { serverNow } from '@/shared/lib/serverClock'
+import { isWritableSessionKind } from '@/shared/lib/sessionKind'
 import { subscribeWorkerChange } from '@/shared/lib/workerBus'
 
 interface Props {
@@ -330,9 +331,10 @@ export function SessionDetailPanel({
             <span className="text-xs font-semibold uppercase tracking-wide text-[var(--color-text-dim)]">
               Oturum bilgisi
             </span>
-            {/* Insight scans are machine-written audit transcripts: no composer,
-                no new user turns (isWritableSessionKind excludes the kind). */}
-            {info?.kind === 'insight' && (
+            {/* Machine-written transcripts (insight scans, inbox, run logs) take
+                no new user turns, so the composer is hidden. Say so here, or the
+                missing composer looks like a bug. */}
+            {info && !isWritableSessionKind(info.kind) && (
               <Badge tone="muted" className="shrink-0">
                 Salt okunur
               </Badge>

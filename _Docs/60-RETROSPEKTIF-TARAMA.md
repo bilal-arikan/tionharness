@@ -377,7 +377,7 @@ Her tarama, bittiğinde **iki** kayıt bırakır:
   aracı — `internal/agent/agentmsg.go`, otomasyon teslimi, koordinatör→worker mesajı) doğrudan
   store/runtime üzerinden yazar ve bilerek guard dışındadır: orada sistem kendi oturumunu sürer.
 
-  Frontend `isWritableSessionKind` (`frontend/src/app/viewRegistry.tsx`) 1. sınıfın **aynasıdır**;
+  Frontend `isWritableSessionKind` (`frontend/src/shared/lib/sessionKind.ts`) 1. sınıfın **aynasıdır**;
   iki taraf birlikte güncellenmelidir.
 - **Geriye uyumluluk:** oturum eşlemesinden önce yazılmış `runs.jsonl` satırlarında `id`/`sessionId`
   yoktur; bu satırlar aynen okunmaya devam eder (alanlar `omitempty`), yalnızca eşlenmemiş görünürler.

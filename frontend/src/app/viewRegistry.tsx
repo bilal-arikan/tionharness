@@ -49,29 +49,6 @@ export const HEADERLESS_VIEWS = new Set<View>([
   'dashboard',
 ])
 
-// isWritableSessionKind reports whether the user may send a new message into a
-// session from the composer. Manual chats (chat/empty) plus "spawned" sessions
-// qualify: spawned covers both the spawn tool and handoff (context-reset)
-// children, which are single-agent linear transcripts explicitly meant for a
-// human to take over and keep talking to.
-//
-// Task / flow transcripts are aggregate run logs produced by the orchestrator:
-// they still appear in the (unified) sessions sidebar and are fully readable —
-// transcript, context preview, debug panel, session info — but the composer is
-// hidden for them, since a new user turn has no run to attach to. The same holds
-// for an 'insight' transcript, which is the read-only audit log of one insight
-// scan run.
-//
-// 'schedule' is the exception: it is not a per-run log but the agent's single
-// long-lived cron thread, which every reuse-mode fire appends to. The user must be
-// able to keep talking in it (answer, correct, add context) between ticks, so it
-// keeps its composer. A user turn and a scheduled turn share the session's single
-// turn slot on the backend, so they serialize rather than interleave.
-//
-// This list MIRRORS the backend source of truth, writableSessionKindList /
-// IsWritableSessionKind in internal/db/models.go, which the API enforces in
-// rejectNonWritableSession (internal/api/session_readonly.go). Change both sides
-// together, or the composer and the API will disagree about the same session.
-export function isWritableSessionKind(kind: string): boolean {
-  return kind === '' || kind === 'chat' || kind === 'spawned' || kind === 'schedule'
-}
+// The composer gate lives in shared/lib so the session panels can share it with
+// the shell; re-exported here for the existing app-layer call sites.
+export { isWritableSessionKind } from '@/shared/lib/sessionKind'
