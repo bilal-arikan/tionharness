@@ -49,6 +49,30 @@ kullanma.
   geçmez; orada yukarıdaki kuralları elle uygula.
 - Bu depoda sorgular için `project` = `C-Users-user-Desktop-Projects-TionHarness`.
 
+## Deferred (ertelenmiş) araçlar
+
+TionHarness bazı araçları **şema yüklemeden** sunar (oturum açılışındaki
+"deferred tools" listesi). Böyle bir aracı doğrudan çağırmak `InputValidationError`
+ile başarısız olur — araç yok değildir, şeması henüz yüklenmemiştir.
+
+- TionHarness araçları için `mcp__tionharness_interaction__activate_tools` çağır;
+  harici `mcp__<server>__*` araçları için `ToolSearch` ile `select:<ad>` sorgusu
+  kullan (ör. `select:mcp__codebase-memory-mcp__search_graph`).
+- Şema yüklendikten sonra aracı **namespaced tam adıyla** çağır; kısa/çıplak ad
+  kullanma.
+- Bir turda ihtiyaç duyacağın **tüm araçları tek çağrıda** yükle
+  (`select:a,b,c`) — araç başına ayrı tur tüketme.
+
+## Ajan delegasyonu
+
+- `spawn_worker` / `run_subagent` çağrısında bir ajan adı vermeden önce o ajanın
+  workspace'te gerçekten tanımlı olduğunu `list_agents` ile doğrula. Uydurulmuş
+  ad, iş başlamadan hataya düşer.
+- Yerleşik `Agent`/`Task` aracının `subagent_type` listesi (ör. `general-purpose`,
+  `Explore`, `Plan`) TionHarness ajan listesinden **tamamen ayrıdır**. İki listeyi
+  karıştırma: TionHarness ajan adını `subagent_type`'a, `subagent_type` değerini
+  TionHarness delegasyon araçlarına geçirme.
+
 ## Shell ve Go araç zinciri
 
 - Bu Windows çalışma alanının zorunlu komut kabuğu **Git Bash**'tir. Komutları POSIX
@@ -111,6 +135,18 @@ değil). Gerçek yaşanan hatalardan çıkarılmış kurallar:
   `Glob` ile (ör. `internal/db/store_*.go`) dosyanın gerçekten var olduğunu
   teyit et, sonra o yolu Grep'e geç.
 
+## Dosya okuma aracı tercihi
+
+- Kod arama ve gezinme için sıra: önce `codebase-memory-mcp` araçları
+  (`search_code`, `search_graph` + `get_code_snippet`, `trace_path`,
+  `query_graph`, `get_architecture`), sonra `Glob`/`Grep`. Ham shell grep
+  (`rg`, `findstr`, `Select-String`) **son çare** — yalnız indeks gerçekten
+  cevap veremediğinde.
+- Büyük çıktı üreten shell komutlarını `rtk` ile sarmala: `rtk git status`,
+  `rtk git log`, `rtk git diff`, `rtk test`, `rtk go build`, `rtk npm <script>`,
+  `rtk lint`. Token guardrail uyarılarını asıl bu önler.
+- `ls`/`tree` gibi native Windows'ta bulunmayan araçlarda `rtk` kullanma.
+
 ## Kod formatı (otomatik)
 
 Frontend **Prettier** ile formatlanır — ayarlar `frontend/.prettierrc.json`
@@ -134,6 +170,18 @@ Pre-commit hook stage'lenmiş dosyayı otomatik dönüştürüyor, bu yüzden te
 düzenlemeler için elle `npm run format` koşmaya gerek yok. Yine de büyük bir
 elle-düzenlenmiş dosya grubu eklenirse (ör. dışarıdan import edilen kod) kontrol
 etmeden varsayma — `cd frontend && npm run format:check` ile ölç.
+
+## Boş patch / gereksiz format koşusu
+
+- `git apply` veya `apply_patch` çağırmadan önce yamanın **gerçekten değişiklik
+  içerdiğini** doğrula: `git diff --exit-code` (0 = değişiklik yok). Boş yama
+  `git apply` tarafından reddedilir; bilinçli olarak boş yama uygulanacaksa
+  `--allow-empty` ver.
+- Prettier'ı yazma modunda (`npm run format`) koşmadan önce
+  `cd frontend && npm run format:check` ile ölç. Zaten temizse **koşma** —
+  gereksiz koşu sahte diff ve boşa tur üretir.
+- Pre-commit hook stage'lenmiş dosyaları zaten formatlar; tekil düzenlemede elle
+  format koşusu genelde gereksizdir.
 
 ## Teslim whitespace kapısı
 
