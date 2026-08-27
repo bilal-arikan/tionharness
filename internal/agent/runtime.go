@@ -1498,6 +1498,14 @@ func (r *Runtime) autonomousSystemPrompt(ctx context.Context, a db.Agent) string
 		if sb := r.SkillsCatalogBlockForAgent(a); sb != "" {
 			out = strings.TrimSpace(out + "\n\n" + sb)
 		}
+		// Advertise the agent's LAZY tools (self-management + MCP) as a load-on-demand
+		// catalog. Without it a headless turn calls a deferred tool whose schema was
+		// never loaded and fails with InputValidationError. Ordered right after the
+		// skills block to match the chat path (api.composeTurnRequest), so both paths
+		// produce the same cached static prefix.
+		if tb := r.LazyToolsCatalogBlock(ctx, a); tb != "" {
+			out = strings.TrimSpace(out + "\n\n" + tb)
+		}
 		// Advertise optional external-tool capabilities (e.g. codebase-memory) present
 		// in this workspace so a headless turn reaches for them too, WITH the session's
 		// cwd-derived project id (ctx carries the session id on scheduler/spawn/flow

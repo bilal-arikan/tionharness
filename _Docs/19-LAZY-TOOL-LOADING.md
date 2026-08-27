@@ -452,6 +452,16 @@ Her `Tool`/`ToolDef` için zaten `Name` + `Description` var. Eklenecek:
 `renderToolCatalog(lazyTools)` → sistem promptuna `# Available Tools (load on
 demand)` bloğu: her satır `ad — özet`. Skill kataloğunun (`renderCatalog`) ikizi.
 
+Blok **iki yolda da** enjekte edilir ve her ikisinde de Skills bloğundan hemen
+sonra gelir (cache prefix'i aynı kalsın diye):
+
+- sohbet: `internal/api/chat_turn.go` → `Runtime.LazyToolsCatalogBlock`
+- otonom (scheduler / flow / `run_subagent` / `spawn_worker`):
+  `internal/agent/runtime.go` → `autonomousSystemPrompt`
+
+Otonom yolda blok eksikken model deferred bir aracı şema yüklemeden çağırıp
+`InputValidationError` alıyordu.
+
 ### 3. `activate_tools` meta aracı
 Yeni built-in (eager): `activate_tools(names: []string)`.
 - Verilen araç adlarının tam `ToolDef`'lerini o oturumun "aktif şema" setine ekler.
