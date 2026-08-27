@@ -11,7 +11,7 @@ işaretlenen özel ajandır. Ayrı bir oturum türü veya `Session` alanı yoktu
 oturumun sistem ajanına ait olup olmadığı ajan kaydından çözülür
 (`internal/agent/systemsession.go:10-21`).
 
-Derlenmiş kayıt defteri beş altyapı rolü ve altı yerleşik worker profili tanımlar:
+Derlenmiş kayıt defteri altı altyapı rolü ve altı yerleşik worker profili tanımlar:
 
 | `SystemKey` | Varsayılan durum | Prompt anahtarı | Görev |
 |---|---|---|---|
@@ -20,6 +20,24 @@ Derlenmiş kayıt defteri beş altyapı rolü ve altı yerleşik worker profili 
 | `compaction` | Etkin | `compact` | Bağlam sınırında konuşma geçmişini yapılandırılmış özete sıkıştırır (`internal/agent/systemagents.go`, `internal/agent/wsconfig.go`). |
 | `lesson-extractor` | Etkin | `lesson` | Başarısız ajan turlarından yeniden kullanılabilir dersler çıkarır (`internal/agent/systemagents.go:29-34`, `internal/agent/lessons_systemagent.go:5-7`). |
 | `insight` | **Devre dışı** | `insight-analyzer` | Oturum kanıtlarında tekrarlanan, eyleme dönük bulguları analiz eder (`internal/agent/systemagents.go:37-43`, `internal/agent/lessons_systemagent.go:9-10`). |
+| `insight-applier` | Etkin | `insight-applier` | İçgörü taramasının `workspace-opt` bulgularını workspace varlıklarına uygular (`internal/agent/systemagents.go`, `internal/prompts/defaults/insight-applier.md`). |
+
+### `insight-applier` — dar allowlist bir güvenlik sözleşmesidir
+
+Ajan yalnız `channel:workspace-opt` + `status:new` bulgularını uygular, `app-fix` kanalına
+dokunmaz ve uyguladığı bulguyu `insight_apply_finding` ile `applied` işaretler. `AllowedTools`
+yedi giriş taşır: `group:automation`, `group:agents`, `group:skills-mcp`, `group:artifacts`,
+`insight_list_findings`, `insight_apply_finding`, `todo_write`.
+
+**`group:files` ve `group:config` bilinçli olarak YOKTUR** → Read/Write/Edit/Bash ve
+ayar/secret/workspace araçlarına erişemez. Böylece düzeltmeyi yalnız workspace store
+varlıklarında (skill, ajan, hook, otomasyon) yapabilir; repo dosyalarına ve uygulama
+ayarlarına ulaşamaz. Kısıtı prompt değil, **allowlist** uygular.
+
+Ajanın kendisi etkin gelir; onu çağıran shipped otomasyon (`insight-apply-workspace-opt`,
+etiket `insight-scan`) ise **varsayılan kapalıdır** — zincir kullanıcı Otomasyon ekranından
+kuralı açana kadar çalışmaz. Zincirin tamamı: `_Docs/60-RETROSPEKTIF-TARAMA.md` §9.2,
+otomasyon alanları: `_Docs/46-ETIKET-OTOMASYON.md`.
 
 ### Yerleşik worker profilleri (`subagent-*`)
 
@@ -73,6 +91,7 @@ profilleri turkuaz/mavi, yazma yetkisi olan worker profilleri kehribar/kiremit.
 | `compaction` | 📦 | `#6B5FA8` | analiz |
 | `lesson-extractor` | 🎓 | `#B07AD0` | analiz |
 | `insight` | 🔮 | `#5C6480` | analiz |
+| `insight-applier` | 🛠️ | `#8A6BC8` | analiz |
 | `subagent-explore` | 🔍 | `#17A2A2` | worker, salt-okunur |
 | `subagent-planner` | 🧭 | `#2E86D8` | worker, salt-okunur |
 | `subagent-reviewer` | 🧐 | `#4FBF8B` | worker, salt-okunur |
@@ -174,7 +193,7 @@ işlevi (titler/compaction/worker olarak çağrılması) etkilenmez.
 
 ## Workspace seed
 
-Workspace manager'ın ortak `open()` yolu beş derlenmiş tanımı `EnsureSystemAgents`
+Workspace manager'ın ortak `open()` yolu derlenmiş tanımları `EnsureSystemAgents`
 ile seed eder (`internal/workspace/manager.go:263-293`). Aynı yol yeni workspace
 oluşturulurken ve kayıtlı workspace'ler boot sırasında açılırken çalıştığından eski
 workspace'ler de açılışta backfill edilir (`internal/workspace/manager.go:523-537`).

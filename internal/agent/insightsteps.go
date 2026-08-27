@@ -169,8 +169,9 @@ func (rec *insightStepRecorder) finish(ctx context.Context, rep insightRunReport
 	// title-then-message would freeze "messageCount": 0 on disk until the session
 	// is next mutated, which anything reading the file directly (counter
 	// automations, external tooling) would believe.
+	transcript := insightRunTranscript(rep)
 	if err := rec.rt.recordAssistantMessage(ctx, sid, rep.AgentID,
-		insightRunTranscript(rep), steps, nil, rep.Duration.Milliseconds()); err != nil {
+		transcript, steps, nil, rep.Duration.Milliseconds()); err != nil {
 		return err
 	}
 	title := insightRunTitle(len(rep.LensIDs), rep.Result.Findings)
@@ -183,6 +184,12 @@ func (rec *insightStepRecorder) finish(ctx context.Context, rep insightRunReport
 	if rep.Failure != nil {
 		return rec.rt.db.SetSessionRunState(ctx, sid, turnStatusFailed, time.Now().Unix())
 	}
+	// The scan drives its own transcript instead of going through a chat/spawn
+	// turn, so no completion path fires the turn hooks for it. Do it here: the
+	// session is fully written (message + title) at this point, which is what a
+	// tag automation reading it expects. Detached inside FireTurnFinished, so the
+	// scan is not blocked.
+	rec.rt.FireTurnFinished(sid, rep.AgentID, transcript)
 	return nil
 }
 
@@ -197,6 +204,10 @@ func (r *Runtime) openInsightSession(ctx context.Context, runID, agentID, title 
 		Kind:     db.SessionKindInsight,
 		SourceID: runID,
 		Title:    title,
+		// The scan session carries the trigger tag the insight-apply automation
+		// waits for (see insightScanSessionTag). Without it OnTurnFinished has
+		// nothing to match and the rule can never fire.
+		Tags: []string{insightScanSessionTag},
 	})
 	if err != nil {
 		return "", err

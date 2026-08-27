@@ -186,7 +186,7 @@ func TestEmbeddedDefaultsAllParse(t *testing.T) {
 	want := []string{
 		"tool-errors", "skill-usage-opt", "context-hygiene",
 		"tool-usage-opt", "context-cache-opt", "lessons-mining",
-		"cache-cooling-waste",
+		"cache-cooling-waste", "workspace-tuning",
 	}
 	for _, id := range want {
 		l, ok := reg.Get(id)
@@ -220,6 +220,27 @@ func TestEmbeddedDefaultsAllParse(t *testing.T) {
 		if l, _ := reg.Get(id); !hasScope(l, ScopeCache) {
 			t.Fatalf("lens %q must declare scope: [... cache], got %v", id, l.Scope)
 		}
+	}
+
+	// workspace-tuning is the lens that pushes workspace-opt findings at ASSETS
+	// (skills/agents/tools/hooks) instead of at CLAUDE.md. It only earns that job
+	// if it is enabled, routed to workspace-opt and actually fires on friction
+	// sessions — a prefilter that parsed to nothing would silently disable it.
+	wt, ok := reg.Get("workspace-tuning")
+	if !ok {
+		t.Fatal("workspace-tuning lens must load")
+	}
+	if wt.Channel != ChannelWorkspaceOpt || !wt.Enabled {
+		t.Fatalf("workspace-tuning must be an enabled workspace-opt lens: %+v", wt)
+	}
+	if len(wt.Prefilter.RequiresAny) == 0 {
+		t.Fatalf("workspace-tuning prefilter did not parse: %+v", wt.Prefilter)
+	}
+	if !wt.Prefilter.Match(SessionSignals{DebugEvents: map[string]int{"error": 1}}) {
+		t.Fatal("workspace-tuning must match a session carrying errors")
+	}
+	if wt.Prompt == "" {
+		t.Fatal("workspace-tuning body (analysis instruction) is empty")
 	}
 }
 

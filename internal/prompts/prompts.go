@@ -94,6 +94,12 @@ var specs = []Spec{
 		OwnedBySystemKey: "insight",
 	},
 	{
+		Key:              "insight-applier",
+		Label:            "İçgörü uygulama promptu",
+		Hint:             "Taramanın ürettiği workspace-opt bulgularını workspace varlıklarına (skill/agent/hook/automation) uygulayan ajanın sistem promptu. Repo dosyalarına erişimi yoktur.",
+		OwnedBySystemKey: "insight-applier",
+	},
+	{
 		Key:   "auto-continue",
 		Label: "Otomatik devam dürtmesi",
 		Hint:  "Otonom turda iş yarım kaldığında oturuma kullanıcı mesajı olarak yazılan devam talimatı.",

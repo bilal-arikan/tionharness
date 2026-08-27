@@ -245,7 +245,7 @@ func (s *Server) buildWorkspaceTemplatePayload(ctx context.Context, wsp *workspa
 
 	// Automations → reference the agent by key / the flow by name (skip orphans).
 	// The built-in seeded board defaults are excluded: every workspace provisions
-	// its own copy at open time (EnsureDefaultBoardAutomations), so exporting them
+	// its own copy at open time (EnsureDefaultAutomations), so exporting them
 	// would either duplicate the rule on install or resurrect one the installing
 	// user had deliberately deleted.
 	autos, aerr := wsp.DB.ListAutomations(ctx)

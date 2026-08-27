@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/bilal-arikan/tionharness/internal/db"
 	"github.com/bilal-arikan/tionharness/internal/insight"
@@ -138,6 +139,53 @@ func TestInsightRunSessionHeaderCountsTheMessage(t *testing.T) {
 	}
 	if header.MessageCount != 1 {
 		t.Fatalf("on-disk messageCount = %d, want 1 (retitle must follow the message)", header.MessageCount)
+	}
+}
+
+// TestInsightRunSessionCarriesScanTagAndFiresTurnHook: the scan session must be
+// stamped with insightScanSessionTag AND reach the turn hooks on finish —
+// together they are the only path by which a tag automation (the shipped
+// insight-apply rule) can ever see a completed scan.
+func TestInsightRunSessionCarriesScanTagAndFiresTurnHook(t *testing.T) {
+	rt, _ := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))
+	ctx := context.Background()
+	a, err := rt.db.CreateAgent(ctx, db.Agent{Name: "A", Provider: "claude-cli"})
+	if err != nil {
+		t.Fatalf("create agent: %v", err)
+	}
+	fired := make(chan TurnFinished, 1)
+	rt.SetTurnHook(func(_ context.Context, tf TurnFinished) { fired <- tf })
+
+	rep := insightRunReport{
+		RunID:   "IRUN-tag",
+		LensIDs: []string{"lens-a"},
+		AgentID: a.ID,
+		Result:  insight.ScanResult{Sessions: 1, Analyzed: 1, Findings: 1},
+	}
+	rec := newInsightStepRecorder(rt, rep.RunID, rep.AgentID, insightRunTitle(1, 0))
+	rec.onAnalysis(insight.AnalysisEvent{LensID: "lens-a", SessionID: "SES1", Findings: 1})
+	if err := rec.finish(ctx, rep); err != nil {
+		t.Fatalf("finish: %v", err)
+	}
+
+	sess, err := rt.db.GetSession(ctx, rec.SessionID())
+	if err != nil {
+		t.Fatalf("get session: %v", err)
+	}
+	if !containsTag(sess.Tags, insightScanSessionTag) {
+		t.Fatalf("scan session tags = %v, want %q", sess.Tags, insightScanSessionTag)
+	}
+
+	select {
+	case tf := <-fired:
+		if tf.SessionID != rec.SessionID() || tf.AgentID != a.ID {
+			t.Fatalf("turn hook got %+v, want session %q agent %q", tf, rec.SessionID(), a.ID)
+		}
+		if !strings.Contains(tf.Output, rep.RunID) {
+			t.Fatalf("turn hook output must carry the run transcript, got %q", tf.Output)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("finish did not fire the turn hook: a tag automation can never see the scan")
 	}
 }
 

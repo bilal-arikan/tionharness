@@ -53,6 +53,15 @@ lessons store automatically and ride future turns.
 
 ## Automation
 
+**A scan session is tagged `insight-scan`** and fires the turn-finished signal when it
+completes, so tag automations can react to it. One such rule ships with every workspace:
+`insight-apply-workspace-opt` targets the `insight-applier` system agent, which applies the
+`workspace-opt` findings (`status:"new"`) to workspace entities — a skill, an agent, a hook,
+an automation — and marks each one `applied`. It never touches the `app-fix` channel and it
+cannot reach repo files (no file or config tools in its allowlist). The rule ships
+**disabled**: the user enables it in the Automations screen when they want findings applied
+without being asked each time.
+
 To run this on a schedule, create a schedule (self-management `create_schedule`)
 whose prompt is a scan-and-report instruction, e.g. *"Run an insight scan over new
 sessions and summarize the important findings by channel; do not apply anything."*

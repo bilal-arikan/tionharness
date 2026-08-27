@@ -2,10 +2,50 @@ package agent
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/bilal-arikan/tionharness/internal/prompts"
+	"github.com/bilal-arikan/tionharness/internal/tools"
 )
+
+// TestInsightApplierAllowlistExcludesFilesAndConfig locks the boundary that makes
+// the applier safe to point at a workspace: it edits workspace ENTITIES only. The
+// allowlist is the enforcement — granting group:files or group:config would hand
+// it Read/Write/Edit/Bash or settings/secret/workspace tools.
+func TestInsightApplierAllowlistExcludesFilesAndConfig(t *testing.T) {
+	def, ok := SystemAgentDefault("insight-applier")
+	if !ok {
+		t.Fatal("insight-applier default not found")
+	}
+	var allowed []string
+	if err := json.Unmarshal([]byte(def.AllowedTools), &allowed); err != nil {
+		t.Fatalf("allowedTools is not a JSON array: %v", err)
+	}
+	got := map[string]bool{}
+	for _, name := range allowed {
+		if strings.HasPrefix(name, tools.GroupPrefix) && !tools.ValidGroupKey(name) {
+			t.Errorf("allowlist entry %q names no known tool category", name)
+		}
+		got[name] = true
+	}
+	for _, want := range []string{
+		"group:automation", "group:agents", "group:skills-mcp", "group:artifacts",
+		"insight_list_findings", "insight_apply_finding", "todo_write",
+	} {
+		if !got[want] {
+			t.Errorf("allowlist is missing %q", want)
+		}
+	}
+	for _, banned := range []string{"group:files", "group:config"} {
+		if got[banned] {
+			t.Errorf("allowlist must not grant %q", banned)
+		}
+	}
+	if len(allowed) != 7 {
+		t.Errorf("allowlist has %d entries, want exactly the 7 documented ones: %v", len(allowed), allowed)
+	}
+}
 
 func TestSystemAgentDefaults(t *testing.T) {
 	tests := []struct {
@@ -17,6 +57,7 @@ func TestSystemAgentDefaults(t *testing.T) {
 		{key: "compaction", promptKey: "compact"},
 		{key: "lesson-extractor", promptKey: "lesson"},
 		{key: "insight", promptKey: "insight-analyzer"},
+		{key: "insight-applier", promptKey: "insight-applier"},
 		{key: "subagent-explore", promptKey: "subagent-explore"},
 		{key: "subagent-planner", promptKey: "subagent-planner"},
 		{key: "subagent-coder", promptKey: "subagent-coder"},

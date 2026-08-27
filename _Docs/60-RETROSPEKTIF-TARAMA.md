@@ -92,7 +92,8 @@ alanları baştan taşır, motor Faz 2+ lensleri gelince doldurur.
 
 ### Başlangıç default lensleri
 `tool-errors` (app-fix), `tool-usage-opt`, `skill-usage-opt`, `context-hygiene`,
-`context-cache-opt`, `cache-cooling-waste`, `lessons-mining` (hepsi workspace-opt).
+`context-cache-opt`, `cache-cooling-waste`, `lessons-mining`, `workspace-tuning`
+(hepsi workspace-opt).
 Genişletme: `autonomy-safety`, `cost-hotspots`, `permission-friction`,
 `coordination-stalls`, `handoff-quality`.
 
@@ -120,6 +121,51 @@ damgası şart: tempo lensi olaylar arası **boşluğu** ölçer. Epoch olaylar�
 bilinçli bir adopt'un (`created`/`refreshed`/`compaction`/`ttl-cold`) yanında mı duruyor,
 yoksa tek başına mı — `_Docs\57`'deki okuma kuralı ancak böyle uygulanabilir. Scope
 istemeyen lensler bu olayların token'ını ödemez (opt-in).
+
+### workspace-opt öneri hedefi — varlık önceliği (2026-08-27)
+
+**Semptom:** WS19'un `insight/findings.jsonl` dosyasındaki 69 `workspace-opt` bulgusunun ezici
+çoğunluğu `File: CLAUDE.md` ile geliyordu. Kök neden model değil, **lens promptuydu**:
+`context-hygiene` gövdesi düzeltme hedefi olarak doğrudan "workspace CLAUDE.md, agent soul,
+config prompt" diyordu, dolayısıyla her friction bir CLAUDE.md notuna dönüşüyordu.
+
+**Yeni lens — `workspace-tuning`** (`defaults/workspace-tuning.md`, kanal `workspace-opt`,
+`prefilter.requiresAny: [error, recovery, guardrail, lesson]`). Öneri hedefini **katı bir
+öncelik sırasıyla** dayatır; liste yukarıdan aşağıya taranır ve düzeltmeyi gerçekten taşıyabilen
+İLK hedefte durulur:
+
+| # | Hedef | Ne zaman | `filePointer` biçimi |
+|---|---|---|---|
+| 1 | **Skill** | eksik/yetersiz prosedür, tekrar keşfedilen ritüel | `skill:<slug>` |
+| 2 | **Agent** | soul/system prompt, model seçimi, izinli araç seti, subagent profili | `agent:<ad>` |
+| 3 | **tools-config** | hiç işe yaramayan ya da sürekli hata veren aracı kapat / deferred'a al | `tools-config.json` |
+| 4 | **Hook / automation** | tekrarlayan manuel adımın otomatikleştirilmesi | `hook:<olay>` · `automation:<ad>` |
+| 5 | **Insight ayarı** | yanlış prefilter, `maxSessions`/`maxAnalyzed`, lens enable-disable | `insight:lens:<id>` |
+| 6 | **CLAUDE.md** | **son çare** — yukarıdakilerin hiçbirinin taşıyamadığı, her zaman geçerli proje gerçeği | `CLAUDE.md` |
+
+`proposedFix` somut olmak zorundadır: hangi skill slug'ı ve eklenecek kural, hangi ajan alanı ve
+yeni değeri, hangi araç adı, hangi hook olayı ve komutu. "Rehberliği iyileştir" tarzı öneri
+kabul edilmez. `signature` = hedef varlık + sorun türü (ör. `skill:tionharness-build:missing-test-cmd`).
+
+**`context-hygiene` daraltıldı:** artık yalnızca gerçek BAĞLAM (eksik/bayat prompt metni)
+problemine bakar ve gövdesinde bir **kapsam kilidi** taşır — düzeltme bir workspace varlığıyla
+(skill/agent/tool/hook) yapılabiliyorsa bulgu üretmez, işi `workspace-tuning` lensine bırakır.
+İki lens aynı oturumda çalışır; çakışmayı bu kilit engeller (iki cache lensinin birbirinin
+sebebini yok sayması ile aynı desen).
+
+**Mevcut workspace'lere yayılım kod tarafından olur** — elle dosya kopyalanmaz. `seed.Ensure`
+(`internal/seed/seed.go`) diskte **olmayan** her gömülü lensi yazar, dolayısıyla
+`workspace-tuning.md` her workspace'e ilk `EnsureDefaults` çağrısında düşer. Çağrı noktaları:
+`RunInsightScan` (`internal/agent/insightscan.go:66`, her taramanın başında) ve lens listesi /
+raw uçları (`internal/api/insight.go:21,120`). Gövdesi bozulmamış (`default`/`tuned`) lensler
+gövde-hash defterinden tazelenir; kullanıcının **gövdesini** düzenlediği lens (`edited`)
+dondurulur ve yeni prompt'u almaz — bilinçli davranış, çözümü tekil "varsayılana döndür"
+(`POST /api/insight/lenses/{id}/restore`).
+
+> **Manifest öncesi kurulum uyarısı:** `.shipped-versions.json` dosyası **olmayan** bir lens
+> dizininde, önceki sürümle birebir aynı olan `context-hygiene.md` de "kullanıcı düzenlemesi"
+> gibi görünür ve yeni gövdeyi almaz (bkz. `seed.Ensure` bootstrap notu). Yeni lens yine de
+> düşer; `context-hygiene`'i tazelemek için o workspace'te bir kez "varsayılana döndür" gerekir.
 
 ---
 
@@ -336,6 +382,51 @@ Her tarama, bittiğinde **iki** kayıt bırakır:
 - **Geriye uyumluluk:** oturum eşlemesinden önce yazılmış `runs.jsonl` satırlarında `id`/`sessionId`
   yoktur; bu satırlar aynen okunmaya devam eder (alanlar `omitempty`), yalnızca eşlenmemiş görünürler.
   Oturum açılamazsa tarama yine de run log satırını yazar (`sessionId` boş kalır) ve hata loglanır.
+
+### 9.2 Otomatik uygulama zinciri (2026-08-27)
+
+Tarama bulguyu **üretiyordu** ama kimse **uygulamıyordu**: `workspace-opt` bulguları panoda
+`new` durumunda birikiyordu. Zincir artık uçtan uca kapalı:
+
+```mermaid
+graph LR
+    S[Tarama biter] --> T[Oturum tag: insight-scan]
+    T --> F[FireTurnFinished]
+    F --> A[Otomasyon: insight-apply-workspace-opt]
+    A --> P[insight-applier oturumu spawn]
+    P --> D[Bulgu applied]
+```
+
+1. **Tarama oturumu artık etiketli ve tur-bitişi sinyali veriyor.** `openInsightSession`
+   oturumu `Tags: ["insight-scan"]` ile açar; `insightStepRecorder.finish` başarı yolunda
+   `Runtime.FireTurnFinished` çağırır (`internal/agent/insightsteps.go`). Öncesinde tarama
+   **hiçbir** tur-bitiş hook'unu ateşlemiyordu — tarama oturumlarında etiket-tetikleyicili
+   otomasyonlar tamamen ölüydü. Etiket sabiti `insightScanSessionTag`
+   (`internal/agent/automation_defaults.go`).
+2. **Shipped tag-otomasyonu `insight-apply-workspace-opt`.** `TriggerKind: tag`, tetik etiketi
+   `insight-scan`, hedef `insight-applier` sistem ajanı (seed anında `SystemKey` ile çözülür,
+   "ilk ajan" değil), `SessionMode: spawn`, `MaxIterations: 20`, `CooldownSec: 300`.
+   `SpawnTags: ["insight-applied"]` — **döngü kırıcı**: `nil` bırakılsa spawn edilen oturum
+   tetik etiketini alır ve kural kendini yeniden ateşlerdi, boş dilim de bunu ifade edemez
+   (`normalizeTags` `[]` değerini `nil`'e indirger). Detay: `_Docs/46-ETIKET-OTOMASYON.md`.
+3. **Varsayılan KAPALI (`Enabled: false`) — opt-in.** Diğer shipped otomasyonlarla aynı
+   sözleşme: düz bir workspace'te sürpriz maliyet/mutasyon olmasın. Açmak için **Otomasyon**
+   ekranı ▸ 🏷 Etiket otomasyonları şeridi ▸ ilgili kartın aç-kapa düğmesi. Kullanıcı kuralı
+   silerse `.seeded-automations.json` defteri sayesinde bir sonraki açılışta **dirilmez**.
+4. **`insight-applier`'ın izin sınırı bir güvenlik sözleşmesidir.** Yalnız `channel:workspace-opt`
+   + `status:new` bulguları uygular, `app-fix` kanalına dokunmaz, uyguladığını
+   `insight_apply_finding` ile `applied` işaretler. `AllowedTools` yedi giriş taşır
+   (`group:automation`, `group:agents`, `group:skills-mcp`, `group:artifacts`,
+   `insight_list_findings`, `insight_apply_finding`, `todo_write`); **`group:files` ve
+   `group:config` bilinçli olarak YOKTUR** → Read/Write/Edit/Bash ve ayar/secret araçlarına
+   erişemez. Yani düzeltmeyi yalnız workspace store varlıklarında (skill/agent/hook/automation)
+   yapabilir, repo dosyalarında değil. Kısıtı prompt değil, allowlist uygular. Ajan tanımı
+   `internal/agent/systemagents.go`, promptu `internal/prompts/defaults/insight-applier.md`;
+   sistem ajanı kaydı için `_Docs/74-SISTEM-AJANLARI.md`.
+
+Yani zincir `workspace-tuning` lensinin ürettiği varlık-hedefli öneriyi (§2) doğal alıcısına
+teslim eder: öneri zaten `skill:<slug>` / `agent:<ad>` / `automation:<ad>` işaretçisi taşır ve
+applier tam olarak o varlıkları düzenleyebilir.
 
 ---
 

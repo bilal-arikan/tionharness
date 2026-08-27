@@ -27,6 +27,7 @@ var systemAgentVisuals = map[string]struct{ Avatar, Color string }{
 	"compaction":          {"📦", "#6B5FA8"},
 	"lesson-extractor":    {"🎓", "#B07AD0"},
 	"insight":             {"🔮", "#5C6480"},
+	"insight-applier":     {"🛠️", "#8A6BC8"},
 
 	// Worker profiles — read-only.
 	"subagent-explore":   {"🔍", "#17A2A2"},
@@ -97,6 +98,19 @@ func buildSystemAgentDefaults() []SystemAgentDefinition {
 			SuggestedModel: "haiku",
 			AllowedTools:   "[]",
 			Disabled:       true,
+		},
+		{
+			SystemKey:      "insight-applier",
+			Name:           "Insight Applier",
+			Description:    "Applies workspace-opt insight findings to workspace entities.",
+			SystemPrompt:   prompts.Default("insight-applier"),
+			SuggestedModel: "haiku",
+			// Deliberately NO group:files and NO group:config: the applier fixes
+			// workspace ENTITIES (skills, agents, hooks, automations), so it must not
+			// be able to reach Read/Write/Edit/Bash or settings/secret/workspace tools.
+			// The allowlist is the enforcement, not the prompt.
+			AllowedTools: `["group:automation","group:agents","group:skills-mcp","group:artifacts",` +
+				`"insight_list_findings","insight_apply_finding","todo_write"]`,
 		},
 	}
 	workerDescriptions := map[string]string{

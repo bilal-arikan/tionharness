@@ -9,11 +9,11 @@ import (
 	"github.com/bilal-arikan/tionharness/internal/db"
 )
 
-// defaultBoardAutomation describes a built-in board automation shipped into every
-// workspace store by EnsureDefaultBoardAutomations. Together the seeded rules make
-// the kanban board a source of EXECUTION in any workspace, out of the box: moving
-// a card into "in_progress" starts an agent on it, and a finished card is archived
-// off the board with no LLM call. Seed is the stable identity used both to skip
+// defaultAutomation describes a built-in automation shipped into every workspace
+// store by EnsureDefaultAutomations. Together the seeded rules make the kanban
+// board a source of EXECUTION in any workspace, out of the box: moving a card
+// into "in_progress" starts an agent on it, and a finished card is archived off
+// the board with no LLM call. Seed is the stable identity used both to skip
 // re-seeding an existing default and to record it in the deletion ledger.
 //
 // They are seeded DISABLED on purpose: auto-spawning an agent on every card move
@@ -21,16 +21,23 @@ import (
 // (one toggle in the Automations screen), not a silent default in, say, a plain
 // single-agent chat workspace. Seeding-yet-disabled means the wiring is present
 // everywhere and activating "board-driven execution" is a single click.
-type defaultBoardAutomation struct {
-	Seed string
-	Make func(agentID string) db.Automation
+//
+// AgentSystemKey pins the rule to a specific BUILT-IN agent instead of the
+// workspace's first agent: a rule that only makes sense with one system agent
+// (the insight applier) must not be seeded onto an arbitrary chat agent. When the
+// key resolves to no live agent the rule is skipped WITHOUT being recorded, so a
+// later startup backfills it.
+type defaultAutomation struct {
+	Seed           string
+	AgentSystemKey string
+	Make           func(agentID string) db.Automation
 }
 
-// defaultBoardAutomations is the single source of truth for the built-in board
-// automations every workspace gets. The spawn rule's TargetAgentID is filled with
-// the workspace's first agent at seed time (empty when there is none yet — the
-// user assigns one later, exactly like a seeded flow's agent nodes).
-var defaultBoardAutomations = []defaultBoardAutomation{
+// defaultAutomations is the single source of truth for the built-in automations
+// every workspace gets. A rule without AgentSystemKey gets the workspace's first
+// agent at seed time (empty when there is none yet — the user assigns one later,
+// exactly like a seeded flow's agent nodes).
+var defaultAutomations = []defaultAutomation{
 	{
 		Seed: "board-run-in-progress",
 		Make: func(agentID string) db.Automation {
@@ -76,19 +83,56 @@ var defaultBoardAutomations = []defaultBoardAutomation{
 			}
 		},
 	},
+	{
+		Seed: "insight-apply-workspace-opt",
+		// The applier is a system agent with a deliberately narrow allowlist; the
+		// rule is meaningless pointed at anything else.
+		AgentSystemKey: "insight-applier",
+		Make: func(agentID string) db.Automation {
+			return db.Automation{
+				Name:          "🛠️ İçgörü taraması bitti → workspace-opt bulgularını uygula",
+				TriggerKind:   db.TriggerTag,
+				TriggerTag:    insightScanSessionTag,
+				TargetAgentID: agentID,
+				SessionMode:   db.SessionModeSpawn,
+				PromptTemplate: "Az önce biten içgörü taramasının workspace-opt bulgularını uygula.\n\n" +
+					"Tarama oturumu: {{title}} ({{sessionId}})\n\n" +
+					"insight_list_findings ile channel: \"workspace-opt\", status: \"new\" bulguları çek ve " +
+					"her birini uygun workspace varlığında (skill / agent / hook / automation) düzelt. " +
+					"app-fix kanalına dokunma. Uyguladığın bulguyu insight_apply_finding ile applied işaretle; " +
+					"uygulamadıklarını gerekçesiyle raporla.",
+				// Break the loop with a DIFFERENT tag: nil would default to the trigger
+				// tag (the applier session would re-fire this rule), and an empty slice
+				// cannot express it either — normalizeTags collapses [] back to nil at
+				// create time. The tag also makes applier sessions easy to filter.
+				SpawnTags:     []string{"insight-applied"},
+				Enabled:       false,
+				MaxIterations: 20,
+				CooldownSec:   300,
+				Seed:          "insight-apply-workspace-opt",
+			}
+		},
+	},
 }
 
+// insightScanSessionTag is the session tag the insight-apply rule waits for.
+// Scan sessions are opened with it (openInsightSession) and fire the turn hooks
+// when their transcript is written (insightStepRecorder.finish), so enabling the
+// rule is all that is needed — it ships DISABLED because applying findings to the
+// workspace stays a deliberate user decision.
+const insightScanSessionTag = "insight-scan"
+
 // seededAutomationsLedgerName is a dotfile at the store root recording which
-// default board-automation seed keys have ever been provisioned into this
-// workspace. Like the flows ledger, it makes a user deletion permanent: once a
-// key is recorded, EnsureDefaultBoardAutomations never recreates that default.
+// default automation seed keys have ever been provisioned into this workspace.
+// Like the flows ledger, it makes a user deletion permanent: once a key is
+// recorded, EnsureDefaultAutomations never recreates that default.
 const seededAutomationsLedgerName = ".seeded-automations.json"
 
 type seededAutomationsLedger struct {
 	Seeded []string `json:"seeded"`
 }
 
-// EnsureDefaultBoardAutomations provisions the built-in board automations into a
+// EnsureDefaultAutomations provisions the built-in automations into a
 // workspace's store, idempotently and respecting user deletion — the same
 // contract as EnsureDefaultFlows:
 //
@@ -100,7 +144,7 @@ type seededAutomationsLedger struct {
 //
 // open() calls this on every startup, so existing workspaces are backfilled with
 // newly shipped defaults on the next launch.
-func EnsureDefaultBoardAutomations(ctx context.Context, database *db.DB, storeDir string) error {
+func EnsureDefaultAutomations(ctx context.Context, database *db.DB, storeDir string) error {
 	if database == nil || storeDir == "" {
 		return nil
 	}
@@ -124,11 +168,22 @@ func EnsureDefaultBoardAutomations(ctx context.Context, database *db.DB, storeDi
 	agentID := firstAgentID(ctx, database)
 
 	changed := false
-	for _, dba := range defaultBoardAutomations {
+	for _, dba := range defaultAutomations {
 		if present[dba.Seed] || recorded[dba.Seed] {
 			continue
 		}
-		auto := dba.Make(agentID)
+		target := agentID
+		if dba.AgentSystemKey != "" {
+			pinned, ok := database.FindAgentBySystemKey(dba.AgentSystemKey)
+			if !ok {
+				// The system agent is seeded before this runs; a miss means an older
+				// store that has not been backfilled yet. Skip WITHOUT recording so the
+				// next startup provisions it.
+				continue
+			}
+			target = pinned.ID
+		}
+		auto := dba.Make(target)
 		// Same shape contract the create/update paths enforce (db.ValidateAutomationShape).
 		// The spawn seed intentionally carries an EMPTY target when the workspace has
 		// no agent yet: that fails the shape check, so we skip WITHOUT recording it in

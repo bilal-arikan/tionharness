@@ -87,6 +87,14 @@ output)` ile sinyallenir — **detached goroutine**, turu asla bloklamaz/iptal e
 - `api/chat_stream.go` — her yanıt sonrası (`resp.Text`).
 - `agent/spawn.go` `runSpawn` — spawn turu bitince (döngünün doğal adımı).
 - `agent/scheduler.go` `deliverPrompt` (zamanlanmış) + `deliverWake` (uyandırma).
+- `agent/insightsteps.go` `insightStepRecorder.finish` — içgörü taraması başarıyla bitince
+  (2026-08-27). Tarama transkriptini kendi sürdüğü için sohbet/spawn yolundan geçmiyordu;
+  eklenmeden önce tarama oturumlarında **hiçbir** etiket otomasyonu tetiklenmiyordu.
+
+**İçgörü tarama oturumu `insight-scan` etiketini taşır.** `openInsightSession` oturumu
+`Tags: []string{insightScanSessionTag}` ile açar (sabit: `agent/automation_defaults.go`).
+Etiket + yukarıdaki `FireTurnFinished` çağrısı birlikte, "tarama bitti" olayını etiket
+tetikleyicisine bağlanabilir hâle getirir.
 
 ### Motor (`agent/automation.go`)
 `AutomationEngine.OnTurnFinished`:
@@ -109,6 +117,33 @@ output)` ile sinyallenir — **detached goroutine**, turu asla bloklamaz/iptal e
 
 Döngü: A(#loop) biter → B(#loop) spawn → B biter → C spawn … MaxIterations'a kadar.
 Sayaç tek otomasyon üzerinde birikir (tüm spawn'lar aynı etiketi → aynı kural).
+
+### Gönderilen kural: `insight-apply-workspace-opt` (2026-08-27)
+
+Tohumlanan tek **etiket** otomasyonu (`defaultAutomations`,
+`internal/agent/automation_defaults.go`): içgörü taraması bitince `workspace-opt`
+bulgularını uygulatır.
+
+| Alan | Değer |
+|------|-------|
+| `TriggerKind` / `TriggerTag` | `tag` / `insight-scan` |
+| Hedef | `insight-applier` **sistem ajanı** — seed anında `AgentSystemKey` ile çözülür (`FindAgentBySystemKey`), "ilk ajan" fallback'i kullanılmaz |
+| `SessionMode` | `spawn` (her tarama kendi uygulama oturumunu alır) |
+| `SpawnTags` | `["insight-applied"]` |
+| `MaxIterations` / `CooldownSec` | 20 / 300 |
+| `Enabled` | **`false` — opt-in** |
+
+- **Döngü kırıcı `SpawnTags`:** `nil` bırakılsaydı spawn edilen oturum tetik etiketini
+  (`insight-scan`) alır ve kural kendini yeniden ateşlerdi; boş dilim de bunu ifade edemez
+  çünkü `normalizeTags` `[]` değerini `nil`'e indirger. Bu yüzden **farklı** bir etiket
+  verilir — ayrıca uygulayıcı oturumları filtrelemeyi kolaylaştırır.
+- **Neden kapalı geliyor:** diğer shipped otomasyonlarla aynı sözleşme — düz bir workspace'te
+  sürpriz maliyet/mutasyon olmaz. Açmak: **Otomasyon** ekranı ▸ 🏷 Etiket otomasyonları şeridi ▸
+  kartın aç-kapa düğmesi. Kullanıcı silerse `.seeded-automations.json` defteri sayesinde
+  yeniden tohumlanmaz.
+- `insight-applier`'ın izin sınırı (repo dosyalarına erişemez, yalnız workspace varlıklarını
+  düzenler) `_Docs/74-SISTEM-AJANLARI.md`'de; zincirin tamamı `_Docs/60-RETROSPEKTIF-TARAMA.md`
+  §9.2'de.
 
 ### API + Araçlar + UI
 - **API:** `GET/POST /api/automations`, `PUT /api/automations/{id}`,
@@ -161,9 +196,11 @@ Board zaten bir kart değişiminde iş **başlatabiliyordu** (`fireBoard`); iki 
    gizler: `list_tasks` aracı, `GET /api/tasks` (yeni `?archived=1` ile tümü) ve `get_view board`
    projeksiyonu `db.ListActiveTasks`'e geçti (`ListTasks` bütünlük yolları için tümünü döndürmeye
    devam eder). `UpdateTask` `Archived`'a dokunmaz → arşiv yalnız `SetTaskArchived`'den değişir.
-2. **Generic tohum (`EnsureDefaultBoardAutomations`, `internal/agent/automation_defaults.go`)** —
+2. **Generic tohum (`EnsureDefaultAutomations`, `internal/agent/automation_defaults.go`;
+   2026-08-27'ye kadar `EnsureDefaultBoardAutomations` — artık pano dışı kurallar da
+   tohumladığı için yeniden adlandırıldı)** —
    `EnsureDefaultFlows` desenini (silme-defterli `.seeded-automations.json`, `Automation.Seed`)
-   birebir taklit eder; her workspace store'una iki kural tohumlar: **`board-run-in-progress`**
+   birebir taklit eder; her workspace store'una iki pano kuralı tohumlar: **`board-run-in-progress`**
    (`move → in_progress`, `spawn`, hedef=ilk ajan) ve **`board-archive-done`** (`move → done`,
    `archive`). Manager `open()` yolunda çağrılır → mevcut workspace'ler bir sonraki açılışta
    backfill olur. **`Enabled:false` tohumlanır** (opt-in): board yürütmenin kaynağı olsun diye
@@ -607,7 +644,7 @@ için çağrı yerlerinde kalır; bu, birleşik sonucun son freni. `RANGE` denet
 (`maxIterations`, `tokenThreshold`) ayrı kalıp yanında çağrılır. Test:
 `automation_limits_test.go` → `TestValidateAutomationShape` (tür-switch geçerli/geçersiz tablosu).
 
-**Seed'ler de aynı sözleşmeden geçer (2026-08-05):** `EnsureDefaultBoardAutomations`
+**Seed'ler de aynı sözleşmeden geçer (2026-08-05):** `EnsureDefaultAutomations`
 artık her seed'i `CreateAutomation`'dan önce `ValidateAutomationShape`'ten geçirir.
 `board-run-in-progress` spawn seed'i, workspace'te henüz ajan yokken **boş hedefle**
 gelir → shape'i geçmez → **deftere yazılmadan atlanır**; bir sonraki açılışta (ajan

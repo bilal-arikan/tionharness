@@ -53,6 +53,7 @@ func TestSystemAgentOwnership(t *testing.T) {
 		"compact":            "compaction",
 		"lesson":             "lesson-extractor",
 		"insight-analyzer":   "insight",
+		"insight-applier":    "insight-applier",
 		"subagent-explore":   "subagent-explore",
 		"subagent-planner":   "subagent-planner",
 		"subagent-coder":     "subagent-coder",

@@ -321,7 +321,7 @@ type Automation struct {
 	UpdatedAt int64  `json:"updatedAt"`
 
 	// Seed is the stable identity of a built-in default automation provisioned by
-	// EnsureDefaultBoardAutomations. Empty for user/agent-created automations. It
+	// EnsureDefaultAutomations. Empty for user/agent-created automations. It
 	// is used both to skip re-seeding an existing default and to record it in the
 	// deletion ledger so a user-deleted default is never resurrected (mirrors
 	// Flow.Seed).
