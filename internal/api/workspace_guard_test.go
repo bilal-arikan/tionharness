@@ -15,6 +15,12 @@ func TestWorkspaceOptionalPath(t *testing.T) {
 		"/api/pick-folder",
 		"/api/external-tools",
 		"/api/events",
+		// Process-global infra: none of these read a workspace, so a fresh
+		// install must be able to reach them before one exists.
+		"/health",
+		"/api/version",
+		"/api/version/update",
+		"/api/debug/store-stats",
 	}
 	for _, p := range optional {
 		if !workspaceOptionalPath(p) {

@@ -896,6 +896,12 @@ func workspaceOptionalPath(path string) bool {
 		return true
 	case path == "/api/events":
 		return true
+	case path == "/health":
+		return true
+	case path == "/api/version" || path == "/api/version/update":
+		return true
+	case path == "/api/debug/store-stats":
+		return true
 	}
 	return false
 }
