@@ -151,6 +151,37 @@ function scheduleLine(o: Record<string, unknown>): string | null {
   return p || cron || null
 }
 
+/** "kind · id/sub" for the entity-addressing tools (get_view, expand,
+ *  read_artifact, get_flow, delete_*) whose whole input is an identity — no
+ *  command, path or message to show, so the identity itself is the summary. */
+function identityLine(o: Record<string, unknown>): string | null {
+  const kind = str(o.kind)
+  const id = str(o.id)
+  const sub = str(o.sub)
+  const head = kind && id ? `${kind} · ${id}` : kind || id
+  if (!head) return null
+  return sub ? `${head}/${sub}` : head
+}
+
+// Pure paging/ordering fields: real values, but meaningless as the only thing a
+// card says ("limit=20" tells the reader nothing about the call).
+const PAGINATION_KEYS = new Set(['limit', 'offset', 'sort', 'order', 'cursor', 'page'])
+
+/** Last resort for filter-only inputs (list_agents, list_workers) and boolean
+ *  switches (set_coordinator_mode): render up to two scalar fields as
+ *  "key=value" — e.g. "scope=subtree, state=running", "enabled=true". */
+function scalarFallback(o: Record<string, unknown>): string {
+  const parts: string[] = []
+  for (const [k, v] of Object.entries(o)) {
+    if (PAGINATION_KEYS.has(k.toLowerCase())) continue
+    if (typeof v !== 'string' && typeof v !== 'number' && typeof v !== 'boolean') continue
+    if (v === '') continue
+    parts.push(`${k}=${v}`)
+    if (parts.length === 2) break
+  }
+  return parts.join(', ')
+}
+
 /** Derive a one-line summary from common tool input shapes. The goal is a
  *  content-bearing line (the actual command / path / message / items), never a
  *  raw key list — a bare "names" or "questions" next to the tool name is noise,
@@ -180,6 +211,7 @@ function summarize(base: string, input: unknown): string {
     o.title ??
     o.name ??
     o.message ??
+    o.summary ??
     o.text ??
     o.prompt ??
     o.objective ??
@@ -201,6 +233,9 @@ function summarize(base: string, input: unknown): string {
   // A bare board move (move_task / update_task with only a target column) reads
   // best as its destination: "→ done".
   if (typeof o.boardState === 'string') return `→ ${o.boardState}`
+  // Entity-addressing tools carry only an identity (kind/id/sub).
+  const ident = identityLine(o)
+  if (ident) return ident
   // Array-valued fields carry the real payload for many tools
   // (activate_tools.names, ask_user.questions, todo_write.todos, …) — surface
   // the first meaningful one, skipping secondary/filter arrays, instead of its key.
@@ -209,8 +244,9 @@ function summarize(base: string, input: unknown): string {
       return summarizeArray(v)
     }
   }
-  // Nothing content-bearing — leave the side info blank rather than dumping keys.
-  return ''
+  // Filter-only or boolean inputs: name the values, not just the keys. Still
+  // blank when the input holds nothing but paging fields.
+  return scalarFallback(o)
 }
 
 const DIFF_TOOLS = ['edit', 'write', 'multiedit', 'apply_patch']
