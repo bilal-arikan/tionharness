@@ -22,6 +22,20 @@ describe('toolMeta', () => {
     )
   })
 
+  it('collapses a singleton identity whose id only repeats the kind', () => {
+    expect(toolMeta('get_view', { kind: 'board', id: 'board' }).summary).toBe('board')
+    expect(toolMeta('get_view', { kind: 'board', id: 'Board', sub: 'TSK379' }).summary).toBe(
+      'board/TSK379',
+    )
+  })
+
+  it('keeps both halves when the id differs from the kind', () => {
+    expect(toolMeta('get_view', { kind: 'session', id: 'SES1787' }).summary).toBe(
+      'session · SES1787',
+    )
+    expect(toolMeta('get_view', { kind: 'boards', id: 'board' }).summary).toBe('boards · board')
+  })
+
   it('summarizes filter-only list inputs by their values', () => {
     expect(
       toolMeta('list_agents', { provider: 'claude', state: 'idle', sort: 'name', limit: 20 })

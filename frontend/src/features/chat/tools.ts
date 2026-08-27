@@ -153,12 +153,15 @@ function scheduleLine(o: Record<string, unknown>): string | null {
 
 /** "kind · id/sub" for the entity-addressing tools (get_view, expand,
  *  read_artifact, get_flow, delete_*) whose whole input is an identity — no
- *  command, path or message to show, so the identity itself is the summary. */
+ *  command, path or message to show, so the identity itself is the summary.
+ *  Singleton views address themselves (kind "board" with id "board"), so an
+ *  id that only repeats the kind is collapsed into a single word. */
 function identityLine(o: Record<string, unknown>): string | null {
   const kind = str(o.kind)
   const id = str(o.id)
   const sub = str(o.sub)
-  const head = kind && id ? `${kind} · ${id}` : kind || id
+  const sameEntity = kind.trim() !== '' && kind.trim().toLowerCase() === id.trim().toLowerCase()
+  const head = sameEntity ? kind.trim() : kind && id ? `${kind} · ${id}` : kind || id
   if (!head) return null
   return sub ? `${head}/${sub}` : head
 }
