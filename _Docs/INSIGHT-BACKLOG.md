@@ -666,3 +666,42 @@ stable `insight-sig` marker so re-scans never duplicate it.
 
 <!-- insight-sig:windows-cleanup/spawn-test-tempdir-locked -->
 
+## MCP araç adı çiftleşmesi: tionharness_interaction araçları iki kez ön-ek alıyor
+
+- **Severity:** high
+- **Occurrences:** 1
+- **Evidence sessions:** SES1410
+- **File:** `internal/mcp/ veya internal/providers/ (MCP tool schema loading ve registration)` ⚠️ (not found in repo — pointer unverified)
+
+**Root cause:** TionHarness, MCP sunucusundan yüklenen araç adlarını tool registration sırasında iki kez `mcp__<server>__` ön-eki ile işleyerek, `list_workers` gibi araçların `mcp__tionharness_interaction__mcp__tionharness_interaction__list_workers` şeklinde kayıt edilmesine neden oluyor. Araç lookup mekanizması çift ön-ekli adı bulamadığından 'No such tool available' hatası veriyor.
+
+**Proposed fix:** MCP araç şeması yüklendiğinde, araç adının normalleştirmesini kontrol et: adda zaten `mcp__` ön-eki varsa tekrar ekleme. Veya araç adı kaydı (registration) sırasında ön-ek normalleştirmesinin idempotent olduğundan emin ol.
+
+<!-- insight-sig:mcp_tool_name_double_prefix_tionharness_interaction -->
+
+## Ertelenmiş araçlar otonom/subagent çalıştırmalarda şema yüklenmeksizin çağrılıyor
+
+- **Severity:** med
+- **Occurrences:** 1
+- **Evidence sessions:** SES1269
+- **File:** `internal/providers/claudecli.go veya araç dispatch kodu (araç çağrı interceptor'ı)` ⚠️ (not found in repo — pointer unverified)
+
+**Root cause:** Otonom çalıştırmalarda veya subagent spawn'larında, TionHarness araç göndericisi deferred araçlar için şemaları otomatik olarak yüklemüyor. Ajanlar ToolSearch çağrısı yapmaksızın (ve çoğu zaman yapamaksızın) bu araçları çağırmaya kalkıyor, sonuçta 'deferred and cannot be called before its schema is available' hatası oluşuyor.
+
+**Proposed fix:** Tool invocation layer'a, deferred araçlar için otomatik şema yükleme mantığı ekle: (1) Aracı çağırmadan önce şemanın yüklü olup olmadığını kontrol et; (2) Yüklü değilse ToolSearch ile yükle veya (3) Subagent sistem prompt'una otomatik şema yükleme talimatları dahil et, 'deferred tools require ToolSearch before use' mesajını içer.
+
+<!-- insight-sig:deferred_tool_before_schema_loaded -->
+
+## Deferred araçlar şema yüklenmeden çağrılabiliyor ve tekrarlanan başarısızlıklara yol açıyor
+
+- **Severity:** low
+- **Occurrences:** 1
+- **Evidence sessions:** SES1307
+- **File:** `internal/providers/claudecli.go`
+
+**Root cause:** TionHarness, deferred araçları (create_task, list_tasks) mevcut araçlar listesinde sunuyor. Ajan veya kullanıcı bu araçları ToolSearch aracılığıyla şemalarını yüklemeden çağırabililiyor. Çağrı zamanında reddetme gerçekleştiğinden, tekrarlanan denemeler (4x create_task, 1x list_tasks) ve açık olmayan hata rehberliği görülüyor.
+
+**Proposed fix:** ToolSearch çağrısı yapılıncaya kadar deferred araçları ajan tarafından callable olan araç listesinden hariç tut. Alternatif olarak, deferred araç çağrısı anında 'ToolSearch(select:<toolname>) ile şemayı yükle' şeklinde otomatik hata kılavuzu ver.
+
+<!-- insight-sig:deferred_tool_schema_load_required -->
+
