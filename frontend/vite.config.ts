@@ -1,12 +1,44 @@
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { fileURLToPath, URL } from 'node:url'
-import { defineConfig } from 'vite'
+import { defineConfig, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
+
+// internal/web/dist/.gitkeep is a tracked file (.gitignore ignores the dist
+// contents but whitelists this one) because //go:embed all:dist in
+// internal/web/embed.go fails to compile when the directory does not exist —
+// on a fresh clone .gitkeep is what creates it. emptyOutDir wipes the whole
+// directory on every build, so restore the placeholder once the bundle is out.
+function keepDistPlaceholder(): Plugin {
+  const gitkeep = fileURLToPath(new URL('../internal/web/dist/.gitkeep', import.meta.url))
+  // Snapshot the tracked bytes now, while the file still exists — the config is
+  // evaluated before Vite empties outDir. Restoring the exact content (BOM and
+  // all) is what keeps the build out of `git status`. A previous build may have
+  // wiped it already, in which case fall back to the canonical text.
+  let content: Buffer | string
+  try {
+    content = readFileSync(gitkeep)
+  } catch {
+    content =
+      '﻿Frontend build placeholder. Real assets are emitted here by ' +
+      "'npm run build' (vite outDir) and embedded via go:embed. Do not delete this file."
+  }
+  return {
+    name: 'tionharness-keep-dist-gitkeep',
+    apply: 'build',
+    closeBundle() {
+      mkdirSync(fileURLToPath(new URL('../internal/web/dist', import.meta.url)), {
+        recursive: true,
+      })
+      writeFileSync(gitkeep, content)
+    },
+  }
+}
 
 // During dev, proxy API calls to the Go backend on :8090 (TIONHARNESS_ADDR default
 // in the run docs — :8080 collides with unity-mcp's HTTP backend).
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
+  plugins: [react(), tailwindcss(), keepDistPlaceholder()],
   resolve: {
     alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
   },
