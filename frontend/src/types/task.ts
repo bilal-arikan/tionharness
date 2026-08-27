@@ -60,6 +60,10 @@ export type TaskPatch = Partial<
   >
 >
 
+// Schedule session mode: 'reuse' keeps appending to the agent's single schedule
+// thread, 'spawn' opens a new session on every fire. '' resolves to 'reuse'.
+export type ScheduleSessionMode = 'reuse' | 'spawn'
+
 export interface Schedule {
   id: string
   // Optional human-readable name (shown in the board card and modal).
@@ -70,6 +74,10 @@ export interface Schedule {
   flowId?: string
   cronExpr: string
   prompt: string
+  // How an agent-backed schedule uses sessions: 'reuse' (default, '' is treated
+  // the same) appends every fire to the agent's one long-lived schedule thread;
+  // 'spawn' opens a fresh session per fire. Ignored for flow-backed schedules.
+  sessionMode?: ScheduleSessionMode
   nextRunAt: number
   lastRunAt: number
   lastDeliveryStatus: string

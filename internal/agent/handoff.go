@@ -314,9 +314,16 @@ func buildContinuationPrompt(tmpl, oldSessionID, artifactID, filePath, handoffTe
 // parent (kind "chat" or legacy "") yields a "chat" continuation so it appears
 // under the sidebar's "Sohbet" filter next to the thread it continues. Any other
 // parent kind falls back to "spawned" — the continuation is always a single-agent
-// human-continuable transcript, and inheriting a non-writable kind (task/flow/
-// schedule) or a tree kind (worker/flow-coordinator, which also carry back-links
-// this fresh session lacks) would misfile or misrender it.
+// human-continuable transcript, and inheriting a non-writable kind (task/flow) or
+// a tree kind (worker/flow-coordinator, which also carry back-links this fresh
+// session lacks) would misfile or misrender it.
+//
+// A "schedule" parent falls back to "spawned" as well, even though the schedule
+// kind IS writable. The kind is not just a permission there: GetOrCreateKindSession
+// keys the agent's ONE cron thread by (agent, kind), so a second schedule-kind
+// session would compete to be that thread and the scheduler could start appending
+// fires to the continuation. The continuation is a one-off human-continuable
+// transcript, which is exactly what "spawned" means.
 func continuationKind(parentKind string) string {
 	switch strings.TrimSpace(parentKind) {
 	case "", "chat":

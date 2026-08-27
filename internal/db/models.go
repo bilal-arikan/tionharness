@@ -233,14 +233,23 @@ func MachineTranscriptKinds() []string {
 // writableSessionKindList is the set of Session.Kind values into which a NEW
 // USER TURN may be started. Manual chats ("" / "chat") plus "spawned" sessions
 // (spawn tool and handoff children) are linear transcripts a human is meant to
-// keep talking to. Every other kind — task, flow, schedule, automation,
-// flow-coordinator, worker, insight — is an orchestrator-owned transcript: a new
-// user turn there has no run to attach to.
+// keep talking to. Every other kind — task, flow, automation, flow-coordinator,
+// worker, insight — is an orchestrator-owned transcript: a new user turn there has
+// no run to attach to.
+//
+// "schedule" is writable too, and is the one deliberate exception to that rule. A
+// schedule session is not a per-run log: it is the agent's single long-lived cron
+// thread that every fire of a reuse-mode schedule appends to, so it reads as one
+// continuing conversation the user is meant to steer — answer a question the
+// scheduled turn asked, correct it, or hand it more context before the next tick.
+// The concurrency worry that keeps the other kinds closed does not apply: a user
+// turn and a scheduled turn both claim the session's single turn slot (turnqueue),
+// which serializes them instead of letting them interleave.
 //
 // This list is the single source of truth for the whole product; the frontend's
 // isWritableSessionKind (frontend/src/app/viewRegistry.tsx) mirrors it and the
 // two must be changed together.
-var writableSessionKindList = []string{"", "chat", "spawned"}
+var writableSessionKindList = []string{"", "chat", "spawned", "schedule"}
 
 // IsWritableSessionKind reports whether a new user turn may be started in a
 // session of this kind (see writableSessionKindList).

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Clock, Sparkles, X } from 'lucide-react'
 import { api } from '@/api'
-import type { Agent, Flow, Schedule } from '@/types'
+import type { Agent, Flow, Schedule, ScheduleSessionMode } from '@/types'
 import { AgentPicker } from '@/shared/components/agents/AgentPicker'
 import { toast } from '@/shared/components'
 import { COLUMN_ACCENT } from './automationMeta'
@@ -41,6 +41,10 @@ export function ScheduleModal({
   const [flowId, setFlowId] = useState(editing?.flowId ?? '')
   const [cronExpr, setCronExpr] = useState(editing?.cronExpr ?? '*/5 * * * *')
   const [prompt, setPrompt] = useState(editing?.prompt ?? '')
+  // An empty stored mode means the backend default (reuse), so show that.
+  const [sessionMode, setSessionMode] = useState<ScheduleSessionMode>(
+    editing?.sessionMode === 'spawn' ? 'spawn' : 'reuse',
+  )
   const [expiresAt, setExpiresAt] = useState(unixToLocalInput(editing?.expiresAt))
   const [generatingTitle, setGeneratingTitle] = useState(false)
 
@@ -74,6 +78,7 @@ export function ScheduleModal({
           ...target,
           cronExpr: cronExpr.trim(),
           prompt: prompt.trim(),
+          sessionMode,
           expiresAt: expUnix,
         })
         onSaved(updated, false)
@@ -83,6 +88,7 @@ export function ScheduleModal({
           ...(targetMode === 'flow' ? { flowId } : { agentId }),
           cronExpr: cronExpr.trim(),
           prompt: prompt.trim(),
+          sessionMode,
           enabled: true,
           expiresAt: expUnix,
         })
@@ -159,6 +165,25 @@ export function ScheduleModal({
         </div>
         <FieldError message={errorFor('target')} />
       </Field>
+
+      {/* Session mode applies only to an agent target: a flow-backed schedule
+          always records into its own per-run transcript. */}
+      {targetMode === 'agent' && (
+        <Field
+          label="Oturum"
+          hint="Her çalışma aynı zamanlama sohbetine mi eklensin, yoksa kendi oturumunu mu açsın?"
+        >
+          <select
+            data-testid="schedule-create-session-mode-select"
+            value={sessionMode}
+            onChange={(e) => setSessionMode(e.target.value as ScheduleSessionMode)}
+            className="w-full rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5 text-sm outline-none"
+          >
+            <option value="reuse">Aynı oturumu sürdür (varsayılan)</option>
+            <option value="spawn">Her çalışmada yeni oturum aç</option>
+          </select>
+        </Field>
+      )}
 
       <Field label="Cron ifadesi" hint="Hazır ifadeyi seç ya da elle yaz.">
         <div className="flex flex-wrap items-center gap-2">

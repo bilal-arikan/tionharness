@@ -71,7 +71,7 @@ func postRewind(t *testing.T, s *Server, wsp *workspace.Workspace, sessionID, ms
 // destroy the record — every non-writable kind must refuse it with 403, and the
 // messages must survive.
 func TestRewindRejectedOnReadOnlySessions(t *testing.T) {
-	for _, kind := range []string{"task", "flow", "schedule", "automation", "flow-coordinator", "worker", db.SessionKindInsight} {
+	for _, kind := range []string{"task", "flow", "automation", "flow-coordinator", "worker", db.SessionKindInsight} {
 		t.Run(kind, func(t *testing.T) {
 			s, wsp := newWorkspaceServer(t)
 			ctx := context.Background()
@@ -123,12 +123,13 @@ func TestRewindAllowedOnWritableKinds(t *testing.T) {
 	}
 }
 
-// TestEnqueueMessageRejectsOrchestratorSessions: task/flow/schedule/automation
+// TestEnqueueMessageRejectsOrchestratorSessions: task/flow/automation
 // transcripts are orchestrator-owned run logs — the UI hides the composer for
 // them and the API must agree, instead of silently accepting a turn that has no
-// run to attach to.
+// run to attach to. "schedule" is deliberately absent: it is the agent's
+// long-lived cron thread, which the user may keep talking in.
 func TestEnqueueMessageRejectsOrchestratorSessions(t *testing.T) {
-	for _, kind := range []string{"task", "flow", "schedule", "automation", "flow-coordinator", "worker"} {
+	for _, kind := range []string{"task", "flow", "automation", "flow-coordinator", "worker"} {
 		t.Run(kind, func(t *testing.T) {
 			s, wsp := newWorkspaceServer(t)
 			sess, err := wsp.DB.CreateSession(context.Background(), db.Session{Kind: kind, Title: kind})
@@ -192,6 +193,43 @@ func TestImmutableSessionRejectsBothGuards(t *testing.T) {
 	}
 	if rec := postInteractionAnswer(t, s, wsp, sess.ID); rec.Code != http.StatusForbidden {
 		t.Fatalf("interaction answer: expected 403, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+// TestEnqueueMessageAllowedOnScheduleSession pins the exception directly, not just
+// through the WritableSessionKinds() loop: a user message into the agent's cron
+// thread is accepted AND actually queued, so the turn really runs.
+func TestEnqueueMessageAllowedOnScheduleSession(t *testing.T) {
+	s, wsp := newWorkspaceServer(t)
+	sess, err := wsp.DB.CreateSession(context.Background(), db.Session{Kind: "schedule", Title: "⏰ Schedule"})
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+	if rec := postMessage(t, s, wsp, sess.ID); rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	s.inbox.lock()
+	defer s.inbox.unlock()
+	if ib := s.inbox.at(wsp.ID, sess.ID); ib == nil {
+		t.Fatal("an accepted message must create a queue for the schedule session")
+	}
+}
+
+// TestRewindAllowedOnScheduleSession: rewinding the cron thread is a legitimate
+// edit now that it has a composer — the user can re-drive it from the checkpoint.
+func TestRewindAllowedOnScheduleSession(t *testing.T) {
+	s, wsp := newWorkspaceServer(t)
+	ctx := context.Background()
+	sess, err := wsp.DB.CreateSession(ctx, db.Session{Kind: "schedule", Title: "⏰ Schedule"})
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+	msg, err := wsp.DB.AddMessage(ctx, db.Message{SessionID: sess.ID, Role: "user", Text: "ilk"})
+	if err != nil {
+		t.Fatalf("add message: %v", err)
+	}
+	if rec := postRewind(t, s, wsp, sess.ID, msg.ID); rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
 }
 

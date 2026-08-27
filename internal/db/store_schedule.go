@@ -53,6 +53,7 @@ func (d *DB) UpdateSchedule(ctx context.Context, sc Schedule) error {
 	cur.CronExpr = sc.CronExpr
 	cur.Prompt = sc.Prompt
 	cur.FlowID = sc.FlowID
+	cur.SessionMode = sc.SessionMode
 	cur.ExpiresAt = sc.ExpiresAt
 	cur.UpdatedAt = now()
 	return d.persistScheduleLocked(cur)

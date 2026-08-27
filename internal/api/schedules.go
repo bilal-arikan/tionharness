@@ -74,8 +74,10 @@ type createScheduleReq struct {
 	Prompt   string `json:"prompt"`
 	// FlowID, when set, makes this a flow-backed schedule (runs the flow with
 	// Prompt as input instead of delivering the prompt to AgentID).
-	FlowID  string `json:"flowId"`
-	Enabled bool   `json:"enabled"`
+	FlowID string `json:"flowId"`
+	// SessionMode selects reuse (default) or spawn for an agent-backed schedule.
+	SessionMode string `json:"sessionMode"`
+	Enabled     bool   `json:"enabled"`
 	// ExpiresAt is an optional end date (unix seconds); 0 = no end date.
 	ExpiresAt int64 `json:"expiresAt"`
 }
@@ -89,6 +91,13 @@ func (s *Server) handleCreateSchedule(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.CronExpr == "" {
 		writeError(w, http.StatusBadRequest, "cronExpr is required")
+		return
+	}
+	// Reject an unknown mode instead of storing it: EffectiveSessionMode would
+	// silently resolve the typo to reuse and hide the mistake until someone
+	// wondered why no fresh session ever appeared.
+	if !db.ValidScheduleSessionMode(req.SessionMode) {
+		writeError(w, http.StatusBadRequest, invalidSessionModeMsg)
 		return
 	}
 	// A schedule targets EITHER a flow or a single agent. Flow-backed schedules
@@ -114,13 +123,14 @@ func (s *Server) handleCreateSchedule(w http.ResponseWriter, r *http.Request) {
 	}
 
 	schedule, err := wsp.DB.CreateSchedule(r.Context(), db.Schedule{
-		Name:      req.Name,
-		AgentID:   req.AgentID,
-		CronExpr:  req.CronExpr,
-		Prompt:    req.Prompt,
-		FlowID:    req.FlowID,
-		Enabled:   req.Enabled,
-		ExpiresAt: req.ExpiresAt,
+		Name:        req.Name,
+		AgentID:     req.AgentID,
+		CronExpr:    req.CronExpr,
+		Prompt:      req.Prompt,
+		FlowID:      req.FlowID,
+		SessionMode: req.SessionMode,
+		Enabled:     req.Enabled,
+		ExpiresAt:   req.ExpiresAt,
 	})
 	if writeDBError(w, err, "") {
 		return
@@ -140,9 +150,15 @@ type updateScheduleReq struct {
 	// FlowID, when set, makes this a flow-backed schedule (empty string clears it
 	// back to agent-backed).
 	FlowID *string `json:"flowId"`
+	// SessionMode selects reuse (default) or spawn for an agent-backed schedule.
+	SessionMode *string `json:"sessionMode"`
 	// ExpiresAt is an optional end date (unix seconds); 0 = no end date.
 	ExpiresAt *int64 `json:"expiresAt"`
 }
+
+// invalidSessionModeMsg is the single wording both schedule write paths return
+// for an unknown sessionMode.
+const invalidSessionModeMsg = "invalid sessionMode (want reuse or spawn)"
 
 // handleUpdateSchedule edits a schedule's agent/flow/cron/prompt and reloads cron.
 func (s *Server) handleUpdateSchedule(w http.ResponseWriter, r *http.Request) {
@@ -187,6 +203,14 @@ func (s *Server) handleUpdateSchedule(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.Prompt != nil {
 		cur.Prompt = *req.Prompt
+	}
+	if req.SessionMode != nil {
+		mode := strings.TrimSpace(*req.SessionMode)
+		if !db.ValidScheduleSessionMode(mode) {
+			writeError(w, http.StatusBadRequest, invalidSessionModeMsg)
+			return
+		}
+		cur.SessionMode = mode
 	}
 	if req.ExpiresAt != nil {
 		cur.ExpiresAt = *req.ExpiresAt

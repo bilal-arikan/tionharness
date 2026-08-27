@@ -64,7 +64,7 @@ graph LR
   dosya değişiklikleri geri **gelmez** — Claude Code ile aynı sınır.
 - Yerel-only (persist edilmemiş) anchor'da sunucu çağrısı atlanır (yalnız görünüm dilimlenir).
 - **Salt-okunur oturumlarda rewind yok.** Yazılabilir olmayan her kind (`task`, `flow`,
-  `schedule`, `automation`, `flow-coordinator`, `worker`, `insight`) orkestratörün yazdığı
+  `automation`, `flow-coordinator`, `worker`, `insight`) orkestratörün yazdığı
   bir çalışma günlüğüdür: composer gizli olduğu için checkpoint'ten devam etmenin yolu yok,
   dolayısıyla rewind yalnızca kaydı bozar. API `POST /api/sessions/{id}/rewind`'i
   `rejectReadOnlySession` ile **403** döndürür (`internal/api/session_readonly.go`),
@@ -72,6 +72,16 @@ graph LR
   ⟲ butonu ve `RewindDialog` görünmez. Testler:
   `internal/api/session_writable_test.go` (`TestRewindRejectedOnReadOnlySessions`,
   `TestRewindAllowedOnWritableKinds`).
+- **`schedule` kind'ı bu listede DEĞİL — yazılabilir, dolayısıyla rewind edilebilir.**
+  Bir schedule oturumu tek bir koşunun günlüğü değil; ajanın **tek, uzun ömürlü cron
+  sohbetidir** ve `reuse` modundaki her ateşleme oraya yeni bir tur ekler. Kullanıcının
+  turlar arasında o sohbete yazması (zamanlanmış turun sorduğu soruyu yanıtlaması,
+  düzeltmesi, bağlam eklemesi) tasarımın parçasıdır — composer görünür, dolayısıyla
+  checkpoint'ten devam etmenin yolu vardır ve rewind kaydı bozmaz, yeniden sürülebilir
+  kılar. Eşzamanlılık riski yok: kullanıcı turu ile zamanlanmış tur aynı oturum-başına
+  tur yuvasını (`turnqueue`) alır ve birbirini beklerler. Testler:
+  `internal/api/session_writable_test.go` (`TestRewindAllowedOnScheduleSession`,
+  `TestEnqueueMessageAllowedOnScheduleSession`).
 
 ## Olası sonraki adımlar
 

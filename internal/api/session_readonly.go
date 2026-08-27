@@ -10,10 +10,17 @@ import (
 // internal/db (IsWritableSessionKind / IsImmutableSessionKind) so the API, the
 // runtime and the frontend cannot drift apart:
 //
-//  1. NOT WRITABLE — no new USER TURN may be started. Task, flow, schedule,
-//     automation, flow-coordinator and worker transcripts are orchestrator-owned
-//     run logs: fully readable, but a fresh user turn has no run to attach to.
-//     This mirrors what the UI already does by hiding the composer.
+//  1. NOT WRITABLE — no new USER TURN may be started. Task, flow, automation,
+//     flow-coordinator and worker transcripts are orchestrator-owned run logs:
+//     fully readable, but a fresh user turn has no run to attach to. This mirrors
+//     what the UI already does by hiding the composer.
+//
+//     "schedule" is NOT in that group, though the scheduler writes into it too. It
+//     is not a per-run log but the agent's single long-lived cron thread, and the
+//     user is meant to keep talking in it between ticks — answer what a scheduled
+//     turn asked, correct it, add context for the next fire. Interleaving is not a
+//     risk: a user turn and a scheduled turn claim the same per-session turn slot
+//     (turnqueue), which serializes them.
 //  2. IMMUTABLE — the transcript can never change at all. Currently only the
 //     machine-written kinds (insight scan records), where no turn ever runs.
 //

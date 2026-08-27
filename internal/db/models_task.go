@@ -117,6 +117,41 @@ type Task struct {
 	UpdatedAt int64  `json:"updatedAt"`
 }
 
+// Schedule session modes. An agent-backed schedule either REUSES the agent's one
+// long-lived "schedule" thread so every fire is another turn in the same
+// conversation (ScheduleSessionModeReuse — the original and default behavior), or
+// opens a FRESH independent session per fire (ScheduleSessionModeSpawn), which
+// keeps each run's context clean and stops the shared thread from growing without
+// bound. SessionMode == "" is treated as reuse by EffectiveSessionMode, so rows
+// written before the field existed keep their behavior.
+const (
+	ScheduleSessionModeReuse = "reuse"
+	ScheduleSessionModeSpawn = "spawn"
+)
+
+// ValidScheduleSessionMode reports whether mode is empty (defaults to reuse) or a
+// known schedule session mode.
+func ValidScheduleSessionMode(mode string) bool {
+	switch mode {
+	case "", ScheduleSessionModeReuse, ScheduleSessionModeSpawn:
+		return true
+	default:
+		return false
+	}
+}
+
+// EffectiveSessionMode resolves the stored SessionMode to a concrete mode,
+// mapping the empty default to reuse. Callers (the scheduler's fire path) should
+// use this instead of repeating the `== "" → reuse` fallback. Value receiver (not
+// pointer): callers pass Schedule around by value and the tests call it on a
+// composite literal, which is not addressable.
+func (sc Schedule) EffectiveSessionMode() string {
+	if sc.SessionMode == "" {
+		return ScheduleSessionModeReuse
+	}
+	return sc.SessionMode
+}
+
 // Schedule fires on a cron expression and delivers a standalone prompt to its
 // agent. (Schedules are decoupled from the board: they do not run tasks.)
 //
@@ -133,7 +168,13 @@ type Schedule struct {
 	Prompt   string `json:"prompt"`
 	// FlowID, when set, makes this a flow-backed schedule: firing runs that flow
 	// with Prompt as its input instead of delivering the prompt to AgentID.
-	FlowID             string `json:"flowId,omitempty"`
+	FlowID string `json:"flowId,omitempty"`
+	// SessionMode selects, for an AGENT-backed schedule, whether each fire adds a
+	// turn to the agent's shared "schedule" thread (ScheduleSessionModeReuse) or
+	// opens a fresh session of its own (ScheduleSessionModeSpawn). Empty resolves to
+	// reuse via EffectiveSessionMode. Ignored for flow-backed schedules (a flow
+	// always records into its own per-run transcript).
+	SessionMode        string `json:"sessionMode,omitempty"`
 	NextRunAt          int64  `json:"nextRunAt"`
 	LastRunAt          int64  `json:"lastRunAt"`
 	LastDeliveryStatus string `json:"lastDeliveryStatus"`

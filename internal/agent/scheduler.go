@@ -467,6 +467,11 @@ func (s *Scheduler) deliverPrompt(ctx context.Context, sc db.Schedule) (string, 
 	if sc.Prompt == "" {
 		return "", fmt.Errorf("schedule %s has neither task nor prompt", sc.ID)
 	}
+	// Spawn mode opts out of the shared thread entirely: each fire gets its own
+	// session, so none of the reuse-path bookkeeping below applies.
+	if sc.EffectiveSessionMode() == db.ScheduleSessionModeSpawn {
+		return s.deliverSpawnedPrompt(ctx, sc)
+	}
 	agent, err := s.db.GetAgent(ctx, sc.AgentID)
 	if err != nil {
 		s.logger.Warn("schedule deliver: agent lookup failed",
@@ -582,6 +587,50 @@ func (s *Scheduler) deliverPrompt(ctx context.Context, sc db.Schedule) (string, 
 		s.rt.FireTurnFinished(session.ID, agent.ID, output)
 	}
 	return session.ID, err
+}
+
+// deliverSpawnedPrompt runs a "spawn"-mode schedule: every fire opens a NEW
+// session for the agent instead of appending a turn to its shared "schedule"
+// thread. It returns the spawned session id so the caller can deep-link the
+// delivery notification to it.
+//
+// Dispatch goes through LaunchRun rather than SpawnSession directly: LaunchRun is
+// the single launch seam that applies launchGate (the workspace autonomy brake
+// plus the one-line launch telemetry) and forces NoQueue, so a scheduled fire is
+// dispatched immediately instead of waiting behind the spawn queue.
+//
+// The reuse path's two guards are deliberately absent here:
+//   - No stuck gate. That gate protects the ONE long-lived schedule session from
+//     accumulating refusals; a session created a moment ago cannot be stuck.
+//   - No per-session turn slot. The slot serializes concurrent turns on a shared
+//     session; a fresh session has exactly one turn and no other producer can
+//     reach it. Fan-out is instead bounded by the spawn concurrency limit
+//     (SpawnMaxConcurrent) that SpawnSession already enforces.
+func (s *Scheduler) deliverSpawnedPrompt(ctx context.Context, sc db.Schedule) (string, error) {
+	res, err := s.rt.LaunchRun(ctx, RunSpec{
+		Trigger:    TriggerSchedule,
+		Input:      sc.Prompt,
+		Autonomous: true,
+		AgentID:    sc.AgentID,
+		Spawn: SpawnOptions{
+			Title: scheduleSpawnTitle(sc),
+		},
+	})
+	if err != nil {
+		s.logger.Error("schedule deliver: spawn failed",
+			"schedule", sc.ID, "agent", sc.AgentID, "session", res.SessionID, "error", err)
+		return res.SessionID, err
+	}
+	return res.SessionID, nil
+}
+
+// scheduleSpawnTitle names a session spawned by a schedule fire: the schedule's
+// own name when it has one, otherwise a short line derived from its prompt.
+func scheduleSpawnTitle(sc db.Schedule) string {
+	if name := strings.TrimSpace(sc.Name); name != "" {
+		return "⏰ " + name
+	}
+	return "⏰ " + spawnTitle(sc.Prompt)
 }
 
 // nextRun returns the unix time of a schedule's next fire (0 if unknown).

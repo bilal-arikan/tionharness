@@ -92,6 +92,7 @@ erDiagram
         text agent_id FK
         text cron_expr
         text prompt
+        text session_mode
         int  next_run_at
         int  last_run_at
         text last_delivery_status
@@ -165,7 +166,7 @@ erDiagram
 | `session_messages` | Tur geçmişi: rol, metin, araç çağrıları, akıl yürütme içeriği, aktivite izi (`steps`); **`agent_id`** = turu üreten ajan (çok-ajanlı oturumda mesaj başına ajan) |
 | `agent_usage` | Ajan başına gün bazlı kullanım sayacı (çağrı + giriş/çıkış token) — `db.Usage`, `store_usage.go`. **Yalnız takip/raporlama** (Tasarruf Merkezi + spend metre); limit uygulamaz |
 | `tasks` | Pano durumu (`board_state`), sahiplik, ajana verilen `prompt`, son çalışma özeti, bağımlılıklar. **`flow_id`** dolu ise görev "flow-backed" — çalıştırılınca ajana prompt yerine o orchestration akışı koşar. **`created_by`** = görevi oluşturan ajan ("" = kullanıcı; yalnız köken/görüntü, silme kapısı değil) |
-| `schedules` | Cron zamanlama; ajana doğrudan `prompt` teslimi (panodan bağımsız — görev çalıştırmaz); sonraki/son çalışma + teslim durumu; etkin mi. **`expires_at`** dolu ise (opsiyonel son tarih, unix saniye) o tarihten sonra zamanlama çalışmaz ve otomatik pasifleşir (0 = süresiz) |
+| `schedules` | Cron zamanlama; ajana doğrudan `prompt` teslimi (panodan bağımsız — görev çalıştırmaz); sonraki/son çalışma + teslim durumu; etkin mi. **`expires_at`** dolu ise (opsiyonel son tarih, unix saniye) o tarihten sonra zamanlama çalışmaz ve otomatik pasifleşir (0 = süresiz). **`session_mode`** (yalnız ajan hedefli zamanlamalarda) her ateşlemenin hangi oturumda koşacağını seçer: `reuse` (varsayılan; boş değer de böyle yorumlanır) ajanın tek uzun ömürlü `schedule` sohbetine yeni bir tur ekler — kullanıcı aralarda o sohbete yazıp yön verebilir; `spawn` her ateşlemede ajana **yeni bir oturum** açar — her koşu temiz bağlamla başlar ve ortak sohbet sınırsız büyümez. Akış (flow) hedefli zamanlamalarda yok sayılır, çünkü akış zaten kendi koşu transkriptini yazar |
 | `runs` | Yürütme kaydı: durum, tetikleyici (`trigger`), ajan çıktısı (`output`), hata |
 | ~~`knowledge_sources`~~ | **KALDIRILDI (2026-07-05)** — hafıza alt sistemiyle birlikte çıkarıldı |
 | `mcp_servers` | İsim, taşıma (stdio; SSE/HTTP henüz yok), `command`/`args`/`url`, env config, `enabled`, `scope` (workspace). **`created_by`** = sunucuyu ekleyen ajan ("" = kullanıcı tanımlı; yalnız köken/görüntü, silme kapısı değil) |

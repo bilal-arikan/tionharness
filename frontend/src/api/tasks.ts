@@ -1,7 +1,15 @@
 // Tasks (kanban board) and cron schedules. The board is a passive status
 // surface: tasks are described, columned and optionally tagged with an agent or
 // flow. It never runs anything — flows, schedules and agent sessions do the work.
-import type { Task, TaskPatch, Schedule, BoardState, Automation, BoardAction } from '@/types'
+import type {
+  Task,
+  TaskPatch,
+  Schedule,
+  ScheduleSessionMode,
+  BoardState,
+  Automation,
+  BoardAction,
+} from '@/types'
 import { req } from './client'
 
 export const taskApi = {
@@ -50,6 +58,7 @@ export const taskApi = {
     flowId?: string
     cronExpr: string
     prompt?: string
+    sessionMode?: ScheduleSessionMode
     enabled?: boolean
     expiresAt?: number
   }) =>
@@ -65,6 +74,7 @@ export const taskApi = {
       flowId?: string
       cronExpr: string
       prompt?: string
+      sessionMode?: ScheduleSessionMode
       expiresAt?: number
     },
   ) =>
