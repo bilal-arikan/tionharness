@@ -79,8 +79,9 @@ derinlik/çocuk cap'i şart (§8.1).
 1. **Yeni Kind'ler:** `KindAgent`, `KindBudget`, `KindTools`, `KindCategory`
    (grup düğümü; ID = `sessions|flows|agents|...`). Board-sütunu zaten `Sub`.
 2. **Yeni projeksiyonlar (deterministik, LLM yok):**
-   - `agent.go` — `ProjectAgent`: ajan kimliği + bugünkü token/maliyet + aktif oturum
-     sayısı + son etkinlik; handle'lar → ajanın oturumları.
+   - `agent.go` — `ProjectAgent`: ajan kimliği + aktif oturum sayısı + son etkinlik;
+     handle'lar → ajanın oturumları. Harcama **yok** (TSK374) — para yalnız `budget`
+     view'ında.
    - `budget.go` — `ProjectBudget`: `billing.RollupOf` roll-up'ını View'a sar (yeniden
      hesaplama yok); gün/model kırılımı handle'ları.
    - `tools.go` — `ProjectTools`: workspace-aktif araç seti + MCP sunucu havuzu durumu.

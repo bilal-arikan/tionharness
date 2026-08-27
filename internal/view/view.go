@@ -33,9 +33,9 @@ const (
 	KindBoard    Kind = "board"
 	KindSpace    Kind = "workspace"
 	KindSchedule Kind = "schedule"
-	// KindAgent projects one agent: identity + today's token/cost + how many of
-	// its sessions are open + last activity. Its structural children are that
-	// agent's sessions.
+	// KindAgent projects one agent: identity + how many of its sessions are open
+	// + last activity. Spend is not part of it — the budget view owns money. Its
+	// structural children are that agent's sessions.
 	KindAgent Kind = "agent"
 	// KindBudget wraps billing.RollupOf into a view: today's spend broken down by
 	// model. It re-renders the rollup, it never re-prices — the numbers come from
