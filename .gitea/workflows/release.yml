@@ -1,14 +1,24 @@
-name: Release (verify only)
+name: Release
 
-# PUBLISHING IS OWNED BY GITHUB ACTIONS -- see .github/workflows/release.yml.
-# That workflow creates the GitHub Release, uploads the archives as assets and
-# publishes latest.json to GitHub Pages. This Gitea workflow deliberately does
-# NOT publish anything: two pipelines firing on the same `v*` tag would race
-# over latest.json and could advertise a version whose assets are not up yet.
+# Tag-triggered release for the Gitea runner: run the full ci.yml gate, build
+# every artifact with scripts/build-release.sh, then rsync the result to a
+# static release host (deploy/release-host layout: <root>/v<version>/<files>
+# plus a top-level latest.json).
 #
-# What is left here is verification: on a tag push, prove that the gate is green
-# and that scripts/build-release.sh actually produces the full artifact set on a
-# clean Linux runner. Nothing leaves the runner; there is no VPS and no rsync.
+# Publishing is the LAST step on purpose. Every gate and build step runs before
+# anything leaves the runner, so a red test or a failed cross-compile aborts the
+# job with the feed untouched -- clients keep seeing the previous version instead
+# of a half-uploaded one.
+#
+# Nothing about the destination is hardcoded. Host, user, path, port and the SSH
+# key all come from Gitea secrets, so the same workflow points at a local Docker
+# volume today and at a VPS later with no file change.
+#
+# This is a SEPARATE feed from the GitHub one (.github/workflows/release.yml,
+# which serves latest.json from Pages). The two never write the same object: this
+# one only ever touches ${RELEASE_PATH} on the self-hosted release host. Do not
+# point RELEASE_FEED_BASE at the Pages domain -- that would put two pipelines in
+# a race over one feed on every tag push.
 
 on:
   push:
@@ -20,40 +30,18 @@ on:
         required: false
         default: ''
 
+# One release at a time; never let two runs race over latest.json.
 concurrency:
-  group: release-verify-tionharness
+  group: gitea-release-tionharness
   cancel-in-progress: false
 
 jobs:
-  # Same gate as ci.yml. A workflow cannot `needs:` a job in another workflow
-  # file, so the check is repeated here rather than trusted to run elsewhere.
-  test:
+  release:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 60
     env:
+      # Without this the shell-tool tests skip instead of running.
       TIONHARNESS_ENABLE_SHELL: '1'
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.26'
-
-      - name: Placeholder for the embedded SPA
-        run: mkdir -p internal/web/dist && touch internal/web/dist/index.html
-
-      - name: Vet
-        run: go vet ./...
-
-      - name: Test
-        run: go test ./... -count=1 -race -timeout 900s
-
-  build:
-    needs: test
-    runs-on: ubuntu-latest
-    timeout-minutes: 40
     steps:
       # Tags are needed by build-release.sh (git describe) and by the version
       # resolution below, so fetch the full history rather than a shallow tip.
@@ -74,6 +62,30 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
+      # --- gate: identical to ci.yml. A release must never ship a red build. ---
+
+      # internal/web/dist is gitignored but //go:embed all:dist needs the
+      # directory to exist to compile. build-release.sh replaces it later with
+      # the real frontend build.
+      - name: Placeholder for the embedded SPA
+        run: mkdir -p internal/web/dist && touch internal/web/dist/index.html
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: go test ./... -count=1 -race -timeout 900s
+
+      - name: Frontend install
+        working-directory: frontend
+        run: npm ci
+
+      - name: Frontend test
+        working-directory: frontend
+        run: npm test
+
+      # --- build ---------------------------------------------------------------
+
       # Tag push -> ref_name is the tag; manual run -> the dispatch input.
       - name: Resolve version
         env:
@@ -87,22 +99,101 @@ jobs:
             exit 1
           fi
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
-          echo "Verifying build of version $VERSION"
+          echo "Releasing version $VERSION"
 
-      # The same two bases GitHub Actions uses, so the generated latest.json here
-      # is byte-comparable with the published one.
+      # FEED_BASE is where clients poll latest.json; ARTIFACT_BASE is where the
+      # archives live. On a single static host they are the same origin, so
+      # ARTIFACT_BASE defaults to <feed>/v<version> inside build-release.sh and
+      # only needs a secret when the two are split.
       - name: Build release artifacts
         env:
           NODE_OPTIONS: --max_old_space_size=1536
-          FEED_BASE: https://tionharness.com
+          FEED_BASE: ${{ secrets.RELEASE_FEED_BASE }}
+          ARTIFACT_BASE: ${{ secrets.RELEASE_ARTIFACT_BASE }}
         run: |
-          export ARTIFACT_BASE="https://github.com/bilal-arikan/tionharness/releases/download/v$VERSION"
+          if [ -z "$FEED_BASE" ]; then
+            echo "RELEASE_FEED_BASE secret is not set -- the feed URLs would point at the wrong host." >&2
+            exit 1
+          fi
+          if [ -z "$ARTIFACT_BASE" ]; then
+            unset ARTIFACT_BASE
+          fi
+          echo "Feed base: $FEED_BASE"
           scripts/build-release.sh "$VERSION"
           ls -la "dist/release/$VERSION"
 
+      # Cheap guard against publishing a feed the client cannot parse: the whole
+      # point of the release is that latest.json stays valid.
+      - name: Verify latest.json
+        run: |
+          FEED="dist/release/$VERSION/latest.json"
+          test -s "$FEED" || { echo "missing or empty $FEED" >&2; exit 1; }
+          node -e '
+            const fs = require("fs");
+            const feed = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+            if (feed.version !== process.argv[2]) {
+              throw new Error(`latest.json version ${feed.version} != ${process.argv[2]}`);
+            }
+            if (!Array.isArray(feed.artifacts) || feed.artifacts.length === 0) {
+              throw new Error("latest.json has no artifacts");
+            }
+            console.log(`latest.json OK: v${feed.version}, ${feed.artifacts.length} artifacts`);
+          ' "$FEED" "$VERSION"
+
+      # --- publish (LAST) ------------------------------------------------------
+
+      - name: Configure SSH for the release host
+        env:
+          SSH_KEY: ${{ secrets.RELEASE_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.RELEASE_SSH_KNOWN_HOSTS }}
+        run: |
+          for name in SSH_KEY KNOWN_HOSTS; do
+            eval "value=\${$name}"
+            if [ -z "$value" ]; then
+              echo "RELEASE_${name} secret is not set -- refusing to publish." >&2
+              exit 1
+            fi
+          done
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/release_key
+          chmod 600 ~/.ssh/release_key
+          # Pinned host keys only -- never StrictHostKeyChecking=no, which would
+          # happily upload the release to whoever answers on that address.
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      # Version directory first, feed second. Uploading latest.json before the
+      # archives it points at would advertise URLs that 404 for the duration of
+      # the transfer.
+      - name: Publish to the release host
+        env:
+          RELEASE_HOST: ${{ secrets.RELEASE_HOST }}
+          RELEASE_USER: ${{ secrets.RELEASE_USER }}
+          RELEASE_PATH: ${{ secrets.RELEASE_PATH }}
+          RELEASE_PORT: ${{ secrets.RELEASE_PORT }}
+        run: |
+          for name in RELEASE_HOST RELEASE_USER RELEASE_PATH; do
+            eval "value=\${$name}"
+            if [ -z "$value" ]; then
+              echo "$name secret is not set -- refusing to publish." >&2
+              exit 1
+            fi
+          done
+          PORT="${RELEASE_PORT:-22}"
+          SRC="dist/release/$VERSION"
+          DEST_ROOT="${RELEASE_PATH%/}"
+          SSH_CMD="ssh -p $PORT -i ~/.ssh/release_key -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$HOME/.ssh/known_hosts"
+
+          $SSH_CMD "$RELEASE_USER@$RELEASE_HOST" "mkdir -p '$DEST_ROOT/v$VERSION'"
+          rsync -az --delete -e "$SSH_CMD" \
+            "$SRC/" "$RELEASE_USER@$RELEASE_HOST:$DEST_ROOT/v$VERSION/"
+          rsync -az -e "$SSH_CMD" \
+            "$SRC/latest.json" "$RELEASE_USER@$RELEASE_HOST:$DEST_ROOT/latest.json"
+          echo "Published v$VERSION to $DEST_ROOT"
+
       - name: Summary
         run: |
-          echo "Version: $VERSION -- build verified, nothing published."
-          echo "Publishing happens in .github/workflows/release.yml."
+          echo "Version: $VERSION"
+          echo "Artifacts: dist/release/$VERSION"
           cat "dist/release/$VERSION/SHA256SUMS"
-          cat "dist/release/$VERSION/latest.json"

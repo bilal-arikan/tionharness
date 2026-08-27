@@ -166,14 +166,32 @@ anahtarı, rsync, `RELEASE_*` secret'ları ve VPS **kaldırılmıştır**.
 4. **Settings → Actions → General → Workflow permissions**: `Read and write
    permissions` (feed commit'i ve release oluşturma bunu gerektirir).
 
-## Gitea tarafı: yalnız doğrulama
+## Gitea tarafı: kendi barındırılan sürüm sunucusuna yayın
 
-`.gitea/workflows/release.yml` **hiçbir şey yayımlamaz**. Aynı `v*` etiketinde iki
-hat birden yayımlasaydı `latest.json` üzerinde yarışırlardı. Gitea kopyası artık
-sadece kapıyı (vet + test) ve `build-release.sh`'in temiz bir Linux runner'da tam
-artifact setini gerçekten ürettiğini doğrular; rsync adımları ve `RELEASE_*`
-secret'ları kaldırılmıştır. Dosya bilinçli olarak silinmedi — Gitea hâlâ ikinci bir
-derleme doğrulaması sağlıyor.
+`.gitea/workflows/release.yml` de `v*` etiketiyle tetiklenir ve şu sırayı izler:
+kapı (vet + `go test -race` + frontend testleri) → `scripts/build-release.sh` →
+`latest.json` doğrulaması → rsync ile yayın. **Yayın en son adımdır**: kapı veya
+derleme kırılırsa runner'dan hiçbir dosya çıkmaz, sunucudaki feed eski sürümü
+göstermeye devam eder.
+
+Hedef tamamen secret ile parametriktir; dosyada hiçbir host/adres/anahtar gömülü
+değildir:
+
+| Secret | Zorunlu | Anlamı |
+|--------|---------|--------|
+| `RELEASE_HOST` | evet | rsync/ssh hedef host |
+| `RELEASE_USER` | evet | ssh kullanıcısı |
+| `RELEASE_PATH` | evet | sunucudaki kök dizin (feed + `v<sürüm>/` buraya yazılır) |
+| `RELEASE_PORT` | hayır | ssh portu (varsayılan `22`) |
+| `RELEASE_SSH_KEY` | evet | özel anahtar (PEM içeriği) |
+| `RELEASE_SSH_KNOWN_HOSTS` | evet | sabitlenmiş host anahtarı (`StrictHostKeyChecking=yes`) |
+| `RELEASE_FEED_BASE` | evet | `latest.json` içindeki URL'lerin kök adresi |
+| `RELEASE_ARTIFACT_BASE` | hayır | arşivler ayrı bir originde duruyorsa |
+
+Bu, GitHub Pages feed'inden **ayrı** bir feed'dir: yalnız `RELEASE_PATH` altına
+yazar. `RELEASE_FEED_BASE`'i Pages alan adına yönlendirmeyin — o zaman iki hat aynı
+`latest.json` üzerinde yarışır. Bugünkü hedef yerel Docker volume'ü
+(`deploy/release-host/srv/dl`), ileride VPS; workflow dosyası değişmez.
 
 ## Yerel önizleme (üretim DEĞİL)
 
@@ -288,7 +306,7 @@ powershell -NoProfile -File scripts/install.ps1 -FeedUrl http://localhost:8080
 | `.github/workflows/pages.yml` | `website/` derleyip GitHub Pages'e deploy eder; `latest.json` ve `CNAME` de bu deploy'la gider |
 | `website/public/latest.json` | Yayımlanan feed'in kaynağı → `https://tionharness.com/latest.json` |
 | `website/public/CNAME` | Pages custom domain (`tionharness.com`) |
-| `.gitea/workflows/release.yml` | Yalnız doğrulama: kapı + derleme, **yayın yok** |
+| `.gitea/workflows/release.yml` | Etiket → kapı → derleme → `latest.json` doğrulama → rsync (kendi barındırılan sürüm sunucusu, `RELEASE_*` secret'ları) |
 | `scripts/build-release.sh` | Çapraz derleme, arşivleme, `SHA256SUMS`, `latest.json` (`FEED_BASE` + `ARTIFACT_BASE`) |
 | `scripts/install.sh` | Linux/macOS/Git Bash kurulum script'i (feed + sha256) |
 | `scripts/install.ps1` | Windows PowerShell kurulum script'i (feed + sha256) |
