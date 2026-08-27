@@ -37,7 +37,11 @@
   --color-warning: #fbbf24;
   --color-on-warning: var(--color-bg);
   --color-danger: #f87171;
+  --color-on-danger: var(--color-bg);
   --color-info: #38bdf8;
+  /* Muted informational fill (queue/"later" actions): a calm bluish surface that
+     carries --color-text, unlike the vivid --color-info used for icons/borders. */
+  --color-info-soft: #1e3a5f;
 
   /* Elevation + shape scale for a more layered, premium feel. */
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
@@ -67,7 +71,9 @@
   --color-warning: #a54a07;
   --color-on-warning: var(--color-surface);
   --color-danger: #b91c1c;
+  --color-on-danger: var(--color-surface);
   --color-info: #0284c7;
+  --color-info-soft: #dbe7f7;
 
   --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.06);
   --shadow-md: 0 4px 16px -2px rgba(16, 24, 40, 0.1);

@@ -9580,3 +9580,19 @@ bir CLI provider'ı değil — meşru model referansları olarak korundu.
   içindeki `bg-white`/`bg-black` kullanıcı içeriği tuvalidir, kasıtlı.
 - **Doğrulama:** `npx tsc --noEmit` ✅, `npm run format:check` ✅,
   `git diff --check` ✅.
+
+### Ek dilim — composer buton stilleri (`buttonStyles.ts`)
+
+- **Yeni token — `--color-on-danger`:** `--color-on-success`/`--color-on-warning`
+  ile aynı desende, HEM `@theme` (koyu: `var(--color-bg)`) HEM
+  `[data-theme='light']` (`var(--color-surface)`) bloğuna eklendi. `var()`
+  referansı olduğu için preset'ler `--color-bg`/`--color-surface`'i inline
+  ezdiğinde de doğru çözülür; `themePresets.ts`'e alan eklemek gerekmedi.
+- **Yeni token — `--color-info-soft`:** dolgu (surface) amaçlı sakin bilgi rengi;
+  koyu `#1e3a5f`, açık `#dbe7f7`. `--color-info` (canlı, ikon/kenarlık için)
+  dolgu olarak kullanılamadığı için ayrı token. Yine iki blokta birden.
+- **Değişen:** `buttonStyles.ts:13,18,23` — `BTN_DANGER` ve `BTN_STOP_COMPACT`
+  `text-white` → `text-[var(--color-on-danger)]`; `BTN_QUEUE`
+  `bg-[#1e3a5f] text-white hover:bg-[#264a75]` →
+  `bg-[var(--color-info-soft)] text-[var(--color-text)] hover:opacity-90`
+  (hover artık dosyadaki diğer butonlarla aynı idiyom).
