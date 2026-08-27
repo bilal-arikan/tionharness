@@ -34,7 +34,7 @@ export const PeerTurn = memo(function PeerTurn({
   return (
     <div className="group flex flex-col gap-1">
       <div className="flex w-full justify-start">
-        <div className="max-w-[80%] min-w-0 rounded-2xl bg-[color-mix(in_srgb,var(--color-surface-2)_65%,var(--color-bg))] px-4 py-3">
+        <div className="max-w-[80%] min-w-0 rounded-2xl border border-[var(--color-sender-bubble-border)] bg-[var(--color-sender-bubble)] px-4 py-3 text-[var(--color-on-sender-bubble)]">
           {sender ? (
             <AgentHeader agent={sender} onOpenAgent={onOpenAgent} />
           ) : m.authorId ? (
@@ -42,7 +42,7 @@ export const PeerTurn = memo(function PeerTurn({
               {m.authorId}
             </div>
           ) : null}
-          <div className="whitespace-pre-wrap break-words text-sm leading-relaxed text-[var(--color-text)]">
+          <div className="whitespace-pre-wrap break-words text-sm leading-relaxed text-[var(--color-on-sender-bubble)]">
             {m.text}
           </div>
         </div>

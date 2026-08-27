@@ -411,6 +411,18 @@ kırpıldı:
     meta'sı gösterilir. `MessageList` `isPeer(m)` ile tespit edip bu bileşene devreder;
     peer satırları "typed user" pin/overlay'den de dışlanır. Gönderen roster'da yoksa
     ham `authorId` fallback olarak yazılır (atıf sessizce kaybolmaz).
+    **Gönderici balon rengi (2026-08-28):** balon artık asistan balonuyla aynı
+    `surface-2` karışımını değil, kendi tema token'larını kullanır —
+    `--color-sender-bubble` (dolgu), `--color-sender-bubble-border` (kenar),
+    `--color-on-sender-bubble` (metin). Böylece "bu mesajı başkası gönderdi"
+    bir bakışta ayrışır; kimin gönderdiği ise AgentHeader'daki ajana özel
+    avatar renginden okunur. Token'lar üç yerde birlikte tutulur:
+    `frontend/src/index.css` (dark `@theme` + `[data-theme='light']`),
+    `frontend/src/shared/lib/themePresets.ts` (`DARK_NEUTRALS`/`LIGHT_NEUTRALS`,
+    `theme.ts` ile CSS değişkenine yazılır) ve site aynası
+    `website/src/styles/theme.css` + `website/src/content/themes.ts`.
+    `themePresets.test.ts` her preset için token'ların dolu olduğunu ve
+    dolgu↔metin kontrastının WCAG AA (≥ 4.5) kaldığını doğrular.
   - `AutoPromptNote.tsx` — `Message.origin` dolu olduğunda (`wake`/`schedule`)
     ortalanmış "⏰ Otomatik devam / Zamanlanmış görev" notu (kullanıcı balonu değil).
   - `AssistantTurn.tsx` — asistan turu (başlık + akıl yürütme + iz + cevap + meta).

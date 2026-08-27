@@ -11,6 +11,9 @@ export interface Neutrals {
   surface: string
   surface2: string
   border: string
+  senderBubble: string
+  onSenderBubble: string
+  senderBubbleBorder: string
   text: string
   textDim: string
 }
@@ -20,6 +23,9 @@ export const DARK_NEUTRALS: Neutrals = {
   surface: '#17171a',
   surface2: '#202024',
   border: '#2b2b30',
+  senderBubble: '#24242f',
+  onSenderBubble: '#e7e7ea',
+  senderBubbleBorder: '#3b3b4a',
   text: '#e7e7ea',
   textDim: '#9a9aa6',
 }
@@ -29,6 +35,9 @@ export const LIGHT_NEUTRALS: Neutrals = {
   surface: '#ffffff',
   surface2: '#eceef2',
   border: '#d8dce3',
+  senderBubble: '#e7eaf1',
+  onSenderBubble: '#16202c',
+  senderBubbleBorder: '#c3c9d4',
   text: '#16202c',
   textDim: '#5a6470',
 }
