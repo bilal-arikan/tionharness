@@ -406,8 +406,8 @@ export function ToolsPanel({ draft, set }: PanelProps) {
         etkilenmez.
       </div>
       <Toggle
-        label="Otonom turları çalışma dizinine kilitle"
-        hint="Açıkken zamanlama/spawn/flow ile çalışan ajanların dosya araçları yalnızca oturumun çalışma dizininde kalır (mutlak yol + `..` kaçışı reddedilir) ve `git push` engellenir. Önerilen: AÇIK."
+        label="Otonom turlarda dosya araçlarını çalışma dizinine kilitle"
+        hint="Açıkken zamanlama/spawn/flow ile çalışan ajanların DOSYA araçları yalnızca oturumun çalışma dizininde kalır (mutlak yol + `..` kaçışı reddedilir) ve `git push` engellenir. Dikkat: `shell`, `powershell` ve `transform_data` bundan ETKİLENMEZ — komutlar yol olarak kısıtlanmaz, tek sınır sürecin çalışma dizinidir; kilitli bir turda bile shell ile dışarıya yazılabilir. Önerilen: AÇIK."
         checked={draft.autonomousConfine}
         onChange={(v) => set('autonomousConfine', v)}
       />

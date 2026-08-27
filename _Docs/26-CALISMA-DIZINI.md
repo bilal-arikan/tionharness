@@ -59,7 +59,7 @@ için bir fren var (Ayarlar ▸ MCP & Araçlar):
 
 | Ayar | Varsayılan | Etki |
 |---|---|---|
-| `autonomousConfine` | **açık** | Otonom turda fs araçları çalışma dizinine **kilitlenir** (mutlak yol + `..` reddi) ve shell'de `git push` engellenir. İnteraktif sohbet etkilenmez. |
+| `autonomousConfine` | **açık** | Otonom turda **fs araçları** çalışma dizinine **kilitlenir** (mutlak yol + `..` reddi) ve shell'de `git push` engellenir. **Shell yolu kısıtlanmaz** (aşağıya bak). İnteraktif sohbet etkilenmez. |
 
 - Confine, `Sandbox.Confined` bayrağını yeniden kullanır (`internal/tools/sandbox.go`):
   interaktif = `NewSandbox` (kilitsiz), otonom+confine = `NewConfinedSandbox`.
@@ -78,6 +78,40 @@ için bir fren var (Ayarlar ▸ MCP & Araçlar):
 - Kök içi/dışı karşılaştırması (`underRoot`) Windows'ta **case-insensitive**'dir;
   bu, dosya sistemiyle ve `internal/api/files.go` içindeki `underDir` sınırıyla
   aynı davranışı verir (önceden ikisi farklıydı).
+
+### Confine, shell'de path kısıtlamaz (2026-08-28)
+
+`autonomousConfine` adı yanıltıcı olabilir: confine **yalnız fs araçlarını**
+kapatır, kabuğu kapatmaz.
+
+| Araç | Confined turda kısıtlı mı? | Mekanizma |
+|---|---|---|
+| `read_file`, `write_file`, `edit_file`, `apply_patch`, `list_dir`, `glob`, `grep`, `config_validate` | **Evet** | Her yol argümanı `Sandbox.Resolve`'dan geçer; mutlak yol ve `..` kaçışı reddedilir. |
+| `shell` (Bash), `powershell` | **Hayır** | `Sandbox.Resolve` bu yolda **hiç çağrılmaz**. Komut, kabuğa opak bir metin olarak verilir. |
+| `transform_data` | **Hayır** | Aynı kapıdan (`ShellEnabled`) kayıtlı, ana makinede python/node çalıştırır. |
+
+Confined bayrağının shell yolunda yaptığı **tek** iki şey
+(`internal/tools/builtin_shell.go`, `builtin_shell_harden.go`):
+
+1. `proc.DisableGitSigningEnv()` env'e eklenir — ajanın koştuğu `git commit`
+   GPG pinentry parola istemine takılıp sonsuza kadar beklemesin diye.
+2. `isNetworkMutatingGit` ile `git push` / `git remote add` / `git remote set-url`
+   engellenir — substring tabanlı, best-effort fren.
+
+Gerçek tek sınır **süreç çalışma dizinidir** (`cmd.Dir = sb.Root`). Yani confined
+bir turda `write_file` ile `/c/başka/yer` yazılamaz ama
+`sh -c 'echo x > /c/başka/yer/f'` serbesttir — shell, fs araçlarının kısıtını
+komple bypass eder.
+
+**Neden statik komut ayrıştırma çözüm değil:** komut metninden yol çıkarıp
+reddetmek güvenilir biçimde yapılamaz. `cat $(echo /c/x)`, `p=/c/x; cat "$p"`,
+`cd /c/x && cat f`, `python -c "open('/c/x')"` — hepsi her ayrıştırıcıyı deler.
+Yarım koruma "kısıtlı" etiketiyle sunulduğunda, hiç koruma olmamasından daha
+kötüdür: yanlış güven yaratır. Bu yüzden mevcut davranış **belgelenmiştir,
+kısıtlanmamıştır**.
+
+Gerçek sınır için OS-seviyesi izolasyon gerekir (container / Windows job object
+ile dosya sistemi kapsamı). Bu ayrı bir karttır ve v0.1.0 sonrasına bırakılmıştır.
 
 > **Not (2026-08-26):** Eski per-session `gitWorktreeIsolation` özelliği kaldırılmış
 > kalır. Yerine kart yaşam döngüsünün tek sahibi olan `internal/worktree` geldi:
@@ -106,11 +140,11 @@ tek `.git` deposu paylaşılır, her worktree'nin kendi çalışma dizini + dal�
 
 ## Akış matrisi
 
-| Tur tipi | Sandbox | git push |
-|---|---|---|
-| İnteraktif sohbet | Kilitsiz | Serbest |
-| Otonom + confine açık | Çalışma dizinine kilitli | Engelli |
-| Otonom + confine kapalı | Kilitsiz | Serbest |
+| Tur tipi | fs araçları | shell path | git push |
+|---|---|---|---|
+| İnteraktif sohbet | Kilitsiz | Kilitsiz | Serbest |
+| Otonom + confine açık | Çalışma dizinine kilitli | **Kilitsiz** (yalnız cwd = çalışma dizini) | Engelli |
+| Otonom + confine kapalı | Kilitsiz | Kilitsiz | Serbest |
 
 ## the external agent project ile fark
 

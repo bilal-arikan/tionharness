@@ -33,6 +33,8 @@ func hardenShellCmd(cmd *exec.Cmd, confined bool) *exec.Cmd {
 	// guards are appended to an already-filtered base (never to a raw os.Environ()).
 	cmd.Env = proc.HardenedEnv(proc.CredentialSafeEnv(cmd.Env))
 	if confined {
+		// This is the ONLY thing `confined` does to a shell subprocess — it is not a
+		// path restriction. See the note above shellMaxOutputBytes in builtin_shell.go.
 		cmd.Env = append(cmd.Env, proc.DisableGitSigningEnv()...)
 	}
 	proc.TreeKill(cmd)

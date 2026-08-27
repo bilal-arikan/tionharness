@@ -95,7 +95,7 @@ func (s *Server) handleListBuiltinHooks(w http.ResponseWriter, _ *http.Request) 
 			Event:       "PreToolUse",
 			Setting:     "autonomousConfine",
 			Enabled:     cur.AutonomousConfine,
-			Description: "On autonomous (confined) turns, shell commands that push to a git remote (git push / remote add / set-url) are blocked — a human-in-the-loop safeguard. Interactive chat is unaffected.",
+			Description: "On autonomous (confined) turns, shell commands that push to a git remote (git push / remote add / set-url) are blocked — a human-in-the-loop safeguard. Interactive chat is unaffected. Best-effort substring check, not a boundary: confine does not path-restrict the shell at all (only the fs tools), so a confined turn can still read and write outside the working dir via a shell command.",
 		},
 		{
 			Name:        "Hook fail-open policy",

@@ -15,6 +15,26 @@ import (
 	"github.com/bilal-arikan/tionharness/internal/providers"
 )
 
+// WHAT Sandbox.Confined DOES *NOT* MEAN HERE: it does not confine paths.
+//
+// The fs tools resolve every path argument through Sandbox.Resolve, which rejects
+// absolute paths and `..` escapes when confined. The shell tools never call
+// Resolve — a command is an opaque string handed to bash/PowerShell. Confined
+// changes exactly two things on this path:
+//
+//  1. hardenShellCmd appends proc.DisableGitSigningEnv() so an agent-run commit
+//     cannot block on a GPG pinentry prompt (see builtin_shell_harden.go).
+//  2. isNetworkMutatingGit blocks `git push` / `git remote add` / `git remote
+//     set-url` — a best-effort substring brake, not a boundary.
+//
+// The only thing that keeps a confined shell near the working directory is
+// cmd.Dir = sb.Root (the process CWD). `sh -c 'echo x > /c/elsewhere/f'` runs
+// exactly as it does unconfined. Deriving a path restriction from the command
+// string is not attemptable in a trustworthy way — `cat $(echo /c/x)`,
+// `p=/c/x; cat "$p"`, `cd /c/x && cat f`, `python -c "open('/c/x')"` all defeat
+// any static parse, and a half-guard advertised as "confined" is worse than a
+// documented gap. A real boundary needs OS-level isolation (container / job
+// object), tracked separately.
 const shellMaxOutputBytes = 64 * 1024 // cap combined stdout+stderr
 
 // Shell timeouts are process-global and settings-driven (ShellDefaultTimeoutSec /
@@ -508,8 +528,10 @@ func isRTKWrapped(cmd string) bool {
 // isNetworkMutatingGit reports whether cmd looks like a git operation that
 // mutates a remote (push). It is a best-effort substring check used only as the
 // autonomous brake — it normalises whitespace and lowercases so "git   push" and
-// "git push --force" are caught. Not a security boundary; the real boundary is
-// running autonomous turns confined.
+// "git push --force" are caught. Not a security boundary, and confining the turn
+// does not add one for the shell: a confined shell still runs arbitrary commands
+// on any path (see the note above shellMaxOutputBytes). This brake only raises
+// the cost of an accidental push.
 func isNetworkMutatingGit(cmd string) bool {
 	norm := strings.ToLower(strings.Join(strings.Fields(cmd), " "))
 	return strings.Contains(norm, "git push") || strings.Contains(norm, "git remote add") || strings.Contains(norm, "git remote set-url")
