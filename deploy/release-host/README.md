@@ -1,4 +1,11 @@
-# TionHarness sürüm sunucusu
+# TionHarness sürüm sunucusu — YEREL ÖNİZLEME
+
+> **Bu birim üretimde kullanılmaz.** Üretimde ortada VPS yoktur: binary'ler GitHub
+> Release asset'i, `latest.json` ise GitHub Pages üzerinden
+> `https://tionharness.com/latest.json` adresinde sunulur
+> (`.github/workflows/release.yml` + `pages.yml`, ayrıntı:
+> `_Docs\75-YAYIN-SURECI.md`). Aşağıdaki Caddy birimi yalnızca feed + indirme
+> yerleşimini **yerelde** denemek içindir.
 
 Bu Docker Compose birimi, Caddy ile iki statik site sunar:
 
@@ -35,7 +42,10 @@ Kontrol:
 curl http://localhost:8080/latest.json
 ```
 
-## VPS'e taşıma
+## VPS'e taşıma (ARTIK GEÇERLİ DEĞİL)
+
+Aşağıdaki adımlar yalnızca tarihsel referanstır; mevcut yayın mimarisi VPS
+kullanmaz. Kendi barındırma altyapınıza taşımak isterseniz izlenecek yol budur:
 
 1. `deploy/release-host/` dizinini VPS'e kopyalayın.
 2. `.env.example` dosyasını `.env` olarak kopyalayıp üretim profilindeki site adreslerini ve `80`/`443` portlarını ayarlayın.

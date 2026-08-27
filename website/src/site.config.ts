@@ -45,7 +45,7 @@ export const site: SiteConfig = {
     'Self-hosted multi-agent AI workspace and control plane. One binary, no database, no API key.',
 
   url: 'https://tionharness.com',
-  feedUrl: import.meta.env.PUBLIC_FEED_URL ?? 'https://dl.tionharness.com',
+  feedUrl: import.meta.env.PUBLIC_FEED_URL ?? 'https://tionharness.com',
 
   // TODO(placeholder): public repository is not published yet.
   repoUrl: null,

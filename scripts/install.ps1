@@ -8,7 +8,7 @@
 
 .PARAMETER FeedUrl
   Release feed base URL. Defaults to $env:TIONHARNESS_FEED_URL when set,
-  otherwise https://dl.tionharness.com
+  otherwise https://tionharness.com
 
 .EXAMPLE
   powershell -NoProfile -File scripts/install.ps1
@@ -28,7 +28,7 @@ function Fail([string]$Message) {
 
 if (-not $FeedUrl) {
     if ($env:TIONHARNESS_FEED_URL) { $FeedUrl = $env:TIONHARNESS_FEED_URL }
-    else { $FeedUrl = 'https://dl.tionharness.com' }
+    else { $FeedUrl = 'https://tionharness.com' }
 }
 $FeedUrl = $FeedUrl.TrimEnd('/')
 

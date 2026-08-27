@@ -48,7 +48,7 @@ gerçekten kayıtlı, feed adresi gerçekten planlanmış):
 | Alan | Değer | Anlamı |
 |---|---|---|
 | `url` | `https://tionharness.com` | Sitenin kanonik adresi; `<link rel="canonical">` ve `og:url` buradan üretilir. `astro.config.mjs`'teki `site` alanı **elle senkron** tutulur (config `.mjs`, TS dosyasını import edemez) |
-| `feedUrl` | `https://dl.tionharness.com` | Release feed'inin kökü. `import.meta.env.PUBLIC_FEED_URL` verilirse onunla ezilir |
+| `feedUrl` | `https://tionharness.com` | Release feed'inin kökü — feed sitenin kendi kökünden (`website/public/latest.json` → `/latest.json`) sunulur. `import.meta.env.PUBLIC_FEED_URL` verilirse onunla ezilir |
 
 ```bash
 cd website
@@ -168,10 +168,11 @@ Hafıza alt sistemini anlatıyor (2026-07-05'te silindi), provider listesi 3 diy
 
 - Repo/lisans/release kararı → `site.config.ts` doldur (`repoUrl`, `docsUrl`,
   `issuesUrl`, `license`, `demoVideoUrl` hâlâ `null`)
-- `dl.tionharness.com` DNS'ini gerçek release host'una yönlendir; sonrasında site
-  kodunda değişiklik gerekmez, feed kendiliğinden dolar
+- Site GitHub Pages'e `.github/workflows/pages.yml` ile deploy edilir; feed aynı
+  deploy'la `/latest.json` olarak gider. DNS + Pages ayarları için
+  `_Docs\75-YAYIN-SURECI.md` → "Depo ayarları"
 - `site.downloads` alanı artık feed tarafından ikame edildi; ilk yayından sonra
   bu alanın tamamen kaldırılması değerlendirilecek
 - Gerçek screenshot'ları üret (`shots.ps1`)
-- Hosting bağla (Cloudflare Pages veya `deploy/` VPS + Caddy)
+- Pages custom domain'i (`tionharness.com`) doğrula ve HTTPS'i zorunlu kıl
 - Faz 2: TR çevirisi, `/docs`, `05-ILERLEME.md`'den türetilen `/changelog`

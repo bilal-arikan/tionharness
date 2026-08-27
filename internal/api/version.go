@@ -17,7 +17,7 @@ var (
 	BuildVersion = "dev"
 	BuildCommit  = "unknown"
 	BuildDate    = "unknown"
-	FeedBaseURL  = "https://dl.tionharness.com"
+	FeedBaseURL  = "https://tionharness.com"
 )
 
 // FeedURL returns the update feed base URL, with an environment override for

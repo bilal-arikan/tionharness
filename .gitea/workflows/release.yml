@@ -1,12 +1,14 @@
-name: Release
+name: Release (verify only)
 
-# Tag-driven release pipeline. A push of `vX.Y.Z` builds the cross-compiled
-# artifacts with scripts/build-release.sh and publishes them to the static
-# download host (deploy/release-host) over SSH.
+# PUBLISHING IS OWNED BY GITHUB ACTIONS -- see .github/workflows/release.yml.
+# That workflow creates the GitHub Release, uploads the archives as assets and
+# publishes latest.json to GitHub Pages. This Gitea workflow deliberately does
+# NOT publish anything: two pipelines firing on the same `v*` tag would race
+# over latest.json and could advertise a version whose assets are not up yet.
 #
-# The publish target is fully parametric: while no VPS exists the RELEASE_HOST
-# secret is empty and the publish step skips loudly instead of failing the run
-# or pretending it shipped.
+# What is left here is verification: on a tag push, prove that the gate is green
+# and that scripts/build-release.sh actually produces the full artifact set on a
+# clean Linux runner. Nothing leaves the runner; there is no VPS and no rsync.
 
 on:
   push:
@@ -18,15 +20,13 @@ on:
         required: false
         default: ''
 
-# One release at a time; never let two runs race over latest.json.
 concurrency:
-  group: release-tionharness
+  group: release-verify-tionharness
   cancel-in-progress: false
 
 jobs:
   # Same gate as ci.yml. A workflow cannot `needs:` a job in another workflow
-  # file, so the check is repeated here rather than trusted to run elsewhere —
-  # a release must never ship a red build.
+  # file, so the check is repeated here rather than trusted to run elsewhere.
   test:
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -50,7 +50,7 @@ jobs:
       - name: Test
         run: go test ./... -count=1 -race -timeout 900s
 
-  release:
+  build:
     needs: test
     runs-on: ubuntu-latest
     timeout-minutes: 40
@@ -87,72 +87,22 @@ jobs:
             exit 1
           fi
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
-          echo "Releasing version $VERSION"
+          echo "Verifying build of version $VERSION"
 
+      # The same two bases GitHub Actions uses, so the generated latest.json here
+      # is byte-comparable with the published one.
       - name: Build release artifacts
         env:
           NODE_OPTIONS: --max_old_space_size=1536
-          FEED_BASE: ${{ secrets.FEED_BASE }}
+          FEED_BASE: https://tionharness.com
         run: |
-          export FEED_BASE="${FEED_BASE:-https://dl.tionharness.com}"
-          echo "Feed base: $FEED_BASE"
+          export ARTIFACT_BASE="https://github.com/bilal-arikan/tionharness/releases/download/v$VERSION"
           scripts/build-release.sh "$VERSION"
           ls -la "dist/release/$VERSION"
 
-      - name: Prepare SSH
-        env:
-          RELEASE_HOST: ${{ secrets.RELEASE_HOST }}
-          RELEASE_SSH_KEY: ${{ secrets.RELEASE_SSH_KEY }}
-        run: |
-          if [ -z "$RELEASE_HOST" ]; then
-            echo "RELEASE_HOST is empty - skipping SSH setup (no publish target configured)."
-            exit 0
-          fi
-          mkdir -p ~/.ssh
-          echo "$RELEASE_SSH_KEY" > ~/.ssh/release_key
-          chmod 600 ~/.ssh/release_key
-
-      - name: Ensure rsync
-        env:
-          RELEASE_HOST: ${{ secrets.RELEASE_HOST }}
-        run: |
-          if [ -z "$RELEASE_HOST" ]; then
-            echo "RELEASE_HOST is empty - skipping rsync install."
-            exit 0
-          fi
-          command -v rsync >/dev/null || { apt-get update && apt-get install -y rsync; }
-
-      # Mirrors deploy/release-host/sync-release.sh: artifacts land in
-      # <RELEASE_PATH>/v<version>/ first, and latest.json is promoted LAST so the
-      # feed never advertises a version whose files are not downloadable yet.
-      - name: Publish to download host
-        env:
-          RELEASE_HOST: ${{ secrets.RELEASE_HOST }}
-          RELEASE_USER: ${{ secrets.RELEASE_USER }}
-          RELEASE_PATH: ${{ secrets.RELEASE_PATH }}
-        run: |
-          if [ -z "$RELEASE_HOST" ]; then
-            echo "RELEASE_HOST is empty - publish SKIPPED."
-            echo "Artifacts were built at dist/release/$VERSION but nothing was uploaded."
-            echo "Set the RELEASE_HOST / RELEASE_USER / RELEASE_PATH / RELEASE_SSH_KEY secrets to enable publishing."
-            exit 0
-          fi
-          RELEASE_USER="${RELEASE_USER:-hermes}"
-          RELEASE_PATH="${RELEASE_PATH:-/srv/dl}"
-          SSH="ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/.ssh/release_key"
-          TARGET="$RELEASE_USER@$RELEASE_HOST"
-          SRC="dist/release/$VERSION"
-
-          $SSH "$TARGET" "mkdir -p '$RELEASE_PATH/v$VERSION'"
-          # Exclude latest.json from the bulk copy; it is promoted separately.
-          rsync -e "$SSH" -avz --exclude latest.json "$SRC/" "$TARGET:$RELEASE_PATH/v$VERSION/"
-          # Version-local copy of the feed, then the root feed that clients poll.
-          rsync -e "$SSH" -avz "$SRC/latest.json" "$TARGET:$RELEASE_PATH/v$VERSION/latest.json"
-          rsync -e "$SSH" -avz "$SRC/latest.json" "$TARGET:$RELEASE_PATH/latest.json"
-          echo "Published v$VERSION to $TARGET:$RELEASE_PATH"
-
       - name: Summary
         run: |
-          echo "Version: $VERSION"
-          echo "Artifacts: dist/release/$VERSION"
+          echo "Version: $VERSION -- build verified, nothing published."
+          echo "Publishing happens in .github/workflows/release.yml."
           cat "dist/release/$VERSION/SHA256SUMS"
+          cat "dist/release/$VERSION/latest.json"

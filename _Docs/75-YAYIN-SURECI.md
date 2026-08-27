@@ -1,8 +1,13 @@
 # 75 — Yayın Süreci (release pipeline)
 
-> **Durum: CI hattı UYGULANDI (2026-08-27).** Etiket atıldığında derleyip yayımlayan
-> Gitea workflow'u: `.gitea/workflows/release.yml`. Derleme betiği
-> `scripts/build-release.sh`, indirme sunucusu `deploy/release-host/`.
+> **Durum: GitHub tabanlı hat UYGULANDI (2026-08-27).** Yayını **GitHub Actions
+> sahiplenir**: `.github/workflows/release.yml`. Derleme betiği
+> `scripts/build-release.sh`; feed'i GitHub Pages'e taşıyan workflow
+> `.github/workflows/pages.yml`.
+>
+> **Ortada VPS yoktur.** Sıfır altyapı: binary'ler GitHub Release asset'i,
+> `latest.json` GitHub Pages. `deploy/release-host/` artık yalnızca **yerel
+> önizleme** aracıdır (aşağıya bakın), üretim bileşeni değildir.
 >
 > Not: `_Docs/73-*` numarası lokalizasyona ait olduğu için bu doküman **75** numarasını
 > aldı.
@@ -10,36 +15,69 @@
 ## Akış
 
 ```
-git tag v1.2.3 → push
+git tag v1.2.3 → push (GitHub)
         │
         ▼
-  .gitea/workflows/release.yml
+  .github/workflows/release.yml   (tek job, permissions: contents: write)
         │
-        ├── job: test         (ci.yml'nin aynısı — go vet + go test ./... -race)
-        │        │  kırmızıysa burada durur, hiçbir şey yayımlanmaz
-        │        ▼
-        └── job: release      (needs: test)
-                 ├── scripts/build-release.sh <version>
-                 │      → dist/release/<version>/  (arşivler + SHA256SUMS + latest.json)
-                 ├── publish  → rsync  <RELEASE_PATH>/v<version>/
-                 └── promote  → rsync  <RELEASE_PATH>/latest.json   (EN SON)
+        ├── gate: go vet + go test ./... -race + frontend npm ci/test
+        │        kırmızıysa burada durur, hiçbir şey yayımlanmaz
+        ├── scripts/build-release.sh <version>
+        │        FEED_BASE=https://tionharness.com
+        │        ARTIFACT_BASE=https://github.com/bilal-arikan/tionharness/releases/download/v1.2.3
+        │        → dist/release/1.2.3/  (arşivler + SHA256SUMS + latest.json)
+        ├── GitHub Release oluştur + arşivleri ve SHA256SUMS'ı asset olarak yükle
+        │        (softprops/action-gh-release@v2)
+        └── EN SON: latest.json → website/public/latest.json, default branch'e commit
+                 → .github/workflows/pages.yml → https://tionharness.com/latest.json
 ```
 
-Sıralama tesadüf değil: `latest.json` **en son** yüklenir. Feed bir sürümü ancak
-dosyaları indirilebilir hale geldikten sonra duyurur; ters sırada istemciler henüz var
-olmayan arşivleri indirmeye çalışırdı.
+Sıralama tesadüf değil: feed **en son** yayımlanır. `latest.json` bir sürümü ancak
+asset'leri gerçekten indirilebilir hale geldikten sonra duyurur; ters sırada istemciler
+henüz var olmayan dosyalar için 404 alırdı.
 
-Kapı (gate) `needs: test` ile kurulur. `test` job'ı kırmızıysa `release` job'ı hiç
-başlamaz — derleme de yayın da olmaz.
+**Neden asset, neden Pages değil:** her sürüm ~125 MB. GitHub Pages'in site başına
+~1 GB boyut ve ayda ~100 GB bant genişliği yumuşak sınırı vardır; birkaç sürümde
+dolar. Release asset'lerinde böyle bir sınır yoktur. Buna karşılık birkaç yüz baytlık
+`latest.json` Pages için idealdir ve `tionharness.com` kökünden sabit bir adreste
+sunulur.
 
 ### Tetikleyiciler
 
 | Tetikleyici | Sürüm nereden gelir |
 |-------------|---------------------|
-| `push` → `tags: ['v*']` | `gitea.ref_name` (baştaki `v` soyulur) |
+| `push` → `tags: ['v*']` | `github.ref_name` (baştaki `v` soyulur) |
 | `workflow_dispatch` | `version` girdisi (elle yeniden çalıştırma) |
 
 Her ikisinde de sürüm boşsa job hata verip durur; sessizce yanlış sürüm üretmez.
+
+### Feed commit'i CI'ı yeniden tetiklemez
+
+Feed adımı default branch'e `chore(release): publish latest.json for v<version>
+[skip ci]` mesajıyla commit atar. `[skip ci]` GitHub'da **tüm** push tetikli
+workflow'ları susturur — `pages.yml` dahil. Bu yüzden release workflow'u, commit
+gerçekten atıldıysa `pages.yml`'yi `gh workflow run pages.yml` ile **açıkça**
+tetikler (`permissions: actions: write` bunun içindir). `latest.json` değişmediyse
+commit de dispatch de yapılmaz.
+
+## İki temel adres: `FEED_BASE` ve `ARTIFACT_BASE`
+
+Tek bir statik sunucu varken feed ile arşivler aynı host'taydı. GitHub'da **iki ayrı
+host**tur, dolayısıyla `scripts/build-release.sh` iki değişken okur:
+
+| Değişken | Anlamı | Varsayılan |
+|----------|--------|------------|
+| `FEED_BASE` | Feed'in kökü. Binary'ye `internal/api.FeedBaseURL` ldflag'i olarak gömülür; uygulama `<FEED_BASE>/latest.json` adresini yoklar | `https://tionharness.com` |
+| `ARTIFACT_BASE` | `latest.json` içindeki `artifacts[].url` ön eki — arşivlerin gerçekte durduğu yer | `${FEED_BASE}/v<version>` |
+
+`ARTIFACT_BASE` varsayılanı **eski davranışın birebir aynısıdır**: verilmediğinde url
+yine `<FEED_BASE>/v<version>/<file>` olur, yani tek-host yerleşimi ve yerel Docker
+akışı hiç değişmeden çalışır. GitHub workflow'u bunu Release indirme köküyle ezer:
+
+```
+ARTIFACT_BASE=https://github.com/bilal-arikan/tionharness/releases/download/v1.2.3
+→ url = https://github.com/.../releases/download/v1.2.3/tionharness_1.2.3_linux_amd64.tar.gz
+```
 
 ## Üretilen çıktı
 
@@ -57,10 +95,8 @@ dist/release/<version>/
   latest.json
 ```
 
-Betik `FEED_BASE` ortam değişkenini okur (varsayılan `https://dl.tionharness.com`) ve
-bu değeri hem `latest.json` içindeki indirme adreslerine hem de binary'ye
-(`internal/api.FeedBaseURL` ldflag) gömer. Workflow bu değeri `FEED_BASE` secret'ından
-alır; secret yoksa varsayılana düşer.
+Arşivler ve `SHA256SUMS` GitHub Release asset'i olarak yüklenir; `latest.json` asset
+**değildir**, `website/public/latest.json` üzerinden Pages'ten sunulur.
 
 ## `latest.json` şeması
 
@@ -74,7 +110,7 @@ alır; secret yoksa varsayılana düşer.
       "os": "linux",
       "arch": "amd64",
       "file": "tionharness_1.2.3_linux_amd64.tar.gz",
-      "url": "https://dl.tionharness.com/v1.2.3/tionharness_1.2.3_linux_amd64.tar.gz",
+      "url": "https://github.com/bilal-arikan/tionharness/releases/download/v1.2.3/tionharness_1.2.3_linux_amd64.tar.gz",
       "sha256": "…",
       "size": 18234567
     }
@@ -90,53 +126,60 @@ alır; secret yoksa varsayılana düşer.
 | `artifacts[].os` | `linux` \| `windows` \| `darwin` |
 | `artifacts[].arch` | `amd64` \| `arm64` |
 | `artifacts[].file` | Arşiv dosya adı |
-| `artifacts[].url` | `<FEED_BASE>/v<version>/<file>` — tam indirme adresi |
+| `artifacts[].url` | `<ARTIFACT_BASE>/<file>` — tam indirme adresi (üretimde GitHub Release asset'i) |
 | `artifacts[].sha256` | Arşivin SHA-256 özeti (`SHA256SUMS` ile aynı değer) |
 | `artifacts[].size` | Arşiv boyutu (bayt, sayı) |
 
-Dosyanın iki kopyası sunulur: sürüme sabitlenmiş `v<version>/latest.json` ve istemcilerin
-yokladığı kök `latest.json`. Kök kopya her yayında üzerine yazılır.
+Üretimde tek bir kopya sunulur: `https://tionharness.com/latest.json`. Kaynağı depodaki
+`website/public/latest.json` dosyasıdır ve her yayında üzerine yazılır. (Yerel Docker
+önizlemesinde ayrıca `v<version>/latest.json` kopyası da oluşur.)
 
-## Gereken secret'lar
+## Gereken secret'lar — yok
 
-| Secret | Zorunlu | Anlam |
-|--------|---------|-------|
-| `RELEASE_HOST` | hayır | Yayın hedefinin adresi. **Boşsa yayın adımı atlanır.** |
-| `RELEASE_USER` | hayır | SSH kullanıcısı (varsayılan `hermes`) |
-| `RELEASE_PATH` | hayır | Sunucudaki `dl` kökü (varsayılan `/srv/dl`) |
-| `RELEASE_SSH_KEY` | `RELEASE_HOST` doluysa evet | rsync/ssh için özel anahtar |
-| `FEED_BASE` | hayır | Feed kök adresi (varsayılan `https://dl.tionharness.com`) |
+GitHub hattı **hiçbir secret istemez**. Release oluşturma ve feed commit'i için
+otomatik `GITHUB_TOKEN` yeterlidir; workflow bunu `permissions: contents: write`
+(+ `pages.yml` tarafında `pages: write`, `id-token: write`) ile talep eder. SSH
+anahtarı, rsync, `RELEASE_*` secret'ları ve VPS **kaldırılmıştır**.
 
-Secret adları ve SSH kurulumu `deploy.yml`'deki `DEPLOY_SSH_KEY` deseninin aynısıdır:
-anahtar `~/.ssh/release_key` dosyasına yazılır, `chmod 600` verilir ve
-`ssh -o StrictHostKeyChecking=no` ile kullanılır.
+## Depo ayarları (bir kez yapılır)
 
-### VPS yokken davranış
+1. **Settings → Pages → Build and deployment → Source = GitHub Actions.**
+   (`Deploy from a branch` seçiliyse `pages.yml` deploy adımı hata verir.)
+2. **Settings → Pages → Custom domain = `tionharness.com`**, ardından
+   **Enforce HTTPS** işaretlenir. Alan adı `website/public/CNAME` dosyasında da
+   durur; her Pages deploy'u onu çıktının köküne kopyalar, böylece ayar deploy
+   sırasında sıfırlanmaz.
+3. **DNS sağlayıcısı DNS** kayıtları:
 
-Şu an ortada VPS yok; yığın yerel Docker'da çalışıyor. Bu yüzden `RELEASE_HOST`
-**boş** kabul edilir ve workflow şöyle davranır:
+   | Host | Tip | Değer |
+   |------|-----|-------|
+   | `@` (apex) | A | `185.199.108.153` |
+   | `@` (apex) | A | `185.199.109.153` |
+   | `@` (apex) | A | `185.199.110.153` |
+   | `@` (apex) | A | `185.199.111.153` |
+   | `www` | CNAME | `<user>.github.io` |
 
-- `test` ve derleme adımları normal çalışır — sürüm çıktısı gerçekten üretilir.
-- `Prepare SSH`, `Ensure rsync` ve `Publish to download host` adımları erken çıkar ve
-  log'a neden atlandığını yazar: `RELEASE_HOST is empty - publish SKIPPED.`
-- Job **yeşil** biter. Hattı kırmaz, ama "yayımladım" gibi de davranmaz.
+   Apex için A kayıtları (dört adet, GitHub Pages'in anycast havuzu), `www` için
+   CNAME. DNS sağlayıcısı'in varsayılan olarak eklediği çakışan apex A / `www` CNAME
+   kayıtları **silinmelidir**, yoksa alan adı doğrulaması takılır.
+   Eski `dl.` kaydına artık gerek yoktur.
+4. **Settings → Actions → General → Workflow permissions**: `Read and write
+   permissions` (feed commit'i ve release oluşturma bunu gerektirir).
 
-Secret'lar tanımlandığı anda aynı workflow, dosya değişikliği gerekmeden yayımlamaya
-başlar.
+## Gitea tarafı: yalnız doğrulama
 
-### Bilinen eksik: workflow artifact yüklemesi
+`.gitea/workflows/release.yml` **hiçbir şey yayımlamaz**. Aynı `v*` etiketinde iki
+hat birden yayımlasaydı `latest.json` üzerinde yarışırlardı. Gitea kopyası artık
+sadece kapıyı (vet + test) ve `build-release.sh`'in temiz bir Linux runner'da tam
+artifact setini gerçekten ürettiğini doğrular; rsync adımları ve `RELEASE_*`
+secret'ları kaldırılmıştır. Dosya bilinçli olarak silinmedi — Gitea hâlâ ikinci bir
+derleme doğrulaması sağlıyor.
 
-`ci.yml` ve `deploy.yml`'de hiçbir artifact yükleme action'ı (`actions/upload-artifact`
-vb.) kullanılmıyor; bu Gitea kurulumunda çözüleceği doğrulanmamış bir action'ı
-uydurmamak için adım **eklenmedi**. Çıktılar şimdilik yalnızca job'ın çalışma dizininde
-(`dist/release/<version>/`) durur ve `Summary` adımı `SHA256SUMS` içeriğini log'a basar.
-Runner'da artifact desteği doğrulandığında `release` job'ının sonuna tek bir yükleme
-adımı eklenmesi yeterlidir.
+## Yerel önizleme (üretim DEĞİL)
 
-## Yerel Docker ile test etme
-
-Yayın sunucusu `deploy/release-host/` altındaki Caddy birimidir (`dl` ve `www` statik
-siteleri). VPS'e dokunmadan tüm akışı yerelde denemek için:
+`deploy/release-host/` altındaki Caddy birimi artık yalnızca bir **yerel önizleme**
+aracıdır: feed + indirme yerleşimini VPS'e ihtiyaç duymadan denemeye yarar. Üretimde
+karşılığı yoktur; üretimde arşivler GitHub Release asset'i, feed ise Pages'tedir.
 
 ```bash
 # 1) Sürüm çıktısını üret (depo kökünde)
@@ -211,7 +254,7 @@ Windows'ta Git Bash) ve `scripts/install.ps1` (Windows PowerShell). İkisi de
 `<feed>/latest.json` dosyasını indirir, makinenin GOOS/GOARCH değerine uyan
 artifact'ı seçer, indirir ve **sha256'yı doğrular**.
 
-- Feed adresi varsayılan `https://dl.tionharness.com`; `install.sh` bunu
+- Feed adresi varsayılan `https://tionharness.com`; `install.sh` bunu
   `TIONHARNESS_FEED_URL` ile, `install.ps1` ise `-FeedUrl` parametresi veya aynı
   ortam değişkeni ile geçersiz kılar.
 - Kurulum dizini: `install.sh` → `TIONHARNESS_INSTALL_DIR` ya da
@@ -241,13 +284,17 @@ powershell -NoProfile -File scripts/install.ps1 -FeedUrl http://localhost:8080
 
 | Dosya | Rolü |
 |-------|------|
-| `.gitea/workflows/release.yml` | Etiket → test → derleme → yayın hattı |
-| `scripts/build-release.sh` | Çapraz derleme, arşivleme, `SHA256SUMS`, `latest.json` |
+| `.github/workflows/release.yml` | Etiket → kapı → derleme → Release asset'leri → feed commit'i (**yayını sahiplenir**) |
+| `.github/workflows/pages.yml` | `website/` derleyip GitHub Pages'e deploy eder; `latest.json` ve `CNAME` de bu deploy'la gider |
+| `website/public/latest.json` | Yayımlanan feed'in kaynağı → `https://tionharness.com/latest.json` |
+| `website/public/CNAME` | Pages custom domain (`tionharness.com`) |
+| `.gitea/workflows/release.yml` | Yalnız doğrulama: kapı + derleme, **yayın yok** |
+| `scripts/build-release.sh` | Çapraz derleme, arşivleme, `SHA256SUMS`, `latest.json` (`FEED_BASE` + `ARTIFACT_BASE`) |
 | `scripts/install.sh` | Linux/macOS/Git Bash kurulum script'i (feed + sha256) |
 | `scripts/install.ps1` | Windows PowerShell kurulum script'i (feed + sha256) |
-| `deploy/release-host/sync-release.sh` | Yerel/manuel yayın (aynı yerleşim) |
+| `deploy/release-host/sync-release.sh` | Yerel önizleme yayını (üretimde kullanılmaz) |
 | `internal/api/updatecheck.go` | Uygulama içi sürüm kontrolü (feed okuma, önbellek) |
 | `internal/api/semver.go` | Bağımlılıksız semver karşılaştırma (prerelease dahil) |
 | `frontend/src/app/UpdateBanner.tsx` | "Yeni sürüm mevcut" şeridi (yalnız link) |
-| `deploy/release-host/docker-compose.yml` | Caddy statik indirme + tanıtım sitesi |
+| `deploy/release-host/docker-compose.yml` | Caddy statik indirme + tanıtım sitesi (yalnız yerel önizleme) |
 | `_Docs/72-TANITIM-SITESI.md` | `www` tarafında sunulan tanıtım sitesi |

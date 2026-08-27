@@ -5,11 +5,11 @@
 #   bash scripts/install.sh
 #
 # Environment:
-#   TIONHARNESS_FEED_URL      release feed base URL (default https://dl.tionharness.com)
+#   TIONHARNESS_FEED_URL      release feed base URL (default https://tionharness.com)
 #   TIONHARNESS_INSTALL_DIR   install directory (default $HOME/.local/bin)
 set -euo pipefail
 
-feed_url=${TIONHARNESS_FEED_URL:-https://dl.tionharness.com}
+feed_url=${TIONHARNESS_FEED_URL:-https://tionharness.com}
 feed_url=${feed_url%/}
 binary=tionharness
 

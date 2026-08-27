@@ -1,0 +1,161 @@
+name: Release
+
+# GitHub Actions OWNS release publishing. A push of `vX.Y.Z` runs the same gate
+# ci.yml runs, cross-compiles with scripts/build-release.sh, publishes the
+# archives as GitHub Release assets and only then commits the feed
+# (website/public/latest.json) back to the default branch, from where GitHub
+# Pages serves it at https://tionharness.com/latest.json.
+#
+# No VPS is involved. `.gitea/workflows/release.yml` is verification only.
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to build (with or without the leading v)'
+        required: false
+        default: ''
+
+# One release at a time; never let two runs race over latest.json.
+concurrency:
+  group: release-tionharness
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  # Only to dispatch pages.yml for the feed commit -- see "Deploy the feed" below.
+  actions: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      # Without this the shell-tool tests skip instead of running.
+      TIONHARNESS_ENABLE_SHELL: '1'
+    steps:
+      # Tags are needed by build-release.sh (git describe) and by the version
+      # resolution below, so fetch the full history rather than a shallow tip.
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.26'
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      # --- gate: identical to ci.yml. A release must never ship a red build. ---
+
+      # internal/web/dist is gitignored but //go:embed all:dist needs the
+      # directory to exist to compile. build-release.sh replaces it later with
+      # the real frontend build.
+      - name: Placeholder for the embedded SPA
+        run: mkdir -p internal/web/dist && touch internal/web/dist/index.html
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: go test ./... -count=1 -race -timeout 900s
+
+      - name: Frontend install
+        working-directory: frontend
+        run: npm ci
+
+      - name: Frontend test
+        working-directory: frontend
+        run: npm test
+
+      # --- build ---------------------------------------------------------------
+
+      # Tag push -> ref_name is the tag; manual run -> the dispatch input.
+      - name: Resolve version
+        env:
+          REF_NAME: ${{ github.ref_name }}
+          INPUT_VERSION: ${{ github.event.inputs.version }}
+        run: |
+          RAW="${INPUT_VERSION:-$REF_NAME}"
+          VERSION="${RAW#v}"
+          if [ -z "$VERSION" ]; then
+            echo "No version: push a vX.Y.Z tag or supply the version input." >&2
+            exit 1
+          fi
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          echo "Releasing version $VERSION"
+
+      # FEED_BASE is where clients poll latest.json (GitHub Pages behind the
+      # custom domain). ARTIFACT_BASE is where the archives actually live
+      # (Release assets) -- two different hosts, hence two variables.
+      - name: Build release artifacts
+        env:
+          NODE_OPTIONS: --max_old_space_size=1536
+          FEED_BASE: https://tionharness.com
+        run: |
+          export ARTIFACT_BASE="https://github.com/${{ github.repository }}/releases/download/v$VERSION"
+          echo "Feed base: $FEED_BASE"
+          echo "Artifact base: $ARTIFACT_BASE"
+          scripts/build-release.sh "$VERSION"
+          ls -la "dist/release/$VERSION"
+
+      # --- publish -------------------------------------------------------------
+
+      # softprops/action-gh-release@v2 (major pinned) creates the release for the
+      # tag and uploads every archive plus SHA256SUMS. latest.json is NOT an asset;
+      # it is served from Pages.
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ env.VERSION }}
+          name: v${{ env.VERSION }}
+          fail_on_unmatched_files: true
+          files: |
+            dist/release/${{ env.VERSION }}/*.tar.gz
+            dist/release/${{ env.VERSION }}/*.zip
+            dist/release/${{ env.VERSION }}/SHA256SUMS
+
+      # Only now, with every asset downloadable, does the feed start advertising
+      # this version. The reverse order would point clients at 404s.
+      - name: Publish feed to Pages
+        run: |
+          DEFAULT_BRANCH="${{ github.event.repository.default_branch }}"
+          git fetch origin "$DEFAULT_BRANCH"
+          git checkout "$DEFAULT_BRANCH"
+          git pull --ff-only origin "$DEFAULT_BRANCH"
+          cp "dist/release/$VERSION/latest.json" website/public/latest.json
+          if git diff --quiet -- website/public/latest.json; then
+            echo "latest.json unchanged - nothing to commit."
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add website/public/latest.json
+          # [skip ci] keeps this commit from retriggering CI; pages.yml is
+          # additionally scoped to website/** so it DOES pick the feed up.
+          git commit -m "chore(release): publish latest.json for v$VERSION [skip ci]"
+          git push origin "HEAD:$DEFAULT_BRANCH"
+          echo "FEED_COMMITTED=1" >> "$GITHUB_ENV"
+
+      # [skip ci] suppresses every push-triggered workflow, pages.yml included, so
+      # the feed deploy is requested explicitly instead of relying on the push.
+      - name: Deploy the feed
+        if: env.FEED_COMMITTED == '1'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run pages.yml --ref "${{ github.event.repository.default_branch }}"
+
+      - name: Summary
+        run: |
+          echo "Version: $VERSION"
+          echo "Artifacts: dist/release/$VERSION"
+          cat "dist/release/$VERSION/SHA256SUMS"

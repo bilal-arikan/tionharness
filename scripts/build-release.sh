@@ -41,8 +41,14 @@ fi
 
 commit=$(git rev-parse --short HEAD)
 build_date=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-feed_base=${FEED_BASE:-https://dl.tionharness.com}
+feed_base=${FEED_BASE:-https://tionharness.com}
 feed_base=${feed_base%/}
+# Where the feed lives (feed_base) and where the archives live (artifact_base)
+# are the same host only when one static server holds both. On GitHub they
+# differ: the feed is on Pages, the archives are Release assets. The default
+# keeps the single-host layout (<feed>/v<version>/<file>) byte-for-byte.
+artifact_base=${ARTIFACT_BASE:-$feed_base/v$version}
+artifact_base=${artifact_base%/}
 binary=tionharness
 main_package=./cmd/tionharness
 release_dir="dist/release/$version"
@@ -156,8 +162,8 @@ released_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
     size=$(wc -c <"$release_dir/$archive" | tr -d '[:space:]')
     ((first == 1)) || printf ',\n'
     first=0
-    printf '    { "os": "%s", "arch": "%s", "file": "%s", "url": "%s/v%s/%s", "sha256": "%s", "size": %s }' \
-      "$os" "$arch" "$archive" "$feed_base" "$version" "$archive" "$hash" "$size"
+    printf '    { "os": "%s", "arch": "%s", "file": "%s", "url": "%s/%s", "sha256": "%s", "size": %s }' \
+      "$os" "$arch" "$archive" "$artifact_base" "$archive" "$hash" "$size"
   done <"$artifacts_file"
   printf '\n  ]\n}\n'
 } >"$release_dir/latest.json"
