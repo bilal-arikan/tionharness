@@ -520,7 +520,11 @@ export function AgentSettingsForm({
             aktif araçlar listelenir (aktivasyon <strong>Araçlar</strong> ekranından). Değişiklikler
             anında kaydedilir.
           </p>
-          <AgentToolsSection agentId={agent.id} onError={setErr} />
+          <AgentToolsSection
+            agentId={agent.id}
+            onError={setErr}
+            locked={!!agent.systemKey?.startsWith('subagent-')}
+          />
         </div>
 
         {err && <p className="text-xs text-[var(--color-danger)]">{err}</p>}

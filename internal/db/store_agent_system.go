@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"errors"
+	"strings"
 )
 
 // ErrSystemAgentDelete explains the supported alternative to deleting a
@@ -46,6 +47,28 @@ func (d *DB) EnsureSystemAgents(ctx context.Context, defs ...SystemAgentDefiniti
 		}
 	}
 	for _, def := range defs {
+		if strings.HasPrefix(def.SystemKey, "subagent-") {
+			legacyName := "worker:" + strings.TrimPrefix(def.SystemKey, "subagent-")
+			legacy, legacyFound := d.findLiveAgentByName(legacyName)
+			_, systemFound := d.FindAgentBySystemKey(def.SystemKey)
+			if legacyFound {
+				if systemFound {
+					if _, err := d.mutateAgentLocked(legacy.ID, func(a *Agent) { a.Disabled = true }); err != nil {
+						return err
+					}
+				} else {
+					if _, err := d.mutateAgentLocked(legacy.ID, func(a *Agent) {
+						a.Name = def.Name
+						a.Identity = def.Description
+						a.AllowedTools = def.AllowedTools
+						a.System = true
+						a.SystemKey = def.SystemKey
+					}); err != nil {
+						return err
+					}
+				}
+			}
+		}
 		if _, ok := d.FindAgentBySystemKey(def.SystemKey); ok {
 			continue
 		}
@@ -63,4 +86,15 @@ func (d *DB) EnsureSystemAgents(ctx context.Context, defs ...SystemAgentDefiniti
 		}
 	}
 	return nil
+}
+
+func (d *DB) findLiveAgentByName(name string) (Agent, bool) {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	for _, a := range d.agents {
+		if !a.Deleted && !a.System && a.Name == name {
+			return a, true
+		}
+	}
+	return Agent{}, false
 }

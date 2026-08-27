@@ -73,7 +73,13 @@ func (r *Runtime) subagentProfile(target string) (SubagentProfile, bool) {
 	if !ok {
 		return SubagentProfile{}, false
 	}
-	p.SystemPrompt = r.readPrompt("subagent-" + p.ID)
+	systemKey := "subagent-" + p.ID
+	if systemAgent, _, err := r.ResolveSystemAgent(systemKey); err == nil {
+		p.SystemPrompt = systemAgent.Soul
+	} else {
+		r.logger.Warn("subagent system agent resolution failed; using prompt registry fallback", "systemKey", systemKey, "error", err)
+		p.SystemPrompt = r.readPrompt(systemKey)
+	}
 	return p, true
 }
 

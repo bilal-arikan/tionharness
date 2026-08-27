@@ -11,7 +11,7 @@ işaretlenen özel ajandır. Ayrı bir oturum türü veya `Session` alanı yoktu
 oturumun sistem ajanına ait olup olmadığı ajan kaydından çözülür
 (`internal/agent/systemsession.go:10-21`).
 
-Derlenmiş kayıt defteri dört rol tanımlar:
+Derlenmiş kayıt defteri beş altyapı rolü ve altı yerleşik worker profili tanımlar:
 
 | `SystemKey` | Varsayılan durum | Prompt anahtarı | Görev |
 |---|---|---|---|
@@ -20,6 +20,32 @@ Derlenmiş kayıt defteri dört rol tanımlar:
 | `compaction` | Etkin | `compact` | Bağlam sınırında konuşma geçmişini yapılandırılmış özete sıkıştırır (`internal/agent/systemagents.go`, `internal/agent/wsconfig.go`). |
 | `lesson-extractor` | Etkin | `lesson` | Başarısız ajan turlarından yeniden kullanılabilir dersler çıkarır (`internal/agent/systemagents.go:29-34`, `internal/agent/lessons_systemagent.go:5-7`). |
 | `insight` | **Devre dışı** | `insight-analyzer` | Oturum kanıtlarında tekrarlanan, eyleme dönük bulguları analiz eder (`internal/agent/systemagents.go:37-43`, `internal/agent/lessons_systemagent.go:9-10`). |
+
+### Yerleşik worker profilleri (`subagent-*`)
+
+`run_subagent` ve `spawn_worker` hedefi olan altı yerleşik profil de sistem ajanı
+olarak tutulur: `subagent-explore`, `subagent-planner`, `subagent-coder`,
+`subagent-reviewer`, `subagent-validator`, `subagent-config`. Tanımları
+`buildSystemAgentDefaults` üretir; prompt `prompts.Default("subagent-<id>")`,
+araç listesi ise `defaultSubagentProfiles[<id>].AllowedTools` alanından gelir
+(`internal/agent/systemagents.go`, `internal/agent/subagent.go`).
+
+Üç kural bu profilleri diğer sistem ajanlarından ayırır:
+
+- **Araç listesi bir güvenlik sözleşmesidir, kullanıcı tercihi değil.** Ajan
+  kaydındaki `AllowedTools`, koddaki profilin önbelleğidir: `resolveWorkerTarget`
+  farklıysa kaydı geri yazar, `SpawnSession` ve `SendToWorker` ise o turun ajan
+  kopyasına listeyi yeniden uygular (`applyProfileAllowlist`,
+  `internal/agent/subagent_allowlist.go`). Böylece elle düzenlenmiş bir kayıt
+  worker'ın erişimini genişletemez. UI'da bu ajanlarda araç bölümü salt-okunurdur
+  (`frontend/src/features/agents/AgentToolsSection.tsx`, `locked` prop'u).
+- **Model ve sağlayıcı dinamiktir.** Tanımda `SuggestedModel` boştur; worker,
+  spawn anında koordinatörün provider/instance/model/permission değerlerini
+  klonlar (`SpawnSession`, `RuntimeBaseAgentID`).
+- **Eski `worker:<profil>` ajanları göç ettirilir.** `EnsureSystemAgents`, aynı
+  adlı kalıcı ajanı bulursa onu yerinde sistem ajanına dönüştürür (id korunur,
+  oturumları çözülmeye devam eder); sistem ajanı zaten varsa eski kaydı devre dışı
+  bırakır, böylece çift hedef kalmaz (`internal/db/store_agent_system.go`).
 
 Kayıt defteri promptları `prompts.Default(<anahtar>)` ile alır. Rol çözümlemesi
 başarısız olduğunda kullanılan `readPrompt(<anahtar>)` aynı anahtara gider; böylece

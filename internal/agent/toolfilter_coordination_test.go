@@ -10,16 +10,23 @@ import (
 	"github.com/bilal-arikan/tionharness/internal/tools"
 )
 
-// profileAgent mirrors what resolveWorkerTarget materializes for a built-in
-// profile: a persisted agent whose legacy allowlist pins it to the profile's work
-// tools. It is the shape that made the coordination surface disappear.
+// profileAgent mirrors what resolveWorkerTarget hands a worker spawn: the
+// built-in "subagent-explore" system agent, whose allowlist pins it to the
+// profile's work tools. It is the shape that made the coordination surface
+// disappear.
 func profileAgent(t *testing.T, allowed ...string) db.Agent {
 	t.Helper()
 	raw, err := json.Marshal(allowed)
 	if err != nil {
 		t.Fatalf("marshal allowlist: %v", err)
 	}
-	return db.Agent{Name: "worker:explore", MCPEnabled: true, AllowedTools: string(raw)}
+	return db.Agent{
+		Name:         "Worker: Explore",
+		System:       true,
+		SystemKey:    "subagent-explore",
+		MCPEnabled:   true,
+		AllowedTools: string(raw),
+	}
 }
 
 // TestToolFilterExemptsCoordinationFromAllowlist is the regression for the live

@@ -890,6 +890,7 @@ active/tool_search/hidden). Tam app boot + canlı chat testi orantısız ağır/
 
 `validator` profili `unity-mcp` sunucu anahtarını allowlist'inde taşır. Native,
 Claude CLI ve Codex CLI yolları yalnız bu dış MCP sunucusunu açar; `Write`, `Edit`
-ve Playwright dahil diğer MCP sunucuları kapalı kalır. `worker:validator` reuse
-yolu yalnız eski profil allowlist'iyle birebir eşleşen materialized ajanı yeni
-sözleşmeye taşır. Kullanıcı değiştirmiş allowlist ve `ToolOverrides` ezilmez.
+ve Playwright dahil diğer MCP sunucuları kapalı kalır. Profil worker'ları artık
+`subagent-validator` sistem ajanına çözülür ve allowlist her spawn'da koddan
+yeniden uygulanır (bkz. `_Docs/74-SISTEM-AJANLARI.md`); `ToolOverrides` gibi
+diğer ajan özelleştirmeleri ezilmez.

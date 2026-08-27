@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/bilal-arikan/tionharness/internal/prompts"
@@ -16,6 +17,12 @@ func TestSystemAgentDefaults(t *testing.T) {
 		{key: "compaction", promptKey: "compact"},
 		{key: "lesson-extractor", promptKey: "lesson"},
 		{key: "insight", promptKey: "insight-analyzer"},
+		{key: "subagent-explore", promptKey: "subagent-explore"},
+		{key: "subagent-planner", promptKey: "subagent-planner"},
+		{key: "subagent-coder", promptKey: "subagent-coder"},
+		{key: "subagent-reviewer", promptKey: "subagent-reviewer"},
+		{key: "subagent-validator", promptKey: "subagent-validator"},
+		{key: "subagent-config", promptKey: "subagent-config"},
 	}
 	if got := len(SystemAgentDefaults()); got != len(tests) {
 		t.Fatalf("default count = %d, want %d", got, len(tests))
@@ -36,6 +43,28 @@ func TestSystemAgentDefaults(t *testing.T) {
 	}
 	if _, ok := SystemAgentDefault("missing"); ok {
 		t.Fatal("unknown key unexpectedly found")
+	}
+}
+
+// TestSubagentSystemAgentDefaultsCarryProfileAllowlist keeps the built-in worker
+// definitions bound to the code-side profile contract: the seeded agent row must
+// start from exactly the profile's tools, never a hand-written copy.
+func TestSubagentSystemAgentDefaultsCarryProfileAllowlist(t *testing.T) {
+	for id, prof := range defaultSubagentProfiles {
+		def, ok := SystemAgentDefault("subagent-" + id)
+		if !ok {
+			t.Fatalf("profile %q has no system agent default", id)
+		}
+		want, err := json.Marshal(prof.AllowedTools)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if def.AllowedTools != string(want) {
+			t.Errorf("profile %q allowlist = %s, want %s", id, def.AllowedTools, want)
+		}
+		if def.SuggestedModel != "" {
+			t.Errorf("profile %q pins a model (%q); workers must inherit the coordinator's", id, def.SuggestedModel)
+		}
 	}
 }
 

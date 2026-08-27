@@ -12,6 +12,10 @@ import { AgentToolGroupRow } from './AgentToolGroupRow'
 interface Props {
   agentId: string
   onError?: (msg: string) => void
+  // Built-in worker agents (systemKey "subagent-*") carry a tool allowlist that
+  // lives in code and is re-applied on every spawn. Editing it here would be a
+  // no-op at best, so the whole panel is shown read-only instead.
+  locked?: boolean
 }
 
 // AgentToolsSection manages an agent's per-tool OVERRIDES. Every tool reaches
@@ -23,7 +27,7 @@ interface Props {
 // defaults, not a second copy of the 140-row tools catalog. Changes auto-save,
 // and picking a tier equal to the default deletes the override instead of
 // storing a redundant one.
-export function AgentToolsSection({ agentId, onError }: Props) {
+export function AgentToolsSection({ agentId, onError, locked = false }: Props) {
   const [data, setData] = useState<AgentTools | null>(null)
   const [busy, setBusy] = useState(false)
   const [query, setQuery] = useState('')
@@ -52,7 +56,7 @@ export function AgentToolsSection({ agentId, onError }: Props) {
   const groupByKey = useMemo(() => new Map(groups.map((g) => [g.key, g])), [groups])
 
   const save = async (mcpEnabled: boolean, next: Record<string, AgentToolTier>) => {
-    if (!data) return
+    if (!data || locked) return
     setBusy(true)
     setData({ ...data, mcpEnabled, toolOverrides: next }) // optimistic
     try {
@@ -151,15 +155,27 @@ export function AgentToolsSection({ agentId, onError }: Props) {
   }
 
   const overrideCount = overridden.length + groupOverridden.length + orphans.length
+  // Every interactive control freezes while a save is in flight — and permanently
+  // for a system-owned worker, whose allowlist is enforced from code.
+  const frozen = busy || locked
 
   return (
     <div className="space-y-3">
+      {locked && (
+        <p
+          data-testid="agent-tools-locked-note"
+          className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-xs text-[var(--color-text-dim)]"
+        >
+          Bu yerleşik worker ajanının araç listesi bir güvenlik sözleşmesidir ve koddan gelir. Her
+          spawn'da yeniden uygulanır, bu yüzden buradan değiştirilemez.
+        </p>
+      )}
       <label className="flex items-center gap-2.5 text-sm">
         <input
           data-testid="agent-tools-enable-checkbox"
           type="checkbox"
           checked={data.mcpEnabled}
-          disabled={busy}
+          disabled={frozen}
           onChange={(e) => save(e.target.checked, overrides)}
         />
         <span className="font-medium">Bu ajan için araç kullanımını etkinleştir</span>
@@ -175,7 +191,7 @@ export function AgentToolsSection({ agentId, onError }: Props) {
               <button
                 data-testid="agent-tools-clear-blocks"
                 onClick={resetAll}
-                disabled={busy || overrideCount === 0}
+                disabled={frozen || overrideCount === 0}
                 className="rounded bg-[var(--color-surface-2)] px-2 py-0.5 hover:opacity-90 disabled:opacity-40"
                 title="Tüm override'ları kaldır (her araç workspace varsayılanına döner)"
               >
@@ -184,7 +200,7 @@ export function AgentToolsSection({ agentId, onError }: Props) {
               <button
                 data-testid="agent-tools-block-all"
                 onClick={blockAll}
-                disabled={busy || catalog.length === 0}
+                disabled={frozen || catalog.length === 0}
                 className="rounded bg-[var(--color-surface-2)] px-2 py-0.5 hover:opacity-90 disabled:opacity-40"
                 title="Tüm araçları yasakla"
               >
@@ -205,7 +221,7 @@ export function AgentToolsSection({ agentId, onError }: Props) {
                   key={tool.name}
                   tool={tool}
                   tier={tier}
-                  busy={busy}
+                  busy={frozen}
                   onSelect={(t) => setTier(tool.name, t)}
                   onReset={() => clearOverride(tool.name)}
                 />
@@ -222,7 +238,7 @@ export function AgentToolsSection({ agentId, onError }: Props) {
                   <AgentTierBadge tier={overrides[name]} />
                   <button
                     onClick={() => clearOverride(name)}
-                    disabled={busy}
+                    disabled={frozen}
                     title="Kaydı sil"
                     className="ml-auto rounded p-1 text-[var(--color-text-dim)] hover:text-[var(--color-danger)] disabled:opacity-40"
                   >
@@ -248,7 +264,7 @@ export function AgentToolsSection({ agentId, onError }: Props) {
                     key={group.key}
                     group={group}
                     tier={overrides[group.key]}
-                    busy={busy}
+                    busy={frozen}
                     onSelect={(t) => setGroupTier(group.key, t)}
                     onClear={() => clearOverride(group.key)}
                   />
@@ -269,7 +285,7 @@ export function AgentToolsSection({ agentId, onError }: Props) {
               />
               <span className="flex items-center gap-1.5 text-[11px] text-[var(--color-text-dim)]">
                 Tıklayınca:
-                <AgentTierSelector value={pickTier} busy={busy} onSelect={setPickTier} compact />
+                <AgentTierSelector value={pickTier} busy={frozen} onSelect={setPickTier} compact />
               </span>
             </div>
             <div className="max-h-56 space-y-1 overflow-y-auto">
@@ -295,7 +311,7 @@ export function AgentToolsSection({ agentId, onError }: Props) {
                       if (sel.handleClick(e, t.name, orderedIds)) return
                       setTier(t.name, pickTier)
                     }}
-                    disabled={busy}
+                    disabled={frozen}
                     className={`flex w-full items-start gap-2 rounded px-1 py-1 text-left hover:bg-[var(--color-surface-2)] ${
                       sel.isSelected(t.name)
                         ? 'bg-[var(--color-accent-soft)] ring-1 ring-[var(--color-accent)]'

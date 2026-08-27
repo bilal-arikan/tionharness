@@ -5,6 +5,7 @@ import (
 	"io"
 	"log/slog"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/bilal-arikan/tionharness/internal/db"
@@ -78,12 +79,12 @@ func TestResolveSystemAgentUnknownKeyReturnsError(t *testing.T) {
 	}
 }
 
-func TestSystemAgentDefaultsHavePromptAndModel(t *testing.T) {
+func TestSystemAgentDefaultsHavePromptAndExpectedModel(t *testing.T) {
 	for _, def := range SystemAgentDefaults() {
 		if def.SystemPrompt == "" {
 			t.Errorf("system agent default %q has empty SystemPrompt", def.SystemKey)
 		}
-		if def.SuggestedModel == "" {
+		if def.SuggestedModel == "" && !strings.HasPrefix(def.SystemKey, "subagent-") {
 			t.Errorf("system agent default %q has empty SuggestedModel", def.SystemKey)
 		}
 	}

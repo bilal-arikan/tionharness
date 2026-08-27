@@ -41,17 +41,32 @@ func TestCreateSeedsCoreSystemAgents(t *testing.T) {
 	if err != nil {
 		t.Fatalf("list agents: %v", err)
 	}
-	if len(agents) != 5 {
-		t.Fatalf("agent count = %d, want 5", len(agents))
+	// Derived from the definition list, not hardcoded: this test asserted "5" and
+	// broke the moment the six subagent profiles became system agents. The seeding
+	// contract is "every default lands, with its own Disabled flag" -- expressing it
+	// that way is what makes the assertion survive the next profile.
+	defs := agent.SystemAgentDefaults()
+	if len(defs) == 0 {
+		t.Fatal("no system agent defaults defined")
 	}
-	for _, key := range []string{"titler", "overview-summarizer", "compaction", "lesson-extractor", "insight"} {
-		seeded, ok := wsp.DB.FindAgentBySystemKey(key)
+	if len(agents) != len(defs) {
+		t.Fatalf("agent count = %d, want %d (one per system agent default)", len(agents), len(defs))
+	}
+	for _, def := range defs {
+		seeded, ok := wsp.DB.FindAgentBySystemKey(def.SystemKey)
 		if !ok {
-			t.Errorf("system agent %q not seeded", key)
+			t.Errorf("system agent %q not seeded", def.SystemKey)
 			continue
 		}
-		if got, want := seeded.Disabled, key == "insight"; got != want {
-			t.Errorf("system agent %q disabled = %v, want %v", key, got, want)
+		if seeded.Disabled != def.Disabled {
+			t.Errorf("system agent %q disabled = %v, want %v", def.SystemKey, seeded.Disabled, def.Disabled)
+		}
+	}
+	// The five core (non-subagent) keys are named explicitly so a refactor that
+	// quietly drops one still fails here rather than silently shrinking the list.
+	for _, key := range []string{"titler", "overview-summarizer", "compaction", "lesson-extractor", "insight"} {
+		if _, ok := wsp.DB.FindAgentBySystemKey(key); !ok {
+			t.Errorf("core system agent %q not seeded", key)
 		}
 	}
 }

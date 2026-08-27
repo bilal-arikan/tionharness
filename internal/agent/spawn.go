@@ -30,6 +30,9 @@ type SpawnOptions struct {
 	ModelOverride string
 	Title         string
 	CreatedBy     string
+	// RuntimeBaseAgentID supplies provider/model/permission settings for a worker
+	// system agent while leaving its identity, soul, and allowlist intact.
+	RuntimeBaseAgentID string
 	// ParentSessionID links a spawned session back to the one it continues, set by
 	// a context-reset handoff so the UI can walk the reset chain. "" for an
 	// ordinary spawn with no lineage.
@@ -126,6 +129,23 @@ func (r *Runtime) SpawnSession(ctx context.Context, agentRef, prompt string, opt
 	}
 	agent, err := r.resolveAgent(ctx, agentRef)
 	if err != nil {
+		return SpawnResult{}, err
+	}
+	if baseID := strings.TrimSpace(opts.RuntimeBaseAgentID); baseID != "" && agent.System && strings.HasPrefix(agent.SystemKey, "subagent-") {
+		base, err := r.db.GetAgent(ctx, baseID)
+		if err != nil {
+			return SpawnResult{}, fmt.Errorf("worker runtime base agent unavailable: %w", err)
+		}
+		agent.Provider = base.Provider
+		agent.ProviderInstanceID = base.ProviderInstanceID
+		agent.Model = base.Model
+		agent.PermissionMode = base.PermissionMode
+	}
+	// A profile worker's allowlist is a SAFETY CONTRACT that lives in code, not a
+	// user preference stored on the agent row. Re-assert it for this run whatever
+	// the record says, so an edited (or stale) system-agent row can never widen
+	// what an explore/reviewer/validator worker may touch.
+	if err := r.applyProfileAllowlist(&agent); err != nil {
 		return SpawnResult{}, err
 	}
 	// Per-agent provider is preserved; only the model may be overridden.

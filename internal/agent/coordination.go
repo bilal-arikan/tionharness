@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -474,9 +473,8 @@ func (r *Runtime) SpawnWorker(ctx context.Context, coordSessionID, agentRef, tas
 	if err != nil {
 		return SpawnResult{}, err
 	}
-	// A profile target (explore/coder/reviewer) is materialized into a persisted,
-	// reusable worker agent so the worker has a real session to run in. An ordinary
-	// target passes through unchanged (existing agent name/id). Resolved BEFORE the
+	// A profile target resolves to its persistent system agent. An ordinary target
+	// passes through unchanged (existing agent name/id). Resolved BEFORE the
 	// worker-count reservation so a bad target never leaks a slot.
 	agentRef, err = r.resolveWorkerTarget(ctx, coordSessionID, createdBy, agentRef)
 	if err != nil {
@@ -500,6 +498,7 @@ func (r *Runtime) SpawnWorker(ctx context.Context, coordSessionID, agentRef, tas
 		ModelOverride:            spec.ModelOverride,
 		WorkingDir:               cwd,
 		CreatedBy:                createdBy,
+		RuntimeBaseAgentID:       createdBy,
 		CoordinatorSessionID:     coordSessionID,
 		Role:                     db.SessionRoleWorker,
 		RootCoordinatorSessionID: rootID,
@@ -685,11 +684,7 @@ func (r *Runtime) agentCoordinatorDefaults(ctx context.Context, target string) (
 }
 
 // resolveWorkerTarget maps a spawn_worker target to a runnable persistent agent
-// id. An existing agent (name or id) passes through. A built-in profile
-// (explore/coder/reviewer) is materialized once into a reusable persisted worker
-// agent — "worker:<profile>" — cloned from the base agent (the coordinator's own
-// agent: provider/model/permission) but reshaped with the profile's soul and tool
-// allowlist. Reused on subsequent spawns (find-or-create, serialized).
+// id. Existing agents pass through; built-in profiles resolve to system agents.
 func (r *Runtime) resolveWorkerTarget(ctx context.Context, coordSessionID, baseAgentID, target string) (string, error) {
 	target = strings.TrimSpace(target)
 	prof, isProfile := r.subagentProfile(target)
@@ -702,78 +697,23 @@ func (r *Runtime) resolveWorkerTarget(ctx context.Context, coordSessionID, baseA
 		return a.ID, nil
 	}
 
-	name := "worker:" + prof.ID
-	r.profileWorkerMu.Lock()
-	defer r.profileWorkerMu.Unlock()
-	// Already materialized? Reuse it.
-	if a, err := r.resolveAgent(ctx, name); err == nil {
-		if prof.ID == "validator" {
-			if err := r.syncValidatorProfileAllowlist(ctx, a, prof); err != nil {
-				return "", err
-			}
-		}
-		return a.ID, nil
-	}
-	// Clone provider/model/permission from the base agent (coordinator's agent), or
-	// the coordinator session's agent when no base id was supplied.
-	if strings.TrimSpace(baseAgentID) == "" {
-		if sess, err := r.db.GetSession(ctx, coordSessionID); err == nil {
-			baseAgentID = sess.AgentID
-		}
-	}
-	base, err := r.db.GetAgent(ctx, baseAgentID)
+	systemAgent, _, err := r.ResolveSystemAgent("subagent-" + prof.ID)
 	if err != nil {
-		return "", fmt.Errorf("cannot materialize worker profile %q: base agent unavailable: %w", prof.ID, err)
+		return "", fmt.Errorf("cannot resolve worker profile %q system agent: %w", prof.ID, err)
 	}
-	allow, _ := json.Marshal(prof.AllowedTools)
-	// ProviderInstanceID mirrors the base agent's — GetAgent backfills it from
-	// Provider at read time when the base's on-disk row predates this field
-	// (_Docs/71 §2.5), so it is always populated here. Cloning it (not just
-	// Provider) matters when the base is bound to a non-default instance of its
-	// kind (e.g. a second "anthropic" instance with its own key): the worker
-	// must reuse that SAME instance, not fall back to the kind's default one.
-	created, err := r.db.CreateAgent(ctx, db.Agent{
-		Name:               name,
-		Soul:               prof.SystemPrompt,
-		Provider:           base.Provider,
-		ProviderInstanceID: base.ProviderInstanceID,
-		Model:              base.Model,
-		PermissionMode:     base.PermissionMode,
-		// MCPEnabled is the master switch, NOT a grant: the profile allowlist below
-		// names only built-ins, and no built-in pattern can match a namespaced
-		// "<server>__<tool>" MCP name, so a profile worker reaches no MCP server on
-		// either path (native: toolFilter; CLI: mcpServerGate). It stays true so an
-		// operator who deliberately widens this agent's allowlist in the UI gets MCP
-		// without also having to find this flag.
-		MCPEnabled:   true,
-		AllowedTools: string(allow),
-		CreatedBy:    baseAgentID,
-	})
-	if err != nil {
-		return "", fmt.Errorf("cannot materialize worker profile %q: %w", prof.ID, err)
-	}
-	r.logger.Info("coordination: materialized profile worker", "profile", prof.ID, "agent", created.ID)
-	return created.ID, nil
-}
-
-// syncValidatorProfileAllowlist migrates only a materialized validator that
-// still has the exact pre-Unity profile contract. Any operator customization is
-// left untouched; the profile name alone is not authority to overwrite it.
-func (r *Runtime) syncValidatorProfileAllowlist(ctx context.Context, a db.Agent, prof SubagentProfile) error {
-	legacy := []string{"Read", "LS", "Glob", "Grep", "Bash"}
-	var current []string
-	if err := json.Unmarshal([]byte(a.AllowedTools), &current); err != nil || !slices.Equal(current, legacy) {
-		return nil
+	if systemAgent.ID == "" {
+		return "", fmt.Errorf("cannot resolve worker profile %q: system agent is not seeded", prof.ID)
 	}
 	allow, err := json.Marshal(prof.AllowedTools)
 	if err != nil {
-		return fmt.Errorf("cannot sync worker profile %q allowlist: %w", prof.ID, err)
+		return "", fmt.Errorf("cannot sync worker profile %q allowlist: %w", prof.ID, err)
 	}
-	if err := r.db.UpdateAgentAllowedTools(ctx, a.ID, string(allow)); err != nil {
-		return fmt.Errorf("cannot sync worker profile %q allowlist: %w", prof.ID, err)
+	if systemAgent.AllowedTools != string(allow) {
+		if err := r.db.UpdateAgentAllowedTools(ctx, systemAgent.ID, string(allow)); err != nil {
+			return "", fmt.Errorf("cannot sync worker profile %q allowlist: %w", prof.ID, err)
+		}
 	}
-	r.logger.Info("coordination: synced profile worker allowlist", "profile", prof.ID, "agent", a.ID)
-	return nil
+	return systemAgent.ID, nil
 }
 
 // SendToWorker appends a follow-up message to an existing worker session and runs
@@ -797,6 +737,11 @@ func (r *Runtime) SendToWorker(ctx context.Context, coordSessionID, workerSessio
 	agent, err := r.db.GetAgent(ctx, ws.AgentID)
 	if err != nil {
 		return tools.SendResult{}, fmt.Errorf("worker agent gone: %w", err)
+	}
+	// Follow-up turns re-read the agent row, so the code-side profile contract has
+	// to be re-asserted here too — not only on the spawn path.
+	if err := r.applyProfileAllowlist(&agent); err != nil {
+		return tools.SendResult{}, err
 	}
 
 	// Backpressure instead of rejection: a worker mid-turn no longer loses the
@@ -1394,6 +1339,18 @@ func (r *Runtime) emitInjectedUserNote(sessionID string, msg db.Message) {
 // see the freshly-persisted notification in history (coalescing). Otherwise it
 // starts the loop, which queues for the session's turn slot like any other caller.
 func (r *Runtime) enqueueCoordinatorTurn(coordSessionID string) {
+	// Archive is a HARD stop on automatic turns, and it has to be enforced here --
+	// the wake entry point -- not only in RecoverOrphanedTurns. WHY: on 2026-08-27
+	// archiving the three runaway coordinators in WS5 was not enough. Their orphaned
+	// workers are still reclaimed at boot, and each reclaim calls NotifyCoordinator,
+	// which lands right here and starts a drain on a session the user had explicitly
+	// archived. The whole subtree had to be archived by hand to break the loop.
+	// The note itself is already durably recorded by the caller, so nothing is lost:
+	// un-archiving and resuming replays it.
+	if sess, err := r.db.GetSession(context.Background(), coordSessionID); err == nil && sess.State == "archived" {
+		r.logger.Info("coordination: skipping turn, coordinator session is archived", "session", coordSessionID)
+		return
+	}
 	slot := r.coordSlotFor(coordSessionID)
 	slot.mu.Lock()
 	// A hard stall halt must gate the wake entry point, not only a drain already in
@@ -1590,7 +1547,7 @@ func (r *Runtime) coordinatorWorkerStatusBlock(ctx context.Context, coordSession
 	if err != nil || len(ws) == 0 {
 		return ""
 	}
-	v, err := view.ProjectWorkers(view.WorkersInput{Workers: toViewWorkers(ws)}, view.LevelCard, view.LensHealth)
+	v, err := view.ProjectWorkers(view.WorkersInput{Workers: toViewWorkers(ws)}, view.LevelCard)
 	if err != nil {
 		// The block is an optional prompt enrichment; losing it must not fail the
 		// turn. It IS worth a log line — a coordinator silently running without its

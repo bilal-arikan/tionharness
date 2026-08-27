@@ -48,11 +48,17 @@ func TestRegistryConsistency(t *testing.T) {
 
 func TestSystemAgentOwnership(t *testing.T) {
 	want := map[string]string{
-		"title":            "titler",
-		"summary":          "overview-summarizer",
-		"compact":          "compaction",
-		"lesson":           "lesson-extractor",
-		"insight-analyzer": "insight",
+		"title":              "titler",
+		"summary":            "overview-summarizer",
+		"compact":            "compaction",
+		"lesson":             "lesson-extractor",
+		"insight-analyzer":   "insight",
+		"subagent-explore":   "subagent-explore",
+		"subagent-planner":   "subagent-planner",
+		"subagent-coder":     "subagent-coder",
+		"subagent-reviewer":  "subagent-reviewer",
+		"subagent-validator": "subagent-validator",
+		"subagent-config":    "subagent-config",
 	}
 	for _, s := range Specs() {
 		if got, owned := want[s.Key]; owned {

@@ -58,6 +58,10 @@ type Runtime struct {
 	// acceptable for advisory coaching. Zero value is ready (no init).
 	anomalyNotified sync.Map
 
+	// mcpFailStreaks counts consecutive MCP catalog-build failures per server so a
+	// standing outage escalates from WARN to a single ERROR (see mcpescalate.go).
+	mcpFailStreaks mcpFailStreaks
+
 	// logs is the process-wide ring buffer of captured log entries, exposed to
 	// agents through the read_logs self-management tool. May be nil.
 	logs *logbuf.Buffer
@@ -165,11 +169,6 @@ type Runtime struct {
 	// dispatchWorkerTurn — a test seam so the queue's accept/refuse/deliver logic
 	// can be exercised without a live provider. Nil in production.
 	workerRunFn func(agent db.Agent, workerSessionID, prompt, coordSessionID string)
-
-	// profileWorkerMu serializes find-or-create of the persisted profile-worker
-	// agents (worker:explore/coder/reviewer) so two concurrent spawn_worker calls
-	// with the same profile target never create duplicate agents.
-	profileWorkerMu sync.Mutex
 
 	// settingsBridge backs the get_settings / update_settings self-management
 	// tools: read and live-apply the application-wide settings. Wired by the

@@ -9400,3 +9400,19 @@ bir CLI provider'ı değil — meşru model referansları olarak korundu.
 - **Doküman:** Kavram, resolver/fallback, restore/disable, API, UI, seed,
   özyineleme koruması, usage taksonomisi ve kaynak dosya haritası
   `_Docs/74-SISTEM-AJANLARI.md` içinde toplandı; doküman dizinine eklendi.
+
+- **Ne:** Yerleşik subagent/worker profilleri (`explore`, `planner`, `coder`,
+  `reviewer`, `validator`, `config`) sistem ajanına çevrildi; `spawn_worker` artık
+  `worker:<profil>` ajanı yaratmıyor, `subagent-<profil>` sistem ajanını hedefliyor.
+- **Değişen:** `systemAgentDefaults`'a altı girdi (prompt registry + profil
+  allowlist'i); `subagentProfile()` promptu `ResolveSystemAgent` ile çözüyor
+  (hata → uyarı logu + registry fallback); `resolveWorkerTarget` sistem ajanının
+  id'sini döndürüyor; `applyProfileAllowlist` spawn ve follow-up turlarında
+  allowlist'i koddan yeniden dayatıyor; `EnsureSystemAgents` eski `worker:*`
+  ajanlarını idempotent biçimde göç ettiriyor; UI'da bu ajanların araç bölümü
+  kilitli.
+- **Not:** Provider/model dinamik kaldı — sistem ajanı model pinlemiyor, worker
+  koordinatörün provider/instance/model/permission değerlerini klonluyor.
+- **Doğrulama:** `go build ./...` ✅, `go test ./internal/agent/... ./internal/api/...
+  ./internal/prompts/... ./internal/db/...` ✅, `npm run format:check` + `npm test` ✅.
+  Ayrıntı: `_Docs/74-SISTEM-AJANLARI.md`, `_Docs/47-KOORDINATOR-COKLU-AJAN.md` §17.

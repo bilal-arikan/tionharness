@@ -339,12 +339,23 @@ func newTestCoordinator(t *testing.T, rt *Runtime, depth int) string {
 	return sess.ID
 }
 
-// TestSpawnWorkerMaterializesProfile verifies a profile target (explore) is
-// materialized once into a reusable "worker:explore" agent cloned from the base
-// coordinator agent, and reused on the second spawn.
-func TestSpawnWorkerMaterializesProfile(t *testing.T) {
+// seedSystemAgents installs the canonical built-ins into a test runtime's store,
+// mirroring what workspace boot does. Profile workers now resolve to those agents,
+// so a runtime without them cannot spawn one.
+func seedSystemAgents(t *testing.T, rt *Runtime) {
+	t.Helper()
+	if err := rt.db.EnsureSystemAgents(context.Background(), SystemAgentDefaults()...); err != nil {
+		t.Fatalf("seed system agents: %v", err)
+	}
+}
+
+// TestSpawnWorkerTargetsSystemAgent verifies a profile target (explore) resolves
+// to the shared "subagent-explore" SYSTEM agent — reused across spawns and never
+// materialized into a per-profile "worker:<id>" copy.
+func TestSpawnWorkerTargetsSystemAgent(t *testing.T) {
 	rt, _ := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))
 	ctx := context.Background()
+	seedSystemAgents(t, rt)
 	base, err := rt.db.CreateAgent(ctx, db.Agent{Name: "Coord", Provider: "anthropic", Model: "m"})
 	if err != nil {
 		t.Fatalf("create base agent: %v", err)
@@ -357,61 +368,87 @@ func TestSpawnWorkerMaterializesProfile(t *testing.T) {
 		t.Fatalf("spawn worker (explore): %v", err)
 	}
 	s1, _ := rt.db.GetSession(ctx, r1.SessionID)
-	wa, err := rt.resolveAgent(ctx, "worker:explore")
-	if err != nil {
-		t.Fatalf("profile worker agent not materialized: %v", err)
+	sys, ok := rt.db.FindAgentBySystemKey("subagent-explore")
+	if !ok {
+		t.Fatal("subagent-explore system agent missing")
 	}
-	if s1.AgentID != wa.ID {
-		t.Errorf("worker session agent = %q, want materialized %q", s1.AgentID, wa.ID)
-	}
-	if wa.Provider != "anthropic" {
-		t.Errorf("materialized worker should clone provider, got %q", wa.Provider)
+	if s1.AgentID != sys.ID {
+		t.Errorf("worker session agent = %q, want system agent %q", s1.AgentID, sys.ID)
 	}
 
-	// Second spawn reuses the same agent (no duplicate).
+	// Second spawn reuses the same system agent and creates no extra rows.
 	if _, err := rt.SpawnWorker(ctx, coord, "explore", "again", base.ID, WorkerSpec{}); err != nil {
 		t.Fatalf("second spawn: %v", err)
 	}
 	agents, _ := rt.db.ListAgents(ctx)
 	n := 0
 	for _, a := range agents {
-		if a.Name == "worker:explore" {
+		if a.Name == "worker:explore" || a.SystemKey == "subagent-explore" {
 			n++
 		}
 	}
 	if n != 1 {
-		t.Errorf("expected exactly one worker:explore agent, got %d", n)
+		t.Errorf("expected exactly one explore worker agent, got %d", n)
 	}
 }
 
-func TestResolveWorkerTargetSyncsLegacyValidatorWithoutOverwritingCustomization(t *testing.T) {
+// TestResolveWorkerTargetReassertsProfileAllowlist proves the allowlist is a code
+// contract: an edited system-agent row is pulled back to the profile's tools,
+// while unrelated per-agent customization (tool overrides) survives.
+func TestResolveWorkerTargetReassertsProfileAllowlist(t *testing.T) {
 	rt, _ := newTestRuntime(t, filepath.Join(t.TempDir(), "workspace"))
 	ctx := context.Background()
-	legacy := `["Read","LS","Glob","Grep","Bash"]`
-	a, err := rt.db.CreateAgent(ctx, db.Agent{Name: "worker:validator", Provider: "anthropic", AllowedTools: legacy, ToolOverrides: `{"Write":"blocked"}`})
+	seedSystemAgents(t, rt)
+	sys, ok := rt.db.FindAgentBySystemKey("subagent-validator")
+	if !ok {
+		t.Fatal("subagent-validator system agent missing")
+	}
+	if err := rt.db.UpdateAgentAllowedTools(ctx, sys.ID, `["Read","Write","Bash"]`); err != nil {
+		t.Fatal(err)
+	}
+	if err := rt.db.UpdateAgentTools(ctx, sys.ID, true, `{"Write":"blocked"}`); err != nil {
+		t.Fatal(err)
+	}
+
+	id, err := rt.resolveWorkerTarget(ctx, "", "", "validator")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := rt.resolveWorkerTarget(ctx, "", "", "validator"); err != nil {
-		t.Fatal(err)
+	if id != sys.ID {
+		t.Fatalf("resolveWorkerTarget = %q, want system agent %q", id, sys.ID)
 	}
-	got, _ := rt.db.GetAgent(ctx, a.ID)
+	got, _ := rt.db.GetAgent(ctx, sys.ID)
 	if got.AllowedTools != mustJSON(t, defaultSubagentProfiles["validator"].AllowedTools) {
-		t.Fatalf("legacy allowlist not synced: %s", got.AllowedTools)
+		t.Fatalf("edited allowlist not re-asserted: %s", got.AllowedTools)
 	}
 	if got.ToolOverrides != `{"Write":"blocked"}` {
 		t.Fatalf("custom overrides overwritten: %s", got.ToolOverrides)
 	}
-	custom, err := rt.db.CreateAgent(ctx, db.Agent{Name: "worker:validator-custom", Provider: "anthropic", AllowedTools: `["Read"]`})
-	if err != nil {
+}
+
+// TestApplyProfileAllowlistIgnoresNonProfileAgents keeps the re-assertion scoped:
+// only a subagent-* system agent is rewritten from code.
+func TestApplyProfileAllowlistIgnoresNonProfileAgents(t *testing.T) {
+	plain := db.Agent{Name: "Coord", AllowedTools: `["Read"]`}
+	if err := applyProfileAllowlist(&plain); err != nil {
 		t.Fatal(err)
 	}
-	if err := rt.syncValidatorProfileAllowlist(ctx, custom, defaultSubagentProfiles["validator"]); err != nil {
+	if plain.AllowedTools != `["Read"]` {
+		t.Fatalf("non-system agent rewritten: %s", plain.AllowedTools)
+	}
+	other := db.Agent{Name: "Titler", System: true, SystemKey: "titler", AllowedTools: `[]`}
+	if err := applyProfileAllowlist(&other); err != nil {
 		t.Fatal(err)
 	}
-	got, _ = rt.db.GetAgent(ctx, custom.ID)
-	if got.AllowedTools != `["Read"]` {
-		t.Fatalf("custom allowlist overwritten: %s", got.AllowedTools)
+	if other.AllowedTools != `[]` {
+		t.Fatalf("non-profile system agent rewritten: %s", other.AllowedTools)
+	}
+	worker := db.Agent{Name: "Worker: Coder", System: true, SystemKey: "subagent-coder", AllowedTools: `["Bash"]`}
+	if err := applyProfileAllowlist(&worker); err != nil {
+		t.Fatal(err)
+	}
+	if worker.AllowedTools != mustJSON(t, defaultSubagentProfiles["coder"].AllowedTools) {
+		t.Fatalf("profile worker allowlist = %s", worker.AllowedTools)
 	}
 }
 

@@ -1296,3 +1296,36 @@ ajanın boş değerle yüklenmesi).
 paketi (`market.AgentPayload`) hem workspace şablonu
 (`market.WorkspaceTemplateAgent`) için prompt JSON'dan geçip kurulan ajanda
 birebir korunuyor mu; alansız paket boş değerle çözülüyor mu.
+
+---
+
+## 17. Profil worker'ları sistem ajanı oldu (2026-08-27)
+
+`spawn_worker`'ın yerleşik profil hedefleri (`explore`, `planner`, `coder`,
+`reviewer`, `validator`, `config`) artık kalıcı `worker:<profil>` ajanına
+materyalize **edilmiyor**; her biri kararlı bir sistem ajanına (`SystemKey`:
+`subagent-<profil>`) karşılık geliyor.
+
+- **Kayıt defteri:** `buildSystemAgentDefaults` altı girdiyi profil listesinden
+  üretir — prompt `prompts.Default("subagent-<id>")`, araç listesi
+  `defaultSubagentProfiles[<id>].AllowedTools`. Prompt ekranında bu altı kayıt
+  `ownedBySystemKey` taşır ve salt-okunur aynadır.
+- **Çözümleme:** `subagentProfile()` promptu `ResolveSystemAgent` üzerinden okur;
+  çözümleme hata verirse uyarı loglanır ve prompt registry fallback'i kullanılır.
+  `resolveWorkerTarget` hedefi sistem ajanının id'sine çevirir.
+- **Allowlist sözleşmesi:** ajan kaydı yalnız önbellektir. `resolveWorkerTarget`
+  kaydı koddaki listeye geri yazar; `SpawnSession` ve `SendToWorker` ise o turun
+  ajan kopyasına listeyi yeniden uygular (`applyProfileAllowlist`). UI'da bu
+  ajanların araç bölümü kilitlidir.
+- **Provider/model:** sistem ajanı model pinlemez; worker koordinatörün
+  provider/instance/model/permission değerlerini klonlamaya devam eder.
+- **Göç:** `EnsureSystemAgents` eski `worker:<profil>` ajanını yerinde sistem
+  ajanına dönüştürür (id korunur); sistem ajanı zaten varsa eski kaydı devre dışı
+  bırakır. İdempotenttir.
+
+**Testler:** `TestSpawnWorkerTargetsSystemAgent`,
+`TestResolveWorkerTargetReassertsProfileAllowlist`,
+`TestApplyProfileAllowlistIgnoresNonProfileAgents`,
+`TestSubagentSystemAgentDefaultsCarryProfileAllowlist`,
+`TestEnsureSystemAgentsAdoptsLegacyWorkerAgent`,
+`TestEnsureSystemAgentsDisablesRedundantLegacyWorker`.

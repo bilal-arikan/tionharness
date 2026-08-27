@@ -47,6 +47,82 @@ func TestEnsureSystemAgentsIdempotent(t *testing.T) {
 	}
 }
 
+// TestEnsureSystemAgentsAdoptsLegacyWorkerAgent covers the migration away from
+// materialized "worker:<profile>" agents: the existing row is adopted in place
+// (so its sessions keep resolving) and becomes the system agent, with no second
+// copy created.
+func TestEnsureSystemAgentsAdoptsLegacyWorkerAgent(t *testing.T) {
+	ctx := context.Background()
+	d, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacy, err := d.CreateAgent(ctx, Agent{Name: "worker:coder", Provider: "anthropic", AllowedTools: `["Read"]`})
+	if err != nil {
+		t.Fatal(err)
+	}
+	def := SystemAgentDefinition{
+		SystemKey: "subagent-coder", Name: "Worker: Coder", Description: "Implements focused code changes.",
+		SystemPrompt: "coder prompt", AllowedTools: `["Read","Write"]`,
+	}
+	if err := d.EnsureSystemAgents(ctx, def); err != nil {
+		t.Fatal(err)
+	}
+	got, ok := d.FindAgentBySystemKey("subagent-coder")
+	if !ok {
+		t.Fatal("subagent-coder not present after migration")
+	}
+	if got.ID != legacy.ID {
+		t.Fatalf("legacy agent not adopted: got %q, want %q", got.ID, legacy.ID)
+	}
+	if got.Name != def.Name || got.AllowedTools != def.AllowedTools || !got.System {
+		t.Fatalf("adopted agent = %+v, want the system definition applied", got)
+	}
+	// Idempotent: a second pass changes nothing and adds no duplicate.
+	if err := d.EnsureSystemAgents(ctx, def); err != nil {
+		t.Fatal(err)
+	}
+	agents, _ := d.ListAgents(ctx)
+	if len(agents) != 1 {
+		t.Fatalf("agent count = %d, want 1", len(agents))
+	}
+}
+
+// TestEnsureSystemAgentsDisablesRedundantLegacyWorker covers the other migration
+// branch: when the system agent already exists, the leftover "worker:<profile>"
+// row is disabled instead of competing with it as a second target.
+func TestEnsureSystemAgentsDisablesRedundantLegacyWorker(t *testing.T) {
+	ctx := context.Background()
+	d, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	def := SystemAgentDefinition{
+		SystemKey: "subagent-coder", Name: "Worker: Coder",
+		SystemPrompt: "coder prompt", AllowedTools: `["Read","Write"]`,
+	}
+	if err := d.EnsureSystemAgents(ctx, def); err != nil {
+		t.Fatal(err)
+	}
+	legacy, err := d.CreateAgent(ctx, Agent{Name: "worker:coder", Provider: "anthropic"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := d.EnsureSystemAgents(ctx, def); err != nil {
+		t.Fatal(err)
+	}
+	got, err := d.GetAgent(ctx, legacy.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got.Disabled {
+		t.Fatal("redundant legacy worker agent left enabled")
+	}
+	if _, ok := d.FindAgentBySystemKey("subagent-coder"); !ok {
+		t.Fatal("system agent lost")
+	}
+}
+
 func TestEnsureSystemAgentsBackfillsMissingDefinition(t *testing.T) {
 	ctx := context.Background()
 	d, err := Open(t.TempDir())
