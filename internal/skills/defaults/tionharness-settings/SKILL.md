@@ -204,10 +204,11 @@ path; the permission mode is the safety boundary). These guards rein that in
 for autonomous (no-human) turns; interactive chat is unaffected.
 - `autonomousConfine` (default true) — on scheduler/spawn/flow turns, confine the
   fs tools to the session's working dir (reject absolute paths + `..` escapes) and
-  block `git push`. Recommended: on. **Scope:** the fs tools only — `shell`,
-  `powershell` and `transform_data` stay path-unrestricted (their only boundary is
-  the process working directory), so a confined turn can still write anywhere via a
-  shell command. Documented, not fixed: a real boundary needs OS-level isolation.
+  block `git push`. Recommended: on. **Scope:** `shell` and `powershell` stay
+  path-unrestricted, so a confined turn can still write anywhere via a shell
+  command. `transform_data` resolves its input/output argument paths through the
+  sandbox, but its arbitrary host-code script can bypass that restriction.
+  Documented, not fixed: a real boundary needs OS-level isolation.
 - `autonomousBootSeq` (default true) — on scheduler/spawn/flow/subagent turns,
   inject a short boot/verification-sequence reminder (orient → recall → select one
   task → verify the baseline → work → close the loop) into the system prompt. The

@@ -88,7 +88,11 @@ kapatır, kabuğu kapatmaz.
 |---|---|---|
 | `read_file`, `write_file`, `edit_file`, `apply_patch`, `list_dir`, `glob`, `grep`, `config_validate` | **Evet** | Her yol argümanı `Sandbox.Resolve`'dan geçer; mutlak yol ve `..` kaçışı reddedilir. |
 | `shell` (Bash), `powershell` | **Hayır** | `Sandbox.Resolve` bu yolda **hiç çağrılmaz**. Komut, kabuğa opak bir metin olarak verilir. |
-| `transform_data` | **Hayır** | Aynı kapıdan (`ShellEnabled`) kayıtlı, ana makinede python/node çalıştırır. |
+| `transform_data` | **Argümanlar evet, script gövdesi hayır** | Aynı kapıdan (`ShellEnabled`) kayıtlı, ana makinede python/node çalıştırır. |
+
+`transform_data` input/output argüman yollarını `Sandbox.Resolve` üzerinden
+kısıtlar. Ancak script gövdesi rastgele ana makine kodu çalıştırdığı için kendi
+dosya erişimini açabilir ve bu argüman kısıtını aşabilir.
 
 Confined bayrağının shell yolunda yaptığı **tek** iki şey
 (`internal/tools/builtin_shell.go`, `builtin_shell_harden.go`):

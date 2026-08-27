@@ -378,9 +378,10 @@ type Settings struct {
 
 	// Working-directory guards. The built-in fs/shell tools are unconfined (may
 	// touch any path); these brake that power on autonomous (no-human) turns.
-	// Scope caveat: AutonomousConfine confines the FS tools only. shell/powershell/
-	// transform_data are NOT path-restricted by it — see the note above
-	// shellMaxOutputBytes in internal/tools/builtin_shell.go.
+	// Scope caveat: AutonomousConfine confines the FS tools, but shell/powershell
+	// are NOT path-restricted by it. transform_data resolves its input/output
+	// arguments through the sandbox, but its arbitrary host-code script can bypass
+	// that path restriction. See internal/tools/builtin_shell.go.
 	AutonomousConfine bool `json:"autonomousConfine"` // confine the fs tools to the working dir on autonomous turns; shell is unaffected (default true)
 	AutonomousBootSeq bool `json:"autonomousBootSeq"` // inject the boot/verification-sequence reminder on autonomous turns (default true)
 
