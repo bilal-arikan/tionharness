@@ -634,6 +634,10 @@ func (b *interactionBackend) callViaSink(ctx context.Context, run *chatRun, st s
 // never by its bare name. Used to report the exact callable name back to the model.
 const extendedNSPrefix = "mcp__tionharness_extended__"
 
+// interactionNSPrefix is the namespace the core (always-listed) Interaction MCP
+// tools are advertised under by every CLI that mounts the server.
+const interactionNSPrefix = "mcp__tionharness_interaction__"
+
 // activateRelistTimeout bounds how long callActivate waits for the CLI to re-fetch
 // tools/list after an activate push (PushToolsChangedAndWait). The live probe saw
 // claude-cli re-list concurrently in ~10-16ms, so the wait almost always returns far
@@ -644,11 +648,24 @@ const activateRelistTimeout = 1 * time.Second
 // bareToolName strips the Interaction MCP namespace so dispatch matches whether
 // the CLI sends a namespaced name (core: mcp__tionharness_interaction__ask_user,
 // extended: mcp__tionharness_extended__create_agent) or the bare name.
+//
+// Stripping loops until no prefix remains: a model that re-namespaces an already
+// namespaced name sends a doubled prefix
+// (mcp__tionharness_interaction__mcp__tionharness_interaction__ask_user), and a
+// single-layer strip would leave a name no dispatch table or activation catalog
+// can match.
 func bareToolName(name string) string {
-	if s := strings.TrimPrefix(name, "mcp__tionharness_interaction__"); s != name {
-		return s
+	for {
+		if s := strings.TrimPrefix(name, interactionNSPrefix); s != name {
+			name = s
+			continue
+		}
+		if s := strings.TrimPrefix(name, extendedNSPrefix); s != name {
+			name = s
+			continue
+		}
+		return name
 	}
-	return strings.TrimPrefix(name, extendedNSPrefix)
 }
 
 // fullTierProvider reports whether a provider mounts the Interaction MCP with the
@@ -700,7 +717,7 @@ func (b *interactionBackend) toolCallError(token, name string, run *chatRun) str
 
 func callableToolName(name string, visOf func(string) string) string {
 	if cliTier(name, visOf) == "core" {
-		return "mcp__tionharness_interaction__" + name
+		return interactionNSPrefix + name
 	}
 	return extendedNSPrefix + name
 }

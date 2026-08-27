@@ -6,6 +6,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/bilal-arikan/tionharness/internal/mcp"
 )
 
 // --- codex exec --json event shapes ---
@@ -297,9 +299,11 @@ func (p *codexStreamParser) feedItem(evType string, it *codexItem) {
 	case "mcp_tool_call":
 		p.setStep(it, final, TraceStep{
 			// Codex namespaces MCP tools exactly like claude-cli, so the existing
-			// mcp.SplitNamespaced / trace-stripping helpers work unchanged.
+			// mcp.SplitNamespaced / trace-stripping helpers work unchanged. Build the
+			// name through mcp.NamespaceTool so an it.Tool that already carries its
+			// server (or the CLI's mcp__) prefix is left alone instead of doubled.
 			Kind:    "tool",
-			Tool:    "mcp__" + it.Server + "__" + it.Tool,
+			Tool:    mcp.NamespaceTool("mcp", mcp.NamespaceTool(it.Server, it.Tool)),
 			Input:   it.Arguments,
 			Output:  mcpToolOutput(it),
 			IsError: it.Error != nil || it.Status == "failed" || (it.Result != nil && it.Result.IsError),

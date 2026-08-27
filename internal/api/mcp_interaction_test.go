@@ -488,3 +488,30 @@ func TestBridgedShellAdvertisesNoCompress(t *testing.T) {
 		t.Errorf("a bare tool with no filter and no opt-in must NOT advertise no_compress: %s", bare)
 	}
 }
+
+// TestBareToolNameStripsRepeatedNamespace covers the doubled-prefix name a model
+// produces when it re-namespaces an already namespaced tool: stripping must be
+// idempotent, otherwise activation rejects the tool as unknown.
+func TestBareToolNameStripsRepeatedNamespace(t *testing.T) {
+	cases := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{"bare", "ask_user", "ask_user"},
+		{"core", interactionNSPrefix + "ask_user", "ask_user"},
+		{"extended", extendedNSPrefix + "create_agent", "create_agent"},
+		{"doubled core", interactionNSPrefix + interactionNSPrefix + "ask_user", "ask_user"},
+		{"doubled extended", extendedNSPrefix + extendedNSPrefix + "create_agent", "create_agent"},
+		{"mixed tiers", interactionNSPrefix + extendedNSPrefix + "create_agent", "create_agent"},
+		{"tripled", interactionNSPrefix + interactionNSPrefix + interactionNSPrefix + "ask_user", "ask_user"},
+		{"foreign server untouched", "mcp__other_server__ask_user", "mcp__other_server__ask_user"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := bareToolName(tc.in); got != tc.want {
+				t.Errorf("bareToolName(%q) = %q, want %q", tc.in, got, tc.want)
+			}
+		})
+	}
+}
