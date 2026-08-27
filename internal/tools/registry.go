@@ -65,6 +65,14 @@ func truncTail(s string, n int) string {
 
 // capToolOutput truncates s to maxToolOutputBytes on a UTF-8 boundary and
 // appends a marker when it overflows, so the model is told output was cut.
+//
+// The cap bounds the KEPT BODY, not the returned string: the marker is added on
+// top, so the result can be up to maxToolOutputBytes + len(marker) (~27 bytes).
+// That is deliberate — the cap is a context/OOM backstop, and no consumer of
+// this value treats it as a hard ceiling (the tool loop itself appends
+// guardrail and repair hints to the result afterwards). Do not "fix" the
+// overshoot by shrinking the body; a caller that truly needs a hard bound must
+// enforce it on its own side.
 func capToolOutput(s string) string {
 	if len(s) <= maxToolOutputBytes {
 		return s
@@ -87,6 +95,11 @@ func capToolOutput(s string) string {
 // going to be truncated before this feature existed. Turning a storage problem
 // into a failed tool call would be a strict regression, so the failure degrades
 // the output rather than the call.
+//
+// Same cap semantics as capToolOutput: head + tail together are exactly
+// maxToolOutputBytes and the artifact marker (~110 bytes, its length varies with
+// the artifact id) rides on top, so the returned string overshoots the cap by
+// ~0.1%. Intentional, for the reason spelled out on capToolOutput.
 func capToolOutputOffload(ctx context.Context, toolName, s string) string {
 	if len(s) <= maxToolOutputBytes {
 		return s
