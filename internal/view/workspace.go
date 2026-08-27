@@ -19,14 +19,6 @@ type WorkspaceInput struct {
 	FlowRuns    []db.FlowRun
 	Schedules   []db.Schedule
 	WaitingAsks []db.SessionAsk
-	// TokensToday is the workspace-wide token spend for the current day.
-	TokensToday int64
-	// CostToday is the workspace-wide USD cost for the current day, priced by
-	// billing.RollupOf. CostEstimated is set when any of that spend is priced via
-	// an equivalent-API estimate (subscription providers like claude-cli) rather
-	// than a real list price — the header then prefixes "~".
-	CostToday     float64
-	CostEstimated bool
 	// Name is the workspace display name (e.g. "TionHarnessRepo"). When empty, the
 	// header falls back to "WORKSPACE"; this happens in agent tool call paths where
 	// the projector lacks the workspace-wide identity.
@@ -64,21 +56,15 @@ func ProjectWorkspace(in WorkspaceInput, level Level) (View, error) {
 	}
 
 	st := workspaceStats(in, now)
-	// Cost rides next to the token figure so the reader sees spend in money, not
-	// only volume. It is omitted (not shown as "$0.00") when there is no priced
-	// spend today: a bare $0.00 next to a non-zero token count would read as "free"
-	// when it actually means "this provider has no price", which is a different fact.
-	cost := ""
-	if in.CostToday > 0 {
-		cost = " · " + usd(in.CostToday, in.CostEstimated) + " bugün"
-	}
 	label := "WORKSPACE"
 	if in.Name != "" {
 		label = "WORKSPACE " + fmt.Sprintf("%q", clip(in.Name, 60))
 	}
-	v.Header = fmt.Sprintf("%s · %d ajan · %d oturum (%d aktif) · %d kart · %d koşu · %s tok bugün%s · asOf %s",
+	// Spend (tokens and cost) is deliberately absent: the budget view owns it, and
+	// repeating it here put a money figure in front of every unrelated read.
+	v.Header = fmt.Sprintf("%s · %d ajan · %d oturum (%d aktif) · %d kart · %d koşu · asOf %s",
 		label, len(in.Agents), len(in.Sessions), st.ActiveSessions, len(in.Tasks),
-		len(in.FlowRuns), compactCount(in.TokensToday), cost, hhmmss(now))
+		len(in.FlowRuns), hhmmss(now))
 
 	if level == LevelTiny {
 		v.finalize()

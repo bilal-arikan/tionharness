@@ -50,11 +50,11 @@ func (GetViewTool) Def() providers.ToolDef {
 		Description: "Get a COMPACT, deterministic summary of a large entity instead of reading it whole. " +
 			"Numbers are computed, never model-written; the view reports what it hid and hands back " +
 			"drill-down refs, so nothing is silently dropped.\n\n" +
-			"  workspace — \"what is going on?\": counts, today's spend, and the signals worth acting on " +
+			"  workspace — \"what is going on?\": counts and the signals worth acting on " +
 			"(stuck sessions, pending questions, failed runs, broken schedules, stale cards). id='workspace'.\n" +
 			"  board    — the kanban: column histogram + stuck/failed/blocked/overdue cards. id='board'; " +
 			"sub=<cardId> drills into one card.\n" +
-			"  session  — a conversation WITHOUT its transcript: cost, checklist progress, last failure, " +
+			"  session  — a conversation WITHOUT its transcript: checklist progress, last failure, " +
 			"stuck turns, pending question, handoff lineage, coordinator role.\n" +
 			"  flowrun  — a flow execution: which nodes ran, timings, where it is parked, what failed. " +
 			"sub=<nodeId> drills into one node.\n" +

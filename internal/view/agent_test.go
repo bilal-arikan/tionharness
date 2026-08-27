@@ -38,10 +38,14 @@ func TestAgentHeaderCountsLiveSessions(t *testing.T) {
 		t.Fatalf("project: %v", err)
 	}
 	// 4 live sessions (the archived one is excluded), 3 of them active (fresh).
-	for _, want := range []string{`AGENT:AG1 "builder"`, "anthropic/claude", "4 oturum (3 aktif)", "1.0M tok bugün", "son etkinlik"} {
+	for _, want := range []string{`AGENT:AG1 "builder"`, "anthropic/claude", "4 oturum (3 aktif)", "son etkinlik"} {
 		if !strings.Contains(v.Header, want) {
 			t.Errorf("header missing %q: %q", want, v.Header)
 		}
+	}
+	// Spend belongs to the budget view; the agent header must not carry it.
+	if strings.Contains(v.Header, " tok") || strings.Contains(v.Header, "$") {
+		t.Errorf("header still reports spend: %q", v.Header)
 	}
 	// No priced spend (empty ByModel) → the header must NOT show a bare $0.00.
 	if strings.Contains(v.Header, "$") {

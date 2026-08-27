@@ -48,9 +48,6 @@ func (s *fakeStore) GetFlow(context.Context, string) (db.Flow, error)       { re
 func (s *fakeStore) GetSession(context.Context, string) (db.Session, error) {
 	return db.Session{}, nil
 }
-func (s *fakeStore) GetSessionUsage(context.Context, string) (db.SessionUsage, error) {
-	return db.SessionUsage{}, nil
-}
 func (s *fakeStore) ListMessagesTail(context.Context, string, int) ([]db.Message, int, error) {
 	return nil, 0, nil
 }
@@ -61,7 +58,6 @@ func (s *fakeStore) ListSchedules(context.Context) ([]db.Schedule, error) { retu
 func (s *fakeStore) GetSchedule(context.Context, string) (db.Schedule, error) {
 	return db.Schedule{}, nil
 }
-func (s *fakeStore) WorkspaceTokensToday(context.Context) int64              { return 0 }
 func (s *fakeStore) UsageForDay(context.Context, string) ([]db.Usage, error) { return nil, nil }
 func (s *fakeStore) GetAgent(context.Context, string) (db.Agent, error)      { return db.Agent{}, nil }
 func (s *fakeStore) GetUsageToday(context.Context, string) (db.Usage, error) { return db.Usage{}, nil }

@@ -18,7 +18,6 @@ func sessionFixture(now time.Time) SessionInput {
 			UpdatedAt: now.Add(-4 * time.Minute).Unix(),
 			Summary:   "JWT'den session cookie'ye geçiş yapılıyor.", SummaryMsgCount: 120,
 		},
-		Usage: db.SessionUsage{InputTokens: 150_000, OutputTokens: 20_000, CacheReadTokens: 17_000},
 		Messages: []db.Message{
 			{Role: "user", Text: "devam et"},
 			{Role: "assistant", Text: "tamam", Steps: `[
@@ -40,8 +39,12 @@ func TestSessionCardSummarisesWithoutTranscript(t *testing.T) {
 	}
 	txt := v.Text()
 
-	if !strings.Contains(v.Header, "214 msg") || !strings.Contains(v.Header, "187k tok") {
-		t.Errorf("header cost/size wrong: %q", v.Header)
+	if !strings.Contains(v.Header, "214 msg") {
+		t.Errorf("header size wrong: %q", v.Header)
+	}
+	// Spend belongs to the budget view; the session header must not carry it.
+	if strings.Contains(v.Header, " tok") || strings.Contains(v.Header, "$") {
+		t.Errorf("header still reports spend: %q", v.Header)
 	}
 	if !strings.Contains(v.Header, "agent:builder") {
 		t.Errorf("header lacks agent: %q", v.Header)

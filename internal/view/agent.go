@@ -5,7 +5,6 @@ import (
 	"sort"
 	"time"
 
-	"github.com/bilal-arikan/tionharness/internal/billing"
 	"github.com/bilal-arikan/tionharness/internal/db"
 )
 
@@ -16,7 +15,8 @@ type AgentInput struct {
 	Agent    db.Agent
 	Sessions []db.Session
 	// Usage is the agent's usage row for the current day (zero-valued when the
-	// agent has run nothing today).
+	// agent has run nothing today). It is not rendered — spend belongs to the
+	// budget view — but its call count fingerprints the projection's Source.
 	Usage db.Usage
 	// Now is the clock used for age computations. Zero means time.Now().
 	Now time.Time
@@ -26,10 +26,10 @@ type AgentInput struct {
 // rest are reported as Elided.
 const agentSessionHandles = 20
 
-// ProjectAgent renders one agent: who it is, what it cost today, how many of its
-// sessions are open, and when it last did anything. It re-uses the same L0/L1
-// discipline as every other projection — every number is counted in Go, the
-// cost comes from billing.RollupOf (never re-priced here), nothing is narrated.
+// ProjectAgent renders one agent: who it is, how many of its sessions are open,
+// and when it last did anything. It re-uses the same L0/L1 discipline as every
+// other projection — every number is counted in Go, nothing is narrated. Spend
+// is not part of it: the budget view is the one place that reports money.
 func ProjectAgent(in AgentInput, level Level) (View, error) {
 	if in.Agent.ID == "" {
 		return View{}, fmt.Errorf("agent input has no agent")
@@ -47,19 +47,11 @@ func ProjectAgent(in AgentInput, level Level) (View, error) {
 	}
 
 	st := computeAgentStats(in, now)
-	tokens := usageTokens(in.Usage)
-	// Cost rides next to the token figure, priced exactly as every budget surface
-	// prices it. Omitted (not "$0.00") when there is no priced spend today: a bare
-	// $0.00 next to a non-zero token count would read as "free" when it actually
-	// means "this provider has no list price".
-	cost := ""
-	roll := billing.RollupOf(in.Usage.ByModel)
-	if roll.CostUSD > 0 {
-		cost = " · " + usd(roll.CostUSD, roll.Estimated || !roll.Priced) + " bugün"
-	}
-	v.Header = fmt.Sprintf("AGENT:%s %q · %s · %d oturum (%d aktif) · %s tok bugün%s · son etkinlik %s",
+	// Today's tokens and cost are deliberately absent: the budget view owns spend,
+	// and an agent read should not put a money figure in front of the reader.
+	v.Header = fmt.Sprintf("AGENT:%s %q · %s · %d oturum (%d aktif) · son etkinlik %s",
 		in.Agent.ID, clip(agentName(in.Agent), 60), modelLabel(in.Agent),
-		st.Total, st.Active, compactCount(tokens), cost, agentLastActivity(st.LastActivity, now))
+		st.Total, st.Active, agentLastActivity(st.LastActivity, now))
 
 	if level == LevelTiny {
 		v.finalize()
@@ -186,10 +178,4 @@ func agentLastActivity(ts int64, now time.Time) string {
 		return "-"
 	}
 	return age(tsSec(ts), now) + " önce"
-}
-
-// usageTokens sums every token class of a day's usage row.
-func usageTokens(u db.Usage) int64 {
-	return int64(u.InputTokens) + int64(u.OutputTokens) +
-		int64(u.CacheReadTokens) + int64(u.CacheWriteTokens)
 }

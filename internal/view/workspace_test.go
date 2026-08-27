@@ -15,9 +15,8 @@ func workspaceFixture(now time.Time) WorkspaceInput {
 	old := now.Add(-9 * 24 * time.Hour).Unix()
 
 	return WorkspaceInput{
-		Now:         now,
-		TokensToday: 1_250_000,
-		Agents:      []db.Agent{{ID: "AG1", Name: "builder"}, {ID: "AG2", Name: "researcher"}},
+		Now:    now,
+		Agents: []db.Agent{{ID: "AG1", Name: "builder"}, {ID: "AG2", Name: "researcher"}},
 		Sessions: []db.Session{
 			{ID: "SES1", AgentID: "AG1", UpdatedAt: fresh},
 			{ID: "SES2", AgentID: "AG1", UpdatedAt: fresh, StuckTurns: 2, Title: "takılan iş"},
@@ -56,10 +55,14 @@ func TestWorkspaceHeaderCountsWhatMatters(t *testing.T) {
 
 	// 5 sessions total; 3 active (fresh + non-archived); the archived one is
 	// excluded from "active" but still counted in the total.
-	for _, want := range []string{"2 ajan", "5 oturum (3 aktif)", "3 kart", "4 koşu", "1.2M tok bugün"} {
+	for _, want := range []string{"2 ajan", "5 oturum (3 aktif)", "3 kart", "4 koşu"} {
 		if !strings.Contains(v.Header, want) {
 			t.Errorf("header missing %q: %q", want, v.Header)
 		}
+	}
+	// Spend belongs to the budget view; the workspace header must not carry it.
+	if strings.Contains(v.Header, " tok") || strings.Contains(v.Header, "$") {
+		t.Errorf("header still reports spend: %q", v.Header)
 	}
 }
 

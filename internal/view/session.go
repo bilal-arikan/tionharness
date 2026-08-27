@@ -16,7 +16,6 @@ import (
 // session costs the same as a fresh one.
 type SessionInput struct {
 	Session db.Session
-	Usage   db.SessionUsage
 	// Messages is the tail of the transcript, oldest first.
 	Messages []db.Message
 	// TailFrom is the index the tail starts at within the full transcript, so the
@@ -94,7 +93,8 @@ func summaryWidth(level Level) int {
 	return 300
 }
 
-// sessionHeader is the always-present identity + cost + state line.
+// sessionHeader is the always-present identity + state line. Token/cost figures
+// are deliberately not part of it — spend belongs to the budget view.
 func sessionHeader(in SessionInput, now time.Time) string {
 	s := in.Session
 	title := s.Title
@@ -102,8 +102,8 @@ func sessionHeader(in SessionInput, now time.Time) string {
 		title = "(başlıksız)"
 	}
 
-	head := fmt.Sprintf("SES:%s %q · %d msg · %s tok · %s · agent:%s",
-		s.ID, clip(title, 60), s.MessageCount, compactCount(in.Usage.TotalTokens()),
+	head := fmt.Sprintf("SES:%s %q · %d msg · %s · agent:%s",
+		s.ID, clip(title, 60), s.MessageCount,
 		age(tsSec(s.CreatedAt), now)+" önce açıldı", orDash(s.AgentID))
 
 	if s.Kind != "" && s.Kind != "chat" {
