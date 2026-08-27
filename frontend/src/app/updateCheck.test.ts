@@ -28,6 +28,8 @@ const ok: UpdateStatus = {
   notesUrl: 'https://example.test/notes',
   releasedAt: '2026-08-01T00:00:00Z',
   checkedAt: '2026-08-27T00:00:00Z',
+  downloadUrl: 'https://example.test/download/tionharness_0.2.0_windows_amd64.zip',
+  downloadFile: 'tionharness_0.2.0_windows_amd64.zip',
 }
 
 describe('shouldShowUpdate', () => {
