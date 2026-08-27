@@ -252,7 +252,7 @@ func TestResolveProjectID(t *testing.T) {
 		{"missing, preferred indexed", "", "C-Users-user-Desktop-Projects-TionHarness", two, "C-Users-user-Desktop-Projects-TionHarness"},
 		{"missing, preferred absent, two candidates", "", "C-Users-user-Desktop-Projects-other", two, ""},
 		{"bare repo name", "external-context-agent", "", two, "C-Users-user-Desktop-Projects-external-context-agent"},
-		{"case-insensitive full id", "c-users-bilal-desktop-projects-tionharness", "", two, "C-Users-user-Desktop-Projects-TionHarness"},
+		{"case-insensitive full id", "c-users-user-desktop-projects-tionharness", "", two, "C-Users-user-Desktop-Projects-TionHarness"},
 		{"absolute path", `C:\Users\user\Desktop\Projects\TionHarness`, "", two, "C-Users-user-Desktop-Projects-TionHarness"},
 		{"unknown, falls back to preferred", "nope", "C-Users-user-Desktop-Projects-TionHarness", two, "C-Users-user-Desktop-Projects-TionHarness"},
 		{"unknown, single index", "nope", "", []string{"C-Users-user-Desktop-Projects-SampleRepo"}, "C-Users-user-Desktop-Projects-SampleRepo"},
