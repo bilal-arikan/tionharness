@@ -47,14 +47,19 @@ export const site: SiteConfig = {
   url: 'https://tionharness.com',
   feedUrl: import.meta.env.PUBLIC_FEED_URL ?? 'https://tionharness.com',
 
-  // TODO(placeholder): public repository is not published yet.
-  repoUrl: null,
+  repoUrl: 'https://github.com/bilal-arikan/tionharness',
+  issuesUrl: 'https://github.com/bilal-arikan/tionharness/issues',
+
+  // TODO(placeholder): no tagged release exists yet, so the GitHub releases page
+  // is empty -- linking it would send visitors to a blank list. `/releases` on
+  // this site fills that role until the first tag ships.
   releasesUrl: null,
-  issuesUrl: null,
+  // TODO(placeholder): `_Docs` is internal and Turkish; there is no docs site.
   docsUrl: null,
   demoVideoUrl: null,
 
-  // TODO(placeholder): no published release artifacts yet.
+  // TODO(placeholder): no published release artifacts yet. Artifacts now come
+  // from the release feed (`lib/releaseFeedBuild.ts`), not from these fields.
   downloads: {
     windows: null,
     linux: null,
@@ -62,6 +67,9 @@ export const site: SiteConfig = {
   },
 
   license: 'Apache-2.0',
+  // The advertised version comes from the release feed, not from this file, so
+  // that a release never requires a config edit. Kept as the fallback for a
+  // build with no feed at all.
   version: null,
 
   // Measured from a local `scripts\build.ps1` output.

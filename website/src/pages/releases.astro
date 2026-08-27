@@ -1,12 +1,16 @@
 ---
 import Base from '../layouts/Base.astro'
 import Section from '../components/Section.astro'
+import { loadReleaseAtBuild } from '../lib/releaseFeedBuild'
+import { artifactLabel, formatDate, formatSize } from '../lib/releaseFeed'
 
 /**
- * Current release, fetched from the feed in the browser (see `lib/releaseFeed.ts`
- * for why it is not a build-time fetch). Without a reachable feed the page keeps
- * the placeholder below instead of showing a version that does not exist.
+ * Current release, resolved at build time from the feed this deploy ships
+ * (`lib/releaseFeedBuild.ts`); the client script refreshes it from the live feed
+ * afterwards. Without a resolvable release the placeholder below is what ships,
+ * instead of a version that does not exist.
  */
+const release = await loadReleaseAtBuild()
 ---
 
 <Base
@@ -22,6 +26,7 @@ import Section from '../components/Section.astro'
       <div
         class="rounded-[var(--radius)] border border-[var(--color-border)] bg-[var(--color-surface)] px-6 py-10 text-center"
         data-releases-pending
+        hidden={release !== null}
       >
         <p class="font-medium">No release published yet</p>
         <p class="mt-2 text-sm text-[var(--color-text-dim)]">
@@ -32,15 +37,20 @@ import Section from '../components/Section.astro'
         </p>
       </div>
 
-      <div data-releases-ready hidden>
+      <div data-releases-ready hidden={release === null}>
         <div
           class="flex flex-wrap items-baseline gap-x-4 gap-y-1 border-b border-[var(--color-border)] pb-4"
         >
-          <h3 class="font-mono text-2xl font-semibold" data-releases-version></h3>
-          <p class="text-sm text-[var(--color-text-dim)]" data-releases-date></p>
+          <h3 class="font-mono text-2xl font-semibold" data-releases-version>
+            {release ? `v${release.version}` : ''}
+          </h3>
+          <p class="text-sm text-[var(--color-text-dim)]" data-releases-date>
+            {release ? `Released ${formatDate(release.released_at)}` : ''}
+          </p>
           <a
             data-releases-notes
-            hidden
+            href={release?.notesUrl ?? undefined}
+            hidden={!release?.notesUrl}
             class="text-sm text-[var(--color-accent)] hover:underline">Release notes &rarr;</a
           >
         </div>
@@ -55,7 +65,29 @@ import Section from '../components/Section.astro'
                 <th class="py-2 font-medium">SHA-256</th>
               </tr>
             </thead>
-            <tbody data-releases-rows></tbody>
+            <tbody data-releases-rows>
+              {
+                (release?.artifacts ?? []).map((artifact) => (
+                  <tr class="border-t border-[var(--color-border)] align-top">
+                    <td class="py-3 pr-4 whitespace-nowrap">{artifactLabel(artifact)}</td>
+                    <td class="py-3 pr-4">
+                      <a
+                        href={artifact.url}
+                        class="font-mono text-[var(--color-accent)] hover:underline"
+                      >
+                        {artifact.file}
+                      </a>
+                    </td>
+                    <td class="py-3 pr-4 font-mono whitespace-nowrap text-[var(--color-text-dim)]">
+                      {formatSize(artifact.size)}
+                    </td>
+                    <td class="py-3 font-mono text-xs break-all text-[var(--color-text-dim)]">
+                      {artifact.sha256}
+                    </td>
+                  </tr>
+                ))
+              }
+            </tbody>
           </table>
         </div>
 

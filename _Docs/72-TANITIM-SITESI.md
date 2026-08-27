@@ -20,14 +20,15 @@ sunar.
 | Kapsam | Tek sayfa + `/releases` + `/404` | Doküman sitesi ayrı bir iş |
 | Deploy | Yok (henüz) | `dist/` hazır; hosting kararı repo kararına bağlı |
 | Alan adı | `tionharness.com` | Bir alan adı sağlayıcısında kayıtlı; DNS henüz bir yere yönlendirilmedi |
-| Release verisi | Tarayıcıda **runtime** fetch | Build, canlı bir feed'e bağımlı olmamalı (aşağıya bak) |
+| Release verisi | **Build anında** çözülür, tarayıcıda tazelenir | Sürüm ve indirme linki JS'siz görünür; build hiçbir zaman canlı bir host'a bağımlı değil (aşağıya bak) |
 
 Go tarafını etkilemez: `website/` modül dışıdır, `go:embed` ağacına girmez.
 
 ## Placeholder politikası — sitenin omurgası
 
-Projede henüz **olmayan** her şey (public repo, release binary'leri, docs sitesi, lisans,
-sürüm, alan adı) tek dosyada toplanır: `website/src/site.config.ts`.
+Projede henüz **olmayan** her şey (release binary'leri, docs sitesi, tanıtım videosu,
+DNS) tek dosyada toplanır: `website/src/site.config.ts`. Public repo, lisans ve issue
+takibi artık var, dolayısıyla o alanlar dolduruldu.
 
 Kural: **`null` = henüz yok.** Bileşenler bu durumu ölü linke çevirmez.
 
@@ -58,15 +59,25 @@ PUBLIC_FEED_URL=http://localhost:8080 npm run build   # yerel feed'e karşı der
 `PUBLIC_` öneki zorunludur: Astro/Vite yalnız bu önekli değişkenleri istemci
 paketine gömer. Tip tanımı `website/src/env.d.ts` içindedir.
 
-### Neden build anında değil, tarayıcıda fetch
+### İki katman: build anında çözüm + tarayıcıda tazeleme
 
-Feed `<feedUrl>/latest.json` adresinden okunur ve **istemcide, sayfa yüklendikten
-sonra** çekilir. Build anında çekilseydi:
+Feed **iki kez** okunur ve iki okuma da aynı `null` politikasına uyar:
 
-- site, canlı bir release host'u **var olmadan derlenemezdi** — bugünkü gerçeklik tam
-  olarak bu (DNS henüz yönlendirilmemiş, public host yok);
-- her deploy üçüncü bir servisin ayakta olmasına bağımlı hale gelirdi;
-- yeni bir sürüm yayınlandığında siteyi **yeniden derlemek** gerekirdi.
+1. **Build anında** — `website/src/lib/releaseFeedBuild.ts`. Kaynak, bu deploy'un
+   kendi yayınladığı dosyadır: `website/public/latest.json` (Astro onu olduğu gibi
+   `/latest.json` olarak kopyalar). Diskten okumak hem en taze hem de tek
+   döngüsüz kaynaktır; canlı siteyi fetch etmek **bir önceki** deploy'un feed'ini
+   döndürürdü. `PUBLIC_FEED_URL` verilirse kaynak gerçek bir HTTP fetch'e
+   (6 sn timeout) döner — yerel `deploy/release-host` konteynerini test etmenin yolu
+   budur. Sonuç HTML'e yazılır: sürüm rozeti ve indirme linki **JS olmadan** görünür.
+2. **Tarayıcıda** — `releaseFeed.ts`, sayfa yüklendikten sonra `<feedUrl>/latest.json`
+   çeker. Ziyaretçinin platformuna göre birincil butonu yeniden seçer ve site
+   yeniden derlenmeden yeni bir sürüm yayınlanmışsa onu gösterir.
+
+Build fetch'i **asla derlemeyi düşürmez**: erişilemeyen host, 200 dışı yanıt, bozuk
+JSON veya eksik dosya `null`'a iner ve site "Coming soon" durumunda kalır. Ancak
+sessizce yutulmaz — her başarısızlık build log'una `[release-feed] …` satırı basar.
+Sessiz yanlış sürüm, sürüm göstermemekten kötüdür.
 
 Feed `Access-Control-Allow-Origin: *` ile servis edildiği için tarayıcıdan okumak
 serbesttir. Şema:
@@ -102,7 +113,10 @@ feed'in erişilemez olması beklenen durumdur, kullanıcının yapabileceği bir
 - `pages/releases.astro` — `/releases`: sürüm, tarih, `notes_url` linki ve platform
   başına dosya/boyut/**sha256** tablosu (elle doğrulama için `sha256sum` /
   `certutil` ipucuyla). Footer'daki "Releases" linki artık bu iç sayfaya gider.
-- **RSS bilerek yok:** changelog verisi henüz üretilmiyor; boş bir feed stub'lanmadı.
+- `pages/releases.xml.ts` — `/releases.xml`: RSS 2.0 kanalı. Feed yalnız **güncel**
+  sürümü tanımladığı için kanalda en fazla **tek item** olur; sürüm yokken kanal
+  boş ama geçerli kalır (uydurma geçmiş üretilmez). `Base.astro` içinde
+  `<link rel="alternate">`, footer'da "RSS" linki ile duyurulur.
 
 ### Yerel feed'e karşı önizleme
 
@@ -166,8 +180,12 @@ Hafıza alt sistemini anlatıyor (2026-07-05'te silindi), provider listesi 3 diy
 
 ## Sıradaki adımlar
 
-- Repo/lisans/release kararı → `site.config.ts` doldur (`repoUrl`, `docsUrl`,
-  `issuesUrl`, `license`, `demoVideoUrl` hâlâ `null`)
+- `repoUrl` / `issuesUrl` / `license` **dolduruldu** (depo public:
+  `github.com/bilal-arikan/tionharness`). `releasesUrl` (henüz tag yok, GitHub
+  releases sayfası boş), `docsUrl` (docs sitesi yok, `_Docs` iç kullanım için
+  Türkçe) ve `demoVideoUrl` bilerek `null` — dolduğunda otomatik canlıya geçerler
+- `version` artık `site.config.ts`'ten değil feed'den gelir; alan yalnızca
+  hiç feed olmayan bir build için fallback olarak duruyor
 - Site GitHub Pages'e `.github/workflows/pages.yml` ile deploy edilir; feed aynı
   deploy'la `/latest.json` olarak gider. DNS + Pages ayarları için
   `_Docs\75-YAYIN-SURECI.md` → "Depo ayarları"

@@ -2,9 +2,14 @@
 import { site } from '../site.config'
 import AgentTreeGraphic from './AgentTreeGraphic.astro'
 import CTAButton from './CTAButton.astro'
+import { loadReleaseAtBuild } from '../lib/releaseFeedBuild'
 
 // The CTA scrolls to the download section, which resolves the real artifact from
-// the release feed at runtime and shows "Coming soon" when there is none yet.
+// the release feed and shows "Coming soon" when there is none yet.
+// The version badge comes from the same feed; with no release it stays off
+// rather than showing a number nothing can be downloaded for.
+const release = await loadReleaseAtBuild()
+const version = release?.version ?? site.version
 ---
 
 <header class="relative overflow-hidden">
@@ -18,6 +23,11 @@ import CTAButton from './CTAButton.astro'
       >
         <span class="size-1.5 rounded-full bg-[var(--color-accent)]"></span>
         Open source &middot; self-hosted &middot; written in Go
+        {
+          version && (
+            <span class="font-mono text-[var(--color-accent)]">&middot; v{version}</span>
+          )
+        }
       </p>
 
       <h1 class="text-4xl font-semibold tracking-tight text-balance sm:text-5xl lg:text-6xl">
@@ -37,7 +47,7 @@ import CTAButton from './CTAButton.astro'
       </div>
 
       <p class="mt-4 font-mono text-xs text-[var(--color-text-dim)]">
-        {site.version ? `v${site.version}` : 'unreleased'} &middot; Windows, Linux, macOS &middot;
+        {version ? `v${version}` : 'unreleased'} &middot; Windows, Linux, macOS &middot;
         {site.binarySizeMb} MB
       </p>
     </div>

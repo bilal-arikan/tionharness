@@ -2,12 +2,24 @@
 import Section from './Section.astro'
 import CTAButton from './CTAButton.astro'
 import Icon from './Icon.astro'
+import { loadReleaseAtBuild } from '../lib/releaseFeedBuild'
+import { artifactLabel, formatDate, formatSize, pickPrimaryArtifact } from '../lib/releaseFeed'
 
 /**
- * The markup below is the placeholder state, rendered by the build. The client
- * script only ever swaps it out after a successful feed fetch, so a missing or
- * unreachable release host leaves the honest "Coming soon" state in place.
+ * The release is resolved at BUILD time, so the version and a working download
+ * link are in the HTML before any JavaScript runs. The build has no user agent,
+ * so it highlights the Windows amd64 build and lists every other artifact next
+ * to it; the client script re-picks the primary link for the visitor's actual
+ * platform and refreshes the data from the live feed.
+ *
+ * With no resolvable release the placeholder below is what ships -- a missing
+ * feed never produces a broken button or an invented version.
  */
+const release = await loadReleaseAtBuild()
+const primary = release
+  ? (pickPrimaryArtifact(release, { os: 'windows', arch: 'amd64' }) ?? release.artifacts[0]!)
+  : null
+const secondary = release && primary ? release.artifacts.filter((a) => a !== primary) : []
 ---
 
 <Section
@@ -17,7 +29,7 @@ import Icon from './Icon.astro'
   lead="One file, no installer, no runtime. Unzip it and run it."
 >
   <div class="mx-auto max-w-2xl text-center" data-download>
-    <div data-download-pending>
+    <div data-download-pending hidden={release !== null}>
       <div class="flex justify-center">
         <CTAButton href={null} icon="download" pendingHint="No release artifacts published yet">
           Download
@@ -31,23 +43,44 @@ import Icon from './Icon.astro'
       </p>
     </div>
 
-    <div data-download-ready hidden>
+    <div data-download-ready hidden={release === null}>
       <div class="flex justify-center">
         <a
           data-download-primary
+          href={primary?.url}
           class="inline-flex items-center justify-center gap-2 rounded-[var(--radius)] bg-[var(--color-accent)] px-5 py-2.5 text-sm font-medium text-white shadow-[var(--shadow-md)] transition hover:brightness-110"
         >
           <Icon name="download" class="size-4" />
-          <span data-download-primary-label>Download</span>
+          <span data-download-primary-label
+            >{primary ? `Download for ${artifactLabel(primary)}` : 'Download'}</span
+          >
         </a>
       </div>
 
-      <p class="mt-4 font-mono text-xs text-[var(--color-text-dim)]" data-download-meta></p>
+      <p class="mt-4 font-mono text-xs text-[var(--color-text-dim)]" data-download-meta>
+        {
+          release && primary
+            ? `v${release.version} · ${formatDate(release.released_at)} · ${primary.file} · ${formatSize(primary.size)}`
+            : ''
+        }
+      </p>
 
       <ul
         class="mt-6 flex flex-wrap justify-center gap-x-5 gap-y-2 text-sm"
         data-download-others
       >
+        {
+          secondary.map((artifact) => (
+            <li>
+              <a
+                href={artifact.url}
+                class="text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)]"
+              >
+                {`${artifactLabel(artifact)} (${formatSize(artifact.size)})`}
+              </a>
+            </li>
+          ))
+        }
       </ul>
 
       <p class="mt-6 text-sm">
@@ -111,7 +144,8 @@ import Icon from './Icon.astro'
     }
 
     // Deliberately not awaited at module top level in a blocking way: the script
-    // is a deferred module, so first paint already happened with the placeholder.
+    // is a deferred module, so first paint already happened with whatever the
+    // build resolved. A failed fetch leaves that server-rendered state alone.
     fetchLatestRelease(site.feedUrl).then((release) => {
       if (release) render(release)
     })
