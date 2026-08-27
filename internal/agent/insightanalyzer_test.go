@@ -16,12 +16,12 @@ func TestAnalysisUserPromptLanguage(t *testing.T) {
 	}
 
 	// No language → no directive (model default).
-	if got := analysisUserPrompt(req, ""); strings.Contains(got, "Write the title") {
+	if got := analysisUserPrompt(req, "", nil); strings.Contains(got, "Write the title") {
 		t.Fatalf("empty language should append no directive:\n%s", got)
 	}
 
 	// Configured language → directive naming the prose fields, keeping code verbatim.
-	got := analysisUserPrompt(req, "Turkish (Türkçe)")
+	got := analysisUserPrompt(req, "Turkish (Türkçe)", nil)
 	for _, want := range []string{"Turkish (Türkçe)", "rootCause", "proposedFix", "verbatim"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("directive missing %q:\n%s", want, got)

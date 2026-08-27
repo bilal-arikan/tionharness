@@ -201,8 +201,8 @@ func TestLessonsContextBlock_RecurringToolLessonRanksLater(t *testing.T) {
 	rt, tun := newTestRuntime(t, t.TempDir())
 	tun.SetLessonReflect(true)
 	base := time.Now().Unix()
-	addLessonForTest(t, rt, db.Lesson{Time: base - 60, Signature: "Bash:high-count", Text: "high count lesson", Count: 8})
-	addLessonForTest(t, rt, db.Lesson{Time: base - 60, Signature: "Bash:low-count", Text: "low count lesson", Count: 1})
+	addLessonForTest(t, rt, db.Lesson{Time: base - 60, Signature: "Bash:6f1c9a03b2d84e57", Text: "high count lesson", Count: 8})
+	addLessonForTest(t, rt, db.Lesson{Time: base - 60, Signature: "Bash:2ad7e0416b93cf85", Text: "low count lesson", Count: 1})
 
 	block := rt.LessonsContextBlock(context.Background(), "")
 	assertLessonBefore(t, block, "low count lesson", "high count lesson")
@@ -231,8 +231,8 @@ func TestLessonsContextBlock_AgentPriorityOutranksTrust(t *testing.T) {
 	rt, tun := newTestRuntime(t, t.TempDir())
 	tun.SetLessonReflect(true)
 	base := time.Now().Unix()
-	addLessonForTest(t, rt, db.Lesson{Time: base - 60, AgentID: "AGT1", Signature: "Bash:mine", Text: "lower trust matching lesson", Count: 20})
-	addLessonForTest(t, rt, db.Lesson{Time: base - 60, AgentID: "OTHER", Signature: "Bash:other", Text: "higher trust other lesson", Count: 1})
+	addLessonForTest(t, rt, db.Lesson{Time: base - 60, AgentID: "AGT1", Signature: "Bash:c30fb95a17e2d648", Text: "lower trust matching lesson", Count: 20})
+	addLessonForTest(t, rt, db.Lesson{Time: base - 60, AgentID: "OTHER", Signature: "Bash:80e4a7f2159cbd36", Text: "higher trust other lesson", Count: 1})
 
 	block := rt.LessonsContextBlock(context.Background(), "AGT1")
 	assertLessonBefore(t, block, "lower trust matching lesson", "higher trust other lesson")

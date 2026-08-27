@@ -323,6 +323,16 @@ func (m *Manager) open(meta Meta) error {
 		m.logger.Warn("seed default automations failed", "workspace", meta.ID, "error", err)
 	}
 
+	// Collapse the near-duplicate lessons written before signature-similarity
+	// dedupe existed (the insight lens re-invented a slug per run, so one topic
+	// occupied several rows and crowded the injected context). Idempotent, so
+	// running it on every open is a no-op once a workspace is clean.
+	if res, dErr := database.DedupeLessons(); dErr != nil {
+		m.logger.Warn("lesson dedupe failed", "workspace", meta.ID, "error", dErr)
+	} else if res.Merged > 0 {
+		m.logger.Info("lessons deduped", "workspace", meta.ID, "before", res.Before, "after", res.After, "merged", res.Merged)
+	}
+
 	// Per-workspace secret vault (AES-GCM encrypted), shared by the secret_* tools.
 	vault, err := secrets.Open(storeDir, m.cipher)
 	if err != nil {

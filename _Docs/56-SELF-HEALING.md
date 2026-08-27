@@ -250,6 +250,65 @@ döngülüyordu); (4) reflector "NONE\n…reconsider" cevabında NONE artefaktı
 derse sızıyordu (`cleanLessonText`). Ayrıca NONE kararı artık `lesson/none`
 debug olayı olarak günlüklenir.
 
+## Ders deduplikasyonu — konu benzerliği (2026-08-27)
+
+Signature dedupe yalnız **birebir** eşleşmede çalışıyordu. Reflector'ın anahtarı
+deterministik (`<tool>:<normalize hata digest'i>`) olduğu için orada sorun yok;
+ama `lessons-mining` merceğinden gelen dersin imzasını **model uyduruyor** ve her
+taramada aynı konuya yeni bir slug yazıyordu. Canlı ölçüm (WS19): 66 ders, 66
+farklı `sig`, yalnız 2'sinde `count > 1` — yani dedupe fiilen kapalıydı. Yan
+etki: `lessonTrust` `Count > 1` olan derse ceza verdiği için gerçek tekrarlar
+geri plana düşüyor, aynı konunun kopyaları enjekte edilen 5 slotu dolduruyordu.
+
+**Nasıl eşleşiyor** (`internal/db/store_lessons_dedupe.go`):
+
+- Karşılaştırılan şey **imza slug'ının kelimeleri** (`lesson:` öneki atılır, hex
+  digest token'ları atılır). Ders gövdesi kullanılmaz: gövde workspace dilinde
+  serbest metindir ve ölçümde doğru/yanlış çiftlerin token örtüşmesi aynı
+  (~0,06) çıktı — sinyal taşımıyor.
+- Ölçüt: **overlap katsayısı ≥ 0,50 VE Jaccard ≥ 0,28 VE en az 2 ortak kelime**.
+  Overlap (`|a∩b| / min`) seçildi çünkü kısa slug çoğu kez uzun olanın içinde
+  geçiyor (`bash-not-powershell` ⊂ `powershell-bash-chaining-operator`) ve saf
+  Jaccard bunu seyreltiyor. Jaccard tabanı ise overlap'in "benim her kelimem
+  sende de var" yanılgısını kesiyor: canlı veride en yakın **yanlış** çift
+  (`ask_user-timeout-fallback` ↔ `wsl-hcs-connection-timeout-shell-fallback`,
+  ortak yalnız "timeout"+"fallback") 0,25'te kalıp eleniyor.
+- **`Tool` farklıysa asla birleşmez** — aynı kelimeler araç başına farklı kural
+  demektir. Birebir imza eşleşmesi de artık `Tool`'u kimliğin parçası sayar.
+- Reflector imzaları (`<tool>:<hash>`) hiçbir konu kelimesi üretmediği için (hex
+  opak sayılır) bulanık eşleşmeye hiç girmez; yalnız birebir deduplanır.
+- Tokenizer/Jaccard/overlap ortak: `internal/textutil/similar.go`. İçgörü
+  bulgularının kümelenmesi (`insight/cluster.go`) da aynı yardımcıları kullanır —
+  ikinci bir implementasyon yok. Tokenizer unicode-duyarlı: transkriptler
+  Türkçe olduğu için ASCII-only bölme "çalıştır"ı parçalayıp atardı.
+
+**İki katman:**
+
+1. **Yazma anında** — `AddLesson` önce birebir imza, sonra `collapseLessons` ile
+   konu benzerliği uygular; kayıt yeni satır açmak yerine mevcut satıra katılır.
+2. **Prompt tarafında** — `lessons-mining` merceği çalışırken analiz prompt'una
+   kayıtlı en yeni 30 `lesson:` imzası "SIGNATURES ALREADY ON RECORD" başlığıyla
+   verilir ve "aynı problemse imzayı **harfi harfine** yeniden kullan" talimatı
+   eklenir (`insightanalyzer.go` + `insight/defaults/lessons-mining.md`).
+
+**Geçmiş kayıtların toplanması (backfill).** `DB.DedupeLessons()` diskteki
+birikmiş kopyaları aynı ölçütle tek satıra indirir. Gruplama **geçişlidir**
+(a↔b ve b↔c üçünü birleştirir) — bir konunun varyasyonları yıldız değil zincir
+oluşturuyor. Grup en **yeni** üyesiyle hayatta kalır (en taze ifade) ve
+`Count`'lar toplanır. Idempotent: kendi çıktısı üzerinde ikinci geçiş hiçbir şey
+değiştirmez, dosyayı yalnız gerçekten birleşme olduğunda yeniden yazar. Çağrı
+noktası `internal/workspace/manager.go` → `open()` (diğer `Ensure*`/`Migrate*`
+adımlarının yanında), yani her workspace açılışında bir kez.
+
+Ölçüm (WS19'un gerçek dosyasının kopyası, canlı dosyaya dokunulmadı):
+**66 → 50 kayıt** (16 birleşme), ikinci geçiş 50 → 50. Görev tanımındaki dört
+küme (PowerShell/bash zincirleme, CRLF shebang, `ask_user` timeout,
+`send_to_worker` kuyruğu) tamamen birleşti; `wsl-hcs-…` dersi ayrı kaldı.
+
+Testler: `internal/db/store_lessons_dedupe_test.go` — dört kümenin gerçek
+imzalarıyla yazma-anı birleşme, alakasız/araç-farklı/reflector imzalarının
+birleşmemesi, backfill sayısı + `Count` toplamı + idempotentlik.
+
 ## Kapsam dışı / sıradaki adımlar
 - ~~Guardrail eşiklerinin settings'e açılması~~ ✅ (2026-07-07, 6 eşik ayarı).
 - ~~Lessons için UI görünürlüğü~~ ✅ (2026-07-07, API + LessonsList).

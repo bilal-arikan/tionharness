@@ -30,5 +30,13 @@ For each, produce a workspace-opt finding whose fields double as a lesson:
 - **severity** (low|med|high) — how costly repeating the mistake is.
 - **signature** — stable dedupe key for the lesson (e.g. `lesson:windows-path-quoting`).
 
+The signature is the identity of the lesson across runs, not a label for this run. When the
+signatures already on record are listed below and one of them names the same problem, reuse it
+CHARACTER FOR CHARACTER — do not reword it, reorder it, or swap a synonym in. A new slug for a
+known problem stores the same lesson twice and both copies then look like one-offs.
+
+Name the problem, not the occurrence: `lesson:crlf-shebang` covers every CRLF-shebang failure,
+while `lesson:crlf-shebang-breaks-deploy-script` invites a new slug for the next script.
+
 Findings from this lens are additionally promoted into the runtime **lessons store** so future
 turns carry them. Only emit lessons that are genuinely reusable; skip session-specific noise.

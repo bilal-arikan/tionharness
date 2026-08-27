@@ -93,21 +93,25 @@ func (d *DB) AddLesson(l Lesson) (Lesson, error) {
 		}
 	}
 	lessons = fresh
-	updated := false
+	// Exact signature first: the reflector's key is deterministic, so a repeat of
+	// the same failure shape lands here and only bumps the existing row.
+	at := -1
 	for i := range lessons {
-		if l.Signature != "" && lessons[i].Signature == l.Signature {
-			lessons[i].Count++
-			lessons[i].Time = l.Time
-			lessons[i].SessionID = l.SessionID
-			if l.Text != "" {
-				lessons[i].Text = l.Text
-			}
-			l = lessons[i]
-			updated = true
+		// Tool is part of the identity: the same words describe a different rule
+		// per tool, and the similarity layer below draws the same line.
+		if l.Signature != "" && lessons[i].Signature == l.Signature && lessons[i].Tool == l.Tool {
+			at = i
 			break
 		}
 	}
-	if !updated {
+	if at >= 0 {
+		lessons[at].Count = lessonCount(lessons[at]) + 1
+		lessons[at].Time = l.Time
+		lessons[at].SessionID = l.SessionID
+		if l.Text != "" {
+			lessons[at].Text = l.Text
+		}
+	} else {
 		if l.ID == "" {
 			l.ID = newID()
 		}
@@ -115,7 +119,13 @@ func (d *DB) AddLesson(l Lesson) (Lesson, error) {
 			l.Count = 1
 		}
 		lessons = append(lessons, l)
+		at = len(lessons) - 1
 	}
+	// Then the topic-similarity layer: an insight-mined lesson whose slug the
+	// model re-invented this run collapses into the row already holding that
+	// topic instead of opening a near-duplicate (see store_lessons_dedupe.go).
+	lessons, groupOf := collapseLessons(lessons)
+	l = lessons[groupOf[at]]
 	if len(lessons) > DefaultLessonsCap {
 		lessons = lessons[len(lessons)-DefaultLessonsCap:]
 	}

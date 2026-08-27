@@ -63,9 +63,21 @@ var insightFindingsSchema = json.RawMessage(`{
 // session evidence, the strict-JSON instruction, and — when lang is non-empty — a
 // directive to write the user-facing prose fields in that language (code
 // identifiers, paths and the signature stay verbatim so dedup/file-pointers hold).
-func analysisUserPrompt(req insight.AnalysisRequest, lang string) string {
+// knownSigs, when non-empty, lists signatures already on record for this lens's
+// topic so the model reuses one instead of minting a fresh slug for a problem
+// that is already tracked (the store's similarity dedupe is the safety net, not
+// the first line of defence).
+func analysisUserPrompt(req insight.AnalysisRequest, lang string, knownSigs []string) string {
 	var b strings.Builder
 	b.WriteString(strings.TrimSpace(req.Lens.Prompt))
+	if len(knownSigs) > 0 {
+		b.WriteString("\n\n--- SIGNATURES ALREADY ON RECORD ---\n")
+		for _, s := range knownSigs {
+			b.WriteString("- " + s + "\n")
+		}
+		b.WriteString("If a finding is the same problem as one of these, reuse that EXACT signature so it " +
+			"updates the existing entry. Only invent a new signature for a genuinely new problem.")
+	}
 	b.WriteString("\n\n--- SESSION EVIDENCE ---\n")
 	b.WriteString(req.Transcript)
 	b.WriteString("\n\nReturn ONLY JSON of the form {\"findings\":[{\"title\":...,\"rootCause\":...,\"proposedFix\":...,\"filePointer\":...,\"severity\":\"low|med|high\",\"signature\":...}]}. " +
@@ -93,7 +105,7 @@ func (a *insightAnalyzer) Analyze(ctx context.Context, req insight.AnalysisReque
 		System:       a.system,
 		MaxTokens:    1500,
 		OutputSchema: insightFindingsSchema,
-		Messages:     []providers.Message{{Role: providers.RoleUser, Text: analysisUserPrompt(req, lang)}},
+		Messages:     []providers.Message{{Role: providers.RoleUser, Text: analysisUserPrompt(req, lang, a.knownSigsFor(req.Lens))}},
 	}, false)
 	if err != nil {
 		if errors.Is(err, providers.ErrPermanentProviderFailure) {
@@ -108,6 +120,32 @@ func (a *insightAnalyzer) Analyze(ctx context.Context, req insight.AnalysisReque
 	}
 	a.steps.captureRaw(req.Lens.ID, req.SessionID, resp.Text)
 	return a.parse(resp.Text, req.Lens), nil
+}
+
+// knownLessonSigCount bounds how many stored signatures ride the lessons-mining
+// prompt: enough to cover the live topics, small enough not to crowd the
+// evidence. Newest first, since a recurring failure is a recent one.
+const knownLessonSigCount = 30
+
+// knownSigsFor returns the signatures to offer the model for reuse. Only the
+// lessons-mining lens gets them — it is the one lens whose findings become
+// lessons, so it is the one whose signatures the lessons store already holds.
+func (a *insightAnalyzer) knownSigsFor(lens insight.Lens) []string {
+	if lens.ID != lessonsMiningLensID || a.rt == nil || a.rt.db == nil {
+		return nil
+	}
+	lessons, err := a.rt.db.ListLessons(knownLessonSigCount)
+	if err != nil {
+		a.rt.logger.Warn("insight analyzer: known lesson signatures unavailable", "error", err)
+		return nil
+	}
+	sigs := make([]string, 0, len(lessons))
+	for _, l := range lessons {
+		if strings.HasPrefix(l.Signature, lessonInsightSignaturePrefix) {
+			sigs = append(sigs, l.Signature)
+		}
+	}
+	return sigs
 }
 
 func (a *insightAnalyzer) permanentError() error {
