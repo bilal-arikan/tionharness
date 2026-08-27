@@ -243,6 +243,11 @@ func Bootstrap(cfg *config.Config, logs *logbuf.Buffer, logger *slog.Logger) (*A
 	// Use the resolved listener address so a ":0" port is correct.
 	server.SetBaseURL(ln.Addr().String())
 
+	// Advisory update check: one background probe of the release feed shortly
+	// after boot (skipped entirely on unstamped dev builds). It never downloads
+	// or installs anything — the UI only shows a link to the release notes.
+	server.StartUpdateCheck()
+
 	httpSrv := &http.Server{
 		Handler:           server.Routes(),
 		ReadHeaderTimeout: 10 * time.Second,

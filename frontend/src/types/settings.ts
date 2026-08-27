@@ -273,6 +273,23 @@ export interface VersionInfo {
   module: string
 }
 
+// Result of the advisory release-feed check (GET /api/version/update).
+// `state` separates the three outcomes so the UI never has to infer a failed
+// check from an empty `latest`:
+//   'ok'      → the feed was read; `updateAvailable` says whether to upgrade
+//   'skipped' → unstamped dev build, no check was made
+//   'unknown' → the feed could not be read (unreachable/non-200/malformed)
+// The app never downloads or installs anything; `notesUrl` is the only action.
+export interface UpdateStatus {
+  state: 'ok' | 'skipped' | 'unknown'
+  current: string
+  latest: string
+  updateAvailable: boolean
+  notesUrl: string
+  releasedAt: string
+  checkedAt: string
+}
+
 // Detection result for an optional external CLI tool (rtk, sqz, mmdc, piper…).
 // The backend resolves the executable's path without running it, then reads the
 // version by invoking only the tool's version flag (side-effect free, 3s cap).

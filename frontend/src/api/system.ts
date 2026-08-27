@@ -14,6 +14,7 @@ import type {
   ExternalToolUpdateResult,
   TokenToolReport,
   VersionInfo,
+  UpdateStatus,
   BackupStatus,
   BackupResult,
   WorkspaceArchives,
@@ -304,6 +305,11 @@ export const systemApi = {
   // Build / version info (injected via ldflags at build time; falls back to
   // "dev" for local development builds without explicit versioning).
   getVersion: () => req<VersionInfo>('/api/version'),
+
+  // Advisory "is there a newer release?" check. Answered from a server-side
+  // cache (24h TTL), skipped entirely on unstamped dev builds, and never an
+  // error: an unreachable feed comes back as state 'unknown'.
+  getUpdateStatus: () => req<UpdateStatus>('/api/version/update'),
 
   // Workspace backups: live status (config + last run) and an on-demand run.
   // The periodic schedule itself is driven by the settings document.

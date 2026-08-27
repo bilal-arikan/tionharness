@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 
 	"github.com/google/uuid"
 
@@ -80,6 +81,10 @@ type Server struct {
 	// backups runs the periodic workspace-backup loop; reconfigured on every
 	// settings change. nil until wired by SetBackupManager (after construction).
 	backups *backup.Manager
+	// updateChk caches the release-feed check (see updatecheck.go). Created on
+	// first use so a bare Server needs no extra wiring.
+	updateChk   *updateChecker
+	updatesOnce sync.Once
 }
 
 // NewServer constructs an API server and pushes the persisted settings into the
@@ -320,6 +325,9 @@ func (s *Server) Routes() http.Handler {
 
 	mux.HandleFunc("GET /health", s.handleHealth)
 	mux.HandleFunc("GET /api/version", s.handleVersion)
+	// Advisory release-feed check for the "newer version available" banner.
+	// Cached server-side (24h) so the UI can call it freely.
+	mux.HandleFunc("GET /api/version/update", s.handleUpdateCheck)
 	// In-memory store footprint per workspace — the measurement baseline for the
 	// message lazy-loading work. Global (not workspace-scoped) on purpose: the
 	// question it answers is "what does the PROCESS hold?".

@@ -1,0 +1,119 @@
+---
+import Section from './Section.astro'
+import CTAButton from './CTAButton.astro'
+import Icon from './Icon.astro'
+
+/**
+ * The markup below is the placeholder state, rendered by the build. The client
+ * script only ever swaps it out after a successful feed fetch, so a missing or
+ * unreachable release host leaves the honest "Coming soon" state in place.
+ */
+---
+
+<Section
+  id="download"
+  eyebrow="Download"
+  title="Get the binary"
+  lead="One file, no installer, no runtime. Unzip it and run it."
+>
+  <div class="mx-auto max-w-2xl text-center" data-download>
+    <div data-download-pending>
+      <div class="flex justify-center">
+        <CTAButton href={null} icon="download" pendingHint="No release artifacts published yet">
+          Download
+        </CTAButton>
+      </div>
+      <p class="mt-4 text-sm text-[var(--color-text-dim)]">
+        Builds are not published yet. Until then, <a
+          href="#quickstart"
+          class="text-[var(--color-accent)] hover:underline">build from source</a
+        > &mdash; it is one <code class="font-mono">go build</code>.
+      </p>
+    </div>
+
+    <div data-download-ready hidden>
+      <div class="flex justify-center">
+        <a
+          data-download-primary
+          class="inline-flex items-center justify-center gap-2 rounded-[var(--radius)] bg-[var(--color-accent)] px-5 py-2.5 text-sm font-medium text-white shadow-[var(--shadow-md)] transition hover:brightness-110"
+        >
+          <Icon name="download" class="size-4" />
+          <span data-download-primary-label>Download</span>
+        </a>
+      </div>
+
+      <p class="mt-4 font-mono text-xs text-[var(--color-text-dim)]" data-download-meta></p>
+
+      <ul
+        class="mt-6 flex flex-wrap justify-center gap-x-5 gap-y-2 text-sm"
+        data-download-others
+      >
+      </ul>
+
+      <p class="mt-6 text-sm">
+        <a href="/releases" class="text-[var(--color-accent)] hover:underline"
+          >All artifacts and checksums &rarr;</a
+        >
+      </p>
+    </div>
+  </div>
+</Section>
+
+<script>
+  import { site } from '../site.config'
+  import {
+    artifactLabel,
+    detectPlatform,
+    fetchLatestRelease,
+    formatDate,
+    formatSize,
+    pickPrimaryArtifact,
+    type Release,
+    type ReleaseArtifact,
+  } from '../lib/releaseFeed'
+
+  const root = document.querySelector<HTMLElement>('[data-download]')
+  if (root) {
+    const pending = root.querySelector<HTMLElement>('[data-download-pending]')
+    const ready = root.querySelector<HTMLElement>('[data-download-ready]')
+    const primary = root.querySelector<HTMLAnchorElement>('[data-download-primary]')
+    const primaryLabel = root.querySelector<HTMLElement>('[data-download-primary-label]')
+    const meta = root.querySelector<HTMLElement>('[data-download-meta]')
+    const others = root.querySelector<HTMLElement>('[data-download-others]')
+
+    const secondaryLink = (artifact: ReleaseArtifact): HTMLLIElement => {
+      const item = document.createElement('li')
+      const link = document.createElement('a')
+      link.href = artifact.url
+      link.className = 'text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)]'
+      link.textContent = `${artifactLabel(artifact)} (${formatSize(artifact.size)})`
+      item.append(link)
+      return item
+    }
+
+    const render = (release: Release) => {
+      if (!pending || !ready || !primary || !primaryLabel || !meta || !others) return
+      const platform = detectPlatform(navigator.userAgent)
+      const best = pickPrimaryArtifact(release, platform)
+      // An unrecognised platform still gets a working button: the first artifact.
+      const chosen = best ?? release.artifacts[0]
+
+      primary.href = chosen.url
+      primaryLabel.textContent = `Download for ${artifactLabel(chosen)}`
+      meta.textContent = `v${release.version} · ${formatDate(release.released_at)} · ${chosen.file} · ${formatSize(chosen.size)}`
+
+      others.replaceChildren(
+        ...release.artifacts.filter((a) => a !== chosen).map(secondaryLink)
+      )
+
+      pending.hidden = true
+      ready.hidden = false
+    }
+
+    // Deliberately not awaited at module top level in a blocking way: the script
+    // is a deferred module, so first paint already happened with the placeholder.
+    fetchLatestRelease(site.feedUrl).then((release) => {
+      if (release) render(release)
+    })
+  }
+</script>

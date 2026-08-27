@@ -20,7 +20,10 @@ import SmartLink from './SmartLink.astro'
 
     <nav class="flex flex-wrap gap-x-6 gap-y-2 text-sm">
       <SmartLink href={site.repoUrl}>Source</SmartLink>
-      <SmartLink href={site.releasesUrl}>Releases</SmartLink>
+      <a
+        href="/releases"
+        class="text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)]">Releases</a
+      >
       <SmartLink href={site.docsUrl}>Docs</SmartLink>
       <SmartLink href={site.issuesUrl}>Issues</SmartLink>
     </nav>

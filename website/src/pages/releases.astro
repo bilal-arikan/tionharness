@@ -1,0 +1,141 @@
+---
+import Base from '../layouts/Base.astro'
+import Section from '../components/Section.astro'
+
+/**
+ * Current release, fetched from the feed in the browser (see `lib/releaseFeed.ts`
+ * for why it is not a build-time fetch). Without a reachable feed the page keeps
+ * the placeholder below instead of showing a version that does not exist.
+ */
+---
+
+<Base
+  title="Releases"
+  description="Downloads, checksums and release notes for the current TionHarness build."
+>
+  <Section
+    eyebrow="Releases"
+    title="Current release"
+    lead="Every artifact of the latest build, with its SHA-256 so you can verify the file yourself."
+  >
+    <div class="mx-auto max-w-4xl" data-releases>
+      <div
+        class="rounded-[var(--radius)] border border-[var(--color-border)] bg-[var(--color-surface)] px-6 py-10 text-center"
+        data-releases-pending
+      >
+        <p class="font-medium">No release published yet</p>
+        <p class="mt-2 text-sm text-[var(--color-text-dim)]">
+          Binaries will appear here as soon as the first tagged build ships. In the meantime,
+          <a href="/#quickstart" class="text-[var(--color-accent)] hover:underline"
+            >build from source</a
+          >.
+        </p>
+      </div>
+
+      <div data-releases-ready hidden>
+        <div
+          class="flex flex-wrap items-baseline gap-x-4 gap-y-1 border-b border-[var(--color-border)] pb-4"
+        >
+          <h3 class="font-mono text-2xl font-semibold" data-releases-version></h3>
+          <p class="text-sm text-[var(--color-text-dim)]" data-releases-date></p>
+          <a
+            data-releases-notes
+            hidden
+            class="text-sm text-[var(--color-accent)] hover:underline">Release notes &rarr;</a
+          >
+        </div>
+
+        <div class="mt-6 overflow-x-auto">
+          <table class="w-full text-left text-sm">
+            <thead class="text-xs tracking-wide text-[var(--color-text-dim)] uppercase">
+              <tr>
+                <th class="py-2 pr-4 font-medium">Platform</th>
+                <th class="py-2 pr-4 font-medium">File</th>
+                <th class="py-2 pr-4 font-medium">Size</th>
+                <th class="py-2 font-medium">SHA-256</th>
+              </tr>
+            </thead>
+            <tbody data-releases-rows></tbody>
+          </table>
+        </div>
+
+        <p class="mt-6 text-xs text-[var(--color-text-dim)]">
+          Verify a download with <code class="font-mono">sha256sum &lt;file&gt;</code> (Linux/macOS)
+          or <code class="font-mono">certutil -hashfile &lt;file&gt; SHA256</code> (Windows) and
+          compare the value against the table above.
+        </p>
+      </div>
+    </div>
+  </Section>
+</Base>
+
+<script>
+  import { site } from '../site.config'
+  import {
+    artifactLabel,
+    fetchLatestRelease,
+    formatDate,
+    formatSize,
+    type Release,
+    type ReleaseArtifact,
+  } from '../lib/releaseFeed'
+
+  const root = document.querySelector<HTMLElement>('[data-releases]')
+  if (root) {
+    const pending = root.querySelector<HTMLElement>('[data-releases-pending]')
+    const ready = root.querySelector<HTMLElement>('[data-releases-ready]')
+    const version = root.querySelector<HTMLElement>('[data-releases-version]')
+    const date = root.querySelector<HTMLElement>('[data-releases-date]')
+    const notes = root.querySelector<HTMLAnchorElement>('[data-releases-notes]')
+    const rows = root.querySelector<HTMLElement>('[data-releases-rows]')
+
+    const cell = (className: string): HTMLTableCellElement => {
+      const td = document.createElement('td')
+      td.className = className
+      return td
+    }
+
+    const row = (artifact: ReleaseArtifact): HTMLTableRowElement => {
+      const tr = document.createElement('tr')
+      tr.className = 'border-t border-[var(--color-border)] align-top'
+
+      const platform = cell('py-3 pr-4 whitespace-nowrap')
+      platform.textContent = artifactLabel(artifact)
+
+      const file = cell('py-3 pr-4')
+      const link = document.createElement('a')
+      link.href = artifact.url
+      link.className = 'font-mono text-[var(--color-accent)] hover:underline'
+      link.textContent = artifact.file
+      file.append(link)
+
+      const size = cell('py-3 pr-4 font-mono whitespace-nowrap text-[var(--color-text-dim)]')
+      size.textContent = formatSize(artifact.size)
+
+      const sha = cell('py-3 font-mono text-xs break-all text-[var(--color-text-dim)]')
+      sha.textContent = artifact.sha256
+
+      tr.append(platform, file, size, sha)
+      return tr
+    }
+
+    const render = (release: Release) => {
+      if (!pending || !ready || !version || !date || !notes || !rows) return
+      version.textContent = `v${release.version}`
+      date.textContent = `Released ${formatDate(release.released_at)}`
+
+      if (release.notesUrl) {
+        notes.href = release.notesUrl
+        notes.hidden = false
+      }
+
+      rows.replaceChildren(...release.artifacts.map(row))
+      pending.hidden = true
+      ready.hidden = false
+    }
+
+    fetchLatestRelease(site.feedUrl).then((release) => {
+      if (release) render(release)
+    })
+  }
+</script>

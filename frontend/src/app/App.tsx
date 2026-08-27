@@ -9,6 +9,7 @@ import { NavRail, type View } from './NavRail'
 import { MobileNavBar } from './MobileNavBar'
 import { SplashScreen } from './SplashScreen'
 import { AppHeader } from './AppHeader'
+import { UpdateBanner } from './UpdateBanner'
 import { FlowsPanel, NetworkPanel, ExplorerView } from './lazyPanels'
 import { HEADERLESS_VIEWS, SPLASH_MIN_MS, VIEW_TITLE } from './viewRegistry'
 import { INITIAL_ROUTE, useAppNavigation } from './useAppNavigation'
@@ -623,6 +624,12 @@ export default function App() {
         key={activeWorkspaceId ?? 'none'}
         className="flex h-full min-w-0 flex-1 flex-col max-md:pb-[calc(3.25rem+env(safe-area-inset-bottom))]"
       >
+        {/* Advisory "newer version available" strip — above the header so it is
+            visible on every view, including the headerless ones. Renders nothing
+            unless the release feed reported a newer version that the user has
+            not dismissed. */}
+        <UpdateBanner />
+
         {!HEADERLESS_VIEWS.has(view) && (
           <AppHeader
             view={view}

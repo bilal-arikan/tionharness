@@ -6,8 +6,9 @@ import tailwindcss from '@tailwindcss/vite'
 // into dist/ so any static host (Cloudflare Pages, Caddy, GitHub Pages) works.
 export default defineConfig({
   output: 'static',
-  // TODO(placeholder): set once a public domain exists, so canonical/og URLs resolve.
-  // site: 'https://tionharness.dev',
+  // Keep in sync with `site.url` in src/site.config.ts -- this file cannot import
+  // the TypeScript config, so the canonical origin is written twice.
+  site: 'https://tionharness.com',
   vite: {
     plugins: [tailwindcss()],
   },

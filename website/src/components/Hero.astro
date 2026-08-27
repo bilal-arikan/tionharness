@@ -3,9 +3,8 @@ import { site } from '../site.config'
 import AgentTreeGraphic from './AgentTreeGraphic.astro'
 import CTAButton from './CTAButton.astro'
 
-// The download CTA points at the first available platform artifact; while every
-// entry is null it degrades to the disabled "Coming soon" state on its own.
-const primaryDownload = site.downloads.windows ?? site.downloads.linux ?? site.downloads.macos
+// The CTA scrolls to the download section, which resolves the real artifact from
+// the release feed at runtime and shows "Coming soon" when there is none yet.
 ---
 
 <header class="relative overflow-hidden">
@@ -33,9 +32,7 @@ const primaryDownload = site.downloads.windows ?? site.downloads.linux ?? site.d
       </p>
 
       <div class="mt-9 flex flex-wrap items-center gap-3">
-        <CTAButton href={primaryDownload} icon="download" pendingHint="No release artifacts published yet">
-          Download
-        </CTAButton>
+        <CTAButton href="#download" icon="download">Download</CTAButton>
         <CTAButton href="#quickstart" variant="ghost" icon="code">Build from source</CTAButton>
       </div>
 

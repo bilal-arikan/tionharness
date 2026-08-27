@@ -12,6 +12,7 @@ interface Props {
 const { title, description } = Astro.props
 const pageTitle = title ? `${title} - ${site.name}` : `${site.name} - ${site.tagline}`
 const pageDescription = description ?? site.description
+const canonical = new URL(Astro.url.pathname, site.url).href
 ---
 
 <!doctype html>
@@ -23,11 +24,13 @@ const pageDescription = description ?? site.description
     <meta name="description" content={pageDescription} />
     <meta name="theme-color" content="#0e0e10" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="canonical" href={canonical} />
 
     <meta property="og:type" content="website" />
     <meta property="og:title" content={pageTitle} />
     <meta property="og:description" content={pageDescription} />
-    <!-- TODO(placeholder): add og:image and og:url once a domain and a hero shot exist. -->
+    <meta property="og:url" content={canonical} />
+    <!-- TODO(placeholder): add og:image once a hero shot exists. -->
 
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content={pageTitle} />
