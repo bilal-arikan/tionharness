@@ -545,6 +545,8 @@ export function SessionsSidebar({
           hasMoreSessions: hasMoreSessions ?? false,
           canLoadMore: Boolean(onLoadMore),
           query,
+          hasActiveChipFilters: chipsOff.length > 0,
+          filteredSessionCount: orderedIds.length,
         }) &&
           onLoadMore && (
             <button

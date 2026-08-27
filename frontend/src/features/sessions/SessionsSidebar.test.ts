@@ -6,11 +6,32 @@ const visibleState = {
   hasMoreSessions: true,
   canLoadMore: true,
   query: '',
+  hasActiveChipFilters: false,
+  filteredSessionCount: 0,
 }
 
 describe('shouldShowSessionsLoadMore', () => {
-  it('stays visible when chip filters leave no rendered session groups', () => {
+  it('stays visible without active chip filters', () => {
     expect(shouldShowSessionsLoadMore(visibleState)).toBe(true)
+  })
+
+  it('is hidden when active chip filters leave no rendered sessions', () => {
+    expect(
+      shouldShowSessionsLoadMore({
+        ...visibleState,
+        hasActiveChipFilters: true,
+      }),
+    ).toBe(false)
+  })
+
+  it('stays visible when active chip filters leave rendered sessions', () => {
+    expect(
+      shouldShowSessionsLoadMore({
+        ...visibleState,
+        hasActiveChipFilters: true,
+        filteredSessionCount: 1,
+      }),
+    ).toBe(true)
   })
 
   it('is hidden when every session is loaded', () => {
