@@ -94,6 +94,14 @@ func IsCredentialEnvName(name string) bool {
 // reports the names it removed (sorted, de-duplicated). Entries with no "=" are
 // passed through untouched — malformed input is not this function's business.
 func StripCredentialEnv(env []string) (kept []string, stripped []string) {
+	return stripCredentialEnv(env, nil)
+}
+
+// stripCredentialEnv is StripCredentialEnv with an optional exemption predicate:
+// when exempt returns true for a NAME, the variable is passed through even though
+// IsCredentialEnvName matched it. Used for subprocesses that are a single known
+// binary needing its own vendor credentials (see CredentialSafeEnvExcept).
+func stripCredentialEnv(env []string, exempt func(name string) bool) (kept []string, stripped []string) {
 	kept = make([]string, 0, len(env))
 	seen := map[string]bool{}
 	for _, kv := range env {
@@ -109,6 +117,10 @@ func StripCredentialEnv(env []string) (kept []string, stripped []string) {
 			continue
 		}
 		if !IsCredentialEnvName(name) {
+			kept = append(kept, kv)
+			continue
+		}
+		if exempt != nil && exempt(name) {
 			kept = append(kept, kv)
 			continue
 		}
@@ -134,5 +146,27 @@ func CredentialSafeEnv(base []string) []string {
 		base = os.Environ()
 	}
 	kept, stripped := StripCredentialEnv(base)
+	return append(kept, StrippedEnvVar+"="+strings.Join(stripped, ","))
+}
+
+// CredentialSafeEnvExcept is CredentialSafeEnv with an exemption predicate: a
+// credential-looking NAME for which exempt returns true is passed through to the
+// child untouched.
+//
+// It exists for a threat model that differs from the shell tool's. The shell runs
+// ARBITRARY model-authored commands, so nothing secret may reach it. A CLI provider
+// subprocess is a SINGLE known binary (claude / codex) that authenticates from its
+// own vendor namespace — stripping that namespace does not harden anything, it just
+// logs the user out. So the caller exempts exactly the vendor's own variables and
+// everything else (the user's GITHUB_TOKEN, AWS keys, TionHarness's own
+// CREDENTIAL_SECRET, other vendors' keys) is still withheld.
+//
+// The StrippedEnvVar marker still lists what was removed, so an exemption that turns
+// out to be too narrow is discoverable from inside the child rather than silent.
+func CredentialSafeEnvExcept(base []string, exempt func(name string) bool) []string {
+	if base == nil {
+		base = os.Environ()
+	}
+	kept, stripped := stripCredentialEnv(base, exempt)
 	return append(kept, StrippedEnvVar+"="+strings.Join(stripped, ","))
 }

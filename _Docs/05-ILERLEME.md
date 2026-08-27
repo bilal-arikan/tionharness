@@ -9644,3 +9644,43 @@ bir CLI provider'ı değil — meşru model referansları olarak korundu.
   geçiriyor. Bu **kasıtlı olabilir** (CLI kendi auth'unu oradan alır); soymak
   sağlayıcıyı komple kırardı. Ayrı bir karar/kart gerektiriyor, bu iş kapsamında
   dokunulmadı.
+
+## TSK388 — CLI sağlayıcı alt proseslerinde credential filtresi (2026-08-28)
+
+TSK386'nın "kapsam dışı" bıraktığı kart: `cliBaseEnv` (`providers/claudecli.go`)
+ve `codexBaseEnv` (`providers/codexcli.go`) `os.Environ()`'ın tamamını çocuğa
+veriyordu — `CREDENTIAL_SECRET`, `GITHUB_TOKEN`, AWS anahtarları ve **diğer**
+sağlayıcıların anahtarları dahil.
+
+- **Tehdit modeli shell'den farklı:** env keyfi bir ajan komutuna değil, tek bir
+  bilinen binary'ye (claude / codex) gidiyor ve o binary auth'unu kendi vendor
+  namespace'inden alıyor. Bu yüzden körlemesine `CredentialSafeEnv` uygulanmadı.
+- **Yeni yardımcı:** `proc.CredentialSafeEnvExcept(base, exempt)` — muafiyet
+  yordamı alan `CredentialSafeEnv` varyantı (`internal/proc/env_credentials.go`).
+  `StripCredentialEnv` içi `stripCredentialEnv(env, exempt)`'e taşındı; dış
+  imza değişmedi.
+- **Muafiyetler (`internal/providers/cli_env.go`), kanıtla:**
+  - claude → `ANTHROPIC_` ön eki. Kanıt: CLI'nin auth önceliği
+    `ANTHROPIC_API_KEY` > `CLAUDE_CODE_OAUTH_TOKEN` > config-dir
+    `.credentials.json` (`_Docs/05-ARSIV.md`); TionHarness `authKind="apikey"`
+    için zaten `ANTHROPIC_API_KEY` enjekte ediyor. `authKind` ayarlamayıp
+    ortamdan `ANTHROPIC_API_KEY` export eden kullanıcı desteklenen bir kurulum,
+    soymak onu kırardı. `ANTHROPIC_BASE_URL` / Bedrock-Vertex uçları da aynı
+    gerekçeyle geçiyor.
+  - codex → `OPENAI_` ön eki. Kanıt: `OPENAI_API_KEY` belgelenmiş codex login
+    kanalı (`_Docs/69-CODEX-CLI-SAGLAYICI.md`) ve claude'un aksine codex için
+    backend enjeksiyon kanalı **yok** (`_Docs/70-…`) — miras alınan env veya
+    önceden yapılmış `codex login` tek yol.
+- **Nesting sızıntısı geri gelmedi:** `cliBaseEnv` `ANTHROPIC_MODEL`,
+  `ANTHROPIC_SMALL_FAST_MODEL`, `ANTHROPIC_DEFAULT_*` ve tüm `CLAUDE_CODE_*`
+  ön ekini credential filtresinden **önce** düşürüyor; muafiyet yalnız filtreden
+  sağ kalanı belirliyor.
+- **Sessiz yutma yok:** `TIONHARNESS_STRIPPED_ENV` işaretçisi CLI çocuğuna da
+  enjekte ediliyor, soyulan adlar oradan okunabiliyor.
+- **Testler:** `internal/providers/cli_env_test.go` —
+  `TestCLIEnvExemptTable` (muaf/soyulan adları pinleyen tablo) ve
+  `TestCLIBaseEnvFiltersCredentials` (gerçek `cliBaseEnv`/`codexBaseEnv` çıktısı:
+  kendi anahtarı duruyor, yabancı anahtarlar yok, işaretçi doğru).
+- **Kapsam dışı — ayrı kart:** `internal/exttools/update.go:42` ve
+  `version.go:53` hâlâ `proc.HardenedEnv(nil)` kullanıyor (update-check alt
+  prosesi); bu turda dokunulmadı.

@@ -559,8 +559,11 @@ readLoop:
 // codexBaseEnv returns the parent environment hardened the same way the native
 // shell tools are, so a codex agent running `git commit` cannot hang on a GUI
 // editor or a credential prompt inside the stdin-less child. Unlike the claude
-// path there is nothing to strip: codex has no nesting env vars that silently
+// path there are no nesting env vars to strip: codex has none that silently
 // downgrade the child's model.
+//
+// Credentials ARE filtered, with an exemption for codex's own auth namespace —
+// see codexCLIEnvExempt.
 func codexBaseEnv() []string {
-	return proc.HardenedEnv(os.Environ())
+	return proc.HardenedEnv(proc.CredentialSafeEnvExcept(os.Environ(), codexCLIEnvExempt))
 }

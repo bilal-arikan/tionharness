@@ -560,7 +560,10 @@ func cliBaseEnv(extra ...string) []string {
 	// tools are: a claude-cli agent running `git commit` must not hang on a GUI
 	// editor (core.editor=notepad) or a credential prompt inside the stdin-less
 	// child. Guards win over inherited values (appended last).
-	return proc.HardenedEnv(append(out, extra...))
+	//
+	// Credentials are filtered too, but with an exemption for the CLI's own auth
+	// namespace — see claudeCLIEnvExempt.
+	return proc.HardenedEnv(proc.CredentialSafeEnvExcept(append(out, extra...), claudeCLIEnvExempt))
 }
 
 // ensureEnvDefault appends KEY=val to env only when KEY is not already present,
