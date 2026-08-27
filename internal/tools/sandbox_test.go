@@ -1,6 +1,8 @@
 package tools
 
 import (
+	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -132,6 +134,81 @@ func TestConfinedSandbox_InRootCaseDiffersFromRoot(t *testing.T) {
 
 	if _, err := sb.Resolve(strings.ToLower(root)); err != nil {
 		t.Errorf("Root itself with different casing rejected: %v", err)
+	}
+}
+
+// When Root itself is a symlink, the lexical root and the path the OS actually
+// opens diverge. cleanRoot resolves Root once, so naming a file by its real
+// absolute path is recognised as in-root instead of being rejected as an escape.
+func TestCleanRoot_ResolvesSymlinkedRoot(t *testing.T) {
+	base := t.TempDir()
+	real := filepath.Join(base, "real")
+	if err := os.Mkdir(real, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	link := filepath.Join(base, "link")
+	if err := os.Symlink(real, link); err != nil {
+		// Creating a directory symlink needs Developer Mode or admin on Windows.
+		t.Skipf("cannot create a directory symlink here: %v", err)
+	}
+
+	sb := NewConfinedSandbox(link)
+	if want := filepath.Clean(real); sb.Root != want {
+		t.Fatalf("Root = %q, want the resolved %q", sb.Root, want)
+	}
+
+	realFile := filepath.Join(real, "x.go")
+	got, err := sb.Resolve(realFile)
+	if err != nil {
+		t.Fatalf("real path of an in-root file rejected: %v", err)
+	}
+	if got != realFile {
+		t.Errorf("resolved = %q, want %q", got, realFile)
+	}
+}
+
+// EvalSymlinks failing must not drop Root: a working dir that does not exist yet
+// is a legitimate case, and the lexical path is still the right base.
+func TestCleanRoot_KeepsLexicalRootWhenItDoesNotExist(t *testing.T) {
+	missing := filepath.Join(t.TempDir(), "not-created-yet")
+	sb := NewConfinedSandbox(missing)
+	if sb.Root != filepath.Clean(missing) {
+		t.Fatalf("Root = %q, want the lexical %q", sb.Root, filepath.Clean(missing))
+	}
+	got, err := sb.Resolve("x.go")
+	if err != nil {
+		t.Fatalf("relative path under a not-yet-created root rejected: %v", err)
+	}
+	if want := filepath.Join(missing, "x.go"); got != want {
+		t.Errorf("resolved = %q, want %q", got, want)
+	}
+}
+
+// Documents the measured Windows behaviour: filepath.EvalSymlinks does NOT follow
+// junctions (it reports a junction verbatim, and fails outright for anything below
+// one), so a junction Root stays in its lexical spelling. Recorded as a test so a
+// future Go release changing this is noticed here rather than in the field.
+func TestCleanRoot_JunctionRootIsNotResolved(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("junctions are Windows-only")
+	}
+	base := t.TempDir()
+	real := filepath.Join(base, "real")
+	if err := os.Mkdir(real, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	link := filepath.Join(base, "link")
+	if err := exec.Command("cmd", "/c", "mklink", "/J", link, real).Run(); err != nil {
+		t.Skipf("cannot create a junction here: %v", err)
+	}
+
+	sb := NewConfinedSandbox(link)
+	if sb.Root != filepath.Clean(link) {
+		t.Fatalf("Root = %q, want the unresolved junction %q", sb.Root, filepath.Clean(link))
+	}
+	// Consequence of the above: the junction target is still outside this Root.
+	if _, err := sb.Resolve(filepath.Join(real, "x.go")); err == nil {
+		t.Error("junction target was accepted as in-root; EvalSymlinks now follows junctions")
 	}
 }
 

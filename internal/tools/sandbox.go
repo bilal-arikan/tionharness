@@ -41,6 +41,23 @@ func NewConfinedSandbox(dir string) Sandbox {
 }
 
 // cleanRoot makes dir absolute and cleaned; empty/erroring input yields "".
+//
+// The cleaned path is then run through filepath.EvalSymlinks so Root is stored in
+// the same spelling the OS will report for paths opened underneath it. This is a
+// correctness/consistency fix, not a security boundary: when Root itself is a
+// symlink, the lexical Root and the real path of a file opened through it diverge,
+// so an agent naming that same file by its real absolute path was rejected by the
+// underRoot check even though it is the very file Root points at. Resolving Root
+// once also keeps this boundary in step with the API-side one (internal/api.underDir).
+//
+// It does NOT resolve links *inside* Root — a symlink or junction below Root still
+// passes the lexical underRoot check and lets the OS open a target outside Root.
+// Confinement remains a lexical boundary; closing that hole is a separate change.
+//
+// EvalSymlinks failing is an expected, benign case (Root may not exist yet, e.g. a
+// working dir created later), so the cleaned lexical path is kept as-is rather than
+// dropping the root. On Windows this is also the normal outcome for a junction:
+// EvalSymlinks reports junctions verbatim instead of following them.
 func cleanRoot(dir string) string {
 	if dir == "" {
 		return ""
@@ -49,7 +66,12 @@ func cleanRoot(dir string) string {
 	if err != nil {
 		return ""
 	}
-	return filepath.Clean(abs)
+	cleaned := filepath.Clean(abs)
+	resolved, err := filepath.EvalSymlinks(cleaned)
+	if err != nil {
+		return cleaned
+	}
+	return filepath.Clean(resolved)
 }
 
 // isSlashRooted reports a Windows path written with a root slash but no drive.
