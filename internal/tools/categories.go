@@ -32,6 +32,7 @@ var builtinCategory = map[string]string{
 	"LS": CategoryFiles, "Glob": CategoryFiles, "Grep": CategoryFiles,
 	"Bash": CategoryFiles, "PowerShell": CategoryFiles,
 	"shell_manage": CategoryFiles,
+	"apply_patch":  CategoryFiles, "run_code": CategoryFiles,
 
 	// Search & web
 	"WebFetch": CategorySearch, "WebSearch": CategorySearch,
@@ -46,6 +47,11 @@ var builtinCategory = map[string]string{
 	"list_sessions": CategoryAgents, "update_session": CategoryAgents,
 	"archive_sessions": CategoryAgents,
 	"focus_view":       CategoryAgents, "get_session_info": CategoryAgents,
+	// Coordinator/worker delegation (a coordinator drives background workers;
+	// a worker reports back) — same family as run_subagent/spawn_session.
+	"spawn_worker": CategoryAgents, "send_to_worker": CategoryAgents,
+	"stop_worker": CategoryAgents, "list_workers": CategoryAgents,
+	"report_to_coordinator": CategoryAgents, "set_coordinator_mode": CategoryAgents,
 
 	// User profile (Settings ▸ Profile) — grouped with settings/config.
 	"update_user_preferences": CategoryConfig,
@@ -63,6 +69,8 @@ var builtinCategory = map[string]string{
 	"delete_task": CategoryAutomation, "todo_write": CategoryAutomation,
 	"list_hooks": CategoryAutomation, "create_hook": CategoryAutomation,
 	"update_hook": CategoryAutomation, "delete_hook": CategoryAutomation,
+	"list_automations": CategoryAutomation, "create_automation": CategoryAutomation,
+	"update_automation": CategoryAutomation, "delete_automation": CategoryAutomation,
 
 	// Interaction
 	"ask_user": CategoryInteraction, "request_confirmation": CategoryInteraction,
@@ -94,8 +102,13 @@ var builtinCategory = map[string]string{
 	"get_view":         CategoryDiagnostics,
 	"expand":           CategoryDiagnostics,
 	"mermaid_validate": CategoryDiagnostics, "transform_data": CategoryDiagnostics,
-	"activate_tools": CategoryDiagnostics, "deactivate_tools": CategoryDiagnostics,
+	"render_template": CategoryDiagnostics,
+	"activate_tools":  CategoryDiagnostics, "deactivate_tools": CategoryDiagnostics,
 	"tool_search": CategoryDiagnostics,
+	// Retrospective self-improvement: scan findings and the error→lesson store.
+	"insight_scan": CategoryDiagnostics, "insight_list_findings": CategoryDiagnostics,
+	"insight_apply_finding": CategoryDiagnostics,
+	"read_lessons":          CategoryDiagnostics, "delete_lesson": CategoryDiagnostics,
 }
 
 // GroupPrefix marks an override key as a GROUP key rather than a tool name:

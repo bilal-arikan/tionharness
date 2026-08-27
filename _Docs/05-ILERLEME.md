@@ -9362,6 +9362,13 @@ sunucu başına gruplanırken). Tutarsız ve taranması zor.
   (alfabetik) böler. Bilinmeyen kategori anahtarı ham haliyle sona düşer (graceful).
 - `go build ./internal/tools/... ./internal/api/...` + `tsc --noEmit` temiz. Yeni araç
   eklenince `categories.go`'ya bir satır eklenmeli (yoksa "Diğer" altında görünür).
+- **Güncelleme (2026-08-28):** Bu sözleşme artık testle zorlanıyor —
+  `internal/tools/categories_coverage_test.go`, paketin `Def()` gövdelerini AST ile
+  tarayıp her yerleşik aracın haritada olduğunu (`TestEveryBuiltinToolHasACategory`)
+  ve haritada ölü girdi kalmadığını (`TestNoStaleCategoryEntries`) doğrular. Aynı
+  turda haritada eksik olan 18 araç (coordinator/worker altılısı, automation CRUD,
+  insight üçlüsü, lessons ikilisi, `apply_patch`, `run_code`, `render_template`)
+  eklendi.
 
 ## Tam temizlik: bütçe/limit sistemi + ölü ayarlar backend'den söküldü ✅ (2026-07-01)
 
