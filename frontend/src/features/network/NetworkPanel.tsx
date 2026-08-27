@@ -8,6 +8,7 @@ import { workspaceToVis, NODE_LAYERS, type WorkspaceMode } from './relationGraph
 import { NetworkFilters } from './NetworkFilters'
 import { emptyNetworkFilter, filterGraph, type NetworkFilter } from './networkFilter'
 import { useIsMobile } from '@/shared/hooks/useMediaQuery'
+import { avatarForeground } from '@/shared/lib/avatar'
 
 interface Props {
   onError: (msg: string) => void
@@ -198,10 +199,10 @@ export function NetworkPanel({ onError, onOpenSession }: Props) {
                 onClick={() => toggleLayer(l.type)}
                 className={`flex items-center gap-1 rounded-full border px-2 py-0.5 transition ${
                   on
-                    ? 'border-transparent text-white'
+                    ? 'border-transparent'
                     : 'border-[var(--color-border)] text-[var(--color-text-dim)] opacity-60'
                 }`}
-                style={on ? { background: l.color } : undefined}
+                style={on ? { background: l.color, color: avatarForeground(l.color) } : undefined}
               >
                 <span
                   className="inline-block h-2 w-2 rounded-full"

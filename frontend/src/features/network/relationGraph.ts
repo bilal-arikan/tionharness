@@ -3,6 +3,7 @@
 // handled by its engine (see components/graph/VisNetworkGraph).
 import type { Node, Edge } from 'vis-network'
 import type { WorkspaceGraph, WorkspaceGraphEdge, WorkspaceNodeType, BoardColumnDef } from '@/types'
+import { avatarForeground } from '@/shared/lib/avatar'
 
 // Edge colors per workspace relationship kind, so the network reads at a glance.
 const EDGE_COLOR: Record<WorkspaceGraphEdge['kind'], string> = {
@@ -104,7 +105,7 @@ function agentAvatarDataUrl(emoji: string, color: string, size = 96): string {
     `<circle cx="${size / 2}" cy="${size / 2}" r="${size / 2}" fill="url(#g)" ` +
     `stroke="${safeColor}" stroke-width="2"/>` +
     `<text x="50%" y="50%" text-anchor="middle" dominant-baseline="central" ` +
-    `font-size="${size * 0.5}" fill="#fff" font-family="system-ui, -apple-system, 'Segoe UI Emoji', 'Noto Color Emoji', sans-serif" ` +
+    `font-size="${size * 0.5}" fill="${avatarForeground(safeColor)}" font-family="system-ui, -apple-system, 'Segoe UI Emoji', 'Noto Color Emoji', sans-serif" ` +
     `font-weight="600">${safeGlyph}</text>` +
     `</svg>`
   return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg)
