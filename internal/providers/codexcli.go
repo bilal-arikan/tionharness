@@ -359,7 +359,7 @@ var codexIdleOutputTimeoutDuration = codexIdleOutputTimeout
 // produced no terminal-classified failure, no salvageable content, and ran no
 // tool.
 func (c *CodexCLI) runAttempt(ctx context.Context, args []string, prompt, model string, req Request, home string) (resp *Response, retryable bool, err error) {
-	cmd := proc.CommandContext(ctx, c.binPath, args...)
+	cmd := proc.CommandContextNested(ctx, c.binPath, args...)
 	// codex spawns its own children (MCP servers, and whatever the turn shells
 	// out to — a Gradle daemon outlives the build that started it). They inherit
 	// this command's stdout pipe, so killing codex alone leaves the pipe open and

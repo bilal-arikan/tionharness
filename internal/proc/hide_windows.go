@@ -47,3 +47,24 @@ func HideConsole(cmd *exec.Cmd) {
 	}
 	cmd.SysProcAttr.CreationFlags |= createNoWindow
 }
+
+// HideNested hides cmd's own console window WITHOUT CREATE_NO_WINDOW, for a
+// child that spawns further console children of its own (an agentic CLI
+// launching MCP stdio servers, or shelling out to a build tool). CREATE_NO_WINDOW
+// gives cmd no console at all — and when a console-less process then spawns a
+// child without an explicit console flag, Windows allocates that grandchild a
+// BRAND NEW, VISIBLE console, because there is no console to inherit. That is
+// the flashing terminal users see on every MCP tool call from a hidden
+// claude-cli/codex-cli turn (see internal/providers/claudecli.go,
+// claudecli_session.go, codexcli.go). HideWindow alone still allocates cmd a
+// console but hides it immediately, so grandchildren inherit that existing
+// hidden console instead of creating their own.
+func HideNested(cmd *exec.Cmd) {
+	if cmd == nil {
+		return
+	}
+	if cmd.SysProcAttr == nil {
+		cmd.SysProcAttr = &syscall.SysProcAttr{}
+	}
+	cmd.SysProcAttr.HideWindow = true
+}

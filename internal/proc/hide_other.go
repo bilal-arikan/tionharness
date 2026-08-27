@@ -10,3 +10,6 @@ func Hide(cmd *exec.Cmd) {}
 
 // HideConsole is a no-op on non-Windows platforms.
 func HideConsole(cmd *exec.Cmd) {}
+
+// HideNested is a no-op on non-Windows platforms.
+func HideNested(cmd *exec.Cmd) {}

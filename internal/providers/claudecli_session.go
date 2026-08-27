@@ -203,7 +203,7 @@ func (c *ClaudeCLI) startPersistent(ctx context.Context, req Request) (*CLISessi
 	}
 	args = append(args, c.mcpArgs()...)
 
-	cmd := proc.CommandContext(ctx, c.binPath, args...)
+	cmd := proc.CommandContextNested(ctx, c.binPath, args...)
 	// Persistent process: its MCP servers and tool subprocesses inherit the pipes,
 	// so tear the whole tree down on cancellation instead of orphaning them.
 	proc.TreeKill(cmd)

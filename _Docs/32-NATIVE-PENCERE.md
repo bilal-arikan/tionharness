@@ -227,6 +227,22 @@ Masaüstünde iki ayrı kök sebep:
 `proc.Hide` (HideWindow+CREATE_NO_WINDOW) yalnız saf konsol çocukları (git/claude/sh) için;
 GUI dialog açan konsol çocuğu için `proc.HideConsole`.
 
+### Üçüncü yol: `proc.HideNested` / `proc.CommandContextNested` (torun doğuran çocuklar)
+
+**Ne zaman:** alt proses KENDİ torun proseslerini doğuruyorsa — ör. `claude-cli` / `codex-cli`
+turlarının başlattığı MCP stdio alt prosesleri veya turun kabuğa düşerek çalıştırdığı build
+aracı. Çağrı yerleri: `internal/providers/claudecli.go`, `claudecli_session.go`, `codexcli.go`.
+
+**Neden CREATE_NO_WINDOW yok:** `CREATE_NO_WINDOW` çocuğa **hiç konsol vermez**. Konsolsuz bir
+ebeveyn, açık bir konsol bayrağı olmadan çocuk doğurduğunda Windows'un miras alacağı konsol
+olmadığı için toruna **yepyeni ve GÖRÜNÜR** bir konsol tahsis eder — gizli bir CLI turundaki her
+MCP araç çağrısında kullanıcının gördüğü terminal parlaması budur. Tek başına `HideWindow`
+(`STARTF_USESHOWWINDOW` + `SW_HIDE`) çocuğa konsolu yine tahsis eder ama anında gizler; torunlar
+da kendi konsollarını açmak yerine bu mevcut gizli konsolu miras alır.
+
+**Ayrım korunmalı:** torun doğurmayan çağrılar (`ProbeAuth`, `cli_preflight.go`, `git.go`) eski
+`proc.CommandContext` ile kalır — onlarda `CREATE_NO_WINDOW` doğru davranıştır.
+
 ## Çapraz platform yol haritası (sonraki, opsiyonel)
 
 - macOS/Linux için `webview/webview_go` (CGO) ile `cmd/tionharness-desktop/main_unix.go`

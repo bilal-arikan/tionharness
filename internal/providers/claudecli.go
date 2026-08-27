@@ -583,7 +583,7 @@ func ensureEnvDefault(env []string, key, val string) []string {
 const cliStartupTimeout = 90 * time.Second
 
 func (c *ClaudeCLI) runAttempt(ctx context.Context, args []string, prompt, model string, req Request) (resp *Response, retryable bool, err error) {
-	cmd := proc.CommandContext(ctx, c.binPath, args...)
+	cmd := proc.CommandContextNested(ctx, c.binPath, args...)
 	// The CLI spawns its own children (MCP servers, and whatever a Bash tool call
 	// shells out to — a build daemon outlives the build that started it). They
 	// inherit this command's stdout pipe, so killing the CLI alone leaves the pipe
