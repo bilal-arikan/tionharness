@@ -53,6 +53,27 @@ func TestUpdateSettings_ValidPatchApplies(t *testing.T) {
 	}
 }
 
+func TestUpdateWorkspaceSettings_WorktreeLifecycleAppliesAndReturns(t *testing.T) {
+	s, wsp := newWorkspaceServer(t)
+	h := s.Routes()
+
+	var got workspaceSettingsDTO
+	rec := doJSON(t, h, http.MethodPut, "/api/workspace-settings", map[string]any{
+		"worktreeBaseRef": "origin/release",
+		"worktreeRootDir": `D:\tion-worktrees`,
+	}, &got)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("update status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	if got.WorktreeBaseRef != "origin/release" || got.WorktreeRootDir != `D:\tion-worktrees` {
+		t.Fatalf("response worktree settings = base %q root %q", got.WorktreeBaseRef, got.WorktreeRootDir)
+	}
+	persisted := wsp.Settings()
+	if persisted.WorktreeBaseRef != "origin/release" || persisted.WorktreeRootDir != `D:\tion-worktrees` {
+		t.Fatalf("persisted worktree settings = base %q root %q", persisted.WorktreeBaseRef, persisted.WorktreeRootDir)
+	}
+}
+
 // TestTestProvider_UnknownFieldRejected verifies POST /api/settings/test-provider
 // rejects a body carrying a field testProviderReq does not declare.
 func TestTestProvider_UnknownFieldRejected(t *testing.T) {

@@ -1,7 +1,9 @@
 package workspace
 
 import (
+	"bytes"
 	"encoding/json"
+	"os"
 	"testing"
 )
 
@@ -14,6 +16,36 @@ func TestDefaultWSSettings(t *testing.T) {
 	}
 	if d.DesktopNotifications != nil {
 		t.Error("desktopNotifications should default to nil (inherit the global toggle)")
+	}
+	if d.WorktreeBaseRef != "" || d.WorktreeRootDir != "" {
+		t.Fatalf("worktree lifecycle defaults = base %q root %q, want empty fallbacks", d.WorktreeBaseRef, d.WorktreeRootDir)
+	}
+}
+
+func TestWSSettingsWorktreeLifecycleJSONRoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	written := &Workspace{DataDir: dir}
+	written.settings.cur = defaultWSSettings()
+	written.settings.cur.WorktreeBaseRef = "origin/develop"
+	written.settings.cur.WorktreeRootDir = `C:\worktrees\project`
+	if err := written.saveSettings(); err != nil {
+		t.Fatalf("save settings: %v", err)
+	}
+	data, err := os.ReadFile(written.settingsPath())
+	if err != nil {
+		t.Fatalf("read settings file: %v", err)
+	}
+	for _, field := range []string{`"worktreeBaseRef": "origin/develop"`, `"worktreeRootDir": "C:\\worktrees\\project"`} {
+		if !bytes.Contains(data, []byte(field)) {
+			t.Fatalf("persisted settings missing %s: %s", field, data)
+		}
+	}
+
+	loaded := &Workspace{DataDir: dir}
+	loaded.loadSettings()
+	got := loaded.Settings()
+	if got.WorktreeBaseRef != "origin/develop" || got.WorktreeRootDir != `C:\worktrees\project` {
+		t.Fatalf("reloaded worktree settings = base %q root %q", got.WorktreeBaseRef, got.WorktreeRootDir)
 	}
 }
 

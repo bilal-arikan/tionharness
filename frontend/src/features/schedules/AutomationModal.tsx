@@ -38,6 +38,7 @@ import { useFieldErrors } from './useFieldErrors'
 import { FormModal } from './FormModal'
 import { Field, FlowPicker, TargetModeToggle, inputCls } from './pickers'
 import { localInputToUnix, unixToLocalInput } from './timeUtils'
+import { buildAutomationPayload } from './automationPayload'
 
 interface Props {
   kind: AutomationTriggerKind
@@ -166,45 +167,31 @@ export function AutomationModal({
       onError('Son tarih gelecekte olmalı')
       return
     }
-    const trigger = isBoardKind
-      ? {
-          boardOp,
-          boardFromState,
-          boardToState,
-          boardPriority,
-          boardExclusive,
-          boardAction,
-          boardMoveToState,
-        }
-      : isTokenKind
-        ? { tokenScope, tokenThreshold }
-        : isCounterKind
-          ? { counterMetric, counterScope, counterInterval }
-          : { triggerTag: triggerTag.trim() }
-    // An archive rule carries no target; a spawn rule (and every non-board kind)
-    // carries either an agent or a flow.
-    const target = isTargetlessAction
-      ? { targetAgentId: '', flowId: '' }
-      : targetMode === 'flow'
-        ? { flowId, targetAgentId: '' }
-        : { targetAgentId, flowId: '' }
-    const body = {
-      name: name.trim(),
-      // A full edit always sends the (fixed) kind so the board filters below are
-      // re-applied together with it; a partial patch (e.g. spawnTags) omits it.
-      triggerKind: kind,
-      ...trigger,
-      ...target,
-      // Session mode only matters for an agent target; a flow always runs per-trigger.
-      ...(targetMode === 'agent' && !isTargetlessAction ? { sessionMode } : {}),
-      promptTemplate: promptTemplate.trim(),
-      // NOT `|| 0`: an empty or non-numeric field used to submit 0, which the
-      // runtime reads as UNLIMITED — the very value this form forbids. Fall back
-      // to the default bound so a blank field can never create a runaway loop.
-      maxIterations: Number(maxIterations) || DEFAULT_MAX_ITERATIONS,
-      cooldownSec: Number(cooldownSec) || 0,
-      expiresAt: expUnix,
-    }
+    const body = buildAutomationPayload({
+      kind,
+      name,
+      triggerTag,
+      boardOp,
+      boardFromState,
+      boardToState,
+      boardPriority,
+      boardExclusive,
+      boardAction,
+      boardMoveToState,
+      tokenScope,
+      tokenThreshold,
+      counterMetric,
+      counterScope,
+      counterInterval,
+      targetMode,
+      targetAgentId,
+      flowId,
+      sessionMode,
+      promptTemplate,
+      maxIterations,
+      cooldownSec,
+      expiresAt,
+    })
     try {
       if (editing) {
         await api.updateAutomation(editing.id, body)

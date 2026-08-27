@@ -1,6 +1,11 @@
-import { describe, expect, it, vi, afterEach } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { setLocale } from '@/i18n'
 import { noteServerTime, serverClockSkewSec, serverNow } from './serverClock'
 import { formatDurationMs } from './time'
+
+beforeEach(async () => {
+  await setLocale('tr')
+})
 
 afterEach(() => {
   vi.useRealTimers()

@@ -107,6 +107,7 @@ export const taskApi = {
     boardPriority?: number
     boardExclusive?: boolean
     boardAction?: BoardAction
+    boardMoveToState?: string
     tokenScope?: 'session' | 'workspace'
     tokenThreshold?: number
     counterMetric?: 'message' | 'tool'
@@ -137,6 +138,7 @@ export const taskApi = {
       boardPriority?: number
       boardExclusive?: boolean
       boardAction?: BoardAction
+      boardMoveToState?: string
       tokenScope?: 'session' | 'workspace'
       tokenThreshold?: number
       counterMetric?: 'message' | 'tool'

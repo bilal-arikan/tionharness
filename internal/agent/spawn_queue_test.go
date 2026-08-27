@@ -3,11 +3,34 @@ package agent
 import (
 	"context"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/bilal-arikan/tionharness/internal/db"
+	"github.com/bilal-arikan/tionharness/internal/providers"
 )
+
+type queuedResultProvider struct{}
+
+func (queuedResultProvider) Name() string { return "queued-result-test" }
+
+func (queuedResultProvider) Complete(context.Context, providers.Request) (*providers.Response, error) {
+	return &providers.Response{Text: "queued worker result surfaced"}, nil
+}
+
+var registerQueuedResultProvider sync.Once
+
+func configureQueuedResultProvider(rt *Runtime) {
+	registerQueuedResultProvider.Do(func() {
+		providers.RegisterKind(providers.NewBuiltinKind(
+			providers.Manifest{Kind: "queued-result-test", Transport: providers.TransportAPI},
+			func(providers.ResolvedConfig) bool { return true },
+			func(providers.ResolvedConfig) (providers.Provider, error) { return queuedResultProvider{}, nil },
+		))
+	})
+	rt.providers.SetInstances([]providers.Instance{{ID: "queued-result-test", KindID: "queued-result-test"}})
+}
 
 func queueTestAgent(t *testing.T, rt *Runtime) db.Agent {
 	t.Helper()
@@ -51,6 +74,46 @@ func TestSpawnSessionQueuesAtCapacityAndStartsOnRelease(t *testing.T) {
 	}
 	drainSpawns(t, rt)
 	rt.CloseMCP()
+}
+
+func TestSpawnSessionQueuedWorkerResultSurfacesToCoordinator(t *testing.T) {
+	rt, _ := newTestRuntime(t, t.TempDir())
+	configureQueuedResultProvider(rt)
+	ctx := context.Background()
+	agent, err := rt.db.CreateAgent(ctx, db.Agent{
+		Name: "Queue Worker", Provider: "queued-result-test", ProviderInstanceID: "queued-result-test", Model: "test",
+	})
+	if err != nil {
+		t.Fatalf("create agent: %v", err)
+	}
+	coord, err := rt.db.CreateSession(ctx, db.Session{AgentID: agent.ID, Kind: "chat", SourceID: "queue-result", Title: "Coordinator"})
+	if err != nil {
+		t.Fatalf("create coordinator: %v", err)
+	}
+	rt.tun.SetSpawnLimits(1, 16, 0)
+	fillSpawnSlots(t, rt, 1)
+
+	res, err := rt.SpawnSession(ctx, agent.ID, "queued work", SpawnOptions{CoordinatorSessionID: coord.ID})
+	if err != nil {
+		t.Fatalf("queue worker: %v", err)
+	}
+	if !res.Queued || res.SessionID != "" {
+		t.Fatalf("unexpected queued result: %+v", res)
+	}
+	rt.releaseSpawnSlot()
+	drainSpawns(t, rt)
+
+	messages, err := rt.db.ListMessages(ctx, coord.ID)
+	if err != nil {
+		t.Fatalf("list coordinator messages: %v", err)
+	}
+	for _, message := range messages {
+		if strings.Contains(message.Text, "queued worker result surfaced") &&
+			strings.Contains(message.Text, "<status>completed</status>") && message.Origin == "worker-note" {
+			return
+		}
+	}
+	t.Fatalf("queued worker result was not surfaced to coordinator: %+v", messages)
 }
 
 func TestSpawnSessionRejectsWhenQueueFull(t *testing.T) {
