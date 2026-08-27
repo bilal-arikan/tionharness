@@ -1,9 +1,13 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
-  <rect width="32" height="32" rx="7" fill="#8b5cf6" />
-  <path
-    d="M8 10h16M16 10v13"
-    stroke="#fff"
-    stroke-width="3"
-    stroke-linecap="round"
-  />
+<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" fill="none" viewBox="0 0 48 48">
+  <!-- TionHarness brand mark: "TH" monogram on the brand purple badge.
+       Kept byte-identical in shape to frontend/public/favicon.svg. Letters are
+       plain rects (no <text>), so rendering never depends on a font. -->
+  <rect width="48" height="48" fill="#863bff" rx="11"/>
+  <g fill="#fff">
+    <rect width="15" height="4.4" x="7" y="14" rx="1"/>
+    <rect width="4.4" height="20" x="12.3" y="14" rx="1"/>
+    <rect width="4.4" height="20" x="26" y="14" rx="1"/>
+    <rect width="4.4" height="20" x="36.6" y="14" rx="1"/>
+    <rect width="15" height="4.4" x="26" y="21.8" rx="1"/>
+  </g>
 </svg>

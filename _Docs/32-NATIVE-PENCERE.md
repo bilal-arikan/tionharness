@@ -266,3 +266,35 @@ GUI dialog açan konsol çocuğu için `proc.HideConsole`.
 - Çekirdek (1–5): ~1 oturum, orta büyüklük. Refactor (`internal/app`) en dikkatli kısım
   (davranış-korumalı olmalı). Webview sarmalayıcı küçük.
 - İkon + çapraz platform: ayrı, opsiyonel turlar.
+
+## Uygulama ikonu (Windows exe kaynağı)
+
+`build/windows/icon.ico` — "TH" monogramı, marka moru (`#863bff`), yuvarlatılmış rozet.
+`frontend/public/favicon.svg` ve `website/public/favicon.svg` ile aynı biçim; ikon
+`build/windows/make-icon.py` (Pillow) ile aynı rect'lerden rasterize edilir
+(7 boy: 16→256).
+
+İkon ve sürüm bilgisi exe'ye Windows kaynak nesnesi (`.syso`) olarak gömülür:
+
+| Dosya | Kapsam |
+|-------|--------|
+| `cmd/tionharness/rsrc_windows_amd64.syso` | başsız sunucu, x64 |
+| `cmd/tionharness/rsrc_windows_arm64.syso` | başsız sunucu, arm64 |
+| `cmd/tionharness-desktop/rsrc_windows_*.syso` | native pencere derlemesi |
+
+Bu dosyalar **depoya işlenmiştir** (`.gitignore` içinde `!cmd/*/rsrc_windows_*.syso`
+istisnası), böylece düz `go build` bile markalı bir exe üretir — derleme zamanında
+ek araç gerekmez. Go bunları dosya adındaki `_windows_<arch>` son ekine göre yalnız
+ilgili hedefte bağlar; Linux/macOS derlemeleri etkilenmez.
+
+Yeniden üretmek (ikon veya sürüm değişirse):
+
+```bash
+go install github.com/josephspurrier/goversioninfo/cmd/goversioninfo@latest
+for pkg in tionharness tionharness-desktop; do
+  ~/go/bin/goversioninfo.exe -icon=build/windows/icon.ico -64 \
+    -o cmd/$pkg/rsrc_windows_amd64.syso build/windows/versioninfo.json
+  ~/go/bin/goversioninfo.exe -icon=build/windows/icon.ico -64 -arm=true \
+    -o cmd/$pkg/rsrc_windows_arm64.syso build/windows/versioninfo.json
+done
+```

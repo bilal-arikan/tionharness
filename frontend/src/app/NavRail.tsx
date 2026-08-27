@@ -170,7 +170,7 @@ export function NavRail({
       {/* Brand */}
       <div className="flex h-14 items-center gap-2 px-3">
         <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-[var(--color-accent)] text-sm font-bold text-[var(--color-on-accent)] shadow-[var(--shadow-sm)]">
-          TS
+          TH
         </div>
         {!collapsed && <span className="text-lg font-semibold tracking-tight">TionHarness</span>}
       </div>

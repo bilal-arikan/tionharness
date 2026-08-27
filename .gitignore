@@ -1,10 +1,14 @@
 # Build artifacts
-/build/
+/build/*
 /bin/
 /dist/
 *.exe
 *.exe~
 *.syso
+# Windows resource objects (app icon + version info) are generated once from
+# build/windows/ and committed, so plain `go build` produces a branded exe.
+!cmd/*/rsrc_windows_*.syso
+!/build/windows/
 
 # Go tooling output (profiling, coverage, test binaries)
 *.prof
