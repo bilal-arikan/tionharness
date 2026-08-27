@@ -422,7 +422,7 @@ olduğu için çapraz-agent token karışması yapısal olarak imkânsız.
 
 **VPS zincir göçü (gateway-of-gateways).**
 - TS gateway bugün `vps-*` sunucuları streamable-http URL'li backend olarak zincirliyor
-  (Tailscale `<vps-host>:9090/servers/{name}/mcp`). TionHarness `internal/mcp` **zaten
+  (uzak makinede özel ağ üzerinden yayınlanan `/servers/{name}/mcp` uçları). TionHarness `internal/mcp` **zaten
   streamable-http backend destekliyor** → `vps-*` sadece URL'li MCP kaynağı olarak eklenir
   (§7-8). Zincirleme neredeyse bedava.
 - Göç adımları: (a) TS `config.json`'daki 18 server + 7 vps girişini TionHarness MCP-server
@@ -445,8 +445,8 @@ düşürülür. Masked template üzerinde doğrulandı (18 server: stdio/http do
 ```bash
 # 1) TS config'i normalize et (gerçek config.json + secrets.json ile)
 python _spikes/52-gateway/migrate-vps.py \
-  C:/Users/<user>/Desktop/Projects/mcp-server/config.json \
-  --secrets C:/Users/<user>/Desktop/Projects/mcp-server/secrets.json > import.json
+  <projects>/mcp-server/config.json \
+  --secrets <projects>/mcp-server/secrets.json > import.json
 # 2) default workspace'e toplu import et
 curl -X POST http://127.0.0.1:8090/api/mcp-servers/import \
   -H "X-Workspace-Id: <default-ws-id>" --data-binary @import.json
@@ -732,10 +732,10 @@ active/tool_search/hidden). Tam app boot + canlı chat testi orantısız ağır/
   (JSONL append, fire-and-forget; meta-araçlar denetlenmez). Test: `TestGatewayAuditRecordsProxiedCalls`.
 - ✅ **Canlı VPS göç uygulaması — YAPILDI (2026-07-06):** kullanıcı onayıyla (tüm workspace'ler,
   23 server, çakışanların üstüne). Masaüstü app kapalıyken `cmd/tionharness` geçici olarak
-  gerçek data-dir'e (`~/.tionharness`) karşı `:8095`'te başlatıldı; `apply-migration.py`
+  gerçek data-dir'e karşı ayrı bir portta başlatıldı; `apply-migration.py`
   (delete-colliding + import) 4 workspace'e uygulandı → **WS1: 2 overwrite +23, WS5: 1
   overwrite +23 (non-colliding `codebase-memory` korundu → 24), WS8: +23, WS9: +23**;
-  0 hata, **dupe yok** (doğrulandı). Geçici server durduruldu, secret'lı `import.json` +
+  0 hata, **dupe yok** (doğrulandı). Geçici server durduruldu, secret taşıyan ara çıktı +
   binary silindi. Sonraki masaüstü açılışında WS1/5/8/9'da 23 server hazır. Araçlar:
   `_spikes/52-gateway/migrate-vps.py` + `apply-migration.py`.
   > **Ek düzeltme (2026-07-06):** Import her server'ı **enabled** oluşturduğundan (import
@@ -744,24 +744,20 @@ active/tool_search/hidden). Tam app boot + canlı chat testi orantısız ağır/
   > log spam'i. Çözüm: `migrate-vps.py` artık çıktıya `_disabled: [...]` ekler; `apply-migration.py`
   > import sonrası bunları `toggle {enabled:false}` ile kapatır. Canlıda 4 workspace'te 13'er
   > server disable edildi → enabled set TS ile eşleşti (10 server). Kalan enabled http backend'leri
-  > (mcp-chrome/unity/mcp-alpha/vps-*) çalışmadıkça hâlâ warn verebilir — bu TS'nin enabled setiyle aynı.
+  > (yerel ve `vps-*` backend'ler) çalışmadıkça hâlâ warn verebilir — bu TS'nin enabled setiyle aynı.
 
 - ⛔ **VPS göçü GERİ ALINDI (2026-07-06):** Bilal netleştirdi — asıl istek dış `mcp-server`
   gateway'inin server'larını TionHarness'e **import etmek değildi**; istek, TionHarness'in *kendi*
   built-in tool'larını + kullanıcının TionHarness'e **kendi eklediği** harici MCP'leri gateway-benzeri
   yüzeyle yönetmesiydi (bu zaten `internal/gateway` + iki-katmanlı interaction ile mevcut).
-  Dolayısıyla göç bir yanlış-anlama ürünüydü. **Temizlik:** VPS gateway'e (`<vps-host>:9090`,
-  yani `mcp-server`) işaret eden **tüm `vps-*` server'lar** 4 workspace'ten silindi (WS1:1, WS5/8/9:7'şer
+  Dolayısıyla göç bir yanlış-anlama ürünüydü. **Temizlik:** uzak gateway'e işaret eden
+  **tüm `vps-*` server'lar** 4 workspace'ten silindi (WS1:1, WS5/8/9:7'şer
   = 22 toplam, 0 leftover doğrulandı). Kullanıcının gerçek local tool'ları korundu
-  (mcp-alpha :55643, unity-mcp :8080, mcp-chrome :12306, playwright, desktop-commander, stitch,
-  photopea, codebase-memory — hepsi stdio/local). `migrate-vps.py`/`apply-migration.py` araçları
+  (hepsi stdio/local). `migrate-vps.py`/`apply-migration.py` araçları
   `_spikes`'te referans olarak duruyor ama **canlıya artık uygulanmıyor**. Not: import'tan kalan
-  bazı **disabled** config-only stdio server'lar (figma, docker, telegram, mcpvault, mobile-mcp,
-  flutter-dart, github, app-store, play-store) da Bilal'in isteğiyle silindi (**32 disabled server**,
+  config-only **disabled** stdio server'lar da kullanıcının isteğiyle silindi (**32 disabled server**,
   4 workspace). Nihai temiz durum — yalnız kullanıcının gerçek tool'ları:
-  **WS1(5):** mcp-chrome, playwright, mcp-alpha, stitch, photopea ·
-  **WS5(8):** +unity-mcp, desktop-commander, codebase-memory ·
-  **WS8(7)/WS9(7):** unity-mcp, desktop-commander, mcp-chrome, playwright, stitch, photopea, mcp-alpha.
+  **WS1:** 5 server · **WS5:** 8 server · **WS8/WS9:** 7'şer server.
   Gateway mekanizmasının kendisi (asıl hedef) değişmedi.
 
 - 🩹 **activate_tools/active_tools çıktısı namespaced ad döndürüyor (2026-07-06):** Semptom

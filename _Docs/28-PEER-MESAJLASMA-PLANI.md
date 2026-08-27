@@ -1,8 +1,8 @@
 # TionHarness — Ajanlar-Arası Peer Mesajlaşma Planı (SendMessage / Mailbox)
 
-> **Durum:** **Faz 1 UYGULANDI (2026-06-23).** Claude Code `swarm/teammate`
-> incelemesinden (`observed-behavior`) çıkarılan **adresli mailbox** deseninin
-> TionHarness'e uyarlanması. Kavramsal arka plan: [[10-KAVRAMSAL-TASARIM-NOTLARI]] §10.
+> **Durum:** **Faz 1 UYGULANDI (2026-06-23).** Claude Code'un gözlemlenen
+> swarm/teammate davranışından çıkarılan **adresli mailbox** deseninin
+> TionHarness'e uyarlanması.
 >
 > **Faz 1–2 + Faz 3-broadcast (tamam):** `send_message({to, message, summary?})`
 > built-in (self-manage gated); teslim = alıcının kalıcı **inbox** oturumuna
@@ -136,8 +136,8 @@ işbirliği).
 - `internal/agent/toolsetup.go` (self-manage bloğuna ekle)
 - `internal/agent/agentmsg.go` → `DeliverAgentMessage(ctx, fromAgentID, toRef, summary, message)` (inbox + spawn)
 - `internal/tools/builtin_sendmessage_test.go`
-- Docs: bu plan + [[10-KAVRAMSAL-TASARIM-NOTLARI]] + [[05-ILERLEME]] + [[23-ILISKI-GRAFIGI]]
+- Docs: bu plan + [[05-ILERLEME]] + [[23-ILISKI-GRAFIGI]]
 
 ---
-*Kaynak inceleme: `observed-behavior` (salt-okunur; kod kopyalanmadı, yalnız desen).
+*Desen kaynağı: Claude Code'un dışarıdan gözlemlenen mesajlaşma davranışı (kod kopyalanmadı, yalnız desen).
 İlgili: [[25-SUBAGENT-ISOLATION]] · [[22-SPAWN-SESSION]] · [[07-CHAT-UX]].*

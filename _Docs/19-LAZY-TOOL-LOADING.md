@@ -132,7 +132,7 @@
     `TestLazyCatalogCLIFormNamespacesNames` (extended prefix). Detay: `_Docs/11`.
 - **Dış MCP araçları da NameOnly (2026-07-01):** `AttachMCP` artık her MCP aracını
   `lazy` **VE** `nameOnly` işaretliyor (önceden yalnız `lazy`). Sebep: katalog
-  bloğunda dış MCP araçları (ör. `mcp__mcp-chrome__*`, ~30 araç) ≤ `lazyCatalogMCPListLimit`
+  bloğunda dış MCP araçları (ör. `mcp__<server>__*`, ~30 araç) ≤ `lazyCatalogMCPListLimit`
   iken **tam açıklamalarıyla** dökülüyordu — `tionharness_extended` (NameOnly) araçların
   yalnız-ad davranışıyla çelişiyor ve kullanıcı o aracı kullanmasa bile her tur
   ~800–1200 ölü token harcıyordu. Artık tutarlı: **hiçbir deferred araç katalogda

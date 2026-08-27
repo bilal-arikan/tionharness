@@ -159,58 +159,6 @@ stable `insight-sig` marker so re-scans never duplicate it.
 
 <!-- insight-sig:tool:Bash|error:no_such_tool_available_not_enabled_in_context -->
 
-## Unity compile/import await never settles within timeout ceiling
-
-- **Severity:** med
-- **Occurrences:** 1
-- **Evidence sessions:** SES42
-- **File:** `internal/mcp/mcp-alpha/unity_compile_await.go` ⚠️ (not found in repo — pointer unverified)
-
-**Root cause:** mcp-alpha_unity_compile_await polls the Unity editor for a settled compile/import state but the settle-detection never confirms: after 240s and 295 probes it observed 0 reloads and 0 settled confirmations while reporting refreshed=true. The await loop treats 'no observable settle signal' the same as 'still compiling' and burns the full timeout instead of distinguishing an idle editor (nothing to wait for) from an in-progress compile. The fixed ~240s ceiling with retryable=true invites repeated full-length hangs.
-
-**Proposed fix:** In the await handler, short-circuit when probes report zero reloads AND zero transient failures AND refreshed=true for a stable window (editor is already idle) and return settled instead of timing out; separately, detect a lost/dropped editor connection and fail fast rather than probing to the ceiling. Make the timeout and probe cadence configurable.
-
-<!-- insight-sig:mcp__mcp-alpha__mcp-alpha_unity_compile_await:HEIMDALL.TOOL.TIMEOUT/compile-import-not-settled -->
-
-## Heimdall MCP transport drops mid-call, losing tool response
-
-- **Severity:** med
-- **Occurrences:** 1
-- **Evidence sessions:** SES42
-- **File:** `internal/mcp/client/transport.go` ⚠️ (not found in repo — pointer unverified)
-
-**Root cause:** The mcp-alpha MCP server transport dropped mid-call and the response for mcp-alpha_unity_compile_await was lost, leaving the call unresolved with no response envelope. The client has no reconnect/replay path for an in-flight long-running tool call, so a transport blip on a 240s call surfaces as a lost response rather than a recoverable error. This co-occurs with the long await above, suggesting the long-lived call outlives transport stability.
-
-**Proposed fix:** Add transport keep-alive/heartbeat and a bounded reconnect-with-resume for in-flight calls, or make long-running tools return a job handle immediately and poll for completion so a dropped connection doesn't lose the result. Ensure a dropped transport yields a structured retryable error envelope instead of a silently lost response.
-
-<!-- insight-sig:mcp__mcp-alpha__mcp-alpha_unity_compile_await:MCP.TRANSPORT.DROPPED/response-lost-mid-call -->
-
-## mcp-alpha_unity_wait_until rejects multi-statement expressions instead of guiding callers up front
-
-- **Severity:** med
-- **Occurrences:** 1
-- **Evidence sessions:** SES45
-- **File:** `internal/mcp/mcp-alpha/unity_wait_until.go` ⚠️ (not found in repo — pointer unverified)
-
-**Root cause:** The wait_until tool only accepts a single boolean expression (expression-bodied lambda), but the tool schema/description does not surface this constraint to the model, so the agent repeatedly submits statement-bodied predicates with semicolons/braces and gets HEIMDALL.SCHEMA.INVALID. The repeated identical failure shows the constraint is discovered by trial-and-error, not enforced or documented at call time.
-
-**Proposed fix:** Encode the single-boolean-expression constraint in the wait_until tool's input schema description and add an example; optionally auto-wrap/normalize a trivial statement body into an expression, and return a structured hint (expected form) rather than a bare validation string.
-
-<!-- insight-sig:mcp__mcp-alpha__mcp-alpha_unity_wait_until|HEIMDALL.SCHEMA.INVALID|expression-must-be-single-boolean-expression -->
-
-## mcp-alpha MCP transport drops mid-call, losing the tool response
-
-- **Severity:** med
-- **Occurrences:** 1
-- **Evidence sessions:** SES45
-- **File:** `internal/mcp/transport.go` ⚠️ (not found in repo — pointer unverified)
-
-**Root cause:** The mcp-alpha MCP server transport dropped during an in-flight mcp-alpha_unity_wait_until call and the runtime lost the response with no reconnect/retry, leaving the tool call unresolved. This is an app-side transport/session-management gap in how TionHarness holds the MCP connection for long-running wait calls.
-
-**Proposed fix:** Add transport keepalive/reconnect and idempotent in-flight call re-issue (or surface a retryable error) for long-running mcp-alpha calls so a dropped transport does not silently lose the response.
-
-<!-- insight-sig:mcp__mcp-alpha__*|transport-dropped-mid-call|response-lost -->
-
 ## Model calls shell tools (PowerShell/Bash) that are not enabled in the session's toolset
 
 - **Severity:** med
@@ -413,7 +361,7 @@ stable `insight-sig` marker so re-scans never duplicate it.
 - **Evidence sessions:** SES45
 - **File:** `internal/agent/toolloop.go`
 
-**Root cause:** TionHarness passes MCP resource links (`mcp-alpha://resource/<id>`) through to the model as opaque handles and only dereferences them when the model later calls `*_retrieve`. Since the producing server may expire or evict the artifact between turns, the retrieve fails with ARTIFACT.NOT_FOUND (`retryable: false`) and the step is unrecoverable — the app has no cached copy and no way to regenerate the handle.
+**Root cause:** TionHarness passes MCP resource links (`<server>://resource/<id>`) through to the model as opaque handles and only dereferences them when the model later calls `*_retrieve`. Since the producing server may expire or evict the artifact between turns, the retrieve fails with ARTIFACT.NOT_FOUND (`retryable: false`) and the step is unrecoverable — the app has no cached copy and no way to regenerate the handle.
 
 **Proposed fix:** When an MCP tool result contains a resource link, resolve and cache the artifact bytes (or a workspace-local copy) at result-ingest time and rewrite the handle to point at the local copy. Fall back to a clear, actionable error ("artifact expired — re-run the producing tool") that the toolloop can turn into a repair step, rather than surfacing the raw NOT_FOUND.
 

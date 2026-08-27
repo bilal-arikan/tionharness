@@ -4,8 +4,8 @@ Tarih: 2026-07-05 · Kaynak: 21 ajanlık ultracode incelemesi (kod + oturum logu
 
 ## Ölçülen Sorun
 
-Test oturumu `260705-tall-lake` (SES91, 3 basit sohbet çağrısı, neredeyse hiç araç kullanımı yok): **$2.59**.
-the external agent project'taki eşdeğer oturum: **$0.177**.
+Test oturumu `260705-tall-lake` (SES91, 3 basit sohbet çağrısı, neredeyse hiç araç kullanımı yok): **$2.59** —
+aynı iş için beklenenin bir kaç katı.
 
 | Tur | input | output | cacheWrite | cacheRead |
 |-----|-------|--------|-----------|-----------|
@@ -21,19 +21,19 @@ the external agent project'taki eşdeğer oturum: **$0.177**.
 ## Kök Nedenler (kod kanıtlı)
 
 1. **Oturum claude-cli sarmalayıcı yolunda koştu** (provider=`claude-cli`, model `claude-cli|claude-opus-4-8`). `toolloop.go:193-270` her turda **tek seferlik yeni bir `claude -p` alt süreci** başlatıyor ve `--mcp-config`'i yeniden üretiyor (`claudePersistentSession=false`) → prefix her turda değişiyor, cache kırılıyor.
-2. **Araç şişkinliği CLI yolunda**: 140 aracın çoğu Claude Code yerleşikleri + playwright (~21) + mcp-chrome (~25-30). `climcp.go:85-103` harici MCP sunucularını **toptan** geçiriyor; kullanıcının 23 playwright aracına koyduğu "hidden" işaretleri ve `DisabledTools` listesi bu yolda **hiç okunmuyor**. TionHarness'in kendi 24 çekirdek aracı sadece ~6k token.
+2. **Araç şişkinliği CLI yolunda**: 140 aracın çoğu Claude Code yerleşikleri + playwright (~21) + bir tarayıcı MCP sunucusu (~25-30). `climcp.go:85-103` harici MCP sunucularını **toptan** geçiriyor; kullanıcının 23 playwright aracına koyduğu "hidden" işaretleri ve `DisabledTools` listesi bu yolda **hiç okunmuyor**. TionHarness'in kendi 24 çekirdek aracı sadece ~6k token.
 3. **Native (anthropic) yolda gizli cache hataları** (ajan bu yola geçince patlayacak):
    - Lazy-tool aktivasyon seti **her turda sıfırlanıyor** ve tur ortasında budanıyor (`toolloop.go:279/347-348/592`) → tools bloğu değişince Anthropic'in tools→system→messages hiyerarşisi gereği TÜM prefix geçersiz.
    - `ExtendedPromptCache` varsayılan **kapalı** (`settings.go` `Default()` içinde yok) → taze kurulum hiç `cache_control` göndermiyor VE sistem promptuna **saniye hassasiyetli timestamp** ekleniyor (`chat_turn.go:85,182-185`).
    - TTL sabit **1 saat** (`anthropic.go:17,44`) → yazım primi 2× (5 dk'lık 1.25× yerine); ölçülen aralıklar 18 sn iken 1h hiçbir şey kazandırmadı.
-4. **Fiyat tablosu ve kör noktalar**: Dahili fiyat tablosu opus-4-8'i $15/$75 sayıyor (gerçek liste $5/$25 → maliyetler 3× şişkin tahmin). Yan işler (başlık/özet) için ucuz model yönlendirmesi yok; büyük araç sonuçları sınırlanmıyor; cache-kırılma dedektörü tam bu senaryoyu (ikinci çağrıda %100 miss) yakalayamıyor.
+4. **Fiyat tablosu ve kör noktalar**: Dahili fiyat tablosu opus-4-8'i sağlayıcının güncel liste fiyatının 3 katı sayıyor → maliyetler şişkin tahmin ediliyor. Yan işler (başlık/özet) için ucuz model yönlendirmesi yok; büyük araç sonuçları sınırlanmıyor; cache-kırılma dedektörü tam bu senaryoyu (ikinci çağrıda %100 miss) yakalayamıyor.
 
 ## Plan (kazanca göre sıralı)
 
 | # | Ne | Nerede | Beklenen kazanç | Efor |
 |---|-----|--------|-----------------|------|
 | 1 | `claudePersistentSession=true` yap (tek uzun ömürlü claude süreci) **veya** Coder ajanını (AGT1) native `anthropic` provider'a geçir | `~\.tionharness\settings.json`; `internal/providers/claudecli.go:392-400` | Oturumun ~%36'sı ($0.93); tur-2 sınıfı miss'ler biter | Küçük |
-| 2 | Kodlama ajanları için playwright + mcp-chrome sunucu satırlarını kapat; `writeCLIMCPConfig`'i per-tool visibility/DisabledTools'a saygılı hale getir | `internal/agent/climcp.go:76-135`; `internal/agent/toolsetup.go:573-599` | ~45-55 şema = 10-15k token/çağrı; 3 turluk oturum ~$0.60-0.75'e iner | Orta |
+| 2 | Kodlama ajanları için playwright + tarayıcı MCP sunucu satırlarını kapat; `writeCLIMCPConfig`'i per-tool visibility/DisabledTools'a saygılı hale getir | `internal/agent/climcp.go:76-135`; `internal/agent/toolsetup.go:573-599` | ~45-55 şema = 10-15k token/çağrı; 3 turluk oturum ~$0.60-0.75'e iner | Orta |
 | 3 | `ExtendedPromptCache`'i varsayılan **açık** yap; timestamp'i sistem promptundan çıkarıp rolling breakpoint sonrası kullanıcı-mesajı kuyruğuna taşı | `internal/settings/settings.go:106,293-425`; `internal/providers/anthropic.go:499-517`; `internal/api/chat_turn.go:85,182-185` | Taze kurulumda sıcak çağrılar 1× tam fiyattan 0.1× cache-read'e (prefix'te ~%85-90) | Küçük |
 | 4 | Lazy-tool aktivasyonunu **oturum bazında** kalıcı yap (append-only), tur-ortası Prune'u kaldır; uzun vadede API-native Tool Search (`tool_search_tool_regex_20251119` + `defer_loading:true`) | `internal/agent/toolloop.go:279,292,347-348,592`; `internal/tools/registry.go:289-313` | Araç aktivasyonu sonrası her turda ~65k token 2× fiyatlı yeniden yazımı önler | Orta |
 | 5 | TTL'i yapılandırılabilir yap, varsayılan **5m** (beta header'sız `ephemeral`); 1h yalnızca uzun düşünme aralıklı otonom oturumlara opt-in | `internal/providers/anthropic.go:17,44,567-577,604-620` | Yazım primi 2×→1.25× (soğuk yazımda ~%37) | Küçük |
@@ -41,7 +41,7 @@ the external agent project'taki eşdeğer oturum: **$0.177**.
 | 7 | Büyük araç sonuçlarını sınırla: ~12k token üstünü dosyaya yaz, Haiku özetini + dosya yolunu geçmişe koy | `internal/agent/toolloop.go:416-420,586-589` | Tarayıcı/MCP ağırlıklı oturumlarda on binlerce token'ın her turda yeniden faturalanması biter | Orta |
 | 8 | Cache-kırılma dedektörünü düzelt: messages-prefix hash'i, tool-listesi deltası logu, "hiç ısınmayan oturum" bayrağı | `internal/providers/anthropic.go` (usage/probe mantığı) | Doğrudan kazanç yok; gelecekteki sessiz $1+/tur regresyonları görünür kılar | Küçük |
 
-Ayrıca: dahili fiyat tablosundaki opus-4-8 satırını gerçek liste fiyatına ($5/$25) çek — raporlanan maliyetler şu an 3× şişkin. ✅ **YAPILDI** (2026-07-05): `internal/providers/pricing.go` içinde `anthropic/claude-opus-4-8` ve `openrouter/anthropic/claude-opus-4.8` satırları 15/75 → **5/25** güncellendi; `pricing_test.go` + `billing_test.go` beklentileri düzeltildi (tümü geçiyor). Kaynak: Anthropic liste fiyatı Opus 4.8/4.7/4.5 = $5 giriş / $25 çıkış (per 1M tok).
+Ayrıca: dahili fiyat tablosundaki opus-4-8 satırını sağlayıcının güncel liste fiyatına çek — raporlanan maliyetler şu an 3× şişkin. ✅ **YAPILDI** (2026-07-05): `internal/providers/pricing.go` içinde `anthropic/claude-opus-4-8` ve `openrouter/anthropic/claude-opus-4.8` satırları güncel liste fiyatına göre düzeltildi; `pricing_test.go` + `billing_test.go` beklentileri düzeltildi (tümü geçiyor). Kaynak: sağlayıcının yayınlanmış liste fiyatı.
 
 ## the external agent project'tan Kopyalanacak Desenler
 

@@ -478,7 +478,7 @@ Faz sonrası eklemeler: iki-tier endpoint (2026-06-26) ve stateful streaming +
 ## 14. Faz 0 spike sonucu (2026-06-16 — DOĞRULANDI ✅)
 
 Tüm wiring'i yazmadan önce, en büyük riski (handshake) ölçmek için ~40 satırlık
-bağımsız bir Go MCP-over-HTTP server'ı (`C:\Users\<user>\Desktop\Progs\mcp-spike`)
+bağımsız bir Go MCP-over-HTTP server'ı (`<progs>/mcp-spike`)
 ile `claude -p --mcp-config` canlı test edildi. **Sonuç: tam başarı.**
 
 **Doğrulanan akış** (server logundan):

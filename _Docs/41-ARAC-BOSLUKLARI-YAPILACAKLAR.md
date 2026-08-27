@@ -64,13 +64,13 @@
   kendi native'ini kullanır (`TestWebSearchVisibleInWorkspaceCatalog` ile doğrulandı).
 - **Operatör kurulumu:** `secret_set` ile `TAVILY_API_KEY` *veya* `SEARXNG_URL` ekle.
 - **Bu makinedeki kurulum (2026-08-11):** Anahtarsız yol seçildi — yerel SearXNG,
-  `C:\Users\<user>\Desktop\Progs\searxng` (Docker Compose, `searxng/searxng:latest`,
+  `<progs>/searxng` (Docker Compose, `searxng/searxng:latest`,
   `127.0.0.1:8484` → container 8080, `restart: unless-stopped`). `settings.yml` içinde
   `search.formats` listesine `json` eklendi (araç `GET /search?format=json` çağırır;
   varsayılan imajda JSON kapalıdır) ve `server.limiter: false` (yerel, tek tüketici).
   Vault kaydı: `SEARXNG_URL = http://127.0.0.1:8484` — **workspace başına izole**, yani
   her workspace'e ayrı eklenir (şu an WS5 ve WS1'de var).
-  Yeniden başlatma: `cd C:\Users\<user>\Desktop\Progs\searxng; docker compose up -d`.
+  Yeniden başlatma: `cd <progs>/searxng; docker compose up -d`.
   Docker Desktop kapalıysa arama `connection refused` verir — önce onu başlat.
   **Konteyner `restart: unless-stopped` olsa da elle durdurulduğunda geri gelmez** — 2026-08-16'da
   tam olarak bu oldu ve zamanlanmış bir oturum (WS1/SES286) aramayı hiç yapamadı. Sağlık kontrolü:
@@ -275,7 +275,7 @@
 
 > Bölüm A "eksik araçları" listeler; bu bölüm **TionHarness'te VAR OLAN** araçların
 > Claude Code muadilinde bulunup bizde olmayan **özelliklerini** toplar. (İlk kayıt:
-> 2026-07-03, `observed-behavior` `src/tools/*` incelemesinden.)
+> 2026-07-03, Claude Code araçlarının gözlemlenen davranışından.)
 
 ### `Edit` / `Write` — tazelik guard'ı — ✅ TAMAMLANDI (2026-07-03)
 - **Eklendi:** read-before-write + modified-since-read kontrolü (`ReadTracker`, içerik-hash).
@@ -314,7 +314,7 @@ the external agent project'ta olup TionHarness'in **kapsam/felsefe farkı** nede
 - `list_messaging_channels` / `unbind_messaging_channel` → Telegram/WhatsApp gateway entegrasyonu yok
   (Connectors fazı 2026-06-16'da kapsamdan çıkarıldı).
 - `send_developer_feedback` → harici geri bildirim kanalı yok.
-- `browser_tool` → natif tarayıcı aracı yerine playwright / mcp-chrome MCP sunucuları kullanılır.
+- `browser_tool` → natif tarayıcı aracı yerine playwright vb. tarayıcı MCP sunucuları kullanılır.
 - `SubmitPlan` → claude-cli plan modu (`ExitPlanMode` köprüsü, `_Docs/40-PLAN-MODE.md`) zaten karşılıyor.
 
 ---

@@ -614,7 +614,7 @@ no_compress: true to get the byte-exact output.]
 
 > **Turun ortaya çıkardığı ayrı bir sorun:** `cargo` bridged shell'in PATH'inde yok —
 > SES14/SES15'te üç çağrı harcatan israfın aynısı. git-bash normal bir kabuktan
-> çağrıldığında `/c/Users/<user>/.cargo/bin/cargo`'yu görüyor, yani sorun git-bash'te
+> çağrıldığında `<home>/.cargo/bin/cargo`'yu görüyor, yani sorun git-bash'te
 > değil: **TionHarness süreci dar bir PATH ile başlatılmış** ve tüm alt kabukları onu
 > miras alıyor. Bu, token optimizasyonundan bağımsız bir dağıtım/başlatma konusu;
 > `_Docs/17`'nin kapsamı dışında ama worker'ların Rust derleyememesine yol açıyor.
@@ -1102,11 +1102,11 @@ turdan tura değiştiği için maliyeti tam normalize etme.
 
 ### Optimizasyon zinciri — uçtan uca vaka çalışması (2026-07-06)
 
-Aynı 3-turluk sohbet (opus-4-8) hem TionHarness'te (AGT1/AGT9, claude-cli) hem Craft
-Agent'ta (native Anthropic API) çalıştırılıp `usage-detail` + `info` + ham `claude -p`
-`usage` ile karşılaştırıldı. Amaç: TionHarness claude-cli yolundaki her ek yükü ölçüp
-teker teker kırmak. **Referans farkı:** aynı iş Craft native-API'de ~\$0.31 iken
-TionHarness claude-cli klasik başlangıçta ~\$2.59 (~8.4x) idi.
+Aynı 3-turluk sohbet (opus-4-8) TionHarness'te (AGT1/AGT9, claude-cli) çalıştırılıp
+`usage-detail` + `info` + ham `claude -p` `usage` ile karşılaştırıldı; referans olarak
+aynı iş native Anthropic API üzerinden de ölçüldü. Amaç: TionHarness claude-cli
+yolundaki her ek yükü ölçüp teker teker kırmak. **Referans farkı:** claude-cli klasik
+başlangıcı (~\$2.59) native-API yoluna göre yaklaşık bir büyüklük derecesi pahalıydı.
 
 **Kaldıraç kaldıraç ölçülen kazanç (AGT9, tur-1 `cache_creation` prefix'i — deterministik):**
 

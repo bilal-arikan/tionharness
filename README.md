@@ -24,7 +24,7 @@ Açık kaynaklı, kendi sunucunda barındırılan **çoklu-ajan (multi-agent) AI
 ## Hızlı Başlangıç (geliştirme)
 
 ```powershell
-# Terminal 1 — backend (127.0.0.1:8090 — :8080 unity-mcp ile çakışır)
+# Terminal 1 — backend (127.0.0.1:8090 — :8080 sık çakıştığı için 8090)
 # Loopback adresi Windows Güvenlik Duvarı'nın her derlemede "izin ver" sormasını önler.
 $env:TIONHARNESS_ADDR="127.0.0.1:8090"; go run ./cmd/tionharness
 
@@ -107,7 +107,6 @@ Tüm plan ve tasarım dokümanları [`_Docs/`](_Docs/) klasöründedir:
 - [Sohbet UX](_Docs/07-CHAT-UX.md)
 - [Depolama](_Docs/08-DEPOLAMA.md)
 - [Claude Agent SDK Paritesi (ADR)](_Docs/09-CLAUDE-AGENT-SDK.md)
-- [Kavramsal Tasarım Notları](_Docs/10-KAVRAMSAL-TASARIM-NOTLARI.md)
 - [Interaction MCP](_Docs/11-INTERACTION-MCP.md)
 - [Loglama Sistemi](_Docs/12-LOGLAMA.md)
 - [Tanıtım Sitesi](_Docs/72-TANITIM-SITESI.md)

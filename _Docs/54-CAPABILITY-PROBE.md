@@ -357,7 +357,7 @@ skill'i üzerinden shell ile sürer. İki tuzağı var ve ikisi de "cevapsızlı
 **1. İkilinin adı `op` — 1Password CLI de aynı adı kullanıyor.** Bu yüzden katalog
 anahtarı `exttools.OpenPencilToolName = "openpencil"` (ikilinin adı DEĞİL) ve
 `openPencilExe()` çözümlemesi şu sırayla çalışır: `TIONHARNESS_OPENPENCIL` env →
-`~\Desktop\Progs\openpencil\cli\op` → PATH — ama **PATH sonucu ancak yolunda
+`<progs>/openpencil/cli/op` → PATH — ama **PATH sonucu ancak yolunda
 "openpencil" geçiyorsa kabul edilir**. Aksi halde panel 1Password'ün sürümünü okur,
 onu OpenPencil'in release akışıyla karşılaştırır ve kullanıcıya tasarım aracının
 yıllardır güncellenmediğini söyler. Scoop (`scoop\apps\openpencil\…`) ve brew
@@ -444,8 +444,8 @@ onda koşar.
 **Windows tuzağı (ölçüldü):** bu makinede
 
 ```
-lookPath("python3") → C:\Users\...\AppData\Local\Microsoft\WindowsApps\python3.exe   ← Store stub
-proc.LookInterpreter → C:\Python313\python.exe                                        ← gerçek CPython 3.13.7
+lookPath("python3") → <python>/python3.exe   ← Store stub (WindowsApps)
+proc.LookInterpreter → <python>/python.exe   ← gerçek CPython 3.13.7
 ```
 
 Store "app execution alias" stub'ı 0-baytlık bir reparse point; sadeleştirilmiş

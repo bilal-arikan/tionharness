@@ -4,8 +4,8 @@
 > Claude Code'un prompt-cache + compaction mekaniğine yaklaştırmak — **SDK'ya bağımlı
 > olmadan** (çok-sağlayıcı, anahtarsız claude-cli, dosya-tabanlı felsefe korunur).
 >
-> Referanslar: `observed-behavior` (`services/api/promptCacheBreakDetection.ts`,
-> `services/compact/{compact,apiMicrocompact,microCompact}.ts`, `services/api/claude.ts`)
+> Referanslar: Claude Code'un gözlemlenen prompt-cache ve compaction davranışı
+> (cache breakpoint kırılması, otomatik/mikro compaction)
 > ve `external-agent-oss` (context/cache'i **Claude Agent SDK / native `claude` binary'ye
 > devrediyor** — kendi cache/compaction kodu yok). Bağlam: `_Docs\17-TOKEN-OPTIMIZASYON.md`.
 

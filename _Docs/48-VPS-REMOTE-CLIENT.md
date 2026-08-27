@@ -201,7 +201,7 @@ kanalına maplenebilir (gelecek iş).
    **güvenli bağlamda** izin verir → telefondan sesli girdi ancak `https://` ile çalışır
    (bkz. `07-CHAT-UX.md` STT). Trafik tailnet **içinde** kalır (`serve`, `funnel` DEĞİL)
    → auth'suz backend asla public olmaz. Varsayılan port 5174, `dev.ps1` (5173/8090) ve
-   unity-mcp (8080) ile çakışmaz. **Tek seferlik ön koşul:** tailnet admin konsolunda
+   yerelde sık kullanılan 8080 ile çakışmaz. **Tek seferlik ön koşul:** tailnet admin konsolunda
    "HTTPS Certificates" açık olmalı (`https://login.tailscale.com/admin/dns`).
 2. **claude-cli VPS'te kimlik:** izole config home + `claude setup-token` (oauth) ya
    da `ANTHROPIC_API_KEY` (`claudeCliAuthKind`/`Token`, `03` maddesi). VPS'te login

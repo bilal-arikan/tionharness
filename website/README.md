@@ -88,6 +88,7 @@ Site metni yazılırken **`README.md` kaynak alınmaz** — bayat bilgiler içer
 
 ## Dağıtım
 
-Şu an bağlı bir hosting yok. `dist/` klasörü olduğu gibi Cloudflare Pages, GitHub Pages
-veya `deploy/` altındaki VPS'te Caddy ile sunulabilir. Statik sitede auth sorunu yoktur —
-uygulamanın aksine internete açmak güvenlidir.
+Site **GitHub Pages** ile yayınlanır (`.github/workflows/pages.yml`); `dist/` klasörü
+herhangi bir statik hosting'e de olduğu gibi konulabilir. `deploy/release-host/` yalnızca
+**yerel önizleme** içindir. Statik sitede auth sorunu yoktur — uygulamanın aksine
+internete açmak güvenlidir.

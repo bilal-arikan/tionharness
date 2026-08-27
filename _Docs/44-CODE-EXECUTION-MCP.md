@@ -433,7 +433,7 @@ provider tokenizer'ı ile birebir değil.
 | Server | Araç | Full şema |
 |--------|------|-----------|
 | codebase-memory | 14 | 11.815 B ≈ 3.210 tok |
-| mcp-chrome | 29 | 36.433 B ≈ 9.125 tok |
+| tarayıcı-mcp | 29 | 36.433 B ≈ 9.125 tok |
 | playwright | 23 | 13.906 B ≈ 3.492 tok |
 | sqz-mcp | 6 | 4.896 B ≈ 1.222 tok |
 | context-mode | — | ulaşılamadı (bayat konfig — `cmd /c context-mode` artık yok) |
@@ -472,7 +472,7 @@ kod-modunun gerçek değeri bu ortamda şema tasarrufu DEĞİL; üç başka ekse
 
 **Faz 3 ölçümü buna göre güncellendi:** karşılaştırma metriği "şema tokenı" değil,
 **görev-başına toplam token (in+out) + tur sayısı + bağlama giren araç-çıktısı
-baytı** olmalı — MCP-yoğun, çok-adımlı bir senaryoda (ör. mcp-chrome/playwright ile
+baytı** olmalı — MCP-yoğun, çok-adımlı bir senaryoda (ör. tarayıcı-mcp/playwright ile
 50+ satır listeleme→filtreleme→toplama akışı).
 
 ---
@@ -514,7 +514,7 @@ açıkça söylüyor (belgelenmiş fark). İzin modu `auto`. Metrikler `debug.js
    token-sıkıştırma sunucusu — klasik yolda bağlama giren çıktı yalnız 4,4 KB'tı.
    Buna rağmen B1 (script doğru olsaydı) görev toplamında **−%13** öndeydi ve
    bağlama giren araç verisi 4.366 B → 373 B'ye (−%91) düştü. Çıktısı büyük
-   sunucularda (mcp-chrome DOM dökümleri, playwright snapshot'ları) fark
+   sunucularda (tarayıcı-mcp DOM dökümleri, playwright snapshot'ları) fark
    dramatik büyür — Faz 3 devamı için doğru hedef senaryo budur.
 3. **B2 = kod-modunun gerçek agentic akışı:** model 7 `run_code` denemesiyle sqz
    formatını script içinden keşfetti (`expand(hash)` semantiğini kendisi çözdü),
@@ -535,7 +535,7 @@ açıkça söylüyor (belgelenmiş fark). İzin modu `auto`. Metrikler `debug.js
   in+out + bağlama giren araç-çıktısı baytı.
 
 **Sonraki adım (Faz 3 devamı):** Aynı düzeneği büyük-çıktılı senaryoyla tekrarla
-(mcp-chrome/playwright: sayfa gezinme + N eleman çıkarma + toplama) — beklenti:
+(tarayıcı-mcp/playwright: sayfa gezinme + N eleman çıkarma + toplama) — beklenti:
 klasik yolda çıktılar bağlamı domine eder, kod-modu farkı belirginleşir.
 `run_code` açıklamasına "opak/yapılandırılmamış dönüşlerde önce küçük bir örneği
 print edip formatı doğrula" nudge'ı **eklendi** (2026-07-03, `builtin_runcode.go`

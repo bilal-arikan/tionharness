@@ -19,7 +19,7 @@ sunar.
 | Dil | EN | Hedef kitle açık kaynak geliştiricisi; TR faz 2 |
 | Kapsam | Tek sayfa + `/releases` + `/404` | Doküman sitesi ayrı bir iş |
 | Deploy | Yok (henüz) | `dist/` hazır; hosting kararı repo kararına bağlı |
-| Alan adı | `tionharness.com` | DNS sağlayıcısı'te kayıtlı; DNS henüz bir yere yönlendirilmedi |
+| Alan adı | `tionharness.com` | Bir alan adı sağlayıcısında kayıtlı; DNS henüz bir yere yönlendirilmedi |
 | Release verisi | Tarayıcıda **runtime** fetch | Build, canlı bir feed'e bağımlı olmamalı (aşağıya bak) |
 
 Go tarafını etkilemez: `website/` modül dışıdır, `go:embed` ağacına girmez.

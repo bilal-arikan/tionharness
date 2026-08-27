@@ -149,7 +149,7 @@ anahtarı, rsync, `RELEASE_*` secret'ları ve VPS **kaldırılmıştır**.
    **Enforce HTTPS** işaretlenir. Alan adı `website/public/CNAME` dosyasında da
    durur; her Pages deploy'u onu çıktının köküne kopyalar, böylece ayar deploy
    sırasında sıfırlanmaz.
-3. **DNS sağlayıcısı DNS** kayıtları:
+3. **Alan adı sağlayıcının DNS panelinde** kayıtlar:
 
    | Host | Tip | Değer |
    |------|-----|-------|
@@ -157,10 +157,10 @@ anahtarı, rsync, `RELEASE_*` secret'ları ve VPS **kaldırılmıştır**.
    | `@` (apex) | A | `185.199.109.153` |
    | `@` (apex) | A | `185.199.110.153` |
    | `@` (apex) | A | `185.199.111.153` |
-   | `www` | CNAME | `<user>.github.io` |
+   | `www` | CNAME | `<kullanici>.github.io` |
 
    Apex için A kayıtları (dört adet, GitHub Pages'in anycast havuzu), `www` için
-   CNAME. DNS sağlayıcısı'in varsayılan olarak eklediği çakışan apex A / `www` CNAME
+   CNAME. Sağlayıcının varsayılan olarak eklediği çakışan apex A / `www` CNAME
    kayıtları **silinmelidir**, yoksa alan adı doğrulaması takılır.
    Eski `dl.` kaydına artık gerek yoktur.
 4. **Settings → Actions → General → Workflow permissions**: `Read and write

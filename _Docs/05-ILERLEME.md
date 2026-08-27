@@ -256,7 +256,7 @@ temiz kesim yapıldı. Bunun yerine canlı veri dizini **elle taşındı** (aşa
   hata depoda da yaşandı, orada da tekrar koşarak çözüldü). Kalan `prompt_epoch.json`
   (87 adet, donmuş sistem promptu + araç şemaları) ve insight raporları düzeltildi.
   Ders: bu tür süpürmelerde **sıfıra kadar tekrar tara**, tek geçişe güvenme.
-- Geri dönüş: `~/.tionswarm-config-backup-20260824\` (kök configler + `credential-secret`),
+- Geri dönüş: `~/.tionswarm-config-backup-20260824\` (kök configler),
   `~/.tionharness-textfiles-backup-20260824.tgz` (1105 dosya) ve
   `~/.tionharness-textfiles-backup2-20260824.tgz` (ikinci geçişin 239 dosyası).
 
@@ -303,9 +303,9 @@ edilemiyor — `Desktop-city-cleaner` önce yanlışlıkla ölü sanıldı) her 
   klasörleri aslında genel algoritma benchmark'ı (AlgoBench), ürünle ilgisi yok — yalnız
   adı öyleydi. Yol değiştiği için eski cbm indeksleri öksüz kaldı (yeniden üretilebilir).
 
-**Kasten dokunulmayanlar:** gitea deposu
-`swarmgo` ve VPS yolu `/home/<user>/projects/tionharness`, Claude Code'un kendi `swarm/teammate`
-alt sistemine yapılan doküman atıfları, tarihsel `_Docs/05-ARSIV.md` anlatıları.
+**Kasten dokunulmayanlar:** uzak depo ve dağıtım tarafındaki eski adlandırma, Claude Code'un
+kendi `swarm/teammate` alt sistemine yapılan doküman atıfları, tarihsel `_Docs/05-ARSIV.md`
+anlatıları.
 
 **Not:** ad değişimi, kaynak projedeki `f544edf2` (tool-approval ses ipucu) commit'i ve
 o an duran WIP ağacı senkronlandıktan **sonra** yeniden uygulandı; kopya kaynakla birebir.
@@ -2728,9 +2728,9 @@ ekranıyla tek kaynaktan.
   ediyordu. `?workspace=WS17` gibi bir parametre **sessizce yok sayılıp** default
   workspace'e düşüyordu → çağıran, **başka bir workspace'in verisini** kendi
   istediği id'nin cevabı sanıyordu. Canlı örnek: `GET /api/mcp-servers?workspace=WS17`
-  7 workspace için de WS1'in sunucularını (`MCP31 mcp-chrome`) döndürdü; WS17'nin
+  7 workspace için de WS1'in sunucularını (`MCP31 browser-mcp`) döndürdü; WS17'nin
   gerçek listesi diskte `MCP1 codebase-memory` + `MCP2 playwright`. Teşhis sırasında
-  bu, "WS17'de mcp-chrome var" şeklinde **yanlış bir bulguya** yol açtı. Dış-ajan
+  bu, "WS17'de browser-mcp var" şeklinde **yanlış bir bulguya** yol açtı. Dış-ajan
   otomasyonu için (`_Docs/33`) asıl risk okuma değil **yanlış store'a yazma**.
 - **Çözüm** (`internal/api/server.go`):
   - `workspaceQueryKeys` = `ws` · `workspace` · `workspaceId` · `workspace_id`
@@ -2867,7 +2867,7 @@ ekranıyla tek kaynaktan.
   `exttools` **aynı** fonksiyonu çağırıyor → panelin gösterdiği ikili ile `run_code`'un
   çalıştırdığı ikili ayrışamaz. `proc` ikisinin de zaten bağımlı olduğu leaf paket.
 - **Doğrulandı:** naif `lookPath(python3)` → stub; `Detect(python)` →
-  `C:\Python313\python.exe` → `3.13.7` ✓. `python/cpython` `releases/latest` → **404**
+  `<python>/python.exe` → `3.13.7` ✓. `python/cpython` `releases/latest` → **404**
   (tag var, release yok — `git/git` ile aynı) → akış bağlanmadı.
 - **Dokunulan:** `internal/proc/interp.go` (yeni) · `internal/tools/builtin_transform_data.go`
   (kopya kalktı) · `internal/exttools/catalog.go` · `_Docs/54`.
@@ -6645,10 +6645,11 @@ workspace+skills 35 test ✓, `tsc` ✓.
 açılır, popup'a koddan yapıştırılır, arka planda kimlik senkron yazılır.
 
 **Yaklaşım B (native PKCE):** `claude setup-token`/`auth login` interaktif TUI'sini sürmek
-yerine OAuth authorization-code + PKCE akışını **Go'da kendimiz** kurduk. Sabitler kurulu
-CLI binary'sinden (v2.1.201) + public client-metadata dokümanından çıkarıldı (domain'ler
-`platform.claude.com`/`claude.com/cai`'ye taşınmış — eski `console.anthropic.com` değil):
-- client_id `9d1c250a-e61b-44d9-88ed-5944d1962f5e`, authorize `claude.com/cai/oauth/authorize`,
+yerine OAuth authorization-code + PKCE akışını **Go'da kendimiz** kurduk. OAuth istemci
+sabitleri sağlayıcının resmî CLI'ından ve public client-metadata dokümanından alınır
+(domain'ler `platform.claude.com`/`claude.com/cai`'ye taşınmış — eski `console.anthropic.com`
+değil):
+- public client_id, authorize `claude.com/cai/oauth/authorize`,
   token `platform.claude.com/v1/oauth/token`, redirect `platform.claude.com/oauth/code/callback`, S256.
 
 **Parçalar:**
@@ -6680,7 +6681,7 @@ Failed — client_id: Input should be a valid UUID, found `h` at 1" hatası veri
 `LoopbackConfig` client_id olarak metadata-doküman URL'i (`https://claude.ai/oauth/
 claude-code-client-metadata`) gönderiyordu, ama `claude.com/cai/oauth/authorize` endpoint'i
 client_id'yi **UUID** olarak doğrular ve URL'i (`https`'in `h`'sinden) reddeder. Düzeltme:
-loopback artık manuel akışla **aynı public UUID client**'ı (`9d1c250a-…`) kullanır. Ayrıca
+loopback artık manuel akışla **aynı public UUID client**'ı kullanır. Ayrıca
 redirect_uri `127.0.0.1` → **`localhost`** yapıldı: authorize endpoint 127.0.0.1'i localhost'a
 normalize ediyor; token-exchange redirect_uri'si normalize edilmiş biçimle eşleşmezse
 "redirect mismatch" olurdu. Yerel dinleyici hâlâ 127.0.0.1'e bind (tarayıcı localhost'u ona
@@ -7381,7 +7382,7 @@ seçilen bir **orkestrasyon akışını** (Flow) da başlatabilsin. Task'taki me
 
 ## Schedules toggle title'a + Flows minimap toggle + Market butonları panele ✅ (2026-07-04)
 
-Üç ayrı UI isteği. Hepsi canlı doğrulandı (mcp-chrome), `tsc -b` temiz.
+Üç ayrı UI isteği. Hepsi canlı doğrulandı (browser-mcp), `tsc -b` temiz.
 
 - **Schedules — otonomi toggle başlığa taşındı:** `schedules` artık `HEADERLESS_VIEWS`
   içinde; `Schedules` kendi `PaneHeader`'ını render ediyor (title="Otomasyon",
@@ -7398,7 +7399,7 @@ seçilen bir **orkestrasyon akışını** (Flow) da başlatabilsin. Task'taki me
 ## Agents: aktivite paneli üst-title'daki butondan toggle ✅ (2026-07-04)
 
 Kullanıcı isteği: ajan ekranında aktivite paneli, başlıktaki bir butonla açılıp
-kapansın. Canlı doğrulandı (mcp-chrome).
+kapansın. Canlı doğrulandı (browser-mcp).
 
 - `AgentsView` `PaneHeader` `right`'ına **"Aktivite"** toggle butonu eklendi
   (`data-testid="agent-activity-toggle"`, `Activity` ikonu, chat'teki "Detay"
@@ -7411,7 +7412,7 @@ kapansın. Canlı doğrulandı (mcp-chrome).
 
 ## Artifacts + Skills başlıkları da üst-title'a birleştirildi ✅ (2026-07-04)
 
-Flows/Agents desenini diğer detay ekranlarına uygulama. Canlı doğrulandı (mcp-chrome).
+Flows/Agents desenini diğer detay ekranlarına uygulama. Canlı doğrulandı (browser-mcp).
 
 - **Artifacts:** detay toolbar'ı (başlık + origin/kind/creator rozetleri + eylemler:
   Düzenle/İçerik-kopyala/Yol-kopyala/Aç/Kaynak-sohbet/Sil) tamamen üst `PaneHeader`'a
@@ -7438,7 +7439,7 @@ Flows/Agents desenini diğer detay ekranlarına uygulama. Canlı doğrulandı (m
 ## Flows: Şablonlar + Koşular başlıkları da üst-title'a birleştirildi ✅ (2026-07-04)
 
 Önceki birleştirmenin (flow editörü + agents) devamı — aynı desen Şablonlar ve
-Koşular sekmelerine uygulandı. Canlı doğrulandı (mcp-chrome).
+Koşular sekmelerine uygulandı. Canlı doğrulandı (browser-mcp).
 
 - **Şablonlar:** şablon önizleme üstündeki ayrı toolbar kaldırıldı; içeriği üst
   `PaneHeader`'a taşındı → `titleSlot` = şablon adı + açıklaması; `right` =
@@ -7454,7 +7455,7 @@ Koşular sekmelerine uygulandı. Canlı doğrulandı (mcp-chrome).
 ## Flows + Agents başlıkları tek üst-title'a birleştirildi ✅ (2026-07-04)
 
 Kullanıcı isteği: detay başlıklarını tek üst-bar'a topla (sohbet başlığı deseni).
-Canlı doğrulandı (mcp-chrome).
+Canlı doğrulandı (browser-mcp).
 
 - **`PaneHeader` esnetildi:** `title` opsiyonel oldu + yeni `titleSlot?: ReactNode`
   (title/subtitle bloğunun yerine büyüyen özel içerik — ör. isim inputu). Sol
@@ -7508,7 +7509,7 @@ kaldırılsın, yalnız kopyalama ikonu kalsın.
   "Yolu kopyala" (menü öğesi — liste satırı, etiket gerekli) ve `ExecutionsPanel`
   seçim-çubuğundaki "Kimlikleri kopyala" (bulk-action; `SelectionBarButton` children
   zorunlu, ikon-only UX'i bozardı). İstenirse bunlar da dönüştürülebilir.
-- `tsc -b` temiz; canlı doğrulama (mcp-chrome) sorunsuz.
+- `tsc -b` temiz; canlı doğrulama (browser-mcp) sorunsuz.
 
 ## Liste ekranı başlıkları tam sohbet paritesi: başlık artık listenin üstüne gelmiyor ✅ (2026-07-04)
 
@@ -7552,7 +7553,7 @@ sessizce bozuktu).
   `panels/ExecutionsPanel` (toplu-id + oturum-id kopyala). Ayrıca daha önce düzeltilen
   `CopyPathButton` + `App.tsx` (`openFile`, `copySessionPath`) de artık merkezi metodu
   kullanıyor (inline prompt kaldırıldı).
-- `tsc -b` temiz; canlı smoke testi (mcp-chrome) sorunsuz.
+- `tsc -b` temiz; canlı smoke testi (browser-mcp) sorunsuz.
 
 ## Claude Code cache paritesi P1+P6: native yolda dinamiği mesaj kuyruğuna taşı ✅ (2026-07-04)
 
@@ -7674,8 +7675,8 @@ vite build` temiz.
 
 ## Yol kopyala butonu güvensiz bağlamda (LAN IP/HTTP) düzeltildi ✅ (2026-07-04)
 
-Kullanıcı "Copy path / Open path çalışmıyor" bildirdi. Canlı tarayıcıda (mcp-chrome,
-`http://192.168.1.4:5173`) teşhis edildi:
+Kullanıcı "Copy path / Open path çalışmıyor" bildirdi. Canlı tarayıcıda (browser-mcp,
+`http://<lan-ip>:5173`) teşhis edildi:
 
 - **Kök neden (Copy):** `window.isSecureContext === false` → `navigator.clipboard`
   **undefined**. Eski kod `navigator.clipboard?.writeText` (optional chaining) ile
@@ -7710,7 +7711,7 @@ Kullanıcı "Copy path / Open path çalışmıyor" bildirdi. Canlı tarayıcıda
 
 ## Ajan-yanı model etiketi + isim hizalaması ✅ (2026-07-04)
 
-Kullanıcı isteğiyle 2 küçük UI düzeltmesi (canlı tarayıcıda mcp-chrome ile doğrulandı).
+Kullanıcı isteğiyle 2 küçük UI düzeltmesi (canlı tarayıcıda browser-mcp ile doğrulandı).
 
 - **Model etiketinden açıklama eki kırpıldı:** `resolveModelLabel` (`lib/catalog.ts`)
   artık `stripTagline` ile katalog label'ındaki boşlukla ayrılmış tire sonrası eki
@@ -8201,15 +8202,15 @@ mesaj-yükleme effect'i chat tanımından ÖNCE geldiği için deps-dizisi TDZ's
 
 ## Workspace default promptu TionHarness-native yeniden yazıldı ✅ (2026-07-03)
 
-`internal/workspace/defaults/default-instructions.md` hâlâ the external agent project sistem
-promptunun mekanik "the external agent project→TionHarness" kopyasıydı — TionHarness'te **olmayan**
+`internal/workspace/defaults/default-instructions.md` hâlâ başka bir ajan ürününden
+devralınmış yönergelerin mekanik ad-değiştirilmiş uyarlamasıydı — TionHarness'te **olmayan**
 onlarca yeteneği öğretiyor (`datatable`/`spreadsheet`, `html/pdf/markdown-preview`,
 `render_template`, `call_llm`, `~/.external-agent/docs/*`, `_displayName` MCP meta,
 External Sources+`guide.md` modeli), **gerçek** yüzeyi (run_subagent, use_skill,
 set_session_goal, flows/self-management/handoff/plan modu, gerçek render seti) hiç
-anlatmıyordu. Ayrıca ajana talimat olmayan the external agent project iç dokümantasyonu (Dynamic
+anlatmıyordu. Ayrıca ajana talimat olmayan devralınmış iç dokümantasyon (Dynamic
 context / Complete user message / SDK config bölümleri + mini-agent promptu) ve
-makineye özel sızıntı (gömülü Bilal tercihleri + sabit `C:/Users/<user>/...` yolları)
+makineye özel sızıntı (gömülü kişisel tercihler + sabit `C:/Users/<user>/...` yolları)
 içeriyordu.
 
 **Yapılan:** dosya sıfırdan TionHarness-native olarak yeniden yazıldı (~750 → ~150
@@ -8618,7 +8619,7 @@ anahtarı geçersiz çıktı), gerçek `sqz-mcp`; görev: 5 dizinin girdi sayım
 - **Zincir uçtan uca doğrulandı:** Settings toggle canlı → run_code kaydı → binding +
   köprü + izin + `via run_code` debug olayları + katlanabilir trace kartı (5 alt satır).
 - **Dürüst not:** sqz-mcp kod-moduna en aleyhte senaryo (çıktılar zaten sıkışık);
-  büyük-çıktılı tekrar (mcp-chrome/playwright) sıradaki hedef. `run_code`
+  büyük-çıktılı tekrar (browser-mcp/playwright) sıradaki hedef. `run_code`
   açıklamasına "opak dönüşte önce küçük örnek print et" nudge'ı **eklendi**
   (2026-07-03, `builtin_runcode.go` "ACCURACY:" paragrafı).
 
@@ -9000,7 +9001,7 @@ onun yerini tutar). (3) `ClaudeResume`'u default açık yap.
   eski Özet/NameOnly toggle çiftini değiştirir, araçların `VISIBILITY_TIERS`'ini
   paylaşır. Detay: `_Docs\19` §Skill 4-tier.
 - **Default workspace prompt:** `internal/workspace/defaults/default-instructions.md`
-  (the external agent project tam sistem promptu, ~40KB) `//go:embed` ile `defaultWSSettings().Instructions`
+  (varsayılan ajan yönergeleri, ~40KB) `//go:embed` ile `defaultWSSettings().Instructions`
   seed'ine bağlandı → talimatı olmayan (yeni) workspace'ler bu baseline'la açılır.
   Persisted `instructions` bunu override eder (mevcut workspace'ler etkilenmez).
 - **ClaudeResume:** zaten default açıktı (kod `settings.go` DefaultSettings + canlı
@@ -9106,7 +9107,7 @@ alt-panele taşınsın (feature detaylandırılacak); export alırken **neyin da
 (`internal/api/external_tools.go`) yeni entry: **codebase-memory-mcp** (DeusData) — kod tabanını
 kalıcı bilgi grafiğine indeksleyen stdio MCP sunucusu (158 dil, sub-ms sorgu, ~%99 daha az token).
 `category=dev`, `wire=mcp` (Market'te "Codebase Memory MCP" paketiyle kurulur). Tespit PATH'te
-`exec.LookPath` ile; program `C:\Users\<user>\Desktop\Progs\codebase-memory-mcp\` altında ve PATH'te
+`exec.LookPath` ile; program `<progs>/codebase-memory-mcp/` altında ve PATH'te
 olduğundan ekran **Found** gösteriyor. `go build ./internal/api` ✅. Not: yeni entry PATH'e o dizini
 içeren bir süreçten görünür — backend yeni PATH ile yeniden başlatıldı.
 
@@ -9293,7 +9294,7 @@ Detay: `_Docs/19-LAZY-TOOL-LOADING.md`.
 ## Dış MCP araçları katalogda yalnız-ad (NameOnly) ✅ (2026-07-01)
 
 **İstek:** Context-payload optimizasyonu. "Available Tools (load on demand)" bloğunda
-dış MCP araçları (ör. `mcp__mcp-chrome__*`) tam açıklamalarıyla dökülüyordu; TionHarness'in
+dış MCP araçları (ör. `mcp__browser-mcp__*`) tam açıklamalarıyla dökülüyordu; TionHarness'in
 kendi `tionharness_extended` araçları ise zaten yalnız-ad. Tutarsızlık + her tur ölü token.
 
 **Yapılan:** `internal/tools/registry.go` `AttachMCP` artık her MCP aracını `lazy` **VE**

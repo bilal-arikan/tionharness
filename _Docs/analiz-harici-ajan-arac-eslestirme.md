@@ -119,7 +119,7 @@ Durum: `birebir` / `kısmi` / `TionHarness'te yok`.
 | `send_developer_feedback` | — | TionHarness'te yok | Geliştiriciye geri bildirim kanalı yok. |
 | `call_llm` | `run_subagent` (sync, izole) | kısmi | `run_subagent` araçlı tam bir ajan (daha ağır); `call_llm` tek-completion/ucuz. En yakın karşılık. |
 | `spawn_session` | `spawn_session` | birebir | Her ikisi de bağımsız yeni oturum başlatır (fire-and-forget). |
-| `browser_tool` | — (MCP: playwright / mcp-chrome) | TionHarness'te yok | Natif tarayıcı aracı yok; tarayıcı MCP sunucuları üzerinden kullanılır. |
+| `browser_tool` | — (MCP: playwright vb.) | TionHarness'te yok | Natif tarayıcı aracı yok; tarayıcı MCP sunucuları üzerinden kullanılır. |
 | `set_session_labels` | — (`move_task` kanban kolonları) | TionHarness'te yok | Oturum-seviyesi etiket kavramı yok; benzer "durum" mantığı kanban task'larında. |
 | `set_session_status` | `archive_session` / `complete_goal` / `move_task` | kısmi | Oturum için done≈`archive_session`; durum-makinesi task board'unda (`move_task`). |
 | `get_session_info` | `list_sessions` | kısmi | Tekil oturum metadata'sını dönen ayrı araç yok; `list_sessions` durumsal farkındalık verir. |

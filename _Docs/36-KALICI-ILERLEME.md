@@ -191,7 +191,7 @@ davranışı: katla/aç toggle + statü işaretçisi + son 3 log; dizin-scope uy
 ## Doğrulama
 
 ```powershell
-cd C:\Users\<user>\Desktop\Projects\TionHarness
+cd <repo>
 go build ./...
 go test ./internal/progress/... ./internal/agent/... ./internal/tools/... ./internal/api/... ./internal/settings/...
 cd frontend; npm run build

@@ -293,7 +293,7 @@ görüp **çift yön** senkronlamak.
   modalden çıkarıldı; backend alanları omitempty olarak duruyor.)
 - `types/task.ts`/`api/tasks.ts` yeni alanlarla genişledi.
 
-**Obsidian-pm köprüsü (harici, `Desktop\Progs\tionharness-obsidian-sync`, Python):**
+**Obsidian-pm köprüsü (harici, `<progs>/tionharness-obsidian-sync`, Python):**
 - TionHarness REST API (`/api/tasks`) ↔ obsidian-pm projesi (düz Markdown: `<proje>.md`
   + `<proje>_tasks/*.md`, `pm-project`/`pm-task` frontmatter). Sunucu/DB yok.
 - **Tam çift-yön:** başlık/açıklama/durum/owner/deps + **priority/tags/type/parentId**
@@ -2277,7 +2277,7 @@ Seviye 2 importer'ın ilk iki increment'i. Önkoşullar SK-1..SK-4 hazırdı.
 ## Skill sistemi geliştirmeleri SK-1..SK-4 (CC skill importer önkoşulları) ✅ (2026-06-23)
 
 Claude Code skill importer'a (Seviye 2, `03-YOL-HARITASI.md` SK-IMP) hazırlık olarak, kendi skill
-sistemimizde 4 önkoşul uygulandı. Kaynak desen: `observed-behavior/src/skills/loadSkillsDir.ts`.
+sistemimizde 4 önkoşul uygulandı. Desen kaynağı: Claude Code'un gözlemlenen skill yükleme davranışı.
 
 - **SK-1 — Çok-dosyalı skill:** `Store.UseSkillBody` gövdede `${SKILL_DIR}` (+ CC `${CLAUDE_SKILL_DIR}`)
   ikamesi yapıyor → skill kendi klasöründeki dosyalara atıf verir; **sibling dosyalar** "## Bundled files"
@@ -2518,9 +2518,9 @@ yeni turlar birikir — normal); birincisi `conversation/manager.go` `compactPro
 **"under 200 words"** cap'i + her katlamada **özetin özetini** alan rolling-merge →
 **decay**.
 
-Claude Code compaction motoru incelendi (`Desktop/Projects/observed-behavior/src/services/
-compact/`: `prompt.ts` 9-bölümlü + `<analysis>` scratchpad, `compact.ts`, `autoCompact.ts`,
-~20K output rezervi, fork+prompt-cache paylaşımı, post-compact dosya/skill re-injection).
+Claude Code'un gözlemlenen compaction davranışı incelendi (9-bölümlü özet promptu +
+`<analysis>` scratchpad, otomatik compaction eşiği, ~20K output rezervi, fork+prompt-cache
+paylaşımı, compaction sonrası dosya/skill yeniden enjeksiyonu).
 
 **1. faz uygulandı (düşük risk, en yüksek etki):**
 - `compactPrompt` → sabit **8 bölümlü** yapı + **anti-decay talimatı** ("önceki özetteki her
@@ -2869,7 +2869,7 @@ temiz (ilgisiz `internal/e2e` MemGPT WIP build hatası hariç).
 Çok-ajan "kim ne dedi" çözümünü iki referansla karşılaştırdık:
 - **external-agent-oss:** sorunu *yaşamıyor* — bir oturum = tek ajan; çok-ajan ayrı oturum.
   Mesajlarda per-mesaj yazar alanı yok; Claude Agent SDK döngüyü sürüyor.
-- **Claude Code (`observed-behavior` swarm/teammate):** çok-ajanı **izole bağlam + adresli
+- **Claude Code (gözlemlenen swarm/teammate davranışı):** çok-ajanı **izole bağlam + adresli
   mailbox** ile çözüyor — `SendMessage({to,message,summary})`, alıcının inbox'ına `from`
   kimliğiyle `<teammate_message teammate_id>` etiketiyle düşer; plain çıktı diğer ajana
   görünmez. Kimlik **doğuştan**; ardışık-rol çakışması hiç oluşmaz.
@@ -2877,7 +2877,7 @@ temiz (ilgisiz `internal/e2e` MemGPT WIP build hatası hariç).
 TionHarness iki modeli birden taşıyor: paylaşılan-thread (etiketleme+coalesce ile sağlamlaştırıldı)
 ve izole `run_subagent`. Eksik olan "akran ajana adresli DM" için **uyarlama planı** yazıldı:
 `_Docs\28-PEER-MESAJLASMA-PLANI.md` (mevcut `GetOrCreateKindSession` inbox + `SpawnSession`
-üzerine). Kavramsal not: `_Docs\10-KAVRAMSAL-TASARIM-NOTLARI.md` §10. **Uygulama kullanıcı
+üzerine). Kavramsal not: peer-mesajlaşma tasarım notu §10. **Uygulama kullanıcı
 onayı bekliyor** (tetik/inbox modeli/ayrı-araç kararları planda).
 
 ## Çok-ajanlı bağlam sağlamlığı: yazar kimliği + ardışık-rol + geçmiş-duyarlı wake ✅ (2026-06-23)
@@ -2911,8 +2911,8 @@ build + 167 test yeşil. Detay: `_Docs\07-CHAT-UX.md`, `_Docs\20-SCHEDULE-WAKE.m
 
 ## Bilinen kısıt — dinamik MCP araç ekleme (`tools.listChanged`) desteklenmiyor 🔴 (2026-06-23)
 
-**Bulgu (gerçek vaka):** Bir ajan MCP Gateway üzerinden `mcp-chrome`'u kullanmak istedi.
-Gateway'in `activate_tools('mcp-chrome')` çağrısı **"✅ 29 tools activated"** döndü ama
+**Bulgu (gerçek vaka):** Bir ajan MCP Gateway üzerinden `browser-mcp`'u kullanmak istedi.
+Gateway'in `activate_tools('browser-mcp')` çağrısı **"✅ 29 tools activated"** döndü ama
 ardından `chrome_navigate` çağrısı **`No such tool available`** verdi. Gateway'in kendisi
 uyardı: *"Your client did not advertise tools.listChanged support… reconnect with a preset."*
 
@@ -2929,8 +2929,8 @@ uyardı: *"Your client did not advertise tools.listChanged support… reconnect 
 
 **Geçici çözüm (uygulandı):** İstenen araçlar sunucunun bağlantı URL'indeki **preset'e**
 konur; preset her taze session'da başlangıçta yüklendiği için dial-per-operation modeliyle
-sorunsuz çalışır. MCP Gateway `tionharness` preset'ine `mcp-chrome` eklendi
-(`mcp-server/config.json`: `tionharness: [<remote-service>, mcp-chrome]`); `?preset=tionharness` artık
+sorunsuz çalışır. MCP Gateway `tionharness` preset'ine `browser-mcp` eklendi
+(`mcp-server/config.json`: `tionharness: [browser-mcp]`); `?preset=tionharness` artık
 47→**76 araç** döndürüyor. Doğrulandı.
 
 **Kalıcı çözüm (Sırada / öneri):** ya (a) `initialize`'da `tools.listChanged` ilan edip
@@ -3667,7 +3667,7 @@ Detay: `_Docs\20-SCHEDULE-WAKE.md`.
 - **Gerçek veride uygulandı (2026-06-19):** `~/.tionharness` (4 workspace) migrate edildi
   → `WS1:MINIMAX`, `WS2:DenemeBilimsel`, `WS3:TionHarness`, `WS4:OtonomOps`; toplam
   130 entity. Yedek: `~/.tionharness-idbackup` (junction içeriği hariç). **Bulgu:**
-  `OtonomOps` workspace'inin `workspace/` dizini `Desktop\Projects\url-shortener`'a
+  `OtonomOps` workspace'inin `workspace/` dizini `<projects>/ornek-proje`'ye
   bir **junction**'dı → araç junction-güvenli yapıldı (yedek atlar, rewrite yalnız
   `store/`). Çalıştırma için **uygulama kapatıldı**, sonra tek-binary build başlatıldı.
 - **Doğrulama:** sentetik fixture'da dry-run+apply+idempotent re-run; gerçek veride
@@ -5279,7 +5279,7 @@ workspace'te ≥1 skill varken kaydedilir (`builtin_skill.go`, `toolsetup.go`).
 skill'i `/api/skills` katalogda frontmatter-only, `/api/skills/{slug}` gövdeyi lazy
 döndü, `/api/skills/reload` ok, Türkçe karakterler round-trip. Demo skill
 `~/.agents/skills/code-review/` bırakıldı (özellik anında görünür). **Not:**
-mcp-chrome bu oturumda bağlı olmadığından Playwright görsel testi yapılamadı.
+browser-mcp bu oturumda bağlı olmadığından Playwright görsel testi yapılamadı.
 **Kalan (v2):** namespacing (`parent:child`), `paths:` koşullu otomatik aktivasyon,
 skill'in `alwaysAllow`/`requiredSources` alanlarının runtime'da enforce edilmesi.
 
@@ -5352,7 +5352,7 @@ Sohbetten tetiklenen akışlar artık node-node canlı akıyor ve dosya/görsel 
 
 ## Faz A1 — Agent loop recovery + `continuationReason` ✅ (2026-06-17)
 
-Native tool döngüsü (`agent/toolloop.go`) "happy-path" odaklıydı; max-token / bağlam-taşması gibi durumlarda yapısal kurtarma yoktu. `observed-behavior`'in gerçek query-loop implementasyonu (`src/query/transitions.ts` + `src/query.ts`) referans alınarak kurtarma yolları yapısal hale getirildi. **Tasarım ilkesi (audit'ten):** kurtarma *kararı* (saf, I/O'suz, test edilebilir) yürütmeden ayrıldı.
+Native tool döngüsü (`agent/toolloop.go`) "happy-path" odaklıydı; max-token / bağlam-taşması gibi durumlarda yapısal kurtarma yoktu. Claude Code'un gözlemlenen sorgu-döngüsü davranışı referans alınarak kurtarma yolları yapısal hale getirildi. **Tasarım ilkesi:** kurtarma *kararı* (saf, I/O'suz, test edilebilir) yürütmeden ayrıldı.
 
 **Faz 1 — saf karar katmanı + max-token kurtarma:**
 - **`agent/recovery.go` (yeni):** `loopState` (iterasyonlar arası tek-atımlık guard'lar: `maxTokenRetries`/`compacted`/`lastContinue`) + `decideRecovery(resp, callErr, st) decision` saf fonksiyonu. `contReason`/`termReason` makine etiketleri (audit'in `Continue`/`Terminal` transition'larının Go karşılığı). `lastContinue` State'te tutulur → test mesaj içeriğine bakmadan kurtarma yolunun tetiklendiğini assert eder (audit deseni).
@@ -5390,7 +5390,7 @@ Akışlar (flows) artık sohbet composer'ından "/" komutuyla tetiklenebiliyor v
 - **Backend:** `POST /api/sessions/{id}/run-flow` (`api/flows.go` `handleSessionRunFlow`) — flow'u çalıştırır (`Runtime.RunFlow`, manuel/bütçesiz), session'a **user mesajı** (input) + **assistant mesajı** ekler. Assistant gövdesi `flowRunMarkdown` ile run trace'inden üretilir (her node = başlık + çıktı bölümü; branch "→ etiket"; hata durumu notu); mesaj **son agent node'unun ajanına** atfedilir (`finalAgentID`). `flow_run` satırı yine oluşur → trace geçmişte kalır. `handleSessionSummary` kalıbının ikizi.
 - **Frontend:** Her flow sohbet "/" menüsünde bir komut olur (🔀 + slug ad, `useChatStream.ts` `flowSlug`+`chatCommands`); seçince composer'a `/slug ` yazılır, satırın geri kalanı flow input'u olur. `SlashCommand` artık `run(input?)` + `takesInput` taşıyor; `Composer.tsx` gönderimde `/ad argüman` ayrıştırıp eşleşen komutu çalıştırır. `runFlow` runner'ı `summarize` gibi optimistic user+placeholder gösterip API sonucuyla değiştirir.
 - **Tasarım kararı:** flow_run trace paneli korundu (anlık teknik görünüm); session turu kalıcı + zengin + devam edilebilir kayıt. Sınırlama: flow'lar sunucuda senkron çalışır → node-node canlı token akışı yok ("⏳ çalışıyor…" → bitince transcript).
-- ✅ Backend curl ile uçtan uca doğrulandı (Geri Bildirim Yönlendirici akışı: NEGATIVE → Özür Dile, assistant agentId = son node). `go build` + frontend `tsc --noEmit` yeşil. (Görsel "/" menü testi mcp-chrome kırılganlığı nedeniyle yapılamadı.)
+- ✅ Backend curl ile uçtan uca doğrulandı (Geri Bildirim Yönlendirici akışı: NEGATIVE → Özür Dile, assistant agentId = son node). `go build` + frontend `tsc --noEmit` yeşil. (Görsel "/" menü testi browser-mcp kırılganlığı nedeniyle yapılamadı.)
 
 ## Ara özellik — Akış açıklaması + trace markdown render (FlowsPanel) ✅ (2026-06-17)
 
@@ -5664,7 +5664,7 @@ Uygulama tamamen state-tabanlıydı (URL routing yoktu). Artık navigasyon durum
 - **App.tsx wiring:** modül-yükünde `INITIAL_ROUTE` parse → `setActiveWorkspace` (geçersiz id `useWorkspaces`'te ilk ws'e düşer); workspace-yükleme effect'i `Promise.all([listAgents, listSessions])` sonrası `pendingRouteRef`'i bir kez tüketerek deep-link entity'sini seçer (ilk yük + çapraz-ws nav). `applyRoute` (aynı ws→entity'yi hemen uygula; ws değişimi→`pendingRouteRef`+`switchWorkspace`). `focusAgent` (agent-scoped görünümlerde aktif ajanı, varsayılanı bozmadan seçer).
 - **Kontrollü bileşenler:** `AgentsView` `selectedId`/`onSelectAgent` prop'ları (verilmezse iç state); `Schedules` `focusId` → deep-link satırına scroll + 2.5sn highlight ring.
 
-✅ `tsc -b`/`vite build` yeşil; `url.ts` saf fonksiyonları **25/25** round-trip/parse testinden geçti (geçici tsx test koşuldu+silindi). **Not:** gateway-manager MCP bu oturuma tool olarak gelmediğinden (gateway 9091 + mcp-chrome 12306 ayakta olsa da) canlı Chrome görsel testi yapılmadı — sıraya alındı.
+✅ `tsc -b`/`vite build` yeşil; `url.ts` saf fonksiyonları **25/25** round-trip/parse testinden geçti (geçici tsx test koşuldu+silindi). **Not:** gateway-manager MCP bu oturuma tool olarak gelmediğinden (gateway 9091 + browser-mcp 12306 ayakta olsa da) canlı Chrome görsel testi yapılmadı — sıraya alındı.
 
 ## Bugfix — Zamanlanmış prompt artık gerçek sohbet turu olarak görünür (2026-06-17)
 
@@ -5854,7 +5854,7 @@ bağlama inline edilmez (diskte kalır, `read_file` ile okunur). Canlı doğrula
 (v2):** sekme-kapatma/yenileme ile gönderilmeden bırakılan ekler yetim kalabilir
 (yaş/kota bazlı GC); native görsel multimodal.
 
-**Not:** mcp-chrome bu oturumda bağlı olmadığından tarayıcı görsel testi
+**Not:** browser-mcp bu oturumda bağlı olmadığından tarayıcı görsel testi
 yapılamadı. **v2:** görsel **multimodal** (model görseli görür — provider
 katmanına anthropic image content-block eklenmeli; claude-cli kendi Read'i ile
 görebilir), "Artifact'a dönüştür" butonu, drag-drop cilası.
@@ -5933,7 +5933,7 @@ Liste + toggle (aktif/pasif) + sil zaten vardı (`components/panels/Schedules.ts
 - **`PUT /api/schedules/{id}`** (`api/schedules.go` `handleUpdateSchedule`): create ile aynı doğrulama (`agentId`+`cronExpr` zorunlu, `taskId` **veya** `prompt` gerekli, bilinmeyen ajan reddi). Başarıda `Scheduler.Reload(ctx)` çağırır (cron tablosu yeni ifadeyle yeniden yüklenir) ve güncel satırı döner. Route `server.go` `registerScheduleRoutes`'a eklendi.
 - **Frontend `api.updateSchedule`** (`api/tasks.ts`) + `Schedules.tsx` **satır-içi düzenleme modu**: her satırda ✎ düğmesi → o satır ajan/preset/cron/görev/prompt formuna dönüşür (**Kaydet**/**İptal**). Kaydedince listedeki satır sunucudan dönen güncel veriyle değiştirilir; tek seferde bir zamanlama düzenlenir.
 
-✅ `go build`/`vet` + `tsc -b`/`vite build` yeşil. **API canlı test** (yeni binary, `127.0.0.1:8090`): schedule create → `PUT` (cron `*/5 * * * *`→`0 9 * * *` ve prompt değişti, `enabled=true` **korundu**) → list ile diskte kalıcılık doğrulandı → delete ile temizlik. Not: gateway/mcp-chrome bu oturumda bağlı değil → tarayıcı görsel testi yapılmadı (API round-trip kanıt).
+✅ `go build`/`vet` + `tsc -b`/`vite build` yeşil. **API canlı test** (yeni binary, `127.0.0.1:8090`): schedule create → `PUT` (cron `*/5 * * * *`→`0 9 * * *` ve prompt değişti, `enabled=true` **korundu**) → list ile diskte kalıcılık doğrulandı → delete ile temizlik. Not: gateway/browser-mcp bu oturumda bağlı değil → tarayıcı görsel testi yapılmadı (API round-trip kanıt).
 
 ## Bugfix — claude-cli transcript'ine sızan harness markup'ı (system-reminder balonu) (2026-06-17)
 
@@ -5970,7 +5970,7 @@ Liste + toggle (aktif/pasif) + sil zaten vardı (`components/panels/Schedules.ts
    Edit/Write için çıktıyı `parseDiff` ile çözüp **`+X −Y`** (added>0||removed>0),
    Read/`read_file` için çıktı satır sayısı **`N satır`**. `lib/tools.ts`'e
    `toolBase`/`isReadTool` export'ları eklendi. ✅ tsc + vite build temiz.
-   (Chrome canlı testi: gateway-manager/mcp-chrome bu oturumda bağlı değil — yapılamadı.)
+   (Chrome canlı testi: gateway-manager/browser-mcp bu oturumda bağlı değil — yapılamadı.)
 
 ## Faz P3 — İzin/onay katmanı (Aşama 1: claude-cli izin modu, 2026-06-16)
 
@@ -6565,7 +6565,7 @@ Ayarlar ekranı **sohbet gibi 2 panele** dönüştürüldü (sol kategori rayı,
 - [x] **Anthropic beta'ları** (yalnız anthropic sağlayıcı): **1M token bağlam** (`context-1m-2025-08-07`) + **uzatılmış prompt cache 1 saat** (`extended-cache-ttl-2025-04-11` + system'e `cache_control` ttl=1h). `anthropic.go` `WithBetas`/`betaHeader`/`systemField`; `registry.SetAnthropicBetas`; `applySettings` push.
 
 **CANLI TEST (API + Chrome):**
-- [x] settings yeni alanlar GET/PUT: profil (Bilal/Türkiye/İstanbul), 1M+cache+notif+awake → kaydedildi.
+- [x] settings yeni alanlar GET/PUT: profil (ad/ülke/şehir), 1M+cache+notif+awake → kaydedildi.
 - [x] workspace-settings: rename "Ana Workspace" + açıklama + pause=true persist; `/api/workspaces` rename'i yansıttı; sonra varsayılana sıfırlandı.
 - [x] Chrome: ⚙ Ayarlar → **Profil** kategorisi (Ad/Saat dilimi/Şehir/Ülke/Notlar) ve **Bu Workspace > Genel** kategorisi (ad/açıklama/sağlayıcı-model override) DOM ile doğrulandı; 0 konsol hatası.
 - [x] `go build/vet ./...` + `tsc + vite build` temiz.
@@ -6725,7 +6725,7 @@ Desen: built-in + MCP tek katalogda, ajan başına atanır. İki yol birlikte ku
 - [x] API: claude-cli delegasyonu — "note.txt oku" → araçla okudu, **"hello from tionharness"** (BOM + CRLF dahil → gerçekten araçla, tahmin değil)
 - [x] Chrome (DOM): "🔌 Araçlar" sekmesi; 17 araç tam açıklamayla; filesystem MCP sunucusu Test/Kapat/Sil; ekleme formu render
 
-> Not: `chrome_screenshot` odaktaki başka sekmeyi yakaladı (bilinen mcp-chrome sorunu); doğrulama DOM (`chrome_get_web_content`) ile yapıldı.
+> Not: `chrome_screenshot` odaktaki başka sekmeyi yakaladı (bilinen browser-mcp sorunu); doğrulama DOM (`chrome_get_web_content`) ile yapıldı.
 
 ---
 
@@ -7102,10 +7102,10 @@ Yeni gelen özellikler (Ajanlar/Artifactlar/Sırlar görünümleri, sessions sid
 4. **Frontend** (geçen turda hazırdı): App.onStep `tool_delta`'yı `ID` ile merge, `tombstone`'u filtreler; `ToolDeltaStep.tsx` canlı çıktı kartı. `stepKinds.ts` durumları `infra`→`active`.
 5. **Test:** `builtin_shell_test.go` — `CanStream("shell")` + `CallStream` onChunk parça + tam çıktı.
 
-> Doküman: `10-KAVRAMSAL` E3 (artık tüm kind'lar üreticili) + SKILL güncellendi. Mekanizma genel: uzun MCP çağrıları da aynı `StreamingTool` yoluna takılabilir.
+> Doküman: kavramsal tasarım notları E3 (artık tüm kind'lar üreticili) + SKILL güncellendi. Mekanizma genel: uzun MCP çağrıları da aynı `StreamingTool` yoluna takılabilir.
 
 ### 2026-06-16 — Trace StepKind genişletme #2: error/steer/tool_delta/tombstone + Ayarlar referans ekranı
-4 yeni `StepKind` eklendi (`go build`/`vet`/`test ./...` + frontend `tsc`/`build` yeşil; canlı UI testi mcp-chrome stale-sekme/screenshot kırılganlığı nedeniyle güvenilir alınamadı, otomatik kontroller esas):
+4 yeni `StepKind` eklendi (`go build`/`vet`/`test ./...` + frontend `tsc`/`build` yeşil; canlı UI testi browser-mcp stale-sekme/screenshot kırılganlığı nedeniyle güvenilir alınamadı, otomatik kontroller esas):
 
 1. **`error`** (`StepError`) — tur düzeyinde hata (sağlayıcı/bütçe/iptal); `toolloop.go` `fail()` budget_exceeded/provider_error yollarında yayar → `ErrorStep.tsx` (kırmızı + reason rozeti). Araç hatasından (tool+isError) ayrı.
 2. **`steer`** (`StepSteer`) — canlı yönlendirme artık `StepText` "↪" prefix'i yerine ayrı tip → `SteerStep.tsx`.
@@ -7114,7 +7114,7 @@ Yeni gelen özellikler (Ajanlar/Artifactlar/Sırlar görünümleri, sessions sid
 - `TurnStep`'e `ID`/`Ref` alanları. Tek-kaynak referans `frontend/src/lib/stepKinds.ts` (kind/etiket/ikon/kalıcı?/durum/açıklama) → **Ayarlar ▸ Adım Türleri** read-only ekranı (`SettingsPanel.tsx` yeni `stepkinds` kategorisi).
 - Testler: `trace_test.go` error/steer/tool_delta/tombstone JSON round-trip.
 
-> Doküman: `10-KAVRAMSAL` E3 + SKILL güncellendi.
+> Doküman: kavramsal tasarım notları E3 + SKILL güncellendi.
 
 ### 2026-06-16 — UI tema yenileme (Design Refresh)
 Arayüzün görsel dili cilalandı (`go build`/`vet` yeşil; backend `themePreset` kalıcılığı API round-trip ile, yeni tema + preset grid Chrome'da canlı doğrulandı):
@@ -7136,10 +7136,10 @@ Arayüzün görsel dili cilalandı (`go build`/`vet` yeşil; backend `themePrese
 3. **Frontend:** `types.ts` `StepKind` union + `TodoItem` tipi; `TurnSteps.tsx` `todo`/`recovery` yönlendirmesi.
 4. **Testler:** `agent/trace_test.go` (`parseTodos` geçerli/bozuk + todo/recovery JSON round-trip).
 
-> Kalan StepKind adayları (sonraki): `subagent` (A2 ile), `tombstone`/`tool_delta` (canlı güncelleme altyapısı, P3). Bkz. `10-KAVRAMSAL-TASARIM-NOTLARI.md` E3.
+> Kalan StepKind adayları (sonraki): `subagent` (A2 ile), `tombstone`/`tool_delta` (canlı güncelleme altyapısı, P3).
 
 ### 2026-06-16 — Etkileşim araçları: `todo_write` + `ask_user` (E3/E2/E1)
-`observed-behavior` mimari incelemesinden (`_Docs/10-KAVRAMSAL-TASARIM-NOTLARI.md`) çıkan **etkileşim katmanı** ilk iş paketi uygulandı (`go build`/`vet`/`test ./...` + frontend `tsc`/`build` + canlı tool-katalog smoke testi yeşil):
+Claude Code'un gözlemlenen mimarisinin incelenmesinden çıkan **etkileşim katmanı** ilk iş paketi uygulandı (`go build`/`vet`/`test ./...` + frontend `tsc`/`build` + canlı tool-katalog smoke testi yeşil):
 
 1. **E3 — Trace modeli genişletildi** (`internal/agent/trace.go`): yeni `StepAsk` (`"ask"`) kind'ı (delta gibi geçici, kalıcı değil) + `TurnStep.Options []string` (tıklanabilir öneri yanıtlar).
 2. **E2 — `todo_write` aracı + UI** (`internal/tools/builtin_todo.go`): ajan tam görev listesini her seferinde yayınlar (`pending|in_progress|completed`); araç çağrısı yalnızca özet metin döner, listeyi frontend `TodoCard.tsx` canlı checklist olarak render eder (tool adına göre özel-durum, `TurnSteps.tsx`). Sunucu tarafında durum tutulmaz.
@@ -7147,7 +7147,7 @@ Arayüzün görsel dili cilalandı (`go build`/`vet` yeşil; backend `themePrese
 4. **Frontend:** `AskPrompt.tsx` (soru + tıklanabilir seçenekler + serbest metin) composer üstünde gösterilir; `App.tsx` `pendingAsk` state'i + `answerAsk` callback'i. `lib/tools.ts` ikonları (✅ todo_write, 💬 ask_user).
 5. **Testler (yeni):** `internal/tools/builtin_interaction_test.go` — todo_write geçerli/geçersiz-durum/boş, ask_user asker-yok/asker-var/boş-soru.
 
-> Doküman: `10-KAVRAMSAL-TASARIM-NOTLARI.md` güncellendi (B-Ek + D2-streaming "yapıldı" işaretlendi; E1/E2 tamamlandı). Kalan etkileşim işi: `ask_user` kalıcı tool kartı için özel render (şu an generic ActivityCard) ve `EnterPlanMode`/`ExitPlanMode` (plan modu).
+> Doküman: kavramsal tasarım notları güncellendi (B-Ek + D2-streaming "yapıldı" işaretlendi; E1/E2 tamamlandı). Kalan etkileşim işi: `ask_user` kalıcı tool kartı için özel render (şu an generic ActivityCard) ve `EnterPlanMode`/`ExitPlanMode` (plan modu).
 
 ### 2026-06-16 — Modülerlik refactor'ları (davranış değişmedi)
 Dört adet düşük-riskli, davranış-korumalı refactor uygulandı (`go build`/`go vet`/`go test ./...` + canlı `/health` smoke testi yeşil):

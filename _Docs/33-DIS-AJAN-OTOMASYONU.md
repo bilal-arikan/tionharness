@@ -330,7 +330,7 @@ playwright-mcp `browser_network_request` veya sayfa içi `fetch` ile `/api/chat/
   `chrome_get_web_content`/`chrome_read_page` ile oku.
 - Çok sekme açıkken `chrome_screenshot` kırılgan — gerekiyorsa `playwright` (temiz instance)
   veya `vps-playwright` kullan.
-- `mcp-chrome` gerçek kullanıcı oturumudur (cookie/login); `playwright` temiz profildir.
+- Tarayıcı MCP sunucusu gerçek kullanıcı oturumudur (cookie/login); `playwright` temiz profildir.
 
 ---
 

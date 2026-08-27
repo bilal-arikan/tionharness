@@ -349,7 +349,6 @@ Native döngü (`toolloop.go`) tek turda çoklu `tool_use` döndürür; bunlar g
 6. **Profil kaynağı:** önce kod sabiti (A2.1), sonra `settings.json`.
 
 ## İlgili dokümanlar
-- `10-KAVRAMSAL-TASARIM-NOTLARI.md` §A2/A3, E3 (subagent StepKind)
 - `03-YOL-HARITASI.md` A2 maddesi
 - `22-SPAWN-SESSION.md` (spawn primitifi — `wait:async` moduna evrilir)
 - `24-SELF-MANAGEMENT.md` (call_agent/send_agent_message araç yüzeyi — güncellenecek)
