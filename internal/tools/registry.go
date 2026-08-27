@@ -33,17 +33,84 @@ func SetMaxToolOutputBytes(n int) {
 	}
 }
 
+// offloadHeadBudget is the share of maxToolOutputBytes spent on the head of an
+// offloaded output; the remainder carries the tail. A head-only truncation always
+// loses the ending — exit status, final rows, the error trailer — which is usually
+// the most decisive part of a long tool output, so the offload keeps both ends.
+const offloadHeadBudget = 0.7
+
+// truncHead returns the longest valid-UTF-8 prefix of s that fits in n bytes.
+func truncHead(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	cut := s[:n]
+	for len(cut) > 0 && !utf8.ValidString(cut) {
+		cut = cut[:len(cut)-1]
+	}
+	return cut
+}
+
+// truncTail returns the longest valid-UTF-8 suffix of s that fits in n bytes.
+func truncTail(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	cut := s[len(s)-n:]
+	for len(cut) > 0 && !utf8.ValidString(cut) {
+		cut = cut[1:]
+	}
+	return cut
+}
+
 // capToolOutput truncates s to maxToolOutputBytes on a UTF-8 boundary and
 // appends a marker when it overflows, so the model is told output was cut.
 func capToolOutput(s string) string {
 	if len(s) <= maxToolOutputBytes {
 		return s
 	}
-	cut := s[:maxToolOutputBytes]
-	for len(cut) > 0 && !utf8.ValidString(cut) {
-		cut = cut[:len(cut)-1]
-	}
+	cut := truncHead(s, maxToolOutputBytes)
 	return fmt.Sprintf("%s\n…[truncated %d bytes]", cut, len(s)-len(cut))
+}
+
+// capToolOutputOffload bounds a tool's output like capToolOutput, but when an
+// artifact sink is attached to ctx the FULL output is first persisted as a text
+// artifact and the model receives head + tail + an artifact handle. The dropped
+// middle then stays retrievable instead of being destroyed by the cut.
+//
+// Without a sink (a turn with no session, or the claude-cli bridge registry) the
+// behaviour is byte-for-byte capToolOutput: no sink means no offload, and plain
+// truncation still applies.
+//
+// A failed artifact write is logged and ALSO falls back to plain truncation, on
+// purpose: the model still needs this tool's result, and the output was already
+// going to be truncated before this feature existed. Turning a storage problem
+// into a failed tool call would be a strict regression, so the failure degrades
+// the output rather than the call.
+func capToolOutputOffload(ctx context.Context, toolName, s string) string {
+	if len(s) <= maxToolOutputBytes {
+		return s
+	}
+	sink := artifactsFrom(ctx)
+	if sink == nil {
+		return capToolOutput(s)
+	}
+	art, err := sink.CreateArtifact(ctx, CreateArtifactSpec{
+		Title:   fmt.Sprintf("%s — full output (%d bytes)", toolName, len(s)),
+		Kind:    "text",
+		Content: s,
+	})
+	if err != nil {
+		slog.Warn("tool output offload failed; falling back to plain truncation",
+			"component", "tools", "tool", toolName, "bytes", len(s), "error", err)
+		return capToolOutput(s)
+	}
+	headBudget := int(float64(maxToolOutputBytes) * offloadHeadBudget)
+	head := truncHead(s, headBudget)
+	tail := truncTail(s, maxToolOutputBytes-len(head))
+	return fmt.Sprintf(
+		"%s\n…[%d bytes elided — full output saved as 📎 artifact %s; open it if you need the middle]…\n%s",
+		head, len(s)-len(head)-len(tail), art.ID, tail)
 }
 
 // Tool is an in-process (built-in) tool.
@@ -663,7 +730,7 @@ func (r *Registry) Call(ctx context.Context, call providers.ToolCall) providers.
 			res.IsError = true
 			return res
 		}
-		res.Content = capToolOutput(out)
+		res.Content = capToolOutputOffload(ctx, call.Name, out)
 		return res
 	}
 
@@ -683,7 +750,7 @@ func (r *Registry) Call(ctx context.Context, call providers.ToolCall) providers.
 			res.IsError = true
 			return res
 		}
-		res.Content = capToolOutput(out.Text)
+		res.Content = capToolOutputOffload(ctx, call.Name, out.Text)
 		res.IsError = out.IsError
 		return res
 	}
@@ -777,7 +844,7 @@ func (r *Registry) CallStream(ctx context.Context, call providers.ToolCall, onCh
 				res.IsError = true
 				return res
 			}
-			res.Content = capToolOutput(out)
+			res.Content = capToolOutputOffload(ctx, call.Name, out)
 			return res
 		}
 	}
