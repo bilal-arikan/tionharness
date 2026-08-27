@@ -9596,3 +9596,51 @@ bir CLI provider'ı değil — meşru model referansları olarak korundu.
   `bg-[#1e3a5f] text-white hover:bg-[#264a75]` →
   `bg-[var(--color-info-soft)] text-[var(--color-text)] hover:opacity-90`
   (hover artık dosyadaki diğer butonlarla aynı idiyom).
+
+## TSK386 — Shell alt proseslerinden credential sızıntısı kesildi (2026-08-28)
+
+- **Teşhis:** `hardenShellCmd` (`internal/tools/builtin_shell_harden.go`)
+  `cmd.Env`'i `nil` bırakıyor, `proc.HardenedEnv(nil)` de `os.Environ()`'ın
+  tamamını alıyordu. Sonuç: ajanın çalıştırdığı **her** shell komutu ve alt
+  prosesi `ANTHROPIC_API_KEY`, `CREDENTIAL_SECRET` ve kullanıcının tüm
+  `*_TOKEN`/`*_KEY` değişkenlerini görüyordu; tek bir `env`/`printenv` hepsini
+  LLM bağlamına, transkripte ve UI'a yazıyordu.
+- **Çözüm — `internal/proc/env_credentials.go` (yeni):**
+  - `IsCredentialEnvName(name)` — değişken **adına** bakan sınıflandırıcı
+    (değer hiç incelenmez). Alt-dize kuralları (`SECRET`, `TOKEN`, `PASSWORD`,
+    `PASSWD`, `PASSPHRASE`, `CREDENTIAL`, `APIKEY`, `API_KEY`, `ACCESS_KEY`,
+    `PRIVATE_KEY`, `AUTH_KEY`, `SESSION_KEY`, `SIGNING_KEY`, `_KEY`) + sağlayıcı
+    ön ekleri (`ANTHROPIC_`, `OPENAI_`, `OPENROUTER_`, `AZURE_OPENAI_`,
+    `GEMINI_`, `GROQ_`, `MISTRAL_`, `DEEPSEEK_`, `XAI_`, `HUGGINGFACE_`, `HF_`)
+    + tekil adlar (`CREDENTIAL_SECRET`, `GITHUB_TOKEN`, `GH_TOKEN`, `NPM_AUTH`,
+    `PGPASSFILE`). Eşleşme büyük/küçük harf duyarsız.
+  - `StripCredentialEnv(env)` / `CredentialSafeEnv(base)` — filtrelenmiş env +
+    `TIONHARNESS_STRIPPED_ENV` işaretçisi.
+- **Neden denylist (allowlist değil):** `transform_data`'nın katı allowlist'i
+  (`transform_data_env.go`) tek bir yorumlayıcıyı başlatmaya yeter; shell ise
+  keyfi komut çalıştırır ve `GOPATH`, `JAVA_HOME`, `NVM_DIR`, proxy, locale,
+  toolchain değişkenlerine ihtiyaç duyar. Eksik kalan bir değişken komutu
+  **sessizce** kırar; bu yüzden shell için bilinen credential desenleri
+  reddedilir, gerisi geçirilir. Bedeli listelenmemiş bir sır şeklinin
+  kaçabilmesidir — desenler bu yüzden bilinçli olarak geniş tutuldu.
+- **Sessiz yutma yok:** her komutta log basmak yerine çocuğun env'ine
+  `TIONHARNESS_STRIPPED_ENV=<soyulan adlar, virgüllü>` enjekte edilir. Bir komut
+  kimlik doğrulayamadığında `echo $TIONHARNESS_STRIPPED_ENV` neyin esirgendiğini
+  tam olarak söyler. Ebeveynden **miras alınan** işaretçi düşürülür (çocuğun
+  işaretçisi yalnız kendi filtresini anlatır).
+- **Bağlanan yer:** `builtin_shell_harden.go:26` →
+  `proc.HardenedEnv(proc.CredentialSafeEnv(cmd.Env))`. Bash + PowerShell,
+  foreground + `run_in_background` hepsi bu tek closure'dan geçtiği için
+  kapsam tamdır.
+- **Testler:** `internal/proc/env_credentials_test.go`
+  (`TestCredentialSafeEnvStripsSecretsKeepsPath` — sır adı *ve değeri* yok,
+  `PATH`/`GOPATH` duruyor, işaretçi doğru; `TestCredentialSafeEnvDropsInheritedMarker`;
+  `TestIsCredentialEnvName` — pozitif/negatif set) ve
+  `internal/tools/builtin_shell_harden_test.go`
+  (`TestHardenShellCmdStripsCredentials` — gerçek `exec.Cmd` env'inde credential
+  yok, `PATH` ve `GIT_EDITOR=true` guard'ı duruyor).
+- **Kapsam dışı — CLI sağlayıcı env'i:** `providers/claudecli.go` `cliBaseEnv` ve
+  `codexcli.go` `codexBaseEnv` hâlâ `os.Environ()` üzerinden `ANTHROPIC_API_KEY`
+  geçiriyor. Bu **kasıtlı olabilir** (CLI kendi auth'unu oradan alır); soymak
+  sağlayıcıyı komple kırardı. Ayrı bir karar/kart gerektiriyor, bu iş kapsamında
+  dokunulmadı.
