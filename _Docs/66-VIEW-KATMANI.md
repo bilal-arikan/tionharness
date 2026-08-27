@@ -166,7 +166,7 @@ Kart listesi **değil**, sinyal. Yaşlılık yalnız **çalışan sütunlarda**
 ### Session (gerçek çıktı — 60 token)
 
 ```
-SES:SES9a1 "auth refactor" · 214 msg · 187k tok · 3g önce açıldı · agent:builder
+SES:SES9a1 "auth refactor" · 214 msg · 3g önce açıldı · agent:builder
 özet: JWT'den session cookie'ye geçiş yapılıyor.
 todo: 2/4 tamam · şu an: testleri güncelle
 ⤺ ilk 120 mesaj özete katlandı (compaction)
@@ -184,7 +184,7 @@ Diğerlerinin roll-up'ı. **Panel ekranının** üst bloğu ve ileride tartış�
 *müşterisi* olur, ayrı bir izleme alt sistemi değil.
 
 ```
-WORKSPACE · 2 ajan · 5 oturum (3 aktif) · 3 kart · 4 koşu · 1.2M tok bugün · $3.14 bugün · asOf 11:12:57
+WORKSPACE · 2 ajan · 5 oturum (3 aktif) · 3 kart · 4 koşu · asOf 11:12:57
 pano: todo 1 | in_progress 1 | failed 1
 koşular: 1 çalışıyor · 1 bekliyor · 1 başarısız (son 24s: 3)
 ⚠ 1 oturum takılmış (StuckTurns>0): SES2
@@ -201,12 +201,18 @@ yok, bu yüzden poll edilebilecek kadar ucuz. **Devre dışı bırakılmış** b
 zamanlamanın son hatası raporlanmaz: bilerek duraklatılmış bir şeyi "bozuk" diye
 göstermek okuyucuya satırı yok saymayı öğretir.
 
-Başlıktaki **`$X bugün`** günün USD maliyetidir — `billing.RollupOf` ile (Bütçe
-ekranıyla aynı fiyatlama), abonelik sağlayıcıda `~$` (eşdeğer-API tahmini).
-Fiyatlanmış harcama yoksa satır **yazılmaz**: token>0 iken `$0.00` göstermek
-"ücretsiz" gibi okunurdu, oysa anlamı "bu sağlayıcının fiyatı yok" — farklı bir
-gerçek. `internal/view` bunun için `billing`'i import eder (billing → db+providers,
-döngü yok).
+**Harcama (token/USD) hiçbir view'ın başlığında yer almaz** (TSK374): workspace,
+session ve agent başlıkları eskiden "1.2M tok bugün · $3.14 bugün" taşırdı, artık
+taşımıyor. Tek harcama yüzeyi **`budget` view'ı**dır (`budget.go`). `internal/view`
+içinde `billing` yalnız iki dosyadan import edilir ve ikisi de aynı yüzeye hizmet
+eder: `budget.go` (`BudgetInput.Rollup` tipi ve rollup'ın render'ı) ve
+`project.go` (`Projector.loadBudget`, günün kullanımını `billing.RollupOf` ile bir
+kez fiyatlar). Başka hiçbir projeksiyon `billing`'e dokunmaz — agent/session/
+workspace projeksiyonları para göstermez; `loadAgent` günün kullanım satırını
+hâlâ okur ama yalnız `Source` parmak izi için, fiyatlamaz (billing →
+db+providers, döngü yok). Her
+okumanın önüne para rakamı koymak istenmiyordu — rakam isteyen `get_view
+{kind:"budget"}` çağırır.
 
 ## Göç 1: coordinator worker-state bloğu (push projeksiyonu)
 
@@ -473,7 +479,7 @@ Faz 5'e ancak 1-4 kanıtlanırsa geçilir.
   sıradaki, hedef agent/flow, prompt). L0/L1 (küçük varlık, L2 yok). Roll-up'ın
   aksine **devre dışı** zamanlamanın son hatası burada gösterilir: kullanıcı bu
   zamanlamaya inmişse tam da onu soruyordur.
-- `session.go` — kimlik/maliyet/coordination soyağacı başlığı + rolling summary +
+- `session.go` — kimlik/coordination soyağacı başlığı (harcama **yok**) + rolling summary +
   todo ilerlemesi + L1 sinyaller (StuckTurns, bekleyen soru, son hata, alarm
   etiketleri, handoff, compaction). `agent` paketi **import edilmez** (cycle:
   agent → tools → view); `TurnStep` yapısal olarak `stepLite` ile çözülür.

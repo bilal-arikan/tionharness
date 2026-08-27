@@ -26,7 +26,6 @@ type Store interface {
 	GetFlowRun(ctx context.Context, id string) (db.FlowRun, error)
 	GetFlow(ctx context.Context, id string) (db.Flow, error)
 	GetSession(ctx context.Context, id string) (db.Session, error)
-	GetSessionUsage(ctx context.Context, id string) (db.SessionUsage, error)
 	// ListMessagesTail is deliberately the only transcript reader here: a
 	// projection never renders more than the tail (sessionTailMessages), so
 	// asking for the whole transcript would copy megabytes to throw them away.
@@ -40,7 +39,7 @@ type Store interface {
 	ListFlowRuns(ctx context.Context, flowID string) ([]db.FlowRun, error)
 	ListSchedules(ctx context.Context) ([]db.Schedule, error)
 	GetSchedule(ctx context.Context, id string) (db.Schedule, error)
-	WorkspaceTokensToday(ctx context.Context) int64
+	// UsageForDay backs the budget view only — no other projection reports spend.
 	UsageForDay(ctx context.Context, day string) ([]db.Usage, error)
 	GetAgent(ctx context.Context, id string) (db.Agent, error)
 	GetUsageToday(ctx context.Context, agentID string) (db.Usage, error)
@@ -320,43 +319,12 @@ func (p *Projector) loadWorkspace(ctx context.Context) (WorkspaceInput, error) {
 		FlowRuns:    runs,
 		Schedules:   schedules,
 		WaitingAsks: asks,
-		TokensToday: p.store.WorkspaceTokensToday(ctx),
-	}
-
-	// Price today's spend the same way every budget surface does (billing.RollupOf),
-	// so the header's dollar figure can never disagree with the Budget screen. A
-	// usage read error degrades the cost line to zero rather than failing the whole
-	// projection: the token figure and every signal above are still correct and
-	// useful without it.
-	if rows, err := p.store.UsageForDay(ctx, db.Today()); err == nil {
-		in.CostToday, in.CostEstimated = workspaceCost(rows)
 	}
 	return in, nil
 }
 
-// workspaceCost sums the USD cost of a day's usage rows across every agent,
-// merging their per-model breakdowns into one rollup. estimated is true when any
-// priced slice used an equivalent-API estimate or lacked a real list price — the
-// same "this is not a real invoice" flag the Budget screen shows.
-func workspaceCost(rows []db.Usage) (cost float64, estimated bool) {
-	merged := map[string]db.KindStat{}
-	for _, u := range rows {
-		for key, st := range u.ByModel {
-			m := merged[key]
-			m.Calls += st.Calls
-			m.InputTokens += st.InputTokens
-			m.OutputTokens += st.OutputTokens
-			m.CacheReadTokens += st.CacheReadTokens
-			m.CacheWriteTokens += st.CacheWriteTokens
-			merged[key] = m
-		}
-	}
-	roll := billing.RollupOf(merged)
-	return roll.CostUSD, roll.Estimated || !roll.Priced
-}
-
-// loadSession gathers the session header, its usage rollup, the transcript TAIL
-// and any pending question.
+// loadSession gathers the session header, the transcript TAIL and any pending
+// question.
 //
 // Only the tail is read, and only above the tiny tier: a tiny view is answered
 // entirely from the in-memory session header, so pushing one costs no file I/O.
@@ -368,12 +336,6 @@ func (p *Projector) loadSession(ctx context.Context, id string, level Level) (Se
 	}
 	in := SessionInput{Session: sess}
 
-	// A session with no recorded usage is normal (nothing has run yet); a read
-	// error is not worth failing the whole view over, so the cost line degrades
-	// to zero rather than taking the projection down.
-	if usage, err := p.store.GetSessionUsage(ctx, id); err == nil {
-		in.Usage = usage
-	}
 	if level == LevelTiny {
 		return in, nil
 	}
@@ -431,7 +393,9 @@ func (p *Projector) loadFlowRun(ctx context.Context, id string) (FlowRunInput, e
 // loadAgent gathers one agent, the sessions bound to it, and its usage row for
 // today. All three are in-memory reads. A missing agent is an error (a stale id
 // must not render as a blank agent); a missing usage row is normal (nothing has
-// run today) and degrades the cost/token line to zero rather than failing.
+// run today) and leaves Usage zero-valued rather than failing. The row itself is
+// never rendered — spend belongs to the budget view — it only feeds the call
+// count in the projection's Source fingerprint.
 func (p *Projector) loadAgent(ctx context.Context, id string) (AgentInput, error) {
 	agent, err := p.store.GetAgent(ctx, id)
 	if err != nil {
