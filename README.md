@@ -173,3 +173,10 @@ Detay: [Tanıtım Sitesi](_Docs/72-TANITIM-SITESI.md) · [website/README.md](web
 ➡️ **Sıradaki: Faz 9 — Wails paketleme.** (Connectors fazı 2026-06-16'da kapsamdan çıkarıldı.) Detaylar için bkz. [İlerleme](_Docs/05-ILERLEME.md).
 
 > Not: Faz 8 (Tool-use + MCP) kullanıcı talebiyle Faz 7'den (Orchestration) önce tamamlandı.
+
+## License
+
+TionHarness, [Apache License 2.0](LICENSE) altında lisanslanmıştır.
+
+Gömülen ve dağıtılan üçüncü-taraf bileşenlerin lisansları ve gerekli atıfları
+için bkz. [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).

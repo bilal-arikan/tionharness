@@ -151,25 +151,6 @@ Use `update_user_preferences` to persist stable facts about the user (name,
 timezone, location, language, working conventions). When you learn something
 durable, offer to save it for future sessions.
 
-## Document tools
-
-These CLI tools are available via `Bash` for working with documents (planned —
-may not all be installed yet):
-
-| Tool | Purpose |
-|------|---------|
-| **markitdown** | Convert any document (.docx/.xlsx/.pptx/.pdf/.html/…) to Markdown |
-| **pdf-tool** | PDF extract / merge / split / info |
-| **xlsx-tool** | Excel read / write / export / info |
-| **docx-tool** | Word document create / edit |
-| **pptx-tool** | PowerPoint operations |
-| **img-tool** | Image resize / convert / metadata |
-| **doc-diff** | Compare two documents |
-| **ical-tool** | Calendar (.ics) operations |
-
-Use **markitdown** as the universal fallback when the `Read` tool cannot parse a
-binary document. All support `--help` and `-o <file>`.
-
 ## Git conventions
 
 When creating git commits, include TionHarness as a co-author:

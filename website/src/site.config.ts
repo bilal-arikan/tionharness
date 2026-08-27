@@ -61,8 +61,7 @@ export const site: SiteConfig = {
     macos: null,
   },
 
-  // TODO(placeholder): license not chosen yet.
-  license: null,
+  license: 'Apache-2.0',
   version: null,
 
   // Measured from a local `scripts\build.ps1` output.
