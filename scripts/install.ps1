@@ -100,6 +100,35 @@ try {
     }
     Write-Host "Checksum OK ($expected)"
 
+    # SHA256SUMS ships next to the archives, which on GitHub is a different
+    # origin than the feed. Cross-checking the two makes a tampered feed alone
+    # insufficient. The digest from latest.json is already enforced above, so a
+    # SHA256SUMS that cannot be fetched downgrades to a warning -- but one that
+    # disagrees, or that has no line for this archive, is fatal.
+    $sumsUrl = ($artifact.url -replace '/[^/]+$', '') + '/SHA256SUMS'
+    $sumsFile = Join-Path $workDir 'SHA256SUMS'
+    $sumsFetched = $true
+    try {
+        Invoke-WebRequest -Uri $sumsUrl -OutFile $sumsFile -UseBasicParsing
+    } catch {
+        $sumsFetched = $false
+        Write-Warning "could not fetch $sumsUrl ; verified against latest.json only"
+    }
+    if ($sumsFetched) {
+        $pattern = '^([0-9a-fA-F]{64})\s+\*?' + [regex]::Escape($artifact.file) + '$'
+        $line = Get-Content -LiteralPath $sumsFile | Where-Object { $_ -match $pattern } | Select-Object -First 1
+        if (-not $line) { Fail "SHA256SUMS at $sumsUrl has no entry for $($artifact.file)" }
+        $sumsSha = ([regex]::Match($line, $pattern).Groups[1].Value).ToLowerInvariant()
+        if ($sumsSha -ne $expected) {
+            Remove-Item -LiteralPath $archive -Force -ErrorAction SilentlyContinue
+            Write-Host "install: SHA256SUMS disagrees with latest.json for $($artifact.file)"
+            Write-Host "install:   latest.json  $expected"
+            Write-Host "install:   SHA256SUMS   $sumsSha"
+            Fail 'checksum verification failed; the download was deleted and nothing was installed'
+        }
+        Write-Host 'SHA256SUMS agrees with the feed'
+    }
+
     # --- extract --------------------------------------------------------------
 
     $extractDir = Join-Path $workDir 'extract'
@@ -126,6 +155,8 @@ try {
 
     if ($env:TIONHARNESS_INSTALL_DIR) {
         $installDir = $env:TIONHARNESS_INSTALL_DIR
+    } elseif ($env:INSTALL_DIR) {
+        $installDir = $env:INSTALL_DIR
     } else {
         $installDir = Join-Path $env:LOCALAPPDATA 'Programs\TionHarness'
     }

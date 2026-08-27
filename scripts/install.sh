@@ -7,6 +7,7 @@
 # Environment:
 #   TIONHARNESS_FEED_URL      release feed base URL (default https://tionharness.com)
 #   TIONHARNESS_INSTALL_DIR   install directory (default $HOME/.local/bin)
+#   INSTALL_DIR               alias for TIONHARNESS_INSTALL_DIR
 set -euo pipefail
 
 feed_url=${TIONHARNESS_FEED_URL:-https://tionharness.com}
@@ -119,6 +120,29 @@ if [ "$actual_sha" != "$artifact_sha" ]; then
 fi
 printf 'Checksum OK (%s)\n' "$artifact_sha"
 
+# SHA256SUMS ships next to the archives, which on GitHub is a different origin
+# than the feed. Cross-checking the two makes a tampered feed alone insufficient.
+# The digest from latest.json is already enforced above, so a SHA256SUMS that
+# cannot be fetched downgrades to a warning -- but a SHA256SUMS that disagrees,
+# or that has no line for this archive, is fatal.
+sums_url="${artifact_url%/*}/SHA256SUMS"
+sums_file="$work_dir/SHA256SUMS"
+if fetch "$sums_url" "$sums_file" 2>/dev/null; then
+  sums_sha=$(sed -n 's/^\([0-9a-fA-F]\{64\}\)[[:space:]][[:space:]*]*'"$artifact_file"'$/\1/p' "$sums_file" | head -n 1)
+  [ -n "$sums_sha" ] || fail "SHA256SUMS at $sums_url has no entry for $artifact_file"
+  if [ "$sums_sha" != "$artifact_sha" ]; then
+    rm -f "$archive"
+    printf 'install: SHA256SUMS disagrees with latest.json for %s\n' "$artifact_file" >&2
+    printf 'install:   latest.json  %s\n' "$artifact_sha" >&2
+    printf 'install:   SHA256SUMS   %s\n' "$sums_sha" >&2
+    printf 'install: the download was deleted and nothing was installed\n' >&2
+    exit 1
+  fi
+  printf 'SHA256SUMS agrees with the feed\n'
+else
+  printf 'install: warning: could not fetch %s; verified against latest.json only\n' "$sums_url" >&2
+fi
+
 # --- extract ------------------------------------------------------------------
 
 extract_dir="$work_dir/extract"
@@ -148,7 +172,7 @@ extracted="$extract_dir/$binary"
 
 # --- install ------------------------------------------------------------------
 
-install_dir=${TIONHARNESS_INSTALL_DIR:-$HOME/.local/bin}
+install_dir=${TIONHARNESS_INSTALL_DIR:-${INSTALL_DIR:-$HOME/.local/bin}}
 mkdir -p "$install_dir" || fail "cannot create install directory: $install_dir"
 
 target="$install_dir/$binary"
