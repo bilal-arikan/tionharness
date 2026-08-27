@@ -26,6 +26,11 @@
   --color-text: #e7e7ea;
   --color-text-dim: #9a9aa6;
 
+  /* Scrim behind modals, drawers and media chrome. Always a dark neutral so the
+     backdrop dims in both modes; consumers add the opacity they need
+     (e.g. `bg-[var(--color-overlay)]/50`). */
+  --color-overlay: #000000;
+
   /* Semantic state colours (re-themed per mode/preset). */
   --color-success: #34d399;
   --color-on-success: var(--color-bg);
@@ -53,6 +58,9 @@
   --color-on-accent: var(--color-surface);
   --color-text: #16202c;
   --color-text-dim: #5a6470;
+
+  /* Softer, slate-tinted scrim: pure black reads harsh over a light canvas. */
+  --color-overlay: #16202c;
 
   --color-success: #12784b;
   --color-on-success: var(--color-surface);

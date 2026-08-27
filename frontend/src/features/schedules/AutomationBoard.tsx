@@ -396,7 +396,7 @@ export function AutomationBoard({ agents, focusId, onError }: Props) {
                 }`}
               >
                 <span
-                  className={`block h-4 w-4 rounded-full bg-white transition ${pauseAutonomy ? 'translate-x-4' : ''}`}
+                  className={`block h-4 w-4 rounded-full bg-[var(--color-text)] transition ${pauseAutonomy ? 'translate-x-4' : ''}`}
                 />
               </span>
               <span className="hidden sm:inline">

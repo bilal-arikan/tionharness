@@ -573,7 +573,7 @@ export default function App() {
           {/* Mobile: dim backdrop behind the sessions drawer. */}
           {isMobile && mobileListOpen && (
             <div
-              className="fixed inset-0 z-30 bg-black/50 md:hidden"
+              className="fixed inset-0 z-30 bg-[var(--color-overlay)]/50 md:hidden"
               onClick={() => setMobileListOpen(false)}
             />
           )}
@@ -850,7 +850,10 @@ export default function App() {
         <>
           {/* Mobile: dim backdrop behind the right detail drawer. */}
           {isMobile && (
-            <div className="fixed inset-0 z-30 bg-black/50 md:hidden" onClick={toggleDetail} />
+            <div
+              className="fixed inset-0 z-30 bg-[var(--color-overlay)]/50 md:hidden"
+              onClick={toggleDetail}
+            />
           )}
           {/* Desktop: a right-hand column. Mobile: a right slide-in drawer. */}
           <div className="shrink-0 md:static max-md:fixed max-md:inset-y-0 max-md:right-0 max-md:z-40 max-md:shadow-xl">

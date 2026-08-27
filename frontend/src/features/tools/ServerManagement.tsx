@@ -217,7 +217,7 @@ export function ServerManagement(props: {
                     }`}
                   >
                     <span
-                      className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-all ${
+                      className={`absolute top-0.5 h-4 w-4 rounded-full bg-[var(--color-text)] transition-all ${
                         s.enabled ? 'left-4' : 'left-0.5'
                       }`}
                     />

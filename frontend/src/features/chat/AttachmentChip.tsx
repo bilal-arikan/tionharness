@@ -58,7 +58,7 @@ export function AttachmentChip({ attachment, onRemove, previewURL, uploading, on
       )}
 
       {uploading && (
-        <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-black/40">
+        <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-[var(--color-overlay)]/40">
           <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
         </div>
       )}

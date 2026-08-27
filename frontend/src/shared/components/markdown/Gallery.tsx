@@ -108,7 +108,7 @@ export function Gallery({ code }: Props) {
                   className="h-full w-full object-cover transition group-hover:scale-105"
                 />
                 <span className="absolute inset-0 flex items-center justify-center">
-                  <span className="flex h-9 w-9 items-center justify-center rounded-full bg-black/55 text-white">
+                  <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--color-overlay)]/55 text-white">
                     <Play size={18} className="ml-0.5" />
                   </span>
                 </span>
@@ -122,7 +122,7 @@ export function Gallery({ code }: Props) {
               />
             )}
             {img.alt && (
-              <span className="absolute inset-x-0 bottom-0 truncate bg-black/55 px-1.5 py-0.5 text-[10px] text-white opacity-0 transition group-hover:opacity-100">
+              <span className="absolute inset-x-0 bottom-0 truncate bg-[var(--color-overlay)]/55 px-1.5 py-0.5 text-[10px] text-white opacity-0 transition group-hover:opacity-100">
                 {img.alt}
               </span>
             )}

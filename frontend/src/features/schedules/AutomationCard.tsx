@@ -93,7 +93,7 @@ export function AutomationCard({
             title={a.enabled ? 'Etkin' : 'Pasif'}
           >
             <span
-              className={`block h-4 w-4 rounded-full bg-white transition ${a.enabled ? 'translate-x-4' : ''}`}
+              className={`block h-4 w-4 rounded-full bg-[var(--color-text)] transition ${a.enabled ? 'translate-x-4' : ''}`}
             />
           </button>
           {isTargetlessRule ? (

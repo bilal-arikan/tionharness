@@ -26,7 +26,12 @@ export function CollapsibleListShell({ open, onToggle, children }: Props) {
   return (
     <>
       {/* Mobile-only dim backdrop while the drawer is open. */}
-      {open && <div className="fixed inset-0 z-30 bg-black/50 md:hidden" onClick={onToggle} />}
+      {open && (
+        <div
+          className="fixed inset-0 z-30 bg-[var(--color-overlay)]/50 md:hidden"
+          onClick={onToggle}
+        />
+      )}
       {/* Desktop: static column (always visible). Mobile: fixed left drawer that
           slides in/out with `open`. Solid surface + shadow so it never shows the
           content/backdrop through it. The mobile drawer is `inset-y-0` (full

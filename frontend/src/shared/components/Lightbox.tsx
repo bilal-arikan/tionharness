@@ -194,7 +194,7 @@ export function Lightbox({ onClose, title, imageSrc, imageAlt, images, index, ch
     'flex h-8 w-8 items-center justify-center rounded-md bg-white/10 text-white transition hover:bg-white/20'
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-black/85 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex flex-col bg-[var(--color-overlay)]/85 backdrop-blur-sm">
       <div
         className="flex items-center justify-between gap-3 px-4 py-2"
         onClick={(e) => e.stopPropagation()}

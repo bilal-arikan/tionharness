@@ -87,8 +87,8 @@ export function NodeShell({ id, type, title, isStart, isEnd, selected, status, c
         <chrome.Icon size={13} className="shrink-0" />
         <span className="truncate">{title || chrome.label}</span>
         <span className="ml-auto flex gap-1">
-          {isStart && <span className="rounded bg-black/25 px-1">başlangıç</span>}
-          {isEnd && <span className="rounded bg-black/25 px-1">bitiş</span>}
+          {isStart && <span className="rounded bg-[var(--color-overlay)]/25 px-1">başlangıç</span>}
+          {isEnd && <span className="rounded bg-[var(--color-overlay)]/25 px-1">bitiş</span>}
         </span>
       </div>
       <div className="rounded-b-lg px-2.5 py-2" style={{ background: bodyBg }}>

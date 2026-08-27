@@ -31,7 +31,7 @@ export function ModalOverlay({
   // portrait phones is not partly hidden behind the bottom navbar.
   return (
     <div
-      className={`fixed inset-0 z-[60] flex items-center justify-center bg-black/50 ${padding} ${className} max-md:items-end max-md:p-0 max-md:[&>*]:!w-full max-md:[&>*]:!max-w-none max-md:[&>*]:!max-h-[92dvh] max-md:[&>*]:!rounded-b-none`}
+      className={`fixed inset-0 z-[60] flex items-center justify-center bg-[var(--color-overlay)]/50 ${padding} ${className} max-md:items-end max-md:p-0 max-md:[&>*]:!w-full max-md:[&>*]:!max-w-none max-md:[&>*]:!max-h-[92dvh] max-md:[&>*]:!rounded-b-none`}
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose()
       }}

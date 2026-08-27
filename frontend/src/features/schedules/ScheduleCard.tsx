@@ -61,7 +61,7 @@ export const ScheduleCard = forwardRef<HTMLDivElement, Props>(function ScheduleC
             title={s.enabled ? 'Etkin' : 'Pasif'}
           >
             <span
-              className={`block h-4 w-4 rounded-full bg-white transition ${s.enabled ? 'translate-x-4' : ''}`}
+              className={`block h-4 w-4 rounded-full bg-[var(--color-text)] transition ${s.enabled ? 'translate-x-4' : ''}`}
             />
           </button>
           {s.flowId ? (

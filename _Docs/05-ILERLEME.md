@@ -9558,3 +9558,25 @@ bir CLI provider'ı değil — meşru model referansları olarak korundu.
 - **Doğrulama:** `go build ./...` ✅, `go test ./internal/agent/... ./internal/api/...
   ./internal/prompts/... ./internal/db/...` ✅, `npm run format:check` + `npm test` ✅.
   Ayrıntı: `_Docs/74-SISTEM-AJANLARI.md`, `_Docs/47-KOORDINATOR-COKLU-AJAN.md` §17.
+
+## TSK335 — Tema denetimi B+C: overlay token'ı + toggle knob (2026-08-27)
+
+- **Ne:** Denetimin en düşük riskli dilimi uygulandı: sabit `bg-black/*` scrim'leri
+  ve `bg-white` toggle knob'ları tema token'larına bağlandı, `ArtifactsPanel`
+  "daha fazla yükle" hover regresyonu düzeltildi.
+- **Yeni token — `--color-overlay`:** `frontend/src/index.css` içinde HEM koyu
+  (`@theme`, `#000000`) HEM açık (`[data-theme='light']`, `#16202c`) bloğuna
+  eklendi. Açık temada saf siyah sert okunduğu için scrim slate tonlu. Kullanım:
+  `bg-[var(--color-overlay)]/50` (opaklığı tüketici belirler). `website/src/styles/theme.css`
+  mirror'ına da eklendi (CLAUDE.md senkron kuralı).
+- **Değişen:** 9 dosyada `bg-black/{25,40,50,55,85}` → `bg-[var(--color-overlay)]/…`;
+  5 toggle knob'da `bg-white` → `bg-[var(--color-text)]` (knob hem accent hem
+  nötr `--color-border` ray üzerinde görünür kalmalı — `--color-on-accent` açık
+  temada nötr ray üzerinde kayboluyordu); `ArtifactsPanel.tsx:778` base
+  `--color-surface`, hover `--color-surface-2` (dosyanın kendi hover idiyomu),
+  böylece hover koyu temada koyulaşmak yerine yükseliyor.
+- **Kapsam dışı:** `relationGraph.ts` ve `palette.ts` renk KAYNAĞI dosyalarıdır
+  (`themePresets.ts` gibi), token'a çevrilmedi. `ArtifactView`/`HtmlPreview`
+  içindeki `bg-white`/`bg-black` kullanıcı içeriği tuvalidir, kasıtlı.
+- **Doğrulama:** `npx tsc --noEmit` ✅, `npm run format:check` ✅,
+  `git diff --check` ✅.

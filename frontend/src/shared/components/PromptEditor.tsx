@@ -255,7 +255,7 @@ export function PromptEditor({
 
       {full && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 sm:p-8 max-md:p-0 max-md:[&>*]:!max-w-none max-md:[&>*]:!rounded-none"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--color-overlay)]/50 p-4 sm:p-8 max-md:p-0 max-md:[&>*]:!max-w-none max-md:[&>*]:!rounded-none"
           onClick={() => setFull(false)}
         >
           <div

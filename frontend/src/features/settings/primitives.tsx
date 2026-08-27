@@ -84,7 +84,7 @@ export function Toggle({
         }`}
       >
         <span
-          className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-all ${
+          className={`absolute top-0.5 h-4 w-4 rounded-full bg-[var(--color-text)] transition-all ${
             checked ? 'left-4' : 'left-0.5'
           }`}
         />
