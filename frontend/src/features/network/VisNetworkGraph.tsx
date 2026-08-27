@@ -45,6 +45,26 @@ interface Props {
   lite?: boolean
 }
 
+interface ThemeColors {
+  border: string
+  text: string
+  textDim: string
+}
+
+function resolveThemeColors(): ThemeColors {
+  const styles = getComputedStyle(document.documentElement)
+  const read = (token: string) => {
+    const value = styles.getPropertyValue(token).trim()
+    if (!value) throw new Error(`Theme token ${token} did not resolve`)
+    return value
+  }
+  return {
+    border: read('--color-border'),
+    text: read('--color-text'),
+    textDim: read('--color-text-dim'),
+  }
+}
+
 // buildOptions configures the vis-network instance. Relation mode uses a
 // forceAtlas2 force field (even organic spread); live mode drops central gravity
 // so the fixed board-state column anchors govern the horizontal layout while
@@ -53,19 +73,24 @@ interface Props {
 // node shadows and curved edges are the two biggest repaint costs while panning /
 // zooming, and improvedLayout + a high stabilization count make first paint janky.
 // Dropping them keeps the same graph, just cheaper to render.
-function buildOptions(density = 1, mode: VisMode = 'relation', lite = false): Options {
+function buildOptions(
+  colors: ThemeColors,
+  density = 1,
+  mode: VisMode = 'relation',
+  lite = false,
+): Options {
   const d = Math.min(2, Math.max(0.4, density))
   return {
     autoResize: true,
     nodes: {
       borderWidth: 2,
-      font: { color: '#e5e7eb', size: 13, face: 'Inter, system-ui, sans-serif' },
+      font: { color: colors.text, size: 13, face: 'Inter, system-ui, sans-serif' },
       shadow: lite
         ? { enabled: false }
-        : { enabled: true, size: 8, x: 0, y: 2, color: 'rgba(0,0,0,0.35)' },
+        : { enabled: true, size: 8, x: 0, y: 2, color: colors.border },
     },
     edges: {
-      color: { color: '#475569', highlight: '#94a3b8', opacity: 0.7 },
+      color: { color: colors.border, highlight: colors.textDim, opacity: 0.7 },
       // Straight edges on mobile: continuous smoothing recomputes bezier control
       // points every frame, which is the main pan/zoom stutter on phones.
       smooth: lite ? false : { enabled: true, type: 'continuous', roundness: 0.5 },
@@ -134,6 +159,7 @@ export function VisNetworkGraph({
   // set (per-edge opacity/width) after a hover dim.
   const baseEdgeColorRef = useRef<Map<string, Edge['color']>>(new Map())
   const highlightRef = useRef(highlightNeighbors)
+  const dimmedEdgeColorRef = useRef('')
   // Post-commit assignment: these refs exist so the vis-network callbacks (bound
   // once, outside React) always see the latest props. Handlers fire after commit.
   useEffect(() => {
@@ -145,6 +171,8 @@ export function VisNetworkGraph({
   // Create the network once.
   useEffect(() => {
     if (!containerRef.current) return
+    const colors = resolveThemeColors()
+    dimmedEdgeColorRef.current = colors.border
     const nodesDS = new DataSet<Node>([])
     const edgesDS = new DataSet<Edge>([])
     nodesDSRef.current = nodesDS
@@ -152,7 +180,7 @@ export function VisNetworkGraph({
     const network = new Network(
       containerRef.current,
       { nodes: nodesDS, edges: edgesDS },
-      buildOptions(densityRef.current, modeRef.current, liteRef.current),
+      buildOptions(colors, densityRef.current, modeRef.current, liteRef.current),
     )
     networkRef.current = network
     network.on('selectNode', (p: { nodes: string[] }) => onSelectRef.current?.(p.nodes[0] ?? null))
@@ -172,7 +200,7 @@ export function VisNetworkGraph({
         (eds.getIds() as string[]).map((id) =>
           keptEdges.has(id)
             ? { id, color: baseEdgeColorRef.current.get(id) }
-            : { id, color: { color: '#334155', opacity: 0.05 } },
+            : { id, color: { color: dimmedEdgeColorRef.current, opacity: 0.05 } },
         ),
       )
     })
@@ -191,6 +219,21 @@ export function VisNetworkGraph({
       networkRef.current = null
       populatedRef.current = false
     }
+  }, [])
+
+  // Theme presets are applied as inline root tokens; data-theme additionally
+  // distinguishes light mode. Re-resolve both without polling when either changes.
+  useEffect(() => {
+    const root = document.documentElement
+    const observer = new MutationObserver(() => {
+      const net = networkRef.current
+      if (!net) return
+      const colors = resolveThemeColors()
+      dimmedEdgeColorRef.current = colors.border
+      net.setOptions(buildOptions(colors, densityRef.current, modeRef.current, liteRef.current))
+    })
+    observer.observe(root, { attributes: true, attributeFilter: ['style', 'data-theme'] })
+    return () => observer.disconnect()
   }, [])
 
   // Incremental data sync: remove gone ids, upsert the rest. New nodes are added
@@ -248,7 +291,7 @@ export function VisNetworkGraph({
     densityRef.current = density
     const net = networkRef.current
     if (!net) return
-    net.setOptions(buildOptions(density, mode, lite))
+    net.setOptions(buildOptions(resolveThemeColors(), density, mode, lite))
     const fit = () => fitAndCap(net, true)
     net.once('stabilizationIterationsDone', fit)
     const t = setTimeout(fit, 1600)

@@ -13,7 +13,7 @@ func TestProjectSkillRendersCatalogEntry(t *testing.T) {
 			Slug: "tionharness-build", Name: "Build", Description: "Derler ve test eder.",
 			Shared: true, Group: "araçlar", Icon: "hammer",
 		},
-	}, LevelCard, LensHealth)
+	}, LevelCard)
 	if err != nil {
 		t.Fatalf("project: %v", err)
 	}
@@ -32,7 +32,7 @@ func TestProjectSkillRendersCatalogEntry(t *testing.T) {
 func TestProjectSkillRestrictedAccess(t *testing.T) {
 	v, err := ProjectSkill(SkillInput{
 		Skill: skills.Skill{Slug: "gizli-skill", Description: "yalnız atanmış ajanlar"},
-	}, LevelCard, LensHealth)
+	}, LevelCard)
 	if err != nil {
 		t.Fatalf("project: %v", err)
 	}
@@ -42,7 +42,7 @@ func TestProjectSkillRestrictedAccess(t *testing.T) {
 }
 
 func TestProjectSkillRejectsEmptySlug(t *testing.T) {
-	if _, err := ProjectSkill(SkillInput{Skill: skills.Skill{}}, LevelCard, LensHealth); err == nil {
+	if _, err := ProjectSkill(SkillInput{Skill: skills.Skill{}}, LevelCard); err == nil {
 		t.Error("a skill with no slug must be an error, not a blank card")
 	}
 }

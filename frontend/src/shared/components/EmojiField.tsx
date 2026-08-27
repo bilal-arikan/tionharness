@@ -51,7 +51,7 @@ export function EmojiField({ value, onChange, clearLabel = 'Aa', label, compact 
           title="Emoji seç"
           className="flex items-center gap-2 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2.5 py-1.5 text-sm hover:border-[var(--color-accent)]"
         >
-          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[var(--color-surface-2)] text-lg leading-none">
+          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[var(--color-surface-2)] text-lg leading-none text-[var(--color-text)]">
             {glyph}
           </span>
           {text ? (

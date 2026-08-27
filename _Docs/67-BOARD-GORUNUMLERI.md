@@ -40,7 +40,7 @@ sıfır kazanç demekti. Filtreleme tamamen `filterTasks.ts` içinde.
 
 Yine de `BoardFilter` **backend'de tipli** tanımlı. Sebebi bugün değil yarın:
 ajanların self-management araçlarıyla görünüm üretebilmesi ve
-[66-VIEW-KATMANI](66-VIEW-KATMANI.md) projeksiyonunun aynı yapıyı board lens'i
+[66-VIEW-KATMANI](66-VIEW-KATMANI.md) projeksiyonunun aynı yapıyı board görünümü
 olarak kullanabilmesi. Opak JSON blob saklamak bugün daha kolaydı, o iki kapıyı
 kapatırdı.
 

@@ -57,7 +57,7 @@ Bu bir "özetleyici" değil — **projeksiyon** katmanı. İstenen çıktının 
 LLM'siz üretilebilir ve üretilmelidir.
 
 ```
-View = f(entity, level, lens)   → deterministik · cache'lenebilir · damgalı
+View = f(entity, level)   → deterministik · cache'lenebilir · damgalı
 ```
 
 `internal/view` (leaf paket, `db`+`orchestration` okur, kimseye bağımlı değil):
@@ -76,14 +76,6 @@ const (
     LevelFull Level = "full"      // ~1500 tok — drill-down
 )
 
-type Lens string                  // sabit ve az sayıda (bkz. Tuzaklar/3)
-const (
-    LensHealth Lens = "health"    // varsayılan: durum + sinyaller
-    LensStale  Lens = "stale"     // yaşlanan/bloke olan
-    LensRecent Lens = "recent"    // son Δ penceresi
-    LensErrors Lens = "errors"    // hata/retry/guardrail
-)
-
 type View struct {
     Ref     Ref
     Header  string      // her zaman üretilir, deterministik, ~8-12 satır
@@ -95,7 +87,7 @@ type View struct {
     Tokens  int         // ölçülen maliyet (UI'da gösterilir)
 }
 
-func Project(ctx context.Context, ref Ref, level Level, lens Lens) (View, error)
+func Project(ctx context.Context, ref Ref, level Level) (View, error)
 ```
 
 ## Üç katmanlı üretim — LLM en sonda
@@ -131,7 +123,7 @@ TionHarness bu mekanik için hazır: `session.jsonl` append-only ([08](08-DEPOLA
 `FlowRun` state'i restart-safe ([15](15-FLOW-CANVAS.md)), board mutasyonları `BoardHook`
 event'li ([46](46-ETIKET-OTOMASYON.md)). Yani **checkpoint + delta** doğal olarak var.
 
-- Cache anahtarı: `entityID + lastSeq/contentHash + level + lens`
+- Cache anahtarı: `entityID + lastSeq/contentHash + level`
 - Değişmediyse → **0 token, sub-ms** (L2 dahil)
 - Değiştiyse → yalnız delta katlanır
 - Cache yeri: `<store>/views/<kind>/<id>.json` (L2 sonuçları kalıcı; L0/L1 bellek-içi)
@@ -312,7 +304,7 @@ push etmek **prompt cache'i her turda kırar** → [57](57-PROMPT-EPOCH.md) çal
 
 | Kanal | Ne | Nereye | Kural |
 |-------|-----|--------|-------|
-| **Pull** *(varsayılan)* | `get_view(ref, level, lens)` aracı | tool sonucu | Cache-nötr, her zaman güvenli |
+| **Pull** *(varsayılan)* | `get_view(ref, level)` aracı | tool sonucu | Cache-nötr, her zaman güvenli |
 | **Push** | yalnız `tiny`, yalnız ilgili oturuma | **volatile dinamik suffix** | Coordinator worker-state bloğu gibi; **asla statik prefix'e** |
 | **Handle** | büyük tool çıktısı yerine `view://SES9a1@seq214` | tool sonucu | 64KB cap'e çarpan yerlerde otomatik daraltma |
 
@@ -338,7 +330,7 @@ bir **`◱ Özet`** butonu. Tıklayınca sağdan `ViewPanel` sheet'i açılır.
 
 ```
 ┌─ ◱ Özet — flowrun:RUN7f2 ─────────────────── ✕ ─┐
-│ [tiny] [card] [full]      lens: [health ▾]      │  ← level + lens seçici
+│ [tiny] [card] [full]                             │  ← level seçici
 │ asOf 15:41:07 (7sn önce)  ~112 tok   🔄 Yenile  │  ← tazelik + ölçülen maliyet
 ├─────────────────────────────────────────────────┤
 │ FLOW run:RUN7f2 "research-pipeline" · 6/9 …     │  ← monospace, ham DSL
@@ -406,7 +398,7 @@ sessiz bir hafta sonu trendden silinmek yerine boşluk olarak görünür.
 
 ```
 GET /api/dashboard?days=14                          → sayaçlar + seriler + workspace projeksiyonu
-GET /api/views/{kind}/{id}?level=card&lens=health   → View (JSON zarf, Body ham DSL)
+GET /api/views/{kind}/{id}?level=card   → View (JSON zarf, Body ham DSL)
 GET /api/views/workspace?level=tiny
 ```
 
@@ -438,8 +430,8 @@ hatası tam olarak "1970'ten beri" kılığına giriyor.
 1. **Sessiz kesme yok.** "En önemli 10 kart"ı gösterip gerisini yutmak ajanı
    sistematik yanıltır. `Elided` alanı zorunlu ve her zaman render edilir.
 2. **Tazelik damgası zorunlu.** `AsOf` olmadan ajan eski durumla karar verir.
-3. **Lens sayısı az.** Çok lens = ajan yanlış seçer. Dört sabit lens, genişletme
-   ancak kanıtla.
+3. **Tek projeksiyon semantiği.** Aynı entity ve level her çağrıda aynı tür
+   sinyalleri üretir; filtre ekseni yoktur.
 4. **L2 sayı üretmez.** Sayılar L0'dan; LLM sadece anlatır.
 5. **Format sabitlenmeli.** DSL grameri versiyonlanır; ajan promptları buna
    dayanacak, serbest biçim drift yaratır.
@@ -462,7 +454,7 @@ Faz 5'e ancak 1-4 kanıtlanırsa geçilir.
 
 **Backend — `internal/view`** (leaf paket; `db` + `orchestration` okur):
 
-- `view.go` — `Ref`/`Kind`/`Level`/`Lens`/`Handle`/`View` + `View.Text()` (elision
+- `view.go` — `Ref`/`Kind`/`Level`/`Handle`/`View` + `View.Text()` (elision
   satırı dahil tam render) + `finalize()` (token tahmini = karakter/4, `AsOf`).
 - `dsl.go` — `lines` biriktirici + `dur`/`durMs`/`age`/`clip`/`collapseSpace`.
   Her projeksiyon süreleri ve kısaltmayı aynı şekilde biçimler.
@@ -489,18 +481,18 @@ Faz 5'e ancak 1-4 kanıtlanırsa geçilir.
   dispatch'i + `loadSession` (yalnız **son 40 mesaj**; `tiny` seviyede hiç dosya
   okumaz). Bilinmeyen kind ve bozuk graph/state **hata** döner, boş view değil.
 
-**API** — `internal/api/views.go`: `GET /api/views/{kind}/{id}?level&lens&sub`.
+**API** — `internal/api/views.go`: `GET /api/views/{kind}/{id}?level&sub`.
 Yanıt hem yapısal zarfı hem `text`'i taşır; panel `text`'i olduğu gibi basar.
 Bilinmeyen kind → 400, olmayan entity → 404.
 
-**Araç** — `internal/tools/builtin_view.go`: `get_view{kind,id,sub,level,lens}`
+**Araç** — `internal/tools/builtin_view.go`: `get_view{kind,id,sub,level}`
 (`kind` ∈ flowrun|session|board|workspace|schedule; `sub` = flowrun'da node,
 board'da kart), `toolsetup.go`'da her ajana açık (salt-okunur), kategori
 `diagnostics`. Çıktı = `View.Text()` + drill-down çağrı ipuçları.
 
 **UI** — `frontend/src/features/view/`:
 `ViewButton` (◱ Özet tetikleyicisi, sağdan açılan sheet) + `ViewPanel`
-(level/lens seçici, `asOf` + `~N tok` göstergesi, **ham DSL monospace**,
+(level seçici, `asOf` + `~N tok` göstergesi, **ham DSL monospace**,
 birimli `elided` satırı, tıklanabilir handle'lar + breadcrumb, Kopyala).
 `api/views.ts` + `types/view.ts`. Bağlandığı yerler: Akışlar ▸ Koşular
 `FlowsHeader`, `RunView` özet satırı (inilen alt koşular), **`AppHeader`** (chat →
@@ -515,7 +507,7 @@ start✓(100ms) → agent:collect✓(31s) → parallel:fan[2/2✓ 48s] → agent
 ```
 
 Testler: `internal/view/{flowrun,board,session}_test.go` (paralel katlama, mevcut
-node, hata + handle, waiting, lens filtreleri, elision, özel sütun sıralaması,
+node, hata + handle, waiting, elision, özel sütun sıralaması,
 boş pano, coordination soyağacı, boş girdi reddi) ve `internal/api/views_test.go`
 (üç kind uçtan uca + 400/404).
 

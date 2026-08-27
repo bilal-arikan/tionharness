@@ -85,7 +85,7 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 	// stat tiles and the summary text can therefore never disagree. A failure is
 	// reported rather than swallowed: a dashboard with a blank summary looks like
 	// an idle workspace.
-	v, counts, err := s.viewProjector(r).Workspace(ctx, view.LevelCard, view.LensHealth)
+	v, counts, err := s.viewProjector(r).Workspace(ctx, view.LevelCard)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return

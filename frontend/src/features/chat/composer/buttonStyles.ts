@@ -9,9 +9,9 @@
 // wrapping onto a second toolbar row.
 export const BTN_BASE =
   'flex items-center justify-center gap-1.5 rounded-xl px-2.5 py-3 text-sm font-medium transition sm:px-4'
-export const BTN_PRIMARY = `${BTN_BASE} bg-[var(--color-accent)] text-white hover:opacity-90 disabled:opacity-30`
+export const BTN_PRIMARY = `${BTN_BASE} bg-[var(--color-accent)] text-[var(--color-on-accent)] hover:opacity-90 disabled:opacity-30`
 export const BTN_DANGER = `${BTN_BASE} bg-[var(--color-danger)] text-white hover:opacity-90`
-export const BTN_WARNING = `${BTN_BASE} bg-[var(--color-warning)] text-white hover:opacity-90`
+export const BTN_WARNING = `${BTN_BASE} bg-[var(--color-warning)] text-[var(--color-on-warning)] hover:opacity-90`
 export const BTN_SECONDARY = `${BTN_BASE} border border-[var(--color-border)] text-[var(--color-text)] hover:border-[var(--color-accent)]`
 // Queue action ("Sıraya") — a bluish dark fill so it reads as a distinct, calm
 // "later" action next to the accent Send / warning Interrupt buttons.

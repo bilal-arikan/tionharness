@@ -59,7 +59,7 @@ export function OutcomeSummary({ o }: { o: OutcomeBlock }) {
           </div>
         ))}
       </div>
-      <DayBars points={o.velocityByDay} label="Biten kart / gün" color="#22c55e" />
+      <DayBars points={o.velocityByDay} label="Biten kart / gün" color="var(--color-success)" />
     </section>
   )
 }

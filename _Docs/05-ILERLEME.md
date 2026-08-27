@@ -2,6 +2,97 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-08-27**
 
+## MCP sunucu stderr'i artık yutulmuyor (2026-08-27) ✅
+
+`DialStdio` çocuk sürecin stderr'ini `io.Discard`'a veriyordu ("chatty server pipe'ı
+doldurup bloke etmesin" gerekçesiyle). Endişe haklı ama bedeli ağır: stdio MCP
+sunucusunun kendini açıklayabildiği **tek kanal** buydu. 2026-08-27'de
+`codebase-memory-mcp` her yeni istemciyi *"CBM daemon is active or starting but could
+not accept this client within 30000 ms"* diyerek reddedip çıktı; logda görünen tek
+şey `mcp initialize: mcp read: EOF` oldu — "bir pipe kapandı" der, sebebini demez.
+WS5'teki bütün ajan turları ilk LLM çağrısına gelmeden durdu ve log 32 saniyede bir
+aynı boş uyarıyı tekrarladı.
+
+Çözüm `internal/mcp/stderrtail.go`: sınırlı (8 KB), asla bloklamayan, asla büyümeyen
+halka tampon. Doluysa en eskiyi atar, kapasiteyi aşan tek yazımda **sonu** saklar
+(hata mesajı oradadır) ve her zaman tam uzunluğu "yazıldı" olarak raporlar — kısa
+write bildirmek `os/exec`'in kopyalayıcısını durdurup tam da kaçınılan bloklamayı
+geri getirirdi. Handshake başarısız olursa son 3 anlamlı satır hataya iliştirilir
+(`... (server stderr: ...)`), banner/allocator gürültüsü elenir. Close önce çağrılır
+ki ölmekte olan sunucunun son satırı tampona yetişsin. Testler
+`stderrtail_test.go`; düzeltme kaldırılınca regresyon testi tam olarak eski
+`mcp initialize: mcp read: EOF` metniyle kırılıyor (doğrulandı).
+
+Tail okuması `Close()`'un 2 sn'lik bekleme tavanına bağlıydı ve yüklü makinede
+(tam test paketi + ajan build'leri koşarken) kaçırılabiliyordu — `waitNonEmpty` ile
+sınırlı ve deterministik hale getirildi. `os/exec` stderr'i kendi goroutine'inde
+kopyalar ve bunun bittiğini yalnız `Wait` döndüğünde garanti eder; bu bekleme
+yalnızca hata yolunda çalışır.
+
+## MCP katalog arızası WARN'da boğulmuyor (2026-08-27) ✅
+
+Aynı sunucu için **ardışık** katalog hatası sayılıyor (`internal/agent/mcpescalate.go`,
+`Runtime.mcpFailStreaks`); eşiği (3) geçen ilk hata tek seferlik **ERROR** basar,
+sonrakiler yine WARN kalır ve başarılı bir katalog sayacı sıfırlar. Neden: 2026-08-27'de
+`codebase-memory-mcp` ~9 saat boyunca her istemciyi reddetti; log 32 saniyede bir
+aynı WARN satırını yazdı, hiçbir şey yükselmedi ve **hiçbir ajanın tur açamadığı** bir
+workspace, log seviyesine bakıldığında normal işleyişten ayırt edilemedi. Eşik
+"mevcut kesinti"yi ölçer, ömür boyu toplamı değil — böylece kısa kesintide gürültü
+olmaz, ama tekrar tekrar düşen sunucu her kesintide yeniden yükselir. Testler
+`mcpescalate_test.go` (tek seferlik geçiş, kurtarma sonrası yeniden geçiş,
+sunucu-başına izolasyon).
+
+**Kapsam notu:** native tool loop katalog arızasını zaten `StepRecovery` kartı olarak
+gösteriyor (`toolloop.go` → `mcpnotice.go`). **claude-cli yolu (`BridgeTools`)
+collector'ı bağlamıyor**, dolayısıyla o yolda hâlâ yalnız log var — olayın yaşandığı
+yol da buydu. ERROR eskalasyonu her iki yolu da kapsar; CLI kartı açık iş.
+
+## Kendi reposunu build eden ajan döngüsü kesildi (2026-08-27) ✅
+
+Dev ortamı tekrar tekrar kapanıyordu. Zincir: backend boot'ta WS5'teki üç öksüz
+koordinatörü (`SES1543/1545/1558`, cwd = TionHarness reposu) yeniden kuyruğa alıyor →
+bunlar `cd frontend && npm run build` yapan worker'lar spawn ediyor → `dev.ps1`
+temizliği backend **ağacını** `taskkill /T /F` ile öldürünce ajanın `npm`'i paket
+açarken kesiliyor → `@rolldown/pluginutils/dist/index.mjs` gibi dosyalar hiç
+oluşmuyor → Vite `ERR_MODULE_NOT_FOUND` ile ölüyor → script her şeyi kapatıyor →
+başa dön. Yani uygulama, kendisini çalıştıran dev sunucusunun repo'sunu build
+ediyordu.
+
+Çözüm: `node_modules` sıfırdan `npm ci` ile kuruldu ve o koordinatör ağacının 28
+oturumu (3 koordinatör + 25 worker) `state="archived"` yapıldı —
+`RecoverOrphanedTurns` arşivli oturumu diriltmiyor. Doğrulandı: yeniden başlatmada
+`orphaned coordinator re-enqueued` satırı yok, Vite temiz kalkıyor. Yedek:
+`<store>\_archive-backup-20260827\`.
+
+**Kalıcı düzeltme:** `enqueueCoordinatorTurn` artık uyandırma girişinde arşiv
+kontrolü yapıyor — arşiv, otomatik turlar için `stallHalted` gibi sert bir dur.
+Önceden yalnız `RecoverOrphanedTurns` bakıyordu, bu yüzden koordinatörü arşivlemek
+yetmiyordu: kurtarılan her worker `NotifyCoordinator` çağırıp arşivli oturumda
+yeni bir drain başlatıyordu (bu olayda alt ağacın tamamı elle arşivlenmek zorunda
+kaldı). Not zaten kalıcı yazıldığı için hiçbir şey kaybolmuyor; arşivden çıkarınca
+bir sonraki bildirim onu işliyor. Slot'a dokunulmadan dönülüyor, yani arşivden
+çıkan oturum `driving` takılı kalmıyor. Regresyon: `coordination_archived_test.go`
+(guard kaldırılınca kırmızı olduğu doğrulandı). Detay:
+[47](47-KOORDINATOR-COKLU-AJAN.md), [58](58-QUEUE-SENKRON.md).
+
+## dev.ps1 frontend ön-kontrolü vite'ı gerçekten yüklüyor (2026-08-27) ✅
+
+Ön-kontrol artık dosya varlığına değil **`Test-FrontendDeps`**'e dayanıyor: `.bin\vite.cmd`
+var mı + `node -e "import('vite')"` sıfırla çıkıyor mu. Dosya bakmak yetmiyordu, çünkü
+aynı sabah ağaç iki farklı şekilde bozuldu ve ikisi de `Test-Path`'e görünmüyor:
+(1) `.bin\` kayboldu → npm `vite`'ı PATH'ten çözüp alakasız bir Python static-site
+generator'ı çalıştırdı (exit 2); (2) bir ajanın `npm install`'u paket açarken öldü →
+`@rolldown/pluginutils` package.json'lı ama `dist\index.mjs`'siz kaldı →
+`ERR_MODULE_NOT_FOUND`. Ölçüldü: bozuk ağaçta `vite --version` hâlâ **0 ile çıkıyor**
+(eksik modülü hiç import etmiyor), yani ikinci vakayı yalnız gerçek bir import yakalar.
+
+Onarım kademeli: `npm install` → hâlâ bozuksa `node_modules` silinip `npm ci`
+(lockfile yoksa `npm install`) → hâlâ bozuksa açık hata. Kademe şart, çünkü
+**`npm install` yarım açılmış paketi onaramaz** — package.json orada olduğu için npm
+paketi kurulu sayıp atlar; ilk guard'ın çöküş döngüsünü kıramama sebebi buydu.
+Canlı testte üç basamak da sırayla çalıştı. Ayrıca exit 2 açıklaması iki çocuğu da
+anıyor (backend → Go panic/OOM, frontend → npm/vite başlatma hatası).
+
 ## Sohbet listesi kategori çiplerinde Ctrl/Shift tıklama (2026-08-27) ✅
 
 Sidebar'daki oturum türü çipleri artık modifier tuşlarını anlıyor: düz tıklama tek
@@ -283,7 +374,7 @@ alternatifi (ham state okumak) daha pahalı. Bunun yerine açıklaması sıkış
 (kind başına paragraf → tek satır) ve `Examples` 7→4'e indi; örnekler
 `foldExamples` ile **gönderilen şemaya** katıldığı için her biri tur maliyetidir.
 Kalan dört örnek şemanın anlatamadığı konvansiyonları (singleton id, `sub`
-drill-down, `level`/`lens`) kapsıyor. `expand` referansı korundu — name-only olan
+drill-down, `level`) kapsıyor. `expand` referansı korundu — name-only olan
 `expand`'in tek keşif yolu o cümle. **~1087 → ~858 token.**
 
 **`run_subagent` (Strateji B).** Name-only YAPILMADI: delegasyon davranışsal, aracı
@@ -1291,9 +1382,6 @@ projektörünü kuruyor, biri hariç hiçbiri opsiyonel kaynakları bağlamıyor
 - **`view.CountWorkspace` + `Projector.Workspace`** — Panel'in stat kutuları
   `dashboardCounters`'ın ayrı döngüsüyle sayılıyordu; silindi. Metin ve sayaçlar
   artık **tek yüklemeden, tek saatle** üretiliyor.
-- **Mercek tekleşti:** `ViewPanel` opsiyonel `lens` prop'u alır; Harita ekranında
-  başlıktaki mercek yan paneli de sürer (panel kendi seçicisini gizler). Önce
-  harita `errors`, yanındaki özet `health` gösterebiliyordu.
 - **Kategori düğümünde `full` işe yaramıyordu:** `ProjectCategory` üyeleri yalnız
   `Handle` olarak veriyordu, dolayısıyla `card` ile `full` aynı metni üretiyordu ve
   Harita'daki `full` düğmesi hiçbir şey değiştirmiyordu. Artık `full` üyeleri satır
@@ -1504,7 +1592,7 @@ vardı). Kök 6 → **11 node**.
   projeksiyonlar (deterministik, LLM yok): `artifact.go` (metadata: origin/session/grup/yaş),
   `automation.go` (tetik/hedef/durum/ateşleme sayacı + hata), `skill.go` (katalog: erişim/
   grup/açıklama), `insight.go` (bulgu: severity/durum/oluşum/kanıt), `logs.go` (process log
-  ring-buffer kuyruğu — budget/tools gibi yaprak; `errors` lens → yalnız ERROR kayıtları).
+  ring-buffer kuyruğu — budget/tools gibi yaprak).
 - **Kaynaklar:** skills/logs/findings db'de değil → `Projector.WithSources(Sources{Skills,
   Findings, Logs})` (narrow interface'ler; nil = "yok" satırı, asla sessiz boşluk değil).
   `internal/insight` zaten `view`'i import ettiği için (cycle!) findings view-local
@@ -1551,7 +1639,7 @@ grafı **aynı backend'le** dolaşabiliyor; harita URL ile paylaşılabiliyor, a
 odak+bağlam ile soldurma yapıyor.
 
 **Nasıl:**
-- **`expand` aracı** (`internal/tools/builtin_expand.go`) — `expand{kind,id,sub,lens}` →
+- **`expand` aracı** (`internal/tools/builtin_expand.go`) — `expand{kind,id,sub}` →
   `Projector.Children`'ı sarar (haritayla birebir aynı). Her çocuğu doğru sonraki çağrıya
   yönlendirir: çocuğu olan → `expand`, yaprak → `get_view`. Singleton id defaulting
   (workspace/board), bilinmeyen kind/kategori = hata. `toolsetup.go`'da her ajana açık,
@@ -1583,11 +1671,11 @@ Bu ekran **Ağ'dan ayrıdır** — Ağ ilişki grafiği, Harita durum-drill-down
   kardeş→satır) ve döngü-kırıcı visited-set (her düğüm bir kez yerleşir, DAG/döngü
   geri-kenarı çizilir). elkjs/dagre eklenmedi.
 - `useExplorerGraph.ts` — durum: `expanded`/`childrenByKey`/`selected`, lazy children
-  fetch (`api.viewChildren`), lens değişiminde açık dalları yeniden çeker.
+  fetch (`api.viewChildren`).
 - `ExplorerNode.tsx` — özel React Flow düğümü: kind ikonu + etiket + çocuk sayısı +
   chevron; **semantic zoom** (uzak zoom → tek satır).
 - `ExplorerGraph.tsx` — React Flow canvas (pan/zoom + tıkla; sürüklenemez).
-- `ExplorerView.tsx` — ekran kabuğu: lens seçici + graf + gömülü `ViewPanel` yan-özet;
+- `ExplorerView.tsx` — ekran kabuğu: graf + gömülü `ViewPanel` yan-özet;
   session düğümünde "Sohbeti aç".
 
 Yeni React Flow bağımlılığı YOK (Akış builder'dakini yeniden kullanır); lazy chunk
@@ -1615,15 +1703,15 @@ her biri için ayrı dosyada bir projeksiyon:
 - `tools.go` — `ProjectTools`: MCP sunucu havuzu (aktif önce) + kapalı araç sayısı.
 - `category.go` — `ProjectCategory`: grup düğümü, üyeleri sayar (dürüst toplam), üst-N'i
   handle verir, kalanı `Elided`. Bilinmeyen kategori id = hata.
-- `children.go` — `Projector.Children(ctx, ref, lens) []Handle`: **yapısal** çocuk grafı
+- `children.go` — `Projector.Children(ctx, ref) []Handle`: **yapısal** çocuk grafı
   (özet `Project`'ten ayrı). `workspace`→6 kategori; `category:sessions/flows/agents`→üye
   handle'ları; `board`→sütun düğümleri; `category:col:<key>`→kart handle'ları;
-  `agent:X`→oturumları; `session:COORD`→worker'ları. Lens `errors`'ta sorunlulara daralır;
+  `agent:X`→oturumları; `session:COORD`→worker'ları;
   `categoryTopN` (50) döngü/patlama cap'i. Bilinmeyen Kind = hata, sessiz boş liste değil.
 
 `Store` arayüzüne dört salt-okunur metot (`GetAgent`, `GetUsageToday`, `ListMCPServers`,
 `GetWorkspaceToolConfig`); leaf-paket disiplini korundu. API: `handleGetView`'in yanına
-`GET /api/views/{kind}/{id}/children?lens=` route'u (`views.go`). Testler mevcut
+`GET /api/views/{kind}/{id}/children` route'u (`views.go`). Testler mevcut
 `view/*_test.go` fixture desenini izler (hand-built `db.*` + `fakeStore`); her projeksiyon
 + `Children` + endpoint için kapsam. `go build ./... && go vet ./... && go test
 ./internal/view/... ./internal/api/...` ✅.
@@ -1650,7 +1738,7 @@ Dashboard / Akışlar ekranlarında kalıyor). `SessionDetailPanel`'in artık ku
 katlıyken `ViewPanel` mount edilmez → gereksiz `get_view` çağrısı yok). Gömülü
 `ViewPanel`'in `target`'ı `useMemo(sessionId)` ile stabil — satır-içi obje her render'da
 kimlik değiştirip 1s timer/3s poll tick'lerinde `getView`'i (deterministik, LLM'siz)
-gereksizce yeniden çağırıyordu; artık yalnız oturum/seviye/lens değişince yükler.
+gereksizce yeniden çağırıyordu; artık yalnız oturum/seviye değişince yükler.
 `tsc --noEmit` ✅.
 
 ## Fix: Kullanıcı "Durdur" sonrası koordinatör idle-reconcile turu kaçağı (2026-08-06) ✅
@@ -1945,8 +2033,8 @@ projeksiyonunu** yandan açabiliyor. İki boşluk kapatıldı:
   olmaması için satır yeniden yapılandırıldı); workspace özeti altında
   `summary.handles` tıklanabilir ◱ çipler. `schedule` için projeksiyon yok değil artık
   → dört aksiyon türü de drill-down. API değişmedi (routing generic).
-- **Test:** `schedule_test.go` (tek-kart sub + bilinmeyen-id hatası + schedule son-hata
-  + errors lens). view/api/tools yeşil, FE build geçer.
+- **Test:** `schedule_test.go` (tek-kart sub + bilinmeyen-id hatası + schedule son-hata).
+  view/api/tools yeşil, FE build geçer.
 
 ## Panel: CEO kokpiti — maliyet + aksiyon kuyruğu + delta + sonuçlar (2026-08-04) ✅
 
@@ -2400,10 +2488,9 @@ ekranıyla tek kaynaktan.
   şekilde çıktı veren bir sistem" + "bu değerleri UI'da bir butonla/panelle
   görebilelim". Tasarım notu: [66-VIEW-KATMANI.md](66-VIEW-KATMANI.md).
 - **Yeni paket `internal/view`** (leaf; `db`+`orchestration` okur):
-  `Project(ref, level, lens) → View{Header, Body, Handles, AsOf, Source, Elided,
+  `Project(ref, level) → View{Header, Body, Handles, AsOf, Source, Elided,
   Tokens}`. Üretim **deterministik**: L0 sayım + L1 kural-tabanlı sinyal, LLM yok
-  → sayılar uydurulamaz. Bütçe tier'ları `tiny`/`card`/`full`, dört lens
-  (`health`/`stale`/`recent`/`errors`). Çıktı JSON değil **satır-bazlı kompakt
+  → sayılar uydurulamaz. Bütçe tier'ları `tiny`/`card`/`full`. Çıktı JSON değil **satır-bazlı kompakt
   DSL** (JSON'un tekrar eden anahtarları bu ölçekte saf token israfı).
 - **İlk entity: flow run** (`flowrun.go`). Paralel node'un çocukları ebeveyne
   katlanır (`parallel:fan[2/2✓ 48s]`); ardışık node süresi trace damgalarının
@@ -2416,13 +2503,13 @@ ekranıyla tek kaynaktan.
 - **Hata yutulmaz:** bilinmeyen kind → 400, olmayan koşu → 404, bozuk graph/state
   JSON → hata. Boş view "sağlıklı boş entity" gibi okunacağı için asla
   döndürülmez.
-- **API** `GET /api/views/{kind}/{id}?level&lens&sub` (`internal/api/views.go`);
+- **API** `GET /api/views/{kind}/{id}?level&sub` (`internal/api/views.go`);
   yanıt `text` alanını taşır — ajanın aldığı baytların aynısı.
 - **Araç** `get_view` (`internal/tools/builtin_view.go`) — pull kanalı, her ajana
   açık, kategori `diagnostics`. Push (dinamik suffix) bilerek yapılmadı: canlı bir
   özeti her tura enjekte etmek prompt cache'ini kırar ([57](57-PROMPT-EPOCH.md)).
 - **UI `frontend/src/features/view/`** — `◱ Özet` butonu (Akışlar ▸ Koşular
-  başlığı + `RunView` özet satırı) → sağdan `ViewPanel` sheet'i: level/lens
+  başlığı + `RunView` özet satırı) → sağdan `ViewPanel` sheet'i: level
   seçici, `asOf` + `~N tok`, **ham DSL monospace** (güzelleştirilmiş kart değil →
   projeksiyon yanlışsa kullanıcı görür), `elided` satırı, tıklanabilir handle'lar
   + breadcrumb, Kopyala.

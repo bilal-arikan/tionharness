@@ -1,5 +1,6 @@
 import type { DaySeriesPoint, DeltaStat, NamedCost, NamedCount } from '@/types'
 import { compact, fmtUsd } from './chartFormat'
+import { KIND_COLORS } from '@/shared/lib/palette'
 
 // Hand-rolled SVG/CSS charts, matching how features/sessions/viz already draws
 // its Sankey and Gantt. A charting library would add a large dependency for
@@ -26,7 +27,7 @@ export function DeltaBadge({ d, invert = false }: { d: DeltaStat; invert?: boole
   return (
     <span
       className="text-[10px] font-medium tabular-nums"
-      style={{ color: good ? '#22c55e' : 'var(--color-danger)' }}
+      style={{ color: good ? 'var(--color-success)' : 'var(--color-danger)' }}
       title={`${d.curr} (önceki dönem ${d.prev})`}
     >
       {up ? '▲' : '▼'} {Math.round(Math.abs(d.pct) * 100)}%
@@ -115,13 +116,13 @@ export function DayBars({
 // between refreshes, which is what makes the chart readable at a glance.
 const PALETTE = [
   'var(--color-accent)',
-  '#22c55e',
-  '#eab308',
-  '#ef4444',
-  '#a855f7',
-  '#06b6d4',
-  '#f97316',
-  '#64748b',
+  'var(--color-success)',
+  'var(--color-warning)',
+  'var(--color-danger)',
+  KIND_COLORS.flow,
+  KIND_COLORS.schedule,
+  KIND_COLORS.delegate,
+  KIND_COLORS.other,
 ]
 
 // colorFor gives known statuses their semantic colour and everything else a
@@ -129,17 +130,17 @@ const PALETTE = [
 function colorFor(name: string, index: number): string {
   switch (name) {
     case 'success':
-      return '#22c55e'
+      return 'var(--color-success)'
     case 'failure':
-      return '#ef4444'
+      return 'var(--color-danger)'
     case 'waiting':
-      return '#eab308'
+      return 'var(--color-warning)'
     case 'running':
       return 'var(--color-accent)'
     case 'done':
-      return '#22c55e'
+      return 'var(--color-success)'
     case 'failed':
-      return '#ef4444'
+      return 'var(--color-danger)'
     case 'in_progress':
       return 'var(--color-accent)'
     case 'review':
@@ -215,7 +216,10 @@ export function CostRankBars({
             <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-[var(--color-surface-2)]">
               <div
                 className="h-full rounded-full"
-                style={{ width: `${max > 0 ? (i.cost / max) * 100 : 0}%`, background: '#22c55e' }}
+                style={{
+                  width: `${max > 0 ? (i.cost / max) * 100 : 0}%`,
+                  background: 'var(--color-success)',
+                }}
               />
             </div>
             <span className="w-14 shrink-0 text-right text-[11px] font-medium tabular-nums">

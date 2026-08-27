@@ -18,7 +18,7 @@ func TestProjectArtifactRendersMetadata(t *testing.T) {
 			UpdatedAt: now.Add(-2 * time.Hour).Unix(),
 		},
 		Now: now,
-	}, LevelCard, LensHealth)
+	}, LevelCard)
 	if err != nil {
 		t.Fatalf("project: %v", err)
 	}
@@ -36,7 +36,7 @@ func TestProjectArtifactRendersMetadata(t *testing.T) {
 }
 
 func TestProjectArtifactRejectsEmptyID(t *testing.T) {
-	if _, err := ProjectArtifact(ArtifactInput{Artifact: db.Artifact{}}, LevelCard, LensHealth); err == nil {
+	if _, err := ProjectArtifact(ArtifactInput{Artifact: db.Artifact{}}, LevelCard); err == nil {
 		t.Error("an artifact with no id must be an error, not a blank card")
 	}
 }
@@ -44,7 +44,7 @@ func TestProjectArtifactRejectsEmptyID(t *testing.T) {
 func TestProjectArtifactTinyIsHeaderOnly(t *testing.T) {
 	v, err := ProjectArtifact(ArtifactInput{
 		Artifact: db.Artifact{ID: "ART1", Title: "x", Kind: "text", UpdatedAt: 1},
-	}, LevelTiny, LensHealth)
+	}, LevelTiny)
 	if err != nil {
 		t.Fatalf("project: %v", err)
 	}

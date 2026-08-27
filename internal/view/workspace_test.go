@@ -49,7 +49,7 @@ func workspaceFixture(now time.Time) WorkspaceInput {
 
 func TestWorkspaceHeaderCountsWhatMatters(t *testing.T) {
 	now := time.Now()
-	v, err := ProjectWorkspace(workspaceFixture(now), LevelCard, LensHealth)
+	v, err := ProjectWorkspace(workspaceFixture(now), LevelCard)
 	if err != nil {
 		t.Fatalf("project: %v", err)
 	}
@@ -65,7 +65,7 @@ func TestWorkspaceHeaderCountsWhatMatters(t *testing.T) {
 
 func TestWorkspaceSurfacesEverySignal(t *testing.T) {
 	now := time.Now()
-	v, err := ProjectWorkspace(workspaceFixture(now), LevelCard, LensHealth)
+	v, err := ProjectWorkspace(workspaceFixture(now), LevelCard)
 	if err != nil {
 		t.Fatalf("project: %v", err)
 	}
@@ -102,7 +102,7 @@ func TestWorkspaceDisabledScheduleIsNotAFailure(t *testing.T) {
 	// line entirely.
 	in.Schedules = []db.Schedule{{ID: "SCH2", Enabled: false, LastDeliveryStatus: "error"}}
 
-	v, err := ProjectWorkspace(in, LevelCard, LensHealth)
+	v, err := ProjectWorkspace(in, LevelCard)
 	if err != nil {
 		t.Fatalf("project: %v", err)
 	}
@@ -111,40 +111,9 @@ func TestWorkspaceDisabledScheduleIsNotAFailure(t *testing.T) {
 	}
 }
 
-func TestWorkspaceErrorsLensDropsRoutineLines(t *testing.T) {
-	v, err := ProjectWorkspace(workspaceFixture(time.Now()), LevelCard, LensErrors)
-	if err != nil {
-		t.Fatalf("project: %v", err)
-	}
-	txt := v.Text()
-	if !strings.Contains(txt, "başarısız akış koşusu") {
-		t.Errorf("errors lens dropped a failure signal:\n%s", txt)
-	}
-	for _, unwanted := range []string{"pano:", "koşular:", "koordinatör oturumu", "hareketsiz"} {
-		if strings.Contains(txt, unwanted) {
-			t.Errorf("errors lens leaked %q:\n%s", unwanted, txt)
-		}
-	}
-}
-
-func TestWorkspaceQuietLensSaysSoInsteadOfBlank(t *testing.T) {
-	now := time.Now()
-	in := WorkspaceInput{Now: now, Agents: []db.Agent{{ID: "AG1"}}}
-
-	v, err := ProjectWorkspace(in, LevelCard, LensErrors)
-	if err != nil {
-		t.Fatalf("project: %v", err)
-	}
-	// A healthy workspace under a failure lens must SAY nothing is wrong; an
-	// empty body is indistinguishable from a broken projection.
-	if !strings.Contains(v.Text(), "dikkat çeken bir şey yok") {
-		t.Errorf("quiet lens rendered a bare header:\n%s", v.Text())
-	}
-}
-
 func TestWorkspaceFullListsTheSpecifics(t *testing.T) {
 	now := time.Now()
-	v, err := ProjectWorkspace(workspaceFixture(now), LevelFull, LensHealth)
+	v, err := ProjectWorkspace(workspaceFixture(now), LevelFull)
 	if err != nil {
 		t.Fatalf("project: %v", err)
 	}
@@ -157,7 +126,7 @@ func TestWorkspaceFullListsTheSpecifics(t *testing.T) {
 }
 
 func TestWorkspaceHandlesPointAtTheTrouble(t *testing.T) {
-	v, err := ProjectWorkspace(workspaceFixture(time.Now()), LevelCard, LensHealth)
+	v, err := ProjectWorkspace(workspaceFixture(time.Now()), LevelCard)
 	if err != nil {
 		t.Fatalf("project: %v", err)
 	}
@@ -177,7 +146,7 @@ func TestWorkspaceHandlesPointAtTheTrouble(t *testing.T) {
 }
 
 func TestWorkspaceTinyIsHeaderOnly(t *testing.T) {
-	v, err := ProjectWorkspace(workspaceFixture(time.Now()), LevelTiny, LensHealth)
+	v, err := ProjectWorkspace(workspaceFixture(time.Now()), LevelTiny)
 	if err != nil {
 		t.Fatalf("project: %v", err)
 	}

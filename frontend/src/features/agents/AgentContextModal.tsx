@@ -9,6 +9,7 @@ import {
   CollapsibleSection,
   InfoPopover,
   ModalOverlay,
+  PaneHeader,
   toast,
   useBulkToggle,
 } from '@/shared/components'
@@ -183,20 +184,26 @@ export function AgentContextModal({ agentId, agentName, onClose }: Props) {
         )}
 
         {/* Sample message → simulate the dynamic suffix */}
-        <div className="flex flex-wrap items-center gap-2 border-b border-[var(--color-border)] px-5 py-2">
-          <input
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && load(message)}
-            placeholder="Örnek mesaj yaz → bu mesaj için çapraz-oturum bağlamı simüle edilir"
-            className="min-w-0 flex-1 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5 text-xs outline-none focus:border-[var(--color-accent)]"
-          />
-          {/* Expand/collapse-all (icon-only), sitting next to the simulate button. */}
-          {data && <BulkButtons onExpand={expandAll} onCollapse={collapseAll} />}
-          <Button onClick={() => load(message)} disabled={loading} className="shrink-0">
-            {loading ? '…' : 'Simüle et'}
-          </Button>
-        </div>
+        <PaneHeader
+          titleSlot={
+            <input
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && load(message)}
+              placeholder="Örnek mesaj yaz → bu mesaj için çapraz-oturum bağlamı simüle edilir"
+              className="min-w-0 flex-1 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5 text-xs outline-none focus:border-[var(--color-accent)]"
+            />
+          }
+          right={
+            <>
+              {/* Expand/collapse-all (icon-only), sitting next to the simulate button. */}
+              {data && <BulkButtons onExpand={expandAll} onCollapse={collapseAll} />}
+              <Button onClick={() => load(message)} disabled={loading} className="shrink-0">
+                {loading ? '…' : 'Simüle et'}
+              </Button>
+            </>
+          }
+        />
 
         {/* Body */}
         <div className="min-h-0 flex-1 overflow-y-auto p-5">

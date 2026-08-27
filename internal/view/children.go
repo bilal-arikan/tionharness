@@ -16,10 +16,6 @@ import (
 // child. Both surfaces (the map UI and the agent-side expand wrapper) call this,
 // so they walk the exact same graph.
 //
-// lens filters the children: LensErrors returns only the troubled ones. Finer
-// lens semantics (stale/recent slicing) are a later refinement; today only the
-// errors lens narrows the set, every other lens passes the members through.
-//
 // The list is capped at categoryTopN (the per-node child cap, _Docs/68 §8.1) so a
 // 300-session workspace cannot explode the map. The honest total lives on the
 // node's own Project (e.g. ProjectCategory reports Elided) — Children is the raw,
@@ -28,7 +24,7 @@ import (
 // An unknown kind is an error, not an empty slice: a caller asking to expand a
 // kind that has no children defined has a bug, and a silent empty list would hide
 // it behind a plausible "leaf node".
-func (p *Projector) Children(ctx context.Context, ref Ref, lens Lens) ([]Handle, error) {
+func (p *Projector) Children(ctx context.Context, ref Ref) ([]Handle, error) {
 	if p == nil || p.store == nil {
 		return nil, fmt.Errorf("view: projector has no store")
 	}
@@ -36,7 +32,7 @@ func (p *Projector) Children(ctx context.Context, ref Ref, lens Lens) ([]Handle,
 	case KindSpace:
 		return workspaceChildren(), nil
 	case KindCategory:
-		members, err := p.categoryMembers(ctx, ref.ID, lens)
+		members, err := p.categoryMembers(ctx, ref.ID)
 		if err != nil {
 			return nil, err
 		}
@@ -51,13 +47,13 @@ func (p *Projector) Children(ctx context.Context, ref Ref, lens Lens) ([]Handle,
 		}
 		return capHandles(cols, categoryTopN), nil
 	case KindAgent:
-		sessions, err := p.agentSessionChildren(ctx, ref.ID, lens)
+		sessions, err := p.agentSessionChildren(ctx, ref.ID)
 		if err != nil {
 			return nil, err
 		}
 		return capHandles(sessions, categoryTopN), nil
 	case KindSession:
-		workers, err := p.sessionWorkerChildren(ctx, ref.ID, lens)
+		workers, err := p.sessionWorkerChildren(ctx, ref.ID)
 		if err != nil {
 			return nil, err
 		}
@@ -112,20 +108,20 @@ func workspaceChildren() []Handle {
 // categoryMembers computes the FULL (uncapped) member handle list for a category.
 // ProjectCategory reads this to count members honestly; Children caps the same
 // list. An unknown category id is an error — see ProjectCategory's rationale.
-func (p *Projector) categoryMembers(ctx context.Context, id string, lens Lens) ([]Handle, error) {
+func (p *Projector) categoryMembers(ctx context.Context, id string) ([]Handle, error) {
 	switch id {
 	case CategorySessions:
 		sessions, err := p.store.ListSessions(ctx, "")
 		if err != nil {
 			return nil, fmt.Errorf("view: category sessions: %w", err)
 		}
-		return sessionHandleList(liveSessions(sessions), lens), nil
+		return sessionHandleList(liveSessions(sessions)), nil
 	case CategoryFlows:
 		runs, err := p.store.ListFlowRuns(ctx, "")
 		if err != nil {
 			return nil, fmt.Errorf("view: category flows: %w", err)
 		}
-		return flowRunHandleList(runs, lens), nil
+		return flowRunHandleList(runs), nil
 	case CategoryAgents:
 		agents, err := p.store.ListAgents(ctx)
 		if err != nil {
@@ -143,7 +139,7 @@ func (p *Projector) categoryMembers(ctx context.Context, id string, lens Lens) (
 		if err != nil {
 			return nil, fmt.Errorf("view: category automations: %w", err)
 		}
-		return automationHandleList(automations, lens), nil
+		return automationHandleList(automations), nil
 	case CategorySkills:
 		if p.sources.Skills == nil {
 			return nil, fmt.Errorf("view: category skills: skill catalog unavailable")
@@ -153,14 +149,14 @@ func (p *Projector) categoryMembers(ctx context.Context, id string, lens Lens) (
 		if p.sources.Findings == nil {
 			return nil, fmt.Errorf("view: category insights: findings store unavailable")
 		}
-		return insightHandleList(p.sources.Findings.ListFindings(), lens), nil
+		return insightHandleList(p.sources.Findings.ListFindings()), nil
 	}
 	if key, found := cutColumnPrefix(id); found {
 		tasks, err := p.store.ListActiveTasks(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("view: category %s: %w", id, err)
 		}
-		return columnCardHandles(tasks, key, lens), nil
+		return columnCardHandles(tasks, key), nil
 	}
 	return nil, fmt.Errorf("view: unknown category %q", id)
 }
@@ -185,8 +181,8 @@ func (p *Projector) boardColumnChildren(ctx context.Context) ([]Handle, error) {
 }
 
 // agentSessionChildren is an agent's structural children: the sessions bound to
-// it, lens-filtered.
-func (p *Projector) agentSessionChildren(ctx context.Context, agentID string, lens Lens) ([]Handle, error) {
+// it.
+func (p *Projector) agentSessionChildren(ctx context.Context, agentID string) ([]Handle, error) {
 	if agentID == "" {
 		return nil, fmt.Errorf("view: agent children: empty id")
 	}
@@ -194,13 +190,13 @@ func (p *Projector) agentSessionChildren(ctx context.Context, agentID string, le
 	if err != nil {
 		return nil, fmt.Errorf("view: agent %s sessions: %w", agentID, err)
 	}
-	return sessionHandleList(liveSessions(sessions), lens), nil
+	return sessionHandleList(liveSessions(sessions)), nil
 }
 
 // sessionWorkerChildren is a session's structural children: the worker sessions
 // that report up to it (a coordinator drills into its fleet). A plain session
 // simply has none.
-func (p *Projector) sessionWorkerChildren(ctx context.Context, sessionID string, lens Lens) ([]Handle, error) {
+func (p *Projector) sessionWorkerChildren(ctx context.Context, sessionID string) ([]Handle, error) {
 	if sessionID == "" {
 		return nil, fmt.Errorf("view: session children: empty id")
 	}
@@ -214,21 +210,15 @@ func (p *Projector) sessionWorkerChildren(ctx context.Context, sessionID string,
 			workers = append(workers, s)
 		}
 	}
-	return sessionHandleList(workers, lens), nil
+	return sessionHandleList(workers), nil
 }
 
-// sessionHandleList orders sessions most-recently-active first, applies the lens
-// filter, and renders each as a session handle.
-func sessionHandleList(sessions []db.Session, lens Lens) []Handle {
-	filtered := make([]db.Session, 0, len(sessions))
+// sessionHandleList orders sessions most-recently-active first and renders each
+// as a session handle.
+func sessionHandleList(sessions []db.Session) []Handle {
+	sort.Slice(sessions, func(i, j int) bool { return sessions[i].UpdatedAt > sessions[j].UpdatedAt })
+	hs := make([]Handle, 0, len(sessions))
 	for _, s := range sessions {
-		if sessionMatchesLens(s, lens) {
-			filtered = append(filtered, s)
-		}
-	}
-	sort.Slice(filtered, func(i, j int) bool { return filtered[i].UpdatedAt > filtered[j].UpdatedAt })
-	hs := make([]Handle, 0, len(filtered))
-	for _, s := range filtered {
 		hs = append(hs, Handle{
 			Label: "session:" + s.ID + " " + clip(orDash(s.Title), 40),
 			Ref:   Ref{Kind: KindSession, ID: s.ID},
@@ -238,18 +228,12 @@ func sessionHandleList(sessions []db.Session, lens Lens) []Handle {
 	return hs
 }
 
-// flowRunHandleList orders runs most-recent first, applies the lens filter, and
-// renders each as a flow-run handle.
-func flowRunHandleList(runs []db.FlowRun, lens Lens) []Handle {
-	filtered := make([]db.FlowRun, 0, len(runs))
+// flowRunHandleList orders runs most-recent first and renders each as a
+// flow-run handle.
+func flowRunHandleList(runs []db.FlowRun) []Handle {
+	sort.Slice(runs, func(i, j int) bool { return runs[i].UpdatedAt > runs[j].UpdatedAt })
+	hs := make([]Handle, 0, len(runs))
 	for _, r := range runs {
-		if flowRunMatchesLens(r, lens) {
-			filtered = append(filtered, r)
-		}
-	}
-	sort.Slice(filtered, func(i, j int) bool { return filtered[i].UpdatedAt > filtered[j].UpdatedAt })
-	hs := make([]Handle, 0, len(filtered))
-	for _, r := range filtered {
 		hs = append(hs, Handle{
 			Label: "run:" + r.ID + " " + string(r.Status),
 			Ref:   Ref{Kind: KindFlowRun, ID: r.ID},
@@ -259,8 +243,7 @@ func flowRunHandleList(runs []db.FlowRun, lens Lens) []Handle {
 	return hs
 }
 
-// agentHandleList renders every agent as an agent handle. The errors lens does
-// not narrow agents — an agent is not itself an error state — so all agents pass.
+// agentHandleList renders every agent as an agent handle.
 func agentHandleList(agents []db.Agent) []Handle {
 	hs := make([]Handle, 0, len(agents))
 	for _, a := range agents {
@@ -274,8 +257,7 @@ func agentHandleList(agents []db.Agent) []Handle {
 }
 
 // artifactHandleList renders every artifact (newest updated first) as an
-// artifact handle. The errors lens does not narrow artifacts — an artifact is
-// not itself an error state — so all pass.
+// artifact handle.
 func artifactHandleList(artifacts []db.Artifact) []Handle {
 	sorted := append([]db.Artifact(nil), artifacts...)
 	sort.SliceStable(sorted, func(i, j int) bool { return sorted[i].UpdatedAt > sorted[j].UpdatedAt })
@@ -291,17 +273,10 @@ func artifactHandleList(artifacts []db.Artifact) []Handle {
 }
 
 // automationHandleList renders automations (newest first) as automation handles.
-// The errors lens keeps only rules whose last fire failed.
-func automationHandleList(automations []db.Automation, lens Lens) []Handle {
-	filtered := make([]db.Automation, 0, len(automations))
+func automationHandleList(automations []db.Automation) []Handle {
+	sort.SliceStable(automations, func(i, j int) bool { return automations[i].CreatedAt > automations[j].CreatedAt })
+	hs := make([]Handle, 0, len(automations))
 	for _, a := range automations {
-		if automationMatchesLens(a, lens) {
-			filtered = append(filtered, a)
-		}
-	}
-	sort.SliceStable(filtered, func(i, j int) bool { return filtered[i].CreatedAt > filtered[j].CreatedAt })
-	hs := make([]Handle, 0, len(filtered))
-	for _, a := range filtered {
 		hs = append(hs, Handle{
 			Label: "automation:" + a.ID + " " + clip(orDash(a.Name), 40),
 			Ref:   Ref{Kind: KindAutomation, ID: a.ID},
@@ -311,8 +286,7 @@ func automationHandleList(automations []db.Automation, lens Lens) []Handle {
 	return hs
 }
 
-// skillHandleList renders the catalog (display order) as skill handles. The
-// errors lens does not narrow skills — a skill is not an error state.
+// skillHandleList renders the catalog (display order) as skill handles.
 func skillHandleList(skills []skills.Skill) []Handle {
 	hs := make([]Handle, 0, len(skills))
 	for _, sk := range skills {
@@ -326,17 +300,10 @@ func skillHandleList(skills []skills.Skill) []Handle {
 }
 
 // insightHandleList renders findings (store order: priority-ranked, newest
-// evidence first) as insight handles. The errors lens keeps only findings that
-// still need attention (fresh or regressed).
-func insightHandleList(findings []InsightFinding, lens Lens) []Handle {
-	filtered := make([]InsightFinding, 0, len(findings))
+// evidence first) as insight handles.
+func insightHandleList(findings []InsightFinding) []Handle {
+	hs := make([]Handle, 0, len(findings))
 	for _, f := range findings {
-		if insightMatchesLens(f, lens) {
-			filtered = append(filtered, f)
-		}
-	}
-	hs := make([]Handle, 0, len(filtered))
-	for _, f := range filtered {
 		hs = append(hs, Handle{
 			Label: "insight:" + f.ID + " " + clip(f.Title, 40),
 			Ref:   Ref{Kind: KindInsight, ID: f.ID},
@@ -347,15 +314,15 @@ func insightHandleList(findings []InsightFinding, lens Lens) []Handle {
 }
 
 // columnCardHandles renders the cards of one board column as card handles
-// (KindBoard drill-down via Sub), applying the lens filter.
-func columnCardHandles(tasks []db.Task, columnKey string, lens Lens) []Handle {
+// (KindBoard drill-down via Sub).
+func columnCardHandles(tasks []db.Task, columnKey string) []Handle {
 	var cards []db.Task
 	for _, t := range tasks {
 		key := t.BoardState
 		if key == "" {
 			key = "(boş)"
 		}
-		if key == columnKey && taskMatchesLens(t, lens) {
+		if key == columnKey {
 			cards = append(cards, t)
 		}
 	}
@@ -369,53 +336,6 @@ func columnCardHandles(tasks []db.Task, columnKey string, lens Lens) []Handle {
 		})
 	}
 	return hs
-}
-
-// sessionMatchesLens decides whether a session belongs in a lens-filtered child
-// list. Only the errors lens narrows the set (to stuck sessions); every other
-// lens passes the session through.
-func sessionMatchesLens(s db.Session, lens Lens) bool {
-	if lens == LensErrors {
-		return s.StuckTurns > 0
-	}
-	return true
-}
-
-// flowRunMatchesLens narrows a run to failures under the errors lens.
-func flowRunMatchesLens(r db.FlowRun, lens Lens) bool {
-	if lens == LensErrors {
-		return r.Status == db.FlowFailure
-	}
-	return true
-}
-
-// taskMatchesLens narrows a card to failed cards under the errors lens.
-func taskMatchesLens(t db.Task, lens Lens) bool {
-	if lens == LensErrors {
-		return t.BoardState == db.BoardFailed
-	}
-	return true
-}
-
-// automationMatchesLens narrows automations to rules whose last fire failed
-// under the errors lens — a rule that never fired has no error, and a disabled
-// rule is a deliberate pause, not a problem.
-func automationMatchesLens(a db.Automation, lens Lens) bool {
-	if lens == LensErrors {
-		return a.LastError != ""
-	}
-	return true
-}
-
-// insightMatchesLens narrows findings to ones needing attention under the
-// errors lens: a fresh (unreviewed) finding or a regressed (recurring after
-// being closed) one. A triaged/accepted/applied finding is under review and
-// not an open error.
-func insightMatchesLens(f InsightFinding, lens Lens) bool {
-	if lens == LensErrors {
-		return f.Status == insightStatusNew || f.Regressed
-	}
-	return true
 }
 
 // liveSessions drops archived sessions — they are not part of the live surface

@@ -447,7 +447,7 @@ export function ExternalToolsPanel({ onError }: Props) {
                                     ? ' (önbellekten — GitHub’a ulaşılamadı)'
                                     : ''
                                 }`}
-                                className="rounded bg-[var(--color-warning-soft,var(--color-surface-2))] px-1.5 py-0.5 font-mono text-[10px] text-[var(--color-warning)] hover:underline"
+                                className="rounded bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)] px-1.5 py-0.5 font-mono text-[10px] text-[var(--color-warning)] hover:underline"
                               >
                                 ↑ {updates[t.name].latest}
                               </a>
@@ -556,7 +556,7 @@ export function ExternalToolsPanel({ onError }: Props) {
                               disabled={updateBusy === t.name}
                               onClick={() => runUpdate(t)}
                               title={`Çalıştırılacak komut: ${t.updateCommand}`}
-                              className="rounded bg-[var(--color-accent)] px-2 py-0.5 text-xs font-medium text-white hover:opacity-90 disabled:opacity-50"
+                              className="rounded bg-[var(--color-accent)] px-2 py-0.5 text-xs font-medium text-[var(--color-on-accent)] hover:opacity-90 disabled:opacity-50"
                             >
                               {updateBusy === t.name ? 'Güncelleniyor…' : 'Güncelle'}
                             </button>
@@ -664,7 +664,7 @@ export function ExternalToolsPanel({ onError }: Props) {
                               className={`rounded px-2.5 py-1 text-xs font-medium disabled:opacity-50 ${
                                 cbmServer()
                                   ? 'bg-[var(--color-accent-soft)] text-[var(--color-accent)]'
-                                  : 'bg-[var(--color-accent)] text-white hover:opacity-90'
+                                  : 'bg-[var(--color-accent)] text-[var(--color-on-accent)] hover:opacity-90'
                               }`}
                               title={
                                 !t.found
@@ -739,7 +739,7 @@ export function ExternalToolsPanel({ onError }: Props) {
                               data-hook={h.id}
                               disabled={fixBusy === h.id}
                               onClick={() => fixMatcher(h)}
-                              className="shrink-0 rounded bg-[var(--color-accent)] px-2 py-0.5 text-xs font-medium text-white hover:opacity-90 disabled:opacity-50"
+                              className="shrink-0 rounded bg-[var(--color-accent)] px-2 py-0.5 text-xs font-medium text-[var(--color-on-accent)] hover:opacity-90 disabled:opacity-50"
                               title="Matcher'a PowerShell ekle (Bash,PowerShell)"
                             >
                               {fixBusy === h.id ? '…' : 'Matcher’ı düzelt'}

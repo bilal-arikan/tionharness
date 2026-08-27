@@ -114,7 +114,7 @@ func kindsOf(hs []Handle) map[Kind]int {
 }
 
 func TestChildrenWorkspaceIsElevenNodes(t *testing.T) {
-	hs, err := childrenFixture().Children(context.Background(), Ref{Kind: KindSpace, ID: WorkspaceRefID}, LensHealth)
+	hs, err := childrenFixture().Children(context.Background(), Ref{Kind: KindSpace, ID: WorkspaceRefID})
 	if err != nil {
 		t.Fatalf("children: %v", err)
 	}
@@ -132,7 +132,7 @@ func TestChildrenWorkspaceIsElevenNodes(t *testing.T) {
 }
 
 func TestChildrenSessionsCategoryExcludesArchived(t *testing.T) {
-	hs, err := childrenFixture().Children(context.Background(), Ref{Kind: KindCategory, ID: CategorySessions}, LensHealth)
+	hs, err := childrenFixture().Children(context.Background(), Ref{Kind: KindCategory, ID: CategorySessions})
 	if err != nil {
 		t.Fatalf("children: %v", err)
 	}
@@ -150,45 +150,27 @@ func TestChildrenSessionsCategoryExcludesArchived(t *testing.T) {
 	}
 }
 
-func TestChildrenSessionsErrorsLensKeepsOnlyStuck(t *testing.T) {
-	hs, err := childrenFixture().Children(context.Background(), Ref{Kind: KindCategory, ID: CategorySessions}, LensErrors)
-	if err != nil {
-		t.Fatalf("children: %v", err)
-	}
-	if len(hs) != 1 || hs[0].Ref.ID != "W2" {
-		t.Fatalf("errors lens should keep only the stuck session W2: %+v", hs)
-	}
-}
-
 func TestChildrenAgentsAndFlows(t *testing.T) {
 	p := childrenFixture()
-	agents, err := p.Children(context.Background(), Ref{Kind: KindCategory, ID: CategoryAgents}, LensHealth)
+	agents, err := p.Children(context.Background(), Ref{Kind: KindCategory, ID: CategoryAgents})
 	if err != nil {
 		t.Fatalf("agents: %v", err)
 	}
 	if len(agents) != 2 || kindsOf(agents)[KindAgent] != 2 {
 		t.Errorf("agents category wrong: %+v", agents)
 	}
-	flows, err := p.Children(context.Background(), Ref{Kind: KindCategory, ID: CategoryFlows}, LensHealth)
+	flows, err := p.Children(context.Background(), Ref{Kind: KindCategory, ID: CategoryFlows})
 	if err != nil {
 		t.Fatalf("flows: %v", err)
 	}
 	if len(flows) != 2 || kindsOf(flows)[KindFlowRun] != 2 {
 		t.Errorf("flows category wrong: %+v", flows)
 	}
-	// Errors lens narrows flows to the failed run.
-	failed, err := p.Children(context.Background(), Ref{Kind: KindCategory, ID: CategoryFlows}, LensErrors)
-	if err != nil {
-		t.Fatalf("flows errors: %v", err)
-	}
-	if len(failed) != 1 || failed[0].Ref.ID != "RUN2" {
-		t.Errorf("errors lens should keep only the failed run: %+v", failed)
-	}
 }
 
 func TestChildrenBoardIsColumnsAndColumnIsCards(t *testing.T) {
 	p := childrenFixture()
-	cols, err := p.Children(context.Background(), Ref{Kind: KindBoard, ID: BoardRefID}, LensHealth)
+	cols, err := p.Children(context.Background(), Ref{Kind: KindBoard, ID: BoardRefID})
 	if err != nil {
 		t.Fatalf("board: %v", err)
 	}
@@ -196,7 +178,7 @@ func TestChildrenBoardIsColumnsAndColumnIsCards(t *testing.T) {
 	if len(cols) != 2 || kindsOf(cols)[KindCategory] != 2 {
 		t.Fatalf("board columns wrong: %+v", cols)
 	}
-	cards, err := p.Children(context.Background(), Ref{Kind: KindCategory, ID: categoryColumnPrefix + db.BoardInProgress}, LensHealth)
+	cards, err := p.Children(context.Background(), Ref{Kind: KindCategory, ID: categoryColumnPrefix + db.BoardInProgress})
 	if err != nil {
 		t.Fatalf("column: %v", err)
 	}
@@ -211,7 +193,7 @@ func TestChildrenBoardIsColumnsAndColumnIsCards(t *testing.T) {
 }
 
 func TestChildrenAgentDrillsIntoItsSessions(t *testing.T) {
-	hs, err := childrenFixture().Children(context.Background(), Ref{Kind: KindAgent, ID: "AG1"}, LensHealth)
+	hs, err := childrenFixture().Children(context.Background(), Ref{Kind: KindAgent, ID: "AG1"})
 	if err != nil {
 		t.Fatalf("agent children: %v", err)
 	}
@@ -222,7 +204,7 @@ func TestChildrenAgentDrillsIntoItsSessions(t *testing.T) {
 }
 
 func TestChildrenSessionDrillsIntoWorkers(t *testing.T) {
-	hs, err := childrenFixture().Children(context.Background(), Ref{Kind: KindSession, ID: "COORD"}, LensHealth)
+	hs, err := childrenFixture().Children(context.Background(), Ref{Kind: KindSession, ID: "COORD"})
 	if err != nil {
 		t.Fatalf("session children: %v", err)
 	}
@@ -230,7 +212,7 @@ func TestChildrenSessionDrillsIntoWorkers(t *testing.T) {
 		t.Fatalf("coordinator should have 2 workers: %+v", hs)
 	}
 	// A plain (non-coordinator) session has no workers.
-	none, err := childrenFixture().Children(context.Background(), Ref{Kind: KindSession, ID: "S3"}, LensHealth)
+	none, err := childrenFixture().Children(context.Background(), Ref{Kind: KindSession, ID: "S3"})
 	if err != nil {
 		t.Fatalf("plain session children: %v", err)
 	}
@@ -245,7 +227,7 @@ func TestChildrenLeavesAndErrors(t *testing.T) {
 
 	// Budget/tools are leaves in the map — empty, not an error.
 	for _, ref := range []Ref{{Kind: KindBudget, ID: BudgetRefID}, {Kind: KindTools, ID: ToolsRefID}} {
-		hs, err := p.Children(ctx, ref, LensHealth)
+		hs, err := p.Children(ctx, ref)
 		if err != nil {
 			t.Errorf("%s children errored: %v", ref.Kind, err)
 		}
@@ -254,18 +236,18 @@ func TestChildrenLeavesAndErrors(t *testing.T) {
 		}
 	}
 	// A single board card (Sub set) is a leaf.
-	if hs, err := p.Children(ctx, Ref{Kind: KindBoard, ID: BoardRefID, Sub: "T1"}, LensHealth); err != nil || len(hs) != 0 {
+	if hs, err := p.Children(ctx, Ref{Kind: KindBoard, ID: BoardRefID, Sub: "T1"}); err != nil || len(hs) != 0 {
 		t.Errorf("board card must be a leaf: hs=%+v err=%v", hs, err)
 	}
 	// An unknown category id and an unsupported kind are BOTH errors, never empty.
-	if _, err := p.Children(ctx, Ref{Kind: KindCategory, ID: "galaxy"}, LensHealth); err == nil {
+	if _, err := p.Children(ctx, Ref{Kind: KindCategory, ID: "galaxy"}); err == nil {
 		t.Error("unknown category must be an error")
 	}
-	if _, err := p.Children(ctx, Ref{Kind: KindSchedule, ID: "SCH1"}, LensHealth); err != nil {
+	if _, err := p.Children(ctx, Ref{Kind: KindSchedule, ID: "SCH1"}); err != nil {
 		// schedule is a defined leaf → empty, no error.
 		t.Errorf("schedule leaf should not error: %v", err)
 	}
-	if _, err := p.Children(ctx, Ref{Kind: Kind("galaxy"), ID: "x"}, LensHealth); err == nil {
+	if _, err := p.Children(ctx, Ref{Kind: Kind("galaxy"), ID: "x"}); err == nil {
 		t.Error("unsupported kind must be an error")
 	}
 }
@@ -277,12 +259,81 @@ func TestChildrenCapsAtTopN(t *testing.T) {
 		sessions = append(sessions, db.Session{ID: fmt.Sprintf("S%d", i), AgentID: "AG1", UpdatedAt: now})
 	}
 	p := NewProjector(&fakeStore{sessions: sessions})
-	hs, err := p.Children(context.Background(), Ref{Kind: KindCategory, ID: CategorySessions}, LensHealth)
+	hs, err := p.Children(context.Background(), Ref{Kind: KindCategory, ID: CategorySessions})
 	if err != nil {
 		t.Fatalf("children: %v", err)
 	}
 	if len(hs) != categoryTopN {
 		t.Errorf("children capped wrong: got %d, want %d", len(hs), categoryTopN)
+	}
+}
+
+func TestChildrenArtifactsAndAutomations(t *testing.T) {
+	now := time.Now().Unix()
+	p := NewProjector(&fakeStore{
+		artifacts: []db.Artifact{
+			{ID: "ART1", Title: "görev raporu", UpdatedAt: now},
+			{ID: "ART2", Title: "şema", UpdatedAt: now},
+		},
+		automations: []db.Automation{
+			{ID: "AUT1", Name: "todo→review", CreatedAt: now},
+			{ID: "AUT2", Name: "failed kart", CreatedAt: now, LastError: "provider 429"},
+		},
+	})
+	ctx := context.Background()
+
+	arts, err := p.Children(ctx, Ref{Kind: KindCategory, ID: CategoryArtifacts})
+	if err != nil {
+		t.Fatalf("artifacts: %v", err)
+	}
+	if len(arts) != 2 || kindsOf(arts)[KindArtifact] != 2 {
+		t.Errorf("artifacts category wrong: %+v", arts)
+	}
+	auts, err := p.Children(ctx, Ref{Kind: KindCategory, ID: CategoryAutomations})
+	if err != nil {
+		t.Fatalf("automations: %v", err)
+	}
+	if len(auts) != 2 || kindsOf(auts)[KindAutomation] != 2 {
+		t.Errorf("automations category wrong: %+v", auts)
+	}
+}
+
+func TestChildrenSkillsAndInsightsNeedSources(t *testing.T) {
+	ctx := context.Background()
+	p := NewProjector(&fakeStore{})
+	p.WithSources(Sources{
+		Skills: fakeSkillsSource{catalog: []skills.Skill{
+			{Slug: "tionharness-build", Name: "Build"},
+			{Slug: "tionharness-guide", Name: "Guide"},
+		}},
+		Findings: fakeFindingsSource{findings: []InsightFinding{
+			{ID: "FND1", Title: "provider 429", Status: "new"},
+			{ID: "FND2", Title: "eski ders", Status: "applied", Regressed: true},
+			{ID: "FND3", Title: "triaj edildi", Status: "triaged"},
+		}},
+	})
+
+	sk, err := p.Children(ctx, Ref{Kind: KindCategory, ID: CategorySkills})
+	if err != nil {
+		t.Fatalf("skills: %v", err)
+	}
+	if len(sk) != 2 || kindsOf(sk)[KindSkill] != 2 {
+		t.Errorf("skills category wrong: %+v", sk)
+	}
+	ins, err := p.Children(ctx, Ref{Kind: KindCategory, ID: CategoryInsights})
+	if err != nil {
+		t.Fatalf("insights: %v", err)
+	}
+	if len(ins) != 3 || kindsOf(ins)[KindInsight] != 3 {
+		t.Errorf("insights category wrong: %+v", ins)
+	}
+
+	bare := NewProjector(&fakeStore{})
+	if _, err := bare.Children(ctx, Ref{Kind: KindCategory, ID: CategorySkills}); err == nil {
+		t.Error("skills category without a source must error")
+	}
+	if _, err := bare.Children(ctx, Ref{Kind: KindCategory, ID: CategoryInsights}); err == nil {
+		t.Error("insights category without a source must error")
 	}
 }
 
@@ -306,102 +357,11 @@ type fakeFindingsSource struct{ findings []InsightFinding }
 
 func (f fakeFindingsSource) ListFindings() []InsightFinding { return f.findings }
 
-func TestChildrenArtifactsAndAutomations(t *testing.T) {
-	now := time.Now().Unix()
-	p := NewProjector(&fakeStore{
-		artifacts: []db.Artifact{
-			{ID: "ART1", Title: "görev raporu", UpdatedAt: now},
-			{ID: "ART2", Title: "şema", UpdatedAt: now},
-		},
-		automations: []db.Automation{
-			{ID: "AUT1", Name: "todo→review", CreatedAt: now},
-			{ID: "AUT2", Name: "failed kart", CreatedAt: now, LastError: "provider 429"},
-		},
-	})
-	ctx := context.Background()
-
-	arts, err := p.Children(ctx, Ref{Kind: KindCategory, ID: CategoryArtifacts}, LensHealth)
-	if err != nil {
-		t.Fatalf("artifacts: %v", err)
-	}
-	if len(arts) != 2 || kindsOf(arts)[KindArtifact] != 2 {
-		t.Errorf("artifacts category wrong: %+v", arts)
-	}
-
-	auts, err := p.Children(ctx, Ref{Kind: KindCategory, ID: CategoryAutomations}, LensHealth)
-	if err != nil {
-		t.Fatalf("automations: %v", err)
-	}
-	if len(auts) != 2 || kindsOf(auts)[KindAutomation] != 2 {
-		t.Errorf("automations category wrong: %+v", auts)
-	}
-
-	// Errors lens keeps only the rule whose last fire failed.
-	failed, err := p.Children(ctx, Ref{Kind: KindCategory, ID: CategoryAutomations}, LensErrors)
-	if err != nil {
-		t.Fatalf("automations errors: %v", err)
-	}
-	if len(failed) != 1 || failed[0].Ref.ID != "AUT2" {
-		t.Errorf("errors lens should keep only the failed automation: %+v", failed)
-	}
-}
-
-func TestChildrenSkillsAndInsightsNeedSources(t *testing.T) {
-	ctx := context.Background()
-	p := NewProjector(&fakeStore{})
-	p.WithSources(Sources{
-		Skills: fakeSkillsSource{catalog: []skills.Skill{
-			{Slug: "tionharness-build", Name: "Build"},
-			{Slug: "tionharness-guide", Name: "Guide"},
-		}},
-		Findings: fakeFindingsSource{findings: []InsightFinding{
-			{ID: "FND1", Title: "provider 429", Status: "new"},
-			{ID: "FND2", Title: "eski ders", Status: "applied", Regressed: true},
-			{ID: "FND3", Title: "triaj edildi", Status: "triaged"},
-		}},
-	})
-
-	sk, err := p.Children(ctx, Ref{Kind: KindCategory, ID: CategorySkills}, LensHealth)
-	if err != nil {
-		t.Fatalf("skills: %v", err)
-	}
-	if len(sk) != 2 || kindsOf(sk)[KindSkill] != 2 {
-		t.Errorf("skills category wrong: %+v", sk)
-	}
-
-	ins, err := p.Children(ctx, Ref{Kind: KindCategory, ID: CategoryInsights}, LensHealth)
-	if err != nil {
-		t.Fatalf("insights: %v", err)
-	}
-	if len(ins) != 3 || kindsOf(ins)[KindInsight] != 3 {
-		t.Errorf("insights category wrong: %+v", ins)
-	}
-
-	// Errors lens keeps fresh + regressed findings (needing attention).
-	needy, err := p.Children(ctx, Ref{Kind: KindCategory, ID: CategoryInsights}, LensErrors)
-	if err != nil {
-		t.Fatalf("insights errors: %v", err)
-	}
-	if len(needy) != 2 {
-		t.Errorf("errors lens should keep FND1 + FND2 (regressed): %+v", needy)
-	}
-
-	// Without sources the categories are a wiring error, never an empty list —
-	// an empty bucket would read like a genuinely empty workspace.
-	bare := NewProjector(&fakeStore{})
-	if _, err := bare.Children(ctx, Ref{Kind: KindCategory, ID: CategorySkills}, LensHealth); err == nil {
-		t.Error("skills category without a source must error")
-	}
-	if _, err := bare.Children(ctx, Ref{Kind: KindCategory, ID: CategoryInsights}, LensHealth); err == nil {
-		t.Error("insights category without a source must error")
-	}
-}
-
 func TestChildrenNewKindsAreLeaves(t *testing.T) {
 	ctx := context.Background()
 	p := childrenFixture()
 
-	hs, err := p.Children(ctx, Ref{Kind: KindLogs, ID: LogsRefID}, LensHealth)
+	hs, err := p.Children(ctx, Ref{Kind: KindLogs, ID: LogsRefID})
 	if err != nil {
 		t.Fatalf("logs children: %v", err)
 	}
@@ -415,7 +375,7 @@ func TestChildrenNewKindsAreLeaves(t *testing.T) {
 		{Kind: KindSkill, ID: "x"},
 		{Kind: KindInsight, ID: "FND1"},
 	} {
-		hs, err := p.Children(ctx, ref, LensHealth)
+		hs, err := p.Children(ctx, ref)
 		if err != nil {
 			t.Errorf("%s children errored: %v", ref.Kind, err)
 		}

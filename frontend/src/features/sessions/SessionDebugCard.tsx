@@ -301,7 +301,7 @@ export function SessionDebugCard({
                     onClick={() => setTypeFilter(t)}
                     className={`rounded px-1.5 py-0.5 text-[10px] transition ${
                       typeFilter === t
-                        ? 'bg-[var(--color-accent)] text-white'
+                        ? 'bg-[var(--color-accent)] text-[var(--color-on-accent)]'
                         : 'border border-[var(--color-border)] text-[var(--color-text-dim)] hover:text-[var(--color-text)]'
                     }`}
                   >

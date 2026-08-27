@@ -134,7 +134,7 @@ export function AgentActivityPanel({ agentId, onError, onOpenExecution, onClose 
         <span className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-[var(--color-text-dim)]">
           <Activity size={13} /> Aktivite
           {runningCount > 0 && (
-            <span className="rounded-full bg-[var(--color-accent-soft)] px-1.5 py-0.5 text-[10px] font-semibold text-[var(--color-accent)]">
+            <span className="rounded-full bg-[var(--color-accent-soft)] px-1.5 py-0.5 text-[10px] font-semibold text-[color-mix(in_srgb,var(--color-accent)_75%,var(--color-text))]">
               {runningCount} çalışıyor
             </span>
           )}

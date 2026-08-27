@@ -653,7 +653,7 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
                 onClick={() => setOriginFilter(val)}
                 className={`rounded px-1.5 py-0.5 text-[10px] font-medium transition ${
                   originFilter === val
-                    ? 'bg-[var(--color-accent)] text-white'
+                    ? 'bg-[var(--color-accent)] text-[var(--color-on-accent)]'
                     : 'bg-[var(--color-surface-2)] text-[var(--color-text-dim)] hover:text-[var(--color-text)]'
                 }`}
               >
@@ -671,7 +671,7 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
               title={showArchived ? 'Aktif artifactlara dön' : 'Arşivlenen artifactları göster'}
               className={`flex items-center gap-1.5 self-start rounded px-1.5 py-0.5 text-[10px] font-medium transition ${
                 showArchived
-                  ? 'bg-[var(--color-accent)] text-white'
+                  ? 'bg-[var(--color-accent)] text-[var(--color-on-accent)]'
                   : 'bg-[var(--color-surface-2)] text-[var(--color-text-dim)] hover:text-[var(--color-text)]'
               }`}
             >
@@ -924,7 +924,7 @@ export function ArtifactsPanel({ onError, agents, selectedId, onOpenSession }: P
                       data-testid="artifact-edit-save"
                       onClick={save}
                       disabled={saving}
-                      className="flex items-center gap-1 rounded-md bg-[var(--color-accent)] px-2.5 py-1.5 text-xs font-medium text-white hover:brightness-110 disabled:opacity-50"
+                      className="flex items-center gap-1 rounded-md bg-[var(--color-accent)] px-2.5 py-1.5 text-xs font-medium text-[var(--color-on-accent)] hover:brightness-110 disabled:opacity-50"
                     >
                       <Save size={14} /> {saving ? 'Kaydediliyor…' : 'Kaydet'}
                     </button>

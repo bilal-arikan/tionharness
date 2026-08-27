@@ -1,18 +1,20 @@
 import { presetById, DEFAULT_PRESET, type PresetTokens } from './themePresets'
 
-function setPalette(root: HTMLElement, t: PresetTokens, dark: boolean) {
+function setPalette(root: HTMLElement, t: PresetTokens) {
   root.style.setProperty('--color-bg', t.bg)
   root.style.setProperty('--color-surface', t.surface)
   root.style.setProperty('--color-surface-2', t.surface2)
   root.style.setProperty('--color-border', t.border)
   root.style.setProperty('--color-accent', t.accent)
   root.style.setProperty('--color-accent-soft', t.accentSoft)
+  root.style.setProperty('--color-on-accent', t.onAccent)
   root.style.setProperty('--color-text', t.text)
   root.style.setProperty('--color-text-dim', t.textDim)
-  // Semantic colours: presets may override, else a tasteful per-mode default.
-  root.style.setProperty('--color-success', t.success ?? (dark ? '#34d399' : '#15915b'))
-  root.style.setProperty('--color-warning', t.warning ?? (dark ? '#fbbf24' : '#b45309'))
-  root.style.setProperty('--color-danger', t.danger ?? (dark ? '#f87171' : '#dc2626'))
+  root.style.setProperty('--color-success', t.success)
+  root.style.setProperty('--color-on-success', t.onSuccess)
+  root.style.setProperty('--color-warning', t.warning)
+  root.style.setProperty('--color-on-warning', t.onWarning)
+  root.style.setProperty('--color-danger', t.danger)
 }
 
 // applyTheme reflects the selected theme preset onto the document root so the CSS
@@ -23,7 +25,7 @@ function setPalette(root: HTMLElement, t: PresetTokens, dark: boolean) {
 export function applyTheme(preset?: string) {
   const root = document.documentElement
   const p = presetById(preset || DEFAULT_PRESET) ?? presetById(DEFAULT_PRESET)!
-  setPalette(root, p.tokens, p.dark)
+  setPalette(root, p.tokens)
   if (p.dark) root.removeAttribute('data-theme')
   else root.setAttribute('data-theme', 'light')
 }

@@ -9,8 +9,8 @@ const COLOR_PRESETS = [
   '#8b5cf6', // violet
   '#ec4899', // pink
   '#f97316', // orange
-  '#eab308', // yellow
-  '#22c55e', // green
+  'var(--color-warning)',
+  'var(--color-success)',
   '#14b8a6', // teal
   '#ef4444', // red
 ]
@@ -226,7 +226,7 @@ export function BoardColumnEditor({ columns, taskCountByColumn, onSave, onClose 
                           data-testid="column-custom-color-input"
                           data-col-index={idx}
                           type="color"
-                          value={col.color || '#6b7280'}
+                          value={col.color?.startsWith('#') ? col.color : '#6b7280'}
                           onChange={(e) => update(idx, { color: e.target.value })}
                           className="h-6 w-8 cursor-pointer rounded border-0 bg-transparent p-0"
                           title="Özel renk"

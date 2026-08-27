@@ -26,7 +26,7 @@ const budgetModelRows = 6
 
 // ProjectBudget renders today's spend broken down by model. Every figure is
 // carried straight from the rollup: the projection adds no arithmetic of its own.
-func ProjectBudget(in BudgetInput, level Level, lens Lens) (View, error) {
+func ProjectBudget(in BudgetInput, level Level) (View, error) {
 	now := in.Now
 	if now.IsZero() {
 		now = time.Now()
@@ -39,7 +39,6 @@ func ProjectBudget(in BudgetInput, level Level, lens Lens) (View, error) {
 	v := View{
 		Ref:    Ref{Kind: KindBudget, ID: BudgetRefID},
 		Level:  level,
-		Lens:   lens,
 		AsOf:   now,
 		Source: fmt.Sprintf("%s/%d", in.Day, len(roll.Rows)),
 	}

@@ -44,7 +44,7 @@ export function RunTreePanel({ runs, flows, viewRunId, onSelect }: Props) {
                 title={`${flow?.name ?? '（silinmiş akış）'} — ${STATUS_LABEL[run.status] ?? run.status}`}
                 className={`flex w-full items-center gap-1 rounded-md py-1 pr-1.5 text-left text-xs ${
                   run.id === viewRunId
-                    ? 'bg-[var(--color-accent)] text-white'
+                    ? 'bg-[var(--color-accent)] text-[var(--color-on-accent)]'
                     : 'hover:bg-[var(--color-surface-2)]'
                 }`}
               >

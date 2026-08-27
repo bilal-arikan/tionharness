@@ -302,7 +302,7 @@ export function LogsPanel({ onError }: Props) {
               onClick={() => setLevel(l)}
               className={`rounded px-2 py-1 text-xs transition ${
                 level === l
-                  ? 'bg-[var(--color-accent)] text-white'
+                  ? 'bg-[var(--color-accent)] text-[var(--color-on-accent)]'
                   : 'bg-[var(--color-surface-2)] text-[var(--color-text-dim)] hover:text-[var(--color-text)]'
               }`}
             >

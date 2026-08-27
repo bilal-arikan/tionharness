@@ -157,12 +157,12 @@ func (p *Projector) WithName(name string) *Projector {
 	return p
 }
 
-// Project renders the view for ref at the requested level and lens.
+// Project renders the view for ref at the requested level.
 //
 // Unknown kinds are an error, not an empty view: a caller asking for a
 // projection that does not exist has a bug, and silently handing back a blank
 // summary would hide it behind plausible-looking output.
-func (p *Projector) Project(ctx context.Context, ref Ref, level Level, lens Lens) (View, error) {
+func (p *Projector) Project(ctx context.Context, ref Ref, level Level) (View, error) {
 	if p == nil || p.store == nil {
 		return View{}, fmt.Errorf("view: projector has no store")
 	}
@@ -176,81 +176,81 @@ func (p *Projector) Project(ctx context.Context, ref Ref, level Level, lens Lens
 			return View{}, err
 		}
 		in.Sub = ref.Sub
-		return ProjectFlowRun(in, level, lens)
+		return ProjectFlowRun(in, level)
 	case KindSession:
 		in, err := p.loadSession(ctx, ref.ID, level)
 		if err != nil {
 			return View{}, err
 		}
-		return ProjectSession(in, level, lens)
+		return ProjectSession(in, level)
 	case KindBoard:
 		tasks, err := p.store.ListActiveTasks(ctx)
 		if err != nil {
 			return View{}, fmt.Errorf("view: board: %w", err)
 		}
-		return ProjectBoard(BoardInput{Tasks: tasks, Sub: ref.Sub}, level, lens)
+		return ProjectBoard(BoardInput{Tasks: tasks, Sub: ref.Sub}, level)
 	case KindSchedule:
 		sc, err := p.store.GetSchedule(ctx, ref.ID)
 		if err != nil {
 			return View{}, fmt.Errorf("view: schedule %s: %w", ref.ID, err)
 		}
-		return ProjectSchedule(ScheduleInput{Schedule: sc}, level, lens)
+		return ProjectSchedule(ScheduleInput{Schedule: sc}, level)
 	case KindSpace:
 		in, err := p.loadWorkspace(ctx)
 		if err != nil {
 			return View{}, err
 		}
-		return ProjectWorkspace(in, level, lens)
+		return ProjectWorkspace(in, level)
 	case KindAgent:
 		in, err := p.loadAgent(ctx, ref.ID)
 		if err != nil {
 			return View{}, err
 		}
-		return ProjectAgent(in, level, lens)
+		return ProjectAgent(in, level)
 	case KindBudget:
 		in, err := p.loadBudget(ctx)
 		if err != nil {
 			return View{}, err
 		}
-		return ProjectBudget(in, level, lens)
+		return ProjectBudget(in, level)
 	case KindTools:
 		in, err := p.loadTools(ctx)
 		if err != nil {
 			return View{}, err
 		}
-		return ProjectTools(in, level, lens)
+		return ProjectTools(in, level)
 	case KindCategory:
-		members, err := p.categoryMembers(ctx, ref.ID, lens)
+		members, err := p.categoryMembers(ctx, ref.ID)
 		if err != nil {
 			return View{}, err
 		}
-		return ProjectCategory(CategoryInput{ID: ref.ID, Members: members}, level, lens)
+		return ProjectCategory(CategoryInput{ID: ref.ID, Members: members}, level)
 	case KindArtifact:
 		in, err := p.loadArtifact(ctx, ref.ID)
 		if err != nil {
 			return View{}, err
 		}
-		return ProjectArtifact(in, level, lens)
+		return ProjectArtifact(in, level)
 	case KindAutomation:
 		in, err := p.loadAutomation(ctx, ref.ID)
 		if err != nil {
 			return View{}, err
 		}
-		return ProjectAutomation(in, level, lens)
+		return ProjectAutomation(in, level)
 	case KindSkill:
 		sk, err := p.loadSkill(ref.ID)
 		if err != nil {
 			return View{}, err
 		}
-		return ProjectSkill(SkillInput{Skill: sk}, level, lens)
+		return ProjectSkill(SkillInput{Skill: sk}, level)
 	case KindInsight:
 		f, err := p.loadInsight(ref.ID)
 		if err != nil {
 			return View{}, err
 		}
-		return ProjectInsight(InsightInput{Finding: f}, level, lens)
+		return ProjectInsight(InsightInput{Finding: f}, level)
 	case KindLogs:
-		return ProjectLogs(LogsInput{Entries: p.logEntries()}, level, lens)
+		return ProjectLogs(LogsInput{Entries: p.logEntries()}, level)
 	default:
 		return View{}, fmt.Errorf("view: unsupported kind %q", ref.Kind)
 	}
@@ -260,7 +260,7 @@ func (p *Projector) Project(ctx context.Context, ref Ref, level Level, lens Lens
 // same load, for callers (the dashboard) that need both. Going through Project
 // and then counting the store again would give two tallies of the same facts,
 // taken at two different instants — exactly the drift this layer exists to stop.
-func (p *Projector) Workspace(ctx context.Context, level Level, lens Lens) (View, WorkspaceCounts, error) {
+func (p *Projector) Workspace(ctx context.Context, level Level) (View, WorkspaceCounts, error) {
 	if p == nil || p.store == nil {
 		return View{}, WorkspaceCounts{}, fmt.Errorf("view: projector has no store")
 	}
@@ -272,7 +272,7 @@ func (p *Projector) Workspace(ctx context.Context, level Level, lens Lens) (View
 	if in.Now.IsZero() {
 		in.Now = time.Now()
 	}
-	v, err := ProjectWorkspace(in, level, lens)
+	v, err := ProjectWorkspace(in, level)
 	if err != nil {
 		return View{}, WorkspaceCounts{}, err
 	}

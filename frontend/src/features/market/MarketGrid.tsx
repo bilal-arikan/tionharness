@@ -53,7 +53,11 @@ export function MarketGrid({
             <div className="flex items-center gap-2">
               <span
                 className="flex h-8 w-8 shrink-0 items-center justify-center rounded text-lg"
-                style={{ background: p.color ? `${p.color}22` : 'var(--color-surface-2)' }}
+                style={{
+                  background: p.color
+                    ? `color-mix(in srgb, ${p.color} 14%, transparent)`
+                    : 'var(--color-surface-2)',
+                }}
               >
                 {p.icon || '📦'}
               </span>

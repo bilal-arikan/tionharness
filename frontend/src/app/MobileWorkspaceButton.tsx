@@ -58,7 +58,11 @@ export function MobileWorkspaceButton({
       >
         <span
           className="flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded text-sm leading-none"
-          style={active?.color ? { backgroundColor: active.color + '33' } : undefined}
+          style={
+            active?.color
+              ? { backgroundColor: `color-mix(in srgb, ${active.color} 20%, transparent)` }
+              : undefined
+          }
         >
           {active?.icon || '⬡'}
         </span>
@@ -98,7 +102,11 @@ export function MobileWorkspaceButton({
             >
               <span
                 className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-sm"
-                style={w.color ? { backgroundColor: w.color + '33' } : undefined}
+                style={
+                  w.color
+                    ? { backgroundColor: `color-mix(in srgb, ${w.color} 20%, transparent)` }
+                    : undefined
+                }
               >
                 {w.icon || '⬡'}
               </span>

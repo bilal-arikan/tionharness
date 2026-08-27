@@ -6,10 +6,10 @@ import { normalizeAvatar } from '@/shared/lib/avatar'
 
 // Priority chip colors/labels, keyed by the stored priority slug.
 const PRIORITY_META: Record<string, { label: string; color: string }> = {
-  critical: { label: 'Kritik', color: '#ef4444' },
-  high: { label: 'Yüksek', color: '#f59e0b' },
-  medium: { label: 'Orta', color: '#3b82f6' },
-  low: { label: 'Düşük', color: '#6b7280' },
+  critical: { label: 'Kritik', color: 'var(--color-danger)' },
+  high: { label: 'Yüksek', color: 'var(--color-warning)' },
+  medium: { label: 'Orta', color: 'var(--color-accent)' },
+  low: { label: 'Düşük', color: 'var(--color-text-dim)' },
 }
 
 // TaskCardMeta is everything the card shows that is derived rather than stored on
@@ -192,8 +192,8 @@ function TaskCardImpl({
             <span
               className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium"
               style={{
-                backgroundColor: PRIORITY_META[t.priority].color + '22',
-                color: PRIORITY_META[t.priority].color,
+                backgroundColor: `color-mix(in srgb, ${PRIORITY_META[t.priority].color} 14%, transparent)`,
+                color: `color-mix(in srgb, ${PRIORITY_META[t.priority].color} 75%, var(--color-text))`,
               }}
             >
               ● {PRIORITY_META[t.priority].label}
@@ -202,7 +202,7 @@ function TaskCardImpl({
           {t.tags?.map((tag) => (
             <span
               key={tag}
-              className="rounded-full bg-[var(--color-accent-soft)] px-1.5 py-0.5 text-[10px] text-[var(--color-accent)]"
+              className="rounded-full bg-[var(--color-accent-soft)] px-1.5 py-0.5 text-[10px] text-[color-mix(in_srgb,var(--color-accent)_75%,var(--color-text))]"
             >
               #{tag}
             </span>
@@ -221,7 +221,7 @@ function TaskCardImpl({
             </span>
           )}
           {t.flowId && (
-            <span className="inline-flex items-center gap-1 rounded bg-[var(--color-accent-soft)] px-1.5 py-0.5 text-[10px] text-[var(--color-accent)]">
+            <span className="inline-flex items-center gap-1 rounded bg-[var(--color-accent-soft)] px-1.5 py-0.5 text-[10px] text-[color-mix(in_srgb,var(--color-accent)_75%,var(--color-text))]">
               {normalizeAvatar(flow?.emoji) ?? '🔀'} {flow?.name ?? 'Akış'}
             </span>
           )}
@@ -231,7 +231,10 @@ function TaskCardImpl({
               // precomputed from the board's cardMeta.
               const chipStyle =
                 unmetDeps.length > 0 && unmetColColor
-                  ? { backgroundColor: unmetColColor + '22', color: unmetColColor }
+                  ? {
+                      backgroundColor: `color-mix(in srgb, ${unmetColColor} 14%, transparent)`,
+                      color: `color-mix(in srgb, ${unmetColColor} 75%, var(--color-text))`,
+                    }
                   : undefined
               return (
                 <span

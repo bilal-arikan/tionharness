@@ -205,7 +205,7 @@ export function NetworkPanel({ onError, onOpenSession }: Props) {
               >
                 <span
                   className="inline-block h-2 w-2 rounded-full"
-                  style={{ background: on ? '#fff' : l.color }}
+                  style={{ background: on ? 'var(--color-text)' : l.color }}
                 />
                 {l.label}
               </button>

@@ -21,7 +21,7 @@ func logFixture(now time.Time) []logbuf.Entry {
 
 func TestProjectLogsRendersTailOldestFirst(t *testing.T) {
 	now := time.Now()
-	v, err := ProjectLogs(LogsInput{Entries: logFixture(now), Now: now}, LevelCard, LensHealth)
+	v, err := ProjectLogs(LogsInput{Entries: logFixture(now), Now: now}, LevelCard)
 	if err != nil {
 		t.Fatalf("project: %v", err)
 	}
@@ -38,23 +38,6 @@ func TestProjectLogsRendersTailOldestFirst(t *testing.T) {
 	}
 }
 
-func TestProjectLogsErrorsLensKeepsOnlyErrors(t *testing.T) {
-	now := time.Now()
-	v, err := ProjectLogs(LogsInput{Entries: logFixture(now), Now: now}, LevelCard, LensErrors)
-	if err != nil {
-		t.Fatalf("project: %v", err)
-	}
-	txt := v.Text()
-	if !strings.Contains(txt, "LOGS · 2 hata kaydı") {
-		t.Errorf("errors lens count wrong:\n%s", txt)
-	}
-	for _, unwanted := range []string{"turn ok", "yavaş sağlayıcı"} {
-		if strings.Contains(txt, unwanted) {
-			t.Errorf("errors lens leaked %q:\n%s", unwanted, txt)
-		}
-	}
-}
-
 func TestProjectLogsCapsAndElides(t *testing.T) {
 	now := time.Now()
 	entries := make([]logbuf.Entry, 0, logsRows+25)
@@ -64,7 +47,7 @@ func TestProjectLogsCapsAndElides(t *testing.T) {
 			Level: "INFO", Message: "kayıt",
 		})
 	}
-	v, err := ProjectLogs(LogsInput{Entries: entries, Now: now}, LevelCard, LensHealth)
+	v, err := ProjectLogs(LogsInput{Entries: entries, Now: now}, LevelCard)
 	if err != nil {
 		t.Fatalf("project: %v", err)
 	}
@@ -80,7 +63,7 @@ func TestProjectLogsCapsAndElides(t *testing.T) {
 }
 
 func TestProjectLogsEmptySaysSo(t *testing.T) {
-	v, err := ProjectLogs(LogsInput{}, LevelCard, LensHealth)
+	v, err := ProjectLogs(LogsInput{}, LevelCard)
 	if err != nil {
 		t.Fatalf("project: %v", err)
 	}
@@ -90,7 +73,7 @@ func TestProjectLogsEmptySaysSo(t *testing.T) {
 }
 
 func TestProjectLogsTinyIsHeaderOnly(t *testing.T) {
-	v, err := ProjectLogs(LogsInput{Entries: logFixture(time.Now())}, LevelTiny, LensHealth)
+	v, err := ProjectLogs(LogsInput{Entries: logFixture(time.Now())}, LevelTiny)
 	if err != nil {
 		t.Fatalf("project: %v", err)
 	}

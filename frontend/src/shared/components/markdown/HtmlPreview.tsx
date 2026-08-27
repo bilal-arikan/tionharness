@@ -89,7 +89,7 @@ export function HtmlPreview({ code }: Props) {
                   className={
                     'rounded px-2 py-0.5 text-[11px] transition ' +
                     (i === idx
-                      ? 'bg-[var(--color-accent)] text-white'
+                      ? 'bg-[var(--color-accent)] text-[var(--color-on-accent)]'
                       : 'text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)]')
                   }
                 >

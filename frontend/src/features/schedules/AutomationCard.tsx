@@ -180,7 +180,7 @@ export function AutomationCard({
             )}
             {isBoardKind && a.boardExclusive && (
               <span
-                className="rounded bg-[var(--color-warning-soft,var(--color-accent-soft))] px-1.5 py-0.5 text-[11px] text-[var(--color-text)]"
+                className="rounded bg-[color-mix(in_srgb,var(--color-warning)_16%,transparent)] px-1.5 py-0.5 text-[11px] text-[var(--color-text)]"
                 title="Tek sahip: eşleşen kart değişiminde yalnız bu otomasyon çalışır, diğer eşleşmeler bastırılır."
               >
                 🔒 tek sahip

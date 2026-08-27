@@ -112,7 +112,7 @@ export function FlowVarsButton({ nodeRefs, onInsert, context = 'node' }: Props) 
             {/* Click-away backdrop. */}
             <div className="fixed inset-0 z-[60]" onClick={() => setOpen(false)} />
             <div
-              className="fixed z-[61] w-[320px] max-w-[calc(100vw-16px)] rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-2 shadow-xl"
+              className="fixed z-[61] w-[320px] max-w-[calc(100vw-16px)] rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-2 shadow-[var(--shadow-lg)]"
               style={
                 pos.placement === 'top'
                   ? { left: pos.left, bottom: window.innerHeight - pos.top }

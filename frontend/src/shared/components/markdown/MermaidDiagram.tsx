@@ -23,11 +23,11 @@ function currentBase(): 'dark' | 'default' {
 function themeVariables(): Record<string, string> {
   const cs = getComputedStyle(document.documentElement)
   const v = (name: string) => cs.getPropertyValue(name).trim()
-  const accent = v('--color-accent') || '#6366f1'
-  const text = v('--color-text') || '#e5e7eb'
-  const surface = v('--color-surface') || '#1f2937'
-  const surface2 = v('--color-surface-2') || '#111827'
-  const border = v('--color-border') || '#374151'
+  const accent = v('--color-accent')
+  const text = v('--color-text')
+  const surface = v('--color-surface')
+  const surface2 = v('--color-surface-2')
+  const border = v('--color-border')
   return {
     primaryColor: surface,
     primaryTextColor: text,

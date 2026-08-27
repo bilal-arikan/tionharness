@@ -184,7 +184,7 @@ export function BackupPanel({ draft, set }: PanelProps) {
           type="button"
           onClick={runNow}
           disabled={running}
-          className="rounded bg-[var(--color-accent)] px-4 py-1.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-40"
+          className="rounded bg-[var(--color-accent)] px-4 py-1.5 text-sm font-medium text-[var(--color-on-accent)] hover:opacity-90 disabled:opacity-40"
         >
           {running ? 'Yedekleniyor…' : 'Şimdi yedekle'}
         </button>

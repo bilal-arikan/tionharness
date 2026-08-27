@@ -26,7 +26,7 @@ func TestBoardUsesSecondTimestamps(t *testing.T) {
 			UpdatedAt: now.Add(-1 * time.Hour).Unix()},
 	}}
 
-	v, err := ProjectBoard(in, LevelFull, LensHealth)
+	v, err := ProjectBoard(in, LevelFull)
 	if err != nil {
 		t.Fatalf("project: %v", err)
 	}
@@ -52,7 +52,7 @@ func TestBoardStalenessUsesSecondTimestamps(t *testing.T) {
 			UpdatedAt: now.Add(-5 * 24 * time.Hour).Unix()},
 	}}
 
-	v, err := ProjectBoard(in, LevelCard, LensHealth)
+	v, err := ProjectBoard(in, LevelCard)
 	if err != nil {
 		t.Fatalf("project: %v", err)
 	}
@@ -74,7 +74,7 @@ func TestSessionUsesSecondTimestamps(t *testing.T) {
 			CreatedAt: now.Add(-3 * time.Minute).Unix()},
 	}
 
-	v, err := ProjectSession(in, LevelCard, LensHealth)
+	v, err := ProjectSession(in, LevelCard)
 	if err != nil {
 		t.Fatalf("project: %v", err)
 	}
@@ -116,7 +116,7 @@ func TestFlowRunMixesSecondAndMilliTimestamps(t *testing.T) {
 		}},
 	}
 
-	v, err := ProjectFlowRun(in, LevelCard, LensHealth)
+	v, err := ProjectFlowRun(in, LevelCard)
 	if err != nil {
 		t.Fatalf("project: %v", err)
 	}

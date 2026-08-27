@@ -22,7 +22,7 @@ type InsightInput struct {
 
 // ProjectInsight renders one finding: severity, lifecycle status, recurrence and
 // evidence — enough to decide whether the proposed fix is worth acting on.
-func ProjectInsight(in InsightInput, level Level, lens Lens) (View, error) {
+func ProjectInsight(in InsightInput, level Level) (View, error) {
 	f := in.Finding
 	now := in.Now
 	if now.IsZero() {
@@ -35,7 +35,6 @@ func ProjectInsight(in InsightInput, level Level, lens Lens) (View, error) {
 	v := View{
 		Ref:    Ref{Kind: KindInsight, ID: f.ID},
 		Level:  level,
-		Lens:   lens,
 		AsOf:   now,
 		Source: fmt.Sprintf("%s/%d/%d", f.Status, f.Occurrences, f.LastSeen),
 	}

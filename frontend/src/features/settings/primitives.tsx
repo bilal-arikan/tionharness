@@ -122,7 +122,7 @@ export function Segmented<T extends string>({
             onClick={() => onChange(o.value)}
             className={`flex-1 rounded px-2 py-1 text-xs font-medium transition ${
               o.value === value
-                ? 'bg-[var(--color-accent)] text-white'
+                ? 'bg-[var(--color-accent)] text-[var(--color-on-accent)]'
                 : 'text-[var(--color-text-dim)] hover:text-[var(--color-text)]'
             }`}
           >

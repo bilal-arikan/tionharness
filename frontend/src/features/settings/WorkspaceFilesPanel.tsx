@@ -208,7 +208,7 @@ export function WorkspaceFilesPanel({ onError, onGoToAgents, onState }: Props) {
                 </span>
               )}
               {!isDefault && missing.length > 0 && (
-                <span className="rounded bg-[var(--color-danger,#b91c1c)]/15 px-1.5 py-0.5 text-[10px] text-[var(--color-danger,#f87171)]">
+                <span className="rounded bg-[var(--color-danger)]/15 px-1.5 py-0.5 text-[10px] text-[var(--color-danger)]">
                   eksik yer tutucu: {missing.map((p) => `{{${p}}}`).join(', ')} — varsayılana düşer
                 </span>
               )}

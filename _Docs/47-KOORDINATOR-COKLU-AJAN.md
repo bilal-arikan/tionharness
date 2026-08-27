@@ -307,6 +307,16 @@ geri açar. Sert halt artık yalnız mevcut drain'i değil `enqueueCoordinatorTu
 girişini de kapatır: worker notu kalıcı yazılır fakat açıkça "durduruldu" görünen
 koordinatörü otomatik uyandırmaz; resume kuyruğu güvenle yeniden başlatır.
 
+2026-08-27: **arşiv de aynı girişi kapatır.** `enqueueCoordinatorTurn` artık slot'u
+almadan önce oturumun `State`'ine bakar ve `archived` ise dokunmadan döner. Önceden
+yalnız `RecoverOrphanedTurns` arşive bakıyordu, bu yüzden koordinatörü arşivlemek
+onu susturmuyordu: boot'ta kurtarılan her worker `NotifyCoordinator` çağırıyor, o da
+buraya düşüp arşivli oturumda yeni bir drain başlatıyordu — kaçak bir koordinatör
+ağacını durdurmak için 25 worker'ı da elle arşivlemek gerekti. Not `stallHalted`'da
+olduğu gibi kalıcı yazılmaya devam eder; arşivden çıkınca bir sonraki bildirim onu
+işler. Slot'a hiç dokunulmadığı için arşivden çıkan oturum `driving` takılı kalmaz.
+Regresyon: `coordination_archived_test.go`.
+
 ---
 
 ## 4. Koordinatör Sistem Promptu / Skill

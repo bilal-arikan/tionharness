@@ -17,7 +17,7 @@ func TestProjectInsightRendersFinding(t *testing.T) {
 			LastSeen:           now.Add(-1 * time.Hour).Unix(),
 		},
 		Now: now,
-	}, LevelCard, LensHealth)
+	}, LevelCard)
 	if err != nil {
 		t.Fatalf("project: %v", err)
 	}
@@ -42,7 +42,7 @@ func TestProjectInsightMarksRegression(t *testing.T) {
 			Regressed: true, Occurrences: 5, LastSeen: now.Unix(),
 		},
 		Now: now,
-	}, LevelCard, LensHealth)
+	}, LevelCard)
 	if err != nil {
 		t.Fatalf("project: %v", err)
 	}
@@ -52,7 +52,7 @@ func TestProjectInsightMarksRegression(t *testing.T) {
 }
 
 func TestProjectInsightRejectsEmptyID(t *testing.T) {
-	if _, err := ProjectInsight(InsightInput{Finding: InsightFinding{}}, LevelCard, LensHealth); err == nil {
+	if _, err := ProjectInsight(InsightInput{Finding: InsightFinding{}}, LevelCard); err == nil {
 		t.Error("a finding with no id must be an error, not a blank card")
 	}
 }

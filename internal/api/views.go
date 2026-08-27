@@ -3,7 +3,7 @@ package api
 // handleGetView exposes the projection layer (internal/view) over HTTP: the
 // compact, deterministic summary of a large piece of runtime state.
 //
-//	GET /api/views/{kind}/{id}?level=card&lens=health&sub=<nodeId>
+//	GET /api/views/{kind}/{id}?level=card&sub=<nodeId>
 //
 // The response carries both the structured envelope and `text` — the exact bytes
 // an agent would receive. The panel renders `text` verbatim rather than
@@ -39,8 +39,7 @@ func (s *Server) handleGetView(w http.ResponseWriter, r *http.Request) {
 		Sub:  strings.TrimSpace(q.Get("sub")),
 	}
 
-	v, err := s.viewProjector(r).Project(
-		r.Context(), ref, view.ParseLevel(q.Get("level")), view.ParseLens(q.Get("lens")))
+	v, err := s.viewProjector(r).Project(r.Context(), ref, view.ParseLevel(q.Get("level")))
 	if err != nil {
 		// An unknown kind is a client mistake; a missing entity is a 404. Both are
 		// reported instead of degrading to an empty view, which would read like a
@@ -56,7 +55,6 @@ func (s *Server) handleGetView(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"ref":        v.Ref,
 		"level":      v.Level,
-		"lens":       v.Lens,
 		"header":     v.Header,
 		"body":       v.Body,
 		"text":       v.Text(),
@@ -71,7 +69,7 @@ func (s *Server) handleGetView(w http.ResponseWriter, r *http.Request) {
 
 // handleGetViewChildren exposes the Explorer map's structural drill-down:
 //
-//	GET /api/views/{kind}/{id}/children?lens=health&sub=<selector>
+//	GET /api/views/{kind}/{id}/children?sub=<selector>
 //
 // It returns the child handles of one node — what expanding it reveals — without
 // rendering a full card for each child. This is the map's lazy-expand edge, the
@@ -85,7 +83,7 @@ func (s *Server) handleGetViewChildren(w http.ResponseWriter, r *http.Request) {
 		Sub:  strings.TrimSpace(q.Get("sub")),
 	}
 
-	handles, err := s.viewProjector(r).Children(r.Context(), ref, view.ParseLens(q.Get("lens")))
+	handles, err := s.viewProjector(r).Children(r.Context(), ref)
 	if err != nil {
 		// An unsupported kind is a client mistake (400); anything else is a store
 		// read failure. Neither degrades to an empty list, which would read like a
@@ -105,7 +103,6 @@ func (s *Server) handleGetViewChildren(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"ref":      ref,
-		"lens":     view.ParseLens(q.Get("lens")),
 		"children": handles,
 	})
 }

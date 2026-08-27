@@ -25,7 +25,7 @@ const toolsServerRows = 12
 
 // ProjectTools renders the workspace tool surface: how many MCP servers are
 // configured and enabled, and how many tools are switched off workspace-wide.
-func ProjectTools(in ToolsInput, level Level, lens Lens) (View, error) {
+func ProjectTools(in ToolsInput, level Level) (View, error) {
 	now := in.Now
 	if now.IsZero() {
 		now = time.Now()
@@ -42,7 +42,6 @@ func ProjectTools(in ToolsInput, level Level, lens Lens) (View, error) {
 	v := View{
 		Ref:    Ref{Kind: KindTools, ID: ToolsRefID},
 		Level:  level,
-		Lens:   lens,
 		AsOf:   now,
 		Source: fmt.Sprintf("%d/%d/%d", len(in.MCPServers), enabled, disabledTools),
 	}
@@ -80,7 +79,7 @@ func ProjectTools(in ToolsInput, level Level, lens Lens) (View, error) {
 		v.Elided, v.ElidedUnit = dropped, "MCP sunucu"
 	}
 
-	if disabledTools > 0 && lens != LensErrors {
+	if disabledTools > 0 {
 		l.add("kapalı araçlar: %s", strings.Join(clipList(in.ToolConfig.DisabledTools, toolsServerRows), ", "))
 	}
 	if l.empty() {

@@ -52,7 +52,7 @@ export function ArtifactCard({ step, onOpenArtifact }: Props) {
       onClick={() => onOpenArtifact?.(ref.id)}
       className="group flex w-full items-center gap-3 rounded-lg border border-[var(--color-accent-soft)] bg-[var(--color-accent-soft)] px-3 py-2 text-left transition hover:brightness-110"
     >
-      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-[var(--color-accent)] text-white">
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-[var(--color-accent)] text-[var(--color-on-accent)]">
         <FileCode size={16} />
       </span>
       <span className="min-w-0 flex-1">

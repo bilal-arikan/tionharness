@@ -16,7 +16,7 @@ func TestBoardCardSubProjectsOneCard(t *testing.T) {
 	in := boardFixture(now)
 	in.Sub = "T4" // the failed card
 
-	v, err := ProjectBoard(in, LevelCard, LensHealth)
+	v, err := ProjectBoard(in, LevelCard)
 	if err != nil {
 		t.Fatalf("project card: %v", err)
 	}
@@ -31,7 +31,7 @@ func TestBoardCardSubProjectsOneCard(t *testing.T) {
 	}
 	// A blocked/overdue card must carry its marks so the drill-down is self-contained.
 	in.Sub = "T5" // waits on T2 (not done) → blocked
-	blocked, err := ProjectBoard(in, LevelCard, LensHealth)
+	blocked, err := ProjectBoard(in, LevelCard)
 	if err != nil {
 		t.Fatalf("project blocked card: %v", err)
 	}
@@ -40,14 +40,11 @@ func TestBoardCardSubProjectsOneCard(t *testing.T) {
 	}
 
 	in.Sub = "NOPE"
-	if _, err := ProjectBoard(in, LevelCard, LensHealth); err == nil {
+	if _, err := ProjectBoard(in, LevelCard); err == nil {
 		t.Error("unknown card id must error, not render a blank card")
 	}
 }
 
-// TestScheduleProjectionSurfacesLastError pins the schedule drill-down: the last
-// fire's error is the headline, the enabled/disabled state is explicit, and a
-// disabled schedule still shows its error here (unlike the workspace roll-up).
 func TestScheduleProjectionSurfacesLastError(t *testing.T) {
 	now := time.Now()
 	sc := db.Schedule{
@@ -61,7 +58,7 @@ func TestScheduleProjectionSurfacesLastError(t *testing.T) {
 		LastDeliveryError:  "provider timeout",
 	}
 
-	v, err := ProjectSchedule(ScheduleInput{Schedule: sc, Now: now}, LevelCard, LensHealth)
+	v, err := ProjectSchedule(ScheduleInput{Schedule: sc, Now: now}, LevelCard)
 	if err != nil {
 		t.Fatalf("project schedule: %v", err)
 	}
@@ -75,10 +72,8 @@ func TestScheduleProjectionSurfacesLastError(t *testing.T) {
 	if !strings.Contains(txt, "agent:AG1") {
 		t.Errorf("delivery target missing:\n%s", txt)
 	}
-
-	// The errors lens keeps only the failure line.
-	errView, _ := ProjectSchedule(ScheduleInput{Schedule: sc, Now: now}, LevelCard, LensErrors)
-	if strings.Contains(errView.Text(), "prompt:") {
-		t.Errorf("errors lens should drop the prompt line:\n%s", errView.Text())
-	}
 }
+
+// TestScheduleProjectionSurfacesLastError pins the schedule drill-down: the last
+// fire's error is the headline, the enabled/disabled state is explicit, and a
+// disabled schedule still shows its error here (unlike the workspace roll-up).

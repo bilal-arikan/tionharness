@@ -40,7 +40,7 @@ const (
 // configured column list. That keeps this package free of a settings dependency
 // AND keeps the view honest: it reports the board that exists, not the board that
 // was configured. A configured-but-empty column simply does not appear.
-func ProjectBoard(in BoardInput, level Level, lens Lens) (View, error) {
+func ProjectBoard(in BoardInput, level Level) (View, error) {
 	now := in.Now
 	if now.IsZero() {
 		now = time.Now()
@@ -49,7 +49,6 @@ func ProjectBoard(in BoardInput, level Level, lens Lens) (View, error) {
 	v := View{
 		Ref:    Ref{Kind: KindBoard, ID: BoardRefID, Sub: in.Sub},
 		Level:  level,
-		Lens:   lens,
 		AsOf:   now,
 		Source: fmt.Sprintf("%d/%d", len(in.Tasks), boardRevision(in.Tasks)),
 	}
@@ -76,7 +75,7 @@ func ProjectBoard(in BoardInput, level Level, lens Lens) (View, error) {
 	}
 
 	l.add("%s", boardHistogram(cols))
-	for _, s := range boardSignals(in, cols, now, lens) {
+	for _, s := range boardSignals(in, cols, now) {
 		l.add("%s", s)
 	}
 
@@ -257,30 +256,24 @@ func boardHistogram(cols []boardColumn) string {
 }
 
 // boardSignals is the L1 layer: what deserves attention right now.
-func boardSignals(in BoardInput, cols []boardColumn, now time.Time, lens Lens) []string {
+func boardSignals(in BoardInput, cols []boardColumn, now time.Time) []string {
 	var out []string
 
-	if lens != LensRecent {
-		if stale := staleCards(cols, now); len(stale) > 0 {
-			out = append(out, fmt.Sprintf("⚠ %d kart >%dg hareketsiz: %s",
-				len(stale), boardStaleDays, namesOf(stale, boardSignalCards)))
-		}
-		if failed := cardsInColumn(cols, db.BoardFailed); len(failed) > 0 {
-			out = append(out, fmt.Sprintf("✗ %d başarısız kart: %s",
-				len(failed), namesOf(failed, boardSignalCards)))
-		}
-		if blocked := blockedCards(in.Tasks); len(blocked) > 0 {
-			out = append(out, fmt.Sprintf("⛔ %d kart bağımlılıkla bloke: %s",
-				len(blocked), namesOf(blocked, boardSignalCards)))
-		}
-		if over := overdueCards(in.Tasks, now); len(over) > 0 {
-			out = append(out, fmt.Sprintf("📅 %d kart gecikmiş: %s",
-				len(over), namesOf(over, boardSignalCards)))
-		}
+	if stale := staleCards(cols, now); len(stale) > 0 {
+		out = append(out, fmt.Sprintf("⚠ %d kart >%dg hareketsiz: %s",
+			len(stale), boardStaleDays, namesOf(stale, boardSignalCards)))
 	}
-	if lens == LensStale || lens == LensErrors {
-		// These lenses are single-purpose: everything below is noise for them.
-		return out
+	if failed := cardsInColumn(cols, db.BoardFailed); len(failed) > 0 {
+		out = append(out, fmt.Sprintf("✗ %d başarısız kart: %s",
+			len(failed), namesOf(failed, boardSignalCards)))
+	}
+	if blocked := blockedCards(in.Tasks); len(blocked) > 0 {
+		out = append(out, fmt.Sprintf("⛔ %d kart bağımlılıkla bloke: %s",
+			len(blocked), namesOf(blocked, boardSignalCards)))
+	}
+	if over := overdueCards(in.Tasks, now); len(over) > 0 {
+		out = append(out, fmt.Sprintf("📅 %d kart gecikmiş: %s",
+			len(over), namesOf(over, boardSignalCards)))
 	}
 
 	if recent := recentlyTouched(in.Tasks, now, 24*time.Hour); len(recent) > 0 {

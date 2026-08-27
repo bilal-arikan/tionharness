@@ -36,7 +36,7 @@ const categoryTopN = 50
 const categoryFullMaxBytes = 2400
 
 // CategoryInput is a resolved category: its id plus the FULL (uncapped, already
-// lens-filtered) member list. The projection counts the members and caps the
+// member list. The projection counts the members and caps the
 // handles — the count is honest because it sees every member, the handle list is
 // bounded because the map cannot render every one.
 type CategoryInput struct {
@@ -50,7 +50,7 @@ type CategoryInput struct {
 // top-N as handles, reporting the rest as Elided. An unknown category id is an
 // error, not an empty node — a blank category would read like a real but empty
 // bucket and hide the caller's mistake.
-func ProjectCategory(in CategoryInput, level Level, lens Lens) (View, error) {
+func ProjectCategory(in CategoryInput, level Level) (View, error) {
 	label, unit, ok := categoryMeta(in.ID)
 	if !ok {
 		return View{}, fmt.Errorf("view: unknown category %q", in.ID)
@@ -63,7 +63,6 @@ func ProjectCategory(in CategoryInput, level Level, lens Lens) (View, error) {
 	v := View{
 		Ref:    Ref{Kind: KindCategory, ID: in.ID},
 		Level:  level,
-		Lens:   lens,
 		AsOf:   now,
 		Source: fmt.Sprintf("%s/%d", in.ID, len(in.Members)),
 	}

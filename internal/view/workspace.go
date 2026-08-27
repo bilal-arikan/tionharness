@@ -50,7 +50,7 @@ const (
 // This is the roll-up the dashboard shows and the projection a future supervisor
 // agent would read. It re-uses the same L0/L1 discipline as the per-entity
 // views: every number is counted in Go, nothing is narrated by a model.
-func ProjectWorkspace(in WorkspaceInput, level Level, lens Lens) (View, error) {
+func ProjectWorkspace(in WorkspaceInput, level Level) (View, error) {
 	now := in.Now
 	if now.IsZero() {
 		now = time.Now()
@@ -59,7 +59,6 @@ func ProjectWorkspace(in WorkspaceInput, level Level, lens Lens) (View, error) {
 	v := View{
 		Ref:    Ref{Kind: KindSpace, ID: WorkspaceRefID},
 		Level:  level,
-		Lens:   lens,
 		AsOf:   now,
 		Source: fmt.Sprintf("%d/%d/%d/%d", len(in.Agents), len(in.Sessions), len(in.Tasks), len(in.FlowRuns)),
 	}
@@ -87,22 +86,15 @@ func ProjectWorkspace(in WorkspaceInput, level Level, lens Lens) (View, error) {
 	}
 
 	var l lines
-	if len(in.Tasks) > 0 && lens != LensErrors {
+	if len(in.Tasks) > 0 {
 		l.add("pano: %s", boardHistogram(boardColumns(in.Tasks)))
 	}
-	if lens != LensErrors {
-		l.add("koşular: %d çalışıyor · %d bekliyor · %d başarısız (son 24s: %d)",
-			st.RunsRunning, st.RunsWaiting, st.RunsFailed, st.RunsRecent)
-	}
+	l.add("koşular: %d çalışıyor · %d bekliyor · %d başarısız (son 24s: %d)",
+		st.RunsRunning, st.RunsWaiting, st.RunsFailed, st.RunsRecent)
 
-	sigs := workspaceSignals(in, st, now, lens)
+	sigs := workspaceSignals(in, st, now)
 	for _, s := range sigs {
 		l.add("%s", s)
-	}
-	if len(sigs) == 0 && lens != LensHealth {
-		// A lens that found nothing must say so; a blank body reads like a broken
-		// projection rather than a clean bill of health.
-		l.add("(bu mercekte dikkat çeken bir şey yok)")
 	}
 
 	if level == LevelFull {
@@ -253,7 +245,7 @@ func workspaceStats(in WorkspaceInput, now time.Time) wsStats {
 
 // workspaceSignals is the L1 layer: what a human (or a supervisor agent) should
 // look at first.
-func workspaceSignals(in WorkspaceInput, st wsStats, now time.Time, lens Lens) []string {
+func workspaceSignals(in WorkspaceInput, st wsStats, now time.Time) []string {
 	var out []string
 
 	if n := len(st.StuckSessions); n > 0 {
@@ -276,18 +268,10 @@ func workspaceSignals(in WorkspaceInput, st wsStats, now time.Time, lens Lens) [
 	if n := len(st.FailedCards); n > 0 {
 		out = append(out, fmt.Sprintf("✗ %d başarısız kart: %s", n, namesOf(st.FailedCards, wsSignalNames)))
 	}
-	if lens == LensErrors {
-		return out
-	}
-
 	if n := len(st.StaleCards); n > 0 {
 		out = append(out, fmt.Sprintf("⚠ %d kart >%dg çalışan sütunda hareketsiz: %s",
 			n, boardStaleDays, namesOf(st.StaleCards, wsSignalNames)))
 	}
-	if lens == LensStale {
-		return out
-	}
-
 	if st.RunsWaiting > 0 {
 		out = append(out, fmt.Sprintf("⏸ %d akış koşusu girdi bekliyor (await-input)", st.RunsWaiting))
 	}

@@ -59,7 +59,7 @@ export function ToolDetail({
             className={`rounded-lg px-4 py-2 text-sm font-medium transition disabled:opacity-50 ${
               tool.enabled
                 ? 'bg-[var(--color-surface-2)] hover:opacity-90'
-                : 'bg-[var(--color-accent)] text-white hover:opacity-90'
+                : 'bg-[var(--color-accent)] text-[var(--color-on-accent)] hover:opacity-90'
             }`}
           >
             {tool.enabled ? 'Devre dışı bırak' : 'Etkinleştir'}

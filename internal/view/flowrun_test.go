@@ -53,7 +53,7 @@ func base(now time.Time) FlowRunInput {
 
 func TestFlowRunCardFoldsParallelAndShowsCurrent(t *testing.T) {
 	now := time.Now()
-	v, err := ProjectFlowRun(base(now), LevelCard, LensHealth)
+	v, err := ProjectFlowRun(base(now), LevelCard)
 	if err != nil {
 		t.Fatalf("project: %v", err)
 	}
@@ -88,7 +88,7 @@ func TestFlowRunCardFoldsParallelAndShowsCurrent(t *testing.T) {
 }
 
 func TestFlowRunTinyIsHeaderOnly(t *testing.T) {
-	v, err := ProjectFlowRun(base(time.Now()), LevelTiny, LensHealth)
+	v, err := ProjectFlowRun(base(time.Now()), LevelTiny)
 	if err != nil {
 		t.Fatalf("project: %v", err)
 	}
@@ -106,7 +106,7 @@ func TestFlowRunFailureSurfacesErrorAndHandle(t *testing.T) {
 	in.Run.Status = db.FlowFailure
 	in.Run.Error = "node \"synth\": provider 429 rate_limit"
 
-	v, err := ProjectFlowRun(in, LevelCard, LensHealth)
+	v, err := ProjectFlowRun(in, LevelCard)
 	if err != nil {
 		t.Fatalf("project: %v", err)
 	}
@@ -135,29 +135,13 @@ func TestFlowRunWaitingIsVisible(t *testing.T) {
 	in.Run.Status = db.FlowWaiting
 	in.State.WaitingAt = "synth"
 
-	v, err := ProjectFlowRun(in, LevelCard, LensHealth)
+	v, err := ProjectFlowRun(in, LevelCard)
 	if err != nil {
 		t.Fatalf("project: %v", err)
 	}
 	txt := v.Text()
 	if !strings.Contains(txt, "⏸WAITING") || !strings.Contains(txt, "await-input node:synth") {
 		t.Errorf("waiting state not surfaced:\n%s", txt)
-	}
-}
-
-func TestFlowRunErrorsLensDropsNonFailureSignals(t *testing.T) {
-	now := time.Now()
-	in := base(now)
-	in.Run.SessionID = "SES9"
-	in.State.Iter = 3
-
-	v, err := ProjectFlowRun(in, LevelCard, LensErrors)
-	if err != nil {
-		t.Fatalf("project: %v", err)
-	}
-	txt := v.Text()
-	if strings.Contains(txt, "loop iterasyon") || strings.Contains(txt, "transkript") {
-		t.Errorf("errors lens leaked non-failure signals:\n%s", txt)
 	}
 }
 
@@ -177,7 +161,7 @@ func TestFlowRunLongChainReportsElision(t *testing.T) {
 	in.Run.Status = db.FlowSuccess
 	in.State.Current = ""
 
-	v, err := ProjectFlowRun(in, LevelCard, LensHealth)
+	v, err := ProjectFlowRun(in, LevelCard)
 	if err != nil {
 		t.Fatalf("project: %v", err)
 	}
@@ -190,7 +174,7 @@ func TestFlowRunLongChainReportsElision(t *testing.T) {
 }
 
 func TestFlowRunRejectsEmptyInput(t *testing.T) {
-	if _, err := ProjectFlowRun(FlowRunInput{}, LevelCard, LensHealth); err == nil {
+	if _, err := ProjectFlowRun(FlowRunInput{}, LevelCard); err == nil {
 		t.Fatal("expected an error for an empty run, got a view")
 	}
 }

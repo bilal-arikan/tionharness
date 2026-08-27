@@ -54,7 +54,7 @@ const workersMaxListed = 20
 // a finished worker was still running would wait forever (_Docs/47). Hence the
 // "trust THIS over the notifications in history" framing, the explicit
 // DELEGATING state, and the closing nudge when nothing is left running.
-func ProjectWorkers(in WorkersInput, level Level, lens Lens) (View, error) {
+func ProjectWorkers(in WorkersInput, level Level) (View, error) {
 	now := in.Now
 	if now.IsZero() {
 		now = time.Now()
@@ -79,7 +79,6 @@ func ProjectWorkers(in WorkersInput, level Level, lens Lens) (View, error) {
 	v := View{
 		Ref:    Ref{Kind: KindWorkers, ID: WorkersRefID},
 		Level:  level,
-		Lens:   lens,
 		AsOf:   now,
 		Source: fmt.Sprintf("%d/%d", running, finished),
 	}

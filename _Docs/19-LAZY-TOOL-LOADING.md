@@ -233,7 +233,7 @@
   **açıklaması sıkıştırıldı**: kind başına paragraf → tek satır, "sayılar hesaplanır"
   paragrafı tek cümleye indi. Ayrıca `Examples` 7→4: örnekler `foldExamples` ile
   **gönderilen şemaya** katıldığı için her biri tur maliyeti; kalan dördü şemanın
-  anlatamadığı tüm konvansiyonları (singleton id, `sub` drill-down, `level`/`lens`)
+  anlatamadığı tüm konvansiyonları (singleton id, `sub` drill-down, `level`)
   kapsıyor. `expand` referansı bilerek korundu (name-only `expand`'in tek keşif yolu).
   **~1087 → ~858 token.**
 - **`run_subagent` → SUMMARY tier (2026-08-20, "Strateji B" kapandı):** 791 token'lık

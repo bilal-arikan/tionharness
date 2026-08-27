@@ -38,7 +38,7 @@ const (
 
 // ProjectSession renders a session: what it is working on, how far the checklist
 // got, what it cost, and whether it is in trouble.
-func ProjectSession(in SessionInput, level Level, lens Lens) (View, error) {
+func ProjectSession(in SessionInput, level Level) (View, error) {
 	if in.Session.ID == "" {
 		return View{}, fmt.Errorf("session input has no session")
 	}
@@ -50,7 +50,6 @@ func ProjectSession(in SessionInput, level Level, lens Lens) (View, error) {
 	v := View{
 		Ref:    Ref{Kind: KindSession, ID: in.Session.ID},
 		Level:  level,
-		Lens:   lens,
 		AsOf:   now,
 		Source: fmt.Sprintf("%d@%d", in.Session.MessageCount, in.Session.UpdatedAt),
 	}
@@ -62,13 +61,13 @@ func ProjectSession(in SessionInput, level Level, lens Lens) (View, error) {
 	}
 
 	var l lines
-	if s := strings.TrimSpace(in.Session.Summary); s != "" && lens != LensErrors {
+	if s := strings.TrimSpace(in.Session.Summary); s != "" {
 		l.add("özet: %s", clip(s, summaryWidth(level)))
 	}
-	if todo := sessionTodoLine(in.Messages); todo != "" && lens != LensErrors {
+	if todo := sessionTodoLine(in.Messages); todo != "" {
 		l.add("%s", todo)
 	}
-	for _, s := range sessionSignals(in, now, lens) {
+	for _, s := range sessionSignals(in, now) {
 		l.add("%s", s)
 	}
 
@@ -125,7 +124,7 @@ func sessionHeader(in SessionInput, now time.Time) string {
 }
 
 // sessionSignals is the L1 layer for a session.
-func sessionSignals(in SessionInput, now time.Time, lens Lens) []string {
+func sessionSignals(in SessionInput, now time.Time) []string {
 	var out []string
 	s := in.Session
 
@@ -139,10 +138,6 @@ func sessionSignals(in SessionInput, now time.Time, lens Lens) []string {
 	if err := lastErrorStep(in.Messages); err != "" {
 		out = append(out, "✗ son hata: "+clip(err, 180))
 	}
-	if lens == LensErrors {
-		return out
-	}
-
 	if tags := signalTags(s.Tags); len(tags) > 0 {
 		out = append(out, "🏷 "+strings.Join(tags, ", "))
 	}

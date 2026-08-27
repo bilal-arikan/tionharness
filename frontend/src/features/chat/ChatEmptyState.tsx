@@ -27,7 +27,11 @@ function AgentDot({ agent }: { agent: Agent }) {
   return (
     <span
       className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px]"
-      style={agent.color ? { backgroundColor: agent.color + '33' } : undefined}
+      style={
+        agent.color
+          ? { backgroundColor: `color-mix(in srgb, ${agent.color} 20%, transparent)` }
+          : undefined
+      }
     >
       {agent.avatar || agent.name.slice(0, 1).toUpperCase()}
     </span>

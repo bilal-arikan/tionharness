@@ -122,31 +122,6 @@ func ParseLevel(s string) Level {
 	}
 }
 
-// Lens selects WHICH facts are interesting. Deliberately few: a long menu makes
-// the agent pick badly, and every lens is another format the prompts must know.
-type Lens string
-
-const (
-	LensHealth Lens = "health" // default: current state + warning signals
-	LensStale  Lens = "stale"  // what has stopped moving
-	LensRecent Lens = "recent" // what changed in the recent window
-	LensErrors Lens = "errors" // failures, retries, guardrail trips
-)
-
-// ParseLens resolves a request string, defaulting to LensHealth.
-func ParseLens(s string) Lens {
-	switch Lens(strings.TrimSpace(strings.ToLower(s))) {
-	case LensStale:
-		return LensStale
-	case LensRecent:
-		return LensRecent
-	case LensErrors:
-		return LensErrors
-	default:
-		return LensHealth
-	}
-}
-
 // Handle is a drill-down pointer emitted alongside a view: the projection stayed
 // small, and this is how to get the part that was left out. Label is what the
 // renderer prints; Ref is what get_view takes.
@@ -161,7 +136,6 @@ type Handle struct {
 type View struct {
 	Ref     Ref       `json:"ref"`
 	Level   Level     `json:"level"`
-	Lens    Lens      `json:"lens"`
 	Header  string    `json:"header"`  // always produced, deterministic
 	Body    string    `json:"body"`    // graded by Level; may be empty at tiny
 	Handles []Handle  `json:"handles"` // drill-down pointers

@@ -322,7 +322,7 @@ export function TaskFormModal({
                       onClick={() => setBoardState(col.key as BoardState)}
                       className={`rounded-full px-2.5 py-1 text-xs transition ${
                         active
-                          ? 'text-white'
+                          ? 'text-[var(--color-on-accent)]'
                           : 'bg-[var(--color-surface-2)] text-[var(--color-text-dim)] hover:text-[var(--color-text)]'
                       }`}
                       style={
@@ -416,7 +416,7 @@ export function TaskFormModal({
               {tags.map((t) => (
                 <span
                   key={t}
-                  className="inline-flex items-center gap-1 rounded-full bg-[var(--color-accent-soft)] px-2 py-0.5 text-xs text-[var(--color-accent)]"
+                  className="inline-flex items-center gap-1 rounded-full bg-[var(--color-accent-soft)] px-2 py-0.5 text-xs text-[color-mix(in_srgb,var(--color-accent)_75%,var(--color-text))]"
                 >
                   #{t}
                   <button
@@ -466,7 +466,7 @@ export function TaskFormModal({
               {depsOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
               <span>Bağımlılıklar — önce tamamlanması gereken görevler</span>
               {depIds.length > 0 && (
-                <span className="rounded-full bg-[var(--color-accent-soft)] px-1.5 py-0.5 text-[10px] text-[var(--color-accent)]">
+                <span className="rounded-full bg-[var(--color-accent-soft)] px-1.5 py-0.5 text-[10px] text-[color-mix(in_srgb,var(--color-accent)_75%,var(--color-text))]">
                   {depIds.length}
                 </span>
               )}

@@ -163,8 +163,12 @@ func DialStdio(ctx context.Context, command string, args, env []string, dir stri
 	if err != nil {
 		return nil, err
 	}
-	// Discard stderr so a chatty server can't block on a full pipe.
-	cmd.Stderr = io.Discard
+	// Keep the tail of stderr instead of discarding it. A chatty server still
+	// cannot block, because stderrTail never blocks and never grows -- but when the
+	// handshake fails, the server's own explanation is available instead of a bare
+	// "EOF" (see stderrtail.go for the incident that motivated this).
+	tail := &stderrTail{}
+	cmd.Stderr = tail
 
 	if err := cmd.Start(); err != nil {
 		return nil, fmt.Errorf("mcp: start %q: %w", command, err)
@@ -180,7 +184,15 @@ func DialStdio(ctx context.Context, command string, args, env []string, dir stri
 	go c.readLoop()
 
 	if err := c.initialize(ctx); err != nil {
+		// Close first: it stops stdin and waits for the process, which is what lets
+		// os/exec finish copying stderr. Close caps that wait and then kills, so back
+		// it up with a short bounded wait -- otherwise the one diagnostic we came for
+		// can be missed on a loaded machine.
 		_ = c.Close()
+		tail.waitNonEmpty(2 * time.Second)
+		if msg := tail.lastLines(3); msg != "" {
+			return nil, fmt.Errorf("%w (server stderr: %s)", err, msg)
+		}
 		return nil, err
 	}
 	return c, nil

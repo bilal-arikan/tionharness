@@ -193,7 +193,7 @@ export function ProviderInstanceForm({ kinds, instances, editing, onCancel, onSa
           data-testid="provider-instance-save"
           onClick={save}
           disabled={busy || !draft.kindId || !draft.label}
-          className="flex items-center gap-1 rounded bg-[var(--color-accent)] px-3 py-1.5 text-xs font-medium text-white hover:opacity-90 disabled:opacity-30"
+          className="flex items-center gap-1 rounded bg-[var(--color-accent)] px-3 py-1.5 text-xs font-medium text-[var(--color-on-accent)] hover:opacity-90 disabled:opacity-30"
         >
           <Plus size={13} /> {editing ? 'Güncelle' : 'Ekle'}
         </button>

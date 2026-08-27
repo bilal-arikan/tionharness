@@ -34,7 +34,7 @@ func sessionFixture(now time.Time) SessionInput {
 
 func TestSessionCardSummarisesWithoutTranscript(t *testing.T) {
 	now := time.Now()
-	v, err := ProjectSession(sessionFixture(now), LevelCard, LensHealth)
+	v, err := ProjectSession(sessionFixture(now), LevelCard)
 	if err != nil {
 		t.Fatalf("project: %v", err)
 	}
@@ -75,7 +75,7 @@ func TestSessionSurfacesTrouble(t *testing.T) {
 	in.WaitingAsk = &db.SessionAsk{ID: "SAK1", SessionID: "SES9a1", Kind: "ask",
 		CreatedAt: now.Add(-30 * time.Minute).Unix()}
 
-	v, err := ProjectSession(in, LevelCard, LensHealth)
+	v, err := ProjectSession(in, LevelCard)
 	if err != nil {
 		t.Fatalf("project: %v", err)
 	}
@@ -100,32 +100,13 @@ func TestSessionSurfacesTrouble(t *testing.T) {
 	}
 }
 
-func TestSessionErrorsLensDropsRoutineLines(t *testing.T) {
-	in := sessionFixture(time.Now())
-	in.Session.StuckTurns = 1
-
-	v, err := ProjectSession(in, LevelCard, LensErrors)
-	if err != nil {
-		t.Fatalf("project: %v", err)
-	}
-	txt := v.Text()
-	if !strings.Contains(txt, "StuckTurns 1") {
-		t.Errorf("errors lens dropped a failure signal:\n%s", txt)
-	}
-	for _, unwanted := range []string{"todo:", "özet:", "compaction", "son hareket"} {
-		if strings.Contains(txt, unwanted) {
-			t.Errorf("errors lens leaked %q:\n%s", unwanted, txt)
-		}
-	}
-}
-
 func TestSessionCoordinatorLineageInHeader(t *testing.T) {
 	in := sessionFixture(time.Now())
 	in.Session.CoordinatorMode = true
 	in.Session.CoordinatorSessionID = "SESroot"
 	in.Session.CoordinatorDepth = 2
 
-	v, err := ProjectSession(in, LevelCard, LensHealth)
+	v, err := ProjectSession(in, LevelCard)
 	if err != nil {
 		t.Fatalf("project: %v", err)
 	}
@@ -137,7 +118,7 @@ func TestSessionCoordinatorLineageInHeader(t *testing.T) {
 }
 
 func TestSessionTinyIsHeaderOnly(t *testing.T) {
-	v, err := ProjectSession(sessionFixture(time.Now()), LevelTiny, LensHealth)
+	v, err := ProjectSession(sessionFixture(time.Now()), LevelTiny)
 	if err != nil {
 		t.Fatalf("project: %v", err)
 	}
@@ -147,7 +128,7 @@ func TestSessionTinyIsHeaderOnly(t *testing.T) {
 }
 
 func TestSessionRejectsEmptyInput(t *testing.T) {
-	if _, err := ProjectSession(SessionInput{}, LevelCard, LensHealth); err == nil {
+	if _, err := ProjectSession(SessionInput{}, LevelCard); err == nil {
 		t.Fatal("expected an error for an empty session, got a view")
 	}
 }

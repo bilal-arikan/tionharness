@@ -62,7 +62,7 @@ func (GetViewTool) Def() providers.ToolDef {
 			"  agent | budget | tools | logs | artifact | automation | skill | insight | category — the " +
 			"remaining Workspace Explorer nodes, the ones `expand` hands you refs for (use the id expand " +
 			"returned; 'budget'/'tools'/'logs' and category ids like 'sessions' are singletons).\n\n" +
-			"level: 'tiny' | 'card' (default) | 'full'. lens: 'health' (default) | 'stale' | 'recent' | 'errors'.\n" +
+			"level: 'tiny' | 'card' (default) | 'full'.\n" +
 			"Prefer this over list_tasks / get_flow_run + parsing raw state: a fraction of the tokens, and " +
 			"it surfaces the warning signals directly.",
 		InputSchema: json.RawMessage(`{
@@ -71,15 +71,14 @@ func (GetViewTool) Def() providers.ToolDef {
     "kind": { "type": "string", "enum": ["flowrun","session","board","workspace","schedule","agent","budget","tools","logs","artifact","automation","skill","insight","category"], "description": "Entity type to project." },
     "id": { "type": "string", "description": "Entity id (a flow run / session / schedule id, or 'board'/'workspace' for the singletons)." },
     "sub": { "type": "string", "description": "Optional drill-down target inside the entity (a node id for a flow run, a card id for the board)." },
-    "level": { "type": "string", "enum": ["tiny","card","full"], "description": "Budget tier (default card)." },
-    "lens": { "type": "string", "enum": ["health","stale","recent","errors"], "description": "Which facts matter (default health)." }
+    "level": { "type": "string", "enum": ["tiny","card","full"], "description": "Budget tier (default card)." }
   },
   "required": ["kind","id"],
   "additionalProperties": false
 }`),
 		// Four examples, not seven: they fold into the SHIPPED schema (foldExamples), so
 		// each one is per-turn cost. These four cover every convention the schema alone
-		// cannot express — singleton ids, sub drill-down, and level/lens placement.
+		// cannot express — singleton ids, sub drill-down, and level placement.
 		Examples: []json.RawMessage{
 			json.RawMessage(`{"kind":"workspace","id":"workspace"}`),
 			json.RawMessage(`{"kind":"board","id":"board","sub":"T3"}`),
@@ -95,7 +94,6 @@ func (t GetViewTool) Call(ctx context.Context, input json.RawMessage) (string, e
 		ID    string `json:"id"`
 		Sub   string `json:"sub"`
 		Level string `json:"level"`
-		Lens  string `json:"lens"`
 	}
 	if err := json.Unmarshal(input, &in); err != nil {
 		return "", argErr(err)
@@ -119,7 +117,7 @@ func (t GetViewTool) Call(ctx context.Context, input json.RawMessage) (string, e
 
 	ref := view.Ref{Kind: kind, ID: id, Sub: strings.TrimSpace(in.Sub)}
 	v, err := ViewProjector(t.db, t.wsName, t.sources).
-		Project(ctx, ref, view.ParseLevel(in.Level), view.ParseLens(in.Lens))
+		Project(ctx, ref, view.ParseLevel(in.Level))
 	if err != nil {
 		// A bad ref is returned as an error rather than an empty summary: a blank
 		// view reads like a healthy empty entity and would send the agent down the

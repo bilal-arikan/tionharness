@@ -189,7 +189,10 @@ function Get-ExitReason($code) {
     switch ($hex) {
         "0x00000000" { return "temiz cikis" }
         "0x00000001" { return "genel hata ya da disaridan taskkill /F" }
-        "0x00000002" { return "Go runtime fatal (panic / out of memory) -- stderr yakalamasina bak" }
+        # 2 is ambiguous across the two children: Go's runtime uses it for fatal
+        # panics, npm/vite uses it for a config or launcher failure (2026-08-27:
+        # PATH'ten yanlis vite binary'si). Say both, or the reader chases the wrong one.
+        "0x00000002" { return "backend ise Go runtime fatal (panic/OOM), frontend ise npm/vite baslatma hatasi -- stderr yakalamasina bak" }
         "0x00000086" { return "abort() -- node JS heap OOM adayi" }
         "0x40010004" { return "DBG_TERMINATE_PROCESS -- disaridan sonlandirildi (konsol kapandi / taskkill)" }
         "0xC0000005" { return "ACCESS_VIOLATION -- native cokme" }
@@ -241,6 +244,27 @@ function Free-Port($pt, $label) {
     }
     # Give the OS a moment to release the socket before we rebind.
     Start-Sleep -Milliseconds 400
+}
+
+# Test-FrontendDeps answers "will `npm run dev` actually start?" -- deliberately by
+# LOADING vite, not by looking for files. WHY: on 2026-08-27 the tree was broken two
+# different ways in one morning and neither is visible to a Test-Path check.
+#   1. node_modules\.bin\ vanished  -> npm resolved `vite` from PATH and ran an
+#      unrelated Python static-site generator of the same name (exit 2).
+#   2. an agent's `npm install` was killed mid-extraction (dev.ps1 cleanup does
+#      taskkill /T on the backend TREE, and the agent's npm was in it), leaving
+#      @rolldown/pluginutils with its package.json but no dist\index.mjs -> vite
+#      died with ERR_MODULE_NOT_FOUND.
+# Measured on the broken tree: `vite --version` still exits 0 (it never imports the
+# missing module), so only a real import detects case 2.
+function Test-FrontendDeps($fe) {
+    if (-not (Test-Path (Join-Path $fe "node_modules\.bin\vite.cmd"))) { return $false }
+    Push-Location $fe
+    # Exit code is the whole signal; the stdout tag is only for a human reading the log.
+    & node -e "import('vite').then(()=>process.exit(0),e=>{console.log('vite-load-failed:'+e.code);process.exit(1)})" | Out-Null
+    $ok = ($LASTEXITCODE -eq 0)
+    Pop-Location
+    return $ok
 }
 
 try {
@@ -301,11 +325,43 @@ try {
         # Pre-flight: clear any orphan still holding the Vite dev port (5173).
         Free-Port 5173 "Frontend"
         $fe = Join-Path $root "frontend"
-        if (-not (Test-Path (Join-Path $fe "node_modules"))) {
-            Write-Host "==> node_modules yok, npm install calisiyor..." -ForegroundColor Yellow
+        # Pre-flight: repair node_modules before launching, escalating only as far as
+        # needed (see Test-FrontendDeps for the two failure modes this exists for).
+        # The ladder matters: `npm install` CANNOT repair a half-extracted package,
+        # because the package.json is present so npm considers it installed and skips
+        # it -- that is exactly why the 2026-08-27 crash loop survived the first guard.
+        # Only a full delete + npm ci re-extracts it.
+        if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
+            throw "node bulunamadi (PATH) -- frontend baslatilamaz."
+        }
+        if (-not (Test-FrontendDeps $fe)) {
             Push-Location $fe
+            $hasLock = Test-Path (Join-Path $fe "package-lock.json")
+            Write-Host "==> frontend bagimliliklari bozuk -> npm install deneniyor..." -ForegroundColor Yellow
+            Write-Lifecycle "dev.ps1 pre-flight: frontend deps broken, running npm install"
             npm install
             Pop-Location
+            if (-not (Test-FrontendDeps $fe)) {
+                Push-Location $fe
+                if ($hasLock) {
+                    Write-Host "==> hala bozuk -> node_modules siliniyor + npm ci..." -ForegroundColor Yellow
+                    Write-Lifecycle "dev.ps1 pre-flight: still broken, wiping node_modules for npm ci"
+                    Remove-Item (Join-Path $fe "node_modules") -Recurse -Force -ErrorAction SilentlyContinue
+                    npm ci
+                } else {
+                    Write-Host "==> hala bozuk -> node_modules siliniyor + npm install..." -ForegroundColor Yellow
+                    Write-Lifecycle "dev.ps1 pre-flight: still broken, wiping node_modules (no lockfile)"
+                    Remove-Item (Join-Path $fe "node_modules") -Recurse -Force -ErrorAction SilentlyContinue
+                    npm install
+                }
+                Pop-Location
+                if (-not (Test-FrontendDeps $fe)) {
+                    Write-Lifecycle "dev.ps1 pre-flight: frontend deps UNREPAIRABLE"
+                    throw "frontend bagimliliklari temiz kurulumdan sonra da yuklenemiyor -- 'cd frontend; node -e ""import('vite')""' ile hatayi gor."
+                }
+            }
+            Write-Host "==> frontend bagimliliklari onarildi." -ForegroundColor Green
+            Write-Lifecycle "dev.ps1 pre-flight: frontend deps repaired"
         }
         # In network mode pass --host 0.0.0.0 so Vite listens on every interface
         # (default is localhost-only). "--" forwards the flag through npm to vite.

@@ -15,7 +15,7 @@ func TestWorkersBlockKeepsItsAuthoritativeFraming(t *testing.T) {
 		{SessionID: "SES3", AgentName: "writer", Summary: "rapor hazır"},
 	}}
 
-	v, err := ProjectWorkers(in, LevelCard, LensHealth)
+	v, err := ProjectWorkers(in, LevelCard)
 	if err != nil {
 		t.Fatalf("project: %v", err)
 	}
@@ -53,7 +53,7 @@ func TestWorkersVerdictBadgeAndTally(t *testing.T) {
 		{SessionID: "SES3", AgentName: "writer", Summary: "rapor hazır"},
 	}}
 
-	v, err := ProjectWorkers(in, LevelCard, LensHealth)
+	v, err := ProjectWorkers(in, LevelCard)
 	if err != nil {
 		t.Fatalf("project: %v", err)
 	}
@@ -98,7 +98,7 @@ func TestWorkersRunningShowsElapsed(t *testing.T) {
 		{SessionID: "SES2", AgentName: "ghost", Running: true}, // start time unknown
 	}}
 
-	v, err := ProjectWorkers(in, LevelCard, LensHealth)
+	v, err := ProjectWorkers(in, LevelCard)
 	if err != nil {
 		t.Fatalf("project: %v", err)
 	}
@@ -118,7 +118,7 @@ func TestWorkersIdleFleetGetsTheNudge(t *testing.T) {
 	v, err := ProjectWorkers(WorkersInput{Workers: []Worker{
 		{SessionID: "SES1", AgentName: "a", Summary: "bitti"},
 		{SessionID: "SES2", AgentName: "b", Summary: "bitti"},
-	}}, LevelCard, LensHealth)
+	}}, LevelCard)
 	if err != nil {
 		t.Fatalf("project: %v", err)
 	}
@@ -149,7 +149,7 @@ func TestWorkersWideFleetIsCappedButCountsStayWhole(t *testing.T) {
 		Worker{SessionID: "SESr1", AgentName: "busy1", Running: true, StartedAt: now.Add(-time.Minute).Unix()},
 		Worker{SessionID: "SESr2", AgentName: "busy2", Delegating: true})
 
-	v, err := ProjectWorkers(in, LevelCard, LensHealth)
+	v, err := ProjectWorkers(in, LevelCard)
 	if err != nil {
 		t.Fatalf("project: %v", err)
 	}
@@ -182,7 +182,7 @@ func TestWorkersWideFleetIsCappedButCountsStayWhole(t *testing.T) {
 // TestWorkersEmptyFleetStillReportsZero: the caller skips the block entirely for
 // an empty fleet, but the projection itself must not produce a dangling header.
 func TestWorkersEmptyFleetStillReportsZero(t *testing.T) {
-	v, err := ProjectWorkers(WorkersInput{}, LevelCard, LensHealth)
+	v, err := ProjectWorkers(WorkersInput{}, LevelCard)
 	if err != nil {
 		t.Fatalf("project: %v", err)
 	}

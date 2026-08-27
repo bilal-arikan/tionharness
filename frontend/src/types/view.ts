@@ -27,10 +27,6 @@ export type ViewKind =
 // is the default, full adds per-item detail.
 export type ViewLevel = 'tiny' | 'card' | 'full'
 
-// Which facts are interesting. Deliberately few — a long menu makes both the
-// agent and the user pick badly.
-export type ViewLens = 'health' | 'stale' | 'recent' | 'errors'
-
 export interface ViewRef {
   kind: ViewKind
   id: string
@@ -48,7 +44,6 @@ export interface ViewHandle {
 export interface ViewResult {
   ref: ViewRef
   level: ViewLevel
-  lens: ViewLens
   header: string
   body: string
   // The rendered projection exactly as an agent receives it.
@@ -74,7 +69,6 @@ export interface ViewResult {
 // getView.
 export interface ViewChildrenResult {
   ref: ViewRef
-  lens: ViewLens
   children: ViewHandle[]
 }
 
@@ -119,11 +113,4 @@ export function parseRef(s: string): ViewRef | null {
   }
   if (!rest) return null
   return { kind: kind as ViewKind, id: rest, ...(sub ? { sub } : {}) }
-}
-
-export const VIEW_LENS_LABEL: Record<ViewLens, string> = {
-  health: 'sağlık',
-  stale: 'duran',
-  recent: 'son değişim',
-  errors: 'hatalar',
 }

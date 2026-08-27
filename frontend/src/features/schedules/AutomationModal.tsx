@@ -382,7 +382,7 @@ export function AutomationModal({
                     onClick={() => setSessionMode(m)}
                     className={`px-2.5 py-1 transition ${
                       sessionMode === m
-                        ? 'bg-[var(--color-accent)] text-white'
+                        ? 'bg-[var(--color-accent)] text-[var(--color-on-accent)]'
                         : 'bg-[var(--color-bg)] text-[var(--color-text-dim)] hover:text-[var(--color-accent)]'
                     }`}
                   >

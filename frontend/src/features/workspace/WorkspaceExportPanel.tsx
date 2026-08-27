@@ -541,7 +541,7 @@ export function WorkspaceExportPanel({ ws, onError }: Props) {
       </div>
       {msg && (
         <p
-          className={`text-xs ${msg.ok ? 'text-[var(--color-success,#10b981)]' : 'text-[var(--color-danger)]'}`}
+          className={`text-xs ${msg.ok ? 'text-[var(--color-success)]' : 'text-[var(--color-danger)]'}`}
         >
           {msg.text}
         </p>

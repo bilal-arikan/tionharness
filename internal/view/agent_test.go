@@ -33,7 +33,7 @@ func agentFixture(now time.Time) AgentInput {
 
 func TestAgentHeaderCountsLiveSessions(t *testing.T) {
 	now := time.Now()
-	v, err := ProjectAgent(agentFixture(now), LevelCard, LensHealth)
+	v, err := ProjectAgent(agentFixture(now), LevelCard)
 	if err != nil {
 		t.Fatalf("project: %v", err)
 	}
@@ -50,7 +50,7 @@ func TestAgentHeaderCountsLiveSessions(t *testing.T) {
 }
 
 func TestAgentSurfacesStuckAndCoordinator(t *testing.T) {
-	v, err := ProjectAgent(agentFixture(time.Now()), LevelCard, LensHealth)
+	v, err := ProjectAgent(agentFixture(time.Now()), LevelCard)
 	if err != nil {
 		t.Fatalf("project: %v", err)
 	}
@@ -72,7 +72,7 @@ func TestAgentHandlesArePerSessionAndCapped(t *testing.T) {
 			ID: fmt.Sprintf("F%d", i), AgentID: "AG1", UpdatedAt: now.Unix(),
 		})
 	}
-	v, err := ProjectAgent(in, LevelCard, LensHealth)
+	v, err := ProjectAgent(in, LevelCard)
 	if err != nil {
 		t.Fatalf("project: %v", err)
 	}
@@ -89,22 +89,8 @@ func TestAgentHandlesArePerSessionAndCapped(t *testing.T) {
 	}
 }
 
-func TestAgentErrorsLensDropsRoutine(t *testing.T) {
-	v, err := ProjectAgent(agentFixture(time.Now()), LevelCard, LensErrors)
-	if err != nil {
-		t.Fatalf("project: %v", err)
-	}
-	txt := v.Text()
-	if !strings.Contains(txt, "takılmış") {
-		t.Errorf("errors lens dropped the stuck signal:\n%s", txt)
-	}
-	if strings.Contains(txt, "koordinatör oturumu") {
-		t.Errorf("errors lens leaked the coordinator count:\n%s", txt)
-	}
-}
-
 func TestAgentTinyIsHeaderOnly(t *testing.T) {
-	v, err := ProjectAgent(agentFixture(time.Now()), LevelTiny, LensHealth)
+	v, err := ProjectAgent(agentFixture(time.Now()), LevelTiny)
 	if err != nil {
 		t.Fatalf("project: %v", err)
 	}
@@ -114,7 +100,7 @@ func TestAgentTinyIsHeaderOnly(t *testing.T) {
 }
 
 func TestAgentEmptyIsRejected(t *testing.T) {
-	if _, err := ProjectAgent(AgentInput{}, LevelCard, LensHealth); err == nil {
+	if _, err := ProjectAgent(AgentInput{}, LevelCard); err == nil {
 		t.Error("an agent input with no agent must be an error, not a blank view")
 	}
 }

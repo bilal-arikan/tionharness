@@ -44,7 +44,7 @@ export function OptimizerChip({ optimizer }: Props) {
       title={title}
       className={`shrink-0 rounded px-1.5 py-px font-mono text-[10px] ${
         degraded
-          ? 'bg-[var(--color-surface-2)] text-[var(--color-warning,var(--color-danger))]'
+          ? 'bg-[var(--color-surface-2)] text-[var(--color-warning)]'
           : 'bg-[var(--color-surface-2)] text-[var(--color-text-dim)]'
       }`}
     >

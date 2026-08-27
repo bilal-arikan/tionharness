@@ -19,7 +19,7 @@ type SkillInput struct {
 }
 
 // ProjectSkill renders one skill's catalog entry.
-func ProjectSkill(in SkillInput, level Level, lens Lens) (View, error) {
+func ProjectSkill(in SkillInput, level Level) (View, error) {
 	sk := in.Skill
 	now := in.Now
 	if now.IsZero() {
@@ -32,7 +32,6 @@ func ProjectSkill(in SkillInput, level Level, lens Lens) (View, error) {
 	v := View{
 		Ref:    Ref{Kind: KindSkill, ID: sk.Slug},
 		Level:  level,
-		Lens:   lens,
 		AsOf:   now,
 		Source: sk.Slug,
 	}

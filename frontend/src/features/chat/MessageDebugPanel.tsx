@@ -82,7 +82,7 @@ export function MessageDebugPanel({ sessionId, turnId }: { sessionId: string; tu
                       className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
                         warm
                           ? 'bg-[color-mix(in_srgb,var(--color-success)_15%,transparent)] text-[var(--color-success)]'
-                          : 'bg-[color-mix(in_srgb,var(--color-warning,#d97706)_15%,transparent)] text-[var(--color-warning,#d97706)]'
+                          : 'bg-[color-mix(in_srgb,var(--color-warning)_15%,transparent)] text-[var(--color-warning)]'
                       }`}
                       title={
                         warm
@@ -111,7 +111,7 @@ export function MessageDebugPanel({ sessionId, turnId }: { sessionId: string; tu
                         </p>
                       )}
                       {(data.coolingWasteUsd ?? 0) > 0 && (
-                        <p className="mt-1 text-[10px] text-[var(--color-warning,#d97706)]">
+                        <p className="mt-1 text-[10px] text-[var(--color-warning)]">
                           Kaçınılabilir fazla ödeme: {fmtUSD(data.coolingWasteUsd!)}
                           {data.coolingWasteEstimated ? ' ≈' : ''} — tur daha erken gelseydi önek
                           sıcak kalırdı.
@@ -225,7 +225,7 @@ function Tag({ tone, children }: { tone: 'danger' | 'warn'; children: React.Reac
   const cls =
     tone === 'danger'
       ? 'bg-[color-mix(in_srgb,var(--color-danger)_15%,transparent)] text-[var(--color-danger)]'
-      : 'bg-[color-mix(in_srgb,var(--color-warning,#d97706)_15%,transparent)] text-[var(--color-warning,#d97706)]'
+      : 'bg-[color-mix(in_srgb,var(--color-warning)_15%,transparent)] text-[var(--color-warning)]'
   return <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${cls}`}>{children}</span>
 }
 

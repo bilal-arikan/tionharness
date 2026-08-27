@@ -26,7 +26,7 @@ degree-of-interest (DOI) tree**. Ekranı doldurmadan yalnız ilgili dalı açık
 | İhtiyaç | Mevcut karşılığı |
 |---|---|
 | Düğüm adresi | `view.Ref{Kind, ID, Sub}` (`session:SES1`, `board:board#in_progress`) |
-| Düğüm özeti | `Projector.Project(ctx, ref, level, lens) → View` |
+| Düğüm özeti | `Projector.Project(ctx, ref, level) → View` |
 | Çocuk düğümlere kenar | `View.Handle{Label, Ref, Level}` (drill-down işaretçisi) |
 | Semantic zoom (bütçe) | `Level` = `tiny/card/full` |
 | Ajan erişimi | `get_view` aracı (Ref çözer, Handle takip eder) |
@@ -65,10 +65,7 @@ TSK66 notları:
 - Kök **11 düğüm** (eskiden 6); boş kovacık da görünür (harita şekli içerikle değişmez).
 - Yeni kovacıkların üyeleri **yapraktır** — tıklayınca yan panelde metadata projeksiyonu
   açılır, içerik (artifact body / skill body / bulgu detayı) ilgili ekranda kalır.
-- `logs` yapraktır: ring-buffer kuyruğu inline render edilir; `errors` lens yalnız ERROR
-  kayıtlarını bırakır.
-- `errors` lens ayrıca Otomasyonlar'da son ateşlemesi hatalı kurallara, İçgörüler'de
-  yeni/regressed bulgulara daralır.
+- `logs` yapraktır: ring-buffer kuyruğu inline render edilir.
 - skills/findings/logs db'de değil → `Projector.WithSources(Sources{Skills, Findings,
   Logs})`; `internal/insight` view'i import ettiği için findings view-local `InsightFinding`
   tipine api-adapter'ıyla bağlanır (cycle yok).
@@ -89,12 +86,11 @@ derinlik/çocuk cap'i şart (§8.1).
    - `tools.go` — `ProjectTools`: workspace-aktif araç seti + MCP sunucu havuzu durumu.
    - `category.go` — `ProjectCategory`: bir kategori altındaki üyeleri sayar + üst-N'i
      handle olarak verir, kalanı `Elided` ile bildirir.
-3. **`Children(ctx, ref, lens) []Handle`** — Projector'a **yapısal çocuk** metodu
+3. **`Children(ctx, ref) []Handle`** — Projector'a **yapısal çocuk** metodu
    (özet `Project`'ten ayrı; harita gezinirken her düğüm için tam `card` render
    etmeden çocukları almak için). `workspace` → 11 kategori/yaprak; `category:sessions` →
-   session handle'ları; `board` → sütun handle'ları; vb. **Lens** burada filtreler
-   (`errors` → yalnız sorunlu çocuklar).
-4. **Endpoint:** `GET /api/views/{kind}/{id}/children?lens=` → `[]Handle`. Özet için
+   session handle'ları; `board` → sütun handle'ları; vb.
+4. **Endpoint:** `GET /api/views/{kind}/{id}/children` → `[]Handle`. Özet için
    mevcut `GET /api/views/{kind}/{id}` korunur.
 5. **Elision & cost sözleşmesi korunur:** kategori/harita düğümü kaç öğe gizlediğini
    (`Elided`+birim) ve `~N tok`'u taşır.
@@ -105,7 +101,7 @@ derinlik/çocuk cap'i şart (§8.1).
 ## 6. Agent tarafı
 
 - `get_view` **zaten** handle döndürüyor → ajan BFS/DFS ile gezebiliyor. **✅ `expand`
-  aracı canlı** (`internal/tools/builtin_expand.go`): `expand{kind,id,sub,lens}` →
+  aracı canlı** (`internal/tools/builtin_expand.go`): `expand{kind,id,sub}` →
   `Projector.Children`'ı sarar, haritayla **birebir aynı backend**. Her çocuğu doğru
   sonraki çağrıya yönlendirir (çocuğu olan düğüm → `expand`, yaprak → `get_view`).
   Salt-okunur, her ajana açık, kategori `diagnostics`. Ajanın doğal akışı:
@@ -138,7 +134,7 @@ derinlik/çocuk cap'i şart (§8.1).
     fan-out değil drill-down okur. Her seviyede çalışır.
   - Düğümü seç → yanda `getView card` özeti.
   - **Semantic zoom:** uzak zoom'da tiny satır, odakta card (zoom eşiğine göre içerik).
-  - **Breadcrumb + lens seçici + level seçici** üst barda (ViewPanel kontratıyla aynı).
+  - **Breadcrumb + level seçici** üst barda (ViewPanel kontratıyla aynı).
 - **Canlı güncelleme:** `useRefreshTrigger('network')` benzeri bir `'explorer'` tick +
   merkezi SSE → açık düğümlerin çocukları tazelenir (tüm harita değil).
 - **Deep-link:** düğüm id = `Ref.String()` → URL'de açık düğüm izi (paylaşılabilir).
@@ -150,22 +146,20 @@ derinlik/çocuk cap'i şart (§8.1).
 2. **Tek veri kaynağı:** her şey View katmanı üstüne kurulur; paralel "özet toplayıcı"
    YAZILMAZ (iki kaynak zamanla çelişir — bu projenin tekrarlanan dersi).
 3. **DOI pruning:** ekran dolunca "ilgisiz" dalları soldur/katla (focus+context).
-4. **Lens haritaya uygulanır:** `errors`/`stale` → 300 oturumluk workspace'te "hepsi"
-   yerine "yalnız sorunlular".
-5. **Sessiz kesme yok:** elision düğümde görünür.
+4. **Sessiz kesme yok:** elision düğümde görünür.
 6. **Maliyet görünürlüğü:** her düğümde `~N tok`; pahalı dal ajana/kullanıcıya belli.
 7. **Stabil kimlik + deep-link:** `Ref.String()` cache anahtarı + URL + "aynı düğüm mü?".
 
 ## 9. Fazlar
 
 - **Faz 1 — Backend:** ✅ (2026-08-06) yeni Kind'ler (`agent/budget/tools/category`),
-  `ProjectAgent/Budget/Tools/Category`, `Children(ref, lens)` metodu, `GET
+  `ProjectAgent/Budget/Tools/Category`, `Children(ref)` metodu, `GET
   /api/views/{kind}/{id}/children` endpoint + testler (`view/*_test.go` fixture deseni +
   `fakeStore`). `go build ./... && go vet ./... && go test ./internal/view/...
   ./internal/api/...` ✅.
 - **Faz 2 — Frontend:** ✅ (2026-08-06) `features/explorer` ekranı — React Flow lazy-expand
   (deterministik katmanlı yerleşim, elkjs eklenmedi), gömülü `ViewPanel` yan-özet paneli,
-  semantic zoom (uzak zoom → tek satır), lens seçici, canlı SSE (`'explorer'` tick, yalnız
+  semantic zoom (uzak zoom → tek satır), canlı SSE (`'explorer'` tick, yalnız
   açık dallar). NavRail "Harita" girişi + `api.viewChildren`. `tsc --noEmit` ✅.
   **Deferred → Faz 3:** URL deep-link (`useAppNavigation` entegrasyonu) ve `expand` ajan aracı.
 - **Faz 3 — Agent/MCP + cila:** ✅ (2026-08-06) **`expand` aracı** (ajan, haritayla aynı

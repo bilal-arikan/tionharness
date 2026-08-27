@@ -29,8 +29,8 @@ export function useIsEndNode(id: string): boolean {
 }
 
 // Faint body tints (mixed into the surface) to distinguish flow endpoints.
-export const START_TINT = 'color-mix(in srgb, #22c55e 14%, var(--color-surface))'
-export const END_TINT = 'color-mix(in srgb, #3b82f6 14%, var(--color-surface))'
+export const START_TINT = 'color-mix(in srgb, var(--color-success) 14%, var(--color-surface))'
+export const END_TINT = 'color-mix(in srgb, var(--color-info) 14%, var(--color-surface))'
 
 // AgentsContext lets node components resolve an agentId to its display info
 // without threading agents through every node's data.
@@ -102,11 +102,11 @@ export function statusRing(status?: NodeStatus): string {
     case 'running':
       return '0 0 0 2px var(--color-accent), 0 0 16px var(--color-accent)'
     case 'done':
-      return '0 0 0 2px #22c55e'
+      return '0 0 0 2px var(--color-success), 0 0 12px color-mix(in srgb, var(--color-success) 55%, transparent)'
     case 'error':
       return '0 0 0 2px var(--color-danger)'
     case 'waiting':
-      return '0 0 0 2px #eab308, 0 0 14px #eab308'
+      return '0 0 0 2px var(--color-warning), 0 0 12px color-mix(in srgb, var(--color-warning) 55%, transparent)'
     default:
       return 'none'
   }

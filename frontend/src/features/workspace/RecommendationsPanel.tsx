@@ -96,7 +96,7 @@ export function RecommendationsPanel({ onError, onShowCards }: Props) {
                 ? 'Şu an gösterilecek (geçerli ve yok sayılmamış) öneri yok'
                 : 'Geçerli önerileri sağ-altta kart olarak göster'
             }
-            className="inline-flex w-fit items-center gap-1.5 rounded-lg border border-[var(--color-accent)] bg-[var(--color-accent)] px-3 py-1.5 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-50"
+            className="inline-flex w-fit items-center gap-1.5 rounded-lg border border-[var(--color-accent)] bg-[var(--color-accent)] px-3 py-1.5 text-sm font-medium text-[var(--color-on-accent)] transition hover:opacity-90 disabled:opacity-50"
           >
             <Bell size={14} />
             {visibleCount > 0 ? `Kartları göster (${visibleCount})` : 'Kartları göster'}

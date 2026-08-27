@@ -147,7 +147,7 @@ function LensEditor({
           <button
             onClick={save}
             disabled={saving || raw === null}
-            className="rounded-md bg-[var(--color-accent)] px-3 py-1 text-sm text-white disabled:opacity-50"
+            className="rounded-md bg-[var(--color-accent)] px-3 py-1 text-sm text-[var(--color-on-accent)] disabled:opacity-50"
           >
             {saving ? 'Kaydediliyor…' : 'Kaydet'}
           </button>

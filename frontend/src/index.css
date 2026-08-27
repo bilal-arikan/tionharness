@@ -22,12 +22,15 @@
   --color-border: #2b2b30;
   --color-accent: #8b5cf6;
   --color-accent-soft: #2c2545;
+  --color-on-accent: var(--color-bg);
   --color-text: #e7e7ea;
   --color-text-dim: #9a9aa6;
 
   /* Semantic state colours (re-themed per mode/preset). */
   --color-success: #34d399;
+  --color-on-success: var(--color-bg);
   --color-warning: #fbbf24;
+  --color-on-warning: var(--color-bg);
   --color-danger: #f87171;
   --color-info: #38bdf8;
 
@@ -47,12 +50,15 @@
   --color-border: #d8dce3;
   --color-accent: #2f6fed;
   --color-accent-soft: #d8e4fb;
+  --color-on-accent: var(--color-surface);
   --color-text: #16202c;
   --color-text-dim: #5a6470;
 
-  --color-success: #15915b;
-  --color-warning: #b45309;
-  --color-danger: #dc2626;
+  --color-success: #12784b;
+  --color-on-success: var(--color-surface);
+  --color-warning: #a54a07;
+  --color-on-warning: var(--color-surface);
+  --color-danger: #b91c1c;
   --color-info: #0284c7;
 
   --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.06);
@@ -242,4 +248,67 @@ kbd,
 .sg-markdown .hljs {
   background: transparent;
   padding: 0;
+}
+
+/* highlight.js ships with GitHub Dark above; remap its syntax palette when the
+   active preset is light. These GitHub Light colors all clear 4.5:1 on the
+   light surface used by code blocks. */
+[data-theme='light'] .hljs {
+  color: #24292e;
+}
+[data-theme='light'] .hljs-doctag,
+[data-theme='light'] .hljs-keyword,
+[data-theme='light'] .hljs-meta .hljs-keyword,
+[data-theme='light'] .hljs-template-tag,
+[data-theme='light'] .hljs-template-variable,
+[data-theme='light'] .hljs-type,
+[data-theme='light'] .hljs-variable.language_ {
+  color: #b31d28;
+}
+[data-theme='light'] .hljs-title,
+[data-theme='light'] .hljs-title.class_,
+[data-theme='light'] .hljs-title.class_.inherited__,
+[data-theme='light'] .hljs-title.function_ {
+  color: #6f42c1;
+}
+[data-theme='light'] .hljs-attr,
+[data-theme='light'] .hljs-attribute,
+[data-theme='light'] .hljs-literal,
+[data-theme='light'] .hljs-meta,
+[data-theme='light'] .hljs-number,
+[data-theme='light'] .hljs-operator,
+[data-theme='light'] .hljs-variable,
+[data-theme='light'] .hljs-selector-attr,
+[data-theme='light'] .hljs-selector-class,
+[data-theme='light'] .hljs-selector-id,
+[data-theme='light'] .hljs-section {
+  color: #005cc5;
+}
+[data-theme='light'] .hljs-regexp,
+[data-theme='light'] .hljs-string,
+[data-theme='light'] .hljs-meta .hljs-string {
+  color: #032f62;
+}
+[data-theme='light'] .hljs-built_in,
+[data-theme='light'] .hljs-symbol {
+  color: #b54708;
+}
+[data-theme='light'] .hljs-comment,
+[data-theme='light'] .hljs-code,
+[data-theme='light'] .hljs-formula {
+  color: #59636e;
+}
+[data-theme='light'] .hljs-name,
+[data-theme='light'] .hljs-quote,
+[data-theme='light'] .hljs-selector-tag,
+[data-theme='light'] .hljs-selector-pseudo {
+  color: #18752d;
+}
+[data-theme='light'] .hljs-subst,
+[data-theme='light'] .hljs-emphasis,
+[data-theme='light'] .hljs-strong {
+  color: #24292e;
+}
+[data-theme='light'] .hljs-bullet {
+  color: #735c0f;
 }

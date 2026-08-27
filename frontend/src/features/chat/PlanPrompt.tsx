@@ -40,7 +40,7 @@ export function PlanPrompt({ ask, onAnswer }: Props) {
               className={
                 reject
                   ? 'rounded-full border border-[var(--color-danger)]/60 px-3 py-1 text-xs text-[var(--color-danger)] hover:bg-[var(--color-danger)]/10'
-                  : 'rounded-full bg-[var(--color-success)] px-3 py-1 text-xs font-medium text-white hover:opacity-90'
+                  : 'rounded-full bg-[var(--color-success)] px-3 py-1 text-xs font-medium text-[var(--color-on-success)] hover:opacity-90'
               }
             >
               {opt}

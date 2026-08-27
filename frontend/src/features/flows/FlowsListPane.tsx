@@ -96,7 +96,9 @@ export function FlowsListPane({
               key={t}
               onClick={() => setTab(t)}
               className={`flex-1 rounded-md px-1.5 py-1 ${
-                tab === t ? 'bg-[var(--color-accent)] text-white' : 'text-[var(--color-text-dim)]'
+                tab === t
+                  ? 'bg-[var(--color-accent)] text-[var(--color-on-accent)]'
+                  : 'text-[var(--color-text-dim)]'
               }`}
             >
               {t === 'flows' ? 'Akışlarım' : t === 'templates' ? 'Şablonlar' : 'Koşular'}
@@ -218,7 +220,7 @@ export function FlowsListPane({
                       onClick={() => toggleTagFilter(t)}
                       className={`rounded-full px-1.5 py-0.5 text-[10px] transition ${
                         on
-                          ? 'bg-[var(--color-accent)] text-white'
+                          ? 'bg-[var(--color-accent)] text-[var(--color-on-accent)]'
                           : 'bg-[var(--color-accent-soft)] text-[var(--color-accent)] hover:opacity-80'
                       }`}
                       title={on ? 'Filtreyi kaldır' : 'Bu etikete göre filtrele'}
@@ -280,7 +282,7 @@ export function FlowsListPane({
                               {f.tags!.slice(0, 4).map((t) => (
                                 <span
                                   key={t}
-                                  className="rounded-full bg-[var(--color-accent-soft)] px-1.5 py-0.5 text-[10px] text-[var(--color-accent)]"
+                                  className="rounded-full bg-[var(--color-accent-soft)] px-1.5 py-0.5 text-[10px] text-[color-mix(in_srgb,var(--color-accent)_75%,var(--color-text))]"
                                 >
                                   #{t}
                                 </span>

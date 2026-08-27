@@ -75,7 +75,7 @@ export function LessonsTab({ onError }: Props) {
         <button
           onClick={save}
           disabled={!dirty || saving}
-          className="flex items-center gap-1 rounded-md bg-[var(--color-accent)] px-3 py-1 text-sm text-white disabled:opacity-50"
+          className="flex items-center gap-1 rounded-md bg-[var(--color-accent)] px-3 py-1 text-sm text-[var(--color-on-accent)] disabled:opacity-50"
         >
           <Save className="h-4 w-4" /> {saving ? 'Kaydediliyor…' : 'Kaydet'}
         </button>

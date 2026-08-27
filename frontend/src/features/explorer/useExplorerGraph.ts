@@ -3,12 +3,11 @@
 // cycle-safe layout. The screen (ExplorerView) is a thin consumer.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '@/api'
-import type { ViewLens, ViewRef } from '@/types'
+import type { ViewRef } from '@/types'
 import { parseRef, refToString } from '@/types'
 import { buildGraph, isDrillable, nextExpandedSet, ROOT_KEY, ROOT_REF } from './explorerModel'
 
 interface Options {
-  lens: ViewLens
   // search dims non-matching nodes (focus+context); empty = no search.
   search: string
   onError?: (msg: string) => void
@@ -18,7 +17,7 @@ interface Options {
   onSelect?: (refString: string) => void
 }
 
-export function useExplorerGraph({ lens, search, onError, initialSelected, onSelect }: Options) {
+export function useExplorerGraph({ search, onError, initialSelected, onSelect }: Options) {
   // refByKey/labelByKey/childrenByKey grow as nodes are fetched. Seeded with the
   // root so the workspace node renders (and is selectable) before any fetch.
   const [refByKey, setRefByKey] = useState<Record<string, ViewRef>>({ [ROOT_KEY]: ROOT_REF })
@@ -58,7 +57,7 @@ export function useExplorerGraph({ lens, search, onError, initialSelected, onSel
       const key = refToString(ref)
       setLoading((s) => new Set(s).add(key))
       try {
-        const res = await api.viewChildren(ref, lens)
+        const res = await api.viewChildren(ref)
         const childRefs = res.children.map((h) => h.ref)
         setChildrenByKey((m) => ({ ...m, [key]: childRefs }))
         setParentByKey((m) => {
@@ -87,7 +86,7 @@ export function useExplorerGraph({ lens, search, onError, initialSelected, onSel
         })
       }
     },
-    [lens, onError],
+    [onError],
   )
 
   // toggle drills one layer in (fetching children on first expand) or collapses.
@@ -109,7 +108,7 @@ export function useExplorerGraph({ lens, search, onError, initialSelected, onSel
   )
 
   // refreshExpanded re-fetches every currently-expanded node's children. Used on
-  // a lens change (children filter differently) and on the 'explorer' SSE tick
+  // an 'explorer' SSE tick
   // (only open branches are refreshed, not the whole map).
   const refreshExpanded = useCallback(() => {
     for (const key of expandedRef.current) {
@@ -120,8 +119,7 @@ export function useExplorerGraph({ lens, search, onError, initialSelected, onSel
 
   // reload seeds/refreshes the map: auto-expand the root (so the eleven buckets
   // are visible immediately, not a lone workspace node), drop stale child caches,
-  // and re-fetch every open branch under the current lens. Runs on mount and on
-  // every lens change.
+  // and re-fetch every open branch. Runs on mount.
   const reload = useCallback(() => {
     setChildrenByKey({})
     setExpanded((prev) => (prev.has(ROOT_KEY) ? prev : new Set(prev).add(ROOT_KEY)))
@@ -133,8 +131,8 @@ export function useExplorerGraph({ lens, search, onError, initialSelected, onSel
     }
   }, [fetchChildren])
   useEffect(() => {
-    // Fetch-on-mount + on-lens-change synchronization (same idiom as the other
-    // data panels); reload seeds the root and re-fetches open branches.
+    // Fetch-on-mount synchronization; reload seeds the root and re-fetches open
+    // branches.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     reload()
   }, [reload])

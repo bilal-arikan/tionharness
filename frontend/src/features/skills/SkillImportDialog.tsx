@@ -370,7 +370,7 @@ export function SkillImportDialog({ onClose, onImported }: Props) {
           {/* STEP 3: done */}
           {step === 'done' && result && (
             <div data-testid="import-result" className="space-y-3">
-              <p className="flex items-center gap-1.5 text-sm font-medium text-[var(--color-success,#16a34a)]">
+              <p className="flex items-center gap-1.5 text-sm font-medium text-[var(--color-success)]">
                 <CheckCircle2 size={16} /> {result.installed.length} öğe içe aktarıldı
                 {result.skipped.length > 0 && (
                   <span className="text-[var(--color-text-dim)]">
@@ -408,7 +408,7 @@ export function SkillImportDialog({ onClose, onImported }: Props) {
               )}
 
               {result.warnings.length > 0 && (
-                <div className="text-xs text-[var(--color-warning,#d97706)]">
+                <div className="text-xs text-[var(--color-warning)]">
                   <p className="mb-1 flex items-center gap-1.5 font-medium">
                     <AlertTriangle size={13} /> Uyarılar
                   </p>

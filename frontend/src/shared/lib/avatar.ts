@@ -54,6 +54,24 @@ export function resolveColor(agent: Pick<Agent, 'id' | 'color'>): string {
   return AVATAR_COLORS[hashString(agent.id || agent.color || '') % AVATAR_COLORS.length]
 }
 
+// Pick the higher-contrast monochrome foreground for a hex avatar background.
+// Agent colors are persisted as hex; generated palette colors use the same form.
+export function avatarForeground(background: string): '#000' | '#fff' {
+  const hex = background.replace(/^#/, '')
+  const value = hex.length === 3 ? [...hex].map((c) => c + c).join('') : hex
+  if (!/^[0-9a-f]{6}$/i.test(value)) {
+    throw new Error(`Invalid avatar color: ${background}`)
+  }
+  const rgb = [0, 2, 4].map((offset) => Number.parseInt(value.slice(offset, offset + 2), 16))
+  const luminance = rgb.reduce((sum, channel, index) => {
+    const normalized = channel / 255
+    const linear =
+      normalized <= 0.04045 ? normalized / 12.92 : Math.pow((normalized + 0.055) / 1.055, 2.4)
+    return sum + linear * [0.2126, 0.7152, 0.0722][index]
+  }, 0)
+  return luminance > 0.179 ? '#000' : '#fff'
+}
+
 // initials returns up to two uppercase letters for the fallback avatar glyph.
 export function initials(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean)

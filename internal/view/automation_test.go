@@ -19,7 +19,7 @@ func TestProjectAutomationRendersTriggerAndState(t *testing.T) {
 			MaxIterations: 50, CooldownSec: 60,
 		},
 		Now: now,
-	}, LevelFull, LensHealth)
+	}, LevelFull)
 	if err != nil {
 		t.Fatalf("project: %v", err)
 	}
@@ -48,7 +48,7 @@ func TestProjectAutomationSurfacesLastErrorAndDefaults(t *testing.T) {
 			LastError: "provider 429",
 		},
 		Now: now,
-	}, LevelCard, LensHealth)
+	}, LevelCard)
 	if err != nil {
 		t.Fatalf("project: %v", err)
 	}
@@ -61,7 +61,7 @@ func TestProjectAutomationSurfacesLastErrorAndDefaults(t *testing.T) {
 }
 
 func TestProjectAutomationRejectsEmptyID(t *testing.T) {
-	if _, err := ProjectAutomation(AutomationInput{Automation: db.Automation{}}, LevelCard, LensHealth); err == nil {
+	if _, err := ProjectAutomation(AutomationInput{Automation: db.Automation{}}, LevelCard); err == nil {
 		t.Error("an automation with no id must be an error, not a blank card")
 	}
 }

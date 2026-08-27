@@ -15,12 +15,14 @@ export interface PresetTokens {
   border: string
   accent: string
   accentSoft: string
+  onAccent: string
   text: string
   textDim: string
-  // Optional semantic overrides; sensible per-mode defaults are used otherwise.
-  success?: string
-  warning?: string
-  danger?: string
+  success: string
+  onSuccess: string
+  warning: string
+  onWarning: string
+  danger: string
 }
 
 export interface ThemePreset {
@@ -34,7 +36,20 @@ export interface ThemePreset {
 // canvas (bg/surface/surface2/border) and the text colours stay a constant
 // near-grey so switching the color only repaints the accent — not the whole
 // background hue. Each color only contributes its accent + accentSoft on top.
-type Neutrals = Pick<PresetTokens, 'bg' | 'surface' | 'surface2' | 'border' | 'text' | 'textDim'>
+type Neutrals = Pick<
+  PresetTokens,
+  | 'bg'
+  | 'surface'
+  | 'surface2'
+  | 'border'
+  | 'text'
+  | 'textDim'
+  | 'success'
+  | 'onSuccess'
+  | 'warning'
+  | 'onWarning'
+  | 'danger'
+>
 
 const DARK_NEUTRALS: Neutrals = {
   bg: '#0e0e10',
@@ -43,6 +58,11 @@ const DARK_NEUTRALS: Neutrals = {
   border: '#2b2b30',
   text: '#e7e7ea',
   textDim: '#9a9aa6',
+  success: '#34d399',
+  onSuccess: '#000000',
+  warning: '#fbbf24',
+  onWarning: '#000000',
+  danger: '#f87171',
 }
 
 const LIGHT_NEUTRALS: Neutrals = {
@@ -52,6 +72,11 @@ const LIGHT_NEUTRALS: Neutrals = {
   border: '#d8dce3',
   text: '#16202c',
   textDim: '#5a6470',
+  success: '#12784b',
+  onSuccess: '#ffffff',
+  warning: '#a54a07',
+  onWarning: '#ffffff',
+  danger: '#b91c1c',
 }
 
 // One entry per color family. Each carries the accent (+ soft selected-surface
@@ -62,8 +87,10 @@ interface ColorDef {
   label: string
   darkAccent: string
   darkSoft: string
+  darkOnAccent: string
   lightAccent: string
   lightSoft: string
+  lightOnAccent: string
 }
 
 const COLORS: ColorDef[] = [
@@ -72,48 +99,60 @@ const COLORS: ColorDef[] = [
     label: 'Mor',
     darkAccent: '#8b5cf6',
     darkSoft: '#2c2545',
+    darkOnAccent: '#000000',
     lightAccent: '#7c3aed',
     lightSoft: '#ece7fb',
+    lightOnAccent: '#ffffff',
   },
   {
     id: 'blue',
     label: 'Mavi',
     darkAccent: '#58a6ff',
     darkSoft: '#16304d',
+    darkOnAccent: '#000000',
     lightAccent: '#2f6fed',
     lightSoft: '#d8e4fb',
+    lightOnAccent: '#ffffff',
   },
   {
     id: 'emerald',
     label: 'Zümrüt',
     darkAccent: '#34d399',
     darkSoft: '#123528',
+    darkOnAccent: '#000000',
     lightAccent: '#15915b',
     lightSoft: '#d6f0e3',
+    lightOnAccent: '#000000',
   },
   {
     id: 'rose',
     label: 'Gül',
     darkAccent: '#fb7185',
     darkSoft: '#3a1f29',
+    darkOnAccent: '#000000',
     lightAccent: '#e11d48',
     lightSoft: '#fbe0e6',
+    lightOnAccent: '#ffffff',
   },
   {
     id: 'amber',
     label: 'Kehribar',
     darkAccent: '#f59e0b',
     darkSoft: '#3a2a12',
+    darkOnAccent: '#000000',
     lightAccent: '#b45309',
     lightSoft: '#f7e6cf',
+    lightOnAccent: '#ffffff',
   },
   {
     id: 'nord',
     label: 'Nord',
     darkAccent: '#88c0d0',
     darkSoft: '#2b3d44',
+    darkOnAccent: '#000000',
     lightAccent: '#3b7e93',
     lightSoft: '#d9eaf0',
+    lightOnAccent: '#ffffff',
   },
 ]
 
@@ -127,13 +166,23 @@ export const THEME_PRESETS: ThemePreset[] = COLORS.flatMap((c) => [
     id: `${c.id}-dark`,
     label: c.label,
     dark: true,
-    tokens: { ...DARK_NEUTRALS, accent: c.darkAccent, accentSoft: c.darkSoft },
+    tokens: {
+      ...DARK_NEUTRALS,
+      accent: c.darkAccent,
+      accentSoft: c.darkSoft,
+      onAccent: c.darkOnAccent,
+    },
   },
   {
     id: `${c.id}-light`,
     label: c.label,
     dark: false,
-    tokens: { ...LIGHT_NEUTRALS, accent: c.lightAccent, accentSoft: c.lightSoft },
+    tokens: {
+      ...LIGHT_NEUTRALS,
+      accent: c.lightAccent,
+      accentSoft: c.lightSoft,
+      onAccent: c.lightOnAccent,
+    },
   },
 ])
 

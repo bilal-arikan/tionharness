@@ -199,7 +199,12 @@ function nodeFor(n: WorkspaceGraph['nodes'][number], colColor?: Map<string, stri
       image: avatar,
       brokenImage: avatar,
       color: { background: c, border: c, highlight: { background: c, border: '#fff' } },
-      font: { color: '#f1f5f9', size: 14, strokeWidth: 3, strokeColor: '#0b0e14' },
+      font: {
+        color: 'var(--color-text)',
+        size: 14,
+        strokeWidth: 3,
+        strokeColor: 'var(--color-bg)',
+      },
     }
   }
   if (n.type === 'flow') {

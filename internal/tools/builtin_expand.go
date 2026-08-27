@@ -54,17 +54,15 @@ func (ExpandTool) Def() providers.ToolDef {
 			"Also: expand{kind:'board',id:'board'} → columns; expand{kind:'category',id:'col:in_progress'} " +
 			"→ that column's cards; expand{kind:'agent',id:AG} → the agent's sessions; " +
 			"expand{kind:'session',id:SES} → a coordinator's worker sessions.\n\n" +
-			"lens narrows the children: 'errors' returns only the troubled ones (stuck sessions, failed " +
-			"runs, failed cards, failed automations, fresh/regressed findings). Leaves (budget, tools, logs, " +
-			"a single card, a flow run, a schedule, one artifact/automation/skill/finding) have no " +
+			"Leaves (budget, tools, logs, a single card, a flow run, a schedule, one " +
+			"artifact/automation/skill/finding) have no " +
 			"children and return an empty list.",
 		InputSchema: json.RawMessage(`{
   "type": "object",
   "properties": {
     "kind": { "type": "string", "enum": ["workspace","category","board","agent","session"], "description": "Node type to expand." },
     "id": { "type": "string", "description": "Node id ('workspace'/'board' for the singletons; a category id like 'sessions'/'flows'/'agents'/'col:<column>'; an agent or session id)." },
-    "sub": { "type": "string", "description": "Optional drill-down selector on the node (unused for most; a board with a sub is a single card and has no children)." },
-    "lens": { "type": "string", "enum": ["health","stale","recent","errors"], "description": "Which children matter (default health; 'errors' = troubled only). For expand, only 'errors' filters — 'stale'/'recent' behave like 'health' (pass-through) here." }
+    "sub": { "type": "string", "description": "Optional drill-down selector on the node (unused for most; a board with a sub is a single card and has no children)." }
   },
   "required": ["kind","id"],
   "additionalProperties": false
@@ -72,7 +70,6 @@ func (ExpandTool) Def() providers.ToolDef {
 		Examples: []json.RawMessage{
 			json.RawMessage(`{"kind":"workspace","id":"workspace"}`),
 			json.RawMessage(`{"kind":"category","id":"sessions"}`),
-			json.RawMessage(`{"kind":"category","id":"sessions","lens":"errors"}`),
 			json.RawMessage(`{"kind":"board","id":"board"}`),
 			json.RawMessage(`{"kind":"agent","id":"AG1"}`),
 		},
@@ -84,7 +81,6 @@ func (t ExpandTool) Call(ctx context.Context, input json.RawMessage) (string, er
 		Kind string `json:"kind"`
 		ID   string `json:"id"`
 		Sub  string `json:"sub"`
-		Lens string `json:"lens"`
 	}
 	if err := json.Unmarshal(input, &in); err != nil {
 		return "", argErr(err)
@@ -106,8 +102,7 @@ func (t ExpandTool) Call(ctx context.Context, input json.RawMessage) (string, er
 	}
 
 	ref := view.Ref{Kind: kind, ID: id, Sub: strings.TrimSpace(in.Sub)}
-	lens := view.ParseLens(in.Lens)
-	children, err := ViewProjector(t.db, t.wsName, t.sources).Children(ctx, ref, lens)
+	children, err := ViewProjector(t.db, t.wsName, t.sources).Children(ctx, ref)
 	if err != nil {
 		// A bad ref is an error, never an empty list — a silent empty result reads
 		// like a genuine leaf node and would hide the mistake.
@@ -115,7 +110,7 @@ func (t ExpandTool) Call(ctx context.Context, input json.RawMessage) (string, er
 	}
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "CHILDREN of %s (lens=%s) · %d", ref.String(), lens, len(children))
+	fmt.Fprintf(&b, "CHILDREN of %s · %d", ref.String(), len(children))
 	if len(children) == 0 {
 		b.WriteString(" — leaf (no children)")
 		return b.String(), nil
@@ -142,7 +137,7 @@ func (t ExpandTool) Call(ctx context.Context, input json.RawMessage) (string, er
 		b.WriteString(ln)
 	}
 	if dropped > 0 {
-		fmt.Fprintf(&b, "\n\n  … +%d more (of %d) elided — narrow with lens, or get_view the branch you need",
+		fmt.Fprintf(&b, "\n\n  … +%d more (of %d) elided — get_view the branch you need",
 			dropped, len(children))
 	}
 	return b.String(), nil

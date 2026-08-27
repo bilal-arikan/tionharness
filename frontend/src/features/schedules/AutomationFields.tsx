@@ -301,7 +301,7 @@ export function PromptVarsField({
       {show && (
         <>
           <div className="fixed inset-0 z-10" onClick={() => setShow(false)} />
-          <div className="absolute bottom-full left-0 z-20 mb-1 w-[360px] max-w-[90vw] rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-2 shadow-lg">
+          <div className="absolute bottom-full left-0 z-20 mb-1 w-[360px] max-w-[90vw] rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-2 shadow-[var(--shadow-lg)]">
             <div className="mb-1 px-1 text-[11px] font-semibold text-[var(--color-text-dim)]">
               Şablonda kullanılabilir değişkenler (tıkla → ekle)
             </div>

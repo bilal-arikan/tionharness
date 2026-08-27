@@ -97,7 +97,11 @@ export function WorkspaceSwitcher({
           <span className="flex min-w-0 items-center gap-2">
             <span
               className="relative flex h-5 w-5 shrink-0 items-center justify-center rounded text-sm"
-              style={active?.color ? { backgroundColor: active.color + '33' } : undefined}
+              style={
+                active?.color
+                  ? { backgroundColor: `color-mix(in srgb, ${active.color} 20%, transparent)` }
+                  : undefined
+              }
             >
               {active?.icon || '⬡'}
               {(hasUnread || hasOtherBusy) && (
@@ -169,7 +173,11 @@ export function WorkspaceSwitcher({
               >
                 <span
                   className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-sm"
-                  style={w.color ? { backgroundColor: w.color + '33' } : undefined}
+                  style={
+                    w.color
+                      ? { backgroundColor: `color-mix(in srgb, ${w.color} 20%, transparent)` }
+                      : undefined
+                  }
                 >
                   {w.icon || '⬡'}
                 </span>

@@ -84,7 +84,7 @@ export function ExportPickList({
                 <span
                   className={`flex h-4 w-4 flex-shrink-0 items-center justify-center rounded border text-[10px] ${
                     on
-                      ? 'border-[var(--color-accent)] bg-[var(--color-accent)] text-white'
+                      ? 'border-[var(--color-accent)] bg-[var(--color-accent)] text-[var(--color-on-accent)]'
                       : 'border-[var(--color-border)]'
                   }`}
                 >

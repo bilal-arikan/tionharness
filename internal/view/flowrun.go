@@ -39,7 +39,7 @@ const (
 // and what is wrong with it. This is the highest value-per-token projection in
 // the system — a 40-node run collapses to two lines without losing the shape of
 // the graph.
-func ProjectFlowRun(in FlowRunInput, level Level, lens Lens) (View, error) {
+func ProjectFlowRun(in FlowRunInput, level Level) (View, error) {
 	if in.Run.ID == "" {
 		return View{}, fmt.Errorf("flow run input has no run")
 	}
@@ -51,7 +51,6 @@ func ProjectFlowRun(in FlowRunInput, level Level, lens Lens) (View, error) {
 	v := View{
 		Ref:    Ref{Kind: KindFlowRun, ID: in.Run.ID, Sub: in.Sub},
 		Level:  level,
-		Lens:   lens,
 		AsOf:   now,
 		Source: fmt.Sprintf("%s@%d/%d", in.Run.Status, in.Run.UpdatedAt, len(in.State.Trace)),
 	}
@@ -73,7 +72,7 @@ func ProjectFlowRun(in FlowRunInput, level Level, lens Lens) (View, error) {
 	if len(segs) > 0 {
 		l.add("%s", wrapChain(segs))
 	}
-	for _, w := range flowSignals(in, now, lens) {
+	for _, w := range flowSignals(in, now) {
 		l.add("%s", w)
 	}
 	if level == LevelFull {
@@ -350,7 +349,7 @@ func currentSegment(in FlowRunInput, now time.Time, lastAtSec int64) string {
 
 // flowSignals is the L1 layer: the rule-based warnings that carry most of a
 // view's value. Still no LLM, still no invented numbers.
-func flowSignals(in FlowRunInput, now time.Time, lens Lens) []string {
+func flowSignals(in FlowRunInput, now time.Time) []string {
 	var out []string
 
 	if e := strings.TrimSpace(in.Run.Error); e != "" {
@@ -360,11 +359,6 @@ func flowSignals(in FlowRunInput, now time.Time, lens Lens) []string {
 		out = append(out, fmt.Sprintf("⏸ await-input node:%s — %s bekliyor",
 			in.State.WaitingAt, age(tsSec(in.Run.UpdatedAt), now)))
 	}
-	if lens == LensErrors {
-		// The errors lens deliberately stops here: failures only, nothing else.
-		return out
-	}
-
 	if in.State.Iter > 0 {
 		out = append(out, fmt.Sprintf("↻ loop iterasyon %d", in.State.Iter))
 	}
@@ -376,7 +370,7 @@ func flowSignals(in FlowRunInput, now time.Time, lens Lens) []string {
 			out = append(out, fmt.Sprintf("⚠ %s'dir aynı node'da — takılmış olabilir", dur(idle)))
 		}
 	}
-	if in.Run.SessionID != "" && lens == LensHealth {
+	if in.Run.SessionID != "" {
 		out = append(out, "↳ transkript session:"+in.Run.SessionID)
 	}
 	return out

@@ -352,7 +352,7 @@ export function BudgetPanel({ onError }: Props) {
                   onClick={() => setDays(d)}
                   className={`px-2 py-1 transition ${
                     days === d
-                      ? 'bg-[var(--color-accent)] text-white'
+                      ? 'bg-[var(--color-accent)] text-[var(--color-on-accent)]'
                       : 'bg-[var(--color-surface-2)] text-[var(--color-text-dim)] hover:opacity-80'
                   }`}
                 >
@@ -580,7 +580,7 @@ export function BudgetPanel({ onError }: Props) {
                         onClick={() => setTrendMetric(m.key)}
                         className={`px-2 py-1 transition ${
                           trendMetric === m.key
-                            ? 'bg-[var(--color-accent)] text-white'
+                            ? 'bg-[var(--color-accent)] text-[var(--color-on-accent)]'
                             : 'bg-[var(--color-surface)] text-[var(--color-text-dim)] hover:opacity-80'
                         }`}
                       >

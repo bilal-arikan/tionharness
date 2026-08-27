@@ -148,7 +148,7 @@ func TestDashboardSummaryMatchesWorkspaceView(t *testing.T) {
 		t.Fatalf("dashboard status %d: %s", dash.Code, dash.Body.String())
 	}
 	view := serveFlowRuns(srv.handleGetView, database,
-		"/api/views/workspace/workspace?level=card&lens=health",
+		"/api/views/workspace/workspace?level=card",
 		map[string]string{"kind": "workspace", "id": "workspace"})
 	if view.Code != http.StatusOK {
 		t.Fatalf("view status %d: %s", view.Code, view.Body.String())

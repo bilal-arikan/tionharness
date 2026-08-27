@@ -87,10 +87,10 @@ export function ActionQueue({
                   <span
                     className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md"
                     style={{
-                      color: danger ? 'var(--color-danger)' : '#eab308',
+                      color: danger ? 'var(--color-danger)' : 'var(--color-warning)',
                       background: danger
                         ? 'color-mix(in srgb, var(--color-danger) 12%, transparent)'
-                        : 'rgba(234,179,8,0.12)',
+                        : 'color-mix(in srgb, var(--color-warning) 12%, transparent)',
                     }}
                     title={KIND_LABEL[a.kind]}
                   >

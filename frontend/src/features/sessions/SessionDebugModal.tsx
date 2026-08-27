@@ -1,5 +1,5 @@
 import { Bug, X } from 'lucide-react'
-import { ModalOverlay } from '@/shared/components'
+import { ModalOverlay, PaneHeader } from '@/shared/components'
 import { SessionDebugCard } from './SessionDebugCard'
 
 interface Props {
@@ -28,19 +28,25 @@ export function SessionDebugModal({ sessionId, title, agentNames, onClose }: Pro
         className="flex max-h-[85vh] w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-[var(--shadow-lg)]"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center gap-2 border-b border-[var(--color-border)] px-5 py-3">
-          <Bug size={16} className="shrink-0 text-[var(--color-text-dim)]" />
-          <h2 className="min-w-0 flex-1 truncate text-sm font-semibold">
-            Debug / Gözlemlenebilirlik{title ? ` — ${title}` : ''}
-          </h2>
-          <button
-            onClick={onClose}
-            aria-label="Kapat"
-            className="shrink-0 rounded-md p-1.5 text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]"
-          >
-            <X size={16} />
-          </button>
-        </div>
+        <PaneHeader
+          titleSlot={
+            <>
+              <Bug size={16} className="shrink-0 text-[var(--color-text-dim)]" />
+              <h2 className="min-w-0 flex-1 truncate text-sm font-semibold">
+                Debug / Gözlemlenebilirlik{title ? ` — ${title}` : ''}
+              </h2>
+            </>
+          }
+          right={
+            <button
+              onClick={onClose}
+              aria-label="Kapat"
+              className="shrink-0 rounded-md p-1.5 text-[var(--color-text-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]"
+            >
+              <X size={16} />
+            </button>
+          }
+        />
 
         <div className="min-h-0 flex-1 overflow-y-auto p-5">
           <SessionDebugCard sessionId={sessionId} agentNames={agentNames} alwaysOpen />

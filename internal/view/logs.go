@@ -26,15 +26,14 @@ const (
 )
 
 // ProjectLogs renders the recent process log tail, oldest → newest (the stream
-// reads top-down like a terminal that ended). The errors lens keeps only ERROR
-// entries, so the node doubles as "son hatalar".
-func ProjectLogs(in LogsInput, level Level, lens Lens) (View, error) {
+// reads top-down like a terminal that ended).
+func ProjectLogs(in LogsInput, level Level) (View, error) {
 	now := in.Now
 	if now.IsZero() {
 		now = time.Now()
 	}
 
-	entries := filterLogEntries(in.Entries, lens)
+	entries := in.Entries
 
 	limit := logsRows
 	if level == LevelFull {
@@ -46,27 +45,19 @@ func ProjectLogs(in LogsInput, level Level, lens Lens) (View, error) {
 	if len(kept) > limit {
 		elided = len(kept) - limit
 		elidedUnit = "kayıt"
-		if lens == LensErrors {
-			elidedUnit = "hata kaydı"
-		}
 		kept = kept[len(kept)-limit:]
 	}
 
 	v := View{
 		Ref:        Ref{Kind: KindLogs, ID: LogsRefID},
 		Level:      level,
-		Lens:       lens,
 		AsOf:       now,
 		Source:     fmt.Sprintf("%d", len(entries)),
 		Elided:     elided,
 		ElidedUnit: elidedUnit,
 	}
 
-	unit := "kayıt"
-	if lens == LensErrors {
-		unit = "hata kaydı"
-	}
-	v.Header = fmt.Sprintf("LOGS · %d %s · asOf %s", len(entries), unit, hhmmss(now))
+	v.Header = fmt.Sprintf("LOGS · %d kayıt · asOf %s", len(entries), hhmmss(now))
 
 	if level == LevelTiny {
 		v.finalize()
@@ -96,19 +87,4 @@ func ProjectLogs(in LogsInput, level Level, lens Lens) (View, error) {
 	v.Body = l.String()
 	v.finalize()
 	return v, nil
-}
-
-// filterLogEntries narrows the stream by lens. Only the errors lens filters —
-// every other lens passes the full tail through.
-func filterLogEntries(entries []logbuf.Entry, lens Lens) []logbuf.Entry {
-	if lens != LensErrors {
-		return entries
-	}
-	out := make([]logbuf.Entry, 0, len(entries))
-	for _, e := range entries {
-		if e.Level == "ERROR" {
-			out = append(out, e)
-		}
-	}
-	return out
 }

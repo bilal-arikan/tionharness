@@ -25,8 +25,10 @@ export function CapBadge({ label, on }: { label: string; on: boolean }) {
     <span
       className="rounded px-2 py-0.5 text-[11px]"
       style={{
-        background: on ? 'var(--color-success, #16a34a)22' : 'var(--color-surface-2)',
-        color: on ? 'var(--color-success, #16a34a)' : 'var(--color-text-dim)',
+        background: on
+          ? 'color-mix(in srgb, var(--color-success) 13%, transparent)'
+          : 'var(--color-surface-2)',
+        color: on ? 'var(--color-success)' : 'var(--color-text-dim)',
       }}
     >
       {label}
@@ -49,7 +51,9 @@ export function ColumnsPreview({
           key={c.key}
           className="rounded px-2 py-0.5 text-[11px]"
           style={{
-            background: c.color ? `${c.color}22` : 'var(--color-surface-2)',
+            background: c.color
+              ? `color-mix(in srgb, ${c.color} 14%, transparent)`
+              : 'var(--color-surface-2)',
             color: c.color || 'var(--color-text-dim)',
           }}
         >

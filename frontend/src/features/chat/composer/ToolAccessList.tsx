@@ -38,7 +38,7 @@ const STATUS_META: Record<ToolAccessServerStatus, { label: string; hint: string;
     'hidden-only': {
       label: 'katalog dışı',
       hint: 'Araçları "Gizli" tier\'da: katalogda tek tek listelenmez (bağlamda yalnız "N araç daha var, tool_search ile bul" notu durur), aktive edilince normal çağrılır.',
-      color: 'var(--color-warning,#d97706)',
+      color: 'var(--color-warning)',
     },
     disabled: {
       label: 'kapalı',
@@ -48,7 +48,7 @@ const STATUS_META: Record<ToolAccessServerStatus, { label: string; hint: string;
     'agent-mcp-off': {
       label: 'ajanda MCP kapalı',
       hint: 'Sunucu etkin ama bu ajanın MCP anahtarı kapalı — hiçbir MCP aracı sunulmuyor.',
-      color: 'var(--color-warning,#d97706)',
+      color: 'var(--color-warning)',
     },
     'no-tools': {
       label: 'araç yok',

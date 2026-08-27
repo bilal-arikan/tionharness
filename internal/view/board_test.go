@@ -34,7 +34,7 @@ func boardFixture(now time.Time) BoardInput {
 
 func TestBoardCardSurfacesEverySignal(t *testing.T) {
 	now := time.Now()
-	v, err := ProjectBoard(boardFixture(now), LevelCard, LensHealth)
+	v, err := ProjectBoard(boardFixture(now), LevelCard)
 	if err != nil {
 		t.Fatalf("project: %v", err)
 	}
@@ -73,20 +73,6 @@ func TestBoardCardSurfacesEverySignal(t *testing.T) {
 	}
 }
 
-func TestBoardStaleLensDropsRoutineSignals(t *testing.T) {
-	v, err := ProjectBoard(boardFixture(time.Now()), LevelCard, LensStale)
-	if err != nil {
-		t.Fatalf("project: %v", err)
-	}
-	txt := v.Text()
-	if !strings.Contains(txt, "hareketsiz") {
-		t.Errorf("stale lens dropped its own signal:\n%s", txt)
-	}
-	if strings.Contains(txt, "Δ24s") || strings.Contains(txt, "sahibi yok") {
-		t.Errorf("stale lens leaked routine signals:\n%s", txt)
-	}
-}
-
 func TestBoardFullListsCardsAndCountsDropped(t *testing.T) {
 	now := time.Now()
 	in := boardFixture(now)
@@ -96,7 +82,7 @@ func TestBoardFullListsCardsAndCountsDropped(t *testing.T) {
 			Title: "filler", BoardState: db.BoardTodo, UpdatedAt: now.Unix(),
 		})
 	}
-	v, err := ProjectBoard(in, LevelFull, LensHealth)
+	v, err := ProjectBoard(in, LevelFull)
 	if err != nil {
 		t.Fatalf("project: %v", err)
 	}
@@ -109,7 +95,7 @@ func TestBoardFullListsCardsAndCountsDropped(t *testing.T) {
 }
 
 func TestBoardEmptyIsExplicit(t *testing.T) {
-	v, err := ProjectBoard(BoardInput{Now: time.Now()}, LevelCard, LensHealth)
+	v, err := ProjectBoard(BoardInput{Now: time.Now()}, LevelCard)
 	if err != nil {
 		t.Fatalf("project: %v", err)
 	}
@@ -130,7 +116,7 @@ func TestBoardCustomColumnsSortAfterBuiltins(t *testing.T) {
 		{ID: "B", BoardState: db.BoardTodo, UpdatedAt: now.Unix()},
 		{ID: "C", BoardState: "alpha_custom", UpdatedAt: now.Unix()},
 	}}
-	v, err := ProjectBoard(in, LevelCard, LensHealth)
+	v, err := ProjectBoard(in, LevelCard)
 	if err != nil {
 		t.Fatalf("project: %v", err)
 	}

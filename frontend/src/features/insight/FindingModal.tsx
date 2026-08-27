@@ -1,6 +1,6 @@
 import { Check, LayoutGrid, Trash2, X } from 'lucide-react'
 import type { InsightFinding } from '@/types'
-import { ModalOverlay } from '@/shared/components'
+import { ModalOverlay, PaneHeader } from '@/shared/components'
 import { ChannelBadge, SeverityBadge, RegressedBadge, StatusBadge } from './insightBadges'
 
 interface Props {
@@ -22,11 +22,12 @@ export function FindingModal({ f, onClose, onStatus, onDelete, onAddCard, onOpen
   }
   return (
     <ModalOverlay onClose={onClose}>
-      <div className="flex max-h-[86vh] w-[min(680px,94vw)] flex-col overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-2xl">
+      <div className="flex max-h-[86vh] w-[min(680px,94vw)] flex-col overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-[var(--shadow-lg)]">
         {/* Header */}
-        <div className="flex items-start gap-2 border-b border-[var(--color-border)] p-4">
-          <div className="min-w-0 flex-1">
-            <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
+        <PaneHeader
+          title={f.title}
+          secondary={
+            <>
               <ChannelBadge channel={f.channel} />
               {f.severity && <SeverityBadge severity={f.severity} />}
               {f.regressed && <RegressedBadge />}
@@ -35,13 +36,14 @@ export function FindingModal({ f, onClose, onStatus, onDelete, onAddCard, onOpen
                 <span className="text-xs text-[var(--color-text-dim)]">×{f.occurrences}</span>
               )}
               <span className="text-xs text-[var(--color-text-dim)]">{f.lensId}</span>
-            </div>
-            <h2 className="text-base font-semibold leading-snug">{f.title}</h2>
-          </div>
-          <button onClick={onClose} className="rounded p-1 hover:bg-[var(--color-surface-2)]">
-            <X className="h-4 w-4" />
-          </button>
-        </div>
+            </>
+          }
+          right={
+            <button onClick={onClose} className="rounded p-1 hover:bg-[var(--color-surface-2)]">
+              <X className="h-4 w-4" />
+            </button>
+          }
+        />
 
         {/* Body */}
         <div className="flex-1 space-y-3 overflow-auto p-4 text-sm">
@@ -97,7 +99,7 @@ export function FindingModal({ f, onClose, onStatus, onDelete, onAddCard, onOpen
         <div className="flex flex-wrap items-center gap-2 border-t border-[var(--color-border)] p-3">
           <button
             onClick={() => act('accepted')}
-            className="flex items-center gap-1 rounded-md bg-[var(--color-accent)] px-3 py-1 text-sm text-white"
+            className="flex items-center gap-1 rounded-md bg-[var(--color-accent)] px-3 py-1 text-sm text-[var(--color-on-accent)]"
           >
             <Check className="h-3.5 w-3.5" /> Kabul
           </button>

@@ -19,7 +19,7 @@ type AutomationInput struct {
 
 // ProjectAutomation renders one automation rule's configuration and runtime
 // state: what fires it, what it runs, and whether the last fire failed.
-func ProjectAutomation(in AutomationInput, level Level, lens Lens) (View, error) {
+func ProjectAutomation(in AutomationInput, level Level) (View, error) {
 	a := in.Automation
 	now := in.Now
 	if now.IsZero() {
@@ -32,7 +32,6 @@ func ProjectAutomation(in AutomationInput, level Level, lens Lens) (View, error)
 	v := View{
 		Ref:    Ref{Kind: KindAutomation, ID: a.ID},
 		Level:  level,
-		Lens:   lens,
 		AsOf:   now,
 		Source: fmt.Sprintf("%d", a.UpdatedAt),
 	}

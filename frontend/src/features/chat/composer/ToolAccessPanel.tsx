@@ -172,7 +172,7 @@ export function ToolAccessPanel({ agentId, onClose }: Props) {
             </div>
           )}
           {!data.mcpEnabled && (
-            <div className="mt-2 text-[11px] text-[var(--color-warning,#d97706)]">
+            <div className="mt-2 text-[11px] text-[var(--color-warning)]">
               Bu ajanda MCP kapalı — MCP sunucularının araçları sunulmuyor.
             </div>
           )}

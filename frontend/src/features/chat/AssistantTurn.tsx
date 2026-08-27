@@ -238,7 +238,7 @@ export const AssistantTurn = memo(function AssistantTurn({
           )}
           {/* Reply recovered from a mid-stream server crash: flag it as cut off. */}
           {m.interrupted && (
-            <div className="mt-2 flex items-center gap-2 rounded-lg border border-[color-mix(in_srgb,var(--color-warning,#d97706)_40%,transparent)] bg-[color-mix(in_srgb,var(--color-warning,#d97706)_12%,transparent)] px-3 py-2 text-xs text-[var(--color-text-dim)]">
+            <div className="mt-2 flex items-center gap-2 rounded-lg border border-[color-mix(in_srgb,var(--color-warning)_40%,transparent)] bg-[color-mix(in_srgb,var(--color-warning)_12%,transparent)] px-3 py-2 text-xs text-[var(--color-text-dim)]">
               <span>⚠</span>
               <span>Bu yanıt yarıda kesildi (sunucu yeniden başladı). İçerik eksik olabilir.</span>
             </div>
@@ -252,7 +252,7 @@ export const AssistantTurn = memo(function AssistantTurn({
           )}
           {/* Stop-reason warning (truncation / refusal). */}
           {stopNote && (
-            <div className="mt-2 flex items-center gap-1.5 text-[11px] text-[var(--color-warning,#d97706)]">
+            <div className="mt-2 flex items-center gap-1.5 text-[11px] text-[var(--color-warning)]">
               <span>⚠</span>
               <span>{stopNote}</span>
             </div>

@@ -2,12 +2,11 @@ import { useCallback, useEffect, useState } from 'react'
 import { Loader2, Copy, RefreshCw, X, ChevronLeft } from 'lucide-react'
 import { api } from '@/api'
 import { toast } from '@/shared/components'
-import { VIEW_LENS_LABEL, refToString } from '@/types'
-import type { ViewLens, ViewLevel, ViewRef, ViewResult } from '@/types'
+import { refToString } from '@/types'
+import type { ViewLevel, ViewRef, ViewResult } from '@/types'
 import { formatTime } from '@/shared/lib/intl'
 
 const LEVELS: ViewLevel[] = ['tiny', 'card', 'full']
-const LENSES: ViewLens[] = ['health', 'stale', 'recent', 'errors']
 
 interface Props {
   // The entity to project. Changing it resets the drill-down trail.
@@ -22,12 +21,16 @@ interface Props {
   // of a full-height right-anchored drawer (drops the side border / fixed height
   // / bg so it flows in the host's scroll).
   embedded?: boolean
-  // lens hands lens ownership to the host. The Explorer screen has its own lens
-  // selector that filters the MAP; leaving the panel a second, independent one
-  // let the two disagree — the map showing only failures while the panel beside
-  // it rendered the healthy summary. When set, the panel follows it and hides
-  // its own selector; when absent the panel owns its lens as before.
-  lens?: ViewLens
+  // hideHandles drops the "↳ next node" drill chips. The Explorer screen already
+  // navigates the graph with its own map, so the panel there is only meant to
+  // show what an agent's get_view returns — a second, competing navigator in the
+  // footer just duplicated the map's job.
+  hideHandles?: boolean
+  // fillHeight makes an embedded panel take the host's full height: the DSL body
+  // gets every spare pixel and scrolls on its own, while header/controls/footer
+  // stay pinned. Without it the embedded body is capped (max-h) so the panel can
+  // flow inside a host that scrolls as a whole.
+  fillHeight?: boolean
 }
 
 // ViewPanel is the "◱ Özet" drawer: the same compact projection an agent gets,
@@ -39,11 +42,9 @@ interface Props {
 //     the model saw.
 //   - The token estimate and the asOf stamp are always on screen, so an expensive
 //     or stale view is obvious rather than something to discover later.
-export function ViewPanel({ target, onClose, onSend, embedded, lens: hostLens }: Props) {
+export function ViewPanel({ target, onClose, onSend, embedded, hideHandles, fillHeight }: Props) {
   const [trail, setTrail] = useState<ViewRef[]>([target])
   const [level, setLevel] = useState<ViewLevel>('card')
-  const [ownLens, setOwnLens] = useState<ViewLens>('health')
-  const lens = hostLens ?? ownLens
   const [result, setResult] = useState<ViewResult | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -59,7 +60,7 @@ export function ViewPanel({ target, onClose, onSend, embedded, lens: hostLens }:
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      setResult(await api.getView(ref, level, lens))
+      setResult(await api.getView(ref, level))
       setError(null)
     } catch (e) {
       // Surface the failure instead of showing a stale projection as if current.
@@ -68,7 +69,7 @@ export function ViewPanel({ target, onClose, onSend, embedded, lens: hostLens }:
     } finally {
       setLoading(false)
     }
-  }, [ref, level, lens])
+  }, [ref, level])
 
   useEffect(() => {
     void load()
@@ -80,9 +81,9 @@ export function ViewPanel({ target, onClose, onSend, embedded, lens: hostLens }:
     // get at each level — no extra UI toggle needed.
     try {
       const [tiny, card, full] = await Promise.all([
-        api.getView(ref, 'tiny', lens),
-        api.getView(ref, 'card', lens),
-        api.getView(ref, 'full', lens),
+        api.getView(ref, 'tiny'),
+        api.getView(ref, 'card'),
+        api.getView(ref, 'full'),
       ])
       // Tiers that render identically are merged into one block instead of being
       // pasted three times. Small entities (a skill, a schedule, a category) have
@@ -125,11 +126,11 @@ export function ViewPanel({ target, onClose, onSend, embedded, lens: hostLens }:
     <div
       className={
         embedded
-          ? 'flex w-full flex-col'
+          ? `flex w-full flex-col${fillHeight ? ' h-full min-h-0' : ''}`
           : 'flex h-full w-full max-w-[560px] flex-col border-l border-[var(--color-border)] bg-[var(--color-surface)]'
       }
     >
-      <header className="flex items-center gap-2 border-b border-[var(--color-border)] px-3 py-2">
+      <header className="flex shrink-0 items-center gap-2 border-b border-[var(--color-border)] px-3 py-2">
         {trail.length > 1 && (
           <button
             type="button"
@@ -156,9 +157,8 @@ export function ViewPanel({ target, onClose, onSend, embedded, lens: hostLens }:
         )}
       </header>
 
-      {/* Controls: budget tier + lens. Both are part of the contract the agent
-          uses, so they are named identically here and in the get_view tool. */}
-      <div className="flex flex-wrap items-center gap-2 border-b border-[var(--color-border)] px-3 py-2 text-xs">
+      {/* Budget tier uses the same names as the get_view tool contract. */}
+      <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-[var(--color-border)] px-3 py-2 text-xs">
         <div className="flex overflow-hidden rounded-md border border-[var(--color-border)]">
           {LEVELS.map((l) => (
             <button
@@ -167,7 +167,7 @@ export function ViewPanel({ target, onClose, onSend, embedded, lens: hostLens }:
               onClick={() => setLevel(l)}
               className={`px-2 py-1 transition ${
                 level === l
-                  ? 'bg-[var(--color-accent)] text-white'
+                  ? 'bg-[var(--color-accent)] text-[var(--color-on-accent)]'
                   : 'text-[var(--color-text-dim)] hover:text-[var(--color-accent)]'
               }`}
             >
@@ -175,23 +175,6 @@ export function ViewPanel({ target, onClose, onSend, embedded, lens: hostLens }:
             </button>
           ))}
         </div>
-        {hostLens ? (
-          // The host owns the lens: show which one is in force, do not offer a
-          // second control that could disagree with it.
-          <span className="text-[var(--color-text-dim)]">mercek: {VIEW_LENS_LABEL[lens]}</span>
-        ) : (
-          <select
-            value={lens}
-            onChange={(e) => setOwnLens(e.target.value as ViewLens)}
-            className="rounded-md border border-[var(--color-border)] bg-transparent px-2 py-1 text-[var(--color-text)]"
-          >
-            {LENSES.map((l) => (
-              <option key={l} value={l}>
-                {VIEW_LENS_LABEL[l]}
-              </option>
-            ))}
-          </select>
-        )}
         <button
           type="button"
           onClick={() => void load()}
@@ -212,7 +195,9 @@ export function ViewPanel({ target, onClose, onSend, embedded, lens: hostLens }:
 
       <div
         className={
-          embedded ? 'max-h-[420px] overflow-auto p-3' : 'min-h-0 flex-1 overflow-auto p-3'
+          embedded && !fillHeight
+            ? 'max-h-[420px] overflow-auto p-3'
+            : 'min-h-0 flex-1 overflow-auto p-3'
         }
       >
         {error ? (
@@ -227,7 +212,7 @@ export function ViewPanel({ target, onClose, onSend, embedded, lens: hostLens }:
       </div>
 
       {result && (
-        <footer className="border-t border-[var(--color-border)] px-3 py-2">
+        <footer className="shrink-0 border-t border-[var(--color-border)] px-3 py-2">
           {/* Elision is reported unconditionally: a summary that quietly drops
               items misleads whoever reads it, model or human. */}
           {result.elided > 0 && (
@@ -236,7 +221,7 @@ export function ViewPanel({ target, onClose, onSend, embedded, lens: hostLens }:
               yükselt veya bir bağlantıyı aç.
             </p>
           )}
-          {(result.handles ?? []).length > 0 && (
+          {!hideHandles && (result.handles ?? []).length > 0 && (
             <div className="mb-2 flex flex-wrap gap-1.5">
               {(result.handles ?? []).map((h) => (
                 <button

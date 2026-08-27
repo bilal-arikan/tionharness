@@ -20,7 +20,7 @@ type ArtifactInput struct {
 // ProjectArtifact renders one artifact's metadata: origin (chat/manual/agent/
 // tool/plan), the originating session/agent, kind/language/group and how long
 // ago it last changed.
-func ProjectArtifact(in ArtifactInput, level Level, lens Lens) (View, error) {
+func ProjectArtifact(in ArtifactInput, level Level) (View, error) {
 	a := in.Artifact
 	now := in.Now
 	if now.IsZero() {
@@ -33,7 +33,6 @@ func ProjectArtifact(in ArtifactInput, level Level, lens Lens) (View, error) {
 	v := View{
 		Ref:    Ref{Kind: KindArtifact, ID: a.ID},
 		Level:  level,
-		Lens:   lens,
 		AsOf:   now,
 		Source: fmt.Sprintf("%d", a.UpdatedAt),
 	}

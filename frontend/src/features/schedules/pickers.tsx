@@ -20,7 +20,7 @@ export function TargetModeToggle({
           onClick={() => onChange(m)}
           className={`px-2 py-1 transition ${
             mode === m
-              ? 'bg-[var(--color-accent)] text-white'
+              ? 'bg-[var(--color-accent)] text-[var(--color-on-accent)]'
               : 'bg-[var(--color-bg)] text-[var(--color-text-dim)] hover:text-[var(--color-accent)]'
           }`}
         >

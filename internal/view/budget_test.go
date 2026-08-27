@@ -28,7 +28,7 @@ func budgetFixture() BudgetInput {
 }
 
 func TestBudgetHeaderCarriesRollupTotals(t *testing.T) {
-	v, err := ProjectBudget(budgetFixture(), LevelCard, LensHealth)
+	v, err := ProjectBudget(budgetFixture(), LevelCard)
 	if err != nil {
 		t.Fatalf("project: %v", err)
 	}
@@ -40,7 +40,7 @@ func TestBudgetHeaderCarriesRollupTotals(t *testing.T) {
 }
 
 func TestBudgetBodyListsModelRows(t *testing.T) {
-	v, err := ProjectBudget(budgetFixture(), LevelCard, LensHealth)
+	v, err := ProjectBudget(budgetFixture(), LevelCard)
 	if err != nil {
 		t.Fatalf("project: %v", err)
 	}
@@ -61,7 +61,7 @@ func TestBudgetCardCapsModelsAndCountsElided(t *testing.T) {
 			Stat: db.KindStat{Calls: 1, InputTokens: 100},
 		})
 	}
-	v, err := ProjectBudget(in, LevelCard, LensHealth)
+	v, err := ProjectBudget(in, LevelCard)
 	if err != nil {
 		t.Fatalf("project: %v", err)
 	}
@@ -69,7 +69,7 @@ func TestBudgetCardCapsModelsAndCountsElided(t *testing.T) {
 		t.Errorf("elision wrong: elided=%d unit=%q (rows=%d)", v.Elided, v.ElidedUnit, len(in.Rollup.Rows))
 	}
 	// LevelFull lists every model — no elision.
-	full, err := ProjectBudget(in, LevelFull, LensHealth)
+	full, err := ProjectBudget(in, LevelFull)
 	if err != nil {
 		t.Fatalf("project full: %v", err)
 	}
@@ -79,7 +79,7 @@ func TestBudgetCardCapsModelsAndCountsElided(t *testing.T) {
 }
 
 func TestBudgetEmptyIsExplicit(t *testing.T) {
-	v, err := ProjectBudget(BudgetInput{Day: "2026-08-06"}, LevelCard, LensHealth)
+	v, err := ProjectBudget(BudgetInput{Day: "2026-08-06"}, LevelCard)
 	if err != nil {
 		t.Fatalf("project: %v", err)
 	}
@@ -89,7 +89,7 @@ func TestBudgetEmptyIsExplicit(t *testing.T) {
 }
 
 func TestBudgetTinyIsHeaderOnly(t *testing.T) {
-	v, err := ProjectBudget(budgetFixture(), LevelTiny, LensHealth)
+	v, err := ProjectBudget(budgetFixture(), LevelTiny)
 	if err != nil {
 		t.Fatalf("project: %v", err)
 	}

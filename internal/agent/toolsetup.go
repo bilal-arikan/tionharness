@@ -579,8 +579,24 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 		// wired) so the tool loop can card them once. See mcpnotice.go.
 		failures := mcpFailuresFrom(ctx)
 		for name, e := range errs {
-			r.logger.Warn("mcp catalog build failed", "server", name, "error", e)
+			// Escalate a STANDING outage exactly once (mcpescalate.go): repeating the
+			// same WARN forever made a workspace where no turn could start look normal.
+			streak := r.mcpFailStreaks.note(name)
+			switch {
+			case streak == mcpFailStreakThreshold:
+				r.logger.Error("mcp catalog build failing repeatedly; this server's tools are unavailable",
+					"server", name, "consecutive", streak, "error", e)
+			default:
+				r.logger.Warn("mcp catalog build failed", "server", name, "consecutive", streak, "error", e)
+			}
 			failures.record(name, e)
+		}
+		// Reset the streak for every server that catalogued fine this turn, so the
+		// threshold measures the current outage rather than a lifetime total.
+		for _, cfg := range cfgs {
+			if _, bad := errs[cfg.Name]; !bad {
+				r.mcpFailStreaks.clear(cfg.Name)
+			}
 		}
 		caller := func(cctx context.Context, namespaced string, args json.RawMessage) (mcp.CallToolResult, error) {
 			return r.mcpPool.Call(cctx, cfgByServer, namespaced, args)

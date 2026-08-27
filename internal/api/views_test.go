@@ -67,7 +67,7 @@ func TestGetViewProjectsFlowRun(t *testing.T) {
 	database, run := viewFixture(t)
 
 	rec := serveFlowRuns((&Server{}).handleGetView, database,
-		"/api/views/flowrun/"+run.ID+"?level=card&lens=health",
+		"/api/views/flowrun/"+run.ID+"?level=card",
 		map[string]string{"kind": "flowrun", "id": run.ID})
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status %d: %s", rec.Code, rec.Body.String())

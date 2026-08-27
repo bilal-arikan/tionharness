@@ -30,7 +30,7 @@ export function ToolsPanel({ draft, set }: PanelProps) {
         onChange={(v) => set('enableCodeMode', v)}
       />
       {draft.enableCodeMode && !draft.enableShell && (
-        <div className="rounded-lg border border-[var(--color-warning,#f59e0b)] bg-[var(--color-surface-2)] px-3 py-2 text-xs text-[var(--color-text-dim)]">
+        <div className="rounded-lg border border-[var(--color-warning)] bg-[var(--color-surface-2)] px-3 py-2 text-xs text-[var(--color-text-dim)]">
           ⚠️ <b>Kod-modu kabuk yetkisi olmadan etkisizdir.</b> <code>run_code</code> aracı yalnız
           "Kabuk (Bash) aracı" da açıkken kaydedilir — yukarıdaki toggle'ı da açın.
         </div>

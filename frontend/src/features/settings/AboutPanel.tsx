@@ -22,7 +22,7 @@ export function AboutPanel() {
     <div className="space-y-5 text-sm">
       {/* App identity */}
       <div className="flex items-center gap-3">
-        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--color-accent)] text-xl font-bold text-white select-none">
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--color-accent)] text-xl font-bold text-[var(--color-on-accent)] select-none">
           S
         </div>
         <div>

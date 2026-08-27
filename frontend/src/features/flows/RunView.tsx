@@ -343,7 +343,7 @@ export function RunView({
           input to continue. Delivering resumes it (any window/peer can); the poll
           then reflects the run advancing. */}
       {run.status === 'waiting' && (
-        <div className="flex items-center gap-2 border-b border-[color:#eab308] bg-[color:color-mix(in_srgb,#eab308_10%,var(--color-surface))] p-3">
+        <div className="flex items-center gap-2 border-b border-[color:var(--color-warning)] bg-[color:color-mix(in_srgb,var(--color-warning)_10%,var(--color-surface))] p-3">
           <span className="shrink-0 text-xs text-[var(--color-warning)]">⏳ Girdi bekleniyor</span>
           <input
             value={awaitInput}

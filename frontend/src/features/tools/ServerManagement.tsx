@@ -8,7 +8,7 @@ import type {
   ImportableMCPServer,
 } from '@/types'
 import { parseArgs, serverToImportJson, toolSource, toolServer, VISIBILITY_TIERS } from './toolMeta'
-import { toast } from '@/shared/components'
+import { EmptyState, ModalOverlay, PaneHeader, toast } from '@/shared/components'
 
 // ServerManagement is the MCP server list + add form, shown when no tool is
 // selected. (Extracted so the right pane stays readable.)
@@ -229,7 +229,7 @@ export function ServerManagement(props: {
                     title="Bu sunucuyu düzenle (isim, komut, URL, başlıklar, kapsam). Değişiklik sonraki turda yeniden bağlanır."
                     className={`rounded px-2 py-1 text-xs hover:opacity-90 ${
                       editingId === s.id
-                        ? 'bg-[var(--color-accent)] text-white'
+                        ? 'bg-[var(--color-accent)] text-[var(--color-on-accent)]'
                         : 'bg-[var(--color-surface-2)]'
                     }`}
                   >
@@ -363,7 +363,7 @@ export function ServerManagement(props: {
           <button
             data-testid="mcp-server-add"
             onClick={onAdd}
-            className="rounded-lg bg-[var(--color-accent)] px-4 py-2 text-sm font-medium text-white hover:opacity-90"
+            className="rounded-lg bg-[var(--color-accent)] px-4 py-2 text-sm font-medium text-[var(--color-on-accent)] hover:opacity-90"
           >
             {editingId ? 'Kaydet' : 'Ekle'}
           </button>
@@ -403,7 +403,7 @@ export function ServerManagement(props: {
             data-testid="mcp-import-button"
             onClick={onImport}
             disabled={importing || !importText.trim()}
-            className="rounded-lg bg-[var(--color-accent)] px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
+            className="rounded-lg bg-[var(--color-accent)] px-4 py-2 text-sm font-medium text-[var(--color-on-accent)] hover:opacity-90 disabled:opacity-50"
           >
             {importing ? 'İçe aktarılıyor…' : 'İçe aktar'}
           </button>
@@ -415,36 +415,29 @@ export function ServerManagement(props: {
 
       {/* Popup: MCP servers from OTHER workspaces, one-click add into this one. */}
       {showImportable && (
-        <div
-          data-testid="mcp-importable-overlay"
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-          onClick={() => setShowImportable(false)}
-        >
+        <ModalOverlay onClose={() => setShowImportable(false)}>
           <div
-            className="flex max-h-[80vh] w-full max-w-lg flex-col rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] shadow-xl"
+            data-testid="mcp-importable-overlay"
+            className="flex max-h-[80vh] w-full max-w-lg flex-col rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-[var(--shadow-lg)]"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between border-b border-[var(--color-border)] px-4 py-3">
-              <div>
-                <h3 className="text-sm font-semibold">Diğer workspace’lerdeki MCP’ler</h3>
-                <p className="text-xs text-[var(--color-text-dim)]">
-                  Bu workspace’e eklenmemiş sunucular. Tek tıkla kopyala.
-                </p>
-              </div>
-              <button
-                data-testid="mcp-importable-close"
-                onClick={() => setShowImportable(false)}
-                className="rounded p-1 text-lg leading-none text-[var(--color-text-dim)] hover:opacity-80"
-                aria-label="Kapat"
-              >
-                ×
-              </button>
-            </div>
+            <PaneHeader
+              title="Diğer workspace’lerdeki MCP’ler"
+              subtitle="Bu workspace’e eklenmemiş sunucular. Tek tıkla kopyala."
+              right={
+                <button
+                  data-testid="mcp-importable-close"
+                  onClick={() => setShowImportable(false)}
+                  className="rounded p-1 text-lg leading-none text-[var(--color-text-dim)] hover:opacity-80"
+                  aria-label="Kapat"
+                >
+                  ×
+                </button>
+              }
+            />
             <div className="flex-1 overflow-y-auto p-3">
               {importable.length === 0 ? (
-                <p className="py-6 text-center text-sm text-[var(--color-text-dim)]">
-                  Eklenebilecek başka MCP sunucusu yok.
-                </p>
+                <EmptyState title="Eklenebilecek başka MCP sunucusu yok." />
               ) : (
                 <div className="space-y-2">
                   {importable.map((item) => (
@@ -479,7 +472,7 @@ export function ServerManagement(props: {
                         data-server-id={item.server.id}
                         onClick={() => onAddImportable(item)}
                         disabled={addingImportable === item.server.id}
-                        className="flex-shrink-0 rounded-lg bg-[var(--color-accent)] px-3 py-1.5 text-xs font-medium text-white hover:opacity-90 disabled:opacity-50"
+                        className="flex-shrink-0 rounded-lg bg-[var(--color-accent)] px-3 py-1.5 text-xs font-medium text-[var(--color-on-accent)] hover:opacity-90 disabled:opacity-50"
                       >
                         {addingImportable === item.server.id ? 'Ekleniyor…' : 'Ekle'}
                       </button>
@@ -489,7 +482,7 @@ export function ServerManagement(props: {
               )}
             </div>
           </div>
-        </div>
+        </ModalOverlay>
       )}
     </div>
   )

@@ -296,8 +296,8 @@ function CanvasInner({
         <MiniMap
           pannable
           zoomable
-          bgColor="#0b0e14"
-          maskColor="rgba(0, 0, 0, 0.6)"
+          bgColor="var(--color-bg)"
+          maskColor="color-mix(in srgb, var(--color-bg) 60%, transparent)"
           nodeColor={(n) => chromeFor(n.type ?? 'agent').accent}
         />
       )}

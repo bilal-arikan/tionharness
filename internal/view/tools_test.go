@@ -21,7 +21,7 @@ func toolsFixture() ToolsInput {
 }
 
 func TestToolsHeaderCountsServersAndDisabled(t *testing.T) {
-	v, err := ProjectTools(toolsFixture(), LevelCard, LensHealth)
+	v, err := ProjectTools(toolsFixture(), LevelCard)
 	if err != nil {
 		t.Fatalf("project: %v", err)
 	}
@@ -33,7 +33,7 @@ func TestToolsHeaderCountsServersAndDisabled(t *testing.T) {
 }
 
 func TestToolsBodyListsServersEnabledFirst(t *testing.T) {
-	v, err := ProjectTools(toolsFixture(), LevelCard, LensHealth)
+	v, err := ProjectTools(toolsFixture(), LevelCard)
 	if err != nil {
 		t.Fatalf("project: %v", err)
 	}
@@ -62,7 +62,7 @@ func TestToolsCardCapsServersAndCountsElided(t *testing.T) {
 			Transport: db.MCPTransportStdio, Command: "x", Enabled: true,
 		})
 	}
-	v, err := ProjectTools(in, LevelCard, LensHealth)
+	v, err := ProjectTools(in, LevelCard)
 	if err != nil {
 		t.Fatalf("project: %v", err)
 	}
@@ -72,7 +72,7 @@ func TestToolsCardCapsServersAndCountsElided(t *testing.T) {
 }
 
 func TestToolsEmptyIsExplicit(t *testing.T) {
-	v, err := ProjectTools(ToolsInput{Now: time.Now()}, LevelCard, LensHealth)
+	v, err := ProjectTools(ToolsInput{Now: time.Now()}, LevelCard)
 	if err != nil {
 		t.Fatalf("project: %v", err)
 	}
@@ -82,7 +82,7 @@ func TestToolsEmptyIsExplicit(t *testing.T) {
 }
 
 func TestToolsTinyIsHeaderOnly(t *testing.T) {
-	v, err := ProjectTools(toolsFixture(), LevelTiny, LensHealth)
+	v, err := ProjectTools(toolsFixture(), LevelTiny)
 	if err != nil {
 		t.Fatalf("project: %v", err)
 	}

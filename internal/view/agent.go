@@ -30,7 +30,7 @@ const agentSessionHandles = 20
 // sessions are open, and when it last did anything. It re-uses the same L0/L1
 // discipline as every other projection — every number is counted in Go, the
 // cost comes from billing.RollupOf (never re-priced here), nothing is narrated.
-func ProjectAgent(in AgentInput, level Level, lens Lens) (View, error) {
+func ProjectAgent(in AgentInput, level Level) (View, error) {
 	if in.Agent.ID == "" {
 		return View{}, fmt.Errorf("agent input has no agent")
 	}
@@ -42,7 +42,6 @@ func ProjectAgent(in AgentInput, level Level, lens Lens) (View, error) {
 	v := View{
 		Ref:    Ref{Kind: KindAgent, ID: in.Agent.ID},
 		Level:  level,
-		Lens:   lens,
 		AsOf:   now,
 		Source: fmt.Sprintf("%d@%d", len(in.Sessions), in.Usage.Calls),
 	}
@@ -68,11 +67,8 @@ func ProjectAgent(in AgentInput, level Level, lens Lens) (View, error) {
 	}
 
 	var l lines
-	for _, s := range agentSignals(st, lens) {
+	for _, s := range agentSignals(st) {
 		l.add("%s", s)
-	}
-	if l.empty() && lens != LensHealth {
-		l.add("(bu mercekte dikkat çeken bir şey yok)")
 	}
 
 	v.Handles, v.Elided = agentSessionHandleList(in.Sessions, now)
@@ -119,14 +115,11 @@ func computeAgentStats(in AgentInput, now time.Time) agentStats {
 }
 
 // agentSignals is the L1 layer: what about this agent deserves attention.
-func agentSignals(st agentStats, lens Lens) []string {
+func agentSignals(st agentStats) []string {
 	var out []string
 	if n := len(st.Stuck); n > 0 {
 		out = append(out, fmt.Sprintf("⚠ %d oturum takılmış (StuckTurns>0): %s",
 			n, sessionNames(st.Stuck, wsSignalNames)))
-	}
-	if lens == LensErrors {
-		return out
 	}
 	if st.Coordinators > 0 {
 		out = append(out, fmt.Sprintf("⇵ %d koordinatör oturumu", st.Coordinators))

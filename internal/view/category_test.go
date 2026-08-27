@@ -17,7 +17,7 @@ func sessionMemberHandles(n int) []Handle {
 }
 
 func TestCategoryHeaderCountsMembers(t *testing.T) {
-	v, err := ProjectCategory(CategoryInput{ID: CategorySessions, Members: sessionMemberHandles(12)}, LevelCard, LensHealth)
+	v, err := ProjectCategory(CategoryInput{ID: CategorySessions, Members: sessionMemberHandles(12)}, LevelCard)
 	if err != nil {
 		t.Fatalf("project: %v", err)
 	}
@@ -30,7 +30,7 @@ func TestCategoryHeaderCountsMembers(t *testing.T) {
 }
 
 func TestCategoryCapsAtTopNAndCountsElided(t *testing.T) {
-	v, err := ProjectCategory(CategoryInput{ID: CategorySessions, Members: sessionMemberHandles(categoryTopN + 7)}, LevelCard, LensHealth)
+	v, err := ProjectCategory(CategoryInput{ID: CategorySessions, Members: sessionMemberHandles(categoryTopN + 7)}, LevelCard)
 	if err != nil {
 		t.Fatalf("project: %v", err)
 	}
@@ -48,7 +48,7 @@ func TestCategoryCapsAtTopNAndCountsElided(t *testing.T) {
 }
 
 func TestCategoryColumnLabelsByKey(t *testing.T) {
-	v, err := ProjectCategory(CategoryInput{ID: categoryColumnPrefix + "in_progress", Members: nil}, LevelCard, LensHealth)
+	v, err := ProjectCategory(CategoryInput{ID: categoryColumnPrefix + "in_progress", Members: nil}, LevelCard)
 	if err != nil {
 		t.Fatalf("project: %v", err)
 	}
@@ -62,13 +62,13 @@ func TestCategoryColumnLabelsByKey(t *testing.T) {
 }
 
 func TestCategoryUnknownIdIsRejected(t *testing.T) {
-	if _, err := ProjectCategory(CategoryInput{ID: "galaxy"}, LevelCard, LensHealth); err == nil {
+	if _, err := ProjectCategory(CategoryInput{ID: "galaxy"}, LevelCard); err == nil {
 		t.Error("an unknown category id must be an error, not a blank node")
 	}
 }
 
 func TestCategoryTinyIsHeaderOnly(t *testing.T) {
-	v, err := ProjectCategory(CategoryInput{ID: CategoryAgents, Members: sessionMemberHandles(3)}, LevelTiny, LensHealth)
+	v, err := ProjectCategory(CategoryInput{ID: CategoryAgents, Members: sessionMemberHandles(3)}, LevelTiny)
 	if err != nil {
 		t.Fatalf("project: %v", err)
 	}
@@ -87,11 +87,11 @@ func TestCategoryFullListsMembersCardDoesNot(t *testing.T) {
 		{Label: "board planner", Ref: Ref{Kind: KindSession, ID: "SES2"}},
 	}}
 
-	card, err := ProjectCategory(in, LevelCard, LensHealth)
+	card, err := ProjectCategory(in, LevelCard)
 	if err != nil {
 		t.Fatalf("card: %v", err)
 	}
-	full, err := ProjectCategory(in, LevelFull, LensHealth)
+	full, err := ProjectCategory(in, LevelFull)
 	if err != nil {
 		t.Fatalf("full: %v", err)
 	}
@@ -121,7 +121,7 @@ func TestCategoryFullElisionAddsToTopNOverflow(t *testing.T) {
 		})
 	}
 
-	v, err := ProjectCategory(CategoryInput{ID: CategorySessions, Members: members}, LevelFull, LensHealth)
+	v, err := ProjectCategory(CategoryInput{ID: CategorySessions, Members: members}, LevelFull)
 	if err != nil {
 		t.Fatalf("full: %v", err)
 	}

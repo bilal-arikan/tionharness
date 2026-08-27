@@ -78,7 +78,11 @@ export function AgentTierSelector({
             title={tier.hint}
             className={`${compact ? 'px-2 py-1 text-[11px]' : 'px-3 py-2 text-xs'} font-medium transition disabled:opacity-50 ${
               active
-                ? 'text-white'
+                ? tier.value === 'full'
+                  ? 'text-[var(--color-on-success)]'
+                  : tier.value === 'name-only'
+                    ? 'text-[var(--color-on-warning)]'
+                    : 'text-[var(--color-text)]'
                 : 'bg-[var(--color-surface-2)] text-[var(--color-text-dim)] hover:text-[var(--color-text)]'
             }`}
             style={active ? { backgroundColor: tier.color } : undefined}

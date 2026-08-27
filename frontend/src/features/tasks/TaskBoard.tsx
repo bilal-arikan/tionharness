@@ -34,6 +34,14 @@ const DEFAULT_COLUMNS: BoardColumnDef[] = [
   { key: 'iptal', label: 'İptal', color: '' },
 ]
 
+// Preserve custom colors while upgrading legacy built-in green/yellow values to
+// semantic tokens that remain readable in both theme modes.
+function columnColor(color: string): string {
+  if (color === '#22c55e') return 'var(--color-success)'
+  if (color === '#eab308') return 'var(--color-warning)'
+  return color
+}
+
 // Current unix time in seconds, matching the backend's task timestamps — used
 // for optimistic createdAt/updatedAt so cards sort consistently before reload.
 const nowSec = () => Math.floor(Date.now() / 1000)
@@ -603,9 +611,9 @@ export function TaskBoard({ agents, onError }: Props) {
                   style={
                     col.color
                       ? {
-                          backgroundColor: col.color + '22',
-                          color: col.color,
-                          borderBottom: `2px solid ${col.color}44`,
+                          backgroundColor: `color-mix(in srgb, ${columnColor(col.color)} 13%, transparent)`,
+                          color: columnColor(col.color),
+                          borderBottom: `2px solid color-mix(in srgb, ${columnColor(col.color)} 27%, transparent)`,
                         }
                       : undefined
                   }
@@ -617,7 +625,10 @@ export function TaskBoard({ agents, onError }: Props) {
                     className="rounded px-1.5"
                     style={
                       col.color
-                        ? { backgroundColor: col.color + '33' }
+                        ? {
+                            backgroundColor: `color-mix(in srgb, ${columnColor(col.color)} 20%, transparent)`,
+                            color: `color-mix(in srgb, ${columnColor(col.color)} 40%, var(--color-text))`,
+                          }
                         : { backgroundColor: 'var(--color-surface-2)' }
                     }
                   >

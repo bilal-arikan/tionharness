@@ -169,7 +169,7 @@ export function NavRail({
     >
       {/* Brand */}
       <div className="flex h-14 items-center gap-2 px-3">
-        <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-[var(--color-accent)] to-[color-mix(in_srgb,var(--color-accent)_60%,#000)] text-sm font-bold text-white shadow-[var(--shadow-sm)]">
+        <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-[var(--color-accent)] text-sm font-bold text-[var(--color-on-accent)] shadow-[var(--shadow-sm)]">
           TS
         </div>
         {!collapsed && <span className="text-lg font-semibold tracking-tight">TionHarness</span>}
@@ -181,7 +181,11 @@ export function NavRail({
           onClick={() => setCollapsed(false)}
           title={active?.name ?? 'Workspace seç'}
           className="relative mx-2 mb-2 flex h-9 items-center justify-center rounded-lg bg-[var(--color-surface-2)] text-sm font-medium hover:opacity-90"
-          style={active?.color ? { backgroundColor: active.color + '33' } : undefined}
+          style={
+            active?.color
+              ? { backgroundColor: `color-mix(in srgb, ${active.color} 20%, transparent)` }
+              : undefined
+          }
         >
           {active?.icon || (active?.name ?? '?').charAt(0).toUpperCase()}
           {(unreadWorkspaceIds.size > 0 || anyOtherBusy) && (

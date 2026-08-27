@@ -1,13 +1,10 @@
 import { useEffect, useState } from 'react'
 import { Map as MapIcon, MessageSquare, RefreshCw, Search, X } from 'lucide-react'
 import { useRefreshTrigger } from '@/shared/hooks/useRefreshTrigger'
-import { VIEW_LENS_LABEL, refToString } from '@/types'
-import type { ViewLens } from '@/types'
+import { refToString } from '@/types'
 import { ViewPanel } from '@/features/view/ViewPanel'
 import { ExplorerGraph } from './ExplorerGraph'
 import { useExplorerGraph } from './useExplorerGraph'
-
-const LENSES: ViewLens[] = ['health', 'stale', 'recent', 'errors']
 
 interface Props {
   onError: (msg: string) => void
@@ -28,10 +25,8 @@ interface Props {
 // This is deliberately SEPARATE from the Network screen: the network is a
 // relationship graph of running agent instances, this is a state drill-down.
 export function ExplorerView({ onError, onOpenSession, focusNode, onFocusNode }: Props) {
-  const [lens, setLens] = useState<ViewLens>('health')
   const [search, setSearch] = useState('')
   const { nodes, edges, toggle, selectedRef, refreshExpanded } = useExplorerGraph({
-    lens,
     search,
     onError,
     initialSelected: focusNode,
@@ -77,20 +72,6 @@ export function ExplorerView({ onError, onOpenSession, focusNode, onFocusNode }:
         </div>
 
         <div className="ml-auto flex items-center gap-2 text-xs">
-          <label className="flex items-center gap-1 text-[var(--color-text-dim)]">
-            mercek
-            <select
-              value={lens}
-              onChange={(e) => setLens(e.target.value as ViewLens)}
-              className="rounded-md border border-[var(--color-border)] bg-transparent px-2 py-1 text-[var(--color-text)]"
-            >
-              {LENSES.map((l) => (
-                <option key={l} value={l}>
-                  {VIEW_LENS_LABEL[l]}
-                </option>
-              ))}
-            </select>
-          </label>
           <button
             onClick={refreshExpanded}
             title="Açık dalları yenile"
@@ -120,10 +101,18 @@ export function ExplorerView({ onError, onOpenSession, focusNode, onFocusNode }:
             </button>
           )}
           {/* Keyed by the ref so switching nodes resets the panel's own drill-trail. */}
-          <div className="min-h-0 flex-1 overflow-auto">
-            {/* The header's lens drives the panel too, so the map and the summary
-                beside it always describe the workspace through the same lens. */}
-            <ViewPanel key={refToString(selectedRef)} target={selectedRef} embedded lens={lens} />
+          {/* The panel owns its own scrolling in fillHeight mode, so the host must
+              NOT scroll too — otherwise the pinned footer scrolls away with it. */}
+          <div className="flex min-h-0 flex-1 flex-col">
+            {/* hideHandles: the map is the navigator here, so the panel shows only
+                the projection an agent would get — no drill chips beside it. */}
+            <ViewPanel
+              key={refToString(selectedRef)}
+              target={selectedRef}
+              embedded
+              hideHandles
+              fillHeight
+            />
           </div>
         </aside>
       </div>

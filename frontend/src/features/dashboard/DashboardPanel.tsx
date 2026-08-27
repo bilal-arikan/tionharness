@@ -85,7 +85,7 @@ export function DashboardPanel({
                   onClick={() => setDays(d)}
                   className={`px-2 py-1 transition ${
                     days === d
-                      ? 'bg-[var(--color-accent)] text-white'
+                      ? 'bg-[var(--color-accent)] text-[var(--color-on-accent)]'
                       : 'text-[var(--color-text-dim)] hover:text-[var(--color-accent)]'
                   }`}
                 >

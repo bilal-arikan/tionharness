@@ -25,7 +25,7 @@ type ScheduleInput struct {
 // schedule does not read as "broken" in a list of real problems, but when the
 // user has drilled into this specific schedule they are asking about exactly
 // that, so withholding it would be the surprise.
-func ProjectSchedule(in ScheduleInput, level Level, lens Lens) (View, error) {
+func ProjectSchedule(in ScheduleInput, level Level) (View, error) {
 	now := in.Now
 	if now.IsZero() {
 		now = time.Now()
@@ -35,7 +35,6 @@ func ProjectSchedule(in ScheduleInput, level Level, lens Lens) (View, error) {
 	v := View{
 		Ref:    Ref{Kind: KindSchedule, ID: sc.ID},
 		Level:  level,
-		Lens:   lens,
 		AsOf:   now,
 		Source: fmt.Sprintf("%d/%s", sc.LastRunAt, sc.LastDeliveryStatus),
 	}
@@ -58,20 +57,13 @@ func ProjectSchedule(in ScheduleInput, level Level, lens Lens) (View, error) {
 	}
 
 	var l lines
-	// The most important line first: did the last fire fail? errors lens keeps
-	// only this.
+	// The most important line first: did the last fire fail?
 	if sc.LastDeliveryStatus == "error" {
 		l.add("✗ son çalışmada hata: %s", clip(sc.LastDeliveryError, 120))
 	} else if sc.LastRunAt > 0 {
 		l.add("son çalışma: %s önce · %s", age(tsSec(sc.LastRunAt), now),
 			firstNonBlank(sc.LastDeliveryStatus, "ok"))
 	}
-	if lens == LensErrors {
-		v.Body = l.String()
-		v.finalize()
-		return v, nil
-	}
-
 	if sc.Enabled && sc.NextRunAt > 0 {
 		l.add("sıradaki: %s sonra", dur(time.Until(time.Unix(sc.NextRunAt, 0))))
 	}
