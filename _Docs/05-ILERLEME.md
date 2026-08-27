@@ -2,6 +2,41 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-08-27**
 
+## Public yayın (2026-08-27) ✅
+
+Proje **public** oldu: `https://github.com/bilal-arikan/tionharness` (tek branch
+`main`, 984 commit), repo açıklaması + 12 topic + `homepage: https://tionharness.com`
+dolduruldu. Tanıtım sitesi GitHub Pages üzerinden canlıya alındı
+(`.github/workflows/pages.yml`), custom domain + zorunlu HTTPS onaylı.
+
+**VPS deploy hattı tamamen kaldırıldı:** `.gitea/workflows/deploy.yml`,
+`deploy/README.md`, `deploy/deploy.sh`, `deploy/tionharness.service` silindi.
+`deploy/release-host/` kaldı ama artık yalnız yerel Docker önizlemesi, üretimde
+kullanılmıyor. Yayın hattının sahibi `.github/workflows/` (release + Pages);
+`.gitea/workflows/ci.yml` + `release.yml` yalnız doğrulama yapar. Detay
+`_Docs/75-YAYIN-SURECI.md` (zaten güncel).
+
+**Apache-2.0 lisansı eklendi:** kökte `LICENSE`, `NOTICE`, `THIRD-PARTY-NOTICES.md`;
+`website/src/site.config.ts`'te `license: 'Apache-2.0'` (eskiden `null` + TODO).
+
+**Doküman sanitizasyonu (public yayın için):** `claude-code-audit` deposuna
+atıflar kaldırıldı → "Claude Code'un gözlemlenen davranışı" gibi ifadelerle
+değiştirildi; `mcp-chrome` → `browser-mcp`, `heimdall` → `mcp-alpha` olarak
+yeniden adlandırıldı (dokümanlar + `internal/db/store_mcp_test.go` fixture'ları);
+kişisel MCP envanteri/port listeleri `_Docs/52-MCP-GATEWAY.md`'den çıkarıldı;
+yerel disk yolları placeholder'landı; `internal/workspace/defaults/default-instructions.md`'den
+"Document tools" tablosu kaldırıldı.
+
+**Yeni araç:** `gitleaks` 8.30.1 kuruldu (`<progs>/gitleaks/gitleaks.exe`, PATH'te
+değil) — commit öncesi sır taraması için (bkz. `tionharness-commit` skill'i).
+
+**Git temizliği:** tüm `task/*` worktree branch'leri ve `main-rename-v1` silindi;
+commit mesajlarındaki `Co-Authored-By` trailer'ları (External Agent/Claude/TionSwarm/
+TionHarness botları) geçmişten temizlendi.
+
+Bu oturumda ayrıca `tionharness-project` (public/lisans/yayın bilgisi) ve
+`tionharness-commit` (gitleaks adımı) skill'leri güncellendi.
+
 ## Sistem ajanlarına kanonik görsel kimlik + varsayılan ajan kısıtı (2026-08-27) ✅
 
 11 yerleşik ajanın avatarı ve rengi 14 workspace'in hepsinde boştu, yani roster'da

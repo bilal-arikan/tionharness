@@ -6,6 +6,11 @@
 
 Açık kaynaklı, kendi sunucunda barındırılan (self-hosted) bir **çoklu-ajan (multi-agent) AI çalışma ortamı (runtime)** ve **kontrol düzlemi (control plane)** inşa etmek. Birden fazla otonom AI ajanını yöneten, görev dağıtan ve zamanlanmış işler çalıştıran bir sistem.
 
+> **Public yayın (2026-08-27):** repo `https://github.com/bilal-arikan/tionharness`
+> altında herkese açık, tanıtım sitesi `https://tionharness.com` adresinde canlı
+> (GitHub Pages), lisans **Apache-2.0**. Yayın hattı GitHub Actions'a taşındı, VPS
+> deploy hattı kaldırıldı — detay `75-YAYIN-SURECI.md`.
+
 ## Neden Go?
 
 | Kriter | Kazanım |
