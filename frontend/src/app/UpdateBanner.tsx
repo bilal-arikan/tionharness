@@ -1,9 +1,9 @@
 // A dismissible strip shown at the top of the app when the release feed reports
-// a newer version. It links to the release notes and NOTHING else: this version
-// deliberately offers no download or self-update action, so replacing the binary
+// a newer version. It links to the release notes and to the download for this
+// platform, and NOTHING else: it never self-updates, so replacing the binary
 // stays an explicit, user-driven step.
 import { useEffect, useState } from 'react'
-import { ArrowUpCircle, ExternalLink, X } from 'lucide-react'
+import { ArrowUpCircle, Download, ExternalLink, X } from 'lucide-react'
 import { api } from '@/api'
 import type { UpdateStatus } from '@/types'
 import { readDismissedVersion, shouldShowUpdate, writeDismissedVersion } from './updateCheck'
@@ -15,13 +15,16 @@ export function UpdateBanner() {
   useEffect(() => {
     let alive = true
     // The check is advisory and cached server-side; a failure here means the
-    // banner simply never appears, which is the intended quiet fallback.
+    // banner simply never appears. That fallback is quiet in the UI but not
+    // silent: the reason is logged so a broken endpoint is diagnosable.
     api
       .getUpdateStatus()
       .then((s) => {
         if (alive) setStatus(s)
       })
-      .catch(() => {})
+      .catch((err) => {
+        console.error('update check request failed', err)
+      })
     return () => {
       alive = false
     }
@@ -39,6 +42,21 @@ export function UpdateBanner() {
         <span className="font-medium">Yeni sürüm mevcut: {status.latest}</span>
         <span className="text-[var(--color-text-dim)]"> · yüklü sürüm {status.current}</span>
       </span>
+      {status.downloadUrl && (
+        <a
+          href={status.downloadUrl}
+          target="_blank"
+          rel="noreferrer"
+          // A file name means the feed had a build for this platform; without
+          // one the link goes to the releases page, so say so instead of
+          // promising a download that is really a page.
+          title={status.downloadFile || undefined}
+          className="flex shrink-0 items-center gap-1 rounded-lg px-2 py-1 text-[var(--color-accent)] transition hover:bg-[var(--color-surface-2)]"
+        >
+          <Download size={13} />
+          {status.downloadFile ? 'İndir' : 'Sürümler'}
+        </a>
+      )}
       {status.notesUrl && (
         <a
           href={status.notesUrl}

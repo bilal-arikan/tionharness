@@ -239,13 +239,21 @@ sürüm notlarına link verir, binary'yi değiştirme kararı kullanıcıdadır.
   8 sn timeout, gerçek `User-Agent`) + `internal/api/semver.go` (bağımlılık
   eklemeden semver karşılaştırma; `0.0.1-test` < `0.0.1`).
 - Uç nokta: `GET /api/version/update` →
-  `{ state, current, latest, updateAvailable, notesUrl, releasedAt, checkedAt }`.
+  `{ state, current, latest, updateAvailable, notesUrl, releasedAt, checkedAt,
+  downloadUrl, downloadFile }`.
   `state` üç sonucu ayırır: `ok` (feed okundu), `skipped` (ldflags'siz `dev`
   derlemesi — kontrol hiç yapılmaz), `unknown` (feed erişilemez/bozuk).
 - **Damgalanmamış `dev` derlemesi hiç feed'e çıkmaz.** Geliştiriciye güncelleme
   uyarısı gösterilmez.
 - **Hata yutulur (bilinçli):** erişilemeyen/bozuk feed loglanır, sonuç `unknown`
-  olur; kullanıcıya hata gösterilmez ve açılış bloklanmaz.
+  olur; kullanıcıya hata gösterilmez ve açılış bloklanmaz. Frontend tarafında da
+  istek hatası `console.error` ile loglanır, şerit yalnızca görünmez.
+- **Artifact seçimi** (`internal/api/updateartifact.go`): `latest.json`'daki
+  `artifacts` listesinden sunucunun kendi `runtime.GOOS`/`GOARCH` çiftine uyan
+  giriş seçilir → `downloadUrl` doğrudan dosya, `downloadFile` dosya adı. Uyan
+  giriş yoksa (veya girişin `url`'i boşsa) `downloadUrl` jenerik
+  `<FeedURL()>/releases` sayfasıdır ve `downloadFile` boş kalır — başka
+  platformun binary'si asla verilmez.
 - Önbellek: sonuç bellekte tutulur, en fazla 24 saatte bir gerçek istek atılır;
   eşzamanlı çağrılar tek isteğe düşer. Açılıştan ~15 sn sonra bir kez arka planda
   kontrol edilir (`Server.StartUpdateCheck`, `internal/app/app.go`).
@@ -313,6 +321,7 @@ powershell -NoProfile -File scripts/install.ps1 -FeedUrl http://localhost:8080
 | `deploy/release-host/sync-release.sh` | Yerel önizleme yayını (üretimde kullanılmaz) |
 | `internal/api/updatecheck.go` | Uygulama içi sürüm kontrolü (feed okuma, önbellek) |
 | `internal/api/semver.go` | Bağımlılıksız semver karşılaştırma (prerelease dahil) |
+| `internal/api/updateartifact.go` | Platforma uyan artifact seçimi + `/releases` fallback |
 | `frontend/src/app/UpdateBanner.tsx` | "Yeni sürüm mevcut" şeridi (yalnız link) |
 | `deploy/release-host/docker-compose.yml` | Caddy statik indirme + tanıtım sitesi (yalnız yerel önizleme) |
 | `_Docs/72-TANITIM-SITESI.md` | `www` tarafında sunulan tanıtım sitesi |

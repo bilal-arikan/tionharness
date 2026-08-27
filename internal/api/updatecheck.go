@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"runtime"
 	"sync"
 	"time"
 )
@@ -15,7 +16,8 @@ import (
 // The app asks the release feed (<FeedURL()>/latest.json) whether a newer
 // version exists and surfaces the answer as a dismissible banner. Nothing is
 // downloaded and nothing self-updates: the banner only links to the release
-// notes, so the user stays in control of how the binary is replaced.
+// notes and to the download for this platform, so the user stays in control of
+// how the binary is replaced.
 //
 // Two rules shape the behaviour:
 //
@@ -42,12 +44,14 @@ const (
 	devVersion = "dev"
 )
 
-// updateFeed is the subset of latest.json the check needs. The artifact list is
-// deliberately ignored: this version never downloads anything.
+// updateFeed is the subset of latest.json the check needs. Only Version is
+// required; released_at, notes_url and artifacts are read when present and left
+// empty otherwise, since the feed does not guarantee them.
 type updateFeed struct {
-	Version    string `json:"version"`
-	ReleasedAt string `json:"released_at"`
-	NotesURL   string `json:"notes_url"`
+	Version    string           `json:"version"`
+	ReleasedAt string           `json:"released_at"`
+	NotesURL   string           `json:"notes_url"`
+	Artifacts  []updateArtifact `json:"artifacts"`
 }
 
 // updateStatus is the API shape. State separates the three real outcomes so the
@@ -56,14 +60,21 @@ type updateFeed struct {
 //	"ok"      — the feed was read; Available says whether to upgrade
 //	"skipped" — unstamped dev build, no check was made
 //	"unknown" — the feed could not be read
+//
+// DownloadURL is either the artifact built for this server's platform or, when
+// the feed lists none for it, the generic releases page. DownloadFile is the
+// artifact's file name and is empty in the fallback case, which is how the UI
+// tells "direct download" from "go pick one yourself".
 type updateStatus struct {
-	State      string `json:"state"`
-	Current    string `json:"current"`
-	Latest     string `json:"latest"`
-	Available  bool   `json:"updateAvailable"`
-	NotesURL   string `json:"notesUrl"`
-	ReleasedAt string `json:"releasedAt"`
-	CheckedAt  string `json:"checkedAt"`
+	State        string `json:"state"`
+	Current      string `json:"current"`
+	Latest       string `json:"latest"`
+	Available    bool   `json:"updateAvailable"`
+	NotesURL     string `json:"notesUrl"`
+	ReleasedAt   string `json:"releasedAt"`
+	CheckedAt    string `json:"checkedAt"`
+	DownloadURL  string `json:"downloadUrl"`
+	DownloadFile string `json:"downloadFile"`
 }
 
 // updateChecker owns the cached result. The mutex is held across the fetch on
@@ -163,13 +174,21 @@ func (c *updateChecker) fetch(ctx context.Context) (updateStatus, error) {
 	if err != nil {
 		return updateStatus{}, err
 	}
+	// Fall back to the releases page: an artifact for another platform is worse
+	// than no direct link at all.
+	download, file := releasesURL(), ""
+	if art, ok := selectArtifact(feed.Artifacts, runtime.GOOS, runtime.GOARCH); ok {
+		download, file = art.URL, art.File
+	}
 	return updateStatus{
-		State:      "ok",
-		Current:    BuildVersion,
-		Latest:     feed.Version,
-		Available:  newer,
-		NotesURL:   feed.NotesURL,
-		ReleasedAt: feed.ReleasedAt,
+		State:        "ok",
+		Current:      BuildVersion,
+		Latest:       feed.Version,
+		Available:    newer,
+		NotesURL:     feed.NotesURL,
+		ReleasedAt:   feed.ReleasedAt,
+		DownloadURL:  download,
+		DownloadFile: file,
 	}, nil
 }
 

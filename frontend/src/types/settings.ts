@@ -288,6 +288,11 @@ export interface UpdateStatus {
   notesUrl: string
   releasedAt: string
   checkedAt: string
+  // Direct download for the platform the server runs on, or the generic
+  // releases page when the feed lists no build for it. `downloadFile` is the
+  // artifact's file name and is empty in that fallback case.
+  downloadUrl: string
+  downloadFile: string
 }
 
 // Detection result for an optional external CLI tool (rtk, sqz, mmdc, piper…).
