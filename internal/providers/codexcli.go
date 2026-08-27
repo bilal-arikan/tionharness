@@ -177,6 +177,10 @@ func (c *CodexCLI) buildConfig(req Request) codexConfig {
 		// turn on a prompt no one can answer in exec mode.
 		DisableUpdatePlan:       true,
 		DisableRequestUserInput: true,
+		// Codex's native multi-agent/collab tools duplicate spawn_worker and are
+		// unusable under --ephemeral (no thread store), so a model that reaches
+		// for them loses the turn to "collab spawn failed: no thread with id".
+		DisableNativeMultiAgent: true,
 		Servers:                 c.mcpServers,
 	}
 }

@@ -35,6 +35,10 @@ type codexConfig struct {
 	// ReasoningEffort becomes `model_reasoning_effort` when non-empty. Codex
 	// accepts none|minimal|low|medium|high|xhigh|max|ultra.
 	ReasoningEffort string
+	// DisableNativeMultiAgent emits `multi_agent = false` and
+	// `multi_agent_v2 = false` under [features], turning off codex's own
+	// agent-spawning/collab tools.
+	DisableNativeMultiAgent bool
 	// DisableWebSearch emits `web_search = false` under [tools].
 	DisableWebSearch bool
 	// DisableUpdatePlan emits `update_plan = { enabled = false }` under [tools].
@@ -63,6 +67,21 @@ func renderCodexConfig(cfg codexConfig) string {
 	}
 	if cfg.ReasoningEffort != "" {
 		fmt.Fprintf(&b, "model_reasoning_effort = %s\n", tomlString(cfg.ReasoningEffort))
+	}
+
+	if cfg.DisableNativeMultiAgent {
+		if b.Len() > 0 {
+			b.WriteString("\n")
+		}
+		// Both flags default to ON in codex and expose its native collab tools
+		// (spawn_agent and friends), which compete with TionHarness's own
+		// spawn_worker delegation. Under --ephemeral there is no persistent
+		// thread store behind them, so a model that picks the native tool dies
+		// with "collab spawn failed: no thread with id" and the TionHarness
+		// delegation is never attempted.
+		b.WriteString("[features]\n")
+		b.WriteString("multi_agent = false\n")
+		b.WriteString("multi_agent_v2 = false\n")
 	}
 
 	if cfg.DisableWebSearch || cfg.DisableUpdatePlan || cfg.DisableRequestUserInput {

@@ -411,3 +411,27 @@ func TestWriteCodexConfigReportsAllDroppedKeys(t *testing.T) {
 		t.Fatalf("dropped = %v, want [alpha zulu]", dropped)
 	}
 }
+
+// Codex ships its native multi-agent/collab tools ON by default; they shadow
+// TionHarness's spawn_worker delegation and cannot work under --ephemeral. Both
+// keys must reach the file, and the block must sit after the top-level keys so
+// they are not swallowed into [features].
+func TestCodexConfigDisablesNativeMultiAgent(t *testing.T) {
+	got := renderCodexConfig(codexConfig{
+		ReasoningEffort:         "high",
+		DisableNativeMultiAgent: true,
+		DisableUpdatePlan:       true,
+	})
+	want := "model_reasoning_effort = \"high\"\n" +
+		"\n[features]\nmulti_agent = false\nmulti_agent_v2 = false\n" +
+		"\n[tools]\nupdate_plan = { enabled = false }\n"
+	if got != want {
+		t.Fatalf("features block mismatch\n got: %q\nwant: %q", got, want)
+	}
+}
+
+func TestCodexConfigFeaturesOmittedWhenNotDisabled(t *testing.T) {
+	if got := renderCodexConfig(codexConfig{ReasoningEffort: "low"}); strings.Contains(got, "[features]") {
+		t.Fatalf("features block must be opt-in, got %q", got)
+	}
+}
