@@ -1,6 +1,11 @@
 package conversation
 
-import "github.com/bilal-arikan/tionharness/internal/providers"
+import (
+	"log/slog"
+	"sync"
+
+	"github.com/bilal-arikan/tionharness/internal/providers"
+)
 
 // Model-aware transcript budget (Option B). A flat default budget wastes a large
 // model's context window: a 200K–1M model could keep far more history before
@@ -26,15 +31,65 @@ const (
 	// of folded detail. Users who want more raise it from Settings (or
 	// TIONHARNESS_CONTEXT_BUDGET_CEIL); MaxContextTokens is the floor.
 	defaultBudgetAutoCeil = 262144
+	// budgetWindowShare caps EVERY budget — including one lifted by the configured
+	// floor — at this share of the model's real context window. Without it the floor
+	// silently outranks physics: with the shipped default (MaxContextTokens =
+	// 800000) a 200K model was told to keep 800K of transcript, so compaction could
+	// never fire before the API rejected the request and every long turn ended in
+	// the context-overflow recovery path instead of a clean fold. The budget is
+	// weighed against messages PLUS the fixed per-turn overhead (see Compact), so
+	// the remaining 20% is what the reply and the estimator's error margin live in.
+	budgetWindowShare = 0.8
+	// unknownModelWindow is the context window ASSUMED for a model family
+	// providers.ContextWindowFor does not recognise. An unknown model used to
+	// inherit the configured floor verbatim, i.e. an 800K transcript budget for a
+	// model that may really have 32K — wrong in the dangerous direction, and
+	// invisible until the API refused the turn. 128K is the smallest window still
+	// plausible for a current model, so assuming it under-promises rather than
+	// over-promises; the model is also logged once (see noteUnknownModelWindow) so
+	// the missing family entry is fixable instead of silent.
+	unknownModelWindow = 128_000
 )
+
+// unknownModelWindowSeen dedupes the unknown-model warning: EffectiveBudget runs on
+// every turn, so without it one unrecognised model would flood the Logs screen.
+var unknownModelWindowSeen sync.Map
+
+// noteUnknownModelWindow logs, once per provider/model, that the family is unknown
+// and the budget therefore falls back to the conservative assumed window. The empty
+// model is exempt: that is claude-cli's "default" alias, where the concrete model is
+// resolved inside the CLI and an unknown window here is expected, not a gap.
+func noteUnknownModelWindow(provider, model string, budget int) {
+	if model == "" {
+		return
+	}
+	if _, dup := unknownModelWindowSeen.LoadOrStore(provider+"/"+model, struct{}{}); dup {
+		return
+	}
+	slog.Warn("unknown model context window; using safe transcript budget",
+		"provider", provider, "model", model,
+		"assumedWindow", unknownModelWindow, "budget", budget)
+}
+
+// capToWindow bounds a budget at budgetWindowShare of window. window must be > 0.
+func capToWindow(budget, window int) int {
+	limit := int(float64(window) * budgetWindowShare)
+	if budget > limit {
+		return limit
+	}
+	return budget
+}
 
 // EffectiveBudget returns the transcript token budget for an agent's model. The
 // configured value (settings.MaxContextTokens / TIONHARNESS_MAX_CONTEXT_TOKENS) is
 // the floor; when the model's context window is known we allow a larger budget —
 // clamp(window * fraction, configured, ceil) — so big-context models aren't
-// pinned to the small default. An unknown window (0) falls back to configured, so
-// behaviour is unchanged for models without metadata. fraction/ceil are the live
-// settings values; non-positive values fall back to the package defaults.
+// pinned to the small default. Every result is then capped at budgetWindowShare of
+// the model's window, so the floor can lift the budget but never above the model's
+// real capacity. An unknown window (0) falls back to the configured value capped by
+// the conservative unknownModelWindow, and the model is logged once. fraction/ceil
+// are the live settings values; non-positive values fall back to the package
+// defaults.
 func EffectiveBudget(provider, model string, configured int, fraction float64, ceil int) int {
 	if configured <= 0 {
 		configured = defaultMaxTokens
@@ -44,7 +99,11 @@ func EffectiveBudget(provider, model string, configured int, fraction float64, c
 	}
 	window := providers.ContextWindowFor(provider, model)
 	if window <= 0 {
-		return configured
+		// Unknown family: fall back to the conservative assumed window instead of
+		// trusting the configured floor, which knows nothing about this model.
+		safe := capToWindow(configured, unknownModelWindow)
+		noteUnknownModelWindow(provider, model, safe)
+		return safe
 	}
 	// fraction<=0 means "auto": pick a family-appropriate share (context-rot aware),
 	// falling back to the package default only for families the table doesn't cover.
@@ -61,5 +120,6 @@ func EffectiveBudget(provider, model string, configured int, fraction float64, c
 	if derived < configured {
 		derived = configured
 	}
-	return derived
+	// The floor lifts, but never past what the model can actually hold.
+	return capToWindow(derived, window)
 }

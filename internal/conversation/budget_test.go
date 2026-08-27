@@ -30,9 +30,24 @@ func TestEffectiveBudget(t *testing.T) {
 	}
 
 	// Configured floor wins when it exceeds the derived value (Haiku 200K×0.6=120000,
-	// configured 200000 → 200000).
-	if got := EffectiveBudget("anthropic", "claude-haiku-4-5-20251001", 200000, 0.6, c); got != 200000 {
-		t.Fatalf("high configured floor: got %d, want 200000", got)
+	// configured 200000), but only up to budgetWindowShare of the real window:
+	// 200K×0.8 = 160000.
+	if got := EffectiveBudget("anthropic", "claude-haiku-4-5-20251001", 200000, 0.6, c); got != 160000 {
+		t.Fatalf("high configured floor: got %d, want 160000", got)
+	}
+
+	// The floor can never lift the budget above the model's window. The shipped
+	// default (settings.MaxContextTokens = 800000) on a 200K model used to yield a
+	// 800000-token budget, i.e. compaction that could not fire before the API
+	// rejected the turn.
+	if got := EffectiveBudget("anthropic", "claude-haiku-4-5-20251001", 800000, 0.6, c); got != 160000 {
+		t.Fatalf("floor above window: got %d, want 160000", got)
+	}
+
+	// Same for an unknown family: the floor is capped by the conservative assumed
+	// window (128000 × 0.8 = 102400) instead of being trusted verbatim.
+	if got := EffectiveBudget("openrouter", "some-unknown-model", 800000, 0.6, c); got != 102400 {
+		t.Fatalf("unknown window with big floor: got %d, want 102400", got)
 	}
 }
 

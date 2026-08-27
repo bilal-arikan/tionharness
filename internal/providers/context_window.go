@@ -6,8 +6,9 @@ import "strings"
 // rot fast (model IDs churn weekly), so knowledge is kept family-based and
 // deliberately conservative: only families we are confident about are filled,
 // everything else returns 0 ("unknown") so callers fall back rather than trust a
-// guess. The 1M Claude tier is opt-in (beta), so the Claude family reports its
-// 200K base.
+// guess. "Unknown" is not a licence for the caller to invent a large number:
+// conversation.EffectiveBudget answers a 0 window with a conservative assumed
+// window, so an unrecognised model gets a small budget, not the configured one.
 const (
 	// Claude 4.x/5 is NOT one size: Opus 4.8, Sonnet 4.6 and Fable 5 ship a 1M
 	// window (the long-context surcharge was dropped in 2026), while Haiku 4.5

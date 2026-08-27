@@ -931,11 +931,25 @@ daha yüksek pay alır, küçük/bilinmeyen modeller muhafazakâr kalır:
 | Haiku 4.5 | 200K | 0.40 | **80K** |
 | MiniMax / DeepSeek / Gemini | 1M | 0.35 | 350K → **256K** (tavan) |
 | Genel Claude (bilinmeyen katman) | 200K | 0.40 | **80K** |
-| Bilinmeyen | 0 | — | taban (`MaxContextTokens`) |
+| Bilinmeyen | 0 → **128K varsayılır** | — | `min(MaxContextTokens, 102400)` + tek seferlik uyarı log'u |
+
+**Pencere tavanı (2026-08-28, TSK341).** Her sonuç — tabanın yükselttiği değer dahil —
+modelin **gerçek penceresinin %80'i** (`budgetWindowShare`) ile sınırlanır. Öncesinde taban
+fizikten üstündü: sevk edilen varsayılan `MaxContextTokens = 800000` ile 200K'lık bir modele
+"800K transcript tut" deniyordu; sıkıştırma API isteği reddedilmeden önce hiç tetiklenemiyor,
+her uzun tur temiz bir fold yerine bağlam-taşması kurtarma yoluna düşüyordu. Bütçe mesajlar
+**artı** sabit tur yükü ile karşılaştırıldığından kalan %20 yanıt ve tahmin hata payı içindir.
+Aynı sebeple **bilinmeyen aile** artık tabanı olduğu gibi miras almaz: `ContextWindowFor` 0
+döndürdüğünde güvenli bir varsayılan pencere (128K) varsayılır ve model bir kez
+`unknown model context window; using safe transcript budget` uyarısıyla Log ekranına düşer —
+sessizce yutulmaz. **1M ↔ 200K anahtarı ayrıca gerekmez:** `ContextBudgetCeil` zaten odur
+(200000'e çekince her 1M model 200K'ya iner); taban tavanı eziyordu, bu düzeltme onu geri
+işler hale getirir.
 
 **Semantik & geriye-uyumluluk.** `ContextBudgetFraction = 0` artık **"otomatik/adaptif"** anlamına gelir
 (negatif → 0'a clamp'lenir; pozitif → manuel sabit pay). `MaxContextTokens` (configured) **taban** olarak
-korunur → kimse mevcut tabanının altına düşmez. `EffectiveBudget(provider, model, configured, fraction,
+korunur → kimse mevcut tabanının altına düşmez (ama yukarıda anlatılan pencere tavanının üstüne de
+çıkamaz). `EffectiveBudget(provider, model, configured, fraction,
 ceil)`: `fraction<=0` ise `AdaptiveBudgetFraction`, o da 0 ise paket fallback (0.4). `SetBudgetShape`
 artık fraction 0'ı (auto) saklar (eskiden yok sayardı). Eski `settings.json`'larda kalan açık `0.6` değeri
 **manuel sabit** olarak yaşamaya devam eder (kullanıcı sıfırlayana dek); yeni kurulumlar adaptif başlar —
