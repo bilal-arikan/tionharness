@@ -1,0 +1,21 @@
+{$DL_SITE}, http://:80 {
+	root * /srv/dl
+	header Access-Control-Allow-Origin "*"
+
+	@latest path /latest.json
+	header @latest Cache-Control "no-cache, must-revalidate"
+
+	@versioned path /v*
+	header @versioned Cache-Control "public, max-age=31536000, immutable"
+
+	file_server
+	log
+}
+
+{$WWW_SITE}, http://:81 {
+	root * /srv/www
+	try_files {path} {path}/ {path}.html /404.html
+	encode gzip zstd
+	file_server
+	log
+}

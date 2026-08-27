@@ -2,42 +2,36 @@ package api
 
 import (
 	"net/http"
+	"os"
 	"runtime"
 	"runtime/debug"
-	"sync"
+	"strings"
 )
 
 // BuildVersion, BuildDate, and BuildCommit are injected at build time via
 //
 //	go build -ldflags "-X github.com/bilal-arikan/tionharness/internal/api.BuildVersion=v1.2.3 ..."
 //
-// When building without ldflags (dev mode) all three default to "dev".
+// When building without ldflags, the values below identify a development build.
 var (
-	BuildVersion  = "dev"
-	BuildDate     = "dev"
-	BuildCommit   = "dev"
-	buildInfoOnce sync.Once
+	BuildVersion = "dev"
+	BuildCommit  = "unknown"
+	BuildDate    = "unknown"
+	FeedBaseURL  = "https://dl.tionharness.com"
 )
 
-// ResolveBuildInfo fills missing ldflags values from Go's embedded VCS metadata.
-func ResolveBuildInfo() {
-	buildInfoOnce.Do(func() {
-		if info, ok := debug.ReadBuildInfo(); ok {
-			for _, setting := range info.Settings {
-				switch setting.Key {
-				case "vcs.revision":
-					if BuildCommit == "dev" && len(setting.Value) >= 7 {
-						BuildCommit = setting.Value[:7]
-					}
-				case "vcs.time":
-					if BuildDate == "dev" {
-						BuildDate = setting.Value
-					}
-				}
-			}
-		}
-	})
+// FeedURL returns the update feed base URL, with an environment override for
+// local and self-hosted update feeds.
+func FeedURL() string {
+	if value := os.Getenv("TIONHARNESS_FEED_URL"); value != "" {
+		return strings.TrimRight(value, "/")
+	}
+	return strings.TrimRight(FeedBaseURL, "/")
 }
+
+// ResolveBuildInfo is retained for callers that initialize build metadata.
+// Release metadata is supplied exclusively through linker flags.
+func ResolveBuildInfo() {}
 
 type versionResponse struct {
 	Version   string `json:"version"`
@@ -48,7 +42,6 @@ type versionResponse struct {
 }
 
 func (s *Server) handleVersion(w http.ResponseWriter, r *http.Request) {
-	ResolveBuildInfo()
 	goVer := runtime.Version()
 
 	// ReadBuildInfo fills in the module path and, when built with ldflags, VCS

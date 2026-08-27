@@ -1,6 +1,7 @@
 # Build artifacts
 /build/
 /bin/
+/dist/
 *.exe
 *.exe~
 *.syso

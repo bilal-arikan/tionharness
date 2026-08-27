@@ -1,0 +1,21 @@
+services:
+  caddy:
+    image: caddy:2-alpine
+    env_file:
+      - path: .env
+        required: false
+    restart: unless-stopped
+    ports:
+      - "${HTTP_PORT:-8080}:80"
+      - "${WWW_HTTP_PORT:-8081}:81"
+      - "${HTTPS_PORT:-8443}:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./srv/dl:/srv/dl:ro
+      - ./srv/www:/srv/www:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  caddy_data:
+  caddy_config:

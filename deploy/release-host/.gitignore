@@ -1,0 +1,5 @@
+.env
+srv/dl/*
+!srv/dl/.gitkeep
+srv/www/*
+!srv/www/.gitkeep
