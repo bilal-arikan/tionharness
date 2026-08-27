@@ -558,9 +558,10 @@ readLoop:
 
 // codexBaseEnv returns the parent environment hardened the same way the native
 // shell tools are, so a codex agent running `git commit` cannot hang on a GUI
-// editor or a credential prompt inside the stdin-less child. Unlike the claude
-// path there are no nesting env vars to strip: codex has none that silently
-// downgrade the child's model.
+// editor or a credential prompt inside the stdin-less child. There is no codex
+// counterpart to the claude path's nesting/model filter (see claudecli.go):
+// codex defines no nesting env var that would silently downgrade the child's
+// model, so nothing of that kind is stripped here.
 //
 // Credentials ARE filtered, with an exemption for codex's own auth namespace —
 // see codexCLIEnvExempt.
