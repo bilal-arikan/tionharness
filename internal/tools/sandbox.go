@@ -65,6 +65,58 @@ func isSlashRooted(path string) bool {
 	return !filepath.IsAbs(path)
 }
 
+// ntNamespacePrefixes are the Windows NT / device namespace spellings that let a
+// caller address the filesystem without going through normal Win32 path parsing.
+// filepath.Clean does not normalise them, so a confined sandbox must reject them
+// explicitly rather than relying on the Root prefix comparison happening to miss.
+var ntNamespacePrefixes = []string{`\\?\`, `\\.\`, `\??\`}
+
+// rejectWindowsPathTricks rejects Windows path spellings that survive
+// filepath.Clean and would therefore make the confinement boundary depend on how
+// Root itself happens to be spelled:
+//
+//   - NT / device namespace prefixes (\\?\, \\.\, \??\, including \\?\UNC\) and
+//     GLOBALROOT device paths. These bypass Win32 path normalisation entirely.
+//   - Alternate data streams (file.txt:stream). Clean leaves the ":" in place, so
+//     the stream suffix also defeats extension allowlists built on filepath.Ext.
+//
+// Both checks are Windows-only: on other platforms these spellings carry no
+// special meaning and ":" is a legal filename character.
+func rejectWindowsPathTricks(path string) error {
+	if runtime.GOOS != "windows" || path == "" {
+		return nil
+	}
+	slashed := strings.ReplaceAll(path, "/", `\`)
+	for _, prefix := range ntNamespacePrefixes {
+		if strings.HasPrefix(slashed, prefix) {
+			return fmt.Errorf("path %q uses the Windows NT/device namespace (%s), which is not allowed in a confined sandbox: use a plain drive-qualified path (C:\\...) or a path relative to the working directory", path, prefix)
+		}
+	}
+	for _, elem := range strings.Split(slashed, `\`) {
+		if strings.EqualFold(elem, "GLOBALROOT") {
+			return fmt.Errorf("path %q addresses a GLOBALROOT device path, which is not allowed in a confined sandbox: use a plain drive-qualified path (C:\\...) or a path relative to the working directory", path)
+		}
+	}
+	// VolumeName consumes the legitimate "C:" drive letter (and the UNC
+	// \\server\share prefix); any ":" left over is a stream separator.
+	if strings.Contains(slashed[len(filepath.VolumeName(slashed)):], ":") {
+		return fmt.Errorf("path %q names an NTFS alternate data stream, which is not allowed in a confined sandbox", path)
+	}
+	return nil
+}
+
+// underRoot reports whether abs is Root itself or a descendant of it. On Windows
+// the comparison is case-insensitive (NTFS is), matching the API-side boundary in
+// internal/api.underDir so both boundaries behave identically on one platform.
+func underRoot(abs, root string) bool {
+	prefix := root + string(filepath.Separator)
+	if runtime.GOOS == "windows" {
+		return strings.EqualFold(abs, root) ||
+			(len(abs) >= len(prefix) && strings.EqualFold(abs[:len(prefix)], prefix))
+	}
+	return abs == root || strings.HasPrefix(abs, prefix)
+}
+
 // Ready reports whether the sandbox has a configured base directory.
 func (s Sandbox) Ready() bool { return s.Root != "" }
 
@@ -76,9 +128,19 @@ func (s Sandbox) Ready() bool { return s.Root != "" }
 //
 // Confined: requires a configured Root and keeps every path inside it — a ".."
 // escape or an absolute path outside Root is rejected, while an absolute path that
-// resolves inside Root is honoured. The empty path resolves to Root.
+// resolves inside Root is honoured. The empty path resolves to Root. On Windows,
+// NT/device namespace spellings and alternate data streams are rejected outright
+// (see rejectWindowsPathTricks) so the boundary does not depend on how Root is
+// spelled.
 func (s Sandbox) Resolve(rel string) (string, error) {
 	rel = strings.TrimSpace(rel)
+	// Checked before the slash-rooted check so NT namespace and stream inputs get
+	// their own diagnostic instead of the generic "not a valid absolute path" one.
+	if s.Confined {
+		if err := rejectWindowsPathTricks(rel); err != nil {
+			return "", err
+		}
+	}
 	if isSlashRooted(rel) {
 		return "", fmt.Errorf("path %q is not a valid absolute path on this platform: use a drive-qualified path (C:\\...) or a path relative to the working directory; it was NOT resolved against the working root", rel)
 	}
@@ -97,7 +159,7 @@ func (s Sandbox) Resolve(rel string) (string, error) {
 		} else {
 			abs = filepath.Clean(filepath.Join(s.Root, rel))
 		}
-		if abs != s.Root && !strings.HasPrefix(abs, s.Root+string(filepath.Separator)) {
+		if !underRoot(abs, s.Root) {
 			return "", fmt.Errorf("path %q escapes the sandbox", rel)
 		}
 		return abs, nil

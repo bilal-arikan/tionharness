@@ -65,6 +65,19 @@ için bir fren var (Ayarlar ▸ MCP & Araçlar):
   interaktif = `NewSandbox` (kilitsiz), otonom+confine = `NewConfinedSandbox`.
 - `git push` engeli `builtin_shell.go isNetworkMutatingGit` ile (best-effort substring;
   gerçek sınır confine'ın kendisidir).
+- **Windows yol yazımları (confined dalda, `rejectWindowsPathTricks`):** kök
+  karşılaştırmasından ÖNCE açıkça reddedilenler — NT/device namespace önekleri
+  (`\\?\`, `\\.\`, `\??\`, dolayısıyla `\\?\UNC\`), `GLOBALROOT` aygıt yolları ve
+  NTFS alternate data stream'leri (`file.txt:stream`). Bunlar `filepath.Clean`'den
+  sağ çıktığı için, kök öneki karşılaştırmasının tesadüfen tutmamasına
+  güvenilmez: kural, `Sandbox.Root` bir gün uzun-yol için `\\?\` biçimine
+  normalize edilse bile ayakta kalır. Sürücü harfindeki `:` meşrudur; eleman
+  içindeki `:` reddedilir. Kontroller yalnız Windows'ta çalışır — başka
+  platformlarda bu yazımların özel anlamı yoktur ve `:` geçerli bir dosya adı
+  karakteridir. Kilitsiz (`NewSandbox`) dal tasarım gereği etkilenmez.
+- Kök içi/dışı karşılaştırması (`underRoot`) Windows'ta **case-insensitive**'dir;
+  bu, dosya sistemiyle ve `internal/api/files.go` içindeki `underDir` sınırıyla
+  aynı davranışı verir (önceden ikisi farklıydı).
 
 > **Not (2026-08-26):** Eski per-session `gitWorktreeIsolation` özelliği kaldırılmış
 > kalır. Yerine kart yaşam döngüsünün tek sahibi olan `internal/worktree` geldi:
