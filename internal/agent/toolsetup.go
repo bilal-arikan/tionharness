@@ -1016,12 +1016,15 @@ func renderLazyToolCatalog(lazy []providers.ToolDef, hiddenCount int, cli bool, 
 			counts[srv]++
 		}
 		sort.Strings(order)
-		findHint, actHint := "tool_search(\"keyword\")", "activate_tools"
+		// findHint carries its own backticks so the CLI form can spell out the
+		// ToolSearch query syntax (`select:<name>`); without it agents call
+		// ToolSearch with an invented parameter and get an InputValidationError.
+		findHint, actHint := "`tool_search(\"keyword\")`", "activate_tools"
 		if cli {
-			findHint, actHint = "ToolSearch", "load"
+			findHint, actHint = "`ToolSearch` (`select:<name>,<name>`)", "load"
 		}
 		fmt.Fprintf(&b, "\n%d more tools are available from MCP servers but not listed individually "+
-			"(to save context). Find one with `%s`, then `%s` it. Servers:\n", len(mcpTools), findHint, actHint)
+			"(to save context). Find one with %s, then `%s` it. Servers:\n", len(mcpTools), findHint, actHint)
 		for _, srv := range order {
 			label := srv
 			if cli {
@@ -1040,17 +1043,17 @@ func renderLazyToolCatalog(lazy []providers.ToolDef, hiddenCount int, cli bool, 
 	// them) and at the search tool as the quick path. The skill + search names are
 	// namespaced for the CLI, bare for native.
 	if hiddenCount > 0 {
-		skillTool, findHint, actHint := "use_skill", "tool_search(\"keyword\")", "activate_tools"
+		skillTool, findHint, actHint := "use_skill", "`tool_search(\"keyword\")`", "activate_tools"
 		if cli {
 			skillTool = interactionToolPrefix + "use_skill"
-			findHint, actHint = "ToolSearch", "load"
+			findHint, actHint = "`ToolSearch` (`select:<name>,<name>`)", "load"
 		}
 		// "memory" is deliberately absent from this list: the memory subsystem was
 		// removed on 2026-07-05 and naming it here advertised tools that do not exist.
 		fmt.Fprintf(&b, "\n%d self-management tools (agents, flows, schedules, tasks, hooks, MCP servers, "+
 			"skills, workspaces, app settings, your own prompts/config, secrets, logs) are not listed here "+
 			"to save context. Load the `tionharness-self-management` skill (via `%s`) for the full catalog, "+
-			"or find one with `%s` — then `%s` the names you need.\n", hiddenCount, skillTool, findHint, actHint)
+			"or find one with %s — then `%s` the names you need.\n", hiddenCount, skillTool, findHint, actHint)
 	}
 	return strings.TrimSpace(b.String())
 }

@@ -187,6 +187,34 @@ func TestLazyCatalogCLIFormNamespacesNames(t *testing.T) {
 	}
 }
 
+// TestLazyCatalogSummaryFormSpellsToolSearchSyntax guards the SUMMARISED branch
+// (MCP tools above lazyCatalogMCPListLimit): the CLI form must spell out the
+// ToolSearch query syntax (`select:<name>`) in both the server summary and the
+// self-management pointer, otherwise agents call ToolSearch with an invented
+// parameter and get an InputValidationError. Native form keeps tool_search.
+func TestLazyCatalogSummaryFormSpellsToolSearchSyntax(t *testing.T) {
+	var lazy []providers.ToolDef
+	for i := 0; i <= lazyCatalogMCPListLimit; i++ { // one past the list limit → summary branch
+		lazy = append(lazy, providers.ToolDef{Name: fmt.Sprintf("srvA__tool%d", i), Description: "mcp"})
+	}
+
+	out := renderLazyToolCatalog(lazy, 7, true, nil)
+	if strings.Contains(out, "srvA__tool0") {
+		t.Fatalf("fixture must exceed the list limit and summarise instead:\n%s", out)
+	}
+	if strings.Count(out, "select:<name>") != 2 {
+		t.Errorf("CLI summary + self-management pointer must both spell the ToolSearch select: syntax:\n%s", out)
+	}
+
+	nat := renderLazyToolCatalog(lazy, 7, false, nil)
+	if strings.Contains(nat, "select:") {
+		t.Errorf("native form uses tool_search, not ToolSearch select:\n%s", nat)
+	}
+	if !strings.Contains(nat, "`tool_search(\"keyword\")`") {
+		t.Errorf("native summary must keep the tool_search hint:\n%s", nat)
+	}
+}
+
 // TestReadOnlyAgentDemotesWriteTools verifies a read-only agent ships the read
 // tools eagerly but the mutating tools (Write/Edit) are demoted to the
 // load-on-demand catalog, while an auto agent keeps them eager.
