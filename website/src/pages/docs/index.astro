@@ -1,0 +1,38 @@
+---
+import Base from '../../layouts/Base.astro'
+import Section from '../../components/Section.astro'
+import { docsHref, docsNav } from '../../content/docsNav'
+---
+
+<Base
+  title="Documentation"
+  description="Guides and reference for installing, configuring and running TionHarness."
+>
+  <Section
+    eyebrow="Docs"
+    title="Documentation"
+    lead="Install it, learn the four concepts it is built on, then look up the settings."
+  >
+    <div class="mx-auto grid max-w-4xl gap-6 sm:grid-cols-2 lg:grid-cols-3">
+      {
+        docsNav.map((section) => (
+          <div class="rounded-[var(--radius)] border border-[var(--color-border)] bg-[var(--color-surface)] p-6">
+            <h2 class="mb-3 font-semibold">{section.label}</h2>
+            <ul class="space-y-2">
+              {section.pages.map((page) => (
+                <li>
+                  <a
+                    href={docsHref(`${section.id}/${page.slug}`)}
+                    class="text-sm text-[var(--color-text-dim)] transition hover:text-[var(--color-accent)]"
+                  >
+                    {page.label}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))
+      }
+    </div>
+  </Section>
+</Base>

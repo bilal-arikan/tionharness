@@ -169,6 +169,44 @@ kaynak değil.
 Playwright bilerek `package.json`'a konmadı (Chromium ~150 MB); `-InstallDeps` ile talep
 üzerine kurulur. Böylece sitenin normal kurulumu hafif kalır.
 
+## Docs bölümü (`/docs`)
+
+Site içi dokümantasyon, ana sayfadan ayrı bir rota ağacıdır. Şu an **iskelet**:
+7 sayfanın hepsi placeholder, gerçek `_Docs` içeriği bilerek taşınmadı.
+
+| Dosya | Rolü |
+|---|---|
+| `src/content.config.ts` | `docs` koleksiyonu — `glob` loader, `src/content/docs/**/*.md`, şema: `title`, `description`, `order` |
+| `src/content/docs/<bölüm>/<sayfa>.md` | Placeholder markdown. Koleksiyon id'si `<bölüm>/<sayfa>`, URL'i `/docs/<bölüm>/<sayfa>` |
+| `src/content/docsNav.ts` | **Sıra ve etiketlerin tek kaynağı**; sidebar da prev/next de bundan türer |
+| `src/layouts/Docs.astro` | Sol sidebar + breadcrumb + sağda TOC (h2/h3) + altta prev/next |
+| `src/pages/docs/[...slug].astro` | `getStaticPaths` ile koleksiyondan sayfa üretir |
+| `src/pages/docs/index.astro` | Bölümleri listeleyen giriş sayfası |
+
+Bölümler: `getting-started` (introduction, installation, quickstart),
+`concepts` (agents, sessions, workspaces), `reference` (configuration).
+
+Dikkat edilecekler:
+
+- **Yeni sayfa iki yere birden eklenir**: markdown dosyası + `docsNav.ts` girdisi.
+  `assertNavMatchesCollection` iki yönlü kontrol eder — nav'da olup dosyası olmayan
+  da, dosyası olup nav'da olmayan da **build'i patlatır**. Sessizce atlanmaz;
+  ilki ölü sidebar linki, ikincisi erişilemeyen sayfa demektir.
+- Tailwind v4 kurulumunda **typography eklentisi yok**; markdown gövdesinin
+  (`h2`, `p`, `pre`, `code`, `table`…) stilleri `Docs.astro` içindeki scoped
+  `<style>` bloğunda elle yazılıdır. Yeni bir element tipi kullanılacaksa oraya
+  eklenir.
+- `src/content/` altında hem bu koleksiyon hem de eski **düz TS veri modülleri**
+  (`features.ts`, `themes.ts`…) yaşar. Loader deseni `docs/**` ile sınırlıdır,
+  ikisi çakışmaz.
+- `site.config.ts` → `docsUrl` artık `null` değil; Nav ve Footer'daki `SmartLink`
+  bu yüzden otomatik olarak canlı link render eder.
+- Uygulama tarafındaki **Ayarlar → Hakkında** paneli
+  (`frontend/src/features/settings/AboutPanel.tsx`, `PROJECT_LINKS`) siteye,
+  docs'a ve depoya link verir. Docs rotası taşınırsa orası da güncellenmelidir.
+
+Arama kutusu, tema seçici ve TR çevirisi kapsam dışı bırakıldı.
+
 ## İçerik kaynağı kuralı
 
 Site metni yazılırken/güncellenirken **kök `README.md` kaynak alınmaz.** Bayat: kaldırılmış
@@ -182,8 +220,8 @@ Hafıza alt sistemini anlatıyor (2026-07-05'te silindi), provider listesi 3 diy
 
 - `repoUrl` / `issuesUrl` / `license` **dolduruldu** (depo public:
   `github.com/bilal-arikan/tionharness`). `releasesUrl` (henüz tag yok, GitHub
-  releases sayfası boş), `docsUrl` (docs sitesi yok, `_Docs` iç kullanım için
-  Türkçe) ve `demoVideoUrl` bilerek `null` — dolduğunda otomatik canlıya geçerler
+  releases sayfası boş) ve `demoVideoUrl` bilerek `null` — dolduğunda otomatik
+  canlıya geçerler. `docsUrl` artık dolu (`/docs/getting-started/introduction`)
 - `version` artık `site.config.ts`'ten değil feed'den gelir; alan yalnızca
   hiç feed olmayan bir build için fallback olarak duruyor
 - Site GitHub Pages'e `.github/workflows/pages.yml` ile deploy edilir; feed aynı
@@ -193,4 +231,6 @@ Hafıza alt sistemini anlatıyor (2026-07-05'te silindi), provider listesi 3 diy
   bu alanın tamamen kaldırılması değerlendirilecek
 - Gerçek screenshot'ları üret (`shots.ps1`)
 - Pages custom domain'i (`tionharness.com`) doğrula ve HTTPS'i zorunlu kıl
-- Faz 2: TR çevirisi, `/docs`, `05-ILERLEME.md`'den türetilen `/changelog`
+- `/docs` iskeleti kuruldu; sıradaki iş placeholder sayfaları gerçek içerikle
+  doldurmak (kaynak: `00-GENEL-BAKIS.md` + `tionharness-project` skill'i)
+- Faz 2: TR çevirisi, `05-ILERLEME.md`'den türetilen `/changelog`, docs araması

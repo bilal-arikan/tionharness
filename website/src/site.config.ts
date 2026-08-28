@@ -54,8 +54,7 @@ export const site: SiteConfig = {
   // is empty -- linking it would send visitors to a blank list. `/releases` on
   // this site fills that role until the first tag ships.
   releasesUrl: null,
-  // TODO(placeholder): `_Docs` is internal and Turkish; there is no docs site.
-  docsUrl: null,
+  docsUrl: '/docs/getting-started/introduction',
   demoVideoUrl: null,
 
   // TODO(placeholder): no published release artifacts yet. Artifacts now come

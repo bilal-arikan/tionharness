@@ -1,7 +1,18 @@
 import { useState, useEffect } from 'react'
+import { BookOpen, Github, Globe } from 'lucide-react'
 import type { VersionInfo } from '@/types'
 import { api } from '@/api'
 import { formatDate } from '@/shared/lib/intl'
+
+/**
+ * Public project entry points. Kept in sync with `website/src/site.config.ts`:
+ * the docs path there is the same landing page this links to.
+ */
+const PROJECT_LINKS = [
+  { label: 'Web sitesi', href: 'https://tionharness.com', icon: Globe },
+  { label: 'Dokümantasyon', href: 'https://tionharness.com/docs', icon: BookOpen },
+  { label: 'GitHub', href: 'https://github.com/bilal-arikan/tionharness', icon: Github },
+] as const
 
 export function AboutPanel() {
   const [info, setInfo] = useState<VersionInfo | null>(null)
@@ -66,6 +77,22 @@ export function AboutPanel() {
             <span className="font-mono text-xs">{info?.goVersion ?? '—'}</span>
           )}
         </AboutRow>
+      </div>
+
+      {/* Bağlantılar */}
+      <div className="flex flex-wrap gap-2">
+        {PROJECT_LINKS.map((link) => (
+          <a
+            key={link.href}
+            href={link.href}
+            target="_blank"
+            rel="noreferrer"
+            className="flex items-center gap-1.5 rounded-lg border border-[var(--color-border)] px-2.5 py-1.5 text-[var(--color-text-dim)] transition hover:bg-[var(--color-surface-2)] hover:text-[var(--color-accent)]"
+          >
+            <link.icon size={14} />
+            {link.label}
+          </a>
+        ))}
       </div>
 
       {/* Güncelleme notu */}
