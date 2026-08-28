@@ -367,9 +367,15 @@ func (r *Registry) AttachMCP(entries []mcp.CatalogEntry, cfgByServer map[string]
 	r.mcpEntries = entries
 	r.mcpCfgByServer = cfgByServer
 	r.mcpCaller = caller
+	// The name-only tier is not hardcoded here: it comes from the bundle-default
+	// table's "mcp:*" row (tierdefaults.go), so a later layer can demote or promote
+	// a single server without touching this call site.
+	defaults := DefaultTiers()
 	for _, e := range entries {
 		r.lazy[e.NamespacedName] = true
-		r.nameOnly[e.NamespacedName] = true
+		if tier := defaults.TierFor(e.NamespacedName); tier != "" {
+			r.SetVisibility(e.NamespacedName, tier)
+		}
 	}
 }
 

@@ -151,11 +151,13 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 		tools.NewWebFetchTool(),
 		// WebSearch: native web search for every NATIVE-API provider (anthropic,
 		// minimax, openrouter). Registered unconditionally — exactly like
-		// its sibling WebFetch — so it also appears in the workspace tools catalog. The
-		// claude-cli path never receives it: TionHarness built-ins reach the CLI ONLY through
-		// the explicit interactionToolSpecs bridge (which does not list it), so a CLI
-		// agent transparently uses its OWN native WebSearch instead. Backed by the
-		// workspace vault (a self-hosted SEARXNG_URL or a TAVILY_API_KEY).
+		// its sibling WebFetch — so it also appears in the workspace tools catalog.
+		// claude-cli never receives it: it has its OWN native WebSearch/WebFetch, so
+		// TionHarness's are withheld to avoid doubling the surface. codex-cli DOES
+		// receive both over the Interaction bridge (BridgeTools): codex ships no
+		// native WebFetch at all and its own web_search is OFF by default, so without
+		// the bridge a codex agent has no web access and starts inventing sources.
+		// Backed by the workspace vault (a self-hosted SEARXNG_URL or a TAVILY_API_KEY).
 		tools.NewWebSearchTool(r.vault),
 		// Interaction tools: todo_write surfaces a live checklist; ask_user pauses
 		// the turn for a clarifying question; request_confirmation blocks for a
@@ -283,7 +285,7 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 	// WithSources is what keeps the agent's projections identical to the ones the
 	// Explorer map renders: without it the skill / insight / logs nodes would
 	// report their source as unavailable to the agent while the UI showed them.
-	viewSources := tools.ViewSources{Skills: r.skills, Logs: r.logs}
+	viewSources := tools.ViewSources{Skills: r.skills, Logs: r.logs, DefaultAgentID: r.DefaultAgentID()}
 	builtins = append(builtins, tools.NewGetViewTool(r.db).WithSources(r.wsName, viewSources))
 
 	// expand: the structural drill-down companion to get_view (_Docs/68). Lists a
@@ -452,80 +454,14 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 		// full tier (which clears the hidden/lazy marks). See BridgeableDefsFiltered.
 		reg.MarkSelfManaged(t.Def().Name)
 	}
-	// Default NAME-ONLY tier: a curated set of always-built tools that are
-	// self-descriptive AND used in only a minority of turns. They are listed in the
-	// load-on-demand catalog by NAME ALONE (no schema, no summary) — the Claude Code
-	// "deferred tool" style: the model recognises them by name and pulls the schema
-	// via tool_search / activate_tools when it actually needs one. This strips their
-	// schemas (and, for the formerly-eager ones, their per-turn cost entirely) from
-	// EVERY turn's cached prefix, while keeping them fully reachable. On the
-	// claude-cli path the Interaction MCP bridge still advertises the bridgeable ones
-	// with full schemas, so capability is unchanged there. MarkNameOnly on a name not
-	// present in this agent's builtins is a harmless no-op, so gated tools
-	// (vault/config/session-context off) need no extra guarding here.
-	//
-	// Deliberately kept EAGER (behavioral nudges, context-bound, or high-frequency):
-	// todo_write, ask_user, request_confirmation, schedule_wake,
-	// create_artifact/update_artifact, use_skill/skill_search, run_subagent,
-	// Read/Write/Edit/list_dir/
-	// Glob/Grep, shell. The self-management suite stays MarkHidden (dropped from the
-	// catalog entirely — more aggressive than name-only).
-	reg.MarkNameOnly(
-		// Session lifecycle & navigation — names say it all; rarely the turn's point.
-		"update_session",
-		"notify", "focus_view",
-		// Cross-session & self-diagnostics — occasional, discoverable by name.
-		"list_sessions", "conversation_search", "read_session_debug",
-		"get_session_info", "update_user_preferences",
-		// Artifact revise + meta — create_artifact stays eager (behavioral); revise
-		// and the deactivate meta-tool are reached on demand.
-		"update_artifact", "deactivate_tools",
-		// archive_sessions — bulk housekeeping over OTHER sessions; a handful of calls
-		// across the whole journal history, and the largest schema after get_view.
-		"archive_sessions",
-		// expand — structural drill-down; get_view's EAGER description names it
-		// explicitly ("the same ones `expand` hands you refs for"), so the model still
-		// discovers it and pulls the schema when it actually fans out over the tree.
-		"expand",
-		// apply_patch — the batch (multi-hunk/multi-file) sibling of Edit. Edit stays
-		// eager, so single edits are unaffected; the batch path is pulled on demand.
-		"apply_patch",
-		// Self-healing lessons — read/prune the auto-collected failure lessons. The
-		// newest few already ride the context, so these are for deliberate inspection.
-		"read_lessons", "delete_lesson",
-		// Insight (retrospective scanning) — self-descriptive names, used in a small
-		// minority of turns; the model pulls a schema when it actually scans/triages.
-		"insight_scan", "insight_list_findings", "insight_apply_finding",
-		// Validation tools — read-only, used only around authoring/diagram emission.
-		"skill_validate", "config_validate", "mermaid_validate",
-		// render_template — occasional (only when a branded-HTML skill is in play);
-		// name says it, model pulls the schema on demand.
-		"render_template",
-		// Background-shell management — reached only after a run_in_background launch.
-		"shell_manage",
-		// Promoted out of the hidden self-management group: common enough to advertise
-		// by name (handoff at context limit, DM a peer agent) rather than fold into the
-		// self-management skill pointer. MarkNameOnly clears the earlier MarkHidden on
-		// these (disjoint tiers, last mark wins).
-		"handoff_session", "send_message",
-	)
-	// Keep context-bound/behavioral tools eager. Their first call must reach the
-	// runner: schedule_wake may arm the current chat turn, while run_subagent must
-	// surface target-resolution errors. An auto-activation result in place of either
-	// call loses the one-shot action and masks the runner's real error until a retry.
-	// Admin-rare tools fold into the HIDDEN self-management group (not enumerated
-	// per turn — surfaced via the tionharness-self-management skill / tool_search). These
-	// are confined config edits and secret reads: used in a tiny fraction of turns,
-	// and their WRITE siblings (secret_set/secret_delete via the self-manage suite)
-	// are already hidden — so hiding the reads keeps the secret/config family
-	// consistent instead of split across the name-only and hidden tiers.
-	//   - read/write/list_config : the agent editing its OWN prompts/instructions
-	//   - secret                  : vault list/get/set/delete, only on credential tasks
-	// MarkHidden on a name not built for this agent is a harmless no-op.
-	reg.MarkHidden(
-		"read_config", "write_config", "list_config",
-		"secret",
-	)
+	// Default per-tool tiers (name-only + hidden) live as DATA in
+	// tools.DefaultTiers() — see internal/tools/tierdefaults.go for the table and
+	// the rationale of each row (including which tools are deliberately kept eager).
+	// Applied AFTER the self-manage hidden loop above, so the table's authoritative
+	// entry for a promoted name (handoff_session, send_message → name-only) wins;
+	// their MarkSelfManaged stamp survives, which the claude-cli bridge needs.
+	defaults := tools.DefaultTiers()
+	reg.ApplyToolDefaults(defaults)
 	// Role-aware eager trim: a read-only agent can never have a write approved, so
 	// shipping the mutating tools' schemas every turn is pure waste. Demote them to
 	// load-on-demand for read-only agents (still reachable via activate_tools, and
@@ -602,6 +538,10 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 			return r.mcpPool.Call(cctx, cfgByServer, namespaced, args)
 		}
 		reg.AttachMCP(entries, cfgByServer, caller)
+		// Bundle-level defaults need the MCP entries to exist, so they run here
+		// rather than next to ApplyToolDefaults. No-op for built-ins today (no
+		// group rows ship), and workspace/agent overrides below still win.
+		reg.ApplyBundleDefaults(defaults)
 		mcpEntries, mcpCaller = entries, caller
 	}
 
@@ -881,12 +821,12 @@ func (r *Runtime) LazyToolsCatalogBlock(ctx context.Context, agent db.Agent) str
 	// built-ins as MCP tools and loads them via TionHarness's gateway activate_tools
 	// (Doc 52) — NOT the CLI's own tool search, which cannot find a tool that is not
 	// advertised yet. Render the block in CLI form for it (namespaced names +
-	// activate_tools). The empty provider is the keyless claude-cli default; native
-	// API providers take false.
-	cli := isCLIProviderKind(agent.Provider)
+	// activate_tools). The provider KIND is passed through rather than a bool because
+	// the CLI dialects differ in which built-ins they bridge (see catalogDisplayName);
+	// the empty provider is the keyless claude-cli default.
 	// Visible lazy tools are enumerated; the hidden self-management suite is folded
 	// into a single skill pointer (rendered when hiddenCount > 0).
-	return renderLazyToolCatalog(reg.VisibleLazyCatalog(filter), reg.HiddenLazyCount(filter), cli, reg.ServerDescriptions())
+	return renderLazyToolCatalog(reg.VisibleLazyCatalog(filter), reg.HiddenLazyCount(filter), r.agentProviderKind(agent), reg.ServerDescriptions())
 }
 
 // lazyCatalogMCPListLimit caps how many MCP (namespaced) lazy tools are listed
@@ -899,13 +839,13 @@ func (r *Runtime) LazyToolsCatalogBlock(ctx context.Context, agent db.Agent) str
 // instead of enumerate once the catalog grows large.
 const lazyCatalogMCPListLimit = 50
 
-// cliLazyBridgeExcluded names built-in lazy tools NOT advertised to the claude-cli
-// Interaction MCP bridge, so the CLI-form catalog must not list them (the CLI uses
-// its OWN equivalent). Mirrors tools.bridgeExcluded — keep in sync. run_subagent is
-// eager (never in the lazy catalog), so WebFetch is the only one that surfaces here.
+// cliLazyBridgeExcluded names built-in lazy tools NOT advertised to a CLI-provider
+// Interaction MCP bridge, so the CLI-form catalog must not list them. Mirrors
+// tools.bridgeExcluded — keep in sync. run_subagent is eager (never in the lazy
+// catalog), so WebFetch is the only one that normally surfaces here.
 var cliLazyBridgeExcluded = map[string]bool{
-	"WebFetch":     true, // CLI has its own native WebFetch
-	"WebSearch":    true, // CLI has its own native WebSearch (defensive: eager, so not normally lazy)
+	"WebFetch":     true, // claude-cli has its own native WebFetch (see claudeOnlyBridgeExclusions)
+	"WebSearch":    true, // claude-cli has its own native WebSearch (defensive: eager, so not normally lazy)
 	"run_subagent": true, // bridged explicitly via interactionToolSpecs, not the lazy path
 	"run_code":     true, // code-execution mode is native-path-only (mirrors tools.bridgeExcluded)
 	// deactivate_tools is a TionHarness-native meta-tool (paired with activate_tools);
@@ -914,21 +854,48 @@ var cliLazyBridgeExcluded = map[string]bool{
 	"deactivate_tools": true,
 }
 
+// claudeOnlyBridgeExclusions narrows cliLazyBridgeExcluded to the entries that are
+// withheld ONLY because claude-cli already ships an equivalent native. codex-cli
+// ships no native WebFetch and keeps its own web_search OFF by default, so for it
+// these are bridged (Runtime.BridgeTools advertises them) and must appear in the
+// catalog — otherwise the agent has no web tool at all and starts inventing sources.
+// Every other entry (run_subagent, run_code, deactivate_tools) stays excluded for
+// BOTH dialects: those are about dispatch context, not about a CLI-native twin.
+var claudeOnlyBridgeExclusions = map[string]bool{
+	"WebFetch":  true,
+	"WebSearch": true,
+}
+
+// cliBridgeExcludes reports whether a built-in is withheld from the CLI bridge for
+// the given provider KIND. provider "" is the keyless claude-cli default, so an
+// unknown/empty provider keeps the historical (claude-cli) exclusions.
+func cliBridgeExcludes(name, provider string) bool {
+	if !cliLazyBridgeExcluded[name] {
+		return false
+	}
+	if provider == providerKindCodexCLI && claudeOnlyBridgeExclusions[name] {
+		return false
+	}
+	return true
+}
+
 // catalogDisplayName maps a registry tool name to the identifier the target agent
-// must actually call. Native agents call the bare/registry name as-is. A claude-cli
-// agent reaches everything as MCP tools, so the name is namespaced: a namespaced
-// MCP tool (server__tool) gains the CLI's "mcp__" prefix, and a built-in gains the
-// Interaction MCP prefix. Returns ok=false for built-ins the CLI does not bridge
-// (it has its own), so the caller skips them.
-func catalogDisplayName(name string, cli bool) (string, bool) {
-	if !cli {
+// must actually call. Native agents call the bare/registry name as-is. A CLI agent
+// reaches everything as MCP tools, so the name is namespaced: a namespaced MCP tool
+// (server__tool) gains the CLI's "mcp__" prefix, and a built-in gains the
+// Interaction MCP prefix. Returns ok=false for built-ins that CLI dialect does not
+// bridge, so the caller skips them — which entries those are depends on the
+// provider (see cliBridgeExcludes). provider is a provider KIND; "" is the keyless
+// claude-cli default and native-API kinds take the bare name.
+func catalogDisplayName(name, provider string) (string, bool) {
+	if !isCLIProviderKind(provider) {
 		return name, true
 	}
 	if _, _, ok := mcp.SplitNamespaced(name); ok {
 		return mcp.NamespaceTool("mcp", name), true // server__tool → mcp__server__tool
 	}
-	if cliLazyBridgeExcluded[name] {
-		return "", false // not bridged to the CLI (CLI-native)
+	if cliBridgeExcludes(name, provider) {
+		return "", false // not bridged to this CLI (it has its own equivalent)
 	}
 	// Lazy built-ins are the EXTENDED tier (deferred via the CLI's ToolSearch), so
 	// they are namespaced under the extended server key. Eager built-ins never reach
@@ -943,16 +910,18 @@ func catalogDisplayName(name string, cli bool) (string, bool) {
 // a single pointer to the `tionharness-self-management` skill in place of enumerating
 // the hidden suite. Returns "" when there is nothing to show.
 //
-// cli renders the block for a claude-cli agent, which reaches these tools as MCP
-// tools: names are namespaced (mcp__tionharness_interaction__<name> for built-ins,
+// provider is the agent's provider KIND. A CLI kind renders the block in CLI form:
+// names are namespaced (mcp__tionharness_interaction__<name> for built-ins,
 // mcp__<server>__<tool> for MCP) and loaded via the CLI's own ToolSearch — NOT
 // TionHarness's native activate_tools (the CLI has neither activate_tools nor
-// tool_search). CLI-native built-ins (WebFetch) are dropped. This mirrors how the
-// skills block (CatalogBlockForAgentTool) already adapts to the CLI.
-func renderLazyToolCatalog(lazy []providers.ToolDef, hiddenCount int, cli bool, serverDesc map[string]string) string {
+// tool_search). Built-ins that dialect does not bridge (claude-cli's own WebFetch/
+// WebSearch) are dropped. This mirrors how the skills block
+// (CatalogBlockForAgentTool) already adapts to the CLI.
+func renderLazyToolCatalog(lazy []providers.ToolDef, hiddenCount int, provider string, serverDesc map[string]string) string {
 	if len(lazy) == 0 && hiddenCount == 0 {
 		return ""
 	}
+	cli := isCLIProviderKind(provider)
 	// Separate built-in lazy tools from namespaced MCP tools (server__tool).
 	var builtin, mcpTools []providers.ToolDef
 	for _, d := range lazy {
@@ -982,7 +951,7 @@ func renderLazyToolCatalog(lazy []providers.ToolDef, hiddenCount int, cli bool, 
 			"schema arrives on your next step. Activate everything you expect to need in one call.\n")
 	}
 	for _, d := range builtin {
-		if name, ok := catalogDisplayName(d.Name, cli); ok {
+		if name, ok := catalogDisplayName(d.Name, provider); ok {
 			writeLazyToolLine(&b, name, d.Description)
 		}
 	}
@@ -999,7 +968,7 @@ func renderLazyToolCatalog(lazy []providers.ToolDef, hiddenCount int, cli bool, 
 				"(`select:<name>,<name>`), not `activate_tools`.\n")
 		}
 		for _, d := range mcpTools {
-			if name, ok := catalogDisplayName(d.Name, cli); ok {
+			if name, ok := catalogDisplayName(d.Name, provider); ok {
 				writeLazyToolLine(&b, name, d.Description)
 			}
 		}

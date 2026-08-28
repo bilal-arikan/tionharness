@@ -719,8 +719,22 @@ iki ayrı model, iki ayrı UI. Artık tek bir **5 değerli** ajan override harit
 ### Öncelik zinciri
 
 ```
-kod default  <  workspace ToolVisibility  <  agent ToolOverrides
+kayıt default (full)  <  bundle default  <  tool default
+    <  workspace ToolVisibility  <  agent ToolOverrides
 ```
+
+**Bundle + tool default katmanı VERİDİR (2026-08-28).** İlk iki "kod default"
+katmanı artık `toolsetup.go` içinde elle yazılmış `MarkNameOnly`/`MarkHidden`
+argüman listeleri değil; `internal/tools/tierdefaults.go` içindeki
+`DefaultTiers()` tablosudur — `Tool` (araç adı → tier) `Bundle`'ı (bundle
+anahtarı → tier, bkz. `internal/tools/bundles.go`) yener. `buildRegistry`
+tabloyu `reg.ApplyToolDefaults` ile **ada göre koşulsuz** damgalar (`VisibilityOf`
+bu registry'de derlenmemiş **köprülenmiş** adları da sınıflandırır), MCP
+girdileri oluştuktan sonra `AttachMCP`'nin ardından `reg.ApplyBundleDefaults`
+çalışır. Bundle katmanı bugün tek satır taşır: `mcp:*` → `name-only` (eski
+`AttachMCP` sabit damgası). Yerleşik `group:*` bundle'ları bilerek boştur —
+kategoriler tier-homojen değildir. Davranış eşdeğerliği
+`internal/agent/tierparity_test.go` altın tablosuyla kilitlidir.
 
 `blocked` **registry'ye girmez** — registry hâlâ yalnız 4 görünürlük tier'ını bilir.
 `blocked` bir katman yukarıda, `toolFilter`'da çözülür ve aracı ajanın kataloğundan
