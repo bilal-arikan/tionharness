@@ -235,6 +235,9 @@ func (s *Server) buildWorkspaceTemplatePayload(ctx context.Context, wsp *workspa
 		if !allSched && !schedSet[sc.ID] {
 			continue // not selected for this export
 		}
+		if sc.OneShot {
+			continue // a spent/pending wake has no cron — exporting it yields a broken row
+		}
 		key, ok := idToKey[sc.AgentID]
 		if !ok {
 			continue // agent not in the exported team → drop the orphan

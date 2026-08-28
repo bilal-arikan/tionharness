@@ -43,8 +43,8 @@ Ajan turunda (native veya CLI)
 | `internal/api/mcp_interaction.go` | `schedule_wake` araç tanımı + `callWake` dispatch |
 | `internal/api/mcp_interaction.go` | `schedule_wake`, `interactionToolSpecs`'e eklenir (extended tier); allowlist `inter.Core/ExtendedToolNames`'ten otomatik türer (tek kaynak). CLI'da `mcp__tionharness_extended__schedule_wake` |
 | `internal/agent/climcp.go` | `"ScheduleWakeup"` (CLI native) → disallowed (TionHarness'in schedule_wake'i yerine geçer) |
-| `internal/api/schedules.go` | One-shot satırları liste filtresi |
-| `internal/tools/builtin_schedulemgmt.go` | One-shot satırları `list_schedules` filtresi |
+| `internal/api/schedules.go` | Bekleyen one-shot satır liste filtresi + one-shot düzenleme reddi (400) |
+| `internal/tools/builtin_schedulemgmt.go` | Aynı filtre + `update_schedule`'da one-shot reddi |
 | `frontend/src/App.tsx` | `chat` event: `phase=start` → `markPending`, `phase=done` → `clearPending` |
 | `internal/db/store_schedule.go` | `ConsumeOneShotSchedule` (at-most-once claim), `ErrNotOneShot` |
 | `internal/agent/wake_test.go` | 5 birim testi |
@@ -87,6 +87,54 @@ Ajan turunda (native veya CLI)
   ya da `lastRunAt > 0` olan bir satır `rebuildLocked` içinde **teslim edilmeden**
   tüketilir (`lastDeliveryStatus="expired"`), yeniden kuyruğa girmez.
 - Hata yönetimi: `invokeTraced` başarısız olursa, hata metni asistan mesajı olarak sohbete yazılır (sohbet askıda kalmaz)
+
+## Tükenmiş wake satırının UI görünürlüğü (2026-08-28)
+
+Teslimi denenmiş ama başarısız olmuş (`failure`) veya bayatlamış (`expired`) bir
+wake satırı diskte kalır. Eskiden liste filtreleri **tüm** one-shot satırları
+attığı için bu artık kayıt UI'da hiç görünmüyordu; silme yalnız düzenleme
+modalinden yapılabildiği ve modal ancak listedeki karttan açıldığı için kayıt
+silinemez hâle geliyordu.
+
+Kural artık "one-shot ise gizle" değil, **"teslimi hiç denenmemiş one-shot ise
+gizle"**:
+
+- `internal/api/schedules.go` `handleListSchedules` ve
+  `internal/tools/builtin_schedulemgmt.go` `list_schedules`:
+  `sc.OneShot && sc.LastDeliveryStatus == ""` olan satır atlanır. Bekleyen wake
+  (henüz ateşlenmemiş) gizli kalır; `lastDeliveryStatus` dolu satır listeye girer.
+  Filtre `enabled`/`agentId` filtrelerinden **önce** uygulanır, yani sayfalama
+  toplamlarını (`total`/`hasMore`) da doğru şekilde şekillendirir.
+- Başarılı teslim satırı zaten sildiği için listede görünen her one-shot satır
+  tanım gereği başarısız/bayat bir kalıntıdır.
+
+**Düzenlenemez, yalnız silinebilir.** Wake satırının cron ifadesi yoktur ve fire
+zamanı scheduler'a aittir; bir düzenleme yarı geçerli bir satır üretirdi. Bu
+yüzden yazma yolları açık hata döndürür (sessiz yutma yok):
+
+- `handleUpdateSchedule` → 400 `one-shot wake schedules cannot be edited (delete it instead)`
+- `UpdateScheduleTool` (`update_schedule`) → benzer hata, `delete_schedule`'a yönlendirir
+- `internal/api/market_publish.go` export'u `sc.OneShot` satırlarını atlar
+  (boş `cronExpr`'li template kirliliği önlenir)
+
+Silme yolu değişmedi: `DELETE /api/schedules/{id}` ve `delete_schedule` çalışmaya
+devam eder.
+
+**Frontend:**
+
+- `ScheduleCard.tsx` — cron satırı yerine, `s.oneShot` true ise
+  `Tek seferlik · <fireAt>` yazar (`fmtTime`, `timeUtils.ts`). Aksi hâlde boş cron
+  yüzünden boş satır çıkıyordu.
+- `ScheduleModal.tsx` — `editing.oneShot` durumunda form yerine salt-okunur özet
+  (fire zamanı, prompt, `lastDeliveryError`) + "Tek seferlik uyandırma —
+  düzenlenemez, silinebilir." notu gösterilir. Footer'daki `schedule-delete` silme
+  düğmesi korunur; hiçbir `updateSchedule` isteği gönderilmez, dolayısıyla
+  `cronExpr` için `*/5 * * * *` varsayılanı bu satıra sızmaz.
+- `frontend/src/types/task.ts` `Schedule` tipine `oneShot?: boolean` ve
+  `fireAt?: number` alanları eklendi (backend JSON adlarıyla).
+
+Testler: `internal/api/schedules_oneshot_test.go`
+(`TestListSchedulesOneShotVisibility`, `TestUpdateScheduleRejectsOneShot`).
 
 ## Frontend thinking göstergesi
 
@@ -211,7 +259,7 @@ gönderiyordu (`Messages: [{user, prompt}]`) — uyanan ajan sürdürmesi gereke
 ## Bilinen davranışlar
 
 - `ScheduleWakeup` (Claude Code harness aracı) devre dışı bırakıldı. Model bazen hâlâ bu aracı çağırmayı dener; disallowed listesi sayesinde araç çağrısı reddedilir, model `schedule_wake`'e yönelir.
-- Sohbet oturumu `ListSchedules` ve `list_schedules` aracından filtrelenir — yalnız aktif (henüz tetiklenmemiş) wake satırları gözükür ve bunlar da UI'da gösterilmez.
+- Bekleyen (henüz tetiklenmemiş) wake satırları `ListSchedules` ve `list_schedules` çıktısından filtrelenir, yani UI'da gösterilmez. Teslimi denenip başarısız olan satırlar listelenir — bkz. "Tükenmiş wake satırının UI görünürlüğü".
 - Çok uzun gecikmeler (1h+) clamp edilir; kullanıcıya araç çağrısı yanıtında belirtilir.
 
 ## Stuck oturumlarda tekrarlayan zamanlama freni

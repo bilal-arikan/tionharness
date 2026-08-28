@@ -90,10 +90,12 @@ export const ScheduleCard = forwardRef<HTMLDivElement, Props>(function ScheduleC
               {s.name}
             </div>
           ) : null}
+          {/* A one-shot wake has no cron expression — printing it raw left an empty
+              line, so show its single fire time instead. */}
           <div
             className={`font-mono text-[13px] ${s.name ? 'text-[var(--color-text-dim)]' : 'text-[var(--color-accent)]'}`}
           >
-            {s.cronExpr}
+            {s.oneShot ? `Tek seferlik · ${fmtTime(s.fireAt)}` : s.cronExpr}
           </div>
           <div className="truncate text-xs text-[var(--color-text-dim)]">
             → {s.flowId ? `${flowIcon ?? '🔀'} ${flow?.name ?? s.flowId}` : (owner?.name ?? '—')}

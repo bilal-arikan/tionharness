@@ -16,11 +16,14 @@ func (s *Server) handleListSchedules(w http.ResponseWriter, r *http.Request) {
 	if writeDBError(w, err, "") {
 		return
 	}
-	// Hide one-shot wakes (schedule_wake) from the routine list: they are transient,
-	// single-use timers tied to a chat turn, not user-managed recurring routines.
+	// Hide PENDING one-shot wakes (schedule_wake) from the routine list: they are
+	// transient, single-use timers tied to a chat turn, not user-managed routines.
+	// A wake whose delivery was already attempted (lastDeliveryStatus set) is kept:
+	// a successful one deletes itself, so what remains is a spent row that failed
+	// or expired — the user must be able to see and delete it.
 	schedules := make([]db.Schedule, 0, len(all))
 	for _, sc := range all {
-		if sc.OneShot {
+		if sc.OneShot && sc.LastDeliveryStatus == "" {
 			continue
 		}
 		schedules = append(schedules, sc)
@@ -160,6 +163,10 @@ type updateScheduleReq struct {
 // for an unknown sessionMode.
 const invalidSessionModeMsg = "invalid sessionMode (want reuse or spawn)"
 
+// oneShotNotEditableMsg is the wording both schedule update paths return when the
+// target row is a one-shot wake (delete is the only supported operation).
+const oneShotNotEditableMsg = "one-shot wake schedules cannot be edited (delete it instead)"
+
 // handleUpdateSchedule edits a schedule's agent/flow/cron/prompt and reloads cron.
 func (s *Server) handleUpdateSchedule(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
@@ -171,6 +178,14 @@ func (s *Server) handleUpdateSchedule(w http.ResponseWriter, r *http.Request) {
 	}
 	cur, err := wsp.DB.GetSchedule(r.Context(), id)
 	if writeDBError(w, err, "schedule not found") {
+		return
+	}
+	// A one-shot wake is not an editable routine: it has no cron and its fire time
+	// already passed or is owned by the scheduler. Spent rows are listed only so
+	// they can be inspected and deleted — reject edits loudly instead of writing a
+	// half-valid row.
+	if cur.OneShot {
+		writeError(w, http.StatusBadRequest, oneShotNotEditableMsg)
 		return
 	}
 	if req.Name != nil {

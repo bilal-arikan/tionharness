@@ -87,6 +87,12 @@ export interface Schedule {
   createdAt: number
   // Optional end date (unix seconds); 0/undefined = no end date.
   expiresAt?: number
+  // One-shot wake (schedule_wake): fires once at fireAt instead of on a cron.
+  // Such a row is only listed once its delivery was attempted and failed — it is
+  // read-only in the UI and can only be deleted.
+  oneShot?: boolean
+  // Wake fire time (unix seconds); only meaningful when oneShot is true.
+  fireAt?: number
 }
 
 // Automation is a tag-triggered rule: when a session carrying triggerTag finishes

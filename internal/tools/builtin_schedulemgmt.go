@@ -240,6 +240,11 @@ func (t UpdateScheduleTool) Call(ctx context.Context, input json.RawMessage) (st
 	if err != nil {
 		return "", err
 	}
+	// A one-shot wake is not an editable routine: it has no cron and the scheduler
+	// owns its fire time. Deleting it is the only supported operation.
+	if cur.OneShot {
+		return "", fmt.Errorf("schedule %q is a one-shot wake and cannot be edited (use delete_schedule)", in.ID)
+	}
 	// A non-empty flowId switches to flow-backed (and clears the agent); an
 	// explicit agentId switches back to prompt delivery (and clears the flow).
 	if in.FlowID != nil && strings.TrimSpace(*in.FlowID) != "" {
@@ -352,7 +357,8 @@ func (ListSchedulesTool) Def() providers.ToolDef {
 		Name: "list_schedules",
 		Description: "List the schedules (routines) in this workspace (id, name, agent, flowId, cron, prompt, enabled, expiresAt, " +
 			"and whether each was created by an agent — provenance only; you can edit/delete any of them). " +
-			"One-shot schedule_wake entries are transient, not routines, so they are excluded (this also shapes total/hasMore). " +
+			"Pending one-shot schedule_wake entries are transient, not routines, so they are excluded (this also shapes " +
+			"total/hasMore); a spent wake whose delivery failed stays listed so it can be deleted. " +
 			"Results are PAGINATED: pass limit (default 20, max 100) and offset to page; the reply reports total " +
 			"and hasMore, and you reach the next page with offset += limit. Filters: enabled (true/false), " +
 			"agentId (exact). Sort: updated_desc (default), updated_asc, created_desc, created_asc, name_asc, " +
@@ -394,8 +400,9 @@ func (t ListSchedulesTool) Call(ctx context.Context, input json.RawMessage) (str
 	agentID := strings.TrimSpace(in.AgentID)
 	matches := make([]db.Schedule, 0, len(schedules))
 	for _, sc := range schedules {
-		// One-shot wakes (schedule_wake) are transient, not routines — hide them.
-		if sc.OneShot {
+		// Pending one-shot wakes (schedule_wake) are transient, not routines — hide
+		// them. A spent wake that failed delivery stays visible so it can be deleted.
+		if sc.OneShot && sc.LastDeliveryStatus == "" {
 			continue
 		}
 		if in.Enabled != nil && sc.Enabled != *in.Enabled {

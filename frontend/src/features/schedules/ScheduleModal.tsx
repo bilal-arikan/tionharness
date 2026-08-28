@@ -8,7 +8,7 @@ import { COLUMN_ACCENT } from './automationMeta'
 import { PRESET_GROUPS } from './cronPresets'
 import { FormModal } from './FormModal'
 import { Field, FlowPicker, TargetModeToggle, inputCls } from './pickers'
-import { localInputToUnix, unixToLocalInput } from './timeUtils'
+import { fmtTime, localInputToUnix, unixToLocalInput } from './timeUtils'
 import { FieldError } from './FieldError'
 import { useFieldErrors } from './useFieldErrors'
 
@@ -56,6 +56,47 @@ export function ScheduleModal({
       targetMode === 'flow' ? (!flowId ? 'Akış seçilmeli' : '') : !agentId ? 'Ajan zorunlu' : '',
     prompt: targetMode === 'agent' && !prompt.trim() ? 'Prompt zorunlu' : '',
   })
+
+  // A one-shot wake (schedule_wake) is not an editable routine: it carries no cron
+  // and the scheduler owns its fire time. Such a row only reaches this modal after
+  // its delivery failed, so the single supported action here is deleting it — the
+  // form is replaced by a read-only summary rather than shown with dead fields.
+  if (editing?.oneShot) {
+    return (
+      <FormModal
+        title="Tek seferlik uyandırma"
+        icon={Clock}
+        accent={COLUMN_ACCENT.schedules}
+        submitLabel="Kapat"
+        onSubmit={onClose}
+        onClose={onClose}
+        onDelete={onDelete}
+        deleteTestId="schedule-delete"
+        testId="schedule-edit-modal"
+      >
+        <p className="rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-xs text-[var(--color-text-dim)]">
+          Tek seferlik uyandırma — düzenlenemez, silinebilir.
+        </p>
+        <Field label="Çalışma zamanı">
+          <div className="font-mono text-sm text-[var(--color-text)]">
+            {fmtTime(editing.fireAt)}
+          </div>
+        </Field>
+        <Field label="Prompt">
+          <div className="whitespace-pre-wrap text-sm text-[var(--color-text-dim)]">
+            {editing.prompt}
+          </div>
+        </Field>
+        {editing.lastDeliveryError ? (
+          <Field label="Hata">
+            <div className="whitespace-pre-wrap text-sm text-[var(--color-danger)]">
+              {editing.lastDeliveryError}
+            </div>
+          </Field>
+        ) : null}
+      </FormModal>
+    )
+  }
 
   const submit = async () => {
     markAttempted()
