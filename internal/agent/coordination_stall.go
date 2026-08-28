@@ -348,8 +348,7 @@ func (r *Runtime) injectStallNudge(coordSessionID, agentID string, slot *coordSl
 // judgeCoordinatorStalled asks a cheap model whether `text` claims a spawn that
 // never happened. Synchronous (the turn-end caller re-arms on a true verdict, so the
 // decision must be in hand before it returns), bounded by a short timeout. A cheaper
-// model is preferred, same policy as lessons/summaries: the title-model override when
-// configured, else the coordinator's own model.
+// model is preferred, same policy as lessons/summaries: the coordinator's own model.
 func (r *Runtime) judgeCoordinatorStalled(ctx context.Context, agent db.Agent, text string) (bool, error) {
 	if r.stallJudgeFn != nil {
 		return r.stallJudgeFn(ctx, agent, text)
@@ -359,9 +358,6 @@ func (r *Runtime) judgeCoordinatorStalled(ctx context.Context, agent db.Agent, t
 		return false, nil
 	}
 	model := agent.Model
-	if override := r.tun.TitleModel(); override != "" {
-		model = override
-	}
 	jctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 	resp, err := r.guardedComplete(WithCallKind(jctx, KindReflect), agent, providers.Request{

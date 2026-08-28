@@ -452,7 +452,8 @@ applier tam olarak o varlıkları düzenleyebilir.
 **LLM + entegrasyon — TAMAM (tam build + tsc temiz):**
 - [x] `internal/agent/insightanalyzer.go`: gerçek `Analyzer` — `guardedComplete` (usage-metered,
       workspace-pinned) + `Request.OutputSchema` structured output + parse-with-fallback (balanced
-      JSON çıkar; unparseable → 0 bulgu + warn). `KindReflect` call-kind (ucuz TitleModel override).
+      JSON çıkar; unparseable → 0 bulgu + warn). `KindReflect` call-kind (çağıran ajanın modeli;
+      eski `TitleModel` override'ı 2026-08-28'de kaldırıldı).
 - [x] `internal/agent/insightscan.go`: `Runtime.RunInsightScan(scope, agentID)` — seed→registry→
       ledger/findings/settings→scan→app-fix backlog append. Ajan seçimi: verilen id veya default.
 - [x] `router.go` Kanal A: `RenderAppFixReport` + `AppendBacklog` (idempotent, `insight-sig` marker).

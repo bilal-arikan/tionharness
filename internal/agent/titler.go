@@ -50,12 +50,6 @@ func (r *Runtime) GenerateTitle(ctx context.Context, agent db.Agent, source stri
 	// continues to supply provider credentials. Resolution errors deliberately
 	// retain the embedded legacy path so title generation never fails closed.
 	agentCfg, titlePrompt := r.resolveTitleConfig(agent)
-	if override := r.tun.TitleProviderID(); override != "" {
-		agentCfg.Provider = override
-	}
-	if override := r.tun.TitleModel(); override != "" {
-		agentCfg.Model = override
-	}
 
 	resp, err := r.guardedComplete(WithPromptTrace(WithCallKind(ctx, KindTitle), "title", titlePrompt), agentCfg, providers.Request{
 		Model:        agentCfg.Model,

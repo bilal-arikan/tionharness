@@ -146,8 +146,6 @@ const (
 // change applies uniformly regardless of which workspace runtime reads it.
 type Tunables struct {
 	mu               sync.RWMutex
-	titleModel       string
-	titleProviderID  string
 	shellEnabled     bool // gates the high-risk built-in `shell` tool (off by default)
 	cliHooks         bool // pass PreToolUse/PostToolUse hooks to claude-cli via --settings (on by default)
 	cliPersist       bool // keep a long-lived claude-cli process per session (on by default)
@@ -388,36 +386,6 @@ func NewTunables() *Tunables {
 		// across its whole life, which no healthy coordinator ever reaches.
 		coordStallHaltTotal: DefaultCoordinatorStallHaltTotal,
 	}
-}
-
-// SetTitleModel sets the model used for auto-title generation. Empty means use
-// the titling agent's own model.
-func (t *Tunables) SetTitleModel(model string) {
-	t.mu.Lock()
-	t.titleModel = model
-	t.mu.Unlock()
-}
-
-// TitleModel returns the configured title-model override ("" = agent default).
-func (t *Tunables) TitleModel() string {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
-	return t.titleModel
-}
-
-// SetTitleProviderID sets the provider used for auto-title generation. Empty
-// means use the titling agent's own provider.
-func (t *Tunables) SetTitleProviderID(id string) {
-	t.mu.Lock()
-	t.titleProviderID = id
-	t.mu.Unlock()
-}
-
-// TitleProviderID returns the configured title-provider override ("" = agent default).
-func (t *Tunables) TitleProviderID() string {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
-	return t.titleProviderID
 }
 
 // SetShellEnabled toggles the built-in `shell` tool. It is off by default

@@ -131,7 +131,6 @@ func TestSummarizeCompactorResolveErrorRunsEmbeddedFallback(t *testing.T) {
 
 	rt := newSystemAgentResolveRuntime(t)
 	provider := configureCompactorTestProvider(rt)
-	rt.tun.SetTitleModel("haiku")
 	callingAgent, err := rt.db.CreateAgent(context.Background(), db.Agent{
 		Name: "Caller", Provider: "compactor-test", ProviderInstanceID: "compactor-test-instance", Model: "session-model",
 	})
@@ -152,7 +151,8 @@ func TestSummarizeCompactorResolveErrorRunsEmbeddedFallback(t *testing.T) {
 	if provider.request.System != embeddedSummaryPrompt {
 		t.Fatalf("fallback prompt = %q, want fixed embedded prompt", provider.request.System)
 	}
-	if provider.request.Model != "haiku" {
-		t.Fatalf("fallback model = %q, want %q", provider.request.Model, "haiku")
+	// With no compactor system agent, the fallback keeps the calling agent's own model.
+	if provider.request.Model != "session-model" {
+		t.Fatalf("fallback model = %q, want %q", provider.request.Model, "session-model")
 	}
 }

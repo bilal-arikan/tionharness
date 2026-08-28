@@ -66,11 +66,6 @@ func (r *Runtime) resolveCompactorConfig(agent db.Agent) (db.Agent, string) {
 	compactor, _, err := r.ResolveSystemAgent("overview-summarizer")
 	if err != nil {
 		r.logger.Warn("system compactor resolution failed; using embedded summary behavior", "error", err)
-		model := agent.Model
-		if override := r.tun.TitleModel(); override != "" {
-			model = override
-		}
-		agent.Model = model
 		return agent, r.readPrompt("summary")
 	}
 

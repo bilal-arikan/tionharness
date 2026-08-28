@@ -286,9 +286,7 @@ type Settings struct {
 	MaxOutputTokens int `json:"maxOutputTokens"`
 
 	// Auto-title generation.
-	AutoTitleEnabled bool   `json:"autoTitleEnabled"`
-	TitleModel       string `json:"titleModel"`      // "" = use the agent's model
-	TitleProviderID  string `json:"titleProviderId"` // "" = use the agent's provider
+	AutoTitleEnabled bool `json:"autoTitleEnabled"`
 
 	// Gated tool capabilities — off by default; each expands agent power/cost.
 	// (enableSelfManage was removed 2026-07-01: the self-management suite is always
@@ -480,8 +478,6 @@ func Default() Settings {
 		MaxOutputTokens:     0, // auto: per-model family default
 
 		AutoTitleEnabled: true,
-		TitleModel:       "",
-		TitleProviderID:  "",
 
 		// CLI-path hooks default ON (preserves the hook-passthrough behaviour); turn
 		// off when a hook authored for TionHarness's shell misbehaves under the CLI's.
@@ -630,9 +626,7 @@ type DTO struct {
 	LessonMaxAgeDays    int  `json:"lessonMaxAgeDays"`
 	MaxOutputTokens     int  `json:"maxOutputTokens"`
 
-	AutoTitleEnabled bool   `json:"autoTitleEnabled"`
-	TitleModel       string `json:"titleModel"`
-	TitleProviderID  string `json:"titleProviderId"`
+	AutoTitleEnabled bool `json:"autoTitleEnabled"`
 
 	EnableShell    bool `json:"enableShell"`
 	EnableCLIHooks bool `json:"enableCliHooks"`
@@ -758,8 +752,6 @@ func (s Settings) ToDTO() DTO {
 		MaxOutputTokens:     s.MaxOutputTokens,
 
 		AutoTitleEnabled: s.AutoTitleEnabled,
-		TitleModel:       s.TitleModel,
-		TitleProviderID:  s.TitleProviderID,
 
 		EnableShell:             s.EnableShell,
 		EnableCLIHooks:          s.EnableCLIHooks,
@@ -878,9 +870,7 @@ type Patch struct {
 	LessonMaxAgeDays    *int  `json:"lessonMaxAgeDays"`
 	MaxOutputTokens     *int  `json:"maxOutputTokens"`
 
-	AutoTitleEnabled *bool   `json:"autoTitleEnabled"`
-	TitleModel       *string `json:"titleModel"`
-	TitleProviderID  *string `json:"titleProviderId"`
+	AutoTitleEnabled *bool `json:"autoTitleEnabled"`
 
 	EnableShell             *bool `json:"enableShell"`
 	EnableCLIHooks          *bool `json:"enableCliHooks"`

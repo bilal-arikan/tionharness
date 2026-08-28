@@ -96,8 +96,6 @@ export interface AppSettings {
   lessonMaxAgeDays: number // prune a lesson not recurring within N days (0 = built-in default)
 
   autoTitleEnabled: boolean
-  titleModel: string
-  titleProviderId: string
 
   // Gated tool capabilities (off by default).
   enableShell: boolean

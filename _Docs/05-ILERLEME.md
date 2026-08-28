@@ -2,6 +2,30 @@
 
 > Bu dosya canlı tutulur; her oturumda güncellenir. Son güncelleme: **2026-08-28**
 
+## Başlık için ayrı sağlayıcı/model seçimi kaldırıldı (2026-08-28) ✅
+
+Otomatik başlık üretimi artık **yalnız** `titler` sistem ajanı üzerinden çalışıyor
+(`resolveTitleConfig`); prompt ve model o ajandan gelir. `titleModel` /
+`titleProviderId` ayarları, karşılık gelen `Tunables` alanları
+(`SetTitleModel`/`TitleModel`/`SetTitleProviderID`/`TitleProviderID`), API'deki
+uygulama çağrıları ve ayarlar ekranındaki sağlayıcı+model alanları silindi — geriye
+tek bir `autoTitleEnabled` anahtarı kaldı. Aynı override'ı ucuz-model seçici olarak
+ödünç alan iki yer de (`resolveCompactorConfig` fallback'i,
+`judgeCoordinatorStalled`) artık çağıran ajanın kendi modelini kullanıyor.
+
+## Marka ikonları simple-icons'a taşındı (2026-08-28) ✅
+
+UI build'i `AboutPanel.tsx(2,20): error TS2305: Module 'lucide-react' has no
+exported member 'Github'` ile kırıldı: lucide-react v1 marka ikonlarını kaldırdı.
+`simple-icons` zaten bağımlılık ve zaten projenin marka-glyph kaynağı
+(`shared/lib/programIcons.ts`), ama **path verisi** yayınlıyor, React bileşeni değil
+— yani lucide arayüzü bekleyen bir ikon yuvasına doğrudan takılamıyordu. Araya
+`shared/components/BrandIcon.tsx` adaptörü kondu: lucide'ın `size` prop'unu
+karşılar, varsayılan olarak `currentColor` ile boyar (link/buton hover durumları ve
+light/dark temalar çalışsın diye; marka rengi isteyen için `brandColor`). Böylece her
+ikon yuvası marka ikonu alabilir, çağıran başına elde `<svg>` yazılmaz.
+Kalan `lucide-react` importları tarandı — başka marka ikonu kullanan yer yok.
+
 ## Güvenlik sertleştirme: sandbox sınırı, alt süreç ortamı, gizli konsol (2026-08-28) ✅
 
 Sandbox artık NT namespace (`\\?\`, `\\.\`) ve ADS (`dosya:stream`) yazımlarını

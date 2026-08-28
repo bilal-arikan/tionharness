@@ -127,7 +127,9 @@ instances with different keys).
   `pauseAutonomy` setting was removed. Pause is now the workspace-settings field
   `pauseAutonomy` (`ws-settings.json`), toggled from the **Schedules** screen. It
   blocks only that workspace's scheduled calls. Not an app-settings key anymore.
-- `autoTitleEnabled` (default true), `titleModel` (`""` = agent's model).
+- `autoTitleEnabled` (default true) — the only auto-title knob. The model and prompt
+  come from the built-in **titler** system agent; the old `titleModel` /
+  `titleProviderId` overrides were removed (2026-08-28).
 
 ### Context reset / handoff (see _Docs/35)
 - `handoffAuto` (default false) — auto-handoff a near-limit session (autonomous turns only).
