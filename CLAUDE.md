@@ -190,6 +190,27 @@ etmeden varsayma — `cd frontend && npm run format:check` ile ölç.
 - Pre-commit hook stage'lenmiş dosyaları zaten formatlar; tekil düzenlemede elle
   format koşusu genelde gereksizdir.
 
+## Kısmi commit (`git add -p`) ve pre-commit
+
+`.githooks/pre-commit` stage'lenmiş her `.go` dosyasını `gofmt` ile biçimlendirip
+`git add <dosya>` ile **dosyanın tamamını** yeniden stage'ler (BOM soyma adımı da
+aynısını yapar). Bu yüzden `git add -p` ile seçilen kısmi hunk'lar commit anında
+geçersizleşir: dosyanın working tree'deki tüm değişiklikleri — o commit'e girmesini
+istemediklerin dahil — commit'e sızar.
+
+Bir dosyanın yalnız bir kısmını commit'lemek gerektiğinde:
+
+```bash
+git add -p -- <dosya>              # istenen hunk'ları stage'le
+cp <dosya> /tmp/dosya.full         # tam sürümü sakla
+git checkout-index -f -- <dosya>   # working tree = yalnız stage'li sürüm
+git commit -m "..."                # hook artık aynı içeriği yeniden stage'ler
+cp /tmp/dosya.full <dosya>         # tam sürümü geri yaz
+```
+
+`--no-verify` ile hook'u atlamak çözüm **değildir**: hook aynı zamanda `gofmt` ve
+UTF-8 BOM soyma görevini yapar; atlarsan biçimsiz veya BOM'lu dosya commit'lenir.
+
 ## Teslim whitespace kapısı
 
 - Markdown (`*.md`) ve YAML (`*.yml`, `*.yaml`) satırlarında trailing whitespace
