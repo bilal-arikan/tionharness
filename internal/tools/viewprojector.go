@@ -27,6 +27,10 @@ import (
 type ViewSources struct {
 	Skills *skills.Store
 	Logs   *logbuf.Buffer
+	// DefaultAgentID is the workspace's default agent (workspace settings, not the
+	// store), so the agent projection can mark it. Empty = unknown, and the marker
+	// is simply omitted.
+	DefaultAgentID string
 }
 
 // ViewProjector builds the projection resolver for a workspace with every
@@ -49,7 +53,10 @@ func ViewProjector(database *db.DB, wsName string, src ViewSources) *view.Projec
 			s.Findings = viewFindingsSource{store}
 		}
 	}
-	return view.NewProjector(database).WithName(wsName).WithSources(s)
+	return view.NewProjector(database).
+		WithName(wsName).
+		WithDefaultAgent(src.DefaultAgentID).
+		WithSources(s)
 }
 
 // viewFindingsSource adapts *insight.FindingStore to view.FindingsSource.

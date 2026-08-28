@@ -1,8 +1,10 @@
 package view
 
 import (
+	"encoding/json"
 	"fmt"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/bilal-arikan/tionharness/internal/db"
@@ -18,13 +20,26 @@ type AgentInput struct {
 	// agent has run nothing today). It is not rendered — spend belongs to the
 	// budget view — but its call count fingerprints the projection's Source.
 	Usage db.Usage
+	// IsDefault reports whether this agent is the workspace's default agent (the
+	// one pre-selected for new sessions). It is NOT on db.Agent — it lives in the
+	// workspace settings — so the loader wires it in; a caller that cannot know it
+	// leaves it false and the projection simply omits the marker.
+	IsDefault bool
 	// Now is the clock used for age computations. Zero means time.Now().
 	Now time.Time
 }
 
-// agentSessionHandles is how many session handles an agent view lists before the
-// rest are reported as Elided.
-const agentSessionHandles = 20
+const (
+	// agentSessionHandles is how many session handles an agent view lists before
+	// the rest are reported as Elided.
+	agentSessionHandles = 20
+	// agentBlockedToolsShown is how many denied tool names are spelled out before
+	// the rest collapse into a "+N" tail. The total count is always rendered.
+	agentBlockedToolsShown = 5
+	// agentPersonaWidth is the rune budget for each persona line (soul, identity)
+	// at LevelFull — enough to recognise the agent, not enough to reproduce it.
+	agentPersonaWidth = 120
+)
 
 // ProjectAgent renders one agent: who it is, how many of its sessions are open,
 // and when it last did anything. It re-uses the same L0/L1 discipline as every
@@ -60,6 +75,9 @@ func ProjectAgent(in AgentInput, level Level) (View, error) {
 
 	var l lines
 	for _, s := range agentSignals(st) {
+		l.add("%s", s)
+	}
+	for _, s := range agentConfigLines(in, level) {
 		l.add("%s", s)
 	}
 
@@ -117,6 +135,111 @@ func agentSignals(st agentStats) []string {
 		out = append(out, fmt.Sprintf("⇵ %d koordinatör oturumu", st.Coordinators))
 	}
 	return out
+}
+
+// agentConfigLines is what the agent IS — its provider binding, its behavioural
+// flags, its tool restrictions and (at the full tier) its persona — as opposed to
+// what its sessions are doing.
+//
+// Every line is omitted when the underlying field is unset. A rendered
+// "model: -" would assert the agent has no model, which is a different fact from
+// "this projection does not know one".
+func agentConfigLines(in AgentInput, level Level) []string {
+	a := in.Agent
+	var out []string
+
+	// Provider and model are NOT repeated here: the header already carries them as
+	// `provider/model` (see modelLabel). Printing them a second time made the card
+	// read as if the agent had two bindings.
+	if t := thinkingLabel(a.ThinkingLevel); t != "" {
+		out = append(out, "düşünme: "+t)
+	}
+
+	// The permission mode gates whether this agent's tool calls are auto-approved,
+	// asked about, or refused outright — the difference between an agent that can
+	// edit files and one that cannot. "" and "auto" are the same (documented)
+	// default, so neither renders: a line that only ever repeats the default is
+	// noise on every card.
+	if m := strings.TrimSpace(a.PermissionMode); m != "" && m != "auto" {
+		out = append(out, "izin: "+m)
+	}
+
+	var flags []string
+	// A disabled agent never runs at all, which reframes every other line on the
+	// card (its "0 aktif oturum" is a consequence, not a coincidence).
+	if a.Disabled {
+		flags = append(flags, "devre dışı")
+	}
+	if a.CoordinatorMode {
+		flags = append(flags, "koordinatör")
+	}
+	if in.IsDefault {
+		flags = append(flags, "varsayılan")
+	}
+	if len(flags) > 0 {
+		out = append(out, strings.Join(flags, " · "))
+	}
+
+	if s := blockedToolsLine(a.BlockedTools); s != "" {
+		out = append(out, s)
+	}
+
+	// The persona is the agent's most expensive text and only earns its tokens at
+	// the full tier; a card keeps the binding and the flags.
+	if level == LevelFull {
+		if s := strings.TrimSpace(a.Soul); s != "" {
+			out = append(out, "ruh: "+clip(s, agentPersonaWidth))
+		}
+		if s := strings.TrimSpace(a.Identity); s != "" {
+			out = append(out, "kimlik: "+clip(s, agentPersonaWidth))
+		}
+	}
+	return out
+}
+
+// thinkingLabel renders the extended-reasoning level, treating both "" and "off"
+// as "not requested" (the field's two spellings of the same state) so the line is
+// omitted rather than rendered as a setting the user never made.
+func thinkingLabel(level string) string {
+	l := strings.TrimSpace(level)
+	if l == "" || l == "off" {
+		return ""
+	}
+	return l
+}
+
+// blockedToolsLine renders the per-agent tool denylist. The COUNT is always exact
+// and comes first: a truncated list that did not say how much it dropped would
+// read as the whole restriction set. A denylist that will not parse is reported
+// as unreadable rather than as "nothing blocked" — the opposite fact.
+func blockedToolsLine(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" || raw == "[]" || raw == "null" {
+		return ""
+	}
+	var names []string
+	if err := json.Unmarshal([]byte(raw), &names); err != nil {
+		return "yasaklı araçlar: (liste okunamadı)"
+	}
+	kept := make([]string, 0, len(names))
+	for _, n := range names {
+		if n = strings.TrimSpace(n); n != "" {
+			kept = append(kept, n)
+		}
+	}
+	if len(kept) == 0 {
+		return ""
+	}
+	shown, extra := kept, 0
+	if len(shown) > agentBlockedToolsShown {
+		extra = len(shown) - agentBlockedToolsShown
+		shown = shown[:agentBlockedToolsShown]
+	}
+	line := fmt.Sprintf("yasaklı araçlar (%d): %s", len(kept), strings.Join(shown, ", "))
+	if extra > 0 {
+		line += fmt.Sprintf(" … +%d", extra)
+	}
+	return line
 }
 
 // agentSessionHandleList returns up to agentSessionHandles session handles (most

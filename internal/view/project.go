@@ -123,9 +123,10 @@ type InsightFinding struct {
 
 // Projector resolves a Ref against a store and renders the matching projection.
 type Projector struct {
-	store   Store
-	sources Sources
-	wsName  string // workspace display name, set by WithName
+	store        Store
+	sources      Sources
+	wsName       string // workspace display name, set by WithName
+	defaultAgent string // workspace default agent id, set by WithDefaultAgent
 }
 
 // NewProjector wires a projector to a store.
@@ -153,6 +154,18 @@ func (p *Projector) WithName(name string) *Projector {
 		return nil
 	}
 	p.wsName = name
+	return p
+}
+
+// WithDefaultAgent sets the workspace's default agent id (the agent pre-selected
+// for new sessions), which lives in the workspace settings rather than on the
+// agent record. Callers that do not have it omit it — the agent projection then
+// leaves the "varsayılan" marker off instead of guessing.
+func (p *Projector) WithDefaultAgent(id string) *Projector {
+	if p == nil {
+		return nil
+	}
+	p.defaultAgent = id
 	return p
 }
 
@@ -405,7 +418,11 @@ func (p *Projector) loadAgent(ctx context.Context, id string) (AgentInput, error
 	if err != nil {
 		return AgentInput{}, fmt.Errorf("view: agent %s sessions: %w", id, err)
 	}
-	in := AgentInput{Agent: agent, Sessions: sessions}
+	in := AgentInput{
+		Agent:     agent,
+		Sessions:  sessions,
+		IsDefault: p.defaultAgent != "" && p.defaultAgent == id,
+	}
 	if usage, err := p.store.GetUsageToday(ctx, id); err == nil {
 		in.Usage = usage
 	}

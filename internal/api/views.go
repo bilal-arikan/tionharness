@@ -24,7 +24,7 @@ import (
 // the dashboard, get_view and expand — goes through, so no surface can end up
 // with a differently-configured projector than the others.
 func (s *Server) viewProjector(r *http.Request) *view.Projector {
-	src := tools.ViewSources{Logs: s.logs}
+	src := tools.ViewSources{Logs: s.logs, DefaultAgentID: ws(r).Settings().DefaultAgentId}
 	if rt := ws(r).Runtime; rt != nil {
 		src.Skills = rt.Skills()
 	}
