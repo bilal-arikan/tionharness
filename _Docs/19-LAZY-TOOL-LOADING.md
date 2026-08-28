@@ -334,9 +334,16 @@
   — buradaki **n kategorinin büyüklüğü değil, o demetteki LAZY araç sayısıdır**
   (`lazyBundleCounts`; eager araçlar sayıma girmez, zaten katalogda listelidir)
   (demet yoksa satır hiç yazılmaz → blok bayt-aynı kalır; CLI formunda yazılmaz,
-  çünkü orada üyelik gateway'in kendi aday kümesinden çözülür). Testler:
+  çünkü orada üyelik gateway'in kendi aday kümesinden çözülür).
+  **Ajan filtresi demet indeksine de uygulanır (2026-08-28):** `buildRegistry`
+  demet indeksini `reg.BundleIndex(r.toolFilter(ctx, agent))` ile kurar ve
+  `lazyBundleCounts` aynı filtreyi alır. Yani o ajan için engellenmiş
+  (blocked/workspace-disabled) bir built-in ne demet listesinde `ad — özet`
+  satırı olarak görünür ne de `Bundles:` satırındaki sayıya girer; önceden
+  indeks `nil` filtreyle kurulduğu için liste yanıltıcı olabiliyordu (şema
+  yüklenmediğinden token/güvenlik etkisi yoktu). Testler:
   `builtin_activate_bundle_test.go`, `TestLazyCatalogBundleLine`,
-  `gateway_bundle_test.go`.
+  `TestBundleIndexHonoursAgentToolFilter`, `gateway_bundle_test.go`.
 - Per-turn **aktif set** (`internal/tools/activetools.go`, context üzerinden
   `buildRegistry`'ye taşınır). Tool loop her iterasyonda
   `reg.ActiveDefs(filter, active.Snapshot())` ile gönderilen şemayı yeniden
@@ -589,27 +596,11 @@ köprülenmezse** o şemalar o tur CLI sürecine hiç gitmez. Araçlar tur-içi
 çağrılamaz; "aktive" muadili **bir sonraki tur** yeniden-allowlist olur (model/
 kullanıcı isteyince TionHarness yeniden ilan eder).
 
-**Kod (izole, geri-alınır):**
-- `internal/tools/bridge_filter.go` — `BridgeableDefsFiltered(allow, skipHidden)`
-  (+ `HiddenBridgeableCount` ölçüm helper'ı). `BridgeableDefs` artık buna
-  `skipHidden=false` ile delege eder → davranış değişmez.
-- `internal/agent/clibridge_tunable.go` + `Tunables.cliBridgeSkipHidden` alanı —
-  `SetCLIBridgeSkipHidden`/`CLIBridgeSkipHidden` accessor'ları (**default true**).
-- `internal/agent/runtime.go` `BridgeTools` — gate'i okur, `skipHidden` iken
-  atlanan hidden araç sayısını Logs'a yazar (ölçüm).
-- `internal/app/app.go` — boot'ta `TIONHARNESS_CLI_BRIDGE_SKIP_HIDDEN` env'iyle seed.
-
-**Default:** **AÇIK** (2026-07-01, `NewTunables`) — hidden araçlar CLI'ya
-köprülenmez. `TIONHARNESS_CLI_BRIDGE_SKIP_HIDDEN` env'i iki yönlü override:
-`0/false/off` → kapatır (eski davranış: hidden köprülenir), `1/true/on` → açar.
-Test: `TestBridgeableDefsFilteredSkipsHidden`.
-
-> **Davranış etkisi:** açıkken bir claude-cli ajanı self-management araçlarını
-> **tur-içinde çağıramaz**; erişim bir sonraki tur yeniden-allowlist ile gelir.
-> Native yol etkilenmez (hidden tier orada `activate_tools` ile tur-içi yüklenir).
-
-**Ölçülecek:** kapalı vs açık — CLI'ya giden şema baytı / prompt token farkı ve
-self-management araçlarına erişimin tur-ötesine kaymasının ajan davranışına etkisi.
+> **Durum: KALDIRILDI.** Bu POC'un gate'i (`Tunables.cliBridgeSkipHidden`,
+> `internal/agent/clibridge_tunable.go` ve `TIONHARNESS_CLI_BRIDGE_SKIP_HIDDEN`
+> env'i) depoda yok; `internal/agent/runtime.go` `BridgeTools` hidden araçları
+> koşulsuz köprüler ve eski gate'i açıkça "obsolete" olarak anar. Yerini bir
+> sonraki bölümdeki görünürlük-tier hizalaması aldı.
 
 ## Görünürlük tier'ının claude-cli teline HİZALANMASI (2026-07-05)
 

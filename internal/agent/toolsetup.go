@@ -680,11 +680,11 @@ func (r *Runtime) buildRegistry(ctx context.Context, agent db.Agent) *tools.Regi
 		// answer a stray "activate an already-shipped tool" request with a clear
 		// "already available" note instead of a misleading "unknown name".
 		eagerNames := reg.EagerNames(nil)
-		// Bundle index for activate_tools' group form. nil filter matches the
-		// LazyCatalog(nil) snapshot above — deliberately NOT the agent filter, so the
-		// two views stay consistent; the tool itself drops any member missing from the
-		// lazy catalog.
-		bundles := reg.BundleIndex(nil)
+		// Bundle index for activate_tools' group form, built with THIS agent's tool
+		// filter so a blocked built-in never surfaces as a name+summary line when the
+		// agent opens its category. The tool additionally drops any member missing
+		// from the lazy catalog, so an eager tool still cannot be "activated".
+		bundles := reg.BundleIndex(r.toolFilter(ctx, agent))
 		reg.Add(
 			tools.NewActivateToolsToolBundled(active, lazyCat, eagerNames, bundles),
 			deact,
@@ -831,23 +831,24 @@ func (r *Runtime) LazyToolsCatalogBlock(ctx context.Context, agent db.Agent) str
 	// the empty provider is the keyless claude-cli default.
 	// Visible lazy tools are enumerated; the hidden self-management suite is folded
 	// into a single skill pointer (rendered when hiddenCount > 0).
-	return renderLazyToolCatalog(reg.VisibleLazyCatalog(filter), reg.HiddenLazyCount(filter), r.agentProviderKind(agent), reg.ServerDescriptions(), lazyBundleCounts(reg))
+	return renderLazyToolCatalog(reg.VisibleLazyCatalog(filter), reg.HiddenLazyCount(filter), r.agentProviderKind(agent), reg.ServerDescriptions(), lazyBundleCounts(reg, filter))
 }
 
 // lazyBundleCounts returns bundle key -> member count over the LAZY catalog only,
 // i.e. exactly the bundles activate_tools can open (buildRegistry hands the tool
-// the same nil-filtered index, and the tool drops members that are not lazy).
-// Eager tools are excluded so the advertised count matches the listing length.
-func lazyBundleCounts(reg *tools.Registry) map[string]int {
+// an index built with the SAME agent filter, and the tool drops members that are
+// not lazy). Eager and agent-blocked tools are excluded so the advertised count
+// matches the listing the agent actually gets.
+func lazyBundleCounts(reg *tools.Registry, filter func(string) bool) map[string]int {
 	lazy := map[string]bool{}
-	for _, d := range reg.LazyCatalog(nil) {
+	for _, d := range reg.LazyCatalog(filter) {
 		lazy[d.Name] = true
 	}
 	if len(lazy) == 0 {
 		return nil
 	}
 	out := map[string]int{}
-	for key, members := range reg.BundleIndex(nil) {
+	for key, members := range reg.BundleIndex(filter) {
 		n := 0
 		for _, m := range members {
 			if lazy[m] {
